@@ -1,0 +1,236 @@
+ewentualny roadmap:
+----wersja 0.3 dywidenda update-------
+-możliwość pauzowania gry
+- pula inwestycyjna- do start upów dodać pulę inwestycyjną która automatycznie inwestuje w losowe spółki, gracz wraz z botami może nawiązywać współprace i razem na to wpłacać. Można by stworzyć takie słupki kto ile wpłacił na pulę i ile akcji dostanie
+- spółki gamingowe Mają też unikalne mini-eventy w fazie developmentu (np. "Hype w mediach", "Przeciek kodu", "Crunch deweloperski").
+- Start upy:
+
+Specjalna mechanika dla firm gamingowych
+
+Poza dodaniem jako kategorii, firmy te nie mają jeszcze unikalnych zasad (np. związanych z cyklem produkcyjnym gier).
+
+Inwestowanie regularne (Auto-inwestowanie)
+
+Nie ma jeszcze opcji ustawienia automatycznego, cyklicznego inwestowania w wybrany start-up.
+
+"Obietnice" i powiadomienia od start-upów
+
+Nie zaimplementowaliśmy mechaniki, w której start-upy mogłyby aktywnie zabiegać o inwestorów, składając im specjalne oferty czy obietnice.
+
+Zaawansowany "rzut kostką" o losie start-upu
+
+Obecnie system decyduje zero-jedynkowo (sukces lub porażka). Nie ma jeszcze rozbudowanej logiki opartej na różnych wynikach rzutu, która mogłaby spowodować np. opóźnienie debiutu.
+
+Wyższe poziomy umiejętności "Anioł Biznesu"
+
+Zaimplementowaliśmy poziomy 1-4. Bardziej zaawansowane mechaniki z kolejnych poziomów wciąż czekają na dodanie:
+
+Poziom 5 (Prywatyzacja)
+
+Poziom 6 (Zwiększona szansa na wykrycie oszustwa)
+
+
+
+----- wersja 0.4 Prestiż i władza--------
+-możliwość pauzowania gry
+- dodać zakładke moje pasywa z kredytami 
+-ranking powinien aktualizować się na bieżąco, razem ze zmianą miejsca.
+-państwo jako akcjonariusz większościowy w spółkach skarbu państwa. Państwo zawsze na start posiada między 50 a 90% udziałów w państwowych spółkach, spółki też zawsze wychodzą z kryzysu. Możliowść prywatyzacji takich spółek albo też upaństwowienia spółek
+1.5. Realna władza korony (blokowanie inwestycji, wsparcie w rozwoju czy innowacji)
+4.6. [NOWA MECHANIKA] Spółki Doradcze i Fundusze Inwestycyjne 💼
+4.6.1. Dodanie do gry 4 nowych spółek typu "Fundusz Inwestycyjny".
+-spółka tania nienajlepsza- Fundusz KolegaToWie
+-spółka średnia w miarę okej inwestycje taki typowy średniak- OurInvest
+-spółka średnia rywal dla OurInvest (spółki mają faktycznie rywalizować)- PyraMid
+-spółka największa, dobrze inwestuje wysokie ceny i wyższe koszta- GlobalFund
+4.6.2. Oferują płatne porady inwestycyjne dla gracza (np. "W co warto teraz zainwestować?"). Każda z tych spółek po innej cenie, ceny dwóch środkowych mają się zmieniać ponieważ walczą o klienta, mogą oferować zniżki tu i teraz. 
+4.6.3. Oferują usługę zarządzania kapitałem: gracz może im powierzyć środki, a one będą je pomnażać w zamian za prowizję od zysku. Najtańsza robi to najgorzej ale bierze tylko 25% zysków, średniaki rywalizują ze sobą i biorą od 51 do 66% zależy od tego co się dzieje na giełdzie, jak jest hossa to więcej, jak bessa to mniej, duża firma analogicznie między 75 a 85 zależy od hossy i bessy. 
+4.6.4. Fundusze aktywnie handlują na giełdzie, a także mogą emitować własne obligacje korporacyjne.
+5.4. Badania i Rozwój (R&D) w Spółkach.
+6.7. Rozbudowa mechaniki własnej firmy (nowy sprzęt, morale, minigra polegająca na układaniu pieniędzy na sobie tak żeby nie spadły, każdy bloczek porusza się lewa prawa, spacją kładzie się bloczki na sobie, z każdym bloczkiem wieża porusza się coraz szybciej a np. co 5 bloczków gracz może dostać 250. kolejna minigra to podpisywanie papierów, trzeba w 15 sekund podpisać lub odrzucić 20 papierów dzielą się na dobre i złe za podpisanie złego kara to -50, za zrobienie minigry nagroda to 500. Gracz klika albo zielony kwadracik na umowie albo czerwony, jakoś trzeba wymyślić odróżnienie złej od dobrej umowy/faktury).
+7.1. Handel/transfer akcji z botami AI.
+
+---0.4.5 relacje ------
+- pula inwestycyjna- do start upów dodać pulę inwestycyjną która automatycznie inwestuje w losowe spółki, gracz wraz z botami może nawiązywać współprace i razem na to wpłacać. Można by stworzyć takie słupki kto ile wpłacił na pulę i ile akcji dostanie
+-każda ze spółek ma krótki 3-5 zdaniowy opis czym się zajmuje, spółki które są potencjalnie lepszą inwestycją mają inne opisy które bardzo delikatnie na to wskazują. Spółki słabe za to mają gorsze opisy (może bardziej ogólnikowe lub z np. delikatnymi błędami).
+- 4.4. System reputacji gracza i botów (wpływ na handel, regeneracja w czasie).
+5.6. Mechanika zadowolenia spółki.
+5.5. Rozbudowa mechaniki przejęć (M&A).
+Nowa Mechanika: Wpływ na Media 📰
+
+Rozwinięcie: Odblokowuje możliwość płacenia za artykuły sponsorowane w gazecie "Puls Rynku".
+
+Pozytywny PR: Płacisz 10 000 PLN, aby ukazał się pozytywny artykuł o Twojej spółce (tej, w której masz 👑). Daje to tymczasowy, mały boost do ceny i chroni przed negatywnymi eventami.
+
+Czarny PR (szkalowanie): Płacisz 25 000 PLN, aby puścić negatywną plotkę na temat konkurencyjnej spółki. Istnieje 60% szans, że wywoła to mały, negatywny event dla tej spółki, ale też 10% szans, że "dziennikarskie śledztwo" wykryje Ciebie, co negatywnie wpłynie na Twoją reputację.
+
+
+Nowa Mechanika: Prezesi (CEO) i Zarząd 👨‍💼
+
+Rozwinięcie: Każda spółka z giełdy Srebrnej i wyżej dostaje losowo wygenerowanego Prezesa z jedną lub dwoma cechami (np. "Wizjoner" - zwiększa szansę na sukces R&D, ale też na ryzykowne decyzje; "Konserwatysta" - zmniejsza volatilityFactor, ale spowalnia wzrost; "Skandalista" - zwiększa szansę na negatywne eventy obyczajowe). Gracz, jako 👑, może raz na jakiś czas zwołać walne zgromadzenie i spróbować wymienić prezesa, co jest kosztowne i nie zawsze się udaje. 
+- oprócz tych powyżej dodać jeszcze "wizjoner", "głowa w chmurach", "tyran", "pewniak", "hobbista", "nieudacznik", "stoik", "oddany", "PRowiec", "skompromitowany"
+- w trakcie gry mogą pojawić się eventy które dodają lub usuwają dane cechy,
+- będąc większościowcem (powyżej 80% udziałów), masz 70% szans na wybór jednego z kandydatów
+-zarząd: możesz jako większościowiec obsadzić swoim człowiekiem zarząd (emotka ludzika w widoku większościowca), max 6 ludzików. Każdy zielony ludzik to twój człowiek, niebieski cię lubi, szary jest obojętny a czerwony cię nie lubi
+- ma to wpyłw na twoje decyzję, jeżeli większość cię nie lubi, będą próbowali cię wykurzyć z firmy, sprzedać twoje udziały (specjalny event) i vetować twoje decyzje.
+-gracz może zostać wybrany do zarządu (złoty ludzik), jeżeli lubi cię ponad połowa z zarządu i ceo
+-boty też powinny mieć dostęp do władzy korony
+
+----wersja 0.5 BigBank------
+0.3 firmy platynowe miały kupować udziały innych ale tego nie robią (do wprowadzenia po wprowadzeniu funduszy spółek)
+0.4 mechanika długów jak na razie jest słaba/nie działa
+3.1. Obligacje (państwowe, korporacyjne, komunalne).
+4.1. Rozbudowa Banku Centralnego (bony skarbowe, regulacje, przekupstwo).
+4.5. [NOWA MECHANIKA] Banki Komercyjne 🏦
+4.5.1. Dodanie do gry 2-3 banków komercyjnych jako nowych, niezależnych instytucji (np. na bazie istniejących spółek bankowych).
+4.5.2. Banki komercyjne korzystają z usług Banku Centralnego (ich oprocentowanie kredytów i depozytów jest powiązane ze stopami procentowymi).
+4.5.3. Spółki giełdowe aktywnie korzystają z usług banków: biorą kredyty na inwestycje, M&A, zwiększanie kapitału.
+4.5.4. Prywatna firma gracza również może korzystać z usług tych banków.
+5.2. Rozbudowa cyklu życia korporacji.
+5.7. [NOWA MECHANIKA] Zaawansowane Finanse Spółek 💰
+5.7.1. Każda spółka otrzymuje własny bilans: aktywa, pasywa, kapitał zakładowy i zadłużenie.
+5.7.2. Spółki przechowują swoją gotówkę na kontach w bankach komercyjnych.
+5.7.3. Stworzenie katalogu 3-5 możliwych do sfinansowania inwestycji dla każdej kategorii spółek (np. "Nowa fabryka", "Kampania marketingowa", "Ekspansja zagraniczna").
+5.7.4. Inwestycje wpływają na bilans firmy (zwiększają aktywa, ale też zadłużenie) oraz na jej przyszłe przychody i wydatki.
+5.7.5. Gracz jako akcjonariusz większościowy może:
+a) Wskazywać, którą inwestycję spółka ma podjąć.
+
+b) Wesprzeć finansowanie inwestycji z własnej kieszeni w zamian za dodatkowe akcje (nawet ponad standardowy limit) lub stały, pasywny dochód z tej inwestycji.
+
+6.6. Umiejętność "Goodstar" (system ocen dla ETF-ów i akcji).
+6.8. [NOWA UMIEJĘTNOŚĆ] Zarządzanie Własnym Funduszem Inwestycyjnym 👑
+
+6.8.1. Nowa umiejętność na końcu drzewka, wymagająca odblokowania max poziomu "Pracy" oraz "Analityka Finansowego".
+
+6.8.2. Pozwala graczowi założyć własny fundusz inwestycyjny, który pojawia się na rynku jako nowa spółka.
+
+6.8.3. Gracz zarządza funduszem, ustala jego strategię i może przyjmować kapitał od botów AI, zarabiając na prowizji od zysków.
+- w funduszach zatrudniani są specjaliści. Oprócz współpracy z funduszem można dopłacić do wyboru specjalisty, od 1-5 gwiazdek, którzy radzą graczowi lepiej lub gorzej zależy od poziomu
+- to samo dla swojego funduszu, tylko tutaj jeszcze umiejętności specjalistów wpływają na działanie funduszu
+
+
+---- wersja 0.6 Ciemna Strefa--
+1.7. Dodanie opcji przełączenia na ciemny motyw.
+2.3. Dostęp do wyższych giełd przez "Wejściówki" od Mafii.
+2.4. Unikalne Scenariusze dla firm z Giełdy Śmieciowej ("Całkowicie Legalna Firma", "Firma Krzak")
+-firmy krzaki, pojawia się albo na brązowej, srebnej albo na złotej giełdzie, na początku wygląda dobrze ale jak wykupi się ponad 50% akcji tej spółki to już tylko spada (nie ważne czy kupi ją gracz czy bot) a wcześniej ma łądne wyniki
+-co grę wybór losowo ukrytych dwóch alf które z śmieciowej, brązowej lub srebnej dojdą do platyny.
+2.5. Mechanika firmy "Całkowicie Legalna Firma" (zależność od korupcji).
+-system korupcji
+4.2. Przeciwnik Mafia -do przemyślenia i rozbudowania
+Sabotaż: Zapłać mafii, a w konkurencyjnej spółce wydarzy się bardzo negatywny event (np. "Pożar w magazynie").
+
+Ochrona: Płać comiesięczny haracz, a Twoje spółki będą odporne na negatywne eventy wywołane przez mafię.
+
+Insider trading: Mafia oferuje cynk o planowanym "przekręcie" na spółce z Giełdy Śmieciowej. Inwestycja obarczona ogromnym ryzykiem, ale potencjalnie gigantycznym zyskiem.
+
+
+---- wersja 0.7 Szeroki rynek----
+- dodać 3 nowe poziomy giełd (rubin, szmaragd, diament) 
+-rubin spółki cenowo od 5 tysięcy dostają premie do stabilności za bycie tutaj, max 6 spółek może tam być
+-szmaragd kapitał od 1 miliarda, cena od 10k za akcje, bonus do stabilności się zwiększa, spółki stąd mogą otworzyć max. 2 spółki zależne poprzez wykup słabszej spółki lub założenie nowej, spółki zależne dają im kasę, max 3 spółki
+-diament, największa spółka w grze, dostępna dopiero od 30 minut w grze, może wykupować akcje spółek z każdego niższego poziomu oprócz szmaragdu, spółka stara się monopolizować rynek, wszystkie bonusy z niższych poziomów
+-gracz wygrywa jeżeli jest większościowcem w tej spółce która jest diamentowa przez 10 minut. 
+- (dla diamentu) Dodatkowo może dyktować warunki, jest tobigtofall, spółka która stanie się diamentowa nie może już nigdy zbankrutować, jeżeli przestanie być diamentowa to wybucha w niej kryzys i może spaść nawet do srebra, wyprzedając udziały w innych firmach po niższych cenach, spółka diamentowa aktualizuje się co 2,5 minuty czyli na czas 3 minuty ma nietykalność.
+- Nowa Mechanika: Wydarzenia Makroekonomiczne 📉📈
+Rozwinięcie: Zamiast prostych wydarzeń rynkowych, wprowadzamy globalne wskaźniki, takie jak Inflacja czy Stopa Bezrobocia. Decyzje Banku Centralnego (które teraz będą ogłaszane w gazecie) o podniesieniu lub obniżeniu stóp procentowych będą miały realny, długofalowy wpływ na oprocentowanie kredytów (LOAN_INTEREST_RATE), depozytów i ogólną kondycję rynku.
+
+
+---wersja 0.7.5 nowe horyzonty-----
+- dodanie pozytywnych i negatywnego eventu który dodaje spółki zagraniczne. 
+- Nasza giełda przejmuje rynek zagraniczny (Niemcy, Szwecja, USA, Japonia, Chiny, Indie, Czechy, Szwajcaria) 
+-dla każdego z tych państw utworzyć od 10 do 20 spółek które będą stereotypowe dla danego kraju np. dla Japonii SushiBiznes, dla Indii CuryMango itd.
+- w tym stworzyć odpowiedniki ichniejszych gigantów takich jak google, amazon itp.
+-ceo tych spółek mogą dostać konkretne krajowe cechy
+-ceo polskich spółek dostają krajowe cechy
+- Zależy od wielkości państwa Czechy dostaną najmniej bo są najmniejsze
+-ceny tych spółek będą w zagranicznych walutach. 
+- Negatywny event- nasza giełda została przejęta przez giełdę ***. event neutralny- zawiązano międzynarodową giełdę w skład której weszła giełda nasza,*** i *** max 3 państwa, inne mogą powoli dołączać. Event ma 1% na pojawienie się co 5 minut i mnoży się razy 2 co kolejne 5 minut, czyli jest 1,2,4,,8 itd. 
+-dodać funkcję kantor który przelicza waluty, dla kantoru ustawić wahania ceny między złotówkami a tymi walutami np. PLN/EUR między 3,80 do 5,50 za 1 euro. 
+-nowy typ inwestowania/spekulowania- waluty na giełdzie.
+-bot Kacper "Intercontinental" Bayer, skupuje obce waluty i handluje tylko spółkami zagraniczymi, pojawia się dopiero wtedy gdy giełda przejmie inną giełdę
+-bot Michael "Dad" Santos, amerykański biznesmen zaczyna z dolarami, zupełnie nie zna się na PL spółkach więc w nie inwestuje losowo, w amerykańskie inwestuje perfekcyjnie, pojawia się dopiero gdy giełda przejmie giełde USA.
+-bot Peter "Lech" Kozel, czeski entuzjasta dobrego piwa, inwestuje głównie w spółki czeskie ale lubi też inne europejskie, kupuje w euro i koronach czeskich. 20% środków zatrzymuje na wydatki prywatne
+-bot "tygrys" inwestuje agresywnie, głównie celuje w spółki tech (chiny)
+-bot "Konfucjusz", japoński odpowiednik stoika z tym że skupia się na japońskim rynku, akcjami handluje tylko z chińczykiem
+-bot "Bankier" (szwajcar) skupia się na bankowości i walutach, aktywnie korzysta z władzy korony
+-bot "Wiking" Szwed, inwestuje agresywnie w byle co
+-bot niemiecki który jest dużym graczem, inwestuje tylko w stabilne spółki, nie lubi polskich spółek. Taki odpowiednik wieloryba
+-bot europejski, powstaje po utworzeniu wspólnoty europejskiej, minimum 3 kraje europejskie na giełdzie, odpowiednik "yolo"
+-boty pojawiają się dopiero jak dany kraj dołączy na giełdę
+-wraz z dołączeniem kraju do giełdy, powiększa się siła inwestorów mniejszościowych
+
+--- wersja 0.8 ryzyko, rozwoje i wybuchy---
+- nowy wyższy poziom umiejętności dywidendowej dodaje guzik ze sprawdzeniem każdej pojedynczej spółki jaki typ dywidendy i ile ona wynosi
+-dodać kryzysy takie jak nagła bessa, bańki i krachy
+-poziomy trudności
+- Lepsze zbalansowanie częstotliwości eventów. (niektóre powinny być rzadziej inne częściej)
+6.4. Rozbudowa drzewka na 3 ścieżki specjalizacji (Analityk, Koneser Wpływów, Ryzykant).
+
+
+---wersja 0.9 polityka ------
+-eventy dla spółek z innych państw np. wybrano prezydenta idiotę, *** zamyka granicę, ludzie uciekają z ***, dofinansowania dla ***. I więcej eventów tego typu. 
+- cykl wyborów.
+- istnieje system partii które mogą ze sobą współpracować lub siebie antagonizować
+-partia wolnościowa, liberalna, zieloni, centrum, skonfederowani, czerwoni, socjaldemokracja, partia pracy, libertariańska, anarchistyczna, komunistyczna, centrolewica, centroprawica, technokraci, 
+-każda partia ma oddzielny program który realizuje, program polityczny- wprowadza wiele nowych eventów negatywnych i pozytywnych oraz ekonomiczny, co ma wpływ na ceny akcji, spółki państwowe, bank i handel
+- dla każdego dodanego państwa dodać po 4 partie 
+-w każdej grze pojawia się 6 partii w naszym kraju i po 4 w innych krajach. 
+- musi być po jednej parii z każdej ćwiartki
+-każda partia ma indywidualne eventy
+-można wpływać na wyniki wyborów pieniędzmi- sponsoring. +5% za każdy sponosring dla partii
+-mając własną firmę można zmuszać pracowników do głosowania na konkretne parite
+-każde państwo dostaje przydzieloną liczbę populacji która się zwiększa z czasem, przyrost jest dla każdego państwa indywidualny. 
+- lobbing może powodować też ustawy przychylne konkretnym sektorom np. dotację na przemysł
+- np. Ustawa o Podatku Cukrowym: Jeśli masz akcje w spółkach spożywczych, lobbujesz przeciw. Jeśli ustawa przejdzie, spółki z sektora 'Żywność' dostają negatywny modyfikator.
+Rozbudowa Umiejętności "Nepotyzm" 🤝
+
+Rozwinięcie: Oprócz samego dostępu do spółek Skarbu Państwa, kolejne poziomy umiejętności mogą odblokować:
+
+Poziom 2: Możliwość "zasugerowania" zarządowi spółki państwowej, by wzięła kontrakt z Twoją prywatną firmą (jeśli ją posiadasz), co da jej jednorazowy, duży zastrzyk gotówki.
+
+Poziom 3: Dostęp do "poufnych informacji" o planowanych ruchach rządu, co działa podobnie do "Szóstego Zmysłu", ale dotyczy tylko spółek państwowych.
+
+--wersja 0.10 Boty, spółki i ich odświeżenie-----
+1.1. Udoskonalenie wykresu historii cen (widok świecowy).
+6.1. Dodać więcej umiejętności.
+7.2. Baza postaci/awatary dla gracza i botów.
+7.3. Tryb nauka i poziomy łatwy, normalny i trudny
+-dodanie cfd
+-Rozbudowa AI: Specjaliści od Spekulacji
+Rozwinięcie: W grze pojawia się nowy, bardzo rzadki i agresywny typ bota: "Spekulant". Ignoruje on fundamenty spółek i financialHealth. Handluje wyłącznie na podstawie krótkoterminowych trendów, volatilityFactor oraz aktywnie korzysta z opcji i kontraktów terminowych, potrafiąc w krótkim czasie zbić fortunę lub zbankrutować.
+- Nowy typ start-upu: "Jednorożec". Ekstremalnie rzadki (1% szans na pojawienie się), z ogromnym celem finansowym, ale gwarantowanym sukcesem, jeśli zostanie ufundowany. Oraz fałszywy prorok, bardzo duży cel finansowy, jest oszustwem.
+
+
+
+--- wersja 0.11 Development ---
+- w grze pojawia się system technologii, każda technologia permamentnie zmienia rynek 
+- wygrane partie mają wpływ na rozwijaną technologię, np. socjal/komu partie będą wspierać pracowników i wprowadzać podatki od zysków
+-po niektórych technologiach pojawiają się podsektory np. telekomunikacja, 
+
+
+--- wersja 1.0 start i scenariusze----
+Nowy Tryb Gry: Scenariusze i Wyzwania
+
+Rozwinięcie: Oprócz standardowej gry "sandbox", pojawia się menu Scenariuszy. Każdy scenariusz ma unikalne warunki początkowe i cele do zrealizowania. Przykłady:
+
+"Feniks z Popiołów": Zaczynasz z jedną, potężnie zadłużoną spółką na skraju bankructwa. Cel: W ciągu 2 godzin gry doprowadź ją do giełdy Złotej.
+
+"Król Sektora": Cel: Zdobądź status 👑 w co najmniej 3 spółkach z tego samego sektora i utrzymaj go przez 30 minut.
+
+"Wielki Kryzys": Zaczynasz grę tuż przed zaplanowanym, gigantycznym krachem giełdowym. Cel: Przetrwaj i zakończ kryzys z dodatnim bilansem.
+
+System Osiągnięć (Achievements) 🏆
+
+Rozwinięcie: W grze pojawia się lista osiągnięć do odblokowania (np. "Pierwszy Milion", "Wróg Publiczny" - przetrwaj wrogie przejęcie, "Monopolista" - zdobądź 👑 w spółce typu 'Diament', "Anioł Stróż" - uratuj spółkę przed bankructwem, wpłacając własne środki).
+Ostateczny Szlif: Muzyka, Dźwięki, Tutorial
+
+Rozwinięcie: Dodanie klimatycznej, zmieniającej się w zależności od sytuacji na rynku muzyki (inna w czasie hossy, inna w czasie bessy). Wprowadzenie dźwięków interfejsu (kliknięcia, powiadomienia, dźwięk "kasy" przy sprzedaży z zyskiem). Stworzenie interaktywnego samouczka, który krok po kroku wprowadza nowego gracza w najbardziej skomplikowane mechaniki.
+
+
+
+
+
+
+
+

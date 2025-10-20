@@ -1,0 +1,54 @@
+0. posegregować funkcje i je porozdzielać na różne pliki
+1. Dodać poprawny wykres
+2. inne giełdy
+2.1. dodać giełde mniejszych papierów. 
+2.2. dodać giełdę gigantów
+2.3 dodać giełdę start-upów
+2.4 dodać indeksy na spółki
+2.4.1 oddzielne indeksy na przemysł, technologie, banki itd.
+3. dodać inne papiery wartościowe
+3.1 przede wszystkim obligacje
+3.1.1 obligacje komunalne
+3.1.2 obligacje korporacyjne
+3.1.3 obligacje państwowe
+4. dodać instytucje państwa
+4.1 państwo ma swoje 4 spółki
+4.1.1 elektorwnia, bank, paliwa, kopalnie
+4.1.2 dodać instytucje kontrolne które w przypadku zbyt dużych obniżek ceny mają 75% szans na reakcje podnosząc cenę stratnej spółki
+4.2 dodać bank centralny
+4.2.1 bank centralny może wydawać bony skarbowe (jako event) raz na 3 minuty może wydać 10 papierów każdy o wartości 10.000 kupowany po zniżce czyli np. za 9,900. 100% że się wypłaci ale np przez kolejne 3 minuty nie można wydawać tych pieniędzy. 
+4.2.2 bank centralny może regulować rynek, jeżeli jest hossa to 35% że bank da negatywny event np. podniesie podatki
+4.2.3 bank centralny można przekupić ale jest ryzyko wykrycia i zablokowania środków gracza. Za każdą łapówkę +10% do szansy wykrycia. 
+4.2.4 bank centralny powinien pojawiać się w okienku gdzie można brać pożyczki i dawać depozyty na stopę lombardową.
+4.2.5 stopa lombardowa- mechanika która zlicza ceny wszystkich akcji i poprzez obliczenia wylicza cenę złożenia depozytu. Np. na start 0.5%. Jeżeli wszystkich akcji wzrośnie to podnieść o 0.05% jeżeli 3/4 wzrośnie to o 0.02% jeżeli połowa wzrośnie to nie zwiększać a jeżeli spadnie to tak samo jak we wzrostach tylko obniżyć.
+4.3 dodać kryzys gdzie cena sp. skarb. państw. spada o 80% przez łapówki. Działa tylko w przypadku używania mechaniki łapówek. 
+5. Kupowanie i sprzedaż akcji ma wpływ na ich wartość. Kupno- podnosi cenę a sprzedaż obniża. 
+6. dodać więcej ciekawych mechanik
+7. zabrać się za grafikę bo na razie to źle wygląda
+8. dodać 3 konkurentów
+8.1 nierozważny konkurent- kupuje jak leci w dłuższej grze ma stracić wszystko
+8.2 spokojny- kupuje rozważnie, oblicza ryzyko
+8.3 gruba ryba- na start ma o 300% więcej od gracza, kupuje duże sumy
+9. dodać limity akcji np każda spółka ma po 100 na start
+9.1 firmy które przez 3 minuty osiągają zysk emitują nowe akcje % zależne od ich wyniku.
+9.2 dodać event gdzie firmy skupują swoje akcje i zmniejsza się ich liczba na rynku
+10. dodać zyski firm, każda z nich ma 60% na zysk, 30% na utrzymanie wyniku, 10% na stratę
+10.1 zyski- delikatny 7%, mały 13%, średni 24%, duży 10%, wielki 5%, to the mooooon 1%
+10.1.2 każdy z zysków w jakiś konkrenty sposób podnosi cenę i daję szansę na emisje nowych akcji
+10.2 utrzymanie- nic nie daje
+10.3 straty- mała 6%, średnia 3%, duża 1%
+10.3.1 każa strata zmniejsza w jakiś sposób cenę akcji, przy dużej stracie występuje ryzyko zamknięcia firmy 
+11. dodać dywidendy z akcji
+12. dodać pulę nowych firm najlepiej jako generator z bazy nazw które będą dodawna
+13. dodać możliwość przechodzenia firm pomiędzy giełdami, jeżeli ich cena odpowiednio wzrośnie lub spadnie to są przenoszone albo wyżej albo niżej. 
+14. dodać giełdę śmieciową- ceny akcji wynoszą do 5j.p. ceny strasznie skaczą, jest duże ryzyko ale też duża nagroda. Na giełdę śmieciową trafiają wszystkie spółki które zbankrutowały
+14.1 dodać całkowicie legalną firmę- ma się tak nazywać i nigdy nie wyjść ze śmieciówki
+14.1.2 dodać firmę krzak która ma dojść do 3 poziomu giełdy i zniknąć
+14.1.3 dodać spółkę wcale nie mafia która co jakiś czas dostaje event o wzroście kapitału o 50%, straty kapitału o 50% lub o tym, że policja firmę zamyka. wtedy pojawia się kolejna firma o tej samej nazwie ale z dodaną cyferką albo zmienioną kolejnością słów.
+15. dodać przeciwnika mafię który przejmuje spółki i daje oferty nie do odrzucenia
+16. dać możliwość sprzedawania akcji innym graczom 
+16.1 dodać też transfer akcji
+17. dodać bazę postaci które reprezentują gracza i boty
+18. ponazywać giełdy (brąz, srebro, złoto, platyna, diament, zieleń, listek). 
+18.1 dla pozostałych pap. wart. i ich giełd wymyślić śmieszne nazwy. 
+ 

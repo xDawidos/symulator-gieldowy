@@ -1,0 +1,916 @@
+@import url('https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,400;0,700;1,400&display=swap');
+
+/* --- STYLE OGÓLNE --- */
+
+.modal {
+    display: none; /* Domyślnie ukryte */
+    position: fixed; /* Kluczowe: "wyrywa" okno z normalnego przepływu strony */
+    z-index: 1000; /* Upewnia się, że okno jest na wierzchu */
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%); /* Centruje okno na ekranie */
+    background-color: #f9f9f9;
+    padding: 20px;
+    border: 2px solid #333;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    max-height: 90vh; /* Zapobiega wychodzeniu okna poza ekran */
+    display: flex; /* Ułatwia zarządzanie zawartością */
+    flex-direction: column;
+}
+
+body {
+    font-family: sans-serif;
+    background-color: #EAECEE;
+    color: #333;
+}
+
+h1, h2, h3 {
+    color: #1c1e21;
+}
+
+button {
+    cursor: pointer;
+    padding: 5px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #f5f6f7;
+}
+
+    button:hover {
+        background-color: #e9ebee;
+    }
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+    background-color: #fff;
+}
+
+th, td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+th {
+    background-color: #e9ebee;
+}
+
+.profit {
+    color: #28a745;
+    font-weight: bold;
+}
+
+.loss {
+    color: #dc3545;
+    font-weight: bold;
+}
+
+/* --- UKŁAD GŁÓWNY --- */
+.game-container {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+}
+
+.main-content {
+    flex: 2;
+}
+
+.sidebar {
+    flex: 1;
+    position: sticky;
+    top: 88px;
+}
+
+.panel {
+    background-color: #FAF9F6;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.08);
+    margin-bottom: 20px;
+    position: relative;
+}
+
+    .panel h2 {
+        margin-top: 0;
+        padding-bottom: 15px;
+        border-bottom: 1px solid #f0f0f0;
+        font-size: 20px;
+        color: #333;
+    }
+
+#main-nav {
+    background-color: #ffffff;
+    padding: 10px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 20px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+    #main-nav button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        border-color: #007bff;
+    }
+
+#settings-container {
+    position: fixed;
+    top: 15px;
+    left: 15px;
+    z-index: 1050;
+}
+
+#theme-toggle-btn {
+    font-size: 24px;
+    padding: 5px 10px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    background-color: #f5f6f7;
+    line-height: 1;
+}
+
+
+/* --- STYLE KOMPONENTÓW --- */
+
+/* Portfel */
+#portfolio ul {
+    list-style-type: none;
+    padding: 0;
+}
+
+#portfolio li {
+    background-color: #fff;
+    padding: 10px;
+    margin-bottom: 5px;
+    border-radius: 4px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+/* Tabela Giełdowa */
+.exchange-header td {
+    background-color: #343a40;
+    color: white;
+    font-weight: bold;
+    text-align: center !important;
+    border-bottom: 2px solid #fff;
+}
+
+.exchange-header {
+    cursor: pointer;
+    -webkit-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+    .exchange-header:hover {
+        background-color: #495057 !important;
+    }
+
+tr.locked-row {
+    background-color: #f8f9fa;
+}
+
+/* Bank */
+.bank-section {
+    border-bottom: 1px solid #ccc;
+    padding-bottom: 15px;
+    margin-bottom: 15px;
+}
+
+    .bank-section:last-of-type {
+        border-bottom: none;
+        margin-bottom: 0;
+    }
+
+/* Kontrolki Czasu */
+#time-controls .speed-btn {
+    margin: 0 5px;
+    padding: 5px 12px;
+}
+
+    #time-controls .speed-btn.active {
+        background-color: #007bff;
+        color: white;
+        border-color: #007bff;
+        font-weight: bold;
+    }
+
+/* Ranking (Leaderboard) */
+#leaderboard-list {
+    list-style-type: none;
+    padding: 0;
+}
+
+    #leaderboard-list li {
+        background-color: #fff;
+        padding: 10px 15px;
+        margin-bottom: 5px;
+        border-radius: 4px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        font-size: 16px;
+        border-left: 5px solid #007bff;
+    }
+
+        #leaderboard-list li:nth-child(1) {
+            border-left-color: #ffd700; /* Złoto */
+        }
+
+        #leaderboard-list li:nth-child(2) {
+            border-left-color: #c0c0c0; /* Srebro */
+        }
+
+        #leaderboard-list li:nth-child(3) {
+            border-left-color: #cd7f32; /* Brąz */
+        }
+
+/* Indeksy Giełdowe */
+#indexes-container {
+    display: flex;
+    justify-content: space-around;
+    text-align: center;
+}
+
+.index-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0 15px;
+}
+
+.index-name {
+    font-size: 14px;
+    color: #666;
+    font-weight: bold;
+}
+
+.index-value {
+    font-size: 24px;
+    font-weight: bold;
+    margin: 5px 0;
+}
+
+.index-change {
+    font-size: 16px;
+}
+
+.index-actions {
+    margin-top: 10px;
+}
+
+    .index-actions input {
+        width: 60px;
+        margin-right: 5px;
+        padding: 5px;
+        text-align: center;
+    }
+
+.vix-item {
+    border-left: 3px solid #007bff;
+    padding-left: 20px;
+    margin-left: 10px;
+}
+
+/* Gazeta */
+#newspaper-modal {
+    display: none !important;
+}
+
+    #newspaper-modal .newspaper-content {
+        font-family: 'Merriweather', serif;
+        background-color: #fdf5e6;
+        color: #333;
+        padding: 20px;
+        height: 70vh;
+        overflow-y: auto;
+    }
+
+.newspaper-header {
+    text-align: center;
+    padding-bottom: 15px;
+    border-bottom: 3px double #333;
+    margin-bottom: 15px;
+}
+
+    .newspaper-header h2 {
+        font-size: 36px;
+        margin: 0;
+        font-weight: 700;
+    }
+
+    .newspaper-header p {
+        margin: 5px 0 0 0;
+        font-size: 14px;
+        color: #555;
+    }
+
+.newspaper-columns {
+    display: flex;
+    gap: 20px;
+}
+
+.news-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.news-section {
+    border-top: 1px solid #ccc;
+    padding-top: 10px;
+}
+
+    .news-section h3 {
+        font-size: 20px;
+        margin-top: 0;
+        margin-bottom: 10px;
+        border-bottom: 1px solid #ddd;
+        padding-bottom: 5px;
+    }
+
+    .news-section ul {
+        list-style-type: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .news-section li {
+        font-size: 14px;
+        line-height: 1.6;
+        text-align: justify;
+        padding-bottom: 10px;
+        margin-bottom: 10px;
+        border-bottom: 1px dotted #ccc;
+    }
+
+        .news-section li:last-child {
+            border-bottom: none;
+        }
+
+.premium-section {
+    background-color: rgba(0, 123, 255, 0.05);
+    border: 1px dashed #007bff;
+    padding: 15px;
+    border-radius: 4px;
+}
+
+/* Style Okien Modalnych */
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #ccc;
+    padding-bottom: 10px;
+    flex-shrink: 0;
+}
+
+.modal-body {
+    flex-grow: 1;
+    overflow-y: auto;
+    min-height: 0;
+    margin-top: 15px;
+    padding-top: 10px;
+}
+
+.close-btn {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    background: none;
+    border: none;
+    font-size: 24px;
+    font-weight: bold;
+    color: #555;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+
+    .close-btn:hover {
+        color: #000;
+    }
+
+#dividend-tracker-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 600px;
+    max-height: 80vh;
+    background-color: #f9f9f9;
+    border: 2px solid #333;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    padding: 20px;
+    z-index: 1009;
+    display: flex;
+    flex-direction: column;
+}
+
+#takeover-modal button {
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+    #takeover-modal button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+
+/* Inkubator Start-upów */
+#startup-incubator-panel {
+    background-color: #F5F5DC;
+    border: 1px solid #D3D3D3;
+}
+
+    #startup-incubator-panel h2 {
+        color: #0056b3;
+        border-bottom: 1px solid #ADD8E6;
+    }
+
+#startup-table thead th {
+    background-color: #E3F2FD;
+    color: #0056b3;
+}
+
+#startup-table tbody tr:hover {
+    background-color: #EEEEEE;
+}
+
+#startup-table progress {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 12px;
+    border: 1px solid #BDBDBD;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+    #startup-table progress::-webkit-progress-bar {
+        background-color: #E0E0E0;
+    }
+
+    #startup-table progress::-webkit-progress-value {
+        background-color: #007bff;
+        transition: width 0.5s ease-in-out;
+    }
+
+/* Suwak Auto-inwestowania */
+#autoinvest-interval {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 8px;
+    background: #d3d3d3;
+    outline: none;
+    opacity: 0.7;
+    -webkit-transition: .2s;
+    transition: opacity .2s;
+    border-radius: 5px;
+}
+
+    #autoinvest-interval:hover {
+        opacity: 1;
+    }
+
+    #autoinvest-interval::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 20px;
+        height: 20px;
+        background: #007bff;
+        cursor: pointer;
+        border-radius: 50%;
+    }
+
+    #autoinvest-interval::-moz-range-thumb {
+        width: 20px;
+        height: 20px;
+        background: #007bff;
+        cursor: pointer;
+        border-radius: 50%;
+    }
+
+#toggle-autoinvest-btn {
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+/* Powiadomienia (Toast) */
+#toast-notification {
+    display: none;
+    position: fixed;
+    top: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 15px 25px;
+    border-radius: 8px;
+    background-color: #333;
+    color: white;
+    font-size: 16px;
+    font-weight: bold;
+    z-index: 2001;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    text-align: center;
+    transition: opacity 0.5s ease;
+}
+
+.toast-success {
+    background-color: #28a745;
+}
+
+.toast-warning {
+    background-color: #ffc107;
+    color: #333;
+}
+
+.toast-error {
+    background-color: #dc3545;
+}
+
+/* Przycisk Info */
+.info-btn {
+    width: 22px;
+    height: 22px;
+    margin-left: 8px;
+    border-radius: 4px;
+    border: 1px solid #aaa;
+    background-color: #f0f0f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #333;
+    font-weight: bold;
+    font-size: 14px;
+    font-family: 'Georgia', serif;
+    cursor: pointer;
+    vertical-align: middle;
+    padding: 0;
+}
+
+    .info-btn:hover {
+        background-color: #e0e0e0;
+    }
+
+.chart-controls-group {
+    display: flex;
+    align-items: center;
+}
+
+/* Minigra Money Stacker */
+#money-stacker-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 2001;
+    display: none;
+    width: 400px;
+    background-color: #f0f0f0;
+    padding: 20px;
+    border: 2px solid #333;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+#stacker-ui-container {
+    display: flex;
+    justify-content: space-around;
+    background-color: #ddd;
+    padding: 0 10px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+}
+
+#stacker-game-area {
+    width: 100%;
+    height: 500px;
+    background-color: #d4e6f1;
+    border: 1px solid #aaa;
+    position: relative;
+    overflow: hidden;
+}
+
+.stacker-block {
+    position: absolute;
+    width: 100px;
+    height: 60px;
+    background-image: url('img/money.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    border: 1px solid #333;
+    box-sizing: border-box;
+}
+
+/* Cechy CEO */
+.ceo-traits-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 5px;
+}
+
+.ceo-trait {
+    color: white;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    cursor: help;
+}
+
+/* --- CIEMNY MOTYW (DARK MODE) --- */
+
+body.dark-mode {
+    background-color: #3a3a3a;
+    color: #FFFFFF;
+}
+
+    body.dark-mode h1,
+    body.dark-mode h2,
+    body.dark-mode h3,
+    body.dark-mode h4 {
+        color: #FFFFFF;
+    }
+
+    body.dark-mode .panel,
+    body.dark-mode #skills-modal,
+    body.dark-mode #bank-modal,
+    body.dark-mode #leaderboard-modal,
+
+/* Poprawka dla ciemnego motywu */
+  #management-modal .modal-body {
+    max-height: 60vh; /* Ogranicza wysokość do 60% wysokości ekranu */
+    overflow-y: auto; /* Pokazuje pionowy suwak tylko wtedy, gdy treść się nie mieści */
+    padding-right: 15px; /* Dodaje trochę miejsca, aby suwak nie nachodził na treść */
+    margin-top: 15px; /* Dodaje odstęp od tytułu */
+    padding-top: 10px; /* Dodaje wewnętrzny odstęp */
+    border-top: 1px solid #ccc; /* Dodaje linię oddzielającą tytuł od treści */
+}
+    body.dark-mode #stock-details-modal,
+    body.dark-mode #work-modal,
+    body.dark-mode #dividend-tracker-modal,
+    body.dark-mode #takeover-modal,
+    body.dark-mode #rescue-offering-modal,
+    body.dark-mode #investors-modal,
+    body.dark-mode #autoinvest-modal,
+    body.dark-mode #startup-autoinvest-modal,
+    body.dark-mode #liabilities-modal,
+    body.dark-mode #startup-offer-modal,
+    body.dark-mode #price-chart-modal,
+    body.dark-mode #settings-modal,
+    body.dark-mode #newspaper-modal .newspaper-content {
+        background-color: #4f4f4f !important;
+        color: #FFFFFF;
+        border-color: #6c757d;
+    }
+
+    body.dark-mode #minigame-content {
+        background-color: #4f4f4f;
+    }
+
+    body.dark-mode table {
+        background-color: #4f4f4f;
+    }
+
+    body.dark-mode th {
+        background-color: #3a3a3a;
+    }
+
+    body.dark-mode td,
+    body.dark-mode th {
+        border-bottom-color: #6c757d;
+    }
+
+    body.dark-mode button,
+    body.dark-mode input,
+    body.dark-mode select {
+        background-color: #5a5a5a;
+        color: #FFFFFF;
+        border-color: #6c757d;
+    }
+
+        body.dark-mode button:hover {
+            background-color: #6c757d;
+        }
+
+    body.dark-mode .speed-btn.active {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+    }
+
+    body.dark-mode #main-nav,
+    body.dark-mode #theme-toggle-btn {
+        background-color: #4f4f4f;
+        border-color: #6c757d;
+    }
+
+        body.dark-mode #main-nav button:hover {
+            background-color: #6c757d;
+            border-color: #8c959d;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        }
+
+    body.dark-mode #portfolio li,
+    body.dark-mode #leaderboard-list li {
+        background-color: #5a5a5a;
+        box-shadow: none;
+    }
+
+    body.dark-mode #startup-incubator-panel {
+        background-color: #5a5a5a !important;
+        border-color: #6c757d;
+    }
+
+        body.dark-mode #startup-incubator-panel h2 {
+            border-bottom-color: #6c757d;
+        }
+
+    body.dark-mode #startup-table thead th {
+        background-color: #3a3a3a;
+        color: #FFFFFF;
+    }
+
+    body.dark-mode #startup-table tbody tr:hover,
+    body.dark-mode #stock-table tbody tr:hover {
+        background-color: #5a5a5a;
+    }
+
+    body.dark-mode tr.locked-row {
+        background-color: #404040;
+    }
+
+    body.dark-mode #chart-svg-area,
+    body.dark-mode #pie-chart-container {
+        background-color: #5a5a5a !important;
+    }
+
+        body.dark-mode #chart-svg-area text,
+        body.dark-mode #pie-chart-container text {
+            fill: #FFFFFF;
+        }
+
+    body.dark-mode .pie-legend-color-box {
+        border-color: #999;
+    }
+
+    body.dark-mode #stock-details-modal #pie-chart-legend span {
+        color: #FFFFFF;
+    }
+
+    body.dark-mode .info-btn {
+        background-color: #5a5a5a;
+        border-color: #888;
+        color: #fff;
+    }
+
+    body.dark-mode .ceo-trait[style*="background-color: #a0a0a0"] {
+        color: #111;
+    }
+
+    .bank-tabs {
+    display: flex;
+    border-bottom: 2px solid #ccc;
+    margin-bottom: 15px;
+}
+
+.bank-tab-btn {
+    padding: 10px 15px;
+    cursor: pointer;
+    border: none;
+    background-color: transparent;
+    font-size: 16px;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px; /* Nakłada się na dolną ramkę kontenera */
+}
+
+.bank-tab-btn.active {
+    font-weight: bold;
+    color: #007bff;
+    border-bottom-color: #007bff;
+}
+
+#city-investment-modal .bank-section table tbody {
+    display: block; /* Umożliwia ustawienie max-height */
+    max-height: 150px; /* Maksymalna wysokość tabeli, dostosuj wg potrzeb */
+    overflow-y: auto; /* Dodaje pionowy pasek przewijania, gdy potrzeba */
+}
+
+/* Dopasowanie nagłówka i komórek do przewijalnej tabeli */
+#city-investment-modal .bank-section table thead,
+#city-investment-modal .bank-section table tbody tr {
+    display: table; /* Zachowuje układ tabeli */
+    width: 100%;
+    table-layout: fixed; /* Równomiernie rozkłada kolumny */
+}
+
+#bank-modal #other-bonds-table tbody {
+    display: block; /* Umożliwia ustawienie max-height */
+    max-height: 180px; /* Maksymalna wysokość tabeli, np. 180px - dostosuj wg potrzeb */
+    overflow-y: auto; /* Dodaje pionowy pasek przewijania, gdy potrzeba */
+    width: 100%; /* Upewnia się, że tbody zajmuje całą szerokość */
+}
+
+/* Dopasowanie nagłówka i komórek do przewijalnej tabeli obligacji */
+#bank-modal #other-bonds-table thead,
+#bank-modal #other-bonds-table tbody tr {
+    display: table; /* Zachowuje układ tabeli */
+    width: 100%;
+    table-layout: fixed; /* Równomiernie rozkłada kolumny */
+}
+
+/* Opcjonalnie: Ustawienie szerokości kolumn, aby były spójne */
+#bank-modal #other-bonds-table th,
+#bank-modal #other-bonds-table td {
+    /* Możesz tu zdefiniować szerokości % dla każdej kolumny, np.: */
+     /* width: 20%; */
+     /* Ale table-layout: fixed; często wystarcza */
+     word-wrap: break-word; /* Zapewnia łamanie długich nazw */
+}
+
+/* Dostosowanie komórki Akcje, aby input i przycisk się mieściły */
+#bank-modal #other-bonds-table td:last-child {
+    white-space: nowrap; /* Zapobiega łamaniu linii w komórce z przyciskami */
+}
+#bank-modal #other-bonds-table td:last-child input {
+    width: 50px; /* Zmniejszenie inputa */
+    margin-right: 3px;
+}
+
+.commercial-bank-item {
+    margin-bottom: 15px;
+    padding: 15px;
+    background-color: #f8f9fa; /* Jaśniejsze tło dla odróżnienia */
+    border-radius: 4px;
+    border-left-width: 5px;
+    border-left-style: solid;
+}
+.commercial-bank-item h4 {
+    margin-top: 0;
+    margin-bottom: 8px;
+}
+.commercial-bank-item p {
+    margin: 5px 0;
+    font-size: 13px;
+}
+.bank-actions button {
+    margin-right: 5px;
+    margin-top: 8px;
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+/* Style dla ciemnego motywu */
+body.dark-mode .commercial-bank-item {
+    background-color: #5a5a5a;
+    border-color: #4f4f4f; /* Dopasuj kolor ramki */
+}
+body.dark-mode .commercial-bank-item p {
+    color: #e0e0e0;
+}
+body.dark-mode .bank-actions p {
+    color: #bbb;
+}
+
+.bank-stock-sales {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed #ccc;
+}
+.bank-stock-sales h5 {
+    margin: 0 0 5px 0;
+    font-size: 13px;
+    color: #666;
+}
+.bank-stock-sales ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    font-size: 12px;
+}
+.bank-stock-sales li {
+    margin-bottom: 5px;
+}
+.bank-stock-sales button {
+    padding: 2px 5px;
+    font-size: 11px;
+    margin-left: 5px;
+}
+body.dark-mode .bank-stock-sales { border-top-color: #6c757d; }
+body.dark-mode .bank-stock-sales h5 { color: #ccc; }
