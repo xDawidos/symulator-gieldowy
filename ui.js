@@ -1,5 +1,7 @@
-// ui.js
+// ui.js (Połączony)
 // Funkcje odpowiedzialne za aktualizację i wyświetlanie interfejsu użytkownika
+
+let startupPanelCollapsed = false; // <<< DODANE Z ui2.js
 
 function getCurrentInputValues() {
     const values = {};
@@ -27,8 +29,21 @@ function displayStocks(previousInputValues = {}) {
         return;
     }
 
+    // --- POCZĄTEK BLOKU (DODANE Z ui2.js) ---
+    // Aktualizacja nagłówka ceny (strzałki sortowania)
+    const priceHeader = document.getElementById('price-header-cell');
+    if (priceHeader) {
+        let headerText = 'Cena (PLN)';
+        if (currentSortState === 'price_asc') headerText += ' ▲';
+        else if (currentSortState === 'price_desc') headerText += ' ▼';
+        priceHeader.innerHTML = headerText;
+    } else {
+        console.warn("Nie znaleziono elementu #price-header-cell"); // Ostrzeżenie
+    }
+    // --- KONIEC BLOKU (DODANE Z ui2.js) ---
+
     const selectedSector = document.getElementById('sector-filter').value;
-    let filteredStocks;
+    let filteredStocks; // W ui.js nazwa to filteredStocks
 
     if (selectedSector === 'all') {
         filteredStocks = stocks;
@@ -44,7 +59,18 @@ function displayStocks(previousInputValues = {}) {
 
     sortedExchanges.forEach(exchangeKey => {
         const exchange = exchanges[exchangeKey];
-        const stocksOnThisExchange = filteredStocks.filter(stock => stock.exchange === exchangeKey);
+        // Używamy nazwy 'filteredStocks' z pliku ui.js
+        let stocksOnThisExchange = filteredStocks.filter(stock => stock.exchange === exchangeKey);
+
+        // --- POCZĄTEK BLOKU (DODANE Z ui2.js) ---
+        // --- NOWA LOGIKA SORTOWANIA WEWNĄTRZ GIEŁDY ---
+        if (currentSortState === 'price_asc') {
+            stocksOnThisExchange.sort((a, b) => a.price - b.price);
+        } else if (currentSortState === 'price_desc') {
+            stocksOnThisExchange.sort((a, b) => b.price - a.price);
+        }
+        // --- KONIEC BLOKU (DODANE Z ui2.js) ---
+
 
         if (stocksOnThisExchange.length > 0) {
             const headerRow = stockTableBody.insertRow();
@@ -94,7 +120,7 @@ function displayStocks(previousInputValues = {}) {
             }
 
             // Komórka 1: Nazwa Spółki + przycisk "i"
-             // Komórka 1: Nazwa Spółki + przycisk "i"
+            // Komórka 1: Nazwa Spółki + przycisk "i"
             const nameCell = row.insertCell();
             const nameWrapper = document.createElement('div');
             nameWrapper.style.display = 'flex';
@@ -103,8 +129,8 @@ function displayStocks(previousInputValues = {}) {
             let stockNameContent = '';
             if (playerSharePct > 50) stockNameContent += '👑 ';
             if (stock.assetType === 'ResearchInstitute') {
-            stockNameContent += '🧪 ';
-        }
+                stockNameContent += '🧪 ';
+            }
             if (stock.isStateOwned) {
                 stockNameContent += `🏛️ ${stock.name}`;
                 nameCell.title = 'Spółka Skarbu Państwa';
@@ -121,7 +147,7 @@ function displayStocks(previousInputValues = {}) {
             infoButton.className = 'info-btn';
             infoButton.title = 'Pokaż opis spółki';
             infoButton.onclick = () => openDescriptionModal(stock.symbol);
-            
+
             nameWrapper.appendChild(nameSpan);
             nameWrapper.appendChild(infoButton);
             nameCell.appendChild(nameWrapper);
@@ -200,7 +226,7 @@ function displayStocks(previousInputValues = {}) {
             detailsButton.style.marginLeft = '5px';
             detailsButton.onclick = () => { openStockDetailsModal(stock.symbol); };
             actionsCell.appendChild(detailsButton);
-            
+
             if (playerSharePct > 50) {
                 const manageButton = document.createElement('button');
                 manageButton.textContent = '👑 Zarządzaj';
@@ -217,7 +243,7 @@ function displayStocks(previousInputValues = {}) {
             reportCell.style.fontSize = '18px';
 
             const isMajorityOwner = playerSharePct > 50;
-            const hasDebt = stock.corporateDebt && stock.corporateDebt > 0;
+            const hasDebt = stock.corporateDebt && stock.corporateDebt > 0; // Ta logika jest w obu plikach
             let reportContent = '';
             let reportTitle = '';
 
@@ -235,11 +261,14 @@ function displayStocks(previousInputValues = {}) {
                 reportTitle = 'Wykup umiejętność "Analityk Finansowy", aby zobaczyć raporty.';
             }
 
+            // W pliku ui.js sprawdzanie długu jest, ale używa 'stock.corporateDebt'
+            // W pliku ui2.js też używa 'stock.corporateDebt'
+            // Zostawiamy jak jest.
             if (hasDebt && (hasAnalystSkill || isMajorityOwner)) {
                 reportContent += ' <span style="color:red;" title="Spółka jest zadłużona!">💵​‼️</span>';
                 reportTitle += ' (Spółka jest zadłużona!)';
             }
-            
+
             reportCell.innerHTML = reportContent;
             reportCell.title = reportTitle;
         });
@@ -255,7 +284,7 @@ function showPriceHistoryModal(symbol) {
     const modal = document.getElementById('price-chart-modal');
     const chartTitle = document.getElementById('chart-title');
     const svgArea = document.getElementById('chart-svg-area');
-    
+
     // Pobierz kontrolki
     const candlestickBtn = document.getElementById('chart-type-candlestick-btn');
     const lineBtn = document.getElementById('chart-type-line-btn');
@@ -264,7 +293,7 @@ function showPriceHistoryModal(symbol) {
     const openAlertBtn = document.getElementById('open-alert-modal-btn');
 
     chartTitle.textContent = `Historia Cen: ${stock.name} (${stock.symbol})`;
-    
+
     const redrawChart = () => {
         const svgWidth = svgArea.offsetWidth;
         const svgHeight = svgArea.offsetHeight;
@@ -280,7 +309,7 @@ function showPriceHistoryModal(symbol) {
             candleIntervalSelect.style.display = 'none';
         }
         updateChartTypeButtons();
-        
+
     };
 
     // Ustaw wartości początkowe
@@ -394,6 +423,7 @@ function renderSkillsPanel() {
     }
 }
 
+// Ta funkcja jest z ui.js (baza), zachowujemy ją, ponieważ obsługuje bankowość komercyjną
 function displayPortfolio() {
     const myStocksList = document.getElementById('my-stocks-list');
     if (!myStocksList) {
@@ -426,13 +456,13 @@ function displayPortfolio() {
             let marketData, currentPrice = 0, name = symbol;
             if (holding.assetType === 'etf') {
                 marketData = etfs.find(e => e.symbol === symbol);
-                if(marketData) { currentPrice = marketData.price; name = marketData.name; }
+                if (marketData) { currentPrice = marketData.price; name = marketData.name; }
             } else if (holding.assetType === 'index') {
                 marketData = marketIndexes.find(i => i.id === symbol);
-                 if(marketData) { currentPrice = marketData.value; name = marketData.name; }
+                if (marketData) { currentPrice = marketData.value; name = marketData.name; }
             } else { // Zakładamy, że to standardowe akcje
                 marketData = stocks.find(s => s.symbol === symbol);
-                 if(marketData) { currentPrice = marketData.price; name = marketData.name; }
+                if (marketData) { currentPrice = marketData.price; name = marketData.name; }
             }
 
             if (!marketData || holding.shares <= 0) continue; // Pomiń, jeśli brak danych lub udziałów
@@ -454,9 +484,9 @@ function displayPortfolio() {
 
             // --- 👇 TUTAJ JEST DODANY BLOK DLA ZABLOKOWANYCH AKCJI 👇 ---
             if (holding.lockedShares && holding.lockedShares > 0) {
-                 listItem.textContent += ` (Zablokowane: ${holding.lockedShares})`;
-                 listItem.style.opacity = '0.7'; // Lekko przygaś
-                 listItem.title = `${holding.lockedShares} akcji jest zablokowanych jako zabezpieczenie kredytu hipotecznego.`;
+                listItem.textContent += ` (Zablokowane: ${holding.lockedShares})`;
+                listItem.style.opacity = '0.7'; // Lekko przygaś
+                listItem.title = `${holding.lockedShares} akcji jest zablokowanych jako zabezpieczenie kredytu hipotecznego.`;
             }
             // --- 👆 KONIEC BLOKU 👆 ---
 
@@ -882,12 +912,12 @@ function displayMarketIndexes() {
 function openManagementModal(symbol) {
     const modal = document.getElementById('management-modal');
     const stock = stocks.find(s => s.symbol === symbol);
-     modal.dataset.currentSymbol = symbol;
+    modal.dataset.currentSymbol = symbol;
     if (!modal || !stock) return;
 
     document.getElementById('management-title').textContent = `👑 Panel Zarządzania: ${stock.name}`;
 
-    // Logika dywidendy (bez zmian)
+    // Logika dywidendy
     const dividendBtn = document.getElementById('force-dividend-btn');
     const cooldownInfo = document.getElementById('dividend-cooldown-info');
     if (Date.now() < stock.dividendCooldownUntil) {
@@ -899,11 +929,12 @@ function openManagementModal(symbol) {
         cooldownInfo.textContent = '';
     }
     dividendBtn.onclick = () => forceDividend(symbol);
-const fireCeoBtn = document.getElementById('fire-ceo-btn');
+
+    // Logika zmiany CEO
+    const fireCeoBtn = document.getElementById('fire-ceo-btn');
     const fireCeoCooldownInfo = document.getElementById('fire-ceo-cooldown-info');
-    
-    // Zmieniamy tekst przycisku na bardziej adekwatny
-    fireCeoBtn.textContent = "Zażądaj zmiany prezesa"; 
+
+    fireCeoBtn.textContent = "Zażądaj zmiany prezesa";
     fireCeoBtn.title = "Zaproponuj radzie nadzorczej nowych kandydatów. Szansa na sukces zależy od Twojego udziału w firmie.";
 
     if (stock.ceo && stock.ceo.fireCooldown && Date.now() < stock.ceo.fireCooldown) {
@@ -914,58 +945,68 @@ const fireCeoBtn = document.getElementById('fire-ceo-btn');
         fireCeoBtn.disabled = false;
         fireCeoCooldownInfo.textContent = '';
     }
-    // Zmieniamy wywoływaną funkcję
     fireCeoBtn.onclick = () => initiateCeoChange(symbol);
+
+    // Logika polityki dywidendowej
     const policySelect = document.getElementById('policy-select');
     policySelect.dataset.symbol = symbol;
     policySelect.value = stock.dividendPolicy || 'Growth'; // Ustaw domyślną, jeśli brak
 
-    const bankSelectionSection = document.getElementById('bank-selection-section');
-    const bankSelect = document.getElementById('bank-select');
-    const changeBankBtn = document.getElementById('change-bank-btn');
-    const bankChangeInfo = document.getElementById('bank-change-info');
-    bankSelect.innerHTML = '<option value="">-- Brak --</option>'; // Wyczyść i dodaj opcję domyślną
+    // --- SEKCJA DOSTĘPU DO FINANSÓW (DODANE Z ui2.js) ---
+    // Ta sekcja zastępuje sekcję wyboru banku z ui.js
+    const financialSection = document.getElementById('financial-access-section');
+    const viewFinancesBtn = document.getElementById('view-finances-btn');
+    const financesInfo = document.getElementById('finances-access-info');
 
-    // Pokaż sekcję tylko dla standardowych spółek
-    if (!stock.assetType) {
-        const eligibleBanks = commercialBanks.filter(b => b.isActive && (b.type === BANK_TYPES.CORPORATE || b.type === BANK_TYPES.UNIVERSAL));
+    // Upewnijmy się, że elementy istnieją (na wypadek, gdyby HTML nie był gotowy)
+    if (financialSection && viewFinancesBtn && financesInfo) {
+        const accountantLevel = getSkillLevel('accountant');
+        const playerRep = stock.reputation['player'];
+        const isMajorityOwner = (playerPortfolio[symbol]?.shares / stock.totalShares) > 0.5;
+        const hasPaidAccess = stock.playerHasFinancialAccess;
 
-        eligibleBanks.forEach(bank => {
-            const option = document.createElement('option');
-            option.value = bank.id;
-            option.textContent = bank.name;
-            if (stock.bankAccountId === bank.id) {
-                option.selected = true; // Zaznacz aktualny bank
-            }
-            bankSelect.appendChild(option);
-        });
+        if (accountantLevel > 0) { // Czy umiejętność "Księgowy" jest odblokowana?
+            financialSection.style.display = 'block'; // Pokaż sekcję
+            viewFinancesBtn.onclick = () => handleViewFinancesClick(symbol); // Ustaw akcję kliknięcia
+            financesInfo.textContent = ''; // Wyczyść poprzednie info
 
-        changeBankBtn.onclick = () => {
-            const newBankId = bankSelect.value;
-            if (newBankId) {
-                changeCompanyBank(symbol, newBankId);
+            // Sprawdź warunki dostępu
+            if (playerRep < REPUTATION_LEVELS.NEGATIVE && !isMajorityOwner) {
+                viewFinancesBtn.disabled = true; // Zablokuj przycisk
+                financesInfo.textContent = 'Dostęp zablokowany z powodu złych relacji.'; // Pokaż powód
+                financesInfo.style.color = 'red';
+            } else if (hasPaidAccess) {
+                viewFinancesBtn.disabled = false; // Odblokuj przycisk
+                financesInfo.textContent = 'Dostęp już opłacony.'; // Poinformuj, że dostęp jest
+                financesInfo.style.color = 'green';
+            } else if (accountantLevel >= 2 && isMajorityOwner) {
+                viewFinancesBtn.disabled = false; // Odblokuj przycisk
+                financesInfo.textContent = 'Dostęp darmowy (większościowy udziałowiec).'; // Dostęp darmowy
+                financesInfo.style.color = 'green';
             } else {
-                alert("Wybierz bank z listy.");
+                // Dostęp płatny (Lvl 1 lub Lvl 2+ bez większości)
+                viewFinancesBtn.disabled = false; // Odblokuj przycisk
+                financesInfo.textContent = 'Wymagana opłata: 2000 PLN.'; // Informacja o koszcie
+                financesInfo.style.color = '#666';
             }
-        };
 
-        // Informacja o ograniczeniach (na razie brak)
-        bankChangeInfo.textContent = ""; // Można tu dodać np. info o kosztach zmiany banku
-
-        bankSelectionSection.style.display = 'block';
-    } else {
-        bankSelectionSection.style.display = 'none'; // Ukryj dla startupów, REITów etc.
+        } else {
+            // Umiejętność nieodblokowana - ukryj całą sekcję
+            financialSection.style.display = 'none';
+        }
     }
+    // --- KONIEC SEKCJI Z ui2.js ---
 
-   // --- Sekcja Długu (zmodyfikowana, aby używać bilansu) ---
+    // --- Sekcja Długu (zmodyfikowana, aby używać bilansu) ---
     const debtSection = document.getElementById('debt-management-section');
+    // W obu plikach ta sekcja wyglądała inaczej. ui.js używał 'balanceSheet', ui2.js 'corporateDebt'.
+    // Zachowujemy wersję z ui.js (baza), która jest powiązana z bilansem.
     if (stock.balanceSheet && stock.balanceSheet.liabilities > 0) {
         document.getElementById('corporate-debt-amount').textContent = stock.balanceSheet.liabilities.toFixed(2); // Użyj długu z bilansu
         const repaymentInput = document.getElementById('debt-repayment-amount');
         repaymentInput.value = '';
         document.getElementById('repay-debt-btn').onclick = () => {
             const amount = parseFloat(repaymentInput.value);
-            // Wywołujemy starą funkcję, ale docelowo można ją zmodyfikować, by operowała na bilansie
             playerBailsOutCompany(symbol, amount);
         };
         debtSection.style.display = 'block';
@@ -973,7 +1014,7 @@ const fireCeoBtn = document.getElementById('fire-ceo-btn');
         debtSection.style.display = 'none';
     }
 
-    // --- NOWY FRAGMENT - OBSŁUGA PANELU R&D ---
+    // --- FRAGMENT - OBSŁUGA PANELU R&D ---
     const rdSection = document.getElementById('rd-management-section');
     if (stock.research && stock.research.isResearching && stock.research.currentTech) {
         const tech = technologies[stock.research.currentTech];
@@ -981,16 +1022,18 @@ const fireCeoBtn = document.getElementById('fire-ceo-btn');
 
         const progressPercent = (stock.research.progress / tech.cost) * 100;
         document.getElementById('rd-progress-bar').value = progressPercent;
-        
+
         document.getElementById('open-research-panel-btn').onclick = () => {
-            openResearchModal(symbol); 
+            openResearchModal(symbol);
         };
 
         rdSection.style.display = 'block'; // Pokaż sekcję R&D
     } else {
         rdSection.style.display = 'none'; // Ukryj sekcję R&D
     }
-    // --- KONIEC NOWEGO FRAGMENTU ---
+    // --- KONIEC FRAGMENTU R&D ---
+
+    // Sekcja Reputacji
     const repSection = document.getElementById('reputation-management-section');
     if (stock.reputation && stock.reputation['player'] !== undefined) {
         const repStatusEl = document.getElementById('reputation-status');
@@ -1003,7 +1046,7 @@ const fireCeoBtn = document.getElementById('fire-ceo-btn');
         else if (playerRep <= REPUTATION_LEVELS.CORRECT) repText = 'Poprawne';
         else if (playerRep <= REPUTATION_LEVELS.POSITIVE) repText = 'Pozytywne';
         else repText = 'Przyjacielskie';
-        
+
         repStatusEl.textContent = `${repText} (${playerRep.toFixed(1)})`;
 
         document.getElementById('donate-btn').onclick = () => {
@@ -1022,15 +1065,18 @@ const fireCeoBtn = document.getElementById('fire-ceo-btn');
 
 
 function toggleAutoRepay(isEnabled) {
+    // Ta funkcja jest specyficzna dla ui2.js (prosty kredyt). 
+    // W ui.js (baza) system auto-spłaty nie jest zaimplementowany dla kredytów komercyjnych.
+    // Na razie zostawiamy ją, ale może nie być używana.
     isAutoRepayEnabled = isEnabled;
     logEvent(`System automatycznej spłaty kredytu został ${isEnabled ? 'WŁĄCZONY' : 'WYŁĄCZONY'}.`, 'market');
 }
 
 
 // Plik: ui.js
-
+// Ta funkcja jest z ui.js (baza) i obsługuje złożony modal bankowy (z zakładkami)
 function openBankModal() {
- const centralTabContent = document.getElementById('bank-content-central');
+    const centralTabContent = document.getElementById('bank-content-central');
     if (centralTabContent && centralBank.ceo) {
         let ceoInfoHtml = `
             <div style="text-align: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px dashed #ccc;">
@@ -1051,16 +1097,24 @@ function openBankModal() {
             centralTabContent.insertBefore(infoDiv, centralTabContent.children[1]);
         }
     }
-    // Aktualizacja checkboxa auto-spłaty (jeśli jeszcze jest używany - na razie zostawiamy)
+
+    // Logika z ui2.js dotycząca 'playerLoan' (prosty kredyt) jest zastąpiona
+    // przez system bankowości komercyjnej z ui.js.
+    // Poniższe elementy z ui2.js (dotyczące playerLoan) mogą nie istnieć w HTML dla ui.js
+
+    // Aktualizacja checkboxa auto-spłaty (z ui2.js)
     const autoRepayToggle = document.getElementById('auto-repay-toggle');
-    if (autoRepayToggle) { // Sprawdź, czy element istnieje
+    if (autoRepayToggle) {
         autoRepayToggle.checked = isAutoRepayEnabled;
     }
 
-    // Aktualizacja informacji o pominiętych ratach (jeśli element istnieje)
+    // Aktualizacja informacji o pominiętych ratach (z ui2.js)
     const missedPaymentsInfo = document.getElementById('missed-payments-info');
     if (missedPaymentsInfo) {
-        if (playerLoan.missedPayments > 0) {
+        // Zakładamy, że 'playerLoan' nadal istnieje równolegle, albo ta sekcja powinna być usunięta
+        // Jeśli ui.js *całkowicie* usuwa playerLoan, ten blok jest martwy.
+        // Na potrzeby łączenia, zakładamy, że HTML może jeszcze to mieć.
+        if (typeof playerLoan !== 'undefined' && playerLoan.missedPayments > 0) {
             if (playerLoan.missedPayments >= 3) {
                 missedPaymentsInfo.textContent = `KONTO ZABLOKOWANE! Posiadasz ${playerLoan.missedPayments} pominiętych rat. Spłać część długu, aby odblokować inwestycje.`;
                 missedPaymentsInfo.style.color = '#dc3545';
@@ -1075,7 +1129,7 @@ function openBankModal() {
     }
 
 
-    // Aktualizacja sekcji licencji (bez zmian)
+    // Aktualizacja sekcji licencji (z bazy ui.js)
     const licenseInfoText = document.getElementById('license-info-text');
     const licenseButton = document.getElementById('buy-license-btn');
     const nextLevel = playerAccessLevel + 1;
@@ -1093,7 +1147,7 @@ function openBankModal() {
     }
 
 
-    // Aktualizacja sekcji ofert do państwa (bez zmian)
+    // Aktualizacja sekcji ofert do państwa (z bazy ui.js)
     const stateCompanySelect = document.getElementById('state-company-select');
     const stateOfferSection = document.getElementById('state-offer-section'); // Dodano sprawdzenie
     if (stateCompanySelect && stateOfferSection) { // Sprawdź, czy elementy istnieją
@@ -1115,12 +1169,12 @@ function openBankModal() {
     }
 
 
-    // Sprawdź dostęp do bonów, zanim pokażesz sekcję aukcji (bez zmian)
+    // Sprawdź dostęp do bonów, zanim pokażesz sekcję aukcji (z bazy ui.js)
     checkTBillAccess();
     updateTBillAuctionSection();
-    updateCollateralAuctionSection();
+    updateCollateralAuctionSection(); // Funkcja z ui.js
 
-const baseRateEl = document.getElementById('bc-base-rate-display');
+    const baseRateEl = document.getElementById('bc-base-rate-display');
     if (baseRateEl) {
         baseRateEl.textContent = (centralBank.baseInterestRate * 100).toFixed(1);
     }
@@ -1128,6 +1182,7 @@ const baseRateEl = document.getElementById('bc-base-rate-display');
     switchBankTab('central'); // Ustaw domyślną zakładkę
     document.getElementById('bank-modal').style.display = 'block';
 }
+
 
 function openStockDetailsModal(symbol) {
     const stock = stocks.find(s => s.symbol === symbol);
@@ -1230,7 +1285,7 @@ function updatePassiveWorkUI() {
         rewardInfo.textContent = "0.00";
         collectBtn.disabled = true;
     }
-}   
+}
 
 function startWorkMinigame() {
     const grid = document.getElementById('work-grid');
@@ -1488,13 +1543,13 @@ function displayStartups(previousInputValues = {}) {
                 } else if (startup.developmentPausedUntil && Date.now() < startup.developmentPausedUntil) {
                     const timeLeft = Math.ceil((startup.developmentPausedUntil - Date.now()) / 1000);
                     progressCell.innerHTML = `<span style="color: orange;">OPÓŹNIENIE (${timeLeft}s)</span>`;
-                    actionsCell.innerHTML = 'Prace wstrzymane';
+                    actionsCell.innerHTML = 'Prace wstrzmane';
                 } else {
                     progressCell.innerHTML = `<progress value="${startup.developmentProgress}" max="100" style="width: 100%;"></progress>`;
                     actionsCell.innerHTML = 'Zablokowane';
                 }
                 break;
-            
+
             case 'financial_complications':
                 const timeLeftFC = Math.max(0, Math.floor(startup.rescueTimeLeft / 1000));
                 fundingCell.innerHTML = `
@@ -1503,18 +1558,18 @@ function displayStartups(previousInputValues = {}) {
                     <span>${startup.rescueCurrent.toLocaleString('pl-PL')} / ${startup.rescueGoal.toLocaleString('pl-PL')} PLN</span>
                 `;
                 progressCell.innerHTML = `<strong style="color: #dc3545;">Pozostały czas: ${timeLeftFC}s</strong>`;
-                
+
                 const rescueInput = document.createElement('input');
                 rescueInput.type = 'number';
                 rescueInput.placeholder = 'Kwota';
-                rescueInput.style.width = '80px';   
+                rescueInput.style.width = '80px';
                 const rescueButton = document.createElement('button');
                 rescueButton.textContent = 'Dofinansuj';
                 rescueButton.onclick = () => {
                     const amount = parseFloat(rescueInput.value);
                     playerRescuesStartup(startup.symbol, amount);
                 };
-                
+
                 // Pokaż przycisk tylko jeśli gracz jest już inwestorem
                 if (playerPortfolio[startup.symbol]) {
                     actionsCell.appendChild(rescueInput);
@@ -1527,36 +1582,36 @@ function displayStartups(previousInputValues = {}) {
 
 
             case 'overfunding': {
-            const timeLeftOF = Math.max(0, Math.floor(startup.overfundingTimeLeft / 1000));
-            fundingCell.innerHTML = `<strong style="color: #28a745;">Cel osiągnięty!</strong><br>Czas na bonus: ${timeLeftOF}s`;
-            progressCell.innerHTML = `<progress value="0" max="100" style="width: 100%;"></progress>`;
-            investButton.textContent = 'Zainwestuj (Bonus)';
-            
-            // Tworzenie przycisku auto-inwestycji (ten kod jest poprawny)
-            const autoInvestSettings = playerStartupAutoInvest[startup.symbol];
-            const autoInvestButton = document.createElement('button');
-            autoInvestButton.textContent = '🔄'; // Użyłem sugerowanej przez Ciebie emotki
-            autoInvestButton.title = 'Ustaw automatyczne inwestowanie';
-            autoInvestButton.style.marginLeft = '4px';
-            if (autoInvestSettings && autoInvestSettings.isEnabled) {
-                autoInvestButton.style.borderColor = '#28a745'; // Zielona ramka dla aktywnych
-                autoInvestButton.style.borderWidth = '2px';
-            }
-            autoInvestButton.onclick = () => openStartupAutoInvestModal(startup.symbol); // To też jest potrzebne!
-            
-            investButton.onclick = () => {
-                const amount = parseFloat(amountInput.value);
-                investInStartup(startup.symbol, amount);
-            };
-            
-            if (startup.isScamDetected) investButton.disabled = true;
-            
-            // Dodawanie elementów do komórki
-            actionsCell.appendChild(amountInput);
-            actionsCell.appendChild(investButton);
-            actionsCell.appendChild(autoInvestButton); 
-            
-            break;
+                const timeLeftOF = Math.max(0, Math.floor(startup.overfundingTimeLeft / 1000));
+                fundingCell.innerHTML = `<strong style="color: #28a745;">Cel osiągnięty!</strong><br>Czas na bonus: ${timeLeftOF}s`;
+                progressCell.innerHTML = `<progress value="0" max="100" style="width: 100%;"></progress>`;
+                investButton.textContent = 'Zainwestuj (Bonus)';
+
+                // Tworzenie przycisku auto-inwestycji (ten kod jest poprawny)
+                const autoInvestSettings = playerStartupAutoInvest[startup.symbol];
+                const autoInvestButton = document.createElement('button');
+                autoInvestButton.textContent = '🔄'; // Użyłem sugerowanej przez Ciebie emotki
+                autoInvestButton.title = 'Ustaw automatyczne inwestowanie';
+                autoInvestButton.style.marginLeft = '4px';
+                if (autoInvestSettings && autoInvestSettings.isEnabled) {
+                    autoInvestButton.style.borderColor = '#28a745'; // Zielona ramka dla aktywnych
+                    autoInvestButton.style.borderWidth = '2px';
+                }
+                autoInvestButton.onclick = () => openStartupAutoInvestModal(startup.symbol); // To też jest potrzebne!
+
+                investButton.onclick = () => {
+                    const amount = parseFloat(amountInput.value);
+                    investInStartup(startup.symbol, amount);
+                };
+
+                if (startup.isScamDetected) investButton.disabled = true;
+
+                // Dodawanie elementów do komórki
+                actionsCell.appendChild(amountInput);
+                actionsCell.appendChild(investButton);
+                actionsCell.appendChild(autoInvestButton);
+
+                break;
             }
         }
 
@@ -1767,7 +1822,7 @@ function openStartupOfferModal(offerDetails) {
     // Klonujemy przycisk akceptacji, aby usunąć stare event listenery
     const newAcceptBtn = acceptBtn.cloneNode(true);
     acceptBtn.parentNode.replaceChild(newAcceptBtn, acceptBtn);
-    
+
     newAcceptBtn.onclick = () => {
         const amount = document.getElementById('startup-offer-amount').valueAsNumber;
         if (isNaN(amount) || amount <= 0) {
@@ -1790,7 +1845,7 @@ function openStartupAutoInvestModal(symbol) {
     if (!startup) return;
 
     const modal = document.getElementById('startup-autoinvest-modal');
-    
+
     // Upewnij się, że mamy obiekt ustawień dla tego startupu
     if (!playerStartupAutoInvest[symbol]) {
         playerStartupAutoInvest[symbol] = {
@@ -1905,6 +1960,7 @@ function openStockDetailModal(stockSymbol) {
     // --- KONIEC NOWEGO FRAGMENTU ---
 }
 
+// Ta funkcja jest zduplikowana w obu plikach, ale jest identyczna. Zostawiamy jedną.
 function updateChartTypeButtons() {
     const candlestickBtn = document.getElementById('chart-type-candlestick-btn');
     const lineBtn = document.getElementById('chart-type-line-btn');
@@ -1929,7 +1985,7 @@ function updateChartTypeButtons() {
 
 function toggleDarkMode() {
     document.body.classList.toggle('dark-mode');
-    
+
     // Zapisz wybór w pamięci przeglądarki
     if (document.body.classList.contains('dark-mode')) {
         localStorage.setItem('theme', 'dark');
@@ -2011,7 +2067,7 @@ function openDescriptionModal(symbol) {
             assetsToLiabilities_display = ratio.toFixed(2);
         }
         indicatorsHTML += `<p><strong>Aktywa / Pasywa:</strong> ${assetsToLiabilities_display}</p>`;
-        
+
         indicatorsAdded = true;
     }
 
@@ -2040,6 +2096,9 @@ function updateStateOfferInfo() {
     const quantityInput = document.getElementById('state-offer-quantity');
     const costLabel = document.getElementById('state-offer-cost');
     const cooldownLabel = document.getElementById('state-offer-cooldown');
+
+    // Dodajemy sprawdzenie, czy elementy istnieją, na wypadek gdyby HTML bazy (ui.js) ich nie miał
+    if (!select || !quantityInput || !costLabel || !cooldownLabel) return;
 
     if (!select.value) {
         costLabel.textContent = "0.00 PLN";
@@ -2089,7 +2148,7 @@ function setPriceAlert(symbol, type) {
 
     document.getElementById('price-alert-modal').style.display = 'none';
     // Ponowne narysowanie wykresu, aby pokazać/ukryć linie
-    showPriceHistoryModal(symbol); 
+    showPriceHistoryModal(symbol);
 }
 
 function openPriceAlertModal(symbol) {
@@ -2105,7 +2164,7 @@ function openPriceAlertModal(symbol) {
     const sellInput = document.getElementById('price-alert-sell');
     buyInput.value = stock.priceAlerts.buy || '';
     sellInput.value = stock.priceAlerts.sell || '';
-    
+
     // Ustaw akcje dla przycisków
     document.getElementById('set-buy-alert-btn').onclick = () => setPriceAlert(symbol, 'buy');
     document.getElementById('set-sell-alert-btn').onclick = () => setPriceAlert(symbol, 'sell');
@@ -2121,9 +2180,9 @@ function openResearchModal(symbol) {
     }
 
     const modal = document.getElementById('research-modal');
-    modal.dataset.currentSymbol = symbol; 
+    modal.dataset.currentSymbol = symbol;
     document.getElementById('research-modal-title').textContent = `🔬 Panel R&D: ${stock.name}`;
-    
+
     const unlocks = stock.researchUnlocks;
     const research = stock.research;
     const specializations = ["wzmacnianie rozwoju", "wzmacnianie pozycji na rynku", "wzmacnianie ceny i zysków"];
@@ -2183,7 +2242,7 @@ function openResearchModal(symbol) {
         document.getElementById('rd-unlock-tier3-btn').onclick = () => unlockResearchTier(symbol, 'canFund', 5000);
         tier4_section.style.display = 'none';
     }
-    
+
     // --- TIER 4 ---
     if (unlocks.canInfluence) {
         tier4_locked.style.display = 'none';
@@ -2205,7 +2264,7 @@ function openResearchModal(symbol) {
         document.getElementById('rd-unlock-tier4-btn').onclick = () => unlockResearchTier(symbol, 'canInfluence', 10000);
         tier5_section.style.display = 'none';
     }
-    
+
     // --- TIER 5 ---
     if (unlocks.canInterfere) {
         tier5_locked.style.display = 'none';
@@ -2223,14 +2282,14 @@ function openResearchModal(symbol) {
         tier5_unlocked.style.display = 'none';
         document.getElementById('rd-unlock-tier5-btn').onclick = () => unlockResearchTier(symbol, 'canInterfere', 20000);
     }
-    
+
     modal.style.display = 'block';
 }
 
 function openCeoChoiceModal(symbol, candidates, successChance) {
     const modal = document.getElementById('ceo-choice-modal');
     const container = document.getElementById('ceo-candidates-container');
-    
+
     document.getElementById('ceo-choice-title').textContent = `Wybierz kandydata na nowego prezesa dla ${symbol}`;
     container.innerHTML = '';
 
@@ -2354,12 +2413,12 @@ function updateCityModalContent() {
 
         if (statusEl) {
             if (cityInvestment.playerHasUnlocked) { // Sprawdzaj TYLKO flagę gracza
-            statusEl.textContent = "Odblokowane!";
-            statusEl.style.color = '#28a745';
-        } else {
-            statusEl.textContent = `Zablokowane (Cel: 10,000 PLN)`;
-            statusEl.style.color = '#dc3545';
-        }
+                statusEl.textContent = "Odblokowane!";
+                statusEl.style.color = '#28a745';
+            } else {
+                statusEl.textContent = `Zablokowane (Cel: 10,000 PLN)`;
+                statusEl.style.color = '#dc3545';
+            }
         }
 
         if (countdownEl) {
@@ -2405,7 +2464,7 @@ function renderFestivalView(modal) {
         `;
     } else {
         // --- SEKCJA DOŁĄCZANIA DO FESTYNU (NOWA WERSJA) ---
-        
+
         // Dynamiczne generowanie przycisków dla spółek, w których gracz ma większość
         let companyButtonsHTML = '';
         for (const symbol in playerPortfolio) {
@@ -2437,7 +2496,7 @@ function renderFestivalView(modal) {
     sortedParticipants.forEach((p, index) => {
         const ownerName = p.ownerId === 'player' ? 'Ty' : (aiCompetitors.find(a => a.id === p.ownerId)?.name || p.ownerId.charAt(0).toUpperCase() + p.ownerId.slice(1));
         let targetName = '';
-        switch(p.promotionTarget.type) {
+        switch (p.promotionTarget.type) {
             case 'self': targetName = 'Własny wizerunek'; break;
             case 'company': targetName = p.promotionTarget.id; break;
             case 'player_company': targetName = playerCompany.name; break;
@@ -2502,6 +2561,8 @@ function switchBankTab(tabName) {
     // Jeśli aktywowano zakładkę obligacji, odśwież jej zawartość
     if (tabName === 'bonds') {
         renderBondMarketInBank();
+    } else if (tabName === 'commercial') { // <-- DODANE Z ui.js
+        renderCommercialBanksList();
     }
 }
 
@@ -2511,18 +2572,18 @@ function switchBankTab(tabName) {
 function renderBondMarketInBank() {
     const stateBondsBody = document.getElementById('state-bonds-table').getElementsByTagName('tbody')[0];
     stateBondsBody.innerHTML = '';
-    
+
     const bondTypes = ['shortTerm', 'mediumTerm', 'longTerm'];
     bondTypes.forEach(type => {
         const offer = stateBondOffer[type];
         const row = stateBondsBody.insertRow();
-        
+
         let typeName = '';
         if (type === 'shortTerm') typeName = 'Krótkoterminowe (10 min)';
         if (type === 'mediumTerm') typeName = 'Średnioterminowe (25 min)';
         if (type === 'longTerm') typeName = 'Długoterminowe (45 min)';
         row.insertCell().textContent = typeName;
-        
+
         let interestText;
         if (type === 'shortTerm') {
             interestText = `${(offer.interest * 100).toFixed(1)}% (stałe)`;
@@ -2545,7 +2606,7 @@ function renderBondMarketInBank() {
         // ZMIANA #1 TUTAJ
         // Dodajemy 'player' jako pierwszy argument
         buyBtn.onclick = () => buyStateBond('player', type, parseInt(input.value));
-        
+
         actionsCell.appendChild(input);
         actionsCell.appendChild(buyBtn);
     });
@@ -2668,6 +2729,8 @@ function updateTBillAuctionSection() {
     }
 }
 
+// --- PONIŻEJ FUNKCJE Z BAZY ui.js (Bankowość Komercyjna) ---
+
 function renderCommercialBanksList() {
     const listContainer = document.getElementById('commercial-banks-list');
     if (!listContainer) return;
@@ -2750,20 +2813,6 @@ function getBankColor(type) {
     }
 }
 
-// Zmodyfikuj funkcję switchBankTab, aby odświeżała listę banków
-function switchBankTab(tabName) {
-    document.querySelectorAll('.bank-tab-content').forEach(content => content.style.display = 'none');
-    document.getElementById(`bank-content-${tabName}`).style.display = 'block';
-    document.querySelectorAll('.bank-tab-btn').forEach(btn => btn.classList.remove('active'));
-    document.getElementById(`tab-btn-${tabName}`).classList.add('active');
-
-    if (tabName === 'bonds') {
-        renderBondMarketInBank();
-    } else if (tabName === 'commercial') { // <-- DODAJ TEN WARUNEK
-        renderCommercialBanksList();
-    }
-}
-
 function openSellSharesToBankModal(bankId) {
     const bank = commercialBanks.find(b => b.id === bankId);
     const modal = document.getElementById('sell-shares-to-bank-modal');
@@ -2802,12 +2851,12 @@ function openSellSharesToBankModal(bankId) {
 
         // Walidacja ilości
         const quantity = quantityInput.valueAsNumber || 0;
-         if (quantity > availableShares) {
-             quantityInput.value = availableShares;
-         }
-         if (quantity < 1 && availableShares > 0) {
-             quantityInput.value = 1;
-         }
+        if (quantity > availableShares) {
+            quantityInput.value = availableShares;
+        }
+        if (quantity < 1 && availableShares > 0) {
+            quantityInput.value = 1;
+        }
 
 
         if (stock) {
@@ -3008,8 +3057,8 @@ function openMortgageModal(bankId) {
             quantity = availableShares; // Użyj poprawionej wartości
         }
         if (quantity < 1 && availableShares > 0) {
-             quantityInput.value = 1;
-             quantity = 1;
+            quantityInput.value = 1;
+            quantity = 1;
         }
 
         if (stock && quantity > 0) {
@@ -3059,3 +3108,135 @@ function closeBankIPOOfferModal() {
     currentBankIPOOffer = null; // Wyczyść ofertę na wypadek zamknięcia przez 'X'
 }
 
+// --- PONIŻEJ FUNKCJE DODANE Z ui2.js (Panel Finansowy i Zwijanie) ---
+
+/**
+* Przełącza widoczność panelu Inkubatora Start-upów.
+* DODANE Z ui2.js
+*/
+function toggleStartupPanelVisibility() {
+    startupPanelCollapsed = !startupPanelCollapsed; // Odwróć stan
+    const panel = document.getElementById('startup-incubator-panel');
+    const icon = document.getElementById('toggle-icon-startup');
+
+    if (panel && icon) {
+        if (startupPanelCollapsed) {
+            panel.classList.add('collapsed'); // Dodaj klasę, aby ukryć treść (CSS zadziała)
+            icon.textContent = '▶'; // Zmień ikonkę na "rozwinięty"
+        } else {
+            panel.classList.remove('collapsed'); // Usuń klasę, aby pokazać treść
+            icon.textContent = '▼'; // Zmień ikonkę na "zwinięty"
+        }
+    }
+    // Zapisz stan w localStorage, aby był pamiętany po odświeżeniu
+    localStorage.setItem('startupPanelCollapsed', startupPanelCollapsed);
+}
+
+/**
+* Otwiera modal ze szczegółami finansowymi spółki.
+* DODANE Z ui2.js
+* @param {string} symbol Symbol spółki.
+*/
+function openFinancialDetailsModal(symbol) {
+    const stock = stocks.find(s => s.symbol === symbol);
+    if (!stock) return;
+
+    const modal = document.getElementById('financial-details-modal');
+    const title = document.getElementById('financial-details-title');
+    const content = document.getElementById('financial-details-content');
+    const anomalyReport = document.getElementById('financial-anomaly-report');
+
+    title.textContent = `Szczegóły Finansowe: ${stock.name}`;
+    anomalyReport.innerHTML = ''; // Wyczyść raport anomalii
+
+    // Sprawdzenie dostępu (powtórzone dla pewności)
+    const accountantLevel = getSkillLevel('accountant');
+    const playerRep = stock.reputation['player'];
+    // Sprawdź, czy gracz ma flagę dostępu LUB (ma Lvl 2+ ORAZ jest większościowcem)
+    const hasAccess = stock.playerHasFinancialAccess || (accountantLevel >= 2 && (playerPortfolio[symbol]?.shares / stock.totalShares) > 0.5);
+
+    if (!hasAccess || accountantLevel === 0) { // Jeśli nie ma dostępu LUB nie ma umiejętności
+        content.innerHTML = '<p style="color: red;">Brak dostępu do danych finansowych.</p>';
+        modal.style.display = 'block';
+        return;
+    }
+
+    // Wyświetlanie danych z bilansu
+    if (stock.balanceSheet) {
+        content.innerHTML = `
+            <h4>Bilans Spółki:</h4>
+            <p><strong>Aktywa:</strong> ${stock.balanceSheet.assets.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN</p>
+            <p><strong>Zobowiązania (Pasywa):</strong> ${stock.balanceSheet.liabilities.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN</p>
+            <p><strong>Kapitał Własny:</strong> ${(stock.balanceSheet.assets - stock.balanceSheet.liabilities).toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN</p>
+            <p> &nbsp; - Kapitał Zakładowy: ${stock.balanceSheet.shareCapital.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN</p>
+            <p> &nbsp; - Zyski Zatrzymane: ${stock.balanceSheet.retainedEarnings.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN</p>
+            <hr>
+            <p><strong>Zysk Kwartalny (Ostatni):</strong> ${stock.quarterlyEarnings.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN</p>
+            <p><strong>Dług Korporacyjny (jeśli dotyczy):</strong> ${(stock.corporateDebt || 0).toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN</p>
+        `;
+    } else {
+        content.innerHTML = '<p>Brak szczegółowych danych bilansowych dla tej spółki.</p>';
+    }
+
+    // Logika Poziomu 3: Wykrywanie Anomalii
+    if (accountantLevel >= 3) {
+        // Sprawdź, czy funkcja detectFinancialAnomaly istnieje (na wypadek problemów z ładowaniem plików)
+        if (typeof detectFinancialAnomaly === 'function') {
+            detectFinancialAnomaly(stock); // Wywołaj funkcję z gameLogic.js
+        } else {
+            console.error("Funkcja detectFinancialAnomaly nie została znaleziona!");
+        }
+    }
+
+    modal.style.display = 'block'; // Pokaż modal
+}
+
+/**
+ * Obsługuje kliknięcie przycisku "Zobacz Finanse" w Panelu Zarządzania.
+ * DODANE Z ui2.js
+ * @param {string} symbol Symbol spółki.
+ */
+function handleViewFinancesClick(symbol) {
+    const stock = stocks.find(s => s.symbol === symbol);
+    if (!stock) return;
+
+    const accountantLevel = getSkillLevel('accountant');
+    const playerRep = stock.reputation['player'];
+    const isMajorityOwner = (playerPortfolio[symbol]?.shares / stock.totalShares) > 0.5;
+    const hasPaidAccess = stock.playerHasFinancialAccess;
+
+    // Warunki blokujące dostęp
+    if (accountantLevel === 0) {
+        showToast("Musisz odblokować umiejętność 'Księgowy', aby uzyskać dostęp.", 'error');
+        return;
+    }
+    if (playerRep < REPUTATION_LEVELS.NEGATIVE && !isMajorityOwner) {
+        showToast(`Twoje relacje z ${stock.name} są zbyt złe (${playerRep.toFixed(1)}), aby udostępnili Ci dane finansowe.`, 'error');
+        return;
+    }
+
+    // Sprawdzenie, czy dostęp jest darmowy lub już opłacony
+    if (hasPaidAccess || (accountantLevel >= 2 && isMajorityOwner)) {
+        openFinancialDetailsModal(symbol); // Otwórz modal od razu
+        return;
+    }
+
+    // Dostęp wymaga opłaty (Lvl 1)
+    const accessCost = 2000;
+    if (playerCash < accessCost) {
+        showToast(`Nie masz wystarczająco gotówki (${accessCost} PLN), aby zapłacić za dostęp.`, 'error');
+        return;
+    }
+
+    // Zapytaj gracza o potwierdzenie płatności
+    if (confirm(`Czy chcesz zapłacić ${accessCost} PLN za jednorazowy wgląd w finanse ${stock.name}?`)) {
+        playerCash -= accessCost; // Pobierz opłatę
+        stock.playerHasFinancialAccess = true; // Ustaw flagę dostępu
+        displayCash(); // Zaktualizuj UI gotówki
+        logEvent(`Zapłacono ${accessCost} PLN za wgląd w finanse ${stock.name}.`, 'review'); // Zaloguj zdarzenie
+        showToast("Dostęp do finansów uzyskany!", 'success'); // Pokaż powiadomienie
+        openFinancialDetailsModal(symbol); // Otwórz modal finansowy
+        // Odśwież modal zarządzania, aby zaktualizować tekst przycisku/info
+        openManagementModal(symbol); // Ponownie otwórz modal zarządzania, by odświeżyć info
+    }
+}
