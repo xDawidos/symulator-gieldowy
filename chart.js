@@ -446,15 +446,14 @@ function renderOwnershipPieChart(symbol) {
     });
 
     let investmentBankColorIndex = 0;
-    const investmentBankColors = ['#8E44AD', '#16A085', '#E67E22', '#2980B9', '#C0392B']; // Kolory dla banków
+    const investmentBankColors = ['#198754', '#0a58ca', '#ffc107', '#4682B4', '#2E8B57']; // Odcienie zieleni, niebieskiego, złoty
 
     commercialBanks.forEach(bank => {
-        // Sprawdź tylko aktywne banki inwestycyjne
         if (bank.isActive && bank.type === BANK_TYPES.INVESTMENT && bank.stockPortfolio[symbol]) {
             const holding = bank.stockPortfolio[symbol];
             if (holding.shares > 0) {
                 owners.push({
-                    name: `🏦 ${bank.name}`, // Oznacz ikonką
+                    name: `🏦 ${bank.name}`,
                     shares: holding.shares,
                     color: investmentBankColors[investmentBankColorIndex % investmentBankColors.length]
                 });
@@ -465,14 +464,15 @@ function renderOwnershipPieChart(symbol) {
 
     const holdingCompanies = stocks.filter(s => s.assetType === 'Holding');
     let holdingColorIndex = 0;
-    const holdingColors = ['#8E44AD', '#16A085', '#E67E22', '#2980B9', '#C0392B']; // Nowa paleta kolorów dla funduszy
+    // --- NOWA PALETA KOLORÓW DLA FUNDUSZY HOLDINGOWYCH ---
+    const holdingColors = ['#0d6efd', '#17a2b8', '#6610f2', '#8FBC8F', '#B8860B']; // Odcienie niebieskiego, fioletu, zieleni, złota
 
     holdingCompanies.forEach(holding => {
-        const holdingData = holding.holdingPortfolio[symbol]; // Pobieramy cały obiekt
-        if (holdingData && holdingData.quantity > 0) { // Sprawdzamy .quantity
+        const holdingData = holding.holdingPortfolio[symbol];
+        if (holdingData && holdingData.quantity > 0) {
             owners.push({
                 name: `💼 ${holding.name}`,
-                shares: holdingData.quantity, // Używamy .quantity
+                shares: holdingData.quantity,
                 color: holdingColors[holdingColorIndex % holdingColors.length]
             });
             holdingColorIndex++;

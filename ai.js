@@ -8,6 +8,8 @@ const aiCompetitors = [
         accessLevel: 1,
         hasTBillAccess: false, 
         tBills: [],
+        skillPoints: 0,         
+        unlockedSkills: {},      
         creditScore: 100 
     },
     {
@@ -19,6 +21,8 @@ const aiCompetitors = [
         accessLevel: 0,
         hasTBillAccess: false, 
         tBills: [],
+        skillPoints: 0,         
+        unlockedSkills: {},      
         creditScore: 100
     },
     {
@@ -30,6 +34,8 @@ const aiCompetitors = [
         accessLevel: 2,
         hasTBillAccess: true, 
         tBills: [],
+        skillPoints: 0,         
+        unlockedSkills: {},      
         creditScore: 100
     },
     // --- NOWE BOTY ---
@@ -42,6 +48,8 @@ const aiCompetitors = [
         accessLevel: 1,
         hasTBillAccess: false, 
         tBills: [],
+        skillPoints: 0,         
+        unlockedSkills: {},      
         creditScore: 100 
     },
     {
@@ -53,6 +61,8 @@ const aiCompetitors = [
         accessLevel: 0,
         hasTBillAccess: false, 
         tBills: [],
+        skillPoints: 0,         
+        unlockedSkills: {},      
         creditScore: 100
     },
 	{
@@ -77,6 +87,8 @@ const aiCompetitors = [
     decision_speed: 7000,
         hasTBillAccess: false, 
         tBills: [],
+        skillPoints: 0,         
+        unlockedSkills: {},      
         creditScore: 100,
     accessLevel: 2, // Zaczyna z dostępem do Srebrnej Giełdy
     memory: {} // Pamięć na ceny zakupu
@@ -233,6 +245,21 @@ function aiSellStock(ai, symbol, quantity) {
 
     const stockToSell = stocks.find(s => s.symbol === symbol);
     if (!stockToSell || !holding || holding.shares < quantity) return;
+
+    const sellPrice = stockToSell.price;
+    const avgBuyPrice = holding.avgPrice;
+    const profitPerShare = sellPrice - avgBuyPrice;
+    const totalProfit = profitPerShare * quantity;
+
+    if (totalProfit > 0) {
+        // Przyznaj punkty (1 za każde 1000 PLN zysku)
+        const skillPointsGained = totalProfit / 1000;
+        // Upewnij się, że pole istnieje (na wypadek, gdyby bot market_maker był tu przetwarzany)
+        if (ai.skillPoints !== undefined) {
+             ai.skillPoints = (ai.skillPoints || 0) + skillPointsGained; // Zainicjuj, jeśli trzeba
+             console.log(`[AI Skills] ${ai.name} zyskał ${skillPointsGained.toFixed(2)} pkt umiejętności za sprzedaż ${symbol}. Total: ${ai.skillPoints.toFixed(2)}`);
+        }
+    }
 	
 	if (stockToSell.isTradeLocked) {
         return;
@@ -745,6 +772,39 @@ function makeAiDecision(ai) {
         // console.log(`[AI Kredyt] Wynik kredytowy ${ai.name} wzrósł do ${ai.creditScore}.`); // Opcjonalny log
     }
 
+    // --- NOWA LOGIKA: Wydawanie punktów umiejętności ---
+    // Sprawdź tylko boty, które mają system umiejętności
+    if (ai.skillPoints !== undefined && ai.unlockedSkills !== undefined) {
+         // Dajmy AI np. 20% szans w każdej turze na próbę ulepszenia umiejętności
+         if (Math.random() < 0.2) {
+            // Przejrzyj dostępne umiejętności i sprawdź, czy AI stać na następny poziom
+            for (const skillId in skills) {
+                // Pomijamy AdBlock dla AI
+                if (skillId === 'adblock') continue;
+
+                const skillData = skills[skillId];
+                const currentAiLevel = ai.unlockedSkills[skillId] || 0;
+                const nextLevelInfo = skillData.levels.find(l => l.level === currentAiLevel + 1);
+
+                if (nextLevelInfo) {
+                    // Sprawdź wymagania (jeśli istnieją)
+                    const requirement = nextLevelInfo.requires;
+                    const requirementMet = requirement ? (ai.unlockedSkills[requirement.skillId] || 0) >= requirement.level : true;
+
+                    // Sprawdź koszt i czy spełnia wymagania
+                    if (ai.skillPoints >= nextLevelInfo.cost && requirementMet) {
+                        // "Kup" umiejętność
+                        ai.skillPoints -= nextLevelInfo.cost;
+                        ai.unlockedSkills[skillId] = nextLevelInfo.level;
+                        console.log(`[AI Skills] ${ai.name} odblokował/ulepszył ${skillData.name} do poziomu ${nextLevelInfo.level}! Pozostałe punkty: ${ai.skillPoints.toFixed(2)}`);
+
+                        // AI kupuje tylko jedną umiejętność na turę
+                        break; // Wyjdź z pętli for in skills
+                    }
+                }
+            } // Koniec pętli for in skills
+         } // Koniec if Math.random() < 0.2
+    }
 }
     
 

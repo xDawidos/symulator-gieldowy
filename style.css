@@ -914,3 +914,59 @@ body.dark-mode .bank-actions p {
 }
 body.dark-mode .bank-stock-sales { border-top-color: #6c757d; }
 body.dark-mode .bank-stock-sales h5 { color: #ccc; }
+
+#ad-popup {
+    position: fixed;
+    left: 20px;       /* Od lewej krawędzi */
+    bottom: 20px;     /* Od dolnej krawędzi */
+    width: 280px;     /* Szerokość okienka */
+    background-color: #f0f8ff; /* Jasnoniebieskie tło (AliceBlue) */
+    border: 1px solid #add8e6; /* Jasnoniebieska ramka */
+    border-radius: 8px;
+    padding: 15px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+    z-index: 1050;    /* Nad innymi elementami */
+    font-family: sans-serif;
+    color: #333;
+}
+
+#ad-popup h4 {
+    margin-top: 0;
+    margin-bottom: 5px;
+    color: #0056b3; /* Ciemniejszy niebieski dla nagłówka */
+    text-align: center;
+    border-bottom: 1px dashed #add8e6;
+    padding-bottom: 5px;
+}
+
+/* Dostosowanie przycisku zamykania dla tego okienka */
+#ad-popup .close-btn {
+    position: absolute;
+    top: 5px;
+    right: 8px;
+    font-size: 20px;
+    color: #aaa;
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+#ad-popup .close-btn:hover {
+    color: #555;
+}
+
+/* Ciemny motyw dla reklamy */
+body.dark-mode #ad-popup {
+    background-color: #4a5a6a; /* Ciemniejsze tło */
+    border-color: #6c757d;
+    color: #e0e0e0;
+}
+body.dark-mode #ad-popup h4 {
+    color: #a0c4ff; /* Jaśniejszy niebieski */
+    border-bottom-color: #6c757d;
+}
+body.dark-mode #ad-popup .close-btn {
+    color: #bbb;
+}
+body.dark-mode #ad-popup .close-btn:hover {
+    color: #eee;
+}

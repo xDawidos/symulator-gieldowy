@@ -38,6 +38,12 @@ function clearIntervals() {
             gameTimers[key] = null;
         }
     }
+    // ---> DODAJ TĘ LINIĘ <---
+    if (adPopupTimerId) {
+        clearTimeout(adPopupTimerId);
+        adPopupTimerId = null;
+    }
+    // ---> KONIEC DODAWANIA <---
     console.log("Wszystkie pętle gry zostały zatrzymane.");
 }
 
@@ -49,6 +55,11 @@ function setGameSpeed(speedMultiplier) {
     clearIntervals(); // Zatrzymaj wszystkie istniejące pętle
     currentSpeedMultiplier = speedMultiplier; // Ustaw nowy mnożnik
 
+    if (adPopupTimerId) {
+        clearTimeout(adPopupTimerId);
+        adPopupTimerId = null;
+    }
+
     // Zaktualizuj wygląd przycisków prędkości
     const speedButtons = document.querySelectorAll('.speed-btn');
     speedButtons.forEach(btn => btn.classList.remove('active'));
@@ -59,6 +70,10 @@ function setGameSpeed(speedMultiplier) {
     if (activeBtn) activeBtn.classList.add('active');
 
     console.log(`Ustawiono prędkość gry na x${speedMultiplier}`);
+
+    if (!isAdPopupVisible) {
+         scheduleAdPopup();
+    }
 
     // --- URUCHOMIENIE NOWYCH PĘTLI Z NOWĄ PRĘDKOŚCIĄ ---
 
@@ -99,6 +114,7 @@ function setGameSpeed(speedMultiplier) {
         // --- AKTUALIZACJA LOGIKI GRY ---
         const gameTimeDelta = BASE_DELAYS.stockUpdate; // Każdy tick to zawsze 1 sekunda CZASU GRY
         cleanupBankruptStocks(currentSpeedMultiplier);
+        clearExpiredBankBonuses();
         updateStockPrices();
         updateHoldingCompanies();
         updateStartups(gameTimeDelta);
@@ -259,64 +275,132 @@ function setGameSpeed(speedMultiplier) {
     }, BASE_DELAYS.stockUpdate / speedMultiplier);
 
     // Pętla tygodniowa (z bazy main.js - bankowość komercyjna)
-    gameTimers.weekly = setInterval(() => {
-        if (isGamePaused) return;
+gameTimers.weekly = setInterval(() => {
+    if (isGamePaused) return;
 
-        processCompanyBanking(); // Bankowość korporacyjna
-        processBankStartupSponsorship(); // Sponsorowanie startupów przez banki
+    processCompanyBanking(); // Bankowość korporacyjna
+    processBankStartupSponsorship(); // Sponsorowanie startupów przez banki
 
-        // Naliczanie odsetek od depozytów komercyjnych gracza
-        playerCommercialDeposits.forEach(deposit => {
-            const weeklyRate = deposit.interestRate / 52;
-            const interestEarned = deposit.amount * weeklyRate;
-            playerCash += interestEarned;
-            if (interestEarned > 0.01) {
-                logEvent(` Naliczono ${interestEarned.toFixed(2)} PLN odsetek od depozytu w ${deposit.bankName}.`, 'market');
-            }
-        });
+    // Naliczanie odsetek od depozytów komercyjnych gracza
+    playerCommercialDeposits.forEach(deposit => {
+        const weeklyRate = deposit.interestRate / 52;
+        const interestEarned = deposit.amount * weeklyRate;
+        playerCash += interestEarned;
+        if (interestEarned > 0.01) {
+            logEvent(` Naliczono ${interestEarned.toFixed(2)} PLN odsetek od depozytu w ${deposit.bankName}.`, 'market');
+        }
+    });
 
-        // Obsługa automatycznej spłaty kredytów komercyjnych gracza
-        playerCommercialLoans.forEach((loan, index) => {
-            const weeklyInterest = loan.amount * (loan.interestRate / 52);
-            loan.amount += weeklyInterest; // Dolicz odsetki do salda
+    // Obsługa automatycznej spłaty kredytów komercyjnych gracza
+    // ---> WAŻNE: Używamy pętli 'for' z iteracją wstecz, aby uniknąć problemów przy usuwaniu elementów (splice) <---
+    for (let index = playerCommercialLoans.length - 1; index >= 0; index--) {
+        const loan = playerCommercialLoans[index];
+        const weeklyInterest = loan.amount * (loan.interestRate / 52);
+        loan.amount += weeklyInterest; // Dolicz odsetki do salda
 
-            // Sprawdzamy czy auto-spłata jest włączona (zmienna isAutoRepayEnabled może pochodzić z ui.js)
-            let autoRepayActive = typeof isAutoRepayEnabled !== 'undefined' ? isAutoRepayEnabled : true; // Domyślnie włączona, jeśli zmienna nie istnieje
+        let autoRepayActive = typeof isAutoRepayEnabled !== 'undefined' ? isAutoRepayEnabled : true;
 
-            if (autoRepayActive && playerCash >= loan.weeklyPayment) {
-                const payment = Math.min(loan.weeklyPayment, loan.amount); // Nie spłacaj więcej niż zostało
-                playerCash -= payment;
-                loan.amount -= payment;
+        if (autoRepayActive && playerCash >= loan.weeklyPayment) {
+            const payment = Math.min(loan.weeklyPayment, loan.amount);
+            playerCash -= payment;
+            loan.amount -= payment;
 
-                // Znajdź bank i zaktualizuj jego stan
-                const bank = commercialBanks.find(b => b.id === loan.bankId);
-                if (bank) {
-                    bank.cash += payment;
-                    bank.loanPortfolio['player'] = Math.max(0, (bank.loanPortfolio['player'] || 0) - payment);
+            const bank = commercialBanks.find(b => b.id === loan.bankId);
+            if (bank) {
+                bank.cash += payment;
+                // --- POPRAWKA AKTUALIZACJI PORTFELA BANKU ---
+                // Musimy znaleźć konkretną pożyczkę w portfelu banku i ją zaktualizować/usunąć
+                if (bank.loanPortfolio && bank.loanPortfolio['player']) {
+                    const bankLoanIndex = bank.loanPortfolio['player'].findIndex(bl => bl.id === loan.id);
+                    if (bankLoanIndex !== -1) {
+                        bank.loanPortfolio['player'][bankLoanIndex].remainingAmount -= payment;
+                        if (bank.loanPortfolio['player'][bankLoanIndex].remainingAmount <= 0.01) {
+                            bank.loanPortfolio['player'].splice(bankLoanIndex, 1);
+                        }
+                    }
                 }
+                // --- KONIEC POPRAWKI ---
+            }
 
-                if (loan.amount <= 0) {
-                    logEvent(` Kredyt komercyjny w ${loan.bankName} został spłacony!`, 'success');
-                    // Odblokuj zastaw, jeśli istniał
-                    if (loan.collateral) unlockCollateral(loan.collateral.symbol, loan.collateral.quantity);
-                    playerCommercialLoans.splice(index, 1); // Usuń spłaconą pożyczkę
+            if (loan.amount <= 0.01) { // Użyj małego progu dla bezpieczeństwa
+                logEvent(` Kredyt komercyjny w ${loan.bankName} został spłacony!`, 'success');
+                if (loan.collateral) {
+                    // Sprawdź, czy funkcja unlockCollateral istnieje przed wywołaniem
+                    if (typeof unlockCollateral === 'function') {
+                         unlockCollateral(loan.collateral.symbol, loan.collateral.quantity);
+                    } else {
+                        console.warn("Funkcja unlockCollateral nie została znaleziona!");
+                    }
+                }
+                playerCommercialLoans.splice(index, 1); // Usuń spłaconą pożyczkę
+            } else {
+                logEvent(` Automatycznie spłacono ${payment.toFixed(2)} PLN raty kredytu w ${loan.bankName}.`, 'market');
+            }
+        } else if (autoRepayActive) {
+            logEvent(`⚠️ Brak środków na spłatę raty kredytu komercyjnego w ${loan.bankName}!`, 'warning');
+            loan.missedPayments = (loan.missedPayments || 0) + 1;
+            if (loan.missedPayments >= 3 && loan.collateral) {
+                 // Sprawdź, czy funkcja triggerCollateralAuction istnieje
+                 if (typeof triggerCollateralAuction === 'function') {
+                    // Przekażemy obiekt pożyczki, aby funkcja aukcji miała potrzebne dane
+                    triggerCollateralAuction(loan); // UWAGA: Upewnij się, że triggerCollateralAuction obsługuje obiekt pożyczki
+                 } else {
+                    console.warn("Funkcja triggerCollateralAuction nie została znaleziona!");
+                 }
+                playerCommercialLoans.splice(index, 1);
+            }
+        }
+    } // Koniec pętli for dla pożyczek
+
+    // ---> NOWA PĘTLA DLA KOSZTÓW BADAŃ <---
+    stocks.forEach(stock => {
+        // Sprawdź tylko ZWYKŁE spółki (NIE banki, NIE startupy itp.)
+        // i te, które mają obiekt badań
+        if (!stock.assetType && !stock.isBankStock && stock.research) { // Dodano !stock.isBankStock
+            // Sprawdź, czy badania są aktywne
+            if (stock.research.isResearching && stock.research.currentTech) {
+                if (stock.cash >= RESEARCH_MAINTENANCE_COST) {
+                    stock.cash -= RESEARCH_MAINTENANCE_COST;
                 } else {
-                    logEvent(` Automatycznie spłacono ${payment.toFixed(2)} PLN raty kredytu w ${loan.bankName}.`, 'market');
-                }
-            } else if (autoRepayActive) {
-                // TODO: Logika pominiętych rat dla kredytów komercyjnych
-                logEvent(`⚠️ Brak środków na spłatę raty kredytu komercyjnego w ${loan.bankName}!`, 'warning');
-                loan.missedPayments = (loan.missedPayments || 0) + 1; // Zliczaj pominięte raty
-                // Sprawdź warunki niewypłacalności (np. 3 pominięte raty)
-                if (loan.missedPayments >= 3 && loan.collateral) {
-                    triggerCollateralAuction(loan); // Uruchom aukcję zastawu
-                    playerCommercialLoans.splice(index, 1); // Usuń kredyt po uruchomieniu aukcji
+                    // Wstrzymaj badania (logika bez zmian)
+                    stock.research.isResearching = false;
+                    stock.research.researchPaused = true;
+                    const techName = technologies[stock.research.currentTech]?.name || "nieznanej technologii";
+                    logEvent(`⏸️ ${stock.name} wstrzymuje badania nad "${techName}" z powodu braku środków na utrzymanie.`, 'company');
+                    showToast(`Badania w ${stock.name} wstrzymane - brak funduszy!`, 'warning');
                 }
             }
-        });
-        if (playerCash > 0) displayCash(); // Aktualizuj gotówkę po operacjach
+            // Sprawdź, czy badania były wstrzymane i można je wznowić
+            else if (stock.research.researchPaused && stock.research.currentTech) {
+                if (stock.cash >= RESEARCH_MAINTENANCE_COST) {
+                    // Wznów badania (logika bez zmian)
+                    stock.cash -= RESEARCH_MAINTENANCE_COST;
+                    stock.research.isResearching = true;
+                    stock.research.researchPaused = false;
+                    const techName = technologies[stock.research.currentTech]?.name || "nieznanej technologii";
+                    logEvent(`▶️ ${stock.name} wznawia badania nad "${techName}".`, 'company');
+                }
+            }
+        }
+        // --- NOWA LOGIKA: Wznawianie zapauzowanych INWESTYCJI bankowych ---
+        else if (stock.isBankStock && stock.research && stock.research.investmentPaused && stock.research.currentInvestmentId) {
+             const bankData = commercialBanks.find(b => b.id === stock.bankData.id);
+             const investment = bankInvestments[stock.research.currentInvestmentId];
+             if(bankData && investment && bankData.cash >= (investment.initialCashCost || 0)) {
+                 // Wznów inwestycję
+                 bankData.cash -= (investment.initialCashCost || 0);
+                 stock.research.isResearching = true;
+                 stock.research.investmentPaused = false;
+                 if((investment.initialCashCost || 0) > 0) logEvent(`💸 Bank ${stock.name} wznawia inwestycję "${investment.name}" kosztem ${(investment.initialCashCost || 0).toLocaleString()} PLN.`);
+                 else logEvent(`▶️ Bank ${stock.name} wznawia inwestycję "${investment.name}".`);
+             }
+        }
+    });
+    // ---> KONIEC NOWEJ PĘTLI <---
 
-    }, BASE_DELAYS.weekly / speedMultiplier);
+    if (playerCash > 0) displayCash(); // Aktualizuj gotówkę po operacjach
+
+}, BASE_DELAYS.weekly / speedMultiplier);
 
     // Pętla kwartalna (z bazy main.js - zawiera AI Banku Centralnego)
     gameTimers.quarterly = setInterval(() => {
@@ -390,27 +474,71 @@ function setGameSpeed(speedMultiplier) {
 
 // Funkcja inicjalizująca grę
 function initializeGame() {
-    console.log("--- Funkcja initializeGame() została wywołana ---");
+    console.log("--- Funkcja initializeGame() została wywołana ---"); // Log startowy
     applyInitialTheme(); // Stosuje motyw (ciemny/jasny)
 
-    // --- POCZĄTEK BLOKU (DODANE Z main2.js) ---
     // Wczytaj zapisany stan zwinięcia panelu startupów
     const savedStartupCollapseState = localStorage.getItem('startupPanelCollapsed');
     if (savedStartupCollapseState !== null) {
-        // Zakładamy, że zmienna startupPanelCollapsed jest dostępna globalnie (zdefiniowana w ui.js)
         if (typeof startupPanelCollapsed !== 'undefined') {
             startupPanelCollapsed = JSON.parse(savedStartupCollapseState);
         } else {
-            console.warn("Zmienna startupPanelCollapsed nie jest dostępna globalnie w main.js");
-            // Można ustawić domyślną wartość na wszelki wypadek
-            // startupPanelCollapsed = false;
+            // console.warn("Zmienna startupPanelCollapsed nie jest dostępna globalnie w main.js"); // Usunięty log diagnostyczny
         }
     }
-    // --- KONIEC BLOKU (DODANE Z main2.js) ---
 
-    // Inicjalizacja banków komercyjnych (z bazy main.js)
-    initializeCommercialBanks();
-    generateCentralBankGovernor(); // Z bazy main.js
+    // Inicjalizacja banków komercyjnych (ta funkcja teraz ustawia isActive dla banków startowych)
+    initializeCommercialBanks(); // Tworzy banki, może ustawić isActiveFromStart
+    generateCentralBankGovernor();
+
+    
+    let activatedBankIds = []; // Tablica do śledzenia ID aktywowanych banków
+    let activatedBanksCount = 0; // Licznik aktywowanych banków
+
+    // --- Krok 1: Resetuj isActive dla wszystkich banków ---
+    // Zapewnia, że nasza logika wyboru ma pierwszeństwo przed flagą isActiveFromStart
+    commercialBanks.forEach(bank => bank.isActive = false);
+
+    // --- Krok 2: Aktywuj JEDEN bank inwestycyjny ---
+    const investmentBanks = commercialBanks.filter(b => b.type === BANK_TYPES.INVESTMENT);
+    if (investmentBanks.length > 0) {
+        const chosenInv = getRandomElement(investmentBanks);
+        chosenInv.isActive = true;
+        activatedBankIds.push(chosenInv.id);
+        activatedBanksCount++;
+        
+    } else {
+        console.warn("! Brak banków inwestycyjnych do aktywacji.");
+    }
+
+    // --- Krok 3: Aktywuj JEDEN bank korporacyjny (inny niż już aktywowany) ---
+    const corporateBanks = commercialBanks.filter(b => b.type === BANK_TYPES.CORPORATE && !activatedBankIds.includes(b.id));
+    if (corporateBanks.length > 0) {
+        const chosenCorp = getRandomElement(corporateBanks);
+        chosenCorp.isActive = true;
+        activatedBankIds.push(chosenCorp.id);
+        activatedBanksCount++;
+        
+    } else {
+        console.warn("! Brak dostępnych *nieaktywowanych* banków korporacyjnych do aktywacji.");
+    }
+
+    // --- Krok 4: Aktywuj DWA inne, losowe banki (inne niż już aktywowane) ---
+    const remainingInactiveBanks = commercialBanks.filter(b => !activatedBankIds.includes(b.id));
+    const neededRandomBanks = 4 - activatedBanksCount; // Ile jeszcze brakuje do 4
+
+    for (let i = 0; i < neededRandomBanks && remainingInactiveBanks.length > 0; i++) {
+        const randomIndex = Math.floor(Math.random() * remainingInactiveBanks.length);
+        const chosenOther = remainingInactiveBanks.splice(randomIndex, 1)[0]; // Wybierz i usuń z puli
+        chosenOther.isActive = true;
+        activatedBankIds.push(chosenOther.id);
+        activatedBanksCount++;
+        console.log(`- [Aktywacja OK] Losowy bank ${i + 1}: ${chosenOther.name} (ID: ${chosenOther.id}, Typ: ${chosenOther.type})`);
+    }
+
+    if (activatedBanksCount < 4) {
+        console.warn(`! Nie udało się aktywować 4 banków, aktywnych jest tylko ${activatedBanksCount}. Sprawdź definicje banków.`);
+    }
 
     // Tworzenie początkowych start-upów, jeśli ich brakuje
     const existingStartups = Array.isArray(stocks) ? stocks.filter(s => s.assetType === 'Startup').length : 0;
@@ -422,105 +550,122 @@ function initializeGame() {
                 try {
                     stocks.push(genFn());
                 } catch (err) {
-                    console.error('Błąd podczas generowania start-upu:', err);
+                    console.error('Błąd podczas generowania start-upu:', err); // Zachowany błąd
                 }
             }
         } else {
-            console.warn('generateNewStartup nie jest dostępna — pomijam tworzenie dodatkowych start-upów.');
+            console.warn('generateNewStartup nie jest dostępna — pomijam tworzenie dodatkowych start-upów.'); // Zachowane ostrzeżenie
         }
     }
 
-    // --- Logika inicjalizacji opisów, CEO, bilansów itp. ---
+    // Inicjalizacja opisów R&D Instytutów
     let availableResearchDescriptions = [];
     if (typeof researchInstituteDescriptions !== 'undefined' && Array.isArray(researchInstituteDescriptions)) {
         availableResearchDescriptions = [...researchInstituteDescriptions];
     } else {
-        console.warn("Zmienna researchInstituteDescriptions nie jest zdefiniowana lub nie jest tablicą.");
+        console.warn("Zmienna researchInstituteDescriptions nie jest zdefiniowana lub nie jest tablicą."); // Zachowane ostrzeżenie
     }
+    // (Pętla inicjalizująca opisy Instytutów - zakładam, że jest w innej części kodu lub była w usuniętym fragmencie)
 
-    stocks.forEach(stock => {
-        if (stock.assetType === 'Startup') {
-            generateCEO(stock);
-        } else if (stock.assetType === 'ResearchInstitute') {
-            generateCEO(stock);
-            if (availableResearchDescriptions.length > 0) {
-                const randomIndex = Math.floor(Math.random() * availableResearchDescriptions.length);
-                const randomDescription = availableResearchDescriptions.splice(randomIndex, 1)[0];
-                stock.description = `${randomDescription} Na czele instytutu stoi prezes ${stock.ceo ? stock.ceo.name : 'nieznany'}.`;
+    // --- Dodawanie aktywnych banków do giełdy ---
+    console.log("[START GRY] Dodawanie aktywnych banków na giełdę...");
+    let banksAddedToStocks = 0;
+    commercialBanks.forEach(bank => {
+        if (bank.isActive) { // Dodajemy tylko te, które TERAZ oznaczyliśmy jako aktywne
+            let bankStock = stocks.find(s => s.isBankStock && s.bankData && s.bankData.id === bank.id);
+
+            if (bankStock) {
+                banksAddedToStocks++;
+            } else if (typeof createBankStockObject === 'function') {
+                bankStock = createBankStockObject(bank, 'SILVER');
+                if (bankStock) {
+                    const existingStockWithSymbol = stocks.find(s => s.symbol === bankStock.symbol);
+                    if (!existingStockWithSymbol) {
+                        stocks.push(bankStock);
+                        banksAddedToStocks++;
+                    } else {
+                         if(existingStockWithSymbol.bankData && existingStockWithSymbol.bankData.id === bank.id) {
+                            console.warn(`! Próbowano dodać bank ${bank.name} (${bankStock.symbol}), ale już istnieje w 'stocks'.`);
+                        } else {
+                             console.error(`!!! KRYTYCZNY BŁĄD: Wygenerowano zduplikowany symbol ${bankStock.symbol} dla różnych banków (${bank.name} vs ${existingStockWithSymbol.name})!`);
+                        }
+                    }
+                } else {
+                     console.error(`! createBankStockObject zwrócił null dla banku ${bank.name}`);
+                }
+            } else {
+                console.error("! Funkcja createBankStockObject nie jest dostępna!");
             }
-        } else { // Dla zwykłych spółek
-            initializeDescriptionParts(stock);
-            initializeAnalyticalProperties(stock);
-            initializeResearchForStock(stock);
-            // --- POCZĄTEK LINII (DODANE Z main2.js) ---
-            stock.playerHasFinancialAccess = false; // Inicjalizacja dostępu finansowego
-            // --- KONIEC LINII (DODANE Z main2.js) ---
         }
-        // Wspólne dla wszystkich lub prawie wszystkich
-        initializeBalanceSheetForStock(stock);
     });
-    // --- Koniec logiki inicjalizacji opisów ---
+    console.log(`[initializeGame] Zakończono dodawanie banków. ${banksAddedToStocks} banków jest teraz w 'stocks'. Całkowita liczba banków w 'stocks': ${stocks.filter(s=>s.isBankStock).length}`);
 
+
+    // Przypisywanie kont bankowych spółkom
+    console.log("[START GRY] Przypisywanie kont bankowych spółkom..."); // Log informacyjny
+    const activeCorpAndUniBanks = commercialBanks.filter(b => b.isActive && (b.type === BANK_TYPES.CORPORATE || b.type === BANK_TYPES.UNIVERSAL));
+    stocks.forEach(stock => {
+        if (!stock.assetType && !stock.isBankStock && !stock.bankAccountId) {
+            if (activeCorpAndUniBanks.length > 0) {
+                const assignedBank = getRandomElement(activeCorpAndUniBanks);
+                stock.bankAccountId = assignedBank.id;
+                assignedBank.corporateClients.push(stock.symbol);
+                if (stock.cash === undefined || stock.cash === 0) {
+                     if (!stock.balanceSheet) {
+                        initializeBalanceSheetForStock(stock);
+                     }
+                     if (stock.balanceSheet) {
+                        const initialCash = stock.balanceSheet.assets * getRandomInRange(0.01, 0.05);
+                        stock.cash = initialCash;
+                        assignedBank.cash += initialCash;
+                     } else {
+                         console.warn(`! Nie można zainicjalizować gotówki dla ${stock.symbol}, brak bilansu.`); // Zachowane ostrzeżenie
+                         stock.cash = 0;
+                     }
+                } else {
+                    assignedBank.cash += stock.cash;
+                }
+            } else {
+                console.warn(`! Brak aktywnych banków korporacyjnych/uniwersalnych do przypisania konta dla ${stock.symbol}`); // Zachowane ostrzeżenie
+                stock.cash = 0;
+            }
+        }
+    });
+
+    // Końcowa inicjalizacja danych dla wszystkich spółek w 'stocks'
+    console.log("[initializeGame] Końcowa inicjalizacja bilansów, CEO, R&D itp. dla wszystkich spółek w 'stocks'..."); // Log informacyjny
+    stocks.forEach(stock => {
+        if (!stock.balanceSheet && !stock.assetType) {
+             initializeBalanceSheetForStock(stock);
+        }
+        if (stock.cash === undefined) {
+             stock.cash = stock.balanceSheet ? stock.balanceSheet.assets * getRandomInRange(0.01, 0.05) : 0;
+        }
+        if (!stock.ceo && !stock.assetType) generateCEO(stock);
+        if (!stock.descriptionParts && !stock.description && !stock.assetType) initializeDescriptionParts(stock);
+        if (!stock.analytical && !stock.assetType) initializeAnalyticalProperties(stock);
+        if (!stock.research && !stock.assetType) initializeResearchForStock(stock);
+        if (stock.playerHasFinancialAccess === undefined) stock.playerHasFinancialAccess = false;
+    });
+
+    // Inicjalizacja systemów globalnych
     initializeReputation();
     initializeHoldingPortfolios();
     assignInitialDividendPolicies();
     if (typeof initializeDividendEstimates === 'function') {
         initializeDividendEstimates();
-    } else if (typeof window !== 'undefined' && typeof window.initializeDividendEstimates === 'function') {
-        window.initializeDividendEstimates();
     } else {
-        console.warn('initializeDividendEstimates nie jest dostępna — pomijam inicjalizację estymat dywidend.');
+        console.warn('initializeDividendEstimates nie jest dostępna — pomijam inicjalizację estymat dywidend.'); // Zachowane ostrzeżenie
     }
 
-    // --- Aktywacja banków i przypisanie kont (z bazy main.js) ---
-    console.log("[START GRY] Aktywowanie banków startowych...");
-    const activeBankTypes = new Set();
-    // (Kod aktywacji banków - bez zmian z main.js)
-    const investmentBanks = commercialBanks.filter(b => b.type === BANK_TYPES.INVESTMENT);
-    if (investmentBanks.length > 0) {
-        const chosenInv = getRandomElement(investmentBanks);
-        chosenInv.isActive = true; activeBankTypes.add(chosenInv.type); console.log(`- Aktywowano bank inwestycyjny: ${chosenInv.name}`);
-    }
-    const corporateBanks = commercialBanks.filter(b => b.type === BANK_TYPES.CORPORATE);
-    if (corporateBanks.length > 0) {
-        const chosenCorp = getRandomElement(corporateBanks);
-        chosenCorp.isActive = true; activeBankTypes.add(chosenCorp.type); console.log(`- Aktywowano bank korporacyjny: ${chosenCorp.name}`);
-    }
-    const otherBankTypes = Object.values(BANK_TYPES).filter(t => t !== BANK_TYPES.INVESTMENT && t !== BANK_TYPES.CORPORATE);
-    const availableOtherBanks = commercialBanks.filter(b => otherBankTypes.includes(b.type) && !b.isActive);
-    if (availableOtherBanks.length > 0) {
-        const chosenOther = getRandomElement(availableOtherBanks);
-        chosenOther.isActive = true; activeBankTypes.add(chosenOther.type); console.log(`- Aktywowano losowy bank: ${chosenOther.name} (${chosenOther.type})`);
-    }
-
-    console.log("[START GRY] Przypisywanie kont bankowych spółkom...");
-    const activeCorpAndUniBanks = commercialBanks.filter(b => b.isActive && (b.type === BANK_TYPES.CORPORATE || b.type === BANK_TYPES.UNIVERSAL));
-    stocks.forEach(stock => {
-        if (!stock.assetType && !stock.bankAccountId) {
-            if (activeCorpAndUniBanks.length > 0) {
-                const assignedBank = getRandomElement(activeCorpAndUniBanks);
-                stock.bankAccountId = assignedBank.id;
-                assignedBank.corporateClients.push(stock.symbol);
-                const initialCash = stock.balanceSheet.assets * getRandomInRange(0.01, 0.05);
-                stock.cash = initialCash;
-                assignedBank.cash += initialCash;
-            } else {
-                console.warn(`! Brak aktywnych banków korporacyjnych/uniwersalnych do przypisania konta dla ${stock.symbol}`);
-            }
-        }
-    });
-    // --- Koniec aktywacji banków ---
-
-    // --- POCZĄTEK BLOKU (DODANE Z main2.js) ---
-    // Ustaw początkowy stan zwinięcia panelu startupów
+    // Ustawienie UI
     const startupPanel = document.getElementById('startup-incubator-panel');
     const startupIcon = document.getElementById('toggle-icon-startup');
     if (startupPanel && startupIcon) {
-        let isCollapsed = false; // Wartość domyślna
+        let isCollapsed = false;
         if (typeof startupPanelCollapsed !== 'undefined') {
             isCollapsed = startupPanelCollapsed;
         }
-
         if (isCollapsed) {
             startupPanel.classList.add('collapsed');
             startupIcon.textContent = '▶';
@@ -529,9 +674,8 @@ function initializeGame() {
             startupIcon.textContent = '▼';
         }
     }
-    // --- KONIEC BLOKU (DODANE Z main2.js) ---
 
-    // Inicjalizacja UI
+    console.log("[initializeGame] Końcowa inicjalizacja UI..."); // Log informacyjny
     setupAutoInvestModal();
     displayCash();
     displayPortfolio();
@@ -540,18 +684,23 @@ function initializeGame() {
     updateWorkButtonVisibility();
     updateDividendTrackerButtonVisibility();
 
-    // Aktualizacja przycisku pauzy
     const pauseButton = document.getElementById('pause-game-btn');
     if (isGamePaused && pauseButton) {
         pauseButton.textContent = '▶️ Wznów';
         pauseButton.style.backgroundColor = '#28a745';
     }
 
-    // Obliczenie początkowych stóp procentowych (z bazy main.js)
     updateInterestRates();
+
+    // Wyświetlenie początkowego stanu rynku
+    displayStocks();
+    displayStartups();
+    displayEtfs();
 
     // Uruchomienie pętli gry
     setGameSpeed(1);
+
+    scheduleAdPopup();
 }
 
 // Uruchom grę po załadowaniu strony (z bazy main.js - zawiera zależność od banków komercyjnych)

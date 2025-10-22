@@ -16,6 +16,10 @@ function logEvent(message, category = 'market') { // Domyślna kategoria to 'mar
     }
 }
 
+let activePlayerBankBonuses = []; // { bankId: string, type: 'loan' | 'deposit', value: number, expiryTime: number }
+
+
+
 // Lista eventów specyficznych dla firmy (USUNIĘTO DUPLIKATY)
 const companySpecificEventsPrompts = [
     // Pozytywne
@@ -632,6 +636,56 @@ const festivalPlayerEvents = [
             participant.interest += 50;
             stocks.forEach(s => { if (!s.assetType) changeReputation('player', s.symbol, 3); });
         }
+    },
+    {
+        id: 'fest_bank_loan_discount',
+        rarity: 0.15, // Dość częste, jeśli są banki
+        message: (bankName) => `🏦 Specjalna oferta festynowa od ${bankName}! Oferują Ci ${getRandomIntInRange(5, 15)}% zniżki na oprocentowanie *nowego* kredytu komercyjnego zaciągniętego w ciągu najbliższych 2 minut!`,
+        condition: (participant) => {
+            // Warunek: Gracz uczestniczy ORAZ na festynie jest co najmniej jeden bank
+            return festival.participants.some(p => p.isBank === true);
+        },
+        effect: (participant) => {
+            // Wybierz losowy bank uczestniczący w festynie
+            const participatingBanks = festival.participants.filter(p => p.isBank === true);
+            if (participatingBanks.length === 0) return; // Na wszelki wypadek
+            const offeringBank = getRandomElement(participatingBanks);
+            const discountPercentage = getRandomInRange(0.05, 0.15); // Zniżka 5-15%
+            const bonusDuration = 120 * 1000; // 2 minuty czasu RZECZYWISTEGO
+
+            activePlayerBankBonuses.push({
+                bankId: offeringBank.ownerId,
+                type: 'loan',
+                value: discountPercentage, // Wartość zniżki (np. 0.1 dla 10%)
+                expiryTime: Date.now() + bonusDuration
+            });
+            // Informacja dla gracza (już jest w message, ale można dodać log)
+            logEvent(`[Festyn Bank] Otrzymano ofertę zniżki ${Math.round(discountPercentage*100)}% na kredyt w ${offeringBank.ownerName}.`);
+        }
+    },
+    {
+        id: 'fest_bank_deposit_bonus',
+        rarity: 0.15, // Dość częste, jeśli są banki
+        message: (bankName) => `💰 Bonus depozytowy od ${bankName}! Złóż *nowy* depozyt w ciągu 2 minut, a otrzymasz +${getRandomInRange(0.5, 1.5).toFixed(1)}% do standardowego oprocentowania przez rok!`,
+        condition: (participant) => {
+            // Warunek: Gracz uczestniczy ORAZ na festynie jest co najmniej jeden bank
+            return festival.participants.some(p => p.isBank === true);
+        },
+        effect: (participant) => {
+            const participatingBanks = festival.participants.filter(p => p.isBank === true);
+            if (participatingBanks.length === 0) return;
+            const offeringBank = getRandomElement(participatingBanks);
+            const bonusPercentagePoint = getRandomInRange(0.005, 0.015); // Bonus 0.5-1.5 punktu procentowego
+            const bonusDuration = 120 * 1000;
+
+            activePlayerBankBonuses.push({
+                bankId: offeringBank.ownerId,
+                type: 'deposit',
+                value: bonusPercentagePoint, // Wartość bonusu (np. 0.01 dla +1%)
+                expiryTime: Date.now() + bonusDuration
+            });
+            logEvent(`[Festyn Bank] Otrzymano ofertę bonusu +${(bonusPercentagePoint*100).toFixed(1)}% do depozytu w ${offeringBank.ownerName}.`);
+        }
     }
 ];
 
@@ -642,14 +696,13 @@ function triggerFestivalPlayerEvent() {
     if (!festival || !festival.isActive) return;
 
     const playerParticipant = festival.participants.find(p => p.ownerId === 'player');
-    if (!playerParticipant) return; // Gracz nie bierze udziału
+    if (!playerParticipant) return;
 
-    // Filtruj zdarzenia, które mogą wystąpić
     const possibleEvents = festivalPlayerEvents.filter(event => {
-        if (event.condition && !event.condition(playerParticipant)) {
-            return false;
-        }
-        return Math.random() < event.rarity; // Sprawdź rzadkość
+        if (event.condition && !event.condition(playerParticipant)) return false;
+        // Sprawdź rzadkość (można dostosować)
+        const adjustedRarity = event.rarity * (festival.tier || 1); // Rzadsze eventy częściej na większych festynach
+        return Math.random() < adjustedRarity;
     });
 
     if (possibleEvents.length === 0) {
@@ -658,11 +711,11 @@ function triggerFestivalPlayerEvent() {
         if (commonEvents.length === 0 || Math.random() > 0.1) return; // 10% szansy na zwykły event
         
         const chosenEvent = getRandomElement(commonEvents);
-        triggerEvent(chosenEvent, playerParticipant);
+        triggerSingleFestivalEvent(chosenEvent, playerParticipant);
     } else {
         // Wylosuj jedno zdarzenie spośród możliwych rzadkich
         const chosenEvent = getRandomElement(possibleEvents);
-        triggerEvent(chosenEvent, playerParticipant);
+        triggerSingleFestivalEvent(chosenEvent, playerParticipant);
     }
 }
 
@@ -692,19 +745,191 @@ function triggerEvent(chosenEvent, playerParticipant) {
     }
 }
 
-// --- KONIEC NOWYCH EVENTÓW Z PLIKU KOLEGI ---
+function triggerSingleFestivalEvent(chosenEvent, playerParticipant) {
+    let targetName = 'Twoja Działalność'; // Domyślnie
+    let bankNameForMessage = ''; // Nazwa banku dla eventów bankowych
+
+    // Ustal targetName (bez zmian)
+    const target = playerParticipant.promotionTarget;
+    if (target.type === 'company') {
+        const stock = stocks.find(s => s.symbol === target.id);
+        if (stock) targetName = stock.name;
+    } else if (target.type === 'player_company' && playerCompany) {
+        targetName = playerCompany.name;
+    } else if (target.type === 'city') {
+        targetName = 'Miasto Gdańsk';
+    }
+
+    // Jeśli to event bankowy, znajdź nazwę banku dla wiadomości
+    if (chosenEvent.id.startsWith('fest_bank_')) {
+        const participatingBanks = festival.participants.filter(p => p.isBank === true);
+        if(participatingBanks.length > 0) {
+            // Wybierz losowy bank z uczestniczących DO WIADOMOŚCI
+            // UWAGA: Efekt może dotyczyć innego banku (wybranego w `effect`)
+             bankNameForMessage = getRandomElement(participatingBanks).ownerName || "jednego z banków";
+        } else {
+            bankNameForMessage = "jednego z banków"; // Zapasowe
+        }
+    }
+
+    // Wygeneruj wiadomość, przekazując odpowiednią nazwę
+    const message = chosenEvent.message(chosenEvent.id.startsWith('fest_bank_') ? bankNameForMessage : targetName);
+    logEvent(`[FESTYN] ${message}`, 'review');
+    showToast(message, 'default', 7000); // Wydłużony czas dla ofert
+
+    // Wywołaj efekt
+    chosenEvent.effect(playerParticipant);
+
+    // Odśwież widok festynu (bez zmian)
+    const modal = document.getElementById('city-investment-modal');
+    if (modal && modal.style.display === 'block') {
+        updateCityModalContent();
+    }
+}
+
 
 
 function triggerCeoEvent() {
-    // ... (kod bez zmian) ...
+    // Wybierz losową spółkę giełdową (nie startup, nie REIT, nie bankrut)
+    const potentialTargets = stocks.filter(s => !s.assetType && !s.isBankrupt && s.ceo);
+    if (potentialTargets.length === 0) return;
+
+    const targetStock = getRandomElement(potentialTargets);
+    const ceo = targetStock.ceo;
+    let eventTriggered = false;
+
+    // Zdarzenia zależne od cech (przykłady)
+    if (ceo.traits.some(t => t.id === 'skompromitowany') && Math.random() < 0.2) {
+        // Skompromitowany prezes wywołuje skandal
+        const magnitude = getRandomInRange(-0.05, -0.15);
+        displayEventMessage(`🚨 Skandal wokół prezesa ${targetStock.name}! Jego przeszłość wraca jak bumerang.`, 45, magnitude, 'company');
+        applyPriceEffect(targetStock.symbol, magnitude, 'negative', 'company');
+        changeReputation('player', targetStock.symbol, -5); // Lekki spadek reputacji u gracza
+        eventTriggered = true;
+    } else if (ceo.traits.some(t => t.id === 'prowiec') && Math.random() < 0.15) {
+        // PRowiec organizuje udaną konferencję
+        const magnitude = getRandomInRange(0.03, 0.08);
+        displayEventMessage(`🎙️ Prezes ${targetStock.name} błyszczy na konferencji prasowej, zyskując uznanie rynku.`, 30, magnitude, 'company');
+        applyPriceEffect(targetStock.symbol, magnitude, 'positive', 'company');
+        eventTriggered = true;
+    } else if (ceo.traits.some(t => t.id === 'ryzykant') && Math.random() < 0.1) {
+        // Ryzykant podejmuje kontrowersyjną decyzję
+        const isGoodDecision = Math.random() < 0.4; // Tylko 40% szans, że to dobra decyzja
+        const magnitude = getRandomInRange(0.05, 0.12) * (isGoodDecision ? 1 : -1);
+        displayEventMessage(`🎲 Prezes-ryzykant ${targetStock.name} podejmuje śmiałą, ale kontrowersyjną decyzję strategiczną...`, 40, magnitude, 'company');
+        applyPriceEffect(targetStock.symbol, magnitude, isGoodDecision ? 'positive' : 'negative', 'company');
+         eventTriggered = true;
+    }
+
+    // Ogólne, losowe zdarzenia CEO (jeśli żadne specyficzne nie wystąpiło)
+    if (!eventTriggered && Math.random() < 0.15) { // 15% szans na ogólne zdarzenie
+        const roll = Math.random();
+        if (roll < 0.3) {
+            // Pozytywne (np. nagroda branżowa)
+            const magnitude = getRandomInRange(0.02, 0.05);
+            displayEventMessage(`🏆 Prezes ${targetStock.name} otrzymuje prestiżową nagrodę branżową!`, 25, magnitude, 'company');
+            applyPriceEffect(targetStock.symbol, magnitude, 'positive', 'company');
+        } else if (roll < 0.6) {
+            // Neutralne (np. zmiana w zarządzie niższego szczebla)
+            displayEventMessage(`👥 Drobne przetasowania w zarządzie ${targetStock.name}. Rynek obserwuje.`, 20, null, 'company');
+        } else {
+            // Negatywne (np. problemy zdrowotne prezesa - plotki)
+            const magnitude = getRandomInRange(-0.03, -0.06);
+            displayEventMessage(` rumors O ${targetStock.name} krążą plotki o problemach zdrowotnych prezesa...`, 35, magnitude, 'company');
+            applyPriceEffect(targetStock.symbol, magnitude, 'negative', 'company');
+        }
+    }
 }
 
+/**
+ * Losuje i uruchamia zdarzenia półroczne (niekoniecznie związane z CEO).
+ * Wywoływane co dwa kwartały.
+ */
 function triggerSemiAnnualEvents() {
-    // ... (kod bez zmian) ...
+    // Tutaj można dodać logikę dla zdarzeń, które mają sens co pół roku
+    // np. przeglądy regulacyjne, sezonowe wahania popytu w niektórych branżach
+
+    if (Math.random() < 0.1) { // 10% szans na wydarzenie półroczne
+        const roll = Math.random();
+        if (roll < 0.5) {
+             // Przykład: Półroczny przegląd regulacji (lekki wpływ na losowy sektor)
+             const sectors = ['Bankowość', 'Energia', 'Chemia', 'Medycyna'];
+             const targetSector = getRandomElement(sectors);
+             const magnitude = getRandomInRange(-0.02, 0.02); // Mały, losowy wpływ
+             const type = magnitude >= 0 ? 'positive' : 'negative';
+             displayEventMessage(`📑 Półroczny przegląd regulacji w sektorze '${targetSector}'. Inwestorzy analizują potencjalne zmiany.`, 30, magnitude, 'market');
+             stocks.filter(s => s.sector.includes(targetSector)).forEach(stock => {
+                 applyPriceEffect(stock.symbol, magnitude, type, 'market');
+             });
+        } else {
+            // Przykład: Sezonowe wahania (np. lepsze wyniki turystyki latem) - uproszczone
+             if (Math.random() < 0.3) { // Szansa na sezonowy boost
+                const targetSector = 'Turystyka';
+                const magnitude = getRandomInRange(0.03, 0.07);
+                 displayEventMessage(`☀️ Sezon urlopowy w pełni! Spółki z sektora '${targetSector}' liczą zyski.`, 40, magnitude, 'market');
+                 stocks.filter(s => s.sector.includes(targetSector)).forEach(stock => {
+                     applyPriceEffect(stock.symbol, magnitude, 'positive', 'market');
+                 });
+             }
+        }
+    }
+     // Można dodać więcej zdarzeń półrocznych
 }
 
+
+/**
+ * Losuje i uruchamia zdarzenia związane z prezesami (CEO), które mają sens raz w roku.
+ * Dotyczy głównie wieku, stażu, rocznych ocen. Wywoływane co rok.
+ */
 function triggerYearlyCeoEvents() {
-    // ... (kod bez zmian) ...
+    console.log("[ZDARZENIA ROCZNE CEO] Uruchomiono cykl roczny...");
+
+    stocks.forEach(stock => {
+        if (!stock.assetType && !stock.isBankrupt && stock.ceo) {
+            const ceo = stock.ceo;
+            let eventTriggered = false; // Flaga, czy już coś się stało dla tego CEO w tym roku
+
+            // 1. Sprawdzenie emerytury
+            const retirementAge = 68 + getRandomIntInRange(-3, 5); // Wiek emerytalny między 65 a 73
+            if (ceo.age >= retirementAge && Math.random() < 0.4) { // 40% szans na emeryturę po osiągnięciu wieku
+                logEvent(`👋 Prezes ${stock.name}, ${ceo.name}, przechodzi na zasłużoną emeryturę w wieku ${ceo.age} lat.`, 'review');
+                replaceCeo(stock); // Wygeneruj nowego, losowego prezesa
+                eventTriggered = true;
+                return; // Przejdź do następnej spółki
+            }
+
+            // 2. Roczna ocena wyników (jeśli nie było emerytury)
+            if (!eventTriggered) {
+                 const health = stock.financialHealth;
+                 if (health >= 4 && Math.random() < 0.3) {
+                     // Bardzo dobre wyniki -> bonus dla CEO (pozytywny wpływ)
+                     const magnitude = getRandomInRange(0.02, 0.04);
+                     displayEventMessage(`💰 Roczny bonus dla prezesa ${stock.name} za doskonałe wyniki! Akcjonariusze są zadowoleni.`, 20, magnitude, 'company');
+                     applyPriceEffect(stock.symbol, magnitude, 'positive', 'company');
+                     eventTriggered = true;
+                 } else if (health <= -4 && Math.random() < 0.35) {
+                     // Bardzo słabe wyniki -> presja na CEO (negatywny wpływ, zwiększona szansa na zwolnienie w przyszłości)
+                     const magnitude = getRandomInRange(-0.03, -0.05);
+                     displayEventMessage(`📉 Rada nadzorcza ${stock.name} wywiera presję na prezesa po katastrofalnym roku...`, 30, magnitude, 'company');
+                     applyPriceEffect(stock.symbol, magnitude, 'negative', 'company');
+                     // Można by tu dodać ukrytą flagę zwiększającą szansę na wymuszone odejście w `triggerCeoEvent`
+                     eventTriggered = true;
+                 }
+            }
+
+             // 3. Zdarzenia roczne związane z cechami (jeśli nic innego się nie stało)
+            if (!eventTriggered && Math.random() < 0.1) { // Mniejsza szansa na zdarzenie związane z cechą
+                 if (ceo.traits.some(t => t.id === 'wizjoner')) {
+                     displayEventMessage(`🚀 Prezes ${stock.name} przedstawia nową, długoterminową wizję rozwoju firmy! Inwestorzy są zaintrygowani.`, 30, 0.02, 'company');
+                     applyPriceEffect(stock.symbol, 0.02, 'positive', 'company');
+                 } else if (ceo.traits.some(t => t.id === 'ekspansjonista')) {
+                      // Tutaj można dodać np. ogłoszenie planów przejęcia innej (losowej, mniejszej) firmy
+                      displayEventMessage(`🗺️ ${stock.name}, pod wodzą prezesa-ekspansjonisty, ogłasza plany rozwoju na nowych rynkach.`, 25, null, 'company');
+                 }
+                 // Można dodać więcej specyficznych zdarzeń rocznych dla innych cech
+             }
+        }
+    });
 }
 
 function triggerTBillAuctionEvent() {

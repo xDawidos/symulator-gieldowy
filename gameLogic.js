@@ -72,6 +72,48 @@ let stateBondOffer = {
     longTerm: { available: 0, interestBase: 0.05 }
 };
 
+const BANK_TYPES = {
+    INVESTMENT: 'Inwestycyjny',
+    CORPORATE: 'Korporacyjny',
+    UNIVERSAL: 'Uniwersalny',
+    INTERNATIONAL: 'Międzynarodowy',
+    COOPERATIVE: 'Spółdzielczy',
+    INTERNET: 'Internetowy (e-bank)',
+    MORTGAGE: 'Hipoteczny'
+};
+
+// Definicje wszystkich banków w grze
+const ALL_COMMERCIAL_BANKS_DEFINITIONS = [
+    // Inwestycyjne (3 + 1)
+    { id: 'inv1', name: 'Apex Capital Partners', type: BANK_TYPES.INVESTMENT, initialCapital: 5000000, reserveRatio: 0.1, baseInterestRateMargin: 0.01 },
+    { id: 'inv2', name: 'Quantum Financial Group', type: BANK_TYPES.INVESTMENT, initialCapital: 4500000, reserveRatio: 0.1, baseInterestRateMargin: 0.012 },
+    { id: 'inv3', name: 'Meridian Trade Bank', type: BANK_TYPES.INVESTMENT, initialCapital: 4000000, reserveRatio: 0.1, baseInterestRateMargin: 0.009 },
+    // --> NOWY: Bank Hipotezy jako Inwestycyjny <--
+    { id: 'bhi', name: 'Bank Hipotezy', type: BANK_TYPES.INVESTMENT, initialCapital: 8000000, reserveRatio: 0.11, baseInterestRateMargin: 0.011, isActiveFromStart: true }, // Kapitał szacowany
+
+    // Korporacyjne (3)
+    { id: 'corp1', name: 'Proxima Business Bank', type: BANK_TYPES.CORPORATE, initialCapital: 7000000, reserveRatio: 0.15, baseInterestRateMargin: 0.015 },
+    { id: 'corp2', name: 'Centauri Corporate Finance', type: BANK_TYPES.CORPORATE, initialCapital: 6500000, reserveRatio: 0.16, baseInterestRateMargin: 0.016 },
+    { id: 'corp3', name: 'Sirius Enterprise Bank', type: BANK_TYPES.CORPORATE, initialCapital: 6000000, reserveRatio: 0.14, baseInterestRateMargin: 0.014 },
+
+    // Uniwersalny (2)
+    { id: 'uni1', name: 'Bank Powszechny Gdański', type: BANK_TYPES.UNIVERSAL, initialCapital: 10000000, reserveRatio: 0.12, baseInterestRateMargin: 0.02 },
+    { id: 'bpn', name: 'BPN BK', type: BANK_TYPES.UNIVERSAL, initialCapital: 6000000, reserveRatio: 0.13, baseInterestRateMargin: 0.021, isActiveFromStart: true }, // Kapitał szacowany
+
+    // Międzynarodowy (2)
+    { id: 'int1', name: 'Global Finance Alliance', type: BANK_TYPES.INTERNATIONAL, initialCapital: 15000000, reserveRatio: 0.1, baseInterestRateMargin: 0.018 },
+    { id: 'bks', name: 'Bank Klasy Światowej', type: BANK_TYPES.INTERNATIONAL, initialCapital: 20000000, reserveRatio: 0.09, baseInterestRateMargin: 0.017, isActiveFromStart: true }, // Kapitał szacowany
+
+    // Spółdzielczy (1)
+    { id: 'coop1', name: 'Pomorski Bank Spółdzielczy', type: BANK_TYPES.COOPERATIVE, initialCapital: 2000000, reserveRatio: 0.18, baseInterestRateMargin: 0.025 },
+
+    // Internetowy (1)
+    { id: 'net1', name: 'CyberBank Connect', type: BANK_TYPES.INTERNET, initialCapital: 3000000, reserveRatio: 0.08, baseInterestRateMargin: 0.017 },
+
+    // Hipoteczny (1)
+    { id: 'mort1', name: 'DomInvest Bank Hipoteczny', type: BANK_TYPES.MORTGAGE, initialCapital: 5000000, reserveRatio: 0.13, baseInterestRateMargin: 0.022 },
+];
+
 // --- NOWY FRAGMENT ---
 // Ustawienia Auto-inwestowania Gracza
 let playerAutoInvest = {
@@ -555,17 +597,25 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'BPN BK', price: 45.00, volatilityFactor: 0.6, symbol: 'BPN', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
-    quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
-  lineHistory: [], playerTransactions: [], sector: ['Bankowość'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
+        name: 'BPN BK',
+        price: 45.00, // Pozostawiamy cenę startową
+        volatilityFactor: 0.6,
+        symbol: 'BPN',
+        exchange: 'BRONZE', // Pozostawiamy giełdę
+        totalShares: 10000, maxShares: 10000, // Pozostawiamy akcje
+        sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [],
+        balanceSheet: { assets: 6000000, liabilities: 0, shareCapital: 600000, retainedEarnings: 5400000 }, // Ustawiamy bilans banku
+        quarterlyEarnings: 0, lineHistory: [], playerTransactions: [],
+        sector: ['Bankowość Komercyjna', 'Bankowość'], // Zmieniamy sektor
+        financialHealth: 2, // Domyślna kondycja
+        lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0,
+        dividendPolicy: 'Balanced', // Domyślna polityka
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
-        lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null, // <-- DODAJ TO
-    cash: 0 
+        lastQuarterValue: 45 * 10000, estimatedDividend: 0,
+        bankAccountId: null, // Banki nie mają kont
+        cash: 6000000, // Gotówka banku = kapitał
+        isBankStock: true, // --> Dodana flaga <--
+        bankData: { id: 'bpn', type: BANK_TYPES.UNIVERSAL } // --> Dodane dane banku <--
     },
     {
     name: 'KolenBreg', price: 19.00, volatilityFactor: 1.5, symbol: 'KOB', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
@@ -900,17 +950,25 @@ const initialStocks = [
         candlestickHistory: [], lineHistory: [], currentCandle: null, dividendPolicy: 'Growth'
     },
     {
-        name: 'Bank Hipotezy', price: 330.00, volatilityFactor: 0.8, symbol: 'BHI', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
-    quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
-  lineHistory: [], playerTransactions: [], sector: ['Bankowość'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
+        name: 'Bank Hipotezy',
+        price: 330.00, // Pozostawiamy cenę startową
+        volatilityFactor: 0.8,
+        symbol: 'BHI',
+        exchange: 'SILVER', // Pozostawiamy giełdę
+        totalShares: 50000, maxShares: 50000, // Pozostawiamy akcje
+        sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [],
+        balanceSheet: { assets: 8000000, liabilities: 0, shareCapital: 800000, retainedEarnings: 7200000 }, // Ustawiamy bilans banku
+        quarterlyEarnings: 0, lineHistory: [], playerTransactions: [],
+        sector: ['Bankowość Komercyjna', 'Finanse'], // Zmieniamy sektor
+        financialHealth: 2, // Domyślna kondycja
+        lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0,
+        dividendPolicy: 'Balanced', // Domyślna polityka
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
-        lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null, // <-- DODAJ TO
-    cash: 0 
+        lastQuarterValue: 330 * 50000, estimatedDividend: 0,
+        bankAccountId: null, // Banki nie mają kont
+        cash: 8000000, // Gotówka banku = kapitał
+        isBankStock: true, // --> Dodana flaga <--
+        bankData: { id: 'bhi', type: BANK_TYPES.INVESTMENT } // --> Dodane dane banku <--
     },
     {
         name: 'Siarkobrzeg', price: 337.00, volatilityFactor: 1.4, symbol: 'SIK', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
@@ -1047,17 +1105,25 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Bank Klasy Światowej', price: 1000.00, volatilityFactor: 0.3, symbol: 'BKS', exchange: 'GOLD', totalShares: 100000, maxShares: 100000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
-    quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
-  lineHistory: [], playerTransactions: [], sector: ['Bankowość'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
+        name: 'Bank Klasy Światowej',
+        price: 1000.00, // Pozostawiamy cenę startową
+        volatilityFactor: 0.3,
+        symbol: 'BKS',
+        exchange: 'GOLD', // Pozostawiamy giełdę
+        totalShares: 100000, maxShares: 100000, // Pozostawiamy akcje
+        sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [],
+        balanceSheet: { assets: 20000000, liabilities: 0, shareCapital: 2000000, retainedEarnings: 18000000 }, // Ustawiamy bilans banku
+        quarterlyEarnings: 0, lineHistory: [], playerTransactions: [],
+        sector: ['Bankowość Komercyjna', 'Finanse', 'Międzynarodowy'], // Zmieniamy sektor
+        financialHealth: 3, // Domyślna kondycja (lepsza)
+        lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0,
+        dividendPolicy: 'Balanced', // Domyślna polityka
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
-        lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null, // <-- DODAJ TO
-    cash: 0 
+        lastQuarterValue: 1000 * 100000, estimatedDividend: 0,
+        bankAccountId: null, // Banki nie mają kont
+        cash: 20000000, // Gotówka banku = kapitał
+        isBankStock: true, // --> Dodana flaga <--
+        bankData: { id: 'bks', type: BANK_TYPES.INTERNATIONAL } // --> Dodane dane banku <--
     },
 
     // GIEŁDA PLATYNOWA (Poziom 4)
@@ -1454,6 +1520,14 @@ const BASE_SKILL_COST = 100;
 const SKILL_COST_INCREASE_FACTOR = 0.75;
 
 const skills = {
+
+    'adblock': {
+        name: 'AdBlock 🚫',
+        unlockedLevel: 0,
+        levels: [
+            { level: 1, cost: 1000, description: 'Wyłącza wyskakujące okienka reklamowe w interfejsie gry.' }
+        ]
+    },
 
     'work': {
         name: 'Praca ✍️',
@@ -3295,26 +3369,19 @@ function processDividendPayout(stock) {
 
 function initializeBalanceSheetForStock(stock) {
     // Pomiń start-upy, REIT-y i inne specjalne typy
-    if (stock.assetType) {
+    if (stock.assetType || stock.isBankStock) { // Dodano isBankStock
         stock.balanceSheet = { assets: 0, liabilities: 0, shareCapital: 0, retainedEarnings: 0 };
         stock.quarterlyEarnings = 0;
+        stock.cash = 0; // Inicjalizuj gotówkę na 0 dla typów specjalnych
         return;
     }
 
     const marketCap = stock.price * stock.totalShares;
-
-    // 1. Aktywa są powiązane z kapitalizacją, ale z pewną losowością
     const assets = marketCap * getRandomInRange(0.9, 1.5);
-
-    // 2. Zadłużenie jest większe dla firm o niższej kondycji
     const liabilitiesRatio = getRandomInRange(0.1, 0.6) - (stock.financialHealth * 0.05);
     const liabilities = assets * Math.max(0.05, liabilitiesRatio);
-
-    // 3. Kapitał zakładowy to mała, stała część kapitału własnego
-    const equity = assets - liabilities; // Kapitał własny = Aktywa - Zobowiązania
+    const equity = assets - liabilities;
     const shareCapital = equity * getRandomInRange(0.1, 0.2);
-
-    // 4. Reszta kapitału własnego to zyski zatrzymane
     const retainedEarnings = equity - shareCapital;
 
     stock.balanceSheet = {
@@ -3323,7 +3390,19 @@ function initializeBalanceSheetForStock(stock) {
         shareCapital: shareCapital,
         retainedEarnings: retainedEarnings
     };
-    stock.quarterlyEarnings = 0; // Zaczynamy z zerowym zyskiem kwartalnym
+    stock.quarterlyEarnings = 0;
+
+    // ---> INICJALIZACJA GOTÓWKI <---
+    // Ustawmy początkową gotówkę jako mały procent aktywów
+    stock.cash = assets * getRandomInRange(0.01, 0.05);
+    // Jeśli firma ma przypisany bank, upewnij się, że bank też "ma" tę gotówkę
+    if (stock.bankAccountId) {
+        const bank = commercialBanks.find(b => b.id === stock.bankAccountId);
+        if (bank) {
+            bank.cash += stock.cash; // Dodaj gotówkę firmy do zasobów banku
+        }
+    }
+    // ---> KONIEC INICJALIZACJI GOTÓWKI <---
 }
 
 function processReitDividend(stock) {
@@ -4944,29 +5023,58 @@ function applyTechnology(stock, techId) {
     const tech = technologies[techId];
     if (!tech) return;
 
+    // Zastosuj efekt ukończonej technologii
     tech.applyEffect(stock);
     stock.research.unlockedTechs.push(techId);
-    
-    // --- KLUCZOWA LOGIKA DECYZYJNA ---
+
+    // Zresetuj flagę pauzy, jeśli była aktywna
+    stock.research.researchPaused = false;
+
+    // --- KLUCZOWA LOGIKA DECYZYJNA (rozpoczęcie następnego badania) ---
+    // Sprawdź, czy gracz ma odblokowaną możliwość ingerencji (Tier 5)
     if (stock.researchUnlocks.canInterfere) {
-        // Zatrzymaj badania i ustaw timer na podjęcie decyzji
+        // Tak, gracz ma kontrolę. Wstrzymaj badania i ustaw timer na decyzję.
         stock.research.currentTech = null;
         stock.research.progress = 0;
-        stock.research.choiceAvailableUntil = Date.now() + 15000; // 15 sekund rzeczywistego czasu
-        logEvent(`🔬 ${stock.name} kończy badania i czeka na Twoją decyzję co do następnego projektu!`);
+        // Ustaw timer na 15 sekund RZECZYWISTEGO czasu (niezależnie od prędkości gry)
+        stock.research.choiceAvailableUntil = Date.now() + 15000;
+        logEvent(`🔬 ${stock.name} kończy badania nad "${tech.name}" i czeka na Twoją decyzję co do następnego projektu! Masz 15 sekund.`);
+        showToast(`${stock.name}: Wybierz następny projekt R&D!`, 'default', 10000);
+        // Odśwież modale, jeśli są otwarte, aby pokazać opcje wyboru
+        if (document.getElementById('research-modal')?.style.display === 'block') openResearchModal(stock.symbol);
+        if (document.getElementById('management-modal')?.style.display === 'block') openManagementModal(stock.symbol);
+
     } else {
-        // Losuj następną technologię automatycznie (stara logika)
-        const availableTechs = Object.keys(technologies).filter(id => 
-            !stock.research.unlockedTechs.includes(id) &&
-            (technologies[id].sector === 'common' || stock.sector.includes(technologies[id].sector)) &&
-            technologies[id].type === stock.research.specialization
+        // Nie, gracz nie ma kontroli (lub umiejętność nie jest odblokowana). Wybierz losowo.
+        // Znajdź dostępne technologie w tej samej specjalizacji
+        const availableTechs = Object.keys(technologies).filter(id =>
+            !stock.research.unlockedTechs.includes(id) && // Jeszcze nie zbadana
+            (technologies[id].sector === 'common' || stock.sector.includes(technologies[id].sector)) && // Pasuje do sektora
+            technologies[id].type === stock.research.specialization // Pasuje do specjalizacji
         );
 
         if (availableTechs.length > 0) {
-            stock.research.currentTech = getRandomElement(availableTechs);
-            stock.research.progress = 0;
-            logEvent(`🔬 ${stock.name} rozpoczyna nowe badania nad technologią: "${technologies[stock.research.currentTech].name}".`);
+            // Jest co badać - wybierz losowo i sprawdź koszt
+            const nextTechId = getRandomElement(availableTechs);
+            const nextTech = technologies[nextTechId];
+            const initialCost = nextTech.initialCashCost || 0;
+
+            if (stock.cash >= initialCost) {
+                // Stać firmę, rozpocznij badania
+                stock.cash -= initialCost;
+                stock.research.currentTech = nextTechId;
+                stock.research.progress = 0;
+                stock.research.isResearching = true; // Upewnij się, że badania są aktywne
+                logEvent(`💸 ${stock.name} inwestuje ${initialCost.toFixed(0)} PLN w rozpoczęcie badań nad "${nextTech.name}".`, 'company');
+                logEvent(`🔬 ${stock.name} automatycznie rozpoczyna nowe badania nad technologią: "${nextTech.name}".`);
+            } else {
+                // Nie stać firmy, wstrzymaj badania
+                stock.research.isResearching = false;
+                stock.research.currentTech = null;
+                logEvent(`📉 ${stock.name} zakończył(a) badania, ale nie ma środków (${initialCost.toFixed(0)} PLN), aby rozpocząć następny projekt. Badania wstrzymane.`, 'company');
+            }
         } else {
+            // Brak dostępnych technologii w tej specjalizacji
             stock.research.isResearching = false;
             stock.research.currentTech = null;
             logEvent(`🔬 ${stock.name} zakończył wszystkie dostępne badania w swojej specjalizacji.`);
@@ -5001,69 +5109,140 @@ function checkResearchChoiceTimers() {
 }
 
 function updateResearchProgress(deltaTime) {
-    const researchPoints = deltaTime / 2500;
+    const researchPoints = deltaTime / 2500; // Ilość punktów postępu w tym cyklu
 
     stocks.forEach(stock => {
-        if (stock.research && stock.research.isResearching && stock.research.currentTech) {
-            const baseSpeedMultiplier = stock.research.researchSpeedMultiplier || 1.0;
-            let ceoMultiplier = 1.0;
-            if (stock.ceo && stock.ceo.traits) {
-                if (stock.ceo.traits.some(t => t.id === 'wizjoner')) ceoMultiplier *= 1.10;
-                if (stock.ceo.traits.some(t => t.id === 'glowa_w_chmurach')) ceoMultiplier *= 0.95;
-                if (stock.ceo.traits.some(t => t.id === 'geniusz_innowacji')) ceoMultiplier *= 1.25;
-                if (stock.ceo.traits.some(t => t.id === 'biurowy_dron')) ceoMultiplier *= 1.05;
-                if (stock.ceo.traits.some(t => t.id === 'ksiegowy')) ceoMultiplier *= 0.95;
-                if (stock.ceo.traits.some(t => t.id === 'lowca_glow')) ceoMultiplier *= 1.10;
+        // Pomiń, jeśli spółka nie ma systemu badań/inwestycji lub nie jest aktywny
+        if (!stock.research || !stock.research.isResearching) return;
+
+        // --- Logika dla Inwestycji Bankowych ---
+        if (stock.research.isInvestment) {
+            if (stock.research.currentInvestmentId) {
+                // Dodaj punkty postępu
+                stock.research.progress += researchPoints; // Banki na razie bez mnożników prędkości
+
+                // Sprawdź, czy inwestycja została ukończona
+                if (stock.research.progress >= stock.research.requiredProgress) {
+                    applyBankInvestmentEffect(stock, stock.research.currentInvestmentId);
+                }
             }
+        }
+        // --- Logika dla Standardowego R&D ---
+        else {
+            if (stock.research.currentTech) {
+                const baseSpeedMultiplier = stock.research.researchSpeedMultiplier || 1.0;
+                let ceoMultiplier = 1.0;
+                // ... (istniejąca logika obliczania ceoMultiplier na podstawie cech) ...
+                if (stock.ceo && stock.ceo.traits) {
+                    if (stock.ceo.traits.some(t => t.id === 'wizjoner')) ceoMultiplier *= 1.10;
+                    if (stock.ceo.traits.some(t => t.id === 'glowa_w_chmurach')) ceoMultiplier *= 0.95;
+                    if (stock.ceo.traits.some(t => t.id === 'geniusz_innowacji')) ceoMultiplier *= 1.25;
+                    if (stock.ceo.traits.some(t => t.id === 'biurowy_dron')) ceoMultiplier *= 1.05;
+                    if (stock.ceo.traits.some(t => t.id === 'ksiegowy')) ceoMultiplier *= 0.95;
+                    if (stock.ceo.traits.some(t => t.id === 'lowca_glow')) ceoMultiplier *= 1.10;
+                }
 
-            stock.research.progress += researchPoints * baseSpeedMultiplier * ceoMultiplier;
+                // Dodaj punkty postępu
+                stock.research.progress += researchPoints * baseSpeedMultiplier * ceoMultiplier;
 
-            const currentTechCost = technologies[stock.research.currentTech]?.cost;
-            if (currentTechCost && stock.research.progress >= currentTechCost) {
-                logEvent(`💡 PRZEŁOM! ${stock.name} zakończył badania nad technologią: "${technologies[stock.research.currentTech].name}"!`);
-                applyTechnology(stock, stock.research.currentTech);
+                // Sprawdź, czy badanie zostało ukończone
+                const currentTechCost = technologies[stock.research.currentTech]?.cost;
+                if (currentTechCost && stock.research.progress >= currentTechCost) {
+                    logEvent(`💡 PRZEŁOM! ${stock.name} zakończył badania nad technologią: "${technologies[stock.research.currentTech].name}"!`);
+                    applyTechnology(stock, stock.research.currentTech); // Wywołaj starą funkcję
+                }
             }
         }
     });
 }
 
 function initializeResearchForStock(stock) {
-    // Ta funkcja nie dotyczy start-upów i funduszy REIT
+    // Ta funkcja nie dotyczy start-upów, REIT-ów i Instytutów Badawczych
     if (stock.assetType === 'Startup' || stock.assetType === 'REIT' || stock.assetType === 'ResearchInstitute') {
-        return; // Ta funkcja nie dotyczy start-upów, REIT-ów i Instytutów Badawczych
+        stock.research = null; // Upewnij się, że nie mają obiektu research
+        stock.researchUnlocks = null;
+        return;
     }
 
-    const specializations = ["wzmacnianie rozwoju", "wzmacnianie pozycji na rynku", "wzmacnianie ceny i zysków"];
-    const shouldResearch = Math.random() > 0.10; // 90% szans, że firma prowadzi badania
+    // --- NOWA LOGIKA DLA BANKÓW ---
+    if (stock.isBankStock) {
+        const investmentIds = Object.keys(bankInvestments);
+        if (investmentIds.length === 0) {
+            stock.research = null; // Brak dostępnych inwestycji
+            return;
+        }
+        const firstInvestmentId = getRandomElement(investmentIds);
+        const firstInvestment = bankInvestments[firstInvestmentId];
+        const initialRequiredProgress = firstInvestment.baseCost;
 
-    stock.research = {
-        isResearching: shouldResearch,
-        specialization: null,
-        researchSpeedMultiplier: 1.0,
-        currentTech: null,
-        progress: 0,
-        unlockedTechs: []
-    };
-    stock.researchUnlocks = {
-        canSeeSpecialization: false, canSeeResults: false, canFund: false,
-        canInfluence: false, canInterfere: false
-    };
+        stock.research = {
+            isInvestment: true, // Flaga oznaczająca system inwestycji
+            isResearching: false, // Domyślnie nieaktywne, startuje po sprawdzeniu kasy
+            currentInvestmentId: firstInvestmentId,
+            progress: 0,
+            requiredProgress: initialRequiredProgress, // Wymagane punkty dla pierwszej realizacji
+            completedInvestments: {}, // Licznik ukończonych { 'ID': level }
+            investmentPaused: false // Flaga pauzy
+        };
+        // Inicjalizuj licznik dla wszystkich inwestycji na 0
+        investmentIds.forEach(id => { stock.research.completedInvestments[id] = 0; });
 
-    if (shouldResearch) {
-        // Losuj specjalizację
-        stock.research.specialization = getRandomElement(specializations);
-        
-        // Znajdź pierwszą dostępną technologię dla tej specjalizacji i sektora
-        const availableTechs = Object.keys(technologies).filter(id => 
-            (technologies[id].sector === 'common' || stock.sector.includes(technologies[id].sector)) &&
-            technologies[id].type === stock.research.specialization
-        );
-
-        if (availableTechs.length > 0) {
-            stock.research.currentTech = getRandomElement(availableTechs);
+        // Sprawdź, czy bank stać na rozpoczęcie pierwszej inwestycji
+        const bankData = commercialBanks.find(b => b.id === stock.bankData.id);
+        if (bankData && bankData.cash >= (firstInvestment.initialCashCost || 0)) {
+            bankData.cash -= (firstInvestment.initialCashCost || 0);
+            stock.research.isResearching = true;
+            if((firstInvestment.initialCashCost || 0) > 0) logEvent(`💸 Bank ${stock.name} rozpoczyna inwestycję "${firstInvestment.name}" kosztem ${firstInvestment.initialCashCost.toLocaleString()} PLN.`);
+             else logEvent(`▶️ Bank ${stock.name} rozpoczyna inwestycję "${firstInvestment.name}".`);
         } else {
-            // Jeśli w danym sektorze nie ma badań dla tej specjalizacji, wyłącz badania
-            stock.research.isResearching = false;
+             logEvent(`⏸️ Bank ${stock.name} chciał rozpocząć inwestycję "${firstInvestment.name}", ale brakuje środków (${(firstInvestment.initialCashCost || 0).toLocaleString()} PLN).`);
+            stock.research.investmentPaused = true; // Zapauzuj od razu
+        }
+
+    } else { // --- STARA LOGIKA DLA ZWYKŁYCH SPÓŁEK ---
+        const specializations = ["wzmacnianie rozwoju", "wzmacnianie pozycji na rynku", "wzmacnianie ceny i zysków"];
+        const shouldResearch = Math.random() > 0.10; // 90% szans
+
+        stock.research = {
+            isInvestment: false, // Oznacz jako standardowe R&D
+            isResearching: shouldResearch,
+            specialization: null,
+            researchSpeedMultiplier: 1.0,
+            currentTech: null,
+            progress: 0,
+            unlockedTechs: [],
+            researchPaused: false // Dodajemy flagę pauzy
+        };
+        stock.researchUnlocks = { // Inicjalizuj odblokowania dla zwykłych spółek
+            canSeeSpecialization: false, canSeeResults: false, canFund: false,
+            canInfluence: false, canInterfere: false
+        };
+
+        if (shouldResearch) {
+            stock.research.specialization = getRandomElement(specializations);
+            const availableTechs = Object.keys(technologies).filter(id =>
+                !stock.research.unlockedTechs.includes(id) &&
+                (technologies[id].sector === 'common' || stock.sector.includes(technologies[id].sector)) &&
+                technologies[id].type === stock.research.specialization
+            );
+
+            if (availableTechs.length > 0) {
+                 const firstTechId = getRandomElement(availableTechs);
+                 const firstTech = technologies[firstTechId];
+                 // Sprawdź koszt początkowy
+                 if(stock.cash >= (firstTech.initialCashCost || 0)) {
+                    stock.cash -= (firstTech.initialCashCost || 0);
+                    stock.research.currentTech = firstTechId;
+                     if((firstTech.initialCashCost || 0) > 0) logEvent(`💸 ${stock.name} rozpoczyna badania nad "${firstTech.name}" kosztem ${firstTech.initialCashCost.toLocaleString()} PLN.`);
+                     else logEvent(`▶️ ${stock.name} rozpoczyna badania nad "${firstTech.name}".`);
+                 } else {
+                     logEvent(`⏸️ ${stock.name} chciał rozpocząć badania nad "${firstTech.name}", ale brakuje środków (${(firstTech.initialCashCost || 0).toLocaleString()} PLN). Badania wstrzymane.`);
+                     stock.research.isResearching = false;
+                     stock.research.researchPaused = true;
+                 }
+            } else {
+                stock.research.isResearching = false; // Brak dostępnych technologii
+            }
         }
     }
 }
@@ -5153,16 +5332,41 @@ function changeResearchSpecialization(symbol) {
 
 function chooseNextResearch(symbol, chosenTechId) {
     const stock = stocks.find(s => s.symbol === symbol);
-    if (!stock || !chosenTechId) return;
+    const tech = technologies[chosenTechId];
+
+    if (!stock || !tech) return;
+
+    // ---> NOWE SPRAWDZENIE KOSZTU POCZĄTKOWEGO <---
+    const initialCost = tech.initialCashCost || 0;
+    if (stock.cash < initialCost) {
+        logEvent(`📉 ${stock.name} nie ma wystarczająco środków (${initialCost.toFixed(0)} PLN), aby rozpocząć badania nad "${tech.name}". Badania wstrzymane.`, 'company');
+        showToast(`Brak środków w ${stock.name} na rozpoczęcie badań!`, 'warning');
+        stock.research.currentTech = null; // Anuluj wybór technologii
+        stock.research.isResearching = false;
+        stock.research.choiceAvailableUntil = null; // Zresetuj timer wyboru, jeśli był aktywny
+        // Odśwież modale, jeśli są otwarte
+        if (document.getElementById('research-modal')?.style.display === 'block') openResearchModal(symbol);
+        if (document.getElementById('management-modal')?.style.display === 'block') openManagementModal(symbol);
+        return; // Zakończ funkcję
+    }
+
+    // Jeśli firmę stać, pobierz koszt i kontynuuj
+    stock.cash -= initialCost;
+    logEvent(`💸 ${stock.name} inwestuje ${initialCost.toFixed(0)} PLN w rozpoczęcie badań nad "${tech.name}".`, 'company');
+    // ---> KONIEC NOWEGO SPRAWDZENIA <---
 
     stock.research.currentTech = chosenTechId;
     stock.research.progress = 0;
-    
-    logEvent(`🔬 Ingerencja w ${stock.name} udana! Firma rozpoczyna badania nad wybraną technologią: "${technologies[chosenTechId].name}".`, 'review');
-    showToast("Nowy projekt badawczy został wybrany!", 'success');
-    
-    openResearchModal(symbol);
-    openManagementModal(symbol);
+    stock.research.isResearching = true; // Upewnij się, że badania są aktywne
+    stock.research.researchPaused = false; // Upewnij się, że nie są zapauzowane
+    stock.research.choiceAvailableUntil = null; // Zresetuj timer wyboru
+
+    logEvent(`🔬 ${stock.name} rozpoczyna badania nad wybraną technologią: "${tech.name}".`, 'review');
+    showToast(`Rozpoczęto nowy projekt badawczy w ${stock.name}!`, 'success');
+
+    // Odśwież modale
+    if (document.getElementById('research-modal')?.style.display === 'block') openResearchModal(symbol);
+    if (document.getElementById('management-modal')?.style.display === 'block') openManagementModal(symbol);
 }
 
 function updateResearchInstitutes() {
@@ -5173,10 +5377,16 @@ function updateResearchInstitutes() {
         'wzmacnianie ceny i zysków': 0
     };
     
-    stocks.filter(s => s.assetType !== 'ResearchInstitute' && s.research?.unlockedTechs.length > 0)
+stocks.filter(s =>
+            s.assetType !== 'ResearchInstitute' && // Nie licz instytutów
+            s.research &&                           // Upewnij się, że obiekt research istnieje
+            s.research.unlockedTechs &&             // Upewnij się, że tablica unlockedTechs istnieje
+            s.research.unlockedTechs.length > 0     // Dopiero teraz sprawdź długość
+          )
           .forEach(s => {
               s.research.unlockedTechs.forEach(techId => {
                   const tech = technologies[techId];
+                  // Sprawdź, czy technologia istnieje i ma poprawny typ
                   if (tech && totalTechsByType.hasOwnProperty(tech.type)) {
                       totalTechsByType[tech.type]++;
                   }
@@ -5801,6 +6011,8 @@ function startFestival() {
         attractions: attractions,
         participants: [] // Lista stoisk, na razie pusta
     };
+
+
     
     // --- POCZĄTEK NOWEJ LOGIKI ---
 
@@ -5831,7 +6043,23 @@ function startFestival() {
         });
     }
 
-    // --- KONIEC NOWEJ LOGIKI ---
+   const activeBanks = commercialBanks.filter(b => b.isActive);
+    const numberOfBanks = getRandomIntInRange(1, 3); // Do festynu dołączy od 1 do 3 aktywnych banków
+    const shuffledBanks = activeBanks.sort(() => 0.5 - Math.random()); // Pomieszaj banki
+
+    for (let i = 0; i < Math.min(numberOfBanks, shuffledBanks.length); i++) {
+         const bank = shuffledBanks[i];
+         const bankStock = stocks.find(s => s.isBankStock && s.bankData.id === bank.id); // Znajdź akcje banku
+         festival.participants.push({
+            ownerId: bank.id, // Używamy ID banku jako identyfikatora uczestnika
+            ownerName: bank.name, // Dodajemy nazwę dla łatwiejszego wyświetlania
+            isBank: true, // Flaga oznaczająca bank
+            promotionTarget: { type: 'bank_promo', id: bank.id, stockSymbol: bankStock ? bankStock.symbol : null }, // Cel promocji banku
+            level: 1,
+            interest: getRandomIntInRange(8, 18) // Banki startują z nieco większym zainteresowaniem
+        });
+        console.log(`[Festyn] Bank ${bank.name} dołącza do festynu.`);
+    }
 
     nextFestivalCountdown = 0;
     logEvent(`🎉 Rozpoczyna się ${name}! Wydarzenie potrwa miesiąc czasu gry.`, 'success');
@@ -5872,11 +6100,12 @@ function updateFestival() {
         // --- 👇 POPRAWIONY WARUNEK isCompany 👇 ---
         // Sprawdź, czy ownerId jest stringiem PRZED użyciem startsWith
         const isAI = typeof participant.ownerId === 'string' && participant.ownerId.startsWith('ai');
-        const isCompany = !isCity && !isPlayer && !isAI; // Jeśli to nie miasto, gracz ani AI, to musi być spółka
+        const isBank = participant.isBank === true;
+        const isCompany = !isCity && !isPlayer && !isAI && !isBank; // Jeśli to nie miasto, gracz ani AI, to musi być spółka
         // --- 👆 KONIEC POPRAWKI isCompany 👆 ---
 
 
-        if (isCity || isCompany) {
+        if (isCity || isCompany || isBank) {
             // Mają szansę na wykonanie akcji w każdej turze
             if (Math.random() < 0.05) { // 5% szansy na akcję
                 const actionRoll = Math.random();
@@ -5921,8 +6150,9 @@ function updateFestival() {
 
     // --- NOWY BLOK: Losowe zdarzenie dla gracza ---
     // (Ta funkcja nie była zdefiniowana w żadnym pliku, zostawiam wywołanie)
-     if (Math.random() < 0.02 / currentSpeedMultiplier) {
-        triggerFestivalPlayerEvent(); // Wywołaj funkcję losującą zdarzenie dla gracza
+     if (festival.participants.some(p => p.ownerId === 'player')) {
+             triggerFestivalPlayerEvent(); // Ta funkcja wylosuje odpowiedni event (stary lub nowy bankowy)
+        
      }
     // --- KONIEC NOWEGO BLOKU ---
 
@@ -6021,6 +6251,10 @@ function applyFestivalBonus(participant, multiplier) {
 }
 
 function playerJoinFestival(promotionTarget) {
+    if (!cityInvestment.playerHasUnlocked) {
+        alert("Musisz najpierw odblokować inwestycje miejskie (wpłać 10,000 PLN), aby wziąć udział w festynie!");
+        return; // Zakończ funkcję, jeśli miasto nie jest odblokowane dla gracza
+    }
     if (!festival || !festival.isActive || playerCash < FESTIVAL_STALL_LEVELS[0].cost) return;
 
     playerCash -= FESTIVAL_STALL_LEVELS[0].cost;
@@ -6373,52 +6607,26 @@ function detectFinancialAnomaly(stock) {
 // --- Banki Komercyjne (Twoja wersja, była bardziej rozbudowana) ---
 let commercialBanks = []; // Tablica na banki komercyjne
 // Definicje typów banków komercyjnych
-const BANK_TYPES = {
-    INVESTMENT: 'Inwestycyjny',
-    CORPORATE: 'Korporacyjny',
-    UNIVERSAL: 'Uniwersalny',
-    INTERNATIONAL: 'Międzynarodowy',
-    COOPERATIVE: 'Spółdzielczy',
-    INTERNET: 'Internetowy (e-bank)',
-    MORTGAGE: 'Hipoteczny'
-};
 
-// Definicje wszystkich banków w grze
-const ALL_COMMERCIAL_BANKS_DEFINITIONS = [
-    // Inwestycyjne (3)
-    { id: 'inv1', name: 'Apex Capital Partners', type: BANK_TYPES.INVESTMENT, initialCapital: 5000000, reserveRatio: 0.1, baseInterestRateMargin: 0.01 },
-    { id: 'inv2', name: 'Quantum Financial Group', type: BANK_TYPES.INVESTMENT, initialCapital: 4500000, reserveRatio: 0.1, baseInterestRateMargin: 0.012 },
-    { id: 'inv3', name: 'Meridian Trade Bank', type: BANK_TYPES.INVESTMENT, initialCapital: 4000000, reserveRatio: 0.1, baseInterestRateMargin: 0.009 },
-    // Korporacyjne (3)
-    { id: 'corp1', name: 'Proxima Business Bank', type: BANK_TYPES.CORPORATE, initialCapital: 7000000, reserveRatio: 0.15, baseInterestRateMargin: 0.015 },
-    { id: 'corp2', name: 'Centauri Corporate Finance', type: BANK_TYPES.CORPORATE, initialCapital: 6500000, reserveRatio: 0.16, baseInterestRateMargin: 0.016 },
-    { id: 'corp3', name: 'Sirius Enterprise Bank', type: BANK_TYPES.CORPORATE, initialCapital: 6000000, reserveRatio: 0.14, baseInterestRateMargin: 0.014 },
-    // Uniwersalny (1)
-    { id: 'uni1', name: 'Bank Powszechny Gdański', type: BANK_TYPES.UNIVERSAL, initialCapital: 10000000, reserveRatio: 0.12, baseInterestRateMargin: 0.02 },
-    // Międzynarodowy (1)
-    { id: 'int1', name: 'Global Finance Alliance', type: BANK_TYPES.INTERNATIONAL, initialCapital: 15000000, reserveRatio: 0.1, baseInterestRateMargin: 0.018 },
-    // Spółdzielczy (1)
-    { id: 'coop1', name: 'Pomorski Bank Spółdzielczy', type: BANK_TYPES.COOPERATIVE, initialCapital: 2000000, reserveRatio: 0.18, baseInterestRateMargin: 0.025 },
-    // Internetowy (1)
-    { id: 'net1', name: 'CyberBank Connect', type: BANK_TYPES.INTERNET, initialCapital: 3000000, reserveRatio: 0.08, baseInterestRateMargin: 0.017 },
-    // Hipoteczny (1)
-    { id: 'mort1', name: 'DomInvest Bank Hipoteczny', type: BANK_TYPES.MORTGAGE, initialCapital: 5000000, reserveRatio: 0.13, baseInterestRateMargin: 0.022 },
-];
+
 
 // Inicjalizacja banków (dodanie pól dynamicznych)
 function initializeCommercialBanks() {
     commercialBanks = ALL_COMMERCIAL_BANKS_DEFINITIONS.map(def => ({
         ...def,
-        cash: def.initialCapital, // Gotówka banku
-        reservesBC: 0, // Rezerwy w Banku Centralnym
-        loanPortfolio: {}, // Udzielone kredyty {clientId: amount}
-        depositPortfolio: {}, // Przyjęte depozyty {clientId: amount}
-        stockPortfolio: {}, // Portfel akcji dla banków inwestycyjnych {symbol: {shares: x, avgPrice: y}}
-        corporateClients: [], // Lista ID spółek będących klientami
-        interestRateDeposit: 0, // Aktualne oprocentowanie depozytów
-        interestRateLoan: 0, // Aktualne oprocentowanie kredytów
-        isActive: false // Domyślnie nieaktywny
+        cash: def.initialCapital,
+        reservesBC: 0,
+        loanPortfolio: {},
+        depositPortfolio: {},
+        stockPortfolio: {},
+        corporateClients: [],
+        interestRateDeposit: 0,
+        interestRateLoan: 0,
+        // Ustaw isActive na podstawie flagi isActiveFromStart LUB zostaw na false, jeśli flaga nie istnieje
+        isActive: def.isActiveFromStart || false, // <--- Dodaj lub zmodyfikuj tę linię
+        startupInvestments: {} // Dodajmy pole na inwestycje startupowe
     }));
+
 }
 
 function processCompanyBanking() {
@@ -6539,7 +6747,26 @@ function takeCommercialLoan(bankId, amount) {
     }
 
 
+    
+
+
     const interestRate = bank.interestRateLoan;
+    // ---> NOWOŚĆ: Sprawdź i zastosuj bonus festynowy <---
+    const now = Date.now();
+    const activeBonusIndex = activePlayerBankBonuses.findIndex(bonus =>
+        bonus.bankId === bankId && bonus.type === 'loan' && now < bonus.expiryTime
+    );
+
+    if (activeBonusIndex !== -1) {
+        const bonus = activePlayerBankBonuses[activeBonusIndex];
+        const originalRate = interestRate;
+        interestRate *= (1 - bonus.value); // Zastosuj zniżkę procentową
+        logEvent(`[Festyn Bonus] Zastosowano ${Math.round(bonus.value * 100)}% zniżki na oprocentowanie kredytu w ${bank.name}!`);
+        showToast(`Zastosowano zniżkę ${Math.round(bonus.value * 100)}% na kredyt!`, 'success');
+
+        // Usuń bonus po wykorzystaniu
+        activePlayerBankBonuses.splice(activeBonusIndex, 1);
+    }
     const loanDurationWeeks = 26; // Kredyt na pół roku (26 tygodni)
     const maturityDate = Date.now() + (loanDurationWeeks * BASE_DELAYS.weekly / currentSpeedMultiplier);
     // Dokładniejsza kalkulacja raty (annuitetowa, uproszczona)
@@ -6551,7 +6778,7 @@ function takeCommercialLoan(bankId, amount) {
     bank.cash -= amount; // Bank wypłaca środki
     // Zapisz pożyczkę w portfelu banku (kwota początkowa)
     if (!bank.loanPortfolio['player']) bank.loanPortfolio['player'] = [];
-    bank.loanPortfolio['player'].push({ id: `loan_${Date.now()}`, initialAmount: amount, remainingAmount: amount, interestRate: interestRate });
+    bank.loanPortfolio['player'].push({ id: `loan_${Date.now()}`, initialAmount: amount, remainingAmount: amount, interestRate: interestRate }); // Zapisz finalne oprocentowanie
 
     const newLoan = {
         id: `loan_${Date.now()}`,
@@ -6642,7 +6869,22 @@ function makeCommercialDeposit(bankId, amount) {
         return;
     }
 
-    const interestRate = bank.interestRateDeposit;
+    let interestRate = bank.interestRateDeposit;
+    const now = Date.now();
+    const activeBonusIndex = activePlayerBankBonuses.findIndex(bonus =>
+        bonus.bankId === bankId && bonus.type === 'deposit' && now < bonus.expiryTime
+    );
+
+    if (activeBonusIndex !== -1) {
+        const bonus = activePlayerBankBonuses[activeBonusIndex];
+        const originalRate = interestRate;
+        interestRate += bonus.value; // Dodaj bonusowy punkt procentowy
+        logEvent(`[Festyn Bonus] Zastosowano +${(bonus.value * 100).toFixed(1)}% bonusu do oprocentowania depozytu w ${bank.name}!`);
+        showToast(`Zastosowano +${(bonus.value * 100).toFixed(1)}% bonusu do depozytu!`, 'success');
+
+        // Usuń bonus po wykorzystaniu
+        activePlayerBankBonuses.splice(activeBonusIndex, 1);
+    }
 
     // Transakcja
     playerCash -= amount;
@@ -6673,6 +6915,11 @@ function makeCommercialDeposit(bankId, amount) {
     displayCash();
     displayPortfolio();
     closeInteractionModal();
+}
+
+function clearExpiredBankBonuses() {
+    const now = Date.now();
+    activePlayerBankBonuses = activePlayerBankBonuses.filter(bonus => now < bonus.expiryTime);
 }
 
 function withdrawCommercialDeposit(depositId, amount) {
@@ -7740,5 +7987,270 @@ function fundStateOwnedCompanies() {
         } else {
             console.log(`[BC Finansowanie] BC chciał wesprzeć ${targetCompany.name}, ale zabrakło środków.`);
         }
+    }
+}
+
+function applyBankInvestmentEffect(stock, completedInvestmentId) {
+    const investment = bankInvestments[completedInvestmentId];
+    const bankData = commercialBanks.find(b => b.id === stock.bankData.id);
+
+    if (!investment || !bankData) {
+        console.error(`Błąd przy aplikowaniu efektu inwestycji ${completedInvestmentId} dla ${stock.symbol}`);
+        stock.research.isResearching = false; // Zatrzymaj proces w razie błędu
+        return;
+    }
+
+    // 1. Zastosuj efekt ukończonej inwestycji
+    investment.applyEffect(stock, bankData);
+
+    // 2. Zaktualizuj licznik ukończonych
+    stock.research.completedInvestments[completedInvestmentId]++;
+    const currentLevel = stock.research.completedInvestments[completedInvestmentId];
+    logEvent(`✅ Bank ${stock.name} zakończył inwestycję "${investment.name}" (Poziom ${currentLevel}).`);
+
+    // 3. Sprawdź, czy osiągnięto maksymalny poziom
+    if (investment.maxLevel && currentLevel >= investment.maxLevel) {
+        logEvent(`ℹ️ Bank ${stock.name} osiągnął maksymalny poziom inwestycji "${investment.name}".`);
+        // Wybierz inną inwestycję (która nie jest na max poziomie)
+        const availableInvestmentIds = Object.keys(bankInvestments).filter(id => {
+            const inv = bankInvestments[id];
+            const completedCount = stock.research.completedInvestments[id] || 0;
+            return !inv.maxLevel || completedCount < inv.maxLevel;
+        });
+        if (availableInvestmentIds.length === 0) {
+            logEvent(`🎉 Bank ${stock.name} zrealizował wszystkie dostępne inwestycje!`);
+            stock.research.isResearching = false;
+            stock.research.currentInvestmentId = null;
+            return;
+        }
+        const nextInvestmentId = getRandomElement(availableInvestmentIds);
+        startNextBankInvestment(stock, nextInvestmentId, bankData);
+
+    } else {
+        // 4. Wybierz losowo następną inwestycję (może być ta sama)
+        const availableInvestmentIds = Object.keys(bankInvestments).filter(id => {
+            const inv = bankInvestments[id];
+            const completedCount = stock.research.completedInvestments[id] || 0;
+            return !inv.maxLevel || completedCount < inv.maxLevel; // Tylko te, które nie są na max poziomie
+        });
+         if (availableInvestmentIds.length === 0) { // Na wszelki wypadek
+            logEvent(`🎉 Bank ${stock.name} zrealizował wszystkie dostępne inwestycje!`);
+            stock.research.isResearching = false;
+            stock.research.currentInvestmentId = null;
+            return;
+        }
+        const nextInvestmentId = getRandomElement(availableInvestmentIds);
+        startNextBankInvestment(stock, nextInvestmentId, bankData);
+    }
+}
+
+// Funkcja pomocnicza do rozpoczynania kolejnej inwestycji bankowej
+function startNextBankInvestment(stock, nextInvestmentId, bankData) {
+    const nextInvestment = bankInvestments[nextInvestmentId];
+    const completedCount = stock.research.completedInvestments[nextInvestmentId] || 0;
+    const requiredProgress = nextInvestment.baseCost + (completedCount * nextInvestment.increaseDurationPoints);
+    const initialCashCost = nextInvestment.initialCashCost || 0;
+
+    stock.research.currentInvestmentId = nextInvestmentId;
+    stock.research.progress = 0;
+    stock.research.requiredProgress = requiredProgress; // Zapisz wymagany postęp dla tej realizacji
+    stock.research.investmentPaused = false; // Resetuj pauzę
+
+    // Sprawdź, czy bank stać na rozpoczęcie
+    if (bankData.cash >= initialCashCost) {
+        bankData.cash -= initialCashCost;
+        stock.research.isResearching = true;
+        if(initialCashCost > 0) logEvent(`💸 Bank ${stock.name} rozpoczyna kolejną inwestycję: "${nextInvestment.name}" (Poziom ${completedCount + 1}) kosztem ${initialCashCost.toLocaleString()} PLN. Czas: ${Math.round(requiredProgress / BANK_INVESTMENT_POINT_EQUIVALENT_MINUTE)} min.`);
+        else logEvent(`▶️ Bank ${stock.name} rozpoczyna kolejną inwestycję: "${nextInvestment.name}" (Poziom ${completedCount + 1}). Czas: ${Math.round(requiredProgress / BANK_INVESTMENT_POINT_EQUIVALENT_MINUTE)} min.`);
+    } else {
+        stock.research.isResearching = false;
+        stock.research.investmentPaused = true; // Zapauzuj
+        logEvent(`⏸️ Bank ${stock.name} chciał rozpocząć inwestycję "${nextInvestment.name}", ale brakuje środków (${initialCashCost.toLocaleString()} PLN). Inwestycje wstrzymane.`);
+    }
+}
+
+function createBankStockObject(bank, exchangeLevel = 'SILVER') {
+    if (!bank || !bank.isActive) return null;
+
+    // Uproszczone obliczenie parametrów IPO na podstawie kapitału początkowego
+    const ipoValuation = bank.initialCapital * getRandomInRange(1.05, 1.3); // Wycena 5-30% wyższa niż kapitał
+    const ipoSharePrice = getRandomInRange(75, 150); // Cena akcji w typowym zakresie dla SILVER
+    const ipoTotalShares = Math.floor(ipoValuation / ipoSharePrice);
+
+    if (ipoTotalShares <= 0) {
+        console.error(`[Bank IPO Init] Obliczona liczba akcji (${ipoTotalShares}) jest nieprawidłowa dla ${bank.name}.`);
+        return null;
+    }
+
+    const symbol = `BK${bank.id.toUpperCase()}`; // Generowanie symbolu, np. BKINV1
+
+    const newBankStock = {
+        name: bank.name,
+        symbol: symbol,
+        price: ipoSharePrice,
+        volatilityFactor: getRandomInRange(0.4, 1.2), // Banki są raczej stabilne
+        exchange: exchangeLevel, // Debiut na określonej giełdzie
+        totalShares: ipoTotalShares,
+        maxShares: ipoTotalShares * 2, // Możliwość przyszłych emisji
+        sharesHeld: 0, // Na starcie nikt nie ma akcji
+        sector: ['Bankowość Komercyjna', 'Finanse'], // Sektory
+        financialHealth: getRandomIntInRange(1, 3), // Startują ze zdrową kondycją
+        balanceSheet: { // Uproszczony bilans na start
+            assets: bank.cash,
+            liabilities: bank.cash - bank.initialCapital, // Różnica jako zobowiązania (uproszczenie)
+            shareCapital: bank.initialCapital * 0.1, // Kapitał zakładowy
+            retainedEarnings: bank.initialCapital * 0.9 // Zyski zatrzymane
+        },
+        quarterlyEarnings: 0,
+        bankAccountId: null, // Banki nie mają konta w innym banku
+        cash: bank.cash, // Gotówka banku
+        descriptionParts: null, // Zostaną wygenerowane
+        ceo: null, // Zostanie wygenerowany
+        isBankStock: true, // Flaga oznaczająca akcje banku
+        bankData: { id: bank.id, type: bank.type }, // Dane powiązane z obiektem banku
+        // --- Dodaj standardowe pola, których może brakować ---
+        priceHistory: [],
+        candlestickHistory: [],
+        lineHistory: [],
+        currentCandle: null,
+        playerTransactions: [],
+        priceAlerts: { buy: null, sell: null },
+        dividendPolicy: 'Balanced', // Domyślna polityka dywidendy dla banków
+        dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
+        lastQuarterValue: ipoValuation,
+        estimatedDividend: 0,
+        isTradeLocked: false,
+        dividendCooldownUntil: 0,
+        stateOwnershipPct: 0,
+        isStateOwned: false,
+        lastReport: 'brak',
+        research: null, // Banki używają systemu inwestycji, nie R&D
+        researchUnlocks: null
+    };
+
+    // Wygeneruj opis i CEO
+    initializeDescriptionParts(newBankStock);
+    generateCEO(newBankStock);
+    console.log(`[createBankStockObject] Utworzono obiekt akcji dla banku ${bank.name}:`, newBankStock);
+    return newBankStock;
+}
+
+// === SYSTEM REKLAM ===
+
+let adPopupTimerId = null;
+let isAdPopupVisible = false;
+const AD_POPUP_INTERVAL_BASE = 120000; // Bazowy czas między reklamami (2 minuty)
+const AD_POPUP_INITIAL_DELAY = 45000; // Pierwsza reklama po 45 sekundach
+
+/**
+ * Planuje pokazanie następnego okienka reklamowego.
+ * Czas jest modyfikowany przez liczbę aktywnych banków.
+ */
+function scheduleAdPopup() {
+    // Sprawdź, czy AdBlock jest aktywny
+    if (getSkillLevel('adblock') > 0) {
+        // console.log("[AdBlock] Reklamy zablokowane.");
+        if (adPopupTimerId) clearTimeout(adPopupTimerId); // Anuluj ewentualny timer
+        adPopupTimerId = null;
+        return;
+    }
+
+    // Anuluj poprzedni timer, jeśli istniał
+    if (adPopupTimerId) {
+        clearTimeout(adPopupTimerId);
+    }
+
+    // Oblicz czas do następnej reklamy
+    const activeBanksCount = commercialBanks.filter(b => b.isActive).length;
+    // Im więcej banków, tym krótszy odstęp (ale nie mniej niż 30s)
+    const intervalMultiplier = Math.max(0.25, 1 / Math.max(1, activeBanksCount));
+    const randomFactor = getRandomInRange(0.8, 1.2); // Dodaj trochę losowości
+    const nextInterval = AD_POPUP_INTERVAL_BASE * intervalMultiplier * randomFactor;
+    const finalInterval = Math.max(30000, nextInterval); // Minimum 30 sekund
+
+    // console.log(`[Reklama] Następna za ${Math.round(finalInterval / (1000 * currentSpeedMultiplier))}s czasu rzeczywistego.`);
+
+    // Ustaw timer (uwzględniając prędkość gry)
+    adPopupTimerId = setTimeout(showAdPopup, finalInterval / currentSpeedMultiplier);
+}
+
+/**
+ * Generuje treść reklamy i wyświetla okienko.
+ */
+function showAdPopup() {
+    // Ponownie sprawdź AdBlock i czy okienko już nie jest widoczne
+    if (getSkillLevel('adblock') > 0 || isAdPopupVisible) {
+        return;
+    }
+
+    const popupElement = document.getElementById('ad-popup');
+    const contentElement = document.getElementById('ad-content');
+    if (!popupElement || !contentElement) return;
+
+    // Wygeneruj treść reklamy
+    const adHtml = generateAdContent();
+    contentElement.innerHTML = adHtml;
+
+    // Pokaż okienko
+    popupElement.style.display = 'block';
+    isAdPopupVisible = true;
+    adPopupTimerId = null; // Zresetuj ID timera, bo okienko jest już pokazane
+}
+
+/**
+ * Zamyka okienko reklamowe i planuje pokazanie następnego.
+ */
+function closeAdPopup() {
+    const popupElement = document.getElementById('ad-popup');
+    if (popupElement) {
+        popupElement.style.display = 'none';
+    }
+    isAdPopupVisible = false;
+
+    // Zaplanuj następne pokazanie
+    scheduleAdPopup();
+}
+
+/**
+ * Generuje losową treść reklamy (banku lub spółki).
+ * @returns {string} - HTML treści reklamy.
+ */
+function generateAdContent() {
+    const activeBanks = commercialBanks.filter(b => b.isActive);
+    const regularStocks = stocks.filter(s => !s.assetType && !s.isBankrupt && !s.isBankStock);
+
+    // 80% szans na reklamę banku, jeśli są aktywne banki
+    if (activeBanks.length > 0 && Math.random() < 0.8) {
+        const bank = getRandomElement(activeBanks);
+        const rand = Math.random();
+        if (rand < 0.5 && bank.interestRateDeposit > 0.01) { // Reklama lokaty
+            return `
+                <p>Zmęczony ryzykiem? 😴 Otwórz lokatę w <strong>${bank.name}</strong>!</p>
+                <p>Gwarantowane <strong>${(bank.interestRateDeposit * 100).toFixed(1)}%</strong> rocznie!</p>
+                <p style="font-size: 11px; text-align: center; margin-top: 8px;">Promocja ograniczona czasowo!</p>
+            `;
+        } else if (bank.interestRateLoan < 0.15) { // Reklama kredytu (jeśli nie jest super drogi)
+             return `
+                <p>Brakuje Ci środków na inwestycje? 💰</p>
+                <p>Szybki kredyt w <strong>${bank.name}</strong> na <strong>${(bank.interestRateLoan * 100).toFixed(1)}%</strong>!</p>
+                <p style="font-size: 11px; text-align: center; margin-top: 8px;">Sprawdź naszą ofertę!</p>
+            `;
+        }
+        // Fallback, jeśli powyższe warunki nie pasują
+         return `<p><strong>${bank.name}</strong> - Twój partner w finansach. Oferujemy konta, kredyty i depozyty. Odwiedź nas!</p>`;
+
+    } else if (regularStocks.length > 0) {
+        // Reklama zwykłej spółki
+        const stock = getRandomElement(regularStocks);
+        const messages = [
+            `Nie przegap okazji! Akcje <strong>${stock.name} (${stock.symbol})</strong> mogą wkrótce wystrzelić! 🚀 Kup teraz!`,
+            `Analitycy mówią: KUPUJ! <strong>${stock.name} (${stock.symbol})</strong> to solidna inwestycja na przyszłość.`,
+            `Potencjał wzrostu w <strong>${stock.name} (${stock.symbol})</strong>! Zainwestuj, zanim zrobią to inni!`,
+            `Ostatnie sztuki <strong>${stock.name} (${stock.symbol})</strong> w tej cenie! Popyt rośnie, nie zwlekaj!`
+        ];
+        return `<p>${getRandomElement(messages)}</p>`;
+    } else {
+        // Reklama zapasowa
+        return "<p>Zainwestuj mądrze! Dywersyfikuj swój portfel.</p>";
     }
 }
