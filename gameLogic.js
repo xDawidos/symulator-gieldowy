@@ -41,6 +41,25 @@ let playerChartSettings = {
     candleInterval: 15000     // Domyślny interwał dla wykresu świecowego: 15 sekund
 };
 
+let governmentTreasury = 1000000; // Startowy budżet państwa
+const TAX_RATES = {
+    dividend: 0.10,        // 10% od dywidend
+    capitalGains: 0.12,    // 12% od zysków kapitałowych
+    companyIncome: [       // Podatek dochodowy od firm (progi)
+        { threshold: 0, rate: 0.13 },    // 13% do pewnego progu
+        { threshold: 50000, rate: 0.26 } // 26% powyżej progu 50k PLN dochodu (tygodniowo/miesięcznie?) - UPROSZCZONE
+    ],
+    wealthTax: [           // Podatek od bogactwa (progi od wartości netto)
+        { threshold: 100000, rate: 0.25 },  // 25% dla 100k - 600k
+        { threshold: 600001, rate: 0.35 },  // 35% dla 600k - 1.5M
+        { threshold: 1500001, rate: 0.50 } // 50% powyżej 1.5M
+    ],
+    cityTaxPlayerAI: 0.03, // 3% podatek miejski od gotówki gracza/AI (płacony tygodniowo)
+    cityTaxCompany: 0.02   // 2% podatek miejski od gotówki spółek (płacony tygodniowo)
+};
+let WEALTH_TAX_INTERVAL; // = BASE_DELAYS.quarterly * 4; <-- Usunięto inicjalizację
+let nextWealthTaxTime = 0; // Inicjalizuj na 0, ustawimy później
+
 // --- NOWE ZMIENNE DLA RYNKU OBLIGACJI I MIASTA ---
 
 let allBonds = []; // Przechowuje obligacje gracza
@@ -72,6 +91,8 @@ let stateBondOffer = {
     longTerm: { available: 0, interestBase: 0.05 }
 };
 
+
+
 const BANK_TYPES = {
     INVESTMENT: 'Inwestycyjny',
     CORPORATE: 'Korporacyjny',
@@ -80,6 +101,13 @@ const BANK_TYPES = {
     COOPERATIVE: 'Spółdzielczy',
     INTERNET: 'Internetowy (e-bank)',
     MORTGAGE: 'Hipoteczny'
+};
+
+const BASE_DELAYS = {
+    stockUpdate: 1000, // 1 sekunda
+    weekly: 60000,     // 1 minuta (tydzień w grze)
+    quarterly: 300000, // 5 minut (kwartał w grze)
+    event: 45000       // 45 sekund
 };
 
 // Definicje wszystkich banków w grze
@@ -1622,6 +1650,18 @@ const skills = {
             { level: 3, cost: 1000, name: 'Twardy negocjator', description: 'Cena akcji w ofercie prywatnej jest niższa o dodatkowe 15%.' }
         ]
     },
+    'sanEscobar': {
+        name: 'Znajomości w San Escobar 🌴',
+        unlockedLevel: 0,
+        levels: [
+            { level: 1, cost: 2000, description: 'Obniża podatek od dywidend, zysków kapitałowych i miejski o 5% wartości podatku.' },
+            { level: 2, cost: 8000, name: 'Firma w Raju', description: 'Całkowicie usuwa podatek dochodowy od Twojej firmy (jeśli ją posiadasz) i obniża podatek od bogactwa o 3 punkty procentowe (np. z 25% na 22%).' },
+            { level: 3, cost: 25000, name: 'Obywatel Wyspy', description: 'Usuwa dwa najwyższe progi podatku od bogactwa (35% i 50%), a najniższy próg (25%) obniża do 5%.' },
+            { level: 4, cost: 100000, name: 'Przepisanie Majątku', description: 'Całkowite usunięcie wszystkich podatków! UWAGA: Istnieje roczne ryzyko kontroli skarbowej, która może wyzerować poziomy tej umiejętności!' }
+        ],
+        // Dodajemy flagę do śledzenia ryzyka kontroli
+        hasRiskActive: false
+    },
     'sixthSense': {
         name: 'Szósty Zmysł 💡',
         unlockedLevel: 0,
@@ -1976,14 +2016,7 @@ function buyStock(symbol, quantity) {
         return;
     }
 
-    /*
-    const playerIsBank = false; // W przyszłości tu będzie sprawdzenie, czy gracz jest bankiem
-    const targetIsBank = commercialBanks.some(b => b.id === `bank_${stockToBuy.symbol}` && b.isActive); // Placeholder
-    if (playerIsBank && targetIsBank) {
-        // TODO: Sprawdzić obecny udział gracza w banku-celu i zablokować, jeśli przekroczy 30%
-        // console.log("Gracz (jako bank) próbuje kupić inny bank - sprawdzenie limitu (jeszcze nie zaimplementowane)");
-    }
-    */
+    
 
     let totalCost = stockToBuy.price * quantity;
     const charismaLevel = getSkillLevel('sharkCharisma');
@@ -2064,30 +2097,44 @@ function sellStock(symbol, quantity) {
         totalGain *= (1 + charismaBonus);
     }
 
-    const profitPerShare = (totalGain / quantity) - holding.avgPrice;
-    const totalProfit = profitPerShare * quantity;
+const purchaseValue = holding.avgPrice * quantity; // Koszt zakupu sprzedawanych akcji
+    const profit = totalGainGross - purchaseValue; // Zysk brutto z transakcji
 
-    if (totalProfit > 0) {
-        let xpGained = totalProfit / 100;
+    let taxToPay = 0;
+    let xpGained = 0;
+
+    // ---> NOWOŚĆ: Obliczanie podatku i XP <---
+    if (profit > 0) {
+        let taxRateCapitalGains = TAX_RATES.capitalGains;
+        let playerTaxModifier = 1.0;
+        const sanEscobarLvl = getSkillLevel('sanEscobar');
+        if (sanEscobarLvl >= 1) playerTaxModifier = 0.95;
+        if (sanEscobarLvl >= 4) playerTaxModifier = 0.0;
+
+        taxToPay = profit * taxRateCapitalGains * playerTaxModifier;
+        governmentTreasury += taxToPay; // Podatek do budżetu
+
+        // XP liczymy od zysku PRZED podatkiem, aby San Escobar nie zmniejszał XP
+        xpGained = profit / 100;
         if (getSkillLevel('sharkCharisma') === 3) xpGained *= 1.10;
+        if (stockToSell.ceo?.traits?.some(t => t.id === 'patron')) xpGained *= 1.10;
+    }
+    // ---> KONIEC NOWOŚCI <---
 
-        // --- NOWY BLOK ---
-        if (stockToSell.ceo?.traits?.some(t => t.id === 'patron')) {
-            xpGained *= 1.10; // +10% XP
-            logEvent(`🤝 [CEO] Patron z ${stockToSell.name} docenia Twój zmysł inwestycyjny! Otrzymujesz bonusowe XP.`);
-        }
-        // --- KONIEC NOWEGO BLOKU ---
+    const totalGainNet = totalGainGross - taxToPay; // Przychód netto po podatku
 
-        if (xpGained > 0) {
-            playerXP += xpGained;
-            displayXP();
-        }
+    if (xpGained > 0) {
+        playerXP += xpGained;
+        displayXP();
     }
 
-    playerCash += totalGain;
+    playerCash += totalGainNet; // Gracz otrzymuje kwotę netto
     holding.shares -= quantity;
     stockToSell.sharesHeld -= quantity;
     stockToSell.price -= (quantity * stockToSell.price) * 0.000005;
+
+    // Logowanie z informacją o podatku
+    logEvent(`Sprzedano ${quantity} szt. ${symbol}. Zysk brutto: ${profit.toFixed(2)} PLN, Podatek: ${taxToPay.toFixed(2)} PLN.`);
 
     if (holding.shares === 0) {
         stockToSell.playerTransactions = [];
@@ -2520,47 +2567,72 @@ function sellEtf(symbol, quantity) {
     const etfToSell = etfs.find(e => e.symbol === symbol);
     const holding = playerPortfolio[symbol];
 
-    // BŁĄD W ORYGINALE: Ta funkcja powinna sprawdzać 'etfExpert', a nie 'indexAnalystLvl1'
-    if (getSkillLevel('etfExpert') === 0) { 
+    // Sprawdzenie umiejętności i podstawowa walidacja
+    if (getSkillLevel('etfExpert') === 0) {
         alert("Musisz odblokować umiejętność 'Ekspert Rynków Globalnych', aby handlować funduszami ETF!");
         return;
     }
+    if (!etfToSell || !holding || holding.shares < quantity || quantity <= 0) {
+        alert(`Nie masz wystarczającej liczby jednostek ${etfToSell ? etfToSell.name : symbol}. Posiadasz: ${holding ? holding.shares : 0}`);
+        return;
+    }
 
-
-    let totalGain = etfToSell.price * quantity;
+    let totalGainGross = etfToSell.price * quantity; // Przychód brutto
     const charismaLevel = getSkillLevel('sharkCharisma');
     if (charismaLevel > 0) {
         let charismaBonus = 0;
         switch (charismaLevel) {
-            case 1: charismaBonus = 0.005; break; // 0.5%
-            case 2: charismaBonus = 0.01; break;  // 1.0%
-            case 3: charismaBonus = 0.015; break; // 1.5%
+            case 1: charismaBonus = 0.005; break;
+            case 2: charismaBonus = 0.01; break;
+            case 3: charismaBonus = 0.015; break;
         }
-        totalGain *= (1 + charismaBonus); // Przy sprzedaży dodajemy bonus
+        totalGainGross *= (1 + charismaBonus); // Dodajemy bonus do przychodu brutto
     }
 
-    const profitPerShare = (totalGain / quantity) - holding.avgPrice;
-    const totalProfit = profitPerShare * quantity;
-    console.log(`Sprzedaż ${quantity} jedn. ${symbol}. Zysk/strata na transakcji: ${totalProfit.toFixed(2)} PLN`);
+    const purchaseValue = holding.avgPrice * quantity; // Koszt zakupu sprzedawanych jednostek
+    const profit = totalGainGross - purchaseValue; // Zysk brutto
 
-    if (totalProfit > 0) {
-        const xpGained = totalProfit / 100;
-        if (xpGained > 0) {
-            playerXP += xpGained;
-            displayXP();
-        }
+    let taxToPay = 0;
+    let xpGained = 0;
+
+    // --- NOWOŚĆ: Obliczanie podatku i XP ---
+    if (profit > 0) {
+        let taxRateCapitalGains = TAX_RATES.capitalGains;
+        let playerTaxModifier = 1.0;
+        const sanEscobarLvl = getSkillLevel('sanEscobar');
+        if (sanEscobarLvl >= 1) playerTaxModifier = 0.95; // Lvl 1: 5% zniżki
+        if (sanEscobarLvl >= 4) playerTaxModifier = 0.0; // Lvl 4: 0% podatku
+
+        taxToPay = profit * taxRateCapitalGains * playerTaxModifier;
+        governmentTreasury += taxToPay; // Podatek do budżetu
+
+        // XP liczymy od zysku PRZED podatkiem
+        xpGained = profit / 100;
+        // Bonus XP z Charyzmy Rekina (jeśli jest)
+        if (getSkillLevel('sharkCharisma') === 3) xpGained *= 1.10;
+        // W ETFach nie ma cechy 'Patron'
+    }
+    // --- KONIEC NOWOŚCI ---
+
+    const totalGainNet = totalGainGross - taxToPay; // Przychód netto po podatku
+
+    if (xpGained > 0) {
+        playerXP += xpGained;
+        displayXP();
     }
 
-    playerCash += totalGain;
+    playerCash += totalGainNet; // Gracz otrzymuje kwotę netto
     holding.shares -= quantity;
 
-    if (holding.shares === 0) {
+    logEvent(`Sprzedano ${quantity} jedn. ETF ${symbol}. Zysk brutto: ${profit.toFixed(2)} PLN, Podatek: ${taxToPay.toFixed(2)} PLN.`);
+
+    if (holding.shares <= 0.001) { // Użyj progu dla bezpieczeństwa
         delete playerPortfolio[symbol];
     }
 
     displayCash();
     displayPortfolio();
-    checkPlayerTierUpgrade();
+    checkPlayerTierUpgrade(); // Sprawdzenie awansu gracza
 }
 /**
  * Funkcja do zakupu subskrypcji premium "Pulsu Rynku".
@@ -3088,43 +3160,72 @@ function sellIndex(indexId, quantity) {
     const indexToSell = marketIndexes.find(i => i.id === indexId);
     const holding = playerPortfolio[indexId];
 
-    if (!indexToSell || !holding || holding.shares < quantity) {
-        alert(`Nie masz wystarczającej liczby jednostek ${indexToSell.name}. Posiadasz: ${holding ? holding.shares : 0}`);
+    // Sprawdzenie umiejętności i podstawowa walidacja
+    if (getSkillLevel('indexAnalystLvl1') < 2) { // Wymagany Poziom 2 Analityka Indeksowego
+        alert("Musisz odblokować umiejętność 'Makler Indeksowy' (Analityk Indeksowy poz. 2), aby handlować indeksami!");
+        return;
+    }
+    if (!indexToSell || !holding || holding.shares < quantity || quantity <= 0) {
+        alert(`Nie masz wystarczającej liczby jednostek ${indexToSell ? indexToSell.name : indexId}. Posiadasz: ${holding ? holding.shares : 0}`);
         return;
     }
 
-    let totalGain = indexToSell.value * quantity;
+    let totalGainGross = indexToSell.value * quantity; // Przychód brutto
     const charismaLevel = getSkillLevel('sharkCharisma');
     if (charismaLevel > 0) {
         let charismaBonus = 0;
         switch (charismaLevel) {
-            case 1: charismaBonus = 0.005; break; // 0.5%
-            case 2: charismaBonus = 0.01; break;  // 1.0%
-            case 3: charismaBonus = 0.015; break; // 1.5%
+            case 1: charismaBonus = 0.005; break;
+            case 2: charismaBonus = 0.01; break;
+            case 3: charismaBonus = 0.015; break;
         }
-        totalGain *= (1 + charismaBonus); // Przy sprzedaży dodajemy bonus
+        totalGainGross *= (1 + charismaBonus); // Dodajemy bonus do przychodu brutto
     }
 
-    // Obliczanie zysku i przyznawanie XP
-    const profitPerShare = (totalGain / quantity) - holding.avgPrice;
-    const totalProfit = profitPerShare * quantity;
-    if (totalProfit > 0) {
-        const xpGained = totalProfit / 100;
-        if (xpGained > 0) {
-            playerXP += xpGained;
-            displayXP();
-        }
+    const purchaseValue = holding.avgPrice * quantity; // Koszt zakupu sprzedawanych jednostek
+    const profit = totalGainGross - purchaseValue; // Zysk brutto
+
+    let taxToPay = 0;
+    let xpGained = 0;
+
+    // --- NOWOŚĆ: Obliczanie podatku i XP ---
+    if (profit > 0) {
+        let taxRateCapitalGains = TAX_RATES.capitalGains;
+        let playerTaxModifier = 1.0;
+        const sanEscobarLvl = getSkillLevel('sanEscobar');
+        if (sanEscobarLvl >= 1) playerTaxModifier = 0.95; // Lvl 1: 5% zniżki
+        if (sanEscobarLvl >= 4) playerTaxModifier = 0.0; // Lvl 4: 0% podatku
+
+        taxToPay = profit * taxRateCapitalGains * playerTaxModifier;
+        governmentTreasury += taxToPay; // Podatek do budżetu
+
+        // XP liczymy od zysku PRZED podatkiem
+        xpGained = profit / 100;
+        // Bonus XP z Charyzmy Rekina (jeśli jest)
+        if (getSkillLevel('sharkCharisma') === 3) xpGained *= 1.10;
+        // W Indeksach nie ma cechy 'Patron'
+    }
+    // --- KONIEC NOWOŚCI ---
+
+    const totalGainNet = totalGainGross - taxToPay; // Przychód netto po podatku
+
+    if (xpGained > 0) {
+        playerXP += xpGained;
+        displayXP();
     }
 
-    playerCash += totalGain;
+    playerCash += totalGainNet; // Gracz otrzymuje kwotę netto
     holding.shares -= quantity;
 
-    if (holding.shares === 0) {
+    logEvent(`Sprzedano ${quantity} jedn. indeksu ${indexId}. Zysk brutto: ${profit.toFixed(2)} PLN, Podatek: ${taxToPay.toFixed(2)} PLN.`);
+
+    if (holding.shares <= 0.001) { // Użyj progu dla bezpieczeństwa
         delete playerPortfolio[indexId];
     }
 
     displayCash();
     displayPortfolio();
+    checkPlayerTierUpgrade(); // Sprawdzenie awansu gracza
 }
 
 function updateMarketVolatilityIndex() {
@@ -3230,16 +3331,34 @@ function investInCompany() {
 function updateCompanyStatus() {
     if (getSkillLevel('work') < 4 || playerCompany === null) return;
 
-    // Obliczanie dochodu
+    const now = Date.now();
     const totalIncome = playerCompany.baseIncome + (playerCompany.employees * 100);
-    if (Date.now() - playerCompany.lastIncomeTime >= playerCompany.incomeInterval) {
-        playerCash += totalIncome;
-        playerCompany.lastIncomeTime = Date.now();
-        logEvent(`🏢 Twoja firma wygenerowała ${totalIncome} PLN dochodu.`, 'review');
+
+    if (now - playerCompany.lastIncomeTime >= playerCompany.incomeInterval) {
+        let incomeBeforeTax = totalIncome;
+        let taxToPay = 0;
+
+        // ---> NOWOŚĆ: Obliczanie podatku dochodowego <---
+        const sanEscobarLvl = getSkillLevel('sanEscobar');
+        if (sanEscobarLvl < 2 || sanEscobarLvl >= 4) { // Płacimy podatek, jeśli NIE mamy Lvl 2/3 (Firma w Raju) LUB mamy Lvl 4 (całkowite zwolnienie)
+             let taxRate = TAX_RATES.companyIncome[0].rate; // Domyślnie niższy próg
+             if (incomeBeforeTax > TAX_RATES.companyIncome[1].threshold) {
+                 taxRate = TAX_RATES.companyIncome[1].rate; // Wyższy próg
+             }
+             // Lvl 4 całkowicie znosi podatek
+             taxToPay = sanEscobarLvl >= 4 ? 0 : incomeBeforeTax * taxRate;
+             governmentTreasury += taxToPay;
+        }
+        // ---> KONIEC NOWOŚCI <---
+
+        const incomeAfterTax = incomeBeforeTax - taxToPay;
+        playerCash += incomeAfterTax;
+        playerCompany.lastIncomeTime = now;
+        logEvent(`🏢 Twoja firma wygenerowała ${incomeAfterTax.toFixed(2)} PLN dochodu netto (podatek: ${taxToPay.toFixed(2)} PLN).`, 'review');
         displayCash();
     }
 
-    // Obliczanie wartości firmy
+    // Obliczanie wartości firmy (bez zmian)
     playerCompany.value = playerCompany.cashInvested + (playerCompany.employees * 7500);
 }
 function calculateInitialHoldingPrices() {
@@ -3418,47 +3537,70 @@ function processReitDividend(stock) {
 }
 
 function payDividendToShareholders(stock, dividendPerShare) {
-    const oldPrice = stock.price; // <-- LOG
+    const oldPrice = stock.price;
+    let taxRateDividend = TAX_RATES.dividend;
+
+    // Podatek dla Gracza
     if (playerPortfolio[stock.symbol]) {
         let finalDividendPerShare = dividendPerShare;
         const playerRep = stock.reputation['player'];
 
-        if (playerRep < REPUTATION_LEVELS.NEGATIVE) {
-            finalDividendPerShare *= 0.8; // Kara 20%
-        } else if (playerRep >= REPUTATION_LEVELS.CORRECT && playerRep < REPUTATION_LEVELS.POSITIVE) {
-            finalDividendPerShare *= 1.01; // Bonus 1%
-        } else if (playerRep >= REPUTATION_LEVELS.POSITIVE) {
-            finalDividendPerShare *= 1.05; // Bonus 5%
-        }
+        // Bonus/kara reputacji (bez zmian)
+        if (playerRep < REPUTATION_LEVELS.NEGATIVE) finalDividendPerShare *= 0.8;
+        else if (playerRep >= REPUTATION_LEVELS.CORRECT && playerRep < REPUTATION_LEVELS.POSITIVE) finalDividendPerShare *= 1.01;
+        else if (playerRep >= REPUTATION_LEVELS.POSITIVE) finalDividendPerShare *= 1.05;
 
-        const playerDividend = playerPortfolio[stock.symbol].shares * finalDividendPerShare;
-        playerCash += playerDividend;
+        const grossDividend = playerPortfolio[stock.symbol].shares * finalDividendPerShare;
+
+        // ---> NOWOŚĆ: Obliczanie i potrącanie podatku dla gracza <---
+        let playerTaxModifier = 1.0;
+        const sanEscobarLvl = getSkillLevel('sanEscobar');
+        if (sanEscobarLvl >= 1) playerTaxModifier = 0.95; // Lvl 1: 5% zniżki
+        if (sanEscobarLvl >= 4) playerTaxModifier = 0.0; // Lvl 4: 0% podatku
+
+        const taxToPay = grossDividend * taxRateDividend * playerTaxModifier;
+        const netDividend = grossDividend - taxToPay;
+        governmentTreasury += taxToPay; // Podatek trafia do budżetu państwa
+        // ---> KONIEC NOWOŚCI <---
+
+        playerCash += netDividend; // Gracz dostaje kwotę netto
         displayCash();
-        logEvent(`💰 Otrzymujesz ${playerDividend.toFixed(2)} PLN dywidendy od ${stock.name}!`, 'review');
+        logEvent(`💰 Otrzymujesz ${netDividend.toFixed(2)} PLN dywidendy netto od ${stock.name} (podatek: ${taxToPay.toFixed(2)} PLN).`, 'review');
     }
 
+    // Podatek dla AI
     aiCompetitors.forEach(ai => {
-    if (ai.portfolio[stock.symbol]) {
-        let finalDividendPerShare = dividendPerShare;
-        const aiRep = stock.reputation[ai.id]; // Pobieramy reputację konkretnego bota
+        if (ai.portfolio[stock.symbol]) {
+            let finalDividendPerShare = dividendPerShare;
+            const aiRep = stock.reputation[ai.id];
 
-        // Używamy reputacji bota (aiRep) do obliczeń
-        if (aiRep < REPUTATION_LEVELS.NEGATIVE) {
-            finalDividendPerShare *= 0.8; // Kara 20%
-        } else if (aiRep >= REPUTATION_LEVELS.CORRECT && aiRep < REPUTATION_LEVELS.POSITIVE) {
-            finalDividendPerShare *= 1.01; // Bonus 1%
-        } else if (aiRep >= REPUTATION_LEVELS.POSITIVE) {
-            finalDividendPerShare *= 1.05; // Bonus 5%
+            // Bonus/kara reputacji (bez zmian)
+            if (aiRep < REPUTATION_LEVELS.NEGATIVE) finalDividendPerShare *= 0.8;
+            else if (aiRep >= REPUTATION_LEVELS.CORRECT && aiRep < REPUTATION_LEVELS.POSITIVE) finalDividendPerShare *= 1.01;
+            else if (aiRep >= REPUTATION_LEVELS.POSITIVE) finalDividendPerShare *= 1.05;
+
+            const grossDividend = ai.portfolio[stock.symbol].shares * finalDividendPerShare;
+
+            // ---> NOWOŚĆ: Podatek dla AI <---
+            let aiTaxModifier = 1.0;
+            const aiSanEscobarLvl = ai.unlockedSkills ? (ai.unlockedSkills['sanEscobar'] || 0) : 0;
+            if (aiSanEscobarLvl >= 1) aiTaxModifier = 0.95;
+            if (aiSanEscobarLvl >= 4) aiTaxModifier = 0.0;
+
+            const taxToPay = grossDividend * taxRateDividend * aiTaxModifier;
+            const netDividend = grossDividend - taxToPay;
+            governmentTreasury += taxToPay;
+            // ---> KONIEC NOWOŚCI <---
+
+            ai.cash += netDividend; // AI dostaje kwotę netto
         }
-        
-        ai.cash += ai.portfolio[stock.symbol].shares * finalDividendPerShare;
-    }
-});
+    });
 
+    // Spadek ceny akcji (bez zmian)
     stock.price -= dividendPerShare;
     if (stock.price < 0.01) stock.price = 0.01;
 
-    console.log(`[Dywidenda] Wypłata ${dividendPerShare.toFixed(4)} na akcję dla ${stock.name}. Cena spada z ${oldPrice.toFixed(2)} do ${stock.price.toFixed(2)}`); // <-- LOG
+     console.log(`[Dywidenda] Wypłata ${dividendPerShare.toFixed(4)}...`); // Log bez zmian
 }
 
 function getRandomIntInRange(min, max) {
@@ -4524,6 +4666,8 @@ function handleSuccessfulIPO(startup, successMultiplier) {
     logEvent(`Spółka ${startup.name} wchodzi na rynek z ceną ${newIpoPrice.toFixed(2)} PLN i kapitałem ${newTotalShares.toLocaleString('pl-PL')} akcji!`, 'review');
 }
 
+
+
 function buyStartupInsurance(symbol) {
     if (isPlayerInDefault()) return; // <-- DODAJ TĘ LINIĘ
     const holding = playerPortfolio[symbol];
@@ -4647,6 +4791,8 @@ function processPoolInvestments() {
     investmentPool.totalFunds = 0;
     investmentPool.contributors = {};
 }
+
+
 
 function updateInvestmentPoolTimer(deltaTime) {
     if (investmentPool.investmentTimer > 0) {
@@ -8253,4 +8399,168 @@ function generateAdContent() {
         // Reklama zapasowa
         return "<p>Zainwestuj mądrze! Dywersyfikuj swój portfel.</p>";
     }
+}
+
+function processWealthTax() {
+    const entities = [
+        { id: 'player', name: 'Ty (Gracz)', cash: playerCash, portfolio: playerPortfolio, skills: skills }, // Przekazujemy obiekt skills gracza
+        ...aiCompetitors.filter(ai => ai.skillPoints !== undefined) // Filtrujemy boty bez systemu skilli (Market Maker)
+    ];
+
+    entities.forEach(entity => {
+        const netWorth = calculateNetWorth(entity.id === 'player' ? 'player' : entity); // Funkcja calculateNetWorth powinna obsługiwać ID lub obiekt AI
+        let taxRate = 0;
+        let applicableThreshold = 0;
+
+        // Znajdź odpowiedni próg podatkowy
+        for (let i = TAX_RATES.wealthTax.length - 1; i >= 0; i--) {
+            if (netWorth >= TAX_RATES.wealthTax[i].threshold) {
+                taxRate = TAX_RATES.wealthTax[i].rate;
+                applicableThreshold = TAX_RATES.wealthTax[i].threshold;
+                break;
+            }
+        }
+
+        if (taxRate > 0) {
+            // ---> NOWOŚĆ: Zastosowanie umiejętności San Escobar <---
+            let taxModifier = 1.0; // Mnożnik podatku
+            let baseRateReduction = 0; // Redukcja punktów procentowych
+            const entitySkills = entity.id === 'player' ? skills : entity.unlockedSkills || {};
+            const sanEscobarLvl = entity.id === 'player' ? getSkillLevel('sanEscobar') : (entitySkills['sanEscobar'] || 0);
+
+            if (sanEscobarLvl >= 4) { // Lvl 4 - całkowite zniesienie
+                taxRate = 0;
+            } else if (sanEscobarLvl === 3) { // Lvl 3 - usunięcie progów 35% i 50%, obniżenie 25% do 5%
+                if (applicableThreshold >= TAX_RATES.wealthTax[1].threshold) { // Jeśli normalnie byłby próg 35% lub 50%
+                    taxRate = 0; // Usuwamy podatek
+                } else if (applicableThreshold === TAX_RATES.wealthTax[0].threshold) { // Jeśli normalnie byłby próg 25%
+                    taxRate = 0.05; // Obniżamy do 5%
+                }
+            } else if (sanEscobarLvl === 2) { // Lvl 2 - obniżenie o 3 punkty procentowe
+                baseRateReduction = 0.03;
+            }
+            // Lvl 1 nie wpływa na podatek od bogactwa
+
+            // Zastosuj redukcję punktów procentowych (jeśli dotyczy Lvl 2)
+            taxRate = Math.max(0, taxRate - baseRateReduction);
+            // ---> KONIEC NOWOŚCI <---
+
+            if (taxRate > 0) {
+                const taxToPay = netWorth * taxRate;
+                governmentTreasury += taxToPay;
+
+                if (entity.id === 'player') {
+                    playerCash -= taxToPay;
+                    logEvent(`💸 Zapłacono roczny podatek od bogactwa: ${taxToPay.toFixed(2)} PLN (${(taxRate * 100).toFixed(0)}% od ${netWorth.toFixed(2)} PLN).`, 'review');
+                    displayCash();
+                } else {
+                    entity.cash -= taxToPay;
+                    console.log(`[AI Podatki] ${entity.name} zapłacił ${taxToPay.toFixed(2)} PLN podatku od bogactwa.`);
+                }
+            } else if (entity.id === 'player' && sanEscobarLvl >= 3) {
+                 logEvent(`🌴 Dzięki znajomościom w San Escobar uniknąłeś rocznego podatku od bogactwa!`, 'success');
+            }
+        }
+    });
+
+    nextWealthTaxTime = Date.now() + WEALTH_TAX_INTERVAL / currentSpeedMultiplier; // Ustaw czas następnego pobrania
+}
+
+function checkSanEscobarRisk() {
+    const playerLvl = getSkillLevel('sanEscobar');
+    // Użyj flagi hasRiskActive, aby kontrola zdarzała się tylko raz w roku
+    if (playerLvl === 4 && !skills.sanEscobar.hasRiskActive) {
+        skills.sanEscobar.hasRiskActive = true; // Oznacz, że ryzyko jest aktywne w tym roku
+        if (Math.random() < 0.15) { // 15% szans na kontrolę
+            logEvent(`🚨 KONTROLA SKARBOWA! Twoje machinacje w San Escobar zostały wykryte! Tracisz wszystkie poziomy tej umiejętności!`, 'error');
+            showToast("Kontrola Skarbowa! Utracono znajomości w San Escobar!", 'error', 8000);
+            // Wyzeruj poziom umiejętności
+            skills.sanEscobar.unlockedLevel = 0;
+            // Odśwież widok umiejętności, jeśli jest otwarty
+            if (document.getElementById('skills-modal')?.style.display === 'block') {
+                renderSkillsPanel();
+            }
+        }
+    } else if (playerLvl < 4) {
+        // Zresetuj flagę ryzyka, jeśli gracz spadł poniżej Lvl 4
+        skills.sanEscobar.hasRiskActive = false;
+    }
+    // Resetuj flagę ryzyka na początku nowego roku (można to zrobić też np. w triggerYearlyCeoEvents)
+    // Na razie zrobimy to po prostu przy kolejnym sprawdzeniu, jeśli gracz ma Lvl 4
+    if (playerLvl === 4 && Date.now() > nextWealthTaxTime) { // Użyj nextWealthTaxTime jako znacznika początku roku
+         skills.sanEscobar.hasRiskActive = false;
+    }
+}
+
+function processCityAndCitizenTaxes() {
+    let totalTaxCollected = 0;
+
+    // Podatek od Gracza
+    let playerTaxModifier = 1.0;
+    const playerSanEscobarLvl = getSkillLevel('sanEscobar');
+    if (playerSanEscobarLvl >= 1) playerTaxModifier = 0.95;
+    if (playerSanEscobarLvl >= 4) playerTaxModifier = 0.0;
+    const playerCityTax = playerCash * TAX_RATES.cityTaxPlayerAI * playerTaxModifier;
+    if (playerCityTax > 0) {
+        playerCash -= playerCityTax;
+        totalTaxCollected += playerCityTax;
+    }
+
+    // Podatek od AI
+    aiCompetitors.forEach(ai => {
+        // Pomijamy boty bez gotówki lub bez systemu umiejętności
+        if (!ai.cash || ai.cash <= 0 || ai.skillPoints === undefined) return;
+
+        let aiTaxModifier = 1.0;
+        const aiSanEscobarLvl = ai.unlockedSkills ? (ai.unlockedSkills['sanEscobar'] || 0) : 0;
+        if (aiSanEscobarLvl >= 1) aiTaxModifier = 0.95;
+        if (aiSanEscobarLvl >= 4) aiTaxModifier = 0.0;
+
+        const aiCityTax = ai.cash * TAX_RATES.cityTaxPlayerAI * aiTaxModifier;
+        if (aiCityTax > 0) {
+            ai.cash -= aiCityTax;
+            totalTaxCollected += aiCityTax;
+        }
+    });
+
+    // Podatek od Spółek
+    stocks.forEach(stock => {
+        // Płacą tylko aktywne spółki giełdowe (nie startupy, reity, itp.)
+        if (!stock.assetType && !stock.isBankrupt && stock.cash > 0) {
+            // Umiejętność San Escobar NIE wpływa na podatek spółek
+            const companyCityTax = stock.cash * TAX_RATES.cityTaxCompany;
+            if (companyCityTax > 0) {
+                stock.cash -= companyCityTax;
+                totalTaxCollected += companyCityTax;
+                // Aktualizuj gotówkę banku, jeśli firma ma konto
+                if (stock.bankAccountId) {
+                    const bank = commercialBanks.find(b => b.id === stock.bankAccountId);
+                    if (bank) bank.cash -= companyCityTax; // Bank traci gotówkę firmy
+                }
+            }
+        }
+    });
+
+    // Podatek od "Obywateli" (symulacja)
+    // Prosty model: stała kwota + rosnąca z populacją miasta
+    const citizenBaseTax = 5000;
+    const citizenPopulationTax = city.population * 0.1; // Np. 0.1 PLN od mieszkańca tygodniowo
+    const citizenTax = citizenBaseTax + citizenPopulationTax;
+    totalTaxCollected += citizenTax;
+
+    // Dodaj zebrane podatki do skarbca państwa
+    governmentTreasury += totalTaxCollected;
+
+    // Loguj tylko dla gracza
+    if (playerCityTax > 0 && playerSanEscobarLvl < 4) { // Nie loguj, jeśli gracz nie płaci
+        logEvent(`🏛️ Zapłacono tygodniowy podatek miejski: ${playerCityTax.toFixed(2)} PLN.`);
+    }
+}
+
+function initializeGameTimeRelatedVariables() {
+    // ---> Inicjalizacja wartości TUTAJ <---
+    WEALTH_TAX_INTERVAL = BASE_DELAYS.quarterly * 4;
+    nextWealthTaxTime = Date.now() + WEALTH_TAX_INTERVAL; // Ustawienie początkowe
+    console.log(`[INIT] WEALTH_TAX_INTERVAL ustawiono na: ${WEALTH_TAX_INTERVAL} ms`);
+    // Tutaj można inicjalizować inne zmienne czasowe, jeśli są potrzebne
 }

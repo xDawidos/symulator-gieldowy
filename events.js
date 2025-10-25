@@ -1065,3 +1065,137 @@ const bankingSectorEventsPrompts = [
     { id: 'bank_neg_2', message: bankName => `⚖️ Nowe, restrykcyjne regulacje Banku Centralnego uderzają w rentowność ${bankName} i innych banków.`, type: 'negative' },
     { id: 'bank_neg_3', message: bankName => `📉 ${bankName} publikuje gorsze od oczekiwań wyniki finansowe z powodu rosnących rezerw na złe kredyty.`, type: 'negative' },
 ];
+
+const governmentInterventions = [
+    {
+        id: 'infra_boost',
+        name: "Program Budowy Infrastruktury",
+        minBudget: 10000000, // Minimalny budżet państwa do uruchomienia
+        costFactor: 0.1, // Wyda 10% budżetu
+        targetSectors: ['Przemysł', 'Nieruchomości'],
+        effectMagnitude: 0.05, // +5% boost dla spółek z tych sektorów
+        message: () => `🏗️ Rząd ogłasza wielki program inwestycji infrastrukturalnych! Sektory Przemysł i Nieruchomości zyskują.`
+    },
+    {
+        id: 'rnd_grants',
+        name: "Granty na Innowacje",
+        minBudget: 5000000,
+        costFactor: 0.05,
+        effect: (spentAmount) => {
+            // Przyspiesz badania we wszystkich spółkach proporcjonalnie do wydanej kwoty
+            const progressBoost = spentAmount / 1000; // 1000 PLN = 1 punkt postępu
+            stocks.forEach(s => {
+                if (s.research && s.research.isResearching) {
+                    s.research.progress += progressBoost * getRandomInRange(0.5, 1.5);
+                }
+            });
+        },
+        message: () => `💡 Rząd przyznaje granty na badania i rozwój! Innowacyjne projekty nabierają tempa.`
+    },
+    {
+        id: 'market_support',
+        name: "Interwencyjny Skup Akcji",
+        minBudget: 15000000,
+        costFactor: 0.15,
+        effectMagnitude: 0.02, // +2% boost dla CAŁEGO rynku
+        message: () => `📈 Państwowy fundusz inwestycyjny wchodzi na giełdę! Interwencyjny skup akcji poprawia nastroje na całym rynku.`
+    },
+    {
+        id: 'bailout',
+        name: "Koło Ratunkowe od Rządu",
+        minBudget: 8000000,
+        costFactor: 0.08,
+        effect: (spentAmount) => {
+            // Znajdź spółkę na granicy bankructwa (ale jeszcze nie bankruta)
+            const targets = stocks.filter(s => !s.assetType && !s.isBankrupt && s.financialHealth <= -4);
+            if (targets.length > 0) {
+                const target = getRandomElement(targets);
+                target.financialHealth = 0; // Uratuj kondycję
+                target.cash += spentAmount; // Daj zastrzyk gotówki
+                if(target.bankAccountId) { // Dodaj kasę też do banku firmy
+                    const bank = commercialBanks.find(b => b.id === target.bankAccountId);
+                    if(bank) bank.cash += spentAmount;
+                }
+                applyPriceEffect(target.symbol, 0.10, 'positive'); // Boost ceny
+                logEvent(`🆘 Rząd ratuje ${target.name} przed bankructwem kwotą ${spentAmount.toLocaleString()} PLN!`);
+                showToast(`Rządowa pomoc dla ${target.name}!`, 'success');
+            } else {
+                 logEvent(`ℹ️ Rząd planował koło ratunkowe, ale żadna spółka nie była na skraju upadku.`);
+                 governmentTreasury += spentAmount; // Zwróć pieniądze do budżetu
+            }
+        },
+        message: () => `🆘 Rząd uruchamia program ratunkowy dla spółek w najtrudniejszej sytuacji!` // Wiadomość ogólna
+    },
+    {
+        id: 'interest_rate_cut', // Obniżka stóp procentowych
+        name: "Obniżka Stóp Procentowych",
+        minBudget: 1000000, // Niewielki koszt "administracyjny"
+        costFactor: 0.01,
+        effect: () => {
+            const change = -0.005 * getRandomInRange(0.5, 1.5); // Obniżka o 0.25-0.75 pp
+            centralBank.baseInterestRate = Math.max(0.005, centralBank.baseInterestRate + change);
+            updateInterestRates(); // Zastosuj zmianę
+            logEvent(`💰 Rząd w porozumieniu z Bankiem Centralnym obniża stopy procentowe, by pobudzić gospodarkę! Nowa stopa bazowa: ${(centralBank.baseInterestRate * 100).toFixed(1)}%.`);
+        },
+        message: () => `💰 Rząd decyduje się na stymulację gospodarki przez obniżkę stóp procentowych!`
+    },
+    // Przykładowe eventy sektorowe (dodaj po 2 dla każdego sektora)
+    {
+        id: 'sector_boost_food',
+        name: "Program 'Zdrowa Żywność'",
+        minBudget: 3000000, costFactor: 0.04, targetSectors: ['Żywność'], effectMagnitude: 0.04,
+        message: () => `🍎 Rządowy program promocji zdrowej żywności wspiera producentów z sektora Żywność.`
+    },
+    {
+        id: 'sector_boost_tech',
+        name: "Ulgi Podatkowe dla IT",
+        minBudget: 4000000, costFactor: 0.06, targetSectors: ['Technologia'], effectMagnitude: 0.06,
+        message: () => `💻 Nowe ulgi podatkowe dla firm technologicznych! Sektor IT zyskuje.`
+    },
+    // ... Dodaj więcej interwencji dla innych sektorów ...
+];
+
+/**
+ * Losowo wybiera i uruchamia interwencję rządową, jeśli budżet na to pozwala.
+ */
+function triggerGovernmentSpendingEvent() {
+    // console.log("[Rząd] Sprawdzanie możliwości interwencji..."); // Opcjonalny log
+
+    // Filtruj interwencje, na które stać państwo
+    const possibleInterventions = governmentInterventions.filter(inv => governmentTreasury >= inv.minBudget);
+
+    if (possibleInterventions.length === 0) {
+        // console.log("[Rząd] Budżet zbyt mały na interwencje."); // Opcjonalny log
+        return;
+    }
+
+    // Wybierz losową interwencję spośród możliwych
+    const intervention = getRandomElement(possibleInterventions);
+    const cost = governmentTreasury * intervention.costFactor; // Oblicz koszt
+
+    // Odejmij koszt z budżetu państwa
+    governmentTreasury -= cost;
+
+    logEvent(`🏛️ ${intervention.message()}`, 'state'); // Zaloguj główne przesłanie interwencji
+    showToast(`Interwencja Rządowa: ${intervention.name}`, 'default', 6000);
+
+    // Zastosuj efekt interwencji
+    if (intervention.effectMagnitude) {
+        // Efekt procentowy na cały rynek lub wybrane sektory
+        const targets = intervention.targetSectors
+            ? stocks.filter(s => !s.assetType && !s.isBankrupt && s.sector.some(sec => intervention.targetSectors.includes(sec)))
+            : stocks.filter(s => !s.assetType && !s.isBankrupt); // Cały rynek
+
+        targets.forEach(stock => {
+            applyPriceEffect(stock.symbol, intervention.effectMagnitude, 'positive', 'state');
+        });
+    } else if (intervention.effect) {
+        // Efekt specjalny zdefiniowany w funkcji
+        intervention.effect(cost); // Przekaż wydaną kwotę do funkcji efektu
+    }
+
+    // Zaktualizuj widok modala Państwo, jeśli jest otwarty
+    if (document.getElementById('state-modal')?.style.display === 'block') {
+         if (typeof updateStateModalContent === 'function') updateStateModalContent();
+    }
+}

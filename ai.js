@@ -237,44 +237,75 @@ function aiBuyStock(ai, symbol, quantity) {
 function aiSellStock(ai, symbol, quantity) {
     const holding = ai.portfolio[symbol];
 
-    // Strażnik uniemożliwiający sprzedaż udziałów w start-upie
-    if (holding && holding.assetType === 'Startup') {
+    // Sprawdź, czy AI ma tę pozycję i czy ilość jest poprawna
+    if (!holding || holding.shares < quantity || quantity <= 0) return;
+
+    // Zabezpieczenie przed sprzedażą startupu
+    if (holding.assetType === 'Startup') {
         console.warn(`[AI ZABEZPIECZENIE] ${ai.name} próbował sprzedać udziały w start-upie ${symbol}. Operacja zablokowana.`);
         return;
     }
 
     const stockToSell = stocks.find(s => s.symbol === symbol);
-    if (!stockToSell || !holding || holding.shares < quantity) return;
-
-    const sellPrice = stockToSell.price;
-    const avgBuyPrice = holding.avgPrice;
-    const profitPerShare = sellPrice - avgBuyPrice;
-    const totalProfit = profitPerShare * quantity;
-
-    if (totalProfit > 0) {
-        // Przyznaj punkty (1 za każde 1000 PLN zysku)
-        const skillPointsGained = totalProfit / 1000;
-        // Upewnij się, że pole istnieje (na wypadek, gdyby bot market_maker był tu przetwarzany)
-        if (ai.skillPoints !== undefined) {
-             ai.skillPoints = (ai.skillPoints || 0) + skillPointsGained; // Zainicjuj, jeśli trzeba
-             console.log(`[AI Skills] ${ai.name} zyskał ${skillPointsGained.toFixed(2)} pkt umiejętności za sprzedaż ${symbol}. Total: ${ai.skillPoints.toFixed(2)}`);
+    // Sprawdź, czy akcja istnieje ORAZ czy handel nie jest zablokowany
+    if (!stockToSell || stockToSell.isTradeLocked) {
+        // Jeśli handel zablokowany, po prostu zakończ funkcję
+        if (stockToSell && stockToSell.isTradeLocked) {
+            // Można dodać log, jeśli chcesz wiedzieć, kiedy AI próbowało sprzedać zablokowane akcje
+            // console.log(`[AI] ${ai.name} - Próba sprzedaży zablokowanych akcji ${symbol} nie powiodła się.`);
         }
-    }
-	
-	if (stockToSell.isTradeLocked) {
         return;
     }
 
-    const totalGain = stockToSell.price * quantity;
-    ai.cash += totalGain;
+
+    const sellPrice = stockToSell.price;
+    const avgBuyPrice = holding.avgPrice;
+    const profit = (sellPrice - avgBuyPrice) * quantity; // Zysk brutto
+
+    let taxToPay = 0;
+
+    // ---> TUTAJ ZACZYNA SIĘ BRAKUJĄCY BLOK PODATKOWY <---
+    if (profit > 0) {
+        let taxRateCapitalGains = TAX_RATES.capitalGains;
+        let aiTaxModifier = 1.0;
+        // Sprawdź umiejętność San Escobar AI
+        const aiSanEscobarLvl = ai.unlockedSkills ? (ai.unlockedSkills['sanEscobar'] || 0) : 0;
+        if (aiSanEscobarLvl >= 1) aiTaxModifier = 0.95; // Lvl 1: 5% zniżki
+        if (aiSanEscobarLvl >= 4) aiTaxModifier = 0.0; // Lvl 4: Brak podatku
+
+        taxToPay = profit * taxRateCapitalGains * aiTaxModifier; // Oblicz podatek
+        governmentTreasury += taxToPay; // Dodaj podatek do budżetu państwa
+    }
+    // ---> TUTAJ KOŃCZY SIĘ BRAKUJĄCY BLOK PODATKOWY <---
+
+    // Przyznawanie punktów umiejętności (bez zmian, liczymy od zysku brutto)
+    if (profit > 0 && ai.skillPoints !== undefined) {
+        const skillPointsGained = profit / 1000;
+        ai.skillPoints = (ai.skillPoints || 0) + skillPointsGained;
+        console.log(`[AI Skills] ${ai.name} zyskał ${skillPointsGained.toFixed(2)} pkt umiejętności za sprzedaż ${symbol}. Total: ${ai.skillPoints.toFixed(2)}`);
+    }
+
+    // Transakcja sprzedaży
+    const totalGainGross = sellPrice * quantity; // Przychód brutto
+    const totalGainNet = totalGainGross - taxToPay; // Przychód netto po podatku
+
+    ai.cash += totalGainNet; // AI otrzymuje kwotę netto
     holding.shares -= quantity;
-    stockToSell.sharesHeld -= quantity;
+    stockToSell.sharesHeld -= quantity; // Zaktualizuj liczbę akcji w obiegu rynkowym
+    // Symuluj niewielki wpływ na cenę
     stockToSell.price -= (quantity * stockToSell.price) * 0.000005;
 
-    if (holding.shares === 0) {
+    // Logowanie z informacją o podatku
+    console.log(`[AI] ${ai.name} sprzedał ${quantity} szt. ${symbol}. Zysk brutto: ${profit.toFixed(2)}, Podatek: ${taxToPay.toFixed(2)}.`);
+
+    // Usuń pozycję z portfela, jeśli sprzedano wszystko
+    if (holding.shares <= 0.001) { // Użyj małego progu dla bezpieczeństwa
         delete ai.portfolio[symbol];
+        // Jeśli AI używa pamięci (jak Marian), usuń wpis
+        if (ai.memory && ai.memory[symbol]) {
+            delete ai.memory[symbol];
+        }
     }
-    console.log(`[AI] ${ai.name} sprzedał ${quantity} szt. ${symbol}`);
 }
 
 function runAiMarian(ai) {
@@ -772,39 +803,54 @@ function makeAiDecision(ai) {
         // console.log(`[AI Kredyt] Wynik kredytowy ${ai.name} wzrósł do ${ai.creditScore}.`); // Opcjonalny log
     }
 
-    // --- NOWA LOGIKA: Wydawanie punktów umiejętności ---
-    // Sprawdź tylko boty, które mają system umiejętności
+   // --- NOWA LOGIKA: Wydawanie punktów umiejętności ---
     if (ai.skillPoints !== undefined && ai.unlockedSkills !== undefined) {
-         // Dajmy AI np. 20% szans w każdej turze na próbę ulepszenia umiejętności
          if (Math.random() < 0.2) {
-            // Przejrzyj dostępne umiejętności i sprawdź, czy AI stać na następny poziom
             for (const skillId in skills) {
                 // Pomijamy AdBlock dla AI
                 if (skillId === 'adblock') continue;
 
-                const skillData = skills[skillId];
-                const currentAiLevel = ai.unlockedSkills[skillId] || 0;
-                const nextLevelInfo = skillData.levels.find(l => l.level === currentAiLevel + 1);
-
-                if (nextLevelInfo) {
-                    // Sprawdź wymagania (jeśli istnieją)
-                    const requirement = nextLevelInfo.requires;
-                    const requirementMet = requirement ? (ai.unlockedSkills[requirement.skillId] || 0) >= requirement.level : true;
-
-                    // Sprawdź koszt i czy spełnia wymagania
-                    if (ai.skillPoints >= nextLevelInfo.cost && requirementMet) {
-                        // "Kup" umiejętność
-                        ai.skillPoints -= nextLevelInfo.cost;
-                        ai.unlockedSkills[skillId] = nextLevelInfo.level;
-                        console.log(`[AI Skills] ${ai.name} odblokował/ulepszył ${skillData.name} do poziomu ${nextLevelInfo.level}! Pozostałe punkty: ${ai.skillPoints.toFixed(2)}`);
-
-                        // AI kupuje tylko jedną umiejętność na turę
-                        break; // Wyjdź z pętli for in skills
-                    }
+                // ---> TUTAJ WKLEJ NOWY BLOK <---
+                // Sprawdź, czy AI może/chce rozważyć San Escobar
+                let canConsiderSanEscobar = ai.skillPoints > 5000;
+                if (ai.personality === 'pro_investor' || ai.personality === 'whale') {
+                    canConsiderSanEscobar = ai.skillPoints > 3000;
                 }
+                let desiresMaxLevel = (ai.personality === 'reckless' || ai.personality === 'yolo_trader') && ai.skillPoints > 110000;
+                // ---> KONIEC NOWEGO BLOKU <---
+
+                // ---> DODAJ TEN WARUNEK 'IF' OTACZAJĄCY RESZTĘ LOGIKI <---
+                // Przetwarzaj dalej tylko jeśli:
+                // 1. To NIE jest San Escobar LUB
+                // 2. To JEST San Escobar, ALE AI może go rozważyć
+                if (skillId !== 'sanEscobar' || canConsiderSanEscobar) {
+
+                    const skillData = skills[skillId];
+                    const currentAiLevel = ai.unlockedSkills[skillId] || 0;
+
+                    // ---> ZMODYFIKUJ OKREŚLANIE CELU <---
+                    // Jeśli AI chce max level San Escobar, celuj w Lvl 4
+                    const targetLevel = (desiresMaxLevel && skillId === 'sanEscobar') ? 4 : currentAiLevel + 1;
+                    const nextLevelInfo = skillData.levels.find(l => l.level === targetLevel);
+                    // ---> KONIEC MODYFIKACJI CELU <---
+
+
+                    if (nextLevelInfo) {
+                        const requirement = nextLevelInfo.requires;
+                        const requirementMet = requirement ? (ai.unlockedSkills[requirement.skillId] || 0) >= requirement.level : true;
+
+                        if (ai.skillPoints >= nextLevelInfo.cost && requirementMet) {
+                            ai.skillPoints -= nextLevelInfo.cost;
+                            ai.unlockedSkills[skillId] = nextLevelInfo.level;
+                            console.log(`[AI Skills] ${ai.name} odblokował/ulepszył ${skillData.name} do poziomu ${nextLevelInfo.level}! Pozostałe punkty: ${ai.skillPoints.toFixed(2)}`);
+                            break; // Kupiono jedną umiejętność
+                        }
+                    }
+                } // ---> ZAMKNIJ DODANY WARUNEK 'IF' <---
+
             } // Koniec pętli for in skills
          } // Koniec if Math.random() < 0.2
-    }
+    } // Koniec if ai.skillPoints !== undefined
 }
     
 

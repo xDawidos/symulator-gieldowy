@@ -15,6 +15,7 @@
     <div id="main-nav">
         <button id="open-work-btn" onclick="openWorkModal()" style="display: none;">✍️ Praca</button>
         <button id="open-bank-btn" onclick="openBankModal()">🏦 Bank</button>
+        <button id="open-state-btn" onclick="openStateModal()">🏛️ Państwo</button>
         <button id="open-city-btn" onclick="openCityInvestmentModal()">🏙️ Miasto</button>
         <button id="open-skills-btn" onclick="openSkillsModal()">🧠 Umiejętności</button>
         <button id="open-newspaper-btn" onclick="openNewspaperModal()">📰 Gazeta</button>
@@ -358,6 +359,29 @@
              </main>
          </div>
          <button onclick="document.getElementById('newspaper-modal').style.display='none';" style="position: absolute; top: 5px; right: 5px; font-size: 20px; background: none; border: none; cursor: pointer;">&times;</button>
+    </div>
+
+    <div id="state-modal" class="modal" style="display:none; width: 500px;">
+        <button class="close-btn" onclick="document.getElementById('state-modal').style.display='none';">&times;</button>
+        <h2 style="margin-top: 0; text-align: center;">🏛️ Skarbiec Państwa</h2>
+        <div class="bank-section">
+            <h4>Budżet Państwa</h4>
+            <p>Aktualne środki w skarbcu: <strong id="government-treasury-display">0.00</strong> PLN</p>
+            <p style="font-size: 12px; color: #6c757d;">Środki pochodzą z podatków od dywidend, zysków kapitałowych, firm, bogactwa, podatków miejskich oraz symulowanych podatków od obywateli.</p>
+        </div>
+        <div class="bank-section">
+            <h4>Możliwe Interwencje Rządowe</h4>
+            <p style="font-size: 12px; color: #6c757d;">Rząd może wykorzystać zgromadzone środki na różne programy wspierające gospodarkę. Działania są podejmowane automatycznie, gdy budżet jest wystarczająco duży.</p>
+            <ul id="government-actions-list" style="font-size: 13px; list-style-type: '💰 '; padding-left: 20px;">
+                <li>Programy infrastrukturalne (wsparcie dla sektora Przemysł i Nieruchomości)</li>
+                <li>Dotacje na innowacje (przyspieszenie badań R&D)</li>
+                <li>Interwencyjny skup akcji (wsparcie dla rynku)</li>
+                <li>Koła ratunkowe dla zagrożonych spółek</li>
+                <li>Zmiany stóp procentowych (wpływ na sektor Finanse i Bankowość)</li>
+                <li>Specjalne programy sektorowe (losowe bonusy dla wybranych branż)</li>
+                </ul>
+        </div>
+         <p style="font-size: 11px; text-align: center; margin-top: 15px;">Więcej informacji o aktywnych programach rządowych znajdziesz w logu wydarzeń.</p>
     </div>
 
     <div id="management-modal" style="display:none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 450px; border: 2px solid #007bff; background-color: #f9f9f9; box-shadow: 0 4px 8px rgba(0,0,0,0.2); padding: 20px; z-index: 1006; border-radius: 8px;">

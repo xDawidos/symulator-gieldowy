@@ -21,12 +21,7 @@ const gameTimers = {
 let currentSpeedMultiplier = 1;
 
 // Podstawowe opóźnienia w milisekundach
-const BASE_DELAYS = {
-    stockUpdate: 1000, // 1 sekunda
-    weekly: 60000,     // 1 minuta (tydzień w grze)
-    quarterly: 300000, // 5 minut (kwartał w grze)
-    event: 45000       // 45 sekund
-};
+
 
 /**
  * Zatrzymuje wszystkie aktywne pętle gry. Niezbędne przy zmianie prędkości.
@@ -94,6 +89,18 @@ function setGameSpeed(speedMultiplier) {
 
         if (isGamePaused) {
             return; // Jeśli gra jest zapauzowana, nie wykonuj żadnych akcji
+        }
+
+        if (document.getElementById('state-modal').style.display === 'block') {
+            updateStateModalContent();
+        }
+
+
+        if (document.getElementById('state-modal').style.display === 'block') {
+             // Sprawdź czy funkcja istnieje przed wywołaniem
+            if (typeof updateStateModalContent === 'function') {
+                updateStateModalContent();
+            }
         }
 
         // --- ZAPAMIĘTYWANIE STANU INTERFEJSU ---
@@ -398,6 +405,12 @@ gameTimers.weekly = setInterval(() => {
     });
     // ---> KONIEC NOWEJ PĘTLI <---
 
+    if (typeof processCityAndCitizenTaxes === 'function') {
+        processCityAndCitizenTaxes();
+    } else {
+        console.error("Funkcja processCityAndCitizenTaxes nie została znaleziona!");
+    }
+
     if (playerCash > 0) displayCash(); // Aktualizuj gotówkę po operacjach
 
 }, BASE_DELAYS.weekly / speedMultiplier);
@@ -468,6 +481,27 @@ gameTimers.weekly = setInterval(() => {
         if (isGamePaused) return;
         updateCeoTenureAndAge();
         triggerYearlyCeoEvents();
+        if (Date.now() >= nextWealthTaxTime) {
+         if (typeof processWealthTax === 'function') {
+             processWealthTax();
+         } else {
+             console.error("Funkcja processWealthTax nie została znaleziona!");
+         }
+    }
+
+    checkSanEscobarRisk();
+
+
+
+
+    if (Math.random() < 0.3) {
+        if (typeof triggerGovernmentSpendingEvent === 'function') {
+            triggerGovernmentSpendingEvent();
+        } else {
+            console.error("Funkcja triggerGovernmentSpendingEvent nie została znaleziona!");
+        }
+    }
+
         updateCity(); // Aktualizacja miasta i start festynu
     }, BASE_DELAYS.quarterly * 4 / speedMultiplier); // Co rok
 }
@@ -697,6 +731,19 @@ function initializeGame() {
     displayStartups();
     displayEtfs();
 
+   if (typeof initializeGameTimeRelatedVariables === 'function') {
+        initializeGameTimeRelatedVariables();
+    } else {
+        console.error("Funkcja initializeGameTimeRelatedVariables nie została znaleziona w gameLogic.js!");
+         // Awaryjne ustawienie, jeśli funkcja nie istnieje
+        if(typeof BASE_DELAYS !== 'undefined' && typeof BASE_DELAYS.quarterly !== 'undefined') {
+             WEALTH_TAX_INTERVAL = BASE_DELAYS.quarterly * 4; // Zdefiniuj WEALTH_TAX_INTERVAL globalnie (mniej idealne)
+             nextWealthTaxTime = Date.now() + WEALTH_TAX_INTERVAL;
+        } else {
+            console.error("BASE_DELAYS lub BASE_DELAYS.quarterly nie jest zdefiniowane!");
+        }
+    }
+
     // Uruchomienie pętli gry
     setGameSpeed(1);
 
@@ -705,32 +752,35 @@ function initializeGame() {
 
 // Uruchom grę po załadowaniu strony (z bazy main.js - zawiera zależność od banków komercyjnych)
 window.addEventListener('load', () => {
-    const required = [
-        'generateNewStartup',
-        'initializeDividendEstimates',
-        'assembleDescription',
-        'initializeCommercialBanks' // Zależność z bazy main.js
-    ];
-    const start = Date.now();
-    const timeout = 5000;
-    const interval = 50; // ms
+    console.log('[loader] Zdarzenie "load" strony wystąpiło. Uruchamiam initializeGame().');
+    try {
+        // Podstawowe sprawdzenie, czy kluczowe funkcje z innych plików istnieją
+        if (typeof initializeCommercialBanks !== 'function' ||
+            typeof generateNewStartup !== 'function' ||
+            typeof assembleDescription !== 'function' ||
+            typeof createBankStockObject !== 'function') { // Sprawdzenie nowej funkcji
+            console.error('[loader] Krytyczne funkcje z innych plików nie są dostępne! Sprawdź kolejność i zawartość skryptów w HTML.');
+            alert("Błąd ładowania gry! Niezbędne funkcje nie zostały znalezione. Sprawdź konsolę deweloperską (F12).");
+            return; // Nie kontynuuj, jeśli brakuje podstaw
+        }
 
-    function checkDeps() {
-        const missing = required.filter(name => !(typeof globalThis[name] === 'function'));
-        if (missing.length === 0) {
-            console.log('[loader] Wszystkie zależności dostępne, uruchamiam initializeGame()');
-            try { initializeGame(); } catch (e) { console.error('[loader] initializeGame() rzucił wyjątek:', e); }
-            return;
+        // Sprawdzenie istnienia kluczowych stałych z gameLogic.js
+        // Upewnij się, że BASE_DELAYS jest zdefiniowane w gameLogic.js
+        if (typeof BANK_TYPES === 'undefined' ||
+            typeof ALL_COMMERCIAL_BANKS_DEFINITIONS === 'undefined' ||
+            typeof BASE_DELAYS === 'undefined') {
+             console.error('[loader] Krytyczne stałe z gameLogic.js nie są dostępne! Sprawdź definicje na początku gameLogic.js.');
+             alert("Błąd ładowania gry! Niezbędne stałe nie zostały znalezione. Sprawdź konsolę deweloperską (F12).");
+             return;
         }
-        if (Date.now() - start < timeout) {
-            setTimeout(checkDeps, interval);
-        } else {
-            console.error('[loader] Timeout: brakujące zależności:', missing);
-            try { initializeGame(); } catch (e) { console.error('[loader] initializeGame() nie mogło zostać wywołane (brak zależności):', e); }
-        }
+
+
+        initializeGame(); // Wywołaj inicjalizację bezpośrednio
+
+    } catch (e) {
+        console.error('[loader] Błąd podczas wywoływania initializeGame():', e);
+        alert("Wystąpił krytyczny błąd podczas inicjalizacji gry. Sprawdź konsolę deweloperską (F12).");
     }
-
-    checkDeps();
 });
 
 // Funkcja uruchamiająca AI (z bazy main.js - zawiera AI banków inwestycyjnych)
@@ -754,3 +804,4 @@ function runAllAi() {
         runStateActions();
     }
 }
+

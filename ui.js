@@ -3240,3 +3240,20 @@ function handleViewFinancesClick(symbol) {
         openManagementModal(symbol); // Ponownie otwórz modal zarządzania, by odświeżyć info
     }
 }
+
+function openStateModal() {
+    const modal = document.getElementById('state-modal');
+    if(modal) {
+        updateStateModalContent();
+        modal.style.display = 'block';
+    }
+}
+
+function updateStateModalContent() {
+    const treasuryDisplay = document.getElementById('government-treasury-display');
+    if (treasuryDisplay) {
+        treasuryDisplay.textContent = governmentTreasury.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' });
+    }
+    // W przyszłości można tu dynamicznie aktualizować listę możliwych akcji
+    // np. na podstawie aktualnego stanu gry lub budżetu.
+}

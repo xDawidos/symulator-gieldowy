@@ -970,3 +970,7 @@ body.dark-mode #ad-popup .close-btn {
 body.dark-mode #ad-popup .close-btn:hover {
     color: #eee;
 }
+
+#state-modal h4 {
+    color: #0d6efd; /* Niebieski kolor nagłówków sekcji */
+}
