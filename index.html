@@ -486,19 +486,42 @@
              <button id="collect-reward-btn" onclick="collectPassiveWorkReward()" disabled>Odbierz</button>
          </div>
          <div id="company-panel" style="display: none;">
-             <h3 id="company-name">Twoja Firma</h3>
-             <p>Wartość firmy: <strong id="company-value">0</strong> / 25 000 PLN</p>
-             <p>Pracownicy: <strong id="company-employees">0</strong></p>
-             <p>Dochód (co 90s): <strong id="company-income">100</strong> PLN (Następna za: <strong id="company-income-timer">90</strong>s)</p>
-             <hr>
-             <button onclick="hireEmployee()">Zatrudnij pracownika (5000 PLN)</button>
+             <h3 id="company-name" style="text-align: center;">Twoja Firma</h3>
+             <div style="display: flex; justify-content: space-around; margin-bottom: 15px; border-bottom: 1px dashed #ccc; padding-bottom: 10px;">
+                 <div>Wartość firmy: <strong id="company-value">0</strong> PLN</div>
+                 <div>Dochód (cykl): <strong id="company-income">0</strong> PLN</div>
+             </div>
+
+             <div class="bank-section">
+                 <h4>Pracownicy (<span id="employee-count">0</span>)</h4>
+                 <ul id="employee-list" style="max-height: 150px; overflow-y: auto; list-style: none; padding: 0;">
+                     </ul>
+                 <button onclick="openHireModal()">Zatrudnij</button> </div>
+
+             <div class="bank-section">
+                 <h4>Sprzęt (<span id="equipment-count">0</span> / <span id="employee-slots-for-equipment">0</span> miejsc)</h4>
+                 <ul id="equipment-list" style="list-style: none; padding: 0; font-size: 13px;">
+                     </ul>
+                  <select id="equipment-select" style="margin-right: 5px;">
+                      </select>
+                 <button onclick="buySelectedEquipment()">Kup Wybrany Sprzęt</button>
+             </div>
+
+             <div class="bank-section">
+                 <h4>Dział HR (Poziom <span id="hr-level">0</span>/10)</h4>
+                 <p>Redukcja pensji: <strong id="hr-salary-reduction">0%</strong></p>
+                 <p id="hr-upgrade-cost-p">Koszt ulepszenia: <strong id="hr-upgrade-cost"></strong> PLN</p>
+                 <button id="upgrade-hr-btn" onclick="upgradeHR()">Ulepsz HR</button>
+                 <p style="font-size: 11px; color: #6c757d; margin-top: 5px;">Lepszy HR pomaga rekrutować, oceniać i obniżać koszty pracowników.</p>
+             </div>
+
              <hr>
              <input type="number" id="company-invest-amount" placeholder="Kwota doinwestowania">
              <button onclick="investInCompany()">Zainwestuj</button>
              <hr>
              <button onclick="startRandomSpecialMinigame()">Wykonaj zadanie specjalne (Bonus)</button>
              <hr>
-             <button id="ipo-btn" onclick="triggerIPO()" disabled>Wprowadź firmę na giełdę!</button>
+             <button id="ipo-btn" onclick="triggerIPO()" disabled>Wprowadź firmę na giełdę! (Wartość min. 25k)</button>
          </div>
          <button onclick="document.getElementById('work-modal').style.display='none';" style="display: block; margin: 15px auto 0 auto;">Zamknij</button>
     </div>
@@ -647,6 +670,18 @@
                  <div id="rd-tech-choice-container"></div>
              </div>
          </div>
+    </div>
+
+    <div id="hire-employee-modal" class="modal" style="display:none; width: 600px;">
+        <button class="close-btn" onclick="document.getElementById('hire-employee-modal').style.display='none';">&times;</button>
+        <h3 style="margin-top: 0; text-align: center;">Zatrudnij Pracownika</h3>
+        <p style="text-align: center; font-size: 12px;">Wybierz rodzaj umowy, aby zobaczyć kandydatów.</p>
+        <div style="text-align: center; margin-bottom: 15px;">
+            <button onclick="generateCandidates('permanent')">Szukaj na Umowę o Pracę</button>
+            <button onclick="generateCandidates('mandate')">Szukaj na Umowę Zlecenie</button>
+        </div>
+        <div id="candidate-list" style="display: flex; gap: 15px; justify-content: center;">
+            </div>
     </div>
 
     <div id="money-stacker-modal" class="modal" style="display: none;">

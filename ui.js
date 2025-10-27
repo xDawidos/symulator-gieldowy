@@ -1219,45 +1219,257 @@ function openWorkModal() {
     const companyPanel = document.getElementById('company-panel');
     const separator = document.getElementById('work-separator');
 
-    // Ukrywamy wszystko na starcie
+    // Ukrywamy wszystko
     activePanel.style.display = 'none';
     passivePanel.style.display = 'none';
     companyPanel.style.display = 'none';
     separator.style.display = 'none';
 
-    if (workLevel >= 4) {
-        // Poziom 4: Pokazujemy tylko panel firmy
+    if (workLevel >= 4 && playerCompany) {
+        // --- NOWA LOGIKA DLA PANELU FIRMY ---
         companyPanel.style.display = 'block';
-        if (playerCompany) {
-            document.getElementById('company-name').textContent = playerCompany.name;
-            document.getElementById('company-value').textContent = `${playerCompany.value.toLocaleString('pl-PL')}`;
-            document.getElementById('company-employees').textContent = playerCompany.employees;
-            const totalIncome = playerCompany.baseIncome + (playerCompany.employees * 100);
-            document.getElementById('company-income').textContent = totalIncome;
-            // NOWY FRAGMENT KODU
-            const timerEl = document.getElementById('company-income-timer');
-            if (timerEl && playerCompany.lastIncomeTime) { // Sprawdzamy czy playerCompany.lastIncomeTime istnieje
-                const remainingMs = (playerCompany.lastIncomeTime + playerCompany.incomeInterval) - Date.now();
-                const remainingSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
-                timerEl.textContent = remainingSeconds;
-            }
-            // KONIEC NOWEGO FRAGMENTU
-            const ipoBtn = document.getElementById('ipo-btn');
-            ipoBtn.disabled = playerCompany.value < 25000;
+
+        document.getElementById('company-name').textContent = playerCompany.name;
+        document.getElementById('company-value').textContent = playerCompany.value.toLocaleString('pl-PL', { maximumFractionDigits: 0 });
+
+        // Aktualizacja dochodu (teraz jest liczony w updateCompanyStatus)
+        // Musimy pobrać ostatnio obliczony dochód lub pokazać 0
+        const lastCycleIncomeElement = document.getElementById('company-income');
+        // Tu można by przechowywać ostatni dochód w playerCompany, na razie 0
+        lastCycleIncomeElement.textContent = "0.00"; // Placeholder
+
+        // Lista pracowników
+        const employeeList = document.getElementById('employee-list');
+        const employeeCountSpan = document.getElementById('employee-count');
+        employeeList.innerHTML = '';
+        employeeCountSpan.textContent = playerCompany.employees.length;
+        if (playerCompany.employees.length > 0) {
+            playerCompany.employees.forEach(emp => {
+                const li = document.createElement('li');
+                li.style.display = 'flex';
+                li.style.justifyContent = 'space-between';
+                li.style.alignItems = 'center';
+                li.style.marginBottom = '5px';
+                li.style.padding = '3px';
+                li.style.borderBottom = '1px dotted #eee';
+
+                const performancePercent = Math.round(emp.performance * 100);
+                const moraleText = emp.morale.toFixed(0);
+                let statusText = '';
+                if (emp.status === 'vacation') statusText = '🏖️';
+                else if (emp.status === 'sick') statusText = 'ố';
+
+                li.innerHTML = `
+                    <span>${statusText} ${emp.name} (Wyd: ${performancePercent}%, Morale: ${moraleText})</span>
+                    <button onclick="fireEmployee(${emp.id})" style="font-size: 11px; padding: 2px 5px; background-color: #ffdddd;">Zwolnij</button>
+                `;
+                employeeList.appendChild(li);
+            });
+        } else {
+            employeeList.innerHTML = '<li>Brak pracowników.</li>';
         }
+
+        // Lista sprzętu
+        const equipmentList = document.getElementById('equipment-list');
+        const equipmentCountSpan = document.getElementById('equipment-count');
+        const employeeSlotsSpan = document.getElementById('employee-slots-for-equipment');
+        equipmentList.innerHTML = '';
+        const totalEquipment = playerCompany.equipment.reduce((sum, eq) => sum + eq.quantity, 0);
+        equipmentCountSpan.textContent = totalEquipment;
+        employeeSlotsSpan.textContent = playerCompany.employees.length; // Max sprzętu = liczba pracowników
+
+        if (playerCompany.equipment.length > 0) {
+            playerCompany.equipment.forEach(eq => {
+                const li = document.createElement('li');
+                li.textContent = `- ${eq.name}: ${eq.quantity} szt.`;
+                equipmentList.appendChild(li);
+            });
+        } else {
+            equipmentList.innerHTML = '<li>Brak sprzętu.</li>';
+        }
+
+        // Wypełnienie selecta sprzętu
+        const equipmentSelect = document.getElementById('equipment-select');
+        equipmentSelect.innerHTML = ''; // Wyczyść opcje
+        for (const id in EQUIPMENT_TYPES) {
+            const eq = EQUIPMENT_TYPES[id];
+            const option = document.createElement('option');
+            option.value = id;
+            option.textContent = `${eq.name} (${eq.purchaseCost} PLN)`;
+            equipmentSelect.appendChild(option);
+        }
+
+        // Dział HR
+        const hrLevelSpan = document.getElementById('hr-level');
+        const hrReductionSpan = document.getElementById('hr-salary-reduction');
+        const hrCostSpan = document.getElementById('hr-upgrade-cost');
+        const hrUpgradeBtn = document.getElementById('upgrade-hr-btn');
+        const hrCostP = document.getElementById('hr-upgrade-cost-p');
+
+        hrLevelSpan.textContent = playerCompany.hrLevel;
+        hrReductionSpan.textContent = `${playerCompany.hrLevel * 5}%`;
+
+        if (playerCompany.hrLevel < 10) {
+            const upgradeCost = 5000 * Math.pow(2, playerCompany.hrLevel); // Przykładowy rosnący koszt
+            hrCostSpan.textContent = upgradeCost.toLocaleString('pl-PL');
+            hrUpgradeBtn.disabled = playerCash < upgradeCost;
+            hrUpgradeBtn.style.display = 'inline-block';
+            hrCostP.style.display = 'block';
+        } else {
+            hrCostSpan.textContent = 'MAX';
+            hrUpgradeBtn.disabled = true;
+            hrUpgradeBtn.style.display = 'none';
+            hrCostP.style.display = 'none';
+        }
+
+        // Przycisk IPO (bez zmian)
+        const ipoBtn = document.getElementById('ipo-btn');
+        ipoBtn.disabled = playerCompany.value < 25000;
+        // --- KONIEC NOWEJ LOGIKI ---
+
     } else if (workLevel === 3) {
-        // Poziom 3: Pokazujemy oba panele
+        // Poziom 3: panel aktywny i pasywny (bez zmian)
         activePanel.style.display = 'block';
         passivePanel.style.display = 'block';
         separator.style.display = 'block';
         startWorkMinigame();
-        updatePassiveWorkUI(); // Funkcja pomocnicza
+        updatePassiveWorkUI();
     } else {
-        // Poziom 1 i 2: Pokazujemy tylko panel aktywny
+        // Poziom 1 i 2: panel aktywny (bez zmian)
         activePanel.style.display = 'block';
         startWorkMinigame();
     }
     modal.style.display = 'block';
+}
+
+// Nowa funkcja do kupowania wybranego sprzętu
+function buySelectedEquipment() {
+    const select = document.getElementById('equipment-select');
+    if (select.value) {
+        buyEquipment(select.value, 1); // Kupujemy jedną sztukę
+    }
+}
+
+// Nowa funkcja do ulepszania HR
+function upgradeHR() {
+    if (!playerCompany || playerCompany.hrLevel >= 10) return;
+    const upgradeCost = 5000 * Math.pow(2, playerCompany.hrLevel);
+    if (playerCash < upgradeCost) {
+        alert("Za mało gotówki na ulepszenie HR!");
+        return;
+    }
+    playerCash -= upgradeCost;
+    playerCompany.hrLevel++;
+    logEvent(`🏢 Ulepszono dział HR do poziomu ${playerCompany.hrLevel}!`);
+    displayCash();
+    openWorkModal(); // Odśwież widok
+}
+
+// Nowe funkcje do obsługi modala zatrudniania
+function openHireModal() {
+    const modal = document.getElementById('hire-employee-modal');
+    document.getElementById('candidate-list').innerHTML = ''; // Wyczyść listę kandydatów
+    modal.style.display = 'block';
+}
+
+function generateCandidates(contractType) {
+    const candidateListDiv = document.getElementById('candidate-list');
+    candidateListDiv.innerHTML = ''; // Wyczyść poprzednich
+    const candidateCount = 3; // Pokaż 3 kandydatów
+
+    for (let i = 0; i < candidateCount; i++) {
+        const isPermanent = contractType === 'permanent';
+        const performanceMultiplier = isPermanent ? getRandomInRange(0.9, 1.4) : getRandomInRange(0.7, 1.1); // Lepsza wydajność na stałe
+        const salaryMultiplier = isPermanent ? getRandomInRange(1.0, 1.3) : getRandomInRange(0.8, 1.0); // Wyższa pensja na stałe
+        const baseSalary = EMPLOYEE_BASE_SALARY;
+
+        const candidate = {
+            name: generateEmployeeName(),
+            performance: performanceMultiplier,
+            salary: baseSalary * salaryMultiplier,
+            contractType: contractType
+        };
+
+        const card = createCandidateCard(candidate);
+        candidateListDiv.appendChild(card);
+    }
+}
+
+function createCandidateCard(candidate) {
+    const card = document.createElement('div');
+    card.style.border = "1px solid #ccc";
+    card.style.padding = "10px";
+    card.style.borderRadius = "5px";
+    card.style.width = "160px";
+    card.style.textAlign = "center";
+
+    const hrLevel = playerCompany ? playerCompany.hrLevel : 0;
+    let performanceText = '??';
+    let salaryText = '??';
+
+    // Logika odkrywania statystyk z HR
+    if (hrLevel >= 8) { // Wysoki poziom HR odkrywa wszystko
+        performanceText = `${Math.round(candidate.performance * 100)}%`;
+        salaryText = `${candidate.salary.toFixed(2)} PLN/tydz.`;
+    } else if (hrLevel >= 4) { // Średni poziom daje zakresy
+        const perfLower = Math.max(70, Math.round(candidate.performance * 100) - 10);
+        const perfUpper = Math.min(150, Math.round(candidate.performance * 100) + 10);
+        performanceText = `${perfLower}-${perfUpper}%`;
+        const salaryLower = Math.max(50, candidate.salary - 15);
+        const salaryUpper = candidate.salary + 15;
+        salaryText = `${salaryLower.toFixed(0)}-${salaryUpper.toFixed(0)} PLN/tydz.`;
+    } else { // Niski poziom daje tylko "gwiazdki" lub ogólniki
+        if (candidate.performance > 1.2) performanceText = '⭐⭐⭐ (Wysoka)';
+        else if (candidate.performance > 0.9) performanceText = '⭐⭐ (Średnia)';
+        else performanceText = '⭐ (Niska)';
+
+        if (candidate.salary > EMPLOYEE_BASE_SALARY * 1.1) salaryText = 'Wysoka';
+        else if (candidate.salary < EMPLOYEE_BASE_SALARY * 0.9) salaryText = 'Niska';
+        else salaryText = 'Średnia';
+    }
+
+    card.innerHTML = `
+        <h5 style="margin: 0 0 5px 0;">${candidate.name}</h5>
+        <p style="font-size: 12px; margin: 3px 0;">Umowa: ${candidate.contractType === 'permanent' ? 'o Pracę' : 'Zlecenie'}</p>
+        <p style="font-size: 12px; margin: 3px 0;">Wydajność: ${performanceText}</p>
+        <p style="font-size: 12px; margin: 3px 0;">Pensja: ${salaryText}</p>
+        <button onclick='confirmHire(${JSON.stringify(candidate)})' style="margin-top: 10px;">Zatrudnij</button>
+    `;
+    return card;
+}
+
+// Nowa funkcja do potwierdzenia zatrudnienia wybranego kandydata
+function confirmHire(candidateData) {
+     if (!playerCompany) return;
+
+     // Koszt zatrudnienia = pierwsza pensja
+     const hiringCost = candidateData.salary;
+     if (playerCash < hiringCost) {
+         alert(`Nie stać Cię na zatrudnienie tego pracownika (wymagana pierwsza pensja: ${hiringCost.toFixed(2)} PLN).`);
+         return;
+     }
+     playerCash -= hiringCost;
+
+     const newEmployee = {
+        id: Date.now() + Math.random(),
+        name: candidateData.name,
+        performance: candidateData.performance,
+        salary: candidateData.salary,
+        morale: getRandomIntInRange(60, 80),
+        status: 'working',
+        contractType: candidateData.contractType,
+        vacationEnds: 0
+    };
+
+    playerCompany.employees.push(newEmployee);
+    logEvent(`👨‍💼 Zatrudniono nowego pracownika: ${newEmployee.name} (${newEmployee.contractType === 'permanent' ? 'Umowa o Pracę' : 'Zlecenie'}). Zapłacono pierwszą pensję ${hiringCost.toFixed(2)} PLN.`);
+    displayCash();
+
+    // Zamknij modal zatrudniania i odśwież panel firmy
+    document.getElementById('hire-employee-modal').style.display='none';
+    if (document.getElementById('work-modal')?.style.display === 'block') {
+        openWorkModal();
+    }
 }
 
 // Funkcja pomocnicza do odświeżania panelu pasywnego

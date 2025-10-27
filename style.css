@@ -607,13 +607,18 @@ tr.locked-row {
 
 .stacker-block {
     position: absolute;
-    width: 100px;
-    height: 60px;
+    /* width: 100px; */ /* Szerokość będzie ustawiana dynamicznie */
+    height: 20px; /* Stała wysokość */
     background-image: url('img/money.png');
-    background-size: 100% 100%;
-    background-repeat: no-repeat;
+    /* ---> ZMIANA: Użyj contain, aby obraz się nie rozciągał <--- */
+    background-size: contain; /* Dopasuj obraz do wysokości, zachowaj proporcje */
+    background-repeat: no-repeat; /* Nie powtarzaj tła */
+    background-position: center center; /* Wyśrodkuj obraz */
+    background-color: #8FBC8F; /* Dodaj kolor tła (ciemna zieleń morska) na wypadek, gdyby obraz był mniejszy */
     border: 1px solid #333;
     box-sizing: border-box;
+    /* Dodajmy delikatny cień dla lepszego odróżnienia */
+    box-shadow: 1px 1px 2px rgba(0,0,0,0.3);
 }
 
 /* Cechy CEO */

@@ -3283,19 +3283,238 @@ function collectPassiveWorkReward() {
     }
 }
 
+const EMPLOYEE_BASE_SALARY = 100; // Bazowy tygodniowy koszt pracownika
+const EQUIPMENT_TYPES = { // Definicje typów sprzętu (można rozbudować)
+    'basic_chair': { name: "Ergonomiczne Krzesło", purchaseCost: 300, runningCostMin: 5, runningCostMax: 15, moraleBoost: 0.5, bonusType: 'comfort', bonusValue: 0.01 }, // Np. lekko zmniejsza spadek morale
+    'good_computer': { name: "Dobry Komputer", purchaseCost: 1500, runningCostMin: 15, runningCostMax: 40, moraleBoost: 1.0, bonusType: 'performance', bonusValue: 0.03 }, // Np. lekko zwiększa wydajność
+    'coffee_machine': { name: "Ekspres do Kawy", purchaseCost: 800, runningCostMin: 20, runningCostMax: 50, moraleBoost: 1.5, bonusType: 'morale_regen', bonusValue: 0.02 } // Np. lekko zwiększa regenerację morale
+};
+
 function foundPlayerCompany() {
-    if (playerCompany === null) {
+    if (playerCompany === null && getSkillLevel('work') >= 4) { // Sprawdźmy poziom umiejętności
         playerCompany = {
-            name: "Twoja Firma",
+            name: "Twoja Firma", // Można pozwolić graczowi zmienić
             value: 0,
-            employees: 0,
+            employees: [], // ---> ZMIANA: Teraz to tablica obiektów <---
+            equipment: [], // ---> NOWOŚĆ: Tablica obiektów sprzętu <---
             cashInvested: 0,
-            baseIncome: 100, // Dochód bazowy
-            incomeInterval: 90000, // 90 sekund
-            lastIncomeTime: Date.now()
+            baseIncomePerEmployee: 100, // Zmieniono nazwę dla jasności
+            incomeInterval: 90000,
+            lastIncomeTime: Date.now(),
+            hrLevel: 0 // ---> NOWOŚĆ: Poziom HR <---
         };
         logEvent('🏢 Gratulacje! Założyłeś Własną Firmę!', 'review');
+        // Od razu zatrudnijmy pierwszego pracownika (placeholder)
+        // hireEmployee('initial'); // Wywołamy to po zdefiniowaniu funkcji
     }
+}
+
+// Nowa funkcja do kupowania sprzętu
+/**
+ * Gracz kupuje nowy sprzęt dla firmy.
+ * @param {string} equipmentId - Klucz sprzętu z EQUIPMENT_TYPES.
+ * @param {number} quantity - Liczba sztuk do kupienia.
+ */
+function buyEquipment(equipmentId, quantity = 1) {
+    if (!playerCompany || quantity <= 0) return;
+    const equipmentData = EQUIPMENT_TYPES[equipmentId];
+    if (!equipmentData) {
+        alert("Nieznany typ sprzętu!");
+        return;
+    }
+
+    // Sprawdzenie limitu: nie więcej sprzętu niż pracowników
+    const totalEquipment = playerCompany.equipment.reduce((sum, eq) => sum + eq.quantity, 0);
+    if (totalEquipment + quantity > playerCompany.employees.length) {
+        alert("Nie możesz mieć więcej sprzętu niż pracowników!");
+        return;
+    }
+
+    const totalCost = equipmentData.purchaseCost * quantity;
+    if (playerCash < totalCost) {
+        alert(`Nie masz wystarczająco gotówki! Potrzebujesz ${totalCost.toFixed(2)} PLN.`);
+        return;
+    }
+
+    playerCash -= totalCost;
+
+    // Dodaj sprzęt do firmy
+    const existingEquipment = playerCompany.equipment.find(eq => eq.id === equipmentId);
+    if (existingEquipment) {
+        existingEquipment.quantity += quantity;
+    } else {
+        playerCompany.equipment.push({
+            id: equipmentId,
+            name: equipmentData.name,
+            quantity: quantity,
+            runningCostMin: equipmentData.runningCostMin,
+            runningCostMax: equipmentData.runningCostMax,
+            bonusType: equipmentData.bonusType,
+            bonusValue: equipmentData.bonusValue,
+            moraleBoost: equipmentData.moraleBoost
+        });
+    }
+
+    logEvent(`🛒 Zakupiono ${quantity} szt. sprzętu "${equipmentData.name}" dla firmy za ${totalCost.toFixed(2)} PLN.`);
+    displayCash();
+    // Odśwież UI firmy, jeśli otwarte
+    if (document.getElementById('work-modal')?.style.display === 'block') {
+        openWorkModal();
+    }
+}
+
+function generateEmployeeName() {
+    const isFemale = Math.random() < 0.5;
+    const firstName = isFemale ? getRandomElement(femaleFirstNames) : getRandomElement(maleFirstNames);
+    const lastNameInitial = getRandomElement(ceoLastNames).charAt(0) + ".";
+    return `${firstName} ${lastNameInitial}`;
+}
+
+/** Funkcja do zatrudniania (na razie uproszczona, bez wyboru kontraktu) */
+function hireEmployee(source = 'manual') { // source może być 'initial' lub 'manual'
+    if (!playerCompany) return;
+
+    // Na razie prosty koszt zatrudnienia (później zastąpiony pierwszym wynagrodzeniem)
+    const hiringCost = source === 'initial' ? 0 : 500; // Pierwszy pracownik darmowy
+
+    if (source !== 'initial' && playerCash < hiringCost) {
+        alert(`Nie stać Cię na zatrudnienie nowego pracownika (koszt: ${hiringCost} PLN).`);
+        return;
+    }
+    if (source !== 'initial') playerCash -= hiringCost;
+
+    const newEmployee = {
+        id: Date.now() + Math.random(), // Proste unikalne ID
+        name: generateEmployeeName(),
+        performance: getRandomInRange(0.75, 1.25), // Wydajność 75% - 125% normy
+        salary: EMPLOYEE_BASE_SALARY * (0.8 + Math.random() * 0.4), // Pensja +/- 20% od bazy
+        morale: getRandomIntInRange(60, 80), // Startowe morale
+        status: 'working', // 'working', 'vacation', 'sick'
+        contractType: Math.random() < 0.7 ? 'permanent' : 'mandate', // Domyślnie 70% na stałe
+        vacationEnds: 0 // Kiedy kończy się urlop
+    };
+
+    playerCompany.employees.push(newEmployee);
+    logEvent(`👨‍💼 Zatrudniono nowego pracownika: ${newEmployee.name} (Wydajność: ${Math.round(newEmployee.performance*100)}%).`);
+    if (source !== 'initial') displayCash();
+
+    // Odśwież UI firmy
+    if (document.getElementById('work-modal')?.style.display === 'block') {
+        openWorkModal();
+    }
+}
+
+/** Funkcja do zwalniania pracownika */
+function fireEmployee(employeeId, quit = false) { // quit=true oznacza, że sam odchodzi
+    if (!playerCompany) return;
+    const index = playerCompany.employees.findIndex(emp => emp.id === employeeId);
+    if (index === -1) return;
+
+    const firedEmployee = playerCompany.employees.splice(index, 1)[0];
+
+    if (quit) {
+        logEvent(`🚶 Pracownik ${firedEmployee.name} odszedł z firmy z powodu niskiego morale.`);
+        showToast(`${firedEmployee.name} odchodzi z firmy!`, 'warning');
+        // Brak dodatkowych kar za odejście
+    } else {
+        logEvent(`🔥 Zwolniono pracownika: ${firedEmployee.name}. Pozostali pracownicy są zaniepokojeni.`);
+        // Kara do morale dla pozostałych
+        applyMoralePenalty(playerCompany.employees, 5); // Np. -5 morale
+        // Można dodać koszt odprawy
+        const severancePay = firedEmployee.salary * 2; // Np. 2 tygodnie pensji
+        if (playerCash >= severancePay) {
+            playerCash -= severancePay;
+            logEvent(`💸 Wypłacono ${severancePay.toFixed(2)} PLN odprawy dla ${firedEmployee.name}.`);
+        } else {
+            logEvent(`🚨 Brak środków na pełną odprawę dla ${firedEmployee.name}! Morale spada jeszcze bardziej!`);
+            applyMoralePenalty(playerCompany.employees, 5); // Dodatkowa kara
+        }
+        displayCash();
+    }
+
+
+    // Odśwież UI firmy
+    if (document.getElementById('work-modal')?.style.display === 'block') {
+        openWorkModal();
+    }
+}
+
+
+/** Aktualizuje morale wszystkich pracowników w firmie */
+function updateAllEmployeeMorale() {
+    if (!playerCompany || playerCompany.employees.length === 0) return;
+
+    const employeeCount = playerCompany.employees.length;
+    const totalEquipment = playerCompany.equipment.reduce((sum, eq) => sum + eq.quantity, 0);
+    // Stosunek sprzętu do pracowników (idealnie 1 sprzęt na 5 pracowników = 0.2)
+    const equipmentRatio = employeeCount > 0 ? totalEquipment / employeeCount : 0;
+    const idealRatio = 0.2;
+    // Bonus/Kara za sprzęt: od -10 (brak sprzętu) do +10 (dużo sprzętu)
+    const equipmentMoraleEffect = (equipmentRatio - idealRatio) * 50;
+
+    // Bonus za sprzęt specjalny (np. ekspres do kawy)
+    let specialEquipmentBonus = 0;
+    playerCompany.equipment.forEach(eq => {
+         if (eq.bonusType === 'morale_regen' || eq.bonusType === 'comfort') {
+             specialEquipmentBonus += eq.moraleBoost * eq.quantity;
+         }
+    });
+    // Rozłóż bonus równo na pracowników (ale nie więcej niż +5 na głowę)
+    specialEquipmentBonus = Math.min(5, specialEquipmentBonus / employeeCount);
+
+
+    playerCompany.employees.forEach(employee => {
+        let moraleChange = 0;
+
+        // Wpływ sprzętu ogólnego
+        moraleChange += equipmentMoraleEffect / 10; // Rozłożony na 10 "tygodni"
+
+        // Wpływ sprzętu specjalnego
+        moraleChange += specialEquipmentBonus / 10;
+
+        // Lekki spadek morale z czasem (zmęczenie)
+        moraleChange -= 0.5;
+
+        // Losowy czynnik
+        moraleChange += getRandomInRange(-0.5, 0.5);
+
+        // Zastosuj zmianę morale
+        employee.morale += moraleChange;
+        employee.morale = Math.max(0, Math.min(100, employee.morale)); // Ogranicz 0-100
+
+        // Szansa na urlop (jeśli morale < 30) lub chorobowe (jeśli < 15)
+        if (employee.status === 'working' && employee.morale < 30 && Math.random() < 0.02) {
+             employee.status = 'vacation';
+             const vacationDuration = getRandomIntInRange(1, 2) * BASE_DELAYS.weekly / currentSpeedMultiplier; // 1-2 tyg urlopu
+             employee.vacationEnds = Date.now() + vacationDuration;
+             logEvent(`🏖️ Pracownik ${employee.name} bierze urlop z powodu niskiego morale.`);
+        } else if (employee.status === 'working' && employee.morale < 15 && Math.random() < 0.03) {
+             employee.status = 'sick';
+             const sickDuration = getRandomIntInRange(1, 3) * BASE_DELAYS.weekly / currentSpeedMultiplier; // 1-3 tyg L4
+             employee.vacationEnds = Date.now() + sickDuration; // Używamy tego samego pola
+             logEvent(`ố Pracownik ${employee.name} idzie na zwolnienie lekarskie.`);
+        }
+
+        // Sprawdzenie końca urlopu/chorobowego
+        if (employee.status !== 'working' && Date.now() > employee.vacationEnds) {
+             logEvent(`✅ Pracownik ${employee.name} wraca do pracy.`);
+             employee.status = 'working';
+             employee.vacationEnds = 0;
+        }
+
+        // Ryzyko odejścia (jeśli morale bardzo niskie)
+        if (employee.status === 'working' && employee.morale < 10 && Math.random() < 0.05) {
+            fireEmployee(employee.id, true); // true oznacza, że sam odchodzi
+            // Pętla forEach może mieć problem, jeśli usuniemy element - lepiej użyć pętli for od końca
+        }
+    });
+}
+
+/** Pomocnicza funkcja do aplikowania kary do morale */
+function applyMoralePenalty(employees, penaltyAmount) {
+     employees.forEach(emp => {
+         emp.morale = Math.max(0, emp.morale - penaltyAmount);
+     });
 }
 
 function hireEmployee() {
@@ -3332,34 +3551,58 @@ function updateCompanyStatus() {
     if (getSkillLevel('work') < 4 || playerCompany === null) return;
 
     const now = Date.now();
-    const totalIncome = playerCompany.baseIncome + (playerCompany.employees * 100);
 
+    // ---> ZMODYFIKOWANE OBLICZANIE DOCHODU <---
+    let currentTotalIncome = 0;
     if (now - playerCompany.lastIncomeTime >= playerCompany.incomeInterval) {
-        let incomeBeforeTax = totalIncome;
-        let taxToPay = 0;
+        let incomeBeforeTax = 0;
+        let workingEmployeesCount = 0; // Licznik faktycznie pracujących
 
-        // ---> NOWOŚĆ: Obliczanie podatku dochodowego <---
+        playerCompany.employees.forEach(employee => {
+            // Dochód generują tylko pracownicy ze statusem 'working'
+            if (employee.status === 'working') {
+                workingEmployeesCount++;
+                // Wydajność zależy od bazowej wydajności i morale
+                const effectivePerformance = employee.performance * (0.8 + employee.morale / 250); // 80%-120%
+                // Bonus za sprzęt performance
+                let equipmentPerformanceBonus = 1.0;
+                playerCompany.equipment.forEach(eq => {
+                     if (eq.bonusType === 'performance') {
+                         equipmentPerformanceBonus += eq.bonusValue * eq.quantity / workingEmployeesCount; // Rozłożony bonus
+                     }
+                });
+                incomeBeforeTax += playerCompany.baseIncomePerEmployee * effectivePerformance * equipmentPerformanceBonus;
+            }
+        });
+
+        let taxToPay = 0;
+        // Obliczanie podatku (bez zmian)
         const sanEscobarLvl = getSkillLevel('sanEscobar');
-        if (sanEscobarLvl < 2 || sanEscobarLvl >= 4) { // Płacimy podatek, jeśli NIE mamy Lvl 2/3 (Firma w Raju) LUB mamy Lvl 4 (całkowite zwolnienie)
-             let taxRate = TAX_RATES.companyIncome[0].rate; // Domyślnie niższy próg
-             if (incomeBeforeTax > TAX_RATES.companyIncome[1].threshold) {
-                 taxRate = TAX_RATES.companyIncome[1].rate; // Wyższy próg
+         if (sanEscobarLvl < 2 || sanEscobarLvl >= 4) {
+             let taxRateKey = 'companyIncomeLow';
+             if (incomeBeforeTax > TAX_RATES.companyIncomeThreshold) {
+                 taxRateKey = 'companyIncomeHigh';
              }
-             // Lvl 4 całkowicie znosi podatek
+             const taxRate = TAX_RATES[taxRateKey]?.current || 0; // Użyj ?.current
              taxToPay = sanEscobarLvl >= 4 ? 0 : incomeBeforeTax * taxRate;
              governmentTreasury += taxToPay;
         }
-        // ---> KONIEC NOWOŚCI <---
 
         const incomeAfterTax = incomeBeforeTax - taxToPay;
+        currentTotalIncome = incomeAfterTax; // Zapisz dla logiki wartości firmy
         playerCash += incomeAfterTax;
         playerCompany.lastIncomeTime = now;
-        logEvent(`🏢 Twoja firma wygenerowała ${incomeAfterTax.toFixed(2)} PLN dochodu netto (podatek: ${taxToPay.toFixed(2)} PLN).`, 'review');
+        logEvent(`🏢 Twoja firma wygenerowała ${incomeAfterTax.toFixed(2)} PLN dochodu netto (pracowało ${workingEmployeesCount}/${playerCompany.employees.length}, podatek: ${taxToPay.toFixed(2)} PLN).`, 'review');
         displayCash();
     }
+    // ---> KONIEC MODYFIKACJI DOCHODU <---
 
-    // Obliczanie wartości firmy (bez zmian)
-    playerCompany.value = playerCompany.cashInvested + (playerCompany.employees * 7500);
+    // ---> ZMODYFIKOWANE OBLICZANIE WARTOŚCI FIRMY <---
+    // Wartość = inwestycje + (średni roczny dochód * 2) + (liczba pracowników * 1000)
+    // Uproszczenie: Wartość = inwestycje + (ostatni dochód * 4 * 2) + (pracownicy * 1000)
+    const estimatedAnnualIncome = currentTotalIncome > 0 ? currentTotalIncome * ( (BASE_DELAYS.quarterly*4) / playerCompany.incomeInterval ) : 0; // Szacowany dochód roczny
+    playerCompany.value = playerCompany.cashInvested + (estimatedAnnualIncome * 1.5) + (playerCompany.employees.length * 1000);
+    // ---> KONIEC MODYFIKACJI WARTOŚCI <---
 }
 function calculateInitialHoldingPrices() {
     const holdingCompanies = stocks.filter(s => s.assetType === 'Holding');

@@ -298,6 +298,50 @@ gameTimers.weekly = setInterval(() => {
         }
     });
 
+
+    if (playerCompany && playerCompany.employees.length > 0) {
+        let totalEmployeeSalary = 0;
+        let totalEquipmentRunningCost = 0;
+
+        // Koszty pracowników
+        playerCompany.employees.forEach(employee => {
+            // Użyj pensji pracownika, jeśli istnieje, inaczej bazowej
+            totalEmployeeSalary += employee.salary || EMPLOYEE_BASE_SALARY;
+        });
+
+        // Modyfikator HR (jeśli HR istnieje i ma poziom > 0)
+        if (playerCompany.hrLevel > 0) {
+            const salaryReduction = 1 - (playerCompany.hrLevel * 0.05);
+            totalEmployeeSalary *= salaryReduction;
+        }
+
+        // Koszty sprzętu
+        playerCompany.equipment.forEach(eq => {
+            totalEquipmentRunningCost += eq.quantity * getRandomInRange(eq.runningCostMin, eq.runningCostMax);
+        });
+
+        const totalCompanyCosts = totalEmployeeSalary + totalEquipmentRunningCost;
+
+        if (playerCash >= totalCompanyCosts) {
+            playerCash -= totalCompanyCosts;
+            if (totalEmployeeSalary > 0) logEvent(`💸 Twoja firma wypłaciła ${totalEmployeeSalary.toFixed(2)} PLN pensji.`);
+            if (totalEquipmentRunningCost > 0) logEvent(`💡 Twoja firma zapłaciła ${totalEquipmentRunningCost.toFixed(2)} PLN za utrzymanie sprzętu.`);
+        } else {
+            // Brak środków - konsekwencje (np. obniżenie morale)
+            logEvent(`🚨 Brak wystarczających środków (${totalCompanyCosts.toFixed(2)} PLN) na pokrycie kosztów firmy! Morale pracowników spada!`, 'error');
+            // Zastosuj karę do morale (implementacja morale w kroku 4)
+             if (typeof applyMoralePenalty === 'function') {
+                 applyMoralePenalty(playerCompany.employees, 10); // Np. kara -10 morale
+             }
+            // Można dodać zaciąganie długu przez firmę lub inne kary
+        }
+        displayCash(); // Zaktualizuj gotówkę po odjęciu kosztów
+    }
+
+    if (playerCompany && typeof updateAllEmployeeMorale === 'function') {
+        updateAllEmployeeMorale();
+    }
+
     // Obsługa automatycznej spłaty kredytów komercyjnych gracza
     // ---> WAŻNE: Używamy pętli 'for' z iteracją wstecz, aby uniknąć problemów przy usuwaniu elementów (splice) <---
     for (let index = playerCommercialLoans.length - 1; index >= 0; index--) {
@@ -787,6 +831,10 @@ function initializeGame() {
         } else {
             console.error("BASE_DELAYS lub BASE_DELAYS.quarterly nie jest zdefiniowane!");
         }
+    }
+
+    if (playerCompany && typeof hireEmployee === 'function') {
+        hireEmployee('initial');
     }
 
     // Uruchomienie pętli gry

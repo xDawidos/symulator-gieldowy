@@ -163,26 +163,59 @@ const BLOCK_HEIGHT = 20;
 const INITIAL_SPEED = 2;
 
 function startMoneyStackerGame() {
+    // Inicjalizacja zmiennych stanu gry
     isStackerGameOver = false;
     stackerScore = 0;
-    blockHeight = 0;
+    blockHeight = 0; // Wieża zaczyna się od poziomu 0
     gameSpeed = INITIAL_SPEED;
-    stack = [];
+    stack = []; // Tablica przechowująca dane statycznych klocków w wieży
 
+    // Pobranie elementów interfejsu
     const modal = document.getElementById('money-stacker-modal');
     stackerGameArea = document.getElementById('stacker-game-area');
-    stackerGameArea.innerHTML = ''; // Wyczyść planszę
-    modal.style.display = 'block';
+
+    // Sprawdzenie, czy elementy UI istnieją
+    if (!modal || !stackerGameArea) {
+        console.error("Nie znaleziono elementów UI dla minigry Money Stacker!");
+        return;
+    }
+
+    stackerGameArea.innerHTML = ''; // Wyczyść planszę przed rozpoczęciem
+
+    // Ustawienie początkowych wartości w UI
+    const scoreElement = document.getElementById('stacker-score');
+    const heightElement = document.getElementById('stacker-height');
+    if (scoreElement) scoreElement.textContent = '0';
+    if (heightElement) heightElement.textContent = '0';
+
+    modal.style.display = 'block'; // Pokaż okno gry
 
     // Stwórz podstawę wieży
-    const baseBlock = { x: (stackerGameArea.offsetWidth / 2) - (INITIAL_BLOCK_WIDTH / 2), width: INITIAL_BLOCK_WIDTH };
+    // Upewnij się, że obszar gry ma już wymiary
+    const gameAreaWidth = stackerGameArea.offsetWidth;
+    if (gameAreaWidth <= 0) {
+        console.error("Obszar gry Money Stacker ma zerową szerokość!");
+         // Można spróbować opóźnić start lub ustawić domyślną szerokość
+        // Na razie zakończymy, aby uniknąć błędów
+        modal.style.display = 'none';
+        return;
+    }
+    const baseBlock = { x: (gameAreaWidth / 2) - (INITIAL_BLOCK_WIDTH / 2), width: INITIAL_BLOCK_WIDTH };
     stack.push(baseBlock);
-    renderBlock(baseBlock, 0);
+    renderBlock(baseBlock, 0); // Renderuj podstawę na wysokości 0
 
-    // Stwórz pierwszy ruchomy klocek
+    // Stwórz pierwszy ruchomy klocek (jego renderowanie odbędzie się w spawnNewBlock/renderMovingBlock)
     spawnNewBlock(INITIAL_BLOCK_WIDTH);
-    
+
+    // Dodaj nasłuchiwanie na naciśnięcie spacji
+    document.removeEventListener('keydown', handleStackerKeyPress); // Usuń stary listener na wszelki wypadek
     document.addEventListener('keydown', handleStackerKeyPress);
+
+    // Anuluj poprzednią pętlę animacji, jeśli istniała
+    if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+    }
+    // Rozpocznij pętlę gry
     animationFrameId = requestAnimationFrame(stackerGameLoop);
 }
 
@@ -201,55 +234,64 @@ function handleStackerKeyPress(event) {
 
 function placeBlock() {
     if (!currentBlock) return;
-    currentBlock.direction = 0; // Zatrzymaj ruch boczny
+    currentBlock.direction = 0; // Zatrzymaj ruch
 
-    // --- NOWY FRAGMENT ---
-    // Znajdź i usuń stary, poruszający się element DOM, ponieważ zaraz go zastąpimy statycznym.
     const oldMovingBlock = stackerGameArea.querySelector('.moving');
     if (oldMovingBlock) {
-        oldMovingBlock.remove();
+        oldMovingBlock.remove(); // Usuń stary ruchomy element
     }
-    // --- KONIEC NOWEGO FRAGMENTU ---
 
     const topBlock = stack[stack.length - 1];
-    
     const overlapStart = Math.max(currentBlock.x, topBlock.x);
     const overlapEnd = Math.min(currentBlock.x + currentBlock.width, topBlock.x + topBlock.width);
     const overlapWidth = overlapEnd - overlapStart;
 
     if (overlapWidth <= 0) {
-        // P pudło! Koniec gry
-        currentBlock.y = (blockHeight + 1) * BLOCK_HEIGHT;
-        renderBlock(currentBlock, blockHeight + 1); // Narysuj spadający klocek
+        // Renderuj spadający klocek na właściwej wysokości
+        renderBlock(currentBlock, blockHeight + 1);
         endMoneyStackerGame();
         return;
     }
 
-    // Część klocka została "odcięta"
     const newPlacedBlock = { x: overlapStart, width: overlapWidth };
     stack.push(newPlacedBlock);
-    renderBlock(newPlacedBlock, blockHeight + 1); // Narysuj nowy, statyczny klocek na wieży
+    renderBlock(newPlacedBlock, blockHeight + 1); // Renderuj nowy statyczny klocek
 
-    // Aktualizuj wynik i wysokość
     blockHeight++;
-    if (blockHeight > 1) stackerScore += 50;
-    if (blockHeight > 1 && blockHeight % 5 === 0) stackerScore += 250;
-    
-    document.getElementById('stacker-score').textContent = stackerScore.toFixed(2);
-    document.getElementById('stacker-height').textContent = blockHeight;
+    // ... (reszta logiki punktów i aktualizacji UI) ...
+     if (blockHeight > 1) stackerScore += 50;
+     if (blockHeight > 1 && blockHeight % 5 === 0) stackerScore += 250;
+     document.getElementById('stacker-score').textContent = stackerScore.toFixed(0); // Zmień na 0 miejsc po przecinku
+     document.getElementById('stacker-height').textContent = blockHeight;
 
-    // Zwiększ prędkość i stwórz nowy klocek
     gameSpeed *= 1.05;
-    spawnNewBlock(overlapWidth);
+    if(stackerGameArea) { // Sprawdź czy gameArea istnieje
+      spawnNewBlock(overlapWidth); // Spawnuj nowy klocek
+    } else {
+        console.error("stackerGameArea not found in placeBlock!");
+        endMoneyStackerGame(); // Zakończ grę, jeśli coś poszło nie tak
+    }
 }
 
 function spawnNewBlock(width) {
     currentBlock = {
         x: 0,
-        y: (blockHeight + 1) * BLOCK_HEIGHT,
+        
         width: width,
         direction: 1 // 1 = w prawo, -1 = w lewo
     };
+    renderMovingBlock();
+}
+
+function renderMovingBlock() {
+     let movingBlock = stackerGameArea.querySelector('.moving');
+    if (!movingBlock) {
+        movingBlock = renderBlock(currentBlock, blockHeight + 1); // Renderuj na wysokości +1
+        movingBlock.classList.add('moving');
+    }
+    movingBlock.style.left = `${currentBlock.x}px`;
+    movingBlock.style.width = `${currentBlock.width}px`; // Upewnij się, że szerokość jest aktualna
+    movingBlock.style.bottom = `${(blockHeight + 1) * BLOCK_HEIGHT}px`; // Upewnij się, że wysokość jest aktualna
 }
 
 function renderBlock(blockData, height) {
@@ -258,50 +300,51 @@ function renderBlock(blockData, height) {
     blockElement.style.left = `${blockData.x}px`;
     blockElement.style.bottom = `${height * BLOCK_HEIGHT}px`;
     blockElement.style.width = `${blockData.width}px`;
+    blockElement.style.height = `${BLOCK_HEIGHT}px`; // Upewnij się, że wysokość jest stała
     stackerGameArea.appendChild(blockElement);
     return blockElement;
 }
 
 function stackerGameLoop() {
-    if (isStackerGameOver) return;
+    if (isStackerGameOver || !currentBlock) return; // Dodano sprawdzenie currentBlock
 
-    // Przesuń bieżący klocek
     currentBlock.x += gameSpeed * currentBlock.direction;
 
-    // Odbij od ścian
     if (currentBlock.x + currentBlock.width > stackerGameArea.offsetWidth || currentBlock.x < 0) {
         currentBlock.direction *= -1;
+        // Korekta pozycji, jeśli wyszedł poza ekran
+        currentBlock.x = Math.max(0, Math.min(currentBlock.x, stackerGameArea.offsetWidth - currentBlock.width));
     }
 
-    // Renderuj na nowo tylko ruchomy klocek
-    let movingBlock = stackerGameArea.querySelector('.moving');
-    if (!movingBlock) {
-        movingBlock = renderBlock(currentBlock, blockHeight + 1);
-        movingBlock.classList.add('moving');
-    }
-    movingBlock.style.left = `${currentBlock.x}px`;
-    
+    renderMovingBlock(); // Użyj nowej funkcji
+
     animationFrameId = requestAnimationFrame(stackerGameLoop);
 }
 
 function endMoneyStackerGame() {
     isStackerGameOver = true;
-    const finalReward = stackerScore;
-    
+    cancelAnimationFrame(animationFrameId); // Zatrzymaj pętlę animacji
+    document.removeEventListener('keydown', handleStackerKeyPress); // Usuń listener
+
+    const finalReward = Math.floor(stackerScore); // Zaokrąglij w dół
+
     if (finalReward > 0) {
         playerCash += finalReward;
-        showToast(`Koniec gry! Zdobyłeś ${finalReward.toFixed(2)} PLN!`, 'success', 5000);
-        logEvent(`💰 W minigrze "Wieża z Pieniędzy" zdobyto ${finalReward.toFixed(2)} PLN.`, 'review');
+        showToast(`Koniec gry! Zdobyłeś ${finalReward} PLN!`, 'success', 5000);
+        logEvent(`💰 W minigrze "Wieża z Pieniędzy" zdobyto ${finalReward} PLN.`, 'review');
         displayCash();
     } else {
         showToast(`Koniec gry! Spróbuj jeszcze raz.`, 'default', 4000);
     }
 
-    // --- DODANA LOGIKA ---
-    // Poczekaj 2 sekundy i automatycznie zamknij okno gry
     setTimeout(() => {
-        stopMoneyStackerGame();
-    }, 1500);
+         const modal = document.getElementById('money-stacker-modal');
+         if(modal) modal.style.display = 'none'; // Ukryj modal po czasie
+         // Reset zmiennych na wszelki wypadek
+         stackerGameArea = null;
+         currentBlock = null;
+         stack = [];
+    }, 2000); // Zwiększony czas oczekiwania
 }
 
 
