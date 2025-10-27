@@ -633,7 +633,52 @@ function initializeGame() {
         }
     });
     console.log(`[initializeGame] Zakończono dodawanie banków. ${banksAddedToStocks} banków jest teraz w 'stocks'. Całkowita liczba banków w 'stocks': ${stocks.filter(s=>s.isBankStock).length}`);
+    console.log("[initializeGame] Inicjalizacja startowych depozytów AI...");
+    aiCompetitors.forEach(ai => {
+        if (ai.initialDeposit && ai.initialDeposit > 0) {
+            // Znajdź odpowiedni, aktywny bank dla depozytu (np. uniwersalny lub internetowy)
+            const eligibleBanks = commercialBanks.filter(b =>
+                b.isActive &&
+                (b.type === BANK_TYPES.UNIVERSAL || b.type === BANK_TYPES.INTERNET || b.type === BANK_TYPES.COOPERATIVE) // Banki detaliczne
+            );
+            if (eligibleBanks.length > 0) {
+                const chosenBank = getRandomElement(eligibleBanks);
+                const depositAmount = ai.initialDeposit;
 
+                // Sprawdź, czy bank ma tyle kapitału (na wszelki wypadek)
+                // W tym przypadku AI wpłaca, więc bankowi przybywa, ale zachowajmy spójność
+                if (ai.cash >= depositAmount) { // AI musi mieć środki na depozyt
+                    ai.cash -= depositAmount; // Odejmij z gotówki AI
+                    chosenBank.cash += depositAmount; // Dodaj do gotówki banku
+
+                    // Zapisz depozyt w portfelu banku
+                    if (!chosenBank.depositPortfolio[ai.id]) chosenBank.depositPortfolio[ai.id] = [];
+                    chosenBank.depositPortfolio[ai.id].push({
+                        id: `dep_init_${ai.id}_${Date.now()}`,
+                        amount: depositAmount,
+                        interestRate: chosenBank.interestRateDeposit // Użyj aktualnej stopy banku
+                    });
+
+                    // Opcjonalnie: Zapisz depozyt u AI (jeśli dodano pole ai.deposits)
+                     if (ai.deposits) {
+                         ai.deposits.push({
+                            id: `dep_init_${ai.id}_${Date.now()}`,
+                            bankId: chosenBank.id,
+                            bankName: chosenBank.name,
+                            amount: depositAmount,
+                            interestRate: chosenBank.interestRateDeposit,
+                            startDate: Date.now()
+                         });
+                     }
+                    console.log(`- Bankier ${ai.name} umieścił startowy depozyt ${depositAmount} PLN w ${chosenBank.name}.`);
+                } else {
+                    console.warn(`! Bankier ${ai.name} nie miał wystarczająco gotówki (${ai.cash}) na startowy depozyt (${depositAmount}).`);
+                }
+            } else {
+                console.warn(`! Nie znaleziono odpowiedniego banku dla startowego depozytu AI ${ai.name}.`);
+            }
+        }
+    });
 
     // Przypisywanie kont bankowych spółkom
     console.log("[START GRY] Przypisywanie kont bankowych spółkom..."); // Log informacyjny
