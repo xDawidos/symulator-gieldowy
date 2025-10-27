@@ -445,6 +445,16 @@ const centralBankGovernorTraits = {
     partyjniak: { name: "Człowiek Partii", rarity: "rare", color: "#8B4513", description: "Jego decyzje są często podyktowane bieżącą polityką, co prowadzi do nieprzewidywalnych ruchów." }
 };
 
+const CORPORATE_PHASES = {
+    GROWTH: 'Wzrost',
+    STABILITY: 'Stabilność',
+    DECLINE: 'Spadek',
+    REORGANIZATION: 'Reorganizacja',
+    GOLDEN_YEAR: 'Złoty Rok ✨', // Faza unikalna
+    SHADOW_DESCENT: 'Zejście w Cień 👻', // Faza unikalna
+    INNOVATION_PUSH: 'Impuls Innowacji 💡' // Faza unikalna
+};
+
 
 // --- Dane ---
 const exchanges = {
@@ -493,12 +503,7 @@ let marketIndexes = [
 const initialStocks = [
     // GIEŁDA ŚMIECIOWA (Poziom 0)
     {
-    name: 'EcoLube', price: 5.00, volatilityFactor: 2.1, symbol: 'ECL', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'EcoLube', price: 5.00, volatilityFactor: 2.1, symbol: 'ECL', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
  lineHistory: [], playerTransactions: [], sector: ['Chemia'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -506,12 +511,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Elektrownia SA', price: 15.00, volatilityFactor: 0.5, symbol: 'ELE', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Elektrownia SA', price: 15.00, volatilityFactor: 0.5, symbol: 'ELE', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Energia'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -519,12 +519,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Konfiturex', price: 2.00, volatilityFactor: 4.5, symbol: 'KFX', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Konfiturex', price: 2.00, volatilityFactor: 4.5, symbol: 'KFX', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Żywność'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -532,12 +527,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Wieczne Ziemniaki Sp. z o.o.', price: 1.50, volatilityFactor: 3.5, symbol: 'WZM', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Wieczne Ziemniaki Sp. z o.o.', price: 1.50, volatilityFactor: 3.5, symbol: 'WZM', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Żywność'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -545,12 +535,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Wąs Janusza S.A.', price: 0.80, volatilityFactor: 4.0, symbol: 'WJS', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Wąs Janusza S.A.', price: 0.80, volatilityFactor: 4.0, symbol: 'WJS', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Dobra konsumpcyjne'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -558,12 +543,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Pikselowe Marzenia', price: 7.50, volatilityFactor: 3.8, symbol: 'PIX', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Pikselowe Marzenia', price: 7.50, volatilityFactor: 3.8, symbol: 'PIX', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Technologia'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -571,12 +551,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Błyskawiczna Proteza', price: 12.00, volatilityFactor: 3.2, symbol: 'BLP', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Błyskawiczna Proteza', price: 12.00, volatilityFactor: 3.2, symbol: 'BLP', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Medycyna'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -584,12 +559,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Super Makarony', price: 18.00, volatilityFactor: 0.6, symbol: 'SUM', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Super Makarony', price: 18.00, volatilityFactor: 0.6, symbol: 'SUM', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Żywność'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -612,12 +582,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Kopalnie Węgla Mine', price: 35.00, volatilityFactor: 1.6, symbol: 'KWM', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Kopalnie Węgla Mine', price: 35.00, volatilityFactor: 1.6, symbol: 'KWM', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Przemysł'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -646,12 +611,7 @@ const initialStocks = [
         bankData: { id: 'bpn', type: BANK_TYPES.UNIVERSAL } // --> Dodane dane banku <--
     },
     {
-    name: 'KolenBreg', price: 19.00, volatilityFactor: 1.5, symbol: 'KOB', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'KolenBreg', price: 19.00, volatilityFactor: 1.5, symbol: 'KOB', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Żywność'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -659,12 +619,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Komfucja', price: 19.00, volatilityFactor: 2.2, symbol: 'KOM', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Komfucja', price: 19.00, volatilityFactor: 2.2, symbol: 'KOM', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Technologia'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -672,12 +627,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Gwarancja-SI', price: 20.00, volatilityFactor: 2.8, symbol: 'GAI', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Gwarancja-SI', price: 20.00, volatilityFactor: 2.8, symbol: 'GAI', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Technologia', 'Usługi'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -685,12 +635,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Knor-FIX', price: 24.00, volatilityFactor: 1.0, symbol: 'FIX', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Knor-FIX', price: 24.00, volatilityFactor: 1.0, symbol: 'FIX', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Żywność'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -698,12 +643,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Czysty Błysk', price: 30.00, volatilityFactor: 0.7, symbol: 'CZB', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Czysty Błysk', price: 30.00, volatilityFactor: 0.7, symbol: 'CZB', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Usługi'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -711,12 +651,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Gdańska Stocznia Krzeseł', price: 22.00, volatilityFactor: 1.1, symbol: 'GSK', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Gdańska Stocznia Krzeseł', price: 22.00, volatilityFactor: 1.1, symbol: 'GSK', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Przemysł'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -724,12 +659,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Drużyna Holding', price: 22.00, volatilityFactor: 1.1, symbol: 'DRH', exchange: 'BRONZE', totalShares: 8000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Drużyna Holding', price: 22.00, volatilityFactor: 1.1, symbol: 'DRH', exchange: 'BRONZE', totalShares: 8000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Usługi'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -737,12 +667,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Bałtyckie Rejsy', price: 45.00, volatilityFactor: 1.6, symbol: 'BAL', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Bałtyckie Rejsy', price: 45.00, volatilityFactor: 1.6, symbol: 'BAL', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Turystyka'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -750,12 +675,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Boazeria Organiczna', price: 48.00, volatilityFactor: 1.2, symbol: 'BOO', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Boazeria Organiczna', price: 48.00, volatilityFactor: 1.2, symbol: 'BOO', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Przemysł'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -763,12 +683,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'DarAwansu', price: 47.00, volatilityFactor: 3.0, symbol: 'DAW', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'DarAwansu', price: 47.00, volatilityFactor: 3.0, symbol: 'DAW', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Usługi'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -776,12 +691,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Lek-Pol', price: 60.00, volatilityFactor: 1.1, symbol: 'LEK', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Lek-Pol', price: 60.00, volatilityFactor: 1.1, symbol: 'LEK', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Medycyna'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -789,12 +699,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'BurgerLand', price: 58.00, volatilityFactor: 1.4, symbol: 'BUL', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'BurgerLand', price: 58.00, volatilityFactor: 1.4, symbol: 'BUL', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Żywność'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -802,12 +707,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Beretxol', price: 68.00, volatilityFactor: 1.1, symbol: 'BER', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Beretxol', price: 68.00, volatilityFactor: 1.1, symbol: 'BER', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Przemysł'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -817,12 +717,7 @@ const initialStocks = [
 
     // GIEŁDA SREBRNA (Poziom 2) - Limit: 50,000
     {
-        name: 'Bank Żywności', price: 76.00, volatilityFactor: 1.8, symbol: 'BAZ', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Bank Żywności', price: 76.00, volatilityFactor: 1.8, symbol: 'BAZ', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Bankowość', 'Żywność'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -830,12 +725,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Firma Tłusta Pucha', price: 80.00, volatilityFactor: 1.6, symbol: 'FTP', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Firma Tłusta Pucha', price: 80.00, volatilityFactor: 1.6, symbol: 'FTP', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Żywność', 'Przemysł'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -843,12 +733,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Luksusowe Spinacze', price: 88.00, volatilityFactor: 0.8, symbol: 'LUS', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Luksusowe Spinacze', price: 88.00, volatilityFactor: 0.8, symbol: 'LUS', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Dobra konsumpcyjne'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -856,12 +741,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Krajoznawsto Obce', price: 78.00, volatilityFactor: 2.5, symbol: 'KRO', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Krajoznawsto Obce', price: 78.00, volatilityFactor: 2.5, symbol: 'KRO', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Turystyka'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -869,12 +749,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Plandex', price: 99.00, volatilityFactor: 1.3, symbol: 'PLX', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Plandex', price: 99.00, volatilityFactor: 1.3, symbol: 'PLX', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Turystyka'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -891,12 +766,7 @@ const initialStocks = [
         candlestickHistory: [], lineHistory: [], currentCandle: null, dividendPolicy: 'Growth'
     },
     {
-        name: 'Linapol', price: 114.00, volatilityFactor: 0.9, symbol: 'LIN', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Linapol', price: 114.00, volatilityFactor: 0.9, symbol: 'LIN', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Nieruchomości'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -904,12 +774,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Betonex', price: 120.00, volatilityFactor: 1.0, symbol: 'BTX', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Betonex', price: 120.00, volatilityFactor: 1.0, symbol: 'BTX', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Przemysł', 'Nieruchomości'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -917,12 +782,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'VitaGen', price: 180.00, volatilityFactor: 2.2, symbol: 'VTG', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'VitaGen', price: 180.00, volatilityFactor: 2.2, symbol: 'VTG', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Medycyna', 'Technologia'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -930,12 +790,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Cyber-Ochrona', price: 210.00, volatilityFactor: 1.9, symbol: 'CRO', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Cyber-Ochrona', price: 210.00, volatilityFactor: 1.9, symbol: 'CRO', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Usługi', 'Technologia'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -943,12 +798,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Annesco', price: 298.00, volatilityFactor: 1.2, symbol: 'ANN', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Annesco', price: 298.00, volatilityFactor: 1.2, symbol: 'ANN', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Przemysł'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -956,12 +806,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Meferox', price: 292.00, volatilityFactor: 1.7, symbol: 'MEF', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Meferox', price: 292.00, volatilityFactor: 1.7, symbol: 'MEF', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Energia', 'Chemia'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -999,12 +844,7 @@ const initialStocks = [
         bankData: { id: 'bhi', type: BANK_TYPES.INVESTMENT } // --> Dodane dane banku <--
     },
     {
-        name: 'Siarkobrzeg', price: 337.00, volatilityFactor: 1.4, symbol: 'SIK', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Siarkobrzeg', price: 337.00, volatilityFactor: 1.4, symbol: 'SIK', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Chemia'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -1012,12 +852,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'BlueBull', price: 150.00, volatilityFactor: 1.2, symbol: 'BLB', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'BlueBull', price: 150.00, volatilityFactor: 1.2, symbol: 'BLB', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Żywność'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -1025,12 +860,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Cyberfood Corp', price: 250.00, volatilityFactor: 1.8, symbol: 'CYF', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Cyberfood Corp', price: 250.00, volatilityFactor: 1.8, symbol: 'CYF', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Żywność', 'Technologia'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -1051,12 +881,7 @@ const initialStocks = [
 
     // GIEŁDA ZŁOTA (Poziom 3)
     {
-        name: 'WielkiWoltaż', price: 410.00, volatilityFactor: 0.9, symbol: 'WIW', exchange: 'GOLD', totalShares: 100000, maxShares: 100000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'WielkiWoltaż', price: 410.00, volatilityFactor: 0.9, symbol: 'WIW', exchange: 'GOLD', totalShares: 100000, maxShares: 100000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Energia'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -1064,12 +889,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Krawaciarze Inc.', price: 485.00, volatilityFactor: 0.7, symbol: 'KRA', exchange: 'GOLD', totalShares: 100000, maxShares: 100000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Krawaciarze Inc.', price: 485.00, volatilityFactor: 0.7, symbol: 'KRA', exchange: 'GOLD', totalShares: 100000, maxShares: 100000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Przemysł', 'Usługi'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -1077,12 +897,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Sanitas Szpitale', price: 550.00, volatilityFactor: 0.6, symbol: 'SAN', exchange: 'GOLD', totalShares: 100000, maxShares: 100000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Sanitas Szpitale', price: 550.00, volatilityFactor: 0.6, symbol: 'SAN', exchange: 'GOLD', totalShares: 100000, maxShares: 100000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Medycyna'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -1090,12 +905,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Stocznia Morska', price: 777.00, volatilityFactor: 1.3, symbol: 'STM', exchange: 'GOLD', totalShares: 100000, maxShares: 100000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Stocznia Morska', price: 777.00, volatilityFactor: 1.3, symbol: 'STM', exchange: 'GOLD', totalShares: 100000, maxShares: 100000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Przemysł'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -1120,12 +930,7 @@ const initialStocks = [
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) candlestickHistory: [], lineHistory: [], playerTransactions: [], priceAlerts: { buy: null, sell: null }
     },
     {
-        name: 'SuperKonsumpcja!', price: 950.00, volatilityFactor: 1.1, symbol: 'SKP', exchange: 'GOLD', totalShares: 100000, maxShares: 100000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'SuperKonsumpcja!', price: 950.00, volatilityFactor: 1.1, symbol: 'SKP', exchange: 'GOLD', totalShares: 100000, maxShares: 100000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Dobra konsumpcyjne'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -1156,12 +961,7 @@ const initialStocks = [
 
     // GIEŁDA PLATYNOWA (Poziom 4)
     {
-        name: 'Universal Projects', price: 1525.00, volatilityFactor: 1.5, symbol: 'UNP', exchange: 'PLATINUM', totalShares: 1000000, maxShares: 1000000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Universal Projects', price: 1525.00, volatilityFactor: 1.5, symbol: 'UNP', exchange: 'PLATINUM', totalShares: 1000000, maxShares: 1000000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Technologia'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -1169,12 +969,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Cortex Neural', price: 1850.00, volatilityFactor: 2.4, symbol: 'CTX', exchange: 'PLATINUM', totalShares: 1000000, maxShares: 1000000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Cortex Neural', price: 1850.00, volatilityFactor: 2.4, symbol: 'CTX', exchange: 'PLATINUM', totalShares: 1000000, maxShares: 1000000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Technologia'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -1182,12 +977,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'KrzeUraFos4', price: 2300.00, volatilityFactor: 2.9, symbol: 'KUP', exchange: 'PLATINUM', totalShares: 1000000, maxShares: 1000000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'KrzeUraFos4', price: 2300.00, volatilityFactor: 2.9, symbol: 'KUP', exchange: 'PLATINUM', totalShares: 1000000, maxShares: 1000000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Chemia'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -1195,12 +985,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Biurowce Obsługi Rachunkowej', price: 3000.00, volatilityFactor: 0.6, symbol: 'BOR', exchange: 'PLATINUM', totalShares: 1000000, maxShares: 1000000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Biurowce Obsługi Rachunkowej', price: 3000.00, volatilityFactor: 0.6, symbol: 'BOR', exchange: 'PLATINUM', totalShares: 1000000, maxShares: 1000000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Usługi', 'Nieruchomości'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -1870,6 +1655,34 @@ function updateStockPrices() {
         let priceGrowthModifier = 1.0;
         let volatilityModifier = 1.0;
         let isVolatilityCapped = false;
+        switch (stock.corporatePhase) {
+            case CORPORATE_PHASES.GROWTH:
+                priceGrowthModifier += 0.015; // +1.5% do dryfu
+                volatilityModifier += 0.1; // +10% do zmienności
+                break;
+            case CORPORATE_PHASES.STABILITY:
+                volatilityModifier -= 0.1; // -10% do zmienności
+                break;
+            case CORPORATE_PHASES.DECLINE:
+                priceGrowthModifier -= 0.02; // -2% do dryfu
+                volatilityModifier += 0.15; // +15% do zmienności
+                break;
+            case CORPORATE_PHASES.REORGANIZATION:
+                volatilityModifier += 0.2; // +20% do zmienności (niepewność)
+                break;
+            case CORPORATE_PHASES.GOLDEN_YEAR:
+                priceGrowthModifier += 0.04; // +4% do dryfu!
+                volatilityModifier -= 0.05; // Nieco stabilniejszy wzrost
+                break;
+            case CORPORATE_PHASES.SHADOW_DESCENT:
+                priceGrowthModifier -= 0.05; // -5% do dryfu!
+                volatilityModifier += 0.25; // +25% do zmienności
+                break;
+            case CORPORATE_PHASES.INNOVATION_PUSH:
+                priceGrowthModifier += 0.01; // Lekki wzrost
+                volatilityModifier += 0.1; // +10% do zmienności (ryzyko R&D)
+                break;
+        }
 
         if (stock.ceo && stock.ceo.traits) {
             stock.ceo.traits.forEach(trait => {
@@ -1911,8 +1724,34 @@ function updateStockPrices() {
             if (effectiveVolatility > 3.0) effectiveVolatility = 3.0;
         }
 
+        
+
         if (stock.marketBehavior) {
-            // ... (logika IPO bez zmian) ...
+            // Sprawdź, czy jesteśmy w fazie 'ipo_boost' i czy czas jeszcze nie minął
+            if (stock.marketBehavior.phase === 'ipo_boost' && now < stock.marketBehavior.endTime) {
+                // Zastosuj silniejszy, ukierunkowany na wzrost losowy ruch ceny
+                change = (0.01 + Math.random() * 0.02) * effectiveVolatility; // Mały stały wzrost + mniejsza losowość
+                // Nie modyfikujemy tu priceDrift, pozwalamy mu działać normalnie
+            } else if (now >= stock.marketBehavior.endTime) {
+                // Czas minął, zakończ specjalne zachowanie
+                logEvent(`📈 Faza początkowego wzrostu dla ${stock.name} zakończyła się.`);
+                stock.marketBehavior = null; // Usuń obiekt zachowania
+                // Od tego momentu cena będzie się zmieniać wg standardowej logiki (poniżej)
+            }
+            // Jeśli faza jest inna lub czas minął i marketBehavior zostało usunięte,
+            // przejdziemy do standardowej logiki obliczania 'change' poniżej.
+        }
+
+        if (!stock.marketBehavior) { // Wykonaj tylko jeśli NIE jesteśmy w aktywnej fazie specjalnej
+             if (stock.activePositiveBoostUntil && now < stock.activePositiveBoostUntil) {
+                 change = (0.015 + Math.random() * 0.025) * effectiveVolatility;
+             } else if (stock.activeNegativeBoostUntil && now < stock.activeNegativeBoostUntil) {
+                 change = -(0.015 + Math.random() * 0.025) * effectiveVolatility;
+             } else {
+                 if (stock.activePositiveBoostUntil && now >= stock.activePositiveBoostUntil) stock.activePositiveBoostUntil = null;
+                 if (stock.activeNegativeBoostUntil && now >= stock.activeNegativeBoostUntil) stock.activeNegativeBoostUntil = null;
+                 change = (Math.random() - 0.5) * 0.2 * effectiveVolatility * marketModifier;
+             }
         }
 
         if (stock.activePositiveBoostUntil && now < stock.activePositiveBoostUntil) {
@@ -2787,14 +2626,17 @@ function processFinancialReports() {
 
         } else {
             // 🏭 Standardowe spółki (logika, którą już zaimplementowaliśmy)
+            console.log(`[REPORTS] Przetwarzanie standardowej spółki: ${stock.symbol}, Health: ${stock.financialHealth}, Phase: ${stock.corporatePhase}`); // <--- LOG 1
             const earningsBase = (stock.financialHealth * 0.01) + (getRandomInRange(-0.015, 0.015));
             quarterlyEarnings = marketCap * earningsBase;
+            console.log(`[REPORTS] ${stock.symbol} -> Obliczone quarterlyEarnings: ${quarterlyEarnings}`); // <--- LOG 2
         }
 
         stock.quarterlyEarnings = quarterlyEarnings;
 
         // --- Aktualizacja bilansu na podstawie obliczonych zysków ---
         if (stock.balanceSheet) {
+            console.log(`[REPORTS] ${stock.symbol} - Aktualizacja bilansu. Przed: Assets=${stock.balanceSheet.assets.toFixed(0)}, Liab=${stock.balanceSheet.liabilities.toFixed(0)}, RetEarn=${stock.balanceSheet.retainedEarnings.toFixed(0)}`); // <--- LOG 3
             stock.balanceSheet.assets += quarterlyEarnings;
             stock.balanceSheet.retainedEarnings += quarterlyEarnings;
 
@@ -2807,7 +2649,10 @@ function processFinancialReports() {
                 const actualRepayment = Math.min(debtRepayment, stock.balanceSheet.liabilities);
                 stock.balanceSheet.liabilities -= actualRepayment;
                 stock.balanceSheet.assets -= actualRepayment;
-            }
+                console.log(`[REPORTS] ${stock.symbol} - Po: Assets=${stock.balanceSheet.assets.toFixed(0)}, Liab=${stock.balanceSheet.liabilities.toFixed(0)}, RetEarn=${stock.balanceSheet.retainedEarnings.toFixed(0)}`); // <--- LOG 4
+            } else {
+         console.warn(`[REPORTS] ${stock.symbol} nie ma obiektu balanceSheet!`); // <--- OSTRZEŻENIE
+    }
         }
         
         // =====================================================================
@@ -2844,6 +2689,21 @@ function processFinancialReports() {
                  stock.isBankrupt = true;
                  stock.timeOfDeath = Date.now();
              }
+        }
+
+        const canIssueRescue = stock.financialHealth <= -3 &&
+                               stock.balanceSheet && stock.balanceSheet.liabilities > stock.balanceSheet.assets * 0.6 && // Dług > 60% aktywów
+                               !stock.assetType && // Tylko zwykłe spółki
+                               !stock.isBankStock &&
+                               (!stock.rescueActionCooldown || Date.now() > stock.rescueActionCooldown) && // Sprawdź cooldown
+                               Math.random() < 0.25; // 25% szans w kwartale, jeśli warunki spełnione
+
+        if (canIssueRescue) {
+            // Sprawdź, czy nie ma już aktywnej emisji ratunkowej akcji dla tej firmy
+            // (zakładając, że triggerRescueOfferingEvent ustawia jakąś flagę na obiekcie stock, np. stock.isRescueOfferingActive)
+            // if (!stock.isRescueOfferingActive) {
+                 issueRescueBond(stock); // Wywołaj emisję obligacji
+            // }
         }
 
         // Generowanie raportów i zdarzeń (wspólne dla wszystkich)
@@ -3627,12 +3487,7 @@ function triggerIPO() {
             totalShares: 1000,
             maxShares: 2000,
             sharesHeld: 800, // 80% akcji jest Twoje
-            priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+            priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z)
             sector: ['Usługi'],
             financialHealth: 1,
@@ -3730,13 +3585,18 @@ function processDividendPayout(stock) {
 }
 
 function initializeBalanceSheetForStock(stock) {
+
+
     // Pomiń start-upy, REIT-y i inne specjalne typy
     if (stock.assetType || stock.isBankStock) { // Dodano isBankStock
+        console.log(`[INIT_BALANCE] Pomijanie inicjalizacji dla ${stock.symbol} (Typ: ${stock.assetType || 'Bank'})`);
         stock.balanceSheet = { assets: 0, liabilities: 0, shareCapital: 0, retainedEarnings: 0 };
         stock.quarterlyEarnings = 0;
         stock.cash = 0; // Inicjalizuj gotówkę na 0 dla typów specjalnych
         return;
     }
+
+    console.log(`[INIT_BALANCE] Inicjalizacja bilansu/fazy dla ZWYKŁEJ spółki: ${stock.symbol}`);
 
     const marketCap = stock.price * stock.totalShares;
     const assets = marketCap * getRandomInRange(0.9, 1.5);
@@ -3757,6 +3617,20 @@ function initializeBalanceSheetForStock(stock) {
     // ---> INICJALIZACJA GOTÓWKI <---
     // Ustawmy początkową gotówkę jako mały procent aktywów
     stock.cash = assets * getRandomInRange(0.01, 0.05);
+
+    const exchangeLevel = exchanges[stock.exchange]?.level ?? 0; // Użyj ?? 0 dla bezpieczeństwa
+    stock.companyAge = getRandomIntInRange(1, 5) + exchangeLevel * 8; // Starsze firmy na wyższych giełdach
+
+    // Faza startowa - zależna od wieku i kondycji
+    if (stock.companyAge < 12 && stock.financialHealth >= 1) {
+        stock.corporatePhase = CORPORATE_PHASES.GROWTH;
+    } else if (stock.financialHealth <= -2) {
+        stock.corporatePhase = CORPORATE_PHASES.DECLINE;
+    } else {
+        stock.corporatePhase = CORPORATE_PHASES.STABILITY;
+    }
+    stock.phaseTimer = 0; // Licznik dla faz tymczasowych (np. Złoty Rok)
+    console.log(`[INIT_BALANCE] ${stock.symbol} - Wiek: ${stock.companyAge}, Faza: ${stock.corporatePhase}, Bilans zainicjalizowany.`);
     // Jeśli firma ma przypisany bank, upewnij się, że bank też "ma" tę gotówkę
     if (stock.bankAccountId) {
         const bank = commercialBanks.find(b => b.id === stock.bankAccountId);
@@ -4420,6 +4294,26 @@ function buyOtherBond(buyer, bondId, quantity) {
     }
     
     offer.available -= quantity;
+
+    if (offer.isRescueBond && offer.issuerSymbol) {
+        const issuingStock = stocks.find(s => s.symbol === offer.issuerSymbol);
+        if (issuingStock) {
+            issuingStock.cash += totalCost; // Dodaj gotówkę do kasy firmy
+            // Uaktualnij bilans firmy
+            if (issuingStock.balanceSheet) {
+                issuingStock.balanceSheet.assets += totalCost;
+                // Można by tu dodać logikę zmniejszania długu, ale prościej jest dodać do aktywów
+            }
+            logEvent(`💸 ${buyer === 'player' ? 'Twoja inwestycja' : buyer.name} wsparła ${issuingStock.name} kwotą ${totalCost.toFixed(0)} PLN poprzez zakup obligacji ratunkowych.`);
+        } else {
+             console.warn(`Nie znaleziono spółki ${offer.issuerSymbol} emitującej obligacje ratunkowe ${bondId}`);
+             governmentTreasury += totalCost; // Awaryjnie: przekaż do skarbu państwa
+        }
+    } else {
+        // Dla zwykłych obligacji (lub jeśli błąd) - można przekazać do skarbu państwa lub "usunąć"
+         governmentTreasury += totalCost;
+    }
+
     if (offer.available <= 0) {
         activeBonds.splice(offerIndex, 1);
     }
@@ -5529,6 +5423,13 @@ function updateResearchProgress(deltaTime) {
                     if (stock.ceo.traits.some(t => t.id === 'biurowy_dron')) ceoMultiplier *= 1.05;
                     if (stock.ceo.traits.some(t => t.id === 'ksiegowy')) ceoMultiplier *= 0.95;
                     if (stock.ceo.traits.some(t => t.id === 'lowca_glow')) ceoMultiplier *= 1.10;
+                }
+
+                let phaseMultiplier = 1.0;
+                if (stock.corporatePhase === CORPORATE_PHASES.INNOVATION_PUSH) {
+                    phaseMultiplier = 1.5; // +50% prędkości badań
+                } else if (stock.corporatePhase === CORPORATE_PHASES.DECLINE || stock.corporatePhase === CORPORATE_PHASES.SHADOW_DESCENT) {
+                     phaseMultiplier = 0.7; // -30% prędkości w fazie spadku
                 }
 
                 // Dodaj punkty postępu
@@ -8806,4 +8707,158 @@ function initializeGameTimeRelatedVariables() {
     nextWealthTaxTime = Date.now() + WEALTH_TAX_INTERVAL; // Ustawienie początkowe
     console.log(`[INIT] WEALTH_TAX_INTERVAL ustawiono na: ${WEALTH_TAX_INTERVAL} ms`);
     // Tutaj można inicjalizować inne zmienne czasowe, jeśli są potrzebne
+}
+
+    function updateCorporatePhase(stock) {
+    // Pomiń typy specjalne i bankrutów
+    if (stock.assetType || stock.isBankStock || stock.isBankrupt) return;
+
+    stock.companyAge++; // Firma starzeje się o kwartał
+
+    // Obsługa faz tymczasowych (Złoty Rok, Zejście w Cień, Impuls Innowacji)
+    if (stock.phaseTimer && stock.phaseTimer > 0) {
+        stock.phaseTimer--; // Odliczanie czasu trwania fazy
+        if (stock.phaseTimer <= 0) {
+            // Faza tymczasowa się skończyła, wróć do fazy bazowej
+            const previousPhase = stock.previousPhase || CORPORATE_PHASES.STABILITY; // Wróć do poprzedniej lub domyślnej
+            logEvent(`⏳ Faza "${stock.corporatePhase}" dla ${stock.name} dobiegła końca. Powrót do fazy "${previousPhase}".`);
+            stock.corporatePhase = previousPhase;
+            stock.previousPhase = null; // Wyczyść zapamiętaną fazę
+            // Tutaj można dodać jednorazowy efekt po zakończeniu fazy, np. lekka korekta ceny
+        }
+        return; // Jeśli jesteśmy w fazie tymczasowej, nie zmieniamy jej jeszcze
+    }
+
+    const currentPhase = stock.corporatePhase;
+    const health = stock.financialHealth;
+    const age = stock.companyAge;
+    let nextPhase = currentPhase; // Domyślnie zostajemy w tej samej fazie
+    let transitionReason = ""; // Opis powodu zmiany
+
+    // Sprawdzenie szansy na unikalne fazy (przed standardowymi przejściami)
+    const uniquePhaseRoll = Math.random();
+    if (uniquePhaseRoll < 0.02 && (currentPhase === CORPORATE_PHASES.GROWTH || currentPhase === CORPORATE_PHASES.STABILITY || currentPhase === CORPORATE_PHASES.REORGANIZATION)) {
+        // 2% szansy na Złoty Rok
+        nextPhase = CORPORATE_PHASES.GOLDEN_YEAR;
+        stock.phaseTimer = 4; // Faza trwa 4 kwartały (1 rok)
+        transitionReason = "niespodziewanego okresu prosperity";
+    } else if (uniquePhaseRoll < 0.04 && (currentPhase === CORPORATE_PHASES.DECLINE || currentPhase === CORPORATE_PHASES.REORGANIZATION)) {
+        // 2% szansy na Zejście w Cień (jeśli już jest źle)
+        nextPhase = CORPORATE_PHASES.SHADOW_DESCENT;
+        stock.phaseTimer = getRandomIntInRange(3, 6); // Faza trwa 3-6 kwartałów
+        transitionReason = "pogłębiającego się kryzysu";
+    } else if (uniquePhaseRoll < 0.07 && (currentPhase === CORPORATE_PHASES.GROWTH || currentPhase === CORPORATE_PHASES.REORGANIZATION)) {
+        // 3% szansy na Impuls Innowacji (szczególnie w fazie wzrostu lub reorganizacji)
+        nextPhase = CORPORATE_PHASES.INNOVATION_PUSH;
+        stock.phaseTimer = getRandomIntInRange(4, 8); // Faza trwa 4-8 kwartałów
+        transitionReason = "skupienia na badaniach i rozwoju";
+    }
+
+    // Jeśli nie wylosowano fazy unikalnej, sprawdź standardowe przejścia
+    if (nextPhase === currentPhase) {
+        switch (currentPhase) {
+            case CORPORATE_PHASES.GROWTH:
+                if (health <= 0 || age > 20) { // Słabe wyniki lub starzenie się
+                    nextPhase = CORPORATE_PHASES.STABILITY;
+                    transitionReason = health <= 0 ? "spowolnienia rozwoju" : "osiągnięcia dojrzałości";
+                } else if (health < -2) { // Nagłe załamanie
+                    nextPhase = CORPORATE_PHASES.DECLINE;
+                    transitionReason = "gwałtownego pogorszenia wyników";
+                }
+                break;
+            case CORPORATE_PHASES.STABILITY:
+                if (health >= 3 && age < 30 && Math.random() < 0.1) { // Dobre wyniki i młody wiek - szansa na powrót do wzrostu
+                    nextPhase = CORPORATE_PHASES.GROWTH;
+                    transitionReason = "nowego impulsu rozwojowego";
+                } else if (health < -1) { // Pogorszenie wyników
+                    nextPhase = CORPORATE_PHASES.DECLINE;
+                    transitionReason = "pogarszającej się rentowności";
+                } else if (health <= 1 && age > 40 && Math.random() < 0.05) { // Starzenie się i przeciętne wyniki
+                     nextPhase = CORPORATE_PHASES.DECLINE;
+                     transitionReason = "utraty konkurencyjności";
+                }
+                break;
+            case CORPORATE_PHASES.DECLINE:
+                if (health <= -5) { // Bardzo źle - ryzyko bankructwa (obsługiwane w processFinancialReports)
+                    // Pozostaje w Decline, ale może wejść w Reorganizację po evencie ratunkowym
+                } else if (health >= 0 && Math.random() < 0.2) { // Lekka poprawa - szansa na Reorganizację
+                    nextPhase = CORPORATE_PHASES.REORGANIZATION;
+                    transitionReason = "próby restrukturyzacji";
+                }
+                break;
+            case CORPORATE_PHASES.REORGANIZATION:
+                if (health >= 2) { // Udana reorganizacja
+                    nextPhase = CORPORATE_PHASES.STABILITY;
+                    transitionReason = "udanej restrukturyzacji i stabilizacji";
+                } else if (health < -3) { // Porażka reorganizacji
+                    nextPhase = CORPORATE_PHASES.DECLINE;
+                    transitionReason = "niepowodzenia planu naprawczego";
+                }
+                // Jeśli health jest neutralne, pozostaje w Reorganization
+                break;
+        }
+    }
+
+    // Zastosuj zmianę fazy, jeśli nastąpiła
+    if (nextPhase !== currentPhase) {
+        // Zapisz poprzednią fazę bazową, jeśli wchodzimy w fazę tymczasową
+        if (stock.phaseTimer > 0 && currentPhase !== CORPORATE_PHASES.GOLDEN_YEAR && currentPhase !== CORPORATE_PHASES.SHADOW_DESCENT && currentPhase !== CORPORATE_PHASES.INNOVATION_PUSH) {
+            stock.previousPhase = currentPhase;
+        } else if (stock.phaseTimer === 0) { // Wychodzimy z fazy tymczasowej lub normalna zmiana
+             stock.previousPhase = null;
+        }
+
+        stock.corporatePhase = nextPhase;
+        logEvent(`🏢 Spółka ${stock.name} wchodzi w fazę "${nextPhase}" z powodu ${transitionReason}.`, 'company');
+
+        // Można dodać jednorazowy efekt przy zmianie fazy, np. mały boost/spadek ceny
+        if (nextPhase === CORPORATE_PHASES.GROWTH) applyPriceEffect(stock.symbol, 0.02, 'positive');
+        else if (nextPhase === CORPORATE_PHASES.DECLINE) applyPriceEffect(stock.symbol, -0.03, 'negative');
+        else if (nextPhase === CORPORATE_PHASES.GOLDEN_YEAR) applyPriceEffect(stock.symbol, 0.05, 'positive');
+        else if (nextPhase === CORPORATE_PHASES.SHADOW_DESCENT) applyPriceEffect(stock.symbol, -0.04, 'negative');
+    }
+}
+
+function issueRescueBond(stock) {
+    // Oblicz, ile kapitału potrzeba (np. 30% obecnego długu)
+    const capitalNeeded = stock.balanceSheet.liabilities * 0.3;
+    if (capitalNeeded <= 0) return; // Nie emituj, jeśli nie ma długu lub potrzeba 0
+
+    const faceValue = 1000;
+    const quantityToIssue = Math.ceil(capitalNeeded / faceValue);
+    if (quantityToIssue <= 0) return;
+
+    // Wyższe oprocentowanie i ryzyko zależne od kondycji
+    const baseInterest = 0.08; // Wyższa baza niż normalnie
+    const healthPenaltyInterest = Math.abs(stock.financialHealth) * 0.015; // +1.5% za każdy pkt poniżej 0
+    const volatilityRiskBonus = stock.volatilityFactor * 0.05; // Ryzyko rośnie ze zmiennością
+    const finalInterest = baseInterest + healthPenaltyInterest;
+    const finalRisk = Math.min(0.9, 0.3 + Math.abs(stock.financialHealth) * 0.1 + volatilityRiskBonus); // Ryzyko 30%-90%
+
+    const duration = getRandomIntInRange(15, 35); // Krótszy/Średni termin
+
+    const newBondOffer = {
+        id: `res_bond_${stock.symbol}_${Date.now()}`,
+        issuerName: `${stock.name} (Ratunkowa)`, // Oznacz nazwę
+        issuerSymbol: stock.symbol, // ---> WAŻNE: Dodaj symbol emitenta <---
+        type: 'Korporacyjna Ratunkowa 🆘', // Oznacz typ
+        interestRate: finalInterest,
+        durationMinutes: duration,
+        risk: finalRisk,
+        faceValue: faceValue,
+        available: quantityToIssue,
+        isRescueBond: true // ---> Dodaj flagę <---
+    };
+
+    activeBonds.push(newBondOffer);
+    logEvent(`🆘 Emisja Ratunkowa Obligacji! ${stock.name} emituje ${quantityToIssue} obligacji (${(finalInterest * 100).toFixed(1)}%, Ryzyko: ${(finalRisk * 100).toFixed(0)}%) by pokryć długi!`, 'market');
+    showToast(`🆘 ${stock.name} emituje obligacje ratunkowe!`, 'warning');
+
+    // Zapobiegaj natychmiastowej kolejnej emisji (np. cooldown na kwartał)
+    stock.rescueActionCooldown = Date.now() + BASE_DELAYS.quarterly / currentSpeedMultiplier;
+
+    // Odśwież widok rynku obligacji, jeśli otwarty
+    if (document.getElementById('bank-modal')?.style.display === 'block' && document.getElementById('bank-content-bonds')?.style.display === 'block') {
+        if (typeof renderBondMarketInBank === 'function') renderBondMarketInBank();
+    }
 }

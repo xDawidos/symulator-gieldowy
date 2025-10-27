@@ -418,23 +418,26 @@ function runAiMarian(ai) {
 function makeAiDecision(ai) {
     // Podstawowe sprawdzenia i dostępne akcje
     const accessibleStocks = stocks.filter(s => {
-        if (s.assetType === 'Startup' || s.isBankrupt) return false;
+        // AI nie handluje startupami, REITami, Instytutami
+        if (s.assetType || s.isBankrupt) return false;
         const exchange = exchanges[s.exchange];
-        return exchange && exchange.level <= ai.accessLevel;
+        // Sprawdź dostęp do giełdy i czy spółka nie jest zablokowana
+        return exchange && exchange.level <= ai.accessLevel && !s.isTradeLocked;
     });
-    if (accessibleStocks.length === 0 && ai.personality !== 'banker') return; // Bankier może działać nawet bez akcji
+    // Bankier może działać (np. zarządzać depozytami/kredytami) nawet bez dostępnych akcji
+    if (accessibleStocks.length === 0 && ai.personality !== 'banker') return;
 
     const portfolioSize = Object.keys(ai.portfolio).length;
-    const aiNetWorth = calculateNetWorth(ai); // Oblicz raz
+    const aiNetWorth = calculateNetWorth(ai); // Oblicz raz na turę
+    const cashRatio = ai.cash / aiNetWorth; // Stosunek gotówki do wartości netto
 
-    // Znajdź aktywne banki inwestycyjne
+    // Znajdź aktywne banki inwestycyjne do potencjalnych zakupów
     const activeInvestmentBanks = commercialBanks.filter(b => b.isActive && b.type === BANK_TYPES.INVESTMENT);
 
     // Główna logika inwestycyjna zależna od osobowości
     switch (ai.personality) {
         case 'reckless':
         case 'yolo_trader':
-            // Logika dla Ryzykanta i Yolo Tradera
             if (Math.random() < 0.5) { // Szansa na akcję giełdową
                 // Próba zakupu ryzykownych akcji lub wzięcia pożyczki
                 if (Math.random() < 0.7 || portfolioSize === 0) {
@@ -447,18 +450,17 @@ function makeAiDecision(ai) {
                         if (desiredQuantity > 0) {
                             if (affordableQuantity >= desiredQuantity) {
                                 aiBuyStock(ai, stockToBuy.symbol, desiredQuantity);
-                            } else if (affordableQuantity < desiredQuantity && affordableQuantity > 0 && Math.random() < (ai.personality === 'reckless' ? 0.4 : 0.6)) { // Yolo chętniej bierze hipotekę
+                            } else if (affordableQuantity < desiredQuantity && affordableQuantity > 0 && Math.random() < (ai.personality === 'reckless' ? 0.4 : 0.6)) {
                                 const neededCash = (desiredQuantity - affordableQuantity) * stockToBuy.price;
                                 const mortgageBank = commercialBanks.find(b => b.isActive && b.type === BANK_TYPES.MORTGAGE);
                                 let collateralStock = null, availableCollateralQty = 0;
-                                for (const sym in ai.portfolio) { /* ... znajdź zastaw ... */
+                                for (const sym in ai.portfolio) {
                                      const h = ai.portfolio[sym];
                                      const s = stocks.find(st => st.symbol === sym && !st.assetType);
                                      const available = h.shares - (h.lockedShares || 0);
                                      if (s && available > 0) { collateralStock = s; availableCollateralQty = available; break; }
                                 }
-
-                                if (mortgageBank && collateralStock && neededCash > (ai.personality === 'reckless' ? 100 : 50)) { // Yolo pożycza mniejsze kwoty
+                                if (mortgageBank && collateralStock && neededCash > (ai.personality === 'reckless' ? 100 : 50)) {
                                     const requiredCollateralValue = neededCash * 2;
                                     const requiredCollateralQty = Math.ceil(requiredCollateralValue / collateralStock.price);
                                     if (availableCollateralQty >= requiredCollateralQty) {
@@ -476,8 +478,7 @@ function makeAiDecision(ai) {
                 // Próba sprzedaży (losowa)
                 else if (portfolioSize > 0) {
                     const randomOwnedSymbol = getRandomElement(Object.keys(ai.portfolio));
-                     // Sprawdź czy pozycja nie jest startupem przed próbą sprzedaży
-                    if (ai.portfolio[randomOwnedSymbol] && ai.portfolio[randomOwnedSymbol].assetType !== 'Startup') {
+                    if (ai.portfolio[randomOwnedSymbol] && ai.portfolio[randomOwnedSymbol].assetType !== 'Startup') { // Sprawdź czy to nie startup
                         const sharesToSell = Math.max(1, Math.floor(ai.portfolio[randomOwnedSymbol].shares * 0.5));
                         aiSellStock(ai, randomOwnedSymbol, sharesToSell);
                     }
@@ -489,7 +490,7 @@ function makeAiDecision(ai) {
                 if (Math.random() < 0.25) {
                     const targetStartup = getRandomElement(stocks.filter(s => s.assetType === 'Startup' && s.stage === 'funding'));
                     if (targetStartup && ai.cash > 1000) {
-                        const amount = ai.cash * getRandomInRange(0.10, (ai.personality === 'yolo_trader' ? 0.7 : 0.2)); // Yolo inwestuje więcej
+                        const amount = ai.cash * getRandomInRange(0.10, (ai.personality === 'yolo_trader' ? 0.7 : 0.2));
                         aiInvestInStartup(ai, targetStartup.symbol, amount);
                     }
                 }
@@ -500,7 +501,7 @@ function makeAiDecision(ai) {
                 }
             }
 
-            // Kupowanie od banków inwestycyjnych (mała szansa)
+            // Kupowanie od banków inwestycyjnych (mała szansa, impulsywnie)
             if (activeInvestmentBanks.length > 0 && Math.random() < 0.05) {
                 for (const bank of activeInvestmentBanks) {
                     const potentialBuys = Object.keys(bank.stockPortfolio).filter(symbol => bank.stockPortfolio[symbol].shares > 0);
@@ -525,26 +526,23 @@ function makeAiDecision(ai) {
             break; // Koniec reckless/yolo
 
         case 'calm':
-        case 'dividend_chaser': // Marian też lubi stabilność
-            // Logika dla Spokojnego i Łowcy Dywidend
+        case 'dividend_chaser':
             if (ai.personality === 'dividend_chaser') {
-                runAiMarian(ai); // Marian ma osobną, bardziej złożoną logikę
+                runAiMarian(ai); // Marian ma swoją logikę
             } else { // Logika dla 'calm'
-                if (Math.random() < 0.25) { // Rzadsze akcje
-                    // Sprzedaż (z zyskiem > 30% lub gdy firma ma kłopoty)
+                if (Math.random() < 0.25) {
                     for (const symbol in ai.portfolio) {
                         const holding = ai.portfolio[symbol];
-                        if (holding.assetType === 'Startup') continue; // Pomiń startupy
+                        if (holding.assetType === 'Startup') continue;
                         const marketData = stocks.find(s => s.symbol === symbol);
                         if (marketData && (marketData.price > holding.avgPrice * 1.3 || marketData.financialHealth <= -4)) {
-                            aiSellStock(ai, symbol, holding.shares); // Sprzedaj całość
-                            return; // Akcja podjęta
+                            aiSellStock(ai, symbol, holding.shares);
+                            return;
                         }
                     }
-                    // Zakup (stabilne spółki)
                     const stockToBuy = getRandomElement(accessibleStocks.filter(s => s.volatilityFactor < 1.2 && s.financialHealth >= 0));
                     if (stockToBuy) {
-                        const investmentFraction = 0.1; // Inwestuje tylko 10% wartości portfela
+                        const investmentFraction = 0.1;
                         const quantity = Math.floor((aiNetWorth * investmentFraction) / stockToBuy.price);
                         if (quantity > 0) {
                             aiBuyStock(ai, stockToBuy.symbol, quantity);
@@ -554,9 +552,8 @@ function makeAiDecision(ai) {
             } // Koniec logiki dla 'calm'
 
             // Depozyty (dla obu)
-            const cashRatioCalm = ai.cash / aiNetWorth;
-            if (cashRatioCalm > 0.5 && aiNetWorth > 5000) { // Jeśli >50% gotówki
-                const excessCash = ai.cash - (aiNetWorth * 0.3); // Zostaw 30% gotówki
+            if (cashRatio > 0.5 && aiNetWorth > 5000) {
+                const excessCash = ai.cash - (aiNetWorth * 0.3);
                 const depositBank = aiChooseCommercialBank('deposit', ai);
                 if (depositBank && excessCash > 500) {
                     if (aiMakeDeposit(ai, depositBank.id, excessCash)) {
@@ -569,22 +566,21 @@ function makeAiDecision(ai) {
 
         case 'whale':
         case 'pro_investor':
-            // Logika dla Wieloryba i Profesjonalisty
-            if (Math.random() < (ai.personality === 'pro_investor' ? 0.7 : 0.4)) { // Pro częściej handluje
-                // Sprzedaż (z zyskiem > 25-35% lub przy problemach)
+            if (Math.random() < (ai.personality === 'pro_investor' ? 0.7 : 0.4)) {
+                // Sprzedaż
                 for (const symbol in ai.portfolio) {
                     const holding = ai.portfolio[symbol];
-                     if (holding.assetType === 'Startup') continue;
+                    if (holding.assetType === 'Startup') continue;
                     const stock = stocks.find(s => s.symbol === symbol);
                     const profitTarget = ai.personality === 'pro_investor' ? 1.25 : 1.35;
                     const healthThreshold = ai.personality === 'pro_investor' ? -1 : 0;
                     if (stock && (stock.price > holding.avgPrice * profitTarget || stock.financialHealth < healthThreshold)) {
-                        aiSellStock(ai, symbol, holding.shares); // Sprzedaj całość
-                        return; // Akcja podjęta
+                        aiSellStock(ai, symbol, holding.shares);
+                        return;
                     }
                 }
 
-                // Inwestycje w startupy (jeśli ma umiejętność) - Pro bardziej selektywny
+                // Inwestycje w startupy (jeśli ma umiejętność)
                 if ((ai.unlockedSkills['startupInvestor'] || 0) >= 1) {
                     if (Math.random() < 0.15) {
                         const successThreshold = ai.personality === 'pro_investor' ? 0.65 : 0.55;
@@ -608,16 +604,15 @@ function makeAiDecision(ai) {
                 }
 
                 // Zakup najlepszych akcji (jeśli mało pozycji)
-                if (portfolioSize < (ai.personality === 'pro_investor' ? 3 : 5)) { // Pro ma bardziej skoncentrowany portfel
+                if (portfolioSize < (ai.personality === 'pro_investor' ? 3 : 5)) {
                     const healthMin = ai.personality === 'pro_investor' ? 1 : 2;
                     const bestBuys = accessibleStocks.filter(s => s.financialHealth >= healthMin).sort((a, b) => b.financialHealth - a.financialHealth);
                     if (bestBuys.length > 0) {
                         const stockToBuy = bestBuys[0];
-                        const neededCash = stockToBuy.price * (ai.personality === 'pro_investor' ? 5 : 10); // Pro potrzebuje mniej akcji
-                        // Rozważenie kredytu (Pro jest ostrożniejszy)
+                        const neededCash = stockToBuy.price * (ai.personality === 'pro_investor' ? 5 : 10);
                         if (ai.cash < neededCash && ai.cash > (neededCash * (ai.personality === 'pro_investor' ? 0.7 : 0.5))) {
                              const loanAmount = neededCash * (ai.personality === 'pro_investor' ? 0.3 : 0.5);
-                             aiTakeLoan(ai, loanAmount); // Użyj kredytu komercyjnego
+                             aiTakeLoan(ai, loanAmount);
                         }
                         const quantity = Math.floor((ai.cash * (ai.personality === 'pro_investor' ? 0.33 : 0.4)) / stockToBuy.price);
                         if (quantity > 0) {
@@ -633,7 +628,7 @@ function makeAiDecision(ai) {
                     for (const symbol in bank.stockPortfolio) {
                         const bankHolding = bank.stockPortfolio[symbol];
                         const stock = stocks.find(s => s.symbol === symbol);
-                        const ownsTooMuch = ai.portfolio[symbol] && (ai.portfolio[symbol].shares / stock.totalShares) > 0.2;
+                        const ownsTooMuch = ai.portfolio[symbol] && stock && stock.totalShares > 0 && (ai.portfolio[symbol].shares / stock.totalShares) > 0.2; // Dodano stock && stock.totalShares > 0
                         if (stock && bankHolding.shares > 0 && stock.financialHealth >= 1 && !ownsTooMuch) {
                             const bankSellPrice = stock.price * 1.10;
                             const acceptablePremium = ai.portfolio[symbol] ? ai.portfolio[symbol].avgPrice * 1.15 : bankSellPrice * 1.01;
@@ -653,8 +648,7 @@ function makeAiDecision(ai) {
             }
 
             // Depozyty
-            const cashRatioPro = ai.cash / aiNetWorth;
-            if (cashRatioPro > 0.4 && aiNetWorth > 20000) {
+            if (cashRatio > 0.4 && aiNetWorth > 20000) {
                 const excessCash = ai.cash - (aiNetWorth * 0.25);
                 const depositBank = aiChooseCommercialBank('deposit', ai);
                 if (depositBank && excessCash > 1000) {
@@ -667,23 +661,21 @@ function makeAiDecision(ai) {
             break; // Koniec whale/pro_investor
 
         case 'banker':
-            const banker = ai; // Dla czytelności
-            const bankerNetWorth = aiNetWorth; // Użyj już obliczonej
+            const banker = ai;
+            const bankerNetWorth = aiNetWorth;
             const bankerPortfolioSize = portfolioSize;
             const financeSectors = ['Finanse', 'Bankowość Komercyjna'];
 
-            // --- 1. Strategia Sprzedaży ---
+            // 1. Sprzedaż
             let soldSomethingBanker = false;
             for (const symbol in banker.portfolio) {
                 if (banker.portfolio[symbol].assetType === 'Startup') continue;
                 const stock = stocks.find(s => s.symbol === symbol);
                 const holding = banker.portfolio[symbol];
                 if (!stock || !holding) continue;
-
                 const profitMargin = stock.price / holding.avgPrice;
                 const isRisky = stock.volatilityFactor > (1.5 - banker.riskAversionFactor * 1.0) || stock.financialHealth < (0 - banker.riskAversionFactor * 2);
                 const moderateProfitTarget = 1.15 + banker.riskAversionFactor * 0.1;
-
                 if (isRisky || profitMargin > moderateProfitTarget) {
                     const quantityToSell = Math.floor(holding.shares * getRandomInRange(0.5, 1.0));
                     aiSellStock(banker, symbol, quantityToSell);
@@ -693,8 +685,8 @@ function makeAiDecision(ai) {
             }
             if (soldSomethingBanker) break;
 
-            // --- 2. Zarządzanie Gotówką (Depozyty) ---
-            const cashRatioBanker = banker.cash / bankerNetWorth;
+            // 2. Depozyty
+            const cashRatioBanker = cashRatio; // Użyj już obliczonego
             if (cashRatioBanker > 0.4 && bankerNetWorth > 10000) {
                 const excessCash = banker.cash - (bankerNetWorth * 0.2);
                 const depositBank = aiChooseCommercialBank('deposit', banker);
@@ -706,7 +698,7 @@ function makeAiDecision(ai) {
                 }
             }
 
-            // --- 3. Strategia Zakupu (Akcje Finansowe/Bankowe z rynku) ---
+            // 3. Zakup (Akcje Finansowe/Bankowe z rynku)
             if (cashRatioBanker > 0.1 && bankerPortfolioSize < 6) {
                 const potentialTargets = accessibleStocks.filter(s =>
                     (s.isBankStock || s.sector.some(sec => financeSectors.includes(sec))) &&
@@ -719,7 +711,6 @@ function makeAiDecision(ai) {
                     const investmentAmount = banker.cash * getRandomInRange(0.3, 0.6);
                     const affordableQuantity = Math.floor(banker.cash / targetStock.price);
                     let quantityToBuy = Math.floor(investmentAmount / targetStock.price);
-
                     if (quantityToBuy > 0) {
                         aiBuyStock(banker, targetStock.symbol, Math.min(quantityToBuy, affordableQuantity));
                         break;
@@ -727,7 +718,7 @@ function makeAiDecision(ai) {
                 }
             }
 
-             // --- 3.5 Zakup od banków inwestycyjnych (tylko finanse/banki) ---
+             // 3.5 Zakup od banków inwestycyjnych (tylko finanse/banki)
              if (activeInvestmentBanks.length > 0 && Math.random() < 0.1) {
                 for (const bank of activeInvestmentBanks) {
                      for (const symbol in bank.stockPortfolio) {
@@ -743,7 +734,7 @@ function makeAiDecision(ai) {
                                 if (buyQuantity > 0) {
                                     if (aiBuySharesFromInvestmentBank(banker, bank.id, symbol, buyQuantity)) {
                                         console.log(`[AI Bankier] ${banker.name} kupił ${buyQuantity} akcji finansowych ${symbol} od banku ${bank.name}.`);
-                                        return; // Akcja podjęta
+                                        return;
                                     }
                                 }
                              }
@@ -752,8 +743,7 @@ function makeAiDecision(ai) {
                 }
              }
 
-
-            // --- 4. Strategia Pożyczkowa (Leverage) ---
+            // 4. Pożyczki (Leverage)
             const currentLoansValue = (banker.loans || []).reduce((sum, l) => sum + l.amount, 0);
             const maxLeverageRatio = 0.4;
             if (cashRatioBanker < 0.15 && (currentLoansValue / bankerNetWorth) < maxLeverageRatio) {
@@ -766,8 +756,7 @@ function makeAiDecision(ai) {
                  if (potentialTargets.length > 0) {
                     const targetStock = potentialTargets[0];
                     const desiredInvestment = bankerNetWorth * 0.1;
-                    const neededCash = Math.max(0, desiredInvestment - banker.cash); // Użyj max(0, ...)
-
+                    const neededCash = Math.max(0, desiredInvestment - banker.cash);
                     if (neededCash > 500) {
                         let loanTaken = false;
                         let collateralStock = null, availableCollateralQty = 0;
@@ -792,7 +781,6 @@ function makeAiDecision(ai) {
                                loanTaken = true;
                            }
                         }
-
                         if (loanTaken) {
                             const affordableQuantityNow = Math.floor(banker.cash / targetStock.price);
                             const quantityToBuyNow = Math.floor(desiredInvestment / targetStock.price);
@@ -805,7 +793,7 @@ function makeAiDecision(ai) {
                  }
             }
 
-            // --- 5. Spłata Pożyczek ---
+            // 5. Spłata Pożyczek
             if (cashRatioBanker > 0.5 && banker.loans && banker.loans.length > 0) {
                 banker.loans.sort((a, b) => b.interestRate - a.interestRate);
                 const loanToRepay = banker.loans[0];
@@ -821,9 +809,8 @@ function makeAiDecision(ai) {
 
         case 'market_maker':
             // Market maker nie korzysta z depozytów ani nie kupuje od banków
-            // ... (istniejąca logika market makera) ...
-             const isActiveBoost = ai.marketMakerBoost.isActive;
-            if (isActiveBoost && Date.now() > ai.marketMakerBoost.expiryTime) { /* ... wyłącz boost ... */
+            const isActiveBoost = ai.marketMakerBoost.isActive;
+            if (isActiveBoost && Date.now() > ai.marketMakerBoost.expiryTime) {
                  ai.marketMakerBoost.isActive = false;
                  ai.cash -= ai.marketMakerBoost.cashBonus;
                  if (ai.cash < 0) ai.cash = 0;
@@ -837,14 +824,12 @@ function makeAiDecision(ai) {
             if (Math.random() < actionChance) {
                 if (Math.random() < 0.35 && Object.keys(ai.portfolio).length > 0) {
                     const symbolToSell = getRandomElement(Object.keys(ai.portfolio));
-                    // Sprawdź czy to nie startup
-                    if (ai.portfolio[symbolToSell] && ai.portfolio[symbolToSell].assetType !== 'Startup') {
+                    if (ai.portfolio[symbolToSell] && ai.portfolio[symbolToSell].assetType !== 'Startup') { // Sprawdź czy to nie startup
                          const sharesToSell = getRandomIntInRange(tradeSizeMin, tradeSizeMax);
                          aiSellStock(ai, symbolToSell, sharesToSell);
                     }
                 } else {
-                     // Market maker powinien mieć dostęp do wszystkich akcji, nie tylko accessibleStocks
-                    const allTradeableStocks = stocks.filter(s => !s.assetType && !s.isBankrupt);
+                    const allTradeableStocks = stocks.filter(s => !s.assetType && !s.isBankrupt && !s.isTradeLocked); // Dodano !isTradeLocked
                     if (allTradeableStocks.length > 0) {
                         const stockToBuy = getRandomElement(allTradeableStocks);
                         if (stockToBuy) {
@@ -863,69 +848,62 @@ function makeAiDecision(ai) {
     // --- Akcje wykonywane przez WSZYSTKIE AI (które mają odpowiednie systemy) ---
 
     // Sprawdzanie "Korony" i użycie mocy
-    if (ai.portfolio) { // Upewnij się, że portfolio istnieje
+    if (ai.portfolio) {
         for (const symbol in ai.portfolio) {
             const stock = stocks.find(s => s.symbol === symbol);
-            if (!stock || stock.assetType === 'Startup') continue; // Pomiń startupy
-
+            if (!stock || stock.assetType === 'Startup') continue;
             const holding = ai.portfolio[symbol];
-            // Upewnij się, że holding istnieje i ma właściwość 'shares'
             if (holding && typeof holding.shares === 'number' && stock.totalShares > 0) {
                 const ownershipPct = (holding.shares / stock.totalShares) * 100;
                 if (ownershipPct > 50 && Math.random() < 0.15) {
                     aiUseCrownPowers(ai, stock);
-                    // Można dodać 'return;' jeśli chcesz, aby AI wykonało tylko jedną akcję na turę
                 }
             }
         }
     }
 
-
     // Zarządzanie Reputacją
-     if (ai.portfolio) { // Ponowne sprawdzenie portfolio
+     if (ai.portfolio) {
         for (const symbol in ai.portfolio) {
             const stock = stocks.find(s => s.symbol === symbol);
-            // Sprawdź reputację tylko dla zwykłych akcji
             if (stock && !stock.assetType && stock.reputation && stock.reputation[ai.id] !== undefined && stock.reputation[ai.id] < -20) {
                 if (ai.cash > 50000 && Math.random() < 0.1) {
                     const donationAmount = ai.cash * 0.05;
                     donateToCompany(symbol, donationAmount, ai.id);
-                    return; // Akcja podjęta
+                    return;
                 }
             }
         }
      }
 
-    // Spłata Pożyczek (jeśli AI ma nadmiar gotówki - logika dla wszystkich poza Bankierem, który ma swoją)
+    // Spłata Pożyczek (jeśli AI ma nadmiar gotówki)
      if (ai.personality !== 'banker' && ai.loans && ai.loans.length > 0) {
-          const cashRatioRepay = ai.cash / aiNetWorth;
-         if (cashRatioRepay > 0.6) { // Jeśli > 60% gotówki
-             ai.loans.sort((a, b) => b.interestRate - a.interestRate); // Sortuj wg oprocentowania
+          const cashRatioRepay = cashRatio; // Użyj już obliczonego
+         if (cashRatioRepay > 0.6) {
+             ai.loans.sort((a, b) => b.interestRate - a.interestRate);
              const loanToRepay = ai.loans[0];
-             const repaymentAmount = Math.min(loanToRepay.amount, ai.cash * 0.4); // Spłać do 40% gotówki
+             const repaymentAmount = Math.min(loanToRepay.amount, ai.cash * 0.4);
              if (repaymentAmount > 100) {
                  if (aiRepayLoan(ai, loanToRepay.id, repaymentAmount)) {
                      console.log(`[AI] ${ai.name} spłacił ${repaymentAmount.toFixed(0)} PLN pożyczki w ${loanToRepay.bankName}.`);
-                     return; // Akcja podjęta
+                     return;
                  }
              }
          }
      }
 
-    // Automatyczna spłata rat (logika dla wszystkich AI) - RZADZIEJ
+    // Automatyczna spłata rat (rzadziej)
     if (ai.loans && ai.loans.length > 0 && Math.random() < 0.2) {
         for (let i = ai.loans.length - 1; i >= 0; i--) {
             const loan = ai.loans[i];
             const bank = commercialBanks.find(b => b.id === loan.bankId);
-
             const weeklyInterestRate = ((LOAN_INTEREST_RATE + bank?.baseInterestRateMargin * (loan.collateral ? 1.1 : 1.0)) || 0.002) / 52;
             loan.amount += loan.amount * weeklyInterestRate;
-
             if (ai.cash >= loan.weeklyPayment) {
                 const payment = Math.min(loan.weeklyPayment, loan.amount);
                 ai.cash -= payment;
                 loan.amount -= payment;
-                if (bank) { /* ... aktualizuj bank.cash i bank.loanPortfolio ... */
+                if (bank) {
                     bank.cash += payment;
                     if (bank.loanPortfolio[ai.id]) {
                         const bankLoanIndex = bank.loanPortfolio[ai.id].findIndex(bl => bl.id === loan.id);
@@ -937,7 +915,7 @@ function makeAiDecision(ai) {
                         }
                     }
                 }
-                if (loan.amount <= 0.01) { /* ... usuń pożyczkę, odblokuj zastaw ... */
+                if (loan.amount <= 0.01) {
                     console.log(`[AI] ${ai.name} spłacił kredyt w ${loan.bankName}.`);
                     if (loan.collateral) {
                         const holding = ai.portfolio[loan.collateral.symbol];
@@ -947,7 +925,7 @@ function makeAiDecision(ai) {
                     }
                     ai.loans.splice(i, 1);
                 }
-            } else { /* ... obsługa braku środków, obniżenie creditScore ... */
+            } else {
                 console.log(`[AI] ${ai.name} nie ma środków na spłatę raty kredytu w ${loan.bankName}.`);
                 const scorePenalty = 5;
                 ai.creditScore = Math.max(0, ai.creditScore - scorePenalty);
@@ -956,37 +934,34 @@ function makeAiDecision(ai) {
         }
     }
 
-    // Zarządzanie obligacjami, miastem, aukcjami (logika dla wszystkich, rzadziej)
+    // Zarządzanie obligacjami, miastem, aukcjami (rzadziej)
     if (Math.random() < 0.1) {
         aiManageBondsAndCity(ai);
     }
 
-    // Akcje na festynie (logika dla wszystkich, jeśli trwa)
+    // Akcje na festynie (jeśli trwa)
     if (festival && festival.isActive) {
         aiFestivalActions(ai);
     }
 
-    // Regeneracja Credit Score (logika dla wszystkich)
+    // Regeneracja Credit Score
     if (ai.creditScore < 100 && Math.random() < 0.1) {
         ai.creditScore = Math.min(100, ai.creditScore + 1);
     }
 
-    // Wydawanie punktów umiejętności (logika dla wszystkich poza Market Maker)
+    // Wydawanie punktów umiejętności
     if (ai.skillPoints !== undefined && ai.unlockedSkills !== undefined) {
          if (Math.random() < 0.2) {
             for (const skillId in skills) {
                 if (skillId === 'adblock') continue;
-
                 let canConsiderSanEscobar = ai.skillPoints > 5000;
                 if (ai.personality === 'pro_investor' || ai.personality === 'whale') canConsiderSanEscobar = ai.skillPoints > 3000;
                 let desiresMaxLevel = (ai.personality === 'reckless' || ai.personality === 'yolo_trader') && ai.skillPoints > 110000;
-
                 if (skillId !== 'sanEscobar' || canConsiderSanEscobar) {
                     const skillData = skills[skillId];
                     const currentAiLevel = ai.unlockedSkills[skillId] || 0;
                     const targetLevel = (desiresMaxLevel && skillId === 'sanEscobar') ? 4 : currentAiLevel + 1;
                     const nextLevelInfo = skillData.levels.find(l => l.level === targetLevel);
-
                     if (nextLevelInfo) {
                         const requirement = nextLevelInfo.requires;
                         const requirementMet = requirement ? (ai.unlockedSkills[requirement.skillId] || 0) >= requirement.level : true;
@@ -1002,7 +977,7 @@ function makeAiDecision(ai) {
          }
     } // Koniec bloku wydawania punktów
 
-}
+} // Koniec funkcji makeAiDecision
     
 
 

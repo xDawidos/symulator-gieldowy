@@ -467,6 +467,11 @@ gameTimers.weekly = setInterval(() => {
         updateCeoTenureAndAge(); // Zmieniona nazwa, ale to samo
         updateAnalyticalProperties();
         runCentralBankAI(); // Z bazy main.js
+        stocks.forEach(stock => {
+        if (typeof updateCorporatePhase === 'function') {
+            updateCorporatePhase(stock);
+        }
+    });
     }, BASE_DELAYS.quarterly / speedMultiplier);
 
     // Pętla reputacji (powolny powrót do zera)

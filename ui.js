@@ -2216,10 +2216,26 @@ function applyInitialTheme() {
 function openDescriptionModal(symbol) {
     const stock = stocks.find(s => s.symbol === symbol);
     if (!stock) return;
+    console.log(`[MODAL_DESC] Otwieranie opisu dla: ${symbol}`, stock);
 
     const modal = document.getElementById('description-modal');
     document.getElementById('description-modal-title').textContent = `${stock.name} (${stock.symbol})`;
     document.getElementById('description-modal-content').innerHTML = assembleDescription(stock);
+
+    const phaseInfoDiv = document.getElementById('description-modal-phase'); // Potrzebny nowy div w HTML
+    console.log(`[MODAL_DESC] ${symbol} - Wartość stock.corporatePhase:`, stock.corporatePhase);
+    if (phaseInfoDiv && stock.corporatePhase) {
+         phaseInfoDiv.innerHTML = `<strong>Faza cyklu życia:</strong> ${stock.corporatePhase}`;
+         // Można dodać kolorowanie w zależności od fazy
+         if(stock.corporatePhase === CORPORATE_PHASES.GOLDEN_YEAR || stock.corporatePhase === CORPORATE_PHASES.GROWTH) phaseInfoDiv.style.color = '#28a745';
+         else if(stock.corporatePhase === CORPORATE_PHASES.DECLINE || stock.corporatePhase === CORPORATE_PHASES.SHADOW_DESCENT) phaseInfoDiv.style.color = '#dc3545';
+         else phaseInfoDiv.style.color = ''; // Domyślny kolor
+
+         phaseInfoDiv.style.display = 'block';
+    } else if (phaseInfoDiv) {
+        phaseInfoDiv.style.display = 'none';
+        console.log(`[MODAL_DESC] ${symbol} - Ukrywanie sekcji fazy (brak elementu lub brak danych)`);
+    }
 
     const ceoInfoDiv = document.getElementById('description-modal-ceo');
     ceoInfoDiv.innerHTML = ''; // Wyczyśćmy na start
@@ -2249,11 +2265,11 @@ function openDescriptionModal(symbol) {
     }
 
     const analyticalDiv = document.getElementById('description-modal-analytical');
-    analyticalDiv.innerHTML = ''; // Wyczyśćmy na start
-
-    // --- POCZĄTEK NOWEJ LOGIKI WSKAŹNIKÓW ---
+    analyticalDiv.innerHTML = '';
     let indicatorsHTML = '<h4>Kluczowe Wskaźniki Finansowe:</h4>';
     let indicatorsAdded = false;
+
+    console.log(`[MODAL_DESC] ${symbol} - Dane do wskaźników: balanceSheet=`, stock.balanceSheet, `quarterlyEarnings=`, stock.quarterlyEarnings, `totalShares=`, stock.totalShares);
 
     // Sprawdzamy, czy spółka ma zaimplementowany bilans
     if (stock.balanceSheet && stock.balanceSheet.assets > 0) {
@@ -2281,6 +2297,9 @@ function openDescriptionModal(symbol) {
         indicatorsHTML += `<p><strong>Aktywa / Pasywa:</strong> ${assetsToLiabilities_display}</p>`;
 
         indicatorsAdded = true;
+        console.log(`[MODAL_DESC] ${symbol} - Wskaźniki obliczone.`); // <--- LOG 4
+    } else {
+        console.log(`[MODAL_DESC] ${symbol} - Warunki do obliczenia wskaźników niespełnione.`); // <--- LOG 5
     }
 
     if (indicatorsAdded) {
@@ -2288,6 +2307,7 @@ function openDescriptionModal(symbol) {
         analyticalDiv.style.display = 'block';
     } else {
         analyticalDiv.style.display = 'none';
+        console.log(`[MODAL_DESC] ${symbol} - Ukrywanie sekcji wskaźników.`); // <--- LOG 6
     }
     // --- KONIEC NOWEJ LOGIKI WSKAŹNIKÓW ---
 
@@ -2828,11 +2848,20 @@ function renderBondMarketInBank() {
     otherBondsBody.innerHTML = '';
     activeBonds.forEach(bond => {
         const row = otherBondsBody.insertRow();
+        if (bond.isRescueBond) {
+            row.style.backgroundColor = '#fff0f0'; // Lekko czerwone tło
+            row.title = 'Obligacja ratunkowa - podwyższone ryzyko!';
+        }
         row.insertCell().textContent = bond.issuerName;
+        row.insertCell().textContent = bond.type.replace(' 🆘', '');
         row.insertCell().textContent = bond.type;
         row.insertCell().textContent = `${(bond.interestRate * 100).toFixed(1)}%`;
         row.insertCell().textContent = `${bond.durationMinutes} min`;
         row.insertCell().textContent = `${(bond.risk * 100).toFixed(0)}%`;
+        const riskCell = row.insertCell();
+        riskCell.textContent = `${(bond.risk * 100).toFixed(0)}%`;
+        if (bond.risk > 0.5) riskCell.style.color = '#dc3545'; // Oznacz wysokie ryzyko
+        else if (bond.risk > 0.3) riskCell.style.color = '#ffc107'; // Oznacz średnie ryzyko
         row.insertCell().textContent = bond.available;
 
         const actionsCell = row.insertCell();
