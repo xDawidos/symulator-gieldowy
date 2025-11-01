@@ -368,6 +368,14 @@
             <h4>Budżet Państwa</h4>
             <p>Aktualne środki w skarbcu: <strong id="government-treasury-display">0.00</strong> PLN</p>
             <p style="font-size: 12px; color: #6c757d;">Środki pochodzą z podatków od dywidend, zysków kapitałowych, firm, bogactwa, podatków miejskich oraz symulowanych podatków od obywateli.</p>
+            <h4>⚖️ Urząd Antymonopolowy</h4>
+    <p>Poziom: <strong id="antitrust-level">0</strong>/5</p>
+    <p style="font-size: 12px;">Szansa na analizę: <strong id="antitrust-capacity">10%</strong> | Dokładność decyzji: <strong id="antitrust-accuracy">20%</strong></p>
+    <div id="antitrust-upgrade-section">
+        <p>Koszt następnego ulepszenia: <strong id="antitrust-upgrade-cost"></strong> PLN</p>
+        <button id="antitrust-upgrade-btn" onclick="investInAntitrustOffice()">Inwestuj w Urząd</button>
+    </div>
+    <p id="antitrust-max-level-info" style="display: none; font-weight: bold; color: #28a745;">Urząd osiągnął maksymalny poziom rozwoju!</p>
         </div>
         <div class="bank-section">
             <h4>Możliwe Interwencje Rządowe</h4>
@@ -388,6 +396,15 @@
         <h2 id="management-title" style="margin-top: 0; text-align: center; color: #007bff;">👑 Panel Zarządzania</h2>
         <div class="modal-body">
             <div class="bank-section">
+                <div id="reputation-management-section" class="bank-section">
+                <h4>🤝 Relacje z Zarządem</h4>
+                <p>Twoje obecne relacje: <strong id="reputation-status">Neutralne (0)</strong></p>
+                <p style="font-size: 12px;">Popraw relacje, przekazując datek na rozwój firmy.</p>
+                <div>
+                    <input type="number" id="donation-amount" placeholder="Kwota datku">
+                    <button id="donate-btn">Przekaż datek</button>
+                </div>
+            </div>
                 <h4>💰 Specjalna Dywidenda</h4>
                 <p>Jako większościowy akcjonariusz, możesz zażądać od zarządu natychmiastowej wypłaty dywidendy.</p>
                 <p style="font-size: 12px; color: #666;">Uwaga: Taka operacja obciąża finanse spółki i może tymczasowo obniżyć jej kurs.</p>
@@ -440,15 +457,33 @@
                 <button id="view-finances-btn">Zobacz Finanse</button>
                 <p id="finances-access-info" style="font-size: 12px; color: #666; margin-top: 5px;"></p>
             </div>
-            <div id="reputation-management-section" class="bank-section">
-                <h4>🤝 Relacje z Zarządem</h4>
-                <p>Twoje obecne relacje: <strong id="reputation-status">Neutralne (0)</strong></p>
-                <p style="font-size: 12px;">Popraw relacje, przekazując datek na rozwój firmy.</p>
-                <div>
-                    <input type="number" id="donation-amount" placeholder="Kwota datku">
-                    <button id="donate-btn">Przekaż datek</button>
-                </div>
-            </div>
+            
+            <div id="influence-section" class="bank-section" style="display: none;">
+     <h4>🐙 Wpływy i Naciski</h4>
+     <p>Całkowity wpływ innych na tę spółkę: <strong id="influence-total-received">0</strong></p>
+     <h5>Wpływ wywierany przez tę spółkę na:</h5>
+     <ul id="influence-exerted-list" style="font-size: 12px; max-height: 80px; overflow-y: auto;">
+         <li>Brak</li>
+     </ul>
+     <h5>Wpływ otrzymywany od:</h5>
+     <ul id="influence-received-list" style="font-size: 12px; max-height: 80px; overflow-y: auto;">
+         <li>Brak</li>
+     </ul>
+ </div>
+
+    <div id="ma-initiation-section" class="bank-section" style="display: none;">
+        <h4><span style="font-size: 20px;">🤝</span> Fuzje i Przejęcia</h4>
+        <p style="font-size: 12px;">Wykorzystaj swoją pozycję, aby zainicjować połączenie lub wrogie przejęcie innej spółki.</p>
+        <button id="ma-open-target-modal-btn">Rozpocznij proces M&A</button>
+    </div>
+    
+    <div id="ma-defense-section" class="bank-section" style="display: none; border: 2px solid #dc3545;">
+        <h4 style="color: #dc3545;">🚨 JESTEŚ CELEM PRZEJĘCIA! 🚨</h4>
+        <p id="ma-defense-info" style="font-size: 13px;">... informacja o zagrożeniu ...</p>
+        <h5>Aktywuj mechanizmy obronne:</h5>
+        <button id="ma-defense-poisonpill-btn" title="Znacząco podniesie koszty przejęcia, ale zaszkodzi Twojej firmie (koszt: 5% wartości firmy).">Zatwierdź "Zatrutą Pigułkę"</button>
+        </div>
+
         </div>
         <button onclick="document.getElementById('management-modal').style.display='none';" style="margin-top: 15px;">Zamknij</button>
     </div>

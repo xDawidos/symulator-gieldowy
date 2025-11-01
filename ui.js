@@ -29,248 +29,325 @@ function displayStocks(previousInputValues = {}) {
         return;
     }
 
-    // --- POCZĄTEK BLOKU (DODANE Z ui2.js) ---
     // Aktualizacja nagłówka ceny (strzałki sortowania)
     const priceHeader = document.getElementById('price-header-cell');
     if (priceHeader) {
         let headerText = 'Cena (PLN)';
         if (currentSortState === 'price_asc') headerText += ' ▲';
         else if (currentSortState === 'price_desc') headerText += ' ▼';
-        priceHeader.innerHTML = headerText;
+        priceHeader.innerHTML = headerText; // Używamy innerHTML ze względu na strzałki
     } else {
-        console.warn("Nie znaleziono elementu #price-header-cell"); // Ostrzeżenie
+        console.warn("Nie znaleziono elementu #price-header-cell");
     }
-    // --- KONIEC BLOKU (DODANE Z ui2.js) ---
 
     const selectedSector = document.getElementById('sector-filter').value;
-    let filteredStocks; // W ui.js nazwa to filteredStocks
-
+    // ===>>> Filtrujemy spółki zależne na starcie <<<===
+    let baseStocksToDisplay;
     if (selectedSector === 'all') {
-        filteredStocks = stocks;
+        baseStocksToDisplay = stocks.filter(stock => !stock.isSubsidiaryOf); // Pokaż tylko te, które NIE są zależne
     } else if (selectedSector === 'REIT') {
-        filteredStocks = stocks.filter(stock => stock.assetType === 'REIT');
+        baseStocksToDisplay = stocks.filter(stock => stock.assetType === 'REIT' && !stock.isSubsidiaryOf);
     } else {
-        filteredStocks = stocks.filter(stock => stock.sector.includes(selectedSector));
+        // Upewnij się, że stock.sector istnieje i jest tablicą przed użyciem includes
+        baseStocksToDisplay = stocks.filter(stock => Array.isArray(stock.sector) && stock.sector.includes(selectedSector) && !stock.isSubsidiaryOf);
     }
 
-    stockTableBody.innerHTML = '';
+    stockTableBody.innerHTML = ''; // Wyczyść tabelę przed ponownym renderowaniem
     const sortedExchanges = Object.keys(exchanges).sort((a, b) => exchanges[a].level - exchanges[b].level);
-    const hasAnalystSkill = isSkillUnlocked('financialAnalyst');
+    const hasAnalystSkill = isSkillUnlocked('financialAnalyst'); // Sprawdź raz na początku
 
+    // --- Funkcja pomocnicza do renderowania wiersza ---
+    const renderStockRow = (stock, isSubsidiary = false, parentSymbol = null) => {
+        const exchangeData = exchanges[stock.exchange];
+        // Dodatkowe zabezpieczenie: Jeśli giełda nie istnieje lub poziom jest niezdefiniowany, ustaw dostęp na false
+        const hasAccess = exchangeData ? exchangeData.level <= playerAccessLevel : false;
+        const row = stockTableBody.insertRow();
+        row.dataset.symbol = stock.symbol; // Dodajemy atrybut data-symbol dla łatwiejszego znalezienia w JS
+
+        // Style dla bankruta lub spółki na krawędzi
+        if (stock.isBankrupt) {
+            row.style.backgroundColor = 'pink';
+            row.style.border = '2px solid red';
+            row.style.textDecoration = 'line-through';
+            row.title = 'BANKRUCTWO!';
+            row.querySelectorAll('input, button').forEach(el => el.disabled = true);
+        } else if (stock.financialHealth === -4) {
+            row.style.backgroundColor = 'lightcoral'; // Lepszy kolor niż pink
+            row.title = 'UWAGA: Spółka jest na krawędzi bankructwa!';
+        }
+
+        // Klasy i style dla spółek zależnych
+        if (isSubsidiary) {
+            row.classList.add('subsidiary-row');
+            if (parentSymbol) {
+                row.classList.add(`subsidiary-of-${parentSymbol}`); // Dodaj klasę do ukrywania/pokazywania
+            }
+            row.style.display = 'none'; // Domyślnie ukryte, pokażemy po kliknięciu rodzica
+        }
+
+        // Klasa grupy giełdy dla zwijania
+        row.className += ` exchange-group-${stock.exchange}`; // Dodaj klasę grupy giełdy
+
+        const sharesOwned = playerPortfolio[stock.symbol] ? playerPortfolio[stock.symbol].shares : 0;
+        // Zabezpieczenie przed dzieleniem przez zero, jeśli totalShares to 0
+        const playerSharePct = stock.totalShares > 0 ? (sharesOwned / stock.totalShares) * 100 : 0;
+        const isLocked = stock.isTradeLocked;
+
+        if (isLocked) {
+            row.style.opacity = '0.5';
+            row.title = 'Handel tą spółką jest tymczasowo wstrzymany z powodu bardzo niskiej ceny.';
+        }
+        // Przyciemnij, jeśli nie ma dostępu do giełdy
+        if (!hasAccess && !isLocked) {
+            row.style.opacity = '0.6';
+            row.classList.add('locked-row');
+        }
+
+        // Komórka 1: Nazwa Spółki + przyciski + ikony
+        const nameCell = row.insertCell();
+        const nameWrapper = document.createElement('div');
+        nameWrapper.style.display = 'flex';
+        nameWrapper.style.alignItems = 'center';
+        if (isSubsidiary) {
+            nameWrapper.style.paddingLeft = '25px'; // Wcięcie dla zależnych
+        }
+
+        // Przycisk rozwijania/zwijania dla spółki-matki
+        if (stock.subsidiaries && stock.subsidiaries.length > 0) {
+            const toggleBtn = document.createElement('span');
+            toggleBtn.textContent = stock.isSubsidiaryExpanded ? '▼ ' : '▶ '; // Ustaw ikonkę na podstawie zapisanego stanu
+            toggleBtn.style.cursor = 'pointer';
+            toggleBtn.style.marginRight = '5px';
+            toggleBtn.onclick = (e) => {
+                e.stopPropagation();
+                toggleSubsidiaryVisibility(stock.symbol);
+            };
+            toggleBtn.classList.add('subsidiary-toggle');
+            nameWrapper.appendChild(toggleBtn);
+        }
+
+        // Ikony statusu (Właściciel >50%, Instytut, Monopolista)
+        let stockNameContent = '';
+        if (playerSharePct > 50) stockNameContent += '👑 '; // Ikona większościowego właściciela
+        if (stock.assetType === 'ResearchInstitute') stockNameContent += '🧪 ';
+        if (stock.isMonopolist) stockNameContent += '👑 '; // Ikona Monopolisty (można zmienić na inną)
+
+        // Nazwa spółki (z ikoną państwową)
+        if (stock.isStateOwned) {
+            stockNameContent += `🏛️ ${stock.name}`;
+            nameCell.title = 'Spółka Skarbu Państwa'; // Tooltip
+        } else {
+            stockNameContent += stock.name;
+        }
+
+        const nameSpan = document.createElement('span');
+        nameSpan.innerHTML = stockNameContent;
+        if (sharesOwned > 0) nameSpan.style.fontWeight = 'bold'; // Pogrubienie posiadanych
+
+        // Przycisk "i" (Informacje)
+        const infoButton = document.createElement('button');
+        infoButton.textContent = 'i';
+        infoButton.className = 'info-btn';
+        infoButton.title = 'Pokaż opis spółki';
+        infoButton.onclick = () => openDescriptionModal(stock.symbol);
+
+        nameWrapper.appendChild(nameSpan);
+        nameWrapper.appendChild(infoButton);
+        nameCell.appendChild(nameWrapper);
+
+        // Komórka 2: Cena
+        row.insertCell().textContent = stock.price.toFixed(2);
+
+        // Komórka 3: Dostępne Akcje (uwzględnia akcje własne)
+        let availableShares;
+        const treasuryShares = stock.treasuryShares || 0;
+        if (stock.isStateOwned) {
+            const publicFloat = Math.floor(stock.totalShares * (1 - stock.stateOwnershipPct));
+            availableShares = publicFloat - stock.sharesHeld - treasuryShares;
+        } else {
+            availableShares = stock.totalShares - stock.sharesHeld - treasuryShares;
+        }
+        row.insertCell().textContent = Math.max(0, Math.floor(availableShares)).toLocaleString('pl-PL');
+
+        // Komórka 4: Posiadane Akcje
+        row.insertCell().textContent = sharesOwned.toLocaleString('pl-PL');
+
+        // Komórka 5: Akcje (kupno/sprzedaż)
+        const actionsCell = row.insertCell();
+        const quantityInput = document.createElement('input');
+        quantityInput.type = 'number';
+        quantityInput.min = '1';
+        quantityInput.value = previousInputValues[stock.symbol] !== undefined ? previousInputValues[stock.symbol] : '1';
+        quantityInput.style.width = '50px';
+        quantityInput.id = `quantity-${stock.symbol}`;
+        // Zablokuj input jeśli: brak dostępu LUB handel zablokowany LUB trwa fuzja LUB nie można handlować
+        quantityInput.disabled = !hasAccess || isLocked || stock.isBeingMerged || stock.canBeTraded === false;
+        actionsCell.appendChild(quantityInput);
+
+        // Przycisk Kup
+        const buyButton = document.createElement('button');
+        buyButton.textContent = hasAccess ? 'Kup' : '🔒';
+        buyButton.disabled = !hasAccess || isLocked || stock.isBeingMerged || stock.canBeTraded === false;
+        if (hasAccess && isLocked) buyButton.textContent = '⛔'; // Jeśli dostęp jest, ale handel zablokowany
+        if (hasAccess && !isLocked && stock.canBeTraded !== false) { // Jeśli można handlować
+            buyButton.onclick = () => {
+                const quantity = parseInt(quantityInput.value, 10);
+                if (!isNaN(quantity) && quantity > 0) buyStock(stock.symbol, quantity);
+                else alert("Proszę wprowadzić poprawną, dodatnią liczbę.");
+            };
+        }
+        actionsCell.appendChild(buyButton);
+
+        // Przycisk Sprzedaj
+        const sellButton = document.createElement('button');
+        sellButton.textContent = 'Sprzedaj';
+        sellButton.disabled = !hasAccess || isLocked || sharesOwned === 0 || stock.isBeingMerged || stock.canBeTraded === false;
+        if (isLocked) sellButton.textContent = '⛔';
+        if (hasAccess && !isLocked && stock.canBeTraded !== false) {
+             sellButton.onclick = () => {
+                const quantity = parseInt(quantityInput.value, 10);
+                if (!isNaN(quantity) && quantity > 0) sellStock(stock.symbol, quantity);
+                else alert("Proszę wprowadzić poprawną, dodatnią liczbę.");
+            };
+        }
+        actionsCell.appendChild(sellButton);
+
+        // Przycisk Sprzedaj MAX
+        const sellAllButton = document.createElement('button');
+        sellAllButton.textContent = 'Sprzedaj MAX';
+        sellAllButton.disabled = !hasAccess || isLocked || sharesOwned === 0 || stock.isBeingMerged || stock.canBeTraded === false;
+        sellAllButton.title = "Sprzedaj wszystkie posiadane akcje tej spółki";
+        sellAllButton.style.marginLeft = '2px';
+         if (hasAccess && !isLocked && stock.canBeTraded !== false) {
+            sellAllButton.onclick = () => {
+                if (confirm(`Czy na pewno chcesz sprzedać wszystkie ${sharesOwned.toLocaleString('pl-PL')} akcji ${stock.name}?`)) {
+                    sellAllShares(stock.symbol);
+                }
+            };
+        }
+        actionsCell.appendChild(sellAllButton);
+
+        // Przycisk Wykres
+        const historyButton = document.createElement('button');
+        historyButton.textContent = 'Wykres';
+        historyButton.style.marginLeft = '5px';
+        historyButton.disabled = !hasAccess; // Wykres dostępny tylko przy dostępie do giełdy
+        historyButton.onclick = () => { showPriceHistoryModal(stock.symbol); };
+        actionsCell.appendChild(historyButton);
+
+        // Przycisk Szczegóły Akcjonariatu
+        const detailsButton = document.createElement('button');
+        detailsButton.textContent = '📊';
+        detailsButton.title = "Pokaż strukturę akcjonariatu";
+        detailsButton.style.marginLeft = '5px';
+        detailsButton.disabled = !hasAccess;
+        detailsButton.onclick = () => { openStockDetailsModal(stock.symbol); };
+        actionsCell.appendChild(detailsButton);
+
+        // Przycisk Zarządzaj (dla >50% własności)
+        if (playerSharePct > 50) {
+            const manageButton = document.createElement('button');
+            manageButton.textContent = '👑 Zarządzaj';
+            manageButton.style.marginLeft = '5px';
+            manageButton.style.border = '2px solid #007bff';
+            manageButton.onclick = () => openManagementModal(stock.symbol);
+            actionsCell.appendChild(manageButton);
+        }
+
+        // Komórka 6: Raport + Wpływ
+        const reportCell = row.insertCell();
+        reportCell.style.textAlign = 'center';
+
+        const isMajorityOwner = playerSharePct > 50;
+        // Użyj długu z bilansu, jeśli dostępny
+        const hasDebt = stock.balanceSheet ? stock.balanceSheet.liabilities > 0 : (stock.corporateDebt && stock.corporateDebt > 0);
+        let reportContent = '';
+        let reportTitle = '';
+
+        // Ikona Raportu
+        if (hasAnalystSkill) {
+            switch (stock.lastReport) {
+                case 'excellent': reportContent += '💎'; reportTitle += 'Doskonały raport! '; break;
+                case 'good': reportContent += '📈'; reportTitle += 'Dobry raport. '; break;
+                case 'neutral': reportContent += '😐'; reportTitle += 'Neutralny raport. '; break;
+                case 'bad': reportContent += '📉'; reportTitle += 'Słaby raport. '; break;
+                case 'tragic': reportContent += '🔥'; reportTitle += 'Tragiczny raport! '; break;
+                default: reportContent += '- '; reportTitle += 'Brak raportu. ';
+            }
+        } else {
+            reportContent += '🔒';
+            reportTitle += 'Wykup Analityka Finansowego, aby zobaczyć raporty. ';
+        }
+
+        // Ikona Długu
+        if (hasDebt && (hasAnalystSkill || isMajorityOwner)) {
+            reportContent += '<span style="color:red;" title="Spółka jest zadłużona!"> 💵‼️</span>';
+            reportTitle += '(Spółka jest zadłużona!) ';
+        }
+        
+        // --- >>> NOWA IKONA WPŁYWU <<< ---
+        if (stock.influence && stock.influence.totalReceived > 10) { // Pokaż ikonę, jeśli wpływ przekracza 10
+             const influenceStrength = Math.min(5, Math.ceil(stock.influence.totalReceived / 15)); // Skala 1-5
+             const influenceIcon = '🐙'; // Możesz użyć '🐙'.repeat(influenceStrength) dla wizualizacji siły
+             reportContent += ` <span title="Całkowity wpływ innych spółek: ${stock.influence.totalReceived.toFixed(1)}">${influenceIcon}</span>`;
+             reportTitle += `(Pod wpływem: ${stock.influence.totalReceived.toFixed(1)})`;
+        }
+        // --- >>> KONIEC NOWEJ IKONY <<< ---
+
+
+        reportCell.innerHTML = reportContent;
+        reportCell.title = reportTitle.trim(); // Usuń zbędne spacje na końcu
+
+        return row; // Zwróć stworzony wiersz
+    }; // Koniec funkcji renderStockRow
+
+    // --- Główna pętla renderowania ---
     sortedExchanges.forEach(exchangeKey => {
         const exchange = exchanges[exchangeKey];
-        // Używamy nazwy 'filteredStocks' z pliku ui.js
-        let stocksOnThisExchange = filteredStocks.filter(stock => stock.exchange === exchangeKey);
+        // Używamy przefiltrowanej listy baseStocksToDisplay
+        let stocksOnThisExchange = baseStocksToDisplay.filter(stock => stock.exchange === exchangeKey);
 
-        // --- POCZĄTEK BLOKU (DODANE Z ui2.js) ---
-        // --- NOWA LOGIKA SORTOWANIA WEWNĄTRZ GIEŁDY ---
+        // Sortowanie wewnątrz giełdy
         if (currentSortState === 'price_asc') {
             stocksOnThisExchange.sort((a, b) => a.price - b.price);
         } else if (currentSortState === 'price_desc') {
             stocksOnThisExchange.sort((a, b) => b.price - a.price);
         }
-        // --- KONIEC BLOKU (DODANE Z ui2.js) ---
 
-
+        // Renderowanie nagłówka giełdy (jeśli są na niej spółki)
         if (stocksOnThisExchange.length > 0) {
             const headerRow = stockTableBody.insertRow();
             headerRow.className = 'exchange-header';
             headerRow.onclick = () => toggleExchangeVisibility(exchangeKey);
             const headerCell = headerRow.insertCell();
-            headerCell.colSpan = "6";
+            headerCell.colSpan = "6"; // Ustaw colSpan na liczbę kolumn
             const icon = exchangeCollapseState[exchangeKey] ? '▶' : '▼';
-            headerCell.innerHTML = `<h4 style="margin: 5px 0; color: ${exchange.color}; display: flex; justify-content: space-between; align-items: center;">
-                ${exchange.name}
-                <span id="toggle-icon-${exchangeKey}">${icon}</span>
-            </h4>`;
+            headerCell.innerHTML = `<h4 style="margin: 5px 0; color: ${exchange.color}; display: flex; justify-content: space-between; align-items: center;">${exchange.name}<span id="toggle-icon-${exchangeKey}">${icon}</span></h4>`;
         }
 
+        // Renderowanie wierszy dla każdej spółki na tej giełdzie
         stocksOnThisExchange.forEach(stock => {
-            const hasAccess = exchange.level <= playerAccessLevel;
-            const row = stockTableBody.insertRow();
-
-            if (stock.isBankrupt) {
-                row.style.backgroundColor = 'pink';
-                row.style.border = '2px solid red';
-                row.style.textDecoration = 'line-through';
-                row.title = 'BANKRUCTWO!';
-                row.querySelectorAll('input, button').forEach(el => el.disabled = true);
-            } else if (stock.financialHealth === -4) {
-                row.style.backgroundColor = 'pink';
-                row.title = 'UWAGA: Spółka jest na krawędzi bankructwa!';
-            }
-
-            row.className = `exchange-group-${exchangeKey}`;
-
-            const sharesOwned = playerPortfolio[stock.symbol] ? playerPortfolio[stock.symbol].shares : 0;
-            const playerSharePct = (sharesOwned / stock.totalShares) * 100;
-            const isLocked = stock.isTradeLocked;
-
-            if (isLocked) {
-                row.style.opacity = '0.5';
-                row.title = 'Handel tą spółką jest tymczasowo wstrzymany z powodu bardzo niskiej ceny.';
-            }
-
+            const mainRow = renderStockRow(stock, false); // Renderuj główny wiersz (nie jest zależny)
+            // Ukryj główny wiersz, jeśli giełda jest zwinięta
             if (exchangeCollapseState[exchangeKey]) {
-                row.style.display = 'none';
-            }
-            if (!hasAccess && !isLocked) {
-                row.style.opacity = '0.6';
-                row.classList.add('locked-row');
+                mainRow.style.display = 'none';
             }
 
-            // Komórka 1: Nazwa Spółki + przycisk "i"
-            // Komórka 1: Nazwa Spółki + przycisk "i"
-            const nameCell = row.insertCell();
-            const nameWrapper = document.createElement('div');
-            nameWrapper.style.display = 'flex';
-            nameWrapper.style.alignItems = 'center';
-
-            let stockNameContent = '';
-            if (playerSharePct > 50) stockNameContent += '👑 ';
-            if (stock.assetType === 'ResearchInstitute') {
-                stockNameContent += '🧪 ';
+            // Renderuj spółki zależne pod głównym wierszem
+            if (stock.subsidiaries && stock.subsidiaries.length > 0) {
+                stock.subsidiaries.forEach(subSymbol => {
+                    const subStock = stocks.find(s => s.symbol === subSymbol);
+                    if (subStock) {
+                        const subRow = renderStockRow(subStock, true, stock.symbol); // Renderuj wiersz zależny, przekazując symbol rodzica
+                        // Ukryj wiersz zależny, jeśli giełda jest zwinięta LUB rodzic jest zwinięty
+                        if (exchangeCollapseState[exchangeKey] || !stock.isSubsidiaryExpanded) {
+                            subRow.style.display = 'none';
+                        } else {
+                            subRow.style.display = ''; // Pokaż, jeśli rozwinięte
+                        }
+                    }
+                });
             }
-            if (stock.isStateOwned) {
-                stockNameContent += `🏛️ ${stock.name}`;
-                nameCell.title = 'Spółka Skarbu Państwa';
-            } else {
-                stockNameContent += stock.name;
-            }
-
-            const nameSpan = document.createElement('span');
-            nameSpan.innerHTML = stockNameContent;
-            if (sharesOwned > 0) nameSpan.style.fontWeight = 'bold';
-
-            const infoButton = document.createElement('button');
-            infoButton.textContent = 'i';
-            infoButton.className = 'info-btn';
-            infoButton.title = 'Pokaż opis spółki';
-            infoButton.onclick = () => openDescriptionModal(stock.symbol);
-
-            nameWrapper.appendChild(nameSpan);
-            nameWrapper.appendChild(infoButton);
-            nameCell.appendChild(nameWrapper);
-
-            // Komórka 2: Cena
-            row.insertCell().textContent = stock.price.toFixed(2);
-
-            // Komórka 3: Dostępne Akcje
-            let availableShares;
-            if (stock.isStateOwned) {
-                const publicFloat = Math.floor(stock.totalShares * (1 - stock.stateOwnershipPct));
-                availableShares = publicFloat - stock.sharesHeld;
-            } else {
-                availableShares = stock.totalShares - stock.sharesHeld;
-            }
-            row.insertCell().textContent = Math.max(0, Math.floor(availableShares)).toLocaleString('pl-PL');
-
-            // Komórka 4: Posiadane Akcje
-            row.insertCell().textContent = sharesOwned.toLocaleString('pl-PL');
-
-            // Komórka 5: Akcje (kupno/sprzedaż)
-            const actionsCell = row.insertCell();
-            const quantityInput = document.createElement('input');
-            quantityInput.type = 'number';
-            quantityInput.min = '1';
-            quantityInput.value = previousInputValues[stock.symbol] !== undefined ? previousInputValues[stock.symbol] : '1';
-            quantityInput.style.width = '50px';
-            quantityInput.id = `quantity-${stock.symbol}`;
-            quantityInput.disabled = !hasAccess || isLocked;
-            actionsCell.appendChild(quantityInput);
-
-            const buyButton = document.createElement('button');
-            buyButton.textContent = hasAccess ? 'Kup' : '🔒';
-            buyButton.disabled = !hasAccess || isLocked;
-            if (hasAccess && isLocked) buyButton.textContent = '⛔';
-            if (hasAccess && !isLocked) {
-                buyButton.onclick = () => {
-                    const quantity = parseInt(quantityInput.value, 10);
-                    if (quantity > 0) buyStock(stock.symbol, quantity);
-                    else alert("Proszę wprowadzić poprawną, dodatnią liczbę.");
-                };
-            }
-            actionsCell.appendChild(buyButton);
-
-            const sellButton = document.createElement('button');
-            sellButton.textContent = 'Sprzedaj';
-            sellButton.disabled = isLocked || sharesOwned === 0;
-            if (isLocked) sellButton.textContent = '⛔';
-            sellButton.onclick = () => {
-                const quantity = parseInt(document.getElementById(`quantity-${stock.symbol}`).value, 10);
-                if (quantity > 0) sellStock(stock.symbol, quantity);
-            };
-            actionsCell.appendChild(sellButton);
-
-            const sellAllButton = document.createElement('button');
-            sellAllButton.textContent = 'Sprzedaj MAX';
-            sellAllButton.disabled = isLocked || sharesOwned === 0;
-            sellAllButton.title = "Sprzedaj wszystkie posiadane akcje tej spółki";
-            sellAllButton.style.marginLeft = '2px';
-            sellAllButton.onclick = () => {
-                if (confirm(`Czy na pewno chcesz sprzedać wszystkie ${sharesOwned} akcji ${stock.name}?`)) {
-                    sellAllShares(stock.symbol);
-                }
-            };
-            actionsCell.appendChild(sellAllButton);
-
-            const historyButton = document.createElement('button');
-            historyButton.textContent = 'Wykres';
-            historyButton.style.marginLeft = '5px';
-            historyButton.onclick = () => { showPriceHistoryModal(stock.symbol); };
-            actionsCell.appendChild(historyButton);
-
-            const detailsButton = document.createElement('button');
-            detailsButton.textContent = '📊';
-            detailsButton.title = "Pokaż strukturę akcjonariatu";
-            detailsButton.style.marginLeft = '5px';
-            detailsButton.onclick = () => { openStockDetailsModal(stock.symbol); };
-            actionsCell.appendChild(detailsButton);
-
-            if (playerSharePct > 50) {
-                const manageButton = document.createElement('button');
-                manageButton.textContent = '👑 Zarządzaj';
-                manageButton.style.marginLeft = '5px';
-                manageButton.style.border = '2px solid #007bff';
-                manageButton.onclick = () => openManagementModal(stock.symbol);
-                actionsCell.appendChild(manageButton);
-            }
-
-            // Komórka 6: Raport
-            const reportCell = row.insertCell();
-            reportCell.style.textAlign = 'center';
-            reportCell.style.fontWeight = 'bold';
-            reportCell.style.fontSize = '18px';
-
-            const isMajorityOwner = playerSharePct > 50;
-            const hasDebt = stock.corporateDebt && stock.corporateDebt > 0; // Ta logika jest w obu plikach
-            let reportContent = '';
-            let reportTitle = '';
-
-            if (hasAnalystSkill) {
-                switch (stock.lastReport) {
-                    case 'excellent': reportContent = '💎'; reportTitle = 'Doskonały raport!'; break;
-                    case 'good': reportContent = '📈'; reportTitle = 'Dobry raport'; break;
-                    case 'neutral': reportContent = '😐'; reportTitle = 'Neutralny raport'; break;
-                    case 'bad': reportContent = '📉'; reportTitle = 'Słaby raport'; break;
-                    case 'tragic': reportContent = '🔥'; reportTitle = 'Tragiczny raport!'; break;
-                    default: reportContent = '-'; reportTitle = 'Brak raportu';
-                }
-            } else {
-                reportContent = '🔒';
-                reportTitle = 'Wykup umiejętność "Analityk Finansowy", aby zobaczyć raporty.';
-            }
-
-            // W pliku ui.js sprawdzanie długu jest, ale używa 'stock.corporateDebt'
-            // W pliku ui2.js też używa 'stock.corporateDebt'
-            // Zostawiamy jak jest.
-            if (hasDebt && (hasAnalystSkill || isMajorityOwner)) {
-                reportContent += ' <span style="color:red;" title="Spółka jest zadłużona!">💵​‼️</span>';
-                reportTitle += ' (Spółka jest zadłużona!)';
-            }
-
-            reportCell.innerHTML = reportContent;
-            reportCell.title = reportTitle;
         });
     });
 }
@@ -1061,6 +1138,52 @@ function openManagementModal(symbol) {
         repSection.style.display = 'none';
     }
     modal.style.display = 'block';
+
+    // --- >>> NOWA LOGIKA DLA SEKCJI WPŁYWÓW <<< ---
+    const influenceSection = document.getElementById('influence-section');
+    const totalReceivedEl = document.getElementById('influence-total-received');
+    const exertedListEl = document.getElementById('influence-exerted-list');
+    const receivedListEl = document.getElementById('influence-received-list');
+
+    // Sprawdź, czy spółka ma system wpływów (nie jest np. startupem)
+    if (stock.influence && influenceSection && totalReceivedEl && exertedListEl && receivedListEl) {
+        totalReceivedEl.textContent = stock.influence.totalReceived.toFixed(1); // Pokaż całkowity otrzymywany wpływ
+
+        // Wypełnij listę wywieranych wpływów
+        exertedListEl.innerHTML = ''; // Wyczyść
+        const exertedEntries = Object.entries(stock.influence.exerted);
+        if (exertedEntries.length > 0) {
+            exertedEntries.sort(([, a], [, b]) => b - a); // Sortuj malejąco wg siły wpływu
+            exertedEntries.forEach(([targetSymbol, value]) => {
+                const li = document.createElement('li');
+                li.textContent = `${targetSymbol}: ${value.toFixed(1)}`;
+                exertedListEl.appendChild(li);
+            });
+        } else {
+            exertedListEl.innerHTML = '<li>Brak</li>';
+        }
+
+        // Wypełnij listę otrzymywanych wpływów
+        receivedListEl.innerHTML = ''; // Wyczyść
+        const receivedEntries = Object.entries(stock.influence.received);
+        if (receivedEntries.length > 0) {
+            receivedEntries.sort(([, a], [, b]) => b - a); // Sortuj malejąco wg siły wpływu
+            receivedEntries.forEach(([sourceSymbol, value]) => {
+                const li = document.createElement('li');
+                li.textContent = `${sourceSymbol}: ${value.toFixed(1)}`;
+                receivedListEl.appendChild(li);
+            });
+        } else {
+            receivedListEl.innerHTML = '<li>Brak</li>';
+        }
+
+        influenceSection.style.display = 'block'; // Pokaż sekcję
+    } else if (influenceSection) {
+        influenceSection.style.display = 'none'; // Ukryj sekcję, jeśli nie dotyczy tej spółki
+    }
+
+
+
 }
 
 
@@ -3490,11 +3613,63 @@ function openStateModal() {
     }
 }
 
+function toggleSubsidiaryVisibility(parentSymbol) {
+    const parentStock = stocks.find(s => s.symbol === parentSymbol);
+    if (!parentStock) return;
+
+    // Odwróć stan rozwinięcia
+    parentStock.isSubsidiaryExpanded = !parentStock.isSubsidiaryExpanded;
+
+    // Znajdź wiersze zależne i przełącz ich widoczność
+    const subRows = document.querySelectorAll(`.subsidiary-of-${parentSymbol}`);
+    subRows.forEach(row => {
+        row.style.display = parentStock.isSubsidiaryExpanded ? '' : 'none';
+    });
+
+    // Zaktualizuj ikonkę przycisku
+    const parentRow = document.querySelector(`tr[data-symbol="${parentSymbol}"]`);
+    if (parentRow) {
+        const toggleBtn = parentRow.querySelector('.subsidiary-toggle');
+        if (toggleBtn) {
+            toggleBtn.textContent = parentStock.isSubsidiaryExpanded ? '▼ ' : '▶ ';
+        }
+    }
+}
+
 function updateStateModalContent() {
     const treasuryDisplay = document.getElementById('government-treasury-display');
     if (treasuryDisplay) {
         treasuryDisplay.textContent = governmentTreasury.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' });
     }
-    // W przyszłości można tu dynamicznie aktualizować listę możliwych akcji
-    // np. na podstawie aktualnego stanu gry lub budżetu.
+
+    // --- >>> NOWA LOGIKA DLA URZĘDU ANTYMONOPOLOWEGO <<< ---
+    const levelEl = document.getElementById('antitrust-level');
+    const capacityEl = document.getElementById('antitrust-capacity');
+    const accuracyEl = document.getElementById('antitrust-accuracy');
+    const upgradeSectionEl = document.getElementById('antitrust-upgrade-section');
+    const upgradeCostEl = document.getElementById('antitrust-upgrade-cost');
+    const upgradeBtnEl = document.getElementById('antitrust-upgrade-btn');
+    const maxLevelInfoEl = document.getElementById('antitrust-max-level-info');
+
+    // Sprawdź, czy wszystkie elementy istnieją
+    if (levelEl && capacityEl && accuracyEl && upgradeSectionEl && upgradeCostEl && upgradeBtnEl && maxLevelInfoEl) {
+        levelEl.textContent = `${antitrustOffice.level}`;
+        capacityEl.textContent = `${(antitrustOffice.analysisCapacity * 100).toFixed(0)}%`;
+        accuracyEl.textContent = `${(antitrustOffice.accuracy * 100).toFixed(0)}%`;
+
+        if (antitrustOffice.level < 5) { // Jeśli nie osiągnięto max poziomu
+            const nextLevelCost = ANTITRUST_UPGRADE_COSTS[antitrustOffice.level];
+            upgradeCostEl.textContent = nextLevelCost.toLocaleString('pl-PL');
+            // Przycisk aktywny tylko, jeśli GRACZA stać (inwestycja gracza)
+            upgradeBtnEl.disabled = playerCash < nextLevelCost;
+            upgradeSectionEl.style.display = 'block';
+            maxLevelInfoEl.style.display = 'none';
+        } else { // Osiągnięto maksymalny poziom
+            upgradeSectionEl.style.display = 'none';
+            maxLevelInfoEl.style.display = 'block';
+        }
+    }
+    // --- >>> KONIEC NOWEJ LOGIKI <<< ---
+
+    // W przyszłości można tu dynamicznie aktualizować listę możliwych akcji rządowych
 }

@@ -91,6 +91,15 @@ let stateBondOffer = {
     longTerm: { available: 0, interestBase: 0.05 }
 };
 
+let antitrustOffice = {
+    level: 0,              // Poziom urzędu (0-5)
+    analysisCapacity: 0.1, // Bazowa szansa na analizę (10%)
+    accuracy: 0.2,         // Bazowa szansa na poprawną blokadę (20%)
+    budget: 0              // Budżet urzędu (może być używany do kosztów analizy) - Opcjonalne
+};
+
+const ANTITRUST_UPGRADE_COSTS = [50000, 150000, 500000, 1500000, 5000000]; // Koszty ulepszeń urzędu
+
 
 
 const BANK_TYPES = {
@@ -1646,184 +1655,240 @@ const CANDLE_INTERVAL = 15 * 1000; // 15 sekund na jedną świecę bazową
 
 function updateStockPrices() {
     const now = Date.now();
-    const marketModifier = 1 + (marketVolatilityIndex - 1) * 0.5;
+    const marketModifier = 1 + (marketVolatilityIndex - 1) * 0.5; // Modifier based on market volatility index
 
     stocks.forEach(stock => {
+        // Skip Holding companies, they are updated separately
         if (stock.assetType === 'Holding') {
-            return; // Pomiń tę spółkę, jej cena jest obliczana w updateHoldingCompanies()
+            return;
         }
+
+        // Initialize modifiers for price growth and volatility
         let priceGrowthModifier = 1.0;
         let volatilityModifier = 1.0;
-        let isVolatilityCapped = false;
+        let isVolatilityCapped = false; // Flag for CEO trait 'pewniak'
+
+        // Apply modifiers based on corporate phase
         switch (stock.corporatePhase) {
             case CORPORATE_PHASES.GROWTH:
-                priceGrowthModifier += 0.015; // +1.5% do dryfu
-                volatilityModifier += 0.1; // +10% do zmienności
+                priceGrowthModifier += 0.015; // +1.5% drift
+                volatilityModifier += 0.1; // +10% volatility
                 break;
             case CORPORATE_PHASES.STABILITY:
-                volatilityModifier -= 0.1; // -10% do zmienności
+                volatilityModifier -= 0.1; // -10% volatility
                 break;
             case CORPORATE_PHASES.DECLINE:
-                priceGrowthModifier -= 0.02; // -2% do dryfu
-                volatilityModifier += 0.15; // +15% do zmienności
+                priceGrowthModifier -= 0.02; // -2% drift
+                volatilityModifier += 0.15; // +15% volatility
                 break;
             case CORPORATE_PHASES.REORGANIZATION:
-                volatilityModifier += 0.2; // +20% do zmienności (niepewność)
+                volatilityModifier += 0.2; // +20% volatility (uncertainty)
                 break;
             case CORPORATE_PHASES.GOLDEN_YEAR:
-                priceGrowthModifier += 0.04; // +4% do dryfu!
-                volatilityModifier -= 0.05; // Nieco stabilniejszy wzrost
+                priceGrowthModifier += 0.04; // +4% drift!
+                volatilityModifier -= 0.05; // Slightly more stable growth
                 break;
             case CORPORATE_PHASES.SHADOW_DESCENT:
-                priceGrowthModifier -= 0.05; // -5% do dryfu!
-                volatilityModifier += 0.25; // +25% do zmienności
+                priceGrowthModifier -= 0.05; // -5% drift!
+                volatilityModifier += 0.25; // +25% volatility
                 break;
             case CORPORATE_PHASES.INNOVATION_PUSH:
-                priceGrowthModifier += 0.01; // Lekki wzrost
-                volatilityModifier += 0.1; // +10% do zmienności (ryzyko R&D)
+                priceGrowthModifier += 0.01; // Slight growth
+                volatilityModifier += 0.1; // +10% volatility (R&D risk)
                 break;
         }
 
+        // Apply modifiers based on CEO traits
         if (stock.ceo && stock.ceo.traits) {
             stock.ceo.traits.forEach(trait => {
                 switch (trait.id) {
-                    // Modyfikatory wzrostu ceny
+                    // Price Growth Modifiers
                     case 'wyjadacz': priceGrowthModifier += 0.01; break;
                     case 'rekin': priceGrowthModifier += 0.05; break;
                     case 'filar_w_branzy': priceGrowthModifier += 0.01; break;
                     case 'tyran': priceGrowthModifier -= 0.02; break;
                     case 'rozrzutny': priceGrowthModifier -= 0.02; break;
                     case 'nieudacznik': priceGrowthModifier -= 0.05; volatilityModifier += 0.05; break;
-                    case 'biurowy_dron': priceGrowthModifier -= 0.01; break; // NOWA LINIA
+                    case 'biurowy_dron': priceGrowthModifier -= 0.01; break;
 
-                    // Modyfikatory zmienności
+                    // Volatility Modifiers
                     case 'hobbista': volatilityModifier += 0.02; break;
                     case 'wizjoner': volatilityModifier += 0.05; break;
                     case 'stoik': volatilityModifier *= 0.60; break;
-                    case 'pewniak': isVolatilityCapped = true; break;
-                    case 'ryzykant': volatilityModifier += 0.10; break; // NOWA LINIA
-                    case 'ksiegowy': volatilityModifier *= 0.95; break; // NOWA LINIA
-                    case 'lowca_glow': volatilityModifier += 0.15; break; // NOWA LINIA
+                    case 'pewniak': isVolatilityCapped = true; break; // Caps volatility later
+                    case 'ryzykant': volatilityModifier += 0.10; break;
+                    case 'ksiegowy': volatilityModifier *= 0.95; break;
+                    case 'lowca_glow': volatilityModifier += 0.15; break;
                 }
             });
         }
 
-        // Reszta funkcji pozostaje taka sama, jak w Twoim pliku
+        // Initialize chart data if missing
         if (!stock.currentCandle || !stock.candlestickHistory) {
             stock.candlestickHistory = [];
             stock.lineHistory = [];
-            stock.currentCandle = { time: now, open: stock.price, high: stock.price, low: stock.price, close: stock.price };
+            // Ensure initial price is set, falling back to 0.01 if undefined/null/0
+            const initialPrice = stock.price > 0 ? stock.price : 0.01;
+            stock.currentCandle = { time: now, open: initialPrice, high: initialPrice, low: initialPrice, close: initialPrice };
         }
 
+        // Calculate price change
         let change;
-
         let effectiveVolatility = stock.volatilityFactor * volatilityModifier;
 
+        // Apply volatility cap if CEO trait 'pewniak' is active
         if (isVolatilityCapped) {
-            if (effectiveVolatility < 0.5) effectiveVolatility = 0.5;
-            if (effectiveVolatility > 3.0) effectiveVolatility = 3.0;
+            effectiveVolatility = Math.max(0.5, Math.min(effectiveVolatility, 3.0));
         }
 
-        
-
+        // Special market behavior (e.g., IPO boost) overrides standard price change
         if (stock.marketBehavior) {
-            // Sprawdź, czy jesteśmy w fazie 'ipo_boost' i czy czas jeszcze nie minął
             if (stock.marketBehavior.phase === 'ipo_boost' && now < stock.marketBehavior.endTime) {
-                // Zastosuj silniejszy, ukierunkowany na wzrost losowy ruch ceny
-                change = (0.01 + Math.random() * 0.02) * effectiveVolatility; // Mały stały wzrost + mniejsza losowość
-                // Nie modyfikujemy tu priceDrift, pozwalamy mu działać normalnie
+                // Apply a stronger, upward-biased random movement
+                change = (0.01 + Math.random() * 0.02) * effectiveVolatility;
             } else if (now >= stock.marketBehavior.endTime) {
-                // Czas minął, zakończ specjalne zachowanie
-                logEvent(`📈 Faza początkowego wzrostu dla ${stock.name} zakończyła się.`);
-                stock.marketBehavior = null; // Usuń obiekt zachowania
-                // Od tego momentu cena będzie się zmieniać wg standardowej logiki (poniżej)
-            }
-            // Jeśli faza jest inna lub czas minął i marketBehavior zostało usunięte,
-            // przejdziemy do standardowej logiki obliczania 'change' poniżej.
-        }
-
-        if (!stock.marketBehavior) { // Wykonaj tylko jeśli NIE jesteśmy w aktywnej fazie specjalnej
-             if (stock.activePositiveBoostUntil && now < stock.activePositiveBoostUntil) {
-                 change = (0.015 + Math.random() * 0.025) * effectiveVolatility;
-             } else if (stock.activeNegativeBoostUntil && now < stock.activeNegativeBoostUntil) {
-                 change = -(0.015 + Math.random() * 0.025) * effectiveVolatility;
-             } else {
-                 if (stock.activePositiveBoostUntil && now >= stock.activePositiveBoostUntil) stock.activePositiveBoostUntil = null;
-                 if (stock.activeNegativeBoostUntil && now >= stock.activeNegativeBoostUntil) stock.activeNegativeBoostUntil = null;
+                // End special behavior phase
+                logEvent(`📈 IPO boost phase for ${stock.name} has ended.`);
+                stock.marketBehavior = null; // Remove behavior object
+                // Standard logic will apply from next tick
+                change = (Math.random() - 0.5) * 0.2 * effectiveVolatility * marketModifier; // Calculate standard change for this tick
+            } else {
+                 // If behavior exists but isn't ipo_boost or time expired, use standard logic
                  change = (Math.random() - 0.5) * 0.2 * effectiveVolatility * marketModifier;
-             }
+            }
+        }
+        // Standard price change logic (if no active special behavior)
+        else {
+            if (stock.activePositiveBoostUntil && now < stock.activePositiveBoostUntil) {
+                // Apply positive boost
+                change = (0.015 + Math.random() * 0.025) * effectiveVolatility;
+            } else if (stock.activeNegativeBoostUntil && now < stock.activeNegativeBoostUntil) {
+                // Apply negative boost (make change negative)
+                change = -(0.015 + Math.random() * 0.025) * effectiveVolatility;
+            } else {
+                // Reset expired boosts
+                if (stock.activePositiveBoostUntil && now >= stock.activePositiveBoostUntil) stock.activePositiveBoostUntil = null;
+                if (stock.activeNegativeBoostUntil && now >= stock.activeNegativeBoostUntil) stock.activeNegativeBoostUntil = null;
+                // Calculate standard random change influenced by volatility and market index
+                change = (Math.random() - 0.5) * 0.2 * effectiveVolatility * marketModifier;
+            }
         }
 
-        if (stock.activePositiveBoostUntil && now < stock.activePositiveBoostUntil) {
-            change = (0.015 + Math.random() * 0.025) * effectiveVolatility;
-        } else if (stock.activeNegativeBoostUntil && now < stock.activeNegativeBoostUntil) {
-            change = -(0.015 + Math.random() * 0.025) * effectiveVolatility;
-        } else {
-            if (stock.activePositiveBoostUntil && now >= stock.activePositiveBoostUntil) stock.activePositiveBoostUntil = null;
-            if (stock.activeNegativeBoostUntil && now >= stock.activeNegativeBoostUntil) stock.activeNegativeBoostUntil = null;
-            change = (Math.random() - 0.5) * 0.2 * effectiveVolatility * marketModifier;
+
+        // Calculate base price drift (tendency to increase/decrease based on health/phase/CEO)
+        // Ensure stock.price is valid before calculation
+        const currentPriceForDrift = stock.price > 0 ? stock.price : 0.01;
+        const priceDrift = currentPriceForDrift * 0.00005 * (priceGrowthModifier - 1.0); // Drift is proportional to price
+
+        // --- Apply Monopolist bonus to drift ---
+        let finalPriceDrift = priceDrift;
+        if (stock.isMonopolist) {
+            finalPriceDrift *= 1.5; // Monopolist has 50% higher base price drift
+        }
+        // --- End Monopolist bonus ---
+
+        // Update the stock price
+        stock.price += change + finalPriceDrift; // Apply change and final drift
+
+        // Ensure price doesn't go below 0.01
+        if (stock.price <= 0) { // Check if less than or equal to zero
+             stock.price = 0.01; // Set minimum price
         }
 
-        const priceDrift = stock.price * 0.00005 * (priceGrowthModifier - 1.0);
-        stock.price += change + priceDrift;
 
-        if (stock.price < 0.01) stock.price = 0.01;
-
+        // Logic for locking/unlocking trade based on price
         if (stock.price < 1.00 && !stock.isTradeLocked) {
+            // High chance to lock trade if price drops below 1.00
             if (Math.random() < 0.80) {
                 stock.isTradeLocked = true;
-                logEvent(`⛔ Handel akcjami ${stock.name} (${stock.symbol}) został tymczasowo wstrzymany z powodu niskiej ceny!`, 'review');
+                logEvent(`⛔ Trading halted for ${stock.name} (${stock.symbol}) due to low price!`, 'review');
             }
         } else if (stock.price > 1.50 && stock.isTradeLocked) {
+            // Unlock trade if price recovers above 1.50
             stock.isTradeLocked = false;
-            logEvent(`✅ Handel akcjami ${stock.name} (${stock.symbol}) został wznowiony!`, 'review');
+            logEvent(`✅ Trading resumed for ${stock.name} (${stock.symbol})!`, 'review');
         }
 
+        // Bankruptcy check pre-condition (simplified, actual bankruptcy in processFinancialReports)
         if (stock.financialHealth <= -5 && !stock.isBankrupt) {
             let canGoBankrupt = true;
-            if (stock.ceo && stock.ceo.traits.some(t => t.id === 'bogacz')) {
+            // CEO trait 'bogacz' prevents bankruptcy
+            if (stock.ceo?.traits?.some(t => t.id === 'bogacz')) {
                 canGoBankrupt = false;
-                if (stock.financialHealth < -4) stock.financialHealth = -4; // Blokada na -4
+                // Prevent health dropping further below -4 if bogacz is CEO
+                if (stock.financialHealth < -4) stock.financialHealth = -4;
             }
+            // Add actual bankruptcy trigger logic here or in processFinancialReports if needed based on `canGoBankrupt` flag.
         }
 
-        let historyLimit = 15;
+        // --- Update Chart Data ---
+        // Determine history limit based on analytical mind skill
+        let historyLimitCandles = 15 * 4; // Default: 15 minutes (15 * 4 candles)
+        let historyLimitLine = 15 * 60;   // Default: 15 minutes (15 * 60 points)
         const mindLevel = getSkillLevel('analyticalMind');
-        if (mindLevel === 1) historyLimit = 20;
-        if (mindLevel === 2) historyLimit = 25;
+        if (mindLevel === 1) {
+            historyLimitCandles = 20 * 4;
+            historyLimitLine = 20 * 60;
+        } else if (mindLevel >= 2) { // Level 2 and 3 have the same limit for now
+            historyLimitCandles = 25 * 4;
+            historyLimitLine = 25 * 60;
+        }
 
+        // Update line history
         stock.lineHistory.push({ time: now, price: stock.price });
-        if (stock.lineHistory.length > (historyLimit * 60)) {
-            stock.lineHistory.shift();
+        // Trim line history if it exceeds the limit
+        if (stock.lineHistory.length > historyLimitLine) {
+            stock.lineHistory.shift(); // Remove the oldest point
         }
 
+        // Update current candlestick
         const candle = stock.currentCandle;
-        candle.close = stock.price;
-        if (stock.price > candle.high) candle.high = stock.price;
-        if (stock.price < candle.low) candle.low = stock.price;
+        // Ensure candle exists before updating
+        if (candle) {
+            candle.close = stock.price;
+            if (stock.price > candle.high) candle.high = stock.price;
+            if (stock.price < candle.low) candle.low = stock.price;
 
-        if (now - candle.time >= CANDLE_INTERVAL) {
-            stock.candlestickHistory.push(candle);
-            if (stock.candlestickHistory.length > historyLimit * 4) {
-                stock.candlestickHistory.shift();
+            // Check if current candle interval has passed
+            if (now - candle.time >= CANDLE_INTERVAL) {
+                // Add completed candle to history
+                stock.candlestickHistory.push(candle);
+                // Trim candlestick history if it exceeds the limit
+                if (stock.candlestickHistory.length > historyLimitCandles) {
+                    stock.candlestickHistory.shift(); // Remove the oldest candle
+                }
+                // Start a new candle
+                stock.currentCandle = { time: now, open: stock.price, high: stock.price, low: stock.price, close: stock.price };
             }
-            stock.currentCandle = { time: now, open: stock.price, high: stock.price, low: stock.price, close: stock.price };
+        } else {
+             // If candle was missing, initialize it (fallback)
+             stock.currentCandle = { time: now, open: stock.price, high: stock.price, low: stock.price, close: stock.price };
         }
-    });
+    }); // End stocks.forEach
 
+    // Update ETF prices based on underlying stocks
     etfs.forEach(etf => {
+        // Find stocks matching the ETF's target sectors
         const underlyingStocks = stocks.filter(stock =>
-            stock.sector.some(s => etf.targetSectors.includes(s))
+            !stock.assetType && // Exclude special types like Startups, REITs etc.
+            !stock.isBankrupt &&
+            stock.sector?.some(s => etf.targetSectors.includes(s)) // Check if any stock sector matches ETF targets
         );
+
         if (underlyingStocks.length > 0) {
+            // Calculate average price of underlying stocks
             const totalValue = underlyingStocks.reduce((sum, stock) => sum + stock.price, 0);
             etf.price = totalValue / underlyingStocks.length;
+
+            // Add new price to history and trim if needed (simple history limit)
             etf.priceHistory.push(etf.price);
-            if (etf.priceHistory.length > 15) {
+            if (etf.priceHistory.length > 15) { // Keep last 15 price points for ETF
                 etf.priceHistory.shift();
             }
         }
-    });
+         // Optional: Handle case where no underlying stocks are found (e.g., set price to 0 or last known)
+         // else { etf.price = 0; }
+    }); // End etfs.forEach
 }
 
 function buyStock(symbol, quantity) {
@@ -2629,6 +2694,9 @@ function processFinancialReports() {
             console.log(`[REPORTS] Przetwarzanie standardowej spółki: ${stock.symbol}, Health: ${stock.financialHealth}, Phase: ${stock.corporatePhase}`); // <--- LOG 1
             const earningsBase = (stock.financialHealth * 0.01) + (getRandomInRange(-0.015, 0.015));
             quarterlyEarnings = marketCap * earningsBase;
+            if (stock.isMonopolist) {
+        quarterlyEarnings *= 1.2; // Monopolista zarabia o 20% więcej
+    }
             console.log(`[REPORTS] ${stock.symbol} -> Obliczone quarterlyEarnings: ${quarterlyEarnings}`); // <--- LOG 2
         }
 
@@ -3654,6 +3722,30 @@ function processReitDividend(stock) {
 }
 
 function payDividendToShareholders(stock, dividendPerShare) {
+    if (stock.isSubsidiaryOf) {
+        const parentStock = stocks.find(s => s.symbol === stock.isSubsidiaryOf);
+        if (parentStock) {
+            const totalDividendFromSubsidiary = stock.totalShares * dividendPerShare;
+            // Transfer CAŁEJ kwoty dywidendy do spółki-matki (zamiast do akcjonariuszy)
+            if (parentStock.cash !== undefined) { // Upewnij się, że parent ma pole cash
+                 parentStock.cash += totalDividendFromSubsidiary;
+                 // Można też lekko poprawić bilans spółki-matki
+                 if (parentStock.balanceSheet) {
+                    parentStock.balanceSheet.assets += totalDividendFromSubsidiary;
+                    parentStock.balanceSheet.retainedEarnings += totalDividendFromSubsidiary;
+                 }
+            } else {
+                 console.warn(`Spółka-matka ${parentStock.symbol} nie ma pola 'cash' do transferu dywidendy od ${stock.symbol}`);
+            }
+
+            logEvent(`💸 Spółka zależna ${stock.name} przekazuje ${totalDividendFromSubsidiary.toFixed(2)} PLN dywidendy do ${parentStock.name}.`, 'company');
+            // Nie kontynuuj wypłaty dla akcjonariuszy spółki zależnej
+            // Spadek ceny akcji spółki zależnej nadal następuje
+            stock.price -= dividendPerShare;
+            if (stock.price < 0.01) stock.price = 0.01;
+            return; // Zakończ funkcję tutaj
+        }
+    }
     const oldPrice = stock.price;
     let taxRateDividend = TAX_RATES.dividend;
 
@@ -8860,5 +8952,952 @@ function issueRescueBond(stock) {
     // Odśwież widok rynku obligacji, jeśli otwarty
     if (document.getElementById('bank-modal')?.style.display === 'block' && document.getElementById('bank-content-bonds')?.style.display === 'block') {
         if (typeof renderBondMarketInBank === 'function') renderBondMarketInBank();
+    }
+}
+
+function updateInfluence() {
+    const regularStocks = stocks.filter(s => s.influence); // Tylko te z obiektem influence
+
+    regularStocks.forEach(sourceStock => {
+        sourceStock.influence.exerted = {}; // Resetuj wywierany wpływ w każdej turze
+    });
+
+    regularStocks.forEach(sourceStock => {
+        const sourceMarketCap = sourceStock.price * sourceStock.totalShares;
+
+        regularStocks.forEach(targetStock => {
+            if (sourceStock.symbol === targetStock.symbol) return; // Spółka nie wpływa sama na siebie
+
+            const targetMarketCap = targetStock.price * targetStock.totalShares;
+            let currentInfluence = 0;
+
+            // 1. Wpływ rozmiaru (większy wpływa na mniejszego)
+            if (sourceMarketCap > targetMarketCap) {
+                currentInfluence += (sourceMarketCap / targetMarketCap - 1) * 2; // Skalowanie wpływu
+            }
+
+            // 2. Wpływ kondycji finansowej (zdrowszy wpływa bardziej)
+            currentInfluence += (sourceStock.financialHealth - targetStock.financialHealth) * 0.5;
+
+            // 3. Wpływ posiadanych akcji (jeśli sourceStock to Holding)
+            if (sourceStock.assetType === 'Holding' && sourceStock.holdingPortfolio[targetStock.symbol]) {
+                const sharesHeld = sourceStock.holdingPortfolio[targetStock.symbol].quantity;
+                const ownershipPct = (sharesHeld / targetStock.totalShares) * 100;
+                currentInfluence += ownershipPct * 0.5; // Posiadanie 10% daje +5 pkt wpływu
+            }
+
+            // 4. Cechy CEO (przykładowo)
+             if (sourceStock.ceo?.traits?.some(t => t.id === 'rekin')) {
+                currentInfluence *= 1.1;
+             }
+
+
+            // Ograniczenie i zaokrąglenie
+            currentInfluence = Math.max(0, Math.round(currentInfluence));
+
+            if (currentInfluence > 0) {
+                sourceStock.influence.exerted[targetStock.symbol] = currentInfluence;
+            }
+        });
+    });
+
+    // Agregacja otrzymywanego wpływu
+    regularStocks.forEach(targetStock => {
+        targetStock.influence.received = {};
+        targetStock.influence.totalReceived = 0;
+        regularStocks.forEach(sourceStock => {
+            if (sourceStock.influence.exerted[targetStock.symbol]) {
+                const received = sourceStock.influence.exerted[targetStock.symbol];
+                targetStock.influence.received[sourceStock.symbol] = received;
+                targetStock.influence.totalReceived += received;
+            }
+        });
+         // Powolny zanik wpływu (np. 5% co kwartał) - opcjonalne
+        // targetStock.influence.totalReceived *= 0.95; 
+    });
+
+    regularStocks.forEach(targetStock => {
+    for (const sourceSymbol in targetStock.influence.received) {
+        if (targetStock.influence.received[sourceSymbol] > 50) {
+            const sourceStock = stocks.find(s => s.symbol === sourceSymbol);
+            // Sprawdź czy już nie trwa proces
+            if (sourceStock && !targetStock.mergerProcess && !sourceStock.mergerProcess) {
+                 console.log(`[WPŁYWY] ${sourceSymbol} osiągnął ponad 50% wpływu na ${targetStock.symbol}! Inicjowanie przejęcia...`);
+                 // Tutaj zainicjuj proces przejęcia (np. jako specjalny typ wrogiego przejęcia)
+                 // initiateMergerProcess(sourceStock, targetStock, 'influenceTakeover');
+                 // Można też od razu zrobić z niej spółkę zależną (prostsze na start)
+                 makeSubsidiary(sourceStock, targetStock);
+                 break; // Tylko jedno przejęcie na raz dla celu
+            }
+        }
+    }
+});
+
+    console.log("[WPŁYWY] Zaktualizowano poziomy wpływów między spółkami.");
+}
+
+function makeSubsidiary(parentStock, childStock) {
+    if (!parentStock || !childStock || childStock.isSubsidiaryOf) {
+        console.warn(`[makeSubsidiary] Błąd: Nie można utworzyć zależności dla ${parentStock?.symbol} -> ${childStock?.symbol}`);
+        return; // Zabezpieczenie przed błędami lub ponownym ustawieniem
+    }
+
+    // Ustaw flagę zależności
+    childStock.isSubsidiaryOf = parentStock.symbol;
+
+    // Dodaj do listy spółek zależnych rodzica (jeśli lista nie istnieje, stwórz ją)
+    if (!parentStock.subsidiaries) {
+        parentStock.subsidiaries = [];
+    }
+    // Upewnij się, że nie dodajemy duplikatu
+    if (!parentStock.subsidiaries.includes(childStock.symbol)) {
+        parentStock.subsidiaries.push(childStock.symbol);
+    }
+
+    // Zresetuj proces fuzji/przejęcia, jeśli jakiś był aktywny (na wypadek, gdyby to był wynik wpływu)
+    childStock.mergerProcess = null;
+    parentStock.mergerProcess = null; // Zresetuj też rodzica na wszelki wypadek
+
+    // Zaloguj zdarzenie
+    logEvent(`🏢 Spółka ${childStock.name} (${childStock.symbol}) stała się spółką zależną od ${parentStock.name} (${parentStock.symbol}) z powodu dominującego wpływu!`, 'review');
+    showToast(`${childStock.name} jest teraz zależna od ${parentStock.name}!`, 'warning');
+
+    // Opcjonalnie: Można tutaj dodać natychmiastowe efekty, np.
+    // - Lekki boost dla ceny parentStock
+    // - Lekki spadek zmienności childStock (większa stabilność pod kontrolą)
+    applyPriceEffect(parentStock.symbol, 0.02, 'positive'); // +2% dla rodzica
+    childStock.volatilityFactor *= 0.9; // Spółka zależna staje się stabilniejsza
+
+    // Odśwież UI, aby pokazać zmiany (np. wcięcie w tabeli)
+    displayStocks(getCurrentInputValues());
+    // Jeśli modal zarządzania jest otwarty dla którejś z tych spółek, odśwież go
+    if (document.getElementById('management-modal')?.style.display === 'block') {
+         const currentSymbol = document.getElementById('management-modal').dataset.currentSymbol;
+         if(currentSymbol === parentStock.symbol || currentSymbol === childStock.symbol) {
+             openManagementModal(currentSymbol);
+         }
+    }
+     // Odśwież też opis, jeśli jest otwarty
+    if (document.getElementById('description-modal')?.style.display === 'block') {
+        const currentSymbol = document.getElementById('description-modal-title').textContent.match(/\(([^)]+)\)/)?.[1];
+         if(currentSymbol === parentStock.symbol || currentSymbol === childStock.symbol) {
+             openDescriptionModal(currentSymbol);
+         }
+    }
+}
+
+function advanceMergerProcess(stock) {
+    // Podstawowe walidacje i pobranie danych
+    if (!stock.mergerProcess) return;
+    const process = stock.mergerProcess;
+    // Znajdź partnera. Jeśli go nie ma (np. zbankrutował), anuluj proces.
+    const partnerStock = stocks.find(s => s.symbol === process.partnerSymbol);
+    if (!partnerStock || partnerStock.isBankrupt) {
+        cancelMerger(stock, "Partner przestał istnieć lub zbankrutował.");
+        // Jeśli partnerStock istnieje, ale jest bankrutem, anuluj też u niego
+        if (partnerStock) cancelMerger(partnerStock, "Partner przestał istnieć lub zbankrutował.");
+        return;
+    }
+    // Jeśli wymagana jest decyzja, nie kontynuuj postępu
+    if (process.decisionRequired) return;
+
+    // --- Zwiększanie postępu ---
+    let progressSpeed = 5; // Bazowa prędkość postępu (5% na cykl)
+    if (process.defenseActive === 'poisonPill') progressSpeed *= 0.7; // Spowolnienie przez obronę
+    process.progress += progressSpeed;
+    process.progress = Math.min(100, process.progress); // Ogranicz do 100%
+
+    // --- Losowanie Mini-Eventów i Komplikacji ---
+    const eventRoll = Math.random();
+    if (eventRoll < 0.05) { // 5% szans na mini-event w każdym cyklu
+        triggerMergerMiniEvent(stock, partnerStock, process);
+    } else if (eventRoll < 0.08) { // Dodatkowe 3% szans na komplikację
+        process.complications++;
+        process.statusMessage = `Etap ${process.stage}: Komplikacja nr ${process.complications}! 🔴`;
+        console.log(`[M&A] Komplikacja ${process.complications} w procesie ${stock.symbol} <-> ${partnerStock.symbol} (Etap ${process.stage})`);
+
+        // Zaktualizuj proces u partnera
+        if (partnerStock.mergerProcess) {
+            partnerStock.mergerProcess.complications = process.complications;
+            partnerStock.mergerProcess.statusMessage = process.statusMessage;
+        }
+
+        if (process.complications >= 3) {
+            handleMajorComplication(stock, partnerStock, process);
+        }
+    }
+
+    // --- Przejście do następnego etapu ---
+    if (process.progress >= 100) {
+        process.stage++;
+        process.progress = 0;
+        process.complications = 0; // Resetuj komplikacje
+        console.log(`[M&A] Proces ${stock.symbol} <-> ${partnerStock.symbol} wchodzi w etap ${process.stage}`);
+
+        // Zaktualizuj proces u partnera przed logiką etapu
+        if (partnerStock.mergerProcess) {
+             Object.assign(partnerStock.mergerProcess, process);
+             partnerStock.mergerProcess.partnerSymbol = stock.symbol; // Popraw partnera
+        }
+
+        // Logika specyficzna dla nowego etapu
+        switch (process.stage) {
+            case 2:
+                process.statusMessage = `Etap 2: Negocjacje warunków...`;
+                break;
+            case 3:
+                const baseCost = 5000;
+                const valueCost = (stock.price * stock.totalShares + partnerStock.price * partnerStock.totalShares) * 0.005;
+                process.costs += (baseCost + valueCost);
+                process.statusMessage = `Etap 3: Strategia i finansowanie (koszty: ${process.costs.toFixed(0)} PLN).`;
+                break;
+            case 4: // Analiza prawna i Urząd Antymonopolowy
+                process.statusMessage = `Etap 4: Analiza prawna (due diligence) i kontrola antymonopolowa...`;
+
+                // ===>>> INTEGRACJA Z URZĘDEM ANTYMONOPOLOWYM <<<===
+                if (checkAntitrust(stock, partnerStock)) {
+                    // Blokada! Anuluj proces.
+                    // Funkcja checkAntitrust już loguje powód i pokazuje Toast.
+                    cancelMerger(stock, "Zablokowane przez Urząd Antymonopolowy.");
+                    cancelMerger(partnerStock, "Zablokowane przez Urząd Antymonopolowy.");
+                    return; // Zakończ przetwarzanie dla tej spółki
+                } else {
+                    // Brak blokady - można kontynuować
+                    process.statusMessage = `Etap 4: Analiza prawna ZAAKCEPTOWANA. Losowanie zdarzeń...`;
+                    // Losowanie "trupa w szafie" / "ukrytego złota" po udanej analizie
+                    triggerMergerMiniEvent(stock, partnerStock, process);
+                }
+                // ===>>> KONIEC INTEGRACJI <<<===
+                break;
+            case 5:
+                process.statusMessage = `Etap 5: Integracja operacyjna...`;
+                stock.mergerPartnerVisible = true;
+                partnerStock.mergerPartnerVisible = true;
+                partnerStock.isBeingMerged = true;
+                partnerStock.price *= 1.1; // Lekkie zawyżenie ceny
+                break;
+            case 6:
+                process.statusMessage = `Etap 6: Finalizacja umowy i transfery...`;
+                partnerStock.canBeTraded = false; // Zablokuj handel
+                break;
+            case 7:
+                resolveMerger(stock, partnerStock, process);
+                return; // Zakończono
+            default:
+                console.warn(`[M&A] Nieznany etap procesu: ${process.stage} dla ${stock.symbol}`);
+                process.statusMessage = `Etap ${process.stage}: ???`;
+                break;
+        }
+        // Zaktualizuj proces u partnera PO logice etapu (aby miał najnowszy statusMessage itp.)
+        if (partnerStock.mergerProcess) {
+            Object.assign(partnerStock.mergerProcess, process);
+            partnerStock.mergerProcess.partnerSymbol = stock.symbol; // Popraw partnera
+        }
+    }
+
+    // Odśwież widok tabeli
+    displayStocks(getCurrentInputValues());
+}
+
+function initiateMergerProcess(initiatorStock, targetStock, type, financing = 'cash') {
+    // Podstawowe walidacje
+    if (!initiatorStock || !targetStock || initiatorStock === targetStock) {
+        console.error("[M&A Init] Błąd: Nieprawidłowe spółki inicjujące/celu.");
+        return false;
+    }
+    if (initiatorStock.mergerProcess || targetStock.mergerProcess) {
+        console.warn(`[M&A Init] Anulowano: Jedna ze spółek (${initiatorStock.symbol} lub ${targetStock.symbol}) jest już w trakcie innego procesu M&A.`);
+        // Można dodać logEvent lub showToast dla gracza, jeśli inicjował
+        return false;
+    }
+    if (targetStock.isSubsidiaryOf) {
+        console.warn(`[M&A Init] Anulowano: ${targetStock.symbol} jest już spółką zależną.`);
+        return false;
+    }
+    // TODO: Dodać więcej walidacji (np. czy inicjatora stać, czy cel nie jest za duży/mały dla danego typu)
+
+    console.log(`[M&A Init] Rozpoczęto proces: ${initiatorStock.symbol} -> ${targetStock.symbol} (Typ: ${type})`);
+
+    const processData = {
+        type: type,
+        stage: 1,
+        progress: 0,
+        partnerSymbol: targetStock.symbol,
+        initiatorSymbol: initiatorStock.symbol,
+        complications: 0,
+        costs: 0,
+        statusMessage: `Etap 1: Wstępne rozmowy (${type})...`,
+        decisionRequired: null,
+        defenseActive: null,
+        financing: financing // Zapisz metodę finansowania
+        // Można dodać: offerPremium (dla przejęć), exchangeRatio (dla fuzji)
+    };
+
+    // Ustaw obiekt procesu w obu spółkach
+    initiatorStock.mergerProcess = { ...processData }; // Kopia dla inicjatora
+    targetStock.mergerProcess = { ...processData, partnerSymbol: initiatorStock.symbol }; // Kopia dla celu (z zamienionym partnerem)
+
+    logEvent(`🤝 Rozpoczynają się rozmowy o ${type} między ${initiatorStock.name} a ${targetStock.name}!`, 'market');
+
+    // Aktywacja obrony dla wrogich przejęć (placeholder)
+    if (type === 'przejęcie' || type === 'influenceTakeover') {
+        // TODO: Dodać logikę decyzji AI/gracza o aktywacji obrony
+        // np. if (decideToDefend(targetStock, initiatorStock, offerPremium)) { activateDefense(...) }
+        console.log(`[M&A Init] ${targetStock.symbol} może teraz rozważyć aktywację mechanizmów obronnych.`);
+    }
+
+    // Odśwież UI
+    displayStocks(getCurrentInputValues());
+    return true; // Proces zainicjowany pomyślnie
+}
+
+if (typeof antitrustOffice === 'undefined') {
+    let antitrustOffice = {
+        level: 0,
+        analysisCapacity: 0.1,
+        accuracy: 0.2,
+        budget: 0
+    };
+    const ANTITRUST_UPGRADE_COSTS = [50000, 150000, 500000, 1500000, 5000000];
+}
+
+/**
+ * Funkcja pomocnicza do całkowitego usuwania spółki z gry (po fuzji/bankructwie).
+ * @param {string} symbol - Symbol spółki do usunięcia.
+ */
+function removeStockFromGame(symbol) {
+    // 1. Usuń z głównej listy `stocks`
+    const index = stocks.findIndex(s => s.symbol === symbol);
+    if (index > -1) {
+        stocks.splice(index, 1);
+    }
+
+    // 2. Usuń z portfela gracza
+    if (playerPortfolio[symbol]) {
+        delete playerPortfolio[symbol];
+    }
+
+    // 3. Usuń z portfeli AI
+    aiCompetitors.forEach(ai => {
+        if (ai.portfolio[symbol]) {
+            delete ai.portfolio[symbol];
+        }
+    });
+
+    // 4. Usuń z portfeli Holdingów
+    stocks.forEach(s => {
+        if (s.assetType === 'Holding' && s.holdingPortfolio[symbol]) {
+            delete s.holdingPortfolio[symbol];
+        }
+    });
+
+    // 5. Usuń z portfeli Banków Inwestycyjnych
+    commercialBanks.forEach(bank => {
+        if (bank.stockPortfolio[symbol]) {
+            delete bank.stockPortfolio[symbol];
+        }
+    });
+
+    console.log(`[M&A] Spółka ${symbol} została całkowicie usunięta z gry.`);
+}
+
+
+/**
+ * Inicjuje proces fuzji lub przejęcia między dwoma spółkami.
+ * @param {object} initiatorStock - Spółka inicjująca proces.
+ * @param {object} targetStock - Spółka będąca celem procesu.
+ * @param {'fuzja' | 'przejęcie'} type - Typ procesu M&A.
+ * @param {string} financing - Metoda finansowania ('cash', 'stockSwap', 'lbo').
+ * @param {number} [offerPremium=0.25] - Premia oferowana ponad cenę rynkową (tylko dla 'przejęcie').
+ */
+function initiateMergerProcess(initiatorStock, targetStock, type, financing = 'cash', offerPremium = 0.25) {
+    // Walidacje
+    if (!initiatorStock || !targetStock || initiatorStock === targetStock) {
+        console.error("[M&A Init] Błąd: Nieprawidłowe spółki.");
+        return false;
+    }
+    if (initiatorStock.mergerProcess || targetStock.mergerProcess) {
+        showToast("Anulowano: Jedna ze spółek jest już w trakcie innego procesu M&A.", 'warning');
+        return false;
+    }
+    if (targetStock.isSubsidiaryOf) {
+        showToast("Anulowano: Nie można przejąć spółki zależnej.", 'warning');
+        return false;
+    }
+    if (targetStock.isBankrupt || initiatorStock.isBankrupt) {
+        showToast("Anulowano: Nie można przeprowadzać operacji na bankrutach.", 'warning');
+        return false;
+    }
+
+    // Walidacja finansowania
+    let buyoutPricePerShare = 0;
+    let totalCost = 0;
+
+    if (type === 'przejęcie') {
+        buyoutPricePerShare = targetStock.price * (1 + offerPremium);
+        totalCost = buyoutPricePerShare * targetStock.totalShares;
+        if (financing === 'cash' && initiatorStock.cash < totalCost) {
+            showToast(`Anulowano: ${initiatorStock.name} nie ma wystarczająco gotówki (${totalCost.toFixed(0)} PLN) na przejęcie.`, 'error');
+            return false;
+        }
+        // TODO: Walidacja dla 'lbo' (zdolność kredytowa)
+    }
+
+    console.log(`[M&A Init] Rozpoczęto proces: ${initiatorStock.symbol} -> ${targetStock.symbol} (Typ: ${type})`);
+
+    const processData = {
+        type: type,
+        stage: 1,
+        progress: 0,
+        partnerSymbol: targetStock.symbol,
+        initiatorSymbol: initiatorStock.symbol,
+        complications: 0,
+        costs: 0,
+        statusMessage: `Etap 1: Wstępne rozmowy (${type})...`,
+        decisionRequired: null,
+        defenseActive: null,
+        financing: financing,
+        offerDetails: { // Zapisujemy szczegóły oferty
+            premium: offerPremium,
+            buyoutPricePerShare: buyoutPricePerShare,
+            totalCost: totalCost
+            // Dla fuzji można tu zapisać 'exchangeRatio'
+        }
+    };
+
+    // Ustaw obiekt procesu w obu spółkach
+    initiatorStock.mergerProcess = { ...processData };
+    targetStock.mergerProcess = { ...processData, partnerSymbol: initiatorStock.symbol };
+
+    logEvent(`🤝 Rozpoczynają się rozmowy o ${type} między ${initiatorStock.name} a ${targetStock.name}!`, 'market');
+    showToast(`Rozpoczęto rozmowy o ${type} ${initiatorStock.symbol} z ${targetStock.symbol}!`, 'default');
+
+    // Aktywacja obrony dla wrogich przejęć
+    if (type === 'przejęcie') {
+        // Sprawdź, kto kontroluje spółkę-cel
+        const majorityOwner = findMajorityShareholder(targetStock);
+        if (majorityOwner && (majorityOwner.id === 'player' || majorityOwner.id.startsWith('ai'))) {
+            // Decyzja AI lub gracza o obronie (logika w `makeAiDecision` lub `openManagementModal`)
+            console.log(`[M&A] ${targetStock.symbol} jest pod kontrolą ${majorityOwner.name}. Oczekuję na decyzję o obronie...`);
+        } else {
+            // Zarząd decyduje (losowo)
+            if (Math.random() < 0.3) {
+                activateDefenseMechanism(targetStock, 'poisonPill'); // Przykładowa domyślna obrona
+            }
+        }
+    }
+
+    displayStocks(getCurrentInputValues());
+    return true;
+}
+
+/**
+ * Losuje i aplikuje "mini-event" podczas procesu M&A.
+ * @param {object} stock1 - Pierwsza spółka w procesie.
+ * @param {object} stock2 - Druga spółka w procesie.
+ * @param {object} process - Obiekt mergerProcess (wspólny dla obu).
+ */
+function triggerMergerMiniEvent(stock1, stock2, process) {
+    const isPositive = Math.random() < 0.5; // 50% szans na pozytywny event
+
+    if (isPositive) {
+        // --- Ukryte Złoto ---
+        const effects = [
+            { desc: "odkryto nieoczekiwane synergie operacyjne!", costChange: -500, progressChange: 5, healthChange: 0.1 },
+            { desc: "znaleziono sposób na optymalizację podatkową połączonej firmy!", costChange: -1000, progressChange: 0, healthChange: 0.05 },
+            { desc: "kluczowy pracownik konkurencji przechodzi do jednej ze spółek!", costChange: 0, progressChange: 0, healthChange: 0.15 }
+        ];
+        const effect = getRandomElement(effects);
+        process.costs = Math.max(0, process.costs + effect.costChange);
+        process.progress += effect.progressChange;
+        stock1.financialHealth += effect.healthChange;
+        stock2.financialHealth += effect.healthChange;
+        process.statusMessage = `✨ Ukryte złoto: ${effect.desc}`;
+        logEvent(`[M&A] ✨ ${stock1.symbol} <-> ${stock2.symbol}: ${effect.desc}`, 'review');
+    } else {
+        // --- Trup w Szafie ---
+        const effects = [
+            { desc: "ujawniono nieznane wcześniej zobowiązania jednej ze spółek!", costChange: 1500, progressChange: -5, healthChange: -0.1 },
+            { desc: "kluczowi menedżerowie ogłaszają odejście w proteście przeciw fuzji!", costChange: 500, progressChange: -10, healthChange: -0.05 },
+            { desc: "pojawiają się problemy z integracją systemów IT!", costChange: 800, progressChange: -8, healthChange: 0 }
+        ];
+        const effect = getRandomElement(effects);
+        process.costs += effect.costChange;
+        process.progress = Math.max(0, process.progress + effect.progressChange);
+        stock1.financialHealth += effect.healthChange;
+        stock2.financialHealth += effect.healthChange;
+        process.statusMessage = `💀 Trup w szafie: ${effect.desc}`;
+        logEvent(`[M&A] 💀 ${stock1.symbol} <-> ${stock2.symbol}: ${effect.desc}`, 'review');
+    }
+    // Aktualizuj proces w obu spółkach (bo 'process' to referencja do obiektu jednej z nich)
+    const partner = stock1.symbol === process.initiatorSymbol ? stock2 : stock1;
+    if (partner.mergerProcess) {
+        Object.assign(partner.mergerProcess, process); // Nadpisz dane w procesie partnera
+    }
+}
+
+/**
+ * Obsługuje sytuację, gdy w danym etapie M&A wystąpiły 3 komplikacje.
+ * Prezentuje decyzję graczowi lub symuluje ją dla AI.
+ * @param {object} stock1 - Pierwsza spółka.
+ * @param {object} stock2 - Druga spółka.
+ * @param {object} process - Obiekt mergerProcess.
+ */
+function handleMajorComplication(stock1, stock2, process) {
+    process.statusMessage = "🔴 POWAŻNE KOMPLIKACJE! Wymagana decyzja...";
+    process.progress = 0; // Zatrzymaj postęp etapu
+    process.decisionRequired = { // Ustaw flagę wymaganej decyzji
+        question: `Proces ${process.type} między ${stock1.name} a ${stock2.name} napotkał poważne trudności! Co robimy?`,
+        options: [
+            { id: 'cancel', text: "Anuluj proces (negatywne konsekwencje dla obu firm)", consequence: () => { cancelMerger(stock1, "Poważne komplikacje i brak zgody."); cancelMerger(stock2, "Poważne komplikacje i brak zgody."); } },
+            { id: 'expensive', text: "Kontynuuj mimo wszystko (proces będzie droższy o 25% i potrwa dłużej)", consequence: () => { process.costs *= 1.25; process.complications = 0; process.decisionRequired = null; process.statusMessage = "Kontynuacja mimo kosztów..."; /* Można dodać spowolnienie postępu */ } },
+            { id: 'stronger', text: "Wykorzystaj kryzys, by wzmocnić współpracę (mała szansa na bonus, ryzyko anulowania)", consequence: () => { process.complications = 0; process.decisionRequired = null; if (Math.random() < 0.3) { triggerMergerMiniEvent(stock1, stock2, process); process.statusMessage = "Kryzys wzmocnił współpracę!"; } else { cancelMerger(stock1, "Nie udało się przezwyciężyć kryzysu."); cancelMerger(stock2, "Nie udało się przezwyciężyć kryzysu."); } } }
+        ]
+    };
+
+    logEvent(`[M&A] 🔴 Poważne komplikacje w procesie ${stock1.symbol} <-> ${stock2.symbol}! Wymagana decyzja.`, 'warning');
+
+    // Sprawdź, czy gracz jest właścicielem >50% którejkolwiek ze spółek
+    const playerOwnsStock1 = playerPortfolio[stock1.symbol] && (playerPortfolio[stock1.symbol].shares / stock1.totalShares) > 0.5;
+    const playerOwnsStock2 = playerPortfolio[stock2.symbol] && (playerPortfolio[stock2.symbol].shares / stock2.totalShares) > 0.5;
+
+    if (playerOwnsStock1 || playerOwnsStock2) {
+        // TODO: Wyświetl modal decyzyjny dla gracza z opcjami z process.decisionRequired.options
+        // Gracz klika opcję, która wywołuje odpowiednią funkcję consequence().
+        // Na razie tylko logujemy:
+        console.log(`[M&A] TODO: Wyświetl modal decyzyjny dla gracza (komplikacje ${stock1.symbol} <-> ${stock2.symbol})`);
+        // Symulujemy, że gracz nic nie wybrał - po jakimś czasie AI podejmie decyzję
+    } else {
+        // TODO: Symuluj decyzję AI (np. na podstawie osobowości właściciela lub losowo)
+        // Na razie wybieramy losową opcję:
+        const randomChoice = getRandomElement(process.decisionRequired.options);
+        console.log(`[M&A AI Decision] AI zdecydowało: ${randomChoice.text}`);
+        randomChoice.consequence();
+    }
+}
+
+/**
+ * Finalizuje proces fuzji lub przejęcia.
+ * @param {object} stock1 - Jedna ze spółek (zwykle inicjator).
+ * @param {object} stock2 - Druga spółka (zwykle cel).
+ * @param {object} process - Obiekt mergerProcess.
+ */
+function resolveMerger(stock1, stock2, process) {
+    console.log(`[M&A Resolve] Finalizowanie procesu ${process.type} dla ${stock1.symbol} i ${stock2.symbol}...`);
+
+    const initiator = stock1.symbol === process.initiatorSymbol ? stock1 : stock2;
+    const target = stock1.symbol === process.initiatorSymbol ? stock2 : stock1;
+    let successMessage = "";
+
+    // --- Logika dla różnych typów ---
+    switch (process.type) {
+        case 'przejęcie':
+        case 'influenceTakeover':
+            // 1. Sprawdź finansowanie (ponownie, na wszelki wypadek)
+            const totalCost = process.offerDetails.totalCost;
+            if (process.financing === 'cash' && initiator.cash < totalCost) {
+                cancelMerger(initiator, "Brak wystarczających środków na finalizację przejęcia.");
+                cancelMerger(target, "Inicjator nie pokrył kosztów przejęcia.");
+                return;
+            }
+
+            // 2. Pobierz koszty
+            if (process.financing === 'cash') {
+                initiator.cash -= totalCost;
+                logEvent(`💸 ${initiator.name} wydaje ${totalCost.toFixed(0)} PLN na przejęcie ${target.name}.`, 'company');
+            }
+            // TODO: Logika dla 'lbo' (zaciągnięcie długu)
+
+            // 3. Wypłata dla akcjonariuszy spółki-celu
+            const pricePerShare = process.offerDetails.buyoutPricePerShare;
+            // Gracz
+            if (playerPortfolio[target.symbol]) {
+                const holding = playerPortfolio[target.symbol];
+                const grossGain = holding.shares * pricePerShare;
+                // TODO: Obliczyć i potrącić podatek od zysków kapitałowych
+                playerCash += grossGain;
+                logEvent(`💰 Otrzymujesz ${grossGain.toFixed(2)} PLN za akcje ${target.name} w ramach przejęcia.`, 'success');
+            }
+            // AI
+            aiCompetitors.forEach(ai => {
+                if (ai.portfolio[target.symbol]) {
+                    const holding = ai.portfolio[target.symbol];
+                    const grossGain = holding.shares * pricePerShare;
+                    // TODO: Obliczyć podatek dla AI
+                    ai.cash += grossGain;
+                }
+            });
+            // (Akcje posiadane przez holdingi/banki są również spłacane - uproszczenie: ich gotówka po prostu rośnie)
+            stocks.filter(s => s.assetType === 'Holding' && s.holdingPortfolio[target.symbol]).forEach(h => h.cash += (h.holdingPortfolio[target.symbol].quantity * pricePerShare));
+            commercialBanks.filter(b => b.stockPortfolio[target.symbol]).forEach(b => b.cash += (b.stockPortfolio[target.symbol].shares * pricePerShare));
+
+            // 4. Przeniesienie Aktywów i Pasywów
+            if (initiator.balanceSheet && target.balanceSheet) {
+                initiator.balanceSheet.assets += target.balanceSheet.assets;
+                initiator.balanceSheet.liabilities += target.balanceSheet.liabilities;
+                // Zyski zatrzymane też się sumują
+                initiator.balanceSheet.retainedEarnings += target.balanceSheet.retainedEarnings;
+                initiator.cash += target.cash; // Przejęcie gotówki celu
+            }
+
+            // 5. Obsługa CEO (Złoty Spadochron)
+            if (target.ceo?.traits?.some(t => t.id === 'goldenParachute')) {
+                const parachuteCost = (target.price * target.totalShares) * 0.02; // 2% wartości firmy
+                if (initiator.cash >= parachuteCost) {
+                    initiator.cash -= parachuteCost;
+                    logEvent(` parachute.png Prezes ${target.name} odpala złoty spadochron! Koszt: ${parachuteCost.toFixed(0)} PLN.`, 'company');
+                }
+            }
+
+            // 6. Aktualizacja spółki-matki
+            initiator.financialHealth = Math.max(-5, Math.min(5, ((initiator.financialHealth + target.financialHealth) / 2) + 0.5)); // Średnia + bonus
+            if (!initiator.subsidiaries) initiator.subsidiaries = [];
+            initiator.subsidiaries.push({ symbol: target.symbol, name: target.name, date: Date.now() }); // Zapisz historię
+
+            successMessage = `✅ Przejęcie zakończone! ${initiator.name} wchłonął ${target.name}.`;
+            break;
+
+        case 'fuzja':
+            // 1. Oblicz parytet wymiany
+            const initiatorValue = initiator.price * initiator.totalShares;
+            const targetValue = target.price * target.totalShares;
+            const totalNewValue = initiatorValue + targetValue;
+            // Stosunek, w jakim akcjonariusze celu otrzymają nowe akcje
+            const exchangeRatio = (targetValue / totalNewValue) / target.totalShares; // Nowe akcje na 1 starą akcję
+            // Całkowita liczba nowych akcji do wyemitowania dla akcjonariuszy celu
+            const newSharesForTargetHolders = target.totalShares * exchangeRatio;
+            
+            // Stosunek dla akcjonariuszy inicjatora (dla uaktualnienia ich stanu posiadania)
+            const initiatorRatio = (initiatorValue / totalNewValue) / initiator.totalShares;
+            const newSharesForInitiatorHolders = initiator.totalShares * initiatorRatio;
+            
+            const newTotalShares = newSharesForTargetHolders + newSharesForInitiatorHolders;
+
+            // 2. Aktualizuj portfele (Gracz)
+            const playerTargetShares = playerPortfolio[target.symbol]?.shares || 0;
+            const playerInitiatorShares = playerPortfolio[initiator.symbol]?.shares || 0;
+            const totalNewSharesForPlayer = (playerTargetShares * exchangeRatio) + (playerInitiatorShares * initiatorRatio);
+            if (playerTargetShares > 0) delete playerPortfolio[target.symbol];
+            if (totalNewSharesForPlayer > 0) {
+                 playerPortfolio[initiator.symbol] = { shares: totalNewSharesForPlayer, avgPrice: totalNewValue / newTotalShares };
+                 logEvent(`🔄 Twoje akcje ${target.symbol} i ${initiator.symbol} zostały wymienione na ${totalNewSharesForPlayer.toFixed(0)} akcji nowej spółki.`, 'review');
+            }
+
+            // 3. Aktualizuj portfele (AI, Holdingi, Banki) - (Uproszczona pętla)
+            [...aiCompetitors, ...stocks.filter(s=>s.assetType==='Holding'), ...commercialBanks].forEach(entity => {
+                const portfolio = entity.portfolio || entity.holdingPortfolio || entity.stockPortfolio;
+                if (!portfolio) return;
+
+                const targetShares = portfolio[target.symbol]?.shares || portfolio[target.symbol]?.quantity || 0;
+                const initiatorShares = portfolio[initiator.symbol]?.shares || portfolio[initiator.symbol]?.quantity || 0;
+                const totalNewShares = (targetShares * exchangeRatio) + (initiatorShares * initiatorRatio);
+
+                if (targetShares > 0) delete portfolio[target.symbol];
+                if (totalNewShares > 0) {
+                    portfolio[initiator.symbol] = { shares: totalNewShares, avgPrice: totalNewValue / newTotalShares };
+                }
+            });
+
+            // 4. Aktualizuj spółkę inicjatora (staje się nową spółką)
+            initiator.name = `${initiator.name.split(' ')[0]}-${target.name.split(' ')[0]} Group`;
+            initiator.totalShares = newTotalShares;
+            initiator.maxShares = newTotalShares * 1.5;
+            initiator.price = totalNewValue / newTotalShares; // Nowa cena akcji
+            initiator.balanceSheet.assets += target.balanceSheet.assets;
+            initiator.balanceSheet.liabilities += target.balanceSheet.liabilities;
+            initiator.balanceSheet.retainedEarnings += target.balanceSheet.retainedEarnings;
+            initiator.cash += target.cash;
+            initiator.financialHealth = Math.max(-5, Math.min(5, ((initiator.financialHealth + target.financialHealth) / 2) + 1.0)); // Większy bonus za fuzję
+            if (!initiator.subsidiaries) initiator.subsidiaries = [];
+            initiator.subsidiaries.push({ symbol: target.symbol, name: target.name, date: Date.now() });
+
+            // 5. Wybierz nowego CEO (proste: lepsza kondycja)
+            if (target.ceo && target.financialHealth > initiator.financialHealth) {
+                initiator.ceo = target.ceo; // CEO celu przejmuje stery
+            } // W przeciwnym razie CEO inicjatora zostaje
+
+            successMessage = `✅ Fuzja zakończona! Powstaje ${initiator.name}.`;
+            break;
+
+        default:
+            console.warn(`[M&A Resolve] Nieznany typ procesu: ${process.type}`);
+            cancelMerger(stock1, "Nieobsługiwany typ procesu.");
+            cancelMerger(stock2, "Nieobsługiwany typ procesu.");
+            return;
+    }
+
+    // --- Finalizacja ---
+    // Usuń spółkę-cel z gry
+    removeStockFromGame(target.symbol);
+
+    // Resetuj stan M&A u inicjatora
+    initiator.mergerProcess = null;
+    initiator.mergerPartnerVisible = false;
+    // (Flagi targetu nie mają znaczenia, bo został usunięty)
+
+    logEvent(successMessage, 'success');
+    showToast(successMessage, 'success', 7000);
+
+    // Odśwież UI
+    displayStocks(getCurrentInputValues());
+    displayPortfolio();
+}
+
+/**
+ * Anuluje proces fuzji lub przejęcia.
+ * @param {object} stock - Spółka, dla której anulujemy proces (druga zostanie znaleziona po partnerSymbol).
+ * @param {string} reason - Powód anulowania.
+ */
+function cancelMerger(stock, reason) {
+    if (!stock || !stock.mergerProcess) return;
+
+    const partnerSymbol = stock.mergerProcess.partnerSymbol;
+    const partnerStock = stocks.find(s => s.symbol === partnerSymbol);
+
+    logEvent(`❌ Proces M&A między ${stock.symbol} a ${partnerSymbol} został anulowany. Powód: ${reason}`, 'review');
+    showToast(`Fuzja/Przejęcie ${stock.symbol}-${partnerSymbol} anulowane!`, 'error');
+
+    // Resetuj stan w obu spółkach
+    stock.mergerProcess = null;
+    stock.mergerPartnerVisible = false;
+    stock.isBeingMerged = false;
+    stock.canBeTraded = true;
+
+    if (partnerStock) {
+        partnerStock.mergerProcess = null;
+        partnerStock.mergerPartnerVisible = false;
+        partnerStock.isBeingMerged = false;
+        partnerStock.canBeTraded = true;
+    }
+
+    // Nałóż karę za nieudany proces (lekki spadek kondycji)
+    stock.financialHealth -= 0.3;
+    if (partnerStock) {
+        partnerStock.financialHealth -= 0.3;
+    }
+
+    // Odśwież UI
+    displayStocks(getCurrentInputValues());
+}
+
+function checkAntitrust(stock1, stock2) {
+    // 1. Sprawdź, czy urząd w ogóle analizuje tę sprawę
+    if (Math.random() > antitrustOffice.analysisCapacity) {
+        console.log(`[Antymonopol] Urząd nie zainteresował się fuzją ${stock1.symbol} i ${stock2.symbol}.`);
+        return false; // Urząd nie podjął analizy
+    }
+
+    console.log(`[Antymonopol] Urząd analizuje potencjalną fuzję ${stock1.symbol} i ${stock2.symbol}...`);
+    logEvent(`⚖️ Urząd Antymonopolowy przygląda się planom połączenia ${stock1.name} i ${stock2.name}...`, 'state');
+
+    // 2. Oblicz potencjalny udział rynkowy połączonej firmy (uproszczony)
+    const combinedMarketCap = (stock1.price * stock1.totalShares) + (stock2.price * stock2.totalShares);
+    const commonSectors = stock1.sector.filter(s => stock2.sector.includes(s)); // Znajdź wspólne sektory
+    let potentialMarketShare = 0;
+
+    if (commonSectors.length > 0) {
+        // Oblicz całkowitą kapitalizację we wspólnym sektorze (głównym)
+        const sector = commonSectors[0];
+        const sectorTotalMarketCap = stocks
+            .filter(s => !s.assetType && !s.isBankrupt && s.sector.includes(sector))
+            .reduce((sum, s) => sum + (s.price * s.totalShares), 0);
+
+        if (sectorTotalMarketCap > 0) {
+            potentialMarketShare = combinedMarketCap / sectorTotalMarketCap;
+        }
+    } else {
+        // Jeśli brak wspólnych sektorów (fuzja konglomeratowa), ryzyko monopolu jest niskie
+        potentialMarketShare = 0.1; // Przykładowo niskie ryzyko
+    }
+
+    // 3. Określ próg blokady (np. 40% udziału w rynku)
+    const blockThreshold = 0.40;
+    const shouldBlock = potentialMarketShare >= blockThreshold;
+
+    // 4. Losuj decyzję urzędu (uwzględniając jego dokładność)
+    let blockDecision = false;
+    if (shouldBlock) {
+        // Jeśli udział przekracza próg, jest szansa na blokadę (zależna od accuracy)
+        blockDecision = Math.random() < antitrustOffice.accuracy;
+    } else {
+        // Jeśli udział jest niski, jest mała szansa na BŁĘDNĄ blokadę (1 - accuracy)
+        blockDecision = Math.random() < (1 - antitrustOffice.accuracy) * 0.1; // Mała szansa na błąd
+    }
+
+    // 5. Zastosuj i zwróć decyzję
+    if (blockDecision) {
+        logEvent(`⚖️ BLOKADA! Urząd Antymonopolowy blokuje połączenie ${stock1.name} i ${stock2.name} z powodu ryzyka monopolu!`, 'state');
+        showToast(`Urząd Antymonopolowy zablokował fuzję ${stock1.symbol}-${stock2.symbol}!`, 'error');
+        // TODO: Opcjonalnie: Można nałożyć karę finansową na inicjatora
+        return true; // Fuzja zablokowana
+    } else {
+        console.log(`[Antymonopol] Urząd zezwolił na połączenie ${stock1.symbol} i ${stock2.symbol}.`);
+        logEvent(`⚖️ Urząd Antymonopolowy nie widzi przeciwwskazań dla połączenia ${stock1.name} i ${stock2.name}.`, 'state');
+        return false; // Fuzja dozwolona
+    }
+}
+
+function investInAntitrustOffice() {
+    if (antitrustOffice.level >= 5) {
+        alert("Urząd Antymonopolowy osiągnął już maksymalny poziom rozwoju!");
+        return;
+    }
+
+    const upgradeCost = ANTITRUST_UPGRADE_COSTS[antitrustOffice.level];
+    if (playerCash < upgradeCost) {
+        alert("Nie masz wystarczająco gotówki, aby zainwestować w Urząd.");
+        return;
+    }
+
+    // Potwierdzenie od gracza
+    if (confirm(`Czy na pewno chcesz zainwestować ${upgradeCost.toLocaleString('pl-PL')} PLN w rozwój Urzędu Antymonopolowego do poziomu ${antitrustOffice.level + 1}?`)) {
+        playerCash -= upgradeCost;
+        antitrustOffice.level++;
+
+        // Zwiększ parametry urzędu (przykładowe wartości)
+        antitrustOffice.analysisCapacity += 0.1; // +10% szansy na analizę per poziom
+        antitrustOffice.accuracy += 0.12;       // +12% dokładności per poziom
+        // Ogranicz wartości do maksymalnie 100%
+        antitrustOffice.analysisCapacity = Math.min(1.0, antitrustOffice.analysisCapacity);
+        antitrustOffice.accuracy = Math.min(1.0, antitrustOffice.accuracy);
+
+        logEvent(`🏛️ Zainwestowano w Urząd Antymonopolowy! Osiągnięto poziom ${antitrustOffice.level}.`, 'review');
+        showToast("Rozwój Urzędu Antymonopolowego zakończony sukcesem!", 'success');
+
+        displayCash();
+        // Odśwież modal państwa, jeśli jest otwarty
+        if (document.getElementById('state-modal')?.style.display === 'block') {
+            updateStateModalContent();
+        }
+    }
+}
+
+function checkMonopolyStatus() {
+    console.log("[Monopol] Sprawdzanie statusu monopolistów...");
+    const allSectors = [...new Set(stocks.flatMap(s => s.sector))]; // Zbierz unikalne sektory
+
+    // Najpierw zresetuj status dla wszystkich
+    stocks.forEach(s => { if (s.isMonopolist) s.isMonopolist = false; });
+
+    allSectors.forEach(sector => {
+        // Znajdź aktywne, nie-zależne spółki w danym sektorze
+        const companiesInSector = stocks.filter(s =>
+            !s.assetType &&         // Nie specjalny typ
+            !s.isBankrupt &&        // Nie bankrut
+            !s.isSubsidiaryOf &&    // Nie zależna
+            s.sector.includes(sector) // W danym sektorze
+        );
+
+        // Jeśli jest DOKŁADNIE jedna taka spółka, oznacz ją jako monopolistę
+        if (companiesInSector.length === 1) {
+            const monopolist = companiesInSector[0];
+            monopolist.isMonopolist = true;
+            logEvent(`👑 ${monopolist.name} (${monopolist.symbol}) uzyskał status monopolisty w sektorze ${sector}!`, 'market');
+            console.log(`[Monopol] ${monopolist.symbol} jest monopolistą w ${sector}.`);
+        }
+    });
+}
+
+function checkForPotentialMA() {
+    // console.log("[M&A AI] Sprawdzanie potencjalnych celów M&A...");
+
+    // Zbierz wszystkich potencjalnych inicjatorów (Boty, Holdingi, Banki Inwestycyjne)
+    const potentialInitiators = [
+        ...aiCompetitors.filter(ai => ai.cash > 50000 && ai.personality !== 'market_maker'), // Boty z gotówką
+        ...stocks.filter(s => s.assetType === 'Holding' && s.cash > 100000), // Holdingi z gotówką
+        ...commercialBanks.filter(b => b.type === BANK_TYPES.INVESTMENT && b.isActive && b.cash > 1000000) // Aktywne banki inwestycyjne
+    ];
+
+    const potentialTargets = stocks.filter(s =>
+        !s.assetType && // Nie jest typem specjalnym
+        !s.isBankrupt &&
+        !s.mergerProcess && // Nie jest już w trakcie procesu
+        !s.isSubsidiaryOf && // Nie jest już zależna
+        exchanges[s.exchange].level < 3 // Celuj w mniejsze firmy (Junk, Bronze, Silver)
+    );
+
+    if (potentialInitiators.length === 0 || potentialTargets.length === 0) {
+        // console.log("[M&A AI] Brak inicjatorów lub celów.");
+        return;
+    }
+
+    // Wybierz losowego inicjatora do analizy w tej turze
+    const initiator = getRandomElement(potentialInitiators);
+    const initiatorObject = (initiator.id ? initiator : { id: initiator.symbol, name: initiator.name, cash: initiator.cash, portfolio: initiator.holdingPortfolio || initiator.stockPortfolio }); // Ujednolicenie obiektu
+
+    // --- Ustalenie strategii i prawdopodobieństwa na podstawie typu inicjatora ---
+    let checkChance = 0.05; // Bazowa szansa 5%
+    let preferredType = 'przejęcie';
+    let preferredFinancing = 'cash';
+    let targetFilter = (target) => target.financialHealth < 0; // Domyślnie celuj w słabych
+
+    if (initiator.personality) { // Jeśli to Bot AI
+        switch (initiator.personality) {
+            case 'whale':
+            case 'pro_investor':
+                checkChance = 0.15; // Bardziej aktywni
+                targetFilter = (target) => target.financialHealth < 1 && (target.price * target.totalShares < initiatorObject.cash * 0.5); // Zdrowi, ale tani
+                break;
+            case 'reckless':
+            case 'yolo_trader':
+                checkChance = 0.20; // Najbardziej aktywni
+                targetFilter = (target) => target.volatilityFactor > 2.0; // Celuj w ryzykowne
+                break;
+            case 'banker':
+                checkChance = 0.10;
+                targetFilter = (target) => target.sector.includes('Finanse') || target.sector.includes('Bankowość'); // Celuj w swój sektor
+                break;
+        }
+    } else if (initiator.assetType === 'Holding') {
+        checkChance = 0.10;
+        // Holdingi celują w swoje sektory specjalizacji
+        targetFilter = (target) => target.sector.some(s => initiator.specializationSectors.includes(s));
+    } else if (initiator.type === BANK_TYPES.INVESTMENT) {
+        checkChance = 0.12;
+        preferredType = 'fuzja'; // Banki wolą fuzje
+        preferredFinancing = 'stockSwap'; // i wymianę akcji
+        targetFilter = (target) => target.financialHealth >= 1; // Celuj w zdrowe firmy
+    }
+
+    // --- Decyzja o rozpoczęciu analizy ---
+    if (Math.random() > checkChance) {
+        return; // Inicjator nie jest zainteresowany w tej turze
+    }
+
+    // --- Wybór celu ---
+    const eligibleTargets = potentialTargets.filter(target =>
+        target.symbol !== initiatorObject.id && // Nie celuj w siebie
+        targetFilter(target) // Sprawdź filtr strategii
+    );
+
+    if (eligibleTargets.length > 0) {
+        const targetStock = getRandomElement(eligibleTargets);
+        
+        // CEO inicjatora może mieć wpływ (np. Ekspansjonista)
+        let ceoModifier = 1.0;
+        const initiatorStock = stocks.find(s => s.symbol === initiatorObject.id); // Znajdź obiekt stock, jeśli inicjatorem jest Holding/Bank
+        if (initiatorStock && initiatorStock.ceo?.traits?.some(t => t.id === 'ekspansjonista')) {
+            ceoModifier = 2.0; // Podwójna szansa, jeśli CEO jest ekspansjonistą
+        }
+
+        // Finalna szansa na zainicjowanie procesu
+        if (Math.random() < 0.5 * ceoModifier) {
+            console.log(`[M&A AI] ${initiatorObject.name} (${initiatorObject.id}) inicjuje ${preferredType} celu ${targetStock.symbol}!`);
+            
+            // Pobierz obiekt stock inicjatora, jeśli sam nim nie jest (np. gdy inicjuje bot AI)
+            let finalInitiatorStock = initiatorStock;
+            if (initiator.personality) {
+                 // Bot AI musi działać przez spółkę, w której ma większość
+                 const controlledStockSymbol = Object.keys(initiator.portfolio).find(sym => {
+                     const stock = stocks.find(s => s.symbol === sym);
+                     return stock && !stock.assetType && (initiator.portfolio[sym].shares / stock.totalShares > 0.5);
+                 });
+                 finalInitiatorStock = stocks.find(s => s.symbol === controlledStockSymbol);
+            }
+            
+            if (finalInitiatorStock) {
+                initiateMergerProcess(finalInitiatorStock, targetStock, preferredType, preferredFinancing, getRandomInRange(0.15, 0.35)); // Premia 15-35%
+            }
+        }
     }
 }

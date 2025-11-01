@@ -287,7 +287,7 @@ gameTimers.weekly = setInterval(() => {
 
     processCompanyBanking(); // Bankowość korporacyjna
     processBankStartupSponsorship(); // Sponsorowanie startupów przez banki
-
+    stocks.forEach(s => { if(s.mergerProcess) advanceMergerProcess(s); });
     // Naliczanie odsetek od depozytów komercyjnych gracza
     playerCommercialDeposits.forEach(deposit => {
         const weeklyRate = deposit.interestRate / 52;
@@ -464,14 +464,33 @@ gameTimers.weekly = setInterval(() => {
         if (isGamePaused) return;
         reviewCompanyPlacements();
         processFinancialReports();
+        updateInfluence();
         updateCeoTenureAndAge(); // Zmieniona nazwa, ale to samo
         updateAnalyticalProperties();
         runCentralBankAI(); // Z bazy main.js
         stocks.forEach(stock => {
-        if (typeof updateCorporatePhase === 'function') {
-            updateCorporatePhase(stock);
+            if (typeof updateCorporatePhase === 'function') {
+                updateCorporatePhase(stock);
+            }
+            // ===>>> AKTUALIZACJA PROCESÓW M&A (JEŚLI TRWAJĄ) <<<===
+            if (stock.mergerProcess && typeof advanceMergerProcess === 'function') {
+                advanceMergerProcess(stock);
+            }
+        });
+        if (typeof updateInfluence === 'function') {
+             updateInfluence();
         }
-    });
+        
+        // ===>>> SPRAWDZENIE NOWYCH M&A PRZEZ AI <<<===
+        if (typeof checkForPotentialMA === 'function') {
+            checkForPotentialMA();
+        }
+        
+        // ===>>> SPRAWDZENIE STATUSU MONOPOLISTY <<<===
+        if (typeof checkMonopolyStatus === 'function') {
+             checkMonopolyStatus();
+        }
+
     }, BASE_DELAYS.quarterly / speedMultiplier);
 
     // Pętla reputacji (powolny powrót do zera)
@@ -774,6 +793,15 @@ function initializeGame() {
         if (!stock.analytical && !stock.assetType) initializeAnalyticalProperties(stock);
         if (!stock.research && !stock.assetType) initializeResearchForStock(stock);
         if (stock.playerHasFinancialAccess === undefined) stock.playerHasFinancialAccess = false;
+        if (!stock.assetType && !stock.isBankStock) { // Tylko dla zwykłych spółek
+            stock.influence = {
+                exerted: {}, 
+                received: {}, 
+                totalReceived: 0 
+            };
+        } else {
+            stock.influence = null; 
+        }
     });
 
     // Inicjalizacja systemów globalnych

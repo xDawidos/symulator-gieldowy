@@ -979,3 +979,32 @@ body.dark-mode #ad-popup .close-btn:hover {
 #state-modal h4 {
     color: #0d6efd; /* Niebieski kolor nagłówków sekcji */
 }
+
+.subsidiary-row td {
+    /* Można dodać lekkie tło dla odróżnienia */
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+/* Opcjonalnie: lekkie przyciemnienie tła po najechaniu na wiersz zależny */
+.subsidiary-row:hover td {
+    background-color: rgba(0, 0, 0, 0.04);
+}
+
+/* Ciemny motyw dla spółek zależnych */
+body.dark-mode .subsidiary-row td {
+    background-color: rgba(255, 255, 255, 0.03);
+}
+
+body.dark-mode .subsidiary-row:hover td {
+    background-color: rgba(255, 255, 255, 0.06);
+}
+
+/* Styl dla przycisku rozwijania/zwijania */
+.subsidiary-toggle {
+    font-weight: bold;
+    color: #555; /* Kolor strzałki */
+}
+
+body.dark-mode .subsidiary-toggle {
+    color: #ccc; /* Jaśniejsza strzałka w ciemnym motywie */
+}
