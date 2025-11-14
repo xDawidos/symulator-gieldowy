@@ -1008,3 +1008,55 @@ body.dark-mode .subsidiary-row:hover td {
 body.dark-mode .subsidiary-toggle {
     color: #ccc; /* Jaśniejsza strzałka w ciemnym motywie */
 }
+
+#stock-table progress {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 8px;
+    border: 1px solid #BDBDBD;
+    border-radius: 4px;
+    overflow: hidden;
+    /* Usuń domyślny kolor tła, aby działał -webkit-progress-bar */
+    background-color: transparent; 
+}
+
+#stock-table progress::-webkit-progress-bar {
+    background-color: #E0E0E0; /* Tło paska */
+}
+
+#stock-table progress::-webkit-progress-value {
+    background-color: #007bff; /* Domyślny niebieski (postęp) */
+    transition: width 0.3s ease;
+}
+
+/* Kolor paska dla komplikacji */
+#stock-table progress.complication::-webkit-progress-value {
+    background-color: #ffc107; /* Żółty */
+}
+
+/* Kolor paska dla decyzji */
+#stock-table progress.decision::-webkit-progress-value {
+    background-color: #dc3545; /* Czerwony */
+}
+
+/* Ciemny motyw dla pasków */
+body.dark-mode #stock-table progress {
+    border-color: #6c757d;
+}
+
+body.dark-mode #stock-table progress::-webkit-progress-bar {
+    background-color: #5a5a5a;
+}
+
+body.dark-mode #stock-table progress::-webkit-progress-value {
+    background-color: #0d6efd; /* Jaśniejszy niebieski */
+}
+
+body.dark-mode #stock-table progress.complication::-webkit-progress-value {
+    background-color: #ffc107;
+}
+
+body.dark-mode #stock-table progress.decision::-webkit-progress-value {
+    background-color: #dc3545;
+}

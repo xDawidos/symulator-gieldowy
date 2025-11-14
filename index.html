@@ -881,19 +881,31 @@
     <div id="ma-target-modal" class="modal" style="display:none; width: 600px;">
     <button class="close-btn" onclick="document.getElementById('ma-target-modal').style.display='none';">&times;</button>
     <h3 id="ma-target-title" style="margin-top: 0;">Wybierz Cel dla: Nazwa Spółki</h3>
-    <div class="modal-body" style="max-height: 400px; overflow-y: auto;">
+    <div class="modal-body" style="max-height: 400px; overflow-y: auto; padding-right: 15px;">
         <table id="ma-target-table" style="width: 100%;">
             <thead>
                 <tr>
                     <th>Cel</th>
                     <th>Sektor</th>
                     <th>Kapitalizacja</th>
-                    <th>Akcja</th>
-                </tr>
+                    <th style="width: 220px;">Akcja</th> </tr>
             </thead>
             <tbody id="ma-target-table-body">
                 </tbody>
         </table>
+    </div>
+</div>
+
+<div id="ma-complication-modal" class="modal" style="display:none; width: 450px; border-color: #dc3545;">
+    <button class="close-btn" onclick="document.getElementById('ma-complication-modal').style.display='none';">&times;</button>
+    <h3 id="ma-complication-title" style="margin-top: 0; color: #dc3545;">🔴 Poważne Komplikacje!</h3>
+    <div class="modal-body">
+        <p id="ma-complication-message" style="font-size: 14px; line-height: 1.5;">...Wiadomość o komplikacji...</p>
+        <div id="ma-complication-options" style="display: flex; flex-direction: column; gap: 10px; margin-top: 20px;">
+            <button>Opcja 1</button>
+            <button>Opcja 2</button>
+            <button>Opcja 3</button>
+        </div>
     </div>
 </div>
 
