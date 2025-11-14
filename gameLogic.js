@@ -41,6 +41,25 @@ let playerChartSettings = {
     candleInterval: 15000     // Domyślny interwał dla wykresu świecowego: 15 sekund
 };
 
+let governmentTreasury = 1000000; // Startowy budżet państwa
+const TAX_RATES = {
+    dividend: 0.10,        // 10% od dywidend
+    capitalGains: 0.12,    // 12% od zysków kapitałowych
+    companyIncome: [       // Podatek dochodowy od firm (progi)
+        { threshold: 0, rate: 0.13 },    // 13% do pewnego progu
+        { threshold: 50000, rate: 0.26 } // 26% powyżej progu 50k PLN dochodu (tygodniowo/miesięcznie?) - UPROSZCZONE
+    ],
+    wealthTax: [           // Podatek od bogactwa (progi od wartości netto)
+        { threshold: 100000, rate: 0.25 },  // 25% dla 100k - 600k
+        { threshold: 600001, rate: 0.35 },  // 35% dla 600k - 1.5M
+        { threshold: 1500001, rate: 0.50 } // 50% powyżej 1.5M
+    ],
+    cityTaxPlayerAI: 0.03, // 3% podatek miejski od gotówki gracza/AI (płacony tygodniowo)
+    cityTaxCompany: 0.02   // 2% podatek miejski od gotówki spółek (płacony tygodniowo)
+};
+let WEALTH_TAX_INTERVAL; // = BASE_DELAYS.quarterly * 4; <-- Usunięto inicjalizację
+let nextWealthTaxTime = 0; // Inicjalizuj na 0, ustawimy później
+
 // --- NOWE ZMIENNE DLA RYNKU OBLIGACJI I MIASTA ---
 
 let allBonds = []; // Przechowuje obligacje gracza
@@ -71,6 +90,66 @@ let stateBondOffer = {
     mediumTerm: { available: 0, interestBase: 0.02 },
     longTerm: { available: 0, interestBase: 0.05 }
 };
+
+let antitrustOffice = {
+    level: 0,              // Poziom urzędu (0-5)
+    analysisCapacity: 0.1, // Bazowa szansa na analizę (10%)
+    accuracy: 0.2,         // Bazowa szansa na poprawną blokadę (20%)
+    budget: 0              // Budżet urzędu (może być używany do kosztów analizy) - Opcjonalne
+};
+
+const ANTITRUST_UPGRADE_COSTS = [50000, 150000, 500000, 1500000, 5000000]; // Koszty ulepszeń urzędu
+
+
+
+const BANK_TYPES = {
+    INVESTMENT: 'Inwestycyjny',
+    CORPORATE: 'Korporacyjny',
+    UNIVERSAL: 'Uniwersalny',
+    INTERNATIONAL: 'Międzynarodowy',
+    COOPERATIVE: 'Spółdzielczy',
+    INTERNET: 'Internetowy (e-bank)',
+    MORTGAGE: 'Hipoteczny'
+};
+
+const BASE_DELAYS = {
+    stockUpdate: 1000, // 1 sekunda
+    weekly: 60000,     // 1 minuta (tydzień w grze)
+    quarterly: 300000, // 5 minut (kwartał w grze)
+    event: 45000       // 45 sekund
+};
+
+// Definicje wszystkich banków w grze
+const ALL_COMMERCIAL_BANKS_DEFINITIONS = [
+    // Inwestycyjne (3 + 1)
+    { id: 'inv1', name: 'Apex Capital Partners', type: BANK_TYPES.INVESTMENT, initialCapital: 5000000, reserveRatio: 0.1, baseInterestRateMargin: 0.01 },
+    { id: 'inv2', name: 'Quantum Financial Group', type: BANK_TYPES.INVESTMENT, initialCapital: 4500000, reserveRatio: 0.1, baseInterestRateMargin: 0.012 },
+    { id: 'inv3', name: 'Meridian Trade Bank', type: BANK_TYPES.INVESTMENT, initialCapital: 4000000, reserveRatio: 0.1, baseInterestRateMargin: 0.009 },
+    // --> NOWY: Bank Hipotezy jako Inwestycyjny <--
+    { id: 'bhi', name: 'Bank Hipotezy', type: BANK_TYPES.INVESTMENT, initialCapital: 8000000, reserveRatio: 0.11, baseInterestRateMargin: 0.011, isActiveFromStart: true }, // Kapitał szacowany
+
+    // Korporacyjne (3)
+    { id: 'corp1', name: 'Proxima Business Bank', type: BANK_TYPES.CORPORATE, initialCapital: 7000000, reserveRatio: 0.15, baseInterestRateMargin: 0.015 },
+    { id: 'corp2', name: 'Centauri Corporate Finance', type: BANK_TYPES.CORPORATE, initialCapital: 6500000, reserveRatio: 0.16, baseInterestRateMargin: 0.016 },
+    { id: 'corp3', name: 'Sirius Enterprise Bank', type: BANK_TYPES.CORPORATE, initialCapital: 6000000, reserveRatio: 0.14, baseInterestRateMargin: 0.014 },
+
+    // Uniwersalny (2)
+    { id: 'uni1', name: 'Bank Powszechny Gdański', type: BANK_TYPES.UNIVERSAL, initialCapital: 10000000, reserveRatio: 0.12, baseInterestRateMargin: 0.02 },
+    { id: 'bpn', name: 'BPN BK', type: BANK_TYPES.UNIVERSAL, initialCapital: 6000000, reserveRatio: 0.13, baseInterestRateMargin: 0.021, isActiveFromStart: true }, // Kapitał szacowany
+
+    // Międzynarodowy (2)
+    { id: 'int1', name: 'Global Finance Alliance', type: BANK_TYPES.INTERNATIONAL, initialCapital: 15000000, reserveRatio: 0.1, baseInterestRateMargin: 0.018 },
+    { id: 'bks', name: 'Bank Klasy Światowej', type: BANK_TYPES.INTERNATIONAL, initialCapital: 20000000, reserveRatio: 0.09, baseInterestRateMargin: 0.017, isActiveFromStart: true }, // Kapitał szacowany
+
+    // Spółdzielczy (1)
+    { id: 'coop1', name: 'Pomorski Bank Spółdzielczy', type: BANK_TYPES.COOPERATIVE, initialCapital: 2000000, reserveRatio: 0.18, baseInterestRateMargin: 0.025 },
+
+    // Internetowy (1)
+    { id: 'net1', name: 'CyberBank Connect', type: BANK_TYPES.INTERNET, initialCapital: 3000000, reserveRatio: 0.08, baseInterestRateMargin: 0.017 },
+
+    // Hipoteczny (1)
+    { id: 'mort1', name: 'DomInvest Bank Hipoteczny', type: BANK_TYPES.MORTGAGE, initialCapital: 5000000, reserveRatio: 0.13, baseInterestRateMargin: 0.022 },
+];
 
 // --- NOWY FRAGMENT ---
 // Ustawienia Auto-inwestowania Gracza
@@ -375,6 +454,16 @@ const centralBankGovernorTraits = {
     partyjniak: { name: "Człowiek Partii", rarity: "rare", color: "#8B4513", description: "Jego decyzje są często podyktowane bieżącą polityką, co prowadzi do nieprzewidywalnych ruchów." }
 };
 
+const CORPORATE_PHASES = {
+    GROWTH: 'Wzrost',
+    STABILITY: 'Stabilność',
+    DECLINE: 'Spadek',
+    REORGANIZATION: 'Reorganizacja',
+    GOLDEN_YEAR: 'Złoty Rok ✨', // Faza unikalna
+    SHADOW_DESCENT: 'Zejście w Cień 👻', // Faza unikalna
+    INNOVATION_PUSH: 'Impuls Innowacji 💡' // Faza unikalna
+};
+
 
 // --- Dane ---
 const exchanges = {
@@ -423,12 +512,7 @@ let marketIndexes = [
 const initialStocks = [
     // GIEŁDA ŚMIECIOWA (Poziom 0)
     {
-    name: 'EcoLube', price: 5.00, volatilityFactor: 2.1, symbol: 'ECL', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'EcoLube', price: 5.00, volatilityFactor: 2.1, symbol: 'ECL', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
  lineHistory: [], playerTransactions: [], sector: ['Chemia'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -436,12 +520,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Elektrownia SA', price: 15.00, volatilityFactor: 0.5, symbol: 'ELE', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Elektrownia SA', price: 15.00, volatilityFactor: 0.5, symbol: 'ELE', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Energia'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -449,12 +528,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Konfiturex', price: 2.00, volatilityFactor: 4.5, symbol: 'KFX', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Konfiturex', price: 2.00, volatilityFactor: 4.5, symbol: 'KFX', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Żywność'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -462,12 +536,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Wieczne Ziemniaki Sp. z o.o.', price: 1.50, volatilityFactor: 3.5, symbol: 'WZM', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Wieczne Ziemniaki Sp. z o.o.', price: 1.50, volatilityFactor: 3.5, symbol: 'WZM', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Żywność'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -475,12 +544,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Wąs Janusza S.A.', price: 0.80, volatilityFactor: 4.0, symbol: 'WJS', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Wąs Janusza S.A.', price: 0.80, volatilityFactor: 4.0, symbol: 'WJS', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Dobra konsumpcyjne'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -488,12 +552,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Pikselowe Marzenia', price: 7.50, volatilityFactor: 3.8, symbol: 'PIX', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Pikselowe Marzenia', price: 7.50, volatilityFactor: 3.8, symbol: 'PIX', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Technologia'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -501,12 +560,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Błyskawiczna Proteza', price: 12.00, volatilityFactor: 3.2, symbol: 'BLP', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Błyskawiczna Proteza', price: 12.00, volatilityFactor: 3.2, symbol: 'BLP', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Medycyna'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -514,12 +568,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Super Makarony', price: 18.00, volatilityFactor: 0.6, symbol: 'SUM', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Super Makarony', price: 18.00, volatilityFactor: 0.6, symbol: 'SUM', exchange: 'JUNK', totalShares: 1000, maxShares: 1000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Żywność'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -542,12 +591,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Kopalnie Węgla Mine', price: 35.00, volatilityFactor: 1.6, symbol: 'KWM', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Kopalnie Węgla Mine', price: 35.00, volatilityFactor: 1.6, symbol: 'KWM', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Przemysł'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -555,25 +599,28 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'BPN BK', price: 45.00, volatilityFactor: 0.6, symbol: 'BPN', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
-    quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
-  lineHistory: [], playerTransactions: [], sector: ['Bankowość'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
+        name: 'BPN BK',
+        price: 45.00, // Pozostawiamy cenę startową
+        volatilityFactor: 0.6,
+        symbol: 'BPN',
+        exchange: 'BRONZE', // Pozostawiamy giełdę
+        totalShares: 10000, maxShares: 10000, // Pozostawiamy akcje
+        sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [],
+        balanceSheet: { assets: 6000000, liabilities: 0, shareCapital: 600000, retainedEarnings: 5400000 }, // Ustawiamy bilans banku
+        quarterlyEarnings: 0, lineHistory: [], playerTransactions: [],
+        sector: ['Bankowość Komercyjna', 'Bankowość'], // Zmieniamy sektor
+        financialHealth: 2, // Domyślna kondycja
+        lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0,
+        dividendPolicy: 'Balanced', // Domyślna polityka
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
-        lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null, // <-- DODAJ TO
-    cash: 0 
+        lastQuarterValue: 45 * 10000, estimatedDividend: 0,
+        bankAccountId: null, // Banki nie mają kont
+        cash: 6000000, // Gotówka banku = kapitał
+        isBankStock: true, // --> Dodana flaga <--
+        bankData: { id: 'bpn', type: BANK_TYPES.UNIVERSAL } // --> Dodane dane banku <--
     },
     {
-    name: 'KolenBreg', price: 19.00, volatilityFactor: 1.5, symbol: 'KOB', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'KolenBreg', price: 19.00, volatilityFactor: 1.5, symbol: 'KOB', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Żywność'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -581,12 +628,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Komfucja', price: 19.00, volatilityFactor: 2.2, symbol: 'KOM', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Komfucja', price: 19.00, volatilityFactor: 2.2, symbol: 'KOM', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Technologia'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -594,12 +636,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Gwarancja-SI', price: 20.00, volatilityFactor: 2.8, symbol: 'GAI', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Gwarancja-SI', price: 20.00, volatilityFactor: 2.8, symbol: 'GAI', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Technologia', 'Usługi'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -607,12 +644,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Knor-FIX', price: 24.00, volatilityFactor: 1.0, symbol: 'FIX', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Knor-FIX', price: 24.00, volatilityFactor: 1.0, symbol: 'FIX', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Żywność'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -620,12 +652,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Czysty Błysk', price: 30.00, volatilityFactor: 0.7, symbol: 'CZB', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Czysty Błysk', price: 30.00, volatilityFactor: 0.7, symbol: 'CZB', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Usługi'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -633,12 +660,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Gdańska Stocznia Krzeseł', price: 22.00, volatilityFactor: 1.1, symbol: 'GSK', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Gdańska Stocznia Krzeseł', price: 22.00, volatilityFactor: 1.1, symbol: 'GSK', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Przemysł'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -646,12 +668,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Drużyna Holding', price: 22.00, volatilityFactor: 1.1, symbol: 'DRH', exchange: 'BRONZE', totalShares: 8000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Drużyna Holding', price: 22.00, volatilityFactor: 1.1, symbol: 'DRH', exchange: 'BRONZE', totalShares: 8000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Usługi'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -659,12 +676,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Bałtyckie Rejsy', price: 45.00, volatilityFactor: 1.6, symbol: 'BAL', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Bałtyckie Rejsy', price: 45.00, volatilityFactor: 1.6, symbol: 'BAL', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Turystyka'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -672,12 +684,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Boazeria Organiczna', price: 48.00, volatilityFactor: 1.2, symbol: 'BOO', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Boazeria Organiczna', price: 48.00, volatilityFactor: 1.2, symbol: 'BOO', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Przemysł'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -685,12 +692,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'DarAwansu', price: 47.00, volatilityFactor: 3.0, symbol: 'DAW', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'DarAwansu', price: 47.00, volatilityFactor: 3.0, symbol: 'DAW', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Usługi'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -698,12 +700,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-    name: 'Lek-Pol', price: 60.00, volatilityFactor: 1.1, symbol: 'LEK', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+    name: 'Lek-Pol', price: 60.00, volatilityFactor: 1.1, symbol: 'LEK', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Medycyna'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -711,12 +708,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'BurgerLand', price: 58.00, volatilityFactor: 1.4, symbol: 'BUL', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'BurgerLand', price: 58.00, volatilityFactor: 1.4, symbol: 'BUL', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Żywność'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -724,12 +716,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Beretxol', price: 68.00, volatilityFactor: 1.1, symbol: 'BER', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Beretxol', price: 68.00, volatilityFactor: 1.1, symbol: 'BER', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Przemysł'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -739,12 +726,7 @@ const initialStocks = [
 
     // GIEŁDA SREBRNA (Poziom 2) - Limit: 50,000
     {
-        name: 'Bank Żywności', price: 76.00, volatilityFactor: 1.8, symbol: 'BAZ', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Bank Żywności', price: 76.00, volatilityFactor: 1.8, symbol: 'BAZ', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Bankowość', 'Żywność'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -752,12 +734,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Firma Tłusta Pucha', price: 80.00, volatilityFactor: 1.6, symbol: 'FTP', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Firma Tłusta Pucha', price: 80.00, volatilityFactor: 1.6, symbol: 'FTP', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Żywność', 'Przemysł'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -765,12 +742,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Luksusowe Spinacze', price: 88.00, volatilityFactor: 0.8, symbol: 'LUS', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Luksusowe Spinacze', price: 88.00, volatilityFactor: 0.8, symbol: 'LUS', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Dobra konsumpcyjne'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -778,12 +750,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Krajoznawsto Obce', price: 78.00, volatilityFactor: 2.5, symbol: 'KRO', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Krajoznawsto Obce', price: 78.00, volatilityFactor: 2.5, symbol: 'KRO', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Turystyka'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -791,12 +758,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Plandex', price: 99.00, volatilityFactor: 1.3, symbol: 'PLX', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Plandex', price: 99.00, volatilityFactor: 1.3, symbol: 'PLX', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Turystyka'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -813,12 +775,7 @@ const initialStocks = [
         candlestickHistory: [], lineHistory: [], currentCandle: null, dividendPolicy: 'Growth'
     },
     {
-        name: 'Linapol', price: 114.00, volatilityFactor: 0.9, symbol: 'LIN', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Linapol', price: 114.00, volatilityFactor: 0.9, symbol: 'LIN', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Nieruchomości'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -826,12 +783,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Betonex', price: 120.00, volatilityFactor: 1.0, symbol: 'BTX', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Betonex', price: 120.00, volatilityFactor: 1.0, symbol: 'BTX', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Przemysł', 'Nieruchomości'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -839,12 +791,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'VitaGen', price: 180.00, volatilityFactor: 2.2, symbol: 'VTG', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'VitaGen', price: 180.00, volatilityFactor: 2.2, symbol: 'VTG', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Medycyna', 'Technologia'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -852,12 +799,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Cyber-Ochrona', price: 210.00, volatilityFactor: 1.9, symbol: 'CRO', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Cyber-Ochrona', price: 210.00, volatilityFactor: 1.9, symbol: 'CRO', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Usługi', 'Technologia'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -865,12 +807,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Annesco', price: 298.00, volatilityFactor: 1.2, symbol: 'ANN', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Annesco', price: 298.00, volatilityFactor: 1.2, symbol: 'ANN', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Przemysł'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -878,12 +815,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Meferox', price: 292.00, volatilityFactor: 1.7, symbol: 'MEF', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Meferox', price: 292.00, volatilityFactor: 1.7, symbol: 'MEF', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Energia', 'Chemia'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -900,25 +832,28 @@ const initialStocks = [
         candlestickHistory: [], lineHistory: [], currentCandle: null, dividendPolicy: 'Growth'
     },
     {
-        name: 'Bank Hipotezy', price: 330.00, volatilityFactor: 0.8, symbol: 'BHI', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
-    quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
-  lineHistory: [], playerTransactions: [], sector: ['Bankowość'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
+        name: 'Bank Hipotezy',
+        price: 330.00, // Pozostawiamy cenę startową
+        volatilityFactor: 0.8,
+        symbol: 'BHI',
+        exchange: 'SILVER', // Pozostawiamy giełdę
+        totalShares: 50000, maxShares: 50000, // Pozostawiamy akcje
+        sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [],
+        balanceSheet: { assets: 8000000, liabilities: 0, shareCapital: 800000, retainedEarnings: 7200000 }, // Ustawiamy bilans banku
+        quarterlyEarnings: 0, lineHistory: [], playerTransactions: [],
+        sector: ['Bankowość Komercyjna', 'Finanse'], // Zmieniamy sektor
+        financialHealth: 2, // Domyślna kondycja
+        lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0,
+        dividendPolicy: 'Balanced', // Domyślna polityka
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
-        lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null, // <-- DODAJ TO
-    cash: 0 
+        lastQuarterValue: 330 * 50000, estimatedDividend: 0,
+        bankAccountId: null, // Banki nie mają kont
+        cash: 8000000, // Gotówka banku = kapitał
+        isBankStock: true, // --> Dodana flaga <--
+        bankData: { id: 'bhi', type: BANK_TYPES.INVESTMENT } // --> Dodane dane banku <--
     },
     {
-        name: 'Siarkobrzeg', price: 337.00, volatilityFactor: 1.4, symbol: 'SIK', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Siarkobrzeg', price: 337.00, volatilityFactor: 1.4, symbol: 'SIK', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Chemia'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -926,12 +861,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'BlueBull', price: 150.00, volatilityFactor: 1.2, symbol: 'BLB', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'BlueBull', price: 150.00, volatilityFactor: 1.2, symbol: 'BLB', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Żywność'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -939,12 +869,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Cyberfood Corp', price: 250.00, volatilityFactor: 1.8, symbol: 'CYF', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Cyberfood Corp', price: 250.00, volatilityFactor: 1.8, symbol: 'CYF', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Żywność', 'Technologia'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -965,12 +890,7 @@ const initialStocks = [
 
     // GIEŁDA ZŁOTA (Poziom 3)
     {
-        name: 'WielkiWoltaż', price: 410.00, volatilityFactor: 0.9, symbol: 'WIW', exchange: 'GOLD', totalShares: 100000, maxShares: 100000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'WielkiWoltaż', price: 410.00, volatilityFactor: 0.9, symbol: 'WIW', exchange: 'GOLD', totalShares: 100000, maxShares: 100000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Energia'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -978,12 +898,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Krawaciarze Inc.', price: 485.00, volatilityFactor: 0.7, symbol: 'KRA', exchange: 'GOLD', totalShares: 100000, maxShares: 100000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Krawaciarze Inc.', price: 485.00, volatilityFactor: 0.7, symbol: 'KRA', exchange: 'GOLD', totalShares: 100000, maxShares: 100000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Przemysł', 'Usługi'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -991,12 +906,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Sanitas Szpitale', price: 550.00, volatilityFactor: 0.6, symbol: 'SAN', exchange: 'GOLD', totalShares: 100000, maxShares: 100000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Sanitas Szpitale', price: 550.00, volatilityFactor: 0.6, symbol: 'SAN', exchange: 'GOLD', totalShares: 100000, maxShares: 100000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Medycyna'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -1004,12 +914,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Stocznia Morska', price: 777.00, volatilityFactor: 1.3, symbol: 'STM', exchange: 'GOLD', totalShares: 100000, maxShares: 100000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Stocznia Morska', price: 777.00, volatilityFactor: 1.3, symbol: 'STM', exchange: 'GOLD', totalShares: 100000, maxShares: 100000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Przemysł'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -1034,12 +939,7 @@ const initialStocks = [
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) candlestickHistory: [], lineHistory: [], playerTransactions: [], priceAlerts: { buy: null, sell: null }
     },
     {
-        name: 'SuperKonsumpcja!', price: 950.00, volatilityFactor: 1.1, symbol: 'SKP', exchange: 'GOLD', totalShares: 100000, maxShares: 100000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'SuperKonsumpcja!', price: 950.00, volatilityFactor: 1.1, symbol: 'SKP', exchange: 'GOLD', totalShares: 100000, maxShares: 100000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Dobra konsumpcyjne'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -1047,27 +947,30 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Bank Klasy Światowej', price: 1000.00, volatilityFactor: 0.3, symbol: 'BKS', exchange: 'GOLD', totalShares: 100000, maxShares: 100000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
-    quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
-  lineHistory: [], playerTransactions: [], sector: ['Bankowość'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
+        name: 'Bank Klasy Światowej',
+        price: 1000.00, // Pozostawiamy cenę startową
+        volatilityFactor: 0.3,
+        symbol: 'BKS',
+        exchange: 'GOLD', // Pozostawiamy giełdę
+        totalShares: 100000, maxShares: 100000, // Pozostawiamy akcje
+        sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [],
+        balanceSheet: { assets: 20000000, liabilities: 0, shareCapital: 2000000, retainedEarnings: 18000000 }, // Ustawiamy bilans banku
+        quarterlyEarnings: 0, lineHistory: [], playerTransactions: [],
+        sector: ['Bankowość Komercyjna', 'Finanse', 'Międzynarodowy'], // Zmieniamy sektor
+        financialHealth: 3, // Domyślna kondycja (lepsza)
+        lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0,
+        dividendPolicy: 'Balanced', // Domyślna polityka
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
-        lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null, // <-- DODAJ TO
-    cash: 0 
+        lastQuarterValue: 1000 * 100000, estimatedDividend: 0,
+        bankAccountId: null, // Banki nie mają kont
+        cash: 20000000, // Gotówka banku = kapitał
+        isBankStock: true, // --> Dodana flaga <--
+        bankData: { id: 'bks', type: BANK_TYPES.INTERNATIONAL } // --> Dodane dane banku <--
     },
 
     // GIEŁDA PLATYNOWA (Poziom 4)
     {
-        name: 'Universal Projects', price: 1525.00, volatilityFactor: 1.5, symbol: 'UNP', exchange: 'PLATINUM', totalShares: 1000000, maxShares: 1000000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Universal Projects', price: 1525.00, volatilityFactor: 1.5, symbol: 'UNP', exchange: 'PLATINUM', totalShares: 1000000, maxShares: 1000000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Technologia'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -1075,12 +978,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Cortex Neural', price: 1850.00, volatilityFactor: 2.4, symbol: 'CTX', exchange: 'PLATINUM', totalShares: 1000000, maxShares: 1000000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Cortex Neural', price: 1850.00, volatilityFactor: 2.4, symbol: 'CTX', exchange: 'PLATINUM', totalShares: 1000000, maxShares: 1000000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Technologia'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -1088,12 +986,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'KrzeUraFos4', price: 2300.00, volatilityFactor: 2.9, symbol: 'KUP', exchange: 'PLATINUM', totalShares: 1000000, maxShares: 1000000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'KrzeUraFos4', price: 2300.00, volatilityFactor: 2.9, symbol: 'KUP', exchange: 'PLATINUM', totalShares: 1000000, maxShares: 1000000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Chemia'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -1101,12 +994,7 @@ const initialStocks = [
     cash: 0 
     },
     {
-        name: 'Biurowce Obsługi Rachunkowej', price: 3000.00, volatilityFactor: 0.6, symbol: 'BOR', exchange: 'PLATINUM', totalShares: 1000000, maxShares: 1000000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+        name: 'Biurowce Obsługi Rachunkowej', price: 3000.00, volatilityFactor: 0.6, symbol: 'BOR', exchange: 'PLATINUM', totalShares: 1000000, maxShares: 1000000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Usługi', 'Nieruchomości'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
@@ -1455,6 +1343,14 @@ const SKILL_COST_INCREASE_FACTOR = 0.75;
 
 const skills = {
 
+    'adblock': {
+        name: 'AdBlock 🚫',
+        unlockedLevel: 0,
+        levels: [
+            { level: 1, cost: 1000, description: 'Wyłącza wyskakujące okienka reklamowe w interfejsie gry.' }
+        ]
+    },
+
     'work': {
         name: 'Praca ✍️',
         unlockedLevel: 0,
@@ -1547,6 +1443,18 @@ const skills = {
             { level: 2, cost: 400, name: 'Nagięcia na giełdzie', description: 'W ofercie prywatnej możesz zadeklarować chęć kupna o 10% więcej akcji, niż wynika z Twojego udziału.' },
             { level: 3, cost: 1000, name: 'Twardy negocjator', description: 'Cena akcji w ofercie prywatnej jest niższa o dodatkowe 15%.' }
         ]
+    },
+    'sanEscobar': {
+        name: 'Znajomości w San Escobar 🌴',
+        unlockedLevel: 0,
+        levels: [
+            { level: 1, cost: 2000, description: 'Obniża podatek od dywidend, zysków kapitałowych i miejski o 5% wartości podatku.' },
+            { level: 2, cost: 8000, name: 'Firma w Raju', description: 'Całkowicie usuwa podatek dochodowy od Twojej firmy (jeśli ją posiadasz) i obniża podatek od bogactwa o 3 punkty procentowe (np. z 25% na 22%).' },
+            { level: 3, cost: 25000, name: 'Obywatel Wyspy', description: 'Usuwa dwa najwyższe progi podatku od bogactwa (35% i 50%), a najniższy próg (25%) obniża do 5%.' },
+            { level: 4, cost: 100000, name: 'Przepisanie Majątku', description: 'Całkowite usunięcie wszystkich podatków! UWAGA: Istnieje roczne ryzyko kontroli skarbowej, która może wyzerować poziomy tej umiejętności!' }
+        ],
+        // Dodajemy flagę do śledzenia ryzyka kontroli
+        hasRiskActive: false
     },
     'sixthSense': {
         name: 'Szósty Zmysł 💡',
@@ -1747,130 +1655,240 @@ const CANDLE_INTERVAL = 15 * 1000; // 15 sekund na jedną świecę bazową
 
 function updateStockPrices() {
     const now = Date.now();
-    const marketModifier = 1 + (marketVolatilityIndex - 1) * 0.5;
+    const marketModifier = 1 + (marketVolatilityIndex - 1) * 0.5; // Modifier based on market volatility index
 
     stocks.forEach(stock => {
+        // Skip Holding companies, they are updated separately
         if (stock.assetType === 'Holding') {
-            return; // Pomiń tę spółkę, jej cena jest obliczana w updateHoldingCompanies()
+            return;
         }
+
+        // Initialize modifiers for price growth and volatility
         let priceGrowthModifier = 1.0;
         let volatilityModifier = 1.0;
-        let isVolatilityCapped = false;
+        let isVolatilityCapped = false; // Flag for CEO trait 'pewniak'
 
+        // Apply modifiers based on corporate phase
+        switch (stock.corporatePhase) {
+            case CORPORATE_PHASES.GROWTH:
+                priceGrowthModifier += 0.015; // +1.5% drift
+                volatilityModifier += 0.1; // +10% volatility
+                break;
+            case CORPORATE_PHASES.STABILITY:
+                volatilityModifier -= 0.1; // -10% volatility
+                break;
+            case CORPORATE_PHASES.DECLINE:
+                priceGrowthModifier -= 0.02; // -2% drift
+                volatilityModifier += 0.15; // +15% volatility
+                break;
+            case CORPORATE_PHASES.REORGANIZATION:
+                volatilityModifier += 0.2; // +20% volatility (uncertainty)
+                break;
+            case CORPORATE_PHASES.GOLDEN_YEAR:
+                priceGrowthModifier += 0.04; // +4% drift!
+                volatilityModifier -= 0.05; // Slightly more stable growth
+                break;
+            case CORPORATE_PHASES.SHADOW_DESCENT:
+                priceGrowthModifier -= 0.05; // -5% drift!
+                volatilityModifier += 0.25; // +25% volatility
+                break;
+            case CORPORATE_PHASES.INNOVATION_PUSH:
+                priceGrowthModifier += 0.01; // Slight growth
+                volatilityModifier += 0.1; // +10% volatility (R&D risk)
+                break;
+        }
+
+        // Apply modifiers based on CEO traits
         if (stock.ceo && stock.ceo.traits) {
             stock.ceo.traits.forEach(trait => {
                 switch (trait.id) {
-                    // Modyfikatory wzrostu ceny
+                    // Price Growth Modifiers
                     case 'wyjadacz': priceGrowthModifier += 0.01; break;
                     case 'rekin': priceGrowthModifier += 0.05; break;
                     case 'filar_w_branzy': priceGrowthModifier += 0.01; break;
                     case 'tyran': priceGrowthModifier -= 0.02; break;
                     case 'rozrzutny': priceGrowthModifier -= 0.02; break;
                     case 'nieudacznik': priceGrowthModifier -= 0.05; volatilityModifier += 0.05; break;
-                    case 'biurowy_dron': priceGrowthModifier -= 0.01; break; // NOWA LINIA
+                    case 'biurowy_dron': priceGrowthModifier -= 0.01; break;
 
-                    // Modyfikatory zmienności
+                    // Volatility Modifiers
                     case 'hobbista': volatilityModifier += 0.02; break;
                     case 'wizjoner': volatilityModifier += 0.05; break;
                     case 'stoik': volatilityModifier *= 0.60; break;
-                    case 'pewniak': isVolatilityCapped = true; break;
-                    case 'ryzykant': volatilityModifier += 0.10; break; // NOWA LINIA
-                    case 'ksiegowy': volatilityModifier *= 0.95; break; // NOWA LINIA
-                    case 'lowca_glow': volatilityModifier += 0.15; break; // NOWA LINIA
+                    case 'pewniak': isVolatilityCapped = true; break; // Caps volatility later
+                    case 'ryzykant': volatilityModifier += 0.10; break;
+                    case 'ksiegowy': volatilityModifier *= 0.95; break;
+                    case 'lowca_glow': volatilityModifier += 0.15; break;
                 }
             });
         }
 
-        // Reszta funkcji pozostaje taka sama, jak w Twoim pliku
+        // Initialize chart data if missing
         if (!stock.currentCandle || !stock.candlestickHistory) {
             stock.candlestickHistory = [];
             stock.lineHistory = [];
-            stock.currentCandle = { time: now, open: stock.price, high: stock.price, low: stock.price, close: stock.price };
+            // Ensure initial price is set, falling back to 0.01 if undefined/null/0
+            const initialPrice = stock.price > 0 ? stock.price : 0.01;
+            stock.currentCandle = { time: now, open: initialPrice, high: initialPrice, low: initialPrice, close: initialPrice };
         }
 
+        // Calculate price change
         let change;
-
         let effectiveVolatility = stock.volatilityFactor * volatilityModifier;
 
+        // Apply volatility cap if CEO trait 'pewniak' is active
         if (isVolatilityCapped) {
-            if (effectiveVolatility < 0.5) effectiveVolatility = 0.5;
-            if (effectiveVolatility > 3.0) effectiveVolatility = 3.0;
+            effectiveVolatility = Math.max(0.5, Math.min(effectiveVolatility, 3.0));
         }
 
+        // Special market behavior (e.g., IPO boost) overrides standard price change
         if (stock.marketBehavior) {
-            // ... (logika IPO bez zmian) ...
+            if (stock.marketBehavior.phase === 'ipo_boost' && now < stock.marketBehavior.endTime) {
+                // Apply a stronger, upward-biased random movement
+                change = (0.01 + Math.random() * 0.02) * effectiveVolatility;
+            } else if (now >= stock.marketBehavior.endTime) {
+                // End special behavior phase
+                logEvent(`📈 IPO boost phase for ${stock.name} has ended.`);
+                stock.marketBehavior = null; // Remove behavior object
+                // Standard logic will apply from next tick
+                change = (Math.random() - 0.5) * 0.2 * effectiveVolatility * marketModifier; // Calculate standard change for this tick
+            } else {
+                 // If behavior exists but isn't ipo_boost or time expired, use standard logic
+                 change = (Math.random() - 0.5) * 0.2 * effectiveVolatility * marketModifier;
+            }
+        }
+        // Standard price change logic (if no active special behavior)
+        else {
+            if (stock.activePositiveBoostUntil && now < stock.activePositiveBoostUntil) {
+                // Apply positive boost
+                change = (0.015 + Math.random() * 0.025) * effectiveVolatility;
+            } else if (stock.activeNegativeBoostUntil && now < stock.activeNegativeBoostUntil) {
+                // Apply negative boost (make change negative)
+                change = -(0.015 + Math.random() * 0.025) * effectiveVolatility;
+            } else {
+                // Reset expired boosts
+                if (stock.activePositiveBoostUntil && now >= stock.activePositiveBoostUntil) stock.activePositiveBoostUntil = null;
+                if (stock.activeNegativeBoostUntil && now >= stock.activeNegativeBoostUntil) stock.activeNegativeBoostUntil = null;
+                // Calculate standard random change influenced by volatility and market index
+                change = (Math.random() - 0.5) * 0.2 * effectiveVolatility * marketModifier;
+            }
         }
 
-        if (stock.activePositiveBoostUntil && now < stock.activePositiveBoostUntil) {
-            change = (0.015 + Math.random() * 0.025) * effectiveVolatility;
-        } else if (stock.activeNegativeBoostUntil && now < stock.activeNegativeBoostUntil) {
-            change = -(0.015 + Math.random() * 0.025) * effectiveVolatility;
-        } else {
-            if (stock.activePositiveBoostUntil && now >= stock.activePositiveBoostUntil) stock.activePositiveBoostUntil = null;
-            if (stock.activeNegativeBoostUntil && now >= stock.activeNegativeBoostUntil) stock.activeNegativeBoostUntil = null;
-            change = (Math.random() - 0.5) * 0.2 * effectiveVolatility * marketModifier;
+
+        // Calculate base price drift (tendency to increase/decrease based on health/phase/CEO)
+        // Ensure stock.price is valid before calculation
+        const currentPriceForDrift = stock.price > 0 ? stock.price : 0.01;
+        const priceDrift = currentPriceForDrift * 0.00005 * (priceGrowthModifier - 1.0); // Drift is proportional to price
+
+        // --- Apply Monopolist bonus to drift ---
+        let finalPriceDrift = priceDrift;
+        if (stock.isMonopolist) {
+            finalPriceDrift *= 1.5; // Monopolist has 50% higher base price drift
+        }
+        // --- End Monopolist bonus ---
+
+        // Update the stock price
+        stock.price += change + finalPriceDrift; // Apply change and final drift
+
+        // Ensure price doesn't go below 0.01
+        if (stock.price <= 0) { // Check if less than or equal to zero
+             stock.price = 0.01; // Set minimum price
         }
 
-        const priceDrift = stock.price * 0.00005 * (priceGrowthModifier - 1.0);
-        stock.price += change + priceDrift;
 
-        if (stock.price < 0.01) stock.price = 0.01;
-
+        // Logic for locking/unlocking trade based on price
         if (stock.price < 1.00 && !stock.isTradeLocked) {
+            // High chance to lock trade if price drops below 1.00
             if (Math.random() < 0.80) {
                 stock.isTradeLocked = true;
-                logEvent(`⛔ Handel akcjami ${stock.name} (${stock.symbol}) został tymczasowo wstrzymany z powodu niskiej ceny!`, 'review');
+                logEvent(`⛔ Trading halted for ${stock.name} (${stock.symbol}) due to low price!`, 'review');
             }
         } else if (stock.price > 1.50 && stock.isTradeLocked) {
+            // Unlock trade if price recovers above 1.50
             stock.isTradeLocked = false;
-            logEvent(`✅ Handel akcjami ${stock.name} (${stock.symbol}) został wznowiony!`, 'review');
+            logEvent(`✅ Trading resumed for ${stock.name} (${stock.symbol})!`, 'review');
         }
 
+        // Bankruptcy check pre-condition (simplified, actual bankruptcy in processFinancialReports)
         if (stock.financialHealth <= -5 && !stock.isBankrupt) {
             let canGoBankrupt = true;
-            if (stock.ceo && stock.ceo.traits.some(t => t.id === 'bogacz')) {
+            // CEO trait 'bogacz' prevents bankruptcy
+            if (stock.ceo?.traits?.some(t => t.id === 'bogacz')) {
                 canGoBankrupt = false;
-                if (stock.financialHealth < -4) stock.financialHealth = -4; // Blokada na -4
+                // Prevent health dropping further below -4 if bogacz is CEO
+                if (stock.financialHealth < -4) stock.financialHealth = -4;
             }
+            // Add actual bankruptcy trigger logic here or in processFinancialReports if needed based on `canGoBankrupt` flag.
         }
 
-        let historyLimit = 15;
+        // --- Update Chart Data ---
+        // Determine history limit based on analytical mind skill
+        let historyLimitCandles = 15 * 4; // Default: 15 minutes (15 * 4 candles)
+        let historyLimitLine = 15 * 60;   // Default: 15 minutes (15 * 60 points)
         const mindLevel = getSkillLevel('analyticalMind');
-        if (mindLevel === 1) historyLimit = 20;
-        if (mindLevel === 2) historyLimit = 25;
+        if (mindLevel === 1) {
+            historyLimitCandles = 20 * 4;
+            historyLimitLine = 20 * 60;
+        } else if (mindLevel >= 2) { // Level 2 and 3 have the same limit for now
+            historyLimitCandles = 25 * 4;
+            historyLimitLine = 25 * 60;
+        }
 
+        // Update line history
         stock.lineHistory.push({ time: now, price: stock.price });
-        if (stock.lineHistory.length > (historyLimit * 60)) {
-            stock.lineHistory.shift();
+        // Trim line history if it exceeds the limit
+        if (stock.lineHistory.length > historyLimitLine) {
+            stock.lineHistory.shift(); // Remove the oldest point
         }
 
+        // Update current candlestick
         const candle = stock.currentCandle;
-        candle.close = stock.price;
-        if (stock.price > candle.high) candle.high = stock.price;
-        if (stock.price < candle.low) candle.low = stock.price;
+        // Ensure candle exists before updating
+        if (candle) {
+            candle.close = stock.price;
+            if (stock.price > candle.high) candle.high = stock.price;
+            if (stock.price < candle.low) candle.low = stock.price;
 
-        if (now - candle.time >= CANDLE_INTERVAL) {
-            stock.candlestickHistory.push(candle);
-            if (stock.candlestickHistory.length > historyLimit * 4) {
-                stock.candlestickHistory.shift();
+            // Check if current candle interval has passed
+            if (now - candle.time >= CANDLE_INTERVAL) {
+                // Add completed candle to history
+                stock.candlestickHistory.push(candle);
+                // Trim candlestick history if it exceeds the limit
+                if (stock.candlestickHistory.length > historyLimitCandles) {
+                    stock.candlestickHistory.shift(); // Remove the oldest candle
+                }
+                // Start a new candle
+                stock.currentCandle = { time: now, open: stock.price, high: stock.price, low: stock.price, close: stock.price };
             }
-            stock.currentCandle = { time: now, open: stock.price, high: stock.price, low: stock.price, close: stock.price };
+        } else {
+             // If candle was missing, initialize it (fallback)
+             stock.currentCandle = { time: now, open: stock.price, high: stock.price, low: stock.price, close: stock.price };
         }
-    });
+    }); // End stocks.forEach
 
+    // Update ETF prices based on underlying stocks
     etfs.forEach(etf => {
+        // Find stocks matching the ETF's target sectors
         const underlyingStocks = stocks.filter(stock =>
-            stock.sector.some(s => etf.targetSectors.includes(s))
+            !stock.assetType && // Exclude special types like Startups, REITs etc.
+            !stock.isBankrupt &&
+            stock.sector?.some(s => etf.targetSectors.includes(s)) // Check if any stock sector matches ETF targets
         );
+
         if (underlyingStocks.length > 0) {
+            // Calculate average price of underlying stocks
             const totalValue = underlyingStocks.reduce((sum, stock) => sum + stock.price, 0);
             etf.price = totalValue / underlyingStocks.length;
+
+            // Add new price to history and trim if needed (simple history limit)
             etf.priceHistory.push(etf.price);
-            if (etf.priceHistory.length > 15) {
+            if (etf.priceHistory.length > 15) { // Keep last 15 price points for ETF
                 etf.priceHistory.shift();
             }
         }
-    });
+         // Optional: Handle case where no underlying stocks are found (e.g., set price to 0 or last known)
+         // else { etf.price = 0; }
+    }); // End etfs.forEach
 }
 
 function buyStock(symbol, quantity) {
@@ -1902,14 +1920,7 @@ function buyStock(symbol, quantity) {
         return;
     }
 
-    /*
-    const playerIsBank = false; // W przyszłości tu będzie sprawdzenie, czy gracz jest bankiem
-    const targetIsBank = commercialBanks.some(b => b.id === `bank_${stockToBuy.symbol}` && b.isActive); // Placeholder
-    if (playerIsBank && targetIsBank) {
-        // TODO: Sprawdzić obecny udział gracza w banku-celu i zablokować, jeśli przekroczy 30%
-        // console.log("Gracz (jako bank) próbuje kupić inny bank - sprawdzenie limitu (jeszcze nie zaimplementowane)");
-    }
-    */
+    
 
     let totalCost = stockToBuy.price * quantity;
     const charismaLevel = getSkillLevel('sharkCharisma');
@@ -1990,30 +2001,44 @@ function sellStock(symbol, quantity) {
         totalGain *= (1 + charismaBonus);
     }
 
-    const profitPerShare = (totalGain / quantity) - holding.avgPrice;
-    const totalProfit = profitPerShare * quantity;
+const purchaseValue = holding.avgPrice * quantity; // Koszt zakupu sprzedawanych akcji
+    const profit = totalGainGross - purchaseValue; // Zysk brutto z transakcji
 
-    if (totalProfit > 0) {
-        let xpGained = totalProfit / 100;
+    let taxToPay = 0;
+    let xpGained = 0;
+
+    // ---> NOWOŚĆ: Obliczanie podatku i XP <---
+    if (profit > 0) {
+        let taxRateCapitalGains = TAX_RATES.capitalGains;
+        let playerTaxModifier = 1.0;
+        const sanEscobarLvl = getSkillLevel('sanEscobar');
+        if (sanEscobarLvl >= 1) playerTaxModifier = 0.95;
+        if (sanEscobarLvl >= 4) playerTaxModifier = 0.0;
+
+        taxToPay = profit * taxRateCapitalGains * playerTaxModifier;
+        governmentTreasury += taxToPay; // Podatek do budżetu
+
+        // XP liczymy od zysku PRZED podatkiem, aby San Escobar nie zmniejszał XP
+        xpGained = profit / 100;
         if (getSkillLevel('sharkCharisma') === 3) xpGained *= 1.10;
+        if (stockToSell.ceo?.traits?.some(t => t.id === 'patron')) xpGained *= 1.10;
+    }
+    // ---> KONIEC NOWOŚCI <---
 
-        // --- NOWY BLOK ---
-        if (stockToSell.ceo?.traits?.some(t => t.id === 'patron')) {
-            xpGained *= 1.10; // +10% XP
-            logEvent(`🤝 [CEO] Patron z ${stockToSell.name} docenia Twój zmysł inwestycyjny! Otrzymujesz bonusowe XP.`);
-        }
-        // --- KONIEC NOWEGO BLOKU ---
+    const totalGainNet = totalGainGross - taxToPay; // Przychód netto po podatku
 
-        if (xpGained > 0) {
-            playerXP += xpGained;
-            displayXP();
-        }
+    if (xpGained > 0) {
+        playerXP += xpGained;
+        displayXP();
     }
 
-    playerCash += totalGain;
+    playerCash += totalGainNet; // Gracz otrzymuje kwotę netto
     holding.shares -= quantity;
     stockToSell.sharesHeld -= quantity;
     stockToSell.price -= (quantity * stockToSell.price) * 0.000005;
+
+    // Logowanie z informacją o podatku
+    logEvent(`Sprzedano ${quantity} szt. ${symbol}. Zysk brutto: ${profit.toFixed(2)} PLN, Podatek: ${taxToPay.toFixed(2)} PLN.`);
 
     if (holding.shares === 0) {
         stockToSell.playerTransactions = [];
@@ -2446,47 +2471,72 @@ function sellEtf(symbol, quantity) {
     const etfToSell = etfs.find(e => e.symbol === symbol);
     const holding = playerPortfolio[symbol];
 
-    // BŁĄD W ORYGINALE: Ta funkcja powinna sprawdzać 'etfExpert', a nie 'indexAnalystLvl1'
-    if (getSkillLevel('etfExpert') === 0) { 
+    // Sprawdzenie umiejętności i podstawowa walidacja
+    if (getSkillLevel('etfExpert') === 0) {
         alert("Musisz odblokować umiejętność 'Ekspert Rynków Globalnych', aby handlować funduszami ETF!");
         return;
     }
+    if (!etfToSell || !holding || holding.shares < quantity || quantity <= 0) {
+        alert(`Nie masz wystarczającej liczby jednostek ${etfToSell ? etfToSell.name : symbol}. Posiadasz: ${holding ? holding.shares : 0}`);
+        return;
+    }
 
-
-    let totalGain = etfToSell.price * quantity;
+    let totalGainGross = etfToSell.price * quantity; // Przychód brutto
     const charismaLevel = getSkillLevel('sharkCharisma');
     if (charismaLevel > 0) {
         let charismaBonus = 0;
         switch (charismaLevel) {
-            case 1: charismaBonus = 0.005; break; // 0.5%
-            case 2: charismaBonus = 0.01; break;  // 1.0%
-            case 3: charismaBonus = 0.015; break; // 1.5%
+            case 1: charismaBonus = 0.005; break;
+            case 2: charismaBonus = 0.01; break;
+            case 3: charismaBonus = 0.015; break;
         }
-        totalGain *= (1 + charismaBonus); // Przy sprzedaży dodajemy bonus
+        totalGainGross *= (1 + charismaBonus); // Dodajemy bonus do przychodu brutto
     }
 
-    const profitPerShare = (totalGain / quantity) - holding.avgPrice;
-    const totalProfit = profitPerShare * quantity;
-    console.log(`Sprzedaż ${quantity} jedn. ${symbol}. Zysk/strata na transakcji: ${totalProfit.toFixed(2)} PLN`);
+    const purchaseValue = holding.avgPrice * quantity; // Koszt zakupu sprzedawanych jednostek
+    const profit = totalGainGross - purchaseValue; // Zysk brutto
 
-    if (totalProfit > 0) {
-        const xpGained = totalProfit / 100;
-        if (xpGained > 0) {
-            playerXP += xpGained;
-            displayXP();
-        }
+    let taxToPay = 0;
+    let xpGained = 0;
+
+    // --- NOWOŚĆ: Obliczanie podatku i XP ---
+    if (profit > 0) {
+        let taxRateCapitalGains = TAX_RATES.capitalGains;
+        let playerTaxModifier = 1.0;
+        const sanEscobarLvl = getSkillLevel('sanEscobar');
+        if (sanEscobarLvl >= 1) playerTaxModifier = 0.95; // Lvl 1: 5% zniżki
+        if (sanEscobarLvl >= 4) playerTaxModifier = 0.0; // Lvl 4: 0% podatku
+
+        taxToPay = profit * taxRateCapitalGains * playerTaxModifier;
+        governmentTreasury += taxToPay; // Podatek do budżetu
+
+        // XP liczymy od zysku PRZED podatkiem
+        xpGained = profit / 100;
+        // Bonus XP z Charyzmy Rekina (jeśli jest)
+        if (getSkillLevel('sharkCharisma') === 3) xpGained *= 1.10;
+        // W ETFach nie ma cechy 'Patron'
+    }
+    // --- KONIEC NOWOŚCI ---
+
+    const totalGainNet = totalGainGross - taxToPay; // Przychód netto po podatku
+
+    if (xpGained > 0) {
+        playerXP += xpGained;
+        displayXP();
     }
 
-    playerCash += totalGain;
+    playerCash += totalGainNet; // Gracz otrzymuje kwotę netto
     holding.shares -= quantity;
 
-    if (holding.shares === 0) {
+    logEvent(`Sprzedano ${quantity} jedn. ETF ${symbol}. Zysk brutto: ${profit.toFixed(2)} PLN, Podatek: ${taxToPay.toFixed(2)} PLN.`);
+
+    if (holding.shares <= 0.001) { // Użyj progu dla bezpieczeństwa
         delete playerPortfolio[symbol];
     }
 
     displayCash();
     displayPortfolio();
-    checkPlayerTierUpgrade();
+    checkPlayerTierUpgrade(); // Sprawdzenie awansu gracza
 }
 /**
  * Funkcja do zakupu subskrypcji premium "Pulsu Rynku".
@@ -2641,14 +2691,20 @@ function processFinancialReports() {
 
         } else {
             // 🏭 Standardowe spółki (logika, którą już zaimplementowaliśmy)
+            console.log(`[REPORTS] Przetwarzanie standardowej spółki: ${stock.symbol}, Health: ${stock.financialHealth}, Phase: ${stock.corporatePhase}`); // <--- LOG 1
             const earningsBase = (stock.financialHealth * 0.01) + (getRandomInRange(-0.015, 0.015));
             quarterlyEarnings = marketCap * earningsBase;
+            if (stock.isMonopolist) {
+        quarterlyEarnings *= 1.2; // Monopolista zarabia o 20% więcej
+    }
+            console.log(`[REPORTS] ${stock.symbol} -> Obliczone quarterlyEarnings: ${quarterlyEarnings}`); // <--- LOG 2
         }
 
         stock.quarterlyEarnings = quarterlyEarnings;
 
         // --- Aktualizacja bilansu na podstawie obliczonych zysków ---
         if (stock.balanceSheet) {
+            console.log(`[REPORTS] ${stock.symbol} - Aktualizacja bilansu. Przed: Assets=${stock.balanceSheet.assets.toFixed(0)}, Liab=${stock.balanceSheet.liabilities.toFixed(0)}, RetEarn=${stock.balanceSheet.retainedEarnings.toFixed(0)}`); // <--- LOG 3
             stock.balanceSheet.assets += quarterlyEarnings;
             stock.balanceSheet.retainedEarnings += quarterlyEarnings;
 
@@ -2661,7 +2717,10 @@ function processFinancialReports() {
                 const actualRepayment = Math.min(debtRepayment, stock.balanceSheet.liabilities);
                 stock.balanceSheet.liabilities -= actualRepayment;
                 stock.balanceSheet.assets -= actualRepayment;
-            }
+                console.log(`[REPORTS] ${stock.symbol} - Po: Assets=${stock.balanceSheet.assets.toFixed(0)}, Liab=${stock.balanceSheet.liabilities.toFixed(0)}, RetEarn=${stock.balanceSheet.retainedEarnings.toFixed(0)}`); // <--- LOG 4
+            } else {
+         console.warn(`[REPORTS] ${stock.symbol} nie ma obiektu balanceSheet!`); // <--- OSTRZEŻENIE
+    }
         }
         
         // =====================================================================
@@ -2698,6 +2757,21 @@ function processFinancialReports() {
                  stock.isBankrupt = true;
                  stock.timeOfDeath = Date.now();
              }
+        }
+
+        const canIssueRescue = stock.financialHealth <= -3 &&
+                               stock.balanceSheet && stock.balanceSheet.liabilities > stock.balanceSheet.assets * 0.6 && // Dług > 60% aktywów
+                               !stock.assetType && // Tylko zwykłe spółki
+                               !stock.isBankStock &&
+                               (!stock.rescueActionCooldown || Date.now() > stock.rescueActionCooldown) && // Sprawdź cooldown
+                               Math.random() < 0.25; // 25% szans w kwartale, jeśli warunki spełnione
+
+        if (canIssueRescue) {
+            // Sprawdź, czy nie ma już aktywnej emisji ratunkowej akcji dla tej firmy
+            // (zakładając, że triggerRescueOfferingEvent ustawia jakąś flagę na obiekcie stock, np. stock.isRescueOfferingActive)
+            // if (!stock.isRescueOfferingActive) {
+                 issueRescueBond(stock); // Wywołaj emisję obligacji
+            // }
         }
 
         // Generowanie raportów i zdarzeń (wspólne dla wszystkich)
@@ -3014,43 +3088,72 @@ function sellIndex(indexId, quantity) {
     const indexToSell = marketIndexes.find(i => i.id === indexId);
     const holding = playerPortfolio[indexId];
 
-    if (!indexToSell || !holding || holding.shares < quantity) {
-        alert(`Nie masz wystarczającej liczby jednostek ${indexToSell.name}. Posiadasz: ${holding ? holding.shares : 0}`);
+    // Sprawdzenie umiejętności i podstawowa walidacja
+    if (getSkillLevel('indexAnalystLvl1') < 2) { // Wymagany Poziom 2 Analityka Indeksowego
+        alert("Musisz odblokować umiejętność 'Makler Indeksowy' (Analityk Indeksowy poz. 2), aby handlować indeksami!");
+        return;
+    }
+    if (!indexToSell || !holding || holding.shares < quantity || quantity <= 0) {
+        alert(`Nie masz wystarczającej liczby jednostek ${indexToSell ? indexToSell.name : indexId}. Posiadasz: ${holding ? holding.shares : 0}`);
         return;
     }
 
-    let totalGain = indexToSell.value * quantity;
+    let totalGainGross = indexToSell.value * quantity; // Przychód brutto
     const charismaLevel = getSkillLevel('sharkCharisma');
     if (charismaLevel > 0) {
         let charismaBonus = 0;
         switch (charismaLevel) {
-            case 1: charismaBonus = 0.005; break; // 0.5%
-            case 2: charismaBonus = 0.01; break;  // 1.0%
-            case 3: charismaBonus = 0.015; break; // 1.5%
+            case 1: charismaBonus = 0.005; break;
+            case 2: charismaBonus = 0.01; break;
+            case 3: charismaBonus = 0.015; break;
         }
-        totalGain *= (1 + charismaBonus); // Przy sprzedaży dodajemy bonus
+        totalGainGross *= (1 + charismaBonus); // Dodajemy bonus do przychodu brutto
     }
 
-    // Obliczanie zysku i przyznawanie XP
-    const profitPerShare = (totalGain / quantity) - holding.avgPrice;
-    const totalProfit = profitPerShare * quantity;
-    if (totalProfit > 0) {
-        const xpGained = totalProfit / 100;
-        if (xpGained > 0) {
-            playerXP += xpGained;
-            displayXP();
-        }
+    const purchaseValue = holding.avgPrice * quantity; // Koszt zakupu sprzedawanych jednostek
+    const profit = totalGainGross - purchaseValue; // Zysk brutto
+
+    let taxToPay = 0;
+    let xpGained = 0;
+
+    // --- NOWOŚĆ: Obliczanie podatku i XP ---
+    if (profit > 0) {
+        let taxRateCapitalGains = TAX_RATES.capitalGains;
+        let playerTaxModifier = 1.0;
+        const sanEscobarLvl = getSkillLevel('sanEscobar');
+        if (sanEscobarLvl >= 1) playerTaxModifier = 0.95; // Lvl 1: 5% zniżki
+        if (sanEscobarLvl >= 4) playerTaxModifier = 0.0; // Lvl 4: 0% podatku
+
+        taxToPay = profit * taxRateCapitalGains * playerTaxModifier;
+        governmentTreasury += taxToPay; // Podatek do budżetu
+
+        // XP liczymy od zysku PRZED podatkiem
+        xpGained = profit / 100;
+        // Bonus XP z Charyzmy Rekina (jeśli jest)
+        if (getSkillLevel('sharkCharisma') === 3) xpGained *= 1.10;
+        // W Indeksach nie ma cechy 'Patron'
+    }
+    // --- KONIEC NOWOŚCI ---
+
+    const totalGainNet = totalGainGross - taxToPay; // Przychód netto po podatku
+
+    if (xpGained > 0) {
+        playerXP += xpGained;
+        displayXP();
     }
 
-    playerCash += totalGain;
+    playerCash += totalGainNet; // Gracz otrzymuje kwotę netto
     holding.shares -= quantity;
 
-    if (holding.shares === 0) {
+    logEvent(`Sprzedano ${quantity} jedn. indeksu ${indexId}. Zysk brutto: ${profit.toFixed(2)} PLN, Podatek: ${taxToPay.toFixed(2)} PLN.`);
+
+    if (holding.shares <= 0.001) { // Użyj progu dla bezpieczeństwa
         delete playerPortfolio[indexId];
     }
 
     displayCash();
     displayPortfolio();
+    checkPlayerTierUpgrade(); // Sprawdzenie awansu gracza
 }
 
 function updateMarketVolatilityIndex() {
@@ -3108,19 +3211,238 @@ function collectPassiveWorkReward() {
     }
 }
 
+const EMPLOYEE_BASE_SALARY = 100; // Bazowy tygodniowy koszt pracownika
+const EQUIPMENT_TYPES = { // Definicje typów sprzętu (można rozbudować)
+    'basic_chair': { name: "Ergonomiczne Krzesło", purchaseCost: 300, runningCostMin: 5, runningCostMax: 15, moraleBoost: 0.5, bonusType: 'comfort', bonusValue: 0.01 }, // Np. lekko zmniejsza spadek morale
+    'good_computer': { name: "Dobry Komputer", purchaseCost: 1500, runningCostMin: 15, runningCostMax: 40, moraleBoost: 1.0, bonusType: 'performance', bonusValue: 0.03 }, // Np. lekko zwiększa wydajność
+    'coffee_machine': { name: "Ekspres do Kawy", purchaseCost: 800, runningCostMin: 20, runningCostMax: 50, moraleBoost: 1.5, bonusType: 'morale_regen', bonusValue: 0.02 } // Np. lekko zwiększa regenerację morale
+};
+
 function foundPlayerCompany() {
-    if (playerCompany === null) {
+    if (playerCompany === null && getSkillLevel('work') >= 4) { // Sprawdźmy poziom umiejętności
         playerCompany = {
-            name: "Twoja Firma",
+            name: "Twoja Firma", // Można pozwolić graczowi zmienić
             value: 0,
-            employees: 0,
+            employees: [], // ---> ZMIANA: Teraz to tablica obiektów <---
+            equipment: [], // ---> NOWOŚĆ: Tablica obiektów sprzętu <---
             cashInvested: 0,
-            baseIncome: 100, // Dochód bazowy
-            incomeInterval: 90000, // 90 sekund
-            lastIncomeTime: Date.now()
+            baseIncomePerEmployee: 100, // Zmieniono nazwę dla jasności
+            incomeInterval: 90000,
+            lastIncomeTime: Date.now(),
+            hrLevel: 0 // ---> NOWOŚĆ: Poziom HR <---
         };
         logEvent('🏢 Gratulacje! Założyłeś Własną Firmę!', 'review');
+        // Od razu zatrudnijmy pierwszego pracownika (placeholder)
+        // hireEmployee('initial'); // Wywołamy to po zdefiniowaniu funkcji
     }
+}
+
+// Nowa funkcja do kupowania sprzętu
+/**
+ * Gracz kupuje nowy sprzęt dla firmy.
+ * @param {string} equipmentId - Klucz sprzętu z EQUIPMENT_TYPES.
+ * @param {number} quantity - Liczba sztuk do kupienia.
+ */
+function buyEquipment(equipmentId, quantity = 1) {
+    if (!playerCompany || quantity <= 0) return;
+    const equipmentData = EQUIPMENT_TYPES[equipmentId];
+    if (!equipmentData) {
+        alert("Nieznany typ sprzętu!");
+        return;
+    }
+
+    // Sprawdzenie limitu: nie więcej sprzętu niż pracowników
+    const totalEquipment = playerCompany.equipment.reduce((sum, eq) => sum + eq.quantity, 0);
+    if (totalEquipment + quantity > playerCompany.employees.length) {
+        alert("Nie możesz mieć więcej sprzętu niż pracowników!");
+        return;
+    }
+
+    const totalCost = equipmentData.purchaseCost * quantity;
+    if (playerCash < totalCost) {
+        alert(`Nie masz wystarczająco gotówki! Potrzebujesz ${totalCost.toFixed(2)} PLN.`);
+        return;
+    }
+
+    playerCash -= totalCost;
+
+    // Dodaj sprzęt do firmy
+    const existingEquipment = playerCompany.equipment.find(eq => eq.id === equipmentId);
+    if (existingEquipment) {
+        existingEquipment.quantity += quantity;
+    } else {
+        playerCompany.equipment.push({
+            id: equipmentId,
+            name: equipmentData.name,
+            quantity: quantity,
+            runningCostMin: equipmentData.runningCostMin,
+            runningCostMax: equipmentData.runningCostMax,
+            bonusType: equipmentData.bonusType,
+            bonusValue: equipmentData.bonusValue,
+            moraleBoost: equipmentData.moraleBoost
+        });
+    }
+
+    logEvent(`🛒 Zakupiono ${quantity} szt. sprzętu "${equipmentData.name}" dla firmy za ${totalCost.toFixed(2)} PLN.`);
+    displayCash();
+    // Odśwież UI firmy, jeśli otwarte
+    if (document.getElementById('work-modal')?.style.display === 'block') {
+        openWorkModal();
+    }
+}
+
+function generateEmployeeName() {
+    const isFemale = Math.random() < 0.5;
+    const firstName = isFemale ? getRandomElement(femaleFirstNames) : getRandomElement(maleFirstNames);
+    const lastNameInitial = getRandomElement(ceoLastNames).charAt(0) + ".";
+    return `${firstName} ${lastNameInitial}`;
+}
+
+/** Funkcja do zatrudniania (na razie uproszczona, bez wyboru kontraktu) */
+function hireEmployee(source = 'manual') { // source może być 'initial' lub 'manual'
+    if (!playerCompany) return;
+
+    // Na razie prosty koszt zatrudnienia (później zastąpiony pierwszym wynagrodzeniem)
+    const hiringCost = source === 'initial' ? 0 : 500; // Pierwszy pracownik darmowy
+
+    if (source !== 'initial' && playerCash < hiringCost) {
+        alert(`Nie stać Cię na zatrudnienie nowego pracownika (koszt: ${hiringCost} PLN).`);
+        return;
+    }
+    if (source !== 'initial') playerCash -= hiringCost;
+
+    const newEmployee = {
+        id: Date.now() + Math.random(), // Proste unikalne ID
+        name: generateEmployeeName(),
+        performance: getRandomInRange(0.75, 1.25), // Wydajność 75% - 125% normy
+        salary: EMPLOYEE_BASE_SALARY * (0.8 + Math.random() * 0.4), // Pensja +/- 20% od bazy
+        morale: getRandomIntInRange(60, 80), // Startowe morale
+        status: 'working', // 'working', 'vacation', 'sick'
+        contractType: Math.random() < 0.7 ? 'permanent' : 'mandate', // Domyślnie 70% na stałe
+        vacationEnds: 0 // Kiedy kończy się urlop
+    };
+
+    playerCompany.employees.push(newEmployee);
+    logEvent(`👨‍💼 Zatrudniono nowego pracownika: ${newEmployee.name} (Wydajność: ${Math.round(newEmployee.performance*100)}%).`);
+    if (source !== 'initial') displayCash();
+
+    // Odśwież UI firmy
+    if (document.getElementById('work-modal')?.style.display === 'block') {
+        openWorkModal();
+    }
+}
+
+/** Funkcja do zwalniania pracownika */
+function fireEmployee(employeeId, quit = false) { // quit=true oznacza, że sam odchodzi
+    if (!playerCompany) return;
+    const index = playerCompany.employees.findIndex(emp => emp.id === employeeId);
+    if (index === -1) return;
+
+    const firedEmployee = playerCompany.employees.splice(index, 1)[0];
+
+    if (quit) {
+        logEvent(`🚶 Pracownik ${firedEmployee.name} odszedł z firmy z powodu niskiego morale.`);
+        showToast(`${firedEmployee.name} odchodzi z firmy!`, 'warning');
+        // Brak dodatkowych kar za odejście
+    } else {
+        logEvent(`🔥 Zwolniono pracownika: ${firedEmployee.name}. Pozostali pracownicy są zaniepokojeni.`);
+        // Kara do morale dla pozostałych
+        applyMoralePenalty(playerCompany.employees, 5); // Np. -5 morale
+        // Można dodać koszt odprawy
+        const severancePay = firedEmployee.salary * 2; // Np. 2 tygodnie pensji
+        if (playerCash >= severancePay) {
+            playerCash -= severancePay;
+            logEvent(`💸 Wypłacono ${severancePay.toFixed(2)} PLN odprawy dla ${firedEmployee.name}.`);
+        } else {
+            logEvent(`🚨 Brak środków na pełną odprawę dla ${firedEmployee.name}! Morale spada jeszcze bardziej!`);
+            applyMoralePenalty(playerCompany.employees, 5); // Dodatkowa kara
+        }
+        displayCash();
+    }
+
+
+    // Odśwież UI firmy
+    if (document.getElementById('work-modal')?.style.display === 'block') {
+        openWorkModal();
+    }
+}
+
+
+/** Aktualizuje morale wszystkich pracowników w firmie */
+function updateAllEmployeeMorale() {
+    if (!playerCompany || playerCompany.employees.length === 0) return;
+
+    const employeeCount = playerCompany.employees.length;
+    const totalEquipment = playerCompany.equipment.reduce((sum, eq) => sum + eq.quantity, 0);
+    // Stosunek sprzętu do pracowników (idealnie 1 sprzęt na 5 pracowników = 0.2)
+    const equipmentRatio = employeeCount > 0 ? totalEquipment / employeeCount : 0;
+    const idealRatio = 0.2;
+    // Bonus/Kara za sprzęt: od -10 (brak sprzętu) do +10 (dużo sprzętu)
+    const equipmentMoraleEffect = (equipmentRatio - idealRatio) * 50;
+
+    // Bonus za sprzęt specjalny (np. ekspres do kawy)
+    let specialEquipmentBonus = 0;
+    playerCompany.equipment.forEach(eq => {
+         if (eq.bonusType === 'morale_regen' || eq.bonusType === 'comfort') {
+             specialEquipmentBonus += eq.moraleBoost * eq.quantity;
+         }
+    });
+    // Rozłóż bonus równo na pracowników (ale nie więcej niż +5 na głowę)
+    specialEquipmentBonus = Math.min(5, specialEquipmentBonus / employeeCount);
+
+
+    playerCompany.employees.forEach(employee => {
+        let moraleChange = 0;
+
+        // Wpływ sprzętu ogólnego
+        moraleChange += equipmentMoraleEffect / 10; // Rozłożony na 10 "tygodni"
+
+        // Wpływ sprzętu specjalnego
+        moraleChange += specialEquipmentBonus / 10;
+
+        // Lekki spadek morale z czasem (zmęczenie)
+        moraleChange -= 0.5;
+
+        // Losowy czynnik
+        moraleChange += getRandomInRange(-0.5, 0.5);
+
+        // Zastosuj zmianę morale
+        employee.morale += moraleChange;
+        employee.morale = Math.max(0, Math.min(100, employee.morale)); // Ogranicz 0-100
+
+        // Szansa na urlop (jeśli morale < 30) lub chorobowe (jeśli < 15)
+        if (employee.status === 'working' && employee.morale < 30 && Math.random() < 0.02) {
+             employee.status = 'vacation';
+             const vacationDuration = getRandomIntInRange(1, 2) * BASE_DELAYS.weekly / currentSpeedMultiplier; // 1-2 tyg urlopu
+             employee.vacationEnds = Date.now() + vacationDuration;
+             logEvent(`🏖️ Pracownik ${employee.name} bierze urlop z powodu niskiego morale.`);
+        } else if (employee.status === 'working' && employee.morale < 15 && Math.random() < 0.03) {
+             employee.status = 'sick';
+             const sickDuration = getRandomIntInRange(1, 3) * BASE_DELAYS.weekly / currentSpeedMultiplier; // 1-3 tyg L4
+             employee.vacationEnds = Date.now() + sickDuration; // Używamy tego samego pola
+             logEvent(`ố Pracownik ${employee.name} idzie na zwolnienie lekarskie.`);
+        }
+
+        // Sprawdzenie końca urlopu/chorobowego
+        if (employee.status !== 'working' && Date.now() > employee.vacationEnds) {
+             logEvent(`✅ Pracownik ${employee.name} wraca do pracy.`);
+             employee.status = 'working';
+             employee.vacationEnds = 0;
+        }
+
+        // Ryzyko odejścia (jeśli morale bardzo niskie)
+        if (employee.status === 'working' && employee.morale < 10 && Math.random() < 0.05) {
+            fireEmployee(employee.id, true); // true oznacza, że sam odchodzi
+            // Pętla forEach może mieć problem, jeśli usuniemy element - lepiej użyć pętli for od końca
+        }
+    });
+}
+
+/** Pomocnicza funkcja do aplikowania kary do morale */
+function applyMoralePenalty(employees, penaltyAmount) {
+     employees.forEach(emp => {
+         emp.morale = Math.max(0, emp.morale - penaltyAmount);
+     });
 }
 
 function hireEmployee() {
@@ -3156,17 +3478,59 @@ function investInCompany() {
 function updateCompanyStatus() {
     if (getSkillLevel('work') < 4 || playerCompany === null) return;
 
-    // Obliczanie dochodu
-    const totalIncome = playerCompany.baseIncome + (playerCompany.employees * 100);
-    if (Date.now() - playerCompany.lastIncomeTime >= playerCompany.incomeInterval) {
-        playerCash += totalIncome;
-        playerCompany.lastIncomeTime = Date.now();
-        logEvent(`🏢 Twoja firma wygenerowała ${totalIncome} PLN dochodu.`, 'review');
+    const now = Date.now();
+
+    // ---> ZMODYFIKOWANE OBLICZANIE DOCHODU <---
+    let currentTotalIncome = 0;
+    if (now - playerCompany.lastIncomeTime >= playerCompany.incomeInterval) {
+        let incomeBeforeTax = 0;
+        let workingEmployeesCount = 0; // Licznik faktycznie pracujących
+
+        playerCompany.employees.forEach(employee => {
+            // Dochód generują tylko pracownicy ze statusem 'working'
+            if (employee.status === 'working') {
+                workingEmployeesCount++;
+                // Wydajność zależy od bazowej wydajności i morale
+                const effectivePerformance = employee.performance * (0.8 + employee.morale / 250); // 80%-120%
+                // Bonus za sprzęt performance
+                let equipmentPerformanceBonus = 1.0;
+                playerCompany.equipment.forEach(eq => {
+                     if (eq.bonusType === 'performance') {
+                         equipmentPerformanceBonus += eq.bonusValue * eq.quantity / workingEmployeesCount; // Rozłożony bonus
+                     }
+                });
+                incomeBeforeTax += playerCompany.baseIncomePerEmployee * effectivePerformance * equipmentPerformanceBonus;
+            }
+        });
+
+        let taxToPay = 0;
+        // Obliczanie podatku (bez zmian)
+        const sanEscobarLvl = getSkillLevel('sanEscobar');
+         if (sanEscobarLvl < 2 || sanEscobarLvl >= 4) {
+             let taxRateKey = 'companyIncomeLow';
+             if (incomeBeforeTax > TAX_RATES.companyIncomeThreshold) {
+                 taxRateKey = 'companyIncomeHigh';
+             }
+             const taxRate = TAX_RATES[taxRateKey]?.current || 0; // Użyj ?.current
+             taxToPay = sanEscobarLvl >= 4 ? 0 : incomeBeforeTax * taxRate;
+             governmentTreasury += taxToPay;
+        }
+
+        const incomeAfterTax = incomeBeforeTax - taxToPay;
+        currentTotalIncome = incomeAfterTax; // Zapisz dla logiki wartości firmy
+        playerCash += incomeAfterTax;
+        playerCompany.lastIncomeTime = now;
+        logEvent(`🏢 Twoja firma wygenerowała ${incomeAfterTax.toFixed(2)} PLN dochodu netto (pracowało ${workingEmployeesCount}/${playerCompany.employees.length}, podatek: ${taxToPay.toFixed(2)} PLN).`, 'review');
         displayCash();
     }
+    // ---> KONIEC MODYFIKACJI DOCHODU <---
 
-    // Obliczanie wartości firmy
-    playerCompany.value = playerCompany.cashInvested + (playerCompany.employees * 7500);
+    // ---> ZMODYFIKOWANE OBLICZANIE WARTOŚCI FIRMY <---
+    // Wartość = inwestycje + (średni roczny dochód * 2) + (liczba pracowników * 1000)
+    // Uproszczenie: Wartość = inwestycje + (ostatni dochód * 4 * 2) + (pracownicy * 1000)
+    const estimatedAnnualIncome = currentTotalIncome > 0 ? currentTotalIncome * ( (BASE_DELAYS.quarterly*4) / playerCompany.incomeInterval ) : 0; // Szacowany dochód roczny
+    playerCompany.value = playerCompany.cashInvested + (estimatedAnnualIncome * 1.5) + (playerCompany.employees.length * 1000);
+    // ---> KONIEC MODYFIKACJI WARTOŚCI <---
 }
 function calculateInitialHoldingPrices() {
     const holdingCompanies = stocks.filter(s => s.assetType === 'Holding');
@@ -3191,12 +3555,7 @@ function triggerIPO() {
             totalShares: 1000,
             maxShares: 2000,
             sharesHeld: 800, // 80% akcji jest Twoje
-            priceHistory: [], balanceSheet: {
-        assets: 0,          // Aktywa (majątek firmy)
-        liabilities: 0,     // Pasywa (głównie zadłużenie)
-        shareCapital: 0,    // Kapitał zakładowy (wartość nominalna akcji)
-        retainedEarnings: 0 // Zyski zatrzymane (skumulowane zyski/straty)
-    },
+            priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z)
             sector: ['Usługi'],
             financialHealth: 1,
@@ -3294,27 +3653,25 @@ function processDividendPayout(stock) {
 }
 
 function initializeBalanceSheetForStock(stock) {
+
+
     // Pomiń start-upy, REIT-y i inne specjalne typy
-    if (stock.assetType) {
+    if (stock.assetType || stock.isBankStock) { // Dodano isBankStock
+        console.log(`[INIT_BALANCE] Pomijanie inicjalizacji dla ${stock.symbol} (Typ: ${stock.assetType || 'Bank'})`);
         stock.balanceSheet = { assets: 0, liabilities: 0, shareCapital: 0, retainedEarnings: 0 };
         stock.quarterlyEarnings = 0;
+        stock.cash = 0; // Inicjalizuj gotówkę na 0 dla typów specjalnych
         return;
     }
 
+    console.log(`[INIT_BALANCE] Inicjalizacja bilansu/fazy dla ZWYKŁEJ spółki: ${stock.symbol}`);
+
     const marketCap = stock.price * stock.totalShares;
-
-    // 1. Aktywa są powiązane z kapitalizacją, ale z pewną losowością
     const assets = marketCap * getRandomInRange(0.9, 1.5);
-
-    // 2. Zadłużenie jest większe dla firm o niższej kondycji
     const liabilitiesRatio = getRandomInRange(0.1, 0.6) - (stock.financialHealth * 0.05);
     const liabilities = assets * Math.max(0.05, liabilitiesRatio);
-
-    // 3. Kapitał zakładowy to mała, stała część kapitału własnego
-    const equity = assets - liabilities; // Kapitał własny = Aktywa - Zobowiązania
+    const equity = assets - liabilities;
     const shareCapital = equity * getRandomInRange(0.1, 0.2);
-
-    // 4. Reszta kapitału własnego to zyski zatrzymane
     const retainedEarnings = equity - shareCapital;
 
     stock.balanceSheet = {
@@ -3323,7 +3680,33 @@ function initializeBalanceSheetForStock(stock) {
         shareCapital: shareCapital,
         retainedEarnings: retainedEarnings
     };
-    stock.quarterlyEarnings = 0; // Zaczynamy z zerowym zyskiem kwartalnym
+    stock.quarterlyEarnings = 0;
+
+    // ---> INICJALIZACJA GOTÓWKI <---
+    // Ustawmy początkową gotówkę jako mały procent aktywów
+    stock.cash = assets * getRandomInRange(0.01, 0.05);
+
+    const exchangeLevel = exchanges[stock.exchange]?.level ?? 0; // Użyj ?? 0 dla bezpieczeństwa
+    stock.companyAge = getRandomIntInRange(1, 5) + exchangeLevel * 8; // Starsze firmy na wyższych giełdach
+
+    // Faza startowa - zależna od wieku i kondycji
+    if (stock.companyAge < 12 && stock.financialHealth >= 1) {
+        stock.corporatePhase = CORPORATE_PHASES.GROWTH;
+    } else if (stock.financialHealth <= -2) {
+        stock.corporatePhase = CORPORATE_PHASES.DECLINE;
+    } else {
+        stock.corporatePhase = CORPORATE_PHASES.STABILITY;
+    }
+    stock.phaseTimer = 0; // Licznik dla faz tymczasowych (np. Złoty Rok)
+    console.log(`[INIT_BALANCE] ${stock.symbol} - Wiek: ${stock.companyAge}, Faza: ${stock.corporatePhase}, Bilans zainicjalizowany.`);
+    // Jeśli firma ma przypisany bank, upewnij się, że bank też "ma" tę gotówkę
+    if (stock.bankAccountId) {
+        const bank = commercialBanks.find(b => b.id === stock.bankAccountId);
+        if (bank) {
+            bank.cash += stock.cash; // Dodaj gotówkę firmy do zasobów banku
+        }
+    }
+    // ---> KONIEC INICJALIZACJI GOTÓWKI <---
 }
 
 function processReitDividend(stock) {
@@ -3339,47 +3722,94 @@ function processReitDividend(stock) {
 }
 
 function payDividendToShareholders(stock, dividendPerShare) {
-    const oldPrice = stock.price; // <-- LOG
+    if (stock.isSubsidiaryOf) {
+        const parentStock = stocks.find(s => s.symbol === stock.isSubsidiaryOf);
+        if (parentStock) {
+            const totalDividendFromSubsidiary = stock.totalShares * dividendPerShare;
+            // Transfer CAŁEJ kwoty dywidendy do spółki-matki (zamiast do akcjonariuszy)
+            if (parentStock.cash !== undefined) { // Upewnij się, że parent ma pole cash
+                 parentStock.cash += totalDividendFromSubsidiary;
+                 // Można też lekko poprawić bilans spółki-matki
+                 if (parentStock.balanceSheet) {
+                    parentStock.balanceSheet.assets += totalDividendFromSubsidiary;
+                    parentStock.balanceSheet.retainedEarnings += totalDividendFromSubsidiary;
+                 }
+            } else {
+                 console.warn(`Spółka-matka ${parentStock.symbol} nie ma pola 'cash' do transferu dywidendy od ${stock.symbol}`);
+            }
+
+            logEvent(`💸 Spółka zależna ${stock.name} przekazuje ${totalDividendFromSubsidiary.toFixed(2)} PLN dywidendy do ${parentStock.name}.`, 'company');
+            // Nie kontynuuj wypłaty dla akcjonariuszy spółki zależnej
+            // Spadek ceny akcji spółki zależnej nadal następuje
+            stock.price -= dividendPerShare;
+            if (stock.price < 0.01) stock.price = 0.01;
+            return; // Zakończ funkcję tutaj
+        }
+    }
+    const oldPrice = stock.price;
+    let taxRateDividend = TAX_RATES.dividend;
+
+    // Podatek dla Gracza
     if (playerPortfolio[stock.symbol]) {
         let finalDividendPerShare = dividendPerShare;
         const playerRep = stock.reputation['player'];
 
-        if (playerRep < REPUTATION_LEVELS.NEGATIVE) {
-            finalDividendPerShare *= 0.8; // Kara 20%
-        } else if (playerRep >= REPUTATION_LEVELS.CORRECT && playerRep < REPUTATION_LEVELS.POSITIVE) {
-            finalDividendPerShare *= 1.01; // Bonus 1%
-        } else if (playerRep >= REPUTATION_LEVELS.POSITIVE) {
-            finalDividendPerShare *= 1.05; // Bonus 5%
-        }
+        // Bonus/kara reputacji (bez zmian)
+        if (playerRep < REPUTATION_LEVELS.NEGATIVE) finalDividendPerShare *= 0.8;
+        else if (playerRep >= REPUTATION_LEVELS.CORRECT && playerRep < REPUTATION_LEVELS.POSITIVE) finalDividendPerShare *= 1.01;
+        else if (playerRep >= REPUTATION_LEVELS.POSITIVE) finalDividendPerShare *= 1.05;
 
-        const playerDividend = playerPortfolio[stock.symbol].shares * finalDividendPerShare;
-        playerCash += playerDividend;
+        const grossDividend = playerPortfolio[stock.symbol].shares * finalDividendPerShare;
+
+        // ---> NOWOŚĆ: Obliczanie i potrącanie podatku dla gracza <---
+        let playerTaxModifier = 1.0;
+        const sanEscobarLvl = getSkillLevel('sanEscobar');
+        if (sanEscobarLvl >= 1) playerTaxModifier = 0.95; // Lvl 1: 5% zniżki
+        if (sanEscobarLvl >= 4) playerTaxModifier = 0.0; // Lvl 4: 0% podatku
+
+        const taxToPay = grossDividend * taxRateDividend * playerTaxModifier;
+        const netDividend = grossDividend - taxToPay;
+        governmentTreasury += taxToPay; // Podatek trafia do budżetu państwa
+        // ---> KONIEC NOWOŚCI <---
+
+        playerCash += netDividend; // Gracz dostaje kwotę netto
         displayCash();
-        logEvent(`💰 Otrzymujesz ${playerDividend.toFixed(2)} PLN dywidendy od ${stock.name}!`, 'review');
+        logEvent(`💰 Otrzymujesz ${netDividend.toFixed(2)} PLN dywidendy netto od ${stock.name} (podatek: ${taxToPay.toFixed(2)} PLN).`, 'review');
     }
 
+    // Podatek dla AI
     aiCompetitors.forEach(ai => {
-    if (ai.portfolio[stock.symbol]) {
-        let finalDividendPerShare = dividendPerShare;
-        const aiRep = stock.reputation[ai.id]; // Pobieramy reputację konkretnego bota
+        if (ai.portfolio[stock.symbol]) {
+            let finalDividendPerShare = dividendPerShare;
+            const aiRep = stock.reputation[ai.id];
 
-        // Używamy reputacji bota (aiRep) do obliczeń
-        if (aiRep < REPUTATION_LEVELS.NEGATIVE) {
-            finalDividendPerShare *= 0.8; // Kara 20%
-        } else if (aiRep >= REPUTATION_LEVELS.CORRECT && aiRep < REPUTATION_LEVELS.POSITIVE) {
-            finalDividendPerShare *= 1.01; // Bonus 1%
-        } else if (aiRep >= REPUTATION_LEVELS.POSITIVE) {
-            finalDividendPerShare *= 1.05; // Bonus 5%
+            // Bonus/kara reputacji (bez zmian)
+            if (aiRep < REPUTATION_LEVELS.NEGATIVE) finalDividendPerShare *= 0.8;
+            else if (aiRep >= REPUTATION_LEVELS.CORRECT && aiRep < REPUTATION_LEVELS.POSITIVE) finalDividendPerShare *= 1.01;
+            else if (aiRep >= REPUTATION_LEVELS.POSITIVE) finalDividendPerShare *= 1.05;
+
+            const grossDividend = ai.portfolio[stock.symbol].shares * finalDividendPerShare;
+
+            // ---> NOWOŚĆ: Podatek dla AI <---
+            let aiTaxModifier = 1.0;
+            const aiSanEscobarLvl = ai.unlockedSkills ? (ai.unlockedSkills['sanEscobar'] || 0) : 0;
+            if (aiSanEscobarLvl >= 1) aiTaxModifier = 0.95;
+            if (aiSanEscobarLvl >= 4) aiTaxModifier = 0.0;
+
+            const taxToPay = grossDividend * taxRateDividend * aiTaxModifier;
+            const netDividend = grossDividend - taxToPay;
+            governmentTreasury += taxToPay;
+            // ---> KONIEC NOWOŚCI <---
+
+            ai.cash += netDividend; // AI dostaje kwotę netto
         }
-        
-        ai.cash += ai.portfolio[stock.symbol].shares * finalDividendPerShare;
-    }
-});
+    });
 
+    // Spadek ceny akcji (bez zmian)
     stock.price -= dividendPerShare;
     if (stock.price < 0.01) stock.price = 0.01;
 
-    console.log(`[Dywidenda] Wypłata ${dividendPerShare.toFixed(4)} na akcję dla ${stock.name}. Cena spada z ${oldPrice.toFixed(2)} do ${stock.price.toFixed(2)}`); // <-- LOG
+     console.log(`[Dywidenda] Wypłata ${dividendPerShare.toFixed(4)}...`); // Log bez zmian
 }
 
 function getRandomIntInRange(min, max) {
@@ -3956,6 +4386,26 @@ function buyOtherBond(buyer, bondId, quantity) {
     }
     
     offer.available -= quantity;
+
+    if (offer.isRescueBond && offer.issuerSymbol) {
+        const issuingStock = stocks.find(s => s.symbol === offer.issuerSymbol);
+        if (issuingStock) {
+            issuingStock.cash += totalCost; // Dodaj gotówkę do kasy firmy
+            // Uaktualnij bilans firmy
+            if (issuingStock.balanceSheet) {
+                issuingStock.balanceSheet.assets += totalCost;
+                // Można by tu dodać logikę zmniejszania długu, ale prościej jest dodać do aktywów
+            }
+            logEvent(`💸 ${buyer === 'player' ? 'Twoja inwestycja' : buyer.name} wsparła ${issuingStock.name} kwotą ${totalCost.toFixed(0)} PLN poprzez zakup obligacji ratunkowych.`);
+        } else {
+             console.warn(`Nie znaleziono spółki ${offer.issuerSymbol} emitującej obligacje ratunkowe ${bondId}`);
+             governmentTreasury += totalCost; // Awaryjnie: przekaż do skarbu państwa
+        }
+    } else {
+        // Dla zwykłych obligacji (lub jeśli błąd) - można przekazać do skarbu państwa lub "usunąć"
+         governmentTreasury += totalCost;
+    }
+
     if (offer.available <= 0) {
         activeBonds.splice(offerIndex, 1);
     }
@@ -4445,6 +4895,8 @@ function handleSuccessfulIPO(startup, successMultiplier) {
     logEvent(`Spółka ${startup.name} wchodzi na rynek z ceną ${newIpoPrice.toFixed(2)} PLN i kapitałem ${newTotalShares.toLocaleString('pl-PL')} akcji!`, 'review');
 }
 
+
+
 function buyStartupInsurance(symbol) {
     if (isPlayerInDefault()) return; // <-- DODAJ TĘ LINIĘ
     const holding = playerPortfolio[symbol];
@@ -4568,6 +5020,8 @@ function processPoolInvestments() {
     investmentPool.totalFunds = 0;
     investmentPool.contributors = {};
 }
+
+
 
 function updateInvestmentPoolTimer(deltaTime) {
     if (investmentPool.investmentTimer > 0) {
@@ -4944,29 +5398,58 @@ function applyTechnology(stock, techId) {
     const tech = technologies[techId];
     if (!tech) return;
 
+    // Zastosuj efekt ukończonej technologii
     tech.applyEffect(stock);
     stock.research.unlockedTechs.push(techId);
-    
-    // --- KLUCZOWA LOGIKA DECYZYJNA ---
+
+    // Zresetuj flagę pauzy, jeśli była aktywna
+    stock.research.researchPaused = false;
+
+    // --- KLUCZOWA LOGIKA DECYZYJNA (rozpoczęcie następnego badania) ---
+    // Sprawdź, czy gracz ma odblokowaną możliwość ingerencji (Tier 5)
     if (stock.researchUnlocks.canInterfere) {
-        // Zatrzymaj badania i ustaw timer na podjęcie decyzji
+        // Tak, gracz ma kontrolę. Wstrzymaj badania i ustaw timer na decyzję.
         stock.research.currentTech = null;
         stock.research.progress = 0;
-        stock.research.choiceAvailableUntil = Date.now() + 15000; // 15 sekund rzeczywistego czasu
-        logEvent(`🔬 ${stock.name} kończy badania i czeka na Twoją decyzję co do następnego projektu!`);
+        // Ustaw timer na 15 sekund RZECZYWISTEGO czasu (niezależnie od prędkości gry)
+        stock.research.choiceAvailableUntil = Date.now() + 15000;
+        logEvent(`🔬 ${stock.name} kończy badania nad "${tech.name}" i czeka na Twoją decyzję co do następnego projektu! Masz 15 sekund.`);
+        showToast(`${stock.name}: Wybierz następny projekt R&D!`, 'default', 10000);
+        // Odśwież modale, jeśli są otwarte, aby pokazać opcje wyboru
+        if (document.getElementById('research-modal')?.style.display === 'block') openResearchModal(stock.symbol);
+        if (document.getElementById('management-modal')?.style.display === 'block') openManagementModal(stock.symbol);
+
     } else {
-        // Losuj następną technologię automatycznie (stara logika)
-        const availableTechs = Object.keys(technologies).filter(id => 
-            !stock.research.unlockedTechs.includes(id) &&
-            (technologies[id].sector === 'common' || stock.sector.includes(technologies[id].sector)) &&
-            technologies[id].type === stock.research.specialization
+        // Nie, gracz nie ma kontroli (lub umiejętność nie jest odblokowana). Wybierz losowo.
+        // Znajdź dostępne technologie w tej samej specjalizacji
+        const availableTechs = Object.keys(technologies).filter(id =>
+            !stock.research.unlockedTechs.includes(id) && // Jeszcze nie zbadana
+            (technologies[id].sector === 'common' || stock.sector.includes(technologies[id].sector)) && // Pasuje do sektora
+            technologies[id].type === stock.research.specialization // Pasuje do specjalizacji
         );
 
         if (availableTechs.length > 0) {
-            stock.research.currentTech = getRandomElement(availableTechs);
-            stock.research.progress = 0;
-            logEvent(`🔬 ${stock.name} rozpoczyna nowe badania nad technologią: "${technologies[stock.research.currentTech].name}".`);
+            // Jest co badać - wybierz losowo i sprawdź koszt
+            const nextTechId = getRandomElement(availableTechs);
+            const nextTech = technologies[nextTechId];
+            const initialCost = nextTech.initialCashCost || 0;
+
+            if (stock.cash >= initialCost) {
+                // Stać firmę, rozpocznij badania
+                stock.cash -= initialCost;
+                stock.research.currentTech = nextTechId;
+                stock.research.progress = 0;
+                stock.research.isResearching = true; // Upewnij się, że badania są aktywne
+                logEvent(`💸 ${stock.name} inwestuje ${initialCost.toFixed(0)} PLN w rozpoczęcie badań nad "${nextTech.name}".`, 'company');
+                logEvent(`🔬 ${stock.name} automatycznie rozpoczyna nowe badania nad technologią: "${nextTech.name}".`);
+            } else {
+                // Nie stać firmy, wstrzymaj badania
+                stock.research.isResearching = false;
+                stock.research.currentTech = null;
+                logEvent(`📉 ${stock.name} zakończył(a) badania, ale nie ma środków (${initialCost.toFixed(0)} PLN), aby rozpocząć następny projekt. Badania wstrzymane.`, 'company');
+            }
         } else {
+            // Brak dostępnych technologii w tej specjalizacji
             stock.research.isResearching = false;
             stock.research.currentTech = null;
             logEvent(`🔬 ${stock.name} zakończył wszystkie dostępne badania w swojej specjalizacji.`);
@@ -5001,69 +5484,147 @@ function checkResearchChoiceTimers() {
 }
 
 function updateResearchProgress(deltaTime) {
-    const researchPoints = deltaTime / 2500;
+    const researchPoints = deltaTime / 2500; // Ilość punktów postępu w tym cyklu
 
     stocks.forEach(stock => {
-        if (stock.research && stock.research.isResearching && stock.research.currentTech) {
-            const baseSpeedMultiplier = stock.research.researchSpeedMultiplier || 1.0;
-            let ceoMultiplier = 1.0;
-            if (stock.ceo && stock.ceo.traits) {
-                if (stock.ceo.traits.some(t => t.id === 'wizjoner')) ceoMultiplier *= 1.10;
-                if (stock.ceo.traits.some(t => t.id === 'glowa_w_chmurach')) ceoMultiplier *= 0.95;
-                if (stock.ceo.traits.some(t => t.id === 'geniusz_innowacji')) ceoMultiplier *= 1.25;
-                if (stock.ceo.traits.some(t => t.id === 'biurowy_dron')) ceoMultiplier *= 1.05;
-                if (stock.ceo.traits.some(t => t.id === 'ksiegowy')) ceoMultiplier *= 0.95;
-                if (stock.ceo.traits.some(t => t.id === 'lowca_glow')) ceoMultiplier *= 1.10;
+        // Pomiń, jeśli spółka nie ma systemu badań/inwestycji lub nie jest aktywny
+        if (!stock.research || !stock.research.isResearching) return;
+
+        // --- Logika dla Inwestycji Bankowych ---
+        if (stock.research.isInvestment) {
+            if (stock.research.currentInvestmentId) {
+                // Dodaj punkty postępu
+                stock.research.progress += researchPoints; // Banki na razie bez mnożników prędkości
+
+                // Sprawdź, czy inwestycja została ukończona
+                if (stock.research.progress >= stock.research.requiredProgress) {
+                    applyBankInvestmentEffect(stock, stock.research.currentInvestmentId);
+                }
             }
+        }
+        // --- Logika dla Standardowego R&D ---
+        else {
+            if (stock.research.currentTech) {
+                const baseSpeedMultiplier = stock.research.researchSpeedMultiplier || 1.0;
+                let ceoMultiplier = 1.0;
+                // ... (istniejąca logika obliczania ceoMultiplier na podstawie cech) ...
+                if (stock.ceo && stock.ceo.traits) {
+                    if (stock.ceo.traits.some(t => t.id === 'wizjoner')) ceoMultiplier *= 1.10;
+                    if (stock.ceo.traits.some(t => t.id === 'glowa_w_chmurach')) ceoMultiplier *= 0.95;
+                    if (stock.ceo.traits.some(t => t.id === 'geniusz_innowacji')) ceoMultiplier *= 1.25;
+                    if (stock.ceo.traits.some(t => t.id === 'biurowy_dron')) ceoMultiplier *= 1.05;
+                    if (stock.ceo.traits.some(t => t.id === 'ksiegowy')) ceoMultiplier *= 0.95;
+                    if (stock.ceo.traits.some(t => t.id === 'lowca_glow')) ceoMultiplier *= 1.10;
+                }
 
-            stock.research.progress += researchPoints * baseSpeedMultiplier * ceoMultiplier;
+                let phaseMultiplier = 1.0;
+                if (stock.corporatePhase === CORPORATE_PHASES.INNOVATION_PUSH) {
+                    phaseMultiplier = 1.5; // +50% prędkości badań
+                } else if (stock.corporatePhase === CORPORATE_PHASES.DECLINE || stock.corporatePhase === CORPORATE_PHASES.SHADOW_DESCENT) {
+                     phaseMultiplier = 0.7; // -30% prędkości w fazie spadku
+                }
 
-            const currentTechCost = technologies[stock.research.currentTech]?.cost;
-            if (currentTechCost && stock.research.progress >= currentTechCost) {
-                logEvent(`💡 PRZEŁOM! ${stock.name} zakończył badania nad technologią: "${technologies[stock.research.currentTech].name}"!`);
-                applyTechnology(stock, stock.research.currentTech);
+                // Dodaj punkty postępu
+                stock.research.progress += researchPoints * baseSpeedMultiplier * ceoMultiplier;
+
+                // Sprawdź, czy badanie zostało ukończone
+                const currentTechCost = technologies[stock.research.currentTech]?.cost;
+                if (currentTechCost && stock.research.progress >= currentTechCost) {
+                    logEvent(`💡 PRZEŁOM! ${stock.name} zakończył badania nad technologią: "${technologies[stock.research.currentTech].name}"!`);
+                    applyTechnology(stock, stock.research.currentTech); // Wywołaj starą funkcję
+                }
             }
         }
     });
 }
 
 function initializeResearchForStock(stock) {
-    // Ta funkcja nie dotyczy start-upów i funduszy REIT
+    // Ta funkcja nie dotyczy start-upów, REIT-ów i Instytutów Badawczych
     if (stock.assetType === 'Startup' || stock.assetType === 'REIT' || stock.assetType === 'ResearchInstitute') {
-        return; // Ta funkcja nie dotyczy start-upów, REIT-ów i Instytutów Badawczych
+        stock.research = null; // Upewnij się, że nie mają obiektu research
+        stock.researchUnlocks = null;
+        return;
     }
 
-    const specializations = ["wzmacnianie rozwoju", "wzmacnianie pozycji na rynku", "wzmacnianie ceny i zysków"];
-    const shouldResearch = Math.random() > 0.10; // 90% szans, że firma prowadzi badania
+    // --- NOWA LOGIKA DLA BANKÓW ---
+    if (stock.isBankStock) {
+        const investmentIds = Object.keys(bankInvestments);
+        if (investmentIds.length === 0) {
+            stock.research = null; // Brak dostępnych inwestycji
+            return;
+        }
+        const firstInvestmentId = getRandomElement(investmentIds);
+        const firstInvestment = bankInvestments[firstInvestmentId];
+        const initialRequiredProgress = firstInvestment.baseCost;
 
-    stock.research = {
-        isResearching: shouldResearch,
-        specialization: null,
-        researchSpeedMultiplier: 1.0,
-        currentTech: null,
-        progress: 0,
-        unlockedTechs: []
-    };
-    stock.researchUnlocks = {
-        canSeeSpecialization: false, canSeeResults: false, canFund: false,
-        canInfluence: false, canInterfere: false
-    };
+        stock.research = {
+            isInvestment: true, // Flaga oznaczająca system inwestycji
+            isResearching: false, // Domyślnie nieaktywne, startuje po sprawdzeniu kasy
+            currentInvestmentId: firstInvestmentId,
+            progress: 0,
+            requiredProgress: initialRequiredProgress, // Wymagane punkty dla pierwszej realizacji
+            completedInvestments: {}, // Licznik ukończonych { 'ID': level }
+            investmentPaused: false // Flaga pauzy
+        };
+        // Inicjalizuj licznik dla wszystkich inwestycji na 0
+        investmentIds.forEach(id => { stock.research.completedInvestments[id] = 0; });
 
-    if (shouldResearch) {
-        // Losuj specjalizację
-        stock.research.specialization = getRandomElement(specializations);
-        
-        // Znajdź pierwszą dostępną technologię dla tej specjalizacji i sektora
-        const availableTechs = Object.keys(technologies).filter(id => 
-            (technologies[id].sector === 'common' || stock.sector.includes(technologies[id].sector)) &&
-            technologies[id].type === stock.research.specialization
-        );
-
-        if (availableTechs.length > 0) {
-            stock.research.currentTech = getRandomElement(availableTechs);
+        // Sprawdź, czy bank stać na rozpoczęcie pierwszej inwestycji
+        const bankData = commercialBanks.find(b => b.id === stock.bankData.id);
+        if (bankData && bankData.cash >= (firstInvestment.initialCashCost || 0)) {
+            bankData.cash -= (firstInvestment.initialCashCost || 0);
+            stock.research.isResearching = true;
+            if((firstInvestment.initialCashCost || 0) > 0) logEvent(`💸 Bank ${stock.name} rozpoczyna inwestycję "${firstInvestment.name}" kosztem ${firstInvestment.initialCashCost.toLocaleString()} PLN.`);
+             else logEvent(`▶️ Bank ${stock.name} rozpoczyna inwestycję "${firstInvestment.name}".`);
         } else {
-            // Jeśli w danym sektorze nie ma badań dla tej specjalizacji, wyłącz badania
-            stock.research.isResearching = false;
+             logEvent(`⏸️ Bank ${stock.name} chciał rozpocząć inwestycję "${firstInvestment.name}", ale brakuje środków (${(firstInvestment.initialCashCost || 0).toLocaleString()} PLN).`);
+            stock.research.investmentPaused = true; // Zapauzuj od razu
+        }
+
+    } else { // --- STARA LOGIKA DLA ZWYKŁYCH SPÓŁEK ---
+        const specializations = ["wzmacnianie rozwoju", "wzmacnianie pozycji na rynku", "wzmacnianie ceny i zysków"];
+        const shouldResearch = Math.random() > 0.10; // 90% szans
+
+        stock.research = {
+            isInvestment: false, // Oznacz jako standardowe R&D
+            isResearching: shouldResearch,
+            specialization: null,
+            researchSpeedMultiplier: 1.0,
+            currentTech: null,
+            progress: 0,
+            unlockedTechs: [],
+            researchPaused: false // Dodajemy flagę pauzy
+        };
+        stock.researchUnlocks = { // Inicjalizuj odblokowania dla zwykłych spółek
+            canSeeSpecialization: false, canSeeResults: false, canFund: false,
+            canInfluence: false, canInterfere: false
+        };
+
+        if (shouldResearch) {
+            stock.research.specialization = getRandomElement(specializations);
+            const availableTechs = Object.keys(technologies).filter(id =>
+                !stock.research.unlockedTechs.includes(id) &&
+                (technologies[id].sector === 'common' || stock.sector.includes(technologies[id].sector)) &&
+                technologies[id].type === stock.research.specialization
+            );
+
+            if (availableTechs.length > 0) {
+                 const firstTechId = getRandomElement(availableTechs);
+                 const firstTech = technologies[firstTechId];
+                 // Sprawdź koszt początkowy
+                 if(stock.cash >= (firstTech.initialCashCost || 0)) {
+                    stock.cash -= (firstTech.initialCashCost || 0);
+                    stock.research.currentTech = firstTechId;
+                     if((firstTech.initialCashCost || 0) > 0) logEvent(`💸 ${stock.name} rozpoczyna badania nad "${firstTech.name}" kosztem ${firstTech.initialCashCost.toLocaleString()} PLN.`);
+                     else logEvent(`▶️ ${stock.name} rozpoczyna badania nad "${firstTech.name}".`);
+                 } else {
+                     logEvent(`⏸️ ${stock.name} chciał rozpocząć badania nad "${firstTech.name}", ale brakuje środków (${(firstTech.initialCashCost || 0).toLocaleString()} PLN). Badania wstrzymane.`);
+                     stock.research.isResearching = false;
+                     stock.research.researchPaused = true;
+                 }
+            } else {
+                stock.research.isResearching = false; // Brak dostępnych technologii
+            }
         }
     }
 }
@@ -5153,16 +5714,41 @@ function changeResearchSpecialization(symbol) {
 
 function chooseNextResearch(symbol, chosenTechId) {
     const stock = stocks.find(s => s.symbol === symbol);
-    if (!stock || !chosenTechId) return;
+    const tech = technologies[chosenTechId];
+
+    if (!stock || !tech) return;
+
+    // ---> NOWE SPRAWDZENIE KOSZTU POCZĄTKOWEGO <---
+    const initialCost = tech.initialCashCost || 0;
+    if (stock.cash < initialCost) {
+        logEvent(`📉 ${stock.name} nie ma wystarczająco środków (${initialCost.toFixed(0)} PLN), aby rozpocząć badania nad "${tech.name}". Badania wstrzymane.`, 'company');
+        showToast(`Brak środków w ${stock.name} na rozpoczęcie badań!`, 'warning');
+        stock.research.currentTech = null; // Anuluj wybór technologii
+        stock.research.isResearching = false;
+        stock.research.choiceAvailableUntil = null; // Zresetuj timer wyboru, jeśli był aktywny
+        // Odśwież modale, jeśli są otwarte
+        if (document.getElementById('research-modal')?.style.display === 'block') openResearchModal(symbol);
+        if (document.getElementById('management-modal')?.style.display === 'block') openManagementModal(symbol);
+        return; // Zakończ funkcję
+    }
+
+    // Jeśli firmę stać, pobierz koszt i kontynuuj
+    stock.cash -= initialCost;
+    logEvent(`💸 ${stock.name} inwestuje ${initialCost.toFixed(0)} PLN w rozpoczęcie badań nad "${tech.name}".`, 'company');
+    // ---> KONIEC NOWEGO SPRAWDZENIA <---
 
     stock.research.currentTech = chosenTechId;
     stock.research.progress = 0;
-    
-    logEvent(`🔬 Ingerencja w ${stock.name} udana! Firma rozpoczyna badania nad wybraną technologią: "${technologies[chosenTechId].name}".`, 'review');
-    showToast("Nowy projekt badawczy został wybrany!", 'success');
-    
-    openResearchModal(symbol);
-    openManagementModal(symbol);
+    stock.research.isResearching = true; // Upewnij się, że badania są aktywne
+    stock.research.researchPaused = false; // Upewnij się, że nie są zapauzowane
+    stock.research.choiceAvailableUntil = null; // Zresetuj timer wyboru
+
+    logEvent(`🔬 ${stock.name} rozpoczyna badania nad wybraną technologią: "${tech.name}".`, 'review');
+    showToast(`Rozpoczęto nowy projekt badawczy w ${stock.name}!`, 'success');
+
+    // Odśwież modale
+    if (document.getElementById('research-modal')?.style.display === 'block') openResearchModal(symbol);
+    if (document.getElementById('management-modal')?.style.display === 'block') openManagementModal(symbol);
 }
 
 function updateResearchInstitutes() {
@@ -5173,10 +5759,16 @@ function updateResearchInstitutes() {
         'wzmacnianie ceny i zysków': 0
     };
     
-    stocks.filter(s => s.assetType !== 'ResearchInstitute' && s.research?.unlockedTechs.length > 0)
+stocks.filter(s =>
+            s.assetType !== 'ResearchInstitute' && // Nie licz instytutów
+            s.research &&                           // Upewnij się, że obiekt research istnieje
+            s.research.unlockedTechs &&             // Upewnij się, że tablica unlockedTechs istnieje
+            s.research.unlockedTechs.length > 0     // Dopiero teraz sprawdź długość
+          )
           .forEach(s => {
               s.research.unlockedTechs.forEach(techId => {
                   const tech = technologies[techId];
+                  // Sprawdź, czy technologia istnieje i ma poprawny typ
                   if (tech && totalTechsByType.hasOwnProperty(tech.type)) {
                       totalTechsByType[tech.type]++;
                   }
@@ -5801,6 +6393,8 @@ function startFestival() {
         attractions: attractions,
         participants: [] // Lista stoisk, na razie pusta
     };
+
+
     
     // --- POCZĄTEK NOWEJ LOGIKI ---
 
@@ -5831,7 +6425,23 @@ function startFestival() {
         });
     }
 
-    // --- KONIEC NOWEJ LOGIKI ---
+   const activeBanks = commercialBanks.filter(b => b.isActive);
+    const numberOfBanks = getRandomIntInRange(1, 3); // Do festynu dołączy od 1 do 3 aktywnych banków
+    const shuffledBanks = activeBanks.sort(() => 0.5 - Math.random()); // Pomieszaj banki
+
+    for (let i = 0; i < Math.min(numberOfBanks, shuffledBanks.length); i++) {
+         const bank = shuffledBanks[i];
+         const bankStock = stocks.find(s => s.isBankStock && s.bankData.id === bank.id); // Znajdź akcje banku
+         festival.participants.push({
+            ownerId: bank.id, // Używamy ID banku jako identyfikatora uczestnika
+            ownerName: bank.name, // Dodajemy nazwę dla łatwiejszego wyświetlania
+            isBank: true, // Flaga oznaczająca bank
+            promotionTarget: { type: 'bank_promo', id: bank.id, stockSymbol: bankStock ? bankStock.symbol : null }, // Cel promocji banku
+            level: 1,
+            interest: getRandomIntInRange(8, 18) // Banki startują z nieco większym zainteresowaniem
+        });
+        console.log(`[Festyn] Bank ${bank.name} dołącza do festynu.`);
+    }
 
     nextFestivalCountdown = 0;
     logEvent(`🎉 Rozpoczyna się ${name}! Wydarzenie potrwa miesiąc czasu gry.`, 'success');
@@ -5872,11 +6482,12 @@ function updateFestival() {
         // --- 👇 POPRAWIONY WARUNEK isCompany 👇 ---
         // Sprawdź, czy ownerId jest stringiem PRZED użyciem startsWith
         const isAI = typeof participant.ownerId === 'string' && participant.ownerId.startsWith('ai');
-        const isCompany = !isCity && !isPlayer && !isAI; // Jeśli to nie miasto, gracz ani AI, to musi być spółka
+        const isBank = participant.isBank === true;
+        const isCompany = !isCity && !isPlayer && !isAI && !isBank; // Jeśli to nie miasto, gracz ani AI, to musi być spółka
         // --- 👆 KONIEC POPRAWKI isCompany 👆 ---
 
 
-        if (isCity || isCompany) {
+        if (isCity || isCompany || isBank) {
             // Mają szansę na wykonanie akcji w każdej turze
             if (Math.random() < 0.05) { // 5% szansy na akcję
                 const actionRoll = Math.random();
@@ -5921,8 +6532,9 @@ function updateFestival() {
 
     // --- NOWY BLOK: Losowe zdarzenie dla gracza ---
     // (Ta funkcja nie była zdefiniowana w żadnym pliku, zostawiam wywołanie)
-     if (Math.random() < 0.02 / currentSpeedMultiplier) {
-        triggerFestivalPlayerEvent(); // Wywołaj funkcję losującą zdarzenie dla gracza
+     if (festival.participants.some(p => p.ownerId === 'player')) {
+             triggerFestivalPlayerEvent(); // Ta funkcja wylosuje odpowiedni event (stary lub nowy bankowy)
+        
      }
     // --- KONIEC NOWEGO BLOKU ---
 
@@ -6021,6 +6633,10 @@ function applyFestivalBonus(participant, multiplier) {
 }
 
 function playerJoinFestival(promotionTarget) {
+    if (!cityInvestment.playerHasUnlocked) {
+        alert("Musisz najpierw odblokować inwestycje miejskie (wpłać 10,000 PLN), aby wziąć udział w festynie!");
+        return; // Zakończ funkcję, jeśli miasto nie jest odblokowane dla gracza
+    }
     if (!festival || !festival.isActive || playerCash < FESTIVAL_STALL_LEVELS[0].cost) return;
 
     playerCash -= FESTIVAL_STALL_LEVELS[0].cost;
@@ -6373,52 +6989,26 @@ function detectFinancialAnomaly(stock) {
 // --- Banki Komercyjne (Twoja wersja, była bardziej rozbudowana) ---
 let commercialBanks = []; // Tablica na banki komercyjne
 // Definicje typów banków komercyjnych
-const BANK_TYPES = {
-    INVESTMENT: 'Inwestycyjny',
-    CORPORATE: 'Korporacyjny',
-    UNIVERSAL: 'Uniwersalny',
-    INTERNATIONAL: 'Międzynarodowy',
-    COOPERATIVE: 'Spółdzielczy',
-    INTERNET: 'Internetowy (e-bank)',
-    MORTGAGE: 'Hipoteczny'
-};
 
-// Definicje wszystkich banków w grze
-const ALL_COMMERCIAL_BANKS_DEFINITIONS = [
-    // Inwestycyjne (3)
-    { id: 'inv1', name: 'Apex Capital Partners', type: BANK_TYPES.INVESTMENT, initialCapital: 5000000, reserveRatio: 0.1, baseInterestRateMargin: 0.01 },
-    { id: 'inv2', name: 'Quantum Financial Group', type: BANK_TYPES.INVESTMENT, initialCapital: 4500000, reserveRatio: 0.1, baseInterestRateMargin: 0.012 },
-    { id: 'inv3', name: 'Meridian Trade Bank', type: BANK_TYPES.INVESTMENT, initialCapital: 4000000, reserveRatio: 0.1, baseInterestRateMargin: 0.009 },
-    // Korporacyjne (3)
-    { id: 'corp1', name: 'Proxima Business Bank', type: BANK_TYPES.CORPORATE, initialCapital: 7000000, reserveRatio: 0.15, baseInterestRateMargin: 0.015 },
-    { id: 'corp2', name: 'Centauri Corporate Finance', type: BANK_TYPES.CORPORATE, initialCapital: 6500000, reserveRatio: 0.16, baseInterestRateMargin: 0.016 },
-    { id: 'corp3', name: 'Sirius Enterprise Bank', type: BANK_TYPES.CORPORATE, initialCapital: 6000000, reserveRatio: 0.14, baseInterestRateMargin: 0.014 },
-    // Uniwersalny (1)
-    { id: 'uni1', name: 'Bank Powszechny Gdański', type: BANK_TYPES.UNIVERSAL, initialCapital: 10000000, reserveRatio: 0.12, baseInterestRateMargin: 0.02 },
-    // Międzynarodowy (1)
-    { id: 'int1', name: 'Global Finance Alliance', type: BANK_TYPES.INTERNATIONAL, initialCapital: 15000000, reserveRatio: 0.1, baseInterestRateMargin: 0.018 },
-    // Spółdzielczy (1)
-    { id: 'coop1', name: 'Pomorski Bank Spółdzielczy', type: BANK_TYPES.COOPERATIVE, initialCapital: 2000000, reserveRatio: 0.18, baseInterestRateMargin: 0.025 },
-    // Internetowy (1)
-    { id: 'net1', name: 'CyberBank Connect', type: BANK_TYPES.INTERNET, initialCapital: 3000000, reserveRatio: 0.08, baseInterestRateMargin: 0.017 },
-    // Hipoteczny (1)
-    { id: 'mort1', name: 'DomInvest Bank Hipoteczny', type: BANK_TYPES.MORTGAGE, initialCapital: 5000000, reserveRatio: 0.13, baseInterestRateMargin: 0.022 },
-];
+
 
 // Inicjalizacja banków (dodanie pól dynamicznych)
 function initializeCommercialBanks() {
     commercialBanks = ALL_COMMERCIAL_BANKS_DEFINITIONS.map(def => ({
         ...def,
-        cash: def.initialCapital, // Gotówka banku
-        reservesBC: 0, // Rezerwy w Banku Centralnym
-        loanPortfolio: {}, // Udzielone kredyty {clientId: amount}
-        depositPortfolio: {}, // Przyjęte depozyty {clientId: amount}
-        stockPortfolio: {}, // Portfel akcji dla banków inwestycyjnych {symbol: {shares: x, avgPrice: y}}
-        corporateClients: [], // Lista ID spółek będących klientami
-        interestRateDeposit: 0, // Aktualne oprocentowanie depozytów
-        interestRateLoan: 0, // Aktualne oprocentowanie kredytów
-        isActive: false // Domyślnie nieaktywny
+        cash: def.initialCapital,
+        reservesBC: 0,
+        loanPortfolio: {},
+        depositPortfolio: {},
+        stockPortfolio: {},
+        corporateClients: [],
+        interestRateDeposit: 0,
+        interestRateLoan: 0,
+        // Ustaw isActive na podstawie flagi isActiveFromStart LUB zostaw na false, jeśli flaga nie istnieje
+        isActive: def.isActiveFromStart || false, // <--- Dodaj lub zmodyfikuj tę linię
+        startupInvestments: {} // Dodajmy pole na inwestycje startupowe
     }));
+
 }
 
 function processCompanyBanking() {
@@ -6539,7 +7129,26 @@ function takeCommercialLoan(bankId, amount) {
     }
 
 
+    
+
+
     const interestRate = bank.interestRateLoan;
+    // ---> NOWOŚĆ: Sprawdź i zastosuj bonus festynowy <---
+    const now = Date.now();
+    const activeBonusIndex = activePlayerBankBonuses.findIndex(bonus =>
+        bonus.bankId === bankId && bonus.type === 'loan' && now < bonus.expiryTime
+    );
+
+    if (activeBonusIndex !== -1) {
+        const bonus = activePlayerBankBonuses[activeBonusIndex];
+        const originalRate = interestRate;
+        interestRate *= (1 - bonus.value); // Zastosuj zniżkę procentową
+        logEvent(`[Festyn Bonus] Zastosowano ${Math.round(bonus.value * 100)}% zniżki na oprocentowanie kredytu w ${bank.name}!`);
+        showToast(`Zastosowano zniżkę ${Math.round(bonus.value * 100)}% na kredyt!`, 'success');
+
+        // Usuń bonus po wykorzystaniu
+        activePlayerBankBonuses.splice(activeBonusIndex, 1);
+    }
     const loanDurationWeeks = 26; // Kredyt na pół roku (26 tygodni)
     const maturityDate = Date.now() + (loanDurationWeeks * BASE_DELAYS.weekly / currentSpeedMultiplier);
     // Dokładniejsza kalkulacja raty (annuitetowa, uproszczona)
@@ -6551,7 +7160,7 @@ function takeCommercialLoan(bankId, amount) {
     bank.cash -= amount; // Bank wypłaca środki
     // Zapisz pożyczkę w portfelu banku (kwota początkowa)
     if (!bank.loanPortfolio['player']) bank.loanPortfolio['player'] = [];
-    bank.loanPortfolio['player'].push({ id: `loan_${Date.now()}`, initialAmount: amount, remainingAmount: amount, interestRate: interestRate });
+    bank.loanPortfolio['player'].push({ id: `loan_${Date.now()}`, initialAmount: amount, remainingAmount: amount, interestRate: interestRate }); // Zapisz finalne oprocentowanie
 
     const newLoan = {
         id: `loan_${Date.now()}`,
@@ -6642,7 +7251,22 @@ function makeCommercialDeposit(bankId, amount) {
         return;
     }
 
-    const interestRate = bank.interestRateDeposit;
+    let interestRate = bank.interestRateDeposit;
+    const now = Date.now();
+    const activeBonusIndex = activePlayerBankBonuses.findIndex(bonus =>
+        bonus.bankId === bankId && bonus.type === 'deposit' && now < bonus.expiryTime
+    );
+
+    if (activeBonusIndex !== -1) {
+        const bonus = activePlayerBankBonuses[activeBonusIndex];
+        const originalRate = interestRate;
+        interestRate += bonus.value; // Dodaj bonusowy punkt procentowy
+        logEvent(`[Festyn Bonus] Zastosowano +${(bonus.value * 100).toFixed(1)}% bonusu do oprocentowania depozytu w ${bank.name}!`);
+        showToast(`Zastosowano +${(bonus.value * 100).toFixed(1)}% bonusu do depozytu!`, 'success');
+
+        // Usuń bonus po wykorzystaniu
+        activePlayerBankBonuses.splice(activeBonusIndex, 1);
+    }
 
     // Transakcja
     playerCash -= amount;
@@ -6673,6 +7297,11 @@ function makeCommercialDeposit(bankId, amount) {
     displayCash();
     displayPortfolio();
     closeInteractionModal();
+}
+
+function clearExpiredBankBonuses() {
+    const now = Date.now();
+    activePlayerBankBonuses = activePlayerBankBonuses.filter(bonus => now < bonus.expiryTime);
 }
 
 function withdrawCommercialDeposit(depositId, amount) {
@@ -7740,5 +8369,1601 @@ function fundStateOwnedCompanies() {
         } else {
             console.log(`[BC Finansowanie] BC chciał wesprzeć ${targetCompany.name}, ale zabrakło środków.`);
         }
+    }
+}
+
+function applyBankInvestmentEffect(stock, completedInvestmentId) {
+    const investment = bankInvestments[completedInvestmentId];
+    const bankData = commercialBanks.find(b => b.id === stock.bankData.id);
+
+    if (!investment || !bankData) {
+        console.error(`Błąd przy aplikowaniu efektu inwestycji ${completedInvestmentId} dla ${stock.symbol}`);
+        stock.research.isResearching = false; // Zatrzymaj proces w razie błędu
+        return;
+    }
+
+    // 1. Zastosuj efekt ukończonej inwestycji
+    investment.applyEffect(stock, bankData);
+
+    // 2. Zaktualizuj licznik ukończonych
+    stock.research.completedInvestments[completedInvestmentId]++;
+    const currentLevel = stock.research.completedInvestments[completedInvestmentId];
+    logEvent(`✅ Bank ${stock.name} zakończył inwestycję "${investment.name}" (Poziom ${currentLevel}).`);
+
+    // 3. Sprawdź, czy osiągnięto maksymalny poziom
+    if (investment.maxLevel && currentLevel >= investment.maxLevel) {
+        logEvent(`ℹ️ Bank ${stock.name} osiągnął maksymalny poziom inwestycji "${investment.name}".`);
+        // Wybierz inną inwestycję (która nie jest na max poziomie)
+        const availableInvestmentIds = Object.keys(bankInvestments).filter(id => {
+            const inv = bankInvestments[id];
+            const completedCount = stock.research.completedInvestments[id] || 0;
+            return !inv.maxLevel || completedCount < inv.maxLevel;
+        });
+        if (availableInvestmentIds.length === 0) {
+            logEvent(`🎉 Bank ${stock.name} zrealizował wszystkie dostępne inwestycje!`);
+            stock.research.isResearching = false;
+            stock.research.currentInvestmentId = null;
+            return;
+        }
+        const nextInvestmentId = getRandomElement(availableInvestmentIds);
+        startNextBankInvestment(stock, nextInvestmentId, bankData);
+
+    } else {
+        // 4. Wybierz losowo następną inwestycję (może być ta sama)
+        const availableInvestmentIds = Object.keys(bankInvestments).filter(id => {
+            const inv = bankInvestments[id];
+            const completedCount = stock.research.completedInvestments[id] || 0;
+            return !inv.maxLevel || completedCount < inv.maxLevel; // Tylko te, które nie są na max poziomie
+        });
+         if (availableInvestmentIds.length === 0) { // Na wszelki wypadek
+            logEvent(`🎉 Bank ${stock.name} zrealizował wszystkie dostępne inwestycje!`);
+            stock.research.isResearching = false;
+            stock.research.currentInvestmentId = null;
+            return;
+        }
+        const nextInvestmentId = getRandomElement(availableInvestmentIds);
+        startNextBankInvestment(stock, nextInvestmentId, bankData);
+    }
+}
+
+// Funkcja pomocnicza do rozpoczynania kolejnej inwestycji bankowej
+function startNextBankInvestment(stock, nextInvestmentId, bankData) {
+    const nextInvestment = bankInvestments[nextInvestmentId];
+    const completedCount = stock.research.completedInvestments[nextInvestmentId] || 0;
+    const requiredProgress = nextInvestment.baseCost + (completedCount * nextInvestment.increaseDurationPoints);
+    const initialCashCost = nextInvestment.initialCashCost || 0;
+
+    stock.research.currentInvestmentId = nextInvestmentId;
+    stock.research.progress = 0;
+    stock.research.requiredProgress = requiredProgress; // Zapisz wymagany postęp dla tej realizacji
+    stock.research.investmentPaused = false; // Resetuj pauzę
+
+    // Sprawdź, czy bank stać na rozpoczęcie
+    if (bankData.cash >= initialCashCost) {
+        bankData.cash -= initialCashCost;
+        stock.research.isResearching = true;
+        if(initialCashCost > 0) logEvent(`💸 Bank ${stock.name} rozpoczyna kolejną inwestycję: "${nextInvestment.name}" (Poziom ${completedCount + 1}) kosztem ${initialCashCost.toLocaleString()} PLN. Czas: ${Math.round(requiredProgress / BANK_INVESTMENT_POINT_EQUIVALENT_MINUTE)} min.`);
+        else logEvent(`▶️ Bank ${stock.name} rozpoczyna kolejną inwestycję: "${nextInvestment.name}" (Poziom ${completedCount + 1}). Czas: ${Math.round(requiredProgress / BANK_INVESTMENT_POINT_EQUIVALENT_MINUTE)} min.`);
+    } else {
+        stock.research.isResearching = false;
+        stock.research.investmentPaused = true; // Zapauzuj
+        logEvent(`⏸️ Bank ${stock.name} chciał rozpocząć inwestycję "${nextInvestment.name}", ale brakuje środków (${initialCashCost.toLocaleString()} PLN). Inwestycje wstrzymane.`);
+    }
+}
+
+function createBankStockObject(bank, exchangeLevel = 'SILVER') {
+    if (!bank || !bank.isActive) return null;
+
+    // Uproszczone obliczenie parametrów IPO na podstawie kapitału początkowego
+    const ipoValuation = bank.initialCapital * getRandomInRange(1.05, 1.3); // Wycena 5-30% wyższa niż kapitał
+    const ipoSharePrice = getRandomInRange(75, 150); // Cena akcji w typowym zakresie dla SILVER
+    const ipoTotalShares = Math.floor(ipoValuation / ipoSharePrice);
+
+    if (ipoTotalShares <= 0) {
+        console.error(`[Bank IPO Init] Obliczona liczba akcji (${ipoTotalShares}) jest nieprawidłowa dla ${bank.name}.`);
+        return null;
+    }
+
+    const symbol = `BK${bank.id.toUpperCase()}`; // Generowanie symbolu, np. BKINV1
+
+    const newBankStock = {
+        name: bank.name,
+        symbol: symbol,
+        price: ipoSharePrice,
+        volatilityFactor: getRandomInRange(0.4, 1.2), // Banki są raczej stabilne
+        exchange: exchangeLevel, // Debiut na określonej giełdzie
+        totalShares: ipoTotalShares,
+        maxShares: ipoTotalShares * 2, // Możliwość przyszłych emisji
+        sharesHeld: 0, // Na starcie nikt nie ma akcji
+        sector: ['Bankowość Komercyjna', 'Finanse'], // Sektory
+        financialHealth: getRandomIntInRange(1, 3), // Startują ze zdrową kondycją
+        balanceSheet: { // Uproszczony bilans na start
+            assets: bank.cash,
+            liabilities: bank.cash - bank.initialCapital, // Różnica jako zobowiązania (uproszczenie)
+            shareCapital: bank.initialCapital * 0.1, // Kapitał zakładowy
+            retainedEarnings: bank.initialCapital * 0.9 // Zyski zatrzymane
+        },
+        quarterlyEarnings: 0,
+        bankAccountId: null, // Banki nie mają konta w innym banku
+        cash: bank.cash, // Gotówka banku
+        descriptionParts: null, // Zostaną wygenerowane
+        ceo: null, // Zostanie wygenerowany
+        isBankStock: true, // Flaga oznaczająca akcje banku
+        bankData: { id: bank.id, type: bank.type }, // Dane powiązane z obiektem banku
+        // --- Dodaj standardowe pola, których może brakować ---
+        priceHistory: [],
+        candlestickHistory: [],
+        lineHistory: [],
+        currentCandle: null,
+        playerTransactions: [],
+        priceAlerts: { buy: null, sell: null },
+        dividendPolicy: 'Balanced', // Domyślna polityka dywidendy dla banków
+        dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
+        lastQuarterValue: ipoValuation,
+        estimatedDividend: 0,
+        isTradeLocked: false,
+        dividendCooldownUntil: 0,
+        stateOwnershipPct: 0,
+        isStateOwned: false,
+        lastReport: 'brak',
+        research: null, // Banki używają systemu inwestycji, nie R&D
+        researchUnlocks: null
+    };
+
+    // Wygeneruj opis i CEO
+    initializeDescriptionParts(newBankStock);
+    generateCEO(newBankStock);
+    console.log(`[createBankStockObject] Utworzono obiekt akcji dla banku ${bank.name}:`, newBankStock);
+    return newBankStock;
+}
+
+// === SYSTEM REKLAM ===
+
+let adPopupTimerId = null;
+let isAdPopupVisible = false;
+const AD_POPUP_INTERVAL_BASE = 120000; // Bazowy czas między reklamami (2 minuty)
+const AD_POPUP_INITIAL_DELAY = 45000; // Pierwsza reklama po 45 sekundach
+
+/**
+ * Planuje pokazanie następnego okienka reklamowego.
+ * Czas jest modyfikowany przez liczbę aktywnych banków.
+ */
+function scheduleAdPopup() {
+    // Sprawdź, czy AdBlock jest aktywny
+    if (getSkillLevel('adblock') > 0) {
+        // console.log("[AdBlock] Reklamy zablokowane.");
+        if (adPopupTimerId) clearTimeout(adPopupTimerId); // Anuluj ewentualny timer
+        adPopupTimerId = null;
+        return;
+    }
+
+    // Anuluj poprzedni timer, jeśli istniał
+    if (adPopupTimerId) {
+        clearTimeout(adPopupTimerId);
+    }
+
+    // Oblicz czas do następnej reklamy
+    const activeBanksCount = commercialBanks.filter(b => b.isActive).length;
+    // Im więcej banków, tym krótszy odstęp (ale nie mniej niż 30s)
+    const intervalMultiplier = Math.max(0.25, 1 / Math.max(1, activeBanksCount));
+    const randomFactor = getRandomInRange(0.8, 1.2); // Dodaj trochę losowości
+    const nextInterval = AD_POPUP_INTERVAL_BASE * intervalMultiplier * randomFactor;
+    const finalInterval = Math.max(30000, nextInterval); // Minimum 30 sekund
+
+    // console.log(`[Reklama] Następna za ${Math.round(finalInterval / (1000 * currentSpeedMultiplier))}s czasu rzeczywistego.`);
+
+    // Ustaw timer (uwzględniając prędkość gry)
+    adPopupTimerId = setTimeout(showAdPopup, finalInterval / currentSpeedMultiplier);
+}
+
+/**
+ * Generuje treść reklamy i wyświetla okienko.
+ */
+function showAdPopup() {
+    // Ponownie sprawdź AdBlock i czy okienko już nie jest widoczne
+    if (getSkillLevel('adblock') > 0 || isAdPopupVisible) {
+        return;
+    }
+
+    const popupElement = document.getElementById('ad-popup');
+    const contentElement = document.getElementById('ad-content');
+    if (!popupElement || !contentElement) return;
+
+    // Wygeneruj treść reklamy
+    const adHtml = generateAdContent();
+    contentElement.innerHTML = adHtml;
+
+    // Pokaż okienko
+    popupElement.style.display = 'block';
+    isAdPopupVisible = true;
+    adPopupTimerId = null; // Zresetuj ID timera, bo okienko jest już pokazane
+}
+
+/**
+ * Zamyka okienko reklamowe i planuje pokazanie następnego.
+ */
+function closeAdPopup() {
+    const popupElement = document.getElementById('ad-popup');
+    if (popupElement) {
+        popupElement.style.display = 'none';
+    }
+    isAdPopupVisible = false;
+
+    // Zaplanuj następne pokazanie
+    scheduleAdPopup();
+}
+
+/**
+ * Generuje losową treść reklamy (banku lub spółki).
+ * @returns {string} - HTML treści reklamy.
+ */
+function generateAdContent() {
+    const activeBanks = commercialBanks.filter(b => b.isActive);
+    const regularStocks = stocks.filter(s => !s.assetType && !s.isBankrupt && !s.isBankStock);
+
+    // 80% szans na reklamę banku, jeśli są aktywne banki
+    if (activeBanks.length > 0 && Math.random() < 0.8) {
+        const bank = getRandomElement(activeBanks);
+        const rand = Math.random();
+        if (rand < 0.5 && bank.interestRateDeposit > 0.01) { // Reklama lokaty
+            return `
+                <p>Zmęczony ryzykiem? 😴 Otwórz lokatę w <strong>${bank.name}</strong>!</p>
+                <p>Gwarantowane <strong>${(bank.interestRateDeposit * 100).toFixed(1)}%</strong> rocznie!</p>
+                <p style="font-size: 11px; text-align: center; margin-top: 8px;">Promocja ograniczona czasowo!</p>
+            `;
+        } else if (bank.interestRateLoan < 0.15) { // Reklama kredytu (jeśli nie jest super drogi)
+             return `
+                <p>Brakuje Ci środków na inwestycje? 💰</p>
+                <p>Szybki kredyt w <strong>${bank.name}</strong> na <strong>${(bank.interestRateLoan * 100).toFixed(1)}%</strong>!</p>
+                <p style="font-size: 11px; text-align: center; margin-top: 8px;">Sprawdź naszą ofertę!</p>
+            `;
+        }
+        // Fallback, jeśli powyższe warunki nie pasują
+         return `<p><strong>${bank.name}</strong> - Twój partner w finansach. Oferujemy konta, kredyty i depozyty. Odwiedź nas!</p>`;
+
+    } else if (regularStocks.length > 0) {
+        // Reklama zwykłej spółki
+        const stock = getRandomElement(regularStocks);
+        const messages = [
+            `Nie przegap okazji! Akcje <strong>${stock.name} (${stock.symbol})</strong> mogą wkrótce wystrzelić! 🚀 Kup teraz!`,
+            `Analitycy mówią: KUPUJ! <strong>${stock.name} (${stock.symbol})</strong> to solidna inwestycja na przyszłość.`,
+            `Potencjał wzrostu w <strong>${stock.name} (${stock.symbol})</strong>! Zainwestuj, zanim zrobią to inni!`,
+            `Ostatnie sztuki <strong>${stock.name} (${stock.symbol})</strong> w tej cenie! Popyt rośnie, nie zwlekaj!`
+        ];
+        return `<p>${getRandomElement(messages)}</p>`;
+    } else {
+        // Reklama zapasowa
+        return "<p>Zainwestuj mądrze! Dywersyfikuj swój portfel.</p>";
+    }
+}
+
+function processWealthTax() {
+    const entities = [
+        { id: 'player', name: 'Ty (Gracz)', cash: playerCash, portfolio: playerPortfolio, skills: skills }, // Przekazujemy obiekt skills gracza
+        ...aiCompetitors.filter(ai => ai.skillPoints !== undefined) // Filtrujemy boty bez systemu skilli (Market Maker)
+    ];
+
+    entities.forEach(entity => {
+        const netWorth = calculateNetWorth(entity.id === 'player' ? 'player' : entity); // Funkcja calculateNetWorth powinna obsługiwać ID lub obiekt AI
+        let taxRate = 0;
+        let applicableThreshold = 0;
+
+        // Znajdź odpowiedni próg podatkowy
+        for (let i = TAX_RATES.wealthTax.length - 1; i >= 0; i--) {
+            if (netWorth >= TAX_RATES.wealthTax[i].threshold) {
+                taxRate = TAX_RATES.wealthTax[i].rate;
+                applicableThreshold = TAX_RATES.wealthTax[i].threshold;
+                break;
+            }
+        }
+
+        if (taxRate > 0) {
+            // ---> NOWOŚĆ: Zastosowanie umiejętności San Escobar <---
+            let taxModifier = 1.0; // Mnożnik podatku
+            let baseRateReduction = 0; // Redukcja punktów procentowych
+            const entitySkills = entity.id === 'player' ? skills : entity.unlockedSkills || {};
+            const sanEscobarLvl = entity.id === 'player' ? getSkillLevel('sanEscobar') : (entitySkills['sanEscobar'] || 0);
+
+            if (sanEscobarLvl >= 4) { // Lvl 4 - całkowite zniesienie
+                taxRate = 0;
+            } else if (sanEscobarLvl === 3) { // Lvl 3 - usunięcie progów 35% i 50%, obniżenie 25% do 5%
+                if (applicableThreshold >= TAX_RATES.wealthTax[1].threshold) { // Jeśli normalnie byłby próg 35% lub 50%
+                    taxRate = 0; // Usuwamy podatek
+                } else if (applicableThreshold === TAX_RATES.wealthTax[0].threshold) { // Jeśli normalnie byłby próg 25%
+                    taxRate = 0.05; // Obniżamy do 5%
+                }
+            } else if (sanEscobarLvl === 2) { // Lvl 2 - obniżenie o 3 punkty procentowe
+                baseRateReduction = 0.03;
+            }
+            // Lvl 1 nie wpływa na podatek od bogactwa
+
+            // Zastosuj redukcję punktów procentowych (jeśli dotyczy Lvl 2)
+            taxRate = Math.max(0, taxRate - baseRateReduction);
+            // ---> KONIEC NOWOŚCI <---
+
+            if (taxRate > 0) {
+                const taxToPay = netWorth * taxRate;
+                governmentTreasury += taxToPay;
+
+                if (entity.id === 'player') {
+                    playerCash -= taxToPay;
+                    logEvent(`💸 Zapłacono roczny podatek od bogactwa: ${taxToPay.toFixed(2)} PLN (${(taxRate * 100).toFixed(0)}% od ${netWorth.toFixed(2)} PLN).`, 'review');
+                    displayCash();
+                } else {
+                    entity.cash -= taxToPay;
+                    console.log(`[AI Podatki] ${entity.name} zapłacił ${taxToPay.toFixed(2)} PLN podatku od bogactwa.`);
+                }
+            } else if (entity.id === 'player' && sanEscobarLvl >= 3) {
+                 logEvent(`🌴 Dzięki znajomościom w San Escobar uniknąłeś rocznego podatku od bogactwa!`, 'success');
+            }
+        }
+    });
+
+    nextWealthTaxTime = Date.now() + WEALTH_TAX_INTERVAL / currentSpeedMultiplier; // Ustaw czas następnego pobrania
+}
+
+function checkSanEscobarRisk() {
+    const playerLvl = getSkillLevel('sanEscobar');
+    // Użyj flagi hasRiskActive, aby kontrola zdarzała się tylko raz w roku
+    if (playerLvl === 4 && !skills.sanEscobar.hasRiskActive) {
+        skills.sanEscobar.hasRiskActive = true; // Oznacz, że ryzyko jest aktywne w tym roku
+        if (Math.random() < 0.15) { // 15% szans na kontrolę
+            logEvent(`🚨 KONTROLA SKARBOWA! Twoje machinacje w San Escobar zostały wykryte! Tracisz wszystkie poziomy tej umiejętności!`, 'error');
+            showToast("Kontrola Skarbowa! Utracono znajomości w San Escobar!", 'error', 8000);
+            // Wyzeruj poziom umiejętności
+            skills.sanEscobar.unlockedLevel = 0;
+            // Odśwież widok umiejętności, jeśli jest otwarty
+            if (document.getElementById('skills-modal')?.style.display === 'block') {
+                renderSkillsPanel();
+            }
+        }
+    } else if (playerLvl < 4) {
+        // Zresetuj flagę ryzyka, jeśli gracz spadł poniżej Lvl 4
+        skills.sanEscobar.hasRiskActive = false;
+    }
+    // Resetuj flagę ryzyka na początku nowego roku (można to zrobić też np. w triggerYearlyCeoEvents)
+    // Na razie zrobimy to po prostu przy kolejnym sprawdzeniu, jeśli gracz ma Lvl 4
+    if (playerLvl === 4 && Date.now() > nextWealthTaxTime) { // Użyj nextWealthTaxTime jako znacznika początku roku
+         skills.sanEscobar.hasRiskActive = false;
+    }
+}
+
+function processCityAndCitizenTaxes() {
+    let totalTaxCollected = 0;
+
+    // Podatek od Gracza
+    let playerTaxModifier = 1.0;
+    const playerSanEscobarLvl = getSkillLevel('sanEscobar');
+    if (playerSanEscobarLvl >= 1) playerTaxModifier = 0.95;
+    if (playerSanEscobarLvl >= 4) playerTaxModifier = 0.0;
+    const playerCityTax = playerCash * TAX_RATES.cityTaxPlayerAI * playerTaxModifier;
+    if (playerCityTax > 0) {
+        playerCash -= playerCityTax;
+        totalTaxCollected += playerCityTax;
+    }
+
+    // Podatek od AI
+    aiCompetitors.forEach(ai => {
+        // Pomijamy boty bez gotówki lub bez systemu umiejętności
+        if (!ai.cash || ai.cash <= 0 || ai.skillPoints === undefined) return;
+
+        let aiTaxModifier = 1.0;
+        const aiSanEscobarLvl = ai.unlockedSkills ? (ai.unlockedSkills['sanEscobar'] || 0) : 0;
+        if (aiSanEscobarLvl >= 1) aiTaxModifier = 0.95;
+        if (aiSanEscobarLvl >= 4) aiTaxModifier = 0.0;
+
+        const aiCityTax = ai.cash * TAX_RATES.cityTaxPlayerAI * aiTaxModifier;
+        if (aiCityTax > 0) {
+            ai.cash -= aiCityTax;
+            totalTaxCollected += aiCityTax;
+        }
+    });
+
+    // Podatek od Spółek
+    stocks.forEach(stock => {
+        // Płacą tylko aktywne spółki giełdowe (nie startupy, reity, itp.)
+        if (!stock.assetType && !stock.isBankrupt && stock.cash > 0) {
+            // Umiejętność San Escobar NIE wpływa na podatek spółek
+            const companyCityTax = stock.cash * TAX_RATES.cityTaxCompany;
+            if (companyCityTax > 0) {
+                stock.cash -= companyCityTax;
+                totalTaxCollected += companyCityTax;
+                // Aktualizuj gotówkę banku, jeśli firma ma konto
+                if (stock.bankAccountId) {
+                    const bank = commercialBanks.find(b => b.id === stock.bankAccountId);
+                    if (bank) bank.cash -= companyCityTax; // Bank traci gotówkę firmy
+                }
+            }
+        }
+    });
+
+    // Podatek od "Obywateli" (symulacja)
+    // Prosty model: stała kwota + rosnąca z populacją miasta
+    const citizenBaseTax = 5000;
+    const citizenPopulationTax = city.population * 0.1; // Np. 0.1 PLN od mieszkańca tygodniowo
+    const citizenTax = citizenBaseTax + citizenPopulationTax;
+    totalTaxCollected += citizenTax;
+
+    // Dodaj zebrane podatki do skarbca państwa
+    governmentTreasury += totalTaxCollected;
+
+    // Loguj tylko dla gracza
+    if (playerCityTax > 0 && playerSanEscobarLvl < 4) { // Nie loguj, jeśli gracz nie płaci
+        logEvent(`🏛️ Zapłacono tygodniowy podatek miejski: ${playerCityTax.toFixed(2)} PLN.`);
+    }
+}
+
+function initializeGameTimeRelatedVariables() {
+    // ---> Inicjalizacja wartości TUTAJ <---
+    WEALTH_TAX_INTERVAL = BASE_DELAYS.quarterly * 4;
+    nextWealthTaxTime = Date.now() + WEALTH_TAX_INTERVAL; // Ustawienie początkowe
+    console.log(`[INIT] WEALTH_TAX_INTERVAL ustawiono na: ${WEALTH_TAX_INTERVAL} ms`);
+    // Tutaj można inicjalizować inne zmienne czasowe, jeśli są potrzebne
+}
+
+    function updateCorporatePhase(stock) {
+    // Pomiń typy specjalne i bankrutów
+    if (stock.assetType || stock.isBankStock || stock.isBankrupt) return;
+
+    stock.companyAge++; // Firma starzeje się o kwartał
+
+    // Obsługa faz tymczasowych (Złoty Rok, Zejście w Cień, Impuls Innowacji)
+    if (stock.phaseTimer && stock.phaseTimer > 0) {
+        stock.phaseTimer--; // Odliczanie czasu trwania fazy
+        if (stock.phaseTimer <= 0) {
+            // Faza tymczasowa się skończyła, wróć do fazy bazowej
+            const previousPhase = stock.previousPhase || CORPORATE_PHASES.STABILITY; // Wróć do poprzedniej lub domyślnej
+            logEvent(`⏳ Faza "${stock.corporatePhase}" dla ${stock.name} dobiegła końca. Powrót do fazy "${previousPhase}".`);
+            stock.corporatePhase = previousPhase;
+            stock.previousPhase = null; // Wyczyść zapamiętaną fazę
+            // Tutaj można dodać jednorazowy efekt po zakończeniu fazy, np. lekka korekta ceny
+        }
+        return; // Jeśli jesteśmy w fazie tymczasowej, nie zmieniamy jej jeszcze
+    }
+
+    const currentPhase = stock.corporatePhase;
+    const health = stock.financialHealth;
+    const age = stock.companyAge;
+    let nextPhase = currentPhase; // Domyślnie zostajemy w tej samej fazie
+    let transitionReason = ""; // Opis powodu zmiany
+
+    // Sprawdzenie szansy na unikalne fazy (przed standardowymi przejściami)
+    const uniquePhaseRoll = Math.random();
+    if (uniquePhaseRoll < 0.02 && (currentPhase === CORPORATE_PHASES.GROWTH || currentPhase === CORPORATE_PHASES.STABILITY || currentPhase === CORPORATE_PHASES.REORGANIZATION)) {
+        // 2% szansy na Złoty Rok
+        nextPhase = CORPORATE_PHASES.GOLDEN_YEAR;
+        stock.phaseTimer = 4; // Faza trwa 4 kwartały (1 rok)
+        transitionReason = "niespodziewanego okresu prosperity";
+    } else if (uniquePhaseRoll < 0.04 && (currentPhase === CORPORATE_PHASES.DECLINE || currentPhase === CORPORATE_PHASES.REORGANIZATION)) {
+        // 2% szansy na Zejście w Cień (jeśli już jest źle)
+        nextPhase = CORPORATE_PHASES.SHADOW_DESCENT;
+        stock.phaseTimer = getRandomIntInRange(3, 6); // Faza trwa 3-6 kwartałów
+        transitionReason = "pogłębiającego się kryzysu";
+    } else if (uniquePhaseRoll < 0.07 && (currentPhase === CORPORATE_PHASES.GROWTH || currentPhase === CORPORATE_PHASES.REORGANIZATION)) {
+        // 3% szansy na Impuls Innowacji (szczególnie w fazie wzrostu lub reorganizacji)
+        nextPhase = CORPORATE_PHASES.INNOVATION_PUSH;
+        stock.phaseTimer = getRandomIntInRange(4, 8); // Faza trwa 4-8 kwartałów
+        transitionReason = "skupienia na badaniach i rozwoju";
+    }
+
+    // Jeśli nie wylosowano fazy unikalnej, sprawdź standardowe przejścia
+    if (nextPhase === currentPhase) {
+        switch (currentPhase) {
+            case CORPORATE_PHASES.GROWTH:
+                if (health <= 0 || age > 20) { // Słabe wyniki lub starzenie się
+                    nextPhase = CORPORATE_PHASES.STABILITY;
+                    transitionReason = health <= 0 ? "spowolnienia rozwoju" : "osiągnięcia dojrzałości";
+                } else if (health < -2) { // Nagłe załamanie
+                    nextPhase = CORPORATE_PHASES.DECLINE;
+                    transitionReason = "gwałtownego pogorszenia wyników";
+                }
+                break;
+            case CORPORATE_PHASES.STABILITY:
+                if (health >= 3 && age < 30 && Math.random() < 0.1) { // Dobre wyniki i młody wiek - szansa na powrót do wzrostu
+                    nextPhase = CORPORATE_PHASES.GROWTH;
+                    transitionReason = "nowego impulsu rozwojowego";
+                } else if (health < -1) { // Pogorszenie wyników
+                    nextPhase = CORPORATE_PHASES.DECLINE;
+                    transitionReason = "pogarszającej się rentowności";
+                } else if (health <= 1 && age > 40 && Math.random() < 0.05) { // Starzenie się i przeciętne wyniki
+                     nextPhase = CORPORATE_PHASES.DECLINE;
+                     transitionReason = "utraty konkurencyjności";
+                }
+                break;
+            case CORPORATE_PHASES.DECLINE:
+                if (health <= -5) { // Bardzo źle - ryzyko bankructwa (obsługiwane w processFinancialReports)
+                    // Pozostaje w Decline, ale może wejść w Reorganizację po evencie ratunkowym
+                } else if (health >= 0 && Math.random() < 0.2) { // Lekka poprawa - szansa na Reorganizację
+                    nextPhase = CORPORATE_PHASES.REORGANIZATION;
+                    transitionReason = "próby restrukturyzacji";
+                }
+                break;
+            case CORPORATE_PHASES.REORGANIZATION:
+                if (health >= 2) { // Udana reorganizacja
+                    nextPhase = CORPORATE_PHASES.STABILITY;
+                    transitionReason = "udanej restrukturyzacji i stabilizacji";
+                } else if (health < -3) { // Porażka reorganizacji
+                    nextPhase = CORPORATE_PHASES.DECLINE;
+                    transitionReason = "niepowodzenia planu naprawczego";
+                }
+                // Jeśli health jest neutralne, pozostaje w Reorganization
+                break;
+        }
+    }
+
+    // Zastosuj zmianę fazy, jeśli nastąpiła
+    if (nextPhase !== currentPhase) {
+        // Zapisz poprzednią fazę bazową, jeśli wchodzimy w fazę tymczasową
+        if (stock.phaseTimer > 0 && currentPhase !== CORPORATE_PHASES.GOLDEN_YEAR && currentPhase !== CORPORATE_PHASES.SHADOW_DESCENT && currentPhase !== CORPORATE_PHASES.INNOVATION_PUSH) {
+            stock.previousPhase = currentPhase;
+        } else if (stock.phaseTimer === 0) { // Wychodzimy z fazy tymczasowej lub normalna zmiana
+             stock.previousPhase = null;
+        }
+
+        stock.corporatePhase = nextPhase;
+        logEvent(`🏢 Spółka ${stock.name} wchodzi w fazę "${nextPhase}" z powodu ${transitionReason}.`, 'company');
+
+        // Można dodać jednorazowy efekt przy zmianie fazy, np. mały boost/spadek ceny
+        if (nextPhase === CORPORATE_PHASES.GROWTH) applyPriceEffect(stock.symbol, 0.02, 'positive');
+        else if (nextPhase === CORPORATE_PHASES.DECLINE) applyPriceEffect(stock.symbol, -0.03, 'negative');
+        else if (nextPhase === CORPORATE_PHASES.GOLDEN_YEAR) applyPriceEffect(stock.symbol, 0.05, 'positive');
+        else if (nextPhase === CORPORATE_PHASES.SHADOW_DESCENT) applyPriceEffect(stock.symbol, -0.04, 'negative');
+    }
+}
+
+function issueRescueBond(stock) {
+    // Oblicz, ile kapitału potrzeba (np. 30% obecnego długu)
+    const capitalNeeded = stock.balanceSheet.liabilities * 0.3;
+    if (capitalNeeded <= 0) return; // Nie emituj, jeśli nie ma długu lub potrzeba 0
+
+    const faceValue = 1000;
+    const quantityToIssue = Math.ceil(capitalNeeded / faceValue);
+    if (quantityToIssue <= 0) return;
+
+    // Wyższe oprocentowanie i ryzyko zależne od kondycji
+    const baseInterest = 0.08; // Wyższa baza niż normalnie
+    const healthPenaltyInterest = Math.abs(stock.financialHealth) * 0.015; // +1.5% za każdy pkt poniżej 0
+    const volatilityRiskBonus = stock.volatilityFactor * 0.05; // Ryzyko rośnie ze zmiennością
+    const finalInterest = baseInterest + healthPenaltyInterest;
+    const finalRisk = Math.min(0.9, 0.3 + Math.abs(stock.financialHealth) * 0.1 + volatilityRiskBonus); // Ryzyko 30%-90%
+
+    const duration = getRandomIntInRange(15, 35); // Krótszy/Średni termin
+
+    const newBondOffer = {
+        id: `res_bond_${stock.symbol}_${Date.now()}`,
+        issuerName: `${stock.name} (Ratunkowa)`, // Oznacz nazwę
+        issuerSymbol: stock.symbol, // ---> WAŻNE: Dodaj symbol emitenta <---
+        type: 'Korporacyjna Ratunkowa 🆘', // Oznacz typ
+        interestRate: finalInterest,
+        durationMinutes: duration,
+        risk: finalRisk,
+        faceValue: faceValue,
+        available: quantityToIssue,
+        isRescueBond: true // ---> Dodaj flagę <---
+    };
+
+    activeBonds.push(newBondOffer);
+    logEvent(`🆘 Emisja Ratunkowa Obligacji! ${stock.name} emituje ${quantityToIssue} obligacji (${(finalInterest * 100).toFixed(1)}%, Ryzyko: ${(finalRisk * 100).toFixed(0)}%) by pokryć długi!`, 'market');
+    showToast(`🆘 ${stock.name} emituje obligacje ratunkowe!`, 'warning');
+
+    // Zapobiegaj natychmiastowej kolejnej emisji (np. cooldown na kwartał)
+    stock.rescueActionCooldown = Date.now() + BASE_DELAYS.quarterly / currentSpeedMultiplier;
+
+    // Odśwież widok rynku obligacji, jeśli otwarty
+    if (document.getElementById('bank-modal')?.style.display === 'block' && document.getElementById('bank-content-bonds')?.style.display === 'block') {
+        if (typeof renderBondMarketInBank === 'function') renderBondMarketInBank();
+    }
+}
+
+function updateInfluence() {
+    // 1. Filtruj aktywne, niezależne spółki, które mają system wpływów
+    const regularStocks = stocks.filter(s => s.influence && !s.isSubsidiaryOf);
+
+    // 2. Oblicz wywierany wpływ (tylko od aktywnych)
+    regularStocks.forEach(sourceStock => {
+        sourceStock.influence.exerted = {}; // Resetuj wywierany wpływ
+        const sourceMarketCap = sourceStock.price * sourceStock.totalShares;
+
+        // Wpływ jest wywierany na WSZYSTKIE spółki (nawet zależne, ale nie na siebie)
+        stocks.filter(s => s.influence && s.symbol !== sourceStock.symbol).forEach(targetStock => {
+            const targetMarketCap = targetStock.price * targetStock.totalShares;
+            let currentInfluence = 0;
+
+            // 1. Wpływ rozmiaru
+            if (sourceMarketCap > targetMarketCap) {
+                currentInfluence += (sourceMarketCap / targetMarketCap - 1) * 2;
+            }
+            // 2. Wpływ kondycji
+            currentInfluence += (sourceStock.financialHealth - targetStock.financialHealth) * 0.5;
+
+            // 3. Wpływ posiadanych akcji (Holdingi)
+            if (sourceStock.assetType === 'Holding' && sourceStock.holdingPortfolio[targetStock.symbol]) {
+                const sharesHeld = sourceStock.holdingPortfolio[targetStock.symbol].quantity;
+                const ownershipPct = (sharesHeld / targetStock.totalShares) * 100;
+                currentInfluence += ownershipPct * 0.5;
+            }
+            
+            // 4. Cechy CEO
+            if (sourceStock.ceo?.traits?.some(t => t.id === 'rekin')) {
+                currentInfluence *= 1.1;
+            }
+
+            // Ograniczenie i zapis
+            currentInfluence = Math.max(0, Math.round(currentInfluence));
+            if (currentInfluence > 0) {
+                sourceStock.influence.exerted[targetStock.symbol] = currentInfluence;
+            }
+        });
+    });
+
+    // 3. Agreguj otrzymywany wpływ dla WSZYSTKICH spółek (nawet zależnych)
+    stocks.filter(s => s.influence).forEach(targetStock => {
+        targetStock.influence.received = {};
+        targetStock.influence.totalReceived = 0;
+        // Sprawdź wpływ od wszystkich regularnych (niezależnych) spółek
+        regularStocks.forEach(sourceStock => {
+            if (sourceStock.influence.exerted[targetStock.symbol]) {
+                const received = sourceStock.influence.exerted[targetStock.symbol];
+                targetStock.influence.received[sourceStock.symbol] = received;
+                targetStock.influence.totalReceived += received;
+            }
+        });
+    });
+
+    // 4. ===>>> USUNIĘTA SEKCJA PRZEJMOWANIA PRZEZ WPŁYW <<<===
+    // Celowo pozostawione puste. Funkcja teraz tylko oblicza statystyki.
+    // console.log("[WPŁYWY] Zaktualizowano statystyki wpływów (przejęcia wyłączone).");
+}
+
+function makeSubsidiary(parentStock, childStock) {
+    if (!parentStock || !childStock || childStock.isSubsidiaryOf) {
+        console.warn(`[makeSubsidiary] Błąd: Nie można utworzyć zależności dla ${parentStock?.symbol} -> ${childStock?.symbol}`);
+        return; // Zabezpieczenie przed błędami lub ponownym ustawieniem
+    }
+
+    // Ustaw flagę zależności
+    childStock.isSubsidiaryOf = parentStock.symbol;
+
+    // Dodaj do listy spółek zależnych rodzica (jeśli lista nie istnieje, stwórz ją)
+    if (!parentStock.subsidiaries) {
+        parentStock.subsidiaries = [];
+    }
+    // Upewnij się, że nie dodajemy duplikatu
+    if (!parentStock.subsidiaries.includes(childStock.symbol)) {
+        parentStock.subsidiaries.push(childStock.symbol);
+    }
+
+    // Zresetuj proces fuzji/przejęcia, jeśli jakiś był aktywny (na wypadek, gdyby to był wynik wpływu)
+    childStock.mergerProcess = null;
+    parentStock.mergerProcess = null; // Zresetuj też rodzica na wszelki wypadek
+
+    // Zaloguj zdarzenie
+    logEvent(`🏢 Spółka ${childStock.name} (${childStock.symbol}) stała się spółką zależną od ${parentStock.name} (${parentStock.symbol}) z powodu dominującego wpływu!`, 'review');
+    showToast(`${childStock.name} jest teraz zależna od ${parentStock.name}!`, 'warning');
+
+    // Opcjonalnie: Można tutaj dodać natychmiastowe efekty, np.
+    // - Lekki boost dla ceny parentStock
+    // - Lekki spadek zmienności childStock (większa stabilność pod kontrolą)
+    applyPriceEffect(parentStock.symbol, 0.02, 'positive'); // +2% dla rodzica
+    childStock.volatilityFactor *= 0.9; // Spółka zależna staje się stabilniejsza
+
+    // Odśwież UI, aby pokazać zmiany (np. wcięcie w tabeli)
+    displayStocks(getCurrentInputValues());
+    // Jeśli modal zarządzania jest otwarty dla którejś z tych spółek, odśwież go
+    if (document.getElementById('management-modal')?.style.display === 'block') {
+         const currentSymbol = document.getElementById('management-modal').dataset.currentSymbol;
+         if(currentSymbol === parentStock.symbol || currentSymbol === childStock.symbol) {
+             openManagementModal(currentSymbol);
+         }
+    }
+     // Odśwież też opis, jeśli jest otwarty
+    if (document.getElementById('description-modal')?.style.display === 'block') {
+        const currentSymbol = document.getElementById('description-modal-title').textContent.match(/\(([^)]+)\)/)?.[1];
+         if(currentSymbol === parentStock.symbol || currentSymbol === childStock.symbol) {
+             openDescriptionModal(currentSymbol);
+         }
+    }
+}
+
+function advanceMergerProcess(stock) {
+    if (!stock.mergerProcess) return;
+    const process = stock.mergerProcess;
+    const partnerStock = stocks.find(s => s.symbol === process.partnerSymbol);
+    if (!partnerStock || partnerStock.isBankrupt) {
+        cancelMerger(stock, "Partner przestał istnieć lub zbankrutował.");
+        if (partnerStock) cancelMerger(partnerStock, "Partner przestał istnieć lub zbankrutował.");
+        return;
+    }
+    if (process.decisionRequired) return;
+
+    // --- Zwiększanie postępu ---
+    let progressSpeed = 5; 
+    
+    // ===>>> EFEKT OBRONY: "Zatruta Pigułka" spowalnia proces <<<===
+    if (process.defenseActive === 'poisonPill') {
+        progressSpeed *= 0.7; // Postęp wolniejszy o 30%
+        process.costs += 10000; // Dodatkowy koszt prawny co cykl
+        logEvent(`💊 "Zatruta Pigułka" spowalnia i podnosi koszty przejęcia ${stock.symbol}...`);
+        
+        // Sprawdź, czy agresor (AI) się nie wycofa
+        const initiator = stocks.find(s => s.symbol === process.initiatorSymbol);
+        if (initiator && initiator.mergerProcess && !initiator.personality) { // Jeśli inicjatorem jest spółka AI
+             if (Math.random() < 0.1) { // 10% szans na wycofanie się w każdym cyklu
+                logEvent(`[M&A] 🏳️ ${initiator.name} wycofuje się z przejęcia ${stock.name} z powodu aktywowanej "Zatrutej Pigułki"!`, 'review');
+                cancelMerger(stock, "Agresor wycofał ofertę.");
+                cancelMerger(partnerStock, "Agresor wycofał ofertę.");
+                return;
+             }
+        }
+    }
+    // ===>>> KONIEC EFEKTU OBRONY <<<===
+
+    process.progress += progressSpeed;
+    process.progress = Math.min(100, process.progress);
+
+    // --- Losowanie Mini-Eventów i Komplikacji ---
+    const eventRoll = Math.random();
+    if (eventRoll < 0.05) { 
+        triggerMergerMiniEvent(stock, partnerStock, process);
+    } else if (eventRoll < 0.08) {
+        process.complications++;
+        process.statusMessage = `Etap ${process.stage}: Komplikacja nr ${process.complications}! 🔴`;
+        console.log(`[M&A] Komplikacja ${process.complications} w procesie ${stock.symbol} <-> ${partnerStock.symbol} (Etap ${process.stage})`);
+        if (partnerStock.mergerProcess) {
+            partnerStock.mergerProcess.complications = process.complications;
+            partnerStock.mergerProcess.statusMessage = process.statusMessage;
+        }
+        if (process.complications >= 3) {
+            handleMajorComplication(stock, partnerStock, process);
+        }
+    }
+
+    // --- Przejście do następnego etapu ---
+    if (process.progress >= 100) {
+        process.stage++;
+        process.progress = 0;
+        process.complications = 0; 
+        console.log(`[M&A] Proces ${stock.symbol} <-> ${partnerStock.symbol} wchodzi w etap ${process.stage}`);
+
+        // Zaktualizuj proces u partnera przed logiką etapu
+        if (partnerStock.mergerProcess) {
+             Object.assign(partnerStock.mergerProcess, process);
+             partnerStock.mergerProcess.partnerSymbol = stock.symbol;
+        }
+
+        // Logika specyficzna dla nowego etapu
+        switch (process.stage) {
+            case 2:
+                process.statusMessage = `Etap 2: Negocjacje warunków...`;
+                break;
+            case 3: 
+                const baseCost = 5000;
+                const valueCost = (stock.price * stock.totalShares + partnerStock.price * partnerStock.totalShares) * 0.005;
+                process.costs += (baseCost + valueCost);
+                process.statusMessage = `Etap 3: Strategia i finansowanie (koszty: ${process.costs.toFixed(0)} PLN).`;
+                break;
+            case 4: 
+                process.statusMessage = `Etap 4: Analiza prawna i kontrola antymonopolowa...`;
+                if (checkAntitrust(stock, partnerStock)) {
+                    cancelMerger(stock, "Zablokowane przez Urząd Antymonopolowy.");
+                    cancelMerger(partnerStock, "Zablokowane przez Urząd Antymonopolowy.");
+                    return; 
+                } else {
+                    process.statusMessage = `Etap 4: Analiza prawna ZAAKCEPTOWANA. Losowanie zdarzeń...`;
+                    triggerMergerMiniEvent(stock, partnerStock, process);
+                }
+                break;
+            case 5: 
+                process.statusMessage = `Etap 5: Integracja operacyjna...`;
+                stock.mergerPartnerVisible = true;
+                partnerStock.mergerPartnerVisible = true;
+                partnerStock.isBeingMerged = true; 
+                partnerStock.price *= 1.1; 
+                break;
+            case 6: 
+                process.statusMessage = `Etap 6: Finalizacja umowy i transfery...`;
+                partnerStock.canBeTraded = false; 
+                break;
+            case 7: 
+                resolveMerger(stock, partnerStock, process); 
+                return; 
+            default:
+                console.warn(`[M&A] Nieznany etap procesu: ${process.stage} dla ${stock.symbol}`);
+                process.statusMessage = `Etap ${process.stage}: ???`;
+                break;
+        }
+        // Zaktualizuj proces u partnera PO logice etapu
+        if (partnerStock.mergerProcess) {
+            Object.assign(partnerStock.mergerProcess, process);
+            partnerStock.mergerProcess.partnerSymbol = stock.symbol;
+        }
+    }
+
+    displayStocks(getCurrentInputValues());
+}
+
+function initiateMergerProcess(initiatorStock, targetStock, type, financing = 'cash') {
+    // Podstawowe walidacje
+    if (!initiatorStock || !targetStock || initiatorStock === targetStock) {
+        console.error("[M&A Init] Błąd: Nieprawidłowe spółki inicjujące/celu.");
+        return false;
+    }
+    if (initiatorStock.mergerProcess || targetStock.mergerProcess) {
+        console.warn(`[M&A Init] Anulowano: Jedna ze spółek (${initiatorStock.symbol} lub ${targetStock.symbol}) jest już w trakcie innego procesu M&A.`);
+        // Można dodać logEvent lub showToast dla gracza, jeśli inicjował
+        return false;
+    }
+    if (targetStock.isSubsidiaryOf) {
+        console.warn(`[M&A Init] Anulowano: ${targetStock.symbol} jest już spółką zależną.`);
+        return false;
+    }
+    // TODO: Dodać więcej walidacji (np. czy inicjatora stać, czy cel nie jest za duży/mały dla danego typu)
+
+    console.log(`[M&A Init] Rozpoczęto proces: ${initiatorStock.symbol} -> ${targetStock.symbol} (Typ: ${type})`);
+
+    const processData = {
+        type: type,
+        stage: 1,
+        progress: 0,
+        partnerSymbol: targetStock.symbol,
+        initiatorSymbol: initiatorStock.symbol,
+        complications: 0,
+        costs: 0,
+        statusMessage: `Etap 1: Wstępne rozmowy (${type})...`,
+        decisionRequired: null,
+        defenseActive: null,
+        financing: financing // Zapisz metodę finansowania
+        // Można dodać: offerPremium (dla przejęć), exchangeRatio (dla fuzji)
+    };
+
+    // Ustaw obiekt procesu w obu spółkach
+    initiatorStock.mergerProcess = { ...processData }; // Kopia dla inicjatora
+    targetStock.mergerProcess = { ...processData, partnerSymbol: initiatorStock.symbol }; // Kopia dla celu (z zamienionym partnerem)
+
+    logEvent(`🤝 Rozpoczynają się rozmowy o ${type} między ${initiatorStock.name} a ${targetStock.name}!`, 'market');
+
+    // Aktywacja obrony dla wrogich przejęć (placeholder)
+    if (type === 'przejęcie' || type === 'influenceTakeover') {
+        // TODO: Dodać logikę decyzji AI/gracza o aktywacji obrony
+        // np. if (decideToDefend(targetStock, initiatorStock, offerPremium)) { activateDefense(...) }
+        console.log(`[M&A Init] ${targetStock.symbol} może teraz rozważyć aktywację mechanizmów obronnych.`);
+    }
+
+    // Odśwież UI
+    displayStocks(getCurrentInputValues());
+    return true; // Proces zainicjowany pomyślnie
+}
+
+if (typeof antitrustOffice === 'undefined') {
+    let antitrustOffice = {
+        level: 0,
+        analysisCapacity: 0.1,
+        accuracy: 0.2,
+        budget: 0
+    };
+    const ANTITRUST_UPGRADE_COSTS = [50000, 150000, 500000, 1500000, 5000000];
+}
+
+/**
+ * Funkcja pomocnicza do całkowitego usuwania spółki z gry (po fuzji/bankructwie).
+ * @param {string} symbol - Symbol spółki do usunięcia.
+ */
+function removeStockFromGame(symbol) {
+    // 1. Usuń z głównej listy `stocks`
+    const index = stocks.findIndex(s => s.symbol === symbol);
+    if (index > -1) {
+        stocks.splice(index, 1);
+    }
+
+    // 2. Usuń z portfela gracza
+    if (playerPortfolio[symbol]) {
+        delete playerPortfolio[symbol];
+    }
+
+    // 3. Usuń z portfeli AI
+    aiCompetitors.forEach(ai => {
+        if (ai.portfolio[symbol]) {
+            delete ai.portfolio[symbol];
+        }
+    });
+
+    // 4. Usuń z portfeli Holdingów
+    stocks.forEach(s => {
+        if (s.assetType === 'Holding' && s.holdingPortfolio[symbol]) {
+            delete s.holdingPortfolio[symbol];
+        }
+    });
+
+    // 5. Usuń z portfeli Banków Inwestycyjnych
+    commercialBanks.forEach(bank => {
+        if (bank.stockPortfolio[symbol]) {
+            delete bank.stockPortfolio[symbol];
+        }
+    });
+
+    console.log(`[M&A] Spółka ${symbol} została całkowicie usunięta z gry.`);
+}
+
+
+/**
+ * Inicjuje proces fuzji lub przejęcia między dwoma spółkami.
+ * @param {object} initiatorStock - Spółka inicjująca proces.
+ * @param {object} targetStock - Spółka będąca celem procesu.
+ * @param {'fuzja' | 'przejęcie'} type - Typ procesu M&A.
+ * @param {string} financing - Metoda finansowania ('cash', 'stockSwap', 'lbo').
+ * @param {number} [offerPremium=0.25] - Premia oferowana ponad cenę rynkową (tylko dla 'przejęcie').
+ */
+function initiateMergerProcess(initiatorStock, targetStock, type, financing = 'cash', offerPremium = 0.25) {
+    // Walidacje
+    if (!initiatorStock || !targetStock || initiatorStock === targetStock) {
+        console.error("[M&A Init] Błąd: Nieprawidłowe spółki.");
+        return false;
+    }
+    if (initiatorStock.mergerProcess || targetStock.mergerProcess) {
+        showToast("Anulowano: Jedna ze spółek jest już w trakcie innego procesu M&A.", 'warning');
+        return false;
+    }
+    if (targetStock.isSubsidiaryOf) {
+        showToast("Anulowano: Nie można przejąć spółki zależnej.", 'warning');
+        return false;
+    }
+    if (targetStock.isBankrupt || initiatorStock.isBankrupt) {
+        showToast("Anulowano: Nie można przeprowadzać operacji na bankrutach.", 'warning');
+        return false;
+    }
+
+    // Walidacja finansowania
+    let buyoutPricePerShare = 0;
+    let totalCost = 0;
+
+    if (type === 'przejęcie') {
+        buyoutPricePerShare = targetStock.price * (1 + offerPremium);
+        totalCost = buyoutPricePerShare * targetStock.totalShares;
+        if (financing === 'cash' && initiatorStock.cash < totalCost) {
+            showToast(`Anulowano: ${initiatorStock.name} nie ma wystarczająco gotówki (${totalCost.toFixed(0)} PLN) na przejęcie.`, 'error');
+            return false;
+        }
+        // TODO: Walidacja dla 'lbo' (zdolność kredytowa)
+    }
+
+    console.log(`[M&A Init] Rozpoczęto proces: ${initiatorStock.symbol} -> ${targetStock.symbol} (Typ: ${type})`);
+
+    const processData = {
+        type: type,
+        stage: 1,
+        progress: 0,
+        partnerSymbol: targetStock.symbol,
+        initiatorSymbol: initiatorStock.symbol,
+        complications: 0,
+        costs: 0,
+        statusMessage: `Etap 1: Wstępne rozmowy (${type})...`,
+        decisionRequired: null,
+        defenseActive: null,
+        financing: financing,
+        offerDetails: { // Zapisujemy szczegóły oferty
+            premium: offerPremium,
+            buyoutPricePerShare: buyoutPricePerShare,
+            totalCost: totalCost
+            // Dla fuzji można tu zapisać 'exchangeRatio'
+        }
+    };
+
+    // Ustaw obiekt procesu w obu spółkach
+    initiatorStock.mergerProcess = { ...processData };
+    targetStock.mergerProcess = { ...processData, partnerSymbol: initiatorStock.symbol };
+
+    logEvent(`🤝 Rozpoczynają się rozmowy o ${type} między ${initiatorStock.name} a ${targetStock.name}!`, 'market');
+    showToast(`Rozpoczęto rozmowy o ${type} ${initiatorStock.symbol} z ${targetStock.symbol}!`, 'default');
+
+    // Aktywacja obrony dla wrogich przejęć
+    if (type === 'przejęcie') {
+        // Sprawdź, kto kontroluje spółkę-cel
+        const majorityOwner = findMajorityShareholder(targetStock);
+        if (majorityOwner && (majorityOwner.id === 'player' || majorityOwner.id.startsWith('ai'))) {
+            // Decyzja AI lub gracza o obronie (logika w `makeAiDecision` lub `openManagementModal`)
+            console.log(`[M&A] ${targetStock.symbol} jest pod kontrolą ${majorityOwner.name}. Oczekuję na decyzję o obronie...`);
+        } else {
+            // Zarząd decyduje (losowo)
+            if (Math.random() < 0.3) {
+                activateDefenseMechanism(targetStock, 'poisonPill'); // Przykładowa domyślna obrona
+            }
+        }
+    }
+
+    displayStocks(getCurrentInputValues());
+    return true;
+}
+
+/**
+ * Losuje i aplikuje "mini-event" podczas procesu M&A.
+ * @param {object} stock1 - Pierwsza spółka w procesie.
+ * @param {object} stock2 - Druga spółka w procesie.
+ * @param {object} process - Obiekt mergerProcess (wspólny dla obu).
+ */
+function triggerMergerMiniEvent(stock1, stock2, process) {
+    const isPositive = Math.random() < 0.5; // 50% szans na pozytywny event
+
+    if (isPositive) {
+        // --- Ukryte Złoto ---
+        const effects = [
+            { desc: "odkryto nieoczekiwane synergie operacyjne!", costChange: -500, progressChange: 5, healthChange: 0.1 },
+            { desc: "znaleziono sposób na optymalizację podatkową połączonej firmy!", costChange: -1000, progressChange: 0, healthChange: 0.05 },
+            { desc: "kluczowy pracownik konkurencji przechodzi do jednej ze spółek!", costChange: 0, progressChange: 0, healthChange: 0.15 }
+        ];
+        const effect = getRandomElement(effects);
+        process.costs = Math.max(0, process.costs + effect.costChange);
+        process.progress += effect.progressChange;
+        stock1.financialHealth += effect.healthChange;
+        stock2.financialHealth += effect.healthChange;
+        process.statusMessage = `✨ Ukryte złoto: ${effect.desc}`;
+        logEvent(`[M&A] ✨ ${stock1.symbol} <-> ${stock2.symbol}: ${effect.desc}`, 'review');
+    } else {
+        // --- Trup w Szafie ---
+        const effects = [
+            { desc: "ujawniono nieznane wcześniej zobowiązania jednej ze spółek!", costChange: 1500, progressChange: -5, healthChange: -0.1 },
+            { desc: "kluczowi menedżerowie ogłaszają odejście w proteście przeciw fuzji!", costChange: 500, progressChange: -10, healthChange: -0.05 },
+            { desc: "pojawiają się problemy z integracją systemów IT!", costChange: 800, progressChange: -8, healthChange: 0 }
+        ];
+        const effect = getRandomElement(effects);
+        process.costs += effect.costChange;
+        process.progress = Math.max(0, process.progress + effect.progressChange);
+        stock1.financialHealth += effect.healthChange;
+        stock2.financialHealth += effect.healthChange;
+        process.statusMessage = `💀 Trup w szafie: ${effect.desc}`;
+        logEvent(`[M&A] 💀 ${stock1.symbol} <-> ${stock2.symbol}: ${effect.desc}`, 'review');
+    }
+    // Aktualizuj proces w obu spółkach (bo 'process' to referencja do obiektu jednej z nich)
+    const partner = stock1.symbol === process.initiatorSymbol ? stock2 : stock1;
+    if (partner.mergerProcess) {
+        Object.assign(partner.mergerProcess, process); // Nadpisz dane w procesie partnera
+    }
+}
+
+/**
+ * Obsługuje sytuację, gdy w danym etapie M&A wystąpiły 3 komplikacje.
+ * Prezentuje decyzję graczowi lub symuluje ją dla AI.
+ * @param {object} stock1 - Pierwsza spółka.
+ * @param {object} stock2 - Druga spółka.
+ * @param {object} process - Obiekt mergerProcess.
+ */
+function handleMajorComplication(stock1, stock2, process) {
+    process.statusMessage = "🔴 POWAŻNE KOMPLIKACJE! Wymagana decyzja...";
+    process.progress = 0; // Zatrzymaj postęp etapu
+    process.decisionRequired = { // Ustaw flagę wymaganej decyzji
+        question: `Proces ${process.type} między ${stock1.name} a ${stock2.name} napotkał poważne trudności! Co robimy?`,
+        options: [
+            { id: 'cancel', text: "Anuluj proces (negatywne konsekwencje dla obu firm)", consequence: () => { cancelMerger(stock1, "Poważne komplikacje i brak zgody."); cancelMerger(stock2, "Poważne komplikacje i brak zgody."); } },
+            { id: 'expensive', text: "Kontynuuj mimo wszystko (proces będzie droższy o 25% i potrwa dłużej)", consequence: () => { process.costs *= 1.25; process.complications = 0; process.decisionRequired = null; process.statusMessage = "Kontynuacja mimo kosztów..."; /* Można dodać spowolnienie postępu */ } },
+            { id: 'stronger', text: "Wykorzystaj kryzys, by wzmocnić współpracę (mała szansa na bonus, ryzyko anulowania)", consequence: () => { process.complications = 0; process.decisionRequired = null; if (Math.random() < 0.3) { triggerMergerMiniEvent(stock1, stock2, process); process.statusMessage = "Kryzys wzmocnił współpracę!"; } else { cancelMerger(stock1, "Nie udało się przezwyciężyć kryzysu."); cancelMerger(stock2, "Nie udało się przezwyciężyć kryzysu."); } } }
+        ]
+    };
+
+    logEvent(`[M&A] 🔴 Poważne komplikacje w procesie ${stock1.symbol} <-> ${stock2.symbol}! Wymagana decyzja.`, 'warning');
+
+    // Sprawdź, czy gracz jest właścicielem >50% którejkolwiek ze spółek
+    const playerOwnsStock1 = playerPortfolio[stock1.symbol] && (playerPortfolio[stock1.symbol].shares / stock1.totalShares) > 0.5;
+    const playerOwnsStock2 = playerPortfolio[stock2.symbol] && (playerPortfolio[stock2.symbol].shares / stock2.totalShares) > 0.5;
+
+    if (playerOwnsStock1 || playerOwnsStock2) {
+        // TODO: Wyświetl modal decyzyjny dla gracza z opcjami z process.decisionRequired.options
+        // Gracz klika opcję, która wywołuje odpowiednią funkcję consequence().
+        // Na razie tylko logujemy:
+        console.log(`[M&A] TODO: Wyświetl modal decyzyjny dla gracza (komplikacje ${stock1.symbol} <-> ${stock2.symbol})`);
+        // Symulujemy, że gracz nic nie wybrał - po jakimś czasie AI podejmie decyzję
+    } else {
+        // TODO: Symuluj decyzję AI (np. na podstawie osobowości właściciela lub losowo)
+        // Na razie wybieramy losową opcję:
+        const randomChoice = getRandomElement(process.decisionRequired.options);
+        console.log(`[M&A AI Decision] AI zdecydowało: ${randomChoice.text}`);
+        randomChoice.consequence();
+    }
+}
+
+function resolveMerger(stock1, stock2, process) {
+    console.log(`[M&A Resolve] Finalizowanie procesu ${process.type} dla ${stock1.symbol} i ${stock2.symbol}...`);
+
+    const initiator = stock1.symbol === process.initiatorSymbol ? stock1 : stock2;
+    const target = stock1.symbol === process.initiatorSymbol ? stock2 : stock1;
+    let successMessage = "";
+
+    // ===>>> NOWY BLOK: Finalny koszt mechanizmów obronnych <<<===
+    let defenseCost = 0;
+    if (process.defenseActive === 'poisonPill') {
+        // Oblicz koszt "wykupienia" pigułki (np. 20% wartości firmy celu, które dodaliśmy jako dług)
+        defenseCost = (target.price * target.totalShares) * 0.20;
+        logEvent(`💊 ${initiator.name} musi zapłacić ${defenseCost.toFixed(0)} PLN za "odtrucie pigułki" w ${target.name}!`, 'review');
+        process.costs += defenseCost;
+    }
+    // ===>>> KONIEC NOWEGO BLOKU <<<===
+
+
+    // --- Logika dla różnych typów ---
+    switch (process.type) {
+        case 'przejęcie':
+        case 'influenceTakeover':
+            // 1. Sprawdź finansowanie (uwzględniając dodatkowe koszty obrony)
+            const totalCost = process.offerDetails.totalCost + process.costs; // Całkowity koszt = oferta + koszty procesu + koszty obrony
+            if (process.financing === 'cash' && initiator.cash < totalCost) {
+                cancelMerger(initiator, "Brak wystarczających środków na finalizację przejęcia (koszty dodatkowe).");
+                cancelMerger(target, "Inicjator nie pokrył kosztów przejęcia.");
+                return;
+            }
+
+            // 2. Pobierz koszty
+            if (process.financing === 'cash') {
+                initiator.cash -= totalCost;
+                logEvent(`💸 ${initiator.name} wydaje łącznie ${totalCost.toFixed(0)} PLN na przejęcie ${target.name}.`, 'company');
+            }
+            // TODO: Logika dla 'lbo' (zaciągnięcie długu)
+
+            // 3. Wypłata dla akcjonariuszy spółki-celu
+            const pricePerShare = process.offerDetails.buyoutPricePerShare;
+            // Gracz
+            if (playerPortfolio[target.symbol]) {
+                const holding = playerPortfolio[target.symbol];
+                const grossGain = holding.shares * pricePerShare;
+                // TODO: Obliczyć i potrącić podatek od zysków kapitałowych
+                playerCash += grossGain;
+                logEvent(`💰 Otrzymujesz ${grossGain.toFixed(2)} PLN za akcje ${target.name} w ramach przejęcia.`, 'success');
+            }
+            // AI
+            aiCompetitors.forEach(ai => {
+                if (ai.portfolio[target.symbol]) {
+                    const holding = ai.portfolio[target.symbol];
+                    const grossGain = holding.shares * pricePerShare;
+                    ai.cash += grossGain;
+                }
+            });
+            // Holdingi i Banki
+            stocks.filter(s => s.assetType === 'Holding' && s.holdingPortfolio[target.symbol]).forEach(h => h.cash += (h.holdingPortfolio[target.symbol].quantity * pricePerShare));
+            commercialBanks.filter(b => b.stockPortfolio[target.symbol]).forEach(b => b.cash += (b.stockPortfolio[target.symbol].shares * pricePerShare));
+
+            // 4. Przeniesienie Aktywów i Pasywów
+            if (initiator.balanceSheet && target.balanceSheet) {
+                initiator.balanceSheet.assets += target.balanceSheet.assets;
+                initiator.balanceSheet.liabilities += target.balanceSheet.liabilities;
+                // WAŻNE: Jeśli była "Zatruta Pigułka", to dług celu jest już sztucznie zawyżony i jest przenoszony.
+                initiator.balanceSheet.retainedEarnings += target.balanceSheet.retainedEarnings;
+                initiator.cash += target.cash; 
+            }
+
+            // 5. Obsługa CEO (Złoty Spadochron) - Aktywuje się TYLKO przy przejęciu
+            if (target.ceo?.traits?.some(t => t.id === 'goldenParachute')) {
+                const parachuteCost = (target.price * target.totalShares) * 0.02; 
+                if (initiator.cash >= parachuteCost) {
+                    initiator.cash -= parachuteCost;
+                    logEvent(`[CEO] Prezes ${target.name} odpala złoty spadochron! Koszt dla ${initiator.name}: ${parachuteCost.toFixed(0)} PLN.`, 'company');
+                }
+            }
+
+            // 6. Aktualizacja spółki-matki
+            initiator.financialHealth = Math.max(-5, Math.min(5, ((initiator.financialHealth + target.financialHealth) / 2) + 0.5));
+            if (!initiator.subsidiaries) initiator.subsidiaries = [];
+            initiator.subsidiaries.push({ symbol: target.symbol, name: target.name, date: Date.now() });
+
+            successMessage = `✅ Przejęcie zakończone! ${initiator.name} wchłonął ${target.name}.`;
+            break;
+
+        case 'fuzja':
+            // 1. Oblicz parytet wymiany
+            const initiatorValue = initiator.price * initiator.totalShares;
+            const targetValue = target.price * target.totalShares;
+            const totalNewValue = initiatorValue + targetValue;
+            // Stosunek, w jakim akcjonariusze celu otrzymają nowe akcje
+            const exchangeRatio = (targetValue / totalNewValue) / target.totalShares; // Nowe akcje na 1 starą akcję
+            // Całkowita liczba nowych akcji do wyemitowania dla akcjonariuszy celu
+            const newSharesForTargetHolders = target.totalShares * exchangeRatio;
+            
+            // Stosunek dla akcjonariuszy inicjatora (dla uaktualnienia ich stanu posiadania)
+            const initiatorRatio = (initiatorValue / totalNewValue) / initiator.totalShares;
+            const newSharesForInitiatorHolders = initiator.totalShares * initiatorRatio;
+            
+            const newTotalShares = newSharesForTargetHolders + newSharesForInitiatorHolders;
+
+            // 2. Aktualizuj portfele (Gracz)
+            const playerTargetShares = playerPortfolio[target.symbol]?.shares || 0;
+            const playerInitiatorShares = playerPortfolio[initiator.symbol]?.shares || 0;
+            const totalNewSharesForPlayer = (playerTargetShares * exchangeRatio) + (playerInitiatorShares * initiatorRatio);
+            if (playerTargetShares > 0) delete playerPortfolio[target.symbol];
+            if (totalNewSharesForPlayer > 0) {
+                 playerPortfolio[initiator.symbol] = { shares: totalNewSharesForPlayer, avgPrice: totalNewValue / newTotalShares, assetType: 'stock' }; // Upewnij się, że assetType jest 'stock'
+                 logEvent(`🔄 Twoje akcje ${target.symbol} i ${initiator.symbol} zostały wymienione na ${totalNewSharesForPlayer.toFixed(0)} akcji nowej spółki.`, 'review');
+            }
+
+            // 3. Aktualizuj portfele (AI, Holdingi, Banki)
+            [...aiCompetitors, ...stocks.filter(s=>s.assetType==='Holding'), ...commercialBanks].forEach(entity => {
+                const portfolio = entity.portfolio || entity.holdingPortfolio || entity.stockPortfolio;
+                if (!portfolio) return;
+                const targetShares = portfolio[target.symbol]?.shares || portfolio[target.symbol]?.quantity || 0;
+                const initiatorShares = portfolio[initiator.symbol]?.shares || portfolio[initiator.symbol]?.quantity || 0;
+                const totalNewShares = (targetShares * exchangeRatio) + (initiatorShares * initiatorRatio);
+                if (targetShares > 0) delete portfolio[target.symbol];
+                if (totalNewShares > 0) {
+                    // Sprawdź typ portfolio, aby poprawnie zapisać
+                    if(entity.portfolio) { // Dla AI i Gracza
+                         portfolio[initiator.symbol] = { shares: totalNewShares, avgPrice: totalNewValue / newTotalShares };
+                    } else { // Dla Holdingów i Banków
+                         portfolio[initiator.symbol] = { quantity: totalNewShares, purchasePrice: totalNewValue / newTotalShares };
+                    }
+                }
+            });
+
+            // 4. Aktualizuj spółkę inicjatora (staje się nową spółką)
+            initiator.name = `${initiator.name.split(' ')[0]}-${target.name.split(' ')[0]} Group`;
+            initiator.totalShares = newTotalShares;
+            initiator.maxShares = newTotalShares * 1.5;
+            initiator.price = totalNewValue / newTotalShares;
+            if (initiator.balanceSheet && target.balanceSheet) {
+                initiator.balanceSheet.assets += target.balanceSheet.assets;
+                initiator.balanceSheet.liabilities += target.balanceSheet.liabilities;
+                initiator.balanceSheet.retainedEarnings += target.balanceSheet.retainedEarnings;
+                initiator.cash += target.cash;
+            }
+            // Potrąć koszty fuzji z gotówki nowej firmy
+            initiator.cash -= process.costs;
+            initiator.financialHealth = Math.max(-5, Math.min(5, ((initiator.financialHealth + target.financialHealth) / 2) + 1.0));
+            if (!initiator.subsidiaries) initiator.subsidiaries = [];
+            initiator.subsidiaries.push({ symbol: target.symbol, name: target.name, date: Date.now() });
+
+            // 5. Wybierz nowego CEO
+            if (target.ceo && target.financialHealth > initiator.financialHealth) {
+                initiator.ceo = target.ceo;
+            } 
+
+            successMessage = `✅ Fuzja zakończona! Powstaje ${initiator.name}.`;
+            break;
+
+        default:
+            console.warn(`[M&A Resolve] Nieznany typ procesu: ${process.type}`);
+            cancelMerger(stock1, "Nieobsługiwany typ procesu.");
+            cancelMerger(stock2, "Nieobsługiwany typ procesu.");
+            return;
+    }
+
+    // --- Finalizacja ---
+    removeStockFromGame(target.symbol); // Usuń spółkę-cel z gry
+    initiator.mergerProcess = null;
+    initiator.mergerPartnerVisible = false;
+    // (Flagi targetu nie mają znaczenia, bo został usunięty)
+
+    logEvent(successMessage, 'success');
+    showToast(successMessage, 'success', 7000);
+
+    displayStocks(getCurrentInputValues());
+    displayPortfolio();
+}
+
+/**
+ * Anuluje proces fuzji lub przejęcia.
+ * @param {object} stock - Spółka, dla której anulujemy proces (druga zostanie znaleziona po partnerSymbol).
+ * @param {string} reason - Powód anulowania.
+ */
+function cancelMerger(stock, reason) {
+    if (!stock || !stock.mergerProcess) return;
+
+    const partnerSymbol = stock.mergerProcess.partnerSymbol;
+    const partnerStock = stocks.find(s => s.symbol === partnerSymbol);
+
+    logEvent(`❌ Proces M&A między ${stock.symbol} a ${partnerSymbol} został anulowany. Powód: ${reason}`, 'review');
+    showToast(`Fuzja/Przejęcie ${stock.symbol}-${partnerSymbol} anulowane!`, 'error');
+
+    // Resetuj stan w obu spółkach
+    stock.mergerProcess = null;
+    stock.mergerPartnerVisible = false;
+    stock.isBeingMerged = false;
+    stock.canBeTraded = true;
+
+    if (partnerStock) {
+        partnerStock.mergerProcess = null;
+        partnerStock.mergerPartnerVisible = false;
+        partnerStock.isBeingMerged = false;
+        partnerStock.canBeTraded = true;
+    }
+
+    // Nałóż karę za nieudany proces (lekki spadek kondycji)
+    stock.financialHealth -= 0.3;
+    if (partnerStock) {
+        partnerStock.financialHealth -= 0.3;
+    }
+
+    // Odśwież UI
+    displayStocks(getCurrentInputValues());
+}
+
+function checkAntitrust(stock1, stock2) {
+    // 1. Sprawdź, czy urząd w ogóle analizuje tę sprawę
+    if (Math.random() > antitrustOffice.analysisCapacity) {
+        console.log(`[Antymonopol] Urząd nie zainteresował się fuzją ${stock1.symbol} i ${stock2.symbol}.`);
+        return false; // Urząd nie podjął analizy
+    }
+
+    console.log(`[Antymonopol] Urząd analizuje potencjalną fuzję ${stock1.symbol} i ${stock2.symbol}...`);
+    logEvent(`⚖️ Urząd Antymonopolowy przygląda się planom połączenia ${stock1.name} i ${stock2.name}...`, 'state');
+
+    // 2. Oblicz potencjalny udział rynkowy połączonej firmy (uproszczony)
+    const combinedMarketCap = (stock1.price * stock1.totalShares) + (stock2.price * stock2.totalShares);
+    const commonSectors = stock1.sector.filter(s => stock2.sector.includes(s)); // Znajdź wspólne sektory
+    let potentialMarketShare = 0;
+
+    if (commonSectors.length > 0) {
+        // Oblicz całkowitą kapitalizację we wspólnym sektorze (głównym)
+        const sector = commonSectors[0];
+        const sectorTotalMarketCap = stocks
+            .filter(s => !s.assetType && !s.isBankrupt && s.sector.includes(sector))
+            .reduce((sum, s) => sum + (s.price * s.totalShares), 0);
+
+        if (sectorTotalMarketCap > 0) {
+            potentialMarketShare = combinedMarketCap / sectorTotalMarketCap;
+        }
+    } else {
+        // Jeśli brak wspólnych sektorów (fuzja konglomeratowa), ryzyko monopolu jest niskie
+        potentialMarketShare = 0.1; // Przykładowo niskie ryzyko
+    }
+
+    // 3. Określ próg blokady (np. 40% udziału w rynku)
+    const blockThreshold = 0.40;
+    const shouldBlock = potentialMarketShare >= blockThreshold;
+
+    // 4. Losuj decyzję urzędu (uwzględniając jego dokładność)
+    let blockDecision = false;
+    if (shouldBlock) {
+        // Jeśli udział przekracza próg, jest szansa na blokadę (zależna od accuracy)
+        blockDecision = Math.random() < antitrustOffice.accuracy;
+    } else {
+        // Jeśli udział jest niski, jest mała szansa na BŁĘDNĄ blokadę (1 - accuracy)
+        blockDecision = Math.random() < (1 - antitrustOffice.accuracy) * 0.1; // Mała szansa na błąd
+    }
+
+    // 5. Zastosuj i zwróć decyzję
+    if (blockDecision) {
+        logEvent(`⚖️ BLOKADA! Urząd Antymonopolowy blokuje połączenie ${stock1.name} i ${stock2.name} z powodu ryzyka monopolu!`, 'state');
+        showToast(`Urząd Antymonopolowy zablokował fuzję ${stock1.symbol}-${stock2.symbol}!`, 'error');
+        // TODO: Opcjonalnie: Można nałożyć karę finansową na inicjatora
+        return true; // Fuzja zablokowana
+    } else {
+        console.log(`[Antymonopol] Urząd zezwolił na połączenie ${stock1.symbol} i ${stock2.symbol}.`);
+        logEvent(`⚖️ Urząd Antymonopolowy nie widzi przeciwwskazań dla połączenia ${stock1.name} i ${stock2.name}.`, 'state');
+        return false; // Fuzja dozwolona
+    }
+}
+
+function investInAntitrustOffice() {
+    if (antitrustOffice.level >= 5) {
+        alert("Urząd Antymonopolowy osiągnął już maksymalny poziom rozwoju!");
+        return;
+    }
+
+    const upgradeCost = ANTITRUST_UPGRADE_COSTS[antitrustOffice.level];
+    if (playerCash < upgradeCost) {
+        alert("Nie masz wystarczająco gotówki, aby zainwestować w Urząd.");
+        return;
+    }
+
+    // Potwierdzenie od gracza
+    if (confirm(`Czy na pewno chcesz zainwestować ${upgradeCost.toLocaleString('pl-PL')} PLN w rozwój Urzędu Antymonopolowego do poziomu ${antitrustOffice.level + 1}?`)) {
+        playerCash -= upgradeCost;
+        antitrustOffice.level++;
+
+        // Zwiększ parametry urzędu (przykładowe wartości)
+        antitrustOffice.analysisCapacity += 0.1; // +10% szansy na analizę per poziom
+        antitrustOffice.accuracy += 0.12;       // +12% dokładności per poziom
+        // Ogranicz wartości do maksymalnie 100%
+        antitrustOffice.analysisCapacity = Math.min(1.0, antitrustOffice.analysisCapacity);
+        antitrustOffice.accuracy = Math.min(1.0, antitrustOffice.accuracy);
+
+        logEvent(`🏛️ Zainwestowano w Urząd Antymonopolowy! Osiągnięto poziom ${antitrustOffice.level}.`, 'review');
+        showToast("Rozwój Urzędu Antymonopolowego zakończony sukcesem!", 'success');
+
+        displayCash();
+        // Odśwież modal państwa, jeśli jest otwarty
+        if (document.getElementById('state-modal')?.style.display === 'block') {
+            updateStateModalContent();
+        }
+    }
+}
+
+function checkMonopolyStatus() {
+    console.log("[Monopol] Sprawdzanie statusu monopolistów...");
+    const allSectors = [...new Set(stocks.flatMap(s => s.sector))]; // Zbierz unikalne sektory
+
+    // Najpierw zresetuj status dla wszystkich
+    stocks.forEach(s => { if (s.isMonopolist) s.isMonopolist = false; });
+
+    allSectors.forEach(sector => {
+        // Znajdź aktywne, nie-zależne spółki w danym sektorze
+        const companiesInSector = stocks.filter(s =>
+            !s.assetType &&         // Nie specjalny typ
+            !s.isBankrupt &&        // Nie bankrut
+            !s.isSubsidiaryOf &&    // Nie zależna
+            s.sector.includes(sector) // W danym sektorze
+        );
+
+        // Jeśli jest DOKŁADNIE jedna taka spółka, oznacz ją jako monopolistę
+        if (companiesInSector.length === 1) {
+            const monopolist = companiesInSector[0];
+            monopolist.isMonopolist = true;
+            logEvent(`👑 ${monopolist.name} (${monopolist.symbol}) uzyskał status monopolisty w sektorze ${sector}!`, 'market');
+            console.log(`[Monopol] ${monopolist.symbol} jest monopolistą w ${sector}.`);
+        }
+    });
+}
+
+function checkForPotentialMA() {
+    // console.log("[M&A AI] Sprawdzanie potencjalnych celów M&A...");
+
+    // Zbierz wszystkich potencjalnych inicjatorów (Boty, Holdingi, Banki Inwestycyjne)
+    const potentialInitiators = [
+        ...aiCompetitors.filter(ai => ai.cash > 50000 && ai.personality !== 'market_maker'), // Boty z gotówką
+        ...stocks.filter(s => s.assetType === 'Holding' && s.cash > 100000), // Holdingi z gotówką
+        ...commercialBanks.filter(b => b.type === BANK_TYPES.INVESTMENT && b.isActive && b.cash > 1000000) // Aktywne banki inwestycyjne
+    ];
+
+    const potentialTargets = stocks.filter(s =>
+        !s.assetType && // Nie jest typem specjalnym
+        !s.isBankrupt &&
+        !s.mergerProcess && // Nie jest już w trakcie procesu
+        !s.isSubsidiaryOf && // Nie jest już zależna
+        exchanges[s.exchange].level < 3 // Celuj w mniejsze firmy (Junk, Bronze, Silver)
+    );
+
+    if (potentialInitiators.length === 0 || potentialTargets.length === 0) {
+        // console.log("[M&A AI] Brak inicjatorów lub celów.");
+        return;
+    }
+
+    // Wybierz losowego inicjatora do analizy w tej turze
+    const initiator = getRandomElement(potentialInitiators);
+    const initiatorObject = (initiator.id ? initiator : { id: initiator.symbol, name: initiator.name, cash: initiator.cash, portfolio: initiator.holdingPortfolio || initiator.stockPortfolio }); // Ujednolicenie obiektu
+
+    // --- Ustalenie strategii i prawdopodobieństwa na podstawie typu inicjatora ---
+    let checkChance = 0.05; // Bazowa szansa 5%
+    let preferredType = 'przejęcie';
+    let preferredFinancing = 'cash';
+    let targetFilter = (target) => target.financialHealth < 0; // Domyślnie celuj w słabych
+
+    if (initiator.personality) { // Jeśli to Bot AI
+        switch (initiator.personality) {
+            case 'whale':
+            case 'pro_investor':
+                checkChance = 0.15; // Bardziej aktywni
+                targetFilter = (target) => target.financialHealth < 1 && (target.price * target.totalShares < initiatorObject.cash * 0.5); // Zdrowi, ale tani
+                break;
+            case 'reckless':
+            case 'yolo_trader':
+                checkChance = 0.20; // Najbardziej aktywni
+                targetFilter = (target) => target.volatilityFactor > 2.0; // Celuj w ryzykowne
+                break;
+            case 'banker':
+                checkChance = 0.10;
+                targetFilter = (target) => target.sector.includes('Finanse') || target.sector.includes('Bankowość'); // Celuj w swój sektor
+                break;
+        }
+    } else if (initiator.assetType === 'Holding') {
+        checkChance = 0.10;
+        // Holdingi celują w swoje sektory specjalizacji
+        targetFilter = (target) => target.sector.some(s => initiator.specializationSectors.includes(s));
+    } else if (initiator.type === BANK_TYPES.INVESTMENT) {
+        checkChance = 0.12;
+        preferredType = 'fuzja'; // Banki wolą fuzje
+        preferredFinancing = 'stockSwap'; // i wymianę akcji
+        targetFilter = (target) => target.financialHealth >= 1; // Celuj w zdrowe firmy
+    }
+
+    // --- Decyzja o rozpoczęciu analizy ---
+    if (Math.random() > checkChance) {
+        return; // Inicjator nie jest zainteresowany w tej turze
+    }
+
+    // --- Wybór celu ---
+    const eligibleTargets = potentialTargets.filter(target =>
+        target.symbol !== initiatorObject.id && // Nie celuj w siebie
+        targetFilter(target) // Sprawdź filtr strategii
+    );
+
+    if (eligibleTargets.length > 0) {
+        const targetStock = getRandomElement(eligibleTargets);
+        
+        // CEO inicjatora może mieć wpływ (np. Ekspansjonista)
+        let ceoModifier = 1.0;
+        const initiatorStock = stocks.find(s => s.symbol === initiatorObject.id); // Znajdź obiekt stock, jeśli inicjatorem jest Holding/Bank
+        if (initiatorStock && initiatorStock.ceo?.traits?.some(t => t.id === 'ekspansjonista')) {
+            ceoModifier = 2.0; // Podwójna szansa, jeśli CEO jest ekspansjonistą
+        }
+
+        // Finalna szansa na zainicjowanie procesu
+        if (Math.random() < 0.5 * ceoModifier) {
+            console.log(`[M&A AI] ${initiatorObject.name} (${initiatorObject.id}) inicjuje ${preferredType} celu ${targetStock.symbol}!`);
+            
+            // Pobierz obiekt stock inicjatora, jeśli sam nim nie jest (np. gdy inicjuje bot AI)
+            let finalInitiatorStock = initiatorStock;
+            if (initiator.personality) {
+                 // Bot AI musi działać przez spółkę, w której ma większość
+                 const controlledStockSymbol = Object.keys(initiator.portfolio).find(sym => {
+                     const stock = stocks.find(s => s.symbol === sym);
+                     return stock && !stock.assetType && (initiator.portfolio[sym].shares / stock.totalShares > 0.5);
+                 });
+                 finalInitiatorStock = stocks.find(s => s.symbol === controlledStockSymbol);
+            }
+            
+            if (finalInitiatorStock) {
+                initiateMergerProcess(finalInitiatorStock, targetStock, preferredType, preferredFinancing, getRandomInRange(0.15, 0.35)); // Premia 15-35%
+            }
+        }
+    }
+}
+
+/**
+ * Funkcja pomocnicza do aktywacji mechanizmu obronnego przez gracza lub AI.
+ * @param {string} symbol - Symbol spółki, która się broni.
+ *(Ta funkcja powinna już istnieć - zastąp ją tą)
+ * @param {'poisonPill' | 'whiteKnight' | 'pacMan'} defenseType - Typ obrony.
+ * @param {string} [entityId='player'] - Kto aktywuje ('player' lub ID bota).
+ */
+function activateDefenseMechanism(symbol, defenseType, entityId = 'player') {
+    const stock = stocks.find(s => s.symbol === symbol);
+    if (!stock || !stock.mergerProcess || stock.mergerProcess.defenseActive) return; // Nie można aktywować, jeśli już coś działa
+
+    let entityCash, entityName;
+    if (entityId === 'player') {
+        entityCash = playerCash;
+        entityName = "Ty";
+    } else {
+        const ai = aiCompetitors.find(a => a.id === entityId);
+        if (!ai) return;
+        entityCash = ai.cash;
+        entityName = ai.name;
+    }
+
+    switch (defenseType) {
+        case 'poisonPill':
+            // Koszt aktywacji (np. opłaty prawne i doradcze) to 5% wartości rynkowej firmy
+            const activationCost = (stock.price * stock.totalShares) * 0.05; 
+            
+            if (entityCash < activationCost) {
+                if(entityId === 'player') alert(`Nie masz wystarczająco gotówki, aby aktywować "Zatrutą Pigułkę"! Wymagane: ${activationCost.toFixed(0)} PLN.`);
+                return;
+            }
+            
+            // Potwierdzenie (tylko dla gracza)
+            if (entityId === 'player') {
+                 if (!confirm(`Aktywacja "Zatrutej Pigułki" będzie Cię kosztować ${activationCost.toFixed(0)} PLN (opłaty doradcze) i natychmiast zaszkodzi firmie (spadek kondycji, wzrost długu), ale może zniechęcić agresora. Kontynuować?`)) {
+                    return; // Gracz anulował
+                 }
+            }
+
+            // --- Transakcja ---
+            if (entityId === 'player') playerCash -= activationCost;
+            else entityCash -= activationCost;
+            
+            stock.mergerProcess.defenseActive = 'poisonPill';
+            
+            // --- Natychmiastowe Kary dla Spółki-Celu ---
+            stock.financialHealth -= 1.0; // Natychmiastowa kara dla kondycji
+            if (stock.balanceSheet) {
+                 // Spółka emituje specjalne warranty lub zaciąga dług, aby zwiększyć toksyczność
+                 stock.balanceSheet.liabilities += (stock.price * stock.totalShares) * 0.2; // Dług rośnie o 20% wartości firmy
+            }
+            
+            logEvent(`🛡️ ${stock.name} aktywuje "Zatrutą Pigułkę" (koszt: ${activationCost.toFixed(0)} PLN), aby obronić się przed przejęciem! Kondycja firmy spada, a dług rośnie.`, 'review');
+            if(entityId === 'player') {
+                showToast(`${stock.name} aktywuje "Zatrutą Pigułkę"!`, 'warning');
+                displayCash();
+            }
+            break;
+
+        case 'whiteKnight':
+            // TODO: Logika dla Białego Rycerza (np. ustawienie flagi 'seekingWhiteKnight')
+            logEvent(`🛡️ ${stock.name} rozpoczyna poszukiwania "Białego Rycerza"!`, 'review');
+            break;
+            
+        case 'pacMan':
+            // TODO: Logika dla obrony Pac-Man (próba wrogiego przejęcia agresora)
+            logEvent(`👻 ${stock.name} aktywuje obronę "Pac-Man" i próbuje przejąć agresora!`, 'warning');
+            break;
+    }
+
+    // Odśwież modal zarządzania, aby pokazać aktywną obronę
+    if (entityId === 'player' && document.getElementById('management-modal')?.style.display === 'block') {
+        openManagementModal(symbol);
     }
 }

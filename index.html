@@ -15,6 +15,7 @@
     <div id="main-nav">
         <button id="open-work-btn" onclick="openWorkModal()" style="display: none;">✍️ Praca</button>
         <button id="open-bank-btn" onclick="openBankModal()">🏦 Bank</button>
+        <button id="open-state-btn" onclick="openStateModal()">🏛️ Państwo</button>
         <button id="open-city-btn" onclick="openCityInvestmentModal()">🏙️ Miasto</button>
         <button id="open-skills-btn" onclick="openSkillsModal()">🧠 Umiejętności</button>
         <button id="open-newspaper-btn" onclick="openNewspaperModal()">📰 Gazeta</button>
@@ -46,7 +47,7 @@
 
             <div id="startup-incubator-panel" class="panel">
                 <h2 onclick="toggleStartupPanelVisibility()" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
-                    Inkubator Start-upów 🚀
+                    Giełda NewHorizons🚀
                     <span id="toggle-icon-startup">▼</span>
                 </h2>
 
@@ -360,10 +361,50 @@
          <button onclick="document.getElementById('newspaper-modal').style.display='none';" style="position: absolute; top: 5px; right: 5px; font-size: 20px; background: none; border: none; cursor: pointer;">&times;</button>
     </div>
 
+    <div id="state-modal" class="modal" style="display:none; width: 500px;">
+        <button class="close-btn" onclick="document.getElementById('state-modal').style.display='none';">&times;</button>
+        <h2 style="margin-top: 0; text-align: center;">🏛️ Skarbiec Państwa</h2>
+        <div class="bank-section">
+            <h4>Budżet Państwa</h4>
+            <p>Aktualne środki w skarbcu: <strong id="government-treasury-display">0.00</strong> PLN</p>
+            <p style="font-size: 12px; color: #6c757d;">Środki pochodzą z podatków od dywidend, zysków kapitałowych, firm, bogactwa, podatków miejskich oraz symulowanych podatków od obywateli.</p>
+            <h4>⚖️ Urząd Antymonopolowy</h4>
+    <p>Poziom: <strong id="antitrust-level">0</strong>/5</p>
+    <p style="font-size: 12px;">Szansa na analizę: <strong id="antitrust-capacity">10%</strong> | Dokładność decyzji: <strong id="antitrust-accuracy">20%</strong></p>
+    <div id="antitrust-upgrade-section">
+        <p>Koszt następnego ulepszenia: <strong id="antitrust-upgrade-cost"></strong> PLN</p>
+        <button id="antitrust-upgrade-btn" onclick="investInAntitrustOffice()">Inwestuj w Urząd</button>
+    </div>
+    <p id="antitrust-max-level-info" style="display: none; font-weight: bold; color: #28a745;">Urząd osiągnął maksymalny poziom rozwoju!</p>
+        </div>
+        <div class="bank-section">
+            <h4>Możliwe Interwencje Rządowe</h4>
+            <p style="font-size: 12px; color: #6c757d;">Rząd może wykorzystać zgromadzone środki na różne programy wspierające gospodarkę. Działania są podejmowane automatycznie, gdy budżet jest wystarczająco duży.</p>
+            <ul id="government-actions-list" style="font-size: 13px; list-style-type: '💰 '; padding-left: 20px;">
+                <li>Programy infrastrukturalne (wsparcie dla sektora Przemysł i Nieruchomości)</li>
+                <li>Dotacje na innowacje (przyspieszenie badań R&D)</li>
+                <li>Interwencyjny skup akcji (wsparcie dla rynku)</li>
+                <li>Koła ratunkowe dla zagrożonych spółek</li>
+                <li>Zmiany stóp procentowych (wpływ na sektor Finanse i Bankowość)</li>
+                <li>Specjalne programy sektorowe (losowe bonusy dla wybranych branż)</li>
+                </ul>
+        </div>
+         <p style="font-size: 11px; text-align: center; margin-top: 15px;">Więcej informacji o aktywnych programach rządowych znajdziesz w logu wydarzeń.</p>
+    </div>
+
     <div id="management-modal" style="display:none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 450px; border: 2px solid #007bff; background-color: #f9f9f9; box-shadow: 0 4px 8px rgba(0,0,0,0.2); padding: 20px; z-index: 1006; border-radius: 8px;">
         <h2 id="management-title" style="margin-top: 0; text-align: center; color: #007bff;">👑 Panel Zarządzania</h2>
         <div class="modal-body">
             <div class="bank-section">
+                <div id="reputation-management-section" class="bank-section">
+                <h4>🤝 Relacje z Zarządem</h4>
+                <p>Twoje obecne relacje: <strong id="reputation-status">Neutralne (0)</strong></p>
+                <p style="font-size: 12px;">Popraw relacje, przekazując datek na rozwój firmy.</p>
+                <div>
+                    <input type="number" id="donation-amount" placeholder="Kwota datku">
+                    <button id="donate-btn">Przekaż datek</button>
+                </div>
+            </div>
                 <h4>💰 Specjalna Dywidenda</h4>
                 <p>Jako większościowy akcjonariusz, możesz zażądać od zarządu natychmiastowej wypłaty dywidendy.</p>
                 <p style="font-size: 12px; color: #666;">Uwaga: Taka operacja obciąża finanse spółki i może tymczasowo obniżyć jej kurs.</p>
@@ -416,15 +457,33 @@
                 <button id="view-finances-btn">Zobacz Finanse</button>
                 <p id="finances-access-info" style="font-size: 12px; color: #666; margin-top: 5px;"></p>
             </div>
-            <div id="reputation-management-section" class="bank-section">
-                <h4>🤝 Relacje z Zarządem</h4>
-                <p>Twoje obecne relacje: <strong id="reputation-status">Neutralne (0)</strong></p>
-                <p style="font-size: 12px;">Popraw relacje, przekazując datek na rozwój firmy.</p>
-                <div>
-                    <input type="number" id="donation-amount" placeholder="Kwota datku">
-                    <button id="donate-btn">Przekaż datek</button>
-                </div>
-            </div>
+            
+            <div id="influence-section" class="bank-section" style="display: none;">
+     <h4>🐙 Wpływy i Naciski</h4>
+     <p>Całkowity wpływ innych na tę spółkę: <strong id="influence-total-received">0</strong></p>
+     <h5>Wpływ wywierany przez tę spółkę na:</h5>
+     <ul id="influence-exerted-list" style="font-size: 12px; max-height: 80px; overflow-y: auto;">
+         <li>Brak</li>
+     </ul>
+     <h5>Wpływ otrzymywany od:</h5>
+     <ul id="influence-received-list" style="font-size: 12px; max-height: 80px; overflow-y: auto;">
+         <li>Brak</li>
+     </ul>
+ </div>
+
+    <div id="ma-initiation-section" class="bank-section" style="display: none;">
+        <h4><span style="font-size: 20px;">🤝</span> Fuzje i Przejęcia</h4>
+        <p style="font-size: 12px;">Wykorzystaj swoją pozycję, aby zainicjować połączenie lub wrogie przejęcie innej spółki.</p>
+        <button id="ma-open-target-modal-btn">Rozpocznij proces M&A</button>
+    </div>
+    
+    <div id="ma-defense-section" class="bank-section" style="display: none; border: 2px solid #dc3545;">
+        <h4 style="color: #dc3545;">🚨 JESTEŚ CELEM PRZEJĘCIA! 🚨</h4>
+        <p id="ma-defense-info" style="font-size: 13px;">... informacja o zagrożeniu ...</p>
+        <h5>Aktywuj mechanizmy obronne:</h5>
+        <button id="ma-defense-poisonpill-btn" title="Znacząco podniesie koszty przejęcia, ale zaszkodzi Twojej firmie (koszt: 5% wartości firmy).">Zatwierdź "Zatrutą Pigułkę"</button>
+        </div>
+
         </div>
         <button onclick="document.getElementById('management-modal').style.display='none';" style="margin-top: 15px;">Zamknij</button>
     </div>
@@ -440,6 +499,7 @@
         <h3 id="description-modal-title" style="margin-top: 0; text-align: center;"></h3>
          <div id="description-modal-ceo" style="margin-top: 15px; padding-top: 10px; border-top: 1px dotted #ccc;"></div>
          <p id="description-modal-content" style="text-align: justify;"></p>
+         <div id="description-modal-phase" style="display: none; margin-top: 15px; padding-top: 10px; border-top: 1px dotted #ccc;"></div>
          <div id="description-modal-analytical" style="margin-top: 15px; padding-top: 10px; border-top: 1px dotted #ccc;"></div>
          <div id="description-modal-research" style="margin-top: 15px; padding-top: 10px; border-top: 1px dotted #ccc;"></div>
          <button onclick="document.getElementById('description-modal').style.display='none';" style="display: block; margin: 20px auto 0 auto;">Zamknij</button>
@@ -462,19 +522,42 @@
              <button id="collect-reward-btn" onclick="collectPassiveWorkReward()" disabled>Odbierz</button>
          </div>
          <div id="company-panel" style="display: none;">
-             <h3 id="company-name">Twoja Firma</h3>
-             <p>Wartość firmy: <strong id="company-value">0</strong> / 25 000 PLN</p>
-             <p>Pracownicy: <strong id="company-employees">0</strong></p>
-             <p>Dochód (co 90s): <strong id="company-income">100</strong> PLN (Następna za: <strong id="company-income-timer">90</strong>s)</p>
-             <hr>
-             <button onclick="hireEmployee()">Zatrudnij pracownika (5000 PLN)</button>
+             <h3 id="company-name" style="text-align: center;">Twoja Firma</h3>
+             <div style="display: flex; justify-content: space-around; margin-bottom: 15px; border-bottom: 1px dashed #ccc; padding-bottom: 10px;">
+                 <div>Wartość firmy: <strong id="company-value">0</strong> PLN</div>
+                 <div>Dochód (cykl): <strong id="company-income">0</strong> PLN</div>
+             </div>
+
+             <div class="bank-section">
+                 <h4>Pracownicy (<span id="employee-count">0</span>)</h4>
+                 <ul id="employee-list" style="max-height: 150px; overflow-y: auto; list-style: none; padding: 0;">
+                     </ul>
+                 <button onclick="openHireModal()">Zatrudnij</button> </div>
+
+             <div class="bank-section">
+                 <h4>Sprzęt (<span id="equipment-count">0</span> / <span id="employee-slots-for-equipment">0</span> miejsc)</h4>
+                 <ul id="equipment-list" style="list-style: none; padding: 0; font-size: 13px;">
+                     </ul>
+                  <select id="equipment-select" style="margin-right: 5px;">
+                      </select>
+                 <button onclick="buySelectedEquipment()">Kup Wybrany Sprzęt</button>
+             </div>
+
+             <div class="bank-section">
+                 <h4>Dział HR (Poziom <span id="hr-level">0</span>/10)</h4>
+                 <p>Redukcja pensji: <strong id="hr-salary-reduction">0%</strong></p>
+                 <p id="hr-upgrade-cost-p">Koszt ulepszenia: <strong id="hr-upgrade-cost"></strong> PLN</p>
+                 <button id="upgrade-hr-btn" onclick="upgradeHR()">Ulepsz HR</button>
+                 <p style="font-size: 11px; color: #6c757d; margin-top: 5px;">Lepszy HR pomaga rekrutować, oceniać i obniżać koszty pracowników.</p>
+             </div>
+
              <hr>
              <input type="number" id="company-invest-amount" placeholder="Kwota doinwestowania">
              <button onclick="investInCompany()">Zainwestuj</button>
              <hr>
              <button onclick="startRandomSpecialMinigame()">Wykonaj zadanie specjalne (Bonus)</button>
              <hr>
-             <button id="ipo-btn" onclick="triggerIPO()" disabled>Wprowadź firmę na giełdę!</button>
+             <button id="ipo-btn" onclick="triggerIPO()" disabled>Wprowadź firmę na giełdę! (Wartość min. 25k)</button>
          </div>
          <button onclick="document.getElementById('work-modal').style.display='none';" style="display: block; margin: 15px auto 0 auto;">Zamknij</button>
     </div>
@@ -623,6 +706,18 @@
                  <div id="rd-tech-choice-container"></div>
              </div>
          </div>
+    </div>
+
+    <div id="hire-employee-modal" class="modal" style="display:none; width: 600px;">
+        <button class="close-btn" onclick="document.getElementById('hire-employee-modal').style.display='none';">&times;</button>
+        <h3 style="margin-top: 0; text-align: center;">Zatrudnij Pracownika</h3>
+        <p style="text-align: center; font-size: 12px;">Wybierz rodzaj umowy, aby zobaczyć kandydatów.</p>
+        <div style="text-align: center; margin-bottom: 15px;">
+            <button onclick="generateCandidates('permanent')">Szukaj na Umowę o Pracę</button>
+            <button onclick="generateCandidates('mandate')">Szukaj na Umowę Zlecenie</button>
+        </div>
+        <div id="candidate-list" style="display: flex; gap: 15px; justify-content: center;">
+            </div>
     </div>
 
     <div id="money-stacker-modal" class="modal" style="display: none;">
@@ -775,6 +870,32 @@
         <div id="financial-anomaly-report" style="margin-top: 15px; padding-top: 10px; border-top: 1px dashed #ccc; text-align: center; font-weight: bold;">
         </div>
     </div>
+
+    <div id="ad-popup" style="display: none;">
+        <button class="close-btn" onclick="closeAdPopup()">&times;</button>
+        <h4>Reklama</h4>
+        <div id="ad-content" style="font-size: 14px; margin-top: 10px;">
+            </div>
+    </div>
+
+    <div id="ma-target-modal" class="modal" style="display:none; width: 600px;">
+    <button class="close-btn" onclick="document.getElementById('ma-target-modal').style.display='none';">&times;</button>
+    <h3 id="ma-target-title" style="margin-top: 0;">Wybierz Cel dla: Nazwa Spółki</h3>
+    <div class="modal-body" style="max-height: 400px; overflow-y: auto;">
+        <table id="ma-target-table" style="width: 100%;">
+            <thead>
+                <tr>
+                    <th>Cel</th>
+                    <th>Sektor</th>
+                    <th>Kapitalizacja</th>
+                    <th>Akcja</th>
+                </tr>
+            </thead>
+            <tbody id="ma-target-table-body">
+                </tbody>
+        </table>
+    </div>
+</div>
 
     <div id="chart-tooltip" style="display: none; position: absolute;"></div>
     <div id="toast-notification"></div>
