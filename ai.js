@@ -416,6 +416,74 @@ function runAiMarian(ai) {
  * Logika decyzyjna dla pojedynczego bota AI.
  */
 function makeAiDecision(ai) {
+    let targetStockSymbol = null;
+    let targetStock = null;
+    for (const symbol in ai.portfolio) {
+        const stock = stocks.find(s => s.symbol === symbol);
+        // Sprawdź, czy AI ma >50% udziałów, czy spółka jest celem, czy nie podjęto jeszcze obrony
+        if (stock && 
+            stock.mergerProcess && 
+            (stock.mergerProcess.type === 'przejęcie' || stock.mergerProcess.type === 'influenceTakeover') &&
+            stock.mergerProcess.initiatorSymbol !== stock.symbol && // Upewnij się, że AI jest celem, a nie inicjatorem
+            !stock.mergerProcess.defenseActive && // Jeśli obrona nie jest już aktywna
+            (ai.portfolio[symbol].shares / stock.totalShares) > 0.5) 
+        {
+            targetStockSymbol = symbol;
+            targetStock = stock;
+            break; // Znaleziono cel, przerwij pętlę
+        }
+    }
+
+    // Jeśli AI jest atakowane, podejmuje decyzję o obronie
+    if (targetStock) {
+        const process = targetStock.mergerProcess;
+        const offerPremium = process.offerDetails.premium; // Premia (np. 0.25 dla 25%)
+
+        let defenseChance = 0.5; // Bazowa szansa na podjęcie walki
+
+        // Modyfikatory szansy na obronę w zależności od osobowości
+        switch (ai.personality) {
+            case 'calm':
+                if (offerPremium > 0.3) defenseChance = 0.05; // Zaakceptuje dobrą ofertę
+                else defenseChance = 0.6; // Będzie walczył, jeśli oferta jest słaba
+                break;
+            case 'reckless':
+            case 'yolo_trader':
+                defenseChance = 0.3; // Mniej zainteresowani obroną, wolą szybką gotówkę
+                break;
+            case 'whale':
+            case 'pro_investor':
+                defenseChance = 0.8; // Będą walczyć o swoje aktywa
+                if (offerPremium > 0.4) defenseChance = 0.2; // Ale skuszą się na bardzo wysoką premię
+                break;
+            case 'dividend_chaser':
+                defenseChance = 0.9; // Będzie walczył o swoje spółki dywidendowe
+                break;
+            case 'banker':
+                 defenseChance = 0.7; // Bankier jest ostrożny
+                break;
+        }
+
+        // CEO celu (jeśli jest "Oddany") zwiększa szansę obrony
+        if (targetStock.ceo?.traits?.some(t => t.id === 'oddany')) {
+            defenseChance += 0.25;
+        }
+        
+        // Finalna decyzja
+        if (Math.random() < defenseChance) {
+            // AI decyduje się na obronę -> aktywuj "Zatrutą Pigułkę"
+            // (Na razie AI używa tylko tej obrony)
+            console.log(`[M&A AI Obrona] ${ai.name} aktywuje "Zatrutą Pigułkę" w ${targetStock.symbol}!`);
+            activateDefenseMechanism(targetStock.symbol, 'poisonPill', ai.id); // Przekaż ID bota
+            return; // AI podjęło akcję obronną, kończy turę
+        } else {
+            // AI nie aktywuje obrony (akceptuje ofertę lub czeka)
+            console.log(`[M&A AI Obrona] ${ai.name} postanawia nie bronić aktywnie ${targetStock.symbol}.`);
+            // Oznaczamy proces, aby AI nie pytało ponownie (można to pominąć)
+            targetStock.mergerProcess.defenseActive = 'none'; // Flaga oznaczająca podjęcie decyzji o braku obrony
+            return;
+        }
+    }
     // Podstawowe sprawdzenia i dostępne akcje
     const accessibleStocks = stocks.filter(s => {
         // AI nie handluje startupami, REITami, Instytutami
@@ -433,6 +501,61 @@ function makeAiDecision(ai) {
 
     // Znajdź aktywne banki inwestycyjne do potencjalnych zakupów
     const activeInvestmentBanks = commercialBanks.filter(b => b.isActive && b.type === BANK_TYPES.INVESTMENT);
+
+    if (ai.loans && ai.loans.length > 0) {
+        // Zwiększ szansę na próbę spłaty (z 0.2 na 0.5), aby AI szybciej reagowało
+        if (Math.random() < 0.5) { 
+            let paidLoanThisTurn = false;
+            for (let i = ai.loans.length - 1; i >= 0; i--) {
+                const loan = ai.loans[i];
+                const bank = commercialBanks.find(b => b.id === loan.bankId);
+                // Obliczanie odsetek (przeniesione z logiki tygodniowej dla AI)
+                const weeklyInterestRate = ((LOAN_INTEREST_RATE + bank?.baseInterestRateMargin * (loan.collateral ? 1.1 : 1.0)) || 0.002) / 52;
+                loan.amount += loan.amount * weeklyInterestRate; // Dolicz odsetki
+
+                // Sprawdź, czy stać na ratę
+                if (ai.cash >= loan.weeklyPayment) {
+                    const payment = Math.min(loan.weeklyPayment, loan.amount);
+                    ai.cash -= payment;
+                    loan.amount -= payment;
+                    paidLoanThisTurn = true; // Zaznacz, że dokonano płatności
+                    if (bank) {
+                        bank.cash += payment;
+                        if (bank.loanPortfolio[ai.id]) {
+                            const bankLoanIndex = bank.loanPortfolio[ai.id].findIndex(bl => bl.id === loan.id);
+                            if (bankLoanIndex !== -1) {
+                                bank.loanPortfolio[ai.id][bankLoanIndex].remainingAmount -= payment;
+                                if (bank.loanPortfolio[ai.id][bankLoanIndex].remainingAmount <= 0.01) {
+                                    bank.loanPortfolio[ai.id].splice(bankLoanIndex, 1);
+                                }
+                            }
+                        }
+                    }
+                    if (loan.amount <= 0.01) {
+                        console.log(`[AI] ${ai.name} spłacił kredyt w ${loan.bankName}.`);
+                        if (loan.collateral) {
+                            const holding = ai.portfolio[loan.collateral.symbol];
+                            if (holding && holding.lockedShares) {
+                                holding.lockedShares = Math.max(0, holding.lockedShares - loan.collateral.quantity);
+                            }
+                        }
+                        ai.loans.splice(i, 1);
+                    }
+                } else {
+                    // Nadal nie ma środków na spłatę
+                    console.log(`[AI] ${ai.name} nie ma środków na spłatę raty kredytu w ${loan.bankName}.`);
+                    const scorePenalty = 5;
+                    ai.creditScore = Math.max(0, ai.creditScore - scorePenalty);
+                    console.log(`[AI Kredyt] Wynik kredytowy ${ai.name} spadł do ${ai.creditScore} (-${scorePenalty}) za brak spłaty.`);
+                }
+            } // Koniec pętli for
+            
+            // Jeśli AI właśnie zapłaciło ratę, niech nie robi nic więcej w tej turze
+            if (paidLoanThisTurn) {
+                return; 
+            }
+        }
+    }
 
     // Główna logika inwestycyjna zależna od osobowości
     switch (ai.personality) {
@@ -893,46 +1016,7 @@ function makeAiDecision(ai) {
      }
 
     // Automatyczna spłata rat (rzadziej)
-    if (ai.loans && ai.loans.length > 0 && Math.random() < 0.2) {
-        for (let i = ai.loans.length - 1; i >= 0; i--) {
-            const loan = ai.loans[i];
-            const bank = commercialBanks.find(b => b.id === loan.bankId);
-            const weeklyInterestRate = ((LOAN_INTEREST_RATE + bank?.baseInterestRateMargin * (loan.collateral ? 1.1 : 1.0)) || 0.002) / 52;
-            loan.amount += loan.amount * weeklyInterestRate;
-            if (ai.cash >= loan.weeklyPayment) {
-                const payment = Math.min(loan.weeklyPayment, loan.amount);
-                ai.cash -= payment;
-                loan.amount -= payment;
-                if (bank) {
-                    bank.cash += payment;
-                    if (bank.loanPortfolio[ai.id]) {
-                        const bankLoanIndex = bank.loanPortfolio[ai.id].findIndex(bl => bl.id === loan.id);
-                        if (bankLoanIndex !== -1) {
-                            bank.loanPortfolio[ai.id][bankLoanIndex].remainingAmount -= payment;
-                            if (bank.loanPortfolio[ai.id][bankLoanIndex].remainingAmount <= 0.01) {
-                                bank.loanPortfolio[ai.id].splice(bankLoanIndex, 1);
-                            }
-                        }
-                    }
-                }
-                if (loan.amount <= 0.01) {
-                    console.log(`[AI] ${ai.name} spłacił kredyt w ${loan.bankName}.`);
-                    if (loan.collateral) {
-                        const holding = ai.portfolio[loan.collateral.symbol];
-                        if (holding && holding.lockedShares) {
-                            holding.lockedShares = Math.max(0, holding.lockedShares - loan.collateral.quantity);
-                        }
-                    }
-                    ai.loans.splice(i, 1);
-                }
-            } else {
-                console.log(`[AI] ${ai.name} nie ma środków na spłatę raty kredytu w ${loan.bankName}.`);
-                const scorePenalty = 5;
-                ai.creditScore = Math.max(0, ai.creditScore - scorePenalty);
-                console.log(`[AI Kredyt] Wynik kredytowy ${ai.name} spadł do ${ai.creditScore} (-${scorePenalty}) za brak spłaty.`);
-            }
-        }
-    }
+    
 
     // Zarządzanie obligacjami, miastem, aukcjami (rzadziej)
     if (Math.random() < 0.1) {
