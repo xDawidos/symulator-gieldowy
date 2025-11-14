@@ -878,6 +878,25 @@
             </div>
     </div>
 
+    <div id="ma-target-modal" class="modal" style="display:none; width: 600px;">
+    <button class="close-btn" onclick="document.getElementById('ma-target-modal').style.display='none';">&times;</button>
+    <h3 id="ma-target-title" style="margin-top: 0;">Wybierz Cel dla: Nazwa Spółki</h3>
+    <div class="modal-body" style="max-height: 400px; overflow-y: auto;">
+        <table id="ma-target-table" style="width: 100%;">
+            <thead>
+                <tr>
+                    <th>Cel</th>
+                    <th>Sektor</th>
+                    <th>Kapitalizacja</th>
+                    <th>Akcja</th>
+                </tr>
+            </thead>
+            <tbody id="ma-target-table-body">
+                </tbody>
+        </table>
+    </div>
+</div>
+
     <div id="chart-tooltip" style="display: none; position: absolute;"></div>
     <div id="toast-notification"></div>
 

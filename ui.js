@@ -1139,7 +1139,48 @@ function openManagementModal(symbol) {
     }
     modal.style.display = 'block';
 
-    // --- >>> NOWA LOGIKA DLA SEKCJI WPŁYWÓW <<< ---
+    const maInitiationSection = document.getElementById('ma-initiation-section');
+    const maDefenseSection = document.getElementById('ma-defense-section');
+
+    if (stock.mergerProcess) {
+        // Jeśli spółka jest w trakcie procesu M&A
+        maInitiationSection.style.display = 'none'; // Ukryj sekcję inicjowania
+
+        // Sprawdź, czy ta spółka jest CELEM wrogiego przejęcia
+        if ((stock.mergerProcess.type === 'przejęcie' || stock.mergerProcess.type === 'influenceTakeover') && 
+            stock.mergerProcess.initiatorSymbol !== symbol) 
+        {
+            // Tak, jesteśmy celem
+            maDefenseSection.style.display = 'block';
+            const infoEl = document.getElementById('ma-defense-info');
+            const poisonPillBtn = document.getElementById('ma-defense-poisonpill-btn');
+            
+            infoEl.textContent = `Spółka ${stock.mergerProcess.initiatorSymbol} próbuje Cię przejąć! (Etap ${stock.mergerProcess.stage}: ${stock.mergerProcess.statusMessage})`;
+
+            if (stock.mergerProcess.defenseActive) {
+                // Obrona jest już aktywna
+                poisonPillBtn.disabled = true;
+                poisonPillBtn.textContent = `Aktywowano: ${stock.mergerProcess.defenseActive}`;
+            } else {
+                // Można aktywować obronę
+                poisonPillBtn.disabled = false;
+                poisonPillBtn.textContent = 'Aktywuj "Zatrutą Pigułkę"';
+                poisonPillBtn.onclick = () => activateDefenseMechanism(symbol, 'poisonPill');
+            }
+
+        } else {
+            // Jesteśmy inicjatorem lub to przyjazna fuzja - nie pokazuj obrony
+            maDefenseSection.style.display = 'none';
+        }
+    } else {
+        // Jeśli spółka nie jest w procesie M&A
+        maInitiationSection.style.display = 'block'; // Pokaż sekcję inicjowania
+        maDefenseSection.style.display = 'none'; // Ukryj sekcję obrony
+
+        document.getElementById('ma-open-target-modal-btn').onclick = () => openMaTargetModal(symbol);
+    }
+
+    
     const influenceSection = document.getElementById('influence-section');
     const totalReceivedEl = document.getElementById('influence-total-received');
     const exertedListEl = document.getElementById('influence-exerted-list');
@@ -3673,3 +3714,71 @@ function updateStateModalContent() {
 
     // W przyszłości można tu dynamicznie aktualizować listę możliwych akcji rządowych
 }
+
+function openMaTargetModal(initiatorSymbol) {
+    const initiatorStock = stocks.find(s => s.symbol === initiatorSymbol);
+    if (!initiatorStock) return;
+
+    const modal = document.getElementById('ma-target-modal');
+    const tableBody = document.getElementById('ma-target-table-body');
+    document.getElementById('ma-target-title').textContent = `Wybierz Cel dla: ${initiatorStock.name}`;
+    tableBody.innerHTML = ''; // Wyczyść listę
+
+    // Filtruj potencjalne cele
+    const potentialTargets = stocks.filter(target =>
+        target.symbol !== initiatorSymbol && // Nie można przejąć siebie
+        !target.assetType &&                // Nie można przejąć Startupów, REITów itp.
+        !target.isBankrupt &&
+        !target.mergerProcess &&            // Nie jest już w trakcie fuzji
+        !target.isSubsidiaryOf              // Nie jest już zależna
+    );
+
+    if (potentialTargets.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Brak dostępnych celów na rynku.</td></tr>';
+    } else {
+        potentialTargets.forEach(target => {
+            const row = tableBody.insertRow();
+            const marketCap = target.price * target.totalShares;
+            
+            row.insertCell().textContent = `${target.name} (${target.symbol})`;
+            row.insertCell().textContent = target.sector.join(', ');
+            row.insertCell().textContent = `${marketCap.toLocaleString('pl-PL')} PLN`;
+            
+            const actionCell = row.insertCell();
+            
+            // Przycisk Przejęcia
+            const takeoverBtn = document.createElement('button');
+            takeoverBtn.textContent = 'Przejęcie';
+            takeoverBtn.title = 'Wrogie przejęcie (finansowanie gotówką)';
+            takeoverBtn.onclick = () => {
+                 if (confirm(`Czy na pewno chcesz zainicjować WROGIE PRZEJĘCIE ${target.name} przez ${initiatorStock.name}? Będzie to wymagało pokrycia kosztów w gotówce.`)) {
+                    initiateMergerProcess(initiatorStock, target, 'przejęcie', 'cash');
+                    document.getElementById('ma-target-modal').style.display='none';
+                    openManagementModal(initiatorSymbol); // Odśwież modal zarządzania
+                 }
+            };
+            actionCell.appendChild(takeoverBtn);
+
+            // Przycisk Fuzji (tylko dla podobnych rozmiarowo)
+            const initiatorMarketCap = initiatorStock.price * initiatorStock.totalShares;
+            const sizeRatio = Math.max(marketCap, initiatorMarketCap) / Math.min(marketCap, initiatorMarketCap);
+            if (sizeRatio < 2.5) { // Pozwól na fuzję, jeśli różnica w wielkości jest mniejsza niż 2.5x
+                const mergerBtn = document.createElement('button');
+                mergerBtn.textContent = 'Fuzja';
+                mergerBtn.title = 'Przyjazna fuzja (wymiana akcji)';
+                mergerBtn.style.marginLeft = '5px';
+                mergerBtn.onclick = () => {
+                    if (confirm(`Czy na pewno chcesz zaproponować FUZJĘ ${target.name} z ${initiatorStock.name}? Będzie to polegało na wymianie akcji.`)) {
+                        initiateMergerProcess(initiatorStock, target, 'fuzja', 'stockSwap');
+                        document.getElementById('ma-target-modal').style.display='none';
+                        openManagementModal(initiatorSymbol); // Odśwież modal zarządzania
+                    }
+                };
+                actionCell.appendChild(mergerBtn);
+            }
+        });
+    }
+
+    modal.style.display = 'block';
+}
+

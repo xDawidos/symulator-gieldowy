@@ -8956,55 +8956,51 @@ function issueRescueBond(stock) {
 }
 
 function updateInfluence() {
-    const regularStocks = stocks.filter(s => s.influence); // Tylko te z obiektem influence
+    // 1. Filtruj aktywne, niezależne spółki, które mają system wpływów
+    const regularStocks = stocks.filter(s => s.influence && !s.isSubsidiaryOf);
 
+    // 2. Oblicz wywierany wpływ (tylko od aktywnych)
     regularStocks.forEach(sourceStock => {
-        sourceStock.influence.exerted = {}; // Resetuj wywierany wpływ w każdej turze
-    });
-
-    regularStocks.forEach(sourceStock => {
+        sourceStock.influence.exerted = {}; // Resetuj wywierany wpływ
         const sourceMarketCap = sourceStock.price * sourceStock.totalShares;
 
-        regularStocks.forEach(targetStock => {
-            if (sourceStock.symbol === targetStock.symbol) return; // Spółka nie wpływa sama na siebie
-
+        // Wpływ jest wywierany na WSZYSTKIE spółki (nawet zależne, ale nie na siebie)
+        stocks.filter(s => s.influence && s.symbol !== sourceStock.symbol).forEach(targetStock => {
             const targetMarketCap = targetStock.price * targetStock.totalShares;
             let currentInfluence = 0;
 
-            // 1. Wpływ rozmiaru (większy wpływa na mniejszego)
+            // 1. Wpływ rozmiaru
             if (sourceMarketCap > targetMarketCap) {
-                currentInfluence += (sourceMarketCap / targetMarketCap - 1) * 2; // Skalowanie wpływu
+                currentInfluence += (sourceMarketCap / targetMarketCap - 1) * 2;
             }
-
-            // 2. Wpływ kondycji finansowej (zdrowszy wpływa bardziej)
+            // 2. Wpływ kondycji
             currentInfluence += (sourceStock.financialHealth - targetStock.financialHealth) * 0.5;
 
-            // 3. Wpływ posiadanych akcji (jeśli sourceStock to Holding)
+            // 3. Wpływ posiadanych akcji (Holdingi)
             if (sourceStock.assetType === 'Holding' && sourceStock.holdingPortfolio[targetStock.symbol]) {
                 const sharesHeld = sourceStock.holdingPortfolio[targetStock.symbol].quantity;
                 const ownershipPct = (sharesHeld / targetStock.totalShares) * 100;
-                currentInfluence += ownershipPct * 0.5; // Posiadanie 10% daje +5 pkt wpływu
+                currentInfluence += ownershipPct * 0.5;
+            }
+            
+            // 4. Cechy CEO
+            if (sourceStock.ceo?.traits?.some(t => t.id === 'rekin')) {
+                currentInfluence *= 1.1;
             }
 
-            // 4. Cechy CEO (przykładowo)
-             if (sourceStock.ceo?.traits?.some(t => t.id === 'rekin')) {
-                currentInfluence *= 1.1;
-             }
-
-
-            // Ograniczenie i zaokrąglenie
+            // Ograniczenie i zapis
             currentInfluence = Math.max(0, Math.round(currentInfluence));
-
             if (currentInfluence > 0) {
                 sourceStock.influence.exerted[targetStock.symbol] = currentInfluence;
             }
         });
     });
 
-    // Agregacja otrzymywanego wpływu
-    regularStocks.forEach(targetStock => {
+    // 3. Agreguj otrzymywany wpływ dla WSZYSTKICH spółek (nawet zależnych)
+    stocks.filter(s => s.influence).forEach(targetStock => {
         targetStock.influence.received = {};
         targetStock.influence.totalReceived = 0;
+        // Sprawdź wpływ od wszystkich regularnych (niezależnych) spółek
         regularStocks.forEach(sourceStock => {
             if (sourceStock.influence.exerted[targetStock.symbol]) {
                 const received = sourceStock.influence.exerted[targetStock.symbol];
@@ -9012,28 +9008,11 @@ function updateInfluence() {
                 targetStock.influence.totalReceived += received;
             }
         });
-         // Powolny zanik wpływu (np. 5% co kwartał) - opcjonalne
-        // targetStock.influence.totalReceived *= 0.95; 
     });
 
-    regularStocks.forEach(targetStock => {
-    for (const sourceSymbol in targetStock.influence.received) {
-        if (targetStock.influence.received[sourceSymbol] > 50) {
-            const sourceStock = stocks.find(s => s.symbol === sourceSymbol);
-            // Sprawdź czy już nie trwa proces
-            if (sourceStock && !targetStock.mergerProcess && !sourceStock.mergerProcess) {
-                 console.log(`[WPŁYWY] ${sourceSymbol} osiągnął ponad 50% wpływu na ${targetStock.symbol}! Inicjowanie przejęcia...`);
-                 // Tutaj zainicjuj proces przejęcia (np. jako specjalny typ wrogiego przejęcia)
-                 // initiateMergerProcess(sourceStock, targetStock, 'influenceTakeover');
-                 // Można też od razu zrobić z niej spółkę zależną (prostsze na start)
-                 makeSubsidiary(sourceStock, targetStock);
-                 break; // Tylko jedno przejęcie na raz dla celu
-            }
-        }
-    }
-});
-
-    console.log("[WPŁYWY] Zaktualizowano poziomy wpływów między spółkami.");
+    // 4. ===>>> USUNIĘTA SEKCJA PRZEJMOWANIA PRZEZ WPŁYW <<<===
+    // Celowo pozostawione puste. Funkcja teraz tylko oblicza statystyki.
+    // console.log("[WPŁYWY] Zaktualizowano statystyki wpływów (przejęcia wyłączone).");
 }
 
 function makeSubsidiary(parentStock, childStock) {
@@ -9087,41 +9066,53 @@ function makeSubsidiary(parentStock, childStock) {
 }
 
 function advanceMergerProcess(stock) {
-    // Podstawowe walidacje i pobranie danych
     if (!stock.mergerProcess) return;
     const process = stock.mergerProcess;
-    // Znajdź partnera. Jeśli go nie ma (np. zbankrutował), anuluj proces.
     const partnerStock = stocks.find(s => s.symbol === process.partnerSymbol);
     if (!partnerStock || partnerStock.isBankrupt) {
         cancelMerger(stock, "Partner przestał istnieć lub zbankrutował.");
-        // Jeśli partnerStock istnieje, ale jest bankrutem, anuluj też u niego
         if (partnerStock) cancelMerger(partnerStock, "Partner przestał istnieć lub zbankrutował.");
         return;
     }
-    // Jeśli wymagana jest decyzja, nie kontynuuj postępu
     if (process.decisionRequired) return;
 
     // --- Zwiększanie postępu ---
-    let progressSpeed = 5; // Bazowa prędkość postępu (5% na cykl)
-    if (process.defenseActive === 'poisonPill') progressSpeed *= 0.7; // Spowolnienie przez obronę
+    let progressSpeed = 5; 
+    
+    // ===>>> EFEKT OBRONY: "Zatruta Pigułka" spowalnia proces <<<===
+    if (process.defenseActive === 'poisonPill') {
+        progressSpeed *= 0.7; // Postęp wolniejszy o 30%
+        process.costs += 10000; // Dodatkowy koszt prawny co cykl
+        logEvent(`💊 "Zatruta Pigułka" spowalnia i podnosi koszty przejęcia ${stock.symbol}...`);
+        
+        // Sprawdź, czy agresor (AI) się nie wycofa
+        const initiator = stocks.find(s => s.symbol === process.initiatorSymbol);
+        if (initiator && initiator.mergerProcess && !initiator.personality) { // Jeśli inicjatorem jest spółka AI
+             if (Math.random() < 0.1) { // 10% szans na wycofanie się w każdym cyklu
+                logEvent(`[M&A] 🏳️ ${initiator.name} wycofuje się z przejęcia ${stock.name} z powodu aktywowanej "Zatrutej Pigułki"!`, 'review');
+                cancelMerger(stock, "Agresor wycofał ofertę.");
+                cancelMerger(partnerStock, "Agresor wycofał ofertę.");
+                return;
+             }
+        }
+    }
+    // ===>>> KONIEC EFEKTU OBRONY <<<===
+
     process.progress += progressSpeed;
-    process.progress = Math.min(100, process.progress); // Ogranicz do 100%
+    process.progress = Math.min(100, process.progress);
 
     // --- Losowanie Mini-Eventów i Komplikacji ---
     const eventRoll = Math.random();
-    if (eventRoll < 0.05) { // 5% szans na mini-event w każdym cyklu
+    if (eventRoll < 0.05) { 
         triggerMergerMiniEvent(stock, partnerStock, process);
-    } else if (eventRoll < 0.08) { // Dodatkowe 3% szans na komplikację
+    } else if (eventRoll < 0.08) {
         process.complications++;
         process.statusMessage = `Etap ${process.stage}: Komplikacja nr ${process.complications}! 🔴`;
         console.log(`[M&A] Komplikacja ${process.complications} w procesie ${stock.symbol} <-> ${partnerStock.symbol} (Etap ${process.stage})`);
-
-        // Zaktualizuj proces u partnera
         if (partnerStock.mergerProcess) {
             partnerStock.mergerProcess.complications = process.complications;
             partnerStock.mergerProcess.statusMessage = process.statusMessage;
         }
-
         if (process.complications >= 3) {
             handleMajorComplication(stock, partnerStock, process);
         }
@@ -9131,13 +9122,13 @@ function advanceMergerProcess(stock) {
     if (process.progress >= 100) {
         process.stage++;
         process.progress = 0;
-        process.complications = 0; // Resetuj komplikacje
+        process.complications = 0; 
         console.log(`[M&A] Proces ${stock.symbol} <-> ${partnerStock.symbol} wchodzi w etap ${process.stage}`);
 
         // Zaktualizuj proces u partnera przed logiką etapu
         if (partnerStock.mergerProcess) {
              Object.assign(partnerStock.mergerProcess, process);
-             partnerStock.mergerProcess.partnerSymbol = stock.symbol; // Popraw partnera
+             partnerStock.mergerProcess.partnerSymbol = stock.symbol;
         }
 
         // Logika specyficzna dla nowego etapu
@@ -9145,57 +9136,49 @@ function advanceMergerProcess(stock) {
             case 2:
                 process.statusMessage = `Etap 2: Negocjacje warunków...`;
                 break;
-            case 3:
+            case 3: 
                 const baseCost = 5000;
                 const valueCost = (stock.price * stock.totalShares + partnerStock.price * partnerStock.totalShares) * 0.005;
                 process.costs += (baseCost + valueCost);
                 process.statusMessage = `Etap 3: Strategia i finansowanie (koszty: ${process.costs.toFixed(0)} PLN).`;
                 break;
-            case 4: // Analiza prawna i Urząd Antymonopolowy
-                process.statusMessage = `Etap 4: Analiza prawna (due diligence) i kontrola antymonopolowa...`;
-
-                // ===>>> INTEGRACJA Z URZĘDEM ANTYMONOPOLOWYM <<<===
+            case 4: 
+                process.statusMessage = `Etap 4: Analiza prawna i kontrola antymonopolowa...`;
                 if (checkAntitrust(stock, partnerStock)) {
-                    // Blokada! Anuluj proces.
-                    // Funkcja checkAntitrust już loguje powód i pokazuje Toast.
                     cancelMerger(stock, "Zablokowane przez Urząd Antymonopolowy.");
                     cancelMerger(partnerStock, "Zablokowane przez Urząd Antymonopolowy.");
-                    return; // Zakończ przetwarzanie dla tej spółki
+                    return; 
                 } else {
-                    // Brak blokady - można kontynuować
                     process.statusMessage = `Etap 4: Analiza prawna ZAAKCEPTOWANA. Losowanie zdarzeń...`;
-                    // Losowanie "trupa w szafie" / "ukrytego złota" po udanej analizie
                     triggerMergerMiniEvent(stock, partnerStock, process);
                 }
-                // ===>>> KONIEC INTEGRACJI <<<===
                 break;
-            case 5:
+            case 5: 
                 process.statusMessage = `Etap 5: Integracja operacyjna...`;
                 stock.mergerPartnerVisible = true;
                 partnerStock.mergerPartnerVisible = true;
-                partnerStock.isBeingMerged = true;
-                partnerStock.price *= 1.1; // Lekkie zawyżenie ceny
+                partnerStock.isBeingMerged = true; 
+                partnerStock.price *= 1.1; 
                 break;
-            case 6:
+            case 6: 
                 process.statusMessage = `Etap 6: Finalizacja umowy i transfery...`;
-                partnerStock.canBeTraded = false; // Zablokuj handel
+                partnerStock.canBeTraded = false; 
                 break;
-            case 7:
-                resolveMerger(stock, partnerStock, process);
-                return; // Zakończono
+            case 7: 
+                resolveMerger(stock, partnerStock, process); 
+                return; 
             default:
                 console.warn(`[M&A] Nieznany etap procesu: ${process.stage} dla ${stock.symbol}`);
                 process.statusMessage = `Etap ${process.stage}: ???`;
                 break;
         }
-        // Zaktualizuj proces u partnera PO logice etapu (aby miał najnowszy statusMessage itp.)
+        // Zaktualizuj proces u partnera PO logice etapu
         if (partnerStock.mergerProcess) {
             Object.assign(partnerStock.mergerProcess, process);
-            partnerStock.mergerProcess.partnerSymbol = stock.symbol; // Popraw partnera
+            partnerStock.mergerProcess.partnerSymbol = stock.symbol;
         }
     }
 
-    // Odśwież widok tabeli
     displayStocks(getCurrentInputValues());
 }
 
@@ -9476,12 +9459,6 @@ function handleMajorComplication(stock1, stock2, process) {
     }
 }
 
-/**
- * Finalizuje proces fuzji lub przejęcia.
- * @param {object} stock1 - Jedna ze spółek (zwykle inicjator).
- * @param {object} stock2 - Druga spółka (zwykle cel).
- * @param {object} process - Obiekt mergerProcess.
- */
 function resolveMerger(stock1, stock2, process) {
     console.log(`[M&A Resolve] Finalizowanie procesu ${process.type} dla ${stock1.symbol} i ${stock2.symbol}...`);
 
@@ -9489,14 +9466,25 @@ function resolveMerger(stock1, stock2, process) {
     const target = stock1.symbol === process.initiatorSymbol ? stock2 : stock1;
     let successMessage = "";
 
+    // ===>>> NOWY BLOK: Finalny koszt mechanizmów obronnych <<<===
+    let defenseCost = 0;
+    if (process.defenseActive === 'poisonPill') {
+        // Oblicz koszt "wykupienia" pigułki (np. 20% wartości firmy celu, które dodaliśmy jako dług)
+        defenseCost = (target.price * target.totalShares) * 0.20;
+        logEvent(`💊 ${initiator.name} musi zapłacić ${defenseCost.toFixed(0)} PLN za "odtrucie pigułki" w ${target.name}!`, 'review');
+        process.costs += defenseCost;
+    }
+    // ===>>> KONIEC NOWEGO BLOKU <<<===
+
+
     // --- Logika dla różnych typów ---
     switch (process.type) {
         case 'przejęcie':
         case 'influenceTakeover':
-            // 1. Sprawdź finansowanie (ponownie, na wszelki wypadek)
-            const totalCost = process.offerDetails.totalCost;
+            // 1. Sprawdź finansowanie (uwzględniając dodatkowe koszty obrony)
+            const totalCost = process.offerDetails.totalCost + process.costs; // Całkowity koszt = oferta + koszty procesu + koszty obrony
             if (process.financing === 'cash' && initiator.cash < totalCost) {
-                cancelMerger(initiator, "Brak wystarczających środków na finalizację przejęcia.");
+                cancelMerger(initiator, "Brak wystarczających środków na finalizację przejęcia (koszty dodatkowe).");
                 cancelMerger(target, "Inicjator nie pokrył kosztów przejęcia.");
                 return;
             }
@@ -9504,7 +9492,7 @@ function resolveMerger(stock1, stock2, process) {
             // 2. Pobierz koszty
             if (process.financing === 'cash') {
                 initiator.cash -= totalCost;
-                logEvent(`💸 ${initiator.name} wydaje ${totalCost.toFixed(0)} PLN na przejęcie ${target.name}.`, 'company');
+                logEvent(`💸 ${initiator.name} wydaje łącznie ${totalCost.toFixed(0)} PLN na przejęcie ${target.name}.`, 'company');
             }
             // TODO: Logika dla 'lbo' (zaciągnięcie długu)
 
@@ -9523,11 +9511,10 @@ function resolveMerger(stock1, stock2, process) {
                 if (ai.portfolio[target.symbol]) {
                     const holding = ai.portfolio[target.symbol];
                     const grossGain = holding.shares * pricePerShare;
-                    // TODO: Obliczyć podatek dla AI
                     ai.cash += grossGain;
                 }
             });
-            // (Akcje posiadane przez holdingi/banki są również spłacane - uproszczenie: ich gotówka po prostu rośnie)
+            // Holdingi i Banki
             stocks.filter(s => s.assetType === 'Holding' && s.holdingPortfolio[target.symbol]).forEach(h => h.cash += (h.holdingPortfolio[target.symbol].quantity * pricePerShare));
             commercialBanks.filter(b => b.stockPortfolio[target.symbol]).forEach(b => b.cash += (b.stockPortfolio[target.symbol].shares * pricePerShare));
 
@@ -9535,24 +9522,24 @@ function resolveMerger(stock1, stock2, process) {
             if (initiator.balanceSheet && target.balanceSheet) {
                 initiator.balanceSheet.assets += target.balanceSheet.assets;
                 initiator.balanceSheet.liabilities += target.balanceSheet.liabilities;
-                // Zyski zatrzymane też się sumują
+                // WAŻNE: Jeśli była "Zatruta Pigułka", to dług celu jest już sztucznie zawyżony i jest przenoszony.
                 initiator.balanceSheet.retainedEarnings += target.balanceSheet.retainedEarnings;
-                initiator.cash += target.cash; // Przejęcie gotówki celu
+                initiator.cash += target.cash; 
             }
 
-            // 5. Obsługa CEO (Złoty Spadochron)
+            // 5. Obsługa CEO (Złoty Spadochron) - Aktywuje się TYLKO przy przejęciu
             if (target.ceo?.traits?.some(t => t.id === 'goldenParachute')) {
-                const parachuteCost = (target.price * target.totalShares) * 0.02; // 2% wartości firmy
+                const parachuteCost = (target.price * target.totalShares) * 0.02; 
                 if (initiator.cash >= parachuteCost) {
                     initiator.cash -= parachuteCost;
-                    logEvent(` parachute.png Prezes ${target.name} odpala złoty spadochron! Koszt: ${parachuteCost.toFixed(0)} PLN.`, 'company');
+                    logEvent(`[CEO] Prezes ${target.name} odpala złoty spadochron! Koszt dla ${initiator.name}: ${parachuteCost.toFixed(0)} PLN.`, 'company');
                 }
             }
 
             // 6. Aktualizacja spółki-matki
-            initiator.financialHealth = Math.max(-5, Math.min(5, ((initiator.financialHealth + target.financialHealth) / 2) + 0.5)); // Średnia + bonus
+            initiator.financialHealth = Math.max(-5, Math.min(5, ((initiator.financialHealth + target.financialHealth) / 2) + 0.5));
             if (!initiator.subsidiaries) initiator.subsidiaries = [];
-            initiator.subsidiaries.push({ symbol: target.symbol, name: target.name, date: Date.now() }); // Zapisz historię
+            initiator.subsidiaries.push({ symbol: target.symbol, name: target.name, date: Date.now() });
 
             successMessage = `✅ Przejęcie zakończone! ${initiator.name} wchłonął ${target.name}.`;
             break;
@@ -9579,22 +9566,25 @@ function resolveMerger(stock1, stock2, process) {
             const totalNewSharesForPlayer = (playerTargetShares * exchangeRatio) + (playerInitiatorShares * initiatorRatio);
             if (playerTargetShares > 0) delete playerPortfolio[target.symbol];
             if (totalNewSharesForPlayer > 0) {
-                 playerPortfolio[initiator.symbol] = { shares: totalNewSharesForPlayer, avgPrice: totalNewValue / newTotalShares };
+                 playerPortfolio[initiator.symbol] = { shares: totalNewSharesForPlayer, avgPrice: totalNewValue / newTotalShares, assetType: 'stock' }; // Upewnij się, że assetType jest 'stock'
                  logEvent(`🔄 Twoje akcje ${target.symbol} i ${initiator.symbol} zostały wymienione na ${totalNewSharesForPlayer.toFixed(0)} akcji nowej spółki.`, 'review');
             }
 
-            // 3. Aktualizuj portfele (AI, Holdingi, Banki) - (Uproszczona pętla)
+            // 3. Aktualizuj portfele (AI, Holdingi, Banki)
             [...aiCompetitors, ...stocks.filter(s=>s.assetType==='Holding'), ...commercialBanks].forEach(entity => {
                 const portfolio = entity.portfolio || entity.holdingPortfolio || entity.stockPortfolio;
                 if (!portfolio) return;
-
                 const targetShares = portfolio[target.symbol]?.shares || portfolio[target.symbol]?.quantity || 0;
                 const initiatorShares = portfolio[initiator.symbol]?.shares || portfolio[initiator.symbol]?.quantity || 0;
                 const totalNewShares = (targetShares * exchangeRatio) + (initiatorShares * initiatorRatio);
-
                 if (targetShares > 0) delete portfolio[target.symbol];
                 if (totalNewShares > 0) {
-                    portfolio[initiator.symbol] = { shares: totalNewShares, avgPrice: totalNewValue / newTotalShares };
+                    // Sprawdź typ portfolio, aby poprawnie zapisać
+                    if(entity.portfolio) { // Dla AI i Gracza
+                         portfolio[initiator.symbol] = { shares: totalNewShares, avgPrice: totalNewValue / newTotalShares };
+                    } else { // Dla Holdingów i Banków
+                         portfolio[initiator.symbol] = { quantity: totalNewShares, purchasePrice: totalNewValue / newTotalShares };
+                    }
                 }
             });
 
@@ -9602,19 +9592,23 @@ function resolveMerger(stock1, stock2, process) {
             initiator.name = `${initiator.name.split(' ')[0]}-${target.name.split(' ')[0]} Group`;
             initiator.totalShares = newTotalShares;
             initiator.maxShares = newTotalShares * 1.5;
-            initiator.price = totalNewValue / newTotalShares; // Nowa cena akcji
-            initiator.balanceSheet.assets += target.balanceSheet.assets;
-            initiator.balanceSheet.liabilities += target.balanceSheet.liabilities;
-            initiator.balanceSheet.retainedEarnings += target.balanceSheet.retainedEarnings;
-            initiator.cash += target.cash;
-            initiator.financialHealth = Math.max(-5, Math.min(5, ((initiator.financialHealth + target.financialHealth) / 2) + 1.0)); // Większy bonus za fuzję
+            initiator.price = totalNewValue / newTotalShares;
+            if (initiator.balanceSheet && target.balanceSheet) {
+                initiator.balanceSheet.assets += target.balanceSheet.assets;
+                initiator.balanceSheet.liabilities += target.balanceSheet.liabilities;
+                initiator.balanceSheet.retainedEarnings += target.balanceSheet.retainedEarnings;
+                initiator.cash += target.cash;
+            }
+            // Potrąć koszty fuzji z gotówki nowej firmy
+            initiator.cash -= process.costs;
+            initiator.financialHealth = Math.max(-5, Math.min(5, ((initiator.financialHealth + target.financialHealth) / 2) + 1.0));
             if (!initiator.subsidiaries) initiator.subsidiaries = [];
             initiator.subsidiaries.push({ symbol: target.symbol, name: target.name, date: Date.now() });
 
-            // 5. Wybierz nowego CEO (proste: lepsza kondycja)
+            // 5. Wybierz nowego CEO
             if (target.ceo && target.financialHealth > initiator.financialHealth) {
-                initiator.ceo = target.ceo; // CEO celu przejmuje stery
-            } // W przeciwnym razie CEO inicjatora zostaje
+                initiator.ceo = target.ceo;
+            } 
 
             successMessage = `✅ Fuzja zakończona! Powstaje ${initiator.name}.`;
             break;
@@ -9627,10 +9621,7 @@ function resolveMerger(stock1, stock2, process) {
     }
 
     // --- Finalizacja ---
-    // Usuń spółkę-cel z gry
-    removeStockFromGame(target.symbol);
-
-    // Resetuj stan M&A u inicjatora
+    removeStockFromGame(target.symbol); // Usuń spółkę-cel z gry
     initiator.mergerProcess = null;
     initiator.mergerPartnerVisible = false;
     // (Flagi targetu nie mają znaczenia, bo został usunięty)
@@ -9638,7 +9629,6 @@ function resolveMerger(stock1, stock2, process) {
     logEvent(successMessage, 'success');
     showToast(successMessage, 'success', 7000);
 
-    // Odśwież UI
     displayStocks(getCurrentInputValues());
     displayPortfolio();
 }
@@ -9901,4 +9891,79 @@ function checkForPotentialMA() {
         }
     }
 }
-//huhuhhhuhujdsf
+
+/**
+ * Funkcja pomocnicza do aktywacji mechanizmu obronnego przez gracza lub AI.
+ * @param {string} symbol - Symbol spółki, która się broni.
+ *(Ta funkcja powinna już istnieć - zastąp ją tą)
+ * @param {'poisonPill' | 'whiteKnight' | 'pacMan'} defenseType - Typ obrony.
+ * @param {string} [entityId='player'] - Kto aktywuje ('player' lub ID bota).
+ */
+function activateDefenseMechanism(symbol, defenseType, entityId = 'player') {
+    const stock = stocks.find(s => s.symbol === symbol);
+    if (!stock || !stock.mergerProcess || stock.mergerProcess.defenseActive) return; // Nie można aktywować, jeśli już coś działa
+
+    let entityCash, entityName;
+    if (entityId === 'player') {
+        entityCash = playerCash;
+        entityName = "Ty";
+    } else {
+        const ai = aiCompetitors.find(a => a.id === entityId);
+        if (!ai) return;
+        entityCash = ai.cash;
+        entityName = ai.name;
+    }
+
+    switch (defenseType) {
+        case 'poisonPill':
+            // Koszt aktywacji (np. opłaty prawne i doradcze) to 5% wartości rynkowej firmy
+            const activationCost = (stock.price * stock.totalShares) * 0.05; 
+            
+            if (entityCash < activationCost) {
+                if(entityId === 'player') alert(`Nie masz wystarczająco gotówki, aby aktywować "Zatrutą Pigułkę"! Wymagane: ${activationCost.toFixed(0)} PLN.`);
+                return;
+            }
+            
+            // Potwierdzenie (tylko dla gracza)
+            if (entityId === 'player') {
+                 if (!confirm(`Aktywacja "Zatrutej Pigułki" będzie Cię kosztować ${activationCost.toFixed(0)} PLN (opłaty doradcze) i natychmiast zaszkodzi firmie (spadek kondycji, wzrost długu), ale może zniechęcić agresora. Kontynuować?`)) {
+                    return; // Gracz anulował
+                 }
+            }
+
+            // --- Transakcja ---
+            if (entityId === 'player') playerCash -= activationCost;
+            else entityCash -= activationCost;
+            
+            stock.mergerProcess.defenseActive = 'poisonPill';
+            
+            // --- Natychmiastowe Kary dla Spółki-Celu ---
+            stock.financialHealth -= 1.0; // Natychmiastowa kara dla kondycji
+            if (stock.balanceSheet) {
+                 // Spółka emituje specjalne warranty lub zaciąga dług, aby zwiększyć toksyczność
+                 stock.balanceSheet.liabilities += (stock.price * stock.totalShares) * 0.2; // Dług rośnie o 20% wartości firmy
+            }
+            
+            logEvent(`🛡️ ${stock.name} aktywuje "Zatrutą Pigułkę" (koszt: ${activationCost.toFixed(0)} PLN), aby obronić się przed przejęciem! Kondycja firmy spada, a dług rośnie.`, 'review');
+            if(entityId === 'player') {
+                showToast(`${stock.name} aktywuje "Zatrutą Pigułkę"!`, 'warning');
+                displayCash();
+            }
+            break;
+
+        case 'whiteKnight':
+            // TODO: Logika dla Białego Rycerza (np. ustawienie flagi 'seekingWhiteKnight')
+            logEvent(`🛡️ ${stock.name} rozpoczyna poszukiwania "Białego Rycerza"!`, 'review');
+            break;
+            
+        case 'pacMan':
+            // TODO: Logika dla obrony Pac-Man (próba wrogiego przejęcia agresora)
+            logEvent(`👻 ${stock.name} aktywuje obronę "Pac-Man" i próbuje przejąć agresora!`, 'warning');
+            break;
+    }
+
+    // Odśwież modal zarządzania, aby pokazać aktywną obronę
+    if (entityId === 'player' && document.getElementById('management-modal')?.style.display === 'block') {
+        openManagementModal(symbol);
+    }
+}
