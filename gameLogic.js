@@ -12,6 +12,8 @@ let playerLoan = {
     weeklyPayment: 0,
     missedPayments: 0
 };
+let currentDebtOffer = null;
+let currentPawnOffer = null;
 let isAutoRepayEnabled = true;
 let playerDeposit = 0;
 let lastWeekStockPrices = {};
@@ -19,15 +21,16 @@ let playerStartupAutoInvest = {};
 let currentlyDisplayedChartSymbol = null;
 let exchangeCollapseState = {};
 let playerAccessLevel = 0;
-let playerHasPremiumSubscription = false;
-let premiumSubscriptionEndTime = 0;
-let activePremiumRumors = [];
+
 let marketVolatilityIndex = 0;
 let playerCompany = null;
 let workPassiveProgress = 0;
 const PASSIVE_WORK_INTERVAL = 90000;
 const PREMIUM_SUBSCRIPTION_COST = 5000;
 const PREMIUM_SUBSCRIPTION_DURATION = 1000 * 60 * 60 * 24 * 7; // 7 dni
+let blackPRRiskCounter = 0; // Licznik globalnego użycia Czarnego PR
+const BLACK_PR_BASE_RISK = 0.10; // 10% bazowego ryzyka
+const BLACK_PR_RISK_INCREASE = 0.025; // Wzrost ryzyka o 2.5% za każde użycie
 let investmentPool = {
     totalFunds: 0,
     contributors: {}, // Przechowuje wkłady, np. { 'player': 5000, 'ai1': 2000 }
@@ -166,7 +169,7 @@ let playerAutoInvest = {
 // ZMIANA OD KOLEGI: Dodano zmienną do śledzenia sortowania
 let currentSortState = 'none'; // 'none', 'price_asc', 'price_desc'
 
-const startupSectors = [['Technologia'], ['Gaming'], ['Medycyna'], ['Energia'], ['Żywność'], ['Nieruchomości'], ['Chemia'], ['Przemysł'], ['Dobra konsumpcyjne'], ['Usługi'], ['Turystyka'], ['Bankowość']];
+const startupSectors = [['Technologia'], ['Gaming'], ['Medycyna'], ['Media'], ['Energia'], ['Żywność'], ['Nieruchomości'], ['Chemia'], ['Przemysł'], ['Dobra konsumencje'], ['Usługi'], ['Turystyka'], ['Bankowość'], ['Finanse Konsumenckie']];
 
 const techPrefixes = ['Quantum', 'Cyber', 'Data', 'Nano', 'Aero', 'Geo'];
 const techSuffixes = ['Leap', 'Verse', 'Solutions', 'Dynamics', 'Core'];
@@ -1003,7 +1006,109 @@ const initialStocks = [
         lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null, // <-- DODAJ TO
     cash: 0 
     },
+    // --- NOWE SPÓŁKI: FINANSE KONSUMENCKIE ---
+    {
+        name: 'WRONA',
+        price: 650.00, volatilityFactor: 1.8, symbol: 'WRN', exchange: 'GOLD',
+        totalShares: 90000, maxShares: 100000, sharesHeld: 0,
+        sector: ['Finanse Konsumenckie', 'Usługi'],
+        financialHealth: 2, lastReport: 'brak', cash: 5000000, // Potrzebuje dużo gotówki na start
+        assetType: 'DebtCollector', // Unikalny typ dla logiki
+        balanceSheet: { assets: 5000000, liabilities: 0, shareCapital: 50000, retainedEarnings: 450000 },
+        quarterlyEarnings: 0, priceHistory: [], candlestickHistory: [], lineHistory: [], playerTransactions: [],
+        dividendPolicy: 'Growth', dividendTimer: getRandomIntInRange(8*60*1000, 15*60*1000), estimatedDividend: 0,
+        bankAccountId: null, isBankStock: false
+    },
+    {
+        name: 'LOMBARDEX S.A.',
+        price: 65.00, volatilityFactor: 1.5, symbol: 'LOM', exchange: 'SILVER',
+        totalShares: 35000, maxShares: 45000, sharesHeld: 0,
+        sector: ['Finanse Konsumenckie', 'Usługi'],
+        financialHealth: 1, lastReport: 'brak', cash: 400000, // Też potrzebuje gotówki na pożyczki
+        assetType: 'PawnShop', // Unikalny typ dla logiki
+        balanceSheet: { assets: 400000, liabilities: 0, shareCapital: 40000, retainedEarnings: 360000 },
+        quarterlyEarnings: 0, priceHistory: [], candlestickHistory: [], lineHistory: [], playerTransactions: [],
+        dividendPolicy: 'Balanced', dividendTimer: getRandomIntInRange(8*60*1000, 15*60*1000), estimatedDividend: 0,
+        bankAccountId: null, isBankStock: false
+    },
+    {
+        name: 'Retax Biuro Obrachunkowe',
+        price: 40.00, volatilityFactor: 0.8, symbol: 'TAX', exchange: 'BRONZE',
+        totalShares: 20000, maxShares: 30000, sharesHeld: 0,
+        sector: ['Finanse Konsumenckie', 'Usługi'],
+        financialHealth: 3, lastReport: 'brak', cash: 50000, // Stabilny biznes, nie wymaga dużo gotówki
+        assetType: 'Accounting', // Unikalny typ dla logiki
+        balanceSheet: { assets: 50000, liabilities: 0, shareCapital: 5000, retainedEarnings: 45000 },
+        quarterlyEarnings: 0, priceHistory: [], candlestickHistory: [], lineHistory: [], playerTransactions: [],
+        dividendPolicy: 'Balanced', dividendTimer: getRandomIntInRange(8*60*1000, 15*60*1000), estimatedDividend: 0,
+        bankAccountId: null, isBankStock: false
+    },
     // --- NOWE SPÓŁKI SKARBU PAŃSTWA ---
+
+    {
+        name: 'Puls Rynku S.A.',
+        price: 110.00, volatilityFactor: 1.1, symbol: 'PULS', exchange: 'SILVER',
+        totalShares: 30000, maxShares: 40000, sharesHeld: 0,
+        sector: ['Media', 'Usługi'],
+        financialHealth: 2, lastReport: 'brak', cash: 300000,
+        assetType: 'Holding', // Traktujemy je jak Holdingi, aby mogły kupować akcje innych
+        specializationSectors: ['Media'], // Flaga identyfikująca
+        holdingPortfolio: {},
+        balanceSheet: { assets: 300000, liabilities: 0, shareCapital: 30000, retainedEarnings: 270000 },
+        quarterlyEarnings: 0, priceHistory: [], candlestickHistory: [], lineHistory: [], playerTransactions: [],
+        dividendPolicy: 'Balanced', dividendTimer: getRandomIntInRange(8*60*1000, 15*60*1000), estimatedDividend: 0,
+        bankAccountId: null, isBankStock: false,
+        // Dane specyficzne dla mediów
+        newspaperData: { 
+            layout: 'layout1', // Inny wygląd (na przyszłość)
+            eventLog: [], // Własny log zdarzeń
+            adRevenuePerClick: 15.0 // Zysk za otwarcie gazety z reklamą
+        },
+        stance: 'neutral', // ('neutral', 'pro-player', 'anti-player')
+        favors: {} // Obiekt firm, które kupiły przychylność (np. {'PLY': true})
+    },
+    {
+        name: 'Flesz Giełdowy',
+        price: 95.00, volatilityFactor: 1.3, symbol: 'FLESZ', exchange: 'SILVER',
+        totalShares: 25000, maxShares: 35000, sharesHeld: 0,
+        sector: ['Media', 'Usługi'],
+        financialHealth: 1, lastReport: 'brak', cash: 200000,
+        assetType: 'Holding', 
+        specializationSectors: ['Media'],
+        holdingPortfolio: {},
+        balanceSheet: { assets: 200000, liabilities: 0, shareCapital: 20000, retainedEarnings: 180000 },
+        quarterlyEarnings: 0, priceHistory: [], candlestickHistory: [], lineHistory: [], playerTransactions: [],
+        dividendPolicy: 'Growth', dividendTimer: getRandomIntInRange(8*60*1000, 15*60*1000), estimatedDividend: 0,
+        bankAccountId: null, isBankStock: false,
+        newspaperData: { 
+            layout: 'layout2',
+            eventLog: [], 
+            adRevenuePerClick: 10.0
+        },
+        stance: 'neutral',
+        favors: {}
+    },
+    {
+        name: 'Obserwator Finansowy',
+        price: 120.00, volatilityFactor: 0.9, symbol: 'OBSER', exchange: 'SILVER',
+        totalShares: 30000, maxShares: 40000, sharesHeld: 0,
+        sector: ['Media', 'Usługi'],
+        financialHealth: 3, lastReport: 'brak', cash: 400000,
+        assetType: 'Holding', 
+        specializationSectors: ['Media'],
+        holdingPortfolio: {},
+        balanceSheet: { assets: 400000, liabilities: 0, shareCapital: 40000, retainedEarnings: 360000 },
+        quarterlyEarnings: 0, priceHistory: [], candlestickHistory: [], lineHistory: [], playerTransactions: [],
+        dividendPolicy: 'Balanced', dividendTimer: getRandomIntInRange(8*60*1000, 15*60*1000), estimatedDividend: 0,
+        bankAccountId: null, isBankStock: false,
+        newspaperData: { 
+            layout: 'layout3',
+            eventLog: [], 
+            adRevenuePerClick: 12.0
+        },
+        stance: 'neutral',
+        favors: {}
+    },
     
     // NOWY KOD (POPRAWIONY)
     {
@@ -1094,6 +1199,29 @@ const initialStocks = [
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
         lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null, // <-- DODAJ TO
     cash: 0 
+    },
+    {
+        name: 'Fundacja Przedsiębiorczości Miejskiej',
+        price: 100.00, // Cena startowa
+        volatilityFactor: 0.1, // Bardzo stabilna
+        symbol: 'FPM',
+        exchange: 'SILVER',
+        totalShares: 100000, maxShares: 100000, sharesHeld: 100000, // 100% akcji "zajętych"
+        sector: ['Finanse'],
+        financialHealth: 5, lastReport: 'brak', cash: 2000000,
+        assetType: 'Holding', // Działa jak Holding
+        holdingPortfolio: {},
+        specializationSectors: ['Finanse Konsumenckie'], // Specjalizacja (na razie pusta)
+        balanceSheet: { assets: 2000000, liabilities: 0, shareCapital: 200000, retainedEarnings: 1800000 },
+        quarterlyEarnings: 0, priceHistory: [], candlestickHistory: [], lineHistory: [], playerTransactions: [],
+        
+        isStateOwned: true,           // Traktujemy ją jako "państwową" dla mechaniki
+        stateOwnershipPct: 1.0,       // Miasto posiada 100%
+        canBeTraded: false,           // ===>>> GRACZ NIE MOŻE JEJ KUPIĆ/SPRZEDAĆ <<<===
+        cannotGoBankrupt: true,       // Nie może zbankrutować
+        
+        dividendPolicy: 'None', dividendTimer: 999999999, estimatedDividend: 0,
+        bankAccountId: null, isBankStock: false
     },
 
     // --- NOWE SPÓŁKI TYPU REIT ---
@@ -1529,8 +1657,28 @@ const skills = {
                 description: 'Twoje doświadczenie pozwala Ci wykrywać anomalie. Zyskujesz 15% szans przy każdym wglądzie w finanse na wykrycie nieprawidłowości (co może zapobiec negatywnemu zdarzeniu) lub ukrytego potencjału (co może dać mały bonus).'
             }
         ]
+    },
+
+    'mediaManipulation': {
+        name: 'Wpływ na Media 📰',
+        unlockedLevel: 0,
+        levels: [
+            { 
+                level: 1, 
+                cost: 3000, 
+                description: 'Odblokowuje możliwość kupowania artykułów sponsorowanych (Pozytywny PR) w gazecie "Puls Rynku" dla spółek, w których masz większość.' 
+            },
+            { 
+                level: 2, 
+                cost: 7000, 
+                description: 'Odblokowuje "Czarny PR" - możliwość szkalowania konkurencji (ryzykowne).', 
+                requires: { skillId: 'mediaManipulation', level: 1 } 
+            }
+        ]
     }
+    
 };
+
 
 
 const etfs = [
@@ -2487,95 +2635,13 @@ function sellEtf(symbol, quantity) {
     displayPortfolio();
     checkPlayerTierUpgrade(); // Sprawdzenie awansu gracza
 }
-/**
- * Funkcja do zakupu subskrypcji premium "Pulsu Rynku".
- */
-function buyPremiumSubscription() {
-    if (playerHasPremiumSubscription) {
-        alert("Posiadasz już aktywną subskrypcję!");
-        return;
-    }
 
-    if (playerCash < PREMIUM_SUBSCRIPTION_COST) {
-        alert("Nie masz wystarczająco gotówki, aby zakupić subskrypcję!");
-        return;
-    }
 
-    playerCash -= PREMIUM_SUBSCRIPTION_COST;
-    playerHasPremiumSubscription = true;
-    premiumSubscriptionEndTime = Date.now() + PREMIUM_SUBSCRIPTION_DURATION;
-
-    displayCash();
-    logEvent(`📰 Zakupiono subskrypcję premium "Pulsu Rynku"! Dostęp ważny przez 7 dni.`);
-
-    // Odśwież widok gazety, jeśli jest otwarta
-    if (document.getElementById('newspaper-modal').style.display === 'block') {
-        openNewspaperModal();
-    }
-}
-
-/**
- * Sprawdza, czy subskrypcja gracza wygasła.
- */
-function checkSubscriptionStatus() {
-    if (playerHasPremiumSubscription && Date.now() > premiumSubscriptionEndTime) {
-        playerHasPremiumSubscription = false;
-        logEvent("📰 Twoja subskrypcja premium 'Pulsu Rynku' wygasła.");
-        alert("Twoja subskrypcja premium 'Pulsu Rynku' wygasła!");
-    }
-}
-
-function generatePremiumRumor() {
-    // Generuj plotkę tylko jeśli gracz ma subskrypcję i jest mała szansa na to w danym cyklu
-    if (!playerHasPremiumSubscription || Math.random() > 0.3) {
-        return;
-    }
-
-    const prompt = getRandomElement(premiumNewsPrompts);
-    let rumorText = "";
-    let targetStock = null;
-
-    if (prompt.scope === 'company') {
-        targetStock = getRandomElement(stocks);
-        rumorText = prompt.message(targetStock.name);
-    } else if (prompt.scope === 'sector') {
-        const targetSector = getRandomElement(prompt.targetSectors);
-        rumorText = prompt.message(targetSector);
-    }
-
-    // Dodaj plotkę do listy aktywnych
-    activePremiumRumors.unshift({ text: rumorText, date: new Date() });
-    // Ogranicz liczbę plotek do 5
-    if (activePremiumRumors.length > 5) activePremiumRumors.pop();
-
-    logEvent(`📰 [Puls Rynku] Nowa wiadomość w strefie premium!`);
-
-    // Ustaw "tykającą bombę" - zdarzenie, które może, ale nie musi się wydarzyć
-    const delay = getRandomIntInRange(20, 40) * 1000; // Opóźnienie od 20 do 40 sekund
-    setTimeout(() => {
-        if (Math.random() < prompt.chanceToHappen) {
-            // Plotka okazała się prawdziwa!
-            console.log(`[Puls Rynku] Plotka "${prompt.id}" okazała się prawdziwa!`);
-            const magnitude = (Math.random() * 0.1) + 0.05; // Wpływ 5-15%
-            const finalMagnitude = prompt.type === 'positive' ? magnitude : -magnitude;
-
-            if (prompt.scope === 'company' && targetStock) {
-                displayEventMessage(`[Z OSTATNIEJ CHWILI] Potwierdziły się doniesienia o ${targetStock.name}!`, 30, finalMagnitude);
-                applyPriceEffect(targetStock.symbol, finalMagnitude);
-            } else if (prompt.scope === 'sector') {
-                // Tutaj można by zaimplementować logikę dla całego sektora
-            }
-        } else {
-            // Plotka była fałszywa
-            console.log(`[Puls Rynku] Plotka "${prompt.id}" okazała się fałszywa.`);
-        }
-    }, delay);
-}
 
 function processFinancialReports() {
     console.log("[RAPORTY KWARTALNE] Rozpoczęto przetwarzanie raportów finansowych...");
 
-    // Zmienna pomocnicza do zliczania technologii dla Instytutów Badawczych
+    // Zliczanie technologii (bez zmian)
     let totalUnlockedTechs = 0;
     stocks.forEach(s => {
         if (s.research && s.research.unlockedTechs) {
@@ -2586,11 +2652,12 @@ function processFinancialReports() {
     for (let i = stocks.length - 1; i >= 0; i--) {
         const stock = stocks[i];
 
-        // Pomiń start-upy w fazie inkubacji, one nie generują raportów
         if (stock.assetType === 'Startup' || stock.isBankrupt) continue;
 
         let quarterlyEarnings = 0;
         const marketCap = stock.price * stock.totalShares;
+
+        // ===>>> ZMIANA 1: Obliczanie dochodu bazowego <<<===
         let baseQuarterlyIncome = 0;
         const exchangeLevel = stock.exchange;
         // Dochód bazowy tylko dla standardowych spółek (nie Holdingów, REITów, Banków itp.)
@@ -2598,149 +2665,265 @@ function processFinancialReports() {
             const earningsRange = EXCHANGE_BASE_EARNINGS[exchangeLevel];
             baseQuarterlyIncome = getRandomInRange(earningsRange.min, earningsRange.max);
         }
+        // ===>>> KONIEC ZMIANY 1 <<<===
+
 
         if (!stock.balanceSheet) {
              console.warn(`[REPORTS] ${stock.symbol} nie miał bilansu. Inicjalizuję pusty.`);
              stock.balanceSheet = { assets: 0, liabilities: 0, shareCapital: 0, retainedEarnings: 0 };
         }
-
-        // =====================================================================
-        // === GŁÓWNA LOGIKA UNIKALNYCH MECHANIK ZAROBKOWYCH ===
-        // =====================================================================
-
+        
+        // --- Logika obliczania Zysku/Straty (główna) ---
         if (stock.assetType === 'REIT') {
-            // 🏡 REITy zarabiają na "wynajmie" (stały % od aktywów)
-            const rentalIncomeRate = 0.02; // 2% przychodu od wartości aktywów na kwartał
-            const maintenanceCostRate = 0.005; // 0.5% kosztów
-            const healthModifier = 1 + (stock.financialHealth / 50); // Modyfikator +/- 10%
-            
-            const rentalIncome = stock.balanceSheet.assets * rentalIncomeRate;
-            const maintenanceCosts = stock.balanceSheet.assets * maintenanceCostRate;
-            quarterlyEarnings = (rentalIncome - maintenanceCosts) * healthModifier;
+            // 🏡 REITy
+            const assetBase = stock.balanceSheet.assets > 0 ? stock.balanceSheet.assets : marketCap * 0.8;
+            if (stock.balanceSheet.assets === 0) stock.balanceSheet.assets = assetBase;
+            const rentalIncome = assetBase * 0.02; // 2%
+            const maintenanceCosts = assetBase * 0.005; // 0.5%
+            quarterlyEarnings = (rentalIncome - maintenanceCosts) * (1 + (stock.financialHealth / 50));
 
         } else if (stock.assetType === 'Holding') {
-            // 🏢 Holdingi zarabiają na zarządzaniu i inwestycjach
+            // 🏢 Holdingi
             const portfolioValue = Object.values(stock.holdingPortfolio).reduce((sum, holding) => {
                 const ownedStock = stocks.find(s => s.symbol === Object.keys(stock.holdingPortfolio).find(key => stock.holdingPortfolio[key] === holding));
                 return sum + (ownedStock ? ownedStock.price * holding.quantity : 0);
             }, 0);
-            
-            const managementFee = (stock.cash + portfolioValue) * 0.0025; // 0.25% opłaty za zarządzanie
-            
-            // Symulacja zysku/straty na portfelu na podstawie kondycji i losowości
+            const managementFee = (stock.cash + portfolioValue) * 0.0025;
             const portfolioPerformance = portfolioValue * ((stock.financialHealth * 0.005) + getRandomInRange(-0.02, 0.02));
-            
             quarterlyEarnings = managementFee + portfolioPerformance;
 
         } else if (stock.assetType === 'ResearchInstitute') {
-            // 🧪 Instytuty zarabiają na ogólnym postępie technologicznym
+            // 🧪 Instytuty
             const earningsPerTech = 5000;
             quarterlyEarnings = totalUnlockedTechs * earningsPerTech * getRandomInRange(0.9, 1.1);
+        
+        // ===>>> NOWA LOGIKA DLA FINANSÓW KONSUMENCKICH <<<===
+        } else if (stock.assetType === 'DebtCollector') {
+            // WRONA zarabia na odsetkach od przejętych długów
+            let totalInterestCollected = 0;
+            // Sprawdź długi gracza
+            playerCommercialLoans.forEach(loan => {
+                if (loan.collectorSymbol === stock.symbol) {
+                    const weeklyInterest = loan.amount * (loan.interestRate / 52);
+                    totalInterestCollected += weeklyInterest * 12; // 12 tygodni w kwartale
+                }
+            });
+            // Sprawdź długi AI
+            aiCompetitors.forEach(ai => {
+                if (ai.loans) {
+                    ai.loans.forEach(loan => {
+                        if (loan.collectorSymbol === stock.symbol) {
+                            const weeklyInterest = loan.amount * (loan.interestRate / 52);
+                            totalInterestCollected += weeklyInterest * 12;
+                        }
+                    });
+                }
+            });
+            quarterlyEarnings = totalInterestCollected * (1 + (stock.financialHealth / 10)); // Modyfikator kondycji
+        
+
+        } else if (stock.isBankStock) {
+            // 🏦 Banki Komercyjne
+            const loanIncome = stock.balanceSheet.assets * 0.01; 
+            const depositCosts = stock.balanceSheet.liabilities * 0.005; 
+            quarterlyEarnings = (loanIncome - depositCosts) * (1 + (stock.financialHealth / 10));
 
         } else if (stock.isStateOwned) {
-            // 🏛️ Spółki państwowe działają normalnie, ale z interwencją państwa
+            // 🏛️ Spółki państwowe
             const baseEarnings = marketCap * ((stock.financialHealth * 0.01) + getRandomInRange(-0.015, 0.015));
             if (baseEarnings < 0) {
-                const subsidy = Math.abs(baseEarnings) * 0.70; // Państwo pokrywa 70% strat
+                const subsidy = Math.abs(baseEarnings) * 0.70;
                 quarterlyEarnings = baseEarnings + subsidy;
-                logEvent(`🏛️ ${stock.name} otrzymuje dotację w wys. ${subsidy.toFixed(0)} PLN na pokrycie strat.`, 'state');
             } else {
-                const specialTax = baseEarnings * 0.40; // Państwo zabiera 40% zysku
+                const specialTax = baseEarnings * 0.40;
                 quarterlyEarnings = baseEarnings - specialTax;
-                logEvent(`🏛️ ${stock.name} odprowadza do budżetu państwa ${specialTax.toFixed(0)} PLN specjalnego podatku.`, 'state');
             }
 
-        } else {
-            // 🏭 Standardowe spółki (logika, którą już zaimplementowaliśmy)
-            console.log(`[REPORTS] Przetwarzanie standardowej spółki: ${stock.symbol}, Health: ${stock.financialHealth}, Phase: ${stock.corporatePhase}`); // <--- LOG 1
+        } else if (!stock.assetType) {
+            // 🏭 Standardowe spółki
             const earningsBase = (stock.financialHealth * 0.01) + (getRandomInRange(-0.015, 0.015));
-            quarterlyEarnings = marketCap * earningsBase;
-            if (stock.isMonopolist) {
-        quarterlyEarnings *= 1.2; // Monopolista zarabia o 20% więcej
-    }
-            console.log(`[REPORTS] ${stock.symbol} -> Obliczone quarterlyEarnings: ${quarterlyEarnings}`); // <--- LOG 2
+            // ===>>> ZMIANA 2: Dodanie dochodu bazowego do zysku <<<===
+            quarterlyEarnings = (marketCap * earningsBase) + baseQuarterlyIncome;
+            // ===>>> KONIEC ZMIANY 2 <<<===
         }
-
+        else if (stock.assetType === 'DebtCollector') {
+            // WRONA zarabia na odsetkach od przejętych długów
+            let totalInterestCollected = 0;
+            // Sprawdź długi gracza
+            playerCommercialLoans.forEach(loan => {
+                if (loan.collectorSymbol === stock.symbol) {
+                    const weeklyInterest = loan.amount * (loan.interestRate / 52);
+                    totalInterestCollected += weeklyInterest * 12; // 12 tygodni w kwartale
+                }
+            });
+            // Sprawdź długi AI
+            aiCompetitors.forEach(ai => {
+                if (ai.loans) {
+                    ai.loans.forEach(loan => {
+                        if (loan.collectorSymbol === stock.symbol) {
+                            const weeklyInterest = loan.amount * (loan.interestRate / 52);
+                            totalInterestCollected += weeklyInterest * 12;
+                        }
+                    });
+                }
+            });
+            quarterlyEarnings = totalInterestCollected * (1 + (stock.financialHealth / 10)); // Modyfikator kondycji
+        } else if (stock.assetType === 'PawnShop') {
+            // LOMBARDEX (Na razie mały bazowy zysk + zysk ze sprzedaży)
+            let profitFromSales = 0;
+            if (stock.holdingPortfolio) {
+                for (const symbol in stock.holdingPortfolio) {
+                    if (Math.random() < 0.5) { // 50% szans na sprzedaż w tym kwartale
+                        const holding = stock.holdingPortfolio[symbol];
+                        const targetStock = stocks.find(s => s.symbol === symbol);
+                        if (targetStock) {
+                            const proceeds = targetStock.price * holding.quantity;
+                            const costBasis = holding.purchasePrice * holding.quantity;
+                            profitFromSales += (proceeds - costBasis);
+                            
+                            stock.cash += proceeds; 
+                            targetStock.sharesHeld -= holding.quantity; 
+                            delete stock.holdingPortfolio[symbol]; 
+                            
+                            logEvent(`[LOMBARDEX] ${stock.name} sprzedał ${holding.quantity} akcji ${symbol} (zysk: ${profitFromSales.toFixed(0)} PLN).`, 'company');
+                        }
+                    }
+                }
+            }
+            quarterlyEarnings = profitFromSales + baseQuarterlyIncome + 5000; // Zysk ze sprzedaży + Baza + Stały bonus
+        }
+        else if (stock.assetType === 'Accounting') {
+            // Zysk z prowizji (stock.quarterlyEarnings) był już zbierany co tydzień w chargeAccountingFee()
+            // Dodajemy do niego tylko bazowy dochód
+            quarterlyEarnings = stock.quarterlyEarnings + baseQuarterlyIncome;
+            
+            // WAŻNE: Resetujemy licznik zysków na następny kwartał
+            stock.quarterlyEarnings = 0; 
+        }
+        
+        // Zapisz całkowity zysk/stratę
         stock.quarterlyEarnings = quarterlyEarnings;
 
-        // --- Aktualizacja bilansu na podstawie obliczonych zysków ---
-        if (stock.balanceSheet) {
-            console.log(`[REPORTS] ${stock.symbol} - Aktualizacja bilansu. Przed: Assets=${stock.balanceSheet.assets.toFixed(0)}, Liab=${stock.balanceSheet.liabilities.toFixed(0)}, RetEarn=${stock.balanceSheet.retainedEarnings.toFixed(0)}`); // <--- LOG 3
-            stock.balanceSheet.assets += quarterlyEarnings;
-            stock.balanceSheet.retainedEarnings += quarterlyEarnings;
+        // ===>>> ZMIANA 3: Dodanie zysku do stock.cash i kasy banku <<<===
+        stock.cash += quarterlyEarnings; // Zysk/strata jest dodawana do gotówki firmy
+        // Zaktualizuj również stan konta w banku komercyjnym
+        if (stock.bankAccountId) {
+            const bank = commercialBanks.find(b => b.id === stock.bankAccountId);
+            if (bank) {
+                bank.cash += quarterlyEarnings; // Bank odzwierciedla zmianę salda firmy
+            }
+        }
+        // ===>>> KONIEC ZMIANY 3 <<<===
 
-            if (quarterlyEarnings < 0 && stock.assetType !== 'Holding') { // Holdingi zarządzają gotówką inaczej
-                const debtIncrease = Math.abs(quarterlyEarnings) * getRandomInRange(0.1, 0.4);
-                stock.balanceSheet.liabilities += debtIncrease;
-                stock.balanceSheet.assets += debtIncrease;
-            } else if (quarterlyEarnings > 0 && stock.balanceSheet.liabilities > 0) {
-                const debtRepayment = quarterlyEarnings * getRandomInRange(0.1, 0.3);
-                const actualRepayment = Math.min(debtRepayment, stock.balanceSheet.liabilities);
-                stock.balanceSheet.liabilities -= actualRepayment;
-                stock.balanceSheet.assets -= actualRepayment;
-                console.log(`[REPORTS] ${stock.symbol} - Po: Assets=${stock.balanceSheet.assets.toFixed(0)}, Liab=${stock.balanceSheet.liabilities.toFixed(0)}, RetEarn=${stock.balanceSheet.retainedEarnings.toFixed(0)}`); // <--- LOG 4
-            } else {
-         console.warn(`[REPORTS] ${stock.symbol} nie ma obiektu balanceSheet!`); // <--- OSTRZEŻENIE
-    }
+        // ===>>> ZMIANA 4: Transfer 50% zysków od spółek zależnych <<<===
+        let earningsToTransfer = 0;
+        if (stock.isSubsidiaryOf && quarterlyEarnings > 0) {
+            const parentStock = stocks.find(s => s.symbol === stock.isSubsidiaryOf);
+            if (parentStock) {
+                earningsToTransfer = quarterlyEarnings * 0.5; // 50% zysków
+                
+                // 1. Odejmij gotówkę ze spółki zależnej (dziecka)
+                stock.cash -= earningsToTransfer; 
+                const childBank = commercialBanks.find(b => b.id === stock.bankAccountId);
+                if (childBank) childBank.cash -= earningsToTransfer;
+
+                // 2. Dodaj gotówkę do spółki-matki
+                parentStock.cash += earningsToTransfer;
+                const parentBank = commercialBanks.find(b => b.id === parentStock.bankAccountId);
+                if (parentBank) parentBank.cash += earningsToTransfer;
+
+                // 3. Zaloguj transfer
+                logEvent(`💸 Spółka zależna ${stock.name} transferuje 50% zysków (${earningsToTransfer.toFixed(0)} PLN) do ${parentStock.name}.`, 'company');
+            }
+        }
+        // ===>>> KONIEC ZMIANY 4 <<<===
+
+
+        // --- Aktualizacja bilansu ---
+        // Całkowity zysk/strata (quarterlyEarnings) wpływa na aktywa i kapitał
+        stock.balanceSheet.assets += quarterlyEarnings; 
+        stock.balanceSheet.retainedEarnings += quarterlyEarnings; 
+
+        // Jeśli nastąpił transfer do spółki-matki, musimy skorygować bilanse obu firm
+        if (earningsToTransfer > 0) {
+             const parentStock = stocks.find(s => s.symbol === stock.isSubsidiaryOf);
+             if (parentStock && parentStock.balanceSheet) {
+                 // Transfer gotówki to transfer aktywów
+                 // Aktywa rodzica rosną (bo dostał gotówkę)
+                 parentStock.balanceSheet.assets += earningsToTransfer;
+                 // To jest przychód dla rodzica, więc zwiększa jego zyski zatrzymane
+                 parentStock.balanceSheet.retainedEarnings += earningsToTransfer;
+
+                 // Aktywa dziecka spadają (bo straciło gotówkę)
+                 stock.balanceSheet.assets -= earningsToTransfer;
+                 // To jest koszt/dywidenda dla dziecka, więc zmniejsza jego zyski zatrzymane
+                 stock.balanceSheet.retainedEarnings -= earningsToTransfer;
+             }
         }
         
-        // =====================================================================
-        // === KONIEC GŁÓWNEJ LOGIKI - RESZTA FUNKCJI POZOSTAJE PODOBNA ===
-        // =====================================================================
+        // Logika spłaty/zaciągania długu (bez zmian)
+        if (quarterlyEarnings < 0 && stock.assetType !== 'Holding' && !stock.isBankStock) {
+            // Firma ze stratą zaciąga mały dług, aby zachować płynność
+            const debtIncrease = Math.abs(quarterlyEarnings) * getRandomInRange(0.1, 0.4);
+            stock.balanceSheet.liabilities += debtIncrease;
+            stock.balanceSheet.assets += debtIncrease; // Dług zwiększa też aktywa (jako gotówka)
+        } else if (quarterlyEarnings > 0 && stock.balanceSheet.liabilities > 0) {
+            // Firma z zyskiem spłaca część długu
+            if (stock.cash > 0) { 
+                const debtRepayment = Math.min(stock.cash * 0.5, quarterlyEarnings * getRandomInRange(0.1, 0.3)); // Spłać 50% nowej gotówki lub 10-30% zysku
+                const actualRepayment = Math.min(debtRepayment, stock.balanceSheet.liabilities);
+                
+                // Zmniejsz dług
+                stock.balanceSheet.liabilities -= actualRepayment;
+                // Zmniejsz aktywa (gotówkę)
+                stock.balanceSheet.assets -= actualRepayment;
+                stock.cash -= actualRepayment;
+                // Zaktualizuj bank
+                if (stock.bankAccountId) {
+                    const bank = commercialBanks.find(b => b.id === stock.bankAccountId);
+                    if (bank) bank.cash -= actualRepayment;
+                }
+            }
+        }
 
-        // Losowa zmiana kondycji finansowej (dla wszystkich)
-        const healthChange = getRandomIntInRange(-1, 1);
-        stock.financialHealth += healthChange;
-        if (stock.financialHealth > 5) stock.financialHealth = 5;
-        if (stock.financialHealth < -5) stock.financialHealth = -5;
-        
-        // Logika bankructwa (działa dla wszystkich typów, które mogą zbankrutować)
-        const equity = stock.balanceSheet ? stock.balanceSheet.assets - stock.balanceSheet.liabilities : stock.financialHealth;
+        // Logika bankructwa (bez zmian)
+        const equity = stock.balanceSheet.assets - stock.balanceSheet.liabilities;
         if ((equity <= 0 || stock.financialHealth <= -5) && !stock.isBankrupt) {
              let bankruptcyChance = 0.30;
              if (stock.ceo?.traits?.some(t => t.id === 'bogacz')) {
                  bankruptcyChance = 0;
                  logEvent(`[CEO] Prywatne środki i wpływy prezesa ratują ${stock.name} przed bankructwem!`);
-                 if (stock.balanceSheet) {
-                    const bailout = Math.abs(equity) + (stock.price * stock.totalShares * 0.1);
-                    stock.balanceSheet.assets += bailout;
-                    stock.balanceSheet.retainedEarnings += bailout;
-                 }
+                 const bailout = Math.abs(equity) + (stock.price * stock.totalShares * 0.1);
+                 stock.balanceSheet.assets += bailout;
+                 stock.balanceSheet.retainedEarnings += bailout;
                  stock.financialHealth = 1;
-             } else if (stock.assetType === 'REIT') {
-                bankruptcyChance = 0.05;
+             } else if (stock.assetType === 'REIT' || stock.isBankStock) {
+                bankruptcyChance = 0.05; // REITy i Banki rzadziej bankrutują
              }
 
              if (bankruptcyChance > 0 && Math.random() < bankruptcyChance) {
                  logEvent(`🔥 BANKRUCTWO! Spółka ${stock.name} (${stock.symbol}) ogłasza upadłość!`, 'review');
-                 if (playerPortfolio[stock.symbol]) { delete playerPortfolio[stock.symbol]; }
-                 aiCompetitors.forEach(ai => { if (ai.portfolio[stock.symbol]) { delete ai.portfolio[stock.symbol]; } });
+                 removeStockFromGame(stock.symbol); 
                  stock.isBankrupt = true;
                  stock.timeOfDeath = Date.now();
+                 continue; 
              }
         }
 
+        // Emisja obligacji ratunkowych (bez zmian)
         const canIssueRescue = stock.financialHealth <= -3 &&
-                               stock.balanceSheet && stock.balanceSheet.liabilities > stock.balanceSheet.assets * 0.6 && // Dług > 60% aktywów
-                               !stock.assetType && // Tylko zwykłe spółki
-                               !stock.isBankStock &&
-                               (!stock.rescueActionCooldown || Date.now() > stock.rescueActionCooldown) && // Sprawdź cooldown
-                               Math.random() < 0.25; // 25% szans w kwartale, jeśli warunki spełnione
-
+                               stock.balanceSheet.liabilities > stock.balanceSheet.assets * 0.6 &&
+                               !stock.assetType && !stock.isBankStock &&
+                               (!stock.rescueActionCooldown || Date.now() > stock.rescueActionCooldown) &&
+                               Math.random() < 0.25;
         if (canIssueRescue) {
-            // Sprawdź, czy nie ma już aktywnej emisji ratunkowej akcji dla tej firmy
-            // (zakładając, że triggerRescueOfferingEvent ustawia jakąś flagę na obiekcie stock, np. stock.isRescueOfferingActive)
-            // if (!stock.isRescueOfferingActive) {
-                 issueRescueBond(stock); // Wywołaj emisję obligacji
-            // }
+            issueRescueBond(stock);
         }
 
-        // Generowanie raportów i zdarzeń (wspólne dla wszystkich)
+        // Generowanie raportów (bez zmian)
         let reportResult = 'neutral';
         let eventMessage = "";
         let magnitude = 0;
-
-        // ... (logika raportów excellent/good/bad, emisji akcji, zmiany volatility etc.)
         
         if (stock.financialHealth >= 5) {
             reportResult = 'excellent';
@@ -2766,24 +2949,50 @@ function processFinancialReports() {
             applyPriceEffect(stock.symbol, magnitude, reportResult === 'bad' || reportResult === 'tragic' ? 'negative' : 'positive', 'review');
         }
 
+        // Aktualizacja zmienności (bez zmian)
         const baseVolatility = initialStocks.find(s => s.symbol === stock.symbol)?.volatilityFactor || stock.volatilityFactor;
         if (stock.financialHealth > 0) {
-            stock.volatilityFactor *= 0.95;
-            if (stock.volatilityFactor < baseVolatility) stock.volatilityFactor = baseVolatility;
+            stock.volatilityFactor = Math.max(baseVolatility * 0.8, stock.volatilityFactor * 0.95);
         } else if (stock.financialHealth < 0) {
-            stock.volatilityFactor *= 1.05;
+            stock.volatilityFactor = Math.min(baseVolatility * 2.5, stock.volatilityFactor * 1.05);
         }
         if (stock.volatilityFactor < 0.1) stock.volatilityFactor = 0.1;
-    }
+
+        if (stock.quarterlyEarnings > 0 && !stock.isBankrupt) {
+            let cityTaxRate = 0.005; // 0.5%
+            
+            // Sprawdź modyfikator podatkowy burmistrza
+            if (city.mayor.taxModifier) {
+                cityTaxRate += city.mayor.taxModifier; // np. +0.01 lub -0.01
+            }
+            
+            if (cityTaxRate > 0) {
+                 const cityTax = stock.quarterlyEarnings * cityTaxRate;
+                 if (stock.cash >= cityTax) {
+                     stock.cash -= cityTax;
+                     city.budget += cityTax;
+                     
+                     // Zaktualizuj bank
+                     if (stock.bankAccountId) {
+                         const bank = commercialBanks.find(b => b.id === stock.bankAccountId);
+                         if (bank) bank.cash -= cityTax;
+                     }
+                 }
+                 // Nie logujemy tego, żeby nie spamować
+            }
+        }
+
+    } // Koniec pętli for
 
     // Estymacja dywidend i odświeżenie widoków (bez zmian)
     stocks.forEach(stock => {
+        if (stock.isBankrupt) return;
         stock.lastQuarterValue = stock.price * stock.totalShares;
         if (stock.assetType === 'REIT') {
             stock.estimatedDividend = stock.dividendPerShare;
         } else if (stock.dividendPolicy && stock.dividendPolicy !== 'Growth') {
             const estimatedProfit = stock.quarterlyEarnings > 0 ? stock.quarterlyEarnings : 0;
-            const estimatedTotal = estimatedProfit * 0.1; // Uproszczona estymacja
+            const estimatedTotal = estimatedProfit * 0.1;
             stock.estimatedDividend = stock.totalShares > 0 ? estimatedTotal / stock.totalShares : 0;
         } else {
             stock.estimatedDividend = 0;
@@ -2925,27 +3134,34 @@ function applyPriceEffect(stockSymbol, percentageChange, eventType, eventCategor
     const stock = stocks.find(s => s.symbol === stockSymbol);
     if (!stock) return;
 
-    // --- Sekcja 1: Pełna odporność na zdarzenia (z cech CEO) ---
-    // Te warunki sprawdzane są na samym początku, bo całkowicie anulują zdarzenie.
+    // ===>>> NOWY BLOK: TARCZA PR (PR SHIELD CHECK) <<<===
+    if (percentageChange < 0 && stock.prShieldExpiry && Date.now() < stock.prShieldExpiry) {
+        logEvent(`🛡️ Tarcza PR (artykuł sponsorowany) ochroniła ${stock.name} przed negatywnym zdarzeniem!`, 'review');
+        showToast(`Pozytywny PR ochronił ${stock.name} przed negatywnym eventem!`, 'success');
+        
+        // Opcjonalnie: Tarcza zużywa się po jednej obronie
+        // stock.prShieldExpiry = null; 
+        
+        return; // ZATRZYMAJ negatywny efekt
+    }
+    // ===>>> KONIEC NOWEGO BLOKU <<<===
 
-    // Cecha "Człowiek z Ludu" chroni przed negatywnymi zdarzeniami firmowymi.
+    // --- Sekcja 1: Pełna odporność na zdarzenia (z cech CEO) ---
     if (
         percentageChange < 0 &&
         eventCategory === 'company' &&
         stock.ceo?.traits?.some(t => t.id === 'czlowiek_z_ludu')
     ) {
         logEvent(`🛡️ [Człowiek z Ludu] Reputacja prezesa ${stock.name} ochroniła firmę przed negatywnymi skutkami zdarzenia!`);
-        return; // Zakończ funkcję, nie aplikuj negatywnego efektu.
+        return; 
     }
-
-    // Cecha "Tytan Przemysłu" chroni przed negatywnymi zdarzeniami rynkowymi i sektorowymi.
     if (
         percentageChange < 0 &&
         (eventCategory === 'market' || eventCategory === 'sector') &&
         stock.ceo?.traits?.some(t => t.id === 'tytan_przemyslu')
     ) {
         logEvent(`🛡️ [Tytan Przemysłu] Niewzruszona pozycja ${stock.name} na rynku uchroniła ją przed negatywnym zdarzeniem!`);
-        return; // Zakończ funkcję.
+        return; 
     }
 
     // --- Sekcja 2: Obliczanie modyfikatorów ---
@@ -2982,23 +3198,17 @@ function applyPriceEffect(stockSymbol, percentageChange, eventType, eventCategor
         });
     }
 
-    // Modyfikatory dla negatywnych zdarzeń (odporność spółek państwowych i umiejętności gracza)
+    // Modyfikatory dla negatywnych zdarzeń (spółki państwowe, umiejętności gracza)
     if (finalPercentageChange < 0) {
         let totalResistance = 0;
-
-        // Bazowa odporność spółki państwowej
         if (stock.isStateOwned && stock.eventResistance > 0) {
             totalResistance += stock.eventResistance;
         }
-
-        // Dodatkowa odporność z cechy "Lojalista" dla spółek państwowych
         if (stock.isStateOwned && stock.ceo?.traits?.some(t => t.id === 'lojalista')) {
             totalResistance += 0.20;
         }
-
-        // Zastosuj skumulowaną odporność
         if (totalResistance > 0) {
-            finalPercentageChange *= (1 - Math.min(1, totalResistance)); // Ograniczenie do 100% odporności
+            finalPercentageChange *= (1 - Math.min(1, totalResistance));
         }
 
         // Umiejętność gracza "Żelazne Nerwy"
@@ -3006,40 +3216,33 @@ function applyPriceEffect(stockSymbol, percentageChange, eventType, eventCategor
         if (nervesLevel > 0) {
             let nervesModifier = 1.0;
             switch (nervesLevel) {
-                case 1: nervesModifier = 0.95; break; // 5% redukcji
-                case 2: nervesModifier = 0.88; break; // 12% redukcji
-                case 3: nervesModifier = 0.80; break; // 20% redukcji
+                case 1: nervesModifier = 0.95; break;
+                case 2: nervesModifier = 0.88; break;
+                case 3: nervesModifier = 0.80; break;
             }
             finalPercentageChange *= nervesModifier;
         }
 
-        // --- NOWY BLOK: Charyzma (z 'sharkCharisma') Lvl 1 i 4 ---
-        // Redukuje negatywny wpływ zdarzeń losowych
-        // POPRAWKA: Użyto 'sharkCharisma', ponieważ 'charisma' nie istnieje w gameLogic.js
-        // SCALONO: (Używamy 'charisma' jak w definicji umiejętności)
+        // Umiejętność gracza "Charyzma"
         const charismaLevel = getSkillLevel('charisma'); 
         if (charismaLevel > 0) {
             let charismaModifier = 1.0;
-            if (charismaLevel >= 3) {
-                charismaModifier = 0.50; // 50% redukcji (Lvl 4)
+            if (charismaLevel >= 4) { // Poziom 4 (stara nazwa) -> teraz Lvl 3+
+                charismaModifier = 0.50; // 50% redukcji
             } else if (charismaLevel >= 1) {
-                charismaModifier = 0.85; // 15% redukcji (Lvl 1-3)
+                charismaModifier = 0.85; // 15% redukcji
             }
             finalPercentageChange *= charismaModifier;
         }
-        // --- KONIEC NOWEGO BLOKU ---
     }
 
     // --- Sekcja 3: Zastosowanie finalnej zmiany ceny ---
     stock.price *= (1 + finalPercentageChange);
-
-    // Zabezpieczenie przed ujemną ceną
     if (stock.price < 0.01) {
         stock.price = 0.01;
     }
 
-    // Każde zdarzenie lekko zwiększa zmienność
-    stock.volatilityFactor *= 1.1;
+    stock.volatilityFactor *= 1.1; // Każde zdarzenie lekko zwiększa zmienność
 
     console.log(`Efekt cenowy dla ${stock.name}: ${oldPrice.toFixed(2)} -> ${stock.price.toFixed(2)} (finalna zmiana: ${(finalPercentageChange * 100).toFixed(2)}%)`);
 }
@@ -6275,16 +6478,27 @@ function donateToCity(amount) {
 let nextFestivalCountdown = 0; // Odliczanie w ms do następnego festynu
 let activeModifiers = []; // Przechowuje aktywne, roczne bonusy z festynu
 let city = {
-    budget: 50000, // Budżet startowy
-    population: getRandomIntInRange(15000, 25000), // Losowa populacja na start
-    availableAttractions: [ // Lista możliwych do sfinansowania atrakcji
-        { name: "Koncert rockowy", cost: 20000, interestBonus: 15 },
-        { name: "Występ znanego artysty", cost: 50000, interestBonus: 30 },
-        { name: "Pokaz mody", cost: 12000, interestBonus: 10 },
-        { name: "Wystawa samochodów zabytkowych", cost: 8000, interestBonus: 8 },
-        { name: "Festiwal foodtrucków", cost: 15000, interestBonus: 12 }
-    ]
+    name: "Miasto",
+    population: getRandomIntInRange(25000, 45000), // Startowa populacja
+    budget: 1000000, // Startowy budżet miasta
+    infrastructureLevel: 1.0, // Mnożnik (1.0 = 100%)
+    baseExpenses: 50000, // Stałe wydatki (policja, szkoły) na rok
+    mayor: {
+        name: "Prezydent Startowy",
+        policy: 'balanced', // 'infrastructure', 'business', 'municipal'
+        taxModifier: 0, // np. 0.01 lub -0.01
+        electionYear: 4 // Wybory co 4 lata (16 kwartałów)
+    },
+    // Flagi odblokowania przez gracza (ze starego obiektu)
+    playerDonatedAmount: 0,
+    playerHasUnlocked: false
 };
+
+// Nowa globalna tablica na spółki miejskie (nienotowane na giełdzie)
+let municipalCompanies = [];
+
+// Nowa globalna tablica na firmy prywatne (nienotowane na giełdzie)
+let privateCompanies = [];
 
 let festival = null; // Gdy nie ma festynu, ten obiekt ma wartość null
 
@@ -9785,35 +9999,30 @@ function checkAntitrust(stock1, stock2) {
     }
 }
 
-function investInAntitrustOffice() {
+function aiUpgradeAntitrustOffice() {
     if (antitrustOffice.level >= 5) {
-        alert("Urząd Antymonopolowy osiągnął już maksymalny poziom rozwoju!");
-        return;
+        return; // Urząd jest już na maksymalnym poziomie
     }
 
     const upgradeCost = ANTITRUST_UPGRADE_COSTS[antitrustOffice.level];
-    if (playerCash < upgradeCost) {
-        alert("Nie masz wystarczająco gotówki, aby zainwestować w Urząd.");
-        return;
-    }
-
-    // Potwierdzenie od gracza
-    if (confirm(`Czy na pewno chcesz zainwestować ${upgradeCost.toLocaleString('pl-PL')} PLN w rozwój Urzędu Antymonopolowego do poziomu ${antitrustOffice.level + 1}?`)) {
-        playerCash -= upgradeCost;
+    
+    // Państwo decyduje się na ulepszenie, jeśli ma wystarczająco pieniędzy (np. 5x koszt)
+    // i jest na to losowa szansa (np. 40% rocznie)
+    if (governmentTreasury > (upgradeCost * 5) && Math.random() < 0.4) {
+        
+        governmentTreasury -= upgradeCost; // Państwo płaci ze swojego budżetu
         antitrustOffice.level++;
 
-        // Zwiększ parametry urzędu (przykładowe wartości)
-        antitrustOffice.analysisCapacity += 0.1; // +10% szansy na analizę per poziom
-        antitrustOffice.accuracy += 0.12;       // +12% dokładności per poziom
-        // Ogranicz wartości do maksymalnie 100%
+        // Zwiększ parametry urzędu (tak jak robił to gracz)
+        antitrustOffice.analysisCapacity += 0.1; 
+        antitrustOffice.accuracy += 0.12;       
         antitrustOffice.analysisCapacity = Math.min(1.0, antitrustOffice.analysisCapacity);
         antitrustOffice.accuracy = Math.min(1.0, antitrustOffice.accuracy);
 
-        logEvent(`🏛️ Zainwestowano w Urząd Antymonopolowy! Osiągnięto poziom ${antitrustOffice.level}.`, 'review');
-        showToast("Rozwój Urzędu Antymonopolowego zakończony sukcesem!", 'success');
-
-        displayCash();
-        // Odśwież modal państwa, jeśli jest otwarty
+        logEvent(`⚖️ Państwo inwestuje w Urząd Antymonopolowy! Osiągnięto poziom ${antitrustOffice.level}.`, 'state');
+        showToast("Urząd Antymonopolowy został ulepszony przez rząd!", 'default');
+        
+        // Odśwież modal, jeśli gracz go akurat ogląda
         if (document.getElementById('state-modal')?.style.display === 'block') {
             updateStateModalContent();
         }
@@ -10041,4 +10250,764 @@ function findBestLenderBank(initiator, loanAmount) {
     
     console.log(`[LBO] Bank ${lender.name} zgodził się sfinansować LBO dla ${initiator.symbol}.`);
     return lender;
+}
+
+function runDebtCollectorAI() {
+    const collectors = stocks.filter(s => s.assetType === 'DebtCollector' && !s.isBankrupt && s.cash > 20000); // Musi mieć gotówkę
+    if (collectors.length === 0) return;
+
+    // Zbierz wszystkie potencjalne długi (tylko bankowe z problemami)
+    const potentialDebts = [];
+    
+    // Długi Gracza
+    playerCommercialLoans.forEach(loan => {
+        if (loan.bankId && (loan.missedPayments || 0) > 0) { // Tylko długi bankowe z pominiętymi ratami
+            potentialDebts.push({ entity: 'player', loan: loan });
+        }
+    });
+
+    // Długi AI
+    aiCompetitors.forEach(ai => {
+        if (ai.loans) {
+            ai.loans.forEach(loan => {
+                if (loan.bankId && (loan.missedPayments || 0) > 0) {
+                    potentialDebts.push({ entity: ai, loan: loan });
+                }
+            });
+        }
+    });
+
+    if (potentialDebts.length === 0) return; // Brak długów do przejęcia
+
+    // Każdy windykator próbuje złożyć jedną ofertę
+    collectors.forEach(collector => {
+        // Niska szansa na działanie w każdym cyklu
+        if (Math.random() < 0.1) { 
+            const targetDebtInfo = getRandomElement(potentialDebts);
+            const loan = targetDebtInfo.loan;
+
+            // Sprawdź, czy oferta nie była niedawno składana
+            const now = Date.now();
+            if (loan.offerCooldown && now < loan.offerCooldown) {
+                return; // Pomiń, ten dług jest na cooldownie
+            }
+
+            // Sprawdź, czy windykatora stać
+            if (collector.cash >= loan.amount) {
+                createDebtTakeoverOffer(collector, targetDebtInfo.entity, loan);
+            }
+        }
+    });
+}
+
+/**
+ * Tworzy ofertę przejęcia długu i prezentuje ją graczowi lub AI.
+ */
+function createDebtTakeoverOffer(collectorStock, targetEntity, loan) {
+    const newInterestRate = loan.interestRate * 1.5; // Przykładowo: 50% wyższe oprocentowanie
+    const offerCooldownTime = BASE_DELAYS.quarterly / currentSpeedMultiplier; // Cooldown na kwartał
+
+    loan.offerCooldown = Date.now() + offerCooldownTime; // Ustaw cooldown, aby nie spamować
+
+    if (targetEntity === 'player') {
+        // Sprawdź, czy gracz nie ma już innej oferty
+        if (currentDebtOffer) return; 
+        
+        // Zapisz ofertę globalnie, aby przyciski UI wiedziały, co robić
+        currentDebtOffer = {
+            collectorSymbol: collectorStock.symbol,
+            loanId: loan.id,
+            newInterestRate: newInterestRate
+        };
+        // Otwórz modal w UI
+        openDebtOfferModal(collectorStock, loan, newInterestRate);
+    } else {
+        // To jest AI, wywołaj logikę decyzyjną AI
+        aiDecideOnDebtOffer(targetEntity, collectorStock, loan, newInterestRate);
+    }
+}
+
+/**
+ * Wykonywane, gdy gracz lub AI AKCEPTUJE ofertę przejęcia długu.
+ */
+function executeDebtTransfer(collectorStock, targetEntity, loan, newInterestRate) {
+    // 1. Collector (WRONA) płaci bankowi
+    collectorStock.cash -= loan.amount;
+    collectorStock.balanceSheet.assets += loan.amount; // Dług staje się aktywem windykatora
+
+    // 2. Bank otrzymuje pieniądze i zamyka kredyt
+    const bank = commercialBanks.find(b => b.id === loan.bankId);
+    if (bank) {
+        bank.cash += loan.amount;
+        // Usuń kredyt z portfolio banku
+        const portfolioKey = (targetEntity === 'player') ? 'player' : targetEntity.id;
+        if (bank.loanPortfolio[portfolioKey]) {
+            const loanIndex = bank.loanPortfolio[portfolioKey].findIndex(l => l.id === loan.id);
+            if (loanIndex > -1) {
+                bank.loanPortfolio[portfolioKey].splice(loanIndex, 1);
+            }
+        }
+    }
+
+    // 3. Dłużnik (Gracz/AI) ma zmodyfikowany dług
+    loan.bankId = null; // Już nie jest dłużny bankowi
+    loan.bankName = collectorStock.name; // Nowy wierzyciel
+    loan.collectorSymbol = collectorStock.symbol; // Symbol wierzyciela (dla płatności)
+    loan.interestRate = newInterestRate; // NOWE, WYŻSZE OPROCENTOWANIE
+    loan.missedPayments = 0; // Windykator daje "czystą kartę"
+    // Przelicz ratę
+    const loanDurationWeeks = Math.round((loan.maturityDate - Date.now()) / (BASE_DELAYS.weekly / currentSpeedMultiplier));
+    const weeklyRate = loan.interestRate / 52;
+    if (loanDurationWeeks > 0 && weeklyRate > 0) {
+        loan.weeklyPayment = loan.amount * (weeklyRate * Math.pow(1 + weeklyRate, loanDurationWeeks)) / (Math.pow(1 + weeklyRate, loanDurationWeeks) - 1);
+    } else {
+        loan.weeklyPayment = loan.amount * 0.05; // Awaryjna rata
+    }
+
+    const entityName = (targetEntity === 'player') ? "Twój" : `Bota ${targetEntity.name}`;
+    logEvent(`🔔 ${collectorStock.name} przejął ${entityName} dług w wysokości ${loan.amount.toFixed(2)} PLN. Nowe oprocentowanie: ${(newInterestRate * 100).toFixed(1)}%.`, 'review');
+    
+    if(targetEntity === 'player') {
+        showToast("Twój dług został przejęty przez windykatora!", 'warning');
+        displayPortfolio(); // Odśwież listę pasywów
+        if(document.getElementById('commercial-loan-modal')?.style.display === 'block') {
+            openCommercialLoanModal(bank ? bank.id : null); // Odśwież modal banku
+        }
+    }
+}
+
+/** Wywoływane z UI, gdy gracz kliknie "Akceptuj" */
+function acceptDebtOffer() {
+    if (!currentDebtOffer) return;
+    const { collectorSymbol, loanId, newInterestRate } = currentDebtOffer;
+    
+    const collectorStock = stocks.find(s => s.symbol === collectorSymbol);
+    const loan = playerCommercialLoans.find(l => l.id === loanId);
+
+    if (collectorStock && loan) {
+        executeDebtTransfer(collectorStock, 'player', loan, newInterestRate);
+    }
+    currentDebtOffer = null; // Wyczyść ofertę
+}
+
+/** Wywoływane z UI, gdy gracz kliknie "Odrzuć" lub "X" */
+function declineDebtOffer() {
+    if (!currentDebtOffer) return;
+    logEvent("Odrzucono ofertę przejęcia długu przez windykatora.", 'review');
+    currentDebtOffer = null; // Wyczyść ofertę
+}
+
+function runPawnShopAI() {
+    const pawnShops = stocks.filter(s => s.assetType === 'PawnShop' && !s.isBankrupt && s.cash > 50000); // Musi mieć gotówkę na pożyczki
+    if (pawnShops.length === 0) return;
+
+    // Zbierz potencjalnych klientów (Gracz i AI, którzy mają kłopoty LUB cenne akcje)
+    const potentialClients = [];
+    
+    // Sprawdź Gracza
+    const playerNetWorth = calculateNetWorth('player');
+    const playerCashRatio = playerCash / playerNetWorth;
+    const playerHasDebt = playerCommercialLoans.some(l => (l.missedPayments || 0) > 0);
+    if (playerCashRatio < 0.1 || playerHasDebt) { // Jeśli gracz ma kłopoty
+        for (const symbol in playerPortfolio) {
+            const holding = playerPortfolio[symbol];
+            // Szukaj wartościowych, niezablokowanych akcji
+            if (holding.shares > 0 && !holding.assetType && !holding.lockedShares) {
+                const stock = stocks.find(s => s.symbol === symbol);
+                if (stock && stock.price * holding.shares > 1000) { // Jeśli pakiet jest wart > 1000 PLN
+                    potentialClients.push({ entity: 'player', stockToPawn: stock, holding: holding });
+                    break; // Wystarczy jedna oferta na raz dla gracza
+                }
+            }
+        }
+    }
+
+    // Sprawdź AI
+    aiCompetitors.forEach(ai => {
+        const aiNetWorth = calculateNetWorth(ai);
+        const aiCashRatio = ai.cash / aiNetWorth;
+        const aiHasDebt = ai.loans && ai.loans.some(l => (l.missedPayments || 0) > 0);
+        if (aiCashRatio < 0.1 || aiHasDebt) {
+            for (const symbol in ai.portfolio) {
+                const holding = ai.portfolio[symbol];
+                if (holding.shares > 0 && !holding.assetType && !holding.lockedShares) {
+                    const stock = stocks.find(s => s.symbol === symbol);
+                    if (stock && stock.price * holding.shares > 1000) {
+                        potentialClients.push({ entity: ai, stockToPawn: stock, holding: holding });
+                        break; 
+                    }
+                }
+            }
+        }
+    });
+
+    if (potentialClients.length === 0) return; // Brak celów
+
+    // Każdy lombard składa jedną ofertę
+    pawnShops.forEach(pawnShop => {
+        if (Math.random() < 0.05) { // Niska szansa (5%) na ofertę w tygodniu
+            const targetClient = getRandomElement(potentialClients);
+            const loanAmount = (targetClient.stockToPawn.price * targetClient.holding.shares) * 0.4; // Pożyczka 40% wartości akcji
+            
+            if (pawnShop.cash >= loanAmount) {
+                createPawnLoanOffer(pawnShop, targetClient.entity, targetClient.stockToPawn, targetClient.holding, loanAmount);
+            }
+        }
+    });
+}
+
+/**
+ * Tworzy ofertę pożyczki lombardowej i prezentuje ją graczowi lub AI.
+ */
+function createPawnLoanOffer(pawnShop, targetEntity, stockToPawn, holding, loanAmount) {
+    // Lombardy mają bardzo wysokie oprocentowanie
+    const newInterestRate = 0.25; // 25% rocznie (stałe)
+    const durationWeeks = 12; // 12 tygodni (kwartał) na spłatę
+
+    // Zastawiamy wszystkie posiadane akcje danej spółki (uproszczenie)
+    const quantity = holding.shares;
+    
+    // Ustaw cooldown na ofercie dla tej konkretnej spółki w portfelu
+    const now = Date.now();
+    const offerCooldownTime = BASE_DELAYS.quarterly / currentSpeedMultiplier;
+    // Potrzebujemy miejsca do zapisania cooldownu - użyjmy obiektu stockToPawn
+    if (!stockToPawn.pawnOfferCooldown) stockToPawn.pawnOfferCooldown = {};
+    const entityId = (targetEntity === 'player') ? 'player' : targetEntity.id;
+    
+    if (stockToPawn.pawnOfferCooldown[entityId] && now < stockToPawn.pawnOfferCooldown[entityId]) {
+        return; // Pomiń, ten cel jest na cooldownie
+    }
+    stockToPawn.pawnOfferCooldown[entityId] = now + offerCooldownTime;
+
+
+    if (targetEntity === 'player') {
+        if (currentPawnOffer) return; // Już jest aktywna oferta dla gracza
+        
+        currentPawnOffer = {
+            pawnShopSymbol: pawnShop.symbol,
+            targetStockSymbol: stockToPawn.symbol,
+            quantity: quantity,
+            loanAmount: loanAmount,
+            newInterestRate: newInterestRate,
+            durationWeeks: durationWeeks
+        };
+        // Otwórz modal w UI
+        openPawnOfferModal(pawnShop, stockToPawn, quantity, loanAmount, newInterestRate, durationWeeks);
+    } else {
+        // To jest AI
+        aiDecideOnPawnOffer(targetEntity, pawnShop, stockToPawn, quantity, loanAmount, newInterestRate, durationWeeks);
+    }
+}
+
+/**
+ * Wykonywane, gdy gracz lub AI AKCEPTUJE ofertę pożyczki lombardowej.
+ * @param {object | 'player'} targetEntity - Obiekt AI lub string 'player'.
+ * @param {object} pawnShop - Obiekt spółki LOM.
+ * @param {object} targetStock - Obiekt akcji do zastawienia.
+ * @param {number} quantity - Liczba akcji.
+ * @param {number} loanAmount - Oferowana kwota.
+ * @param {number} newInterestRate - Oprocentowanie.
+ * @param {number} durationWeeks - Czas na spłatę.
+ */
+function executePawnLoan(targetEntity, pawnShop, targetStock, quantity, loanAmount, newInterestRate, durationWeeks) {
+    const entityId = (targetEntity === 'player') ? 'player' : targetEntity.id;
+    const portfolio = (targetEntity === 'player') ? playerPortfolio : targetEntity.portfolio;
+    const holding = portfolio[targetStock.symbol];
+
+    // 1. Sprawdź, czy akcje są nadal dostępne (nie zostały sprzedane)
+    const availableShares = holding.shares - (holding.lockedShares || 0);
+    if (availableShares < quantity) {
+        if (targetEntity === 'player') showToast("Transakcja anulowana. Sprzedałeś akcje, zanim oferta została przyjęta.", 'error');
+        return;
+    }
+
+    // 2. Transakcja: Lombard płaci, Dłużnik dostaje gotówkę
+    pawnShop.cash -= loanAmount;
+    if (targetEntity === 'player') playerCash += loanAmount;
+    else targetEntity.cash += loanAmount;
+
+    // 3. Stwórz nowy dług lombardowy dla dłużnika
+    const maturityDate = Date.now() + (durationWeeks * BASE_DELAYS.weekly / currentSpeedMultiplier);
+    const totalRepaymentAmount = loanAmount * (1 + (newInterestRate * (durationWeeks / 52))); // Całkowita kwota do spłaty (kapitał + odsetki)
+
+    const newLoan = {
+        id: `pawn_${Date.now()}_${entityId}`,
+        bankId: null, // To nie jest kredyt bankowy
+        bankName: pawnShop.name, // Wierzyciel
+        collectorSymbol: pawnShop.symbol, // Używamy tego pola do identyfikacji
+        initialAmount: loanAmount,
+        amount: totalRepaymentAmount, // Całkowita kwota do spłaty
+        interestRate: newInterestRate,
+        weeklyPayment: totalRepaymentAmount, // Cała kwota jest płatna na koniec
+        maturityDate: maturityDate,
+        collateral: { symbol: targetStock.symbol, quantity: quantity },
+        isPawnLoan: true // Specjalna flaga
+    };
+
+    if (targetEntity === 'player') playerCommercialLoans.push(newLoan);
+    else {
+        if (!targetEntity.loans) targetEntity.loans = [];
+        targetEntity.loans.push(newLoan);
+    }
+
+    // 4. Zablokuj akcje dłużnika
+    if (!holding.lockedShares) holding.lockedShares = 0;
+    holding.lockedShares += quantity;
+
+    logEvent(`💰 ${pawnShop.name} udzielił pożyczki ${loanAmount.toFixed(2)} PLN pod zastaw ${quantity} akcji ${targetStock.symbol}. Termin spłaty: ${durationWeeks} tyg.`, 'review');
+    
+    if (targetEntity === 'player') {
+        showToast("Otrzymano gotówkę z lombardu! Akcje zostały zablokowane.", 'success');
+        displayCash();
+        displayPortfolio();
+    }
+}
+
+/** Wywoływane z UI, gdy gracz kliknie "Akceptuj" */
+function acceptPawnOffer() {
+    if (!currentPawnOffer) return;
+    const { pawnShopSymbol, targetStockSymbol, quantity, loanAmount, newInterestRate, durationWeeks } = currentPawnOffer;
+    
+    const pawnShop = stocks.find(s => s.symbol === pawnShopSymbol);
+    const targetStock = stocks.find(s => s.symbol === targetStockSymbol);
+
+    if (pawnShop && targetStock && playerPortfolio[targetStockSymbol]) {
+        executePawnLoan('player', pawnShop, targetStock, quantity, loanAmount, newInterestRate, durationWeeks);
+    }
+    currentPawnOffer = null; // Wyczyść ofertę
+}
+
+/** Wywoływane z UI, gdy gracz kliknie "Odrzuć" lub "X" */
+function declinePawnOffer() {
+    if (!currentPawnOffer) return;
+    logEvent("Odrzucono ofertę pożyczki lombardowej.", 'review');
+    currentPawnOffer = null; // Wyczyść ofertę
+    closePawnOfferModal(); // Upewnij się, że modal jest zamknięty
+}
+
+function chargeAccountingFee(paymentAmount, entityId) {
+    // Znajdź wszystkie aktywne firmy księgowe (na wypadek, gdyby było ich więcej)
+    const accountingCompanies = stocks.filter(s => s.assetType === 'Accounting' && !s.isBankrupt);
+    if (accountingCompanies.length === 0) {
+        return; // Brak firm księgowych, brak prowizji
+    }
+
+    // Prowizja to np. 0.5% od kwoty raty
+    const feeRate = 0.005; // 0.5%
+    const totalFee = paymentAmount * feeRate;
+
+    // 1. Pobierz prowizję od płacącego
+    if (entityId === 'player') {
+        if (playerCash >= totalFee) {
+            playerCash -= totalFee; // Pobierz od gracza
+        } else {
+            return; // Gracza nie stać na prowizję, pomiń
+        }
+    } else {
+        const ai = aiCompetitors.find(a => a.id === entityId);
+        if (ai && ai.cash >= totalFee) {
+            ai.cash -= totalFee; // Pobierz od AI
+        } else {
+            return; // Bota nie stać na prowizję, pomiń
+        }
+    }
+    
+    // 2. Rozdziel prowizję po równo między wszystkie aktywne firmy księgowe
+    const feePerCompany = totalFee / accountingCompanies.length;
+    accountingCompanies.forEach(company => {
+        // Dodaj zysk bezpośrednio do gotówki firmy księgowej
+        company.cash += feePerCompany; 
+        
+        // Zaktualizuj licznik zysków kwartalnych (dla raportów)
+        // (Zakładamy, że `quarterlyEarnings` jest resetowane w `processFinancialReports`)
+        company.quarterlyEarnings += feePerCompany;
+        
+        // Zaktualizuj bilans
+        if (company.balanceSheet) {
+            company.balanceSheet.assets += feePerCompany; // Gotówka to aktywa
+            company.balanceSheet.retainedEarnings += feePerCompany; // Zysk zwiększa kapitał
+        }
+        // Zaktualizuj bank, w którym firma ma konto
+        if (company.bankAccountId) {
+            const bank = commercialBanks.find(b => b.id === company.bankAccountId);
+            if (bank) bank.cash += feePerCompany;
+        }
+    });
+
+    // 3. Loguj tylko dla gracza (aby nie spamować konsoli botami)
+    if (entityId === 'player' && totalFee > 0.01) {
+        logEvent(`🧾 Zapłacono ${totalFee.toFixed(2)} PLN prowizji księgowej za automatyczną spłatę raty.`, 'review');
+    }
+}
+
+function playerBuyPositivePR() {
+    const skillLvl = getSkillLevel('mediaManipulation');
+    if (skillLvl < 1) return; // Sprawdzenie umiejętności
+    const cost = 10000;
+
+    if (playerCash < cost) {
+        showToast("Brak środków na artykuł sponsorowany! (Wymagane 10 000 PLN)", 'error');
+        return;
+    }
+    
+    const select = document.getElementById('positive-pr-select');
+    if (!select || !select.value) {
+        showToast("Wybierz spółkę, którą chcesz promować.", 'warning');
+        return;
+    }
+    const symbol = select.value;
+    const stock = stocks.find(s => s.symbol === symbol);
+    if (!stock) return;
+
+    // Transakcja
+    playerCash -= cost;
+    displayCash();
+    
+    // Efekt
+    logEvent(`📰 Sfinansowałeś pozytywny artykuł o ${stock.name}. Wizerunek firmy ociepla się.`, 'review');
+    showToast(`Artykuł o ${stock.name} został opublikowany!`, 'success');
+    
+    // 1. Mały, natychmiastowy boost do ceny
+    applyPriceEffect(stock.symbol, 0.03, 'positive', 'review'); // 3% boost
+    
+    // 2. Tarcza PR na 1 kwartał (czas gry)
+    stock.prShieldExpiry = Date.now() + (BASE_DELAYS.quarterly / currentSpeedMultiplier); 
+    logEvent(`🛡️ ${stock.name} uzyskuje "Tarczę PR" na 1 kwartał.`, 'company');
+}
+
+/**
+ * Gracz kupuje negatywny artykuł (Czarny PR) przeciwko konkurencji.
+ * Wywoływane przez przycisk w modalu gazety.
+ */
+function playerBuyBlackPR() {
+    const skillLvl = getSkillLevel('mediaManipulation');
+    if (skillLvl < 2) return; // Wymagany Lvl 2
+    const cost = 25000;
+
+    if (playerCash < cost) {
+        showToast("Brak środków na Czarny PR! (Wymagane 25 000 PLN)", 'error');
+        return;
+    }
+
+    const select = document.getElementById('black-pr-select');
+    if (!select || !select.value) {
+        showToast("Wybierz spółkę, którą chcesz zaatakować.", 'warning');
+        return;
+    }
+    const targetSymbol = select.value;
+    const targetStock = stocks.find(s => s.symbol === targetSymbol);
+    if (!targetStock) return;
+
+    // Transakcja
+    playerCash -= cost;
+    displayCash();
+    blackPRRiskCounter++; // Zwiększ globalny licznik ryzyka
+
+    logEvent(`📰 Ktoś opłacił negatywną kampanię PR przeciwko ${targetStock.name}...`, 'market');
+    
+    // 1. Sprawdzenie ryzyka wykrycia
+    const currentRisk = BLACK_PR_BASE_RISK + (blackPRRiskCounter * BLACK_PR_RISK_INCREASE);
+    if (Math.random() < currentRisk) {
+        // WYKRYTO!
+        logEvent(`🚨 ŚLEDZTWO DZIENNIKARSKIE! Wykryto, że to Ty stałeś za atakiem na ${targetStock.name}! Twoja reputacja legła w gruzach.`, 'error');
+        showToast(`ZOSTAŁEŚ PRZYŁAPANY! Twoja reputacja ucierpiała!`, 'error', 7000);
+        
+        // Zastosuj uniwersalną karę do reputacji
+        stocks.forEach(s => {
+            if (s.reputation && s.reputation['player'] !== undefined) {
+                changeReputation('player', s.symbol, -25); // Duży cios
+            }
+        });
+        // Odśwież UI gazety, aby pokazać nowe, wyższe ryzyko
+        if (document.getElementById('newspaper-modal').style.display === 'flex') {
+            openNewspaperModal();
+        }
+        return; // Atak nie dochodzi do skutku
+    }
+
+    // 2. Niewykryty - Losowanie wyniku ataku
+    const outcomeRoll = Math.random();
+    if (outcomeRoll < 0.05) { // 5% szans - Duży Negatywny Event
+        logEvent(`🔥 Skandal w ${targetStock.name}! Wypłynęły druzgocące informacje.`, 'company');
+        showToast(`Wybuchł skandal w ${targetStock.name}!`, 'warning');
+        applyPriceEffect(targetSymbol, -0.15, 'negative', 'company'); // -15% uderzenie
+    } else if (outcomeRoll < 0.15) { // 10% szans - Obrona (0.05 + 0.10)
+        logEvent(`🛡️ ${targetStock.name} skutecznie dementuje plotki. Atak PR nie powiódł się.`, 'company');
+        showToast(`Atak PR na ${targetStock.name} nie powiódł się.`, 'default');
+    } else { // 85% szans - Mały Negatywny Event
+        logEvent(`📉 Pojawiły się niepokojące plotki na temat ${targetStock.name}.`, 'company');
+        applyPriceEffect(targetSymbol, -0.05, 'negative', 'company'); // -5% uderzenie
+    }
+    
+    // Odśwież UI gazety, aby pokazać nowe, wyższe ryzyko
+    if (document.getElementById('newspaper-modal').style.display === 'flex') {
+        openNewspaperModal();
+    }
+}
+
+/**
+ * Logika AI do korzystania z Wpływu na Media.
+ * Wywoływana co kwartał.
+ */
+function aiUseMediaInfluence(ai) {
+    const skillLvl = ai.unlockedSkills['mediaManipulation'] || 0;
+    if (skillLvl === 0) return; // AI nie ma tej umiejętności
+
+    const costPR = 10000;
+    const costBlackPR = 25000;
+    
+    // Znajdź spółkę, którą AI kontroluje (do Pozytywnego PR)
+    const controlledStock = Object.keys(ai.portfolio).find(sym => {
+        const s = stocks.find(s => s.symbol === sym);
+        return s && !s.assetType && (ai.portfolio[sym].shares / s.totalShares) > 0.5;
+    });
+
+    // 1. Pozytywny PR (Działanie defensywne)
+    if (controlledStock && ai.cash > costPR && (ai.personality === 'pro_investor' || ai.personality === 'whale' || ai.personality === 'banker')) {
+        const stock = stocks.find(s => s.symbol === controlledStock);
+        // Użyj PR, jeśli kondycja firmy spada LUB reputacja AI w niej jest niska
+        if (stock.financialHealth < 0 || (stock.reputation[ai.id] && stock.reputation[ai.id] < 0)) {
+            if (Math.random() < 0.25) { // 25% szans na reakcję
+                ai.cash -= costPR;
+                logEvent(`📰 ${stock.name} (kontrolowany przez ${ai.name}) publikuje sponsorowany artykuł, aby poprawić swój wizerunek.`, 'review');
+                applyPriceEffect(stock.symbol, 0.03, 'positive', 'review');
+                stock.prShieldExpiry = Date.now() + (BASE_DELAYS.quarterly / currentSpeedMultiplier);
+                return; // AI podjęło akcję
+            }
+        }
+    }
+
+    // 2. Czarny PR (Działanie ofensywne) - Wymagany Lvl 2
+    if (skillLvl < 2 || ai.cash < costBlackPR) return;
+
+    // Tylko agresywne osobowości używają Czarnego PR
+    if (ai.personality === 'reckless' || ai.personality === 'pro_investor' || ai.personality === 'whale') {
+        if (Math.random() < 0.1) { // 10% szans w kwartale na próbę ataku
+            
+            // Znajdź cel (konkurenta)
+            let targetStock = null;
+            if (controlledStock) {
+                // Jeśli AI kontroluje spółkę, atakuje rywala z sektora
+                const controlled = stocks.find(s => s.symbol === controlledStock);
+                targetStock = getRandomElement(stocks.filter(s => 
+                    !s.assetType && !s.isBankrupt && s.sector.includes(controlled.sector[0]) && s.symbol !== controlledStock
+                ));
+            } else {
+                // Jeśli AI nie kontroluje niczego, atakuje losową spółkę
+                targetStock = getRandomElement(stocks.filter(s => !s.assetType && !s.isBankrupt));
+            }
+            
+            if (targetStock) {
+                ai.cash -= costBlackPR;
+                blackPRRiskCounter++; // Użycie przez AI również zwiększa globalne ryzyko!
+                
+                // Sprawdź, czy AI zostało wykryte
+                const currentRisk = BLACK_PR_BASE_RISK + (blackPRRiskCounter * BLACK_PR_RISK_INCREASE);
+                if (Math.random() < currentRisk) {
+                    logEvent(`🚨 Śledztwo dziennikarskie wykryło próbę manipulacji rynkiem przez ${ai.name}!`, 'error');
+                    // AI nie traci reputacji w ten sam sposób co gracz, ale jego atak się nie powiódł
+                    return; // Atak AI nie powiódł się
+                }
+
+                // Atak AI się powiódł
+                const outcomeRoll = Math.random();
+                if (outcomeRoll < 0.05) { // Duży event
+                    logEvent(`🔥 Skandal w ${targetStock.name} (spowodowany przez AI)!`, 'company');
+                    applyPriceEffect(targetStock.symbol, -0.15, 'negative', 'company');
+                } else if (outcomeRoll < 0.15) { // Obrona
+                    logEvent(`🛡️ ${targetStock.name} skutecznie dementuje plotki (atak AI nie powiódł się).`, 'company');
+                } else { // Mały event
+                    logEvent(`📉 Pojawiły się plotki na temat ${targetStock.name} (spowodowane przez AI).`, 'company');
+                    applyPriceEffect(targetStock.symbol, -0.05, 'negative', 'company');
+                }
+            }
+        }
+    }
+}
+
+function initializeCityCompanies() {
+    // 1. Wyczyść stare dane
+    municipalCompanies = [];
+    privateCompanies = [];
+    
+    // 2. Stwórz spółki miejskie
+    const municipalNames = [
+        { name: "Oczyszczalnia Ścieków 'Woda Czysta'", type: 'utility', budget: 50000 },
+        { name: "Drogi i Zieleń Miejska", type: 'infrastructure', budget: 30000 },
+        { name: "Sortownia Odpadów 'EkoGdańsk'", type: 'utility', budget: 40000 },
+        { name: "Elektrociepłownia Miejska", type: 'energy', budget: 150000 },
+        { name: "Stadion Miejski", type: 'leisure', budget: 10000 },
+        { name: "Szpital Miejski", type: 'health', budget: 80000 },
+        { name: "Dom Kultury", type: 'leisure', budget: 5000 },
+        { name: "Wodociągi Miejskie", type: 'utility', budget: 60000 }
+    ];
+
+    municipalNames.forEach(comp => {
+        municipalCompanies.push({
+            id: `mun_${comp.name.substring(0, 3).toUpperCase()}`,
+            name: comp.name,
+            type: comp.type,
+            budget: comp.budget,
+            baseIncome: comp.budget * 0.1 // Przykładowy roczny przychód
+        });
+    });
+
+    // 3. Stwórz firmy prywatne
+    const fpf = stocks.find(s => s.symbol === 'FPF'); // Znajdź Fundację
+    for (let i = 0; i < 5; i++) { // Stwórz 5 firm prywatnych na start
+        const newPrivateCompany = {
+            id: `priv_${Date.now() + i}`,
+            name: `Prywatna Inicjatywa #${i + 1}`, // TODO: Lepszy generator nazw
+            value: getRandomIntInRange(10000, 50000),
+            developmentProgress: 0,
+            cityOwnership: getRandomInRange(0.01, 0.99) // Udział Fundacji (miasta)
+        };
+        privateCompanies.push(newPrivateCompany);
+        
+        // Fundacja przejmuje udziały
+        if (fpf && fpf.holdingPortfolio) {
+            // Symulujemy udziały jako specjalny wpis w portfolio holdingu
+            fpf.holdingPortfolio[newPrivateCompany.id] = {
+                quantity: newPrivateCompany.cityOwnership * 100, // Zapiszemy procent jako "ilość"
+                purchasePrice: newPrivateCompany.value / 100 // Zapiszemy wartość 1%
+            };
+        }
+    }
+    console.log("[MIASTO] Zainicjowano spółki miejskie i firmy prywatne.");
+}
+
+function runCityEconomy() {
+    // 1. Oblicz wydatki
+    const infrastructureMaintenance = city.infrastructureLevel * 10000;
+    const policySpending = 0; // Tu będą koszty polityki burmistrza
+    const totalExpenses = city.baseExpenses + infrastructureMaintenance + policySpending;
+    city.budget -= totalExpenses;
+
+    // 2. Oblicz przychody
+    // (Podatki od spółek giełdowych są dodawane kwartalnie w processFinancialReports)
+    const citizenTax = city.population * 25; // 25 PLN/rok od mieszkańca
+    const stateGrant = governmentTreasury > 10000000 ? governmentTreasury * 0.01 : 0; // 1% dotacji z budżetu państwa
+    
+    if (stateGrant > 0) {
+        governmentTreasury -= stateGrant;
+        logEvent(`🏛️ Rząd przekazał ${stateGrant.toFixed(0)} PLN dotacji dla miasta ${city.name}.`, 'state');
+    }
+    city.budget += (citizenTax + stateGrant);
+
+    // 3. Zastosuj politykę burmistrza
+    switch (city.mayor.policy) {
+        case 'infrastructure':
+            // Szybki rozwój infrastruktury
+            city.infrastructureLevel += 0.05; 
+            break;
+        case 'business':
+            // Program wsparcia biznesu (dodaje nową firmę prywatną)
+            if (privateCompanies.length < 20) { // Limit firm
+                 const newPrivateCompany = { /* ... (logika tworzenia nowej firmy) ... */ };
+                 // privateCompanies.push(newPrivateCompany);
+                 logEvent(`🏙️ W mieście powstaje nowa firma prywatna dzięki programowi wsparcia!`, 'city');
+            }
+            break;
+        case 'municipal':
+            // Wsparcie spółek miejskich (dodatkowy budżet dla nich)
+            municipalCompanies.forEach(comp => comp.budget += 10000);
+            break;
+    }
+
+    // 4. Wzrost populacji (zależny od infrastruktury)
+    const baseGrowth = getRandomInRange(0.01, 0.02); // 1-2% bazowo
+    const infraBonus = (city.infrastructureLevel - 1.0) * 0.01; // +1% za każdy 1.0 infra
+    city.population += Math.floor(city.population * (baseGrowth + infraBonus));
+    
+    logEvent(`🏙️ Roczne rozliczenie miasta ${city.name}. Budżet: ${city.budget.toFixed(0)} PLN. Populacja: ${city.population.toLocaleString()}.`, 'review');
+}
+
+/**
+ * (Roczna) Logika spółek miejskich (IPO).
+ */
+function runMunicipalCompanyLogic() {
+    if (Math.random() > 0.20) { // 20% szans rocznie na IPO
+        return;
+    }
+
+    const targetCompany = getRandomElement(municipalCompanies);
+    if (!targetCompany) return;
+
+    // Spółka wchodzi na giełdę
+    logEvent(`🎉 IPO SPÓŁKI MIEJSKIEJ! ${targetCompany.name} wchodzi na Giełdę Brązową!`, 'success');
+
+    const cityOwnershipPct = getRandomInRange(0.51, 0.95); // Miasto trzyma 51-95%
+    const totalShares = getRandomIntInRange(20000, 50000);
+    const initialPrice = (targetCompany.budget + targetCompany.baseIncome * 5) / totalShares; // Prosta wycena
+
+    const newStock = {
+        name: targetCompany.name,
+        price: Math.max(10, initialPrice), // Cena min. 10 PLN
+        volatilityFactor: getRandomInRange(0.2, 0.5), // Bardzo stabilne
+        symbol: targetCompany.id,
+        exchange: 'BRONZE', 
+        totalShares: totalShares,
+        maxShares: totalShares * 2,
+        sharesHeld: Math.floor(totalShares * cityOwnershipPct), // Akcje "zajęte" przez miasto
+        sector: ['Usługi', 'Nieruchomości'], // Uogólniony sektor
+        financialHealth: 5, // Bardzo zdrowe
+        lastReport: 'good',
+        cash: targetCompany.budget,
+        assetType: 'Municipal', // Nowy typ
+        balanceSheet: { assets: targetCompany.budget * 2, liabilities: targetCompany.budget, shareCapital: totalShares * 10, retainedEarnings: 0 },
+        quarterlyEarnings: targetCompany.baseIncome / 4,
+        priceHistory: [], candlestickHistory: [], lineHistory: [], playerTransactions: [],
+        
+        isStateOwned: true, // Używamy tej flagi do oznaczenia własności publicznej (miejskiej)
+        stateOwnershipPct: cityOwnershipPct,
+        canBeTraded: true,
+        cannotGoBankrupt: true, // Nigdy nie bankrutują
+        
+        dividendPolicy: Math.random() < 0.5 ? 'None' : 'Balanced', // 50/50
+        dividendTimer: getRandomIntInRange(8*60*1000, 15*60*1000),
+        estimatedDividend: 0,
+        bankAccountId: null, 
+        isBankStock: false
+    };
+    
+    // Zainicjuj bilans, CEO itp.
+    initializeBalanceSheetForStock(newStock); // Mimo że ma assetType, chcemy CEO itp.
+    initializeDescriptionParts(newStock);
+    generateCEO(newStock);
+    
+    stocks.push(newStock);
+
+    // Usuń z listy spółek miejskich
+    const index = municipalCompanies.findIndex(c => c.id === targetCompany.id);
+    if (index > -1) municipalCompanies.splice(index, 1);
+}
+
+/**
+ * (Kwartalna) Logika rozwoju firm prywatnych.
+ */
+function runPrivateCompanyLogic() {
+    privateCompanies.forEach(company => {
+        company.developmentProgress += getRandomInRange(1, 5); // Powolny postęp co kwartał
+
+        if (company.developmentProgress >= 100) {
+            // Firma dojrzała - podejmuje decyzję
+            company.developmentProgress = 0; // Reset
+            const decision = Math.random();
+
+            if (decision < 0.2) { // 20% szans na IPO
+                logEvent(`📈 Firma prywatna ${company.name} decyduje się na wejście na Giełdę Brązową!`, 'market');
+                // TODO: Logika IPO podobna do `runMunicipalCompanyLogic`, ale:
+                // 1. Tworzy zwykłą spółkę (bez `cannotGoBankrupt`).
+                // 2. Fundacja (FPF) otrzymuje `cityOwnership` procent akcji.
+                // 3. Reszta akcji trafia na rynek.
+            } else if (decision < 0.4) { // 20% szans na wejście do inkubatora
+                logEvent(`🚀 Firma prywatna ${company.name} wchodzi do inkubatora jako startup!`, 'market');
+                // TODO: Logika tworzenia `Startupu` na bazie `company.value`.
+            } else {
+                // 60% szans - pozostaje prywatna, ale rośnie
+                company.value *= 1.2; // Wartość rośnie o 20%
+                city.infrastructureLevel += 0.01; // Stały, mały bonus do infrastruktury
+            }
+        }
+    });
 }

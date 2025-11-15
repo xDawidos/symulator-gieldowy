@@ -87,9 +87,17 @@ function setGameSpeed(speedMultiplier) {
     // Główna pętla gry (aktualizacje co sekundę czasu gry)
     gameTimers.stockUpdate = setInterval(() => {
 
+
         if (isGamePaused) {
             return; // Jeśli gra jest zapauzowana, nie wykonuj żadnych akcji
         }
+
+        stocks.forEach(stock => {
+            if (stock.prShieldExpiry && Date.now() > stock.prShieldExpiry) {
+                stock.prShieldExpiry = null;
+                logEvent(`🛡️ Tarcza PR dla ${stock.name} wygasła.`, 'company');
+            }
+        });
 
         if (document.getElementById('state-modal').style.display === 'block') {
             updateStateModalContent();
@@ -125,8 +133,6 @@ function setGameSpeed(speedMultiplier) {
         updateStockPrices();
         updateHoldingCompanies();
         updateStartups(gameTimeDelta);
-        checkSubscriptionStatus();
-        generatePremiumRumor();
         checkTBillAccess();
         updateMarketVolatilityIndex();
         updatePassiveWork(gameTimeDelta);
@@ -283,181 +289,230 @@ function setGameSpeed(speedMultiplier) {
 
     // Pętla tygodniowa (z bazy main.js - bankowość komercyjna)
 gameTimers.weekly = setInterval(() => {
-    if (isGamePaused) return;
+        if (isGamePaused) return;
 
-    processCompanyBanking(); // Bankowość korporacyjna
-    processBankStartupSponsorship(); // Sponsorowanie startupów przez banki
-    stocks.forEach(s => { if(s.mergerProcess) advanceMergerProcess(s); });
-    // Naliczanie odsetek od depozytów komercyjnych gracza
-    playerCommercialDeposits.forEach(deposit => {
-        const weeklyRate = deposit.interestRate / 52;
-        const interestEarned = deposit.amount * weeklyRate;
-        playerCash += interestEarned;
-        if (interestEarned > 0.01) {
-            logEvent(` Naliczono ${interestEarned.toFixed(2)} PLN odsetek od depozytu w ${deposit.bankName}.`, 'market');
+        // ===>>> NOWE WYWOŁANIE SKANERA WINDYKATORA <<<===
+        if (typeof runDebtCollectorAI === 'function') {
+            runDebtCollectorAI(); //
         }
-    });
+        // ===>>> NOWE WYWOŁANIE SKANERA LOMBARDU <<<===
+        if (typeof runPawnShopAI === 'function') {
+            runPawnShopAI(); //
+        }
 
+        processCompanyBanking(); //
+        processBankStartupSponsorship(); //
 
-    if (playerCompany && playerCompany.employees.length > 0) {
-        let totalEmployeeSalary = 0;
-        let totalEquipmentRunningCost = 0;
-
-        // Koszty pracowników
-        playerCompany.employees.forEach(employee => {
-            // Użyj pensji pracownika, jeśli istnieje, inaczej bazowej
-            totalEmployeeSalary += employee.salary || EMPLOYEE_BASE_SALARY;
+        // Naliczanie odsetek od depozytów komercyjnych gracza (bez zmian)
+        playerCommercialDeposits.forEach(deposit => { //
+            const weeklyRate = deposit.interestRate / 52; //
+            const interestEarned = deposit.amount * weeklyRate; //
+            playerCash += interestEarned; //
+            if (interestEarned > 0.01) { //
+                logEvent(` Naliczono ${interestEarned.toFixed(2)} PLN odsetek od depozytu w ${deposit.bankName}.`, 'market'); //
+            }
         });
 
-        // Modyfikator HR (jeśli HR istnieje i ma poziom > 0)
-        if (playerCompany.hrLevel > 0) {
-            const salaryReduction = 1 - (playerCompany.hrLevel * 0.05);
-            totalEmployeeSalary *= salaryReduction;
+        // Koszty firmy gracza (bez zmian)
+        if (playerCompany && playerCompany.employees.length > 0) { //
+            let totalEmployeeSalary = 0; //
+            let totalEquipmentRunningCost = 0; //
+
+            // Koszty pracowników
+            playerCompany.employees.forEach(employee => { //
+                totalEmployeeSalary += employee.salary || EMPLOYEE_BASE_SALARY; //
+            });
+
+            // Modyfikator HR
+            if (playerCompany.hrLevel > 0) { //
+                const salaryReduction = 1 - (playerCompany.hrLevel * 0.05); //
+                totalEmployeeSalary *= salaryReduction; //
+            }
+
+            // Koszty sprzętu
+            playerCompany.equipment.forEach(eq => { //
+                totalEquipmentRunningCost += eq.quantity * getRandomInRange(eq.runningCostMin, eq.runningCostMax); //
+            });
+
+            const totalCompanyCosts = totalEmployeeSalary + totalEquipmentRunningCost; //
+
+            if (playerCash >= totalCompanyCosts) { //
+                playerCash -= totalCompanyCosts; //
+                if (totalEmployeeSalary > 0) logEvent(`💸 Twoja firma wypłaciła ${totalEmployeeSalary.toFixed(2)} PLN pensji.`); //
+                if (totalEquipmentRunningCost > 0) logEvent(`💡 Twoja firma zapłaciła ${totalEquipmentRunningCost.toFixed(2)} PLN za utrzymanie sprzętu.`); //
+            } else {
+                logEvent(`🚨 Brak wystarczających środków (${totalCompanyCosts.toFixed(2)} PLN) na pokrycie kosztów firmy! Morale pracowników spada!`, 'error'); //
+                 if (typeof applyMoralePenalty === 'function') { //
+                     applyMoralePenalty(playerCompany.employees, 10); //
+                 }
+            }
+            displayCash(); //
+        }
+        if (playerCompany && typeof updateAllEmployeeMorale === 'function') { //
+            updateAllEmployeeMorale(); //
         }
 
-        // Koszty sprzętu
-        playerCompany.equipment.forEach(eq => {
-            totalEquipmentRunningCost += eq.quantity * getRandomInRange(eq.runningCostMin, eq.runningCostMax);
-        });
+        // ===>>> ZMODYFIKOWANA PĘTLA SPŁATY KREDYTÓW GRACZA <<<===
+        const now = Date.now(); // Pobierz aktualny czas
+        for (let index = playerCommercialLoans.length - 1; index >= 0; index--) { //
+            const loan = playerCommercialLoans[index]; //
 
-        const totalCompanyCosts = totalEmployeeSalary + totalEquipmentRunningCost;
+            // --- NOWA LOGIKA DLA POŻYCZEK LOMBARDOWYCH ---
+            if (loan.isPawnLoan) { //
+                // To jest pożyczka lombardowa, sprawdzamy tylko termin zapadalności
+                if (now >= loan.maturityDate) { //
+                    const pawnShop = stocks.find(s => s.symbol === loan.collectorSymbol); //
+                    
+                    if (playerCash >= loan.amount) { //
+                        // Gracz ma pieniądze - automatyczna spłata
+                        playerCash -= loan.amount; //
+                        if (pawnShop) pawnShop.cash += loan.amount; //
+                        
+                        logEvent(`✅ Pożyczka lombardowa w ${loan.bankName} została automatycznie spłacona (${loan.amount.toFixed(2)} PLN).`, 'success'); //
+                        
+                        // Odblokuj akcje
+                        if (loan.collateral && typeof unlockCollateral === 'function') { //
+                             unlockCollateral(loan.collateral.symbol, loan.collateral.quantity); //
+                        }
+                        playerCommercialLoans.splice(index, 1); //
+                    
+                    } else {
+                        // Gracz nie ma pieniędzy - DEFAULT
+                        logEvent(`❌ NIE SPŁACONO POŻYCZKI LOMBARDOWEJ! ${loan.bankName} przejmuje Twoje ${loan.collateral.quantity} akcji ${loan.collateral.symbol}!`, 'error'); //
+                        showToast(`LOMBARD PRZEJĄŁ AKCJE ${loan.collateral.symbol}!`, 'error'); //
 
-        if (playerCash >= totalCompanyCosts) {
-            playerCash -= totalCompanyCosts;
-            if (totalEmployeeSalary > 0) logEvent(`💸 Twoja firma wypłaciła ${totalEmployeeSalary.toFixed(2)} PLN pensji.`);
-            if (totalEquipmentRunningCost > 0) logEvent(`💡 Twoja firma zapłaciła ${totalEquipmentRunningCost.toFixed(2)} PLN za utrzymanie sprzętu.`);
-        } else {
-            // Brak środków - konsekwencje (np. obniżenie morale)
-            logEvent(`🚨 Brak wystarczających środków (${totalCompanyCosts.toFixed(2)} PLN) na pokrycie kosztów firmy! Morale pracowników spada!`, 'error');
-            // Zastosuj karę do morale (implementacja morale w kroku 4)
-             if (typeof applyMoralePenalty === 'function') {
-                 applyMoralePenalty(playerCompany.employees, 10); // Np. kara -10 morale
-             }
-            // Można dodać zaciąganie długu przez firmę lub inne kary
-        }
-        displayCash(); // Zaktualizuj gotówkę po odjęciu kosztów
-    }
+                        // Lombard przejmuje akcje
+                        const holding = playerPortfolio[loan.collateral.symbol]; //
+                        if (holding) { //
+                            holding.shares = Math.max(0, holding.shares - loan.collateral.quantity); //
+                            if (holding.shares <= 0) delete playerPortfolio[loan.collateral.symbol]; //
+                        }
+                        
+                        if (pawnShop) { //
+                            if (!pawnShop.holdingPortfolio) pawnShop.holdingPortfolio = {}; //
+                            const pawnHolding = pawnShop.holdingPortfolio[loan.collateral.symbol]; //
+                            if (pawnHolding) { //
+                                pawnHolding.quantity += loan.collateral.quantity; //
+                            } else {
+                                const stock = stocks.find(s => s.symbol === loan.collateral.symbol); //
+                                pawnShop.holdingPortfolio[loan.collateral.symbol] = { 
+                                    quantity: loan.collateral.quantity, 
+                                    purchasePrice: stock ? stock.price : 0 
+                                };
+                            }
+                        }
+                        playerCommercialLoans.splice(index, 1); //
+                    }
+                }
+                // Jeśli termin nie minął, nic nie rób (odsetki doliczone na starcie)
+                continue; // Przejdź do następnej pożyczki
+            }
+            // --- KONIEC LOGIKI LOMBARDU ---
 
-    if (playerCompany && typeof updateAllEmployeeMorale === 'function') {
-        updateAllEmployeeMorale();
-    }
 
-    // Obsługa automatycznej spłaty kredytów komercyjnych gracza
-    // ---> WAŻNE: Używamy pętli 'for' z iteracją wstecz, aby uniknąć problemów przy usuwaniu elementów (splice) <---
-    for (let index = playerCommercialLoans.length - 1; index >= 0; index--) {
-        const loan = playerCommercialLoans[index];
-        const weeklyInterest = loan.amount * (loan.interestRate / 52);
-        loan.amount += weeklyInterest; // Dolicz odsetki do salda
+            // --- Logika dla kredytów bankowych i windykacyjnych (stara logika) ---
+            const weeklyInterest = loan.amount * (loan.interestRate / 52); 
+            loan.amount += weeklyInterest; //
 
-        let autoRepayActive = typeof isAutoRepayEnabled !== 'undefined' ? isAutoRepayEnabled : true;
+            let autoRepayActive = typeof isAutoRepayEnabled !== 'undefined' ? isAutoRepayEnabled : true; //
 
-        if (autoRepayActive && playerCash >= loan.weeklyPayment) {
-            const payment = Math.min(loan.weeklyPayment, loan.amount);
-            playerCash -= payment;
-            loan.amount -= payment;
+            if (autoRepayActive && playerCash >= loan.weeklyPayment) { 
+                const payment = Math.min(loan.weeklyPayment, loan.amount); 
+                playerCash -= payment; 
+                loan.amount -= payment; 
+                chargeAccountingFee(payment, 'player');
 
-            const bank = commercialBanks.find(b => b.id === loan.bankId);
-            if (bank) {
-                bank.cash += payment;
-                // --- POPRAWKA AKTUALIZACJI PORTFELA BANKU ---
-                // Musimy znaleźć konkretną pożyczkę w portfelu banku i ją zaktualizować/usunąć
-                if (bank.loanPortfolio && bank.loanPortfolio['player']) {
-                    const bankLoanIndex = bank.loanPortfolio['player'].findIndex(bl => bl.id === loan.id);
-                    if (bankLoanIndex !== -1) {
-                        bank.loanPortfolio['player'][bankLoanIndex].remainingAmount -= payment;
-                        if (bank.loanPortfolio['player'][bankLoanIndex].remainingAmount <= 0.01) {
-                            bank.loanPortfolio['player'].splice(bankLoanIndex, 1);
+                // --- NOWA LOGIKA: Kierowanie płatności ---
+                if (loan.collectorSymbol) { 
+                    // To jest dług windykatora
+                    const collector = stocks.find(s => s.symbol === loan.collectorSymbol); 
+                    if (collector) { 
+                        collector.cash += payment; // Płatność idzie do WRONY
+                    }
+                } else if (loan.bankId) { 
+                    // To jest normalny dług bankowy
+                    const bank = commercialBanks.find(b => b.id === loan.bankId); 
+                    if (bank) { //
+                        bank.cash += payment; //
+                        if (bank.loanPortfolio && bank.loanPortfolio['player']) { 
+                            const bankLoanIndex = bank.loanPortfolio['player'].findIndex(bl => bl.id === loan.id); 
+                            if (bankLoanIndex !== -1) { //
+                                bank.loanPortfolio['player'][bankLoanIndex].remainingAmount -= payment; 
+                                if (bank.loanPortfolio['player'][bankLoanIndex].remainingAmount <= 0.01) { 
+                                    bank.loanPortfolio['player'].splice(bankLoanIndex, 1); 
+                                }
+                            }
                         }
                     }
                 }
-                // --- KONIEC POPRAWKI ---
-            }
+                // --- KONIEC NOWEJ LOGIKI ---
 
-            if (loan.amount <= 0.01) { // Użyj małego progu dla bezpieczeństwa
-                logEvent(` Kredyt komercyjny w ${loan.bankName} został spłacony!`, 'success');
-                if (loan.collateral) {
-                    // Sprawdź, czy funkcja unlockCollateral istnieje przed wywołaniem
-                    if (typeof unlockCollateral === 'function') {
-                         unlockCollateral(loan.collateral.symbol, loan.collateral.quantity);
+                if (loan.amount <= 0.01) { //
+                    logEvent(` Kredyt komercyjny w ${loan.bankName} został spłacony!`, 'success'); //
+                    if (loan.collateral && typeof unlockCollateral === 'function') { //
+                         unlockCollateral(loan.collateral.symbol, loan.collateral.quantity); //
+                    }
+                    playerCommercialLoans.splice(index, 1); //
+                } else {
+                    logEvent(` Automatycznie spłacono ${payment.toFixed(2)} PLN raty kredytu w ${loan.bankName}.`, 'market'); //
+                }
+            } else if (autoRepayActive) { //
+                logEvent(`⚠️ Brak środków na spłatę raty kredytu komercyjnego w ${loan.bankName}!`, 'warning'); //
+                loan.missedPayments = (loan.missedPayments || 0) + 1; //
+                if (loan.missedPayments >= 3 && loan.collateral && typeof triggerCollateralAuction === 'function') { //
+                    triggerCollateralAuction(loan); //
+                    playerCommercialLoans.splice(index, 1); //
+                }
+            }
+        } // Koniec pętli for dla pożyczek gracza
+        // ===>>> KONIEC MODYFIKACJI PĘTLI KREDYTOWEJ <<<===
+
+
+        // Koszty badań R&D (bez zmian)
+        stocks.forEach(stock => { //
+            if (!stock.assetType && !stock.isBankStock && stock.research) { //
+                if (stock.research.isResearching && stock.research.currentTech) { //
+                    if (stock.cash >= RESEARCH_MAINTENANCE_COST) { //
+                        stock.cash -= RESEARCH_MAINTENANCE_COST; //
                     } else {
-                        console.warn("Funkcja unlockCollateral nie została znaleziona!");
+                        stock.research.isResearching = false; //
+                        stock.research.researchPaused = true; //
+                        const techName = technologies[stock.research.currentTech]?.name || "nieznanej technologii"; //
+                        logEvent(`⏸️ ${stock.name} wstrzymuje badania nad "${techName}" z powodu braku środków na utrzymanie.`, 'company'); //
+                        showToast(`Badania w ${stock.name} wstrzymane - brak funduszy!`, 'warning'); //
                     }
                 }
-                playerCommercialLoans.splice(index, 1); // Usuń spłaconą pożyczkę
-            } else {
-                logEvent(` Automatycznie spłacono ${payment.toFixed(2)} PLN raty kredytu w ${loan.bankName}.`, 'market');
+                else if (stock.research.researchPaused && stock.research.currentTech) { //
+                    if (stock.cash >= RESEARCH_MAINTENANCE_COST) { //
+                        stock.cash -= RESEARCH_MAINTENANCE_COST; //
+                        stock.research.isResearching = true; //
+                        stock.research.researchPaused = false; //
+                        const techName = technologies[stock.research.currentTech]?.name || "nieznanej technologii"; //
+                        logEvent(`▶️ ${stock.name} wznawia badania nad "${techName}".`, 'company'); //
+                    }
+                }
             }
-        } else if (autoRepayActive) {
-            logEvent(`⚠️ Brak środków na spłatę raty kredytu komercyjnego w ${loan.bankName}!`, 'warning');
-            loan.missedPayments = (loan.missedPayments || 0) + 1;
-            if (loan.missedPayments >= 3 && loan.collateral) {
-                 // Sprawdź, czy funkcja triggerCollateralAuction istnieje
-                 if (typeof triggerCollateralAuction === 'function') {
-                    // Przekażemy obiekt pożyczki, aby funkcja aukcji miała potrzebne dane
-                    triggerCollateralAuction(loan); // UWAGA: Upewnij się, że triggerCollateralAuction obsługuje obiekt pożyczki
-                 } else {
-                    console.warn("Funkcja triggerCollateralAuction nie została znaleziona!");
+            else if (stock.isBankStock && stock.research && stock.research.investmentPaused && stock.research.currentInvestmentId) { //
+                 const bankData = commercialBanks.find(b => b.id === stock.bankData.id); //
+                 const investment = bankInvestments[stock.research.currentInvestmentId]; //
+                 if(bankData && investment && bankData.cash >= (investment.initialCashCost || 0)) { //
+                     bankData.cash -= (investment.initialCashCost || 0); //
+                     stock.research.isResearching = true; //
+                     stock.research.investmentPaused = false; //
+                     if((investment.initialCashCost || 0) > 0) logEvent(`💸 Bank ${stock.name} wznawia inwestycję "${investment.name}" kosztem ${(investment.initialCashCost || 0).toLocaleString()} PLN.`); //
+                     else logEvent(`▶️ Bank ${stock.name} wznawia inwestycję "${investment.name}".`); //
                  }
-                playerCommercialLoans.splice(index, 1);
             }
+        });
+        
+        // Podatki miejskie (bez zmian)
+        if (typeof processCityAndCitizenTaxes === 'function') { //
+            processCityAndCitizenTaxes(); //
         }
-    } // Koniec pętli for dla pożyczek
 
-    // ---> NOWA PĘTLA DLA KOSZTÓW BADAŃ <---
-    stocks.forEach(stock => {
-        // Sprawdź tylko ZWYKŁE spółki (NIE banki, NIE startupy itp.)
-        // i te, które mają obiekt badań
-        if (!stock.assetType && !stock.isBankStock && stock.research) { // Dodano !stock.isBankStock
-            // Sprawdź, czy badania są aktywne
-            if (stock.research.isResearching && stock.research.currentTech) {
-                if (stock.cash >= RESEARCH_MAINTENANCE_COST) {
-                    stock.cash -= RESEARCH_MAINTENANCE_COST;
-                } else {
-                    // Wstrzymaj badania (logika bez zmian)
-                    stock.research.isResearching = false;
-                    stock.research.researchPaused = true;
-                    const techName = technologies[stock.research.currentTech]?.name || "nieznanej technologii";
-                    logEvent(`⏸️ ${stock.name} wstrzymuje badania nad "${techName}" z powodu braku środków na utrzymanie.`, 'company');
-                    showToast(`Badania w ${stock.name} wstrzymane - brak funduszy!`, 'warning');
-                }
-            }
-            // Sprawdź, czy badania były wstrzymane i można je wznowić
-            else if (stock.research.researchPaused && stock.research.currentTech) {
-                if (stock.cash >= RESEARCH_MAINTENANCE_COST) {
-                    // Wznów badania (logika bez zmian)
-                    stock.cash -= RESEARCH_MAINTENANCE_COST;
-                    stock.research.isResearching = true;
-                    stock.research.researchPaused = false;
-                    const techName = technologies[stock.research.currentTech]?.name || "nieznanej technologii";
-                    logEvent(`▶️ ${stock.name} wznawia badania nad "${techName}".`, 'company');
-                }
-            }
-        }
-        // --- NOWA LOGIKA: Wznawianie zapauzowanych INWESTYCJI bankowych ---
-        else if (stock.isBankStock && stock.research && stock.research.investmentPaused && stock.research.currentInvestmentId) {
-             const bankData = commercialBanks.find(b => b.id === stock.bankData.id);
-             const investment = bankInvestments[stock.research.currentInvestmentId];
-             if(bankData && investment && bankData.cash >= (investment.initialCashCost || 0)) {
-                 // Wznów inwestycję
-                 bankData.cash -= (investment.initialCashCost || 0);
-                 stock.research.isResearching = true;
-                 stock.research.investmentPaused = false;
-                 if((investment.initialCashCost || 0) > 0) logEvent(`💸 Bank ${stock.name} wznawia inwestycję "${investment.name}" kosztem ${(investment.initialCashCost || 0).toLocaleString()} PLN.`);
-                 else logEvent(`▶️ Bank ${stock.name} wznawia inwestycję "${investment.name}".`);
-             }
-        }
-    });
-    // ---> KONIEC NOWEJ PĘTLI <---
+        if (playerCash > 0) displayCash(); //
 
-    if (typeof processCityAndCitizenTaxes === 'function') {
-        processCityAndCitizenTaxes();
-    } else {
-        console.error("Funkcja processCityAndCitizenTaxes nie została znaleziona!");
-    }
-
-    if (playerCash > 0) displayCash(); // Aktualizuj gotówkę po operacjach
-
-}, BASE_DELAYS.weekly / speedMultiplier);
+    }, BASE_DELAYS.weekly / speedMultiplier);
 
     // Pętla kwartalna (z bazy main.js - zawiera AI Banku Centralnego)
     gameTimers.quarterly = setInterval(() => {
@@ -468,6 +523,12 @@ gameTimers.weekly = setInterval(() => {
         updateCeoTenureAndAge(); // Zmieniona nazwa, ale to samo
         updateAnalyticalProperties();
         runCentralBankAI(); // Z bazy main.js
+        aiCompetitors.forEach(ai => {
+            // Sprawdź, czy to "prawdziwy" bot (nie market maker) i czy funkcja istnieje
+            if (ai.skillPoints !== undefined && typeof aiUseMediaInfluence === 'function') { 
+                aiUseMediaInfluence(ai);
+            }
+        });
         stocks.forEach(stock => {
             if (typeof updateCorporatePhase === 'function') {
                 updateCorporatePhase(stock);
@@ -489,6 +550,10 @@ gameTimers.weekly = setInterval(() => {
         // ===>>> SPRAWDZENIE STATUSU MONOPOLISTY <<<===
         if (typeof checkMonopolyStatus === 'function') {
              checkMonopolyStatus();
+        }
+
+        if (typeof runPrivateCompanyLogic === 'function') {
+            runPrivateCompanyLogic(); // Logika rozwoju firm prywatnych
         }
 
     }, BASE_DELAYS.quarterly / speedMultiplier);
@@ -559,7 +624,9 @@ gameTimers.weekly = setInterval(() => {
 
     checkSanEscobarRisk();
 
-
+    if (typeof aiUpgradeAntitrustOffice === 'function') {
+            aiUpgradeAntitrustOffice(); // Państwo (AI) decyduje o ulepszeniu urzędu
+        }
 
 
     if (Math.random() < 0.3) {
@@ -570,7 +637,21 @@ gameTimers.weekly = setInterval(() => {
         }
     }
 
-        updateCity(); // Aktualizacja miasta i start festynu
+        if (typeof runCityEconomy === 'function') {
+            runCityEconomy(); // Uruchom roczną logikę gospodarki miasta
+        }
+        if (typeof runMunicipalCompanyLogic === 'function') {
+            runMunicipalCompanyLogic(); // Uruchom roczną logikę spółek miejskich (w tym IPO)
+        }
+        
+        // Logika wyborów (co 4 lata)
+        city.mayor.electionYear--;
+        if (city.mayor.electionYear <= 0) {
+            if (typeof triggerMayoralElection === 'function') {
+                triggerMayoralElection(); // Uruchom wybory
+            }
+            city.mayor.electionYear = 4; // Zresetuj licznik
+        }
     }, BASE_DELAYS.quarterly * 4 / speedMultiplier); // Co rok
 }
 
@@ -813,7 +894,15 @@ function initializeGame() {
     } else {
         console.warn('initializeDividendEstimates nie jest dostępna — pomijam inicjalizację estymat dywidend.'); // Zachowane ostrzeżenie
     }
-
+    initializeCityCompanies();
+    console.log("[M&A Init] Inicjalizacja nastawienia mediów...");
+    const mediaCompanies = stocks.filter(s => s.specializationSectors?.includes('Media'));
+    if (mediaCompanies.length >= 2) {
+        const shuffledMedia = mediaCompanies.sort(() => 0.5 - Math.random());
+        shuffledMedia[0].stance = 'pro-player';
+        shuffledMedia[1].stance = 'anti-player';
+        console.log(`[M&A Init] Gazeta PRO-gracz: ${shuffledMedia[0].symbol}, Gazeta ANTI-gracz: ${shuffledMedia[1].symbol}`);
+    }
     // Ustawienie UI
     const startupPanel = document.getElementById('startup-incubator-panel');
     const startupIcon = document.getElementById('toggle-icon-startup');

@@ -303,20 +303,65 @@
         </div>
     </div>
 </div>
-    <div id="city-investment-modal" class="modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 400px; border: 2px solid #333; background-color: #f9f9f9; box-shadow: 0 4px 8px rgba(0,0,0,0.2); padding: 20px; z-index: 1020; border-radius: 8px;">
-        <button class="close-btn" onclick="document.getElementById('city-investment-modal').style.display='none';">&times;</button>
-         <h2 style="margin-top: 0; text-align: center;">🏙️ Inwestuj w Miasto</h2>
-         <p>Twoje inwestycje w infrastrukturę i rozwój Gdańska mogą odblokować nowe, unikalne możliwości inwestycyjne i wydarzenia.</p>
-         <div class="bank-section">
-             <p>Całkowity wkład: <strong id="city-total-donated">0.00</strong> PLN</p>
-             <p>Status: <strong id="city-unlock-status">Zablokowane</strong></p>
-         </div>
-         <div class="bank-section">
-             <label for="city-donation-amount">Kwota datku:</label>
-             <input type="number" id="city-donation-amount" placeholder="Wpisz kwotę...">
-             <button onclick="donateToCity(document.getElementById('city-donation-amount').valueAsNumber)">Przekaż datek</button>
-         </div>
+    <div id="city-investment-modal" class="modal" style="display: none; width: 650px;">
+    <button class="close-btn" onclick="document.getElementById('city-investment-modal').style.display='none';">&times;</button>
+    <h2 style="margin-top: 0; text-align: center;">🏙️ Panel Miasta: Gdańsk</h2>
+    
+    <div class="bank-tabs">
+        <button id="tab-btn-city-main" class="bank-tab-btn active" onclick="switchCityTab('main')">Panel Główny</button>
+        <button id="tab-btn-city-municipal" class="bank-tab-btn" onclick="switchCityTab('municipal')">Spółki Miejskie</button>
+        <button id="tab-btn-city-private" class="bank-tab-btn" onclick="switchCityTab('private')">Firmy Prywatne</button>
+        <button id="tab-btn-city-election" class="bank-tab-btn" onclick="switchCityTab('election')" style="display: none;">Wybory</button> </div>
+
+    <div id="city-content-main" class="bank-tab-content">
+        <div class="bank-section">
+            <h4>Gospodarka Miejska</h4>
+            <p>Budżet: <strong id="city-budget-display">0.00</strong> PLN | Populacja: <strong id="city-population-display">0</strong></p>
+            <p>Poziom Infrastruktury: <strong id="city-infra-level">1.0</strong> | Następny festyn za: <strong id="next-festival-countdown">--</strong>s</p>
+        </div>
+        <div class="bank-section">
+            <h4>Obecny Zarząd (Wybory za <span id="city-election-timer">4</span> lata)</h4>
+            <p>Prezydent: <strong id="city-mayor-name">...</strong></p>
+            <p>Polityka: <strong id="city-mayor-policy">...</strong></p>
+        </div>
+        <div class="bank-section">
+            <h4>Twój Wkład</h4>
+            <p>Całkowity wkład: <strong id="city-total-donated">0.00</strong> PLN</p>
+            <p>Status: <strong id="city-unlock-status">Zablokowane (Cel: 10 000 PLN)</strong></p>
+            <div>
+                <label for="city-donation-amount">Kwota datku:</label>
+                <input type="number" id="city-donation-amount" placeholder="Wpisz kwotę...">
+                <button onclick="donateToCity(document.getElementById('city-donation-amount').valueAsNumber)">Przekaż datek</button>
+            </div>
+        </div>
     </div>
+
+    <div id="city-content-municipal" class="bank-tab-content" style="display: none;">
+        <h4>Spółki Miejskie (Nienotowane na Giełdzie)</h4>
+        <p style="font-size: 12px;">Te spółki zapewniają kluczowe usługi dla miasta i emitują obligacje komunalne. Istnieje roczna szansa, że wejdą na giełdę.</p>
+        <table style="width: 100%;">
+            <thead><tr><th>Nazwa</th><th>Typ</th><th>Budżet</th><th>Przychód (roczny)</th></tr></thead>
+            <tbody id="city-municipal-list">
+                </tbody>
+        </table>
+    </div>
+
+    <div id="city-content-private" class="bank-tab-content" style="display: none;">
+        <h4>Lokalne Firmy Prywatne (Pozagiełdowe)</h4>
+        <p style="font-size: 12px;">Te firmy powoli rozwijają się w mieście. Gdy dojrzeją, mogą wejść na giełdę lub do inkubatora startupów. Miasto (poprzez FPF) posiada w nich udziały.</p>
+        <table style="width: 100%;">
+            <thead><tr><th>Nazwa Firmy</th><th>Szac. Wartość</th><th>Udział Miasta (FPF)</th><th>Postęp Rozwoju</th></tr></thead>
+            <tbody id="city-private-list">
+                </tbody>
+        </table>
+    </div>
+    
+    <div id="city-content-election" class="bank-tab-content" style="display: none;">
+         </div>
+
+    <div id="city-content-festival" style="display: none;">
+        </div>
+</div>
 
     <div id="leaderboard-modal" style="display:none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 450px; border: 2px solid #333; background-color: #f9f9f9; box-shadow: 0 4px 8px rgba(0,0,0,0.2); padding: 20px; z-index: 1003; border-radius: 8px;">
         <h2 style="margin-top: 0; text-align: center;">🏆 Ranking Inwestorów</h2>
@@ -330,36 +375,69 @@
          <button onclick="document.getElementById('sixth-sense-modal').style.display='none';" style="display: block; width: 100%; padding: 10px; font-size: 16px;">Rozumiem</button>
     </div>
 
-    <div id="newspaper-modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 800px; max-width: 90%; max-height: 90vh; background-color: #fdf5e6; border: 2px solid #333; box-shadow: 0 4px 8px rgba(0,0,0,0.2); z-index: 1005; border-radius: 4px; display: flex; flex-direction: column;">
-        <div class="newspaper-content">
-             <header class="newspaper-header">
-                 <h2>Puls Rynku</h2>
-             </header>
-             <main class="newspaper-columns">
-                 <div class="news-column">
-                     <section class="news-section">
-                         <h3>Wiadomości z Rynku</h3>
-                         <ul id="market-news-list"></ul>
-                     </section>
-                 </div>
-                 <div class="news-column">
-                     <section class="news-section">
-                         <h3>Wiadomości Spółek</h3>
-                         <ul id="company-news-list"></ul>
-                     </section>
-                     <section class="news-section premium-section">
-                         <h3>Strefa Premium</h3>
-                         <div id="newspaper-subscription-section" style="text-align: center; padding-bottom: 10px;">
-                             <p id="subscription-status-text"></p>
-                             <button id="buy-subscription-btn" onclick="buyPremiumSubscription()"></button>
-                         </div>
-                         <ul id="premium-content"></ul>
-                     </section>
-                 </div>
-             </main>
-         </div>
-         <button onclick="document.getElementById('newspaper-modal').style.display='none';" style="position: absolute; top: 5px; right: 5px; font-size: 20px; background: none; border: none; cursor: pointer;">&times;</button>
+   <div id="newspaper-modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 800px; max-width: 90%; max-height: 90vh; background-color: #fdf5e6; border: 2px solid #333; box-shadow: 0 4px 8px rgba(0,0,0,0.2); z-index: 1005; border-radius: 4px; display: flex; flex-direction: column;">
+    
+    <div class="bank-tabs" style="padding-left: 15px; padding-right: 15px; padding-top: 10px; background-color: #fdf5e6; flex-shrink: 0;">
+        <button id="tab-btn-newspaper-PULS" class="bank-tab-btn active" onclick="switchNewspaperTab('PULS')">Puls Rynku</button>
+        <button id="tab-btn-newspaper-FLESZ" class="bank-tab-btn" onclick="switchNewspaperTab('FLESZ')">Flesz Giełdowy</button>
+        <button id="tab-btn-newspaper-OBSER" class="bank-tab-btn" onclick="switchNewspaperTab('OBSER')">Obserwator Finansowy</button>
     </div>
+    <div class="newspaper-content">
+        <header class="newspaper-header">
+            <h2 id="newspaper-title">Puls Rynku</h2> 
+            <p id="newspaper-date"></p>
+        </header>
+        
+        <div id="newspaper-ad-container" style="display: none; padding: 10px 15px; background-color: #fff8c4; border: 1px dashed #e6db55; margin: 0 15px 10px 15px; text-align: center; font-family: sans-serif; font-size: 13px;">
+            </div>
+
+        <main class="newspaper-columns">
+            <div class="news-column">
+                <section class="news-section">
+                    <h3>Wiadomości z Rynku</h3>
+                    <ul id="market-news-list"></ul>
+                </section>
+            </div>
+            <div class="news-column">
+                <section class="news-section">
+                    <h3>Wiadomości Spółek</h3>
+                    <ul id="company-news-list"></ul>
+                </section>
+                <section class="news-section premium-section">
+                    <h3 id="premium-section-title">Strefa Premium</h3>
+                    
+                    <div id="newspaper-subscription-section" style="text-align: center; padding-bottom: 10px;">
+                        <p id="subscription-status-text"></p>
+                        <button id="buy-subscription-btn" onclick="buyPremiumSubscription()"></button>
+                    </div>
+                    
+                    <ul id="premium-content"></ul>
+                    
+                    <div id="media-influence-section" class="bank-section" style="display: none; margin-top: 15px; border-top: 1px dashed #aaa; padding-top: 10px;">
+                       <h4 style="margin-top: 0; text-align: center;">Kontrola Mediów</h4>
+                       
+                       <div id="positive-pr-controls" style="display: none;">
+                           <label for="positive-pr-select">Pozytywny PR:</label>
+                           <select id="positive-pr-select" style="max-width: 150px;"></select>
+                           <button id="positive-pr-btn" onclick="playerBuyPositivePR()">Kup (10 000 PLN)</button>
+                       </div>
+
+                       <div id="black-pr-controls" style="display: none; margin-top: 10px;">
+                           <label for="black-pr-select">Czarny PR:</label>
+                           <select id="black-pr-select" style="max-width: 150px;"></select>
+                           <button id="black-pr-btn" onclick="playerBuyBlackPR()">Kup (25 000 PLN)</button>
+                           <p style="font-size: 11px; color: #dc3545; margin: 5px 0 0 0;">
+                               Ryzyko wykrycia: <strong id="black-pr-risk-display">10%</strong>
+                           </p>
+                       </div>
+                   </div>
+                   
+                </section>
+            </div>
+        </main>
+    </div>
+    <button onclick="document.getElementById('newspaper-modal').style.display='none';" style="position: absolute; top: 15px; right: 15px; font-size: 20px; background: none; border: none; cursor: pointer; z-index: 1006;">&times;</button>
+</div>
 
     <div id="state-modal" class="modal" style="display:none; width: 500px;">
         <button class="close-btn" onclick="document.getElementById('state-modal').style.display='none';">&times;</button>
@@ -371,11 +449,9 @@
             <h4>⚖️ Urząd Antymonopolowy</h4>
     <p>Poziom: <strong id="antitrust-level">0</strong>/5</p>
     <p style="font-size: 12px;">Szansa na analizę: <strong id="antitrust-capacity">10%</strong> | Dokładność decyzji: <strong id="antitrust-accuracy">20%</strong></p>
-    <div id="antitrust-upgrade-section">
-        <p>Koszt następnego ulepszenia: <strong id="antitrust-upgrade-cost"></strong> PLN</p>
-        <button id="antitrust-upgrade-btn" onclick="investInAntitrustOffice()">Inwestuj w Urząd</button>
-    </div>
-    <p id="antitrust-max-level-info" style="display: none; font-weight: bold; color: #28a745;">Urząd osiągnął maksymalny poziom rozwoju!</p>
+    
+    <p id="antitrust-max-level-info" style="display: none; font-weight: bold; color: #28a745;">Urząd osiągnął maksymalny poziom rozwoju.</p>
+    <p style="font-size: 11px; color: #6c757d; margin-top: 5px;">Państwo automatycznie inwestuje w rozwój urzędu, gdy posiada wystarczające środki w budżecie.</p>
         </div>
         <div class="bank-section">
             <h4>Możliwe Interwencje Rządowe</h4>
@@ -905,6 +981,32 @@
             <button>Opcja 1</button>
             <button>Opcja 2</button>
             <button>Opcja 3</button>
+        </div>
+    </div>
+</div>
+
+<div id="debt-offer-modal" class="modal" style="display:none; width: 450px; border-color: #ffc107;">
+    <button class="close-btn" onclick="declineDebtOffer()">&times;</button>
+    <h3 id="debt-offer-title" style="margin-top: 0; color: #856404;">Propozycja Przejęcia Długu!</h3>
+    <div class="modal-body">
+        <p id="debt-offer-message" style="font-size: 14px; line-height: 1.5;">...Wiadomość z ofertą...</p>
+        <p style="font-size: 12px; color: #dc3545; font-weight: bold;">Uwaga: Przejęcie długu przez tę firmę wiąże się ze znacznie wyższym oprocentowaniem w przyszłości!</p>
+        <div id="debt-offer-options" style="display: flex; justify-content: space-around; margin-top: 20px;">
+            <button id="debt-offer-accept-btn" style="background-color: #28a745; color: white;">Tak, spłaćcie mój dług bankowy</button>
+            <button id="debt-offer-decline-btn" style="background-color: #dc3545; color: white;">Nie, dziękuję</button>
+        </div>
+    </div>
+</div>
+
+<div id="pawn-offer-modal" class="modal" style="display:none; width: 450px; border-color: #28a745;">
+    <button class="close-btn" onclick="declinePawnOffer()">&times;</button>
+    <h3 id="pawn-offer-title" style="margin-top: 0; color: #155724;">Oferta Pożyczki Lombardowej!</h3>
+    <div class="modal-body">
+        <p id="pawn-offer-message" style="font-size: 14px; line-height: 1.5;">...Wiadomość z ofertą pożyczki...</p>
+        <p style="font-size: 12px; color: #dc3545; font-weight: bold;">Uwaga: Jeśli nie spłacisz pożyczki w terminie, zastawione akcje przepadną na rzecz lombardu!</p>
+        <div id="pawn-offer-options" style="display: flex; justify-content: space-around; margin-top: 20px;">
+            <button id="pawn-offer-accept-btn" style="background-color: #28a745; color: white;">Tak, zastawiam akcje i biorę gotówkę</button>
+            <button id="pawn-offer-decline-btn" style="background-color: #dc3545; color: white;">Nie, dziękuję</button>
         </div>
     </div>
 </div>

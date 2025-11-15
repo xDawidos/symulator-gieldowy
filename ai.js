@@ -412,10 +412,9 @@ function runAiMarian(ai) {
     }
 }
 
-/**
- * Logika decyzyjna dla pojedynczego bota AI.
- */
+
 function makeAiDecision(ai) {
+  
     let targetStockSymbol = null;
     let targetStock = null;
     for (const symbol in ai.portfolio) {
@@ -472,18 +471,20 @@ function makeAiDecision(ai) {
         // Finalna decyzja
         if (Math.random() < defenseChance) {
             // AI decyduje się na obronę -> aktywuj "Zatrutą Pigułkę"
-            // (Na razie AI używa tylko tej obrony)
             console.log(`[M&A AI Obrona] ${ai.name} aktywuje "Zatrutą Pigułkę" w ${targetStock.symbol}!`);
             activateDefenseMechanism(targetStock.symbol, 'poisonPill', ai.id); // Przekaż ID bota
             return; // AI podjęło akcję obronną, kończy turę
         } else {
             // AI nie aktywuje obrony (akceptuje ofertę lub czeka)
             console.log(`[M&A AI Obrona] ${ai.name} postanawia nie bronić aktywnie ${targetStock.symbol}.`);
-            // Oznaczamy proces, aby AI nie pytało ponownie (można to pominąć)
+            // Oznaczamy proces, aby AI nie pytało ponownie
             targetStock.mergerProcess.defenseActive = 'none'; // Flaga oznaczająca podjęcie decyzji o braku obrony
             return;
         }
     }
+    // ===>>> KONIEC SEKCJI REAKCJI NA PRZEJĘCIE <<<===
+
+
     // Podstawowe sprawdzenia i dostępne akcje
     const accessibleStocks = stocks.filter(s => {
         // AI nie handluje startupami, REITami, Instytutami
@@ -497,40 +498,100 @@ function makeAiDecision(ai) {
 
     const portfolioSize = Object.keys(ai.portfolio).length;
     const aiNetWorth = calculateNetWorth(ai); // Oblicz raz na turę
-    const cashRatio = ai.cash / aiNetWorth; // Stosunek gotówki do wartości netto
-
-    // Znajdź aktywne banki inwestycyjne do potencjalnych zakupów
+    const cashRatio = (aiNetWorth > 0) ? ai.cash / aiNetWorth : 1.0; // Stosunek gotówki do wartości netto (unikaj dzielenia przez zero)
     const activeInvestmentBanks = commercialBanks.filter(b => b.isActive && b.type === BANK_TYPES.INVESTMENT);
 
+
+    // ===>>> ZMODYFIKOWANA PĘTLA SPŁATY KREDYTÓW AI <<<===
+    const now = Date.now();
     if (ai.loans && ai.loans.length > 0) {
-        // Zwiększ szansę na próbę spłaty (z 0.2 na 0.5), aby AI szybciej reagowało
-        if (Math.random() < 0.5) { 
+        
+        // Sprawdź najpierw pożyczki lombardowe (mają twardy termin)
+        for (let i = ai.loans.length - 1; i >= 0; i--) {
+            const loan = ai.loans[i];
+            if (loan.isPawnLoan && now >= loan.maturityDate) {
+                const pawnShop = stocks.find(s => s.symbol === loan.collectorSymbol);
+                
+                if (ai.cash >= loan.amount) {
+                    // AI ma pieniądze - spłaca
+                    ai.cash -= loan.amount;
+                    if (pawnShop) pawnShop.cash += loan.amount;
+                    console.log(`[AI] ${ai.name} spłacił pożyczkę lombardową w ${loan.bankName} (${loan.amount.toFixed(2)} PLN).`);
+                    
+                    // Odblokuj akcje
+                    const holding = ai.portfolio[loan.collateral.symbol];
+                    if (holding && holding.lockedShares) {
+                        holding.lockedShares = Math.max(0, holding.lockedShares - loan.collateral.quantity);
+                    }
+                    ai.loans.splice(i, 1);
+                
+                } else {
+                    // AI nie ma pieniędzy - DEFAULT
+                    console.log(`[AI] ❌ ${ai.name} NIE SPŁACIŁ pożyczki lombardowej! ${loan.bankName} przejmuje ${loan.collateral.quantity} akcji ${loan.collateral.symbol}!`);
+
+                    // Przeniesienie akcji
+                    const holding = ai.portfolio[loan.collateral.symbol];
+                    if (holding) {
+                        holding.shares = Math.max(0, holding.shares - loan.collateral.quantity);
+                        if (holding.shares <= 0) delete ai.portfolio[loan.collateral.symbol];
+                    }
+                    if (pawnShop) {
+                        if (!pawnShop.holdingPortfolio) pawnShop.holdingPortfolio = {};
+                        const pawnHolding = pawnShop.holdingPortfolio[loan.collateral.symbol];
+                        if (pawnHolding) {
+                            pawnHolding.quantity += loan.collateral.quantity;
+                        } else {
+                            const stock = stocks.find(s => s.symbol === loan.collateral.symbol);
+                            pawnShop.holdingPortfolio[loan.collateral.symbol] = {
+                                quantity: loan.collateral.quantity,
+                                purchasePrice: stock ? stock.price : 0
+                            };
+                        }
+                    }
+                    ai.loans.splice(i, 1);
+                }
+            }
+        } // Koniec pętli lombardowej
+
+        // Teraz obsłuż normalne kredyty (bankowe i windykacyjne)
+        if (Math.random() < 0.5) { // Zwiększona szansa na próbę spłaty
             let paidLoanThisTurn = false;
             for (let i = ai.loans.length - 1; i >= 0; i--) {
                 const loan = ai.loans[i];
-                const bank = commercialBanks.find(b => b.id === loan.bankId);
-                // Obliczanie odsetek (przeniesione z logiki tygodniowej dla AI)
-                const weeklyInterestRate = ((LOAN_INTEREST_RATE + bank?.baseInterestRateMargin * (loan.collateral ? 1.1 : 1.0)) || 0.002) / 52;
-                loan.amount += loan.amount * weeklyInterestRate; // Dolicz odsetki
+                if (loan.isPawnLoan) continue; // Pomiń lombardowe, już obsłużone
 
-                // Sprawdź, czy stać na ratę
+                // Obliczanie odsetek
+                const weeklyInterestRate = loan.interestRate / 52;
+                loan.amount += loan.amount * weeklyInterestRate; 
+
                 if (ai.cash >= loan.weeklyPayment) {
                     const payment = Math.min(loan.weeklyPayment, loan.amount);
                     ai.cash -= payment;
                     loan.amount -= payment;
-                    paidLoanThisTurn = true; // Zaznacz, że dokonano płatności
-                    if (bank) {
-                        bank.cash += payment;
-                        if (bank.loanPortfolio[ai.id]) {
-                            const bankLoanIndex = bank.loanPortfolio[ai.id].findIndex(bl => bl.id === loan.id);
-                            if (bankLoanIndex !== -1) {
-                                bank.loanPortfolio[ai.id][bankLoanIndex].remainingAmount -= payment;
-                                if (bank.loanPortfolio[ai.id][bankLoanIndex].remainingAmount <= 0.01) {
-                                    bank.loanPortfolio[ai.id].splice(bankLoanIndex, 1);
+                    paidLoanThisTurn = true; 
+                    chargeAccountingFee(payment, ai.id);
+
+                    // --- Kierowanie płatności ---
+                    if (loan.collectorSymbol) {
+                        const collector = stocks.find(s => s.symbol === loan.collectorSymbol);
+                        if (collector) collector.cash += payment;
+                    } else if (loan.bankId) {
+                        const bank = commercialBanks.find(b => b.id === loan.bankId);
+                        if (bank) {
+                            bank.cash += payment;
+                            if (bank.loanPortfolio[ai.id]) {
+                                const bankLoanIndex = bank.loanPortfolio[ai.id].findIndex(bl => bl.id === loan.id);
+                                if (bankLoanIndex !== -1) {
+                                    bank.loanPortfolio[ai.id][bankLoanIndex].remainingAmount -= payment;
+                                    if (bank.loanPortfolio[ai.id][bankLoanIndex].remainingAmount <= 0.01) {
+                                        bank.loanPortfolio[ai.id].splice(bankLoanIndex, 1);
+                                    }
                                 }
                             }
                         }
                     }
+                    // --- Koniec kierowania ---
+
                     if (loan.amount <= 0.01) {
                         console.log(`[AI] ${ai.name} spłacił kredyt w ${loan.bankName}.`);
                         if (loan.collateral) {
@@ -542,7 +603,6 @@ function makeAiDecision(ai) {
                         ai.loans.splice(i, 1);
                     }
                 } else {
-                    // Nadal nie ma środków na spłatę
                     console.log(`[AI] ${ai.name} nie ma środków na spłatę raty kredytu w ${loan.bankName}.`);
                     const scorePenalty = 5;
                     ai.creditScore = Math.max(0, ai.creditScore - scorePenalty);
@@ -550,19 +610,37 @@ function makeAiDecision(ai) {
                 }
             } // Koniec pętli for
             
-            // Jeśli AI właśnie zapłaciło ratę, niech nie robi nic więcej w tej turze
             if (paidLoanThisTurn) {
-                return; 
+                return; // AI zapłaciło ratę, kończy turę
             }
         }
     }
+    // ===>>> KONIEC ZMODYFIKOWANEJ PĘTLI KREDYTOWEJ <<<===
+
 
     // Główna logika inwestycyjna zależna od osobowości
     switch (ai.personality) {
         case 'reckless':
         case 'yolo_trader':
+            const currentLoansValue = (ai.loans || []).reduce((sum, l) => sum + l.amount, 0);
+            const maxLeverageRatio = (ai.personality === 'yolo_trader' ? 0.7 : 0.5); // Yolo bardziej ryzykuje
+
+            // --- Priorytet spłaty długu (jeśli nadmiar gotówki) ---
+            if (cashRatio > 0.6 && currentLoansValue > 0) {
+                ai.loans.sort((a, b) => b.interestRate - a.interestRate); // Spłać najdroższy
+                const loanToRepay = ai.loans[0];
+                const repaymentAmount = Math.min(loanToRepay.amount, ai.cash * 0.5); // Użyj 50% gotówki na spłatę
+                if (repaymentAmount > 100) {
+                     if (aiRepayLoan(ai, loanToRepay.id, repaymentAmount)) {
+                        console.log(`[AI ${ai.personality}] ${ai.name} spłacił ${repaymentAmount.toFixed(0)} PLN pożyczki (nadmiar gotówki).`);
+                        return; // Zrób tylko to w tej turze
+                     }
+                }
+            }
+            // --- Koniec spłaty długu ---
+
             if (Math.random() < 0.5) { // Szansa na akcję giełdową
-                // Próba zakupu ryzykownych akcji lub wzięcia pożyczki
+                // Próba zakupu ryzykownych akcji
                 if (Math.random() < 0.7 || portfolioSize === 0) {
                     const stockToBuy = getRandomElement(accessibleStocks.filter(s => s.volatilityFactor > 1.5 && s.financialHealth >= -1));
                     if (stockToBuy) {
@@ -573,35 +651,33 @@ function makeAiDecision(ai) {
                         if (desiredQuantity > 0) {
                             if (affordableQuantity >= desiredQuantity) {
                                 aiBuyStock(ai, stockToBuy.symbol, desiredQuantity);
-                            } else if (affordableQuantity < desiredQuantity && affordableQuantity > 0 && Math.random() < (ai.personality === 'reckless' ? 0.4 : 0.6)) {
+                            } 
+                            // --- Logika brania kredytu ---
+                            else if (affordableQuantity < desiredQuantity && 
+                                     (currentLoansValue / aiNetWorth) < maxLeverageRatio && 
+                                     ai.creditScore > 60 && 
+                                     Math.random() < 0.4) 
+                            {
                                 const neededCash = (desiredQuantity - affordableQuantity) * stockToBuy.price;
-                                const mortgageBank = commercialBanks.find(b => b.isActive && b.type === BANK_TYPES.MORTGAGE);
-                                let collateralStock = null, availableCollateralQty = 0;
-                                for (const sym in ai.portfolio) {
-                                     const h = ai.portfolio[sym];
-                                     const s = stocks.find(st => st.symbol === sym && !st.assetType);
-                                     const available = h.shares - (h.lockedShares || 0);
-                                     if (s && available > 0) { collateralStock = s; availableCollateralQty = available; break; }
+                                // Uproszczone do zwykłego kredytu
+                                if (aiTakeLoan(ai, neededCash)) { 
+                                    const nowAffordable = Math.floor(ai.cash / stockToBuy.price);
+                                    if (nowAffordable >= desiredQuantity) aiBuyStock(ai, stockToBuy.symbol, desiredQuantity);
+                                    else if (nowAffordable > 0) aiBuyStock(ai, stockToBuy.symbol, nowAffordable);
+                                } else if (affordableQuantity > 0) {
+                                    aiBuyStock(ai, stockToBuy.symbol, affordableQuantity); 
                                 }
-                                if (mortgageBank && collateralStock && neededCash > (ai.personality === 'reckless' ? 100 : 50)) {
-                                    const requiredCollateralValue = neededCash * 2;
-                                    const requiredCollateralQty = Math.ceil(requiredCollateralValue / collateralStock.price);
-                                    if (availableCollateralQty >= requiredCollateralQty) {
-                                        if (aiTakeMortgageLoan(ai, mortgageBank.id, collateralStock.symbol, requiredCollateralQty, neededCash)) {
-                                            const nowAffordable = Math.floor(ai.cash / stockToBuy.price);
-                                            if (nowAffordable >= desiredQuantity) aiBuyStock(ai, stockToBuy.symbol, desiredQuantity);
-                                            else if (nowAffordable > 0) aiBuyStock(ai, stockToBuy.symbol, nowAffordable);
-                                        }
-                                    } else if (affordableQuantity > 0) { aiBuyStock(ai, stockToBuy.symbol, affordableQuantity); }
-                                } else if (affordableQuantity > 0) { aiBuyStock(ai, stockToBuy.symbol, affordableQuantity); }
-                            } else if (affordableQuantity > 0) { aiBuyStock(ai, stockToBuy.symbol, affordableQuantity); }
+                            } else if (affordableQuantity > 0) {
+                                aiBuyStock(ai, stockToBuy.symbol, affordableQuantity); 
+                            }
+                            // --- Koniec logiki kredytu ---
                         }
                     }
                 }
                 // Próba sprzedaży (losowa)
                 else if (portfolioSize > 0) {
                     const randomOwnedSymbol = getRandomElement(Object.keys(ai.portfolio));
-                    if (ai.portfolio[randomOwnedSymbol] && ai.portfolio[randomOwnedSymbol].assetType !== 'Startup') { // Sprawdź czy to nie startup
+                    if (ai.portfolio[randomOwnedSymbol] && ai.portfolio[randomOwnedSymbol].assetType !== 'Startup') {
                         const sharesToSell = Math.max(1, Math.floor(ai.portfolio[randomOwnedSymbol].shares * 0.5));
                         aiSellStock(ai, randomOwnedSymbol, sharesToSell);
                     }
@@ -695,9 +771,11 @@ function makeAiDecision(ai) {
                     const holding = ai.portfolio[symbol];
                     if (holding.assetType === 'Startup') continue;
                     const stock = stocks.find(s => s.symbol === symbol);
+                    // Dodaj sprawdzenie, czy stock istnieje
+                    if (!stock) continue; 
                     const profitTarget = ai.personality === 'pro_investor' ? 1.25 : 1.35;
                     const healthThreshold = ai.personality === 'pro_investor' ? -1 : 0;
-                    if (stock && (stock.price > holding.avgPrice * profitTarget || stock.financialHealth < healthThreshold)) {
+                    if (stock.price > holding.avgPrice * profitTarget || stock.financialHealth < healthThreshold) {
                         aiSellStock(ai, symbol, holding.shares);
                         return;
                     }
@@ -751,7 +829,7 @@ function makeAiDecision(ai) {
                     for (const symbol in bank.stockPortfolio) {
                         const bankHolding = bank.stockPortfolio[symbol];
                         const stock = stocks.find(s => s.symbol === symbol);
-                        const ownsTooMuch = ai.portfolio[symbol] && stock && stock.totalShares > 0 && (ai.portfolio[symbol].shares / stock.totalShares) > 0.2; // Dodano stock && stock.totalShares > 0
+                        const ownsTooMuch = ai.portfolio[symbol] && stock && stock.totalShares > 0 && (ai.portfolio[symbol].shares / stock.totalShares) > 0.2; 
                         if (stock && bankHolding.shares > 0 && stock.financialHealth >= 1 && !ownsTooMuch) {
                             const bankSellPrice = stock.price * 1.10;
                             const acceptablePremium = ai.portfolio[symbol] ? ai.portfolio[symbol].avgPrice * 1.15 : bankSellPrice * 1.01;
@@ -761,7 +839,7 @@ function makeAiDecision(ai) {
                                 if (buyQuantity > 0) {
                                     if (aiBuySharesFromInvestmentBank(ai, bank.id, symbol, buyQuantity)) {
                                         console.log(`[AI ${ai.personality}] ${ai.name} strategicznie kupił ${buyQuantity} ${symbol} od banku ${bank.name}.`);
-                                        return; // Akcja podjęta
+                                        return; 
                                     }
                                 }
                             }
@@ -777,7 +855,7 @@ function makeAiDecision(ai) {
                 if (depositBank && excessCash > 1000) {
                     if (aiMakeDeposit(ai, depositBank.id, excessCash)) {
                         console.log(`[AI ${ai.personality}] ${ai.name} wpłacił ${excessCash.toFixed(0)} PLN na lokatę w ${depositBank.name}.`);
-                        return; // Akcja podjęta
+                        return;
                     }
                 }
             }
@@ -809,7 +887,7 @@ function makeAiDecision(ai) {
             if (soldSomethingBanker) break;
 
             // 2. Depozyty
-            const cashRatioBanker = cashRatio; // Użyj już obliczonego
+            const cashRatioBanker = cashRatio;
             if (cashRatioBanker > 0.4 && bankerNetWorth > 10000) {
                 const excessCash = banker.cash - (bankerNetWorth * 0.2);
                 const depositBank = aiChooseCommercialBank('deposit', banker);
@@ -867,9 +945,9 @@ function makeAiDecision(ai) {
              }
 
             // 4. Pożyczki (Leverage)
-            const currentLoansValue = (banker.loans || []).reduce((sum, l) => sum + l.amount, 0);
-            const maxLeverageRatio = 0.4;
-            if (cashRatioBanker < 0.15 && (currentLoansValue / bankerNetWorth) < maxLeverageRatio) {
+            const currentLoansValueBanker = (banker.loans || []).reduce((sum, l) => sum + l.amount, 0);
+            const maxLeverageRatioBanker = 0.4;
+            if (cashRatioBanker < 0.15 && (currentLoansValueBanker / bankerNetWorth) < maxLeverageRatioBanker) {
                  const potentialTargets = accessibleStocks.filter(s =>
                     (s.isBankStock || s.sector.some(sec => financeSectors.includes(sec))) &&
                     s.financialHealth >= (2 - banker.riskAversionFactor * 2) &&
@@ -883,7 +961,7 @@ function makeAiDecision(ai) {
                     if (neededCash > 500) {
                         let loanTaken = false;
                         let collateralStock = null, availableCollateralQty = 0;
-                        for (const sym in banker.portfolio) { /* ... znajdź zastaw ... */
+                        for (const sym in banker.portfolio) {
                              const h = banker.portfolio[sym];
                              const s = stocks.find(st => st.symbol === sym && !st.assetType);
                              const available = h.shares - (h.lockedShares || 0);
@@ -999,7 +1077,7 @@ function makeAiDecision(ai) {
         }
      }
 
-    // Spłata Pożyczek (jeśli AI ma nadmiar gotówki)
+    // Spłata Pożyczek (jeśli AI ma nadmiar gotówki) - OPRÓCZ BANKIERA (ma swoją logikę)
      if (ai.personality !== 'banker' && ai.loans && ai.loans.length > 0) {
           const cashRatioRepay = cashRatio; // Użyj już obliczonego
          if (cashRatioRepay > 0.6) {
@@ -1014,9 +1092,6 @@ function makeAiDecision(ai) {
              }
          }
      }
-
-    // Automatyczna spłata rat (rzadziej)
-    
 
     // Zarządzanie obligacjami, miastem, aukcjami (rzadziej)
     if (Math.random() < 0.1) {
@@ -1825,4 +1900,65 @@ function aiBuySharesFromInvestmentBank(ai, bankId, symbol, quantity) {
     // because the shares are just transferred from the bank's holding to the AI's.
 
     return true; // Purchase successful
+}
+
+/**
+ * AI decyduje, czy przyjąć ofertę przejęcia długu od windykatora.
+ * @param {object} ai - Obiekt bota AI.
+ * @param {object} collectorStock - Obiekt spółki WRN.
+ * @param {object} loan - Obiekt pożyczki AI.
+ * @param {number} newInterestRate - Nowe, wyższe oprocentowanie.
+ */
+function aiDecideOnDebtOffer(ai, collectorStock, loan, newInterestRate) {
+    let acceptChance = 0.10; // Domyślnie to zła oferta, więc niska szansa
+
+    // Jeśli AI jest zdesperowane (niski credit score lub pominięte raty), chętniej przyjmie
+    if (ai.creditScore < 50 || (loan.missedPayments && loan.missedPayments >= 2)) {
+        acceptChance = 0.90; // 90% szans, bo potrzebuje resetu
+    }
+
+    // Osobowość też ma znaczenie
+    if (ai.personality === 'reckless' || ai.personality === 'yolo_trader') {
+        acceptChance += 0.20; // Bardziej skłonni do ryzykownych decyzji
+    }
+    if (ai.personality === 'calm' || ai.personality === 'pro_investor' || ai.personality === 'banker') {
+        acceptChance -= 0.05; // Mniej skłonni
+    }
+
+    if (Math.random() < acceptChance) {
+        // AI Akceptuje
+        console.log(`[AI Decyzja] ${ai.name} akceptuje ofertę przejęcia długu przez ${collectorStock.name}.`);
+        executeDebtTransfer(collectorStock, ai, loan, newInterestRate);
+    } else {
+        // AI Odrzuca
+        console.log(`[AI Decyzja] ${ai.name} odrzuca ofertę przejęcia długu.`);
+    }
+}
+
+function aiDecideOnPawnOffer(ai, pawnShop, targetStock, quantity, loanAmount, newInterestRate, durationWeeks) {
+    let acceptChance = 0.20; // Domyślnie to ryzykowna oferta
+
+    // Jeśli AI ma mało gotówki lub niski credit score, jest bardziej zdesperowane
+    const netWorth = calculateNetWorth(ai);
+    const cashRatio = ai.cash / netWorth;
+    if (cashRatio < 0.1 || ai.creditScore < 60) {
+        acceptChance = 0.85; // 85% szans
+    }
+
+    // Osobowość
+    if (ai.personality === 'reckless' || ai.personality === 'yolo_trader') {
+        acceptChance = 0.95; // Prawie zawsze wezmą
+    }
+    if (ai.personality === 'calm' || ai.personality === 'pro_investor' || ai.personality === 'banker') {
+        acceptChance = 0.1; // Prawie nigdy nie wezmą, wolą kredyt w banku
+    }
+
+    if (Math.random() < acceptChance) {
+        // AI Akceptuje
+        console.log(`[AI Decyzja] ${ai.name} akceptuje ofertę pożyczki lombardowej od ${pawnShop.name}.`);
+        executePawnLoan(ai, pawnShop, targetStock, quantity, loanAmount, newInterestRate, durationWeeks);
+    } else {
+        // AI Odrzuca
+        console.log(`[AI Decyzja] ${ai.name} odrzuca ofertę pożyczki lombardowej.`);
+    }
 }
