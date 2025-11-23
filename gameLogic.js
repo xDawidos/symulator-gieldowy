@@ -94,6 +94,36 @@ let stateBondOffer = {
     longTerm: { available: 0, interestBase: 0.05 }
 };
 
+const DEPARTMENTS = {
+    RESEARCH: 'Badania',
+    DEVELOPMENT: 'Rozwój',
+    ECONOMY: 'Ekonomia'
+};
+
+const INVESTMENT_PHASES = {
+    DESIGN: 'Projektowanie 📐',
+    TENDER: 'Przetarg 🤝',
+    BUILD: 'Budowa 🏗️',
+    VERIFY: 'Weryfikacja ✅',
+    ACTIVE: 'Aktywna 🏭'
+};
+
+const INVESTMENT_CATALOG = [
+    // Ogólne
+   { id: 'new_factory', name: "Nowa Fabryka", baseCost: 500000, baseDuration: 8, roi: 0.05, desc: "Zwiększa moce produkcyjne.", type: 'general', checkpoints: [25, 50, 75, 99] },
+    { id: 'marketing_campaign', name: "Kampania Marketingowa", baseCost: 100000, baseDuration: 2, roi: 0.15, desc: "Krótkoterminowy wzrost.", type: 'general', checkpoints: [50, 99] },
+    { id: 'foreign_expansion', name: "Ekspansja Zagraniczna", baseCost: 1000000, baseDuration: 12, roi: 0.08, desc: "Ryzykowna ekspansja.", type: 'general', checkpoints: [20, 40, 60, 80, 99] }, // Dużo punktów ryzyka
+    { id: 'equipment_upgrade', name: "Ulepszenie Sprzętu", baseCost: 200000, baseDuration: 4, roi: 0.04, desc: "Zwiększa wydajność.", type: 'general', checkpoints: [50, 99] },
+    { id: 'new_branch', name: "Nowa Filia", baseCost: 300000, baseDuration: 6, roi: 0.06, desc: "Zwiększa zasięg.", type: 'general', checkpoints: [33, 66, 99] },
+    { id: 'software_update', name: "Aktualizacja Systemów", baseCost: 50000, baseDuration: 2, roi: 0.03, desc: "Poprawia logistykę.", type: 'general', checkpoints: [50] }, // Tylko jeden check w połowie
+    { id: 'warehouse', name: "Nowy Magazyn", baseCost: 150000, baseDuration: 5, roi: 0.04, desc: "Zwiększa zapasy.", type: 'general', checkpoints: [33, 66, 99] },
+    
+    // Sektorowe
+    { id: 'new_drug_lab', name: "Laboratorium Leków", baseCost: 800000, baseDuration: 10, roi: 0.12, desc: "Tworzenie leków.", type: 'Medycyna', checkpoints: [25, 50, 75, 99] },
+    { id: 'server_farm', name: "Serwerownia", baseCost: 600000, baseDuration: 6, roi: 0.10, desc: "Moc obliczeniowa.", type: 'Technologia', checkpoints: [33, 66, 99] },
+    { id: 'new_mine_shaft', name: "Nowy Szyb Wydobywczy", baseCost: 2000000, baseDuration: 20, roi: 0.09, desc: "Wydobycie surowców.", type: 'Przemysł', checkpoints: [10, 30, 50, 70, 90, 99] } // Bardzo trudna budowa
+];
+
 
 
 let antitrustOffice = {
@@ -169,7 +199,7 @@ let playerAutoInvest = {
 // ZMIANA OD KOLEGI: Dodano zmienną do śledzenia sortowania
 let currentSortState = 'none'; // 'none', 'price_asc', 'price_desc'
 
-const startupSectors = [['Technologia'], ['Gaming'], ['Medycyna'], ['Media'], ['Energia'], ['Żywność'], ['Nieruchomości'], ['Chemia'], ['Przemysł'], ['Dobra konsumencje'], ['Usługi'], ['Turystyka'], ['Bankowość'], ['Finanse Konsumenckie']];
+const startupSectors = [['Technologia'], ['Gaming'], ['Medycyna'],['Budownictwo'], ['Media'], ['Energia'], ['Żywność'], ['Nieruchomości'], ['Chemia'], ['Przemysł'], ['Dobra konsumencje'], ['Usługi'], ['Turystyka'], ['Bankowość'], ['Finanse Konsumenckie']];
 
 const techPrefixes = ['Quantum', 'Cyber', 'Data', 'Nano', 'Aero', 'Geo'];
 const techSuffixes = ['Leap', 'Verse', 'Solutions', 'Dynamics', 'Core'];
@@ -787,14 +817,7 @@ const initialStocks = [
         lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null, // <-- DODAJ TO
     cash: 0 
     },
-    {
-        name: 'Betonex', price: 120.00, volatilityFactor: 1.0, symbol: 'BTX', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
-    quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
-  lineHistory: [], playerTransactions: [], sector: ['Przemysł', 'Nieruchomości'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
-        dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
-        lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null, // <-- DODAJ TO
-    cash: 0 
-    },
+    
     {
         name: 'VitaGen', price: 180.00, volatilityFactor: 2.2, symbol: 'VTG', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
@@ -1110,7 +1133,7 @@ const initialStocks = [
         favors: {}
     },
     
-    // NOWY KOD (POPRAWIONY)
+    
     {
         name: 'Bank Finansowania Projektów',
         price: 0, volatilityFactor: 0.4, symbol: 'BFP', exchange: 'SILVER',
@@ -1224,7 +1247,23 @@ const initialStocks = [
         bankAccountId: null, isBankStock: false
     },
 
-    // --- NOWE SPÓŁKI TYPU REIT ---
+    { name: 'Budimix', price: 450.00, volatilityFactor: 0.9, symbol: 'BDX', exchange: 'GOLD', totalShares: 80000, maxShares: 80000, sharesHeld: 0, sector: ['Budownictwo'], financialHealth: 2, lastReport: 'brak', cash: 2000000, assetType: 'Construction', constructionCapacity: 5, activeProjects: [], experience: 80, balanceSheet: { assets: 5000000, liabilities: 1000000, shareCapital: 500000, retainedEarnings: 3500000 }, quarterlyEarnings: 0, priceHistory: [], candlestickHistory: [], lineHistory: [], playerTransactions: [], dividendPolicy: 'Balanced', dividendTimer: 0, estimatedDividend: 0, bankAccountId: null, isBankStock: false },
+    
+    { name: 'Infrastrukturex', price: 520.00, volatilityFactor: 1.1, symbol: 'INF', exchange: 'GOLD', totalShares: 75000, maxShares: 75000, sharesHeld: 0, sector: ['Budownictwo'], financialHealth: 3, lastReport: 'brak', cash: 3000000, assetType: 'Construction', constructionCapacity: 4, activeProjects: [], experience: 90, balanceSheet: { assets: 6000000, liabilities: 2000000, shareCapital: 600000, retainedEarnings: 3400000 }, quarterlyEarnings: 0, priceHistory: [], candlestickHistory: [], lineHistory: [], playerTransactions: [], dividendPolicy: 'Aggressive', dividendTimer: 0, estimatedDividend: 0, bankAccountId: null, isBankStock: false },
+
+    { name: 'Giereklud', price: 410.00, volatilityFactor: 0.5, symbol: 'GRL', exchange: 'GOLD', totalShares: 100000, maxShares: 100000, sharesHeld: 0, sector: ['Budownictwo'], financialHealth: 1, lastReport: 'brak', cash: 5000000, assetType: 'Construction', constructionCapacity: 10, activeProjects: [], experience: 60, isStateOwned: true, stateOwnershipPct: 1.0, balanceSheet: { assets: 10000000, liabilities: 4000000, shareCapital: 1000000, retainedEarnings: 5000000 }, quarterlyEarnings: 0, priceHistory: [], candlestickHistory: [], lineHistory: [], playerTransactions: [], dividendPolicy: 'None', dividendTimer: 0, estimatedDividend: 0, bankAccountId: null, isBankStock: false },
+
+    { name: 'Bractwo Stali', price: 1600.00, volatilityFactor: 1.5, symbol: 'BST', exchange: 'PLATINUM', totalShares: 500000, maxShares: 500000, sharesHeld: 0, sector: ['Budownictwo', 'Przemysł'], financialHealth: 4, lastReport: 'brak', cash: 15000000, assetType: 'Construction', constructionCapacity: 8, activeProjects: [], experience: 95, balanceSheet: { assets: 30000000, liabilities: 5000000, shareCapital: 5000000, retainedEarnings: 20000000 }, quarterlyEarnings: 0, priceHistory: [], candlestickHistory: [], lineHistory: [], playerTransactions: [], dividendPolicy: 'Balanced', dividendTimer: 0, estimatedDividend: 0, bankAccountId: null, isBankStock: false },
+
+    { name: 'DrogiStal', price: 120.00, volatilityFactor: 1.2, symbol: 'DRS', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, sector: ['Budownictwo'], financialHealth: 1, lastReport: 'brak', cash: 800000, assetType: 'Construction', constructionCapacity: 3, activeProjects: [], experience: 50, balanceSheet: { assets: 2000000, liabilities: 800000, shareCapital: 200000, retainedEarnings: 1000000 }, quarterlyEarnings: 0, priceHistory: [], candlestickHistory: [], lineHistory: [], playerTransactions: [], dividendPolicy: 'Growth', dividendTimer: 0, estimatedDividend: 0, bankAccountId: null, isBankStock: false },
+
+    { name: 'Budipol', price: 145.00, volatilityFactor: 1.0, symbol: 'BDP', exchange: 'SILVER', totalShares: 45000, maxShares: 45000, sharesHeld: 0, sector: ['Budownictwo'], financialHealth: 2, lastReport: 'brak', cash: 900000, assetType: 'Construction', constructionCapacity: 3, activeProjects: [], experience: 60, balanceSheet: { assets: 2500000, liabilities: 500000, shareCapital: 250000, retainedEarnings: 1750000 }, quarterlyEarnings: 0, priceHistory: [], candlestickHistory: [], lineHistory: [], playerTransactions: [], dividendPolicy: 'Balanced', dividendTimer: 0, estimatedDividend: 0, bankAccountId: null, isBankStock: false },
+
+    { name: 'Betonex', price: 120.00, volatilityFactor: 1.0, symbol: 'BTX', exchange: 'SILVER', totalShares: 50000, maxShares: 50000, sharesHeld: 0, sector: ['Budownictwo', 'Przemysł'], financialHealth: 0, lastReport: 'brak', cash: 600000, assetType: 'Construction', constructionCapacity: 3, activeProjects: [], experience: 40, balanceSheet: { assets: 1500000, liabilities: 800000, shareCapital: 150000, retainedEarnings: 550000 }, quarterlyEarnings: 0, priceHistory: [], candlestickHistory: [], lineHistory: [], playerTransactions: [], dividendPolicy: 'None', dividendTimer: 0, estimatedDividend: 0, bankAccountId: null, isBankStock: false }, // (Istniejący Betonex zaktualizowany o typ Construction)
+
+    { name: 'BobBuild', price: 35.00, volatilityFactor: 2.0, symbol: 'BOB', exchange: 'BRONZE', totalShares: 12000, maxShares: 12000, sharesHeld: 0, sector: ['Budownictwo'], financialHealth: -1, lastReport: 'brak', cash: 100000, assetType: 'Construction', constructionCapacity: 2, activeProjects: [], experience: 20, balanceSheet: { assets: 300000, liabilities: 200000, shareCapital: 30000, retainedEarnings: 70000 }, quarterlyEarnings: 0, priceHistory: [], candlestickHistory: [], lineHistory: [], playerTransactions: [], dividendPolicy: 'None', dividendTimer: 0, estimatedDividend: 0, bankAccountId: null, isBankStock: false },
+
+    { name: 'Majsterbud', price: 25.00, volatilityFactor: 2.5, symbol: 'MJB', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, sector: ['Budownictwo'], financialHealth: 0, lastReport: 'brak', cash: 50000, assetType: 'Construction', constructionCapacity: 1, activeProjects: [], experience: 10, balanceSheet: { assets: 150000, liabilities: 50000, shareCapital: 10000, retainedEarnings: 90000 }, quarterlyEarnings: 0, priceHistory: [], candlestickHistory: [], lineHistory: [], playerTransactions: [], dividendPolicy: 'Growth', dividendTimer: 0, estimatedDividend: 0, bankAccountId: null, isBankStock: false },
     {
         name: 'Global Real Estate Trust',
         price: 450.00, volatilityFactor: 0.2, symbol: 'GRET', exchange: 'GOLD',
@@ -2740,12 +2779,19 @@ function processFinancialReports() {
             }
 
         } else if (!stock.assetType) {
-            // 🏭 Standardowe spółki
-            const earningsBase = (stock.financialHealth * 0.01) + (getRandomInRange(-0.015, 0.015));
-            // ===>>> ZMIANA 2: Dodanie dochodu bazowego do zysku <<<===
-            quarterlyEarnings = (marketCap * earningsBase) + baseQuarterlyIncome;
-            // ===>>> KONIEC ZMIANY 2 <<<===
+        // 🏭 Standardowe spółki
+        const earningsBase = (stock.financialHealth * 0.01) + (getRandomInRange(-0.015, 0.015));
+        
+        // ===>>> ZMIANA: Bonusy z działów i inwestycji <<<===
+        let investmentBonus = stock.investmentIncome || 0; // Dochód z aktywnych inwestycji
+        let economyBonus = 1.0;
+        if (stock.departments) {
+            economyBonus += stock.departments[DEPARTMENTS.ECONOMY].incomeBonus;
         }
+        
+        quarterlyEarnings = ((marketCap * earningsBase) + baseQuarterlyIncome + investmentBonus) * economyBonus;
+        // ===>>> KONIEC ZMIANY <<<===
+    }
         else if (stock.assetType === 'DebtCollector') {
             // WRONA zarabia na odsetkach od przejętych długów
             let totalInterestCollected = 0;
@@ -11007,6 +11053,358 @@ function runPrivateCompanyLogic() {
                 // 60% szans - pozostaje prywatna, ale rośnie
                 company.value *= 1.2; // Wartość rośnie o 20%
                 city.infrastructureLevel += 0.01; // Stały, mały bonus do infrastruktury
+            }
+        }
+    });
+}
+
+function initializeDepartments(stock) {
+    if (stock.assetType === 'Startup' || stock.isBankrupt) return;
+
+    // Losowe poziomy startowe (zależne od giełdy)
+    const exchangeLevel = exchanges[stock.exchange]?.level || 0;
+    const baseLevel = Math.min(3, Math.floor(exchangeLevel / 1.5) + 1);
+    
+    stock.departments = {
+        [DEPARTMENTS.RESEARCH]: { level: getRandomIntInRange(1, baseLevel), progress: 0 },
+        [DEPARTMENTS.DEVELOPMENT]: { level: getRandomIntInRange(1, baseLevel), activeInvestments: [] },
+        [DEPARTMENTS.ECONOMY]: { level: getRandomIntInRange(1, baseLevel), efficiency: 1.0 }
+    };
+    
+    // Przelicz efekty działów na start
+    recalculateDepartmentEffects(stock);
+}
+
+function recalculateDepartmentEffects(stock) {
+    if (!stock.departments) return;
+    
+    // 1. Badania
+    // (Wpływa na researchSpeedMultiplier w updateResearchProgress - już mamy logikę, dodamy tam modyfikator)
+    
+    // 2. Rozwój
+    // Poziom określa limit równoczesnych inwestycji
+    stock.departments[DEPARTMENTS.DEVELOPMENT].maxInvestments = stock.departments[DEPARTMENTS.DEVELOPMENT].level;
+    // Poziom określa zniżkę na budowę
+    stock.departments[DEPARTMENTS.DEVELOPMENT].costDiscount = (stock.departments[DEPARTMENTS.DEVELOPMENT].level - 1) * 0.05; // 0%, 5%, 10%
+    
+    // 3. Ekonomia
+    const ecoLvl = stock.departments[DEPARTMENTS.ECONOMY].level;
+    stock.departments[DEPARTMENTS.ECONOMY].incomeBonus = (ecoLvl - 1) * 0.05; // Bonus do przychodów bazowych (+0%, +5%, +10%)
+    stock.departments[DEPARTMENTS.ECONOMY].autoDebtPay = ecoLvl >= 3; // Poziom 3 automatyzuje długi
+}
+
+/**
+ * Rozpoczyna proces inwestycyjny w spółce.
+ */
+function startCompanyInvestment(stock, investmentId) {
+    const investData = INVESTMENT_CATALOG.find(i => i.id === investmentId);
+    if (!investData) return;
+    
+    const devDept = stock.departments[DEPARTMENTS.DEVELOPMENT];
+    if (devDept.activeInvestments.length >= devDept.maxInvestments) {
+        showToast("Limit aktywnych inwestycji osiągnięty!", "error");
+        return;
+    }
+    
+    const cost = investData.baseCost * (1 - devDept.costDiscount);
+    if (stock.cash < cost) {
+        showToast("Spółka nie ma wystarczających środków.", "error");
+        return;
+    }
+
+    // Pobierz środki (albo zaciągnij dług, jeśli Ekonomia lvl 2+ pozwala)
+    stock.cash -= cost;
+    
+    // Dodaj do bilansu (W toku budowy)
+    stock.balanceSheet.assets += cost; 
+
+    const newInvestment = {
+        id: `inv_${stock.symbol}_${Date.now()}`,
+        typeId: investmentId,
+        name: investData.name,
+        phase: INVESTMENT_PHASES.DESIGN,
+        progress: 0,
+        totalDuration: investData.baseDuration * 4, // Tygodnie
+        currentWeek: 0,
+        cost: cost,
+        roi: investData.roi,
+        constructionCompany: null
+    };
+    
+    devDept.activeInvestments.push(newInvestment);
+    logEvent(`🏗️ ${stock.name} rozpoczyna proces inwestycyjny: ${investData.name}.`, 'company');
+    
+    // Jeśli gracz ma otwarty panel, odśwież
+    if(document.getElementById('management-modal')?.style.display === 'block') {
+        openManagementModal(stock.symbol); // Zostanie zaktualizowane, by obsłużyć zakładki
+    }
+}
+
+/**
+ * Obsługuje przetargi i postęp budowy. Wywoływana co tydzień.
+ */
+function runConstructionLogic() {
+    stocks.forEach(stock => {
+        if (!stock.departments || !stock.departments[DEPARTMENTS.DEVELOPMENT]) return;
+        
+        const investments = stock.departments[DEPARTMENTS.DEVELOPMENT].activeInvestments;
+        
+        investments.forEach(inv => {
+            // Pomiń, jeśli inwestycja jest w stanie błędu/komplikacji (czeka na akcję gracza lub upływ czasu)
+            if (inv.isComplicated) {
+                // Tutaj można dodać logikę automatycznego rozwiązywania komplikacji przez AI po czasie
+                // Na razie zakładamy, że komplikacja "wisi" aż zostanie rozwiązana (lub automatycznie mija po 1-2 turach - zróbmy automatyczne mijanie dla płynności)
+                inv.complicationTimer = (inv.complicationTimer || 0) - 1;
+                if (inv.complicationTimer <= 0) {
+                     inv.isComplicated = false; // Komplikacja rozwiązana
+                     inv.statusText = "Wznawianie prac...";
+                }
+                return; 
+            }
+
+            // --- ETAP 3: BUDOWA ---
+            if (inv.phase === INVESTMENT_PHASES.BUILD) {
+                const builder = stocks.find(s => s.symbol === inv.constructionCompany);
+                
+                if (builder) {
+                    let buildSpeed = 100 / inv.totalDuration;
+                    buildSpeed *= (1 + builder.experience / 200); 
+
+                    const nextProgress = inv.progress + buildSpeed;
+                    
+                    // Pobierz checkpointy dla tego typu inwestycji
+                    const investData = INVESTMENT_CATALOG.find(i => i.id === inv.typeId);
+                    const checkpoints = investData ? investData.checkpoints : [99];
+
+                    // Sprawdź, czy przekraczamy checkpoint
+                    let hitCheckpoint = null;
+                    for (const cp of checkpoints) {
+                        // Jeśli jesteśmy przed checkpointem, a następny krok go przekracza (lub dotyka)
+                        if (inv.progress < cp && nextProgress >= cp) {
+                            hitCheckpoint = cp;
+                            break; // Zatrzymujemy się na pierwszym napotkanym checkpoincie
+                        }
+                    }
+
+                    if (hitCheckpoint !== null) {
+                        // Dotarliśmy do checkpointu
+                        inv.progress = hitCheckpoint; // Ustawiamy równo na punkt
+                        
+                        // Losowanie komplikacji (22.5% szansy)
+                        if (Math.random() < 0.225) {
+                            inv.isComplicated = true;
+                            inv.complicationTimer = getRandomIntInRange(2, 4); // Komplikacja trwa 2-4 tygodnie
+                            
+                            const problems = [
+                                "Brak materiałów budowlanych", 
+                                "Zalanie fundamentów", 
+                                "Protesty ekologów", 
+                                "Inspekcja nadzoru budowlanego", 
+                                "Wypadek dźwigu",
+                                "Błąd w projekcie"
+                            ];
+                            const problem = getRandomElement(problems);
+                            inv.statusText = `⚠️ ${problem}! Przestój: ${inv.complicationTimer} tyg.`;
+                            
+                            logEvent(`🛑 Komplikacja na budowie ${inv.name} w ${stock.name}: ${problem}.`, 'warning');
+                        } else {
+                            // Udało się przejść bez problemów
+                             // Musimy "pchnąć" postęp o minimalną wartość, żeby w następnej pętli nie utknąć na tym samym checkpoincie
+                             inv.progress += 0.1; 
+                        }
+
+                    } else {
+                        // Brak checkpointu po drodze, normalny postęp
+                        inv.progress = nextProgress;
+                    }
+
+                    // Finalizacja budowy (tylko jeśli minęliśmy 100%)
+                    if (inv.progress >= 100) {
+                        inv.phase = INVESTMENT_PHASES.VERIFY;
+                        inv.progress = 0;
+                        // Zwolnij slot u budowlańca
+                        const projIndex = builder.activeProjects.indexOf(inv.id);
+                        if (projIndex > -1) builder.activeProjects.splice(projIndex, 1);
+                        // Zapłać budowlańcowi
+                        builder.cash += inv.cost * 0.2; 
+                        builder.quarterlyEarnings += inv.cost * 0.2;
+                        builder.experience += 1;
+                    }
+
+                } else {
+                    // Firma budowlana zniknęła
+                     inv.phase = INVESTMENT_PHASES.TENDER;
+                     inv.progress = 0;
+                }
+            }
+            
+            // --- INNE ETAPY (Projektowanie, Weryfikacja) ---
+            // (Tu można zostawić standardowy postęp liniowy lub też dodać checkpointy)
+            else if (inv.phase === INVESTMENT_PHASES.DESIGN) {
+                inv.progress += 25;
+                if (inv.progress >= 100) {
+                    inv.phase = INVESTMENT_PHASES.TENDER;
+                    inv.progress = 0;
+                    resolveTender(stock, inv);
+                }
+            }
+            else if (inv.phase === INVESTMENT_PHASES.VERIFY) {
+                inv.progress += 50;
+                if (inv.progress >= 100) {
+                    inv.phase = INVESTMENT_PHASES.ACTIVE;
+                    logEvent(`✅ ${stock.name} zakończył inwestycję: ${inv.name}.`, 'success');
+                    applyInvestmentBonus(stock, inv);
+                }
+            }
+        });
+    });
+}
+
+function resolveTender(stock, investment) {
+    // Znajdź firmy budowlane, które mają wolne moce
+    const availableBuilders = stocks.filter(s => 
+        s.assetType === 'Construction' && 
+        !s.isBankrupt && 
+        s.activeProjects.length < s.constructionCapacity
+    );
+    
+    if (availableBuilders.length === 0) {
+        // Brak wykonawców, czekamy
+        return; 
+    }
+    
+    // Punktacja (Cena, Czas, Doświadczenie)
+    // Uproszczenie: Wybieramy firmę z największym doświadczeniem i dostępnością
+    availableBuilders.sort((a, b) => b.experience - a.experience);
+    const winner = availableBuilders[0];
+    
+    investment.constructionCompany = winner.symbol;
+    investment.phase = INVESTMENT_PHASES.BUILD;
+    winner.activeProjects.push(investment.id);
+    
+    logEvent(`🤝 ${stock.name} wybrał ${winner.name} do realizacji: ${investment.name}.`, 'market');
+}
+
+function applyInvestmentBonus(stock, investment) {
+    // ROI wpływa na kwartalne zarobki bazowe (dodajemy to jako stały składnik w processFinancialReports)
+    if (!stock.investmentIncome) stock.investmentIncome = 0;
+    stock.investmentIncome += investment.cost * investment.roi; // Np. 500k * 0.05 = 25k/kwartał extra
+}
+
+function corporateTakeLoan(stock, amount) {
+    if (!stock.bankAccountId) return false;
+    
+    const bank = commercialBanks.find(b => b.id === stock.bankAccountId);
+    if (!bank || !bank.isActive) return false;
+
+    // Sprawdź, czy bank ma środki
+    if (bank.cash < amount) return false;
+
+    // Sprawdź zdolność kredytową spółki (uproszczona)
+    // Limit długu to np. 60% aktywów
+    const currentDebt = stock.balanceSheet ? stock.balanceSheet.liabilities : (stock.corporateDebt || 0);
+    const assets = stock.balanceSheet ? stock.balanceSheet.assets : (stock.price * stock.totalShares); // Fallback do market cap
+    const maxDebt = assets * 0.6;
+
+    if (currentDebt + amount > maxDebt) return false; // Zbyt zadłużona
+
+    // --- Realizacja kredytu ---
+    
+    // 1. Przelew środków
+    bank.cash -= amount;
+    stock.cash += amount;
+
+    // 2. Księgowanie długu w spółce
+    if (stock.balanceSheet) {
+        stock.balanceSheet.liabilities += amount;
+        stock.balanceSheet.assets += amount; // Gotówka to aktywa
+    }
+    // (Zachowujemy kompatybilność ze starym polem, jeśli jest używane)
+    if (stock.corporateDebt !== undefined) stock.corporateDebt += amount;
+
+    // 3. Księgowanie w banku
+    // Dodajemy do portfela kredytowego banku dla danej spółki
+    bank.loanPortfolio[stock.symbol] = (bank.loanPortfolio[stock.symbol] || 0) + amount;
+
+    // logEvent(`🏦 ${stock.name} zaciąga kredyt inwestycyjny ${amount.toLocaleString()} PLN w ${bank.name}.`, 'company');
+    return true;
+}
+
+/**
+ * (Kwartalna) AI Spółek decyduje o ulepszaniu swoich działów.
+ */
+function runCompanyDepartmentsAI() {
+    // console.log("[AI Departments] Spółki analizują potrzeby rozwoju...");
+
+    stocks.forEach(stock => {
+        // Pomiń: typy specjalne, bankrutów, spółki bez działów
+        if (stock.assetType || stock.isBankrupt || !stock.departments) return;
+
+        // Szansa na podjęcie decyzji w tym kwartale (np. 20%)
+        // Zwiększona przez cechę CEO "Ekspansjonista"
+        let chance = 0.20;
+        if (stock.ceo?.traits?.some(t => t.id === 'ekspansjonista')) chance = 0.40;
+        
+        if (Math.random() > chance) return;
+
+        // 1. Wybór priorytetowego działu na podstawie sektora
+        let priorities = [];
+        if (stock.sector.includes('Technologia') || stock.sector.includes('Medycyna')) {
+            priorities = [DEPARTMENTS.RESEARCH, DEPARTMENTS.DEVELOPMENT, DEPARTMENTS.ECONOMY];
+        } else if (stock.sector.includes('Przemysł') || stock.sector.includes('Budownictwo') || stock.sector.includes('Nieruchomości')) {
+            priorities = [DEPARTMENTS.DEVELOPMENT, DEPARTMENTS.ECONOMY, DEPARTMENTS.RESEARCH];
+        } else if (stock.sector.includes('Bankowość') || stock.sector.includes('Finanse')) {
+            priorities = [DEPARTMENTS.ECONOMY, DEPARTMENTS.RESEARCH, DEPARTMENTS.DEVELOPMENT];
+        } else {
+            // Domyślnie losowo
+            priorities = [DEPARTMENTS.DEVELOPMENT, DEPARTMENTS.ECONOMY, DEPARTMENTS.RESEARCH].sort(() => 0.5 - Math.random());
+        }
+
+        // Sprawdź działy w kolejności priorytetów
+        for (const deptType of priorities) {
+            const dept = stock.departments[deptType];
+            if (dept.level >= 3) continue; // Max poziom
+
+            // Koszt ulepszenia (taki sam jak dla gracza: 50k * 2^level)
+            const cost = 50000 * Math.pow(2, dept.level);
+
+            // Decyzja o finansowaniu
+            let canAfford = false;
+            let source = '';
+
+            // A. Mamy gotówkę? (Musi zostać bezpieczny bufor np. 50k)
+            if (stock.cash >= cost + 50000) {
+                canAfford = true;
+                source = 'cash';
+            } 
+            // B. Jeśli nie, czy warto wziąć kredyt? (Tylko jeśli kondycja jest dobra)
+            else if (stock.financialHealth >= 1) {
+                // Próba wzięcia kredytu na brakującą kwotę
+                const needed = cost - stock.cash + 20000; // + bufor
+                if (corporateTakeLoan(stock, needed)) {
+                    canAfford = true;
+                    source = 'loan';
+                }
+            }
+
+            // Wykonaj ulepszenie
+            if (canAfford) {
+                stock.cash -= cost;
+                dept.level++;
+                recalculateDepartmentEffects(stock); // Ważne! Aktualizuje bonusy
+
+                let msg = `🏢 ${stock.name} modernizuje dział: ${deptType} (Poziom ${dept.level}).`;
+                if (source === 'loan') msg += ` Sfinansowano kredytem.`;
+                
+                logEvent(msg, 'company');
+                
+                // Jeśli gracz ma otwarty panel tej spółki, odśwież go
+                if (document.getElementById('management-modal')?.style.display === 'block' && 
+                    document.getElementById('management-modal').dataset.currentSymbol === stock.symbol) {
+                    openManagementModal(stock.symbol);
+                }
+
+                break; // Jedno ulepszenie na kwartał wystarczy
             }
         }
     });

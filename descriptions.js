@@ -37,6 +37,18 @@ const sectorSpecifics = {
         "regulacje medialne", "content marketing", "dziennikarstwo śledcze"
     ] 
 },
+'Budownictwo': {
+    activity: [
+        "Spółka realizuje wielkie kontrakty infrastrukturalne, budując drogi i mosty.",
+        "Firma specjalizuje się w budownictwie kubaturowym i deweloperskim.",
+        "Przedsiębiorstwo dostarcza beton i prefabrykaty na największe place budowy w kraju.",
+        "Koncern budowlany wygrywa przetargi na modernizację obiektów użyteczności publicznej."
+    ],
+    keywords: [
+        "ceny materiałów", "przetargi publiczne", "warunki pogodowe", "dostępność siły roboczej",
+        "koniunktura mieszkaniowa", "inwestycje rządowe", "pozwolenia na budowę"
+    ]
+},
     'Finanse Konsumenckie': { 
     activity: [
         "Spółka jest liderem na rynku pożyczek pozabankowych, tzw. 'chwilówek'.", 

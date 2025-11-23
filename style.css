@@ -639,7 +639,9 @@ tr.locked-row {
     box-shadow: 0 1px 2px rgba(0,0,0,0.2);
     cursor: help;
 }
-
+#research-modal {
+    z-index: 2000 !important; /* Wyższy priorytet - zawsze na wierzchu */
+}
 /* --- CIEMNY MOTYW (DARK MODE) --- */
 
 body.dark-mode {
@@ -661,6 +663,7 @@ body.dark-mode {
 
 /* Poprawka dla ciemnego motywu */
   #management-modal .modal-body {
+    z-index: 1006;
     max-height: 60vh; /* Ogranicza wysokość do 60% wysokości ekranu */
     overflow-y: auto; /* Pokazuje pionowy suwak tylko wtedy, gdy treść się nie mieści */
     padding-right: 15px; /* Dodaje trochę miejsca, aby suwak nie nachodził na treść */
@@ -1059,4 +1062,118 @@ body.dark-mode #stock-table progress.complication::-webkit-progress-value {
 
 body.dark-mode #stock-table progress.decision::-webkit-progress-value {
     background-color: #dc3545;
+}
+
+.investment-item {
+    background: #fff;
+    border: 1px solid #ddd;
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+}
+
+.investment-header {
+    display: flex;
+    justify-content: space-between;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.investment-builder-info {
+    font-size: 10px;
+    color: #666;
+    margin-top: 5px;
+    font-style: italic;
+    text-align: right;
+}
+
+.construction-timeline {
+    position: relative;
+    height: 40px; /* Wysokość kontenera paska */
+    margin-top: 15px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+}
+
+/* Linia tła (szara) */
+.timeline-bg-line {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 100%;
+    height: 6px;
+    background-color: #e0e0e0;
+    transform: translateY(-50%);
+    z-index: 1;
+    border-radius: 3px;
+    border: 1px solid #333; /* Czarna obwódka jak na obrazku */
+}
+
+/* Pasek postępu (niebieski) */
+.timeline-fill-line {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    height: 6px;
+    background-color: #4169E1; /* Royal Blue - podobny do obrazka */
+    transform: translateY(-50%);
+    z-index: 2;
+    border-radius: 3px;
+    /* width ustawiane dynamicznie w JS */
+}
+
+/* Checkpointy (kółka) */
+.timeline-checkpoint {
+    position: absolute;
+    top: 50%;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background-color: #fff; /* Domyślnie białe w środku */
+    border: 2px solid #000; /* Czarna obwódka */
+    transform: translate(-50%, -50%); /* Centrowanie */
+    z-index: 3;
+    /* left ustawiane dynamicznie w JS */
+}
+
+/* Osiągnięty checkpoint */
+.timeline-checkpoint.reached {
+    background-color: #4169E1; /* Niebieski środek */
+}
+
+/* Checkpoint z komplikacją */
+.timeline-checkpoint.error {
+    background-color: #4169E1; /* Niebieski środek */
+}
+
+/* Wykrzyknik */
+.complication-alert {
+    position: absolute;
+    top: -25px; /* Nad kółkiem */
+    left: 50%;
+    transform: translateX(-50%);
+    color: #dc3545; /* Czerwony */
+    font-size: 24px;
+    font-weight: bold;
+    text-shadow: 1px 1px 0 #fff;
+    animation: blink 1s infinite;
+    z-index: 4;
+}
+
+@keyframes blink {
+    0% { opacity: 1; }
+    50% { opacity: 0.3; }
+    100% { opacity: 1; }
+}
+
+.investment-status-text {
+    font-size: 12px;
+    margin-top: 5px;
+    color: #333;
+    font-weight: bold;
+}
+
+.investment-status-text.error {
+    color: #dc3545;
 }

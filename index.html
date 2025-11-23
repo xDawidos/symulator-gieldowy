@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="pl">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Symulator Inwestycyjny</title>
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
     <div id="settings-container">
@@ -20,165 +22,156 @@
         <button id="open-skills-btn" onclick="openSkillsModal()">🧠 Umiejętności</button>
         <button id="open-newspaper-btn" onclick="openNewspaperModal()">📰 Gazeta</button>
         <button id="open-leaderboard-btn" onclick="openLeaderboardModal()">🏆 Ranking</button>
-        <button id="open-dividend-tracker-btn" onclick="openDividendTrackerModal()" style="display: none;">💰 Dywidendy</button>
-        <button id="pause-game-btn" onclick="togglePauseGame()">⏸️ Pauza</button>
-        <button onclick="saveGame()" style="margin-left: 20px; border-style: dashed;">Zapisz Grę</button>
-        <button onclick="resetGame()" style="background-color: #dc3545; color: white;">Resetuj Grę</button>
-    </div>
+        <button id="open-dividend-tracker-btn" onclick="openDividendTrackerModal()" style="display: none;">💰
+            Dywidendy</button>
 
-    <h1>Symulator Giełdowy</h1>
+        Giełda NewHorizons🚀
+        <span id="toggle-icon-startup">▼</span>
+        </h2>
 
-    <div id="ticker-container">
-        <div class="ticker-message">wersja 0.7.1 obligacje BETA</div>
-    </div>
-
-    <div id="time-controls" style="text-align: center; margin-bottom: 20px;">
-        <strong>Prędkość gry:</strong>
-        <button class="speed-btn active" onclick="setGameSpeed(1)">x1</button>
-        <button class="speed-btn" onclick="setGameSpeed(2)">x2</button>
-        <button class="speed-btn" onclick="setGameSpeed(5)">x5</button>
-    </div>
-
-    <div class="game-container">
-        <div class="main-content">
-            <div id="indexes-panel" class="panel" style="display: none;">
-                <div id="indexes-container"></div>
-            </div>
-
-            <div id="startup-incubator-panel" class="panel">
-                <h2 onclick="toggleStartupPanelVisibility()" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
-                    Giełda NewHorizons🚀
-                    <span id="toggle-icon-startup">▼</span>
-                </h2>
-
-                <div id="investment-pool-panel" class="panel startup-panel-content"> <h2>Pula Inwestycyjna Start-upów 🏊</h2>
-                    <p>Wpłacaj środki do wspólnej puli, która automatycznie inwestuje w obiecujące projekty. Zyski dzielone są proporcjonalnie!</p>
-                    <div style="display: flex; justify-content: space-around; align-items: center;">
-                        <div>
-                            <h4>Całkowite środki w puli:</h4>
-                            <h3 id="pool-total-funds">0.00 PLN</h3>
-                            <p>Następna inwestycja za: <span id="pool-timer">60</span>s</p>
-                        </div>
-                        <div>
-                            <h4>Twoja wpłata:</h4>
-                            <div id="pool-controls-container">
-                                <input type="number" id="pool-contribution-amount" placeholder="Wpłać do puli" style="width: 120px;">
-                                <button onclick="contributeToInvestmentPool('player', document.getElementById('pool-contribution-amount').valueAsNumber)">Wpłać</button>
-                                <button id="open-autoinvest-modal-btn" style="margin-left: 10px;">🤖 Ustawienia Auto</button>
-                                <div id="autoinvest-status" style="font-size: 12px; color: #555; margin-top: 5px;"></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div id="pool-contributors-chart" style="margin-top: 20px;">
-                        <h4>Wpłacający w tej rundzie:</h4>
-                        <div id="pool-contributors-list">Brak wpłat.</div>
+        <div id="investment-pool-panel" class="panel startup-panel-content">
+            <h2>Pula Inwestycyjna Start-upów 🏊</h2>
+            <p>Wpłacaj środki do wspólnej puli, która automatycznie inwestuje w obiecujące projekty. Zyski dzielone są
+                proporcjonalnie!</p>
+            <div style="display: flex; justify-content: space-around; align-items: center;">
+                <div>
+                    <h4>Całkowite środki w puli:</h4>
+                    <h3 id="pool-total-funds">0.00 PLN</h3>
+                    <p>Następna inwestycja za: <span id="pool-timer">60</span>s</p>
+                </div>
+                <div>
+                    <h4>Twoja wpłata:</h4>
+                    <div id="pool-controls-container">
+                        <input type="number" id="pool-contribution-amount" placeholder="Wpłać do puli"
+                            style="width: 120px;">
+                        <button
+                            onclick="contributeToInvestmentPool('player', document.getElementById('pool-contribution-amount').valueAsNumber)">Wpłać</button>
+                        <button id="open-autoinvest-modal-btn" style="margin-left: 10px;">🤖 Ustawienia Auto</button>
+                        <div id="autoinvest-status" style="font-size: 12px; color: #555; margin-top: 5px;"></div>
                     </div>
                 </div>
-
-                <table id="startup-table" class="startup-panel-content"> <thead>
-                        <tr>
-                            <th>Nazwa Start-upu</th>
-                            <th>Cel Finansowania</th>
-                            <th>Postęp Finansowania</th>
-                            <th>Postęp Rozwoju</th>
-                            <th>Akcje</th>
-                        </tr>
-                    </thead>
-                    <tbody id="startup-table-body">
-                    </tbody>
-                </table>
             </div>
-
-            <div id="market" class="panel">
-                <h2>Rynek Akcji</h2>
-                <div style="margin-bottom: 10px;">
-                    <label for="sector-filter">Filtruj według sektora: </label>
-                    <select id="sector-filter" onchange="displayStocks(getCurrentInputValues())">
-                        <option value="all">Wszystkie sektory</option>
-                        <option value="Żywność">Żywność</option>
-                        <option value="Gaming">Gaming</option>
-                        <option value="Finanse">Finanse</option>
-                        <option value="Technologia">Technologia</option>
-                        <option value="Bankowość">Bankowość</option>
-                        <option value="Nieruchomości">Nieruchomości</option>
-                        <option value="Energia">Energia</option>
-                        <option value="Chemia">Chemia</option>
-                        <option value="Przemysł">Przemysł</option>
-                        <option value="Dobra konsumpcyjne">Dobra konsumpcyjne</option>
-                        <option value="Usługi">Usługi</option>
-                        <option value="Badania">Badania</option>
-                        <option value="Turystyka">Turystyka</option>
-                        <option value="Medycyna">Medycyna</option>
-                        <option value="REIT">Fundusze REIT</option>
-                    </select>
-                </div>
-                <table id="stock-table">
-                    <thead>
-                        <tr>
-                            <th>Nazwa Spółki</th>
-                            <th id="price-header-cell" onclick="togglePriceSort()" style="cursor: pointer;">Cena (PLN)</th>
-                            <th>Dostępne</th>
-                            <th>Posiadane</th>
-                            <th>Akcje</th>
-                            <th>Raport</th>
-                        </tr>
-                    </thead>
-                    <tbody id="stock-table-body"></tbody>
-                </table>
-                <div id="etf-section">
-                    <h3 style="margin-top: 30px;">Fundusze ETF</h3>
-                    <table id="etf-table">
-                        <thead>
-                            <tr>
-                                <th>Nazwa Funduszu</th>
-                                <th>Cena (PLN)</th>
-                                <th>Posiadane</th>
-                                <th>Akcje</th>
-                            </tr>
-                        </thead>
-                        <tbody id="etf-table-body"></tbody>
-                    </table>
-                </div>
+            <div id="pool-contributors-chart" style="margin-top: 20px;">
+                <h4>Wpłacający w tej rundzie:</h4>
+                <div id="pool-contributors-list">Brak wpłat.</div>
             </div>
         </div>
-        <div class="sidebar">
-            <div id="portfolio" class="panel">
-                <h2>Mój Portfel</h2>
-                <h3 style="font-size: 24px;">Całkowita wartość: <span id="total-portfolio-value">10000.00</span> PLN</h3>
-                <hr>
-                <p>Gotówka: <span id="cash">10000.00</span> PLN</p>
-                <p>Całkowity Zysk/Strata: <span id="total-profit-loss">0.00</span> PLN</p>
-                <p>Doświadczenie: <span id="player-xp">0.0</span> XP</p>
-                <hr>
-                <h3>Moje Aktywa:</h3>
-                <ul id="my-stocks-list"></ul>
-                <hr>
-                <h3>Moje Pasywa:</h3>
-                <ul id="my-liabilities-list" style="list-style-type: none; padding: 0;">
-                </ul>
-            </div>
-        </div>
+
+        <table id="startup-table" class="startup-panel-content">
+            <thead>
+                <tr>
+                    <th>Nazwa Start-upu</th>
+                    <th>Cel Finansowania</th>
+                    <th>Postęp Finansowania</th>
+                    <th>Postęp Rozwoju</th>
+                    <th>Akcje</th>
+                </tr>
+            </thead>
+            <tbody id="startup-table-body">
+            </tbody>
+        </table>
     </div>
 
-    <div id="settings-modal" class="modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 350px; border: 2px solid #333; background-color: #f9f9f9; box-shadow: 0 4px 8px rgba(0,0,0,0.2); padding: 20px; z-index: 1020; border-radius: 8px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ccc; padding-bottom: 10px;">
+    <div id="market" class="panel">
+        <h2>Rynek Akcji</h2>
+        <div style="margin-bottom: 10px;">
+            <label for="sector-filter">Filtruj według sektora: </label>
+            <select id="sector-filter" onchange="displayStocks(getCurrentInputValues())">
+                <option value="all">Wszystkie sektory</option>
+                <option value="Żywność">Żywność</option>
+                <option value="Gaming">Gaming</option>
+                <option value="Finanse">Finanse</option>
+                <option value="Technologia">Technologia</option>
+                <option value="Bankowość">Bankowość</option>
+                <option value="Nieruchomości">Nieruchomości</option>
+                <option value="Energia">Energia</option>
+                <option value="Chemia">Chemia</option>
+                <option value="Przemysł">Przemysł</option>
+                <option value="Dobra konsumpcyjne">Dobra konsumpcyjne</option>
+                <option value="Usługi">Usługi</option>
+                <option value="Badania">Badania</option>
+                <option value="Turystyka">Turystyka</option>
+                <option value="Medycyna">Medycyna</option>
+                <option value="REIT">Fundusze REIT</option>
+            </select>
+        </div>
+        <table id="stock-table">
+            <thead>
+                <tr>
+                    <th>Nazwa Spółki</th>
+                    <th id="price-header-cell" onclick="togglePriceSort()" style="cursor: pointer;">Cena (PLN)</th>
+                    <th>Dostępne</th>
+                    <th>Posiadane</th>
+                    <th>Akcje</th>
+                    <th>Raport</th>
+                </tr>
+            </thead>
+            <tbody id="stock-table-body"></tbody>
+        </table>
+        <div id="etf-section">
+            <h3 style="margin-top: 30px;">Fundusze ETF</h3>
+            <table id="etf-table">
+                <thead>
+                    <tr>
+                        <th>Nazwa Funduszu</th>
+                        <th>Cena (PLN)</th>
+                        <th>Posiadane</th>
+                        <th>Akcje</th>
+                    </tr>
+                </thead>
+                <tbody id="etf-table-body"></tbody>
+            </table>
+        </div>
+    </div>
+    </div>
+    <div class="sidebar">
+        <div id="portfolio" class="panel">
+            <h2>Mój Portfel</h2>
+            <h3 style="font-size: 24px;">Całkowita wartość: <span id="total-portfolio-value">10000.00</span> PLN</h3>
+            <hr>
+            <p>Gotówka: <span id="cash">10000.00</span> PLN</p>
+            <p>Całkowity Zysk/Strata: <span id="total-profit-loss">0.00</span> PLN</p>
+            <p>Doświadczenie: <span id="player-xp">0.0</span> XP</p>
+            <hr>
+            <h3>Moje Aktywa:</h3>
+            <ul id="my-stocks-list"></ul>
+            <hr>
+            <h3>Moje Pasywa:</h3>
+            <ul id="my-liabilities-list" style="list-style-type: none; padding: 0;">
+            </ul>
+        </div>
+    </div>
+    </div>
+
+    <div id="settings-modal" class="modal"
+        style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 350px; border: 2px solid #333; background-color: #f9f9f9; box-shadow: 0 4px 8px rgba(0,0,0,0.2); padding: 20px; z-index: 1020; border-radius: 8px;">
+        <div
+            style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ccc; padding-bottom: 10px;">
             <h3 style="margin: 0;">Ustawienia</h3>
-            <button onclick="closeSettingsModal()" style="background: none; border: none; font-size: 24px; font-weight: bold; cursor: pointer;">&times;</button>
+            <button onclick="closeSettingsModal()"
+                style="background: none; border: none; font-size: 24px; font-weight: bold; cursor: pointer;">&times;</button>
         </div>
         <div style="text-align: center; padding-top: 20px;">
             <p>Zmień wygląd interfejsu.</p>
-            <button id="theme-toggle-btn-modal" onclick="toggleDarkMode()" style="padding: 10px 15px; font-size: 16px;">Zmień motyw</button>
+            <button id="theme-toggle-btn-modal" onclick="toggleDarkMode()"
+                style="padding: 10px 15px; font-size: 16px;">Zmień motyw</button>
         </div>
     </div>
 
-    <div id="price-chart-modal" style="display:none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 420px; border: 2px solid #333; background-color: #f9f9f9; box-shadow: 0 4px 8px rgba(0,0,0,0.2); padding: 20px; z-index: 1000; border-radius: 8px;">
+    <div id="price-chart-modal"
+        style="display:none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 420px; border: 2px solid #333; background-color: #f9f9f9; box-shadow: 0 4px 8px rgba(0,0,0,0.2); padding: 20px; z-index: 1000; border-radius: 8px;">
         <h3 id="chart-title" style="margin-top: 0; text-align: center;">Historia Cen</h3>
-        <div id="chart-svg-area" style="width: 100%; height: 220px; background-color: #fff; border: 1px solid #ccc; margin-bottom: 10px;"></div>
+        <div id="chart-svg-area"
+            style="width: 100%; height: 220px; background-color: #fff; border: 1px solid #ccc; margin-bottom: 10px;">
+        </div>
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
             <div class="chart-controls-group">
                 <span>Typ wykresu:</span>
-                <img id="chart-type-candlestick-btn" src="img/slupki.png" alt="Wykres Świecowy" title="Pokaż wykres świecowy" style="width: 24px; height: 24px; cursor: pointer; padding: 2px; border: 2px solid transparent; border-radius: 4px; vertical-align: middle;">
-                <img id="chart-type-line-btn" src="img/wykres.png" alt="Wykres Liniowy" title="Pokaż wykres liniowy" style="width: 24px; height: 24px; cursor: pointer; padding: 2px; border: 2px solid transparent; border-radius: 4px; margin-left: 5px; vertical-align: middle;">
+                <img id="chart-type-candlestick-btn" src="img/slupki.png" alt="Wykres Świecowy"
+                    title="Pokaż wykres świecowy"
+                    style="width: 24px; height: 24px; cursor: pointer; padding: 2px; border: 2px solid transparent; border-radius: 4px; vertical-align: middle;">
+                <img id="chart-type-line-btn" src="img/wykres.png" alt="Wykres Liniowy" title="Pokaż wykres liniowy"
+                    style="width: 24px; height: 24px; cursor: pointer; padding: 2px; border: 2px solid transparent; border-radius: 4px; margin-left: 5px; vertical-align: middle;">
             </div>
             <div class="chart-controls-group">
                 <span>Interwał:</span>
@@ -198,264 +191,338 @@
                     <option value="300000">5 minut</option>
                     <option value="600000">10 minut</option>
                 </select>
-                <button id="open-alert-modal-btn" title="Ustaw alerty cenowe" style="font-size: 20px; padding: 0 5px; vertical-align: middle; margin-left: 10px;">⏰</button>
+                <button id="open-alert-modal-btn" title="Ustaw alerty cenowe"
+                    style="font-size: 20px; padding: 0 5px; vertical-align: middle; margin-left: 10px;">⏰</button>
             </div>
         </div>
         <button onclick="closePriceChartModal()" style="display: block; width: 100%;">Zamknij</button>
     </div>
 
-    <div id="skills-modal" style="display:none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 450px; max-height: 80vh; overflow-y: auto; border: 2px solid #333; background-color: #f9f9f9; box-shadow: 0 4px 8px rgba(0,0,0,0.2); padding: 20px; z-index: 1001; border-radius: 8px;">
-        <button class="close-btn" onclick="document.getElementById('skills-modal').style.display='none';">&times;</button>
+    <div id="skills-modal"
+        style="display:none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 450px; max-height: 80vh; overflow-y: auto; border: 2px solid #333; background-color: #f9f9f9; box-shadow: 0 4px 8px rgba(0,0,0,0.2); padding: 20px; z-index: 1001; border-radius: 8px;">
+        <button class="close-btn"
+            onclick="document.getElementById('skills-modal').style.display='none';">&times;</button>
         <h2 style="margin-top: 0; text-align: center;">Drzewko Umiejętności</h2>
-        <p style="text-align: center; border-bottom: 1px solid #ccc; padding-bottom: 10px;">Twoje XP: <span id="skills-modal-xp">0</span></p>
+        <p style="text-align: center; border-bottom: 1px solid #ccc; padding-bottom: 10px;">Twoje XP: <span
+                id="skills-modal-xp">0</span></p>
         <div id="skills-list"></div>
     </div>
 
     <div id="bank-modal" class="modal" style="display:none; width: 650px;">
-    <button class="close-btn" onclick="document.getElementById('bank-modal').style.display='none';">&times;</button>
-    <div class="bank-tabs">
-        <button id="tab-btn-central" class="bank-tab-btn active" onclick="switchBankTab('central')">🏛️ Bank Centralny</button>
-        <button id="tab-btn-commercial" class="bank-tab-btn" onclick="switchBankTab('commercial')">🏦 Banki Komercyjne</button>
-        <button id="tab-btn-bonds" class="bank-tab-btn" onclick="switchBankTab('bonds')">- Rynek Obligacji -</button>
-    </div>
+        <button class="close-btn" onclick="document.getElementById('bank-modal').style.display='none';">&times;</button>
+        <div class="bank-tabs">
+            <button id="tab-btn-central" class="bank-tab-btn active" onclick="switchBankTab('central')">🏛️ Bank
+                Centralny</button>
+            <button id="tab-btn-commercial" class="bank-tab-btn" onclick="switchBankTab('commercial')">🏦 Banki
+                Komercyjne</button>
+            <button id="tab-btn-bonds" class="bank-tab-btn" onclick="switchBankTab('bonds')">- Rynek Obligacji
+                -</button>
+        </div>
 
-    <div id="bank-content-central" class="bank-tab-content">
-        <h2 style="margin-top: 10px; text-align: center;">Bank Centralny</h2>
-        <p style="text-align: center; font-size: 14px; margin-bottom: 15px;">
-            Aktualna stopa bazowa: <strong id="bc-base-rate-display">--</strong>%
-        </p>
-        <div class="central-bank-ceo-info" style="text-align: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px dashed #ccc;">
+        <div id="bank-content-central" class="bank-tab-content">
+            <h2 style="margin-top: 10px; text-align: center;">Bank Centralny</h2>
+            <p style="text-align: center; font-size: 14px; margin-bottom: 15px;">
+                Aktualna stopa bazowa: <strong id="bc-base-rate-display">--</strong>%
+            </p>
+            <div class="central-bank-ceo-info"
+                style="text-align: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px dashed #ccc;">
             </div>
 
-        <div id="state-offer-section" class="bank-section">
-             <h4>🏛️ Oferta do Skarbu Państwa</h4>
-             <p style="font-size: 12px;">Złóż ofertę kupna akcji...</p>
-             <div id="state-offer-controls">
-                <label for="state-company-select">Wybierz spółkę:</label>
-                <select id="state-company-select" onchange="updateStateOfferInfo()"></select>
-                <label for="state-offer-quantity" style="margin-left: 10px;">Liczba akcji:</label>
-                <input type="number" id="state-offer-quantity" min="1" value="1" style="width: 60px;" oninput="updateStateOfferInfo()">
-                <button onclick="makeOfferToState()" style="margin-left: 10px;">Złóż Ofertę</button>
-             </div>
-             <div id="state-offer-info" style="margin-top: 10px; font-size: 13px;">
-                <p style="margin: 5px 0;">Szacowany koszt: <strong id="state-offer-cost">0.00 PLN</strong></p>
-                <p style="margin: 5px 0; color: #dc3545;" id="state-offer-cooldown"></p>
-             </div>
-        </div>
-        <div id="t-bill-auction-section" class="bank-section" style="display: none; border-top: 2px dashed #007bff; margin-top: 15px; padding-top: 15px;">
-             <h4>🔔 Aukcja Bonów Skarbowych! (Wykup: 1000 PLN)</h4>
-             <p>Liczba dostępnych bonów: <strong id="t-bill-auction-available">0</strong></p>
-             <p>Koniec aukcji za: <strong id="t-bill-auction-timer">0</strong>s</p>
-             <div>
-                <label for="t-bill-bid-quantity">Ilość:</label>
-                <input type="number" id="t-bill-bid-quantity" min="1" value="1" style="width: 60px;">
-                <label for="t-bill-bid-price" style="margin-left: 10px;">Cena za szt. (max 999.99):</label>
-                <input type="number" id="t-bill-bid-price" step="0.01" min="1" max="999.99" placeholder="Twoja oferta..." style="width: 100px;">
-                <button onclick="submitPlayerTBillBid()">Złóż Ofertę</button>
-             </div>
-             <p style="font-size: 12px; color: #666;">Twoje złożone oferty w tej aukcji:</p>
-             <ul id="player-t-bill-bids" style="font-size: 12px; max-height: 60px; overflow-y: auto;"></ul>
-        </div>
-         <div id="collateral-auction-section" class="bank-section" style="display: none; border-top: 2px dashed #dc3545; margin-top: 15px; padding-top: 15px;">
-            <h4> AUKCJA AKCJI Z HIPOTEKI!</h4>
-            <p>Akcje: <strong id="collateral-auction-symbol">-</strong> (<span id="collateral-auction-available">0</span> szt.)</p>
-            <p>Cena minimalna: <strong id="collateral-auction-min-price">0.00</strong> PLN</p>
-            <p>Koniec aukcji za: <strong id="collateral-auction-timer">0</strong>s</p>
-            <div>
-                <label for="collateral-bid-quantity">Ilość:</label>
-                <input type="number" id="collateral-bid-quantity" min="1" value="1" style="width: 60px;">
-                <label for="collateral-bid-price" style="margin-left: 10px;">Cena za szt.:</label>
-                <input type="number" id="collateral-bid-price" step="0.01" min="0.01" placeholder="Twoja oferta..." style="width: 100px;">
-                <button onclick="submitPlayerCollateralBid()">Złóż Ofertę</button>
+            <div id="state-offer-section" class="bank-section">
+                <h4>🏛️ Oferta do Skarbu Państwa</h4>
+                <p style="font-size: 12px;">Złóż ofertę kupna akcji...</p>
+                <div id="state-offer-controls">
+                    <label for="state-company-select">Wybierz spółkę:</label>
+                    <select id="state-company-select" onchange="updateStateOfferInfo()"></select>
+                    <label for="state-offer-quantity" style="margin-left: 10px;">Liczba akcji:</label>
+                    <input type="number" id="state-offer-quantity" min="1" value="1" style="width: 60px;"
+                        oninput="updateStateOfferInfo()">
+                    <button onclick="makeOfferToState()" style="margin-left: 10px;">Złóż Ofertę</button>
+                </div>
+                <div id="state-offer-info" style="margin-top: 10px; font-size: 13px;">
+                    <p style="margin: 5px 0;">Szacowany koszt: <strong id="state-offer-cost">0.00 PLN</strong></p>
+                    <p style="margin: 5px 0; color: #dc3545;" id="state-offer-cooldown"></p>
+                </div>
             </div>
-            <p style="font-size: 12px; color: #666;">Twoje oferty w tej aukcji:</p>
-            <ul id="player-collateral-bids" style="font-size: 12px; max-height: 60px; overflow-y: auto;"></ul>
-        </div>
-        <div id="license-section" class="bank-section">
-            <h4>Licencje Giełdowe</h4>
-            <p id="license-info-text"></p>
-            <button id="buy-license-btn" onclick="buyExchangeLicense()" style="display: none;">Kup licencję</button>
-        </div>
+            <div id="t-bill-auction-section" class="bank-section"
+                style="display: none; border-top: 2px dashed #007bff; margin-top: 15px; padding-top: 15px;">
+                <h4>🔔 Aukcja Bonów Skarbowych! (Wykup: 1000 PLN)</h4>
+                <p>Liczba dostępnych bonów: <strong id="t-bill-auction-available">0</strong></p>
+                <p>Koniec aukcji za: <strong id="t-bill-auction-timer">0</strong>s</p>
+                <div>
+                    <label for="t-bill-bid-quantity">Ilość:</label>
+                    <input type="number" id="t-bill-bid-quantity" min="1" value="1" style="width: 60px;">
+                    <label for="t-bill-bid-price" style="margin-left: 10px;">Cena za szt. (max 999.99):</label>
+                    <input type="number" id="t-bill-bid-price" step="0.01" min="1" max="999.99"
+                        placeholder="Twoja oferta..." style="width: 100px;">
+                    <button onclick="submitPlayerTBillBid()">Złóż Ofertę</button>
+                </div>
+                <p style="font-size: 12px; color: #666;">Twoje złożone oferty w tej aukcji:</p>
+                <ul id="player-t-bill-bids" style="font-size: 12px; max-height: 60px; overflow-y: auto;"></ul>
+            </div>
+            <div id="collateral-auction-section" class="bank-section"
+                style="display: none; border-top: 2px dashed #dc3545; margin-top: 15px; padding-top: 15px;">
+                <h4> AUKCJA AKCJI Z HIPOTEKI!</h4>
+                <p>Akcje: <strong id="collateral-auction-symbol">-</strong> (<span
+                        id="collateral-auction-available">0</span> szt.)</p>
+                <p>Cena minimalna: <strong id="collateral-auction-min-price">0.00</strong> PLN</p>
+                <p>Koniec aukcji za: <strong id="collateral-auction-timer">0</strong>s</p>
+                <div>
+                    <label for="collateral-bid-quantity">Ilość:</label>
+                    <input type="number" id="collateral-bid-quantity" min="1" value="1" style="width: 60px;">
+                    <label for="collateral-bid-price" style="margin-left: 10px;">Cena za szt.:</label>
+                    <input type="number" id="collateral-bid-price" step="0.01" min="0.01" placeholder="Twoja oferta..."
+                        style="width: 100px;">
+                    <button onclick="submitPlayerCollateralBid()">Złóż Ofertę</button>
+                </div>
+                <p style="font-size: 12px; color: #666;">Twoje oferty w tej aukcji:</p>
+                <ul id="player-collateral-bids" style="font-size: 12px; max-height: 60px; overflow-y: auto;"></ul>
+            </div>
+            <div id="license-section" class="bank-section">
+                <h4>Licencje Giełdowe</h4>
+                <p id="license-info-text"></p>
+                <button id="buy-license-btn" onclick="buyExchangeLicense()" style="display: none;">Kup licencję</button>
+            </div>
         </div>
 
-    <div id="bank-content-commercial" class="bank-tab-content" style="display: none;">
-        <h2 style="margin-top: 10px; text-align: center;">Banki Komercyjne</h2>
-        <p style="text-align: center;">Wybierz bank, aby zobaczyć dostępne usługi.</p>
-        <div id="commercial-banks-list" style="max-height: 400px; overflow-y: auto; padding-right: 10px;">
+        <div id="bank-content-commercial" class="bank-tab-content" style="display: none;">
+            <h2 style="margin-top: 10px; text-align: center;">Banki Komercyjne</h2>
+            <p style="text-align: center;">Wybierz bank, aby zobaczyć dostępne usługi.</p>
+            <div id="commercial-banks-list" style="max-height: 400px; overflow-y: auto; padding-right: 10px;">
             </div>
-    </div>
+        </div>
 
-    <div id="bank-content-bonds" class="bank-tab-content" style="display: none;">
-        <h2 style="margin-top: 10px; text-align: center;">Rynek Obligacji</h2>
-        <div class="bank-section">
-            <h4>🏛️ Obligacje Skarbu Państwa (Cena: 1000 PLN/szt.)</h4>
-            <table id="state-bonds-table" style="width: 100%;">
-                 <thead><tr><th>Typ</th><th>Oproc. (roczne)</th><th>Dostępne</th><th>Akcje</th></tr></thead>
-                 <tbody></tbody>
-            </table>
-        </div>
-        <div class="bank-section">
-            <h4>🏢 Obligacje Korporacyjne i Komunalne</h4>
-            <table id="other-bonds-table" style="width: 100%;">
-                 <thead><tr><th>Emitent</th><th>Typ</th><th>Oproc. (roczne)</th><th>Termin</th><th>Ryzyko</th><th>Dostępne</th><th>Akcje</th></tr></thead>
-                 <tbody></tbody>
-            </table>
+        <div id="bank-content-bonds" class="bank-tab-content" style="display: none;">
+            <h2 style="margin-top: 10px; text-align: center;">Rynek Obligacji</h2>
+            <div class="bank-section">
+                <h4>🏛️ Obligacje Skarbu Państwa (Cena: 1000 PLN/szt.)</h4>
+                <table id="state-bonds-table" style="width: 100%;">
+                    <thead>
+                        <tr>
+                            <th>Typ</th>
+                            <th>Oproc. (roczne)</th>
+                            <th>Dostępne</th>
+                            <th>Akcje</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="bank-section">
+                <h4>🏢 Obligacje Korporacyjne i Komunalne</h4>
+                <table id="other-bonds-table" style="width: 100%;">
+                    <thead>
+                        <tr>
+                            <th>Emitent</th>
+                            <th>Typ</th>
+                            <th>Oproc. (roczne)</th>
+                            <th>Termin</th>
+                            <th>Ryzyko</th>
+                            <th>Dostępne</th>
+                            <th>Akcje</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
         </div>
     </div>
-</div>
     <div id="city-investment-modal" class="modal" style="display: none; width: 650px;">
-    <button class="close-btn" onclick="document.getElementById('city-investment-modal').style.display='none';">&times;</button>
-    <h2 style="margin-top: 0; text-align: center;">🏙️ Panel Miasta: Gdańsk</h2>
-    
-    <div class="bank-tabs">
-        <button id="tab-btn-city-main" class="bank-tab-btn active" onclick="switchCityTab('main')">Panel Główny</button>
-        <button id="tab-btn-city-municipal" class="bank-tab-btn" onclick="switchCityTab('municipal')">Spółki Miejskie</button>
-        <button id="tab-btn-city-private" class="bank-tab-btn" onclick="switchCityTab('private')">Firmy Prywatne</button>
-        <button id="tab-btn-city-election" class="bank-tab-btn" onclick="switchCityTab('election')" style="display: none;">Wybory</button> </div>
+        <button class="close-btn"
+            onclick="document.getElementById('city-investment-modal').style.display='none';">&times;</button>
+        <h2 style="margin-top: 0; text-align: center;">🏙️ Panel Miasta: Gdańsk</h2>
 
-    <div id="city-content-main" class="bank-tab-content">
-        <div class="bank-section">
-            <h4>Gospodarka Miejska</h4>
-            <p>Budżet: <strong id="city-budget-display">0.00</strong> PLN | Populacja: <strong id="city-population-display">0</strong></p>
-            <p>Poziom Infrastruktury: <strong id="city-infra-level">1.0</strong> | Następny festyn za: <strong id="next-festival-countdown">--</strong>s</p>
+        <div class="bank-tabs">
+            <button id="tab-btn-city-main" class="bank-tab-btn active" onclick="switchCityTab('main')">Panel
+                Główny</button>
+            <button id="tab-btn-city-municipal" class="bank-tab-btn" onclick="switchCityTab('municipal')">Spółki
+                Miejskie</button>
+            <button id="tab-btn-city-private" class="bank-tab-btn" onclick="switchCityTab('private')">Firmy
+                Prywatne</button>
+            <button id="tab-btn-city-election" class="bank-tab-btn" onclick="switchCityTab('election')"
+                style="display: none;">Wybory</button>
         </div>
-        <div class="bank-section">
-            <h4>Obecny Zarząd (Wybory za <span id="city-election-timer">4</span> lata)</h4>
-            <p>Prezydent: <strong id="city-mayor-name">...</strong></p>
-            <p>Polityka: <strong id="city-mayor-policy">...</strong></p>
-        </div>
-        <div class="bank-section">
-            <h4>Twój Wkład</h4>
-            <p>Całkowity wkład: <strong id="city-total-donated">0.00</strong> PLN</p>
-            <p>Status: <strong id="city-unlock-status">Zablokowane (Cel: 10 000 PLN)</strong></p>
-            <div>
-                <label for="city-donation-amount">Kwota datku:</label>
-                <input type="number" id="city-donation-amount" placeholder="Wpisz kwotę...">
-                <button onclick="donateToCity(document.getElementById('city-donation-amount').valueAsNumber)">Przekaż datek</button>
+
+        <div id="city-content-main" class="bank-tab-content">
+            <div class="bank-section">
+                <h4>Gospodarka Miejska</h4>
+                <p>Budżet: <strong id="city-budget-display">0.00</strong> PLN | Populacja: <strong
+                        id="city-population-display">0</strong></p>
+                <p>Poziom Infrastruktury: <strong id="city-infra-level">1.0</strong> | Następny festyn za: <strong
+                        id="next-festival-countdown">--</strong>s</p>
+            </div>
+            <div class="bank-section">
+                <h4>Obecny Zarząd (Wybory za <span id="city-election-timer">4</span> lata)</h4>
+                <p>Prezydent: <strong id="city-mayor-name">...</strong></p>
+                <p>Polityka: <strong id="city-mayor-policy">...</strong></p>
+            </div>
+            <div class="bank-section">
+                <h4>Twój Wkład</h4>
+                <p>Całkowity wkład: <strong id="city-total-donated">0.00</strong> PLN</p>
+                <p>Status: <strong id="city-unlock-status">Zablokowane (Cel: 10 000 PLN)</strong></p>
+                <div>
+                    <label for="city-donation-amount">Kwota datku:</label>
+                    <input type="number" id="city-donation-amount" placeholder="Wpisz kwotę...">
+                    <button
+                        onclick="donateToCity(document.getElementById('city-donation-amount').valueAsNumber)">Przekaż
+                        datek</button>
+                </div>
             </div>
         </div>
-    </div>
 
-    <div id="city-content-municipal" class="bank-tab-content" style="display: none;">
-        <h4>Spółki Miejskie (Nienotowane na Giełdzie)</h4>
-        <p style="font-size: 12px;">Te spółki zapewniają kluczowe usługi dla miasta i emitują obligacje komunalne. Istnieje roczna szansa, że wejdą na giełdę.</p>
-        <table style="width: 100%;">
-            <thead><tr><th>Nazwa</th><th>Typ</th><th>Budżet</th><th>Przychód (roczny)</th></tr></thead>
-            <tbody id="city-municipal-list">
+        <div id="city-content-municipal" class="bank-tab-content" style="display: none;">
+            <h4>Spółki Miejskie (Nienotowane na Giełdzie)</h4>
+            <p style="font-size: 12px;">Te spółki zapewniają kluczowe usługi dla miasta i emitują obligacje komunalne.
+                Istnieje roczna szansa, że wejdą na giełdę.</p>
+            <table style="width: 100%;">
+                <thead>
+                    <tr>
+                        <th>Nazwa</th>
+                        <th>Typ</th>
+                        <th>Budżet</th>
+                        <th>Przychód (roczny)</th>
+                    </tr>
+                </thead>
+                <tbody id="city-municipal-list">
                 </tbody>
-        </table>
-    </div>
-
-    <div id="city-content-private" class="bank-tab-content" style="display: none;">
-        <h4>Lokalne Firmy Prywatne (Pozagiełdowe)</h4>
-        <p style="font-size: 12px;">Te firmy powoli rozwijają się w mieście. Gdy dojrzeją, mogą wejść na giełdę lub do inkubatora startupów. Miasto (poprzez FPF) posiada w nich udziały.</p>
-        <table style="width: 100%;">
-            <thead><tr><th>Nazwa Firmy</th><th>Szac. Wartość</th><th>Udział Miasta (FPF)</th><th>Postęp Rozwoju</th></tr></thead>
-            <tbody id="city-private-list">
-                </tbody>
-        </table>
-    </div>
-    
-    <div id="city-content-election" class="bank-tab-content" style="display: none;">
-         </div>
-
-    <div id="city-content-festival" style="display: none;">
+            </table>
         </div>
-</div>
 
-    <div id="leaderboard-modal" style="display:none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 450px; border: 2px solid #333; background-color: #f9f9f9; box-shadow: 0 4px 8px rgba(0,0,0,0.2); padding: 20px; z-index: 1003; border-radius: 8px;">
+        <div id="city-content-private" class="bank-tab-content" style="display: none;">
+            <h4>Lokalne Firmy Prywatne (Pozagiełdowe)</h4>
+            <p style="font-size: 12px;">Te firmy powoli rozwijają się w mieście. Gdy dojrzeją, mogą wejść na giełdę lub
+                do inkubatora startupów. Miasto (poprzez FPF) posiada w nich udziały.</p>
+            <table style="width: 100%;">
+                <thead>
+                    <tr>
+                        <th>Nazwa Firmy</th>
+                        <th>Szac. Wartość</th>
+                        <th>Udział Miasta (FPF)</th>
+                        <th>Postęp Rozwoju</th>
+                    </tr>
+                </thead>
+                <tbody id="city-private-list">
+                </tbody>
+            </table>
+        </div>
+
+        <div id="city-content-election" class="bank-tab-content" style="display: none;">
+        </div>
+
+        <div id="city-content-festival" style="display: none;">
+        </div>
+    </div>
+
+    <div id="leaderboard-modal"
+        style="display:none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 450px; border: 2px solid #333; background-color: #f9f9f9; box-shadow: 0 4px 8px rgba(0,0,0,0.2); padding: 20px; z-index: 1003; border-radius: 8px;">
         <h2 style="margin-top: 0; text-align: center;">🏆 Ranking Inwestorów</h2>
-         <ol id="leaderboard-list" style="list-style-type: none; padding: 0;"></ol>
-         <button onclick="document.getElementById('leaderboard-modal').style.display='none';">Zamknij</button>
+        <ol id="leaderboard-list" style="list-style-type: none; padding: 0;"></ol>
+        <button onclick="document.getElementById('leaderboard-modal').style.display='none';">Zamknij</button>
     </div>
 
-    <div id="sixth-sense-modal" style="display:none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 400px; border: 2px solid #007bff; background-color: #f9f9f9; box-shadow: 0 4px 8px rgba(0,0,0,0.2); padding: 20px; z-index: 1004; border-radius: 8px;">
+    <div id="sixth-sense-modal"
+        style="display:none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 400px; border: 2px solid #007bff; background-color: #f9f9f9; box-shadow: 0 4px 8px rgba(0,0,0,0.2); padding: 20px; z-index: 1004; border-radius: 8px;">
         <h2 style="margin-top: 0; text-align: center; color: #007bff;">💡 Szósty Zmysł 💡</h2>
-         <p id="sixth-sense-message" style="text-align: center; font-size: 18px; margin: 20px 0;"></p>
-         <button onclick="document.getElementById('sixth-sense-modal').style.display='none';" style="display: block; width: 100%; padding: 10px; font-size: 16px;">Rozumiem</button>
+        <p id="sixth-sense-message" style="text-align: center; font-size: 18px; margin: 20px 0;"></p>
+        <button onclick="document.getElementById('sixth-sense-modal').style.display='none';"
+            style="display: block; width: 100%; padding: 10px; font-size: 16px;">Rozumiem</button>
     </div>
 
-   <div id="newspaper-modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 800px; max-width: 90%; max-height: 90vh; background-color: #fdf5e6; border: 2px solid #333; box-shadow: 0 4px 8px rgba(0,0,0,0.2); z-index: 1005; border-radius: 4px; display: flex; flex-direction: column;">
-    
-    <div class="bank-tabs" style="padding-left: 15px; padding-right: 15px; padding-top: 10px; background-color: #fdf5e6; flex-shrink: 0;">
-        <button id="tab-btn-newspaper-PULS" class="bank-tab-btn active" onclick="switchNewspaperTab('PULS')">Puls Rynku</button>
-        <button id="tab-btn-newspaper-FLESZ" class="bank-tab-btn" onclick="switchNewspaperTab('FLESZ')">Flesz Giełdowy</button>
-        <button id="tab-btn-newspaper-OBSER" class="bank-tab-btn" onclick="switchNewspaperTab('OBSER')">Obserwator Finansowy</button>
-    </div>
-    <div class="newspaper-content">
-        <header class="newspaper-header">
-            <h2 id="newspaper-title">Puls Rynku</h2> 
-            <p id="newspaper-date"></p>
-        </header>
-        
-        <div id="newspaper-ad-container" style="display: none; padding: 10px 15px; background-color: #fff8c4; border: 1px dashed #e6db55; margin: 0 15px 10px 15px; text-align: center; font-family: sans-serif; font-size: 13px;">
+    <div id="newspaper-modal"
+        style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 800px; max-width: 90%; max-height: 90vh; background-color: #fdf5e6; border: 2px solid #333; box-shadow: 0 4px 8px rgba(0,0,0,0.2); z-index: 1005; border-radius: 4px; display: flex; flex-direction: column;">
+
+        <div class="bank-tabs"
+            style="padding-left: 15px; padding-right: 15px; padding-top: 10px; background-color: #fdf5e6; flex-shrink: 0;">
+            <button id="tab-btn-newspaper-PULS" class="bank-tab-btn active" onclick="switchNewspaperTab('PULS')">Puls
+                Rynku</button>
+            <button id="tab-btn-newspaper-FLESZ" class="bank-tab-btn" onclick="switchNewspaperTab('FLESZ')">Flesz
+                Giełdowy</button>
+            <button id="tab-btn-newspaper-OBSER" class="bank-tab-btn" onclick="switchNewspaperTab('OBSER')">Obserwator
+                Finansowy</button>
+        </div>
+        <div class="newspaper-content">
+            <header class="newspaper-header">
+                <h2 id="newspaper-title">Puls Rynku</h2>
+                <p id="newspaper-date"></p>
+            </header>
+
+            <div id="newspaper-ad-container"
+                style="display: none; padding: 10px 15px; background-color: #fff8c4; border: 1px dashed #e6db55; margin: 0 15px 10px 15px; text-align: center; font-family: sans-serif; font-size: 13px;">
             </div>
 
-        <main class="newspaper-columns">
-            <div class="news-column">
-                <section class="news-section">
-                    <h3>Wiadomości z Rynku</h3>
-                    <ul id="market-news-list"></ul>
-                </section>
-            </div>
-            <div class="news-column">
-                <section class="news-section">
-                    <h3>Wiadomości Spółek</h3>
-                    <ul id="company-news-list"></ul>
-                </section>
-                <section class="news-section premium-section">
-                    <h3 id="premium-section-title">Strefa Premium</h3>
-                    
-                    <div id="newspaper-subscription-section" style="text-align: center; padding-bottom: 10px;">
-                        <p id="subscription-status-text"></p>
-                        <button id="buy-subscription-btn" onclick="buyPremiumSubscription()"></button>
-                    </div>
-                    
-                    <ul id="premium-content"></ul>
-                    
-                    <div id="media-influence-section" class="bank-section" style="display: none; margin-top: 15px; border-top: 1px dashed #aaa; padding-top: 10px;">
-                       <h4 style="margin-top: 0; text-align: center;">Kontrola Mediów</h4>
-                       
-                       <div id="positive-pr-controls" style="display: none;">
-                           <label for="positive-pr-select">Pozytywny PR:</label>
-                           <select id="positive-pr-select" style="max-width: 150px;"></select>
-                           <button id="positive-pr-btn" onclick="playerBuyPositivePR()">Kup (10 000 PLN)</button>
-                       </div>
+            <main class="newspaper-columns">
+                <div class="news-column">
+                    <section class="news-section">
+                        <h3>Wiadomości z Rynku</h3>
+                        <ul id="market-news-list"></ul>
+                    </section>
+                </div>
+                <div class="news-column">
+                    <section class="news-section">
+                        <h3>Wiadomości Spółek</h3>
+                        <ul id="company-news-list"></ul>
+                    </section>
+                    <section class="news-section premium-section">
+                        <h3 id="premium-section-title">Strefa Premium</h3>
 
-                       <div id="black-pr-controls" style="display: none; margin-top: 10px;">
-                           <label for="black-pr-select">Czarny PR:</label>
-                           <select id="black-pr-select" style="max-width: 150px;"></select>
-                           <button id="black-pr-btn" onclick="playerBuyBlackPR()">Kup (25 000 PLN)</button>
-                           <p style="font-size: 11px; color: #dc3545; margin: 5px 0 0 0;">
-                               Ryzyko wykrycia: <strong id="black-pr-risk-display">10%</strong>
-                           </p>
-                       </div>
-                   </div>
-                   
-                </section>
-            </div>
-        </main>
+                        <div id="newspaper-subscription-section" style="text-align: center; padding-bottom: 10px;">
+                            <p id="subscription-status-text"></p>
+                            <button id="buy-subscription-btn" onclick="buyPremiumSubscription()"></button>
+                        </div>
+
+                        <ul id="premium-content"></ul>
+
+                        <div id="media-influence-section" class="bank-section"
+                            style="display: none; margin-top: 15px; border-top: 1px dashed #aaa; padding-top: 10px;">
+                            <h4 style="margin-top: 0; text-align: center;">Kontrola Mediów</h4>
+
+                            <div id="positive-pr-controls" style="display: none;">
+                                <label for="positive-pr-select">Pozytywny PR:</label>
+                                <select id="positive-pr-select" style="max-width: 150px;"></select>
+                                <button id="positive-pr-btn" onclick="playerBuyPositivePR()">Kup (10 000 PLN)</button>
+                            </div>
+
+                            <div id="black-pr-controls" style="display: none; margin-top: 10px;">
+                                <label for="black-pr-select">Czarny PR:</label>
+                                <select id="black-pr-select" style="max-width: 150px;"></select>
+                                <button id="black-pr-btn" onclick="playerBuyBlackPR()">Kup (25 000 PLN)</button>
+                                <p style="font-size: 11px; color: #dc3545; margin: 5px 0 0 0;">
+                                    Ryzyko wykrycia: <strong id="black-pr-risk-display">10%</strong>
+                                </p>
+                            </div>
+                        </div>
+
+                    </section>
+                </div>
+            </main>
+        </div>
+        <button onclick="document.getElementById('newspaper-modal').style.display='none';"
+            style="position: absolute; top: 15px; right: 15px; font-size: 20px; background: none; border: none; cursor: pointer; z-index: 1006;">&times;</button>
     </div>
-    <button onclick="document.getElementById('newspaper-modal').style.display='none';" style="position: absolute; top: 15px; right: 15px; font-size: 20px; background: none; border: none; cursor: pointer; z-index: 1006;">&times;</button>
-</div>
 
     <div id="state-modal" class="modal" style="display:none; width: 500px;">
-        <button class="close-btn" onclick="document.getElementById('state-modal').style.display='none';">&times;</button>
+        <button class="close-btn"
+            onclick="document.getElementById('state-modal').style.display='none';">&times;</button>
         <h2 style="margin-top: 0; text-align: center;">🏛️ Skarbiec Państwa</h2>
         <div class="bank-section">
             <h4>Budżet Państwa</h4>
             <p>Aktualne środki w skarbcu: <strong id="government-treasury-display">0.00</strong> PLN</p>
-            <p style="font-size: 12px; color: #6c757d;">Środki pochodzą z podatków od dywidend, zysków kapitałowych, firm, bogactwa, podatków miejskich oraz symulowanych podatków od obywateli.</p>
+            <p style="font-size: 12px; color: #6c757d;">Środki pochodzą z podatków od dywidend, zysków kapitałowych,
+                firm, bogactwa, podatków miejskich oraz symulowanych podatków od obywateli.</p>
             <h4>⚖️ Urząd Antymonopolowy</h4>
-    <p>Poziom: <strong id="antitrust-level">0</strong>/5</p>
-    <p style="font-size: 12px;">Szansa na analizę: <strong id="antitrust-capacity">10%</strong> | Dokładność decyzji: <strong id="antitrust-accuracy">20%</strong></p>
-    
-    <p id="antitrust-max-level-info" style="display: none; font-weight: bold; color: #28a745;">Urząd osiągnął maksymalny poziom rozwoju.</p>
-    <p style="font-size: 11px; color: #6c757d; margin-top: 5px;">Państwo automatycznie inwestuje w rozwój urzędu, gdy posiada wystarczające środki w budżecie.</p>
+            <p>Poziom: <strong id="antitrust-level">0</strong>/5</p>
+            <p style="font-size: 12px;">Szansa na analizę: <strong id="antitrust-capacity">10%</strong> | Dokładność
+                decyzji: <strong id="antitrust-accuracy">20%</strong></p>
+
+            <p id="antitrust-max-level-info" style="display: none; font-weight: bold; color: #28a745;">Urząd osiągnął
+                maksymalny poziom rozwoju.</p>
+            <p style="font-size: 11px; color: #6c757d; margin-top: 5px;">Państwo automatycznie inwestuje w rozwój
+                urzędu, gdy posiada wystarczające środki w budżecie.</p>
         </div>
         <div class="bank-section">
             <h4>Możliwe Interwencje Rządowe</h4>
-            <p style="font-size: 12px; color: #6c757d;">Rząd może wykorzystać zgromadzone środki na różne programy wspierające gospodarkę. Działania są podejmowane automatycznie, gdy budżet jest wystarczająco duży.</p>
+            <p style="font-size: 12px; color: #6c757d;">Rząd może wykorzystać zgromadzone środki na różne programy
+                wspierające gospodarkę. Działania są podejmowane automatycznie, gdy budżet jest wystarczająco duży.</p>
             <ul id="government-actions-list" style="font-size: 13px; list-style-type: '💰 '; padding-left: 20px;">
                 <li>Programy infrastrukturalne (wsparcie dla sektora Przemysł i Nieruchomości)</li>
                 <li>Dotacje na innowacje (przyspieszenie badań R&D)</li>
@@ -463,329 +530,430 @@
                 <li>Koła ratunkowe dla zagrożonych spółek</li>
                 <li>Zmiany stóp procentowych (wpływ na sektor Finanse i Bankowość)</li>
                 <li>Specjalne programy sektorowe (losowe bonusy dla wybranych branż)</li>
-                </ul>
+            </ul>
         </div>
-         <p style="font-size: 11px; text-align: center; margin-top: 15px;">Więcej informacji o aktywnych programach rządowych znajdziesz w logu wydarzeń.</p>
+        <p style="font-size: 11px; text-align: center; margin-top: 15px;">Więcej informacji o aktywnych programach
+            rządowych znajdziesz w logu wydarzeń.</p>
     </div>
 
-    <div id="management-modal" style="display:none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 450px; border: 2px solid #007bff; background-color: #f9f9f9; box-shadow: 0 4px 8px rgba(0,0,0,0.2); padding: 20px; z-index: 1006; border-radius: 8px;">
-        <h2 id="management-title" style="margin-top: 0; text-align: center; color: #007bff;">👑 Panel Zarządzania</h2>
-        <div class="modal-body">
-            <div class="bank-section">
-                <div id="reputation-management-section" class="bank-section">
-                <h4>🤝 Relacje z Zarządem</h4>
-                <p>Twoje obecne relacje: <strong id="reputation-status">Neutralne (0)</strong></p>
-                <p style="font-size: 12px;">Popraw relacje, przekazując datek na rozwój firmy.</p>
-                <div>
-                    <input type="number" id="donation-amount" placeholder="Kwota datku">
-                    <button id="donate-btn">Przekaż datek</button>
+    <div id="management-modal" class="modal"
+        style="display:none; width: 700px; max-height: 90vh; background-color: #f9f9f9; border: 2px solid #333; box-shadow: 0 4px 8px rgba(0,0,0,0.2); border-radius: 8px; flex-direction: column; z-index: 1006;">
+
+        <div class="modal-header"
+            style="flex-shrink: 0; flex-direction: column; align-items: flex-start; padding: 15px; border-bottom: 1px solid #ccc;">
+            <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+                <h2 id="management-title" style="margin: 0; color: #007bff;">👑 Panel Zarządzania</h2>
+                <button class="close-btn" onclick="document.getElementById('management-modal').style.display='none';"
+                    style="position: relative; top: 0; right: 0;">&times;</button>
+            </div>
+
+            <div
+                style="margin-top: 10px; width: 100%; background-color: #e9ecef; padding: 8px; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
+                🤝 Relacje z Zarządem: <strong id="reputation-status-header">Neutralne</strong>
+            </div>
+        </div>
+
+        <div class="bank-tabs" style="flex-shrink: 0; padding: 10px 15px 0 15px; border-bottom: 1px solid #ccc;">
+            <button id="tab-btn-mgmt-general" class="bank-tab-btn active" onclick="switchMgmtTab('general')">⚙️
+                Ogólne</button>
+            <button id="tab-btn-mgmt-development" class="bank-tab-btn" onclick="switchMgmtTab('development')">🚀 Rozwój
+                Firmy</button>
+        </div>
+
+        <div class="modal-body" style="flex-grow: 1; overflow-y: auto; padding: 15px;">
+
+            <div id="mgmt-content-general" class="bank-tab-content">
+                <div id="mgmt-general-placeholder">
+
+                    <div id="dividend-management-section" class="bank-section">
+                        <h4>💰 Specjalna Dywidenda</h4>
+                        <p style="font-size: 12px;">Wymuś na zarządzie wypłatę dywidendy (4% wartości).</p>
+                        <button id="force-dividend-btn">Wymuś Wypłatę</button>
+                        <p id="dividend-cooldown-info"
+                            style="color: #dc3545; font-weight: bold; font-size: 12px; margin-top: 5px;"></p>
+                    </div>
+
+                    <div id="ceo-management-section" class="bank-section">
+                        <h4>👨‍💼 Zmiana Prezesa</h4>
+                        <button id="fire-ceo-btn">Zwołaj zgromadzenie (Wybór nowego CEO)</button>
+                        <p id="fire-ceo-cooldown-info"
+                            style="color: #dc3545; font-weight: bold; font-size: 12px; margin-top: 5px;"></p>
+                    </div>
+
+                    <div id="policy-management-section" class="bank-section">
+                        <h4>📜 Polityka Dywidendowa</h4>
+                        <select id="policy-select" onchange="setDividendPolicy(this.dataset.symbol, this.value)"
+                            style="width: 100%;">
+                            <option value="Growth">Polityka Wzrostu (Brak dywidendy)</option>
+                            <option value="Balanced">Zrównoważona</option>
+                            <option value="Aggressive">Agresywna</option>
+                            <option value="Total">Całkowita (100% zysku)</option>
+                        </select>
+                    </div>
+
+                    <div id="bank-selection-section" class="bank-section">
+                        <h4>🏦 Rachunek Bankowy</h4>
+                        <div style="display: flex; gap: 5px;">
+                            <select id="bank-select" style="flex-grow: 1;">
+                                <option value="">-- Brak --</option>
+                            </select>
+                            <button id="change-bank-btn">Zmień</button>
+                        </div>
+                        <p id="bank-change-info" style="font-size: 11px; color: #6c757d; margin-top: 5px;"></p>
+                    </div>
+
+                    <div id="debt-management-section" class="bank-section" style="display: none;">
+                        <h4>💵 Spłata Długu</h4>
+                        <p>Zadłużenie: <strong id="corporate-debt-amount">0.00</strong> PLN</p>
+                        <div style="display: flex; gap: 5px;">
+                            <input type="number" id="debt-repayment-amount" placeholder="Kwota" style="width: 100px;">
+                            <button id="repay-debt-btn">Spłać</button>
+                        </div>
+                    </div>
+
+                    <div id="financial-access-section" class="bank-section" style="display: none;">
+                        <h4>📊 Dane Finansowe</h4>
+                        <button id="view-finances-btn">Zobacz Bilans</button>
+                        <p id="finances-access-info" style="font-size: 12px; color: #666; margin-top: 5px;"></p>
+                    </div>
+
+                    <div id="reputation-management-section" class="bank-section">
+                        <h4>🤝 Poprawa Relacji</h4>
+                        <div style="display: flex; gap: 5px;">
+                            <input type="number" id="donation-amount" placeholder="Kwota datku" style="width: 100px;">
+                            <button id="donate-btn">Wyślij datek</button>
+                        </div>
+                    </div>
+
+                    <div id="ma-initiation-section" class="bank-section">
+                        <h4><span style="font-size: 20px;">🤝</span> Fuzje i Przejęcia</h4>
+                        <button id="ma-open-target-modal-btn" style="width: 100%;">Rozpocznij proces M&A</button>
+                    </div>
+
+                    <div id="ma-defense-section" class="bank-section"
+                        style="display: none; border: 2px solid #dc3545; background-color: #fff5f5;">
+                        <h4 style="color: #dc3545; margin-top: 0;">🚨 ATAK NA SPÓŁKĘ!</h4>
+                        <p id="ma-defense-info" style="font-size: 13px;"></p>
+                        <button id="ma-defense-poisonpill-btn"
+                            style="width: 100%; background-color: #dc3545; color: white;">Aktywuj "Zatrutą
+                            Pigułkę"</button>
+                    </div>
+
+
                 </div>
             </div>
-                <h4>💰 Specjalna Dywidenda</h4>
-                <p>Jako większościowy akcjonariusz, możesz zażądać od zarządu natychmiastowej wypłaty dywidendy.</p>
-                <p style="font-size: 12px; color: #666;">Uwaga: Taka operacja obciąża finanse spółki i może tymczasowo obniżyć jej kurs.</p>
-                <button id="force-dividend-btn">Wymuś Wypłatę (4% wartości akcji)</button>
-                <p id="dividend-cooldown-info" style="color: #dc3545; font-weight: bold;"></p>
-            </div>
-            <div id="ceo-management-section" class="bank-section">
-                <h4>👨‍💼 Walne Zgromadzenie</h4>
-                <p>Jako właściciel, możesz spróbować odwołać obecnego prezesa i powołać nowego. Koszt operacji to 5% wartości firmy.</p>
-                <button id="fire-ceo-btn">Zwołaj zgromadzenie i spróbuj odwołać prezesa</button>
-                <p id="fire-ceo-cooldown-info" style="color: #dc3545; font-weight: bold;"></p>
-            </div>
-            <div id="policy-management-section" class="bank-section">
-                <h4>📜 Polityka Dywidendowa</h4>
-                <p>Jako akcjonariusz większościowy, możesz wpłynąć na strategię dywidendową spółki.</p>
-                <select id="policy-select" onchange="setDividendPolicy(this.dataset.symbol, this.value)">
-                    <option value="Growth">Polityka Wzrostu (Brak dywidendy)</option>
-                    <option value="Balanced">Zrównoważona</option>
-                    <option value="Aggressive">Agresywna</option>
-                    <option value="Total">Całkowita (100% zysku)</option>
-                </select>
-            </div>
-            <div id="bank-selection-section" class="bank-section"> <h4>🏦 Rachunek Bankowy Spółki</h4>
-                <p style="font-size: 12px;">Wybierz bank komercyjny, w którym spółka będzie prowadzić główny rachunek.</p>
-                <label for="bank-select">Aktualny bank:</label>
-                <select id="bank-select" style="margin-left: 5px; min-width: 150px;">
-                    <option value="">-- Brak przypisanego banku --</option>
-                </select>
-                <button id="change-bank-btn" style="margin-left: 10px;">Zmień Bank</button>
-                <p id="bank-change-info" style="font-size: 11px; color: #6c757d; margin-top: 5px;"></p>
-            </div>
-            <div id="debt-management-section" class="bank-section" style="display: none;">
-                <h4>💵 Ratunek Finansowy</h4>
-                <p>Ta spółka jest zadłużona! Możesz użyć swojej władzy, aby jej pomóc.</p>
-                <p>Aktualne zadłużenie: <strong id="corporate-debt-amount">0.00</strong> PLN</p>
-                <div>
-                    <input type="number" id="debt-repayment-amount" placeholder="Wpisz kwotę do spłaty">
-                    <button id="repay-debt-btn">Spłać część długu</button>
+
+            <div id="mgmt-content-development" class="bank-tab-content" style="display: none;">
+
+                <div class="bank-section"
+                    style="background-color: #e3f2fd; padding: 10px; border-radius: 5px; border: 1px solid #90caf9; margin-bottom: 15px;">
+                    <h4 style="margin-top: 0;">Dział Ekonomii (Poziom <span id="dept-eco-level">1</span>)</h4>
+                    <p style="margin: 5px 0;">Bonus do przychodów: <strong id="dept-eco-bonus">0%</strong></p>
+                    <button onclick="upgradeDepartment('ECONOMY')" style="margin-top: 5px;">Ulepsz Dział (Koszt: <span
+                            id="dept-eco-cost"></span>)</button>
                 </div>
-            </div>
-            <div id="rd-management-section" class="bank-section" style="display: none;">
-                <h4>🔬 Badania i Rozwój</h4>
-                <p>Postęp bieżących badań: <strong id="rd-current-tech-name"></strong></p>
-                <progress id="rd-progress-bar" value="0" max="100"></progress>
-                <button id="open-research-panel-btn">Otwórz Panel Badań</button>
-            </div>
-            <div id="financial-access-section" class="bank-section" style="display: none;">
-                <h4>📊 Dostęp do Finansów</h4>
-                <p>Uzyskaj wgląd w szczegółowe dane finansowe spółki.</p>
-                <button id="view-finances-btn">Zobacz Finanse</button>
-                <p id="finances-access-info" style="font-size: 12px; color: #666; margin-top: 5px;"></p>
-            </div>
-            
-            <div id="influence-section" class="bank-section" style="display: none;">
-     <h4>🐙 Wpływy i Naciski</h4>
-     <p>Całkowity wpływ innych na tę spółkę: <strong id="influence-total-received">0</strong></p>
-     <h5>Wpływ wywierany przez tę spółkę na:</h5>
-     <ul id="influence-exerted-list" style="font-size: 12px; max-height: 80px; overflow-y: auto;">
-         <li>Brak</li>
-     </ul>
-     <h5>Wpływ otrzymywany od:</h5>
-     <ul id="influence-received-list" style="font-size: 12px; max-height: 80px; overflow-y: auto;">
-         <li>Brak</li>
-     </ul>
- </div>
 
-    <div id="ma-initiation-section" class="bank-section" style="display: none;">
-        <h4><span style="font-size: 20px;">🤝</span> Fuzje i Przejęcia</h4>
-        <p style="font-size: 12px;">Wykorzystaj swoją pozycję, aby zainicjować połączenie lub wrogie przejęcie innej spółki.</p>
-        <button id="ma-open-target-modal-btn">Rozpocznij proces M&A</button>
-    </div>
-    
-    <div id="ma-defense-section" class="bank-section" style="display: none; border: 2px solid #dc3545;">
-        <h4 style="color: #dc3545;">🚨 JESTEŚ CELEM PRZEJĘCIA! 🚨</h4>
-        <p id="ma-defense-info" style="font-size: 13px;">... informacja o zagrożeniu ...</p>
-        <h5>Aktywuj mechanizmy obronne:</h5>
-        <button id="ma-defense-poisonpill-btn" title="Znacząco podniesie koszty przejęcia, ale zaszkodzi Twojej firmie (koszt: 5% wartości firmy).">Zatwierdź "Zatrutą Pigułkę"</button>
+                <div class="bank-section"
+                    style="background-color: #fff3cd; padding: 10px; border-radius: 5px; border: 1px solid #ffeeba; margin-bottom: 15px;">
+                    <h4 style="margin-top: 0;">Dział Badań (Poziom <span id="dept-res-level">1</span>)</h4>
+                    <button onclick="upgradeDepartment('RESEARCH')" style="margin-bottom: 10px;">Ulepsz Dział (Koszt:
+                        <span id="dept-res-cost"></span>)</button>
+
+                    <div id="rd-management-section"
+                        style="background-color: #fff; padding: 10px; border-radius: 4px; border: 1px dashed #ccc;">
+                        <p style="margin: 0 0 5px 0; font-size: 13px;">Bieżące badania: <strong
+                                id="rd-current-tech-name-mgmt">Brak</strong></p>
+                        <progress id="rd-progress-bar-mgmt" value="0" max="100"
+                            style="width: 100%; height: 15px;"></progress>
+                        <button id="open-research-panel-btn-mgmt"
+                            style="margin-top: 5px; width: 100%; font-size: 12px;">Otwórz Laboratorium R&D</button>
+                    </div>
+                </div>
+
+                <div class="bank-section"
+                    style="background-color: #f8f9fa; padding: 10px; border-radius: 5px; border: 1px solid #e9ecef;">
+                    <h4 style="margin-top: 0;">Dział Rozwoju (Poziom <span id="dept-dev-level">1</span>)</h4>
+                    <p style="margin: 5px 0;">Limit inwestycji: <span id="dept-dev-limit">1</span> | Zniżka: <span
+                            id="dept-dev-discount">0%</span></p>
+                    <button onclick="upgradeDepartment('DEVELOPMENT')" style="margin-bottom: 15px;">Ulepsz Dział (Koszt:
+                        <span id="dept-dev-cost"></span>)</button>
+
+                    <h5 style="margin-bottom: 5px;">Aktywne Projekty</h5>
+                    <ul id="active-investments-list"
+                        style="font-size: 12px; padding-left: 0; list-style: none; margin-bottom: 15px;">
+                        <li>Brak aktywnych inwestycji.</li>
+                    </ul>
+
+                    <h5 style="margin-bottom: 5px;">Nowa Inwestycja</h5>
+                    <select id="investment-catalog-select" style="width: 100%; margin-bottom: 10px; padding: 5px;">
+                        <option>-- Wybierz --</option>
+                    </select>
+                    <p id="investment-details"
+                        style="font-size: 12px; color: #666; min-height: 40px; background: #eee; padding: 5px; border-radius: 4px;">
+                        Wybierz inwestycję z listy, aby zobaczyć szczegóły.</p>
+                    <button id="start-investment-btn"
+                        style="width: 100%; background-color: #28a745; color: white;">Rozpocznij Inwestycję</button>
+                </div>
+
+            </div>
+
         </div>
-
-        </div>
-        <button onclick="document.getElementById('management-modal').style.display='none';" style="margin-top: 15px;">Zamknij</button>
     </div>
 
-    <div id="stock-details-modal" style="display:none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 400px; border: 2px solid #333; background-color: #f9f9f9; box-shadow: 0 4px 8px rgba(0,0,0,0.2); padding: 20px; z-index: 1007; border-radius: 8px;">
+    <div id="stock-details-modal"
+        style="display:none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 400px; border: 2px solid #333; background-color: #f9f9f9; box-shadow: 0 4px 8px rgba(0,0,0,0.2); padding: 20px; z-index: 1007; border-radius: 8px;">
         <h3 id="details-title" style="margin-top: 0; text-align: center;">Struktura Akcjonariatu</h3>
-         <div id="pie-chart-container" style="width: 200px; height: 200px; margin: 20px auto;"></div>
-         <div id="pie-chart-legend" style="text-align: center; margin-bottom: 15px;"></div>
-         <button onclick="document.getElementById('stock-details-modal').style.display='none';" style="display: block; margin: 0 auto;">Zamknij</button>
+        <div id="pie-chart-container" style="width: 200px; height: 200px; margin: 20px auto;"></div>
+        <div id="pie-chart-legend" style="text-align: center; margin-bottom: 15px;"></div>
+        <button onclick="document.getElementById('stock-details-modal').style.display='none';"
+            style="display: block; margin: 0 auto;">Zamknij</button>
     </div>
 
-    <div id="description-modal" style="display:none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 400px; max-height: 90vh; overflow-y: auto; border: 2px solid #333; background-color: #f9f9f9; box-shadow: 0 4px 8px rgba(0,0,0,0.2); padding: 20px; z-index: 1015; border-radius: 8px;">
+    <div id="description-modal"
+        style="display:none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 400px; max-height: 90vh; overflow-y: auto; border: 2px solid #333; background-color: #f9f9f9; box-shadow: 0 4px 8px rgba(0,0,0,0.2); padding: 20px; z-index: 1015; border-radius: 8px;">
         <h3 id="description-modal-title" style="margin-top: 0; text-align: center;"></h3>
-         <div id="description-modal-ceo" style="margin-top: 15px; padding-top: 10px; border-top: 1px dotted #ccc;"></div>
-         <p id="description-modal-content" style="text-align: justify;"></p>
-         <div id="description-modal-phase" style="display: none; margin-top: 15px; padding-top: 10px; border-top: 1px dotted #ccc;"></div>
-         <div id="description-modal-analytical" style="margin-top: 15px; padding-top: 10px; border-top: 1px dotted #ccc;"></div>
-         <div id="description-modal-research" style="margin-top: 15px; padding-top: 10px; border-top: 1px dotted #ccc;"></div>
-         <button onclick="document.getElementById('description-modal').style.display='none';" style="display: block; margin: 20px auto 0 auto;">Zamknij</button>
+        <div id="description-modal-ceo" style="margin-top: 15px; padding-top: 10px; border-top: 1px dotted #ccc;"></div>
+        <p id="description-modal-content" style="text-align: justify;"></p>
+        <div id="description-modal-phase"
+            style="display: none; margin-top: 15px; padding-top: 10px; border-top: 1px dotted #ccc;"></div>
+        <div id="description-modal-analytical"
+            style="margin-top: 15px; padding-top: 10px; border-top: 1px dotted #ccc;"></div>
+        <div id="description-modal-research" style="margin-top: 15px; padding-top: 10px; border-top: 1px dotted #ccc;">
+        </div>
+        <button onclick="document.getElementById('description-modal').style.display='none';"
+            style="display: block; margin: 20px auto 0 auto;">Zamknij</button>
     </div>
 
-    <div id="work-modal" style="display:none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 450px; border: 2px solid #28a745; background-color: #f9f9f9; box-shadow: 0 4px 8px rgba(0,0,0,0.2); padding: 20px; z-index: 1008; border-radius: 8px;">
+    <div id="work-modal"
+        style="display:none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 450px; border: 2px solid #28a745; background-color: #f9f9f9; box-shadow: 0 4px 8px rgba(0,0,0,0.2); padding: 20px; z-index: 1008; border-radius: 8px;">
         <h2 style="margin-top: 0; text-align: center;">✍️ Panel Pracy</h2>
-         <div id="active-work-panel">
-             <p style="text-align: center;">Klikaj na numerki w poprawnej kolejności (od 1 do 10).</p>
-             <p style="text-align: center;">Następny numer: <strong id="next-number-info">1</strong></p>
-             <div id="work-grid" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 20px 0;"></div>
-             <button id="start-work-btn" onclick="startWorkMinigame()">Rozpocznij nowe zadanie</button>
-         </div>
-         <hr id="work-separator" style="display: none;">
-         <div id="passive-work-panel" style="display: none;">
-             <h4>Dochód Pasywny</h4>
-             <p>Twoja pensja jest przygotowywana... (100 PLN co 90 sekund)</p>
-             <progress id="passive-work-progress" value="0" max="100"></progress>
-             <p>Gotowe do odbioru: <strong id="passive-reward-info">0</strong> PLN</p>
-             <button id="collect-reward-btn" onclick="collectPassiveWorkReward()" disabled>Odbierz</button>
-         </div>
-         <div id="company-panel" style="display: none;">
-             <h3 id="company-name" style="text-align: center;">Twoja Firma</h3>
-             <div style="display: flex; justify-content: space-around; margin-bottom: 15px; border-bottom: 1px dashed #ccc; padding-bottom: 10px;">
-                 <div>Wartość firmy: <strong id="company-value">0</strong> PLN</div>
-                 <div>Dochód (cykl): <strong id="company-income">0</strong> PLN</div>
-             </div>
+        <div id="active-work-panel">
+            <p style="text-align: center;">Klikaj na numerki w poprawnej kolejności (od 1 do 10).</p>
+            <p style="text-align: center;">Następny numer: <strong id="next-number-info">1</strong></p>
+            <div id="work-grid"
+                style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 20px 0;"></div>
+            <button id="start-work-btn" onclick="startWorkMinigame()">Rozpocznij nowe zadanie</button>
+        </div>
+        <hr id="work-separator" style="display: none;">
+        <div id="passive-work-panel" style="display: none;">
+            <h4>Dochód Pasywny</h4>
+            <p>Twoja pensja jest przygotowywana... (100 PLN co 90 sekund)</p>
+            <progress id="passive-work-progress" value="0" max="100"></progress>
+            <p>Gotowe do odbioru: <strong id="passive-reward-info">0</strong> PLN</p>
+            <button id="collect-reward-btn" onclick="collectPassiveWorkReward()" disabled>Odbierz</button>
+        </div>
+        <div id="company-panel" style="display: none;">
+            <h3 id="company-name" style="text-align: center;">Twoja Firma</h3>
+            <div
+                style="display: flex; justify-content: space-around; margin-bottom: 15px; border-bottom: 1px dashed #ccc; padding-bottom: 10px;">
+                <div>Wartość firmy: <strong id="company-value">0</strong> PLN</div>
+                <div>Dochód (cykl): <strong id="company-income">0</strong> PLN</div>
+            </div>
 
-             <div class="bank-section">
-                 <h4>Pracownicy (<span id="employee-count">0</span>)</h4>
-                 <ul id="employee-list" style="max-height: 150px; overflow-y: auto; list-style: none; padding: 0;">
-                     </ul>
-                 <button onclick="openHireModal()">Zatrudnij</button> </div>
+            <div class="bank-section">
+                <h4>Pracownicy (<span id="employee-count">0</span>)</h4>
+                <ul id="employee-list" style="max-height: 150px; overflow-y: auto; list-style: none; padding: 0;">
+                </ul>
+                <button onclick="openHireModal()">Zatrudnij</button>
+            </div>
 
-             <div class="bank-section">
-                 <h4>Sprzęt (<span id="equipment-count">0</span> / <span id="employee-slots-for-equipment">0</span> miejsc)</h4>
-                 <ul id="equipment-list" style="list-style: none; padding: 0; font-size: 13px;">
-                     </ul>
-                  <select id="equipment-select" style="margin-right: 5px;">
-                      </select>
-                 <button onclick="buySelectedEquipment()">Kup Wybrany Sprzęt</button>
-             </div>
+            <div class="bank-section">
+                <h4>Sprzęt (<span id="equipment-count">0</span> / <span id="employee-slots-for-equipment">0</span>
+                    miejsc)</h4>
+                <ul id="equipment-list" style="list-style: none; padding: 0; font-size: 13px;">
+                </ul>
+                <select id="equipment-select" style="margin-right: 5px;">
+                </select>
+                <button onclick="buySelectedEquipment()">Kup Wybrany Sprzęt</button>
+            </div>
 
-             <div class="bank-section">
-                 <h4>Dział HR (Poziom <span id="hr-level">0</span>/10)</h4>
-                 <p>Redukcja pensji: <strong id="hr-salary-reduction">0%</strong></p>
-                 <p id="hr-upgrade-cost-p">Koszt ulepszenia: <strong id="hr-upgrade-cost"></strong> PLN</p>
-                 <button id="upgrade-hr-btn" onclick="upgradeHR()">Ulepsz HR</button>
-                 <p style="font-size: 11px; color: #6c757d; margin-top: 5px;">Lepszy HR pomaga rekrutować, oceniać i obniżać koszty pracowników.</p>
-             </div>
+            <div class="bank-section">
+                <h4>Dział HR (Poziom <span id="hr-level">0</span>/10)</h4>
+                <p>Redukcja pensji: <strong id="hr-salary-reduction">0%</strong></p>
+                <p id="hr-upgrade-cost-p">Koszt ulepszenia: <strong id="hr-upgrade-cost"></strong> PLN</p>
+                <button id="upgrade-hr-btn" onclick="upgradeHR()">Ulepsz HR</button>
+                <p style="font-size: 11px; color: #6c757d; margin-top: 5px;">Lepszy HR pomaga rekrutować, oceniać i
+                    obniżać koszty pracowników.</p>
+            </div>
 
-             <hr>
-             <input type="number" id="company-invest-amount" placeholder="Kwota doinwestowania">
-             <button onclick="investInCompany()">Zainwestuj</button>
-             <hr>
-             <button onclick="startRandomSpecialMinigame()">Wykonaj zadanie specjalne (Bonus)</button>
-             <hr>
-             <button id="ipo-btn" onclick="triggerIPO()" disabled>Wprowadź firmę na giełdę! (Wartość min. 25k)</button>
-         </div>
-         <button onclick="document.getElementById('work-modal').style.display='none';" style="display: block; margin: 15px auto 0 auto;">Zamknij</button>
+            <hr>
+            <input type="number" id="company-invest-amount" placeholder="Kwota doinwestowania">
+            <button onclick="investInCompany()">Zainwestuj</button>
+            <hr>
+            <button onclick="startRandomSpecialMinigame()">Wykonaj zadanie specjalne (Bonus)</button>
+            <hr>
+            <button id="ipo-btn" onclick="triggerIPO()" disabled>Wprowadź firmę na giełdę! (Wartość min. 25k)</button>
+        </div>
+        <button onclick="document.getElementById('work-modal').style.display='none';"
+            style="display: block; margin: 15px auto 0 auto;">Zamknij</button>
     </div>
 
     <div id="minigame-modal" class="modal" style="display:none;">
         <div id="minigame-content">
-             <h3 id="minigame-title">Zadanie: Zmotywuj pracownika!</h3>
-             <p id="minigame-instruction">Przeciągnij go z powrotem do biurka!</p>
-             <div id="minigame-area">
-                 <img src="img/face.png" id="draggable-employee" draggable="true">
-                 <img src="img/desk.png" id="dropzone-desk">
-             </div>
-         </div>
+            <h3 id="minigame-title">Zadanie: Zmotywuj pracownika!</h3>
+            <p id="minigame-instruction">Przeciągnij go z powrotem do biurka!</p>
+            <div id="minigame-area">
+                <img src="img/face.png" id="draggable-employee" draggable="true">
+                <img src="img/desk.png" id="dropzone-desk">
+            </div>
+        </div>
     </div>
 
     <div id="dividend-tracker-modal" class="modal" style="display: none;">
         <div class="modal-header">
-             <h2>💰 Panel Analityka Dywidend</h2>
-             <button onclick="document.getElementById('dividend-tracker-modal').style.display='none';">&times;</button>
-         </div>
-         <div class="modal-body">
-             <table>
-                 <thead><tr><th>Spółka</th><th>Polityka</th><th>Czas do wypłaty</th><th>Szac. Dywidenda</th></tr></thead>
-                 <tbody id="dividend-tracker-body"></tbody>
-             </table>
-         </div>
+            <h2>💰 Panel Analityka Dywidend</h2>
+            <button onclick="document.getElementById('dividend-tracker-modal').style.display='none';">&times;</button>
+        </div>
+        <div class="modal-body">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Spółka</th>
+                        <th>Polityka</th>
+                        <th>Czas do wypłaty</th>
+                        <th>Szac. Dywidenda</th>
+                    </tr>
+                </thead>
+                <tbody id="dividend-tracker-body"></tbody>
+            </table>
+        </div>
     </div>
 
     <div id="takeover-modal" class="modal" style="display:none;">
         <h2>🚨 Próba Wrogiego Przejęcia! 🚨</h2>
-         <p id="takeover-message"></p>
-         <div>
-             <button id="accept-takeover-btn">✅ Akceptuj Ofertę</button>
-             <button id="reject-takeover-btn">❌ Odrzuć Ofertę (Weto)</button>
-         </div>
+        <p id="takeover-message"></p>
+        <div>
+            <button id="accept-takeover-btn">✅ Akceptuj Ofertę</button>
+            <button id="reject-takeover-btn">❌ Odrzuć Ofertę (Weto)</button>
+        </div>
     </div>
 
     <div id="rescue-offering-modal" class="modal" style="display:none;">
         <h2>📢 Oferta Emisji Ratunkowej!</h2>
-         <p id="rescue-offering-message"></p>
-         <div>
-             <button id="accept-rescue-btn">✅ Kup Akcje</button>
-             <button id="decline-rescue-btn">❌ Odrzuć</button>
-         </div>
+        <p id="rescue-offering-message"></p>
+        <div>
+            <button id="accept-rescue-btn">✅ Kup Akcje</button>
+            <button id="decline-rescue-btn">❌ Odrzuć</button>
+        </div>
     </div>
 
     <div id="investors-modal" class="modal" style="display:none;">
-        <button class="close-btn" onclick="document.getElementById('investors-modal').style.display='none';">&times;</button>
-         <h3 id="investors-modal-title">Ranking Inwestorów</h3>
-         <table>
-             <thead><tr><th>#</th><th>Inwestor</th><th>Zainwestowana kwota</th></tr></thead>
-             <tbody id="investors-table-body"></tbody>
-         </table>
+        <button class="close-btn"
+            onclick="document.getElementById('investors-modal').style.display='none';">&times;</button>
+        <h3 id="investors-modal-title">Ranking Inwestorów</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Inwestor</th>
+                    <th>Zainwestowana kwota</th>
+                </tr>
+            </thead>
+            <tbody id="investors-table-body"></tbody>
+        </table>
     </div>
 
     <div id="autoinvest-modal" class="modal" style="display: none;">
         <div class="modal-header">
-             <h3>🤖 Ustaw Auto-inwestowanie</h3>
-             <button class="close-btn" onclick="document.getElementById('autoinvest-modal').style.display='none'">&times;</button>
-         </div>
-         <div class="modal-body">
-             <p>Automatycznie wpłacaj środki do puli inwestycyjnej start-upów.</p>
-             <label for="autoinvest-amount">Kwota wpłaty (PLN):</label>
-             <input type="number" id="autoinvest-amount" value="100" min="10">
-             <label for="autoinvest-interval">Częstotliwość (co ile sekund):</label>
-             <div>
-                 <input type="range" id="autoinvest-interval" min="10" max="120" value="30" step="5">
-                 <span id="autoinvest-interval-value">30s</span>
-             </div>
-             <button id="toggle-autoinvest-btn"></button>
-         </div>
+            <h3>🤖 Ustaw Auto-inwestowanie</h3>
+            <button class="close-btn"
+                onclick="document.getElementById('autoinvest-modal').style.display='none'">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p>Automatycznie wpłacaj środki do puli inwestycyjnej start-upów.</p>
+            <label for="autoinvest-amount">Kwota wpłaty (PLN):</label>
+            <input type="number" id="autoinvest-amount" value="100" min="10">
+            <label for="autoinvest-interval">Częstotliwość (co ile sekund):</label>
+            <div>
+                <input type="range" id="autoinvest-interval" min="10" max="120" value="30" step="5">
+                <span id="autoinvest-interval-value">30s</span>
+            </div>
+            <button id="toggle-autoinvest-btn"></button>
+        </div>
     </div>
 
     <div id="startup-autoinvest-modal" class="modal" style="display: none;">
         <div class="modal-header">
-             <h3 id="startup-autoinvest-title">🤖 Ustaw Auto-inwestowanie</h3>
-             <button class="close-btn" onclick="document.getElementById('startup-autoinvest-modal').style.display='none'">&times;</button>
-         </div>
-         <div class="modal-body">
-             <p>Automatycznie inwestuj w ten start-up.</p>
-             <label for="startup-autoinvest-amount">Kwota wpłaty (PLN):</label>
-             <input type="number" id="startup-autoinvest-amount" value="100" min="10">
-             <label for="startup-autoinvest-interval">Częstotliwość (co ile sekund):</label>
-             <div>
-                 <input type="range" id="startup-autoinvest-interval" min="10" max="120" value="30" step="5">
-                 <span id="startup-autoinvest-interval-value">30s</span>
-             </div>
-             <button id="toggle-startup-autoinvest-btn"></button>
-         </div>
+            <h3 id="startup-autoinvest-title">🤖 Ustaw Auto-inwestowanie</h3>
+            <button class="close-btn"
+                onclick="document.getElementById('startup-autoinvest-modal').style.display='none'">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p>Automatycznie inwestuj w ten start-up.</p>
+            <label for="startup-autoinvest-amount">Kwota wpłaty (PLN):</label>
+            <input type="number" id="startup-autoinvest-amount" value="100" min="10">
+            <label for="startup-autoinvest-interval">Częstotliwość (co ile sekund):</label>
+            <div>
+                <input type="range" id="startup-autoinvest-interval" min="10" max="120" value="30" step="5">
+                <span id="startup-autoinvest-interval-value">30s</span>
+            </div>
+            <button id="toggle-startup-autoinvest-btn"></button>
+        </div>
     </div>
 
     <div id="research-modal" class="modal" style="display: none;">
-        <button class="close-btn" onclick="document.getElementById('research-modal').style.display='none';">&times;</button>
-         <h2 id="research-modal-title">🔬 Panel Badań i Rozwoju</h2>
-         <div class="bank-section">
-             <h4>Poziom 1: Analiza Potencjału</h4>
-             <div id="rd-tier1-locked">
-                 <p>Odblokuj, aby zobaczyć specjalizację firmy.</p>
-                 <button id="rd-unlock-tier1-btn">Odblokuj (1000 PLN)</button>
-             </div>
-             <div id="rd-tier1-unlocked" style="display: none;">
-                 <p>Specjalizacja: <strong id="rd-specialization-name"></strong></p>
-             </div>
-         </div>
-         <div id="rd-tier2-section" class="bank-section" style="display: none;">
-             <h4>Poziom 2: Dostęp do Wyników</h4>
-             <div id="rd-tier2-locked">
-                 <p>Odblokuj, aby zobaczyć efekt badań.</p>
-                 <button id="rd-unlock-tier2-btn">Odblokuj (2500 PLN)</button>
-             </div>
-             <div id="rd-tier2-unlocked" style="display: none;">
-                 <p>Bieżące badanie: <strong id="rd-current-tech-details-name"></strong></p>
-                 <p>Efekt: <em id="rd-tech-effect-desc"></em></p>
-             </div>
-         </div>
-         <div id="rd-tier3-section" class="bank-section" style="display: none;">
-             <h4>Poziom 3: Granty Naukowe</h4>
-             <div id="rd-tier3-locked">
-                 <p>Odblokuj możliwość finansowania badań.</p>
-                 <button id="rd-unlock-tier3-btn">Odblokuj (5000 PLN)</button>
-             </div>
-             <div id="rd-tier3-unlocked" style="display: none;">
-                 <input type="number" id="rd-funding-amount" placeholder="Kwota (PLN)">
-                 <button id="rd-fund-btn">Sfinansuj</button>
-             </div>
-         </div>
-         <div id="rd-tier4-section" class="bank-section" style="display: none;">
-             <h4>Poziom 4: Wpływ na Badania</h4>
-             <div id="rd-tier4-locked">
-                 <p>Odblokuj możliwość zmiany specjalizacji.</p>
-                 <button id="rd-unlock-tier4-btn">Odblokuj (10000 PLN)</button>
-             </div>
-             <div id="rd-tier4-unlocked" style="display: none;">
-                 <select id="rd-specialization-select"></select>
-                 <button id="rd-change-spec-btn">Zmień</button>
-             </div>
-         </div>
-         <div id="rd-tier5-section" class="bank-section" style="display: none;">
-             <h4>Poziom 5: Ingerencja w Badania</h4>
-             <div id="rd-tier5-locked">
-                 <p>Odblokuj możliwość wyboru projektu.</p>
-                 <button id="rd-unlock-tier5-btn">Odblokuj (20000 PLN)</button>
-             </div>
-             <div id="rd-tier5-unlocked" style="display: none;">
-                 <p>Zdecyduj! Czas: <strong id="rd-choice-timer">15</strong>s</p>
-                 <div id="rd-tech-choice-container"></div>
-             </div>
-         </div>
+        <button class="close-btn"
+            onclick="document.getElementById('research-modal').style.display='none';">&times;</button>
+        <h2 id="research-modal-title">🔬 Panel Badań i Rozwoju</h2>
+        <div class="bank-section">
+            <h4>Poziom 1: Analiza Potencjału</h4>
+            <div id="rd-tier1-locked">
+                <p>Odblokuj, aby zobaczyć specjalizację firmy.</p>
+                <button id="rd-unlock-tier1-btn">Odblokuj (1000 PLN)</button>
+            </div>
+            <div id="rd-tier1-unlocked" style="display: none;">
+                <p>Specjalizacja: <strong id="rd-specialization-name"></strong></p>
+            </div>
+        </div>
+        <div id="rd-tier2-section" class="bank-section" style="display: none;">
+            <h4>Poziom 2: Dostęp do Wyników</h4>
+            <div id="rd-tier2-locked">
+                <p>Odblokuj, aby zobaczyć efekt badań.</p>
+                <button id="rd-unlock-tier2-btn">Odblokuj (2500 PLN)</button>
+            </div>
+            <div id="rd-tier2-unlocked" style="display: none;">
+                <p>Bieżące badanie: <strong id="rd-current-tech-details-name"></strong></p>
+                <p>Efekt: <em id="rd-tech-effect-desc"></em></p>
+            </div>
+        </div>
+        <div id="rd-tier3-section" class="bank-section" style="display: none;">
+            <h4>Poziom 3: Granty Naukowe</h4>
+            <div id="rd-tier3-locked">
+                <p>Odblokuj możliwość finansowania badań.</p>
+                <button id="rd-unlock-tier3-btn">Odblokuj (5000 PLN)</button>
+            </div>
+            <div id="rd-tier3-unlocked" style="display: none;">
+                <input type="number" id="rd-funding-amount" placeholder="Kwota (PLN)">
+                <button id="rd-fund-btn">Sfinansuj</button>
+            </div>
+        </div>
+        <div id="rd-tier4-section" class="bank-section" style="display: none;">
+            <h4>Poziom 4: Wpływ na Badania</h4>
+            <div id="rd-tier4-locked">
+                <p>Odblokuj możliwość zmiany specjalizacji.</p>
+                <button id="rd-unlock-tier4-btn">Odblokuj (10000 PLN)</button>
+            </div>
+            <div id="rd-tier4-unlocked" style="display: none;">
+                <select id="rd-specialization-select"></select>
+                <button id="rd-change-spec-btn">Zmień</button>
+            </div>
+        </div>
+        <div id="rd-tier5-section" class="bank-section" style="display: none;">
+            <h4>Poziom 5: Ingerencja w Badania</h4>
+            <div id="rd-tier5-locked">
+                <p>Odblokuj możliwość wyboru projektu.</p>
+                <button id="rd-unlock-tier5-btn">Odblokuj (20000 PLN)</button>
+            </div>
+            <div id="rd-tier5-unlocked" style="display: none;">
+                <p>Zdecyduj! Czas: <strong id="rd-choice-timer">15</strong>s</p>
+                <div id="rd-tech-choice-container"></div>
+            </div>
+        </div>
     </div>
 
     <div id="hire-employee-modal" class="modal" style="display:none; width: 600px;">
-        <button class="close-btn" onclick="document.getElementById('hire-employee-modal').style.display='none';">&times;</button>
+        <button class="close-btn"
+            onclick="document.getElementById('hire-employee-modal').style.display='none';">&times;</button>
         <h3 style="margin-top: 0; text-align: center;">Zatrudnij Pracownika</h3>
         <p style="text-align: center; font-size: 12px;">Wybierz rodzaj umowy, aby zobaczyć kandydatów.</p>
         <div style="text-align: center; margin-bottom: 15px;">
@@ -793,70 +961,72 @@
             <button onclick="generateCandidates('mandate')">Szukaj na Umowę Zlecenie</button>
         </div>
         <div id="candidate-list" style="display: flex; gap: 15px; justify-content: center;">
-            </div>
+        </div>
     </div>
 
     <div id="money-stacker-modal" class="modal" style="display: none;">
         <button class="close-btn" onclick="stopMoneyStackerGame()">&times;</button>
-         <h3>Wieża z Pieniędzy</h3>
-         <div id="stacker-ui-container">
-             <p>Wynik: <strong id="stacker-score">0</strong> PLN</p>
-             <p>Wysokość: <strong id="stacker-height">0</strong></p>
-         </div>
-         <div id="stacker-game-area"></div>
+        <h3>Wieża z Pieniędzy</h3>
+        <div id="stacker-ui-container">
+            <p>Wynik: <strong id="stacker-score">0</strong> PLN</p>
+            <p>Wysokość: <strong id="stacker-height">0</strong></p>
+        </div>
+        <div id="stacker-game-area"></div>
     </div>
 
     <div id="startup-offer-modal" class="modal" style="display:none;">
         <h2 id="startup-offer-title">Otrzymałeś Ofertę Specjalną!</h2>
-         <p id="startup-offer-message"></p>
-         <div>
-             <label for="startup-offer-amount">Kwota inwestycji (PLN):</label>
-             <input type="number" id="startup-offer-amount" placeholder="Wpisz kwotę...">
-         </div>
-         <div>
-             <button id="accept-startup-offer-btn">✅ Zainwestuj z Bonusem</button>
-             <button id="decline-startup-offer-btn">❌ Odrzuć</button>
-         </div>
+        <p id="startup-offer-message"></p>
+        <div>
+            <label for="startup-offer-amount">Kwota inwestycji (PLN):</label>
+            <input type="number" id="startup-offer-amount" placeholder="Wpisz kwotę...">
+        </div>
+        <div>
+            <button id="accept-startup-offer-btn">✅ Zainwestuj z Bonusem</button>
+            <button id="decline-startup-offer-btn">❌ Odrzuć</button>
+        </div>
     </div>
 
     <div id="price-alert-modal" class="modal" style="display:none;">
         <h3 id="price-alert-title">Ustaw Alerty Cenowe</h3>
-         <p>Aktualna cena: <strong id="price-alert-current-price">0.00</strong></p>
-         <div>
-             <label for="price-alert-buy">Powiadom, gdy cena spadnie do:</label>
-             <input type="number" id="price-alert-buy" placeholder="Cena zakupu...">
-             <button id="set-buy-alert-btn">Ustaw</button>
-         </div>
-         <div>
-             <label for="price-alert-sell">Powiadom, gdy cena wzrośnie do:</label>
-             <input type="number" id="price-alert-sell" placeholder="Cena sprzedaży...">
-             <button id="set-sell-alert-btn">Ustaw</button>
-         </div>
-         <button onclick="document.getElementById('price-alert-modal').style.display='none';">Anuluj</button>
+        <p>Aktualna cena: <strong id="price-alert-current-price">0.00</strong></p>
+        <div>
+            <label for="price-alert-buy">Powiadom, gdy cena spadnie do:</label>
+            <input type="number" id="price-alert-buy" placeholder="Cena zakupu...">
+            <button id="set-buy-alert-btn">Ustaw</button>
+        </div>
+        <div>
+            <label for="price-alert-sell">Powiadom, gdy cena wzrośnie do:</label>
+            <input type="number" id="price-alert-sell" placeholder="Cena sprzedaży...">
+            <button id="set-sell-alert-btn">Ustaw</button>
+        </div>
+        <button onclick="document.getElementById('price-alert-modal').style.display='none';">Anuluj</button>
     </div>
 
     <div id="ceo-choice-modal" class="modal" style="display: none;">
         <h2 id="ceo-choice-title">Wybierz kandydata na nowego prezesa</h2>
-         <p>Twoja szansa na sukces zależy od udziału w akcjonariacie.</p>
-         <div id="ceo-candidates-container"></div>
-         <button onclick="document.getElementById('ceo-choice-modal').style.display='none';">Anuluj</button>
+        <p>Twoja szansa na sukces zależy od udziału w akcjonariacie.</p>
+        <div id="ceo-candidates-container"></div>
+        <button onclick="document.getElementById('ceo-choice-modal').style.display='none';">Anuluj</button>
     </div>
 
     <div id="festival-results-modal" class="modal" style="display: none; width: 500px;">
-        <button class="close-btn" onclick="document.getElementById('festival-results-modal').style.display='none';">&times;</button>
-         <h2 id="festival-results-title" style="margin-top: 0; text-align: center;"></h2>
-         <p style="text-align: center;">Ranking stoisk na podstawie zdobytego zainteresowania. Zwycięzcy otrzymują roczne bonusy!</p>
-         <table style="width: 100%;">
-             <thead>
-                 <tr>
-                     <th>Miejsce</th>
-                     <th>Wystawca</th>
-                     <th>Zainteresowanie</th>
-                 </tr>
-             </thead>
-             <tbody id="festival-results-body">
-             </tbody>
-         </table>
+        <button class="close-btn"
+            onclick="document.getElementById('festival-results-modal').style.display='none';">&times;</button>
+        <h2 id="festival-results-title" style="margin-top: 0; text-align: center;"></h2>
+        <p style="text-align: center;">Ranking stoisk na podstawie zdobytego zainteresowania. Zwycięzcy otrzymują roczne
+            bonusy!</p>
+        <table style="width: 100%;">
+            <thead>
+                <tr>
+                    <th>Miejsce</th>
+                    <th>Wystawca</th>
+                    <th>Zainteresowanie</th>
+                </tr>
+            </thead>
+            <tbody id="festival-results-body">
+            </tbody>
+        </table>
     </div>
 
     <div id="commercial-loan-modal" class="modal" style="display: none; width: 450px;">
@@ -901,7 +1071,8 @@
             <div>
                 <label for="mortgage-collateral-quantity">Ilość akcji:</label>
                 <input type="number" id="mortgage-collateral-quantity" min="1" value="1" style="width: 80px;">
-                <span style="margin-left: 10px;">Wartość zastawu: <strong id="mortgage-collateral-value">0.00</strong> PLN</span>
+                <span style="margin-left: 10px;">Wartość zastawu: <strong id="mortgage-collateral-value">0.00</strong>
+                    PLN</span>
             </div>
             <hr style="margin: 10px 0;">
             <div>
@@ -922,28 +1093,36 @@
             <div>
                 <label for="sell-shares-quantity">Ilość:</label>
                 <input type="number" id="sell-shares-quantity" min="1" value="1" style="width: 80px;">
-                <span style="margin-left: 10px;">Szacunkowa cena odkupu: <strong id="sell-shares-estimated-price">0.00</strong> PLN/szt.</span>
+                <span style="margin-left: 10px;">Szacunkowa cena odkupu: <strong
+                        id="sell-shares-estimated-price">0.00</strong> PLN/szt.</span>
             </div>
-             <button id="sell-shares-to-bank-btn" style="margin-top: 15px;">Sprzedaj</button>
+            <button id="sell-shares-to-bank-btn" style="margin-top: 15px;">Sprzedaj</button>
         </div>
     </div>
 
     <div id="bank-ipo-offer-modal" class="modal" style="display: none; width: 450px;">
-        <button class="close-btn" onclick="resolveBankIPO('reject')">&times;</button> <h2 style="margin-top: 0; text-align: center; color: #0d6efd;">🔔 Oferta IPO Banku! 🔔</h2>
-        <p id="bank-ipo-offer-message" style="text-align: center; font-size: 16px; margin: 20px 0; line-height: 1.5;"></p>
+        <button class="close-btn" onclick="resolveBankIPO('reject')">&times;</button>
+        <h2 style="margin-top: 0; text-align: center; color: #0d6efd;">🔔 Oferta IPO Banku! 🔔</h2>
+        <p id="bank-ipo-offer-message" style="text-align: center; font-size: 16px; margin: 20px 0; line-height: 1.5;">
+        </p>
         <div style="display: flex; justify-content: space-around; margin-top: 25px;">
-            <button id="accept-bank-ipo-btn" style="background-color: #28a745; color: white; padding: 10px 20px; font-size: 16px;">✅ Skorzystaj z oferty</button>
-            <button id="reject-bank-ipo-btn" onclick="resolveBankIPO('reject')" style="background-color: #6c757d; color: white; padding: 10px 20px; font-size: 16px;">❌ Odrzuć</button>
+            <button id="accept-bank-ipo-btn"
+                style="background-color: #28a745; color: white; padding: 10px 20px; font-size: 16px;">✅ Skorzystaj z
+                oferty</button>
+            <button id="reject-bank-ipo-btn" onclick="resolveBankIPO('reject')"
+                style="background-color: #6c757d; color: white; padding: 10px 20px; font-size: 16px;">❌ Odrzuć</button>
         </div>
     </div>
 
     <div id="financial-details-modal" class="modal" style="display:none; width: 500px;">
-        <button class="close-btn" onclick="document.getElementById('financial-details-modal').style.display='none';">&times;</button>
+        <button class="close-btn"
+            onclick="document.getElementById('financial-details-modal').style.display='none';">&times;</button>
         <h3 id="financial-details-title" style="margin-top: 0; text-align: center;">Szczegóły Finansowe</h3>
         <div id="financial-details-content">
             <p>Ładowanie danych...</p>
         </div>
-        <div id="financial-anomaly-report" style="margin-top: 15px; padding-top: 10px; border-top: 1px dashed #ccc; text-align: center; font-weight: bold;">
+        <div id="financial-anomaly-report"
+            style="margin-top: 15px; padding-top: 10px; border-top: 1px dashed #ccc; text-align: center; font-weight: bold;">
         </div>
     </div>
 
@@ -951,65 +1130,75 @@
         <button class="close-btn" onclick="closeAdPopup()">&times;</button>
         <h4>Reklama</h4>
         <div id="ad-content" style="font-size: 14px; margin-top: 10px;">
-            </div>
+        </div>
     </div>
 
     <div id="ma-target-modal" class="modal" style="display:none; width: 600px;">
-    <button class="close-btn" onclick="document.getElementById('ma-target-modal').style.display='none';">&times;</button>
-    <h3 id="ma-target-title" style="margin-top: 0;">Wybierz Cel dla: Nazwa Spółki</h3>
-    <div class="modal-body" style="max-height: 400px; overflow-y: auto; padding-right: 15px;">
-        <table id="ma-target-table" style="width: 100%;">
-            <thead>
-                <tr>
-                    <th>Cel</th>
-                    <th>Sektor</th>
-                    <th>Kapitalizacja</th>
-                    <th style="width: 220px;">Akcja</th> </tr>
-            </thead>
-            <tbody id="ma-target-table-body">
+        <button class="close-btn"
+            onclick="document.getElementById('ma-target-modal').style.display='none';">&times;</button>
+        <h3 id="ma-target-title" style="margin-top: 0;">Wybierz Cel dla: Nazwa Spółki</h3>
+        <div class="modal-body" style="max-height: 400px; overflow-y: auto; padding-right: 15px;">
+            <table id="ma-target-table" style="width: 100%;">
+                <thead>
+                    <tr>
+                        <th>Cel</th>
+                        <th>Sektor</th>
+                        <th>Kapitalizacja</th>
+                        <th style="width: 220px;">Akcja</th>
+                    </tr>
+                </thead>
+                <tbody id="ma-target-table-body">
                 </tbody>
-        </table>
-    </div>
-</div>
-
-<div id="ma-complication-modal" class="modal" style="display:none; width: 450px; border-color: #dc3545;">
-    <button class="close-btn" onclick="document.getElementById('ma-complication-modal').style.display='none';">&times;</button>
-    <h3 id="ma-complication-title" style="margin-top: 0; color: #dc3545;">🔴 Poważne Komplikacje!</h3>
-    <div class="modal-body">
-        <p id="ma-complication-message" style="font-size: 14px; line-height: 1.5;">...Wiadomość o komplikacji...</p>
-        <div id="ma-complication-options" style="display: flex; flex-direction: column; gap: 10px; margin-top: 20px;">
-            <button>Opcja 1</button>
-            <button>Opcja 2</button>
-            <button>Opcja 3</button>
+            </table>
         </div>
     </div>
-</div>
 
-<div id="debt-offer-modal" class="modal" style="display:none; width: 450px; border-color: #ffc107;">
-    <button class="close-btn" onclick="declineDebtOffer()">&times;</button>
-    <h3 id="debt-offer-title" style="margin-top: 0; color: #856404;">Propozycja Przejęcia Długu!</h3>
-    <div class="modal-body">
-        <p id="debt-offer-message" style="font-size: 14px; line-height: 1.5;">...Wiadomość z ofertą...</p>
-        <p style="font-size: 12px; color: #dc3545; font-weight: bold;">Uwaga: Przejęcie długu przez tę firmę wiąże się ze znacznie wyższym oprocentowaniem w przyszłości!</p>
-        <div id="debt-offer-options" style="display: flex; justify-content: space-around; margin-top: 20px;">
-            <button id="debt-offer-accept-btn" style="background-color: #28a745; color: white;">Tak, spłaćcie mój dług bankowy</button>
-            <button id="debt-offer-decline-btn" style="background-color: #dc3545; color: white;">Nie, dziękuję</button>
+    <div id="ma-complication-modal" class="modal" style="display:none; width: 450px; border-color: #dc3545;">
+        <button class="close-btn"
+            onclick="document.getElementById('ma-complication-modal').style.display='none';">&times;</button>
+        <h3 id="ma-complication-title" style="margin-top: 0; color: #dc3545;">🔴 Poważne Komplikacje!</h3>
+        <div class="modal-body">
+            <p id="ma-complication-message" style="font-size: 14px; line-height: 1.5;">...Wiadomość o komplikacji...</p>
+            <div id="ma-complication-options"
+                style="display: flex; flex-direction: column; gap: 10px; margin-top: 20px;">
+                <button>Opcja 1</button>
+                <button>Opcja 2</button>
+                <button>Opcja 3</button>
+            </div>
         </div>
     </div>
-</div>
 
-<div id="pawn-offer-modal" class="modal" style="display:none; width: 450px; border-color: #28a745;">
-    <button class="close-btn" onclick="declinePawnOffer()">&times;</button>
-    <h3 id="pawn-offer-title" style="margin-top: 0; color: #155724;">Oferta Pożyczki Lombardowej!</h3>
-    <div class="modal-body">
-        <p id="pawn-offer-message" style="font-size: 14px; line-height: 1.5;">...Wiadomość z ofertą pożyczki...</p>
-        <p style="font-size: 12px; color: #dc3545; font-weight: bold;">Uwaga: Jeśli nie spłacisz pożyczki w terminie, zastawione akcje przepadną na rzecz lombardu!</p>
-        <div id="pawn-offer-options" style="display: flex; justify-content: space-around; margin-top: 20px;">
-            <button id="pawn-offer-accept-btn" style="background-color: #28a745; color: white;">Tak, zastawiam akcje i biorę gotówkę</button>
-            <button id="pawn-offer-decline-btn" style="background-color: #dc3545; color: white;">Nie, dziękuję</button>
+    <div id="debt-offer-modal" class="modal" style="display:none; width: 450px; border-color: #ffc107;">
+        <button class="close-btn" onclick="declineDebtOffer()">&times;</button>
+        <h3 id="debt-offer-title" style="margin-top: 0; color: #856404;">Propozycja Przejęcia Długu!</h3>
+        <div class="modal-body">
+            <p id="debt-offer-message" style="font-size: 14px; line-height: 1.5;">...Wiadomość z ofertą...</p>
+            <p style="font-size: 12px; color: #dc3545; font-weight: bold;">Uwaga: Przejęcie długu przez tę firmę wiąże
+                się ze znacznie wyższym oprocentowaniem w przyszłości!</p>
+            <div id="debt-offer-options" style="display: flex; justify-content: space-around; margin-top: 20px;">
+                <button id="debt-offer-accept-btn" style="background-color: #28a745; color: white;">Tak, spłaćcie mój
+                    dług bankowy</button>
+                <button id="debt-offer-decline-btn" style="background-color: #dc3545; color: white;">Nie,
+                    dziękuję</button>
+            </div>
         </div>
     </div>
-</div>
+
+    <div id="pawn-offer-modal" class="modal" style="display:none; width: 450px; border-color: #28a745;">
+        <button class="close-btn" onclick="declinePawnOffer()">&times;</button>
+        <h3 id="pawn-offer-title" style="margin-top: 0; color: #155724;">Oferta Pożyczki Lombardowej!</h3>
+        <div class="modal-body">
+            <p id="pawn-offer-message" style="font-size: 14px; line-height: 1.5;">...Wiadomość z ofertą pożyczki...</p>
+            <p style="font-size: 12px; color: #dc3545; font-weight: bold;">Uwaga: Jeśli nie spłacisz pożyczki w
+                terminie, zastawione akcje przepadną na rzecz lombardu!</p>
+            <div id="pawn-offer-options" style="display: flex; justify-content: space-around; margin-top: 20px;">
+                <button id="pawn-offer-accept-btn" style="background-color: #28a745; color: white;">Tak, zastawiam akcje
+                    i biorę gotówkę</button>
+                <button id="pawn-offer-decline-btn" style="background-color: #dc3545; color: white;">Nie,
+                    dziękuję</button>
+            </div>
+        </div>
+    </div>
 
     <div id="chart-tooltip" style="display: none; position: absolute;"></div>
     <div id="toast-notification"></div>
@@ -1025,4 +1214,5 @@
     <script src="main.js"></script>
 
 </body>
+
 </html>

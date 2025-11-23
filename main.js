@@ -291,6 +291,10 @@ function setGameSpeed(speedMultiplier) {
 gameTimers.weekly = setInterval(() => {
         if (isGamePaused) return;
 
+        if (typeof runConstructionLogic === 'function') {
+        runConstructionLogic();
+        }
+
         // ===>>> NOWE WYWOŁANIE SKANERA WINDYKATORA <<<===
         if (typeof runDebtCollectorAI === 'function') {
             runDebtCollectorAI(); //
@@ -530,6 +534,11 @@ gameTimers.weekly = setInterval(() => {
             }
         });
         stocks.forEach(stock => {
+
+            if (!stock.departments && !stock.assetType) {
+            initializeDepartments(stock);
+        }
+
             if (typeof updateCorporatePhase === 'function') {
                 updateCorporatePhase(stock);
             }
@@ -554,6 +563,10 @@ gameTimers.weekly = setInterval(() => {
 
         if (typeof runPrivateCompanyLogic === 'function') {
             runPrivateCompanyLogic(); // Logika rozwoju firm prywatnych
+        }
+
+        if (typeof runCompanyDepartmentsAI === 'function') {
+            runCompanyDepartmentsAI(); // Spółki autonomicznie ulepszają działy
         }
 
     }, BASE_DELAYS.quarterly / speedMultiplier);
