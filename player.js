@@ -14,6 +14,7 @@ let investmentPool = {
     investmentTimer: 90000, // Czas do następnej inwestycji (1 minuta)
     INVESTMENT_INTERVAL: 90000 // Stały interwał
 };
+let playerHasTBillAccess = false;
 let city = {
     name: "Miasto",
     population: getRandomIntInRange(25000, 45000), // Startowa populacja
