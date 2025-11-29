@@ -4,7 +4,7 @@
 let governmentTreasury = 1000000; // Skarbiec Państwa
 let marketVolatilityIndex = 0; // Wskaźnik zmienności (WNR)
 let exchangeCollapseState = {}; // Stan zwinięcia tabel w UI
-let currentDebtOffer = null;
+
 // --- Podatki ---
 const TAX_RATES = {
     dividend: 0.10,        // 10% od dywidend

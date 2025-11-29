@@ -1,5 +1,15 @@
 // gameCore.js - Rdzeń silnika gry, stałe i helpery
 
+
+const BANK_TYPES = {
+    INVESTMENT: 'Inwestycyjny',
+    CORPORATE: 'Korporacyjny',
+    UNIVERSAL: 'Uniwersalny',
+    INTERNATIONAL: 'Międzynarodowy',
+    COOPERATIVE: 'Spółdzielczy',
+    INTERNET: 'Internetowy (e-bank)',
+    MORTGAGE: 'Hipoteczny'
+};
 // Diagnostic
 if (typeof window !== 'undefined' && window.console) {
     console.log('[diag] gameCore.js loaded');

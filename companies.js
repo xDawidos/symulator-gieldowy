@@ -7,7 +7,8 @@ let municipalCompanies = [];
 let privateCompanies = [];
 const MINIMUM_STARTUPS = 3; 
 const TARGET_STARTUPS = 5;
-
+let currentBankIPOOffer = null;
+let currentDebtOffer = null;
 // cechy prezesów
 const ceoTraits = {
     // === CECHY POSPOLITE (COMMON) ===
@@ -299,16 +300,7 @@ const centralBankGovernorTraits = {
     niezalezny: { name: "Niezależny Ekspert", rarity: "common", color: "#a0a0a0", description: "Podejmuje decyzje w oparciu o dane makroekonomiczne, mniej podatny na naciski." },
     partyjniak: { name: "Człowiek Partii", rarity: "rare", color: "#8B4513", description: "Jego decyzje są często podyktowane bieżącą polityką, co prowadzi do nieprzewidywalnych ruchów." }
 };
-// --- Definicje banków ---
-const BANK_TYPES = {
-    INVESTMENT: 'Inwestycyjny',
-    CORPORATE: 'Korporacyjny',
-    UNIVERSAL: 'Uniwersalny',
-    INTERNATIONAL: 'Międzynarodowy',
-    COOPERATIVE: 'Spółdzielczy',
-    INTERNET: 'Internetowy (e-bank)',
-    MORTGAGE: 'Hipoteczny'
-};
+
 
 const ALL_COMMERCIAL_BANKS_DEFINITIONS = [
     // Inwestycyjne (3 + 1)
@@ -1183,7 +1175,7 @@ const initialStocks = [
 ];
 
 
-let stocks = JSON.parse(JSON.stringify(initialStocks)); // Główna tablica spółek w grze
+
 
 // --- ETFy ---
 const etfs = [
@@ -1412,6 +1404,7 @@ function initializeBalanceSheetForStock(stock) {
     // ---> KONIEC INICJALIZACJI GOTÓWKI <---
 }
 
+let stocks = JSON.parse(JSON.stringify(initialStocks)); // Inicjalizacja głównej tablicy
 
 try {
     randomizeInitialShareCounts();
@@ -1430,6 +1423,8 @@ function randomizeInitialShareCounts() {
         }
     });
 }
+
+
 
 function processFinancialReports() {
     console.log("[RAPORTY KWARTALNE] Rozpoczęto przetwarzanie raportów finansowych...");
@@ -3840,6 +3835,210 @@ function initiateMergerProcess(initiatorStock, targetStock, type, financing = 'c
 
     displayStocks(getCurrentInputValues());
     return true;
+}
+
+function findMajorityShareholder(stock) {
+    let majorityOwner = null;
+    let maxShares = 0;
+
+    // Sprawdź gracza
+    if (playerPortfolio[stock.symbol]) {
+        const shares = playerPortfolio[stock.symbol].shares;
+        if (shares > maxShares) {
+            maxShares = shares;
+            majorityOwner = { id: 'player', name: 'Ty (Gracz)' };
+        }
+    }
+
+    // Sprawdź AI
+    aiCompetitors.forEach(ai => {
+        if (ai.portfolio[stock.symbol]) {
+            const shares = ai.portfolio[stock.symbol].shares;
+            if (shares > maxShares) {
+                maxShares = shares;
+                majorityOwner = ai;
+            }
+        }
+    });
+
+    // Wymóg > 50%
+    if (maxShares > stock.totalShares * 0.5) {
+        return majorityOwner;
+    }
+    return null;
+}
+
+function resolveComplicationDecision(stockSymbol, optionId) {
+    const stock = stocks.find(s => s.symbol === stockSymbol);
+    if (!stock || !stock.mergerProcess || !stock.mergerProcess.decisionRequired) return;
+
+    const process = stock.mergerProcess;
+    const decisionData = process.decisionRequired;
+    const chosenOption = decisionData.options.find(opt => opt.id === optionId);
+
+    if (chosenOption) {
+        console.log(`[M&A Decision] Wybrano: ${chosenOption.text}`);
+        chosenOption.consequence();
+    }
+    
+    // Czyścimy flagę decyzji
+    stock.mergerProcess.decisionRequired = null;
+    const partner = stocks.find(s => s.symbol === process.partnerSymbol);
+    if(partner && partner.mergerProcess) partner.mergerProcess.decisionRequired = null;
+}
+
+function handleTakeoverAcceptance(acquirer, target, buyoutPrice) {
+    // Logika akceptacji przejęcia
+    const processData = {
+        type: 'przejęcie',
+        stage: 7, // Skok do finału
+        progress: 100,
+        partnerSymbol: target.symbol,
+        initiatorSymbol: acquirer.symbol,
+        costs: 0,
+        offerDetails: {
+            buyoutPricePerShare: buyoutPrice,
+            totalCost: buyoutPrice * target.totalShares,
+            premium: 0
+        },
+        financing: 'cash' // Zakładamy gotówkę przy akceptacji oferty AI
+    };
+    
+    // Ustawiamy proces, aby resolveMerger mógł go obsłużyć
+    acquirer.mergerProcess = processData;
+    target.mergerProcess = { ...processData, partnerSymbol: acquirer.symbol };
+    
+    resolveMerger(acquirer, target, processData);
+}
+
+function handleTakeoverRejection(acquirer, target) {
+    logEvent(`❌ ${target.name} odrzuca ofertę przejęcia złożoną przez ${acquirer.name}.`, 'company');
+    // Ewentualnie: obniżenie relacji
+    changeReputation(acquirer.id || 'player', target.symbol, -15);
+}
+
+function triggerHostileTakeoverEvent() {
+    // To jest trigger eventu losowego, gdzie AI próbuje przejąć inną spółkę (lub gracza)
+    // Używamy funkcji checkForPotentialMA z companies.js, która to obsługuje
+    checkForPotentialMA();
+}
+
+function triggerBankIPOEvent() {
+    if (currentBankIPOOffer) return;
+    
+    const inactiveBanks = commercialBanks.filter(b => !b.isActive);
+    if (inactiveBanks.length === 0) return;
+    
+    const bankToIPO = getRandomElement(inactiveBanks);
+    const ipoValuation = bankToIPO.initialCapital * getRandomInRange(1.1, 1.5);
+    const ipoSharePrice = getRandomInRange(50, 150);
+    const ipoTotalShares = Math.floor(ipoValuation / ipoSharePrice);
+    
+    const sharesOfferedToPlayer = Math.floor(ipoTotalShares * 0.05); // 5% dla gracza
+    const offerPrice = ipoSharePrice * 0.9; // 10% zniżki
+    const offerCost = sharesOfferedToPlayer * offerPrice;
+
+    currentBankIPOOffer = {
+        bank: bankToIPO,
+        symbol: `BK${bankToIPO.id.toUpperCase()}`,
+        ipoSharePrice: ipoSharePrice,
+        ipoTotalShares: ipoTotalShares,
+        sharesOffered: sharesOfferedToPlayer,
+        offerPrice: offerPrice,
+        offerCost: offerCost
+    };
+
+    // Wywołaj UI (bezpiecznie)
+    if (typeof openBankIPOOfferModal === 'function') {
+        const message = `Nowy bank "${bankToIPO.name}" wchodzi na giełdę! <br> Kup 5% udziałów (${sharesOfferedToPlayer} akcji) za ${offerCost.toFixed(2)} PLN?`;
+        openBankIPOOfferModal(message);
+    }
+}
+
+function resolveBankIPO(decision) {
+    if (!currentBankIPOOffer) return;
+    const offer = currentBankIPOOffer;
+    
+    if (decision === 'accept') {
+        // Logika w player.js (buyStock) lub tutaj bezpośrednio:
+        if (playerCash >= offer.offerCost) {
+            playerCash -= offer.offerCost;
+            if (!playerPortfolio[offer.symbol]) {
+                playerPortfolio[offer.symbol] = { shares: 0, avgPrice: 0, assetType: 'stock' };
+            }
+            playerPortfolio[offer.symbol].shares += offer.sharesOffered;
+            playerPortfolio[offer.symbol].avgPrice = offer.offerPrice; // Uproszczone uśrednianie
+            logEvent(`✅ Kupiłeś akcje w IPO banku ${offer.bank.name}.`, 'success');
+        } else {
+            logEvent(`❌ Brak środków na IPO banku ${offer.bank.name}.`, 'error');
+        }
+    }
+    
+    // Aktywacja banku i dodanie na giełdę
+    offer.bank.isActive = true;
+    const newStock = createBankStockObject(offer.bank); // Funkcja już jest w companies.js
+    if (newStock) {
+        stocks.push(newStock);
+    }
+    
+    currentBankIPOOffer = null;
+    if (typeof closeBankIPOOfferModal === 'function') closeBankIPOOfferModal();
+    if (typeof displayStocks === 'function') displayStocks();
+}
+
+function triggerRescueOfferingEvent() {
+    // Znajdź spółkę w kłopotach
+    const troubledStocks = stocks.filter(s => !s.assetType && !s.isBankrupt && s.balanceSheet.liabilities > s.balanceSheet.assets * 0.7);
+    if (troubledStocks.length === 0) return;
+    
+    const target = getRandomElement(troubledStocks);
+    // Sprawdź czy gracz ma akcje
+    const playerHasShares = playerPortfolio[target.symbol] && playerPortfolio[target.symbol].shares > 0;
+    
+    const sharesToIssue = Math.floor(target.totalShares * 0.2); // Emisja 20%
+    const price = target.price * 0.7; // 30% zniżki
+    const totalCost = sharesToIssue * price;
+    
+    const offerDetails = {
+        targetCompany: target,
+        sharesOffered: sharesToIssue,
+        promotionalPrice: price,
+        totalCost: totalCost,
+        cashRaisedSoFar: 0,
+        sharesBoughtSoFar: 0
+    };
+    
+    if (playerHasShares) {
+        // Wywołaj UI
+        if (typeof openRescueOfferingModal === 'function') openRescueOfferingModal(offerDetails);
+    } else {
+        // Symuluj AI (uproszczone)
+        aiCompetitors.forEach(ai => {
+             const bought = aiDecideOnRescueOffer(ai, offerDetails);
+             offerDetails.sharesBoughtSoFar += bought;
+             offerDetails.cashRaisedSoFar += bought * price;
+        });
+        finalizeRescueOffering(target, offerDetails.cashRaisedSoFar, offerDetails.sharesBoughtSoFar);
+    }
+}
+
+function runStateActions() {
+    // Logika Skarbu Państwa (skup/sprzedaż)
+    const stateCompanies = stocks.filter(s => s.isStateOwned && !s.isBankrupt);
+    
+    stateCompanies.forEach(stock => {
+        // Utrzymywanie kontroli (min 51%)
+        if (stock.stateOwnershipPct < 0.51) {
+            const needed = Math.ceil(stock.totalShares * 0.51) - stock.sharesHeld;
+            if (needed > 0) {
+                stock.sharesHeld += needed;
+                stock.stateOwnershipPct = stock.sharesHeld / stock.totalShares;
+                // Podbij cenę
+                applyPriceEffect(stock.symbol, 0.02, 'positive', 'state');
+            }
+        }
+    });
+    // Można dodać tu logikę prywatyzacji/nacjonalizacji
 }
 
 function triggerMergerMiniEvent(stock1, stock2, process) {

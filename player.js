@@ -63,6 +63,8 @@ const PROMOTION_ACTIONS = {
 let playerChartSettings = { type: 'candlestick', lineInterval: 1000, candleInterval: 15000 };
 let playerAutoInvest = { isEnabled: false, amount: 100, interval: 30000, timer: 30000 };
 let playerStartupAutoInvest = {};
+let playerLoan = { amount: 0, weeklyPayment: 0, missedPayments: 0 };
+let activePlayerBankBonuses = [];
 
 // --- Umiejętności ---
 const skills = {
@@ -730,62 +732,87 @@ function sellIndex(indexId, quantity) {
     checkPlayerTierUpgrade(); // Sprawdzenie awansu gracza
 }
 
+function upgradeHR() {
+    if (!playerCompany) return;
+    if (playerCompany.hrLevel >= 10) return;
+
+    const cost = 5000 * Math.pow(1.5, playerCompany.hrLevel); // Przykładowy koszt
+    
+    if (playerCash >= cost) {
+        playerCash -= cost;
+        playerCompany.hrLevel++;
+        logEvent(`🏢 Dział HR ulepszony do poziomu ${playerCompany.hrLevel}.`, 'success');
+        displayCash();
+        if (typeof openWorkModal === 'function') openWorkModal(); // Odśwież UI
+    } else {
+        alert("Brak środków na ulepszenie HR.");
+    }
+}
+
+// ZASTĄP ISTNIEJĄCĄ FUNKCJĘ updateCompanyStatus PONIŻSZĄ WERSJĄ (Z POPRAWKĄ PODATKOWĄ):
 function updateCompanyStatus() {
     if (getSkillLevel('work') < 4 || playerCompany === null) return;
 
     const now = Date.now();
-
-    // ---> ZMODYFIKOWANE OBLICZANIE DOCHODU <---
-    let currentTotalIncome = 0;
     if (now - playerCompany.lastIncomeTime >= playerCompany.incomeInterval) {
         let incomeBeforeTax = 0;
-        let workingEmployeesCount = 0; // Licznik faktycznie pracujących
+        let workingEmployeesCount = 0;
 
+        // 1. Oblicz przychód z pracowników
         playerCompany.employees.forEach(employee => {
-            // Dochód generują tylko pracownicy ze statusem 'working'
             if (employee.status === 'working') {
                 workingEmployeesCount++;
-                // Wydajność zależy od bazowej wydajności i morale
-                const effectivePerformance = employee.performance * (0.8 + employee.morale / 250); // 80%-120%
-                // Bonus za sprzęt performance
+                const effectivePerformance = employee.performance * (0.8 + employee.morale / 250);
+                // Bonusy ze sprzętu
                 let equipmentPerformanceBonus = 1.0;
                 playerCompany.equipment.forEach(eq => {
                      if (eq.bonusType === 'performance') {
-                         equipmentPerformanceBonus += eq.bonusValue * eq.quantity / workingEmployeesCount; // Rozłożony bonus
+                         equipmentPerformanceBonus += eq.bonusValue * eq.quantity / Math.max(1, playerCompany.employees.length);
                      }
                 });
+                
                 incomeBeforeTax += playerCompany.baseIncomePerEmployee * effectivePerformance * equipmentPerformanceBonus;
             }
         });
 
+        // 2. === POPRAWKA PODATKOWA ===
         let taxToPay = 0;
-        // Obliczanie podatku (bez zmian)
         const sanEscobarLvl = getSkillLevel('sanEscobar');
-         if (sanEscobarLvl < 2 || sanEscobarLvl >= 4) {
-             let taxRateKey = 'companyIncomeLow';
-             if (incomeBeforeTax > TAX_RATES.companyIncomeThreshold) {
-                 taxRateKey = 'companyIncomeHigh';
-             }
-             const taxRate = TAX_RATES[taxRateKey]?.current || 0; // Użyj ?.current
-             taxToPay = sanEscobarLvl >= 4 ? 0 : incomeBeforeTax * taxRate;
-             governmentTreasury += taxToPay;
+        const rates = TAX_RATES.companyIncome; // Pobierz z economy.js
+
+        let taxRate = 0;
+        // Sprawdź progi (zakładamy, że rates[1] to wyższy próg)
+        if (incomeBeforeTax > rates[1].threshold) {
+            taxRate = rates[1].rate;
+        } else {
+            taxRate = rates[0].rate;
         }
 
+        // Skill Lvl 2 "Firma w Raju" znosi podatek dochodowy firmy
+        if (sanEscobarLvl >= 2) {
+            taxRate = 0;
+        }
+
+        taxToPay = incomeBeforeTax * taxRate;
+        governmentTreasury += taxToPay;
+        // ===========================
+
         const incomeAfterTax = incomeBeforeTax - taxToPay;
-        currentTotalIncome = incomeAfterTax; // Zapisz dla logiki wartości firmy
         playerCash += incomeAfterTax;
         playerCompany.lastIncomeTime = now;
-        logEvent(`🏢 Twoja firma wygenerowała ${incomeAfterTax.toFixed(2)} PLN dochodu netto (pracowało ${workingEmployeesCount}/${playerCompany.employees.length}, podatek: ${taxToPay.toFixed(2)} PLN).`, 'review');
-        displayCash();
-    }
-    // ---> KONIEC MODYFIKACJI DOCHODU <---
+        
+        // Zaktualizuj wartość firmy (uproszczona wycena)
+        const estimatedAnnualIncome = incomeAfterTax * ( (BASE_DELAYS.quarterly * 4) / playerCompany.incomeInterval );
+        playerCompany.value = playerCompany.cashInvested + (estimatedAnnualIncome * 1.5) + (playerCompany.employees.length * 1000);
 
-    // ---> ZMODYFIKOWANE OBLICZANIE WARTOŚCI FIRMY <---
-    // Wartość = inwestycje + (średni roczny dochód * 2) + (liczba pracowników * 1000)
-    // Uproszczenie: Wartość = inwestycje + (ostatni dochód * 4 * 2) + (pracownicy * 1000)
-    const estimatedAnnualIncome = currentTotalIncome > 0 ? currentTotalIncome * ( (BASE_DELAYS.quarterly*4) / playerCompany.incomeInterval ) : 0; // Szacowany dochód roczny
-    playerCompany.value = playerCompany.cashInvested + (estimatedAnnualIncome * 1.5) + (playerCompany.employees.length * 1000);
-    // ---> KONIEC MODYFIKACJI WARTOŚCI <---
+        logEvent(`🏢 Twoja firma wygenerowała ${incomeAfterTax.toFixed(2)} PLN zysku netto (Podatek: ${taxToPay.toFixed(2)} PLN).`, 'review');
+        displayCash();
+        
+        // Odśwież UI jeśli otwarte
+        if (typeof openWorkModal === 'function' && document.getElementById('work-modal').style.display === 'block') {
+             // Tu można by wywołać odświeżenie konkretnych elementów
+        }
+    }
 }
 
 function foundPlayerCompany() {
