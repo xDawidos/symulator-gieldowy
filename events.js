@@ -1,5 +1,3 @@
-let currentBankIPOOffer = null; // Przechowuje dane aktywnej oferty IPO
-
 // --- Zmienne i dane dla systemu zdarzeń ---
 const positiveTraits = ['wyjadacz', 'pewniak', 'prowiec', 'doswiadczony', 'filar_w_branzy', 'oddany', 'stoik', 'wizjoner', 'rekin', 'kapitalista', 'bogacz', 'legenda'];
 const negativeTraits = ['tyran', 'rozrzutny', 'glowa_w_chmurach', 'nieudacznik', 'skompromitowany'];
@@ -16,7 +14,7 @@ function logEvent(message, category = 'market') { // Domyślna kategoria to 'mar
     }
 }
 
-let activePlayerBankBonuses = []; // { bankId: string, type: 'loan' | 'deposit', value: number, expiryTime: number }
+
 
 
 

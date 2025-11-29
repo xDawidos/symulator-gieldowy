@@ -858,75 +858,187 @@ function displayEtfs() {
     });
 }
 
-function updateNewspaperContent() {
-    // --- Aktualizacja Daty ---
-    const newspaperDate = document.getElementById('newspaper-date');
-    if (newspaperDate) {
-        newspaperDate.textContent = `Gdańsk, ${new Date().toLocaleDateString('pl-PL')}`;
+function switchNewspaperTab(symbol) {
+    const mediaStock = stocks.find(s => s.symbol === symbol);
+    if (!mediaStock) {
+        console.error(`Nie znaleziono spółki medialnej o symbolu: ${symbol}`);
+        return;
+    }
+    
+    const modal = document.getElementById('newspaper-modal');
+    if (!modal) return;
+    
+    // 1. Zaktualizuj przyciski zakładek
+    modal.querySelectorAll('.bank-tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    const activeBtn = document.getElementById(`tab-btn-newspaper-${symbol}`);
+    if (activeBtn) {
+        activeBtn.classList.add('active');
     }
 
-    // --- Logika Subskrypcji ---
-    const statusText = document.getElementById('subscription-status-text');
-    const buyButton = document.getElementById('buy-subscription-btn');
-    if (statusText && buyButton) {
-        if (playerHasPremiumSubscription) {
-            const remainingTime = new Date(premiumSubscriptionEndTime).toLocaleString('pl-PL');
-            statusText.innerHTML = `<strong>Subskrypcja premium aktywna!</strong><br>Ważna do: ${remainingTime}`;
-            buyButton.style.display = 'none';
+    // 2. Przypisz aktualnie otwartą gazetę do modala (do użycia przez PR)
+    modal.dataset.currentNewspaper = symbol;
+    
+    // 3. Wywołaj funkcję, która odświeża całą treść gazety
+    updateNewspaperContent(mediaStock);
+}
+
+/**
+ * Otwiera modal gazety i domyślnie włącza pierwszą zakładkę.
+ */
+function openNewspaperModal() {
+    const modal = document.getElementById('newspaper-modal');
+    if (!modal) return;
+    
+    // Domyślnie otwórz pierwszą gazetę ('PULS')
+    switchNewspaperTab('PULS'); 
+    
+    modal.style.setProperty('display', 'flex', 'important');
+}
+
+/**
+ * Aktualizuje treść modala gazety na podstawie danych konkretnej spółki medialnej.
+ * @param {object} mediaStock - Obiekt spółki medialnej (np. PULS, FLESZ).
+ */
+function updateNewspaperContent(mediaStock) {
+    if (!mediaStock || !mediaStock.newspaperData) return;
+
+    // 1. Ustaw tytuł gazety
+    const newspaperTitle = document.getElementById('newspaper-title');
+    if (newspaperTitle) newspaperTitle.textContent = mediaStock.name;
+
+    // 2. Aktualizacja daty
+    const newspaperDate = document.getElementById('newspaper-date');
+    if (newspaperDate) newspaperDate.textContent = `Gdańsk, ${new Date().toLocaleDateString('pl-PL')}`;
+
+    // 3. Logika Reklamy (dla przychodu spółki medialnej)
+    const adContainer = document.getElementById('newspaper-ad-container');
+    if (adContainer) {
+        if (Math.random() < 0.6) { // 60% szans na reklamę
+            const adStock = getRandomElement(stocks.filter(s => !s.assetType && !s.isBankrupt && s.symbol !== mediaStock.symbol));
+            if (adStock) {
+                adContainer.innerHTML = `<p><strong>REKLAMA:</strong> Zainwestuj w <strong>${adStock.name} (${adStock.symbol})</strong>! Niesamowity potencjał wzrostu! Kup teraz!</p>`;
+                adContainer.style.display = 'block';
+                
+                // Mechanika przychodu za kliknięcie (teraz za KAŻDYM przełączeniem zakładki)
+                mediaStock.cash += mediaStock.newspaperData.adRevenuePerClick;
+                // Można dodać logikę pobierania kasy od reklamodawcy
+                if (adStock.cash > mediaStock.newspaperData.adRevenuePerClick) {
+                    adStock.cash -= mediaStock.newspaperData.adRevenuePerClick;
+                }
+            }
         } else {
-            statusText.innerHTML = "Wykup dostęp do plotek rynkowych i wczesnych ostrzeżeń.";
-            buyButton.style.display = 'inline-block';
-            const costText = (typeof PREMIUM_SUBSCRIPTION_COST !== 'undefined') ? PREMIUM_SUBSCRIPTION_COST.toLocaleString('pl-PL') : '5000';
-            buyButton.textContent = `Kup subskrypcję (${costText} PLN)`;
+            adContainer.style.display = 'none'; // Brak reklamy
         }
     }
 
-    // --- Wypełnianie Kolumn ---
+    // 4. Logika Subskrypcji (na razie ukryta)
+    const statusText = document.getElementById('subscription-status-text');
+    const buyButton = document.getElementById('buy-subscription-btn');
+    if (statusText && buyButton) {
+        statusText.innerHTML = "Wiadomości premium (już wkrótce)."; // Placeholder
+        buyButton.style.display = 'none'; // Ukryj stary przycisk
+    }
+
+    // 5. Wypełnianie Kolumn (TODO Krok 2: Zmienić 'eventLog' na 'mediaStock.newspaperData.eventLog')
+    const newspaperLog = eventLog; // Na razie nadal używamy głównego logu
+    
     const marketNewsList = document.getElementById('market-news-list');
     const companyNewsList = document.getElementById('company-news-list');
     const premiumContentList = document.getElementById('premium-content');
 
-    if (!marketNewsList || !companyNewsList || !premiumContentList) return;
+    // ===>>> NOWA LOGIKA DLA NASTAWIENIA GAZETY <<<===
+    const premiumTitle = document.getElementById('premium-section-title');
+    premiumContentList.innerHTML = ''; // Wyczyść stare plotki
 
-    marketNewsList.innerHTML = '<li>Brak ważnych wiadomości z rynku.</li>';
-    companyNewsList.innerHTML = '<li>Brak doniesień ze spółek.</li>';
-    premiumContentList.innerHTML = '<li>Brak wiadomości premium.</li>';
+    if (mediaStock.stance === 'pro-player') {
+        premiumTitle.textContent = 'Strefa Inwestora (Wgląd Analityczny)';
+        premiumTitle.style.color = '#28a745';
+        // TODO: W przyszłości ta gazeta może pokazywać tu prawdziwe wskazówki
+        premiumContentList.innerHTML = '<li style="color: #666;">Jesteśmy po Twojej stronie. Szukamy dla Ciebie najlepszych okazji.</li>';
+    } else if (mediaStock.stance === 'anti-player') {
+        premiumTitle.textContent = 'Felieton Krytyczny';
+        premiumTitle.style.color = '#dc3545';
+        // TODO: Tutaj gazeta może krytykować ostatnie ruchy gracza
+        premiumContentList.innerHTML = '<li style="color: #666;">Obserwujemy Twoje ruchy... i nie jesteśmy pod wrażeniem. Uważaj.</li>';
+    } else {
+        premiumTitle.textContent = 'Strefa Premium';
+        premiumTitle.style.color = ''; // Domyślny kolor
+        premiumContentList.innerHTML = '<li style="color: #666;">Neutralne analizy (już wkrótce).</li>';
+    }
+    // ===>>> KONIEC LOGIKI NASTAWIENIA <<<===
 
-    // Filtrowanie i wyświetlanie wiadomości
-    const marketMessages = eventLog.filter(e => e.category === 'market').slice(0, 15);
+    // Wypełnianie głównych newsów (bez zmian)
+    const marketMessages = newspaperLog.filter(e => e.category === 'market').slice(0, 15);
     if (marketMessages.length > 0) {
         marketNewsList.innerHTML = '';
         marketMessages.forEach(msg => { marketNewsList.innerHTML += `<li>${msg.text}</li>`; });
+    } else {
+         marketNewsList.innerHTML = '<li>Brak ważnych wiadomości z rynku.</li>';
     }
 
-    const companyMessages = eventLog.filter(e => e.category === 'company' || e.category === 'review').slice(0, 15);
+    const companyMessages = newspaperLog.filter(e => e.category === 'company' || e.category === 'review' || e.category === 'state').slice(0, 15);
     if (companyMessages.length > 0) {
         companyNewsList.innerHTML = '';
         companyMessages.forEach(msg => { companyNewsList.innerHTML += `<li>${msg.text}</li>`; });
-    }
-
-    if (playerHasPremiumSubscription) {
-        if (activePremiumRumors.length > 0) {
-            premiumContentList.innerHTML = '';
-            activePremiumRumors.forEach(rumor => { premiumContentList.innerHTML += `<li>[${rumor.date.toLocaleTimeString('pl-PL')}] ${rumor.text}</li>`; });
-        } else {
-            premiumContentList.innerHTML = '<li style="color: #666;">Brak nowych plotek i analiz...</li>';
-        }
     } else {
-        premiumContentList.innerHTML = '<li style="color: #666;">Dostępne tylko dla subskrybentów.</li>';
+        companyNewsList.innerHTML = '<li>Brak doniesień ze spółek.</li>';
+    }
+
+    // 6. Sekcja "Wpływ na Media" (logika bez zmian)
+    const mediaSection = document.getElementById('media-influence-section');
+    const positiveControls = document.getElementById('positive-pr-controls');
+    const blackControls = document.getElementById('black-pr-controls');
+    const skillLvl = getSkillLevel('mediaManipulation');
+
+    if (skillLvl > 0 && mediaSection && positiveControls && blackControls) {
+        mediaSection.style.display = 'block';
+        
+        // Pozytywny PR (Lvl 1+)
+        positiveControls.style.display = 'block';
+        const posSelect = document.getElementById('positive-pr-select');
+        posSelect.innerHTML = ''; 
+        const ownedStocks = stocks.filter(s => {
+            const holding = playerPortfolio[s.symbol];
+            return holding && !s.assetType && (holding.shares / s.totalShares > 0.5);
+        });
+        if (ownedStocks.length > 0) {
+            ownedStocks.forEach(s => { posSelect.innerHTML += `<option value="${s.symbol}">${s.name} (${s.symbol})</option>`; });
+            document.getElementById('positive-pr-btn').disabled = false;
+        } else {
+            posSelect.innerHTML = '<option value="">(Brak spółek 👑)</option>';
+            document.getElementById('positive-pr-btn').disabled = true;
+        }
+
+        // Czarny PR (Lvl 2+)
+        if (skillLvl >= 2) {
+            blackControls.style.display = 'block';
+            const blackSelect = document.getElementById('black-pr-select');
+            blackSelect.innerHTML = ''; 
+            const targetStocks = stocks.filter(s => {
+                 const holding = playerPortfolio[s.symbol];
+                 const isOwned = holding && !s.assetType && (holding.shares / s.totalShares > 0.5);
+                 return !s.assetType && !s.isBankrupt && !s.isSubsidiaryOf && !isOwned;
+            });
+            if (targetStocks.length > 0) {
+                targetStocks.forEach(s => { blackSelect.innerHTML += `<option value="${s.symbol}">${s.name} (${s.symbol})</option>`; });
+                document.getElementById('black-pr-btn').disabled = false;
+            } else {
+                 blackSelect.innerHTML = '<option value="">(Brak celów)</option>';
+                 document.getElementById('black-pr-btn').disabled = true;
+            }
+            const currentRisk = BLACK_PR_BASE_RISK + (blackPRRiskCounter * BLACK_PR_RISK_INCREASE);
+            document.getElementById('black-pr-risk-display').textContent = `${(currentRisk * 100).toFixed(1)}%`;
+        } else {
+            blackControls.style.display = 'none';
+        }
+    } else if (mediaSection) {
+        mediaSection.style.display = 'none';
     }
 }
 
-function openNewspaperModal() {
-    const modal = document.getElementById('newspaper-modal');
-    if (!modal) return;
 
-    // Wywołujemy funkcję, która odświeża całą treść gazety
-    updateNewspaperContent();
-
-    // Ustawiamy styl, aby pokazać modal
-    modal.style.setProperty('display', 'flex', 'important');
-}
 function displayMarketIndexes() {
     const indexesPanel = document.getElementById('indexes-panel');
     const indexesContainer = document.getElementById('indexes-container');
@@ -2760,39 +2872,10 @@ function closeSettingsModal() {
 function openCityInvestmentModal() {
     const modal = document.getElementById('city-investment-modal');
     if (!modal) return;
+    
+    // Zawsze wywołuj aktualizację danych
+    updateCityModalContent(); 
 
-    // Sprawdź, czy trwa festyn
-    if (festival && festival.isActive) {
-        // Jeśli tak, renderuj dynamiczny widok festynu
-        renderFestivalView(modal); // Ta funkcja już buduje swój HTML
-    } else {
-        // Jeśli nie, upewnij się, że struktura HTML dla widoku standardowego istnieje.
-        // Sprawdzamy, czy istnieje już np. element odliczania - jeśli nie, budujemy.
-        if (!modal.querySelector('#next-festival-countdown')) {
-            // Buduje PUSTĄ strukturę HTML z odpowiednimi ID
-            modal.innerHTML = `
-                <button class="close-btn" onclick="document.getElementById('city-investment-modal').style.display='none';">&times;</button>
-                <h2 style="margin-top: 0; text-align: center;">🏙️ Panel Miasta</h2>
-                <div class="bank-section">
-                    <p>Następny festyn za: <strong id="next-festival-countdown">--</strong></p>
-                </div>
-                <div class="bank-section">
-                    <p>Budżet miasta: <strong id="city-budget-display">--</strong></p>
-                    <p>Populacja: <strong id="city-population-display">--</strong></p>
-                    <p>Twój wkład: <strong id="city-total-donated">--</strong></p>
-                    <p>Status: <strong id="city-unlock-status">--</strong></p>
-                </div>
-                <div class="bank-section">
-                    <label for="city-donation-amount">Kwota datku:</label>
-                    <input type="number" id="city-donation-amount" placeholder="Wpisz kwotę...">
-                    <button onclick="donateToCity(document.getElementById('city-donation-amount').valueAsNumber)">Przekaż datek</button>
-                </div>
-            `;
-        }
-        // Niezależnie czy budowaliśmy, czy nie, AKTUALIZUJEMY dane tekstowe
-        updateCityModalContent();
-    }
-    // Pokaż modal
     modal.style.display = 'block';
 }
 
@@ -2801,59 +2884,112 @@ function openCityInvestmentModal() {
  */
 function updateCityModalContent() {
     const modal = document.getElementById('city-investment-modal');
-    // Jeśli okno nie jest otwarte, nic nie rób
     if (!modal || modal.style.display !== 'block') {
-        return;
+        return; // Nie aktualizuj, jeśli niewidoczne
     }
 
+    const festivalContent = modal.querySelector('#city-content-festival');
+    const tabsContainer = modal.querySelector('.bank-tabs');
+    
+    // Sprawdź, czy trwa festyn
     if (festival && festival.isActive) {
-        // Jeśli jest festyn, odśwież widok festynu (ta funkcja sama zarządza swoim HTML)
-        renderFestivalView(modal);
+        // --- WIDOK FESTYNU ---
+        tabsContainer.style.display = 'none'; // Ukryj zakładki
+        // Ukryj wszystkie normalne treści zakładek
+        document.querySelectorAll('#city-investment-modal .bank-tab-content').forEach(content => {
+            content.style.display = 'none';
+        });
+        
+        festivalContent.style.display = 'block'; // Pokaż kontener festynu
+        renderFestivalView(festivalContent); // Przekaż kontener do funkcji renderującej festyn
+
     } else {
-        // Jeśli nie ma festynu, zaktualizuj TYLKO tekst w widoku standardowym
-        const totalDonatedEl = modal.querySelector('#city-total-donated');
-        const statusEl = modal.querySelector('#city-unlock-status');
-        const countdownEl = modal.querySelector('#next-festival-countdown');
-        const budgetEl = modal.querySelector('#city-budget-display');
-        const populationEl = modal.querySelector('#city-population-display');
+        // --- WIDOK STANDARDOWY (ZAKŁADKI) ---
+        festivalContent.style.display = 'none'; // Ukryj festyn
+        tabsContainer.style.display = 'flex'; // Pokaż zakładki
 
-        if (totalDonatedEl) totalDonatedEl.textContent = `${cityInvestment.donatedAmount.toFixed(2)} PLN`;
-
-        if (statusEl) {
-            if (cityInvestment.playerHasUnlocked) { // Sprawdzaj TYLKO flagę gracza
-                statusEl.textContent = "Odblokowane!";
-                statusEl.style.color = '#28a745';
-            } else {
-                statusEl.textContent = `Zablokowane (Cel: 10,000 PLN)`;
-                statusEl.style.color = '#dc3545';
-            }
+        // Aktualizuj zakładkę "Panel Główny"
+        document.getElementById('city-budget-display').textContent = `${city.budget.toLocaleString('pl-PL')} PLN`;
+        document.getElementById('city-population-display').textContent = city.population.toLocaleString('pl-PL');
+        document.getElementById('city-infra-level').textContent = (city.infrastructureLevel * 100).toFixed(0) + '%';
+        // Odliczanie festynu
+        const countdownSeconds = Math.max(0, Math.floor(nextFestivalCountdown / 1000));
+        const minutes = Math.floor(countdownSeconds / 60);
+        const seconds = countdownSeconds % 60;
+        document.getElementById('next-festival-countdown').textContent = nextFestivalCountdown > 0 ? `${minutes}m ${seconds.toString().padStart(2, '0')}s` : "Wkrótce...";
+        
+        // Zarząd
+        document.getElementById('city-election-timer').textContent = city.mayor.electionYear;
+        document.getElementById('city-mayor-name').textContent = city.mayor.name;
+        document.getElementById('city-mayor-policy').textContent = city.mayor.policy; // TODO: Przetłumaczyć
+        
+        // Wkład gracza
+        document.getElementById('city-total-donated').textContent = `${city.playerDonatedAmount.toFixed(2)} PLN`; // Użyj nowego pola
+        const statusEl = document.getElementById('city-unlock-status');
+        if (city.playerHasUnlocked) {
+            statusEl.textContent = "Odblokowane!";
+            statusEl.style.color = '#28a745';
+        } else {
+            statusEl.textContent = `Zablokowane (Cel: 10,000 PLN)`;
+            statusEl.style.color = '#dc3545';
         }
 
-        if (countdownEl) {
-            const countdownSeconds = Math.max(0, Math.floor(nextFestivalCountdown / 1000));
-            const minutes = Math.floor(countdownSeconds / 60);
-            const seconds = countdownSeconds % 60;
-            countdownEl.textContent = nextFestivalCountdown > 0 ? `${minutes}m ${seconds.toString().padStart(2, '0')}s` : "Wkrótce...";
+        // Aktualizuj zakładkę "Spółki Miejskie"
+        const municipalList = document.getElementById('city-municipal-list');
+        municipalList.innerHTML = '';
+        if (municipalCompanies.length > 0) {
+            municipalCompanies.forEach(comp => {
+                municipalList.innerHTML += `
+                    <tr>
+                        <td>${comp.name}</td>
+                        <td>${comp.type}</td>
+                        <td>${comp.budget.toLocaleString('pl-PL')} PLN</td>
+                        <td>${comp.baseIncome.toLocaleString('pl-PL')} PLN</td>
+                    </tr>`;
+            });
+        } else {
+            municipalList.innerHTML = '<tr><td colspan="4">Wszystkie spółki miejskie weszły na giełdę.</td></tr>';
         }
-
-        if (budgetEl) {
-            budgetEl.textContent = `${city.budget.toLocaleString('pl-PL')} PLN`;
+        
+        // Aktualizuj zakładkę "Firmy Prywatne"
+        const privateList = document.getElementById('city-private-list');
+        privateList.innerHTML = '';
+        if (privateCompanies.length > 0) {
+            privateCompanies.forEach(comp => {
+                privateList.innerHTML += `
+                    <tr>
+                        <td>${comp.name}</td>
+                        <td>${comp.value.toLocaleString('pl-PL')} PLN</td>
+                        <td>${(comp.cityOwnership * 100).toFixed(1)}%</td>
+                        <td><progress value="${comp.developmentProgress}" max="100"></progress></td>
+                    </tr>`;
+            });
+        } else {
+             privateList.innerHTML = '<tr><td colspan="4">Brak firm prywatnych w mieście.</td></tr>';
         }
-        if (populationEl) {
-            populationEl.textContent = `${city.population.toLocaleString('pl-PL')}`;
-        }
+        
+        // Pokaż aktywną zakładkę (nie festyn)
+        const activeTab = document.querySelector('#city-investment-modal .bank-tab-btn.active');
+        const activeTabId = activeTab ? activeTab.id.replace('tab-btn-city-', 'city-content-') : 'city-content-main';
+        document.getElementById(activeTabId).style.display = 'block';
     }
 }
 
 
 
-function renderFestivalView(modal) {
+function renderFestivalView(festivalContainer) {
+    if (!festival || !festival.isActive) {
+        festivalContainer.innerHTML = '<p>Błąd: Festyn nie jest aktywny.</p>';
+        return;
+    }
+    
     const playerParticipant = festival.participants.find(p => p.ownerId === 'player');
     const timeLeft = Math.max(0, Math.ceil((festival.endTime - Date.now()) / 1000));
 
     // --- Sekcja Gracza ---
     let playerSectionHTML = '';
     if (playerParticipant) {
+        // Logika dla gracza, który dołączył
         const currentLevel = FESTIVAL_STALL_LEVELS[playerParticipant.level - 1];
         const nextLevel = FESTIVAL_STALL_LEVELS[playerParticipant.level];
         playerSectionHTML = `
@@ -2871,23 +3007,21 @@ function renderFestivalView(modal) {
             </div>
         `;
     } else {
-        // --- SEKCJA DOŁĄCZANIA DO FESTYNU (NOWA WERSJA) ---
-
-        // Dynamiczne generowanie przycisków dla spółek, w których gracz ma większość
+        // --- SEKCJA DOŁĄCZANIA DO FESTYNU ---
         let companyButtonsHTML = '';
         for (const symbol in playerPortfolio) {
             const stock = stocks.find(s => s.symbol === symbol);
-            if (stock && playerPortfolio[symbol].shares / stock.totalShares > 0.5) {
+            // Sprawdź, czy stock istnieje, czy gracz ma akcje i czy te akcje dają ponad 50%
+            if (stock && playerPortfolio[symbol].shares > 0 && stock.totalShares > 0 && (playerPortfolio[symbol].shares / stock.totalShares > 0.5)) {
                 companyButtonsHTML += `<button onclick="playerJoinFestival({type: 'company', id: '${symbol}'})">Spółkę ${symbol}</button>`;
             }
         }
-
         playerSectionHTML = `
             <h4>Dołącz do festynu! (Koszt: ${FESTIVAL_STALL_LEVELS[0].cost} PLN)</h4>
             <p>Co chcesz promować?</p>
             <div id="join-festival-options">
-                <button onclick="playerJoinFestival({type: 'self'})">Siebie (bonus do relacji)</button>
-                <button onclick="playerJoinFestival({type: 'player_company'})" ${!playerCompany ? 'disabled title="Musisz najpierw założyć własną firmę"' : ''}>Własną firmę</button>
+                <button onclick="playerJoinFestival({type: 'self'})">Siebie</button>
+                <button onclick="playerJoinFestival({type: 'player_company'})" ${!playerCompany ? 'disabled title="Musisz założyć własną firmę"' : ''}>Własną firmę</button>
                 ${companyButtonsHTML}
             </div>
         `;
@@ -2902,13 +3036,15 @@ function renderFestivalView(modal) {
     `;
     const sortedParticipants = [...festival.participants].sort((a, b) => b.interest - a.interest);
     sortedParticipants.forEach((p, index) => {
-        const ownerName = p.ownerId === 'player' ? 'Ty' : (aiCompetitors.find(a => a.id === p.ownerId)?.name || p.ownerId.charAt(0).toUpperCase() + p.ownerId.slice(1));
+        // Logika nazw uczestników
+        const ownerName = p.ownerId === 'player' ? 'Ty' : (p.ownerId === 'city' ? 'Miasto Gdańsk' : (aiCompetitors.find(a => a.id === p.ownerId)?.name || p.ownerName || stocks.find(s => s.symbol === p.ownerId)?.name || p.ownerId));
         let targetName = '';
         switch (p.promotionTarget.type) {
             case 'self': targetName = 'Własny wizerunek'; break;
             case 'company': targetName = p.promotionTarget.id; break;
-            case 'player_company': targetName = playerCompany.name; break;
+            case 'player_company': targetName = playerCompany ? playerCompany.name : 'Moja Firma'; break;
             case 'city': targetName = 'Miasto Gdańsk'; break;
+            case 'bank_promo': targetName = p.ownerName; break; // Dla banków
         }
         participantsTableHTML += `<tr style="${p.ownerId === 'player' ? 'font-weight: bold; background-color: #e3f2fd;' : ''}">
             <td>${index + 1}</td>
@@ -2931,9 +3067,8 @@ function renderFestivalView(modal) {
         bonusesHTML += '</ul>';
     }
 
-    // --- Finalne złożenie widoku ---
-    modal.innerHTML = `
-        <button class="close-btn" onclick="document.getElementById('city-investment-modal').style.display='none';">&times;</button>
+    // --- Finalne złożenie widoku (renderowanie do kontenera) ---
+    festivalContainer.innerHTML = `
         <h2 style="margin-top: 0; text-align: center;">🎉 Trwa ${festival.name}! 🎉</h2>
         <div class="bank-section">
             <p>Koniec za: <strong>${timeLeft}s</strong> | Zainteresowanie wydarzeniem: <strong>${festival.globalInterest.toFixed(1)}</strong></p>
@@ -3696,36 +3831,25 @@ function updateStateModalContent() {
         treasuryDisplay.textContent = governmentTreasury.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' });
     }
 
-    // --- >>> NOWA LOGIKA DLA URZĘDU ANTYMONOPOLOWEGO <<< ---
+    // --- >>> UPROSZCZONA LOGIKA DLA URZĘDU ANTYMONOPOLOWEGO <<< ---
     const levelEl = document.getElementById('antitrust-level');
     const capacityEl = document.getElementById('antitrust-capacity');
     const accuracyEl = document.getElementById('antitrust-accuracy');
-    const upgradeSectionEl = document.getElementById('antitrust-upgrade-section');
-    const upgradeCostEl = document.getElementById('antitrust-upgrade-cost');
-    const upgradeBtnEl = document.getElementById('antitrust-upgrade-btn');
     const maxLevelInfoEl = document.getElementById('antitrust-max-level-info');
 
-    // Sprawdź, czy wszystkie elementy istnieją
-    if (levelEl && capacityEl && accuracyEl && upgradeSectionEl && upgradeCostEl && upgradeBtnEl && maxLevelInfoEl) {
+    // Sprawdź, czy elementy istnieją
+    if (levelEl && capacityEl && accuracyEl && maxLevelInfoEl) {
         levelEl.textContent = `${antitrustOffice.level}`;
         capacityEl.textContent = `${(antitrustOffice.analysisCapacity * 100).toFixed(0)}%`;
         accuracyEl.textContent = `${(antitrustOffice.accuracy * 100).toFixed(0)}%`;
 
-        if (antitrustOffice.level < 5) { // Jeśli nie osiągnięto max poziomu
-            const nextLevelCost = ANTITRUST_UPGRADE_COSTS[antitrustOffice.level];
-            upgradeCostEl.textContent = nextLevelCost.toLocaleString('pl-PL');
-            // Przycisk aktywny tylko, jeśli GRACZA stać (inwestycja gracza)
-            upgradeBtnEl.disabled = playerCash < nextLevelCost;
-            upgradeSectionEl.style.display = 'block';
-            maxLevelInfoEl.style.display = 'none';
-        } else { // Osiągnięto maksymalny poziom
-            upgradeSectionEl.style.display = 'none';
+        if (antitrustOffice.level >= 5) { // Jeśli osiągnięto max poziom
             maxLevelInfoEl.style.display = 'block';
+        } else {
+            maxLevelInfoEl.style.display = 'none';
         }
     }
-    // --- >>> KONIEC NOWEJ LOGIKI <<< ---
-
-    // W przyszłości można tu dynamicznie aktualizować listę możliwych akcji rządowych
+    // --- >>> KONIEC UPROSZCZONEJ LOGIKI <<< ---
 }
 
 function openMaTargetModal(initiatorSymbol) {
@@ -3881,5 +4005,98 @@ function resolveComplicationDecision(stockSymbol, optionId) {
     if (document.getElementById('management-modal')?.style.display === 'block') {
         openManagementModal(stockSymbol);
     }
+}
+
+function openDebtOfferModal(collectorStock, targetLoan, newInterestRate) {
+    const modal = document.getElementById('debt-offer-modal');
+    if (!modal || !currentDebtOffer) return; // currentDebtOffer jest ustawiane w gameLogic
+
+    const messageEl = document.getElementById('debt-offer-message');
+    const acceptBtn = document.getElementById('debt-offer-accept-btn');
+    const declineBtn = document.getElementById('debt-offer-decline-btn');
+
+    messageEl.innerHTML = `
+        Firma <strong>${collectorStock.name}</strong> zauważyła Twoje problemy z kredytem w <strong>${targetLoan.bankName}</strong>.<br><br>
+        Oferujemy natychmiastową spłatę Twojego długu w wysokości <strong>${targetLoan.amount.toFixed(2)} PLN</strong>.<br><br>
+        W zamian zaczniesz spłacać tę kwotę nam, ale z nowym, wyższym oprocentowaniem: <strong>${(newInterestRate * 100).toFixed(1)}%</strong> rocznie (zamiast obecnych ${(targetLoan.interestRate * 100).toFixed(1)}%).<br><br>
+        Twoje pominięte raty zostaną wyzerowane. Czy akceptujesz ofertę?
+    `;
+
+    // Używamy .onclick, aby mieć pewność, że stare listenery są usuwane
+    acceptBtn.onclick = () => {
+        acceptDebtOffer(); // Wywołuje funkcję z gameLogic
+        modal.style.display = 'none';
+    };
+    
+    declineBtn.onclick = () => {
+        declineDebtOffer(); // Wywołuje funkcję z gameLogic
+        modal.style.display = 'none';
+    };
+
+    modal.style.display = 'block';
+}
+
+/**
+ * Zamyka modal oferty długu (jeśli gracz kliknie 'X' lub 'Odrzuć').
+ */
+function closeDebtOfferModal() {
+    const modal = document.getElementById('debt-offer-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    // Funkcja declineDebtOffer() w gameLogic wyczyści currentDebtOffer
+}
+
+function openPawnOfferModal(pawnShop, targetStock, quantity, loanAmount, newInterestRate, durationWeeks) {
+    const modal = document.getElementById('pawn-offer-modal');
+    if (!modal || !currentPawnOffer) return; // currentPawnOffer jest ustawiane w gameLogic
+
+    const messageEl = document.getElementById('pawn-offer-message');
+    const acceptBtn = document.getElementById('pawn-offer-accept-btn');
+    const declineBtn = document.getElementById('pawn-offer-decline-btn');
+
+    messageEl.innerHTML = `
+        Firma <strong>${pawnShop.name}</strong> widzi, że potrzebujesz gotówki.<br><br>
+        Oferujemy natychmiastową pożyczkę w wysokości <strong>${loanAmount.toFixed(2)} PLN</strong>.
+        Jako zabezpieczenie musisz zastawić <strong>${quantity} szt.</strong> swoich akcji <strong>${targetStock.name} (${targetStock.symbol})</strong>.<br><br>
+        Będziesz mieć <strong>${durationWeeks} tygodni</strong> na spłatę kwoty <strong>${loanAmount.toFixed(2)} PLN</strong> wraz z odsetkami (${(newInterestRate * 100).toFixed(1)}% rocznie).
+    `;
+
+    acceptBtn.onclick = () => {
+        acceptPawnOffer(); // Wywołuje funkcję z gameLogic
+        modal.style.display = 'none';
+    };
+    
+    declineBtn.onclick = () => {
+        declinePawnOffer(); // Wywołuje funkcję z gameLogic
+        modal.style.display = 'none';
+    };
+
+    modal.style.display = 'block';
+}
+
+/**
+ * Zamyka modal oferty lombardu (używane przez declinePawnOffer).
+ */
+function closePawnOfferModal() {
+    const modal = document.getElementById('pawn-offer-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+function switchCityTab(tabName) {
+    // Ukryj wszystkie kontenery zakładek miasta
+    document.querySelectorAll('#city-investment-modal .bank-tab-content').forEach(content => {
+        content.style.display = 'none';
+    });
+    // Pokaż wybrany kontener
+    document.getElementById(`city-content-${tabName}`).style.display = 'block';
+
+    // Zaktualizuj wygląd przycisków zakładek
+    document.querySelectorAll('#city-investment-modal .bank-tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    document.getElementById(`tab-btn-city-${tabName}`).classList.add('active');
 }
 
