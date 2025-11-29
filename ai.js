@@ -1962,3 +1962,147 @@ function aiDecideOnPawnOffer(ai, pawnShop, targetStock, quantity, loanAmount, ne
         console.log(`[AI Decyzja] ${ai.name} odrzuca ofertę pożyczki lombardowej.`);
     }
 }
+
+function aiTakeMortgageLoan(ai, bankId, collateralSymbol, collateralQuantity, requestedAmount) {
+    const bank = commercialBanks.find(b => b.id === bankId && b.type === BANK_TYPES.MORTGAGE);
+    const stock = stocks.find(s => s.symbol === collateralSymbol && !s.assetType);
+    const holding = ai.portfolio[collateralSymbol];
+
+    // Podstawowa walidacja
+    if (!bank || !bank.isActive || !stock || !holding || holding.shares < collateralQuantity || requestedAmount <= 0) {
+        console.warn(`[AI Hipoteka] Walidacja nie powiodła się dla ${ai.name} przy próbie wzięcia hipoteki.`);
+        return false;
+    }
+
+    const creditScoreThreshold = 50;
+    if (ai.creditScore < creditScoreThreshold) {
+        console.log(`[AI Hipoteka] ${ai.name} ma zbyt niski wynik kredytowy (${ai.creditScore}), aby wziąć hipotekę.`);
+        return false; // Zablokuj wzięcie hipoteki
+    }
+
+    const collateralValue = stock.price * collateralQuantity;
+    const maxLoanAmount = collateralValue * 0.5; // Max 50% wartości zastawu
+
+    // Kwota, którą AI faktycznie pożyczy (nie więcej niż limit i nie więcej niż bank może)
+    const finalLoanAmount = Math.min(requestedAmount, maxLoanAmount, bank.cash * 0.1);
+
+    if (finalLoanAmount <= 0) {
+        console.log(`[AI Hipoteka] ${ai.name} nie mógł wziąć hipoteki (kwota ${finalLoanAmount} <= 0).`);
+        return false;
+    }
+
+    // Parametry pożyczki (takie same jak dla gracza)
+    const interestRate = bank.interestRateLoan * 1.1;
+    const loanDurationWeeks = 52;
+    const maturityDate = Date.now() + (loanDurationWeeks * BASE_DELAYS.weekly / currentSpeedMultiplier);
+    const weeklyRate = interestRate / 52;
+    const weeklyPayment = finalLoanAmount * (weeklyRate * Math.pow(1 + weeklyRate, loanDurationWeeks)) / (Math.pow(1 + weeklyRate, loanDurationWeeks) - 1);
+
+    // Transakcja
+    ai.cash += finalLoanAmount; // AI otrzymuje gotówkę
+    bank.cash -= finalLoanAmount; // Bank wypłaca
+    // Dodaj pożyczkę do portfela banku
+    if (!bank.loanPortfolio[ai.id]) bank.loanPortfolio[ai.id] = [];
+    bank.loanPortfolio[ai.id].push({
+        id: `mort_ai_${Date.now()}`,
+        initialAmount: finalLoanAmount,
+        remainingAmount: finalLoanAmount,
+        interestRate: interestRate,
+        collateral: { symbol: collateralSymbol, quantity: collateralQuantity }
+    });
+
+    // Zapisz pożyczkę u AI (potrzebujemy nowej struktury)
+    if (!ai.loans) ai.loans = []; // Upewnij się, że tablica pożyczek istnieje
+    ai.loans.push({
+        id: `mort_ai_${Date.now()}`,
+        bankId: bankId,
+        bankName: bank.name,
+        amount: finalLoanAmount, // Pozostała kwota
+        weeklyPayment: weeklyPayment, // Rata
+        maturityDate: maturityDate,
+        collateral: { symbol: collateralSymbol, quantity: collateralQuantity }
+    });
+
+    // Zablokuj zastawione akcje w portfelu AI
+    if (!holding.lockedShares) holding.lockedShares = 0;
+    holding.lockedShares += collateralQuantity;
+
+    console.log(`[AI Hipoteka] ${ai.name} wziął ${finalLoanAmount.toFixed(0)} PLN hipoteki w ${bank.name} pod zastaw ${collateralQuantity} ${collateralSymbol}.`);
+    return true; // Sukces
+}
+
+function aiUseMediaInfluence(ai) {
+    const skillLvl = ai.unlockedSkills['mediaManipulation'] || 0;
+    if (skillLvl === 0) return; // AI nie ma tej umiejętności
+
+    const costPR = 10000;
+    const costBlackPR = 25000;
+    
+    // Znajdź spółkę, którą AI kontroluje (do Pozytywnego PR)
+    const controlledStock = Object.keys(ai.portfolio).find(sym => {
+        const s = stocks.find(s => s.symbol === sym);
+        return s && !s.assetType && (ai.portfolio[sym].shares / s.totalShares) > 0.5;
+    });
+
+    // 1. Pozytywny PR (Działanie defensywne)
+    if (controlledStock && ai.cash > costPR && (ai.personality === 'pro_investor' || ai.personality === 'whale' || ai.personality === 'banker')) {
+        const stock = stocks.find(s => s.symbol === controlledStock);
+        // Użyj PR, jeśli kondycja firmy spada LUB reputacja AI w niej jest niska
+        if (stock.financialHealth < 0 || (stock.reputation[ai.id] && stock.reputation[ai.id] < 0)) {
+            if (Math.random() < 0.25) { // 25% szans na reakcję
+                ai.cash -= costPR;
+                logEvent(`📰 ${stock.name} (kontrolowany przez ${ai.name}) publikuje sponsorowany artykuł, aby poprawić swój wizerunek.`, 'review');
+                applyPriceEffect(stock.symbol, 0.03, 'positive', 'review');
+                stock.prShieldExpiry = Date.now() + (BASE_DELAYS.quarterly / currentSpeedMultiplier);
+                return; // AI podjęło akcję
+            }
+        }
+    }
+
+    // 2. Czarny PR (Działanie ofensywne) - Wymagany Lvl 2
+    if (skillLvl < 2 || ai.cash < costBlackPR) return;
+
+    // Tylko agresywne osobowości używają Czarnego PR
+    if (ai.personality === 'reckless' || ai.personality === 'pro_investor' || ai.personality === 'whale') {
+        if (Math.random() < 0.1) { // 10% szans w kwartale na próbę ataku
+            
+            // Znajdź cel (konkurenta)
+            let targetStock = null;
+            if (controlledStock) {
+                // Jeśli AI kontroluje spółkę, atakuje rywala z sektora
+                const controlled = stocks.find(s => s.symbol === controlledStock);
+                targetStock = getRandomElement(stocks.filter(s => 
+                    !s.assetType && !s.isBankrupt && s.sector.includes(controlled.sector[0]) && s.symbol !== controlledStock
+                ));
+            } else {
+                // Jeśli AI nie kontroluje niczego, atakuje losową spółkę
+                targetStock = getRandomElement(stocks.filter(s => !s.assetType && !s.isBankrupt));
+            }
+            
+            if (targetStock) {
+                ai.cash -= costBlackPR;
+                blackPRRiskCounter++; // Użycie przez AI również zwiększa globalne ryzyko!
+                
+                // Sprawdź, czy AI zostało wykryte
+                const currentRisk = BLACK_PR_BASE_RISK + (blackPRRiskCounter * BLACK_PR_RISK_INCREASE);
+                if (Math.random() < currentRisk) {
+                    logEvent(`🚨 Śledztwo dziennikarskie wykryło próbę manipulacji rynkiem przez ${ai.name}!`, 'error');
+                    // AI nie traci reputacji w ten sam sposób co gracz, ale jego atak się nie powiódł
+                    return; // Atak AI nie powiódł się
+                }
+
+                // Atak AI się powiódł
+                const outcomeRoll = Math.random();
+                if (outcomeRoll < 0.05) { // Duży event
+                    logEvent(`🔥 Skandal w ${targetStock.name} (spowodowany przez AI)!`, 'company');
+                    applyPriceEffect(targetStock.symbol, -0.15, 'negative', 'company');
+                } else if (outcomeRoll < 0.15) { // Obrona
+                    logEvent(`🛡️ ${targetStock.name} skutecznie dementuje plotki (atak AI nie powiódł się).`, 'company');
+                } else { // Mały event
+                    logEvent(`📉 Pojawiły się plotki na temat ${targetStock.name} (spowodowane przez AI).`, 'company');
+                    applyPriceEffect(targetStock.symbol, -0.05, 'negative', 'company');
+                }
+            }
+        }
+    }
+}
