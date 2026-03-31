@@ -29,7 +29,7 @@
     <h1>Symulator Giełdowy</h1>
 
     <div id="ticker-container">
-        <div class="ticker-message">wersja 0.7.1 obligacje BETA</div>
+        <div class="ticker-message">wersja 0.9 dewelopment BETA</div>
     </div>
 
     <div id="time-controls" style="text-align: center; margin-bottom: 20px;">
@@ -468,19 +468,26 @@
          <p style="font-size: 11px; text-align: center; margin-top: 15px;">Więcej informacji o aktywnych programach rządowych znajdziesz w logu wydarzeń.</p>
     </div>
 
-    <div id="management-modal" style="display:none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 450px; border: 2px solid #007bff; background-color: #f9f9f9; box-shadow: 0 4px 8px rgba(0,0,0,0.2); padding: 20px; z-index: 1006; border-radius: 8px;">
+    <div id="management-modal" class="modal" style="display:none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 500px; border: 2px solid #007bff; background-color: #f9f9f9; box-shadow: 0 4px 8px rgba(0,0,0,0.2); padding: 20px; z-index: 1006; border-radius: 8px;">
+        <button class="close-btn" onclick="document.getElementById('management-modal').style.display='none';">&times;</button>
         <h2 id="management-title" style="margin-top: 0; text-align: center; color: #007bff;">👑 Panel Zarządzania</h2>
-        <div class="modal-body">
+        
+        <div class="bank-tabs" style="margin-bottom: 10px; border-bottom: 1px solid #ccc;">
+            <button id="tab-btn-mgmt-main" class="bank-tab-btn active" onclick="switchManagementTab('main')">Ogólne</button>
+            <button id="tab-btn-mgmt-depts" class="bank-tab-btn" onclick="switchManagementTab('depts')">🏢 Działy i Inwestycje</button>
+        </div>
+
+        <div id="mgmt-content-main" class="bank-tab-content modal-body" style="max-height: 400px; overflow-y: auto;">
             <div class="bank-section">
                 <div id="reputation-management-section" class="bank-section">
-                <h4>🤝 Relacje z Zarządem</h4>
-                <p>Twoje obecne relacje: <strong id="reputation-status">Neutralne (0)</strong></p>
-                <p style="font-size: 12px;">Popraw relacje, przekazując datek na rozwój firmy.</p>
-                <div>
-                    <input type="number" id="donation-amount" placeholder="Kwota datku">
-                    <button id="donate-btn">Przekaż datek</button>
+                    <h4>🤝 Relacje z Zarządem</h4>
+                    <p>Twoje obecne relacje: <strong id="reputation-status">Neutralne (0)</strong></p>
+                    <p style="font-size: 12px;">Popraw relacje, przekazując datek na rozwój firmy.</p>
+                    <div>
+                        <input type="number" id="donation-amount" placeholder="Kwota datku">
+                        <button id="donate-btn">Przekaż datek</button>
+                    </div>
                 </div>
-            </div>
                 <h4>💰 Specjalna Dywidenda</h4>
                 <p>Jako większościowy akcjonariusz, możesz zażądać od zarządu natychmiastowej wypłaty dywidendy.</p>
                 <p style="font-size: 12px; color: #666;">Uwaga: Taka operacja obciąża finanse spółki i może tymczasowo obniżyć jej kurs.</p>
@@ -503,7 +510,8 @@
                     <option value="Total">Całkowita (100% zysku)</option>
                 </select>
             </div>
-            <div id="bank-selection-section" class="bank-section"> <h4>🏦 Rachunek Bankowy Spółki</h4>
+            <div id="bank-selection-section" class="bank-section">
+                <h4>🏦 Rachunek Bankowy Spółki</h4>
                 <p style="font-size: 12px;">Wybierz bank komercyjny, w którym spółka będzie prowadzić główny rachunek.</p>
                 <label for="bank-select">Aktualny bank:</label>
                 <select id="bank-select" style="margin-left: 5px; min-width: 150px;">
@@ -534,18 +542,27 @@
                 <p id="finances-access-info" style="font-size: 12px; color: #666; margin-top: 5px;"></p>
             </div>
             
-            <div id="influence-section" class="bank-section" style="display: none;">
-     <h4>🐙 Wpływy i Naciski</h4>
-     <p>Całkowity wpływ innych na tę spółkę: <strong id="influence-total-received">0</strong></p>
-     <h5>Wpływ wywierany przez tę spółkę na:</h5>
-     <ul id="influence-exerted-list" style="font-size: 12px; max-height: 80px; overflow-y: auto;">
-         <li>Brak</li>
-     </ul>
-     <h5>Wpływ otrzymywany od:</h5>
-     <ul id="influence-received-list" style="font-size: 12px; max-height: 80px; overflow-y: auto;">
-         <li>Brak</li>
-     </ul>
- </div>
+            
+
+            <div id="ma-initiation-section" class="bank-section" style="display: none;">
+                <h4><span style="font-size: 20px;">🤝</span> Fuzje i Przejęcia</h4>
+                <p style="font-size: 12px;">Wykorzystaj swoją pozycję, aby zainicjować połączenie lub wrogie przejęcie innej spółki.</p>
+                <button id="ma-open-target-modal-btn">Rozpocznij proces M&A</button>
+            </div>
+            
+            <div id="ma-defense-section" class="bank-section" style="display: none; border: 2px solid #dc3545;">
+                <h4 style="color: #dc3545;">🚨 JESTEŚ CELEM PRZEJĘCIA! 🚨</h4>
+                <p id="ma-defense-info" style="font-size: 13px;">... informacja o zagrożeniu ...</p>
+                <h5>Aktywuj mechanizmy obronne:</h5>
+                <button id="ma-defense-poisonpill-btn">Zatwierdź "Zatrutą Pigułkę"</button>
+            </div>
+        </div>
+
+        <div id="mgmt-content-depts" class="bank-tab-content modal-body" style="display: none; max-height: 400px; overflow-y: auto;">
+            </div>
+
+        <button onclick="document.getElementById('management-modal').style.display='none';" style="margin-top: 15px;">Zamknij</button>
+    </div>
 
     <div id="ma-initiation-section" class="bank-section" style="display: none;">
         <h4><span style="font-size: 20px;">🤝</span> Fuzje i Przejęcia</h4>

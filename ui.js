@@ -25,9 +25,7 @@ function displayCash() {
 
 function displayStocks(previousInputValues = {}) {
     const stockTableBody = document.getElementById('stock-table-body');
-    if (!stockTableBody) {
-        return;
-    }
+    if (!stockTableBody) return;
 
     // Aktualizacja nagłówka ceny (strzałki sortowania)
     const priceHeader = document.getElementById('price-header-cell');
@@ -35,75 +33,72 @@ function displayStocks(previousInputValues = {}) {
         let headerText = 'Cena (PLN)';
         if (currentSortState === 'price_asc') headerText += ' ▲';
         else if (currentSortState === 'price_desc') headerText += ' ▼';
-        priceHeader.innerHTML = headerText; 
-    } else {
-        console.warn("Nie znaleziono elementu #price-header-cell");
+        priceHeader.innerHTML = headerText;
     }
 
     const selectedSector = document.getElementById('sector-filter').value;
-    // Filtrujemy spółki zależne na starcie
+    
+    // Filtrowanie spółek do wyświetlenia
     let baseStocksToDisplay;
     if (selectedSector === 'all') {
-        baseStocksToDisplay = stocks.filter(stock => !stock.isSubsidiaryOf); 
+        baseStocksToDisplay = stocks.filter(stock => !stock.isSubsidiaryOf);
     } else if (selectedSector === 'REIT') {
         baseStocksToDisplay = stocks.filter(stock => stock.assetType === 'REIT' && !stock.isSubsidiaryOf);
     } else {
         baseStocksToDisplay = stocks.filter(stock => Array.isArray(stock.sector) && stock.sector.includes(selectedSector) && !stock.isSubsidiaryOf);
     }
 
-    stockTableBody.innerHTML = ''; 
+    stockTableBody.innerHTML = '';
     const sortedExchanges = Object.keys(exchanges).sort((a, b) => exchanges[a].level - exchanges[b].level);
-    const hasAnalystSkill = isSkillUnlocked('financialAnalyst');
+    const hasAnalystSkill = getSkillLevel('financialAnalyst') > 0; // Używamy helpera
 
     // --- Funkcja pomocnicza do renderowania wiersza ---
     const renderStockRow = (stock, isSubsidiary = false, parentSymbol = null) => {
+        // ===>>> TU BYŁ BŁĄD: Definiujemy hasAccess na początku <<<===
         const exchangeData = exchanges[stock.exchange];
         const hasAccess = exchangeData ? exchangeData.level <= playerAccessLevel : false;
-        const row = stockTableBody.insertRow();
-        row.dataset.symbol = stock.symbol; 
+        const isLocked = stock.isTradeLocked;
+        // ==========================================================
 
-        // Style dla bankruta lub spółki na krawędzi (bez zmian)
+        const row = stockTableBody.insertRow();
+        row.dataset.symbol = stock.symbol;
+
+        // --- Style wiersza ---
         if (stock.isBankrupt) {
-            row.style.backgroundColor = 'pink';
+            row.style.backgroundColor = '#ffe6e6';
             row.style.border = '2px solid red';
             row.style.textDecoration = 'line-through';
             row.title = 'BANKRUCTWO!';
             row.querySelectorAll('input, button').forEach(el => el.disabled = true);
+        } else if (isLocked) {
+            row.style.backgroundColor = '#e9ecef';
+            row.style.color = '#6c757d';
+            row.title = 'HANDEL WSTRZYMANY';
         } else if (stock.financialHealth === -4) {
-            row.style.backgroundColor = 'lightcoral'; 
+            row.style.backgroundColor = '#fff3cd';
             row.title = 'UWAGA: Spółka jest na krawędzi bankructwa!';
         }
 
-        // Klasy i style dla spółek zależnych (bez zmian)
         if (isSubsidiary) {
             row.classList.add('subsidiary-row');
-            if (parentSymbol) {
-                row.classList.add(`subsidiary-of-${parentSymbol}`); 
-            }
-            row.style.display = 'none'; 
+            if (parentSymbol) row.classList.add(`subsidiary-of-${parentSymbol}`);
+            row.style.display = 'none';
         }
-        row.className += ` exchange-group-${stock.exchange}`; 
+        row.className += ` exchange-group-${stock.exchange}`;
 
         const sharesOwned = playerPortfolio[stock.symbol] ? playerPortfolio[stock.symbol].shares : 0;
         const playerSharePct = stock.totalShares > 0 ? (sharesOwned / stock.totalShares) * 100 : 0;
-        const isLocked = stock.isTradeLocked;
 
-        if (isLocked) { /* ... (bez zmian) ... */ }
-        if (!hasAccess && !isLocked) { /* ... (bez zmian) ... */ }
-
-        // Komórka 1: Nazwa Spółki + przyciski + ikony
+        // Komórka 1: Nazwa
         const nameCell = row.insertCell();
         const nameWrapper = document.createElement('div');
         nameWrapper.style.display = 'flex';
         nameWrapper.style.alignItems = 'center';
-        if (isSubsidiary) {
-            nameWrapper.style.paddingLeft = '25px'; 
-        }
+        if (isSubsidiary) nameWrapper.style.paddingLeft = '25px';
 
-        // Przycisk rozwijania/zwijania dla spółki-matki (bez zmian)
         if (stock.subsidiaries && stock.subsidiaries.length > 0) {
             const toggleBtn = document.createElement('span');
-            toggleBtn.textContent = stock.isSubsidiaryExpanded ? '▼ ' : '▶ '; 
+            toggleBtn.textContent = stock.isSubsidiaryExpanded ? '▼ ' : '▶ ';
             toggleBtn.style.cursor = 'pointer';
             toggleBtn.style.marginRight = '5px';
             toggleBtn.onclick = (e) => {
@@ -114,13 +109,11 @@ function displayStocks(previousInputValues = {}) {
             nameWrapper.appendChild(toggleBtn);
         }
 
-        // Ikony statusu (Właściciel, Instytut, Monopolista) (bez zmian)
         let stockNameContent = '';
-        if (playerSharePct > 50) stockNameContent += '👑 '; 
+        if (playerSharePct > 50) stockNameContent += '👑 ';
         if (stock.assetType === 'ResearchInstitute') stockNameContent += '🧪 ';
-        if (stock.isMonopolist) stockNameContent += '👑 '; 
+        if (stock.isMonopolist) stockNameContent += '🦁 '; // Ikona monopolisty
 
-        // Nazwa spółki (z ikoną państwową) (bez zmian)
         if (stock.isStateOwned) {
             stockNameContent += `🏛️ ${stock.name}`;
             nameCell.title = 'Spółka Skarbu Państwa';
@@ -132,56 +125,46 @@ function displayStocks(previousInputValues = {}) {
         nameSpan.innerHTML = stockNameContent;
         if (sharesOwned > 0) nameSpan.style.fontWeight = 'bold';
 
-        // Przycisk "i" (Informacje) (bez zmian)
         const infoButton = document.createElement('button');
         infoButton.textContent = 'i';
         infoButton.className = 'info-btn';
-        infoButton.title = 'Pokaż opis spółki';
         infoButton.onclick = () => openDescriptionModal(stock.symbol);
 
         nameWrapper.appendChild(nameSpan);
         nameWrapper.appendChild(infoButton);
-        
-        // ===>>> NOWY BLOK: Wskaźnik Procesu M&A <<<===
+
+        // Pasek M&A
         if (stock.mergerProcess) {
             const process = stock.mergerProcess;
             const mergerStatusContainer = document.createElement('div');
             mergerStatusContainer.style.marginLeft = '10px';
-            mergerStatusContainer.style.width = '70px'; // Szerokość paska postępu
-            mergerStatusContainer.title = `Proces M&A: ${process.statusMessage}`; // Tooltip
+            mergerStatusContainer.style.width = '70px';
+            mergerStatusContainer.title = `Proces M&A: ${process.statusMessage}`;
 
-            // Tekst etapu
             const statusText = document.createElement('span');
             statusText.textContent = `Etap: ${process.stage}/7`;
             statusText.style.fontSize = '10px';
             statusText.style.display = 'block';
-            statusText.style.lineHeight = '1.2';
 
-            // Pasek postępu
             const progressBar = document.createElement('progress');
             progressBar.value = process.progress;
             progressBar.max = 100;
             progressBar.style.width = '100%';
             
-            // Kolorowanie paska w zależności od statusu
-            if (process.decisionRequired) {
-                progressBar.classList.add('decision'); // Czerwony
-            } else if (process.complications > 0) {
-                progressBar.classList.add('complication'); // Żółty
-            }
+            if (process.decisionRequired) progressBar.classList.add('decision');
+            else if (process.complications > 0) progressBar.classList.add('complication');
 
             mergerStatusContainer.appendChild(statusText);
             mergerStatusContainer.appendChild(progressBar);
             nameWrapper.appendChild(mergerStatusContainer);
         }
-        // ===>>> KONIEC NOWEGO BLOKU <<<===
 
         nameCell.appendChild(nameWrapper);
 
-        // Komórka 2: Cena (bez zmian)
+        // Komórka 2: Cena
         row.insertCell().textContent = stock.price.toFixed(2);
 
-        // Komórka 3: Dostępne Akcje (bez zmian)
+        // Komórka 3: Dostępne
         let availableShares;
         const treasuryShares = stock.treasuryShares || 0;
         if (stock.isStateOwned) {
@@ -192,10 +175,10 @@ function displayStocks(previousInputValues = {}) {
         }
         row.insertCell().textContent = Math.max(0, Math.floor(availableShares)).toLocaleString('pl-PL');
 
-        // Komórka 4: Posiadane Akcje (bez zmian)
+        // Komórka 4: Posiadane
         row.insertCell().textContent = sharesOwned.toLocaleString('pl-PL');
 
-        // Komórka 5: Akcje (kupno/sprzedaż) (z blokadą M&A)
+        // Komórka 5: Akcje (Input + Przyciski)
         const actionsCell = row.insertCell();
         const quantityInput = document.createElement('input');
         quantityInput.type = 'number';
@@ -203,124 +186,115 @@ function displayStocks(previousInputValues = {}) {
         quantityInput.value = previousInputValues[stock.symbol] !== undefined ? previousInputValues[stock.symbol] : '1';
         quantityInput.style.width = '50px';
         quantityInput.id = `quantity-${stock.symbol}`;
-        // Zablokuj input jeśli: brak dostępu LUB handel zablokowany LUB trwa fuzja (isBeingMerged) LUB nie można handlować (canBeTraded)
-        quantityInput.disabled = !hasAccess || isLocked || stock.isBeingMerged || stock.canBeTraded === false;
+        
+        // Logika blokowania
+        const isDisabled = !hasAccess || isLocked || stock.isBeingMerged || stock.canBeTraded === false;
+        quantityInput.disabled = isDisabled;
         actionsCell.appendChild(quantityInput);
 
-        // Przycisk Kup (z blokadą M&A)
+        // Przycisk Kup
         const buyButton = document.createElement('button');
         buyButton.textContent = hasAccess ? 'Kup' : '🔒';
-        buyButton.disabled = !hasAccess || isLocked || stock.isBeingMerged || stock.canBeTraded === false;
-        if (hasAccess && isLocked) buyButton.textContent = '⛔'; 
-        if (hasAccess && !isLocked && stock.canBeTraded !== false) { 
+        buyButton.disabled = isDisabled;
+        if (hasAccess && isLocked) buyButton.textContent = '⛔';
+        
+        if (!isDisabled) {
             buyButton.onclick = () => {
                 const quantity = parseInt(quantityInput.value, 10);
                 if (!isNaN(quantity) && quantity > 0) buyStock(stock.symbol, quantity);
-                else alert("Proszę wprowadzić poprawną, dodatnią liczbę.");
             };
         }
         actionsCell.appendChild(buyButton);
 
-        // Przycisk Sprzedaj (z blokadą M&A)
+        // Przycisk Sprzedaj
         const sellButton = document.createElement('button');
         sellButton.textContent = 'Sprzedaj';
-        sellButton.disabled = !hasAccess || isLocked || sharesOwned === 0 || stock.isBeingMerged || stock.canBeTraded === false;
+        sellButton.disabled = isDisabled || sharesOwned === 0;
         if (isLocked) sellButton.textContent = '⛔';
-        if (hasAccess && !isLocked && stock.canBeTraded !== false) {
-             sellButton.onclick = () => {
+
+        if (!isDisabled) {
+            sellButton.onclick = () => {
                 const quantity = parseInt(quantityInput.value, 10);
                 if (!isNaN(quantity) && quantity > 0) sellStock(stock.symbol, quantity);
-                else alert("Proszę wprowadzić poprawną, dodatnią liczbę.");
             };
         }
         actionsCell.appendChild(sellButton);
 
-        // Przycisk Sprzedaj MAX (z blokadą M&A)
+        // Przycisk Sprzedaj MAX
         const sellAllButton = document.createElement('button');
-        sellAllButton.textContent = 'Sprzedaj MAX';
-        sellAllButton.disabled = !hasAccess || isLocked || sharesOwned === 0 || stock.isBeingMerged || stock.canBeTraded === false;
-        sellAllButton.title = "Sprzedaj wszystkie posiadane akcje tej spółki";
+        sellAllButton.textContent = 'MAX';
+        sellAllButton.title = "Sprzedaj wszystko";
         sellAllButton.style.marginLeft = '2px';
-         if (hasAccess && !isLocked && stock.canBeTraded !== false) {
+        sellAllButton.disabled = isDisabled || sharesOwned === 0;
+
+        if (!isDisabled) {
             sellAllButton.onclick = () => {
-                if (confirm(`Czy na pewno chcesz sprzedać wszystkie ${sharesOwned.toLocaleString('pl-PL')} akcji ${stock.name}?`)) {
+                if (confirm(`Czy na pewno chcesz sprzedać wszystkie akcje ${stock.name}?`)) {
                     sellAllShares(stock.symbol);
                 }
             };
         }
         actionsCell.appendChild(sellAllButton);
 
-        // Przycisk Wykres (bez zmian)
+        // Przycisk Wykres
         const historyButton = document.createElement('button');
-        historyButton.textContent = 'Wykres';
+        historyButton.textContent = '📈';
+        historyButton.title = 'Wykres';
         historyButton.style.marginLeft = '5px';
-        historyButton.disabled = !hasAccess; 
-        historyButton.onclick = () => { showPriceHistoryModal(stock.symbol); };
+        historyButton.disabled = !hasAccess;
+        historyButton.onclick = () => showPriceHistoryModal(stock.symbol);
         actionsCell.appendChild(historyButton);
 
-        // Przycisk Szczegóły Akcjonariatu (bez zmian)
+        // Przycisk Akcjonariat
         const detailsButton = document.createElement('button');
         detailsButton.textContent = '📊';
-        detailsButton.title = "Pokaż strukturę akcjonariatu";
-        detailsButton.style.marginLeft = '5px';
+        detailsButton.title = "Akcjonariat";
+        detailsButton.style.marginLeft = '2px';
         detailsButton.disabled = !hasAccess;
-        detailsButton.onclick = () => { openStockDetailsModal(stock.symbol); };
+        detailsButton.onclick = () => openStockDetailsModal(stock.symbol);
         actionsCell.appendChild(detailsButton);
 
-        // Przycisk Zarządzaj (dla >50% własności) (bez zmian)
+        // Przycisk Zarządzaj
         if (playerSharePct > 50) {
             const manageButton = document.createElement('button');
-            manageButton.textContent = '👑 Zarządzaj';
+            manageButton.textContent = '👑';
+            manageButton.title = 'Panel Zarządzania';
             manageButton.style.marginLeft = '5px';
-            manageButton.style.border = '2px solid #007bff';
+            manageButton.style.border = '1px solid #007bff';
             manageButton.onclick = () => openManagementModal(stock.symbol);
             actionsCell.appendChild(manageButton);
         }
 
-        // Komórka 6: Raport + Wpływ (bez zmian)
+        // Komórka 6: Raport
         const reportCell = row.insertCell();
         reportCell.style.textAlign = 'center';
-
-        const isMajorityOwner = playerSharePct > 50;
-        const hasDebt = stock.balanceSheet ? stock.balanceSheet.liabilities > 0 : (stock.corporateDebt && stock.corporateDebt > 0);
+        
+        const hasDebt = stock.balanceSheet ? stock.balanceSheet.liabilities > 0 : false;
         let reportContent = '';
-        let reportTitle = '';
 
         if (hasAnalystSkill) {
             switch (stock.lastReport) {
-                case 'excellent': reportContent += '💎'; reportTitle += 'Doskonały raport! '; break;
-                case 'good': reportContent += '📈'; reportTitle += 'Dobry raport. '; break;
-                case 'neutral': reportContent += '😐'; reportTitle += 'Neutralny raport. '; break;
-                case 'bad': reportContent += '📉'; reportTitle += 'Słaby raport. '; break;
-                case 'tragic': reportContent += '🔥'; reportTitle += 'Tragiczny raport! '; break;
-                default: reportContent += '- '; reportTitle += 'Brak raportu. ';
+                case 'excellent': reportContent = '💎'; break;
+                case 'good': reportContent = '📈'; break;
+                case 'neutral': reportContent = '😐'; break;
+                case 'bad': reportContent = '📉'; break;
+                case 'tragic': reportContent = '🔥'; break;
+                default: reportContent = '-';
             }
         } else {
-            reportContent += '🔒';
-            reportTitle += 'Wykup Analityka Finansowego, aby zobaczyć raporty. ';
+            reportContent = '🔒';
         }
 
-        if (hasDebt && (hasAnalystSkill || isMajorityOwner)) {
-            reportContent += '<span style="color:red;" title="Spółka jest zadłużona!"> 💵‼️</span>';
-            reportTitle += '(Spółka jest zadłużona!) ';
+        if (hasDebt && (hasAnalystSkill || playerSharePct > 50)) {
+            reportContent += ' <span style="color:red; font-size: 10px;">DŁUG</span>';
         }
-        
-        
-        /*
-        if (stock.influence && stock.influence.totalReceived > 10) { // Pokaż ikonę, jeśli wpływ przekracza 10
-             const influenceIcon = '🐙'; 
-             reportContent += ` <span title="Całkowity wpływ innych spółek: ${stock.influence.totalReceived.toFixed(1)}">${influenceIcon}</span>`;
-             reportTitle += `(Pod wpływem: ${stock.influence.totalReceived.toFixed(1)})`;
-        }
-        */
         
         reportCell.innerHTML = reportContent;
-        reportCell.title = reportTitle.trim();
 
-        return row; // Zwróć stworzony wiersz
-    }; // Koniec funkcji renderStockRow
+        return row;
+    };
 
-    // --- Główna pętla renderowania (bez zmian) ---
+    // --- Pętla renderująca giełdy ---
     sortedExchanges.forEach(exchangeKey => {
         const exchange = exchanges[exchangeKey];
         let stocksOnThisExchange = baseStocksToDisplay.filter(stock => stock.exchange === exchangeKey);
@@ -336,27 +310,22 @@ function displayStocks(previousInputValues = {}) {
             headerRow.className = 'exchange-header';
             headerRow.onclick = () => toggleExchangeVisibility(exchangeKey);
             const headerCell = headerRow.insertCell();
-            headerCell.colSpan = "6"; 
+            headerCell.colSpan = "6";
             const icon = exchangeCollapseState[exchangeKey] ? '▶' : '▼';
-            headerCell.innerHTML = `<h4 style="margin: 5px 0; color: ${exchange.color}; display: flex; justify-content: space-between; align-items: center;">${exchange.name}<span id="toggle-icon-${exchangeKey}">${icon}</span></h4>`;
+            headerCell.innerHTML = `<h4 style="margin: 5px 0; color: ${exchange.color}; display: flex; justify-content: space-between;">${exchange.name}<span>${icon}</span></h4>`;
         }
 
         stocksOnThisExchange.forEach(stock => {
-            const mainRow = renderStockRow(stock, false); 
-            if (exchangeCollapseState[exchangeKey]) {
-                mainRow.style.display = 'none';
-            }
+            const mainRow = renderStockRow(stock, false);
+            if (exchangeCollapseState[exchangeKey]) mainRow.style.display = 'none';
 
             if (stock.subsidiaries && stock.subsidiaries.length > 0) {
                 stock.subsidiaries.forEach(subSymbol => {
                     const subStock = stocks.find(s => s.symbol === subSymbol);
                     if (subStock) {
-                        const subRow = renderStockRow(subStock, true, stock.symbol); 
-                        if (exchangeCollapseState[exchangeKey] || !stock.isSubsidiaryExpanded) {
-                            subRow.style.display = 'none';
-                        } else {
-                            subRow.style.display = ''; 
-                        }
+                        const subRow = renderStockRow(subStock, true, stock.symbol);
+                        if (exchangeCollapseState[exchangeKey] || !stock.isSubsidiaryExpanded) subRow.style.display = 'none';
+                        else subRow.style.display = '';
                     }
                 });
             }
@@ -1110,247 +1079,462 @@ function displayMarketIndexes() {
     }
 }
 
-function openManagementModal(symbol) {
+function renderDepartmentsSection(stock, container) {
+    // Sprawdź czy sekcja już istnieje, jeśli tak - wyczyść, jeśli nie - stwórz
+    let deptSection = document.getElementById('departments-section');
+    if (!deptSection) {
+        deptSection = document.createElement('div');
+        deptSection.id = 'departments-section';
+        deptSection.className = 'bank-section';
+        container.appendChild(deptSection);
+    }
+    deptSection.innerHTML = ''; // Reset zawartości
+    
+    if (!stock.departments) {
+        deptSection.innerHTML = '<p>Ta spółka nie posiada struktury działów.</p>';
+        return;
+    }
+
+    deptSection.innerHTML = `<h4>🏢 Działy i Inwestycje</h4>`;
+
+    // --- 1. KARTY DZIAŁÓW ---
+    const deptsDiv = document.createElement('div');
+    deptsDiv.style.display = 'flex';
+    deptsDiv.style.justifyContent = 'space-between';
+    deptsDiv.style.marginBottom = '15px';
+    
+    const deptNames = { research: "Badania (R&D)", development: "Rozwój (Inv)", economy: "Ekonomia" };
+    
+    for (const [key, data] of Object.entries(stock.departments)) {
+        const deptCard = document.createElement('div');
+        deptCard.style.border = '1px solid #ccc';
+        deptCard.style.padding = '8px';
+        deptCard.style.borderRadius = '4px';
+        deptCard.style.textAlign = 'center';
+        deptCard.style.flex = '1';
+        deptCard.style.margin = '0 4px';
+        deptCard.style.backgroundColor = '#fff';
+        
+        let upgradeBtn = '';
+        if (data.level < 3) {
+            const cost = 50000 * Math.pow(2, data.level);
+            upgradeBtn = `<button onclick="fundDepartmentUpgrade('${stock.symbol}', '${key}')" style="font-size: 10px; margin-top: 5px; width: 100%;">Ulepsz (${(cost/1000).toFixed(0)}k)</button>`;
+        } else {
+            upgradeBtn = `<span style="font-size: 10px; color: green; font-weight: bold;">MAX LEVEL</span>`;
+        }
+
+        deptCard.innerHTML = `
+            <div style="font-weight: bold; font-size: 12px; margin-bottom: 4px;">${deptNames[key]}</div>
+            <div style="font-size: 18px; color: #007bff;">Lvl ${data.level}</div>
+            ${upgradeBtn}
+        `;
+        deptsDiv.appendChild(deptCard);
+    }
+    deptSection.appendChild(deptsDiv);
+
+    // --- 2. TRWAJĄCE INWESTYCJE ---
+    const activeDiv = document.createElement('div');
+    activeDiv.innerHTML = `<h5>🚧 Trwające Projekty (${stock.activeInvestments.length}/${stock.departments.development.level})</h5>`;
+    
+    if (stock.activeInvestments.length > 0) {
+        const invList = document.createElement('ul');
+        invList.style.listStyle = 'none';
+        invList.style.padding = '0';
+        
+        stock.activeInvestments.forEach(inv => {
+            const li = document.createElement('li');
+            li.style.marginBottom = '8px';
+            li.style.padding = '8px';
+            li.style.backgroundColor = '#f8f9fa';
+            li.style.borderLeft = '3px solid #007bff';
+            
+            const progressPct = (inv.progress / inv.totalDuration) * 100;
+            const contractorInfo = inv.contractor ? `<br><small>Wykonawca: ${inv.contractor}</small>` : '<br><small>Realizacja własna</small>';
+            
+            li.innerHTML = `
+                <div style="display: flex; justify-content: space-between;">
+                    <strong>${inv.name}</strong>
+                    <button onclick="blockInvestment('${stock.symbol}', '${inv.id}')" style="font-size: 9px; background-color: #ffdddd; border: 1px solid red; color: red;">Anuluj</button>
+                </div>
+                <progress value="${inv.progress}" max="${inv.totalDuration}" style="width: 100%; height: 10px; margin-top: 4px;"></progress>
+                <div style="font-size: 10px; color: #666; display: flex; justify-content: space-between;">
+                    <span>${progressPct.toFixed(0)}%</span>
+                    <span>${inv.progress.toFixed(1)} / ${inv.totalDuration} tyg.</span>
+                </div>
+                ${contractorInfo}
+            `;
+            invList.appendChild(li);
+        });
+        activeDiv.appendChild(invList);
+    } else {
+        activeDiv.innerHTML += `<p style="font-size: 12px; color: #888; font-style: italic;">Brak aktywnych projektów.</p>`;
+    }
+    deptSection.appendChild(activeDiv);
+
+    // --- 3. KATALOG DOSTĘPNYCH INWESTYCJI ---
+    const catalogDiv = document.createElement('div');
+    catalogDiv.style.marginTop = '15px';
+    catalogDiv.innerHTML = `<h5>📋 Katalog Inwestycji</h5>`;
+
+    // Pobierz inwestycje ogólne + sektorowe
+    let availableOptions = [...INVESTMENT_CATALOG['general']];
+    if (stock.sector[0] && INVESTMENT_CATALOG[stock.sector[0]]) {
+        availableOptions = availableOptions.concat(INVESTMENT_CATALOG[stock.sector[0]]);
+    }
+
+    const table = document.createElement('table');
+    table.style.fontSize = '11px';
+    table.style.width = '100%';
+    table.innerHTML = `
+        <thead>
+            <tr style="background-color: #e9ecef;">
+                <th>Nazwa</th>
+                <th>Koszt</th>
+                <th>Czas</th>
+                <th>Efekt</th>
+                <th>Akcja</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    `;
+    const tbody = table.querySelector('tbody');
+
+    availableOptions.forEach(inv => {
+        const tr = document.createElement('tr');
+            
+            // Logika kosztów i wymagań
+            const realCost = stock.departments.development.level >= 3 ? inv.cost * 0.9 : inv.cost;
+            const isAffordable = stock.cash >= realCost;
+            const hasLevel = stock.departments.development.level >= inv.minDevLevel;
+            const isLimitReached = stock.activeInvestments.length >= stock.departments.development.level;
+
+            // Przycisk akcji
+            let statusBtn = '';
+            if (!hasLevel) {
+                statusBtn = `<span style="color: gray; font-size: 9px;">Wymaga Lvl ${inv.minDevLevel}</span>`;
+            } else if (!isAffordable) {
+                statusBtn = `<span style="color: #dc3545; font-size: 9px;">Brak środków</span>`;
+            } else if (isLimitReached) {
+                statusBtn = `<span style="color: #ffc107; font-size: 9px;">Limit projektów</span>`;
+            } else {
+                statusBtn = `<button onclick="forceCompanyInvestment('${stock.symbol}', '${inv.id}')" style="padding: 2px 8px; font-size: 11px; background-color: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer;">Start</button>`;
+            }
+
+            // Ikona (domyślna jeśli brak pliku)
+            const iconSrc = inv.icon || 'img/box.png'; 
+
+            tr.innerHTML = `
+                <td style="display: flex; align-items: center;">
+                    <img src="${iconSrc}" style="width: 24px; height: 24px; margin-right: 8px; object-fit: contain;" onerror="this.style.display='none'">
+                    <span>${inv.name}</span>
+                </td>
+                <td>${(realCost/1000).toFixed(0)}k PLN</td>
+                <td>${inv.duration} tyg.</td>
+                <td>
+                    <div style="font-size: 10px; color: #555;">
+                        ${inv.assetValue > 0 ? `<div>🏠 +${(inv.assetValue/1000).toFixed(0)}k</div>` : ''}
+                        ${inv.incomeBonus > 0 ? `<div>💰 +${(inv.incomeBonus*100).toFixed(0)}%</div>` : ''}
+                        ${inv.healthBonus > 0 ? `<div>❤️ +${inv.healthBonus}</div>` : ''}
+                    </div>
+                </td>
+                <td style="text-align: center;">${statusBtn}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    
+    catalogDiv.appendChild(table);
+    deptSection.appendChild(catalogDiv);
+}
+
+
+
+function openManagementModal(symbol, defaultTab = 'main') {
     const modal = document.getElementById('management-modal');
     const stock = stocks.find(s => s.symbol === symbol);
-    modal.dataset.currentSymbol = symbol;
+    
+    // Zabezpieczenie: jeśli modal lub spółka nie istnieje
     if (!modal || !stock) return;
 
-    document.getElementById('management-title').textContent = `👑 Panel Zarządzania: ${stock.name}`;
+    // Przypisujemy symbol do modala, aby odświeżanie (np. po ulepszeniu działu) wiedziało, kogo dotyczy
+    modal.dataset.currentSymbol = symbol;
 
-    // Logika dywidendy
+    // Helper do bezpiecznego ustawiania tekstu (zapobiega błędom, gdy element nie istnieje)
+    const safeSetText = (id, text) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = text;
+    };
+
+    safeSetText('management-title', `👑 Panel Zarządzania: ${stock.name}`);
+
+    // --- 1. Dywidenda Specjalna ---
     const dividendBtn = document.getElementById('force-dividend-btn');
     const cooldownInfo = document.getElementById('dividend-cooldown-info');
-    if (Date.now() < stock.dividendCooldownUntil) {
-        dividendBtn.disabled = true;
-        const remainingTime = Math.ceil((stock.dividendCooldownUntil - Date.now()) / 1000);
-        cooldownInfo.textContent = `Następna dywidenda dostępna za: ${remainingTime} s.`;
-    } else {
-        dividendBtn.disabled = false;
-        cooldownInfo.textContent = '';
+    
+    if (dividendBtn && cooldownInfo) {
+        if (stock.dividendCooldownUntil && Date.now() < stock.dividendCooldownUntil) {
+            dividendBtn.disabled = true;
+            const remainingTime = Math.ceil((stock.dividendCooldownUntil - Date.now()) / 1000);
+            cooldownInfo.textContent = `Następna dywidenda dostępna za: ${remainingTime} s.`;
+        } else {
+            dividendBtn.disabled = false;
+            cooldownInfo.textContent = '';
+        }
+        // Resetujemy onlick, aby nie kumulować eventów
+        dividendBtn.onclick = () => forceDividend(symbol);
     }
-    dividendBtn.onclick = () => forceDividend(symbol);
 
-    // Logika zmiany CEO
+    // --- 2. Walne Zgromadzenie (CEO) ---
     const fireCeoBtn = document.getElementById('fire-ceo-btn');
     const fireCeoCooldownInfo = document.getElementById('fire-ceo-cooldown-info');
-
-    fireCeoBtn.textContent = "Zażądaj zmiany prezesa";
-    fireCeoBtn.title = "Zaproponuj radzie nadzorczej nowych kandydatów. Szansa na sukces zależy od Twojego udziału w firmie.";
-
-    if (stock.ceo && stock.ceo.fireCooldown && Date.now() < stock.ceo.fireCooldown) {
-        fireCeoBtn.disabled = true;
-        const remainingTime = Math.ceil((stock.ceo.fireCooldown - Date.now()) / 1000);
-        fireCeoCooldownInfo.textContent = `Następne zgromadzenie możliwe za: ${remainingTime} s`;
-    } else {
-        fireCeoBtn.disabled = false;
-        fireCeoCooldownInfo.textContent = '';
+    
+    if (fireCeoBtn && fireCeoCooldownInfo) {
+        if (stock.ceo && stock.ceo.fireCooldown && Date.now() < stock.ceo.fireCooldown) {
+            fireCeoBtn.disabled = true;
+            const remainingTime = Math.ceil((stock.ceo.fireCooldown - Date.now()) / 1000);
+            fireCeoCooldownInfo.textContent = `Następne zgromadzenie możliwe za: ${remainingTime} s`;
+        } else {
+            fireCeoBtn.disabled = false;
+            fireCeoCooldownInfo.textContent = '';
+        }
+        fireCeoBtn.onclick = () => initiateCeoChange(symbol);
     }
-    fireCeoBtn.onclick = () => initiateCeoChange(symbol);
 
-    // Logika polityki dywidendowej
+    // --- 3. Polityka Dywidendowa ---
     const policySelect = document.getElementById('policy-select');
-    policySelect.dataset.symbol = symbol;
-    policySelect.value = stock.dividendPolicy || 'Growth'; // Ustaw domyślną, jeśli brak
+    if (policySelect) {
+        policySelect.dataset.symbol = symbol;
+        policySelect.value = stock.dividendPolicy || 'Growth';
+        // Uwaga: onchange jest zazwyczaj zdefiniowany w HTML, ale upewnij się, że działa
+    }
 
-    // --- SEKCJA DOSTĘPU DO FINANSÓW (DODANE Z ui2.js) ---
-    // Ta sekcja zastępuje sekcję wyboru banku z ui.js
+    // --- 4. Wybór Banku ---
+    const bankSelect = document.getElementById('bank-select');
+    const changeBankBtn = document.getElementById('change-bank-btn');
+    
+    if (bankSelect && changeBankBtn) {
+        bankSelect.innerHTML = '<option value="">-- Brak --</option>';
+        const activeBanks = commercialBanks.filter(b => b.isActive && (b.type === 'Korporacyjny' || b.type === 'Uniwersalny'));
+        
+        activeBanks.forEach(bank => {
+            const option = document.createElement('option');
+            option.value = bank.id;
+            option.textContent = `${bank.name} (Gotówka: ${bank.cash.toLocaleString()} PLN)`;
+            if (stock.bankAccountId === bank.id) option.selected = true;
+            bankSelect.appendChild(option);
+        });
+        
+        changeBankBtn.onclick = () => changeCompanyBank(symbol, bankSelect.value);
+    }
+
+    // --- 5. Zadłużenie (Ratunek) ---
+    const debtSection = document.getElementById('debt-management-section');
+    if (debtSection) {
+        // Sprawdzamy liabilities z bilansu
+        if (stock.balanceSheet && stock.balanceSheet.liabilities > 0) {
+            safeSetText('corporate-debt-amount', stock.balanceSheet.liabilities.toFixed(2));
+            
+            const repaymentInput = document.getElementById('debt-repayment-amount');
+            if (repaymentInput) repaymentInput.value = '';
+            
+            const repayBtn = document.getElementById('repay-debt-btn');
+            if (repayBtn) {
+                repayBtn.onclick = () => {
+                    const amount = parseFloat(repaymentInput.value);
+                    if (!isNaN(amount)) playerBailsOutCompany(symbol, amount);
+                };
+            }
+            debtSection.style.display = 'block';
+        } else {
+            debtSection.style.display = 'none';
+        }
+    }
+
+    // --- 6. Panel Badań (R&D) ---
+    const rdSection = document.getElementById('rd-management-section');
+    if (rdSection) {
+        if (stock.research && stock.research.isResearching && stock.research.currentTech) {
+            const tech = technologies[stock.research.currentTech];
+            safeSetText('rd-current-tech-name', tech ? tech.name : "Nieznane");
+            
+            const progressBar = document.getElementById('rd-progress-bar');
+            if (progressBar) {
+                const cost = tech ? tech.cost : 1;
+                const progressPercent = (stock.research.progress / cost) * 100;
+                progressBar.value = progressPercent;
+            }
+            
+            const openRdBtn = document.getElementById('open-research-panel-btn');
+            if (openRdBtn) openRdBtn.onclick = () => openResearchModal(symbol);
+            
+            rdSection.style.display = 'block';
+        } else {
+            rdSection.style.display = 'none';
+        }
+    }
+
+    // --- 7. Dostęp Finansowy (Księgowy) ---
     const financialSection = document.getElementById('financial-access-section');
     const viewFinancesBtn = document.getElementById('view-finances-btn');
     const financesInfo = document.getElementById('finances-access-info');
 
-    // Upewnijmy się, że elementy istnieją (na wypadek, gdyby HTML nie był gotowy)
     if (financialSection && viewFinancesBtn && financesInfo) {
         const accountantLevel = getSkillLevel('accountant');
-        const playerRep = stock.reputation['player'];
-        const isMajorityOwner = (playerPortfolio[symbol]?.shares / stock.totalShares) > 0.5;
-        const hasPaidAccess = stock.playerHasFinancialAccess;
+        // Gracz ma większość?
+        const playerShares = playerPortfolio[symbol] ? playerPortfolio[symbol].shares : 0;
+        const isMajorityOwner = (playerShares / stock.totalShares) > 0.5;
 
-        if (accountantLevel > 0) { // Czy umiejętność "Księgowy" jest odblokowana?
-            financialSection.style.display = 'block'; // Pokaż sekcję
-            viewFinancesBtn.onclick = () => handleViewFinancesClick(symbol); // Ustaw akcję kliknięcia
-            financesInfo.textContent = ''; // Wyczyść poprzednie info
+        if (accountantLevel > 0) {
+            financialSection.style.display = 'block';
+            viewFinancesBtn.onclick = () => handleViewFinancesClick(symbol);
+            financesInfo.textContent = '';
 
-            // Sprawdź warunki dostępu
-            if (playerRep < REPUTATION_LEVELS.NEGATIVE && !isMajorityOwner) {
-                viewFinancesBtn.disabled = true; // Zablokuj przycisk
-                financesInfo.textContent = 'Dostęp zablokowany z powodu złych relacji.'; // Pokaż powód
-                financesInfo.style.color = 'red';
-            } else if (hasPaidAccess) {
-                viewFinancesBtn.disabled = false; // Odblokuj przycisk
-                financesInfo.textContent = 'Dostęp już opłacony.'; // Poinformuj, że dostęp jest
-                financesInfo.style.color = 'green';
-            } else if (accountantLevel >= 2 && isMajorityOwner) {
-                viewFinancesBtn.disabled = false; // Odblokuj przycisk
-                financesInfo.textContent = 'Dostęp darmowy (większościowy udziałowiec).'; // Dostęp darmowy
+            if (stock.playerHasFinancialAccess || (accountantLevel >= 2 && isMajorityOwner)) {
+                viewFinancesBtn.disabled = false;
+                financesInfo.textContent = 'Dostęp aktywny.';
                 financesInfo.style.color = 'green';
             } else {
-                // Dostęp płatny (Lvl 1 lub Lvl 2+ bez większości)
-                viewFinancesBtn.disabled = false; // Odblokuj przycisk
-                financesInfo.textContent = 'Wymagana opłata: 2000 PLN.'; // Informacja o koszcie
+                viewFinancesBtn.disabled = false;
+                financesInfo.textContent = 'Wymagana opłata: 2000 PLN.';
                 financesInfo.style.color = '#666';
             }
-
         } else {
-            // Umiejętność nieodblokowana - ukryj całą sekcję
             financialSection.style.display = 'none';
         }
     }
-    // --- KONIEC SEKCJI Z ui2.js ---
 
-    // --- Sekcja Długu (zmodyfikowana, aby używać bilansu) ---
-    const debtSection = document.getElementById('debt-management-section');
-    // W obu plikach ta sekcja wyglądała inaczej. ui.js używał 'balanceSheet', ui2.js 'corporateDebt'.
-    // Zachowujemy wersję z ui.js (baza), która jest powiązana z bilansem.
-    if (stock.balanceSheet && stock.balanceSheet.liabilities > 0) {
-        document.getElementById('corporate-debt-amount').textContent = stock.balanceSheet.liabilities.toFixed(2); // Użyj długu z bilansu
-        const repaymentInput = document.getElementById('debt-repayment-amount');
-        repaymentInput.value = '';
-        document.getElementById('repay-debt-btn').onclick = () => {
-            const amount = parseFloat(repaymentInput.value);
-            playerBailsOutCompany(symbol, amount);
-        };
-        debtSection.style.display = 'block';
-    } else {
-        debtSection.style.display = 'none';
-    }
-
-    // --- FRAGMENT - OBSŁUGA PANELU R&D ---
-    const rdSection = document.getElementById('rd-management-section');
-    if (stock.research && stock.research.isResearching && stock.research.currentTech) {
-        const tech = technologies[stock.research.currentTech];
-        document.getElementById('rd-current-tech-name').textContent = tech.name;
-
-        const progressPercent = (stock.research.progress / tech.cost) * 100;
-        document.getElementById('rd-progress-bar').value = progressPercent;
-
-        document.getElementById('open-research-panel-btn').onclick = () => {
-            openResearchModal(symbol);
-        };
-
-        rdSection.style.display = 'block'; // Pokaż sekcję R&D
-    } else {
-        rdSection.style.display = 'none'; // Ukryj sekcję R&D
-    }
-    // --- KONIEC FRAGMENTU R&D ---
-
-    // Sekcja Reputacji
+    // --- 8. Reputacja ---
     const repSection = document.getElementById('reputation-management-section');
-    if (stock.reputation && stock.reputation['player'] !== undefined) {
-        const repStatusEl = document.getElementById('reputation-status');
-        const playerRep = stock.reputation['player'];
-        let repText = '';
-
-        if (playerRep <= REPUTATION_LEVELS.TRAGIC) repText = 'Tragiczne';
-        else if (playerRep <= REPUTATION_LEVELS.NEGATIVE) repText = 'Negatywne';
-        else if (playerRep <= REPUTATION_LEVELS.NEUTRAL) repText = 'Neutralne';
-        else if (playerRep <= REPUTATION_LEVELS.CORRECT) repText = 'Poprawne';
-        else if (playerRep <= REPUTATION_LEVELS.POSITIVE) repText = 'Pozytywne';
-        else repText = 'Przyjacielskie';
-
-        repStatusEl.textContent = `${repText} (${playerRep.toFixed(1)})`;
-
-        document.getElementById('donate-btn').onclick = () => {
-            const amount = document.getElementById('donation-amount').valueAsNumber;
-            if (amount > 0) {
-                donateToCompany(symbol, amount);
-                document.getElementById('donation-amount').value = '';
-            }
-        };
-        repSection.style.display = 'block';
-    } else {
-        repSection.style.display = 'none';
-    }
-    modal.style.display = 'block';
-
-    const maInitiationSection = document.getElementById('ma-initiation-section');
-    const maDefenseSection = document.getElementById('ma-defense-section');
-
-    if (stock.mergerProcess) {
-        // Jeśli spółka jest w trakcie procesu M&A
-        maInitiationSection.style.display = 'none'; // Ukryj sekcję inicjowania
-
-        // Sprawdź, czy ta spółka jest CELEM wrogiego przejęcia
-        if ((stock.mergerProcess.type === 'przejęcie' || stock.mergerProcess.type === 'influenceTakeover') && 
-            stock.mergerProcess.initiatorSymbol !== symbol) 
-        {
-            // Tak, jesteśmy celem
-            maDefenseSection.style.display = 'block';
-            const infoEl = document.getElementById('ma-defense-info');
-            const poisonPillBtn = document.getElementById('ma-defense-poisonpill-btn');
+    if (repSection) {
+        if (stock.reputation && stock.reputation['player'] !== undefined) {
+            safeSetText('reputation-status', `${stock.reputation['player'].toFixed(1)}`);
             
-            infoEl.textContent = `Spółka ${stock.mergerProcess.initiatorSymbol} próbuje Cię przejąć! (Etap ${stock.mergerProcess.stage}: ${stock.mergerProcess.statusMessage})`;
+            const donateBtn = document.getElementById('donate-btn');
+            if (donateBtn) {
+                donateBtn.onclick = () => {
+                    const amount = document.getElementById('donation-amount').valueAsNumber;
+                    donateToCompany(symbol, amount);
+                };
+            }
+            repSection.style.display = 'block';
+        } else {
+            // Fallback dla nowych spółek bez zainicjowanej reputacji
+            safeSetText('reputation-status', '0.0');
+            repSection.style.display = 'block';
+        }
+    }
 
-            if (stock.mergerProcess.defenseActive) {
-                // Obrona jest już aktywna
-                poisonPillBtn.disabled = true;
-                poisonPillBtn.textContent = `Aktywowano: ${stock.mergerProcess.defenseActive}`;
-            } else {
-                // Można aktywować obronę
-                poisonPillBtn.disabled = false;
-                poisonPillBtn.textContent = 'Aktywuj "Zatrutą Pigułkę"';
-                poisonPillBtn.onclick = () => activateDefenseMechanism(symbol, 'poisonPill');
+    // --- 9. Wpływy i Naciski ---
+    const influenceSection = document.getElementById('influence-section');
+    if (influenceSection) {
+        if (stock.influence) {
+            safeSetText('influence-total-received', stock.influence.totalReceived.toFixed(1));
+            
+            // Wypełnij listy wpływów
+            const exertedListEl = document.getElementById('influence-exerted-list');
+            if (exertedListEl) {
+                exertedListEl.innerHTML = '';
+                const exertedEntries = Object.entries(stock.influence.exerted || {});
+                if (exertedEntries.length > 0) {
+                    exertedEntries.sort(([, a], [, b]) => b - a);
+                    exertedEntries.forEach(([targetSym, val]) => {
+                        const li = document.createElement('li');
+                        li.textContent = `${targetSym}: ${val.toFixed(1)}`;
+                        exertedListEl.appendChild(li);
+                    });
+                } else {
+                    exertedListEl.innerHTML = '<li>Brak</li>';
+                }
             }
 
+            const receivedListEl = document.getElementById('influence-received-list');
+            if (receivedListEl) {
+                receivedListEl.innerHTML = '';
+                const receivedEntries = Object.entries(stock.influence.received || {});
+                if (receivedEntries.length > 0) {
+                    receivedEntries.sort(([, a], [, b]) => b - a);
+                    receivedEntries.forEach(([sourceSym, val]) => {
+                        const li = document.createElement('li');
+                        li.textContent = `${sourceSym}: ${val.toFixed(1)}`;
+                        receivedListEl.appendChild(li);
+                    });
+                } else {
+                    receivedListEl.innerHTML = '<li>Brak</li>';
+                }
+            }
+            influenceSection.style.display = 'block';
         } else {
-            // Jesteśmy inicjatorem lub to przyjazna fuzja - nie pokazuj obrony
-            maDefenseSection.style.display = 'none';
+            influenceSection.style.display = 'none';
         }
-    } else {
-        // Jeśli spółka nie jest w procesie M&A
-        maInitiationSection.style.display = 'block'; // Pokaż sekcję inicjowania
-        maDefenseSection.style.display = 'none'; // Ukryj sekcję obrony
-
-        document.getElementById('ma-open-target-modal-btn').onclick = () => openMaTargetModal(symbol);
     }
 
+    // --- 10. Fuzje i Przejęcia (M&A) ---
+    const maInitiation = document.getElementById('ma-initiation-section');
+    const maDefense = document.getElementById('ma-defense-section');
     
-    /*const influenceSection = document.getElementById('influence-section');
-    const totalReceivedEl = document.getElementById('influence-total-received');
-    const exertedListEl = document.getElementById('influence-exerted-list');
-    const receivedListEl = document.getElementById('influence-received-list');
-
-    // Sprawdź, czy spółka ma system wpływów (nie jest np. startupem)
-    if (stock.influence && influenceSection && totalReceivedEl && exertedListEl && receivedListEl) {
-        totalReceivedEl.textContent = stock.influence.totalReceived.toFixed(1); // Pokaż całkowity otrzymywany wpływ
-
-        // Wypełnij listę wywieranych wpływów
-        exertedListEl.innerHTML = ''; // Wyczyść
-        const exertedEntries = Object.entries(stock.influence.exerted);
-        if (exertedEntries.length > 0) {
-            exertedEntries.sort(([, a], [, b]) => b - a); // Sortuj malejąco wg siły wpływu
-            exertedEntries.forEach(([targetSymbol, value]) => {
-                const li = document.createElement('li');
-                li.textContent = `${targetSymbol}: ${value.toFixed(1)}`;
-                exertedListEl.appendChild(li);
-            });
+    if (maInitiation && maDefense) {
+        if (stock.mergerProcess) {
+            maInitiation.style.display = 'none';
+            // Jeśli jesteśmy celem ataku
+            if ((stock.mergerProcess.type === 'przejęcie' || stock.mergerProcess.type === 'influenceTakeover') && 
+                stock.mergerProcess.initiatorSymbol !== symbol) {
+                
+                maDefense.style.display = 'block';
+                safeSetText('ma-defense-info', `Atakuje: ${stock.mergerProcess.initiatorSymbol}`);
+                
+                const poisonBtn = document.getElementById('ma-defense-poisonpill-btn');
+                if (poisonBtn) {
+                    if(stock.mergerProcess.defenseActive) {
+                        poisonBtn.disabled = true;
+                        poisonBtn.textContent = `Obrona aktywna: ${stock.mergerProcess.defenseActive}`;
+                    } else {
+                        poisonBtn.disabled = false;
+                        poisonBtn.textContent = 'Aktywuj "Zatrutą Pigułkę"';
+                        poisonBtn.onclick = () => activateDefenseMechanism(symbol, 'poisonPill');
+                    }
+                }
+            } else {
+                maDefense.style.display = 'none';
+            }
         } else {
-            exertedListEl.innerHTML = '<li>Brak</li>';
+            maInitiation.style.display = 'block';
+            maDefense.style.display = 'none';
+            const maBtn = document.getElementById('ma-open-target-modal-btn');
+            if (maBtn) maBtn.onclick = () => openMaTargetModal(symbol);
         }
-
-        // Wypełnij listę otrzymywanych wpływów
-        receivedListEl.innerHTML = ''; // Wyczyść
-        const receivedEntries = Object.entries(stock.influence.received);
-        if (receivedEntries.length > 0) {
-            receivedEntries.sort(([, a], [, b]) => b - a); // Sortuj malejąco wg siły wpływu
-            receivedEntries.forEach(([sourceSymbol, value]) => {
-                const li = document.createElement('li');
-                li.textContent = `${sourceSymbol}: ${value.toFixed(1)}`;
-                receivedListEl.appendChild(li);
-            });
-        } else {
-            receivedListEl.innerHTML = '<li>Brak</li>';
-        }
-
-        influenceSection.style.display = 'block'; // Pokaż sekcję
-    } else if (influenceSection) {
-        influenceSection.style.display = 'none'; // Ukryj sekcję, jeśli nie dotyczy tej spółki
     }
-*/
 
+    // === 11. ZAKŁADKA: Działy i Inwestycje ===
+    const deptsContent = document.getElementById('mgmt-content-depts');
+    if (deptsContent) {
+        if (typeof renderDepartmentsSection === 'function') {
+            renderDepartmentsSection(stock, deptsContent);
+        } else {
+            deptsContent.innerHTML = '<p style="color:red">Błąd: Brak funkcji renderDepartmentsSection.</p>';
+        }
+    }
 
+    // Przełączenie na odpowiednią zakładkę (np. po kliknięciu "Ulepsz" chcemy wrócić do działów)
+    if (typeof switchManagementTab === 'function') {
+        switchManagementTab(defaultTab);
+    }
+
+    // Pokaż modal
+    modal.style.display = 'block';
 }
 
+function switchManagementTab(tabName) {
+    // Ukryj wszystkie treści
+    document.getElementById('mgmt-content-main').style.display = 'none';
+    document.getElementById('mgmt-content-depts').style.display = 'none';
+    
+    // Odznacz przyciski
+    document.getElementById('tab-btn-mgmt-main').classList.remove('active');
+    document.getElementById('tab-btn-mgmt-depts').classList.remove('active');
+    
+    // Pokaż wybraną treść i zaznacz przycisk
+    document.getElementById(`mgmt-content-${tabName}`).style.display = 'block';
+    document.getElementById(`tab-btn-mgmt-${tabName}`).classList.add('active');
+}
 
 function toggleAutoRepay(isEnabled) {
     // Ta funkcja jest specyficzna dla ui2.js (prosty kredyt). 

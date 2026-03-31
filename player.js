@@ -1,6 +1,6 @@
 console.log('[diag] player.js loaded');
 
-let playerCash = 100000.00;
+let playerCash = 10000000.00;
 let playerXP = 0;
 let playerPortfolio = {};
 let playerCommercialLoans = [];
@@ -316,7 +316,8 @@ function calculateNetWorth(entity) {
 }
 
 function buyStock(symbol, quantity) {
-    if (isPlayerInDefault()) return; // <-- DODAJ TĘ LINIĘ
+    if (isPlayerInDefault && isPlayerInDefault()) return; 
+    
     const stockToBuy = stocks.find(stock => stock.symbol === symbol);
     if (!stockToBuy) {
         alert("Błąd systemowy: Nie znaleziono takiej akcji!");
@@ -330,21 +331,21 @@ function buyStock(symbol, quantity) {
         alert(`Handel akcjami ${stockToBuy.name} jest tymczasowo wstrzymany!`);
         return;
     }
-    const currentSharesHeld = stockToBuy.sharesHeld || 0; // Zabezpieczenie przed błędem NaN
 
-    let sharesOnMarket;
+    // Obliczamy dostępne akcje
+    let sharesAvailableToBuy;
     if (stockToBuy.isStateOwned) {
         const publicFloat = Math.floor(stockToBuy.totalShares * (1 - stockToBuy.stateOwnershipPct));
-        sharesOnMarket = publicFloat - stockToBuy.sharesHeld;
+        sharesAvailableToBuy = publicFloat - stockToBuy.sharesHeld;
     } else {
-        sharesOnMarket = stockToBuy.totalShares;
-    }
-    if (quantity > sharesOnMarket) {
-        alert(`Nie ma wystarczającej liczby akcji na rynku! Dostępne: ${availableShares}`);
-        return;
+        sharesAvailableToBuy = stockToBuy.totalShares - stockToBuy.sharesHeld;
     }
 
-    
+    // Poprawka błędu: używamy poprawnej nazwy zmiennej w warunku
+    if (quantity > sharesAvailableToBuy) {
+        alert(`Nie ma wystarczającej liczby akcji na rynku! Dostępne: ${sharesAvailableToBuy}`);
+        return;
+    }
 
     let totalCost = stockToBuy.price * quantity;
     const charismaLevel = getSkillLevel('sharkCharisma');
@@ -361,18 +362,21 @@ function buyStock(symbol, quantity) {
         return;
     }
 
+    // Transakcja
     playerCash -= totalCost;
     stockToBuy.sharesHeld += quantity;
+    
+    // Wpływ na cenę
     stockToBuy.price += (quantity * stockToBuy.price) * 0.000005;
 
-    // --- NOWY FRAGMENT - ZAPIS TRANSAKCJI ---
+    // Logika transakcji
+    if (!stockToBuy.playerTransactions) stockToBuy.playerTransactions = [];
     stockToBuy.playerTransactions.push({
         type: 'buy',
         time: Date.now(),
         price: stockToBuy.price,
         quantity: quantity
     });
-    // --- KONIEC NOWEGO FRAGMENTU ---
 
     if (playerPortfolio[symbol]) {
         const existingHolding = playerPortfolio[symbol];
@@ -383,10 +387,12 @@ function buyStock(symbol, quantity) {
     } else {
         playerPortfolio[symbol] = {
             shares: quantity,
-            avgPrice: stockToBuy.price
+            avgPrice: stockToBuy.price,
+            assetType: 'stock' // Ważne dla portfolio
         };
     }
 
+    // Reputacja za duży pakiet
     const playerShares = playerPortfolio[symbol]?.shares || 0;
     const ownershipPct = (playerShares / stockToBuy.totalShares) * 100;
     if (ownershipPct > 50) {
@@ -395,6 +401,7 @@ function buyStock(symbol, quantity) {
             changeReputation('player', symbol, repGain);
         }
     }
+
     displayCash();
     displayStocks(getCurrentInputValues());
     displayPortfolio();
@@ -427,7 +434,7 @@ function sellStock(symbol, quantity) {
     }
 
     const purchaseValue = holding.avgPrice * quantity; // Koszt zakupu sprzedawanych akcji
-    const profit = totalGainGross - purchaseValue; // Zysk brutto z transakcji
+    const profit = totalGain - purchaseValue; // Zysk brutto z transakcji
 
     let taxToPay = 0;
     let xpGained = 0;
@@ -450,7 +457,7 @@ function sellStock(symbol, quantity) {
     }
     // ---> KONIEC NOWOŚCI <---
 
-    const totalGainNet = totalGainGross - taxToPay; // Przychód netto po podatku
+    const totalGainNet = totalGain - taxToPay; // Przychód netto po podatku
 
     if (xpGained > 0) {
         playerXP += xpGained;
@@ -564,7 +571,7 @@ function sellEtf(symbol, quantity) {
     }
 
     const purchaseValue = holding.avgPrice * quantity; // Koszt zakupu sprzedawanych jednostek
-    const profit = totalGainGross - purchaseValue; // Zysk brutto
+    const profit = totalGain - purchaseValue;// Zysk brutto
 
     let taxToPay = 0;
     let xpGained = 0;
@@ -588,7 +595,7 @@ function sellEtf(symbol, quantity) {
     }
     // --- KONIEC NOWOŚCI ---
 
-    const totalGainNet = totalGainGross - taxToPay; // Przychód netto po podatku
+    const totalGainNet = totalGain - taxToPay; // Przychód netto po podatku
 
     if (xpGained > 0) {
         playerXP += xpGained;
@@ -688,7 +695,7 @@ function sellIndex(indexId, quantity) {
     }
 
     const purchaseValue = holding.avgPrice * quantity; // Koszt zakupu sprzedawanych jednostek
-    const profit = totalGainGross - purchaseValue; // Zysk brutto
+    const profit = totalGain - purchaseValue;// Zysk brutto
 
     let taxToPay = 0;
     let xpGained = 0;
@@ -712,7 +719,7 @@ function sellIndex(indexId, quantity) {
     }
     // --- KONIEC NOWOŚCI ---
 
-    const totalGainNet = totalGainGross - taxToPay; // Przychód netto po podatku
+    const totalGainNet = totalGain - taxToPay;// Przychód netto po podatku
 
     if (xpGained > 0) {
         playerXP += xpGained;
@@ -2883,5 +2890,102 @@ if (typeof window !== 'undefined') {
         console.log('[diag] gameLogicReady event dispatched');
     } catch (e) {
         console.warn('[diag] Nie udało się rozesłać gameLogicReady:', e);
+    }
+}
+
+function fundDepartmentUpgrade(symbol, deptType) {
+    const stock = stocks.find(s => s.symbol === symbol);
+    if (!stock || !stock.departments) return;
+    
+    const currentLevel = stock.departments[deptType].level;
+    if (currentLevel >= 3) {
+        alert("Ten dział osiągnął już maksymalny poziom.");
+        return;
+    }
+
+    const cost = 50000 * Math.pow(2, currentLevel);
+    
+    if (playerCash < cost) {
+        alert(`Brak środków! Koszt ulepszenia: ${cost} PLN.`);
+        return;
+    }
+
+    // Transakcja
+    playerCash -= cost;
+    stock.departments[deptType].level++;
+    
+    // Bonus
+    changeReputation('player', symbol, 15);
+    
+    logEvent(`🏢 Sfinansowałeś rozwój działu ${deptType} w ${stock.name} do poziomu ${stock.departments[deptType].level}.`, 'review');
+    displayCash();
+    
+    // ===>>> POPRAWKA TUTAJ <<<===
+    // Przekazujemy drugi parametr 'depts', aby modal otworzył się na zakładce Działy
+    if (typeof openManagementModal === 'function') {
+        openManagementModal(symbol, 'depts'); 
+    }
+}
+
+// Władza Korony: Blokowanie inwestycji
+function blockInvestment(symbol, investmentId) {
+    const stock = stocks.find(s => s.symbol === symbol);
+    // Wymaga >50% udziałów lub Charyzmy lvl 4+
+    const isMajority = (playerPortfolio[symbol]?.shares / stock.totalShares) > 0.5;
+    const hasCharisma = getSkillLevel('charisma') >= 4;
+
+    if (!isMajority && !hasCharisma) {
+        alert("Nie masz wystarczającej władzy, by zablokować tę inwestycję.");
+        return;
+    }
+
+    const invIndex = stock.activeInvestments.findIndex(inv => inv.id === investmentId);
+    if (invIndex > -1) {
+        const inv = stock.activeInvestments[invIndex];
+        
+        // Kara do reputacji (zarząd nie lubi mikrozarządzania)
+        changeReputation('player', symbol, -20);
+        
+        // Zwrot części kosztów (np. 50% odzyskane)
+        stock.cash += inv.cost * 0.5;
+        
+        stock.activeInvestments.splice(invIndex, 1);
+        logEvent(`⛔ Zablokowałeś inwestycję "${inv.name}" w ${stock.name}. Odzyskano 50% środków, ale relacje z zarządem ucierpiały.`, 'review');
+        
+        // Odśwież UI
+        if (typeof openManagementModal === 'function') openManagementModal(symbol);
+    }
+}
+
+function playerBailsOutCompany(symbol, amount) {
+    const stock = stocks.find(s => s.symbol === symbol);
+    if (!stock || !stock.balanceSheet) return;
+
+    if (amount <= 0) {
+        alert("Kwota spłaty musi być większa od zera.");
+        return;
+    }
+    
+    // Zabezpieczenie przed przepłaceniem długu
+    if (amount > stock.balanceSheet.liabilities) {
+        amount = stock.balanceSheet.liabilities;
+    }
+    
+    // Zabezpieczenie czy gracza stać
+    if (playerCash < amount) {
+        alert("Nie masz wystarczająco gotówki na tę spłatę!");
+        return;
+    }
+
+    // Wykonanie transakcji
+    playerCash -= amount;
+    stock.balanceSheet.liabilities -= amount;
+    
+    logEvent(`💸 Z prywatnych środków spłacono ${amount.toFixed(2)} PLN długu spółki ${stock.name}.`, 'company');
+    displayCash(); // Odśwież licznik gotówki na górze ekranu
+    
+    // Odśwież panel zarządzania na bieżąco
+    if (typeof openManagementModal === 'function') {
+        openManagementModal(symbol, 'main');
     }
 }

@@ -103,16 +103,6 @@ let antitrustOffice = {
 const ANTITRUST_UPGRADE_COSTS = [50000, 150000, 500000, 1500000, 5000000];
 
 
-if (typeof antitrustOffice === 'undefined') {
-    let antitrustOffice = {
-        level: 0,
-        analysisCapacity: 0.1,
-        accuracy: 0.2,
-        budget: 0
-    };
-    const ANTITRUST_UPGRADE_COSTS = [50000, 150000, 500000, 1500000, 5000000];
-}
-
 // --- FUNKCJE EKONOMICZNE ---
 
 // Aktualizacja stóp procentowych na podstawie Banku Centralnego

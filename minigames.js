@@ -8,6 +8,7 @@ let offsetX, offsetY; // Przesunięcie kursora względem rogu obrazka
 
 
 function startDragEmployeeMinigame() {
+    if (minigameInterval) clearInterval(minigameInterval);
     if (isMinigameActive) return; // Zapobiegaj wielokrotnemu uruchomieniu
 
     isMinigameActive = true;
