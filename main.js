@@ -87,6 +87,39 @@ function setGameSpeed(speedMultiplier) {
     // Główna pętla gry (aktualizacje co sekundę czasu gry)
     gameTimers.stockUpdate = setInterval(() => {
 
+        document.querySelectorAll('#stock-table-body tr').forEach(row => {
+    const symbol = row.dataset.symbol;
+    if (!symbol) return;
+    
+    const stock = stocks.find(s => s.symbol === symbol);
+    if (stock && stock.mergerProcess) {
+        // Złap pasek postępu i jego etykietę wewnątrz tego wiersza
+        const progressBar = row.querySelector('progress');
+        const statusTexts = row.querySelectorAll('span'); 
+        
+        if (progressBar) {
+            progressBar.value = stock.mergerProcess.progress;
+            
+            // Aktualizacja kolorów w zależności od statusu
+            if (stock.mergerProcess.decisionRequired) {
+                progressBar.classList.add('decision');
+            } else if (stock.mergerProcess.complications > 0) {
+                progressBar.classList.add('complication');
+                progressBar.classList.remove('decision');
+            } else {
+                progressBar.classList.remove('decision', 'complication');
+            }
+        }
+        
+        // Zaktualizuj tekst z aktualnym etapem (znajdujemy właściwy span po dopasowaniu tekstu)
+        statusTexts.forEach(span => {
+            if (span.textContent.includes('Etap:')) {
+                span.textContent = `Etap: ${stock.mergerProcess.stage}/7`;
+            }
+        });
+    }
+});
+
 
         if (isGamePaused) {
             return; // Jeśli gra jest zapauzowana, nie wykonuj żadnych akcji
@@ -98,11 +131,6 @@ function setGameSpeed(speedMultiplier) {
                 logEvent(`🛡️ Tarcza PR dla ${stock.name} wygasła.`, 'company');
             }
         });
-
-        if (document.getElementById('state-modal').style.display === 'block') {
-            updateStateModalContent();
-        }
-
 
         if (document.getElementById('state-modal').style.display === 'block') {
              // Sprawdź czy funkcja istnieje przed wywołaniem
@@ -150,7 +178,7 @@ function setGameSpeed(speedMultiplier) {
         processCeoActions(gameTimeDelta);
         runAllAi(); // Zawiera AI banków z bazy main.js
         checkPriceAlerts();
-        checkResearchChoiceTimers()
+        checkResearchChoiceTimers();
         updateResearchProgress(gameTimeDelta);
 
         // --- ODŚWIEŻANIE INTERFEJSU ---
@@ -299,6 +327,10 @@ gameTimers.weekly = setInterval(() => {
         if (typeof runPawnShopAI === 'function') {
             runPawnShopAI(); //
         }
+
+        if (typeof runCorporateLogic === 'function') {
+        runCorporateLogic(); // Obsługa działów i inwestycji
+    }
 
         processCompanyBanking(); //
         processBankStartupSponsorship(); //
@@ -673,7 +705,7 @@ function initializeGame() {
     // Inicjalizacja banków komercyjnych (ta funkcja teraz ustawia isActive dla banków startowych)
     initializeCommercialBanks(); // Tworzy banki, może ustawić isActiveFromStart
     generateCentralBankGovernor();
-
+    initializeConstructionCompanies();
     
     let activatedBankIds = []; // Tablica do śledzenia ID aktywowanych banków
     let activatedBanksCount = 0; // Licznik aktywowanych banków
@@ -832,31 +864,16 @@ function initializeGame() {
     // Przypisywanie kont bankowych spółkom
     console.log("[START GRY] Przypisywanie kont bankowych spółkom..."); // Log informacyjny
     const activeCorpAndUniBanks = commercialBanks.filter(b => b.isActive && (b.type === BANK_TYPES.CORPORATE || b.type === BANK_TYPES.UNIVERSAL));
+    console.log("[START GRY] Przypisywanie kont bankowych spółkom...");
     stocks.forEach(stock => {
-        if (!stock.assetType && !stock.isBankStock && !stock.bankAccountId) {
-            if (activeCorpAndUniBanks.length > 0) {
-                const assignedBank = getRandomElement(activeCorpAndUniBanks);
-                stock.bankAccountId = assignedBank.id;
-                assignedBank.corporateClients.push(stock.symbol);
-                if (stock.cash === undefined || stock.cash === 0) {
-                     if (!stock.balanceSheet) {
-                        initializeBalanceSheetForStock(stock);
-                     }
-                     if (stock.balanceSheet) {
-                        const initialCash = stock.balanceSheet.assets * getRandomInRange(0.01, 0.05);
-                        stock.cash = initialCash;
-                        assignedBank.cash += initialCash;
-                     } else {
-                         console.warn(`! Nie można zainicjalizować gotówki dla ${stock.symbol}, brak bilansu.`); // Zachowane ostrzeżenie
-                         stock.cash = 0;
-                     }
-                } else {
-                    assignedBank.cash += stock.cash;
-                }
-            } else {
-                console.warn(`! Brak aktywnych banków korporacyjnych/uniwersalnych do przypisania konta dla ${stock.symbol}`); // Zachowane ostrzeżenie
-                stock.cash = 0;
-            }
+        // Używamy funkcji z companies.js
+        if (typeof assignBankToCompany === 'function') {
+            assignBankToCompany(stock);
+        }
+        
+        // ZMIANA: Inicjalizacja działów dla WSZYSTKICH odpowiednich spółek na starcie
+        if (typeof initializeDepartments === 'function') {
+            initializeDepartments(stock);
         }
     });
 
@@ -1019,4 +1036,5 @@ function runAllAi() {
         runStateActions();
     }
 }
+
 

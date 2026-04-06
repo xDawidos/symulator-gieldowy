@@ -156,8 +156,14 @@ function aiTakeLoan(ai, amount) {
     const loanDurationWeeks = 26; // Stały okres dla AI
     const maturityDate = Date.now() + (loanDurationWeeks * BASE_DELAYS.weekly / currentSpeedMultiplier);
     const weeklyRate = interestRate / 52;
-    const weeklyPayment = amount * (weeklyRate * Math.pow(1 + weeklyRate, loanDurationWeeks)) / (Math.pow(1 + weeklyRate, loanDurationWeeks) - 1);
-
+    let weeklyPayment;
+if (weeklyRate === 0) {
+    // Brak odsetek, po prostu dzielimy kwotę przez czas
+    weeklyPayment = amount / loanDurationWeeks;
+} else {
+    // Twój stary, dobry wzór dla odsetek > 0
+    weeklyPayment = amount * (weeklyRate * Math.pow(1 + weeklyRate, loanDurationWeeks)) / (Math.pow(1 + weeklyRate, loanDurationWeeks) - 1);
+}
     // 4. Przeprowadź transakcję
     ai.cash += amount; // AI otrzymuje gotówkę
     bestBank.cash -= amount; // Bank wypłaca

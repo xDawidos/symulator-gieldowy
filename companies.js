@@ -312,7 +312,7 @@ const ALL_COMMERCIAL_BANKS_DEFINITIONS = [
 
     // Korporacyjne (3)
     { id: 'corp1', name: 'Syriusz Corp.', type: BANK_TYPES.CORPORATE, initialCapital: 7000000, reserveRatio: 0.15, baseInterestRateMargin: 0.015 },
-    { id: 'corp2', name: 'Krupiewicz Group S.a', type: BANK_TYPES.CORPORATE, initialCapital: 6500000, reserveRatio: 0.16, baseInterestRateMargin: 0.016 },
+    { id: 'corp2', name: 'Krupiewicz Group S.A', type: BANK_TYPES.CORPORATE, initialCapital: 6500000, reserveRatio: 0.16, baseInterestRateMargin: 0.016 },
     { id: 'corp3', name: 'Biuro Pokrytego Investment Group', type: BANK_TYPES.CORPORATE, initialCapital: 6000000, reserveRatio: 0.14, baseInterestRateMargin: 0.014 },
 
     // Uniwersalny (2)
@@ -1174,7 +1174,80 @@ const initialStocks = [
 
 ];
 
+const CONSTRUCTION_COMPANIES_DATA = [
+    { name: 'Budimix', exchange: 'GOLD', price: 450, volatility: 0.8, sector: ['Budowlany'] },
+    { name: 'DrogiStal', exchange: 'SILVER', price: 120, volatility: 1.1, sector: ['Budowlany', 'Przemysł'] },
+    { name: 'BobBuild', exchange: 'BRONZE', price: 40, volatility: 1.5, sector: ['Budowlany'] },
+    { name: 'Infrastrukturex', exchange: 'GOLD', price: 520, volatility: 0.7, sector: ['Budowlany'] },
+    { name: 'Budipol', exchange: 'SILVER', price: 180, volatility: 0.9, sector: ['Budowlany'] },
+    // Betonex już istnieje w initialStocks, zaktualizujemy go dynamicznie lub ręcznie
+    { name: 'Bractwo Stali', exchange: 'PLATINUM', price: 1600, volatility: 0.6, sector: ['Budowlany', 'Przemysł'] },
+    { name: 'Majsterbud', exchange: 'BRONZE', price: 25, volatility: 2.0, sector: ['Budowlany'] },
+    { name: 'Giereklud', exchange: 'GOLD', price: 380, volatility: 0.5, sector: ['Budowlany'], isStateOwned: true, stateOwnershipPct: 1.0 }
+];
 
+const INVESTMENT_CATALOG = {
+    'general': [
+        { 
+            id: 'marketing_campaign', 
+            name: "Kampania Marketingowa", 
+            icon: 'img/billboardicon.png', 
+            cost: 100000, duration: 4, assetValue: 0, incomeBonus: 0.15, healthBonus: 0, minDevLevel: 1,
+            maintenance: 0 // Marketing nie ma kosztów utrzymania po zakończeniu
+        },
+        { 
+            id: 'equipment_upgrade', 
+            name: "Modernizacja Sprzętu", 
+            icon: 'img/equipment.png', 
+            cost: 50000, duration: 2, assetValue: 30000, incomeBonus: 0.02, healthBonus: 0.5, minDevLevel: 1,
+            maintenance: 500 // Serwisowanie sprzętu
+        },
+        { 
+            id: 'software_update', 
+            name: "Aktualizacja Systemów IT", 
+            icon: 'img/update.png', 
+            cost: 20000, duration: 1, assetValue: 0, incomeBonus: 0.01, healthBonus: 0.1, minDevLevel: 1,
+            maintenance: 200 // Licencje
+        },
+        { 
+            id: 'new_branch', 
+            name: "Nowa Filia", 
+            icon: 'img/branch.png', 
+            cost: 200000, duration: 12, assetValue: 150000, incomeBonus: 0.1, healthBonus: 0.2, minDevLevel: 2,
+            maintenance: 2000 // Czynsz, media
+        },
+        { 
+            id: 'foreign_expansion', 
+            name: "Ekspansja Zagraniczna", 
+            icon: 'img/globe.png', 
+            cost: 1000000, duration: 36, assetValue: 800000, incomeBonus: 0.25, healthBonus: 0, minDevLevel: 3,
+            maintenance: 10000 // Biura zagraniczne
+        },
+        { 
+            id: 'employee_training', 
+            name: "Centrum Szkoleniowe", 
+            icon: 'img/box.png', 
+            cost: 150000, duration: 8, assetValue: 100000, incomeBonus: 0.03, healthBonus: 0.8, minDevLevel: 2,
+            maintenance: 1000 
+        }
+    ],
+    'Przemysł': [
+        { id: 'new_factory', name: "Nowa Fabryka", icon: 'img/fabrykaicon.png', cost: 800000, duration: 40, assetValue: 700000, incomeBonus: 0.2, healthBonus: 0.5, minDevLevel: 2, maintenance: 5000 },
+        { id: 'new_mine', name: "Nowy Szyb Wydobywczy", icon: 'img/mine.png', cost: 1500000, duration: 50, assetValue: 1200000, incomeBonus: 0.3, healthBonus: 0.2, minDevLevel: 3, maintenance: 8000 }
+    ],
+    'Technologia': [
+        { id: 'server_room', name: "Własna Serwerownia", icon: 'img/server.png', cost: 400000, duration: 16, assetValue: 300000, incomeBonus: 0.15, healthBonus: 0.2, minDevLevel: 2, maintenance: 3000 } // Prąd!
+    ],
+    'Medycyna': [
+        { id: 'research_lab', name: "Laboratorium Badawcze", icon: 'img/medlab.png', cost: 600000, duration: 20, assetValue: 500000, incomeBonus: 0.1, healthBonus: 1.5, minDevLevel: 2, maintenance: 4000 }
+    ],
+    'Energia': [
+        { id: 'energy_plant', name: "Rozbudowa Elektrowni", icon: 'img/fabrykaicon.png', cost: 1200000, duration: 30, assetValue: 1000000, incomeBonus: 0.18, healthBonus: 1.0, minDevLevel: 3, maintenance: 6000 }
+    ],
+    'Logistyka': [
+        { id: 'logistics_hub', name: "Centrum Logistyczne", icon: 'img/box.png', cost: 500000, duration: 24, assetValue: 400000, incomeBonus: 0.12, healthBonus: 0.3, minDevLevel: 2, maintenance: 2500 }
+    ]
+};
 
 
 // --- ETFy ---
@@ -1352,19 +1425,39 @@ function initializeBalanceSheetForStock(stock) {
 
     // Pomiń start-upy, REIT-y i inne specjalne typy
     if (stock.assetType || stock.isBankStock) { // Dodano isBankStock
-        console.log(`[INIT_BALANCE] Pomijanie inicjalizacji dla ${stock.symbol} (Typ: ${stock.assetType || 'Bank'})`);
+        
         stock.balanceSheet = { assets: 0, liabilities: 0, shareCapital: 0, retainedEarnings: 0 };
         stock.quarterlyEarnings = 0;
         stock.cash = 0; // Inicjalizuj gotówkę na 0 dla typów specjalnych
         return;
     }
 
-    console.log(`[INIT_BALANCE] Inicjalizacja bilansu/fazy dla ZWYKŁEJ spółki: ${stock.symbol}`);
+    if (stock.assetType || stock.isBankStock) {
+        stock.balanceSheet = { assets: 0, liabilities: 0, shareCapital: 0, retainedEarnings: 0 };
+        stock.cash = 0;
+        return;
+    }
 
     const marketCap = stock.price * stock.totalShares;
     const assets = marketCap * getRandomInRange(0.9, 1.5);
-    const liabilitiesRatio = getRandomInRange(0.1, 0.6) - (stock.financialHealth * 0.05);
-    const liabilities = assets * Math.max(0.05, liabilitiesRatio);
+    
+    // ZMIANA: Dług zależny od kondycji. Zdrowe firmy (Health > 1) mogą nie mieć długu.
+    let liabilitiesRatio = 0;
+    if (stock.financialHealth < 2) {
+        // Słabe firmy mają dług (10% - 60%)
+        liabilitiesRatio = getRandomInRange(0.1, 0.5) - (stock.financialHealth * 0.05);
+    } else {
+        // Dobre firmy mają mały dług lub wcale (0% - 30%)
+        if (Math.random() < 0.75) {
+            liabilitiesRatio = getRandomInRange(0.05, 0.3);
+        } else {
+            liabilitiesRatio = 0; // Brak długu
+        }
+    }
+    
+    // Zabezpieczenie, żeby dług nie był ujemny
+    const liabilities = assets * Math.max(0, liabilitiesRatio);
+    
     const equity = assets - liabilities;
     const shareCapital = equity * getRandomInRange(0.1, 0.2);
     const retainedEarnings = equity - shareCapital;
@@ -1376,15 +1469,11 @@ function initializeBalanceSheetForStock(stock) {
         retainedEarnings: retainedEarnings
     };
     stock.quarterlyEarnings = 0;
-
-    // ---> INICJALIZACJA GOTÓWKI <---
-    // Ustawmy początkową gotówkę jako mały procent aktywów
     stock.cash = assets * getRandomInRange(0.01, 0.05);
 
-    const exchangeLevel = exchanges[stock.exchange]?.level ?? 0; // Użyj ?? 0 dla bezpieczeństwa
-    stock.companyAge = getRandomIntInRange(1, 5) + exchangeLevel * 8; // Starsze firmy na wyższych giełdach
+    const exchangeLevel = exchanges[stock.exchange]?.level ?? 0;
+    stock.companyAge = getRandomIntInRange(1, 5) + exchangeLevel * 8;
 
-    // Faza startowa - zależna od wieku i kondycji
     if (stock.companyAge < 12 && stock.financialHealth >= 1) {
         stock.corporatePhase = CORPORATE_PHASES.GROWTH;
     } else if (stock.financialHealth <= -2) {
@@ -1392,16 +1481,13 @@ function initializeBalanceSheetForStock(stock) {
     } else {
         stock.corporatePhase = CORPORATE_PHASES.STABILITY;
     }
-    stock.phaseTimer = 0; // Licznik dla faz tymczasowych (np. Złoty Rok)
-    console.log(`[INIT_BALANCE] ${stock.symbol} - Wiek: ${stock.companyAge}, Faza: ${stock.corporatePhase}, Bilans zainicjalizowany.`);
-    // Jeśli firma ma przypisany bank, upewnij się, że bank też "ma" tę gotówkę
+    stock.phaseTimer = 0;
+    
     if (stock.bankAccountId) {
         const bank = commercialBanks.find(b => b.id === stock.bankAccountId);
-        if (bank) {
-            bank.cash += stock.cash; // Dodaj gotówkę firmy do zasobów banku
-        }
+        if (bank) bank.cash += stock.cash;
     }
-    // ---> KONIEC INICJALIZACJI GOTÓWKI <---
+
 }
 
 let stocks = JSON.parse(JSON.stringify(initialStocks)); // Inicjalizacja głównej tablicy
@@ -1588,6 +1674,9 @@ function processFinancialReports() {
             // WAŻNE: Resetujemy licznik zysków na następny kwartał
             stock.quarterlyEarnings = 0; 
         }
+        if (stock.fixedExpenses) {
+    quarterlyEarnings -= stock.fixedExpenses;
+}
         
         // Zapisz całkowity zysk/stratę
         stock.quarterlyEarnings = quarterlyEarnings;
@@ -3168,15 +3257,15 @@ function initializeCityCompanies() {
     privateCompanies = [];
     
     // 2. Stwórz spółki miejskie
-    const municipalNames = [
-        { name: "Oczyszczalnia Ścieków 'Woda Czysta'", type: 'utility', budget: 50000 },
-        { name: "Drogi i Zieleń Miejska", type: 'infrastructure', budget: 30000 },
-        { name: "Sortownia Odpadów 'EkoGdańsk'", type: 'utility', budget: 40000 },
-        { name: "Elektrociepłownia Miejska", type: 'energy', budget: 150000 },
-        { name: "Stadion Miejski", type: 'leisure', budget: 10000 },
-        { name: "Szpital Miejski", type: 'health', budget: 80000 },
-        { name: "Dom Kultury", type: 'leisure', budget: 5000 },
-        { name: "Wodociągi Miejskie", type: 'utility', budget: 60000 }
+   const municipalNames = [
+        { name: "Oczyszczalnia Ścieków 'Woda Czysta'", type: 'Usługi', budget: 50000 },
+        { name: "Drogi i Zieleń Miejska", type: 'Przemysł', budget: 30000 },
+        { name: "Sortownia Odpadów 'EkoGdańsk'", type: 'Usługi', budget: 40000 },
+        { name: "Elektrociepłownia Miejska", type: 'Energia', budget: 150000 },
+        { name: "Stadion Miejski", type: 'Turystyka', budget: 10000 },
+        { name: "Szpital Miejski", type: 'Medycyna', budget: 80000 },
+        { name: "Dom Kultury", type: 'Usługi', budget: 5000 },
+        { name: "Wodociągi Miejskie", type: 'Usługi', budget: 60000 }
     ];
 
     municipalNames.forEach(comp => {
@@ -3185,7 +3274,7 @@ function initializeCityCompanies() {
             name: comp.name,
             type: comp.type,
             budget: comp.budget,
-            baseIncome: comp.budget * 0.1 // Przykładowy roczny przychód
+            baseIncome: comp.budget * 0.1
         });
     });
 
@@ -5058,9 +5147,11 @@ function applyTechnology(stock, techId) {
         // Nie, gracz nie ma kontroli (lub umiejętność nie jest odblokowana). Wybierz losowo.
         // Znajdź dostępne technologie w tej samej specjalizacji
         const availableTechs = Object.keys(technologies).filter(id =>
-            !stock.research.unlockedTechs.includes(id) && // Jeszcze nie zbadana
-            (technologies[id].sector === 'common' || stock.sector.includes(technologies[id].sector)) && // Pasuje do sektora
-            technologies[id].type === stock.research.specialization // Pasuje do specjalizacji
+    !stock.research.unlockedTechs.includes(id) &&
+    (technologies[id].sector === 'common' || stock.sector.includes(technologies[id].sector)) &&
+    technologies[id].type === stock.research.specialization &&
+    isTechAvailableForCompany(stock, id) // <--- DODANO WARUNEK
+            
         );
 
         if (availableTechs.length > 0) {
@@ -5203,6 +5294,9 @@ function updateResearchProgress(deltaTime) {
                     if (stock.ceo.traits.some(t => t.id === 'biurowy_dron')) ceoMultiplier *= 1.05;
                     if (stock.ceo.traits.some(t => t.id === 'ksiegowy')) ceoMultiplier *= 0.95;
                     if (stock.ceo.traits.some(t => t.id === 'lowca_glow')) ceoMultiplier *= 1.10;
+                }
+                if (stock.departments && stock.departments.research.level >= 3) {
+            baseSpeedMultiplier *= 1.10; // +10% prędkości
                 }
 
                 let phaseMultiplier = 1.0;
@@ -5609,9 +5703,27 @@ function confirmCeoChange(symbol, candidateIndex) {
 
 function updateCeoTenureAndAge() {
     stocks.forEach(stock => {
-        if (stock.ceo && stock.ceo.tenure !== undefined) {
-            stock.ceo.tenure += 4; // Dodajemy 4 kwartały (rok)
-            stock.ceo.age += 1; // Prezes starzeje się o rok
+        // Sprawdzamy tylko aktywne spółki z prezesami
+        if (stock.ceo && !stock.isBankrupt && !stock.assetType) {
+            
+            // 1. Podstawowe starzenie prezesa
+            stock.ceo.age += 1;
+            stock.ceo.tenure += 4; // Dodajemy 4 kwartały do stażu
+            
+            // 2. NOWOŚĆ: Logika przejścia na emeryturę (start od 65 lat)
+            if (stock.ceo.age >= 65) {
+                // Szansa rośnie z każdym rokiem (65 lat = 15%, 66 lat = 30%, 70 lat = 90%)
+                const retirementChance = (stock.ceo.age - 64) * 0.15; 
+                
+                if (Math.random() < retirementChance) {
+                    logEvent(`👴 Prezes ${stock.ceo.name} (${stock.name}) przeszedł na zasłużoną emeryturę w wieku ${stock.ceo.age} lat.`, 'company');
+                    
+                    // Powołanie nowej osoby na miejsce starego prezesa
+                    if (typeof generateCEO === 'function') {
+                        generateCEO(stock);
+                    }
+                }
+            }
         }
     });
 }
@@ -6524,5 +6636,675 @@ if (typeof window !== 'undefined') {
         }
     } catch (e) {
         console.warn('[diag] Nie udało się przypisać initializeDividendEstimates do window:', e);
+    }
+}
+
+function initializeConstructionCompanies() {
+    CONSTRUCTION_COMPANIES_DATA.forEach(data => {
+        const tempSymbol = data.name.substring(0, 3).toUpperCase() + 'B';
+        const existing = stocks.find(s => s.symbol === tempSymbol || s.name === data.name);
+        
+        if (existing) {
+            if (!existing.sector.includes('Budowlany')) existing.sector.push('Budowlany');
+            if (!existing.constructionStats) {
+                existing.constructionStats = { experience: getRandomIntInRange(10, 80), maxProjects: 2, currentProjects: 0 };
+            }
+            if (!existing.departments) initializeDepartments(existing);
+            if (!existing.bankAccountId) assignBankToCompany(existing);
+            return;
+        }
+
+        // ZMIANA: Losowa liczba akcji zamiast MAX
+        const range = SHARE_LIMIT_RANGES[data.exchange];
+        const totalShares = getRandomIntInRange(range.min, range.max);
+
+        // ZMIANA: Losowa polityka dywidendowa
+        const policies = ['Balanced', 'Aggressive', 'Growth', 'Total'];
+        const randomPolicy = getRandomElement(policies);
+
+        const newStock = {
+            name: data.name,
+            symbol: tempSymbol, 
+            price: data.price,
+            volatilityFactor: data.volatility,
+            exchange: data.exchange,
+            totalShares: totalShares,
+            maxShares: totalShares, // Na start max = total
+            sharesHeld: data.isStateOwned ? Math.floor(totalShares * data.stateOwnershipPct) : 0,
+            sector: data.sector,
+            financialHealth: 1,
+            // Bilans startowy
+            balanceSheet: { assets: data.price * totalShares, liabilities: 0, shareCapital: data.price * totalShares * 0.1, retainedEarnings: 0 },
+            quarterlyEarnings: 0,
+            cash: data.price * totalShares * 0.05, 
+            priceHistory: [], candlestickHistory: [], lineHistory: [], playerTransactions: [],
+            isStateOwned: data.isStateOwned || false,
+            stateOwnershipPct: data.stateOwnershipPct || 0,
+            dividendPolicy: randomPolicy, // Zastosowanie losowej polityki
+            dividendTimer: getRandomIntInRange(60000, 120000),
+            
+            constructionStats: {
+                experience: getRandomIntInRange(0, 50),
+                maxProjects: data.exchange === 'PLATINUM' ? 5 : (data.exchange === 'GOLD' ? 3 : 2),
+                currentProjects: 0
+            }
+        };
+        
+        initializeDescriptionParts(newStock);
+        generateCEO(newStock);
+        initializeDepartments(newStock);
+        assignBankToCompany(newStock);
+        initializeReputation(newStock);
+        
+        stocks.push(newStock);
+    });
+    console.log("[COMPANIES] Sektor budowlany zainicjalizowany (z losowością).");
+}
+
+// --- FUNKCJE LOGIKI DZIAŁÓW I INWESTYCJI (Wklej na dole companies.js) ---
+
+function initializeDepartments(stock) {
+    // Pomiń typy specjalne, one nie mają działów
+    if (stock.assetType || stock.isBankStock) return;
+
+    stock.departments = {
+        research: { level: getRandomIntInRange(0, 1) },
+        development: { level: getRandomIntInRange(0, 1) },
+        economy: { level: getRandomIntInRange(0, 1) }
+    };
+    stock.activeInvestments = [];
+}
+
+function runCorporateLogic() {
+    stocks.forEach(stock => {
+        if (stock.assetType || stock.isBankrupt || stock.isBankStock) return;
+        
+        // Autonaprawa działów
+        if (!stock.departments) initializeDepartments(stock);
+        if (!stock.departments) return; 
+
+        // --- 1. Dział Ekonomii ---
+        if (stock.departments.economy.level >= 1) {
+            // Bonus pasywny do income jest liczony w updateStockPrices/raportach, tutaj logika operacyjna
+            
+            // Lvl 2: Optymalizacja Bankowa (Szukanie lepszego oprocentowania)
+            if (stock.departments.economy.level >= 2 && Math.random() < 0.02) { // Raz na jakiś czas
+                optimizeBankChoice(stock);
+            }
+        }
+
+        // --- 2. Dział Rozwoju ---
+        if (stock.departments.development.level >= 1) {
+            const maxProjects = stock.departments.development.level; // Lvl 1=1 projekt, Lvl 3=3 projekty
+            
+            if (!stock.activeInvestments) stock.activeInvestments = [];
+            
+            if (stock.activeInvestments.length < maxProjects) {
+                // AI decyduje o inwestycji jeśli ma nadmiar gotówki
+                if (stock.cash > 150000 && Math.random() < 0.03) {
+                    startRandomInvestment(stock);
+                }
+            }
+            processActiveInvestments(stock);
+        }
+        
+        // --- 3. Dział Badań ---
+        // Logika (bonus prędkości i odblokowanie Tier 2) jest sprawdzana w updateResearchProgress i applyTechnology
+    });
+}
+
+// Dodaj funkcję optymalizacji banku (Ekonomia Lvl 2), jeśli jej nie masz:
+function optimizeBankChoice(stock) {
+    const currentBank = commercialBanks.find(b => b.id === stock.bankAccountId);
+    if (!currentBank) return;
+
+    // Jeśli firma ma dużo gotówki -> szuka wyższego oprocentowania depozytów
+    // Jeśli firma ma dług -> szuka niższego oprocentowania kredytów
+    const lookingForDeposit = stock.cash > 0;
+    
+    let bestBank = currentBank;
+    let bestRate = lookingForDeposit ? currentBank.interestRateDeposit : currentBank.interestRateLoan;
+
+    commercialBanks.filter(b => b.isActive && (b.type === 'Korporacyjny' || b.type === 'Uniwersalny')).forEach(bank => {
+        if (lookingForDeposit) {
+            if (bank.interestRateDeposit > bestRate) { bestRate = bank.interestRateDeposit; bestBank = bank; }
+        } else {
+            if (bank.interestRateLoan < bestRate) { bestRate = bank.interestRateLoan; bestBank = bank; }
+        }
+    });
+
+    if (bestBank.id !== currentBank.id) {
+        // Przenieś konto
+        changeCompanyBank(stock.symbol, bestBank.id);
+        // Log tylko dla gracza jeśli ma wgląd (Accountant skill)
+        // console.log(`[Ekonomia AI] ${stock.name} przenosi konto do ${bestBank.name}`);
+    }
+}
+
+function startRandomInvestment(stock) {
+    let options = [...INVESTMENT_CATALOG['general']];
+    if (stock.sector[0] && INVESTMENT_CATALOG[stock.sector[0]]) {
+        options = options.concat(INVESTMENT_CATALOG[stock.sector[0]]);
+    }
+    options = options.filter(inv => stock.departments.development.level >= inv.minDevLevel);
+    if (options.length === 0) return;
+    
+    const investment = getRandomElement(options);
+    const cost = stock.departments.development.level >= 3 ? investment.cost * 0.9 : investment.cost; 
+    
+    // ZMIANA: Używamy funkcji financeInvestment zamiast sprawdzać tylko gotówkę
+    if (financeInvestment(stock, cost)) {
+        if (investment.duration > 4) { 
+            triggerTender(stock, investment, cost);
+        } else {
+            stock.activeInvestments.push({
+                id: investment.id,
+                name: investment.name,
+                totalDuration: investment.duration,
+                progress: 0,
+                data: investment,
+                contractor: null,
+                cost: cost
+            });
+            logEvent(`🏢 ${stock.name} rozpoczyna projekt: ${investment.name} (Koszt: ${cost.toFixed(0)}).`, 'company');
+        }
+    }
+}
+
+function triggerTender(clientStock, investment, estimatedCost) {
+    // Znajdź firmy budowlane
+    const builders = stocks.filter(s => s.sector.includes('Budowlany') && !s.isBankrupt && s.constructionStats);
+    const availableBuilders = builders.filter(b => b.constructionStats.currentProjects < b.constructionStats.maxProjects);
+    
+    if (availableBuilders.length === 0) {
+        // Brak wykonawców, odkładamy na później
+        return;
+    }
+
+    // Kryteria klienta (losowe wagi)
+    const weightPrice = getRandomInRange(0.3, 0.7);
+    const weightTime = getRandomInRange(0.1, 0.4);
+    const weightExp = 1 - weightPrice - weightTime;
+    const preferState = clientStock.isStateOwned; // Państwowe wolą państwowe
+
+    let bestScore = -1;
+    let winner = null;
+    let winningOffer = null;
+
+    availableBuilders.forEach(builder => {
+        // Generowanie oferty
+        const basePrice = estimatedCost;
+        const priceOffer = basePrice * getRandomInRange(0.9, 1.2); // 90% - 120% szacunku
+        const timeOffer = investment.duration * getRandomInRange(0.8, 1.3); // Czas
+        
+        // Punktacja (im mniej tym lepiej dla ceny/czasu, im więcej tym lepiej dla exp)
+        // Normalizacja: (Base / Offer) * waga
+        let score = (basePrice / priceOffer) * weightPrice * 100 + 
+                    (investment.duration / timeOffer) * weightTime * 100 +
+                    (builder.constructionStats.experience / 100) * weightExp * 100;
+        
+        if (preferState && builder.isStateOwned) score += 15; // Bonus za państwowość
+
+        if (score > bestScore) {
+            bestScore = score;
+            winner = builder;
+            winningOffer = { price: priceOffer, time: Math.ceil(timeOffer) };
+        }
+    });
+
+    if (winner) {
+        // Transakcja
+        clientStock.cash -= winningOffer.price;
+        winner.cash += winningOffer.price * 0.2; // Zaliczka 20% dla budowlańca (reszta w koszty mat.)
+        if (winner.balanceSheet) winner.balanceSheet.assets += winningOffer.price * 0.1; // Zysk
+        
+        winner.constructionStats.currentProjects++;
+        
+        clientStock.activeInvestments.push({
+            id: investment.id,
+            name: investment.name,
+            totalDuration: winningOffer.time,
+            progress: 0,
+            data: investment,
+            contractor: winner.symbol,
+            cost: winningOffer.price
+        });
+
+        logEvent(`🏗️ Przetarg w ${clientStock.name} na "${investment.name}" wygrywa ${winner.name}! Koszt: ${winningOffer.price.toFixed(0)} PLN.`, 'company');
+    }
+}
+
+function processActiveInvestments(stock) {
+    for (let i = stock.activeInvestments.length - 1; i >= 0; i--) {
+        const project = stock.activeInvestments[i];
+        
+        // Postęp
+        let speed = 1;
+        if (project.contractor) {
+            const builder = stocks.find(s => s.symbol === project.contractor);
+            if (builder) {
+                // Bonus z doświadczenia budowlańca
+                speed += (builder.constructionStats.experience / 200); 
+                // Ryzyko opóźnienia
+                if (Math.random() < 0.05) {
+                    speed = 0; // Przestój w tym tygodniu
+                    // logEvent(`⚠️ Opóźnienie na budowie u ${stock.name}...`);
+                }
+            }
+        }
+        
+        project.progress += speed;
+
+        if (project.progress >= project.totalDuration) {
+            // Koniec inwestycji
+            finishInvestment(stock, project);
+            stock.activeInvestments.splice(i, 1);
+        }
+    }
+}
+
+function finishInvestment(stock, project) {
+    const data = project.data;
+    
+    // 1. Zwiększ aktywa (Assets)
+    if (stock.balanceSheet) {
+        stock.balanceSheet.assets += data.assetValue;
+    }
+
+    // 2. ZMIANA: Dodaj koszty utrzymania (Fixed Expenses)
+    if (data.maintenance > 0) {
+        // Inicjuj pole, jeśli nie istnieje
+        if (!stock.fixedExpenses) stock.fixedExpenses = 0;
+        stock.fixedExpenses += data.maintenance;
+    }
+
+    // 3. Bonus do przychodów (Income Bonus) - symulujemy przez Financial Health
+    // (W realnym modelu powinno to zwiększać revenue, ale health wpływa na earnings w reports)
+    stock.financialHealth += data.healthBonus;
+    
+    applyPriceEffect(stock.symbol, data.incomeBonus * 0.5, 'positive', 'company'); 
+
+    if (project.contractor) {
+        const builder = stocks.find(s => s.symbol === project.contractor);
+        if (builder && builder.constructionStats) {
+            builder.constructionStats.currentProjects--;
+            builder.constructionStats.experience += 1; 
+            applyPriceEffect(builder.symbol, 0.02, 'positive', 'company'); 
+        }
+    }
+
+    logEvent(`✅ ${stock.name} zakończył inwestycję: "${project.name}"! (Aktywa: +${data.assetValue}, Koszty stałe: +${data.maintenance}/kw)`, 'success');
+}
+
+function payDividendToShareholders(stock, dividendPerShare) {
+    // Obsługa spółek zależnych (transfer do matki)
+    if (stock.isSubsidiaryOf) {
+        const parentStock = stocks.find(s => s.symbol === stock.isSubsidiaryOf);
+        if (parentStock) {
+            const totalDividendFromSubsidiary = stock.totalShares * dividendPerShare;
+            if (parentStock.cash !== undefined) {
+                 parentStock.cash += totalDividendFromSubsidiary;
+                 if (parentStock.balanceSheet) {
+                    parentStock.balanceSheet.assets += totalDividendFromSubsidiary;
+                    parentStock.balanceSheet.retainedEarnings += totalDividendFromSubsidiary;
+                 }
+            }
+            logEvent(`💸 Spółka zależna ${stock.name} przekazuje ${totalDividendFromSubsidiary.toFixed(2)} PLN dywidendy do ${parentStock.name}.`, 'company');
+            stock.price -= dividendPerShare;
+            if (stock.price < 0.01) stock.price = 0.01;
+            return;
+        }
+    }
+
+    // Standardowa wypłata
+    const taxRateDividend = TAX_RATES.dividend; // Pobieramy z economy.js
+
+    // 1. Wypłata dla Gracza
+    if (playerPortfolio[stock.symbol]) {
+        let finalDividendPerShare = dividendPerShare;
+        const playerRep = stock.reputation ? stock.reputation['player'] : 0;
+
+        // Modyfikatory reputacji
+        if (playerRep < REPUTATION_LEVELS.NEGATIVE) finalDividendPerShare *= 0.8;
+        else if (playerRep >= REPUTATION_LEVELS.POSITIVE) finalDividendPerShare *= 1.05;
+
+        const grossDividend = playerPortfolio[stock.symbol].shares * finalDividendPerShare;
+
+        // Podatki (San Escobar)
+        let playerTaxModifier = 1.0;
+        const sanEscobarLvl = getSkillLevel('sanEscobar'); // Funkcja z player.js jest dostępna globalnie
+        if (sanEscobarLvl >= 1) playerTaxModifier = 0.95;
+        if (sanEscobarLvl >= 4) playerTaxModifier = 0.0;
+
+        const taxToPay = grossDividend * taxRateDividend * playerTaxModifier;
+        const netDividend = grossDividend - taxToPay;
+        
+        governmentTreasury += taxToPay;
+        playerCash += netDividend; // Zmienna z player.js
+        
+        logEvent(`💰 Otrzymujesz ${netDividend.toFixed(2)} PLN dywidendy netto od ${stock.name} (podatek: ${taxToPay.toFixed(2)} PLN).`, 'review');
+        displayCash(); // Funkcja z ui.js
+    }
+
+    // 2. Wypłata dla AI
+    aiCompetitors.forEach(ai => {
+        if (ai.portfolio[stock.symbol]) {
+            let finalDividendPerShare = dividendPerShare;
+            const aiRep = stock.reputation ? stock.reputation[ai.id] : 0;
+            
+            if (aiRep < REPUTATION_LEVELS.NEGATIVE) finalDividendPerShare *= 0.8;
+            else if (aiRep >= REPUTATION_LEVELS.POSITIVE) finalDividendPerShare *= 1.05;
+
+            const grossDividend = ai.portfolio[stock.symbol].shares * finalDividendPerShare;
+            
+            // Podatek AI
+            let aiTaxModifier = 1.0;
+            const aiSanEscobarLvl = ai.unlockedSkills ? (ai.unlockedSkills['sanEscobar'] || 0) : 0;
+            if (aiSanEscobarLvl >= 1) aiTaxModifier = 0.95;
+            if (aiSanEscobarLvl >= 4) aiTaxModifier = 0.0;
+
+            const taxToPay = grossDividend * taxRateDividend * aiTaxModifier;
+            const netDividend = grossDividend - taxToPay;
+            
+            governmentTreasury += taxToPay;
+            ai.cash += netDividend;
+        }
+    });
+
+    // 3. Spadek ceny akcji (odcięcie dywidendy)
+    stock.price -= dividendPerShare;
+    if (stock.price < 0.01) stock.price = 0.01;
+    
+    console.log(`[Dywidenda] Wypłacono dywidendę ${dividendPerShare.toFixed(2)} dla ${stock.symbol}`);
+}
+
+function assignBankToCompany(stock) {
+    // Jeśli to bank, startup, holding lub już ma konto - pomiń
+    if (stock.assetType || stock.isBankStock || stock.bankAccountId) return;
+
+    const activeCorpAndUniBanks = commercialBanks.filter(b => b.isActive && (b.type === 'Korporacyjny' || b.type === 'Uniwersalny'));
+    
+    if (activeCorpAndUniBanks.length > 0) {
+        const assignedBank = getRandomElement(activeCorpAndUniBanks);
+        stock.bankAccountId = assignedBank.id;
+        
+        // Upewnij się, że tablica klientów istnieje
+        if (!assignedBank.corporateClients) assignedBank.corporateClients = [];
+        if (!assignedBank.corporateClients.includes(stock.symbol)) {
+            assignedBank.corporateClients.push(stock.symbol);
+        }
+
+        // Wpłać gotówkę firmy do banku (symulacja)
+        if (stock.cash > 0) {
+            assignedBank.cash += stock.cash;
+        }
+        console.log(`[BANKING] Przypisano ${stock.name} do banku ${assignedBank.name}`);
+    }
+}
+
+function isTechAvailableForCompany(stock, techId) {
+    const tech = technologies[techId];
+    const deptLevel = stock.departments ? stock.departments.research.level : 0;
+    
+    // Wymagany poziom (domyślnie 1)
+    const requiredLevel = tech.minResearchLevel || 1;
+    
+    return deptLevel >= requiredLevel;
+}
+
+function optimizeBankChoice(stock) {
+    // Działa tylko dla Działu Ekonomii Lvl 2+
+    if (!stock.departments || stock.departments.economy.level < 2) return;
+    
+    // Wykonuj rzadko (np. 5% szans na tydzień), żeby firmy nie skakały ciągle
+    if (Math.random() > 0.05) return;
+
+    const currentBank = commercialBanks.find(b => b.id === stock.bankAccountId);
+    if (!currentBank) return;
+
+    // Sprawdź oprocentowanie depozytów (dla firm z gotówką) lub kredytów (dla zadłużonych)
+    const isSaver = stock.cash > 0;
+    
+    let bestBank = currentBank;
+    let bestRate = isSaver ? currentBank.interestRateDeposit : currentBank.interestRateLoan;
+
+    commercialBanks.filter(b => b.isActive && (b.type === 'Korporacyjny' || b.type === 'Uniwersalny')).forEach(bank => {
+        if (isSaver) {
+            // Szukamy wyższego oprocentowania depozytów
+            if (bank.interestRateDeposit > bestRate) {
+                bestRate = bank.interestRateDeposit;
+                bestBank = bank;
+            }
+        } else {
+            // Szukamy niższego oprocentowania kredytów
+            if (bank.interestRateLoan < bestRate) {
+                bestRate = bank.interestRateLoan;
+                bestBank = bank;
+            }
+        }
+    });
+
+    // Jeśli znaleziono lepszy bank (różnica min. 0.5 p.p.)
+    if (bestBank.id !== currentBank.id && Math.abs(bestRate - (isSaver ? currentBank.interestRateDeposit : currentBank.interestRateLoan)) > 0.005) {
+        changeCompanyBank(stock.symbol, bestBank.id); // Używamy istniejącej funkcji z player.js/companies.js
+        logEvent(`📊 Dział Ekonomii ${stock.name} przenosi konto do ${bestBank.name} dla lepszych warunków.`, 'company');
+    }
+}
+
+function forceCompanyInvestment(symbol, investmentId) {
+    const stock = stocks.find(s => s.symbol === symbol);
+    if (!stock) return;
+
+    // Znajdź definicję inwestycji w katalogu
+    let investment = null;
+    // Przeszukaj 'general'
+    investment = INVESTMENT_CATALOG['general'].find(inv => inv.id === investmentId);
+    // Jeśli nie ma, przeszukaj sektorowe
+    if (!investment && stock.sector[0] && INVESTMENT_CATALOG[stock.sector[0]]) {
+        investment = INVESTMENT_CATALOG[stock.sector[0]].find(inv => inv.id === investmentId);
+    }
+
+    if (!investment) {
+        console.error("Nie znaleziono inwestycji o ID:", investmentId);
+        return;
+    }
+
+    // Sprawdź wymagania
+    if (stock.departments.development.level < investment.minDevLevel) {
+        alert(`Wymagany poziom Działu Rozwoju: ${investment.minDevLevel}`);
+        return;
+    }
+
+    // Oblicz koszt (ze zniżką dla Lvl 3)
+    const cost = stock.departments.development.level >= 3 ? investment.cost * 0.9 : investment.cost;
+
+    if (stock.cash < cost) {
+        alert(`Firma nie ma wystarczająco gotówki! Potrzeba: ${cost.toLocaleString()} PLN.`);
+        return;
+    }
+
+    // Sprawdź limit projektów
+    const maxProjects = stock.departments.development.level;
+    if (stock.activeInvestments.length >= maxProjects) {
+        alert(`Osiągnięto limit jednoczesnych inwestycji (${maxProjects}). Ulepsz dział lub poczekaj na zakończenie obecnych.`);
+        return;
+    }
+
+    // === URUCHOMIENIE (Logika z companies.js) ===
+    // Musimy wywołać logikę przetargu lub startu wewnętrznego.
+    // Ponieważ triggerTender jest w companies.js, a my jesteśmy w player.js,
+    // możemy zduplikować tę małą logikę decyzyjną lub wywołać helper.
+    
+    // Decyzja: Budowa czy Wewnętrzne?
+    if (investment.duration > 4) {
+        // Wywołujemy funkcję z companies.js
+        if (typeof triggerTender === 'function') {
+            triggerTender(stock, investment, cost);
+            showToast(`Rozpisano przetarg na: ${investment.name}`, 'success');
+        }
+    } else {
+        // Realizacja wewnętrzna
+        stock.cash -= cost;
+        stock.activeInvestments.push({
+            id: investment.id,
+            name: investment.name,
+            totalDuration: investment.duration,
+            progress: 0,
+            data: investment,
+            contractor: null,
+            cost: cost
+        });
+        logEvent(`👑 Na wniosek właściciela, ${stock.name} rozpoczyna projekt: ${investment.name}.`, 'company');
+        showToast(`Rozpoczęto projekt: ${investment.name}`, 'success');
+    }
+
+    // Odśwież UI
+    if (typeof openManagementModal === 'function') {
+        openManagementModal(symbol, 'depts');
+    }
+}
+
+function financeInvestment(stock, cost) {
+    // Jeśli mamy dużo gotówki, płacimy z kieszeni
+    if (stock.cash >= cost) {
+        stock.cash -= cost;
+        return true;
+    }
+    
+    // Jeśli brakuje gotówki, sprawdzamy zdolność kredytową
+    // (Dług nie może przekroczyć 70% aktywów)
+    const currentDebt = stock.balanceSheet ? stock.balanceSheet.liabilities : 0;
+    const assets = stock.balanceSheet ? stock.balanceSheet.assets : 1;
+    
+    if ((currentDebt + cost) / assets < 0.7) {
+        // Bierzemy dług inwestycyjny!
+        // Wzrost pasywów (zobowiązań)
+        if (stock.balanceSheet) {
+            stock.balanceSheet.liabilities += cost;
+        }
+        // Teoretycznie bank przelewa nam kasę, którą od razu wydajemy na budowę.
+        // W uproszczeniu: Dług rośnie, gotówka bez zmian (bo wydana), ale przybędzie Aktywów po zakończeniu budowy.
+        return true;
+    }
+    
+    return false; // Nie stać nas ani na gotówkę, ani na kredyt
+}
+
+function blockInvestment(symbol, investmentId) {
+    const stock = stocks.find(s => s.symbol === symbol);
+    const isMajority = (playerPortfolio[symbol]?.shares / stock.totalShares) > 0.5;
+    const hasCharisma = getSkillLevel('charisma') >= 4;
+
+    if (!isMajority && !hasCharisma) {
+        alert("Nie masz wystarczającej władzy, by zablokować tę inwestycję (wymagane >50% akcji lub Charyzma Lvl 4).");
+        return;
+    }
+
+    const invIndex = stock.activeInvestments.findIndex(inv => inv.id === investmentId);
+    if (invIndex > -1) {
+        const inv = stock.activeInvestments[invIndex];
+        
+        if (!confirm(`Czy na pewno chcesz zablokować inwestycję "${inv.name}"? Spółka straci część zainwestowanych środków, a Twoja reputacja spadnie.`)) {
+            return;
+        }
+
+        // 1. Zwrot części kosztów (ale tylko 60% - reszta to kary umowne/straty)
+        // Jeśli finansowano długiem, zmniejszamy dług
+        if (stock.balanceSheet && stock.balanceSheet.liabilities >= inv.cost) {
+            stock.balanceSheet.liabilities -= (inv.cost * 0.6); // Umarzamy część długu
+        } else {
+            stock.cash += (inv.cost * 0.6); // Zwracamy gotówkę
+        }
+        
+        // 2. Kara do reputacji (Bolesna)
+        changeReputation('player', symbol, -35); // Bardzo duży cios
+        
+        // 3. Usunięcie projektu
+        stock.activeInvestments.splice(invIndex, 1);
+        
+        logEvent(`⛔ [KORONA] Zablokowałeś inwestycję "${inv.name}" w ${stock.name}. Relacje z zarządem są napięte (-35 rep).`, 'review');
+        showToast(`Inwestycja zablokowana. Strata wizerunkowa!`, 'warning');
+
+        if (typeof openManagementModal === 'function') openManagementModal(symbol, 'depts');
+    }
+}
+
+function forceCompanyInvestment(symbol, investmentId) {
+    const stock = stocks.find(s => s.symbol === symbol);
+    if (!stock) return;
+
+    // 1. Znajdź definicję inwestycji w katalogu
+    let investment = null;
+    // Przeszukaj 'general'
+    investment = INVESTMENT_CATALOG['general'].find(inv => inv.id === investmentId);
+    // Jeśli nie ma, przeszukaj sektorowe
+    if (!investment && stock.sector[0] && INVESTMENT_CATALOG[stock.sector[0]]) {
+        investment = INVESTMENT_CATALOG[stock.sector[0]].find(inv => inv.id === investmentId);
+    }
+
+    if (!investment) {
+        console.error("Nie znaleziono inwestycji o ID:", investmentId);
+        return;
+    }
+
+    // 2. Sprawdź wymagania (Poziom Działu)
+    if (stock.departments.development.level < investment.minDevLevel) {
+        alert(`Wymagany poziom Działu Rozwoju: ${investment.minDevLevel}`);
+        return;
+    }
+
+    // 3. Sprawdź limit projektów
+    const maxProjects = stock.departments.development.level;
+    if (stock.activeInvestments.length >= maxProjects) {
+        alert(`Osiągnięto limit jednoczesnych inwestycji (${maxProjects}). Ulepsz dział lub poczekaj na zakończenie obecnych.`);
+        return;
+    }
+
+    // 4. Oblicz koszt (ze zniżką dla Lvl 3)
+    const cost = stock.departments.development.level >= 3 ? investment.cost * 0.9 : investment.cost;
+
+    // 5. Finansowanie (Gotówka lub Kredyt Inwestycyjny)
+    // Używamy helpera financeInvestment z companies.js
+    let financed = false;
+    if (typeof financeInvestment === 'function') {
+        financed = financeInvestment(stock, cost);
+    } else {
+        // Fallback, jeśli helpera nie ma (płacimy tylko gotówką)
+        if (stock.cash >= cost) {
+            stock.cash -= cost;
+            financed = true;
+        }
+    }
+
+    if (!financed) {
+        alert(`Firma nie ma zdolności finansowej (gotówki ani zdolności kredytowej) na tę inwestycję! Koszt: ${cost.toLocaleString()} PLN.`);
+        return;
+    }
+
+    // 6. Uruchomienie (Przetarg lub Wewnętrzne)
+    if (investment.duration > 4) {
+        // Długie projekty -> Przetarg (funkcja z companies.js)
+        if (typeof triggerTender === 'function') {
+            triggerTender(stock, investment, cost);
+            showToast(`Rozpisano przetarg na: ${investment.name}`, 'success');
+        }
+    } else {
+        // Krótkie projekty -> Realizacja natychmiastowa
+        stock.activeInvestments.push({
+            id: investment.id,
+            name: investment.name,
+            totalDuration: investment.duration,
+            progress: 0,
+            data: investment,
+            contractor: null,
+            cost: cost
+        });
+        logEvent(`👑 Na wniosek właściciela, ${stock.name} rozpoczyna projekt: ${investment.name}.`, 'company');
+        showToast(`Rozpoczęto projekt: ${investment.name}`, 'success');
+    }
+
+    // 7. Odśwież UI
+    if (typeof openManagementModal === 'function') {
+        openManagementModal(symbol, 'depts');
     }
 }
