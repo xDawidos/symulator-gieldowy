@@ -556,6 +556,11 @@ gameTimers.weekly = setInterval(() => {
             processCityAndCitizenTaxes(); //
         }
 
+        // Przetwarzanie konsorcjów budowlanych
+        if (typeof processConstructionConsortia === 'function') {
+            processConstructionConsortia();
+        }
+
         if (playerCash > 0) displayCash(); //
 
     }, BASE_DELAYS.weekly / speedMultiplier);

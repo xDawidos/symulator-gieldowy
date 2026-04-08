@@ -17,6 +17,7 @@
         <button id="open-bank-btn" onclick="openBankModal()">🏦 Bank</button>
         <button id="open-state-btn" onclick="openStateModal()">🏛️ Państwo</button>
         <button id="open-city-btn" onclick="openCityInvestmentModal()">🏙️ Miasto</button>
+        <button id="open-construction-btn" onclick="openConstructionSectorModal()">🏗️ Budownictwo</button>
         <button id="open-skills-btn" onclick="openSkillsModal()">🧠 Umiejętności</button>
         <button id="open-newspaper-btn" onclick="openNewspaperModal()">📰 Gazeta</button>
         <button id="open-leaderboard-btn" onclick="openLeaderboardModal()">🏆 Ranking</button>
@@ -1072,6 +1073,18 @@
 
     <div id="chart-tooltip" style="display: none; position: absolute;"></div>
     <div id="toast-notification"></div>
+
+<!-- Modal Sektora Budowlanego -->
+<div id="construction-sector-modal" class="modal" style="display:none; width: 600px;">
+    <button class="close-btn" onclick="document.getElementById('construction-sector-modal').style.display='none';">&times;</button>
+    <h2 style="margin-top: 0; text-align: center;">🏗️ Sektor Budowlany</h2>
+    <div class="modal-body" style="max-height: 500px; overflow-y: auto;">
+        <div id="construction-tenders"></div>
+        <div id="construction-projects"></div>
+        <div id="construction-consortiums"></div>
+    </div>
+    <button onclick="document.getElementById('construction-sector-modal').style.display='none';" style="margin-top: 15px;">Zamknij</button>
+</div>
 
 <script src="gameCore.js"></script>
     <script src="economy.js"></script>

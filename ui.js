@@ -4348,6 +4348,141 @@ function closePawnOfferModal() {
 }
 
 // --- Panel Lombardu ---
+
+function openConstructionSectorModal() {
+    const modal = document.getElementById('construction-sector-modal');
+    if (!modal) {
+        console.error('Construction sector modal not found');
+        return;
+    }
+
+    const content = modal.querySelector('.modal-content');
+    if (!content) return;
+
+    // Tytuły przetargów
+    const tendersContainer = content.querySelector('#construction-tenders');
+    tendersContainer.innerHTML = '<h3>Aktywne Przetargi Budowlane</h3>';
+
+    // Pobierz spółki budowlane
+    const builders = stocks.filter(s => s.sector.includes('Budowlany') && !s.isBankrupt && s.constructionStats);
+
+    // Symuluj aktywne przetargi (w rzeczywistości powinny być przechowywane)
+    const activeTenders = [];
+    stocks.forEach(stock => {
+        if (stock.activeInvestments) {
+            stock.activeInvestments.forEach(project => {
+                if (project.contractor && typeof project.contractor === 'string' && project.contractor.includes('+')) {
+                    // To konsorcjum
+                    activeTenders.push({
+                        client: stock,
+                        project: project,
+                        isConsortium: true
+                    });
+                }
+            });
+        }
+    });
+
+    if (activeTenders.length === 0) {
+        tendersContainer.innerHTML += '<p>Brak aktywnych przetargów.</p>';
+    } else {
+        activeTenders.forEach(tender => {
+            const tenderDiv = document.createElement('div');
+            tenderDiv.className = 'tender-item';
+            tenderDiv.innerHTML = `
+                <h4>${tender.project.name} (${tender.client.name})</h4>
+                <p>Wykonawca: ${tender.project.contractor}</p>
+                <p>Postęp: ${Math.min(100, (tender.project.progress / tender.project.totalDuration * 100).toFixed(1))}%</p>
+                <p>Koszt: ${tender.project.cost.toFixed(0)} PLN</p>
+                ${tender.isConsortium ? '<p style="color: blue;">🔗 Konsorcjum</p>' : ''}
+            `;
+            tendersContainer.appendChild(tenderDiv);
+        });
+    }
+
+    // Projekty do wsparcia
+    const projectsContainer = content.querySelector('#construction-projects');
+    projectsContainer.innerHTML = '<h3>Projekty Budowlane do Wsparcia</h3>';
+
+    const supportableProjects = [];
+    stocks.forEach(stock => {
+        if (stock.activeInvestments) {
+            stock.activeInvestments.forEach((project, index) => {
+                if (project.contractor && !project.contractor.includes('+')) { // Nie konsorcjum
+                    supportableProjects.push({
+                        stock: stock,
+                        project: project,
+                        index: index
+                    });
+                }
+            });
+        }
+    });
+
+    if (supportableProjects.length === 0) {
+        projectsContainer.innerHTML += '<p>Brak projektów do wsparcia.</p>';
+    } else {
+        supportableProjects.forEach(item => {
+            const projectDiv = document.createElement('div');
+            projectDiv.className = 'project-item';
+            const progress = Math.min(100, (item.project.progress / item.project.totalDuration * 100));
+            projectDiv.innerHTML = `
+                <h4>${item.project.name} (${item.stock.name})</h4>
+                <p>Wykonawca: ${item.project.contractor}</p>
+                <p>Postęp: ${progress.toFixed(1)}%</p>
+                <p>Pozostały czas: ${Math.ceil(item.project.totalDuration - item.project.progress)} tygodni</p>
+                <button onclick="supportConstructionProjectUI('${item.stock.symbol}', ${item.index}, 10000)">Wesprzyj 10k PLN</button>
+                <button onclick="supportConstructionProjectUI('${item.stock.symbol}', ${item.index}, 50000)">Wesprzyj 50k PLN</button>
+            `;
+            projectsContainer.appendChild(projectDiv);
+        });
+    }
+
+    // Informacje o konsorcjach
+    const consortiumContainer = content.querySelector('#construction-consortiums');
+    consortiumContainer.innerHTML = '<h3>Aktywne Konsorcja Budowlane</h3>';
+
+    const activeConsortiums = [];
+    stocks.forEach(stock => {
+        if (stock.constructionData && stock.constructionData.consortiumPartner) {
+            const partner = stocks.find(s => s.symbol === stock.constructionData.consortiumPartner);
+            if (partner) {
+                activeConsortiums.push({
+                    company1: stock,
+                    company2: partner,
+                    formedAt: stock.constructionData.consortiumFormedAt,
+                    synergy: stock.constructionData.consortiumSynergy
+                });
+            }
+        }
+    });
+
+    if (activeConsortiums.length === 0) {
+        consortiumContainer.innerHTML += '<p>Brak aktywnych konsorcjów.</p>';
+    } else {
+        activeConsortiums.forEach(cons => {
+            const consDiv = document.createElement('div');
+            consDiv.className = 'consortium-item';
+            const age = Math.floor((Date.now() - cons.formedAt) / (1000 * 60 * 60 * 24 * 7));
+            consDiv.innerHTML = `
+                <h4>${cons.company1.name} & ${cons.company2.name}</h4>
+                <p>Wiek konsorcjum: ${age} tygodni</p>
+                <p>Synergia: ${(cons.synergy * 100).toFixed(1)}%</p>
+                <p>Renoma: ${cons.company1.renoma || 0} / ${cons.company2.renoma || 0}</p>
+            `;
+            consortiumContainer.appendChild(consDiv);
+        });
+    }
+
+    modal.style.display = 'block';
+}
+
+function supportConstructionProjectUI(stockSymbol, projectIndex, amount) {
+    if (typeof supportConstructionProject === 'function') {
+        supportConstructionProject(stockSymbol, projectIndex, amount);
+        openConstructionSectorModal(); // Odśwież modal
+    }
+}
 function openPawnShopPanel() {
     const modal = document.getElementById('pawnshop-modal');
     if (!modal) return;

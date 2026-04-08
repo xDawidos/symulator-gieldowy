@@ -1246,6 +1246,32 @@ const INVESTMENT_CATALOG = {
     ],
     'Logistyka': [
         { id: 'logistics_hub', name: "Centrum Logistyczne", icon: 'img/box.png', cost: 500000, duration: 24, assetValue: 400000, incomeBonus: 0.12, healthBonus: 0.3, minDevLevel: 2, maintenance: 2500 }
+    ],
+    'Budowlany': [
+        { id: 'office_building', name: "Biurowiec", icon: 'img/branch.png', cost: 600000, duration: 30, assetValue: 500000, incomeBonus: 0.15, healthBonus: 0.4, minDevLevel: 2, maintenance: 3000 },
+        { id: 'warehouse', name: "Hala Magazynowa", icon: 'img/box.png', cost: 400000, duration: 20, assetValue: 350000, incomeBonus: 0.1, healthBonus: 0.2, minDevLevel: 1, maintenance: 2000 },
+        { id: 'residential_complex', name: "Osiedle Mieszkaniowe", icon: 'img/branch.png', cost: 1000000, duration: 45, assetValue: 800000, incomeBonus: 0.2, healthBonus: 0.5, minDevLevel: 3, maintenance: 5000 },
+        { id: 'shopping_center', name: "Centrum Handlowe", icon: 'img/branch.png', cost: 1500000, duration: 60, assetValue: 1200000, incomeBonus: 0.25, healthBonus: 0.6, minDevLevel: 4, maintenance: 8000 },
+        { id: 'industrial_park', name: "Park Przemysłowy", icon: 'img/fabrykaicon.png', cost: 2000000, duration: 80, assetValue: 1600000, incomeBonus: 0.3, healthBonus: 0.7, minDevLevel: 5, maintenance: 10000 }
+    ],
+    'Gaming': [
+        { id: 'game_studio', name: "Studio Gier", icon: 'img/server.png', cost: 300000, duration: 12, assetValue: 250000, incomeBonus: 0.08, healthBonus: 0.5, minDevLevel: 1, maintenance: 1500 }
+    ],
+    'Turystyka': [
+        { id: 'hotel_chain', name: "Łańcuch Hoteli", icon: 'img/branch.png', cost: 800000, duration: 35, assetValue: 600000, incomeBonus: 0.18, healthBonus: 0.4, minDevLevel: 2, maintenance: 4000 },
+        { id: 'resort', name: "Kurort", icon: 'img/globe.png', cost: 1200000, duration: 50, assetValue: 900000, incomeBonus: 0.22, healthBonus: 0.5, minDevLevel: 3, maintenance: 6000 }
+    ],
+    'Żywność': [
+        { id: 'food_processing_plant', name: "Zakład Przetwórstwa Żywności", icon: 'img/fabrykaicon.png', cost: 700000, duration: 28, assetValue: 550000, incomeBonus: 0.16, healthBonus: 0.3, minDevLevel: 2, maintenance: 3500 }
+    ],
+    'Dobra konsumpcyjne': [
+        { id: 'production_facility', name: "Zakład Produkcyjny", icon: 'img/fabrykaicon.png', cost: 500000, duration: 22, assetValue: 400000, incomeBonus: 0.12, healthBonus: 0.25, minDevLevel: 1, maintenance: 2500 }
+    ],
+    'Usługi': [
+        { id: 'service_center', name: "Centrum Usługowe", icon: 'img/branch.png', cost: 400000, duration: 18, assetValue: 300000, incomeBonus: 0.1, healthBonus: 0.2, minDevLevel: 1, maintenance: 2000 }
+    ],
+    'Badania': [
+        { id: 'research_facility', name: "Obiekt Badawczy", icon: 'img/medlab.png', cost: 900000, duration: 40, assetValue: 700000, incomeBonus: 0.14, healthBonus: 1.0, minDevLevel: 3, maintenance: 4500 }
     ]
 };
 
@@ -6827,10 +6853,8 @@ function triggerTender(clientStock, investment, estimatedCost) {
     const weightExp = 1 - weightPrice - weightTime;
     const preferState = clientStock.isStateOwned; // Państwowe wolą państwowe
 
-    let bestScore = -1;
-    let winner = null;
-    let winningOffer = null;
-
+    // Zbierz oferty od wszystkich budowlańców
+    const bids = [];
     availableBuilders.forEach(builder => {
         // Generowanie oferty
         const basePrice = estimatedCost;
@@ -6845,15 +6869,29 @@ function triggerTender(clientStock, investment, estimatedCost) {
         
         if (preferState && builder.isStateOwned) score += 15; // Bonus za państwowość
 
-        if (score > bestScore) {
-            bestScore = score;
-            winner = builder;
-            winningOffer = { price: priceOffer, time: Math.ceil(timeOffer) };
-        }
+        bids.push({
+            builder: builder,
+            score: score,
+            offer: { price: priceOffer, time: Math.ceil(timeOffer) }
+        });
     });
 
-    if (winner) {
-        // Transakcja
+    // Sortuj oferty po wyniku (malejąco)
+    bids.sort((a, b) => b.score - a.score);
+
+    // Wybierz zwycięzcę
+    const winnerBid = bids[0];
+    if (winnerBid) {
+        const winner = winnerBid.builder;
+        const winningOffer = winnerBid.offer;
+
+        // Sprawdź możliwość utworzenia konsorcjum
+        if (shouldCreateConstructionConsortium(bids, winnerBid)) {
+            formConstructionConsortium(clientStock, investment, bids, winnerBid);
+            return; // Konsorcjum przejmuje przetarg
+        }
+
+        // Standardowa transakcja
         clientStock.cash -= winningOffer.price;
         winner.cash += winningOffer.price * 0.2; // Zaliczka 20% dla budowlańca (reszta w koszty mat.)
         if (winner.balanceSheet) winner.balanceSheet.assets += winningOffer.price * 0.1; // Zysk
@@ -6892,6 +6930,9 @@ function processActiveInvestments(stock) {
                 }
             }
         }
+        
+        // Dodaj przyspieszenie z wsparcia
+        speed += project.speedBoost || 0;
         
         project.progress += speed;
 
@@ -6934,6 +6975,154 @@ function finishInvestment(stock, project) {
     }
 
     logEvent(`✅ ${stock.name} zakończył inwestycję: "${project.name}"! (Aktywa: +${data.assetValue}, Koszty stałe: +${data.maintenance}/kw)`, 'success');
+}
+
+// Funkcja do oszacowania wyniku oferty budowlanej
+function estimateConstructionBidScore(builder, clientStock, investment, estimatedCost, weightPrice, weightTime, weightExp, preferState) {
+    const basePrice = estimatedCost;
+    const priceOffer = basePrice * getRandomInRange(0.9, 1.2);
+    const timeOffer = investment.duration * getRandomInRange(0.8, 1.3);
+    
+    let score = (basePrice / priceOffer) * weightPrice * 100 + 
+                (investment.duration / timeOffer) * weightTime * 100 +
+                (builder.constructionStats.experience / 100) * weightExp * 100;
+    
+    if (preferState && builder.isStateOwned) score += 15;
+    
+    return { score, offer: { price: priceOffer, time: Math.ceil(timeOffer) } };
+}
+
+// Funkcja sprawdzająca, czy utworzyć konsorcjum
+function shouldCreateConstructionConsortium(bids, winnerBid) {
+    if (bids.length < 2) return false;
+    
+    // Sprawdź, czy druga oferta jest bliska zwycięskiej (różnica < 10 punktów)
+    const secondBid = bids[1];
+    const scoreDiff = winnerBid.score - secondBid.score;
+    
+    return scoreDiff < 10 && Math.random() < 0.4; // 40% szans jeśli blisko
+}
+
+// Funkcja formująca konsorcjum
+function formConstructionConsortium(clientStock, investment, bids, winnerBid) {
+    const winner = winnerBid.builder;
+    const partner = bids[1].builder; // Druga najlepsza
+    
+    // Sprawdź, czy już są w konsorcjum
+    if (winner.constructionData && winner.constructionData.consortiumPartner) return;
+    if (partner.constructionData && partner.constructionData.consortiumPartner) return;
+    
+    // Utwórz konsorcjum
+    const synergy = getRandomInRange(0.05, 0.15); // 5-15% synergii
+    
+    winner.constructionData = winner.constructionData || {};
+    partner.constructionData = partner.constructionData || {};
+    
+    winner.constructionData.consortiumPartner = partner.symbol;
+    winner.constructionData.consortiumFormedAt = Date.now();
+    winner.constructionData.consortiumSynergy = synergy;
+    
+    partner.constructionData.consortiumPartner = winner.symbol;
+    partner.constructionData.consortiumFormedAt = Date.now();
+    partner.constructionData.consortiumSynergy = synergy;
+    
+    // Efekt cenowy
+    applyPriceEffect(winner.symbol, 0.03, 'positive', 'company');
+    applyPriceEffect(partner.symbol, 0.03, 'positive', 'company');
+    
+    // Zwiększ renomę
+    if (!winner.renoma) winner.renoma = 0;
+    if (!partner.renoma) partner.renoma = 0;
+    winner.renoma += 5;
+    partner.renoma += 5;
+    
+    // Przetarg wygrywa konsorcjum
+    const combinedOffer = {
+        price: (winnerBid.offer.price + bids[1].offer.price) * 0.95, // 5% rabatu za synergię
+        time: Math.ceil((winnerBid.offer.time + bids[1].offer.time) / 2 * 0.9) // Średni czas z bonusem
+    };
+    
+    clientStock.cash -= combinedOffer.price;
+    winner.cash += combinedOffer.price * 0.1; // Podział zaliczki
+    partner.cash += combinedOffer.price * 0.1;
+    
+    if (winner.balanceSheet) winner.balanceSheet.assets += combinedOffer.price * 0.05;
+    if (partner.balanceSheet) partner.balanceSheet.assets += combinedOffer.price * 0.05;
+    
+    winner.constructionStats.currentProjects++;
+    partner.constructionStats.currentProjects++;
+    
+    clientStock.activeInvestments.push({
+        id: investment.id,
+        name: investment.name,
+        totalDuration: combinedOffer.time,
+        progress: 0,
+        data: investment,
+        contractor: `${winner.symbol}+${partner.symbol}`, // Konsorcjum
+        cost: combinedOffer.price
+    });
+    
+    logEvent(`🤝 Konsorcjum ${winner.name} & ${partner.name} wygrywa przetarg w ${clientStock.name} na "${investment.name}"! Koszt: ${combinedOffer.price.toFixed(0)} PLN.`, 'company');
+}
+
+// Funkcja przetwarzająca konsorcja co tydzień
+function processConstructionConsortia() {
+    stocks.forEach(stock => {
+        if (stock.constructionData && stock.constructionData.consortiumPartner) {
+            const partner = stocks.find(s => s.symbol === stock.constructionData.consortiumPartner);
+            if (partner && partner.constructionData && partner.constructionData.consortiumPartner === stock.symbol) {
+                // Konsorcjum nadal istnieje
+                const age = (Date.now() - stock.constructionData.consortiumFormedAt) / (1000 * 60 * 60 * 24 * 7); // Tygodnie
+                
+                if (age > 12 && Math.random() < 0.3) { // Po roku 30% szans na fuzję
+                    // Próba fuzji
+                    if (Math.random() < 0.5) { // 50% sukcesu
+                        mergeCompanies(stock, partner, 'consortium');
+                        logEvent(`🔗 Konsorcjum ${stock.name} & ${partner.name} ewoluuje w fuzję!`, 'company');
+                    } else {
+                        // Rozpad konsorcjum
+                        delete stock.constructionData.consortiumPartner;
+                        delete stock.constructionData.consortiumFormedAt;
+                        delete stock.constructionData.consortiumSynergy;
+                        delete partner.constructionData.consortiumPartner;
+                        delete partner.constructionData.consortiumFormedAt;
+                        delete partner.constructionData.consortiumSynergy;
+                        logEvent(`💔 Konsorcjum ${stock.name} & ${partner.name} się rozpada.`, 'company');
+                    }
+                } else {
+                    // Kontynuuj synergię
+                    applyPriceEffect(stock.symbol, stock.constructionData.consortiumSynergy * 0.01, 'positive', 'company');
+                    applyPriceEffect(partner.symbol, partner.constructionData.consortiumSynergy * 0.01, 'positive', 'company');
+                }
+            } else {
+                // Partner nie istnieje lub konsorcjum zerwane
+                delete stock.constructionData.consortiumPartner;
+                delete stock.constructionData.consortiumFormedAt;
+                delete stock.constructionData.consortiumSynergy;
+            }
+        }
+    });
+}
+
+// Funkcja wspierania projektu budowlanego
+function supportConstructionProject(stock, projectIndex, supportAmount) {
+    const project = stock.activeInvestments[projectIndex];
+    if (!project || !project.data) return false;
+    
+    if (stock.cash < supportAmount) return false;
+    
+    stock.cash -= supportAmount;
+    
+    // Przyspieszenie projektu
+    const speedBoost = Math.min(supportAmount / project.cost * 2, 1); // Max 100% przyspieszenie
+    project.speedBoost = (project.speedBoost || 0) + speedBoost;
+    
+    // Efekt cenowy dla inwestora
+    applyPriceEffect(stock.symbol, 0.01, 'positive', 'company');
+    
+    logEvent(`⚡ ${stock.name} inwestuje ${supportAmount.toFixed(0)} PLN w przyspieszenie "${project.name}".`, 'company');
+    
+    return true;
 }
 
 function payDividendToShareholders(stock, dividendPerShare) {
