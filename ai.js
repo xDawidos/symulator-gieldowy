@@ -1834,9 +1834,11 @@ function aiRepayLoan(ai, loanId, amount) {
     ai.cash -= amountToRepay;
     loan.amount -= amountToRepay;
 
-    if (bank) {
+    if (loan.isPawnLoan || loan.collectorSymbol) {
+        const creditorStock = stocks.find(s => s.symbol === loan.collectorSymbol);
+        if (creditorStock) creditorStock.cash += amountToRepay;
+    } else if (bank) {
         bank.cash += amountToRepay;
-        // Aktualizuj portfel banku
         if (bank.loanPortfolio[ai.id]) {
             const bankLoanIndex = bank.loanPortfolio[ai.id].findIndex(bl => bl.id === loan.id);
             if (bankLoanIndex !== -1) {

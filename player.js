@@ -1065,6 +1065,10 @@ function applyMoralePenalty(employees, penaltyAmount) {
 }
 
 function triggerIPO() {
+    if (getSkillLevel('work') < 4 || !playerCompany) {
+        alert("Musisz mieć odblokowaną umiejętność 'Własna Firma' (Praca Lvl 4), aby wejść na giełdę!");
+        return;
+    }
     if (playerCompany.value >= 25000) {
         const companySymbol = playerCompany.name.substring(0, 3).toUpperCase() + "X";
         const newStock = {
@@ -1324,7 +1328,6 @@ function repayCommercialLoan(loanId, amount) {
         return;
     }
     const loan = playerCommercialLoans[loanIndex];
-    const bank = commercialBanks.find(b => b.id === loan.bankId);
 
     if (isNaN(amount) || amount <= 0) {
         alert("Wprowadź poprawną kwotę spłaty.");
@@ -1340,15 +1343,23 @@ function repayCommercialLoan(loanId, amount) {
     // Transakcja
     playerCash -= amountToRepay;
     loan.amount -= amountToRepay;
-    if(bank) {
-        bank.cash += amountToRepay; // Bank otrzymuje spłatę
-        // Aktualizuj portfel kredytowy banku (znajdź odpowiednią pożyczkę)
-        if (bank.loanPortfolio['player']) {
-            const bankLoanIndex = bank.loanPortfolio['player'].findIndex(bl => bl.id === loan.id);
-            if (bankLoanIndex !== -1) {
-                bank.loanPortfolio['player'][bankLoanIndex].remainingAmount -= amountToRepay;
-                if (bank.loanPortfolio['player'][bankLoanIndex].remainingAmount <= 0) {
-                    bank.loanPortfolio['player'].splice(bankLoanIndex, 1); // Usuń spłaconą pożyczkę z portfela banku
+
+    // Przekaż pieniądze wierzycielowi (bank, lombard lub windykator)
+    if (loan.isPawnLoan || loan.collectorSymbol) {
+        // Pożyczka lombardowa lub przejęta przez windykatora - przekaż do spółki
+        const creditorStock = stocks.find(s => s.symbol === loan.collectorSymbol);
+        if (creditorStock) creditorStock.cash += amountToRepay;
+    } else {
+        const bank = commercialBanks.find(b => b.id === loan.bankId);
+        if(bank) {
+            bank.cash += amountToRepay;
+            if (bank.loanPortfolio['player']) {
+                const bankLoanIndex = bank.loanPortfolio['player'].findIndex(bl => bl.id === loan.id);
+                if (bankLoanIndex !== -1) {
+                    bank.loanPortfolio['player'][bankLoanIndex].remainingAmount -= amountToRepay;
+                    if (bank.loanPortfolio['player'][bankLoanIndex].remainingAmount <= 0) {
+                        bank.loanPortfolio['player'].splice(bankLoanIndex, 1);
+                    }
                 }
             }
         }
@@ -1357,18 +1368,32 @@ function repayCommercialLoan(loanId, amount) {
     logEvent(` Spłacono ${amountToRepay.toFixed(2)} PLN kredytu w ${loan.bankName}.`, 'review');
 
     // Jeśli spłacono całość
-    if (loan.amount <= 0.01) { // Użyj małego progu dla błędów zmiennoprzecinkowych
-        playerCommercialLoans.splice(loanIndex, 1); // Usuń pożyczkę z listy
+    if (loan.amount <= 0.01) {
+        // Odblokuj zastaw (jeśli istnieje)
+        if (loan.collateral) {
+            const holding = playerPortfolio[loan.collateral.symbol];
+            if (holding && holding.lockedShares) {
+                holding.lockedShares = Math.max(0, holding.lockedShares - loan.collateral.quantity);
+            }
+            logEvent(`🔓 Odblokowano ${loan.collateral.quantity} akcji ${loan.collateral.symbol} po spłacie pożyczki.`, 'success');
+        }
+        playerCommercialLoans.splice(loanIndex, 1);
         logEvent(` Kredyt w ${loan.bankName} został w całości spłacony!`, 'success');
         showToast(`Kredyt w ${loan.bankName} spłacony!`, 'success');
     }
 
     displayCash();
     displayPortfolio();
-    closeInteractionModal(); // Zamknij modal interakcji (jeśli był otwarty)
-    // Jeśli okno kredytów jest otwarte, odśwież je
+    closeInteractionModal();
     if(document.getElementById('commercial-loan-modal')?.style.display === 'block'){
         openCommercialLoanModal(loan.bankId);
+    }
+}
+
+function unlockCollateral(symbol, quantity) {
+    const holding = playerPortfolio[symbol];
+    if (holding && holding.lockedShares) {
+        holding.lockedShares = Math.max(0, holding.lockedShares - quantity);
     }
 }
 

@@ -238,6 +238,20 @@ function setGameSpeed(speedMultiplier) {
                     const progressPercent = (stock.research.progress / tech.cost) * 100;
                     document.getElementById('rd-progress-bar').value = progressPercent;
                 }
+                // Dynamiczna aktualizacja pasków postępu budowy
+                if (stock && stock.activeInvestments && stock.activeInvestments.length > 0) {
+                    const deptContent = document.getElementById('mgmt-content-depts');
+                    if (deptContent && deptContent.style.display !== 'none') {
+                        const progressBars = deptContent.querySelectorAll('progress');
+                        stock.activeInvestments.forEach((inv, idx) => {
+                            if (progressBars[idx]) {
+                                progressBars[idx].value = inv.progress;
+                                const pctSpan = progressBars[idx].parentElement?.querySelector('span');
+                                if (pctSpan) pctSpan.textContent = `${((inv.progress / inv.totalDuration) * 100).toFixed(0)}%`;
+                            }
+                        });
+                    }
+                }
                 // Dynamiczna aktualizacja cooldownu CEO
                 const fireCeoCooldownInfo = document.getElementById('fire-ceo-cooldown-info');
                 if (stock && stock.ceo && stock.ceo.fireCooldown && Date.now() < stock.ceo.fireCooldown) {
