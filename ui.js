@@ -161,8 +161,24 @@ function displayStocks(previousInputValues = {}) {
 
         nameCell.appendChild(nameWrapper);
 
-        // Komórka 2: Cena
-        row.insertCell().textContent = stock.price.toFixed(2);
+        // Komórka 2: Cena + faza cyklu
+        const priceCell = row.insertCell();
+        priceCell.textContent = stock.price.toFixed(2);
+        if (stock.corporatePhase) {
+            const phaseBadge = document.createElement('span');
+            phaseBadge.style.cssText = 'font-size:10px;margin-left:4px;padding:1px 4px;border-radius:3px;';
+            const phaseColors = {
+                'Wzrost': '#28a745', 'Stabilność': '#6c757d', 'Spadek': '#dc3545',
+                'Reorganizacja': '#ffc107', 'Złoty Rok ✨': '#ffd700',
+                'Zejście w Cień 👻': '#6f42c1', 'Impuls Innowacji 💡': '#17a2b8'
+            };
+            const col = phaseColors[stock.corporatePhase] || '#6c757d';
+            phaseBadge.style.color = col;
+            phaseBadge.style.border = '1px solid ' + col;
+            phaseBadge.textContent = stock.corporatePhase;
+            phaseBadge.title = 'Faza cyklu spółki';
+            priceCell.appendChild(phaseBadge);
+        }
 
         // Komórka 3: Dostępne
         let availableShares;
@@ -4049,6 +4065,53 @@ function updateStateModalContent() {
         }
     }
     // --- >>> KONIEC UPROSZCZONEJ LOGIKI <<< ---
+
+    // --- Aktualne stawki podatkowe z uwzględnieniem umiejętności ---
+    const sanLvl = getSkillLevel('sanEscobar');
+    const accLvl = getSkillLevel('accountant');
+    let taxModifier = 1.0;
+    if (sanLvl >= 4) taxModifier = 0.0;
+    else if (sanLvl >= 1) taxModifier = 0.95;
+    // Księgowy: -2% za każdy poziom (mnożnik)
+    taxModifier *= Math.max(0.9, 1.0 - accLvl * 0.02);
+
+    const effDiv = (TAX_RATES.dividend * taxModifier * 100).toFixed(1);
+    const effCap = (TAX_RATES.capitalGains * taxModifier * 100).toFixed(1);
+
+    const divEl = document.getElementById('tax-dividend-display');
+    const capEl = document.getElementById('tax-capital-display');
+    if (divEl) divEl.textContent = effDiv + '%';
+    if (capEl) capEl.textContent = effCap + '%';
+
+    const bonusEl = document.getElementById('tax-skill-bonus-display');
+    if (bonusEl) {
+        const bonuses = [];
+        if (sanLvl > 0) bonuses.push('San Escobar lvl ' + sanLvl);
+        if (accLvl > 0) bonuses.push('Księgowy lvl ' + accLvl + ' (-' + (accLvl * 2) + '%)');
+        if (bonuses.length > 0) {
+            bonusEl.style.display = 'block';
+            bonusEl.textContent = '🎯 Ulgi: ' + bonuses.join(', ');
+        } else {
+            bonusEl.style.display = 'none';
+        }
+    }
+
+    // --- Wskaźnik koniunktury ---
+    const sentimentEl = document.getElementById('market-sentiment-display');
+    if (sentimentEl) {
+        const gigIndex = marketIndexes.find(idx => idx.id === 'GIG');
+        if (gigIndex && gigIndex.priceHistory && gigIndex.priceHistory.length >= 3) {
+            const h = gigIndex.priceHistory;
+            const last3 = h.slice(-3);
+            const allUp = last3.every((v, i) => i === 0 || v >= last3[i - 1]);
+            const allDown = last3.every((v, i) => i === 0 || v <= last3[i - 1]);
+            if (allUp) sentimentEl.innerHTML = '🟢 Hossa (Wzrost)';
+            else if (allDown) sentimentEl.innerHTML = '🔴 Bessa (Spadek)';
+            else sentimentEl.innerHTML = '⚪ Neutralna';
+        } else {
+            sentimentEl.innerHTML = '⚪ Neutralna (brak danych)';
+        }
+    }
 }
 
 function openMaTargetModal(initiatorSymbol) {
