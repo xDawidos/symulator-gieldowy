@@ -403,6 +403,14 @@ function updateMarketIndexes() {
             sig20Index.change = newValue - oldValue;
         }
     }
+
+    // Zapisz historię wartości indeksów (do wskaźnika koniunktury)
+    marketIndexes.forEach(idx => {
+        if (idx.value > 0) {
+            idx.priceHistory.push(idx.value);
+            if (idx.priceHistory.length > 20) idx.priceHistory.shift();
+        }
+    });
 }
 
 function calculateNetWorth(entity) {
