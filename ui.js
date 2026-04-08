@@ -4332,6 +4332,34 @@ function openPawnShopPanel() {
         listDiv.innerHTML = '<p style="color:#666;font-style:italic;">Brak aktywnych pożyczek lombardowych. Lombard sam złoży Ci ofertę, gdy będziesz w potrzebie.</p>';
     }
 
+    // --- Sekcja aukcji zabezpieczeń ---
+    const collateralSection = document.getElementById('pawnshop-collateral-section');
+    if (collateralSection) {
+        const pawnLoansWithCollateral = playerCommercialLoans.filter(l => l.isPawnLoan && l.collateral);
+        if (pawnLoansWithCollateral.length > 0) {
+            let html = '<h4 style="font-size:14px;margin:0 0 8px;color:#dc3545;">Aukcje zabezpieczeń:</h4>';
+            pawnLoansWithCollateral.forEach(loan => {
+                const stock = stocks.find(s => s.symbol === loan.collateral.symbol);
+                const marketValue = stock ? (stock.price * loan.collateral.quantity) : 0;
+                const isAuctionActive = currentCollateralAuction && currentCollateralAuction.stockSymbol === loan.collateral.symbol;
+                html += `<div style="padding:8px;margin-bottom:6px;background:#fff3cd;border-left:3px solid #dc3545;">
+                    <p style="margin:0 0 4px;font-size:13px;"><strong>Zastaw:</strong> ${loan.collateral.quantity} × ${loan.collateral.symbol}</p>
+                    <p style="margin:0 0 4px;font-size:12px;color:#666;">Wartość rynkowa: <strong>${marketValue.toFixed(2)} PLN</strong> | Dług: <strong>${loan.amount.toFixed(2)} PLN</strong></p>`;
+                if (isAuctionActive) {
+                    html += `<p style="margin:0;font-size:12px;color:#856404;font-weight:bold;">⏳ W trakcie aukcji...</p>`;
+                } else {
+                    html += `<button onclick="sellCollateralAtAuction('${loan.id}')" style="margin-top:4px;padding:4px 12px;background:#dc3545;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:12px;">Wystaw na aukcję</button>`;
+                }
+                html += '</div>';
+            });
+            collateralSection.innerHTML = html;
+            collateralSection.style.display = 'block';
+        } else {
+            collateralSection.innerHTML = '';
+            collateralSection.style.display = 'none';
+        }
+    }
+
     modal.style.display = 'block';
 }
 

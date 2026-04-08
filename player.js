@@ -2358,6 +2358,57 @@ function declinePawnOffer() {
     closePawnOfferModal(); // Upewnij się, że modal jest zamknięty
 }
 
+/**
+ * Gracz wystawia zastaw z pożyczki lombardowej na aukcję (MVP: natychmiastowa sprzedaż po wartości rynkowej).
+ * Uzyskane środki spłacają kredyt, nadwyżka trafia do gracza.
+ */
+function sellCollateralAtAuction(loanId) {
+    const loanIndex = playerCommercialLoans.findIndex(l => l.id === loanId);
+    if (loanIndex === -1) { alert("Nie znaleziono pożyczki."); return; }
+    const loan = playerCommercialLoans[loanIndex];
+    if (!loan.collateral || !loan.isPawnLoan) { alert("Ta pożyczka nie ma zastawu lombardowego."); return; }
+
+    const stock = stocks.find(s => s.symbol === loan.collateral.symbol);
+    if (!stock) { alert("Nie znaleziono akcji zastawu."); return; }
+
+    const holding = playerPortfolio[loan.collateral.symbol];
+    if (!holding || (holding.lockedShares || 0) < loan.collateral.quantity) {
+        alert("Brak wystarczających zablokowanych akcji do wystawienia na aukcję.");
+        return;
+    }
+
+    // Oblicz wartość rynkową zastawu
+    const marketValue = stock.price * loan.collateral.quantity;
+    const loanAmount = loan.amount;
+
+    // Usuń zablokowane akcje z portfela
+    holding.lockedShares -= loan.collateral.quantity;
+    holding.shares -= loan.collateral.quantity;
+    if (holding.shares <= 0) delete playerPortfolio[loan.collateral.symbol];
+
+    // Spłać kredyt z uzyskanych środków
+    const repayment = Math.min(marketValue, loanAmount);
+    const surplus = Math.max(0, marketValue - loanAmount);
+
+    // Przekaż spłatę wierzycielowi (lombard)
+    const creditorStock = stocks.find(s => s.symbol === loan.collectorSymbol);
+    if (creditorStock) creditorStock.cash += repayment;
+
+    // Nadwyżka trafia do gracza
+    playerCash += surplus;
+
+    // Usuń pożyczkę
+    playerCommercialLoans.splice(loanIndex, 1);
+
+    logEvent(`🔨 Sprzedano zastaw: ${loan.collateral.quantity} × ${loan.collateral.symbol} za ${marketValue.toFixed(2)} PLN. Spłacono ${repayment.toFixed(2)} PLN kredytu.` +
+        (surplus > 0 ? ` Nadwyżka: ${surplus.toFixed(2)} PLN.` : loanAmount > marketValue ? ` Pozostały dług ${(loanAmount - marketValue).toFixed(2)} PLN został umorzony.` : ''), 'success');
+    showToast(`Zastaw sprzedany! Otrzymano ${surplus.toFixed(2)} PLN nadwyżki.`, surplus > 0 ? 'success' : 'info');
+
+    displayCash();
+    displayPortfolio();
+    openPawnShopPanel(); // Odśwież panel lombardu
+}
+
 function playerBuyPositivePR() {
     const skillLvl = getSkillLevel('mediaManipulation');
     if (skillLvl < 1) return; // Sprawdzenie umiejętności
