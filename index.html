@@ -156,6 +156,10 @@
                 <h3>Moje Pasywa:</h3>
                 <ul id="my-liabilities-list" style="list-style-type: none; padding: 0;">
                 </ul>
+                <div style="display:flex;gap:6px;margin-top:8px;">
+                    <button onclick="openPawnShopPanel()" style="font-size:11px;padding:3px 8px;background:#28a745;color:#fff;border:none;border-radius:3px;cursor:pointer;">🏦 Lombard</button>
+                    <button onclick="openDebtCollectorPanel()" style="font-size:11px;padding:3px 8px;background:#ffc107;color:#333;border:none;border-radius:3px;cursor:pointer;">⚠️ Windykator</button>
+                </div>
             </div>
         </div>
     </div>
@@ -1025,6 +1029,26 @@
             <button id="pawn-offer-accept-btn" style="background-color: #28a745; color: white;">Tak, zastawiam akcje i biorę gotówkę</button>
             <button id="pawn-offer-decline-btn" style="background-color: #dc3545; color: white;">Nie, dziękuję</button>
         </div>
+    </div>
+</div>
+
+<!-- Modal Lombardu -->
+<div id="pawnshop-modal" class="modal" style="display:none; width: 480px; border-color: #28a745;">
+    <button class="close-btn" onclick="document.getElementById('pawnshop-modal').style.display='none'">&times;</button>
+    <h3 style="margin-top: 0; color: #155724;">🏦 Lombard – LOMBARDEX S.A.</h3>
+    <div class="modal-body">
+        <div id="pawnshop-status" style="padding: 10px; background: #f8f9fa; border-radius: 5px; margin-bottom: 10px;"></div>
+        <div id="pawnshop-loans-list" style="max-height: 200px; overflow-y: auto;"></div>
+    </div>
+</div>
+
+<!-- Modal Windykatora -->
+<div id="debtcollector-modal" class="modal" style="display:none; width: 480px; border-color: #ffc107;">
+    <button class="close-btn" onclick="document.getElementById('debtcollector-modal').style.display='none'">&times;</button>
+    <h3 style="margin-top: 0; color: #856404;">⚠️ Windykator – WRONA</h3>
+    <div class="modal-body">
+        <div id="debtcollector-status" style="padding: 10px; background: #f8f9fa; border-radius: 5px; margin-bottom: 10px;"></div>
+        <div id="debtcollector-debts-list" style="max-height: 200px; overflow-y: auto;"></div>
     </div>
 </div>
 

@@ -628,16 +628,31 @@ function displayPortfolio() {
     if (playerCommercialLoans.length > 0) {
         playerCommercialLoans.forEach(loan => {
             const loanItem = document.createElement('li');
-            loanItem.style.backgroundColor = '#fff'; // Dostosuj style wg potrzeb
-            loanItem.innerHTML = `Kredyt (${loan.bankName}): <strong class="loss">${loan.amount.toFixed(2)} PLN</strong> (Rata: ${loan.weeklyPayment.toFixed(2)} PLN/tydz.)`;
-            if (loan.collateral) {
+            loanItem.style.backgroundColor = '#fff';
+            loanItem.style.marginBottom = '6px';
+            loanItem.style.padding = '4px';
+            if (loan.isPawnLoan) {
+                const timeLeft = Math.max(0, Math.ceil((loan.maturityDate - Date.now()) / 1000));
+                const minutesLeft = Math.floor(timeLeft / 60);
+                const secondsLeft = timeLeft % 60;
+                loanItem.innerHTML = `🏦 Lombard (${loan.bankName}): <strong class="loss">${loan.amount.toFixed(2)} PLN</strong> [Zastaw: ${loan.collateral.quantity} ${loan.collateral.symbol}] <span style="color:#856404;">(Termin: ${minutesLeft}m ${secondsLeft}s)</span>`;
+            } else if (loan.collectorSymbol && !loan.bankId) {
+                loanItem.innerHTML = `⚠️ Windykator (${loan.bankName}): <strong class="loss">${loan.amount.toFixed(2)} PLN</strong> (Rata: ${loan.weeklyPayment.toFixed(2)} PLN/tydz.)`;
+            } else {
+                loanItem.innerHTML = `Kredyt (${loan.bankName}): <strong class="loss">${loan.amount.toFixed(2)} PLN</strong> (Rata: ${loan.weeklyPayment.toFixed(2)} PLN/tydz.)`;
+            }
+            if (loan.collateral && !loan.isPawnLoan) {
                 loanItem.innerHTML += ` [Zastaw: ${loan.collateral.quantity} ${loan.collateral.symbol}]`;
             }
+            // Przycisk szybkiej spłaty
+            const repaySpan = document.createElement('span');
+            repaySpan.style.marginLeft = '8px';
+            repaySpan.innerHTML = `<button onclick="repayCommercialLoan('${loan.id}', ${loan.amount.toFixed(2)})" style="font-size:10px;padding:1px 6px;background:#28a745;color:#fff;border:none;border-radius:3px;cursor:pointer;" title="Spłać całość">Spłać</button>`;
+            loanItem.appendChild(repaySpan);
             myLiabilitiesList.appendChild(loanItem);
         });
         hasLiabilities = true;
     }
-    // W przyszłości można tu dodać inne pasywa
 
     if (!hasLiabilities) {
         myLiabilitiesList.innerHTML = '<li>Brak zobowiązań.</li>';
@@ -4267,6 +4282,117 @@ function closePawnOfferModal() {
     if (modal) {
         modal.style.display = 'none';
     }
+}
+
+// --- Panel Lombardu ---
+function openPawnShopPanel() {
+    const modal = document.getElementById('pawnshop-modal');
+    if (!modal) return;
+    const statusDiv = document.getElementById('pawnshop-status');
+    const listDiv = document.getElementById('pawnshop-loans-list');
+
+    const pawnShop = stocks.find(s => s.assetType === 'PawnShop' && !s.isBankrupt);
+    if (!pawnShop) {
+        statusDiv.innerHTML = '<p style="color:#dc3545;">Lombard nie jest dostępny.</p>';
+        listDiv.innerHTML = '';
+        modal.style.display = 'block';
+        return;
+    }
+
+    statusDiv.innerHTML = `<p><strong>${pawnShop.name}</strong> (${pawnShop.symbol})</p>
+        <p>Oprocentowanie: <strong>25% rocznie</strong> | Okres spłaty: <strong>12 tygodni</strong></p>
+        <p>Gotówka lombardu: ${pawnShop.cash.toLocaleString('pl-PL')} PLN</p>`;
+
+    const pawnLoans = playerCommercialLoans.filter(l => l.isPawnLoan);
+    listDiv.innerHTML = '';
+
+    if (pawnLoans.length > 0) {
+        const h4 = document.createElement('h4');
+        h4.textContent = 'Twoje pożyczki lombardowe:';
+        h4.style.fontSize = '14px';
+        listDiv.appendChild(h4);
+        pawnLoans.forEach(loan => {
+            const div = document.createElement('div');
+            div.style.cssText = 'padding:8px;margin-bottom:6px;background:#fff;border-left:3px solid #28a745;';
+            const timeLeft = Math.max(0, Math.ceil((loan.maturityDate - Date.now()) / 1000));
+            const minutesLeft = Math.floor(timeLeft / 60);
+            div.innerHTML = `<p style="margin:0 0 4px"><strong>${loan.amount.toFixed(2)} PLN</strong> [Zastaw: ${loan.collateral.quantity} × ${loan.collateral.symbol}]</p>
+                <p style="margin:0;font-size:12px;color:#856404;">Termin spłaty: ${minutesLeft} min</p>`;
+            const btn = document.createElement('button');
+            btn.textContent = 'Spłać kredyt';
+            btn.style.cssText = 'margin-top:6px;padding:4px 12px;background:#28a745;color:#fff;border:none;border-radius:3px;cursor:pointer;';
+            btn.onclick = () => {
+                repayCommercialLoan(loan.id, loan.amount);
+                openPawnShopPanel();
+            };
+            div.appendChild(btn);
+            listDiv.appendChild(div);
+        });
+    } else {
+        listDiv.innerHTML = '<p style="color:#666;font-style:italic;">Brak aktywnych pożyczek lombardowych. Lombard sam złoży Ci ofertę, gdy będziesz w potrzebie.</p>';
+    }
+
+    modal.style.display = 'block';
+}
+
+// --- Panel Windykatora ---
+function openDebtCollectorPanel() {
+    const modal = document.getElementById('debtcollector-modal');
+    if (!modal) return;
+    const statusDiv = document.getElementById('debtcollector-status');
+    const listDiv = document.getElementById('debtcollector-debts-list');
+
+    const collector = stocks.find(s => s.assetType === 'DebtCollector' && !s.isBankrupt);
+    if (!collector) {
+        statusDiv.innerHTML = '<p style="color:#dc3545;">Windykator nie jest dostępny.</p>';
+        listDiv.innerHTML = '';
+        modal.style.display = 'block';
+        return;
+    }
+
+    statusDiv.innerHTML = `<p><strong>${collector.name}</strong> (${collector.symbol})</p>
+        <p style="font-size:12px;color:#666;">Windykator przejmuje niespłacane długi bankowe za wyższe oprocentowanie (×1.5).</p>`;
+
+    const collectorLoans = playerCommercialLoans.filter(l => l.collectorSymbol === collector.symbol && !l.isPawnLoan);
+    listDiv.innerHTML = '';
+
+    if (collectorLoans.length > 0) {
+        const h4 = document.createElement('h4');
+        h4.textContent = 'Twoje długi u windykatora:';
+        h4.style.fontSize = '14px';
+        listDiv.appendChild(h4);
+        collectorLoans.forEach(loan => {
+            const div = document.createElement('div');
+            div.style.cssText = 'padding:8px;margin-bottom:6px;background:#fff;border-left:3px solid #ffc107;';
+            div.innerHTML = `<p style="margin:0 0 4px"><strong>${loan.amount.toFixed(2)} PLN</strong> (Rata: ${loan.weeklyPayment.toFixed(2)} PLN/tydz.)</p>
+                <p style="margin:0;font-size:12px;color:#dc3545;">Oprocentowanie: ${(loan.interestRate * 100).toFixed(1)}%</p>`;
+            const inputRow = document.createElement('div');
+            inputRow.style.cssText = 'display:flex;gap:6px;margin-top:6px;align-items:center;';
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.placeholder = 'Kwota';
+            input.style.cssText = 'width:100px;padding:3px;';
+            input.value = loan.amount.toFixed(2);
+            const btn = document.createElement('button');
+            btn.textContent = 'Spłać';
+            btn.style.cssText = 'padding:4px 12px;background:#28a745;color:#fff;border:none;border-radius:3px;cursor:pointer;';
+            btn.onclick = () => {
+                const val = parseFloat(input.value);
+                if (!isNaN(val) && val > 0) {
+                    repayCommercialLoan(loan.id, val);
+                    openDebtCollectorPanel();
+                }
+            };
+            inputRow.appendChild(input);
+            inputRow.appendChild(btn);
+            div.appendChild(inputRow);
+            listDiv.appendChild(div);
+        });
+    } else {
+        listDiv.innerHTML = '<p style="color:#666;font-style:italic;">Nie masz długów u windykatora. Windykator przejmuje długi, gdy zalegasz ze spłatą w banku.</p>';
+    }
+
+    modal.style.display = 'block';
 }
 
 function switchCityTab(tabName) {

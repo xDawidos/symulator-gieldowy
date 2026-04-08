@@ -58,7 +58,7 @@ const companySpecificEventsPrompts = [
     { id: 'cs_neg_10', message: stockName => `${stockName} przez pomyłkę wysłało cały roczny zapas produktów na biegun południowy. 🐧🎁 Pingwiny są zachwycone, akcjonariusze mniej. 🤦`, type: 'negative', category: 'company' },
     { id: 'cs_neg_11', message: stockName => `Nowy system komputerowy ${stockName} działa tylko wtedy, gdy pada deszcz i Merkury jest w retrogradacji. 🌧️🪐💻 Czyli rzadko.`, type: 'negative', category: 'company' },
     { id: 'cs_neg_12', message: stockName => `Prezes ${stockName} ogłosił, że Ziemia jest płaska, a akcje firmy to najlepszy sposób na dotarcie do jej krawędzi. 🌍🔚 Inwestorzy uciekają. 🏃‍♂️💨`, type: 'negative', category: 'company' },
-    { id: 'cs_neg_13', message: stockName => `${stockName} próbowało zaoszczędzić na tuszu do drukarek, drukując raporty roczne sokiem z buraków. beetroot📜 Nieczytelne, tak jak przyszłość firmy.`, type: 'negative', category: 'company' },
+    { id: 'cs_neg_13', message: stockName => `${stockName} próbowało zaoszczędzić na tuszu do drukarek, drukując raporty roczne sokiem z buraków. 🥕📜 Nieczytelne, tak jak przyszłość firmy.`, type: 'negative', category: 'company' },
     { id: 'cs_neg_14', message: stockName => `Woda w dystrybutorach ${stockName} okazała się być wodą z kałuży. 💧🤢 Pracownicy strajkują, akcje toną.`, type: 'negative', category: 'company' },
     { id: 'cs_neg_15', message: stockName => `${stockName} zorganizowało konkurs "Najgorszy pomysł na produkt". 🤦‍♀️ Niestety, wszystkie zgłoszenia pochodziły z działu R&D firmy.`, type: 'negative', category: 'company' },
     { id: 'cs_neg_16', message: stockName => `Siedziba ${stockName} została uznana za zabytek i nie można w niej instalować Wi-Fi. 🏛️🚫📶 Firma wraca do epoki kamienia łupanego.`, type: 'negative', category: 'company' },
@@ -111,7 +111,7 @@ const sectorEventsPrompts = [
     { id: 'sec_neg_2', message: () => `Wybucha globalny kryzys finansowy po tym, jak okazało się, że światowe rezerwy złota to tylko pozłacane sztabki czekolady. 🍫📉 Sektory 'Bankowość' i 'Finanse' najmocniej odczuwają skutki.`, type: 'negative', targetSectors: ['Bankowość', 'Finanse'] },
     { id: 'sec_neg_3', message: () => `Strajk generalny w sektorze energetycznym. ⚡ Pracownicy domagają się wygodniejszych foteli. Dostawy prądu zagrożone, ceny akcji spadają.`, type: 'negative', targetSectors: ['Energia'] },
     { id: 'sec_neg_4', message: () => `Plaga inteligentnych szkodników niszczy uprawy i włamuje się do systemów firm spożywczych, zamawiając za nie tysiące ton karmy dla chomików. 🐛🐹 Sektory 'Żywność' i 'Technologia Żywności' w chaosie.`, type: 'negative', targetSectors: ['Żywność', 'Technologia Żywności'] },
-    { id: 'sec_neg_5', message: () => `Okazuje się, że "innowacyjne" domy z sektora 'Nieruchomości' są w rzeczywistości zbudowane z kartonu i taśmy klejącej. 📦 Tape Pierwszy deszcz ujawnia prawdę.`, type: 'negative', targetSectors: ['Nieruchomości'] },
+    { id: 'sec_neg_5', message: () => `Okazuje się, że "innowacyjne" domy z sektora 'Nieruchomości' są w rzeczywistości zbudowane z kartonu i taśmy klejącej. 📦 Pierwszy deszcz ujawnia prawdę.`, type: 'negative', targetSectors: ['Nieruchomości'] },
     { id: 'sec_neg_6', message: () => `Globalna awaria chmury obliczeniowej. Wszystkie firmy z sektora 'Technologia', które "trzymały dane w chmurze", odkrywają, że chmury czasem po prostu znikają. ☁️💨`, type: 'negative', targetSectors: ['Technologia'] },
     { id: 'sec_neg_7', message: () => `W kopalniach z sektora 'Przemysł Wydobywczy' odkryto smoka. 🐲 Jest bardzo zrzędliwy i nie pozwala nikomu pracować. Wydobycie wstrzymane.`, type: 'negative', targetSectors: ['Przemysł Wydobywczy'] },
     { id: 'sec_neg_8', message: () => `Nowa ustawa "Prawo do Bycia Offline" drastycznie zmniejsza popyt na smartfony i inne gadżety. 📵 Sektor 'Technologia' przeżywa kryzys egzystencjalny.`, type: 'negative', targetSectors: ['Technologia'] },
@@ -183,8 +183,8 @@ const startupOfferEventsPrompts = [
         id: 'so_7',
         type: 'BONUS_SHARES',
         value: 0.10, // 10% więcej udziałów
-        getMessage: (startupName) => `[OFERTA SPECJALNA] Program 'Early Bird' w ${startupName}! Zainwestuj teraz, aby otrzymać 10% dodatkowych udziałów.`,
-        offerText: "Kto rano wstaje... ten inwestuje z zyskiem! Dołącz do naszego programu 'Early Bird' i zgarnij 10% więcej udziałów za swoją inwestycję."
+        getMessage: (startupName) => `[OFERTA SPECJALNA] Program 'Ranny Ptaszek' w ${startupName}! Zainwestuj teraz, aby otrzymać 10% dodatkowych udziałów.`,
+        offerText: "Kto rano wstaje... ten inwestuje z zyskiem! Dołącz do naszego programu 'Ranny Ptaszek' i zgarnij 10% więcej udziałów za swoją inwestycję."
     },
     {
         id: 'so_8',
