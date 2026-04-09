@@ -1,7 +1,7 @@
 console.log('[diag] player.js loaded');
 
-let playerCash = 10000000.00;
-let playerXP = 0;
+let playerCash = 100000000000.00;
+let playerXP = 10000000000;
 let playerPortfolio = {};
 let playerCommercialLoans = [];
 let playerCommercialDeposits = [];

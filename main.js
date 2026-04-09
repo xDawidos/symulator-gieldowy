@@ -561,6 +561,31 @@ gameTimers.weekly = setInterval(() => {
             processConstructionConsortia();
         }
 
+        // Przetwarzanie projektów budowlanych
+        if (typeof processConstructionProjects === 'function') {
+            processConstructionProjects();
+        }
+
+        // Aktualizacja systemu przetargów (zamykanie expired, auto-award)
+        if (typeof updateTenderSystem === 'function') {
+            updateTenderSystem();
+        }
+
+        // Generowanie przetargów przez AI
+        if (typeof generateAITenders === 'function') {
+            generateAITenders();
+        }
+
+        // AI budowlne składają oferty
+        if (typeof generateAIBids === 'function') {
+            generateAIBids();
+        }
+
+        // Przetwarzanie dochodów z nieruchomości
+        if (typeof processBuildingIncome === 'function') {
+            processBuildingIncome();
+        }
+
         if (playerCash > 0) displayCash(); //
 
     }, BASE_DELAYS.weekly / speedMultiplier);
@@ -709,7 +734,11 @@ gameTimers.weekly = setInterval(() => {
 // Funkcja inicjalizująca grę
 function initializeGame() {
     console.log("--- Funkcja initializeGame() została wywołana ---"); // Log startowy
-    applyInitialTheme(); // Stosuje motyw (ciemny/jasny)
+    if (typeof applyInitialTheme === 'function') {
+        applyInitialTheme(); // Stosuje motyw (ciemny/jasny)
+    } else {
+        console.warn("applyInitialTheme not available, skipping theme application");
+    }
 
     // Wczytaj zapisany stan zwinięcia panelu startupów
     const savedStartupCollapseState = localStorage.getItem('startupPanelCollapsed');
@@ -725,6 +754,7 @@ function initializeGame() {
     initializeCommercialBanks(); // Tworzy banki, może ustawić isActiveFromStart
     generateCentralBankGovernor();
     initializeConstructionCompanies();
+    initializeAllConstructionStats(); // Inicjalizuje maxProjects i currentProjects dla spółek budowlanych
     
     let activatedBankIds = []; // Tablica do śledzenia ID aktywowanych banków
     let activatedBanksCount = 0; // Licznik aktywowanych banków
@@ -957,13 +987,19 @@ function initializeGame() {
     }
 
     console.log("[initializeGame] Końcowa inicjalizacja UI..."); // Log informacyjny
-    setupAutoInvestModal();
-    displayCash();
-    displayPortfolio();
-    displayXP();
-    displayMarketIndexes();
-    updateWorkButtonVisibility();
-    updateDividendTrackerButtonVisibility();
+    if (typeof setupAutoInvestModal === 'function') {
+        setupAutoInvestModal();
+    } else {
+        console.warn('[initializeGame] setupAutoInvestModal nie jest dostępna.');
+    }
+
+     if (typeof setupAutoInvestModal === 'function') setupAutoInvestModal();
+    if (typeof displayCash === 'function') displayCash();
+    if (typeof displayPortfolio === 'function') displayPortfolio();
+    if (typeof displayXP === 'function') displayXP();
+    if (typeof displayMarketIndexes === 'function') displayMarketIndexes();
+    if (typeof updateWorkButtonVisibility === 'function') updateWorkButtonVisibility();
+    if (typeof updateDividendTrackerButtonVisibility === 'function') updateDividendTrackerButtonVisibility();
 
     const pauseButton = document.getElementById('pause-game-btn');
     if (isGamePaused && pauseButton) {

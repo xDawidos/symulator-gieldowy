@@ -1,4 +1,3 @@
-// companies.js - Spółki, Banki, Startupy, M&A
 
 let currentCollateralAuction = null; // { stockSymbol, quantity, minPrice, endTime, bids: [] }
 let currentPawnOffer = null;
@@ -1236,42 +1235,99 @@ const INVESTMENT_CATALOG = {
         { id: 'new_mine', name: "Nowy Szyb Wydobywczy", icon: 'img/mine.png', cost: 1500000, duration: 50, assetValue: 1200000, incomeBonus: 0.3, healthBonus: 0.2, minDevLevel: 3, maintenance: 8000 }
     ],
     'Technologia': [
-        { id: 'server_room', name: "Własna Serwerownia", icon: 'img/server.png', cost: 400000, duration: 16, assetValue: 300000, incomeBonus: 0.15, healthBonus: 0.2, minDevLevel: 2, maintenance: 3000 } // Prąd!
+        { id: 'server_room', name: "Własna Serwerownia", icon: 'img/server.png', cost: 400000, duration: 16, assetValue: 300000, incomeBonus: 0.15, healthBonus: 0.2, minDevLevel: 2, maintenance: 3000 }, // Prąd!
+        { id: 'chip_factory', name: "Fabryka Chipów", icon: 'img/fabrykaicon.png', cost: 1200000, duration: 50, assetValue: 1000000, incomeBonus: 0.25, healthBonus: 0.5, minDevLevel: 3, maintenance: 8000 },
+        { id: 'software_development_center', name: "Centrum Rozwoju Oprogramowania", icon: 'img/server.png', cost: 600000, duration: 25, assetValue: 500000, incomeBonus: 0.18, healthBonus: 0.3, minDevLevel: 2, maintenance: 4000 }
     ],
     'Medycyna': [
-        { id: 'research_lab', name: "Laboratorium Badawcze", icon: 'img/medlab.png', cost: 600000, duration: 20, assetValue: 500000, incomeBonus: 0.1, healthBonus: 1.5, minDevLevel: 2, maintenance: 4000 }
+        { id: 'research_lab', name: "Laboratorium Badawcze", icon: 'img/medlab.png', cost: 600000, duration: 20, assetValue: 500000, incomeBonus: 0.1, healthBonus: 1.5, minDevLevel: 2, maintenance: 4000 },
+        { id: 'hospital', name: "Szpital", icon: 'img/branch.png', cost: 1500000, duration: 60, assetValue: 1200000, incomeBonus: 0.3, healthBonus: 2.0, minDevLevel: 4, maintenance: 10000 },
+        { id: 'pharma_factory', name: "Fabryka Leków", icon: 'img/fabrykaicon.png', cost: 1000000, duration: 40, assetValue: 800000, incomeBonus: 0.22, healthBonus: 1.0, minDevLevel: 3, maintenance: 6000 }
     ],
     'Energia': [
-        { id: 'energy_plant', name: "Rozbudowa Elektrowni", icon: 'img/fabrykaicon.png', cost: 1200000, duration: 30, assetValue: 1000000, incomeBonus: 0.18, healthBonus: 1.0, minDevLevel: 3, maintenance: 6000 }
+        { id: 'energy_plant', name: "Rozbudowa Elektrowni", icon: 'img/fabrykaicon.png', cost: 1200000, duration: 30, assetValue: 1000000, incomeBonus: 0.18, healthBonus: 1.0, minDevLevel: 3, maintenance: 6000 },
+        { id: 'wind_farm', name: "Farma Wiatrowa", icon: 'img/fabrykaicon.png', cost: 800000, duration: 35, assetValue: 650000, incomeBonus: 0.15, healthBonus: 0.8, minDevLevel: 2, maintenance: 4000 },
+        { id: 'solar_park', name: "Park Słoneczny", icon: 'img/fabrykaicon.png', cost: 600000, duration: 25, assetValue: 500000, incomeBonus: 0.12, healthBonus: 0.6, minDevLevel: 2, maintenance: 3000 }
     ],
     'Logistyka': [
-        { id: 'logistics_hub', name: "Centrum Logistyczne", icon: 'img/box.png', cost: 500000, duration: 24, assetValue: 400000, incomeBonus: 0.12, healthBonus: 0.3, minDevLevel: 2, maintenance: 2500 }
+        { id: 'logistics_hub', name: "Centrum Logistyczne", icon: 'img/box.png', cost: 500000, duration: 24, assetValue: 400000, incomeBonus: 0.12, healthBonus: 0.3, minDevLevel: 2, maintenance: 2500 },
+        { id: 'distribution_center', name: "Centrum Dystrybucyjne", icon: 'img/box.png', cost: 700000, duration: 30, assetValue: 550000, incomeBonus: 0.16, healthBonus: 0.4, minDevLevel: 2, maintenance: 3500 },
+        { id: 'warehouse_automation', name: "Automatyczna Hala Magazynowa", icon: 'img/box.png', cost: 900000, duration: 40, assetValue: 700000, incomeBonus: 0.2, healthBonus: 0.5, minDevLevel: 3, maintenance: 4500 }
     ],
     'Budowlany': [
         { id: 'office_building', name: "Biurowiec", icon: 'img/branch.png', cost: 600000, duration: 30, assetValue: 500000, incomeBonus: 0.15, healthBonus: 0.4, minDevLevel: 2, maintenance: 3000 },
         { id: 'warehouse', name: "Hala Magazynowa", icon: 'img/box.png', cost: 400000, duration: 20, assetValue: 350000, incomeBonus: 0.1, healthBonus: 0.2, minDevLevel: 1, maintenance: 2000 },
         { id: 'residential_complex', name: "Osiedle Mieszkaniowe", icon: 'img/branch.png', cost: 1000000, duration: 45, assetValue: 800000, incomeBonus: 0.2, healthBonus: 0.5, minDevLevel: 3, maintenance: 5000 },
         { id: 'shopping_center', name: "Centrum Handlowe", icon: 'img/branch.png', cost: 1500000, duration: 60, assetValue: 1200000, incomeBonus: 0.25, healthBonus: 0.6, minDevLevel: 4, maintenance: 8000 },
-        { id: 'industrial_park', name: "Park Przemysłowy", icon: 'img/fabrykaicon.png', cost: 2000000, duration: 80, assetValue: 1600000, incomeBonus: 0.3, healthBonus: 0.7, minDevLevel: 5, maintenance: 10000 }
+        { id: 'industrial_park', name: "Park Przemysłowy", icon: 'img/fabrykaicon.png', cost: 2000000, duration: 80, assetValue: 1600000, incomeBonus: 0.3, healthBonus: 0.7, minDevLevel: 5, maintenance: 10000 },
+        { id: 'skyscraper', name: "Wieżowiec", icon: 'img/branch.png', cost: 3000000, duration: 100, assetValue: 2400000, incomeBonus: 0.35, healthBonus: 0.8, minDevLevel: 6, maintenance: 15000 }
     ],
     'Gaming': [
-        { id: 'game_studio', name: "Studio Gier", icon: 'img/server.png', cost: 300000, duration: 12, assetValue: 250000, incomeBonus: 0.08, healthBonus: 0.5, minDevLevel: 1, maintenance: 1500 }
+        { id: 'game_studio', name: "Studio Gier", icon: 'img/server.png', cost: 300000, duration: 12, assetValue: 250000, incomeBonus: 0.08, healthBonus: 0.5, minDevLevel: 1, maintenance: 1500 },
+        { id: 'esports_arena', name: "Arena eSport", icon: 'img/branch.png', cost: 600000, duration: 25, assetValue: 480000, incomeBonus: 0.15, healthBonus: 0.3, minDevLevel: 2, maintenance: 3000 },
+        { id: 'vr_development_lab', name: "Laboratorium VR", icon: 'img/medlab.png', cost: 800000, duration: 35, assetValue: 640000, incomeBonus: 0.18, healthBonus: 0.4, minDevLevel: 3, maintenance: 4000 },
+        { id: 'mobile_game_studio', name: "Studio Gier Mobilnych", icon: 'img/server.png', cost: 400000, duration: 15, assetValue: 320000, incomeBonus: 0.1, healthBonus: 0.6, minDevLevel: 1, maintenance: 2000 },
+        { id: 'streaming_platform', name: "Platforma Streamingowa", icon: 'img/server.png', cost: 1000000, duration: 40, assetValue: 800000, incomeBonus: 0.22, healthBonus: 0.5, minDevLevel: 3, maintenance: 5000 },
+        { id: 'gaming_casino', name: "Kasyno Gier", icon: 'img/branch.png', cost: 700000, duration: 30, assetValue: 550000, incomeBonus: 0.16, healthBonus: 0.35, minDevLevel: 2, maintenance: 3500 }
     ],
     'Turystyka': [
         { id: 'hotel_chain', name: "Łańcuch Hoteli", icon: 'img/branch.png', cost: 800000, duration: 35, assetValue: 600000, incomeBonus: 0.18, healthBonus: 0.4, minDevLevel: 2, maintenance: 4000 },
-        { id: 'resort', name: "Kurort", icon: 'img/globe.png', cost: 1200000, duration: 50, assetValue: 900000, incomeBonus: 0.22, healthBonus: 0.5, minDevLevel: 3, maintenance: 6000 }
+        { id: 'resort', name: "Kurort", icon: 'img/globe.png', cost: 1200000, duration: 50, assetValue: 900000, incomeBonus: 0.22, healthBonus: 0.5, minDevLevel: 3, maintenance: 6000 },
+        { id: 'theme_park', name: "Park Rozrywki", icon: 'img/globe.png', cost: 2000000, duration: 70, assetValue: 1500000, incomeBonus: 0.3, healthBonus: 0.6, minDevLevel: 4, maintenance: 10000 },
+        { id: 'cruise_terminal', name: "Terminal Promowy", icon: 'img/box.png', cost: 1000000, duration: 40, assetValue: 800000, incomeBonus: 0.2, healthBonus: 0.45, minDevLevel: 3, maintenance: 5000 },
+        { id: 'ski_resort', name: "Ośrodek Narciarski", icon: 'img/globe.png', cost: 900000, duration: 45, assetValue: 700000, incomeBonus: 0.19, healthBonus: 0.42, minDevLevel: 2, maintenance: 4500 },
+        { id: 'casino', name: "Kasyno", icon: 'img/branch.png', cost: 600000, duration: 25, assetValue: 480000, incomeBonus: 0.14, healthBonus: 0.3, minDevLevel: 2, maintenance: 3000 }
     ],
     'Żywność': [
-        { id: 'food_processing_plant', name: "Zakład Przetwórstwa Żywności", icon: 'img/fabrykaicon.png', cost: 700000, duration: 28, assetValue: 550000, incomeBonus: 0.16, healthBonus: 0.3, minDevLevel: 2, maintenance: 3500 }
+        { id: 'food_processing_plant', name: "Zakład Przetwórstwa Żywności", icon: 'img/fabrykaicon.png', cost: 700000, duration: 28, assetValue: 550000, incomeBonus: 0.16, healthBonus: 0.3, minDevLevel: 2, maintenance: 3500 },
+        { id: 'dairy_farm', name: "Farma Mleczna", icon: 'img/fabrykaicon.png', cost: 500000, duration: 20, assetValue: 400000, incomeBonus: 0.14, healthBonus: 0.25, minDevLevel: 1, maintenance: 2500 },
+        { id: 'brewery', name: "Browar", icon: 'img/fabrykaicon.png', cost: 600000, duration: 25, assetValue: 480000, incomeBonus: 0.18, healthBonus: 0.35, minDevLevel: 2, maintenance: 3000 }
     ],
     'Dobra konsumpcyjne': [
-        { id: 'production_facility', name: "Zakład Produkcyjny", icon: 'img/fabrykaicon.png', cost: 500000, duration: 22, assetValue: 400000, incomeBonus: 0.12, healthBonus: 0.25, minDevLevel: 1, maintenance: 2500 }
+        { id: 'production_facility', name: "Zakład Produkcyjny", icon: 'img/fabrykaicon.png', cost: 500000, duration: 22, assetValue: 400000, incomeBonus: 0.12, healthBonus: 0.25, minDevLevel: 1, maintenance: 2500 },
+        { id: 'textile_factory', name: "Fabryka Tekstyliów", icon: 'img/fabrykaicon.png', cost: 400000, duration: 18, assetValue: 320000, incomeBonus: 0.1, healthBonus: 0.2, minDevLevel: 1, maintenance: 2000 },
+        { id: 'electronics_assembly', name: "Linia Montażu Elektroniki", icon: 'img/fabrykaicon.png', cost: 800000, duration: 30, assetValue: 640000, incomeBonus: 0.2, healthBonus: 0.4, minDevLevel: 2, maintenance: 4000 }
     ],
     'Usługi': [
-        { id: 'service_center', name: "Centrum Usługowe", icon: 'img/branch.png', cost: 400000, duration: 18, assetValue: 300000, incomeBonus: 0.1, healthBonus: 0.2, minDevLevel: 1, maintenance: 2000 }
+        { id: 'service_center', name: "Centrum Usługowe", icon: 'img/branch.png', cost: 400000, duration: 18, assetValue: 300000, incomeBonus: 0.1, healthBonus: 0.2, minDevLevel: 1, maintenance: 2000 },
+        { id: 'call_center', name: "Centrum Obsługi Klienta", icon: 'img/branch.png', cost: 300000, duration: 15, assetValue: 240000, incomeBonus: 0.08, healthBonus: 0.15, minDevLevel: 1, maintenance: 1500 },
+        { id: 'consulting_office', name: "Biuro Konsultingowe", icon: 'img/branch.png', cost: 500000, duration: 20, assetValue: 400000, incomeBonus: 0.12, healthBonus: 0.25, minDevLevel: 2, maintenance: 2500 },
+        { id: 'it_services_center', name: "Centrum Usług IT", icon: 'img/server.png', cost: 600000, duration: 25, assetValue: 480000, incomeBonus: 0.14, healthBonus: 0.3, minDevLevel: 2, maintenance: 3000 },
+        { id: 'legal_services', name: "Biuro Prawnicze", icon: 'img/branch.png', cost: 350000, duration: 16, assetValue: 280000, incomeBonus: 0.09, healthBonus: 0.18, minDevLevel: 1, maintenance: 1800 },
+        { id: 'accounting_firm', name: "Firma Księgowa", icon: 'img/branch.png', cost: 250000, duration: 12, assetValue: 200000, incomeBonus: 0.07, healthBonus: 0.12, minDevLevel: 1, maintenance: 1300 }
     ],
     'Badania': [
-        { id: 'research_facility', name: "Obiekt Badawczy", icon: 'img/medlab.png', cost: 900000, duration: 40, assetValue: 700000, incomeBonus: 0.14, healthBonus: 1.0, minDevLevel: 3, maintenance: 4500 }
+        { id: 'research_facility', name: "Obiekt Badawczy", icon: 'img/medlab.png', cost: 900000, duration: 40, assetValue: 700000, incomeBonus: 0.14, healthBonus: 1.0, minDevLevel: 3, maintenance: 4500 },
+        { id: 'innovation_lab', name: "Laboratorium Innowacji", icon: 'img/medlab.png', cost: 700000, duration: 30, assetValue: 550000, incomeBonus: 0.12, healthBonus: 0.8, minDevLevel: 2, maintenance: 3500 },
+        { id: 'testing_center', name: "Centrum Testowe", icon: 'img/medlab.png', cost: 500000, duration: 20, assetValue: 400000, incomeBonus: 0.1, healthBonus: 0.6, minDevLevel: 1, maintenance: 2500 },
+        { id: 'biotech_lab', name: "Laboratorium Biotechnologiczne", icon: 'img/medlab.png', cost: 1100000, duration: 45, assetValue: 850000, incomeBonus: 0.16, healthBonus: 1.2, minDevLevel: 3, maintenance: 5500 },
+        { id: 'aerospace_research', name: "Centrum Badań Lotniczych", icon: 'img/medlab.png', cost: 1500000, duration: 60, assetValue: 1200000, incomeBonus: 0.2, healthBonus: 1.5, minDevLevel: 4, maintenance: 7500 },
+        { id: 'materials_science_lab', name: "Laboratorium Nauk Materiałowych", icon: 'img/medlab.png', cost: 800000, duration: 35, assetValue: 650000, incomeBonus: 0.13, healthBonus: 0.9, minDevLevel: 2, maintenance: 4000 }
+    ],
+    'Bankowość': [
+        { id: 'bank_headquarters', name: "Siedziba Banku", icon: 'img/branch.png', cost: 1800000, duration: 50, assetValue: 1500000, incomeBonus: 0.28, healthBonus: 0.8, minDevLevel: 4, maintenance: 12000 },
+        { id: 'data_center_finance', name: "Centrum Danych Finansowych", icon: 'img/server.png', cost: 1200000, duration: 35, assetValue: 900000, incomeBonus: 0.2, healthBonus: 0.6, minDevLevel: 3, maintenance: 7000 },
+        { id: 'vault_building', name: "Budynk Sejfów", icon: 'img/branch.png', cost: 800000, duration: 25, assetValue: 600000, incomeBonus: 0.15, healthBonus: 0.4, minDevLevel: 2, maintenance: 5000 }
+    ],
+    'Finanse': [
+        { id: 'financial_tower', name: "Wieża Finansowa", icon: 'img/branch.png', cost: 2000000, duration: 55, assetValue: 1700000, incomeBonus: 0.3, healthBonus: 0.85, minDevLevel: 4, maintenance: 13000 },
+        { id: 'trading_floor', name: "Piętro Tradingowe", icon: 'img/branch.png', cost: 1500000, duration: 40, assetValue: 1200000, incomeBonus: 0.25, healthBonus: 0.7, minDevLevel: 3, maintenance: 9000 },
+        { id: 'fintech_hub', name: "Hub FinTech", icon: 'img/server.png', cost: 1000000, duration: 30, assetValue: 800000, incomeBonus: 0.2, healthBonus: 0.5, minDevLevel: 2, maintenance: 6000 }
+    ],
+    'Chemia': [
+        { id: 'chemical_plant', name: "Zakład Chemiczny", icon: 'img/fabrykaicon.png', cost: 1300000, duration: 45, assetValue: 1100000, incomeBonus: 0.24, healthBonus: 0.7, minDevLevel: 3, maintenance: 8000 },
+        { id: 'refinery', name: "Rafineria", icon: 'img/fabrykaicon.png', cost: 1800000, duration: 60, assetValue: 1500000, incomeBonus: 0.32, healthBonus: 0.9, minDevLevel: 4, maintenance: 11000 },
+        { id: 'rnd_lab_chemistry', name: "Laboratorium R&D Chemiczne", icon: 'img/medlab.png', cost: 900000, duration: 35, assetValue: 700000, incomeBonus: 0.18, healthBonus: 1.2, minDevLevel: 3, maintenance: 5000 }
+    ],
+    'Media': [
+        { id: 'tv_studio', name: "Studio Telewizyjne", icon: 'img/branch.png', cost: 1400000, duration: 45, assetValue: 1100000, incomeBonus: 0.22, healthBonus: 0.6, minDevLevel: 3, maintenance: 8500 },
+        { id: 'broadcasting_center', name: "Centrum Nadawcze", icon: 'img/branch.png', cost: 1000000, duration: 35, assetValue: 800000, incomeBonus: 0.18, healthBonus: 0.5, minDevLevel: 2, maintenance: 6000 },
+        { id: 'cinema_complex', name: "Kompleks Kinowy", icon: 'img/branch.png', cost: 800000, duration: 28, assetValue: 650000, incomeBonus: 0.16, healthBonus: 0.4, minDevLevel: 2, maintenance: 4500 }
+    ],
+    'Transport': [
+        { id: 'cargo_terminal', name: "Terminal Cargo", icon: 'img/box.png', cost: 1100000, duration: 38, assetValue: 900000, incomeBonus: 0.2, healthBonus: 0.55, minDevLevel: 3, maintenance: 6500 },
+        { id: 'container_port', name: "Port Kontenerowy", icon: 'img/box.png', cost: 1600000, duration: 55, assetValue: 1300000, incomeBonus: 0.26, healthBonus: 0.75, minDevLevel: 4, maintenance: 9500 },
+        { id: 'fuel_station_network', name: "Sieć Stacji Paliw", icon: 'img/branch.png', cost: 700000, duration: 22, assetValue: 550000, incomeBonus: 0.14, healthBonus: 0.35, minDevLevel: 2, maintenance: 4000 }
     ]
 };
 
@@ -1359,6 +1415,19 @@ const etfs = [
         priceHistory: []
     }
 ];
+
+
+
+let specialists = [
+    { id: 'spec1', name: 'Voltomax Systemy', specialty: 'technology', bonus: 0.1, contractsCompleted: 0, level: 1, cash: 101000 },
+    { id: 'spec2', name: 'Hydronex Serwis', specialty: 'general', bonus: 0.08, contractsCompleted: 0, level: 1, cash: 80000 },
+    { id: 'spec3', name: 'Linea Architekci', specialty: 'office', bonus: 0.12, contractsCompleted: 0, level: 1, cash: 120000 },
+    { id: 'spec4', name: 'Inżynierowie Strukturalni', specialty: 'industrial', bonus: 0.15, contractsCompleted: 0, level: 1, cash: 150000 },
+    { id: 'spec5', name: 'Konstruktorium S.A', specialty: 'residential', bonus: 0.09, contractsCompleted: 0, level: 1, cash: 90000 },
+    { id: 'spec6', name: 'WiesBud', specialty: 'residential', bonus: 0.04, contractsCompleted: 0, level: 1, cash: 65000 },
+    { id: 'spec7', name: 'Pomocex', specialty: 'office', bonus: 0.1, contractsCompleted: 0, level: 1, cash: 100000 }
+];
+
 
 // --- Funkcje Zarządzania Spółkami ---
 
@@ -4823,21 +4892,24 @@ function declineRescueOffer(offerDetails) {
 }
 
 function finalizeRescueOffering(targetCompany, totalCashRaised, totalSharesBought) {
-    const stock = stocks.find(s => s.symbol === targetCompany.symbol);
+    const stock = stocks.find(s => s.symbol === targetCompany?.symbol);
     if (!stock) return;
 
-    const initialDebt = stock.corporateDebt;
-    stock.corporateDebt -= totalCashRaised;
+    totalCashRaised = Number(totalCashRaised) || 0;
+    totalSharesBought = Number(totalSharesBought) || 0;
+    const initialDebt = Number(stock.corporateDebt) || 0;
+
+    stock.corporateDebt = initialDebt - totalCashRaised;
     if (stock.corporateDebt < 0) stock.corporateDebt = 0;
 
     // Zwiększamy liczbę akcji w obiegu o te, które zostały faktycznie kupione
-    stock.totalShares += totalSharesBought;
+    stock.totalShares = Number(stock.totalShares || 0) + totalSharesBought;
 
     logEvent(`[FINAŁ EMISJI] Emisja ratunkowa w ${stock.name} zebrała ${totalCashRaised.toFixed(2)} PLN. Dług spółki zmniejszył się z ${initialDebt.toFixed(2)} PLN do ${stock.corporateDebt.toFixed(2)} PLN.`, 'review');
 
     // Nagroda: Poprawa kondycji finansowej, jeśli udało się zebrać jakiekolwiek środki
     if (totalCashRaised > 0) {
-        stock.financialHealth += 1;
+        stock.financialHealth = Number(stock.financialHealth || 0) + 1;
         if (stock.financialHealth > 5) stock.financialHealth = 5;
     }
 }
@@ -6711,8 +6783,9 @@ function initializeConstructionCompanies() {
             
             constructionStats: {
                 experience: getRandomIntInRange(0, 50),
-                maxProjects: data.exchange === 'PLATINUM' ? 5 : (data.exchange === 'GOLD' ? 3 : 2),
-                currentProjects: 0
+                maxProjects: Math.min(5, Math.floor(getRandomIntInRange(0, 50) / 10) + 1),
+                currentProjects: 0,
+                wonTenders: 0
             }
         };
         

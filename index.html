@@ -12,39 +12,120 @@
         <button id="theme-toggle-btn" onclick="openSettingsModal()">⚙️</button>
     </div>
 
-    <div id="main-nav">
-        <button id="open-work-btn" onclick="openWorkModal()" style="display: none;">✍️ Praca</button>
-        <button id="open-bank-btn" onclick="openBankModal()">🏦 Bank</button>
-        <button id="open-state-btn" onclick="openStateModal()">🏛️ Państwo</button>
-        <button id="open-city-btn" onclick="openCityInvestmentModal()">🏙️ Miasto</button>
-        <button id="open-construction-btn" onclick="openConstructionSectorModal()">🏗️ Budownictwo</button>
-        <button id="open-skills-btn" onclick="openSkillsModal()">🧠 Umiejętności</button>
-        <button id="open-newspaper-btn" onclick="openNewspaperModal()">📰 Gazeta</button>
-        <button id="open-leaderboard-btn" onclick="openLeaderboardModal()">🏆 Ranking</button>
-        <button id="open-dividend-tracker-btn" onclick="openDividendTrackerModal()" style="display: none;">💰 Dywidendy</button>
-        <button id="pause-game-btn" onclick="togglePauseGame()">⏸️ Pauza</button>
-        <button onclick="saveGame()" style="margin-left: 20px; border-style: dashed;">Zapisz Grę</button>
-        <button onclick="resetGame()" style="background-color: #dc3545; color: white;">Resetuj Grę</button>
+    <div class="app-shell">
+  <aside class="app-sidebar" id="app-sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-logo">📈</div>
+      <div>
+        <div class="sidebar-title">Symulator Inwestycyjny</div>
+        <div class="sidebar-subtitle">panel główny</div>
+      </div>
     </div>
 
-    <h1>Symulator Giełdowy</h1>
+    <nav class="sidebar-nav">
+      <button class="sidebar-nav-btn" id="open-bank-btn" onclick="openBankModal()">
+        <span class="nav-icon">🏦</span>
+        <span class="nav-label">Bank</span>
+      </button>
 
-    <div id="ticker-container">
-        <div class="ticker-message">wersja 0.9 dewelopment BETA</div>
+      <button class="sidebar-nav-btn" id="open-state-btn" onclick="openStateModal()">
+        <span class="nav-icon">🏛️</span>
+        <span class="nav-label">Państwo</span>
+      </button>
+
+      <button class="sidebar-nav-btn" id="open-city-btn" onclick="openCityInvestmentModal()">
+        <span class="nav-icon">🏙️</span>
+        <span class="nav-label">Miasto</span>
+      </button>
+
+      <button class="sidebar-nav-btn" id="open-construction-btn" onclick="openConstructionSectorModal()">
+        <span class="nav-icon">🏗️</span>
+        <span class="nav-label">Budownictwo</span>
+      </button>
+
+      <button class="sidebar-nav-btn" id="open-skills-btn" onclick="openSkillsModal()">
+        <span class="nav-icon">🧠</span>
+        <span class="nav-label">Umiejętności</span>
+      </button>
+
+      <button class="sidebar-nav-btn has-badge" id="open-newspaper-btn" onclick="openNewspaperModal()">
+        <span class="nav-icon">📰</span>
+        <span class="nav-label">Gazeta</span>
+        <span class="nav-badge">3</span>
+      </button>
+
+      <button class="sidebar-nav-btn" id="open-leaderboard-btn" onclick="openLeaderboardModal()">
+        <span class="nav-icon">🏆</span>
+        <span class="nav-label">Ranking</span>
+      </button>
+    </nav>
+  </aside>
+
+  <div class="app-main">
+    <header class="topbar" id="topbar">
+
+  <!-- Lewa: hamburger + tytuł ekranu + status -->
+  <div class="topbar-left">
+    <button class="mobile-nav-toggle" type="button"
+            onclick="document.body.classList.toggle('sidebar-open')">☰</button>
+    <div class="topbar-screen-title">
+      <h1>Rynek Akcji</h1>
+      <div class="topbar-screen-subtitle">
+        <span class="topbar-day-label">Dzień <strong id="topbar-day">1</strong></span>
+        <span class="topbar-market-status" id="topbar-market-status">Hossa umiarkowana</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="topbar-sep"></div>
+
+  <!-- KPI środek -->
+  <div class="topbar-kpi-group">
+    <div class="topbar-kpi">
+      <span class="topbar-kpi-label">Gotówka</span>
+      <span class="topbar-kpi-val" id="cash">10 000,00 PLN</span>
+    </div>
+    <div class="topbar-kpi">
+      <span class="topbar-kpi-label">Wartość portfela</span>
+      <span class="topbar-kpi-val" id="topbar-portfolio-value">10 000,00</span>
+    </div>
+    <div class="topbar-kpi">
+      <span class="topbar-kpi-label">Zysk / strata dziś</span>
+      <span class="topbar-kpi-val" id="topbar-daily-pnl">+0,00</span>
+    </div>
+  </div>
+
+  <div class="topbar-sep"></div>
+
+  <!-- Segmented control prędkości -->
+  <div id="time-controls" style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+    <span class="topbar-kpi-label">Prędkość</span>
+    <div class="speed-segmented">
+      <button class="speed-btn active" onclick="setGameSpeed(1)">x1</button>
+      <button class="speed-btn" onclick="setGameSpeed(2)">x2</button>
+      <button class="speed-btn" onclick="setGameSpeed(5)">x5</button>
+    </div>
+  </div>
+
+  <!-- CTA -->
+  <div class="topbar-cta-group">
+    <button id="pause-game-btn" class="btn-pause" onclick="togglePauseGame()">Wznów</button>
+    <button class="btn-secondary" onclick="saveGame()">Zapisz</button>
+    <button class="btn-danger" onclick="resetGame()">Reset</button>
+    <button class="btn-secondary" onclick="openBankModal()">📊 Rynek</button>
+  </div>
+
+</header>
+
+    <div id="ticker-container" class="topbar-ticker">
+      <div class="ticker-message">wersja 0.9 development BETA</div>
     </div>
 
-    <div id="time-controls" style="text-align: center; margin-bottom: 20px;">
-        <strong>Prędkość gry:</strong>
-        <button class="speed-btn active" onclick="setGameSpeed(1)">x1</button>
-        <button class="speed-btn" onclick="setGameSpeed(2)">x2</button>
-        <button class="speed-btn" onclick="setGameSpeed(5)">x5</button>
-    </div>
-
-    <div class="game-container">
-        <div class="main-content">
-            <div id="indexes-panel" class="panel" style="display: none;">
-                <div id="indexes-container"></div>
-            </div>
+    <main class="dashboard-layout">
+      <section class="dashboard-market">
+        <div id="indexes-panel" class="panel" style="display: none;">
+          <div id="indexes-container"></div>
+        </div>
 
             <div id="startup-incubator-panel" class="panel">
                 <h2 onclick="toggleStartupPanelVisibility()" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
@@ -89,43 +170,116 @@
                     </tbody>
                 </table>
             </div>
+            
 
-            <div id="market" class="panel">
-                <h2>Rynek Akcji</h2>
-                <div style="margin-bottom: 10px;">
-                    <label for="sector-filter">Filtruj według sektora: </label>
-                    <select id="sector-filter" onchange="displayStocks(getCurrentInputValues())">
-                        <option value="all">Wszystkie sektory</option>
-                        <option value="Żywność">Żywność</option>
-                        <option value="Gaming">Gaming</option>
-                        <option value="Finanse">Finanse</option>
-                        <option value="Technologia">Technologia</option>
-                        <option value="Bankowość">Bankowość</option>
-                        <option value="Nieruchomości">Nieruchomości</option>
-                        <option value="Energia">Energia</option>
-                        <option value="Chemia">Chemia</option>
-                        <option value="Przemysł">Przemysł</option>
-                        <option value="Dobra konsumpcyjne">Dobra konsumpcyjne</option>
-                        <option value="Usługi">Usługi</option>
-                        <option value="Badania">Badania</option>
-                        <option value="Turystyka">Turystyka</option>
-                        <option value="Medycyna">Medycyna</option>
-                        <option value="REIT">Fundusze REIT</option>
-                    </select>
-                </div>
-                <table id="stock-table">
-                    <thead>
-                        <tr>
-                            <th>Nazwa Spółki</th>
-                            <th id="price-header-cell" onclick="togglePriceSort()" style="cursor: pointer;">Cena (PLN)</th>
-                            <th>Dostępne</th>
-                            <th>Posiadane</th>
-                            <th>Akcje</th>
-                            <th>Raport</th>
-                        </tr>
-                    </thead>
-                    <tbody id="stock-table-body"></tbody>
-                </table>
+<div id="market" class="panel">
+    <h2>Rynek Akcji</h2>
+
+    <!-- 4 mini-karty KPI -->
+    <div class="market-kpi-row">
+      <div class="market-kpi-card">
+        <span class="mkpi-label">Spółki aktywne</span>
+        <span class="mkpi-value" id="mkpi-active">—</span>
+        <span class="mkpi-sub">na rynku dziś</span>
+      </div>
+      <div class="market-kpi-card">
+        <span class="mkpi-label">Największy wzrost</span>
+        <span class="mkpi-value up" id="mkpi-top-gainer">—</span>
+        <span class="mkpi-sub" id="mkpi-top-gainer-name">—</span>
+      </div>
+      <div class="market-kpi-card">
+        <span class="mkpi-label">Największy spadek</span>
+        <span class="mkpi-value down" id="mkpi-top-loser">—</span>
+        <span class="mkpi-sub" id="mkpi-top-loser-name">—</span>
+      </div>
+      <div class="market-kpi-card">
+        <span class="mkpi-label">Popularny sektor</span>
+        <span class="mkpi-value" id="mkpi-top-sector">—</span>
+        <span class="mkpi-sub">wg liczby spółek</span>
+      </div>
+    </div>
+
+    <!-- Chipsy sektorów -->
+    <div class="sector-chips">
+      <span class="sector-chip active" data-sector="all"
+            onclick="setSectorChip(this,'all')">Wszystkie</span>
+      <span class="sector-chip" data-sector="Żywność"
+            onclick="setSectorChip(this,'Żywność')">Żywność</span>
+      <span class="sector-chip" data-sector="Gaming"
+            onclick="setSectorChip(this,'Gaming')">Gaming</span>
+      <span class="sector-chip" data-sector="Finanse"
+            onclick="setSectorChip(this,'Finanse')">Finanse</span>
+      <span class="sector-chip" data-sector="Technologia"
+            onclick="setSectorChip(this,'Technologia')">Technologia</span>
+      <span class="sector-chip" data-sector="Bankowość"
+            onclick="setSectorChip(this,'Bankowość')">Bankowość</span>
+      <span class="sector-chip" data-sector="Nieruchomości"
+            onclick="setSectorChip(this,'Nieruchomości')">Nieruchomości</span>
+      <span class="sector-chip" data-sector="Energia"
+            onclick="setSectorChip(this,'Energia')">Energia</span>
+      <span class="sector-chip" data-sector="Chemia"
+            onclick="setSectorChip(this,'Chemia')">Chemia</span>
+      <span class="sector-chip" data-sector="Przemysł"
+            onclick="setSectorChip(this,'Przemysł')">Przemysł</span>
+      <span class="sector-chip" data-sector="Medycyna"
+            onclick="setSectorChip(this,'Medycyna')">Medycyna</span>
+      <span class="sector-chip" data-sector="REIT"
+            onclick="setSectorChip(this,'REIT')">REIT</span>
+    </div>
+
+    <!-- Poziomy rynku jako taby -->
+    <div class="market-level-tabs">
+      <button class="market-level-tab active" data-level="ALL"
+              onclick="setMarketLevel(this,'ALL')">Wszystkie</button>
+      <button class="market-level-tab" data-level="JUNK"
+              onclick="setMarketLevel(this,'JUNK')">♻ Śmieciowa</button>
+      <button class="market-level-tab" data-level="BRONZE"
+              onclick="setMarketLevel(this,'BRONZE')">🥉 Brązowa</button>
+      <button class="market-level-tab" data-level="SILVER"
+              onclick="setMarketLevel(this,'SILVER')">🥈 Srebrna</button>
+      <button class="market-level-tab" data-level="GOLD"
+              onclick="setMarketLevel(this,'GOLD')">🥇 Złota</button>
+      <button class="market-level-tab" data-level="PLATINUM"
+              onclick="setMarketLevel(this,'PLATINUM')">💎 Platynowa</button>
+    </div>
+
+    <!-- Ukryty select — zachowany dla kompatybilności z JS -->
+    <select id="sector-filter" style="display:none"
+            onchange="displayStocks(getCurrentInputValues())">
+      <option value="all">Wszystkie sektory</option>
+      <option value="Żywność">Żywność</option>
+      <option value="Gaming">Gaming</option>
+      <option value="Finanse">Finanse</option>
+      <option value="Technologia">Technologia</option>
+      <option value="Bankowość">Bankowość</option>
+      <option value="Nieruchomości">Nieruchomości</option>
+      <option value="Energia">Energia</option>
+      <option value="Chemia">Chemia</option>
+      <option value="Przemysł">Przemysł</option>
+      <option value="Dobra konsumpcyjne">Dobra konsumpcyjne</option>
+      <option value="Usługi">Usługi</option>
+      <option value="Badania">Badania</option>
+      <option value="Turystyka">Turystyka</option>
+      <option value="Medycyna">Medycyna</option>
+      <option value="REIT">Fundusze REIT</option>
+    </select>
+
+    <!-- Tabela uproszczona -->
+    <table id="stock-table">
+      <thead>
+        <tr>
+          <th style="min-width:160px">Spółka</th>
+          <th>Sektor</th>
+          <th id="price-header-cell" onclick="togglePriceSort()"
+              style="cursor:pointer;min-width:90px">Cena PLN</th>
+          <th>Zmiana 24h</th>
+          <th>Wolumen / dostępne</th>
+          <th>Moje akcje</th>
+          <th style="width:56px">Akcja</th>
+        </tr>
+      </thead>
+      <tbody id="stock-table-body"></tbody>
+    </table>
                 <div id="etf-section">
                     <h3 style="margin-top: 30px;">Fundusze ETF</h3>
                     <table id="etf-table">
@@ -141,29 +295,75 @@
                     </table>
                 </div>
             </div>
-        </div>
-        <div class="sidebar">
+        </section>
+
+        <aside class="dashboard-sidebar">
             <div id="portfolio" class="panel">
-                <h2>Mój Portfel</h2>
-                <h3 style="font-size: 24px;">Całkowita wartość: <span id="total-portfolio-value">10000.00</span> PLN</h3>
-                <hr>
-                <p>Gotówka: <span id="cash">10000.00</span> PLN</p>
-                <p>Całkowity Zysk/Strata: <span id="total-profit-loss">0.00</span> PLN</p>
-                <p>Doświadczenie: <span id="player-xp">0.0</span> XP</p>
-                <hr>
-                <h3>Moje Aktywa:</h3>
-                <ul id="my-stocks-list"></ul>
-                <hr>
-                <h3>Moje Pasywa:</h3>
-                <ul id="my-liabilities-list" style="list-style-type: none; padding: 0;">
-                </ul>
-                <div style="display:flex;gap:6px;margin-top:8px;">
-                    <button onclick="openPawnShopPanel()" style="font-size:11px;padding:3px 8px;background:#28a745;color:#fff;border:none;border-radius:3px;cursor:pointer;">🏦 Lombard</button>
-                    <button onclick="openDebtCollectorPanel()" style="font-size:11px;padding:3px 8px;background:#ffc107;color:#333;border:none;border-radius:3px;cursor:pointer;">⚠️ Windykator</button>
-                </div>
-            </div>
+    <h2>Mój Portfel</h2>
+
+    <!-- KPI karty 2×2 -->
+    <div class="portfolio-kpi-grid">
+      <div class="portfolio-kpi-card">
+        <span class="portfolio-kpi-label">Wartość portfela</span>
+        <span class="portfolio-kpi-value" id="total-portfolio-value">10 000,00</span>
+        <span class="portfolio-kpi-sub">PLN łącznie</span>
+      </div>
+      <div class="portfolio-kpi-card">
+        <span class="portfolio-kpi-label">Gotówka</span>
+        <span class="portfolio-kpi-value" id="cash-portfolio">10 000,00</span>
+        <span class="portfolio-kpi-sub">PLN wolne</span>
+      </div>
+      <div class="portfolio-kpi-card">
+        <span class="portfolio-kpi-label">Zysk / Strata</span>
+        <span class="portfolio-kpi-value" id="total-profit-loss">+0,00</span>
+        <span class="portfolio-kpi-sub">PLN całkowity</span>
+      </div>
+      <div class="portfolio-kpi-card">
+        <span class="portfolio-kpi-label">XP / Poziom</span>
+        <span class="portfolio-kpi-value" id="player-xp">0</span>
+        <span class="portfolio-kpi-sub">do następnego poziomu</span>
+        <div class="xp-bar">
+          <div class="xp-bar-fill" id="xp-bar-fill" style="width:0%"></div>
         </div>
+      </div>
     </div>
+
+    <!-- Moje Aktywa -->
+    <div class="portfolio-section-header">Moje Aktywa</div>
+    <table class="asset-mini-table">
+      <thead>
+        <tr>
+          <th>Spółka</th>
+          <th>Udział %</th>
+          <th>Cena zakupu</th>
+          <th>Wynik</th>
+        </tr>
+      </thead>
+      <tbody id="my-stocks-list"></tbody>
+    </table>
+
+    <!-- Donut sektorów -->
+    <div class="sector-donut-placeholder" id="sector-donut-area">
+      📊 Podział sektorowy portfela (załaduj akcje, aby zobaczyć)
+    </div>
+
+    <!-- Moje Pasywa — akcentbursztyn -->
+    <div class="liabilities-section">
+      <div class="portfolio-section-header">⚠ Moje Pasywa</div>
+      <ul id="my-liabilities-list" style="list-style:none;padding:0;margin:0;"></ul>
+      <div style="display:flex;gap:6px;margin-top:10px;">
+        <button onclick="openPawnShopPanel()" class="btn-secondary">🏦 Lombard</button>
+        <button onclick="openDebtCollectorPanel()" class="btn-secondary"
+                
+          ⚠️ Windykator
+        </button>
+      </div>
+    </div>
+</div>
+        </aside>
+      </main>
+    </div>
+</div>
 
     <div id="settings-modal" class="modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 350px; border: 2px solid #333; background-color: #f9f9f9; box-shadow: 0 4px 8px rgba(0,0,0,0.2); padding: 20px; z-index: 1020; border-radius: 8px;">
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ccc; padding-bottom: 10px;">
@@ -380,68 +580,63 @@
          <button onclick="document.getElementById('sixth-sense-modal').style.display='none';" style="display: block; width: 100%; padding: 10px; font-size: 16px;">Rozumiem</button>
     </div>
 
-   <div id="newspaper-modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 800px; max-width: 90%; max-height: 90vh; background-color: #fdf5e6; border: 2px solid #333; box-shadow: 0 4px 8px rgba(0,0,0,0.2); z-index: 1005; border-radius: 4px; display: flex; flex-direction: column;">
-    
-    <div class="bank-tabs" style="padding-left: 15px; padding-right: 15px; padding-top: 10px; background-color: #fdf5e6; flex-shrink: 0;">
-        <button id="tab-btn-newspaper-PULS" class="bank-tab-btn active" onclick="switchNewspaperTab('PULS')">Puls Rynku</button>
-        <button id="tab-btn-newspaper-FLESZ" class="bank-tab-btn" onclick="switchNewspaperTab('FLESZ')">Flesz Giełdowy</button>
-        <button id="tab-btn-newspaper-OBSER" class="bank-tab-btn" onclick="switchNewspaperTab('OBSER')">Obserwator Finansowy</button>
-    </div>
-    <div class="newspaper-content">
-        <header class="newspaper-header">
-            <h2 id="newspaper-title">Puls Rynku</h2> 
-            <p id="newspaper-date"></p>
-        </header>
-        
-        <div id="newspaper-ad-container" style="display: none; padding: 10px 15px; background-color: #fff8c4; border: 1px dashed #e6db55; margin: 0 15px 10px 15px; text-align: center; font-family: sans-serif; font-size: 13px;">
-            </div>
+   <div id="newspaper-modal" class="modal newspaper-modal" style="display: none; width: 800px; max-width: 90%; max-height: 90vh;">
+  <div class="bank-tabs newspaper-tabs">
+    <button id="tab-btn-newspaper-PULS" class="bank-tab-btn active" onclick="switchNewspaperTab('PULS')">Puls Rynku</button>
+    <button id="tab-btn-newspaper-FLESZ" class="bank-tab-btn" onclick="switchNewspaperTab('FLESZ')">Flesz Giełdowy</button>
+    <button id="tab-btn-newspaper-OBSER" class="bank-tab-btn" onclick="switchNewspaperTab('OBSER')">Obserwator Finansowy</button>
+  </div>
 
-        <main class="newspaper-columns">
-            <div class="news-column">
-                <section class="news-section">
-                    <h3>Wiadomości z Rynku</h3>
-                    <ul id="market-news-list"></ul>
-                </section>
-            </div>
-            <div class="news-column">
-                <section class="news-section">
-                    <h3>Wiadomości Spółek</h3>
-                    <ul id="company-news-list"></ul>
-                </section>
-                <section class="news-section premium-section">
-                    <h3 id="premium-section-title">Strefa Premium</h3>
-                    
-                    <div id="newspaper-subscription-section" style="text-align: center; padding-bottom: 10px;">
-                        <p id="subscription-status-text"></p>
-                        <button id="buy-subscription-btn" onclick="buyPremiumSubscription()"></button>
-                    </div>
-                    
-                    <ul id="premium-content"></ul>
-                    
-                    <div id="media-influence-section" class="bank-section" style="display: none; margin-top: 15px; border-top: 1px dashed #aaa; padding-top: 10px;">
-                       <h4 style="margin-top: 0; text-align: center;">Kontrola Mediów</h4>
-                       
-                       <div id="positive-pr-controls" style="display: none;">
-                           <label for="positive-pr-select">Pozytywny PR:</label>
-                           <select id="positive-pr-select" style="max-width: 150px;"></select>
-                           <button id="positive-pr-btn" onclick="playerBuyPositivePR()">Kup (10 000 PLN)</button>
-                       </div>
+  <div class="newspaper-content">
+    <header class="newspaper-header">
+      <h2 id="newspaper-title">Puls Rynku</h2>
+      <p id="newspaper-date"></p>
+    </header>
 
-                       <div id="black-pr-controls" style="display: none; margin-top: 10px;">
-                           <label for="black-pr-select">Czarny PR:</label>
-                           <select id="black-pr-select" style="max-width: 150px;"></select>
-                           <button id="black-pr-btn" onclick="playerBuyBlackPR()">Kup (25 000 PLN)</button>
-                           <p style="font-size: 11px; color: #dc3545; margin: 5px 0 0 0;">
-                               Ryzyko wykrycia: <strong id="black-pr-risk-display">10%</strong>
-                           </p>
-                       </div>
-                   </div>
-                   
-                </section>
+    <div id="newspaper-ad-container"></div>
+
+    <main class="newspaper-columns">
+      <div class="news-column">
+        <section class="news-section">
+          <h3>Wiadomości z Rynku</h3>
+          <ul id="market-news-list"></ul>
+        </section>
+      </div>
+
+      <div class="news-column">
+        <section class="news-section">
+          <h3>Wiadomości Spółek</h3>
+          <ul id="company-news-list"></ul>
+        </section>
+
+        <section class="news-section premium-section">
+          <h3 id="premium-section-title">Strefa Premium</h3>
+          <div id="newspaper-subscription-section">
+            <p id="subscription-status-text"></p>
+            <button id="buy-subscription-btn" onclick="buyPremiumSubscription()">Kup Premium</button>
+          </div>
+          <ul id="premium-content"></ul>
+
+          <div id="media-influence-section" class="bank-section" style="display: none; margin-top: 15px;">
+            <h4 style="margin-top: 0; text-align: center;">Kontrola Mediów</h4>
+            <div id="positive-pr-controls" style="display: none;">
+              <label for="positive-pr-select">Pozytywny PR</label>
+              <select id="positive-pr-select" style="max-width: 150px;"></select>
+              <button id="positive-pr-btn" onclick="playerBuyPositivePR()">Kup (10 000 PLN)</button>
             </div>
-        </main>
-    </div>
-    <button onclick="document.getElementById('newspaper-modal').style.display='none';" style="position: absolute; top: 15px; right: 15px; font-size: 20px; background: none; border: none; cursor: pointer; z-index: 1006;">&times;</button>
+            <div id="black-pr-controls" style="display: none; margin-top: 10px;">
+              <label for="black-pr-select">Czarny PR</label>
+              <select id="black-pr-select" style="max-width: 150px;"></select>
+              <button id="black-pr-btn" onclick="playerBuyBlackPR()">Kup (25 000 PLN)</button>
+              <p style="font-size: 11px; color: #dc3545; margin: 5px 0 0 0;">Ryzyko wykrycia: <strong id="black-pr-risk-display">10%</strong></p>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <button onclick="document.getElementById('newspaper-modal').classList.remove('open')">×</button>
 </div>
 
     <div id="state-modal" class="modal" style="display:none; width: 500px;">
@@ -600,7 +795,7 @@
         </div>
 
         </div>
-        <button onclick="document.getElementById('management-modal').style.display='none';" style="margin-top: 15px;">Zamknij</button>
+        
     </div>
 
     <div id="stock-details-modal" style="display:none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 400px; border: 2px solid #333; background-color: #f9f9f9; box-shadow: 0 4px 8px rgba(0,0,0,0.2); padding: 20px; z-index: 1007; border-radius: 8px;">
@@ -1075,20 +1270,48 @@
     <div id="toast-notification"></div>
 
 <!-- Modal Sektora Budowlanego -->
-<div id="construction-sector-modal" class="modal" style="display:none; width: 600px;">
+<div id="construction-sector-modal" class="modal" style="display:none; width: 800px;">
     <button class="close-btn" onclick="document.getElementById('construction-sector-modal').style.display='none';">&times;</button>
-    <h2 style="margin-top: 0; text-align: center;">🏗️ Sektor Budowlany</h2>
-    <div class="modal-body" style="max-height: 500px; overflow-y: auto;">
-        <div id="construction-tenders"></div>
-        <div id="construction-projects"></div>
-        <div id="construction-consortiums"></div>
+    <h2 style="margin-top: 0; text-align: center;">🏗️ Przegląd Budownictwa</h2>
+    <div class="modal-body" style="max-height: 600px; overflow-y: auto;">
+        <div class="tab-buttons">
+            <button class="tab-btn active" onclick="showConstructionTab('main')">Firmy Budowlane i Projekty</button>
+            <button class="tab-btn" onclick="showConstructionTab('subcontractors')">Podwykonawcy</button>
+        </div>
+        
+        <div id="construction-main" class="tab-content active construction-main">
+            <div class="construction-grid">
+                <div class="construction-left-panel">
+                    <h3>Spółki Budowlane</h3>
+                    <div id="construction-companies-list"></div>
+                </div>
+                <div class="construction-right-panel">
+                    <h3>Aktywne Projekty Budowlane</h3>
+                    <div id="construction-projects-list"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="construction-subcontractors" class="tab-content construction-subcontractors">
+  <div class="construction-subcontractors-header">
+    <div>
+      <h3>Platforma Podwykonawców</h3>
+      <p>Małe firmy budowlane i specjaliści dostępni do wsparcia projektów.</p>
+    </div>
+    <div class="construction-subcontractors-summary" id="subcontractors-summary"></div>
+  </div>
+
+  <div class="construction-subcontractors-body">
+    <div id="subcontractors-list"></div>
+  </div>
+</div>
     </div>
     <button onclick="document.getElementById('construction-sector-modal').style.display='none';" style="margin-top: 15px;">Zamknij</button>
 </div>
 
 <script src="gameCore.js"></script>
     <script src="economy.js"></script>
-
+    <script src="ui-update.js"></script>
     <script src="technologies.js"></script>
     <script src="descriptions.js"></script>
 
@@ -1101,7 +1324,7 @@
     <script src="minigames.js"></script>
     <script src="chart.js"></script>
     <script src="ui.js"></script>
-
+    
     <script src="main.js"></script>
 
 </body>

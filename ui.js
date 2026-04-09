@@ -24,329 +24,419 @@ function displayCash() {
 
 
 function displayStocks(previousInputValues = {}) {
-    const stockTableBody = document.getElementById('stock-table-body');
-    if (!stockTableBody) return;
+  const stockTableBody = document.getElementById('stock-table-body');
+  if (!stockTableBody) return;
 
-    // Aktualizacja nagłówka ceny (strzałki sortowania)
-    const priceHeader = document.getElementById('price-header-cell');
-    if (priceHeader) {
-        let headerText = 'Cena (PLN)';
-        if (currentSortState === 'price_asc') headerText += ' ▲';
-        else if (currentSortState === 'price_desc') headerText += ' ▼';
-        priceHeader.innerHTML = headerText;
-    }
+  // Nagłówek ceny (strzałki sortowania)
+  const priceHeader = document.getElementById('price-header-cell');
+  if (priceHeader) {
+    let headerText = 'Cena PLN';
+    if (currentSortState === 'price_asc') headerText += ' ▲';
+    else if (currentSortState === 'price_desc') headerText += ' ▼';
+    priceHeader.textContent = headerText;
+  }
 
-    const selectedSector = document.getElementById('sector-filter').value;
-    
-    // Filtrowanie spółek do wyświetlenia
-    let baseStocksToDisplay;
-    if (selectedSector === 'all') {
-        baseStocksToDisplay = stocks.filter(stock => !stock.isSubsidiaryOf);
-    } else if (selectedSector === 'REIT') {
-        baseStocksToDisplay = stocks.filter(stock => stock.assetType === 'REIT' && !stock.isSubsidiaryOf);
-    } else {
-        baseStocksToDisplay = stocks.filter(stock => Array.isArray(stock.sector) && stock.sector.includes(selectedSector) && !stock.isSubsidiaryOf);
-    }
+  const selectedSector = document.getElementById('sector-filter').value;
 
-    stockTableBody.innerHTML = '';
-    const sortedExchanges = Object.keys(exchanges).sort((a, b) => exchanges[a].level - exchanges[b].level);
-    const hasAnalystSkill = getSkillLevel('financialAnalyst') > 0; // Używamy helpera
+  // Filtrowanie spółek do wyświetlenia
+  let baseStocksToDisplay;
+  if (selectedSector === 'all') {
+    baseStocksToDisplay = stocks.filter(stock => !stock.isSubsidiaryOf);
+  } else if (selectedSector === 'REIT') {
+    baseStocksToDisplay = stocks.filter(
+      stock => stock.assetType === 'REIT' && !stock.isSubsidiaryOf
+    );
+  } else {
+    baseStocksToDisplay = stocks.filter(
+      stock =>
+        Array.isArray(stock.sector) &&
+        stock.sector.includes(selectedSector) &&
+        !stock.isSubsidiaryOf
+    );
+  }
 
-    // --- Funkcja pomocnicza do renderowania wiersza ---
-    const renderStockRow = (stock, isSubsidiary = false, parentSymbol = null) => {
-        // ===>>> TU BYŁ BŁĄD: Definiujemy hasAccess na początku <<<===
-        const exchangeData = exchanges[stock.exchange];
-        const hasAccess = exchangeData ? exchangeData.level <= playerAccessLevel : false;
-        const isLocked = stock.isTradeLocked;
-        // ==========================================================
+  stockTableBody.innerHTML = '';
+  const sortedExchanges = Object.keys(exchanges).sort(
+    (a, b) => exchanges[a].level - exchanges[b].level
+  );
+  const hasAnalystSkill = getSkillLevel('financialAnalyst') > 0;
 
-        const row = stockTableBody.insertRow();
-        row.dataset.symbol = stock.symbol;
+  // --- Funkcja pomocnicza do renderowania wiersza ---
+  const renderStockRow = (stock, isSubsidiary = false, parentSymbol = null) => {
+    const exchangeData = exchanges[stock.exchange];
+    const hasAccess = exchangeData ? exchangeData.level <= playerAccessLevel : false;
+    const isLocked = stock.isTradeLocked;
 
-        // --- Style wiersza ---
-        if (stock.isBankrupt) {
-            row.style.backgroundColor = '#ffe6e6';
-            row.style.border = '2px solid red';
-            row.style.textDecoration = 'line-through';
-            row.title = 'BANKRUCTWO!';
-            row.querySelectorAll('input, button').forEach(el => el.disabled = true);
-        } else if (isLocked) {
-            row.style.backgroundColor = '#e9ecef';
-            row.style.color = '#6c757d';
-            row.title = 'HANDEL WSTRZYMANY';
-        } else if (stock.financialHealth === -4) {
-            row.style.backgroundColor = '#fff3cd';
-            row.title = 'UWAGA: Spółka jest na krawędzi bankructwa!';
-        }
+    const row = stockTableBody.insertRow();
+    row.dataset.symbol = stock.symbol;
+    row.classList.add('stock-row');
+    row.dataset.level = stock.exchange || 'ALL';
+    row.style.cursor = 'pointer';
 
-        if (isSubsidiary) {
-            row.classList.add('subsidiary-row');
-            if (parentSymbol) row.classList.add(`subsidiary-of-${parentSymbol}`);
-            row.style.display = 'none';
-        }
-        row.className += ` exchange-group-${stock.exchange}`;
-
-        const sharesOwned = playerPortfolio[stock.symbol] ? playerPortfolio[stock.symbol].shares : 0;
-        const playerSharePct = stock.totalShares > 0 ? (sharesOwned / stock.totalShares) * 100 : 0;
-
-        // Komórka 1: Nazwa
-        const nameCell = row.insertCell();
-        const nameWrapper = document.createElement('div');
-        nameWrapper.style.display = 'flex';
-        nameWrapper.style.alignItems = 'center';
-        if (isSubsidiary) nameWrapper.style.paddingLeft = '25px';
-
-        if (stock.subsidiaries && stock.subsidiaries.length > 0) {
-            const toggleBtn = document.createElement('span');
-            toggleBtn.textContent = stock.isSubsidiaryExpanded ? '▼ ' : '▶ ';
-            toggleBtn.style.cursor = 'pointer';
-            toggleBtn.style.marginRight = '5px';
-            toggleBtn.onclick = (e) => {
-                e.stopPropagation();
-                toggleSubsidiaryVisibility(stock.symbol);
-            };
-            toggleBtn.classList.add('subsidiary-toggle');
-            nameWrapper.appendChild(toggleBtn);
-        }
-
-        let stockNameContent = '';
-        if (playerSharePct > 50) stockNameContent += '👑 ';
-        if (stock.assetType === 'ResearchInstitute') stockNameContent += '🧪 ';
-        if (stock.isMonopolist) stockNameContent += '🦁 '; // Ikona monopolisty
-
-        if (stock.isStateOwned) {
-            stockNameContent += `🏛️ ${stock.name}`;
-            nameCell.title = 'Spółka Skarbu Państwa';
-        } else {
-            stockNameContent += stock.name;
-        }
-
-        const nameSpan = document.createElement('span');
-        nameSpan.innerHTML = stockNameContent;
-        if (sharesOwned > 0) nameSpan.style.fontWeight = 'bold';
-
-        const infoButton = document.createElement('button');
-        infoButton.textContent = 'i';
-        infoButton.className = 'info-btn';
-        infoButton.onclick = () => openDescriptionModal(stock.symbol);
-
-        nameWrapper.appendChild(nameSpan);
-        nameWrapper.appendChild(infoButton);
-
-        // Pasek M&A
-        if (stock.mergerProcess) {
-            const process = stock.mergerProcess;
-            const mergerStatusContainer = document.createElement('div');
-            mergerStatusContainer.style.marginLeft = '10px';
-            mergerStatusContainer.style.width = '70px';
-            mergerStatusContainer.title = `Proces M&A: ${process.statusMessage}`;
-
-            const statusText = document.createElement('span');
-            statusText.textContent = `Etap: ${process.stage}/7`;
-            statusText.style.fontSize = '10px';
-            statusText.style.display = 'block';
-
-            const progressBar = document.createElement('progress');
-            progressBar.value = process.progress;
-            progressBar.max = 100;
-            progressBar.style.width = '100%';
-            
-            if (process.decisionRequired) progressBar.classList.add('decision');
-            else if (process.complications > 0) progressBar.classList.add('complication');
-
-            mergerStatusContainer.appendChild(statusText);
-            mergerStatusContainer.appendChild(progressBar);
-            nameWrapper.appendChild(mergerStatusContainer);
-        }
-
-        nameCell.appendChild(nameWrapper);
-
-        // Komórka 2: Cena + faza cyklu
-        const priceCell = row.insertCell();
-        priceCell.textContent = stock.price.toFixed(2);
-        if (stock.corporatePhase) {
-            const phaseBadge = document.createElement('span');
-            phaseBadge.style.cssText = 'font-size:10px;margin-left:4px;padding:1px 4px;border-radius:3px;';
-            const phaseColors = {
-                'Wzrost': '#28a745', 'Stabilność': '#6c757d', 'Spadek': '#dc3545',
-                'Reorganizacja': '#ffc107', 'Złoty Rok ✨': '#ffd700',
-                'Zejście w Cień 👻': '#6f42c1', 'Impuls Innowacji 💡': '#17a2b8'
-            };
-            const col = phaseColors[stock.corporatePhase] || '#6c757d';
-            phaseBadge.style.color = col;
-            phaseBadge.style.border = '1px solid ' + col;
-            phaseBadge.textContent = stock.corporatePhase;
-            phaseBadge.title = 'Faza cyklu spółki';
-            priceCell.appendChild(phaseBadge);
-        }
-
-        // Komórka 3: Dostępne
-        let availableShares;
-        const treasuryShares = stock.treasuryShares || 0;
-        if (stock.isStateOwned) {
-            const publicFloat = Math.floor(stock.totalShares * (1 - stock.stateOwnershipPct));
-            availableShares = publicFloat - stock.sharesHeld - treasuryShares;
-        } else {
-            availableShares = stock.totalShares - stock.sharesHeld - treasuryShares;
-        }
-        row.insertCell().textContent = Math.max(0, Math.floor(availableShares)).toLocaleString('pl-PL');
-
-        // Komórka 4: Posiadane
-        row.insertCell().textContent = sharesOwned.toLocaleString('pl-PL');
-
-        // Komórka 5: Akcje (Input + Przyciski)
-        const actionsCell = row.insertCell();
-        const quantityInput = document.createElement('input');
-        quantityInput.type = 'number';
-        quantityInput.min = '1';
-        quantityInput.value = previousInputValues[stock.symbol] !== undefined ? previousInputValues[stock.symbol] : '1';
-        quantityInput.style.width = '50px';
-        quantityInput.id = `quantity-${stock.symbol}`;
-        
-        // Logika blokowania
-        const isDisabled = !hasAccess || isLocked || stock.isBeingMerged || stock.canBeTraded === false;
-        quantityInput.disabled = isDisabled;
-        actionsCell.appendChild(quantityInput);
-
-        // Przycisk Kup
-        const buyButton = document.createElement('button');
-        buyButton.textContent = hasAccess ? 'Kup' : '🔒';
-        buyButton.disabled = isDisabled;
-        if (hasAccess && isLocked) buyButton.textContent = '⛔';
-        
-        if (!isDisabled) {
-            buyButton.onclick = () => {
-                const quantity = parseInt(quantityInput.value, 10);
-                if (!isNaN(quantity) && quantity > 0) buyStock(stock.symbol, quantity);
-            };
-        }
-        actionsCell.appendChild(buyButton);
-
-        // Przycisk Sprzedaj
-        const sellButton = document.createElement('button');
-        sellButton.textContent = 'Sprzedaj';
-        sellButton.disabled = isDisabled || sharesOwned === 0;
-        if (isLocked) sellButton.textContent = '⛔';
-
-        if (!isDisabled) {
-            sellButton.onclick = () => {
-                const quantity = parseInt(quantityInput.value, 10);
-                if (!isNaN(quantity) && quantity > 0) sellStock(stock.symbol, quantity);
-            };
-        }
-        actionsCell.appendChild(sellButton);
-
-        // Przycisk Sprzedaj MAX
-        const sellAllButton = document.createElement('button');
-        sellAllButton.textContent = 'MAX';
-        sellAllButton.title = "Sprzedaj wszystko";
-        sellAllButton.style.marginLeft = '2px';
-        sellAllButton.disabled = isDisabled || sharesOwned === 0;
-
-        if (!isDisabled) {
-            sellAllButton.onclick = () => {
-                if (confirm(`Czy na pewno chcesz sprzedać wszystkie akcje ${stock.name}?`)) {
-                    sellAllShares(stock.symbol);
-                }
-            };
-        }
-        actionsCell.appendChild(sellAllButton);
-
-        // Przycisk Wykres
-        const historyButton = document.createElement('button');
-        historyButton.textContent = '📈';
-        historyButton.title = 'Wykres';
-        historyButton.style.marginLeft = '5px';
-        historyButton.disabled = !hasAccess;
-        historyButton.onclick = () => showPriceHistoryModal(stock.symbol);
-        actionsCell.appendChild(historyButton);
-
-        // Przycisk Akcjonariat
-        const detailsButton = document.createElement('button');
-        detailsButton.textContent = '📊';
-        detailsButton.title = "Akcjonariat";
-        detailsButton.style.marginLeft = '2px';
-        detailsButton.disabled = !hasAccess;
-        detailsButton.onclick = () => openStockDetailsModal(stock.symbol);
-        actionsCell.appendChild(detailsButton);
-
-        // Przycisk Zarządzaj
-        if (playerSharePct > 50) {
-            const manageButton = document.createElement('button');
-            manageButton.textContent = '👑';
-            manageButton.title = 'Panel Zarządzania';
-            manageButton.style.marginLeft = '5px';
-            manageButton.style.border = '1px solid #007bff';
-            manageButton.onclick = () => openManagementModal(stock.symbol);
-            actionsCell.appendChild(manageButton);
-        }
-
-        // Komórka 6: Raport
-        const reportCell = row.insertCell();
-        reportCell.style.textAlign = 'center';
-        
-        const hasDebt = stock.balanceSheet ? stock.balanceSheet.liabilities > 0 : false;
-        let reportContent = '';
-
-        if (hasAnalystSkill) {
-            switch (stock.lastReport) {
-                case 'excellent': reportContent = '💎'; break;
-                case 'good': reportContent = '📈'; break;
-                case 'neutral': reportContent = '😐'; break;
-                case 'bad': reportContent = '📉'; break;
-                case 'tragic': reportContent = '🔥'; break;
-                default: reportContent = '-';
-            }
-        } else {
-            reportContent = '🔒';
-        }
-
-        if (hasDebt && (hasAnalystSkill || playerSharePct > 50)) {
-            reportContent += ' <span style="color:red; font-size: 10px;">DŁUG</span>';
-        }
-        
-        reportCell.innerHTML = reportContent;
-
-        return row;
-    };
-
-    // --- Pętla renderująca giełdy ---
-    sortedExchanges.forEach(exchangeKey => {
-        const exchange = exchanges[exchangeKey];
-        let stocksOnThisExchange = baseStocksToDisplay.filter(stock => stock.exchange === exchangeKey);
-
-        if (currentSortState === 'price_asc') {
-            stocksOnThisExchange.sort((a, b) => a.price - b.price);
-        } else if (currentSortState === 'price_desc') {
-            stocksOnThisExchange.sort((a, b) => b.price - a.price);
-        }
-
-        if (stocksOnThisExchange.length > 0) {
-            const headerRow = stockTableBody.insertRow();
-            headerRow.className = 'exchange-header';
-            headerRow.onclick = () => toggleExchangeVisibility(exchangeKey);
-            const headerCell = headerRow.insertCell();
-            headerCell.colSpan = "6";
-            const icon = exchangeCollapseState[exchangeKey] ? '▶' : '▼';
-            headerCell.innerHTML = `<h4 style="margin: 5px 0; color: ${exchange.color}; display: flex; justify-content: space-between;">${exchange.name}<span>${icon}</span></h4>`;
-        }
-
-        stocksOnThisExchange.forEach(stock => {
-            const mainRow = renderStockRow(stock, false);
-            if (exchangeCollapseState[exchangeKey]) mainRow.style.display = 'none';
-
-            if (stock.subsidiaries && stock.subsidiaries.length > 0) {
-                stock.subsidiaries.forEach(subSymbol => {
-                    const subStock = stocks.find(s => s.symbol === subSymbol);
-                    if (subStock) {
-                        const subRow = renderStockRow(subStock, true, stock.symbol);
-                        if (exchangeCollapseState[exchangeKey] || !stock.isSubsidiaryExpanded) subRow.style.display = 'none';
-                        else subRow.style.display = '';
-                    }
-                });
-            }
-        });
+    row.addEventListener('click', e => {
+      if (
+        !e.target.closest('button') &&
+        !e.target.closest('input') &&
+        !e.target.closest('.subsidiary-toggle')
+      ) {
+        toggleStockDrawer(stock.symbol);
+      }
     });
+
+    if (stock.isBankrupt) {
+      row.classList.add('bankrupt-row');
+      row.title = 'BANKRUCTWO!';
+    } else if (isLocked) {
+      row.classList.add('locked-row');
+      row.title = 'HANDEL WSTRZYMANY';
+    } else if (stock.financialHealth <= -4) {
+      row.classList.add('warning-row');
+      row.title = 'UWAGA: Spółka jest na krawędzi bankructwa!';
+    }
+
+    if (isSubsidiary) {
+      row.classList.add('subsidiary-row');
+      if (parentSymbol) row.classList.add(`subsidiary-of-${parentSymbol}`);
+      row.style.display = 'none';
+    }
+
+    row.classList.add(`exchange-group-${stock.exchange}`);
+
+    const sharesOwned = playerPortfolio[stock.symbol]
+      ? playerPortfolio[stock.symbol].shares
+      : 0;
+    const playerSharePct =
+      stock.totalShares > 0 ? (sharesOwned / stock.totalShares) * 100 : 0;
+
+    const treasuryShares = stock.treasuryShares || 0;
+    let availableShares;
+    if (stock.isStateOwned) {
+      const publicFloat = Math.floor(
+        stock.totalShares * (1 - stock.stateOwnershipPct)
+      );
+      availableShares = publicFloat - stock.sharesHeld - treasuryShares;
+    } else {
+      availableShares = stock.totalShares - stock.sharesHeld - treasuryShares;
+    }
+    availableShares = Math.max(0, Math.floor(availableShares));
+
+    let changePct = 0;
+    if (Array.isArray(stock.priceHistory) && stock.priceHistory.length >= 2) {
+      const prevPrice = stock.priceHistory[stock.priceHistory.length - 2];
+      if (prevPrice > 0) {
+        changePct = ((stock.price - prevPrice) / prevPrice) * 100;
+      }
+    }
+
+    const changeClass = changePct > 0 ? 'up' : changePct < 0 ? 'down' : 'flat';
+    const changeSign = changePct > 0 ? '+' : '';
+    const primarySector =
+      Array.isArray(stock.sector) && stock.sector.length > 0
+        ? stock.sector[0]
+        : 'Rynek';
+    const availabilityPct =
+      stock.totalShares > 0
+        ? Math.max(
+            0,
+            Math.min(100, (availableShares / stock.totalShares) * 100)
+          )
+        : 0;
+
+    const isDisabled =
+      !hasAccess || isLocked || stock.isBeingMerged || stock.canBeTraded === false;
+
+    // KOMÓRKA 1: SPÓŁKA
+    const nameCell = row.insertCell();
+    nameCell.classList.add('stock-company-cell');
+
+    const identityWrap = document.createElement('div');
+    identityWrap.className = 'stock-identity';
+
+    const topLine = document.createElement('div');
+    topLine.className = 'stock-name-line';
+    if (isSubsidiary) topLine.style.paddingLeft = '25px';
+
+    if (stock.subsidiaries && stock.subsidiaries.length > 0) {
+      const toggleBtn = document.createElement('span');
+      toggleBtn.textContent = stock.isSubsidiaryExpanded ? '▼' : '▶';
+      toggleBtn.style.cursor = 'pointer';
+      toggleBtn.style.marginRight = '6px';
+      toggleBtn.onclick = e => {
+        e.stopPropagation();
+        toggleSubsidiaryVisibility(stock.symbol);
+      };
+      toggleBtn.classList.add('subsidiary-toggle');
+      topLine.appendChild(toggleBtn);
+    }
+
+    let markerPrefix = '';
+    if (playerSharePct > 50) markerPrefix += '👑 ';
+    if (stock.assetType === 'ResearchInstitute') markerPrefix += '🧪 ';
+    if (stock.isMonopolist) markerPrefix += '🦁 ';
+    if (stock.isStateOwned) {
+      markerPrefix += '🏛️ ';
+      nameCell.title = 'Spółka Skarbu Państwa';
+    }
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'stock-name';
+    nameSpan.textContent = `${markerPrefix}${stock.name}`;
+    topLine.appendChild(nameSpan);
+
+    if (sharesOwned > 0) {
+      const ownedDot = document.createElement('span');
+      ownedDot.className = 'owned-dot';
+      ownedDot.title = 'Masz akcje tej spółki';
+      topLine.appendChild(ownedDot);
+    }
+
+    const infoButton = document.createElement('button');
+    infoButton.textContent = 'i';
+    infoButton.className = 'info-btn';
+    infoButton.onclick = () => openDescriptionModal(stock.symbol);
+    topLine.appendChild(infoButton);
+
+    const metaLine = document.createElement('div');
+    metaLine.className = 'stock-meta';
+    metaLine.textContent = `${primarySector} • ${stock.symbol}`;
+
+    identityWrap.appendChild(topLine);
+    identityWrap.appendChild(metaLine);
+
+    if (stock.mergerProcess) {
+      const process = stock.mergerProcess;
+      const mergerStatusContainer = document.createElement('div');
+      mergerStatusContainer.style.marginTop = '6px';
+      mergerStatusContainer.style.width = '90px';
+      mergerStatusContainer.title = `Proces M&A: ${process.statusMessage}`;
+
+      const statusText = document.createElement('span');
+      statusText.textContent = `Etap: ${process.stage}/7`;
+      statusText.style.fontSize = '10px';
+      statusText.style.display = 'block';
+
+      const progressBar = document.createElement('progress');
+      progressBar.value = process.progress;
+      progressBar.max = 100;
+      progressBar.style.width = '100%';
+
+      if (process.decisionRequired) progressBar.classList.add('decision');
+      else if (process.complications > 0)
+        progressBar.classList.add('complication');
+
+      mergerStatusContainer.appendChild(statusText);
+      mergerStatusContainer.appendChild(progressBar);
+      identityWrap.appendChild(mergerStatusContainer);
+    }
+
+    nameCell.appendChild(identityWrap);
+
+    // KOMÓRKA 2: SEKTOR
+    const sectorCell = row.insertCell();
+    sectorCell.textContent = primarySector;
+
+    // KOMÓRKA 3: CENA
+    const priceCell = row.insertCell();
+    priceCell.classList.add('cell-number', 'cell-price');
+    priceCell.innerHTML = `
+      <div class="price-main">
+        ${stock.price.toLocaleString('pl-PL', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        })} PLN
+      </div>
+    `;
+
+    if (stock.corporatePhase && getSkillLevel('financialAnalyst') >= 1) {
+      const phaseBadge = document.createElement('div');
+      phaseBadge.style.cssText =
+        'font-size:10px;margin-top:4px;padding:2px 6px;border-radius:999px;display:inline-block;';
+      const phaseColors = {
+        Wzrost: '#28a745',
+        Stabilność: '#6c757d',
+        Spadek: '#dc3545',
+        Reorganizacja: '#ffc107',
+        'Złoty Rok ✨': '#ffd700',
+        'Zejście w Cień 👻': '#6f42c1',
+        'Impuls Innowacji 💡': '#17a2b8'
+      };
+      const col = phaseColors[stock.corporatePhase] || '#6c757d';
+      phaseBadge.style.color = col;
+      phaseBadge.style.border = '1px solid ' + col;
+      phaseBadge.textContent = stock.corporatePhase;
+      phaseBadge.title = 'Faza cyklu spółki';
+      priceCell.appendChild(phaseBadge);
+    }
+
+    // KOMÓRKA 4: ZMIANA 24h
+    const changeCell = row.insertCell();
+    changeCell.classList.add('cell-number');
+    changeCell.innerHTML = `
+      <span class="change-pill ${changeClass}">
+        ${changeSign}${changePct.toFixed(2)}%
+      </span>
+    `;
+
+    // KOMÓRKA 5: WOLUMEN / dostępne
+    const availableCell = row.insertCell();
+    availableCell.innerHTML = `
+      <div class="availability-cell">
+        <div class="availability-value">
+          ${availableShares.toLocaleString('pl-PL')}
+        </div>
+        <div class="mini-progress">
+          <div class="mini-progress-bar" style="width:${availabilityPct}%"></div>
+        </div>
+      </div>
+    `;
+
+    // KOMÓRKA 6: Moje akcje
+    const ownedCell = row.insertCell();
+    ownedCell.classList.add('cell-number');
+    ownedCell.innerHTML =
+      sharesOwned > 0
+        ? `<span class="owned-badge">${sharesOwned.toLocaleString(
+            'pl-PL'
+          )}</span>`
+        : `<span class="owned-zero">0</span>`;
+
+    // KOMÓRKA 7: Akcja
+    const actionsCell = row.insertCell();
+    actionsCell.classList.add('trade-actions-cell');
+    actionsCell.style.textAlign = 'center';
+
+    if (!hasAccess) {
+      const lockSpan = document.createElement('span');
+      lockSpan.textContent = '🔒';
+      lockSpan.title = 'Brak dostępu do giełdy';
+      lockSpan.style.fontSize = '18px';
+      actionsCell.appendChild(lockSpan);
+    } else if (isLocked || stock.isBeingMerged || stock.canBeTraded === false) {
+      const stopSpan = document.createElement('span');
+      stopSpan.textContent = '⛔';
+      stopSpan.title = 'Handel wstrzymany';
+      stopSpan.style.fontSize = '18px';
+      actionsCell.appendChild(stopSpan);
+    } else {
+      const drawerBtn = document.createElement('button');
+      drawerBtn.className = 'btn-ghost-icon drawer-toggle-btn';
+      drawerBtn.dataset.symbol = stock.symbol;
+      drawerBtn.title = 'Kup / Sprzedaj / Wykres';
+      drawerBtn.innerHTML =
+        sharesOwned > 0
+          ? '<span style="color:var(--accent-primary)">▼</span>'
+          : '▼';
+      drawerBtn.onclick = e => {
+        e.stopPropagation();
+        toggleStockDrawer(stock.symbol);
+      };
+      actionsCell.appendChild(drawerBtn);
+    }
+
+    const hiddenQty = document.createElement('input');
+    hiddenQty.type = 'number';
+    hiddenQty.id = `quantity-${stock.symbol}`;
+    hiddenQty.value =
+      previousInputValues[stock.symbol] !== undefined
+        ? previousInputValues[stock.symbol]
+        : '1';
+    hiddenQty.style.display = 'none';
+    actionsCell.appendChild(hiddenQty);
+
+    if (hasAnalystSkill) {
+      const reportMap = {
+        excellent: { icon: '💎', label: 'Doskonały' },
+        good: { icon: '📈', label: 'Dobry' },
+        neutral: { icon: '😐', label: 'Neutralny' },
+        bad: { icon: '📉', label: 'Zły' },
+        tragic: { icon: '🔥', label: 'Tragiczny' }
+      };
+      const rep = reportMap[stock.lastReport];
+      if (rep) {
+        const repSpan = document.createElement('span');
+        repSpan.textContent = rep.icon;
+        repSpan.title = `Raport: ${rep.label}`;
+        repSpan.style.cssText =
+          'font-size:14px;margin-left:4px;cursor:default;';
+        actionsCell.appendChild(repSpan);
+      }
+    }
+
+    const hasDebt = stock.balanceSheet
+      ? stock.balanceSheet.liabilities > 0
+      : false;
+    if (hasDebt && (hasAnalystSkill || playerSharePct > 50)) {
+      const debtSpan = document.createElement('span');
+      debtSpan.textContent = '💳';
+      debtSpan.title = 'Spółka ma zobowiązania';
+      debtSpan.style.cssText =
+        'font-size:12px;margin-left:2px;cursor:default;';
+      actionsCell.appendChild(debtSpan);
+    }
+
+    if (playerSharePct > 50) {
+      const manageButton = document.createElement('button');
+      manageButton.textContent = '👑';
+      manageButton.title = 'Panel Zarządzania';
+      manageButton.className = 'btn-ghost-icon';
+      manageButton.style.marginLeft = '4px';
+      manageButton.onclick = e => {
+        e.stopPropagation();
+        openManagementModal(stock.symbol);
+      };
+      actionsCell.appendChild(manageButton);
+    }
+
+    return row;
+  };
+
+  // --- Pętla renderująca giełdy ---
+  sortedExchanges.forEach(exchangeKey => {
+    const exchange = exchanges[exchangeKey];
+    let stocksOnThisExchange = baseStocksToDisplay.filter(
+      stock => stock.exchange === exchangeKey
+    );
+
+    if (currentSortState === 'price_asc') {
+      stocksOnThisExchange.sort((a, b) => a.price - b.price);
+    } else if (currentSortState === 'price_desc') {
+      stocksOnThisExchange.sort((a, b) => b.price - a.price);
+    }
+
+    if (stocksOnThisExchange.length > 0) {
+      const headerRow = stockTableBody.insertRow();
+      headerRow.className = 'exchange-header';
+      headerRow.onclick = () => toggleExchangeVisibility(exchangeKey);
+      const headerCell = headerRow.insertCell();
+      headerCell.colSpan = 7;
+      const icon = exchangeCollapseState[exchangeKey] ? '▶' : '▼';
+      headerCell.innerHTML = `<h4 style="margin: 5px 0; color: ${
+        exchange.color
+      }; display: flex; justify-content: space-between;">${
+        exchange.name
+      }<span>${icon}</span></h4>`;
+    }
+
+    stocksOnThisExchange.forEach(stock => {
+      const mainRow = renderStockRow(stock, false);
+      if (exchangeCollapseState[exchangeKey]) mainRow.style.display = 'none';
+
+      if (stock.subsidiaries && stock.subsidiaries.length > 0) {
+        stock.subsidiaries.forEach(subSymbol => {
+          const subStock = stocks.find(s => s.symbol === subSymbol);
+          if (subStock) {
+            const subRow = renderStockRow(subStock, true, stock.symbol);
+            if (
+              exchangeCollapseState[exchangeKey] ||
+              !stock.isSubsidiaryExpanded
+            )
+              subRow.style.display = 'none';
+            else subRow.style.display = '';
+          }
+        });
+      }
+    });
+  });
 }
 
 function showPriceHistoryModal(symbol) {
@@ -888,13 +978,11 @@ function switchNewspaperTab(symbol) {
  * Otwiera modal gazety i domyślnie włącza pierwszą zakładkę.
  */
 function openNewspaperModal() {
-    const modal = document.getElementById('newspaper-modal');
-    if (!modal) return;
-    
-    // Domyślnie otwórz pierwszą gazetę ('PULS')
-    switchNewspaperTab('PULS'); 
-    
-    modal.style.setProperty('display', 'flex', 'important');
+  const modal = document.getElementById('newspaper-modal');
+  if (!modal) return;
+
+  switchNewspaperTab('PULS');
+  modal.classList.add('open');
 }
 
 /**
@@ -1705,11 +1793,9 @@ const WORK_REWARD = 100;
 
 function updateWorkButtonVisibility() {
     const workBtn = document.getElementById('open-work-btn');
-    if (getSkillLevel('work') > 0) {
-        workBtn.style.display = 'inline-block';
-    } else {
-        workBtn.style.display = 'none';
-    }
+    if (!workBtn) return;
+
+    workBtn.style.display = getSkillLevel('work') > 0 ? 'inline-block' : 'none';
 }
 
 function openWorkModal() {
@@ -2179,7 +2265,7 @@ function displayStartups(previousInputValues = {}) {
         // --- KONIEC LOGIKI DLA POZIOMU 3 i 6 ---
 
         if (startup.isScamDetected) {
-            row.style.backgroundColor = '#FFD2D2';
+            
             row.title = 'UWAGA! Ten start-up to prawdopodobnie oszustwo!';
         }
 
@@ -2369,7 +2455,7 @@ function openInvestorsModal(symbol) {
 
             if (name === "Ty (Gracz)") {
                 row.style.fontWeight = 'bold';
-                row.style.backgroundColor = '#E3F2FD'; // Lekkie podświetlenie dla gracza
+                row.classList.add('player-row'); // Dodaj klasę CSS dla gracza
             }
         });
     }
@@ -2698,22 +2784,18 @@ function updateChartTypeButtons() {
     }
 }
 
-function toggleDarkMode() {
-    document.body.classList.toggle('dark-mode');
-
-    // Zapisz wybór w pamięci przeglądarki
-    if (document.body.classList.contains('dark-mode')) {
-        localStorage.setItem('theme', 'dark');
-    } else {
-        localStorage.setItem('theme', 'light');
-    }
+    let currentTheme = 'light';
+    function toggleDarkMode() {
+  document.body.classList.toggle('dark-mode');
+  currentTheme = document.body.classList.contains('dark-mode') ? 'dark' : 'light';
 }
 
 function applyInitialTheme() {
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'dark') {
-        document.body.classList.add('dark-mode');
-    }
+  if (currentTheme === 'dark') {
+    document.body.classList.add('dark-mode');
+  } else {
+    document.body.classList.remove('dark-mode');
+  }
 }
 
 function openDescriptionModal(symbol) {
@@ -2727,7 +2809,7 @@ function openDescriptionModal(symbol) {
 
     const phaseInfoDiv = document.getElementById('description-modal-phase'); // Potrzebny nowy div w HTML
     console.log(`[MODAL_DESC] ${symbol} - Wartość stock.corporatePhase:`, stock.corporatePhase);
-    if (phaseInfoDiv && stock.corporatePhase) {
+    if (phaseInfoDiv && stock.corporatePhase && getSkillLevel('financialAnalyst') >= 1) {
          phaseInfoDiv.innerHTML = `<strong>Faza cyklu życia:</strong> ${stock.corporatePhase}`;
          // Można dodać kolorowanie w zależności od fazy
          if(stock.corporatePhase === CORPORATE_PHASES.GOLDEN_YEAR || stock.corporatePhase === CORPORATE_PHASES.GROWTH) phaseInfoDiv.style.color = '#28a745';
@@ -3375,7 +3457,7 @@ function renderBondMarketInBank() {
     activeBonds.forEach(bond => {
         const row = otherBondsBody.insertRow();
         if (bond.isRescueBond) {
-            row.style.backgroundColor = '#fff0f0'; // Lekko czerwone tło
+            
             row.title = 'Obligacja ratunkowa - podwyższone ryzyko!';
         }
         row.insertCell().textContent = bond.issuerName;
@@ -3446,7 +3528,7 @@ function openFestivalResultsModal(participants, festivalName) {
 
         if (p.ownerId === 'player') {
             row.style.fontWeight = 'bold';
-            row.style.backgroundColor = '#e3f2fd';
+            
         }
     });
 
@@ -4349,131 +4431,714 @@ function closePawnOfferModal() {
 
 // --- Panel Lombardu ---
 
+// ============================================
+// ZMIENNE GLOBALNE
+// ============================================
+let currentConstructionTab = 'main'; // 'main', 'subcontractors'
+
+// ============================================
+// FUNKCJE ZARZĄDZANIA ZAKŁADKAMI
+// ============================================
+
+/**
+ * Przełącza zakładkę w modal sektora budowlanego
+ */
+function showConstructionTab(tabName) {
+    currentConstructionTab = tabName;
+    
+    const modal = document.getElementById('construction-sector-modal');
+    if (!modal) return;
+    
+    const tabButtons = modal.querySelectorAll('.tab-btn');
+    tabButtons.forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.getAttribute('onclick') && btn.getAttribute('onclick').includes(tabName)) {
+            btn.classList.add('active');
+        }
+    });
+    
+    const tabContents = modal.querySelectorAll('.tab-content');
+    tabContents.forEach(content => {
+        content.classList.remove('active');
+    });
+    
+    const activeContent = modal.querySelector(`#construction-${tabName}`);
+    if (activeContent) {
+        activeContent.classList.add('active');
+    }
+    
+    if (tabName === 'main') {
+        renderConstructionCompaniesList();
+        renderConstructionProjectsList();
+    }
+    if (tabName === 'subcontractors') {
+        renderConstructionSubcontractorsList();
+    }
+}
+
+/**
+ * Inicjalizuje dropdown z typami budynków do wyboru
+ */
+function populateBuildingTypeDropdown() {
+    const dropdown = document.getElementById('tender-building-type');
+    if (!dropdown) return;
+    
+    dropdown.innerHTML = '<option value="">Wybierz typ budynku</option>';
+    
+    // Pobierz wszystkie budynki z katalogu
+    const allBuildings = [];
+    Object.keys(INVESTMENT_CATALOG).forEach(sector => {
+        INVESTMENT_CATALOG[sector].forEach(building => {
+            allBuildings.push({
+                sector: sector,
+                building: building
+            });
+        });
+    });
+    
+    // Sortuj po sektorze i nazwie
+    allBuildings.sort((a, b) => {
+        if (a.sector < b.sector) return -1;
+        if (a.sector > b.sector) return 1;
+        return a.building.name.localeCompare(b.building.name);
+    });
+    
+    allBuildings.forEach(item => {
+        const option = document.createElement('option');
+        option.value = `${item.sector}:${item.building.id}`;
+        option.textContent = `[${item.sector}] ${item.building.name} (${item.building.cost.toLocaleString()} PLN, ${item.building.duration} tyg.)`;
+        option.dataset.cost = item.building.cost;
+        option.dataset.duration = item.building.duration;
+        dropdown.appendChild(option);
+    });
+    
+    // Update preview when selection changes
+    dropdown.onchange = function() {
+        updateBuildingPreview(this.value);
+    };
+}
+
+/**
+ * Aktualizuje podgląd budynku po wyborze z dropdownu
+ */
+function updateBuildingPreview(buildingValue) {
+    if (!buildingValue) return;
+    
+    const [sector, buildingId] = buildingValue.split(':');
+    const building = INVESTMENT_CATALOG[sector]?.find(b => b.id === buildingId);
+    
+    if (!building) return;
+    
+    const previewSection = document.getElementById('building-preview');
+    if (previewSection) previewSection.style.display = 'block';
+
+    // Update preview elements
+    const previewName = document.getElementById('preview-name');
+    const previewCost = document.getElementById('preview-cost');
+    const previewDuration = document.getElementById('preview-duration');
+    const previewIncome = document.getElementById('preview-income');
+    const previewMaintenance = document.getElementById('preview-maintenance');
+    
+    if (previewName) previewName.textContent = building.name;
+    if (previewCost) previewCost.textContent = building.cost.toLocaleString() + ' PLN';
+    if (previewDuration) previewDuration.textContent = building.duration + ' tygodni';
+    if (previewIncome) previewIncome.textContent = (building.incomeBonus * 100).toFixed(1) + '%';
+    if (previewMaintenance) previewMaintenance.textContent = building.maintenance.toLocaleString() + ' PLN/tydzień';
+    
+    // Update minimum budget suggestion
+    const budgetInput = document.getElementById('tender-budget');
+    const minBudgetDisplay = document.getElementById('min-budget-display');
+    if (budgetInput) {
+        const minBudget = Math.ceil(building.cost * 1.2);
+        budgetInput.min = minBudget;
+        budgetInput.placeholder = `Min. ${minBudget.toLocaleString()} PLN`;
+        if (parseFloat(budgetInput.value) < minBudget) {
+            budgetInput.value = minBudget;
+        }
+        if (minBudgetDisplay) minBudgetDisplay.textContent = minBudget.toLocaleString();
+    }
+}
+
+/**
+ * Inicjalizuje suwaki kryteriów z domyślnymi wartościami
+ */
+function initializeCriteriaSliders() {
+    const sliders = [
+        'tender-price-weight',
+        'tender-time-weight',
+        'tender-exp-weight',
+        'tender-prestige-weight',
+        'tender-exchange-weight',
+        'tender-state-weight'
+    ];
+    
+    sliders.forEach(sliderId => {
+        const slider = document.getElementById(sliderId);
+        const valueSpan = document.getElementById(sliderId + '-val');
+        if (slider && valueSpan) {
+            valueSpan.textContent = slider.value;
+            slider.oninput = function() {
+                valueSpan.textContent = this.value;
+            };
+        }
+    });
+}
+
+/**
+ * Tworzy przetarg przez gracza (lub AI dla gracza)
+ */
+function createPlayerTender() {
+    // Funkcja przetargów gracza tymczasowo zablokowana.
+    console.log('Przetargi gracza są wyłączone.');
+    return null;
+}
+
+/**
+ * Renderuje listę aktywnych przetargów
+ */
+function renderTendersList() {
+    const container = document.getElementById('tenders-list');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    if (activeTenders.length === 0) {
+        container.innerHTML = '<p>Brak aktywnych przetargów.</p>';
+        return;
+    }
+    
+    activeTenders.forEach(tender => {
+        const tenderDiv = document.createElement('div');
+        tenderDiv.className = 'tender-item';
+        tenderDiv.style.marginBottom = '10px';
+        tenderDiv.style.padding = '10px';
+        tenderDiv.style.border = '1px solid #ddd';
+        tenderDiv.style.borderRadius = '5px';
+        
+        const deadlineDate = new Date(tender.deadline);
+        const now = Date.now();
+        const timeLeft = Math.max(0, tender.deadline - now);
+        const daysLeft = Math.ceil(timeLeft / (1000 * 60 * 60 * 24));
+        
+        let statusText = `Otwarty (${daysLeft} dni pozostało)`;
+        if (tender.status === 'closed') statusText = 'Zamknięty';
+        if (tender.status === 'awarded') statusText = 'Przyznany';
+        if (tender.status === 'cancelled') statusText = 'Anulowany';
+        
+        let bidsList = '';
+        if (tender.bids.length > 0) {
+            bidsList = '<h5>Oferty:</h5><ul>';
+            tender.bids.sort((a, b) => calculateBidScore(b, tender) - calculateBidScore(a, tender)).forEach(bid => {
+                const score = calculateBidScore(bid, tender).toFixed(1);
+                bidsList += `<li>${bid.bidder.name}: ${bid.price.toLocaleString()} PLN, ${bid.time} dni, doświadczenie: ${bid.experience} (wynik: ${score})</li>`;
+            });
+            bidsList += '</ul>';
+        }
+
+        tenderDiv.innerHTML = `
+            <h4>${tender.buildingType.name}</h4>
+            <p><strong>Klient:</strong> ${tender.clientCompany.name}</p>
+            <p><strong>Budżet:</strong> ${tender.budget.toLocaleString()} PLN</p>
+            <p><strong>Status:</strong> ${statusText}</p>
+            <p><strong>Oferty:</strong> ${tender.bids.length}</p>
+            ${bidsList}
+        `;
+        
+        container.appendChild(tenderDiv);
+    });
+}
+
+function renderConstructionCompaniesList() {
+    const container = document.getElementById('construction-companies-list');
+    if (!container) return;
+    
+    const builderCompanies = stocks.filter(s => s.sector && s.sector.includes('Budowlany'));
+    if (builderCompanies.length === 0) {
+        container.innerHTML = '<p>Brak spółek budowlanych w grze.</p>';
+        return;
+    }
+    
+    container.innerHTML = builderCompanies.map(company => {
+        const projects = (typeof constructionProjects !== 'undefined' ? constructionProjects.filter(p => p.builder.symbol === company.symbol) : []);
+        const currentProjects = company.constructionStats ? company.constructionStats.currentProjects : 0;
+        const maxProjects = company.constructionStats ? company.constructionStats.maxProjects : 0;
+        const availableSlots = Math.max(0, maxProjects - currentProjects);
+        const projectDetails = projects.length > 0 ? projects.map(project => `
+                <li>${project.tender.buildingType.name} (${Math.ceil(project.progress * 100)}%, opóźnienia: ${project.delays})</li>`).join('') : '<li>Brak aktywnych projektów</li>';
+        return `
+            <div class="construction-company-card">
+                <h4>${company.name}</h4>
+                <div style="font-size: 12px; color: #888;">
+                    <p><strong>Projekty:</strong> ${currentProjects} / ${maxProjects}</p>
+                    <p><strong>Dostępne sloty:</strong> ${availableSlots}</p>
+                    <p><strong>Doświadczenie:</strong> ${company.constructionStats ? company.constructionStats.experience : 0}</p>
+                    <p><strong>Wygrane przetargi:</strong> ${company.constructionStats ? (company.constructionStats.wonTenders || 0) : 0}</p>
+                    <p><strong>Wykonywane projekty:</strong></p>
+                    <ul>${projectDetails}</ul>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function updateBidForTender(tenderId) {
+    // Funkcja aktualizacji oferty gracza wyłączona, aktualne przetargi są tylko dla AI.
+    console.log('updateBidForTender disabled for player construction flow.');
+    return;
+}
+
+function updateCompanyOffers(companySymbol) {
+    const openTenders = activeTenders.filter(t => t.status === 'open' && t.bids.some(b => b.bidder.symbol === companySymbol));
+    if (openTenders.length === 0) {
+        alert('Twoja firma nie ma otwartych ofert do aktualizacji.');
+        return;
+    }
+    openTenders.forEach(tender => {
+        updateBidForTender(tender.id);
+    });
+}
+
+function renderConstructionSubcontractorsList() {
+  const container = document.getElementById('subcontractors-list');
+  const summary = document.getElementById('subcontractors-summary');
+  if (!container) return;
+
+  
+  const ipoReadySpecs = specialists.filter(s => s.contractsCompleted >= 10).length;
+
+ 
+
+    
+
+  const specialistsHtml = specialists.length === 0
+    ? `<p class="construction-empty">Brak dostępnych specjalistów.</p>`
+    : `
+      <div class="subcontractor-grid specialist-grid">
+        ${specialists.map(spec => `
+          <article class="subcontractor-card specialist-card">
+            <div class="card-topline">
+              <h4>${spec.name}</h4>
+              <span class="status-badge neutral">Poziom ${spec.level}</span>
+            </div>
+            <div class="subcontractor-meta">
+              <p><strong>Specjalność:</strong> ${spec.specialty}</p>
+              <p><strong>Bonus:</strong> +${(spec.bonus * 100).toFixed(1)}% szybkości</p>
+              <p><strong>Kontrakty:</strong> ${spec.contractsCompleted}</p>
+              <p><strong>Gotówka:</strong> ${spec.cash.toLocaleString('pl-PL')} PLN</p>
+            </div>
+            ${spec.contractsCompleted >= 10
+              ? `<button onclick="goPublicSpecialist('${spec.id}')">Wejdź na giełdę</button>`
+              : `<button disabled>IPO od 10 kontraktów</button>`
+            }
+          </article>
+        `).join('')}
+      </div>
+    `;
+
+  container.innerHTML = `
+    
+
+    <section class="subcontractor-section">
+      <div class="section-header">
+        
+        <span>${specialists.length} specjalistów</span>
+      </div>
+      ${specialistsHtml}
+    </section>
+  `;
+}
+
+function renderConstructionProjectsList() {
+    const container = document.getElementById('construction-projects-list');
+    if (!container) return;
+    
+    if (typeof constructionProjects === 'undefined' || constructionProjects.length === 0) {
+        container.innerHTML = '<p>Brak aktywnych projektów budowlanych.</p>';
+        return;
+    }
+    
+    container.innerHTML = constructionProjects.map(project => {
+        const progressPercent = (project.progress * 100).toFixed(1);
+        const elapsed = (Date.now() - project.startTime) / (1000 * 60 * 60 * 24);
+        const remaining = Math.max(0, project.duration - elapsed);
+        return `
+            <div class="construction-project-card">
+                <h4>${project.tender.buildingType.name}</h4>
+                <p><strong>Klient:</strong> ${project.tender.clientCompany.name}</p>
+                <p><strong>Wykonawca:</strong> ${project.builder.name}</p>
+                <p><strong>Postęp:</strong> ${progressPercent}%</p>
+                <p><strong>Pozostały czas:</strong> ${Math.ceil(remaining)} dni</p>
+                <p><strong>Opóźnienia:</strong> ${project.delays}</p>
+                ${project.delayReason ? `<p><strong>Powód opóźnienia:</strong> ${project.delayReason}</p>` : ''}
+                <progress value="${project.progress}" max="1" style="width: 100%"></progress>
+            </div>
+        `;
+    }).join('');
+}
+
+/**
+ * Renderuje listę ofert gracza (jako wykonawca)
+ */
+function renderMyBidsList() {
+    const container = document.getElementById('my-bids-list');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    const playerCompany = stocks.find(s => s.isPlayer && s.sector.includes('Budowlany'));
+    if (!playerCompany) {
+        container.innerHTML = '<p>Twoja firma nie jest budowlana - nie możesz składać ofert.</p>';
+        return;
+    }
+    
+    // Znajdź wszystkie przetargi, w których gracz złożył ofertę
+    const myBids = [];
+    activeTenders.forEach(tender => {
+        tender.bids.forEach(bid => {
+            if (bid.bidder.symbol === playerCompany.symbol) {
+                myBids.push({
+                    tender: tender,
+                    bid: bid,
+                    score: calculateBidScore(bid, tender)
+                });
+            }
+        });
+    });
+    
+    if (myBids.length === 0) {
+        container.innerHTML = '<p>Nie złożyłeś jeszcze żadnych ofert.</p>';
+        return;
+    }
+    
+    myBids.sort((a, b) => b.score - a.score); // Sortuj od najlepszego
+    
+    myBids.forEach(({ tender, bid, score }) => {
+        // Oblicz pozycję w rankingu
+        const allScores = tender.bids.map(b => calculateBidScore(b, tender)).sort((a, b) => b - a);
+        const position = allScores.indexOf(score) + 1;
+        
+        const bidDiv = document.createElement('div');
+        bidDiv.className = 'bid-item';
+        bidDiv.style.marginBottom = '10px';
+        bidDiv.style.padding = '10px';
+        bidDiv.style.border = '1px solid #ddd';
+        bidDiv.style.borderRadius = '5px';
+        
+        bidDiv.innerHTML = `
+            <h4>${tender.buildingType.name}</h4>
+            <p><strong>Klient:</strong> ${tender.clientCompany.name}</p>
+            <p><strong>Twoja oferta:</strong> ${bid.price.toLocaleString()} PLN, ${bid.time} dni</p>
+            <p><strong>Doświadczenie:</strong> ${bid.experience}</p>
+            <p><strong>Twój wynik:</strong> ${score.toFixed(1)} / 100 (pozycja ${position}/${tender.bids.length})</p>
+            <p><strong>Status:</strong> ${tender.status}</p>
+            ${tender.status === 'open' ? `
+                <button onclick="withdrawBid('${tender.id}')">Wycofaj ofertę</button>
+            ` : ''}
+        `;
+        
+        container.appendChild(bidDiv);
+    });
+}
+
+/**
+ * Renderuje listę przetargów zgłoszonych przez gracza (jako klient)
+ */
+function renderMyTendersList() {
+    const container = document.getElementById('my-tenders-list');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    const playerCompany = stocks.find(s => s.isPlayer);
+    if (!playerCompany) {
+        container.innerHTML = '<p>Nie znaleziono firmy gracza.</p>';
+        return;
+    }
+    
+    // Znajdź przetargi zgłoszone przez gracza
+    const myTenders = activeTenders.filter(t => t.clientCompany.symbol === playerCompany.symbol);
+    
+    if (myTenders.length === 0) {
+        container.innerHTML = '<p>Nie zgłosiłeś jeszcze żadnych przetargów.</p>';
+        return;
+    }
+    
+    myTenders.forEach(tender => {
+        const tenderDiv = document.createElement('div');
+        tenderDiv.className = 'tender-item';
+        tenderDiv.style.marginBottom = '10px';
+        tenderDiv.style.padding = '10px';
+        tenderDiv.style.border = '1px solid #ddd';
+        tenderDiv.style.borderRadius = '5px';
+        
+        const deadlineDate = new Date(tender.deadline);
+        const now = Date.now();
+        const timeLeft = Math.max(0, tender.deadline - now);
+        const daysLeft = Math.ceil(timeLeft / (1000 * 60 * 60 * 24));
+        
+        tenderDiv.innerHTML = `
+            <h4>${tender.buildingType.name}</h4>
+            <p><strong>Budżet:</strong> ${tender.budget.toLocaleString()} PLN</p>
+            <p><strong>Oferty:</strong> ${tender.bids.length}</p>
+            <p><strong>Deadline:</strong> ${daysLeft} dni pozostało</p>
+            <p><strong>Status:</strong> ${tender.status}</p>
+            ${tender.bids.length > 0 ? `
+                <h5>Oferty:</h5>
+                <ul>
+                    ${tender.bids.map(bid =>
+                        `<li>${bid.bidder.name}: ${bid.price.toLocaleString()} PLN, czas: ${bid.time} dni, doświadczenie: ${bid.experience}</li>`
+                    ).join('')}
+                </ul>
+            ` : ''}
+        `;
+        
+        container.appendChild(tenderDiv);
+    });
+}
+
+/**
+ * Renderuje listę projektów w realizacji (dla gracza jako klient lub wykonawca)
+ */
+function renderMyProjectsList() {
+    const container = document.getElementById('my-projects-list');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    const playerCompany = stocks.find(s => s.isPlayer);
+    if (!playerCompany) {
+        container.innerHTML = '<p>Nie znaleziono firmy gracza.</p>';
+        return;
+    }
+    
+    // Znajdź projekty gdzie gracz jest klientem lub wykonawcą
+    const myProjects = constructionProjects.filter(p =>
+        p.tender.clientCompany.symbol === playerCompany.symbol ||
+        p.builder.symbol === playerCompany.symbol
+    );
+    
+    if (myProjects.length === 0) {
+        container.innerHTML = '<p>Nie masz aktywnych projektów budowlanych.</p>';
+        return;
+    }
+    
+    myProjects.forEach(project => {
+        const projectDiv = document.createElement('div');
+        projectDiv.className = 'project-item';
+        projectDiv.style.marginBottom = '10px';
+        projectDiv.style.padding = '10px';
+        projectDiv.style.border = '1px solid #ddd';
+        projectDiv.style.borderRadius = '5px';
+        
+        const progressPercent = (project.progress * 100).toFixed(1);
+        const elapsed = (Date.now() - project.startTime) / (1000 * 60 * 60 * 24);
+        const remaining = Math.max(0, project.duration - elapsed);
+        
+        let buttons = '';
+        if (project.builder.symbol === playerCompany.symbol) {
+            buttons = `<button onclick="addSubcontractor('${project.id}')">Dodaj podwykonawcę</button>`;
+        }
+        
+        projectDiv.innerHTML = `
+            <h4>${project.tender.buildingType.name}</h4>
+            <p><strong>${project.builder.symbol === playerCompany.symbol ? 'Wykonawca' : 'Klient'}:</strong> ${project.builder.symbol === playerCompany.symbol ? project.builder.name : project.tender.clientCompany.name}</p>
+            <p><strong>Postęp:</strong> ${progressPercent}%</p>
+            <p><strong>Pozostały czas:</strong> ${Math.ceil(remaining)} dni</p>
+            <p><strong>Opóźnienia:</strong> ${project.delays}</p>
+            ${project.delayReason ? `<p><strong>Powód:</strong> ${project.delayReason}</p>` : ''}
+            <progress value="${project.progress}" max="1" style="width: 100%"></progress>
+            ${project.events && project.events.length > 0 ? `
+                <p><strong>Zdarzenia:</strong></p>
+                <ul>
+                    ${project.events.map(event => `<li class="${event.type}">${event.description}</li>`).join('')}
+                </ul>
+            ` : ''}
+            ${buttons}
+        `;
+        
+        container.appendChild(projectDiv);
+    });
+}
+
+/**
+ * Renderuje listę konsorcjów (istniejąca funkcja, przepisana)
+ */
+function renderConsortiumsList() {
+    const container = document.getElementById('consortiums-list');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    const activeConsortiums = (typeof constructionConsortia !== 'undefined' && Array.isArray(constructionConsortia)) ? constructionConsortia : [];
+    
+    if (activeConsortiums.length === 0) {
+        container.innerHTML = '<p>Brak aktywnych konsorcjów.</p>';
+        return;
+    }
+    
+    activeConsortiums.forEach(consortium => {
+        const consDiv = document.createElement('div');
+        consDiv.className = 'consortium-item';
+        consDiv.style.marginBottom = '10px';
+        consDiv.style.padding = '10px';
+        consDiv.style.border = '1px solid #ddd';
+        consDiv.style.borderRadius = '5px';
+        
+        const age = Math.floor((Date.now() - consortium.formedAt) / (1000 * 60 * 60 * 24 * 7));
+        const memberNames = consortium.members.map(member => member.name).join(' + ');
+        const shareInfo = Object.entries(consortium.budgetShare || {}).map(([symbol, share]) => `${symbol}: ${share}%`).join(', ');
+        consDiv.innerHTML = `
+            <h4>${memberNames}</h4>
+            <p><strong>Wiek konsorcjum:</strong> ${age} tygodni</p>
+            <p><strong>Udziały:</strong> ${shareInfo}</p>
+            <p><strong>Liczba projektów:</strong> ${consortium.projects.length}</p>
+        `;
+        container.appendChild(consDiv);
+    });
+}
+
+/**
+ * Wycofuje ofertę gracza z przetargu
+ */
+function withdrawBid(tenderId) {
+    const playerCompany = stocks.find(s => s.isPlayer && s.sector.includes('Budowlany'));
+    if (!playerCompany) return;
+    
+    const tender = activeTenders.find(t => t.id === tenderId);
+    if (!tender || tender.status !== 'open') return;
+    
+    // Usuń ofertę gracza
+    tender.bids = tender.bids.filter(bid => bid.bidder.symbol !== playerCompany.symbol);
+    
+    logEvent(`📤 ${playerCompany.name} wycofał ofertę z przetargu ${tender.buildingType.name}.`, 'construction');
+    
+    // Odśwież UI
+    renderMyBidsList();
+    renderTendersList();
+}
+
+function addConsortiumMember() {
+    const membersContainer = document.getElementById('consortium-members');
+    if (!membersContainer) return;
+    const index = membersContainer.children.length + 1;
+    const row = document.createElement('div');
+    row.className = 'consortium-member-row';
+    row.style.marginBottom = '8px';
+    row.innerHTML = `
+        <label style="display:block; margin-bottom:3px;">Członek ${index} (symbol):</label>
+        <input type="text" class="consortium-member-symbol" placeholder="Symbol spółki" style="width: 120px; margin-right: 10px;">
+        <label>Udział (%):</label>
+        <input type="number" class="consortium-member-share" min="1" max="100" value="50" style="width: 80px; margin-left: 5px;">
+    `;
+    membersContainer.appendChild(row);
+}
+
+function createPlayerConsortium() {
+    const nameInput = document.getElementById('consortium-name');
+    const membersContainer = document.getElementById('consortium-members');
+    if (!nameInput || !membersContainer) return;
+
+    const name = nameInput.value.trim();
+    if (!name) {
+        alert('Podaj nazwę konsorcjum.');
+        return;
+    }
+
+    const memberRows = membersContainer.querySelectorAll('.consortium-member-row');
+    const members = [];
+    const budgetShare = {};
+    let totalShare = 0;
+
+    memberRows.forEach(row => {
+        const symbolInput = row.querySelector('.consortium-member-symbol');
+        const shareInput = row.querySelector('.consortium-member-share');
+        if (!symbolInput || !shareInput) return;
+        const symbol = symbolInput.value.trim().toUpperCase();
+        const share = parseFloat(shareInput.value);
+        if (!symbol || isNaN(share) || share <= 0) return;
+        const company = stocks.find(s => s.symbol === symbol);
+        if (!company) return;
+        members.push(company);
+        budgetShare[company.symbol] = share;
+        totalShare += share;
+    });
+
+    if (members.length < 2) {
+        alert('Dodaj przynajmniej dwóch członków konsorcjum.');
+        return;
+    }
+    if (totalShare !== 100) {
+        alert('Suma udziałów musi wynosić 100%.');
+        return;
+    }
+
+    const consortiumId = createConsortium(members, budgetShare);
+    if (consortiumId) {
+        logEvent(`🤝 Utworzono konsorcjum ${name} (${consortiumId}) z ${members.length} członkami.`, 'construction');
+        alert('Konsorcjum zostało utworzone.');
+        renderConsortiumsList();
+    } else {
+        alert('Nie udało się utworzyć konsorcjum.');
+    }
+}
+
+function submitBidForTender(tenderId) {
+    // Składanie ofert przez gracza zostało wyłączone. Tylko AI może składać oferty.
+    console.log('submitBidForTender disabled for player construction flow.');
+    return false;
+}
+
+function renderPortfolioBuildings() {
+    const container = document.getElementById('portfolio-buildings');
+    if (!container) return;
+    
+    const playerCompany = stocks.find(s => s.isPlayer);
+    if (!playerCompany) {
+        container.innerHTML = '<p>Nie znaleziono firmy gracza.</p>';
+        return;
+    }
+    
+    const buildings = (playerCompany.portfolio && playerCompany.portfolio.buildings) ? playerCompany.portfolio.buildings : [];
+    if (buildings.length === 0) {
+        container.innerHTML = '<p>Brak nieruchomości w portfelu.</p>';
+        return;
+    }
+    
+    container.innerHTML = buildings.map(building => {
+        const acquired = new Date(building.acquiredAt).toLocaleDateString();
+        const weeklyIncome = (building.value * building.income).toFixed(2);
+        return `
+            <div class="portfolio-item" style="margin-bottom:10px; padding:10px; border:1px solid #ddd; border-radius:5px;">
+                <h4>${building.type.name}</h4>
+                <p><strong>Wartość rezydualna:</strong> ${building.value.toLocaleString()} PLN</p>
+                <p><strong>Dochód:</strong> ${weeklyIncome} PLN / tydzień</p>
+                <p><strong>Utrzymanie:</strong> ${building.maintenance.toLocaleString()} PLN / tydzień</p>
+                <p><strong>Data nabycia:</strong> ${acquired}</p>
+            </div>
+        `;
+    }).join('');
+}
+
+// ============================================
+// GŁÓWNA FUNKCJA OTWIERANIA MODALU
+// ============================================
+
 function openConstructionSectorModal() {
     const modal = document.getElementById('construction-sector-modal');
     if (!modal) {
         console.error('Construction sector modal not found');
         return;
     }
-
-    const content = modal.querySelector('.modal-content');
-    if (!content) return;
-
-    // Tytuły przetargów
-    const tendersContainer = content.querySelector('#construction-tenders');
-    tendersContainer.innerHTML = '<h3>Aktywne Przetargi Budowlane</h3>';
-
-    // Pobierz spółki budowlane
-    const builders = stocks.filter(s => s.sector.includes('Budowlany') && !s.isBankrupt && s.constructionStats);
-
-    // Symuluj aktywne przetargi (w rzeczywistości powinny być przechowywane)
-    const activeTenders = [];
-    stocks.forEach(stock => {
-        if (stock.activeInvestments) {
-            stock.activeInvestments.forEach(project => {
-                if (project.contractor && typeof project.contractor === 'string' && project.contractor.includes('+')) {
-                    // To konsorcjum
-                    activeTenders.push({
-                        client: stock,
-                        project: project,
-                        isConsortium: true
-                    });
-                }
-            });
-        }
-    });
-
-    if (activeTenders.length === 0) {
-        tendersContainer.innerHTML += '<p>Brak aktywnych przetargów.</p>';
-    } else {
-        activeTenders.forEach(tender => {
-            const tenderDiv = document.createElement('div');
-            tenderDiv.className = 'tender-item';
-            tenderDiv.innerHTML = `
-                <h4>${tender.project.name} (${tender.client.name})</h4>
-                <p>Wykonawca: ${tender.project.contractor}</p>
-                <p>Postęp: ${Math.min(100, (tender.project.progress / tender.project.totalDuration * 100).toFixed(1))}%</p>
-                <p>Koszt: ${tender.project.cost.toFixed(0)} PLN</p>
-                ${tender.isConsortium ? '<p style="color: blue;">🔗 Konsorcjum</p>' : ''}
-            `;
-            tendersContainer.appendChild(tenderDiv);
-        });
-    }
-
-    // Projekty do wsparcia
-    const projectsContainer = content.querySelector('#construction-projects');
-    projectsContainer.innerHTML = '<h3>Projekty Budowlane do Wsparcia</h3>';
-
-    const supportableProjects = [];
-    stocks.forEach(stock => {
-        if (stock.activeInvestments) {
-            stock.activeInvestments.forEach((project, index) => {
-                if (project.contractor && !project.contractor.includes('+')) { // Nie konsorcjum
-                    supportableProjects.push({
-                        stock: stock,
-                        project: project,
-                        index: index
-                    });
-                }
-            });
-        }
-    });
-
-    if (supportableProjects.length === 0) {
-        projectsContainer.innerHTML += '<p>Brak projektów do wsparcia.</p>';
-    } else {
-        supportableProjects.forEach(item => {
-            const projectDiv = document.createElement('div');
-            projectDiv.className = 'project-item';
-            const progress = Math.min(100, (item.project.progress / item.project.totalDuration * 100));
-            projectDiv.innerHTML = `
-                <h4>${item.project.name} (${item.stock.name})</h4>
-                <p>Wykonawca: ${item.project.contractor}</p>
-                <p>Postęp: ${progress.toFixed(1)}%</p>
-                <p>Pozostały czas: ${Math.ceil(item.project.totalDuration - item.project.progress)} tygodni</p>
-                <button onclick="supportConstructionProjectUI('${item.stock.symbol}', ${item.index}, 10000)">Wesprzyj 10k PLN</button>
-                <button onclick="supportConstructionProjectUI('${item.stock.symbol}', ${item.index}, 50000)">Wesprzyj 50k PLN</button>
-            `;
-            projectsContainer.appendChild(projectDiv);
-        });
-    }
-
-    // Informacje o konsorcjach
-    const consortiumContainer = content.querySelector('#construction-consortiums');
-    consortiumContainer.innerHTML = '<h3>Aktywne Konsorcja Budowlane</h3>';
-
-    const activeConsortiums = [];
-    stocks.forEach(stock => {
-        if (stock.constructionData && stock.constructionData.consortiumPartner) {
-            const partner = stocks.find(s => s.symbol === stock.constructionData.consortiumPartner);
-            if (partner) {
-                activeConsortiums.push({
-                    company1: stock,
-                    company2: partner,
-                    formedAt: stock.constructionData.consortiumFormedAt,
-                    synergy: stock.constructionData.consortiumSynergy
-                });
-            }
-        }
-    });
-
-    if (activeConsortiums.length === 0) {
-        consortiumContainer.innerHTML += '<p>Brak aktywnych konsorcjów.</p>';
-    } else {
-        activeConsortiums.forEach(cons => {
-            const consDiv = document.createElement('div');
-            consDiv.className = 'consortium-item';
-            const age = Math.floor((Date.now() - cons.formedAt) / (1000 * 60 * 60 * 24 * 7));
-            consDiv.innerHTML = `
-                <h4>${cons.company1.name} & ${cons.company2.name}</h4>
-                <p>Wiek konsorcjum: ${age} tygodni</p>
-                <p>Synergia: ${(cons.synergy * 100).toFixed(1)}%</p>
-                <p>Renoma: ${cons.company1.renoma || 0} / ${cons.company2.renoma || 0}</p>
-            `;
-            consortiumContainer.appendChild(consDiv);
-        });
-    }
-
+    
+    currentConstructionTab = 'main';
+    populateBuildingTypeDropdown();
+    initializeCriteriaSliders();
+    
+    renderConstructionCompaniesList();
+    renderConstructionProjectsList();
+    renderConstructionSubcontractorsList();
+    
+    showConstructionTab('main');
     modal.style.display = 'block';
 }
 
@@ -4636,3 +5301,109 @@ function switchCityTab(tabName) {
     document.getElementById(`tab-btn-city-${tabName}`).classList.add('active');
 }
 
+function hireSubcontractor(subId) {
+    const sub = subcontractors.find(s => s.id === subId);
+    if (!sub || sub.currentProjects >= sub.maxProjects) return;
+    
+    // Logic to hire for a project, but for now just mark as hired
+    sub.currentProjects++;
+    logEvent(`🤝 Zatrudniono podwykonawcę ${sub.name}.`, 'construction');
+    renderConstructionSubcontractorsList();
+}
+
+function goPublicSpecialist(specId) {
+    const spec = specialists.find(s => s.id === specId);
+    if (!spec || spec.contractsCompleted < 10) return;
+    
+    // Create a new stock for the specialist
+    const newStock = {
+        name: spec.name,
+        symbol: spec.name.substring(0, 3).toUpperCase() + 'S',
+        price: 10, // Starting price
+        totalShares: 10000,
+        sharesHeld: 0,
+        sector: ['Usługi'],
+        exchange: 'BRONZE',
+        cash: spec.cash,
+        // Add other necessary fields
+        balanceSheet: { assets: 100000, liabilities: 0, shareCapital: 100000, retainedEarnings: 0 },
+        quarterlyEarnings: 0,
+        priceHistory: [], candlestickHistory: [], lineHistory: [], playerTransactions: [],
+        isStateOwned: false,
+        dividendPolicy: 'Growth',
+        dividendTimer: getRandomIntInRange(60000, 120000),
+        financialHealth: 1,
+        volatilityFactor: 1.5
+    };
+    initializeDescriptionParts(newStock);
+    generateCEO(newStock);
+    initializeDepartments(newStock);
+    assignBankToCompany(newStock);
+    initializeReputation(newStock);
+    
+    stocks.push(newStock);
+    specialists = specialists.filter(s => s.id !== specId);
+    logEvent(`🏛️ ${spec.name} wchodzi na giełdę jako spółka ${newStock.symbol}.`, 'construction');
+    renderConstructionSubcontractorsList();
+}
+
+function addSubcontractor(projectId) {
+    const project = constructionProjects.find(p => p.id === projectId);
+    if (!project) return;
+    
+    // Find available subcontractor
+    const availableSub = subcontractors.find(s => s.currentProjects < s.maxProjects);
+    if (!availableSub) {
+        alert('Brak dostępnych podwykonawców.');
+        return;
+    }
+    
+    // Accelerate project
+    project.duration = Math.max(1, project.duration - 7); // 1 week acceleration
+    availableSub.currentProjects++;
+    logEvent(`🔧 Podwykonawca ${availableSub.name} przyspiesza projekt ${project.tender.buildingType.name}.`, 'construction');
+    renderMyProjectsList();
+    renderConstructionSubcontractorsList();
+}
+
+// ============================================
+// FUNKCJE POMOCNICZE DLA SEKTORA BUDOWLANEGO
+// ============================================
+
+/**
+ * Obsługuje wsparcie projektu budowlanego przez gracza (dotacja)
+ */
+function supportConstructionProjectUI(stockSymbol, projectIndex, amount) {
+    const playerCompany = stocks.find(s => s.isPlayer);
+    if (!playerCompany) {
+        alert('Nie znaleziono firmy gracza!');
+        return;
+    }
+    
+    // Sprawdź czy gracz ma wystarczającą gotówkę
+    if (playerCompany.cash < amount) {
+        alert('Nie masz wystarczającej gotówki!');
+        return;
+    }
+    
+    // Znajdź aktywny projekt dla tej spółki
+    const targetProject = constructionProjects.find(p => p.tender.clientCompany.symbol === stockSymbol);
+    if (!targetProject) {
+        alert('Nie znaleziono projektu dla tej spółki.');
+        return;
+    }
+    
+    // Apply support: accelerate progress by percentage of project cost
+    const acceleration = (amount / targetProject.cost) * targetProject.duration * 0.1; // 10% speed per 10% cost
+    targetProject.progress += acceleration;
+    targetProject.progress = Math.min(1, targetProject.progress);
+    
+    // Deduct cash from player and give to builder
+    playerCompany.cash -= amount;
+    targetProject.builder.cash += amount;
+    
+    logEvent(`💰 ${playerCompany.name} wesprzył projekt ${targetProject.tender.buildingType.name} kwotą ${amount.toLocaleString()} PLN.`, 'construction');
+    
+    // Odśwież modal
+    openConstructionSectorModal();
+}

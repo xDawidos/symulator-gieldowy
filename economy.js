@@ -1176,3 +1176,35 @@ function checkPriceAlerts() {
         }
     });
 }
+
+// --- Dochody z nieruchomości ---
+function processBuildingIncome() {
+    stocks.forEach(company => {
+        if (company.portfolio && company.portfolio.buildings) {
+            let totalIncome = 0;
+            let totalMaintenance = 0;
+            
+            company.portfolio.buildings.forEach(building => {
+                const weeklyIncome = building.value * building.income;
+                totalIncome += weeklyIncome;
+                totalMaintenance += building.maintenance;
+            });
+            
+            // Dochód netto
+            const netIncome = totalIncome - totalMaintenance;
+            if (netIncome > 0) {
+                company.cash += netIncome;
+                logEvent(`🏢 ${company.name} otrzymała ${netIncome.toFixed(2)} PLN dochodu z nieruchomości.`, 'construction');
+            } else if (totalMaintenance > 0) {
+                // Jeśli koszty utrzymania przekraczają dochód, spółka płaci z kasy
+                if (company.cash >= totalMaintenance) {
+                    company.cash -= totalMaintenance;
+                    logEvent(`💸 ${company.name} zapłaciła ${totalMaintenance.toFixed(2)} PLN za utrzymanie nieruchomości.`, 'construction');
+                } else {
+                    logEvent(`🚨 ${company.name} nie ma środków na utrzymanie nieruchomości! Zdrowie finansowe spada.`, 'error');
+                    company.financialHealth -= 0.1;
+                }
+            }
+        }
+    });
+}
