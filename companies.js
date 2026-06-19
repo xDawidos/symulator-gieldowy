@@ -2269,11 +2269,13 @@ function advanceMergerProcess(stock) {
     if (!stock.mergerProcess) return;
     const process = stock.mergerProcess;
     const partnerStock = stocks.find(s => s.symbol === process.partnerSymbol);
-    if (!partnerStock || partnerStock.isBankrupt) {
-        cancelMerger(stock, "Partner przestał istnieć lub zbankrutował.");
-        if (partnerStock) cancelMerger(partnerStock, "Partner przestał istnieć lub zbankrutował.");
-        return;
-    }
+if (!partnerStock || partnerStock.isBankrupt) {
+  cancelMerger(stock, "Partner przestał istnieć lub zbankrutował.");
+  if (partnerStock) {
+    cancelMerger(partnerStock, "Partner przestał istnieć lub zbankrutował.");
+  }
+  return;
+}
     if (process.decisionRequired) return;
 
     // --- Zwiększanie postępu ---

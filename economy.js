@@ -430,11 +430,11 @@ function calculateNetWorth(entity) {
     // Dodaj wartość obligacji (prosta estymacja)
     
     // --- 👇 POPRAWIONA LINIA 👇 ---
-    // Dodajemy || [], aby zapewnić, że 'bonds' zawsze będzie tablicą, nawet jeśli entity.tBills nie istnieje
-    const bonds = (entity === 'player') ? allBonds.filter(b => b.ownerId === 'player') : (entity.tBills || []); 
-    
-    value += bonds.length * 1000; // Teraz bezpiecznie można użyć .length
+const ownedBonds = allBonds.filter(b => b.ownerId === (entity.id || entity));
+const ownedTBills = entity.tBills || [];
 
+value += ownedBonds.reduce((sum, b) => sum + (b.faceValue || 1000), 0);
+value += ownedTBills.reduce((sum, t) => sum + 1000, 0); // jeśli TBille zawsze 1000
     return value;
 }
 
