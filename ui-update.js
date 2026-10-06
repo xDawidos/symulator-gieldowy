@@ -12,6 +12,96 @@ function setSectorChip(el, sector) {
 
 // Taby poziomów rynku
 let currentMarketLevel = 'ALL';
+let hasTopSectorAccess = false;
+
+function openCompanyReport(symbol) {
+    console.warn('openCompanyReport is not implemented:', symbol);
+}
+
+function unlockPopularSector() {
+    const cost = 15000;
+    if (hasTopSectorAccess) {
+        if (typeof showToast === 'function') showToast('Popularny sektor już odblokowany.', 'info');
+        return;
+    }
+    if (typeof playerCash === 'undefined' || playerCash < cost) {
+        if (typeof showToast === 'function') showToast('Masz za mało gotówki, aby odblokować popularny sektor.', 'error');
+        else alert('Masz za mało gotówki, aby odblokować popularny sektor.');
+        return;
+    }
+    playerCash -= cost;
+    hasTopSectorAccess = true;
+    updateTopbarKPIs();
+    updateMarketKPIs();
+    if (typeof showToast === 'function') showToast('Popularny sektor został odblokowany!', 'success');
+}
+
+function adjustModalWidths() {
+    document.querySelectorAll('.modal').forEach(modal => {
+        const rawWidth = modal.style.width || window.getComputedStyle(modal).width;
+        const match = rawWidth.match(/^(\d+)(px)$/);
+        if (match) {
+            modal.style.width = `${parseInt(match[1], 10) + 5}${match[2]}`;
+        }
+    });
+}
+
+let openStockDrawerSymbol = null;
+
+function renderStockDrawer(symbol) {
+    if (!symbol) return;
+    const drawerId = 'drawer-' + symbol;
+    if (document.getElementById(drawerId)) return;
+    const row = document.querySelector('#stock-table-body tr[data-symbol="' + symbol + '"]');
+    if (!row) return;
+    const cols = row.querySelectorAll('td').length || 7;
+    const dr = document.createElement('tr');
+    dr.id = drawerId;
+    dr.className = 'stock-row-drawer open';
+    const td = document.createElement('td');
+    td.colSpan = cols;
+    td.style.padding = '0';
+    td.innerHTML = `<div class="stock-drawer-inner">
+      <div class="stock-drawer-actions">
+        <div class="stock-drawer-actions-row">
+          <div class="qty-input-wrapper">
+            <input type="number" id="dqty-${symbol}" min="1" value="1">
+            <span class="chip-max" onclick="setDrawerMax('${symbol}')">MAX</span>
+          </div>
+        </div>
+        <div class="stock-drawer-actions-row">
+          <button class="btn-buy"
+            onclick="buyStock('${symbol}',document.getElementById('dqty-${symbol}').value)">Kup</button>
+          <button class="btn-sell"
+            onclick="sellStock('${symbol}',document.getElementById('dqty-${symbol}').value)">Sprzedaj</button>
+          <button class="btn-ghost-icon" title="Wykres"
+            onclick="showPriceHistoryModal('${symbol}')">📈</button>
+          <button class="btn-ghost-icon" title="Raport"
+            onclick="openCompanyReport && openCompanyReport('${symbol}')">📊</button>
+        </div>
+      </div>
+    </div>`;
+    dr.appendChild(td);
+    row.after(dr);
+}
+
+function closeOpenStockDrawer() {
+    if (!openStockDrawerSymbol) return;
+    const previousDrawer = document.getElementById('drawer-' + openStockDrawerSymbol);
+    if (previousDrawer) previousDrawer.remove();
+    openStockDrawerSymbol = null;
+}
+
+function toggleStockDrawer(symbol) {
+    if (openStockDrawerSymbol === symbol) {
+        closeOpenStockDrawer();
+        return;
+    }
+    closeOpenStockDrawer();
+    openStockDrawerSymbol = symbol;
+    renderStockDrawer(symbol);
+}
+
 function setMarketLevel(el, level) {
     currentMarketLevel = level;
     document.querySelectorAll('.market-level-tab').forEach(t => t.classList.remove('active'));
@@ -45,7 +135,16 @@ function updateMarketKPIs() {
     active.forEach(s => { sectorCount[s.sector] = (sectorCount[s.sector] || 0) + 1; });
     const top = Object.entries(sectorCount).sort((a,b) => b[1] - a[1])[0];
     const tsEl = document.getElementById('mkpi-top-sector');
-    if (tsEl && top) tsEl.textContent = top[0] + ' (' + top[1] + ')';
+    const tsSubEl = document.getElementById('mkpi-top-sector-sub');
+    const unlockBtn = document.getElementById('unlock-sector-btn');
+    if (hasTopSectorAccess && tsEl) {
+        tsEl.textContent = top ? top[0] + ' (' + top[1] + ')' : '—';
+        if (tsSubEl) tsSubEl.textContent = 'wg liczby spółek';
+    } else if (tsEl) {
+        tsEl.textContent = '🔒';
+        if (tsSubEl) tsSubEl.textContent = 'Odblokuj za 15 000 PLN';
+    }
+    if (unlockBtn) unlockBtn.style.display = hasTopSectorAccess ? 'none' : 'block';
 }
 
 // Topbar KPI
@@ -88,53 +187,6 @@ function updateXPBar() {
     if (el) el.textContent = Math.floor(playerXP) + ' XP (Poz. ' + Math.floor(playerXP/xpLevel) + ')';
 }
 
-// Drawer w tabeli
-function toggleStockDrawer(symbol) {
-    const drawerId = 'drawer-' + symbol;
-    const existing = document.getElementById(drawerId);
-    if (existing) {
-        if (existing.classList.contains('open')) {
-            existing.classList.remove('open');
-            existing.style.display = 'none';
-        } else {
-            existing.classList.add('open');
-            existing.style.display = '';
-        }
-        return;
-    }
-    const row = document.querySelector('#stock-table-body tr[data-symbol="' + symbol + '"]');
-    if (!row) return;
-    const cols = row.querySelectorAll('td').length || 7;
-    const dr = document.createElement('tr');
-    dr.id = drawerId;
-    dr.className = 'stock-row-drawer open';
-    const td = document.createElement('td');
-    td.colSpan = cols;
-    td.style.padding = '0';
-    td.innerHTML = `<div class="stock-drawer-inner">
-      <div class="stock-drawer-actions">
-        <div class="stock-drawer-actions-row">
-          <div class="qty-input-wrapper">
-            <input type="number" id="dqty-${symbol}" min="1" value="1">
-            <span class="chip-max" onclick="setDrawerMax('${symbol}')">MAX</span>
-          </div>
-        </div>
-        <div class="stock-drawer-actions-row">
-          <button class="btn-buy"
-            onclick="buyStock('${symbol}',document.getElementById('dqty-${symbol}').value)">Kup</button>
-          <button class="btn-sell"
-            onclick="sellStock('${symbol}',document.getElementById('dqty-${symbol}').value)">Sprzedaj</button>
-          <button class="btn-ghost-icon" title="Wykres"
-            onclick="openPriceChartModal('${symbol}')">📈</button>
-          <button class="btn-ghost-icon" title="Raport"
-            onclick="openCompanyReport && openCompanyReport('${symbol}')">📊</button>
-        </div>
-      </div>
-    </div>`;
-    dr.appendChild(td);
-    row.after(dr);
-}
-
 function setDrawerMax(symbol) {
     if (typeof playerCash === 'undefined' || typeof stocks === 'undefined') return;
     const s = stocks.find(x => x.symbol === symbol);
@@ -151,4 +203,5 @@ setInterval(function() {
 }, 3000);
 document.addEventListener('DOMContentLoaded', function() {
     setTimeout(function() { updateTopbarKPIs(); updateMarketKPIs(); updateXPBar(); }, 800);
+    adjustModalWidths();
 });

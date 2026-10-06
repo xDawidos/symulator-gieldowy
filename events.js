@@ -281,12 +281,16 @@ function triggerMainMarketEventCycle() {
             displayEventMessage(eventData.message(targetBankStock.name), duration, magnitude, 'company');
             applyPriceEffect(targetBankStock.symbol, magnitude, eventData.type, 'company');
 
-            if (eventData.id === 'bank_pos_1' || eventData.id === 'bank_neg_2') {
-                 activeBankStocks.forEach(bankStock => {
-                     if (bankStock.symbol !== targetBankStock.symbol) {
-                         applyPriceEffect(bankStock.symbol, magnitude * 0.5, eventData.type, 'market');
-                     }
-                 });
+            const spreadToAllBanks = [
+                'bank_pos_1', 'bank_pos_4', 'bank_pos_5', 'bank_pos_6',
+                'bank_neg_2', 'bank_neg_5', 'bank_neg_7'
+            ];
+            if (spreadToAllBanks.includes(eventData.id)) {
+                activeBankStocks.forEach(bankStock => {
+                    if (bankStock.symbol !== targetBankStock.symbol) {
+                        applyPriceEffect(bankStock.symbol, magnitude * 0.5, eventData.type, 'market');
+                    }
+                });
             }
             return; // Zakończ cykl
         }
@@ -1058,10 +1062,21 @@ const bankingSectorEventsPrompts = [
     { id: 'bank_pos_1', message: bankName => `✅ Regulacje złagodzone! ${bankName} i inne banki komercyjne mają teraz większą swobodę w akcji kredytowej.`, type: 'positive' },
     { id: 'bank_pos_2', message: bankName => `💡 Innowacja w ${bankName}! Nowa aplikacja mobilna przyciąga tysiące nowych klientów.`, type: 'positive' },
     { id: 'bank_pos_3', message: bankName => `⭐ ${bankName} otrzymuje międzynarodową nagrodę za stabilność finansową.`, type: 'positive' },
+    { id: 'bank_pos_4', message: bankName => `🏦 ${bankName} wprowadza nowy produkt depozytowy, a klienci masowo lokują swoje środki.`, type: 'positive' },
+    { id: 'bank_pos_5', message: bankName => `🤝 Strategiczną fuzją ${bankName} zwiększa swój zasięg i kontynuuje ekspansję.`, type: 'positive' },
+    { id: 'bank_pos_6', message: bankName => `🏢 ${bankName} przejmuje lokalny serwis finansowy i wchłania jego klientów oraz kapitał.`, type: 'positive' },
+    { id: 'bank_pos_7', message: bankName => `💳 ${bankName} oferuje klientom nowy, elastyczny kredyt o niskim oprocentowaniu. Popyt rośnie, a bilans się umacnia.`, type: 'positive' },
+    { id: 'bank_pos_8', message: bankName => `🏦 ${bankName} wprowadza program skupu depozytów z gwarantowaną rentownością. Klienci masowo wpłacają swoje oszczędności.`, type: 'positive' },
     // Negatywne
     { id: 'bank_neg_1', message: bankName => `🚨 Skandal w ${bankName}! Wyciekły dane klientów, reputacja banku spada.`, type: 'negative' },
     { id: 'bank_neg_2', message: bankName => `⚖️ Nowe, restrykcyjne regulacje Banku Centralnego uderzają w rentowność ${bankName} i innych banków.`, type: 'negative' },
     { id: 'bank_neg_3', message: bankName => `📉 ${bankName} publikuje gorsze od oczekiwań wyniki finansowe z powodu rosnących rezerw na złe kredyty.`, type: 'negative' },
+    { id: 'bank_neg_4', message: bankName => `💧 Kryzys płynności w ${bankName}! Bank ogranicza akcję kredytową, co osłabia zaufanie inwestorów.`, type: 'negative' },
+    { id: 'bank_neg_5', message: bankName => `🏛️ Bank Centralny podnosi wymogi rezerw obowiązkowych, a ${bankName} musi zablokować część kapitału.`, type: 'negative' },
+    { id: 'bank_neg_6', message: bankName => `🛠️ Nowy produkt kredytowy ${bankName} spotyka się z krytyką. Klienci zaczynają rozważać zmiany.`, type: 'negative' },
+    { id: 'bank_neg_7', message: bankName => `📉 Przejęcie zadłużonej firmy przez ${bankName} obciąża jego bilans i wywołuje obawy o stabilność.`, type: 'negative' },
+    { id: 'bank_neg_8', message: bankName => `🔥 Bank ${bankName} traci płynność po serii niespodziewanych wypłat. Rynkowe plotki wprowadzają nerwowość.`, type: 'negative' },
+    { id: 'bank_neg_9', message: bankName => `📵 Bank ${bankName} wchłania bankrutującego konkurenta, ale przejęcie wymaga dodatkowych rezerw i podkopuje zyski.`, type: 'negative' },
 ];
 
 const governmentInterventions = [
@@ -1197,3 +1212,5 @@ function triggerGovernmentSpendingEvent() {
          if (typeof updateStateModalContent === 'function') updateStateModalContent();
     }
 }
+
+// Technologie budowlane (constructionEffects) są zdefiniowane w technologies.js.

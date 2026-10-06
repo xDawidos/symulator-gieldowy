@@ -556,13 +556,9 @@ function processCityAndCitizenTaxes() {
             // Umiejętność San Escobar NIE wpływa na podatek spółek
             const companyCityTax = stock.cash * TAX_RATES.cityTaxCompany;
             if (companyCityTax > 0) {
-                stock.cash -= companyCityTax;
+                adjustCompanyCash(stock, -companyCityTax); // gotówka i rachunek w banku
+                adjustBalanceSheet(stock, { assets: -companyCityTax, retainedEarnings: -companyCityTax });
                 totalTaxCollected += companyCityTax;
-                // Aktualizuj gotówkę banku, jeśli firma ma konto
-                if (stock.bankAccountId) {
-                    const bank = commercialBanks.find(b => b.id === stock.bankAccountId);
-                    if (bank) bank.cash -= companyCityTax; // Bank traci gotówkę firmy
-                }
             }
         }
     });
@@ -1178,33 +1174,45 @@ function checkPriceAlerts() {
 }
 
 // --- Dochody z nieruchomości ---
+// Wywoływane co tydzień gry. Rok gry = 4 kwartały × 5 tygodni = 20 tygodni.
+// building.income  — roczna stopa dochodu od wartości księgowej,
+// building.maintenance — koszt utrzymania na kwartał.
+// Wynik trafia do gotówki i bilansu od razu, a do raportu kwartalnego jako pozycja okresu.
+const WEEKS_PER_YEAR = 20;
+const WEEKS_PER_QUARTER = 5;
+
 function processBuildingIncome() {
     stocks.forEach(company => {
-        if (company.portfolio && company.portfolio.buildings) {
-            let totalIncome = 0;
-            let totalMaintenance = 0;
-            
-            company.portfolio.buildings.forEach(building => {
-                const weeklyIncome = building.value * building.income;
-                totalIncome += weeklyIncome;
-                totalMaintenance += building.maintenance;
-            });
-            
-            // Dochód netto
-            const netIncome = totalIncome - totalMaintenance;
-            if (netIncome > 0) {
-                company.cash += netIncome;
-                logEvent(`🏢 ${company.name} otrzymała ${netIncome.toFixed(2)} PLN dochodu z nieruchomości.`, 'construction');
-            } else if (totalMaintenance > 0) {
-                // Jeśli koszty utrzymania przekraczają dochód, spółka płaci z kasy
-                if (company.cash >= totalMaintenance) {
-                    company.cash -= totalMaintenance;
-                    logEvent(`💸 ${company.name} zapłaciła ${totalMaintenance.toFixed(2)} PLN za utrzymanie nieruchomości.`, 'construction');
-                } else {
-                    logEvent(`🚨 ${company.name} nie ma środków na utrzymanie nieruchomości! Zdrowie finansowe spada.`, 'error');
-                    company.financialHealth -= 0.1;
-                }
-            }
+        const buildings = company?.portfolio?.buildings;
+        if (!Array.isArray(buildings) || buildings.length === 0 || company.isBankrupt) return;
+
+        let totalIncome = 0;
+        let totalMaintenance = 0;
+
+        buildings.forEach(building => {
+            if (building.status === 'unfinished') return;
+            const bookValue = Number(building.bookValue ?? building.value) || 0;
+            totalIncome += bookValue * (Number(building.income) || 0) / WEEKS_PER_YEAR;
+            totalMaintenance += (Number(building.maintenance) || 0) / WEEKS_PER_QUARTER;
+        });
+
+        const netIncome = totalIncome - totalMaintenance;
+        if (Math.abs(netIncome) < 0.01) return;
+
+        if (netIncome < 0 && (Number(company.cash) || 0) < -netIncome) {
+            logEvent(`🚨 ${company.name} nie ma środków na utrzymanie nieruchomości! Zdrowie finansowe spada.`, 'error');
+            company.financialHealth -= 0.1;
+            return;
         }
+
+        adjustCompanyCash(company, netIncome);
+        adjustBalanceSheet(company, { assets: netIncome, retainedEarnings: netIncome });
+        postPeriodEntry(company, nextSimulationId(`property_${company.symbol}`), { propertyIncome: netIncome });
+        recordPayment(
+            netIncome > 0 ? 'external:najemcy_i_klienci' : company,
+            netIncome > 0 ? company : 'external:utrzymanie_nieruchomosci',
+            Math.abs(netIncome),
+            netIncome > 0 ? 'Dochód netto z nieruchomości' : 'Utrzymanie nieruchomości'
+        );
     });
 }

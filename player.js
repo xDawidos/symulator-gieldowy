@@ -3010,35 +3010,7 @@ function fundDepartmentUpgrade(symbol, deptType) {
     }
 }
 
-// Władza Korony: Blokowanie inwestycji
-function blockInvestment(symbol, investmentId) {
-    const stock = stocks.find(s => s.symbol === symbol);
-    // Wymaga >50% udziałów lub Charyzmy lvl 4+
-    const isMajority = (playerPortfolio[symbol]?.shares / stock.totalShares) > 0.5;
-    const hasCharisma = getSkillLevel('charisma') >= 4;
-
-    if (!isMajority && !hasCharisma) {
-        alert("Nie masz wystarczającej władzy, by zablokować tę inwestycję.");
-        return;
-    }
-
-    const invIndex = stock.activeInvestments.findIndex(inv => inv.id === investmentId);
-    if (invIndex > -1) {
-        const inv = stock.activeInvestments[invIndex];
-        
-        // Kara do reputacji (zarząd nie lubi mikrozarządzania)
-        changeReputation('player', symbol, -20);
-        
-        // Zwrot części kosztów (np. 50% odzyskane)
-        stock.cash += inv.cost * 0.5;
-        
-        stock.activeInvestments.splice(invIndex, 1);
-        logEvent(`⛔ Zablokowałeś inwestycję "${inv.name}" w ${stock.name}. Odzyskano 50% środków, ale relacje z zarządem ucierpiały.`, 'review');
-        
-        // Odśwież UI
-        if (typeof openManagementModal === 'function') openManagementModal(symbol);
-    }
-}
+// blockInvestment: zob. companies.js (jedna implementacja dla inwestycji wewnętrznych i budowlanych).
 
 function playerBailsOutCompany(symbol, amount) {
     const stock = stocks.find(s => s.symbol === symbol);

@@ -437,6 +437,15 @@ function displayStocks(previousInputValues = {}) {
       }
     });
   });
+
+  if (typeof openStockDrawerSymbol !== 'undefined' && openStockDrawerSymbol) {
+    const targetRow = document.querySelector(`#stock-table-body tr[data-symbol="${openStockDrawerSymbol}"]`);
+    if (targetRow) {
+      renderStockDrawer(openStockDrawerSymbol);
+    } else {
+      openStockDrawerSymbol = null;
+    }
+  }
 }
 
 function showPriceHistoryModal(symbol) {
@@ -511,6 +520,47 @@ function showPriceHistoryModal(symbol) {
     redrawChart();
 }
 
+const skillCategoryDefinitions = {
+    bear: {
+        title: 'Bessa & Obrona',
+        description: 'Umiejętności chroniące kapitał podczas spadków, regulacji i ryzyka finansowego.'
+    },
+    bull: {
+        title: 'Hossa & Wzrost',
+        description: 'Zwiększaj zyski, dźwignię bankową i śmiałe inwestycje na rynku.'
+    },
+    balance: {
+        title: 'Równowaga & Kontrola',
+        description: 'Wsparcie analityczne, zarządzanie ryzykiem i bardziej stabilne decyzje.'
+    }
+};
+
+const skillCategoryMap = {
+    adblock: 'balance',
+    work: 'bull',
+    analyticalMind: 'balance',
+    ironNerves: 'bear',
+    sharkCharisma: 'bull',
+    hardNegotiator: 'bear',
+    bankMagnet: 'bull',
+    dividendAnalyst: 'bull',
+    financialAnalyst: 'bull',
+    etfExpert: 'bull',
+    insiderAccess: 'bull',
+    sanEscobar: 'bear',
+    sixthSense: 'balance',
+    indexAnalystLvl1: 'bull',
+    nepotism: 'balance',
+    startupInvestor: 'bull',
+    charisma: 'bear',
+    accountant: 'bear',
+    mediaManipulation: 'bear'
+};
+
+function getSkillCategory(skillId) {
+    return skillCategoryMap[skillId] || 'balance';
+}
+
 function renderSkillsPanel() {
     const skillsListDiv = document.getElementById('skills-list');
     const xpCounterSpan = document.getElementById('skills-modal-xp');
@@ -519,72 +569,92 @@ function renderSkillsPanel() {
     skillsListDiv.innerHTML = '';
     xpCounterSpan.textContent = playerXP.toFixed(2);
 
-    for (const skillId in skills) {
+    const categoryContainers = {};
+    Object.keys(skillCategoryDefinitions).forEach(categoryKey => {
+        const categoryDef = skillCategoryDefinitions[categoryKey];
+        const section = document.createElement('div');
+        section.className = 'skill-category-section';
+        section.innerHTML = `
+            <div class="skill-category-header">
+                <h3>${categoryDef.title}</h3>
+                <p>${categoryDef.description}</p>
+            </div>
+        `;
+        const grid = document.createElement('div');
+        grid.className = 'skill-category-grid';
+        section.appendChild(grid);
+        skillsListDiv.appendChild(section);
+        categoryContainers[categoryKey] = grid;
+    });
+
+    const sortedSkillIds = Object.keys(skills).sort((a, b) => {
+        const nameA = skills[a].name || a;
+        const nameB = skills[b].name || b;
+        return nameA.localeCompare(nameB, 'pl');
+    });
+
+    sortedSkillIds.forEach(skillId => {
         const skillData = skills[skillId];
         const currentLevel = getSkillLevel(skillId);
         const nextLevelInfo = getNextSkillLevelInfo(skillId);
-
+        const categoryKey = getSkillCategory(skillId);
         const skillDiv = document.createElement('div');
-        skillDiv.style.border = '1px solid #ddd';
-        skillDiv.style.padding = '10px';
-        skillDiv.style.marginBottom = '10px';
-        skillDiv.style.borderRadius = '5px';
+        skillDiv.className = 'skill-card';
 
         const skillName = document.createElement('h4');
         skillName.textContent = `${skillData.name} (Poziom: ${currentLevel})`;
-        skillName.style.margin = '0 0 5px 0';
-
         skillDiv.appendChild(skillName);
 
         if (nextLevelInfo) {
-            // --- POCZĄTEK POPRAWKI: Sprawdzanie wymagań ---
             const requirement = nextLevelInfo.requires;
             const requirementMet = requirement ? getSkillLevel(requirement.skillId) >= requirement.level : true;
-
             if (!requirementMet) {
                 const reqText = document.createElement('p');
                 const requiredSkill = skills[requirement.skillId];
                 reqText.textContent = `Wymaga: ${requiredSkill.name} (Poziom ${requirement.level})`;
-                reqText.style.color = '#dc3545';
-                reqText.style.fontWeight = 'bold';
-                reqText.style.fontSize = '12px';
+                reqText.className = 'skill-requirement';
                 skillDiv.appendChild(reqText);
             }
 
-
             const skillDesc = document.createElement('p');
             skillDesc.textContent = `Następny poziom: ${nextLevelInfo.description}`;
-            skillDesc.style.margin = '0 0 10px 0';
-            skillDesc.style.fontSize = '14px';
+            skillDesc.className = 'skill-description';
+            skillDiv.appendChild(skillDesc);
 
             const skillCost = document.createElement('p');
             skillCost.textContent = `Koszt: ${nextLevelInfo.cost} XP`;
-            skillCost.style.margin = '0';
-            skillCost.style.fontWeight = 'bold';
+            skillCost.className = 'skill-cost';
+            skillDiv.appendChild(skillCost);
 
             const buyButton = document.createElement('button');
             buyButton.textContent = `Ulepsz do poz. ${nextLevelInfo.level}`;
             buyButton.onclick = () => buySkill(skillId);
-
-            // Przycisk jest nieaktywny, jeśli brakuje XP LUB nie spełniono wymagań
             if (playerXP < nextLevelInfo.cost || !requirementMet) {
                 buyButton.disabled = true;
             }
-
-            skillDiv.appendChild(skillDesc);
-            skillDiv.appendChild(skillCost);
             skillDiv.appendChild(buyButton);
         } else {
             const maxLevelText = document.createElement('p');
             maxLevelText.textContent = 'Osiągnięto maksymalny poziom umiejętności.';
-            maxLevelText.style.fontWeight = 'bold';
-            maxLevelText.style.color = '#28a745';
+            maxLevelText.className = 'skill-maxed';
             skillDiv.appendChild(maxLevelText);
         }
-        skillsListDiv.appendChild(skillDiv);
-        updateWorkButtonVisibility();
-        updateDividendTrackerButtonVisibility();
-    }
+
+        const targetGrid = categoryContainers[categoryKey] || categoryContainers.balance;
+        targetGrid.appendChild(skillDiv);
+    });
+
+    Object.values(categoryContainers).forEach(container => {
+        if (container.children.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'skill-category-empty';
+            empty.textContent = 'Brak umiejętności w tej sekcji.';
+            container.appendChild(empty);
+        }
+    });
+
+    updateWorkButtonVisibility();
+    updateDividendTrackerButtonVisibility();
 }
 
 // Ta funkcja jest z ui.js (baza), zachowujemy ją, ponieważ obsługuje bankowość komercyjną
@@ -1251,63 +1321,103 @@ function renderDepartmentsSection(stock, container) {
     }
     deptSection.appendChild(deptsDiv);
 
-    // --- 2. TRWAJĄCE INWESTYCJE ---
+    // --- 2. INWESTYCJE W TOKU (wewnętrzne + zamówienia budowlane) ---
+    if (!Array.isArray(stock.activeInvestments)) stock.activeInvestments = [];
+    const devLevel = stock.departments.development.level;
+    const stockKey = getEntityKey(stock);
+    const openTenders = activeTenders.filter(tender =>
+        ['open', 'closed'].includes(tender.status) && getEntityKey(tender.clientCompany) === stockKey
+    );
+    const clientProjects = constructionProjects.filter(project =>
+        !project.settled && getEntityKey(project.tender?.clientCompany) === stockKey
+    );
+
     const activeDiv = document.createElement('div');
-    activeDiv.innerHTML = `<h5>🚧 Trwające Projekty (${stock.activeInvestments.length}/${stock.departments.development.level})</h5>`;
-    
-    if (stock.activeInvestments.length > 0) {
+    activeDiv.innerHTML = `<h5>🚧 Inwestycje w toku (${countCompanyInvestmentOrders(stock)}/${Math.max(1, devLevel)})</h5>`;
+
+    const orders = [
+        ...stock.activeInvestments.map(inv => ({
+            ref: inv.uid || inv.id,
+            name: inv.name,
+            path: 'Realizacja własna',
+            progress: Math.min(1, inv.progress / inv.totalDuration),
+            detail: `${Math.min(inv.progress, inv.totalDuration).toFixed(0)} / ${inv.totalDuration} dni`
+        })),
+        ...openTenders.map(tender => ({
+            ref: tender.id,
+            name: tender.buildingType.name,
+            path: 'Przetarg budowlany',
+            progress: 0,
+            detail: tender.status === 'open'
+                ? `Oferty: ${tender.bids.length}, zostało ${formatConstructionTime(tender.remainingGameMs)}`
+                : 'Rozstrzyganie przetargu'
+        })),
+        ...clientProjects.map(project => ({
+            ref: project.id,
+            name: project.tender.buildingType.name,
+            path: `Wykonawca: ${project.builder.name}`,
+            progress: project.progress,
+            detail: getConstructionProjectStatusLabel(project)
+        }))
+    ];
+
+    if (orders.length > 0) {
         const invList = document.createElement('ul');
         invList.style.listStyle = 'none';
         invList.style.padding = '0';
-        
-        stock.activeInvestments.forEach(inv => {
+
+        for (const order of orders) {
             const li = document.createElement('li');
             li.style.marginBottom = '8px';
             li.style.padding = '8px';
-            li.style.backgroundColor = '#f8f9fa';
             li.style.borderLeft = '3px solid #007bff';
-            
-            const progressPct = (inv.progress / inv.totalDuration) * 100;
-            const contractorInfo = inv.contractor ? `<br><small>Wykonawca: ${inv.contractor}</small>` : '<br><small>Realizacja własna</small>';
-            
-            li.innerHTML = `
-                <div style="display: flex; justify-content: space-between;">
-                    <strong>${inv.name}</strong>
-                    <button onclick="blockInvestment('${stock.symbol}', '${inv.id}')" style="font-size: 9px; background-color: #ffdddd; border: 1px solid red; color: red;">Anuluj</button>
-                </div>
-                <progress value="${inv.progress}" max="${inv.totalDuration}" style="width: 100%; height: 10px; margin-top: 4px;"></progress>
-                <div style="font-size: 10px; color: #666; display: flex; justify-content: space-between;">
-                    <span>${progressPct.toFixed(0)}%</span>
-                    <span>${inv.progress.toFixed(1)} / ${inv.totalDuration} tyg.</span>
-                </div>
-                ${contractorInfo}
-            `;
+
+            const head = document.createElement('div');
+            head.style.display = 'flex';
+            head.style.justifyContent = 'space-between';
+            const name = document.createElement('strong');
+            name.textContent = order.name;
+            const cancel = document.createElement('button');
+            cancel.textContent = 'Zablokuj';
+            cancel.style.fontSize = '9px';
+            cancel.onclick = () => blockInvestment(stock.symbol, order.ref);
+            head.append(name, cancel);
+
+            const bar = document.createElement('progress');
+            bar.max = 1;
+            bar.value = order.progress;
+            bar.dataset.orderRef = order.ref;
+            bar.style.width = '100%';
+            bar.style.height = '10px';
+
+            const info = document.createElement('div');
+            info.style.fontSize = '10px';
+            info.textContent = `${(order.progress * 100).toFixed(0)}% · ${order.detail} · ${order.path}`;
+
+            li.append(head, bar, info);
             invList.appendChild(li);
-        });
+        }
         activeDiv.appendChild(invList);
     } else {
         activeDiv.innerHTML += `<p style="font-size: 12px; color: #888; font-style: italic;">Brak aktywnych projektów.</p>`;
     }
     deptSection.appendChild(activeDiv);
 
-    // --- 3. KATALOG DOSTĘPNYCH INWESTYCJI ---
+    // --- 3. KATALOG DOSTĘPNYCH INWESTYCJI (wszystkie sektory spółki, bez duplikatów) ---
     const catalogDiv = document.createElement('div');
     catalogDiv.style.marginTop = '15px';
-    catalogDiv.innerHTML = `<h5>📋 Katalog Inwestycji</h5>`;
-
-    // Pobierz inwestycje ogólne + sektorowe
-    let availableOptions = [...INVESTMENT_CATALOG['general']];
-    if (stock.sector[0] && INVESTMENT_CATALOG[stock.sector[0]]) {
-        availableOptions = availableOptions.concat(INVESTMENT_CATALOG[stock.sector[0]]);
-    }
+    catalogDiv.innerHTML = `<h5>📋 Katalog Inwestycji</h5>
+        <p style="font-size: 10px; color: #666;">Pozycje budowlane trafiają do przetargu (cena = budżet przetargu, czas w dniach budowy).
+        Pozostałe spółka realizuje sama. Czas podany w dniach (1 dzień = 1/7 tygodnia gry).</p>`;
 
     const table = document.createElement('table');
     table.style.fontSize = '11px';
     table.style.width = '100%';
     table.innerHTML = `
         <thead>
-            <tr style="background-color: #e9ecef;">
+            <tr>
                 <th>Nazwa</th>
+                <th>Rodzaj</th>
                 <th>Koszt</th>
                 <th>Czas</th>
                 <th>Efekt</th>
@@ -1317,53 +1427,57 @@ function renderDepartmentsSection(stock, container) {
         <tbody></tbody>
     `;
     const tbody = table.querySelector('tbody');
+    const isLimitReached = countCompanyInvestmentOrders(stock) >= Math.max(1, devLevel);
 
-    availableOptions.forEach(inv => {
+    getInvestmentCatalogForCompany(stock).forEach(inv => {
         const tr = document.createElement('tr');
-            
-            // Logika kosztów i wymagań
-            const realCost = stock.departments.development.level >= 3 ? inv.cost * 0.9 : inv.cost;
-            const isAffordable = stock.cash >= realCost;
-            const hasLevel = stock.departments.development.level >= inv.minDevLevel;
-            const isLimitReached = stock.activeInvestments.length >= stock.departments.development.level;
+        const realCost = getInvestmentCostForCompany(stock, inv);
+        const isConstruction = CONSTRUCTION_KINDS.includes(inv.kind);
+        const isAffordable = canFinanceAmount(stock, isConstruction ? getConstructionSpec(inv.id).cost * 1.2 : realCost);
+        const hasLevel = devLevel >= inv.minDevLevel;
+        const inProgress = hasCompanyInvestmentInProgress(stock, inv.id);
 
-            // Przycisk akcji
-            let statusBtn = '';
-            if (!hasLevel) {
-                statusBtn = `<span style="color: gray; font-size: 9px;">Wymaga Lvl ${inv.minDevLevel}</span>`;
-            } else if (!isAffordable) {
-                statusBtn = `<span style="color: #dc3545; font-size: 9px;">Brak środków</span>`;
-            } else if (isLimitReached) {
-                statusBtn = `<span style="color: #ffc107; font-size: 9px;">Limit projektów</span>`;
-            } else {
-                statusBtn = `<button onclick="forceCompanyInvestment('${stock.symbol}', '${inv.id}')" style="padding: 2px 8px; font-size: 11px; background-color: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer;">Start</button>`;
-            }
+        let statusBtn = '';
+        if (!hasLevel) {
+            statusBtn = `<span style="color: gray; font-size: 9px;">Wymaga działu rozwoju Lvl ${inv.minDevLevel}</span>`;
+        } else if (inProgress) {
+            statusBtn = `<span style="color: #17a2b8; font-size: 9px;">W toku</span>`;
+        } else if (!isAffordable) {
+            statusBtn = `<span style="color: #dc3545; font-size: 9px;">Brak środków</span>`;
+        } else if (isLimitReached) {
+            statusBtn = `<span style="color: #ffc107; font-size: 9px;">Limit projektów</span>`;
+        } else {
+            statusBtn = `<button onclick="forceCompanyInvestment('${stock.symbol}', '${inv.id}')" style="padding: 2px 8px; font-size: 11px; background-color: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer;">${isConstruction ? 'Przetarg' : 'Start'}</button>`;
+        }
 
-            // Ikona (domyślna jeśli brak pliku)
-            const iconSrc = inv.icon || 'img/box.png'; 
+        const iconSrc = inv.icon || 'img/box.png';
+        const kindLabel = INVESTMENT_KIND_LABELS[inv.kind] || inv.kind;
+        const mixedNote = inv.kind === 'mixed' ? `<div style="font-size: 9px; color: #666;">budowa ${(inv.constructionShare * 100).toFixed(0)}% kosztu</div>` : '';
 
-            tr.innerHTML = `
-                <td style="display: flex; align-items: center;">
-                    <img src="${iconSrc}" style="width: 24px; height: 24px; margin-right: 8px; object-fit: contain;" onerror="this.style.display='none'">
-                    <span>${inv.name}</span>
-                </td>
-                <td>${(realCost/1000).toFixed(0)}k PLN</td>
-                <td>${inv.duration} tyg.</td>
-                <td>
-                    <div style="font-size: 10px; color: #555;">
-                        ${inv.assetValue > 0 ? `<div>🏠 +${(inv.assetValue/1000).toFixed(0)}k</div>` : ''}
-                        ${inv.incomeBonus > 0 ? `<div>💰 +${(inv.incomeBonus*100).toFixed(0)}%</div>` : ''}
-                        ${inv.healthBonus > 0 ? `<div>❤️ +${inv.healthBonus}</div>` : ''}
-                    </div>
-                </td>
-                <td style="text-align: center;">${statusBtn}</td>
-            `;
-            tbody.appendChild(tr);
-        });
-    
+        tr.innerHTML = `
+            <td style="display: flex; align-items: center;">
+                <img src="${iconSrc}" style="width: 24px; height: 24px; margin-right: 8px; object-fit: contain;" onerror="this.style.display='none'">
+                <span>${inv.name}</span>
+            </td>
+            <td>${kindLabel}${mixedNote}</td>
+            <td>${(realCost / 1000).toFixed(0)}k PLN</td>
+            <td>${inv.durationDays} dni</td>
+            <td>
+                <div style="font-size: 10px; color: #555;">
+                    ${inv.assetValue > 0 ? `<div>🏠 szac. ${(inv.assetValue / 1000).toFixed(0)}k</div>` : ''}
+                    ${inv.incomeBonus > 0 ? `<div>💰 +${(inv.incomeBonus * 100).toFixed(0)}%</div>` : ''}
+                    ${inv.healthBonus > 0 ? `<div>❤️ +${inv.healthBonus}</div>` : ''}
+                </div>
+            </td>
+            <td style="text-align: center;">${statusBtn}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+
     catalogDiv.appendChild(table);
     deptSection.appendChild(catalogDiv);
 }
+
 
 
 
@@ -2828,9 +2942,14 @@ function openDescriptionModal(symbol) {
     if (stock.ceo && stock.ceo.name) {
         const tenureYears = Math.floor(stock.ceo.tenure / 4);
         let ceoHTML = `
-            <div style="text-align: center; margin-bottom: 10px;">
-                <h3 style="margin: 0;">${stock.ceo.name}</h3>
-                <p style="margin: 5px 0; font-size: 12px; color: #666;">Wiek: ${stock.ceo.age}, Staż w firmie: ${tenureYears} lat</p>
+            <div style="display:flex; align-items:center; gap:12px; margin-bottom: 10px;">
+                <div style="flex: 0 0 80px; text-align:center; background:#f1f1f1; border-radius:12px; padding:10px;">
+                    <span style="font-size:24px;">👔</span>
+                </div>
+                <div style="flex:1;">
+                    <h4 style="margin: 0;">${stock.ceo.name}</h4>
+                    <p style="margin: 5px 0; font-size: 12px; color: #666;">Wiek: ${stock.ceo.age}, Staż w firmie: ${tenureYears} lat</p>
+                </div>
             </div>
         `;
         if (stock.ceo.traits && stock.ceo.traits.length > 0) {
@@ -3164,7 +3283,66 @@ function closeSettingsModal() {
     }
 }
 
+function closeVisibleModals() {
+    document.querySelectorAll('[id$="-modal"]').forEach(modal => {
+        if (modal instanceof HTMLElement) modal.style.display = 'none';
+    });
+}
 
+function initializeDraggableModals() {
+    const modals = Array.from(document.querySelectorAll('[id$="-modal"], #settings-modal'));
+    modals.forEach(modal => {
+        if (!(modal instanceof HTMLElement)) return;
+        modal.classList.add('modal');
+        modal.style.position = 'fixed';
+        modal.style.touchAction = 'none';
+        const dragHandle = modal.querySelector('.modal-header') || modal;
+        dragHandle.style.cursor = 'move';
+
+        const onMouseDown = e => {
+            if (e.button !== 0) return;
+            if (e.target.closest('button, input, select, textarea, a, .close-btn')) return;
+            e.preventDefault();
+
+            const rect = modal.getBoundingClientRect();
+            const startX = e.clientX;
+            const startY = e.clientY;
+            const initialLeft = rect.left;
+            const initialTop = rect.top;
+
+            modal.style.transform = 'none';
+            modal.style.left = `${initialLeft}px`;
+            modal.style.top = `${initialTop}px`;
+
+            const onMouseMove = moveEvent => {
+                const dx = moveEvent.clientX - startX;
+                const dy = moveEvent.clientY - startY;
+                modal.style.left = `${initialLeft + dx}px`;
+                modal.style.top = `${initialTop + dy}px`;
+            };
+
+            const onMouseUp = () => {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+                document.body.style.userSelect = '';
+            };
+
+            document.body.style.userSelect = 'none';
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        };
+
+        dragHandle.addEventListener('mousedown', onMouseDown);
+    });
+}
+
+window.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+        closeVisibleModals();
+    }
+});
+
+window.addEventListener('DOMContentLoaded', initializeDraggableModals);
 
 function openCityInvestmentModal() {
     const modal = document.getElementById('city-investment-modal');
@@ -4022,6 +4200,7 @@ function openFinancialDetailsModal(symbol) {
             <hr>
             <p><strong>Zysk Kwartalny (Ostatni):</strong> ${stock.quarterlyEarnings.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN</p>
             <p><strong>Dług Korporacyjny (jeśli dotyczy):</strong> ${(stock.corporateDebt || 0).toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN</p>
+            ${renderFinancialPeriodPreview(stock)}
         `;
     } else {
         content.innerHTML = '<p>Brak szczegółowych danych bilansowych dla tej spółki.</p>';
@@ -4038,6 +4217,33 @@ function openFinancialDetailsModal(symbol) {
     }
 
     modal.style.display = 'block'; // Pokaż modal
+}
+
+/** Podgląd pozycji okresu: koszty R&D, kontrakty, nieruchomości i ostatni raport. */
+function renderFinancialPeriodPreview(stock) {
+    const fmt = value => (Number(value) || 0).toLocaleString('pl-PL', { maximumFractionDigits: 0 }) + ' PLN';
+    const rd = getResearchCostSummary(stock);
+    const period = getPendingPeriodResult(stock);
+    const last = stock.lastReportBreakdown;
+
+    let html = `
+        <hr>
+        <h4>Bieżący okres (do następnego raportu):</h4>
+        <p>R&D — koszty rozpoczęcia: ${fmt(rd.pendingStartup)}, utrzymania: ${fmt(rd.pendingMaintenance)}</p>
+        <p>Kontrakty budowlane — przychody: ${fmt(period.constructionRevenue)}, koszty: ${fmt(period.constructionCosts)}</p>
+        <p>Nieruchomości (netto): ${fmt(period.propertyIncome)} · Koszty inwestycji: ${fmt(period.investmentExpense)} · Pozostałe: ${fmt(period.otherIncome)}</p>
+        <p style="font-size: 11px; color: #666;">Pozycje te są już rozliczone w gotówce i bilansie; raport kwartalny tylko je wykaże.</p>
+        <p>R&D łącznie od początku — rozpoczęcia: ${fmt(rd.totalStartup)}, utrzymanie: ${fmt(rd.totalMaintenance)}</p>`;
+
+    if (last) {
+        html += `
+        <h4>Ostatni raport kwartalny:</h4>
+        <p>Wynik operacyjny: ${fmt(last.operating)} · Koszty R&D: −${fmt(last.researchExpense)}</p>
+        <p>Kontrakty: ${fmt(last.constructionRevenue - last.constructionCosts)} · Nieruchomości: ${fmt(last.propertyIncome)} · Inwestycje: −${fmt(last.investmentExpense)}</p>
+        <p><strong>Wynik raportowany: ${fmt(last.total)}</strong></p>`;
+    }
+
+    return html;
 }
 
 /**
@@ -4477,646 +4683,334 @@ function showConstructionTab(tabName) {
 }
 
 /**
- * Inicjalizuje dropdown z typami budynków do wyboru
- */
-function populateBuildingTypeDropdown() {
-    const dropdown = document.getElementById('tender-building-type');
-    if (!dropdown) return;
-    
-    dropdown.innerHTML = '<option value="">Wybierz typ budynku</option>';
-    
-    // Pobierz wszystkie budynki z katalogu
-    const allBuildings = [];
-    Object.keys(INVESTMENT_CATALOG).forEach(sector => {
-        INVESTMENT_CATALOG[sector].forEach(building => {
-            allBuildings.push({
-                sector: sector,
-                building: building
-            });
-        });
-    });
-    
-    // Sortuj po sektorze i nazwie
-    allBuildings.sort((a, b) => {
-        if (a.sector < b.sector) return -1;
-        if (a.sector > b.sector) return 1;
-        return a.building.name.localeCompare(b.building.name);
-    });
-    
-    allBuildings.forEach(item => {
-        const option = document.createElement('option');
-        option.value = `${item.sector}:${item.building.id}`;
-        option.textContent = `[${item.sector}] ${item.building.name} (${item.building.cost.toLocaleString()} PLN, ${item.building.duration} tyg.)`;
-        option.dataset.cost = item.building.cost;
-        option.dataset.duration = item.building.duration;
-        dropdown.appendChild(option);
-    });
-    
-    // Update preview when selection changes
-    dropdown.onchange = function() {
-        updateBuildingPreview(this.value);
-    };
-}
-
-/**
- * Aktualizuje podgląd budynku po wyborze z dropdownu
- */
-function updateBuildingPreview(buildingValue) {
-    if (!buildingValue) return;
-    
-    const [sector, buildingId] = buildingValue.split(':');
-    const building = INVESTMENT_CATALOG[sector]?.find(b => b.id === buildingId);
-    
-    if (!building) return;
-    
-    const previewSection = document.getElementById('building-preview');
-    if (previewSection) previewSection.style.display = 'block';
-
-    // Update preview elements
-    const previewName = document.getElementById('preview-name');
-    const previewCost = document.getElementById('preview-cost');
-    const previewDuration = document.getElementById('preview-duration');
-    const previewIncome = document.getElementById('preview-income');
-    const previewMaintenance = document.getElementById('preview-maintenance');
-    
-    if (previewName) previewName.textContent = building.name;
-    if (previewCost) previewCost.textContent = building.cost.toLocaleString() + ' PLN';
-    if (previewDuration) previewDuration.textContent = building.duration + ' tygodni';
-    if (previewIncome) previewIncome.textContent = (building.incomeBonus * 100).toFixed(1) + '%';
-    if (previewMaintenance) previewMaintenance.textContent = building.maintenance.toLocaleString() + ' PLN/tydzień';
-    
-    // Update minimum budget suggestion
-    const budgetInput = document.getElementById('tender-budget');
-    const minBudgetDisplay = document.getElementById('min-budget-display');
-    if (budgetInput) {
-        const minBudget = Math.ceil(building.cost * 1.2);
-        budgetInput.min = minBudget;
-        budgetInput.placeholder = `Min. ${minBudget.toLocaleString()} PLN`;
-        if (parseFloat(budgetInput.value) < minBudget) {
-            budgetInput.value = minBudget;
-        }
-        if (minBudgetDisplay) minBudgetDisplay.textContent = minBudget.toLocaleString();
-    }
-}
-
-/**
- * Inicjalizuje suwaki kryteriów z domyślnymi wartościami
- */
-function initializeCriteriaSliders() {
-    const sliders = [
-        'tender-price-weight',
-        'tender-time-weight',
-        'tender-exp-weight',
-        'tender-prestige-weight',
-        'tender-exchange-weight',
-        'tender-state-weight'
-    ];
-    
-    sliders.forEach(sliderId => {
-        const slider = document.getElementById(sliderId);
-        const valueSpan = document.getElementById(sliderId + '-val');
-        if (slider && valueSpan) {
-            valueSpan.textContent = slider.value;
-            slider.oninput = function() {
-                valueSpan.textContent = this.value;
-            };
-        }
-    });
-}
-
-/**
- * Tworzy przetarg przez gracza (lub AI dla gracza)
- */
-function createPlayerTender() {
-    // Funkcja przetargów gracza tymczasowo zablokowana.
-    console.log('Przetargi gracza są wyłączone.');
-    return null;
-}
-
-/**
  * Renderuje listę aktywnych przetargów
  */
 function renderTendersList() {
     const container = document.getElementById('tenders-list');
     if (!container) return;
-    
-    container.innerHTML = '';
-    
-    if (activeTenders.length === 0) {
-        container.innerHTML = '<p>Brak aktywnych przetargów.</p>';
-        return;
+
+    const expandedIds = new Set(
+        [...container.querySelectorAll('details[open]')]
+            .map(element => element.dataset.tenderId)
+    );
+
+    const fragment = document.createDocumentFragment();
+
+    const visibleTenders = activeTenders.filter(
+        tender => ['open', 'closed', 'awarded'].includes(tender.status)
+    );
+
+    if (visibleTenders.length === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'construction-empty';
+        empty.textContent = 'Brak otwartych lub realizowanych przetargów.';
+        fragment.appendChild(empty);
     }
-    
-    activeTenders.forEach(tender => {
-        const tenderDiv = document.createElement('div');
-        tenderDiv.className = 'tender-item';
-        tenderDiv.style.marginBottom = '10px';
-        tenderDiv.style.padding = '10px';
-        tenderDiv.style.border = '1px solid #ddd';
-        tenderDiv.style.borderRadius = '5px';
-        
-        const deadlineDate = new Date(tender.deadline);
-        const now = Date.now();
-        const timeLeft = Math.max(0, tender.deadline - now);
-        const daysLeft = Math.ceil(timeLeft / (1000 * 60 * 60 * 24));
-        
-        let statusText = `Otwarty (${daysLeft} dni pozostało)`;
-        if (tender.status === 'closed') statusText = 'Zamknięty';
-        if (tender.status === 'awarded') statusText = 'Przyznany';
-        if (tender.status === 'cancelled') statusText = 'Anulowany';
-        
-        let bidsList = '';
-        if (tender.bids.length > 0) {
-            bidsList = '<h5>Oferty:</h5><ul>';
-            tender.bids.sort((a, b) => calculateBidScore(b, tender) - calculateBidScore(a, tender)).forEach(bid => {
-                const score = calculateBidScore(bid, tender).toFixed(1);
-                bidsList += `<li>${bid.bidder.name}: ${bid.price.toLocaleString()} PLN, ${bid.time} dni, doświadczenie: ${bid.experience} (wynik: ${score})</li>`;
-            });
-            bidsList += '</ul>';
+
+    const statusNames = {
+        open: 'Przyjmowanie ofert',
+        closed: 'Oczekiwanie na rozstrzygnięcie',
+        awarded: 'Kontrakt przyznany'
+    };
+
+    for (const tender of visibleTenders) {
+        const card = document.createElement('article');
+        card.className = 'construction-live-card';
+
+        const title = document.createElement('h4');
+        title.textContent = `🏗️ ${tender.buildingType?.name || 'Inwestycja'}`;
+
+        const status = document.createElement('span');
+        status.className = 'construction-live-status';
+        status.textContent = statusNames[tender.status];
+
+        card.append(title, status);
+
+        card.append(
+            createConstructionInfoRow(
+                'Zamawiający',
+                tender.clientCompany?.name || 'Brak danych'
+            ),
+            createConstructionInfoRow(
+                'Budżet',
+                formatConstructionMoney(tender.budget)
+            )
+        );
+
+        if (tender.status === 'open') {
+            card.appendChild(createConstructionInfoRow(
+                'Czas na oferty',
+                tender.timerVersion === 2
+                    ? formatConstructionTime(tender.remainingGameMs)
+                    : 'Stary przetarg — wymaga migracji'
+            ));
         }
 
-        tenderDiv.innerHTML = `
-            <h4>${tender.buildingType.name}</h4>
-            <p><strong>Klient:</strong> ${tender.clientCompany.name}</p>
-            <p><strong>Budżet:</strong> ${tender.budget.toLocaleString()} PLN</p>
-            <p><strong>Status:</strong> ${statusText}</p>
-            <p><strong>Oferty:</strong> ${tender.bids.length}</p>
-            ${bidsList}
-        `;
-        
-        container.appendChild(tenderDiv);
-    });
+        if (tender.winner) {
+            card.append(
+                createConstructionInfoRow(
+                    'Wykonawca',
+                    tender.winner.bidder?.name || 'Brak danych'
+                ),
+                createConstructionInfoRow(
+                    'Wartość kontraktu',
+                    formatConstructionMoney(tender.winner.price)
+                )
+            );
+        }
+
+        const bids = [...(tender.bids || [])].sort(
+            (a, b) => calculateBidScore(b, tender) -
+                calculateBidScore(a, tender)
+        );
+
+        const details = document.createElement('details');
+        details.dataset.tenderId = tender.id;
+        details.open = expandedIds.has(tender.id);
+
+        const summary = document.createElement('summary');
+        summary.textContent = `Oferty wykonawców (${bids.length})`;
+        details.appendChild(summary);
+
+        if (bids.length === 0) {
+            const empty = document.createElement('p');
+            empty.textContent = 'Nie złożono jeszcze żadnej oferty.';
+            details.appendChild(empty);
+        }
+
+        for (const bid of bids) {
+            const offer = document.createElement('div');
+            offer.className = 'construction-live-offer';
+
+            offer.append(
+                createConstructionInfoRow(
+                    'Spółka',
+                    bid.bidder?.name || 'Brak danych'
+                ),
+                createConstructionInfoRow(
+                    'Cena',
+                    formatConstructionMoney(bid.price)
+                ),
+                createConstructionInfoRow(
+                    'Deklarowany czas',
+                    `${bid.time} dni budowy`
+                ),
+                createConstructionInfoRow(
+                    'Ocena oferty',
+                    `${calculateBidScore(bid, tender).toFixed(1)} / 100`
+                )
+            );
+
+            details.appendChild(offer);
+        }
+
+        card.appendChild(details);
+        fragment.appendChild(card);
+    }
+
+    container.replaceChildren(fragment);
 }
 
 function renderConstructionCompaniesList() {
     const container = document.getElementById('construction-companies-list');
     if (!container) return;
-    
-    const builderCompanies = stocks.filter(s => s.sector && s.sector.includes('Budowlany'));
-    if (builderCompanies.length === 0) {
-        container.innerHTML = '<p>Brak spółek budowlanych w grze.</p>';
+
+    const builders = stocks.filter(company => isConstructionCompany(company) && !company.isBankrupt);
+    if (builders.length === 0) {
+        container.innerHTML = '<p class="construction-empty">Brak spółek budowlanych w grze.</p>';
         return;
     }
-    
-    container.innerHTML = builderCompanies.map(company => {
-        const projects = (typeof constructionProjects !== 'undefined' ? constructionProjects.filter(p => p.builder.symbol === company.symbol) : []);
-        const currentProjects = company.constructionStats ? company.constructionStats.currentProjects : 0;
-        const maxProjects = company.constructionStats ? company.constructionStats.maxProjects : 0;
-        const availableSlots = Math.max(0, maxProjects - currentProjects);
-        const projectDetails = projects.length > 0 ? projects.map(project => `
-                <li>${project.tender.buildingType.name} (${Math.ceil(project.progress * 100)}%, opóźnienia: ${project.delays})</li>`).join('') : '<li>Brak aktywnych projektów</li>';
-        return `
-            <div class="construction-company-card">
-                <h4>${company.name}</h4>
-                <div style="font-size: 12px; color: #888;">
-                    <p><strong>Projekty:</strong> ${currentProjects} / ${maxProjects}</p>
-                    <p><strong>Dostępne sloty:</strong> ${availableSlots}</p>
-                    <p><strong>Doświadczenie:</strong> ${company.constructionStats ? company.constructionStats.experience : 0}</p>
-                    <p><strong>Wygrane przetargi:</strong> ${company.constructionStats ? (company.constructionStats.wonTenders || 0) : 0}</p>
-                    <p><strong>Wykonywane projekty:</strong></p>
-                    <ul>${projectDetails}</ul>
-                </div>
-            </div>
-        `;
-    }).join('');
-}
 
-function updateBidForTender(tenderId) {
-    // Funkcja aktualizacji oferty gracza wyłączona, aktualne przetargi są tylko dla AI.
-    console.log('updateBidForTender disabled for player construction flow.');
-    return;
-}
+    const fragment = document.createDocumentFragment();
 
-function updateCompanyOffers(companySymbol) {
-    const openTenders = activeTenders.filter(t => t.status === 'open' && t.bids.some(b => b.bidder.symbol === companySymbol));
-    if (openTenders.length === 0) {
-        alert('Twoja firma nie ma otwartych ofert do aktualizacji.');
-        return;
+    for (const company of builders) {
+        const stats = company.constructionStats || {};
+        const active = getActiveProjectsForBuilder(company);
+        const openBids = getOpenBidsForBuilder(company).length;
+        const bonuses = getConstructionTechnologyBonuses(company);
+
+        const card = document.createElement('div');
+        card.className = 'construction-company-card';
+
+        const heading = document.createElement('h4');
+        heading.textContent = company.name;
+        card.appendChild(heading);
+
+        card.append(
+            createConstructionInfoRow('Moce wykonawcze', `${active.length} / ${stats.maxProjects || 0} budów (oferty w toku: ${openBids})`),
+            createConstructionInfoRow('Doświadczenie', `${stats.experience || 0} (limit rośnie co 10 pkt, maks. 5 budów)`),
+            createConstructionInfoRow('Wygrane przetargi / ukończone', `${stats.wonTenders || 0} / ${stats.completedProjects || 0}`),
+            createConstructionInfoRow('Gotówka', formatConstructionMoney(company.cash)),
+            createConstructionInfoRow('Kredyt obrotowy na budowy', formatConstructionMoney(company.constructionCredit || 0)),
+            createConstructionInfoRow('Technologie: tempo / koszt / ryzyko', `+${(bonuses.speedBonus * 100).toFixed(0)}% / −${(bonuses.costReduction * 100).toFixed(0)}% / −${(bonuses.delayReduction * 100).toFixed(0)}%`)
+        );
+
+        const list = document.createElement('ul');
+        if (active.length === 0) {
+            const li = document.createElement('li');
+            li.textContent = 'Brak aktywnych budów';
+            list.appendChild(li);
+        }
+        for (const project of active) {
+            const li = document.createElement('li');
+            li.textContent = `${project.tender.buildingType.name} — ${(project.progress * 100).toFixed(0)}%, ${getConstructionProjectStatusLabel(project)}`;
+            list.appendChild(li);
+        }
+        card.appendChild(list);
+        fragment.appendChild(card);
     }
-    openTenders.forEach(tender => {
-        updateBidForTender(tender.id);
-    });
+
+    container.replaceChildren(fragment);
 }
 
 function renderConstructionSubcontractorsList() {
-  const container = document.getElementById('subcontractors-list');
-  const summary = document.getElementById('subcontractors-summary');
-  if (!container) return;
+    const container = document.getElementById('subcontractors-list');
+    const summary = document.getElementById('subcontractors-summary');
+    if (!container) return;
 
-  
-  const ipoReadySpecs = specialists.filter(s => s.contractsCompleted >= 10).length;
+    const busyCount = specialists.filter(spec => spec.busyProjectId).length;
 
- 
+    if (summary) {
+        summary.innerHTML = `
+            <div class="construction-stat-card"><span class="construction-stat-label">Specjaliści</span><strong>${specialists.length}</strong></div>
+            <div class="construction-stat-card"><span class="construction-stat-label">Zajęci przy budowach</span><strong>${busyCount}</strong></div>`;
+    }
 
-    
+    if (specialists.length === 0) {
+        container.innerHTML = '<p class="construction-empty">Brak dostępnych specjalistów.</p>';
+        return;
+    }
 
-  const specialistsHtml = specialists.length === 0
-    ? `<p class="construction-empty">Brak dostępnych specjalistów.</p>`
-    : `
-      <div class="subcontractor-grid specialist-grid">
-        ${specialists.map(spec => `
-          <article class="subcontractor-card specialist-card">
-            <div class="card-topline">
-              <h4>${spec.name}</h4>
-              <span class="status-badge neutral">Poziom ${spec.level}</span>
-            </div>
-            <div class="subcontractor-meta">
-              <p><strong>Specjalność:</strong> ${spec.specialty}</p>
-              <p><strong>Bonus:</strong> +${(spec.bonus * 100).toFixed(1)}% szybkości</p>
-              <p><strong>Kontrakty:</strong> ${spec.contractsCompleted}</p>
-              <p><strong>Gotówka:</strong> ${spec.cash.toLocaleString('pl-PL')} PLN</p>
-            </div>
-            ${spec.contractsCompleted >= 10
-              ? `<button onclick="goPublicSpecialist('${spec.id}')">Wejdź na giełdę</button>`
-              : `<button disabled>IPO od 10 kontraktów</button>`
-            }
-          </article>
-        `).join('')}
-      </div>
-    `;
+    const fragment = document.createDocumentFragment();
+    const intro = document.createElement('p');
+    intro.className = 'construction-empty';
+    intro.textContent = 'Wykonawcy zatrudniają podwykonawców, gdy budowa grozi opóźnieniem. ' +
+        `Wynagrodzenie (${(CONSTRUCTION_RULES.subcontractorFeeRate * 100).toFixed(0)}% pozostałych kosztów) jest kosztem kontraktu; ` +
+        'moce podwykonawcy zwalniają się po odbiorze lub anulowaniu budowy.';
+    fragment.appendChild(intro);
 
-  container.innerHTML = `
-    
+    const grid = document.createElement('div');
+    grid.className = 'subcontractor-grid specialist-grid';
 
-    <section class="subcontractor-section">
-      <div class="section-header">
-        
-        <span>${specialists.length} specjalistów</span>
-      </div>
-      ${specialistsHtml}
-    </section>
-  `;
+    for (const spec of specialists) {
+        const project = spec.busyProjectId ? constructionProjects.find(item => item.id === spec.busyProjectId) : null;
+        const card = document.createElement('article');
+        card.className = 'subcontractor-card specialist-card';
+
+        const top = document.createElement('div');
+        top.className = 'card-topline';
+        const name = document.createElement('h4');
+        name.textContent = spec.name;
+        const badge = document.createElement('span');
+        badge.className = `status-badge ${project ? 'busy' : 'available'}`;
+        badge.textContent = project ? 'Zajęty' : 'Dostępny';
+        top.append(name, badge);
+        card.appendChild(top);
+
+        card.append(
+            createConstructionInfoRow('Poziom', spec.level),
+            createConstructionInfoRow('Specjalność', spec.specialty),
+            createConstructionInfoRow('Bonus tempa', `+${(spec.bonus * 100).toFixed(1)}%`),
+            createConstructionInfoRow('Kontrakty', spec.contractsCompleted),
+            createConstructionInfoRow('Gotówka', formatConstructionMoney(spec.cash)),
+            createConstructionInfoRow('Obecna budowa', project ? `${project.tender.buildingType.name} (${project.builder.name})` : '—')
+        );
+
+        const button = document.createElement('button');
+        const canIpo = spec.contractsCompleted >= 10 && !spec.busyProjectId;
+        button.disabled = !canIpo;
+        button.textContent = canIpo ? 'Wejdź na giełdę' : (spec.busyProjectId ? 'IPO po zakończeniu budowy' : 'IPO od 10 kontraktów');
+        if (canIpo) button.onclick = () => goPublicSpecialist(spec.id);
+        card.appendChild(button);
+
+        grid.appendChild(card);
+    }
+
+    fragment.appendChild(grid);
+    container.replaceChildren(fragment);
+}
+
+/** Jednolity opis statusu budowy — używany we wszystkich widokach. */
+function getConstructionProjectStatusLabel(project) {
+    if (project.settled) return project.status === 'completed' ? 'Odebrana' : 'Anulowana';
+    if (project.status === 'paused') {
+        if (project.delayReason === 'Brak środków wykonawcy.') return 'Wstrzymana — brak finansowania';
+        return `Wstrzymana — ${project.delayReason || 'przerwa'}`;
+    }
+    return getProjectedRemainingMs(project) > getProjectTimeLeftMs(project) ? 'W toku — zagrożony termin' : 'W toku';
 }
 
 function renderConstructionProjectsList() {
     const container = document.getElementById('construction-projects-list');
     if (!container) return;
-    
-    if (typeof constructionProjects === 'undefined' || constructionProjects.length === 0) {
-        container.innerHTML = '<p>Brak aktywnych projektów budowlanych.</p>';
-        return;
-    }
-    
-    container.innerHTML = constructionProjects.map(project => {
-        const progressPercent = (project.progress * 100).toFixed(1);
-        const elapsed = (Date.now() - project.startTime) / (1000 * 60 * 60 * 24);
-        const remaining = Math.max(0, project.duration - elapsed);
-        return `
-            <div class="construction-project-card">
-                <h4>${project.tender.buildingType.name}</h4>
-                <p><strong>Klient:</strong> ${project.tender.clientCompany.name}</p>
-                <p><strong>Wykonawca:</strong> ${project.builder.name}</p>
-                <p><strong>Postęp:</strong> ${progressPercent}%</p>
-                <p><strong>Pozostały czas:</strong> ${Math.ceil(remaining)} dni</p>
-                <p><strong>Opóźnienia:</strong> ${project.delays}</p>
-                ${project.delayReason ? `<p><strong>Powód opóźnienia:</strong> ${project.delayReason}</p>` : ''}
-                <progress value="${project.progress}" max="1" style="width: 100%"></progress>
-            </div>
-        `;
-    }).join('');
-}
 
-/**
- * Renderuje listę ofert gracza (jako wykonawca)
- */
-function renderMyBidsList() {
-    const container = document.getElementById('my-bids-list');
-    if (!container) return;
-    
-    container.innerHTML = '';
-    
-    const playerCompany = stocks.find(s => s.isPlayer && s.sector.includes('Budowlany'));
-    if (!playerCompany) {
-        container.innerHTML = '<p>Twoja firma nie jest budowlana - nie możesz składać ofert.</p>';
-        return;
-    }
-    
-    // Znajdź wszystkie przetargi, w których gracz złożył ofertę
-    const myBids = [];
-    activeTenders.forEach(tender => {
-        tender.bids.forEach(bid => {
-            if (bid.bidder.symbol === playerCompany.symbol) {
-                myBids.push({
-                    tender: tender,
-                    bid: bid,
-                    score: calculateBidScore(bid, tender)
-                });
-            }
-        });
-    });
-    
-    if (myBids.length === 0) {
-        container.innerHTML = '<p>Nie złożyłeś jeszcze żadnych ofert.</p>';
-        return;
-    }
-    
-    myBids.sort((a, b) => b.score - a.score); // Sortuj od najlepszego
-    
-    myBids.forEach(({ tender, bid, score }) => {
-        // Oblicz pozycję w rankingu
-        const allScores = tender.bids.map(b => calculateBidScore(b, tender)).sort((a, b) => b - a);
-        const position = allScores.indexOf(score) + 1;
-        
-        const bidDiv = document.createElement('div');
-        bidDiv.className = 'bid-item';
-        bidDiv.style.marginBottom = '10px';
-        bidDiv.style.padding = '10px';
-        bidDiv.style.border = '1px solid #ddd';
-        bidDiv.style.borderRadius = '5px';
-        
-        bidDiv.innerHTML = `
-            <h4>${tender.buildingType.name}</h4>
-            <p><strong>Klient:</strong> ${tender.clientCompany.name}</p>
-            <p><strong>Twoja oferta:</strong> ${bid.price.toLocaleString()} PLN, ${bid.time} dni</p>
-            <p><strong>Doświadczenie:</strong> ${bid.experience}</p>
-            <p><strong>Twój wynik:</strong> ${score.toFixed(1)} / 100 (pozycja ${position}/${tender.bids.length})</p>
-            <p><strong>Status:</strong> ${tender.status}</p>
-            ${tender.status === 'open' ? `
-                <button onclick="withdrawBid('${tender.id}')">Wycofaj ofertę</button>
-            ` : ''}
-        `;
-        
-        container.appendChild(bidDiv);
-    });
-}
+    const fragment = document.createDocumentFragment();
+    const projects = constructionProjects.filter(project => !project.settled);
 
-/**
- * Renderuje listę przetargów zgłoszonych przez gracza (jako klient)
- */
-function renderMyTendersList() {
-    const container = document.getElementById('my-tenders-list');
-    if (!container) return;
-    
-    container.innerHTML = '';
-    
-    const playerCompany = stocks.find(s => s.isPlayer);
-    if (!playerCompany) {
-        container.innerHTML = '<p>Nie znaleziono firmy gracza.</p>';
-        return;
-    }
-    
-    // Znajdź przetargi zgłoszone przez gracza
-    const myTenders = activeTenders.filter(t => t.clientCompany.symbol === playerCompany.symbol);
-    
-    if (myTenders.length === 0) {
-        container.innerHTML = '<p>Nie zgłosiłeś jeszcze żadnych przetargów.</p>';
-        return;
-    }
-    
-    myTenders.forEach(tender => {
-        const tenderDiv = document.createElement('div');
-        tenderDiv.className = 'tender-item';
-        tenderDiv.style.marginBottom = '10px';
-        tenderDiv.style.padding = '10px';
-        tenderDiv.style.border = '1px solid #ddd';
-        tenderDiv.style.borderRadius = '5px';
-        
-        const deadlineDate = new Date(tender.deadline);
-        const now = Date.now();
-        const timeLeft = Math.max(0, tender.deadline - now);
-        const daysLeft = Math.ceil(timeLeft / (1000 * 60 * 60 * 24));
-        
-        tenderDiv.innerHTML = `
-            <h4>${tender.buildingType.name}</h4>
-            <p><strong>Budżet:</strong> ${tender.budget.toLocaleString()} PLN</p>
-            <p><strong>Oferty:</strong> ${tender.bids.length}</p>
-            <p><strong>Deadline:</strong> ${daysLeft} dni pozostało</p>
-            <p><strong>Status:</strong> ${tender.status}</p>
-            ${tender.bids.length > 0 ? `
-                <h5>Oferty:</h5>
-                <ul>
-                    ${tender.bids.map(bid =>
-                        `<li>${bid.bidder.name}: ${bid.price.toLocaleString()} PLN, czas: ${bid.time} dni, doświadczenie: ${bid.experience}</li>`
-                    ).join('')}
-                </ul>
-            ` : ''}
-        `;
-        
-        container.appendChild(tenderDiv);
-    });
-}
-
-/**
- * Renderuje listę projektów w realizacji (dla gracza jako klient lub wykonawca)
- */
-function renderMyProjectsList() {
-    const container = document.getElementById('my-projects-list');
-    if (!container) return;
-    
-    container.innerHTML = '';
-    
-    const playerCompany = stocks.find(s => s.isPlayer);
-    if (!playerCompany) {
-        container.innerHTML = '<p>Nie znaleziono firmy gracza.</p>';
-        return;
-    }
-    
-    // Znajdź projekty gdzie gracz jest klientem lub wykonawcą
-    const myProjects = constructionProjects.filter(p =>
-        p.tender.clientCompany.symbol === playerCompany.symbol ||
-        p.builder.symbol === playerCompany.symbol
-    );
-    
-    if (myProjects.length === 0) {
-        container.innerHTML = '<p>Nie masz aktywnych projektów budowlanych.</p>';
-        return;
-    }
-    
-    myProjects.forEach(project => {
-        const projectDiv = document.createElement('div');
-        projectDiv.className = 'project-item';
-        projectDiv.style.marginBottom = '10px';
-        projectDiv.style.padding = '10px';
-        projectDiv.style.border = '1px solid #ddd';
-        projectDiv.style.borderRadius = '5px';
-        
-        const progressPercent = (project.progress * 100).toFixed(1);
-        const elapsed = (Date.now() - project.startTime) / (1000 * 60 * 60 * 24);
-        const remaining = Math.max(0, project.duration - elapsed);
-        
-        let buttons = '';
-        if (project.builder.symbol === playerCompany.symbol) {
-            buttons = `<button onclick="addSubcontractor('${project.id}')">Dodaj podwykonawcę</button>`;
-        }
-        
-        projectDiv.innerHTML = `
-            <h4>${project.tender.buildingType.name}</h4>
-            <p><strong>${project.builder.symbol === playerCompany.symbol ? 'Wykonawca' : 'Klient'}:</strong> ${project.builder.symbol === playerCompany.symbol ? project.builder.name : project.tender.clientCompany.name}</p>
-            <p><strong>Postęp:</strong> ${progressPercent}%</p>
-            <p><strong>Pozostały czas:</strong> ${Math.ceil(remaining)} dni</p>
-            <p><strong>Opóźnienia:</strong> ${project.delays}</p>
-            ${project.delayReason ? `<p><strong>Powód:</strong> ${project.delayReason}</p>` : ''}
-            <progress value="${project.progress}" max="1" style="width: 100%"></progress>
-            ${project.events && project.events.length > 0 ? `
-                <p><strong>Zdarzenia:</strong></p>
-                <ul>
-                    ${project.events.map(event => `<li class="${event.type}">${event.description}</li>`).join('')}
-                </ul>
-            ` : ''}
-            ${buttons}
-        `;
-        
-        container.appendChild(projectDiv);
-    });
-}
-
-/**
- * Renderuje listę konsorcjów (istniejąca funkcja, przepisana)
- */
-function renderConsortiumsList() {
-    const container = document.getElementById('consortiums-list');
-    if (!container) return;
-    
-    container.innerHTML = '';
-    
-    const activeConsortiums = (typeof constructionConsortia !== 'undefined' && Array.isArray(constructionConsortia)) ? constructionConsortia : [];
-    
-    if (activeConsortiums.length === 0) {
-        container.innerHTML = '<p>Brak aktywnych konsorcjów.</p>';
-        return;
-    }
-    
-    activeConsortiums.forEach(consortium => {
-        const consDiv = document.createElement('div');
-        consDiv.className = 'consortium-item';
-        consDiv.style.marginBottom = '10px';
-        consDiv.style.padding = '10px';
-        consDiv.style.border = '1px solid #ddd';
-        consDiv.style.borderRadius = '5px';
-        
-        const age = Math.floor((Date.now() - consortium.formedAt) / (1000 * 60 * 60 * 24 * 7));
-        const memberNames = consortium.members.map(member => member.name).join(' + ');
-        const shareInfo = Object.entries(consortium.budgetShare || {}).map(([symbol, share]) => `${symbol}: ${share}%`).join(', ');
-        consDiv.innerHTML = `
-            <h4>${memberNames}</h4>
-            <p><strong>Wiek konsorcjum:</strong> ${age} tygodni</p>
-            <p><strong>Udziały:</strong> ${shareInfo}</p>
-            <p><strong>Liczba projektów:</strong> ${consortium.projects.length}</p>
-        `;
-        container.appendChild(consDiv);
-    });
-}
-
-/**
- * Wycofuje ofertę gracza z przetargu
- */
-function withdrawBid(tenderId) {
-    const playerCompany = stocks.find(s => s.isPlayer && s.sector.includes('Budowlany'));
-    if (!playerCompany) return;
-    
-    const tender = activeTenders.find(t => t.id === tenderId);
-    if (!tender || tender.status !== 'open') return;
-    
-    // Usuń ofertę gracza
-    tender.bids = tender.bids.filter(bid => bid.bidder.symbol !== playerCompany.symbol);
-    
-    logEvent(`📤 ${playerCompany.name} wycofał ofertę z przetargu ${tender.buildingType.name}.`, 'construction');
-    
-    // Odśwież UI
-    renderMyBidsList();
-    renderTendersList();
-}
-
-function addConsortiumMember() {
-    const membersContainer = document.getElementById('consortium-members');
-    if (!membersContainer) return;
-    const index = membersContainer.children.length + 1;
-    const row = document.createElement('div');
-    row.className = 'consortium-member-row';
-    row.style.marginBottom = '8px';
-    row.innerHTML = `
-        <label style="display:block; margin-bottom:3px;">Członek ${index} (symbol):</label>
-        <input type="text" class="consortium-member-symbol" placeholder="Symbol spółki" style="width: 120px; margin-right: 10px;">
-        <label>Udział (%):</label>
-        <input type="number" class="consortium-member-share" min="1" max="100" value="50" style="width: 80px; margin-left: 5px;">
-    `;
-    membersContainer.appendChild(row);
-}
-
-function createPlayerConsortium() {
-    const nameInput = document.getElementById('consortium-name');
-    const membersContainer = document.getElementById('consortium-members');
-    if (!nameInput || !membersContainer) return;
-
-    const name = nameInput.value.trim();
-    if (!name) {
-        alert('Podaj nazwę konsorcjum.');
-        return;
+    if (projects.length === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'construction-empty';
+        empty.textContent = 'Brak aktywnych budów.';
+        fragment.appendChild(empty);
     }
 
-    const memberRows = membersContainer.querySelectorAll('.consortium-member-row');
-    const members = [];
-    const budgetShare = {};
-    let totalShare = 0;
+    for (const project of projects) {
+        const card = document.createElement('article');
+        card.className = 'construction-live-card';
+        card.dataset.projectId = project.id;
 
-    memberRows.forEach(row => {
-        const symbolInput = row.querySelector('.consortium-member-symbol');
-        const shareInput = row.querySelector('.consortium-member-share');
-        if (!symbolInput || !shareInput) return;
-        const symbol = symbolInput.value.trim().toUpperCase();
-        const share = parseFloat(shareInput.value);
-        if (!symbol || isNaN(share) || share <= 0) return;
-        const company = stocks.find(s => s.symbol === symbol);
-        if (!company) return;
-        members.push(company);
-        budgetShare[company.symbol] = share;
-        totalShare += share;
-    });
+        const title = document.createElement('h4');
+        title.textContent = `🏗️ ${project.tender?.buildingType?.name || 'Budowa'}`;
 
-    if (members.length < 2) {
-        alert('Dodaj przynajmniej dwóch członków konsorcjum.');
-        return;
-    }
-    if (totalShare !== 100) {
-        alert('Suma udziałów musi wynosić 100%.');
-        return;
+        const status = document.createElement('span');
+        status.className = 'construction-live-status';
+        if (project.status === 'paused') status.classList.add('is-paused');
+        status.textContent = getConstructionProjectStatusLabel(project);
+
+        card.append(title, status);
+
+        const progress = Math.max(0, Math.min(1, Number(project.progress) || 0));
+        const remainingWork = getProjectedRemainingMs(project) + Math.max(0, Number(project.pauseRemainingMs) || 0);
+        const timeLeft = getProjectTimeLeftMs(project);
+        const nextMilestone = CONSTRUCTION_RULES.milestones[project.milestonesPaid];
+
+        card.append(
+            createConstructionInfoRow('Zamawiający', project.tender?.clientCompany?.name || 'Brak danych'),
+            createConstructionInfoRow('Wykonawca', project.builder?.name || 'Brak danych'),
+            createConstructionInfoRow('Postęp', `${(progress * 100).toFixed(1)}%`),
+            createConstructionInfoRow('Prognoza do końca', formatConstructionTime(remainingWork)),
+            createConstructionInfoRow('Do terminu umownego', timeLeft >= 0 ? formatConstructionTime(timeLeft) : `po terminie o ${formatConstructionTime(-timeLeft)}`),
+            createConstructionInfoRow('Opóźnienia (wykonawca / zewnętrzne)', `${formatConstructionTime(project.contractorDelayMs)} / ${formatConstructionTime(project.excusedDelayMs)}`)
+        );
+
+        const bar = document.createElement('progress');
+        bar.className = 'construction-live-progress';
+        bar.max = 1;
+        bar.value = progress;
+        bar.setAttribute('aria-label', `Postęp budowy: ${(progress * 100).toFixed(1)}%`);
+        card.appendChild(bar);
+
+        const details = document.createElement('details');
+        const summary = document.createElement('summary');
+        summary.textContent = 'Rozliczenia kontraktu';
+        details.appendChild(summary);
+
+        details.append(
+            createConstructionInfoRow('Wartość umowy', formatConstructionMoney(getContractValue(project))),
+            createConstructionInfoRow('Zmiany zamówienia', formatConstructionMoney(project.changeOrderAmount)),
+            createConstructionInfoRow('Depozyt zamawiającego', formatConstructionMoney(project.escrowBalance)),
+            createConstructionInfoRow('Wypłacono wykonawcy (zaliczka + etapy)', formatConstructionMoney(project.paidToBuilder)),
+            createConstructionInfoRow('Następny etap płatności', nextMilestone ? `${Math.round(nextMilestone * 100)}% postępu` : 'Odbiór końcowy'),
+            createConstructionInfoRow('Koszty poniesione / planowane', `${formatConstructionMoney(project.costsPaid)} / ${formatConstructionMoney(project.estimatedCost)}`),
+            createConstructionInfoRow('Planowany wynik kontraktu', formatConstructionMoney(getContractValue(project) - project.estimatedCost)),
+            createConstructionInfoRow('Podwykonawca', project.subcontractor ? `${project.subcontractor.name} (${formatConstructionMoney(project.subcontractor.fee)})` : 'Brak')
+        );
+
+        card.appendChild(details);
+        fragment.appendChild(card);
     }
 
-    const consortiumId = createConsortium(members, budgetShare);
-    if (consortiumId) {
-        logEvent(`🤝 Utworzono konsorcjum ${name} (${consortiumId}) z ${members.length} członkami.`, 'construction');
-        alert('Konsorcjum zostało utworzone.');
-        renderConsortiumsList();
-    } else {
-        alert('Nie udało się utworzyć konsorcjum.');
-    }
-}
-
-function submitBidForTender(tenderId) {
-    // Składanie ofert przez gracza zostało wyłączone. Tylko AI może składać oferty.
-    console.log('submitBidForTender disabled for player construction flow.');
-    return false;
-}
-
-function renderPortfolioBuildings() {
-    const container = document.getElementById('portfolio-buildings');
-    if (!container) return;
-    
-    const playerCompany = stocks.find(s => s.isPlayer);
-    if (!playerCompany) {
-        container.innerHTML = '<p>Nie znaleziono firmy gracza.</p>';
-        return;
-    }
-    
-    const buildings = (playerCompany.portfolio && playerCompany.portfolio.buildings) ? playerCompany.portfolio.buildings : [];
-    if (buildings.length === 0) {
-        container.innerHTML = '<p>Brak nieruchomości w portfelu.</p>';
-        return;
-    }
-    
-    container.innerHTML = buildings.map(building => {
-        const acquired = new Date(building.acquiredAt).toLocaleDateString();
-        const weeklyIncome = (building.value * building.income).toFixed(2);
-        return `
-            <div class="portfolio-item" style="margin-bottom:10px; padding:10px; border:1px solid #ddd; border-radius:5px;">
-                <h4>${building.type.name}</h4>
-                <p><strong>Wartość rezydualna:</strong> ${building.value.toLocaleString()} PLN</p>
-                <p><strong>Dochód:</strong> ${weeklyIncome} PLN / tydzień</p>
-                <p><strong>Utrzymanie:</strong> ${building.maintenance.toLocaleString()} PLN / tydzień</p>
-                <p><strong>Data nabycia:</strong> ${acquired}</p>
-            </div>
-        `;
-    }).join('');
+    container.replaceChildren(fragment);
 }
 
 // ============================================
@@ -5125,39 +5019,57 @@ function renderPortfolioBuildings() {
 
 function openConstructionSectorModal() {
     const modal = document.getElementById('construction-sector-modal');
+
     if (!modal) {
-        console.error('Construction sector modal not found');
+        console.error('Nie znaleziono construction-sector-modal.');
         return;
     }
-    
+
     currentConstructionTab = 'main';
-    populateBuildingTypeDropdown();
-    initializeCriteriaSliders();
-    
-    renderConstructionCompaniesList();
-    renderConstructionProjectsList();
+
+    if (!document.getElementById('tenders-list')) {
+        const mainTab = modal.querySelector('#construction-main');
+
+        if (mainTab) {
+            const section = document.createElement('section');
+            section.className = 'construction-tenders-section';
+
+            const heading = document.createElement('h3');
+            heading.textContent = 'Przetargi i zamówienia';
+
+            const list = document.createElement('div');
+            list.id = 'tenders-list';
+
+            section.append(heading, list);
+            mainTab.prepend(section);
+        } else {
+            console.warn(
+                'Brak construction-main. Sekcja przetargów nie została dodana.'
+            );
+        }
+    }
+
     renderConstructionSubcontractorsList();
-    
-    showConstructionTab('main');
+
+    modal.hidden = false;
     modal.style.display = 'block';
+
+    showConstructionTab('main');
+    updateConstructionSectorUI();
 }
 
-function supportConstructionProjectUI(stockSymbol, projectIndex, amount) {
-    if (typeof supportConstructionProject === 'function') {
-        supportConstructionProject(stockSymbol, projectIndex, amount);
-        openConstructionSectorModal(); // Odśwież modal
-    }
-}
 function openPawnShopPanel() {
     const modal = document.getElementById('pawnshop-modal');
     if (!modal) return;
     const statusDiv = document.getElementById('pawnshop-status');
+    const inventorySection = document.getElementById('pawnshop-inventory-section');
     const listDiv = document.getElementById('pawnshop-loans-list');
 
     const pawnShop = stocks.find(s => s.assetType === 'PawnShop' && !s.isBankrupt);
     if (!pawnShop) {
         statusDiv.innerHTML = '<p style="color:#dc3545;">Lombard nie jest dostępny.</p>';
         listDiv.innerHTML = '';
+        if (inventorySection) inventorySection.innerHTML = '<p style="margin:0;color:#666;">Brak zasobów w lombardzie.</p>';
         modal.style.display = 'block';
         return;
     }
@@ -5169,6 +5081,22 @@ function openPawnShopPanel() {
     const pawnLoans = playerCommercialLoans.filter(l => l.isPawnLoan);
     listDiv.innerHTML = '';
 
+    if (inventorySection) {
+        const inventoryStocks = pawnShop.holdingPortfolio || {};
+        const inventoryKeys = Object.keys(inventoryStocks);
+        if (inventoryKeys.length > 0) {
+            let invHtml = '<h4 style="margin:0 0 8px; font-size:14px;">Zapas Lombardu</h4>';
+            inventoryKeys.forEach(key => {
+                const item = inventoryStocks[key];
+                const stockData = stocks.find(s => s.symbol === key);
+                const name = stockData ? stockData.name : key;
+                invHtml += `<p style="margin:2px 0;">• ${item.quantity} × ${name} (${key}) @ ${item.purchasePrice.toFixed(2)} PLN</p>`;
+            });
+            inventorySection.innerHTML = invHtml;
+        } else {
+            inventorySection.innerHTML = '<p style="margin:0;color:#666;">Brak zasobów w lombardzie.</p>';
+        }
+    }
     if (pawnLoans.length > 0) {
         const h4 = document.createElement('h4');
         h4.textContent = 'Twoje pożyczki lombardowe:';
@@ -5301,19 +5229,9 @@ function switchCityTab(tabName) {
     document.getElementById(`tab-btn-city-${tabName}`).classList.add('active');
 }
 
-function hireSubcontractor(subId) {
-    const sub = subcontractors.find(s => s.id === subId);
-    if (!sub || sub.currentProjects >= sub.maxProjects) return;
-    
-    // Logic to hire for a project, but for now just mark as hired
-    sub.currentProjects++;
-    logEvent(`🤝 Zatrudniono podwykonawcę ${sub.name}.`, 'construction');
-    renderConstructionSubcontractorsList();
-}
-
 function goPublicSpecialist(specId) {
     const spec = specialists.find(s => s.id === specId);
-    if (!spec || spec.contractsCompleted < 10) return;
+    if (!spec || spec.contractsCompleted < 10 || spec.busyProjectId) return;
     
     // Create a new stock for the specialist
     const newStock = {
@@ -5326,7 +5244,8 @@ function goPublicSpecialist(specId) {
         exchange: 'BRONZE',
         cash: spec.cash,
         // Add other necessary fields
-        balanceSheet: { assets: 100000, liabilities: 0, shareCapital: 100000, retainedEarnings: 0 },
+        // Bilans odpowiada faktycznym środkom specjalisty (bez kapitału "z powietrza").
+        balanceSheet: { assets: spec.cash, liabilities: 0, shareCapital: spec.cash, retainedEarnings: 0 },
         quarterlyEarnings: 0,
         priceHistory: [], candlestickHistory: [], lineHistory: [], playerTransactions: [],
         isStateOwned: false,
@@ -5347,63 +5266,530 @@ function goPublicSpecialist(specId) {
     renderConstructionSubcontractorsList();
 }
 
-function addSubcontractor(projectId) {
-    const project = constructionProjects.find(p => p.id === projectId);
-    if (!project) return;
-    
-    // Find available subcontractor
-    const availableSub = subcontractors.find(s => s.currentProjects < s.maxProjects);
-    if (!availableSub) {
-        alert('Brak dostępnych podwykonawców.');
-        return;
-    }
-    
-    // Accelerate project
-    project.duration = Math.max(1, project.duration - 7); // 1 week acceleration
-    availableSub.currentProjects++;
-    logEvent(`🔧 Podwykonawca ${availableSub.name} przyspiesza projekt ${project.tender.buildingType.name}.`, 'construction');
-    renderMyProjectsList();
-    renderConstructionSubcontractorsList();
-}
-
 // ============================================
 // FUNKCJE POMOCNICZE DLA SEKTORA BUDOWLANEGO
 // ============================================
 
-/**
- * Obsługuje wsparcie projektu budowlanego przez gracza (dotacja)
- */
-function supportConstructionProjectUI(stockSymbol, projectIndex, amount) {
-    const playerCompany = stocks.find(s => s.isPlayer);
-    if (!playerCompany) {
-        alert('Nie znaleziono firmy gracza!');
+function formatConstructionTime(milliseconds) {
+    const value = Number(milliseconds);
+
+    if (!Number.isFinite(value)) return 'Brak danych';
+
+    const seconds = Math.ceil(Math.max(0, value) / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const remainder = seconds % 60;
+
+    return `${minutes} min ${String(remainder).padStart(2, '0')} s symulacji`;
+}
+
+function formatConstructionMoney(value) {
+    const amount = Number(value);
+
+    if (!Number.isFinite(amount)) return 'Brak danych';
+
+    return amount.toLocaleString('pl-PL', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }) + ' PLN';
+}
+
+function createConstructionInfoRow(label, value) {
+    const row = document.createElement('p');
+    row.className = 'construction-info-row';
+
+    const labelElement = document.createElement('span');
+    labelElement.className = 'construction-info-label';
+    labelElement.textContent = label;
+
+    const valueElement = document.createElement('span');
+    valueElement.className = 'construction-info-value';
+    valueElement.textContent = String(value);
+
+    row.append(labelElement, valueElement);
+
+    return row;
+}
+
+function updateConstructionSectorUI() {
+    const modal = document.getElementById('construction-sector-modal');
+
+    if (
+        !modal ||
+        modal.hidden ||
+        getComputedStyle(modal).display === 'none'
+    ) {
         return;
     }
-    
-    // Sprawdź czy gracz ma wystarczającą gotówkę
-    if (playerCompany.cash < amount) {
-        alert('Nie masz wystarczającej gotówki!');
+
+    renderTendersList();
+    renderConstructionProjectsList();
+    renderConstructionCompaniesList();
+    renderConstructionHistoryList();
+    renderConstructionResearchList();
+}
+
+function getConstructionHistoryRows(companies = stocks) {
+    const rows = [];
+
+    for (const company of companies) {
+        if (!Array.isArray(company?.constructionHistory)) continue;
+
+        const seenProjects = new Set();
+
+        for (const entry of company.constructionHistory) {
+            if (
+                !entry.projectId ||
+                seenProjects.has(entry.projectId)
+            ) {
+                continue;
+            }
+
+            seenProjects.add(entry.projectId);
+
+            const revenue = Number(entry.revenue);
+            const costs = Number(entry.costs);
+
+            if (
+                !Number.isFinite(revenue) ||
+                revenue < 0 ||
+                !Number.isFinite(costs) ||
+                costs < 0
+            ) {
+                continue;
+            }
+
+            const cancelled = entry.status === 'cancelled';
+            const completedAt = Number(entry.completedAt);
+
+            rows.push({
+                projectId: entry.projectId,
+                builderName: company.name || company.symbol || 'Spółka',
+                builderSymbol: company.symbol || '',
+                buildingName: entry.buildingName || 'Inwestycja',
+                clientName: entry.clientName || 'Brak danych',
+                status: cancelled ? 'cancelled' : 'completed',
+                revenue,
+                costs,
+                profit: revenue - costs,
+                margin: revenue > 0
+                    ? (revenue - costs) / revenue * 100
+                    : null,
+                delays: Math.max(0, Number(entry.delays) || 0),
+                penalty: Math.max(0, Number(entry.penalty) || 0),
+                bonus: Math.max(0, Number(entry.bonus) || 0),
+                elapsedGameMs: Number.isFinite(entry.elapsedGameMs)
+                    ? entry.elapsedGameMs
+                    : null,
+                completedAt: Number.isFinite(completedAt) &&
+                    completedAt > 0
+                    ? completedAt
+                    : null,
+                reason: entry.reason || ''
+            });
+        }
+    }
+
+    rows.sort((a, b) => {
+        const dateDifference =
+            (b.completedAt || 0) - (a.completedAt || 0);
+
+        if (dateDifference !== 0) return dateDifference;
+
+        return String(a.projectId).localeCompare(String(b.projectId));
+    });
+
+    return rows;
+}
+
+function renderConstructionHistoryList(companies = stocks) {
+    const modal = document.getElementById('construction-sector-modal');
+    const mainTab = modal?.querySelector('#construction-main');
+
+    if (!mainTab) return;
+
+    let container = mainTab.querySelector('#construction-history-list');
+
+    if (!container) {
+        const section = document.createElement('section');
+        section.className = 'construction-history-section';
+
+        const heading = document.createElement('h3');
+        heading.textContent = 'Historia kontraktów';
+
+        container = document.createElement('div');
+        container.id = 'construction-history-list';
+
+        section.append(heading, container);
+        mainTab.appendChild(section);
+    }
+
+    const expandedIds = new Set(
+        [...container.querySelectorAll('details[open]')]
+            .map(element => element.dataset.historyKey)
+    );
+
+    const rows = getConstructionHistoryRows(companies);
+    const fragment = document.createDocumentFragment();
+
+    if (rows.length === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'construction-empty';
+        empty.textContent = 'Brak zakończonych lub anulowanych kontraktów.';
+
+        fragment.appendChild(empty);
+        container.replaceChildren(fragment);
         return;
     }
-    
-    // Znajdź aktywny projekt dla tej spółki
-    const targetProject = constructionProjects.find(p => p.tender.clientCompany.symbol === stockSymbol);
-    if (!targetProject) {
-        alert('Nie znaleziono projektu dla tej spółki.');
+
+    const totals = rows.reduce((sum, row) => {
+        sum.revenue += row.revenue;
+        sum.costs += row.costs;
+        sum.profit += row.profit;
+
+        if (row.status === 'completed') {
+            sum.completed++;
+        } else {
+            sum.cancelled++;
+        }
+
+        return sum;
+    }, {
+        revenue: 0,
+        costs: 0,
+        profit: 0,
+        completed: 0,
+        cancelled: 0
+    });
+
+    const summaryCard = document.createElement('article');
+    summaryCard.className = 'construction-live-card';
+
+    const summaryTitle = document.createElement('h4');
+    summaryTitle.textContent = 'Wyniki kontraktów w dostępnej historii';
+
+    summaryCard.append(
+        summaryTitle,
+        createConstructionInfoRow('Ukończone', totals.completed),
+        createConstructionInfoRow('Anulowane', totals.cancelled),
+        createConstructionInfoRow(
+            'Przychody',
+            formatConstructionMoney(totals.revenue)
+        ),
+        createConstructionInfoRow(
+            'Koszty',
+            formatConstructionMoney(totals.costs)
+        ),
+        createConstructionInfoRow(
+            'Wynik',
+            formatConstructionMoney(totals.profit)
+        )
+    );
+
+    fragment.appendChild(summaryCard);
+
+    for (const row of rows.slice(0, 30)) {
+        const card = document.createElement('article');
+        card.className = 'construction-live-card';
+        card.dataset.historyProjectId = row.projectId;
+
+        const heading = document.createElement('h4');
+        heading.textContent = row.buildingName;
+
+        const status = document.createElement('span');
+        status.className = 'construction-live-status';
+        status.textContent = row.status === 'cancelled'
+            ? 'Kontrakt anulowany'
+            : 'Kontrakt ukończony';
+
+        if (row.status === 'cancelled') {
+            status.classList.add('is-paused');
+        }
+
+        card.append(
+            heading,
+            status,
+            createConstructionInfoRow('Wykonawca', row.builderName),
+            createConstructionInfoRow(
+                'Wynik kontraktu',
+                formatConstructionMoney(row.profit)
+            )
+        );
+
+        const key = JSON.stringify([
+            row.builderSymbol || row.builderName,
+            row.projectId
+        ]);
+
+        const details = document.createElement('details');
+        details.dataset.historyKey = key;
+        details.open = expandedIds.has(key);
+
+        const detailsTitle = document.createElement('summary');
+        detailsTitle.textContent = 'Rozliczenie i szczegóły';
+
+        details.append(
+            detailsTitle,
+            createConstructionInfoRow('Zamawiający', row.clientName),
+            createConstructionInfoRow(
+                'Przychód',
+                formatConstructionMoney(row.revenue)
+            ),
+            createConstructionInfoRow(
+                'Koszty realizacji',
+                formatConstructionMoney(row.costs)
+            ),
+            createConstructionInfoRow(
+                'Marża kontraktu',
+                row.margin === null
+                    ? 'Nie dotyczy'
+                    : `${row.margin.toFixed(1)}%`
+            ),
+            createConstructionInfoRow(
+                'Czas realizacji',
+                row.elapsedGameMs === null
+                    ? 'Brak danych'
+                    : formatConstructionTime(row.elapsedGameMs)
+            ),
+            createConstructionInfoRow('Opóźnienia', row.delays),
+            createConstructionInfoRow('Kara umowna / premia', `${formatConstructionMoney(row.penalty)} / ${formatConstructionMoney(row.bonus)}`),
+            createConstructionInfoRow(
+                'Data odbioru',
+                row.completedAt === null
+                    ? 'Brak danych'
+                    : new Date(row.completedAt).toLocaleString('pl-PL')
+            )
+        );
+
+        if (row.reason) {
+            details.appendChild(createConstructionInfoRow(
+                'Powód anulowania',
+                row.reason
+            ));
+        }
+
+        card.appendChild(details);
+        fragment.appendChild(card);
+    }
+
+    if (rows.length > 30) {
+        const note = document.createElement('p');
+        note.className = 'construction-empty';
+        note.textContent =
+            `Wyświetlono 30 z ${rows.length} kontraktów. ` +
+            'Pełna historia pozostaje w danych spółek.';
+
+        fragment.appendChild(note);
+    }
+
+    container.replaceChildren(fragment);
+}
+
+function renderConstructionResearchList(companies = stocks) {
+    const modal = document.getElementById('construction-sector-modal');
+    const mainTab = modal?.querySelector('#construction-main');
+
+    if (!mainTab) return;
+
+    let container = mainTab.querySelector(
+        '#construction-research-list'
+    );
+
+    if (!container) {
+        const section = document.createElement('section');
+        section.className = 'construction-research-section';
+
+        const heading = document.createElement('h3');
+        heading.textContent = 'Badania spółek budowlanych';
+
+        container = document.createElement('div');
+        container.id = 'construction-research-list';
+
+        section.append(heading, container);
+        mainTab.appendChild(section);
+    }
+
+    const expandedCompanies = new Set(
+        [...container.querySelectorAll('details[open]')]
+            .map(element => element.dataset.researchCompany)
+    );
+
+    const builders = companies.filter(
+        company =>
+            !company.isBankrupt &&
+            Array.isArray(company.sector) &&
+            company.sector.includes('Budowlany')
+    );
+
+    const fragment = document.createDocumentFragment();
+
+    if (builders.length === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'construction-empty';
+        empty.textContent = 'Brak aktywnych spółek budowlanych.';
+        fragment.appendChild(empty);
+    }
+
+    for (const company of builders) {
+        const card = document.createElement('article');
+        card.className = 'construction-live-card';
+
+        const heading = document.createElement('h4');
+        heading.textContent = `🔬 ${company.name}`;
+
+        const research = company.research;
+        const currentTech = technologies[research?.currentTech];
+        const bonuses = getConstructionTechnologyBonuses(company);
+
+        let researchStatus = 'Nie prowadzi badań';
+
+        if (research?.currentTech) {
+            researchStatus = research.isResearching
+                ? 'Badanie w toku'
+                : 'Badanie wstrzymane';
+        } else if (research?.choiceAvailableUntil) {
+            researchStatus = 'Oczekiwanie na wybór badania';
+        }
+
+        card.append(
+            heading,
+            createConstructionInfoRow('Status R&D', researchStatus),
+            createConstructionInfoRow(
+                'Specjalizacja',
+                research?.specialization || 'Nie wybrano'
+            ),
+            createConstructionInfoRow(
+                'Aktualne badanie',
+                currentTech?.name ||
+                (research?.currentTech ? 'Nieznana technologia' : 'Brak')
+            ),
+            createConstructionInfoRow(
+                'Bonus szybkości nowych budów',
+                `${(bonuses.speedBonus * 100).toFixed(1)}%`
+            ),
+            createConstructionInfoRow(
+                'Obniżka kosztów nowych budów',
+                `${(bonuses.costReduction * 100).toFixed(1)}%`
+            ),
+            createConstructionInfoRow(
+                'Względna redukcja ryzyka opóźnień',
+                `${(bonuses.delayReduction * 100).toFixed(1)}%`
+            )
+        );
+
+        const requiredPoints = Number(currentTech?.cost);
+        const currentPoints = Number(research?.progress);
+
+        if (
+            Number.isFinite(requiredPoints) &&
+            requiredPoints > 0 &&
+            Number.isFinite(currentPoints)
+        ) {
+            const progress = Math.max(
+                0,
+                Math.min(1, currentPoints / requiredPoints)
+            );
+
+            card.appendChild(createConstructionInfoRow(
+                'Postęp badania',
+                `${(progress * 100).toFixed(1)}%`
+            ));
+
+            const bar = document.createElement('progress');
+            bar.className = 'construction-live-progress';
+            bar.max = 1;
+            bar.value = progress;
+            bar.setAttribute('aria-label', 'Postęp badania');
+
+            card.appendChild(bar);
+        }
+
+        const options = getConstructionResearchOptions(company);
+
+        const details = document.createElement('details');
+        const companyKey = company.symbol || company.id || company.name;
+
+        details.dataset.researchCompany = companyKey;
+        details.open = expandedCompanies.has(companyKey);
+
+        const summary = document.createElement('summary');
+        summary.textContent =
+            `Technologie sektorowe (${options.length})`;
+
+        details.appendChild(summary);
+
+        for (const option of options) {
+            const item = document.createElement('div');
+            item.className = 'construction-live-offer';
+
+            const title = document.createElement('h4');
+            title.textContent = `${option.icon} ${option.name}`;
+
+            const description = document.createElement('p');
+            description.textContent = option.description;
+
+            item.append(
+                title,
+                description,
+                createConstructionInfoRow('Status', option.status),
+                createConstructionInfoRow(
+                    'Koszt rozpoczęcia',
+                    formatConstructionMoney(option.initialCashCost)
+                ),
+                createConstructionInfoRow(
+                    'Wymagany postęp',
+                    Number.isFinite(option.researchPoints)
+                        ? `${option.researchPoints} pkt`
+                        : 'Brak danych'
+                ),
+                createConstructionInfoRow(
+                    'Kierunek badań',
+                    option.type
+                )
+            );
+
+            details.appendChild(item);
+        }
+
+        card.appendChild(details);
+        fragment.appendChild(card);
+    }
+
+    container.replaceChildren(fragment);
+}
+
+function updateResearchChoiceTimerUI() {
+    const modal = document.getElementById('research-modal');
+    const timer = document.getElementById('rd-choice-timer');
+
+    if (
+        !modal ||
+        !timer ||
+        modal.hidden ||
+        getComputedStyle(modal).display === 'none'
+    ) {
         return;
     }
-    
-    // Apply support: accelerate progress by percentage of project cost
-    const acceleration = (amount / targetProject.cost) * targetProject.duration * 0.1; // 10% speed per 10% cost
-    targetProject.progress += acceleration;
-    targetProject.progress = Math.min(1, targetProject.progress);
-    
-    // Deduct cash from player and give to builder
-    playerCompany.cash -= amount;
-    targetProject.builder.cash += amount;
-    
-    logEvent(`💰 ${playerCompany.name} wesprzył projekt ${targetProject.tender.buildingType.name} kwotą ${amount.toLocaleString()} PLN.`, 'construction');
-    
-    // Odśwież modal
-    openConstructionSectorModal();
+
+    const company = stocks.find(
+        stock => stock.symbol === modal.dataset.currentSymbol
+    );
+
+    const research = company?.research;
+
+    if (
+        !research ||
+        research.currentTech ||
+        !research.choiceAvailableUntil
+    ) {
+        timer.textContent = '—';
+        return;
+    }
+
+    const remaining = Number.isFinite(research.choiceRemainingGameMs)
+        ? Math.max(0, research.choiceRemainingGameMs)
+        : 15000;
+
+    timer.textContent =
+        `${Math.ceil(remaining / 1000)} s symulacji` +
+        (isGamePaused ? ' — pauza' : '');
 }

@@ -14,11 +14,14 @@ const gameTimers = {
     mortgageCheck: null, // Z bazy main.js
     stateBondIssuance: null, // Z bazy main.js
     otherBondIssuance: null, // Z bazy main.js
-    bondMaturityCheck: null   // Z bazy main.js
+    bondMaturityCheck: null,  // Z bazy main.js
+    autoSave: null
 };
 
 // Zmienna przechowująca aktualną prędkość gry
 let currentSpeedMultiplier = 1;
+
+// Zapis i wczytanie gry: save.js
 
 // Podstawowe opóźnienia w milisekundach
 
@@ -77,6 +80,12 @@ function setGameSpeed(speedMultiplier) {
         if (isGamePaused) return;
         checkMortgageDefaults();
     }, BASE_DELAYS.weekly / speedMultiplier); // Sprawdzaj co tydzień
+
+    gameTimers.autoSave = setInterval(() => {
+        if (typeof saveGameState === 'function') {
+            saveGameState();
+        }
+    }, 60000 / speedMultiplier);
 
     // Pętla sprawdzania zapadalności bonów skarbowych
     gameTimers.tBillMaturityCheck = setInterval(() => {
@@ -178,8 +187,12 @@ function setGameSpeed(speedMultiplier) {
         processCeoActions(gameTimeDelta);
         runAllAi(); // Zawiera AI banków z bazy main.js
         checkPriceAlerts();
-        checkResearchChoiceTimers();
+        checkResearchChoiceTimers(gameTimeDelta);
+        updateResearchAutoRetry(gameTimeDelta);
         updateResearchProgress(gameTimeDelta);
+        processConstructionProjects(gameTimeDelta);
+        updateTenderSystem(gameTimeDelta); // zawiera też oferty AI
+        updateConstructionSectorUI();
 
         // --- ODŚWIEŻANIE INTERFEJSU ---
         displayStocks(currentMarketInputs);
@@ -219,16 +232,7 @@ function setGameSpeed(speedMultiplier) {
         if (document.getElementById('leaderboard-modal').style.display === 'block') {
             displayLeaderboard();
         }
-        if (document.getElementById('research-modal').style.display === 'block') {
-            const symbol = document.getElementById('research-modal').dataset.currentSymbol;
-            if (symbol) {
-                const stock = stocks.find(s => s.symbol === symbol);
-                if (stock && stock.research && stock.research.choiceAvailableUntil) {
-                    const timeLeft = Math.max(0, Math.ceil((stock.research.choiceAvailableUntil - Date.now()) / 1000));
-                    document.getElementById('rd-choice-timer').textContent = timeLeft;
-                }
-            }
-        }
+        updateResearchChoiceTimerUI();
         if (document.getElementById('management-modal').style.display === 'block') {
             const symbol = document.getElementById('management-modal').dataset.currentSymbol;
             if (symbol) {
@@ -238,19 +242,13 @@ function setGameSpeed(speedMultiplier) {
                     const progressPercent = (stock.research.progress / tech.cost) * 100;
                     document.getElementById('rd-progress-bar').value = progressPercent;
                 }
-                // Dynamiczna aktualizacja pasków postępu budowy
-                if (stock && stock.activeInvestments && stock.activeInvestments.length > 0) {
-                    const deptContent = document.getElementById('mgmt-content-depts');
-                    if (deptContent && deptContent.style.display !== 'none') {
-                        const progressBars = deptContent.querySelectorAll('progress');
-                        stock.activeInvestments.forEach((inv, idx) => {
-                            if (progressBars[idx]) {
-                                progressBars[idx].value = inv.progress;
-                                const pctSpan = progressBars[idx].parentElement?.querySelector('span');
-                                if (pctSpan) pctSpan.textContent = `${((inv.progress / inv.totalDuration) * 100).toFixed(0)}%`;
-                            }
-                        });
-                    }
+                // Dynamiczna aktualizacja pasków postępu budów zamówionych przez spółkę
+                const deptContent = document.getElementById('mgmt-content-depts');
+                if (stock && deptContent && deptContent.style.display !== 'none') {
+                    deptContent.querySelectorAll('progress[data-order-ref]').forEach(bar => {
+                        const project = constructionProjects.find(item => item.id === bar.dataset.orderRef);
+                        if (project) bar.value = project.progress;
+                    });
                 }
                 // Dynamiczna aktualizacja cooldownu CEO
                 const fireCeoCooldownInfo = document.getElementById('fire-ceo-cooldown-info');
@@ -514,40 +512,12 @@ gameTimers.weekly = setInterval(() => {
         // ===>>> KONIEC MODYFIKACJI PĘTLI KREDYTOWEJ <<<===
 
 
-        // Koszty badań R&D (bez zmian)
-        stocks.forEach(stock => { //
-            if (!stock.assetType && !stock.isBankStock && stock.research) { //
-                if (stock.research.isResearching && stock.research.currentTech) { //
-                    if (stock.cash >= RESEARCH_MAINTENANCE_COST) { //
-                        stock.cash -= RESEARCH_MAINTENANCE_COST; //
-                    } else {
-                        stock.research.isResearching = false; //
-                        stock.research.researchPaused = true; //
-                        const techName = technologies[stock.research.currentTech]?.name || "nieznanej technologii"; //
-                        logEvent(`⏸️ ${stock.name} wstrzymuje badania nad "${techName}" z powodu braku środków na utrzymanie.`, 'company'); //
-                        showToast(`Badania w ${stock.name} wstrzymane - brak funduszy!`, 'warning'); //
-                    }
-                }
-                else if (stock.research.researchPaused && stock.research.currentTech) { //
-                    if (stock.cash >= RESEARCH_MAINTENANCE_COST) { //
-                        stock.cash -= RESEARCH_MAINTENANCE_COST; //
-                        stock.research.isResearching = true; //
-                        stock.research.researchPaused = false; //
-                        const techName = technologies[stock.research.currentTech]?.name || "nieznanej technologii"; //
-                        logEvent(`▶️ ${stock.name} wznawia badania nad "${techName}".`, 'company'); //
-                    }
-                }
-            }
-            else if (stock.isBankStock && stock.research && stock.research.investmentPaused && stock.research.currentInvestmentId) { //
-                 const bankData = commercialBanks.find(b => b.id === stock.bankData.id); //
-                 const investment = bankInvestments[stock.research.currentInvestmentId]; //
-                 if(bankData && investment && bankData.cash >= (investment.initialCashCost || 0)) { //
-                     bankData.cash -= (investment.initialCashCost || 0); //
-                     stock.research.isResearching = true; //
-                     stock.research.investmentPaused = false; //
-                     if((investment.initialCashCost || 0) > 0) logEvent(`💸 Bank ${stock.name} wznawia inwestycję "${investment.name}" kosztem ${(investment.initialCashCost || 0).toLocaleString()} PLN.`); //
-                     else logEvent(`▶️ Bank ${stock.name} wznawia inwestycję "${investment.name}".`); //
-                 }
+        // Utrzymanie standardowego R&D oraz wznowienia inwestycji bankowych (osobne systemy).
+        stocks.forEach(stock => {
+            if (stock.isBankStock) {
+                processBankInvestmentResume(stock);
+            } else if (!stock.assetType && stock.research) {
+                processResearchMaintenanceAndPause(stock);
             }
         });
         
@@ -556,30 +526,8 @@ gameTimers.weekly = setInterval(() => {
             processCityAndCitizenTaxes(); //
         }
 
-        // Przetwarzanie konsorcjów budowlanych
-        if (typeof processConstructionConsortia === 'function') {
-            processConstructionConsortia();
-        }
-
-        // Przetwarzanie projektów budowlanych
-        if (typeof processConstructionProjects === 'function') {
-            processConstructionProjects();
-        }
-
-        // Aktualizacja systemu przetargów (zamykanie expired, auto-award)
-        if (typeof updateTenderSystem === 'function') {
-            updateTenderSystem();
-        }
-
-        // Generowanie przetargów przez AI
-        if (typeof generateAITenders === 'function') {
-            generateAITenders();
-        }
-
-        // AI budowlne składają oferty
-        if (typeof generateAIBids === 'function') {
-            generateAIBids();
-        }
+        // Zamówienia budowlane AI powstają w runCorporateLogic (jedna ścieżka inwestycji),
+        // a oferty wykonawców w updateTenderSystem (pętla główna). Konsorcja są wyłączone.
 
         // Przetwarzanie dochodów z nieruchomości
         if (typeof processBuildingIncome === 'function') {
@@ -594,7 +542,7 @@ gameTimers.weekly = setInterval(() => {
     gameTimers.quarterly = setInterval(() => {
         if (isGamePaused) return;
         reviewCompanyPlacements();
-        processFinancialReports();
+        processFinancialReports(); // zawiera koszty R&D, wynik kontraktów i pozycje okresu
         updateInfluence();
         updateCeoTenureAndAge(); // Zmieniona nazwa, ale to samo
         updateAnalyticalProperties();
@@ -750,6 +698,88 @@ function initializeGame() {
         }
     }
 
+    // Wczytanie zapisu (save.js). Przy udanym wczytaniu NIE tworzymy nowego świata,
+    // więc nie ma ponownej inicjalizacji, kasowania postępu ani kosztów startowych.
+    const restoredFromSave = typeof restoreSavedGame === 'function' ? restoreSavedGame() : false;
+
+    if (!restoredFromSave) {
+        createNewWorld();
+    }
+
+    // Ustawienie UI
+    const startupPanel = document.getElementById('startup-incubator-panel');
+    const startupIcon = document.getElementById('toggle-icon-startup');
+    if (startupPanel && startupIcon) {
+        let isCollapsed = false;
+        if (typeof startupPanelCollapsed !== 'undefined') {
+            isCollapsed = startupPanelCollapsed;
+        }
+        if (isCollapsed) {
+            startupPanel.classList.add('collapsed');
+            startupIcon.textContent = '▶';
+        } else {
+            startupPanel.classList.remove('collapsed');
+            startupIcon.textContent = '▼';
+        }
+    }
+
+    console.log("[initializeGame] Końcowa inicjalizacja UI..."); // Log informacyjny
+    if (typeof setupAutoInvestModal === 'function') {
+        setupAutoInvestModal();
+    } else {
+        console.warn('[initializeGame] setupAutoInvestModal nie jest dostępna.');
+    }
+
+     if (typeof setupAutoInvestModal === 'function') setupAutoInvestModal();
+    if (typeof displayCash === 'function') displayCash();
+    if (typeof displayPortfolio === 'function') displayPortfolio();
+    if (typeof displayXP === 'function') displayXP();
+    if (typeof displayMarketIndexes === 'function') displayMarketIndexes();
+    if (typeof updateWorkButtonVisibility === 'function') updateWorkButtonVisibility();
+    if (typeof updateDividendTrackerButtonVisibility === 'function') updateDividendTrackerButtonVisibility();
+
+    const pauseButton = document.getElementById('pause-game-btn');
+    if (isGamePaused && pauseButton) {
+        pauseButton.textContent = '▶️ Wznów';
+        pauseButton.style.backgroundColor = '#28a745';
+    }
+
+    updateInterestRates();
+
+    // Wyświetlenie początkowego stanu rynku
+    displayStocks();
+    displayStartups();
+    displayEtfs();
+
+   if (restoredFromSave) {
+        // Liczniki czasu zostały odtworzone z zapisu.
+    } else if (typeof initializeGameTimeRelatedVariables === 'function') {
+        initializeGameTimeRelatedVariables();
+    } else {
+        console.error("Funkcja initializeGameTimeRelatedVariables nie została znaleziona w gameLogic.js!");
+         // Awaryjne ustawienie, jeśli funkcja nie istnieje
+        if(typeof BASE_DELAYS !== 'undefined' && typeof BASE_DELAYS.quarterly !== 'undefined') {
+             WEALTH_TAX_INTERVAL = BASE_DELAYS.quarterly * 4; // Zdefiniuj WEALTH_TAX_INTERVAL globalnie (mniej idealne)
+             nextWealthTaxTime = Date.now() + WEALTH_TAX_INTERVAL;
+        } else {
+            console.error("BASE_DELAYS lub BASE_DELAYS.quarterly nie jest zdefiniowane!");
+        }
+    }
+
+    if (!restoredFromSave && playerCompany && typeof hireEmployee === 'function') {
+        hireEmployee('initial');
+    }
+
+    // Uruchomienie pętli gry — jedyne miejsce tworzenia timerów (setGameSpeed czyści poprzednie
+    // i planuje reklamę, więc nie wywołujemy scheduleAdPopup drugi raz).
+    setGameSpeed(restoredFromSave ? currentSpeedMultiplier : 1);
+    if (typeof localStorage !== 'undefined') {
+        window.addEventListener('beforeunload', saveGameState);
+    }
+}
+
+/** Tworzy nowy świat gry (banki, spółki budowlane, startupy, bilanse, R&D...). */
+function createNewWorld() {
     // Inicjalizacja banków komercyjnych (ta funkcja teraz ustawia isActive dla banków startowych)
     initializeCommercialBanks(); // Tworzy banki, może ustawić isActiveFromStart
     generateCentralBankGovernor();
@@ -969,76 +999,11 @@ function initializeGame() {
         shuffledMedia[1].stance = 'anti-player';
         console.log(`[M&A Init] Gazeta PRO-gracz: ${shuffledMedia[0].symbol}, Gazeta ANTI-gracz: ${shuffledMedia[1].symbol}`);
     }
-    // Ustawienie UI
-    const startupPanel = document.getElementById('startup-incubator-panel');
-    const startupIcon = document.getElementById('toggle-icon-startup');
-    if (startupPanel && startupIcon) {
-        let isCollapsed = false;
-        if (typeof startupPanelCollapsed !== 'undefined') {
-            isCollapsed = startupPanelCollapsed;
-        }
-        if (isCollapsed) {
-            startupPanel.classList.add('collapsed');
-            startupIcon.textContent = '▶';
-        } else {
-            startupPanel.classList.remove('collapsed');
-            startupIcon.textContent = '▼';
-        }
-    }
-
-    console.log("[initializeGame] Końcowa inicjalizacja UI..."); // Log informacyjny
-    if (typeof setupAutoInvestModal === 'function') {
-        setupAutoInvestModal();
-    } else {
-        console.warn('[initializeGame] setupAutoInvestModal nie jest dostępna.');
-    }
-
-     if (typeof setupAutoInvestModal === 'function') setupAutoInvestModal();
-    if (typeof displayCash === 'function') displayCash();
-    if (typeof displayPortfolio === 'function') displayPortfolio();
-    if (typeof displayXP === 'function') displayXP();
-    if (typeof displayMarketIndexes === 'function') displayMarketIndexes();
-    if (typeof updateWorkButtonVisibility === 'function') updateWorkButtonVisibility();
-    if (typeof updateDividendTrackerButtonVisibility === 'function') updateDividendTrackerButtonVisibility();
-
-    const pauseButton = document.getElementById('pause-game-btn');
-    if (isGamePaused && pauseButton) {
-        pauseButton.textContent = '▶️ Wznów';
-        pauseButton.style.backgroundColor = '#28a745';
-    }
-
-    updateInterestRates();
-
-    // Wyświetlenie początkowego stanu rynku
-    displayStocks();
-    displayStartups();
-    displayEtfs();
-
-   if (typeof initializeGameTimeRelatedVariables === 'function') {
-        initializeGameTimeRelatedVariables();
-    } else {
-        console.error("Funkcja initializeGameTimeRelatedVariables nie została znaleziona w gameLogic.js!");
-         // Awaryjne ustawienie, jeśli funkcja nie istnieje
-        if(typeof BASE_DELAYS !== 'undefined' && typeof BASE_DELAYS.quarterly !== 'undefined') {
-             WEALTH_TAX_INTERVAL = BASE_DELAYS.quarterly * 4; // Zdefiniuj WEALTH_TAX_INTERVAL globalnie (mniej idealne)
-             nextWealthTaxTime = Date.now() + WEALTH_TAX_INTERVAL;
-        } else {
-            console.error("BASE_DELAYS lub BASE_DELAYS.quarterly nie jest zdefiniowane!");
-        }
-    }
-
-    if (playerCompany && typeof hireEmployee === 'function') {
-        hireEmployee('initial');
-    }
-
-    // Uruchomienie pętli gry
-    setGameSpeed(1);
-
-    scheduleAdPopup();
 }
 
 // Uruchom grę po załadowaniu strony (z bazy main.js - zawiera zależność od banków komercyjnych)
-window.addEventListener('load', () => {
+// W trybie testów (tests/tests.html) gra nie startuje automatycznie.
+if (typeof window !== 'undefined' && !window.__GAME_TEST_MODE__) window.addEventListener('load', () => {
     console.log('[loader] Zdarzenie "load" strony wystąpiło. Uruchamiam initializeGame().');
     try {
         // Podstawowe sprawdzenie, czy kluczowe funkcje z innych plików istnieją
