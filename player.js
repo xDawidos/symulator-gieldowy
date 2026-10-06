@@ -332,14 +332,8 @@ function buyStock(symbol, quantity) {
         return;
     }
 
-    // Obliczamy dostępne akcje
-    let sharesAvailableToBuy;
-    if (stockToBuy.isStateOwned) {
-        const publicFloat = Math.floor(stockToBuy.totalShares * (1 - stockToBuy.stateOwnershipPct));
-        sharesAvailableToBuy = publicFloat - stockToBuy.sharesHeld;
-    } else {
-        sharesAvailableToBuy = stockToBuy.totalShares - stockToBuy.sharesHeld;
-    }
+    // Dostępne akcje: wolny obrót (bez pakietu insiderów, państwa i akcji własnych) minus akcje inwestorów
+    const sharesAvailableToBuy = getAvailableShares(stockToBuy);
 
     // Poprawka błędu: używamy poprawnej nazwy zmiennej w warunku
     if (quantity > sharesAvailableToBuy) {
@@ -2686,8 +2680,9 @@ function donateToCompany(symbol, amount, donorId = 'player') {
 function setDividendPolicy(symbol, newPolicy) {
     const stock = stocks.find(s => s.symbol === symbol);
     if (stock) {
-        stock.dividendPolicy = newPolicy;
-        logEvent(`👑 Na Twój wniosek, ${stock.name} zmienia politykę dywidendową na: ${newPolicy}.`, 'review');
+        setCompanyDividendPolicy(stock, newPolicy);
+        stock.dividendPolicyLockedByOwner = true; // zarząd nie zmieni strategii narzuconej przez właściciela
+        logEvent(`👑 Na Twój wniosek, ${stock.name} zmienia politykę dywidendową na: ${getDividendPolicyLabel(stock.dividendPolicy)}.`, 'review');
         // Odśwież widok modala, jeśli jest otwarty
         if (document.getElementById('management-modal').style.display === 'block') {
             openManagementModal(symbol);

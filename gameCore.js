@@ -67,6 +67,14 @@ function getRandomInRange(min, max) {
     return Math.random() * (max - min) + min;
 }
 
+/** Losowanie z rozkładu normalnego N(0, 1) (Box–Muller). */
+function gaussianRandom() {
+    let u = 0;
+    while (u === 0) u = Math.random();
+    const v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
 function getRandomElement(arr) {
     if (!arr || arr.length === 0) return undefined;
     return arr[Math.floor(Math.random() * arr.length)];

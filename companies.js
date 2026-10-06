@@ -1814,16 +1814,357 @@ function randomizeInitialShareCounts() {
 
 
 
-// Bazowy dochód kwartalny standardowych spółek wg poziomu giełdy (PLN / kwartał).
-// Wcześniej stała nie była nigdzie zdefiniowana, przez co raport kwartalny przerywał się błędem.
-// Wartości do kalibracji w bloku "koniunktura i ceny".
-const EXCHANGE_BASE_EARNINGS = {
-    JUNK: { min: 2000, max: 8000 },
-    BRONZE: { min: 10000, max: 40000 },
-    SILVER: { min: 50000, max: 150000 },
-    GOLD: { min: 150000, max: 400000 },
-    PLATINUM: { min: 500000, max: 1500000 }
+// =================================================================================
+// FUNDAMENTY SPÓŁEK
+// Zysk nie zależy od ceny akcji. Spółka ma przychody (kalibrowane raz na starcie tak, by
+// wycena początkowa odpowiadała kapitalizacji), marżę EBITDA, amortyzację, odsetki i CIT.
+// Co kwartał liczymy wskaźniki (EPS, C/Z, C/WK, sprzedaż i WK na akcję) oraz wartość godziwą,
+// do której cena powoli wraca (economy.js → updateStockPrices).
+// =================================================================================
+
+const FUNDAMENTALS_HISTORY_QUARTERS = 8;
+
+const PHASE_GROWTH_ADJUSTMENT = {
+    [CORPORATE_PHASES.GROWTH]: 0.015,
+    [CORPORATE_PHASES.STABILITY]: 0,
+    [CORPORATE_PHASES.DECLINE]: -0.02,
+    [CORPORATE_PHASES.REORGANIZATION]: -0.005,
+    [CORPORATE_PHASES.GOLDEN_YEAR]: 0.03,
+    [CORPORATE_PHASES.SHADOW_DESCENT]: -0.04,
+    [CORPORATE_PHASES.INNOVATION_PUSH]: 0.005
 };
+
+/** Spółki z pełnym modelem przychodów (bez typów specjalnych i banków). */
+function hasRevenueModel(stock) {
+    return Boolean(stock && !stock.assetType && !stock.isBankStock);
+}
+
+/**
+ * Spółki, których cena jest kotwiczona w wartości godziwej.
+ * Banki są wyłączone: ich bilans zawiera depozyty klientów (wartość księgowa wielokrotnie
+ * przewyższa kapitalizację), a zysk to stały % aktywów — model banku do osobnej kalibracji.
+ */
+function hasValuationAnchor(stock) {
+    return Boolean(stock && !stock.assetType && !stock.isBankStock);
+}
+
+function getLoanRate() {
+    return typeof LOAN_INTEREST_RATE === 'number' && Number.isFinite(LOAN_INTEREST_RATE) ? LOAN_INTEREST_RATE : 0.10;
+}
+
+function initializeFundamentals(stock, force = false) {
+    if (!stock || (stock.fundamentals?.version === 1 && !force)) return stock?.fundamentals || null;
+
+    const profile = getSectorProfile(stock);
+    const shares = Math.max(1, Number(stock.totalShares) || 1);
+    const marketCap = Math.max(0.01, Number(stock.price) || 0.01) * shares;
+    const liabilities = Math.max(0, Number(stock.balanceSheet?.liabilities) || 0);
+
+    // Kalibracja: roczny zysk netto przy przeciętnej kondycji ≈ kapitalizacja / C/Z sektora.
+    const netAnnual = marketCap / profile.pe;
+    const ebtAnnual = netAnnual / (1 - COMPANY_INCOME_TAX_RATE);
+    const operatingMargin = Math.max(0.05, profile.margin - profile.da);
+    const revenue = hasRevenueModel(stock)
+        ? Math.max(1000, (ebtAnnual + liabilities * getLoanRate()) / operatingMargin / 4)
+        : 0;
+    const netQuarter = netAnnual / 4;
+
+    stock.fundamentals = {
+        version: 1,
+        revenue,
+        history: [],
+        fairValue: Number(stock.price) || 0.01,
+        expectedEps: netQuarter / shares
+    };
+
+    // Syntetyczna historia 4 kwartałów, żeby EPS z 4 kwartałów istniał od startu.
+    for (let i = 0; i < 4; i++) {
+        stock.fundamentals.history.push({
+            revenue,
+            ebitda: revenue * profile.margin,
+            netIncome: netQuarter,
+            eps: netQuarter / shares,
+            synthetic: true
+        });
+    }
+
+    updateFundamentalRatios(stock);
+    return stock.fundamentals;
+}
+
+/** Wynik kwartału z modelu przychodów (bez zmian gotówki — to robi raport). */
+function computeQuarterResults(stock) {
+    const fundamentals = stock.fundamentals || initializeFundamentals(stock);
+    const profile = getSectorProfile(stock);
+    const health = Number(stock.financialHealth) || 0;
+    const phaseAdj = PHASE_GROWTH_ADJUSTMENT[stock.corporatePhase] || 0;
+    const gdp = Number(economyCycle?.gdpGrowth) || 0;
+
+    const growth = profile.growth / 4 + profile.beta * gdp + health * 0.004 + phaseAdj + gaussianRandom() * 0.02;
+    fundamentals.revenue = Math.max(1000, fundamentals.revenue * (1 + Math.max(-0.25, Math.min(0.25, growth))));
+
+    const revenue = fundamentals.revenue;
+    const margin = Math.max(-0.4, Math.min(0.6, profile.margin + health * 0.015 + phaseAdj * 0.5 + profile.beta * gdp * 2));
+    const fixedExpenses = Math.max(0, Number(stock.fixedExpenses) || 0);
+
+    const ebitda = revenue * margin - fixedExpenses;
+    const depreciation = revenue * profile.da;
+    const interest = Math.max(0, Number(stock.balanceSheet?.liabilities) || 0) * getLoanRate() / 4;
+    const ebt = ebitda - depreciation - interest;
+    const tax = ebt > 0 ? ebt * COMPANY_INCOME_TAX_RATE : 0;
+    let netIncome = ebt - tax;
+
+    // Spółki państwowe: Skarb Państwa pokrywa 70% straty (dotacja).
+    let subsidy = 0;
+    if (stock.isStateOwned && netIncome < 0) {
+        subsidy = -netIncome * 0.7;
+        governmentTreasury -= subsidy;
+        netIncome += subsidy;
+    }
+
+    governmentTreasury += tax;
+
+    return { revenue, ebitda, depreciation, interest, tax, subsidy, netIncome };
+}
+
+/** Zapisuje kwartał w historii i przelicza wskaźniki. Zwraca niespodziankę EPS względem oczekiwań. */
+function recordQuarterFundamentals(stock, quarter) {
+    const fundamentals = stock.fundamentals || initializeFundamentals(stock);
+    const shares = Math.max(1, Number(stock.totalShares) || 1);
+    const eps = quarter.netIncome / shares;
+    const expected = Number(fundamentals.expectedEps) || 0;
+
+    fundamentals.history.push({
+        revenue: quarter.revenue,
+        ebitda: quarter.ebitda,
+        netIncome: quarter.netIncome,
+        eps
+    });
+    if (fundamentals.history.length > FUNDAMENTALS_HISTORY_QUARTERS) fundamentals.history.shift();
+
+    const profile = getSectorProfile(stock);
+    fundamentals.expectedEps = eps * (1 + profile.growth / 4);
+    fundamentals.lastEps = eps;
+
+    updateFundamentalRatios(stock);
+
+    if (Math.abs(expected) < 1e-9) return 0;
+    return (eps - expected) / Math.abs(expected);
+}
+
+function updateFundamentalRatios(stock) {
+    const fundamentals = stock?.fundamentals;
+    if (!fundamentals) return null;
+
+    const shares = Math.max(1, Number(stock.totalShares) || 1);
+    const last4 = fundamentals.history.slice(-4);
+    const sum = key => last4.reduce((total, quarter) => total + (Number(quarter[key]) || 0), 0);
+
+    const equity = (Number(stock.balanceSheet?.assets) || 0) - (Number(stock.balanceSheet?.liabilities) || 0);
+    const price = Math.max(0.01, Number(stock.price) || 0.01);
+
+    fundamentals.revenueTtm = sum('revenue');
+    fundamentals.ebitdaTtm = sum('ebitda');
+    fundamentals.netIncomeTtm = sum('netIncome');
+    fundamentals.epsTtm = fundamentals.netIncomeTtm / shares;
+    fundamentals.salesPerShare = fundamentals.revenueTtm / shares;
+    fundamentals.bookValuePerShare = equity / shares;
+    fundamentals.peRatio = fundamentals.epsTtm > 0 ? price / fundamentals.epsTtm : null;
+    fundamentals.pbRatio = fundamentals.bookValuePerShare > 0 ? price / fundamentals.bookValuePerShare : null;
+
+    if (hasValuationAnchor(stock)) {
+        const profile = getSectorProfile(stock);
+        const healthPremium = 1 + Math.max(-0.3, Math.min(0.3, (Number(stock.financialHealth) || 0) * 0.03));
+        const bvps = Math.max(0, fundamentals.bookValuePerShare);
+
+        fundamentals.fairValue = fundamentals.epsTtm > 0
+            ? 0.75 * fundamentals.epsTtm * profile.pe * getValuationMultiplier(stock) * healthPremium + 0.25 * bvps
+            : Math.max(0.01, bvps * 0.7);
+    } else {
+        fundamentals.fairValue = null;
+    }
+
+    return fundamentals;
+}
+
+/** Kondycja finansowa podąża powoli za rentownością (obok wpływu zdarzeń). */
+function updateHealthFromProfitability(stock, quarter) {
+    if (!(quarter.revenue > 0)) return;
+    const netMargin = quarter.netIncome / quarter.revenue;
+    const target = Math.max(-5, Math.min(5, (netMargin - 0.06) * 30));
+    const health = Number(stock.financialHealth) || 0;
+    stock.financialHealth = Math.max(-5, Math.min(5, health + (target - health) * 0.1));
+}
+
+// =================================================================================
+// STRUKTURA WŁASNOŚCI
+// insiderShares — pakiet zarządu i pracowników (poza obrotem). Państwo: stateOwnershipPct.
+// Jedno miejsce liczenia akcji dostępnych w obrocie: getAvailableShares.
+// =================================================================================
+
+function initializeOwnership(stock) {
+    if (!stock || Number.isFinite(stock.insiderShares)) return;
+
+    const privateCompany = !stock.assetType && !stock.isBankStock && !stock.isStateOwned;
+    // Pakiety insiderów 15–40%: gracz i boty nadal mogą zdobyć większość (>50%) z wolnego obrotu.
+    stock.insiderShares = privateCompany ? Math.floor((Number(stock.totalShares) || 0) * getRandomInRange(0.15, 0.40)) : 0;
+}
+
+function getFreeFloatShares(stock) {
+    const total = Math.max(0, Number(stock?.totalShares) || 0);
+    const insiders = Math.max(0, Number(stock?.insiderShares) || 0);
+    const treasury = Math.max(0, Number(stock?.treasuryShares) || 0);
+    const state = stock?.isStateOwned ? Math.floor(total * (Number(stock.stateOwnershipPct) || 0)) : 0;
+    return Math.max(0, total - insiders - treasury - state);
+}
+
+/** Akcje, które można dziś kupić na rynku (wolny obrót minus akcje posiadane przez inwestorów). */
+function getAvailableShares(stock) {
+    return Math.max(0, Math.floor(getFreeFloatShares(stock) - Math.max(0, Number(stock?.sharesHeld) || 0)));
+}
+
+// =================================================================================
+// DYWIDENDY — strategia = stopa wypłaty z zysku netto kwartału
+// Po raporcie zarząd ogłasza dywidendę; wypłata następuje po krótkim czasie (dividendTimer),
+// z gotówki spółki. W dniu wypłaty cena spada o dywidendę na akcję.
+// =================================================================================
+
+const DIVIDEND_POLICIES = {
+    Growth:     { label: 'Wzrost (0%)',      min: 0,    max: 0 },
+    Balanced:   { label: 'Zachęta (1–10%)',  min: 0.01, max: 0.10 },
+    Aggressive: { label: 'Wysoka (10–50%)',  min: 0.10, max: 0.50 },
+    Total:      { label: 'Pełna (100%)',     min: 1.0,  max: 1.0 }
+};
+
+const DIVIDEND_POLICY_ORDER = ['Growth', 'Balanced', 'Aggressive', 'Total'];
+
+function normalizeDividendPolicy(policy) {
+    return DIVIDEND_POLICIES[policy] ? policy : 'Growth'; // 'None' i brak = Wzrost
+}
+
+function getDividendPolicyLabel(policy) {
+    return DIVIDEND_POLICIES[normalizeDividendPolicy(policy)].label;
+}
+
+function setCompanyDividendPolicy(stock, policy) {
+    stock.dividendPolicy = normalizeDividendPolicy(policy);
+    const def = DIVIDEND_POLICIES[stock.dividendPolicy];
+    stock.dividendPayoutRatio = def.min === def.max ? def.min : getRandomInRange(def.min, def.max);
+}
+
+function assignInitialDividendPolicies() {
+    stocks.forEach(stock => {
+        if (stock.assetType === 'REIT') return;
+        if (stock.exchange === 'JUNK' || stock.assetType) {
+            setCompanyDividendPolicy(stock, 'Growth');
+        } else {
+            setCompanyDividendPolicy(stock, getRandomElement(DIVIDEND_POLICY_ORDER));
+        }
+    });
+    console.log('[START GRY] Przypisano początkowe polityki dywidendowe.');
+}
+
+function initializeDividendEstimates() {
+    stocks.forEach(stock => {
+        if (stock.assetType === 'REIT') {
+            stock.estimatedDividend = stock.dividendPerShare;
+            return;
+        }
+        if (!Number.isFinite(stock.dividendPayoutRatio)) setCompanyDividendPolicy(stock, stock.dividendPolicy);
+        const eps = Number(stock.fundamentals?.expectedEps) || 0;
+        stock.estimatedDividend = Math.max(0, eps * stock.dividendPayoutRatio);
+        stock.dividendTimer = BASE_DELAYS.quarterly;
+    });
+}
+
+/** Zarząd (AI) rzadko zmienia strategię wg cyklu, kondycji i gotówki — chyba że narzucił ją właściciel. */
+function reviewDividendPolicy(stock) {
+    if (stock.assetType || stock.dividendPolicyLockedByOwner || Math.random() > 0.08) return;
+
+    const index = DIVIDEND_POLICY_ORDER.indexOf(normalizeDividendPolicy(stock.dividendPolicy));
+    const health = Number(stock.financialHealth) || 0;
+    let next = index;
+
+    if ((economyCycle.phase === 'recession' || health < -1) && index > 0) next = index - 1;
+    else if ((economyCycle.phase === 'expansion' || economyCycle.phase === 'overheating') && health > 2 && index < 2) next = index + 1;
+    else if (stock.corporatePhase === CORPORATE_PHASES.GROWTH && index > 0) next = 0;
+
+    if (next !== index) {
+        setCompanyDividendPolicy(stock, DIVIDEND_POLICY_ORDER[next]);
+        logEvent(`💼 Zarząd ${stock.name} zmienia strategię dywidendową na: ${getDividendPolicyLabel(stock.dividendPolicy)}.`, 'company');
+    }
+}
+
+/** Ogłoszenie dywidendy po raporcie (wypłata po dividendTimer). */
+function declareQuarterDividend(stock, reportedNetIncome) {
+    if (stock.assetType === 'REIT') return;
+
+    stock.pendingDividend = null;
+    stock.estimatedDividend = 0;
+    stock.dividendTimer = BASE_DELAYS.quarterly;
+
+    if (!Number.isFinite(stock.dividendPayoutRatio)) setCompanyDividendPolicy(stock, stock.dividendPolicy);
+
+    if (stock.ceo?.traits?.some(t => t.id === 'skapiec')) return;
+
+    let ratio = stock.dividendPayoutRatio;
+    const isGenerous = stock.ceo?.traits?.some(t => t.id === 'szczodry');
+    if (isGenerous) ratio = Math.min(1, Math.max(ratio, 0.05) * 1.15);
+
+    if (!(ratio > 0) || !(reportedNetIncome > 0)) return;
+
+    const available = Math.max(0, Number(stock.cash) || 0) * 0.8;
+    const total = Math.min(reportedNetIncome * ratio, available);
+    const shares = Math.max(1, Number(stock.totalShares) || 1);
+    if (total <= 0) return;
+
+    stock.pendingDividend = { total, dps: total / shares, declaredAt: Date.now() };
+    stock.estimatedDividend = total / shares;
+    stock.dividendTimer = getRandomIntInRange(30000, 90000);
+}
+
+/** Wypłata dywidendy: z gotówki spółki, cena spada o dywidendę na akcję. */
+function payCompanyDividend(stock, dividendPerShare, purpose = 'Dywidenda') {
+    const shares = Math.max(1, Number(stock.totalShares) || 1);
+    const maxTotal = Math.max(0, Number(stock.cash) || 0);
+    const total = Math.min(dividendPerShare * shares, maxTotal);
+    if (!(total > 0)) return 0;
+
+    const dps = total / shares;
+    adjustCompanyCash(stock, -total);
+    adjustBalanceSheet(stock, { assets: -total, retainedEarnings: -total });
+    recordPayment(stock, 'external:akcjonariusze', total, purpose);
+
+    stock.lastDividend = { dps, total, paidAt: Date.now(), yield: dps / Math.max(0.01, stock.price) };
+    payDividendToShareholders(stock, dps);
+    return total;
+}
+
+function updateDividendTimers(deltaTime) {
+    stocks.forEach(stock => {
+        if (stock.isBankrupt) return;
+
+        if (stock.assetType === 'REIT') {
+            stock.dividendTimer -= deltaTime;
+            if (stock.dividendTimer <= 0) {
+                processReitDividend(stock);
+                stock.dividendTimer = 2 * 60 * 1000;
+            }
+            return;
+        }
+
+        if (!stock.pendingDividend) return;
+
+        stock.dividendTimer -= deltaTime;
+        if (stock.dividendTimer > 0) return;
+
+        const declared = stock.pendingDividend;
+        stock.pendingDividend = null;
+        stock.estimatedDividend = 0;
+        stock.dividendTimer = BASE_DELAYS.quarterly;
+        payCompanyDividend(stock, declared.dps, 'Dywidenda kwartalna');
+    });
+}
 
 function processFinancialReports() {
     console.log("[RAPORTY KWARTALNE] Rozpoczęto przetwarzanie raportów finansowych...");
@@ -1844,15 +2185,11 @@ function processFinancialReports() {
         let quarterlyEarnings = 0;
         const marketCap = stock.price * stock.totalShares;
 
-        // ===>>> ZMIANA 1: Obliczanie dochodu bazowego <<<===
-        let baseQuarterlyIncome = 0;
-        const exchangeLevel = stock.exchange;
-        // Dochód bazowy tylko dla standardowych spółek (nie Holdingów, REITów, Banków itp.)
-        if (EXCHANGE_BASE_EARNINGS[exchangeLevel] && !stock.assetType && !stock.isBankStock && !stock.isStateOwned) {
-            const earningsRange = EXCHANGE_BASE_EARNINGS[exchangeLevel];
-            baseQuarterlyIncome = getRandomInRange(earningsRange.min, earningsRange.max);
-        }
-        // ===>>> KONIEC ZMIANY 1 <<<===
+        // Dochód bazowy typów specjalnych (lombard, biuro rachunkowe). Spółki standardowe mają model przychodów.
+        const baseQuarterlyIncome = 0;
+        let quarterModel = null;   // wynik z modelu przychodów (spółki standardowe)
+        let nonCashCosts = 0;      // amortyzacja: obniża wynik, ale nie gotówkę
+        if (!stock.fundamentals) initializeFundamentals(stock);
 
 
         if (!stock.balanceSheet) {
@@ -1915,46 +2252,12 @@ function processFinancialReports() {
             const depositCosts = stock.balanceSheet.liabilities * 0.005; 
             quarterlyEarnings = (loanIncome - depositCosts) * (1 + (stock.financialHealth / 10));
 
-        } else if (stock.isStateOwned) {
-            // 🏛️ Spółki państwowe
-            const baseEarnings = marketCap * ((stock.financialHealth * 0.01) + getRandomInRange(-0.015, 0.015));
-            if (baseEarnings < 0) {
-                const subsidy = Math.abs(baseEarnings) * 0.70;
-                quarterlyEarnings = baseEarnings + subsidy;
-            } else {
-                const specialTax = baseEarnings * 0.40;
-                quarterlyEarnings = baseEarnings - specialTax;
-            }
-
         } else if (!stock.assetType) {
-            // 🏭 Standardowe spółki
-            const earningsBase = (stock.financialHealth * 0.01) + (getRandomInRange(-0.015, 0.015));
-            // ===>>> ZMIANA 2: Dodanie dochodu bazowego do zysku <<<===
-            quarterlyEarnings = (marketCap * earningsBase) + baseQuarterlyIncome;
-            // ===>>> KONIEC ZMIANY 2 <<<===
-        }
-        else if (stock.assetType === 'DebtCollector') {
-            // WRONA zarabia na odsetkach od przejętych długów
-            let totalInterestCollected = 0;
-            // Sprawdź długi gracza
-            playerCommercialLoans.forEach(loan => {
-                if (loan.collectorSymbol === stock.symbol) {
-                    const weeklyInterest = loan.amount * (loan.interestRate / 52);
-                    totalInterestCollected += weeklyInterest * 12; // 12 tygodni w kwartale
-                }
-            });
-            // Sprawdź długi AI
-            aiCompetitors.forEach(ai => {
-                if (ai.loans) {
-                    ai.loans.forEach(loan => {
-                        if (loan.collectorSymbol === stock.symbol) {
-                            const weeklyInterest = loan.amount * (loan.interestRate / 52);
-                            totalInterestCollected += weeklyInterest * 12;
-                        }
-                    });
-                }
-            });
-            quarterlyEarnings = totalInterestCollected * (1 + (stock.financialHealth / 10)); // Modyfikator kondycji
+            // 🏭 Spółki standardowe i państwowe: model przychodów, kosztów, amortyzacji, odsetek i CIT.
+            // Zysk nie zależy od ceny akcji.
+            quarterModel = computeQuarterResults(stock);
+            quarterlyEarnings = quarterModel.netIncome;
+            nonCashCosts = quarterModel.depreciation;
         } else if (stock.assetType === 'PawnShop') {
             // LOMBARDEX (Na razie mały bazowy zysk + zysk ze sprzedaży)
             let profitFromSales = 0;
@@ -1987,7 +2290,8 @@ function processFinancialReports() {
             // WAŻNE: Resetujemy licznik zysków na następny kwartał
             stock.quarterlyEarnings = 0; 
         }
-        if (stock.fixedExpenses) {
+        // Koszty stałe z inwestycji: w modelu przychodów są już w EBITDA.
+        if (stock.fixedExpenses && !quarterModel) {
             quarterlyEarnings -= stock.fixedExpenses;
         }
 
@@ -2015,8 +2319,25 @@ function processFinancialReports() {
             total: reportedQuarterlyEarnings
         };
 
-        adjustCompanyCash(stock, operatingCashResult);
+        // Gotówka: zysk netto + amortyzacja (koszt niegotówkowy). Aktywa i kapitał: zysk netto.
+        adjustCompanyCash(stock, operatingCashResult + nonCashCosts);
         adjustBalanceSheet(stock, { assets: operatingCashResult, retainedEarnings: operatingCashResult });
+
+        // Fundamenty kwartału (EPS z wyniku raportowanego: z R&D i kontraktami).
+        const earningsSurprise = recordQuarterFundamentals(stock, {
+            revenue: (quarterModel ? quarterModel.revenue : 0) + periodResults.constructionRevenue,
+            ebitda: quarterModel ? quarterModel.ebitda : reportedQuarterlyEarnings,
+            netIncome: reportedQuarterlyEarnings
+        });
+        if (quarterModel) {
+            stock.lastReportBreakdown.revenue = quarterModel.revenue;
+            stock.lastReportBreakdown.ebitda = quarterModel.ebitda;
+            stock.lastReportBreakdown.depreciation = quarterModel.depreciation;
+            stock.lastReportBreakdown.interest = quarterModel.interest;
+            stock.lastReportBreakdown.tax = quarterModel.tax;
+            stock.lastReportBreakdown.subsidy = quarterModel.subsidy;
+            updateHealthFromProfitability(stock, quarterModel);
+        }
 
         // Wynik kontraktów wpływa na ocenę kondycji spółki (ograniczony wpływ).
         if (constructionResult !== 0) {
@@ -2086,34 +2407,39 @@ function processFinancialReports() {
             issueRescueBond(stock);
         }
 
-        // Generowanie raportów (bez zmian)
+        // Reakcja rynku na raport: niespodzianka EPS względem oczekiwań (nie progi kondycji).
         let reportResult = 'neutral';
-        let eventMessage = "";
         let magnitude = 0;
-        
-        if (stock.financialHealth >= 5) {
+        let eventMessage = '';
+        const surprise = Math.max(-1, Math.min(1, earningsSurprise));
+
+        if (surprise >= 0.5) {
             reportResult = 'excellent';
-            magnitude = getRandomInRange(0.10, 0.15);
-            eventMessage = `📈 DOSKONAŁY RAPORT! ${stock.name} (${stock.symbol}) publikuje rekordowe zyski!`;
-        } else if (stock.financialHealth >= 3) {
+            eventMessage = `📈 DOSKONAŁY RAPORT! ${stock.name} (${stock.symbol}): zysk znacznie powyżej oczekiwań.`;
+        } else if (surprise >= 0.15) {
             reportResult = 'good';
-            magnitude = getRandomInRange(0.04, 0.09);
             eventMessage = `📈 DOBRY RAPORT: Wyniki ${stock.name} (${stock.symbol}) powyżej oczekiwań.`;
-        } else if (stock.financialHealth <= -5) {
+        } else if (surprise <= -0.5) {
             reportResult = 'tragic';
-            magnitude = getRandomInRange(-0.12, -0.18);
-            eventMessage = `📉 TRAGICZNY RAPORT! ${stock.name} (${stock.symbol}) ogłasza ogromne straty!`;
-        } else if (stock.financialHealth <= -3) {
+            eventMessage = `📉 TRAGICZNY RAPORT! ${stock.name} (${stock.symbol}) mocno rozczarowuje wynikami.`;
+        } else if (surprise <= -0.15) {
             reportResult = 'bad';
-            magnitude = getRandomInRange(-0.05, -0.10);
             eventMessage = `📉 SŁABY RAPORT: ${stock.name} (${stock.symbol}) notuje wyniki poniżej prognoz.`;
+        }
+
+        if (reportResult !== 'neutral') {
+            magnitude = Math.max(-0.12, Math.min(0.12, surprise * 0.12));
         }
 
         stock.lastReport = reportResult;
         if (reportResult !== 'neutral') {
             logEvent(eventMessage);
-            applyPriceEffect(stock.symbol, magnitude, reportResult === 'bad' || reportResult === 'tragic' ? 'negative' : 'positive', 'review');
+            applyPriceEffect(stock.symbol, magnitude, magnitude < 0 ? 'negative' : 'positive', 'review');
         }
+
+        // Dywidenda: zarząd może zmienić strategię, potem ogłasza wypłatę z zysku kwartału.
+        reviewDividendPolicy(stock);
+        declareQuarterDividend(stock, reportedQuarterlyEarnings);
 
         // Aktualizacja zmienności (bez zmian)
         const baseVolatility = initialStocks.find(s => s.symbol === stock.symbol)?.volatilityFactor || stock.volatilityFactor;
@@ -2145,81 +2471,15 @@ function processFinancialReports() {
 
     } // Koniec pętli for
 
-    // Estymacja dywidend i odświeżenie widoków (bez zmian)
+    // Wartość godziwa po raportach (nowa faza cyklu i stopy mogły zmienić wyceny).
     stocks.forEach(stock => {
-        if (stock.isBankrupt) return;
-        stock.lastQuarterValue = stock.price * stock.totalShares;
-        if (stock.assetType === 'REIT') {
-            stock.estimatedDividend = stock.dividendPerShare;
-        } else if (stock.dividendPolicy && stock.dividendPolicy !== 'Growth') {
-            const estimatedProfit = stock.quarterlyEarnings > 0 ? stock.quarterlyEarnings : 0;
-            const estimatedTotal = estimatedProfit * 0.1;
-            stock.estimatedDividend = stock.totalShares > 0 ? estimatedTotal / stock.totalShares : 0;
-        } else {
-            stock.estimatedDividend = 0;
-        }
+        if (!stock.isBankrupt && stock.fundamentals) updateFundamentalRatios(stock);
     });
 
     displayStocks(getCurrentInputValues());
     displayPortfolio();
     console.log("[RAPORTY KWARTALNE] Przetwarzanie zakończone.");
     checkCompanyCounterActions();
-}
-
-function processDividendPayout(stock) {
-    if (stock.ceo?.traits?.some(t => t.id === 'skapiec')) {
-        logEvent(`[CEO] Prezes-skąpiec w ${stock.name} blokuje wypłatę dywidendy, kumulując kapitał w firmie.`);
-        return;
-    }
-
-    const isGenerous = stock.ceo?.traits?.some(t => t.id === 'szczodry');
-    if (stock.dividendPolicy === 'Growth' && !isGenerous) return;
-
-    if (stock.sharesHeld === 0) return;
-
-    const currentValue = stock.price * stock.totalShares;
-    const profit = currentValue - stock.lastQuarterValue;
-
-    if (profit <= 0 && stock.financialHealth <= 0) {
-        logEvent(`📉 ${stock.name} wstrzymuje dywidendę z powodu strat.`);
-        return;
-    }
-
-    const healthModifier = 1 + (stock.financialHealth / 10);
-    let dividendTotalAmount = 0;
-    const zyskDoPodzialu = profit > 0 ? profit : currentValue * 0.02;
-
-    let effectivePolicy = stock.dividendPolicy;
-    if (effectivePolicy === 'Growth' && isGenerous) {
-        effectivePolicy = 'Balanced';
-    }
-
-    switch (effectivePolicy) {
-        case 'Balanced':
-            dividendTotalAmount = zyskDoPodzialu * getRandomInRange(0.01, 0.10) * healthModifier;
-            break;
-        case 'Aggressive':
-            dividendTotalAmount = zyskDoPodzialu * getRandomInRange(0.50, 1.00) * healthModifier;
-            break;
-        case 'Total':
-            dividendTotalAmount = profit > 0 ? profit : 0;
-            break;
-    }
-
-    if (isGenerous) {
-        dividendTotalAmount *= 1.15;
-    }
-
-    if (dividendTotalAmount <= 0) return;
-
-    let dividendPerShare = dividendTotalAmount / stock.totalShares;
-
-    if (dividendPerShare > stock.price * 0.50) {
-        console.warn(`[DYWIDENDA] Ograniczono dywidendę dla ${stock.name}, aby zapobiec krachowi.`);
-        dividendPerShare = stock.price * 0.50;
-    }
-
-    payDividendToShareholders(stock, dividendPerShare);
 }
 
 function processReitDividend(stock) {
@@ -3607,7 +3867,7 @@ function initializeHoldingPortfolios() {
             if (targetStock) {
                 const quantity = getRandomIntInRange(1, 10);
                 const cost = quantity * targetStock.price;
-                const availableShares = targetStock.totalShares - targetStock.sharesHeld;
+                const availableShares = getAvailableShares(targetStock);
 
                 if (quantity <= availableShares && holding.cash >= cost) {
                     holding.cash -= cost;
@@ -3672,29 +3932,6 @@ function initializeCityCompanies() {
         }
     }
     console.log("[MIASTO] Zainicjowano spółki miejskie i firmy prywatne.");
-}
-
-function initializeDividendEstimates() {
-    stocks.forEach(stock => {
-        if (stock.assetType === 'REIT') {
-            stock.estimatedDividend = stock.dividendPerShare;
-        } else if (stock.dividendPolicy && stock.dividendPolicy !== 'Growth') {
-            const estimatedTotal = stock.price * 0.02; // Uproszczona estymacja na start
-            stock.estimatedDividend = stock.totalShares > 0 ? estimatedTotal / stock.totalShares : 0;
-        } else {
-            stock.estimatedDividend = 0;
-        }
-    });
-}
-
-function assignInitialDividendPolicies() {
-    const policies = ['Balanced', 'Aggressive', 'Growth', 'Total'];
-    stocks.forEach(stock => {
-        if (stock.exchange !== 'JUNK' && stock.assetType !== 'REIT') {
-            stock.dividendPolicy = getRandomElement(policies);
-        }
-    });
-    console.log("[START GRY] Przypisano początkowe polityki dywidendowe.");
 }
 
 function processCompanyBanking() {
@@ -4054,47 +4291,18 @@ function detectFinancialAnomaly(stock) {
     openFinancialDetailsModal(stock.symbol);
 }
 
-function updateDividendTimers(deltaTime) {
-    stocks.forEach(stock => {
-        if (!stock.dividendPolicy && stock.assetType !== 'REIT') return;
-
-        stock.dividendTimer -= deltaTime;
-
-        if (stock.dividendTimer <= 0) {
-            console.log(`[Dywidenda] Czas upłynął dla ${stock.name}. Przetwarzanie wypłaty...`); // <-- LOG
-            if (stock.assetType === 'REIT') {
-                processReitDividend(stock);
-                stock.dividendTimer = 2 * 60 * 1000;
-            } else {
-                processDividendPayout(stock);
-                stock.dividendTimer = getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000);
-            }
-        }
-    });
-}
-
-function setDividendPolicy(symbol, newPolicy) {
-    const stock = stocks.find(s => s.symbol === symbol);
-    if (stock) {
-        stock.dividendPolicy = newPolicy;
-        logEvent(`👑 Na Twój wniosek, ${stock.name} zmienia politykę dywidendową na: ${newPolicy}.`, 'review');
-        // Odśwież widok modala, jeśli jest otwarty
-        if (document.getElementById('management-modal').style.display === 'block') {
-            openManagementModal(symbol);
-        }
-    }
-}
+// setDividendPolicy: zob. player.js (jedna implementacja).
 
 function executeForcedDividend(stock) {
     if (Date.now() < stock.dividendCooldownUntil) {
         return false; // Nie można jeszcze wymusić dywidendy
     }
 
-    const dividendTotalAmount = (stock.price * stock.totalShares) * 0.04; // 4% wartości rynkowej
-    const dividendPerShare = dividendTotalAmount / stock.totalShares;
+    // Specjalna dywidenda: do 4% kapitalizacji, ale tylko z gotówki spółki.
+    const dividendTotalAmount = Math.min((stock.price * stock.totalShares) * 0.04, Math.max(0, Number(stock.cash) || 0) * 0.8);
+    if (!(dividendTotalAmount > 0)) return false;
 
-    // Wywołujemy uniwersalną funkcję, która płaci wszystkim akcjonariuszom
-    payDividendToShareholders(stock, dividendPerShare);
+    payCompanyDividend(stock, dividendTotalAmount / stock.totalShares, 'Dywidenda specjalna');
 
     // Ustawiamy cooldown
     stock.dividendCooldownUntil = Date.now() + (BASE_DELAYS.quarterly / 2); // Cooldown na pół kwartału
@@ -6053,7 +6261,7 @@ function processCeoActions(deltaTime) {
 
                 if (stock.ceo.timers.buyback <= 0) {
                     const sharesToBuy = Math.floor(stock.totalShares * 0.001); // Skup 0.1% akcji
-                    const availableSharesOnMarket = stock.totalShares - stock.sharesHeld - (stock.treasuryShares || 0);
+                    const availableSharesOnMarket = getAvailableShares(stock);
 
                     if (sharesToBuy > 0 && sharesToBuy <= availableSharesOnMarket) {
                         // Inicjalizuj 'treasuryShares', jeśli nie istnieje
@@ -6726,15 +6934,13 @@ function reviewCompanyPlacements() {
             if (newLimitRange) stock.maxShares = getRandomIntInRange(newLimitRange.min, newLimitRange.max);
 
             if (currentLevel === 0) {
-                const policies = ['Balanced', 'Aggressive', 'Growth', 'Total'];
-                stock.dividendPolicy = getRandomElement(policies);
-                message += ` Spółka ustala swoją politykę dywidendową na: ${stock.dividendPolicy}.`;
+                setCompanyDividendPolicy(stock, getRandomElement(DIVIDEND_POLICY_ORDER));
+                message += ` Spółka ustala swoją politykę dywidendową na: ${getDividendPolicyLabel(stock.dividendPolicy)}.`;
             } else if (Math.random() < 0.25) {
                 const oldPolicy = stock.dividendPolicy;
-                const policies = ['Balanced', 'Aggressive', 'Growth', 'Total'];
-                stock.dividendPolicy = getRandomElement(policies);
+                if (!stock.dividendPolicyLockedByOwner) setCompanyDividendPolicy(stock, getRandomElement(DIVIDEND_POLICY_ORDER));
                 if (oldPolicy !== stock.dividendPolicy) {
-                    message += ` Zarząd rewiduje strategię i zmienia politykę dywidendową na: ${stock.dividendPolicy}!`;
+                    message += ` Zarząd rewiduje strategię i zmienia politykę dywidendową na: ${getDividendPolicyLabel(stock.dividendPolicy)}!`;
                 }
             }
         } else { // Logika dla SPADKU
@@ -6753,16 +6959,6 @@ function reviewCompanyPlacements() {
         displayStocks(getCurrentInputValues());
         checkPlayerTierUpgrade();
     }
-}
-
-function assignInitialDividendPolicies() {
-    const policies = ['Balanced', 'Aggressive', 'Growth', 'Total'];
-    stocks.forEach(stock => {
-        if (stock.exchange !== 'JUNK' && stock.assetType !== 'REIT') {
-            stock.dividendPolicy = getRandomElement(policies);
-        }
-    });
-    console.log("[START GRY] Przypisano początkowe polityki dywidendowe.");
 }
 
 function cleanupBankruptStocks(speedMultiplier) {
@@ -7210,7 +7406,7 @@ function runCorporateLogic() {
         if (stock.departments.development.level >= 1) {
             if (countCompanyInvestmentOrders(stock) < stock.departments.development.level) {
                 // AI decyduje o inwestycji, jeśli ma nadmiar gotówki
-                if (stock.cash > 150000 && Math.random() < 0.03) {
+                if (stock.cash > 150000 && Math.random() < 0.03 * getCycleInvestmentAppetite()) {
                     startRandomInvestment(stock);
                 }
             }
@@ -7481,11 +7677,8 @@ function payDividendToShareholders(stock, dividendPerShare) {
         if (parentStock) {
             const totalDividendFromSubsidiary = stock.totalShares * dividendPerShare;
             if (parentStock.cash !== undefined) {
-                 parentStock.cash += totalDividendFromSubsidiary;
-                 if (parentStock.balanceSheet) {
-                    parentStock.balanceSheet.assets += totalDividendFromSubsidiary;
-                    parentStock.balanceSheet.retainedEarnings += totalDividendFromSubsidiary;
-                 }
+                adjustCompanyCash(parentStock, totalDividendFromSubsidiary);
+                adjustBalanceSheet(parentStock, { assets: totalDividendFromSubsidiary, retainedEarnings: totalDividendFromSubsidiary });
             }
             logEvent(`💸 Spółka zależna ${stock.name} przekazuje ${totalDividendFromSubsidiary.toFixed(2)} PLN dywidendy do ${parentStock.name}.`, 'company');
             stock.price -= dividendPerShare;

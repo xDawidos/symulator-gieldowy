@@ -570,7 +570,7 @@ group('Badania R&D (etap 1)', () => {
             assertNear(b.researchExpense, rd, 'R&D w raporcie');
             assertNear(b.total, b.operating - rd + 600, 'wynik raportowany');
             const debtFlows = paymentJournal.slice(j0).reduce((sum, e) => sum + (e.to === company.symbol ? e.amount : 0) - (e.from === company.symbol ? e.amount : 0), 0);
-            assertNear(company.cash - cash0, b.operating + debtFlows, 'gotówka zmienia się tylko o wynik operacyjny (i kredyt)');
+            assertNear(company.cash - cash0, b.operating + (b.depreciation || 0) + debtFlows, 'gotówka zmienia się tylko o wynik operacyjny + amortyzację (i kredyt)');
             const again = takePeriodResults(company);
             assert(again.total === 0 && getUnrecognizedResearchExpense(company) === 0, 'nic do ponownego zaksięgowania');
         });
@@ -734,6 +734,215 @@ group('Długa symulacja i balans (etap 6)', () => {
             assert(profitable >= 1, 'przynajmniej jeden wykonawca rentowny');
         });
     });
+});
+
+group('Rynek: fundamenty, ceny, cykl, dywidendy (etap A)', () => {
+    function marketCompany(symbol, options = {}) {
+        // Kapitał własny ≈ kapitalizacja (jak w świecie gry): 10 000 akcji × 100 PLN.
+        const company = makeCompany(symbol, { cash: 200_000, fixedAssets: 800_000, ...options });
+        company.price = options.price ?? 100;
+        company.volatilityFactor = options.volatility ?? 1;
+        company.corporatePhase = CORPORATE_PHASES.STABILITY;
+        company.financialHealth = options.health ?? 0;
+        initializeFundamentals(company, true);
+        initializeOwnership(company);
+        return company;
+    }
+
+    function withCycle(phase, gdp, fn) {
+        const saved = economyCycle;
+        economyCycle = createEconomyCycle(phase);
+        economyCycle.gdpGrowth = gdp;
+        try { return fn(); } finally { economyCycle = saved; }
+    }
+
+    test('zysk nie zależy od ceny akcji', () => {
+        const cheap = marketCompany('TANI', { price: 10 });
+        const dear = marketCompany('DROGI', { price: 1000 });
+        dear.fundamentals.revenue = cheap.fundamentals.revenue;
+        resetWorld([cheap, dear]);
+        const a = withSeededRandom(1, () => computeQuarterResults(cheap));
+        const b = withSeededRandom(1, () => computeQuarterResults(dear));
+        assertNear(a.netIncome, b.netIncome, 'ten sam zysk przy różnej cenie');
+    });
+
+    test('rachunek wyników i wskaźniki są spójne', () => {
+        const company = marketCompany('SPOJ', { liabilities: 500000 });
+        resetWorld([company]);
+        const q = computeQuarterResults(company);
+        assertNear(q.ebitda - q.depreciation - q.interest - q.tax + q.subsidy, q.netIncome, 'EBITDA → zysk netto');
+        assert(q.tax >= 0 && q.depreciation > 0 && q.interest > 0, 'koszty niegotówkowe, odsetki, podatek');
+        recordQuarterFundamentals(company, q);
+        const f = company.fundamentals;
+        assertNear(f.history[f.history.length - 1].eps, q.netIncome / company.totalShares, 'EPS');
+        assertNear(f.epsTtm, f.history.slice(-4).reduce((s, h) => s + h.eps, 0), 'EPS z 4 kwartałów');
+        assert(f.fairValue > 0 && f.salesPerShare > 0 && f.bookValuePerShare > 0, 'wartość godziwa i wskaźniki na akcję');
+    });
+
+    test('kalibracja startowa: wartość godziwa bliska bieżącej cenie', () => {
+        const company = marketCompany('KAL', { price: 80 });
+        const ratio = company.fundamentals.fairValue / company.price;
+        assert(ratio > 0.6 && ratio < 1.6, `wartość godziwa / cena = ${ratio.toFixed(2)}`);
+    });
+
+    test('cena wraca w stronę wartości godziwej', () => {
+        for (const direction of [1.5, 0.5]) {
+            const company = marketCompany('POWR', { volatility: 0.5 });
+            resetWorld([company]);
+            withCycle('recovery', 0.007, () => {
+                const fair = company.fundamentals.fairValue;
+                company.price = fair * direction;
+                for (let i = 0; i < 3600; i++) updateStockPrices();
+                const gapBefore = Math.abs(direction - 1);
+                const gapAfter = Math.abs(company.price / company.fundamentals.fairValue - 1);
+                assert(gapAfter < gapBefore * 0.75, `luka ${gapBefore.toFixed(2)} → ${gapAfter.toFixed(2)}`);
+            });
+        }
+    });
+
+    test('ruch cen jest procentowy (ta sama zmienność dla taniej i drogiej akcji)', () => {
+        const returns = [];
+        for (const price of [2, 2000]) {
+            withSeededRandom(77, () => {
+                const company = marketCompany('PCT', { price });
+                company.fundamentals.fairValue = price; // bez luki wyceny
+                resetWorld([company]);
+                withCycle('recovery', 0, () => {
+                    const start = company.price;
+                    for (let i = 0; i < 300; i++) updateStockPrices();
+                    returns.push(company.price / start - 1);
+                });
+            });
+        }
+        assertNear(returns[0], returns[1], 'zwrot niezależny od poziomu ceny', 0.02);
+    });
+
+    test('cykl przechodzi przez wszystkie fazy, recesja ma ujemne PKB', () => {
+        const saved = economyCycle;
+        const seen = new Set();
+        try {
+            economyCycle = createEconomyCycle('recovery');
+            for (let i = 0; i < 60; i++) {
+                advanceEconomyCycle();
+                seen.add(economyCycle.phase);
+                if (economyCycle.phase === 'recession') assert(economyCycle.gdpGrowth < 0, 'PKB w recesji');
+            }
+        } finally {
+            economyCycle = saved;
+        }
+        assert(seen.size === 4, `odwiedzone fazy: ${[...seen].join(', ')}`);
+    });
+
+    test('w recesji sektor defensywny traci mniej niż cykliczny', () => {
+        const food = marketCompany('JEDZ', { sector: ['Żywność'] });
+        const build = marketCompany('BUDO', { sector: ['Budowlany'] });
+        resetWorld([food, build]);
+        const growth = company => withSeededRandom(5, () => withCycle('recession', -0.012, () => {
+            const start = company.fundamentals.revenue;
+            for (let i = 0; i < 8; i++) computeQuarterResults(company);
+            return company.fundamentals.revenue / start - 1;
+        }));
+        const foodGrowth = growth(food);
+        const buildGrowth = growth(build);
+        assert(foodGrowth > buildGrowth, `Żywność ${(foodGrowth * 100).toFixed(1)}% vs Budowlany ${(buildGrowth * 100).toFixed(1)}%`);
+        const multFood = withCycle('recession', -0.012, () => getValuationMultiplier(food));
+        const multBuild = withCycle('recession', -0.012, () => getValuationMultiplier(build));
+        assert(multFood > multBuild, 'niższa wycena cyklicznych w recesji');
+    });
+
+    test('dywidenda: z gotówki spółki, cena spada o dywidendę na akcję, 0% nic nie wypłaca', () => {
+        const company = marketCompany('DYW', { cash: 1_000_000 });
+        resetWorld([company]);
+        setCompanyDividendPolicy(company, 'Total');
+        declareQuarterDividend(company, 100000);
+        assert(company.pendingDividend && near(company.pendingDividend.total, 100000), 'ogłoszona dywidenda = 100% zysku');
+        const cash0 = company.cash, price0 = company.price, re0 = company.balanceSheet.retainedEarnings;
+        const dps = company.pendingDividend.dps;
+        for (let i = 0; i < 100 && company.pendingDividend; i++) updateDividendTimers(1000);
+        assert(!company.pendingDividend, 'wypłacona po czasie');
+        assertNear(cash0 - company.cash, 100000, 'gotówka spółki');
+        assertNear(re0 - company.balanceSheet.retainedEarnings, 100000, 'zyski zatrzymane');
+        assertNear(price0 - company.price, dps, 'spadek ceny o DPS');
+
+        setCompanyDividendPolicy(company, 'Growth');
+        declareQuarterDividend(company, 100000);
+        assert(!company.pendingDividend, 'strategia 0% bez wypłaty');
+
+        setCompanyDividendPolicy(company, 'Aggressive');
+        assert(company.dividendPayoutRatio >= 0.10 && company.dividendPayoutRatio <= 0.50, 'Wysoka 10–50%');
+        declareQuarterDividend(company, -5000);
+        assert(!company.pendingDividend, 'brak dywidendy przy stracie');
+    });
+
+    test('struktura własności: pakiet insiderów nie jest w obrocie', () => {
+        const company = marketCompany('WLAS');
+        assert(company.insiderShares > 0, 'pakiet insiderów');
+        assert(getAvailableShares(company) === company.totalShares - company.insiderShares, 'dostępne = obrót');
+        company.sharesHeld = 100;
+        assert(getAvailableShares(company) === company.totalShares - company.insiderShares - 100, 'minus akcje inwestorów');
+        assert(company.insiderShares < company.totalShares * 0.5, 'większość nadal możliwa do zdobycia');
+    });
+});
+
+group('Długa symulacja rynku (etap A)', () => {
+    test('2 lata gry na pełnym świecie (bez obiektów demonstracyjnych testu)', () => {
+        stocks = JSON.parse(JSON.stringify(initialStocks));
+        randomizeInitialShareCounts();
+        activeTenders = [];
+        constructionProjects = [];
+        isGamePaused = false;
+        createNewWorld();
+        updateInterestRates();
+
+        const startCount = stocks.filter(s => !s.assetType).length;
+        const gigStart = stocks.filter(s => !s.assetType).reduce((sum, s) => sum + s.price, 0);
+        const phases = [];
+        let dividendsPaid = 0;
+        const journalMark = paymentTotals.byPurpose['out: Dywidenda kwartalna'] || 0;
+
+        for (let quarter = 0; quarter < 8; quarter++) {
+            for (let t = 0; t < BASE_DELAYS.quarterly / BASE_DELAYS.stockUpdate; t++) {
+                updateStockPrices();
+                updateDividendTimers(BASE_DELAYS.stockUpdate);
+            }
+            advanceEconomyCycle();
+            processFinancialReports();
+            phases.push(economyCycle.phase);
+        }
+        dividendsPaid = (paymentTotals.byPurpose['out: Dywidenda kwartalna'] || 0) - journalMark;
+
+        const standard = stocks.filter(s => hasValuationAnchor(s) && !s.isBankrupt);
+        const prices = standard.map(s => s.price);
+        assert(prices.every(p => Number.isFinite(p) && p > 0), 'ceny skończone i dodatnie');
+
+        const pe = standard.map(s => s.fundamentals?.peRatio).filter(v => v > 0).sort((a, b) => a - b);
+        const medianPe = pe[Math.floor(pe.length / 2)];
+        const ratios = standard.map(s => s.price / s.fundamentals.fairValue).sort((a, b) => a - b);
+        const medianRatio = ratios[Math.floor(ratios.length / 2)];
+        const maxMove = Math.max(...standard.map(s => {
+            const first = s.lineHistory[0]?.price || s.price;
+            return Math.abs(s.price / first - 1);
+        }));
+        const bankrupt = startCount - stocks.filter(s => !s.assetType && !s.isBankrupt).length;
+        const gigEnd = standard.reduce((sum, s) => sum + s.price, 0);
+
+        addTable('Rynek po 2 latach gry', ['Miara', 'Wartość'], [
+            ['Fazy cyklu (kolejne kwartały)', phases.map(p => ECONOMY_PHASES[p].name).join(' → ')],
+            ['Mediana C/Z', medianPe ? medianPe.toFixed(1) : '—'],
+            ['Spółki ze stratą (C/Z n/d)', standard.length - pe.length],
+            ['Mediana cena / wartość godziwa', medianRatio.toFixed(2)],
+            ['Największa zmiana ceny w oknie historii', `${(maxMove * 100).toFixed(0)}%`],
+            ['Suma cen spółek: start → koniec', `${Math.round(gigStart)} → ${Math.round(gigEnd)}`],
+            ['Bankructwa', bankrupt],
+            ['Wypłacone dywidendy (PLN)', Math.round(dividendsPaid)],
+            ['Spółki z ogłoszoną dywidendą', standard.filter(s => s.lastDividend).length]
+        ]);
+
+        assert(medianPe > 4 && medianPe < 45, `mediana C/Z ${medianPe}`);
+        assert(medianRatio > 0.5 && medianRatio < 2, `mediana cena/wartość ${medianRatio}`);
+        assert(bankrupt <= Math.ceil(startCount * 0.15), `bankructwa: ${bankrupt}`);
+        assert(dividendsPaid > 0, 'dywidendy wypłacane');
+    }, 2027);
 });
 
 // --------------------------------------------------------------------------------

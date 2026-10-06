@@ -217,16 +217,8 @@ function aiBuyStock(ai, symbol, quantity) {
         }
     }
 
-    // Obliczanie dostępnych akcji na rynku
-    let sharesOnMarket;
-    if (stockToBuy.isStateOwned) {
-        // Dla spółek państwowych dostępne są tylko akcje niebędące w posiadaniu państwa
-        sharesOnMarket = Math.floor(stockToBuy.totalShares * (1 - stockToBuy.stateOwnershipPct));
-    } else {
-        sharesOnMarket = stockToBuy.totalShares;
-    }
-    // Dostępne = Całkowita pula (lub public float) - już posiadane przez kogokolwiek (gracz + AI + inne banki)
-    const availableShares = sharesOnMarket - stockToBuy.sharesHeld;
+    // Dostępne = wolny obrót minus akcje posiadane przez inwestorów (gracz + AI + banki)
+    const availableShares = getAvailableShares(stockToBuy);
 
     // Dostosuj ilość, jeśli na rynku jest mniej akcji
     if (quantity > availableShares) {
@@ -1368,7 +1360,7 @@ function runStateActions() {
                 const targetStock = getRandomElement(potentialTargets);
                 const sharesToBuy = Math.floor(targetStock.totalShares * getRandomInRange(0.01, 0.05)); // Kup 1-5%
                 
-                const availableShares = targetStock.totalShares - targetStock.sharesHeld;
+                const availableShares = getAvailableShares(targetStock);
 
                 if (sharesToBuy > 0 && sharesToBuy <= availableShares) {
                     targetStock.sharesHeld += sharesToBuy;
@@ -1418,8 +1410,9 @@ function aiUseCrownPowers(ai, stock) {
              case 'yolo_trader': desiredPolicy = 'Total'; break;
          }
          if (desiredPolicy && stock.dividendPolicy !== desiredPolicy) {
-             stock.dividendPolicy = desiredPolicy;
-             logEvent(`[AI] 👑 ${ai.name} jako główny udziałowiec zmienia politykę dywidendową ${stock.name} na: ${desiredPolicy}!`, 'review');
+             setCompanyDividendPolicy(stock, desiredPolicy);
+             stock.dividendPolicyLockedByOwner = true;
+             logEvent(`[AI] 👑 ${ai.name} jako główny udziałowiec zmienia politykę dywidendową ${stock.name} na: ${getDividendPolicyLabel(desiredPolicy)}!`, 'review');
              return;
          }
     }
@@ -1499,7 +1492,7 @@ function runHoldingCompanyAI(holding) {
             const investmentAmount = holding.cash * 0.25;
             const quantityToBuy = Math.floor(investmentAmount / targetStock.price);
             const cost = quantityToBuy * targetStock.price;
-            const availableShares = targetStock.totalShares - targetStock.sharesHeld;
+            const availableShares = getAvailableShares(targetStock);
 
             if (quantityToBuy > 0 && quantityToBuy <= availableShares && holding.cash >= cost) {
                 holding.cash -= cost;
@@ -1757,7 +1750,7 @@ function runInvestmentBankAI(bank) {
             const investmentAmount = bank.cash * getRandomInRange(0.1, 0.25); // Inwestuje 10-25% gotówki
             const quantity = Math.floor(investmentAmount / targetStock.price);
             const cost = quantity * targetStock.price;
-            const availableShares = targetStock.totalShares - targetStock.sharesHeld;
+            const availableShares = getAvailableShares(targetStock);
 
             if (quantity > 0 && cost <= bank.cash && quantity <= availableShares) {
                 // Sprawdź limit 30% dla innych banków

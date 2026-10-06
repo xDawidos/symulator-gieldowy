@@ -299,7 +299,7 @@ function triggerMainMarketEventCycle() {
     // Standardowe eventy (jeśli żaden specjalny nie wystąpił)
     const eventTypeRoll = Math.random();
     if (eventTypeRoll < 0.30) { 
-        const eventData = getRandomElement(marketWideEventsPrompts);
+        const eventData = pickEventByCycle(marketWideEventsPrompts);
         const duration = getRandomIntInRange(25, 75);
         const magnitude = getRandomInRange(0.03, 0.08) * (eventData.type === 'positive' ? 1 : -1);
         displayEventMessage(eventData.message(), duration, magnitude, 'market');
@@ -307,7 +307,7 @@ function triggerMainMarketEventCycle() {
             applyPriceEffect(stock.symbol, magnitude, eventData.type, 'market');
         });
     } else if (eventTypeRoll < 0.60) { 
-        const eventData = getRandomElement(sectorEventsPrompts);
+        const eventData = pickEventByCycle(sectorEventsPrompts);
         const duration = getRandomIntInRange(20, 60);
         const magnitude = getRandomInRange(0.05, 0.12) * (eventData.type === 'positive' ? 1 : -1);
         displayEventMessage(eventData.message(), duration, magnitude, 'market');
@@ -324,6 +324,13 @@ function triggerMainMarketEventCycle() {
         displayEventMessage(eventData.message(targetStock.name), duration, magnitude, 'company');
         applyPriceEffect(targetStock.symbol, magnitude, eventData.type, 'company');
     }
+}
+
+/** Losuje zdarzenie z przewagą pozytywnych w ekspansji i negatywnych w recesji. */
+function pickEventByCycle(events) {
+    const wantPositive = Math.random() < getCyclePositiveEventBias();
+    const pool = events.filter(event => (event.type === 'positive') === wantPositive);
+    return getRandomElement(pool.length > 0 ? pool : events);
 }
 
 function triggerDividendEventCycle() {

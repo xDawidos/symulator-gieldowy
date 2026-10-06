@@ -713,10 +713,10 @@
                 <h4>📜 Polityka Dywidendowa</h4>
                 <p>Jako akcjonariusz większościowy, możesz wpłynąć na strategię dywidendową spółki.</p>
                 <select id="policy-select" onchange="setDividendPolicy(this.dataset.symbol, this.value)">
-                    <option value="Growth">Polityka Wzrostu (Brak dywidendy)</option>
-                    <option value="Balanced">Zrównoważona</option>
-                    <option value="Aggressive">Agresywna</option>
-                    <option value="Total">Całkowita (100% zysku)</option>
+                    <option value="Growth">Wzrost — 0% zysku (wszystko w kapitał)</option>
+                    <option value="Balanced">Zachęta — 1–10% zysku</option>
+                    <option value="Aggressive">Wysoka — 10–50% zysku</option>
+                    <option value="Total">Pełna — 100% zysku</option>
                 </select>
             </div>
             <div id="bank-selection-section" class="bank-section">
@@ -882,7 +882,7 @@
          </div>
          <div class="modal-body">
              <table>
-                 <thead><tr><th>Spółka</th><th>Polityka</th><th>Czas do wypłaty</th><th>Szac. Dywidenda</th></tr></thead>
+                 <thead><tr><th>Spółka</th><th>Strategia</th><th>Czas do wypłaty</th><th>Dywidenda / akcję</th><th>Stopa</th></tr></thead>
                  <tbody id="dividend-tracker-body"></tbody>
              </table>
          </div>

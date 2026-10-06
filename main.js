@@ -542,7 +542,8 @@ gameTimers.weekly = setInterval(() => {
     gameTimers.quarterly = setInterval(() => {
         if (isGamePaused) return;
         reviewCompanyPlacements();
-        processFinancialReports(); // zawiera koszty R&D, wynik kontraktów i pozycje okresu
+        advanceEconomyCycle(); // nowa faza koniunktury przed raportami
+        processFinancialReports(); // zawiera koszty R&D, wynik kontraktów, pozycje okresu i dywidendy
         updateInfluence();
         updateCeoTenureAndAge(); // Zmieniona nazwa, ale to samo
         updateAnalyticalProperties();
@@ -979,6 +980,15 @@ function createNewWorld() {
         } else {
             stock.influence = null; 
         }
+    });
+
+    // Koniunktura startowa, fundamenty spółek (kalibracja przychodów do obecnych wycen)
+    // i struktura własności (pakiety insiderów).
+    economyCycle = createEconomyCycle(getRandomElement(['recovery', 'expansion']));
+    updateMarketTrendFromCycle();
+    stocks.forEach(stock => {
+        if (stock.balanceSheet && stock.assetType !== 'Startup') initializeFundamentals(stock, true);
+        initializeOwnership(stock);
     });
 
     // Inicjalizacja systemów globalnych

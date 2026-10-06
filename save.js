@@ -1,6 +1,6 @@
 // save.js - Zapis i wczytanie stanu gry (localStorage)
 //
-// Format v2:
+// Format v3 (v2 + cykl koniunktury, fundamenty spółek, struktura własności):
 //  - kontrakty, oferty i projekty przechowują identyfikatory spółek (symbol), a nie kopie obiektów,
 //  - każda referencja do spółki zagnieżdżona w innych danych jest zapisywana jako { __stockRef: SYMBOL },
 //  - po wczytaniu referencje są ponownie łączone z właściwymi spółkami, a zajęte moce wykonawcze
@@ -12,7 +12,8 @@
 
 const GAME_SAVE_KEY = 'gra_inwestycyjna_dawid_save_v2';
 const LEGACY_SAVE_KEYS = ['gra_inwestycyjna_dawid_save_v1'];
-const SAVE_FORMAT_VERSION = 2;
+const SAVE_FORMAT_VERSION = 3;
+const SUPPORTED_SAVE_VERSIONS = [2, 3]; // v2 → migracja modelu rynku (fundamenty, własność, cykl)
 
 let lastSaveReport = null;
 let saveDisabledUntilReload = false;
@@ -107,6 +108,7 @@ function buildSaveSnapshot() {
         constructionProjects: constructionProjects.filter(project => !project.settled).map(serializeProjectForSave),
         paymentJournal: paymentJournal.slice(-100),
         paymentTotals,
+        economyCycle,
         simulationIdCounter,
         nextWealthTaxRemainingMs: Math.max(0, (Number(nextWealthTaxTime) || now) - now),
         WEALTH_TAX_INTERVAL
@@ -161,8 +163,8 @@ function applySaveSnapshot(snapshot) {
         return report;
     }
 
-    if (snapshot.version !== SAVE_FORMAT_VERSION) {
-        report.errors.push(`Niezgodna wersja zapisu (${snapshot.version}). Wymagana: ${SAVE_FORMAT_VERSION}.`);
+    if (!SUPPORTED_SAVE_VERSIONS.includes(snapshot.version)) {
+        report.errors.push(`Niezgodna wersja zapisu (${snapshot.version}). Obsługiwane: ${SUPPORTED_SAVE_VERSIONS.join(', ')}.`);
         return report;
     }
 
@@ -332,12 +334,38 @@ function applySaveSnapshot(snapshot) {
         nextWealthTaxTime = Date.now() + snapshot.nextWealthTaxRemainingMs; // brak upływu czasu offline
     }
 
+    // Koniunktura i model rynku (zapisy v2 nie miały tych danych — migracja).
+    if (snapshot.economyCycle && ECONOMY_PHASES[snapshot.economyCycle.phase]) {
+        economyCycle = snapshot.economyCycle;
+    } else {
+        economyCycle = createEconomyCycle('expansion');
+        report.warnings.push('Zapis bez cyklu koniunktury — utworzono nowy (migracja v2).');
+    }
+    updateMarketTrendFromCycle();
+    migrateMarketModel(report);
+
     if (missing.size > 0) report.warnings.push(`Brakujące spółki w referencjach: ${[...missing].join(', ')}.`);
 
     recountConstructionCapacity();
 
     report.ok = true;
     return report;
+}
+
+/** Uzupełnia fundamenty, strukturę własności i strategie dywidendowe spółek ze starszych zapisów. */
+function migrateMarketModel(report) {
+    let migrated = 0;
+    for (const stock of stocks) {
+        if (!stock.fundamentals && stock.balanceSheet && stock.assetType !== 'Startup') {
+            initializeFundamentals(stock, true);
+            migrated++;
+        }
+        initializeOwnership(stock);
+        if (stock.assetType !== 'REIT' && !Number.isFinite(stock.dividendPayoutRatio)) {
+            setCompanyDividendPolicy(stock, stock.dividendPolicy);
+        }
+    }
+    if (migrated > 0 && report) report.warnings.push(`Uzupełniono fundamenty ${migrated} spółek (migracja v2).`);
 }
 
 /** Wczytuje zapis przy starcie gry. Zwraca true, jeśli stan został odtworzony. */

@@ -22,12 +22,162 @@ const TAX_RATES = {
     cityTaxCompany: 0.02   // 2% podatek miejski od gotówki spółek (płacony tygodniowo)
 };
 
+// =================================================================================
+// CYKL KONIUNKTURALNY I PROFILE SEKTORÓW
+// Globalny cykl: ożywienie → ekspansja → przegrzanie → recesja (zmiana raz na kwartał).
+// Każdy sektor reaguje na cykl z własną siłą (beta) i na stopy procentowe.
+// =================================================================================
+
+const COMPANY_INCOME_TAX_RATE = 0.19; // CIT od zysku przed opodatkowaniem (raport kwartalny)
+
+const ECONOMY_PHASES = {
+    recovery:    { name: 'Ożywienie',   gdp: [0.004, 0.010], length: [2, 4], peMult: 1.00, mood: 0.2,  next: 'expansion' },
+    expansion:   { name: 'Ekspansja',   gdp: [0.008, 0.018], length: [3, 6], peMult: 1.10, mood: 0.5,  next: 'overheating' },
+    overheating: { name: 'Przegrzanie', gdp: [0.003, 0.012], length: [1, 3], peMult: 1.20, mood: 0.3,  next: 'recession' },
+    recession:   { name: 'Recesja',     gdp: [-0.020, -0.004], length: [2, 4], peMult: 0.85, mood: -0.6, next: 'recovery' }
+};
+
+// beta: wrażliwość przychodów i wycen na cykl (1 = przeciętna, <1 defensywna, >1 cykliczna)
+// rateSens: wrażliwość wyceny na stopy procentowe; pe: bazowe C/Z; margin: typowa marża EBITDA;
+// growth: trend wzrostu przychodów rocznie; ps: typowa kapitalizacja / roczne przychody (kalibracja startowa);
+// da: amortyzacja jako część przychodów.
+const SECTOR_PROFILES = {
+    'Technologia':          { beta: 1.3, rateSens: 1.2, pe: 22, margin: 0.28, growth: 0.08, ps: 3.5, da: 0.05 },
+    'Gaming':               { beta: 1.4, rateSens: 1.0, pe: 20, margin: 0.25, growth: 0.07, ps: 3.0, da: 0.06 },
+    'Medycyna':             { beta: 0.6, rateSens: 0.6, pe: 20, margin: 0.22, growth: 0.05, ps: 3.0, da: 0.05 },
+    'Żywność':              { beta: 0.5, rateSens: 0.4, pe: 15, margin: 0.12, growth: 0.03, ps: 1.0, da: 0.03 },
+    'Dobra konsumpcyjne':   { beta: 1.0, rateSens: 0.6, pe: 16, margin: 0.14, growth: 0.04, ps: 1.3, da: 0.03 },
+    'Energia':              { beta: 0.8, rateSens: 0.9, pe: 12, margin: 0.25, growth: 0.02, ps: 1.5, da: 0.08 },
+    'Chemia':               { beta: 1.2, rateSens: 0.7, pe: 13, margin: 0.16, growth: 0.03, ps: 1.1, da: 0.05 },
+    'Przemysł':             { beta: 1.3, rateSens: 0.8, pe: 13, margin: 0.14, growth: 0.03, ps: 1.0, da: 0.05 },
+    'Budowlany':            { beta: 1.5, rateSens: 1.3, pe: 11, margin: 0.10, growth: 0.03, ps: 0.7, da: 0.03 },
+    'Nieruchomości':        { beta: 1.4, rateSens: 1.6, pe: 14, margin: 0.35, growth: 0.03, ps: 4.0, da: 0.10 },
+    'Bankowość':            { beta: 1.1, rateSens: -0.3, pe: 11, margin: 0.40, growth: 0.03, ps: 2.5, da: 0.02 },
+    'Bankowość Komercyjna': { beta: 1.1, rateSens: -0.3, pe: 11, margin: 0.40, growth: 0.03, ps: 2.5, da: 0.02 },
+    'Finanse':              { beta: 1.3, rateSens: 0.5, pe: 13, margin: 0.30, growth: 0.04, ps: 2.5, da: 0.02 },
+    'Finanse Konsumenckie': { beta: 1.2, rateSens: 0.8, pe: 10, margin: 0.30, growth: 0.04, ps: 2.0, da: 0.02 },
+    'Usługi':               { beta: 0.9, rateSens: 0.5, pe: 16, margin: 0.15, growth: 0.04, ps: 1.4, da: 0.03 },
+    'Turystyka':            { beta: 1.5, rateSens: 0.8, pe: 15, margin: 0.15, growth: 0.04, ps: 1.5, da: 0.06 },
+    'Media':                { beta: 1.1, rateSens: 0.6, pe: 14, margin: 0.18, growth: 0.02, ps: 1.8, da: 0.04 },
+    'Logistyka':            { beta: 1.2, rateSens: 0.7, pe: 14, margin: 0.12, growth: 0.04, ps: 1.0, da: 0.06 },
+    'Transport':            { beta: 1.2, rateSens: 0.7, pe: 13, margin: 0.14, growth: 0.03, ps: 1.0, da: 0.07 },
+    'Badania':              { beta: 0.9, rateSens: 0.8, pe: 25, margin: 0.20, growth: 0.07, ps: 4.0, da: 0.05 }
+};
+
+const DEFAULT_SECTOR_PROFILE = { beta: 1.0, rateSens: 0.7, pe: 14, margin: 0.15, growth: 0.03, ps: 1.5, da: 0.04 };
+
+/** Profil spółki: średnia profili jej sektorów. */
+function getSectorProfile(stock) {
+    const sectors = Array.isArray(stock?.sector) ? stock.sector : [];
+    const profiles = sectors.map(sector => SECTOR_PROFILES[sector]).filter(Boolean);
+    if (profiles.length === 0) return { ...DEFAULT_SECTOR_PROFILE };
+
+    const result = {};
+    for (const key of Object.keys(DEFAULT_SECTOR_PROFILE)) {
+        result[key] = profiles.reduce((sum, profile) => sum + profile[key], 0) / profiles.length;
+    }
+    return result;
+}
+
+let economyCycle = createEconomyCycle('expansion');
+
+// Nastrój rynku dla górnego paska (ui-update.js); ustawiany z cyklu.
+let marketTrend = 'neutral';
+
+function createEconomyCycle(phase = 'expansion') {
+    const def = ECONOMY_PHASES[phase];
+    return {
+        phase,
+        quartersInPhase: 0,
+        phaseLength: getRandomIntInRange(def.length[0], def.length[1]),
+        gdpGrowth: (def.gdp[0] + def.gdp[1]) / 2,   // zmiana PKB w kwartale
+        index: 60,                                    // wskaźnik koniunktury 0–100
+        history: []                                   // ostatnie kwartały: { phase, gdpGrowth, index }
+    };
+}
+
+function getEconomyPhaseInfo() {
+    return ECONOMY_PHASES[economyCycle.phase] || ECONOMY_PHASES.expansion;
+}
+
+/** Przesuwa cykl o jeden kwartał (pętla kwartalna, przed raportami spółek). */
+function advanceEconomyCycle() {
+    const cycle = economyCycle;
+    cycle.quartersInPhase++;
+
+    if (cycle.quartersInPhase >= cycle.phaseLength) {
+        const previous = cycle.phase;
+        cycle.phase = ECONOMY_PHASES[previous].next;
+        cycle.quartersInPhase = 0;
+        const def = ECONOMY_PHASES[cycle.phase];
+        cycle.phaseLength = getRandomIntInRange(def.length[0], def.length[1]);
+
+        logEvent(`📊 KONIUNKTURA: gospodarka wchodzi w fazę „${def.name}” (wcześniej: ${ECONOMY_PHASES[previous].name}).`, 'market');
+    }
+
+    const def = getEconomyPhaseInfo();
+    cycle.gdpGrowth = getRandomInRange(def.gdp[0], def.gdp[1]);
+
+    // Wskaźnik koniunktury: wygładzona reakcja na PKB (0 = głęboka recesja, 100 = boom).
+    const target = Math.max(0, Math.min(100, 50 + cycle.gdpGrowth * 2500));
+    cycle.index = Math.round(cycle.index * 0.5 + target * 0.5);
+
+    cycle.history.push({ phase: cycle.phase, gdpGrowth: cycle.gdpGrowth, index: cycle.index });
+    if (cycle.history.length > 16) cycle.history.shift();
+
+    updateMarketTrendFromCycle();
+}
+
+function updateMarketTrendFromCycle() {
+    const index = economyCycle.index;
+    if (index >= 75) marketTrend = 'bullish_strong';
+    else if (index >= 58) marketTrend = 'bullish_moderate';
+    else if (index >= 42) marketTrend = 'neutral';
+    else if (index >= 25) marketTrend = 'bearish_moderate';
+    else marketTrend = 'bearish_strong';
+}
+
+/** Mnożnik C/Z dla spółki: faza cyklu (wg bety sektora) i poziom stóp procentowych. */
+function getValuationMultiplier(stock) {
+    const profile = getSectorProfile(stock);
+    const phaseMult = getEconomyPhaseInfo().peMult;
+    const cycleMult = 1 + profile.beta * (phaseMult - 1);
+    const baseRate = Number(centralBank?.baseInterestRate) || 0.05;
+    const rateMult = 1 - profile.rateSens * (baseRate - 0.05) * 4;
+    return Math.max(0.4, Math.min(1.8, cycleMult * rateMult));
+}
+
+/** Szansa na zdarzenie pozytywne zależnie od fazy (eventy rynkowe). */
+function getCyclePositiveEventBias() {
+    // Łagodna przewaga: zdarzenia rynkowe są częste (co 45 s gry) i silne (3–8%), więc mocniejsze
+    // przechylenie wypychałoby ceny daleko od wartości godziwej. Recesja ~0.46, ekspansja ~0.53.
+    return 0.5 + getEconomyPhaseInfo().mood * 0.06;
+}
+
+/** Apetyt spółek na nowe inwestycje (mnożnik szansy). */
+function getCycleInvestmentAppetite() {
+    switch (economyCycle.phase) {
+        case 'recession': return 0.5;
+        case 'recovery': return 0.9;
+        case 'expansion': return 1.3;
+        case 'overheating': return 1.1;
+        default: return 1;
+    }
+}
+
 // Zmienne czasowe podatków
 let WEALTH_TAX_INTERVAL; // = BASE_DELAYS.quarterly * 4; 
 let nextWealthTaxTime = 0; 
 
 
 const CANDLE_INTERVAL = 15 * 1000; 
+
+// Parametry ruchu cen (na tik = 1 s gry):
+// szum ~0,2% × zmienność; powrót do wartości godziwej z półokresem ok. 1 godziny gry;
+// nastrój rynku wg fazy cyklu (ekspansja ≈ +0,7% na godzinę dla bety 1).
+const PRICE_NOISE_PER_TICK = 0.002;
+const PRICE_MEAN_REVERSION_PER_TICK = 0.0002;
+const MARKET_MOOD_PER_TICK = 0.000004;
 
 // --- Bank Centralny i Stopy ---
 let centralBank = {
@@ -192,7 +342,7 @@ function updateStockPrices() {
         // ===>>> KONIEC NOWEGO BLOKU <<<===
 
 
-        // Inicjalizacja świec (bez zmian)
+        // Inicjalizacja świec
         if (!stock.currentCandle || !stock.candlestickHistory) {
             stock.candlestickHistory = [];
             stock.lineHistory = [];
@@ -200,49 +350,56 @@ function updateStockPrices() {
             stock.currentCandle = { time: now, open: initialPrice, high: initialPrice, low: initialPrice, close: initialPrice };
         }
 
-        // Obliczanie 'change' (bez zmian)
-        let change;
+        // --- Ruch ceny jako zmiana PROCENTOWA ---
+        // Δ% = szum + powrót do wartości godziwej + nastrój rynku + dryf (fazy, CEO, M&A) + boosty
         let effectiveVolatility = stock.volatilityFactor * volatilityModifier;
         if (isVolatilityCapped) {
             effectiveVolatility = Math.max(0.5, Math.min(effectiveVolatility, 3.0));
         }
-        if (stock.marketBehavior) {
-            if (stock.marketBehavior.phase === 'ipo_boost' && now < stock.marketBehavior.endTime) {
-                change = (0.01 + Math.random() * 0.02) * effectiveVolatility;
-            } else if (now >= stock.marketBehavior.endTime) {
+
+        const price = stock.price > 0 ? stock.price : 0.01;
+        // Szum ograniczony do zmienności 3 (bardzo zmienne spółki śmieciowe nie skaczą o kilkadziesiąt % na minutę).
+        const noise = gaussianRandom() * PRICE_NOISE_PER_TICK * Math.min(3, effectiveVolatility) * marketModifier;
+
+        let changePct = noise;
+
+        if (stock.marketBehavior && stock.marketBehavior.phase === 'ipo_boost' && now < stock.marketBehavior.endTime) {
+            changePct = getRandomInRange(0.002, 0.005) * effectiveVolatility;
+        } else {
+            if (stock.marketBehavior && now >= stock.marketBehavior.endTime) {
                 logEvent(`📈 IPO boost phase for ${stock.name} has ended.`);
-                stock.marketBehavior = null; 
-                change = (Math.random() - 0.5) * 0.2 * effectiveVolatility * marketModifier; 
-            } else {
-                 change = (Math.random() - 0.5) * 0.2 * effectiveVolatility * marketModifier;
+                stock.marketBehavior = null;
             }
-        }
-        else {
+
             if (stock.activePositiveBoostUntil && now < stock.activePositiveBoostUntil) {
-                change = (0.015 + Math.random() * 0.025) * effectiveVolatility;
+                changePct = getRandomInRange(0.002, 0.005) * effectiveVolatility;
             } else if (stock.activeNegativeBoostUntil && now < stock.activeNegativeBoostUntil) {
-                change = -(0.015 + Math.random() * 0.025) * effectiveVolatility;
+                changePct = -getRandomInRange(0.002, 0.005) * effectiveVolatility;
             } else {
                 if (stock.activePositiveBoostUntil && now >= stock.activePositiveBoostUntil) stock.activePositiveBoostUntil = null;
                 if (stock.activeNegativeBoostUntil && now >= stock.activeNegativeBoostUntil) stock.activeNegativeBoostUntil = null;
-                change = (Math.random() - 0.5) * 0.2 * effectiveVolatility * marketModifier;
+
+                // Powrót do wartości godziwej (tylko spółki z modelem fundamentalnym).
+                if (!stock.fundamentals && stock.balanceSheet && hasValuationAnchor(stock)) initializeFundamentals(stock);
+                const fairValue = Number(stock.fundamentals?.fairValue);
+                if (fairValue > 0) {
+                    const gap = Math.max(-0.9, Math.min(3, fairValue / price - 1));
+                    changePct += PRICE_MEAN_REVERSION_PER_TICK * gap;
+                }
+
+                // Nastrój rynku wg fazy cyklu i bety sektora.
+                changePct += MARKET_MOOD_PER_TICK * getEconomyPhaseInfo().mood * getSectorProfile(stock).beta;
             }
         }
 
-        // Obliczanie 'priceDrift' (bez zmian)
-        const currentPriceForDrift = stock.price > 0 ? stock.price : 0.01;
-        const priceDrift = currentPriceForDrift * 0.00005 * (priceGrowthModifier - 1.0); 
+        // Dryf z fazy spółki, cech CEO i efektów M&A (wcześniej: 0.00005 × odchylenie modyfikatora).
+        let drift = 0.00005 * (priceGrowthModifier - 1.0);
+        if (stock.isMonopolist) drift *= 1.5;
+        changePct += drift;
 
-        // Zastosowanie efektu Monopolisty (bez zmian)
-        let finalPriceDrift = priceDrift;
-        if (stock.isMonopolist) {
-            finalPriceDrift *= 1.5; 
-        }
-
-        // Aktualizacja ceny (bez zmian)
-        stock.price += change + finalPriceDrift; 
-        if (stock.price <= 0) { 
-             stock.price = 0.01; 
+        stock.price = price * (1 + Math.max(-0.2, Math.min(0.2, changePct)));
+        if (stock.price <= 0.01) {
+            stock.price = 0.01;
         }
 
         // Reszta funkcji (blokada handlu, bankructwo, historia cen, świece, ETFy) bez zmian...
@@ -549,19 +706,8 @@ function processCityAndCitizenTaxes() {
         }
     });
 
-    // Podatek od Spółek
-    stocks.forEach(stock => {
-        // Płacą tylko aktywne spółki giełdowe (nie startupy, reity, itp.)
-        if (!stock.assetType && !stock.isBankrupt && stock.cash > 0) {
-            // Umiejętność San Escobar NIE wpływa na podatek spółek
-            const companyCityTax = stock.cash * TAX_RATES.cityTaxCompany;
-            if (companyCityTax > 0) {
-                adjustCompanyCash(stock, -companyCityTax); // gotówka i rachunek w banku
-                adjustBalanceSheet(stock, { assets: -companyCityTax, retainedEarnings: -companyCityTax });
-                totalTaxCollected += companyCityTax;
-            }
-        }
-    });
+    // Spółki nie płacą już tygodniowego podatku od gotówki — płacą CIT od zysku przy raporcie
+    // kwartalnym (COMPANY_INCOME_TAX_RATE, companies.js → processFinancialReports).
 
     // Podatek od "Obywateli" (symulacja)
     // Prosty model: stała kwota + rosnąca z populacją miasta
@@ -996,9 +1142,9 @@ function runCentralBankAI() {
     let reserveRequirementChange = 0;
     const ceoTraits = centralBank.ceo.traits.map(t => t.name); // Pobierz nazwy cech
 
-    // Analiza rynku
-    const isOverheated = marketVolatilityIndex > 1.8 && avgHealth > 1;
-    const isSlowdown = marketVolatilityIndex < 0.8 && avgHealth < -0.5;
+    // Analiza rynku: faza cyklu koniunkturalnego (przegrzanie → podwyżki, recesja → obniżki)
+    const isOverheated = economyCycle.phase === 'overheating' || (economyCycle.phase === 'expansion' && economyCycle.index > 80);
+    const isSlowdown = economyCycle.phase === 'recession' || (economyCycle.phase === 'recovery' && avgHealth < -0.5);
 
     // Podstawowa decyzja na podstawie rynku
     if (isOverheated) { interestRateChange = 0.005; reserveRequirementChange = 0.01; }

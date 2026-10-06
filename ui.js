@@ -108,17 +108,7 @@ function displayStocks(previousInputValues = {}) {
     const playerSharePct =
       stock.totalShares > 0 ? (sharesOwned / stock.totalShares) * 100 : 0;
 
-    const treasuryShares = stock.treasuryShares || 0;
-    let availableShares;
-    if (stock.isStateOwned) {
-      const publicFloat = Math.floor(
-        stock.totalShares * (1 - stock.stateOwnershipPct)
-      );
-      availableShares = publicFloat - stock.sharesHeld - treasuryShares;
-    } else {
-      availableShares = stock.totalShares - stock.sharesHeld - treasuryShares;
-    }
-    availableShares = Math.max(0, Math.floor(availableShares));
+    const availableShares = getAvailableShares(stock);
 
     let changePct = 0;
     if (Array.isArray(stock.priceHistory) && stock.priceHistory.length >= 2) {
@@ -1536,7 +1526,7 @@ function openManagementModal(symbol, defaultTab = 'main') {
     const policySelect = document.getElementById('policy-select');
     if (policySelect) {
         policySelect.dataset.symbol = symbol;
-        policySelect.value = stock.dividendPolicy || 'Growth';
+        policySelect.value = normalizeDividendPolicy(stock.dividendPolicy);
         // Uwaga: onchange jest zazwyczaj zdefiniowany w HTML, ale upewnij się, że działa
     }
 
@@ -2274,14 +2264,15 @@ function renderDividendTrackerContent() {
     body.innerHTML = '';
     const skillLvl = getSkillLevel('dividendAnalyst');
 
+    // Ogłoszone (oczekujące) dywidendy i REIT-y — najbliższe wypłaty na górze.
     const dividendStocks = stocks
-        .filter(s => (s.dividendPolicy && s.dividendPolicy !== 'Growth') || s.assetType === 'REIT')
+        .filter(s => !s.isBankrupt && (s.pendingDividend || s.assetType === 'REIT'))
         .sort((a, b) => a.dividendTimer - b.dividendTimer);
 
     if (dividendStocks.length === 0) {
         const row = body.insertRow();
         const cell = row.insertCell();
-        cell.colSpan = 4;
+        cell.colSpan = 5;
         cell.textContent = "Brak spółek dywidendowych na rynku lub wymaganego poziomu umiejętności.";
         cell.style.textAlign = "center";
         return;
@@ -2290,7 +2281,7 @@ function renderDividendTrackerContent() {
     dividendStocks.forEach(stock => {
         const row = body.insertRow();
         row.insertCell().textContent = stock.name;
-        row.insertCell().textContent = stock.assetType === 'REIT' ? 'REIT (Częsta)' : stock.dividendPolicy;
+        row.insertCell().textContent = stock.assetType === 'REIT' ? 'REIT (co 2 min)' : getDividendPolicyLabel(stock.dividendPolicy);
 
         // ⏳ Czas do wypłaty
         const timeLeftCell = row.insertCell();
@@ -2315,6 +2306,11 @@ function renderDividendTrackerContent() {
         } else {
             estimateCell.textContent = "???";
         }
+
+        // 📈 Stopa dywidendy (dywidenda / cena)
+        const yieldCell = row.insertCell();
+        const dps = Number(stock.estimatedDividend) || 0;
+        yieldCell.textContent = skillLvl >= 3 && stock.price > 0 ? `${(dps / stock.price * 100).toFixed(2)}%` : '???';
     });
 }
 
@@ -2981,16 +2977,35 @@ function openDescriptionModal(symbol) {
         const marketCap = stock.price * stock.totalShares;
         indicatorsHTML += `<p><strong>Kapitalizacja rynkowa:</strong> ${marketCap.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN</p>`;
 
-        // 2. Wskaźnik Ceny do Zysku (C/Z, P/E)
-        const earningsPerShare = stock.quarterlyEarnings / stock.totalShares;
-        let peRatio_display = "N/A"; // Domyślna wartość (Not Applicable)
-        if (earningsPerShare > 0) {
-            const peRatio = stock.price / earningsPerShare;
-            peRatio_display = peRatio.toFixed(2);
-        } else if (stock.quarterlyEarnings < 0) {
-            peRatio_display = "Strata";
+        // 2. Fundamenty (4 ostatnie kwartały): przychody, EBITDA, zysk, EPS, C/Z, C/WK, na akcję
+        const f = stock.fundamentals ? updateFundamentalRatios(stock) : null;
+        if (f) {
+            const money = value => Number.isFinite(value) ? `${value.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN` : 'N/A';
+            const perShare = value => Number.isFinite(value) ? `${value.toFixed(2)} PLN` : 'N/A';
+            const ratio = value => value === null || !Number.isFinite(value) ? (f.epsTtm < 0 ? 'Strata' : 'N/A') : value.toFixed(2);
+
+            indicatorsHTML += `<p><strong>Przychody (4 kw.):</strong> ${f.revenueTtm > 0 ? money(f.revenueTtm) : 'N/A'}</p>`;
+            indicatorsHTML += `<p><strong>EBITDA (4 kw.):</strong> ${money(f.ebitdaTtm)}</p>`;
+            indicatorsHTML += `<p><strong>Zysk netto (4 kw.):</strong> ${money(f.netIncomeTtm)}</p>`;
+            indicatorsHTML += `<p><strong>Zysk na akcję (EPS):</strong> ${perShare(f.epsTtm)}</p>`;
+            indicatorsHTML += `<p><strong>Cena/Zysk (C/Z):</strong> ${ratio(f.peRatio)}</p>`;
+            indicatorsHTML += `<p><strong>Sprzedaż na akcję:</strong> ${f.revenueTtm > 0 ? perShare(f.salesPerShare) : 'N/A'}</p>`;
+            indicatorsHTML += `<p><strong>Wartość księgowa na akcję:</strong> ${perShare(f.bookValuePerShare)} (C/WK: ${f.pbRatio ? f.pbRatio.toFixed(2) : 'N/A'})</p>`;
+
+            if (getSkillLevel('financialAnalyst') >= 1 && f.fairValue > 0) {
+                indicatorsHTML += `<p><strong>Wycena analityczna:</strong> ${perShare(f.fairValue)} (${((f.fairValue / stock.price - 1) * 100).toFixed(1)}% vs kurs)</p>`;
+            }
         }
-        indicatorsHTML += `<p><strong>Cena/Zysk (C/Z):</strong> ${peRatio_display}</p>`;
+
+        // Dywidenda: strategia, ostatnia wypłata, ogłoszona wypłata
+        if (stock.assetType !== 'REIT') {
+            const last = stock.lastDividend;
+            indicatorsHTML += `<p><strong>Strategia dywidendowa:</strong> ${getDividendPolicyLabel(stock.dividendPolicy)}</p>`;
+            indicatorsHTML += `<p><strong>Ostatnia dywidenda:</strong> ${last ? `${last.dps.toFixed(4)} PLN/akcję (stopa ${(last.yield * 100).toFixed(2)}%)` : 'brak'}</p>`;
+            if (stock.pendingDividend) {
+                indicatorsHTML += `<p><strong>Ogłoszona wypłata:</strong> ${stock.pendingDividend.dps.toFixed(4)} PLN/akcję za ${Math.ceil(Math.max(0, stock.dividendTimer) / 1000)} s</p>`;
+            }
+        }
 
         // 3. Wskaźnik Aktywów do Pasywów
         let assetsToLiabilities_display = "∞"; // Nieskończoność, jeśli brak długu
@@ -4384,21 +4399,13 @@ function updateStateModalContent() {
         }
     }
 
-    // --- Wskaźnik koniunktury ---
+    // --- Wskaźnik koniunktury (faza cyklu gospodarczego) ---
     const sentimentEl = document.getElementById('market-sentiment-display');
     if (sentimentEl) {
-        const gigIndex = marketIndexes.find(idx => idx.id === 'GIG');
-        if (gigIndex && gigIndex.priceHistory && gigIndex.priceHistory.length >= 3) {
-            const h = gigIndex.priceHistory;
-            const last3 = h.slice(-3);
-            const allUp = last3.every((v, i) => i === 0 || v >= last3[i - 1]);
-            const allDown = last3.every((v, i) => i === 0 || v <= last3[i - 1]);
-            if (allUp) sentimentEl.innerHTML = '🟢 Hossa (Wzrost)';
-            else if (allDown) sentimentEl.innerHTML = '🔴 Bessa (Spadek)';
-            else sentimentEl.innerHTML = '⚪ Neutralna';
-        } else {
-            sentimentEl.innerHTML = '⚪ Neutralna (brak danych)';
-        }
+        const phase = getEconomyPhaseInfo();
+        const icons = { recovery: '🌱', expansion: '🟢', overheating: '🔥', recession: '🔴' };
+        const gdp = (economyCycle.gdpGrowth * 100).toFixed(1);
+        sentimentEl.innerHTML = `${icons[economyCycle.phase] || '⚪'} ${phase.name} · wskaźnik ${economyCycle.index}/100 · PKB ${gdp >= 0 ? '+' : ''}${gdp}% kw.`;
     }
 }
 
