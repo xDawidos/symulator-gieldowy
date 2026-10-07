@@ -1289,7 +1289,7 @@ group('Poczta, miasto i państwo (etap E1)', () => {
         startElectionCampaign();
         mailbox.subscriptions.FLESZ = null;
         const snapshot = JSON.parse(JSON.stringify(buildSaveSnapshot()));
-        assert(snapshot.version === 6, 'wersja 6');
+        assert(snapshot.version === SAVE_FORMAT_VERSION, 'aktualna wersja zapisu');
         const count = mailbox.messages.length;
         let report = applySaveSnapshot(snapshot);
         assert(report.ok && mailbox.messages.length === count && mailbox.subscriptions.FLESZ === null, 'skrzynka');
@@ -1298,6 +1298,163 @@ group('Poczta, miasto i państwo (etap E1)', () => {
         snapshot.version = 5;
         report = applySaveSnapshot(snapshot);
         assert(report.ok && mailbox.messages.length === 0 && city.mayor.support > 0, 'migracja v5');
+    });
+});
+
+group('Banki, lombard, obligacje, giełdy elitarne (etap E2)', () => {
+    function worldE2() {
+        const a = makeCompany('AAA', { cash: 600_000, fixedAssets: 800_000, name: 'Alfa Tech' });
+        const b = makeCompany('BBB', { cash: 600_000, fixedAssets: 800_000, name: 'Beta Usługi' });
+        const pawn = makeCompany('LOMB', { cash: 1_000_000, name: 'Lombard Test' });
+        pawn.assetType = 'PawnShop';
+        const collector = makeCompany('WRON', { cash: 1_000_000, name: 'Windykator Test' });
+        collector.assetType = 'DebtCollector';
+        [a, b, pawn, collector].forEach(company => { company.insiderShares = 0; company.sharesHeld = 0; company.reputation = { player: 0 }; });
+        resetWorld([a, b, pawn, collector]);
+        allBonds.length = 0;
+        activeBonds.length = 0;
+        marketIndexes.find(index => index.id === 'GIG').value = 100;
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        return { a, b, pawn, collector };
+    }
+    function makeBank(company) {
+        const bank = { id: 'bankT', name: 'Bank Testowy', isActive: true, type: BANK_TYPES.UNIVERSAL, cash: 5_000_000, loanPortfolio: {}, baseInterestRateMargin: 0.01, reservesBC: 0 };
+        commercialBanks.length = 0;
+        commercialBanks.push(bank);
+        company.bankAccountId = bank.id;
+        return bank;
+    }
+
+    test('bank: depozyt spółki z odsetkami, wynik = marża odsetkowa', () => {
+        const { a } = worldE2();
+        const bank = makeBank(a);
+        processCompanyBanking();
+        const deposit = bank.depositBook.AAA;
+        assert(deposit > 0, 'nadwyżka gotówki na lokacie');
+        processCompanyBanking();
+        assert(bank.depositBook.AAA > deposit, 'odsetki od depozytu');
+        bank.loanPortfolio.AAA = 100_000;
+        processCompanyBanking();
+        const ledger = bank.ledger;
+        assert(ledger.interestIncome > 0 && ledger.interestExpense > 0 && ledger.fees > 0, 'księga banku');
+        const bankStock = { bankData: { id: bank.id } };
+        const expected = (ledger.interestIncome + ledger.fees) * (1 - BANK_OPERATING_COST) - ledger.interestExpense - ledger.writeOffs;
+        assertNear(getBankQuarterlyEarnings(bankStock), expected, 'wynik banku');
+        assert(bank.ledger.interestIncome === 0, 'księga wyzerowana');
+        commercialBanks.length = 0;
+    });
+
+    test('kredyt spółki: zaległości prowadzą do odpisu', () => {
+        const { a } = worldE2();
+        const bank = makeBank(a);
+        bank.loanPortfolio.AAA = 1_000_000;
+        a.cash = 0;
+        for (let i = 0; i < LOAN_WRITE_OFF_AFTER; i++) { a.cash = 0; processCompanyBanking(); }
+        assert(bank.loanPortfolio.AAA < 1_000_000 && bank.ledger.writeOffs > 0, 'odpis części kredytu');
+        commercialBanks.length = 0;
+    });
+
+    test('kredyty botów: odsetki raz na tydzień, brak raty = zaległość', () => {
+        worldE2();
+        const ai = { id: 'aiT', name: 'Bot', cash: 0, creditScore: 80, portfolio: {}, loans: [{ id: 'l1', bankId: 'x', bankName: 'Bank', amount: 1000, interestRate: 0.52, weeklyPayment: 50 }] };
+        processAiLoansWeekly(ai);
+        assertNear(ai.loans[0].amount, 1010, 'odsetki tygodniowe');
+        assert(ai.loans[0].missedPayments === 1, 'zaległość');
+        ai.cash = 100;
+        processAiLoansWeekly(ai);
+        assert(ai.loans[0].missedPayments === 0 && ai.cash <= 50, 'rata zapłacona');
+    });
+
+    test('zastaw funduszu: limit 20% aktywów, gotówka, blokada akcji, spadek zaufania', () => {
+        const { a } = worldE2();
+        buyStock('AAA', 50);
+        const trust = playerFund.trust;
+        const cash = playerCash;
+        const loan = pawnFundShares('AAA', 50);
+        assert(loan && loan.principal <= getFundAssets() * PAWN_MAX_SHARE_OF_ASSETS + 1e-6, 'limit 20%');
+        assertNear(playerCash - cash, loan.principal, 'gotówka funduszu');
+        assert(playerPortfolio.AAA.lockedShares === 50 && playerFund.trust < trust, 'blokada i zaufanie');
+        assert(!sellStock('AAA', 10) || playerPortfolio.AAA.shares === 50, 'zastawionych akcji nie można sprzedać');
+        assert(repayFundPawn(loan.id) && !playerPortfolio.AAA.lockedShares, 'spłata zwalnia zastaw');
+    });
+
+    test('windykator zajmuje akcje po zaległościach', () => {
+        const { collector } = worldE2();
+        buyStock('AAA', 60);
+        const loan = pawnFundShares('AAA', 30);
+        playerCash = 0;
+        for (let i = 0; i < COLLECTOR_AFTER_MISSED; i++) processPawnLoansWeekly(getFundAccount());
+        assert(!playerFund.pawnLoans.includes(loan), 'dług przejęty');
+        assert((playerPortfolio.AAA?.shares || 0) < 60 && collector.holdingPortfolio.AAA.quantity > 0, 'akcje u windykatora');
+    });
+
+    test('obligacje: kupon kwartalny, nominał w terminie, wycena spada przy wzroście stóp', () => {
+        worldE2();
+        stateBondOffer.mediumTerm.available = 10;
+        playerCash = 10000;
+        assert(buyStateBond('player', 'mediumTerm', 2), 'zakup');
+        const bond = allBonds.find(b => b.ownerId === 'player');
+        assert(bond.remainingGameMs === 25 * 60000 && bond.id.startsWith('bond'), 'czas gry i ID');
+        const cash = playerCash;
+        payBondCoupons();
+        assertNear(playerCash - cash, 2 * 1000 * bond.interestRate / 4, 'kupony');
+        const rate = centralBank.baseInterestRate;
+        const value = getBondValue(bond);
+        centralBank.baseInterestRate = rate + 0.05;
+        assert(getBondValue(bond) < value, 'wyższe stopy = niższa wycena');
+        centralBank.baseInterestRate = rate;
+        const before = playerCash;
+        checkBondMaturities(26 * 60000);
+        assertNear(playerCash - before, 2000, 'nominał');
+        assert(allBonds.length === 0, 'obligacje zapadły');
+    });
+
+    test('giełdy elitarne: ranking 6 / 3 / 1, Diament dopiero po 30 minutach', () => {
+        const companies = Array.from({ length: 12 }, (_, i) => {
+            const c = makeCompany(`P${i}`, { name: `Platyna ${i}` });
+            c.exchange = 'PLATINUM';
+            c.price = 2000 + i * 100;
+            c.totalShares = 1000000; // kapitalizacja 2–3,1 mld (próg Szmaragdu: 1 mld)
+            return c;
+        });
+        resetWorld(companies);
+        startNewCareer({});
+        assignEliteExchanges();
+        assert(!stocks.some(s => s.exchange === 'DIAMOND'), 'bez Diamentu przed 30 min');
+        assert(stocks.filter(s => s.exchange === 'EMERALD').length === 3 && stocks.filter(s => s.exchange === 'RUBY').length === 6, 'Szmaragd 3, Rubin 6');
+        playerFund.clockMs = 31 * 60000;
+        assignEliteExchanges();
+        assert(stocks.find(s => s.exchange === 'DIAMOND')?.symbol === 'P11', 'Diament = największa');
+        assert(stocks.find(s => s.symbol === 'P11').volatilityFactor < 1, 'premia stabilności');
+        playerProfile.positionId = 'board';
+        syncExchangeAccessWithPosition();
+        assert(canAccessExchange('EMERALD') && !canAccessExchange('DIAMOND'), 'dostęp wg stanowiska');
+    });
+
+    test('spółka zależna: kapitał od matki, te same badania i polityka', () => {
+        const parent = makeCompany('RUB', { cash: 5_000_000, unlockedTechs: ['t1', 't2'] });
+        parent.exchange = 'RUBY';
+        parent.dividendPolicy = 'Balanced';
+        resetWorld([parent]);
+        const cash = parent.cash;
+        const child = foundSubsidiary(parent);
+        assert(child && child.isSubsidiaryOf === 'RUB' && parent.subsidiaries.includes(child.symbol), 'zależność');
+        assert(child.research.unlockedTechs.join() === 't1,t2' && child.dividendPolicy === 'Balanced', 'badania i polityka');
+        assertNear(cash - parent.cash, child.cash, 'kapitał od matki');
+        assert(!isEliteExchange(child.exchange), 'IPO na niższej giełdzie');
+    });
+
+    test('zapis v7 zachowuje obligacje i zastawy', () => {
+        worldE2();
+        buyStock('AAA', 40);
+        pawnFundShares('AAA', 20);
+        stateBondOffer.shortTerm.available = 5;
+        buyStateBond('player', 'shortTerm', 1);
+        const snapshot = JSON.parse(JSON.stringify(buildSaveSnapshot()));
+        assert(snapshot.version === SAVE_FORMAT_VERSION, 'aktualna wersja zapisu');
+        const report = applySaveSnapshot(snapshot);
+        assert(report.ok && allBonds.length === 1 && playerFund.pawnLoans.length === 1, 'obligacje i zastaw');
+        assert(playerPortfolio.AAA.lockedShares === 20, 'blokada akcji');
     });
 });
 

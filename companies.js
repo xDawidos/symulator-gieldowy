@@ -339,7 +339,11 @@ const exchanges = {
     'BRONZE': { name: 'Rynek Brązowy 🥉', level: 1, color: '#cd7f32', minPrice: 20, maxPrice: 75, licenseCost: 20000 },
     'SILVER': { name: 'Giełda Srebrna 🥈', level: 2, color: '#c0c0c0', minPrice: 75, maxPrice: 400, licenseCost: 125000 },
     'GOLD': { name: 'Giełda Złota 🥇', level: 3, color: '#ffd700', minPrice: 400, maxPrice: 1500, licenseCost: 250000 },
-    'PLATINUM': { name: 'Giełda Platynowa 💎', level: 4, color: '#e5e4e2', minPrice: 1500, maxPrice: Infinity, licenseCost: 500000 }
+    'PLATINUM': { name: 'Giełda Platynowa 💎', level: 4, color: '#e5e4e2', minPrice: 1500, maxPrice: Infinity, licenseCost: 500000 },
+    // Giełdy elitarne (etap E2): przydział wg rankingu kapitalizacji, nie ceny — finance.js
+    'RUBY': { name: 'Giełda Rubinowa 🔴', level: 5, color: '#c3112f', minPrice: Infinity, maxPrice: Infinity, licenseCost: 0, rankBased: true },
+    'EMERALD': { name: 'Giełda Szmaragdowa 🟢', level: 6, color: '#1f9d55', minPrice: Infinity, maxPrice: Infinity, licenseCost: 0, rankBased: true },
+    'DIAMOND': { name: 'Giełda Diamentowa 💠', level: 7, color: '#6ec6ff', minPrice: Infinity, maxPrice: Infinity, licenseCost: 0, rankBased: true }
 };
 
 const CORPORATE_PHASES = {
@@ -1845,7 +1849,7 @@ function hasRevenueModel(stock) {
  * przewyższa kapitalizację), a zysk to stały % aktywów — model banku do osobnej kalibracji.
  */
 function hasValuationAnchor(stock) {
-    return Boolean(stock && !stock.assetType && !stock.isBankStock);
+    return Boolean(stock && !stock.assetType);
 }
 
 function getLoanRate() {
@@ -1977,9 +1981,14 @@ function updateFundamentalRatios(stock) {
         const healthPremium = 1 + Math.max(-0.3, Math.min(0.3, (Number(stock.financialHealth) || 0) * 0.03));
         const bvps = Math.max(0, fundamentals.bookValuePerShare);
 
-        fundamentals.fairValue = fundamentals.epsTtm > 0
-            ? 0.75 * fundamentals.epsTtm * profile.pe * getValuationMultiplier(stock) * healthPremium + 0.25 * bvps
-            : Math.max(0.01, bvps * 0.7);
+        if (stock.isBankStock) {
+            // Bank: wycena z zysku (marża odsetkowa); wartość księgowa zawiera depozyty, więc bez kotwicy P/BV.
+            fundamentals.fairValue = fundamentals.epsTtm > 0 && (stock.ledgerQuarters || 0) >= 4 ? fundamentals.epsTtm * profile.pe * healthPremium : null;
+        } else {
+            fundamentals.fairValue = fundamentals.epsTtm > 0
+                ? 0.75 * fundamentals.epsTtm * profile.pe * getValuationMultiplier(stock) * healthPremium + 0.25 * bvps
+                : Math.max(0.01, bvps * 0.7);
+        }
     } else {
         fundamentals.fairValue = null;
     }
@@ -2248,9 +2257,15 @@ function processFinancialReports() {
 
         } else if (stock.isBankStock) {
             // 🏦 Banki Komercyjne
-            const loanIncome = stock.balanceSheet.assets * 0.01; 
-            const depositCosts = stock.balanceSheet.liabilities * 0.005; 
-            quarterlyEarnings = (loanIncome - depositCosts) * (1 + (stock.financialHealth / 10));
+            // Wynik = marża odsetkowa z księgi banku (finance.js); stary wzór tylko bez danych.
+            const ledgerResult = typeof getBankQuarterlyEarnings === 'function' ? getBankQuarterlyEarnings(stock) : null;
+            if (ledgerResult !== null) {
+                quarterlyEarnings = ledgerResult;
+            } else {
+                const loanIncome = stock.balanceSheet.assets * 0.01;
+                const depositCosts = stock.balanceSheet.liabilities * 0.005;
+                quarterlyEarnings = (loanIncome - depositCosts) * (1 + (stock.financialHealth / 10));
+            }
 
         } else if (!stock.assetType) {
             // 🏭 Spółki standardowe i państwowe: model przychodów, kosztów, amortyzacji, odsetek i CIT.
@@ -3856,87 +3871,6 @@ function initializeCityCompanies() {
     console.log("[MIASTO] Zainicjowano spółki miejskie i firmy prywatne.");
 }
 
-function processCompanyBanking() {
-    const activeBanks = commercialBanks.filter(b => b.isActive);
-    if (activeBanks.length === 0) return;
-
-    stocks.forEach(stock => {
-        // Pomiń typy specjalne, zbankrutowane lub bez konta
-        if (stock.assetType || stock.isBankrupt || !stock.bankAccountId) return;
-
-        const bank = activeBanks.find(b => b.id === stock.bankAccountId);
-        if (!bank) return; // Bank nieaktywny lub nie znaleziono
-
-        // 1. Płacenie opłat i wpłata depozytu (bez zmian)
-        if (stock.cash > 0) {
-            const accountFee = Math.min(stock.cash, stock.cash * 0.0005 + 50);
-            stock.cash -= accountFee;
-            bank.cash += accountFee;
-
-            const depositAmount = stock.cash * 0.1;
-            stock.cash -= depositAmount;
-            bank.cash += depositAmount;
-        }
-
-        // 2. Zarządzanie rezerwami BC (bez zmian)
-        const requiredReserves = bank.cash * centralBank.reserveRequirement;
-        const reserveDifference = requiredReserves - bank.reservesBC;
-        if (reserveDifference > 0) {
-            const amountToTransfer = Math.min(reserveDifference, bank.cash * 0.1);
-            if (amountToTransfer > 0) { /* ... transfer do BC ... */ }
-        } else if (reserveDifference < 0) {
-            const amountToWithdraw = Math.min(Math.abs(reserveDifference), centralBank.funds * 0.01);
-             if (amountToWithdraw > 0) { /* ... wypłata z BC ... */ }
-        }
-
-        // 3. Zaciąganie kredytów przez spółki (bez zmian)
-        const needsLoan = stock.cash < (stock.balanceSheet.assets * 0.01) && stock.financialHealth < 1;
-        const canTakeLoan = bank.type === BANK_TYPES.CORPORATE || bank.type === BANK_TYPES.UNIVERSAL;
-        if (needsLoan && canTakeLoan && Math.random() < 0.1) {
-             const loanAmount = stock.balanceSheet.assets * getRandomInRange(0.05, 0.15);
-             const loanInterest = (LOAN_INTEREST_RATE + bank.baseInterestRateMargin) * 1.1;
-             stock.cash += loanAmount;
-             stock.balanceSheet.liabilities += loanAmount;
-             bank.loanPortfolio[stock.symbol] = (bank.loanPortfolio[stock.symbol] || 0) + loanAmount; // Śledzimy sumę pożyczoną danej firmie
-             bank.cash -= loanAmount;
-             logEvent(` Kredyt Korporacyjny: ${stock.name} zaciąga ${loanAmount.toFixed(0)} PLN pożyczki w ${bank.name}.`, 'market');
-        }
-
-        // --- 👇 NOWA LOGIKA: SPŁATA KREDYTÓW PRZEZ SPÓŁKI 👇 ---
-        // Sprawdź, czy spółka ma kredyt w tym banku (używamy `bank.loanPortfolio`)
-        const companyLoanAmount = bank.loanPortfolio[stock.symbol] || 0;
-        if (companyLoanAmount > 0) {
-            // Oblicz tygodniową ratę (prosta: np. 1% kapitału + odsetki)
-            const weeklyInterestRate = ((LOAN_INTEREST_RATE + bank.baseInterestRateMargin) * 1.1) / 52;
-            const interestPayment = companyLoanAmount * weeklyInterestRate;
-            const capitalPayment = companyLoanAmount * 0.01; // Spłaca 1% kapitału tygodniowo
-            const weeklyPayment = interestPayment + capitalPayment;
-
-            if (stock.cash >= weeklyPayment) {
-                // Spółkę stać na spłatę
-                stock.cash -= weeklyPayment; // Pieniądze znikają z konta spółki
-                stock.balanceSheet.liabilities -= capitalPayment; // Zmniejsz zadłużenie o część kapitałową
-                bank.cash += weeklyPayment; // Bank otrzymuje płatność
-                // Zaktualizuj kwotę kredytu w portfelu banku
-                bank.loanPortfolio[stock.symbol] = Math.max(0, companyLoanAmount - capitalPayment);
-                if (bank.loanPortfolio[stock.symbol] === 0) {
-                    delete bank.loanPortfolio[stock.symbol]; // Usuń, jeśli spłacono
-                }
-            } else {
-                // Spółki nie stać na spłatę - kara
-                const penalty = weeklyPayment * 0.1; // Kara 10% raty
-                stock.balanceSheet.liabilities += penalty; // Zwiększ zadłużenie
-                stock.financialHealth -= 0.1; // Lekkie pogorszenie kondycji
-                logEvent(`⚠️ ${stock.name} ma problemy ze spłatą kredytu w ${bank.name}!`, 'warning');
-            }
-        }
-        // --- 👆 KONIEC NOWEJ LOGIKI 👆 ---
-    });
-
-    // Zysk dla Banku Centralnego (bez zmian)
-    centralBank.funds *= 1.001;
-}
-
 function updateHoldingCompanies() {
     const holdingCompanies = stocks.filter(s => s.assetType === 'Holding');
 
@@ -4937,7 +4871,7 @@ function runPawnShopAI() {
     const playerNetWorth = calculateNetWorth('player');
     const playerCashRatio = playerCash / playerNetWorth;
     const playerHasDebt = playerCommercialLoans.some(l => (l.missedPayments || 0) > 0);
-    if (playerCashRatio < 0.1 || playerHasDebt) { // Jeśli gracz ma kłopoty
+    if (FEATURE_FLAGS.privateLoans && (playerCashRatio < 0.1 || playerHasDebt)) { // fundusz: zastaw w panelu (finance.js)
         for (const symbol in playerPortfolio) {
             const holding = playerPortfolio[symbol];
             // Szukaj wartościowych, niezablokowanych akcji
@@ -4956,7 +4890,7 @@ function runPawnShopAI() {
         const aiNetWorth = calculateNetWorth(ai);
         const aiCashRatio = ai.cash / aiNetWorth;
         const aiHasDebt = ai.loans && ai.loans.some(l => (l.missedPayments || 0) > 0);
-        if (aiCashRatio < 0.1 || aiHasDebt) {
+        if (aiHasDebt || aiCashRatio < 0.03) { // prawdziwe zaległości lub brak gotówki
             for (const symbol in ai.portfolio) {
                 const holding = ai.portfolio[symbol];
                 if (holding.shares > 0 && !holding.assetType && !holding.lockedShares) {
@@ -6815,6 +6749,8 @@ function reviewCompanyPlacements() {
 
 
         if (!correctExchangeKey || correctExchangeKey === currentExchangeKey) return;
+        // Giełdy elitarne przydziela ranking kapitalizacji (assignEliteExchanges, finance.js).
+        if (exchanges[currentExchangeKey]?.rankBased && correctExchangeKey === 'PLATINUM') return;
 
         promotionOccurred = true;
         const newExchange = exchanges[correctExchangeKey];

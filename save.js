@@ -15,8 +15,9 @@ const GAME_SAVE_KEY = 'gra_inwestycyjna_dawid_save_v4';
 const LEGACY_SAVE_KEYS = ['gra_inwestycyjna_dawid_save_v2', 'gra_inwestycyjna_dawid_save_v1'];
 // v5: korporacja (zarządcy, oceny, analitycy, przejęcia). Zapis v4 migruje — korporacja tworzy się przy wczytaniu.
 // v6: skrzynka mailowa, burmistrz i kampania, festyn, oferta prywatyzacyjna. v4/v5 migrują przy wczytaniu.
-const SAVE_FORMAT_VERSION = 6;
-const SUPPORTED_SAVE_VERSIONS = [4, 5, 6];
+// v7: obligacje i oferty (czas gry, kupony), depozyty i księgi banków, zastawy funduszy, giełdy elitarne.
+const SAVE_FORMAT_VERSION = 7;
+const SUPPORTED_SAVE_VERSIONS = [4, 5, 6, 7];
 
 let lastSaveReport = null;
 let saveDisabledUntilReload = false;
@@ -116,6 +117,8 @@ function buildSaveSnapshot() {
         playerFund,
         corporation,
         mailbox,
+        allBonds,
+        activeBonds,
         cityInvestment,
         privatizationOffer,
         nextFestivalCountdown,
@@ -355,6 +358,12 @@ function applySaveSnapshot(snapshot) {
     festival = null; // trwający festyn (czas rzeczywisty) nie przetrwa wczytania
     nextFestivalCountdown = isFiniteNumber(snapshot.nextFestivalCountdown) ? snapshot.nextFestivalCountdown : BASE_DELAYS.quarterly * 2;
     ensureCityModel();
+
+    // Obligacje (v7; wcześniej nie były zapisywane). Stare rekordy bez czasu gry migruje checkBondMaturities.
+    allBonds.length = 0;
+    activeBonds.length = 0;
+    if (Array.isArray(snapshot.allBonds)) allBonds.push(...snapshot.allBonds.filter(bond => bond && isFiniteNumber(bond.faceValue)));
+    if (Array.isArray(snapshot.activeBonds)) activeBonds.push(...snapshot.activeBonds);
 
     if (snapshot.corporation && Array.isArray(snapshot.corporation.managers)) {
         corporation = snapshot.corporation;

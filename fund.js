@@ -30,9 +30,9 @@ const CAREER_POSITIONS = [
     { id: 'junior',      name: 'Młodszy zarządca',   feeShare: 0.15, bonusMult: 1.0, exchangeAccessLevel: 2 },
     { id: 'manager',     name: 'Zarządca funduszu',  feeShare: 0.20, bonusMult: 1.3, exchangeAccessLevel: 3 },
     { id: 'senior',      name: 'Starszy zarządca',   feeShare: 0.25, bonusMult: 1.6, exchangeAccessLevel: 3 },
-    { id: 'projectLead', name: 'Kierownik projektu', feeShare: 0.30, bonusMult: 2.0, exchangeAccessLevel: 4 },
-    { id: 'board',       name: 'Członek zarządu',    feeShare: 0.35, bonusMult: 2.5, exchangeAccessLevel: 4 },
-    { id: 'ceo',         name: 'CEO',                feeShare: 0.40, bonusMult: 3.0, exchangeAccessLevel: 4 }
+    { id: 'projectLead', name: 'Kierownik projektu', feeShare: 0.30, bonusMult: 2.0, exchangeAccessLevel: 5 },
+    { id: 'board',       name: 'Członek zarządu',    feeShare: 0.35, bonusMult: 2.5, exchangeAccessLevel: 6 },
+    { id: 'ceo',         name: 'CEO',                feeShare: 0.40, bonusMult: 3.0, exchangeAccessLevel: 7 }
 ];
 
 // Kraje: na start dostępna tylko Polska; pozostałe jako przyszłe „przepustki” (mechanizm, bez treści).
@@ -116,10 +116,6 @@ function getFundPortfolioValue() {
     let value = 0;
     for (const symbol in playerPortfolio) value += getHoldingMarketValue(symbol, playerPortfolio[symbol]);
     return value;
-}
-
-function getFundBondsValue() {
-    return allBonds.filter(bond => bond.ownerId === 'player').reduce((sum, bond) => sum + (Number(bond.faceValue) || 1000), 0);
 }
 
 function getFundAssets() {
@@ -508,7 +504,9 @@ function forceLiquidation(amountNeeded) {
     for (const { symbol, holding, stock } of positions) {
         if (needed <= 0) break;
         const salePrice = stock.price * 0.99; // sprzedaż pod presją
-        const quantity = Math.min(holding.shares, Math.ceil(needed / salePrice));
+        const free = holding.shares - (holding.lockedShares || 0); // akcje w zastawie zostają
+        if (free <= 0) continue;
+        const quantity = Math.min(free, Math.ceil(needed / salePrice));
         const proceeds = quantity * salePrice;
 
         playerCash += proceeds;

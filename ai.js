@@ -411,6 +411,123 @@ function runAiMarian(ai) {
 }
 
 
+/** Raz na tydzień gry: pożyczki lombardowe (termin), raty i odsetki kredytów, zaległości. */
+function processAiLoansWeekly(ai) {
+    // ===>>> ZMODYFIKOWANA PĘTLA SPŁATY KREDYTÓW AI <<<===
+    const now = Date.now();
+    if (ai.loans && ai.loans.length > 0) {
+        
+        // Sprawdź najpierw pożyczki lombardowe (mają twardy termin)
+        for (let i = ai.loans.length - 1; i >= 0; i--) {
+            const loan = ai.loans[i];
+            if (loan.isPawnLoan && now >= loan.maturityDate) {
+                const pawnShop = stocks.find(s => s.symbol === loan.collectorSymbol);
+                
+                if (ai.cash >= loan.amount) {
+                    // AI ma pieniądze - spłaca
+                    ai.cash -= loan.amount;
+                    if (pawnShop) pawnShop.cash += loan.amount;
+                    console.log(`[AI] ${ai.name} spłacił pożyczkę lombardową w ${loan.bankName} (${loan.amount.toFixed(2)} PLN).`);
+                    
+                    // Odblokuj akcje
+                    const holding = ai.portfolio[loan.collateral.symbol];
+                    if (holding && holding.lockedShares) {
+                        holding.lockedShares = Math.max(0, holding.lockedShares - loan.collateral.quantity);
+                    }
+                    ai.loans.splice(i, 1);
+                
+                } else {
+                    // AI nie ma pieniędzy - DEFAULT
+                    console.log(`[AI] ❌ ${ai.name} NIE SPŁACIŁ pożyczki lombardowej! ${loan.bankName} przejmuje ${loan.collateral.quantity} akcji ${loan.collateral.symbol}!`);
+
+                    // Przeniesienie akcji
+                    const holding = ai.portfolio[loan.collateral.symbol];
+                    if (holding) {
+                        holding.shares = Math.max(0, holding.shares - loan.collateral.quantity);
+                        if (holding.shares <= 0) delete ai.portfolio[loan.collateral.symbol];
+                    }
+                    if (pawnShop) {
+                        if (!pawnShop.holdingPortfolio) pawnShop.holdingPortfolio = {};
+                        const pawnHolding = pawnShop.holdingPortfolio[loan.collateral.symbol];
+                        if (pawnHolding) {
+                            pawnHolding.quantity += loan.collateral.quantity;
+                        } else {
+                            const stock = stocks.find(s => s.symbol === loan.collateral.symbol);
+                            pawnShop.holdingPortfolio[loan.collateral.symbol] = {
+                                quantity: loan.collateral.quantity,
+                                purchasePrice: stock ? stock.price : 0
+                            };
+                        }
+                    }
+                    ai.loans.splice(i, 1);
+                }
+            }
+        } // Koniec pętli lombardowej
+
+        // Teraz obsłuż normalne kredyty (bankowe i windykacyjne)
+        {
+            let paidLoanThisTurn = false;
+            for (let i = ai.loans.length - 1; i >= 0; i--) {
+                const loan = ai.loans[i];
+                if (loan.isPawnLoan) continue; // Pomiń lombardowe, już obsłużone
+
+                // Obliczanie odsetek
+                const weeklyInterestRate = loan.interestRate / 52;
+                loan.amount += loan.amount * weeklyInterestRate; 
+
+                if (ai.cash >= loan.weeklyPayment) {
+                    loan.missedPayments = 0;
+                    if (loan.bankId && typeof recordBankInterestIncome === 'function') recordBankInterestIncome(loan.bankId, loan.amount * weeklyInterestRate / (1 + weeklyInterestRate));
+                    const payment = Math.min(loan.weeklyPayment, loan.amount);
+                    ai.cash -= payment;
+                    loan.amount -= payment;
+                    paidLoanThisTurn = true; 
+                    chargeAccountingFee(payment, ai.id);
+
+                    // --- Kierowanie płatności ---
+                    if (loan.collectorSymbol) {
+                        const collector = stocks.find(s => s.symbol === loan.collectorSymbol);
+                        if (collector) collector.cash += payment;
+                    } else if (loan.bankId) {
+                        const bank = commercialBanks.find(b => b.id === loan.bankId);
+                        if (bank) {
+                            bank.cash += payment;
+                            if (bank.loanPortfolio[ai.id]) {
+                                const bankLoanIndex = bank.loanPortfolio[ai.id].findIndex(bl => bl.id === loan.id);
+                                if (bankLoanIndex !== -1) {
+                                    bank.loanPortfolio[ai.id][bankLoanIndex].remainingAmount -= payment;
+                                    if (bank.loanPortfolio[ai.id][bankLoanIndex].remainingAmount <= 0.01) {
+                                        bank.loanPortfolio[ai.id].splice(bankLoanIndex, 1);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // --- Koniec kierowania ---
+
+                    if (loan.amount <= 0.01) {
+                        console.log(`[AI] ${ai.name} spłacił kredyt w ${loan.bankName}.`);
+                        if (loan.collateral) {
+                            const holding = ai.portfolio[loan.collateral.symbol];
+                            if (holding && holding.lockedShares) {
+                                holding.lockedShares = Math.max(0, holding.lockedShares - loan.collateral.quantity);
+                            }
+                        }
+                        ai.loans.splice(i, 1);
+                    }
+                } else {
+                    loan.missedPayments = (loan.missedPayments || 0) + 1; // widoczne dla windykatora
+                    const scorePenalty = 5;
+                    ai.creditScore = Math.max(0, ai.creditScore - scorePenalty);
+                    console.log(`[AI Kredyt] Wynik kredytowy ${ai.name} spadł do ${ai.creditScore} (-${scorePenalty}) za brak spłaty.`);
+                }
+            } // Koniec pętli for
+            
+        }
+    }
+    // ===>>> KONIEC ZMODYFIKOWANEJ PĘTLI KREDYTOWEJ <<<===
+}
+
 function makeAiDecision(ai) {
   
     let targetStockSymbol = null;
@@ -500,120 +617,7 @@ function makeAiDecision(ai) {
     const activeInvestmentBanks = commercialBanks.filter(b => b.isActive && b.type === BANK_TYPES.INVESTMENT);
 
 
-    // ===>>> ZMODYFIKOWANA PĘTLA SPŁATY KREDYTÓW AI <<<===
-    const now = Date.now();
-    if (ai.loans && ai.loans.length > 0) {
-        
-        // Sprawdź najpierw pożyczki lombardowe (mają twardy termin)
-        for (let i = ai.loans.length - 1; i >= 0; i--) {
-            const loan = ai.loans[i];
-            if (loan.isPawnLoan && now >= loan.maturityDate) {
-                const pawnShop = stocks.find(s => s.symbol === loan.collectorSymbol);
-                
-                if (ai.cash >= loan.amount) {
-                    // AI ma pieniądze - spłaca
-                    ai.cash -= loan.amount;
-                    if (pawnShop) pawnShop.cash += loan.amount;
-                    console.log(`[AI] ${ai.name} spłacił pożyczkę lombardową w ${loan.bankName} (${loan.amount.toFixed(2)} PLN).`);
-                    
-                    // Odblokuj akcje
-                    const holding = ai.portfolio[loan.collateral.symbol];
-                    if (holding && holding.lockedShares) {
-                        holding.lockedShares = Math.max(0, holding.lockedShares - loan.collateral.quantity);
-                    }
-                    ai.loans.splice(i, 1);
-                
-                } else {
-                    // AI nie ma pieniędzy - DEFAULT
-                    console.log(`[AI] ❌ ${ai.name} NIE SPŁACIŁ pożyczki lombardowej! ${loan.bankName} przejmuje ${loan.collateral.quantity} akcji ${loan.collateral.symbol}!`);
-
-                    // Przeniesienie akcji
-                    const holding = ai.portfolio[loan.collateral.symbol];
-                    if (holding) {
-                        holding.shares = Math.max(0, holding.shares - loan.collateral.quantity);
-                        if (holding.shares <= 0) delete ai.portfolio[loan.collateral.symbol];
-                    }
-                    if (pawnShop) {
-                        if (!pawnShop.holdingPortfolio) pawnShop.holdingPortfolio = {};
-                        const pawnHolding = pawnShop.holdingPortfolio[loan.collateral.symbol];
-                        if (pawnHolding) {
-                            pawnHolding.quantity += loan.collateral.quantity;
-                        } else {
-                            const stock = stocks.find(s => s.symbol === loan.collateral.symbol);
-                            pawnShop.holdingPortfolio[loan.collateral.symbol] = {
-                                quantity: loan.collateral.quantity,
-                                purchasePrice: stock ? stock.price : 0
-                            };
-                        }
-                    }
-                    ai.loans.splice(i, 1);
-                }
-            }
-        } // Koniec pętli lombardowej
-
-        // Teraz obsłuż normalne kredyty (bankowe i windykacyjne)
-        if (Math.random() < 0.5) { // Zwiększona szansa na próbę spłaty
-            let paidLoanThisTurn = false;
-            for (let i = ai.loans.length - 1; i >= 0; i--) {
-                const loan = ai.loans[i];
-                if (loan.isPawnLoan) continue; // Pomiń lombardowe, już obsłużone
-
-                // Obliczanie odsetek
-                const weeklyInterestRate = loan.interestRate / 52;
-                loan.amount += loan.amount * weeklyInterestRate; 
-
-                if (ai.cash >= loan.weeklyPayment) {
-                    const payment = Math.min(loan.weeklyPayment, loan.amount);
-                    ai.cash -= payment;
-                    loan.amount -= payment;
-                    paidLoanThisTurn = true; 
-                    chargeAccountingFee(payment, ai.id);
-
-                    // --- Kierowanie płatności ---
-                    if (loan.collectorSymbol) {
-                        const collector = stocks.find(s => s.symbol === loan.collectorSymbol);
-                        if (collector) collector.cash += payment;
-                    } else if (loan.bankId) {
-                        const bank = commercialBanks.find(b => b.id === loan.bankId);
-                        if (bank) {
-                            bank.cash += payment;
-                            if (bank.loanPortfolio[ai.id]) {
-                                const bankLoanIndex = bank.loanPortfolio[ai.id].findIndex(bl => bl.id === loan.id);
-                                if (bankLoanIndex !== -1) {
-                                    bank.loanPortfolio[ai.id][bankLoanIndex].remainingAmount -= payment;
-                                    if (bank.loanPortfolio[ai.id][bankLoanIndex].remainingAmount <= 0.01) {
-                                        bank.loanPortfolio[ai.id].splice(bankLoanIndex, 1);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    // --- Koniec kierowania ---
-
-                    if (loan.amount <= 0.01) {
-                        console.log(`[AI] ${ai.name} spłacił kredyt w ${loan.bankName}.`);
-                        if (loan.collateral) {
-                            const holding = ai.portfolio[loan.collateral.symbol];
-                            if (holding && holding.lockedShares) {
-                                holding.lockedShares = Math.max(0, holding.lockedShares - loan.collateral.quantity);
-                            }
-                        }
-                        ai.loans.splice(i, 1);
-                    }
-                } else {
-                    console.log(`[AI] ${ai.name} nie ma środków na spłatę raty kredytu w ${loan.bankName}.`);
-                    const scorePenalty = 5;
-                    ai.creditScore = Math.max(0, ai.creditScore - scorePenalty);
-                    console.log(`[AI Kredyt] Wynik kredytowy ${ai.name} spadł do ${ai.creditScore} (-${scorePenalty}) za brak spłaty.`);
-                }
-            } // Koniec pętli for
-            
-            if (paidLoanThisTurn) {
-                return; // AI zapłaciło ratę, kończy turę
-            }
-        }
-    }
-    // ===>>> KONIEC ZMODYFIKOWANEJ PĘTLI KREDYTOWEJ <<<===
+    // Raty i odsetki kredytów: processAiLoansWeekly (pętla tygodniowa).
 
 
     // Główna logika inwestycyjna zależna od osobowości

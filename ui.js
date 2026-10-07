@@ -657,16 +657,18 @@ function displayPortfolio() {
         playerBonds.forEach(bond => {
             const key = `${bond.issuerName}_${bond.type}`;
             if (!groupedBonds[key]) {
-                groupedBonds[key] = { count: 0, name: bond.issuerName, type: bond.type, nextMaturity: bond.maturityDate };
+                groupedBonds[key] = { count: 0, name: bond.issuerName, type: bond.type, nextMaturity: Infinity, value: 0, defaulted: 0 };
             }
             groupedBonds[key].count++;
-            groupedBonds[key].nextMaturity = Math.min(groupedBonds[key].nextMaturity, bond.maturityDate);
+            groupedBonds[key].nextMaturity = Math.min(groupedBonds[key].nextMaturity, Number(bond.remainingGameMs) || 0);
+            groupedBonds[key].value += getBondValue(bond);
+            if (bond.defaulted) groupedBonds[key].defaulted++;
         });
         for (const key in groupedBonds) {
             const group = groupedBonds[key];
-            const remainingTime = Math.max(0, Math.ceil((group.nextMaturity - Date.now()) / 1000));
+            const remainingTime = Math.max(0, Math.ceil(group.nextMaturity / 60000));
             const bondItem = document.createElement('li');
-            bondItem.textContent = `- ${group.name} (${group.type}): ${group.count} szt. (najbliższa za: ${remainingTime}s)`;
+            bondItem.textContent = `- ${group.name} (${group.type}): ${group.count} szt., wycena ${group.value.toFixed(0)} zł (zapada za ~${remainingTime} min gry)${group.defaulted ? ' ⚠️ niewypłacalny emitent' : ''}`;
             myStocksList.appendChild(bondItem);
         }
         hasOwnedStocks = true;
@@ -5648,6 +5650,7 @@ function displayFundPanel() {
     renderFundClients();
     renderPrivatePanel();
     renderCareerPanel();
+    renderPawnPanel();
 }
 
 function renderFundSummary() {
@@ -6390,4 +6393,33 @@ function renderCityElection() {
                     <button onclick="donateToCampaign('${c.id}', parseFloat(document.getElementById('campaign-${c.id}').value)); updateCityModalContent();">Wesprzyj</button></td>
             </tr>`).join('')}</tbody>
         </table>`;
+}
+
+// =================================================================================
+// LOMBARD FUNDUSZU (etap E2)
+// =================================================================================
+
+function renderPawnPanel() {
+    const container = document.getElementById('fund-pawn-panel');
+    if (!container || !playerFund || container.contains(document.activeElement)) return; // nie przerywaj wpisywania
+    const account = getFundAccount();
+    const pawnShop = getPawnShop();
+    const holdings = Object.entries(playerPortfolio)
+        .filter(([, h]) => (h.assetType === 'stock' || !h.assetType) && h.shares - (h.lockedShares || 0) > 0);
+
+    container.innerHTML = `
+        <p class="fund-muted">Zastaw do ${(PAWN_MAX_SHARE_OF_ASSETS * 100).toFixed(0)}% aktywów funduszu, ${(PAWN_LOAN_TO_VALUE * 100).toFixed(0)}% wartości akcji, ${(PAWN_ANNUAL_RATE * 100).toFixed(0)}% rocznie, ${PAWN_WEEKS} tygodni.
+        Każdy zastaw obniża zaufanie klientów i zwiększa ryzyko compliance. ${COLLECTOR_AFTER_MISSED} niezapłacone odsetki = windykator zajmuje akcje.</p>
+        <div class="career-row"><span>Zadłużenie / limit</span><span>${formatZl(getPawnOutstanding(account), 0)} / ${formatZl(getPawnOutstanding(account) + getPawnCapacity(account), 0)}</span></div>
+        ${account.loans.map(loan => `
+            <div class="career-row">
+                <span>${escapeHtml(loan.symbol)} × ${loan.shares} · ${formatZl(loan.principal, 0)} · ${loan.weeksLeft} tyg.${loan.missed ? ` · <span class="loss">zaległość ${loan.missed}</span>` : ''}</span>
+                <button onclick="repayFundPawn('${loan.id}')">Spłać</button>
+            </div>`).join('')}
+        ${pawnShop && holdings.length ? `
+            <div class="fund-emission">
+                <select id="pawn-symbol" aria-label="Akcje do zastawu">${holdings.map(([symbol, h]) => `<option value="${symbol}">${symbol} (wolne: ${h.shares - (h.lockedShares || 0)})</option>`).join('')}</select>
+                <input type="text" inputmode="numeric" id="pawn-qty" value="10" aria-label="Liczba akcji">
+                <button class="btn-secondary" onclick="pawnFundShares(document.getElementById('pawn-symbol').value, parseInt(document.getElementById('pawn-qty').value, 10))">Zastaw</button>
+            </div>` : `<p class="fund-muted">${pawnShop ? 'Brak wolnych akcji do zastawu.' : 'Lombard jest nieczynny.'}</p>`}`;
 }

@@ -350,6 +350,8 @@ gameTimers.weekly = setInterval(() => {
 
         // Fundusz gracza: opłata za zarządzanie, zaufanie, decyzje klientów
         processFundWeekly();
+        processFundPawnLoansWeekly(); // zastawy funduszy w lombardzie (finance.js)
+        aiCompetitors.forEach(processAiLoansWeekly); // raty i odsetki kredytów botów raz na tydzień
         processMailWeekly();          // prenumeraty, spam, plotki (mail.js)
         processPrivatizationWeekly(); // zapisy na akcje w prywatyzacji (city.js)
 
@@ -538,6 +540,8 @@ gameTimers.weekly = setInterval(() => {
     gameTimers.quarterly = setInterval(() => {
         if (isGamePaused) return;
         reviewCompanyPlacements();
+        processEliteExchangesQuarterly(); // Rubin / Szmaragd / Diament, spółki zależne (finance.js)
+        payBondCoupons(); // kupony kwartalne (finance.js)
         advanceEconomyCycle(); // nowa faza koniunktury przed raportami
         processCityQuarterly(); // festyn raz w roku (city.js)
         processFinancialReports(); // zawiera koszty R&D, wynik kontraktów, pozycje okresu i dywidendy
@@ -618,7 +622,7 @@ gameTimers.weekly = setInterval(() => {
 
     gameTimers.bondMaturityCheck = setInterval(() => {
         if (isGamePaused) return;
-        checkBondMaturities();
+        checkBondMaturities(5000); // 5 s czasu gry
     }, 5000 / speedMultiplier); // Co 5 sekund
 
     // Pętle dla zdarzeń CEO, półrocznych i rocznych
