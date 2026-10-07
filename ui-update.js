@@ -37,16 +37,6 @@ function unlockPopularSector() {
     if (typeof showToast === 'function') showToast('Popularny sektor został odblokowany!', 'success');
 }
 
-function adjustModalWidths() {
-    document.querySelectorAll('.modal').forEach(modal => {
-        const rawWidth = modal.style.width || window.getComputedStyle(modal).width;
-        const match = rawWidth.match(/^(\d+)(px)$/);
-        if (match) {
-            modal.style.width = `${parseInt(match[1], 10) + 5}${match[2]}`;
-        }
-    });
-}
-
 let openStockDrawerSymbol = null;
 
 function renderStockDrawer(symbol) {
@@ -204,5 +194,4 @@ setInterval(function() {
 }, 3000);
 document.addEventListener('DOMContentLoaded', function() {
     setTimeout(function() { updateTopbarKPIs(); updateMarketKPIs(); updateXPBar(); }, 800);
-    adjustModalWidths();
 });

@@ -996,7 +996,7 @@ function renderDepartmentsSection(stock, container) {
         deptCard.style.textAlign = 'center';
         deptCard.style.flex = '1';
         deptCard.style.margin = '0 4px';
-        deptCard.style.backgroundColor = '#fff';
+        deptCard.style.backgroundColor = 'var(--bg-elevated)';
         
         let upgradeBtn = '';
         if (data.level < 3) {
@@ -1008,7 +1008,7 @@ function renderDepartmentsSection(stock, container) {
 
         deptCard.innerHTML = `
             <div style="font-weight: bold; font-size: 12px; margin-bottom: 4px;">${deptNames[key]}</div>
-            <div style="font-size: 18px; color: #007bff;">Lvl ${data.level}</div>
+            <div style="font-size: 18px; color: var(--accent-info);">Lvl ${data.level}</div>
             ${upgradeBtn}
         `;
         deptsDiv.appendChild(deptCard);
@@ -1093,7 +1093,7 @@ function renderDepartmentsSection(stock, container) {
         }
         activeDiv.appendChild(invList);
     } else {
-        activeDiv.innerHTML += `<p style="font-size: 12px; color: #888; font-style: italic;">Brak aktywnych projektów.</p>`;
+        activeDiv.innerHTML += `<p style="font-size: 12px; color: var(--text-muted); font-style: italic;">Brak aktywnych projektów.</p>`;
     }
     deptSection.appendChild(activeDiv);
 
@@ -1101,7 +1101,7 @@ function renderDepartmentsSection(stock, container) {
     const catalogDiv = document.createElement('div');
     catalogDiv.style.marginTop = '15px';
     catalogDiv.innerHTML = `<h5>📋 Katalog Inwestycji</h5>
-        <p style="font-size: 10px; color: #666;">Pozycje budowlane trafiają do przetargu (cena = budżet przetargu, czas w dniach budowy).
+        <p style="font-size: 10px; color: var(--text-muted);">Pozycje budowlane trafiają do przetargu (cena = budżet przetargu, czas w dniach budowy).
         Pozostałe spółka realizuje sama. Czas podany w dniach (1 dzień = 1/7 tygodnia gry).</p>`;
 
     const table = document.createElement('table');
@@ -1135,18 +1135,18 @@ function renderDepartmentsSection(stock, container) {
         if (!hasLevel) {
             statusBtn = `<span style="color: gray; font-size: 9px;">Wymaga działu rozwoju Lvl ${inv.minDevLevel}</span>`;
         } else if (inProgress) {
-            statusBtn = `<span style="color: #17a2b8; font-size: 9px;">W toku</span>`;
+            statusBtn = `<span style="color: var(--accent-info); font-size: 9px;">W toku</span>`;
         } else if (!isAffordable) {
-            statusBtn = `<span style="color: #dc3545; font-size: 9px;">Brak środków</span>`;
+            statusBtn = `<span style="color: var(--color-down); font-size: 9px;">Brak środków</span>`;
         } else if (isLimitReached) {
-            statusBtn = `<span style="color: #ffc107; font-size: 9px;">Limit projektów</span>`;
+            statusBtn = `<span style="color: var(--color-warn); font-size: 9px;">Limit projektów</span>`;
         } else {
-            statusBtn = `<button onclick="forceCompanyInvestment('${stock.symbol}', '${inv.id}')" style="padding: 2px 8px; font-size: 11px; background-color: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer;">${isConstruction ? 'Przetarg' : 'Start'}</button>`;
+            statusBtn = `<button onclick="forceCompanyInvestment('${stock.symbol}', '${inv.id}')" style="padding: 2px 8px; font-size: 11px; background-color: var(--color-up); color: var(--text-on-accent); border: none; border-radius: 3px; cursor: pointer;">${isConstruction ? 'Przetarg' : 'Start'}</button>`;
         }
 
         const iconSrc = inv.icon || 'img/box.png';
         const kindLabel = INVESTMENT_KIND_LABELS[inv.kind] || inv.kind;
-        const mixedNote = inv.kind === 'mixed' ? `<div style="font-size: 9px; color: #666;">budowa ${(inv.constructionShare * 100).toFixed(0)}% kosztu</div>` : '';
+        const mixedNote = inv.kind === 'mixed' ? `<div style="font-size: 9px; color: var(--text-muted);">budowa ${(inv.constructionShare * 100).toFixed(0)}% kosztu</div>` : '';
 
         tr.innerHTML = `
             <td style="display: flex; align-items: center;">
@@ -1157,7 +1157,7 @@ function renderDepartmentsSection(stock, container) {
             <td>${(realCost / 1000).toFixed(0)}k PLN</td>
             <td>${inv.durationDays} dni</td>
             <td>
-                <div style="font-size: 10px; color: #555;">
+                <div style="font-size: 10px; color: var(--text-muted);">
                     ${inv.assetValue > 0 ? `<div>🏠 szac. ${(inv.assetValue / 1000).toFixed(0)}k</div>` : ''}
                     ${inv.incomeBonus > 0 ? `<div>💰 +${(inv.incomeBonus * 100).toFixed(0)}%</div>` : ''}
                     ${inv.healthBonus > 0 ? `<div>❤️ +${inv.healthBonus}</div>` : ''}
@@ -1322,7 +1322,7 @@ function openManagementModal(symbol, defaultTab = 'main') {
             } else {
                 viewFinancesBtn.disabled = false;
                 financesInfo.textContent = 'Wymagana opłata: 2000 PLN.';
-                financesInfo.style.color = '#666';
+                financesInfo.style.color = 'var(--text-muted)';
             }
         } else {
             financialSection.style.display = 'none';
@@ -1469,9 +1469,9 @@ function openBankModal() {
     const centralTabContent = document.getElementById('bank-content-central');
     if (centralTabContent && centralBank.ceo) {
         let ceoInfoHtml = `
-            <div style="text-align: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px dashed #ccc;">
+            <div style="text-align: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px dashed var(--border-color);">
                 <strong>Prezes Banku Centralnego:</strong> ${centralBank.ceo.name}<br>
-                <span style="font-size: 11px; color: #6c757d;">
+                <span style="font-size: 11px; color: var(--text-muted);">
         `;
         centralBank.ceo.traits.forEach(trait => {
             ceoInfoHtml += `<span title="${trait.description}">[${trait.name}] </span>`;
@@ -1738,7 +1738,7 @@ function displayStartups(previousInputValues = {}) {
                 autoInvestButton.title = 'Ustaw automatyczne inwestowanie';
                 autoInvestButton.style.marginLeft = '4px';
                 if (autoInvestSettings && autoInvestSettings.isEnabled) {
-                    autoInvestButton.style.borderColor = '#28a745';
+                    autoInvestButton.style.borderColor = 'var(--color-up)';
                     autoInvestButton.style.borderWidth = '2px';
                 }
                 autoInvestButton.onclick = () => openStartupAutoInvestModal(startup.symbol);
@@ -1748,7 +1748,7 @@ function displayStartups(previousInputValues = {}) {
             }
 
             case 'development':
-                fundingCell.innerHTML = `<strong style="color: #007bff;">W trakcie rozwoju...</strong>`;
+                fundingCell.innerHTML = `<strong style="color: var(--accent-info);">W trakcie rozwoju...</strong>`;
 
                 if (startup.pendingExtraCost) {
                     progressCell.innerHTML = `<span style="color: red; font-weight: bold;">WSTRZYMANO</span>`;
@@ -1767,11 +1767,11 @@ function displayStartups(previousInputValues = {}) {
             case 'financial_complications':
                 const timeLeftFC = Math.max(0, Math.floor(startup.rescueTimeLeft / 1000));
                 fundingCell.innerHTML = `
-                    <strong style="color: #dc3545;">Wymagane dofinansowanie!</strong>
+                    <strong style="color: var(--color-down);">Wymagane dofinansowanie!</strong>
                     <progress value="${startup.rescueCurrent}" max="${startup.rescueGoal}" style="width: 100%;"></progress>
                     <span>${startup.rescueCurrent.toLocaleString('pl-PL')} / ${startup.rescueGoal.toLocaleString('pl-PL')} PLN</span>
                 `;
-                progressCell.innerHTML = `<strong style="color: #dc3545;">Pozostały czas: ${timeLeftFC}s</strong>`;
+                progressCell.innerHTML = `<strong style="color: var(--color-down);">Pozostały czas: ${timeLeftFC}s</strong>`;
 
                 const rescueInput = document.createElement('input');
                 rescueInput.type = 'number';
@@ -1797,7 +1797,7 @@ function displayStartups(previousInputValues = {}) {
 
             case 'overfunding': {
                 const timeLeftOF = Math.max(0, Math.floor(startup.overfundingTimeLeft / 1000));
-                fundingCell.innerHTML = `<strong style="color: #28a745;">Cel osiągnięty!</strong><br>Czas na bonus: ${timeLeftOF}s`;
+                fundingCell.innerHTML = `<strong style="color: var(--color-up);">Cel osiągnięty!</strong><br>Czas na bonus: ${timeLeftOF}s`;
                 progressCell.innerHTML = `<progress value="0" max="100" style="width: 100%;"></progress>`;
                 investButton.textContent = 'Zainwestuj (Bonus)';
 
@@ -1808,7 +1808,7 @@ function displayStartups(previousInputValues = {}) {
                 autoInvestButton.title = 'Ustaw automatyczne inwestowanie';
                 autoInvestButton.style.marginLeft = '4px';
                 if (autoInvestSettings && autoInvestSettings.isEnabled) {
-                    autoInvestButton.style.borderColor = '#28a745'; // Zielona ramka dla aktywnych
+                    autoInvestButton.style.borderColor = 'var(--color-up)'; // Zielona ramka dla aktywnych
                     autoInvestButton.style.borderWidth = '2px';
                 }
                 autoInvestButton.onclick = () => openStartupAutoInvestModal(startup.symbol); // To też jest potrzebne!
@@ -1913,8 +1913,8 @@ function displayInvestmentPool() {
             barContainer.style.marginBottom = '5px';
             barContainer.innerHTML = `
                 <span>${name}: ${amount.toLocaleString('pl-PL')} PLN</span>
-                <div style="width: 100%; background-color: #eee;">
-                    <div style="width: ${percentage}%; background-color: #007bff; color: white; text-align: right; padding-right: 5px; box-sizing: border-box;">
+                <div style="width: 100%; background-color: var(--bg-elevated-2);">
+                    <div style="width: ${percentage}%; background-color: var(--accent-info); color: var(--text-on-accent); text-align: right; padding-right: 5px; box-sizing: border-box;">
                         ${percentage.toFixed(1)}%
                     </div>
                 </div>
@@ -1935,10 +1935,10 @@ function updateAutoInvestStatus() {
 
     if (playerAutoInvest.isEnabled) {
         statusEl.innerHTML = `✅ Aktywne: <strong>${playerAutoInvest.amount} PLN</strong> co <strong>${playerAutoInvest.interval / 1000}s</strong>`;
-        statusEl.style.color = '#28a745';
+        statusEl.style.color = 'var(--color-up)';
     } else {
         statusEl.textContent = '❌ Nieaktywne';
-        statusEl.style.color = '#dc3545';
+        statusEl.style.color = 'var(--color-down)';
     }
 }
 
@@ -1985,10 +1985,10 @@ function setupAutoInvestModal() {
     function updateToggleButton() {
         if (playerAutoInvest.isEnabled) {
             toggleBtn.textContent = 'Wyłącz Automatyzację';
-            toggleBtn.style.backgroundColor = '#dc3545';
+            toggleBtn.style.backgroundColor = 'var(--color-down)';
         } else {
             toggleBtn.textContent = 'Włącz Automatyzację';
-            toggleBtn.style.backgroundColor = '#28a745';
+            toggleBtn.style.backgroundColor = 'var(--color-up)';
         }
     }
 }
@@ -2087,10 +2087,10 @@ function openStartupAutoInvestModal(symbol) {
     function updateToggleButton() {
         if (settings.isEnabled) {
             toggleBtn.textContent = 'Wyłącz Automatyzację';
-            toggleBtn.style.backgroundColor = '#dc3545';
+            toggleBtn.style.backgroundColor = 'var(--color-down)';
         } else {
             toggleBtn.textContent = 'Włącz Automatyzację';
-            toggleBtn.style.backgroundColor = '#28a745';
+            toggleBtn.style.backgroundColor = 'var(--color-up)';
         }
     }
     updateToggleButton();
@@ -2174,26 +2174,27 @@ function updateChartTypeButtons() {
 
     // Ustaw styl dla aktywnego przycisku
     if (playerChartSettings.type === 'candlestick') {
-        candlestickBtn.style.backgroundColor = '#e0e0e0';
+        candlestickBtn.style.backgroundColor = 'var(--bg-elevated-2)';
         candlestickBtn.style.border = '2px solid #007bff';
     } else {
-        lineBtn.style.backgroundColor = '#e0e0e0';
+        lineBtn.style.backgroundColor = 'var(--bg-elevated-2)';
         lineBtn.style.border = '2px solid #007bff';
     }
 }
 
-    let currentTheme = 'light';
-    function toggleDarkMode() {
-  document.body.classList.toggle('dark-mode');
-  currentTheme = document.body.classList.contains('dark-mode') ? 'dark' : 'light';
+// Motyw: ciemny domyślnie; wybór gracza zapamiętany w przeglądarce (wygoda, nie stan gry).
+const THEME_KEY = 'gra_inwestycyjna_theme';
+let currentTheme = 'dark';
+
+function toggleDarkMode() {
+  currentTheme = document.body.classList.contains('dark-mode') ? 'light' : 'dark';
+  try { localStorage.setItem(THEME_KEY, currentTheme); } catch (e) { /* brak dostępu do pamięci */ }
+  document.body.classList.toggle('dark-mode', currentTheme === 'dark');
 }
 
 function applyInitialTheme() {
-  if (currentTheme === 'dark') {
-    document.body.classList.add('dark-mode');
-  } else {
-    document.body.classList.remove('dark-mode');
-  }
+  try { currentTheme = localStorage.getItem(THEME_KEY) || currentTheme; } catch (e) { /* zostaje domyślny */ }
+  document.body.classList.toggle('dark-mode', currentTheme === 'dark');
 }
 
 function openDescriptionModal(symbol) {
@@ -2210,8 +2211,8 @@ function openDescriptionModal(symbol) {
     if (phaseInfoDiv && stock.corporatePhase && getSkillLevel('financialAnalyst') >= 1) {
          phaseInfoDiv.innerHTML = `<strong>Faza cyklu życia:</strong> ${stock.corporatePhase}`;
          // Można dodać kolorowanie w zależności od fazy
-         if(stock.corporatePhase === CORPORATE_PHASES.GOLDEN_YEAR || stock.corporatePhase === CORPORATE_PHASES.GROWTH) phaseInfoDiv.style.color = '#28a745';
-         else if(stock.corporatePhase === CORPORATE_PHASES.DECLINE || stock.corporatePhase === CORPORATE_PHASES.SHADOW_DESCENT) phaseInfoDiv.style.color = '#dc3545';
+         if(stock.corporatePhase === CORPORATE_PHASES.GOLDEN_YEAR || stock.corporatePhase === CORPORATE_PHASES.GROWTH) phaseInfoDiv.style.color = 'var(--color-up)';
+         else if(stock.corporatePhase === CORPORATE_PHASES.DECLINE || stock.corporatePhase === CORPORATE_PHASES.SHADOW_DESCENT) phaseInfoDiv.style.color = 'var(--color-down)';
          else phaseInfoDiv.style.color = ''; // Domyślny kolor
 
          phaseInfoDiv.style.display = 'block';
@@ -2232,7 +2233,7 @@ function openDescriptionModal(symbol) {
                 </div>
                 <div style="flex:1;">
                     <h4 style="margin: 0;">${stock.ceo.name}</h4>
-                    <p style="margin: 5px 0; font-size: 12px; color: #666;">Wiek: ${stock.ceo.age}, Staż w firmie: ${tenureYears} lat</p>
+                    <p style="margin: 5px 0; font-size: 12px; color: var(--text-muted);">Wiek: ${stock.ceo.age}, Staż w firmie: ${tenureYears} lat</p>
                 </div>
             </div>
         `;
@@ -2549,13 +2550,13 @@ function openCeoChoiceModal(symbol, candidates, successChance) {
                 }
             });
         } else {
-            traitsHTML = '<p style="font-size: 12px; color: #888;">Brak wyróżniających cech</p>';
+            traitsHTML = '<p style="font-size: 12px; color: var(--text-muted);">Brak wyróżniających cech</p>';
         }
 
         const tenureYears = Math.floor(candidate.tenure / 4);
         card.innerHTML = `
             <h4 style="margin: 0 0 5px 0;">${candidate.name}</h4>
-            <p style="margin: 5px 0; font-size: 12px; color: #666;">Wiek: ${candidate.age}, Doświadczenie: ${tenureYears} lat</p>
+            <p style="margin: 5px 0; font-size: 12px; color: var(--text-muted);">Wiek: ${candidate.age}, Doświadczenie: ${tenureYears} lat</p>
             <div class="ceo-traits-container" style="margin-top: 10px; min-height: 50px;">${traitsHTML}</div>
             <button onclick="confirmCeoChange('${symbol}', ${index})">Zatwierdź Kandydata</button>
             <p style="margin-top: 10px; font-weight: bold; font-size: 14px;">Szansa: ${(successChance * 100).toFixed(0)}%</p>
@@ -2686,7 +2687,7 @@ function updateCityModalContent() {
         tabsContainer.style.display = 'flex'; // Pokaż zakładki
 
         // Aktualizuj zakładkę "Panel Główny"
-        document.getElementById('city-budget-display').textContent = `${city.budget.toLocaleString('pl-PL')} PLN`;
+        document.getElementById('city-budget-display').textContent = city.budget.toLocaleString('pl-PL', { maximumFractionDigits: 0 });
         document.getElementById('city-population-display').textContent = city.population.toLocaleString('pl-PL');
         document.getElementById('city-infra-level').textContent = (city.infrastructureLevel * 100).toFixed(0) + '%';
         // Odliczanie festynu
@@ -2707,14 +2708,14 @@ function updateCityModalContent() {
         renderCityElection();
         
         // Wkład gracza
-        document.getElementById('city-total-donated').textContent = `${city.playerDonatedAmount.toFixed(2)} PLN`; // Użyj nowego pola
+        document.getElementById('city-total-donated').textContent = city.playerDonatedAmount.toFixed(2); // Użyj nowego pola
         const statusEl = document.getElementById('city-unlock-status');
         if (city.playerHasUnlocked) {
             statusEl.textContent = "Odblokowane!";
-            statusEl.style.color = '#28a745';
+            statusEl.style.color = 'var(--color-up)';
         } else {
             statusEl.textContent = `Zablokowane (Cel: 10,000 PLN)`;
-            statusEl.style.color = '#dc3545';
+            statusEl.style.color = 'var(--color-down)';
         }
 
         // Aktualizuj zakładkę "Spółki Miejskie"
@@ -2827,7 +2828,7 @@ function renderFestivalView(festivalContainer) {
             case 'city': targetName = 'Miasto Gdańsk'; break;
             case 'bank_promo': targetName = p.ownerName; break; // Dla banków
         }
-        participantsTableHTML += `<tr style="${p.ownerId === 'player' ? 'font-weight: bold; background-color: #e3f2fd;' : ''}">
+        participantsTableHTML += `<tr style="${p.ownerId === 'player' ? 'font-weight: bold; background-color: var(--bg-elevated-2);' : ''}">
             <td>${index + 1}</td>
             <td>${ownerName}</td>
             <td>${targetName}</td>
@@ -2952,8 +2953,8 @@ function renderBondMarketInBank() {
         row.insertCell().textContent = `${(bond.risk * 100).toFixed(0)}%`;
         const riskCell = row.insertCell();
         riskCell.textContent = `${(bond.risk * 100).toFixed(0)}%`;
-        if (bond.risk > 0.5) riskCell.style.color = '#dc3545'; // Oznacz wysokie ryzyko
-        else if (bond.risk > 0.3) riskCell.style.color = '#ffc107'; // Oznacz średnie ryzyko
+        if (bond.risk > 0.5) riskCell.style.color = 'var(--color-down)'; // Oznacz wysokie ryzyko
+        else if (bond.risk > 0.3) riskCell.style.color = 'var(--color-warn)'; // Oznacz średnie ryzyko
         row.insertCell().textContent = bond.available;
 
         const actionsCell = row.insertCell();
@@ -3381,7 +3382,7 @@ function renderFinancialPeriodPreview(stock) {
         <p>R&D — koszty rozpoczęcia: ${fmt(rd.pendingStartup)}, utrzymania: ${fmt(rd.pendingMaintenance)}</p>
         <p>Kontrakty budowlane — przychody: ${fmt(period.constructionRevenue)}, koszty: ${fmt(period.constructionCosts)}</p>
         <p>Nieruchomości (netto): ${fmt(period.propertyIncome)} · Koszty inwestycji: ${fmt(period.investmentExpense)} · Pozostałe: ${fmt(period.otherIncome)}</p>
-        <p style="font-size: 11px; color: #666;">Pozycje te są już rozliczone w gotówce i bilansie; raport kwartalny tylko je wykaże.</p>
+        <p style="font-size: 11px; color: var(--text-muted);">Pozycje te są już rozliczone w gotówce i bilansie; raport kwartalny tylko je wykaże.</p>
         <p>R&D łącznie od początku — rozpoczęcia: ${fmt(rd.totalStartup)}, utrzymanie: ${fmt(rd.totalMaintenance)}</p>`;
 
     if (last) {
@@ -3593,7 +3594,7 @@ function openMaTargetModal(initiatorSymbol) {
             takeoverLboBtn.textContent = 'Przejęcie (LBO)';
             takeoverLboBtn.title = 'Wrogie przejęcie finansowane długiem (LBO). Bank sfinansuje transakcję, a Twoja spółka przejmie dług.';
             takeoverLboBtn.style.marginLeft = '5px';
-            takeoverLboBtn.style.borderColor = '#ffc107'; // Żółta ramka dla odróżnienia
+            takeoverLboBtn.style.borderColor = 'var(--color-warn)'; // Żółta ramka dla odróżnienia
             takeoverLboBtn.onclick = () => {
                  if (confirm(`Czy na pewno chcesz zainicjować WROGIE PRZEJĘCIE ${target.name} przez ${initiatorStock.name}? Transakcja zostanie sfinansowana KREDYTEM (LBO), który obciąży Twoją spółkę.`)) {
                     initiateMergerProcess(initiatorStock, target, 'przejęcie', 'lbo');
@@ -3619,7 +3620,7 @@ function openMaTargetModal(initiatorSymbol) {
                 mergerBtn.textContent = 'Fuzja';
                 mergerBtn.title = 'Przyjazna fuzja (wymiana akcji)';
                 mergerBtn.style.marginLeft = '10px'; // Trochę większy odstęp
-                mergerBtn.style.borderColor = '#28a745'; // Zielona ramka
+                mergerBtn.style.borderColor = 'var(--color-up)'; // Zielona ramka
                 mergerBtn.onclick = () => {
                     if (confirm(`Czy na pewno chcesz zaproponować FUZJĘ ${target.name} z ${initiatorStock.name}? Będzie to polegało na wymianie akcji.`)) {
                         initiateMergerProcess(initiatorStock, target, 'fuzja', 'stockSwap');
