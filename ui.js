@@ -924,132 +924,8 @@ function displayEtfs() {
     });
 }
 
-function switchNewspaperTab(symbol) {
-    const mediaStock = stocks.find(s => s.symbol === symbol);
-    if (!mediaStock) {
-        console.error(`Nie znaleziono spółki medialnej o symbolu: ${symbol}`);
-        return;
-    }
-    
-    const modal = document.getElementById('newspaper-modal');
-    if (!modal) return;
-    
-    // 1. Zaktualizuj przyciski zakładek
-    modal.querySelectorAll('.bank-tab-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    const activeBtn = document.getElementById(`tab-btn-newspaper-${symbol}`);
-    if (activeBtn) {
-        activeBtn.classList.add('active');
-    }
-
-    // 2. Przypisz aktualnie otwartą gazetę do modala (do użycia przez PR)
-    modal.dataset.currentNewspaper = symbol;
-    
-    // 3. Wywołaj funkcję, która odświeża całą treść gazety
-    updateNewspaperContent(mediaStock);
-}
-
-/**
- * Otwiera modal gazety i domyślnie włącza pierwszą zakładkę.
- */
-function openNewspaperModal() {
-  const modal = document.getElementById('newspaper-modal');
-  if (!modal) return;
-
-  switchNewspaperTab('PULS');
-  modal.classList.add('open');
-}
-
-/**
- * Aktualizuje treść modala gazety na podstawie danych konkretnej spółki medialnej.
- * @param {object} mediaStock - Obiekt spółki medialnej (np. PULS, FLESZ).
- */
-function updateNewspaperContent(mediaStock) {
-    if (!mediaStock || !mediaStock.newspaperData) return;
-
-    // 1. Ustaw tytuł gazety
-    const newspaperTitle = document.getElementById('newspaper-title');
-    if (newspaperTitle) newspaperTitle.textContent = mediaStock.name;
-
-    // 2. Aktualizacja daty
-    const newspaperDate = document.getElementById('newspaper-date');
-    if (newspaperDate) newspaperDate.textContent = `Gdańsk, ${new Date().toLocaleDateString('pl-PL')}`;
-
-    // 3. Logika Reklamy (dla przychodu spółki medialnej)
-    const adContainer = document.getElementById('newspaper-ad-container');
-    if (adContainer) {
-        if (Math.random() < 0.6) { // 60% szans na reklamę
-            const adStock = getRandomElement(stocks.filter(s => !s.assetType && !s.isBankrupt && s.symbol !== mediaStock.symbol));
-            if (adStock) {
-                adContainer.innerHTML = `<p><strong>REKLAMA:</strong> Zainwestuj w <strong>${adStock.name} (${adStock.symbol})</strong>! Niesamowity potencjał wzrostu! Kup teraz!</p>`;
-                adContainer.style.display = 'block';
-                
-                // Mechanika przychodu za kliknięcie (teraz za KAŻDYM przełączeniem zakładki)
-                mediaStock.cash += mediaStock.newspaperData.adRevenuePerClick;
-                // Można dodać logikę pobierania kasy od reklamodawcy
-                if (adStock.cash > mediaStock.newspaperData.adRevenuePerClick) {
-                    adStock.cash -= mediaStock.newspaperData.adRevenuePerClick;
-                }
-            }
-        } else {
-            adContainer.style.display = 'none'; // Brak reklamy
-        }
-    }
-
-    // 4. Logika Subskrypcji (na razie ukryta)
-    const statusText = document.getElementById('subscription-status-text');
-    const buyButton = document.getElementById('buy-subscription-btn');
-    if (statusText && buyButton) {
-        statusText.innerHTML = "Wiadomości premium (już wkrótce)."; // Placeholder
-        buyButton.style.display = 'none'; // Ukryj stary przycisk
-    }
-
-    // 5. Wypełnianie Kolumn (TODO Krok 2: Zmienić 'eventLog' na 'mediaStock.newspaperData.eventLog')
-    const newspaperLog = eventLog; // Na razie nadal używamy głównego logu
-    
-    const marketNewsList = document.getElementById('market-news-list');
-    const companyNewsList = document.getElementById('company-news-list');
-    const premiumContentList = document.getElementById('premium-content');
-
-    // ===>>> NOWA LOGIKA DLA NASTAWIENIA GAZETY <<<===
-    const premiumTitle = document.getElementById('premium-section-title');
-    premiumContentList.innerHTML = ''; // Wyczyść stare plotki
-
-    if (mediaStock.stance === 'pro-player') {
-        premiumTitle.textContent = 'Strefa Inwestora (Wgląd Analityczny)';
-        premiumTitle.style.color = '#28a745';
-        // TODO: W przyszłości ta gazeta może pokazywać tu prawdziwe wskazówki
-        premiumContentList.innerHTML = '<li style="color: #666;">Jesteśmy po Twojej stronie. Szukamy dla Ciebie najlepszych okazji.</li>';
-    } else if (mediaStock.stance === 'anti-player') {
-        premiumTitle.textContent = 'Felieton Krytyczny';
-        premiumTitle.style.color = '#dc3545';
-        // TODO: Tutaj gazeta może krytykować ostatnie ruchy gracza
-        premiumContentList.innerHTML = '<li style="color: #666;">Obserwujemy Twoje ruchy... i nie jesteśmy pod wrażeniem. Uważaj.</li>';
-    } else {
-        premiumTitle.textContent = 'Strefa Premium';
-        premiumTitle.style.color = ''; // Domyślny kolor
-        premiumContentList.innerHTML = '<li style="color: #666;">Neutralne analizy (już wkrótce).</li>';
-    }
-    // ===>>> KONIEC LOGIKI NASTAWIENIA <<<===
-
-    // Wypełnianie głównych newsów (bez zmian)
-    const marketMessages = newspaperLog.filter(e => e.category === 'market').slice(0, 15);
-    if (marketMessages.length > 0) {
-        marketNewsList.innerHTML = '';
-        marketMessages.forEach(msg => { marketNewsList.innerHTML += `<li>${msg.text}</li>`; });
-    } else {
-         marketNewsList.innerHTML = '<li>Brak ważnych wiadomości z rynku.</li>';
-    }
-
-    const companyMessages = newspaperLog.filter(e => e.category === 'company' || e.category === 'review' || e.category === 'state').slice(0, 15);
-    if (companyMessages.length > 0) {
-        companyNewsList.innerHTML = '';
-        companyMessages.forEach(msg => { companyNewsList.innerHTML += `<li>${msg.text}</li>`; });
-    } else {
-        companyNewsList.innerHTML = '<li>Brak doniesień ze spółek.</li>';
-    }
-
+/** Kontrola mediów (PR) — panel w skrzynce mailowej, od szkolenia „Manipulacja mediami”. */
+function renderMediaInfluence() {
     // 6. Sekcja "Wpływ na Media" (logika bez zmian)
     const mediaSection = document.getElementById('media-influence-section');
     const positiveControls = document.getElementById('positive-pr-controls');
@@ -3287,10 +3163,8 @@ function openCityInvestmentModal() {
     const modal = document.getElementById('city-investment-modal');
     if (!modal) return;
     
-    // Zawsze wywołuj aktualizację danych
-    updateCityModalContent(); 
-
     modal.style.display = 'block';
+    updateCityModalContent(); // po pokazaniu — funkcja aktualizuje tylko widoczne okno
 }
 
 /**
@@ -3335,7 +3209,13 @@ function updateCityModalContent() {
         // Zarząd
         document.getElementById('city-election-timer').textContent = city.mayor.electionYear;
         document.getElementById('city-mayor-name').textContent = city.mayor.name;
-        document.getElementById('city-mayor-policy').textContent = city.mayor.policy; // TODO: Przetłumaczyć
+        const policy = MAYOR_POLICIES[city.mayor.policy];
+        document.getElementById('city-mayor-policy').textContent = `${policy?.label || city.mayor.policy} — ${policy?.description || ''}`;
+        const support = document.getElementById('city-mayor-support');
+        if (support) support.textContent = `${Number(city.mayor.support || 0).toFixed(0)}%`;
+        const electionTab = document.getElementById('tab-btn-city-election');
+        if (electionTab) electionTab.style.display = city.election ? '' : 'none';
+        renderCityElection();
         
         // Wkład gracza
         document.getElementById('city-total-donated').textContent = `${city.playerDonatedAmount.toFixed(2)} PLN`; // Użyj nowego pola
@@ -6322,4 +6202,192 @@ function showVictoryScreen(victory) {
         <p>Okresy: ${victory.periods} · aktywa funduszu: ${formatZl(victory.assets, 0)} · przejęcia: ${corporation.acquiredFunds.length}</p>
         <p class="fund-muted">Możesz grać dalej.</p>`;
     overlay.hidden = false;
+}
+
+// =================================================================================
+// SKRZYNKA MAILOWA (etap E1) — układ jak Gmail
+// =================================================================================
+
+let mailView = { folder: 'inbox', selectedId: null, pane: 'mail' }; // pane: mail | subscriptions | media
+
+const MAIL_FOLDER_LABELS = {
+    inbox: '📥 Odebrane', starred: '⭐ Oznaczone', corporation: '🏢 Korporacja',
+    PULS: '📰 Puls Rynku', FLESZ: '📰 Flesz Giełdowy', OBSER: '📰 Obserwator', spam: '🚫 Spam'
+};
+
+function openMailbox(folder = mailView.folder) {
+    mailView.folder = folder;
+    mailView.pane = 'mail';
+    document.getElementById('mail-overlay').hidden = false;
+    renderMailbox();
+}
+
+function closeMailbox() {
+    document.getElementById('mail-overlay').hidden = true;
+}
+
+function updateMailBadge() {
+    const badge = document.querySelector('#open-mail-btn .nav-badge');
+    if (!badge || !mailbox) return;
+    const unread = getUnreadMailCount('inbox');
+    badge.textContent = unread > 99 ? '99+' : String(unread);
+    badge.hidden = unread === 0;
+}
+
+function formatMailTime(clockMs) {
+    const totalMinutes = Math.floor((clockMs || 0) / 60000);
+    return `${Math.floor(totalMinutes / 60)}:${String(totalMinutes % 60).padStart(2, '0')}`;
+}
+
+function setMailFolder(folder) {
+    mailView = { folder, selectedId: null, pane: 'mail' };
+    renderMailbox();
+}
+
+function setMailPane(pane) {
+    mailView.pane = pane;
+    mailView.selectedId = null;
+    renderMailbox();
+}
+
+function selectMail(id) {
+    mailView.selectedId = id;
+    markMailRead(id);
+    renderMailbox();
+}
+
+function mailAction(fn, ...args) {
+    fn(...args);
+    renderMailbox();
+}
+
+function renderMailbox() {
+    const overlay = document.getElementById('mail-overlay');
+    updateMailBadge();
+    if (!overlay || overlay.hidden || !mailbox) return;
+
+    const folders = document.getElementById('mail-folders');
+    folders.innerHTML = MAIL_FOLDERS.map(folder => {
+        const unread = getUnreadMailCount(folder);
+        const active = mailView.pane === 'mail' && mailView.folder === folder;
+        return `<button class="mail-folder ${active ? 'active' : ''}" onclick="setMailFolder('${folder}')">
+            <span>${MAIL_FOLDER_LABELS[folder]}</span>${unread ? `<b>${unread}</b>` : ''}</button>`;
+    }).join('') + `
+        <hr>
+        <button class="mail-folder ${mailView.pane === 'subscriptions' ? 'active' : ''}" onclick="setMailPane('subscriptions')">⚙️ Subskrypcje</button>
+        ${getSkillLevel('mediaManipulation') > 0 ? `<button class="mail-folder ${mailView.pane === 'media' ? 'active' : ''}" onclick="setMailPane('media')">📣 Kontrola mediów</button>` : ''}`;
+
+    const list = document.getElementById('mail-list');
+    const preview = document.getElementById('mail-preview');
+    const media = document.getElementById('media-influence-section');
+    if (media) media.style.display = 'none';
+
+    if (mailView.pane === 'subscriptions') {
+        list.hidden = true;
+        preview.innerHTML = renderMailSubscriptions();
+        return;
+    }
+    if (mailView.pane === 'media') {
+        list.hidden = true;
+        preview.innerHTML = '';
+        renderMediaInfluence();
+        return;
+    }
+
+    list.hidden = false;
+    const messages = getMailInFolder(mailView.folder);
+    list.innerHTML = `
+        <div class="mail-list-toolbar">
+            <strong>${MAIL_FOLDER_LABELS[mailView.folder]}</strong>
+            <button class="btn-secondary" onclick="mailAction(markAllMailRead, '${mailView.folder}')">Oznacz wszystkie jako przeczytane</button>
+        </div>
+        ${messages.length ? messages.slice(0, 80).map(message => `
+            <div class="mail-row ${message.read ? '' : 'unread'} ${message.id === mailView.selectedId ? 'selected' : ''}" onclick="selectMail(${message.id})">
+                <button class="mail-star ${message.starred ? 'on' : ''}" onclick="event.stopPropagation(); mailAction(toggleMailStar, ${message.id})" aria-label="Gwiazdka">${message.starred ? '★' : '☆'}</button>
+                <span class="mail-from">${escapeHtml(getMailSenderName(message.sender))}</span>
+                <span class="mail-subject">${message.importance >= 3 ? '❗ ' : ''}${message.isSpam ? '<span class="mail-tag">Reklama</span> ' : ''}${escapeHtml(message.subject)}
+                    <span class="mail-snippet"> — ${escapeHtml(message.body.slice(0, 80))}</span></span>
+                <span class="mail-time">${formatMailTime(message.at)}</span>
+            </div>`).join('') : '<p class="fund-muted mail-empty">Brak wiadomości w tym folderze.</p>'}`;
+
+    const selected = mailbox.messages.find(m => m.id === mailView.selectedId);
+    preview.innerHTML = selected ? renderMailPreview(selected) : '<p class="fund-muted mail-empty">Wybierz wiadomość z listy.</p>';
+}
+
+function renderMailPreview(message) {
+    let action = '';
+    if (message.action?.type === 'privatization') {
+        const offer = privatizationOffer?.symbol === message.action.symbol ? privatizationOffer : null;
+        action = offer
+            ? `<div class="mail-action">
+                   <p>Cena: <strong>${formatZl(offer.price)}</strong> · dostępne: ${offer.remaining.toLocaleString('pl-PL')} akcji · limit funduszu: ${(Math.floor(offer.shares * offer.maxFundShare) - offer.fundShares).toLocaleString('pl-PL')}</p>
+                   <input type="text" inputmode="numeric" id="privatization-qty" value="10" aria-label="Liczba akcji">
+                   <button onclick="mailAction(subscribePrivatization, parseInt(document.getElementById('privatization-qty').value, 10))">Zapisz fundusz</button>
+               </div>`
+            : '<p class="fund-muted">Zapisy na tę ofertę są zamknięte.</p>';
+    }
+    return `
+        <article class="mail-message">
+            <h3>${escapeHtml(message.subject)}</h3>
+            <p class="fund-muted">Od: ${escapeHtml(getMailSenderName(message.sender))} · ${formatMailTime(message.at)}${message.isSpam ? ' · reklama' : ''}</p>
+            <p>${escapeHtml(message.body)}</p>
+            ${action}
+            <div class="mail-message-actions">
+                ${message.symbol ? `<button onclick="openStockDetailsModal('${message.symbol}')">Pokaż spółkę</button>` : ''}
+                <button onclick="mailAction(toggleMailStar, ${message.id})">${message.starred ? '★ Usuń gwiazdkę' : '☆ Oznacz gwiazdką'}</button>
+                <button onclick="mailAction(markMailRead, ${message.id}, false)">Oznacz jako nieprzeczytane</button>
+                <button onclick="mailView.selectedId = null; mailAction(deleteMail, ${message.id})">🗑️ Usuń</button>
+            </div>
+        </article>`;
+}
+
+function renderMailSubscriptions() {
+    const filter = getSkillLevel('adblock');
+    return `
+        <h3>Subskrypcje czasopism</h3>
+        <p class="fund-muted">Wersja darmowa przysyła wszystkie wiadomości czasopisma razem z jego spamem. Premium (płatne co tydzień z portfela prywatnego: ${formatZl(playerWallet.cash)}) — tylko ważne wiadomości, bez spamu. Każde czasopismo to spółka z giełdy.</p>
+        <table class="asset-mini-table">
+            <thead><tr><th>Czasopismo</th><th>Profil</th><th>Premium / tydz.</th><th>Subskrypcja</th></tr></thead>
+            <tbody>${Object.entries(MAGAZINES).map(([symbol, def]) => {
+                const current = mailbox.subscriptions[symbol];
+                const option = (level, label) => `<button class="${current === level ? 'active' : ''}" onclick="mailAction(setMagazineSubscription, '${symbol}', ${level ? `'${level}'` : 'null'})">${label}</button>`;
+                return `<tr>
+                    <td>${escapeHtml(def.label)}</td>
+                    <td>${escapeHtml(def.profile)}</td>
+                    <td>${formatZl(def.premiumWeekly, 0)}</td>
+                    <td class="mail-sub-options">${option('free', 'Darmowa')}${option('premium', 'Premium')}${option(null, 'Wyłącz')}</td>
+                </tr>`;
+            }).join('')}</tbody>
+        </table>
+        <p class="fund-muted">Filtr antyspamowy (szkolenie w CV): poziom ${filter}/2 — ${filter >= 2 ? 'reklamy i spam czasopism trafiają do folderu Spam' : filter >= 1 ? 'reklamy spółek trafiają do folderu Spam' : 'spam trafia do skrzynki odbiorczej'}.</p>`;
+}
+
+// =================================================================================
+// MIASTO: KAMPANIA WYBORCZA (etap E1)
+// =================================================================================
+
+function renderCityElection() {
+    const container = document.getElementById('city-content-election');
+    if (!container || container.contains(document.activeElement)) return; // nie przerywaj wpisywania kwoty
+    if (!city.election) {
+        const last = city.lastElection;
+        container.innerHTML = last
+            ? `<h4>Ostatnie wybory</h4><ul>${last.map(r => `<li>${escapeHtml(r.name)} (${escapeHtml(MAYOR_POLICIES[r.policy].label)}): ${(r.share * 100).toFixed(0)}%</li>`).join('')}</ul>`
+            : '<p class="fund-muted">Kampania rusza na rok przed wyborami.</p>';
+        return;
+    }
+    container.innerHTML = `
+        <h4>Kampania wyborcza — wybory za ${city.mayor.electionYear} ${city.mayor.electionYear === 1 ? 'rok' : 'lata'}</h4>
+        <p class="fund-muted">Darowizny z portfela prywatnego (${formatZl(playerWallet.cash)}) zwiększają szanse kandydata. Darowizna od ${PLAYER_DONATION_COMPLIANCE_LIMIT} zł zwraca uwagę compliance. Wygrany pamięta wsparcie.</p>
+        <table class="asset-mini-table">
+            <thead><tr><th>Kandydat</th><th>Polityka</th><th>Siła kampanii</th><th>Twoje wsparcie</th><th></th></tr></thead>
+            <tbody>${city.election.candidates.map(c => `<tr>
+                <td>${escapeHtml(c.name)}${c.incumbent ? ' (urzędujący)' : ''}</td>
+                <td title="${escapeHtml(MAYOR_POLICIES[c.policy].description)}">${escapeHtml(MAYOR_POLICIES[c.policy].label)}</td>
+                <td>${getCandidateScore(c).toFixed(0)}</td>
+                <td>${formatZl(c.playerDonations, 0)}</td>
+                <td><input type="text" inputmode="numeric" id="campaign-${c.id}" value="100" size="6" aria-label="Kwota darowizny">
+                    <button onclick="donateToCampaign('${c.id}', parseFloat(document.getElementById('campaign-${c.id}').value)); updateCityModalContent();">Wesprzyj</button></td>
+            </tr>`).join('')}</tbody>
+        </table>`;
 }

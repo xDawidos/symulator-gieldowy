@@ -48,10 +48,10 @@
         <span class="nav-label">CV i szkolenia</span>
       </button>
 
-            <button class="sidebar-nav-btn has-badge" id="open-newspaper-btn" onclick="openNewspaperModal()">
-                <span class="nav-icon">📰</span>
-                <span class="nav-label">Gazeta</span>
-                <span class="nav-badge">3</span>
+            <button class="sidebar-nav-btn has-badge" id="open-mail-btn" onclick="openMailbox()">
+                <span class="nav-icon">📧</span>
+                <span class="nav-label">Poczta</span>
+                <span class="nav-badge" hidden>0</span>
             </button>
 
             <button class="sidebar-nav-btn" id="open-pawnshop-btn" onclick="openPawnShopPanel()">
@@ -560,9 +560,10 @@
             <h4>Obecny Zarząd (Wybory za <span id="city-election-timer">4</span> lata)</h4>
             <p>Prezydent: <strong id="city-mayor-name">...</strong></p>
             <p>Polityka: <strong id="city-mayor-policy">...</strong></p>
+            <p>Poparcie: <strong id="city-mayor-support">—</strong></p>
         </div>
         <div class="bank-section">
-            <h4>Twój Wkład</h4>
+            <h4>Twój wkład (z portfela prywatnego)</h4>
             <p>Całkowity wkład: <strong id="city-total-donated">0.00</strong> PLN</p>
             <p>Status: <strong id="city-unlock-status">Zablokowane (Cel: 10 000 PLN)</strong></p>
             <div>
@@ -612,64 +613,6 @@
          <button onclick="document.getElementById('sixth-sense-modal').style.display='none';" style="display: block; width: 100%; padding: 10px; font-size: 16px;">Rozumiem</button>
     </div>
 
-   <div id="newspaper-modal" class="modal newspaper-modal" style="display: none; width: 800px; max-width: 90%; max-height: 90vh;">
-  <div class="bank-tabs newspaper-tabs">
-    <button id="tab-btn-newspaper-PULS" class="bank-tab-btn active" onclick="switchNewspaperTab('PULS')">Puls Rynku</button>
-    <button id="tab-btn-newspaper-FLESZ" class="bank-tab-btn" onclick="switchNewspaperTab('FLESZ')">Flesz Giełdowy</button>
-    <button id="tab-btn-newspaper-OBSER" class="bank-tab-btn" onclick="switchNewspaperTab('OBSER')">Obserwator Finansowy</button>
-  </div>
-
-  <div class="newspaper-content">
-    <header class="newspaper-header">
-      <h2 id="newspaper-title">Puls Rynku</h2>
-      <p id="newspaper-date"></p>
-    </header>
-
-    <div id="newspaper-ad-container"></div>
-
-    <main class="newspaper-columns">
-      <div class="news-column">
-        <section class="news-section">
-          <h3>Wiadomości z Rynku</h3>
-          <ul id="market-news-list"></ul>
-        </section>
-      </div>
-
-      <div class="news-column">
-        <section class="news-section">
-          <h3>Wiadomości Spółek</h3>
-          <ul id="company-news-list"></ul>
-        </section>
-
-        <section class="news-section premium-section">
-          <h3 id="premium-section-title">Strefa Premium</h3>
-          <div id="newspaper-subscription-section">
-            <p id="subscription-status-text"></p>
-            <button id="buy-subscription-btn" onclick="buyPremiumSubscription()">Kup Premium</button>
-          </div>
-          <ul id="premium-content"></ul>
-
-          <div id="media-influence-section" class="bank-section" style="display: none; margin-top: 15px;">
-            <h4 style="margin-top: 0; text-align: center;">Kontrola Mediów</h4>
-            <div id="positive-pr-controls" style="display: none;">
-              <label for="positive-pr-select">Pozytywny PR</label>
-              <select id="positive-pr-select" style="max-width: 150px;"></select>
-              <button id="positive-pr-btn" onclick="playerBuyPositivePR()">Kup (10 000 PLN)</button>
-            </div>
-            <div id="black-pr-controls" style="display: none; margin-top: 10px;">
-              <label for="black-pr-select">Czarny PR</label>
-              <select id="black-pr-select" style="max-width: 150px;"></select>
-              <button id="black-pr-btn" onclick="playerBuyBlackPR()">Kup (25 000 PLN)</button>
-              <p style="font-size: 11px; color: #dc3545; margin: 5px 0 0 0;">Ryzyko wykrycia: <strong id="black-pr-risk-display">10%</strong></p>
-            </div>
-          </div>
-        </section>
-      </div>
-    </main>
-  </div>
-
-  <button onclick="document.getElementById('newspaper-modal').classList.remove('open')">×</button>
-</div>
 
     <div id="state-modal" class="modal" style="display:none; width: 500px;">
         <button class="close-btn" onclick="document.getElementById('state-modal').style.display='none';">&times;</button>
@@ -1214,12 +1157,6 @@
         </div>
     </div>
 
-    <div id="ad-popup" style="display: none;">
-        <button class="close-btn" onclick="closeAdPopup()">&times;</button>
-        <h4>Reklama</h4>
-        <div id="ad-content" style="font-size: 14px; margin-top: 10px;">
-            </div>
-    </div>
 
     <div id="ma-target-modal" class="modal" style="display:none; width: 600px;">
     <button class="close-btn" onclick="document.getElementById('ma-target-modal').style.display='none';">&times;</button>
@@ -1319,6 +1256,37 @@
       </div>
     </div>
 
+    <!-- Poczta (jak Gmail): korporacja, czasopisma, spam -->
+    <div id="mail-overlay" class="intro-overlay" hidden onclick="if (event.target === this) closeMailbox()">
+      <div class="mail-window" role="dialog" aria-labelledby="mail-title">
+        <header class="corp-modal-header">
+          <h2 id="mail-title">📧 Poczta</h2>
+          <button class="close-btn" onclick="closeMailbox()" aria-label="Zamknij">&times;</button>
+        </header>
+        <div class="mail-layout">
+          <nav id="mail-folders" class="mail-folders"></nav>
+          <div id="mail-list" class="mail-list"></div>
+          <div class="mail-preview-wrap">
+            <div id="mail-preview" class="mail-preview"></div>
+      <div id="media-influence-section" class="bank-section" style="display: none; margin-top: 15px;">
+        <h4 style="margin-top: 0; text-align: center;">Kontrola Mediów</h4>
+        <div id="positive-pr-controls" style="display: none;">
+          <label for="positive-pr-select">Pozytywny PR</label>
+          <select id="positive-pr-select" style="max-width: 150px;"></select>
+          <button id="positive-pr-btn" onclick="playerBuyPositivePR()">Kup (10 000 PLN)</button>
+        </div>
+        <div id="black-pr-controls" style="display: none; margin-top: 10px;">
+          <label for="black-pr-select">Czarny PR</label>
+          <select id="black-pr-select" style="max-width: 150px;"></select>
+          <button id="black-pr-btn" onclick="playerBuyBlackPR()">Kup (25 000 PLN)</button>
+          <p style="font-size: 11px; color: #dc3545; margin: 5px 0 0 0;">Ryzyko wykrycia: <strong id="black-pr-risk-display">10%</strong></p>
+        </div>
+      </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Korporacja: zarząd, analitycy, współpraca, przejęcia -->
     <div id="corporation-overlay" class="intro-overlay" hidden onclick="if (event.target === this) closeCorporationModal()">
       <div class="corp-modal" role="dialog" aria-labelledby="corporation-title">
@@ -1395,6 +1363,8 @@
     <script src="player.js"></script>
     <script src="fund.js"></script>
     <script src="career.js"></script>
+    <script src="mail.js"></script>
+    <script src="city.js"></script>
     <script src="events.js"></script>
     <script src="minigames.js"></script>
     <script src="chart.js"></script>

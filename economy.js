@@ -1300,6 +1300,8 @@ function checkMonopolyStatus() {
             console.log(`[Monopol] ${monopolist.symbol} jest monopolistą w ${sector}.`);
         }
     });
+
+    if (typeof applyAntitrustPenalties === 'function') applyAntitrustPenalties(); // city.js
 }
 
 function checkPriceAlerts() {

@@ -1513,7 +1513,7 @@ function runHoldingCompanyAI(holding) {
 
 function aiManageBondsAndCity(ai) {
     // 1. Inwestycja w miasto (bez zmian)
-    if (ai.personality === 'whale' && !cityInvestment.isUnlocked && ai.cash > 20000) {
+    if (ai.personality === 'whale' && !cityInvestment.aiHasUnlocked && ai.cash > 20000) {
         aiDonateToCity(ai, 10000);
         return;
     }

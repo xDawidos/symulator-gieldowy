@@ -1131,7 +1131,7 @@ group('Kariera w korporacji (etap C)', () => {
         corporation.budget = 12345;
         playerProfile.positionId = 'senior';
         const snapshot = JSON.parse(JSON.stringify(buildSaveSnapshot()));
-        assert(snapshot.version === 5, 'wersja 5');
+        assert(snapshot.version === SAVE_FORMAT_VERSION, 'aktualna wersja zapisu');
         let report = applySaveSnapshot(snapshot);
         assert(report.ok && corporation.budget === 12345 && playerProfile.positionId === 'senior', 'v5');
         delete snapshot.corporation;
@@ -1139,6 +1139,165 @@ group('Kariera w korporacji (etap C)', () => {
         report = applySaveSnapshot(snapshot);
         assert(report.ok && corporation && corporation.managers.length >= 3, 'migracja v4');
         assert(playerProfile.positionId === 'senior', 'stanowisko zachowane');
+    });
+});
+
+group('Poczta, miasto i państwo (etap E1)', () => {
+    function worldE1() {
+        const a = makeCompany('AAA', { cash: 600_000, fixedAssets: 800_000, name: 'Alfa Tech' });
+        const b = makeCompany('BBB', { cash: 600_000, fixedAssets: 800_000, name: 'Beta Usługi', sector: ['Usługi'] });
+        const media = ['PULS', 'FLESZ', 'OBSER'].map(symbol => {
+            const paper = makeCompany(symbol, { cash: 100_000, name: `Gazeta ${symbol}` });
+            paper.assetType = 'Holding';
+            paper.holdingPortfolio = {};
+            return paper;
+        });
+        [a, b, ...media].forEach(company => { company.insiderShares = 0; company.sharesHeld = 0; company.reputation = { player: 0 }; });
+        resetWorld([a, b, ...media]);
+        allBonds.length = 0;
+        marketIndexes.find(index => index.id === 'GIG').value = 100;
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        city.mayor = { name: 'Prezydent Startowy', policy: 'infrastructure', taxModifier: 0, electionYear: 4 };
+        city.election = null;
+        city.budget = 1_000_000;
+        festival = null;
+        privatizationOffer = null;
+        skills.adblock.unlockedLevel = 0;
+        initCityModel();
+        return { a, b, media };
+    }
+    const lastMail = () => mailbox.messages[0];
+
+    test('zdarzenia trafiają do właściwego nadawcy (korporacja, OBSER, FLESZ, PULS)', () => {
+        worldE1();
+        logEvent('🎉 Ocena zarządu: 70/100 — AWANS na stanowisko: Zarządca funduszu!', 'review');
+        assert(lastMail().sender === 'corporation' && lastMail().importance === 3, 'korporacja, ważne');
+        logEvent('🏛️ Rząd podnosi podatki dla firm.', 'state');
+        assert(lastMail().sender === 'OBSER', 'państwo → OBSER');
+        logEvent('Skandal! Prezes Alfa Tech przyłapany na luksusowych wakacjach.', 'company');
+        assert(lastMail().sender === 'FLESZ' && lastMail().symbol === 'AAA', 'skandal → FLESZ ze spółką');
+        logEvent('Alfa Tech ogłasza świetne wyniki kwartalne.', 'company');
+        assert(lastMail().sender === 'PULS', 'spółka → PULS');
+    });
+
+    test('premium: tylko ważne maile, bez spamu; opłata trafia do spółki-czasopisma', () => {
+        const { media } = worldE1();
+        playerWallet.cash = 100;
+        assert(setMagazineSubscription('PULS', 'premium'), 'premium włączone');
+        const count = mailbox.messages.length;
+        logEvent('Alfa Tech otwiera nowy sklep.', 'company'); // ważność 1
+        assert(mailbox.messages.length === count, 'mało ważny mail odfiltrowany');
+        logEvent('Alfa Tech ogłasza wyniki kwartalne.', 'company'); // ważność 2
+        assert(mailbox.messages.length === count + 1, 'ważny mail przyszedł');
+        const cash0 = media[0].cash;
+        chargeMagazineSubscriptions();
+        assertNear(playerWallet.cash, 100 - MAGAZINES.PULS.premiumWeekly, 'opłata z portfela');
+        assertNear(media[0].cash - cash0, MAGAZINES.PULS.premiumWeekly, 'przychód PULS');
+        sendMagazineSpam();
+        assert(!mailbox.messages.some(m => m.sender === 'PULS' && m.isSpam), 'brak spamu PULS w premium');
+    });
+
+    test('filtr antyspamowy: poziom 1 — reklamy, poziom 2 — także spam czasopism', () => {
+        worldE1();
+        const random = Math.random;
+        Math.random = () => 0.1;
+        sendCompanyAdSpam();
+        sendMagazineSpam();
+        Math.random = random;
+        const ad = mailbox.messages.find(m => m.spamKind === 'ad');
+        const promo = mailbox.messages.find(m => m.spamKind === 'magazine');
+        assert(ad && promo, 'spam wysłany');
+        assert(getMailFolder(ad) !== 'spam' && getMailFolder(promo) !== 'spam', 'bez filtra w odebranych');
+        skills.adblock.unlockedLevel = 1;
+        assert(getMailFolder(ad) === 'spam' && getMailFolder(promo) !== 'spam', 'poziom 1');
+        skills.adblock.unlockedLevel = 2;
+        assert(getMailFolder(promo) === 'spam', 'poziom 2');
+        assert(!getMailInFolder('inbox').includes(ad), 'spam poza odebranymi');
+        skills.adblock.unlockedLevel = 0;
+    });
+
+    test('wybory: kampania, darowizna gracza wzmacnia kandydata, zwycięzca zmienia politykę', () => {
+        worldE1();
+        startElectionCampaign();
+        const challenger = city.election.candidates.find(c => !c.incumbent);
+        const before = getCandidateScore(challenger);
+        playerWallet.cash = 1000;
+        assert(donateToCampaign(challenger.id, 300), 'darowizna');
+        assert(getCandidateScore(challenger) > before && playerWallet.cash === 700, 'siła kampanii rośnie');
+        const winner = triggerMayoralElection(challenger.id);
+        assert(city.mayor.name === winner.name && city.mayor.policy === challenger.policy, 'nowy burmistrz i polityka');
+        assert(city.mayor.taxModifier === MAYOR_POLICIES[challenger.policy].taxModifier, 'podatek wg polityki');
+        assert(!city.election && city.lastElection.length >= 2, 'wyniki zapisane');
+    });
+
+    test('polityka infrastruktury: miasto finansuje przetarg budowlany spółki', () => {
+        worldE1();
+        const budget0 = city.budget;
+        const symbol = commissionCityTender();
+        assert(symbol, 'przetarg zlecony');
+        assert(activeTenders.some(t => t.clientCompany.symbol === symbol && t.status === 'open'), 'otwarty przetarg');
+        assert(city.budget < budget0, 'dotacja z budżetu miasta');
+    });
+
+    test('festyn startuje raz w roku i daje impuls usługom', () => {
+        const { b } = worldE1();
+        city.availableAttractions = [{ name: 'Koncert', cost: 1000 }];
+        nextFestivalCountdown = 0;
+        processCityQuarterly();
+        assert(festival && festival.isActive, 'festyn trwa');
+        const price = b.price;
+        applyFestivalSectorBoost(150);
+        assert(b.price > price, 'usługi rosną');
+        festival = null;
+    });
+
+    test('prywatyzacja: fundusz zapisuje się po dyskoncie, gotówka do skarbu państwa', () => {
+        const { a } = worldE1();
+        a.isStateOwned = true;
+        a.stateOwnershipPct = 0.8;
+        a.exchange = 'BRONZE';
+        const offer = triggerStatePrivatizationEvent();
+        assert(offer && offer.price < a.price, 'oferta z dyskontem');
+        assert(mailbox.messages[0].action?.type === 'privatization', 'mail z akcją');
+        const treasury = governmentTreasury;
+        const cash = playerCash;
+        assert(subscribePrivatization(20), 'zapis');
+        assert(playerPortfolio.AAA.shares === 20, 'akcje w funduszu');
+        assertNear(cash - playerCash, 20 * offer.price, 'płatność funduszu');
+        assertNear(governmentTreasury - treasury, 20 * offer.price, 'skarb państwa');
+        playerCash += 1_000_000;
+        subscribePrivatization(offer.shares);
+        assert(offer.fundShares === Math.floor(offer.shares * offer.maxFundShare), 'zapis obcięty do limitu 30% oferty');
+        processPrivatizationWeekly(BASE_DELAYS.weekly);
+        assert(!privatizationOffer && a.stateOwnershipPct < 0.8, 'zapisy zamknięte, udział państwa spadł');
+    });
+
+    test('antymonopol: monopolista dostaje karę', () => {
+        const { a } = worldE1();
+        a.isMonopolist = true;
+        const office = { ...antitrustOffice };
+        antitrustOffice.analysisCapacity = 1;
+        const cash = a.cash;
+        const penalized = applyAntitrustPenalties();
+        Object.assign(antitrustOffice, office);
+        assert(penalized.includes('AAA') && a.cash < cash, 'kara nałożona');
+    });
+
+    test('zapis v6 zachowuje skrzynkę i kampanię; v5 migruje', () => {
+        worldE1();
+        logEvent('🏛️ Rząd ogłasza nowy budżet.', 'state');
+        startElectionCampaign();
+        mailbox.subscriptions.FLESZ = null;
+        const snapshot = JSON.parse(JSON.stringify(buildSaveSnapshot()));
+        assert(snapshot.version === 6, 'wersja 6');
+        const count = mailbox.messages.length;
+        let report = applySaveSnapshot(snapshot);
+        assert(report.ok && mailbox.messages.length === count && mailbox.subscriptions.FLESZ === null, 'skrzynka');
+        assert(city.election && city.election.candidates.length >= 2, 'kampania');
+        delete snapshot.mailbox;
+        snapshot.version = 5;
+        report = applySaveSnapshot(snapshot);
+        assert(report.ok && mailbox.messages.length === 0 && city.mayor.support > 0, 'migracja v5');
     });
 });
 

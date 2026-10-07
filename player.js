@@ -73,10 +73,11 @@ let activePlayerBankBonuses = [];
 const skills = {
 
     'adblock': {
-        name: 'AdBlock 🚫',
+        name: 'Filtr antyspamowy 🚫',
         unlockedLevel: 0,
         levels: [
-            { level: 1, cost: 1000, description: 'Wyłącza wyskakujące okienka reklamowe w interfejsie gry.' }
+            { level: 1, cost: 1000, description: 'Reklamy spółek trafiają do folderu Spam w skrzynce mailowej.' },
+            { level: 2, cost: 3000, description: 'Także spam czasopism (promocje, ankiety) trafia do folderu Spam.' }
         ]
     },
 
@@ -1118,37 +1119,7 @@ function triggerIPO() {
 }
 
 
-// --- Interakcje z Miastem ---
-let cityInvestment = {
-    donatedAmount: 0, // Całkowita kwota wpłacona przez WSZYSTKICH
-    playerHasUnlocked: false, // Czy GRACZ odblokował?
-    aiHasUnlocked: false      // Czy JAKIKOLWIEK BOT odblokował?
-};
-
-function donateToCity(amount) {
-    if (isNaN(amount) || amount <= 0) {
-        alert("Wpisz poprawną kwotę.");
-        return;
-    }
-    if (playerCash < amount) {
-        alert("Nie masz wystarczająco gotówki.");
-        return;
-    }
-
-    playerCash -= amount;
-    cityInvestment.donatedAmount += amount;
-    logEvent(`🏙️ Przekazano ${amount.toFixed(2)} PLN na rozwój miasta. Całkowity wkład: ${cityInvestment.donatedAmount.toFixed(2)} PLN.`, 'review');
-
-    if (!cityInvestment.playerHasUnlocked && cityInvestment.donatedAmount >= 10000) { // Sprawdzamy tylko flagę gracza
-    cityInvestment.playerHasUnlocked = true; // Ustawiamy TYLKO flagę gracza
-    logEvent("🎉 Gratulacje! Twój wkład w rozwój miasta odblokował dostęp do obligacji komunalnych i nowych wydarzeń miejskich!", 'success');
-    showToast("Odblokowano inwestycje miejskie!", 'success');
-}
-
-    displayCash();
-    // Odśwież modal miasta
-    updateCityModalContent();
-}
+// Miasto (darowizny, gospodarka, festyn, wybory) — city.js
 
 function contributeToInvestmentPool(contributorId, amount) {
     // Walidacja dla gracza
@@ -1906,30 +1877,6 @@ function checkSanEscobarRisk() {
     }
 }
 
-function aiDonateToCity(ai, amount) {
-    if (ai.cash < amount) return;
-
-    ai.cash -= amount;
-    cityInvestment.donatedAmount += amount;
-    console.log(`[AI] ${ai.name} przekazał ${amount.toFixed(2)} PLN na rozwój miasta.`);
-
-    if (!cityInvestment.aiHasUnlocked && cityInvestment.donatedAmount >= 10000) { // Sprawdzamy tylko flagę AI
-    cityInvestment.aiHasUnlocked = true; // Ustawiamy TYLKO flagę AI
-    console.log(`!!! BOT ${ai.name} ODBLOKOWAŁ MIASTO (dla AI) !!!`, cityInvestment.donatedAmount);
-    logEvent("🎉 Wkład inwestorów w rozwój miasta odblokował dostęp do obligacji komunalnych!", 'success');
-    // showToast nie jest potrzebny dla AI
-    }
-}
-
-function updateCity() {
-    const taxRevenue = city.population * 10;
-    city.budget += taxRevenue;
-    city.population += Math.floor(city.population * getRandomInRange(0.01, 0.025)); // Naturalny przyrost
-    logEvent(`🏙️ Miasto zebrało ${taxRevenue.toFixed(0)} PLN z podatków. Nowy budżet: ${city.budget.toFixed(0)} PLN.`, 'review');
-    
-    startFestival();
-}
-
 function startFestival() {
     if (festival) return; // Nie uruchamiaj, jeśli już trwa
 
@@ -2146,6 +2093,7 @@ function endFestival() {
         }
     }
 
+    if (typeof applyFestivalSectorBoost === 'function') applyFestivalSectorBoost(successScore);
     festival = null;
     nextFestivalCountdown = BASE_DELAYS.quarterly * 4; // Ustaw odliczanie na rok
 
@@ -2445,9 +2393,7 @@ function playerBuyBlackPR() {
             }
         });
         // Odśwież UI gazety, aby pokazać nowe, wyższe ryzyko
-        if (document.getElementById('newspaper-modal').style.display === 'flex') {
-            openNewspaperModal();
-        }
+        if (typeof renderMailbox === 'function') renderMailbox();
         return; // Atak nie dochodzi do skutku
     }
 
@@ -2466,130 +2412,10 @@ function playerBuyBlackPR() {
     }
     
     // Odśwież UI gazety, aby pokazać nowe, wyższe ryzyko
-    if (document.getElementById('newspaper-modal').style.display === 'flex') {
-        openNewspaperModal();
-    }
+    if (typeof renderMailbox === 'function') renderMailbox();
 }
 
-// === SYSTEM REKLAM ===
-
-let adPopupTimerId = null;
-let isAdPopupVisible = false;
-const AD_POPUP_INTERVAL_BASE = 120000; // Bazowy czas między reklamami (2 minuty)
-const AD_POPUP_INITIAL_DELAY = 45000; // Pierwsza reklama po 45 sekundach
-
-/**
- * Planuje pokazanie następnego okienka reklamowego.
- * Czas jest modyfikowany przez liczbę aktywnych banków.
- */
-function scheduleAdPopup() {
-    // Sprawdź, czy AdBlock jest aktywny
-    if (getSkillLevel('adblock') > 0) {
-        // console.log("[AdBlock] Reklamy zablokowane.");
-        if (adPopupTimerId) clearTimeout(adPopupTimerId); // Anuluj ewentualny timer
-        adPopupTimerId = null;
-        return;
-    }
-
-    // Anuluj poprzedni timer, jeśli istniał
-    if (adPopupTimerId) {
-        clearTimeout(adPopupTimerId);
-    }
-
-    // Oblicz czas do następnej reklamy
-    const activeBanksCount = commercialBanks.filter(b => b.isActive).length;
-    // Im więcej banków, tym krótszy odstęp (ale nie mniej niż 30s)
-    const intervalMultiplier = Math.max(0.25, 1 / Math.max(1, activeBanksCount));
-    const randomFactor = getRandomInRange(0.8, 1.2); // Dodaj trochę losowości
-    const nextInterval = AD_POPUP_INTERVAL_BASE * intervalMultiplier * randomFactor;
-    const finalInterval = Math.max(30000, nextInterval); // Minimum 30 sekund
-
-    // console.log(`[Reklama] Następna za ${Math.round(finalInterval / (1000 * currentSpeedMultiplier))}s czasu rzeczywistego.`);
-
-    // Ustaw timer (uwzględniając prędkość gry)
-    adPopupTimerId = setTimeout(showAdPopup, finalInterval / currentSpeedMultiplier);
-}
-
-/**
- * Generuje treść reklamy i wyświetla okienko.
- */
-function showAdPopup() {
-    // Ponownie sprawdź AdBlock i czy okienko już nie jest widoczne
-    if (getSkillLevel('adblock') > 0 || isAdPopupVisible) {
-        return;
-    }
-
-    const popupElement = document.getElementById('ad-popup');
-    const contentElement = document.getElementById('ad-content');
-    if (!popupElement || !contentElement) return;
-
-    // Wygeneruj treść reklamy
-    const adHtml = generateAdContent();
-    contentElement.innerHTML = adHtml;
-
-    // Pokaż okienko
-    popupElement.style.display = 'block';
-    isAdPopupVisible = true;
-    adPopupTimerId = null; // Zresetuj ID timera, bo okienko jest już pokazane
-}
-
-/**
- * Zamyka okienko reklamowe i planuje pokazanie następnego.
- */
-function closeAdPopup() {
-    const popupElement = document.getElementById('ad-popup');
-    if (popupElement) {
-        popupElement.style.display = 'none';
-    }
-    isAdPopupVisible = false;
-
-    // Zaplanuj następne pokazanie
-    scheduleAdPopup();
-}
-
-/**
- * Generuje losową treść reklamy (banku lub spółki).
- * @returns {string} - HTML treści reklamy.
- */
-function generateAdContent() {
-    const activeBanks = commercialBanks.filter(b => b.isActive);
-    const regularStocks = stocks.filter(s => !s.assetType && !s.isBankrupt && !s.isBankStock);
-
-    // 80% szans na reklamę banku, jeśli są aktywne banki
-    if (activeBanks.length > 0 && Math.random() < 0.8) {
-        const bank = getRandomElement(activeBanks);
-        const rand = Math.random();
-        if (rand < 0.5 && bank.interestRateDeposit > 0.01) { // Reklama lokaty
-            return `
-                <p>Zmęczony ryzykiem? 😴 Otwórz lokatę w <strong>${bank.name}</strong>!</p>
-                <p>Gwarantowane <strong>${(bank.interestRateDeposit * 100).toFixed(1)}%</strong> rocznie!</p>
-                <p style="font-size: 11px; text-align: center; margin-top: 8px;">Promocja ograniczona czasowo!</p>
-            `;
-        } else if (bank.interestRateLoan < 0.15) { // Reklama kredytu (jeśli nie jest super drogi)
-             return `
-                <p>Brakuje Ci środków na inwestycje? 💰</p>
-                <p>Szybki kredyt w <strong>${bank.name}</strong> na <strong>${(bank.interestRateLoan * 100).toFixed(1)}%</strong>!</p>
-                <p style="font-size: 11px; text-align: center; margin-top: 8px;">Sprawdź naszą ofertę!</p>
-            `;
-        }
-        // Fallback, jeśli powyższe warunki nie pasują
-         return `<p><strong>${bank.name}</strong> - Twój partner w finansach. Oferujemy konta, kredyty i depozyty. Odwiedź nas!</p>`;
-
-    } else if (regularStocks.length > 0) {
-        // Reklama zwykłej spółki
-        const stock = getRandomElement(regularStocks);
-        const messages = [
-            `Nie przegap okazji! Akcje <strong>${stock.name} (${stock.symbol})</strong> mogą wkrótce wystrzelić! 🚀 Kup teraz!`,
-            `Analitycy mówią: KUPUJ! <strong>${stock.name} (${stock.symbol})</strong> to solidna inwestycja na przyszłość.`,
-            `Potencjał wzrostu w <strong>${stock.name} (${stock.symbol})</strong>! Zainwestuj, zanim zrobią to inni!`,
-            `Ostatnie sztuki <strong>${stock.name} (${stock.symbol})</strong> w tej cenie! Popyt rośnie, nie zwlekaj!`
-        ];
-        return `<p>${getRandomElement(messages)}</p>`;
-    } else {
-        // Reklama zapasowa
-        return "<p>Zainwestuj mądrze! Dywersyfikuj swój portfel.</p>";
-    }
-}
+// Reklamy → spam w skrzynce mailowej (mail.js)
 
 function donateToCompany(symbol, amount, donorId = 'player') {
     const stock = stocks.find(s => s.symbol === symbol);
@@ -2872,52 +2698,6 @@ function takeMortgageLoan(bankId, collateralSymbol, collateralQuantity, requeste
     displayCash();
     displayPortfolio();
     closeInteractionModal();
-}
-
-function runCityEconomy() {
-    // 1. Oblicz wydatki
-    const infrastructureMaintenance = city.infrastructureLevel * 10000;
-    const policySpending = 0; // Tu będą koszty polityki burmistrza
-    const totalExpenses = city.baseExpenses + infrastructureMaintenance + policySpending;
-    city.budget -= totalExpenses;
-
-    // 2. Oblicz przychody
-    // (Podatki od spółek giełdowych są dodawane kwartalnie w processFinancialReports)
-    const citizenTax = city.population * 25; // 25 PLN/rok od mieszkańca
-    const stateGrant = governmentTreasury > 10000000 ? governmentTreasury * 0.01 : 0; // 1% dotacji z budżetu państwa
-    
-    if (stateGrant > 0) {
-        governmentTreasury -= stateGrant;
-        logEvent(`🏛️ Rząd przekazał ${stateGrant.toFixed(0)} PLN dotacji dla miasta ${city.name}.`, 'state');
-    }
-    city.budget += (citizenTax + stateGrant);
-
-    // 3. Zastosuj politykę burmistrza
-    switch (city.mayor.policy) {
-        case 'infrastructure':
-            // Szybki rozwój infrastruktury
-            city.infrastructureLevel += 0.05; 
-            break;
-        case 'business':
-            // Program wsparcia biznesu (dodaje nową firmę prywatną)
-            if (privateCompanies.length < 20) { // Limit firm
-                 const newPrivateCompany = { /* ... (logika tworzenia nowej firmy) ... */ };
-                 // privateCompanies.push(newPrivateCompany);
-                 logEvent(`🏙️ W mieście powstaje nowa firma prywatna dzięki programowi wsparcia!`, 'city');
-            }
-            break;
-        case 'municipal':
-            // Wsparcie spółek miejskich (dodatkowy budżet dla nich)
-            municipalCompanies.forEach(comp => comp.budget += 10000);
-            break;
-    }
-
-    // 4. Wzrost populacji (zależny od infrastruktury)
-    const baseGrowth = getRandomInRange(0.01, 0.02); // 1-2% bazowo
-    const infraBonus = (city.infrastructureLevel - 1.0) * 0.01; // +1% za każdy 1.0 infra
-    city.population += Math.floor(city.population * (baseGrowth + infraBonus));
-    
-    logEvent(`🏙️ Roczne rozliczenie miasta ${city.name}. Budżet: ${city.budget.toFixed(0)} PLN. Populacja: ${city.population.toLocaleString()}.`, 'review');
 }
 
 //TO NA DOLE

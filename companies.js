@@ -4613,25 +4613,6 @@ function triggerRescueOfferingEvent() {
     }
 }
 
-function runStateActions() {
-    // Logika Skarbu Państwa (skup/sprzedaż)
-    const stateCompanies = stocks.filter(s => s.isStateOwned && !s.isBankrupt);
-    
-    stateCompanies.forEach(stock => {
-        // Utrzymywanie kontroli (min 51%)
-        if (stock.stateOwnershipPct < 0.51) {
-            const needed = Math.ceil(stock.totalShares * 0.51) - stock.sharesHeld;
-            if (needed > 0) {
-                stock.sharesHeld += needed;
-                stock.stateOwnershipPct = stock.sharesHeld / stock.totalShares;
-                // Podbij cenę
-                applyPriceEffect(stock.symbol, 0.02, 'positive', 'state');
-            }
-        }
-    });
-    // Można dodać tu logikę prywatyzacji/nacjonalizacji
-}
-
 function triggerMergerMiniEvent(stock1, stock2, process) {
     const isPositive = Math.random() < 0.5; // 50% szans na pozytywny event
 

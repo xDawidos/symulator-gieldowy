@@ -14,8 +14,9 @@
 const GAME_SAVE_KEY = 'gra_inwestycyjna_dawid_save_v4';
 const LEGACY_SAVE_KEYS = ['gra_inwestycyjna_dawid_save_v2', 'gra_inwestycyjna_dawid_save_v1'];
 // v5: korporacja (zarządcy, oceny, analitycy, przejęcia). Zapis v4 migruje — korporacja tworzy się przy wczytaniu.
-const SAVE_FORMAT_VERSION = 5;
-const SUPPORTED_SAVE_VERSIONS = [4, 5];
+// v6: skrzynka mailowa, burmistrz i kampania, festyn, oferta prywatyzacyjna. v4/v5 migrują przy wczytaniu.
+const SAVE_FORMAT_VERSION = 6;
+const SUPPORTED_SAVE_VERSIONS = [4, 5, 6];
 
 let lastSaveReport = null;
 let saveDisabledUntilReload = false;
@@ -114,6 +115,10 @@ function buildSaveSnapshot() {
         playerProfile,
         playerFund,
         corporation,
+        mailbox,
+        cityInvestment,
+        privatizationOffer,
+        nextFestivalCountdown,
         playerWallet,
         playerAccessLevel,
         trainings: Object.fromEntries(Object.entries(skills).map(([id, skill]) => [id, skill.unlockedLevel])),
@@ -338,6 +343,19 @@ function applySaveSnapshot(snapshot) {
         if (skills[id] && isFiniteNumber(level)) skills[id].unlockedLevel = level;
     }
     // Korporacja (v5); zapis v4 — tworzymy nową przy zachowaniu funduszu gracza.
+    // Skrzynka, miasto i państwo (v6); starsze zapisy dostają pustą skrzynkę i burmistrza.
+    if (snapshot.mailbox && Array.isArray(snapshot.mailbox.messages)) {
+        mailbox = { ...createMailbox(), ...snapshot.mailbox };
+    } else {
+        mailbox = createMailbox();
+        report.warnings.push('Zapis bez skrzynki mailowej — utworzono nową (migracja do v6).');
+    }
+    if (snapshot.cityInvestment) cityInvestment = { ...cityInvestment, ...snapshot.cityInvestment };
+    privatizationOffer = snapshot.privatizationOffer || null;
+    festival = null; // trwający festyn (czas rzeczywisty) nie przetrwa wczytania
+    nextFestivalCountdown = isFiniteNumber(snapshot.nextFestivalCountdown) ? snapshot.nextFestivalCountdown : BASE_DELAYS.quarterly * 2;
+    ensureCityModel();
+
     if (snapshot.corporation && Array.isArray(snapshot.corporation.managers)) {
         corporation = snapshot.corporation;
     } else {

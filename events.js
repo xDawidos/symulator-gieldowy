@@ -12,6 +12,7 @@ function logEvent(message, category = 'market') { // Domyślna kategoria to 'mar
     if (eventLog.length > MAX_LOG_ENTRIES) {
         eventLog.pop();
     }
+    if (typeof routeEventToMail === 'function') routeEventToMail(message, category); // skrzynka mailowa (mail.js)
 }
 
 
@@ -423,10 +424,6 @@ function triggerGamingStartupEvent(startup) {
 }
 
 function triggerStartupOfferEvent() {
-    // ... (kod bez zmian) ...
-}
-
-function triggerStatePrivatizationEvent() {
     // ... (kod bez zmian) ...
 }
 

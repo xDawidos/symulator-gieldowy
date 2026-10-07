@@ -69,11 +69,10 @@ const FEATURE_FLAGS = {
     minigames: false,       // zamrożone
     privateLoans: false,    // prywatne kredyty, depozyty, hipoteka gracza
     startups: false,        // inkubator, pula, oferty startupów
-    adPopups: false         // reklamy → spam w mailu (etap E)
 };
 
 // Szkolenia ukryte (mechaniki wyłączone w etapie B).
-const HIDDEN_TRAININGS = ['work', 'startupInvestor', 'adblock']; // adblock wraca w etapie E (spam w mailu)
+const HIDDEN_TRAININGS = ['work', 'startupInvestor'];
 
 let playerProfile = null;      // { name, corporation, fundName, country, positionId, startedAt, cv: [] }
 let playerFund = null;         // stan funduszu (patrz createPlayerFund)
@@ -240,6 +239,10 @@ function startNewCareer(profile = {}) {
     beginFundPeriod();
     syncExchangeAccessWithPosition();
     if (typeof createCorporation === 'function') createCorporation();
+    if (typeof createMailbox === 'function') {
+        mailbox = createMailbox();
+        addMail({ sender: 'corporation', subject: `Witamy w ${playerProfile.corporation}!`, body: `Od dziś zarządzasz funduszem „${playerProfile.fundName}”. Wyniki oceniamy co 4 okresy. Wiadomości z rynku przysyłają czasopisma — prenumeraty ustawisz w zakładce Subskrypcje.`, importance: 2 });
+    }
 
     logEvent(`💼 ${playerProfile.name} zostaje młodszym zarządcą funduszu „${playerProfile.fundName}” (${FUND_START_CASH.toLocaleString('pl-PL')} zł, ${FUND_START_UNITS} JU, ${playerFund.clients.length} klientów).`, 'review');
 }

@@ -37,12 +37,6 @@ function clearIntervals() {
             gameTimers[key] = null;
         }
     }
-    // ---> DODAJ TĘ LINIĘ <---
-    if (adPopupTimerId) {
-        clearTimeout(adPopupTimerId);
-        adPopupTimerId = null;
-    }
-    // ---> KONIEC DODAWANIA <---
     console.log("Wszystkie pętle gry zostały zatrzymane.");
 }
 
@@ -54,11 +48,6 @@ function setGameSpeed(speedMultiplier) {
     clearIntervals(); // Zatrzymaj wszystkie istniejące pętle
     currentSpeedMultiplier = speedMultiplier; // Ustaw nowy mnożnik
 
-    if (adPopupTimerId) {
-        clearTimeout(adPopupTimerId);
-        adPopupTimerId = null;
-    }
-
     // Zaktualizuj wygląd przycisków prędkości
     const speedButtons = document.querySelectorAll('.speed-btn');
     speedButtons.forEach(btn => btn.classList.remove('active'));
@@ -66,11 +55,6 @@ function setGameSpeed(speedMultiplier) {
     if (activeBtn) activeBtn.classList.add('active');
 
     console.log(`Ustawiono prędkość gry na x${speedMultiplier}`);
-
-    // Reklamy wyłączone w etapie B (zastąpi je spam w skrzynce mailowej — etap E).
-    if (!isAdPopupVisible && FEATURE_FLAGS.adPopups) {
-         scheduleAdPopup();
-    }
 
     // --- URUCHOMIENIE NOWYCH PĘTLI Z NOWĄ PRĘDKOŚCIĄ ---
 
@@ -301,9 +285,6 @@ function setGameSpeed(speedMultiplier) {
         if (document.getElementById('dividend-tracker-modal').style.display === 'flex') {
             renderDividendTrackerContent();
         }
-        if (document.getElementById('newspaper-modal').style.display === 'flex') {
-            updateNewspaperContent();
-        }
 
         // Odświeżanie wykresu, jeśli jest otwarty
         if (currentlyDisplayedChartSymbol) {
@@ -369,6 +350,8 @@ gameTimers.weekly = setInterval(() => {
 
         // Fundusz gracza: opłata za zarządzanie, zaufanie, decyzje klientów
         processFundWeekly();
+        processMailWeekly();          // prenumeraty, spam, plotki (mail.js)
+        processPrivatizationWeekly(); // zapisy na akcje w prywatyzacji (city.js)
 
         // Koszty firmy gracza (mechanika wyłączona w etapie B)
         if (FEATURE_FLAGS.playerCompany && playerCompany && playerCompany.employees.length > 0) { //
@@ -556,6 +539,7 @@ gameTimers.weekly = setInterval(() => {
         if (isGamePaused) return;
         reviewCompanyPlacements();
         advanceEconomyCycle(); // nowa faza koniunktury przed raportami
+        processCityQuarterly(); // festyn raz w roku (city.js)
         processFinancialReports(); // zawiera koszty R&D, wynik kontraktów, pozycje okresu i dywidendy
         updateInfluence();
         updateCeoTenureAndAge(); // Zmieniona nazwa, ale to samo
@@ -675,21 +659,7 @@ gameTimers.weekly = setInterval(() => {
         }
     }
 
-        if (typeof runCityEconomy === 'function') {
-            runCityEconomy(); // Uruchom roczną logikę gospodarki miasta
-        }
-        if (typeof runMunicipalCompanyLogic === 'function') {
-            runMunicipalCompanyLogic(); // Uruchom roczną logikę spółek miejskich (w tym IPO)
-        }
-        
-        // Logika wyborów (co 4 lata)
-        city.mayor.electionYear--;
-        if (city.mayor.electionYear <= 0) {
-            if (typeof triggerMayoralElection === 'function') {
-                triggerMayoralElection(); // Uruchom wybory
-            }
-            city.mayor.electionYear = 4; // Zresetuj licznik
-        }
+        processCityYearly(); // gospodarka miasta, polityka burmistrza, spółki miejskie, kampania i wybory (city.js)
     }, BASE_DELAYS.quarterly * 4 / speedMultiplier); // Co rok
 }
 
@@ -793,7 +763,7 @@ function initializeGame() {
     }
 
     // Uruchomienie pętli gry — jedyne miejsce tworzenia timerów (setGameSpeed czyści poprzednie
-    // i planuje reklamę, więc nie wywołujemy scheduleAdPopup drugi raz).
+    // — nie tworzymy ich nigdzie indziej).
     setGameSpeed(restoredFromSave ? currentSpeedMultiplier : 1);
     if (typeof localStorage !== 'undefined') {
         window.addEventListener('beforeunload', saveGameState);
@@ -1022,6 +992,7 @@ function createNewWorld() {
         console.warn('initializeDividendEstimates nie jest dostępna — pomijam inicjalizację estymat dywidend.'); // Zachowane ostrzeżenie
     }
     initializeCityCompanies();
+    initCityModel();
     console.log("[M&A Init] Inicjalizacja nastawienia mediów...");
     const mediaCompanies = stocks.filter(s => s.specializationSectors?.includes('Media'));
     if (mediaCompanies.length >= 2) {
