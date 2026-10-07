@@ -157,6 +157,116 @@ function recordBankInterestIncome(bankId, interest) {
 }
 
 // =================================================================================
+// LOKATY TERMINOWE FUNDUSZU (nowa mechanika banku)
+// Wolna gotówka funduszu na 4/8/16 tygodni; odsetki naliczane co tydzień (wchodzą do NAV),
+// wypłata z kapitałem w terminie; zerwanie = utrata odsetek i kara 1%. Odsetki płaci bank.
+// =================================================================================
+
+const FUND_DEPOSIT_TERMS = [
+    { weeks: 4, premium: 0, label: '4 tygodnie' },
+    { weeks: 8, premium: 0.006, label: '8 tygodni' },
+    { weeks: 16, premium: 0.014, label: '16 tygodni' }
+];
+const FUND_DEPOSIT_BANK_TYPES = () => [BANK_TYPES.UNIVERSAL, BANK_TYPES.INTERNATIONAL, BANK_TYPES.INTERNET, BANK_TYPES.COOPERATIVE, BANK_TYPES.CORPORATE];
+const FUND_DEPOSIT_BREAK_PENALTY = 0.01;
+const FUND_DEPOSIT_MIN = 500;
+
+function canBankTakeFundDeposits(bank) {
+    return Boolean(bank?.isActive && FUND_DEPOSIT_BANK_TYPES().includes(bank.type));
+}
+
+/** Oprocentowanie roczne lokaty: stopa depozytowa + połowa marży banku + premia za długość. */
+function getFundDepositRate(bank, weeks) {
+    const term = FUND_DEPOSIT_TERMS.find(item => item.weeks === weeks) || FUND_DEPOSIT_TERMS[0];
+    return Math.max(0.005, getDepositRate() + (Number(bank?.baseInterestRateMargin) || 0) * 0.5 + term.premium);
+}
+
+function getFundDeposits() {
+    if (!playerFund) return [];
+    if (!playerFund.deposits) playerFund.deposits = [];
+    return playerFund.deposits;
+}
+
+function getFundDepositsValue() {
+    return getFundDeposits().reduce((sum, deposit) => sum + deposit.principal + deposit.accrued, 0);
+}
+
+function openFundDeposit(bankId, amount, weeks) {
+    const bank = commercialBanks.find(item => item.id === bankId);
+    amount = Math.floor(Number(amount) * 100) / 100;
+    if (!canBankTakeFundDeposits(bank)) { showToast('Ten bank nie przyjmuje lokat funduszy.', 'error'); return null; }
+    if (!(amount >= FUND_DEPOSIT_MIN)) { showToast(`Minimalna lokata: ${FUND_DEPOSIT_MIN} zł.`, 'error'); return null; }
+    if (amount > playerCash) { showToast('Za mało wolnej gotówki funduszu.', 'error'); return null; }
+
+    const deposit = {
+        id: nextSimulationId('lokata'),
+        bankId: bank.id,
+        bankName: bank.name,
+        principal: amount,
+        accrued: 0,
+        rate: getFundDepositRate(bank, weeks),
+        termWeeks: weeks,
+        weeksLeft: weeks
+    };
+    playerCash -= amount;
+    bank.cash += amount;
+    getFundDeposits().push(deposit);
+    recordPayment('player-fund', bank, amount, `Lokata ${weeks} tyg.`);
+    logEvent(`🏦 Fundusz zakłada lokatę w ${bank.name}: ${amount.toFixed(2)} zł na ${weeks} tyg. (${(deposit.rate * 100).toFixed(2)}% rocznie).`, 'review');
+    if (typeof refreshFundViews === 'function') refreshFundViews();
+    return deposit;
+}
+
+function settleFundDeposit(deposit, broken = false) {
+    const bank = commercialBanks.find(item => item.id === deposit.bankId);
+    let payout = deposit.principal + deposit.accrued;
+    if (broken) {
+        const penalty = deposit.principal * FUND_DEPOSIT_BREAK_PENALTY;
+        payout = deposit.principal - penalty;
+        if (bank) {
+            bank.cash += deposit.accrued; // utracone odsetki wracają do banku
+            getBankLedger(bank).fees += penalty;
+        }
+    }
+    if (bank) bank.cash -= payout - (broken ? 0 : deposit.accrued); // odsetki bank wypłacił już co tydzień
+    playerCash += payout;
+    const list = getFundDeposits();
+    list.splice(list.indexOf(deposit), 1);
+    return payout;
+}
+
+function breakFundDeposit(depositId) {
+    const deposit = getFundDeposits().find(item => item.id === depositId);
+    if (!deposit) return false;
+    const payout = settleFundDeposit(deposit, true);
+    logEvent(`🏦 Fundusz zrywa lokatę w ${deposit.bankName}: wypłata ${payout.toFixed(2)} zł (utrata odsetek i kara ${(FUND_DEPOSIT_BREAK_PENALTY * 100).toFixed(0)}%).`, 'review');
+    if (typeof refreshFundViews === 'function') refreshFundViews();
+    return true;
+}
+
+/** Co tydzień: odsetki (płaci bank), zapadalność lokat. Upadły/nieaktywny bank zwraca kapitał. */
+function processFundDepositsWeekly() {
+    for (const deposit of [...getFundDeposits()]) {
+        const bank = commercialBanks.find(item => item.id === deposit.bankId);
+        if (!bank || !bank.isActive) {
+            playerCash += deposit.principal + deposit.accrued; // gwarancja depozytów
+            getFundDeposits().splice(getFundDeposits().indexOf(deposit), 1);
+            logEvent(`🏦 ${deposit.bankName} kończy działalność — lokata funduszu zwrócona z gwarancji depozytów.`, 'review');
+            continue;
+        }
+        const interest = deposit.principal * deposit.rate / FUND_WEEKS_PER_YEAR;
+        deposit.accrued += interest;
+        bank.cash -= interest;
+        getBankLedger(bank).interestExpense += interest;
+        deposit.weeksLeft--;
+        if (deposit.weeksLeft <= 0) {
+            const payout = settleFundDeposit(deposit);
+            logEvent(`🏦 Lokata w ${deposit.bankName} zapada: fundusz otrzymuje ${payout.toFixed(2)} zł (odsetki ${deposit.accrued.toFixed(2)} zł).`, 'review');
+        }
+    }
+}
+
+// =================================================================================
 // LOMBARD DLA FUNDUSZY (gracz i boty-zarządcy)
 // =================================================================================
 
@@ -612,8 +722,8 @@ function checkBondMaturities(deltaGameMs = 5000) {
 // =================================================================================
 
 const ELITE_EXCHANGES = {
-    RUBY:    { limit: 6, volatility: 0.80, resistance: 0.10, maxSubsidiaries: 1 },
-    EMERALD: { limit: 3, volatility: 0.65, resistance: 0.20, maxSubsidiaries: 3, minCap: 1e9 }, // kapitał od 1 mld
+    RUBY:    { limit: 6, volatility: 0.80, resistance: 0.10, maxSubsidiaries: 1, minCap: 1.5e9 },
+    EMERALD: { limit: 3, volatility: 0.65, resistance: 0.20, maxSubsidiaries: 3, minCap: 2.5e9 }, // największe spółki
     DIAMOND: { limit: 1, volatility: 0.50, resistance: 0.30, maxSubsidiaries: 3, minGameMs: 30 * 60000 }
 };
 const ELITE_ORDER = ['DIAMOND', 'EMERALD', 'RUBY'];
@@ -645,7 +755,7 @@ function assignEliteExchanges() {
         target[pool[index++].symbol] = 'EMERALD';
         emeralds++;
     }
-    for (let rubies = 0; index < pool.length && rubies < ELITE_EXCHANGES.RUBY.limit; rubies++) target[pool[index++].symbol] = 'RUBY';
+    for (let rubies = 0; index < pool.length && rubies < ELITE_EXCHANGES.RUBY.limit && getMarketCap(pool[index]) >= ELITE_EXCHANGES.RUBY.minCap; rubies++) target[pool[index++].symbol] = 'RUBY';
 
     const changes = [];
     for (const stock of pool) {

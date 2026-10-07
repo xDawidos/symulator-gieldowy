@@ -327,6 +327,7 @@ gameTimers.weekly = setInterval(() => {
         // Fundusz gracza: opłata za zarządzanie, zaufanie, decyzje klientów
         processFundWeekly();
         processFundPawnLoansWeekly(); // zastawy funduszy w lombardzie (finance.js)
+        processFundDepositsWeekly(); // lokaty terminowe funduszu (finance.js)
         aiCompetitors.forEach(processAiLoansWeekly); // raty i odsetki kredytów botów raz na tydzień
         processMailWeekly();          // prenumeraty, spam, plotki (mail.js)
         processPrivatizationWeekly(); // zapisy na akcje w prywatyzacji (city.js)
@@ -821,6 +822,7 @@ function createNewWorld() {
     initCityModel();
     // Holdingi bez ceny startowej (wyliczanej z NAV dopiero przy pierwszym ticku) dostają cenę = NAV.
     stocks.filter(stock => stock.assetType === 'Holding' && !(stock.price > 0)).forEach(stock => { stock.price = Math.max(0.01, getExternalFundValue(stock)); });
+    assignEliteExchanges(); // giełdy Rubinowa i Szmaragdowa od startu (Diamentowa po 30 min gry)
     console.log("[M&A Init] Inicjalizacja nastawienia mediów...");
     const mediaCompanies = stocks.filter(s => s.specializationSectors?.includes('Media'));
     if (mediaCompanies.length >= 2) {

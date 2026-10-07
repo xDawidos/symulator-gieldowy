@@ -71,9 +71,10 @@ function displayStocks(previousInputValues = {}) {
   }
 
   stockTableBody.innerHTML = '';
-  const sortedExchanges = Object.keys(exchanges).sort(
-    (a, b) => exchanges[a].level - exchanges[b].level
-  );
+  // Zakładka poziomu rynku (ui-update.js: setMarketLevel) — pokazujemy tylko wybraną giełdę.
+  const sortedExchanges = Object.keys(exchanges)
+    .filter(key => typeof currentMarketLevel === 'undefined' || currentMarketLevel === 'ALL' || key === currentMarketLevel)
+    .sort((a, b) => exchanges[a].level - exchanges[b].level);
   const hasAnalystSkill = getSkillLevel('financialAnalyst') > 0;
 
   // --- Funkcja pomocnicza do renderowania wiersza ---
@@ -86,7 +87,7 @@ function displayStocks(previousInputValues = {}) {
     row.dataset.symbol = stock.symbol;
     row.classList.add('stock-row');
     row.dataset.level = stock.exchange || 'ALL';
-    row.style.cursor = 'pointer';
+    row.classList.add('clickable');
 
     row.addEventListener('click', e => {
       if (
@@ -164,8 +165,8 @@ function displayStocks(previousInputValues = {}) {
     if (stock.subsidiaries && stock.subsidiaries.length > 0) {
       const toggleBtn = document.createElement('span');
       toggleBtn.textContent = stock.isSubsidiaryExpanded ? '▼' : '▶';
-      toggleBtn.style.cursor = 'pointer';
-      toggleBtn.style.marginRight = '6px';
+      toggleBtn.classList.add('clickable');
+      toggleBtn.classList.add('mr-1');
       toggleBtn.onclick = e => {
         e.stopPropagation();
         toggleSubsidiaryVisibility(stock.symbol);
@@ -211,19 +212,19 @@ function displayStocks(previousInputValues = {}) {
     if (stock.mergerProcess) {
       const process = stock.mergerProcess;
       const mergerStatusContainer = document.createElement('div');
-      mergerStatusContainer.style.marginTop = '6px';
-      mergerStatusContainer.style.width = '90px';
+      mergerStatusContainer.classList.add('mt-1');
+      mergerStatusContainer.classList.add('w-sm');
       mergerStatusContainer.title = `Proces M&A: ${process.statusMessage}`;
 
       const statusText = document.createElement('span');
       statusText.textContent = `Etap: ${process.stage}/7`;
-      statusText.style.fontSize = '10px';
+      statusText.classList.add('text-xs');
       statusText.style.display = 'block';
 
       const progressBar = document.createElement('progress');
       progressBar.value = process.progress;
       progressBar.max = 100;
-      progressBar.style.width = '100%';
+      progressBar.classList.add('w-full');
 
       if (process.decisionRequired) progressBar.classList.add('decision');
       else if (process.complications > 0)
@@ -254,8 +255,7 @@ function displayStocks(previousInputValues = {}) {
 
     if (stock.corporatePhase && getSkillLevel('financialAnalyst') >= 1) {
       const phaseBadge = document.createElement('div');
-      phaseBadge.style.cssText =
-        'font-size:10px;margin-top:4px;padding:2px 6px;border-radius:999px;display:inline-block;';
+      phaseBadge.classList.add('phase-badge');
       const phaseColors = {
         Wzrost: '#28a745',
         Stabilność: '#6c757d',
@@ -308,19 +308,19 @@ function displayStocks(previousInputValues = {}) {
     // KOMÓRKA 7: Akcja
     const actionsCell = row.insertCell();
     actionsCell.classList.add('trade-actions-cell');
-    actionsCell.style.textAlign = 'center';
+    actionsCell.classList.add('text-center');
 
     if (!hasAccess) {
       const lockSpan = document.createElement('span');
       lockSpan.textContent = '🔒';
       lockSpan.title = 'Brak dostępu do giełdy';
-      lockSpan.style.fontSize = '18px';
+      lockSpan.classList.add('text-lg');
       actionsCell.appendChild(lockSpan);
     } else if (isLocked || stock.isBeingMerged || stock.canBeTraded === false) {
       const stopSpan = document.createElement('span');
       stopSpan.textContent = '⛔';
       stopSpan.title = 'Handel wstrzymany';
-      stopSpan.style.fontSize = '18px';
+      stopSpan.classList.add('text-lg');
       actionsCell.appendChild(stopSpan);
     } else {
       const drawerBtn = document.createElement('button');
@@ -329,7 +329,7 @@ function displayStocks(previousInputValues = {}) {
       drawerBtn.title = 'Kup / Sprzedaj / Wykres';
       drawerBtn.innerHTML =
         sharesOwned > 0
-          ? '<span style="color:var(--accent-primary)">▼</span>'
+          ? '<span class="text-up">▼</span>'
           : '▼';
       drawerBtn.onclick = e => {
         e.stopPropagation();
@@ -361,8 +361,7 @@ function displayStocks(previousInputValues = {}) {
         const repSpan = document.createElement('span');
         repSpan.textContent = rep.icon;
         repSpan.title = `Raport: ${rep.label}`;
-        repSpan.style.cssText =
-          'font-size:14px;margin-left:4px;cursor:default;';
+        repSpan.classList.add('row-icon');
         actionsCell.appendChild(repSpan);
       }
     }
@@ -374,8 +373,7 @@ function displayStocks(previousInputValues = {}) {
       const debtSpan = document.createElement('span');
       debtSpan.textContent = '💳';
       debtSpan.title = 'Spółka ma zobowiązania';
-      debtSpan.style.cssText =
-        'font-size:12px;margin-left:2px;cursor:default;';
+      debtSpan.classList.add('row-icon', 'row-icon-sm');
       actionsCell.appendChild(debtSpan);
     }
 
@@ -384,7 +382,7 @@ function displayStocks(previousInputValues = {}) {
       manageButton.textContent = '👑';
       manageButton.title = 'Panel Zarządzania';
       manageButton.className = 'btn-ghost-icon';
-      manageButton.style.marginLeft = '4px';
+      manageButton.classList.add('ml-1');
       manageButton.onclick = e => {
         e.stopPropagation();
         openManagementModal(stock.symbol);
@@ -415,9 +413,9 @@ function displayStocks(previousInputValues = {}) {
       const headerCell = headerRow.insertCell();
       headerCell.colSpan = 7;
       const icon = exchangeCollapseState[exchangeKey] ? '▶' : '▼';
-      headerCell.innerHTML = `<h4 style="margin: 5px 0; color: ${
+      headerCell.innerHTML = `<h4 style="color: ${
         exchange.color
-      }; display: flex; justify-content: space-between;">${
+      }" class="my-1 d-flex justify-between">${
         exchange.name
       }<span>${icon}</span></h4>`;
     }
@@ -636,7 +634,7 @@ function displayPortfolio() {
             // --- 👇 TUTAJ JEST DODANY BLOK DLA ZABLOKOWANYCH AKCJI 👇 ---
             if (holding.lockedShares && holding.lockedShares > 0) {
                 listItem.textContent += ` (Zablokowane: ${holding.lockedShares})`;
-                listItem.style.opacity = '0.7'; // Lekko przygaś
+                listItem.classList.add('dimmed');
                 listItem.title = `${holding.lockedShares} akcji jest zablokowanych jako zabezpieczenie kredytu hipotecznego.`;
             }
             // --- 👆 KONIEC BLOKU 👆 ---
@@ -770,8 +768,8 @@ function displayEventLog() {
     eventLog.forEach(message => {
         const listItem = document.createElement('li');
         listItem.textContent = message;
-        listItem.style.borderBottom = '1px solid #eee';
-        listItem.style.padding = '4px 2px';
+        listItem.classList.add('divider-bottom');
+        listItem.classList.add('py-1');
         logList.appendChild(listItem);
     });
 }
@@ -869,7 +867,7 @@ function displayEtfs() {
         quantityInput.type = 'number';
         quantityInput.min = '1';
         quantityInput.value = '1';
-        quantityInput.style.width = '50px';
+        quantityInput.classList.add('w-xs');
         quantityInput.id = `quantity-${etf.symbol}`;
         actionsCell.appendChild(quantityInput);
 
@@ -956,7 +954,7 @@ function displayMarketIndexes() {
         vixDiv.innerHTML = `
             <span class="index-name">Niestabilność Rynku (WNR)</span>
             <span class="index-value" style="color: ${color};">${marketVolatilityIndex.toFixed(2)}</span>
-            <span class="index-change" style="color: ${color}; font-weight: bold;">${description}</span>
+            <span class="index-change fw-bold" style="color: ${color}">${description}</span>
         `;
         indexesContainer.appendChild(vixDiv);
     }
@@ -983,32 +981,26 @@ function renderDepartmentsSection(stock, container) {
     // --- 1. KARTY DZIAŁÓW ---
     const deptsDiv = document.createElement('div');
     deptsDiv.style.display = 'flex';
-    deptsDiv.style.justifyContent = 'space-between';
-    deptsDiv.style.marginBottom = '15px';
+    deptsDiv.classList.add('justify-between');
+    deptsDiv.classList.add('mb-3');
     
     const deptNames = { research: "Badania (R&D)", development: "Rozwój (Inv)", economy: "Ekonomia" };
     
     for (const [key, data] of Object.entries(stock.departments)) {
         const deptCard = document.createElement('div');
-        deptCard.style.border = '1px solid #ccc';
-        deptCard.style.padding = '8px';
-        deptCard.style.borderRadius = '4px';
-        deptCard.style.textAlign = 'center';
-        deptCard.style.flex = '1';
-        deptCard.style.margin = '0 4px';
-        deptCard.style.backgroundColor = 'var(--bg-elevated)';
+        deptCard.classList.add('dept-card');
         
         let upgradeBtn = '';
         if (data.level < 3) {
             const cost = 50000 * Math.pow(2, data.level);
-            upgradeBtn = `<button onclick="fundDepartmentUpgrade('${stock.symbol}', '${key}')" style="font-size: 10px; margin-top: 5px; width: 100%;">Ulepsz (${(cost/1000).toFixed(0)}k)</button>`;
+            upgradeBtn = `<button onclick="fundDepartmentUpgrade('${stock.symbol}', '${key}')" class="text-xs mt-1 w-full">Ulepsz (${(cost/1000).toFixed(0)}k)</button>`;
         } else {
-            upgradeBtn = `<span style="font-size: 10px; color: green; font-weight: bold;">MAX LEVEL</span>`;
+            upgradeBtn = `<span class="text-xs text-up fw-bold">MAX LEVEL</span>`;
         }
 
         deptCard.innerHTML = `
-            <div style="font-weight: bold; font-size: 12px; margin-bottom: 4px;">${deptNames[key]}</div>
-            <div style="font-size: 18px; color: var(--accent-info);">Lvl ${data.level}</div>
+            <div class="fw-bold text-sm mb-1">${deptNames[key]}</div>
+            <div class="text-lg text-info">Lvl ${data.level}</div>
             ${upgradeBtn}
         `;
         deptsDiv.appendChild(deptCard);
@@ -1057,23 +1049,23 @@ function renderDepartmentsSection(stock, container) {
 
     if (orders.length > 0) {
         const invList = document.createElement('ul');
-        invList.style.listStyle = 'none';
-        invList.style.padding = '0';
+        invList.classList.add('list-plain');
+        invList.classList.add('p-0');
 
         for (const order of orders) {
             const li = document.createElement('li');
-            li.style.marginBottom = '8px';
-            li.style.padding = '8px';
-            li.style.borderLeft = '3px solid #007bff';
+            li.classList.add('mb-2');
+            li.classList.add('p-2');
+            li.classList.add('border-left-info');
 
             const head = document.createElement('div');
             head.style.display = 'flex';
-            head.style.justifyContent = 'space-between';
+            head.classList.add('justify-between');
             const name = document.createElement('strong');
             name.textContent = order.name;
             const cancel = document.createElement('button');
             cancel.textContent = 'Zablokuj';
-            cancel.style.fontSize = '9px';
+            cancel.classList.add('text-xs');
             cancel.onclick = () => blockInvestment(stock.symbol, order.ref);
             head.append(name, cancel);
 
@@ -1081,11 +1073,11 @@ function renderDepartmentsSection(stock, container) {
             bar.max = 1;
             bar.value = order.progress;
             bar.dataset.orderRef = order.ref;
-            bar.style.width = '100%';
-            bar.style.height = '10px';
+            bar.classList.add('w-full');
+            bar.classList.add('h-10');
 
             const info = document.createElement('div');
-            info.style.fontSize = '10px';
+            info.classList.add('text-xs');
             info.textContent = `${(order.progress * 100).toFixed(0)}% · ${order.detail} · ${order.path}`;
 
             li.append(head, bar, info);
@@ -1093,20 +1085,20 @@ function renderDepartmentsSection(stock, container) {
         }
         activeDiv.appendChild(invList);
     } else {
-        activeDiv.innerHTML += `<p style="font-size: 12px; color: var(--text-muted); font-style: italic;">Brak aktywnych projektów.</p>`;
+        activeDiv.innerHTML += `<p class="text-sm text-muted fst-italic">Brak aktywnych projektów.</p>`;
     }
     deptSection.appendChild(activeDiv);
 
     // --- 3. KATALOG DOSTĘPNYCH INWESTYCJI (wszystkie sektory spółki, bez duplikatów) ---
     const catalogDiv = document.createElement('div');
-    catalogDiv.style.marginTop = '15px';
+    catalogDiv.classList.add('mt-3');
     catalogDiv.innerHTML = `<h5>📋 Katalog Inwestycji</h5>
-        <p style="font-size: 10px; color: var(--text-muted);">Pozycje budowlane trafiają do przetargu (cena = budżet przetargu, czas w dniach budowy).
+        <p class="text-xs text-muted">Pozycje budowlane trafiają do przetargu (cena = budżet przetargu, czas w dniach budowy).
         Pozostałe spółka realizuje sama. Czas podany w dniach (1 dzień = 1/7 tygodnia gry).</p>`;
 
     const table = document.createElement('table');
-    table.style.fontSize = '11px';
-    table.style.width = '100%';
+    table.classList.add('text-xs');
+    table.classList.add('w-full');
     table.innerHTML = `
         <thead>
             <tr>
@@ -1133,37 +1125,37 @@ function renderDepartmentsSection(stock, container) {
 
         let statusBtn = '';
         if (!hasLevel) {
-            statusBtn = `<span style="color: gray; font-size: 9px;">Wymaga działu rozwoju Lvl ${inv.minDevLevel}</span>`;
+            statusBtn = `<span class="text-muted text-xs">Wymaga działu rozwoju Lvl ${inv.minDevLevel}</span>`;
         } else if (inProgress) {
-            statusBtn = `<span style="color: var(--accent-info); font-size: 9px;">W toku</span>`;
+            statusBtn = `<span class="text-info text-xs">W toku</span>`;
         } else if (!isAffordable) {
-            statusBtn = `<span style="color: var(--color-down); font-size: 9px;">Brak środków</span>`;
+            statusBtn = `<span class="text-down text-xs">Brak środków</span>`;
         } else if (isLimitReached) {
-            statusBtn = `<span style="color: var(--color-warn); font-size: 9px;">Limit projektów</span>`;
+            statusBtn = `<span class="text-warn text-xs">Limit projektów</span>`;
         } else {
-            statusBtn = `<button onclick="forceCompanyInvestment('${stock.symbol}', '${inv.id}')" style="padding: 2px 8px; font-size: 11px; background-color: var(--color-up); color: var(--text-on-accent); border: none; border-radius: 3px; cursor: pointer;">${isConstruction ? 'Przetarg' : 'Start'}</button>`;
+            statusBtn = `<button onclick="forceCompanyInvestment('${stock.symbol}', '${inv.id}')" class="btn-xs text-xs bg-up text-on-accent btn-plain clickable">${isConstruction ? 'Przetarg' : 'Start'}</button>`;
         }
 
         const iconSrc = inv.icon || 'img/box.png';
         const kindLabel = INVESTMENT_KIND_LABELS[inv.kind] || inv.kind;
-        const mixedNote = inv.kind === 'mixed' ? `<div style="font-size: 9px; color: var(--text-muted);">budowa ${(inv.constructionShare * 100).toFixed(0)}% kosztu</div>` : '';
+        const mixedNote = inv.kind === 'mixed' ? `<div class="text-xs text-muted">budowa ${(inv.constructionShare * 100).toFixed(0)}% kosztu</div>` : '';
 
         tr.innerHTML = `
-            <td style="display: flex; align-items: center;">
-                <img src="${iconSrc}" style="width: 24px; height: 24px; margin-right: 8px; object-fit: contain;" onerror="this.style.display='none'">
+            <td class="d-flex items-center">
+                <img src="${iconSrc}" class="icon-24 mr-2" onerror="this.style.display='none'">
                 <span>${inv.name}</span>
             </td>
             <td>${kindLabel}${mixedNote}</td>
             <td>${(realCost / 1000).toFixed(0)}k PLN</td>
             <td>${inv.durationDays} dni</td>
             <td>
-                <div style="font-size: 10px; color: var(--text-muted);">
+                <div class="text-xs text-muted">
                     ${inv.assetValue > 0 ? `<div>🏠 szac. ${(inv.assetValue / 1000).toFixed(0)}k</div>` : ''}
                     ${inv.incomeBonus > 0 ? `<div>💰 +${(inv.incomeBonus * 100).toFixed(0)}%</div>` : ''}
                     ${inv.healthBonus > 0 ? `<div>❤️ +${inv.healthBonus}</div>` : ''}
                 </div>
             </td>
-            <td style="text-align: center;">${statusBtn}</td>
+            <td class="text-center">${statusBtn}</td>
         `;
         tbody.appendChild(tr);
     });
@@ -1436,7 +1428,7 @@ function openManagementModal(symbol, defaultTab = 'main') {
         if (typeof renderDepartmentsSection === 'function') {
             renderDepartmentsSection(stock, deptsContent);
         } else {
-            deptsContent.innerHTML = '<p style="color:red">Błąd: Brak funkcji renderDepartmentsSection.</p>';
+            deptsContent.innerHTML = '<p class="text-down">Błąd: Brak funkcji renderDepartmentsSection.</p>';
         }
     }
 
@@ -1466,29 +1458,11 @@ function switchManagementTab(tabName) {
 // Plik: ui.js
 // Ta funkcja jest z ui.js (baza) i obsługuje złożony modal bankowy (z zakładkami)
 function openBankModal() {
-    const centralTabContent = document.getElementById('bank-content-central');
-    if (centralTabContent && centralBank.ceo) {
-        let ceoInfoHtml = `
-            <div style="text-align: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px dashed var(--border-color);">
-                <strong>Prezes Banku Centralnego:</strong> ${centralBank.ceo.name}<br>
-                <span style="font-size: 11px; color: var(--text-muted);">
-        `;
-        centralBank.ceo.traits.forEach(trait => {
-            ceoInfoHtml += `<span title="${trait.description}">[${trait.name}] </span>`;
-        });
-        ceoInfoHtml += `</span></div>`;
-
-        // Sprawdź, czy info już istnieje, aby uniknąć duplikacji
-        if (!centralTabContent.querySelector('.central-bank-ceo-info')) {
-            const infoDiv = document.createElement('div');
-            infoDiv.className = 'central-bank-ceo-info'; // Dodaj klasę do identyfikacji
-            infoDiv.innerHTML = ceoInfoHtml;
-            // Wstaw info pod nagłówkiem H2
-            centralTabContent.insertBefore(infoDiv, centralTabContent.children[1]);
-        }
+    const ceoInfo = document.querySelector('#bank-content-central .central-bank-ceo-info');
+    if (ceoInfo && centralBank.ceo) {
+        const traits = centralBank.ceo.traits.map(trait => `<span class="bank-trait" title="${escapeHtml(trait.description)}">${escapeHtml(trait.name)}</span>`).join('');
+        ceoInfo.innerHTML = `<div class="bank-ceo"><span class="bank-ceo-label">Prezes Banku Centralnego</span><strong>${escapeHtml(centralBank.ceo.name)}</strong><div class="bank-traits">${traits}</div></div>`;
     }
-
-    // Dostęp do giełd wynika ze stanowiska (fund.js) — licencji już nie ma.
 
 
     // Aktualizacja sekcji ofert do państwa (z bazy ui.js)
@@ -1523,6 +1497,7 @@ function openBankModal() {
         baseRateEl.textContent = (centralBank.baseInterestRate * 100).toFixed(1);
     }
 
+    renderBankTicker();
     switchBankTab('central'); // Ustaw domyślną zakładkę
     document.getElementById('bank-modal').style.display = 'block';
 }
@@ -1548,12 +1523,6 @@ function openStockDetailsModal(symbol) {
 }
 
 
-// Nowa funkcja do kupowania wybranego sprzętu
-// Nowa funkcja do ulepszania HR
-// Nowe funkcje do obsługi modala zatrudniania
-// Nowa funkcja do potwierdzenia zatrudnienia wybranego kandydata
-// Funkcja pomocnicza do odświeżania panelu pasywnego
-// Funkcja pomocnicza do odświeżania panelu pasywnego
 function updateDividendTrackerButtonVisibility() {
     const btn = document.getElementById('open-dividend-tracker-btn');
     if (!btn) return;
@@ -1577,7 +1546,7 @@ function renderDividendTrackerContent() {
         const cell = row.insertCell();
         cell.colSpan = 5;
         cell.textContent = "Brak spółek dywidendowych na rynku lub wymaganego poziomu umiejętności.";
-        cell.style.textAlign = "center";
+        cell.classList.add('text-center');
         return;
     }
 
@@ -1688,7 +1657,7 @@ function displayStartups(previousInputValues = {}) {
         if (startup.isPrivatized) {
             nameHTML += ` <span title="Projekt sprywatyzowany. Sukces gwarantowany, ale możliwe komplikacje.">🏢</span>`;
         }
-        nameHTML += ` <button onclick="openInvestorsModal('${startup.symbol}')" style="margin-left: 10px; padding: 2px 6px; font-size: 12px;">🏆 Ranking</button>`;
+        nameHTML += ` <button onclick="openInvestorsModal('${startup.symbol}')" class="ml-2 btn-xs text-sm">🏆 Ranking</button>`;
         nameCell.innerHTML = nameHTML;
 
         // Komórka 2: Cel Finansowania
@@ -1702,15 +1671,15 @@ function displayStartups(previousInputValues = {}) {
         const amountInput = document.createElement('input');
         amountInput.type = 'number';
         amountInput.placeholder = 'Kwota';
-        amountInput.style.width = '80px';
+        amountInput.classList.add('w-sm');
         amountInput.id = `invest-amount-${startup.symbol}`;
         amountInput.value = previousInputValues[startup.symbol] || '';
         const investButton = document.createElement('button');
 
         switch (startup.stage) {
             case 'funding': {
-                fundingCell.innerHTML = `${startup.currentFunding.toFixed(2)} PLN <progress value="${startup.currentFunding}" max="${startup.fundingGoal}" style="width: 100%;"></progress>`;
-                progressCell.innerHTML = `<progress value="0" max="100" style="width: 100%;"></progress>`;
+                fundingCell.innerHTML = `${startup.currentFunding.toFixed(2)} PLN <progress value="${startup.currentFunding}" max="${startup.fundingGoal}" class="w-full"></progress>`;
+                progressCell.innerHTML = `<progress value="0" max="100" class="w-full"></progress>`;
                 investButton.textContent = 'Zainwestuj';
                 investButton.onclick = () => {
                     const amount = parseFloat(amountInput.value);
@@ -1726,7 +1695,7 @@ function displayStartups(previousInputValues = {}) {
                     const privatizeButton = document.createElement('button');
                     privatizeButton.textContent = '🏢 Prywatyzuj';
                     privatizeButton.title = 'Wykup projekt na wyłączność. Gwarantuje to sukces, ale wprowadza ryzyko dodatkowych kosztów lub opóźnień.';
-                    privatizeButton.style.marginLeft = '4px';
+                    privatizeButton.classList.add('ml-1');
                     privatizeButton.onclick = () => privatizeStartup(startup.symbol);
                     actionsCell.appendChild(privatizeButton);
                 }
@@ -1736,7 +1705,7 @@ function displayStartups(previousInputValues = {}) {
                 const autoInvestButton = document.createElement('button');
                 autoInvestButton.textContent = '🔄';
                 autoInvestButton.title = 'Ustaw automatyczne inwestowanie';
-                autoInvestButton.style.marginLeft = '4px';
+                autoInvestButton.classList.add('ml-1');
                 if (autoInvestSettings && autoInvestSettings.isEnabled) {
                     autoInvestButton.style.borderColor = 'var(--color-up)';
                     autoInvestButton.style.borderWidth = '2px';
@@ -1748,18 +1717,18 @@ function displayStartups(previousInputValues = {}) {
             }
 
             case 'development':
-                fundingCell.innerHTML = `<strong style="color: var(--accent-info);">W trakcie rozwoju...</strong>`;
+                fundingCell.innerHTML = `<strong class="text-info">W trakcie rozwoju...</strong>`;
 
                 if (startup.pendingExtraCost) {
-                    progressCell.innerHTML = `<span style="color: red; font-weight: bold;">WSTRZYMANO</span>`;
+                    progressCell.innerHTML = `<span class="text-down fw-bold">WSTRZYMANO</span>`;
                     actionsCell.innerHTML = `<span>Wymaga: ${startup.pendingExtraCost.toFixed(2)} PLN</span>
                                            <button onclick="payExtraStartupCost('${startup.symbol}')">Zapłać</button>`;
                 } else if (startup.developmentPausedUntil && Date.now() < startup.developmentPausedUntil) {
                     const timeLeft = Math.ceil((startup.developmentPausedUntil - Date.now()) / 1000);
-                    progressCell.innerHTML = `<span style="color: orange;">OPÓŹNIENIE (${timeLeft}s)</span>`;
+                    progressCell.innerHTML = `<span class="text-warn">OPÓŹNIENIE (${timeLeft}s)</span>`;
                     actionsCell.innerHTML = 'Prace wstrzmane';
                 } else {
-                    progressCell.innerHTML = `<progress value="${startup.developmentProgress}" max="100" style="width: 100%;"></progress>`;
+                    progressCell.innerHTML = `<progress value="${startup.developmentProgress}" max="100" class="w-full"></progress>`;
                     actionsCell.innerHTML = 'Zablokowane';
                 }
                 break;
@@ -1767,16 +1736,16 @@ function displayStartups(previousInputValues = {}) {
             case 'financial_complications':
                 const timeLeftFC = Math.max(0, Math.floor(startup.rescueTimeLeft / 1000));
                 fundingCell.innerHTML = `
-                    <strong style="color: var(--color-down);">Wymagane dofinansowanie!</strong>
-                    <progress value="${startup.rescueCurrent}" max="${startup.rescueGoal}" style="width: 100%;"></progress>
+                    <strong class="text-down">Wymagane dofinansowanie!</strong>
+                    <progress value="${startup.rescueCurrent}" max="${startup.rescueGoal}" class="w-full"></progress>
                     <span>${startup.rescueCurrent.toLocaleString('pl-PL')} / ${startup.rescueGoal.toLocaleString('pl-PL')} PLN</span>
                 `;
-                progressCell.innerHTML = `<strong style="color: var(--color-down);">Pozostały czas: ${timeLeftFC}s</strong>`;
+                progressCell.innerHTML = `<strong class="text-down">Pozostały czas: ${timeLeftFC}s</strong>`;
 
                 const rescueInput = document.createElement('input');
                 rescueInput.type = 'number';
                 rescueInput.placeholder = 'Kwota';
-                rescueInput.style.width = '80px';
+                rescueInput.classList.add('w-sm');
                 const rescueButton = document.createElement('button');
                 rescueButton.textContent = 'Dofinansuj';
                 rescueButton.onclick = () => {
@@ -1797,8 +1766,8 @@ function displayStartups(previousInputValues = {}) {
 
             case 'overfunding': {
                 const timeLeftOF = Math.max(0, Math.floor(startup.overfundingTimeLeft / 1000));
-                fundingCell.innerHTML = `<strong style="color: var(--color-up);">Cel osiągnięty!</strong><br>Czas na bonus: ${timeLeftOF}s`;
-                progressCell.innerHTML = `<progress value="0" max="100" style="width: 100%;"></progress>`;
+                fundingCell.innerHTML = `<strong class="text-up">Cel osiągnięty!</strong><br>Czas na bonus: ${timeLeftOF}s`;
+                progressCell.innerHTML = `<progress value="0" max="100" class="w-full"></progress>`;
                 investButton.textContent = 'Zainwestuj (Bonus)';
 
                 // Tworzenie przycisku auto-inwestycji (ten kod jest poprawny)
@@ -1806,7 +1775,7 @@ function displayStartups(previousInputValues = {}) {
                 const autoInvestButton = document.createElement('button');
                 autoInvestButton.textContent = '🔄'; // Użyłem sugerowanej przez Ciebie emotki
                 autoInvestButton.title = 'Ustaw automatyczne inwestowanie';
-                autoInvestButton.style.marginLeft = '4px';
+                autoInvestButton.classList.add('ml-1');
                 if (autoInvestSettings && autoInvestSettings.isEnabled) {
                     autoInvestButton.style.borderColor = 'var(--color-up)'; // Zielona ramka dla aktywnych
                     autoInvestButton.style.borderWidth = '2px';
@@ -1835,7 +1804,7 @@ function displayStartups(previousInputValues = {}) {
             const insuranceButton = document.createElement('button');
             insuranceButton.textContent = '🛡️ Ubezpiecz';
             insuranceButton.title = 'Koszt: 5% Twojej dotychczasowej inwestycji';
-            insuranceButton.style.marginLeft = '4px';
+            insuranceButton.classList.add('ml-1');
             insuranceButton.onclick = () => buyStartupInsurance(startup.symbol);
             actionsCell.appendChild(insuranceButton);
         }
@@ -1858,7 +1827,7 @@ function openInvestorsModal(symbol) {
         .sort(([, a], [, b]) => b - a); // Sortuj malejąco po kwocie
 
     if (sortedInvestors.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="3" style="text-align: center;">Brak inwestorów.</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="3" class="text-center">Brak inwestorów.</td></tr>';
     } else {
         sortedInvestors.forEach(([name, amount], index) => {
             const row = tableBody.insertRow();
@@ -1910,11 +1879,11 @@ function displayInvestmentPool() {
             const name = id === 'player' ? 'Ty (Gracz)' : aiCompetitors.find(a => a.id === id)?.name || 'Nieznany AI';
 
             const barContainer = document.createElement('div');
-            barContainer.style.marginBottom = '5px';
+            barContainer.classList.add('mb-1');
             barContainer.innerHTML = `
                 <span>${name}: ${amount.toLocaleString('pl-PL')} PLN</span>
-                <div style="width: 100%; background-color: var(--bg-elevated-2);">
-                    <div style="width: ${percentage}%; background-color: var(--accent-info); color: var(--text-on-accent); text-align: right; padding-right: 5px; box-sizing: border-box;">
+                <div class="w-full bg-muted">
+                    <div style="width: ${percentage}%" class="bg-info text-on-accent text-right">
                         ${percentage.toFixed(1)}%
                     </div>
                 </div>
@@ -2227,13 +2196,13 @@ function openDescriptionModal(symbol) {
     if (stock.ceo && stock.ceo.name) {
         const tenureYears = Math.floor(stock.ceo.tenure / 4);
         let ceoHTML = `
-            <div style="display:flex; align-items:center; gap:12px; margin-bottom: 10px;">
-                <div style="flex: 0 0 80px; text-align:center; background:#f1f1f1; border-radius:12px; padding:10px;">
-                    <span style="font-size:24px;">👔</span>
+            <div class="d-flex items-center gap-3 mb-2">
+                <div class="stat-tile text-center p-2">
+                    <span class="text-xl">👔</span>
                 </div>
-                <div style="flex:1;">
-                    <h4 style="margin: 0;">${stock.ceo.name}</h4>
-                    <p style="margin: 5px 0; font-size: 12px; color: var(--text-muted);">Wiek: ${stock.ceo.age}, Staż w firmie: ${tenureYears} lat</p>
+                <div class="flex-1">
+                    <h4 class="m-0">${stock.ceo.name}</h4>
+                    <p class="my-1 text-sm text-muted">Wiek: ${stock.ceo.age}, Staż w firmie: ${tenureYears} lat</p>
                 </div>
             </div>
         `;
@@ -2535,31 +2504,27 @@ function openCeoChoiceModal(symbol, candidates, successChance) {
 
     candidates.forEach((candidate, index) => {
         const card = document.createElement('div');
-        card.style.border = "1px solid #ccc";
-        card.style.borderRadius = "8px";
-        card.style.padding = "15px";
-        card.style.textAlign = "center";
-        card.style.flex = "1";
+        card.classList.add('choice-card');
 
         let traitsHTML = '';
         if (candidate.traits && candidate.traits.length > 0) {
             candidate.traits.forEach(trait => {
                 const traitData = ceoTraits[trait.id];
                 if (traitData) {
-                    traitsHTML += `<span class="ceo-trait" style="background-color: ${traitData.color}; margin: 2px;" title="${traitData.description}">${traitData.name}</span>`;
+                    traitsHTML += `<span class="ceo-trait m-half" style="background-color: ${traitData.color}" title="${traitData.description}">${traitData.name}</span>`;
                 }
             });
         } else {
-            traitsHTML = '<p style="font-size: 12px; color: var(--text-muted);">Brak wyróżniających cech</p>';
+            traitsHTML = '<p class="text-sm text-muted">Brak wyróżniających cech</p>';
         }
 
         const tenureYears = Math.floor(candidate.tenure / 4);
         card.innerHTML = `
-            <h4 style="margin: 0 0 5px 0;">${candidate.name}</h4>
-            <p style="margin: 5px 0; font-size: 12px; color: var(--text-muted);">Wiek: ${candidate.age}, Doświadczenie: ${tenureYears} lat</p>
-            <div class="ceo-traits-container" style="margin-top: 10px; min-height: 50px;">${traitsHTML}</div>
+            <h4 class="mb-1">${candidate.name}</h4>
+            <p class="my-1 text-sm text-muted">Wiek: ${candidate.age}, Doświadczenie: ${tenureYears} lat</p>
+            <div class="ceo-traits-container mt-2 min-h-50" >${traitsHTML}</div>
             <button onclick="confirmCeoChange('${symbol}', ${index})">Zatwierdź Kandydata</button>
-            <p style="margin-top: 10px; font-weight: bold; font-size: 14px;">Szansa: ${(successChance * 100).toFixed(0)}%</p>
+            <p class="mt-2 fw-bold text-md">Szansa: ${(successChance * 100).toFixed(0)}%</p>
         `;
         container.appendChild(card);
     });
@@ -2585,6 +2550,12 @@ function closeSettingsModal() {
     if (modal) {
         modal.style.display = 'none';
     }
+}
+
+/** Przycisk zamykania w oknie: zamyka najbliższe okno .modal. */
+function closeModalFrom(element) {
+    const modal = element?.closest('.modal');
+    if (modal) modal.style.display = 'none';
 }
 
 function closeVisibleModals() {
@@ -2779,7 +2750,7 @@ function renderFestivalView(festivalContainer) {
         playerSectionHTML = `
             <h4>Twoje stoisko (Poziom ${playerParticipant.level}: ${currentLevel.name})</h4>
             <p>Zdobyte zainteresowanie: <strong>${playerParticipant.interest.toFixed(1)}</strong></p>
-            <div style="margin-bottom: 10px;">
+            <div class="mb-2">
                 ${nextLevel ? `<button onclick="playerUpgradeStall()">Ulepsz do: "${nextLevel.name}" (${nextLevel.cost} PLN)</button>` : '<p>Osiągnięto maksymalny poziom stoiska.</p>'}
             </div>
             <div>
@@ -2813,7 +2784,7 @@ function renderFestivalView(festivalContainer) {
     // --- Sekcja Rankingu Uczestników ---
     let participantsTableHTML = `
         <h4>Ranking Stoisk na Żywo</h4>
-        <table style="width: 100%;">
+        <table class="w-full">
             <thead><tr><th>#</th><th>Wystawca</th><th>Cel Promocji</th><th>Zainteresowanie</th></tr></thead>
             <tbody>
     `;
@@ -2851,10 +2822,10 @@ function renderFestivalView(festivalContainer) {
 
     // --- Finalne złożenie widoku (renderowanie do kontenera) ---
     festivalContainer.innerHTML = `
-        <h2 style="margin-top: 0; text-align: center;">🎉 Trwa ${festival.name}! 🎉</h2>
+        <h2 class="mt-0 text-center">🎉 Trwa ${festival.name}! 🎉</h2>
         <div class="bank-section">
             <p>Koniec za: <strong>${timeLeft}s</strong> | Zainteresowanie wydarzeniem: <strong>${festival.globalInterest.toFixed(1)}</strong></p>
-            <p style="font-size: 12px;">Atrakcje: ${festival.attractions.join(', ')}</p>
+            <p class="text-sm">Atrakcje: ${festival.attractions.join(', ')}</p>
             <button onclick="playerPromoteEvent()">Promuj wydarzenie (500 PLN)</button>
         </div>
         <div class="bank-section">
@@ -2867,28 +2838,6 @@ function renderFestivalView(festivalContainer) {
             ${bonusesHTML}
         </div>
     `;
-}
-
-function switchBankTab(tabName) {
-    // Ukryj wszystkie kontenery zakładek
-    document.querySelectorAll('.bank-tab-content').forEach(content => {
-        content.style.display = 'none';
-    });
-    // Pokaż wybrany kontener
-    document.getElementById(`bank-content-${tabName}`).style.display = 'block';
-
-    // Zaktualizuj wygląd przycisków zakładek
-    document.querySelectorAll('.bank-tab-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    document.getElementById(`tab-btn-${tabName}`).classList.add('active');
-
-    // Jeśli aktywowano zakładkę obligacji, odśwież jej zawartość
-    if (tabName === 'bonds') {
-        renderBondMarketInBank();
-    } else if (tabName === 'commercial') { // <-- DODANE Z ui.js
-        renderCommercialBanksList();
-    }
 }
 
 /**
@@ -2924,7 +2873,7 @@ function renderBondMarketInBank() {
         input.type = 'number';
         input.min = '1';
         input.value = '1';
-        input.style.width = '50px';
+        input.classList.add('w-xs');
         const buyBtn = document.createElement('button');
         buyBtn.textContent = 'Kup';
 
@@ -2962,7 +2911,7 @@ function renderBondMarketInBank() {
         input.type = 'number';
         input.min = '1';
         input.value = '1';
-        input.style.width = '50px';
+        input.classList.add('w-xs');
         const buyBtn = document.createElement('button');
         buyBtn.textContent = 'Kup';
 
@@ -3064,79 +3013,6 @@ function updateTBillAuctionSection() {
 }
 
 // --- PONIŻEJ FUNKCJE Z BAZY ui.js (Bankowość Komercyjna) ---
-
-function renderCommercialBanksList() {
-    const listContainer = document.getElementById('commercial-banks-list');
-    if (!listContainer) return;
-
-    listContainer.innerHTML = ''; // Wyczyść starą listę
-    const activeBanks = commercialBanks.filter(b => b.isActive);
-
-    if (activeBanks.length === 0) {
-        listContainer.innerHTML = '<p>Obecnie na rynku nie działają żadne banki komercyjne.</p>';
-        return;
-    }
-
-    activeBanks.forEach(bank => {
-        // Oblicz aktualne oprocentowanie (później dodamy stopy BC)
-        // Na razie użyjmy uproszczonych wartości bazowych + marży
-        const currentLoanRate = (LOAN_INTEREST_RATE + bank.baseInterestRateMargin) * 100;
-        const currentDepositRate = (DEPOSIT_INTEREST_RATE + bank.baseInterestRateMargin * 0.5) * 100; // Depozyty zwykle mniej oprocentowane
-
-        const bankDiv = document.createElement('div');
-        bankDiv.className = 'bank-section commercial-bank-item'; // Dodajemy klasę dla styli
-        bankDiv.style.borderLeft = `5px solid ${getBankColor(bank.type)}`; // Kolorowa ramka wg typu
-
-        let buttonsHTML = '';
-
-        if (bank.type === BANK_TYPES.INVESTMENT) {
-            buttonsHTML += `<button onclick="openSellSharesToBankModal('${bank.id}')">Sprzedaj akcje</button>`;
-        }
-
-        bankDiv.innerHTML = `
-            <h4>${bank.name} (${bank.type})</h4>
-            <p>Oproc. kredytu: <strong>${currentLoanRate.toFixed(1)}%</strong> | Oproc. depozytu: <strong>${currentDepositRate.toFixed(1)}%</strong></p>
-            <div class="bank-actions">
-                ${buttonsHTML || '<p>...</p>'}
-            </div>
-        `;
-
-        // --- 👇 DODAJ TEN BLOK DLA BANKÓW INWESTYCYJNYCH 👇 ---
-        if (bank.type === BANK_TYPES.INVESTMENT && Object.keys(bank.stockPortfolio).length > 0) {
-            let salesHTML = '<div class="bank-stock-sales"><h5>Akcje na sprzedaż:</h5><ul>';
-            for (const symbol in bank.stockPortfolio) {
-                const stock = stocks.find(s => s.symbol === symbol);
-                const holding = bank.stockPortfolio[symbol];
-                if (stock && holding.shares > 0) {
-                    const sellPrice = stock.price * 1.10; // Marża +10%
-                    salesHTML += `<li>${symbol} (${holding.shares} szt.) - Cena: ${sellPrice.toFixed(2)} PLN 
-                                  <input type="number" id="buy-from-bank-${bank.id}-${symbol}" min="1" value="1" style="width:40px; margin-left:5px;">
-                                  <button onclick="buySharesFromInvestmentBank('${bank.id}', '${symbol}')">Kup</button>
-                                </li>`;
-                }
-            }
-            salesHTML += '</ul></div>';
-            bankDiv.innerHTML += salesHTML; // Dodaj HTML do diva banku
-        }
-        // --- 👆 KONIEC NOWEGO BLOKU 👆 ---
-
-        listContainer.appendChild(bankDiv);
-    });
-}
-
-/** Funkcja pomocnicza do kolorowania banków wg typu */
-function getBankColor(type) {
-    switch (type) {
-        case BANK_TYPES.INVESTMENT: return '#20c997'; // Turkusowy
-        case BANK_TYPES.CORPORATE: return '#6f42c1'; // Fioletowy
-        case BANK_TYPES.UNIVERSAL: return '#0d6efd'; // Niebieski
-        case BANK_TYPES.INTERNATIONAL: return '#fd7e14'; // Pomarańczowy
-        case BANK_TYPES.COOPERATIVE: return '#28a745'; // Zielony
-        case BANK_TYPES.INTERNET: return '#ffc107'; // Żółty
-        case BANK_TYPES.MORTGAGE: return '#dc3545'; // Czerwony
-        default: return '#6c757d'; // Szary
-    }
-}
 
 function openSellSharesToBankModal(bankId) {
     const bank = commercialBanks.find(b => b.id === bankId);
@@ -3333,7 +3209,7 @@ function openFinancialDetailsModal(symbol) {
     const hasAccess = stock.playerHasFinancialAccess || (accountantLevel >= 2 && (playerPortfolio[symbol]?.shares / stock.totalShares) > 0.5);
 
     if (!hasAccess || accountantLevel === 0) { // Jeśli nie ma dostępu LUB nie ma umiejętności
-        content.innerHTML = '<p style="color: red;">Brak dostępu do danych finansowych.</p>';
+        content.innerHTML = '<p class="text-down">Brak dostępu do danych finansowych.</p>';
         modal.style.display = 'block';
         return;
     }
@@ -3382,7 +3258,7 @@ function renderFinancialPeriodPreview(stock) {
         <p>R&D — koszty rozpoczęcia: ${fmt(rd.pendingStartup)}, utrzymania: ${fmt(rd.pendingMaintenance)}</p>
         <p>Kontrakty budowlane — przychody: ${fmt(period.constructionRevenue)}, koszty: ${fmt(period.constructionCosts)}</p>
         <p>Nieruchomości (netto): ${fmt(period.propertyIncome)} · Koszty inwestycji: ${fmt(period.investmentExpense)} · Pozostałe: ${fmt(period.otherIncome)}</p>
-        <p style="font-size: 11px; color: var(--text-muted);">Pozycje te są już rozliczone w gotówce i bilansie; raport kwartalny tylko je wykaże.</p>
+        <p class="text-xs text-muted">Pozycje te są już rozliczone w gotówce i bilansie; raport kwartalny tylko je wykaże.</p>
         <p>R&D łącznie od początku — rozpoczęcia: ${fmt(rd.totalStartup)}, utrzymanie: ${fmt(rd.totalMaintenance)}</p>`;
 
     if (last) {
@@ -3562,7 +3438,7 @@ function openMaTargetModal(initiatorSymbol) {
     );
 
     if (potentialTargets.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Brak dostępnych celów na rynku.</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="4" class="text-center">Brak dostępnych celów na rynku.</td></tr>';
     } else {
         potentialTargets.forEach(target => {
             const row = tableBody.insertRow();
@@ -3593,7 +3469,7 @@ function openMaTargetModal(initiatorSymbol) {
             const takeoverLboBtn = document.createElement('button');
             takeoverLboBtn.textContent = 'Przejęcie (LBO)';
             takeoverLboBtn.title = 'Wrogie przejęcie finansowane długiem (LBO). Bank sfinansuje transakcję, a Twoja spółka przejmie dług.';
-            takeoverLboBtn.style.marginLeft = '5px';
+            takeoverLboBtn.classList.add('ml-1');
             takeoverLboBtn.style.borderColor = 'var(--color-warn)'; // Żółta ramka dla odróżnienia
             takeoverLboBtn.onclick = () => {
                  if (confirm(`Czy na pewno chcesz zainicjować WROGIE PRZEJĘCIE ${target.name} przez ${initiatorStock.name}? Transakcja zostanie sfinansowana KREDYTEM (LBO), który obciąży Twoją spółkę.`)) {
@@ -3619,7 +3495,7 @@ function openMaTargetModal(initiatorSymbol) {
                 const mergerBtn = document.createElement('button');
                 mergerBtn.textContent = 'Fuzja';
                 mergerBtn.title = 'Przyjazna fuzja (wymiana akcji)';
-                mergerBtn.style.marginLeft = '10px'; // Trochę większy odstęp
+                mergerBtn.classList.add('ml-2');
                 mergerBtn.style.borderColor = 'var(--color-up)'; // Zielona ramka
                 mergerBtn.onclick = () => {
                     if (confirm(`Czy na pewno chcesz zaproponować FUZJĘ ${target.name} z ${initiatorStock.name}? Będzie to polegało na wymianie akcji.`)) {
@@ -5007,9 +4883,17 @@ function showIntroScene() {
     const form = document.getElementById('intro-form');
     if (!overlay || !thread || !form) return;
 
+    // Tryb debug: opcja „Pomijaj scenkę z babcią” — od razu profil domyślny z formularza.
+    if (isDebugMode() && isIntroSkipEnabled()) {
+        completeIntroScene();
+        return;
+    }
+
     overlay.hidden = false;
     thread.innerHTML = '';
     form.hidden = true;
+    const skip = document.getElementById('intro-skip-btn');
+    if (skip) skip.hidden = !isDebugMode();
 
     let index = 0;
     const typeNext = () => {
@@ -5056,7 +4940,17 @@ function completeIntroScene(event) {
     playerProfile.cv = [{ type: 'start', text: `Zatrudnienie w ${playerProfile.corporation} jako Młodszy zarządca funduszu „${playerProfile.fundName}”.` }];
 
     document.getElementById('intro-overlay').hidden = true;
+    if (typeof syncCeoTitle === 'function') syncCeoTitle(); // nazwa korporacji z formularza
     logEvent(`💼 Witaj, ${playerProfile.name}! Zarządzasz funduszem „${playerProfile.fundName}” w ${playerProfile.corporation}. Wznów grę, aby zacząć.`, 'review');
+
+    // Jedno powitanie w poczcie — z nazwami z formularza (startNewCareer wysłał wcześniej domyślne).
+    mailbox = createMailbox();
+    addMail({
+        sender: 'corporation',
+        subject: `Witamy w ${playerProfile.corporation}, ${playerProfile.name}!`,
+        body: `Od dziś zarządzasz funduszem „${playerProfile.fundName}”. Wyniki oceniamy co 4 okresy. Wiadomości z rynku przysyłają czasopisma — prenumeraty ustawisz w zakładce Subskrypcje.`,
+        importance: 2
+    });
     refreshFundViews();
 }
 
@@ -5077,7 +4971,26 @@ function applyDebugModeUi() {
     if (tools) tools.hidden = !enabled;
     const button = document.getElementById('debug-toggle-btn');
     if (button) button.textContent = `🛠️ Tryb debug: ${enabled ? 'włączony' : 'wyłączony'}`;
+    const skipButton = document.getElementById('debug-skip-intro-btn');
+    if (skipButton) skipButton.textContent = `⏭️ Pomijaj scenkę z babcią: ${isIntroSkipEnabled() ? 'tak' : 'nie'}`;
     if (!enabled && currentSpeedMultiplier > 5) setGameSpeed(5);
+}
+
+const INTRO_SKIP_KEY = 'gra_inwestycyjna_skip_intro';
+
+function isIntroSkipEnabled() {
+    try { return localStorage.getItem(INTRO_SKIP_KEY) === '1'; } catch (e) { return false; }
+}
+
+/** Przełącznik w ustawieniach debug: kolejne nowe gry startują bez scenki z babcią. */
+function toggleIntroSkip() {
+    try { localStorage.setItem(INTRO_SKIP_KEY, isIntroSkipEnabled() ? '0' : '1'); } catch (e) { /* brak localStorage */ }
+    applyDebugModeUi();
+}
+
+/** Pomija trwającą scenkę (przycisk w scence, widoczny w trybie debug). */
+function skipIntroScene() {
+    completeIntroScene();
 }
 
 function toggleDebugMode() {
@@ -5602,3 +5515,105 @@ function openDebtCollectorPanel() {
     modal.style.display = 'block';
 }
 
+// =================================================================================
+// CENTRUM BANKOWE (okno banku): wskaźniki, zakładki, banki komercyjne, lokaty funduszu
+// =================================================================================
+
+const BANK_TYPE_STYLES = {
+    INVESTMENT: 'invest', CORPORATE: 'corporate', UNIVERSAL: 'universal', INTERNATIONAL: 'international',
+    COOPERATIVE: 'cooperative', INTERNET: 'internet', MORTGAGE: 'mortgage'
+};
+
+function getBankTypeClass(type) {
+    const key = Object.keys(BANK_TYPES).find(name => BANK_TYPES[name] === type);
+    return `bank-type-${BANK_TYPE_STYLES[key] || 'other'}`;
+}
+
+/** Pasek wskaźników na górze okna banku. */
+function renderBankTicker() {
+    const ticker = document.getElementById('bank-ticker');
+    if (!ticker) return;
+    const pct = value => `${(value * 100).toFixed(2)}%`;
+    const items = [
+        ['Stopa bazowa BC', pct(centralBank.baseInterestRate || 0)],
+        ['Kredyt (rynek)', pct(getLoanRate())],
+        ['Depozyt (rynek)', pct(getDepositRate())],
+        ['Gotówka funduszu', formatZl(playerCash, 0)],
+        ['Lokaty funduszu', formatZl(getFundDepositsValue(), 0)],
+        ['Obligacje funduszu', formatZl(getFundBondsValue(), 0)]
+    ];
+    ticker.innerHTML = items.map(([label, value]) => `<div class="bank-ticker-item"><span>${label}</span><strong>${value}</strong></div>`).join('');
+}
+
+function switchBankTab(tabName) {
+    const modal = document.getElementById('bank-modal');
+    if (!modal) return;
+    modal.querySelectorAll('.bank-tab-content').forEach(content => { content.style.display = 'none'; });
+    document.getElementById(`bank-content-${tabName}`).style.display = 'block';
+    modal.querySelectorAll('.bank-tab-btn').forEach(button => button.classList.toggle('active', button.id === `tab-btn-${tabName}`));
+    renderBankTicker();
+    if (tabName === 'bonds') renderBondMarketInBank();
+    else if (tabName === 'commercial') renderCommercialBanksList();
+}
+
+function renderFundDeposits() {
+    const container = document.getElementById('fund-deposits-list');
+    if (!container) return;
+    const deposits = getFundDeposits();
+    container.innerHTML = deposits.length ? deposits.map(deposit => `
+        <div class="bank-deposit">
+            <div class="bank-deposit-info">
+                <strong>${escapeHtml(deposit.bankName)}</strong>
+                <span class="text-muted text-sm">${deposit.termWeeks} tyg. · ${(deposit.rate * 100).toFixed(2)}% rocznie · zostało ${deposit.weeksLeft} tyg.</span>
+            </div>
+            <div class="bank-deposit-amount">${formatZl(deposit.principal)} <span class="text-up text-sm">+${formatZl(deposit.accrued)}</span></div>
+            <div class="bank-deposit-progress"><span style="width:${(100 * (1 - deposit.weeksLeft / deposit.termWeeks)).toFixed(0)}%"></span></div>
+            <button class="btn-secondary text-sm" onclick="breakFundDeposit('${deposit.id}'); renderFundDeposits(); renderBankTicker();">Zerwij</button>
+        </div>`).join('') : '<p class="text-muted">Fundusz nie ma lokat. Wybierz bank poniżej.</p>';
+}
+
+/** Karty banków: typ, oprocentowanie, lokata funduszu, sprzedaż akcji (bank inwestycyjny). */
+function renderCommercialBanksList() {
+    renderFundDeposits();
+    const list = document.getElementById('commercial-banks-list');
+    if (!list) return;
+    const banks = commercialBanks.filter(bank => bank.isActive);
+    if (!banks.length) { list.innerHTML = '<p class="text-muted">Na rynku nie działa żaden bank komercyjny.</p>'; return; }
+
+    list.innerHTML = banks.map(bank => {
+        const loanRate = (getLoanRate() + (Number(bank.baseInterestRateMargin) || 0)) * 100;
+        const terms = FUND_DEPOSIT_TERMS.map(term => `<option value="${term.weeks}">${term.label} · ${(getFundDepositRate(bank, term.weeks) * 100).toFixed(2)}%</option>`).join('');
+        const deposit = canBankTakeFundDeposits(bank) ? `
+            <div class="bank-card-form">
+                <select id="deposit-term-${bank.id}" aria-label="Okres lokaty">${terms}</select>
+                <input type="text" inputmode="numeric" id="deposit-amount-${bank.id}" value="${Math.max(FUND_DEPOSIT_MIN, Math.floor(playerCash * 0.1))}" aria-label="Kwota lokaty">
+                <button onclick="openFundDeposit('${bank.id}', parseFloat(document.getElementById('deposit-amount-${bank.id}').value), parseInt(document.getElementById('deposit-term-${bank.id}').value, 10)); renderCommercialBanksList(); renderBankTicker();">Załóż lokatę</button>
+            </div>` : '<p class="text-muted text-sm">Bank nie przyjmuje lokat funduszy.</p>';
+
+        let sales = '';
+        if (bank.type === BANK_TYPES.INVESTMENT && bank.stockPortfolio) {
+            const offers = Object.entries(bank.stockPortfolio).filter(([, holding]) => holding.shares > 0).map(([symbol, holding]) => {
+                const stock = stocks.find(s => s.symbol === symbol);
+                return stock ? `<li><span>${escapeHtml(symbol)} · ${holding.shares} szt. · ${formatZl(stock.price * 1.10)}</span>
+                    <span class="bank-card-form"><input type="text" inputmode="numeric" id="buy-from-bank-${bank.id}-${symbol}" value="1" aria-label="Liczba akcji">
+                    <button onclick="buySharesFromInvestmentBank('${bank.id}', '${symbol}')">Kup</button></span></li>` : '';
+            }).join('');
+            sales = `<div class="bank-card-sales"><h5>Akcje na sprzedaż (+10% do kursu)</h5>${offers ? `<ul class="list-plain">${offers}</ul>` : '<p class="text-muted text-sm">Brak ofert.</p>'}
+                <button class="btn-secondary text-sm" onclick="openSellSharesToBankModal('${bank.id}')">Sprzedaj akcje bankowi</button></div>`;
+        }
+
+        return `<article class="bank-card ${getBankTypeClass(bank.type)}">
+            <header class="bank-card-head">
+                <span class="bank-card-icon" aria-hidden="true">🏦</span>
+                <div><h4>${escapeHtml(bank.name)}</h4><span class="bank-card-type">${escapeHtml(bank.type)}</span></div>
+            </header>
+            <dl class="bank-card-rates">
+                <div><dt>Kredyt</dt><dd>${loanRate.toFixed(2)}%</dd></div>
+                <div><dt>Lokata 16 tyg.</dt><dd>${canBankTakeFundDeposits(bank) ? (getFundDepositRate(bank, 16) * 100).toFixed(2) + '%' : '—'}</dd></div>
+                <div><dt>Kapitał</dt><dd>${formatZl(bank.cash, 0)}</dd></div>
+            </dl>
+            ${deposit}
+            ${sales}
+        </article>`;
+    }).join('');
+}

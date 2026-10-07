@@ -8,10 +8,6 @@
 </head>
 <body>
 
-    <div id="settings-container">
-        <button id="theme-toggle-btn" onclick="openSettingsModal()">⚙️</button>
-    </div>
-
     <div class="app-shell">
   <aside class="app-sidebar" id="app-sidebar">
     <div class="sidebar-brand">
@@ -62,6 +58,11 @@
             <button class="sidebar-nav-btn" id="open-leaderboard-btn" onclick="openLeaderboardModal()">
                 <span class="nav-icon">🏆</span>
                 <span class="nav-label">Ranking</span>
+            </button>
+
+            <button class="sidebar-nav-btn" id="open-settings-btn" onclick="openSettingsModal()">
+                <span class="nav-icon">⚙️</span>
+                <span class="nav-label">Ustawienia</span>
             </button>
     </nav>
   </aside>
@@ -183,10 +184,9 @@
         <span class="mkpi-sub">na rynku dziś</span>
       </div>
       <div class="market-kpi-card" id="popular-sector-card">
-        <span class="mkpi-label">Popularny sektor</span>
+        <span class="mkpi-label">Najsilniejszy sektor</span>
         <span class="mkpi-value" id="mkpi-top-sector">—</span>
-        <span class="mkpi-sub" id="mkpi-top-sector-sub">wg liczby spółek</span>
-        <button id="unlock-sector-btn" class="btn-secondary text-sm mt-2 d-block" onclick="unlockPopularSector()">Odblokuj za 15 000 PLN</button>
+        <span class="mkpi-sub" id="mkpi-top-sector-sub">średnia zmiana dziś</span>
       </div>
     </div>
 
@@ -234,6 +234,12 @@
               onclick="setMarketLevel(this,'GOLD')">🥇 Złota</button>
       <button class="market-level-tab" data-level="PLATINUM"
               onclick="setMarketLevel(this,'PLATINUM')">💎 Platynowa</button>
+      <button class="market-level-tab" data-level="RUBY"
+              onclick="setMarketLevel(this,'RUBY')">🔴 Rubinowa</button>
+      <button class="market-level-tab" data-level="EMERALD"
+              onclick="setMarketLevel(this,'EMERALD')">🟢 Szmaragdowa</button>
+      <button class="market-level-tab" data-level="DIAMOND"
+              onclick="setMarketLevel(this,'DIAMOND')">💠 Diamentowa</button>
     </div>
 
     <!-- Ukryty select — zachowany dla kompatybilności z JS -->
@@ -396,7 +402,7 @@
     <div id="settings-modal" class="modal modal-sm" style="display: none;">
         <div class="d-flex justify-between items-center divider-bottom pb-2">
             <h3 class="m-0">Ustawienia</h3>
-            <button class="btn-plain text-xl fw-bold clickable" onclick="closeSettingsModal()">&times;</button>
+            <button class="close-btn" onclick="closeSettingsModal()" aria-label="Zamknij">&times;</button>
         </div>
         <div class="text-center pt-4">
             <p>Zmień wygląd interfejsu.</p>
@@ -410,11 +416,13 @@
                 <button onclick="debugEndPeriod()">Zakończ okres funduszu</button>
                 <button onclick="debugBoardReview()">Ocena zarządu teraz</button>
                 <button onclick="debugCheckInvariants()">Sprawdź spójność świata</button>
+                <button id="debug-skip-intro-btn" onclick="toggleIntroSkip()">⏭️ Pomijaj scenkę z babcią: nie</button>
             </div>
         </div>
     </div>
 
     <div id="price-chart-modal" class="modal modal-sm" style="display: none;">
+        <button class="close-btn" onclick="closePriceChartModal()" aria-label="Zamknij">&times;</button>
         <h3 class="mt-0 text-center" id="chart-title">Historia Cen</h3>
         <div class="w-full chart-area mb-2" id="chart-svg-area"></div>
         <div class="d-flex justify-between items-center mb-3">
@@ -444,7 +452,6 @@
                 <button class="text-xl px-1 va-middle ml-2" id="open-alert-modal-btn" title="Ustaw alerty cenowe">⏰</button>
             </div>
         </div>
-        <button class="d-block w-full" onclick="closePriceChartModal()">Zamknij</button>
     </div>
 
     <div class="modal" id="skills-modal" style="display: none;">
@@ -454,19 +461,26 @@
         <div id="skills-list"></div>
     </div>
 
-    <div id="bank-modal" class="modal" style="display: none;">
-    <button class="close-btn" onclick="document.getElementById('bank-modal').style.display='none';">&times;</button>
-    <div class="bank-tabs">
+    <div id="bank-modal" class="modal modal-xl bank-window" style="display: none;">
+    <button class="close-btn" onclick="document.getElementById('bank-modal').style.display='none';" aria-label="Zamknij">&times;</button>
+    <header class="bank-hero">
+        <div class="bank-emblem" aria-hidden="true">🏛️</div>
+        <div>
+            <div class="bank-hero-kicker">System bankowy · obsługa funduszy</div>
+            <h2 class="bank-hero-title">Centrum Bankowe</h2>
+        </div>
+    </header>
+    <div class="bank-ticker" id="bank-ticker"></div>
+
+    <nav class="bank-tabs" role="tablist">
         <button id="tab-btn-central" class="bank-tab-btn active" onclick="switchBankTab('central')">🏛️ Bank Centralny</button>
-        <button id="tab-btn-commercial" class="bank-tab-btn" onclick="switchBankTab('commercial')">🏦 Banki Komercyjne</button>
-        <button id="tab-btn-bonds" class="bank-tab-btn" onclick="switchBankTab('bonds')">- Rynek Obligacji -</button>
-    </div>
+        <button id="tab-btn-commercial" class="bank-tab-btn" onclick="switchBankTab('commercial')">🏦 Banki i lokaty</button>
+        <button id="tab-btn-bonds" class="bank-tab-btn" onclick="switchBankTab('bonds')">📜 Obligacje</button>
+    </nav>
 
     <div id="bank-content-central" class="bank-tab-content">
-        <h2 class="mt-2 text-center">Bank Centralny</h2>
-        <p class="text-center text-md mb-3">
-            Aktualna stopa bazowa: <strong id="bc-base-rate-display">--</strong>%
-        </p>
+        <h3 class="bank-section-title">Bank Centralny</h3>
+        <p class="bank-lead">Stopa bazowa: <strong id="bc-base-rate-display">--</strong>% — od niej zależy oprocentowanie kredytów, lokat i wycena obligacji.</p>
         <div class="central-bank-ceo-info text-center mb-3 pb-2 divider-bottom">
             </div>
 
@@ -517,14 +531,16 @@
         </div>
 
     <div id="bank-content-commercial" class="bank-tab-content" style="display: none;">
-        <h2 class="mt-2 text-center">Banki Komercyjne</h2>
-        <p class="text-center">Wybierz bank, aby zobaczyć dostępne usługi.</p>
-        <div class="max-h-md scroll-y" id="commercial-banks-list">
-            </div>
+        <h3 class="bank-section-title">Lokaty funduszu</h3>
+        <p class="bank-lead">Wolna gotówka funduszu może pracować na lokacie terminowej. Odsetki naliczają się co tydzień i podnoszą NAV; zerwanie przed terminem = utrata odsetek i 1% kary.</p>
+        <div id="fund-deposits-list" class="bank-deposits"></div>
+        <h3 class="bank-section-title">Banki komercyjne</h3>
+        <div id="commercial-banks-list" class="bank-grid"></div>
     </div>
 
     <div id="bank-content-bonds" class="bank-tab-content" style="display: none;">
-        <h2 class="mt-2 text-center">Rynek Obligacji</h2>
+        <h3 class="bank-section-title">Rynek obligacji</h3>
+        <p class="bank-lead">Fundusz kupuje obligacje za gotówkę; kupony co kwartał, nominał w terminie. Wycena w NAV zależy od stóp procentowych.</p>
         <div class="bank-section">
             <h4>🏛️ Obligacje Skarbu Państwa (Cena: 1000 PLN/szt.)</h4>
             <table class="w-full" id="state-bonds-table">
@@ -541,7 +557,7 @@
         </div>
     </div>
 </div>
-    <div id="city-investment-modal" class="modal" style="display: none;">
+<div id="city-investment-modal" class="modal" style="display: none;">
     <button class="close-btn" onclick="document.getElementById('city-investment-modal').style.display='none';">&times;</button>
     <h2 class="mt-0 text-center">🏙️ Panel Miasta: Gdańsk</h2>
     
@@ -603,12 +619,13 @@
 </div>
 
     <div class="modal modal-lg" id="leaderboard-modal" style="display: none;">
+        <button class="close-btn" onclick="document.getElementById('leaderboard-modal').style.display='none';" aria-label="Zamknij">&times;</button>
         <h2 class="mt-0 text-center">🏆 Ranking funduszy</h2>
          <div id="leaderboard-list"></div>
-         <button onclick="document.getElementById('leaderboard-modal').style.display='none';">Zamknij</button>
     </div>
 
     <div class="modal modal-sm" id="sixth-sense-modal" style="display: none;">
+        <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
         <h2 class="mt-0 text-center text-info">💡 Szósty Zmysł 💡</h2>
          <p class="text-center text-lg my-4" id="sixth-sense-message"></p>
          <button class="d-block w-full p-2 text-lg" onclick="document.getElementById('sixth-sense-modal').style.display='none';">Rozumiem</button>
@@ -754,7 +771,6 @@
         <div id="mgmt-content-depts" class="bank-tab-content modal-body max-h-md scroll-y" style="display: none;">
             </div>
 
-        <button class="mt-3" onclick="document.getElementById('management-modal').style.display='none';">Zamknij</button>
     </div>
 
     <div id="ma-initiation-section" class="bank-section" style="display: none;">
@@ -775,26 +791,27 @@
     </div>
 
     <div class="modal modal-sm" id="stock-details-modal" style="display: none;">
+        <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
         <h3 class="mt-0 text-center" id="details-title">Struktura Akcjonariatu</h3>
          <div class="w-lg pie-area mx-auto my-4" id="pie-chart-container"></div>
          <div class="text-center mb-3" id="pie-chart-legend"></div>
          <div id="analyst-insights" class="analyst-insights"></div>
-         <button class="d-block mx-auto" onclick="document.getElementById('stock-details-modal').style.display='none';">Zamknij</button>
     </div>
 
     <div class="modal" id="description-modal" style="display: none;">
+        <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
         <h3 class="mt-0 text-center" id="description-modal-title"></h3>
          <div class="mt-3 pt-2 divider-top" id="description-modal-ceo"></div>
          <p class="text-justify" id="description-modal-content"></p>
          <div class="mt-3 pt-2 divider-top" id="description-modal-phase" style="display: none;"></div>
          <div class="mt-3 pt-2 divider-top" id="description-modal-analytical"></div>
          <div class="mt-3 pt-2 divider-top" id="description-modal-research"></div>
-         <button class="d-block mx-auto mt-4" onclick="document.getElementById('description-modal').style.display='none';">Zamknij</button>
     </div>
 
 
 
     <div id="dividend-tracker-modal" class="modal" style="display: none;">
+        <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
         <div class="modal-header">
              <h2>💰 Panel Analityka Dywidend</h2>
              <button onclick="document.getElementById('dividend-tracker-modal').style.display='none';">&times;</button>
@@ -808,6 +825,7 @@
     </div>
 
     <div id="takeover-modal" class="modal" style="display: none;">
+        <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
         <h2>🚨 Próba Wrogiego Przejęcia! 🚨</h2>
          <p id="takeover-message"></p>
          <div>
@@ -817,6 +835,7 @@
     </div>
 
     <div id="rescue-offering-modal" class="modal" style="display: none;">
+        <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
         <h2>📢 Oferta Emisji Ratunkowej!</h2>
          <p id="rescue-offering-message"></p>
          <div>
@@ -932,6 +951,7 @@
 
 
     <div id="startup-offer-modal" class="modal" style="display: none;">
+        <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
         <h2 id="startup-offer-title">Otrzymałeś Ofertę Specjalną!</h2>
          <p id="startup-offer-message"></p>
          <div>
@@ -945,6 +965,7 @@
     </div>
 
     <div id="price-alert-modal" class="modal" style="display: none;">
+        <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
         <h3 id="price-alert-title">Ustaw Alerty Cenowe</h3>
          <p>Aktualna cena: <strong id="price-alert-current-price">0.00</strong></p>
          <div>
@@ -961,6 +982,7 @@
     </div>
 
     <div id="ceo-choice-modal" class="modal" style="display: none;">
+        <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
         <h2 id="ceo-choice-title">Wybierz kandydata na nowego prezesa</h2>
          <p>Twoja szansa na sukces zależy od udziału w akcjonariacie.</p>
          <div id="ceo-candidates-container"></div>
@@ -1076,7 +1098,9 @@
     <!-- Scenka startowa: SMS od babci + profil gracza -->
     <div id="intro-overlay" class="intro-overlay" hidden>
       <div class="intro-phone" role="dialog" aria-labelledby="intro-phone-title">
-        <div class="intro-phone-header" id="intro-phone-title">💬 Babcia</div>
+        <div class="intro-phone-header" id="intro-phone-title">💬 Babcia
+          <button type="button" id="intro-skip-btn" class="intro-skip" hidden onclick="skipIntroScene()">⏭️ Pomiń</button>
+        </div>
         <div class="intro-phone-body" id="intro-sms-thread"></div>
         <form id="intro-form" class="intro-form" hidden onsubmit="completeIntroScene(event)">
           <label>Twoje imię<input id="intro-name" maxlength="30" required value="Dawid"></label>
@@ -1169,7 +1193,6 @@
   </div>
 </div>
     </div>
-    <button class="mt-3" onclick="document.getElementById('construction-sector-modal').style.display='none';">Zamknij</button>
 </div>
 
 <script src="gameCore.js"></script>

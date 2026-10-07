@@ -1413,7 +1413,7 @@ group('Banki, lombard, obligacje, giełdy elitarne (etap E2)', () => {
             const c = makeCompany(`P${i}`, { name: `Platyna ${i}` });
             c.exchange = 'PLATINUM';
             c.price = 2000 + i * 100;
-            c.totalShares = 1000000; // kapitalizacja 2–3,1 mld (próg Szmaragdu: 1 mld)
+            c.totalShares = 1000000; // kapitalizacja 2–3,1 mld (progi: Rubin 1,5 mld, Szmaragd 2,5 mld)
             return c;
         });
         resetWorld(companies);
@@ -1441,6 +1441,26 @@ group('Banki, lombard, obligacje, giełdy elitarne (etap E2)', () => {
         assert(child.research.unlockedTechs.join() === 't1,t2' && child.dividendPolicy === 'Balanced', 'badania i polityka');
         assertNear(cash - parent.cash, child.cash, 'kapitał od matki');
         assert(!isEliteExchange(child.exchange), 'IPO na niższej giełdzie');
+    });
+
+    test('lokata funduszu: NAV bez zmian przy założeniu, odsetki co tydzień, wypłata w terminie, kara za zerwanie', () => {
+        const { a } = worldE2();
+        const bank = makeBank(a);
+        const nav0 = getFundNav();
+        const bankCash0 = bank.cash;
+        const deposit = openFundDeposit(bank.id, 2000, 4);
+        assert(deposit && playerFund.deposits.length === 1, 'lokata założona');
+        assertNear(getFundNav(), nav0, 'NAV bez zmian', 1e-9);
+        processFundDepositsWeekly();
+        assert(deposit.accrued > 0 && getFundNav() > nav0, 'odsetki podnoszą NAV');
+        for (let i = 0; i < 3; i++) processFundDepositsWeekly();
+        assert(playerFund.deposits.length === 0, 'lokata zapadła');
+        assertNear(bank.cash, bankCash0 - deposit.accrued, 'bank zapłacił tylko odsetki');
+        const cash = playerCash;
+        const second = openFundDeposit(bank.id, 1000, 16);
+        breakFundDeposit(second.id);
+        assertNear(playerCash, cash - 1000 * FUND_DEPOSIT_BREAK_PENALTY, 'kara 1% za zerwanie');
+        commercialBanks.length = 0;
     });
 
     test('zapis v7 zachowuje obligacje i zastawy', () => {

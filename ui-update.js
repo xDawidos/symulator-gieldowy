@@ -12,29 +12,10 @@ function setSectorChip(el, sector) {
 
 // Taby poziomów rynku
 let currentMarketLevel = 'ALL';
-let hasTopSectorAccess = false;
 
 /** Przycisk 📊 w panelu kupna: struktura akcjonariatu (kto ma jaki % udziałów). */
 function openCompanyReport(symbol) {
     if (typeof openStockDetailsModal === 'function') openStockDetailsModal(symbol);
-}
-
-function unlockPopularSector() {
-    const cost = 15000;
-    if (hasTopSectorAccess) {
-        if (typeof showToast === 'function') showToast('Popularny sektor już odblokowany.', 'info');
-        return;
-    }
-    if (typeof playerCash === 'undefined' || playerCash < cost) {
-        if (typeof showToast === 'function') showToast('Masz za mało gotówki, aby odblokować popularny sektor.', 'error');
-        else alert('Masz za mało gotówki, aby odblokować popularny sektor.');
-        return;
-    }
-    playerCash -= cost;
-    hasTopSectorAccess = true;
-    updateTopbarKPIs();
-    updateMarketKPIs();
-    if (typeof showToast === 'function') showToast('Popularny sektor został odblokowany!', 'success');
 }
 
 let openStockDrawerSymbol = null;
@@ -122,20 +103,23 @@ function updateMarketKPIs() {
         if (lEl) lEl.textContent = fmt(getPct(l));
         if (lName) lName.textContent = l.symbol;
     }
-    const sectorCount = {};
-    active.forEach(s => { sectorCount[s.sector] = (sectorCount[s.sector] || 0) + 1; });
-    const top = Object.entries(sectorCount).sort((a,b) => b[1] - a[1])[0];
+    // Najsilniejszy sektor dnia: średnia zmiana ceny spółek (każda spółka liczy się w każdym swoim sektorze).
+    const sectorStats = {};
+    active.filter(s => !s.assetType).forEach(s => {
+        (Array.isArray(s.sector) ? s.sector : [s.sector]).forEach(sector => {
+            const stat = sectorStats[sector] || (sectorStats[sector] = { sum: 0, count: 0 });
+            stat.sum += getPct(s);
+            stat.count++;
+        });
+    });
+    const best = Object.entries(sectorStats)
+        .filter(([, stat]) => stat.count >= 2)
+        .map(([sector, stat]) => [sector, stat.sum / stat.count])
+        .sort((a, b) => b[1] - a[1])[0];
     const tsEl = document.getElementById('mkpi-top-sector');
     const tsSubEl = document.getElementById('mkpi-top-sector-sub');
-    const unlockBtn = document.getElementById('unlock-sector-btn');
-    if (hasTopSectorAccess && tsEl) {
-        tsEl.textContent = top ? top[0] + ' (' + top[1] + ')' : '—';
-        if (tsSubEl) tsSubEl.textContent = 'wg liczby spółek';
-    } else if (tsEl) {
-        tsEl.textContent = '🔒';
-        if (tsSubEl) tsSubEl.textContent = 'Odblokuj za 15 000 PLN';
-    }
-    if (unlockBtn) unlockBtn.style.display = hasTopSectorAccess ? 'none' : 'block';
+    if (tsEl) tsEl.textContent = best ? best[0] : '—';
+    if (tsSubEl) tsSubEl.textContent = best ? `średnio ${fmt(best[1])} dziś` : 'brak danych';
 }
 
 // Topbar KPI: gotówka funduszu, NAV/JU, prywatne pieniądze gracza

@@ -116,7 +116,8 @@ function getFundPortfolioValue() {
 }
 
 function getFundAssets() {
-    return Math.max(0, Number(playerCash) || 0) + getFundPortfolioValue() + getFundBondsValue();
+    const deposits = typeof getFundDepositsValue === 'function' ? getFundDepositsValue() : 0; // lokaty (finance.js)
+    return Math.max(0, Number(playerCash) || 0) + getFundPortfolioValue() + getFundBondsValue() + deposits;
 }
 
 function getFundNav() {
