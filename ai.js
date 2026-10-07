@@ -1332,7 +1332,7 @@ function runStateActions() {
             const availableShares = publicFloat - stock.sharesHeld;
 
             if (sharesToBuy > 0 && sharesToBuy <= availableShares) {
-                stock.sharesHeld += sharesToBuy;
+                // Pakiet państwa jest poza wolnym obrotem (getFreeFloatShares) — sharesHeld się nie zmienia.
                 const newTotalStateShares = (stock.totalShares * stock.stateOwnershipPct) + sharesToBuy;
                 stock.stateOwnershipPct = newTotalStateShares / stock.totalShares;
                 logEvent(`🏛️ Skarb Państwa dokupuje pakiet 2% akcji w ${stock.name}, aby wzmocnić swoją pozycję.`, 'market');
@@ -1342,7 +1342,7 @@ function runStateActions() {
         else if (stock.stateOwnershipPct > 0.95) {
             const sharesToSell = Math.floor(stock.totalShares * 0.01); // Sprzedaj 1%
             if (sharesToSell > 0) {
-                stock.sharesHeld -= sharesToSell;
+                // Sprzedaż pakietu państwa powiększa wolny obrót; akcje inwestorów (sharesHeld) bez zmian.
                 const newTotalStateShares = (stock.totalShares * stock.stateOwnershipPct) - sharesToSell;
                 stock.stateOwnershipPct = newTotalStateShares / stock.totalShares;
                 logEvent(`🏛️ Skarb Państwa uwalnia na rynek mały pakiet 1% akcji ${stock.name}.`, 'market');

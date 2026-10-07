@@ -1812,6 +1812,17 @@ function randomizeInitialShareCounts() {
             stock.sharesHeld = 0; // Upewniamy się, że na starcie nikt nie ma akcji
         }
     });
+    syncSharesHeldWithInitialPortfolios();
+}
+
+/** Startowe portfele holdingów i instytucji (np. lombard) to akcje w obrocie — liczą się do sharesHeld. */
+function syncSharesHeldWithInitialPortfolios() {
+    for (const owner of stocks) {
+        for (const [symbol, holding] of Object.entries(owner.holdingPortfolio || {})) {
+            const stock = stocks.find(s => s.symbol === symbol);
+            if (stock) stock.sharesHeld = (Number(stock.sharesHeld) || 0) + (Number(holding.quantity) || 0);
+        }
+    }
 }
 
 

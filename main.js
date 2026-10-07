@@ -162,7 +162,7 @@ function setGameSpeed(speedMultiplier) {
         updateMarketVolatilityIndex();
         updateDividendTimers(gameTimeDelta);
         updateFund(gameTimeDelta); // NAV, obsunięcie, zamykanie okresów funduszu
-        updateFestival(); // Aktualizacja festynu
+        updateFestival(gameTimeDelta); // Aktualizacja festynu (czas gry)
         updateFestivalCountdown(gameTimeDelta); // Odliczanie do festynu
         applyActiveModifiers(); // Aplikowanie rocznych bonusów
         if (currentTBillAuction && Date.now() > currentTBillAuction.endTime) {
@@ -819,6 +819,8 @@ function createNewWorld() {
     }
     initializeCityCompanies();
     initCityModel();
+    // Holdingi bez ceny startowej (wyliczanej z NAV dopiero przy pierwszym ticku) dostają cenę = NAV.
+    stocks.filter(stock => stock.assetType === 'Holding' && !(stock.price > 0)).forEach(stock => { stock.price = Math.max(0.01, getExternalFundValue(stock)); });
     console.log("[M&A Init] Inicjalizacja nastawienia mediów...");
     const mediaCompanies = stocks.filter(s => s.specializationSectors?.includes('Media'));
     if (mediaCompanies.length >= 2) {

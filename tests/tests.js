@@ -1457,6 +1457,58 @@ group('Banki, lombard, obligacje, giełdy elitarne (etap E2)', () => {
     });
 });
 
+group('Spójność świata (etap D2)', () => {
+    test('niezmienniki po krótkiej symulacji: ceny, NAV, gotówka, akcje w obrocie, JU, zapis', () => {
+        const a = makeCompany('AAA', { cash: 600_000, fixedAssets: 800_000 });
+        const b = makeCompany('BBB', { cash: 600_000, fixedAssets: 800_000 });
+        const state = makeCompany('STA', { cash: 600_000, fixedAssets: 800_000 });
+        state.isStateOwned = true;
+        state.stateOwnershipPct = 0.97;
+        const holding = makeCompany('HLD', { cash: 500_000 });
+        holding.assetType = 'Holding';
+        holding.holdingPortfolio = { AAA: { quantity: 50, purchasePrice: 100 } };
+        [a, b, state, holding].forEach(company => { company.insiderShares = 0; company.sharesHeld = 0; company.reputation = { player: 0 }; });
+        resetWorld([a, b, state, holding]);
+        syncSharesHeldWithInitialPortfolios();
+        allBonds.length = 0;
+        activeBonds.length = 0;
+        marketIndexes.find(index => index.id === 'GIG').value = 100;
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+
+        buyStock('AAA', 30);
+        buyStock('BBB', 20);
+        pawnFundShares('BBB', 10);
+        stateBondOffer.shortTerm.available = 5;
+        buyStateBond('player', 'shortTerm', 2);
+        assert(a.sharesHeld === 80, `startowy portfel holdingu w obrocie: ${a.sharesHeld}`);
+
+        for (let week = 0; week < 5; week++) {
+            for (let tick = 0; tick < 60; tick++) {
+                updateStockPrices();
+                updateMarketIndexes();
+                updateFund(BASE_DELAYS.stockUpdate);
+            }
+            processFundWeekly();
+            processFundPawnLoansWeekly();
+            processMailWeekly();
+            runStateActions();
+            checkBondMaturities(BASE_DELAYS.weekly);
+        }
+        payBondCoupons();
+
+        const problems = checkWorldInvariants();
+        assert(problems.length === 0, problems.join('; '));
+        assert(state.sharesHeld >= 0, 'sprzedaż pakietu państwa nie psuje sharesHeld');
+
+        const before = { nav: getFundNav(), units: playerFund.units, cash: playerCash, bonds: allBonds.length, loans: playerFund.pawnLoans.length };
+        const report = applySaveSnapshot(JSON.parse(JSON.stringify(buildSaveSnapshot())));
+        assert(report.ok, report.errors.join(' '));
+        assertNear(getFundNav(), before.nav, 'NAV po wczytaniu', 1e-9);
+        assert(playerFund.units === before.units && playerCash === before.cash && allBonds.length === before.bonds && playerFund.pawnLoans.length === before.loans, 'stan po wczytaniu');
+        assert(checkWorldInvariants().length === 0, 'niezmienniki po wczytaniu');
+    });
+});
+
 // --------------------------------------------------------------------------------
 // Uruchomienie
 // --------------------------------------------------------------------------------

@@ -924,7 +924,7 @@ function startFestival() {
         isActive: true,
         name: name,
         tier: tier,
-        endTime: Date.now() + (durationMs / currentSpeedMultiplier),
+        remainingMs: durationMs, // czas gry
         globalInterest: getRandomIntInRange(20, 50) + (tier * 10),
         attractions: attractions,
         participants: [] // Lista stoisk, na razie pusta
@@ -984,11 +984,12 @@ function startFestival() {
     showToast(`🎉 Rozpoczyna się ${name}!`, 'success', 7000);
 }
 
-function updateFestival() {
+function updateFestival(deltaMs = BASE_DELAYS.stockUpdate) {
     if (!festival || !festival.isActive) return; // Jeśli nie ma festynu, wyjdź
+    festival.remainingMs = (Number.isFinite(festival.remainingMs) ? festival.remainingMs : 0) - deltaMs;
 
     // --- Sprawdzenie końca festynu ---
-    if (Date.now() > festival.endTime) {
+    if (festival.remainingMs <= 0) {
         endFestival();
         return; // Festyn się skończył, zakończ funkcję
     }
@@ -1117,13 +1118,14 @@ function endFestival() {
 }
 
 function playerJoinFestival(promotionTarget) {
+    // Stoisko i promocje opłaca gracz prywatnie (portfel), nie fundusz klientów.
     if (!cityInvestment.playerHasUnlocked) {
         alert("Musisz najpierw odblokować inwestycje miejskie (wpłać 10,000 PLN), aby wziąć udział w festynie!");
         return; // Zakończ funkcję, jeśli miasto nie jest odblokowane dla gracza
     }
-    if (!festival || !festival.isActive || playerCash < FESTIVAL_STALL_LEVELS[0].cost) return;
+    if (!festival || !festival.isActive || playerWallet.cash < FESTIVAL_STALL_LEVELS[0].cost) return;
 
-    playerCash -= FESTIVAL_STALL_LEVELS[0].cost;
+    playerWallet.cash -= FESTIVAL_STALL_LEVELS[0].cost;
     festival.participants.push({
         ownerId: 'player',
         promotionTarget: promotionTarget,
@@ -1138,9 +1140,9 @@ function playerJoinFestival(promotionTarget) {
 function playerUpgradeStall() {
     const participant = festival.participants.find(p => p.ownerId === 'player');
     const nextLevel = FESTIVAL_STALL_LEVELS[participant.level];
-    if (!participant || !nextLevel || playerCash < nextLevel.cost) return;
+    if (!participant || !nextLevel || playerWallet.cash < nextLevel.cost) return;
 
-    playerCash -= nextLevel.cost;
+    playerWallet.cash -= nextLevel.cost;
     participant.level++;
     participant.interest += 20; // Bonus za ulepszenie
     openCityInvestmentModal();
@@ -1149,16 +1151,16 @@ function playerUpgradeStall() {
 function playerPromoteStall(promoType) {
     const participant = festival.participants.find(p => p.ownerId === 'player');
     const action = PROMOTION_ACTIONS[promoType];
-    if (!participant || !action || playerCash < action.cost) return;
+    if (!participant || !action || playerWallet.cash < action.cost) return;
 
-    playerCash -= action.cost;
+    playerWallet.cash -= action.cost;
     participant.interest += action.interest;
     openCityInvestmentModal();
 }
 
 function playerPromoteEvent() {
-    if (!festival || playerCash < 500) return;
-    playerCash -= 500;
+    if (!festival || playerWallet.cash < 500) return;
+    playerWallet.cash -= 500;
     festival.globalInterest += 10;
     openCityInvestmentModal();
 }

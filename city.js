@@ -383,9 +383,10 @@ function subscribePrivatization(quantity) {
     return true;
 }
 
-/** Akcje przechodzą od państwa do kupującego (sharesHeld bez zmian — były już poza wolnym obrotem). */
+/** Akcje przechodzą od państwa (poza wolnym obrotem) do inwestora — trafiają do obrotu jako posiadane. */
 function transferStateShares(stock, quantity) {
     stock.stateOwnershipPct = Math.max(0, (stock.stateOwnershipPct || 0) - quantity / stock.totalShares);
+    stock.sharesHeld += quantity;
     if (stock.isStateOwned && stock.stateOwnershipPct < 0.5) {
         stock.isStateOwned = false;
         logEvent(`🏛️ ${stock.name} przestaje być spółką kontrolowaną przez państwo.`, 'state');

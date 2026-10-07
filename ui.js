@@ -2767,7 +2767,7 @@ function renderFestivalView(festivalContainer) {
     }
     
     const playerParticipant = festival.participants.find(p => p.ownerId === 'player');
-    const timeLeft = Math.max(0, Math.ceil((festival.endTime - Date.now()) / 1000));
+    const timeLeft = Math.max(0, Math.ceil((Number(festival.remainingMs) || 0) / 1000));
 
     // --- Sekcja Gracza ---
     let playerSectionHTML = '';
@@ -5105,6 +5105,60 @@ function debugEndPeriod() {
 function debugBoardReview() {
     if (typeof runBoardEvaluation === 'function') runBoardEvaluation();
     refreshFundViews();
+}
+
+/**
+ * Niezmienniki świata gry (testy i tryb debug): skończone liczby, brak ujemnej gotówki funduszy,
+ * akcje w obrocie w granicach, JU klientów = JU funduszu, zastawy ≤ posiadanych, istniejące giełdy.
+ * Zwraca listę naruszeń (pusta = OK).
+ */
+function checkWorldInvariants() {
+    const problems = [];
+    const finite = (value, label) => { if (!Number.isFinite(Number(value))) problems.push(`${label}: ${value}`); };
+    const EPS = 1e-6;
+
+    for (const stock of stocks) {
+        if (stock.isBankrupt) continue;
+        finite(stock.price, `cena ${stock.symbol}`);
+        if (!(stock.price > 0)) problems.push(`cena ${stock.symbol} ≤ 0`);
+        finite(stock.cash, `gotówka ${stock.symbol}`);
+        if (!exchanges[stock.exchange] && stock.exchange !== 'INCUBATOR') problems.push(`nieznana giełda ${stock.symbol}: ${stock.exchange}`);
+        if (stock.sharesHeld < -EPS || stock.sharesHeld > stock.totalShares + EPS) problems.push(`sharesHeld ${stock.symbol}: ${stock.sharesHeld}/${stock.totalShares}`);
+    }
+
+    if (playerFund) {
+        finite(playerCash, 'gotówka funduszu');
+        if (playerCash < -EPS) problems.push(`ujemna gotówka funduszu: ${playerCash}`);
+        finite(getFundNav(), 'NAV');
+        const clientUnits = playerFund.clients.reduce((sum, client) => sum + client.units, 0);
+        if (Math.abs(clientUnits - playerFund.units) > Math.max(EPS, playerFund.units * 1e-9)) problems.push(`JU klientów ${clientUnits} ≠ JU funduszu ${playerFund.units}`);
+        finite(playerWallet?.cash, 'portfel prywatny');
+    }
+    const checkPortfolio = (portfolio, owner) => {
+        for (const [symbol, holding] of Object.entries(portfolio || {})) {
+            finite(holding.shares, `akcje ${owner} ${symbol}`);
+            if (holding.shares < -EPS) problems.push(`ujemne akcje ${owner} ${symbol}`);
+            if ((holding.lockedShares || 0) > holding.shares + EPS) problems.push(`zastaw > posiadanych ${owner} ${symbol}`);
+        }
+    };
+    checkPortfolio(playerPortfolio, 'fundusz');
+    for (const ai of aiCompetitors) { finite(ai.cash, `gotówka ${ai.name}`); checkPortfolio(ai.portfolio, ai.name); }
+    for (const manager of corporation?.managers || []) {
+        finite(manager.fund.cash, `gotówka funduszu ${manager.name}`);
+        if (manager.fund.cash < -EPS) problems.push(`ujemna gotówka funduszu ${manager.name}`);
+        finite(getBotFundNav(manager.fund), `NAV ${manager.name}`);
+        checkPortfolio(manager.fund.portfolio, manager.name);
+    }
+    for (const bond of allBonds) finite(bond.faceValue, `obligacja ${bond.id}`);
+    if (corporation) finite(corporation.budget, 'budżet korporacji');
+    return problems;
+}
+
+function debugCheckInvariants() {
+    const problems = checkWorldInvariants();
+    showToast(problems.length ? `Naruszenia: ${problems.length} (szczegóły w konsoli)` : 'Świat gry spójny ✔', problems.length ? 'error' : 'success', 6000);
+    if (problems.length) console.warn('[niezmienniki]', problems);
+    return problems;
 }
 
 document.addEventListener('DOMContentLoaded', applyDebugModeUi);

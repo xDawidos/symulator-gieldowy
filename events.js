@@ -469,7 +469,7 @@ function triggerNationalizationEvent() {
     target.eventResistance = 0.6;
     target.balanceSheet.liabilities = 0;
     target.financialHealth = 1;
-    target.sharesHeld = Math.floor(target.totalShares * target.stateOwnershipPct);
+    target.sharesHeld = 0; // inwestorzy wykupieni; pakiet państwa jest poza wolnym obrotem
     return;
 }
 
