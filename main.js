@@ -329,6 +329,8 @@ gameTimers.weekly = setInterval(() => {
         processFundPawnLoansWeekly(); // zastawy funduszy w lombardzie (finance.js)
         processFundDepositsWeekly(); // lokaty terminowe funduszu (finance.js)
         maintainStartupCount(); // inkubator: nowe startupy w czasie gry (startups.js)
+        processPppWeekly(); // projekty miejskie PPP (city.js)
+        processBridgeLoansWeekly(); // finansowanie pomostowe budów (finance.js)
         aiCompetitors.forEach(processAiLoansWeekly); // raty i odsetki kredytów botów raz na tydzień
         processMailWeekly();          // prenumeraty, spam, plotki (mail.js)
         processPrivatizationWeekly(); // zapisy na akcje w prywatyzacji (city.js)

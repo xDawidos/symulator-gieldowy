@@ -120,7 +120,9 @@ function getFundPortfolioValue() {
 
 function getFundAssets() {
     const deposits = typeof getFundDepositsValue === 'function' ? getFundDepositsValue() : 0; // lokaty (finance.js)
-    return Math.max(0, Number(playerCash) || 0) + getFundPortfolioValue() + getFundBondsValue() + deposits;
+    const ppp = typeof getFundPppValue === 'function' ? getFundPppValue() : 0;                 // projekty miejskie (city.js)
+    const bridge = typeof getFundBridgeLoansValue === 'function' ? getFundBridgeLoansValue() : 0; // pożyczki pomostowe (finance.js)
+    return Math.max(0, Number(playerCash) || 0) + getFundPortfolioValue() + getFundBondsValue() + deposits + ppp + bridge;
 }
 
 function getFundNav() {
@@ -437,6 +439,7 @@ function chargeManagementFee() {
 function redeemClientUnits(client, units) {
     if (!(units > 0) || client.units <= 0) return 0;
     units = Math.min(units, client.units);
+    if (client.units - units < 0.5) units = client.units; // bez resztek: klient odchodzi z całością (JU klientów = JU funduszu)
 
     const nav = getFundNav();
     const value = units * nav;

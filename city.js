@@ -22,6 +22,7 @@ const FESTIVAL_BOOST_SECTORS = ['Turystyka', 'Usługi'];
 const PLAYER_DONATION_COMPLIANCE_LIMIT = 500;
 
 let privatizationOffer = null;
+const CITY_UNLOCK_DONATION = 1000; // odblokowanie obligacji komunalnych i festynu (wcześniej 10 000 — nierealne przy 100 zł od babci)
 
 // =================================================================================
 // INICJALIZACJA I MIGRACJA
@@ -70,7 +71,7 @@ function donateToCity(amount) {
     recordPayment('player-wallet', 'external:miasto', amount, 'Darowizna na miasto');
     logEvent(`🏙️ Przekazujesz ${amount.toFixed(2)} zł na rozwój miasta. Twój wkład: ${city.playerDonatedAmount.toFixed(2)} zł.`, 'city');
 
-    if (!city.playerHasUnlocked && city.playerDonatedAmount >= 10000) {
+    if (!city.playerHasUnlocked && city.playerDonatedAmount >= CITY_UNLOCK_DONATION) {
         city.playerHasUnlocked = true;
         cityInvestment.playerHasUnlocked = true;
         logEvent('🎉 Twój wkład w rozwój miasta odblokował obligacje komunalne i wydarzenia miejskie!', 'city');
@@ -201,6 +202,7 @@ function processCityYearly() {
         triggerMayoralElection();
         city.mayor.electionYear = 4;
     }
+    runStatePensionProgram(); // mandaty Państwowego Programu Emerytalnego (raz w roku gry)
 }
 
 function startElectionCampaign() {
@@ -302,6 +304,7 @@ function changeReputationWithMayor(amount) {
 function processCityQuarterly() {
     ensureCityModel();
     if (!festival && nextFestivalCountdown <= 0) updateCity();
+    if (ensurePpp().offers.length < 2) generatePppOffer(); // nowy projekt PPP co kwartał
 }
 
 function updateCity() {
@@ -441,4 +444,172 @@ function applyAntitrustPenalties() {
         penalized.push(stock.symbol);
     }
     return penalized;
+}
+
+// =================================================================================
+// PARTNERSTWO PUBLICZNO-PRYWATNE (etap F3): fundusz współfinansuje projekty miasta
+// Odsetki co tydzień z budżetu miasta, kapitał w terminie; brak środków = zaległość,
+// po 2 przedłużeniach niewypłacalność (odzysk 60%). Łącznie do 15% aktywów funduszu.
+// =================================================================================
+
+const PPP_PROJECT_TYPES = [
+    { name: 'Parking wielopoziomowy', icon: '🅿️' },
+    { name: 'Spalarnia odpadów', icon: '♻️' },
+    { name: 'Linia tramwajowa', icon: '🚋' },
+    { name: 'Basen miejski', icon: '🏊' },
+    { name: 'Termomodernizacja szkół', icon: '🏫' },
+    { name: 'Farma fotowoltaiczna', icon: '☀️' }
+];
+const PPP_FUND_LIMIT = 0.15;
+const PPP_OFFER_WEEKS = 6;
+const PPP_RECOVERY = 0.6;
+
+function ensurePpp() {
+    if (!city.ppp) city.ppp = { offers: [], nextId: 1 };
+    if (!playerFund) return city.ppp;
+    if (!playerFund.ppp) playerFund.ppp = [];
+    return city.ppp;
+}
+
+/** Ryzyko projektu: słaby budżet i niskie poparcie burmistrza podnoszą oprocentowanie i ryzyko. */
+function getCityCreditRisk() {
+    const budgetRisk = city.budget > 500000 ? 0 : city.budget > 0 ? 0.03 : 0.08;
+    const supportRisk = Math.max(0, (50 - (city.mayor?.support || 50)) / 500);
+    return Math.min(0.15, budgetRisk + supportRisk);
+}
+
+function generatePppOffer() {
+    const ppp = ensurePpp();
+    const type = getRandomElement(PPP_PROJECT_TYPES);
+    const risk = getCityCreditRisk();
+    const offer = {
+        id: `ppp_${ppp.nextId++}`,
+        name: type.name,
+        icon: type.icon,
+        total: Math.round(getRandomInRange(15000, 60000) / 500) * 500,
+        raised: 0,
+        rate: 0.05 + risk + getRandomInRange(0, 0.02),
+        termWeeks: getRandomIntInRange(12, 24),
+        weeksLeft: PPP_OFFER_WEEKS,
+        risk
+    };
+    ppp.offers.push(offer);
+    logEvent(`🏙️ Miasto ogłasza projekt PPP: ${offer.icon} ${offer.name} — ${offer.total.toLocaleString('pl-PL')} zł, ${(offer.rate * 100).toFixed(1)}% rocznie, ${offer.termWeeks} tyg.`, 'city');
+    return offer;
+}
+
+function getFundPppValue() {
+    return (playerFund?.ppp || []).reduce((sum, stake) => sum + stake.principal + (stake.unpaid || 0), 0);
+}
+
+function getFundPppCapacity() {
+    return Math.max(0, getFundAssets() * PPP_FUND_LIMIT - getFundPppValue());
+}
+
+function investInPpp(offerId, amount) {
+    const ppp = ensurePpp();
+    const offer = ppp.offers.find(item => item.id === offerId);
+    amount = Math.floor(Number(amount));
+    if (!offer) { showToast('Oferta PPP nieaktualna.', 'error'); return null; }
+    amount = Math.min(amount, offer.total - offer.raised);
+    if (!(amount >= 100)) { showToast('Minimalny udział: 100 zł.', 'error'); return null; }
+    if (amount > playerCash) { showToast('Za mało gotówki funduszu.', 'error'); return null; }
+    if (amount > getFundPppCapacity() + 1e-6) { showToast(`Limit PPP: ${(PPP_FUND_LIMIT * 100).toFixed(0)}% aktywów funduszu.`, 'error'); return null; }
+
+    playerCash -= amount;
+    city.budget += amount;
+    offer.raised += amount;
+    const stake = { id: `${offer.id}_${playerFund.ppp.length + 1}`, name: offer.name, icon: offer.icon, principal: amount, rate: offer.rate, weeksLeft: offer.termWeeks, termWeeks: offer.termWeeks, unpaid: 0, extensions: 0 };
+    playerFund.ppp.push(stake);
+    recordPayment('player-fund', 'external:miasto', amount, `PPP: ${offer.name}`);
+    logEvent(`🤝 Fundusz współfinansuje projekt miejski ${offer.icon} ${offer.name}: ${amount.toLocaleString('pl-PL')} zł na ${offer.termWeeks} tyg.`, 'review');
+    if (offer.raised >= offer.total) ppp.offers = ppp.offers.filter(item => item !== offer);
+    if (typeof refreshFundViews === 'function') refreshFundViews();
+    return stake;
+}
+
+/** Co tydzień: odsetki i spłaty PPP z budżetu miasta, wygasanie ofert. */
+function processPppWeekly() {
+    const ppp = ensurePpp();
+    for (const offer of [...ppp.offers]) {
+        offer.weeksLeft--;
+        if (offer.weeksLeft <= 0) ppp.offers = ppp.offers.filter(item => item !== offer); // resztę miasto finansuje samo
+    }
+    if (!playerFund) return;
+    for (const stake of [...playerFund.ppp]) {
+        const interest = stake.principal * stake.rate / FUND_WEEKS_PER_YEAR + (stake.unpaid || 0);
+        if (city.budget >= interest) {
+            city.budget -= interest;
+            playerCash += interest;
+            stake.unpaid = 0;
+        } else {
+            stake.unpaid = interest;
+        }
+        stake.weeksLeft--;
+        if (stake.weeksLeft > 0) continue;
+
+        if (city.budget >= stake.principal) {
+            city.budget -= stake.principal;
+            playerCash += stake.principal;
+            playerFund.ppp = playerFund.ppp.filter(item => item !== stake);
+            logEvent(`🏙️ Miasto spłaca udział funduszu w PPP ${stake.icon} ${stake.name}: ${stake.principal.toLocaleString('pl-PL')} zł.`, 'review');
+        } else if (stake.extensions < 2) {
+            stake.extensions++;
+            stake.weeksLeft = 4;
+            logEvent(`⚠️ Miasto przesuwa spłatę PPP ${stake.name} o 4 tygodnie (brak środków w budżecie).`, 'city');
+        } else {
+            const recovery = stake.principal * PPP_RECOVERY;
+            playerCash += recovery;
+            playerFund.ppp = playerFund.ppp.filter(item => item !== stake);
+            logEvent(`💥 Miasto nie spłaca PPP ${stake.name} — fundusz odzyskuje ${recovery.toFixed(0)} z ${stake.principal.toFixed(0)} zł.`, 'review');
+        }
+    }
+}
+
+// =================================================================================
+// PAŃSTWOWY PROGRAM EMERYTALNY (etap F3): raz w roku mandaty dla 3 najlepszych funduszy
+// =================================================================================
+
+let statePension = { history: [], lastRanking: [] };
+
+/** Ranking kwalifikacji: wynik vs GIG z 4 okresów, zaufanie klientów. */
+function getPensionRanking() {
+    if (typeof getJuMarketFunds !== 'function') return [];
+    return getJuMarketFunds()
+        .map(fund => ({ id: fund.id, name: fund.name, kind: fund.kind, score: fund.ret * 100 + (fund.trust - 50) / 5, assets: fund.assets, nav: fund.nav }))
+        .sort((a, b) => b.score - a.score);
+}
+
+function runStatePensionProgram() {
+    const ranking = getPensionRanking();
+    statePension.lastRanking = ranking.slice(0, 8).map(({ id, name, kind, score }) => ({ id, name, kind, score }));
+    const winners = ranking.slice(0, 3);
+    if (!winners.length) return [];
+    const grants = [];
+    for (const [index, fund] of winners.entries()) {
+        const base = Math.min(governmentTreasury * 0.004, 20000) * (1 - index * 0.25);
+        if (fund.kind === 'player') {
+            const amount = Math.min(base, getFundAssets() * 0.15);
+            if (amount < 100) continue;
+            governmentTreasury -= amount;
+            addOutsideSubscription('institution', 'Państwowy Program Emerytalny', amount);
+            grants.push({ name: fund.name, amount });
+            logEvent(`🏛️ Państwowy Program Emerytalny powierza Twojemu funduszowi ${amount.toFixed(0)} zł (miejsce ${index + 1} w rankingu).`, 'review');
+        } else if (fund.kind === 'bot') {
+            const manager = corporation.managers.find(item => item.id === fund.id);
+            if (!manager) continue;
+            const amount = Math.min(base, getBotFundAssets(manager.fund) * 0.15);
+            governmentTreasury -= amount;
+            manager.fund.cash += amount;
+            manager.fund.units += amount / Math.max(0.01, getBotFundNav(manager.fund) || fund.nav);
+            grants.push({ name: fund.name, amount });
+        } else {
+            grants.push({ name: fund.name, amount: base });
+            governmentTreasury -= base;
+        }
+    }
+    statePension.history.unshift({ year: (statePension.history[0]?.year || 0) + 1, grants });
+    if (statePension.history.length > 5) statePension.history.length = 5;
+    logEvent(`🏛️ Program Emerytalny: mandaty dla ${grants.map(g => g.name).join(', ')}.`, 'state');
+    return grants;
 }

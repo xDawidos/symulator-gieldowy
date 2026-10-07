@@ -564,14 +564,22 @@
         </div>
     </div>
 </div>
-<div id="city-investment-modal" class="modal" style="display: none;">
-    <button class="close-btn" onclick="document.getElementById('city-investment-modal').style.display='none';">&times;</button>
-    <h2 class="mt-0 text-center">🏙️ Panel Miasta: Gdańsk</h2>
+<div id="city-investment-modal" class="modal modal-xl bank-window city-window" style="display: none;">
+    <button class="close-btn" onclick="document.getElementById('city-investment-modal').style.display='none';" aria-label="Zamknij">&times;</button>
+    <header class="bank-hero city-hero">
+        <div class="bank-emblem" aria-hidden="true">🏙️</div>
+        <div>
+            <div class="bank-hero-kicker">Ratusz · budżet · inwestycje miejskie</div>
+            <h2 class="bank-hero-title">Miasto Gdańsk</h2>
+        </div>
+    </header>
+    <div class="bank-ticker" id="city-ticker"></div>
     
     <div class="bank-tabs">
         <button id="tab-btn-city-main" class="bank-tab-btn active" onclick="switchCityTab('main')">Panel Główny</button>
         <button id="tab-btn-city-municipal" class="bank-tab-btn" onclick="switchCityTab('municipal')">Spółki Miejskie</button>
         <button id="tab-btn-city-private" class="bank-tab-btn" onclick="switchCityTab('private')">Firmy Prywatne</button>
+        <button id="tab-btn-city-ppp" class="bank-tab-btn" onclick="switchCityTab('ppp')">🤝 Projekty PPP</button>
         <button id="tab-btn-city-election" class="bank-tab-btn" onclick="switchCityTab('election')" style="display: none;">Wybory</button> </div>
 
     <div id="city-content-main" class="bank-tab-content">
@@ -581,7 +589,7 @@
             <p>Poziom Infrastruktury: <strong id="city-infra-level">1.0</strong> | Następny festyn za: <strong id="next-festival-countdown">--</strong>s</p>
         </div>
         <div class="bank-section">
-            <h4>Obecny Zarząd (Wybory za <span id="city-election-timer">4</span> lata)</h4>
+            <h4>Obecny Zarząd (wybory za <span id="city-election-timer">4 lata</span>)</h4>
             <p>Prezydent: <strong id="city-mayor-name">...</strong></p>
             <p>Polityka: <strong id="city-mayor-policy">...</strong></p>
             <p>Poparcie: <strong id="city-mayor-support">—</strong></p>
@@ -598,6 +606,8 @@
         </div>
     </div>
 
+    <div id="city-content-ppp" class="bank-tab-content" style="display: none;"></div>
+
     <div id="city-content-municipal" class="bank-tab-content" style="display: none;">
         <h4>Spółki Miejskie (Nienotowane na Giełdzie)</h4>
         <p class="text-sm">Te spółki zapewniają kluczowe usługi dla miasta i emitują obligacje komunalne. Istnieje roczna szansa, że wejdą na giełdę.</p>
@@ -610,9 +620,9 @@
 
     <div id="city-content-private" class="bank-tab-content" style="display: none;">
         <h4>Lokalne Firmy Prywatne (Pozagiełdowe)</h4>
-        <p class="text-sm">Te firmy powoli rozwijają się w mieście. Gdy dojrzeją, mogą wejść na giełdę lub do inkubatora startupów. Miasto (poprzez FPF) posiada w nich udziały.</p>
+        <p class="text-sm">Lokalne firmy rozwijają się w mieście; dojrzałe mogą trafić do inkubatora startupów albo na giełdę.</p>
         <table class="w-full">
-            <thead><tr><th>Nazwa Firmy</th><th>Szac. Wartość</th><th>Udział Miasta (FPF)</th><th>Postęp Rozwoju</th></tr></thead>
+            <thead><tr><th>Nazwa Firmy</th><th>Szac. Wartość</th><th>Postęp Rozwoju</th></tr></thead>
             <tbody id="city-private-list">
                 </tbody>
         </table>
@@ -639,50 +649,23 @@
     </div>
 
 
-    <div id="state-modal" class="modal" style="display: none;">
-        <button class="close-btn" onclick="document.getElementById('state-modal').style.display='none';">&times;</button>
-        <h2 class="mt-0 text-center">🏛️ Skarbiec Państwa</h2>
-        <div class="bank-section">
-            <h4>Budżet Państwa</h4>
-            <p>Aktualne środki w skarbcu: <strong id="government-treasury-display">0.00</strong> PLN</p>
-            <p class="text-sm text-muted">Środki pochodzą z podatków od dywidend, zysków kapitałowych, firm, bogactwa, podatków miejskich oraz symulowanych podatków od obywateli.</p>
-            <h4>⚖️ Urząd Antymonopolowy</h4>
-    <p>Poziom: <strong id="antitrust-level">0</strong>/5</p>
-    <p class="text-sm">Szansa na analizę: <strong id="antitrust-capacity">10%</strong> | Dokładność decyzji: <strong id="antitrust-accuracy">20%</strong></p>
-    
-    <p class="fw-bold text-up" id="antitrust-max-level-info" style="display: none;">Urząd osiągnął maksymalny poziom rozwoju.</p>
-    <p class="text-xs text-muted mt-1">Państwo automatycznie inwestuje w rozwój urzędu, gdy posiada wystarczające środki w budżecie.</p>
-        </div>
-        <div class="bank-section">
-            <h4>📊 Koniunktura Rynkowa</h4>
-            <p class="text-lg fw-bold text-center" id="market-sentiment-display">⚪ Neutralna</p>
-            <p class="text-xs text-muted">Wskaźnik oparty na trendzie Głównego Indeksu Giełdowego (GIG).</p>
-        </div>
-        <div class="bank-section">
-            <h4>💰 Aktualne Stawki Podatkowe</h4>
-            <div class="text-sm" id="tax-rates-display">
-                <p>Podatek od dywidend: <strong id="tax-dividend-display">10%</strong></p>
-                <p>Podatek od zysków kapitałowych: <strong id="tax-capital-display">12%</strong></p>
-                <p>Podatek miejski (gracz): <strong>3%</strong></p>
-                <p>Podatek miejski (spółki): <strong>2%</strong></p>
-                <p>Podatek dochodowy firm: <strong>13% / 26%</strong> (progi)</p>
-                <p>Podatek od bogactwa: <strong>25% / 35% / 50%</strong> (progi)</p>
+    <div id="state-modal" class="modal modal-xl bank-window state-window" style="display: none;">
+        <button class="close-btn" onclick="document.getElementById('state-modal').style.display='none';" aria-label="Zamknij">&times;</button>
+        <header class="bank-hero state-hero">
+            <div class="bank-emblem" aria-hidden="true">🏛️</div>
+            <div>
+                <div class="bank-hero-kicker">Skarb Państwa · regulacje · programy</div>
+                <h2 class="bank-hero-title">Państwo</h2>
             </div>
-            <p class="text-sm text-up" id="tax-skill-bonus-display" style="display: none;"></p>
-        </div>
-        <div class="bank-section">
-            <h4>Możliwe Interwencje Rządowe</h4>
-            <p class="text-sm text-muted">Rząd może wykorzystać zgromadzone środki na różne programy wspierające gospodarkę. Działania są podejmowane automatycznie, gdy budżet jest wystarczająco duży.</p>
-            <ul class="text-sm pl-4" id="government-actions-list" style="list-style-type: '💰 ';">
-                <li>Programy infrastrukturalne (wsparcie dla sektora Przemysł i Nieruchomości)</li>
-                <li>Dotacje na innowacje (przyspieszenie badań R&D)</li>
-                <li>Interwencyjny skup akcji (wsparcie dla rynku)</li>
-                <li>Koła ratunkowe dla zagrożonych spółek</li>
-                <li>Zmiany stóp procentowych (wpływ na sektor Finanse i Bankowość)</li>
-                <li>Specjalne programy sektorowe (losowe bonusy dla wybranych branż)</li>
-                </ul>
-        </div>
-         <p class="text-xs text-center mt-3">Więcej informacji o aktywnych programach rządowych znajdziesz w logu wydarzeń.</p>
+        </header>
+        <div class="bank-ticker" id="state-ticker"></div>
+        <nav class="bank-tabs" role="tablist">
+            <button class="bank-tab-btn active" data-tab="overview" onclick="switchStateTab('overview')">📊 Przegląd</button>
+            <button class="bank-tab-btn" data-tab="taxes" onclick="switchStateTab('taxes')">💰 Podatki</button>
+            <button class="bank-tab-btn" data-tab="pension" onclick="switchStateTab('pension')">🏅 Program emerytalny</button>
+            <button class="bank-tab-btn" data-tab="interventions" onclick="switchStateTab('interventions')">📜 Działania państwa</button>
+        </nav>
+        <div id="state-body" class="bank-tab-content"></div>
     </div>
 
     <div id="management-modal" class="modal" style="display: none;">
@@ -1191,13 +1174,21 @@
     </div>
 
 <!-- Modal Sektora Budowlanego -->
-<div id="construction-sector-modal" class="modal modal-lg" style="display: none;">
-    <button class="close-btn" onclick="document.getElementById('construction-sector-modal').style.display='none';">&times;</button>
-    <h2 class="mt-0 text-center">🏗️ Przegląd Budownictwa</h2>
-    <div class="modal-body max-h-lg scroll-y">
+<div id="construction-sector-modal" class="modal modal-xl bank-window construction-window" style="display: none;">
+    <button class="close-btn" onclick="document.getElementById('construction-sector-modal').style.display='none';" aria-label="Zamknij">&times;</button>
+    <header class="bank-hero construction-hero">
+        <div class="bank-emblem" aria-hidden="true">🏗️</div>
+        <div>
+            <div class="bank-hero-kicker">Przetargi · budowy · podwykonawcy · finansowanie</div>
+            <h2 class="bank-hero-title">Budownictwo</h2>
+        </div>
+    </header>
+    <div class="bank-ticker" id="construction-ticker"></div>
+    <div class="modal-body">
         <div class="tab-buttons">
             <button class="tab-btn active" onclick="showConstructionTab('main')">Firmy Budowlane i Projekty</button>
             <button class="tab-btn" onclick="showConstructionTab('subcontractors')">Podwykonawcy</button>
+            <button class="tab-btn" onclick="showConstructionTab('financing')">💰 Finansowanie pomostowe</button>
         </div>
         
         <div id="construction-main" class="tab-content active construction-main">
@@ -1213,6 +1204,8 @@
             </div>
         </div>
         
+        <div id="construction-financing" class="tab-content"><div id="construction-financing-body"></div></div>
+
         <div id="construction-subcontractors" class="tab-content construction-subcontractors">
   <div class="construction-subcontractors-header">
     <div>

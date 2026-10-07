@@ -120,6 +120,8 @@ function buildSaveSnapshot() {
         mailbox,
         juMarket,
         investmentPool,
+        statePension,
+        bridgeLoanOffers,
         allBonds,
         activeBonds,
         cityInvestment,
@@ -366,6 +368,8 @@ function applySaveSnapshot(snapshot) {
     juMarket = snapshot.juMarket && Array.isArray(snapshot.juMarket.tape) ? { ...createJuMarket(), ...snapshot.juMarket } : createJuMarket();
     if (playerFund) playerFund.clients.forEach(ensureClientProfile);
     if (snapshot.investmentPool && typeof snapshot.investmentPool === 'object') Object.assign(investmentPool, snapshot.investmentPool);
+    statePension = snapshot.statePension && Array.isArray(snapshot.statePension.history) ? snapshot.statePension : { history: [], lastRanking: [] };
+    bridgeLoanOffers = Array.isArray(snapshot.bridgeLoanOffers) ? snapshot.bridgeLoanOffers : [];
 
     // Obligacje (v7; wcześniej nie były zapisywane). Stare rekordy bez czasu gry migruje checkBondMaturities.
     allBonds.length = 0;

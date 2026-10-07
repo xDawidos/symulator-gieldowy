@@ -1705,6 +1705,72 @@ group('Startupy funduszu (etap F2)', () => {
     });
 });
 
+group('Miasto, państwo, budownictwo — nowe mechaniki (etap F3)', () => {
+    function worldF3() {
+        const a = makeCompany('AAA', { cash: 600_000, fixedAssets: 800_000 });
+        const builder = makeCompany('BUD', { cash: 1000, fixedAssets: 800_000, sector: ['Budowlany'] });
+        [a, builder].forEach(c => { c.insiderShares = 0; c.sharesHeld = 0; c.reputation = { player: 0 }; });
+        resetWorld([a, builder]);
+        allBonds.length = 0;
+        marketIndexes.find(index => index.id === 'GIG').value = 100;
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        playerCash = 100000;
+        city.budget = 1_000_000;
+        city.ppp = { offers: [], nextId: 1 };
+        return { a, builder };
+    }
+
+    test('PPP: udział funduszu nie zmienia NAV, odsetki z budżetu miasta, kapitał w terminie', () => {
+        worldF3();
+        const offer = generatePppOffer();
+        const nav = getFundNav();
+        const stake = investInPpp(offer.id, 5000);
+        assert(stake && playerFund.ppp.length === 1, 'udział');
+        assertNear(getFundNav(), nav, 'NAV bez zmian', 1e-9);
+        const budget = city.budget;
+        processPppWeekly();
+        assert(city.budget < budget && getFundNav() > nav, 'odsetki z budżetu miasta podnoszą NAV');
+        for (let i = 0; i < stake.termWeeks; i++) processPppWeekly();
+        assert(playerFund.ppp.length === 0, 'kapitał spłacony w terminie');
+    });
+
+    test('PPP: limit 15% aktywów i niewypłacalność miasta (odzysk 60%)', () => {
+        worldF3();
+        const offer = generatePppOffer();
+        offer.total = 1e9;
+        assert(!investInPpp(offer.id, getFundAssets() * 0.5), 'ponad limit — odmowa');
+        const stake = investInPpp(offer.id, 4000);
+        city.budget = 0;
+        const cash = playerCash;
+        for (let i = 0; i < stake.termWeeks + 8; i++) { city.budget = 0; processPppWeekly(); }
+        assert(playerFund.ppp.length === 0 && playerCash - cash >= 4000 * PPP_RECOVERY - 1e-6, 'odzysk przy niewypłacalności');
+    });
+
+    test('Program emerytalny: mandat dla funduszu z czołówki rankingu', () => {
+        worldF3();
+        governmentTreasury = 5_000_000;
+        playerFund.trust = 100;
+        playerFund.periods.push({ number: 1, fundReturn: 0.2, benchmarkReturn: 0, rivals: [], volatility: 0, maxDrawdown: 0, rank: 1, rankOf: 1 });
+        const units = playerFund.units;
+        const grants = runStatePensionProgram();
+        assert(grants.some(g => g.name === playerProfile.fundName) && playerFund.units > units, 'mandat i napływ JU');
+        assert(playerFund.clients.some(c => c.name === 'Państwowy Program Emerytalny'), 'klient-instytucja');
+    });
+
+    test('Finansowanie pomostowe: pożyczka dla budowlańca, spłata z odsetkami w terminie', () => {
+        const { builder } = worldF3();
+        bridgeLoanOffers = [{ id: 'pomost_t', symbol: 'BUD', name: builder.name, project: 'Hala', amount: 5000, rate: 0.2, weeks: 4, weeksLeft: 3 }];
+        const loan = fundBridgeLoan('pomost_t');
+        assert(loan && builder.cash === 6000, 'gotówka u budowlańca');
+        builder.cash = 50000;
+        const random = Math.random;
+        Math.random = () => 0.99; // bez nowych próśb
+        for (let i = 0; i < 4; i++) processBridgeLoansWeekly();
+        Math.random = random;
+        assert(getFundBridgeLoans().length === 0 && loan.accrued > 0, 'spłata z odsetkami');
+    });
+});
+
 // --------------------------------------------------------------------------------
 // Uruchomienie
 // --------------------------------------------------------------------------------

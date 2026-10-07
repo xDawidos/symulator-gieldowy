@@ -1121,7 +1121,7 @@ function endFestival() {
 function playerJoinFestival(promotionTarget) {
     // Stoisko i promocje opłaca gracz prywatnie (portfel), nie fundusz klientów.
     if (!cityInvestment.playerHasUnlocked) {
-        alert("Musisz najpierw odblokować inwestycje miejskie (wpłać 10,000 PLN), aby wziąć udział w festynie!");
+        showToast(`Najpierw odblokuj inwestycje miejskie (darowizna ${CITY_UNLOCK_DONATION} zł z portfela prywatnego).`, 'warning');
         return; // Zakończ funkcję, jeśli miasto nie jest odblokowane dla gracza
     }
     if (!festival || !festival.isActive || playerWallet.cash < FESTIVAL_STALL_LEVELS[0].cost) return;

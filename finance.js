@@ -931,3 +931,112 @@ function processSubsidiaryIndependence() {
         }
     }
 }
+
+// =================================================================================
+// FINANSOWANIE POMOSTOWE BUDÓW (etap F3)
+// Spółka budowlana z budową w toku i niską gotówką prosi fundusz o pożyczkę. Odsetki naliczane
+// co tydzień, spłata w terminie; brak gotówki = jedno przedłużenie, potem częściowa spłata;
+// bankructwo wykonawcy = odzysk 40%. Łącznie do 15% aktywów funduszu.
+// =================================================================================
+
+const BRIDGE_FUND_LIMIT = 0.15;
+const BRIDGE_RECOVERY = 0.4;
+let bridgeLoanOffers = [];
+
+function getFundBridgeLoans() {
+    if (!playerFund) return [];
+    if (!playerFund.bridgeLoans) playerFund.bridgeLoans = [];
+    return playerFund.bridgeLoans;
+}
+
+function getFundBridgeLoansValue() {
+    return getFundBridgeLoans().reduce((sum, loan) => sum + loan.principal + loan.accrued, 0);
+}
+
+function getFundBridgeCapacity() {
+    return Math.max(0, getFundAssets() * BRIDGE_FUND_LIMIT - getFundBridgeLoansValue());
+}
+
+/** Nowe prośby o finansowanie: budowlańcy z budową w toku i gotówką poniżej 5% aktywów. */
+function generateBridgeLoanOffers() {
+    bridgeLoanOffers = bridgeLoanOffers.filter(offer => --offer.weeksLeft > 0);
+    if (bridgeLoanOffers.length >= 3 || Math.random() > 0.35) return null;
+    const busy = new Set(constructionProjects.filter(project => !project.settled && project.status === 'in_progress').map(project => project.builder?.symbol));
+    const candidates = stocks.filter(stock => busy.has(stock.symbol) && !stock.isBankrupt &&
+        stock.cash < (stock.balanceSheet?.assets || 0) * 0.05 && !bridgeLoanOffers.some(offer => offer.symbol === stock.symbol) &&
+        !getFundBridgeLoans().some(loan => loan.symbol === stock.symbol));
+    const company = getRandomElement(candidates);
+    if (!company) return null;
+    const project = constructionProjects.find(item => item.builder?.symbol === company.symbol && !item.settled);
+    const risk = Math.max(0, -Number(company.financialHealth) || 0) * 0.02;
+    const offer = {
+        id: nextSimulationId('pomost'),
+        symbol: company.symbol,
+        name: company.name,
+        project: project?.buildingType?.name || 'budowa',
+        amount: Math.round(Math.min(20000, Math.max(2000, (project?.price || 50000) * 0.1)) / 100) * 100,
+        rate: 0.12 + risk + getRandomInRange(0, 0.06),
+        weeks: getRandomIntInRange(8, 16),
+        weeksLeft: 3
+    };
+    bridgeLoanOffers.push(offer);
+    logEvent(`🏗️ ${company.name} szuka finansowania pomostowego na „${offer.project}”: ${offer.amount.toLocaleString('pl-PL')} zł, ${(offer.rate * 100).toFixed(1)}% rocznie.`, 'construction');
+    return offer;
+}
+
+function fundBridgeLoan(offerId) {
+    const offer = bridgeLoanOffers.find(item => item.id === offerId);
+    const company = offer && stocks.find(s => s.symbol === offer.symbol);
+    if (!offer || !company || company.isBankrupt) { showToast('Oferta nieaktualna.', 'error'); return null; }
+    if (offer.amount > playerCash) { showToast('Za mało gotówki funduszu.', 'error'); return null; }
+    if (offer.amount > getFundBridgeCapacity() + 1e-6) { showToast(`Limit finansowania pomostowego: ${(BRIDGE_FUND_LIMIT * 100).toFixed(0)}% aktywów.`, 'error'); return null; }
+
+    playerCash -= offer.amount;
+    adjustCompanyCash(company, offer.amount);
+    adjustBalanceSheet(company, { assets: offer.amount, liabilities: offer.amount });
+    recordPayment('player-fund', company, offer.amount, `Pożyczka pomostowa: ${offer.project}`);
+    const loan = { id: offer.id, symbol: company.symbol, name: company.name, project: offer.project, principal: offer.amount, rate: offer.rate, accrued: 0, weeksLeft: offer.weeks, termWeeks: offer.weeks, extended: false };
+    getFundBridgeLoans().push(loan);
+    bridgeLoanOffers = bridgeLoanOffers.filter(item => item !== offer);
+    logEvent(`🏗️ Fundusz udziela ${company.name} pożyczki pomostowej ${offer.amount.toLocaleString('pl-PL')} zł (${(offer.rate * 100).toFixed(1)}%, ${offer.weeks} tyg.).`, 'review');
+    if (typeof refreshFundViews === 'function') refreshFundViews();
+    return loan;
+}
+
+function closeBridgeLoan(loan, received, text) {
+    playerCash += received;
+    playerFund.bridgeLoans = getFundBridgeLoans().filter(item => item !== loan);
+    logEvent(text, 'review');
+}
+
+/** Co tydzień: odsetki, spłata w terminie, przedłużenie, odzysk przy bankructwie. */
+function processBridgeLoansWeekly() {
+    generateBridgeLoanOffers();
+    for (const loan of [...getFundBridgeLoans()]) {
+        const company = stocks.find(s => s.symbol === loan.symbol);
+        if (!company || company.isBankrupt) {
+            const recovery = loan.principal * BRIDGE_RECOVERY;
+            closeBridgeLoan(loan, recovery, `💥 ${loan.name} upada — fundusz odzyskuje ${recovery.toFixed(0)} z ${loan.principal.toFixed(0)} zł pożyczki pomostowej.`);
+            continue;
+        }
+        loan.accrued += loan.principal * loan.rate / FUND_WEEKS_PER_YEAR;
+        loan.weeksLeft--;
+        if (loan.weeksLeft > 0) continue;
+
+        const due = loan.principal + loan.accrued;
+        if (company.cash >= due) {
+            adjustCompanyCash(company, -due);
+            adjustBalanceSheet(company, { assets: -due, liabilities: -loan.principal, retainedEarnings: -loan.accrued });
+            closeBridgeLoan(loan, due, `🏗️ ${company.name} spłaca pożyczkę pomostową: ${due.toFixed(0)} zł (odsetki ${loan.accrued.toFixed(0)} zł).`);
+        } else if (!loan.extended) {
+            loan.extended = true;
+            loan.weeksLeft = 4;
+            logEvent(`⚠️ ${company.name} prosi o przesunięcie spłaty pożyczki pomostowej o 4 tygodnie.`, 'construction');
+        } else {
+            const paid = Math.max(0, company.cash * 0.5);
+            adjustCompanyCash(company, -paid);
+            adjustBalanceSheet(company, { assets: -paid, liabilities: -Math.min(paid, loan.principal) });
+            closeBridgeLoan(loan, paid, `💥 ${company.name} spłaca tylko ${paid.toFixed(0)} z ${due.toFixed(0)} zł pożyczki pomostowej.`);
+        }
+    }
+}

@@ -275,7 +275,7 @@ function runPlayerJuMarket(fund) {
             if (buyer.value < price) buyers.shift();
         }
         if (seller.pendingSellUnits <= 0.01) { seller.pendingSellUnits = 0; seller.pendingSellWeeks = 0; }
-        if (seller.units < 0.5) playerFund.clients = playerFund.clients.filter(item => item !== seller);
+        if (seller.units < 0.5) redeemClientUnits(seller, seller.units); // resztka umorzona, klient odchodzi
     }
 
     // Niewykorzystany popyt: nowi klienci wpłacają do funduszu po NAV (gdy zaufanie pozwala).

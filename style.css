@@ -4259,3 +4259,19 @@ img, svg, video { max-width: 100%; }
   .ju-client { grid-template-columns: 24px minmax(0, 1fr) 60px; }
   .ju-client-units { display: none; }
 }
+
+/* ===================== OKNA PAŃSTWA, MIASTA, BUDOWNICTWA ===================== */
+.state-window { --bank-navy: #1E2A4A; --bank-navy-2: #2B3A63; --bank-gold: #DC2626; --bank-gold-soft: rgba(220, 38, 38, 0.18); }
+.state-hero .bank-emblem { background: radial-gradient(circle at 35% 30%, #FECACA, #DC2626 55%, #7F1D1D); }
+.state-hero .bank-hero-kicker { color: #FCA5A5; }
+.city-window { --bank-navy: #14532D; --bank-navy-2: #166534; --bank-gold: #B45309; --bank-gold-soft: rgba(180, 83, 9, 0.18); }
+.city-hero { background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.03) 0 18px, transparent 18px 36px), linear-gradient(135deg, #14532D, #166534 60%, #7C2D12) !important; }
+.city-hero .bank-emblem { background: radial-gradient(circle at 35% 30%, #FED7AA, #EA580C 55%, #7C2D12); }
+.city-hero .bank-hero-kicker { color: #FDBA74; }
+.construction-window { --bank-navy: #27272A; --bank-navy-2: #3F3F46; --bank-gold: #EAB308; --bank-gold-soft: rgba(234, 179, 8, 0.18); }
+.construction-hero { background: repeating-linear-gradient(135deg, rgba(234, 179, 8, 0.12) 0 14px, transparent 14px 28px), linear-gradient(135deg, #27272A, #3F3F46) !important; }
+.construction-hero .bank-emblem { background: radial-gradient(circle at 35% 30%, #FEF08A, #EAB308 55%, #713F12); }
+.construction-hero .bank-hero-kicker { color: #FDE047; }
+.construction-window .modal-body { padding-top: var(--space-4); padding-bottom: var(--space-5); }
+.city-window .bank-tabs { padding: var(--space-4) var(--space-5) 0; }
+.city-window .bank-tab-content { padding-top: var(--space-4); padding-bottom: var(--space-5); }

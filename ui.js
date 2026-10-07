@@ -2667,7 +2667,9 @@ function updateCityModalContent() {
         document.getElementById('next-festival-countdown').textContent = nextFestivalCountdown > 0 ? `${minutes}m ${seconds.toString().padStart(2, '0')}s` : "Wkrótce...";
         
         // Zarząd
-        document.getElementById('city-election-timer').textContent = city.mayor.electionYear;
+        document.getElementById('city-election-timer').textContent = `${city.mayor.electionYear} ${city.mayor.electionYear === 1 ? 'rok' : 'lata'}`;
+        renderCityTicker();
+        renderCityPpp();
         document.getElementById('city-mayor-name').textContent = city.mayor.name;
         const policy = MAYOR_POLICIES[city.mayor.policy];
         document.getElementById('city-mayor-policy').textContent = `${policy?.label || city.mayor.policy} — ${policy?.description || ''}`;
@@ -2684,7 +2686,7 @@ function updateCityModalContent() {
             statusEl.textContent = "Odblokowane!";
             statusEl.style.color = 'var(--color-up)';
         } else {
-            statusEl.textContent = `Zablokowane (Cel: 10,000 PLN)`;
+            statusEl.textContent = `Zablokowane (cel: ${CITY_UNLOCK_DONATION.toLocaleString('pl-PL')} zł)`;
             statusEl.style.color = 'var(--color-down)';
         }
 
@@ -2714,7 +2716,6 @@ function updateCityModalContent() {
                     <tr>
                         <td>${comp.name}</td>
                         <td>${comp.value.toLocaleString('pl-PL')} PLN</td>
-                        <td>${(comp.cityOwnership * 100).toFixed(1)}%</td>
                         <td><progress value="${comp.developmentProgress}" max="100"></progress></td>
                     </tr>`;
             });
@@ -2766,7 +2767,7 @@ function renderFestivalView(festivalContainer) {
         for (const symbol in playerPortfolio) {
             const stock = stocks.find(s => s.symbol === symbol);
             // Sprawdź, czy stock istnieje, czy gracz ma akcje i czy te akcje dają ponad 50%
-            if (stock && playerPortfolio[symbol].shares > 0 && stock.totalShares > 0 && (playerPortfolio[symbol].shares / stock.totalShares > 0.5)) {
+            if (stock && playerPortfolio[symbol].shares > 0 && stock.totalShares > 0 && (playerPortfolio[symbol].shares / stock.totalShares >= 0.05)) { // fundusz ≥5% akcji
                 companyButtonsHTML += `<button onclick="playerJoinFestival({type: 'company', id: '${symbol}'})">Spółkę ${symbol}</button>`;
             }
         }
@@ -3323,10 +3324,9 @@ function handleViewFinancesClick(symbol) {
 
 function openStateModal() {
     const modal = document.getElementById('state-modal');
-    if(modal) {
-        updateStateModalContent();
-        modal.style.display = 'block';
-    }
+    if (!modal) return;
+    modal.style.display = 'block';
+    switchStateTab(stateTab);
 }
 
 function toggleSubsidiaryVisibility(parentSymbol) {
@@ -3350,72 +3350,6 @@ function toggleSubsidiaryVisibility(parentSymbol) {
         if (toggleBtn) {
             toggleBtn.textContent = parentStock.isSubsidiaryExpanded ? '▼ ' : '▶ ';
         }
-    }
-}
-
-function updateStateModalContent() {
-    const treasuryDisplay = document.getElementById('government-treasury-display');
-    if (treasuryDisplay) {
-        treasuryDisplay.textContent = governmentTreasury.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' });
-    }
-
-    // --- >>> UPROSZCZONA LOGIKA DLA URZĘDU ANTYMONOPOLOWEGO <<< ---
-    const levelEl = document.getElementById('antitrust-level');
-    const capacityEl = document.getElementById('antitrust-capacity');
-    const accuracyEl = document.getElementById('antitrust-accuracy');
-    const maxLevelInfoEl = document.getElementById('antitrust-max-level-info');
-
-    // Sprawdź, czy elementy istnieją
-    if (levelEl && capacityEl && accuracyEl && maxLevelInfoEl) {
-        levelEl.textContent = `${antitrustOffice.level}`;
-        capacityEl.textContent = `${(antitrustOffice.analysisCapacity * 100).toFixed(0)}%`;
-        accuracyEl.textContent = `${(antitrustOffice.accuracy * 100).toFixed(0)}%`;
-
-        if (antitrustOffice.level >= 5) { // Jeśli osiągnięto max poziom
-            maxLevelInfoEl.style.display = 'block';
-        } else {
-            maxLevelInfoEl.style.display = 'none';
-        }
-    }
-    // --- >>> KONIEC UPROSZCZONEJ LOGIKI <<< ---
-
-    // --- Aktualne stawki podatkowe z uwzględnieniem umiejętności ---
-    const sanLvl = getSkillLevel('sanEscobar');
-    const accLvl = getSkillLevel('accountant');
-    let taxModifier = 1.0;
-    if (sanLvl >= 4) taxModifier = 0.0;
-    else if (sanLvl >= 1) taxModifier = 0.95;
-    // Księgowy: -2% za każdy poziom (mnożnik)
-    taxModifier *= Math.max(0.9, 1.0 - accLvl * 0.02);
-
-    const effDiv = (TAX_RATES.dividend * taxModifier * 100).toFixed(1);
-    const effCap = (TAX_RATES.capitalGains * taxModifier * 100).toFixed(1);
-
-    const divEl = document.getElementById('tax-dividend-display');
-    const capEl = document.getElementById('tax-capital-display');
-    if (divEl) divEl.textContent = effDiv + '%';
-    if (capEl) capEl.textContent = effCap + '%';
-
-    const bonusEl = document.getElementById('tax-skill-bonus-display');
-    if (bonusEl) {
-        const bonuses = [];
-        if (sanLvl > 0) bonuses.push('San Escobar lvl ' + sanLvl);
-        if (accLvl > 0) bonuses.push('Księgowy lvl ' + accLvl + ' (-' + (accLvl * 2) + '%)');
-        if (bonuses.length > 0) {
-            bonusEl.style.display = 'block';
-            bonusEl.textContent = '🎯 Ulgi: ' + bonuses.join(', ');
-        } else {
-            bonusEl.style.display = 'none';
-        }
-    }
-
-    // --- Wskaźnik koniunktury (faza cyklu gospodarczego) ---
-    const sentimentEl = document.getElementById('market-sentiment-display');
-    if (sentimentEl) {
-        const phase = getEconomyPhaseInfo();
-        const icons = { recovery: '🌱', expansion: '🟢', overheating: '🔥', recession: '🔴' };
-        const gdp = (economyCycle.gdpGrowth * 100).toFixed(1);
-        sentimentEl.innerHTML = `${icons[economyCycle.phase] || '⚪'} ${phase.name} · wskaźnik ${economyCycle.index}/100 · PKB ${gdp >= 0 ? '+' : ''}${gdp}% kw.`;
     }
 }
 
@@ -3679,9 +3613,7 @@ function renderTendersList() {
         if (tender.status === 'open') {
             card.appendChild(createConstructionInfoRow(
                 'Czas na oferty',
-                tender.timerVersion === 2
-                    ? formatConstructionTime(tender.remainingGameMs)
-                    : 'Stary przetarg — wymaga migracji'
+                formatConstructionTime(tender.remainingGameMs)
             ));
         }
 
@@ -3855,12 +3787,6 @@ function renderConstructionSubcontractorsList() {
             createConstructionInfoRow('Obecna budowa', project ? `${project.tender.buildingType.name} (${project.builder.name})` : '—')
         );
 
-        const button = document.createElement('button');
-        const canIpo = spec.contractsCompleted >= 10 && !spec.busyProjectId;
-        button.disabled = !canIpo;
-        button.textContent = canIpo ? 'Wejdź na giełdę' : (spec.busyProjectId ? 'IPO po zakończeniu budowy' : 'IPO od 10 kontraktów');
-        if (canIpo) button.onclick = () => goPublicSpecialist(spec.id);
-        card.appendChild(button);
 
         grid.appendChild(card);
     }
@@ -4013,43 +3939,6 @@ function switchCityTab(tabName) {
     document.getElementById(`tab-btn-city-${tabName}`).classList.add('active');
 }
 
-function goPublicSpecialist(specId) {
-    const spec = specialists.find(s => s.id === specId);
-    if (!spec || spec.contractsCompleted < 10 || spec.busyProjectId) return;
-    
-    // Create a new stock for the specialist
-    const newStock = {
-        name: spec.name,
-        symbol: spec.name.substring(0, 3).toUpperCase() + 'S',
-        price: 10, // Starting price
-        totalShares: 10000,
-        sharesHeld: 0,
-        sector: ['Usługi'],
-        exchange: 'BRONZE',
-        cash: spec.cash,
-        // Add other necessary fields
-        // Bilans odpowiada faktycznym środkom specjalisty (bez kapitału "z powietrza").
-        balanceSheet: { assets: spec.cash, liabilities: 0, shareCapital: spec.cash, retainedEarnings: 0 },
-        quarterlyEarnings: 0,
-        priceHistory: [], candlestickHistory: [], lineHistory: [], playerTransactions: [],
-        isStateOwned: false,
-        dividendPolicy: 'Growth',
-        dividendTimer: getRandomIntInRange(60000, 120000),
-        financialHealth: 1,
-        volatilityFactor: 1.5
-    };
-    initializeDescriptionParts(newStock);
-    generateCEO(newStock);
-    initializeDepartments(newStock);
-    assignBankToCompany(newStock);
-    initializeReputation(newStock);
-    
-    stocks.push(newStock);
-    specialists = specialists.filter(s => s.id !== specId);
-    logEvent(`🏛️ ${spec.name} wchodzi na giełdę jako spółka ${newStock.symbol}.`, 'construction');
-    renderConstructionSubcontractorsList();
-}
-
 // ============================================
 // FUNKCJE POMOCNICZE DLA SEKTORA BUDOWLANEGO
 // ============================================
@@ -4110,6 +3999,8 @@ function updateConstructionSectorUI() {
     renderConstructionCompaniesList();
     renderConstructionHistoryList();
     renderConstructionResearchList();
+    renderConstructionTicker();
+    renderConstructionFinancing();
 }
 
 function getConstructionHistoryRows(companies = stocks) {
@@ -5720,4 +5611,141 @@ function renderJuMarket() {
             <span class="ju-satisfaction" title="Zadowolenie"><span style="width:${(client.satisfaction * 100).toFixed(0)}%"></span></span>
         </div>${card}`;
     }).join('') || '<p class="text-muted">Brak klientów w tej grupie.</p>';
+}
+
+// =================================================================================
+// OKNA PAŃSTWA, MIASTA I BUDOWNICTWA (etap F3): nagłówek, wskaźniki, nowe mechaniki
+// =================================================================================
+
+function renderTicker(elementId, items) {
+    const ticker = document.getElementById(elementId);
+    if (ticker) ticker.innerHTML = items.map(([label, value]) => `<div class="bank-ticker-item"><span>${label}</span><strong>${value}</strong></div>`).join('');
+}
+
+// ---------- Państwo ----------
+let stateTab = 'overview';
+
+function switchStateTab(tab) {
+    stateTab = tab;
+    document.querySelectorAll('#state-modal .bank-tab-btn').forEach(button => button.classList.toggle('active', button.dataset.tab === tab));
+    updateStateModalContent();
+}
+
+function updateStateModalContent() {
+    const modal = document.getElementById('state-modal');
+    if (!modal || modal.style.display !== 'block') return;
+    const phase = getEconomyPhaseInfo();
+    renderTicker('state-ticker', [
+        ['Skarb Państwa', formatZl(governmentTreasury, 0)],
+        ['Faza koniunktury', escapeHtml(phase.name || '—')],
+        ['Stopa bazowa BC', `${((centralBank.baseInterestRate || 0) * 100).toFixed(2)}%`],
+        ['Urząd antymonopolowy', `poziom ${antitrustOffice.level}/5`],
+        ['Spółki państwowe', stocks.filter(s => s.isStateOwned && !s.isBankrupt).length]
+    ]);
+
+    const body = document.getElementById('state-body');
+    if (!body) return;
+    if (stateTab === 'overview') {
+        body.innerHTML = `
+            <div class="bank-grid">
+                <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">⚖️</span><div><h4>Urząd antymonopolowy</h4><span class="bank-card-type">poziom ${antitrustOffice.level}/5</span></div></header>
+                    <dl class="bank-card-rates"><div><dt>Szansa analizy</dt><dd>${(antitrustOffice.analysisCapacity * 100).toFixed(0)}%</dd></div><div><dt>Dokładność</dt><dd>${(antitrustOffice.accuracy * 100).toFixed(0)}%</dd></div><div><dt>Monopoliści</dt><dd>${stocks.filter(s => s.isMonopolist).length}</dd></div></dl>
+                    <p class="text-sm text-muted">Karze monopolistów i może zablokować skup akcji przez spółkę z Giełdy Diamentowej. Państwo samo inwestuje w rozwój urzędu.</p></article>
+                <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">📊</span><div><h4>Koniunktura</h4><span class="bank-card-type">${escapeHtml(phase.name || '')}</span></div></header>
+                    <p class="text-sm">${escapeHtml(phase.description || 'Faza cyklu gospodarczego wpływa na wyniki spółek, sektory wrażliwe na cykl i stopy procentowe.')}</p>
+                    <p class="text-sm text-muted">Wskaźnik koniunktury: ${Number(economyCycle.index || 0).toFixed(0)}/100 · zmiana PKB w kwartale: ${((economyCycle.gdpGrowth || 0) * 100).toFixed(2)}%.</p></article>
+                <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">🏭</span><div><h4>Spółki Skarbu Państwa</h4><span class="bank-card-type">nacjonalizacje i prywatyzacje</span></div></header>
+                    <ul class="list-plain text-sm">${stocks.filter(s => s.isStateOwned && !s.isBankrupt).slice(0, 8).map(s => `<li>${escapeHtml(s.name)} — ${((s.stateOwnershipPct || 0) * 100).toFixed(0)}%</li>`).join('') || '<li class="text-muted">Brak.</li>'}</ul></article>
+            </div>`;
+    } else if (stateTab === 'taxes') {
+        body.innerHTML = `
+            <table class="asset-mini-table w-full">
+                <thead><tr><th>Podatek</th><th>Stawka</th><th>Kogo dotyczy</th></tr></thead>
+                <tbody>
+                    <tr><td>Dywidendy</td><td>${(TAX_RATES.dividend * 100).toFixed(0)}%</td><td>inwestorzy prywatni i Twoje konto prywatne; <strong>fundusz zwolniony</strong> (dywidenda podnosi NAV)</td></tr>
+                    <tr><td>Zyski kapitałowe</td><td>${(TAX_RATES.capitalGains * 100).toFixed(0)}%</td><td>konto prywatne (z ulgami szkoleń); klienci funduszu płacą przy umorzeniu JU</td></tr>
+                    <tr><td>CIT spółek</td><td>wg progów</td><td>zysk spółek giełdowych (raport kwartalny)</td></tr>
+                    <tr><td>Podatek miejski</td><td>od zysku spółek</td><td>spółki; stawkę zmienia polityka burmistrza (${escapeHtml(MAYOR_POLICIES[city.mayor?.policy]?.label || '—')})</td></tr>
+                    <tr><td>Podatek od bogactwa</td><td>progi</td><td>wielcy inwestorzy prywatni (boty); nie dotyczy funduszu</td></tr>
+                </tbody>
+            </table>`;
+    } else if (stateTab === 'pension') {
+        const ranking = getPensionRanking().slice(0, 8);
+        const last = statePension.history[0];
+        body.innerHTML = `
+            <p class="bank-lead">Raz w roku gry Skarb Państwa powierza mandaty emerytalne (napływ kapitału) 3 najlepszym funduszom: liczy się wynik vs GIG z 4 okresów i zaufanie klientów. Następny przydział: przy rocznym rozliczeniu (wybory za ${city.mayor?.electionYear ?? '—'} ${city.mayor?.electionYear === 1 ? 'rok' : 'lata'}).</p>
+            <table class="asset-mini-table w-full">
+                <thead><tr><th>#</th><th>Fundusz</th><th>Ocena kwalifikacji</th><th></th></tr></thead>
+                <tbody>${ranking.map((fund, index) => `<tr class="${fund.kind === 'player' ? 'mine' : ''}"><td>${index + 1}</td><td>${escapeHtml(fund.name)}</td><td>${fund.score.toFixed(1)}</td><td>${index < 3 ? '🏅 mandat' : ''}</td></tr>`).join('')}</tbody>
+            </table>
+            <h4>Ostatni przydział</h4>
+            <p class="text-sm">${last ? last.grants.map(g => `${escapeHtml(g.name)}: ${formatZl(g.amount, 0)}`).join(' · ') : 'Jeszcze nie było przydziału.'}</p>`;
+    } else {
+        const entries = eventLog.filter(entry => entry.category === 'state').slice(0, 15);
+        body.innerHTML = `<p class="bank-lead">Rzeczywiste działania państwa w tej grze (z dziennika zdarzeń).</p>
+            <ul class="ju-tape list-plain">${entries.map(entry => `<li>${escapeHtml(entry.text)}</li>`).join('') || '<li class="text-muted">Brak działań państwa.</li>'}</ul>`;
+    }
+}
+
+// ---------- Miasto: PPP ----------
+function renderCityPpp() {
+    const container = document.getElementById('city-content-ppp');
+    if (!container || container.contains(document.activeElement) || !playerFund) return;
+    const ppp = ensurePpp();
+    container.innerHTML = `
+        <p class="bank-lead">Partnerstwo publiczno-prywatne: fundusz współfinansuje inwestycje miasta. Odsetki co tydzień z budżetu miasta, kapitał w terminie. Ryzyko rośnie przy słabym budżecie i niskim poparciu burmistrza. Limit: ${(PPP_FUND_LIMIT * 100).toFixed(0)}% aktywów (wolne: ${formatZl(getFundPppCapacity(), 0)}).</p>
+        <h4>Udziały funduszu</h4>
+        <div class="bank-deposits">${playerFund.ppp.map(stake => `
+            <div class="bank-deposit"><div class="bank-deposit-info"><strong>${stake.icon} ${escapeHtml(stake.name)}</strong><span class="text-muted text-sm">${(stake.rate * 100).toFixed(1)}% rocznie · zostało ${stake.weeksLeft} tyg.${stake.unpaid ? ' · ⚠️ zaległe odsetki' : ''}</span></div>
+            <div class="bank-deposit-amount">${formatZl(stake.principal)}</div><span></span>
+            <div class="bank-deposit-progress"><span style="width:${(100 * (1 - stake.weeksLeft / stake.termWeeks)).toFixed(0)}%"></span></div></div>`).join('') || '<p class="text-muted">Fundusz nie ma udziałów w projektach miejskich.</p>'}</div>
+        <h4>Projekty szukające finansowania</h4>
+        <div class="bank-grid">${ppp.offers.map(offer => `
+            <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${offer.icon}</span><div><h4>${escapeHtml(offer.name)}</h4><span class="bank-card-type">oferta ważna ${offer.weeksLeft} tyg.</span></div></header>
+                <dl class="bank-card-rates"><div><dt>Oprocentowanie</dt><dd>${(offer.rate * 100).toFixed(1)}%</dd></div><div><dt>Okres</dt><dd>${offer.termWeeks} tyg.</dd></div><div><dt>Do zebrania</dt><dd>${formatZl(offer.total - offer.raised, 0)}</dd></div></dl>
+                <div class="bank-card-form"><input type="text" inputmode="numeric" id="ppp-amount-${offer.id}" value="${Math.min(offer.total - offer.raised, Math.floor(getFundPppCapacity()))}" aria-label="Kwota udziału">
+                <button onclick="investInPpp('${offer.id}', parseFloat(document.getElementById('ppp-amount-${offer.id}').value)); renderCityPpp();">Współfinansuj</button></div>
+            </article>`).join('') || '<p class="text-muted">Brak otwartych projektów — miasto ogłasza nowe co kwartał.</p>'}</div>`;
+}
+
+// ---------- Budownictwo: finansowanie pomostowe ----------
+function renderConstructionFinancing() {
+    const container = document.getElementById('construction-financing-body');
+    if (!container || !playerFund) return;
+    const loans = getFundBridgeLoans();
+    container.innerHTML = `
+        <p class="bank-lead">Spółki budowlane z budową w toku i niską gotówką proszą fundusz o pożyczkę pomostową. Spłata z odsetkami w terminie; przy braku gotówki jedno przedłużenie o 4 tygodnie, potem częściowa spłata; upadek wykonawcy = odzysk ${(BRIDGE_RECOVERY * 100).toFixed(0)}%. Limit: ${(BRIDGE_FUND_LIMIT * 100).toFixed(0)}% aktywów (wolne: ${formatZl(getFundBridgeCapacity(), 0)}).</p>
+        <h4>Pożyczki funduszu</h4>
+        <div class="bank-deposits">${loans.map(loan => `
+            <div class="bank-deposit"><div class="bank-deposit-info"><strong>🏗️ ${escapeHtml(loan.name)}</strong><span class="text-muted text-sm">${escapeHtml(loan.project)} · ${(loan.rate * 100).toFixed(1)}% · zostało ${loan.weeksLeft} tyg.${loan.extended ? ' · przedłużona' : ''}</span></div>
+            <div class="bank-deposit-amount">${formatZl(loan.principal)} <span class="text-up text-sm">+${formatZl(loan.accrued)}</span></div><span></span>
+            <div class="bank-deposit-progress"><span style="width:${(100 * (1 - loan.weeksLeft / loan.termWeeks)).toFixed(0)}%"></span></div></div>`).join('') || '<p class="text-muted">Fundusz nie finansuje żadnej budowy.</p>'}</div>
+        <h4>Prośby o finansowanie</h4>
+        <div class="bank-grid">${bridgeLoanOffers.map(offer => `
+            <article class="bank-card bank-type-internet"><header class="bank-card-head"><span class="bank-card-icon">🏗️</span><div><h4>${escapeHtml(offer.name)}</h4><span class="bank-card-type">${escapeHtml(offer.project)}</span></div></header>
+                <dl class="bank-card-rates"><div><dt>Kwota</dt><dd>${formatZl(offer.amount, 0)}</dd></div><div><dt>Oprocentowanie</dt><dd>${(offer.rate * 100).toFixed(1)}%</dd></div><div><dt>Okres</dt><dd>${offer.weeks} tyg.</dd></div></dl>
+                <button onclick="fundBridgeLoan('${offer.id}'); renderConstructionFinancing();">Udziel pożyczki</button>
+            </article>`).join('') || '<p class="text-muted">Brak próśb — pojawiają się, gdy budowlańcom brakuje gotówki na kontrakty.</p>'}</div>`;
+}
+
+function renderConstructionTicker() {
+    const builders = stocks.filter(s => !s.isBankrupt && (s.sector || []).includes('Budowlany'));
+    const projects = constructionProjects.filter(p => !p.settled);
+    renderTicker('construction-ticker', [
+        ['Firmy budowlane', builders.length],
+        ['Budowy w toku', projects.length],
+        ['Otwarte przetargi', activeTenders.filter(t => t.status === 'open').length],
+        ['Pożyczki funduszu', formatZl(getFundBridgeLoansValue(), 0)],
+        ['Prośby o finansowanie', bridgeLoanOffers.length]
+    ]);
+}
+
+function renderCityTicker() {
+    renderTicker('city-ticker', [
+        ['Budżet miasta', formatZl(city.budget, 0)],
+        ['Mieszkańcy', Number(city.population || 0).toLocaleString('pl-PL')],
+        ['Burmistrz', escapeHtml(city.mayor?.name || '—')],
+        ['Poparcie', `${Number(city.mayor?.support || 0).toFixed(0)}%`],
+        ['Udziały PPP funduszu', formatZl(getFundPppValue(), 0)]
+    ]);
 }
