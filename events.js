@@ -406,21 +406,7 @@ function triggerRescueOfferingEvent() {
     }
 }
 
-function triggerStartupFundingEvent() {
-    // ... (kod bez zmian) ...
-} 
-
-const gamingStartupEvents = [
-    // ... (kod bez zmian) ...
-];
-
-function triggerGamingStartupEvent(startup) {
-    // ... (kod bez zmian) ...
-}
-
-function triggerStartupOfferEvent() {
-    // ... (kod bez zmian) ...
-}
+ 
 
 function triggerNationalizationEvent() {
     // Wersja z gameLogic.js jest nowsza i poprawna (używa balanceSheet i centralBank.funds)

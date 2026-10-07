@@ -2889,10 +2889,11 @@ function updateStartups(deltaTime) {
             case 'funding':
                 // Etap zbierania funduszy (pasywne finansowanie wciąż działa)
                 if (startup.currentFunding < startup.fundingGoal) {
+                    // Drobni inwestorzy z zewnątrz: średnio ok. 0,1% celu na sekundę gry (~15 min do zebrania bez funduszu i botów).
                     let donation = 0;
                     const roll = Math.random();
-                    if (roll < 0.01) { donation = getRandomInRange(20, 100); } 
-                    else if (roll < 0.20) { donation = getRandomInRange(1, 20); }
+                    if (roll < 0.02) { donation = startup.fundingGoal * getRandomInRange(0.01, 0.03); }
+                    else if (roll < 0.30) { donation = startup.fundingGoal * getRandomInRange(0.001, 0.004); }
                     if (donation > 0) {
                         startup.currentFunding += donation;
                         if (startup.currentFunding > startup.fundingGoal) {
@@ -2923,6 +2924,12 @@ function updateStartups(deltaTime) {
                 break;
 
             case 'development':
+                // Wstrzymanie: niezapłacony koszt dodatkowy albo opóźnienie techniczne (prywatyzacja).
+                if (startup.pendingExtraCost || (startup.developmentPausedUntil && Date.now() < startup.developmentPausedUntil)) break;
+                if (startup.isPrivatized && !startup.complicationRolled && startup.developmentProgress > 50) {
+                    startup.complicationRolled = true;
+                    if (Math.random() < 0.35) { triggerPrivatizedStartupComplication(startup); break; }
+                }
                 // Etap rozwoju
                 if (startup.developmentProgress < 100) {
                     const progressIncrease = (deltaTime / 1000) * 0.5; 
@@ -2955,11 +2962,14 @@ function updateStartups(deltaTime) {
                         if (amount > 100) {
                             contributingAI.cash -= amount;
                             startup.rescueCurrent += amount;
+                            const aiHolding = contributingAI.portfolio[startup.symbol];
+                            aiHolding.investedAmount = (Number(aiHolding.investedAmount) || 0) + amount; // ratunek = inwestycja
                             logEvent(`[START-UP] ${contributingAI.name} dofinansowuje ${startup.name} kwotą ${amount.toFixed(2)} PLN!`);
                         }
                     }
                 }
 
+                if (checkStartupRescue(startup)) break; // zebrano kwotę ratunkową (także przez boty) → debiut
                 if (startup.rescueTimeLeft <= 0 && startup.rescueCurrent < startup.rescueGoal) {
                     // Czas minął, a cel nie został osiągnięty -> KRYTYCZNA PORAŻKA
                     showToast(`Nie udało się uratować ${startup.name}! Firma upada.`, 'error', 5000);
@@ -2970,64 +2980,6 @@ function updateStartups(deltaTime) {
         }
 
     }
-}
-
-function removeStartup(startup, refundPercentageMin = 0, refundPercentageMax = 0) {
-    const symbol = startup.symbol;
-
-    // Oblicz zwrot dla gracza
-    const playerHolding = playerPortfolio[symbol];
-    if (playerHolding && playerHolding.investedAmount > 0) {
-        let refund = 0;
-        if (playerHolding.isInsured) {
-            refund = playerHolding.investedAmount * 0.75;
-            // Wiadomość o ubezpieczeniu jest już w showToast, ale logEvent może być przydatny
-            logEvent(`[BFG] 🛡️ Inwestycja gracza w ${startup.name} była ubezpieczona. Zwrot: ${refund.toFixed(2)} PLN.`, 'review');
-        } else if (refundPercentageMax > 0) {
-            refund = playerHolding.investedAmount * getRandomInRange(refundPercentageMin, refundPercentageMax);
-        }
-
-        if (refund > 0) {
-            playerCash += refund;
-            logEvent(`Otrzymujesz ${refund.toFixed(2)} PLN zwrotu z inwestycji w ${startup.name}.`, 'review');
-        }
-    }
-
-    // Oblicz zwrot dla AI
-    aiCompetitors.forEach(ai => {
-        const aiHolding = ai.portfolio[symbol];
-        if (aiHolding && aiHolding.investedAmount > 0) {
-            const aiRefund = aiHolding.investedAmount * getRandomInRange(refundPercentageMin, refundPercentageMax);
-            if (aiRefund > 0) {
-                ai.cash += aiRefund;
-            }
-        }
-    });
-
-    // Usuń start-up z wszystkich list i portfeli
-    const index = stocks.findIndex(s => s.symbol === symbol);
-    if (index > -1) {
-        stocks.splice(index, 1);
-    }
-    if (playerPortfolio[symbol]) {
-        delete playerPortfolio[symbol];
-    }
-    aiCompetitors.forEach(ai => {
-        if (ai.portfolio[symbol]) {
-            delete ai.portfolio[symbol];
-        }
-    });
-
-    // Zaplanuj pojawienie się nowego start-upu w przyszłości
-    const delay = getRandomIntInRange(30000, 60000);
-    setTimeout(() => {
-        console.log('%c[GENERATOR] Uruchomiono tworzenie nowego start-upu!', 'color: orange; font-weight: bold;');
-        const newStartup = generateNewStartup();
-        stocks.push(newStartup);
-        logEvent(`[INKUBATOR] Na rynku pojawił się nowy, obiecujący start-up: ${newStartup.name}!`, 'market');
-    }, delay);
-
-    // SCALONO: Usunięto wywołanie `displayStartups` z `removeStartup`, ponieważ było też w `finalizeStartup`
 }
 
 function initializeResearchForStock(stock, options = {}) {
@@ -3207,133 +3159,6 @@ function initializeResearchForStock(stock, options = {}) {
     return true;
 }
 
-function handleSuccessfulIPO(startup, successMultiplier) {
-    const symbol = startup.symbol;
-
-    // Obliczanie wyceny i parametrów nowej spółki
-    let totalInvested = startup.fundingGoal + startup.ipoPriceBonus;
-    const ipoValuation = totalInvested * successMultiplier;
-    const newIpoPrice = getRandomInRange(25, 50);
-    const newTotalShares = Math.floor(ipoValuation / newIpoPrice);
-
-    if (newTotalShares <= 0) return; // Zabezpieczenie na wypadek bardzo niskiej wyceny
-
-    // Logika rozdawania akcji wszystkim inwestorom
-    let sharesHeldByKnownInvestors = 0;
-
-    // Inwestorzy bezpośredni (Gracz)
-    const playerHolding = playerPortfolio[symbol];
-    if (playerHolding && playerHolding.investedAmount > 0) {
-        const playerOwnershipPct = playerHolding.investedAmount / totalInvested;
-        playerPortfolio[symbol] = {
-            shares: Math.floor(newTotalShares * playerOwnershipPct),
-            avgPrice: newIpoPrice,
-            // SCALONO: Zachowano 'assetType' z Twojej wersji, aby poprawnie wyświetlał się w portfelu po IPO
-            assetType: 'stock' 
-        };
-        sharesHeldByKnownInvestors += playerPortfolio[symbol].shares;
-    }
-
-    // Inwestorzy bezpośredni (AI)
-    aiCompetitors.forEach(ai => {
-        const aiHolding = ai.portfolio[symbol];
-        if (aiHolding && aiHolding.investedAmount > 0) {
-            const aiOwnershipPct = aiHolding.investedAmount / totalInvested;
-            ai.portfolio[symbol] = {
-                shares: Math.floor(newTotalShares * aiOwnershipPct),
-                avgPrice: newIpoPrice
-                 // SCALONO: AI nie potrzebuje 'assetType: stock', domyślnie jest to akcja
-            };
-            sharesHeldByKnownInvestors += ai.portfolio[symbol].shares;
-        }
-    });
-
-    // Inwestorzy z puli inwestycyjnej
-    if (startup.poolInvestors) {
-        startup.poolInvestors.forEach(investment => {
-            const poolInvestmentFraction = investment.amount / totalInvested;
-            const sharesForThisPoolInvestment = Math.floor(newTotalShares * poolInvestmentFraction);
-            const totalContributionsInRound = Object.values(investment.contributors).reduce((a, b) => a + b, 0);
-
-            if (totalContributionsInRound === 0) return;
-
-            for (const [id, contribution] of Object.entries(investment.contributors)) {
-                const contributorFraction = contribution / totalContributionsInRound;
-                const sharesToDistribute = Math.floor(sharesForThisPoolInvestment * contributorFraction);
-
-                if (sharesToDistribute <= 0) continue;
-
-                if (id === 'player') {
-                    if (playerPortfolio[symbol]) {
-                        playerPortfolio[symbol].shares += sharesToDistribute;
-                    } else {
-                        // SCALONO: Dodano 'assetType: stock' dla spójności
-                        playerPortfolio[symbol] = { shares: sharesToDistribute, avgPrice: newIpoPrice, assetType: 'stock' };
-                    }
-                    sharesHeldByKnownInvestors += sharesToDistribute;
-                } else if (id.startsWith('ai')) {
-                    const ai = aiCompetitors.find(a => a.id === id);
-                    if (ai) {
-                        if (ai.portfolio[symbol]) {
-                            ai.portfolio[symbol].shares += sharesToDistribute;
-                        } else {
-                            ai.portfolio[symbol] = { shares: sharesToDistribute, avgPrice: newIpoPrice };
-                        }
-                        sharesHeldByKnownInvestors += sharesToDistribute;
-                    }
-                }
-                if (investmentPool.playerStakes[id]) {
-                    investmentPool.playerStakes[id] -= contribution;
-                    if (investmentPool.playerStakes[id] < 0) investmentPool.playerStakes[id] = 0;
-                }
-            }
-        });
-        displayStartups(getCurrentStartupInputValues());
-    }
-
-    // --- 👇 NOWY BLOK: Przydział akcji dla banków sponsorujących (z Twojej wersji) 👇 ---
-    commercialBanks.forEach(bank => {
-        if (bank.startupInvestments && bank.startupInvestments[symbol]) {
-            const investedAmount = bank.startupInvestments[symbol];
-            const ownershipPct = investedAmount / totalInvested; // Procent w stosunku do CAŁOŚCI inwestycji
-            const sharesForBank = Math.floor(newTotalShares * ownershipPct);
-
-            if (sharesForBank > 0) {
-                // Dodaj akcje do portfela banku
-                bank.stockPortfolio[symbol] = { shares: sharesForBank, avgPrice: newIpoPrice };
-                sharesHeldByKnownInvestors += sharesForBank;
-                console.log(`[IPO] Bank ${bank.name} otrzymał ${sharesForBank} akcji ${symbol} za sponsoring.`);
-                delete bank.startupInvestments[symbol]; // Usuń zapis o inwestycji
-            }
-        }
-    });
-    // --- 👆 KONIEC NOWEGO BLOKU 👆 ---
-
-    // Ostateczna transformacja start-upu w spółkę giełdową
-    startup.assetType = undefined;
-    startup.exchange = 'BRONZE';
-    startup.price = newIpoPrice;
-    startup.totalShares = newTotalShares;
-    startup.maxShares = newTotalShares * 2;
-    startup.sharesHeld = sharesHeldByKnownInvestors;
-    startup.financialHealth = getRandomIntInRange(1, 4); // Startuje z dobrą kondycją
-    const boostDuration = getRandomIntInRange(8000, 20000);
-    startup.marketBehavior = { phase: 'ipo_boost', endTime: Date.now() + boostDuration };
-    
-    // Usuwamy zbędne już właściwości start-upu
-    delete startup.fundingGoal;
-    delete startup.currentFunding;
-    delete startup.developmentProgress;
-    delete startup.successChance;
-    delete startup.stage;
-    delete startup.poolInvestors;
-
-    initializeDescriptionParts(startup);
-    initializeResearchForStock(startup);
-
-    logEvent(`Spółka ${startup.name} wchodzi na rynek z ceną ${newIpoPrice.toFixed(2)} PLN i kapitałem ${newTotalShares.toLocaleString('pl-PL')} akcji!`, 'review');
-}
-
 function buyStartupInsurance(symbol) {
     const holding = playerPortfolio[symbol];
     if (!holding || holding.assetType !== 'Startup') return;
@@ -3448,7 +3273,7 @@ function generateNewStartup() {
     let successChance = getRandomInRange(0.50, 0.75); // Bazowa szansa na sukces: 50-75%
     let isScam = false;
     let isWhiteCrow = false;
-    let fundingGoal = Math.round(getRandomIntInRange(20000, 150000) / 1000) * 1000;
+    let fundingGoal = Math.round(getRandomIntInRange(5000, 40000) / 500) * 500; // skala funduszu gracza (etap F2)
 
     // --- LOGIKA SPECJALNYCH PRZYPADKÓW ---
     const specialRoll = Math.random();
@@ -3496,65 +3321,6 @@ function generateNewStartup() {
     return newStartup;
 }
 
-/**
-* Gracz próbuje sprywatyzować start-up.
-* @param {string} symbol Symbol start-upu do sprywatyzowania.
-*/
-function privatizeStartup(symbol) {
-    if (getSkillLevel('startupInvestor') < 5) {
-        alert("Musisz osiągnąć 5 poziom 'Anioła Biznesu', aby prywatyzować start-upy!");
-        return;
-    }
-
-    const startup = stocks.find(s => s.symbol === symbol);
-    if (!startup || startup.assetType !== 'Startup') return;
-
-    if (startup.isPrivatized) {
-        alert("Ten start-up jest już prywatny.");
-        return;
-    }
-
-    if (startup.stage !== 'funding') {
-        alert("Można prywatyzować start-upy tylko w fazie finansowania.");
-        return;
-    }
-
-    const privatizationCost = startup.fundingGoal * 1.2; // 20% premii za wykupienie
-    const playerInvestment = playerPortfolio[symbol]?.investedAmount || 0;
-    const finalCost = privatizationCost - playerInvestment;
-
-    if (playerCash < finalCost) {
-        alert(`Nie masz wystarczająco gotówki! Koszt prywatyzacji to ${finalCost.toFixed(2)} PLN.`);
-        return;
-    }
-
-    if (confirm(`Czy na pewno chcesz sprywatyzować ${startup.name} za ${finalCost.toFixed(2)} PLN? To zagwarantuje sukces projektu, ale w przyszłości może wiązać się z dodatkowymi kosztami lub opóźnieniami.`)) {
-        playerCash -= finalCost;
-
-        // Oznacz jako sprywatyzowany
-        startup.isPrivatized = true;
-
-        // Zapisz oryginalne ryzyko i zagwarantuj sukces
-        startup.originalSuccessChance = startup.successChance;
-        startup.successChance = 1.0;
-
-        // Dofinansuj do końca i przejmij w całości
-        startup.currentFunding = startup.fundingGoal;
-        startup.investors = { "Ty (Gracz)": startup.fundingGoal };
-        if (playerPortfolio[symbol]) {
-            playerPortfolio[symbol].investedAmount = startup.fundingGoal;
-        } else {
-            playerPortfolio[symbol] = { investedAmount: startup.fundingGoal, assetType: 'Startup', isInsured: false };
-        }
-
-        logEvent(`🏢 Sprywatyzowałeś start-up ${startup.name}! Projekt ma zagwarantowany sukces.`, 'review');
-
-        displayCash();
-        displayPortfolio();
-        displayStartups(getCurrentStartupInputValues());
-    }
-}
-
 function maintainStartupCount() {
     const currentStartups = stocks.filter(s => s.assetType === 'Startup').length;
 
@@ -3577,6 +3343,7 @@ function acceptStartupOffer(symbol, amount, offerType, offerValue) {
         alert("Niestety, ta oferta jest już nieaktualna!");
         return;
     }
+    if (!canFundInvestInStartups(amount)) return; // limit startupów funduszu
 
     if (playerCash < amount) {
         alert("Nie masz wystarczająco gotówki, aby dokonać tej inwestycji!");
@@ -3651,7 +3418,7 @@ function updateStartupAutoInvestTimers(deltaTime) {
                 const startup = stocks.find(s => s.symbol === symbol);
                 // Sprawdź, czy inwestycja jest nadal możliwa
                 if (startup && (startup.stage === 'funding' || startup.stage === 'overfunding')) {
-                    if (playerCash >= settings.amount) {
+                    if (canFundInvestInStartups(settings.amount, true)) {
                         investInStartup(symbol, settings.amount);
                         logEvent(`[AUTO-STARTUP] Automatycznie zainwestowano ${settings.amount.toFixed(2)} PLN w ${startup.name}.`);
                     } else {
@@ -3691,64 +3458,6 @@ function payExtraStartupCost(symbol) {
     logEvent(`Zapłacono dodatkowe ${cost.toFixed(2)} PLN, aby wznowić prace nad ${startup.name}.`, 'review');
 
     displayCash();
-    displayStartups(getCurrentStartupInputValues());
-}
-
-function investInStartup(symbol, amount) {
-    if (!FEATURE_FLAGS.startups) { if (typeof showToast === 'function') showToast('Inwestycje w startupy są tymczasowo wyłączone.', 'default'); return; } // wyłączone w etapie B
-
-    if (typeof amount !== 'number' || isNaN(amount) || amount <= 0) {
-        // Jeśli nie jest, spróbuj pobrać wartość bezpośrednio z inputa jako ostateczność
-        const inputAmount = document.getElementById(`invest-amount-${symbol}`)?.valueAsNumber;
-        if (typeof inputAmount !== 'number' || isNaN(inputAmount) || inputAmount <= 0) {
-            alert("Proszę wpisać poprawną, dodatnią kwotę inwestycji.");
-            return; // Zakończ funkcję, jeśli kwota jest nieprawidłowa
-        }
-        amount = inputAmount; // Użyj wartości z inputa, jeśli była poprawna
-    }
-
-    if (!isSkillUnlocked('startupInvestor')) {
-        alert("Musisz odblokować umiejętność 'Anioł Biznesu', aby inwestować w start-upy!");
-        return;
-    }
-
-    const startup = stocks.find(s => s.symbol === symbol);
-    if (!startup || startup.assetType !== 'Startup') return;
-
-    if (playerCash < amount) {
-        alert("Nie masz wystarczająco gotówki!");
-        return;
-    }
-
-    // Zmieniamy logikę w zależności od etapu start-upu
-    if (startup.stage === 'funding') {
-        startup.currentFunding += amount;
-        const successChanceBonus = (amount / startup.fundingGoal) * 0.05;
-        startup.successChance += successChanceBonus;
-        if (startup.successChance > 1) startup.successChance = 1;
-        logEvent(`Zainwestowałeś ${amount.toFixed(2)} PLN w fazie finansowania ${startup.name}!`, 'review');
-    } else if (startup.stage === 'overfunding') {
-        startup.ipoPriceBonus += amount; // Wpłata idzie na bonus do ceny IPO
-        logEvent(`Zainwestowałeś ${amount.toFixed(2)} PLN w fazie 'overfunding' ${startup.name}, zwiększając jego wartość przy debiucie!`, 'review');
-    } else {
-        alert(`${startup.name} jest już w fazie rozwoju i nie przyjmuje inwestycji.`);
-        return;
-    }
-
-    // Transakcja i zapis w portfelu (wspólne dla obu etapów)
-    playerCash -= amount;
-    const sharesBought = amount / startup.price;
-    if (playerPortfolio[symbol]) {
-        playerPortfolio[symbol].investedAmount += amount;
-    } else {
-        playerPortfolio[symbol] = { investedAmount: amount, assetType: 'Startup', isInsured: false };
-    }
-
-    const playerName = "Ty (Gracz)";
-    startup.investors[playerName] = (startup.investors[playerName] || 0) + amount;
-
-    displayCash();
-    displayPortfolio();
     displayStartups(getCurrentStartupInputValues());
 }
 

@@ -1617,12 +1617,11 @@ function displayStartups(previousInputValues = {}) {
     const startupTableBody = document.getElementById('startup-table-body');
     if (!startupTableBody || !startupPanel) return;
 
-    if (!isSkillUnlocked('startupInvestor')) {
-        startupPanel.style.display = 'none';
-        return;
-    } else {
-        startupPanel.style.display = 'block';
-    }
+    // Inkubator: inwestuje fundusz (limit 10% aktywów); szkolenie „Anioł Biznesu” daje tylko bonusy.
+    startupPanel.style.display = FEATURE_FLAGS.startups ? 'block' : 'none';
+    if (!FEATURE_FLAGS.startups) return;
+    const limitInfo = document.getElementById('startup-fund-limit');
+    if (limitInfo) limitInfo.textContent = `Fundusz w startupach: ${getFundStartupExposure().toFixed(0)} zł z limitu ${(getFundAssets() * STARTUP_FUND_LIMIT).toFixed(0)} zł (${(STARTUP_FUND_LIMIT * 100).toFixed(0)}% aktywów).`;
 
     const startups = stocks.filter(s => s.assetType === 'Startup');
     startupTableBody.innerHTML = '';
@@ -5032,7 +5031,7 @@ function checkWorldInvariants() {
     const EPS = 1e-6;
 
     for (const stock of stocks) {
-        if (stock.isBankrupt) continue;
+        if (stock.isBankrupt || stock.assetType === 'Startup') continue; // startup: wycena po wpłatach, bez gotówki i akcji
         finite(stock.price, `cena ${stock.symbol}`);
         if (!(stock.price > 0)) problems.push(`cena ${stock.symbol} ≤ 0`);
         finite(stock.cash, `gotówka ${stock.symbol}`);
@@ -5050,6 +5049,7 @@ function checkWorldInvariants() {
     }
     const checkPortfolio = (portfolio, owner) => {
         for (const [symbol, holding] of Object.entries(portfolio || {})) {
+            if (holding.assetType === 'Startup') { finite(holding.investedAmount, `startup ${owner} ${symbol}`); continue; }
             finite(holding.shares, `akcje ${owner} ${symbol}`);
             if (holding.shares < -EPS) problems.push(`ujemne akcje ${owner} ${symbol}`);
             if ((holding.lockedShares || 0) > holding.shares + EPS) problems.push(`zastaw > posiadanych ${owner} ${symbol}`);

@@ -119,6 +119,7 @@ function buildSaveSnapshot() {
         corporation,
         mailbox,
         juMarket,
+        investmentPool,
         allBonds,
         activeBonds,
         cityInvestment,
@@ -364,6 +365,7 @@ function applySaveSnapshot(snapshot) {
     // Rynek JU i profile klientów (v8); starsze zapisy: migracja typów na charaktery.
     juMarket = snapshot.juMarket && Array.isArray(snapshot.juMarket.tape) ? { ...createJuMarket(), ...snapshot.juMarket } : createJuMarket();
     if (playerFund) playerFund.clients.forEach(ensureClientProfile);
+    if (snapshot.investmentPool && typeof snapshot.investmentPool === 'object') Object.assign(investmentPool, snapshot.investmentPool);
 
     // Obligacje (v7; wcześniej nie były zapisywane). Stare rekordy bez czasu gry migruje checkBondMaturities.
     allBonds.length = 0;

@@ -66,13 +66,13 @@ const CLIENT_FIRST_NAMES = ['Anna', 'Piotr', 'Maria', 'Tomasz', 'Ewa', 'Jan', 'K
 const CLIENT_LAST_INITIALS = ['K.', 'N.', 'W.', 'Z.', 'L.', 'M.', 'S.', 'B.', 'D.', 'P.'];
 const INSTITUTION_NAMES = ['Fundacja Rozwoju', 'Kasa Zapomogowa „Promyk”', 'Spółdzielnia Mieszkaniowa „Zacisze”', 'Fundusz Emerytalny Gminy', 'Stowarzyszenie Kupców'];
 
-// Startupy (inkubator, pula, oferty) są zamrożone do decyzji w ostatniej fazie.
+// Startupy: inwestuje tylko fundusz, do 10% aktywów (startups.js).
 const FEATURE_FLAGS = {
-    startups: false
+    startups: true
 };
 
 // Szkolenia ukryte (mechaniki wyłączone w etapie B).
-const HIDDEN_TRAININGS = ['startupInvestor', 'mediaManipulation']; // PR zostaje tylko dla botów
+const HIDDEN_TRAININGS = ['mediaManipulation']; // PR zostaje tylko dla botów
 
 let playerProfile = null;      // { name, corporation, fundName, country, positionId, startedAt, cv: [] }
 let playerFund = null;         // stan funduszu (patrz createPlayerFund)

@@ -707,6 +707,7 @@ function sellIndex(indexId, quantity) {
 function contributeToInvestmentPool(contributorId, amount) {
     // Walidacja dla gracza
     if (contributorId === 'player') {
+        if (!canFundInvestInStartups(amount)) return; // limit 10% aktywów funduszu
         if (isNaN(amount) || amount <= 0) {
             alert("Proszę wpisać poprawną kwotę.");
             return;
@@ -1292,34 +1293,6 @@ function setDividendPolicy(symbol, newPolicy) {
         if (document.getElementById('management-modal').style.display === 'block') {
             openManagementModal(symbol);
         }
-    }
-}
-
-function playerRescuesStartup(symbol, amount) {
-    const startup = stocks.find(s => s.symbol === symbol);
-    if (!startup || startup.stage !== 'financial_complications') return;
-    if (isNaN(amount) || amount <= 0) {
-        alert("Wpisz poprawną kwotę dofinansowania.");
-        return;
-    }
-    if (playerCash < amount) {
-        alert("Nie masz wystarczająco gotówki!");
-        return;
-    }
-
-    playerCash -= amount;
-    startup.rescueCurrent += amount;
-    logEvent(`[START-UP] hero Dofinansowałeś ${startup.name} kwotą ${amount.toFixed(2)} PLN!`);
-    displayCash();
-
-    // Sprawdź, czy cel został osiągnięty
-    if (startup.rescueCurrent >= startup.rescueGoal) {
-        showToast(`${startup.name} został uratowany! Przygotowuje się do debiutu.`, 'success', 4000);
-        logEvent(`[START-UP] ✅ Dzięki wsparciu inwestorów, ${startup.name} wchodzi na giełdę!`);
-        
-        // Uruchamiamy scenariusz "Debiut bez Echa"
-        const successMultiplier = getRandomInRange(1, 5);
-        handleSuccessfulIPO(startup, successMultiplier);
     }
 }
 

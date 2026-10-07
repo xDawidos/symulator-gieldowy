@@ -257,7 +257,8 @@ function aiSellStock(ai, symbol, quantity) {
     const holding = ai.portfolio[symbol];
 
     // Sprawdź, czy AI ma tę pozycję i czy ilość jest poprawna
-    if (!holding || holding.shares < quantity || quantity <= 0) return;
+    // Akcje w zastawie (lombard, hipoteka) nie mogą być sprzedane.
+    if (!holding || holding.shares - (holding.lockedShares || 0) < quantity || quantity <= 0) return;
 
     // Zabezpieczenie przed sprzedażą startupu
     if (holding.assetType === 'Startup') {
@@ -444,6 +445,7 @@ function processAiLoansWeekly(ai) {
                     const holding = ai.portfolio[loan.collateral.symbol];
                     if (holding) {
                         holding.shares = Math.max(0, holding.shares - loan.collateral.quantity);
+                        holding.lockedShares = Math.max(0, Math.min((holding.lockedShares || 0) - loan.collateral.quantity, holding.shares));
                         if (holding.shares <= 0) delete ai.portfolio[loan.collateral.symbol];
                     }
                     if (pawnShop) {

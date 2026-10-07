@@ -955,7 +955,7 @@ group('Fundusz gracza (etap B)', () => {
         assertNear(1000 - playerWallet.cash, cost, 'koszt w zł');
         assert(getTrainingMedal(getSkillLevel('ironNerves')).id === 'bronze', 'odznaka brązowa');
         skills.ironNerves.unlockedLevel = 0;
-        assert(!getAvailableTrainings().includes('work') && !getAvailableTrainings().includes('startupInvestor'), 'ukryte szkolenia');
+        assert(!getAvailableTrainings().includes('mediaManipulation') && getAvailableTrainings().includes('startupInvestor'), 'ukryte i odkryte szkolenia');
     });
 
     test('zapis v4 zachowuje NAV, JU, klientów, okresy i portfel prywatny', () => {
@@ -1629,6 +1629,79 @@ group('Klienci z charakterami i rynek JU (etap F1) + nowe spółki (F4)', () => 
         const report = applySaveSnapshot(snapshot);
         assert(report.ok && juMarket.week === 1, 'rynek JU');
         assert(playerFund.clients[0].type === 'careful' && playerFund.clients[1].type === 'brave' && playerFund.clients[1].loyal, 'migracja typów');
+    });
+});
+
+group('Startupy funduszu (etap F2)', () => {
+    function worldF2() {
+        const a = makeCompany('AAA', { cash: 600_000, fixedAssets: 800_000 });
+        a.insiderShares = 0; a.sharesHeld = 0; a.reputation = { player: 0 };
+        resetWorld([a]);
+        allBonds.length = 0;
+        commercialBanks.length = 0;
+        investmentPool.playerStakes = {};
+        marketIndexes.find(index => index.id === 'GIG').value = 100;
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        playerCash = 100000; // aktywa ~100 tys. → limit startupów ~10 tys.
+        const startup = generateNewStartup();
+        startup.isScam = false;
+        startup.investors = {};
+        stocks.push(startup);
+        return { startup };
+    }
+
+    test('limit: fundusz inwestuje w startupy najwyżej 10% aktywów', () => {
+        const { startup } = worldF2();
+        const cap = getFundStartupCapacity();
+        assert(cap > 9000 && cap < 11000, `limit ${cap}`);
+        assert(investInStartup(startup.symbol, 5000), 'inwestycja w limicie');
+        assert(!investInStartup(startup.symbol, cap), 'ponad limit — odmowa');
+        assertNear(getFundStartupExposure(), 5000, 'ekspozycja');
+    });
+
+    test('IPO: udziały wszystkich inwestorów znormalizowane, akcje w obrocie ≤ wszystkich', () => {
+        const { startup } = worldF2();
+        investInStartup(startup.symbol, 5000);
+        const ai = aiCompetitors[0];
+        ai.portfolio[startup.symbol] = { investedAmount: 3000, assetType: 'Startup' };
+        handleSuccessfulIPO(startup, 3);
+        assert(!startup.assetType && startup.exchange === 'BRONZE', 'debiut');
+        assert(startup.sharesHeld <= startup.totalShares, 'udziały ≤ 100%');
+        const playerPct = playerPortfolio[startup.symbol].shares / startup.totalShares;
+        assertNear(playerPct, STARTUP_INVESTORS_SHARE * 5000 / 8000, 'udział funduszu', 0.01);
+        assert(ai.portfolio[startup.symbol].shares > 0, 'bot dostał akcje');
+        delete ai.portfolio[startup.symbol];
+    });
+
+    test('komplikacje: zebranie kwoty ratunkowej kończy się debiutem, ratunek liczy się jako inwestycja', () => {
+        const { startup } = worldF2();
+        startup.stage = 'financial_complications';
+        startup.rescueGoal = 1000;
+        startup.rescueCurrent = 0;
+        startup.rescueTimeLeft = 60000;
+        assert(playerRescuesStartup(startup.symbol, 1000), 'ratunek');
+        assert(!startup.assetType && playerPortfolio[startup.symbol]?.shares > 0, 'debiut z akcjami funduszu');
+    });
+
+    test('prywatyzacja: zwrot dla innych inwestorów, gwarantowany sukces, premia w inwestycji', () => {
+        const { startup } = worldF2();
+        startup.fundingGoal = 5000;
+        skills.startupInvestor.unlockedLevel = 5;
+        const ai = aiCompetitors[0];
+        ai.portfolio[startup.symbol] = { investedAmount: 700, assetType: 'Startup' };
+        const aiCash = ai.cash;
+        assert(privatizeStartup(startup.symbol), 'prywatyzacja');
+        skills.startupInvestor.unlockedLevel = 0;
+        assert(ai.cash === aiCash + 700 && !ai.portfolio[startup.symbol], 'zwrot dla bota');
+        assert(startup.successChance === 1 && !startup.isScam, 'sukces gwarantowany');
+        assertNear(playerPortfolio[startup.symbol].investedAmount, 6000, 'premia 20% w inwestycji');
+    });
+
+    test('inkubator utrzymuje minimalną liczbę startupów (czas gry)', () => {
+        worldF2();
+        stocks = stocks.filter(s => s.assetType !== 'Startup');
+        maintainStartupCount();
+        assert(stocks.filter(s => s.assetType === 'Startup').length >= MINIMUM_STARTUPS, 'nowe startupy');
     });
 });
 
