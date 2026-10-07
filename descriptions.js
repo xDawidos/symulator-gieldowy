@@ -69,11 +69,6 @@ const researchInstituteDescriptions = ["Jesteśmy inkubatorem innowacji. Nie pro
 
 // --- 2. LOGIKA GENERATORÓW ---
 
-function getRandomElement(arr) {
-    if (!arr || arr.length === 0) return "";
-    return arr[Math.floor(Math.random() * arr.length)];
-}
-
 function assignCeoTraits(ceo) {
     // Sprawdzenie, czy baza danych cech jest dostępna
     if (typeof ceoTraits === 'undefined' || Object.keys(ceoTraits).length === 0) {

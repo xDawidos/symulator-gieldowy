@@ -513,11 +513,6 @@
             <p style="font-size: 12px; color: #666;">Twoje oferty w tej aukcji:</p>
             <ul id="player-collateral-bids" style="font-size: 12px; max-height: 60px; overflow-y: auto;"></ul>
         </div>
-        <div id="license-section" class="bank-section">
-            <h4>Licencje Giełdowe</h4>
-            <p id="license-info-text"></p>
-            <button id="buy-license-btn" onclick="buyExchangeLicense()" style="display: none;">Kup licencję</button>
-        </div>
         </div>
 
     <div id="bank-content-commercial" class="bank-tab-content" style="display: none;">
@@ -796,73 +791,7 @@
          <button onclick="document.getElementById('description-modal').style.display='none';" style="display: block; margin: 20px auto 0 auto;">Zamknij</button>
     </div>
 
-    <div id="work-modal" style="display:none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 450px; border: 2px solid #28a745; background-color: #f9f9f9; box-shadow: 0 4px 8px rgba(0,0,0,0.2); padding: 20px; z-index: 1008; border-radius: 8px;">
-        <h2 style="margin-top: 0; text-align: center;">✍️ Panel Pracy</h2>
-         <div id="active-work-panel">
-             <p style="text-align: center;">Klikaj na numerki w poprawnej kolejności (od 1 do 10).</p>
-             <p style="text-align: center;">Następny numer: <strong id="next-number-info">1</strong></p>
-             <div id="work-grid" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 20px 0;"></div>
-             <button id="start-work-btn" onclick="startWorkMinigame()">Rozpocznij nowe zadanie</button>
-         </div>
-         <hr id="work-separator" style="display: none;">
-         <div id="passive-work-panel" style="display: none;">
-             <h4>Dochód Pasywny</h4>
-             <p>Twoja pensja jest przygotowywana... (100 PLN co 90 sekund)</p>
-             <progress id="passive-work-progress" value="0" max="100"></progress>
-             <p>Gotowe do odbioru: <strong id="passive-reward-info">0</strong> PLN</p>
-             <button id="collect-reward-btn" onclick="collectPassiveWorkReward()" disabled>Odbierz</button>
-         </div>
-         <div id="company-panel" style="display: none;">
-             <h3 id="company-name" style="text-align: center;">Twoja Firma</h3>
-             <div style="display: flex; justify-content: space-around; margin-bottom: 15px; border-bottom: 1px dashed #ccc; padding-bottom: 10px;">
-                 <div>Wartość firmy: <strong id="company-value">0</strong> PLN</div>
-                 <div>Dochód (cykl): <strong id="company-income">0</strong> PLN</div>
-             </div>
 
-             <div class="bank-section">
-                 <h4>Pracownicy (<span id="employee-count">0</span>)</h4>
-                 <ul id="employee-list" style="max-height: 150px; overflow-y: auto; list-style: none; padding: 0;">
-                     </ul>
-                 <button onclick="openHireModal()">Zatrudnij</button> </div>
-
-             <div class="bank-section">
-                 <h4>Sprzęt (<span id="equipment-count">0</span> / <span id="employee-slots-for-equipment">0</span> miejsc)</h4>
-                 <ul id="equipment-list" style="list-style: none; padding: 0; font-size: 13px;">
-                     </ul>
-                  <select id="equipment-select" style="margin-right: 5px;">
-                      </select>
-                 <button onclick="buySelectedEquipment()">Kup Wybrany Sprzęt</button>
-             </div>
-
-             <div class="bank-section">
-                 <h4>Dział HR (Poziom <span id="hr-level">0</span>/10)</h4>
-                 <p>Redukcja pensji: <strong id="hr-salary-reduction">0%</strong></p>
-                 <p id="hr-upgrade-cost-p">Koszt ulepszenia: <strong id="hr-upgrade-cost"></strong> PLN</p>
-                 <button id="upgrade-hr-btn" onclick="upgradeHR()">Ulepsz HR</button>
-                 <p style="font-size: 11px; color: #6c757d; margin-top: 5px;">Lepszy HR pomaga rekrutować, oceniać i obniżać koszty pracowników.</p>
-             </div>
-
-             <hr>
-             <input type="number" id="company-invest-amount" placeholder="Kwota doinwestowania">
-             <button onclick="investInCompany()">Zainwestuj</button>
-             <hr>
-             <button onclick="startRandomSpecialMinigame()">Wykonaj zadanie specjalne (Bonus)</button>
-             <hr>
-             <button id="ipo-btn" onclick="triggerIPO()" disabled>Wprowadź firmę na giełdę! (Wartość min. 25k)</button>
-         </div>
-         <button onclick="document.getElementById('work-modal').style.display='none';" style="display: block; margin: 15px auto 0 auto;">Zamknij</button>
-    </div>
-
-    <div id="minigame-modal" class="modal" style="display:none;">
-        <div id="minigame-content">
-             <h3 id="minigame-title">Zadanie: Zmotywuj pracownika!</h3>
-             <p id="minigame-instruction">Przeciągnij go z powrotem do biurka!</p>
-             <div id="minigame-area">
-                 <img src="img/face.png" id="draggable-employee" draggable="true">
-                 <img src="img/desk.png" id="dropzone-desk">
-             </div>
-         </div>
-    </div>
 
     <div id="dividend-tracker-modal" class="modal" style="display: none;">
         <div class="modal-header">
@@ -999,27 +928,7 @@
          </div>
     </div>
 
-    <div id="hire-employee-modal" class="modal" style="display:none; width: 600px;">
-        <button class="close-btn" onclick="document.getElementById('hire-employee-modal').style.display='none';">&times;</button>
-        <h3 style="margin-top: 0; text-align: center;">Zatrudnij Pracownika</h3>
-        <p style="text-align: center; font-size: 12px;">Wybierz rodzaj umowy, aby zobaczyć kandydatów.</p>
-        <div style="text-align: center; margin-bottom: 15px;">
-            <button onclick="generateCandidates('permanent')">Szukaj na Umowę o Pracę</button>
-            <button onclick="generateCandidates('mandate')">Szukaj na Umowę Zlecenie</button>
-        </div>
-        <div id="candidate-list" style="display: flex; gap: 15px; justify-content: center;">
-            </div>
-    </div>
 
-    <div id="money-stacker-modal" class="modal" style="display: none;">
-        <button class="close-btn" onclick="stopMoneyStackerGame()">&times;</button>
-         <h3>Wieża z Pieniędzy</h3>
-         <div id="stacker-ui-container">
-             <p>Wynik: <strong id="stacker-score">0</strong> PLN</p>
-             <p>Wysokość: <strong id="stacker-height">0</strong></p>
-         </div>
-         <div id="stacker-game-area"></div>
-    </div>
 
     <div id="startup-offer-modal" class="modal" style="display:none;">
         <h2 id="startup-offer-title">Otrzymałeś Ofertę Specjalną!</h2>
@@ -1074,58 +983,8 @@
          </table>
     </div>
 
-    <div id="commercial-loan-modal" class="modal" style="display: none; width: 450px;">
-        <button class="close-btn" onclick="closeInteractionModal()">&times;</button>
-        <h3 id="commercial-loan-title">Weź Kredyt Komercyjny</h3>
-        <div class="bank-section">
-            <p>Bank: <strong id="commercial-loan-bank-name"></strong></p>
-            <p>Oprocentowanie (roczne): <strong id="commercial-loan-rate"></strong>%</p>
-            <p>Maksymalna kwota: <strong id="commercial-loan-limit"></strong> PLN</p>
-            <label for="commercial-loan-amount">Kwota kredytu:</label>
-            <input type="number" id="commercial-loan-amount" placeholder="Wpisz kwotę...">
-            <button id="take-commercial-loan-btn">Weź Kredyt</button>
-        </div>
-        <div class="bank-section">
-            <h4>Twoje istniejące kredyty:</h4>
-            <ul id="existing-loans-list" style="font-size: 12px; max-height: 100px; overflow-y: auto;"></ul>
-        </div>
-    </div>
 
-    <div id="commercial-deposit-modal" class="modal" style="display: none; width: 450px;">
-        <button class="close-btn" onclick="closeInteractionModal()">&times;</button>
-        <h3 id="commercial-deposit-title">Złóż Depozyt Komercyjny</h3>
-        <div class="bank-section">
-            <p>Bank: <strong id="commercial-deposit-bank-name"></strong></p>
-            <p>Oprocentowanie (roczne): <strong id="commercial-deposit-rate"></strong>%</p>
-            <p>Posiadasz w tym banku: <strong id="commercial-deposit-existing"></strong> PLN</p>
-            <label for="commercial-deposit-amount">Kwota wpłaty/wypłaty:</label>
-            <input type="number" id="commercial-deposit-amount" placeholder="Wpisz kwotę...">
-            <button id="make-commercial-deposit-btn">Wpłać</button>
-            <button id="withdraw-commercial-deposit-btn">Wypłać</button>
-        </div>
-    </div>
 
-    <div id="mortgage-modal" class="modal" style="display: none; width: 500px;">
-        <button class="close-btn" onclick="closeInteractionModal()">&times;</button>
-        <h3 id="mortgage-title">Weź Kredyt Hipoteczny</h3>
-        <div class="bank-section">
-            <p>Bank: <strong id="mortgage-bank-name"></strong></p>
-            <p>Oprocentowanie (roczne): <strong id="mortgage-rate"></strong>%</p>
-            <p>Wybierz akcje na zastaw:</p>
-            <select id="mortgage-collateral-select" style="width: 100%; margin-bottom: 10px;"></select>
-            <div>
-                <label for="mortgage-collateral-quantity">Ilość akcji:</label>
-                <input type="number" id="mortgage-collateral-quantity" min="1" value="1" style="width: 80px;">
-                <span style="margin-left: 10px;">Wartość zastawu: <strong id="mortgage-collateral-value">0.00</strong> PLN</span>
-            </div>
-            <hr style="margin: 10px 0;">
-            <div>
-                <label for="mortgage-loan-amount">Kwota pożyczki (max 50% wartości zastawu):</label>
-                <input type="number" id="mortgage-loan-amount" placeholder="Wpisz kwotę...">
-                <button id="take-mortgage-loan-btn">Weź Hipotekę</button>
-            </div>
-        </div>
-    </div>
 
     <div id="sell-shares-to-bank-modal" class="modal" style="display: none; width: 450px;">
         <button class="close-btn" onclick="closeInteractionModal()">&times;</button>
@@ -1194,52 +1053,20 @@
     </div>
 </div>
 
-<div id="debt-offer-modal" class="modal" style="display:none; width: 450px; border-color: #ffc107;">
-    <button class="close-btn" onclick="declineDebtOffer()">&times;</button>
-    <h3 id="debt-offer-title" style="margin-top: 0; color: #856404;">Propozycja Przejęcia Długu!</h3>
-    <div class="modal-body">
-        <p id="debt-offer-message" style="font-size: 14px; line-height: 1.5;">...Wiadomość z ofertą...</p>
-        <p style="font-size: 12px; color: #dc3545; font-weight: bold;">Uwaga: Przejęcie długu przez tę firmę wiąże się ze znacznie wyższym oprocentowaniem w przyszłości!</p>
-        <div id="debt-offer-options" style="display: flex; justify-content: space-around; margin-top: 20px;">
-            <button id="debt-offer-accept-btn" style="background-color: #28a745; color: white;">Tak, spłaćcie mój dług bankowy</button>
-            <button id="debt-offer-decline-btn" style="background-color: #dc3545; color: white;">Nie, dziękuję</button>
-        </div>
-    </div>
-</div>
 
-<div id="pawn-offer-modal" class="modal" style="display:none; width: 450px; border-color: #28a745;">
-    <button class="close-btn" onclick="declinePawnOffer()">&times;</button>
-    <h3 id="pawn-offer-title" style="margin-top: 0; color: #155724;">Oferta Pożyczki Lombardowej!</h3>
-    <div class="modal-body">
-        <p id="pawn-offer-message" style="font-size: 14px; line-height: 1.5;">...Wiadomość z ofertą pożyczki...</p>
-        <p style="font-size: 12px; color: #dc3545; font-weight: bold;">Uwaga: Jeśli nie spłacisz pożyczki w terminie, zastawione akcje przepadną na rzecz lombardu!</p>
-        <div id="pawn-offer-options" style="display: flex; justify-content: space-around; margin-top: 20px;">
-            <button id="pawn-offer-accept-btn" style="background-color: #28a745; color: white;">Tak, zastawiam akcje i biorę gotówkę</button>
-            <button id="pawn-offer-decline-btn" style="background-color: #dc3545; color: white;">Nie, dziękuję</button>
-        </div>
-    </div>
-</div>
 
 <!-- Modal Lombardu -->
 <div id="pawnshop-modal" class="modal" style="display:none; width: 480px; border-color: #28a745;">
     <button class="close-btn" onclick="document.getElementById('pawnshop-modal').style.display='none'">&times;</button>
     <h3 style="margin-top: 0; color: #155724;">🏦 Lombard – LOMBARDEX S.A.</h3>
-    <div class="modal-body">
-        <div id="pawnshop-status" style="padding: 10px; background: #f8f9fa; border-radius: 5px; margin-bottom: 10px;"></div>
-        <div id="pawnshop-inventory-section" style="padding: 10px; background: #fff7e6; border-radius: 5px; margin-bottom: 10px; font-size: 14px; color: #333;"></div>
-        <div id="pawnshop-loans-list" style="max-height: 200px; overflow-y: auto;"></div>
-        <div id="pawnshop-collateral-section" style="border-top: 2px dashed #dc3545; margin-top: 12px; padding-top: 10px;"></div>
-    </div>
+    <div class="modal-body" id="pawnshop-body"></div>
 </div>
 
 <!-- Modal Windykatora -->
 <div id="debtcollector-modal" class="modal" style="display:none; width: 480px; border-color: #ffc107;">
     <button class="close-btn" onclick="document.getElementById('debtcollector-modal').style.display='none'">&times;</button>
     <h3 style="margin-top: 0; color: #856404;">⚠️ Windykator – WRONA</h3>
-    <div class="modal-body">
-        <div id="debtcollector-status" style="padding: 10px; background: #f8f9fa; border-radius: 5px; margin-bottom: 10px;"></div>
-        <div id="debtcollector-debts-list" style="max-height: 200px; overflow-y: auto;"></div>
-    </div>
+    <div class="modal-body" id="debtcollector-body"></div>
 </div>
 
     <div id="chart-tooltip" style="display: none; position: absolute;"></div>
@@ -1273,20 +1100,6 @@
           <div id="mail-list" class="mail-list"></div>
           <div class="mail-preview-wrap">
             <div id="mail-preview" class="mail-preview"></div>
-      <div id="media-influence-section" class="bank-section" style="display: none; margin-top: 15px;">
-        <h4 style="margin-top: 0; text-align: center;">Kontrola Mediów</h4>
-        <div id="positive-pr-controls" style="display: none;">
-          <label for="positive-pr-select">Pozytywny PR</label>
-          <select id="positive-pr-select" style="max-width: 150px;"></select>
-          <button id="positive-pr-btn" onclick="playerBuyPositivePR()">Kup (10 000 PLN)</button>
-        </div>
-        <div id="black-pr-controls" style="display: none; margin-top: 10px;">
-          <label for="black-pr-select">Czarny PR</label>
-          <select id="black-pr-select" style="max-width: 150px;"></select>
-          <button id="black-pr-btn" onclick="playerBuyBlackPR()">Kup (25 000 PLN)</button>
-          <p style="font-size: 11px; color: #dc3545; margin: 5px 0 0 0;">Ryzyko wykrycia: <strong id="black-pr-risk-display">10%</strong></p>
-        </div>
-      </div>
           </div>
         </div>
       </div>
@@ -1372,7 +1185,6 @@
     <script src="city.js"></script>
     <script src="finance.js"></script>
     <script src="events.js"></script>
-    <script src="minigames.js"></script>
     <script src="chart.js"></script>
     <script src="ui.js"></script>
     <script src="save.js"></script>

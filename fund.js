@@ -63,16 +63,13 @@ const CLIENT_FIRST_NAMES = ['Anna', 'Piotr', 'Maria', 'Tomasz', 'Ewa', 'Jan', 'K
 const CLIENT_LAST_INITIALS = ['K.', 'N.', 'W.', 'Z.', 'L.', 'M.', 'S.', 'B.', 'D.', 'P.'];
 const INSTITUTION_NAMES = ['Fundacja Rozwoju', 'Kasa Zapomogowa „Promyk”', 'Spółdzielnia Mieszkaniowa „Zacisze”', 'Fundusz Emerytalny Gminy', 'Stowarzyszenie Kupców'];
 
-// Mechaniki wyłączone w etapie B (kod zostaje do decyzji w etapie D/E).
+// Startupy (inkubator, pula, oferty) są zamrożone do decyzji w ostatniej fazie.
 const FEATURE_FLAGS = {
-    playerCompany: false,   // własna firma gracza i praca pasywna
-    minigames: false,       // zamrożone
-    privateLoans: false,    // prywatne kredyty, depozyty, hipoteka gracza
-    startups: false,        // inkubator, pula, oferty startupów
+    startups: false
 };
 
 // Szkolenia ukryte (mechaniki wyłączone w etapie B).
-const HIDDEN_TRAININGS = ['work', 'startupInvestor'];
+const HIDDEN_TRAININGS = ['startupInvestor', 'mediaManipulation']; // PR zostaje tylko dla botów
 
 let playerProfile = null;      // { name, corporation, fundName, country, positionId, startedAt, cv: [] }
 let playerFund = null;         // stan funduszu (patrz createPlayerFund)
@@ -206,7 +203,6 @@ function startNewCareer(profile = {}) {
 
     playerCash = FUND_START_CASH;
     for (const symbol of Object.keys(playerPortfolio)) delete playerPortfolio[symbol];
-    playerXP = 0;
     playerWallet = createPlayerWallet(GRANDMA_POCKET_MONEY);
     activeTradingAccount = 'fund';
 

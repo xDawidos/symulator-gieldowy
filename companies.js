@@ -1,13 +1,11 @@
 
 let currentCollateralAuction = null; // { stockSymbol, quantity, minPrice, endTime, bids: [] }
-let currentPawnOffer = null;
 // Nowa globalna tablica na spółki miejskie (nienotowane na giełdzie)
 let municipalCompanies = [];
 let privateCompanies = [];
 const MINIMUM_STARTUPS = 3; 
 const TARGET_STARTUPS = 5;
 let currentBankIPOOffer = null;
-let currentDebtOffer = null;
 // cechy prezesów
 const ceoTraits = {
     // === CECHY POSPOLITE (COMMON) ===
@@ -2234,13 +2232,6 @@ function processFinancialReports() {
         } else if (stock.assetType === 'DebtCollector') {
             // WRONA zarabia na odsetkach od przejętych długów
             let totalInterestCollected = 0;
-            // Sprawdź długi gracza
-            playerCommercialLoans.forEach(loan => {
-                if (loan.collectorSymbol === stock.symbol) {
-                    const weeklyInterest = loan.amount * (loan.interestRate / 52);
-                    totalInterestCollected += weeklyInterest * 12; // 12 tygodni w kwartale
-                }
-            });
             // Sprawdź długi AI
             aiCompetitors.forEach(ai => {
                 if (ai.loans) {
@@ -3308,7 +3299,6 @@ function handleSuccessfulIPO(startup, successMultiplier) {
 }
 
 function buyStartupInsurance(symbol) {
-    if (isPlayerInDefault()) return; // <-- DODAJ TĘ LINIĘ
     const holding = playerPortfolio[symbol];
     if (!holding || holding.assetType !== 'Startup') return;
 
@@ -3475,7 +3465,6 @@ function generateNewStartup() {
 * @param {string} symbol Symbol start-upu do sprywatyzowania.
 */
 function privatizeStartup(symbol) {
-    if (isPlayerInDefault()) return; // <-- DODAJ TĘ LINIĘ
     if (getSkillLevel('startupInvestor') < 5) {
         alert("Musisz osiągnąć 5 poziom 'Anioła Biznesu', aby prywatyzować start-upy!");
         return;
@@ -3650,7 +3639,6 @@ function updateStartupAutoInvestTimers(deltaTime) {
  * @param {string} symbol Symbol start-upu.
  */
 function payExtraStartupCost(symbol) {
-    if (isPlayerInDefault()) return; // <-- DODAJ TĘ LINIĘ
     const startup = stocks.find(s => s.symbol === symbol);
     if (!startup || !startup.pendingExtraCost) return;
 
@@ -3672,7 +3660,6 @@ function payExtraStartupCost(symbol) {
 
 function investInStartup(symbol, amount) {
     if (!FEATURE_FLAGS.startups) { if (typeof showToast === 'function') showToast('Inwestycje w startupy są tymczasowo wyłączone.', 'default'); return; } // wyłączone w etapie B
-    if (isPlayerInDefault()) return; // <-- DODAJ TĘ LINIĘ
 
     if (typeof amount !== 'number' || isNaN(amount) || amount <= 0) {
         // Jeśli nie jest, spróbuj pobrać wartość bezpośrednio z inputa jako ostateczność
@@ -4362,191 +4349,6 @@ function initiateMergerProcess(initiatorStock, targetStock, type, financing = 'c
     return true;
 }
 
-function findMajorityShareholder(stock) {
-    let majorityOwner = null;
-    let maxShares = 0;
-
-    // Sprawdź gracza
-    if (playerPortfolio[stock.symbol]) {
-        const shares = playerPortfolio[stock.symbol].shares;
-        if (shares > maxShares) {
-            maxShares = shares;
-            majorityOwner = { id: 'player', name: 'Ty (Gracz)' };
-        }
-    }
-
-    // Sprawdź AI
-    aiCompetitors.forEach(ai => {
-        if (ai.portfolio[stock.symbol]) {
-            const shares = ai.portfolio[stock.symbol].shares;
-            if (shares > maxShares) {
-                maxShares = shares;
-                majorityOwner = ai;
-            }
-        }
-    });
-
-    // Wymóg > 50%
-    if (maxShares > stock.totalShares * 0.5) {
-        return majorityOwner;
-    }
-    return null;
-}
-
-function resolveComplicationDecision(stockSymbol, optionId) {
-    const stock = stocks.find(s => s.symbol === stockSymbol);
-    if (!stock || !stock.mergerProcess || !stock.mergerProcess.decisionRequired) return;
-
-    const process = stock.mergerProcess;
-    const decisionData = process.decisionRequired;
-    const chosenOption = decisionData.options.find(opt => opt.id === optionId);
-
-    if (chosenOption) {
-        console.log(`[M&A Decision] Wybrano: ${chosenOption.text}`);
-        chosenOption.consequence();
-    }
-    
-    // Czyścimy flagę decyzji
-    stock.mergerProcess.decisionRequired = null;
-    const partner = stocks.find(s => s.symbol === process.partnerSymbol);
-    if(partner && partner.mergerProcess) partner.mergerProcess.decisionRequired = null;
-}
-
-function handleTakeoverAcceptance(acquirer, target, buyoutPrice) {
-    // Logika akceptacji przejęcia
-    const processData = {
-        type: 'przejęcie',
-        stage: 7, // Skok do finału
-        progress: 100,
-        partnerSymbol: target.symbol,
-        initiatorSymbol: acquirer.symbol,
-        costs: 0,
-        offerDetails: {
-            buyoutPricePerShare: buyoutPrice,
-            totalCost: buyoutPrice * target.totalShares,
-            premium: 0
-        },
-        financing: 'cash' // Zakładamy gotówkę przy akceptacji oferty AI
-    };
-    
-    // Ustawiamy proces, aby resolveMerger mógł go obsłużyć
-    acquirer.mergerProcess = processData;
-    target.mergerProcess = { ...processData, partnerSymbol: acquirer.symbol };
-    
-    resolveMerger(acquirer, target, processData);
-}
-
-function handleTakeoverRejection(acquirer, target) {
-    logEvent(`❌ ${target.name} odrzuca ofertę przejęcia złożoną przez ${acquirer.name}.`, 'company');
-    // Ewentualnie: obniżenie relacji
-    changeReputation(acquirer.id || 'player', target.symbol, -15);
-}
-
-function triggerHostileTakeoverEvent() {
-    // To jest trigger eventu losowego, gdzie AI próbuje przejąć inną spółkę (lub gracza)
-    // Używamy funkcji checkForPotentialMA z companies.js, która to obsługuje
-    checkForPotentialMA();
-}
-
-function triggerBankIPOEvent() {
-    if (currentBankIPOOffer) return;
-    
-    const inactiveBanks = commercialBanks.filter(b => !b.isActive);
-    if (inactiveBanks.length === 0) return;
-    
-    const bankToIPO = getRandomElement(inactiveBanks);
-    const ipoValuation = bankToIPO.initialCapital * getRandomInRange(1.1, 1.5);
-    const ipoSharePrice = getRandomInRange(50, 150);
-    const ipoTotalShares = Math.floor(ipoValuation / ipoSharePrice);
-    
-    const sharesOfferedToPlayer = Math.floor(ipoTotalShares * 0.05); // 5% dla gracza
-    const offerPrice = ipoSharePrice * 0.9; // 10% zniżki
-    const offerCost = sharesOfferedToPlayer * offerPrice;
-
-    currentBankIPOOffer = {
-        bank: bankToIPO,
-        symbol: `BK${bankToIPO.id.toUpperCase()}`,
-        ipoSharePrice: ipoSharePrice,
-        ipoTotalShares: ipoTotalShares,
-        sharesOffered: sharesOfferedToPlayer,
-        offerPrice: offerPrice,
-        offerCost: offerCost
-    };
-
-    // Wywołaj UI (bezpiecznie)
-    if (typeof openBankIPOOfferModal === 'function') {
-        const message = `Nowy bank "${bankToIPO.name}" wchodzi na giełdę! <br> Kup 5% udziałów (${sharesOfferedToPlayer} akcji) za ${offerCost.toFixed(2)} PLN?`;
-        openBankIPOOfferModal(message);
-    }
-}
-
-function resolveBankIPO(decision) {
-    if (!currentBankIPOOffer) return;
-    const offer = currentBankIPOOffer;
-    
-    if (decision === 'accept') {
-        // Logika w player.js (buyStock) lub tutaj bezpośrednio:
-        if (playerCash >= offer.offerCost) {
-            playerCash -= offer.offerCost;
-            if (!playerPortfolio[offer.symbol]) {
-                playerPortfolio[offer.symbol] = { shares: 0, avgPrice: 0, assetType: 'stock' };
-            }
-            playerPortfolio[offer.symbol].shares += offer.sharesOffered;
-            playerPortfolio[offer.symbol].avgPrice = offer.offerPrice; // Uproszczone uśrednianie
-            logEvent(`✅ Kupiłeś akcje w IPO banku ${offer.bank.name}.`, 'success');
-        } else {
-            logEvent(`❌ Brak środków na IPO banku ${offer.bank.name}.`, 'error');
-        }
-    }
-    
-    // Aktywacja banku i dodanie na giełdę
-    offer.bank.isActive = true;
-    const newStock = createBankStockObject(offer.bank); // Funkcja już jest w companies.js
-    if (newStock) {
-        stocks.push(newStock);
-    }
-    
-    currentBankIPOOffer = null;
-    if (typeof closeBankIPOOfferModal === 'function') closeBankIPOOfferModal();
-    if (typeof displayStocks === 'function') displayStocks();
-}
-
-function triggerRescueOfferingEvent() {
-    // Znajdź spółkę w kłopotach
-    const troubledStocks = stocks.filter(s => !s.assetType && !s.isBankrupt && s.balanceSheet.liabilities > s.balanceSheet.assets * 0.7);
-    if (troubledStocks.length === 0) return;
-    
-    const target = getRandomElement(troubledStocks);
-    // Sprawdź czy gracz ma akcje
-    const playerHasShares = playerPortfolio[target.symbol] && playerPortfolio[target.symbol].shares > 0;
-    
-    const sharesToIssue = Math.floor(target.totalShares * 0.2); // Emisja 20%
-    const price = target.price * 0.7; // 30% zniżki
-    const totalCost = sharesToIssue * price;
-    
-    const offerDetails = {
-        targetCompany: target,
-        sharesOffered: sharesToIssue,
-        promotionalPrice: price,
-        totalCost: totalCost,
-        cashRaisedSoFar: 0,
-        sharesBoughtSoFar: 0
-    };
-    
-    if (playerHasShares) {
-        // Wywołaj UI
-        if (typeof openRescueOfferingModal === 'function') openRescueOfferingModal(offerDetails);
-    } else {
-        // Symuluj AI (uproszczone)
-        aiCompetitors.forEach(ai => {
-             const bought = aiDecideOnRescueOffer(ai, offerDetails);
-             offerDetails.sharesBoughtSoFar += bought;
-             offerDetails.cashRaisedSoFar += bought * price;
-        });
-        finalizeRescueOffering(target, offerDetails.cashRaisedSoFar, offerDetails.sharesBoughtSoFar);
-    }
-}
-
 function triggerMergerMiniEvent(stock1, stock2, process) {
     const isPositive = Math.random() < 0.5; // 50% szans na pozytywny event
 
@@ -4744,50 +4546,6 @@ function checkAntitrust(stock1, stock2) {
 
 // operacje bankowe
 
-function processBankStartupSponsorship() {
-    const activeBanks = commercialBanks.filter(b => b.isActive && (b.type === BANK_TYPES.INVESTMENT || b.type === BANK_TYPES.UNIVERSAL));
-    if (activeBanks.length === 0) return;
-
-    const potentialStartups = stocks.filter(s => s.assetType === 'Startup' && s.stage === 'funding' && !s.isPrivatized && !s.isScamDetected);
-    if (potentialStartups.length === 0) return;
-
-    activeBanks.forEach(bank => {
-        // Niska szansa (np. 2%) w każdym cyklu tygodniowym na próbę sponsorowania
-        if (Math.random() < 0.02 && bank.cash > 50000) { // Bank musi mieć trochę gotówki
-            const targetStartup = getRandomElement(potentialStartups);
-            const investmentAmount = getRandomIntInRange(5000, 20000); // Kwota sponsorowania
-
-            if (bank.cash >= investmentAmount) {
-                bank.cash -= investmentAmount;
-                targetStartup.currentFunding += investmentAmount;
-
-                // Bank pojawia się na liście fundatorów
-                targetStartup.investors[bank.name] = (targetStartup.investors[bank.name] || 0) + investmentAmount;
-
-                // Bank otrzymuje "prawo do udziałów" (zapisujemy kwotę)
-                if (!bank.startupInvestments) bank.startupInvestments = {};
-                bank.startupInvestments[targetStartup.symbol] = (bank.startupInvestments[targetStartup.symbol] || 0) + investmentAmount;
-
-                // Zwiększ szansę na sukces startupu
-                const successChanceBonus = (investmentAmount / targetStartup.fundingGoal) * 0.03; // Mniejszy bonus niż od gracza/AI
-                targetStartup.successChance += successChanceBonus;
-                if (targetStartup.successChance > 1) targetStartup.successChance = 1;
-
-                // Zwiększ szansę na wrogie przejęcie w przyszłości (jeśli wejdzie na giełdę)
-                if (!targetStartup.acquisitionTargetChance) targetStartup.acquisitionTargetChance = 0;
-                targetStartup.acquisitionTargetChance += 0.05; // +5% szansy
-
-                logEvent(`🏦 Bank ${bank.name} sponsoruje startup ${targetStartup.name} kwotą ${investmentAmount.toLocaleString()} PLN!`, 'market');
-                
-                // Odśwież widok startupów, jeśli otwarty
-                if (document.getElementById('startup-incubator-panel').style.display === 'block') {
-                    displayStartups(getCurrentStartupInputValues());
-                }
-            }
-        }
-    });
-}
-
 function runDebtCollectorAI() {
     const collectors = stocks.filter(s => s.assetType === 'DebtCollector' && !s.isBankrupt && s.cash > 20000); // Musi mieć gotówkę
     if (collectors.length === 0) return;
@@ -4795,13 +4553,6 @@ function runDebtCollectorAI() {
     // Zbierz wszystkie potencjalne długi (tylko bankowe z problemami)
     const potentialDebts = [];
     
-    // Długi Gracza
-    playerCommercialLoans.forEach(loan => {
-        if (loan.bankId && (loan.missedPayments || 0) > 0) { // Tylko długi bankowe z pominiętymi ratami
-            potentialDebts.push({ entity: 'player', loan: loan });
-        }
-    });
-
     // Długi AI
     aiCompetitors.forEach(ai => {
         if (ai.loans) {
@@ -4842,22 +4593,8 @@ function createDebtTakeoverOffer(collectorStock, targetEntity, loan) {
 
     loan.offerCooldown = Date.now() + offerCooldownTime; // Ustaw cooldown, aby nie spamować
 
-    if (targetEntity === 'player') {
-        // Sprawdź, czy gracz nie ma już innej oferty
-        if (currentDebtOffer) return; 
-        
-        // Zapisz ofertę globalnie, aby przyciski UI wiedziały, co robić
-        currentDebtOffer = {
-            collectorSymbol: collectorStock.symbol,
-            loanId: loan.id,
-            newInterestRate: newInterestRate
-        };
-        // Otwórz modal w UI
-        openDebtOfferModal(collectorStock, loan, newInterestRate);
-    } else {
-        // To jest AI, wywołaj logikę decyzyjną AI
-        aiDecideOnDebtOffer(targetEntity, collectorStock, loan, newInterestRate);
-    }
+    if (targetEntity === 'player') return; // gracz nie ma prywatnych kredytów (fundusz: finance.js)
+    aiDecideOnDebtOffer(targetEntity, collectorStock, loan, newInterestRate);
 }
 
 function runPawnShopAI() {
@@ -4867,25 +4604,7 @@ function runPawnShopAI() {
     // Zbierz potencjalnych klientów (Gracz i AI, którzy mają kłopoty LUB cenne akcje)
     const potentialClients = [];
     
-    // Sprawdź Gracza
-    const playerNetWorth = calculateNetWorth('player');
-    const playerCashRatio = playerCash / playerNetWorth;
-    const playerHasDebt = playerCommercialLoans.some(l => (l.missedPayments || 0) > 0);
-    if (FEATURE_FLAGS.privateLoans && (playerCashRatio < 0.1 || playerHasDebt)) { // fundusz: zastaw w panelu (finance.js)
-        for (const symbol in playerPortfolio) {
-            const holding = playerPortfolio[symbol];
-            // Szukaj wartościowych, niezablokowanych akcji
-            if (holding.shares > 0 && !holding.assetType && !holding.lockedShares) {
-                const stock = stocks.find(s => s.symbol === symbol);
-                if (stock && stock.price * holding.shares > 1000) { // Jeśli pakiet jest wart > 1000 PLN
-                    potentialClients.push({ entity: 'player', stockToPawn: stock, holding: holding });
-                    break; // Wystarczy jedna oferta na raz dla gracza
-                }
-            }
-        }
-    }
-
-    // Sprawdź AI
+    // Klienci: tylko boty (zastaw funduszu gracza: finance.js)
     aiCompetitors.forEach(ai => {
         const aiNetWorth = calculateNetWorth(ai);
         const aiCashRatio = ai.cash / aiNetWorth;
@@ -4940,23 +4659,8 @@ function createPawnLoanOffer(pawnShop, targetEntity, stockToPawn, holding, loanA
     stockToPawn.pawnOfferCooldown[entityId] = now + offerCooldownTime;
 
 
-    if (targetEntity === 'player') {
-        if (currentPawnOffer) return; // Już jest aktywna oferta dla gracza
-        
-        currentPawnOffer = {
-            pawnShopSymbol: pawnShop.symbol,
-            targetStockSymbol: stockToPawn.symbol,
-            quantity: quantity,
-            loanAmount: loanAmount,
-            newInterestRate: newInterestRate,
-            durationWeeks: durationWeeks
-        };
-        // Otwórz modal w UI
-        openPawnOfferModal(pawnShop, stockToPawn, quantity, loanAmount, newInterestRate, durationWeeks);
-    } else {
-        // To jest AI
-        aiDecideOnPawnOffer(targetEntity, pawnShop, stockToPawn, quantity, loanAmount, newInterestRate, durationWeeks);
-    }
+    if (targetEntity === 'player') return;
+    aiDecideOnPawnOffer(targetEntity, pawnShop, stockToPawn, quantity, loanAmount, newInterestRate, durationWeeks);
 }
 
 /**
@@ -5333,114 +5037,9 @@ function buySharesFromInvestmentBank(bankId, symbol) {
     renderCommercialBanksList(); // Odśwież listę banków, bo zmieniła się dostępność akcji
 }
 
-function takeMortgageLoan(bankId, collateralSymbol, collateralQuantity, requestedAmount) {
-    if (!FEATURE_FLAGS.privateLoans) { if (typeof showToast === 'function') showToast('Zarządca funduszu nie zaciąga prywatnych kredytów ani lokat.', 'default'); return; } // wyłączone w etapie B
-    const bank = commercialBanks.find(b => b.id === bankId && b.type === BANK_TYPES.MORTGAGE);
-    const stock = stocks.find(s => s.symbol === collateralSymbol && !s.assetType);
-    const holding = playerPortfolio[collateralSymbol];
-
-    if (!bank || !bank.isActive) {
-        alert("Wybrany bank jest nieaktywny lub nie obsługuje hipotek."); return;
-    }
-    if (!stock) {
-        alert("Wybrano nieprawidłowe akcje jako zastaw."); return;
-    }
-    
-    // SCALONO: Poprawiona walidacja sprawdzająca 'lockedShares'
-    const availableShares = holding ? holding.shares - (holding.lockedShares || 0) : 0;
-    if (!holding || availableShares < collateralQuantity) {
-        alert(`Nie posiadasz wystarczającej liczby *dostępnych* akcji ${collateralSymbol} (dostępne: ${availableShares}).`); return;
-    }
-    
-    if (isNaN(requestedAmount) || requestedAmount <= 0) {
-        alert("Wprowadź poprawną kwotę pożyczki."); return;
-    }
-    // Sprawdź, czy gracz nie jest w stanie niewypłacalności
-    if (isPlayerInDefault && isPlayerInDefault()) {
-         alert("Nie możesz wziąć hipoteki, mając niespłacone zobowiązania!");
-         return;
-    }
-
-    const collateralValue = stock.price * collateralQuantity;
-    const maxLoanAmount = collateralValue * 0.5; // Max 50% wartości zastawu
-
-    if (requestedAmount > maxLoanAmount) {
-        alert(`Maksymalna kwota pożyczki pod ten zastaw to ${maxLoanAmount.toFixed(0)} PLN.`); return;
-    }
-    if (requestedAmount > bank.cash * 0.1) { // Bank nie pożyczy więcej niż 10% swojej gotówki na raz
-        alert(`Bank ${bank.name} nie może udzielić tak wysokiej hipoteki w tym momencie.`); return;
-    }
-
-    // Parametry pożyczki hipotecznej
-    const interestRate = bank.interestRateLoan * 1.1; // Hipoteka ma wyższe ryzyko dla banku
-    const loanDurationWeeks = 52; // Hipoteka na rok
-    const maturityDate = Date.now() + (loanDurationWeeks * BASE_DELAYS.weekly / currentSpeedMultiplier);
-    const weeklyRate = interestRate / 52;
-    const weeklyPayment = requestedAmount * (weeklyRate * Math.pow(1 + weeklyRate, loanDurationWeeks)) / (Math.pow(1 + weeklyRate, loanDurationWeeks) - 1);
-
-    // Transakcja
-    playerCash += requestedAmount;
-    bank.cash -= requestedAmount;
-    if (!bank.loanPortfolio['player']) bank.loanPortfolio['player'] = [];
-    bank.loanPortfolio['player'].push({ id: `mort_${Date.now()}`, initialAmount: requestedAmount, remainingAmount: requestedAmount, interestRate: interestRate, collateral: { symbol: collateralSymbol, quantity: collateralQuantity } });
-
-
-    // Zapisz pożyczkę u gracza
-    const newLoan = {
-        id: `mort_${Date.now()}`,
-        bankId: bankId,
-        bankName: bank.name,
-        initialAmount: requestedAmount,
-        amount: requestedAmount,
-        interestRate: interestRate,
-        weeklyPayment: weeklyPayment,
-        maturityDate: maturityDate,
-        collateral: { symbol: collateralSymbol, quantity: collateralQuantity }
-    };
-    playerCommercialLoans.push(newLoan);
-
-    // Zablokuj zastawione akcje (dodajemy nową właściwość do portfela)
-    if (!holding.lockedShares) holding.lockedShares = 0;
-    holding.lockedShares += collateralQuantity;
-
-    logEvent(` Zaciągnięto kredyt hipoteczny ${requestedAmount.toFixed(0)} PLN w ${bank.name} pod zastaw ${collateralQuantity} ${collateralSymbol}.`, 'review');
-    displayCash();
-    displayPortfolio();
-    closeInteractionModal();
-}
-
 function checkMortgageDefaults() {
     const now = Date.now();
     let auctionStartedThisCycle = false; // Flaga, aby uruchomić max jedną aukcję na cykl
-
-    // Sprawdź hipoteki gracza
-    for (let i = playerCommercialLoans.length - 1; i >= 0; i--) {
-        const loan = playerCommercialLoans[i];
-        // Sprawdź, czy to hipoteka, termin minął i nie jest spłacona
-        if (loan.collateral && now >= loan.maturityDate && loan.amount > 0.01) {
-            logEvent(`⏰ Termin spłaty Twojej hipoteki pod zastaw ${loan.collateral.quantity} ${loan.collateral.symbol} minął! Akcje trafiają na aukcję.`, 'warning');
-            showToast(`Niespłacona hipoteka! Akcje ${loan.collateral.symbol} trafiają na aukcję!`, 'error', 8000);
-
-            // Uruchom aukcję (ta funkcja sama usuwa akcje z portfela)
-            startCollateralAuction('player', loan.collateral.symbol, loan.collateral.quantity);
-
-            // Usuń niespłaconą pożyczkę z listy gracza
-            playerCommercialLoans.splice(i, 1);
-
-            // Znajdź i usuń pożyczkę z portfela banku
-            const bank = commercialBanks.find(b => b.id === loan.bankId);
-            if (bank && bank.loanPortfolio['player']) {
-                const bankLoanIndex = bank.loanPortfolio['player'].findIndex(bl => bl.id === loan.id);
-                if (bankLoanIndex !== -1) {
-                    bank.loanPortfolio['player'].splice(bankLoanIndex, 1);
-                }
-            }
-
-            auctionStartedThisCycle = true; // Uruchomiono aukcję
-            displayPortfolio(); // Odśwież portfel od razu
-            break; // Tylko jedna aukcja na cykl
-        }
-    }
 
     // --- 👇 ZAKTUALIZOWANA LOGIKA: Sprawdź hipoteki AI 👇 ---
     if (!auctionStartedThisCycle) { // Sprawdzaj AI tylko, jeśli gracz nie stracił akcji w tym cyklu
@@ -5959,7 +5558,6 @@ function checkResearchInstitutePositions() {
 }
 
 function unlockResearchTier(symbol, tierName, cost) {
-    if (isPlayerInDefault()) return; // <-- DODAJ TĘ LINIĘ
     const stock = stocks.find(s => s.symbol === symbol);
     let finalCost = cost;
     const playerRep = stock.reputation['player'];
@@ -5986,7 +5584,6 @@ function unlockResearchTier(symbol, tierName, cost) {
 }
 
 function fundResearch(symbol) {
-    if (isPlayerInDefault()) return; // <-- DODAJ TĘ LINIĘ
     const stock = stocks.find(s => s.symbol === symbol);
     const amountInput = document.getElementById('rd-funding-amount');
     const amount = amountInput.valueAsNumber;
@@ -6247,24 +5844,6 @@ function updateCeoTenureAndAge() {
             }
         }
     });
-}
-
-function replaceCeo(stock, newCeo) {
-    const oldCeo = stock.ceo;
-
-    // 1. Sprawdź cechy starego prezesa
-    if (oldCeo && oldCeo.traits.some(t => t.id === 'kapitalista') && stock.treasuryShares > 0) {
-        const soldShares = stock.treasuryShares;
-        stock.treasuryShares = 0; // Akcje wracają na rynek (zwiększając free float)
-        
-        // Aplikujemy mały, negatywny wpływ na cenę
-        applyPriceEffect(stock.symbol, -0.01, 'negative', 'company');
-        logEvent(`[CEO] Po odejściu prezesa-kapitalisty, ${stock.name} sprzedaje ${soldShares.toLocaleString('pl-PL')} akcji własnych, co lekko obniża kurs.`, 'review');
-    }
-
-    // 2. Przypisz nowego prezesa
-    newCeo.tenure = 0; // Upewnij się, że nowy prezes ma zerowy staż w firmie
-    stock.ceo = newCeo;
 }
 
 function makeSubsidiary(parentStock, childStock) {
@@ -6995,11 +6574,8 @@ function executePawnLoan(targetEntity, pawnShop, targetStock, quantity, loanAmou
         isPawnLoan: true // Specjalna flaga
     };
 
-    if (targetEntity === 'player') playerCommercialLoans.push(newLoan);
-    else {
-        if (!targetEntity.loans) targetEntity.loans = [];
-        targetEntity.loans.push(newLoan);
-    }
+    if (!targetEntity.loans) targetEntity.loans = [];
+    targetEntity.loans.push(newLoan);
 
     // 4. Zablokuj akcje dłużnika
     if (!holding.lockedShares) holding.lockedShares = 0;
@@ -7050,14 +6626,7 @@ function executeDebtTransfer(collectorStock, targetEntity, loan, newInterestRate
 
     const entityName = (targetEntity === 'player') ? "Twój" : `Bota ${targetEntity.name}`;
     logEvent(`🔔 ${collectorStock.name} przejął ${entityName} dług w wysokości ${loan.amount.toFixed(2)} PLN. Nowe oprocentowanie: ${(newInterestRate * 100).toFixed(1)}%.`, 'review');
-    
-    if(targetEntity === 'player') {
-        showToast("Twój dług został przejęty przez windykatora!", 'warning');
-        displayPortfolio(); // Odśwież listę pasywów
-        if(document.getElementById('commercial-loan-modal')?.style.display === 'block') {
-            openCommercialLoanModal(bank ? bank.id : null); // Odśwież modal banku
-        }
-    }
+
 }
 
 function findBestLenderBank(initiator, loanAmount) {

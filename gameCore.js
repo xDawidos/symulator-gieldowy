@@ -20,7 +20,6 @@ let isGamePaused = true;
 let currentlyDisplayedChartSymbol = null;
 let playerAccessLevel = 0; // Poziom dostępu do giełd
 let currentSortState = 'none'; // 'none', 'price_asc', 'price_desc'
-let isAutoRepayEnabled = true;
 let lastWeekStockPrices = {};
 
 
@@ -54,6 +53,7 @@ const PREMIUM_SUBSCRIPTION_COST = 5000;
 const PREMIUM_SUBSCRIPTION_DURATION = 1000 * 60 * 60 * 24 * 7; 
 const BLACK_PR_BASE_RISK = 0.10; 
 const BLACK_PR_RISK_INCREASE = 0.025; 
+let blackPRRiskCounter = 0; // każdy czarny PR botów zwiększa szansę wykrycia kolejnych
 
 // --- Funkcje Pomocnicze (Helpers) ---
 

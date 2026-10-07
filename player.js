@@ -3,12 +3,7 @@ console.log('[diag] player.js loaded');
 // Gotówka i portfel FUNDUSZU zarządzanego przez gracza (ustawiane w fund.js → startNewCareer).
 // Prywatne pieniądze gracza: playerWallet (fund.js).
 let playerCash = 0;
-let playerXP = 0; // nieużywane (XP zastąpione szkoleniami za pieniądze)
 let playerPortfolio = {};
-let playerCommercialLoans = [];
-let playerCommercialDeposits = [];
-let playerCompany = null;
-let workPassiveProgress = 0;
 let investmentPool = {
     totalFunds: 0,
     contributors: {}, // Przechowuje wkłady, np. { 'player': 5000, 'ai1': 2000 }
@@ -34,18 +29,10 @@ let city = {
     playerHasUnlocked: false
 };
 let festival = null;
-let playerDeposit = 0;
 let nextFestivalCountdown = 0; 
 let activeModifiers = [];
-let blackPRRiskCounter = 0; 
 const BASE_SKILL_COST = 100;
 const SKILL_COST_INCREASE_FACTOR = 0.75;
-const EMPLOYEE_BASE_SALARY = 100; // Bazowy tygodniowy koszt pracownika
-const EQUIPMENT_TYPES = { // Definicje typów sprzętu (można rozbudować)
-    'basic_chair': { name: "Ergonomiczne Krzesło", purchaseCost: 300, runningCostMin: 5, runningCostMax: 15, moraleBoost: 0.5, bonusType: 'comfort', bonusValue: 0.01 }, // Np. lekko zmniejsza spadek morale
-    'good_computer': { name: "Dobry Komputer", purchaseCost: 1500, runningCostMin: 15, runningCostMax: 40, moraleBoost: 1.0, bonusType: 'performance', bonusValue: 0.03 }, // Np. lekko zwiększa wydajność
-    'coffee_machine': { name: "Ekspres do Kawy", purchaseCost: 800, runningCostMin: 20, runningCostMax: 50, moraleBoost: 1.5, bonusType: 'morale_regen', bonusValue: 0.02 } // Np. lekko zwiększa regenerację morale
-};
 
 const FESTIVAL_STALL_LEVELS = [
     { level: 1, name: "Miejsce", cost: 1000 },
@@ -66,8 +53,6 @@ const PROMOTION_ACTIONS = {
 let playerChartSettings = { type: 'candlestick', lineInterval: 1000, candleInterval: 15000 };
 let playerAutoInvest = { isEnabled: false, amount: 100, interval: 30000, timer: 30000 };
 let playerStartupAutoInvest = {};
-let playerLoan = { amount: 0, weeklyPayment: 0, missedPayments: 0 };
-let activePlayerBankBonuses = [];
 
 // --- Umiejętności ---
 const skills = {
@@ -81,16 +66,6 @@ const skills = {
         ]
     },
 
-    'work': {
-        name: 'Praca ✍️',
-        unlockedLevel: 0,
-        levels: [
-            { level: 1, cost: 100, description: 'Odblokowuje panel Pracy, gdzie możesz wykonywać proste zadania za pieniądze.' },
-            { level: 2, cost: 250, description: 'Zadania stają się łatwiejsze, a nagroda wzrasta do 200 PLN.' },
-            { level: 3, cost: 600, description: 'Odblokowuje pracę pasywną (100 PLN co 90 sek.)' },
-            { level: 4, cost: 1200, name: 'Własna Firma', description: 'Zakładasz własną firmę! Rozwijaj ją, zatrudniaj pracowników i wprowadź na giełdę.' }
-        ]
-    },
 
     'analyticalMind': {
         name: 'Analityczny Umysł 🧠',
@@ -296,32 +271,7 @@ function getNextSkillLevelInfo(skillId) {
 
 // --- Funkcje Gracza ---
 
-function calculateNetWorth(entity) {
-    // Gracz: aktywa zarządzanego funduszu (gotówka + portfel + obligacje).
-    if (entity === 'player' && typeof playerFund !== 'undefined' && playerFund) return getFundAssets();
-    let value = (entity === 'player') ? playerCash : entity.cash;
-    const portfolio = (entity === 'player') ? playerPortfolio : entity.portfolio;
-    for (const symbol in portfolio) {
-        const holding = portfolio[symbol];
-        if (holding.assetType === 'Startup') {
-            value += holding.investedAmount; // Uproszczona wycena startupu
-        } else {
-            const marketData = stocks.find(s => s.symbol === symbol) || etfs.find(e => e.symbol === symbol) || marketIndexes.find(i => i.id === symbol);
-            if (marketData) {
-                value += (marketData.price || marketData.value || 0) * holding.shares;
-            }
-        }
-    }
-    
-    const bonds = (entity === 'player') ? allBonds.filter(b => b.ownerId === 'player') : (entity.tBills || []); 
-    
-    value += bonds.length * 1000; 
-
-    return value;
-}
-
 function buyStock(symbol, quantity) {
-    if (isPlayerInDefault && isPlayerInDefault()) return; 
     quantity = Math.floor(Number(quantity));
     if (!(quantity > 0)) return;
     // Konto prywatne gracza (fund.js); domyślnie handluje fundusz (playerCash/playerPortfolio).
@@ -470,7 +420,6 @@ function sellStock(symbol, quantity) {
     const totalGainNet = totalGain - taxToPay; // Przychód netto po podatku
 
     if (xpGained > 0) {
-        playerXP += xpGained;
         displayXP();
     }
 
@@ -505,7 +454,6 @@ function sellAllShares(symbol) {
 }
 
 function buyEtf(symbol, quantity) {
-    if (isPlayerInDefault()) return; // <-- DODAJ TĘ LINIĘ
     if (getSkillLevel('etfExpert') === 0) { // POPRAWKA WARUNKU
         alert("Musisz odblokować umiejętność 'Ekspert Rynków Globalnych', aby handlować funduszami ETF!");
         return;
@@ -611,7 +559,6 @@ function sellEtf(symbol, quantity) {
     const totalGainNet = totalGain - taxToPay; // Przychód netto po podatku
 
     if (xpGained > 0) {
-        playerXP += xpGained;
         displayXP();
     }
 
@@ -630,7 +577,6 @@ function sellEtf(symbol, quantity) {
 }
 
 function buyIndex(indexId, quantity) {
-    if (isPlayerInDefault()) return; // <-- DODAJ TĘ LINIĘ
     // Sprawdzenie, czy gracz ma odblokowaną umiejętność Poziomu 2
     if (getSkillLevel('indexAnalystLvl1') < 2) {
         alert("Musisz odblokować umiejętność 'Makler Indeksowy' (Analityk Indeksowy poz. 2), aby handlować indeksami!");
@@ -737,7 +683,6 @@ function sellIndex(indexId, quantity) {
     const totalGainNet = totalGain - taxToPay;// Przychód netto po podatku
 
     if (xpGained > 0) {
-        playerXP += xpGained;
         displayXP();
     }
 
@@ -755,368 +700,6 @@ function sellIndex(indexId, quantity) {
     checkPlayerTierUpgrade(); // Sprawdzenie awansu gracza
 }
 
-function upgradeHR() {
-    if (!playerCompany) return;
-    if (playerCompany.hrLevel >= 10) return;
-
-    const cost = 5000 * Math.pow(1.5, playerCompany.hrLevel); // Przykładowy koszt
-    
-    if (playerCash >= cost) {
-        playerCash -= cost;
-        playerCompany.hrLevel++;
-        logEvent(`🏢 Dział HR ulepszony do poziomu ${playerCompany.hrLevel}.`, 'success');
-        displayCash();
-        if (typeof openWorkModal === 'function') openWorkModal(); // Odśwież UI
-    } else {
-        alert("Brak środków na ulepszenie HR.");
-    }
-}
-
-// ZASTĄP ISTNIEJĄCĄ FUNKCJĘ updateCompanyStatus PONIŻSZĄ WERSJĄ (Z POPRAWKĄ PODATKOWĄ):
-function updateCompanyStatus() {
-    if (getSkillLevel('work') < 4 || playerCompany === null) return;
-
-    const now = Date.now();
-    if (now - playerCompany.lastIncomeTime >= playerCompany.incomeInterval) {
-        let incomeBeforeTax = 0;
-        let workingEmployeesCount = 0;
-
-        // 1. Oblicz przychód z pracowników
-        playerCompany.employees.forEach(employee => {
-            if (employee.status === 'working') {
-                workingEmployeesCount++;
-                const effectivePerformance = employee.performance * (0.8 + employee.morale / 250);
-                // Bonusy ze sprzętu
-                let equipmentPerformanceBonus = 1.0;
-                playerCompany.equipment.forEach(eq => {
-                     if (eq.bonusType === 'performance') {
-                         equipmentPerformanceBonus += eq.bonusValue * eq.quantity / Math.max(1, playerCompany.employees.length);
-                     }
-                });
-                
-                incomeBeforeTax += playerCompany.baseIncomePerEmployee * effectivePerformance * equipmentPerformanceBonus;
-            }
-        });
-
-        // 2. === POPRAWKA PODATKOWA ===
-        let taxToPay = 0;
-        const sanEscobarLvl = getSkillLevel('sanEscobar');
-        const rates = TAX_RATES.companyIncome; // Pobierz z economy.js
-
-        let taxRate = 0;
-        // Sprawdź progi (zakładamy, że rates[1] to wyższy próg)
-        if (incomeBeforeTax > rates[1].threshold) {
-            taxRate = rates[1].rate;
-        } else {
-            taxRate = rates[0].rate;
-        }
-
-        // Skill Lvl 2 "Firma w Raju" znosi podatek dochodowy firmy
-        if (sanEscobarLvl >= 2) {
-            taxRate = 0;
-        }
-
-        taxToPay = incomeBeforeTax * taxRate;
-        governmentTreasury += taxToPay;
-        // ===========================
-
-        const incomeAfterTax = incomeBeforeTax - taxToPay;
-        playerCash += incomeAfterTax;
-        playerCompany.lastIncomeTime = now;
-        
-        // Zaktualizuj wartość firmy (uproszczona wycena)
-        const estimatedAnnualIncome = incomeAfterTax * ( (BASE_DELAYS.quarterly * 4) / playerCompany.incomeInterval );
-        playerCompany.value = playerCompany.cashInvested + (estimatedAnnualIncome * 1.5) + (playerCompany.employees.length * 1000);
-
-        logEvent(`🏢 Twoja firma wygenerowała ${incomeAfterTax.toFixed(2)} PLN zysku netto (Podatek: ${taxToPay.toFixed(2)} PLN).`, 'review');
-        displayCash();
-        
-        // Odśwież UI jeśli otwarte
-        if (typeof openWorkModal === 'function' && document.getElementById('work-modal').style.display === 'block') {
-             // Tu można by wywołać odświeżenie konkretnych elementów
-        }
-    }
-}
-
-function foundPlayerCompany() {
-    if (!FEATURE_FLAGS.playerCompany) { if (typeof showToast === 'function') showToast('Własna firma jest wyłączona — pracujesz w korporacji.', 'default'); return; } // wyłączone w etapie B
-    if (playerCompany === null && getSkillLevel('work') >= 4) { // Sprawdźmy poziom umiejętności
-        playerCompany = {
-            name: "Twoja Firma", // Można pozwolić graczowi zmienić
-            value: 0,
-            employees: [], // ---> ZMIANA: Teraz to tablica obiektów <---
-            equipment: [], // ---> NOWOŚĆ: Tablica obiektów sprzętu <---
-            cashInvested: 0,
-            baseIncomePerEmployee: 100, // Zmieniono nazwę dla jasności
-            incomeInterval: 90000,
-            lastIncomeTime: Date.now(),
-            hrLevel: 0 // ---> NOWOŚĆ: Poziom HR <---
-        };
-        logEvent('🏢 Gratulacje! Założyłeś Własną Firmę!', 'review');
-        // Od razu zatrudnijmy pierwszego pracownika (placeholder)
-        // hireEmployee('initial'); // Wywołamy to po zdefiniowaniu funkcji
-    }
-}
-
-function hireEmployee(source = 'manual') { // source może być 'initial' lub 'manual'
-    if (!playerCompany) return;
-
-    // Na razie prosty koszt zatrudnienia (później zastąpiony pierwszym wynagrodzeniem)
-    const hiringCost = source === 'initial' ? 0 : 500; // Pierwszy pracownik darmowy
-
-    if (source !== 'initial' && playerCash < hiringCost) {
-        alert(`Nie stać Cię na zatrudnienie nowego pracownika (koszt: ${hiringCost} PLN).`);
-        return;
-    }
-    if (source !== 'initial') playerCash -= hiringCost;
-
-    const newEmployee = {
-        id: Date.now() + Math.random(), // Proste unikalne ID
-        name: generateEmployeeName(),
-        performance: getRandomInRange(0.75, 1.25), // Wydajność 75% - 125% normy
-        salary: EMPLOYEE_BASE_SALARY * (0.8 + Math.random() * 0.4), // Pensja +/- 20% od bazy
-        morale: getRandomIntInRange(60, 80), // Startowe morale
-        status: 'working', // 'working', 'vacation', 'sick'
-        contractType: Math.random() < 0.7 ? 'permanent' : 'mandate', // Domyślnie 70% na stałe
-        vacationEnds: 0 // Kiedy kończy się urlop
-    };
-
-    playerCompany.employees.push(newEmployee);
-    logEvent(`👨‍💼 Zatrudniono nowego pracownika: ${newEmployee.name} (Wydajność: ${Math.round(newEmployee.performance*100)}%).`);
-    if (source !== 'initial') displayCash();
-
-    // Odśwież UI firmy
-    if (document.getElementById('work-modal')?.style.display === 'block') {
-        openWorkModal();
-    }
-}
-
-function generateEmployeeName() {
-    const isFemale = Math.random() < 0.5;
-    const firstName = isFemale ? getRandomElement(femaleFirstNames) : getRandomElement(maleFirstNames);
-    const lastNameInitial = getRandomElement(ceoLastNames).charAt(0) + ".";
-    return `${firstName} ${lastNameInitial}`;
-}
-
-/** Funkcja do zatrudniania (na razie uproszczona, bez wyboru kontraktu) */
-
-
-/** Funkcja do zwalniania pracownika */
-function fireEmployee(employeeId, quit = false) { // quit=true oznacza, że sam odchodzi
-    if (!playerCompany) return;
-    const index = playerCompany.employees.findIndex(emp => emp.id === employeeId);
-    if (index === -1) return;
-
-    const firedEmployee = playerCompany.employees.splice(index, 1)[0];
-
-    if (quit) {
-        logEvent(`🚶 Pracownik ${firedEmployee.name} odszedł z firmy z powodu niskiego morale.`);
-        showToast(`${firedEmployee.name} odchodzi z firmy!`, 'warning');
-        // Brak dodatkowych kar za odejście
-    } else {
-        logEvent(`🔥 Zwolniono pracownika: ${firedEmployee.name}. Pozostali pracownicy są zaniepokojeni.`);
-        // Kara do morale dla pozostałych
-        applyMoralePenalty(playerCompany.employees, 5); // Np. -5 morale
-        // Można dodać koszt odprawy
-        const severancePay = firedEmployee.salary * 2; // Np. 2 tygodnie pensji
-        if (playerCash >= severancePay) {
-            playerCash -= severancePay;
-            logEvent(`💸 Wypłacono ${severancePay.toFixed(2)} PLN odprawy dla ${firedEmployee.name}.`);
-        } else {
-            logEvent(`🚨 Brak środków na pełną odprawę dla ${firedEmployee.name}! Morale spada jeszcze bardziej!`);
-            applyMoralePenalty(playerCompany.employees, 5); // Dodatkowa kara
-        }
-        displayCash();
-    }
-
-
-    // Odśwież UI firmy
-    if (document.getElementById('work-modal')?.style.display === 'block') {
-        openWorkModal();
-    }
-}
-
-function buyEquipment(equipmentId, quantity = 1) {
-    if (!playerCompany || quantity <= 0) return;
-    const equipmentData = EQUIPMENT_TYPES[equipmentId];
-    if (!equipmentData) {
-        alert("Nieznany typ sprzętu!");
-        return;
-    }
-
-    // Sprawdzenie limitu: nie więcej sprzętu niż pracowników
-    const totalEquipment = playerCompany.equipment.reduce((sum, eq) => sum + eq.quantity, 0);
-    if (totalEquipment + quantity > playerCompany.employees.length) {
-        alert("Nie możesz mieć więcej sprzętu niż pracowników!");
-        return;
-    }
-
-    const totalCost = equipmentData.purchaseCost * quantity;
-    if (playerCash < totalCost) {
-        alert(`Nie masz wystarczająco gotówki! Potrzebujesz ${totalCost.toFixed(2)} PLN.`);
-        return;
-    }
-
-    playerCash -= totalCost;
-
-    // Dodaj sprzęt do firmy
-    const existingEquipment = playerCompany.equipment.find(eq => eq.id === equipmentId);
-    if (existingEquipment) {
-        existingEquipment.quantity += quantity;
-    } else {
-        playerCompany.equipment.push({
-            id: equipmentId,
-            name: equipmentData.name,
-            quantity: quantity,
-            runningCostMin: equipmentData.runningCostMin,
-            runningCostMax: equipmentData.runningCostMax,
-            bonusType: equipmentData.bonusType,
-            bonusValue: equipmentData.bonusValue,
-            moraleBoost: equipmentData.moraleBoost
-        });
-    }
-
-    logEvent(`🛒 Zakupiono ${quantity} szt. sprzętu "${equipmentData.name}" dla firmy za ${totalCost.toFixed(2)} PLN.`);
-    displayCash();
-    // Odśwież UI firmy, jeśli otwarte
-    if (document.getElementById('work-modal')?.style.display === 'block') {
-        openWorkModal();
-    }
-}
-
-function updateAllEmployeeMorale() {
-    if (!playerCompany || playerCompany.employees.length === 0) return;
-
-    const employeeCount = playerCompany.employees.length;
-    const totalEquipment = playerCompany.equipment.reduce((sum, eq) => sum + eq.quantity, 0);
-    // Stosunek sprzętu do pracowników (idealnie 1 sprzęt na 5 pracowników = 0.2)
-    const equipmentRatio = employeeCount > 0 ? totalEquipment / employeeCount : 0;
-    const idealRatio = 0.2;
-    // Bonus/Kara za sprzęt: od -10 (brak sprzętu) do +10 (dużo sprzętu)
-    const equipmentMoraleEffect = (equipmentRatio - idealRatio) * 50;
-
-    // Bonus za sprzęt specjalny (np. ekspres do kawy)
-    let specialEquipmentBonus = 0;
-    playerCompany.equipment.forEach(eq => {
-         if (eq.bonusType === 'morale_regen' || eq.bonusType === 'comfort') {
-             specialEquipmentBonus += eq.moraleBoost * eq.quantity;
-         }
-    });
-    // Rozłóż bonus równo na pracowników (ale nie więcej niż +5 na głowę)
-    specialEquipmentBonus = Math.min(5, specialEquipmentBonus / employeeCount);
-
-
-    playerCompany.employees.forEach(employee => {
-        let moraleChange = 0;
-
-        // Wpływ sprzętu ogólnego
-        moraleChange += equipmentMoraleEffect / 10; // Rozłożony na 10 "tygodni"
-
-        // Wpływ sprzętu specjalnego
-        moraleChange += specialEquipmentBonus / 10;
-
-        // Lekki spadek morale z czasem (zmęczenie)
-        moraleChange -= 0.5;
-
-        // Losowy czynnik
-        moraleChange += getRandomInRange(-0.5, 0.5);
-
-        // Zastosuj zmianę morale
-        employee.morale += moraleChange;
-        employee.morale = Math.max(0, Math.min(100, employee.morale)); // Ogranicz 0-100
-
-        // Szansa na urlop (jeśli morale < 30) lub chorobowe (jeśli < 15)
-        if (employee.status === 'working' && employee.morale < 30 && Math.random() < 0.02) {
-             employee.status = 'vacation';
-             const vacationDuration = getRandomIntInRange(1, 2) * BASE_DELAYS.weekly / currentSpeedMultiplier; // 1-2 tyg urlopu
-             employee.vacationEnds = Date.now() + vacationDuration;
-             logEvent(`🏖️ Pracownik ${employee.name} bierze urlop z powodu niskiego morale.`);
-        } else if (employee.status === 'working' && employee.morale < 15 && Math.random() < 0.03) {
-             employee.status = 'sick';
-             const sickDuration = getRandomIntInRange(1, 3) * BASE_DELAYS.weekly / currentSpeedMultiplier; // 1-3 tyg L4
-             employee.vacationEnds = Date.now() + sickDuration; // Używamy tego samego pola
-             logEvent(`ố Pracownik ${employee.name} idzie na zwolnienie lekarskie.`);
-        }
-
-        // Sprawdzenie końca urlopu/chorobowego
-        if (employee.status !== 'working' && Date.now() > employee.vacationEnds) {
-             logEvent(`✅ Pracownik ${employee.name} wraca do pracy.`);
-             employee.status = 'working';
-             employee.vacationEnds = 0;
-        }
-
-        // Ryzyko odejścia (jeśli morale bardzo niskie)
-        if (employee.status === 'working' && employee.morale < 10 && Math.random() < 0.05) {
-            fireEmployee(employee.id, true); // true oznacza, że sam odchodzi
-            // Pętla forEach może mieć problem, jeśli usuniemy element - lepiej użyć pętli for od końca
-        }
-    });
-}
-
-function updatePassiveWork(deltaTime) {
-    if (getSkillLevel('work') >= 3 && workPassiveProgress < PASSIVE_WORK_INTERVAL) {
-        workPassiveProgress += deltaTime;
-    }
-}
-
-function collectPassiveWorkReward() {
-    if (workPassiveProgress >= PASSIVE_WORK_INTERVAL) {
-        playerCash += 100;
-        workPassiveProgress = 0; // Resetuj postęp
-        logEvent('✍️ Odebrano pasywny dochód w wysokości 100 PLN.', 'review');
-        displayCash();
-
-        // Odśwież widok panelu, jeśli jest otwarty
-        if (document.getElementById('work-modal').style.display === 'block') {
-            openWorkModal();
-        }
-    }
-}
-
-/** Pomocnicza funkcja do aplikowania kary do morale */
-function applyMoralePenalty(employees, penaltyAmount) {
-     employees.forEach(emp => {
-         emp.morale = Math.max(0, emp.morale - penaltyAmount);
-     });
-}
-
-function triggerIPO() {
-    if (getSkillLevel('work') < 4 || !playerCompany) {
-        alert("Musisz mieć odblokowaną umiejętność 'Własna Firma' (Praca Lvl 4), aby wejść na giełdę!");
-        return;
-    }
-    if (playerCompany.value >= 25000) {
-        const companySymbol = playerCompany.name.substring(0, 3).toUpperCase() + "X";
-        const newStock = {
-            name: playerCompany.name,
-            price: playerCompany.value / 1000, // Wartość początkowa akcji
-            volatilityFactor: 1.5,
-            symbol: companySymbol,
-            exchange: 'JUNK', // Debiut na najniższej giełdzie
-            totalShares: 1000,
-            maxShares: 2000,
-            sharesHeld: 800, // 80% akcji jest Twoje
-            priceHistory: [], 
-    quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z)
-            sector: ['Usługi'],
-            financialHealth: 1,
-            isTradeLocked: false,
-            dividendCooldownUntil: 0
-        };
-
-        stocks.push(newStock);
-        playerPortfolio[companySymbol] = { shares: 800, avgPrice: newStock.price };
-
-        alert(`GRATULACJE! Twoja firma ${playerCompany.name} (${companySymbol}) weszła na giełdę! Otrzymujesz 80% akcji.`);
-        playerCompany = null; // Resetujemy firmę, teraz jest spółką giełdową
-
-        // Zamykamy i odświeżamy widoki
-        document.getElementById('work-modal').style.display = 'none';
-        updateWorkButtonVisibility();
-        displayStocks();
-        displayPortfolio();
-    }
-}
 
 
 // Miasto (darowizny, gospodarka, festyn, wybory) — city.js
@@ -1124,7 +707,6 @@ function triggerIPO() {
 function contributeToInvestmentPool(contributorId, amount) {
     // Walidacja dla gracza
     if (contributorId === 'player') {
-        if (isPlayerInDefault()) return; // <-- DODANA LINIA
         if (isNaN(amount) || amount <= 0) {
             alert("Proszę wpisać poprawną kwotę.");
             return;
@@ -1223,543 +805,6 @@ function updateAutoInvestTimer(deltaTime) {
     }
 }
 
-function takeCommercialLoan(bankId, amount) {
-    if (!FEATURE_FLAGS.privateLoans) { if (typeof showToast === 'function') showToast('Zarządca funduszu nie zaciąga prywatnych kredytów ani lokat.', 'default'); return; } // wyłączone w etapie B
-    const bank = commercialBanks.find(b => b.id === bankId);
-    if (!bank || !bank.isActive) {
-        alert("Wybrany bank jest nieaktywny lub nie istnieje.");
-        return;
-    }
-    if (isNaN(amount) || amount <= 0) {
-        alert("Wprowadź poprawną kwotę kredytu.");
-        return;
-    }
-    // Sprawdź, czy gracz nie jest w stanie niewypłacalności (jeśli taka mechanika istnieje)
-    if (isPlayerInDefault && isPlayerInDefault()) {
-         alert("Nie możesz wziąć kredytu, mając niespłacone zobowiązania!");
-         return;
-    }
-
-    const netWorth = calculateNetWorth('player');
-    const existingLoansTotal = playerCommercialLoans.reduce((sum, loan) => sum + loan.amount, 0);
-    // Limit kredytowy: 30% wartości netto minus istniejące kredyty komercyjne
-    const maxLoanPossible = netWorth * 0.3 - existingLoansTotal;
-
-    if (amount > maxLoanPossible) {
-        alert(`Twój limit kredytowy w bankach komercyjnych wynosi ${Math.max(0, maxLoanPossible).toFixed(0)} PLN. Nie możesz pożyczyć ${amount.toFixed(0)} PLN.`);
-        return;
-    }
-    // Bank też ma limit - nie pożyczy więcej niż np. 20% swojej gotówki na raz
-    if (amount > bank.cash * 0.2) {
-        alert(`Bank ${bank.name} nie może udzielić tak wysokiego kredytu w tym momencie. Spróbuj mniejszą kwotę.`);
-        return;
-    }
-
-
-    
-
-
-    const interestRate = bank.interestRateLoan;
-    // ---> NOWOŚĆ: Sprawdź i zastosuj bonus festynowy <---
-    const now = Date.now();
-    const activeBonusIndex = activePlayerBankBonuses.findIndex(bonus =>
-        bonus.bankId === bankId && bonus.type === 'loan' && now < bonus.expiryTime
-    );
-
-    if (activeBonusIndex !== -1) {
-        const bonus = activePlayerBankBonuses[activeBonusIndex];
-        const originalRate = interestRate;
-        interestRate *= (1 - bonus.value); // Zastosuj zniżkę procentową
-        logEvent(`[Festyn Bonus] Zastosowano ${Math.round(bonus.value * 100)}% zniżki na oprocentowanie kredytu w ${bank.name}!`);
-        showToast(`Zastosowano zniżkę ${Math.round(bonus.value * 100)}% na kredyt!`, 'success');
-
-        // Usuń bonus po wykorzystaniu
-        activePlayerBankBonuses.splice(activeBonusIndex, 1);
-    }
-    const loanDurationWeeks = 26; // Kredyt na pół roku (26 tygodni)
-    const maturityDate = Date.now() + (loanDurationWeeks * BASE_DELAYS.weekly / currentSpeedMultiplier);
-    // Dokładniejsza kalkulacja raty (annuitetowa, uproszczona)
-    const weeklyRate = interestRate / 52;
-    const weeklyPayment = amount * (weeklyRate * Math.pow(1 + weeklyRate, loanDurationWeeks)) / (Math.pow(1 + weeklyRate, loanDurationWeeks) - 1);
-
-    // Transakcja
-    playerCash += amount;
-    bank.cash -= amount; // Bank wypłaca środki
-    // Zapisz pożyczkę w portfelu banku (kwota początkowa)
-    if (!bank.loanPortfolio['player']) bank.loanPortfolio['player'] = [];
-    bank.loanPortfolio['player'].push({ id: `loan_${Date.now()}`, initialAmount: amount, remainingAmount: amount, interestRate: interestRate }); // Zapisz finalne oprocentowanie
-
-    const newLoan = {
-        id: `loan_${Date.now()}`,
-        bankId: bankId,
-        bankName: bank.name,
-        initialAmount: amount,
-        amount: amount, // Kwota pozostała do spłaty
-        interestRate: interestRate,
-        weeklyPayment: weeklyPayment,
-        maturityDate: maturityDate,
-        collateral: null
-    };
-    playerCommercialLoans.push(newLoan);
-
-    logEvent(` Zaciągnięto kredyt ${amount.toFixed(0)} PLN w ${bank.name} na ${loanDurationWeeks} tyg. Rata: ${weeklyPayment.toFixed(2)} PLN/tydz.`, 'review');
-    displayCash();
-    displayPortfolio(); // Aby odświeżyć listę pasywów
-    closeInteractionModal(); // Zamknij modal interakcji
-}
-
-function repayCommercialLoan(loanId, amount) {
-    const loanIndex = playerCommercialLoans.findIndex(l => l.id === loanId);
-    if (loanIndex === -1) {
-        alert("Nie znaleziono takiej pożyczki.");
-        return;
-    }
-    const loan = playerCommercialLoans[loanIndex];
-
-    if (isNaN(amount) || amount <= 0) {
-        alert("Wprowadź poprawną kwotę spłaty.");
-        return;
-    }
-    if (playerCash < amount) {
-        alert("Nie masz wystarczająco gotówki.");
-        return;
-    }
-
-    const amountToRepay = Math.min(amount, loan.amount); // Nie spłacaj więcej niż zostało
-
-    // Transakcja
-    playerCash -= amountToRepay;
-    loan.amount -= amountToRepay;
-
-    // Przekaż pieniądze wierzycielowi (bank, lombard lub windykator)
-    if (loan.isPawnLoan || loan.collectorSymbol) {
-        // Pożyczka lombardowa lub przejęta przez windykatora - przekaż do spółki
-        const creditorStock = stocks.find(s => s.symbol === loan.collectorSymbol);
-        if (creditorStock) creditorStock.cash += amountToRepay;
-    } else {
-        const bank = commercialBanks.find(b => b.id === loan.bankId);
-        if(bank) {
-            bank.cash += amountToRepay;
-            if (bank.loanPortfolio['player']) {
-                const bankLoanIndex = bank.loanPortfolio['player'].findIndex(bl => bl.id === loan.id);
-                if (bankLoanIndex !== -1) {
-                    bank.loanPortfolio['player'][bankLoanIndex].remainingAmount -= amountToRepay;
-                    if (bank.loanPortfolio['player'][bankLoanIndex].remainingAmount <= 0) {
-                        bank.loanPortfolio['player'].splice(bankLoanIndex, 1);
-                    }
-                }
-            }
-        }
-    }
-
-    logEvent(` Spłacono ${amountToRepay.toFixed(2)} PLN kredytu w ${loan.bankName}.`, 'review');
-
-    // Jeśli spłacono całość
-    if (loan.amount <= 0.01) {
-        // Odblokuj zastaw (jeśli istnieje)
-        if (loan.collateral) {
-            const holding = playerPortfolio[loan.collateral.symbol];
-            if (holding && holding.lockedShares) {
-                holding.lockedShares = Math.max(0, holding.lockedShares - loan.collateral.quantity);
-            }
-            logEvent(`🔓 Odblokowano ${loan.collateral.quantity} akcji ${loan.collateral.symbol} po spłacie pożyczki.`, 'success');
-        }
-        playerCommercialLoans.splice(loanIndex, 1);
-        logEvent(` Kredyt w ${loan.bankName} został w całości spłacony!`, 'success');
-        showToast(`Kredyt w ${loan.bankName} spłacony!`, 'success');
-    }
-
-    displayCash();
-    displayPortfolio();
-    closeInteractionModal();
-    if(document.getElementById('commercial-loan-modal')?.style.display === 'block'){
-        openCommercialLoanModal(loan.bankId);
-    }
-}
-
-function unlockCollateral(symbol, quantity) {
-    const holding = playerPortfolio[symbol];
-    if (holding && holding.lockedShares) {
-        holding.lockedShares = Math.max(0, holding.lockedShares - quantity);
-    }
-}
-
-function makeCommercialDeposit(bankId, amount) {
-    if (!FEATURE_FLAGS.privateLoans) { if (typeof showToast === 'function') showToast('Zarządca funduszu nie zaciąga prywatnych kredytów ani lokat.', 'default'); return; } // wyłączone w etapie B
-    const bank = commercialBanks.find(b => b.id === bankId);
-    if (!bank || !bank.isActive) {
-        alert("Wybrany bank jest nieaktywny lub nie istnieje.");
-        return;
-    }
-    if (isNaN(amount) || amount <= 0) {
-        alert("Wprowadź poprawną kwotę depozytu.");
-        return;
-    }
-    if (playerCash < amount) {
-        alert("Nie masz wystarczająco gotówki.");
-        return;
-    }
-
-    let interestRate = bank.interestRateDeposit;
-    const now = Date.now();
-    const activeBonusIndex = activePlayerBankBonuses.findIndex(bonus =>
-        bonus.bankId === bankId && bonus.type === 'deposit' && now < bonus.expiryTime
-    );
-
-    if (activeBonusIndex !== -1) {
-        const bonus = activePlayerBankBonuses[activeBonusIndex];
-        const originalRate = interestRate;
-        interestRate += bonus.value; // Dodaj bonusowy punkt procentowy
-        logEvent(`[Festyn Bonus] Zastosowano +${(bonus.value * 100).toFixed(1)}% bonusu do oprocentowania depozytu w ${bank.name}!`);
-        showToast(`Zastosowano +${(bonus.value * 100).toFixed(1)}% bonusu do depozytu!`, 'success');
-
-        // Usuń bonus po wykorzystaniu
-        activePlayerBankBonuses.splice(activeBonusIndex, 1);
-    }
-
-    // Transakcja
-    playerCash -= amount;
-    bank.cash += amount; // Bank przyjmuje środki
-    // Zapisz depozyt w portfelu banku
-    if (!bank.depositPortfolio['player']) bank.depositPortfolio['player'] = [];
-    bank.depositPortfolio['player'].push({ id: `dep_${Date.now()}`, amount: amount, interestRate: interestRate });
-
-
-    // Sprawdź, czy gracz ma już depozyt w tym banku (w strukturze gracza)
-    const existingDeposit = playerCommercialDeposits.find(d => d.bankId === bankId);
-    if (existingDeposit) {
-        existingDeposit.amount += amount; // Po prostu zwiększ kwotę
-        existingDeposit.interestRate = interestRate; // Zaktualizuj oprocentowanie na wypadek zmiany
-    } else {
-        const newDeposit = {
-            id: `dep_${Date.now()}_player`, // Unikalne ID dla gracza
-            bankId: bankId,
-            bankName: bank.name,
-            amount: amount,
-            interestRate: interestRate,
-            startDate: Date.now()
-        };
-        playerCommercialDeposits.push(newDeposit);
-    }
-
-    logEvent(` Wpłacono ${amount.toFixed(2)} PLN depozytu do ${bank.name}.`, 'review');
-    displayCash();
-    displayPortfolio();
-    closeInteractionModal();
-}
-
-function withdrawCommercialDeposit(depositId, amount) {
-    const depositIndex = playerCommercialDeposits.findIndex(d => d.id === depositId);
-    if (depositIndex === -1) {
-        // Jeśli nie znaleziono po ID, spróbuj znaleźć po bankId (na wypadek starej logiki)
-        const depositByBank = playerCommercialDeposits.find(d => d.bankId === depositId); // Tu depositId to tak naprawdę bankId
-         if(depositByBank){
-             depositId = depositByBank.id; // Użyj poprawnego ID
-             depositIndex = playerCommercialDeposits.findIndex(d => d.id === depositId);
-         } else {
-            alert("Nie znaleziono takiego depozytu.");
-            return;
-         }
-    }
-
-    const deposit = playerCommercialDeposits[depositIndex];
-    const bank = commercialBanks.find(b => b.id === deposit.bankId);
-
-    if (isNaN(amount) || amount <= 0) {
-        alert("Wprowadź poprawną kwotę wypłaty.");
-        return;
-    }
-
-    const amountToWithdraw = Math.min(amount, deposit.amount);
-
-    if (!bank) {
-         console.warn(`Nie znaleziono banku ${deposit.bankId} przy wypłacie depozytu.`);
-         // Wypłać graczowi, ale nie aktualizuj banku
-    } else if (bank.cash < amountToWithdraw) {
-        alert(`Bank ${bank.name} ma chwilowe problemy z płynnością i nie może wypłacić tej kwoty.`);
-        return;
-    } else {
-        // Zaktualizuj bank
-        bank.cash -= amountToWithdraw;
-        // Znajdź i zmniejsz odpowiedni depozyt w portfelu banku (uproszczone)
-        if (bank.depositPortfolio['player']) {
-             // W bardziej złożonym systemie znaleźlibyśmy konkretny depozyt po ID
-             // Tutaj uproszczenie: odejmujemy od ogólnej puli depozytów gracza w banku
-             const totalPlayerDepositsInBank = bank.depositPortfolio['player'].reduce((sum, dep) => sum + dep.amount, 0);
-             const newTotal = Math.max(0, totalPlayerDepositsInBank - amountToWithdraw);
-             // Aktualizacja - zamiast prostej sumy, usuwamy/zmniejszamy konkretny depozyt
-             const bankDepIndex = bank.depositPortfolio['player'].findIndex(dep => dep.id.startsWith('dep_')); // Proste znalezienie
-             if(bankDepIndex !== -1){
-                 bank.depositPortfolio['player'][bankDepIndex].amount -= amountToWithdraw;
-                 if(bank.depositPortfolio['player'][bankDepIndex].amount <= 0) {
-                     bank.depositPortfolio['player'].splice(bankDepIndex, 1);
-                 }
-             }
-        }
-    }
-
-    // Transakcja dla gracza
-    playerCash += amountToWithdraw;
-    deposit.amount -= amountToWithdraw;
-
-    logEvent(` Wypłacono ${amountToWithdraw.toFixed(2)} PLN depozytu z ${deposit.bankName}.`, 'review');
-
-    // Jeśli wypłacono całość
-    if (deposit.amount <= 0.01) {
-        playerCommercialDeposits.splice(depositIndex, 1); // Usuń depozyt z listy gracza
-    }
-
-    displayCash();
-    displayPortfolio();
-    closeInteractionModal();
-     // Jeśli okno depozytów jest otwarte, odśwież je
-    if(document.getElementById('commercial-deposit-modal')?.style.display === 'block'){
-        openCommercialDepositModal(deposit.bankId);
-    }
-}
-
-function isPlayerInDefault() {
-    if (playerLoan.missedPayments >= 3) {
-        alert("Transakcja zablokowana! Masz 3 lub więcej pominiętych rat kredytu. Spłać część długu ręcznie w banku, aby odblokować inwestycje.");
-        return true;
-    }
-    return false;
-}
-
-function takeLoan() {
-    if (!FEATURE_FLAGS.privateLoans) { if (typeof showToast === 'function') showToast('Zarządca funduszu nie zaciąga prywatnych kredytów ani lokat.', 'default'); return; } // wyłączone w etapie B
-    if (isPlayerInDefault()) return; // <-- DODAJ TĘ LINIĘ
-    const loanAmountInput = document.getElementById('loan-amount');
-    const amount = parseFloat(loanAmountInput.value);
-
-    if (isNaN(amount) || amount <= 0) {
-        alert("Proszę wpisać poprawną, dodatnią kwotę pożyczki.");
-        return;
-    }
-
-    if (playerLoan.amount > 0) {
-        alert("Musisz najpierw spłacić obecną pożyczkę, zanim weźmiesz kolejną!");
-        return;
-    }
-
-    const totalPortfolioValue = playerCash + getStocksValue();
-    let loanLimit = totalPortfolioValue * 0.5;
-    if (getSkillLevel('hardNegotiator') === 3) {
-        loanLimit *= 1.10; // Zwiększenie limitu o 10% na 3 poziomie
-    } processWeeklyInterest
-
-    if (amount > loanLimit) {
-        alert(`Nie możesz pożyczyć tyle pieniędzy! Twój maksymalny limit kredytowy to ${Math.max(0, loanLimit).toFixed(2)} PLN.`);
-        return;
-    }
-
-    playerCash += amount;
-    playerLoan.amount = amount;
-    // Rata tygodniowa to 2% pożyczonej kwoty + odsetki (zmieniono z 5% na 2% dla lepszego balansu)
-    playerLoan.weeklyPayment = (amount * 0.02) + (amount * (LOAN_INTEREST_RATE / 52));
-    playerLoan.missedPayments = 0;
-
-    loanAmountInput.value = '';
-    logEvent(`🏦 Wzięto pożyczkę w wysokości ${amount.toFixed(2)} PLN. Twoja tygodniowa rata wynosi ${playerLoan.weeklyPayment.toFixed(2)} PLN.`, 'market');
-    displayCash();
-    openBankModal();
-}
-function repayLoan() {
-    const loanAmountInput = document.getElementById('loan-amount');
-    const amount = parseFloat(loanAmountInput.value);
-
-    if (isNaN(amount) || amount <= 0) {
-        alert("Proszę wpisać poprawną, dodatnią kwotę do spłaty.");
-        return;
-    }
-
-    const amountToRepay = Math.min(amount, playerLoan.amount);
-
-    if (amountToRepay > playerCash) {
-        alert("Nie masz wystarczająco gotówki, aby spłacić tę kwotę.");
-        return;
-    }
-
-    playerCash -= amountToRepay;
-    playerLoan.amount -= amountToRepay;
-
-    // Po spłacie części długu, rata powinna zostać przeliczona
-    if (playerLoan.amount > 0) {
-        playerLoan.weeklyPayment = (playerLoan.amount * 0.02) + (playerLoan.amount * (LOAN_INTEREST_RATE / 52));
-    } else {
-        // Jeśli pożyczka spłacona w całości, resetujemy system
-        playerLoan.amount = 0;
-        playerLoan.weeklyPayment = 0;
-        playerLoan.missedPayments = 0;
-        logEvent(`🎉 Gratulacje! Pożyczka została w całości spłacona!`, 'review');
-    }
-
-    loanAmountInput.value = '';
-
-    // --- NOWY BLOK: Resetowanie licznika kar ---
-    // Jeśli gracz dokonał jakiejkolwiek ręcznej spłaty, resetujemy licznik pominiętych rat
-    if (amountToRepay > 0 && playerLoan.missedPayments > 0) {
-        playerLoan.missedPayments = 0;
-        logEvent(`✅ KONTO ODBLOKOWANE! Ręczna spłata kredytu przywróciła Twoją wiarygodność. Możesz znowu inwestować.`, 'success');
-        showToast("Konto inwestycyjne odblokowane!", 'success');
-    }
-    // --- KONIEC NOWEGO BLOKU ---
-
-    displayCash();
-    openBankModal();
-}
-
-function processLoanRepayment() {
-    if (playerLoan.amount <= 0) {
-        return; // Nie rób nic, jeśli nie ma pożyczki
-    }
-
-    // Odsetki naliczają się co tydzień od pozostałej kwoty
-    let currentLoanInterestRate = LOAN_INTEREST_RATE;
-    const negotiatorLevel = getSkillLevel('hardNegotiator');
-    if (negotiatorLevel > 0) {
-        let interestModifier = 1.0;
-        switch (negotiatorLevel) {
-            case 1: interestModifier = 0.90; break; // 10% zniżki
-            case 2: interestModifier = 0.80; break; // 20% zniżki
-            case 3: interestModifier = 0.75; break; // 25% zniżki
-        }
-        currentLoanInterestRate *= interestModifier;
-    }
-    const weeklyInterest = playerLoan.amount * (currentLoanInterestRate / 52);
-    playerLoan.amount += weeklyInterest;
-    logEvent(`🏦 Naliczono odsetki od kredytu w wysokości ${weeklyInterest.toFixed(2)} PLN.`, 'market');
-
-    // Spłata raty tylko jeśli auto-spłata jest włączona
-    if (isAutoRepayEnabled) {
-        if (playerCash >= playerLoan.weeklyPayment) {
-            // Gracz ma pieniądze, pobieramy ratę
-            const amountPaid = Math.min(playerLoan.amount, playerLoan.weeklyPayment); // Nie spłacaj więcej niż zostało długu
-            playerCash -= amountPaid;
-            playerLoan.amount -= amountPaid;
-            logEvent(`🏦 Automatycznie spłacono ratę kredytu w wysokości ${amountPaid.toFixed(2)} PLN.`, 'market');
-
-            if (playerLoan.amount <= 0) {
-                playerLoan.amount = 0;
-                playerLoan.weeklyPayment = 0;
-                playerLoan.missedPayments = 0;
-                logEvent(`🎉 Gratulacje! Pożyczka została w całości spłacona!`, 'review');
-            } else {
-                // Przelicz ratę po spłacie
-                playerLoan.weeklyPayment = (playerLoan.amount * 0.02) + (playerLoan.amount * (LOAN_INTEREST_RATE / 52));
-            }
-        } else {
-            // --- POCZĄTEK POPRAWKI: NOWA LOGIKA KARY ---
-            // Gracz nie ma pieniędzy na spłatę
-            playerLoan.missedPayments++;
-
-            // Zamiast psuć OPROCENTOWANIE, doliczamy jednorazową opłatę karną
-            const penaltyFee = playerLoan.weeklyPayment * 0.25; // Kara 25% wartości pominiętej raty
-            playerLoan.amount += penaltyFee; // Opłata karna jest dodawana do głównego długu
-
-            logEvent(`🚨 OSTRZEŻENIE! Brak środków na spłatę raty! Doliczono opłatę karną: ${penaltyFee.toFixed(2)} PLN. Liczba pominiętych rat: ${playerLoan.missedPayments}.`, 'review');
-
-            // Konsekwencje (Blokada + Zajęcie depozytu)
-            if (playerLoan.missedPayments >= 3) {
-                logEvent(`❌ KONTO ZABLOKOWANE! Z powodu 3 pominiętych rat, możliwość inwestowania została wstrzymana!`, 'error');
-
-                // Bank automatycznie spróbuje pobrać środki z depozytu, jeśli są dostępne
-                if (playerDeposit > 0) {
-                    const amountToSeize = Math.min(playerDeposit, playerLoan.amount);
-                    playerDeposit -= amountToSeize;
-                    playerLoan.amount -= amountToSeize;
-                    logEvent(`🏦 BANK ZAJĄŁ TWOJĄ LOKATĘ! Wpłata ${amountToSeize.toFixed(2)} PLN z depozytu na poczet długu!`, 'review');
-
-                    // Sprawdźmy, czy to wystarczyło do "spłaty" zaległej raty
-                    if (amountToSeize >= playerLoan.weeklyPayment) {
-                        playerLoan.missedPayments = 0; // Wyzeruj licznik, jeśli lokata pokryła zaległości
-                        logEvent(`✅ KONTO ODBLOKOWANE! Lokata pokryła zaległości. Możesz znowu inwestować.`, 'success');
-                    }
-                }
-            }
-            // --- KONIEC POPRAWKI ---
-        }
-    }
-
-    displayCash();
-    if (document.getElementById('bank-modal').style.display === 'block') {
-        openBankModal();
-    }
-}
-
-function makeDeposit() {
-    if (!FEATURE_FLAGS.privateLoans) { if (typeof showToast === 'function') showToast('Zarządca funduszu nie zaciąga prywatnych kredytów ani lokat.', 'default'); return; } // wyłączone w etapie B
-    const depositAmountInput = document.getElementById('deposit-amount');
-    const amount = parseFloat(depositAmountInput.value);
-    if (isNaN(amount) || amount <= 0) {
-        alert("Proszę wpisać poprawną, dodatnią kwotę depozytu.");
-        return;
-    }
-    if (amount > playerCash) {
-        alert("Nie masz wystarczająco gotówki, aby złożyć taki depozyt.");
-        return;
-    }
-    playerCash -= amount;
-    playerDeposit += amount;
-    depositAmountInput.value = '';
-    displayCash();
-    openBankModal();
-}
-
-function withdrawDeposit() {
-    const depositAmountInput = document.getElementById('deposit-amount');
-    const amount = parseFloat(depositAmountInput.value);
-    if (isNaN(amount) || amount <= 0) {
-        alert("Proszę wpisać poprawną, dodatnią kwotę do wypłaty.");
-        return;
-    }
-    if (amount > playerDeposit) {
-        alert(`Nie możesz wypłacić więcej, niż masz na depozycie. Dostępne środki: ${playerDeposit.toFixed(2)} PLN.`);
-        return;
-    }
-    playerDeposit -= amount;
-    playerCash += amount;
-    depositAmountInput.value = '';
-    displayCash();
-    openBankModal();
-}
-
-function processWeeklyInterest() {
-    updateInterestRates(); 
-
-    if (playerDeposit > 0) {
-        let currentDepositRate = DEPOSIT_INTEREST_RATE;
-        const magnetLevel = getSkillLevel('bankMagnet');
-
-        if (magnetLevel > 0) {
-            let depositBonus = 1.0;
-            switch (magnetLevel) {
-                case 1: depositBonus = 1.10; break; // +10%
-                case 2: depositBonus = 1.20; break; // +20%
-                case 3: depositBonus = 1.25; break; // +25%
-            }
-            currentDepositRate *= depositBonus;
-        }
-
-        const weeklyDepositRate = currentDepositRate / 52;
-        const depositInterest = playerDeposit * weeklyDepositRate;
-        playerCash += depositInterest;
-
-        const interestMessage = `Naliczono odsetki od depozytu: ${depositInterest.toFixed(2)} PLN.`;
-        logEvent(`🏦 ${interestMessage}`, 'market');
-
-        // Bonus XP za 3 poziom umiejętności
-        if (magnetLevel === 3 && playerDeposit >= 100000) {
-            const xpBonus = 50; // Przykładowa stała wartość bonusu
-            playerXP += xpBonus;
-            logEvent(`🧲 Otrzymujesz ${xpBonus} XP bonusu od Bankowego Magnesu za utrzymanie dużego depozytu!`, 'review');
-            displayXP(); // Aktualizujemy interfejs
-        }
-    }
-
-    displayCash();
-}
-
 function chargeAccountingFee(paymentAmount, entityId) {
     // Znajdź wszystkie aktywne firmy księgowe (na wypadek, gdyby było ich więcej)
     const accountingCompanies = stocks.filter(s => s.assetType === 'Accounting' && !s.isBankrupt);
@@ -1815,40 +860,11 @@ function chargeAccountingFee(paymentAmount, entityId) {
     }
 }
 
-/** Umiejętności są teraz szkoleniami kupowanymi za prywatne pieniądze (fund.js → buyTraining). */
-function buySkill(skillId) {
-    return buyTraining(skillId);
-}
-
-function getStocksValue() {
-    let totalValue = 0;
-    for (const symbol in playerPortfolio) {
-        const holding = playerPortfolio[symbol];
-        const marketData = stocks.find(s => s.symbol === symbol);
-        if (marketData) {
-            totalValue += marketData.price * holding.shares;
-        }
-    }
-    return totalValue;
-}
-
-
-
 /** Dostęp do giełd wynika ze stanowiska w korporacji (fund.js), a nie z wartości portfela. */
 function checkPlayerTierUpgrade() {
     if (typeof syncExchangeAccessWithPosition === 'function' && playerProfile) {
         syncExchangeAccessWithPosition();
     }
-}
-
-/** Licencje zastąpione dostępem według stanowiska (awanse w etapie C). */
-function buyExchangeLicense() {
-    const nextExchange = Object.values(exchanges).find(e => e.level === playerAccessLevel + 1);
-    const message = nextExchange
-        ? `Dostęp do giełdy „${nextExchange.name}” daje awans na wyższe stanowisko.`
-        : 'Masz już dostęp do wszystkich giełd.';
-    if (typeof showToast === 'function') showToast(message, 'default', 5000);
-    else alert(message);
 }
 
 function checkSanEscobarRisk() {
@@ -2172,12 +1188,6 @@ function applyActiveModifiers() {
                     stock.price *= (1 + 0.00001 * mod.multiplier);
                 }
                 break;
-            case 'player_company':
-                if (playerCompany) {
-                    // Bonus do generowanej wartości
-                    playerCompany.value += 0.1 * mod.multiplier;
-                }
-                break;
         }
     });
 }
@@ -2215,204 +1225,12 @@ function applyFestivalBonus(participant, multiplier) {
             const stock = stocks.find(s => s.symbol === participant.promotionTarget.id);
             if (stock) logEvent(`🏆 Stoisko ${stock.name} zdobywa roczny bonus do zainteresowania inwestorów!`, 'review');
             break;
-        case 'player_company':
-             if (playerCompany) logEvent(`🏆 Twoja firma zdobywa roczny bonus do generowanej wartości!`, 'review');
-            break;
         case 'city':
             const budgetBoost = 1000 * multiplier; // Bonus do budżetu jest natychmiastowy
             city.budget += budgetBoost;
             logEvent(`🏆 Stoisko miasta przynosi ${budgetBoost.toFixed(0)} PLN do budżetu.`, 'review');
             break;
     }
-}
-
-function acceptDebtOffer() {
-    if (!currentDebtOffer) return;
-    const { collectorSymbol, loanId, newInterestRate } = currentDebtOffer;
-    
-    const collectorStock = stocks.find(s => s.symbol === collectorSymbol);
-    const loan = playerCommercialLoans.find(l => l.id === loanId);
-
-    if (collectorStock && loan) {
-        executeDebtTransfer(collectorStock, 'player', loan, newInterestRate);
-    }
-    currentDebtOffer = null; // Wyczyść ofertę
-}
-
-function declineDebtOffer() {
-    if (!currentDebtOffer) return;
-    logEvent("Odrzucono ofertę przejęcia długu przez windykatora.", 'review');
-    currentDebtOffer = null; // Wyczyść ofertę
-}
-
-function acceptPawnOffer() {
-    if (!currentPawnOffer) return;
-    const { pawnShopSymbol, targetStockSymbol, quantity, loanAmount, newInterestRate, durationWeeks } = currentPawnOffer;
-    
-    const pawnShop = stocks.find(s => s.symbol === pawnShopSymbol);
-    const targetStock = stocks.find(s => s.symbol === targetStockSymbol);
-
-    if (pawnShop && targetStock && playerPortfolio[targetStockSymbol]) {
-        executePawnLoan('player', pawnShop, targetStock, quantity, loanAmount, newInterestRate, durationWeeks);
-    }
-    currentPawnOffer = null; // Wyczyść ofertę
-}
-
-
-function declinePawnOffer() {
-    if (!currentPawnOffer) return;
-    logEvent("Odrzucono ofertę pożyczki lombardowej.", 'review');
-    currentPawnOffer = null; // Wyczyść ofertę
-    closePawnOfferModal(); // Upewnij się, że modal jest zamknięty
-}
-
-/**
- * Gracz wystawia zastaw z pożyczki lombardowej na aukcję (MVP: natychmiastowa sprzedaż po wartości rynkowej).
- * Uzyskane środki spłacają kredyt, nadwyżka trafia do gracza.
- */
-function sellCollateralAtAuction(loanId) {
-    const loanIndex = playerCommercialLoans.findIndex(l => l.id === loanId);
-    if (loanIndex === -1) { alert("Nie znaleziono pożyczki."); return; }
-    const loan = playerCommercialLoans[loanIndex];
-    if (!loan.collateral || !loan.isPawnLoan) { alert("Ta pożyczka nie ma zastawu lombardowego."); return; }
-
-    const stock = stocks.find(s => s.symbol === loan.collateral.symbol);
-    if (!stock) { alert("Nie znaleziono akcji zastawu."); return; }
-
-    const holding = playerPortfolio[loan.collateral.symbol];
-    if (!holding || (holding.lockedShares || 0) < loan.collateral.quantity) {
-        alert("Brak wystarczających zablokowanych akcji do wystawienia na aukcję.");
-        return;
-    }
-
-    // Oblicz wartość rynkową zastawu
-    const marketValue = stock.price * loan.collateral.quantity;
-    const loanAmount = loan.amount;
-
-    // Usuń zablokowane akcje z portfela
-    holding.lockedShares -= loan.collateral.quantity;
-    holding.shares -= loan.collateral.quantity;
-    if (holding.shares <= 0) delete playerPortfolio[loan.collateral.symbol];
-
-    // Spłać kredyt z uzyskanych środków
-    const repayment = Math.min(marketValue, loanAmount);
-    const surplus = Math.max(0, marketValue - loanAmount);
-
-    // Przekaż spłatę wierzycielowi (lombard)
-    const creditorStock = stocks.find(s => s.symbol === loan.collectorSymbol);
-    if (creditorStock) creditorStock.cash += repayment;
-
-    // Nadwyżka trafia do gracza
-    playerCash += surplus;
-
-    // Usuń pożyczkę
-    playerCommercialLoans.splice(loanIndex, 1);
-
-    logEvent(`🔨 Sprzedano zastaw: ${loan.collateral.quantity} × ${loan.collateral.symbol} za ${marketValue.toFixed(2)} PLN. Spłacono ${repayment.toFixed(2)} PLN kredytu.` +
-        (surplus > 0 ? ` Nadwyżka: ${surplus.toFixed(2)} PLN.` : loanAmount > marketValue ? ` Pozostały dług ${(loanAmount - marketValue).toFixed(2)} PLN został umorzony.` : ''), 'success');
-    showToast(`Zastaw sprzedany! Otrzymano ${surplus.toFixed(2)} PLN nadwyżki.`, surplus > 0 ? 'success' : 'info');
-
-    displayCash();
-    displayPortfolio();
-    openPawnShopPanel(); // Odśwież panel lombardu
-}
-
-function playerBuyPositivePR() {
-    const skillLvl = getSkillLevel('mediaManipulation');
-    if (skillLvl < 1) return; // Sprawdzenie umiejętności
-    const cost = 10000;
-
-    if (playerCash < cost) {
-        showToast("Brak środków na artykuł sponsorowany! (Wymagane 10 000 PLN)", 'error');
-        return;
-    }
-    
-    const select = document.getElementById('positive-pr-select');
-    if (!select || !select.value) {
-        showToast("Wybierz spółkę, którą chcesz promować.", 'warning');
-        return;
-    }
-    const symbol = select.value;
-    const stock = stocks.find(s => s.symbol === symbol);
-    if (!stock) return;
-
-    // Transakcja
-    playerCash -= cost;
-    displayCash();
-    
-    // Efekt
-    logEvent(`📰 Sfinansowałeś pozytywny artykuł o ${stock.name}. Wizerunek firmy ociepla się.`, 'review');
-    showToast(`Artykuł o ${stock.name} został opublikowany!`, 'success');
-    
-    // 1. Mały, natychmiastowy boost do ceny
-    applyPriceEffect(stock.symbol, 0.03, 'positive', 'review'); // 3% boost
-    
-    // 2. Tarcza PR na 1 kwartał (czas gry)
-    stock.prShieldExpiry = Date.now() + (BASE_DELAYS.quarterly / currentSpeedMultiplier); 
-    logEvent(`🛡️ ${stock.name} uzyskuje "Tarczę PR" na 1 kwartał.`, 'company');
-}
-
-
-function playerBuyBlackPR() {
-    const skillLvl = getSkillLevel('mediaManipulation');
-    if (skillLvl < 2) return; // Wymagany Lvl 2
-    const cost = 25000;
-
-    if (playerCash < cost) {
-        showToast("Brak środków na Czarny PR! (Wymagane 25 000 PLN)", 'error');
-        return;
-    }
-
-    const select = document.getElementById('black-pr-select');
-    if (!select || !select.value) {
-        showToast("Wybierz spółkę, którą chcesz zaatakować.", 'warning');
-        return;
-    }
-    const targetSymbol = select.value;
-    const targetStock = stocks.find(s => s.symbol === targetSymbol);
-    if (!targetStock) return;
-
-    // Transakcja
-    playerCash -= cost;
-    displayCash();
-    blackPRRiskCounter++; // Zwiększ globalny licznik ryzyka
-
-    logEvent(`📰 Ktoś opłacił negatywną kampanię PR przeciwko ${targetStock.name}...`, 'market');
-    
-    // 1. Sprawdzenie ryzyka wykrycia
-    const currentRisk = BLACK_PR_BASE_RISK + (blackPRRiskCounter * BLACK_PR_RISK_INCREASE);
-    if (Math.random() < currentRisk) {
-        // WYKRYTO!
-        logEvent(`🚨 ŚLEDZTWO DZIENNIKARSKIE! Wykryto, że to Ty stałeś za atakiem na ${targetStock.name}! Twoja reputacja legła w gruzach.`, 'error');
-        showToast(`ZOSTAŁEŚ PRZYŁAPANY! Twoja reputacja ucierpiała!`, 'error', 7000);
-        
-        // Zastosuj uniwersalną karę do reputacji
-        stocks.forEach(s => {
-            if (s.reputation && s.reputation['player'] !== undefined) {
-                changeReputation('player', s.symbol, -25); // Duży cios
-            }
-        });
-        // Odśwież UI gazety, aby pokazać nowe, wyższe ryzyko
-        if (typeof renderMailbox === 'function') renderMailbox();
-        return; // Atak nie dochodzi do skutku
-    }
-
-    // 2. Niewykryty - Losowanie wyniku ataku
-    const outcomeRoll = Math.random();
-    if (outcomeRoll < 0.05) { // 5% szans - Duży Negatywny Event
-        logEvent(`🔥 Skandal w ${targetStock.name}! Wypłynęły druzgocące informacje.`, 'company');
-        showToast(`Wybuchł skandal w ${targetStock.name}!`, 'warning');
-        applyPriceEffect(targetSymbol, -0.15, 'negative', 'company'); // -15% uderzenie
-    } else if (outcomeRoll < 0.15) { // 10% szans - Obrona (0.05 + 0.10)
-        logEvent(`🛡️ ${targetStock.name} skutecznie dementuje plotki. Atak PR nie powiódł się.`, 'company');
-        showToast(`Atak PR na ${targetStock.name} nie powiódł się.`, 'default');
-    } else { // 85% szans - Mały Negatywny Event
-        logEvent(`📉 Pojawiły się niepokojące plotki na temat ${targetStock.name}.`, 'company');
-        applyPriceEffect(targetSymbol, -0.05, 'negative', 'company'); // -5% uderzenie
-    }
-    
-    // Odśwież UI gazety, aby pokazać nowe, wyższe ryzyko
-    if (typeof renderMailbox === 'function') renderMailbox();
 }
 
 // Reklamy → spam w skrzynce mailowej (mail.js)
@@ -2475,57 +1293,6 @@ function setDividendPolicy(symbol, newPolicy) {
     }
 }
 
-function investInCompany() {
-    const amount = parseFloat(document.getElementById('company-invest-amount').value);
-    if (isNaN(amount) || amount <= 0) {
-        alert("Wpisz poprawną kwotę.");
-        return;
-    }
-    if (playerCash >= amount) {
-        playerCash -= amount;
-        playerCompany.cashInvested += amount;
-        displayCash();
-        document.getElementById('company-invest-amount').value = '';
-        openWorkModal(); // Odśwież widok
-    } else {
-        alert("Nie masz tyle gotówki.");
-    }
-}
-
-function playerBailsOutCompany(symbol, amount) {
-    const stock = stocks.find(s => s.symbol === symbol);
-    if (!stock || !stock.corporateDebt || stock.corporateDebt <= 0) return;
-
-    if (isNaN(amount) || amount <= 0) {
-        alert("Proszę wpisać poprawną, dodatnią kwotę.");
-        return;
-    }
-
-    const amountToRepay = Math.min(amount, stock.corporateDebt); // Nie można spłacić więcej niż wynosi dług
-
-    if (playerCash < amountToRepay) {
-        alert("Nie masz wystarczająco gotówki!");
-        return;
-    }
-
-    // Transakcja
-    playerCash -= amountToRepay;
-    stock.corporateDebt -= amountToRepay;
-
-    // Nagroda za pomoc
-    stock.financialHealth += 1; // Natychmiastowa poprawa kondycji finansowej
-    if (stock.financialHealth > 5) stock.financialHealth = 5; // Ograniczenie do max
-
-    const priceBoost = getRandomInRange(0.01, 0.03); // Niewielki wzrost kursu o 1-3%
-    applyPriceEffect(symbol, priceBoost, 'positive', 'review');
-
-    logEvent(`💵‼️ Uratowałeś finanse ${stock.name}, wpłacając ${amountToRepay.toFixed(2)} PLN! Kondycja firmy i kurs akcji rosną.`, 'review');
-
-    displayCash();
-    // Odświeżamy widok panelu zarządzania, aby pokazać zaktualizowany dług
-    openManagementModal(symbol);
-}
-
 function playerRescuesStartup(symbol, amount) {
     const startup = stocks.find(s => s.symbol === symbol);
     if (!startup || startup.stage !== 'financial_complications') return;
@@ -2555,7 +1322,6 @@ function playerRescuesStartup(symbol, amount) {
 }
 
 function makeOfferToState() {
-    if (isPlayerInDefault()) return; // <-- DODAJ TĘ LINIĘ
     const symbol = document.getElementById('state-company-select').value;
     const quantity = document.getElementById('state-offer-quantity').valueAsNumber;
 
@@ -2619,85 +1385,6 @@ function makeOfferToState() {
     displayCash();
     displayPortfolio();
     updateStateOfferInfo();
-}
-
-function clearExpiredBankBonuses() {
-    const now = Date.now();
-    activePlayerBankBonuses = activePlayerBankBonuses.filter(bonus => now < bonus.expiryTime);
-}
-
-function takeMortgageLoan(bankId, collateralSymbol, collateralQuantity, requestedAmount) {
-    if (!FEATURE_FLAGS.privateLoans) { if (typeof showToast === 'function') showToast('Zarządca funduszu nie zaciąga prywatnych kredytów ani lokat.', 'default'); return; } // wyłączone w etapie B
-    const bank = commercialBanks.find(b => b.id === bankId && b.type === BANK_TYPES.MORTGAGE);
-    const stock = stocks.find(s => s.symbol === collateralSymbol && !s.assetType);
-    const holding = playerPortfolio[collateralSymbol];
-
-    if (!bank || !bank.isActive) {
-        alert("Wybrany bank jest nieaktywny lub nie obsługuje hipotek."); return;
-    }
-    if (!stock) {
-        alert("Wybrano nieprawidłowe akcje jako zastaw."); return;
-    }
-    // SCALONO: Poprawiono walidację - sprawdza dostępne akcje (shares - lockedShares)
-    const availableShares = holding ? holding.shares - (holding.lockedShares || 0) : 0;
-    if (!holding || availableShares < collateralQuantity) {
-        alert(`Nie posiadasz wystarczającej liczby *dostępnych* akcji ${collateralSymbol} (dostępne: ${availableShares}).`); return;
-    }
-    if (isNaN(requestedAmount) || requestedAmount <= 0) {
-        alert("Wprowadź poprawną kwotę pożyczki."); return;
-    }
-    // Sprawdź, czy gracz nie jest w stanie niewypłacalności
-    if (isPlayerInDefault && isPlayerInDefault()) {
-         alert("Nie możesz wziąć hipoteki, mając niespłacone zobowiązania!");
-         return;
-    }
-
-    const collateralValue = stock.price * collateralQuantity;
-    const maxLoanAmount = collateralValue * 0.5; // Max 50% wartości zastawu
-
-    if (requestedAmount > maxLoanAmount) {
-        alert(`Maksymalna kwota pożyczki pod ten zastaw to ${maxLoanAmount.toFixed(0)} PLN.`); return;
-    }
-    if (requestedAmount > bank.cash * 0.1) { // Bank nie pożyczy więcej niż 10% swojej gotówki na raz
-        alert(`Bank ${bank.name} nie może udzielić tak wysokiej hipoteki w tym momencie.`); return;
-    }
-
-    // Parametry pożyczki hipotecznej
-    const interestRate = bank.interestRateLoan * 1.1; // Hipoteka ma wyższe ryzyko dla banku
-    const loanDurationWeeks = 52; // Hipoteka na rok
-    const maturityDate = Date.now() + (loanDurationWeeks * BASE_DELAYS.weekly / currentSpeedMultiplier);
-    const weeklyRate = interestRate / 52;
-    const weeklyPayment = requestedAmount * (weeklyRate * Math.pow(1 + weeklyRate, loanDurationWeeks)) / (Math.pow(1 + weeklyRate, loanDurationWeeks) - 1);
-
-    // Transakcja
-    playerCash += requestedAmount;
-    bank.cash -= requestedAmount;
-    if (!bank.loanPortfolio['player']) bank.loanPortfolio['player'] = [];
-    bank.loanPortfolio['player'].push({ id: `mort_${Date.now()}`, initialAmount: requestedAmount, remainingAmount: requestedAmount, interestRate: interestRate, collateral: { symbol: collateralSymbol, quantity: collateralQuantity } });
-
-
-    // Zapisz pożyczkę u gracza
-    const newLoan = {
-        id: `mort_${Date.now()}`,
-        bankId: bankId,
-        bankName: bank.name,
-        initialAmount: requestedAmount,
-        amount: requestedAmount,
-        interestRate: interestRate,
-        weeklyPayment: weeklyPayment,
-        maturityDate: maturityDate,
-        collateral: { symbol: collateralSymbol, quantity: collateralQuantity }
-    };
-    playerCommercialLoans.push(newLoan);
-
-    // Zablokuj zastawione akcje (dodajemy nową właściwość do portfela)
-    if (!holding.lockedShares) holding.lockedShares = 0;
-    holding.lockedShares += collateralQuantity;
-
-    logEvent(` Zaciągnięto kredyt hipoteczny ${requestedAmount.toFixed(0)} PLN w ${bank.name} pod zastaw ${collateralQuantity} ${collateralSymbol}.`, 'review');
-    displayCash();
-    displayPortfolio();
-    closeInteractionModal();
 }
 
 //TO NA DOLE

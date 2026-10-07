@@ -570,28 +570,21 @@ function updateMarketIndexes() {
     });
 }
 
+/** Wartość netto: gracz = aktywa funduszu; bot/inny podmiot = gotówka + portfel + obligacje i bony. */
 function calculateNetWorth(entity) {
-    let value = (entity === 'player') ? playerCash : entity.cash;
-    const portfolio = (entity === 'player') ? playerPortfolio : entity.portfolio;
-    for (const symbol in portfolio) {
-        const holding = portfolio[symbol];
+    if (entity === 'player') return typeof playerFund !== 'undefined' && playerFund ? getFundAssets() : (Number(playerCash) || 0);
+    let value = Number(entity?.cash) || 0;
+    for (const symbol in entity?.portfolio || {}) {
+        const holding = entity.portfolio[symbol];
         if (holding.assetType === 'Startup') {
-            value += holding.investedAmount; // Uproszczona wycena startupu
-        } else {
-            const marketData = stocks.find(s => s.symbol === symbol) || etfs.find(e => e.symbol === symbol) || marketIndexes.find(i => i.id === symbol);
-            if (marketData) {
-                value += (marketData.price || marketData.value || 0) * holding.shares;
-            }
+            value += Number(holding.investedAmount) || 0; // uproszczona wycena startupu
+            continue;
         }
+        const marketData = stocks.find(s => s.symbol === symbol) || etfs.find(e => e.symbol === symbol) || marketIndexes.find(i => i.id === symbol);
+        if (marketData) value += (marketData.price || marketData.value || 0) * holding.shares;
     }
-    // Dodaj wartość obligacji (prosta estymacja)
-    
-    // --- 👇 POPRAWIONA LINIA 👇 ---
-const ownedBonds = allBonds.filter(b => b.ownerId === (entity.id || entity));
-const ownedTBills = entity.tBills || [];
-
-value += ownedBonds.reduce((sum, b) => sum + (b.faceValue || 1000), 0);
-value += ownedTBills.reduce((sum, t) => sum + 1000, 0); // jeśli TBille zawsze 1000
+    value += allBonds.filter(bond => bond.ownerId === entity.id).reduce((sum, bond) => sum + (typeof getBondValue === 'function' ? getBondValue(bond) : (bond.faceValue || 1000)), 0);
+    value += (entity.tBills || []).length * 1000;
     return value;
 }
 

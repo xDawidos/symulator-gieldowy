@@ -829,7 +829,6 @@ group('Fundusz gracza (etap B)', () => {
         allBonds.length = 0;
         const gig = marketIndexes.find(index => index.id === 'GIG');
         gig.value = 100;
-        playerLoan.missedPayments = 0;
         startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
         return { a, b, gig };
     }

@@ -210,11 +210,6 @@ const startupOfferEventsPrompts = [
     }
 ];
 
-function getRandomInRange(min, max) { return Math.random() * (max - min) + min; }
-function getRandomIntInRange(min, max) { return Math.floor(Math.random() * (max - min + 1)) + Math.ceil(min); }
-function getRandomElement(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
-
-
 function triggerMainMarketEventCycle() {
     if (isSkillUnlocked('sixthSense') && Math.random() < 0.15) {
         triggerSixthSenseEvent();
@@ -503,7 +498,6 @@ const festivalPlayerEvents = [
         rarity: 0.10,
         message: () => `💡 Podczas prezentacji na stoisku wpadasz na genialny pomysł biznesowy! Otrzymujesz bonus XP.`,
         effect: () => {
-            playerXP += 50;
             displayXP();
         }
     },
@@ -626,11 +620,8 @@ const festivalPlayerEvents = [
                 if (stock) {
                     applyPriceEffect(stock.symbol, 0.05, 'positive', 'review');
                 }
-            } else if (playerCompany) {
-                playerCompany.cashInvested += 10000;
-                playerCompany.value += 10000;
             }
-            playerCash += 5000;
+            playerWallet.cash += 5000; // nagroda trafia do portfela prywatnego, nie do funduszu
             displayCash();
         }
     },
@@ -643,56 +634,6 @@ const festivalPlayerEvents = [
             stocks.forEach(s => { if (!s.assetType) changeReputation('player', s.symbol, 3); });
         }
     },
-    {
-        id: 'fest_bank_loan_discount',
-        rarity: 0.15, // Dość częste, jeśli są banki
-        message: (bankName) => `🏦 Specjalna oferta festynowa od ${bankName}! Oferują Ci ${getRandomIntInRange(5, 15)}% zniżki na oprocentowanie *nowego* kredytu komercyjnego zaciągniętego w ciągu najbliższych 2 minut!`,
-        condition: (participant) => {
-            // Warunek: Gracz uczestniczy ORAZ na festynie jest co najmniej jeden bank
-            return festival.participants.some(p => p.isBank === true);
-        },
-        effect: (participant) => {
-            // Wybierz losowy bank uczestniczący w festynie
-            const participatingBanks = festival.participants.filter(p => p.isBank === true);
-            if (participatingBanks.length === 0) return; // Na wszelki wypadek
-            const offeringBank = getRandomElement(participatingBanks);
-            const discountPercentage = getRandomInRange(0.05, 0.15); // Zniżka 5-15%
-            const bonusDuration = 120 * 1000; // 2 minuty czasu RZECZYWISTEGO
-
-            activePlayerBankBonuses.push({
-                bankId: offeringBank.ownerId,
-                type: 'loan',
-                value: discountPercentage, // Wartość zniżki (np. 0.1 dla 10%)
-                expiryTime: Date.now() + bonusDuration
-            });
-            // Informacja dla gracza (już jest w message, ale można dodać log)
-            logEvent(`[Festyn Bank] Otrzymano ofertę zniżki ${Math.round(discountPercentage*100)}% na kredyt w ${offeringBank.ownerName}.`);
-        }
-    },
-    {
-        id: 'fest_bank_deposit_bonus',
-        rarity: 0.15, // Dość częste, jeśli są banki
-        message: (bankName) => `💰 Bonus depozytowy od ${bankName}! Złóż *nowy* depozyt w ciągu 2 minut, a otrzymasz +${getRandomInRange(0.5, 1.5).toFixed(1)}% do standardowego oprocentowania przez rok!`,
-        condition: (participant) => {
-            // Warunek: Gracz uczestniczy ORAZ na festynie jest co najmniej jeden bank
-            return festival.participants.some(p => p.isBank === true);
-        },
-        effect: (participant) => {
-            const participatingBanks = festival.participants.filter(p => p.isBank === true);
-            if (participatingBanks.length === 0) return;
-            const offeringBank = getRandomElement(participatingBanks);
-            const bonusPercentagePoint = getRandomInRange(0.005, 0.015); // Bonus 0.5-1.5 punktu procentowego
-            const bonusDuration = 120 * 1000;
-
-            activePlayerBankBonuses.push({
-                bankId: offeringBank.ownerId,
-                type: 'deposit',
-                value: bonusPercentagePoint, // Wartość bonusu (np. 0.01 dla +1%)
-                expiryTime: Date.now() + bonusDuration
-            });
-            logEvent(`[Festyn Bank] Otrzymano ofertę bonusu +${(bonusPercentagePoint*100).toFixed(1)}% do depozytu w ${offeringBank.ownerName}.`);
-        }
-    }
 ];
 
 /**
@@ -732,8 +673,6 @@ function triggerEvent(chosenEvent, playerParticipant) {
     if (target.type === 'company') {
         const stock = stocks.find(s => s.symbol === target.id);
         if (stock) targetName = stock.name;
-    } else if (target.type === 'player_company' && playerCompany) {
-        targetName = playerCompany.name;
     } else if (target.type === 'city') {
         targetName = 'Miasto Gdańsk';
     }
@@ -760,8 +699,6 @@ function triggerSingleFestivalEvent(chosenEvent, playerParticipant) {
     if (target.type === 'company') {
         const stock = stocks.find(s => s.symbol === target.id);
         if (stock) targetName = stock.name;
-    } else if (target.type === 'player_company' && playerCompany) {
-        targetName = playerCompany.name;
     } else if (target.type === 'city') {
         targetName = 'Miasto Gdańsk';
     }

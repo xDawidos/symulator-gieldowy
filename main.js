@@ -149,7 +149,6 @@ function setGameSpeed(speedMultiplier) {
         // --- AKTUALIZACJA LOGIKI GRY ---
         const gameTimeDelta = BASE_DELAYS.stockUpdate; // Każdy tick to zawsze 1 sekunda CZASU GRY
         cleanupBankruptStocks(currentSpeedMultiplier);
-        clearExpiredBankBonuses();
         updateStockPrices();
         updateMarketIndexes(); // GIG/TIG5/SIG20 — benchmark funduszu (wcześniej nigdy nie był liczony)
         updateHoldingCompanies();
@@ -161,10 +160,6 @@ function setGameSpeed(speedMultiplier) {
         }
         checkTBillAccess();
         updateMarketVolatilityIndex();
-        if (FEATURE_FLAGS.playerCompany) {
-            updatePassiveWork(gameTimeDelta);
-            updateCompanyStatus();
-        }
         updateDividendTimers(gameTimeDelta);
         updateFund(gameTimeDelta); // NAV, obsunięcie, zamykanie okresów funduszu
         updateFestival(); // Aktualizacja festynu
@@ -211,16 +206,6 @@ function setGameSpeed(speedMultiplier) {
             }
         }
         // --- KONIEC BLOKU (DODANE Z main2.js) ---
-
-        // Odświeżanie licznika firmy w modalu pracy
-        if (document.getElementById('work-modal').style.display === 'block' && playerCompany) {
-            const timerEl = document.getElementById('company-income-timer');
-            if (timerEl && playerCompany.lastIncomeTime) {
-                const remainingMs = (playerCompany.lastIncomeTime + playerCompany.incomeInterval) - Date.now();
-                const remainingSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
-                timerEl.textContent = remainingSeconds;
-            }
-        }
 
         // Odświeżanie otwartych modali
         if (document.getElementById('leaderboard-modal').style.display === 'block') {
@@ -338,15 +323,6 @@ gameTimers.weekly = setInterval(() => {
         processCompanyBanking(); //
         processBankStartupSponsorship(); //
 
-        // Naliczanie odsetek od depozytów komercyjnych gracza (bez zmian)
-        playerCommercialDeposits.forEach(deposit => { //
-            const weeklyRate = deposit.interestRate / 52; //
-            const interestEarned = deposit.amount * weeklyRate; //
-            playerCash += interestEarned; //
-            if (interestEarned > 0.01) { //
-                logEvent(` Naliczono ${interestEarned.toFixed(2)} PLN odsetek od depozytu w ${deposit.bankName}.`, 'market'); //
-            }
-        });
 
         // Fundusz gracza: opłata za zarządzanie, zaufanie, decyzje klientów
         processFundWeekly();
@@ -355,159 +331,6 @@ gameTimers.weekly = setInterval(() => {
         processMailWeekly();          // prenumeraty, spam, plotki (mail.js)
         processPrivatizationWeekly(); // zapisy na akcje w prywatyzacji (city.js)
 
-        // Koszty firmy gracza (mechanika wyłączona w etapie B)
-        if (FEATURE_FLAGS.playerCompany && playerCompany && playerCompany.employees.length > 0) { //
-            let totalEmployeeSalary = 0; //
-            let totalEquipmentRunningCost = 0; //
-
-            // Koszty pracowników
-            playerCompany.employees.forEach(employee => { //
-                totalEmployeeSalary += employee.salary || EMPLOYEE_BASE_SALARY; //
-            });
-
-            // Modyfikator HR
-            if (playerCompany.hrLevel > 0) { //
-                const salaryReduction = 1 - (playerCompany.hrLevel * 0.05); //
-                totalEmployeeSalary *= salaryReduction; //
-            }
-
-            // Koszty sprzętu
-            playerCompany.equipment.forEach(eq => { //
-                totalEquipmentRunningCost += eq.quantity * getRandomInRange(eq.runningCostMin, eq.runningCostMax); //
-            });
-
-            const totalCompanyCosts = totalEmployeeSalary + totalEquipmentRunningCost; //
-
-            if (playerCash >= totalCompanyCosts) { //
-                playerCash -= totalCompanyCosts; //
-                if (totalEmployeeSalary > 0) logEvent(`💸 Twoja firma wypłaciła ${totalEmployeeSalary.toFixed(2)} PLN pensji.`); //
-                if (totalEquipmentRunningCost > 0) logEvent(`💡 Twoja firma zapłaciła ${totalEquipmentRunningCost.toFixed(2)} PLN za utrzymanie sprzętu.`); //
-            } else {
-                logEvent(`🚨 Brak wystarczających środków (${totalCompanyCosts.toFixed(2)} PLN) na pokrycie kosztów firmy! Morale pracowników spada!`, 'error'); //
-                 if (typeof applyMoralePenalty === 'function') { //
-                     applyMoralePenalty(playerCompany.employees, 10); //
-                 }
-            }
-            displayCash(); //
-        }
-        if (playerCompany && typeof updateAllEmployeeMorale === 'function') { //
-            updateAllEmployeeMorale(); //
-        }
-
-        // ===>>> ZMODYFIKOWANA PĘTLA SPŁATY KREDYTÓW GRACZA <<<===
-        const now = Date.now(); // Pobierz aktualny czas
-        for (let index = playerCommercialLoans.length - 1; index >= 0; index--) { //
-            const loan = playerCommercialLoans[index]; //
-
-            // --- NOWA LOGIKA DLA POŻYCZEK LOMBARDOWYCH ---
-            if (loan.isPawnLoan) { //
-                // To jest pożyczka lombardowa, sprawdzamy tylko termin zapadalności
-                if (now >= loan.maturityDate) { //
-                    const pawnShop = stocks.find(s => s.symbol === loan.collectorSymbol); //
-                    
-                    if (playerCash >= loan.amount) { //
-                        // Gracz ma pieniądze - automatyczna spłata
-                        playerCash -= loan.amount; //
-                        if (pawnShop) pawnShop.cash += loan.amount; //
-                        
-                        logEvent(`✅ Pożyczka lombardowa w ${loan.bankName} została automatycznie spłacona (${loan.amount.toFixed(2)} PLN).`, 'success'); //
-                        
-                        // Odblokuj akcje
-                        if (loan.collateral && typeof unlockCollateral === 'function') { //
-                             unlockCollateral(loan.collateral.symbol, loan.collateral.quantity); //
-                        }
-                        playerCommercialLoans.splice(index, 1); //
-                    
-                    } else {
-                        // Gracz nie ma pieniędzy - DEFAULT
-                        logEvent(`❌ NIE SPŁACONO POŻYCZKI LOMBARDOWEJ! ${loan.bankName} przejmuje Twoje ${loan.collateral.quantity} akcji ${loan.collateral.symbol}!`, 'error'); //
-                        showToast(`LOMBARD PRZEJĄŁ AKCJE ${loan.collateral.symbol}!`, 'error'); //
-
-                        // Lombard przejmuje akcje
-                        const holding = playerPortfolio[loan.collateral.symbol]; //
-                        if (holding) { //
-                            holding.shares = Math.max(0, holding.shares - loan.collateral.quantity); //
-                            if (holding.shares <= 0) delete playerPortfolio[loan.collateral.symbol]; //
-                        }
-                        
-                        if (pawnShop) { //
-                            if (!pawnShop.holdingPortfolio) pawnShop.holdingPortfolio = {}; //
-                            const pawnHolding = pawnShop.holdingPortfolio[loan.collateral.symbol]; //
-                            if (pawnHolding) { //
-                                pawnHolding.quantity += loan.collateral.quantity; //
-                            } else {
-                                const stock = stocks.find(s => s.symbol === loan.collateral.symbol); //
-                                pawnShop.holdingPortfolio[loan.collateral.symbol] = { 
-                                    quantity: loan.collateral.quantity, 
-                                    purchasePrice: stock ? stock.price : 0 
-                                };
-                            }
-                        }
-                        playerCommercialLoans.splice(index, 1); //
-                    }
-                }
-                // Jeśli termin nie minął, nic nie rób (odsetki doliczone na starcie)
-                continue; // Przejdź do następnej pożyczki
-            }
-            // --- KONIEC LOGIKI LOMBARDU ---
-
-
-            // --- Logika dla kredytów bankowych i windykacyjnych (stara logika) ---
-            const weeklyInterest = loan.amount * (loan.interestRate / 52); 
-            loan.amount += weeklyInterest; //
-
-            let autoRepayActive = typeof isAutoRepayEnabled !== 'undefined' ? isAutoRepayEnabled : true; //
-
-            if (autoRepayActive && playerCash >= loan.weeklyPayment) { 
-                const payment = Math.min(loan.weeklyPayment, loan.amount); 
-                playerCash -= payment; 
-                loan.amount -= payment; 
-                chargeAccountingFee(payment, 'player');
-
-                // --- NOWA LOGIKA: Kierowanie płatności ---
-                if (loan.collectorSymbol) { 
-                    // To jest dług windykatora
-                    const collector = stocks.find(s => s.symbol === loan.collectorSymbol); 
-                    if (collector) { 
-                        collector.cash += payment; // Płatność idzie do WRONY
-                    }
-                } else if (loan.bankId) { 
-                    // To jest normalny dług bankowy
-                    const bank = commercialBanks.find(b => b.id === loan.bankId); 
-                    if (bank) { //
-                        bank.cash += payment; //
-                        if (bank.loanPortfolio && bank.loanPortfolio['player']) { 
-                            const bankLoanIndex = bank.loanPortfolio['player'].findIndex(bl => bl.id === loan.id); 
-                            if (bankLoanIndex !== -1) { //
-                                bank.loanPortfolio['player'][bankLoanIndex].remainingAmount -= payment; 
-                                if (bank.loanPortfolio['player'][bankLoanIndex].remainingAmount <= 0.01) { 
-                                    bank.loanPortfolio['player'].splice(bankLoanIndex, 1); 
-                                }
-                            }
-                        }
-                    }
-                }
-                // --- KONIEC NOWEJ LOGIKI ---
-
-                if (loan.amount <= 0.01) { //
-                    logEvent(` Kredyt komercyjny w ${loan.bankName} został spłacony!`, 'success'); //
-                    if (loan.collateral && typeof unlockCollateral === 'function') { //
-                         unlockCollateral(loan.collateral.symbol, loan.collateral.quantity); //
-                    }
-                    playerCommercialLoans.splice(index, 1); //
-                } else {
-                    logEvent(` Automatycznie spłacono ${payment.toFixed(2)} PLN raty kredytu w ${loan.bankName}.`, 'market'); //
-                }
-            } else if (autoRepayActive) { //
-                logEvent(`⚠️ Brak środków na spłatę raty kredytu komercyjnego w ${loan.bankName}!`, 'warning'); //
-                loan.missedPayments = (loan.missedPayments || 0) + 1; //
-                if (loan.missedPayments >= 3 && loan.collateral && typeof triggerCollateralAuction === 'function') { //
-                    triggerCollateralAuction(loan); //
-                    playerCommercialLoans.splice(index, 1); //
-                }
-            }
-        } // Koniec pętli for dla pożyczek gracza
-        // ===>>> KONIEC MODYFIKACJI PĘTLI KREDYTOWEJ <<<===
 
 
         // Utrzymanie standardowego R&D oraz wznowienia inwestycji bankowych (osobne systemy).
@@ -731,7 +554,6 @@ function initializeGame() {
     if (typeof displayPortfolio === 'function') displayPortfolio();
     if (typeof displayXP === 'function') displayXP();
     if (typeof displayMarketIndexes === 'function') displayMarketIndexes();
-    if (typeof updateWorkButtonVisibility === 'function') updateWorkButtonVisibility();
     if (typeof updateDividendTrackerButtonVisibility === 'function') updateDividendTrackerButtonVisibility();
 
     const pauseButton = document.getElementById('pause-game-btn');

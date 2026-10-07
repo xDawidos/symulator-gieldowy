@@ -689,19 +689,6 @@ function displayPortfolio() {
         hasOwnedStocks = true;
     }
 
-    // --- Wyświetlanie Depozytów Komercyjnych ---
-    if (playerCommercialDeposits.length > 0) {
-        const depositHeader = document.createElement('li');
-        depositHeader.innerHTML = `<hr><strong>Depozyty Komercyjne:</strong>`;
-        myStocksList.appendChild(depositHeader);
-        playerCommercialDeposits.forEach(dep => {
-            const depItem = document.createElement('li');
-            depItem.textContent = `- ${dep.bankName}: ${dep.amount.toFixed(2)} PLN (${(dep.interestRate * 100).toFixed(1)}%)`;
-            myStocksList.appendChild(depItem);
-        });
-        hasOwnedStocks = true;
-    }
-
     // --- Wyświetlanie Wkładu w Pulę Inwestycyjną ---
     const playerPoolStake = investmentPool.playerStakes['player'] || 0;
     if (playerPoolStake > 0) {
@@ -720,32 +707,10 @@ function displayPortfolio() {
     const myLiabilitiesList = document.getElementById('my-liabilities-list');
     myLiabilitiesList.innerHTML = '';
     let hasLiabilities = false;
-    if (playerCommercialLoans.length > 0) {
-        playerCommercialLoans.forEach(loan => {
-            const loanItem = document.createElement('li');
-            loanItem.style.backgroundColor = '#fff';
-            loanItem.style.marginBottom = '6px';
-            loanItem.style.padding = '4px';
-            if (loan.isPawnLoan) {
-                const timeLeft = Math.max(0, Math.ceil((loan.maturityDate - Date.now()) / 1000));
-                const minutesLeft = Math.floor(timeLeft / 60);
-                const secondsLeft = timeLeft % 60;
-                loanItem.innerHTML = `🏦 Lombard (${loan.bankName}): <strong class="loss">${loan.amount.toFixed(2)} PLN</strong> [Zastaw: ${loan.collateral.quantity} ${loan.collateral.symbol}] <span style="color:#856404;">(Termin: ${minutesLeft}m ${secondsLeft}s)</span>`;
-            } else if (loan.collectorSymbol && !loan.bankId) {
-                loanItem.innerHTML = `⚠️ Windykator (${loan.bankName}): <strong class="loss">${loan.amount.toFixed(2)} PLN</strong> (Rata: ${loan.weeklyPayment.toFixed(2)} PLN/tydz.)`;
-            } else {
-                loanItem.innerHTML = `Kredyt (${loan.bankName}): <strong class="loss">${loan.amount.toFixed(2)} PLN</strong> (Rata: ${loan.weeklyPayment.toFixed(2)} PLN/tydz.)`;
-            }
-            if (loan.collateral && !loan.isPawnLoan) {
-                loanItem.innerHTML += ` [Zastaw: ${loan.collateral.quantity} ${loan.collateral.symbol}]`;
-            }
-            // Przycisk szybkiej spłaty
-            const repaySpan = document.createElement('span');
-            repaySpan.style.marginLeft = '8px';
-            repaySpan.innerHTML = `<button onclick="repayCommercialLoan('${loan.id}', ${loan.amount.toFixed(2)})" style="font-size:10px;padding:1px 6px;background:#28a745;color:#fff;border:none;border-radius:3px;cursor:pointer;" title="Spłać całość">Spłać</button>`;
-            loanItem.appendChild(repaySpan);
-            myLiabilitiesList.appendChild(loanItem);
-        });
+    for (const loan of playerFund?.pawnLoans || []) { // zastawy funduszu w lombardzie (finance.js)
+        const loanItem = document.createElement('li');
+        loanItem.innerHTML = `🏦 Lombard: <strong class="loss">${loan.principal.toFixed(2)} zł</strong> [zastaw: ${loan.shares} ${escapeHtml(loan.symbol)}] · ${loan.weeksLeft} tyg.`;
+        myLiabilitiesList.appendChild(loanItem);
         hasLiabilities = true;
     }
 
@@ -925,61 +890,6 @@ function displayEtfs() {
         actionsCell.appendChild(sellButton);
     });
 }
-
-/** Kontrola mediów (PR) — panel w skrzynce mailowej, od szkolenia „Manipulacja mediami”. */
-function renderMediaInfluence() {
-    // 6. Sekcja "Wpływ na Media" (logika bez zmian)
-    const mediaSection = document.getElementById('media-influence-section');
-    const positiveControls = document.getElementById('positive-pr-controls');
-    const blackControls = document.getElementById('black-pr-controls');
-    const skillLvl = getSkillLevel('mediaManipulation');
-
-    if (skillLvl > 0 && mediaSection && positiveControls && blackControls) {
-        mediaSection.style.display = 'block';
-        
-        // Pozytywny PR (Lvl 1+)
-        positiveControls.style.display = 'block';
-        const posSelect = document.getElementById('positive-pr-select');
-        posSelect.innerHTML = ''; 
-        const ownedStocks = stocks.filter(s => {
-            const holding = playerPortfolio[s.symbol];
-            return holding && !s.assetType && (holding.shares / s.totalShares > 0.5);
-        });
-        if (ownedStocks.length > 0) {
-            ownedStocks.forEach(s => { posSelect.innerHTML += `<option value="${s.symbol}">${s.name} (${s.symbol})</option>`; });
-            document.getElementById('positive-pr-btn').disabled = false;
-        } else {
-            posSelect.innerHTML = '<option value="">(Brak spółek 👑)</option>';
-            document.getElementById('positive-pr-btn').disabled = true;
-        }
-
-        // Czarny PR (Lvl 2+)
-        if (skillLvl >= 2) {
-            blackControls.style.display = 'block';
-            const blackSelect = document.getElementById('black-pr-select');
-            blackSelect.innerHTML = ''; 
-            const targetStocks = stocks.filter(s => {
-                 const holding = playerPortfolio[s.symbol];
-                 const isOwned = holding && !s.assetType && (holding.shares / s.totalShares > 0.5);
-                 return !s.assetType && !s.isBankrupt && !s.isSubsidiaryOf && !isOwned;
-            });
-            if (targetStocks.length > 0) {
-                targetStocks.forEach(s => { blackSelect.innerHTML += `<option value="${s.symbol}">${s.name} (${s.symbol})</option>`; });
-                document.getElementById('black-pr-btn').disabled = false;
-            } else {
-                 blackSelect.innerHTML = '<option value="">(Brak celów)</option>';
-                 document.getElementById('black-pr-btn').disabled = true;
-            }
-            const currentRisk = BLACK_PR_BASE_RISK + (blackPRRiskCounter * BLACK_PR_RISK_INCREASE);
-            document.getElementById('black-pr-risk-display').textContent = `${(currentRisk * 100).toFixed(1)}%`;
-        } else {
-            blackControls.style.display = 'none';
-        }
-    } else if (mediaSection) {
-        mediaSection.style.display = 'none';
-    }
-}
-
 
 function displayMarketIndexes() {
     const indexesPanel = document.getElementById('indexes-panel');
@@ -1553,15 +1463,6 @@ function switchManagementTab(tabName) {
     document.getElementById(`tab-btn-mgmt-${tabName}`).classList.add('active');
 }
 
-function toggleAutoRepay(isEnabled) {
-    // Ta funkcja jest specyficzna dla ui2.js (prosty kredyt). 
-    // W ui.js (baza) system auto-spłaty nie jest zaimplementowany dla kredytów komercyjnych.
-    // Na razie zostawiamy ją, ale może nie być używana.
-    isAutoRepayEnabled = isEnabled;
-    logEvent(`System automatycznej spłaty kredytu został ${isEnabled ? 'WŁĄCZONY' : 'WYŁĄCZONY'}.`, 'market');
-}
-
-
 // Plik: ui.js
 // Ta funkcja jest z ui.js (baza) i obsługuje złożony modal bankowy (z zakładkami)
 function openBankModal() {
@@ -1587,53 +1488,7 @@ function openBankModal() {
         }
     }
 
-    // Logika z ui2.js dotycząca 'playerLoan' (prosty kredyt) jest zastąpiona
-    // przez system bankowości komercyjnej z ui.js.
-    // Poniższe elementy z ui2.js (dotyczące playerLoan) mogą nie istnieć w HTML dla ui.js
-
-    // Aktualizacja checkboxa auto-spłaty (z ui2.js)
-    const autoRepayToggle = document.getElementById('auto-repay-toggle');
-    if (autoRepayToggle) {
-        autoRepayToggle.checked = isAutoRepayEnabled;
-    }
-
-    // Aktualizacja informacji o pominiętych ratach (z ui2.js)
-    const missedPaymentsInfo = document.getElementById('missed-payments-info');
-    if (missedPaymentsInfo) {
-        // Zakładamy, że 'playerLoan' nadal istnieje równolegle, albo ta sekcja powinna być usunięta
-        // Jeśli ui.js *całkowicie* usuwa playerLoan, ten blok jest martwy.
-        // Na potrzeby łączenia, zakładamy, że HTML może jeszcze to mieć.
-        if (typeof playerLoan !== 'undefined' && playerLoan.missedPayments > 0) {
-            if (playerLoan.missedPayments >= 3) {
-                missedPaymentsInfo.textContent = `KONTO ZABLOKOWANE! Posiadasz ${playerLoan.missedPayments} pominiętych rat. Spłać część długu, aby odblokować inwestycje.`;
-                missedPaymentsInfo.style.color = '#dc3545';
-            } else {
-                missedPaymentsInfo.textContent = `Liczba pominiętych rat: ${playerLoan.missedPayments}. Przy 3 ratach konto zostanie zablokowane.`;
-                missedPaymentsInfo.style.color = '#ffc107';
-            }
-            missedPaymentsInfo.style.display = 'block';
-        } else {
-            missedPaymentsInfo.style.display = 'none';
-        }
-    }
-
-
-    // Aktualizacja sekcji licencji (z bazy ui.js)
-    const licenseInfoText = document.getElementById('license-info-text');
-    const licenseButton = document.getElementById('buy-license-btn');
-    const nextLevel = playerAccessLevel + 1;
-    const nextExchange = Object.values(exchanges).find(e => e.level === nextLevel);
-
-    if (licenseInfoText && licenseButton) { // Sprawdź, czy elementy istnieją
-        if (nextExchange) {
-            licenseInfoText.innerHTML = `Następny poziom dostępu: <strong>${nextExchange.name}</strong><br>Koszt licencji: <strong>${nextExchange.licenseCost.toLocaleString('pl-PL')} PLN</strong>`;
-            licenseButton.style.display = 'block';
-            licenseButton.disabled = playerCash < nextExchange.licenseCost;
-        } else {
-            licenseInfoText.textContent = "Gratulacje! Posiadasz dostęp do wszystkich giełd.";
-            licenseButton.style.display = 'none';
-        }
-    }
+    // Dostęp do giełd wynika ze stanowiska (fund.js) — licencji już nie ma.
 
 
     // Aktualizacja sekcji ofert do państwa (z bazy ui.js)
@@ -1692,366 +1547,13 @@ function openStockDetailsModal(symbol) {
     modal.style.display = 'block';
 }
 
-let nextNumberToClick = 1;
-const WORK_REWARD = 100;
-
-function updateWorkButtonVisibility() {
-    const workBtn = document.getElementById('open-work-btn');
-    if (!workBtn) return;
-
-    workBtn.style.display = getSkillLevel('work') > 0 ? 'inline-block' : 'none';
-}
-
-function openWorkModal() {
-    const workLevel = getSkillLevel('work');
-    if (workLevel === 0) return;
-
-    const modal = document.getElementById('work-modal');
-    const activePanel = document.getElementById('active-work-panel');
-    const passivePanel = document.getElementById('passive-work-panel');
-    const companyPanel = document.getElementById('company-panel');
-    const separator = document.getElementById('work-separator');
-
-    // Ukrywamy wszystko
-    activePanel.style.display = 'none';
-    passivePanel.style.display = 'none';
-    companyPanel.style.display = 'none';
-    separator.style.display = 'none';
-
-    if (workLevel >= 4 && playerCompany) {
-        // --- NOWA LOGIKA DLA PANELU FIRMY ---
-        companyPanel.style.display = 'block';
-
-        document.getElementById('company-name').textContent = playerCompany.name;
-        document.getElementById('company-value').textContent = playerCompany.value.toLocaleString('pl-PL', { maximumFractionDigits: 0 });
-
-        // Aktualizacja dochodu (teraz jest liczony w updateCompanyStatus)
-        // Musimy pobrać ostatnio obliczony dochód lub pokazać 0
-        const lastCycleIncomeElement = document.getElementById('company-income');
-        // Tu można by przechowywać ostatni dochód w playerCompany, na razie 0
-        lastCycleIncomeElement.textContent = "0.00"; // Placeholder
-
-        // Lista pracowników
-        const employeeList = document.getElementById('employee-list');
-        const employeeCountSpan = document.getElementById('employee-count');
-        employeeList.innerHTML = '';
-        employeeCountSpan.textContent = playerCompany.employees.length;
-        if (playerCompany.employees.length > 0) {
-            playerCompany.employees.forEach(emp => {
-                const li = document.createElement('li');
-                li.style.display = 'flex';
-                li.style.justifyContent = 'space-between';
-                li.style.alignItems = 'center';
-                li.style.marginBottom = '5px';
-                li.style.padding = '3px';
-                li.style.borderBottom = '1px dotted #eee';
-
-                const performancePercent = Math.round(emp.performance * 100);
-                const moraleText = emp.morale.toFixed(0);
-                let statusText = '';
-                if (emp.status === 'vacation') statusText = '🏖️';
-                else if (emp.status === 'sick') statusText = 'ố';
-
-                li.innerHTML = `
-                    <span>${statusText} ${emp.name} (Wyd: ${performancePercent}%, Morale: ${moraleText})</span>
-                    <button onclick="fireEmployee(${emp.id})" style="font-size: 11px; padding: 2px 5px; background-color: #ffdddd;">Zwolnij</button>
-                `;
-                employeeList.appendChild(li);
-            });
-        } else {
-            employeeList.innerHTML = '<li>Brak pracowników.</li>';
-        }
-
-        // Lista sprzętu
-        const equipmentList = document.getElementById('equipment-list');
-        const equipmentCountSpan = document.getElementById('equipment-count');
-        const employeeSlotsSpan = document.getElementById('employee-slots-for-equipment');
-        equipmentList.innerHTML = '';
-        const totalEquipment = playerCompany.equipment.reduce((sum, eq) => sum + eq.quantity, 0);
-        equipmentCountSpan.textContent = totalEquipment;
-        employeeSlotsSpan.textContent = playerCompany.employees.length; // Max sprzętu = liczba pracowników
-
-        if (playerCompany.equipment.length > 0) {
-            playerCompany.equipment.forEach(eq => {
-                const li = document.createElement('li');
-                li.textContent = `- ${eq.name}: ${eq.quantity} szt.`;
-                equipmentList.appendChild(li);
-            });
-        } else {
-            equipmentList.innerHTML = '<li>Brak sprzętu.</li>';
-        }
-
-        // Wypełnienie selecta sprzętu
-        const equipmentSelect = document.getElementById('equipment-select');
-        equipmentSelect.innerHTML = ''; // Wyczyść opcje
-        for (const id in EQUIPMENT_TYPES) {
-            const eq = EQUIPMENT_TYPES[id];
-            const option = document.createElement('option');
-            option.value = id;
-            option.textContent = `${eq.name} (${eq.purchaseCost} PLN)`;
-            equipmentSelect.appendChild(option);
-        }
-
-        // Dział HR
-        const hrLevelSpan = document.getElementById('hr-level');
-        const hrReductionSpan = document.getElementById('hr-salary-reduction');
-        const hrCostSpan = document.getElementById('hr-upgrade-cost');
-        const hrUpgradeBtn = document.getElementById('upgrade-hr-btn');
-        const hrCostP = document.getElementById('hr-upgrade-cost-p');
-
-        hrLevelSpan.textContent = playerCompany.hrLevel;
-        hrReductionSpan.textContent = `${playerCompany.hrLevel * 5}%`;
-
-        if (playerCompany.hrLevel < 10) {
-            const upgradeCost = 5000 * Math.pow(2, playerCompany.hrLevel); // Przykładowy rosnący koszt
-            hrCostSpan.textContent = upgradeCost.toLocaleString('pl-PL');
-            hrUpgradeBtn.disabled = playerCash < upgradeCost;
-            hrUpgradeBtn.style.display = 'inline-block';
-            hrCostP.style.display = 'block';
-        } else {
-            hrCostSpan.textContent = 'MAX';
-            hrUpgradeBtn.disabled = true;
-            hrUpgradeBtn.style.display = 'none';
-            hrCostP.style.display = 'none';
-        }
-
-        // Przycisk IPO (bez zmian)
-        const ipoBtn = document.getElementById('ipo-btn');
-        ipoBtn.disabled = playerCompany.value < 25000;
-        // --- KONIEC NOWEJ LOGIKI ---
-
-    } else if (workLevel === 3) {
-        // Poziom 3: panel aktywny i pasywny (bez zmian)
-        activePanel.style.display = 'block';
-        passivePanel.style.display = 'block';
-        separator.style.display = 'block';
-        startWorkMinigame();
-        updatePassiveWorkUI();
-    } else {
-        // Poziom 1 i 2: panel aktywny (bez zmian)
-        activePanel.style.display = 'block';
-        startWorkMinigame();
-    }
-    modal.style.display = 'block';
-}
 
 // Nowa funkcja do kupowania wybranego sprzętu
-function buySelectedEquipment() {
-    const select = document.getElementById('equipment-select');
-    if (select.value) {
-        buyEquipment(select.value, 1); // Kupujemy jedną sztukę
-    }
-}
-
 // Nowa funkcja do ulepszania HR
-function upgradeHR() {
-    if (!playerCompany || playerCompany.hrLevel >= 10) return;
-    const upgradeCost = 5000 * Math.pow(2, playerCompany.hrLevel);
-    if (playerCash < upgradeCost) {
-        alert("Za mało gotówki na ulepszenie HR!");
-        return;
-    }
-    playerCash -= upgradeCost;
-    playerCompany.hrLevel++;
-    logEvent(`🏢 Ulepszono dział HR do poziomu ${playerCompany.hrLevel}!`);
-    displayCash();
-    openWorkModal(); // Odśwież widok
-}
-
 // Nowe funkcje do obsługi modala zatrudniania
-function openHireModal() {
-    const modal = document.getElementById('hire-employee-modal');
-    document.getElementById('candidate-list').innerHTML = ''; // Wyczyść listę kandydatów
-    modal.style.display = 'block';
-}
-
-function generateCandidates(contractType) {
-    const candidateListDiv = document.getElementById('candidate-list');
-    candidateListDiv.innerHTML = ''; // Wyczyść poprzednich
-    const candidateCount = 3; // Pokaż 3 kandydatów
-
-    for (let i = 0; i < candidateCount; i++) {
-        const isPermanent = contractType === 'permanent';
-        const performanceMultiplier = isPermanent ? getRandomInRange(0.9, 1.4) : getRandomInRange(0.7, 1.1); // Lepsza wydajność na stałe
-        const salaryMultiplier = isPermanent ? getRandomInRange(1.0, 1.3) : getRandomInRange(0.8, 1.0); // Wyższa pensja na stałe
-        const baseSalary = EMPLOYEE_BASE_SALARY;
-
-        const candidate = {
-            name: generateEmployeeName(),
-            performance: performanceMultiplier,
-            salary: baseSalary * salaryMultiplier,
-            contractType: contractType
-        };
-
-        const card = createCandidateCard(candidate);
-        candidateListDiv.appendChild(card);
-    }
-}
-
-function createCandidateCard(candidate) {
-    const card = document.createElement('div');
-    card.style.border = "1px solid #ccc";
-    card.style.padding = "10px";
-    card.style.borderRadius = "5px";
-    card.style.width = "160px";
-    card.style.textAlign = "center";
-
-    const hrLevel = playerCompany ? playerCompany.hrLevel : 0;
-    let performanceText = '??';
-    let salaryText = '??';
-
-    // Logika odkrywania statystyk z HR
-    if (hrLevel >= 8) { // Wysoki poziom HR odkrywa wszystko
-        performanceText = `${Math.round(candidate.performance * 100)}%`;
-        salaryText = `${candidate.salary.toFixed(2)} PLN/tydz.`;
-    } else if (hrLevel >= 4) { // Średni poziom daje zakresy
-        const perfLower = Math.max(70, Math.round(candidate.performance * 100) - 10);
-        const perfUpper = Math.min(150, Math.round(candidate.performance * 100) + 10);
-        performanceText = `${perfLower}-${perfUpper}%`;
-        const salaryLower = Math.max(50, candidate.salary - 15);
-        const salaryUpper = candidate.salary + 15;
-        salaryText = `${salaryLower.toFixed(0)}-${salaryUpper.toFixed(0)} PLN/tydz.`;
-    } else { // Niski poziom daje tylko "gwiazdki" lub ogólniki
-        if (candidate.performance > 1.2) performanceText = '⭐⭐⭐ (Wysoka)';
-        else if (candidate.performance > 0.9) performanceText = '⭐⭐ (Średnia)';
-        else performanceText = '⭐ (Niska)';
-
-        if (candidate.salary > EMPLOYEE_BASE_SALARY * 1.1) salaryText = 'Wysoka';
-        else if (candidate.salary < EMPLOYEE_BASE_SALARY * 0.9) salaryText = 'Niska';
-        else salaryText = 'Średnia';
-    }
-
-    card.innerHTML = `
-        <h5 style="margin: 0 0 5px 0;">${candidate.name}</h5>
-        <p style="font-size: 12px; margin: 3px 0;">Umowa: ${candidate.contractType === 'permanent' ? 'o Pracę' : 'Zlecenie'}</p>
-        <p style="font-size: 12px; margin: 3px 0;">Wydajność: ${performanceText}</p>
-        <p style="font-size: 12px; margin: 3px 0;">Pensja: ${salaryText}</p>
-        <button onclick='confirmHire(${JSON.stringify(candidate)})' style="margin-top: 10px;">Zatrudnij</button>
-    `;
-    return card;
-}
-
 // Nowa funkcja do potwierdzenia zatrudnienia wybranego kandydata
-function confirmHire(candidateData) {
-     if (!playerCompany) return;
-
-     // Koszt zatrudnienia = pierwsza pensja
-     const hiringCost = candidateData.salary;
-     if (playerCash < hiringCost) {
-         alert(`Nie stać Cię na zatrudnienie tego pracownika (wymagana pierwsza pensja: ${hiringCost.toFixed(2)} PLN).`);
-         return;
-     }
-     playerCash -= hiringCost;
-
-     const newEmployee = {
-        id: Date.now() + Math.random(),
-        name: candidateData.name,
-        performance: candidateData.performance,
-        salary: candidateData.salary,
-        morale: getRandomIntInRange(60, 80),
-        status: 'working',
-        contractType: candidateData.contractType,
-        vacationEnds: 0
-    };
-
-    playerCompany.employees.push(newEmployee);
-    logEvent(`👨‍💼 Zatrudniono nowego pracownika: ${newEmployee.name} (${newEmployee.contractType === 'permanent' ? 'Umowa o Pracę' : 'Zlecenie'}). Zapłacono pierwszą pensję ${hiringCost.toFixed(2)} PLN.`);
-    displayCash();
-
-    // Zamknij modal zatrudniania i odśwież panel firmy
-    document.getElementById('hire-employee-modal').style.display='none';
-    if (document.getElementById('work-modal')?.style.display === 'block') {
-        openWorkModal();
-    }
-}
-
 // Funkcja pomocnicza do odświeżania panelu pasywnego
 // Funkcja pomocnicza do odświeżania panelu pasywnego
-function updatePassiveWorkUI() {
-    const progressBar = document.getElementById('passive-work-progress');
-    const rewardInfo = document.getElementById('passive-reward-info');
-    const collectBtn = document.getElementById('collect-reward-btn');
-    const timerSpan = document.getElementById('passive-work-timer'); // Nowy element
-
-    const progressPercent = (workPassiveProgress / PASSIVE_WORK_INTERVAL) * 100;
-    progressBar.value = progressPercent > 100 ? 100 : progressPercent;
-
-    // Nowa logika licznika
-    const remainingTime = PASSIVE_WORK_INTERVAL - workPassiveProgress;
-    const remainingSeconds = Math.max(0, Math.ceil(remainingTime / 1000));
-    if (timerSpan) {
-        timerSpan.textContent = remainingSeconds;
-    }
-
-    if (progressPercent >= 100) {
-        rewardInfo.textContent = "100.00";
-        collectBtn.disabled = false;
-    } else {
-        rewardInfo.textContent = "0.00";
-        collectBtn.disabled = true;
-    }
-}
-
-function startWorkMinigame() {
-    if (!FEATURE_FLAGS.minigames) { if (typeof showToast === 'function') showToast('Minigry są zamrożone.', 'default'); return; } // wyłączone w etapie B
-    const grid = document.getElementById('work-grid');
-    grid.innerHTML = '';
-    nextNumberToClick = 1;
-    document.getElementById('next-number-info').textContent = nextNumberToClick;
-
-    const numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-
-    // --- NOWA LOGIKA: Tasowanie zależy od poziomu ---
-    // Poziom 1: Tasujemy liczby
-    if (getSkillLevel('work') === 1) {
-        for (let i = numbers.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [numbers[i], numbers[j]] = [numbers[j], numbers[i]];
-        }
-    }
-    // Poziom 2 (i wyższe): Liczby pozostają posortowane
-
-    numbers.forEach(num => {
-        const cell = document.createElement('button');
-        cell.textContent = num;
-        cell.style.padding = '20px';
-        cell.style.fontSize = '18px';
-        cell.style.textAlign = 'center';
-        cell.onclick = () => onNumberClick(num);
-        grid.appendChild(cell);
-    });
-}
-
-function onNumberClick(clickedNumber) {
-    if (clickedNumber === nextNumberToClick) {
-        nextNumberToClick++;
-        document.getElementById('next-number-info').textContent = nextNumberToClick;
-
-        const buttons = document.getElementById('work-grid').children;
-        for (const btn of buttons) {
-            if (parseInt(btn.textContent) === clickedNumber) {
-                btn.disabled = true;
-                btn.style.backgroundColor = '#28a745';
-                btn.style.color = 'white';
-            }
-        }
-
-        if (nextNumberToClick > 10) {
-            // --- NOWA LOGIKA: Nagroda zależy od poziomu ---
-            const workLevel = getSkillLevel('work');
-            const reward = (workLevel >= 2) ? 200 : 100; // Poziom 2 i wyższe dają 200 PLN
-
-            playerCash += reward;
-            logEvent(`✍️ Wykonano zadanie! Otrzymujesz ${reward} PLN.`, 'review');
-            displayCash();
-            alert(`Dobrze wykonana robota! Otrzymujesz ${reward} PLN.`);
-
-            // Zamykamy modal po wykonaniu zadania
-            document.getElementById('work-modal').style.display = 'none';
-        }
-    }
-}
-
 function updateDividendTrackerButtonVisibility() {
     const btn = document.getElementById('open-dividend-tracker-btn');
     if (!btn) return;
@@ -2613,21 +2115,6 @@ function openStartupAutoInvestModal(symbol) {
     };
 
     modal.style.display = 'block';
-}
-
-function updateChartTypeButtons() {
-    const candlestickBtn = document.getElementById('chart-type-candlestick-btn');
-    const lineBtn = document.getElementById('chart-type-line-btn');
-
-    if (candlestickBtn && lineBtn) {
-        if (playerChartSettings.type === 'candlestick') {
-            candlestickBtn.style.borderColor = '#007bff'; // Aktywny
-            lineBtn.style.borderColor = 'transparent'; // Nieaktywny
-        } else {
-            candlestickBtn.style.borderColor = 'transparent';
-            lineBtn.style.borderColor = '#007bff';
-        }
-    }
 }
 
 function openStockDetailModal(stockSymbol) {
@@ -3317,7 +2804,6 @@ function renderFestivalView(festivalContainer) {
             <p>Co chcesz promować?</p>
             <div id="join-festival-options">
                 <button onclick="playerJoinFestival({type: 'self'})">Siebie</button>
-                <button onclick="playerJoinFestival({type: 'player_company'})" ${!playerCompany ? 'disabled title="Musisz założyć własną firmę"' : ''}>Własną firmę</button>
                 ${companyButtonsHTML}
             </div>
         `;
@@ -3338,7 +2824,6 @@ function renderFestivalView(festivalContainer) {
         switch (p.promotionTarget.type) {
             case 'self': targetName = 'Własny wizerunek'; break;
             case 'company': targetName = p.promotionTarget.id; break;
-            case 'player_company': targetName = playerCompany ? playerCompany.name : 'Moja Firma'; break;
             case 'city': targetName = 'Miasto Gdańsk'; break;
             case 'bank_promo': targetName = p.ownerName; break; // Dla banków
         }
@@ -3602,16 +3087,7 @@ function renderCommercialBanksList() {
         bankDiv.style.borderLeft = `5px solid ${getBankColor(bank.type)}`; // Kolorowa ramka wg typu
 
         let buttonsHTML = '';
-        const canUseCooperative = bank.type === BANK_TYPES.COOPERATIVE ? (playerPortfolio[`${bank.id}_STOCK`] !== undefined && playerPortfolio[`${bank.id}_STOCK`].shares > 0) : true;
-        const canInteract = [BANK_TYPES.UNIVERSAL, BANK_TYPES.INTERNATIONAL, BANK_TYPES.INTERNET, BANK_TYPES.COOPERATIVE].includes(bank.type);
 
-        if (canInteract && canUseCooperative) {
-            buttonsHTML += `<button onclick="openCommercialLoanModal('${bank.id}')">Weź kredyt</button> `;
-            buttonsHTML += `<button onclick="openCommercialDepositModal('${bank.id}')">Złóż depozyt</button> `;
-        }
-        if (bank.type === BANK_TYPES.MORTGAGE) {
-            buttonsHTML += `<button onclick="openMortgageModal('${bank.id}')">Weź hipotekę</button> `;
-        }
         if (bank.type === BANK_TYPES.INVESTMENT) {
             buttonsHTML += `<button onclick="openSellSharesToBankModal('${bank.id}')">Sprzedaj akcje</button>`;
         }
@@ -3788,157 +3264,6 @@ function closeInteractionModal() {
     if (bankModal?.style.display === 'block' && commercialTab?.style.display === 'block') {
         renderCommercialBanksList();
     }
-}
-
-function openCommercialLoanModal(bankId) {
-    if (!FEATURE_FLAGS.privateLoans) { if (typeof showToast === 'function') showToast('Zarządca funduszu nie zaciąga prywatnych kredytów ani lokat.', 'default'); return; } // wyłączone w etapie B
-    const bank = commercialBanks.find(b => b.id === bankId);
-    const modal = document.getElementById('commercial-loan-modal');
-    if (!bank || !modal) return;
-
-    // Oblicz limit kredytowy gracza
-    const netWorth = calculateNetWorth('player');
-    const existingLoansTotal = playerCommercialLoans.reduce((sum, loan) => sum + loan.amount, 0);
-    const maxLoanPossible = Math.max(0, netWorth * 0.3 - existingLoansTotal);
-
-    // Wypełnij dane modala
-    modal.querySelector('#commercial-loan-bank-name').textContent = bank.name;
-    modal.querySelector('#commercial-loan-rate').textContent = (bank.interestRateLoan * 100).toFixed(1);
-    modal.querySelector('#commercial-loan-limit').textContent = maxLoanPossible.toFixed(0);
-    modal.querySelector('#commercial-loan-amount').value = ''; // Wyczyść pole kwoty
-
-    // Wyświetl istniejące pożyczki gracza w tym banku i w innych
-    const loansList = modal.querySelector('#existing-loans-list');
-    loansList.innerHTML = ''; // Wyczyść listę
-    if (playerCommercialLoans.length > 0) {
-        playerCommercialLoans.forEach(loan => {
-            const li = document.createElement('li');
-            li.style.marginBottom = '8px'; // Odstęp między pożyczkami
-            li.innerHTML = `
-                <span>${loan.bankName}: ${loan.amount.toFixed(2)} PLN (Rata: ${loan.weeklyPayment.toFixed(2)})</span>
-                <input type="number" placeholder="Kwota spłaty" style="width: 80px; margin-left: 10px;">
-                <button style="margin-left: 5px;">Spłać</button>
-            `;
-            // Dodaj obsługę przycisku spłaty dla tej konkretnej pożyczki
-            const repayInput = li.querySelector('input');
-            const repayBtn = li.querySelector('button');
-            repayBtn.onclick = () => repayCommercialLoan(loan.id, parseFloat(repayInput.value));
-            loansList.appendChild(li);
-        });
-    } else {
-        loansList.innerHTML = '<li>Brak aktywnych kredytów komercyjnych.</li>';
-    }
-
-    // Ustaw akcję dla głównego przycisku "Weź Kredyt"
-    modal.querySelector('#take-commercial-loan-btn').onclick = () => takeCommercialLoan(bankId, parseFloat(modal.querySelector('#commercial-loan-amount').value));
-
-    modal.style.display = 'block'; // Pokaż modal
-}
-
-function openCommercialDepositModal(bankId) {
-    if (!FEATURE_FLAGS.privateLoans) { if (typeof showToast === 'function') showToast('Zarządca funduszu nie zaciąga prywatnych kredytów ani lokat.', 'default'); return; } // wyłączone w etapie B
-    const bank = commercialBanks.find(b => b.id === bankId);
-    const modal = document.getElementById('commercial-deposit-modal');
-    if (!bank || !modal) return;
-
-    // Znajdź istniejący depozyt gracza w tym banku
-    const existingDeposit = playerCommercialDeposits.find(d => d.bankId === bankId);
-
-    // Wypełnij dane modala
-    modal.querySelector('#commercial-deposit-bank-name').textContent = bank.name;
-    modal.querySelector('#commercial-deposit-rate').textContent = (bank.interestRateDeposit * 100).toFixed(1);
-    modal.querySelector('#commercial-deposit-existing').textContent = existingDeposit ? existingDeposit.amount.toFixed(2) : '0.00';
-    modal.querySelector('#commercial-deposit-amount').value = ''; // Wyczyść pole kwoty
-
-    // Ustaw akcję dla przycisku "Wpłać"
-    modal.querySelector('#make-commercial-deposit-btn').onclick = () => makeCommercialDeposit(bankId, parseFloat(modal.querySelector('#commercial-deposit-amount').value));
-
-    // Ustaw akcję i stan dla przycisku "Wypłać"
-    const withdrawBtn = modal.querySelector('#withdraw-commercial-deposit-btn');
-    withdrawBtn.onclick = () => withdrawCommercialDeposit(existingDeposit ? existingDeposit.id : null, parseFloat(modal.querySelector('#commercial-deposit-amount').value));
-    withdrawBtn.disabled = !existingDeposit || existingDeposit.amount <= 0; // Wyłącz, jeśli nie ma depozytu
-
-    modal.style.display = 'block'; // Pokaż modal
-}
-
-function openMortgageModal(bankId) {
-    if (!FEATURE_FLAGS.privateLoans) { if (typeof showToast === 'function') showToast('Zarządca funduszu nie zaciąga prywatnych kredytów ani lokat.', 'default'); return; } // wyłączone w etapie B
-    const bank = commercialBanks.find(b => b.id === bankId);
-    const modal = document.getElementById('mortgage-modal');
-    if (!bank || !modal) return;
-
-    // Wypełnij dane modala
-    modal.querySelector('#mortgage-bank-name').textContent = bank.name;
-    modal.querySelector('#mortgage-rate').textContent = (bank.interestRateLoan * 100).toFixed(1); // Używamy oprocentowania kredytu
-    modal.querySelector('#mortgage-collateral-quantity').value = '1'; // Resetuj ilość
-    modal.querySelector('#mortgage-loan-amount').value = ''; // Wyczyść kwotę
-
-    // Wypełnij listę rozwijaną akcjami gracza (dostępnymi na zastaw)
-    const select = modal.querySelector('#mortgage-collateral-select');
-    select.innerHTML = '<option value="">-- Wybierz akcje na zastaw --</option>'; // Opcja pusta
-    let hasEligibleShares = false; // Flaga sprawdzająca, czy gracz ma co zastawić
-    Object.keys(playerPortfolio).forEach(symbol => {
-        const holding = playerPortfolio[symbol];
-        const stock = stocks.find(s => s.symbol === symbol && !s.assetType); // Tylko standardowe akcje
-        const availableShares = holding.shares - (holding.lockedShares || 0); // Akcje dostępne do zastawienia
-        if (stock && availableShares > 0) {
-            const option = document.createElement('option');
-            option.value = symbol;
-            // Pokaż dostępne / wszystkie posiadane
-            option.textContent = `${stock.name} (${symbol}) - dostępne: ${availableShares} / ${holding.shares}`;
-            select.appendChild(option);
-            hasEligibleShares = true; // Gracz ma co zastawić
-        }
-    });
-
-    // Funkcja pomocnicza do aktualizacji wartości zastawu i limitu pożyczki
-    const updateCollateralValue = () => {
-        const selectedSymbol = select.value;
-        const quantityInput = modal.querySelector('#mortgage-collateral-quantity');
-        let quantity = quantityInput.valueAsNumber || 0;
-        const holding = playerPortfolio[selectedSymbol];
-        const stock = stocks.find(s => s.symbol === selectedSymbol);
-        const availableShares = holding ? holding.shares - (holding.lockedShares || 0) : 0;
-        const collateralValueEl = modal.querySelector('#mortgage-collateral-value');
-        const loanAmountInput = modal.querySelector('#mortgage-loan-amount');
-
-        // Walidacja ilości
-        if (quantity > availableShares) {
-            quantityInput.value = availableShares; // Nie pozwól wpisać więcej niż dostępne
-            quantity = availableShares; // Użyj poprawionej wartości
-        }
-        if (quantity < 1 && availableShares > 0) {
-            quantityInput.value = 1;
-            quantity = 1;
-        }
-
-        if (stock && quantity > 0) {
-            const collateralValue = stock.price * quantity;
-            collateralValueEl.textContent = collateralValue.toFixed(2);
-            loanAmountInput.max = (collateralValue * 0.5).toFixed(0); // Ustaw max kwotę pożyczki
-        } else {
-            collateralValueEl.textContent = '0.00';
-            loanAmountInput.max = 0;
-            loanAmountInput.value = ''; // Wyczyść kwotę, jeśli zastaw jest nieważny
-        }
-    };
-    // Przypisz eventy do selecta i inputa ilości
-    select.onchange = updateCollateralValue;
-    modal.querySelector('#mortgage-collateral-quantity').oninput = updateCollateralValue;
-    updateCollateralValue(); // Wywołaj raz na start, aby ustawić wartości początkowe
-
-    // Ustaw akcję dla przycisku "Weź Hipotekę"
-    const takeBtn = modal.querySelector('#take-mortgage-loan-btn');
-    takeBtn.onclick = () => {
-        const symbol = select.value;
-        const quantity = parseInt(modal.querySelector('#mortgage-collateral-quantity').value);
-        const amount = parseFloat(modal.querySelector('#mortgage-loan-amount').value);
-        takeMortgageLoan(bankId, symbol, quantity, amount);
-    };
-    // Wyłącz przycisk, jeśli gracz nie ma żadnych akcji do zastawienia
-    takeBtn.disabled = !hasEligibleShares;
-
-    modal.style.display = 'block'; // Pokaż modal
 }
 
 function openBankIPOOfferModal(message) {
@@ -4373,84 +3698,6 @@ function resolveComplicationDecision(stockSymbol, optionId) {
     }
 }
 
-function openDebtOfferModal(collectorStock, targetLoan, newInterestRate) {
-    const modal = document.getElementById('debt-offer-modal');
-    if (!modal || !currentDebtOffer) return; // currentDebtOffer jest ustawiane w gameLogic
-
-    const messageEl = document.getElementById('debt-offer-message');
-    const acceptBtn = document.getElementById('debt-offer-accept-btn');
-    const declineBtn = document.getElementById('debt-offer-decline-btn');
-
-    messageEl.innerHTML = `
-        Firma <strong>${collectorStock.name}</strong> zauważyła Twoje problemy z kredytem w <strong>${targetLoan.bankName}</strong>.<br><br>
-        Oferujemy natychmiastową spłatę Twojego długu w wysokości <strong>${targetLoan.amount.toFixed(2)} PLN</strong>.<br><br>
-        W zamian zaczniesz spłacać tę kwotę nam, ale z nowym, wyższym oprocentowaniem: <strong>${(newInterestRate * 100).toFixed(1)}%</strong> rocznie (zamiast obecnych ${(targetLoan.interestRate * 100).toFixed(1)}%).<br><br>
-        Twoje pominięte raty zostaną wyzerowane. Czy akceptujesz ofertę?
-    `;
-
-    // Używamy .onclick, aby mieć pewność, że stare listenery są usuwane
-    acceptBtn.onclick = () => {
-        acceptDebtOffer(); // Wywołuje funkcję z gameLogic
-        modal.style.display = 'none';
-    };
-    
-    declineBtn.onclick = () => {
-        declineDebtOffer(); // Wywołuje funkcję z gameLogic
-        modal.style.display = 'none';
-    };
-
-    modal.style.display = 'block';
-}
-
-/**
- * Zamyka modal oferty długu (jeśli gracz kliknie 'X' lub 'Odrzuć').
- */
-function closeDebtOfferModal() {
-    const modal = document.getElementById('debt-offer-modal');
-    if (modal) {
-        modal.style.display = 'none';
-    }
-    // Funkcja declineDebtOffer() w gameLogic wyczyści currentDebtOffer
-}
-
-function openPawnOfferModal(pawnShop, targetStock, quantity, loanAmount, newInterestRate, durationWeeks) {
-    const modal = document.getElementById('pawn-offer-modal');
-    if (!modal || !currentPawnOffer) return; // currentPawnOffer jest ustawiane w gameLogic
-
-    const messageEl = document.getElementById('pawn-offer-message');
-    const acceptBtn = document.getElementById('pawn-offer-accept-btn');
-    const declineBtn = document.getElementById('pawn-offer-decline-btn');
-
-    messageEl.innerHTML = `
-        Firma <strong>${pawnShop.name}</strong> widzi, że potrzebujesz gotówki.<br><br>
-        Oferujemy natychmiastową pożyczkę w wysokości <strong>${loanAmount.toFixed(2)} PLN</strong>.
-        Jako zabezpieczenie musisz zastawić <strong>${quantity} szt.</strong> swoich akcji <strong>${targetStock.name} (${targetStock.symbol})</strong>.<br><br>
-        Będziesz mieć <strong>${durationWeeks} tygodni</strong> na spłatę kwoty <strong>${loanAmount.toFixed(2)} PLN</strong> wraz z odsetkami (${(newInterestRate * 100).toFixed(1)}% rocznie).
-    `;
-
-    acceptBtn.onclick = () => {
-        acceptPawnOffer(); // Wywołuje funkcję z gameLogic
-        modal.style.display = 'none';
-    };
-    
-    declineBtn.onclick = () => {
-        declinePawnOffer(); // Wywołuje funkcję z gameLogic
-        modal.style.display = 'none';
-    };
-
-    modal.style.display = 'block';
-}
-
-/**
- * Zamyka modal oferty lombardu (używane przez declinePawnOffer).
- */
-function closePawnOfferModal() {
-    const modal = document.getElementById('pawn-offer-modal');
-    if (modal) {
-        modal.style.display = 'none';
-    }
-}
-
 // --- Panel Lombardu ---
 
 // ============================================
@@ -4874,162 +4121,7 @@ function openConstructionSectorModal() {
     updateConstructionSectorUI();
 }
 
-function openPawnShopPanel() {
-    const modal = document.getElementById('pawnshop-modal');
-    if (!modal) return;
-    const statusDiv = document.getElementById('pawnshop-status');
-    const inventorySection = document.getElementById('pawnshop-inventory-section');
-    const listDiv = document.getElementById('pawnshop-loans-list');
-
-    const pawnShop = stocks.find(s => s.assetType === 'PawnShop' && !s.isBankrupt);
-    if (!pawnShop) {
-        statusDiv.innerHTML = '<p style="color:#dc3545;">Lombard nie jest dostępny.</p>';
-        listDiv.innerHTML = '';
-        if (inventorySection) inventorySection.innerHTML = '<p style="margin:0;color:#666;">Brak zasobów w lombardzie.</p>';
-        modal.style.display = 'block';
-        return;
-    }
-
-    statusDiv.innerHTML = `<p><strong>${pawnShop.name}</strong> (${pawnShop.symbol})</p>
-        <p>Oprocentowanie: <strong>25% rocznie</strong> | Okres spłaty: <strong>12 tygodni</strong></p>
-        <p>Gotówka lombardu: ${pawnShop.cash.toLocaleString('pl-PL')} PLN</p>`;
-
-    const pawnLoans = playerCommercialLoans.filter(l => l.isPawnLoan);
-    listDiv.innerHTML = '';
-
-    if (inventorySection) {
-        const inventoryStocks = pawnShop.holdingPortfolio || {};
-        const inventoryKeys = Object.keys(inventoryStocks);
-        if (inventoryKeys.length > 0) {
-            let invHtml = '<h4 style="margin:0 0 8px; font-size:14px;">Zapas Lombardu</h4>';
-            inventoryKeys.forEach(key => {
-                const item = inventoryStocks[key];
-                const stockData = stocks.find(s => s.symbol === key);
-                const name = stockData ? stockData.name : key;
-                invHtml += `<p style="margin:2px 0;">• ${item.quantity} × ${name} (${key}) @ ${item.purchasePrice.toFixed(2)} PLN</p>`;
-            });
-            inventorySection.innerHTML = invHtml;
-        } else {
-            inventorySection.innerHTML = '<p style="margin:0;color:#666;">Brak zasobów w lombardzie.</p>';
-        }
-    }
-    if (pawnLoans.length > 0) {
-        const h4 = document.createElement('h4');
-        h4.textContent = 'Twoje pożyczki lombardowe:';
-        h4.style.fontSize = '14px';
-        listDiv.appendChild(h4);
-        pawnLoans.forEach(loan => {
-            const div = document.createElement('div');
-            div.style.cssText = 'padding:8px;margin-bottom:6px;background:#fff;border-left:3px solid #28a745;';
-            const timeLeft = Math.max(0, Math.ceil((loan.maturityDate - Date.now()) / 1000));
-            const minutesLeft = Math.floor(timeLeft / 60);
-            div.innerHTML = `<p style="margin:0 0 4px"><strong>${loan.amount.toFixed(2)} PLN</strong> [Zastaw: ${loan.collateral.quantity} × ${loan.collateral.symbol}]</p>
-                <p style="margin:0;font-size:12px;color:#856404;">Termin spłaty: ${minutesLeft} min</p>`;
-            const btn = document.createElement('button');
-            btn.textContent = 'Spłać kredyt';
-            btn.style.cssText = 'margin-top:6px;padding:4px 12px;background:#28a745;color:#fff;border:none;border-radius:3px;cursor:pointer;';
-            btn.onclick = () => {
-                repayCommercialLoan(loan.id, loan.amount);
-                openPawnShopPanel();
-            };
-            div.appendChild(btn);
-            listDiv.appendChild(div);
-        });
-    } else {
-        listDiv.innerHTML = '<p style="color:#666;font-style:italic;">Brak aktywnych pożyczek lombardowych. Lombard sam złoży Ci ofertę, gdy będziesz w potrzebie.</p>';
-    }
-
-    // --- Sekcja aukcji zabezpieczeń ---
-    const collateralSection = document.getElementById('pawnshop-collateral-section');
-    if (collateralSection) {
-        const pawnLoansWithCollateral = playerCommercialLoans.filter(l => l.isPawnLoan && l.collateral);
-        if (pawnLoansWithCollateral.length > 0) {
-            let html = '<h4 style="font-size:14px;margin:0 0 8px;color:#dc3545;">Aukcje zabezpieczeń:</h4>';
-            pawnLoansWithCollateral.forEach(loan => {
-                const stock = stocks.find(s => s.symbol === loan.collateral.symbol);
-                const marketValue = stock ? (stock.price * loan.collateral.quantity) : 0;
-                const isAuctionActive = currentCollateralAuction && currentCollateralAuction.stockSymbol === loan.collateral.symbol;
-                html += `<div style="padding:8px;margin-bottom:6px;background:#fff3cd;border-left:3px solid #dc3545;">
-                    <p style="margin:0 0 4px;font-size:13px;"><strong>Zastaw:</strong> ${loan.collateral.quantity} × ${loan.collateral.symbol}</p>
-                    <p style="margin:0 0 4px;font-size:12px;color:#666;">Wartość rynkowa: <strong>${marketValue.toFixed(2)} PLN</strong> | Dług: <strong>${loan.amount.toFixed(2)} PLN</strong></p>`;
-                if (isAuctionActive) {
-                    html += `<p style="margin:0;font-size:12px;color:#856404;font-weight:bold;">⏳ W trakcie aukcji...</p>`;
-                } else {
-                    html += `<button onclick="sellCollateralAtAuction('${loan.id}')" style="margin-top:4px;padding:4px 12px;background:#dc3545;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:12px;">Wystaw na aukcję</button>`;
-                }
-                html += '</div>';
-            });
-            collateralSection.innerHTML = html;
-            collateralSection.style.display = 'block';
-        } else {
-            collateralSection.innerHTML = '';
-            collateralSection.style.display = 'none';
-        }
-    }
-
-    modal.style.display = 'block';
-}
-
 // --- Panel Windykatora ---
-function openDebtCollectorPanel() {
-    const modal = document.getElementById('debtcollector-modal');
-    if (!modal) return;
-    const statusDiv = document.getElementById('debtcollector-status');
-    const listDiv = document.getElementById('debtcollector-debts-list');
-
-    const collector = stocks.find(s => s.assetType === 'DebtCollector' && !s.isBankrupt);
-    if (!collector) {
-        statusDiv.innerHTML = '<p style="color:#dc3545;">Windykator nie jest dostępny.</p>';
-        listDiv.innerHTML = '';
-        modal.style.display = 'block';
-        return;
-    }
-
-    statusDiv.innerHTML = `<p><strong>${collector.name}</strong> (${collector.symbol})</p>
-        <p style="font-size:12px;color:#666;">Windykator przejmuje niespłacane długi bankowe za wyższe oprocentowanie (×1.5).</p>`;
-
-    const collectorLoans = playerCommercialLoans.filter(l => l.collectorSymbol === collector.symbol && !l.isPawnLoan);
-    listDiv.innerHTML = '';
-
-    if (collectorLoans.length > 0) {
-        const h4 = document.createElement('h4');
-        h4.textContent = 'Twoje długi u windykatora:';
-        h4.style.fontSize = '14px';
-        listDiv.appendChild(h4);
-        collectorLoans.forEach(loan => {
-            const div = document.createElement('div');
-            div.style.cssText = 'padding:8px;margin-bottom:6px;background:#fff;border-left:3px solid #ffc107;';
-            div.innerHTML = `<p style="margin:0 0 4px"><strong>${loan.amount.toFixed(2)} PLN</strong> (Rata: ${loan.weeklyPayment.toFixed(2)} PLN/tydz.)</p>
-                <p style="margin:0;font-size:12px;color:#dc3545;">Oprocentowanie: ${(loan.interestRate * 100).toFixed(1)}%</p>`;
-            const inputRow = document.createElement('div');
-            inputRow.style.cssText = 'display:flex;gap:6px;margin-top:6px;align-items:center;';
-            const input = document.createElement('input');
-            input.type = 'number';
-            input.placeholder = 'Kwota';
-            input.style.cssText = 'width:100px;padding:3px;';
-            input.value = loan.amount.toFixed(2);
-            const btn = document.createElement('button');
-            btn.textContent = 'Spłać';
-            btn.style.cssText = 'padding:4px 12px;background:#28a745;color:#fff;border:none;border-radius:3px;cursor:pointer;';
-            btn.onclick = () => {
-                const val = parseFloat(input.value);
-                if (!isNaN(val) && val > 0) {
-                    repayCommercialLoan(loan.id, val);
-                    openDebtCollectorPanel();
-                }
-            };
-            inputRow.appendChild(input);
-            inputRow.appendChild(btn);
-            div.appendChild(inputRow);
-            listDiv.appendChild(div);
-        });
-    } else {
-        listDiv.innerHTML = '<p style="color:#666;font-style:italic;">Nie masz długów u windykatora. Windykator przejmuje długi, gdy zalegasz ze spłatą w banku.</p>';
-    }
-
-    modal.style.display = 'block';
-}
-
 function switchCityTab(tabName) {
     // Ukryj wszystkie kontenery zakładek miasta
     document.querySelectorAll('#city-investment-modal .bank-tab-content').forEach(content => {
@@ -6277,23 +5369,14 @@ function renderMailbox() {
             <span>${MAIL_FOLDER_LABELS[folder]}</span>${unread ? `<b>${unread}</b>` : ''}</button>`;
     }).join('') + `
         <hr>
-        <button class="mail-folder ${mailView.pane === 'subscriptions' ? 'active' : ''}" onclick="setMailPane('subscriptions')">⚙️ Subskrypcje</button>
-        ${getSkillLevel('mediaManipulation') > 0 ? `<button class="mail-folder ${mailView.pane === 'media' ? 'active' : ''}" onclick="setMailPane('media')">📣 Kontrola mediów</button>` : ''}`;
+        <button class="mail-folder ${mailView.pane === 'subscriptions' ? 'active' : ''}" onclick="setMailPane('subscriptions')">⚙️ Subskrypcje</button>`;
 
     const list = document.getElementById('mail-list');
     const preview = document.getElementById('mail-preview');
-    const media = document.getElementById('media-influence-section');
-    if (media) media.style.display = 'none';
 
     if (mailView.pane === 'subscriptions') {
         list.hidden = true;
         preview.innerHTML = renderMailSubscriptions();
-        return;
-    }
-    if (mailView.pane === 'media') {
-        list.hidden = true;
-        preview.innerHTML = '';
-        renderMediaInfluence();
         return;
     }
 
@@ -6423,3 +5506,44 @@ function renderPawnPanel() {
                 <button class="btn-secondary" onclick="pawnFundShares(document.getElementById('pawn-symbol').value, parseInt(document.getElementById('pawn-qty').value, 10))">Zastaw</button>
             </div>` : `<p class="fund-muted">${pawnShop ? 'Brak wolnych akcji do zastawu.' : 'Lombard jest nieczynny.'}</p>`}`;
 }
+
+/** Okno lombardu: warunki, zastawy funduszu gracza i zapas przejętych akcji. */
+function openPawnShopPanel() {
+    const modal = document.getElementById('pawnshop-modal');
+    const body = document.getElementById('pawnshop-body');
+    if (!modal || !body) return;
+    const pawnShop = getPawnShop();
+    const holdings = shop => Object.entries(shop?.holdingPortfolio || {})
+        .map(([symbol, item]) => `<li>${item.quantity} × ${escapeHtml(symbol)} (przejęte po ${formatZl(item.purchasePrice)})</li>`).join('');
+
+    body.innerHTML = pawnShop ? `
+        <p><strong>${escapeHtml(pawnShop.name)}</strong> (${escapeHtml(pawnShop.symbol)}) · gotówka ${formatZl(pawnShop.cash, 0)}</p>
+        <p class="fund-muted">Pożyczki pod zastaw akcji dla funduszy: ${(PAWN_LOAN_TO_VALUE * 100).toFixed(0)}% wartości, ${(PAWN_ANNUAL_RATE * 100).toFixed(0)}% rocznie, ${PAWN_WEEKS} tygodni, do ${(PAWN_MAX_SHARE_OF_ASSETS * 100).toFixed(0)}% aktywów funduszu. Zastaw ustawisz w panelu funduszu (sekcja „Lombard”).</p>
+        <h4>Zastawy Twojego funduszu</h4>
+        <ul>${(playerFund?.pawnLoans || []).map(loan => `<li>${loan.shares} × ${escapeHtml(loan.symbol)}: ${formatZl(loan.principal)} · ${loan.weeksLeft} tyg.${loan.missed ? ` · zaległość ${loan.missed}` : ''}</li>`).join('') || '<li class="fund-muted">Brak.</li>'}</ul>
+        <h4>Akcje przejęte przez lombard</h4>
+        <ul>${holdings(pawnShop) || '<li class="fund-muted">Brak.</li>'}</ul>`
+        : '<p class="loss">Lombard nie jest dostępny.</p>';
+    modal.style.display = 'block';
+}
+
+/** Okno windykatora: zasady i akcje zajęte dłużnikom (fundusze, boty). */
+function openDebtCollectorPanel() {
+    const modal = document.getElementById('debtcollector-modal');
+    const body = document.getElementById('debtcollector-body');
+    if (!modal || !body) return;
+    const collector = getDebtCollector();
+    const seized = Object.entries(collector?.holdingPortfolio || {})
+        .map(([symbol, item]) => `<li>${item.quantity} × ${escapeHtml(symbol)}</li>`).join('');
+    const botDebts = aiCompetitors.reduce((sum, ai) => sum + (ai.loans || []).filter(loan => (loan.missedPayments || 0) > 0).length, 0);
+
+    body.innerHTML = collector ? `
+        <p><strong>${escapeHtml(collector.name)}</strong> (${escapeHtml(collector.symbol)}) · gotówka ${formatZl(collector.cash, 0)}</p>
+        <p class="fund-muted">Windykator przejmuje zaległe długi (kredyty botów z zaległościami, niespłacone zastawy funduszy po ${COLLECTOR_AFTER_MISSED} nieopłaconych odsetkach) i zajmuje akcje dłużników z dyskontem ${(100 - COLLECTOR_DISCOUNT * 100).toFixed(0)}%.</p>
+        <p>Kredyty botów z zaległościami: <strong>${botDebts}</strong></p>
+        <h4>Zajęte akcje</h4>
+        <ul>${seized || '<li class="fund-muted">Brak.</li>'}</ul>`
+        : '<p class="loss">Windykator nie jest dostępny.</p>';
+    modal.style.display = 'block';
+}
+
