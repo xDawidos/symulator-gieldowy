@@ -598,8 +598,8 @@ value += ownedTBills.reduce((sum, t) => sum + 1000, 0); // jeśli TBille zawsze 
 // --- PODATKI (Poprawiona funkcja Wealth Tax) ---
 function processWealthTax() {
     // Tworzymy listę wszystkich podmiotów do opodatkowania (Gracz + AI)
+    // Gracz zarządza funduszem klientów — podatek od bogactwa go nie obejmuje (etap B).
     const entities = [
-        { id: 'player', name: 'Ty (Gracz)', cash: playerCash, portfolio: playerPortfolio, skills: skills },
         ...aiCompetitors.filter(ai => ai.skillPoints !== undefined) // Tylko boty z systemem umiejętności
     ];
 
@@ -683,7 +683,8 @@ function processCityAndCitizenTaxes() {
     const playerSanEscobarLvl = getSkillLevel('sanEscobar');
     if (playerSanEscobarLvl >= 1) playerTaxModifier = 0.95;
     if (playerSanEscobarLvl >= 4) playerTaxModifier = 0.0;
-    const playerCityTax = playerCash * TAX_RATES.cityTaxPlayerAI * playerTaxModifier;
+    // Gotówka funduszu to pieniądze klientów — gracz nie płaci podatku miejskiego od gotówki (etap B).
+    const playerCityTax = 0;
     if (playerCityTax > 0) {
         playerCash -= playerCityTax;
         totalTaxCollected += playerCityTax;

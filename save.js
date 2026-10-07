@@ -10,10 +10,11 @@
 //
 // Zapisy v1 (z kopiami obiektów klienta i wykonawcy) są oznaczone jako niezgodne i nie są wczytywane.
 
-const GAME_SAVE_KEY = 'gra_inwestycyjna_dawid_save_v2';
-const LEGACY_SAVE_KEYS = ['gra_inwestycyjna_dawid_save_v1'];
-const SAVE_FORMAT_VERSION = 3;
-const SUPPORTED_SAVE_VERSIONS = [2, 3]; // v2 → migracja modelu rynku (fundamenty, własność, cykl)
+// v4: nowy koncept (gracz = zarządca funduszu). Zapisy v1–v3 (prywatny inwestor) są niezgodne.
+const GAME_SAVE_KEY = 'gra_inwestycyjna_dawid_save_v4';
+const LEGACY_SAVE_KEYS = ['gra_inwestycyjna_dawid_save_v2', 'gra_inwestycyjna_dawid_save_v1'];
+const SAVE_FORMAT_VERSION = 4;
+const SUPPORTED_SAVE_VERSIONS = [4];
 
 let lastSaveReport = null;
 let saveDisabledUntilReload = false;
@@ -109,6 +110,11 @@ function buildSaveSnapshot() {
         paymentJournal: paymentJournal.slice(-100),
         paymentTotals,
         economyCycle,
+        playerProfile,
+        playerFund,
+        playerWallet,
+        playerAccessLevel,
+        trainings: Object.fromEntries(Object.entries(skills).map(([id, skill]) => [id, skill.unlockedLevel])),
         simulationIdCounter,
         nextWealthTaxRemainingMs: Math.max(0, (Number(nextWealthTaxTime) || now) - now),
         WEALTH_TAX_INTERVAL
@@ -313,7 +319,23 @@ function applySaveSnapshot(snapshot) {
     if (Array.isArray(snapshot.specialists)) specialists = resolveOther(snapshot.specialists);
 
     if (isFiniteNumber(snapshot.playerCash)) playerCash = snapshot.playerCash;
-    else report.warnings.push('Nieprawidłowa gotówka gracza — pozostawiono wartość startową.');
+    else report.warnings.push('Nieprawidłowa gotówka funduszu — pozostawiono wartość startową.');
+
+    // Fundusz gracza, portfel prywatny, profil i szkolenia (v4).
+    if (!snapshot.playerFund || !isFiniteNumber(snapshot.playerFund.units) || snapshot.playerFund.units <= 0) {
+        report.warnings.push('Zapis bez poprawnego funduszu gracza — utworzono nowy.');
+        startNewCareer(snapshot.playerProfile || {});
+    } else {
+        playerProfile = snapshot.playerProfile;
+        playerFund = snapshot.playerFund;
+        playerWallet = { ...createPlayerWallet(0), ...(snapshot.playerWallet || {}) };
+        if (!isFiniteNumber(playerWallet.cash)) playerWallet.cash = 0;
+        playerFund.clients = (playerFund.clients || []).filter(client => isFiniteNumber(client.units) && client.units >= 0);
+    }
+    for (const [id, level] of Object.entries(snapshot.trainings || {})) {
+        if (skills[id] && isFiniteNumber(level)) skills[id].unlockedLevel = level;
+    }
+    syncExchangeAccessWithPosition();
 
     if (isFiniteNumber(snapshot.governmentTreasury)) governmentTreasury = snapshot.governmentTreasury;
     if (isFiniteNumber(snapshot.currentSpeedMultiplier) && [1, 2, 5].includes(snapshot.currentSpeedMultiplier)) {
@@ -377,8 +399,8 @@ function restoreSavedGame() {
 
     if (!raw) {
         if (legacy) {
-            console.warn('[save] Znaleziono zapis w starym formacie (v1). Jest niezgodny z nowym modelem kontraktów i R&D — rozpoczynam nową grę. Stary zapis pozostaje nietknięty.');
-            logEvent('💾 Stary zapis gry (v1) jest niezgodny z nową wersją — rozpoczęto nową grę.', 'review');
+            console.warn('[save] Znaleziono zapis ze starszej wersji gry (prywatny inwestor). Jest niezgodny z nowym konceptem zarządcy funduszu — rozpoczynam nową grę. Stary zapis pozostaje nietknięty.');
+            logEvent('💾 Zapis ze starszej wersji gry jest niezgodny z nowym konceptem (zarządca funduszu) — rozpoczęto nową grę.', 'review');
         }
         return false;
     }
@@ -406,6 +428,19 @@ function restoreSavedGame() {
 }
 
 /** Usuwa bieżący zapis (np. z konsoli: resetSavedGame()). */
+/** Przycisk „Zapisz” w górnym pasku. */
+function saveGame() {
+    const ok = saveGameState();
+    if (typeof showToast === 'function') showToast(ok ? 'Gra zapisana.' : 'Nie udało się zapisać gry.', ok ? 'success' : 'error');
+}
+
+/** Przycisk „Reset” w górnym pasku: usuwa zapis i zaczyna nową grę. */
+function resetGame() {
+    if (!confirm('Rozpocząć nową grę? Obecny zapis zostanie usunięty.')) return;
+    resetSavedGame();
+    location.reload();
+}
+
 function resetSavedGame() {
     if (typeof localStorage === 'undefined') return;
     localStorage.removeItem(GAME_SAVE_KEY);

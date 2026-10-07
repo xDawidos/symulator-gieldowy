@@ -1,7 +1,9 @@
 console.log('[diag] player.js loaded');
 
-let playerCash = 100000000000.00;
-let playerXP = 10000000000;
+// Gotówka i portfel FUNDUSZU zarządzanego przez gracza (ustawiane w fund.js → startNewCareer).
+// Prywatne pieniądze gracza: playerWallet (fund.js).
+let playerCash = 0;
+let playerXP = 0; // nieużywane (XP zastąpione szkoleniami za pieniądze)
 let playerPortfolio = {};
 let playerCommercialLoans = [];
 let playerCommercialDeposits = [];
@@ -294,6 +296,8 @@ function getNextSkillLevelInfo(skillId) {
 // --- Funkcje Gracza ---
 
 function calculateNetWorth(entity) {
+    // Gracz: aktywa zarządzanego funduszu (gotówka + portfel + obligacje).
+    if (entity === 'player' && typeof playerFund !== 'undefined' && playerFund) return getFundAssets();
     let value = (entity === 'player') ? playerCash : entity.cash;
     const portfolio = (entity === 'player') ? playerPortfolio : entity.portfolio;
     for (const symbol in portfolio) {
@@ -317,6 +321,10 @@ function calculateNetWorth(entity) {
 
 function buyStock(symbol, quantity) {
     if (isPlayerInDefault && isPlayerInDefault()) return; 
+    quantity = Math.floor(Number(quantity));
+    if (!(quantity > 0)) return;
+    // Konto prywatne gracza (fund.js); domyślnie handluje fundusz (playerCash/playerPortfolio).
+    if (typeof activeTradingAccount !== 'undefined' && activeTradingAccount === 'private') return buyStockPrivate(symbol, quantity);
     
     const stockToBuy = stocks.find(stock => stock.symbol === symbol);
     if (!stockToBuy) {
@@ -359,9 +367,10 @@ function buyStock(symbol, quantity) {
     // Transakcja
     playerCash -= totalCost;
     stockToBuy.sharesHeld += quantity;
-    
-    // Wpływ na cenę
-    stockToBuy.price += (quantity * stockToBuy.price) * 0.000005;
+
+    // Minimalny wpływ na cenę (udział w wolnym obrocie) i log transakcji funduszu (compliance)
+    applyTradeImpact(stockToBuy, quantity, 1);
+    logFundTrade(symbol, 'buy');
 
     // Logika transakcji
     if (!stockToBuy.playerTransactions) stockToBuy.playerTransactions = [];
@@ -404,6 +413,9 @@ function buyStock(symbol, quantity) {
 
 
 function sellStock(symbol, quantity) {
+    quantity = Math.floor(Number(quantity));
+    if (!(quantity > 0)) return;
+    if (typeof activeTradingAccount !== 'undefined' && activeTradingAccount === 'private') return sellStockPrivate(symbol, quantity);
     const stockToSell = stocks.find(stock => stock.symbol === symbol);
     const holding = playerPortfolio[symbol];
 
@@ -434,7 +446,7 @@ function sellStock(symbol, quantity) {
     let xpGained = 0;
 
     // ---> NOWOŚĆ: Obliczanie podatku i XP <---
-    if (profit > 0) {
+    if (profit > 0 && typeof playerFund !== 'undefined' && !playerFund) { // fundusz (etap B) nie płaci podatku ani nie zbiera XP
         let taxRateCapitalGains = TAX_RATES.capitalGains;
         let playerTaxModifier = 1.0;
         const sanEscobarLvl = getSkillLevel('sanEscobar');
@@ -464,7 +476,8 @@ function sellStock(symbol, quantity) {
     playerCash += totalGainNet; // Gracz otrzymuje kwotę netto
     holding.shares -= quantity;
     stockToSell.sharesHeld -= quantity;
-    stockToSell.price -= (quantity * stockToSell.price) * 0.000005;
+    applyTradeImpact(stockToSell, quantity, -1);
+    logFundTrade(symbol, 'sell');
 
     // Logowanie z informacją o podatku
     logEvent(`Sprzedano ${quantity} szt. ${symbol}. Zysk brutto: ${profit.toFixed(2)} PLN, Podatek: ${taxToPay.toFixed(2)} PLN.`);
@@ -574,7 +587,7 @@ function sellEtf(symbol, quantity) {
     let xpGained = 0;
 
     // --- NOWOŚĆ: Obliczanie podatku i XP ---
-    if (profit > 0) {
+    if (profit > 0 && typeof playerFund !== 'undefined' && !playerFund) { // fundusz (etap B) nie płaci podatku ani nie zbiera XP
         let taxRateCapitalGains = TAX_RATES.capitalGains;
         let playerTaxModifier = 1.0;
         const sanEscobarLvl = getSkillLevel('sanEscobar');
@@ -700,7 +713,7 @@ function sellIndex(indexId, quantity) {
     let xpGained = 0;
 
     // --- NOWOŚĆ: Obliczanie podatku i XP ---
-    if (profit > 0) {
+    if (profit > 0 && typeof playerFund !== 'undefined' && !playerFund) { // fundusz (etap B) nie płaci podatku ani nie zbiera XP
         let taxRateCapitalGains = TAX_RATES.capitalGains;
         let playerTaxModifier = 1.0;
         const sanEscobarLvl = getSkillLevel('sanEscobar');
@@ -825,6 +838,7 @@ function updateCompanyStatus() {
 }
 
 function foundPlayerCompany() {
+    if (!FEATURE_FLAGS.playerCompany) { if (typeof showToast === 'function') showToast('Własna firma jest wyłączona — pracujesz w korporacji.', 'default'); return; } // wyłączone w etapie B
     if (playerCompany === null && getSkillLevel('work') >= 4) { // Sprawdźmy poziom umiejętności
         playerCompany = {
             name: "Twoja Firma", // Można pozwolić graczowi zmienić
@@ -1239,6 +1253,7 @@ function updateAutoInvestTimer(deltaTime) {
 }
 
 function takeCommercialLoan(bankId, amount) {
+    if (!FEATURE_FLAGS.privateLoans) { if (typeof showToast === 'function') showToast('Zarządca funduszu nie zaciąga prywatnych kredytów ani lokat.', 'default'); return; } // wyłączone w etapie B
     const bank = commercialBanks.find(b => b.id === bankId);
     if (!bank || !bank.isActive) {
         alert("Wybrany bank jest nieaktywny lub nie istnieje.");
@@ -1399,6 +1414,7 @@ function unlockCollateral(symbol, quantity) {
 }
 
 function makeCommercialDeposit(bankId, amount) {
+    if (!FEATURE_FLAGS.privateLoans) { if (typeof showToast === 'function') showToast('Zarządca funduszu nie zaciąga prywatnych kredytów ani lokat.', 'default'); return; } // wyłączone w etapie B
     const bank = commercialBanks.find(b => b.id === bankId);
     if (!bank || !bank.isActive) {
         alert("Wybrany bank jest nieaktywny lub nie istnieje.");
@@ -1540,6 +1556,7 @@ function isPlayerInDefault() {
 }
 
 function takeLoan() {
+    if (!FEATURE_FLAGS.privateLoans) { if (typeof showToast === 'function') showToast('Zarządca funduszu nie zaciąga prywatnych kredytów ani lokat.', 'default'); return; } // wyłączone w etapie B
     if (isPlayerInDefault()) return; // <-- DODAJ TĘ LINIĘ
     const loanAmountInput = document.getElementById('loan-amount');
     const amount = parseFloat(loanAmountInput.value);
@@ -1700,6 +1717,7 @@ function processLoanRepayment() {
 }
 
 function makeDeposit() {
+    if (!FEATURE_FLAGS.privateLoans) { if (typeof showToast === 'function') showToast('Zarządca funduszu nie zaciąga prywatnych kredytów ani lokat.', 'default'); return; } // wyłączone w etapie B
     const depositAmountInput = document.getElementById('deposit-amount');
     const amount = parseFloat(depositAmountInput.value);
     if (isNaN(amount) || amount <= 0) {
@@ -1826,31 +1844,9 @@ function chargeAccountingFee(paymentAmount, entityId) {
     }
 }
 
+/** Umiejętności są teraz szkoleniami kupowanymi za prywatne pieniądze (fund.js → buyTraining). */
 function buySkill(skillId) {
-    const nextLevelInfo = getNextSkillLevelInfo(skillId);
-    if (!nextLevelInfo) return;
-
-    // --- POCZĄTEK POPRAWKI: Sprawdzanie wymagań przed zakupem ---
-    const requirement = nextLevelInfo.requires;
-    const requirementMet = requirement ? getSkillLevel(requirement.skillId) >= requirement.level : true;
-
-    if (!requirementMet) {
-        alert("Nie spełniasz wymagań, aby odblokować tę umiejętność!");
-        return;
-    }
-    // --- KONIEC POPRAWKI ---
-
-    if (playerXP >= nextLevelInfo.cost) {
-        playerXP -= nextLevelInfo.cost;
-        skills[skillId].unlockedLevel++;
-        if (skillId === 'work' && skills[skillId].unlockedLevel === 4) {
-            foundPlayerCompany();
-        }
-        displayXP();
-        renderSkillsPanel();
-    } else {
-        alert("Za mało punktów doświadczenia (XP)!");
-    }
+    return buyTraining(skillId);
 }
 
 function getStocksValue() {
@@ -1867,58 +1863,21 @@ function getStocksValue() {
 
 
 
+/** Dostęp do giełd wynika ze stanowiska w korporacji (fund.js), a nie z wartości portfela. */
 function checkPlayerTierUpgrade() {
-    let newAccessLevel = playerAccessLevel;
-    const totalPortfolioValue = playerCash + getStocksValue();
-    if (totalPortfolioValue >= 35000 && playerAccessLevel < 1) {
-        newAccessLevel = 1;
-    }
-    if (totalPortfolioValue >= 150000 && playerAccessLevel < 2) {
-        newAccessLevel = 2;
-    }
-    if (totalPortfolioValue >= 310000 && playerAccessLevel < 3) {
-        newAccessLevel = 3;
-    }
-    if (totalPortfolioValue >= 750000 && playerAccessLevel < 4) {
-        newAccessLevel = 4;
-    }
-    for (const symbol in playerPortfolio) {
-        const stock = stocks.find(s => s.symbol === symbol);
-        if (stock) {
-            const stockExchangeLevel = exchanges[stock.exchange].level;
-            if (stockExchangeLevel > newAccessLevel) {
-                newAccessLevel = stockExchangeLevel;
-            }
-        }
-    }
-    if (newAccessLevel > playerAccessLevel) {
-        playerAccessLevel = newAccessLevel;
-        const newExchange = Object.values(exchanges).find(e => e.level === newAccessLevel);
-        const message = `🎉 GRATULACJE! Uzyskano dostęp do: ${newExchange.name}`;
-        displayEventMessage(message, 30, null, 'review');
+    if (typeof syncExchangeAccessWithPosition === 'function' && playerProfile) {
+        syncExchangeAccessWithPosition();
     }
 }
 
+/** Licencje zastąpione dostępem według stanowiska (awanse w etapie C). */
 function buyExchangeLicense() {
-    if (isPlayerInDefault()) return; // <-- DODAJ TĘ LINIĘ
-    const nextLevel = playerAccessLevel + 1;
-    const nextExchange = Object.values(exchanges).find(e => e.level === nextLevel);
-    if (!nextExchange) {
-        alert("Błąd: Nie ma kolejnego poziomu do odblokowania.");
-        return;
-    }
-    const cost = nextExchange.licenseCost;
-    if (playerCash >= cost) {
-        playerCash -= cost;
-        playerAccessLevel++;
-        const message = `✅ Zakupiono licencję! Uzyskano dostęp do: ${newExchange.name}`;
-        logEvent(message, 'market');
-        displayCash();
-        displayStocks(getCurrentInputValues());
-        openBankModal();
-    } else {
-        alert("Nie masz wystarczająco gotówki, aby kupić tę licencję.");
-    }
+    const nextExchange = Object.values(exchanges).find(e => e.level === playerAccessLevel + 1);
+    const message = nextExchange
+        ? `Dostęp do giełdy „${nextExchange.name}” daje awans na wyższe stanowisko.`
+        : 'Masz już dostęp do wszystkich giełd.';
+    if (typeof showToast === 'function') showToast(message, 'default', 5000);
+    else alert(message);
 }
 
 function checkSanEscobarRisk() {
@@ -2842,6 +2801,7 @@ function clearExpiredBankBonuses() {
 }
 
 function takeMortgageLoan(bankId, collateralSymbol, collateralQuantity, requestedAmount) {
+    if (!FEATURE_FLAGS.privateLoans) { if (typeof showToast === 'function') showToast('Zarządca funduszu nie zaciąga prywatnych kredytów ani lokat.', 'default'); return; } // wyłączone w etapie B
     const bank = commercialBanks.find(b => b.id === bankId && b.type === BANK_TYPES.MORTGAGE);
     const stock = stocks.find(s => s.symbol === collateralSymbol && !s.assetType);
     const holding = playerPortfolio[collateralSymbol];

@@ -15,10 +15,12 @@ function getCurrentInputValues() {
 }
 
 function displayCash() {
+    // Gotówka FUNDUSZU (pieniądze klientów); prywatne pieniądze gracza pokazuje displayXP.
     const cashElement = document.getElementById('cash');
     if (cashElement) {
         cashElement.textContent = playerCash.toFixed(2);
     }
+    if (typeof displayXP === 'function') displayXP();
 }
 
 
@@ -26,6 +28,19 @@ function displayCash() {
 function displayStocks(previousInputValues = {}) {
   const stockTableBody = document.getElementById('stock-table-body');
   if (!stockTableBody) return;
+
+  // Panel kupna (drawer) przenosimy między odświeżeniami tabeli zamiast budować go od nowa:
+  // wpisana ilość, kursor i kliknięcia w przyciski nie giną co sekundę.
+  const openDrawer = typeof openStockDrawerSymbol !== 'undefined' && openStockDrawerSymbol
+    ? document.getElementById(`drawer-${openStockDrawerSymbol}`)
+    : null;
+  const drawerInput = openDrawer ? openDrawer.querySelector('input') : null;
+  const drawerState = drawerInput ? {
+    focused: document.activeElement === drawerInput,
+    selectionStart: drawerInput.selectionStart,
+    selectionEnd: drawerInput.selectionEnd
+  } : null;
+  if (openDrawer) openDrawer.remove();
 
   // Nagłówek ceny (strzałki sortowania)
   const priceHeader = document.getElementById('price-header-cell');
@@ -431,7 +446,15 @@ function displayStocks(previousInputValues = {}) {
   if (typeof openStockDrawerSymbol !== 'undefined' && openStockDrawerSymbol) {
     const targetRow = document.querySelector(`#stock-table-body tr[data-symbol="${openStockDrawerSymbol}"]`);
     if (targetRow) {
-      renderStockDrawer(openStockDrawerSymbol);
+      if (openDrawer) {
+        targetRow.after(openDrawer);
+      } else {
+        renderStockDrawer(openStockDrawerSymbol);
+      }
+      if (drawerInput && drawerState?.focused) {
+        drawerInput.focus();
+        try { drawerInput.setSelectionRange(drawerState.selectionStart, drawerState.selectionEnd); } catch (e) { /* brak zaznaczenia */ }
+      }
     } else {
       openStockDrawerSymbol = null;
     }
@@ -549,102 +572,6 @@ const skillCategoryMap = {
 
 function getSkillCategory(skillId) {
     return skillCategoryMap[skillId] || 'balance';
-}
-
-function renderSkillsPanel() {
-    const skillsListDiv = document.getElementById('skills-list');
-    const xpCounterSpan = document.getElementById('skills-modal-xp');
-    if (!skillsListDiv || !xpCounterSpan) return;
-
-    skillsListDiv.innerHTML = '';
-    xpCounterSpan.textContent = playerXP.toFixed(2);
-
-    const categoryContainers = {};
-    Object.keys(skillCategoryDefinitions).forEach(categoryKey => {
-        const categoryDef = skillCategoryDefinitions[categoryKey];
-        const section = document.createElement('div');
-        section.className = 'skill-category-section';
-        section.innerHTML = `
-            <div class="skill-category-header">
-                <h3>${categoryDef.title}</h3>
-                <p>${categoryDef.description}</p>
-            </div>
-        `;
-        const grid = document.createElement('div');
-        grid.className = 'skill-category-grid';
-        section.appendChild(grid);
-        skillsListDiv.appendChild(section);
-        categoryContainers[categoryKey] = grid;
-    });
-
-    const sortedSkillIds = Object.keys(skills).sort((a, b) => {
-        const nameA = skills[a].name || a;
-        const nameB = skills[b].name || b;
-        return nameA.localeCompare(nameB, 'pl');
-    });
-
-    sortedSkillIds.forEach(skillId => {
-        const skillData = skills[skillId];
-        const currentLevel = getSkillLevel(skillId);
-        const nextLevelInfo = getNextSkillLevelInfo(skillId);
-        const categoryKey = getSkillCategory(skillId);
-        const skillDiv = document.createElement('div');
-        skillDiv.className = 'skill-card';
-
-        const skillName = document.createElement('h4');
-        skillName.textContent = `${skillData.name} (Poziom: ${currentLevel})`;
-        skillDiv.appendChild(skillName);
-
-        if (nextLevelInfo) {
-            const requirement = nextLevelInfo.requires;
-            const requirementMet = requirement ? getSkillLevel(requirement.skillId) >= requirement.level : true;
-            if (!requirementMet) {
-                const reqText = document.createElement('p');
-                const requiredSkill = skills[requirement.skillId];
-                reqText.textContent = `Wymaga: ${requiredSkill.name} (Poziom ${requirement.level})`;
-                reqText.className = 'skill-requirement';
-                skillDiv.appendChild(reqText);
-            }
-
-            const skillDesc = document.createElement('p');
-            skillDesc.textContent = `Następny poziom: ${nextLevelInfo.description}`;
-            skillDesc.className = 'skill-description';
-            skillDiv.appendChild(skillDesc);
-
-            const skillCost = document.createElement('p');
-            skillCost.textContent = `Koszt: ${nextLevelInfo.cost} XP`;
-            skillCost.className = 'skill-cost';
-            skillDiv.appendChild(skillCost);
-
-            const buyButton = document.createElement('button');
-            buyButton.textContent = `Ulepsz do poz. ${nextLevelInfo.level}`;
-            buyButton.onclick = () => buySkill(skillId);
-            if (playerXP < nextLevelInfo.cost || !requirementMet) {
-                buyButton.disabled = true;
-            }
-            skillDiv.appendChild(buyButton);
-        } else {
-            const maxLevelText = document.createElement('p');
-            maxLevelText.textContent = 'Osiągnięto maksymalny poziom umiejętności.';
-            maxLevelText.className = 'skill-maxed';
-            skillDiv.appendChild(maxLevelText);
-        }
-
-        const targetGrid = categoryContainers[categoryKey] || categoryContainers.balance;
-        targetGrid.appendChild(skillDiv);
-    });
-
-    Object.values(categoryContainers).forEach(container => {
-        if (container.children.length === 0) {
-            const empty = document.createElement('div');
-            empty.className = 'skill-category-empty';
-            empty.textContent = 'Brak umiejętności w tej sekcji.';
-            container.appendChild(empty);
-        }
-    });
-
-    updateWorkButtonVisibility();
-    updateDividendTrackerButtonVisibility();
 }
 
 // Ta funkcja jest z ui.js (baza), zachowujemy ją, ponieważ obsługuje bankowość komercyjną
@@ -839,9 +766,8 @@ function displayPortfolio() {
                 startupValue += playerPortfolio[symbol].investedAmount;
             }
         }
-        const totalDeposits = playerCommercialDeposits.reduce((sum, dep) => sum + dep.amount, 0);
-        // Całkowita wartość = Gotówka + Wartość akcji/ETF/Indeksów + Wartość inwestycji w startupy + Depozyty + Wkład w pulę
-        const totalPortfolioValue = playerCash + totalStocksValue + startupValue + totalDeposits + playerPoolStake;
+        // Aktywa funduszu: gotówka + akcje/ETF/indeksy + obligacje i bony (fund.js)
+        const totalPortfolioValue = playerFund ? getFundAssets() : playerCash + totalStocksValue + startupValue;
         totalPortfolioValueElement.textContent = totalPortfolioValue.toFixed(2);
     }
 }
@@ -856,13 +782,6 @@ function displayEventMessage(message, durationSeconds, percentageInfo = null, ca
         logEvent(fullMessageWithPercent, category);
     } else {
         logEvent(message, category);
-    }
-}
-
-function displayXP() {
-    const xpElement = document.getElementById('player-xp');
-    if (xpElement) {
-        xpElement.textContent = playerXP.toFixed(2);
     }
 }
 
@@ -2193,6 +2112,7 @@ function updatePassiveWorkUI() {
 }
 
 function startWorkMinigame() {
+    if (!FEATURE_FLAGS.minigames) { if (typeof showToast === 'function') showToast('Minigry są zamrożone.', 'default'); return; } // wyłączone w etapie B
     const grid = document.getElementById('work-grid');
     grid.innerHTML = '';
     nextNumberToClick = 1;
@@ -3985,6 +3905,7 @@ function closeInteractionModal() {
 }
 
 function openCommercialLoanModal(bankId) {
+    if (!FEATURE_FLAGS.privateLoans) { if (typeof showToast === 'function') showToast('Zarządca funduszu nie zaciąga prywatnych kredytów ani lokat.', 'default'); return; } // wyłączone w etapie B
     const bank = commercialBanks.find(b => b.id === bankId);
     const modal = document.getElementById('commercial-loan-modal');
     if (!bank || !modal) return;
@@ -4029,6 +3950,7 @@ function openCommercialLoanModal(bankId) {
 }
 
 function openCommercialDepositModal(bankId) {
+    if (!FEATURE_FLAGS.privateLoans) { if (typeof showToast === 'function') showToast('Zarządca funduszu nie zaciąga prywatnych kredytów ani lokat.', 'default'); return; } // wyłączone w etapie B
     const bank = commercialBanks.find(b => b.id === bankId);
     const modal = document.getElementById('commercial-deposit-modal');
     if (!bank || !modal) return;
@@ -4054,6 +3976,7 @@ function openCommercialDepositModal(bankId) {
 }
 
 function openMortgageModal(bankId) {
+    if (!FEATURE_FLAGS.privateLoans) { if (typeof showToast === 'function') showToast('Zarządca funduszu nie zaciąga prywatnych kredytów ani lokat.', 'default'); return; } // wyłączone w etapie B
     const bank = commercialBanks.find(b => b.id === bankId);
     const modal = document.getElementById('mortgage-modal');
     if (!bank || !modal) return;

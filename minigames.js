@@ -8,6 +8,7 @@ let offsetX, offsetY; // Przesunięcie kursora względem rogu obrazka
 
 
 function startDragEmployeeMinigame() {
+    if (!FEATURE_FLAGS.minigames) { if (typeof showToast === 'function') showToast('Minigry są zamrożone.', 'default'); return; } // wyłączone w etapie B
     if (minigameInterval) clearInterval(minigameInterval);
     if (isMinigameActive) return; // Zapobiegaj wielokrotnemu uruchomieniu
 
@@ -164,6 +165,7 @@ const BLOCK_HEIGHT = 20;
 const INITIAL_SPEED = 2;
 
 function startMoneyStackerGame() {
+    if (!FEATURE_FLAGS.minigames) { if (typeof showToast === 'function') showToast('Minigry są zamrożone.', 'default'); return; } // wyłączone w etapie B
     // Inicjalizacja zmiennych stanu gry
     isStackerGameOver = false;
     stackerScore = 0;
@@ -351,6 +353,7 @@ function endMoneyStackerGame() {
 
 // === NOWA FUNKCJA-PRZEŁĄCZNIK ===
 function startRandomSpecialMinigame() {
+    if (!FEATURE_FLAGS.minigames) { if (typeof showToast === 'function') showToast('Minigry są zamrożone.', 'default'); return; } // wyłączone w etapie B
     if (Math.random() < 0.5) {
         startDragEmployeeMinigame();
     } else {

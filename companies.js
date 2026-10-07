@@ -3735,6 +3735,7 @@ function payExtraStartupCost(symbol) {
 }
 
 function investInStartup(symbol, amount) {
+    if (!FEATURE_FLAGS.startups) { if (typeof showToast === 'function') showToast('Inwestycje w startupy są tymczasowo wyłączone.', 'default'); return; } // wyłączone w etapie B
     if (isPlayerInDefault()) return; // <-- DODAJ TĘ LINIĘ
 
     if (typeof amount !== 'number' || isNaN(amount) || amount <= 0) {
@@ -5497,6 +5498,7 @@ function buySharesFromInvestmentBank(bankId, symbol) {
 }
 
 function takeMortgageLoan(bankId, collateralSymbol, collateralQuantity, requestedAmount) {
+    if (!FEATURE_FLAGS.privateLoans) { if (typeof showToast === 'function') showToast('Zarządca funduszu nie zaciąga prywatnych kredytów ani lokat.', 'default'); return; } // wyłączone w etapie B
     const bank = commercialBanks.find(b => b.id === bankId && b.type === BANK_TYPES.MORTGAGE);
     const stock = stocks.find(s => s.symbol === collateralSymbol && !s.assetType);
     const holding = playerPortfolio[collateralSymbol];
@@ -7701,20 +7703,33 @@ function payDividendToShareholders(stock, dividendPerShare) {
 
         const grossDividend = playerPortfolio[stock.symbol].shares * finalDividendPerShare;
 
-        // Podatki (San Escobar)
-        let playerTaxModifier = 1.0;
-        const sanEscobarLvl = getSkillLevel('sanEscobar'); // Funkcja z player.js jest dostępna globalnie
-        if (sanEscobarLvl >= 1) playerTaxModifier = 0.95;
-        if (sanEscobarLvl >= 4) playerTaxModifier = 0.0;
+        if (typeof playerFund !== 'undefined' && playerFund) {
+            // Fundusz nie płaci podatku od dywidend — dywidenda podnosi NAV.
+            playerCash += grossDividend;
+            logEvent(`💰 Fundusz otrzymuje ${grossDividend.toFixed(2)} zł dywidendy od ${stock.name}.`, 'review');
+        } else {
+            // Podatki (San Escobar)
+            let playerTaxModifier = 1.0;
+            const sanEscobarLvl = getSkillLevel('sanEscobar');
+            if (sanEscobarLvl >= 1) playerTaxModifier = 0.95;
+            if (sanEscobarLvl >= 4) playerTaxModifier = 0.0;
 
-        const taxToPay = grossDividend * taxRateDividend * playerTaxModifier;
-        const netDividend = grossDividend - taxToPay;
-        
-        governmentTreasury += taxToPay;
-        playerCash += netDividend; // Zmienna z player.js
-        
-        logEvent(`💰 Otrzymujesz ${netDividend.toFixed(2)} PLN dywidendy netto od ${stock.name} (podatek: ${taxToPay.toFixed(2)} PLN).`, 'review');
+            const taxToPay = grossDividend * taxRateDividend * playerTaxModifier;
+            governmentTreasury += taxToPay;
+            playerCash += grossDividend - taxToPay;
+            logEvent(`💰 Otrzymujesz ${(grossDividend - taxToPay).toFixed(2)} PLN dywidendy netto od ${stock.name} (podatek: ${taxToPay.toFixed(2)} PLN).`, 'review');
+        }
         displayCash(); // Funkcja z ui.js
+    }
+
+    // 1b. Wypłata na prywatne konto gracza (z podatkiem od dywidend)
+    const privateHolding = typeof playerWallet !== 'undefined' ? playerWallet.portfolio[stock.symbol] : null;
+    if (privateHolding && privateHolding.shares > 0) {
+        const gross = privateHolding.shares * dividendPerShare;
+        const tax = gross * taxRateDividend * getPrivateTaxModifier();
+        governmentTreasury += tax;
+        playerWallet.cash += gross - tax;
+        logEvent(`💰 Prywatnie otrzymujesz ${(gross - tax).toFixed(2)} zł dywidendy od ${stock.name} (podatek ${tax.toFixed(2)} zł).`, 'review');
     }
 
     // 2. Wypłata dla AI

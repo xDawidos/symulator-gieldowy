@@ -4051,3 +4051,66 @@ button:hover {
     }
 }
 
+
+/* ===================== ETAP B: FUNDUSZ GRACZA ===================== */
+.fund-account-switch { display: flex; gap: 6px; margin-bottom: 10px; }
+.fund-account-btn { flex: 1; background: var(--bg-elevated); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 8px; padding: 6px 8px; }
+.fund-account-btn.active { background: var(--accent-primary); border-color: var(--accent-primary); color: #0b1220; font-weight: 700; }
+.fund-summary { display: grid; gap: 8px; margin-bottom: 8px; }
+.fund-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.fund-kpis div { background: var(--bg-elevated); border: 1px solid var(--border-color); border-radius: 8px; padding: 6px 8px; display: flex; flex-direction: column; }
+.fund-kpis span, .fund-muted, .fund-period-line { color: var(--text-muted); font-size: 12px; }
+.fund-kpis strong { font-variant-numeric: tabular-nums; }
+.fund-trust { font-size: 13px; }
+.fund-trust-bar, .fund-period-progress { height: 6px; background: var(--bg-elevated); border-radius: 999px; overflow: hidden; margin-top: 4px; }
+.fund-trust-fill { height: 100%; border-radius: 999px; }
+.fund-trust-fill.good { background: var(--color-up); }
+.fund-trust-fill.mid { background: var(--color-warn); }
+.fund-trust-fill.bad { background: var(--color-down); }
+.fund-period-progress div { height: 100%; background: var(--accent-info); }
+.fund-emission { display: flex; gap: 6px; margin: 8px 0; flex-wrap: wrap; }
+.fund-emission input { width: 90px; }
+.fund-chart { color: var(--text-muted); max-width: 420px; }
+.fund-legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 11px; color: var(--text-muted); }
+.fund-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+.fund-rivals caption { caption-side: top; text-align: left; font-size: 12px; color: var(--text-muted); padding: 4px 0; }
+.fund-rivals tr.mine td { font-weight: 700; }
+.fund-details { margin-top: 8px; }
+.fund-details summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
+.fund-private-list { list-style: none; padding: 0; margin: 4px 0; font-size: 13px; }
+
+/* CV i szkolenia */
+.cv-card { display: flex; gap: 14px; align-items: center; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-elevated); }
+.cv-card h3 { margin: 0 0 4px; }
+.cv-card p { margin: 2px 0; }
+.cv-avatar { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; font-size: 26px; font-weight: 700; background: linear-gradient(135deg, var(--accent-info), var(--accent-primary)); color: #0b1220; flex-shrink: 0; }
+.cv-medals { display: flex; flex-wrap: wrap; gap: 6px; }
+.cv-medal { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border-color); }
+.cv-medal-bronze { background: rgba(205, 127, 50, 0.18); border-color: #cd7f32; }
+.cv-medal-silver { background: rgba(192, 192, 192, 0.18); border-color: #c0c0c0; }
+.cv-medal-gold { background: rgba(255, 215, 0, 0.18); border-color: #ffd700; }
+.cv-history { font-size: 13px; padding-left: 18px; }
+.cv-entry-compliance { color: var(--color-down); }
+.cv-trainings { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.cv-training { border: 1px solid var(--border-color); border-radius: 10px; padding: 10px; background: var(--bg-elevated); display: flex; flex-direction: column; gap: 4px; }
+.cv-training h4 { margin: 0; font-size: 14px; }
+.cv-training p { margin: 0; font-size: 12px; }
+.cv-training button { margin-top: auto; }
+
+/* Scenka startowa: SMS od babci */
+.intro-overlay { position: fixed; inset: 0; z-index: 3000; display: grid; place-items: center; background: rgba(5, 10, 20, 0.85); padding: 16px; }
+.intro-overlay[hidden] { display: none; }
+.intro-phone { width: min(380px, 100%); max-height: 92vh; overflow: auto; border-radius: 28px; border: 8px solid #1f2937; background: #0f172a; box-shadow: var(--shadow-soft); }
+.intro-phone-header { padding: 12px 16px; font-weight: 700; border-bottom: 1px solid var(--border-color); background: #111827; }
+.intro-phone-body { padding: 14px; display: flex; flex-direction: column; gap: 8px; min-height: 160px; }
+.intro-sms { align-self: flex-start; max-width: 85%; background: #1f2937; border-radius: 16px 16px 16px 4px; padding: 8px 12px; font-size: 14px; }
+.intro-sms.typing { color: var(--text-muted); }
+.intro-transfer { align-self: center; font-size: 13px; color: var(--color-up); border: 1px dashed var(--color-up); border-radius: 10px; padding: 6px 10px; }
+.intro-form { display: flex; flex-direction: column; gap: 8px; padding: 0 14px 16px; }
+.intro-form[hidden] { display: none; }
+.intro-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--text-muted); }
+.intro-country-label { font-size: 13px; color: var(--text-muted); }
+.intro-countries { display: flex; flex-wrap: wrap; gap: 6px; }
+.intro-country { font-size: 12px; padding: 4px 8px; border-radius: 999px; }
+.intro-country.selected { border-color: var(--accent-primary); font-weight: 700; }
+.intro-country.locked { opacity: 0.5; cursor: not-allowed; }

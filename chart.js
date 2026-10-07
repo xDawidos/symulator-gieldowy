@@ -429,7 +429,15 @@ function renderOwnershipPieChart(symbol) {
     const owners = [];
     const playerShares = playerPortfolio[symbol] ? playerPortfolio[symbol].shares : 0;
     if (playerShares > 0) {
-        owners.push({ name: 'Ty (Gracz)', shares: playerShares, color: '#007bff' });
+        const fundName = typeof playerProfile !== 'undefined' && playerProfile?.fundName ? playerProfile.fundName : 'Twój fundusz';
+        owners.push({ name: `💼 ${fundName}`, shares: playerShares, color: '#007bff' });
+    }
+    const privateShares = typeof playerWallet !== 'undefined' ? (playerWallet.portfolio[symbol]?.shares || 0) : 0;
+    if (privateShares > 0) {
+        owners.push({ name: '🧍 Ty (prywatnie)', shares: privateShares, color: '#3cc9ff' });
+    }
+    if (stock.insiderShares > 0) {
+        owners.push({ name: '👔 Zarząd i pracownicy', shares: stock.insiderShares, color: '#8a63d2' });
     }
 
     let aiColorIndex = 0;
@@ -509,6 +517,12 @@ function renderOwnershipPieChart(symbol) {
     const svgNS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(svgNS, "svg");
     svg.setAttribute("viewBox", "0 0 32 32");
+    // Kliny rysowane grubym obrysem okręgu wychodzą poza koło — przycinamy SVG do koła.
+    svg.style.borderRadius = '50%';
+    svg.style.overflow = 'hidden';
+    svg.style.width = '100%';
+    svg.style.height = '100%';
+    svg.style.display = 'block';
     container.appendChild(svg);
     
     const radius = 15.9;

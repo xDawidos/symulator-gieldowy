@@ -14,8 +14,9 @@ function setSectorChip(el, sector) {
 let currentMarketLevel = 'ALL';
 let hasTopSectorAccess = false;
 
+/** Przycisk 📊 w panelu kupna: struktura akcjonariatu (kto ma jaki % udziałów). */
 function openCompanyReport(symbol) {
-    console.warn('openCompanyReport is not implemented:', symbol);
+    if (typeof openStockDetailsModal === 'function') openStockDetailsModal(symbol);
 }
 
 function unlockPopularSector() {
@@ -65,7 +66,7 @@ function renderStockDrawer(symbol) {
       <div class="stock-drawer-actions">
         <div class="stock-drawer-actions-row">
           <div class="qty-input-wrapper">
-            <input type="number" id="dqty-${symbol}" min="1" value="1">
+            <input type="text" inputmode="numeric" pattern="[0-9]*" id="dqty-${symbol}" value="1" aria-label="Liczba akcji" oninput="this.value=this.value.replace(/[^0-9]/g, '')">
             <span class="chip-max" onclick="setDrawerMax('${symbol}')">MAX</span>
           </div>
         </div>
@@ -76,8 +77,8 @@ function renderStockDrawer(symbol) {
             onclick="sellStock('${symbol}',document.getElementById('dqty-${symbol}').value)">Sprzedaj</button>
           <button class="btn-ghost-icon" title="Wykres"
             onclick="showPriceHistoryModal('${symbol}')">📈</button>
-          <button class="btn-ghost-icon" title="Raport"
-            onclick="openCompanyReport && openCompanyReport('${symbol}')">📊</button>
+          <button class="btn-ghost-icon" title="Akcjonariat — kto ma jaki % udziałów"
+            onclick="openCompanyReport('${symbol}')">📊</button>
         </div>
       </div>
     </div>`;
@@ -147,15 +148,21 @@ function updateMarketKPIs() {
     if (unlockBtn) unlockBtn.style.display = hasTopSectorAccess ? 'none' : 'block';
 }
 
-// Topbar KPI
+// Topbar KPI: gotówka funduszu, NAV/JU, prywatne pieniądze gracza
 function updateTopbarKPIs() {
     const fmt = new Intl.NumberFormat('pl-PL', {minimumFractionDigits:2, maximumFractionDigits:2});
     if (typeof playerCash !== 'undefined') {
         const v = fmt.format(playerCash);
         ['cash','cash-portfolio'].forEach(id => {
             const el = document.getElementById(id);
-            if (el) el.textContent = v + ' PLN';
+            if (el) el.textContent = v + ' zł';
         });
+    }
+    if (typeof playerFund !== 'undefined' && playerFund) {
+        const navEl = document.getElementById('topbar-portfolio-value');
+        if (navEl) navEl.textContent = getFundNav().toFixed(4) + ' zł';
+        const walletEl = document.getElementById('topbar-daily-pnl');
+        if (walletEl) walletEl.textContent = fmt.format(playerWallet.cash) + ' zł';
     }
     if (typeof currentDay !== 'undefined') {
         const d = document.getElementById('topbar-day');
@@ -176,15 +183,9 @@ function updateTopbarKPIs() {
     }
 }
 
-// XP bar
+// Prywatne pieniądze gracza (XP zastąpione szkoleniami za pieniądze)
 function updateXPBar() {
-    if (typeof playerXP === 'undefined') return;
-    const xpLevel = 1000;
-    const pct = Math.min(100, (playerXP % xpLevel) / xpLevel * 100);
-    const fill = document.getElementById('xp-bar-fill');
-    if (fill) fill.style.width = pct + '%';
-    const el = document.getElementById('player-xp');
-    if (el) el.textContent = Math.floor(playerXP) + ' XP (Poz. ' + Math.floor(playerXP/xpLevel) + ')';
+    if (typeof displayXP === 'function') displayXP();
 }
 
 function setDrawerMax(symbol) {

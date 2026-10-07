@@ -69,7 +69,8 @@ function setGameSpeed(speedMultiplier) {
 
     console.log(`Ustawiono prędkość gry na x${speedMultiplier}`);
 
-    if (!isAdPopupVisible) {
+    // Reklamy wyłączone w etapie B (zastąpi je spam w skrzynce mailowej — etap E).
+    if (!isAdPopupVisible && FEATURE_FLAGS.adPopups) {
          scheduleAdPopup();
     }
 
@@ -168,16 +169,22 @@ function setGameSpeed(speedMultiplier) {
         cleanupBankruptStocks(currentSpeedMultiplier);
         clearExpiredBankBonuses();
         updateStockPrices();
+        updateMarketIndexes(); // GIG/TIG5/SIG20 — benchmark funduszu (wcześniej nigdy nie był liczony)
         updateHoldingCompanies();
-        updateStartups(gameTimeDelta);
+        if (FEATURE_FLAGS.startups) {
+            updateStartups(gameTimeDelta);
+            updateInvestmentPoolTimer(gameTimeDelta);
+            updateAutoInvestTimer(gameTimeDelta);
+            updateStartupAutoInvestTimers(gameTimeDelta);
+        }
         checkTBillAccess();
         updateMarketVolatilityIndex();
-        updatePassiveWork(gameTimeDelta);
-        updateCompanyStatus();
-        updateInvestmentPoolTimer(gameTimeDelta);
-        updateAutoInvestTimer(gameTimeDelta);
-        updateStartupAutoInvestTimers(gameTimeDelta);
+        if (FEATURE_FLAGS.playerCompany) {
+            updatePassiveWork(gameTimeDelta);
+            updateCompanyStatus();
+        }
         updateDividendTimers(gameTimeDelta);
+        updateFund(gameTimeDelta); // NAV, obsunięcie, zamykanie okresów funduszu
         updateFestival(); // Aktualizacja festynu
         updateFestivalCountdown(gameTimeDelta); // Odliczanie do festynu
         applyActiveModifiers(); // Aplikowanie rocznych bonusów
@@ -199,6 +206,7 @@ function setGameSpeed(speedMultiplier) {
         displayStartups(currentStartupInputs);
         displayEtfs();
         displayPortfolio();
+        displayFundPanel();
         displayMarketIndexes();
         displayInvestmentPool();
         updateCityModalContent(); // Aktualizacja okna miasta (tylko gdy otwarte)
@@ -357,8 +365,11 @@ gameTimers.weekly = setInterval(() => {
             }
         });
 
-        // Koszty firmy gracza (bez zmian)
-        if (playerCompany && playerCompany.employees.length > 0) { //
+        // Fundusz gracza: opłata za zarządzanie, zaufanie, decyzje klientów
+        processFundWeekly();
+
+        // Koszty firmy gracza (mechanika wyłączona w etapie B)
+        if (FEATURE_FLAGS.playerCompany && playerCompany && playerCompany.employees.length > 0) { //
             let totalEmployeeSalary = 0; //
             let totalEquipmentRunningCost = 0; //
 
@@ -705,6 +716,14 @@ function initializeGame() {
 
     if (!restoredFromSave) {
         createNewWorld();
+        // Fundusz startowy z domyślnym profilem; scenka startowa uzupełnia imię i nazwy.
+        startNewCareer({});
+    }
+
+    // Mechaniki wyłączone w etapie B: ukrycie ich paneli.
+    if (!FEATURE_FLAGS.startups) {
+        const incubator = document.getElementById('startup-incubator-panel');
+        if (incubator) incubator.style.display = 'none';
     }
 
     // Ustawienie UI
@@ -767,8 +786,8 @@ function initializeGame() {
         }
     }
 
-    if (!restoredFromSave && playerCompany && typeof hireEmployee === 'function') {
-        hireEmployee('initial');
+    if (!restoredFromSave && typeof showIntroScene === 'function') {
+        showIntroScene(); // SMS od babci + profil gracza (gra stoi na pauzie)
     }
 
     // Uruchomienie pętli gry — jedyne miejsce tworzenia timerów (setGameSpeed czyści poprzednie

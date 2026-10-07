@@ -945,6 +945,187 @@ group('Długa symulacja rynku (etap A)', () => {
     }, 2027);
 });
 
+group('Fundusz gracza (etap B)', () => {
+    function fundWorld() {
+        const a = makeCompany('AAA', { cash: 200_000, fixedAssets: 800_000 });
+        const b = makeCompany('BBB', { cash: 200_000, fixedAssets: 800_000 });
+        [a, b].forEach(company => { company.insiderShares = 0; company.sharesHeld = 0; company.reputation = { player: 0 }; });
+        resetWorld([a, b]);
+        allBonds.length = 0;
+        const gig = marketIndexes.find(index => index.id === 'GIG');
+        gig.value = 100;
+        playerLoan.missedPayments = 0;
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        return { a, b, gig };
+    }
+
+    test('start kariery: 10 000 zł, 1000 JU, NAV 10, 100 zł od babci, kilkunastu klientów', () => {
+        fundWorld();
+        assert(playerCash === 10000 && playerFund.units === 1000, 'kapitał i JU');
+        assertNear(getFundNav(), 10, 'NAV');
+        assert(playerWallet.cash === 100, 'kieszonkowe');
+        assert(playerFund.clients.length >= 12 && playerFund.clients.length <= 15, 'liczba klientów');
+        assertNear(playerFund.clients.reduce((sum, c) => sum + c.units, 0), 1000, 'JU rozdzielone');
+        assert(playerAccessLevel === 2, 'dostęp: Śmieciowa, Brązowa, Srebrna');
+        assert(Object.keys(playerPortfolio).length === 0, 'pusty portfel funduszu');
+    });
+
+    test('NAV nie zmienia się przy emisji i umorzeniu (po NAV)', () => {
+        const { a } = fundWorld();
+        buyStock('AAA', 30);
+        const nav0 = getFundNav();
+        issueFundUnits(200, { forcedValue: 1500, forcedClient: playerFund.clients[0] });
+        assertNear(getFundNav(), nav0, 'emisja', 1e-9);
+        redeemClientUnits(playerFund.clients[1], 20);
+        assertNear(getFundNav(), nav0, 'umorzenie', 1e-9);
+        assert(a.sharesHeld === 30, 'akcje funduszu w obrocie');
+    });
+
+    test('umorzenie bez gotówki wymusza sprzedaż, gotówka nie spada poniżej zera', () => {
+        const { a } = fundWorld();
+        buyStock('AAA', 95); // ~9 500 zł w akcjach
+        const client = [...playerFund.clients].sort((x, y) => y.units - x.units)[0];
+        const sharesBefore = playerPortfolio.AAA.shares;
+        redeemClientUnits(client, client.units);
+        assert(playerCash >= -1e-9, 'gotówka ≥ 0');
+        assert((playerPortfolio.AAA?.shares || 0) < sharesBefore, 'sprzedano pozycje');
+        assert(playerFund.current.forcedSales > 0, 'zanotowano wymuszoną sprzedaż');
+    });
+
+    test('opłata za zarządzanie: NAV spada o opłatę, udział gracza trafia do portfela prywatnego', () => {
+        fundWorld();
+        const nav0 = getFundNav();
+        const wallet0 = playerWallet.cash;
+        const fee = chargeManagementFee();
+        assertNear(fee, 10000 * MANAGEMENT_FEE_ANNUAL / FUND_WEEKS_PER_YEAR, 'wysokość opłaty');
+        assertNear(nav0 - getFundNav(), fee / playerFund.units, 'NAV po opłacie', 1e-9);
+        assertNear(playerWallet.cash - wallet0, fee * getPlayerPosition().feeShare, 'udział gracza');
+    });
+
+    test('zaufanie spada stopniowo, odpływ tygodniowy ograniczony, lojalny klient zostaje', () => {
+        fundWorld();
+        for (let i = 0; i < 4; i++) {
+            playerFund.periods.push({ number: i, fundReturn: -0.12, benchmarkReturn: 0.02, rivals: [], volatility: 0.03, maxDrawdown: 0.15, rank: 1, rankOf: 1 });
+        }
+        const trust0 = playerFund.trust;
+        const units0 = playerFund.units;
+        processFundWeekly();
+        const firstDrop = trust0 - playerFund.trust;
+        assert(firstDrop > 0 && firstDrop < trust0 * 0.5, `spadek w tygodniu: ${firstDrop.toFixed(1)}`);
+        assert(units0 - playerFund.units <= units0 * MAX_WEEKLY_REDEMPTION_SHARE + 1, 'odpływ ≤ 15% JU');
+        for (let i = 0; i < 15; i++) processFundWeekly();
+        assert(playerFund.trust < 25, `zaufanie po serii strat: ${playerFund.trust.toFixed(1)}`);
+        assert(playerFund.clients.some(c => c.type === 'loyal'), 'klient lojalny zostaje');
+    });
+
+    test('więcej niż 2 emisje w okresie obniżają zaufanie', () => {
+        fundWorld();
+        issueFundUnits(10, { forcedValue: 100, forcedClient: playerFund.clients[0] });
+        issueFundUnits(10, { forcedValue: 100, forcedClient: playerFund.clients[0] });
+        const trust = playerFund.trust;
+        issueFundUnits(10, { forcedValue: 100, forcedClient: playerFund.clients[0] });
+        assert(trust - playerFund.trust >= 4, 'kara za trzecią emisję');
+    });
+
+    test('premia za wyniki i udział w opłacie zależą od wyniku i stanowiska', () => {
+        fundWorld();
+        const base = { benchmarkReturn: 0.02, assets: 10000, rank: 2, rankOf: 3 };
+        assert(computePerformanceBonus({ ...base, fundReturn: 0.01 }) === 0, 'poniżej GIG brak premii');
+        const small = computePerformanceBonus({ ...base, fundReturn: 0.04 });
+        const big = computePerformanceBonus({ ...base, fundReturn: 0.08 });
+        assert(big > small && small > 0, 'premia rośnie z nadwyżką');
+        const senior = computePerformanceBonus({ ...base, fundReturn: 0.04 }, CAREER_POSITIONS[2]);
+        assert(senior > small, 'wyższe stanowisko, wyższa premia');
+        assert(CAREER_POSITIONS[2].feeShare > CAREER_POSITIONS[0].feeShare, 'większy udział w opłacie');
+    });
+
+    test('prywatny zakup akcji kupionej przez fundusz zwiększa ryzyko compliance', () => {
+        fundWorld();
+        buyStock('AAA', 10);
+        playerWallet.cash = 5000;
+        setTradingAccount('private');
+        buyStock('AAA', 5);
+        setTradingAccount('fund');
+        assert(playerWallet.portfolio.AAA?.shares === 5, 'akcje na koncie prywatnym');
+        assert(playerWallet.complianceRisk >= 1 || playerWallet.fines > 0, 'ryzyko lub kara');
+        assert(playerPortfolio.AAA.shares === 10, 'portfel funduszu bez zmian');
+    });
+
+    test('dywidendy: do gotówki funduszu bez podatku, na konto prywatne z podatkiem', () => {
+        const { a } = fundWorld();
+        buyStock('AAA', 20);
+        playerWallet.cash = 5000;
+        setTradingAccount('private');
+        buyStock('AAA', 10);
+        setTradingAccount('fund');
+        const fundCash = playerCash;
+        const wallet = playerWallet.cash;
+        payDividendToShareholders(a, 1);
+        assertNear(playerCash - fundCash, 20, 'fundusz brutto');
+        assert(playerWallet.cash - wallet < 10 && playerWallet.cash - wallet > 8, 'prywatnie netto po podatku');
+    });
+
+    test('minimalny wpływ na cenę: 1% wolnego obrotu ≈ +0,5%', () => {
+        const { a } = fundWorld();
+        const price0 = a.price;
+        buyStock('AAA', 100); // 1% z 10 000 akcji
+        assertNear(a.price / price0 - 1, 0.005, 'wpływ na cenę', 1e-6);
+    });
+
+    test('dostęp do giełd wg stanowiska; szkolenie za pieniądze daje odznakę', () => {
+        fundWorld();
+        assert(!canAccessExchange('GOLD') && canAccessExchange('SILVER'), 'Złota zablokowana');
+        playerWallet.cash = 1000;
+        const cost = getTrainingCost('ironNerves');
+        assert(buyTraining('ironNerves'), 'zakup szkolenia');
+        assertNear(1000 - playerWallet.cash, cost, 'koszt w zł');
+        assert(getTrainingMedal(getSkillLevel('ironNerves')).id === 'bronze', 'odznaka brązowa');
+        skills.ironNerves.unlockedLevel = 0;
+        assert(!getAvailableTrainings().includes('work') && !getAvailableTrainings().includes('startupInvestor'), 'ukryte szkolenia');
+    });
+
+    test('zapis v4 zachowuje NAV, JU, klientów, okresy i portfel prywatny', () => {
+        fundWorld();
+        buyStock('AAA', 25);
+        playerFund.periods.push({ number: 1, fundReturn: 0.01, benchmarkReturn: 0, rivals: [], volatility: 0, maxDrawdown: 0, rank: 1, rankOf: 1, bonus: 5 });
+        playerWallet.cash = 321;
+        const before = { nav: getFundNav(), units: playerFund.units, clients: playerFund.clients.length, periods: playerFund.periods.length };
+        const report = applySaveSnapshot(JSON.parse(JSON.stringify(buildSaveSnapshot())));
+        assert(report.ok, report.errors.join(' '));
+        assertNear(getFundNav(), before.nav, 'NAV', 1e-9);
+        assert(playerFund.units === before.units && playerFund.clients.length === before.clients && playerFund.periods.length === before.periods, 'fundusz');
+        assert(playerWallet.cash === 321, 'portfel prywatny');
+        assert(playerProfile.fundName === 'Fundusz Testowy', 'profil');
+    });
+
+    test('fundusz pasywny przez 4 okresy nie traci klientów masowo', () => {
+        fundWorld();
+        buyStock('AAA', 40);
+        buyStock('BBB', 40);
+        const clients0 = playerFund.clients.length;
+        const ticksPerWeek = BASE_DELAYS.weekly / BASE_DELAYS.stockUpdate;
+        const weeks = Math.ceil(FUND_PERIOD_MS * 4 / BASE_DELAYS.weekly);
+        for (let week = 0; week < weeks; week++) {
+            for (let t = 0; t < ticksPerWeek; t++) {
+                updateStockPrices();
+                updateMarketIndexes();
+                updateFund(BASE_DELAYS.stockUpdate);
+            }
+            processFundWeekly();
+        }
+        assert(playerFund.periods.length >= 4, `okresy: ${playerFund.periods.length}`);
+        addTable('Fundusz pasywny po 4 okresach', ['Miara', 'Wartość'], [
+            ['NAV', getFundNav().toFixed(4)],
+            ['Zaufanie', playerFund.trust.toFixed(1)],
+            ['Klienci', `${clients0} → ${playerFund.clients.length}`],
+            ['Zwroty okresów', playerFund.periods.map(p => (p.fundReturn * 100).toFixed(2) + '%').join(', ')],
+            ['Premie', playerFund.periods.map(p => p.bonus.toFixed(2)).join(', ')],
+            ['Portfel prywatny', playerWallet.cash.toFixed(2)]
+        ]);
+        assert(playerFund.clients.length >= clients0 * 0.6, `klienci: ${clients0} → ${playerFund.clients.length}`);
+    }, 404);
+});
+
 // --------------------------------------------------------------------------------
 // Uruchomienie
 // --------------------------------------------------------------------------------

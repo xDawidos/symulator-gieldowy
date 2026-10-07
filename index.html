@@ -44,8 +44,8 @@
       </button>
 
       <button class="sidebar-nav-btn" id="open-skills-btn" onclick="openSkillsModal()">
-        <span class="nav-icon">🧠</span>
-        <span class="nav-label">Umiejętności</span>
+        <span class="nav-icon">🎓</span>
+        <span class="nav-label">CV i szkolenia</span>
       </button>
 
             <button class="sidebar-nav-btn has-badge" id="open-newspaper-btn" onclick="openNewspaperModal()">
@@ -84,16 +84,16 @@
   <!-- KPI środek -->
   <div class="topbar-kpi-group">
     <div class="topbar-kpi">
-      <span class="topbar-kpi-label">Gotówka</span>
+      <span class="topbar-kpi-label">Gotówka funduszu</span>
       <span class="topbar-kpi-val" id="cash">10 000,00 PLN</span>
     </div>
     <div class="topbar-kpi">
-      <span class="topbar-kpi-label">Wartość portfela</span>
-      <span class="topbar-kpi-val" id="topbar-portfolio-value">10 000,00</span>
+      <span class="topbar-kpi-label">NAV / JU</span>
+      <span class="topbar-kpi-val" id="topbar-portfolio-value">10,00</span>
     </div>
     <div class="topbar-kpi">
-      <span class="topbar-kpi-label">Zysk / strata dziś</span>
-      <span class="topbar-kpi-val" id="topbar-daily-pnl">+0,00</span>
+      <span class="topbar-kpi-label">Moje pieniądze</span>
+      <span class="topbar-kpi-val" id="topbar-daily-pnl">100,00</span>
     </div>
   </div>
 
@@ -291,19 +291,47 @@
 
         <aside class="dashboard-sidebar">
             <div id="portfolio" class="panel">
-    <h2>Mój Portfel</h2>
+    <h2 id="fund-panel-title">Mój fundusz</h2>
+
+    <!-- Przełącznik konta handlu -->
+    <div class="fund-account-switch" role="group" aria-label="Konto handlu">
+      <button id="account-btn-fund" class="fund-account-btn active" onclick="setTradingAccount('fund')">🏦 Fundusz</button>
+      <button id="account-btn-private" class="fund-account-btn" onclick="setTradingAccount('private')">🧍 Prywatne</button>
+    </div>
+
+    <!-- Fundusz: NAV, JU, zaufanie, klienci, emisja -->
+    <div id="fund-summary" class="fund-summary"></div>
+    <div class="fund-emission">
+      <input type="number" id="fund-emission-units" min="1" value="100" aria-label="Liczba JU do emisji">
+      <button class="btn-secondary" onclick="handleFundEmission()">📥 Emisja JU</button>
+    </div>
+
+    <!-- Wykres 4 okresów i porównanie z rywalami -->
+    <div class="portfolio-section-header">Wyniki: 4 ostatnie okresy</div>
+    <div id="fund-periods-chart" class="fund-chart"></div>
+    <div id="fund-rivals-table"></div>
+
+    <details class="fund-details">
+      <summary>👥 Klienci funduszu</summary>
+      <div id="fund-clients-list"></div>
+    </details>
+
+    <details class="fund-details" id="fund-private-section">
+      <summary>🧍 Konto prywatne</summary>
+      <div id="fund-private-panel"></div>
+    </details>
 
     <!-- KPI karty 2×2 -->
     <div class="portfolio-kpi-grid">
       <div class="portfolio-kpi-card">
-        <span class="portfolio-kpi-label">Wartość portfela</span>
+        <span class="portfolio-kpi-label">Aktywa funduszu</span>
         <span class="portfolio-kpi-value" id="total-portfolio-value">10 000,00</span>
-        <span class="portfolio-kpi-sub">PLN łącznie</span>
+        <span class="portfolio-kpi-sub">zł (pieniądze klientów)</span>
       </div>
       <div class="portfolio-kpi-card">
-        <span class="portfolio-kpi-label">Gotówka</span>
+        <span class="portfolio-kpi-label">Gotówka funduszu</span>
         <span class="portfolio-kpi-value" id="cash-portfolio">10 000,00</span>
-        <span class="portfolio-kpi-sub">PLN wolne</span>
+        <span class="portfolio-kpi-sub">zł wolne</span>
       </div>
       <div class="portfolio-kpi-card">
         <span class="portfolio-kpi-label">Zysk / Strata</span>
@@ -311,17 +339,14 @@
         <span class="portfolio-kpi-sub">PLN całkowity</span>
       </div>
       <div class="portfolio-kpi-card">
-        <span class="portfolio-kpi-label">XP / Poziom</span>
-        <span class="portfolio-kpi-value" id="player-xp">0</span>
-        <span class="portfolio-kpi-sub">do następnego poziomu</span>
-        <div class="xp-bar">
-          <div class="xp-bar-fill" id="xp-bar-fill" style="width:0%"></div>
-        </div>
+        <span class="portfolio-kpi-label">Moje pieniądze</span>
+        <span class="portfolio-kpi-value" id="player-xp">100,00</span>
+        <span class="portfolio-kpi-sub">zł prywatnie (szkolenia)</span>
       </div>
     </div>
 
     <!-- Moje Aktywa -->
-    <div class="portfolio-section-header">Moje Aktywa</div>
+    <div class="portfolio-section-header">Pozycje funduszu</div>
     <table class="asset-mini-table">
       <thead>
         <tr>
@@ -345,8 +370,7 @@
       <ul id="my-liabilities-list" style="list-style:none;padding:0;margin:0;"></ul>
       <div style="display:flex;gap:6px;margin-top:10px;">
         <button onclick="openPawnShopPanel()" class="btn-secondary">🏦 Lombard</button>
-        <button onclick="openDebtCollectorPanel()" class="btn-secondary"
-                
+        <button onclick="openDebtCollectorPanel()" class="btn-secondary">
           ⚠️ Windykator
         </button>
       </div>
@@ -401,10 +425,10 @@
         <button onclick="closePriceChartModal()" style="display: block; width: 100%;">Zamknij</button>
     </div>
 
-    <div id="skills-modal" style="display:none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 450px; max-height: 80vh; overflow:auto; border: 2px solid #333; background-color: #f9f9f9; box-shadow: 0 4px 8px rgba(0,0,0,0.2); padding: 24px; z-index: 1001; border-radius: 8px;">
+    <div id="skills-modal" style="display:none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 640px; max-width: 94vw; max-height: 80vh; overflow:auto; border: 2px solid #333; background-color: #f9f9f9; box-shadow: 0 4px 8px rgba(0,0,0,0.2); padding: 24px; z-index: 1001; border-radius: 8px;">
         <button class="close-btn" onclick="document.getElementById('skills-modal').style.display='none';">&times;</button>
-        <h2 style="margin-top: 0; text-align: center;">Drzewko Umiejętności</h2>
-        <p style="text-align: center; border-bottom: 1px solid #ccc; padding-bottom: 10px;">Twoje XP: <span id="skills-modal-xp">0</span></p>
+        <h2 style="margin-top: 0; text-align: center;">🎓 CV i szkolenia</h2>
+        <p style="text-align: center; border-bottom: 1px solid #ccc; padding-bottom: 10px;">Moje pieniądze: <span id="skills-modal-xp">0</span> zł</p>
         <div id="skills-list"></div>
     </div>
 
@@ -1262,6 +1286,22 @@
     <div id="chart-tooltip" style="display: none; position: absolute;"></div>
     <div id="toast-notification"></div>
 
+    <!-- Scenka startowa: SMS od babci + profil gracza -->
+    <div id="intro-overlay" class="intro-overlay" hidden>
+      <div class="intro-phone" role="dialog" aria-labelledby="intro-phone-title">
+        <div class="intro-phone-header" id="intro-phone-title">💬 Babcia</div>
+        <div class="intro-phone-body" id="intro-sms-thread"></div>
+        <form id="intro-form" class="intro-form" hidden onsubmit="completeIntroScene(event)">
+          <label>Twoje imię<input id="intro-name" maxlength="30" required value="Dawid"></label>
+          <label>Nazwa korporacji<input id="intro-corporation" maxlength="40" required value="Wawelska Grupa Inwestycyjna"></label>
+          <label>Nazwa Twojego funduszu<input id="intro-fund" maxlength="40" required value="Fundusz Pierwszy Krok"></label>
+          <div class="intro-country-label">Kraj startowy</div>
+          <div id="intro-countries" class="intro-countries"></div>
+          <button type="submit" class="btn-pause">Zaczynam pracę</button>
+        </form>
+      </div>
+    </div>
+
 <!-- Modal Sektora Budowlanego -->
 <div id="construction-sector-modal" class="modal" style="display:none; width: 800px;">
     <button class="close-btn" onclick="document.getElementById('construction-sector-modal').style.display='none';">&times;</button>
@@ -1310,10 +1350,12 @@
     <script src="companies.js"></script>
     <script src="ai.js"></script> 
     <script src="player.js"></script>
+    <script src="fund.js"></script>
     <script src="events.js"></script>
     <script src="minigames.js"></script>
     <script src="chart.js"></script>
     <script src="ui.js"></script>
+    <script src="fund-ui.js"></script>
     <script src="save.js"></script>
     <script src="main.js"></script>
 
