@@ -20,6 +20,7 @@ const gameTimers = {
 
 // Zmienna przechowująca aktualną prędkość gry
 let currentSpeedMultiplier = 1;
+let uiRefreshTick = 0;
 
 // Zapis i wczytanie gry: save.js
 
@@ -61,10 +62,7 @@ function setGameSpeed(speedMultiplier) {
     // Zaktualizuj wygląd przycisków prędkości
     const speedButtons = document.querySelectorAll('.speed-btn');
     speedButtons.forEach(btn => btn.classList.remove('active'));
-    let activeBtn;
-    if (speedMultiplier === 1) activeBtn = speedButtons[0];
-    if (speedMultiplier === 2) activeBtn = speedButtons[1];
-    if (speedMultiplier === 5) activeBtn = speedButtons[2];
+    const activeBtn = document.querySelector(`.speed-btn[data-speed="${speedMultiplier}"]`);
     if (activeBtn) activeBtn.classList.add('active');
 
     console.log(`Ustawiono prędkość gry na x${speedMultiplier}`);
@@ -200,6 +198,10 @@ function setGameSpeed(speedMultiplier) {
         processConstructionProjects(gameTimeDelta);
         updateTenderSystem(gameTimeDelta); // zawiera też oferty AI
         updateConstructionSectorUI();
+
+        // Przy prędkościach debug (×10, ×50) odświeżamy interfejs rzadziej — logika gry liczy się co tik.
+        uiRefreshTick++;
+        if (speedMultiplier >= 10 && uiRefreshTick % Math.round(speedMultiplier / 5) !== 0) return;
 
         // --- ODŚWIEŻANIE INTERFEJSU ---
         displayStocks(currentMarketInputs);

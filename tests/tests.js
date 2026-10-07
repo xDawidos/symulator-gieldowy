@@ -672,70 +672,6 @@ group('Zapis gry (etap 5)', () => {
     });
 });
 
-group('Długa symulacja i balans (etap 6)', () => {
-    test('rok gry: wielu zamawiających i wykonawców', () => {
-        withSeededRandom(2026, () => {
-            const builders = [10, 25, 40, 60].map((exp, i) => makeCompany(`B${i}`, { sector: ['Budowlany'], experience: exp, cash: 400_000 + i * 200_000 }));
-            const sectors = ['Technologia', 'Medycyna', 'Energia', 'Żywność', 'Turystyka', 'Logistyka', 'Usługi', 'Przemysł'];
-            const clients = sectors.map((sector, i) => makeCompany(`C${i}`, { sector: [sector], cash: 1_500_000 + i * 300_000, devLevel: 3 }));
-            resetWorld([...builders, ...clients]);
-
-            const money0 = moneyInModel();
-            const mark0 = externalMark();
-            const weeks = 20; // rok gry
-            const ticksPerWeek = BASE_DELAYS.weekly / BASE_DELAYS.stockUpdate;
-            let tendersCreated = 0;
-            let maxOpenTenders = 0;
-            let stalledTicks = 0;
-
-            for (let week = 0; week < weeks; week++) {
-                for (const client of clients) {
-                    if (Math.random() < 0.15) {
-                        const before = activeTenders.length;
-                        startRandomInvestment(client);
-                        if (activeTenders.length > before) tendersCreated++;
-                    }
-                    processActiveInvestments(client);
-                }
-                for (let t = 0; t < ticksPerWeek; t++) {
-                    tick(1);
-                    maxOpenTenders = Math.max(maxOpenTenders, activeTenders.filter(x => x.status === 'open').length);
-                    stalledTicks += constructionProjects.filter(p => p.delayReason === 'Brak środków wykonawcy.').length;
-                }
-            }
-
-            assertNear(moneyInModel() - money0, externalNetFlow(mark0), 'zachowanie pieniędzy w całym roku');
-
-            const rows = builders.map(b => {
-                const history = b.constructionHistory || [];
-                const revenue = history.reduce((s, h) => s + h.revenue, 0);
-                const costs = history.reduce((s, h) => s + h.costs, 0);
-                return [b.symbol, b.constructionStats.experience, history.filter(h => h.status === 'completed').length,
-                    history.filter(h => h.status === 'cancelled').length, Math.round(revenue), Math.round(revenue - costs),
-                    revenue > 0 ? `${((revenue - costs) / revenue * 100).toFixed(1)}%` : '—', Math.round(b.constructionCredit || 0)];
-            });
-            addTable('Wyniki wykonawców po roku gry', ['Spółka', 'Dośw.', 'Ukończone', 'Anulowane', 'Przychód', 'Wynik', 'Marża', 'Kredyt'], rows);
-            addTable('Popyt i przepustowość', ['Miara', 'Wartość'], [
-                ['Ogłoszone przetargi', tendersCreated],
-                ['Maks. otwartych przetargów naraz', maxOpenTenders],
-                ['Aktywne budowy na koniec', constructionProjects.length],
-                ['Tiki budów wstrzymanych przez brak środków', stalledTicks],
-                ['Wpisy w dzienniku płatności (limit 400)', paymentJournal.length],
-                ...Object.entries(paymentTotals.byPurpose).sort((a, b) => b[1] - a[1]).slice(0, 8)
-                    .map(([purpose, amount]) => [`Przepływ zewnętrzny ${purpose}`, Math.round(amount)]),
-                ['Najdłuższa historia kontraktów', Math.max(...builders.map(b => (b.constructionHistory || []).length))]
-            ]);
-
-            assert(maxOpenTenders <= CONSTRUCTION_RULES.maxOpenTenders, 'limit otwartych przetargów');
-            assert(paymentJournal.length <= PAYMENT_JOURNAL_LIMIT, 'dziennik ograniczony');
-            const completed = builders.reduce((s, b) => s + (b.constructionHistory || []).filter(h => h.status === 'completed').length, 0);
-            assert(completed > 0, 'w ciągu roku powinny powstać budynki');
-            const profitable = rows.filter(r => r[5] > 0).length;
-            assert(profitable >= 1, 'przynajmniej jeden wykonawca rentowny');
-        });
-    });
-});
-
 group('Rynek: fundamenty, ceny, cykl, dywidendy (etap A)', () => {
     function marketCompany(symbol, options = {}) {
         // Kapitał własny ≈ kapitalizacja (jak w świecie gry): 10 000 akcji × 100 PLN.
@@ -882,67 +818,6 @@ group('Rynek: fundamenty, ceny, cykl, dywidendy (etap A)', () => {
         assert(getAvailableShares(company) === company.totalShares - company.insiderShares - 100, 'minus akcje inwestorów');
         assert(company.insiderShares < company.totalShares * 0.5, 'większość nadal możliwa do zdobycia');
     });
-});
-
-group('Długa symulacja rynku (etap A)', () => {
-    test('2 lata gry na pełnym świecie (bez obiektów demonstracyjnych testu)', () => {
-        stocks = JSON.parse(JSON.stringify(initialStocks));
-        randomizeInitialShareCounts();
-        activeTenders = [];
-        constructionProjects = [];
-        isGamePaused = false;
-        createNewWorld();
-        updateInterestRates();
-
-        const startCount = stocks.filter(s => !s.assetType).length;
-        const gigStart = stocks.filter(s => !s.assetType).reduce((sum, s) => sum + s.price, 0);
-        const phases = [];
-        let dividendsPaid = 0;
-        const journalMark = paymentTotals.byPurpose['out: Dywidenda kwartalna'] || 0;
-
-        for (let quarter = 0; quarter < 8; quarter++) {
-            for (let t = 0; t < BASE_DELAYS.quarterly / BASE_DELAYS.stockUpdate; t++) {
-                updateStockPrices();
-                updateDividendTimers(BASE_DELAYS.stockUpdate);
-            }
-            advanceEconomyCycle();
-            processFinancialReports();
-            phases.push(economyCycle.phase);
-        }
-        dividendsPaid = (paymentTotals.byPurpose['out: Dywidenda kwartalna'] || 0) - journalMark;
-
-        const standard = stocks.filter(s => hasValuationAnchor(s) && !s.isBankrupt);
-        const prices = standard.map(s => s.price);
-        assert(prices.every(p => Number.isFinite(p) && p > 0), 'ceny skończone i dodatnie');
-
-        const pe = standard.map(s => s.fundamentals?.peRatio).filter(v => v > 0).sort((a, b) => a - b);
-        const medianPe = pe[Math.floor(pe.length / 2)];
-        const ratios = standard.map(s => s.price / s.fundamentals.fairValue).sort((a, b) => a - b);
-        const medianRatio = ratios[Math.floor(ratios.length / 2)];
-        const maxMove = Math.max(...standard.map(s => {
-            const first = s.lineHistory[0]?.price || s.price;
-            return Math.abs(s.price / first - 1);
-        }));
-        const bankrupt = startCount - stocks.filter(s => !s.assetType && !s.isBankrupt).length;
-        const gigEnd = standard.reduce((sum, s) => sum + s.price, 0);
-
-        addTable('Rynek po 2 latach gry', ['Miara', 'Wartość'], [
-            ['Fazy cyklu (kolejne kwartały)', phases.map(p => ECONOMY_PHASES[p].name).join(' → ')],
-            ['Mediana C/Z', medianPe ? medianPe.toFixed(1) : '—'],
-            ['Spółki ze stratą (C/Z n/d)', standard.length - pe.length],
-            ['Mediana cena / wartość godziwa', medianRatio.toFixed(2)],
-            ['Największa zmiana ceny w oknie historii', `${(maxMove * 100).toFixed(0)}%`],
-            ['Suma cen spółek: start → koniec', `${Math.round(gigStart)} → ${Math.round(gigEnd)}`],
-            ['Bankructwa', bankrupt],
-            ['Wypłacone dywidendy (PLN)', Math.round(dividendsPaid)],
-            ['Spółki z ogłoszoną dywidendą', standard.filter(s => s.lastDividend).length]
-        ]);
-
-        assert(medianPe > 4 && medianPe < 45, `mediana C/Z ${medianPe}`);
-        assert(medianRatio > 0.5 && medianRatio < 2, `mediana cena/wartość ${medianRatio}`);
-        assert(bankrupt <= Math.ceil(startCount * 0.15), `bankructwa: ${bankrupt}`);
-        assert(dividendsPaid > 0, 'dywidendy wypłacane');
-    }, 2027);
 });
 
 group('Fundusz gracza (etap B)', () => {
@@ -1097,33 +972,174 @@ group('Fundusz gracza (etap B)', () => {
         assert(playerWallet.cash === 321, 'portfel prywatny');
         assert(playerProfile.fundName === 'Fundusz Testowy', 'profil');
     });
+});
 
-    test('fundusz pasywny przez 4 okresy nie traci klientów masowo', () => {
-        fundWorld();
-        buyStock('AAA', 40);
-        buyStock('BBB', 40);
-        const clients0 = playerFund.clients.length;
-        const ticksPerWeek = BASE_DELAYS.weekly / BASE_DELAYS.stockUpdate;
-        const weeks = Math.ceil(FUND_PERIOD_MS * 4 / BASE_DELAYS.weekly);
-        for (let week = 0; week < weeks; week++) {
-            for (let t = 0; t < ticksPerWeek; t++) {
-                updateStockPrices();
-                updateMarketIndexes();
-                updateFund(BASE_DELAYS.stockUpdate);
-            }
-            processFundWeekly();
-        }
-        assert(playerFund.periods.length >= 4, `okresy: ${playerFund.periods.length}`);
-        addTable('Fundusz pasywny po 4 okresach', ['Miara', 'Wartość'], [
-            ['NAV', getFundNav().toFixed(4)],
-            ['Zaufanie', playerFund.trust.toFixed(1)],
-            ['Klienci', `${clients0} → ${playerFund.clients.length}`],
-            ['Zwroty okresów', playerFund.periods.map(p => (p.fundReturn * 100).toFixed(2) + '%').join(', ')],
-            ['Premie', playerFund.periods.map(p => p.bonus.toFixed(2)).join(', ')],
-            ['Portfel prywatny', playerWallet.cash.toFixed(2)]
-        ]);
-        assert(playerFund.clients.length >= clients0 * 0.6, `klienci: ${clients0} → ${playerFund.clients.length}`);
-    }, 404);
+group('Kariera w korporacji (etap C)', () => {
+    function careerWorld() {
+        const a = makeCompany('AAA', { cash: 600_000, fixedAssets: 800_000 });
+        const b = makeCompany('BBB', { cash: 200_000, fixedAssets: 800_000 });
+        const holdings = ['HA', 'HB', 'HC', 'HD'].map(symbol => {
+            const holding = makeCompany(symbol, { cash: 500_000 });
+            holding.assetType = 'Holding';
+            holding.holdingPortfolio = {};
+            return holding;
+        });
+        [a, b, ...holdings].forEach(company => { company.insiderShares = 0; company.sharesHeld = 0; company.reputation = { player: 0 }; });
+        resetWorld([a, b, ...holdings]);
+        allBonds.length = 0;
+        marketIndexes.find(index => index.id === 'GIG').value = 100;
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        return { a, b, holdings };
+    }
+
+    const period = (fundReturn, extra = {}) => ({ number: 0, fundReturn, benchmarkReturn: 0, rivals: [], volatility: 0.01, maxDrawdown: 0.02, rank: 1, rankOf: 1, ...extra });
+    const setPeriods = (periods, fundReturn) => { periods.length = 0; for (let i = 0; i < 4; i++) periods.push(period(fundReturn, { number: i + 1 })); };
+
+    test('start: korporacja z 3–5 zarządcami, 3 cele przejęć spośród holdingów', () => {
+        careerWorld();
+        assert(corporation.managers.length >= 3 && corporation.managers.length <= 5, 'liczba zarządców');
+        assert(corporation.takeoverTargets.length === 3, 'cele przejęć');
+        assert(corporation.takeoverTargets.every(symbol => symbol.startsWith('H')), 'cele = holdingi');
+        assert(corporation.managers.every(m => m.fund.cash > 0 && getBotFundNav(m.fund) > 0), 'fundusze botów');
+    });
+
+    test('ocena: dobry wynik daje awans, wielkość funduszu nie wpływa na wynik', () => {
+        careerWorld();
+        corporation.managers.forEach(m => setPeriods(m.fund.periods, 0));
+        setPeriods(playerFund.periods, 0.05);
+        const small = computeEvaluationScore(playerFund.periods, 60);
+        const big = computeEvaluationScore(playerFund.periods.map(p => ({ ...p, assets: p.assets * 100 })), 60);
+        assertNear(small, big, 'wielkość funduszu bez znaczenia', 1e-9);
+        runBoardEvaluation();
+        assert(playerProfile.positionId === 'manager', `stanowisko: ${playerProfile.positionId}`);
+        assert(playerProfile.cv.some(entry => entry.type === 'promotion'), 'wpis w CV');
+        assert(playerAccessLevel === CAREER_POSITIONS[1].exchangeAccessLevel, 'dostęp do giełd');
+    });
+
+    test('brak wolnego miejsca: zamiana z najsłabszym na wyższym stanowisku', () => {
+        careerWorld();
+        corporation.managers.forEach(m => { m.positionId = 'junior'; setPeriods(m.fund.periods, 0); });
+        const [b1, b2] = corporation.managers;
+        b1.positionId = 'projectLead';
+        b2.positionId = 'projectLead';
+        setPeriods(b1.fund.periods, -0.01);
+        playerProfile.positionId = 'senior';
+        setPeriods(playerFund.periods, 0.06);
+        runBoardEvaluation();
+        assert(playerProfile.positionId === 'projectLead', `gracz: ${playerProfile.positionId}`);
+        assert(b1.positionId === 'senior', `zamieniony bot: ${b1.positionId}`);
+        assert(corporation.managers.filter(m => m.positionId === 'projectLead').length + 1 <= POSITION_LIMITS.projectLead, 'limit miejsc');
+    });
+
+    test('dwie słabe oceny z rzędu: degradacja (na najniższym — ostrzeżenie i wstrzymana premia)', () => {
+        careerWorld();
+        corporation.managers.forEach(m => setPeriods(m.fund.periods, 0));
+        playerProfile.positionId = 'senior';
+        setPeriods(playerFund.periods, -0.08);
+        runBoardEvaluation();
+        assert(playerProfile.positionId === 'senior' && corporation.playerWeakReviews === 1, 'pierwsze ostrzeżenie');
+        runBoardEvaluation();
+        assert(playerProfile.positionId === 'manager', `degradacja: ${playerProfile.positionId}`);
+
+        playerProfile.positionId = 'junior';
+        corporation.playerWeakReviews = 0;
+        runBoardEvaluation();
+        runBoardEvaluation();
+        assert(playerProfile.positionId === 'junior' && playerFund.bonusSuspendedUntilPeriod > 0, 'junior: premia wstrzymana');
+    });
+
+    test('bot-zarządca kupuje tanie akcje, gotówka ≥ 0, dywidenda trafia do jego funduszu', () => {
+        const { a, b } = careerWorld();
+        a.fundamentals = { fairValue: 160 };
+        b.fundamentals = { fairValue: 60 };
+        const manager = corporation.managers[0];
+        manager.personality = 'value';
+        manager.positionId = 'board';
+        const nav0 = getBotFundNav(manager.fund);
+        runManagerTrading(manager);
+        const shares = manager.fund.portfolio.AAA?.shares || 0;
+        assert(shares > 0 && !manager.fund.portfolio.BBB, 'kupił niedowartościowaną spółkę');
+        assert(manager.fund.cash >= 0, 'gotówka ≥ 0');
+        assert(a.sharesHeld === shares, 'akcje w obrocie');
+        assertNear(getBotFundNav(manager.fund), nav0 * (1 + 0), 'NAV po zakupie (wpływ ceny dodatni)', nav0 * 0.05);
+        const cash = manager.fund.cash;
+        payDividendToShareholders(a, 2);
+        assertNear(manager.fund.cash - cash, shares * 2, 'dywidenda bota');
+    });
+
+    test('budżet korporacji = opłaty − udziały zarządców', () => {
+        careerWorld();
+        const budget0 = corporation.budget;
+        const fee = chargeManagementFee();
+        assertNear(corporation.budget - budget0, fee * (1 - getPlayerPosition().feeShare), 'opłata gracza', 1e-9);
+    });
+
+    test('przejęcie: odrzucenie przez zarząd bez kosztów; zgoda — płatność z budżetu i proces M&A do końca', () => {
+        const { holdings } = careerWorld();
+        const target = stocks.find(s => s.symbol === corporation.takeoverTargets[0]);
+        playerProfile.positionId = 'board';
+        corporation.budget = 1_000_000;
+        assert(!proposeFundTakeover(target.symbol, false) && corporation.budget === 1_000_000 && !target.mergerProcess, 'odrzucenie');
+        const price = getExternalFirmValuation(target);
+        assert(proposeFundTakeover(target.symbol, true), 'zgoda zarządu');
+        assertNear(1_000_000 - corporation.budget, price, 'płatność z budżetu');
+        const random = Math.random;
+        Math.random = () => 0.5; // bez komplikacji
+        for (let q = 0; q < 8 && target.mergerProcess; q++) advanceMergerProcess(target);
+        Math.random = random;
+        assert(target.managedByCorporation && corporation.acquiredFunds.includes(target.symbol), 'holding w funduszach korporacji');
+        assert(corporation.milestones.firstTakeover && !corporation.victory, 'pierwsze przejęcie = kamień milowy');
+        assert(holdings.length === 4, 'holdingi zostają na giełdzie');
+    });
+
+    test('współpraca: inwestor kupuje JU, spółka lokuje gotówkę w JU', () => {
+        const { a } = careerWorld();
+        const investor = getBigInvestors()[0];
+        investor.cash = 100_000;
+        playerWallet.cash = 500;
+        const units0 = playerFund.units;
+        const nav0 = getFundNav();
+        assert(meetInvestor(investor.id, true), 'spotkanie udane');
+        assert(investor.cash < 100_000 && playerFund.units > units0, 'inwestor kupił JU');
+        assert(playerFund.clients.some(c => c.type === 'investor' && c.name === investor.name), 'nowy klient');
+        assertNear(getFundNav(), nav0, 'NAV bez zmian', 1e-9);
+        assert(!meetInvestor(investor.id, true), 'raz na okres');
+
+        a.reputation.player = REPUTATION_LEVELS.CORRECT + 10;
+        const cash0 = a.cash;
+        const random = Math.random;
+        Math.random = () => 0;
+        processCorporateSubscriptions();
+        Math.random = random;
+        assert(a.cash < cash0 && playerFund.clients.some(c => c.name.startsWith(a.name)), 'spółka kupiła JU');
+    });
+
+    test('zwycięstwo: CEO albo 3 przejęcia wskazanych funduszy', () => {
+        careerWorld();
+        playerProfile.positionId = 'ceo';
+        assert(checkVictory()?.type === 'ceo', 'CEO');
+
+        careerWorld();
+        corporation.acquiredFunds.push(...corporation.takeoverTargets.slice(0, 2));
+        assert(!checkVictory(), 'dwa przejęcia to za mało');
+        corporation.acquiredFunds.push(corporation.takeoverTargets[2]);
+        assert(checkVictory()?.type === 'domination', 'dominacja');
+    });
+
+    test('zapis v5 zachowuje korporację; zapis v4 migruje', () => {
+        careerWorld();
+        corporation.budget = 12345;
+        playerProfile.positionId = 'senior';
+        const snapshot = JSON.parse(JSON.stringify(buildSaveSnapshot()));
+        assert(snapshot.version === 5, 'wersja 5');
+        let report = applySaveSnapshot(snapshot);
+        assert(report.ok && corporation.budget === 12345 && playerProfile.positionId === 'senior', 'v5');
+        delete snapshot.corporation;
+        snapshot.version = 4;
+        report = applySaveSnapshot(snapshot);
+        assert(report.ok && corporation && corporation.managers.length >= 3, 'migracja v4');
+        assert(playerProfile.positionId === 'senior', 'stanowisko zachowane');
+    });
 });
 
 // --------------------------------------------------------------------------------

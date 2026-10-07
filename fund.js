@@ -55,7 +55,8 @@ const CLIENT_TYPES = {
     saver:       { label: 'Ciułacz',    icon: '🐷', patience: 0.6, volAversion: 1.0, chase: 0.6, loyalty: 0.4, size: [200, 800] },
     speculator:  { label: 'Spekulant',  icon: '🎲', patience: 0.2, volAversion: 0.3, chase: 1.6, loyalty: 0.1, size: [300, 1500] },
     loyal:       { label: 'Lojalny',    icon: '💙', patience: 1.0, volAversion: 0.5, chase: 0.2, loyalty: 0.95, size: [50, 300] },
-    institution: { label: 'Instytucja', icon: '🏛️', patience: 0.5, volAversion: 0.8, chase: 1.0, loyalty: 0.3, size: [2000, 6000], comparesRivals: true }
+    institution: { label: 'Instytucja', icon: '🏛️', patience: 0.5, volAversion: 0.8, chase: 1.0, loyalty: 0.3, size: [2000, 6000], comparesRivals: true },
+    investor:    { label: 'Inwestor',   icon: '🐋', patience: 0.6, volAversion: 0.6, chase: 1.2, loyalty: 0.4, size: [2000, 10000], comparesRivals: true }
 };
 
 const CLIENT_FIRST_NAMES = ['Anna', 'Piotr', 'Maria', 'Tomasz', 'Ewa', 'Jan', 'Kasia', 'Marek', 'Zofia', 'Adam', 'Halina', 'Krzysztof', 'Agata', 'Paweł', 'Irena'];
@@ -136,8 +137,11 @@ function getBenchmarkValue() {
 }
 
 /** Fundusze zewnętrzne: holdingi wyceniane jak NAV (pełni rywale w etapie C). */
+// Holdingi-czasopisma zostają czasopismami (etap E: źródła maili), pozostałe holdingi to fundusze zewnętrzne.
+const MEDIA_HOLDINGS = ['PULS', 'FLESZ', 'OBSER'];
+
 function getExternalFunds() {
-    return stocks.filter(stock => stock.assetType === 'Holding' && !stock.isBankrupt);
+    return stocks.filter(stock => stock.assetType === 'Holding' && !stock.isBankrupt && !MEDIA_HOLDINGS.includes(stock.symbol));
 }
 
 /** NAV na akcję holdingu: (gotówka + wartość portfela) / liczba akcji — bez szumu ceny giełdowej. */
@@ -235,6 +239,7 @@ function startNewCareer(profile = {}) {
 
     beginFundPeriod();
     syncExchangeAccessWithPosition();
+    if (typeof createCorporation === 'function') createCorporation();
 
     logEvent(`💼 ${playerProfile.name} zostaje młodszym zarządcą funduszu „${playerProfile.fundName}” (${FUND_START_CASH.toLocaleString('pl-PL')} zł, ${FUND_START_UNITS} JU, ${playerFund.clients.length} klientów).`, 'review');
 }
@@ -274,6 +279,7 @@ function updateFund(deltaMs) {
     if (nav > current.peakNav) current.peakNav = nav;
     if (current.peakNav > 0) current.maxDrawdown = Math.max(current.maxDrawdown, 1 - nav / current.peakNav);
 
+    if (typeof updateCorporationTick === 'function') updateCorporationTick();
     if (current.elapsedMs >= FUND_PERIOD_MS) closeFundPeriod();
 }
 
@@ -334,6 +340,7 @@ function closeFundPeriod() {
 
     playerFund.periodNumber++;
     beginFundPeriod();
+    if (typeof closeCorporationPeriod === 'function') closeCorporationPeriod(period);
 }
 
 /** Premia za wyniki: tylko za nadwyżkę nad benchmarkiem; rośnie z pozycją w rankingu i stanowiskiem. */
@@ -345,6 +352,8 @@ function computePerformanceBonus(period, position = getPlayerPosition()) {
 }
 
 function payPerformanceBonus(period) {
+    // Po drugiej słabej ocenie zarządu na najniższym stanowisku premia jest wstrzymana.
+    if (playerFund.bonusSuspendedUntilPeriod > period.number) return 0;
     const bonus = computePerformanceBonus(period);
     if (bonus > 0) {
         playerWallet.cash += bonus;
@@ -398,6 +407,11 @@ function processFundWeekly() {
 
     processClientDecisions();
     maybeTriggerForcedEmission();
+
+    if (typeof processCorporationWeekly === 'function') {
+        processCorporationWeekly();
+        payAnalystSalaries();
+    }
 }
 
 function chargeManagementFee() {
@@ -412,6 +426,7 @@ function chargeManagementFee() {
     const share = fee * getPlayerPosition().feeShare;
     playerWallet.cash += share;
     recordPayment('external:korporacja', 'player-wallet', share, 'Udział w opłacie za zarządzanie');
+    if (typeof corporation !== 'undefined' && corporation) corporation.budget += fee - share;
     return fee;
 }
 

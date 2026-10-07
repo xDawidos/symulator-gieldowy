@@ -13,8 +13,9 @@
 // v4: nowy koncept (gracz = zarządca funduszu). Zapisy v1–v3 (prywatny inwestor) są niezgodne.
 const GAME_SAVE_KEY = 'gra_inwestycyjna_dawid_save_v4';
 const LEGACY_SAVE_KEYS = ['gra_inwestycyjna_dawid_save_v2', 'gra_inwestycyjna_dawid_save_v1'];
-const SAVE_FORMAT_VERSION = 4;
-const SUPPORTED_SAVE_VERSIONS = [4];
+// v5: korporacja (zarządcy, oceny, analitycy, przejęcia). Zapis v4 migruje — korporacja tworzy się przy wczytaniu.
+const SAVE_FORMAT_VERSION = 5;
+const SUPPORTED_SAVE_VERSIONS = [4, 5];
 
 let lastSaveReport = null;
 let saveDisabledUntilReload = false;
@@ -112,6 +113,7 @@ function buildSaveSnapshot() {
         economyCycle,
         playerProfile,
         playerFund,
+        corporation,
         playerWallet,
         playerAccessLevel,
         trainings: Object.fromEntries(Object.entries(skills).map(([id, skill]) => [id, skill.unlockedLevel])),
@@ -334,6 +336,13 @@ function applySaveSnapshot(snapshot) {
     }
     for (const [id, level] of Object.entries(snapshot.trainings || {})) {
         if (skills[id] && isFiniteNumber(level)) skills[id].unlockedLevel = level;
+    }
+    // Korporacja (v5); zapis v4 — tworzymy nową przy zachowaniu funduszu gracza.
+    if (snapshot.corporation && Array.isArray(snapshot.corporation.managers)) {
+        corporation = snapshot.corporation;
+    } else {
+        createCorporation();
+        report.warnings.push('Zapis bez korporacji — utworzono nową (migracja v4 → v5).');
     }
     syncExchangeAccessWithPosition();
 

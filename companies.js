@@ -2716,6 +2716,8 @@ function cancelMerger(stock, reason) {
 
 function advanceMergerProcess(stock) {
     if (!stock.mergerProcess) return;
+    // Przejęcie firmy zarządzającej przez korporację gracza (career.js) — bez spółki-inicjatora.
+    if (stock.mergerProcess.type === 'fundTakeover') return advanceFundTakeover(stock);
     const process = stock.mergerProcess;
     const partnerStock = stocks.find(s => s.symbol === process.partnerSymbol);
 if (!partnerStock || partnerStock.isBankrupt) {
@@ -2831,87 +2833,6 @@ if (!partnerStock || partnerStock.isBankrupt) {
     }
 
     displayStocks(getCurrentInputValues());
-}
-
-function initiateMergerProcess(initiatorStock, targetStock, type, financing = 'cash') {
-    // Podstawowe walidacje
-    if (!initiatorStock || !targetStock || initiatorStock === targetStock) {
-        console.error("[M&A Init] Błąd: Nieprawidłowe spółki inicjujące/celu.");
-        return false;
-    }
-    if (initiatorStock.mergerProcess || targetStock.mergerProcess) {
-        console.warn(`[M&A Init] Anulowano: Jedna ze spółek (${initiatorStock.symbol} lub ${targetStock.symbol}) jest już w trakcie innego procesu M&A.`);
-        // Można dodać logEvent lub showToast dla gracza, jeśli inicjował
-        return false;
-    }
-    if (targetStock.isSubsidiaryOf) {
-        console.warn(`[M&A Init] Anulowano: ${targetStock.symbol} jest już spółką zależną.`);
-        return false;
-    }
-    // TODO: Dodać więcej walidacji (np. czy inicjatora stać, czy cel nie jest za duży/mały dla danego typu)
-
-    console.log(`[M&A Init] Rozpoczęto proces: ${initiatorStock.symbol} -> ${targetStock.symbol} (Typ: ${type})`);
-
-    const processData = {
-        type: type,
-        stage: 1,
-        progress: 0,
-        partnerSymbol: targetStock.symbol,
-        initiatorSymbol: initiatorStock.symbol,
-        complications: 0,
-        costs: 0,
-        statusMessage: `Etap 1: Wstępne rozmowy (${type})...`,
-        decisionRequired: null,
-        defenseActive: null,
-        financing: financing // Zapisz metodę finansowania
-        // Można dodać: offerPremium (dla przejęć), exchangeRatio (dla fuzji)
-    };
-
-    // Ustaw obiekt procesu w obu spółkach
-    initiatorStock.mergerProcess = { ...processData }; // Kopia dla inicjatora
-    targetStock.mergerProcess = { ...processData, partnerSymbol: initiatorStock.symbol }; // Kopia dla celu (z zamienionym partnerem)
-
-    logEvent(`🤝 Rozpoczynają się rozmowy o ${type} między ${initiatorStock.name} a ${targetStock.name}!`, 'market');
-
-if (type === 'przejęcie') {
-        const majorityOwner = findMajorityShareholder(targetStock); // Znajdź właściciela
-        
-        if (majorityOwner && (majorityOwner.id === 'player' || majorityOwner.id.startsWith('ai'))) {
-            // Właściciel (Gracz lub AI) podejmie decyzję w swoim cyklu (Gracz w UI, AI w makeAiDecision)
-            console.log(`[M&A] ${targetStock.symbol} jest pod kontrolą ${majorityOwner.id}. Oczekuję na decyzję o obronie...`);
-            // Nie robimy nic, czekamy na reakcję właściciela
-        } else {
-            // Brak dominującego właściciela -> ZARZĄD decyduje (losowo)
-            console.log(`[M&A] Akcjonariat ${targetStock.symbol} jest rozproszony. Zarząd podejmuje decyzję o obronie...`);
-            let defenseChance = 0.3; // Bazowa szansa zarządu na obronę
-            if (offerPremium < 0.15) defenseChance = 0.7; // Niska oferta = większa szansa obrony
-            if (targetStock.ceo?.traits?.some(t => t.id === 'oddany')) defenseChance = 0.9; // Oddany CEO zawsze walczy
-
-            if (Math.random() < defenseChance) {
-                // Zarząd aktywuje "Zatrutą Pigułkę" automatycznie
-                // Aktywacja przez zarząd nie kosztuje gracza, ale kosztuje samą spółkę
-                const activationCost = (targetStock.price * targetStock.totalShares) * 0.05;
-                if (targetStock.cash >= activationCost) {
-                    targetStock.cash -= activationCost; // Spółka sama płaci za obronę
-                    targetStock.mergerProcess.defenseActive = 'poisonPill';
-                    targetStock.financialHealth -= 1.0;
-                    if (targetStock.balanceSheet) {
-                         targetStock.balanceSheet.liabilities += (targetStock.price * targetStock.totalShares) * 0.2;
-                    }
-                    logEvent(`🛡️ Zarząd ${targetStock.name} (bez większościowego właściciela) aktywuje "Zatrutą Pigułkę"!`, 'review');
-                } else {
-                    logEvent(`[M&A] Zarząd ${targetStock.name} chciał aktywować obronę, ale spółki nie było stać.`);
-                }
-            } else {
-                logEvent(`[M&A] Zarząd ${targetStock.name} postanawia nie aktywować obrony i rozważyć ofertę.`);
-                targetStock.mergerProcess.defenseActive = 'none'; // Oznacz brak obrony
-            }
-        }
-    }
-
-    // Odśwież UI
-    displayStocks(getCurrentInputValues());
-    return true; // Proces zainicjowany pomyślnie
 }
 
 // --- Startupy ---
@@ -7756,6 +7677,14 @@ function payDividendToShareholders(stock, dividendPerShare) {
             ai.cash += netDividend;
         }
     });
+
+    // 2b. Fundusze botów-zarządców korporacji (bez podatku, jak fundusz gracza)
+    if (typeof corporation !== 'undefined' && corporation) {
+        for (const manager of corporation.managers) {
+            const holding = manager.fund.portfolio[stock.symbol];
+            if (holding) manager.fund.cash += holding.shares * dividendPerShare;
+        }
+    }
 
     // 3. Spadek ceny akcji (odcięcie dywidendy)
     stock.price -= dividendPerShare;

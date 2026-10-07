@@ -814,59 +814,56 @@ function toggleExchangeVisibility(exchangeKey) {
     displayStocks(getCurrentInputValues());
 }
 
-// POPRAWKA: Usunięto zduplikowaną, starszą wersję funkcji. Pozostaje jedna, poprawna.
+/** Ranking funduszy: gracz, zarządcy korporacji i fundusze zewnętrzne — zwrot z 4 okresów, stabilność, zaufanie. */
+function getFundRanking() {
+    const compound = returns => returns.reduce((acc, r) => acc * (1 + r), 1) - 1;
+    const average = (periods, key) => periods.length ? periods.reduce((sum, p) => sum + p[key], 0) / periods.length : 0;
+    const playerPeriods = (playerFund?.periods || []).slice(-FUND_PERIODS_SHOWN);
+    const rows = [{
+        name: `💼 ${playerProfile?.fundName || 'Twój fundusz'}`, owner: `${playerProfile?.name || 'Ty'} · ${getPlayerPosition().name}`,
+        ret: compound(playerPeriods.map(p => p.fundReturn)), vol: average(playerPeriods, 'volatility'),
+        trust: playerFund?.trust ?? null, assets: playerFund ? getFundAssets() : 0, mine: true
+    }];
+
+    for (const manager of corporation?.managers || []) {
+        const periods = manager.fund.periods.slice(-FUND_PERIODS_SHOWN);
+        rows.push({
+            name: `🏢 Fundusz ${manager.name.split(' ')[1] || manager.name}`,
+            owner: `${manager.name} · ${CAREER_POSITIONS[getPositionIndex(manager.positionId)].name}`,
+            ret: compound(periods.map(p => p.fundReturn)), vol: average(periods, 'volatility'),
+            trust: manager.fund.trust, assets: getBotFundAssets(manager.fund)
+        });
+    }
+
+    for (const fund of getExternalFunds()) {
+        const returns = playerPeriods.map(p => p.rivals.find(r => r.symbol === fund.symbol)?.return).filter(Number.isFinite);
+        rows.push({
+            name: `🌐 ${getExternalFirmName(fund)}`, owner: fund.managedByCorporation ? 'Przejęty przez korporację' : 'Firma zewnętrzna',
+            ret: compound(returns), vol: null, trust: null, assets: getExternalFundValue(fund) * fund.totalShares
+        });
+    }
+    return rows.sort((a, b) => b.ret - a.ret);
+}
+
 function displayLeaderboard() {
-    const leaderboardList = document.getElementById('leaderboard-list');
-    if (!leaderboardList) return;
+    const container = document.getElementById('leaderboard-list');
+    if (!container) return;
+    if (!playerFund) { container.innerHTML = '<p class="fund-muted">Brak funduszu.</p>'; return; }
 
-    // Filtrujemy botów, aby ukryć "Inwestorów Mniejszościowych"
-    const competitorsForLeaderboard = aiCompetitors.filter(ai => ai.personality !== 'market_maker');
-
-    const allPlayers = [
-        { name: 'Ty (Gracz)', cash: playerCash, portfolio: playerPortfolio },
-        ...competitorsForLeaderboard // <-- TUTAJ BYŁ BŁĄD (literówka)
-    ];
-
-    const rankedPlayers = allPlayers.map(player => {
-        let stocksValue = 0;
-        for (const symbol in player.portfolio) {
-            const holding = player.portfolio[symbol];
-            // --- POPRAWKA: Uwzględnienie różnych typów aktywów (akcje, etf, indeksy) ---
-            let marketData;
-            let currentPrice = 0;
-
-            if (holding.assetType === 'etf') {
-                marketData = etfs.find(e => e.symbol === symbol);
-                if (marketData) currentPrice = marketData.price;
-            } else if (holding.assetType === 'index') {
-                marketData = marketIndexes.find(i => i.id === symbol);
-                if (marketData) currentPrice = marketData.value;
-            } else {
-                marketData = stocks.find(s => s.symbol === symbol);
-                if (marketData) currentPrice = marketData.price;
-            }
-
-            if (marketData) {
-                stocksValue += currentPrice * holding.shares;
-            }
-        }
-        const poolStake = investmentPool.playerStakes[player.id] || 0;
-        const totalValue = player.cash + stocksValue + poolStake;
-        return { name: player.name, totalValue: totalValue };
-    });
-
-    rankedPlayers.sort((a, b) => b.totalValue - a.totalValue);
-
-    leaderboardList.innerHTML = '';
-    rankedPlayers.forEach((player, index) => {
-        const listItem = document.createElement('li');
-        if (player.name === 'Ty (Gracz)') {
-            listItem.style.fontWeight = 'bold';
-            listItem.style.color = '#0056b3';
-        }
-        listItem.textContent = `#${index + 1}: ${player.name} - ${player.totalValue.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}`;
-        leaderboardList.appendChild(listItem);
-    });
+    container.innerHTML = `
+        <p class="fund-muted">Zwrot skumulowany z ${FUND_PERIODS_SHOWN} ostatnich okresów. Liczy się wynik, nie wielkość funduszu.</p>
+        <table class="asset-mini-table leaderboard-table">
+            <thead><tr><th>#</th><th>Fundusz</th><th>Zwrot</th><th>Zmienność</th><th>Zaufanie</th><th>Aktywa</th></tr></thead>
+            <tbody>${getFundRanking().map((row, index) => `
+                <tr class="${row.mine ? 'mine' : ''}">
+                    <td>${index + 1}</td>
+                    <td>${escapeHtml(row.name)}<br><small class="fund-muted">${escapeHtml(row.owner)}</small></td>
+                    <td class="${row.ret >= 0 ? 'profit' : 'loss'}">${formatPct(row.ret)}</td>
+                    <td>${row.vol === null ? '—' : formatPct(row.vol)}</td>
+                    <td>${row.trust === null ? '—' : row.trust.toFixed(0)}</td>
+                    <td>${formatZl(row.assets, 0)}</td>
+                </tr>`).join('')}</tbody>
+        </table>`;
 }
 
 function openLeaderboardModal() {
@@ -1807,6 +1804,12 @@ function openStockDetailsModal(symbol) {
 
     title.textContent = `Struktura Akcjonariatu: ${stock.name} (${symbol})`;
     renderOwnershipPieChart(symbol); // Wywołujemy naszą funkcję do renderowania wykresu
+
+    const insights = document.getElementById('analyst-insights');
+    if (insights) {
+        const lines = typeof getAnalystInsights === 'function' ? getAnalystInsights(stock) : [];
+        insights.innerHTML = lines.map(line => `<p>🔎 ${escapeHtml(line)}</p>`).join('');
+    }
 
     modal.style.display = 'block';
 }
@@ -3219,13 +3222,14 @@ function closeSettingsModal() {
 }
 
 function closeVisibleModals() {
-    document.querySelectorAll('[id$="-modal"]').forEach(modal => {
+    document.querySelectorAll('div[id$="-modal"]').forEach(modal => {
         if (modal instanceof HTMLElement) modal.style.display = 'none';
     });
 }
 
 function initializeDraggableModals() {
-    const modals = Array.from(document.querySelectorAll('[id$="-modal"], #settings-modal'));
+    // Tylko kontenery okien (div) — przycisk #theme-toggle-btn-modal też kończy się na "-modal".
+    const modals = Array.from(document.querySelectorAll('div[id$="-modal"]'));
     modals.forEach(modal => {
         if (!(modal instanceof HTMLElement)) return;
         modal.classList.add('modal');
@@ -5722,4 +5726,600 @@ function updateResearchChoiceTimerUI() {
     timer.textContent =
         `${Math.ceil(remaining / 1000)} s symulacji` +
         (isGamePaused ? ' — pauza' : '');
+}
+
+// =================================================================================
+// FUNDUSZ GRACZA (etap B): panel funduszu, wykres okresów, rywale, klienci,
+// konto prywatne, CV ze szkoleniami i scenka startowa
+// =================================================================================
+
+function formatZl(value, digits = 2) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return '—';
+    return number.toLocaleString('pl-PL', { minimumFractionDigits: digits, maximumFractionDigits: digits }) + ' zł';
+}
+
+function formatPct(value, digits = 2) {
+    const number = Number(value) * 100;
+    if (!Number.isFinite(number)) return '—';
+    return `${number >= 0 ? '+' : ''}${number.toFixed(digits)}%`;
+}
+
+function escapeHtml(text) {
+    return String(text).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
+// =================================================================================
+// PANEL FUNDUSZU
+// =================================================================================
+
+function displayFundPanel() {
+    if (!playerFund) return;
+
+    const title = document.getElementById('fund-panel-title');
+    if (title) title.textContent = `💼 ${playerProfile?.fundName || 'Mój fundusz'}`;
+
+    document.getElementById('account-btn-fund')?.classList.toggle('active', activeTradingAccount === 'fund');
+    document.getElementById('account-btn-private')?.classList.toggle('active', activeTradingAccount === 'private');
+
+    renderFundSummary();
+    renderFundPeriodsChart();
+    renderFundRivalsTable();
+    renderFundClients();
+    renderPrivatePanel();
+    renderCareerPanel();
+}
+
+function renderFundSummary() {
+    const container = document.getElementById('fund-summary');
+    if (!container) return;
+
+    const current = playerFund.current;
+    const nav = getFundNav();
+    const periodProgress = Math.min(1, current.elapsedMs / FUND_PERIOD_MS);
+    const periodReturn = getPeriodReturn(current.startNav, nav);
+    const benchmarkReturn = getPeriodReturn(current.startBenchmark, getBenchmarkValue());
+    const trust = Math.round(playerFund.trust);
+    const trustClass = trust >= 60 ? 'good' : trust >= 40 ? 'mid' : 'bad';
+
+    container.innerHTML = `
+        <div class="fund-kpis">
+            <div><span>NAV / JU</span><strong>${nav.toFixed(4)} zł</strong></div>
+            <div><span>Liczba JU</span><strong>${playerFund.units.toFixed(1)}</strong></div>
+            <div><span>Klienci</span><strong>${playerFund.clients.length}</strong></div>
+            <div><span>Stanowisko</span><strong>${escapeHtml(getPlayerPosition().name)}</strong></div>
+        </div>
+        <div class="fund-trust">
+            <span>Zaufanie klientów: <strong>${trust}/100</strong></span>
+            <div class="fund-trust-bar"><div class="fund-trust-fill ${trustClass}" style="width:${trust}%"></div></div>
+        </div>
+        <div class="fund-period-line">
+            Okres ${current.number}: ${formatPct(periodReturn)} vs GIG ${formatPct(benchmarkReturn)}
+            · emisje ${current.emissions}/${MAX_EMISSIONS_PER_PERIOD}
+            · obsunięcie ${(current.maxDrawdown * 100).toFixed(1)}%
+        </div>
+        <div class="fund-period-progress" title="Postęp okresu oceny (15 min gry)">
+            <div style="width:${(periodProgress * 100).toFixed(1)}%"></div>
+        </div>`;
+}
+
+/** Wykres słupkowy: 4 ostatnie okresy + bieżący — fundusz vs GIG vs średnia funduszy zewnętrznych. */
+function renderFundPeriodsChart() {
+    const container = document.getElementById('fund-periods-chart');
+    if (!container) return;
+
+    const current = playerFund.current;
+    const rivalsNow = getExternalFunds().filter(fund => current.startRivals[fund.symbol] > 0)
+        .map(fund => getPeriodReturn(current.startRivals[fund.symbol], getExternalFundValue(fund)));
+
+    const rows = playerFund.periods.slice(-FUND_PERIODS_SHOWN).map(period => ({
+        label: `Okres ${period.number}`,
+        fund: period.fundReturn,
+        benchmark: period.benchmarkReturn,
+        rivals: period.rivals.length ? period.rivals.reduce((sum, rival) => sum + rival.return, 0) / period.rivals.length : 0
+    }));
+    rows.push({
+        label: `Teraz`,
+        fund: getPeriodReturn(current.startNav, getFundNav()),
+        benchmark: getPeriodReturn(current.startBenchmark, getBenchmarkValue()),
+        rivals: rivalsNow.length ? rivalsNow.reduce((sum, value) => sum + value, 0) / rivalsNow.length : 0,
+        partial: true
+    });
+
+    const series = [
+        { key: 'fund', label: 'Twój fundusz', color: '#22C55E' },
+        { key: 'benchmark', label: 'GIG', color: '#38BDF8' },
+        { key: 'rivals', label: 'Fundusze zewnętrzne (śr.)', color: '#F59E0B' }
+    ];
+
+    const width = 320;
+    const height = 150;
+    const pad = { top: 10, bottom: 22, left: 34, right: 6 };
+    const values = rows.flatMap(row => series.map(item => row[item.key]));
+    const maxAbs = Math.max(0.01, ...values.map(Math.abs));
+    const plotH = height - pad.top - pad.bottom;
+    const zeroY = pad.top + plotH / 2;
+    const groupW = (width - pad.left - pad.right) / rows.length;
+    const barW = Math.max(4, groupW / (series.length + 1));
+
+    let svg = `<svg viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Stopy zwrotu w ostatnich okresach">`;
+    svg += `<line x1="${pad.left}" x2="${width - pad.right}" y1="${zeroY}" y2="${zeroY}" stroke="currentColor" stroke-opacity="0.35"/>`;
+    svg += `<text x="${pad.left - 4}" y="${pad.top + 8}" font-size="8" text-anchor="end" fill="currentColor">${formatPct(maxAbs, 1)}</text>`;
+    svg += `<text x="${pad.left - 4}" y="${height - pad.bottom}" font-size="8" text-anchor="end" fill="currentColor">${formatPct(-maxAbs, 1)}</text>`;
+
+    rows.forEach((row, index) => {
+        const groupX = pad.left + index * groupW + barW / 2;
+        series.forEach((item, seriesIndex) => {
+            const value = row[item.key];
+            const h = Math.abs(value) / maxAbs * (plotH / 2);
+            const x = groupX + seriesIndex * barW;
+            const y = value >= 0 ? zeroY - h : zeroY;
+            svg += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${(barW - 1).toFixed(1)}" height="${Math.max(0.5, h).toFixed(1)}" fill="${item.color}" fill-opacity="${row.partial ? 0.55 : 1}"><title>${row.label} — ${item.label}: ${formatPct(value)}</title></rect>`;
+        });
+        svg += `<text x="${(pad.left + index * groupW + groupW / 2).toFixed(1)}" y="${height - 8}" font-size="8" text-anchor="middle" fill="currentColor">${row.label}</text>`;
+    });
+    svg += '</svg>';
+
+    const legend = series.map(item => `<span><i style="background:${item.color}"></i>${item.label}</span>`).join('');
+    container.innerHTML = svg + `<div class="fund-legend">${legend}</div>`;
+}
+
+function renderFundRivalsTable() {
+    const container = document.getElementById('fund-rivals-table');
+    if (!container) return;
+
+    const last = playerFund.periods[playerFund.periods.length - 1];
+    if (!last) {
+        container.innerHTML = '<p class="fund-muted">Porównanie z rywalami pojawi się po pierwszym okresie (15 min gry).</p>';
+        return;
+    }
+
+    const rows = [
+        { name: `💼 ${playerProfile?.fundName || 'Twój fundusz'}`, ret: last.fundReturn, extra: `zmienność ${(last.volatility * 100).toFixed(2)}%, obsunięcie ${(last.maxDrawdown * 100).toFixed(1)}%`, mine: true },
+        { name: '📈 GIG (benchmark)', ret: last.benchmarkReturn, extra: '' },
+        ...last.rivals.map(rival => ({ name: rival.name, ret: rival.return, extra: '' }))
+    ].sort((a, b) => b.ret - a.ret);
+
+    container.innerHTML = `
+        <table class="asset-mini-table fund-rivals">
+            <caption>Okres ${last.number}: miejsce ${last.rank}/${last.rankOf}, premia ${formatZl(last.bonus)}</caption>
+            <thead><tr><th>Fundusz</th><th>Zwrot</th></tr></thead>
+            <tbody>${rows.map(row => `
+                <tr class="${row.mine ? 'mine' : ''}" title="${escapeHtml(row.extra)}">
+                    <td>${escapeHtml(row.name)}</td>
+                    <td class="${row.ret >= 0 ? 'profit' : 'loss'}">${formatPct(row.ret)}</td>
+                </tr>`).join('')}</tbody>
+        </table>`;
+}
+
+function renderFundClients() {
+    const container = document.getElementById('fund-clients-list');
+    if (!container) return;
+    const nav = getFundNav();
+
+    const clients = [...playerFund.clients].sort((a, b) => b.units - a.units);
+    container.innerHTML = `
+        <table class="asset-mini-table">
+            <thead><tr><th>Klient</th><th>Wartość</th><th>Zadowolenie</th></tr></thead>
+            <tbody>${clients.map(client => {
+                const def = CLIENT_TYPES[client.type] || CLIENT_TYPES.saver;
+                const sat = Math.round(client.satisfaction * 100);
+                return `<tr>
+                    <td title="${def.label}">${def.icon} ${escapeHtml(client.name)}</td>
+                    <td>${formatZl(client.units * nav, 0)}</td>
+                    <td class="${sat >= 55 ? 'profit' : sat < 35 ? 'loss' : ''}">${sat}%</td>
+                </tr>`;
+            }).join('')}</tbody>
+        </table>`;
+}
+
+function renderPrivatePanel() {
+    const container = document.getElementById('fund-private-panel');
+    if (!container) return;
+    const nav = getFundNav();
+
+    const holdings = Object.entries(playerWallet.portfolio).map(([symbol, holding]) => {
+        const stock = stocks.find(s => s.symbol === symbol);
+        const value = (stock?.price || 0) * holding.shares;
+        const pl = value - holding.avgPrice * holding.shares;
+        return `<li>${symbol}: ${holding.shares} szt. · ${formatZl(value)} <span class="${pl >= 0 ? 'profit' : 'loss'}">(${pl >= 0 ? '+' : ''}${pl.toFixed(2)})</span></li>`;
+    }).join('') || '<li class="fund-muted">Brak prywatnych akcji.</li>';
+
+    container.innerHTML = `
+        <p>Moje pieniądze: <strong>${formatZl(playerWallet.cash)}</strong>
+           · JU własnego funduszu: <strong>${playerWallet.fundUnits.toFixed(2)}</strong> (${formatZl(playerWallet.fundUnits * nav)})</p>
+        <ul class="fund-private-list">${holdings}</ul>
+        <div class="fund-emission">
+            <input type="number" id="private-ju-amount" min="1" value="50" aria-label="Kwota lub liczba JU">
+            <button class="btn-secondary" onclick="buyOwnFundUnits(document.getElementById('private-ju-amount').value)">Kup JU za zł</button>
+            <button class="btn-secondary" onclick="sellOwnFundUnits(document.getElementById('private-ju-amount').value)">Umórz JU</button>
+        </div>
+        <p class="fund-muted">Prywatny handel akcjami: przełącz konto na „Prywatne” i kupuj w tabeli rynku.
+           Kupowanie akcji, które fundusz kupił w tym tygodniu, grozi kontrolą compliance.</p>`;
+}
+
+function handleFundEmission() {
+    const input = document.getElementById('fund-emission-units');
+    const units = Math.floor(Number(input?.value) || 0);
+    if (!(units > 0)) return;
+    const result = issueFundUnits(units);
+    showToast(result.issued > 0 ? `Emisja: sprzedano ${result.issued.toFixed(1)} JU (${formatZl(result.raised)})` : 'Emisja: brak chętnych', result.issued > 0 ? 'success' : 'warning');
+    refreshFundViews();
+}
+
+// =================================================================================
+// CV I SZKOLENIA (zastępuje drzewko umiejętności)
+// =================================================================================
+
+function renderSkillsPanel() {
+    renderCvPanel();
+}
+
+function renderCvPanel() {
+    const list = document.getElementById('skills-list');
+    const money = document.getElementById('skills-modal-xp');
+    if (!list) return;
+    if (money) money.textContent = playerWallet.cash.toFixed(2);
+
+    const trainings = getAvailableTrainings();
+    const completed = trainings.filter(id => getSkillLevel(id) > 0);
+    const periods = playerFund?.periods || [];
+    const bestExcess = periods.length ? Math.max(...periods.map(p => p.fundReturn - p.benchmarkReturn)) : null;
+
+    const medals = completed.map(id => {
+        const medal = getTrainingMedal(getSkillLevel(id));
+        return `<span class="cv-medal cv-medal-${medal.id}" title="${escapeHtml(skills[id].name)} — poziom ${getSkillLevel(id)}">${medal.icon} ${escapeHtml(skills[id].name)}</span>`;
+    }).join('') || '<span class="fund-muted">Brak ukończonych szkoleń.</span>';
+
+    const history = (playerProfile?.cv || []).slice(-8).reverse()
+        .map(entry => `<li class="cv-entry-${entry.type}">${escapeHtml(entry.text)}</li>`).join('');
+
+    const cards = trainings.map(id => {
+        const skill = skills[id];
+        const level = getSkillLevel(id);
+        const next = getNextSkillLevelInfo(id);
+        const medal = getTrainingMedal(level);
+        const cost = getTrainingCost(id);
+        const reqMet = !next?.requires || getSkillLevel(next.requires.skillId) >= next.requires.level;
+        const canBuy = next && reqMet && playerWallet.cash >= cost;
+
+        return `<article class="cv-training">
+            <h4>${escapeHtml(skill.name)} ${medal ? `<span class="cv-medal cv-medal-${medal.id}">${medal.icon}</span>` : ''}</h4>
+            <p class="fund-muted">Poziom ${level}/${skill.levels.length}</p>
+            ${next ? `<p>${escapeHtml(next.description || '')}</p>` : '<p><strong>Ukończone w pełni.</strong></p>'}
+            ${next ? `<button ${canBuy ? '' : 'disabled'} onclick="buyTraining('${id}')">${reqMet ? `Szkolenie: ${cost} zł` : 'Wymaga wcześniejszego szkolenia'}</button>` : ''}
+        </article>`;
+    }).join('');
+
+    list.innerHTML = `
+        <section class="cv-card">
+            <div class="cv-avatar" aria-hidden="true">${escapeHtml((playerProfile?.name || '?').slice(0, 1).toUpperCase())}</div>
+            <div>
+                <h3>${escapeHtml(playerProfile?.name || 'Gracz')}</h3>
+                <p>${escapeHtml(getPlayerPosition().name)} · ${escapeHtml(playerProfile?.corporation || '')}</p>
+                <p class="fund-muted">Fundusz: ${escapeHtml(playerProfile?.fundName || '')} · okresów: ${periods.length}
+                   ${bestExcess !== null ? `· najlepszy wynik vs GIG: ${formatPct(bestExcess)}` : ''}</p>
+            </div>
+        </section>
+        <h4>Odznaki szkoleń</h4>
+        <div class="cv-medals">${medals}</div>
+        <h4>Historia zawodowa</h4>
+        <ul class="cv-history">${history}</ul>
+        <h4>Dostępne szkolenia</h4>
+        <div class="cv-trainings">${cards}</div>`;
+}
+
+function displayXP() {
+    const element = document.getElementById('player-xp');
+    if (element) element.textContent = formatZl(playerWallet.cash);
+}
+
+// =================================================================================
+// SCENKA STARTOWA: SMS OD BABCI
+// =================================================================================
+
+const INTRO_SMS = [
+    'Cześć Wnusiu! 😊',
+    'Słyszałam, że dostałeś pracę w tej wielkiej firmie od pieniędzy. Jestem z Ciebie taka dumna! ❤️',
+    'Wysyłam Ci 100 zł kieszonkowego na dobry start. Kup sobie coś mądrego, może jakąś książkę albo kurs.',
+    'Tylko nie przepuść wszystkiego od razu! Całuję, Babcia 👵'
+];
+
+function showIntroScene() {
+    const overlay = document.getElementById('intro-overlay');
+    const thread = document.getElementById('intro-sms-thread');
+    const form = document.getElementById('intro-form');
+    if (!overlay || !thread || !form) return;
+
+    overlay.hidden = false;
+    thread.innerHTML = '';
+    form.hidden = true;
+
+    let index = 0;
+    const typeNext = () => {
+        if (index >= INTRO_SMS.length) {
+            const transfer = document.createElement('div');
+            transfer.className = 'intro-transfer';
+            transfer.textContent = `💸 Przelew przychodzący: +${GRANDMA_POCKET_MONEY},00 zł od: Babcia`;
+            thread.appendChild(transfer);
+            renderIntroCountries();
+            form.hidden = false;
+            return;
+        }
+        const bubble = document.createElement('div');
+        bubble.className = 'intro-sms typing';
+        bubble.textContent = '…';
+        thread.appendChild(bubble);
+        setTimeout(() => {
+            bubble.classList.remove('typing');
+            bubble.textContent = INTRO_SMS[index++];
+            setTimeout(typeNext, 450);
+        }, 700);
+    };
+    typeNext();
+}
+
+function renderIntroCountries() {
+    const container = document.getElementById('intro-countries');
+    if (!container) return;
+    container.innerHTML = START_COUNTRIES.map(country => `
+        <button type="button" class="intro-country ${country.available ? 'selected' : 'locked'}" ${country.available ? '' : 'disabled'}
+            title="${country.available ? 'Dostępny' : `Przepustka: ${country.passCost.toLocaleString('pl-PL')} zł (wkrótce)`}">
+            ${country.flag} ${country.name}${country.available ? '' : ' 🔒'}
+        </button>`).join('');
+}
+
+function completeIntroScene(event) {
+    if (event) event.preventDefault();
+    const value = id => (document.getElementById(id)?.value || '').trim();
+
+    playerProfile.name = value('intro-name') || playerProfile.name;
+    playerProfile.corporation = value('intro-corporation') || playerProfile.corporation;
+    playerProfile.fundName = value('intro-fund') || playerProfile.fundName;
+    playerProfile.country = 'PL';
+    playerProfile.cv = [{ type: 'start', text: `Zatrudnienie w ${playerProfile.corporation} jako Młodszy zarządca funduszu „${playerProfile.fundName}”.` }];
+
+    document.getElementById('intro-overlay').hidden = true;
+    logEvent(`💼 Witaj, ${playerProfile.name}! Zarządzasz funduszem „${playerProfile.fundName}” w ${playerProfile.corporation}. Wznów grę, aby zacząć.`, 'review');
+    refreshFundViews();
+}
+
+// =================================================================================
+// TRYB DEBUG (ustawienia): prędkości ×10/×50, dodawanie pieniędzy, wymuszenie okresu i oceny
+// =================================================================================
+
+const DEBUG_MODE_KEY = 'gra_inwestycyjna_debug_mode';
+
+function isDebugMode() {
+    try { return localStorage.getItem(DEBUG_MODE_KEY) === '1'; } catch (e) { return false; }
+}
+
+function applyDebugModeUi() {
+    const enabled = isDebugMode();
+    document.querySelectorAll('.debug-only').forEach(element => { element.hidden = !enabled; });
+    const tools = document.getElementById('debug-tools');
+    if (tools) tools.hidden = !enabled;
+    const button = document.getElementById('debug-toggle-btn');
+    if (button) button.textContent = `🛠️ Tryb debug: ${enabled ? 'włączony' : 'wyłączony'}`;
+    if (!enabled && currentSpeedMultiplier > 5) setGameSpeed(5);
+}
+
+function toggleDebugMode() {
+    try { localStorage.setItem(DEBUG_MODE_KEY, isDebugMode() ? '0' : '1'); } catch (e) { /* brak localStorage */ }
+    applyDebugModeUi();
+}
+
+function debugAddWallet(amount) {
+    playerWallet.cash += amount;
+    logEvent(`🛠️ [DEBUG] +${amount} zł do portfela prywatnego.`, 'review');
+    refreshFundViews();
+}
+
+/** Dodaje gotówkę funduszowi bez nowych JU (NAV rośnie). */
+function debugAddFund(amount) {
+    playerCash += amount;
+    logEvent(`🛠️ [DEBUG] +${amount} zł do gotówki funduszu.`, 'review');
+    refreshFundViews();
+}
+
+function debugEndPeriod() {
+    if (playerFund) closeFundPeriod();
+    refreshFundViews();
+}
+
+function debugBoardReview() {
+    if (typeof runBoardEvaluation === 'function') runBoardEvaluation();
+    refreshFundViews();
+}
+
+document.addEventListener('DOMContentLoaded', applyDebugModeUi);
+
+// =================================================================================
+// KARIERA I KORPORACJA (etap C)
+// =================================================================================
+
+let corporationTab = 'board';
+
+function renderCareerPanel() {
+    const container = document.getElementById('fund-career-panel');
+    if (!container || !corporation) return;
+
+    const periodsDone = playerFund.periods.length;
+    const inCycle = periodsDone % BOARD_REVIEW_EVERY_PERIODS;
+    const reviewProgress = (inCycle + playerFund.current.elapsedMs / FUND_PERIOD_MS) / BOARD_REVIEW_EVERY_PERIODS;
+    const takeovers = getTakeoverProgress();
+    const score = corporation.lastPlayerScore;
+
+    container.innerHTML = `
+        <div class="career-panel">
+            <div class="career-row"><span>Stanowisko</span><strong>${escapeHtml(getPlayerPosition().name)}</strong></div>
+            <div class="career-row"><span>Ocena zarządu za</span><span>${BOARD_REVIEW_EVERY_PERIODS - inCycle} okr.${score !== null ? ` (ostatnio ${Math.round(score)}/100)` : ''}</span></div>
+            <div class="career-progress" title="Do następnej oceny zarządu"><span style="width:${Math.min(100, reviewProgress * 100).toFixed(0)}%"></span></div>
+            ${corporation.playerWeakReviews > 0 ? `<div class="loss">⚠️ Słabe oceny z rzędu: ${corporation.playerWeakReviews}/2</div>` : ''}
+            <div class="career-row"><span>Budżet korporacji</span><span>${formatZl(corporation.budget, 0)}</span></div>
+            <div class="career-row"><span>Cel: przejęcia</span><span>${takeovers.done}/${takeovers.required}</span></div>
+            ${corporation.victory ? `<div class="profit">👑 Zwycięstwo: ${corporation.victory.type === 'ceo' ? 'CEO' : 'dominacja'}</div>` : ''}
+            <button class="btn-secondary" onclick="openCorporationModal()">🏢 Korporacja</button>
+        </div>`;
+}
+
+function openCorporationModal(tab = corporationTab) {
+    if (!corporation) return;
+    document.getElementById('corporation-overlay').hidden = false;
+    setCorporationTab(tab);
+}
+
+function closeCorporationModal() {
+    document.getElementById('corporation-overlay').hidden = true;
+}
+
+function setCorporationTab(tab) {
+    corporationTab = tab;
+    document.querySelectorAll('.corp-tabs button').forEach(button => button.classList.toggle('active', button.dataset.tab === tab));
+    const title = document.getElementById('corporation-title');
+    if (title) title.textContent = `🏢 ${corporation.name}`;
+    renderCorporationBody();
+}
+
+/** Akcja z okna korporacji: wykonaj i odśwież widoki. */
+function corporationAction(fn, ...args) {
+    fn(...args);
+    refreshFundViews();
+    renderCorporationBody();
+}
+
+function renderCorporationBody() {
+    const body = document.getElementById('corporation-body');
+    if (!body || !corporation) return;
+    const renderers = { board: renderCorporationBoard, analysts: renderCorporationAnalysts, cooperation: renderCorporationCooperation, takeovers: renderCorporationTakeovers };
+    body.innerHTML = (renderers[corporationTab] || renderCorporationBoard)();
+}
+
+function renderCorporationBoard() {
+    const lastReview = corporation.reviews[corporation.reviews.length - 1];
+    const people = [
+        { name: playerProfile.name, positionId: playerProfile.positionId, mine: true, score: lastReview?.results.find(r => r.isPlayer)?.score },
+        ...corporation.managers.map(manager => ({
+            name: manager.name, positionId: manager.positionId, manager,
+            personality: MANAGER_PERSONALITIES[manager.personality].label,
+            score: lastReview?.results.find(r => !r.isPlayer && r.name === manager.name)?.score
+        }))
+    ].sort((a, b) => getPositionIndex(b.positionId) - getPositionIndex(a.positionId));
+
+    const supervise = canSuperviseFunds();
+    const positionName = id => CAREER_POSITIONS[getPositionIndex(id)].name;
+
+    return `
+        <p class="fund-muted">Ocena zarządu co ${BOARD_REVIEW_EVERY_PERIODS} okresy: nadwyżka nad GIG, stabilność, zaufanie klientów, miejsce w rankingu, compliance.
+        Awans od ${PROMOTION_SCORE} pkt (przy braku miejsca — zamiana z najsłabszym na wyższym stanowisku), 2 oceny poniżej ${WEAK_SCORE} z rzędu = degradacja.
+        Limity: CEO 1, zarząd 3, kierownicy projektu 2. Twoja reputacja w zarządzie: ${corporation.boardReputation.toFixed(0)}/100.</p>
+        <table class="asset-mini-table">
+            <thead><tr><th>Osoba</th><th>Stanowisko</th><th>Styl</th><th>Ostatnia ocena</th><th></th></tr></thead>
+            <tbody>${people.map(person => {
+                const supervised = person.manager && corporation.supervisedManagerId === person.manager.id;
+                const canTake = supervise && person.manager && getPositionIndex(person.positionId) < getPositionIndex(playerProfile.positionId);
+                const action = supervised
+                    ? `<button onclick="corporationAction(consolidateSupervisedFund)">🔗 Konsoliduj (głosowanie)</button>`
+                    : canTake ? `<button onclick="corporationAction(superviseManagerFund, '${person.manager.id}')">👔 Nadzoruj</button>` : '';
+                return `<tr class="${person.mine ? 'mine' : ''}">
+                    <td>${escapeHtml(person.name)}${person.mine ? ' (Ty)' : ''}</td>
+                    <td>${escapeHtml(positionName(person.positionId))}</td>
+                    <td>${escapeHtml(person.personality || '—')}</td>
+                    <td>${person.score ?? '—'}</td>
+                    <td>${action}</td>
+                </tr>`;
+            }).join('')}</tbody>
+        </table>
+        ${supervise ? '' : '<p class="fund-muted">Nadzór nad funduszem innego zarządcy i konsolidacja — od stanowiska Kierownik projektu.</p>'}
+        <h4>Historia ocen</h4>
+        <ul>${corporation.reviews.slice().reverse().map(review => {
+            const me = review.results.find(r => r.isPlayer);
+            return `<li>Po okresie ${review.periodNumber}: ${me.score}/100, ${escapeHtml(positionName(me.from))} → ${escapeHtml(positionName(me.to))}</li>`;
+        }).join('') || '<li class="fund-muted">Jeszcze nie było oceny.</li>'}</ul>`;
+}
+
+function renderCorporationAnalysts() {
+    const allowed = canHireAnalysts();
+    return `
+        <p class="fund-muted">Analitycy (od stanowiska Starszy zarządca) dodają wgląd w oknie akcjonariatu spółki. Zatrudnienie i tygodniowa pensja z portfela prywatnego (${formatZl(playerWallet.cash)}). Gwiazdki = dokładność.</p>
+        <div class="corp-cards">${Object.entries(ANALYST_TYPES).map(([type, def]) => {
+            const hired = getAnalyst(type);
+            return `<article class="corp-card">
+                <h4>${escapeHtml(def.label)} ${hired ? '★'.repeat(hired.stars) : ''}</h4>
+                <p>${escapeHtml(def.description)}</p>
+                <p class="fund-muted">${hired ? `Pensja: ${formatZl(hired.salary)} / tydzień` : `Zatrudnienie: ${formatZl(def.hireCost, 0)}, pensja ok. ${formatZl(def.salary, 0)} / tydzień`}</p>
+                ${hired ? '<p class="profit">Zatrudniony</p>' : `<button ${allowed ? '' : 'disabled'} onclick="corporationAction(hireAnalyst, '${type}')">Zatrudnij</button>`}
+            </article>`;
+        }).join('')}</div>`;
+}
+
+function renderCorporationCooperation() {
+    const period = playerFund.current.number;
+    const companies = stocks.filter(stock => !stock.assetType && !stock.isBankrupt && !stock.isBankStock)
+        .sort((a, b) => (Number(b.reputation?.player) || 0) - (Number(a.reputation?.player) || 0))
+        .slice(0, 12);
+
+    return `
+        <p class="fund-muted">Spotkanie z inwestorem (${formatZl(MEETING_COST, 0)}, raz na okres): szansa zależy od zaufania, wyniku vs GIG i charakteru inwestora — sukces = zakup JU.
+        Lunch z prezesem (${formatZl(CEO_LUNCH_COST, 0)}) poprawia relacje; przy dobrej opinii spółka z nadwyżką gotówki lokuje część w JU (uwaga na konflikt interesów, gdy fundusz ma &gt;5% jej akcji).</p>
+        <h4>Wielcy inwestorzy</h4>
+        <div class="corp-cards">${getBigInvestors().map(ai => {
+            const met = corporation.lastMeetings[ai.id] === period;
+            return `<article class="corp-card">
+                <h4>${escapeHtml(ai.name)}</h4>
+                <p class="fund-muted">Gotówka: ${formatZl(ai.cash, 0)}</p>
+                <button ${met ? 'disabled' : ''} onclick="corporationAction(meetInvestor, '${ai.id}')">${met ? 'Spotkanie odbyte' : '☕ Spotkanie'}</button>
+            </article>`;
+        }).join('')}</div>
+        <h4>Prezesi spółek</h4>
+        <table class="asset-mini-table">
+            <thead><tr><th>Spółka</th><th>Prezes</th><th>Relacje</th><th>Gotówka</th><th></th></tr></thead>
+            <tbody>${companies.map(stock => {
+                const met = corporation.lastMeetings[stock.symbol] === period;
+                return `<tr>
+                    <td>${escapeHtml(stock.symbol)}</td>
+                    <td>${escapeHtml(stock.ceo?.name || stock.ceo || '—')}</td>
+                    <td>${(Number(stock.reputation?.player) || 0).toFixed(0)}</td>
+                    <td>${formatZl(stock.cash || 0, 0)}</td>
+                    <td><button ${met ? 'disabled' : ''} onclick="corporationAction(lunchWithCeo, '${stock.symbol}')">🍽️ Lunch</button></td>
+                </tr>`;
+            }).join('')}</tbody>
+        </table>`;
+}
+
+function renderCorporationTakeovers() {
+    const allowed = canProposeTakeovers();
+    const progress = getTakeoverProgress();
+    return `
+        <p class="fund-muted">Fundusze zewnętrzne to firmy zarządzające. Przejęcie proponuje członek zarządu; zarząd głosuje (reputacja, ostatnia ocena), a cena (${(EXTERNAL_FIRM_VALUE_PER_AUM * 100).toFixed(0)}% aktywów) schodzi z budżetu korporacji (${formatZl(corporation.budget, 0)}).
+        Proces ma 7 etapów (postęp co kwartał) i może mieć komplikacje. Cel zwycięstwa: przejąć wskazane 🎯 fundusze (${progress.done}/${progress.required}).</p>
+        <div class="corp-cards">${getExternalFunds().map(stock => {
+            const isTarget = corporation.takeoverTargets.includes(stock.symbol);
+            const process = stock.mergerProcess?.type === 'fundTakeover' ? stock.mergerProcess : null;
+            const price = getExternalFirmValuation(stock);
+            let action;
+            if (stock.managedByCorporation) action = '<p class="profit">✅ Przejęty</p>';
+            else if (process) action = `<p>Etap ${process.stage}/7 · postęp ${process.progress}%</p>`;
+            else action = `<button ${allowed && corporation.budget >= price ? '' : 'disabled'} onclick="corporationAction(proposeFundTakeover, '${stock.symbol}')">🗳️ Wniosek o przejęcie</button>`;
+            return `<article class="corp-card ${isTarget ? 'target' : ''} ${stock.managedByCorporation ? 'done' : ''}">
+                <h4>${isTarget ? '🎯 ' : ''}${escapeHtml(getExternalFirmName(stock))}</h4>
+                <p>Aktywa: ${formatZl(getExternalFundValue(stock) * stock.totalShares, 0)}</p>
+                <p>Cena przejęcia: ${formatZl(price, 0)}</p>
+                ${action}
+            </article>`;
+        }).join('')}</div>
+        ${allowed ? '' : '<p class="fund-muted">Wnioski o przejęcie — od stanowiska Członek zarządu.</p>'}`;
+}
+
+function showVictoryScreen(victory) {
+    const overlay = document.getElementById('victory-overlay');
+    const body = document.getElementById('victory-body');
+    if (!overlay || !body) return;
+    body.innerHTML = `
+        <p>${victory.type === 'ceo'
+            ? `${escapeHtml(playerProfile.name)} zostaje <strong>CEO</strong> ${escapeHtml(corporation.name)}!`
+            : `${escapeHtml(corporation.name)} przejmuje wszystkie wskazane fundusze — <strong>dominacja</strong>!`}</p>
+        <p>Okresy: ${victory.periods} · aktywa funduszu: ${formatZl(victory.assets, 0)} · przejęcia: ${corporation.acquiredFunds.length}</p>
+        <p class="fund-muted">Możesz grać dalej.</p>`;
+    overlay.hidden = false;
 }

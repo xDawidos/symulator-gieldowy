@@ -103,9 +103,11 @@
   <div id="time-controls" style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
     <span class="topbar-kpi-label">Prędkość</span>
     <div class="speed-segmented">
-      <button class="speed-btn active" onclick="setGameSpeed(1)">x1</button>
-      <button class="speed-btn" onclick="setGameSpeed(2)">x2</button>
-      <button class="speed-btn" onclick="setGameSpeed(5)">x5</button>
+      <button class="speed-btn active" data-speed="1" onclick="setGameSpeed(1)">x1</button>
+      <button class="speed-btn" data-speed="2" onclick="setGameSpeed(2)">x2</button>
+      <button class="speed-btn" data-speed="5" onclick="setGameSpeed(5)">x5</button>
+      <button class="speed-btn debug-only" data-speed="10" onclick="setGameSpeed(10)" hidden>x10</button>
+      <button class="speed-btn debug-only" data-speed="50" onclick="setGameSpeed(50)" hidden>x50</button>
     </div>
   </div>
 
@@ -321,6 +323,11 @@
       <div id="fund-private-panel"></div>
     </details>
 
+    <details class="fund-details" id="fund-career-section" open>
+      <summary>🏢 Kariera w korporacji</summary>
+      <div id="fund-career-panel"></div>
+    </details>
+
     <!-- KPI karty 2×2 -->
     <div class="portfolio-kpi-grid">
       <div class="portfolio-kpi-card">
@@ -389,6 +396,15 @@
         <div style="text-align: center; padding-top: 20px;">
             <p>Zmień wygląd interfejsu.</p>
             <button id="theme-toggle-btn-modal" onclick="toggleDarkMode()" style="padding: 10px 15px; font-size: 16px;">Zmień motyw</button>
+        </div>
+        <div class="debug-settings">
+            <button id="debug-toggle-btn" onclick="toggleDebugMode()">🛠️ Tryb debug: wyłączony</button>
+            <div id="debug-tools" class="debug-tools" hidden>
+                <button onclick="debugAddWallet(1000)">+1 000 zł prywatnie</button>
+                <button onclick="debugAddFund(10000)">+10 000 zł do funduszu</button>
+                <button onclick="debugEndPeriod()">Zakończ okres funduszu</button>
+                <button onclick="debugBoardReview()">Ocena zarządu teraz</button>
+            </div>
         </div>
     </div>
 
@@ -584,9 +600,9 @@
         </div>
 </div>
 
-    <div id="leaderboard-modal" style="display:none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 450px; border: 2px solid #333; background-color: #f9f9f9; box-shadow: 0 4px 8px rgba(0,0,0,0.2); padding: 20px; z-index: 1003; border-radius: 8px;">
-        <h2 style="margin-top: 0; text-align: center;">🏆 Ranking Inwestorów</h2>
-         <ol id="leaderboard-list" style="list-style-type: none; padding: 0;"></ol>
+    <div id="leaderboard-modal" style="display:none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(640px, 94vw); max-height: 88vh; overflow: auto; border: 2px solid #333; background-color: #f9f9f9; box-shadow: 0 4px 8px rgba(0,0,0,0.2); padding: 20px; z-index: 1003; border-radius: 8px;">
+        <h2 style="margin-top: 0; text-align: center;">🏆 Ranking funduszy</h2>
+         <div id="leaderboard-list"></div>
          <button onclick="document.getElementById('leaderboard-modal').style.display='none';">Zamknij</button>
     </div>
 
@@ -818,6 +834,7 @@
         <h3 id="details-title" style="margin-top: 0; text-align: center;">Struktura Akcjonariatu</h3>
          <div id="pie-chart-container" style="width: 200px; height: 200px; margin: 20px auto;"></div>
          <div id="pie-chart-legend" style="text-align: center; margin-bottom: 15px;"></div>
+         <div id="analyst-insights" class="analyst-insights"></div>
          <button onclick="document.getElementById('stock-details-modal').style.display='none';" style="display: block; margin: 0 auto;">Zamknij</button>
     </div>
 
@@ -1302,6 +1319,32 @@
       </div>
     </div>
 
+    <!-- Korporacja: zarząd, analitycy, współpraca, przejęcia -->
+    <div id="corporation-overlay" class="intro-overlay" hidden onclick="if (event.target === this) closeCorporationModal()">
+      <div class="corp-modal" role="dialog" aria-labelledby="corporation-title">
+        <header class="corp-modal-header">
+          <h2 id="corporation-title">🏢 Korporacja</h2>
+          <button class="close-btn" onclick="closeCorporationModal()" aria-label="Zamknij">&times;</button>
+        </header>
+        <nav class="corp-tabs" role="tablist">
+          <button data-tab="board" onclick="setCorporationTab('board')">Zarząd</button>
+          <button data-tab="analysts" onclick="setCorporationTab('analysts')">Analitycy</button>
+          <button data-tab="cooperation" onclick="setCorporationTab('cooperation')">Współpraca</button>
+          <button data-tab="takeovers" onclick="setCorporationTab('takeovers')">Przejęcia</button>
+        </nav>
+        <div id="corporation-body" class="corp-body"></div>
+      </div>
+    </div>
+
+    <!-- Ekran zwycięstwa -->
+    <div id="victory-overlay" class="intro-overlay" hidden>
+      <div class="corp-modal victory-card" role="dialog" aria-labelledby="victory-title">
+        <h2 id="victory-title">👑 Zwycięstwo!</h2>
+        <div id="victory-body"></div>
+        <button class="btn-pause" onclick="document.getElementById('victory-overlay').hidden = true">Graj dalej</button>
+      </div>
+    </div>
+
 <!-- Modal Sektora Budowlanego -->
 <div id="construction-sector-modal" class="modal" style="display:none; width: 800px;">
     <button class="close-btn" onclick="document.getElementById('construction-sector-modal').style.display='none';">&times;</button>
@@ -1351,11 +1394,11 @@
     <script src="ai.js"></script> 
     <script src="player.js"></script>
     <script src="fund.js"></script>
+    <script src="career.js"></script>
     <script src="events.js"></script>
     <script src="minigames.js"></script>
     <script src="chart.js"></script>
     <script src="ui.js"></script>
-    <script src="fund-ui.js"></script>
     <script src="save.js"></script>
     <script src="main.js"></script>
 

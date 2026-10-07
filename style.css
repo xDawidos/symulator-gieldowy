@@ -4114,3 +4114,35 @@ button:hover {
 .intro-country { font-size: 12px; padding: 4px 8px; border-radius: 999px; }
 .intro-country.selected { border-color: var(--accent-primary); font-weight: 700; }
 .intro-country.locked { opacity: 0.5; cursor: not-allowed; }
+
+/* Tryb debug w ustawieniach */
+.debug-settings { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border-color); text-align: center; }
+.debug-tools { display: grid; gap: 6px; margin-top: 10px; }
+.debug-tools[hidden] { display: none; }
+
+/* Kariera i korporacja (etap C) */
+.career-panel { display: grid; gap: 6px; font-size: 13px; }
+.career-panel .career-row { display: flex; justify-content: space-between; gap: 8px; }
+.career-progress { height: 6px; border-radius: 3px; background: var(--border-color); overflow: hidden; }
+.career-progress > span { display: block; height: 100%; background: var(--accent-primary); }
+.corp-modal { width: min(760px, 100%); max-height: 90vh; overflow: auto; border-radius: 12px; border: 1px solid var(--border-color); background: var(--bg-elevated); box-shadow: var(--shadow-soft); padding: 16px; }
+.corp-modal-header { display: flex; justify-content: space-between; align-items: center; }
+.corp-modal-header h2 { margin: 0; }
+.corp-modal .close-btn { position: static; }
+.corp-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.corp-tabs button.active { border-color: var(--accent-primary); font-weight: 700; }
+.corp-body { display: grid; gap: 12px; font-size: 13px; }
+.corp-body table { width: 100%; }
+.corp-body .mine td { font-weight: 700; }
+.corp-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.corp-card { border: 1px solid var(--border-color); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 4px; }
+.corp-card h4 { margin: 0; font-size: 14px; }
+.corp-card p { margin: 0; font-size: 12px; }
+.corp-card button { margin-top: auto; }
+.corp-card.target { border-color: var(--accent-primary); }
+.corp-card.done { opacity: 0.7; }
+.analyst-insights { font-size: 12px; text-align: left; margin-bottom: 12px; }
+.analyst-insights p { margin: 4px 0; }
+.victory-card { width: min(440px, 100%); text-align: center; display: grid; gap: 10px; }
+.leaderboard-table { width: 100%; font-size: 13px; }
+.leaderboard-table .mine td { font-weight: 700; color: var(--accent-primary); }
