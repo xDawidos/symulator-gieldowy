@@ -4754,7 +4754,7 @@ function renderFundClients() {
         <table class="asset-mini-table">
             <thead><tr><th>Klient</th><th>Wartość</th><th>Zadowolenie</th></tr></thead>
             <tbody>${clients.map(client => {
-                const def = CLIENT_TYPES[client.type] || CLIENT_TYPES.saver;
+                const def = CLIENT_TYPES[client.type] || CLIENT_TYPES.careful;
                 const sat = Math.round(client.satisfaction * 100);
                 return `<tr>
                     <td title="${def.label}">${def.icon} ${escapeHtml(client.name)}</td>
@@ -5616,4 +5616,108 @@ function renderCommercialBanksList() {
             ${sales}
         </article>`;
     }).join('');
+}
+
+// =================================================================================
+// KLIENCI I RYNEK JU (okno obserwacji — gracz nie handluje)
+// =================================================================================
+
+let juView = { filter: 'all', clientId: null };
+
+function openJuMarket() {
+    document.getElementById('clients-modal').style.display = 'block';
+    renderJuMarket();
+}
+
+function setJuClientFilter(filter) {
+    juView.filter = filter;
+    juView.clientId = null;
+    renderJuMarket();
+}
+
+function showJuClient(id) {
+    juView.clientId = juView.clientId === id ? null : id;
+    renderJuMarket();
+}
+
+function formatPremium(value) {
+    const pct = (value || 0) * 100;
+    return `<span class="${pct > 0.05 ? 'text-up' : pct < -0.05 ? 'text-down' : 'text-muted'}">${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%</span>`;
+}
+
+function renderJuMarket() {
+    const modal = document.getElementById('clients-modal');
+    if (!modal || modal.style.display !== 'block' || !playerFund) return;
+
+    const funds = getJuMarketFunds();
+    const playerStats = juMarket.stats.player?.history[0];
+    const weekFlows = playerStats ? playerStats.inflow : 0;
+    const best = funds.find(fund => fund.id === juMarket.bestFundId);
+
+    document.getElementById('ju-ticker').innerHTML = [
+        ['Klienci funduszu', playerFund.clients.length],
+        ['Wpłaty nowych (tydz.)', formatZl(weekFlows, 0)],
+        ['Premia JU funduszu', formatPremium(playerStats?.premium)],
+        ['Wolumen JU (tydz.)', (playerStats?.volume || 0).toFixed(1)],
+        ['Tydzień rynku', juMarket.week],
+        ['Najlepiej sprzedaje się', best ? escapeHtml(best.name) : '—']
+    ].map(([label, value]) => `<div class="bank-ticker-item"><span>${label}</span><strong>${value}</strong></div>`).join('');
+
+    // Tabela funduszy rynku wtórnego
+    const rows = funds.map(fund => {
+        const history = juMarket.stats[fund.id]?.history || [];
+        const last = history[0] || {};
+        const trend = history.slice(0, 4).reduce((sum, item) => sum + (item.premium || 0), 0) / Math.max(1, Math.min(4, history.length));
+        return { fund, last, trend, popularity: getJuPopularity(fund.id, fund.assets) };
+    }).sort((a, b) => b.popularity - a.popularity);
+    document.getElementById('ju-funds-table').innerHTML = `
+        <table class="asset-mini-table ju-table">
+            <thead><tr><th>#</th><th>Fundusz</th><th>NAV</th><th>Cena JU vs NAV</th><th>Trend (4 tyg.)</th><th>Wolumen</th><th>Nowi klienci</th><th>Klienci</th></tr></thead>
+            <tbody>${rows.map((row, index) => `
+                <tr class="${row.fund.kind === 'player' ? 'mine' : ''} ${row.fund.id === juMarket.bestFundId ? 'ju-best' : ''}">
+                    <td>${index + 1}</td>
+                    <td>${row.fund.kind === 'player' ? '💼' : row.fund.kind === 'bot' ? '🏢' : '🌐'} ${escapeHtml(row.fund.name)}</td>
+                    <td>${row.fund.nav.toFixed(2)}</td>
+                    <td>${formatPremium(row.last.premium)}</td>
+                    <td>${formatPremium(row.trend)}</td>
+                    <td>${(row.last.volume || 0).toFixed(1)}</td>
+                    <td>${row.last.newClients || 0}</td>
+                    <td>${row.last.clients ?? '—'}</td>
+                </tr>`).join('')}</tbody>
+        </table>`;
+
+    // Taśma transakcji
+    document.getElementById('ju-tape').innerHTML = juMarket.tape.length
+        ? juMarket.tape.map(item => `<li class="ju-tape-${item.kind}"><span class="text-muted">t.${item.week}</span> ${escapeHtml(item.text)}</li>`).join('')
+        : '<li class="text-muted">Rynek ruszy po pierwszym tygodniu gry.</li>';
+
+    // Klienci funduszu gracza z filtrem po charakterze
+    const filters = ['all', ...CLIENT_CHARACTER_KEYS, 'institution', 'investor'];
+    document.getElementById('ju-client-filters').innerHTML = filters.map(key => {
+        const def = CLIENT_TYPES[key];
+        const count = key === 'all' ? playerFund.clients.length : playerFund.clients.filter(client => client.type === key).length;
+        if (key !== 'all' && !count) return '';
+        return `<button class="${juView.filter === key ? 'active' : ''}" onclick="setJuClientFilter('${key}')">${key === 'all' ? 'Wszyscy' : `${def.icon} ${def.label}`} (${count})</button>`;
+    }).join('');
+
+    const nav = getFundNav();
+    const clients = playerFund.clients
+        .filter(client => juView.filter === 'all' || client.type === juView.filter)
+        .sort((a, b) => b.units - a.units);
+    document.getElementById('ju-clients').innerHTML = clients.map(client => {
+        const def = getClientCharacter(client);
+        const gain = client.avgCost > 0 ? nav / client.avgCost - 1 : 0;
+        const card = juView.clientId === client.id ? `
+            <div class="ju-client-card">
+                <p class="fst-italic">„${escapeHtml(client.motive || '')}”</p>
+                <p>Średni koszt JU: ${client.avgCost.toFixed(2)} zł · zysk na JU: ${formatPremium(gain)}${client.loyal ? ' · 💙 lojalny' : ''}${client.pendingSellUnits > 0 ? ` · wystawił ${client.pendingSellUnits.toFixed(1)} JU na rynku wtórnym` : ''}</p>
+                <ul class="list-plain text-sm">${(client.history || []).map(item => `<li><span class="text-muted">t.${item.week}</span> ${escapeHtml(item.text)}</li>`).join('') || '<li class="text-muted">Brak historii.</li>'}</ul>
+            </div>` : '';
+        return `<div class="ju-client ${juView.clientId === client.id ? 'open' : ''}" onclick="showJuClient(${client.id})">
+            <span class="ju-client-icon" title="${escapeHtml(def.label)}">${def.icon}</span>
+            <span class="ju-client-name">${escapeHtml(client.name)}<small class="text-muted"> ${escapeHtml(def.label)}</small></span>
+            <span class="ju-client-units">${client.units.toFixed(1)} JU · ${formatZl(client.units * nav, 0)}</span>
+            <span class="ju-satisfaction" title="Zadowolenie"><span style="width:${(client.satisfaction * 100).toFixed(0)}%"></span></span>
+        </div>${card}`;
+    }).join('') || '<p class="text-muted">Brak klientów w tej grupie.</p>';
 }

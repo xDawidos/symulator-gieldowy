@@ -4226,3 +4226,36 @@ img, svg, video { max-width: 100%; }
 .phase-badge { display: inline-block; margin-top: var(--space-1); padding: 2px 6px; font-size: 10px; border-radius: 999px; border: 1px solid currentColor; }
 .row-icon { font-size: 14px; margin-left: var(--space-1); cursor: default; }
 .row-icon-sm { font-size: 12px; margin-left: 2px; }
+
+/* ===================== KLIENCI I RYNEK JU ===================== */
+.ju-window { --bank-navy: #2A1748; --bank-navy-2: #3B2366; --bank-gold: #2DD4BF; --bank-gold-soft: rgba(45, 212, 191, 0.18); }
+.ju-hero .bank-emblem { background: radial-gradient(circle at 35% 30%, #A7F3D0, #2DD4BF 55%, #0F766E); }
+.ju-hero .bank-hero-kicker { color: #99F6E4; }
+.ju-layout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(260px, 1fr); gap: var(--space-5); padding-top: var(--space-4); padding-bottom: var(--space-5); }
+.ju-table { width: 100%; }
+.ju-table tr.ju-best td { background: var(--bank-gold-soft); }
+.ju-table tr.ju-best td:nth-child(2)::after { content: ' 🏆'; }
+.ju-filters { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-bottom: var(--space-2); }
+.ju-filters button { font-size: 12px; padding: 4px 10px; border-radius: 999px; }
+.ju-filters button.active { border-color: var(--bank-gold); box-shadow: inset 0 0 0 1px var(--bank-gold); font-weight: 700; }
+.ju-clients { display: grid; gap: 4px; max-height: min(420px, 50vh); overflow-y: auto; }
+.ju-client { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto 80px; align-items: center; gap: var(--space-2); padding: 6px var(--space-2); border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-elevated-2); cursor: pointer; font-size: 13px; }
+.ju-client.open { border-color: var(--bank-gold); }
+.ju-client-icon { font-size: 18px; text-align: center; }
+.ju-client-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ju-client-units { font-variant-numeric: tabular-nums; }
+.ju-satisfaction { height: 6px; border-radius: 3px; background: var(--border-color); overflow: hidden; }
+.ju-satisfaction span { display: block; height: 100%; background: linear-gradient(90deg, var(--color-down), var(--color-warn), var(--color-up)); }
+.ju-client-card { margin: 0 0 var(--space-2) 36px; padding: var(--space-2) var(--space-3); border-left: 3px solid var(--bank-gold); font-size: 12.5px; }
+.ju-client-card p { margin: 0 0 var(--space-1); }
+.ju-tape { max-height: min(640px, 70vh); overflow-y: auto; display: grid; gap: 4px; font-size: 12.5px; }
+.ju-tape li { padding: 6px var(--space-2); border-radius: var(--radius-sm); background: var(--bg-elevated-2); border-left: 3px solid var(--border-color); }
+.ju-tape li.ju-tape-new { border-left-color: var(--color-up); }
+.ju-tape li.ju-tape-trade { border-left-color: var(--accent-info); }
+.ju-tape li.ju-tape-topup { border-left-color: var(--bank-gold); }
+.ju-tape li.ju-tape-best { border-left-color: var(--color-warn); font-weight: 600; }
+@media (max-width: 860px) {
+  .ju-layout { grid-template-columns: 1fr; }
+  .ju-client { grid-template-columns: 24px minmax(0, 1fr) 60px; }
+  .ju-client-units { display: none; }
+}

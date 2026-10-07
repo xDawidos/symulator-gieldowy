@@ -48,15 +48,18 @@ const START_COUNTRIES = [
     { id: 'IN', name: 'Indie', flag: '🇮🇳', available: false, passCost: 80000 }
 ];
 
-// Charaktery klientów: cierpliwość (wolniej odchodzą), awersja do zmienności, pogoń za wynikami,
-// lojalność (szansa, że w ogóle rozważą odejście), typowa wpłata (zł).
+// Charaktery klientów (etap F1, logika w clients.js): cierpliwość, awersja do zmienności, pogoń za wynikiem,
+// lojalność, typowa wpłata (zł), skłonność do dokupowania (buyBias), do sprzedaży na rynku wtórnym
+// (secondaryBias), wrażliwość na opłaty, wymagane zaufanie (trustNeed: +/− do progu 55) i panika (umarza całość).
 const CLIENT_TYPES = {
-    retiree:     { label: 'Emeryt',     icon: '👴', patience: 0.8, volAversion: 1.6, chase: 0.3, loyalty: 0.5, size: [300, 1200] },
-    saver:       { label: 'Ciułacz',    icon: '🐷', patience: 0.6, volAversion: 1.0, chase: 0.6, loyalty: 0.4, size: [200, 800] },
-    speculator:  { label: 'Spekulant',  icon: '🎲', patience: 0.2, volAversion: 0.3, chase: 1.6, loyalty: 0.1, size: [300, 1500] },
-    loyal:       { label: 'Lojalny',    icon: '💙', patience: 1.0, volAversion: 0.5, chase: 0.2, loyalty: 0.95, size: [50, 300] },
-    institution: { label: 'Instytucja', icon: '🏛️', patience: 0.5, volAversion: 0.8, chase: 1.0, loyalty: 0.3, size: [2000, 6000], comparesRivals: true },
-    investor:    { label: 'Inwestor',   icon: '🐋', patience: 0.6, volAversion: 0.6, chase: 1.2, loyalty: 0.4, size: [2000, 10000], comparesRivals: true }
+    sly:         { key: 'sly',         label: 'Spryciarz',  icon: '🦊', patience: 0.25, volAversion: 0.4, chase: 1.6, loyalty: 0.1, size: [300, 1500],  buyBias: 0.6, secondaryBias: 1.3, feeSensitivity: 0.3, trustNeed: 0,   panic: false },
+    careful:     { key: 'careful',     label: 'Ostrożny',   icon: '🛡️', patience: 0.75, volAversion: 1.6, chase: 0.3, loyalty: 0.5, size: [300, 1200],  buyBias: 0.4, secondaryBias: 0.7, feeSensitivity: 0.3, trustNeed: 5,   panic: false },
+    fearful:     { key: 'fearful',     label: 'Strachliwy', icon: '😨', patience: 0.3,  volAversion: 2.2, chase: 0.6, loyalty: 0.2, size: [200, 800],   buyBias: 0.3, secondaryBias: 1.0, feeSensitivity: 0.2, trustNeed: 12,  panic: true },
+    brave:       { key: 'brave',       label: 'Odważny',    icon: '🦁', patience: 0.85, volAversion: 0.3, chase: 1.0, loyalty: 0.6, size: [400, 1600],  buyBias: 1.2, secondaryBias: 0.4, feeSensitivity: 0.2, trustNeed: -10, panic: false },
+    rich:        { key: 'rich',        label: 'Bogaty',     icon: '💎', patience: 0.8,  volAversion: 0.8, chase: 0.8, loyalty: 0.5, size: [2500, 9000], buyBias: 0.9, secondaryBias: 0.6, feeSensitivity: 0.2, trustNeed: 0,   panic: false },
+    miser:       { key: 'miser',       label: 'Sknera',     icon: '🪙', patience: 0.6,  volAversion: 1.0, chase: 0.6, loyalty: 0.4, size: [150, 700],   buyBias: 0.3, secondaryBias: 0.9, feeSensitivity: 1.5, trustNeed: 5,   panic: false },
+    institution: { key: 'institution', label: 'Instytucja', icon: '🏛️', patience: 0.5,  volAversion: 0.8, chase: 1.0, loyalty: 0.3, size: [2000, 6000], buyBias: 0.5, secondaryBias: 0.5, feeSensitivity: 0.5, trustNeed: 0,   panic: false, comparesRivals: true },
+    investor:    { key: 'investor',    label: 'Inwestor',   icon: '🐋', patience: 0.6,  volAversion: 0.6, chase: 1.2, loyalty: 0.4, size: [2000, 10000], buyBias: 0.7, secondaryBias: 0.8, feeSensitivity: 0.4, trustNeed: 0,  panic: false, comparesRivals: true }
 };
 
 const CLIENT_FIRST_NAMES = ['Anna', 'Piotr', 'Maria', 'Tomasz', 'Ewa', 'Jan', 'Kasia', 'Marek', 'Zofia', 'Adam', 'Halina', 'Krzysztof', 'Agata', 'Paweł', 'Irena'];
@@ -184,6 +187,7 @@ function addFundClient(type, units, nav) {
         joinedPeriod: playerFund.periodNumber
     };
     playerFund.clients.push(client);
+    if (typeof ensureClientProfile === 'function') ensureClientProfile(client);
     return client;
 }
 
@@ -212,10 +216,10 @@ function startNewCareer(profile = {}) {
 
     // Kilkunastu startowych klientów; JU rozdzielone wg typowej wpłaty.
     const count = getRandomIntInRange(12, 15);
-    const types = ['loyal', 'retiree', 'retiree', 'saver', 'saver', 'saver', 'speculator', 'speculator', 'institution'];
+    const types = ['brave', 'careful', 'careful', 'miser', 'miser', 'fearful', 'sly', 'sly', 'rich', 'institution'];
     const weights = [];
     for (let i = 0; i < count; i++) {
-        const type = i < types.length ? types[i] : getRandomElement(['saver', 'retiree', 'speculator']);
+        const type = i < types.length ? types[i] : getRandomElement(['careful', 'miser', 'fearful', 'sly', 'brave']);
         const def = CLIENT_TYPES[type];
         weights.push({ type, weight: getRandomInRange(def.size[0], def.size[1]) });
     }
@@ -226,12 +230,14 @@ function startNewCareer(profile = {}) {
             ? FUND_START_UNITS - assigned
             : Math.max(1, Math.round(FUND_START_UNITS * item.weight / totalWeight));
         assigned += units;
-        addFundClient(item.type, units, nav);
+        const client = addFundClient(item.type, units, nav);
+        if (index === 0) client.loyal = true; // pierwszy klient — wierny znajomy rodziny, prawie nigdy nie odchodzi
     });
 
     beginFundPeriod();
     syncExchangeAccessWithPosition();
     if (typeof createCorporation === 'function') createCorporation();
+    if (typeof createJuMarket === 'function') juMarket = createJuMarket();
     if (typeof createMailbox === 'function') {
         mailbox = createMailbox();
         addMail({ sender: 'corporation', subject: `Witamy w ${playerProfile.corporation}!`, body: `Od dziś zarządzasz funduszem „${playerProfile.fundName}”. Wyniki oceniamy co 4 okresy. Wiadomości z rynku przysyłają czasopisma — prenumeraty ustawisz w zakładce Subskrypcje.`, importance: 2 });
@@ -401,8 +407,9 @@ function processFundWeekly() {
     playerFund.navHistory.push({ clockMs: playerFund.clockMs, nav: getFundNav() });
     if (playerFund.navHistory.length > 80) playerFund.navHistory.shift();
 
-    processClientDecisions();
+    if (typeof processClientsWeekly === 'function') processClientsWeekly(); // charaktery klientów (clients.js)
     maybeTriggerForcedEmission();
+    if (typeof runJuMarketWeekly === 'function') runJuMarketWeekly(); // rynek wtórny JU (clients.js)
 
     if (typeof processCorporationWeekly === 'function') {
         processCorporationWeekly();
@@ -424,38 +431,6 @@ function chargeManagementFee() {
     recordPayment('external:korporacja', 'player-wallet', share, 'Udział w opłacie za zarządzanie');
     if (typeof corporation !== 'undefined' && corporation) corporation.budget += fee - share;
     return fee;
-}
-
-function processClientDecisions() {
-    const nav = getFundNav();
-    const current = playerFund.current;
-    const recentReturn = getPeriodReturn(current.startNav, nav) - getPeriodReturn(current.startBenchmark, getBenchmarkValue());
-    const lastPeriod = playerFund.periods[playerFund.periods.length - 1];
-    const lastRankBad = lastPeriod && lastPeriod.rankOf > 1 && lastPeriod.rank === lastPeriod.rankOf;
-
-    let budget = Math.floor(playerFund.units * MAX_WEEKLY_REDEMPTION_SHARE);
-
-    for (const client of [...playerFund.clients]) {
-        if (budget <= 0) break;
-        const def = CLIENT_TYPES[client.type] || CLIENT_TYPES.saver;
-
-        // Zadowolenie: zaufanie, ostatnie wyniki (pogoń za wynikiem), obsunięcie (awersja do zmienności).
-        const drift = (playerFund.trust - 50) / 50 * 0.04 +
-            recentReturn * def.chase * 0.8 -
-            current.maxDrawdown * def.volAversion * 0.3 -
-            (def.comparesRivals && lastRankBad ? 0.05 : 0);
-        client.satisfaction = Math.max(0, Math.min(1, client.satisfaction + drift));
-
-        if (Math.random() < def.loyalty) continue;
-
-        const redeemChance = Math.max(0, (0.40 - client.satisfaction)) * (1 - def.patience) * 0.7;
-        if (Math.random() >= redeemChance) continue;
-
-        const fraction = client.satisfaction < 0.15 ? 1 : getRandomInRange(0.2, def.chase > 1 ? 1 : 0.5);
-        const units = Math.min(budget, Math.max(1, Math.round(client.units * fraction)));
-        redeemClientUnits(client, units);
-        budget -= units;
-    }
 }
 
 /** Umorzenie JU klienta po NAV. Przy braku gotówki fundusz sprzedaje pozycje. */
@@ -482,7 +457,7 @@ function redeemClientUnits(client, units) {
 
     if (client.units < 0.5) {
         playerFund.clients = playerFund.clients.filter(item => item.id !== client.id);
-        logEvent(`👋 ${client.name} (${CLIENT_TYPES[client.type].label}) wycofuje wszystkie środki: ${paid.toFixed(2)} zł (podatek klienta ${tax.toFixed(2)} zł).`, 'review');
+        logEvent(`👋 ${client.name} (${(CLIENT_TYPES[client.type] || CLIENT_TYPES.careful).label}) wycofuje wszystkie środki: ${paid.toFixed(2)} zł (podatek klienta ${tax.toFixed(2)} zł).`, 'review');
     } else {
         logEvent(`📤 ${client.name} umarza ${paidUnits.toFixed(1)} JU (${paid.toFixed(2)} zł).`, 'review');
     }
@@ -557,7 +532,7 @@ function issueFundUnits(requestedUnits, options = {}) {
     const newClients = [];
     const newClientCount = options.forcedValue ? 0 : Math.max(0, Math.round(trust * 4 + getRandomInRange(-1, 1.5)));
     for (let i = 0; i < newClientCount; i++) {
-        const type = trust > 0.7 && Math.random() < 0.2 ? 'institution' : getRandomElement(['saver', 'saver', 'retiree', 'speculator']);
+        const type = trust > 0.7 && Math.random() < 0.2 ? 'institution' : randomCharacter(playerFund.trust);
         const def = CLIENT_TYPES[type];
         newClients.push({ type, value: getRandomInRange(def.size[0], def.size[1]) });
         demandValue += newClients[newClients.length - 1].value;

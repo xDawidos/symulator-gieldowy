@@ -16,8 +16,9 @@ const LEGACY_SAVE_KEYS = ['gra_inwestycyjna_dawid_save_v2', 'gra_inwestycyjna_da
 // v5: korporacja (zarządcy, oceny, analitycy, przejęcia). Zapis v4 migruje — korporacja tworzy się przy wczytaniu.
 // v6: skrzynka mailowa, burmistrz i kampania, festyn, oferta prywatyzacyjna. v4/v5 migrują przy wczytaniu.
 // v7: obligacje i oferty (czas gry, kupony), depozyty i księgi banków, zastawy funduszy, giełdy elitarne.
-const SAVE_FORMAT_VERSION = 7;
-const SUPPORTED_SAVE_VERSIONS = [4, 5, 6, 7];
+// v8: klienci z charakterami i rynek wtórny JU (migracja typów klientów przy wczytaniu).
+const SAVE_FORMAT_VERSION = 8;
+const SUPPORTED_SAVE_VERSIONS = [4, 5, 6, 7, 8];
 
 let lastSaveReport = null;
 let saveDisabledUntilReload = false;
@@ -117,6 +118,7 @@ function buildSaveSnapshot() {
         playerFund,
         corporation,
         mailbox,
+        juMarket,
         allBonds,
         activeBonds,
         cityInvestment,
@@ -358,6 +360,10 @@ function applySaveSnapshot(snapshot) {
     festival = null; // trwający festyn (czas rzeczywisty) nie przetrwa wczytania
     nextFestivalCountdown = isFiniteNumber(snapshot.nextFestivalCountdown) ? snapshot.nextFestivalCountdown : BASE_DELAYS.quarterly * 2;
     ensureCityModel();
+
+    // Rynek JU i profile klientów (v8); starsze zapisy: migracja typów na charaktery.
+    juMarket = snapshot.juMarket && Array.isArray(snapshot.juMarket.tape) ? { ...createJuMarket(), ...snapshot.juMarket } : createJuMarket();
+    if (playerFund) playerFund.clients.forEach(ensureClientProfile);
 
     // Obligacje (v7; wcześniej nie były zapisywane). Stare rekordy bez czasu gry migruje checkBondMaturities.
     allBonds.length = 0;

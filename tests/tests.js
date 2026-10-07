@@ -889,7 +889,7 @@ group('Fundusz gracza (etap B)', () => {
         assert(units0 - playerFund.units <= units0 * MAX_WEEKLY_REDEMPTION_SHARE + 1, 'odpływ ≤ 15% JU');
         for (let i = 0; i < 15; i++) processFundWeekly();
         assert(playerFund.trust < 25, `zaufanie po serii strat: ${playerFund.trust.toFixed(1)}`);
-        assert(playerFund.clients.some(c => c.type === 'loyal'), 'klient lojalny zostaje');
+        assert(playerFund.clients.some(c => c.loyal), 'klient lojalny zostaje');
     });
 
     test('więcej niż 2 emisje w okresie obniżają zaufanie', () => {
@@ -1348,7 +1348,10 @@ group('Banki, lombard, obligacje, giełdy elitarne (etap E2)', () => {
         const bank = makeBank(a);
         bank.loanPortfolio.AAA = 1_000_000;
         a.cash = 0;
+        const random = Math.random;
+        Math.random = () => 0.99; // bez nowego kredytu, który dałby gotówkę na ratę
         for (let i = 0; i < LOAN_WRITE_OFF_AFTER; i++) { a.cash = 0; processCompanyBanking(); }
+        Math.random = random;
         assert(bank.loanPortfolio.AAA < 1_000_000 && bank.ledger.writeOffs > 0, 'odpis części kredytu');
         commercialBanks.length = 0;
     });
@@ -1526,6 +1529,106 @@ group('Spójność świata (etap D2)', () => {
         assertNear(getFundNav(), before.nav, 'NAV po wczytaniu', 1e-9);
         assert(playerFund.units === before.units && playerCash === before.cash && allBonds.length === before.bonds && playerFund.pawnLoans.length === before.loans, 'stan po wczytaniu');
         assert(checkWorldInvariants().length === 0, 'niezmienniki po wczytaniu');
+    });
+});
+
+group('Klienci z charakterami i rynek JU (etap F1) + nowe spółki (F4)', () => {
+    function worldF1() {
+        const a = makeCompany('AAA', { cash: 600_000, fixedAssets: 800_000 });
+        a.insiderShares = 0; a.sharesHeld = 0; a.reputation = { player: 0 };
+        resetWorld([a]);
+        allBonds.length = 0;
+        marketIndexes.find(index => index.id === 'GIG').value = 100;
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        return { a };
+    }
+
+    test('start: klienci mają charaktery, motywy i historię; pierwszy klient lojalny', () => {
+        worldF1();
+        assert(playerFund.clients.every(c => CLIENT_TYPES[c.type] && c.motive && Array.isArray(c.history)), 'profile klientów');
+        assert(playerFund.clients[0].loyal, 'lojalny klient');
+        assert(playerFund.clients.some(c => c.type === 'sly') && playerFund.clients.some(c => c.type === 'miser'), 'różne charaktery');
+    });
+
+    test('macierz decyzji: zadowolony+zaufanie → dokupuje; zadowolony bez zaufania → rynek wtórny; niezadowolony → umarza', () => {
+        worldF1();
+        const random = Math.random;
+        Math.random = () => 0.01;
+        const client = playerFund.clients.find(c => c.type === 'careful');
+        playerFund.clients = [client];
+        client.loyal = false;
+
+        client.satisfaction = 0.9; playerFund.trust = 90;
+        const units0 = client.units;
+        processClientsWeekly();
+        assert(client.units > units0, 'dokupił JU');
+
+        client.satisfaction = 0.9; playerFund.trust = 20;
+        const fundUnits = playerFund.units, cash = playerCash;
+        processClientsWeekly();
+        assert(client.pendingSellUnits > 0, 'wystawił JU na rynku wtórnym');
+        assert(playerFund.units === fundUnits && playerCash === cash, 'fundusz bez zmian');
+
+        client.pendingSellUnits = 0;
+        client.satisfaction = 0.05; playerFund.trust = 60;
+        const before = client.units;
+        processClientsWeekly();
+        Math.random = random;
+        assert(client.units < before || !playerFund.clients.includes(client), 'umorzenie');
+    });
+
+    test('rynek wtórny: transakcja nie zmienia gotówki ani JU funduszu, kupujący z zewnątrz zostaje klientem', () => {
+        worldF1();
+        const seller = playerFund.clients[1];
+        seller.pendingSellUnits = 30;
+        playerFund.trust = 80;
+        const cash = playerCash, units = playerFund.units, count = playerFund.clients.length;
+        const random = Math.random;
+        Math.random = () => 0.5;
+        const fund = getJuMarketFunds().find(f => f.id === 'player');
+        runPlayerJuMarket(fund);
+        Math.random = random;
+        assert(seller.pendingSellUnits < 30, 'sprzedano JU');
+        const stats = juMarket.stats.player.history[0];
+        assert(stats.volume > 0 && stats.newClients > 0 && playerFund.clients.length > count, 'nowi klienci');
+        const unitsSum = playerFund.clients.reduce((sum, c) => sum + c.units, 0);
+        assertNear(unitsSum, playerFund.units, 'JU klientów = JU funduszu', 1e-6);
+        assert(playerCash >= cash && playerFund.units >= units, 'wtórny obrót bez wpływu, nadwyżka popytu to wpłaty');
+    });
+
+    test('premia JU rośnie z popytem i jest ograniczona do ±10%', () => {
+        assert(computeJuPremium(1000, 100) > computeJuPremium(500, 500), 'popyt podnosi premię');
+        assert(computeJuPremium(1e9, 0) <= JU_MARKET_MAX_PREMIUM && computeJuPremium(0, 1e9) >= -JU_MARKET_MAX_PREMIUM, 'limit');
+    });
+
+    test('sprzedaż bez kupca przez 2 tygodnie kończy się umorzeniem', () => {
+        worldF1();
+        const client = playerFund.clients.find(c => !c.loyal);
+        playerFund.clients.forEach(c => { c.satisfaction = 0.5; });
+        client.pendingSellUnits = 10;
+        const units = client.units;
+        for (let i = 0; i < JU_SELL_ORDER_PATIENCE; i++) processClientsWeekly();
+        assert(client.units < units && client.pendingSellUnits === 0, 'umorzone po braku kupca');
+    });
+
+    test('nowe spółki elitarne: BEW i NRB na Rubinie, ORT na Szmaragdzie', () => {
+        const defs = initialStocks.filter(s => ['BEW', 'NRB', 'ORT'].includes(s.symbol));
+        assert(defs.length === 3, 'definicje');
+        const cap = s => s.price * s.totalShares;
+        assert(defs.filter(s => s.exchange === 'RUBY').every(s => cap(s) >= ELITE_EXCHANGES.RUBY.minCap), 'Rubin ≥ progu');
+        assert(defs.filter(s => s.exchange === 'EMERALD').every(s => cap(s) >= ELITE_EXCHANGES.EMERALD.minCap), 'Szmaragd ≥ progu');
+    });
+
+    test('zapis v8: rynek JU i profile klientów; stare typy migrują na charaktery', () => {
+        worldF1();
+        runJuMarketWeekly();
+        const snapshot = JSON.parse(JSON.stringify(buildSaveSnapshot()));
+        assert(snapshot.version === SAVE_FORMAT_VERSION, 'wersja');
+        snapshot.playerFund.clients[0].type = 'retiree';
+        snapshot.playerFund.clients[1].type = 'loyal';
+        const report = applySaveSnapshot(snapshot);
+        assert(report.ok && juMarket.week === 1, 'rynek JU');
+        assert(playerFund.clients[0].type === 'careful' && playerFund.clients[1].type === 'brave' && playerFund.clients[1].loyal, 'migracja typów');
     });
 });
 

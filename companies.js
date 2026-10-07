@@ -847,6 +847,31 @@ const initialStocks = [
         lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null, // <-- DODAJ TO
     cash: 0 
     },
+    // GIEŁDY ELITARNE (od startu; przydział trzyma ranking kapitalizacji — finance.js)
+    {
+        name: 'Bałtycka Energia Wiatrowa', price: 1900.00, volatilityFactor: 0.9, symbol: 'BEW', exchange: 'RUBY', totalShares: 1000000, maxShares: 1000000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [],
+        quarterlyEarnings: 0,
+        lineHistory: [], playerTransactions: [], sector: ['Energia'], financialHealth: 1, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'Balanced',
+        dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
+        lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null,
+        cash: 0
+    },
+    {
+        name: 'Nova Robotics', price: 2000.00, volatilityFactor: 1.4, symbol: 'NRB', exchange: 'RUBY', totalShares: 1000000, maxShares: 1000000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [],
+        quarterlyEarnings: 0,
+        lineHistory: [], playerTransactions: [], sector: ['Technologia', 'Przemysł'], financialHealth: 1, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'Growth',
+        dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
+        lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null,
+        cash: 0
+    },
+    {
+        name: 'Orzeł Telekom', price: 3600.00, volatilityFactor: 0.8, symbol: 'ORT', exchange: 'EMERALD', totalShares: 1000000, maxShares: 1000000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [],
+        quarterlyEarnings: 0,
+        lineHistory: [], playerTransactions: [], sector: ['Technologia', 'Usługi'], financialHealth: 1, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'Aggressive',
+        dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
+        lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null,
+        cash: 0
+    },
     // --- NOWE SPÓŁKI: FINANSE KONSUMENCKIE ---
     {
         name: 'WRONA',

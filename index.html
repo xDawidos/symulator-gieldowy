@@ -60,6 +60,11 @@
                 <span class="nav-label">Ranking</span>
             </button>
 
+            <button class="sidebar-nav-btn" id="open-clients-btn" onclick="openJuMarket()">
+                <span class="nav-icon">👥</span>
+                <span class="nav-label">Klienci i rynek JU</span>
+            </button>
+
             <button class="sidebar-nav-btn" id="open-settings-btn" onclick="openSettingsModal()">
                 <span class="nav-icon">⚙️</span>
                 <span class="nav-label">Ustawienia</span>
@@ -321,6 +326,7 @@
 
     <details class="fund-details">
       <summary>👥 Klienci funduszu</summary>
+      <button class="btn-secondary text-sm mb-2" onclick="openJuMarket()">Otwórz rynek JU i karty klientów</button>
       <div id="fund-clients-list"></div>
     </details>
 
@@ -1130,6 +1136,33 @@
       </div>
     </div>
 
+    <!-- Klienci funduszu i rynek wtórny JU (tylko obserwacja) -->
+    <div id="clients-modal" class="modal modal-xl bank-window ju-window" style="display: none;">
+        <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
+        <header class="bank-hero ju-hero">
+            <div class="bank-emblem" aria-hidden="true">👥</div>
+            <div>
+                <div class="bank-hero-kicker">Rynek wtórny jednostek uczestnictwa · tylko obserwacja</div>
+                <h2 class="bank-hero-title">Klienci i rynek JU</h2>
+            </div>
+        </header>
+        <div class="bank-ticker" id="ju-ticker"></div>
+        <div class="ju-layout">
+            <section>
+                <h3 class="bank-section-title">Fundusze na rynku wtórnym</h3>
+                <p class="bank-lead">Klienci odsprzedają sobie JU po cenie NAV ± premia zależna od popytu. Zadowolony klient przy dużym zaufaniu dokupuje JU, przy małym zaufaniu sprzedaje je innym, a niezadowolony umarza.</p>
+                <div id="ju-funds-table"></div>
+                <h3 class="bank-section-title">Klienci Twojego funduszu</h3>
+                <div id="ju-client-filters" class="ju-filters"></div>
+                <div id="ju-clients" class="ju-clients"></div>
+            </section>
+            <aside>
+                <h3 class="bank-section-title">Taśma transakcji</h3>
+                <ul id="ju-tape" class="ju-tape list-plain"></ul>
+            </aside>
+        </div>
+    </div>
+
     <!-- Korporacja: zarząd, analitycy, współpraca, przejęcia -->
     <div id="corporation-overlay" class="intro-overlay" hidden onclick="if (event.target === this) closeCorporationModal()">
       <div class="corp-modal" role="dialog" aria-labelledby="corporation-title">
@@ -1208,6 +1241,7 @@
     <script src="mail.js"></script>
     <script src="city.js"></script>
     <script src="finance.js"></script>
+    <script src="clients.js"></script>
     <script src="events.js"></script>
     <script src="chart.js"></script>
     <script src="ui.js"></script>
