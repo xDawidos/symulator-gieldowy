@@ -212,7 +212,15 @@ const startupOfferEventsPrompts = [
 
 function triggerMainMarketEventCycle() {
     if (isSkillUnlocked('sixthSense') && Math.random() < 0.15) {
-        triggerSixthSenseEvent();
+        triggerSixthSenseEvent(); // przeczucie zwrotu w sektorze (macro.js) — cykl zdarzeń trwa dalej
+    }
+
+    if (Math.random() < 0.05) { // Szok makro (macro.js)
+        triggerMacroShockEvent();
+        return;
+    }
+    if (Math.random() < (macro.election?.campaign ? 0.12 : 0.06)) { // Spółki państwowe (macro.js)
+        triggerStateCompanyEventCycle();
         return;
     }
 
@@ -242,11 +250,11 @@ function triggerMainMarketEventCycle() {
         triggerStartupOfferEvent();
         return;
     }
-    if (Math.random() < 0.03) { // Prywatyzacja
+    if (Math.random() < 0.03 * getRulingParty().privatization) { // Prywatyzacja (wg partii rządzącej)
         triggerStatePrivatizationEvent();
         return;
     }
-    if (Math.random() < 0.02) { // Nacjonalizacja
+    if (Math.random() < 0.02 * getRulingParty().nationalization) { // Nacjonalizacja (wg partii rządzącej)
         triggerNationalizationEvent();
         return;
     }
@@ -326,27 +334,7 @@ function triggerMainMarketEventCycle() {
 function pickEventByCycle(events) {
     const wantPositive = Math.random() < getCyclePositiveEventBias();
     const pool = events.filter(event => (event.type === 'positive') === wantPositive);
-    return getRandomElement(pool.length > 0 ? pool : events);
-}
-
-function triggerDividendEventCycle() {
-    // Ta funkcja wydaje się być przestarzała (mamy system dywidend kwartalnych)
-    // Zostawiam ją, jeśli jest używana w innym miejscu, ale warto to sprawdzić.
-    if (Math.random() <= 0.025) {
-        // ... (kod bez zmian) ...
-    }
-}
-
-function triggerSixthSenseEvent() {
-    // ... (kod bez zmian) ...
-}
-
-const premiumNewsPrompts = [
-    // ... (kod bez zmian) ...
-];
-
-function triggerStateCompanyEventCycle() {
-    // ... (kod bez zmian) ...
+    return pickMacroEvent(pool.length > 0 ? pool : events); // bez powtórek ostatnich zdarzeń (macro.js)
 }
 
 // --- POPRAWIONA WERSJA triggerRescueOfferingEvent ---

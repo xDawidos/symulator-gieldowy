@@ -86,7 +86,7 @@
             onclick="document.body.classList.toggle('sidebar-open')">☰</button>
     <div class="topbar-screen-title">
       <h1>Stock Market Trader Game</h1>
-      <div class="topbar-version">wersja 0.9 development BETA</div>
+      <div class="topbar-version">wersja 0.10.2 makro</div>
     </div>
   </div>
 
@@ -666,6 +666,7 @@
         <div class="bank-ticker" id="state-ticker"></div>
         <nav class="bank-tabs" role="tablist">
             <button class="bank-tab-btn active" data-tab="overview" onclick="switchStateTab('overview')">📊 Przegląd</button>
+            <button class="bank-tab-btn" data-tab="macro" onclick="switchStateTab('macro')">📈 Makro</button>
             <button class="bank-tab-btn" data-tab="taxes" onclick="switchStateTab('taxes')">💰 Podatki</button>
             <button class="bank-tab-btn" data-tab="pension" onclick="switchStateTab('pension')">🏅 Program emerytalny</button>
             <button class="bank-tab-btn" data-tab="interventions" onclick="switchStateTab('interventions')">📜 Działania państwa</button>
@@ -1236,6 +1237,7 @@
 
 <script src="gameCore.js"></script>
     <script src="economy.js"></script>
+    <script src="macro.js"></script>
     <script src="ui-update.js"></script>
     <script src="technologies.js"></script>
     <script src="descriptions.js"></script>

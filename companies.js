@@ -1938,11 +1938,15 @@ function computeQuarterResults(stock) {
     const phaseAdj = PHASE_GROWTH_ADJUSTMENT[stock.corporatePhase] || 0;
     const gdp = Number(economyCycle?.gdpGrowth) || 0;
 
-    const growth = profile.growth / 4 + profile.beta * gdp + health * 0.004 + phaseAdj + gaussianRandom() * 0.02;
+    // Cykl sektora i inflacja (nominalny wzrost przychodów) — macro.js
+    const sectorAdj = typeof getSectorCycleAdj === 'function' ? getSectorCycleAdj(stock) : 0;
+    const inflation = typeof macro === 'object' ? macro.inflation : 0.025;
+    const growth = profile.growth / 4 + profile.beta * gdp + health * 0.004 + phaseAdj + sectorAdj + inflation / 4 * 0.3 + gaussianRandom() * 0.02;
     fundamentals.revenue = Math.max(1000, fundamentals.revenue * (1 + Math.max(-0.25, Math.min(0.25, growth))));
 
     const revenue = fundamentals.revenue;
-    const margin = Math.max(-0.4, Math.min(0.6, profile.margin + health * 0.015 + phaseAdj * 0.5 + profile.beta * gdp * 2));
+    const inflationSqueeze = Math.max(0, inflation - 0.04) * 0.5; // wysoka inflacja zjada marże
+    const margin = Math.max(-0.4, Math.min(0.6, profile.margin + health * 0.015 + phaseAdj * 0.5 + profile.beta * gdp * 2 - inflationSqueeze));
     const fixedExpenses = Math.max(0, Number(stock.fixedExpenses) || 0);
 
     // Działające inwestycje: kwartalny zysk lub strata (investments.js).

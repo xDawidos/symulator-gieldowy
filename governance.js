@@ -3,10 +3,14 @@
 // Każda spółka ma walne zgromadzenie raz w roku gry (terminy rozłożone po kwartałach). Kwartał przed
 // terminem powstaje porządek obrad; fundusz z udziałem ≥ 5% dostaje mail i ustawia głosy w oknie
 // „Walne zgromadzenia”. Głosy liczone wg akcji; rozproszeni akcjonariusze głosują przy frekwencji 40–70%.
-// Rada nadzorcza: ≥ 20% → 1 miejsce, ≥ 35% → 2, > 50% → większość. Aktywizm: od 5% fundusz zgłasza
-// wnioski i prowadzi kampanie o głosy; wynik wpływa na reputację w spółce i zaufanie klientów.
+// Udział gracza (mail, głos, wnioski, kampanie) tylko jako większościowiec (> 50%); poniżej fundusz
+// głosuje „za” w tle. Rada nadzorcza: ≥ 20% → 1 miejsce, ≥ 35% → 2, > 50% → większość (wgląd).
 
-const AGM_PROPOSAL_THRESHOLD = 0.05;
+const AGM_CONTROL_THRESHOLD = 0.5; // gracz bierze udział w walnym tylko jako większościowiec
+
+function canFundControlAgm(stock) {
+    return Boolean(playerFund) && getFundStakePct(stock) > AGM_CONTROL_THRESHOLD;
+}
 const AGM_HISTORY_LIMIT = 4;
 const ACTIVIST_PROPOSALS = {
     raiseDividend: { label: 'Wyższa dywidenda', desc: 'Polityka dywidendy o stopień wyżej.' },
@@ -21,7 +25,8 @@ const ACTIVIST_PROPOSALS = {
 
 function ensureGovernance(stock) {
     if (!stock.governance) {
-        stock.governance = { quartersToAgm: 1 + Math.floor(Math.random() * 4), pendingAgm: null, proposals: [], history: [] };
+        stock.governance = { quartersToAgm: 2 + Math.floor(Math.random() * 4), // pierwsze walne nie w 1. kwartale
+            pendingAgm: null, proposals: [], history: [] };
     }
     return stock.governance;
 }
@@ -81,7 +86,7 @@ function buildAgmAgenda(stock) {
 function createPendingAgm(stock) {
     const gov = ensureGovernance(stock);
     gov.pendingAgm = { items: buildAgmAgenda(stock) };
-    if (playerFund && getFundStakePct(stock) >= AGM_PROPOSAL_THRESHOLD) {
+    if (canFundControlAgm(stock)) {
         addMail({
             sender: CORPORATION_SENDER,
             subject: `🗳️ Walne zgromadzenie ${stock.name} w przyszłym kwartale`,
@@ -124,7 +129,7 @@ function tallyAgmItem(stock, item, holders, retailVoting) {
     for (const holder of holders) {
         if (holder.kind === 'wallet') { votes.abstain += holder.shares; continue; }
         let choice;
-        if (holder.kind === 'player') choice = item.playerVote || 'for';
+        if (holder.kind === 'player') choice = canFundControlAgm(stock) ? item.playerVote || 'for' : 'for';
         else {
             const roll = Math.random();
             choice = roll < 0.05 ? 'abstain' : roll < 0.05 + 0.95 * getVoteForProbability(holder, item, stock) ? 'for' : 'against';
@@ -165,7 +170,7 @@ function holdAgm(stock) {
     gov.history.unshift(record);
     gov.history.length = Math.min(gov.history.length, AGM_HISTORY_LIMIT);
 
-    if (playerFund && getFundStakePct(stock) >= AGM_PROPOSAL_THRESHOLD) {
+    if (canFundControlAgm(stock)) {
         addMail({
             sender: CORPORATION_SENDER,
             subject: `🗳️ Uchwały walnego zgromadzenia ${stock.name}`,
@@ -257,7 +262,7 @@ function processGovernanceQuarter() {
 function setAgmVote(symbol, itemId, vote) {
     const stock = stocks.find(s => s.symbol === symbol);
     const item = stock?.governance?.pendingAgm?.items.find(i => i.id === itemId);
-    if (!item || !['for', 'against', 'abstain'].includes(vote)) return false;
+    if (!item || !['for', 'against', 'abstain'].includes(vote) || !canFundControlAgm(stock)) return false;
     item.playerVote = vote;
     return true;
 }
@@ -265,7 +270,7 @@ function setAgmVote(symbol, itemId, vote) {
 function submitShareholderProposal(symbol, type) {
     const stock = stocks.find(s => s.symbol === symbol);
     if (!stock || !ACTIVIST_PROPOSALS[type]) return false;
-    if (getFundStakePct(stock) < AGM_PROPOSAL_THRESHOLD) { showToast('Wniosek może zgłosić akcjonariusz z co najmniej 5% akcji.', 'warning'); return false; }
+    if (!canFundControlAgm(stock)) { showToast('Wnioski na walne zgłasza akcjonariusz większościowy (> 50%).', 'warning'); return false; }
     const gov = ensureGovernance(stock);
     const agenda = gov.pendingAgm?.items || [];
     if (agenda.some(i => i.by === 'player') || gov.proposals.length) { showToast('Fundusz zgłosił już wniosek na to zgromadzenie.', 'warning'); return false; }
@@ -286,7 +291,7 @@ function getCampaignCost(stock) {
 function runProxyCampaign(symbol, itemId) {
     const stock = stocks.find(s => s.symbol === symbol);
     const item = stock?.governance?.pendingAgm?.items.find(i => i.id === itemId);
-    if (!item || item.by !== 'player') { showToast('Kampanię prowadzi się dla wniosku funduszu na zaplanowanym walnym.', 'warning'); return false; }
+    if (!item || item.by !== 'player' || !canFundControlAgm(stock)) { showToast('Kampanię prowadzi większościowiec dla wniosku funduszu na zaplanowanym walnym.', 'warning'); return false; }
     if (item.campaign) { showToast('Kampania już trwa.', 'default'); return false; }
     const cost = getCampaignCost(stock);
     if (playerCash < cost) { showToast(`Kampania kosztuje ${formatZl(cost, 0)} — za mało gotówki funduszu.`, 'error'); return false; }

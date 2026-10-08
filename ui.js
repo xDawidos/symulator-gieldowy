@@ -5432,7 +5432,8 @@ function updateStateModalContent() {
         ['Skarb Państwa', formatZl(governmentTreasury, 0)],
         ['Faza koniunktury', escapeHtml(phase.name || '—')],
         ['Stopa bazowa BC', `${((centralBank.baseInterestRate || 0) * 100).toFixed(2)}%`],
-        ['Urząd antymonopolowy', `poziom ${antitrustOffice.level}/5`],
+        ['Inflacja', `${(macro.inflation * 100).toFixed(1)}%`],
+        ['Rząd', escapeHtml(getRulingParty().name)],
         ['Spółki państwowe', stocks.filter(s => s.isStateOwned && !s.isBankrupt).length]
     ]);
 
@@ -5450,6 +5451,8 @@ function updateStateModalContent() {
                 <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">🏭</span><div><h4>Spółki Skarbu Państwa</h4><span class="bank-card-type">nacjonalizacje i prywatyzacje</span></div></header>
                     <ul class="list-plain text-sm">${stocks.filter(s => s.isStateOwned && !s.isBankrupt).slice(0, 8).map(s => `<li>${escapeHtml(s.name)} — ${((s.stateOwnershipPct || 0) * 100).toFixed(0)}%</li>`).join('') || '<li class="text-muted">Brak.</li>'}</ul></article>
             </div>`;
+    } else if (stateTab === 'macro') {
+        body.innerHTML = renderMacroPanel();
     } else if (stateTab === 'taxes') {
         body.innerHTML = `
             <table class="asset-mini-table w-full">
@@ -5829,16 +5832,16 @@ function renderGovernanceDetail(stock) {
     const pct = getFundStakePct(stock);
     const seats = getBoardSeats(stock);
     const insight = getBoardInsight(stock);
-    const canPropose = pct >= AGM_PROPOSAL_THRESHOLD;
+    const canPropose = canFundControlAgm(stock);
     const last = gov.history[0];
 
     const agenda = gov.pendingAgm ? gov.pendingAgm.items.map(item => `
         <li class="gov-item ${item.kind === 'activist' ? 'is-activist' : ''}">
             <div><strong>${escapeHtml(item.label)}</strong> <span class="text-xs text-muted">${item.kind === 'activist' ? 'wniosek akcjonariusza' : 'wniosek zarządu'}</span></div>
             <div class="d-flex gap-2 items-center">
-                <select aria-label="Głos funduszu" onchange="setAgmVote('${stock.symbol}', '${item.id}', this.value)">
+                ${canPropose ? `<select aria-label="Głos funduszu" onchange="setAgmVote('${stock.symbol}', '${item.id}', this.value)">
                     ${[['for', 'Za'], ['against', 'Przeciw'], ['abstain', 'Wstrzymuję się']].map(([value, label]) => `<option value="${value}" ${item.playerVote === value ? 'selected' : ''}>${label}</option>`).join('')}
-                </select>
+                </select>` : '<span class="text-xs text-muted">fundusz: za</span>'}
                 ${item.by === 'player' ? (item.campaign ? '<span class="text-xs text-info">📣 kampania trwa</span>'
                     : `<button class="btn-xs" onclick="runProxyCampaign('${stock.symbol}', '${item.id}')">📣 Kampania (${formatZl(getCampaignCost(stock), 0)})</button>`) : ''}
             </div>
@@ -5864,9 +5867,50 @@ function renderGovernanceDetail(stock) {
         ${canPropose ? `<div class="bank-card-form">
             <select id="gov-proposal-type" aria-label="Rodzaj wniosku">${Object.entries(ACTIVIST_PROPOSALS).map(([id, p]) => `<option value="${id}" title="${escapeHtml(p.desc)}">${p.label}</option>`).join('')}</select>
             <button onclick="submitShareholderProposal('${stock.symbol}', document.getElementById('gov-proposal-type').value)">Zgłoś na walne</button>
-        </div>` : '<p class="text-muted text-sm">Wnioski zgłasza akcjonariusz z co najmniej 5% akcji.</p>'}
+        </div>` : '<p class="text-muted text-sm">Głosuje, zgłasza wnioski i prowadzi kampanie tylko akcjonariusz większościowy (> 50%). Poniżej fundusz głosuje „za” wnioskami zarządu.</p>'}
         ${insight ? `<h4>Wgląd rady nadzorczej</h4>
             <p class="text-sm">Prognoza wyniku kwartału: <strong class="${insight.forecast >= 0 ? 'text-up' : 'text-down'}">${formatZl(insight.forecast, 0)}</strong></p>
             <ul class="list-plain text-sm">${insight.plans.map(p => `<li>• ${escapeHtml(p)}</li>`).join('') || '<li class="text-muted">Brak planów inwestycyjnych.</li>'}</ul>` : ''}
         ${history ? `<h4>Historia uchwał</h4>${history}` : ''}`;
+}
+
+// ---------- Państwo: panel Makro (0.10.2) ----------
+function renderSparkline(values, { width = 160, height = 36 } = {}) {
+    if (values.length < 2) return '<span class="text-xs text-muted">za mało danych</span>';
+    const min = Math.min(...values), max = Math.max(...values);
+    const span = max - min || 1;
+    const points = values.map((value, i) => `${(i / (values.length - 1) * width).toFixed(1)},${(height - 3 - (value - min) / span * (height - 6)).toFixed(1)}`).join(' ');
+    return `<svg class="macro-spark" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true"><polyline points="${points}"/></svg>`;
+}
+
+function renderMacroPanel() {
+    const pct = (value, digits = 1) => `${(value * 100).toFixed(digits)}%`;
+    const series = key => macro.history.map(entry => entry[key]);
+    const card = (icon, title, value, sub, key) => `
+        <article class="bank-card macro-card"><header class="bank-card-head"><span class="bank-card-icon">${icon}</span><div><h4>${title}</h4><span class="bank-card-type">${sub}</span></div></header>
+            <div class="macro-value">${value}</div>${renderSparkline(series(key))}</article>`;
+    const decision = macro.lastDecision;
+    const election = macro.election;
+    const sectors = Object.entries(macro.sectorCycles).sort(([a], [b]) => a.localeCompare(b, 'pl'));
+    return `
+        <div class="bank-grid">
+            ${card('🔥', 'Inflacja', pct(macro.inflation), `cel BC ${pct(INFLATION_TARGET)}`, 'inflation')}
+            ${card('👷', 'Bezrobocie', pct(macro.unemployment), `naturalne ${pct(NATURAL_UNEMPLOYMENT)}`, 'unemployment')}
+            ${card('🏭', 'PKB r/r', pct(macro.gdpAnnual), escapeHtml(getEconomyPhaseInfo().name), 'gdp')}
+            ${card('🏛️', 'Stopa referencyjna', pct(centralBank.baseInterestRate, 2), `kredyty ${pct(LOAN_INTEREST_RATE, 2)} · lokaty ${pct(DEPOSIT_INTEREST_RATE, 2)}`, 'rate')}
+        </div>
+        <div class="bank-grid mt-3">
+            <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">📰</span><div><h4>Posiedzenia Banku Centralnego</h4><span class="bank-card-type">co kwartał · prezes ${escapeHtml(centralBank.ceo?.name || '—')}</span></div></header>
+                <p class="text-sm">Ostatnia decyzja: <strong>${decision ? describeRateChange(decision.change) : '—'}</strong>${decision && Math.abs(decision.surprise) >= 0.001 ? ' <span class="text-warn">(niespodzianka)</span>' : ''}</p>
+                <p class="text-sm">Oczekiwania analityków na następne posiedzenie: <strong>${escapeHtml(macro.expectation?.label || '—')}</strong></p>
+                <p class="text-xs text-muted">Cechy prezesa: ${(centralBank.ceo?.traits || []).map(t => escapeHtml(t.name)).join(', ') || 'brak'}. Rynek reaguje mocniej na niespodziankę niż na decyzję zgodną z oczekiwaniami.</p></article>
+            <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">🗳️</span><div><h4>Polityka</h4><span class="bank-card-type">${escapeHtml(getRulingParty().name)}</span></div></header>
+                <p class="text-sm">${election.campaign ? '<strong class="text-warn">Trwa kampania wyborcza.</strong>' : `Wybory za ${election.quartersLeft} kw.`}</p>
+                <p class="text-xs text-muted">Prywatyzacje ×${getRulingParty().privatization} · nacjonalizacje ×${getRulingParty().nationalization} · dotacje ×${getRulingParty().subsidies}</p></article>
+        </div>
+        <h4>Cykle sektorów</h4>
+        <div class="macro-sectors">${sectors.map(([sector, cycle]) => {
+            const phase = SECTOR_CYCLE_PHASES[cycle.phase];
+            return `<div class="macro-sector is-${cycle.phase}"><span>${phase.icon} ${escapeHtml(sector)}</span><strong>${phase.name}</strong><span class="text-xs text-muted">${cycle.quartersLeft} kw.</span></div>`;
+        }).join('')}</div>`;
 }

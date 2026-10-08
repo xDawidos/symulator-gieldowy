@@ -4316,3 +4316,13 @@ img, svg, video { max-width: 100%; }
 .gov-item.is-activist { border-left: 3px solid var(--accent-warning, #d4a017); }
 .gov-history { margin-bottom: var(--space-2); font-size: 13px; }
 @media (max-width: 700px) { .gov-layout { grid-template-columns: 1fr; } .gov-list { flex-direction: row; overflow-x: auto; } }
+
+/* ===================== PANEL MAKRO ===================== */
+.macro-value { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; margin: var(--space-1) 0; }
+.macro-spark { width: 100%; height: 36px; }
+.macro-spark polyline { fill: none; stroke: var(--accent-info); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.macro-sectors { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: var(--space-2); }
+.macro-sector { display: grid; grid-template-columns: 1fr auto; gap: 2px var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-elevated-2); font-size: 13px; }
+.macro-sector.is-boom { border-left: 3px solid var(--color-up); }
+.macro-sector.is-decline { border-left: 3px solid var(--color-down); }
+.macro-sector.is-peak, .macro-sector.is-trough { border-left: 3px solid var(--text-muted); }

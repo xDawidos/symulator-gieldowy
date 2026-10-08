@@ -17,8 +17,8 @@ const LEGACY_SAVE_KEYS = ['gra_inwestycyjna_dawid_save_v2', 'gra_inwestycyjna_da
 // v6: skrzynka mailowa, burmistrz i kampania, festyn, oferta prywatyzacyjna. v4/v5 migrują przy wczytaniu.
 // v7: obligacje i oferty (czas gry, kupony), depozyty i księgi banków, zastawy funduszy, giełdy elitarne.
 // v8: klienci z charakterami i rynek wtórny JU (migracja typów klientów przy wczytaniu).
-const SAVE_FORMAT_VERSION = 9;
-const SUPPORTED_SAVE_VERSIONS = [4, 5, 6, 7, 8, 9];
+const SAVE_FORMAT_VERSION = 10;
+const SUPPORTED_SAVE_VERSIONS = [4, 5, 6, 7, 8, 9, 10];
 
 let lastSaveReport = null;
 let saveDisabledUntilReload = false;
@@ -114,6 +114,7 @@ function buildSaveSnapshot() {
         paymentJournal: paymentJournal.slice(-100),
         paymentTotals,
         economyCycle,
+        macro,
         playerProfile,
         playerFund,
         corporation,
@@ -122,6 +123,7 @@ function buildSaveSnapshot() {
         investmentPool,
         statePension,
         bridgeLoanOffers,
+        rescueOffer,
         allBonds,
         activeBonds,
         cityInvestment,
@@ -370,6 +372,7 @@ function applySaveSnapshot(snapshot) {
     if (snapshot.investmentPool && typeof snapshot.investmentPool === 'object') Object.assign(investmentPool, snapshot.investmentPool);
     statePension = snapshot.statePension && Array.isArray(snapshot.statePension.history) ? snapshot.statePension : { history: [], lastRanking: [] };
     bridgeLoanOffers = Array.isArray(snapshot.bridgeLoanOffers) ? snapshot.bridgeLoanOffers : [];
+    rescueOffer = snapshot.rescueOffer && !snapshot.rescueOffer.closed ? snapshot.rescueOffer : null; // oferta emisji ratunkowej dla funduszu
 
     // Obligacje (v7; wcześniej nie były zapisywane). Stare rekordy bez czasu gry migruje checkBondMaturities.
     allBonds.length = 0;
@@ -405,6 +408,8 @@ function applySaveSnapshot(snapshot) {
     }
 
     // Koniunktura i model rynku (zapisy v2 nie miały tych danych — migracja).
+    macro = snapshot.macro && typeof snapshot.macro === 'object' ? snapshot.macro : createMacroState(); // v10: makro
+    ensureMacroState();
     if (snapshot.economyCycle && ECONOMY_PHASES[snapshot.economyCycle.phase]) {
         economyCycle = snapshot.economyCycle;
     } else {

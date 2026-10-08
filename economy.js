@@ -144,7 +144,8 @@ function getValuationMultiplier(stock) {
     const cycleMult = 1 + profile.beta * (phaseMult - 1);
     const baseRate = Number(centralBank?.baseInterestRate) || 0.05;
     const rateMult = 1 - profile.rateSens * (baseRate - 0.05) * 4;
-    return Math.max(0.4, Math.min(1.8, cycleMult * rateMult));
+    const sectorMult = typeof getSectorValuationFactor === 'function' ? getSectorValuationFactor(stock) : 1; // cykl sektora (macro.js)
+    return Math.max(0.4, Math.min(1.8, cycleMult * rateMult * sectorMult));
 }
 
 /** Szansa na zdarzenie pozytywne zależnie od fazy (eventy rynkowe). */
@@ -901,53 +902,6 @@ function checkTBillMaturities() {
             }
         }
     });
-}
-
-function runCentralBankAI() {
-    // Decyzje podejmowane rzadziej (np. 15% szans co kwartał)
-    if (Math.random() > 0.15) return;
-
-    const avgHealth = stocks.filter(s=>!s.assetType).reduce((sum, s) => sum + s.financialHealth, 0) / stocks.filter(s=>!s.assetType).length;
-    let interestRateChange = 0;
-    let reserveRequirementChange = 0;
-    const ceoTraits = centralBank.ceo.traits.map(t => t.name); // Pobierz nazwy cech
-
-    // Analiza rynku: faza cyklu koniunkturalnego (przegrzanie → podwyżki, recesja → obniżki)
-    const isOverheated = economyCycle.phase === 'overheating' || (economyCycle.phase === 'expansion' && economyCycle.index > 80);
-    const isSlowdown = economyCycle.phase === 'recession' || (economyCycle.phase === 'recovery' && avgHealth < -0.5);
-
-    // Podstawowa decyzja na podstawie rynku
-    if (isOverheated) { interestRateChange = 0.005; reserveRequirementChange = 0.01; }
-    else if (isSlowdown) { interestRateChange = -0.005; reserveRequirementChange = -0.01; }
-
-    // Modyfikacje na podstawie cech CEO
-    if (ceoTraits.includes("Jastrząb")) interestRateChange += 0.003;
-    if (ceoTraits.includes("Gołąb")) interestRateChange -= 0.003;
-    if (ceoTraits.includes("Stabilizator")) { interestRateChange *= 0.2; reserveRequirementChange *= 0.2; } // Znacznie mniejsze zmiany
-    if (ceoTraits.includes("Regulator")) reserveRequirementChange += 0.005;
-    if (ceoTraits.includes("Deregulator")) reserveRequirementChange -= 0.005;
-    if (ceoTraits.includes("Partyjniak") && Math.random() < 0.3) { // 30% szans na losową, nieuzasadnioną decyzję
-        interestRateChange = getRandomInRange(-0.007, 0.007);
-        reserveRequirementChange = getRandomInRange(-0.015, 0.015);
-        logEvent("🏛️ Niespodziewana decyzja Prezesa BC! Zmiana polityki monetarnej niezgodna z trendami.", 'warning');
-    }
-
-    // Zastosuj zmiany
-    if (Math.abs(interestRateChange) > 0.001 || Math.abs(reserveRequirementChange) > 0.001) {
-        centralBank.baseInterestRate += interestRateChange;
-        centralBank.reserveRequirement += reserveRequirementChange;
-
-        // Ograniczenia
-        centralBank.baseInterestRate = Math.max(0.005, Math.min(0.15, centralBank.baseInterestRate));
-        centralBank.reserveRequirement = Math.max(0.05, Math.min(0.25, centralBank.reserveRequirement));
-
-        logEvent(`🏛️ Bank Centralny zmienia politykę! Stopa bazowa: ${(centralBank.baseInterestRate * 100).toFixed(1)}%, Rezerwy: ${(centralBank.reserveRequirement * 100).toFixed(0)}%.`, 'market');
-        updateInterestRates();
-        showToast("Bank Centralny zmienił politykę monetarną!", 'default', 6000);
-    }
-
-    fundStateOwnedCompanies();
-   
 }
 
 function generateCentralBankGovernor() {

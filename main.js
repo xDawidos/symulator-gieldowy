@@ -372,12 +372,13 @@ gameTimers.weekly = setInterval(() => {
         processPublicInvestmentFunding(); // BC → spółki państwowe, miasto → spółki miejskie (investments.js)
         processGovernanceQuarter(); // walne zgromadzenia (governance.js)
         advanceEconomyCycle(); // nowa faza koniunktury przed raportami
+        advanceMacroQuarter(); // inflacja, bezrobocie, cykle sektorów, wybory (macro.js)
         processCityQuarterly(); // festyn raz w roku (city.js)
         processFinancialReports(); // zawiera koszty R&D, wynik kontraktów, pozycje okresu i dywidendy
         updateInfluence();
         updateCeoTenureAndAge(); // Zmieniona nazwa, ale to samo
         updateAnalyticalProperties();
-        runCentralBankAI(); // Z bazy main.js
+        runCentralBankAI(); // posiedzenie BC, gazeta, rezerwy, dotacje (macro.js)
         aiCompetitors.forEach(ai => {
             // Sprawdź, czy to "prawdziwy" bot (nie market maker) i czy funkcja istnieje
             if (ai.skillPoints !== undefined && typeof aiUseMediaInfluence === 'function') { 
@@ -808,6 +809,7 @@ function createNewWorld() {
     // Koniunktura startowa, fundamenty spółek (kalibracja przychodów do obecnych wycen)
     // i struktura własności (pakiety insiderów).
     economyCycle = createEconomyCycle(getRandomElement(['recovery', 'expansion']));
+    macro = createMacroState(); // wskaźniki makro, cykle sektorów, wybory (macro.js)
     updateMarketTrendFromCycle();
     stocks.forEach(stock => {
         if (stock.balanceSheet && stock.assetType !== 'Startup') initializeFundamentals(stock, true);

@@ -391,6 +391,8 @@ function computeTrustTarget() {
 
     const extraEmissions = Math.max(0, current.emissions - MAX_EMISSIONS_PER_PERIOD);
     score -= extraEmissions * 8;
+    // Klienci porównują wynik z lokatą i inflacją (macro.js).
+    if (typeof getMacroTrustPenalty === 'function') score -= getMacroTrustPenalty(partial.fundReturn, current.elapsedMs);
 
     return Math.max(0, Math.min(100, score));
 }

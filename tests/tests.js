@@ -2089,15 +2089,16 @@ group('Walne zgromadzenia i aktywizm (etap G3)', () => {
 
     test('kalendarz: porządek obrad kwartał wcześniej, potem zgromadzenie i mail', () => {
         const a = worldG3();
-        fundHolds(a, 600);
-        ensureGovernance(a).quartersToAgm = 2;
+        fundHolds(a, 6000);
+        assert(ensureGovernance(a).quartersToAgm >= 2, 'pierwsze walne nie w 1. kwartale');
+        a.governance.quartersToAgm = 2;
         processGovernanceQuarter();
         assert(a.governance.pendingAgm?.items.length >= 2, 'porządek obrad');
         assert(mailbox.messages[0].action?.type === 'agm', 'mail z porządkiem');
         processGovernanceQuarter();
         assert(!a.governance.pendingAgm && a.governance.history.length === 1 && a.governance.quartersToAgm === 4, 'zgromadzenie');
         const turnout = a.governance.history[0].turnout;
-        assert(turnout >= 0.4 && turnout <= 0.75, `frekwencja ${turnout}`);
+        assert(turnout >= 0.6 + 0.4 * 0.4 - 1e-9 && turnout <= 0.6 + 0.4 * 0.7 + 1e-9, `frekwencja ${turnout}`); // fundus 60% + rozproszeni 40–70%
     });
 
     test('głosy wg udziałów: większość funduszu przesądza uchwałę', () => {
@@ -2121,15 +2122,17 @@ group('Walne zgromadzenia i aktywizm (etap G3)', () => {
         assert(a.dividendPolicy === 'Balanced' && a.reputation.player > 0, `polityka ${a.dividendPolicy}`);
     });
 
-    test('poniżej 5% nie można zgłosić wniosku', () => {
+    test('bez większości fundusz nie zgłasza wniosków i głosuje „za”', () => {
         const a = worldG3();
-        fundHolds(a, 300);
+        fundHolds(a, 4000);
+        createPendingAgm(a);
+        assert(!setAgmVote('AAA', 'dividend', 'against'), 'brak głosu');
         assert(!submitShareholderProposal('AAA', 'replaceCeo'), 'odmowa');
     });
 
     test('kampania o głosy kosztuje fundusz i zwiększa poparcie', () => {
         const a = worldG3();
-        fundHolds(a, 600);
+        fundHolds(a, 6000);
         createPendingAgm(a);
         submitShareholderProposal('AAA', 'replaceCeo');
         const item = a.governance.pendingAgm.items.find(i => i.by === 'player');
@@ -2146,6 +2149,115 @@ group('Walne zgromadzenia i aktywizm (etap G3)', () => {
         const shares = a.totalShares;
         runBuyback(a);
         assert(a.totalShares < shares && a.sharesHeld <= a.totalShares, 'skup');
+    });
+});
+
+group('Makroekonomia (0.10.2 M1)', () => {
+    function worldM1() {
+        const a = makeCompany('AAA', { sector: ['Nieruchomości'] });
+        const b = makeCompany('BBB', { sector: ['Bankowość'] });
+        resetWorld([a, b]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        macro = createMacroState();
+        centralBank.baseInterestRate = 0.05;
+        centralBank.ceo = { name: 'Prezes BC', traits: [] };
+        updateInterestRates();
+        return { a, b };
+    }
+
+    test('wysoka inflacja → podwyżka stóp; kredyty i lokaty drożeją; gazeta w poczcie', () => {
+        worldM1();
+        macro.inflation = 0.08;
+        macro.expectation = { change: 0, label: 'bez zmian' };
+        const loan = LOAN_INTEREST_RATE, deposit = getDepositRate();
+        const mails = mailbox.messages.length;
+        runCentralBankMeeting();
+        assert(centralBank.baseInterestRate > 0.05 && LOAN_INTEREST_RATE > loan && getDepositRate() > deposit, `stopa ${centralBank.baseInterestRate}`);
+        assert(mailbox.messages.length > mails && /Gazeta Ekonomiczna/.test(mailbox.messages[0].subject), 'wydanie gazety');
+    });
+
+    test('niespodzianka podwyżki przecenia sektor wrażliwy na stopy mocniej niż banki', () => {
+        const { a, b } = worldM1();
+        macro.inflation = 0.08;
+        macro.expectation = { change: -0.005, label: 'obniżka' };
+        const original = applyPriceEffect;
+        const effects = {};
+        applyPriceEffect = (symbol, value) => { effects[symbol] = value; };
+        runCentralBankMeeting();
+        applyPriceEffect = original;
+        assert(effects.AAA < 0 && (effects.BBB === undefined || effects.BBB > effects.AAA), JSON.stringify(effects));
+    });
+
+    test('decyzja zgodna z oczekiwaniami nie rusza kursów', () => {
+        worldM1();
+        macro.inflation = INFLATION_TARGET; macro.unemployment = NATURAL_UNEMPLOYMENT;
+        centralBank.baseInterestRate = getTaylorRate();
+        macro.expectation = { change: 0, label: 'bez zmian' };
+        let calls = 0;
+        const original = applyPriceEffect;
+        applyPriceEffect = () => { calls++; };
+        runCentralBankMeeting();
+        applyPriceEffect = original;
+        assert(calls === 0 && macro.lastDecision.change === 0, `wywołania ${calls}`);
+    });
+
+    test('wskaźniki: boom podnosi inflację i obniża bezrobocie', () => {
+        worldM1();
+        economyCycle.index = 90; economyCycle.gdpGrowth = 0.018;
+        const inflation = macro.inflation, unemployment = macro.unemployment;
+        const gauss = gaussianRandom;
+        gaussianRandom = () => 0;
+        advanceMacroQuarter();
+        gaussianRandom = gauss;
+        assert(macro.inflation > inflation && macro.unemployment < unemployment, `${macro.inflation} / ${macro.unemployment}`);
+        assert(macro.history.length === 1, 'historia');
+    });
+
+    test('cykl sektora zmienia wycenę i wzrost', () => {
+        const { a } = worldM1();
+        macro.sectorCycles['Nieruchomości'] = { phase: 'boom', quartersLeft: 3 };
+        const boom = getValuationMultiplier(a);
+        assert(getSectorCycleAdj(a) > 0, 'wzrost w boomie');
+        macro.sectorCycles['Nieruchomości'] = { phase: 'decline', quartersLeft: 3 };
+        assert(getValuationMultiplier(a) < boom && getSectorCycleAdj(a) < 0, 'spadek');
+    });
+
+    test('wybory: zmiana władzy zmienia politykę wobec spółek państwowych', () => {
+        worldM1();
+        macro.election = { quartersLeft: 1, ruling: 'market', campaign: true };
+        economyCycle.phase = 'recession';
+        const random = Math.random;
+        Math.random = () => 0.1;
+        advanceElectionCycle();
+        Math.random = random;
+        assert(macro.election.ruling === 'state' && macro.election.quartersLeft === ELECTION_INTERVAL_QUARTERS, 'nowy rząd');
+        assert(getRulingParty().nationalization > 1, 'więcej nacjonalizacji');
+    });
+
+    test('zdarzenie spółek państwowych: realny skutek i brak natychmiastowej powtórki', () => {
+        const { a } = worldM1();
+        a.isStateOwned = true; a.stateOwnershipPct = 0.6;
+        governmentTreasury = 1e9;
+        const first = triggerStateCompanyEventCycle();
+        assert(first && macro.recentEvents[0] === first.id, 'zdarzenie');
+        const pool = STATE_COMPANY_EVENTS.filter(e => e.type === first.type);
+        const next = pickMacroEvent(pool);
+        assert(next.id !== first.id, 'bez powtórki');
+    });
+
+    test('klienci: fundusz przegrywający z lokatą traci zaufanie', () => {
+        worldM1();
+        assert(getMacroTrustPenalty(0, BASE_DELAYS.quarterly * 4) > 0, 'kara');
+        assert(getMacroTrustPenalty(0.5, BASE_DELAYS.quarterly * 4) === 0, 'bez kary przy dobrym wyniku');
+    });
+
+    test('zapis v10 zachowuje stan makro', () => {
+        worldM1();
+        macro.inflation = 0.061; macro.election.ruling = 'state';
+        const snapshot = JSON.parse(JSON.stringify(buildSaveSnapshot()));
+        macro = createMacroState();
+        applySaveSnapshot(snapshot);
+        assert(snapshot.version === 10 && macro.inflation === 0.061 && macro.election.ruling === 'state', 'odtworzone');
     });
 });
 
