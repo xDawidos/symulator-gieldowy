@@ -1567,88 +1567,7 @@ function getConstructionCatalogForCompany(company, options = {}) {
 }
 
 // --- ETFy ---
-const etfs = [
-    {
-        name: 'Tech Sektor ETF',
-        symbol: 'TSX',
-        description: 'Fundusz naśladujący wyniki spółek z sektora Technologia.',
-        targetSectors: ['Technologia'],
-        price: 0,
-        priceHistory: []
-    },
-    {
-        name: 'Bankowość Sektor ETF',
-        symbol: 'FSX',
-        description: 'Fundusz naśladujący wyniki spółek z sektora Bankowość i Finanse.',
-        targetSectors: ['Bankowość'],
-        price: 0,
-        priceHistory: []
-    },
-    {
-        name: 'Przemysł Sektor ETF',
-        symbol: 'PSX',
-        description: 'Fundusz naśladujący wyniki spółek z sektora Przemysł.',
-        targetSectors: ['Przemysł'],
-        price: 0,
-        priceHistory: []
-    },
-    {
-        name: 'Energia Sektor ETF',
-        symbol: 'ESX',
-        description: 'Fundusz naśladujący wyniki spółek z sektora Energia.',
-        targetSectors: ['Energia'],
-        price: 0,
-        priceHistory: []
-    },
-    {
-        name: 'Nieruchomości Sektor ETF',
-        symbol: 'NSX',
-        description: 'Fundusz naśladujący wyniki spółek z sektora Nieruchomości.',
-        targetSectors: ['Nieruchomości'],
-        price: 0,
-        priceHistory: []
-    },
-    {
-        name: 'Chemia Sektor ETF',
-        symbol: 'CHSX',
-        description: 'Fundusz naśladujący wyniki spółek z sektora Chemia.',
-        targetSectors: ['Chemia'],
-        price: 0,
-        priceHistory: []
-    },
-    {
-        name: 'Medycyna Sektor ETF',
-        symbol: 'MHX',
-        description: 'Fundusz naśladujący wyniki spółek z sektora Medycyna.',
-        targetSectors: ['Medycyna'],
-        price: 0,
-        priceHistory: []
-    },
-    {
-        name: 'Turystyka Sektor ETF',
-        symbol: 'TRSX',
-        description: 'Fundusz naśladujący wyniki spółek z sektora tursytyka.',
-        targetSectors: ['Turystyka'],
-        price: 0,
-        priceHistory: []
-    },
-    {
-        name: 'Dobra konsumpcyjne Sektor ETF',
-        symbol: 'DKX',
-        description: 'Fundusz naśladujący wyniki spółek z sektora Dobra konsumpcyjne.',
-        targetSectors: ['Dobra konsumpcyjne'],
-        price: 0,
-        priceHistory: []
-    },
-    {
-        name: 'Usługi Sektor ETF',
-        symbol: 'USX',
-        description: 'Fundusz naśladujący wyniki spółek z sektora Usługi.',
-        targetSectors: ['Usługi'],
-        price: 0,
-        priceHistory: []
-    }
-];
+const etfs = []; // ETF-y z portfelami tworzy initializeEtfs() (etf.js)
 
 
 
@@ -2137,6 +2056,9 @@ function reviewDividendPolicy(stock) {
     if ((economyCycle.phase === 'recession' || health < -1) && index > 0) next = index - 1;
     else if ((economyCycle.phase === 'expansion' || economyCycle.phase === 'overheating') && health > 2 && index < 2) next = index + 1;
     else if (stock.corporatePhase === CORPORATE_PHASES.GROWTH && index > 0) next = 0;
+    else if (getRatePressureOnDividend(stock) > 0 && index < 2) next = index + 1; // wysokie stopy: akcjonariusze chcą wypłat
+    // Arystokrata pilnuje serii: nie obniża polityki bez recesji.
+    if (stock.isDividendAristocrat && next < index && economyCycle.phase !== 'recession') next = index;
 
     if (next !== index) {
         setCompanyDividendPolicy(stock, DIVIDEND_POLICY_ORDER[next]);
@@ -2185,6 +2107,7 @@ function payCompanyDividend(stock, dividendPerShare, purpose = 'Dywidenda') {
     recordPayment(stock, 'external:akcjonariusze', total, purpose);
 
     stock.lastDividend = { dps, total, paidAt: Date.now(), yield: dps / Math.max(0.01, stock.price) };
+    recordDividendPayment(stock, dps);
     payDividendToShareholders(stock, dps);
     return total;
 }
@@ -2488,6 +2411,7 @@ function processFinancialReports() {
         // Dywidenda: zarząd może zmienić strategię, potem ogłasza wypłatę z zysku kwartału.
         reviewDividendPolicy(stock);
         declareQuarterDividend(stock, reportedQuarterlyEarnings);
+        updateDividendStreak(stock); // seria wypłat i status arystokraty (dividends.js)
 
         // Aktualizacja zmienności (bez zmian)
         const baseVolatility = initialStocks.find(s => s.symbol === stock.symbol)?.volatilityFactor || stock.volatilityFactor;
@@ -2622,6 +2546,7 @@ function resolveMerger(stock1, stock2, process) {
             // Holdingi i Banki
             stocks.filter(s => s.assetType === 'Holding' && s.holdingPortfolio[target.symbol]).forEach(h => h.cash += (h.holdingPortfolio[target.symbol].quantity * pricePerShare));
             commercialBanks.filter(b => b.stockPortfolio[target.symbol]).forEach(b => b.cash += (b.stockPortfolio[target.symbol].shares * pricePerShare));
+            settleEtfHoldings(target.symbol, pricePerShare); // pakiety ETF-ów (etf.js)
             // Fundusze botów, konto prywatne gracza i inne spółki z pakietami
             for (const manager of corporation?.managers || []) {
                 const held = manager.fund?.portfolio?.[target.symbol]?.shares || 0;
@@ -4896,11 +4821,11 @@ function updateResearchInstitutes() {
         const marketPositionTechs = totalTechsByType['wzmacnianie pozycji na rynku'];
         volatilityModifier -= (marketPositionTechs * 0.005); // -0.5% do zmienności za każdą taką tech.
         
-        // Zastosuj efekty
-        stock.price += priceBonus;
-        stock.financialHealth += healthBonus;
-        stock.volatilityFactor *= volatilityModifier;
-        if(stock.volatilityFactor < 0.1) stock.volatilityFactor = 0.1;
+        // Zastosuj efekty: procentowy dryf ceny i stałe (nieskładane) modyfikatory.
+        stock.price *= 1 + priceBonus * 0.002;
+        stock.financialHealth = Math.min(5, stock.financialHealth + healthBonus * 0.01);
+        if (!Number.isFinite(stock.baseVolatilityFactor)) stock.baseVolatilityFactor = stock.volatilityFactor;
+        stock.volatilityFactor = Math.max(0.1, stock.baseVolatilityFactor * volatilityModifier);
     });
 }
 
@@ -5580,7 +5505,9 @@ function applyPriceEffect(stockSymbol, percentageChange, eventType, eventCategor
         stock.price = 0.01;
     }
 
-    stock.volatilityFactor *= 1.1; // Każde zdarzenie lekko zwiększa zmienność
+    // Każde zdarzenie lekko zwiększa zmienność — najwyżej do 2× zmienności bazowej (bez narastania w nieskończoność).
+    if (!Number.isFinite(stock.baseVolatilityFactor)) stock.baseVolatilityFactor = stock.volatilityFactor;
+    stock.volatilityFactor = Math.min(stock.baseVolatilityFactor * 2, stock.volatilityFactor * 1.05);
 
     console.log(`Efekt cenowy dla ${stock.name}: ${oldPrice.toFixed(2)} -> ${stock.price.toFixed(2)} (finalna zmiana: ${(finalPercentageChange * 100).toFixed(2)}%)`);
 }
@@ -5633,7 +5560,7 @@ function checkForPotentialMA() {
         }
     } else if (initiator.assetType === 'Holding') {
         checkChance = 0.10;
-        targetFilter = (target) => target.sector.some(s => initiator.specializationSectors.includes(s));
+        targetFilter = (target) => (target.sector || []).some(s => (initiator.specializationSectors || initiator.sector || []).includes(s));
     } else if (initiator.type === BANK_TYPES.INVESTMENT) {
         checkChance = 0.12;
         preferredType = 'fuzja'; 
@@ -6102,6 +6029,8 @@ function removeStockFromGame(symbol) {
         }
     });
 
+    if (typeof settleEtfHoldings === 'function') settleEtfHoldings(symbol, 0); // ETF-y tracą pakiet (bankructwo)
+
     console.log(`[M&A] Spółka ${symbol} została całkowicie usunięta z gry.`);
 }
 
@@ -6521,7 +6450,7 @@ function payDividendToShareholders(stock, dividendPerShare) {
                 adjustBalanceSheet(parentStock, { assets: totalDividendFromSubsidiary, retainedEarnings: totalDividendFromSubsidiary });
             }
             logEvent(`💸 Spółka zależna ${stock.name} przekazuje ${totalDividendFromSubsidiary.toFixed(2)} PLN dywidendy do ${parentStock.name}.`, 'company');
-            stock.price -= dividendPerShare;
+            stock.price = Math.max(stock.price * 0.9, stock.price - dividendPerShare); // odcięcie dywidendy (najwyżej −10%)
             if (stock.price < 0.01) stock.price = 0.01;
             return;
         }
@@ -6604,7 +6533,7 @@ function payDividendToShareholders(stock, dividendPerShare) {
     }
 
     // 3. Spadek ceny akcji (odcięcie dywidendy)
-    stock.price -= dividendPerShare;
+    stock.price = Math.max(stock.price * 0.9, stock.price - dividendPerShare); // odcięcie dywidendy (najwyżej −10%)
     if (stock.price < 0.01) stock.price = 0.01;
     
     console.log(`[Dywidenda] Wypłacono dywidendę ${dividendPerShare.toFixed(2)} dla ${stock.symbol}`);

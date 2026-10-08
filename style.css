@@ -4326,3 +4326,7 @@ img, svg, video { max-width: 100%; }
 .macro-sector.is-boom { border-left: 3px solid var(--color-up); }
 .macro-sector.is-decline { border-left: 3px solid var(--color-down); }
 .macro-sector.is-peak, .macro-sector.is-trough { border-left: 3px solid var(--text-muted); }
+
+/* ===================== DYWIDENDY ===================== */
+.dividend-badges { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: var(--space-2) var(--space-3); margin: 0 0 var(--space-2); }
+.badge-aristocrat { padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; color: #3b2a00; background: linear-gradient(135deg, #f5e3a1, #c9a227); }

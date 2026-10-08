@@ -145,7 +145,8 @@ function getValuationMultiplier(stock) {
     const baseRate = Number(centralBank?.baseInterestRate) || 0.05;
     const rateMult = 1 - profile.rateSens * (baseRate - 0.05) * 4;
     const sectorMult = typeof getSectorValuationFactor === 'function' ? getSectorValuationFactor(stock) : 1; // cykl sektora (macro.js)
-    return Math.max(0.4, Math.min(1.8, cycleMult * rateMult * sectorMult));
+    const interest = typeof getAristocratValuationFactor === 'function' ? getAristocratValuationFactor(stock) : 1; // zainteresowanie arystokratą
+    return Math.max(0.4, Math.min(1.8, cycleMult * rateMult * sectorMult * interest));
 }
 
 /** Szansa na zdarzenie pozytywne zależnie od fazy (eventy rynkowe). */
@@ -307,6 +308,12 @@ function updateStockPrices() {
             case CORPORATE_PHASES.INNOVATION_PUSH: priceGrowthModifier += 0.01; volatilityModifier += 0.1; break;
         }
 
+        // Dywidendowy arystokrata: stabilność i przyrost (dividends.js)
+        if (stock.isDividendAristocrat) {
+            volatilityModifier -= ARISTOCRAT_BONUS.stability;
+            priceGrowthModifier += ARISTOCRAT_BONUS.growth;
+        }
+
         // Modyfikatory cech CEO (bez zmian)
         if (stock.ceo && stock.ceo.traits) {
             stock.ceo.traits.forEach(trait => {
@@ -365,7 +372,7 @@ function updateStockPrices() {
         let changePct = noise;
 
         if (stock.marketBehavior && stock.marketBehavior.phase === 'ipo_boost' && now < stock.marketBehavior.endTime) {
-            changePct = getRandomInRange(0.002, 0.005) * effectiveVolatility;
+            changePct = getRandomInRange(0.002, 0.005) * Math.min(3, effectiveVolatility);
         } else {
             if (stock.marketBehavior && now >= stock.marketBehavior.endTime) {
                 logEvent(`📈 IPO boost phase for ${stock.name} has ended.`);
@@ -373,9 +380,9 @@ function updateStockPrices() {
             }
 
             if (stock.activePositiveBoostUntil && now < stock.activePositiveBoostUntil) {
-                changePct = getRandomInRange(0.002, 0.005) * effectiveVolatility;
+                changePct = getRandomInRange(0.002, 0.005) * Math.min(3, effectiveVolatility);
             } else if (stock.activeNegativeBoostUntil && now < stock.activeNegativeBoostUntil) {
-                changePct = -getRandomInRange(0.002, 0.005) * effectiveVolatility;
+                changePct = -getRandomInRange(0.002, 0.005) * Math.min(3, effectiveVolatility);
             } else {
                 if (stock.activePositiveBoostUntil && now >= stock.activePositiveBoostUntil) stock.activePositiveBoostUntil = null;
                 if (stock.activeNegativeBoostUntil && now >= stock.activeNegativeBoostUntil) stock.activeNegativeBoostUntil = null;
@@ -456,23 +463,8 @@ function updateStockPrices() {
         }
     }); // Koniec stocks.forEach
 
-    // Aktualizacja ETF (bez zmian)
-    etfs.forEach(etf => {
-        const underlyingStocks = stocks.filter(stock =>
-            !stock.assetType && 
-            !stock.isBankrupt &&
-            stock.sector?.some(s => etf.targetSectors.includes(s))
-        );
-
-        if (underlyingStocks.length > 0) {
-            const totalValue = underlyingStocks.reduce((sum, stock) => sum + stock.price, 0);
-            etf.price = totalValue / underlyingStocks.length;
-            etf.priceHistory.push(etf.price);
-            if (etf.priceHistory.length > 15) {
-                etf.priceHistory.shift();
-            }
-        }
-    }); 
+    // ETF-y: cena = wartość portfela / jednostki (etf.js)
+    if (typeof updateEtfPrices === 'function') updateEtfPrices();
 }
 
 function updateMarketVolatilityIndex() {

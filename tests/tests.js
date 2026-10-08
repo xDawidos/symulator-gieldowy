@@ -2261,6 +2261,140 @@ group('Makroekonomia (0.10.2 M1)', () => {
     });
 });
 
+group('Dywidendy: arystokraci (0.10.2 M2)', () => {
+    function worldM2() {
+        const a = makeCompany('AAA');
+        resetWorld([a]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        return a;
+    }
+    function quarter(stock, dps) {
+        stock.pendingDividend = dps > 0 ? { dps, total: dps * stock.totalShares } : null;
+        updateDividendStreak(stock);
+    }
+
+    test('8 kwartałów stałej dywidendy = arystokrata z bonusem wyceny', () => {
+        const a = worldM2();
+        for (let i = 0; i < 7; i++) quarter(a, 1);
+        assert(!a.isDividendAristocrat, 'jeszcze nie');
+        const before = getValuationMultiplier(a);
+        quarter(a, 1.02);
+        assert(a.isDividendAristocrat && a.dividendStreak === 8, 'status');
+        assert(getValuationMultiplier(a) > before, 'zainteresowanie +7%');
+    });
+
+    test('obcięcie dywidendy zabiera status i przecenia kurs', () => {
+        const a = worldM2();
+        for (let i = 0; i < 8; i++) quarter(a, 1);
+        let effect = null;
+        const original = applyPriceEffect;
+        applyPriceEffect = (symbol, value) => { effect = value; };
+        quarter(a, 0.5);
+        applyPriceEffect = original;
+        assert(!a.isDividendAristocrat && a.dividendStreak === 1 && effect < 0, 'utrata');
+    });
+
+    test('REIT nie zostaje arystokratą', () => {
+        const a = worldM2();
+        a.assetType = 'REIT';
+        for (let i = 0; i < 10; i++) quarter(a, 1);
+        assert(!a.isDividendAristocrat, 'REIT');
+    });
+
+    test('wypłata trafia do historii i liczy stopę dywidendy', () => {
+        const a = worldM2();
+        a.cash = 1_000_000;
+        payCompanyDividend(a, 2);
+        assert(a.dividendHistory.length === 1 && getTrailingDividendYield(a) > 0, 'historia');
+        assert(renderDividendBadges(a).includes('Stopa dywidendy'), 'opis w karcie');
+    });
+});
+
+group('ETF-y z portfelem (0.10.2 M3)', () => {
+    function worldM3() {
+        const a = makeCompany('AAA', { sector: ['Technologia'] });
+        const b = makeCompany('BBB', { sector: ['Technologia'] });
+        const c = makeCompany('CCC', { sector: ['Energia'] });
+        [a, b, c].forEach(s => { s.insiderShares = 0; s.sharesHeld = 0; });
+        resetWorld([a, b, c]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        etfs.length = 0;
+        const etf = createEtf({ symbol: 'TSX', templateKey: 'Technologia', seed: 300_000 });
+        etf.rules.maxWeight = 0.6; etf.rules.dividendOnly = false; etf.rules.minExchangeLevel = 0;
+        etf.weighting = 'equal';
+        etfs.push(etf);
+        return { a, b, c, etf };
+    }
+
+    test('ETF kupuje akcje wg zasad i jest w akcjonariacie', () => {
+        const { a, b, c, etf } = worldM3();
+        rebalanceEtf(etf, true);
+        assert(etf.holdings.AAA > 0 && etf.holdings.BBB > 0 && !etf.holdings.CCC, JSON.stringify(etf.holdings));
+        assert(a.sharesHeld === etf.holdings.AAA, 'sharesHeld');
+        assert(getShareholders(a).some(h => h.kind === 'etf'), 'akcjonariat');
+        assert(Math.abs(getEtfNav(etf) - 300_000) < 1, 'wartość bez zmian');
+    });
+
+    test('limit udziału jednej spółki', () => {
+        const { a, b, etf } = worldM3();
+        etf.rules.maxWeight = 0.1;
+        etf.weighting = 'cap';
+        a.price = 1000;
+        rebalanceEtf(etf, true);
+        const weights = getEtfTopHoldings(etf, 5);
+        assert(weights.every(h => h.weight <= 0.55), JSON.stringify(weights)); // 2 spółki → minimum 50% na każdą
+    });
+
+    test('cena jednostki = wartość aktywów / jednostki; kupno i umorzenie po wartości', () => {
+        const { etf } = worldM3();
+        rebalanceEtf(etf, true);
+        updateEtfPrice(etf);
+        const price = etf.price;
+        playerCash = 100_000;
+        const skill = getSkillLevel;
+        getSkillLevel = id => id === 'etfExpert' ? 1 : 0;
+        assert(buyEtf('TSX', 100), 'kupno');
+        updateEtfPrice(etf);
+        assert(Math.abs(etf.price - price) < 1e-6 && Math.abs(playerCash - (100_000 - 100 * price)) < 1e-6, 'kreacja po wartości');
+        assert(sellEtf('TSX', 100), 'umorzenie');
+        getSkillLevel = skill;
+        assert(Math.abs(playerCash - 100_000) < 1e-3 && !playerPortfolio.TSX, `gotówka ${playerCash}`);
+    });
+
+    test('cel roczny nieosiągnięty → zmiana strategii', () => {
+        const { etf } = worldM3();
+        etf.yearStartPrice = etf.price * 2;
+        etf.quartersInYear = 4;
+        const weighting = etf.weighting;
+        reviewEtfYear(etf);
+        assert(etf.weighting !== weighting && etf.lastResult.hit === false, 'nowa strategia');
+    });
+
+    test('przejęcie spółki wypłaca ETF-owi gotówkę za pakiet', () => {
+        const { a, etf } = worldM3();
+        rebalanceEtf(etf, true);
+        const shares = etf.holdings.AAA, cash = etf.cash;
+        settleEtfHoldings('AAA', 150);
+        assert(!etf.holdings.AAA && etf.cash === cash + shares * 150, 'rozliczone');
+    });
+
+    test('bank tworzy własny ETF, mały ETF banku zostaje zamknięty z wypłatą dla funduszu', () => {
+        const { etf } = worldM3();
+        const bank = { id: 'bnk', name: 'Bank Testowy', type: BANK_TYPES.INVESTMENT, isActive: true, cash: 10_000_000, stockPortfolio: {}, loanPortfolio: {} };
+        commercialBanks.push(bank);
+        const random = Math.random;
+        Math.random = () => 0.01;
+        const created = maybeLaunchBankEtf();
+        Math.random = random;
+        commercialBanks.splice(commercialBanks.indexOf(bank), 1);
+        assert(created && created.issuerId === 'bnk' && created.name.startsWith('Bank Testowy'), 'nowy ETF');
+        playerPortfolio[created.symbol] = { shares: 100, avgPrice: created.price, assetType: 'etf' };
+        const cash = playerCash;
+        closeEtf(created, 'test');
+        assert(!etfs.includes(created) && playerCash > cash && !playerPortfolio[created.symbol], 'zamknięty i wypłacony');
+    });
+});
+
 // --------------------------------------------------------------------------------
 // Uruchomienie
 // --------------------------------------------------------------------------------

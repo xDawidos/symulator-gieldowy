@@ -296,8 +296,10 @@
                     <table id="etf-table">
                         <thead>
                             <tr>
-                                <th>Nazwa Funduszu</th>
+                                <th>ETF i strategia</th>
                                 <th>Cena (PLN)</th>
+                                <th>Skład (top 3)</th>
+                                <th>Cel roczny</th>
                                 <th>Posiadane</th>
                                 <th>Akcje</th>
                             </tr>
@@ -783,6 +785,7 @@
     <div class="modal modal-sm" id="stock-details-modal" style="display: none;">
         <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
         <h3 class="mt-0 text-center" id="details-title">Struktura Akcjonariatu</h3>
+        <div id="details-badges" class="text-center"></div>
          <div class="w-lg pie-area mx-auto my-4" id="pie-chart-container"></div>
          <div class="text-center mb-3" id="pie-chart-legend"></div>
          <div id="analyst-insights" class="analyst-insights"></div>
@@ -1254,6 +1257,8 @@
     <script src="ma.js"></script>
     <script src="investments.js"></script>
     <script src="governance.js"></script>
+    <script src="dividends.js"></script>
+    <script src="etf.js"></script>
     <script src="events.js"></script>
     <script src="chart.js"></script>
     <script src="ui.js"></script>

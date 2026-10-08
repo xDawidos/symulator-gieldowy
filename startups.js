@@ -218,9 +218,14 @@ function handleSuccessfulIPO(startup, successMultiplier) {
     startup.sharesHeld = Math.min(sharesHeld, totalShares);
     startup.insiderShares = 0;
     startup.financialHealth = getRandomIntInRange(1, 4);
-    startup.marketBehavior = { phase: 'ipo_boost', endTime: Date.now() + getRandomIntInRange(8000, 20000) };
+    startup.marketBehavior = { phase: 'ipo_boost', endTime: Date.now() + getRandomIntInRange(8000, 20000) / Math.max(1, currentSpeedMultiplier || 1) }; // czas gry, nie rzeczywisty
     ['fundingGoal', 'currentFunding', 'developmentProgress', 'successChance', 'stage', 'poolInvestors', 'rescueGoal', 'rescueCurrent', 'rescueTimeLeft'].forEach(key => delete startup[key]);
 
+    // Bilans po debiucie: kapitał od inwestorów (bez niego wartość godziwa ≈ 0 i kurs spada do zera).
+    const raisedCapital = Math.max(totalClaims, totalShares * ipoPrice * 0.9);
+    startup.balanceSheet = { assets: raisedCapital, liabilities: 0, shareCapital: raisedCapital * 0.8, retainedEarnings: raisedCapital * 0.2 };
+    startup.cash = totalClaims * 0.5; // połowa wpłat zostaje w kasie, reszta poszła na rozwój (aktywa niematerialne)
+    startup.quarterlyEarnings = 0;
     if (typeof initializeDescriptionParts === 'function') initializeDescriptionParts(startup);
     if (typeof initializeResearchForStock === 'function') initializeResearchForStock(startup);
     if (typeof initializeFundamentals === 'function') initializeFundamentals(startup, true);

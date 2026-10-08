@@ -13,7 +13,7 @@ const NATURAL_UNEMPLOYMENT = 0.06;
 const MACRO_HISTORY_LIMIT = 16;
 const BC_MAX_STEP = 0.005;
 const BC_RATE_LIMITS = [0.005, 0.15];
-const RATE_SURPRISE_IMPACT = 4;          // reakcja kursu na niespodziankę (× wrażliwość sektora na stopy)
+const RATE_SURPRISE_IMPACT = 2;          // reakcja kursu na niespodziankę (× wrażliwość sektora na stopy)
 const ELECTION_INTERVAL_QUARTERS = 16;   // 4 lata gry
 const EVENT_COOLDOWN = 6;                // ostatnie zdarzenia nie wracają od razu
 
@@ -208,7 +208,7 @@ function applyRateSurprise(surprise) {
     for (const stock of stocks) {
         if (stock.assetType || stock.isBankrupt) continue;
         const sens = getSectorProfile(stock).rateSens;
-        const effect = clampValue(-surprise * RATE_SURPRISE_IMPACT * sens * 10, -0.06, 0.06);
+        const effect = clampValue(-surprise * RATE_SURPRISE_IMPACT * sens * 10, -0.04, 0.04);
         if (Math.abs(effect) >= 0.002) applyPriceEffect(stock.symbol, effect, effect > 0 ? 'positive' : 'negative', 'market');
     }
 }
@@ -327,13 +327,13 @@ function triggerStateCompanyEventCycle() {
 // =================================================================================
 
 const MACRO_SHOCK_EVENTS = [
-    { id: 'oil', type: 'negative', text: '🛢️ Szok naftowy: ropa drożeje o 40%. Inflacja przyspiesza, transport i turystyka tracą, energetyka zyskuje.', inflation: 0.01, effects: { Energia: 0.06, Transport: -0.07, Turystyka: -0.06, Logistyka: -0.05, '*': -0.02 } },
-    { id: 'currency', type: 'negative', text: '💱 Kryzys walutowy: złoty traci na wartości. Importerzy pod presją, eksporterzy korzystają.', inflation: 0.008, effects: { Przemysł: 0.03, Chemia: 0.02, 'Dobra konsumpcyjne': -0.05, '*': -0.03 } },
-    { id: 'techboom', type: 'positive', text: '💻 Boom technologiczny: fundusze venture zalewają branżę pieniędzmi.', effects: { Technologia: 0.08, Gaming: 0.06, Badania: 0.05 } },
+    { id: 'oil', type: 'negative', text: '🛢️ Szok naftowy: ropa drożeje o 40%. Inflacja przyspiesza, transport i turystyka tracą, energetyka zyskuje.', inflation: 0.01, effects: { Energia: 0.06, Transport: -0.07, Turystyka: -0.06, Logistyka: -0.05, '*': -0.01 } },
+    { id: 'currency', type: 'negative', text: '💱 Kryzys walutowy: złoty traci na wartości. Importerzy pod presją, eksporterzy korzystają.', inflation: 0.008, effects: { Przemysł: 0.03, Chemia: 0.02, 'Dobra konsumpcyjne': -0.05, '*': -0.01 } },
+    { id: 'techboom', type: 'positive', text: '💻 Boom technologiczny: fundusze venture zalewają branżę pieniędzmi.', effects: { Technologia: 0.08, Gaming: 0.06, Badania: 0.05, '*': 0.01 } },
     { id: 'drought', type: 'negative', text: '🌵 Susza: słabe zbiory podbijają ceny żywności.', inflation: 0.004, effects: { Żywność: -0.06, Chemia: 0.02 } },
-    { id: 'pandemic', type: 'negative', text: '🦠 Nowa fala grypy: ludzie zostają w domach. Medycyna zyskuje, turystyka i usługi tracą.', effects: { Medycyna: 0.07, Turystyka: -0.08, Usługi: -0.04, '*': -0.02 } },
+    { id: 'pandemic', type: 'negative', text: '🦠 Nowa fala grypy: ludzie zostają w domach. Medycyna zyskuje, turystyka i usługi tracą.', effects: { Medycyna: 0.07, Turystyka: -0.08, Usługi: -0.04, '*': -0.01 } },
     { id: 'export', type: 'positive', text: '🚢 Rekordowy eksport: zagraniczne zamówienia napędzają przemysł i logistykę.', effects: { Przemysł: 0.05, Logistyka: 0.05, Transport: 0.03, '*': 0.01 } },
-    { id: 'housing', type: 'positive', text: '🏠 Rządowy program mieszkaniowy: rekordowy popyt na kredyty i mieszkania.', effects: { Nieruchomości: 0.06, Budowlany: 0.06, Bankowość: 0.03 } },
+    { id: 'housing', type: 'positive', text: '🏠 Rządowy program mieszkaniowy: rekordowy popyt na kredyty i mieszkania.', effects: { Nieruchomości: 0.06, Budowlany: 0.06, Bankowość: 0.03, '*': 0.01 } },
     { id: 'energyprices', type: 'positive', text: '⚡ Spadek cen energii: koszty firm maleją, inflacja hamuje.', inflation: -0.006, effects: { Energia: -0.04, Przemysł: 0.03, Chemia: 0.03, '*': 0.01 } }
 ];
 

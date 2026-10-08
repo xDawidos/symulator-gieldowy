@@ -35,6 +35,7 @@ function getShareholders(stock) {
         if (stake > 0) add(`${owner.symbol}:stake`, owner.name, 'company', stake, owner);
     }
     for (const bank of commercialBanks) add(bank.id, bank.name, 'bank', bank.stockPortfolio?.[symbol]?.shares || 0, bank);
+    for (const etf of etfs) add(`etf:${etf.symbol}`, etf.name, 'etf', etf.holdings?.[symbol] || 0, etf);
     if (stock.isStateOwned || stock.stateOwnershipPct > 0) add('state', 'Skarb Państwa', 'state', Math.floor(stock.totalShares * (stock.stateOwnershipPct || 0)));
     add('city', 'Miasto', 'city', Number(stock.cityShares) || 0);
     add('insiders', 'Zarząd i pracownicy', 'insiders', Number(stock.insiderShares) || 0);

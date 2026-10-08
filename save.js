@@ -115,6 +115,7 @@ function buildSaveSnapshot() {
         paymentTotals,
         economyCycle,
         macro,
+        etfs: serializeEtfs(),
         playerProfile,
         playerFund,
         corporation,
@@ -422,6 +423,9 @@ function applySaveSnapshot(snapshot) {
     if (missing.size > 0) report.warnings.push(`Brakujące spółki w referencjach: ${[...missing].join(', ')}.`);
 
     recountConstructionCapacity();
+
+    // v10: ETF-y z portfelami (starsze zapisy dostają nowy zestaw)
+    if (!restoreEtfs(snapshot.etfs)) report.warnings.push('Utworzono nowe ETF-y z portfelami (migracja v10).');
 
     report.ok = true;
     return report;

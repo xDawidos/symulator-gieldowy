@@ -855,8 +855,10 @@ function displayEtfs() {
 
     etfs.forEach(etf => {
         const row = etfTableBody.insertRow();
-        row.insertCell().textContent = `${etf.name} (${etf.symbol})`;
+        row.insertCell().innerHTML = `<strong>${escapeHtml(etf.name)}</strong> (${etf.symbol})<span class="text-xs text-muted d-block">${escapeHtml(describeEtfRules(etf))}</span>`;
         row.insertCell().textContent = etf.price.toFixed(2);
+        row.insertCell().textContent = getEtfTopHoldings(etf).map(h => `${h.symbol} ${(h.weight * 100).toFixed(0)}%`).join(', ') || '—';
+        row.insertCell().textContent = `${(etf.yearTarget * 100).toFixed(1)}%${etf.lastResult ? (etf.lastResult.hit ? ' ✅' : ' ❌') : ''}`;
 
         const sharesOwned = playerPortfolio[etf.symbol] ? playerPortfolio[etf.symbol].shares : 0;
         row.insertCell().textContent = sharesOwned;
@@ -1351,6 +1353,8 @@ function openStockDetailsModal(symbol) {
     const title = document.getElementById('details-title');
 
     title.textContent = `Struktura Akcjonariatu: ${stock.name} (${symbol})`;
+    const badges = document.getElementById('details-badges');
+    if (badges) badges.innerHTML = renderDividendBadges(stock); // arystokrata, stopa dywidendy, seria (dividends.js)
     renderOwnershipPieChart(symbol); // Wywołujemy naszą funkcję do renderowania wykresu
 
     const invButton = document.getElementById('details-investments-btn');
@@ -1397,7 +1401,7 @@ function renderDividendTrackerContent() {
 
     dividendStocks.forEach(stock => {
         const row = body.insertRow();
-        row.insertCell().textContent = stock.name;
+        row.insertCell().textContent = stock.isDividendAristocrat ? `👑 ${stock.name}` : stock.name;
         row.insertCell().textContent = stock.assetType === 'REIT' ? 'REIT (co 2 min)' : getDividendPolicyLabel(stock.dividendPolicy);
 
         // ⏳ Czas do wypłaty
