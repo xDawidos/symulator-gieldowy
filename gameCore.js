@@ -1302,6 +1302,13 @@ function addBuildingToClient(client, project, values) {
     };
 
     client.portfolio.buildings.push(record);
+    // Budynek bez etapu wyposażenia działa od razu po odbiorze; jakość z weryfikacji (opóźnienia budowy).
+    if (values.status === 'completed' && spec.kind !== 'mixed' && typeof registerOperatingInvestment === 'function') {
+        registerOperatingInvestment(client, {
+            id: spec.id, name: spec.name, cost: values.purchasePrice, incomeBonus: spec.incomeBonus,
+            quality: rollVerificationQuality(client, project.delays || 0)
+        });
+    }
     return record;
 }
 

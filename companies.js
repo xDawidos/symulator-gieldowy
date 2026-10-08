@@ -1945,7 +1945,9 @@ function computeQuarterResults(stock) {
     const margin = Math.max(-0.4, Math.min(0.6, profile.margin + health * 0.015 + phaseAdj * 0.5 + profile.beta * gdp * 2));
     const fixedExpenses = Math.max(0, Number(stock.fixedExpenses) || 0);
 
-    const ebitda = revenue * margin - fixedExpenses;
+    // Działające inwestycje: kwartalny zysk lub strata (investments.js).
+    const investmentResult = typeof processOperatingInvestments === 'function' ? processOperatingInvestments(stock) : 0;
+    const ebitda = revenue * margin - fixedExpenses + investmentResult;
     const depreciation = revenue * profile.da;
     const interest = Math.max(0, Number(stock.balanceSheet?.liabilities) || 0) * getLoanRate() / 4;
     const ebt = ebitda - depreciation - interest;
@@ -1962,7 +1964,7 @@ function computeQuarterResults(stock) {
 
     governmentTreasury += tax;
 
-    return { revenue, ebitda, depreciation, interest, tax, subsidy, netIncome };
+    return { revenue, ebitda, depreciation, interest, tax, subsidy, netIncome, investmentResult };
 }
 
 /** Zapisuje kwartał w historii i przelicza wskaźniki. Zwraca niespodziankę EPS względem oczekiwań. */
@@ -5497,6 +5499,7 @@ function runMunicipalCompanyLogic() {
         price: Math.max(10, initialPrice), // Cena min. 10 PLN
         volatilityFactor: getRandomInRange(0.2, 0.5), // Bardzo stabilne
         symbol: targetCompany.id,
+        isMunicipal: true, // spółka miejska — miasto może dofinansowywać jej inwestycje
         exchange: 'BRONZE', 
         totalShares: totalShares,
         maxShares: totalShares * 2,
@@ -6619,8 +6622,26 @@ function finishInvestment(stock, project) {
 
     stock.financialHealth = Math.min(5, (Number(stock.financialHealth) || 0) + (Number(data.healthBonus) || 0));
 
-    if (data.incomeBonus > 0) {
-        applyPriceEffect(stock.symbol, data.incomeBonus * 0.5, 'positive', 'company');
+    // Weryfikacja i start działania: wynik kwartalny zamiast stałego bonusu (investments.js).
+    const quality = rollVerificationQuality(stock);
+    if (quality === 'defects') {
+        const fix = Math.round(cost * 0.05);
+        adjustCompanyCash(stock, -fix);
+        adjustBalanceSheet(stock, { assets: -fix, retainedEarnings: -fix });
+    }
+    const building = project.phase === 'equipment' && project.buildingId
+        ? (stock.portfolio?.buildings || []).find(item => item.id === project.buildingId) : null;
+    registerOperatingInvestment(stock, {
+        id: project.id, name: project.name,
+        cost: cost + (building?.purchasePrice || 0),
+        incomeBonus: data.incomeBonus,
+        quality,
+        fundIncomePct: project.fundIncomePct || 0,
+        fundInvested: project.fundInvested || 0,
+        lifeQuarters: capitalized > 0 || building ? null : 4
+    });
+    if (data.incomeBonus > 0 && quality !== 'defects') {
+        applyPriceEffect(stock.symbol, data.incomeBonus * 0.2, 'positive', 'company');
     }
 
     logEvent(`✅ ${stock.name} zakończył projekt: „${project.name}” (aktywowano ${capitalized.toFixed(0)} PLN, koszt okresu ${expensed.toFixed(0)} PLN).`, 'success');

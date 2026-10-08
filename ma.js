@@ -34,6 +34,7 @@ function getShareholders(stock) {
     }
     for (const bank of commercialBanks) add(bank.id, bank.name, 'bank', bank.stockPortfolio?.[symbol]?.shares || 0, bank);
     if (stock.isStateOwned || stock.stateOwnershipPct > 0) add('state', 'Skarb Państwa', 'state', Math.floor(stock.totalShares * (stock.stateOwnershipPct || 0)));
+    add('city', 'Miasto', 'city', Number(stock.cityShares) || 0);
     add('insiders', 'Zarząd i pracownicy', 'insiders', Number(stock.insiderShares) || 0);
     return list.sort((a, b) => b.shares - a.shares);
 }

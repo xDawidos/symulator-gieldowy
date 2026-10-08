@@ -1007,161 +1007,8 @@ function renderDepartmentsSection(stock, container) {
     }
     deptSection.appendChild(deptsDiv);
 
-    // --- 2. INWESTYCJE W TOKU (wewnętrzne + zamówienia budowlane) ---
-    if (!Array.isArray(stock.activeInvestments)) stock.activeInvestments = [];
-    const devLevel = stock.departments.development.level;
-    const stockKey = getEntityKey(stock);
-    const openTenders = activeTenders.filter(tender =>
-        ['open', 'closed'].includes(tender.status) && getEntityKey(tender.clientCompany) === stockKey
-    );
-    const clientProjects = constructionProjects.filter(project =>
-        !project.settled && getEntityKey(project.tender?.clientCompany) === stockKey
-    );
-
-    const activeDiv = document.createElement('div');
-    activeDiv.innerHTML = `<h5>🚧 Inwestycje w toku (${countCompanyInvestmentOrders(stock)}/${Math.max(1, devLevel)})</h5>`;
-
-    const orders = [
-        ...stock.activeInvestments.map(inv => ({
-            ref: inv.uid || inv.id,
-            name: inv.name,
-            path: 'Realizacja własna',
-            progress: Math.min(1, inv.progress / inv.totalDuration),
-            detail: `${Math.min(inv.progress, inv.totalDuration).toFixed(0)} / ${inv.totalDuration} dni`
-        })),
-        ...openTenders.map(tender => ({
-            ref: tender.id,
-            name: tender.buildingType.name,
-            path: 'Przetarg budowlany',
-            progress: 0,
-            detail: tender.status === 'open'
-                ? `Oferty: ${tender.bids.length}, zostało ${formatConstructionTime(tender.remainingGameMs)}`
-                : 'Rozstrzyganie przetargu'
-        })),
-        ...clientProjects.map(project => ({
-            ref: project.id,
-            name: project.tender.buildingType.name,
-            path: `Wykonawca: ${project.builder.name}`,
-            progress: project.progress,
-            detail: getConstructionProjectStatusLabel(project)
-        }))
-    ];
-
-    if (orders.length > 0) {
-        const invList = document.createElement('ul');
-        invList.classList.add('list-plain');
-        invList.classList.add('p-0');
-
-        for (const order of orders) {
-            const li = document.createElement('li');
-            li.classList.add('mb-2');
-            li.classList.add('p-2');
-            li.classList.add('border-left-info');
-
-            const head = document.createElement('div');
-            head.style.display = 'flex';
-            head.classList.add('justify-between');
-            const name = document.createElement('strong');
-            name.textContent = order.name;
-            const cancel = document.createElement('button');
-            cancel.textContent = 'Zablokuj';
-            cancel.classList.add('text-xs');
-            cancel.onclick = () => blockInvestment(stock.symbol, order.ref);
-            head.append(name, cancel);
-
-            const bar = document.createElement('progress');
-            bar.max = 1;
-            bar.value = order.progress;
-            bar.dataset.orderRef = order.ref;
-            bar.classList.add('w-full');
-            bar.classList.add('h-10');
-
-            const info = document.createElement('div');
-            info.classList.add('text-xs');
-            info.textContent = `${(order.progress * 100).toFixed(0)}% · ${order.detail} · ${order.path}`;
-
-            li.append(head, bar, info);
-            invList.appendChild(li);
-        }
-        activeDiv.appendChild(invList);
-    } else {
-        activeDiv.innerHTML += `<p class="text-sm text-muted fst-italic">Brak aktywnych projektów.</p>`;
-    }
-    deptSection.appendChild(activeDiv);
-
-    // --- 3. KATALOG DOSTĘPNYCH INWESTYCJI (wszystkie sektory spółki, bez duplikatów) ---
-    const catalogDiv = document.createElement('div');
-    catalogDiv.classList.add('mt-3');
-    catalogDiv.innerHTML = `<h5>📋 Katalog Inwestycji</h5>
-        <p class="text-xs text-muted">Pozycje budowlane trafiają do przetargu (cena = budżet przetargu, czas w dniach budowy).
-        Pozostałe spółka realizuje sama. Czas podany w dniach (1 dzień = 1/7 tygodnia gry).</p>`;
-
-    const table = document.createElement('table');
-    table.classList.add('text-xs');
-    table.classList.add('w-full');
-    table.innerHTML = `
-        <thead>
-            <tr>
-                <th>Nazwa</th>
-                <th>Rodzaj</th>
-                <th>Koszt</th>
-                <th>Czas</th>
-                <th>Efekt</th>
-                <th>Akcja</th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    `;
-    const tbody = table.querySelector('tbody');
-    const isLimitReached = countCompanyInvestmentOrders(stock) >= Math.max(1, devLevel);
-
-    getInvestmentCatalogForCompany(stock).forEach(inv => {
-        const tr = document.createElement('tr');
-        const realCost = getInvestmentCostForCompany(stock, inv);
-        const isConstruction = CONSTRUCTION_KINDS.includes(inv.kind);
-        const isAffordable = canFinanceAmount(stock, isConstruction ? getConstructionSpec(inv.id).cost * 1.2 : realCost);
-        const hasLevel = devLevel >= inv.minDevLevel;
-        const inProgress = hasCompanyInvestmentInProgress(stock, inv.id);
-
-        let statusBtn = '';
-        if (!hasLevel) {
-            statusBtn = `<span class="text-muted text-xs">Wymaga działu rozwoju Lvl ${inv.minDevLevel}</span>`;
-        } else if (inProgress) {
-            statusBtn = `<span class="text-info text-xs">W toku</span>`;
-        } else if (!isAffordable) {
-            statusBtn = `<span class="text-down text-xs">Brak środków</span>`;
-        } else if (isLimitReached) {
-            statusBtn = `<span class="text-warn text-xs">Limit projektów</span>`;
-        } else {
-            statusBtn = `<button onclick="forceCompanyInvestment('${stock.symbol}', '${inv.id}')" class="btn-xs text-xs bg-up text-on-accent btn-plain clickable">${isConstruction ? 'Przetarg' : 'Start'}</button>`;
-        }
-
-        const iconSrc = inv.icon || 'img/box.png';
-        const kindLabel = INVESTMENT_KIND_LABELS[inv.kind] || inv.kind;
-        const mixedNote = inv.kind === 'mixed' ? `<div class="text-xs text-muted">budowa ${(inv.constructionShare * 100).toFixed(0)}% kosztu</div>` : '';
-
-        tr.innerHTML = `
-            <td class="d-flex items-center">
-                <img src="${iconSrc}" class="icon-24 mr-2" onerror="this.style.display='none'">
-                <span>${inv.name}</span>
-            </td>
-            <td>${kindLabel}${mixedNote}</td>
-            <td>${(realCost / 1000).toFixed(0)}k PLN</td>
-            <td>${inv.durationDays} dni</td>
-            <td>
-                <div class="text-xs text-muted">
-                    ${inv.assetValue > 0 ? `<div>🏠 szac. ${(inv.assetValue / 1000).toFixed(0)}k</div>` : ''}
-                    ${inv.incomeBonus > 0 ? `<div>💰 +${(inv.incomeBonus * 100).toFixed(0)}%</div>` : ''}
-                    ${inv.healthBonus > 0 ? `<div>❤️ +${inv.healthBonus}</div>` : ''}
-                </div>
-            </td>
-            <td class="text-center">${statusBtn}</td>
-        `;
-        tbody.appendChild(tr);
-    });
-
-    catalogDiv.appendChild(table);
-    deptSection.appendChild(catalogDiv);
+    // --- 2. INWESTYCJE: w toku (etapy), działające, katalog (investments.js) ---
+    renderInvestmentPanel(stock, deptSection, true);
 }
 
 
@@ -1512,6 +1359,9 @@ function openStockDetailsModal(symbol) {
 
     title.textContent = `Struktura Akcjonariatu: ${stock.name} (${symbol})`;
     renderOwnershipPieChart(symbol); // Wywołujemy naszą funkcję do renderowania wykresu
+
+    const invButton = document.getElementById('details-investments-btn');
+    if (invButton) invButton.onclick = () => openCompanyInvestments(symbol);
 
     const insights = document.getElementById('analyst-insights');
     if (insights) {
@@ -5742,4 +5592,116 @@ function closeGameConfirm(confirmed) {
     const action = gameConfirmAction;
     gameConfirmAction = null;
     if (confirmed && typeof action === 'function') action();
+}
+
+// =================================================================================
+// PANEL INWESTYCJI SPÓŁKI (etap G4): gotówka, w toku (etapy), działające, katalog
+// =================================================================================
+
+function renderStageBar(segments, currentLabel) {
+    return `<div class="inv-stages" title="${escapeHtml(currentLabel)}">${segments.map(segment => `
+        <div class="inv-stage ${segment.fill >= 1 ? 'done' : segment.fill > 0 ? 'active' : ''}" style="flex:${segment.share}">
+            <span class="inv-stage-fill" style="width:${(segment.fill * 100).toFixed(0)}%"></span>
+            <span class="inv-stage-label">${segment.label}</span>
+        </div>`).join('')}</div>`;
+}
+
+/** Panel inwestycji; canAct = władza większościowego akcjonariusza (zlecanie, blokada, dopłata). */
+function renderInvestmentPanel(stock, container, canAct) {
+    if (!Array.isArray(stock.activeInvestments)) stock.activeInvestments = [];
+    const devLevel = Number(stock.departments?.development?.level) || 0;
+    const stockKey = getEntityKey(stock);
+    const tenders = activeTenders.filter(t => ['open', 'closed'].includes(t.status) && getEntityKey(t.clientCompany) === stockKey);
+    const projects = constructionProjects.filter(p => !p.settled && getEntityKey(p.tender?.clientCompany) === stockKey);
+    const fundCan = canAct && canFundTopUp(stock);
+    const section = document.createElement('div');
+    section.className = 'inv-panel';
+
+    const internal = stock.activeInvestments.map(project => {
+        const info = getInvestmentStageInfo(project);
+        const topUp = fundCan ? `
+            <div class="bank-card-form">
+                <input type="text" inputmode="numeric" id="topup-${project.uid}" value="${Math.min(Math.floor(playerCash), Math.max(0, project.cost - (project.fundTopUp || 0)))}" aria-label="Kwota dopłaty">
+                <select id="topup-mode-${project.uid}" aria-label="Forma dopłaty"><option value="shares">za nowe akcje (−5%)</option><option value="income">za udział w zysku</option></select>
+                <button onclick="fundTopUpInvestment('${stock.symbol}', '${project.uid}', parseFloat(document.getElementById('topup-${project.uid}').value), document.getElementById('topup-mode-${project.uid}').value); refreshInvestmentViews('${stock.symbol}');">Dopłać z funduszu</button>
+            </div>` : '';
+        const funding = [
+            project.fundTopUp ? `fundusz: ${formatZl(project.fundTopUp, 0)}${project.fundIncomePct ? ` (${(project.fundIncomePct * 100).toFixed(0)}% zysku)` : ''}` : '',
+            project.publicFunding === 'state' ? 'dofinansowanie BC' : project.publicFunding === 'city' ? 'dofinansowanie miasta' : ''
+        ].filter(Boolean).join(' · ');
+        return `<li class="inv-item">
+            <div class="d-flex justify-between items-center"><strong>${escapeHtml(project.name)}</strong>
+                ${canAct ? `<button class="text-xs" onclick="blockInvestment('${stock.symbol}', '${project.uid || project.id}')">Zablokuj</button>` : ''}</div>
+            ${renderStageBar(info.segments, info.current.label)}
+            <div class="text-xs text-muted">Etap: ${info.current.label} · ${(info.fraction * 100).toFixed(0)}% · koszt ${formatZl(project.cost, 0)}${funding ? ` · ${funding}` : ''}</div>
+            ${topUp}
+        </li>`;
+    });
+    const building = [
+        ...tenders.map(t => ({ name: t.buildingType.name, label: 'Projekt — przetarg', segments: INVESTMENT_STAGES.map((s, i) => ({ ...s, fill: i === 0 ? 0.5 : 0 })), detail: t.status === 'open' ? `oferty: ${t.bids.length}` : 'rozstrzyganie' })),
+        ...projects.map(p => ({ name: p.tender.buildingType.name, label: 'Budowa', segments: INVESTMENT_STAGES.map((s, i) => ({ ...s, fill: i === 0 ? 1 : i === 1 ? Math.min(1, p.progress) : 0 })), detail: `wykonawca: ${p.builder.name} · ${getConstructionProjectStatusLabel(p)}` }))
+    ].map(item => `<li class="inv-item"><strong>${escapeHtml(item.name)}</strong>${renderStageBar(item.segments, item.label)}<div class="text-xs text-muted">${escapeHtml(item.detail)}</div></li>`);
+
+    const operating = (stock.operatingInvestments || []).map(op => {
+        const quality = INVESTMENT_QUALITY[op.quality] || INVESTMENT_QUALITY.ok;
+        return `<tr>
+            <td>${escapeHtml(op.name)}</td>
+            <td title="Wydajność ${(op.efficiency * 100).toFixed(0)}%">${quality.icon} ${quality.label}</td>
+            <td>${(op.roi * 100).toFixed(0)}% / rok</td>
+            <td class="${op.lastResult >= 0 ? 'profit' : 'loss'}">${formatZl(op.lastResult, 0)}</td>
+            <td class="${op.totalResult >= 0 ? 'profit' : 'loss'}">${formatZl(op.totalResult, 0)}</td>
+            <td>${op.fundIncomePct ? `${(op.fundIncomePct * 100).toFixed(0)}% (wypł. ${formatZl(op.fundPaid, 0)})` : '—'}</td>
+        </tr>`;
+    }).join('');
+
+    const limitReached = countCompanyInvestmentOrders(stock) >= Math.max(1, devLevel);
+    const catalog = getInvestmentCatalogForCompany(stock).map(inv => {
+        const cost = getInvestmentCostForCompany(stock, inv);
+        const isConstruction = CONSTRUCTION_KINDS.includes(inv.kind);
+        let action = '';
+        if (devLevel < inv.minDevLevel) action = `<span class="text-muted">dział rozwoju ${inv.minDevLevel}</span>`;
+        else if (hasCompanyInvestmentInProgress(stock, inv.id)) action = '<span class="text-info">w toku</span>';
+        else if (!canAct) action = '<span class="text-muted">—</span>';
+        else if (!canFinanceAmount(stock, isConstruction ? getConstructionSpec(inv.id).cost * 1.2 : cost)) action = '<span class="text-down">brak środków</span>';
+        else if (limitReached) action = '<span class="text-warn">limit projektów</span>';
+        else action = `<button class="btn-xs" onclick="forceCompanyInvestment('${stock.symbol}', '${inv.id}')">${isConstruction ? 'Przetarg' : 'Zleć'}</button>`;
+        return `<tr>
+            <td><img src="${inv.icon || 'img/box.png'}" class="icon-24 mr-2 va-middle" onerror="this.style.display='none'">${escapeHtml(inv.name)}</td>
+            <td>${formatZl(cost, 0)}</td>
+            <td>${inv.durationDays} dni</td>
+            <td>${(getExpectedAnnualRoi(inv.incomeBonus) * 100).toFixed(0)}% / rok</td>
+            <td>${action}</td>
+        </tr>`;
+    }).join('');
+
+    section.innerHTML = `
+        <div class="inv-cash"><span>💰 Gotówka spółki</span><strong>${formatZl(stock.cash, 0)}</strong></div>
+        <h5>🚧 W toku (${countCompanyInvestmentOrders(stock)}/${Math.max(1, devLevel)})</h5>
+        <ul class="list-plain inv-list">${[...internal, ...building].join('') || '<li class="text-muted">Brak inwestycji w toku.</li>'}</ul>
+        ${fundCan ? '<p class="text-xs text-muted">Jako większościowy akcjonariusz fundusz może dopłacić do inwestycji w toku: za nowe akcje (emisja po cenie −5%, także ponad limit) albo za udział w zyskach tej inwestycji (do 60%).</p>' : ''}
+        <h5>⚙️ Działające</h5>
+        ${operating ? `<table class="asset-mini-table w-full text-xs"><thead><tr><th>Inwestycja</th><th>Jakość</th><th>Oczek. zwrot</th><th>Ost. kwartał</th><th>Łącznie</th><th>Udział funduszu</th></tr></thead><tbody>${operating}</tbody></table>` : '<p class="text-muted text-sm">Brak działających inwestycji.</p>'}
+        <h5>📋 Katalog inwestycji</h5>
+        <table class="asset-mini-table w-full text-xs"><thead><tr><th>Inwestycja</th><th>Koszt</th><th>Czas</th><th>Oczek. zwrot</th><th></th></tr></thead><tbody>${catalog}</tbody></table>`;
+    container.appendChild(section);
+}
+
+/** Okno inwestycji dla dowolnej spółki (podgląd; akcje tylko przy władzy korony). */
+function openCompanyInvestments(symbol) {
+    const stock = stocks.find(s => s.symbol === symbol);
+    const modal = document.getElementById('company-investments-modal');
+    const body = document.getElementById('company-investments-body');
+    if (!stock || !modal || !body) return;
+    document.getElementById('company-investments-title').textContent = `📈 Inwestycje: ${stock.name} (${stock.symbol})`;
+    body.innerHTML = '';
+    renderInvestmentPanel(stock, body, getFundStakePct(stock) > 0.5);
+    modal.style.display = 'block';
+}
+
+/** Odświeża otwarte widoki inwestycji po dopłacie funduszu. */
+function refreshInvestmentViews(symbol) {
+    const modal = document.getElementById('company-investments-modal');
+    if (modal && modal.style.display === 'block') openCompanyInvestments(symbol);
+    const management = document.getElementById('management-modal');
+    if (management && management.style.display === 'block') openManagementModal(symbol, 'depts');
 }

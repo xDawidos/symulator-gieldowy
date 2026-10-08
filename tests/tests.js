@@ -1856,6 +1856,108 @@ group('Fuzje i przejęcia — naprawa modelu (etap G1)', () => {
     });
 });
 
+group('Inwestycje spółek: etapy, wynik, dopłata funduszu (etap G4)', () => {
+    const INV = { id: 'test_line', name: 'Linia testowa', kind: 'internal', durationDays: 28, assetValue: 300_000, incomeBonus: 0.2, healthBonus: 0, maintenance: 0 };
+    function worldG4() {
+        const a = makeCompany('AAA', { cash: 5_000_000 });
+        a.insiderShares = 0;
+        resetWorld([a]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        return a;
+    }
+
+    test('inwestycja przechodzi 3 etapy, a po weryfikacji działa', () => {
+        const a = worldG4();
+        startInternalInvestment(a, INV, 400_000);
+        const project = a.activeInvestments[0];
+        project.progress = 3;
+        assert(getInvestmentStageInfo(project).current.id === 'design', 'projekt');
+        project.progress = 14;
+        assert(getInvestmentStageInfo(project).current.id === 'build', 'budowa');
+        project.progress = 26;
+        assert(getInvestmentStageInfo(project).current.id === 'verify', 'weryfikacja');
+        project.progress = 21;
+        processActiveInvestments(a);
+        assert(a.activeInvestments.length === 0 && a.operatingInvestments.length === 1, 'działa');
+        assert(['excellent', 'ok', 'defects'].includes(a.operatingInvestments[0].quality), 'jakość');
+    });
+
+    test('działająca inwestycja daje kwartalny zysk albo stratę; 4 straty z rzędu = odpis', () => {
+        const a = worldG4();
+        const op = registerOperatingInvestment(a, { id: 'x', name: 'X', cost: 1_000_000, incomeBonus: 0.2, quality: 'ok' });
+        const gauss = gaussianRandom;
+        gaussianRandom = () => 1;
+        assert(processOperatingInvestments(a) > 0, 'zysk');
+        gaussianRandom = () => -5;
+        assert(processOperatingInvestments(a) < 0, 'strata');
+        const assets = a.balanceSheet.assets;
+        processOperatingInvestments(a); processOperatingInvestments(a); processOperatingInvestments(a);
+        gaussianRandom = gauss;
+        assert(op.lossStreak >= 4 && a.operatingInvestments.length === 0 && a.balanceSheet.assets < assets, 'odpis');
+    });
+
+    test('dopłata za akcje: fundusz obejmuje nową emisję ponad limit', () => {
+        const a = worldG4();
+        playerCash = 1_000_000;
+        playerPortfolio.AAA = { shares: 6000, avgPrice: 100, assetType: 'stock' };
+        a.sharesHeld = 6000;
+        a.maxShares = 10000;
+        startInternalInvestment(a, INV, 400_000);
+        const uid = a.activeInvestments[0].uid;
+        assert(fundTopUpInvestment('AAA', uid, 95_000, 'shares'), 'dopłata');
+        assert(playerPortfolio.AAA.shares === 7000 && a.totalShares === 11000 && a.maxShares === 11000, `akcje ${playerPortfolio.AAA.shares}/${a.totalShares}`);
+        assert(playerCash === 905_000, 'gotówka funduszu');
+    });
+
+    test('dopłata za dochód: fundusz dostaje udział w zysku inwestycji', () => {
+        const a = worldG4();
+        playerCash = 1_000_000;
+        playerPortfolio.AAA = { shares: 6000, avgPrice: 100, assetType: 'stock' };
+        a.sharesHeld = 6000;
+        startInternalInvestment(a, INV, 400_000);
+        const project = a.activeInvestments[0];
+        assert(fundTopUpInvestment('AAA', project.uid, 200_000, 'income'), 'dopłata');
+        assert(Math.abs(project.fundIncomePct - 0.3) < 1e-9, `udział ${project.fundIncomePct}`);
+        project.progress = 28;
+        processActiveInvestments(a);
+        const op = a.operatingInvestments[0];
+        op.efficiency = 1;
+        const gauss = gaussianRandom;
+        gaussianRandom = () => 1;
+        const cash = playerCash;
+        processOperatingInvestments(a);
+        gaussianRandom = gauss;
+        assert(op.fundPaid > 0 && playerCash > cash, 'wypłata udziału');
+    });
+
+    test('bez większości fundusz nie może dopłacić', () => {
+        const a = worldG4();
+        playerCash = 1_000_000;
+        playerPortfolio.AAA = { shares: 1000, avgPrice: 100, assetType: 'stock' };
+        startInternalInvestment(a, INV, 400_000);
+        assert(!fundTopUpInvestment('AAA', a.activeInvestments[0].uid, 50_000, 'shares') && playerCash === 1_000_000, 'odmowa');
+    });
+
+    test('Bank Centralny finansuje spółkę państwową, miasto — miejską', () => {
+        const a = worldG4();
+        const b = makeCompany('MIA', { cash: 5_000_000 });
+        resetWorld([a, b]);
+        a.isStateOwned = true; a.stateOwnershipPct = 0.3;
+        b.isMunicipal = true;
+        startInternalInvestment(a, INV, 400_000);
+        startInternalInvestment(b, INV, 400_000);
+        centralBank.funds = 1e9;
+        city.budget = 1e8;
+        const random = Math.random;
+        Math.random = () => 0.01;
+        processPublicInvestmentFunding();
+        Math.random = random;
+        assert(a.activeInvestments[0].publicFunding === 'state' && a.stateOwnershipPct > 0.3, 'BC');
+        assert(b.activeInvestments[0].publicFunding === 'city' && b.cityShares > 0, 'miasto');
+        assert(getShareholders(b).some(h => h.kind === 'city'), 'miasto w akcjonariacie');
+    });
+});
+
 // --------------------------------------------------------------------------------
 // Uruchomienie
 // --------------------------------------------------------------------------------

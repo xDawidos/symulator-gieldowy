@@ -17,8 +17,8 @@ const LEGACY_SAVE_KEYS = ['gra_inwestycyjna_dawid_save_v2', 'gra_inwestycyjna_da
 // v6: skrzynka mailowa, burmistrz i kampania, festyn, oferta prywatyzacyjna. v4/v5 migrują przy wczytaniu.
 // v7: obligacje i oferty (czas gry, kupony), depozyty i księgi banków, zastawy funduszy, giełdy elitarne.
 // v8: klienci z charakterami i rynek wtórny JU (migracja typów klientów przy wczytaniu).
-const SAVE_FORMAT_VERSION = 8;
-const SUPPORTED_SAVE_VERSIONS = [4, 5, 6, 7, 8];
+const SAVE_FORMAT_VERSION = 9;
+const SUPPORTED_SAVE_VERSIONS = [4, 5, 6, 7, 8, 9];
 
 let lastSaveReport = null;
 let saveDisabledUntilReload = false;
@@ -431,6 +431,7 @@ function migrateMarketModel(report) {
             migrated++;
         }
         initializeOwnership(stock);
+        if (!Array.isArray(stock.operatingInvestments)) stock.operatingInvestments = []; // v9: działające inwestycje
         if (stock.assetType !== 'REIT' && !Number.isFinite(stock.dividendPayoutRatio)) {
             setCompanyDividendPolicy(stock, stock.dividendPolicy);
         }
