@@ -489,6 +489,7 @@ function onTakeoverStarted(initiator, target, options = {}) {
     const process = initiator.mergerProcess;
     process.hostile = !options.friendly;
     syncTakeover(initiator, target);
+    if (typeof onTakeoverStartedRelations === 'function') onTakeoverStartedRelations(initiator, target);
     if (getFundStakePct(target) >= 0.2 && playerFund) notifyFundOfTakeover(initiator, target);
 
     const owner = findMajorityShareholder(target);
@@ -566,8 +567,12 @@ function triggerHostileTakeoverEvent(forcedTarget = null) {
     const initiator = getRandomElement(initiators);
     const premium = 0.15 + Math.random() * 0.25;
     const affordable = stocks.filter(s => free(s) && s !== initiator && !s.isStateOwned && getMarketCapValue(s) * (1 + premium) <= initiator.cash);
-    const fundTargets = affordable.filter(s => getFundStakePct(s) >= 0.2);
-    const target = forcedTarget || (fundTargets.length && Math.random() < 0.5 ? getRandomElement(fundTargets) : getRandomElement(affordable));
+    // Przyjazny bot-właściciel nie atakuje spółek, w których fundusz ma duży udział (relations.js).
+    const ownerBot = findMajorityShareholder(initiator)?.kind === 'ai' ? findMajorityShareholder(initiator).entity : null;
+    const spareFund = ownerBot && typeof getRelation === 'function' && getRelation(ownerBot.id) >= RELATION_FRIENDLY;
+    const fundTargets = spareFund ? [] : affordable.filter(s => getFundStakePct(s) >= 0.2);
+    const pool = spareFund ? affordable.filter(s => getFundStakePct(s) < 0.2) : affordable;
+    const target = forcedTarget || (fundTargets.length && Math.random() < 0.5 ? getRandomElement(fundTargets) : getRandomElement(pool));
     if (!target) return null;
     logEvent(`🚨 WROGIE PRZEJĘCIE: ${initiator.name} ogłasza ofertę za ${target.name} (premia ${(premium * 100).toFixed(0)}%).`, 'market');
     return initiateMergerProcess(initiator, target, 'przejęcie', 'cash', premium) ? { initiator, target } : null;

@@ -401,6 +401,7 @@ function applyPositionChanges(participants) {
                 if (weakest && weakest.score < participant.score - 5) {
                     setParticipantPosition(weakest, participant.positionId);
                     setParticipantPosition(participant, target);
+                    if (participant.isPlayer && weakest.manager && typeof onColleagueEvent === 'function') onColleagueEvent(weakest.id, 'overtaken');
                 }
             }
             resetWeak(participant);
@@ -528,6 +529,7 @@ function superviseManagerFund(managerId) {
         return false;
     }
     corporation.supervisedManagerId = managerId;
+    onColleagueEvent(managerId, 'supervise');
     logEvent(`👔 Przejmujesz nadzór nad funduszem: ${manager.name}.`, 'review');
     return true;
 }
@@ -561,6 +563,7 @@ function consolidateSupervisedFund(forceApproval = null) {
     const client = addFundClient('institution', units, nav);
     client.name = `Klienci funduszu ${manager.name}`;
 
+    onColleagueEvent(manager.id, 'consolidate');
     corporation.managers = corporation.managers.filter(item => item !== manager);
     corporation.supervisedManagerId = null;
     playerProfile.cv.push({ type: 'milestone', text: `Konsolidacja funduszu ${manager.name} (${value.toFixed(0)} zł).` });

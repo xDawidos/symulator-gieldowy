@@ -60,6 +60,11 @@
                 <span class="nav-label">Ranking</span>
             </button>
 
+            <button class="sidebar-nav-btn" id="open-firm-btn" onclick="openCorporationModal('firm')">
+                <span class="nav-icon">🏢</span>
+                <span class="nav-label">Firma</span>
+            </button>
+
             <button class="sidebar-nav-btn" id="open-governance-btn" onclick="openGovernanceModal()">
                 <span class="nav-icon">🗳️</span>
                 <span class="nav-label">Walne zgromadzenia</span>
@@ -1171,6 +1176,7 @@
           <button class="close-btn" onclick="closeCorporationModal()" aria-label="Zamknij">&times;</button>
         </header>
         <nav class="corp-tabs" role="tablist">
+          <button data-tab="firm" onclick="setCorporationTab('firm')">🏢 Firma</button>
           <button data-tab="board" onclick="setCorporationTab('board')">Zarząd</button>
           <button data-tab="analysts" onclick="setCorporationTab('analysts')">Analitycy</button>
           <button data-tab="cooperation" onclick="setCorporationTab('cooperation')">Współpraca</button>
@@ -1259,6 +1265,7 @@
     <script src="governance.js"></script>
     <script src="dividends.js"></script>
     <script src="etf.js"></script>
+    <script src="relations.js"></script>
     <script src="events.js"></script>
     <script src="chart.js"></script>
     <script src="ui.js"></script>

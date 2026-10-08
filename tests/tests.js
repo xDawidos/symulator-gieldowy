@@ -2395,6 +2395,88 @@ group('ETF-y z portfelem (0.10.2 M3)', () => {
     });
 });
 
+group('Firma i relacje z botami (0.10.2 M4)', () => {
+    function worldM4() {
+        const a = makeCompany('AAA');
+        const b = makeCompany('BBB', { cash: 50_000_000 });
+        [a, b].forEach(s => { s.insiderShares = 0; s.sharesHeld = 0; s.reputation = { player: 0 }; s.ceo = { name: 'Prezes', traits: [] }; });
+        resetWorld([a, b]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        botRelations = createBotRelations();
+        aiCompetitors.forEach(ai => { ai.portfolio = {}; });
+        return { a, b, bot: aiCompetitors[0] };
+    }
+
+    test('wymuszenie dywidendy: −0,25 pkt za każdy % akcji bota', () => {
+        const { a, bot } = worldM4();
+        bot.portfolio.AAA = { shares: 2000, avgPrice: 100 }; // 20%
+        onPlayerForcedDividend(a);
+        assert(Math.abs(getRelation(bot.id) + 5) < 1e-9, `relacja ${getRelation(bot.id)}`);
+    });
+
+    test('zrzut pakietu spółki bota (≥ 1%): −10; wsparcie kursu: +3', () => {
+        const { a, bot } = worldM4();
+        bot.portfolio.AAA = { shares: 6000, avgPrice: 100 };
+        onFundTrade(a, 150, 'sell');
+        assert(getRelation(bot.id) === -10, 'zrzut');
+        onFundTrade(a, 60, 'buy');
+        assert(getRelation(bot.id) === -7, 'wsparcie');
+    });
+
+    test('prezent z portfela prywatnego poprawia relację, raz na kwartał', () => {
+        const { bot } = worldM4();
+        playerWallet.cash = 5000;
+        assert(giveGiftToBot(bot.id, 1000) && getRelation(bot.id) === 10, 'prezent');
+        assert(!giveGiftToBot(bot.id, 1000) && playerWallet.cash === 4000, 'limit kwartalny');
+    });
+
+    test('relacje wracają powoli do zera; skala −100…100', () => {
+        const { bot } = worldM4();
+        changeRelation(bot.id, -500, 'test');
+        assert(getRelation(bot.id) === -100, 'dolna granica');
+        const random = Math.random;
+        Math.random = () => 0.99; // bez akcji wrogiego bota
+        processRelationsQuarterly();
+        Math.random = random;
+        assert(getRelation(bot.id) === -95, `powrót ${getRelation(bot.id)}`);
+    });
+
+    test('wrogi bot wysyła kpiący mail, przyjazny — radę', () => {
+        const { bot } = worldM4();
+        const person = findRelationPerson(bot.id);
+        sendBotMail(person, 'hostile');
+        assert(mailbox.messages[0].sender === `bot:${bot.id}` && getMailSenderName(mailbox.messages[0].sender).includes(bot.name), 'mail wrogi');
+        sendBotMail(person, 'tip');
+        assert(/dobra rada/.test(mailbox.messages[0].subject), 'rada');
+    });
+
+    test('przyjazny bot sprzedaje pakiet z rabatem', () => {
+        const { a, bot } = worldM4();
+        bot.portfolio.AAA = { shares: 1000, avgPrice: 100 };
+        a.sharesHeld = 1000;
+        offerBotBlock(bot);
+        const offer = botRelations.blockOffer;
+        playerCash = 1_000_000;
+        assert(offer && acceptBotBlock(), 'zakup');
+        assert(playerPortfolio.AAA.shares === offer.shares && bot.portfolio.AAA.shares === 1000 - offer.shares && a.sharesHeld === 1000, 'transfer bez zmiany obrotu');
+        assert(Math.abs(offer.price - a.price * 0.95) < 1e-9, 'rabat 5%');
+    });
+
+    test('zakładka Firma: szef, targety i hierarchia', () => {
+        worldM4();
+        const html = renderCorporationFirm();
+        assert(html.includes('Hierarchia') && html.includes('Targety') && html.includes('Szef'), 'sekcje');
+        assert(getPlayerTargets().length === 5 && getPlayerBoss().name, 'cele i szef');
+    });
+
+    test('kolega: nadzór nad jego funduszem psuje relację', () => {
+        worldM4();
+        const manager = corporation.managers[0];
+        onColleagueEvent(manager.id, 'supervise');
+        assert(getRelation(manager.id) === -15, 'nadzór');
+    });
+});
+
 // --------------------------------------------------------------------------------
 // Uruchomienie
 // --------------------------------------------------------------------------------

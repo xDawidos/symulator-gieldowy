@@ -346,6 +346,8 @@ function buyStock(symbol, quantity) {
         };
     }
 
+    if (typeof onFundTrade === 'function') onFundTrade(stockToBuy, quantity, 'buy'); // relacje z botami (relations.js)
+
     // Reputacja za duży pakiet
     const playerShares = playerPortfolio[symbol]?.shares || 0;
     const ownershipPct = (playerShares / stockToBuy.totalShares) * 100;
@@ -428,6 +430,7 @@ function sellStock(symbol, quantity) {
     stockToSell.sharesHeld -= quantity;
     applyTradeImpact(stockToSell, quantity, -1);
     logFundTrade(symbol, 'sell');
+    if (typeof onFundTrade === 'function') onFundTrade(stockToSell, quantity, 'sell'); // relacje z botami (relations.js)
 
     // Logowanie z informacją o podatku
     logEvent(`Sprzedano ${quantity} szt. ${symbol}. Zysk brutto: ${profit.toFixed(2)} PLN, Podatek: ${taxToPay.toFixed(2)} PLN.`);
@@ -1152,6 +1155,7 @@ function donateToCompany(symbol, amount, donorId = 'player') {
     // --- KONIEC NOWEGO BLOKU ---
 
     changeReputation(donorId, symbol, totalRepGain);
+    if (donorId === 'player' && typeof onPlayerDonation === 'function') onPlayerDonation(stock, amount);
 
     logEvent(`🤝 ${entity.name} przekazał datek w wysokości ${amount.toFixed(2)} PLN na rzecz ${stock.name}, poprawiając relacje.`);
     if (donorId === 'player') {

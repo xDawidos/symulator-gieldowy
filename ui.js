@@ -4760,7 +4760,7 @@ document.addEventListener('DOMContentLoaded', applyDebugModeUi);
 // KARIERA I KORPORACJA (etap C)
 // =================================================================================
 
-let corporationTab = 'board';
+let corporationTab = 'firm';
 
 function renderCareerPanel() {
     const container = document.getElementById('fund-career-panel');
@@ -4813,8 +4813,8 @@ function corporationAction(fn, ...args) {
 function renderCorporationBody() {
     const body = document.getElementById('corporation-body');
     if (!body || !corporation) return;
-    const renderers = { board: renderCorporationBoard, analysts: renderCorporationAnalysts, cooperation: renderCorporationCooperation, takeovers: renderCorporationTakeovers };
-    body.innerHTML = (renderers[corporationTab] || renderCorporationBoard)();
+    const renderers = { firm: renderCorporationFirm, board: renderCorporationBoard, analysts: renderCorporationAnalysts, cooperation: renderCorporationCooperation, takeovers: renderCorporationTakeovers };
+    body.innerHTML = (renderers[corporationTab] || renderCorporationFirm)();
 }
 
 function renderCorporationBoard() {
@@ -5049,7 +5049,12 @@ function renderMailbox() {
 
 function renderMailPreview(message) {
     let action = '';
-    if (message.action?.type === 'agm') {
+    if (message.action?.type === 'botBlock') {
+        const offer = botRelations.blockOffer?.symbol === message.action.symbol ? botRelations.blockOffer : null;
+        action = offer
+            ? `<div class="mail-action"><p>${offer.shares.toLocaleString('pl-PL')} akcji po ${formatZl(offer.price)} · razem ${formatZl(offer.shares * offer.price, 0)}</p><button onclick="mailAction(acceptBotBlock)">Kup pakiet z rabatem</button></div>`
+            : '<p class="fund-muted">Oferta pakietu wygasła.</p>';
+    } else if (message.action?.type === 'agm') {
         action = `<div class="mail-action"><button onclick="openGovernanceModal('${message.action.symbol}')">Otwórz walne zgromadzenie</button></div>`;
     } else if (message.action?.type === 'takeover') {
         action = `<div class="mail-action"><button onclick="openTakeoverModal('${message.action.symbol}')">Otwórz decyzję w sprawie przejęcia</button></div>`;

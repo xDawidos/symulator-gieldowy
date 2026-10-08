@@ -27,6 +27,8 @@ function renderStockDrawer(symbol) {
     const row = document.querySelector('#stock-table-body tr[data-symbol="' + symbol + '"]');
     if (!row) return;
     const cols = row.querySelectorAll('td').length || 7;
+    const stockData = typeof stocks !== 'undefined' ? stocks.find(s => s.symbol === symbol) : null;
+    const isCompanyStock = Boolean(stockData && !stockData.assetType);
     const dr = document.createElement('tr');
     dr.id = drawerId;
     dr.className = 'stock-row-drawer open';
@@ -50,6 +52,10 @@ function renderStockDrawer(symbol) {
             onclick="showPriceHistoryModal('${symbol}')">📈</button>
           <button class="btn-ghost-icon" title="Akcjonariat — kto ma jaki % udziałów"
             onclick="openCompanyReport('${symbol}')">📊</button>
+          ${isCompanyStock ? `<button class="btn-ghost-icon" title="Walne zgromadzenie — akcjonariat, uchwały, głosowanie (większościowiec)"
+            onclick="openGovernanceModal('${symbol}')">🗳️</button>
+          <button class="btn-ghost-icon" title="Inwestycje spółki"
+            onclick="openCompanyInvestments('${symbol}')">🏗️</button>` : ''}
         </div>
       </div>
     </div>`;

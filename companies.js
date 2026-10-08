@@ -3744,6 +3744,7 @@ function forceDividend(symbol) {
         }
         changeReputation('player', symbol, repLoss);
         // --- KONIEC POPRAWKI ---
+        onPlayerForcedDividend(stock); // relacje z botami-akcjonariuszami (relations.js)
 
         openManagementModal(symbol); // Odśwież widok modala
     } else {

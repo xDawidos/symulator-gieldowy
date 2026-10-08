@@ -372,6 +372,7 @@ gameTimers.weekly = setInterval(() => {
         processPublicInvestmentFunding(); // BC → spółki państwowe, miasto → spółki miejskie (investments.js)
         processGovernanceQuarter(); // walne zgromadzenia (governance.js)
         processEtfsQuarterly(); // rebalancing, cele roczne, nowe i zamykane ETF-y (etf.js)
+        processRelationsQuarterly(); // relacje z botami: wrogowie i przyjaciele (relations.js)
         advanceEconomyCycle(); // nowa faza koniunktury przed raportami
         advanceMacroQuarter(); // inflacja, bezrobocie, cykle sektorów, wybory (macro.js)
         processCityQuarterly(); // festyn raz w roku (city.js)
@@ -811,6 +812,7 @@ function createNewWorld() {
     // i struktura własności (pakiety insiderów).
     economyCycle = createEconomyCycle(getRandomElement(['recovery', 'expansion']));
     macro = createMacroState(); // wskaźniki makro, cykle sektorów, wybory (macro.js)
+    botRelations = createBotRelations(); // relacje z botami (relations.js)
     updateMarketTrendFromCycle();
     stocks.forEach(stock => {
         if (stock.balanceSheet && stock.assetType !== 'Startup') initializeFundamentals(stock, true);

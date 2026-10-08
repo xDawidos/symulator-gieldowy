@@ -94,6 +94,7 @@ function trimMailbox() {
 function getMailSenderName(sender) {
     if (sender === CORPORATION_SENDER) return `🏢 ${corporation?.name || playerProfile?.corporation || 'Korporacja'}`;
     if (MAGAZINES[sender]) return `📰 ${MAGAZINES[sender].label}`;
+    if (String(sender).startsWith('bot:') && typeof findRelationPerson === 'function') return `👤 ${findRelationPerson(String(sender).slice(4))?.name || 'Inwestor'}`;
     const stock = stocks.find(s => s.symbol === sender);
     return stock ? `📣 ${stock.name}` : String(sender);
 }

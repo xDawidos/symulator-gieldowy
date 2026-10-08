@@ -116,6 +116,7 @@ function buildSaveSnapshot() {
         economyCycle,
         macro,
         etfs: serializeEtfs(),
+        botRelations,
         playerProfile,
         playerFund,
         corporation,
@@ -410,6 +411,8 @@ function applySaveSnapshot(snapshot) {
 
     // Koniunktura i model rynku (zapisy v2 nie miały tych danych — migracja).
     macro = snapshot.macro && typeof snapshot.macro === 'object' ? snapshot.macro : createMacroState(); // v10: makro
+    botRelations = snapshot.botRelations && typeof snapshot.botRelations === 'object' ? snapshot.botRelations : createBotRelations(); // v10: relacje
+    ensureBotRelations();
     ensureMacroState();
     if (snapshot.economyCycle && ECONOMY_PHASES[snapshot.economyCycle.phase]) {
         economyCycle = snapshot.economyCycle;
