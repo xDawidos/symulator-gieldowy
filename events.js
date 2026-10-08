@@ -349,59 +349,7 @@ function triggerStateCompanyEventCycle() {
     // ... (kod bez zmian) ...
 }
 
-function triggerMergerAndAcquisitionEvent() {
-    // ... (kod bez zmian) ...
-}
-
-function handleTakeoverAcceptance(acquirer, target, buyoutPrice) {
-    // ... (kod bez zmian) ...
-}
-
-function handleTakeoverRejection(acquirer, target) {
-    // ... (kod bez zmian) ...
-}
-
-function triggerHostileTakeoverEvent() {
-    // ... (kod bez zmian) ...
-}
-
 // --- POPRAWIONA WERSJA triggerRescueOfferingEvent ---
-function triggerRescueOfferingEvent() {
-    // Użyj balanceSheet.liabilities zamiast corporateDebt
-    const potentialTargets = stocks.filter(s => {
-        if (!s.balanceSheet || s.balanceSheet.liabilities <= 0 || s.isBankrupt || s.assetType) return false;
-        const marketValue = s.price * s.totalShares;
-        return s.balanceSheet.liabilities > (marketValue * 0.3); // Sprawdź zadłużenie z bilansu
-    });
-
-    if (potentialTargets.length === 0) return;
-
-    const targetCompany = getRandomElement(potentialTargets);
-    
-    const promotionalPrice = targetCompany.price * (1 - getRandomInRange(0.15, 0.25));
-    if (promotionalPrice <= 0) return;
-
-    // Użyj balanceSheet.liabilities do obliczenia potrzebnych akcji
-    const sharesToIssue = Math.ceil(targetCompany.balanceSheet.liabilities / promotionalPrice);
-    if (sharesToIssue <= 0) return;
-
-    logEvent(`[RYNEK] Spółka ${targetCompany.name} ogłasza "emisję ratunkową" (${sharesToIssue} akcji po ~${promotionalPrice.toFixed(2)} PLN), aby spłacić swoje długi!`, 'market');
-
-    let totalCashRaised = 0;
-    let totalSharesBought = 0;
-
-    // ... (reszta funkcji: Runda dla AI i Runda dla Gracza - bez zmian) ...
-    aiCompetitors.forEach(ai => {
-        // ...
-    });
-    const playerShares = playerPortfolio[targetCompany.symbol]?.shares || 0;
-    if (playerShares > 0) {
-        // ...
-    } else {
-        finalizeRescueOffering(targetCompany, totalCashRaised, totalSharesBought);
-    }
-}
-
  
 
 function triggerNationalizationEvent() {

@@ -753,8 +753,8 @@
             <div id="ma-defense-section" class="bank-section border-danger" style="display: none;">
                 <h4 class="text-down">🚨 JESTEŚ CELEM PRZEJĘCIA! 🚨</h4>
                 <p class="text-sm" id="ma-defense-info">... informacja o zagrożeniu ...</p>
-                <h5>Aktywuj mechanizmy obronne:</h5>
-                <button id="ma-defense-poisonpill-btn">Zatwierdź "Zatrutą Pigułkę"</button>
+                <h5>Mechanizmy obronne:</h5>
+                <div id="ma-defense-buttons"></div>
             </div>
         </div>
 
@@ -769,12 +769,6 @@
         <button id="ma-open-target-modal-btn">Rozpocznij proces M&A</button>
     </div>
     
-    <div id="ma-defense-section" class="bank-section border-danger" style="display: none;">
-        <h4 class="text-down">🚨 JESTEŚ CELEM PRZEJĘCIA! 🚨</h4>
-        <p class="text-sm" id="ma-defense-info">... informacja o zagrożeniu ...</p>
-        <h5>Aktywuj mechanizmy obronne:</h5>
-        <button id="ma-defense-poisonpill-btn" title="Znacząco podniesie koszty przejęcia, ale zaszkodzi Twojej firmie (koszt: 5% wartości firmy).">Zatwierdź "Zatrutą Pigułkę"</button>
-        </div>
 
         </div>
         
@@ -815,24 +809,16 @@
          </div>
     </div>
 
-    <div id="takeover-modal" class="modal" style="display: none;">
+    <div id="takeover-modal" class="modal modal-lg" style="display: none;">
         <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
-        <h2>🚨 Próba Wrogiego Przejęcia! 🚨</h2>
-         <p id="takeover-message"></p>
-         <div>
-             <button id="accept-takeover-btn">✅ Akceptuj Ofertę</button>
-             <button id="reject-takeover-btn">❌ Odrzuć Ofertę (Weto)</button>
-         </div>
+        <h2 class="mt-0">🚨 Wrogie przejęcie</h2>
+        <div id="takeover-body"></div>
     </div>
 
     <div id="rescue-offering-modal" class="modal" style="display: none;">
         <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
-        <h2>📢 Oferta Emisji Ratunkowej!</h2>
-         <p id="rescue-offering-message"></p>
-         <div>
-             <button id="accept-rescue-btn">✅ Kup Akcje</button>
-             <button id="decline-rescue-btn">❌ Odrzuć</button>
-         </div>
+        <h2 class="mt-0">📢 Emisja ratunkowa</h2>
+        <div id="rescue-offering-message"></div>
     </div>
 
     <div id="investors-modal" class="modal" style="display: none;">

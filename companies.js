@@ -2618,6 +2618,18 @@ function resolveMerger(stock1, stock2, process) {
             // Holdingi i Banki
             stocks.filter(s => s.assetType === 'Holding' && s.holdingPortfolio[target.symbol]).forEach(h => h.cash += (h.holdingPortfolio[target.symbol].quantity * pricePerShare));
             commercialBanks.filter(b => b.stockPortfolio[target.symbol]).forEach(b => b.cash += (b.stockPortfolio[target.symbol].shares * pricePerShare));
+            // Fundusze botów, konto prywatne gracza i inne spółki z pakietami
+            for (const manager of corporation?.managers || []) {
+                const held = manager.fund?.portfolio?.[target.symbol]?.shares || 0;
+                if (held > 0) { manager.fund.cash += held * pricePerShare; delete manager.fund.portfolio[target.symbol]; }
+            }
+            const walletHeld = playerWallet?.portfolio?.[target.symbol]?.shares || 0;
+            if (walletHeld > 0) { playerWallet.cash += walletHeld * pricePerShare; delete playerWallet.portfolio[target.symbol]; }
+            for (const owner of stocks) {
+                const stake = owner !== initiator ? owner.equityStakes?.[target.symbol] || 0 : 0;
+                if (stake > 0) adjustCompanyCash(owner, stake * pricePerShare);
+                if (owner.equityStakes?.[target.symbol]) delete owner.equityStakes[target.symbol];
+            }
 
             // 4. Przeniesienie Aktywów i Pasywów (bez zmian)
             if (initiator.balanceSheet && target.balanceSheet) {
@@ -3811,76 +3823,6 @@ function forceDividend(symbol) {
 }
 
 /**
- * Funkcja pomocnicza do aktywacji mechanizmu obronnego przez gracza lub AI.
- * @param {string} symbol - Symbol spółki, która się broni.
- *(Ta funkcja powinna już istnieć - zastąp ją tą)
- * @param {'poisonPill' | 'whiteKnight' | 'pacMan'} defenseType - Typ obrony.
- * @param {string} [entityId='player'] - Kto aktywuje ('player' lub ID bota).
- */
-function activateDefenseMechanism(symbol, defenseType, entityId = 'player') {
-    const stock = stocks.find(s => s.symbol === symbol);
-    if (!stock || !stock.mergerProcess || stock.mergerProcess.defenseActive) return; // Nie można aktywować, jeśli już coś działa
-
-    let entityCash, entityName;
-    if (entityId === 'player') {
-        entityCash = playerCash;
-        entityName = "Ty";
-    } else {
-        const ai = aiCompetitors.find(a => a.id === entityId);
-        if (!ai) return;
-        entityCash = ai.cash;
-        entityName = ai.name;
-    }
-
-    switch (defenseType) {
-        case 'poisonPill':
-            // Koszt aktywacji (np. opłaty prawne i doradcze) to 5% wartości rynkowej firmy
-            const activationCost = (stock.price * stock.totalShares) * 0.05; 
-            
-            if (entityCash < activationCost) {
-                if(entityId === 'player') showToast(`Nie masz wystarczająco gotówki, aby aktywować "Zatrutą Pigułkę"! Wymagane: ${activationCost.toFixed(0)} PLN.`);
-                return;
-            }
-            
-
-            // --- Transakcja ---
-            if (entityId === 'player') playerCash -= activationCost;
-            else entityCash -= activationCost;
-            
-            stock.mergerProcess.defenseActive = 'poisonPill';
-            
-            // --- Natychmiastowe Kary dla Spółki-Celu ---
-            stock.financialHealth -= 1.0; // Natychmiastowa kara dla kondycji
-            if (stock.balanceSheet) {
-                 // Spółka emituje specjalne warranty lub zaciąga dług, aby zwiększyć toksyczność
-                 stock.balanceSheet.liabilities += (stock.price * stock.totalShares) * 0.2; // Dług rośnie o 20% wartości firmy
-            }
-            
-            logEvent(`🛡️ ${stock.name} aktywuje "Zatrutą Pigułkę" (koszt: ${activationCost.toFixed(0)} PLN), aby obronić się przed przejęciem! Kondycja firmy spada, a dług rośnie.`, 'review');
-            if(entityId === 'player') {
-                showToast(`${stock.name} aktywuje "Zatrutą Pigułkę"!`, 'warning');
-                displayCash();
-            }
-            break;
-
-        case 'whiteKnight':
-            // TODO: Logika dla Białego Rycerza (np. ustawienie flagi 'seekingWhiteKnight')
-            logEvent(`🛡️ ${stock.name} rozpoczyna poszukiwania "Białego Rycerza"!`, 'review');
-            break;
-            
-        case 'pacMan':
-            // TODO: Logika dla obrony Pac-Man (próba wrogiego przejęcia agresora)
-            logEvent(`👻 ${stock.name} aktywuje obronę "Pac-Man" i próbuje przejąć agresora!`, 'warning');
-            break;
-    }
-
-    // Odśwież modal zarządzania, aby pokazać aktywną obronę
-    if (entityId === 'player' && document.getElementById('management-modal')?.style.display === 'block') {
-        openManagementModal(symbol);
-    }
-}
-
-/**
  * Inicjuje proces fuzji lub przejęcia między dwoma spółkami.
  * @param {object} initiatorStock - Spółka inicjująca proces.
  * @param {object} targetStock - Spółka będąca celem procesu.
@@ -3888,7 +3830,7 @@ function activateDefenseMechanism(symbol, defenseType, entityId = 'player') {
  * @param {string} financing - Metoda finansowania ('cash', 'stockSwap', 'lbo').
  * @param {number} [offerPremium=0.25] - Premia oferowana ponad cenę rynkową (tylko dla 'przejęcie').
  */
-function initiateMergerProcess(initiatorStock, targetStock, type, financing = 'cash', offerPremium = 0.25) {
+function initiateMergerProcess(initiatorStock, targetStock, type, financing = 'cash', offerPremium = 0.25, options = {}) {
     // Walidacje
     if (!initiatorStock || !targetStock || initiatorStock === targetStock) {
         console.error("[M&A Init] Błąd: Nieprawidłowe spółki.");
@@ -3956,20 +3898,8 @@ function initiateMergerProcess(initiatorStock, targetStock, type, financing = 'c
     logEvent(`🤝 Rozpoczynają się rozmowy o ${type} między ${initiatorStock.name} a ${targetStock.name}!`, 'market');
     showToast(`Rozpoczęto rozmowy o ${type} ${initiatorStock.symbol} z ${targetStock.symbol}!`, 'default');
 
-    // Aktywacja obrony dla wrogich przejęć
-    if (type === 'przejęcie') {
-        // Sprawdź, kto kontroluje spółkę-cel
-        const majorityOwner = findMajorityShareholder(targetStock);
-        if (majorityOwner && (majorityOwner.id === 'player' || majorityOwner.id.startsWith('ai'))) {
-            // Decyzja AI lub gracza o obronie (logika w `makeAiDecision` lub `openManagementModal`)
-            console.log(`[M&A] ${targetStock.symbol} jest pod kontrolą ${majorityOwner.name}. Oczekuję na decyzję o obronie...`);
-        } else {
-            // Zarząd decyduje (losowo)
-            if (Math.random() < 0.3) {
-                activateDefenseMechanism(targetStock.symbol, 'poisonPill', 'company'); // zarząd broni się sam
-            }
-        }
-    }
+    // Obrony, decyzja funduszu (≥ 20%), zarząd (ma.js)
+    if (type === 'przejęcie') onTakeoverStarted(initiatorStock, targetStock, options);
 
     displayStocks(getCurrentInputValues());
     return true;
@@ -4393,77 +4323,6 @@ function issueRescueBond(stock) {
     // Odśwież widok rynku obligacji, jeśli otwarty
     if (document.getElementById('bank-modal')?.style.display === 'block' && document.getElementById('bank-content-bonds')?.style.display === 'block') {
         if (typeof renderBondMarketInBank === 'function') renderBondMarketInBank();
-    }
-}
-
-function acceptRescueOffer(offerDetails) {
-    const { targetCompany, sharesOffered, totalCost, promotionalPrice, cashRaisedSoFar, sharesBoughtSoFar } = offerDetails;
-
-    if (playerCash < totalCost) {
-        showToast("Nie masz wystarczająco gotówki, aby skorzystać z tej oferty!");
-        return;
-    }
-
-    playerCash -= totalCost;
-
-    const symbol = targetCompany.symbol;
-    if (playerPortfolio[symbol]) {
-        const existingHolding = playerPortfolio[symbol];
-        const oldTotalValue = existingHolding.avgPrice * existingHolding.shares;
-        const newTotalValue = oldTotalValue + totalCost;
-        existingHolding.shares += sharesOffered;
-        existingHolding.avgPrice = newTotalValue / existingHolding.shares;
-    }
-
-    // sharesHeld gracza jest już zaktualizowane powyżej
-    // sharesHeld botów zostało zaktualizowane w ich własnej logice
-    // Teraz musimy tylko zaktualizować sharesHeld ogólne dla spółki
-    const stock = stocks.find(s => s.symbol === symbol);
-    if (stock) {
-        stock.sharesHeld += sharesOffered;
-    }
-
-    logEvent(`📢 Skorzystałeś z oferty ratunkowej i nabyłeś ${sharesOffered} akcji ${targetCompany.name}!`, 'review');
-
-    // Finalizacja eventu z uwzględnieniem wkładu gracza
-    const finalCashRaised = cashRaisedSoFar + totalCost;
-    const finalSharesBought = sharesBoughtSoFar + sharesOffered;
-    finalizeRescueOffering(targetCompany, finalCashRaised, finalSharesBought);
-
-    displayCash();
-    displayPortfolio();
-    document.getElementById('rescue-offering-modal').style.display = 'none';
-}
-
-function declineRescueOffer(offerDetails) {
-    logEvent(`Odrzuciłeś ofertę zakupu akcji ratunkowych w ${offerDetails.targetCompany.name}.`, 'review');
-    changeReputation('player', offerDetails.targetCompany.symbol, -20);
-    // Finalizujemy event tylko z wkładem botów, bez udziału gracza
-    finalizeRescueOffering(offerDetails.targetCompany, offerDetails.cashRaisedSoFar, offerDetails.sharesBoughtSoFar);
-
-    document.getElementById('rescue-offering-modal').style.display = 'none';
-}
-
-function finalizeRescueOffering(targetCompany, totalCashRaised, totalSharesBought) {
-    const stock = stocks.find(s => s.symbol === targetCompany?.symbol);
-    if (!stock) return;
-
-    totalCashRaised = Number(totalCashRaised) || 0;
-    totalSharesBought = Number(totalSharesBought) || 0;
-    const initialDebt = Number(stock.corporateDebt) || 0;
-
-    stock.corporateDebt = initialDebt - totalCashRaised;
-    if (stock.corporateDebt < 0) stock.corporateDebt = 0;
-
-    // Zwiększamy liczbę akcji w obiegu o te, które zostały faktycznie kupione
-    stock.totalShares = Number(stock.totalShares || 0) + totalSharesBought;
-
-    logEvent(`[FINAŁ EMISJI] Emisja ratunkowa w ${stock.name} zebrała ${totalCashRaised.toFixed(2)} PLN. Dług spółki zmniejszył się z ${initialDebt.toFixed(2)} PLN do ${stock.corporateDebt.toFixed(2)} PLN.`, 'review');
-
-    // Nagroda: Poprawa kondycji finansowej, jeśli udało się zebrać jakiekolwiek środki
-    if (totalCashRaised > 0) {
-        stock.financialHealth = Number(stock.financialHealth || 0) + 1;
-        if (stock.financialHealth > 5) stock.financialHealth = 5;
     }
 }
 

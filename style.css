@@ -4288,3 +4288,8 @@ img, svg, video { max-width: 100%; }
 .inv-stage.done .inv-stage-fill { background: var(--color-up); }
 .inv-stage-label { position: relative; display: block; text-align: center; font-size: 10.5px; line-height: 18px; font-weight: 600; color: var(--text-main); }
 .inv-item .bank-card-form { margin-top: var(--space-2); }
+
+/* ===================== OBRONY PRZED PRZEJĘCIEM ===================== */
+.defense-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-2); }
+.defense-grid button { line-height: 1.3; }
+#takeover-body .bank-ticker { margin-bottom: var(--space-3); border-radius: var(--radius-md); overflow: hidden; }

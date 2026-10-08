@@ -1247,17 +1247,10 @@ function openManagementModal(symbol, defaultTab = 'main') {
                 maDefense.style.display = 'block';
                 safeSetText('ma-defense-info', `Atakuje: ${stock.mergerProcess.initiatorSymbol}`);
                 
-                const poisonBtn = document.getElementById('ma-defense-poisonpill-btn');
-                if (poisonBtn) {
-                    if(stock.mergerProcess.defenseActive) {
-                        poisonBtn.disabled = true;
-                        poisonBtn.textContent = `Obrona aktywna: ${stock.mergerProcess.defenseActive}`;
-                    } else {
-                        poisonBtn.disabled = false;
-                        poisonBtn.textContent = 'Aktywuj "Zatrutą Pigułkę"';
-                        poisonBtn.onclick = () => activateDefenseMechanism(symbol, 'poisonPill');
-                    }
-                }
+                const defenseBox = document.getElementById('ma-defense-buttons');
+                if (defenseBox) defenseBox.innerHTML = getFundStakePct(stock) > 0.5
+                    ? `<div class="defense-grid">${renderDefenseButtons(stock)}</div><button class="mt-2" onclick="openTakeoverModal('${symbol}')">Szczegóły oferty</button>`
+                    : '<p class="text-xs text-muted">Obronę uruchamia akcjonariusz większościowy.</p>';
             } else {
                 maDefense.style.display = 'none';
             }
@@ -1440,26 +1433,6 @@ function openDividendTrackerModal() {
     const modal = document.getElementById('dividend-tracker-modal');
     renderDividendTrackerContent();
     modal.style.display = 'flex'; // ważne! nie 'block', bo w CSS masz flex
-}
-
-function openRescueOfferingModal(offerDetails) {
-    const modal = document.getElementById('rescue-offering-modal');
-    const message = document.getElementById('rescue-offering-message');
-
-    // Destrukturyzacja obiektu dla łatwiejszego dostępu
-    const { targetCompany, sharesOffered, promotionalPrice, totalCost } = offerDetails;
-
-    // Tworzenie treści wiadomości
-    message.innerHTML = `Spółka <strong>${targetCompany.name}</strong>, w której masz udziały, jest w tarapatach! <br><br>
-        Aby spłacić długi, oferują Ci zakup <strong>${sharesOffered}</strong> nowych akcji po promocyjnej cenie <strong>${promotionalPrice.toFixed(2)} PLN</strong> za sztukę. <br><br>
-        Całkowity koszt: <strong>${totalCost.toFixed(2)} PLN</strong>. <br><br>
-        Czy chcesz skorzystać z okazji i pomóc firmie?`;
-
-    // Ustawienie akcji dla przycisków
-    document.getElementById('accept-rescue-btn').onclick = () => acceptRescueOffer(offerDetails);
-    document.getElementById('decline-rescue-btn').onclick = () => declineRescueOffer(offerDetails);
-
-    modal.style.display = 'block';
 }
 
 function displayStartups(previousInputValues = {}) {
@@ -5070,6 +5043,13 @@ function renderMailbox() {
 
 function renderMailPreview(message) {
     let action = '';
+    if (message.action?.type === 'takeover') {
+        action = `<div class="mail-action"><button onclick="openTakeoverModal('${message.action.symbol}')">Otwórz decyzję w sprawie przejęcia</button></div>`;
+    } else if (message.action?.type === 'rescue') {
+        action = rescueOffer?.symbol === message.action.symbol && !rescueOffer.closed
+            ? '<div class="mail-action"><button onclick="openRescueOfferingModal()">Otwórz ofertę emisji</button></div>'
+            : '<p class="fund-muted">Ta emisja jest już zamknięta.</p>';
+    }
     if (message.action?.type === 'privatization') {
         const offer = privatizationOffer?.symbol === message.action.symbol ? privatizationOffer : null;
         action = offer
@@ -5704,4 +5684,83 @@ function refreshInvestmentViews(symbol) {
     if (modal && modal.style.display === 'block') openCompanyInvestments(symbol);
     const management = document.getElementById('management-modal');
     if (management && management.style.display === 'block') openManagementModal(symbol, 'depts');
+}
+
+// =================================================================================
+// OKNA: WROGIE PRZEJĘCIE I EMISJA RATUNKOWA (etap G2)
+// =================================================================================
+
+/** Przyciski obron dla spółki-celu (fundusz z większością). */
+function renderDefenseButtons(target) {
+    return Object.entries(TAKEOVER_DEFENSES).map(([type, defense]) => {
+        const check = canUseDefense(target, type, 'player');
+        return `<button class="btn-secondary" ${check.ok ? '' : 'disabled'} title="${escapeHtml(defense.desc)}"
+            onclick="activateDefenseMechanism('${target.symbol}', '${type}', 'player')">
+            ${defense.label}<br><span class="text-xs">${check.ok ? formatZl(check.cost, 0) : escapeHtml(check.reason)}</span></button>`;
+    }).join('');
+}
+
+function openTakeoverModal(symbol) {
+    const target = stocks.find(s => s.symbol === symbol);
+    const pair = target && getTakeoverAgainst(target);
+    const modal = document.getElementById('takeover-modal');
+    const body = document.getElementById('takeover-body');
+    if (!modal || !body) return;
+    if (!pair) {
+        body.innerHTML = '<p class="text-muted">Ta oferta przejęcia nie jest już aktualna.</p>';
+        modal.style.display = 'block';
+        return;
+    }
+    const { initiator, process } = pair;
+    const offer = process.offerDetails;
+    const holding = playerPortfolio[symbol];
+    const pct = getFundStakePct(target);
+    const value = (holding?.shares || 0) * offer.buyoutPricePerShare;
+    const decided = { sold: 'Fundusz sprzedał pakiet agresorowi.', against: 'Fundusz głosuje przeciw przejęciu.' }[process.fundDecision];
+    const defense = process.defenseActive && process.defenseActive !== 'none'
+        ? `<p>Aktywna obrona: <strong>${TAKEOVER_DEFENSES[process.defenseActive]?.label || process.defenseActive}</strong>${process.defenseBy ? ` (${escapeHtml(process.defenseBy)})` : ''}</p>` : '';
+
+    body.innerHTML = `
+        <div class="bank-ticker">
+            <div class="bank-ticker-item"><span>${process.hostile === false ? 'Przyjazny oferent' : 'Agresor'}</span><strong>${escapeHtml(initiator.name)}</strong></div>
+            <div class="bank-ticker-item"><span>Cena oferty (premia ${((offer.premium || 0) * 100).toFixed(0)}%)</span><strong>${formatZl(offer.buyoutPricePerShare)}</strong></div>
+            <div class="bank-ticker-item"><span>Udział funduszu</span><strong>${(pct * 100).toFixed(1)}% · ${formatZl(value, 0)}</strong></div>
+        </div>
+        <p class="text-sm">${escapeHtml(process.statusMessage || '')}</p>
+        ${defense}
+        ${decided ? `<p class="text-info">${decided}</p>` : `
+        <div class="d-flex gap-2 flex-wrap">
+            <button onclick="sellFundSharesToAggressor('${symbol}')">💰 Sprzedaj akcje po cenie oferty</button>
+            <button class="btn-danger" onclick="voteAgainstTakeover('${symbol}')">🗳️ Głosuj przeciw</button>
+        </div>`}
+        ${pct > 0.5 ? `<h4 class="mt-3">Obrona (akcjonariusz większościowy)</h4><div class="defense-grid">${renderDefenseButtons(target)}</div>` : ''}`;
+    modal.style.display = 'block';
+}
+
+function openRescueOfferingModal() {
+    const offer = rescueOffer;
+    const stock = offer && stocks.find(s => s.symbol === offer.symbol);
+    const modal = document.getElementById('rescue-offering-modal');
+    const message = document.getElementById('rescue-offering-message');
+    if (!modal || !message) return;
+    if (!stock || offer.closed) {
+        message.innerHTML = '<p class="text-muted">Ta emisja jest już zamknięta.</p>';
+        modal.style.display = 'block';
+        return;
+    }
+    const maxAffordable = Math.min(offer.fundReserved, Math.floor(playerCash / offer.price));
+    message.innerHTML = `
+        <p><strong>${escapeHtml(stock.name)}</strong> ma kłopoty z długiem i oferuje funduszowi do <strong>${offer.fundReserved.toLocaleString('pl-PL')}</strong> nowych akcji
+        po <strong>${formatZl(offer.price)}</strong> (rynek: ${formatZl(stock.price)}). Pieniądze idą na spłatę zobowiązań.</p>
+        <div class="bank-card-form">
+            <input type="text" inputmode="numeric" id="rescue-qty" value="${maxAffordable}" aria-label="Liczba akcji">
+            <button onclick="acceptRescueOffer(parseInt(document.getElementById('rescue-qty').value, 10))">✅ Obejmij akcje</button>
+            <button class="btn-secondary" onclick="declineRescueOffer()">❌ Odrzuć</button>
+        </div>`;
+    modal.style.display = 'block';
+}
+
+function closeRescueOfferingModal() {
+    const modal = document.getElementById('rescue-offering-modal');
+    if (modal) modal.style.display = 'none';
 }

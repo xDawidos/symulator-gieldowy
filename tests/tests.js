@@ -1958,6 +1958,112 @@ group('Inwestycje spółek: etapy, wynik, dopłata funduszu (etap G4)', () => {
     });
 });
 
+group('Obrony i wrogie przejęcia (etap G2)', () => {
+    function worldG2() {
+        const a = makeCompany('AAA', { cash: 50_000_000, fixedAssets: 800_000 });
+        const b = makeCompany('BBB', { cash: 1_000_000, fixedAssets: 800_000 });
+        const k = makeCompany('KKK', { cash: 30_000_000, fixedAssets: 800_000 });
+        [a, b, k].forEach(c => { c.insiderShares = 0; c.sharesHeld = 0; c.reputation = { player: 0 }; c.ceo = { name: 'Prezes', traits: [] }; });
+        resetWorld([a, b, k]);
+        allBonds.length = 0;
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        return { a, b, k };
+    }
+    function withRandom(value, fn) {
+        const random = Math.random;
+        Math.random = () => value;
+        try { return fn(); } finally { Math.random = random; }
+    }
+    function fundHolds(b, shares) {
+        playerPortfolio.BBB = { shares, avgPrice: 80, assetType: 'stock' };
+        b.sharesHeld = shares;
+    }
+
+    test('wrogie przejęcie spółki z ≥ 20% funduszu: mail i decyzja', () => {
+        const { a, b } = worldG2();
+        fundHolds(b, 2500);
+        const mails = mailbox.messages.length;
+        withRandom(0.99, () => triggerHostileTakeoverEvent(b));
+        assert(b.mergerProcess && getTakeoverAgainst(b)?.process.fundDecision === 'pending', 'decyzja czeka');
+        assert(mailbox.messages.length > mails && mailbox.messages[0].action?.type === 'takeover', 'mail');
+    });
+
+    test('sprzedaż agresorowi po cenie oferty: gotówka funduszu rośnie, agresor ma pakiet', () => {
+        const { a, b } = worldG2();
+        fundHolds(b, 2500);
+        withRandom(0.99, () => initiateMergerProcess(a, b, 'przejęcie', 'cash', 0.3));
+        const cash = playerCash, total = a.mergerProcess.offerDetails.totalCost;
+        assert(sellFundSharesToAggressor('BBB'), 'sprzedaż');
+        assert(Math.abs(playerCash - cash - 2500 * 130) < 1e-6, `gotówka ${playerCash - cash}`);
+        assert(a.equityStakes.BBB === 2500 && !playerPortfolio.BBB, 'pakiet u agresora');
+        assert(a.mergerProcess.offerDetails.totalCost < total, 'koszt przejęcia pomniejszony');
+    });
+
+    test('głos przeciw: agresor może się wycofać', () => {
+        const { a, b } = worldG2();
+        fundHolds(b, 4000);
+        withRandom(0.99, () => initiateMergerProcess(a, b, 'przejęcie', 'cash', 0.3));
+        voteAgainstTakeover('BBB');
+        withRandom(0.0, () => advanceMergerProcess(a));
+        assert(!a.mergerProcess && !b.mergerProcess, 'wycofanie');
+    });
+
+    test('pigułka: płaci fundusz z większością, obrona zapisana u inicjatora', () => {
+        const { a, b } = worldG2();
+        fundHolds(b, 6000);
+        playerCash = 1_000_000;
+        withRandom(0.99, () => initiateMergerProcess(a, b, 'przejęcie', 'cash', 0.3));
+        assert(activateDefenseMechanism('BBB', 'poisonPill', 'player'), 'aktywna');
+        assert(playerCash === 1_000_000 - 50_000 && a.mergerProcess.defenseActive === 'poisonPill' && b.mergerProcess.defenseActive === 'poisonPill', 'koszt i stan');
+        assert(!activateDefenseMechanism('BBB', 'negotiate', 'player'), 'druga obrona zablokowana');
+    });
+
+    test('negocjacje: agresor podnosi cenę', () => {
+        const { a, b } = worldG2();
+        withRandom(0.99, () => initiateMergerProcess(a, b, 'przejęcie', 'cash', 0.3));
+        const price = a.mergerProcess.offerDetails.buyoutPricePerShare;
+        withRandom(0.01, () => activateDefenseMechanism('BBB', 'negotiate', 'company'));
+        assert(a.mergerProcess && a.mergerProcess.offerDetails.buyoutPricePerShare > price, 'wyższa cena');
+    });
+
+    test('Biały Rycerz: agresor odpuszcza, przyjazna spółka przejmuje inicjatywę', () => {
+        const { a, b, k } = worldG2();
+        withRandom(0.99, () => initiateMergerProcess(a, b, 'przejęcie', 'cash', 0.3));
+        const original = checkAntitrust;
+        checkAntitrust = () => false;
+        withRandom(0.99, () => activateDefenseMechanism('BBB', 'whiteKnight', 'company'));
+        checkAntitrust = original;
+        assert(!a.mergerProcess && k.mergerProcess?.initiatorSymbol === 'KKK' && b.mergerProcess?.partnerSymbol === 'KKK', 'rycerz');
+        assert(k.mergerProcess.hostile === false, 'przyjazna oferta');
+    });
+
+    test('Pac-Man: cel kupuje akcje agresora', () => {
+        const { a, b } = worldG2();
+        withRandom(0.99, () => initiateMergerProcess(a, b, 'przejęcie', 'cash', 0.3));
+        const cash = b.cash;
+        withRandom(0.99, () => activateDefenseMechanism('BBB', 'pacMan', 'company'));
+        assert(b.equityStakes?.AAA > 0 && b.cash < cash && a.sharesHeld === b.equityStakes.AAA, 'pakiet agresora');
+        assert(!a.mergerProcess, 'agresor wycofany');
+    });
+
+    test('emisja ratunkowa: akcje dla nowych akcjonariuszy i funduszu, dług spada', () => {
+        const { b } = worldG2();
+        b.balanceSheet.liabilities = 900_000;
+        const bot = aiCompetitors[0];
+        bot.cash = 10_000_000;
+        delete bot.portfolio.BBB;
+        const liabilities = b.balanceSheet.liabilities, shares = b.totalShares;
+        withRandom(0.0, () => triggerRescueOfferingEvent(b));
+        assert(bot.portfolio.BBB?.shares > 0, 'nowy akcjonariusz-bot');
+        assert(rescueOffer?.symbol === 'BBB' && rescueOffer.fundReserved > 0, 'pula funduszu');
+        playerCash = 1_000_000;
+        assert(acceptRescueOffer(100), 'fundusz obejmuje');
+        assert(playerPortfolio.BBB.shares === 100 && b.totalShares > shares + 100 && b.balanceSheet.liabilities < liabilities, 'akcje i dług');
+        assert(b.sharesHeld === b.totalShares - shares, 'akcje w obrocie');
+        assert(rescueOffer.closed, 'zamknięta');
+    });
+});
+
 // --------------------------------------------------------------------------------
 // Uruchomienie
 // --------------------------------------------------------------------------------

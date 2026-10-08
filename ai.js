@@ -589,7 +589,7 @@ function makeAiDecision(ai) {
         if (Math.random() < defenseChance) {
             // AI decyduje się na obronę -> aktywuj "Zatrutą Pigułkę"
             console.log(`[M&A AI Obrona] ${ai.name} aktywuje "Zatrutą Pigułkę" w ${targetStock.symbol}!`);
-            activateDefenseMechanism(targetStock.symbol, 'poisonPill', ai.id); // Przekaż ID bota
+            activateDefenseMechanism(targetStock.symbol, chooseDefenseForPersonality(ai.personality, targetStock, ai.id), ai.id);
             return; // AI podjęło akcję obronną, kończy turę
         } else {
             // AI nie aktywuje obrony (akceptuje ofertę lub czeka)
@@ -1240,56 +1240,6 @@ function aiDecideOnTakeover(aiOwner, acquirer, target, buyoutPrice) {
         logEvent(`[DECYZJA AI] 🛡️ ${aiOwner.name} odrzuca ofertę przejęcia ${target.name}, chroniąc swoje aktywa!`, 'review');
         handleTakeoverRejection(acquirer, target);
     }
-}
-
-function aiDecideOnRescueOffer(ai, offerDetails) {
-    const { totalCost, sharesOffered } = offerDetails;
-
-    // Główny warunek: czy bota w ogóle stać na zakup?
-    if (ai.cash < totalCost) {
-        // Jeśli nie ma pieniędzy, nie może skorzystać z oferty.
-        return 0; 
-    }
-
-    let acceptanceChance = 0;
-
-    // Każda osobowość ma inną chęć do ryzyka i pomocy firmie
-    switch (ai.personality) {
-        case 'calm':
-        case 'pro_investor':
-        case 'whale':
-            // Logiczni i profesjonalni inwestorzy widzą w tym okazję.
-            acceptanceChance = 0.95; // 95% szans na akceptację, jeśli ich stać.
-            break;
-        case 'yolo_trader':
-        case 'reckless':
-            // Ryzykanci zawsze wchodzą w takie okazje.
-            acceptanceChance = 0.99; // 99% szans.
-            break;
-        case 'dividend_chaser':
-            // Marian chętnie pomoże firmie, która wypłaca dywidendę, aby nadal to robiła.
-            acceptanceChance = 0.90;
-            break;
-        default:
-            acceptanceChance = 0.80; // Domyślna wysoka szansa.
-    }
-
-    if (Math.random() < acceptanceChance) {
-        // Bot decyduje się na zakup
-        ai.cash -= totalCost;
-        
-        const symbol = offerDetails.targetCompany.symbol;
-        if (ai.portfolio[symbol]) {
-            ai.portfolio[symbol].shares += sharesOffered;
-            // Można by tu uśrednić cenę, ale dla uproszczenia na razie pomijamy.
-        }
-        
-        logEvent(`[AI] ${ai.name} skorzystał z oferty ratunkowej i dokupił akcje ${symbol}.`, 'market');
-        return sharesOffered;
-    }
-
-    // Bot odrzucił ofertę
-    return 0;
 }
 
 function aiInvestInStartup(ai, symbol, amount) {
