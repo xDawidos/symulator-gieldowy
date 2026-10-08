@@ -461,7 +461,7 @@ function displayStocks(previousInputValues = {}) {
 
 function showPriceHistoryModal(symbol) {
     const stock = stocks.find(s => s.symbol === symbol);
-    if (!stock) { alert(`Nie znaleziono akcji o symbolu ${symbol}.`); return; }
+    if (!stock) { showToast(`Nie znaleziono akcji o symbolu ${symbol}.`); return; }
 
     currentlyDisplayedChartSymbol = symbol;
 
@@ -2008,7 +2008,7 @@ function openStartupOfferModal(offerDetails) {
     newAcceptBtn.onclick = () => {
         const amount = document.getElementById('startup-offer-amount').valueAsNumber;
         if (isNaN(amount) || amount <= 0) {
-            alert("Proszę wpisać poprawną, dodatnią kwotę inwestycji.");
+            showToast("Proszę wpisać poprawną, dodatnią kwotę inwestycji.");
             return;
         }
         acceptStartupOffer(startup.symbol, amount, offer.type, offer.value);
@@ -2348,7 +2348,7 @@ function setPriceAlert(symbol, type) {
     if (isNaN(value)) { // Jeśli pole jest puste, usuń alert
         stock.priceAlerts[type] = null;
     } else if (value <= 0) {
-        alert("Cena musi być dodatnia!");
+        showToast("Cena musi być dodatnia!");
         return;
     } else {
         stock.priceAlerts[type] = value;
@@ -3310,7 +3310,7 @@ function handleViewFinancesClick(symbol) {
     }
 
     // Zapytaj gracza o potwierdzenie płatności
-    if (confirm(`Czy chcesz zapłacić ${accessCost} PLN za jednorazowy wgląd w finanse ${stock.name}?`)) {
+    gameConfirm(`Czy chcesz zapłacić ${accessCost} PLN za jednorazowy wgląd w finanse ${stock.name}?`, () => {
         playerCash -= accessCost; // Pobierz opłatę
         stock.playerHasFinancialAccess = true; // Ustaw flagę dostępu
         displayCash(); // Zaktualizuj UI gotówki
@@ -3319,7 +3319,7 @@ function handleViewFinancesClick(symbol) {
         openFinancialDetailsModal(symbol); // Otwórz modal finansowy
         // Odśwież modal zarządzania, aby zaktualizować tekst przycisku/info
         openManagementModal(symbol); // Ponownie otwórz modal zarządzania, by odświeżyć info
-    }
+    });
 }
 
 function openStateModal() {
@@ -3390,11 +3390,11 @@ function openMaTargetModal(initiatorSymbol) {
             takeoverCashBtn.textContent = 'Przejęcie (Gotówka)';
             takeoverCashBtn.title = 'Wrogie przejęcie finansowane z gotówki spółki.';
             takeoverCashBtn.onclick = () => {
-                 if (confirm(`Czy na pewno chcesz zainicjować WROGIE PRZEJĘCIE ${target.name} przez ${initiatorStock.name}? Płatność w GOTÓWCE.`)) {
+                 gameConfirm(`Czy na pewno chcesz zainicjować WROGIE PRZEJĘCIE ${target.name} przez ${initiatorStock.name}? Płatność w GOTÓWCE.`, () => {
                     initiateMergerProcess(initiatorStock, target, 'przejęcie', 'cash');
                     document.getElementById('ma-target-modal').style.display='none';
                     openManagementModal(initiatorSymbol);
-                }
+                });
             };
             actionCell.appendChild(takeoverCashBtn);
 
@@ -3405,11 +3405,11 @@ function openMaTargetModal(initiatorSymbol) {
             takeoverLboBtn.classList.add('ml-1');
             takeoverLboBtn.style.borderColor = 'var(--color-warn)'; // Żółta ramka dla odróżnienia
             takeoverLboBtn.onclick = () => {
-                 if (confirm(`Czy na pewno chcesz zainicjować WROGIE PRZEJĘCIE ${target.name} przez ${initiatorStock.name}? Transakcja zostanie sfinansowana KREDYTEM (LBO), który obciąży Twoją spółkę.`)) {
+                 gameConfirm(`Czy na pewno chcesz zainicjować WROGIE PRZEJĘCIE ${target.name} przez ${initiatorStock.name}? Transakcja zostanie sfinansowana KREDYTEM (LBO), który obciąży Twoją spółkę.`, () => {
                     initiateMergerProcess(initiatorStock, target, 'przejęcie', 'lbo');
                     document.getElementById('ma-target-modal').style.display='none';
                     openManagementModal(initiatorSymbol);
-                }
+                });
             };
             // LBO jest ryzykowne, jeśli firma ma złą kondycję
             if (initiatorStock.financialHealth < 0) {
@@ -3431,11 +3431,11 @@ function openMaTargetModal(initiatorSymbol) {
                 mergerBtn.classList.add('ml-2');
                 mergerBtn.style.borderColor = 'var(--color-up)'; // Zielona ramka
                 mergerBtn.onclick = () => {
-                    if (confirm(`Czy na pewno chcesz zaproponować FUZJĘ ${target.name} z ${initiatorStock.name}? Będzie to polegało na wymianie akcji.`)) {
+                    gameConfirm(`Czy na pewno chcesz zaproponować FUZJĘ ${target.name} z ${initiatorStock.name}? Będzie to polegało na wymianie akcji.`, () => {
                         initiateMergerProcess(initiatorStock, target, 'fuzja', 'stockSwap');
                         document.getElementById('ma-target-modal').style.display='none';
                         openManagementModal(initiatorSymbol);
-                    }
+                    });
                 };
                 actionCell.appendChild(mergerBtn);
             }
@@ -3465,47 +3465,6 @@ function openComplicationModal(stock, decisionData) {
     });
 
     modal.style.display = 'block';
-}
-
-/**
- * Funkcja pomocnicza wywoływana przez przycisk w modalu komplikacji.
- * Przekazuje wybór gracza do logiki gry.
- * @param {string} stockSymbol - Symbol spółki, której dotyczy decyzja.
- * @param {string} optionId - ID wybranej opcji ('cancel', 'expensive', 'stronger').
- */
-function resolveComplicationDecision(stockSymbol, optionId) {
-    const stock = stocks.find(s => s.symbol === stockSymbol);
-    if (!stock || !stock.mergerProcess || !stock.mergerProcess.decisionRequired) {
-        console.error(`[M&A Decision] Nie znaleziono spółki lub procesu decyzyjnego dla ${stockSymbol}`);
-        return;
-    }
-
-    const process = stock.mergerProcess;
-    const partnerStock = stocks.find(s => s.symbol === process.partnerSymbol);
-    const decisionData = process.decisionRequired;
-
-    // Znajdź wybraną opcję
-    const chosenOption = decisionData.options.find(opt => opt.id === optionId);
-    if (!chosenOption) {
-        console.error(`[M&A Decision] Nie znaleziono opcji o ID: ${optionId}`);
-        return;
-    }
-
-    // Wykonaj konsekwencję (która jest funkcją zdefiniowaną w gameLogic.js)
-    console.log(`[M&A Decision] Gracz wybrał: ${chosenOption.text}`);
-    chosenOption.consequence();
-
-    // Resetuj flagę decyzji (już nie jest wymagana)
-    // Funkcje consequence (cancelMerger, itp.) powinny same resetować process.decisionRequired = null
-    // Ale na wszelki wypadek, jeśli tego nie robią:
-    if (stock.mergerProcess) stock.mergerProcess.decisionRequired = null;
-    if (partnerStock && partnerStock.mergerProcess) partnerStock.mergerProcess.decisionRequired = null;
-    
-    // Odśwież UI, aby pokazać nowy status (jeśli proces nie został anulowany)
-    displayStocks(getCurrentInputValues());
-    if (document.getElementById('management-modal')?.style.display === 'block') {
-        openManagementModal(stockSymbol);
-    }
 }
 
 // --- Panel Lombardu ---
@@ -5748,4 +5707,39 @@ function renderCityTicker() {
         ['Poparcie', `${Number(city.mayor?.support || 0).toFixed(0)}%`],
         ['Udziały PPP funduszu', formatZl(getFundPppValue(), 0)]
     ]);
+}
+
+// =================================================================================
+// OKNO POTWIERDZENIA GRY (zamiast confirm())
+// =================================================================================
+
+let gameConfirmAction = null;
+
+function gameConfirm(message, onConfirm) {
+    let modal = document.getElementById('game-confirm-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'game-confirm-modal';
+        modal.className = 'modal modal-sm game-confirm';
+        modal.innerHTML = `
+            <button class="close-btn" onclick="closeGameConfirm(false)" aria-label="Zamknij">&times;</button>
+            <h3 class="mt-0">Potwierdzenie</h3>
+            <p id="game-confirm-message"></p>
+            <div class="d-flex gap-2 justify-between">
+                <button class="btn-secondary" onclick="closeGameConfirm(false)">Anuluj</button>
+                <button onclick="closeGameConfirm(true)">Potwierdź</button>
+            </div>`;
+        document.body.appendChild(modal);
+    }
+    gameConfirmAction = onConfirm;
+    document.getElementById('game-confirm-message').textContent = message;
+    modal.style.display = 'block';
+}
+
+function closeGameConfirm(confirmed) {
+    const modal = document.getElementById('game-confirm-modal');
+    if (modal) modal.style.display = 'none';
+    const action = gameConfirmAction;
+    gameConfirmAction = null;
+    if (confirmed && typeof action === 'function') action();
 }

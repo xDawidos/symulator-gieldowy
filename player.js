@@ -279,15 +279,15 @@ function buyStock(symbol, quantity) {
     
     const stockToBuy = stocks.find(stock => stock.symbol === symbol);
     if (!stockToBuy) {
-        alert("Błąd systemowy: Nie znaleziono takiej akcji!");
+        showToast("Błąd systemowy: Nie znaleziono takiej akcji!");
         return;
     }
     if (stockToBuy.isStateOwned && getSkillLevel('nepotism') === 0) {
-        alert("Nie masz odpowiednich znajomości, aby inwestować w tę strategiczną spółkę Skarbu Państwa!");
+        showToast("Nie masz odpowiednich znajomości, aby inwestować w tę strategiczną spółkę Skarbu Państwa!");
         return;
     }
     if (stockToBuy.isTradeLocked) {
-        alert(`Handel akcjami ${stockToBuy.name} jest tymczasowo wstrzymany!`);
+        showToast(`Handel akcjami ${stockToBuy.name} jest tymczasowo wstrzymany!`);
         return;
     }
 
@@ -296,7 +296,7 @@ function buyStock(symbol, quantity) {
 
     // Poprawka błędu: używamy poprawnej nazwy zmiennej w warunku
     if (quantity > sharesAvailableToBuy) {
-        alert(`Nie ma wystarczającej liczby akcji na rynku! Dostępne: ${sharesAvailableToBuy}`);
+        showToast(`Nie ma wystarczającej liczby akcji na rynku! Dostępne: ${sharesAvailableToBuy}`);
         return;
     }
 
@@ -311,7 +311,7 @@ function buyStock(symbol, quantity) {
     }
 
     if (playerCash < totalCost) {
-        alert("Nie masz wystarczająco gotówki, aby dokonać tego zakupu!");
+        showToast("Nie masz wystarczająco gotówki, aby dokonać tego zakupu!");
         return;
     }
 
@@ -371,12 +371,12 @@ function sellStock(symbol, quantity) {
     const holding = playerPortfolio[symbol];
 
     if (!holding || holding.shares < quantity) {
-        alert(`Nie masz wystarczającej liczby akcji ${stockToSell ? stockToSell.name : symbol}.`);
+        showToast(`Nie masz wystarczającej liczby akcji ${stockToSell ? stockToSell.name : symbol}.`);
         return;
     }
 
     if (stockToSell.isTradeLocked) {
-        alert(`Handel akcjami ${stockToSell.name} jest tymczasowo wstrzymany!`);
+        showToast(`Handel akcjami ${stockToSell.name} jest tymczasowo wstrzymany!`);
         return;
     }
 
@@ -446,7 +446,7 @@ function sellStock(symbol, quantity) {
 function sellAllShares(symbol) {
     const holding = playerPortfolio[symbol];
     if (!holding || holding.shares <= 0) {
-        alert("Nie posiadasz akcji tej spółki.");
+        showToast("Nie posiadasz akcji tej spółki.");
         return;
     }
     
@@ -455,13 +455,13 @@ function sellAllShares(symbol) {
 
 function buyEtf(symbol, quantity) {
     if (getSkillLevel('etfExpert') === 0) { // POPRAWKA WARUNKU
-        alert("Musisz odblokować umiejętność 'Ekspert Rynków Globalnych', aby handlować funduszami ETF!");
+        showToast("Musisz odblokować umiejętność 'Ekspert Rynków Globalnych', aby handlować funduszami ETF!");
         return;
     }
 
     const etfToBuy = etfs.find(e => e.symbol === symbol);
     if (!etfToBuy) {
-        alert("Błąd systemowy: Nie znaleziono takiego funduszu ETF!");
+        showToast("Błąd systemowy: Nie znaleziono takiego funduszu ETF!");
         return;
     }
 
@@ -478,7 +478,7 @@ function buyEtf(symbol, quantity) {
     }
 
     if (playerCash < totalCost) {
-        alert("Nie masz wystarczająco gotówki, aby dokonać tego zakupu!");
+        showToast("Nie masz wystarczająco gotówki, aby dokonać tego zakupu!");
         return;
     }
 
@@ -509,11 +509,11 @@ function sellEtf(symbol, quantity) {
 
     // Sprawdzenie umiejętności i podstawowa walidacja
     if (getSkillLevel('etfExpert') === 0) {
-        alert("Musisz odblokować umiejętność 'Ekspert Rynków Globalnych', aby handlować funduszami ETF!");
+        showToast("Musisz odblokować umiejętność 'Ekspert Rynków Globalnych', aby handlować funduszami ETF!");
         return;
     }
     if (!etfToSell || !holding || holding.shares < quantity || quantity <= 0) {
-        alert(`Nie masz wystarczającej liczby jednostek ${etfToSell ? etfToSell.name : symbol}. Posiadasz: ${holding ? holding.shares : 0}`);
+        showToast(`Nie masz wystarczającej liczby jednostek ${etfToSell ? etfToSell.name : symbol}. Posiadasz: ${holding ? holding.shares : 0}`);
         return;
     }
 
@@ -579,13 +579,13 @@ function sellEtf(symbol, quantity) {
 function buyIndex(indexId, quantity) {
     // Sprawdzenie, czy gracz ma odblokowaną umiejętność Poziomu 2
     if (getSkillLevel('indexAnalystLvl1') < 2) {
-        alert("Musisz odblokować umiejętność 'Makler Indeksowy' (Analityk Indeksowy poz. 2), aby handlować indeksami!");
+        showToast("Musisz odblokować umiejętność 'Makler Indeksowy' (Analityk Indeksowy poz. 2), aby handlować indeksami!");
         return;
     }
 
     const indexToBuy = marketIndexes.find(i => i.id === indexId);
     if (!indexToBuy) {
-        alert("Błąd systemowy: Nie znaleziono takiego indeksu!");
+        showToast("Błąd systemowy: Nie znaleziono takiego indeksu!");
         return;
     }
 
@@ -602,7 +602,7 @@ function buyIndex(indexId, quantity) {
     }
 
     if (playerCash < totalCost) {
-        alert("Nie masz wystarczająco gotówki, aby dokonać tego zakupu!");
+        showToast("Nie masz wystarczająco gotówki, aby dokonać tego zakupu!");
         return;
     }
 
@@ -633,11 +633,11 @@ function sellIndex(indexId, quantity) {
 
     // Sprawdzenie umiejętności i podstawowa walidacja
     if (getSkillLevel('indexAnalystLvl1') < 2) { // Wymagany Poziom 2 Analityka Indeksowego
-        alert("Musisz odblokować umiejętność 'Makler Indeksowy' (Analityk Indeksowy poz. 2), aby handlować indeksami!");
+        showToast("Musisz odblokować umiejętność 'Makler Indeksowy' (Analityk Indeksowy poz. 2), aby handlować indeksami!");
         return;
     }
     if (!indexToSell || !holding || holding.shares < quantity || quantity <= 0) {
-        alert(`Nie masz wystarczającej liczby jednostek ${indexToSell ? indexToSell.name : indexId}. Posiadasz: ${holding ? holding.shares : 0}`);
+        showToast(`Nie masz wystarczającej liczby jednostek ${indexToSell ? indexToSell.name : indexId}. Posiadasz: ${holding ? holding.shares : 0}`);
         return;
     }
 
@@ -709,11 +709,11 @@ function contributeToInvestmentPool(contributorId, amount) {
     if (contributorId === 'player') {
         if (!canFundInvestInStartups(amount)) return; // limit 10% aktywów funduszu
         if (isNaN(amount) || amount <= 0) {
-            alert("Proszę wpisać poprawną kwotę.");
+            showToast("Proszę wpisać poprawną kwotę.");
             return;
         }
         if (playerCash < amount) {
-            alert("Nie masz wystarczająco gotówki!");
+            showToast("Nie masz wystarczająco gotówki!");
             return;
         }
         playerCash -= amount;
@@ -798,7 +798,7 @@ function updateAutoInvestTimer(deltaTime) {
             playerAutoInvest.isEnabled = false;
             logEvent(`[AUTO-INWESTOWANIE] Brak środków! Auto-inwestowanie zostało wyłączone.`, 'review');
             // Opcjonalnie: powiadom gracza alertem
-            alert("Brak wystarczających środków na koncie. Twoje auto-inwestowanie w pulę start-upów zostało wstrzymane.");
+            showToast("Brak wystarczających środków na koncie. Twoje auto-inwestowanie w pulę start-upów zostało wstrzymane.");
         }
 
         // Resetujemy timer na nową wartość z ustawień.
@@ -1252,7 +1252,7 @@ function donateToCompany(symbol, amount, donorId = 'player') {
     }
 
     if (cash < amount) {
-        if (donorId === 'player') alert("Nie masz wystarczająco gotówki na taki datek!");
+        if (donorId === 'player') showToast("Nie masz wystarczająco gotówki na taki datek!");
         return;
     }
 
@@ -1301,18 +1301,18 @@ function makeOfferToState() {
     const quantity = document.getElementById('state-offer-quantity').valueAsNumber;
 
     if (!symbol) {
-        alert("Proszę wybrać spółkę, której akcje chcesz kupić.");
+        showToast("Proszę wybrać spółkę, której akcje chcesz kupić.");
         return;
     }
     if (isNaN(quantity) || quantity <= 0) {
-        alert("Proszę wpisać poprawną, dodatnią liczbę akcji.");
+        showToast("Proszę wpisać poprawną, dodatnią liczbę akcji.");
         return;
     }
 
     const stock = stocks.find(s => s.symbol === symbol);
 
     if (stock.stateOfferCooldownUntil && Date.now() < stock.stateOfferCooldownUntil) {
-        alert("Możesz złożyć kolejną ofertę dla tej spółki dopiero po upływie czasu oczekiwania.");
+        showToast("Możesz złożyć kolejną ofertę dla tej spółki dopiero po upływie czasu oczekiwania.");
         return;
     }
 
@@ -1326,7 +1326,7 @@ function makeOfferToState() {
     const totalCost = offerPrice * quantity;
 
     if (playerCash < totalCost) {
-        alert(`Nie masz wystarczająco gotówki! Potrzebujesz ${totalCost.toFixed(2)} PLN.`);
+        showToast(`Nie masz wystarczająco gotówki! Potrzebujesz ${totalCost.toFixed(2)} PLN.`);
         return;
     }
 
@@ -1340,7 +1340,7 @@ function makeOfferToState() {
 
     const stateShares = Math.floor(stock.totalShares * stock.stateOwnershipPct);
     if (quantity > stateShares) {
-        alert(`Państwo nie posiada wystarczającej liczby akcji na sprzedaż. Maksymalna dostępna liczba to ${stateShares}.`);
+        showToast(`Państwo nie posiada wystarczającej liczby akcji na sprzedaż. Maksymalna dostępna liczba to ${stateShares}.`);
         return;
     }
 
@@ -1379,14 +1379,14 @@ function fundDepartmentUpgrade(symbol, deptType) {
     
     const currentLevel = stock.departments[deptType].level;
     if (currentLevel >= 3) {
-        alert("Ten dział osiągnął już maksymalny poziom.");
+        showToast("Ten dział osiągnął już maksymalny poziom.");
         return;
     }
 
     const cost = 50000 * Math.pow(2, currentLevel);
     
     if (playerCash < cost) {
-        alert(`Brak środków! Koszt ulepszenia: ${cost} PLN.`);
+        showToast(`Brak środków! Koszt ulepszenia: ${cost} PLN.`);
         return;
     }
 
@@ -1414,7 +1414,7 @@ function playerBailsOutCompany(symbol, amount) {
     if (!stock || !stock.balanceSheet) return;
 
     if (amount <= 0) {
-        alert("Kwota spłaty musi być większa od zera.");
+        showToast("Kwota spłaty musi być większa od zera.");
         return;
     }
     
@@ -1425,7 +1425,7 @@ function playerBailsOutCompany(symbol, amount) {
     
     // Zabezpieczenie czy gracza stać
     if (playerCash < amount) {
-        alert("Nie masz wystarczająco gotówki na tę spłatę!");
+        showToast("Nie masz wystarczająco gotówki na tę spłatę!");
         return;
     }
 
@@ -1433,7 +1433,7 @@ function playerBailsOutCompany(symbol, amount) {
     playerCash -= amount;
     stock.balanceSheet.liabilities -= amount;
     
-    logEvent(`💸 Z prywatnych środków spłacono ${amount.toFixed(2)} PLN długu spółki ${stock.name}.`, 'company');
+    logEvent(`💸 Ze środków funduszu spłacono ${amount.toFixed(2)} PLN długu spółki ${stock.name}.`, 'company');
     displayCash(); // Odśwież licznik gotówki na górze ekranu
     
     // Odśwież panel zarządzania na bieżąco

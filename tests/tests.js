@@ -1771,6 +1771,91 @@ group('Miasto, państwo, budownictwo — nowe mechaniki (etap F3)', () => {
     });
 });
 
+group('Fuzje i przejęcia — naprawa modelu (etap G1)', () => {
+    function worldG1() {
+        const a = makeCompany('AAA', { cash: 50_000_000, fixedAssets: 800_000 });
+        const b = makeCompany('BBB', { cash: 200_000, fixedAssets: 800_000, sector: ['Usługi'] });
+        [a, b].forEach(c => { c.insiderShares = 0; c.sharesHeld = 0; c.reputation = { player: 0 }; c.ceo = { name: 'Prezes', traits: [] }; });
+        resetWorld([a, b]);
+        allBonds.length = 0;
+        commercialBanks.length = 0;
+        marketIndexes.find(index => index.id === 'GIG').value = 100;
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        return { a, b };
+    }
+
+    test('przejęcie kończy się w 7–9 kwartałach, a proces prowadzi tylko inicjator', () => {
+        const { a, b } = worldG1();
+        assert(initiateMergerProcess(a, b, 'przejęcie', 'cash', 0.25), 'start');
+        const random = Math.random;
+        Math.random = () => 0.99; // bez zdarzeń i komplikacji
+        const original = checkAntitrust;
+        checkAntitrust = () => false;
+        let quarters = 0;
+        while (a.mergerProcess && quarters < 20) {
+            advanceMergerProcess(b); // cel nie przesuwa procesu
+            advanceMergerProcess(a);
+            quarters++;
+        }
+        checkAntitrust = original;
+        Math.random = random;
+        assert(!a.mergerProcess && quarters >= 6 && quarters <= 9, `kwartały: ${quarters}`);
+    });
+
+    test('komplikacja to dane: przeżywa zapis, decyzja gracza działa po wczytaniu', () => {
+        const { a, b } = worldG1();
+        initiateMergerProcess(a, b, 'przejęcie', 'cash', 0.25);
+        playerCash = 1e9;
+        playerPortfolio.AAA = { shares: 6000, avgPrice: 100, assetType: 'stock' }; // fundusz > 50% inicjatora
+        a.sharesHeld = 6000;
+        handleMajorComplication(a, b, a.mergerProcess);
+        assert(a.mergerProcess.decisionRequired?.kind === 'complication', 'decyzja czeka na gracza');
+        const snapshot = JSON.parse(JSON.stringify(buildSaveSnapshot()));
+        applySaveSnapshot(snapshot);
+        const restored = stocks.find(s => s.symbol === 'AAA');
+        assert(restored.mergerProcess.decisionRequired.options.length === 3, 'opcje po wczytaniu');
+        applyComplicationOption('AAA', 'expensive');
+        assert(restored.mergerProcess && !restored.mergerProcess.decisionRequired, 'kontynuacja');
+    });
+
+    test('bez gracza decyzja zapada od razu (bez setTimeout)', () => {
+        const { a, b } = worldG1();
+        initiateMergerProcess(a, b, 'przejęcie', 'cash', 0.25);
+        handleMajorComplication(a, b, a.mergerProcess);
+        assert(!a.mergerProcess || !a.mergerProcess.decisionRequired, 'rozstrzygnięte');
+    });
+
+    test('LBO bez banku-kredytodawcy jest odrzucane na starcie', () => {
+        const { a, b } = worldG1();
+        a.cash = 0;
+        assert(!initiateMergerProcess(a, b, 'przejęcie', 'lbo', 0.25) && !a.mergerProcess, 'odrzucone');
+    });
+
+    test('blokada antymonopolowa: kara dla inicjatora', () => {
+        const { a, b } = worldG1();
+        initiateMergerProcess(a, b, 'przejęcie', 'cash', 0.25);
+        a.mergerProcess.stage = 3;
+        a.mergerProcess.progress = 100;
+        const original = checkAntitrust;
+        checkAntitrust = () => true;
+        const random = Math.random;
+        Math.random = () => 0.99;
+        const cash = a.cash;
+        advanceMergerProcess(a);
+        Math.random = random;
+        checkAntitrust = original;
+        assert(!a.mergerProcess && a.cash < cash, 'zablokowane z karą');
+    });
+
+    test('akcjonariat: fundusz z większością jest akcjonariuszem kontrolującym', () => {
+        const { a } = worldG1();
+        playerPortfolio.AAA = { shares: 6000, avgPrice: 100, assetType: 'stock' };
+        const owner = findMajorityShareholder(a);
+        assert(owner?.id === 'player' && owner.pct === 0.6, 'fundusz kontroluje');
+        assert(getShareholders(a).some(h => h.kind === 'player'), 'lista akcjonariuszy');
+    });
+});
+
 // --------------------------------------------------------------------------------
 // Uruchomienie
 // --------------------------------------------------------------------------------

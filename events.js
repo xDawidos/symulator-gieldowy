@@ -365,10 +365,6 @@ function triggerHostileTakeoverEvent() {
     // ... (kod bez zmian) ...
 }
 
-function findMajorityShareholder(stock) {
-    // ... (kod bez zmian) ...
-}
-
 // --- POPRAWIONA WERSJA triggerRescueOfferingEvent ---
 function triggerRescueOfferingEvent() {
     // Użyj balanceSheet.liabilities zamiast corporateDebt

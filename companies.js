@@ -2756,127 +2756,6 @@ function cancelMerger(stock, reason) {
     displayStocks(getCurrentInputValues());
 }
 
-function advanceMergerProcess(stock) {
-    if (!stock.mergerProcess) return;
-    // Przejęcie firmy zarządzającej przez korporację gracza (career.js) — bez spółki-inicjatora.
-    if (stock.mergerProcess.type === 'fundTakeover') return advanceFundTakeover(stock);
-    const process = stock.mergerProcess;
-    const partnerStock = stocks.find(s => s.symbol === process.partnerSymbol);
-if (!partnerStock || partnerStock.isBankrupt) {
-  cancelMerger(stock, "Partner przestał istnieć lub zbankrutował.");
-  if (partnerStock) {
-    cancelMerger(partnerStock, "Partner przestał istnieć lub zbankrutował.");
-  }
-  return;
-}
-    if (process.decisionRequired) return;
-
-    // --- Zwiększanie postępu ---
-    let progressSpeed = 5; 
-    
-    // ===>>> EFEKT OBRONY: "Zatruta Pigułka" spowalnia proces <<<===
-    if (process.defenseActive === 'poisonPill') {
-        progressSpeed *= 0.7; // Postęp wolniejszy o 30%
-        process.costs += 10000; // Dodatkowy koszt prawny co cykl
-        logEvent(`💊 "Zatruta Pigułka" spowalnia i podnosi koszty przejęcia ${stock.symbol}...`);
-        
-        // Sprawdź, czy agresor (AI) się nie wycofa
-        const initiator = stocks.find(s => s.symbol === process.initiatorSymbol);
-        if (initiator && initiator.mergerProcess && !initiator.personality) { // Jeśli inicjatorem jest spółka AI
-             if (Math.random() < 0.1) { // 10% szans na wycofanie się w każdym cyklu
-                logEvent(`[M&A] 🏳️ ${initiator.name} wycofuje się z przejęcia ${stock.name} z powodu aktywowanej "Zatrutej Pigułki"!`, 'review');
-                cancelMerger(stock, "Agresor wycofał ofertę.");
-                cancelMerger(partnerStock, "Agresor wycofał ofertę.");
-                return;
-             }
-        }
-    }
-    // ===>>> KONIEC EFEKTU OBRONY <<<===
-
-    process.progress += progressSpeed;
-    process.progress = Math.min(100, process.progress);
-
-    // --- Losowanie Mini-Eventów i Komplikacji ---
-    const eventRoll = Math.random();
-    if (eventRoll < 0.05) { 
-        triggerMergerMiniEvent(stock, partnerStock, process);
-    } else if (eventRoll < 0.08) {
-        process.complications++;
-        process.statusMessage = `Etap ${process.stage}: Komplikacja nr ${process.complications}! 🔴`;
-        console.log(`[M&A] Komplikacja ${process.complications} w procesie ${stock.symbol} <-> ${partnerStock.symbol} (Etap ${process.stage})`);
-        if (partnerStock.mergerProcess) {
-            partnerStock.mergerProcess.complications = process.complications;
-            partnerStock.mergerProcess.statusMessage = process.statusMessage;
-        }
-        if (process.complications >= 3) {
-            handleMajorComplication(stock, partnerStock, process);
-        }
-    }
-
-    // --- Przejście do następnego etapu ---
-    if (process.progress >= 100) {
-        process.stage++;
-        process.progress = 0;
-        process.complications = 0; 
-        console.log(`[M&A] Proces ${stock.symbol} <-> ${partnerStock.symbol} wchodzi w etap ${process.stage}`);
-
-        // Zaktualizuj proces u partnera przed logiką etapu
-        if (partnerStock.mergerProcess) {
-             Object.assign(partnerStock.mergerProcess, process);
-             partnerStock.mergerProcess.partnerSymbol = stock.symbol;
-        }
-
-        // Logika specyficzna dla nowego etapu
-        switch (process.stage) {
-            case 2:
-                process.statusMessage = `Etap 2: Negocjacje warunków...`;
-                break;
-            case 3: 
-                const baseCost = 5000;
-                const valueCost = (stock.price * stock.totalShares + partnerStock.price * partnerStock.totalShares) * 0.005;
-                process.costs += (baseCost + valueCost);
-                process.statusMessage = `Etap 3: Strategia i finansowanie (koszty: ${process.costs.toFixed(0)} PLN).`;
-                break;
-            case 4: 
-                process.statusMessage = `Etap 4: Analiza prawna i kontrola antymonopolowa...`;
-                if (checkAntitrust(stock, partnerStock)) {
-                    cancelMerger(stock, "Zablokowane przez Urząd Antymonopolowy.");
-                    cancelMerger(partnerStock, "Zablokowane przez Urząd Antymonopolowy.");
-                    return; 
-                } else {
-                    process.statusMessage = `Etap 4: Analiza prawna ZAAKCEPTOWANA. Losowanie zdarzeń...`;
-                    triggerMergerMiniEvent(stock, partnerStock, process);
-                }
-                break;
-            case 5: 
-                process.statusMessage = `Etap 5: Integracja operacyjna...`;
-                stock.mergerPartnerVisible = true;
-                partnerStock.mergerPartnerVisible = true;
-                partnerStock.isBeingMerged = true; 
-                partnerStock.price *= 1.1; 
-                break;
-            case 6: 
-                process.statusMessage = `Etap 6: Finalizacja umowy i transfery...`;
-                partnerStock.canBeTraded = false; 
-                break;
-            case 7: 
-                resolveMerger(stock, partnerStock, process); 
-                return; 
-            default:
-                console.warn(`[M&A] Nieznany etap procesu: ${process.stage} dla ${stock.symbol}`);
-                process.statusMessage = `Etap ${process.stage}: ???`;
-                break;
-        }
-        // Zaktualizuj proces u partnera PO logice etapu
-        if (partnerStock.mergerProcess) {
-            Object.assign(partnerStock.mergerProcess, process);
-            partnerStock.mergerProcess.partnerSymbol = stock.symbol;
-        }
-    }
-
-    displayStocks(getCurrentInputValues());
-}
-
 // --- Startupy ---
 function updateStartups(deltaTime) {
     const now = Date.now();
@@ -3165,11 +3044,11 @@ function buyStartupInsurance(symbol) {
 
     // Sprawdź warunki
     if (getSkillLevel('startupInvestor') < 4) {
-        alert("Musisz mieć 4 poziom 'Anioła Biznesu', aby wykupić ubezpieczenie.");
+        showToast("Musisz mieć 4 poziom 'Anioła Biznesu', aby wykupić ubezpieczenie.");
         return;
     }
     if (holding.isInsured) {
-        alert("Ta inwestycja jest już ubezpieczona.");
+        showToast("Ta inwestycja jest już ubezpieczona.");
         return;
     }
 
@@ -3179,18 +3058,18 @@ function buyStartupInsurance(symbol) {
     const insuranceCost = holding.investedAmount * 0.05;
 
     if (playerCash < insuranceCost) {
-        alert(`Nie masz wystarczająco gotówki, aby wykupić ubezpieczenie! Potrzebujesz ${insuranceCost.toFixed(2)} PLN.`);
+        showToast(`Nie masz wystarczająco gotówki, aby wykupić ubezpieczenie! Potrzebujesz ${insuranceCost.toFixed(2)} PLN.`);
         return;
     }
 
-    if (confirm(`Czy na pewno chcesz wykupić ubezpieczenie dla inwestycji w ${symbol} za ${insuranceCost.toFixed(2)} PLN?`)) {
+    gameConfirm(`Czy na pewno chcesz wykupić ubezpieczenie dla inwestycji w ${symbol} za ${insuranceCost.toFixed(2)} PLN?`, () => {
         // Transakcja
         playerCash -= insuranceCost;
         holding.isInsured = true;
 
         logEvent(`🛡️ Wykupiono ubezpieczenie dla inwestycji w ${symbol} za ${insuranceCost.toFixed(2)} PLN.`, 'review');
         displayCash();
-    }
+    });
 }
 
 /**
@@ -3340,13 +3219,13 @@ function maintainStartupCount() {
 function acceptStartupOffer(symbol, amount, offerType, offerValue) {
     const startup = stocks.find(s => s.symbol === symbol);
     if (!startup || startup.assetType !== 'Startup' || startup.stage !== 'funding') {
-        alert("Niestety, ta oferta jest już nieaktualna!");
+        showToast("Niestety, ta oferta jest już nieaktualna!");
         return;
     }
     if (!canFundInvestInStartups(amount)) return; // limit startupów funduszu
 
     if (playerCash < amount) {
-        alert("Nie masz wystarczająco gotówki, aby dokonać tej inwestycji!");
+        showToast("Nie masz wystarczająco gotówki, aby dokonać tej inwestycji!");
         return;
     }
 
@@ -3359,7 +3238,7 @@ function acceptStartupOffer(symbol, amount, offerType, offerValue) {
         case 'DISCOUNT':
             const discountedCost = amount * (1 - offerValue);
             if (playerCash < discountedCost) {
-                alert(`Nie masz wystarczająco gotówki! Koszt po zniżce to ${discountedCost.toFixed(2)} PLN.`);
+                showToast(`Nie masz wystarczająco gotówki! Koszt po zniżce to ${discountedCost.toFixed(2)} PLN.`);
                 return;
             }
             playerCash -= discountedCost;
@@ -3448,7 +3327,7 @@ function payExtraStartupCost(symbol) {
     const cost = startup.pendingExtraCost;
 
     if (playerCash < cost) {
-        alert(`Nie masz wystarczająco gotówki, aby pokryć dodatkowe koszty (${cost.toFixed(2)} PLN).`);
+        showToast(`Nie masz wystarczająco gotówki, aby pokryć dodatkowe koszty (${cost.toFixed(2)} PLN).`);
         return;
     }
     playerCash -= cost;
@@ -3957,16 +3836,10 @@ function activateDefenseMechanism(symbol, defenseType, entityId = 'player') {
             const activationCost = (stock.price * stock.totalShares) * 0.05; 
             
             if (entityCash < activationCost) {
-                if(entityId === 'player') alert(`Nie masz wystarczająco gotówki, aby aktywować "Zatrutą Pigułkę"! Wymagane: ${activationCost.toFixed(0)} PLN.`);
+                if(entityId === 'player') showToast(`Nie masz wystarczająco gotówki, aby aktywować "Zatrutą Pigułkę"! Wymagane: ${activationCost.toFixed(0)} PLN.`);
                 return;
             }
             
-            // Potwierdzenie (tylko dla gracza)
-            if (entityId === 'player') {
-                 if (!confirm(`Aktywacja "Zatrutej Pigułki" będzie Cię kosztować ${activationCost.toFixed(0)} PLN (opłaty doradcze) i natychmiast zaszkodzi firmie (spadek kondycji, wzrost długu), ale może zniechęcić agresora. Kontynuować?`)) {
-                    return; // Gracz anulował
-                 }
-            }
 
             // --- Transakcja ---
             if (entityId === 'player') playerCash -= activationCost;
@@ -4043,7 +3916,13 @@ function initiateMergerProcess(initiatorStock, targetStock, type, financing = 'c
             showToast(`Anulowano: ${initiatorStock.name} nie ma wystarczająco gotówki (${totalCost.toFixed(0)} PLN) na przejęcie.`, 'error');
             return false;
         }
-        // TODO: Walidacja dla 'lbo' (zdolność kredytowa)
+        if (financing === 'lbo') {
+            const lbo = validateLbo(initiatorStock, targetStock, totalCost);
+            if (!lbo.ok) {
+                showToast(`Anulowano wykup lewarowany: ${lbo.reason}.`, 'error');
+                return false;
+            }
+        }
     }
 
     console.log(`[M&A Init] Rozpoczęto proces: ${initiatorStock.symbol} -> ${targetStock.symbol} (Typ: ${type})`);
@@ -4085,7 +3964,7 @@ function initiateMergerProcess(initiatorStock, targetStock, type, financing = 'c
         } else {
             // Zarząd decyduje (losowo)
             if (Math.random() < 0.3) {
-                activateDefenseMechanism(targetStock, 'poisonPill'); // Przykładowa domyślna obrona
+                activateDefenseMechanism(targetStock.symbol, 'poisonPill', 'company'); // zarząd broni się sam
             }
         }
     }
@@ -4130,105 +4009,6 @@ function triggerMergerMiniEvent(stock1, stock2, process) {
     const partner = stock1.symbol === process.initiatorSymbol ? stock2 : stock1;
     if (partner.mergerProcess) {
         Object.assign(partner.mergerProcess, process); // Nadpisz dane w procesie partnera
-    }
-}
-
-/**
- * Obsługuje sytuację, gdy w danym etapie M&A wystąpiły 3 komplikacje.
- * Prezentuje decyzję graczowi lub symuluje ją dla AI.
- * @param {object} stock1 - Pierwsza spółka.
- * @param {object} stock2 - Druga spółka.
- * @param {object} process - Obiekt mergerProcess.
- */
-function handleMajorComplication(stock1, stock2, process) {
-    process.statusMessage = "🔴 POWAŻNE KOMPLIKACJE! Wymagana decyzja...";
-    process.progress = 0; // Zatrzymaj postęp etapu
-
-    // Zdefiniuj opcje decyzji
-    const decisionData = {
-        question: `Proces ${process.type} między ${stock1.name} a ${stock2.name} napotkał poważne trudności! Co robimy?`,
-        options: [
-            { 
-                id: 'cancel', 
-                text: "Anuluj proces (negatywne konsekwencje dla obu firm)", 
-                consequence: () => { 
-                    cancelMerger(stock1, "Anulowano z powodu komplikacji."); 
-                    cancelMerger(stock2, "Anulowano z powodu komplikacji."); 
-                } 
-            },
-            { 
-                id: 'expensive', 
-                text: "Kontynuuj mimo wszystko (proces będzie droższy o 25% i potrwa dłużej)", 
-                consequence: () => { 
-                    process.costs *= 1.25; 
-                    process.complications = 0; 
-                    process.decisionRequired = null; 
-                    process.statusMessage = "Kontynuacja mimo kosztów...";
-                    // Zaktualizuj partnera
-                    const partner = stocks.find(s => s.symbol === process.partnerSymbol);
-                    if(partner && partner.mergerProcess) {
-                        partner.mergerProcess.costs = process.costs;
-                        partner.mergerProcess.complications = 0;
-                        partner.mergerProcess.decisionRequired = null;
-                        partner.mergerProcess.statusMessage = process.statusMessage;
-                    }
-                } 
-            },
-            { 
-                id: 'stronger', 
-                text: "Wykorzystaj kryzys, by wzmocnić współpracę (Ryzyko: 70% szans na anulowanie, 30% na bonus)", 
-                consequence: () => { 
-                    process.complications = 0; 
-                    process.decisionRequired = null; 
-                    const partner = stocks.find(s => s.symbol === process.partnerSymbol);
-                    if (Math.random() < 0.3) { 
-                        // Sukces - bonus
-                        triggerMergerMiniEvent(stock1, partner, process); // Wywołaj pozytywny mini-event
-                        process.statusMessage = "Kryzys wzmocnił współpracę!";
-                        if(partner && partner.mergerProcess) partner.mergerProcess.statusMessage = process.statusMessage;
-                    } else { 
-                        // Porażka - anuluj
-                        cancelMerger(stock1, "Nie udało się przezwyciężyć kryzysu."); 
-                        cancelMerger(partner, "Nie udało się przezwyciężyć kryzysu."); 
-                    } 
-                } 
-            }
-        ]
-    };
-    
-    // Zapisz dane decyzyjne w procesie
-    process.decisionRequired = decisionData;
-    if (stock2.mergerProcess) {
-        stock2.mergerProcess.decisionRequired = decisionData;
-    }
-
-    logEvent(`[M&A] 🔴 Poważne komplikacje w procesie ${stock1.symbol} <-> ${stock2.symbol}! Wymagana decyzja.`, 'warning');
-
-    // Sprawdź, czy gracz jest właścicielem >50% którejkolwiek ze spółek
-    const playerOwnsStock1 = playerPortfolio[stock1.symbol] && (playerPortfolio[stock1.symbol].shares / stock1.totalShares) > 0.5;
-    const playerOwnsStock2 = playerPortfolio[stock2.symbol] && (playerPortfolio[stock2.symbol].shares / stock2.totalShares) > 0.5;
-
-    if (playerOwnsStock1 || playerOwnsStock2) {
-        // --- GRACZ DECYDUJE ---
-        // Wybierz spółkę, którą kontroluje gracz, aby przekazać ją do modala
-        const playerControlledStock = playerOwnsStock1 ? stock1 : stock2;
-        console.log(`[M&A] Otwieranie modala decyzyjnego dla gracza (spółka ${playerControlledStock.symbol}).`);
-        // Użyj funkcji z ui.js, aby otworzyć modal
-        openComplicationModal(playerControlledStock, decisionData);
-
-    } else {
-        // --- AI DECYDUJE ---
-        // TODO: Symuluj decyzję AI (np. na podstawie osobowości właściciela lub losowo)
-        // Na razie wybieramy losową opcję po 3 sekundach (dla symulacji)
-        console.log(`[M&A AI Decision] AI zastanawia się nad komplikacją...`);
-        setTimeout(() => {
-            // Sprawdź, czy proces nadal istnieje (gracz mógł go zobaczyć i anulować ręcznie?)
-            if (stock1.mergerProcess && stock1.mergerProcess.decisionRequired) {
-                 const randomChoice = getRandomElement(decisionData.options);
-                 console.log(`[M&A AI Decision] AI zdecydowało: ${randomChoice.text}`);
-                 randomChoice.consequence(); // Wykonaj konsekwencję
-            }
-        }, 3000); // 3 sekundy opóźnienia na decyzję AI
     }
 }
 
@@ -4477,12 +4257,12 @@ function startCollateralAuction(originalOwnerId, symbol, quantity) {
 
 function placeCollateralBid(bidder, quantity, price) {
     if (!currentCollateralAuction || Date.now() > currentCollateralAuction.endTime) {
-        if (bidder === 'player') alert("Aukcja akcji nie jest aktywna.");
+        if (bidder === 'player') showToast("Aukcja akcji nie jest aktywna.");
         return false;
     }
     if (isNaN(quantity) || quantity <= 0 || quantity > currentCollateralAuction.quantityAvailable ||
         isNaN(price) || price < currentCollateralAuction.minPrice) {
-        if (bidder === 'player') alert(`Wprowadź poprawną ilość (max ${currentCollateralAuction.quantityAvailable}) i cenę (min ${currentCollateralAuction.minPrice.toFixed(2)} PLN).`);
+        if (bidder === 'player') showToast(`Wprowadź poprawną ilość (max ${currentCollateralAuction.quantityAvailable}) i cenę (min ${currentCollateralAuction.minPrice.toFixed(2)} PLN).`);
         return false;
     }
 
@@ -4491,7 +4271,7 @@ function placeCollateralBid(bidder, quantity, price) {
     const totalCost = quantity * price;
 
     if (bidderCash < totalCost) {
-        if (bidder === 'player') alert("Nie masz wystarczająco środków na złożenie tej oferty.");
+        if (bidder === 'player') showToast("Nie masz wystarczająco środków na złożenie tej oferty.");
         return false;
     }
 
@@ -4618,7 +4398,7 @@ function acceptRescueOffer(offerDetails) {
     const { targetCompany, sharesOffered, totalCost, promotionalPrice, cashRaisedSoFar, sharesBoughtSoFar } = offerDetails;
 
     if (playerCash < totalCost) {
-        alert("Nie masz wystarczająco gotówki, aby skorzystać z tej oferty!");
+        showToast("Nie masz wystarczająco gotówki, aby skorzystać z tej oferty!");
         return;
     }
 
@@ -4693,7 +4473,7 @@ function sellSharesToInvestmentBank(bankId, symbol, quantity) {
     // SCALONO: Dodano sprawdzenie `holding.lockedShares`
     const availableShares = holding ? holding.shares - (holding.lockedShares || 0) : 0;
     if (!bank || bank.type !== BANK_TYPES.INVESTMENT || !stock || !holding || availableShares < quantity) {
-        alert("Wystąpił błąd podczas sprzedaży (sprawdź, czy masz wystarczająco *dostępnych* akcji).");
+        showToast("Wystąpił błąd podczas sprzedaży (sprawdź, czy masz wystarczająco *dostępnych* akcji).");
         return;
     }
 
@@ -4705,7 +4485,7 @@ function sellSharesToInvestmentBank(bankId, symbol, quantity) {
     const totalCostForBank = purchasePrice * quantity;
 
     if (bank.cash < totalCostForBank) {
-        alert(`Bank ${bank.name} nie ma wystarczająco gotówki, aby odkupić te akcje.`);
+        showToast(`Bank ${bank.name} nie ma wystarczająco gotówki, aby odkupić te akcje.`);
         return;
     }
 
@@ -4743,7 +4523,7 @@ function buySharesFromInvestmentBank(bankId, symbol) {
     const quantity = inputElement ? inputElement.valueAsNumber : 0;
 
     if (!bank || !stock || !bankHolding || bankHolding.shares < quantity || isNaN(quantity) || quantity <= 0) {
-        alert("Nie można zrealizować tej transakcji (sprawdź ilość lub dostępność).");
+        showToast("Nie można zrealizować tej transakcji (sprawdź ilość lub dostępność).");
         return;
     }
 
@@ -4751,7 +4531,7 @@ function buySharesFromInvestmentBank(bankId, symbol) {
     const totalCost = sellPrice * quantity;
 
     if (playerCash < totalCost) {
-        alert("Nie masz wystarczająco gotówki.");
+        showToast("Nie masz wystarczająco gotówki.");
         return;
     }
 
@@ -4833,8 +4613,8 @@ function changeCompanyBank(symbol, newBankId) {
 
     // Walidacja (bez zmian)
     if (!stock || stock.assetType) { console.error("..."); return; }
-    if (!newBank) { alert("Wybrany bank jest nieaktywny lub nie istnieje."); return; }
-    if (stock.bankAccountId === newBankId) { alert(`Spółka ${stock.name} już korzysta z usług banku ${newBank.name}.`); return; }
+    if (!newBank) { showToast("Wybrany bank jest nieaktywny lub nie istnieje."); return; }
+    if (stock.bankAccountId === newBankId) { showToast(`Spółka ${stock.name} już korzysta z usług banku ${newBank.name}.`); return; }
 
     const oldBankId = stock.bankAccountId;
     const oldBank = commercialBanks.find(b => b.id === oldBankId);
@@ -5334,16 +5114,16 @@ function fundResearch(symbol) {
     const amount = amountInput.valueAsNumber;
 
     if (!stock || !amount || amount <= 0) {
-        alert("Wpisz poprawną kwotę.");
+        showToast("Wpisz poprawną kwotę.");
         return;
     }
     if (playerCash < amount) {
-        alert("Nie masz wystarczająco gotówki!");
+        showToast("Nie masz wystarczająco gotówki!");
         return;
     }
 
     if (!stock.research || stock.research.isInvestment || !stock.research.currentTech) {
-        alert("Spółka nie prowadzi teraz badania, które można sfinansować.");
+        showToast("Spółka nie prowadzi teraz badania, które można sfinansować.");
         return;
     }
 
@@ -5962,7 +5742,29 @@ function checkForPotentialMA() {
     let targetFilter = (target) => target.financialHealth < 0; 
 
     if (initiator.personality) { 
-        switch (initiator.personality) { /* ... (logika switch bez zmian) ... */ }
+        // Cele wg charakteru bota: agresywni — tanie i słabe, spokojni — rentowne z dywidendą, wieloryb — duże.
+        switch (initiator.personality) {
+            case 'reckless':
+            case 'yolo_trader':
+                checkChance = 0.08;
+                targetFilter = target => target.financialHealth < 0;
+                break;
+            case 'calm':
+            case 'dividend_chaser':
+                checkChance = 0.03;
+                targetFilter = target => target.financialHealth >= 1 && (target.lastDividend?.yield || 0) > 0;
+                break;
+            case 'whale':
+                checkChance = 0.06;
+                targetFilter = target => target.price * target.totalShares > 50e6;
+                break;
+            case 'pro_investor':
+                checkChance = 0.05;
+                targetFilter = target => target.fundamentals?.fairValue > target.price * 1.2;
+                break;
+            default:
+                break;
+        }
     } else if (initiator.assetType === 'Holding') {
         checkChance = 0.10;
         targetFilter = (target) => target.sector.some(s => initiator.specializationSectors.includes(s));
@@ -7030,7 +6832,7 @@ function blockInvestment(symbol, orderRef) {
     if (!stock) return;
 
     if (!canPlayerBlockInvestments(stock)) {
-        alert("Nie masz wystarczającej władzy, by zablokować tę inwestycję (wymagane >50% akcji lub Charyzma Lvl 4).");
+        showToast("Nie masz wystarczającej władzy, by zablokować tę inwestycję (wymagane >50% akcji lub Charyzma Lvl 4).");
         return;
     }
 
@@ -7041,9 +6843,7 @@ function blockInvestment(symbol, orderRef) {
 
     if (internalIndex < 0 && !tender && !project) return;
 
-    if (!confirm('Czy na pewno chcesz zablokować tę inwestycję? Spółka poniesie koszty przerwania, a relacje z zarządem ucierpią.')) {
-        return;
-    }
+    gameConfirm('Czy na pewno chcesz zablokować tę inwestycję? Spółka poniesie koszty przerwania, a relacje z zarządem ucierpią.', () => {
 
     if (internalIndex >= 0) {
         // Przerwana inwestycja wewnętrzna: odzysk 50% nakładów, reszta to koszt okresu.
@@ -7068,6 +6868,7 @@ function blockInvestment(symbol, orderRef) {
     showToast('Inwestycja zablokowana. Strata wizerunkowa!', 'warning');
 
     if (typeof openManagementModal === 'function') openManagementModal(symbol, 'depts');
+    });
 }
 
 function getConstructionResearchOptions(company) {

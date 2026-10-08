@@ -1382,10 +1382,14 @@ function runStateActions() {
 function aiUseCrownPowers(ai, stock) {
     // Priorytet 1: Ratowanie firmy przed bankructwem
     const marketValue = stock.price * stock.totalShares;
-    if (stock.corporateDebt > marketValue * 0.2 && stock.financialHealth < -1 && ai.cash > stock.corporateDebt * 0.1) {
-        const bailoutAmount = ai.cash * 0.2; // AI używa 20% swojej gotówki na ratunek
+    const liabilities = Number(stock.balanceSheet?.liabilities) || 0;
+    if (liabilities > marketValue * 0.2 && stock.financialHealth < -1 && ai.cash > liabilities * 0.1) {
+        const bailoutAmount = Math.min(ai.cash * 0.2, liabilities); // AI używa 20% swojej gotówki na ratunek
         if (bailoutAmount > 0) {
-            playerBailsOutCompany(stock.symbol, bailoutAmount, ai); // Wywołujemy uniwersalną funkcję ratunku
+            // Bot spłaca część długu spółki ze swojej gotówki (wcześniej płacił fundusz gracza).
+            ai.cash -= bailoutAmount;
+            adjustBalanceSheet(stock, { liabilities: -bailoutAmount, retainedEarnings: bailoutAmount });
+            stock.financialHealth = Math.min(5, stock.financialHealth + 1);
             logEvent(`[AI] 👑 ${ai.name} ratuje ${stock.name}, spłacając ${bailoutAmount.toFixed(2)} PLN długu!`, 'review');
             return; // Akcja podjęta
         }
