@@ -60,6 +60,11 @@
                 <span class="nav-label">Ranking</span>
             </button>
 
+            <button class="sidebar-nav-btn" id="open-governance-btn" onclick="openGovernanceModal()">
+                <span class="nav-icon">🗳️</span>
+                <span class="nav-label">Walne zgromadzenia</span>
+            </button>
+
             <button class="sidebar-nav-btn" id="open-clients-btn" onclick="openJuMarket()">
                 <span class="nav-icon">👥</span>
                 <span class="nav-label">Klienci i rynek JU</span>
@@ -780,7 +785,10 @@
          <div class="w-lg pie-area mx-auto my-4" id="pie-chart-container"></div>
          <div class="text-center mb-3" id="pie-chart-legend"></div>
          <div id="analyst-insights" class="analyst-insights"></div>
-         <button id="details-investments-btn" class="btn-secondary d-block mx-auto mb-2">📈 Inwestycje spółki</button>
+         <div class="d-flex gap-2 justify-center mb-2">
+             <button id="details-investments-btn" class="btn-secondary">📈 Inwestycje spółki</button>
+             <button id="details-governance-btn" class="btn-secondary">🗳️ Walne zgromadzenie</button>
+         </div>
     </div>
 
     <div class="modal" id="description-modal" style="display: none;">
@@ -1107,6 +1115,16 @@
       </div>
     </div>
 
+    <!-- Walne zgromadzenia: głosy funduszu, wnioski, kampanie, rada nadzorcza -->
+    <div id="governance-modal" class="modal modal-xl" style="display: none;">
+        <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
+        <h2 class="mt-0">🗳️ Walne zgromadzenia</h2>
+        <div class="gov-layout">
+            <aside id="governance-list" class="gov-list"></aside>
+            <section id="governance-detail" class="gov-detail"></section>
+        </div>
+    </div>
+
     <!-- Inwestycje spółki (podgląd dla każdej spółki; akcje przy władzy korony) -->
     <div id="company-investments-modal" class="modal modal-lg" style="display: none;">
         <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
@@ -1233,6 +1251,7 @@
     <script src="startups.js"></script>
     <script src="ma.js"></script>
     <script src="investments.js"></script>
+    <script src="governance.js"></script>
     <script src="events.js"></script>
     <script src="chart.js"></script>
     <script src="ui.js"></script>

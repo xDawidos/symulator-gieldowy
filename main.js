@@ -370,6 +370,7 @@ gameTimers.weekly = setInterval(() => {
         processEliteExchangesQuarterly(); // Rubin / Szmaragd / Diament, spółki zależne (finance.js)
         payBondCoupons(); // kupony kwartalne (finance.js)
         processPublicInvestmentFunding(); // BC → spółki państwowe, miasto → spółki miejskie (investments.js)
+        processGovernanceQuarter(); // walne zgromadzenia (governance.js)
         advanceEconomyCycle(); // nowa faza koniunktury przed raportami
         processCityQuarterly(); // festyn raz w roku (city.js)
         processFinancialReports(); // zawiera koszty R&D, wynik kontraktów, pozycje okresu i dywidendy

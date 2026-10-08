@@ -4025,6 +4025,7 @@ button:hover {
 /* Układ */
 .d-flex { display: flex; }
 .d-block { display: block; }
+.justify-center { justify-content: center; }
 .d-inline-block { display: inline-block; }
 .flex-wrap { flex-wrap: wrap; }
 .flex-col { flex-direction: column; }
@@ -4293,3 +4294,25 @@ img, svg, video { max-width: 100%; }
 .defense-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-2); }
 .defense-grid button { line-height: 1.3; }
 #takeover-body .bank-ticker { margin-bottom: var(--space-3); border-radius: var(--radius-md); overflow: hidden; }
+
+/* ===================== WALNE ZGROMADZENIA ===================== */
+.gov-layout { display: grid; grid-template-columns: 200px 1fr; gap: var(--space-4); min-height: 360px; }
+.gov-list { display: flex; flex-direction: column; gap: var(--space-1); max-height: 65vh; overflow-y: auto; }
+.gov-company { text-align: left; background: var(--bg-elevated-2); color: var(--text-main); border: 1px solid var(--border-color); }
+.gov-company.active { border-color: var(--accent-info); box-shadow: inset 3px 0 0 var(--accent-info); }
+.gov-detail { max-height: 65vh; overflow-y: auto; }
+.gov-detail h4 { margin: var(--space-4) 0 var(--space-2); }
+.gov-detail .bank-ticker { border-radius: var(--radius-md); overflow: hidden; }
+.gov-bars { display: grid; gap: 4px; }
+.gov-bar { display: grid; grid-template-columns: minmax(120px, 220px) 1fr 52px; gap: var(--space-2); align-items: center; font-size: 12px; }
+.gov-bar-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gov-bar-track { height: 10px; border-radius: 5px; background: var(--border-color); overflow: hidden; }
+.gov-bar-track span { display: block; height: 100%; background: var(--text-muted); }
+.gov-bar.is-fund .gov-bar-track span { background: var(--accent-info); }
+.gov-bar.is-fund .gov-bar-name { font-weight: 700; }
+.gov-bar-pct { text-align: right; font-variant-numeric: tabular-nums; }
+.gov-agenda { display: grid; gap: var(--space-2); }
+.gov-item { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); flex-wrap: wrap; padding: var(--space-2) var(--space-3); border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-elevated-2); }
+.gov-item.is-activist { border-left: 3px solid var(--accent-warning, #d4a017); }
+.gov-history { margin-bottom: var(--space-2); font-size: 13px; }
+@media (max-width: 700px) { .gov-layout { grid-template-columns: 1fr; } .gov-list { flex-direction: row; overflow-x: auto; } }

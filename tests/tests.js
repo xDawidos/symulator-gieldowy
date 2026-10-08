@@ -2064,6 +2064,91 @@ group('Obrony i wrogie przejęcia (etap G2)', () => {
     });
 });
 
+group('Walne zgromadzenia i aktywizm (etap G3)', () => {
+    function worldG3() {
+        const a = makeCompany('AAA', { cash: 2_000_000 });
+        a.insiderShares = 0; a.sharesHeld = 0; a.reputation = { player: 0 }; a.ceo = { name: 'Prezes', traits: [] };
+        a.financialHealth = 0;
+        setCompanyDividendPolicy(a, 'Growth');
+        resetWorld([a]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        return a;
+    }
+    function fundHolds(a, shares) {
+        playerPortfolio.AAA = { shares, avgPrice: 100, assetType: 'stock' };
+        a.sharesHeld = shares;
+    }
+
+    test('rada nadzorcza wg progów 20 / 35 / 50%', () => {
+        const a = worldG3();
+        fundHolds(a, 1000); assert(getBoardSeats(a).seats === 0, '10%');
+        fundHolds(a, 2000); assert(getBoardSeats(a).seats === 1 && getBoardInsight(a), '20%');
+        fundHolds(a, 3500); assert(getBoardSeats(a).seats === 2, '35%');
+        fundHolds(a, 5100); assert(getBoardSeats(a).seats === 3, '51%');
+    });
+
+    test('kalendarz: porządek obrad kwartał wcześniej, potem zgromadzenie i mail', () => {
+        const a = worldG3();
+        fundHolds(a, 600);
+        ensureGovernance(a).quartersToAgm = 2;
+        processGovernanceQuarter();
+        assert(a.governance.pendingAgm?.items.length >= 2, 'porządek obrad');
+        assert(mailbox.messages[0].action?.type === 'agm', 'mail z porządkiem');
+        processGovernanceQuarter();
+        assert(!a.governance.pendingAgm && a.governance.history.length === 1 && a.governance.quartersToAgm === 4, 'zgromadzenie');
+        const turnout = a.governance.history[0].turnout;
+        assert(turnout >= 0.4 && turnout <= 0.75, `frekwencja ${turnout}`);
+    });
+
+    test('głosy wg udziałów: większość funduszu przesądza uchwałę', () => {
+        const a = worldG3();
+        fundHolds(a, 6000);
+        createPendingAgm(a);
+        const item = a.governance.pendingAgm.items.find(i => i.type === 'dividend');
+        item.policy = 'Aggressive';
+        setAgmVote('AAA', 'dividend', 'against');
+        const record = holdAgm(a);
+        assert(!record.results.find(r => r.type === 'dividend').passed && a.dividendPolicy === 'Growth', 'odrzucona głosem funduszu');
+    });
+
+    test('wniosek funduszu przyjęty zmienia dywidendę i podnosi reputację', () => {
+        const a = worldG3();
+        fundHolds(a, 6000);
+        createPendingAgm(a);
+        assert(submitShareholderProposal('AAA', 'raiseDividend'), 'zgłoszony');
+        assert(!submitShareholderProposal('AAA', 'buyback'), 'tylko jeden wniosek');
+        holdAgm(a);
+        assert(a.dividendPolicy === 'Balanced' && a.reputation.player > 0, `polityka ${a.dividendPolicy}`);
+    });
+
+    test('poniżej 5% nie można zgłosić wniosku', () => {
+        const a = worldG3();
+        fundHolds(a, 300);
+        assert(!submitShareholderProposal('AAA', 'replaceCeo'), 'odmowa');
+    });
+
+    test('kampania o głosy kosztuje fundusz i zwiększa poparcie', () => {
+        const a = worldG3();
+        fundHolds(a, 600);
+        createPendingAgm(a);
+        submitShareholderProposal('AAA', 'replaceCeo');
+        const item = a.governance.pendingAgm.items.find(i => i.by === 'player');
+        const before = getVoteForProbability({ kind: 'ai', entity: { personality: 'calm' } }, item, a);
+        playerCash = 100_000;
+        assert(runProxyCampaign('AAA', item.id) && playerCash === 100_000 - getCampaignCost(a), 'koszt');
+        assert(getVoteForProbability({ kind: 'ai', entity: { personality: 'calm' } }, item, a) > before, 'poparcie rośnie');
+        assert(getVoteForProbability({ kind: 'insiders' }, item, a) === 0, 'zarząd przeciw');
+    });
+
+    test('skup akcji własnych zmniejsza liczbę akcji, nie łamie obrotu', () => {
+        const a = worldG3();
+        fundHolds(a, 1000);
+        const shares = a.totalShares;
+        runBuyback(a);
+        assert(a.totalShares < shares && a.sharesHeld <= a.totalShares, 'skup');
+    });
+});
+
 // --------------------------------------------------------------------------------
 // Uruchomienie
 // --------------------------------------------------------------------------------

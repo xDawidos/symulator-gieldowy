@@ -1355,6 +1355,8 @@ function openStockDetailsModal(symbol) {
 
     const invButton = document.getElementById('details-investments-btn');
     if (invButton) invButton.onclick = () => openCompanyInvestments(symbol);
+    const govButton = document.getElementById('details-governance-btn');
+    if (govButton) govButton.onclick = () => openGovernanceModal(symbol);
 
     const insights = document.getElementById('analyst-insights');
     if (insights) {
@@ -5043,7 +5045,9 @@ function renderMailbox() {
 
 function renderMailPreview(message) {
     let action = '';
-    if (message.action?.type === 'takeover') {
+    if (message.action?.type === 'agm') {
+        action = `<div class="mail-action"><button onclick="openGovernanceModal('${message.action.symbol}')">Otwórz walne zgromadzenie</button></div>`;
+    } else if (message.action?.type === 'takeover') {
         action = `<div class="mail-action"><button onclick="openTakeoverModal('${message.action.symbol}')">Otwórz decyzję w sprawie przejęcia</button></div>`;
     } else if (message.action?.type === 'rescue') {
         action = rescueOffer?.symbol === message.action.symbol && !rescueOffer.closed
@@ -5763,4 +5767,106 @@ function openRescueOfferingModal() {
 function closeRescueOfferingModal() {
     const modal = document.getElementById('rescue-offering-modal');
     if (modal) modal.style.display = 'none';
+}
+
+// =================================================================================
+// OKNO „WALNE ZGROMADZENIA” (etap G3)
+// =================================================================================
+
+let governanceView = { symbol: null };
+
+function getGovernanceCompanies() {
+    return stocks.filter(s => isGovernedCompany(s) && (playerPortfolio[s.symbol]?.shares || 0) > 0)
+        .sort((a, b) => ensureGovernance(a).quartersToAgm - ensureGovernance(b).quartersToAgm || getFundStakePct(b) - getFundStakePct(a));
+}
+
+function openGovernanceModal(symbol = null) {
+    const modal = document.getElementById('governance-modal');
+    if (!modal) return;
+    if (symbol) governanceView.symbol = symbol;
+    renderGovernance();
+    modal.style.display = 'block';
+}
+
+function refreshGovernanceView(symbol) {
+    const modal = document.getElementById('governance-modal');
+    if (modal && modal.style.display === 'block') openGovernanceModal(symbol);
+}
+
+function renderGovernance() {
+    const list = document.getElementById('governance-list');
+    const detail = document.getElementById('governance-detail');
+    if (!list || !detail) return;
+    const companies = getGovernanceCompanies();
+    if (!governanceView.symbol || !stocks.some(s => s.symbol === governanceView.symbol)) governanceView.symbol = companies[0]?.symbol || null;
+
+    list.innerHTML = companies.length ? companies.map(stock => {
+        const gov = ensureGovernance(stock);
+        const pct = getFundStakePct(stock);
+        return `<button class="gov-company ${stock.symbol === governanceView.symbol ? 'active' : ''}" onclick="openGovernanceModal('${stock.symbol}')">
+            <strong>${escapeHtml(stock.symbol)}</strong> <span class="text-xs">${(pct * 100).toFixed(1)}%</span>
+            <span class="text-xs text-muted d-block">${gov.pendingAgm ? '🗳️ walne w przyszłym kwartale' : `walne za ${gov.quartersToAgm} kw.`}</span>
+        </button>`;
+    }).join('') : '<p class="text-muted text-sm">Fundusz nie ma akcji żadnej spółki.</p>';
+
+    const stock = stocks.find(s => s.symbol === governanceView.symbol);
+    detail.innerHTML = stock ? renderGovernanceDetail(stock) : '<p class="text-muted">Kup akcje spółki, aby uczestniczyć w jej walnych zgromadzeniach.</p>';
+}
+
+function renderShareholderBars(stock) {
+    const holders = getShareholders(stock);
+    const listed = holders.reduce((sum, h) => sum + h.shares, 0);
+    const rows = [...holders.slice(0, 7), { name: 'Rozproszeni akcjonariusze', kind: 'retail', pct: Math.max(0, stock.totalShares - listed) / stock.totalShares }];
+    return rows.map(h => `<div class="gov-bar ${h.kind === 'player' ? 'is-fund' : ''}">
+        <span class="gov-bar-name">${escapeHtml(h.name)}</span>
+        <span class="gov-bar-track"><span style="width:${Math.min(100, h.pct * 100).toFixed(1)}%"></span></span>
+        <span class="gov-bar-pct">${(h.pct * 100).toFixed(1)}%</span>
+    </div>`).join('');
+}
+
+function renderGovernanceDetail(stock) {
+    const gov = ensureGovernance(stock);
+    const pct = getFundStakePct(stock);
+    const seats = getBoardSeats(stock);
+    const insight = getBoardInsight(stock);
+    const canPropose = pct >= AGM_PROPOSAL_THRESHOLD;
+    const last = gov.history[0];
+
+    const agenda = gov.pendingAgm ? gov.pendingAgm.items.map(item => `
+        <li class="gov-item ${item.kind === 'activist' ? 'is-activist' : ''}">
+            <div><strong>${escapeHtml(item.label)}</strong> <span class="text-xs text-muted">${item.kind === 'activist' ? 'wniosek akcjonariusza' : 'wniosek zarządu'}</span></div>
+            <div class="d-flex gap-2 items-center">
+                <select aria-label="Głos funduszu" onchange="setAgmVote('${stock.symbol}', '${item.id}', this.value)">
+                    ${[['for', 'Za'], ['against', 'Przeciw'], ['abstain', 'Wstrzymuję się']].map(([value, label]) => `<option value="${value}" ${item.playerVote === value ? 'selected' : ''}>${label}</option>`).join('')}
+                </select>
+                ${item.by === 'player' ? (item.campaign ? '<span class="text-xs text-info">📣 kampania trwa</span>'
+                    : `<button class="btn-xs" onclick="runProxyCampaign('${stock.symbol}', '${item.id}')">📣 Kampania (${formatZl(getCampaignCost(stock), 0)})</button>`) : ''}
+            </div>
+        </li>`).join('') : '';
+
+    const history = gov.history.map(record => `
+        <details class="gov-history"><summary>Walne — frekwencja ${(record.turnout * 100).toFixed(0)}%, przyjęte ${record.results.filter(r => r.passed).length}/${record.results.length}</summary>
+            <ul class="list-plain">${record.results.map(r => `<li>${r.passed ? '✅' : '❌'} ${escapeHtml(r.label)} — za ${(r.for / Math.max(1, r.for + r.against) * 100).toFixed(0)}%${r.effect ? ` · ${escapeHtml(r.effect)}` : ''}</li>`).join('')}</ul>
+        </details>`).join('');
+
+    return `
+        <div class="bank-ticker">
+            <div class="bank-ticker-item"><span>${escapeHtml(stock.name)}</span><strong>${(pct * 100).toFixed(1)}% głosów</strong></div>
+            <div class="bank-ticker-item"><span>Rada nadzorcza</span><strong>${seats.label}</strong></div>
+            <div class="bank-ticker-item"><span>Najbliższe walne</span><strong>${gov.pendingAgm ? 'w przyszłym kwartale' : `za ${gov.quartersToAgm} kw.`}</strong></div>
+            <div class="bank-ticker-item"><span>Ostatnia frekwencja</span><strong>${last ? (last.turnout * 100).toFixed(0) + '%' : '—'}</strong></div>
+        </div>
+        <h4>Akcjonariat</h4>
+        <div class="gov-bars">${renderShareholderBars(stock)}</div>
+        <h4>Porządek obrad</h4>
+        ${agenda ? `<ul class="list-plain gov-agenda">${agenda}</ul>` : '<p class="text-muted text-sm">Porządek obrad pojawi się kwartał przed zgromadzeniem.</p>'}
+        <h4>Wniosek akcjonariusza</h4>
+        ${canPropose ? `<div class="bank-card-form">
+            <select id="gov-proposal-type" aria-label="Rodzaj wniosku">${Object.entries(ACTIVIST_PROPOSALS).map(([id, p]) => `<option value="${id}" title="${escapeHtml(p.desc)}">${p.label}</option>`).join('')}</select>
+            <button onclick="submitShareholderProposal('${stock.symbol}', document.getElementById('gov-proposal-type').value)">Zgłoś na walne</button>
+        </div>` : '<p class="text-muted text-sm">Wnioski zgłasza akcjonariusz z co najmniej 5% akcji.</p>'}
+        ${insight ? `<h4>Wgląd rady nadzorczej</h4>
+            <p class="text-sm">Prognoza wyniku kwartału: <strong class="${insight.forecast >= 0 ? 'text-up' : 'text-down'}">${formatZl(insight.forecast, 0)}</strong></p>
+            <ul class="list-plain text-sm">${insight.plans.map(p => `<li>• ${escapeHtml(p)}</li>`).join('') || '<li class="text-muted">Brak planów inwestycyjnych.</li>'}</ul>` : ''}
+        ${history ? `<h4>Historia uchwał</h4>${history}` : ''}`;
 }
