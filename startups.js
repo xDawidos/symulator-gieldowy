@@ -233,6 +233,7 @@ function handleSuccessfulIPO(startup, successMultiplier) {
 
     const fundValue = (playerPortfolio[symbol]?.shares || 0) * ipoPrice;
     logEvent(`🔔 IPO: ${startup.name} debiutuje po ${ipoPrice.toFixed(2)} zł (${totalShares.toLocaleString('pl-PL')} akcji).${fundClaim > 0 ? ` Fundusz: ${fundClaim.toFixed(0)} zł → ${fundValue.toFixed(0)} zł.` : ''}`, 'review');
+    if (startup.operatorStartup && typeof activateMarketOperator === 'function') activateMarketOperator(startup); // nowy rynek (markets.js)
     if (fundClaim > 0) playerProfile?.cv.push({ type: 'milestone', text: `Startup ${startup.name}: debiut na giełdzie (${fundClaim.toFixed(0)} → ${fundValue.toFixed(0)} zł).` });
 }
 
@@ -253,6 +254,7 @@ function removeStartup(startup, refundMin = 0, refundMax = 0) {
     }
     for (const bank of commercialBanks) if (bank.startupInvestments) delete bank.startupInvestments[symbol];
     delete playerPortfolio[symbol];
+    if (startup.operatorStartup && typeof onOperatorStartupRemoved === 'function') onOperatorStartupRemoved(startup); // upadek operatora: sponsorzy znikają
     const index = stocks.findIndex(s => s.symbol === symbol);
     if (index > -1) stocks.splice(index, 1);
 }

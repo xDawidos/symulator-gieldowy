@@ -4349,3 +4349,8 @@ img, svg, video { max-width: 100%; }
 .rel-bar-fill.pos { background: var(--color-up); }
 .rel-bar-fill.neg { background: var(--color-down); }
 @media (max-width: 700px) { .firm-grid { grid-template-columns: 1fr; } }
+
+/* ===================== RYNKI I PROJEKTY SPECJALNE ===================== */
+.badge-market { padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--bg-elevated-2); border: 1px solid var(--accent-info); }
+.project-card .inv-stages { margin-top: var(--space-1); }
+.project-list { display: grid; gap: var(--space-1); }

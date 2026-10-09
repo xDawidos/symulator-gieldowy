@@ -347,6 +347,7 @@ function buyStock(symbol, quantity) {
     }
 
     if (typeof onFundTrade === 'function') onFundTrade(stockToBuy, quantity, 'buy'); // relacje z botami (relations.js)
+    if (typeof chargeMarketCommission === 'function') chargeMarketCommission(stockToBuy, quantity * stockToBuy.price, 'player'); // prowizja operatora rynku
 
     // Reputacja za duży pakiet
     const playerShares = playerPortfolio[symbol]?.shares || 0;
@@ -431,6 +432,7 @@ function sellStock(symbol, quantity) {
     applyTradeImpact(stockToSell, quantity, -1);
     logFundTrade(symbol, 'sell');
     if (typeof onFundTrade === 'function') onFundTrade(stockToSell, quantity, 'sell'); // relacje z botami (relations.js)
+    if (typeof chargeMarketCommission === 'function') chargeMarketCommission(stockToSell, quantity * stockToSell.price, 'player'); // prowizja operatora rynku
 
     // Logowanie z informacją o podatku
     logEvent(`Sprzedano ${quantity} szt. ${symbol}. Zysk brutto: ${profit.toFixed(2)} PLN, Podatek: ${taxToPay.toFixed(2)} PLN.`);

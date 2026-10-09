@@ -2477,6 +2477,123 @@ group('Firma i relacje z botami (0.10.2 M4)', () => {
     });
 });
 
+group('Rynki i maklerzy (0.10.2 M5)', () => {
+    function worldM5() {
+        const a = makeCompany('AAA');
+        a.insiderShares = 0; a.reputation = { player: 0 };
+        resetWorld([a]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        macro = createMacroState();
+        initMarketOperators();
+        return { a, gpw: stocks.find(s => s.marketOperator === 'GPW') };
+    }
+
+    test('GPW jest notowaną spółką-operatorem, reszta to dopiero przyszłe rynki', () => {
+        const { gpw } = worldM5();
+        assert(gpw && marketOperators.GPW.status === 'active', 'GPW');
+        assert(marketOperators.XTD.status === 'dormant' && marketOperators.EURONEXT.status === 'inactive', 'statusy');
+    });
+
+    test('prowizja od transakcji funduszu trafia do operatora', () => {
+        const { a, gpw } = worldM5();
+        playerCash = 100_000;
+        const cash = gpw.cash;
+        const fee = chargeMarketCommission(a, 10_000, 'player');
+        assert(fee === 30 && playerCash === 100_000 - 30 && gpw.cash === cash + 30, `prowizja ${fee}`);
+    });
+
+    test('startup XTD: sponsor wchodzi na giełdę jako członek rynku XTD', () => {
+        worldM5();
+        const startup = spawnOperatorStartup(marketOperators.XTD);
+        assert(startup.assetType === 'Startup' && startup.fundingGoal >= 300000, 'drogi startup');
+        const sponsor = spawnMarketMember('XTD', 'sponsor');
+        assert(getStockMarket(sponsor) === 'XTD' && !sponsor.assetType && sponsor.fundamentals, 'sponsor notowany');
+    });
+
+    test('debiut operatora otwiera rynek z 5–10 spółkami', () => {
+        worldM5();
+        const startup = spawnOperatorStartup(marketOperators.XTD);
+        const before = stocks.length;
+        activateMarketOperator(startup);
+        const added = stocks.length - before;
+        assert(marketOperators.XTD.status === 'active' && added >= 5 && added <= 10, `nowe spółki: ${added}`);
+    });
+
+    test('zamknięcie operatora: spółki znikają, fundusz rozliczony po ostatniej cenie', () => {
+        worldM5();
+        spawnOperatorStartup(marketOperators.PLU5);
+        const member = spawnMarketMember('PLU5', 'sponsor');
+        playerPortfolio[member.symbol] = { shares: 100, avgPrice: member.price, assetType: 'stock' };
+        member.sharesHeld = 100;
+        playerCash = 0;
+        const price = member.price;
+        closeMarketOperator(marketOperators.PLU5, 'test');
+        assert(!stocks.includes(member) && !playerPortfolio[member.symbol], 'zniknęła');
+        assert(Math.abs(playerCash - 100 * price) < 1e-6 && marketOperators.PLU5.status === 'closed', 'rozliczenie');
+    });
+});
+
+group('Konsorcja i projekty specjalne (0.10.2 M6)', () => {
+    function worldM6() {
+        const builder = makeCompany('BUD', { cash: 20e6, sector: ['Budowlany'] });
+        const a = makeCompany('AAA', { cash: 40e6, sector: ['Energia'] });
+        const b = makeCompany('BBB', { cash: 40e6, sector: ['Przemysł'] });
+        const c = makeCompany('CCC', { cash: 10e6, sector: ['Usługi'] });
+        [builder, a, b, c].forEach(s => { s.insiderShares = 0; s.sharesHeld = 0; s.reputation = { player: 0 }; });
+        resetWorld([builder, a, b, c]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        macro = createMacroState();
+        specialProjects = createSpecialProjects();
+        return { builder, a, b, c };
+    }
+    const NUCLEAR = () => MEGA_PROJECTS.find(p => p.id === 'nuclear');
+
+    test('konsorcjum buduje megaprojekt etapami, bonusy wg wkładu, projekt tylko raz', () => {
+        const { builder, a } = worldM6();
+        const def = { ...NUCLEAR(), cost: 20e6, quarters: 2 };
+        const project = createProject(def);
+        assert(project.participants.length >= 1 && project.participants.length <= 4, 'uczestnicy');
+        project.signupLeft = 1;
+        assert(startProjectBuild(project) && project.builder.symbol === 'BUD', 'start budowy');
+        project.progress = 1;
+        completeProject(project);
+        assert(isMegaProjectTaken('nuclear'), 'tylko raz');
+        assert(getSpecialProjectGrowth(a) > 0 && getSpecialProjectValuation(a) > 1, 'bonus uczestnika');
+        assert(getSpecialProjectGrowth(builder) > 0, 'bonus wykonawcy');
+    });
+
+    test('spółka funduszu (> 50%) dołącza do konsorcjum; bez większości — odmowa', () => {
+        const { c } = worldM6();
+        const project = createProject({ ...NUCLEAR(), cost: 20e6 });
+        project.participants = project.participants.slice(0, 2);
+        playerPortfolio.CCC = { shares: 4000, avgPrice: 100, assetType: 'stock' };
+        assert(!joinConsortium(project.id, 'CCC', 2e6), 'bez większości');
+        playerPortfolio.CCC.shares = 6000;
+        assert(joinConsortium(project.id, 'CCC', 2e6) && project.participants.some(p => p.symbol === 'CCC' && p.player), 'dołączyła');
+    });
+
+    test('projekt czasowy: bonus wygasa najpóźniej po 5 latach gry', () => {
+        const { a } = worldM6();
+        const template = TIMED_PROJECT_TEMPLATES[0];
+        const project = createProject(template, { timed: true, deadline: 10 });
+        project.bonusQuarters = 40;
+        startProjectBuild(project);
+        completeProject(project);
+        const member = stocks.find(s => s.symbol === project.participants[0].symbol);
+        const bonus = member.specialBonuses[0];
+        assert(bonus.until === macro.quarter + MAX_TIMED_BONUS_QUARTERS, `do kwartału ${bonus.until}`);
+        macro.quarter += MAX_TIMED_BONUS_QUARTERS;
+        assert(getSpecialProjectGrowth(member) === 0, 'wygasł');
+    });
+
+    test('przejęcie: bonusy przechodzą na spółkę przejmującą', () => {
+        const { a, b } = worldM6();
+        a.specialBonuses = [{ projectId: 'x', name: 'Most', growth: 0.004, valuation: 0.02, until: null }];
+        transferSpecialBonuses(a, b);
+        assert(getSpecialProjectGrowth(b) === 0.004 && !a.specialBonuses.length, 'przeniesione');
+    });
+});
+
 // --------------------------------------------------------------------------------
 // Uruchomienie
 // --------------------------------------------------------------------------------

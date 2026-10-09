@@ -18,3 +18,9 @@ Zapisuję tu znaleziska do części A1–A4 (pełny audyt po M6).
 - Bank po debiucie (BKNET1) ma wartość godziwą bliską zera (cena / wartość ≈ 50 000).
 - PKB r/r w ekspansji ~7% (model cyklu).
 - Liczba arystokratów dywidendowych (~20–40% spółek po 13 kwartałach) — być może za łatwo.
+
+## Notatki z M4–M6
+- Projekty specjalne: wkłady uczestników wychodzą z gotówki (aktywa bez zmian), ale nikt ich nie otrzymuje — wykonawca nie dostaje przychodu z budowy. Do rozważenia w A1: przychód wykonawcy.
+- `aiBuyStock`: wpływ na cenę liniowy w liczbie akcji (`price += quantity × price × 0.000005`) — duże zakupy botów (np. wrogi bot skupujący pakiet) mogą mocno podbić kurs. Do A4.
+- Prowizje operatorów pobierane od funduszu i botów; banki inwestycyjne i ETF-y handlują bez prowizji.
+- Relacje: koledzy z firmy nie reagują jeszcze na wyniki gracza (tylko nadzór, konsolidacja, zamiana stanowisk, prezenty).

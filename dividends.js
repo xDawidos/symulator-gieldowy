@@ -66,7 +66,8 @@ function renderDividendBadges(stock) {
     const badge = stock.isDividendAristocrat
         ? `<span class="badge-aristocrat" title="Stabilność +${ARISTOCRAT_BONUS.stability}, przyrost +${ARISTOCRAT_BONUS.growth}, zainteresowanie +${ARISTOCRAT_BONUS.interest}">👑 Dywidendowy arystokrata</span>` : '';
     const history = (stock.dividendHistory || []).slice(0, 6).map(entry => entry.dps.toFixed(2)).join(' · ');
-    return `<p class="dividend-badges">${badge}
+    const market = typeof getStockMarket === 'function' && getStockMarket(stock) !== 'GPW' ? `<span class="badge-market">członek rynku ${escapeHtml(getMarketLabel(getStockMarket(stock)))}</span>` : '';
+    return `<p class="dividend-badges">${badge}${market}
         <span class="text-sm">Stopa dywidendy: <strong>${yieldPct}%</strong></span>
         ${stock.assetType ? '' : `<span class="text-sm text-muted">seria: ${stock.dividendStreak || 0}/${ARISTOCRAT_MIN_STREAK} kw.</span>`}
         ${history ? `<span class="text-xs text-muted d-block">Ostatnie wypłaty (zł/akcję): ${history}</span>` : ''}</p>`;

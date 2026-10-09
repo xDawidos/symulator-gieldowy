@@ -373,6 +373,8 @@ gameTimers.weekly = setInterval(() => {
         processGovernanceQuarter(); // walne zgromadzenia (governance.js)
         processEtfsQuarterly(); // rebalancing, cele roczne, nowe i zamykane ETF-y (etf.js)
         processRelationsQuarterly(); // relacje z botami: wrogowie i przyjaciele (relations.js)
+        processMarketsQuarterly(); // operatorzy rynków i maklerzy (markets.js)
+        processSpecialProjectsQuarterly(); // konsorcja i projekty specjalne (projects.js)
         advanceEconomyCycle(); // nowa faza koniunktury przed raportami
         advanceMacroQuarter(); // inflacja, bezrobocie, cykle sektorów, wybory (macro.js)
         processCityQuarterly(); // festyn raz w roku (city.js)
@@ -834,6 +836,8 @@ function createNewWorld() {
     stocks.filter(stock => stock.assetType === 'Holding' && !(stock.price > 0)).forEach(stock => { stock.price = Math.max(0.01, getExternalFundValue(stock)); });
     assignEliteExchanges(); // giełdy Rubinowa i Szmaragdowa od startu (Diamentowa po 30 min gry)
     maintainStartupCount(); // inkubator startuje z kilkoma startupami
+    initMarketOperators(); // GPW i przyszli operatorzy rynków (markets.js)
+    specialProjects = createSpecialProjects(); // projekty specjalne miasta (projects.js)
     initializeEtfs(); // ETF-y z portfelami prawdziwych akcji (etf.js)
     console.log("[M&A Init] Inicjalizacja nastawienia mediów...");
     const mediaCompanies = stocks.filter(s => s.specializationSectors?.includes('Media'));

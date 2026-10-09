@@ -146,7 +146,8 @@ function getValuationMultiplier(stock) {
     const rateMult = 1 - profile.rateSens * (baseRate - 0.05) * 4;
     const sectorMult = typeof getSectorValuationFactor === 'function' ? getSectorValuationFactor(stock) : 1; // cykl sektora (macro.js)
     const interest = typeof getAristocratValuationFactor === 'function' ? getAristocratValuationFactor(stock) : 1; // zainteresowanie arystokratą
-    return Math.max(0.4, Math.min(1.8, cycleMult * rateMult * sectorMult * interest));
+    const projects = typeof getSpecialProjectValuation === 'function' ? getSpecialProjectValuation(stock) : 1; // projekty specjalne
+    return Math.max(0.4, Math.min(1.8, cycleMult * rateMult * sectorMult * interest * projects));
 }
 
 /** Szansa na zdarzenie pozytywne zależnie od fazy (eventy rynkowe). */

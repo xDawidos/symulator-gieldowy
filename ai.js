@@ -234,6 +234,7 @@ function aiBuyStock(ai, symbol, quantity) {
 
     // Przeprowadź transakcję
     ai.cash -= totalCost; // Odejmij gotówkę AI
+    if (typeof chargeMarketCommission === 'function') chargeMarketCommission(stockToBuy, totalCost, ai); // prowizja operatora rynku
     stockToBuy.sharesHeld += quantity; // Zwiększ liczbę akcji posiadanych przez graczy/AI
     // Symuluj niewielki wpływ na cenę (płynność rynku)
     stockToBuy.price += (quantity * stockToBuy.price) * 0.000005;
@@ -310,6 +311,7 @@ function aiSellStock(ai, symbol, quantity) {
     const totalGainNet = totalGainGross - taxToPay; // Przychód netto po podatku
 
     ai.cash += totalGainNet; // AI otrzymuje kwotę netto
+    if (typeof chargeMarketCommission === 'function') chargeMarketCommission(stockToSell, totalGainGross, ai);
     holding.shares -= quantity;
     stockToSell.sharesHeld -= quantity; // Zaktualizuj liczbę akcji w obiegu rynkowym
     // Symuluj niewielki wpływ na cenę

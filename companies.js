@@ -1860,7 +1860,8 @@ function computeQuarterResults(stock) {
     // Cykl sektora i inflacja (nominalny wzrost przychodów) — macro.js
     const sectorAdj = typeof getSectorCycleAdj === 'function' ? getSectorCycleAdj(stock) : 0;
     const inflation = typeof macro === 'object' ? macro.inflation : 0.025;
-    const growth = profile.growth / 4 + profile.beta * gdp + health * 0.004 + phaseAdj + sectorAdj + inflation / 4 * 0.3 + gaussianRandom() * 0.02;
+    const projectAdj = typeof getSpecialProjectGrowth === 'function' ? getSpecialProjectGrowth(stock) : 0; // bonusy projektów specjalnych
+    const growth = profile.growth / 4 + profile.beta * gdp + health * 0.004 + phaseAdj + sectorAdj + projectAdj + inflation / 4 * 0.3 + gaussianRandom() * 0.02;
     fundamentals.revenue = Math.max(1000, fundamentals.revenue * (1 + Math.max(-0.25, Math.min(0.25, growth))));
 
     const revenue = fundamentals.revenue;
@@ -2547,6 +2548,7 @@ function resolveMerger(stock1, stock2, process) {
             stocks.filter(s => s.assetType === 'Holding' && s.holdingPortfolio[target.symbol]).forEach(h => h.cash += (h.holdingPortfolio[target.symbol].quantity * pricePerShare));
             commercialBanks.filter(b => b.stockPortfolio[target.symbol]).forEach(b => b.cash += (b.stockPortfolio[target.symbol].shares * pricePerShare));
             settleEtfHoldings(target.symbol, pricePerShare); // pakiety ETF-ów (etf.js)
+            transferSpecialBonuses(target, initiator); // bonusy projektów specjalnych (projects.js)
             // Fundusze botów, konto prywatne gracza i inne spółki z pakietami
             for (const manager of corporation?.managers || []) {
                 const held = manager.fund?.portfolio?.[target.symbol]?.shares || 0;
@@ -2621,6 +2623,7 @@ function resolveMerger(stock1, stock2, process) {
                 }
             });
 
+            transferSpecialBonuses(target, initiator);
             initiator.name = `${initiator.name.split(' ')[0]}-${target.name.split(' ')[0]} Group`;
             initiator.totalShares = newTotalShares;
             initiator.maxShares = newTotalShares * 1.5;
@@ -2754,7 +2757,7 @@ function updateStartups(deltaTime) {
                 }
                 // Etap rozwoju
                 if (startup.developmentProgress < 100) {
-                    const progressIncrease = (deltaTime / 1000) * 0.5; 
+                    const progressIncrease = (deltaTime / 1000) * 0.5 * (startup.operatorStartup ? OPERATOR_STARTUP_SLOWDOWN : 1); // operator rynku rozwija się wolno
                     startup.developmentProgress += progressIncrease;
                 }
 

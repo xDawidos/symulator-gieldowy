@@ -204,7 +204,8 @@ function displayStocks(previousInputValues = {}) {
 
     const metaLine = document.createElement('div');
     metaLine.className = 'stock-meta';
-    metaLine.textContent = `${primarySector} • ${stock.symbol}`;
+    const marketId = typeof getStockMarket === 'function' ? getStockMarket(stock) : 'GPW';
+    metaLine.textContent = `${primarySector} • ${stock.symbol}${marketId !== 'GPW' ? ` • członek rynku ${getMarketLabel(marketId)}` : ''}${stock.isDividendAristocrat ? ' • 👑 dywidendowy arystokrata' : ''}`;
 
     identityWrap.appendChild(topLine);
     identityWrap.appendChild(metaLine);
@@ -2499,6 +2500,7 @@ function updateCityModalContent() {
         document.getElementById('city-election-timer').textContent = `${city.mayor.electionYear} ${city.mayor.electionYear === 1 ? 'rok' : 'lata'}`;
         renderCityTicker();
         renderCityPpp();
+        renderCitySpecialProjects();
         document.getElementById('city-mayor-name').textContent = city.mayor.name;
         const policy = MAYOR_POLICIES[city.mayor.policy];
         document.getElementById('city-mayor-policy').textContent = `${policy?.label || city.mayor.policy} — ${policy?.description || ''}`;
@@ -5462,6 +5464,8 @@ function updateStateModalContent() {
             </div>`;
     } else if (stateTab === 'macro') {
         body.innerHTML = renderMacroPanel();
+    } else if (stateTab === 'markets') {
+        body.innerHTML = renderMarketsPanel();
     } else if (stateTab === 'taxes') {
         body.innerHTML = `
             <table class="asset-mini-table w-full">

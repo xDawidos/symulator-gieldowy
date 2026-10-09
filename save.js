@@ -117,6 +117,8 @@ function buildSaveSnapshot() {
         macro,
         etfs: serializeEtfs(),
         botRelations,
+        marketOperators,
+        specialProjects,
         playerProfile,
         playerFund,
         corporation,
@@ -413,6 +415,9 @@ function applySaveSnapshot(snapshot) {
     macro = snapshot.macro && typeof snapshot.macro === 'object' ? snapshot.macro : createMacroState(); // v10: makro
     botRelations = snapshot.botRelations && typeof snapshot.botRelations === 'object' ? snapshot.botRelations : createBotRelations(); // v10: relacje
     ensureBotRelations();
+    marketOperators = snapshot.marketOperators && typeof snapshot.marketOperators === 'object' ? snapshot.marketOperators : null; // v10: operatorzy rynków
+    specialProjects = snapshot.specialProjects && typeof snapshot.specialProjects === 'object' ? snapshot.specialProjects : createSpecialProjects(); // v10: projekty specjalne
+    ensureSpecialProjects();
     ensureMacroState();
     if (snapshot.economyCycle && ECONOMY_PHASES[snapshot.economyCycle.phase]) {
         economyCycle = snapshot.economyCycle;
@@ -427,6 +432,7 @@ function applySaveSnapshot(snapshot) {
 
     recountConstructionCapacity();
 
+    ensureMarketOperators(); // starsze zapisy: GPW jako notowana spółka
     // v10: ETF-y z portfelami (starsze zapisy dostają nowy zestaw)
     if (!restoreEtfs(snapshot.etfs)) report.warnings.push('Utworzono nowe ETF-y z portfelami (migracja v10).');
 

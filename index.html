@@ -592,6 +592,7 @@
         <button id="tab-btn-city-municipal" class="bank-tab-btn" onclick="switchCityTab('municipal')">Spółki Miejskie</button>
         <button id="tab-btn-city-private" class="bank-tab-btn" onclick="switchCityTab('private')">Firmy Prywatne</button>
         <button id="tab-btn-city-ppp" class="bank-tab-btn" onclick="switchCityTab('ppp')">🤝 Projekty PPP</button>
+        <button id="tab-btn-city-special" class="bank-tab-btn" onclick="switchCityTab('special')">🏗️ Projekty specjalne</button>
         <button id="tab-btn-city-election" class="bank-tab-btn" onclick="switchCityTab('election')" style="display: none;">Wybory</button> </div>
 
     <div id="city-content-main" class="bank-tab-content">
@@ -619,6 +620,7 @@
     </div>
 
     <div id="city-content-ppp" class="bank-tab-content" style="display: none;"></div>
+    <div id="city-content-special" class="bank-tab-content" style="display: none;"></div>
 
     <div id="city-content-municipal" class="bank-tab-content" style="display: none;">
         <h4>Spółki Miejskie (Nienotowane na Giełdzie)</h4>
@@ -674,6 +676,7 @@
         <nav class="bank-tabs" role="tablist">
             <button class="bank-tab-btn active" data-tab="overview" onclick="switchStateTab('overview')">📊 Przegląd</button>
             <button class="bank-tab-btn" data-tab="macro" onclick="switchStateTab('macro')">📈 Makro</button>
+            <button class="bank-tab-btn" data-tab="markets" onclick="switchStateTab('markets')">🏛️ Rynki</button>
             <button class="bank-tab-btn" data-tab="taxes" onclick="switchStateTab('taxes')">💰 Podatki</button>
             <button class="bank-tab-btn" data-tab="pension" onclick="switchStateTab('pension')">🏅 Program emerytalny</button>
             <button class="bank-tab-btn" data-tab="interventions" onclick="switchStateTab('interventions')">📜 Działania państwa</button>
@@ -776,11 +779,6 @@
 
     </div>
 
-    <div id="ma-initiation-section" class="bank-section" style="display: none;">
-        <h4><span class="text-xl">🤝</span> Fuzje i Przejęcia</h4>
-        <p class="text-sm">Wykorzystaj swoją pozycję, aby zainicjować połączenie lub wrogie przejęcie innej spółki.</p>
-        <button id="ma-open-target-modal-btn">Rozpocznij proces M&A</button>
-    </div>
     
 
         </div>
@@ -1266,6 +1264,8 @@
     <script src="dividends.js"></script>
     <script src="etf.js"></script>
     <script src="relations.js"></script>
+    <script src="markets.js"></script>
+    <script src="projects.js"></script>
     <script src="events.js"></script>
     <script src="chart.js"></script>
     <script src="ui.js"></script>
