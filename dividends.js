@@ -1,12 +1,12 @@
 // dividends.js — Dywidendy (wersja 0.10.2, część M2)
 //
-// Dywidendowy arystokrata: spółka, która ≥ 8 kwartałów z rzędu ogłasza dywidendę i jej nie obniża
+// Dywidendowy arystokrata: spółka, która ≥ 12 kwartałów z rzędu ogłasza dywidendę i jej nie obniża
 // (tolerancja 5%). Bonusy w skali modyfikatorów kursu: +0,2 stabilności (zmienność −20%),
 // +0,05 przyrostu (dryf kursu jak cechy prezesa), +0,07 zainteresowania (wycena ×1,07).
 // Obcięcie dywidendy odbiera status i przecenia kurs. Nie dotyczy REIT-ów.
 // Historia wypłat i seria kwartałów w karcie spółki; polityka zarządu reaguje na stopy procentowe.
 
-const ARISTOCRAT_MIN_STREAK = 8;
+const ARISTOCRAT_MIN_STREAK = 12; // audyt A4: przy 8 kwartałach status miało 20–40% spółek
 const ARISTOCRAT_BONUS = { stability: 0.2, growth: 0.05, interest: 0.07 };
 const DIVIDEND_CUT_TOLERANCE = 0.95;
 const ARISTOCRAT_CUT_PENALTY = -0.06;

@@ -30,12 +30,20 @@ const TAX_RATES = {
 
 const COMPANY_INCOME_TAX_RATE = 0.19; // CIT od zysku przed opodatkowaniem (raport kwartalny)
 
+// gdp: realna zmiana PKB w kwartale (ekspansja ≈ 3–4% rocznie). Wpływ na spółki liczy getGdpDriver()
+// (audyt A4: wcześniej PKB w ekspansji dochodził do 7% r/r — skala przesunięta do napędu koniunktury).
 const ECONOMY_PHASES = {
-    recovery:    { name: 'Ożywienie',   gdp: [0.004, 0.010], length: [2, 4], peMult: 1.00, mood: 0.2,  next: 'expansion' },
-    expansion:   { name: 'Ekspansja',   gdp: [0.008, 0.018], length: [3, 6], peMult: 1.10, mood: 0.5,  next: 'overheating' },
-    overheating: { name: 'Przegrzanie', gdp: [0.003, 0.012], length: [1, 3], peMult: 1.20, mood: 0.3,  next: 'recession' },
-    recession:   { name: 'Recesja',     gdp: [-0.020, -0.004], length: [2, 4], peMult: 0.85, mood: -0.6, next: 'recovery' }
+    recovery:    { name: 'Ożywienie',   gdp: [0.0022, 0.0055], length: [2, 4], peMult: 1.00, mood: 0.2,  next: 'expansion' },
+    expansion:   { name: 'Ekspansja',   gdp: [0.0044, 0.0100], length: [3, 6], peMult: 1.10, mood: 0.5,  next: 'overheating' },
+    overheating: { name: 'Przegrzanie', gdp: [0.0017, 0.0066], length: [1, 3], peMult: 1.20, mood: 0.3,  next: 'recession' },
+    recession:   { name: 'Recesja',     gdp: [-0.0110, -0.0022], length: [2, 4], peMult: 0.85, mood: -0.6, next: 'recovery' }
 };
+const GDP_DRIVER_SCALE = 1 / 0.55;
+
+/** Napęd koniunktury dla przychodów spółek (dawna skala gdpGrowth). */
+function getGdpDriver() {
+    return (Number(economyCycle?.gdpGrowth) || 0) * GDP_DRIVER_SCALE;
+}
 
 // beta: wrażliwość przychodów i wycen na cykl (1 = przeciętna, <1 defensywna, >1 cykliczna)
 // rateSens: wrażliwość wyceny na stopy procentowe; pe: bazowe C/Z; margin: typowa marża EBITDA;
@@ -119,7 +127,7 @@ function advanceEconomyCycle() {
     cycle.gdpGrowth = getRandomInRange(def.gdp[0], def.gdp[1]);
 
     // Wskaźnik koniunktury: wygładzona reakcja na PKB (0 = głęboka recesja, 100 = boom).
-    const target = Math.max(0, Math.min(100, 50 + cycle.gdpGrowth * 2500));
+    const target = Math.max(0, Math.min(100, 50 + getGdpDriver() * 2500));
     cycle.index = Math.round(cycle.index * 0.5 + target * 0.5);
 
     cycle.history.push({ phase: cycle.phase, gdpGrowth: cycle.gdpGrowth, index: cycle.index });
@@ -179,7 +187,7 @@ const CANDLE_INTERVAL = 15 * 1000;
 // szum ~0,2% × zmienność; powrót do wartości godziwej z półokresem ok. 1 godziny gry;
 // nastrój rynku wg fazy cyklu (ekspansja ≈ +0,7% na godzinę dla bety 1).
 const PRICE_NOISE_PER_TICK = 0.002;
-const PRICE_MEAN_REVERSION_PER_TICK = 0.0002;
+const PRICE_MEAN_REVERSION_PER_TICK = 0.0003; // audyt A4: kursy nie nadążały za wyceną w cyklu
 const MARKET_MOOD_PER_TICK = 0.000004;
 
 // --- Bank Centralny i Stopy ---

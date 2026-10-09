@@ -506,7 +506,7 @@ function getAnalystInsights(stock) {
     }
     const earnings = getAnalyst('earnings');
     if (earnings && f) {
-        const trend = (Number(stock.financialHealth) || 0) * 0.08 + getSectorProfile(stock).beta * (economyCycle.gdpGrowth || 0) * 20;
+        const trend = (Number(stock.financialHealth) || 0) * 0.08 + getSectorProfile(stock).beta * getGdpDriver() * 20;
         const chance = Math.max(0.05, Math.min(0.95, 0.5 + trend + gaussianRandom() * (6 - earnings.stars) * 0.03));
         insights.push(`Analityk wyników (${'★'.repeat(earnings.stars)}): szansa pozytywnej niespodzianki ≈ ${(chance * 100).toFixed(0)}%.`);
     }

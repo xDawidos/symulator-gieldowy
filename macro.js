@@ -126,7 +126,7 @@ function advanceMacroQuarter() {
     macro.shocks.inflation *= 0.5;
 
     // Bezrobocie: prawo Okuna + powrót do naturalnej stopy.
-    macro.unemployment = clampValue(macro.unemployment - (macro.gdpAnnual - 0.025) * 0.3 + (NATURAL_UNEMPLOYMENT - macro.unemployment) * 0.1 + gaussianRandom() * 0.002, 0.02, 0.2);
+    macro.unemployment = clampValue(macro.unemployment - (macro.gdpAnnual - 0.018) * 0.3 + (NATURAL_UNEMPLOYMENT - macro.unemployment) * 0.2 + gaussianRandom() * 0.002, 0.02, 0.2);
 
     advanceSectorCycles();
     advanceElectionCycle();

@@ -6,6 +6,31 @@
 - `triggerResearchEvent` był pustym stubem wywoływanym w 5% cykli zdarzeń — teraz działające zdarzenia R&D.
 - Panel Analityka Dywidend nie miał przycisku — przywrócony (zakładki giełd, po szkoleniu).
 
+## A4 — balans
+Pomiar: 27 kwartałów (6,75 roku gry) na ×50, wskaźniki co kwartał, przed i po zmianach.
+
+| Wskaźnik | Przed | Po |
+|---|---|---|
+| PKB r/r w ekspansji | do 7% | 2–4% |
+| Bezrobocie po recesji | utyka na 8–11% | wraca do ~6,5% |
+| Mediana cena / wartość godziwa | spada 0,92 → 0,32 | waha się 0,6–1,2 w rytmie cyklu |
+| Dywidendowi arystokraci | 20–40% spółek | 0–7 spółek |
+| Polityka „Pełna (100%)” | 34 z 77 spółek | 3–10 spółek |
+
+Zmiany:
+- Fazy cyklu ze realistycznym PKB; wpływ na spółki zachowany przez `getGdpDriver()`.
+- Walne: zarząd proponuje politykę dywidendy dopasowaną do kondycji (wcześniej zawsze „+1” → dryf do 100% wypłat);
+  „Pełna” rzadko na starcie, zarząd z niej schodzi poza ekspansją.
+- Arystokrata: 12 kwartałów zamiast 8.
+- Bezrobocie: silniejszy powrót do stopy naturalnej.
+- Kursy szybciej wracają do wartości godziwej (półokres ~40 min gry).
+- Zakupy i sprzedaże botów: wpływ na kurs najwyżej ±2% na transakcję (wcześniej liniowy, bez limitu).
+
+Zostaje do obserwacji:
+- GIG rośnie ok. 3× w 6,75 roku (wzrost przychodów + inflacja) — rynek byczy; ewentualnie osłabić trend wzrostu sektorów.
+- Część spółek ma wartość księgową znacznie powyżej kapitalizacji (np. WIP, KFX) — wartość godziwa z kotwicy księgowej
+  jest wtedy wysoka, a kurs stoi nisko. Do zbadania źródło przyrostu zysków zatrzymanych.
+
 ## A3 — interfejs
 - Skan stylów: w index.html praktycznie brak stylów inline; w JS kolory w ~95% używają zmiennych motywu.
   Sztywne kolory zamienione na klasy: przycisk pauzy (`.is-paused`), przełącznik typu wykresu (`.chart-type-btn.active`),

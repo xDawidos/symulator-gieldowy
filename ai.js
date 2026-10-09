@@ -237,7 +237,7 @@ function aiBuyStock(ai, symbol, quantity) {
     if (typeof chargeMarketCommission === 'function') chargeMarketCommission(stockToBuy, totalCost, ai); // prowizja operatora rynku
     stockToBuy.sharesHeld += quantity; // Zwiększ liczbę akcji posiadanych przez graczy/AI
     // Symuluj niewielki wpływ na cenę (płynność rynku)
-    stockToBuy.price += (quantity * stockToBuy.price) * 0.000005;
+    stockToBuy.price *= 1 + Math.min(0.02, quantity * 0.000005); // wpływ na kurs, najwyżej +2% na transakcję (audyt A4)
 
     // Zaktualizuj portfel AI
     if (ai.portfolio[symbol]) {
@@ -315,7 +315,7 @@ function aiSellStock(ai, symbol, quantity) {
     holding.shares -= quantity;
     stockToSell.sharesHeld -= quantity; // Zaktualizuj liczbę akcji w obiegu rynkowym
     // Symuluj niewielki wpływ na cenę
-    stockToSell.price -= (quantity * stockToSell.price) * 0.000005;
+    stockToSell.price *= 1 - Math.min(0.02, quantity * 0.000005); // najwyżej −2% na transakcję (audyt A4)
 
     // Logowanie z informacją o podatku
     console.log(`[AI] ${ai.name} sprzedał ${quantity} szt. ${symbol}. Zysk brutto: ${profit.toFixed(2)}, Podatek: ${taxToPay.toFixed(2)}.`);

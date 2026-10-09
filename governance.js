@@ -69,7 +69,12 @@ function buildAgmAgenda(stock) {
     const items = [];
     const order = DIVIDEND_POLICY_ORDER;
     const current = Math.max(0, order.indexOf(stock.dividendPolicy || 'Growth'));
-    const proposedPolicy = order[Math.max(0, Math.min(order.length - 1, current + (health >= 2 ? 1 : health <= -2 ? -1 : 0)))];
+    // Zarząd proponuje politykę dopasowaną do kondycji (audyt A4: stałe „+1” prowadziło do dryfu wypłat w górę).
+    // „Pełna (100%)” zostaje tylko tam, gdzie już obowiązuje i spółka jest w świetnej kondycji.
+    const target = health >= 3 ? 'Aggressive' : health >= 1 ? 'Balanced' : health <= -1 ? 'Growth' : order[current];
+    const keepTotal = order[current] === 'Total' && health >= 3;
+    const step = Math.sign(order.indexOf(target) - current); // najwyżej o jeden stopień na walnym
+    const proposedPolicy = keepTotal ? 'Total' : order[Math.max(0, Math.min(order.length - 1, current + step))];
     items.push({ id: 'dividend', kind: 'board', type: 'dividend', policy: proposedPolicy, label: `Polityka dywidendy: ${DIVIDEND_POLICIES[proposedPolicy].label}` });
     items.push({ id: 'discharge', kind: 'board', type: 'discharge', label: `Absolutorium dla prezesa ${stock.ceo?.name || ''}`.trim() });
     if (stock.cash > getMarketCapValue(stock) * 0.15 && Math.random() < 0.5) items.push({ id: 'buyback', kind: 'board', type: 'buyback', label: 'Program skupu akcji własnych' });

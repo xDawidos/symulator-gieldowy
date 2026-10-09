@@ -1845,7 +1845,7 @@ function computeQuarterResults(stock) {
     const profile = getSectorProfile(stock);
     const health = Number(stock.financialHealth) || 0;
     const phaseAdj = PHASE_GROWTH_ADJUSTMENT[stock.corporatePhase] || 0;
-    const gdp = Number(economyCycle?.gdpGrowth) || 0;
+    const gdp = getGdpDriver(); // napęd koniunktury (economy.js)
 
     // Cykl sektora i inflacja (nominalny wzrost przychodów) — macro.js
     const sectorAdj = typeof getSectorCycleAdj === 'function' ? getSectorCycleAdj(stock) : 0;
@@ -2017,7 +2017,7 @@ function assignInitialDividendPolicies() {
         if (stock.exchange === 'JUNK' || stock.assetType) {
             setCompanyDividendPolicy(stock, 'Growth');
         } else {
-            setCompanyDividendPolicy(stock, getRandomElement(DIVIDEND_POLICY_ORDER));
+            setCompanyDividendPolicy(stock, getRandomElement(['Growth', 'Growth', 'Balanced', 'Balanced', 'Aggressive', 'Total'])); // „Pełna” rzadko (audyt A4)
         }
     });
     console.log('[START GRY] Przypisano początkowe polityki dywidendowe.');
@@ -2045,6 +2045,7 @@ function reviewDividendPolicy(stock) {
     let next = index;
 
     if ((economyCycle.phase === 'recession' || health < -1) && index > 0) next = index - 1;
+    else if (DIVIDEND_POLICY_ORDER[index] === 'Total' && economyCycle.phase !== 'expansion' && Math.random() < 0.5) next = index - 1; // 100% wypłaty to wyjątek, nie norma
     else if ((economyCycle.phase === 'expansion' || economyCycle.phase === 'overheating') && health > 2 && index < 2) next = index + 1;
     else if (stock.corporatePhase === CORPORATE_PHASES.GROWTH && index > 0) next = 0;
     else if (getRatePressureOnDividend(stock) > 0 && index < 2) next = index + 1; // wysokie stopy: akcjonariusze chcą wypłat
@@ -5645,7 +5646,7 @@ function reviewCompanyPlacements() {
             if (newLimitRange) stock.maxShares = getRandomIntInRange(newLimitRange.min, newLimitRange.max);
 
             if (currentLevel === 0) {
-                setCompanyDividendPolicy(stock, getRandomElement(DIVIDEND_POLICY_ORDER));
+                setCompanyDividendPolicy(stock, getRandomElement(['Growth', 'Growth', 'Balanced', 'Balanced', 'Aggressive', 'Total'])); // „Pełna” rzadko (audyt A4)
                 message += ` Spółka ustala swoją politykę dywidendową na: ${getDividendPolicyLabel(stock.dividendPolicy)}.`;
             } else if (Math.random() < 0.25) {
                 const oldPolicy = stock.dividendPolicy;

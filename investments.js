@@ -85,7 +85,7 @@ function registerOperatingInvestment(stock, { id, name, cost, incomeBonus, quali
 function processOperatingInvestments(stock) {
     if (!Array.isArray(stock.operatingInvestments) || !stock.operatingInvestments.length) return 0;
     const profile = getSectorProfile(stock);
-    const cycle = 1 + profile.beta * (Number(economyCycle?.gdpGrowth) || 0) * 10;
+    const cycle = 1 + profile.beta * getGdpDriver() * 10;
     let total = 0;
 
     for (const operating of [...stock.operatingInvestments]) {

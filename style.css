@@ -3808,7 +3808,9 @@ button:hover {
 .cv-medal-gold { background: rgba(255, 215, 0, 0.18); border-color: #ffd700; }
 .cv-history { font-size: 13px; padding-left: 18px; }
 .cv-entry-compliance { color: var(--color-down); }
-.cv-trainings { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.cv-trainings { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 900px) { .cv-trainings { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .cv-trainings { grid-template-columns: 1fr; } }
 .cv-training { border: 1px solid var(--border-color); border-radius: 10px; padding: 10px; background: var(--bg-elevated); display: flex; flex-direction: column; gap: 4px; }
 .cv-training h4 { margin: 0; font-size: 14px; }
 .cv-training p { margin: 0; font-size: 12px; }

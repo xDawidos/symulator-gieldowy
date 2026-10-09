@@ -2288,19 +2288,19 @@ group('Dywidendy: arystokraci (0.10.2 M2)', () => {
         updateDividendStreak(stock);
     }
 
-    test('8 kwartałów stałej dywidendy = arystokrata z bonusem wyceny', () => {
+    test('12 kwartałów stałej dywidendy = arystokrata z bonusem wyceny', () => {
         const a = worldM2();
-        for (let i = 0; i < 7; i++) quarter(a, 1);
+        for (let i = 0; i < ARISTOCRAT_MIN_STREAK - 1; i++) quarter(a, 1);
         assert(!a.isDividendAristocrat, 'jeszcze nie');
         const before = getValuationMultiplier(a);
         quarter(a, 1.02);
-        assert(a.isDividendAristocrat && a.dividendStreak === 8, 'status');
+        assert(a.isDividendAristocrat && a.dividendStreak === ARISTOCRAT_MIN_STREAK, 'status');
         assert(getValuationMultiplier(a) > before, 'zainteresowanie +7%');
     });
 
     test('obcięcie dywidendy zabiera status i przecenia kurs', () => {
         const a = worldM2();
-        for (let i = 0; i < 8; i++) quarter(a, 1);
+        for (let i = 0; i < ARISTOCRAT_MIN_STREAK; i++) quarter(a, 1);
         let effect = null;
         const original = applyPriceEffect;
         applyPriceEffect = (symbol, value) => { effect = value; };
