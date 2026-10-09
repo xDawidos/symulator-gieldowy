@@ -3673,7 +3673,7 @@ function detectFinancialAnomaly(stock) {
             { text: "Twoja analiza wskazuje na potencjalne ryzyko sporu prawnego, co niepokoi rynek.", effect: () => { applyPriceEffect(stock.symbol, -0.02, 'negative'); } }
         ];
         const outcome = getRandomElement(possibleNegativeOutcomes);
-        anomalyReportElement.innerHTML = `<span style="color: #dc3545;">🚨 Wykryto Anomalię! ${outcome.text}</span>`;
+        anomalyReportElement.innerHTML = `<span class="text-down">🚨 Wykryto Anomalię! ${outcome.text}</span>`;
         logEvent(`[Księgowy] Wykryto negatywną anomalię w finansach ${stock.name}!`, 'review');
         outcome.effect(); // Zastosuj negatywny efekt
         showToast(`Wykryto anomalię w ${stock.name}!`, 'warning');
@@ -3686,7 +3686,7 @@ function detectFinancialAnomaly(stock) {
             { text: "Zidentyfikowano potencjalne źródło dodatkowych przychodów, wcześniej pomijane przez zarząd.", effect: () => { stock.financialHealth += 0.1; applyPriceEffect(stock.symbol, 0.01, 'positive'); } }
         ];
         const outcome = getRandomElement(possiblePositiveOutcomes);
-        anomalyReportElement.innerHTML = `<span style="color: #28a745;">💡 Wykryto Potencjał! ${outcome.text}</span>`;
+        anomalyReportElement.innerHTML = `<span class="text-up">💡 Wykryto Potencjał! ${outcome.text}</span>`;
         logEvent(`[Księgowy] Wykryto pozytywną anomalię (potencjał) w finansach ${stock.name}!`, 'review');
         outcome.effect(); // Zastosuj pozytywny efekt
         showToast(`Wykryto potencjał w ${stock.name}!`, 'success');

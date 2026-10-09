@@ -571,7 +571,7 @@ function initializeGame() {
     const pauseButton = document.getElementById('pause-game-btn');
     if (isGamePaused && pauseButton) {
         pauseButton.textContent = '▶️ Wznów';
-        pauseButton.style.backgroundColor = '#28a745';
+        pauseButton.classList.add('is-paused');
     }
 
     updateInterestRates();

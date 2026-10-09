@@ -87,11 +87,11 @@ function togglePauseGame() {
     if (pauseButton) {
         if (isGamePaused) {
             pauseButton.textContent = '▶️ Wznów';
-            pauseButton.style.backgroundColor = '#28a745';
+            pauseButton.classList.add('is-paused');
             console.log('--- GRA ZAPAUZOWANA ---');
         } else {
             pauseButton.textContent = '⏸️ Pauza';
-            pauseButton.style.backgroundColor = '';
+            pauseButton.classList.remove('is-paused');
             console.log('--- GRA WZNOWIONA ---');
         }
     }

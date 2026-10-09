@@ -1119,11 +1119,11 @@ function openManagementModal(symbol, defaultTab = 'main') {
             if (stock.playerHasFinancialAccess || (accountantLevel >= 2 && isMajorityOwner)) {
                 viewFinancesBtn.disabled = false;
                 financesInfo.textContent = 'Dostęp aktywny.';
-                financesInfo.style.color = 'green';
+                financesInfo.className = 'text-up';
             } else {
                 viewFinancesBtn.disabled = false;
                 financesInfo.textContent = 'Wymagana opłata: 2000 PLN.';
-                financesInfo.style.color = 'var(--text-muted)';
+                financesInfo.className = 'text-muted';
             }
         } else {
             financialSection.style.display = 'none';
@@ -1881,20 +1881,11 @@ function updateChartTypeButtons() {
 
     if (!candlestickBtn || !lineBtn) return;
 
-    // Zresetuj style obu przycisków
-    candlestickBtn.style.backgroundColor = 'transparent';
-    lineBtn.style.backgroundColor = 'transparent';
-    candlestickBtn.style.border = '2px solid transparent';
-    lineBtn.style.border = '2px solid transparent';
-
-    // Ustaw styl dla aktywnego przycisku
-    if (playerChartSettings.type === 'candlestick') {
-        candlestickBtn.style.backgroundColor = 'var(--bg-elevated-2)';
-        candlestickBtn.style.border = '2px solid #007bff';
-    } else {
-        lineBtn.style.backgroundColor = 'var(--bg-elevated-2)';
-        lineBtn.style.border = '2px solid #007bff';
-    }
+    // Aktywny typ wykresu — klasa zamiast stylów (motyw jasny/ciemny).
+    candlestickBtn.classList.add('chart-type-btn');
+    lineBtn.classList.add('chart-type-btn');
+    candlestickBtn.classList.toggle('active', playerChartSettings.type === 'candlestick');
+    lineBtn.classList.toggle('active', playerChartSettings.type !== 'candlestick');
 }
 
 // Motyw: ciemny domyślnie; wybór gracza zapamiętany w przeglądarce (wygoda, nie stan gry).

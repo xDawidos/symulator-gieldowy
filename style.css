@@ -4354,3 +4354,8 @@ img, svg, video { max-width: 100%; }
 .badge-market { padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--bg-elevated-2); border: 1px solid var(--accent-info); }
 .project-card .inv-stages { margin-top: var(--space-1); }
 .project-list { display: grid; gap: var(--space-1); }
+
+/* ===================== AUDYT A3: klasy zamiast stylów z JS ===================== */
+#pause-game-btn.is-paused { background-color: var(--color-up); color: #fff; }
+.chart-type-btn { background: transparent; border: 2px solid transparent; }
+.chart-type-btn.active { background: var(--bg-elevated-2); border-color: var(--accent-info); }

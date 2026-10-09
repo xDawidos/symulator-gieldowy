@@ -476,14 +476,14 @@
     </div>
 
     <div class="modal" id="skills-modal" style="display: none;">
-        <button class="close-btn" onclick="document.getElementById('skills-modal').style.display='none';">&times;</button>
+        <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
         <h2 class="mt-0 text-center">🎓 CV i szkolenia</h2>
         <p class="text-center divider-bottom pb-2">Moje pieniądze: <span id="skills-modal-xp">0</span> zł</p>
         <div id="skills-list"></div>
     </div>
 
     <div id="bank-modal" class="modal modal-xl bank-window" style="display: none;">
-    <button class="close-btn" onclick="document.getElementById('bank-modal').style.display='none';" aria-label="Zamknij">&times;</button>
+    <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
     <header class="bank-hero">
         <div class="bank-emblem" aria-hidden="true">🏛️</div>
         <div>
@@ -579,7 +579,7 @@
     </div>
 </div>
 <div id="city-investment-modal" class="modal modal-xl bank-window city-window" style="display: none;">
-    <button class="close-btn" onclick="document.getElementById('city-investment-modal').style.display='none';" aria-label="Zamknij">&times;</button>
+    <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
     <header class="bank-hero city-hero">
         <div class="bank-emblem" aria-hidden="true">🏙️</div>
         <div>
@@ -652,7 +652,7 @@
 </div>
 
     <div class="modal modal-lg" id="leaderboard-modal" style="display: none;">
-        <button class="close-btn" onclick="document.getElementById('leaderboard-modal').style.display='none';" aria-label="Zamknij">&times;</button>
+        <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
         <h2 class="mt-0 text-center">🏆 Ranking funduszy</h2>
          <div id="leaderboard-list"></div>
     </div>
@@ -666,7 +666,7 @@
 
 
     <div id="state-modal" class="modal modal-xl bank-window state-window" style="display: none;">
-        <button class="close-btn" onclick="document.getElementById('state-modal').style.display='none';" aria-label="Zamknij">&times;</button>
+        <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
         <header class="bank-hero state-hero">
             <div class="bank-emblem" aria-hidden="true">🏛️</div>
             <div>
@@ -687,7 +687,7 @@
     </div>
 
     <div id="management-modal" class="modal" style="display: none;">
-        <button class="close-btn" onclick="document.getElementById('management-modal').style.display='none';">&times;</button>
+        <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
         <h2 class="mt-0 text-center text-info" id="management-title">👑 Panel Zarządzania</h2>
         
         <div class="bank-tabs mb-2 divider-bottom">
@@ -838,7 +838,7 @@
     </div>
 
     <div id="investors-modal" class="modal" style="display: none;">
-        <button class="close-btn" onclick="document.getElementById('investors-modal').style.display='none';">&times;</button>
+        <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
          <h3 id="investors-modal-title">Ranking Inwestorów</h3>
          <table>
              <thead><tr><th>#</th><th>Inwestor</th><th>Zainwestowana kwota</th></tr></thead>
@@ -849,7 +849,7 @@
     <div id="autoinvest-modal" class="modal" style="display: none;">
         <div class="modal-header">
              <h3>🤖 Ustaw Auto-inwestowanie</h3>
-             <button class="close-btn" onclick="document.getElementById('autoinvest-modal').style.display='none'">&times;</button>
+             <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
          </div>
          <div class="modal-body">
              <p>Automatycznie wpłacaj środki do puli inwestycyjnej start-upów.</p>
@@ -867,7 +867,7 @@
     <div id="startup-autoinvest-modal" class="modal" style="display: none;">
         <div class="modal-header">
              <h3 id="startup-autoinvest-title">🤖 Ustaw Auto-inwestowanie</h3>
-             <button class="close-btn" onclick="document.getElementById('startup-autoinvest-modal').style.display='none'">&times;</button>
+             <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
          </div>
          <div class="modal-body">
              <p>Automatycznie inwestuj w ten start-up.</p>
@@ -883,7 +883,7 @@
     </div>
 
     <div id="research-modal" class="modal" style="display: none;">
-        <button class="close-btn" onclick="document.getElementById('research-modal').style.display='none';">&times;</button>
+        <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
          <h2 id="research-modal-title">🔬 Panel Badań i Rozwoju</h2>
          <div class="bank-section">
              <h4>Poziom 1: Analiza Potencjału</h4>
@@ -983,7 +983,7 @@
     </div>
 
     <div id="festival-results-modal" class="modal" style="display: none;">
-        <button class="close-btn" onclick="document.getElementById('festival-results-modal').style.display='none';">&times;</button>
+        <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
          <h2 class="mt-0 text-center" id="festival-results-title"></h2>
          <p class="text-center">Ranking stoisk na podstawie zdobytego zainteresowania. Zwycięzcy otrzymują roczne bonusy!</p>
          <table class="w-full">
@@ -1028,7 +1028,7 @@
     </div>
 
     <div id="financial-details-modal" class="modal" style="display: none;">
-        <button class="close-btn" onclick="document.getElementById('financial-details-modal').style.display='none';">&times;</button>
+        <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
         <h3 class="mt-0 text-center" id="financial-details-title">Szczegóły Finansowe</h3>
         <div id="financial-details-content">
             <p>Ładowanie danych...</p>
@@ -1039,7 +1039,7 @@
 
 
     <div id="ma-target-modal" class="modal" style="display: none;">
-    <button class="close-btn" onclick="document.getElementById('ma-target-modal').style.display='none';">&times;</button>
+    <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
     <h3 class="mt-0" id="ma-target-title">Wybierz Cel dla: Nazwa Spółki</h3>
     <div class="modal-body max-h-md scroll-y">
         <table class="w-full" id="ma-target-table">
@@ -1057,7 +1057,7 @@
 </div>
 
 <div id="ma-complication-modal" class="modal modal-sm" style="display: none;">
-    <button class="close-btn" onclick="document.getElementById('ma-complication-modal').style.display='none';">&times;</button>
+    <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
     <h3 class="mt-0 text-down" id="ma-complication-title">🔴 Poważne Komplikacje!</h3>
     <div class="modal-body">
         <p class="text-md" id="ma-complication-message">...Wiadomość o komplikacji...</p>
@@ -1073,14 +1073,14 @@
 
 <!-- Modal Lombardu -->
 <div id="pawnshop-modal" class="modal" style="display: none;">
-    <button class="close-btn" onclick="document.getElementById('pawnshop-modal').style.display='none'">&times;</button>
+    <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
     <h3 class="mt-0 text-up">🏦 Lombard – LOMBARDEX S.A.</h3>
     <div class="modal-body" id="pawnshop-body"></div>
 </div>
 
 <!-- Modal Windykatora -->
 <div id="debtcollector-modal" class="modal" style="display: none;">
-    <button class="close-btn" onclick="document.getElementById('debtcollector-modal').style.display='none'">&times;</button>
+    <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
     <h3 class="mt-0 text-warn">⚠️ Windykator – WRONA</h3>
     <div class="modal-body" id="debtcollector-body"></div>
 </div>
@@ -1196,7 +1196,7 @@
 
 <!-- Modal Sektora Budowlanego -->
 <div id="construction-sector-modal" class="modal modal-xl bank-window construction-window" style="display: none;">
-    <button class="close-btn" onclick="document.getElementById('construction-sector-modal').style.display='none';" aria-label="Zamknij">&times;</button>
+    <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
     <header class="bank-hero construction-hero">
         <div class="bank-emblem" aria-hidden="true">🏗️</div>
         <div>

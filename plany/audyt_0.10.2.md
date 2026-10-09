@@ -6,6 +6,15 @@
 - `triggerResearchEvent` był pustym stubem wywoływanym w 5% cykli zdarzeń — teraz działające zdarzenia R&D.
 - Panel Analityka Dywidend nie miał przycisku — przywrócony (zakładki giełd, po szkoleniu).
 
+## A3 — interfejs
+- Skan stylów: w index.html praktycznie brak stylów inline; w JS kolory w ~95% używają zmiennych motywu.
+  Sztywne kolory zamienione na klasy: przycisk pauzy (`.is-paused`), przełącznik typu wykresu (`.chart-type-btn.active`),
+  status dostępu do finansów, komunikaty anomalii R&D.
+- 17 okien zamykało się starym `onclick="...style.display='none'"` — teraz wszędzie `closeModalFrom(this)` z `aria-label`.
+- Wąski ekran (375 px): strona bez poziomego przewijania; 10 okien (Państwo/Makro/Rynki, Bank, Miasto/Projekty,
+  Walne, Firma, Inwestycje, Budownictwo, Rynek JU, Poczta) mieści się w ekranie — szerokie tabele w przewijanych kontenerach.
+- Motyw jasny: nowe panele (Makro, Firma) poprawnie przełączają kolory.
+
 ## A1 — przepływy pieniędzy i akcji
 Narzędzie: `getTrackedHeldShares` / `reconcileSharesHeld` + nowe niezmienniki w `checkWorldInvariants`
 (akcje w obrocie = suma posiadaczy, ujemna gotówka spółek). Uzgadnianie przy wczytaniu i co kwartał.
