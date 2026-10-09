@@ -53,10 +53,6 @@ function getProjectQuarter() {
     return typeof macro === 'object' ? macro.quarter : 0;
 }
 
-function getProjectDef(project) {
-    return project.timed ? TIMED_PROJECT_TEMPLATES.find(t => t.id === project.templateId) : MEGA_PROJECTS.find(p => p.id === project.templateId);
-}
-
 function isMegaProjectTaken(id) {
     return specialProjects.completed.some(p => !p.timed && p.templateId === id) || specialProjects.active.some(p => !p.timed && p.templateId === id);
 }

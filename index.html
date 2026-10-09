@@ -256,6 +256,8 @@
               onclick="setMarketLevel(this,'EMERALD')">🟢 Szmaragdowa</button>
       <button class="market-level-tab" data-level="DIAMOND"
               onclick="setMarketLevel(this,'DIAMOND')">💠 Diamentowa</button>
+      <button class="market-level-tab" id="open-dividend-tracker-btn" style="display: none;"
+              onclick="openDividendTrackerModal()" title="Panel Analityka Dywidend">💰 Dywidendy</button>
     </div>
 
     <!-- Ukryty select — zachowany dla kompatybilności z JS -->
@@ -814,7 +816,6 @@
         <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
         <div class="modal-header">
              <h2>💰 Panel Analityka Dywidend</h2>
-             <button onclick="document.getElementById('dividend-tracker-modal').style.display='none';">&times;</button>
          </div>
          <div class="modal-body">
              <table>

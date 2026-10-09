@@ -773,6 +773,7 @@ function buyTraining(skillId) {
     const medal = getTrainingMedal(skill.unlockedLevel);
     playerProfile?.cv.push({ type: 'training', text: `${skill.name} — poziom ${skill.unlockedLevel}${medal ? ` (${medal.label})` : ''}` });
     logEvent(`🎓 Ukończono szkolenie: ${skill.name} (poziom ${skill.unlockedLevel}).`, 'review');
+    if (typeof updateDividendTrackerButtonVisibility === 'function') updateDividendTrackerButtonVisibility(); // przycisk panelu dywidend
 
     if (typeof renderCvPanel === 'function') renderCvPanel();
     refreshFundViews();

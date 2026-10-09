@@ -391,12 +391,24 @@ function triggerNationalizationEvent() {
     return;
 }
 
+// Zdarzenia działów R&D: przyspieszenie albo opóźnienie trwających badań (A2: wcześniej pusty stub).
 const researchEventsPrompts = [
-    // ... (kod bez zmian) ...
+    { type: 'positive', progress: 0.25, message: name => `🔬 Przełom w laboratorium ${name}! Badania przyspieszają.` },
+    { type: 'positive', progress: 0.15, message: name => `🧑‍🔬 ${name} podkupuje zespół naukowców konkurencji — prace idą szybciej.` },
+    { type: 'negative', progress: -0.2, message: name => `🧪 Nieudany eksperyment w ${name} — część wyników do powtórki.` },
+    { type: 'negative', progress: -0.1, message: name => `🔌 Awaria aparatury w ${name} opóźnia badania.` }
 ];
 
 function triggerResearchEvent() {
-    // ... (kod bez zmian) ...
+    const researching = stocks.filter(s => !s.isBankrupt && s.research?.isResearching && s.research.currentTech);
+    if (!researching.length) return null;
+    const stock = getRandomElement(researching);
+    const event = pickEventByCycle(researchEventsPrompts.map((e, i) => ({ ...e, id: `rnd_${i}` })));
+    const tech = typeof technologies !== 'undefined' ? technologies[stock.research.currentTech] : null;
+    const required = Number(tech?.cost) || 100;
+    stock.research.progress = Math.max(0, (Number(stock.research.progress) || 0) + required * event.progress);
+    logEvent(event.message(stock.name), 'company');
+    return event;
 }
 
 // --- NOWE EVENTY Z PLIKU KOLEGI ---
@@ -585,29 +597,6 @@ function triggerFestivalPlayerEvent() {
 }
 
 // Funkcja pomocnicza do wywołania eventu festynowego
-function triggerEvent(chosenEvent, playerParticipant) {
-    let targetName = 'Twoja Działalność';
-    const target = playerParticipant.promotionTarget;
-    if (target.type === 'company') {
-        const stock = stocks.find(s => s.symbol === target.id);
-        if (stock) targetName = stock.name;
-    } else if (target.type === 'city') {
-        targetName = 'Miasto Gdańsk';
-    }
-
-    const message = chosenEvent.message(targetName);
-    logEvent(`[FESTYN] ${message}`, 'review');
-    showToast(message, 'default', 6000);
-
-    chosenEvent.effect(playerParticipant);
-
-    // Odśwież widok festynu, jeśli jest otwarty
-    const modal = document.getElementById('city-investment-modal');
-    if (modal && modal.style.display === 'block') {
-        updateCityModalContent(); // Użyj głównej funkcji aktualizującej
-    }
-}
-
 function triggerSingleFestivalEvent(chosenEvent, playerParticipant) {
     let targetName = 'Twoja Działalność'; // Domyślnie
     let bankNameForMessage = ''; // Nazwa banku dla eventów bankowych

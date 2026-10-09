@@ -1326,16 +1326,6 @@ const INVESTMENT_KIND_LABELS = {
     investment: 'Inwestycja'
 };
 
-function classifyInvestmentCatalogEntry(investment) {
-    if (!investment || typeof investment !== 'object') return 'investment';
-    return INVESTMENT_CLASSIFICATION[investment.id]?.kind || investment.kind || 'investment';
-}
-
-function isConstructionInvestment(investment) {
-    const entry = investment?.id ? getCatalogEntryById(investment.id) : null;
-    return CONSTRUCTION_KINDS.includes(classifyInvestmentCatalogEntry(entry || investment));
-}
-
 const INVESTMENT_CATALOG = {
     'general': [
         { 
@@ -2588,7 +2578,6 @@ function resolveMerger(stock1, stock2, process) {
             break;
 
         case 'fuzja':
-            // ... (logika fuzji pozostaje bez zmian) ...
             const initiatorValue = initiator.price * initiator.totalShares;
             const targetValue = target.price * target.totalShares;
             const totalNewValue = initiatorValue + targetValue;
@@ -4661,7 +4650,6 @@ function updateResearchProgress(deltaTime) {
             if (stock.research.currentTech) {
                 let baseSpeedMultiplier = stock.research.researchSpeedMultiplier || 1.0;
                 let ceoMultiplier = 1.0;
-                // ... (istniejąca logika obliczania ceoMultiplier na podstawie cech) ...
                 if (stock.ceo && stock.ceo.traits) {
                     if (stock.ceo.traits.some(t => t.id === 'wizjoner')) ceoMultiplier *= 1.10;
                     if (stock.ceo.traits.some(t => t.id === 'glowa_w_chmurach')) ceoMultiplier *= 0.95;
@@ -4693,34 +4681,6 @@ function updateResearchProgress(deltaTime) {
             }
         }
     });
-}
-
-function chooseNextResearch(symbol, chosenTechId) {
-    const company = stocks.find(stock => stock.symbol === symbol);
-
-    if (
-        !company ||
-        !company.researchUnlocks?.canInterfere
-    ) {
-        return false;
-    }
-
-    const started = startCompanyResearch(company, chosenTechId);
-
-    if (!started) return false;
-
-    const researchModal = document.getElementById('research-modal');
-
-    if (
-        researchModal?.style.display === 'block' &&
-        researchModal.dataset.currentSymbol === symbol
-    ) {
-        openResearchModal(symbol);
-    }
-
-    updateConstructionSectorUI();
-
-    return true;
 }
 
 function checkResearchChoiceTimers(deltaTime = 0) {
@@ -5517,7 +5477,6 @@ function applyPriceEffect(stockSymbol, percentageChange, eventType, eventCategor
 }
 
 function checkForPotentialMA() {
-    // ... (logika pobierania initiatorów i targetów - bez zmian) ...
     const potentialInitiators = [
         ...aiCompetitors.filter(ai => ai.cash > 50000 && ai.personality !== 'market_maker'), 
         ...stocks.filter(s => s.assetType === 'Holding' && s.cash > 100000), 
@@ -5631,19 +5590,6 @@ function checkForPotentialMA() {
         }
     }
 }
-
-function calculateInitialHoldingPrices() {
-    const holdingCompanies = stocks.filter(s => s.assetType === 'Holding');
-
-    holdingCompanies.forEach(holding => {
-        if (holding.totalShares > 0) {
-            // Cena startowa jest oparta wyłącznie na gotówce, zanim fundusz dokona jakichkolwiek inwestycji.
-            holding.price = holding.cash / holding.totalShares;
-        }
-    });
-    console.log("[SYSTEM] Obliczono i ustawiono ceny startowe dla spółek finansowych.");
-}
-
 
 function reviewCompanyPlacements() {
     console.log(`[PRZEGLĄD RYNKU] Uruchomiono cykliczny przegląd...`);
@@ -6565,16 +6511,6 @@ function assignBankToCompany(stock) {
         }
         console.log(`[BANKING] Przypisano ${stock.name} do banku ${assignedBank.name}`);
     }
-}
-
-function isTechAvailableForCompany(stock, techId) {
-    const tech = technologies[techId];
-    const deptLevel = stock.departments ? stock.departments.research.level : 0;
-    
-    // Wymagany poziom (domyślnie 1)
-    const requiredLevel = tech.minResearchLevel || 1;
-    
-    return deptLevel >= requiredLevel;
 }
 
 function optimizeBankChoice(stock) {

@@ -547,32 +547,6 @@ const skillCategoryDefinitions = {
     }
 };
 
-const skillCategoryMap = {
-    adblock: 'balance',
-    work: 'bull',
-    analyticalMind: 'balance',
-    ironNerves: 'bear',
-    sharkCharisma: 'bull',
-    hardNegotiator: 'bear',
-    bankMagnet: 'bull',
-    dividendAnalyst: 'bull',
-    financialAnalyst: 'bull',
-    etfExpert: 'bull',
-    insiderAccess: 'bull',
-    sanEscobar: 'bear',
-    sixthSense: 'balance',
-    indexAnalystLvl1: 'bull',
-    nepotism: 'balance',
-    startupInvestor: 'bull',
-    charisma: 'bear',
-    accountant: 'bear',
-    mediaManipulation: 'bear'
-};
-
-function getSkillCategory(skillId) {
-    return skillCategoryMap[skillId] || 'balance';
-}
-
 // Ta funkcja jest z ui.js (baza), zachowujemy ją, ponieważ obsługuje bankowość komercyjną
 function displayPortfolio() {
     const myStocksList = document.getElementById('my-stocks-list');
@@ -759,21 +733,6 @@ function openSkillsModal() {
     }
 }
 
-
-function displayEventLog() {
-    const logList = document.getElementById('event-log-list');
-    if (!logList) return;
-
-    logList.innerHTML = '';
-
-    eventLog.forEach(message => {
-        const listItem = document.createElement('li');
-        listItem.textContent = message;
-        listItem.classList.add('divider-bottom');
-        listItem.classList.add('py-1');
-        logList.appendChild(listItem);
-    });
-}
 
 function toggleExchangeVisibility(exchangeKey) {
     exchangeCollapseState[exchangeKey] = !exchangeCollapseState[exchangeKey];
@@ -1913,48 +1872,6 @@ function openStartupAutoInvestModal(symbol) {
     };
 
     modal.style.display = 'block';
-}
-
-function openStockDetailModal(stockSymbol) {
-    const stock = stocks.find(s => s.symbol === stockSymbol);
-    if (!stock) {
-        return;
-    }
-
-    const modal = document.getElementById('stock-detail-modal');
-    modal.style.display = 'block';
-
-    document.getElementById('stock-detail-name').textContent = stock.name;
-    document.getElementById('stock-detail-symbol').textContent = stock.symbol;
-    document.getElementById('stock-detail-price').textContent = `Cena: ${stock.price.toFixed(2)} PLN`;
-    document.getElementById('stock-detail-volatility').textContent = `Zmienność: ${stock.volatilityFactor.toFixed(2)}`;
-    document.getElementById('stock-detail-sector').textContent = `Sektor: ${stock.sector.join(', ')}`;
-    document.getElementById('stock-detail-ceo').textContent = `CEO: ${stock.ceo}`;
-    document.getElementById('stock-detail-desc').textContent = stock.description;
-
-    const chartContainer = document.getElementById('stock-chart-svg');
-    renderChartSVGForStock(stock, chartContainer, 400, 200); // Rysuj wykres przy otwarciu
-
-    // --- NOWY FRAGMENT - OBSŁUGA PRZYCISKÓW WYKRESÓW ---
-    const candlestickBtn = document.getElementById('chart-type-candlestick-btn');
-    const lineBtn = document.getElementById('chart-type-line-btn');
-
-    if (candlestickBtn) {
-        candlestickBtn.onclick = () => {
-            playerChartSettings.type = 'candlestick';
-            updateChartTypeButtons();
-            renderChartSVGForStock(stock, chartContainer, 400, 200);
-        };
-    }
-    if (lineBtn) {
-        lineBtn.onclick = () => {
-            playerChartSettings.type = 'line';
-            updateChartTypeButtons();
-            renderChartSVGForStock(stock, chartContainer, 400, 200);
-        };
-    }
-    updateChartTypeButtons(); // Ustaw początkowe zaznaczenie
-    // --- KONIEC NOWEGO FRAGMENTU ---
 }
 
 // Ta funkcja jest zduplikowana w obu plikach, ale jest identyczna. Zostawiamy jedną.

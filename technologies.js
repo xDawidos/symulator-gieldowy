@@ -162,9 +162,6 @@ const technologies = {
     'BUILDING_LOGISTICS_1': { name: "Logistyka Materiałów Budowlanych", icon: '🚚', description: "Zmniejsza koszty nowych budów o 2% i ryzyko opóźnień o 20%.", type: "wzmacnianie rozwoju", cost: 350, initialCashCost: 3500, sector: 'Budowlany', constructionEffects: { costReduction: 0.02, delayReduction: 0.20 }, applyEffect: (stock) => { stock.financialHealth += 0.3; } },
 };
 
-// --- 2. LOGIKA GENERATORÓW (BEZ ZMIAN) ---
-// ... (cała reszta pliku, czyli wszystkie funkcje, pozostaje bez zmian) ...
-
 // === NOWA SEKCJA: INWESTYCJE BANKOWE ===
 
 // Współczynnik przeliczenia minut na punkty badań

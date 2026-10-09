@@ -578,20 +578,6 @@ function triggerHostileTakeoverEvent(forcedTarget = null) {
     return initiateMergerProcess(initiator, target, 'przejęcie', 'cash', premium) ? { initiator, target } : null;
 }
 
-function triggerMergerAndAcquisitionEvent() {
-    return triggerHostileTakeoverEvent();
-}
-
-/** Właściciel-bot przyjął ofertę: startuje przyjazne przejęcie po cenie oferty. */
-function handleTakeoverAcceptance(acquirer, target, buyoutPrice) {
-    const premium = Math.max(0, buyoutPrice / Math.max(0.01, target.price) - 1);
-    return initiateMergerProcess(acquirer, target, 'przejęcie', 'cash', premium, { friendly: true });
-}
-
-function handleTakeoverRejection(acquirer, target) {
-    logEvent(`🛡️ Właściciel ${target.name} odrzuca ofertę ${acquirer.name}.`, 'review');
-}
-
 function refreshTakeoverViews(symbol) {
     const modal = document.getElementById('takeover-modal');
     if (modal && modal.style.display === 'block') openTakeoverModal(symbol);

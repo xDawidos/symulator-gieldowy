@@ -1187,63 +1187,6 @@ function checkAiTierUpgrade(ai) {
         logEvent(message);
     }
 }
-function runAiTurns() {
-    aiCompetitors.forEach(ai => {
-        makeAiDecision(ai);
-        checkAiTierUpgrade(ai);
-    });
-}
-
-function aiDecideOnTakeover(aiOwner, acquirer, target, buyoutPrice) {
-    // Bot oblicza, jak duża jest oferowana premia w stosunku do aktualnej ceny
-    const premium = (buyoutPrice / target.price) - 1;
-    let decision = 'reject'; // Domyślnie bot jest ostrożny i odrzuca ofertę
-
-    // Każdy bot decyduje inaczej!
-    switch (aiOwner.personality) {
-        case 'calm': // Beata "Stoik" Nowak
-            // Zaakceptuje, jeśli oferta ma ponad 25% premii - to logiczna, dobra decyzja.
-            if (premium > 0.25) decision = 'accept';
-            break;
-        case 'reckless': // Adam "Ryzyko" Kowalski
-            // Decyduje prawie losowo, z 70% szansą na akceptację dla szybkiej akcji.
-            if (Math.random() < 0.7) decision = 'accept';
-            break;
-        case 'yolo_trader': // Darek "Yolo" Nowobogacki
-            // Prawie zawsze akceptuje, bo liczy się szybka gotówka.
-            if (Math.random() < 0.9) decision = 'accept';
-            break;
-        case 'whale': // Cezary "Wieloryb" Wiśniewski
-            // Jako "wieloryb" jest dumny. Zaakceptuje tylko bardzo wysoką ofertę (ponad 50% premii).
-            if (premium > 0.5) decision = 'accept';
-            break;
-        case 'pro_investor': // Jordan "Wilk" Belfort
-            // Analizuje głębiej. Jeśli spółka jest w świetnej kondycji (health > 3), odrzuci ofertę, licząc na dalsze wzrosty.
-            if (target.financialHealth > 3) decision = 'reject';
-            else if (premium > 0.3) decision = 'accept'; // W innym wypadku, akceptuje dobrą ofertę.
-            break;
-        case 'dividend_chaser': // Marian 'Dywidendusz' Marciniak
-            // Niechętnie sprzeda spółkę dywidendową, chyba że oferta jest nie do odrzucenia (>60% premii).
-            const isDividendStock = target.dividendPolicy !== 'Growth' || target.assetType === 'REIT';
-            if (isDividendStock && premium < 0.6) decision = 'reject';
-            else decision = 'accept';
-            break;
-        default:
-            // Domyślna, bezpieczna decyzja dla innych botów
-            if (premium > 0.3) decision = 'accept';
-            break;
-    }
-
-    // Wykonanie decyzji i zalogowanie jej
-    if (decision === 'accept') {
-        logEvent(`[DECYZJA AI] 🤝 ${aiOwner.name} akceptuje ofertę przejęcia ${target.name}!`, 'review');
-        handleTakeoverAcceptance(acquirer, target, buyoutPrice);
-    } else {
-        logEvent(`[DECYZJA AI] 🛡️ ${aiOwner.name} odrzuca ofertę przejęcia ${target.name}, chroniąc swoje aktywa!`, 'review');
-        handleTakeoverRejection(acquirer, target);
-    }
-}
-
 function aiInvestInStartup(ai, symbol, amount) {
     const startup = stocks.find(s => s.symbol === symbol);
     if (!startup || startup.assetType !== 'Startup' || ai.cash < amount || amount <= 0) {
@@ -1437,7 +1380,6 @@ function runHoldingCompanyAI(holding) {
 
     // === ETAP 2: ZAKUP NOWYCH AKCJI (z uśrednianiem ceny) ===
     if (Math.random() < 0.2 && holding.cash > 1000) {
-        // ... (logika wyszukiwania celów pozostaje bez zmian) ...
         let potentialTargets;
         if (holding.specializationFilter === 'stateOwned') {
             potentialTargets = stocks.filter(stock => stock.isStateOwned && !holding.holdingPortfolio[stock.symbol]);

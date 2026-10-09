@@ -448,16 +448,6 @@ function sellStock(symbol, quantity) {
     checkPlayerTierUpgrade();
 }
 
-function sellAllShares(symbol) {
-    const holding = playerPortfolio[symbol];
-    if (!holding || holding.shares <= 0) {
-        showToast("Nie posiadasz akcji tej spółki.");
-        return;
-    }
-    
-    sellStock(symbol, holding.shares);
-}
-
 function buyIndex(indexId, quantity) {
     // Sprawdzenie, czy gracz ma odblokowaną umiejętność Poziomu 2
     if (getSkillLevel('indexAnalystLvl1') < 2) {
