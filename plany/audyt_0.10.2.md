@@ -1,6 +1,36 @@
-# Audyt 0.10.2 — notatki zebrane w trakcie M1–M3
+# Audyt 0.10.2
 
-Zapisuję tu znaleziska do części A1–A4 (pełny audyt po M6).
+## A2 — martwy kod i stuby (commit 61ca111)
+- Skan: brak zdublowanych funkcji, brak zdublowanych id w HTML, brak wywołań niezdefiniowanych funkcji.
+- Usunięto 17 nieużywanych funkcji (m.in. okna bez elementów w HTML: `openStockDetailModal`, `displayEventLog`).
+- `triggerResearchEvent` był pustym stubem wywoływanym w 5% cykli zdarzeń — teraz działające zdarzenia R&D.
+- Panel Analityka Dywidend nie miał przycisku — przywrócony (zakładki giełd, po szkoleniu).
+
+## A1 — przepływy pieniędzy i akcji
+Narzędzie: `getTrackedHeldShares` / `reconcileSharesHeld` + nowe niezmienniki w `checkWorldInvariants`
+(akcje w obrocie = suma posiadaczy, ujemna gotówka spółek). Uzgadnianie przy wczytaniu i co kwartał.
+
+Znalezione i naprawione:
+1. Dywidendy nie trafiały do banków, holdingów, pakietów spółek, ETF-ów, miasta i Skarbu Państwa — pieniądze znikały. `payDividendToInstitutions`.
+2. Usuwana spółka (przejęcie, bankructwo) zostawiała swoje pakiety jako „wiszące” akcje — teraz przechodzą na przejmującego albo wracają do obrotu (`releaseCompanyStakes`).
+3. Skarb Państwa kupował mniejszościowe pakiety za darmo i liczył je podwójnie (w obrocie i w pakiecie państwa); nadpisywał też udział zamiast go zwiększać. Teraz płaci z budżetu, pakiet poza obrotem.
+4. Pakiet państwa w spółkach niepaństwowych nie był wyłączany z wolnego obrotu.
+5. Spółki państwowe tworzone z pakietem państwa liczonym jednocześnie w obrocie.
+6. Holding przy dokupie nadpisywał pakiet (gubił wcześniejsze akcje).
+7. Sprzedaż części spółki zależnej nie zmniejszała pakietu matki.
+8. Nowa spółka zależna z giełdy elitarnej: pakiet matki nie był zapisany.
+9. Fundacja FPM: 100% akcji jako „anonimowi posiadacze” → pakiet założycielski (insiderzy).
+10. Banki płaciły odsetki od depozytów spółek, nic na nich nie zarabiając — duże banki traciły dziesiątki mln zł na kwartał i bankrutowały. Teraz lokują wolne depozyty w bonach (stopa BC + 0,5 pkt), a lokaty firmowe mają 60% stopy depozytowej.
+11. Projekty specjalne: wykonawca dostaje 8% wpłat konsorcjum jako przychód.
+
+Wynik: 13 kwartałów gry ×50 bez korekt uzgadniania, bez ujemnej gotówki i NaN; banki wypłacalne.
+
+Zostaje (do decyzji / A4):
+- `acquireWeakerSubsidiary`: matka płaci za 51%, ale udział jest tylko jako `parentStakePct` (bez akcji w rejestrze); dywidenda spółki zależnej trafia w całości do matki.
+- Modyfikator reputacji przy dywidendzie dla gracza (×1,05 / ×0,8) tworzy lub zabiera drobne kwoty.
+- `bank.cash` w modelu to suma przepływów klientów (miliardy) — wymaga przemyślenia przy większej przebudowie banków.
+
+## Notatki zebrane w trakcie M1–M3
 
 ## Naprawione przy okazji M2/M3 (stare błędy psujące ceny)
 - `applyPriceEffect` mnożył zmienność spółki ×1,1 przy każdym zdarzeniu, bez limitu → zmienność rosła do tysięcy, kursy zapadały się do 0,01 zł. Teraz ×1,05, najwyżej 2× zmienności bazowej.

@@ -1073,7 +1073,7 @@ const initialStocks = [
         volatilityFactor: 0.1, // Bardzo stabilna
         symbol: 'FPM',
         exchange: 'SILVER',
-        totalShares: 100000, maxShares: 100000, sharesHeld: 100000, // 100% akcji "zajętych"
+        totalShares: 100000, maxShares: 100000, sharesHeld: 0, insiderShares: 100000, // 100% akcji w rękach fundacji
         sector: ['Finanse'],
         financialHealth: 5, lastReport: 'brak', cash: 2000000,
         assetType: 'Holding', // Działa jak Holding
@@ -1973,7 +1973,7 @@ function getFreeFloatShares(stock) {
     const total = Math.max(0, Number(stock?.totalShares) || 0);
     const insiders = Math.max(0, Number(stock?.insiderShares) || 0);
     const treasury = Math.max(0, Number(stock?.treasuryShares) || 0);
-    const state = stock?.isStateOwned ? Math.floor(total * (Number(stock.stateOwnershipPct) || 0)) : 0;
+    const state = Math.floor(total * Math.max(0, Number(stock?.stateOwnershipPct) || 0)); // pakiet państwa (także mniejszościowy) poza obrotem
     return Math.max(0, total - insiders - treasury - state);
 }
 
@@ -2539,6 +2539,7 @@ function resolveMerger(stock1, stock2, process) {
             commercialBanks.filter(b => b.stockPortfolio[target.symbol]).forEach(b => b.cash += (b.stockPortfolio[target.symbol].shares * pricePerShare));
             settleEtfHoldings(target.symbol, pricePerShare); // pakiety ETF-ów (etf.js)
             transferSpecialBonuses(target, initiator); // bonusy projektów specjalnych (projects.js)
+            target.absorbedBy = initiator.symbol; // pakiety celu przechodzą na przejmującego
             // Fundusze botów, konto prywatne gracza i inne spółki z pakietami
             for (const manager of corporation?.managers || []) {
                 const held = manager.fund?.portfolio?.[target.symbol]?.shares || 0;
@@ -2613,6 +2614,7 @@ function resolveMerger(stock1, stock2, process) {
             });
 
             transferSpecialBonuses(target, initiator);
+            target.absorbedBy = initiator.symbol;
             initiator.name = `${initiator.name.split(' ')[0]}-${target.name.split(' ')[0]} Group`;
             initiator.totalShares = newTotalShares;
             initiator.maxShares = newTotalShares * 1.5;
@@ -3355,10 +3357,10 @@ function initializeHoldingPortfolios() {
                 if (quantity <= availableShares && holding.cash >= cost) {
                     holding.cash -= cost;
                     // ZAPISUJEMY OBIEKT Z DANYMI, A NIE TYLKO LICZBĘ
-                    holding.holdingPortfolio[targetStock.symbol] = { 
-                        quantity: quantity, 
-                        purchasePrice: targetStock.price 
-                    };
+                    const existing = holding.holdingPortfolio[targetStock.symbol];
+                    holding.holdingPortfolio[targetStock.symbol] = existing
+                        ? { quantity: existing.quantity + quantity, purchasePrice: (existing.purchasePrice * existing.quantity + cost) / (existing.quantity + quantity) }
+                        : { quantity, purchasePrice: targetStock.price };
                     targetStock.sharesHeld += quantity;
                 }
             }
@@ -5947,6 +5949,7 @@ function findBestLenderBank(initiator, loanAmount) {
 }
 
 function removeStockFromGame(symbol) {
+    releaseCompanyStakes(stocks.find(s => s.symbol === symbol)); // pakiety usuwanej spółki (audyt A1)
     // 1. Usuń z głównej listy `stocks`
     const index = stocks.findIndex(s => s.symbol === symbol);
     if (index > -1) {
@@ -6043,7 +6046,7 @@ function initializeConstructionCompanies() {
             exchange: data.exchange,
             totalShares: totalShares,
             maxShares: totalShares, // Na start max = total
-            sharesHeld: data.isStateOwned ? Math.floor(totalShares * data.stateOwnershipPct) : 0,
+            sharesHeld: 0, // pakiet państwa liczony osobno (stateOwnershipPct), poza wolnym obrotem
             sector: data.sector,
             financialHealth: 1,
             // Bilans startowy
@@ -6481,6 +6484,9 @@ function payDividendToShareholders(stock, dividendPerShare) {
             if (holding) manager.fund.cash += holding.shares * dividendPerShare;
         }
     }
+
+    // 2c. Pozostali posiadacze (audyt A1): banki, holdingi, pakiety spółek, ETF-y, miasto, Skarb Państwa.
+    payDividendToInstitutions(stock, dividendPerShare);
 
     // 3. Spadek ceny akcji (odcięcie dywidendy)
     stock.price = Math.max(stock.price * 0.9, stock.price - dividendPerShare); // odcięcie dywidendy (najwyżej −10%)
@@ -7134,4 +7140,77 @@ function updateResearchAutoRetry(
             research.autoRetryGameMs = null;
         }
     }
+}
+
+// =================================================================================
+// AUDYT A1: spójność akcji w obrocie i wypłat
+// =================================================================================
+
+/** Dywidenda dla instytucji (bez podatku): banki, holdingi, pakiety spółek, ETF-y, miasto, państwo. */
+function payDividendToInstitutions(stock, dps) {
+    const symbol = stock.symbol;
+    for (const bank of commercialBanks) {
+        const shares = bank.stockPortfolio?.[symbol]?.shares || 0;
+        if (shares > 0) bank.cash += shares * dps;
+    }
+    for (const owner of stocks) {
+        if (owner === stock) continue;
+        const shares = (owner.holdingPortfolio?.[symbol]?.quantity || 0) + (owner.equityStakes?.[symbol] || 0);
+        if (shares > 0) {
+            adjustCompanyCash(owner, shares * dps);
+            adjustBalanceSheet(owner, { assets: shares * dps, retainedEarnings: shares * dps });
+        }
+    }
+    if (typeof etfs !== 'undefined') for (const etf of etfs) if (etf.holdings?.[symbol] > 0) etf.cash += etf.holdings[symbol] * dps;
+    if (stock.cityShares > 0 && typeof city === 'object') city.budget += stock.cityShares * dps;
+    const stateShares = Math.floor(stock.totalShares * Math.max(0, Number(stock.stateOwnershipPct) || 0));
+    if (stateShares > 0) governmentTreasury += stateShares * dps;
+}
+
+/** Pakiety usuwanej spółki: przechodzą na spółkę przejmującą albo wracają do wolnego obrotu. */
+function releaseCompanyStakes(company) {
+    if (!company) return;
+    const heir = company.absorbedBy ? stocks.find(s => s.symbol === company.absorbedBy) : null;
+    const stakes = { ...(company.equityStakes || {}) };
+    for (const [symbol, holding] of Object.entries(company.holdingPortfolio || {})) stakes[symbol] = (stakes[symbol] || 0) + (Number(holding.quantity) || 0);
+    for (const [symbol, shares] of Object.entries(stakes)) {
+        const target = stocks.find(s => s.symbol === symbol);
+        if (!target || !(shares > 0)) continue;
+        if (heir && heir !== target) {
+            if (!heir.equityStakes) heir.equityStakes = {};
+            heir.equityStakes[symbol] = (heir.equityStakes[symbol] || 0) + shares;
+        } else {
+            target.sharesHeld = Math.max(0, target.sharesHeld - shares);
+        }
+    }
+    company.equityStakes = {};
+    company.holdingPortfolio = {};
+}
+
+/** Akcje śledzonych posiadaczy w wolnym obrocie (bez państwa i insiderów). */
+function getTrackedHeldShares(stock) {
+    const symbol = stock.symbol;
+    let total = (playerPortfolio[symbol]?.shares || 0) + (playerWallet?.portfolio?.[symbol]?.shares || 0);
+    for (const ai of aiCompetitors) total += ai.portfolio?.[symbol]?.shares || 0;
+    for (const manager of corporation?.managers || []) total += manager.fund?.portfolio?.[symbol]?.shares || 0;
+    for (const bank of commercialBanks) total += bank.stockPortfolio?.[symbol]?.shares || 0;
+    for (const owner of stocks) total += (owner.holdingPortfolio?.[symbol]?.quantity || 0) + (owner.equityStakes?.[symbol] || 0);
+    if (typeof etfs !== 'undefined') for (const etf of etfs) total += etf.holdings?.[symbol] || 0;
+    total += Number(stock.cityShares) || 0;
+    return total;
+}
+
+/** Uzgadnia sharesHeld z posiadaczami (wczytanie zapisu i co kwartał). Zwraca liczbę poprawionych spółek. */
+function reconcileSharesHeld() {
+    let fixed = 0;
+    for (const stock of stocks) {
+        if (stock.assetType === 'Startup' || stock.isBankrupt) continue;
+        const tracked = Math.min(getTrackedHeldShares(stock), Math.max(0, getFreeFloatShares(stock)));
+        if (Math.abs((Number(stock.sharesHeld) || 0) - tracked) > 0.5) {
+            if (typeof isDebugMode === 'function' && isDebugMode()) console.warn(`[A1] sharesHeld ${stock.symbol}: ${stock.sharesHeld} → ${tracked}`);
+            stock.sharesHeld = tracked;
+            fixed++;
+        }
+    }
+    return fixed;
 }

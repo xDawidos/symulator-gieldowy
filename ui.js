@@ -4635,6 +4635,9 @@ function checkWorldInvariants() {
         finite(stock.cash, `gotówka ${stock.symbol}`);
         if (!exchanges[stock.exchange] && stock.exchange !== 'INCUBATOR') problems.push(`nieznana giełda ${stock.symbol}: ${stock.exchange}`);
         if (stock.sharesHeld < -EPS || stock.sharesHeld > stock.totalShares + EPS) problems.push(`sharesHeld ${stock.symbol}: ${stock.sharesHeld}/${stock.totalShares}`);
+        const tracked = getTrackedHeldShares(stock);
+        if (Math.abs(stock.sharesHeld - tracked) > 0.5) problems.push(`akcje w obrocie ${stock.symbol}: ${Math.round(stock.sharesHeld)} ≠ posiadacze ${Math.round(tracked)}`);
+        if (Number(stock.cash) < 0 && !stock.assetType) problems.push(`ujemna gotówka ${stock.symbol}: ${Math.round(stock.cash)}`);
     }
 
     if (playerFund) {

@@ -433,6 +433,8 @@ function applySaveSnapshot(snapshot) {
     recountConstructionCapacity();
 
     ensureMarketOperators(); // starsze zapisy: GPW jako notowana spółka
+    const reconciled = reconcileSharesHeld(); // audyt A1: akcje w obrocie = suma posiadaczy
+    if (reconciled) report.warnings.push(`Uzgodniono akcje w obrocie w ${reconciled} spółkach (audyt A1).`);
     // v10: ETF-y z portfelami (starsze zapisy dostają nowy zestaw)
     if (!restoreEtfs(snapshot.etfs)) report.warnings.push('Utworzono nowe ETF-y z portfelami (migracja v10).');
 

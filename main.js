@@ -375,6 +375,7 @@ gameTimers.weekly = setInterval(() => {
         processRelationsQuarterly(); // relacje z botami: wrogowie i przyjaciele (relations.js)
         processMarketsQuarterly(); // operatorzy rynków i maklerzy (markets.js)
         processSpecialProjectsQuarterly(); // konsorcja i projekty specjalne (projects.js)
+        reconcileSharesHeld(); // audyt A1: akcje w obrocie = suma posiadaczy
         advanceEconomyCycle(); // nowa faza koniunktury przed raportami
         advanceMacroQuarter(); // inflacja, bezrobocie, cykle sektorów, wybory (macro.js)
         processCityQuarterly(); // festyn raz w roku (city.js)

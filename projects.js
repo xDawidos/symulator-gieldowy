@@ -170,6 +170,10 @@ function startProjectBuild(project) {
     const builderShare = project.cost * BUILDER_SHARE;
     adjustCompanyCash(builder, -builderShare);
     project.builder = { symbol: builder.symbol, name: builder.name, amount: builderShare };
+    // Wykonawca: marża 8% od wpłat konsorcjum jako przychód (reszta to koszty materiałów i podwykonawców).
+    const margin = getProjectFunding(project) * 0.08;
+    adjustCompanyCash(builder, margin);
+    adjustBalanceSheet(builder, { assets: margin, retainedEarnings: margin });
     project.status = 'building';
     logEvent(`🏗️ Rusza budowa: ${project.icon} ${project.name}. Wykonawca: ${builder.name}. Konsorcjum: ${project.participants.map(p => p.name).join(', ')}.`, 'city');
     return true;

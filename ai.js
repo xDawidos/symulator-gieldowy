@@ -1263,9 +1263,10 @@ function runStateActions() {
                 
                 const availableShares = getAvailableShares(targetStock);
 
-                if (sharesToBuy > 0 && sharesToBuy <= availableShares) {
-                    targetStock.sharesHeld += sharesToBuy;
-                    targetStock.stateOwnershipPct = sharesToBuy / targetStock.totalShares;
+                const cost = sharesToBuy * targetStock.price;
+                if (sharesToBuy > 0 && sharesToBuy <= availableShares && governmentTreasury >= cost) {
+                    governmentTreasury -= cost; // zakup z rynku (pakiet państwa jest poza wolnym obrotem)
+                    targetStock.stateOwnershipPct = (Number(targetStock.stateOwnershipPct) || 0) + sharesToBuy / targetStock.totalShares;
                     logEvent(`🏛️ Skarb Państwa, w ramach dywersyfikacji, nabywa mniejszościowy pakiet ${ (targetStock.stateOwnershipPct * 100).toFixed(1) }% akcji w prywatnej spółce ${targetStock.name}!`, 'review');
                 }
             }

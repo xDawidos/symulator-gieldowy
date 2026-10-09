@@ -106,6 +106,10 @@ function makeCompany(symbol, options = {}) {
 
 function resetWorld(companies) {
     stocks = companies;
+    // Bez śladów poprzednich testów: portfele botów, banków i ETF-y (audyt A1 — uzgadnianie akcji).
+    aiCompetitors.forEach(ai => { ai.portfolio = {}; });
+    commercialBanks.forEach(bank => { if (bank.stockPortfolio) bank.stockPortfolio = {}; });
+    if (typeof etfs !== 'undefined') etfs.length = 0;
     activeTenders = [];
     constructionProjects = [];
     paymentJournal = [];
@@ -1337,9 +1341,20 @@ group('Banki, lombard, obligacje, giełdy elitarne (etap E2)', () => {
         const ledger = bank.ledger;
         assert(ledger.interestIncome > 0 && ledger.interestExpense > 0 && ledger.fees > 0, 'księga banku');
         const bankStock = { bankData: { id: bank.id } };
-        const expected = (ledger.interestIncome + ledger.fees) * (1 - BANK_OPERATING_COST) - ledger.interestExpense - ledger.writeOffs;
+        const treasury = Object.values(bank.depositBook).reduce((sum, v) => sum + Math.max(0, v), 0) * (1 - (Number(bank.reserveRatio) || 0.1)) * ((Number(centralBank.baseInterestRate) || 0.03) + 0.005) / 4; // dochód z wolnej płynności (audyt A1)
+        const expected = (ledger.interestIncome + treasury + ledger.fees) * (1 - BANK_OPERATING_COST) - ledger.interestExpense - ledger.writeOffs;
         assertNear(getBankQuarterlyEarnings(bankStock), expected, 'wynik banku');
         assert(bank.ledger.interestIncome === 0, 'księga wyzerowana');
+        commercialBanks.length = 0;
+    });
+
+    test('bank z dużymi depozytami nie traci na odsetkach (audyt A1)', () => {
+        const { a } = worldE2();
+        const bank = makeBank(a);
+        bank.cash = 1e9;
+        bank.depositBook = { AAA: 1e9 };
+        for (let week = 0; week < 13; week++) processCompanyBanking();
+        assert(getBankQuarterlyEarnings({ bankData: { id: bank.id } }) > 0, 'dodatni wynik kwartału');
         commercialBanks.length = 0;
     });
 
@@ -2591,6 +2606,54 @@ group('Konsorcja i projekty specjalne (0.10.2 M6)', () => {
         a.specialBonuses = [{ projectId: 'x', name: 'Most', growth: 0.004, valuation: 0.02, until: null }];
         transferSpecialBonuses(a, b);
         assert(getSpecialProjectGrowth(b) === 0.004 && !a.specialBonuses.length, 'przeniesione');
+    });
+});
+
+group('Audyt A1: przepływy pieniędzy i akcji', () => {
+    function worldA1() {
+        const a = makeCompany('AAA', { cash: 5_000_000 });
+        const h = makeCompany('HHH', { cash: 5_000_000 });
+        [a, h].forEach(s => { s.insiderShares = 0; s.sharesHeld = 0; s.reputation = { player: 0 }; });
+        resetWorld([a, h]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        etfs.length = 0;
+        aiCompetitors.forEach(ai => { ai.portfolio = {}; });
+        return { a, h };
+    }
+
+    test('dywidenda trafia też do pakietów spółek, ETF-ów, miasta i państwa', () => {
+        const { a, h } = worldA1();
+        h.equityStakes = { AAA: 1000 };
+        const etf = createEtf({ symbol: 'TST', templateKey: 'Technologia', seed: 1000 });
+        etf.holdings = { AAA: 500 };
+        etfs.push(etf);
+        a.cityShares = 200;
+        a.stateOwnershipPct = 0.1;
+        const hCash = h.cash, etfCash = etf.cash, budget = city.budget, treasury = governmentTreasury;
+        payDividendToInstitutions(a, 2);
+        assert(h.cash === hCash + 2000 && etf.cash === etfCash + 1000 && city.budget === budget + 400 && governmentTreasury === treasury + 2000, 'wypłaty');
+    });
+
+    test('usunięta spółka: pakiety przechodzą na przejmującego albo wracają do obrotu', () => {
+        const { a, h } = worldA1();
+        const b = makeCompany('BBB'); stocks.push(b);
+        h.equityStakes = { AAA: 1000 };
+        a.sharesHeld = 1000;
+        h.absorbedBy = 'BBB';
+        releaseCompanyStakes(h);
+        assert(b.equityStakes.AAA === 1000 && a.sharesHeld === 1000, 'przejęte');
+        b.absorbedBy = null;
+        releaseCompanyStakes(b);
+        assert(a.sharesHeld === 0, 'wróciły do obrotu');
+    });
+
+    test('uzgadnianie: sharesHeld = suma posiadaczy, pakiet państwa poza obrotem', () => {
+        const { a } = worldA1();
+        playerPortfolio.AAA = { shares: 700, avgPrice: 100, assetType: 'stock' };
+        a.sharesHeld = 5000; // „wiszące” akcje bez właściciela
+        a.stateOwnershipPct = 0.2;
+        assert(reconcileSharesHeld() >= 1 && a.sharesHeld === 700, `sharesHeld ${a.sharesHeld}`);
+        assert(getFreeFloatShares(a) === 8000 && getAvailableShares(a) === 7300, 'wolny obrót bez pakietu państwa');
     });
 });
 

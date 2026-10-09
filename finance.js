@@ -82,7 +82,7 @@ function processCompanyBanking() {
         }
         const balance = bank.depositBook[symbol] || 0;
         if (balance > 0) {
-            const interest = balance * getDepositRate() / 52;
+            const interest = balance * getDepositRate() * CORPORATE_DEPOSIT_RATE_SHARE / 52; // lokaty firmowe niżej oprocentowane niż detaliczne
             bank.cash -= interest;
             bank.depositBook[symbol] = balance + interest;
             ledger.interestExpense += interest;
@@ -141,6 +141,16 @@ function getBankQuarterlyEarnings(stock) {
     const bank = getBankForStock(stock);
     if (!bank || !bank.ledger) return null;
     const ledger = bank.ledger;
+    // Audyt A1: wolna płynność (ponad rezerwę) bank lokuje w bonach i w Banku Centralnym — wcześniej
+    // płacił odsetki od depozytów, nic na nich nie zarabiając, i banki z dużymi depozytami bankrutowały.
+    // Podstawa: depozyty spółek w księdze banku (bank.cash odzwierciedla wszystkie przepływy klientów).
+    const deposits = Object.values(bank.depositBook || {}).reduce((sum, value) => sum + Math.max(0, Number(value) || 0), 0);
+    const liquidity = deposits * (1 - (Number(bank.reserveRatio) || 0.1));
+    const treasuryIncome = liquidity * ((Number(centralBank?.baseInterestRate) || 0.03) + 0.005) / 4; // bony skarbowe z rynku
+    if (treasuryIncome > 0) {
+        bank.cash += treasuryIncome;
+        ledger.interestIncome += treasuryIncome;
+    }
     const revenue = ledger.interestIncome + ledger.fees;
     const operatingCost = revenue * BANK_OPERATING_COST;
     const result = revenue - ledger.interestExpense - ledger.writeOffs - operatingCost;
@@ -161,6 +171,8 @@ function recordBankInterestIncome(bankId, interest) {
 // Wolna gotówka funduszu na 4/8/16 tygodni; odsetki naliczane co tydzień (wchodzą do NAV),
 // wypłata z kapitałem w terminie; zerwanie = utrata odsetek i kara 1%. Odsetki płaci bank.
 // =================================================================================
+
+const CORPORATE_DEPOSIT_RATE_SHARE = 0.6; // lokaty spółek: 60% stopy depozytowej
 
 const FUND_DEPOSIT_TERMS = [
     { weeks: 4, premium: 0, label: '4 tygodnie' },
@@ -826,6 +838,8 @@ function foundSubsidiary(parent) {
     };
 
     adjustCompanyCash(parent, -capital); // gotówka → udziały w zależnej (aktywa matki bez zmian)
+    if (!parent.equityStakes) parent.equityStakes = {};
+    parent.equityStakes[symbol] = child.sharesHeld; // pakiet matki zapisany (audyt A1: akcje w obrocie = posiadacze)
     stocks.push(child);
     if (!parent.subsidiaries) parent.subsidiaries = [];
     parent.subsidiaries.push(symbol);
@@ -922,7 +936,9 @@ function processSubsidiaryIndependence() {
         const sold = child.parentStakePct * 0.5;
         const proceeds = getMarketCap(child) * sold;
         adjustCompanyCash(parent, proceeds);
-        child.sharesHeld = Math.max(0, child.sharesHeld - Math.floor(child.totalShares * sold));
+        const soldShares = Math.min(Math.floor(child.totalShares * sold), parent.equityStakes?.[child.symbol] ?? Infinity);
+        if (parent.equityStakes?.[child.symbol]) parent.equityStakes[child.symbol] -= soldShares;
+        child.sharesHeld = Math.max(0, child.sharesHeld - soldShares); // akcje wracają na rynek
         child.parentStakePct -= sold;
         if (child.parentStakePct < 0.5) {
             child.isSubsidiaryOf = null;
