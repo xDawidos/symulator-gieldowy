@@ -222,7 +222,7 @@ function mafiaEntryTicket(symbol) {
     holding.shares += quantity;
     stock.sharesHeld += quantity;
     mafia.acquired[symbol] = (mafia.acquired[symbol] || 0) + quantity;
-    mafiaTrace(20, 3, 15, cost * 0.05);
+    mafiaTrace(20 + (typeof isGuardProtected === 'function' && isGuardProtected(stock) ? 15 : 0), 3, 15, cost * 0.05); // Gwardia patrzy na ręce
     mafia.demand = { type: 'favor', amount: Math.round(cost * 0.1), quarter: macro.quarter + 1 };
     logEvent(`🎟️ Fundusz dostaje „spod lady” ${quantity.toLocaleString('pl-PL')} akcji ${stock.name}. Pan Gato zapamięta przysługę.`, 'review');
     if (typeof refreshFundViews === 'function') refreshFundViews();
@@ -409,7 +409,7 @@ function runMafiaInfiltration() {
         }
     }
     if (stage >= 1 && Math.random() < 0.25) {
-        const pool = stocks.filter(s => !s.assetType && !s.isBankrupt && !s.mafiaBoard && !isMafiaImmune(s) && !s.isStateOwned);
+        const pool = stocks.filter(s => !s.assetType && !s.isBankrupt && !s.mafiaBoard && !isMafiaImmune(s) && !s.isStateOwned && !(typeof isGuardProtected === 'function' && isGuardProtected(s)));
         const stock = pool.length ? getRandomElement(pool) : null;
         if (stock) { stock.mafiaBoard = 'board'; addMafiaInfluence(5); }
     }

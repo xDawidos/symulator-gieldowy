@@ -379,6 +379,7 @@ gameTimers.weekly = setInterval(() => {
         processOversightQuarterly(); // korupcja, policja, KNF (oversight.js)
         processMafiaQuarterly(); // mafia, Bruno Gato, porachunki (mafia.js)
         processScandalsQuarterly(); // parabanki i wojny PR (scandals.js)
+        processDefenseQuarterly(); // zbrojeniówka i fundusz Gwardia (defense.js)
         advanceEconomyCycle(); // nowa faza koniunktury przed raportami
         advanceMacroQuarter(); // inflacja, bezrobocie, cykle sektorów, wybory (macro.js)
         processCityQuarterly(); // festyn raz w roku (city.js)
@@ -844,6 +845,7 @@ function createNewWorld() {
     assignEliteExchanges(); // giełdy Rubinowa i Szmaragdowa od startu (Diamentowa po 30 min gry)
     maintainStartupCount(); // inkubator startuje z kilkoma startupami
     initMarketOperators(); // GPW i przyszli operatorzy rynków (markets.js)
+    initDefenseSector(); // spółki zbrojeniowe i fundusz Gwardia (defense.js)
     specialProjects = createSpecialProjects(); // projekty specjalne miasta (projects.js)
     initializeEtfs(); // ETF-y z portfelami prawdziwych akcji (etf.js)
     console.log("[M&A Init] Inicjalizacja nastawienia mediów...");
@@ -893,7 +895,7 @@ if (typeof window !== 'undefined' && !window.__GAME_TEST_MODE__) window.addEvent
 // Funkcja uruchamiająca AI (z bazy main.js - zawiera AI banków inwestycyjnych)
 function runAllAi() {
     aiCompetitors.forEach(ai => {
-        if (ai.isMafia) return; // Bruno Gato działa w mafia.js
+        if (ai.isMafia || ai.isGuard) return; // Bruno Gato (mafia.js) i Gwardia (defense.js) mają własną logikę
         if (Math.random() < 0.15) {
             makeAiDecision(ai);
             checkAiTierUpgrade(ai);

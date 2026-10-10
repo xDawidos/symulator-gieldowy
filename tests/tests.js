@@ -2741,7 +2741,7 @@ group('Nadzór i korupcja (0.11.1)', () => {
         const snapshot = JSON.parse(JSON.stringify(buildSaveSnapshot()));
         oversight = createOversight();
         applySaveSnapshot(snapshot);
-        assert(snapshot.version === 11 && oversight.corruption === 42 && oversight.records.player.strikes === 2, 'odtworzone');
+        assert(snapshot.version === SAVE_FORMAT_VERSION && oversight.corruption === 42 && oversight.records.player.strikes === 2, 'odtworzone');
     });
 });
 
@@ -2938,6 +2938,65 @@ group('Afery: parabanki i wojny PR (0.11.3)', () => {
         processPrWarsQuarterly();
         Math.random = random;
         assert(!scandals.prWars.includes(war), 'rozstrzygnięta');
+    });
+});
+
+group('Zbrojeniówka i Gwardia (0.11.4)', () => {
+    function world() {
+        const a = makeCompany('AAA', { cash: 2_000_000, sector: ['Technologia'] });
+        a.insiderShares = 0; a.reputation = { player: 0 }; a.ceo = { name: 'X', traits: [] };
+        ['guard_fund', 'mafia_bruno'].forEach(id => { const i = aiCompetitors.findIndex(ai => ai.id === id); if (i >= 0) aiCompetitors.splice(i, 1); });
+        resetWorld([a]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        macro = createMacroState();
+        oversight = createOversight();
+        mafia = createMafia();
+        governmentTreasury = 1e9;
+        initDefenseSector();
+        return { a, defense: stocks.filter(isDefenseCompany) };
+    }
+
+    test('4 spółki zbrojeniowe na Giełdzie Złotej i Platynowej + fundusz Gwardia', () => {
+        const { defense } = world();
+        assert(defense.length === 4 && defense.every(s => ['GOLD', 'PLATINUM'].includes(s.exchange)), 'spółki');
+        assert(getGuardFund() && getGuardFund().cash > 0, 'Gwardia');
+    });
+
+    test('mafia nie sabotuje i nie infiltruje zbrojeniówki', () => {
+        const { defense } = world();
+        contactMafia();
+        assert(!mafiaSabotage(defense[0].symbol) && isMafiaImmune(defense[0]), 'odporne');
+    });
+
+    test('kontrakty MON przy rządzie „państwowym”', () => {
+        const { defense } = world();
+        macro.election.ruling = 'state';
+        const cash = defense.reduce((sum, s) => sum + s.cash, 0);
+        const random = Math.random;
+        Math.random = () => 0.01;
+        processDefenseQuarterly();
+        Math.random = random;
+        assert(defense.reduce((sum, s) => sum + s.cash, 0) > cash, 'kontrakty');
+    });
+
+    test('Gwardia kupuje klasyki, unika technologii; duży pakiet chroni przed mafią', () => {
+        const { a, defense } = world();
+        runGuardFundQuarterly();
+        const guard = getGuardFund();
+        assert(!guard.portfolio.AAA && Object.keys(guard.portfolio).some(symbol => defense.some(s => s.symbol === symbol)), 'portfel Gwardii');
+        guard.portfolio.AAA = { shares: 600, avgPrice: 100 };
+        assert(isGuardProtected(a), 'ochrona ≥ 5%');
+    });
+
+    test('generał i były wojskowy chronią spółkę przed aferą korupcyjną', () => {
+        const { a, defense } = world();
+        stocks.forEach(s => { s.ceo = { name: 'X', traits: [{ id: 'byly_wojskowy' }] }; });
+        assert(triggerCorruptionScandal() === null, 'brak afery');
+    });
+
+    test('bonus wzrostu od siły policji tylko dla zbrojeniówki', () => {
+        const { a, defense } = world();
+        assert(getDefenseGrowthBonus(defense[0]) > 0 && getDefenseGrowthBonus(a) === 0, 'bonus');
     });
 });
 

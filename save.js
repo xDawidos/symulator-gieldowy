@@ -17,8 +17,8 @@ const LEGACY_SAVE_KEYS = ['gra_inwestycyjna_dawid_save_v2', 'gra_inwestycyjna_da
 // v6: skrzynka mailowa, burmistrz i kampania, festyn, oferta prywatyzacyjna. v4/v5 migrują przy wczytaniu.
 // v7: obligacje i oferty (czas gry, kupony), depozyty i księgi banków, zastawy funduszy, giełdy elitarne.
 // v8: klienci z charakterami i rynek wtórny JU (migracja typów klientów przy wczytaniu).
-const SAVE_FORMAT_VERSION = 11;
-const SUPPORTED_SAVE_VERSIONS = [4, 5, 6, 7, 8, 9, 10, 11];
+const SAVE_FORMAT_VERSION = 12;
+const SUPPORTED_SAVE_VERSIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12];
 
 let lastSaveReport = null;
 let saveDisabledUntilReload = false;
@@ -442,6 +442,7 @@ function applySaveSnapshot(snapshot) {
     recountConstructionCapacity();
 
     ensureMarketOperators(); // starsze zapisy: GPW jako notowana spółka
+    if ((snapshot.version || 0) < 12 && !stocks.some(s => s.defenseId)) initDefenseSector(); // v12: zbrojeniówka i Gwardia w starszych zapisach
     const reconciled = reconcileSharesHeld(); // audyt A1: akcje w obrocie = suma posiadaczy
     if (reconciled) report.warnings.push(`Uzgodniono akcje w obrocie w ${reconciled} spółkach (audyt A1).`);
     // v10: ETF-y z portfelami (starsze zapisy dostają nowy zestaw)

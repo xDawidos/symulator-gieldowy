@@ -69,7 +69,8 @@ const SECTOR_PROFILES = {
     'Media':                { beta: 1.1, rateSens: 0.6, pe: 14, margin: 0.18, growth: 0.02, ps: 1.8, da: 0.04 },
     'Logistyka':            { beta: 1.2, rateSens: 0.7, pe: 14, margin: 0.12, growth: 0.04, ps: 1.0, da: 0.06 },
     'Transport':            { beta: 1.2, rateSens: 0.7, pe: 13, margin: 0.14, growth: 0.03, ps: 1.0, da: 0.07 },
-    'Badania':              { beta: 0.9, rateSens: 0.8, pe: 25, margin: 0.20, growth: 0.07, ps: 4.0, da: 0.05 }
+    'Badania':              { beta: 0.9, rateSens: 0.8, pe: 25, margin: 0.20, growth: 0.07, ps: 4.0, da: 0.05 },
+    'Obronność':            { beta: 0.5, rateSens: 0.5, pe: 17, margin: 0.20, growth: 0.04, ps: 1.8, da: 0.05 } // 0.11.4: defensywna, kontrakty państwowe
 };
 
 const DEFAULT_SECTOR_PROFILE = { beta: 1.0, rateSens: 0.7, pe: 14, margin: 0.15, growth: 0.03, ps: 1.5, da: 0.04 };

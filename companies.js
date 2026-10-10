@@ -273,6 +273,24 @@ const ceoTraits = {
         rarity: "hidden", // nadawana tylko przez mafię (mafia.js), nie losowana
         color: "#212121",
         description: "Ćwierć zysku spółki „znika” co kwartał. Policja może go zatrzymać."
+    },
+    emerytowany_policjant: {
+        name: "Emerytowany policjant",
+        rarity: "hidden", // tylko prezesi spółek zbrojeniowych (defense.js)
+        color: "#1565c0",
+        description: "Stare znajomości: korupcja w kraju spada szybciej, a wpływy mafii rosną wolniej."
+    },
+    general: {
+        name: "Generał",
+        rarity: "hidden",
+        color: "#1565c0",
+        description: "Wzmacnia walkę z mafią; korupcja na niego nie działa (spółka odporna na afery)."
+    },
+    byly_wojskowy: {
+        name: "Były wojskowy",
+        rarity: "hidden",
+        color: "#1565c0",
+        description: "Dyscyplina w zarządzie: spółka odporna na afery korupcyjne."
     }
 };
 // generowanie startupów
@@ -1876,7 +1894,8 @@ function computeQuarterResults(stock) {
     const sectorAdj = typeof getSectorCycleAdj === 'function' ? getSectorCycleAdj(stock) : 0;
     const inflation = typeof macro === 'object' ? macro.inflation : 0.025;
     const projectAdj = (typeof getSpecialProjectGrowth === 'function' ? getSpecialProjectGrowth(stock) : 0) // bonusy projektów specjalnych
-        + (typeof getMafiaFrontGrowth === 'function' ? getMafiaFrontGrowth(stock) : 0); // spółki-przykrywki rosną z wpływami mafii
+        + (typeof getMafiaFrontGrowth === 'function' ? getMafiaFrontGrowth(stock) : 0) // spółki-przykrywki rosną z wpływami mafii
+        + (typeof getDefenseGrowthBonus === 'function' ? getDefenseGrowthBonus(stock) : 0); // zbrojeniówka: bonus od siły policji
     const growth = profile.growth / 4 + profile.beta * gdp + health * 0.004 + phaseAdj + sectorAdj + projectAdj + inflation / 4 * 0.3 + gaussianRandom() * 0.02;
     fundamentals.revenue = Math.max(1000, fundamentals.revenue * (1 + Math.max(-0.25, Math.min(0.25, growth))));
 

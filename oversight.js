@@ -299,7 +299,7 @@ function hasCeoTrait(stock, id) {
 
 /** Afera korupcyjna w cyklu zdarzeń (częściej przy wysokiej korupcji i skorumpowanych prezesach). */
 function triggerCorruptionScandal() {
-    const pool = stocks.filter(s => !s.assetType && !s.isBankrupt && !hasCeoTrait(s, 'niezalezny'));
+    const pool = stocks.filter(s => !s.assetType && !s.isBankrupt && !['niezalezny', 'general', 'byly_wojskowy'].some(id => hasCeoTrait(s, id)));
     if (!pool.length) return null;
     const weighted = pool.filter(s => hasCeoTrait(s, 'skorumpowany') || hasCeoTrait(s, 'sklonny_do_korupcji'));
     const stock = getRandomElement(weighted.length && Math.random() < 0.7 ? weighted : pool);

@@ -29,7 +29,8 @@ const ETF_TEMPLATES = [
     { key: 'Złoty', label: 'Blue Chip', rules: { minExchangeLevel: 3 } },
     { key: 'Państwowy', label: 'Skarbu Państwa', rules: { stateOnly: true } },
     { key: 'REIT', label: 'REIT', rules: { assetType: 'REIT' } },
-    { key: 'Holding', label: 'Holdingów', rules: { assetType: 'Holding' } }
+    { key: 'Holding', label: 'Holdingów', rules: { assetType: 'Holding' } },
+    { key: 'Obronność', label: 'Zbrojeniowy', rules: { sectors: ['Obronność'] } }
 ];
 
 // Startowy zestaw (symbole zachowane z poprzednich wersji tam, gdzie się da).
