@@ -266,7 +266,13 @@ const ceoTraits = {
         name: "Niezależny",
         rarity: "rare",
         color: "#4caf50",
-        description: "Nie da się go kupić. Spółka jest odporna na afery korupcyjne (a od wersji 0.11.2 — na wpływy mafii)."
+        description: "Nie da się go kupić. Spółka jest odporna na afery korupcyjne i wpływy mafii."
+    },
+    czlonek_mafii: {
+        name: "Członek mafii",
+        rarity: "hidden", // nadawana tylko przez mafię (mafia.js), nie losowana
+        color: "#212121",
+        description: "Ćwierć zysku spółki „znika” co kwartał. Policja może go zatrzymać."
     }
 };
 // generowanie startupów
@@ -1869,7 +1875,8 @@ function computeQuarterResults(stock) {
     // Cykl sektora i inflacja (nominalny wzrost przychodów) — macro.js
     const sectorAdj = typeof getSectorCycleAdj === 'function' ? getSectorCycleAdj(stock) : 0;
     const inflation = typeof macro === 'object' ? macro.inflation : 0.025;
-    const projectAdj = typeof getSpecialProjectGrowth === 'function' ? getSpecialProjectGrowth(stock) : 0; // bonusy projektów specjalnych
+    const projectAdj = (typeof getSpecialProjectGrowth === 'function' ? getSpecialProjectGrowth(stock) : 0) // bonusy projektów specjalnych
+        + (typeof getMafiaFrontGrowth === 'function' ? getMafiaFrontGrowth(stock) : 0); // spółki-przykrywki rosną z wpływami mafii
     const growth = profile.growth / 4 + profile.beta * gdp + health * 0.004 + phaseAdj + sectorAdj + projectAdj + inflation / 4 * 0.3 + gaussianRandom() * 0.02;
     fundamentals.revenue = Math.max(1000, fundamentals.revenue * (1 + Math.max(-0.25, Math.min(0.25, growth))));
 
@@ -2371,6 +2378,7 @@ function processFinancialReports() {
              }
 
              if (bankruptcyChance > 0 && Math.random() < bankruptcyChance) {
+                 if (typeof mafiaRescueFromBankruptcy === 'function' && mafiaRescueFromBankruptcy(stock)) continue; // „inwestor” w ostatniej chwili (mafia.js)
                  logEvent(`🔥 BANKRUCTWO! Spółka ${stock.name} (${stock.symbol}) ogłasza upadłość!`, 'review');
                  removeStockFromGame(stock.symbol); 
                  stock.isBankrupt = true;

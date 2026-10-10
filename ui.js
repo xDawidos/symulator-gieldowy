@@ -5750,7 +5750,7 @@ function renderShareholderBars(stock) {
     return rows.map(h => `<div class="gov-bar ${h.kind === 'player' ? 'is-fund' : ''}">
         <span class="gov-bar-name">${escapeHtml(h.name)}</span>
         <span class="gov-bar-track"><span style="width:${Math.min(100, h.pct * 100).toFixed(1)}%"></span></span>
-        <span class="gov-bar-pct">${(h.pct * 100).toFixed(1)}%</span>
+        <span class="gov-bar-pct">${h.entity?.isMafia ? `~${Math.max(5, Math.round(h.pct * 20) * 5)}%` : `${(h.pct * 100).toFixed(1)}%`}</span>
     </div>`).join('');
 }
 

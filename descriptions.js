@@ -117,7 +117,7 @@ function assignCeoTraits(ceo) {
             });
         } else {
             // Jeśli w danej rzadkości nie ma już nic do wylosowania, spróbuj wylosować cokolwiek innego
-            const fallbackTraits = traitsPool.filter(trait => !assignedTraits.some(assigned => assigned.id === trait.id));
+            const fallbackTraits = traitsPool.filter(trait => trait.rarity !== 'hidden' && !assignedTraits.some(assigned => assigned.id === trait.id));
             if (fallbackTraits.length > 0) {
                 const chosenTrait = getRandomElement(fallbackTraits);
                 assignedTraits.push({

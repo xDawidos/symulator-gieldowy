@@ -218,6 +218,7 @@ function punishEntity(id, institutionName) {
         governmentTreasury += paid;
         recordPayment('player-fund', 'external:skarb-panstwa', paid, `Kara: ${institutionName}`);
         if (record.strikes >= 3) {
+            if (typeof seizeMafiaAssets === 'function') seizeMafiaAssets(); // akcje zdobyte przez mafię → aukcja policyjna
             seized = Math.min(Math.max(0, playerCash), record.illegalGains);
             playerCash -= seized;
             governmentTreasury += seized;
@@ -343,6 +344,7 @@ function renderOversightPanel() {
             <div class="bank-ticker-item"><span>Uwaga KNF wobec funduszu</span><strong>${(getKnfAttention() * 100).toFixed(0)}%</strong></div>
             <div class="bank-ticker-item"><span>Podejrzenia wobec funduszu</span><strong class="${suspicion.cls}">${suspicion.label}</strong></div>
             <div class="bank-ticker-item"><span>Przewinienia</span><strong>${record.strikes}/${CONVICTION_STRIKES}</strong></div>
+            <div class="bank-ticker-item"><span>Wpływy mafii</span><strong>${typeof getMafiaStage === 'function' ? `${getMafiaStage().icon} ${getMafiaStage().name}` : '—'}</strong></div>
         </div>
         <div class="oversight-gauge"><span style="width:${oversight.corruption}%"></span></div>
         <div class="bank-grid mt-3">
@@ -386,7 +388,8 @@ function renderGreyZone() {
             ${service('debt', select('grey-debt', myCompanies.map(s => [s.symbol, `${s.name} (dług ${formatZl(s.balanceSheet?.liabilities || 0, 0)})`]), 'Spółka'), "greyDebtWriteOff(document.getElementById('grey-debt')?.value)")}
             ${service('underTable', select('grey-under', holdings.map(([symbol, h]) => [symbol, `${symbol} (${h.shares.toLocaleString('pl-PL')} akcji)`]), 'Pakiet') + '<input type="text" inputmode="numeric" id="grey-under-qty" value="100" aria-label="Liczba akcji">', "greyUnderTable(document.getElementById('grey-under')?.value, parseInt(document.getElementById('grey-under-qty').value, 10))")}
             ${service('tender', select('grey-tender', myBuilders.map(s => [s.symbol, s.name]), 'Spółka budowlana'), "greyTender(document.getElementById('grey-tender')?.value)")}
-        </div>`;
+        </div>
+        ${typeof renderMafiaSection === 'function' ? renderMafiaSection() : ''}`;
 }
 
 function showDefeatScreen() {

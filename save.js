@@ -120,6 +120,7 @@ function buildSaveSnapshot() {
         marketOperators,
         specialProjects,
         oversight,
+        mafia,
         playerProfile,
         playerFund,
         corporation,
@@ -421,6 +422,8 @@ function applySaveSnapshot(snapshot) {
     ensureSpecialProjects();
     oversight = snapshot.oversight && typeof snapshot.oversight === 'object' ? snapshot.oversight : createOversight(); // v11: nadzór
     ensureOversight();
+    mafia = snapshot.mafia && typeof snapshot.mafia === 'object' ? snapshot.mafia : createMafia(); // v11: mafia
+    ensureMafia();
     ensureMacroState();
     if (snapshot.economyCycle && ECONOMY_PHASES[snapshot.economyCycle.phase]) {
         economyCycle = snapshot.economyCycle;

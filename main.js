@@ -377,6 +377,7 @@ gameTimers.weekly = setInterval(() => {
         processSpecialProjectsQuarterly(); // konsorcja i projekty specjalne (projects.js)
         reconcileSharesHeld(); // audyt A1: akcje w obrocie = suma posiadaczy
         processOversightQuarterly(); // korupcja, policja, KNF (oversight.js)
+        processMafiaQuarterly(); // mafia, Bruno Gato, porachunki (mafia.js)
         advanceEconomyCycle(); // nowa faza koniunktury przed raportami
         advanceMacroQuarter(); // inflacja, bezrobocie, cykle sektorów, wybory (macro.js)
         processCityQuarterly(); // festyn raz w roku (city.js)
@@ -818,6 +819,7 @@ function createNewWorld() {
     macro = createMacroState(); // wskaźniki makro, cykle sektorów, wybory (macro.js)
     botRelations = createBotRelations(); // relacje z botami (relations.js)
     oversight = createOversight(); // korupcja i nadzór (oversight.js)
+    mafia = createMafia(); // mafia (mafia.js)
     updateMarketTrendFromCycle();
     stocks.forEach(stock => {
         if (stock.balanceSheet && stock.assetType !== 'Startup') initializeFundamentals(stock, true);
@@ -889,6 +891,7 @@ if (typeof window !== 'undefined' && !window.__GAME_TEST_MODE__) window.addEvent
 // Funkcja uruchamiająca AI (z bazy main.js - zawiera AI banków inwestycyjnych)
 function runAllAi() {
     aiCompetitors.forEach(ai => {
+        if (ai.isMafia) return; // Bruno Gato działa w mafia.js
         if (Math.random() < 0.15) {
             makeAiDecision(ai);
             checkAiTierUpgrade(ai);

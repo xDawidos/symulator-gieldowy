@@ -2745,6 +2745,126 @@ group('Nadzór i korupcja (0.11.1)', () => {
     });
 });
 
+group('Mafia (0.11.2)', () => {
+    function world() {
+        const a = makeCompany('AAA', { cash: 2_000_000 });
+        const b = makeCompany('BBB', { cash: 2_000_000 });
+        [a, b].forEach(s => { s.insiderShares = 0; s.reputation = { player: 0 }; s.ceo = { name: 'X', traits: [] }; });
+        const bruno = aiCompetitors.findIndex(ai => ai.isMafia);
+        if (bruno >= 0) aiCompetitors.splice(bruno, 1);
+        resetWorld([a, b]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        macro = createMacroState();
+        oversight = createOversight();
+        mafia = createMafia();
+        playerCash = 1_000_000;
+        return { a, b };
+    }
+    function withRandom(value, fn) {
+        const random = Math.random;
+        Math.random = () => value;
+        try { return fn(); } finally { Math.random = random; }
+    }
+
+    test('bez kontaktu mafia nie oferuje usług ani nie żąda haraczu', () => {
+        world();
+        assert(!mafiaLoan(1000) && !mafia.contacted, 'brak usług');
+        mafia.influence = 200;
+        withRandom(0.01, () => createMafiaDemand());
+        assert(mafia.demand === null, 'brak żądań');
+    });
+
+    test('kontakt: pojawia się Bruno Gato z ukrytym pakietem w akcjonariacie', () => {
+        const { a } = world();
+        contactMafia();
+        const bruno = getBruno();
+        assert(bruno && bruno.cash > 0 && mafia.contacted, 'Bruno');
+        bruno.portfolio.AAA = { shares: 1200, avgPrice: 100 };
+        a.sharesHeld = 1200;
+        const holder = getShareholders(a).find(h => h.entity === bruno);
+        assert(holder && holder.name === 'Akcjonariusz nieujawniony', 'ukryty');
+        assert(!getRelationPeople().some(p => p.id === bruno.id), 'poza relacjami');
+    });
+
+    test('pożyczka: gotówka dla funduszu, spóźnienie = windykacja', () => {
+        world();
+        contactMafia();
+        assert(mafiaLoan(100_000) && playerCash === 1_100_000, 'pożyczka');
+        mafia.loan.dueQuarter = macro.quarter - 1;
+        const cash = playerCash, owed = mafia.loan.owed;
+        withRandom(0.99, () => processMafiaQuarterly());
+        assert(playerCash < cash && (!mafia.loan || mafia.loan.owed < owed * (1 + MAFIA_LOAN_QUARTERLY_RATE)), 'windykacja');
+    });
+
+    test('sabotaż: płaci fundusz, spółka traci, rosną podejrzenia; niezależny prezes chroni', () => {
+        const { a, b } = world();
+        contactMafia();
+        let effect = 0;
+        const original = applyPriceEffect;
+        applyPriceEffect = (symbol, value) => { effect = value; };
+        assert(mafiaSabotage('AAA') && effect < 0 && getRecord('player').suspicion >= 25, 'sabotaż');
+        b.ceo.traits = [{ id: 'niezalezny' }];
+        assert(!mafiaSabotage('BBB'), 'odporna');
+        applyPriceEffect = original;
+    });
+
+    test('odmowa haraczu: atak na portfel i kradzież gotówki', () => {
+        const { a } = world();
+        contactMafia();
+        playerPortfolio.AAA = { shares: 500, avgPrice: 100, assetType: 'stock' };
+        mafia.demand = { type: 'haracz', amount: 5000, quarter: macro.quarter };
+        const cash = playerCash;
+        answerMafiaDemand(false);
+        assert(playerCash < cash && mafia.demand === null, 'kara');
+    });
+
+    test('etapy wpływów i ludzie mafii w zarządach (skimming)', () => {
+        const { a } = world();
+        mafia.influence = 160;
+        assert(getMafiaStage().name === 'Ośmiornica', 'etap');
+        a.mafiaBoard = 'ceo';
+        a.quarterlyEarnings = 100_000;
+        const cash = a.cash, mafiaCash = mafia.cash;
+        withRandom(0.99, () => runMafiaInfiltration());
+        assert(a.cash === cash - 25_000 && mafia.cash === mafiaCash + 25_000, 'skimming 25%');
+    });
+
+    test('ratunek bankruta za udziały dla Pana Gato', () => {
+        const { a } = world();
+        mafia.influence = 200;
+        a.balanceSheet.liabilities = a.balanceSheet.assets + 100_000;
+        const shares = a.totalShares;
+        assert(withRandom(0.01, () => mafiaRescueFromBankruptcy(a)), 'uratowana');
+        assert(a.totalShares > shares && getBruno().portfolio.AAA.shares === a.totalShares - shares, 'udziały dla Bruna');
+    });
+
+    test('rekwizycja: akcje z wejściówki idą na aukcję', () => {
+        const { a } = world();
+        contactMafia();
+        a.exchange = 'RUBY';
+        assert(mafiaEntryTicket('AAA'), 'wejściówka');
+        const shares = playerPortfolio.AAA.shares;
+        aiCompetitors[0].cash = 1e9;
+        const total = seizeMafiaAssets();
+        assert(total > 0 && !playerPortfolio.AAA && Object.keys(mafia.acquired).length === 0, `rekwizycja ${shares}`);
+    });
+
+    test('porażka tylko dla współpracującego: 1000 pkt bez powiązań = brak porażki', () => {
+        world();
+        mafia.influence = MAFIA_MAX_INFLUENCE;
+        mafia.ties.player = 0;
+        withRandom(0.99, () => processMafiaQuarterly());
+        assert(!mafia.defeated, 'gracz bez powiązań nie przegrywa');
+        mafia.contacted = true;
+        mafia.influence = MAFIA_MAX_INFLUENCE;
+        mafia.ties.player = MAFIA_DEFEAT_TIES;
+        oversight.police.level = 0;
+        withRandom(0.99, () => processMafiaQuarterly());
+        assert(mafia.defeated, 'współpracujący przegrywa');
+        document.getElementById('defeat-overlay')?.setAttribute('hidden', '');
+    });
+});
+
 // --------------------------------------------------------------------------------
 // Uruchomienie
 // --------------------------------------------------------------------------------

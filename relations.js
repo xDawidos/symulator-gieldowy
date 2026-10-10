@@ -36,7 +36,7 @@ function ensureBotRelations() {
 
 /** Wszystkie osoby, z którymi gracz ma relacje: inwestorzy giełdowi i koledzy z firmy. */
 function getRelationPeople() {
-    const investors = aiCompetitors.filter(ai => ai.personality !== 'market_maker')
+    const investors = aiCompetitors.filter(ai => ai.personality !== 'market_maker' && !ai.isMafia)
         .map(ai => ({ id: ai.id, name: ai.name, kind: 'investor', entity: ai }));
     const colleagues = (corporation?.managers || []).map(manager => ({ id: manager.id, name: manager.name, kind: 'colleague', entity: manager }));
     return [...colleagues, ...investors];

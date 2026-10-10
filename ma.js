@@ -26,7 +26,7 @@ function getShareholders(stock) {
 
     add('player', playerProfile?.fundName || 'Twój fundusz', 'player', playerPortfolio[symbol]?.shares || 0);
     add('wallet', 'Twoje konto prywatne', 'wallet', playerWallet?.portfolio?.[symbol]?.shares || 0);
-    for (const ai of aiCompetitors) add(ai.id, ai.name, 'ai', ai.portfolio?.[symbol]?.shares || 0, ai);
+    for (const ai of aiCompetitors) add(ai.id, ai.isMafia ? 'Akcjonariusz nieujawniony' : ai.name, 'ai', ai.portfolio?.[symbol]?.shares || 0, ai); // Bruno Gato ukryty
     for (const manager of corporation?.managers || []) add(manager.id, `Fundusz ${manager.name}`, 'botFund', manager.fund.portfolio?.[symbol]?.shares || 0, manager);
     for (const owner of stocks) {
         const quantity = owner.holdingPortfolio?.[symbol]?.quantity || 0;
