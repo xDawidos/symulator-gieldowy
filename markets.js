@@ -153,8 +153,11 @@ function activateMarketOperator(startup) {
     startup.marketOperator = operator.id;
     startup.market = operator.id;
     const count = getRandomIntInRange(5, 10);
-    for (let i = 0; i < count; i++) spawnMarketMember(operator.id, 'otwarcie nowego rynku');
-    logEvent(`🏛️ ${MARKET_OPERATOR_DEFS[operator.id].name} debiutuje i otwiera własny rynek: ${count} nowych spółek!`, 'market');
+    // B5: na zatłoczonym rynku część miejsc zapełniają przenosiny z GPW zamiast nowych debiutów.
+    const fresh = Math.max(1, Math.round(count * getDebutFactor()));
+    for (let i = 0; i < fresh; i++) spawnMarketMember(operator.id, 'otwarcie nowego rynku');
+    for (let i = fresh; i < count; i++) signExclusivity(operator, startup);
+    logEvent(`🏛️ ${MARKET_OPERATOR_DEFS[operator.id].name} debiutuje i otwiera własny rynek: ${fresh} nowych spółek${count > fresh ? `, ${count - fresh} przechodzi z GPW` : ''}!`, 'market');
 }
 
 /** Upadek startupu-operatora (wołane z removeStartup). */
@@ -261,7 +264,7 @@ function processMarketsQuarterly() {
         } else if (operator.status === 'startup') {
             const startup = stocks.find(s => s.symbol === operator.startupSymbol);
             if (!startup) { closeMarketOperator(operator, 'startup operatora zniknął'); continue; }
-            if (Math.random() < OPERATOR_SPONSOR_CHANCE) {
+            if (Math.random() < OPERATOR_SPONSOR_CHANCE * getDebutFactor()) {
                 const sponsor = spawnMarketMember(operator.id, `sponsor ${def.name}`);
                 operator.sponsors.push(sponsor.symbol);
                 startup.successChance = Math.min(0.95, startup.successChance + 0.05);

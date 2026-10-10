@@ -298,7 +298,25 @@ function standardDeviation(values) {
     return Math.sqrt(values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (values.length - 1));
 }
 
+/** B5: powody spadku zaufania (bezczynny lub słaby fundusz). */
+function getTrustDropReasons() {
+    if (!playerFund) return [];
+    const current = playerFund.current;
+    const fundReturn = getPeriodReturn(current.startNav, getFundNav());
+    const benchmark = getPeriodReturn(current.startBenchmark, getBenchmarkValue());
+    const years = current.elapsedMs / (BASE_DELAYS.quarterly * 4);
+    const hurdle = Math.max(getDepositRate(), macro?.inflation || 0) * years;
+    const cashShare = Math.max(0, playerCash) / Math.max(1, getFundAssets());
+    const reasons = [];
+    if (years > 0.1 && fundReturn < benchmark - 0.005) reasons.push(`wynik ${(fundReturn * 100).toFixed(1)}% przegrywa z GIG (${(benchmark * 100).toFixed(1)}%)`);
+    if (years > 0.1 && fundReturn < hurdle) reasons.push(`wynik poniżej lokaty i inflacji (${(hurdle * 100).toFixed(1)}%) — klienci pytają, za co płacą opłatę`);
+    if (cashShare > 0.6) reasons.push(`${(cashShare * 100).toFixed(0)}% aktywów leży w gotówce — fundusz nie inwestuje pieniędzy klientów`);
+    return reasons;
+}
+
 function closeFundPeriod() {
+    const reasons = getTrustDropReasons();
+    const trustBefore = playerFund.periods[playerFund.periods.length - 1]?.trustEnd ?? 50;
     const current = playerFund.current;
     const nav = getFundNav();
     const weeklyReturns = [];
@@ -334,6 +352,9 @@ function closeFundPeriod() {
 
     playerFund.periods.push(period);
     if (playerFund.periods.length > 12) playerFund.periods.shift();
+    if (reasons.length && playerFund.trust < trustBefore - 2 && typeof addMail === 'function') {
+        addMail({ sender: CORPORATION_SENDER, subject: '📉 Klienci tracą zaufanie do funduszu', body: `Zaufanie spadło z ${trustBefore.toFixed(0)} do ${playerFund.trust.toFixed(0)}. Klienci odchodzą, bo: ${reasons.join('; ')}. Zarząd oczekuje aktywnego zarządzania.`, importance: 2 });
+    }
 
     const excess = (period.fundReturn - period.benchmarkReturn) * 100;
     logEvent(

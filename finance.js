@@ -915,7 +915,7 @@ function processEliteExchangesQuarterly() {
     for (const stock of stocks.filter(s => isEliteExchange(s.exchange) && !s.isBankrupt)) {
         const def = ELITE_EXCHANGES[stock.exchange];
         const count = (stock.subsidiaries || []).length;
-        if (count >= def.maxSubsidiaries || Math.random() > 0.1) continue;
+        if (count >= def.maxSubsidiaries || Math.random() > 0.1 * getDebutFactor()) continue;
         if (stock.exchange === 'RUBY' && !(stock.foundedSubsidiaries > 0)) foundSubsidiary(stock);
         else if (stock.exchange !== 'RUBY' && (stock.newSubsidiaries || 0) < 2) {
             const added = Math.random() < 0.5 ? acquireWeakerSubsidiary(stock) : foundSubsidiary(stock);

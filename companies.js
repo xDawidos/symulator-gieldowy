@@ -1882,6 +1882,41 @@ function initializeFundamentals(stock, force = false) {
     return stock.fundamentals;
 }
 
+// B5: rynek mniej byczy (cel GIG +7–9% rocznie zamiast +14%).
+const SECTOR_GROWTH_FACTOR = 0.8;      // trend wzrostu sektorów −20%
+const INFLATION_PASS_THROUGH = 0.15;   // inflacja w przychodach (było 0,3)
+
+// B5: zatłoczony rynek (ponad ~100 spółek) — bez sztywnego limitu: więcej fuzji i przejęć,
+// ostrzejsza konkurencja (niższe marże), łatwiejsze upadki najsłabszych i nieco mniej debiutów.
+const LISTING_SOFT_CAP = 100;
+
+function getListedCompanyCount() {
+    return stocks.filter(s => !s.assetType && !s.isBankrupt).length;
+}
+
+/** Presja zatłoczenia: 0 do 100 spółek, liniowo do 1 przy 120. */
+function getCrowdingPressure() {
+    return Math.max(0, Math.min(1, (getListedCompanyCount() - LISTING_SOFT_CAP) / 20));
+}
+
+/** Mnożnik szans na debiut: łagodnie, najwyżej −30%. */
+function getDebutFactor() {
+    return 1 - 0.3 * getCrowdingPressure();
+}
+
+/** Ponad limitem: najmniejsze spółki (dolne 25% kapitalizacji) z kondycją ≤ −3 mogą upaść. */
+let cullThresholdCache = { quarter: -1, cap: 0 };
+function isCullCandidate(stock) {
+    if (stock.assetType || stock.isStateOwned || stock.isBankStock || stock.marketOperator || (Number(stock.financialHealth) || 0) > -3) return false;
+    if (getCrowdingPressure() <= 0) return false;
+    const quarter = typeof macro === 'object' ? macro.quarter : 0;
+    if (cullThresholdCache.quarter !== quarter) {
+        const caps = stocks.filter(s => !s.assetType && !s.isBankrupt).map(getMarketCapValue).sort((a, b) => a - b);
+        cullThresholdCache = { quarter, cap: caps[Math.floor(caps.length * 0.25)] || 0 };
+    }
+    return getMarketCapValue(stock) <= cullThresholdCache.cap;
+}
+
 /** Wynik kwartału z modelu przychodów (bez zmian gotówki — to robi raport). */
 function computeQuarterResults(stock) {
     const fundamentals = stock.fundamentals || initializeFundamentals(stock);
@@ -1896,12 +1931,12 @@ function computeQuarterResults(stock) {
     const projectAdj = (typeof getSpecialProjectGrowth === 'function' ? getSpecialProjectGrowth(stock) : 0) // bonusy projektów specjalnych
         + (typeof getMafiaFrontGrowth === 'function' ? getMafiaFrontGrowth(stock) : 0) // spółki-przykrywki rosną z wpływami mafii
         + (typeof getDefenseGrowthBonus === 'function' ? getDefenseGrowthBonus(stock) : 0); // zbrojeniówka: bonus od siły policji
-    const growth = profile.growth / 4 + profile.beta * gdp + health * 0.004 + phaseAdj + sectorAdj + projectAdj + inflation / 4 * 0.3 + gaussianRandom() * 0.02;
+    const growth = profile.growth / 4 * SECTOR_GROWTH_FACTOR + profile.beta * gdp + health * 0.004 + phaseAdj + sectorAdj + projectAdj + inflation / 4 * INFLATION_PASS_THROUGH + gaussianRandom() * 0.02;
     fundamentals.revenue = Math.max(1000, fundamentals.revenue * (1 + Math.max(-0.25, Math.min(0.25, growth))));
 
     const revenue = fundamentals.revenue;
     const inflationSqueeze = Math.max(0, inflation - 0.04) * 0.5; // wysoka inflacja zjada marże
-    const margin = Math.max(-0.4, Math.min(0.6, profile.margin + health * 0.015 + phaseAdj * 0.5 + profile.beta * gdp * 2 - inflationSqueeze));
+    const margin = Math.max(-0.4, Math.min(0.6, profile.margin + health * 0.015 + phaseAdj * 0.5 + profile.beta * gdp * (gdp < 0 ? 3 : 2) - inflationSqueeze - getCrowdingPressure() * 0.02)); // B5: recesja mocniej tnie marże; zatłoczony rynek = ostrzejsza konkurencja
     const fixedExpenses = Math.max(0, Number(stock.fixedExpenses) || 0);
 
     // Działające inwestycje: kwartalny zysk lub strata (investments.js).
@@ -1980,8 +2015,9 @@ function updateFundamentalRatios(stock) {
             // Bank: wycena z zysku (marża odsetkowa); wartość księgowa zawiera depozyty, więc bez kotwicy P/BV.
             fundamentals.fairValue = fundamentals.epsTtm > 0 && (stock.ledgerQuarters || 0) >= 4 ? fundamentals.epsTtm * profile.pe * healthPremium : null;
         } else {
+            const earningsValue = fundamentals.epsTtm * profile.pe * getValuationMultiplier(stock) * healthPremium;
             fundamentals.fairValue = fundamentals.epsTtm > 0
-                ? 0.75 * fundamentals.epsTtm * profile.pe * getValuationMultiplier(stock) * healthPremium + 0.25 * bvps
+                ? 0.75 * earningsValue + 0.25 * Math.min(bvps, earningsValue * 2) // B5: kotwica księgowa najwyżej 2× wartość z zysku
                 : Math.max(0.01, bvps * 0.7);
         }
     } else {
@@ -2383,7 +2419,7 @@ function processFinancialReports() {
 
         // Logika bankructwa (bez zmian)
         const equity = stock.balanceSheet.assets - stock.balanceSheet.liabilities;
-        if ((equity <= 0 || stock.financialHealth <= -5) && !stock.isBankrupt) {
+        if ((equity <= 0 || stock.financialHealth <= -5 || isCullCandidate(stock)) && !stock.isBankrupt) {
              let bankruptcyChance = 0.30;
              if (stock.ceo?.traits?.some(t => t.id === 'bogacz')) {
                  bankruptcyChance = 0;
@@ -3189,7 +3225,8 @@ function maintainStartupCount() {
 
     // Funkcja działa tylko wtedy, gdy liczba start-upów spadnie PONIŻEJ minimum
     if (currentStartups < MINIMUM_STARTUPS) {
-        const startupsToAdd = TARGET_STARTUPS - currentStartups;
+        const startupsToAdd = Math.round((TARGET_STARTUPS - currentStartups) * getDebutFactor()); // B5: ponad limitem spółek mniej startupów
+        if (startupsToAdd <= 0) return;
         console.log(`[INKUBATOR] Liczba start-upów (${currentStartups}) spadła poniżej minimum. Dodawanie ${startupsToAdd} nowych...`);
 
         for (let i = 0; i < startupsToAdd; i++) {
@@ -5580,7 +5617,7 @@ function checkForPotentialMA() {
         targetFilter = (target) => target.financialHealth >= 1; 
     }
 
-    if (Math.random() > checkChance) return;
+    if (Math.random() > checkChance * (1 + 2 * getCrowdingPressure())) return; // B5: zatłoczony rynek sprzyja konsolidacji
 
     // --- Wybór celu (logika bez zmian) ---
     const eligibleTargets = potentialTargets.filter(target =>

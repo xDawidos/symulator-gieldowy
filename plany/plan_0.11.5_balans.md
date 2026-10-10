@@ -90,3 +90,17 @@ Kolejność: B1 → B2 → B3 → B4 → B5. Po każdej części testy, przebieg
 1. **Cele korporacji:** spełniony cel daje +5 do oceny zarządu, niespełniony −3. Cele mają realne znaczenie.
 2. **Opłata za zarządzanie:** gracz może ją zmieniać (0,5–3% rocznie). Niższa przyciąga klientów, wyższa zasila budżet korporacji, ale odstrasza klientów wrażliwych na koszty.
 3. **Wsparcie kampanii wyborczej:** z pieniędzy funduszu. Wygrana partia jest przychylna (np. więcej kontraktów, łagodniejsze kontrole), przegrana mniej. Darowizna polityczna z pieniędzy klientów to ryzyko: podejrzenia KNF, a przy dużej kwocie spadek zaufania.
+
+## Wyniki pomiaru (po B5)
+
+Trzy przebiegi ×50 bez działań gracza (ok. 22–29 kwartałów każdy):
+
+| Wskaźnik | Przed 0.11.5 | Po 0.11.5 |
+|---|---|---|
+| GIG rocznie | +14% | od +3% do +17% zależnie od przebiegu (recesje); decyzja: bez dalszego strojenia |
+| Maile na kwartał | ~106 | ok. 15 w stanie ustalonym, średnio ok. 20 (więcej na starcie, gdy odchodzą klienci) |
+| Okna otwierające się samoczynnie | kilka na grę | 0 w 2 z 3 przebiegów; w 1 przebiegu 3 nieustalone (do obserwacji) |
+| Liczba spółek | ~97 i rośnie | równowaga ok. 107–109 |
+| Testy automatyczne | 198 | 226 |
+
+**Zmiana względem planu (decyzja użytkownika):** zamiast sztywnego limitu 100 spółek jest presja zatłoczenia: od 100 do 120 spółek rośnie szansa fuzji i przejęć (do ×3), marże spadają do −2 pkt proc. (konkurencja), małe spółki z kondycją ≤ −3 mogą upaść, a debiutów jest najwyżej o 30% mniej. Otwarcie nowego rynku częściowo przenosi spółki z GPW zamiast tworzyć nowe.

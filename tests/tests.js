@@ -1205,7 +1205,7 @@ group('Poczta, miasto i państwo (etap E1)', () => {
     test('filtr antyspamowy: poziom 1 — reklamy, poziom 2 — także spam czasopism', () => {
         worldE1();
         const random = Math.random;
-        Math.random = () => 0.1;
+        Math.random = () => 0.05;
         sendCompanyAdSpam();
         sendMagazineSpam();
         Math.random = random;
@@ -3368,6 +3368,51 @@ group('Balans B4: decyzje JU, PPP, rynki, wybory, wojny PR', () => {
         const ok = supportPrCampaign('AAA');
         Math.random = random;
         assert(ok && scandals.prWars[0].boost.AAA > 0, 'zarząd przyjął sugestię');
+    });
+});
+
+group('Balans B5: rynek i tempo', () => {
+    test('zatłoczony rynek: presja ponad 100 spółek, łagodnie mniej debiutów', () => {
+        const list = [];
+        for (let i = 0; i < 120; i++) list.push(makeCompany(`C${i}`));
+        resetWorld(list.slice(0, 80));
+        assert(getDebutFactor() === 1, 'poniżej limitu bez zmian');
+        resetWorld(list);
+        assert(getCrowdingPressure() === 1 && Math.abs(getDebutFactor() - 0.7) < 1e-9, `ponad limitem ${getDebutFactor()}`);
+    });
+
+    test('ponad limitem: mała spółka z kondycją ≤ −3 jest kandydatem do upadku', () => {
+        const list = [];
+        for (let i = 0; i < 110; i++) list.push(makeCompany(`C${i}`));
+        resetWorld(list);
+        macro = createMacroState();
+        const small = list[0];
+        small.price = 0.5; small.financialHealth = -3;
+        assert(isCullCandidate(small), 'kandydat');
+        list[1].financialHealth = 2;
+        assert(!isCullCandidate(list[1]), 'zdrowa spółka bezpieczna');
+    });
+
+    test('kotwica księgowa: najwyżej 2× wartości z zysku', () => {
+        const a = makeCompany('AAA');
+        resetWorld([a]);
+        a.ledgerQuarters = 8;
+        a.fundamentals = { history: [1, 2, 3, 4].map(() => ({ revenue: 1e6, ebitda: 2e5, netIncome: a.totalShares * 0.5 })) };
+        a.balanceSheet.assets = a.totalShares * 10_000; // ogromna wartość księgowa
+        a.balanceSheet.liabilities = 0;
+        updateFundamentalRatios(a);
+        const f = a.fundamentals;
+        assert(f.epsTtm > 0, 'zysk');
+        assert(f.fairValue < f.bookValuePerShare * 0.25, `wycena ${f.fairValue} przy BVPS ${f.bookValuePerShare}`);
+    });
+
+    test('bezczynny fundusz: powód spadku zaufania (gotówka)', () => {
+        const a = makeCompany('AAA');
+        resetWorld([a]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        macro = createMacroState();
+        playerCash = 100_000;
+        assert(getTrustDropReasons().some(r => /gotówce/.test(r)), 'gotówka');
     });
 });
 

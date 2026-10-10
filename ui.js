@@ -4242,6 +4242,7 @@ function renderFundSummary() {
             <span>Zaufanie klientów: <strong>${trust}/100</strong></span>
             <div class="fund-trust-bar"><div class="fund-trust-fill ${trustClass}" style="width:${trust}%"></div></div>
         </div>
+        ${(() => { const reasons = typeof getTrustDropReasons === 'function' ? getTrustDropReasons() : []; return reasons.length ? `<div class="text-xs text-warn">⚠️ Zaufanie spada: ${escapeHtml(reasons[0])}</div>` : ''; })()}
         <div class="fund-period-line">
             Okres ${current.number}: ${formatPct(periodReturn)} vs GIG ${formatPct(benchmarkReturn)}
             · emisje ${current.emissions}/${MAX_EMISSIONS_PER_PERIOD}

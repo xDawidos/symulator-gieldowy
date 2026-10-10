@@ -312,7 +312,7 @@ function processScandalsQuarterly() {
     processParabanksQuarterly();
     processPrWarsQuarterly();
     const active = scandals.parabanks.some(p => p.phase !== 'gone');
-    if (!active && (typeof macro !== 'object' || macro.quarter >= 4) && Math.random() < PARABANK_SPAWN_CHANCE) spawnParabank();
+    if (!active && (typeof macro !== 'object' || macro.quarter >= 4) && Math.random() < PARABANK_SPAWN_CHANCE * getDebutFactor()) spawnParabank();
 }
 
 // =================================================================================

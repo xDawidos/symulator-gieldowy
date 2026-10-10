@@ -24,7 +24,9 @@ const MAIL_RULES = {
     FLESZ: /prezes|CEO|skandal|plotk|afer|dymisj|TikTok|influencer|celebryt|szejk|romans|sensac/i
 };
 const CORPORATION_CATEGORIES = ['review', 'success', 'warning', 'error'];
-const ROUTINE_NEWS = /RAPORT|badani|Nowa oferta|przetarg|kampania marketingowa|emisja obligacji/i;
+const ROUTINE_NEWS = /RAPORT|badani|Nowa oferta|przetarg|kampania marketingowa|emisja obligacji|AWANS|przechodzi na giełdę|wchodzi w fazę/i;
+// B5: wiadomości państwowe i miejskie, które zostają osobnym mailem (decyzje, okazje, ważne zmiany); reszta trafia do wydania.
+const STATE_KEEP_NEWS = /PPP|projekt czasowy|PRYWATYZACJA|Oferta prywatyzacyjna|WYBORY|kampania|Gazeta Ekonomiczna|KONIUNKTURA|BANKRUCTWO|parabank|liście ostrzeżeń|podat/i;
 const NOISE_PATTERNS = /otrzymuje .* dywidendy|Fundusz .* nabywa|\[AI\]/i;
 
 let mailbox = createMailbox();
@@ -166,6 +168,7 @@ function routeEventToMail(text, category) {
     else if (ROUTINE_NEWS.test(text) && importance < 3) importance = 1;                   // rutyna o innych spółkach
     // B2: rutyna i wiadomości o spółkach spoza portfela trafiają do wydania gazety; państwo i gospodarka — osobno.
     if (sender !== CORPORATION_SENDER && !held && (importance < 2 || (importance < 3 && (stock || ROUTINE_NEWS.test(text))))) { addToDigest(text); return null; }
+    if (sender === 'OBSER' && importance < 3 && !STATE_KEEP_NEWS.test(text)) { addToDigest(text); return null; }
     const subject = text.split(/(?<=[.!?])\s/)[0].slice(0, 120);
     return addMail({ sender, subject, body: text, importance, symbol: stock?.symbol || null });
 }
@@ -231,7 +234,7 @@ function sendCompanyAdSpam() {
 
 function sendMagazineSpam() {
     for (const [symbol, def] of Object.entries(MAGAZINES)) {
-        if (mailbox.subscriptions[symbol] !== 'free' || Math.random() > 0.2) continue; // B2: rzadziej
+        if (mailbox.subscriptions[symbol] !== 'free' || Math.random() > 0.07) continue; // B2/B5: rzadziej
         addMail({
             sender: symbol,
             subject: getRandomElement([`Przejdź na ${def.label} Premium — pierwszy tydzień taniej!`, `Nie przegap ważnych wiadomości — ${def.label} Premium`, `Ankieta czytelników ${def.label} (zajmie tylko 45 minut)`]),
@@ -249,6 +252,12 @@ function processTabloidRumors() {
         mailbox.rumors = mailbox.rumors.filter(item => item !== rumor);
         const stock = stocks.find(s => s.symbol === rumor.symbol);
         if (!stock) continue;
+        const held = playerPortfolio[stock.symbol] || playerWallet?.portfolio?.[stock.symbol];
+        if (!held) { // B5: rozstrzygnięcie plotki o spółce spoza portfela — w wydaniu gazety
+            if (rumor.isTrue) applyPriceEffect(stock.symbol, rumor.positive ? 0.03 : -0.03, rumor.positive ? 'positive' : 'negative', 'company');
+            addToDigest(rumor.isTrue ? `Flesz: plotka o ${stock.name} potwierdzona.` : `Flesz: plotka o ${stock.name} okazała się nieprawdziwa.`);
+            continue;
+        }
         if (rumor.isTrue) {
             applyPriceEffect(stock.symbol, rumor.positive ? 0.03 : -0.03, rumor.positive ? 'positive' : 'negative', 'company');
             addMail({ sender: 'FLESZ', subject: `Potwierdzamy: plotka o ${stock.name} była prawdziwa!`, body: `Nasze źródła się nie myliły. Rynek reaguje na wiadomości o ${stock.name}.`, importance: 2, symbol: stock.symbol });
@@ -257,7 +266,7 @@ function processTabloidRumors() {
         }
     }
 
-    if (Math.random() > 0.3) return;
+    if (Math.random() > 0.2) return;
     const stock = getRandomElement(stocks.filter(s => !s.assetType && !s.isBankrupt));
     if (!stock) return;
     const positive = Math.random() < 0.5;
