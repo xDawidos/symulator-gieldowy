@@ -161,28 +161,49 @@ function onOperatorStartupRemoved(startup) {
     if (operator && operator.status === 'startup') closeMarketOperator(operator, 'startup operatora upadł');
 }
 
-/** Rozliczenie posiadaczy po ostatniej cenie i zdjęcie spółki z rynku. */
-function delistStockAtPrice(stock, price) {
+/** Wykup wszystkich śledzonych posiadaczy po cenie (bez usuwania spółki). Zwraca wypłaconą kwotę. */
+function buyOutAllHolders(stock, price) {
     const symbol = stock.symbol;
+    let paid = 0;
     const fund = playerPortfolio[symbol];
     if (fund?.shares > 0) {
         playerCash += fund.shares * price;
-        recordPayment(`external:${symbol}`, 'player-fund', fund.shares * price, `Rozliczenie akcji ${symbol} (zamknięcie rynku)`);
+        paid += fund.shares * price;
+        recordPayment(`external:${symbol}`, 'player-fund', fund.shares * price, `Wykup akcji ${symbol}`);
     }
+    delete playerPortfolio[symbol];
     const wallet = playerWallet?.portfolio?.[symbol];
-    if (wallet?.shares > 0) { playerWallet.cash += wallet.shares * price; delete playerWallet.portfolio[symbol]; }
-    for (const ai of aiCompetitors) if (ai.portfolio?.[symbol]?.shares > 0) ai.cash += ai.portfolio[symbol].shares * price;
+    if (wallet?.shares > 0) { playerWallet.cash += wallet.shares * price; paid += wallet.shares * price; }
+    if (playerWallet?.portfolio) delete playerWallet.portfolio[symbol];
+    for (const ai of aiCompetitors) {
+        if (ai.portfolio?.[symbol]?.shares > 0) { ai.cash += ai.portfolio[symbol].shares * price; paid += ai.portfolio[symbol].shares * price; }
+        if (ai.portfolio) delete ai.portfolio[symbol];
+    }
     for (const manager of corporation?.managers || []) {
         const held = manager.fund?.portfolio?.[symbol]?.shares || 0;
-        if (held > 0) { manager.fund.cash += held * price; delete manager.fund.portfolio[symbol]; }
+        if (held > 0) { manager.fund.cash += held * price; paid += held * price; }
+        if (manager.fund?.portfolio) delete manager.fund.portfolio[symbol];
     }
-    for (const bank of commercialBanks) if (bank.stockPortfolio?.[symbol]?.shares > 0) bank.cash += bank.stockPortfolio[symbol].shares * price;
+    for (const bank of commercialBanks) {
+        if (bank.stockPortfolio?.[symbol]?.shares > 0) { bank.cash += bank.stockPortfolio[symbol].shares * price; paid += bank.stockPortfolio[symbol].shares * price; }
+        if (bank.stockPortfolio) delete bank.stockPortfolio[symbol];
+    }
     for (const owner of stocks) {
-        if (owner.holdingPortfolio?.[symbol]?.quantity > 0) adjustCompanyCash(owner, owner.holdingPortfolio[symbol].quantity * price);
-        if (owner.equityStakes?.[symbol] > 0) { adjustCompanyCash(owner, owner.equityStakes[symbol] * price); delete owner.equityStakes[symbol]; }
+        const shares = (owner.holdingPortfolio?.[symbol]?.quantity || 0) + (owner.equityStakes?.[symbol] || 0);
+        if (shares > 0) { adjustCompanyCash(owner, shares * price); paid += shares * price; }
+        if (owner.holdingPortfolio) delete owner.holdingPortfolio[symbol];
+        if (owner.equityStakes) delete owner.equityStakes[symbol];
     }
     if (typeof settleEtfHoldings === 'function') settleEtfHoldings(symbol, price);
-    removeStockFromGame(symbol);
+    if (stock.cityShares > 0 && typeof city === 'object') { city.budget += stock.cityShares * price; stock.cityShares = 0; }
+    stock.sharesHeld = 0;
+    return paid;
+}
+
+/** Rozliczenie posiadaczy po ostatniej cenie i zdjęcie spółki z rynku. */
+function delistStockAtPrice(stock, price) {
+    buyOutAllHolders(stock, price);
+    removeStockFromGame(stock.symbol);
 }
 
 function closeMarketOperator(operator, reason) {

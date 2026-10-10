@@ -278,11 +278,12 @@ function updateInterestRates() {
     DEPOSIT_INTEREST_RATE = Math.max(0.005, DEPOSIT_INTEREST_RATE);
 
     // Aktualizuj oprocentowanie w bankach komercyjnych (teraz bazuje na globalnych stopach)
+    // Wszystkie banki (także nieaktywne): bank aktywowany w trakcie gry ma od razu poprawne stopy
+    // (testy ogólne 0.11: kredyt w takim banku dawał odsetki NaN i gotówkę bota NaN).
     commercialBanks.forEach(bank => {
-        if (bank.isActive) {
-            bank.interestRateLoan = LOAN_INTEREST_RATE + bank.baseInterestRateMargin;
-            bank.interestRateDeposit = DEPOSIT_INTEREST_RATE + bank.baseInterestRateMargin * 0.5; // Marża depozytowa niższa
-        }
+        const margin = Number(bank.baseInterestRateMargin) || 0;
+        bank.interestRateLoan = LOAN_INTEREST_RATE + margin;
+        bank.interestRateDeposit = DEPOSIT_INTEREST_RATE + margin * 0.5; // Marża depozytowa niższa
     });
   // Aktualizuj UI Banku Centralnego, jeśli otwarty
     const bankModal = document.getElementById('bank-modal');
@@ -518,14 +519,18 @@ function updateMarketIndexes() {
     if (stocks.length === 0) return;
 
     // --- Obliczanie GIG (Główny Indeks Giełdowy) ---
-    // Średnia cena wszystkich akcji w grze.
+    // Indeks łańcuchowy: średnia zmiana cen spółek notowanych w obu chwilach (równe wagi).
+    // Debiuty, bankructwa i drogie nowe spółki nie zmieniają już indeksu skokowo (testy ogólne 0.11).
     const gigIndex = marketIndexes.find(idx => idx.id === 'GIG');
     if (gigIndex) {
         const oldValue = gigIndex.value;
-        const totalValue = stocks.reduce((sum, stock) => sum + stock.price, 0);
-        const newValue = totalValue / stocks.length;
-        gigIndex.value = newValue;
-        gigIndex.change = newValue - oldValue;
+        const members = stocks.filter(stock => !stock.assetType && !stock.isBankrupt && !stock.tradeHalted && stock.price > 0);
+        const last = gigIndex.lastPrices || {};
+        const returns = members.filter(stock => last[stock.symbol] > 0).map(stock => Math.max(-0.2, Math.min(0.2, stock.price / last[stock.symbol] - 1)));
+        if (!(oldValue > 0)) gigIndex.value = members.reduce((sum, stock) => sum + stock.price, 0) / Math.max(1, members.length);
+        else if (returns.length) gigIndex.value = oldValue * (1 + returns.reduce((sum, r) => sum + r, 0) / returns.length);
+        gigIndex.lastPrices = Object.fromEntries(members.map(stock => [stock.symbol, stock.price]));
+        gigIndex.change = gigIndex.value - oldValue;
     }
 
     // --- Obliczanie TIG5 i SIG20 (na podstawie kapitalizacji rynkowej) ---

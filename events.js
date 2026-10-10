@@ -372,20 +372,8 @@ function triggerNationalizationEvent() {
     }
     centralBank.funds -= totalCost;
     logEvent(`🏛️ NACJONALIZACJA! Bank Centralny przejmuje kontrolę nad ${target.name} za ${totalCost.toFixed(0)} PLN w celu ochrony gospodarki!`, 'review');
-    if (playerPortfolio[target.symbol]) {
-        const holding = playerPortfolio[target.symbol];
-        const cashGained = buyoutPrice * holding.shares;
-        playerCash += cashGained;
-        delete playerPortfolio[target.symbol];
-        showToast(`Państwo przymusowo wykupiło Twoje akcje w ${target.name} po cenie ${buyoutPrice.toFixed(2)} PLN.`, 'warning', 7000);
-    }
-    aiCompetitors.forEach(ai => {
-        if (ai.portfolio[target.symbol]) {
-            const cashGained = buyoutPrice * ai.portfolio[target.symbol].shares;
-            ai.cash += cashGained;
-            delete ai.portfolio[target.symbol];
-        }
-    });
+    if (playerPortfolio[target.symbol]) showToast(`Państwo przymusowo wykupiło Twoje akcje w ${target.name} po cenie ${buyoutPrice.toFixed(2)} PLN.`, 'warning', 7000);
+    buyOutAllHolders(target, buyoutPrice); // wszyscy posiadacze, nie tylko gracz i boty (testy ogólne 0.11)
     target.isStateOwned = true;
     target.stateOwnershipPct = getRandomInRange(0.75, 0.90);
     target.eventResistance = 0.6;

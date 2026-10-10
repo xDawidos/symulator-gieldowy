@@ -152,7 +152,7 @@ function aiTakeLoan(ai, amount) {
     }
 
     // 3. Oblicz parametry kredytu
-    const interestRate = bestBank.interestRateLoan;
+    const interestRate = Number(bestBank.interestRateLoan) || (getLoanRate() + (Number(bestBank.baseInterestRateMargin) || 0)); // bez NaN dla nowych banków
     const loanDurationWeeks = 26; // Stały okres dla AI
     const maturityDate = Date.now() + (loanDurationWeeks * BASE_DELAYS.weekly / currentSpeedMultiplier);
     const weeklyRate = interestRate / 52;
@@ -1681,7 +1681,7 @@ function aiMakeDeposit(ai, bankId, amount) {
         return false;
     }
 
-    const interestRate = bank.interestRateDeposit;
+    const interestRate = Number(bank.interestRateDeposit) || getDepositRate();
 
     // Transakcja
     ai.cash -= amount;
@@ -1898,7 +1898,7 @@ function aiTakeMortgageLoan(ai, bankId, collateralSymbol, collateralQuantity, re
     }
 
     // Parametry pożyczki (takie same jak dla gracza)
-    const interestRate = bank.interestRateLoan * 1.1;
+    const interestRate = (Number(bank.interestRateLoan) || (getLoanRate() + (Number(bank.baseInterestRateMargin) || 0))) * 1.1;
     const loanDurationWeeks = 52;
     const maturityDate = Date.now() + (loanDurationWeeks * BASE_DELAYS.weekly / currentSpeedMultiplier);
     const weeklyRate = interestRate / 52;

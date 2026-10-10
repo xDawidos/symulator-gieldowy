@@ -262,12 +262,12 @@ function processOversightQuarterly() {
     for (const ai of aiCompetitors) {
         if (!['reckless', 'yolo_trader', 'whale'].includes(ai.personality) || Math.random() > 0.15) continue;
         getRecord(ai.id).suspicion += 20;
-        oversight.pendingCorruption += 3;
+        oversight.pendingCorruption += 2;
     }
     for (const stock of stocks) {
         if (stock.assetType || stock.isBankrupt) continue;
-        if (hasCeoTrait(stock, 'skorumpowany')) oversight.pendingCorruption += 1;
-        if (hasCeoTrait(stock, 'sklonny_do_korupcji') && Math.random() < 0.1) oversight.pendingCorruption += 1;
+        if (hasCeoTrait(stock, 'skorumpowany')) oversight.pendingCorruption += 0.5;
+        if (hasCeoTrait(stock, 'sklonny_do_korupcji') && Math.random() < 0.1) oversight.pendingCorruption += 0.5;
     }
 
     // Śledztwa: policja i KNF.
@@ -289,7 +289,7 @@ function processOversightQuarterly() {
     }
 
     // Korupcja: nowe czyny, walka instytucji, powrót do poziomu bazowego.
-    oversight.corruption = clampValue(oversight.corruption + oversight.pendingCorruption - (police + knf) * 2 + (CORRUPTION_BASE - oversight.corruption) * 0.05, 0, 100);
+    oversight.corruption = clampValue(oversight.corruption + oversight.pendingCorruption - (police + knf) * 3 + (CORRUPTION_BASE - oversight.corruption) * 0.1, 0, 100); // testy ogólne: bez gracza ~15–25
     oversight.pendingCorruption = 0;
 }
 

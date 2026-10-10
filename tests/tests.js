@@ -3000,6 +3000,50 @@ group('Zbrojeniówka i Gwardia (0.11.4)', () => {
     });
 });
 
+group('Testy ogólne 0.11: benchmark GIG i wykup posiadaczy', () => {
+    test('GIG łańcuchowy: debiut drogiej spółki nie podbija indeksu', () => {
+        const a = makeCompany('AAA'); const b = makeCompany('BBB');
+        resetWorld([a, b]);
+        const gig = marketIndexes.find(i => i.id === 'GIG');
+        gig.value = 100; gig.lastPrices = null;
+        updateMarketIndexes();
+        updateMarketIndexes();
+        const before = gig.value;
+        const expensive = makeCompany('DRG'); expensive.price = 5000;
+        stocks.push(expensive);
+        updateMarketIndexes();
+        assert(Math.abs(gig.value - before) < 1e-9, `skok ${gig.value} vs ${before}`);
+        a.price *= 1.1; b.price *= 1.1; expensive.price *= 1.1;
+        updateMarketIndexes();
+        assert(Math.abs(gig.value / before - 1.1) < 1e-9, 'wzrost 10% = +10% indeksu');
+    });
+
+    test('bank aktywowany w trakcie gry ma od razu stopy (bez NaN w kredytach botów)', () => {
+        const bank = { id: 'late', name: 'Późny Bank', type: BANK_TYPES.UNIVERSAL, isActive: false, cash: 1e6, baseInterestRateMargin: 0.02, stockPortfolio: {}, loanPortfolio: {}, depositPortfolio: {} };
+        commercialBanks.push(bank);
+        updateInterestRates();
+        bank.isActive = true;
+        const ok = Number.isFinite(bank.interestRateLoan) && Number.isFinite(bank.interestRateDeposit);
+        commercialBanks.splice(commercialBanks.indexOf(bank), 1);
+        assert(ok, 'stopy ustawione');
+    });
+
+    test('wykup wszystkich posiadaczy: fundusz, boty, banki, ETF-y, pakiety spółek', () => {
+        const a = makeCompany('AAA'); const h = makeCompany('HHH');
+        resetWorld([a, h]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        playerPortfolio.AAA = { shares: 100, avgPrice: 100, assetType: 'stock' };
+        aiCompetitors[0].portfolio.AAA = { shares: 50, avgPrice: 100 };
+        h.equityStakes = { AAA: 30 };
+        const etf = createEtf({ symbol: 'TST', templateKey: 'Technologia', seed: 1000 }); etf.holdings = { AAA: 20 }; etfs.push(etf);
+        a.sharesHeld = 200;
+        const cash = playerCash;
+        buyOutAllHolders(a, 10);
+        assert(playerCash === cash + 1000 && !aiCompetitors[0].portfolio.AAA && !h.equityStakes.AAA && !etf.holdings.AAA && a.sharesHeld === 0, 'wszyscy wykupieni');
+        assert(getTrackedHeldShares(a) === 0, 'brak „wiszących” akcji');
+    });
+});
+
 // --------------------------------------------------------------------------------
 // Uruchomienie
 // --------------------------------------------------------------------------------

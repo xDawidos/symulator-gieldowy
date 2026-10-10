@@ -65,6 +65,7 @@ function spawnParabank() {
         stockPortfolio: {}, loanPortfolio: {}, startupInvestments: {}, depositPortfolio: {}
     };
     commercialBanks.push(bank);
+    if (typeof updateInterestRates === 'function') updateInterestRates();
     const stock = createListedCompany({ name: scenario.name, symbol: uniqueSymbol(scenario.bankName.replace(/[^A-Za-z]/g, '').slice(0, 4).toUpperCase()), sector: ['Finanse'], price: getRandomInRange(20, 40), totalShares: 50000, exchange: 'BRONZE' });
     stock.isParabankStock = true;
     stocks.push(stock);
