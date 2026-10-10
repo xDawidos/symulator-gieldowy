@@ -1849,11 +1849,13 @@ function initializeFundamentals(stock, force = false) {
     const shares = Math.max(1, Number(stock.totalShares) || 1);
     const marketCap = Math.max(0.01, Number(stock.price) || 0.01) * shares;
     const liabilities = Math.max(0, Number(stock.balanceSheet?.liabilities) || 0);
+    assignCompanyIdiosyncrasy(stock);
 
-    // Kalibracja: roczny zysk netto przy przeciętnej kondycji ≈ kapitalizacja / C/Z sektora.
-    const netAnnual = marketCap / profile.pe;
+    // Kalibracja: roczny zysk netto ≈ kapitalizacja / (C/Z sektora × luka wyceny spółki).
+    // U3: luka wyceny sprawia, że na starcie są spółki tanie i drogie względem zysków.
+    const netAnnual = marketCap / (profile.pe * stock.valuationGap);
     const ebtAnnual = netAnnual / (1 - COMPANY_INCOME_TAX_RATE);
-    const operatingMargin = Math.max(0.05, profile.margin - profile.da);
+    const operatingMargin = Math.max(0.05, profile.margin * (1 + stock.marginAdj) - profile.da);
     const revenue = hasRevenueModel(stock)
         ? Math.max(1000, (ebtAnnual + liabilities * getLoanRate()) / operatingMargin / 4)
         : 0;
@@ -1867,13 +1869,16 @@ function initializeFundamentals(stock, force = false) {
         expectedEps: netQuarter / shares
     };
 
-    // Syntetyczna historia 4 kwartałów, żeby EPS z 4 kwartałów istniał od startu.
+    // Syntetyczna historia 4 kwartałów (z szumem), żeby EPS z 4 kwartałów istniał od startu.
+    const noise = [0, 0, 0, 0].map(() => gaussianRandom() * 0.12);
+    const mean = noise.reduce((a, b) => a + b, 0) / 4;
     for (let i = 0; i < 4; i++) {
+        const factor = 1 + noise[i] - mean; // suma 4 kwartałów bez zmian
         stock.fundamentals.history.push({
-            revenue,
-            ebitda: revenue * profile.margin,
-            netIncome: netQuarter,
-            eps: netQuarter / shares,
+            revenue: revenue * (1 + (noise[i] - mean) * 0.5),
+            ebitda: revenue * profile.margin * (1 + stock.marginAdj) * factor,
+            netIncome: netQuarter * factor,
+            eps: netQuarter * factor / shares,
             synthetic: true
         });
     }
@@ -1917,6 +1922,16 @@ function isCullCandidate(stock) {
     return getMarketCapValue(stock) <= cullThresholdCache.cap;
 }
 
+/**
+ * U3: cechy indywidualne spółki (raz, zapisywane w spółce):
+ * marża ±30% profilu sektora, tempo wzrostu ±2,4 pkt proc. rocznie, luka wyceny 0,72–1,4 (C/Z względem sektora).
+ */
+function assignCompanyIdiosyncrasy(stock) {
+    if (!Number.isFinite(stock.marginAdj)) stock.marginAdj = getRandomInRange(-0.3, 0.3);
+    if (!Number.isFinite(stock.growthAdj)) stock.growthAdj = getRandomInRange(-0.006, 0.006);
+    if (!Number.isFinite(stock.valuationGap)) stock.valuationGap = Math.exp(getRandomInRange(Math.log(0.72), Math.log(1.4)));
+}
+
 /** Wynik kwartału z modelu przychodów (bez zmian gotówki — to robi raport). */
 function computeQuarterResults(stock) {
     const fundamentals = stock.fundamentals || initializeFundamentals(stock);
@@ -1931,12 +1946,12 @@ function computeQuarterResults(stock) {
     const projectAdj = (typeof getSpecialProjectGrowth === 'function' ? getSpecialProjectGrowth(stock) : 0) // bonusy projektów specjalnych
         + (typeof getMafiaFrontGrowth === 'function' ? getMafiaFrontGrowth(stock) : 0) // spółki-przykrywki rosną z wpływami mafii
         + (typeof getDefenseGrowthBonus === 'function' ? getDefenseGrowthBonus(stock) : 0); // zbrojeniówka: bonus od siły policji
-    const growth = profile.growth / 4 * SECTOR_GROWTH_FACTOR + profile.beta * gdp + health * 0.004 + phaseAdj + sectorAdj + projectAdj + inflation / 4 * INFLATION_PASS_THROUGH + gaussianRandom() * 0.02;
+    const growth = profile.growth / 4 * SECTOR_GROWTH_FACTOR + (Number(stock.growthAdj) || 0) + profile.beta * gdp + health * 0.004 + phaseAdj + sectorAdj + projectAdj + inflation / 4 * INFLATION_PASS_THROUGH + gaussianRandom() * 0.02;
     fundamentals.revenue = Math.max(1000, fundamentals.revenue * (1 + Math.max(-0.25, Math.min(0.25, growth))));
 
     const revenue = fundamentals.revenue;
     const inflationSqueeze = Math.max(0, inflation - 0.04) * 0.5; // wysoka inflacja zjada marże
-    const margin = Math.max(-0.4, Math.min(0.6, profile.margin + health * 0.015 + phaseAdj * 0.5 + profile.beta * gdp * (gdp < 0 ? 3 : 2) - inflationSqueeze - getCrowdingPressure() * 0.02)); // B5: recesja mocniej tnie marże; zatłoczony rynek = ostrzejsza konkurencja
+    const margin = Math.max(-0.4, Math.min(0.6, profile.margin * (1 + (Number(stock.marginAdj) || 0)) + health * 0.015 + phaseAdj * 0.5 + profile.beta * gdp * (gdp < 0 ? 3 : 2) - inflationSqueeze - getCrowdingPressure() * 0.02)); // B5: recesja mocniej tnie marże; zatłoczony rynek = ostrzejsza konkurencja
     const fixedExpenses = Math.max(0, Number(stock.fixedExpenses) || 0);
 
     // Działające inwestycje: kwartalny zysk lub strata (investments.js).
@@ -5369,6 +5384,7 @@ function runMunicipalCompanyLogic() {
     generateCEO(newStock);
     
     stocks.push(newStock);
+    if (typeof initializeFundamentals === 'function') initializeFundamentals(newStock, true); // U3: pełne wskaźniki (C/Z itd.) od debiutu
 
     // Usuń z listy spółek miejskich
     const index = municipalCompanies.findIndex(c => c.id === targetCompany.id);

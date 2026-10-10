@@ -408,7 +408,8 @@ function processPrivatizationWeekly(deltaMs = BASE_DELAYS.weekly) {
     if (!stock) return;
 
     let sold = offer.fundShares;
-    for (const ai of aiCompetitors.filter(ai => ai.personality !== 'market_maker').sort(() => Math.random() - 0.5)) {
+    if (!(offer.price > 0)) return; // zabezpieczenie: bez prawidłowej ceny boty nie kupują
+    for (const ai of aiCompetitors.filter(ai => ai.personality !== 'market_maker' && Number.isFinite(ai.cash) && ai.cash > 0).sort(() => Math.random() - 0.5)) {
         if (offer.remaining <= 0) break;
         const quantity = Math.min(offer.remaining, Math.floor(ai.cash * 0.1 / offer.price));
         if (quantity <= 0) continue;

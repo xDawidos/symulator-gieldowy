@@ -52,7 +52,8 @@ function ensureMafia() {
 }
 
 function getMafiaStage() {
-    return [...MAFIA_STAGES].reverse().find(stage => mafia.influence >= stage.min);
+    if (!Number.isFinite(mafia.influence)) mafia.influence = 0; // zabezpieczenie przed NaN (przerwałoby kwartał)
+    return [...MAFIA_STAGES].reverse().find(stage => mafia.influence >= stage.min) || MAFIA_STAGES[0];
 }
 
 function getMafiaStageIndex() {
@@ -60,7 +61,9 @@ function getMafiaStageIndex() {
 }
 
 function addMafiaInfluence(points) {
-    mafia.influence = clampValue(mafia.influence + points, 0, MAFIA_MAX_INFLUENCE);
+    if (!Number.isFinite(points)) return;
+    if (!Number.isFinite(mafia.cash)) mafia.cash = 0;
+    mafia.influence = clampValue((Number.isFinite(mafia.influence) ? mafia.influence : 0) + points, 0, MAFIA_MAX_INFLUENCE);
 }
 
 function getBruno() {

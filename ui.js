@@ -1908,6 +1908,11 @@ function formatRatio(value, eps) {
 function renderCompanyCard() {
     const stock = stocks.find(s => s.symbol === companyCardView.symbol);
     if (!stock) return;
+    // U3: każda notowana spółka (także państwowa i miejska) ma bilans i wyniki do wskaźników.
+    if (!stock.assetType || stock.assetType === 'Holding') {
+        if (!stock.balanceSheet && typeof initializeBalanceSheetForStock === 'function') initializeBalanceSheetForStock(stock);
+        if (!stock.fundamentals && stock.balanceSheet && typeof initializeFundamentals === 'function') initializeFundamentals(stock, true);
+    }
     const f = stock.fundamentals ? updateFundamentalRatios(stock) : null;
     const week = getStockChangePct(stock, 1);
     const sector = (stock.sector || []).join(', ') || '—';

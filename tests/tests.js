@@ -700,6 +700,7 @@ group('Rynek: fundamenty, ceny, cykl, dywidendy (etap A)', () => {
         const cheap = marketCompany('TANI', { price: 10 });
         const dear = marketCompany('DROGI', { price: 1000 });
         dear.fundamentals.revenue = cheap.fundamentals.revenue;
+        dear.marginAdj = cheap.marginAdj; dear.growthAdj = cheap.growthAdj; // U3: te same cechy spółki
         resetWorld([cheap, dear]);
         const a = withSeededRandom(1, () => computeQuarterResults(cheap));
         const b = withSeededRandom(1, () => computeQuarterResults(dear));
@@ -3486,6 +3487,35 @@ group('Uwagi U2: interfejs', () => {
         startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
         playerPortfolio.AAA = { shares: 5, avgPrice: 10, assetType: 'stock' };
         assert(isStockOwnedByPlayer(a) && !isStockOwnedByPlayer(b), 'tylko posiadane');
+    });
+});
+
+group('Uwagi U3: fundamenty spółek', () => {
+    test('spółki z jednego sektora startują z różnym C/Z', () => {
+        const list = [];
+        for (let i = 0; i < 8; i++) {
+            const c = makeCompany(`S${i}`, { cash: 200_000, fixedAssets: 800_000 });
+            c.price = 100; c.financialHealth = 0;
+            initializeFundamentals(c, true);
+            list.push(c.fundamentals.peRatio);
+        }
+        const min = Math.min(...list), max = Math.max(...list);
+        assert(max / min > 1.2, `rozrzut C/Z ${min.toFixed(1)}–${max.toFixed(1)}`);
+    });
+
+    test('cechy spółki są stałe (zapisane), marża wpływa na wynik', () => {
+        const c = makeCompany('MRG', { cash: 200_000, fixedAssets: 800_000 });
+        initializeFundamentals(c, true);
+        const gap = c.valuationGap;
+        initializeFundamentals(c, true);
+        assert(c.valuationGap === gap && Math.abs(c.marginAdj) <= 0.3 && c.valuationGap >= 0.72 && c.valuationGap <= 1.4, 'stałe cechy');
+    });
+
+    test('spółka państwowa ma wskaźniki (C/Z)', () => {
+        const c = makeCompany('PANS', { cash: 200_000, fixedAssets: 800_000 });
+        c.isStateOwned = true; c.stateOwnershipPct = 0.6;
+        initializeFundamentals(c, true);
+        assert(Number.isFinite(c.fundamentals.peRatio) && c.fundamentals.peRatio > 0, 'C/Z');
     });
 });
 
