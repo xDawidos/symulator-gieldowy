@@ -133,9 +133,10 @@ function updateTopbarKPIs() {
     const fmt = new Intl.NumberFormat('pl-PL', {minimumFractionDigits:2, maximumFractionDigits:2});
     if (typeof playerCash !== 'undefined') {
         const v = fmt.format(playerCash);
+        const isPrivate = typeof activeTradingAccount !== 'undefined' && activeTradingAccount === 'private';
         ['cash','cash-portfolio'].forEach(id => {
             const el = document.getElementById(id);
-            if (el) el.textContent = v + ' zł';
+            if (el) el.textContent = (id === 'cash-portfolio' && isPrivate ? fmt.format(playerWallet?.cash || 0) : v) + ' zł';
         });
     }
     if (typeof playerFund !== 'undefined' && playerFund) {

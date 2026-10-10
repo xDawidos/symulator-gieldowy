@@ -165,8 +165,8 @@ const skills = {
         name: 'Szósty Zmysł 💡',
         unlockedLevel: 0,
         levels: [
-            { level: 1, cost: 200, description: 'Niewielka szansa na otrzymanie prywatnego "przeczucia" o przyszłych wynikach losowej firmy.' },
-            { level: 2, cost: 500, description: 'Twoje "przeczucia" wskazują teraz, czy nadchodzące wydarzenie będzie pozytywne, czy negatywne.' }
+            { level: 1, cost: 1500, description: 'Niewielka szansa na otrzymanie prywatnego "przeczucia" o przyszłych wynikach losowej firmy.' },
+            { level: 2, cost: 4000, description: 'Twoje "przeczucia" wskazują teraz, czy nadchodzące wydarzenie będzie pozytywne, czy negatywne.' }
         ]
     },
 
@@ -287,6 +287,10 @@ function buyStock(symbol, quantity) {
         return;
     }
     if (typeof isTradingBlocked === 'function' && isTradingBlocked('player')) { showToast('Blokada handlu nałożona przez organy ścigania.', 'error'); return; }
+    if (!canAccessExchange(stockToBuy.exchange)) {
+        showToast(`Twoje stanowisko nie daje dostępu do giełdy ${exchanges[stockToBuy.exchange]?.name || stockToBuy.exchange}. Awans otworzy kolejne giełdy.`, 'warning');
+        return;
+    }
     if (stockToBuy.isTradeLocked) {
         showToast(`Handel akcjami ${stockToBuy.name} jest tymczasowo wstrzymany!`);
         return;

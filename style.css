@@ -4384,3 +4384,6 @@ img, svg, video { max-width: 100%; }
 .notif-item span { flex: 1; }
 .notif-close { background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 2px 6px; }
 .nav-badge-alert { position: absolute; top: 4px; right: 6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--color-down); color: #fff; font-size: 11px; line-height: 18px; text-align: center; }
+
+/* U1: grupy w tabeli pozycji portfela */
+.portfolio-group-row td { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted, #8b949e); padding-top: 10px; border-bottom: 1px solid var(--border-color, #30363d); }

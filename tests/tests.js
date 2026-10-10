@@ -1681,11 +1681,12 @@ group('Startupy funduszu (etap F2)', () => {
         investInStartup(startup.symbol, 5000);
         const ai = aiCompetitors[0];
         ai.portfolio[startup.symbol] = { investedAmount: 3000, assetType: 'Startup' };
+        const goal = startup.fundingGoal;
         handleSuccessfulIPO(startup, 3);
         assert(!startup.assetType && startup.exchange === 'BRONZE', 'debiut');
         assert(startup.sharesHeld <= startup.totalShares, 'udziały ≤ 100%');
         const playerPct = playerPortfolio[startup.symbol].shares / startup.totalShares;
-        assertNear(playerPct, STARTUP_INVESTORS_SHARE * 5000 / 8000, 'udział funduszu', 0.01);
+        assertNear(playerPct, STARTUP_INVESTORS_SHARE * 5000 / Math.max(8000, goal), 'udział funduszu (wpłata / max(wpłaty, cel))', 0.01);
         assert(ai.portfolio[startup.symbol].shares > 0, 'bot dostał akcje');
         delete ai.portfolio[startup.symbol];
     });
@@ -3413,6 +3414,60 @@ group('Balans B5: rynek i tempo', () => {
         macro = createMacroState();
         playerCash = 100_000;
         assert(getTrustDropReasons().some(r => /gotówce/.test(r)), 'gotówka');
+    });
+});
+
+group('Uwagi U1: błędy i exploity', () => {
+    function world() {
+        const a = makeCompany('AAA', { cash: 5_000_000 });
+        resetWorld([a]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        macro = createMacroState();
+        playerCash = 1_000_000;
+        return a;
+    }
+
+    test('startup: mała wpłata przy dużym celu zbiórki = mały udział', () => {
+        world();
+        const startup = generateNewStartup();
+        startup.fundingGoal = 300_000;
+        stocks.push(startup);
+        addFundStartupStake(startup, 35);
+        handleSuccessfulIPO(startup, 2);
+        const pct = (playerPortfolio[startup.symbol]?.shares || 0) / startup.totalShares;
+        assert(pct < 0.001, `udział ${(pct * 100).toFixed(3)}%`);
+    });
+
+    test('fundusz nie kupi akcji na giełdzie ponad poziom stanowiska', () => {
+        const a = world();
+        a.exchange = 'PLATINUM';
+        const before = playerPortfolio.AAA?.shares || 0;
+        buyStock('AAA', 1);
+        assert((playerPortfolio.AAA?.shares || 0) === before, 'zakup zablokowany');
+    });
+
+    test('obligacje: oprocentowanie = stopa bazowa + premia za ryzyko, z limitem', () => {
+        world();
+        const base = centralBank.baseInterestRate;
+        assert(getRiskBondRate(0.7) <= base + 0.15 + 1e-9 && getRiskBondRate(0.7) > getRiskBondRate(0.1), 'premia rośnie z ryzykiem');
+        assert(getRiskBondRate(0.1) < base + 0.03, `niskie ryzyko ${getRiskBondRate(0.1)}`);
+    });
+
+    test('negocjacje: żądanie przyjęte podnosi cenę oferty, zerwanie kończy przejęcie', () => {
+        const a = world();
+        const b = makeCompany('BBB', { cash: 1e9 });
+        stocks.push(b);
+        playerPortfolio.AAA = { shares: a.totalShares * 0.6, avgPrice: 100, assetType: 'stock' };
+        initiateMergerProcess(b, a, 'przejęcie', 'cash', 0.2);
+        const pair = getTakeoverAgainst(a);
+        assert(pair, 'proces przejęcia');
+        assert(startPlayerNegotiation('AAA'), 'start');
+        const price = pair.process.offerDetails.buyoutPricePerShare;
+        const random = Math.random; Math.random = () => 0.01;
+        const result = negotiationDemand('AAA', 0.1);
+        Math.random = random;
+        assert(result === 'accepted' && pair.process.offerDetails.buyoutPricePerShare > price, `wynik ${result}`);
+        assert(getNegotiationAcceptChance(b, 0.4) < getNegotiationAcceptChance(b, 0.05), 'wyższe żądanie = mniejsza szansa');
     });
 });
 

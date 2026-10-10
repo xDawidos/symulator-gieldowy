@@ -663,6 +663,9 @@ function logFundTrade(symbol, side) {
 function setTradingAccount(account) {
     activeTradingAccount = account === 'private' ? 'private' : 'fund';
     if (typeof displayFundPanel === 'function') displayFundPanel();
+    if (typeof displayPortfolio === 'function') displayPortfolio();
+    if (typeof displayStocks === 'function' && typeof getCurrentInputValues === 'function') displayStocks(getCurrentInputValues()); // kolumna „Posiadane” wg konta
+    showToast(account === 'private' ? '🧍 Handlujesz z konta prywatnego (Twoje pieniądze).' : '💼 Handlujesz z konta funduszu (pieniądze klientów).', 'default', 3500);
 }
 
 function getPrivateTaxModifier() {
@@ -700,12 +703,12 @@ function checkCompliance(symbol) {
 
 function buyStockPrivate(symbol, quantity) {
     const stock = stocks.find(s => s.symbol === symbol);
-    if (!stock || stock.isTradeLocked) { alert('Handel tą akcją jest niedostępny.'); return false; }
-    if (!canAccessExchange(stock.exchange)) { alert('Twoje stanowisko nie daje dostępu do tej giełdy.'); return false; }
-    if (quantity > getAvailableShares(stock)) { alert(`Za mało akcji na rynku (dostępne: ${getAvailableShares(stock)}).`); return false; }
+    if (!stock || stock.isTradeLocked) { showToast('Handel tą akcją jest niedostępny.', 'warning'); return false; }
+    if (!canAccessExchange(stock.exchange)) { showToast('Twoje stanowisko nie daje dostępu do tej giełdy.', 'warning'); return false; }
+    if (quantity > getAvailableShares(stock)) { showToast(`Za mało akcji na rynku (dostępne: ${getAvailableShares(stock)}).`, 'warning'); return false; }
 
     const cost = stock.price * quantity;
-    if (playerWallet.cash < cost) { alert('Za mało prywatnych pieniędzy.'); return false; }
+    if (playerWallet.cash < cost) { showToast('Za mało prywatnych pieniędzy.', 'error'); return false; }
 
     playerWallet.cash -= cost;
     stock.sharesHeld += quantity;

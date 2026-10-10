@@ -187,8 +187,10 @@ function handleSuccessfulIPO(startup, successMultiplier) {
     delete playerPortfolio[symbol];
     aiCompetitors.forEach(ai => { if (ai.portfolio[symbol]?.investedAmount !== undefined) delete ai.portfolio[symbol]; });
 
+    // Udział = wpłata / max(wpłaty, cel zbiórki): mała wpłata to mały udział, niezebrana część trafia do wolnego obrotu.
+    const shareBase = Math.max(totalClaims, Number(startup.fundingGoal) || 0);
     for (const claim of claims) {
-        const shares = totalClaims > 0 ? Math.floor(investorShares * claim.amount / totalClaims) : 0;
+        const shares = shareBase > 0 ? Math.floor(investorShares * claim.amount / shareBase) : 0;
         if (shares <= 0) continue;
         sharesHeld += shares;
         if (claim.kind === 'player') {

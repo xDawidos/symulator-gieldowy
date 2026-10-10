@@ -118,9 +118,8 @@ function displayStocks(previousInputValues = {}) {
 
     row.classList.add(`exchange-group-${stock.exchange}`);
 
-    const sharesOwned = playerPortfolio[stock.symbol]
-      ? playerPortfolio[stock.symbol].shares
-      : 0;
+    const ownedPortfolio = typeof activeTradingAccount !== 'undefined' && activeTradingAccount === 'private' ? (playerWallet?.portfolio || {}) : playerPortfolio;
+    const sharesOwned = ownedPortfolio[stock.symbol]?.shares || 0;
     const playerSharePct =
       stock.totalShares > 0 ? (sharesOwned / stock.totalShares) * 100 : 0;
 
@@ -548,168 +547,112 @@ const skillCategoryDefinitions = {
 };
 
 // Ta funkcja jest z ui.js (baza), zachowujemy ją, ponieważ obsługuje bankowość komercyjną
+/** Pozycje portfela jako wiersze tabeli: fundusz albo konto prywatne (przełącznik kont). */
 function displayPortfolio() {
-    const myStocksList = document.getElementById('my-stocks-list');
-    if (!myStocksList) {
-        return;
-    }
+    const body = document.getElementById('my-stocks-list');
+    if (!body) return;
+    const isPrivate = typeof activeTradingAccount !== 'undefined' && activeTradingAccount === 'private';
+    const portfolio = isPrivate ? (playerWallet?.portfolio || {}) : playerPortfolio;
+    const fmt = value => formatZl(value, 0);
+    const rows = [];
+    let totalPL = 0, positionsValue = 0;
 
-    myStocksList.innerHTML = ''; // Wyczyść listę przed ponownym renderowaniem
-    let hasOwnedStocks = false; // Zmieniona nazwa flagi dla jasności
-    let totalPortfolioProfitLoss = 0;
-    let totalStocksValue = 0; // Wartość tylko akcji, ETFów i indeksów
+    const section = title => rows.push(`<tr class="portfolio-group-row"><td colspan="4">${title}</td></tr>`);
+    const row = (name, share, cost, result, cls = '', title = '') =>
+        rows.push(`<tr class="${cls}"${title ? ` title="${escapeHtml(title)}"` : ''}><td>${name}</td><td class="cell-number">${share}</td><td class="cell-number">${cost}</td><td class="cell-number">${result}</td></tr>`);
 
-    // --- Wyświetlanie Aktywów ---
-    for (const symbol in playerPortfolio) {
-        hasOwnedStocks = true;
-        const holding = playerPortfolio[symbol];
-
+    // Akcje, ETF-y, indeksy, startupy
+    const equity = Object.entries(portfolio).filter(([, h]) => h && (h.assetType === 'Startup' ? h.investedAmount > 0 : h.shares > 0));
+    if (equity.length) section('Akcje i fundusze');
+    for (const [symbol, holding] of equity) {
         if (holding.assetType === 'Startup') {
-            // Wyświetlanie Inwestycji w Startupy
-            const startupData = stocks.find(s => s.symbol === symbol);
-            if (startupData) {
-                const listItem = document.createElement('li');
-                listItem.textContent = `🚀 ${startupData.name} (Inwestycja): ${holding.investedAmount.toFixed(2)} PLN`;
-                if (holding.isInsured) {
-                    listItem.textContent += ' 🛡️(Ubezp.)'; // Oznacz ubezpieczone
-                }
-                myStocksList.appendChild(listItem);
-            }
-        } else {
-            // Wyświetlanie Akcji, ETFów, Indeksów
-            let marketData, currentPrice = 0, name = symbol;
-            if (holding.assetType === 'etf') {
-                marketData = etfs.find(e => e.symbol === symbol);
-                if (marketData) { currentPrice = marketData.price; name = marketData.name; }
-            } else if (holding.assetType === 'index') {
-                marketData = marketIndexes.find(i => i.id === symbol);
-                if (marketData) { currentPrice = marketData.value; name = marketData.name; }
-            } else { // Zakładamy, że to standardowe akcje
-                marketData = stocks.find(s => s.symbol === symbol);
-                if (marketData) { currentPrice = marketData.price; name = marketData.name; }
-            }
-
-            if (!marketData || holding.shares <= 0) continue; // Pomiń, jeśli brak danych lub udziałów
-
-            const currentValue = currentPrice * holding.shares;
-            const purchaseValue = holding.avgPrice * holding.shares;
-            const profitLoss = currentValue - purchaseValue;
-            totalStocksValue += currentValue; // Sumuj wartość rynkową
-            totalPortfolioProfitLoss += profitLoss; // Sumuj zysk/stratę
-
-            const listItem = document.createElement('li');
-            const profitLossSpan = document.createElement('span');
-            profitLossSpan.textContent = ` (Z/S: ${profitLoss.toFixed(2)} PLN)`;
-            if (profitLoss > 0) profitLossSpan.className = 'profit';
-            else if (profitLoss < 0) profitLossSpan.className = 'loss';
-
-            const unitName = (holding.assetType === 'etf' || holding.assetType === 'index') ? 'jedn.' : 'szt.';
-            listItem.textContent = `${name} (${symbol}): ${holding.shares} ${unitName}`;
-
-            // --- 👇 TUTAJ JEST DODANY BLOK DLA ZABLOKOWANYCH AKCJI 👇 ---
-            if (holding.lockedShares && holding.lockedShares > 0) {
-                listItem.textContent += ` (Zablokowane: ${holding.lockedShares})`;
-                listItem.classList.add('dimmed');
-                listItem.title = `${holding.lockedShares} akcji jest zablokowanych jako zabezpieczenie kredytu hipotecznego.`;
-            }
-            // --- 👆 KONIEC BLOKU 👆 ---
-
-            listItem.textContent += ` | Śr. cena zakupu: ${holding.avgPrice.toFixed(2)} | Wartość: ${currentValue.toFixed(2)} PLN`;
-            listItem.appendChild(profitLossSpan);
-            myStocksList.appendChild(listItem);
+            const startup = stocks.find(s => s.symbol === symbol);
+            positionsValue += holding.investedAmount;
+            row(`🚀 ${escapeHtml(startup?.name || symbol)}`, 'startup', fmt(holding.investedAmount), holding.isInsured ? '🛡️ ubezp.' : '—');
+            continue;
         }
-    }
-
-    // --- Wyświetlanie Obligacji ---
-    const playerBonds = allBonds.filter(b => b.ownerId === 'player' && b.isStateBond !== undefined); // Filtruj obligacje (nie bony)
-    if (playerBonds.length > 0) {
-        const bondHeader = document.createElement('li');
-        bondHeader.innerHTML = `<hr><strong>Obligacje (${playerBonds.length} szt.):</strong>`;
-        myStocksList.appendChild(bondHeader);
-        const groupedBonds = {};
-        playerBonds.forEach(bond => {
-            const key = `${bond.issuerName}_${bond.type}`;
-            if (!groupedBonds[key]) {
-                groupedBonds[key] = { count: 0, name: bond.issuerName, type: bond.type, nextMaturity: Infinity, value: 0, defaulted: 0 };
-            }
-            groupedBonds[key].count++;
-            groupedBonds[key].nextMaturity = Math.min(groupedBonds[key].nextMaturity, Number(bond.remainingGameMs) || 0);
-            groupedBonds[key].value += getBondValue(bond);
-            if (bond.defaulted) groupedBonds[key].defaulted++;
-        });
-        for (const key in groupedBonds) {
-            const group = groupedBonds[key];
-            const remainingTime = Math.max(0, Math.ceil(group.nextMaturity / 60000));
-            const bondItem = document.createElement('li');
-            bondItem.textContent = `- ${group.name} (${group.type}): ${group.count} szt., wycena ${group.value.toFixed(0)} zł (zapada za ~${remainingTime} min gry)${group.defaulted ? ' ⚠️ niewypłacalny emitent' : ''}`;
-            myStocksList.appendChild(bondItem);
+        let market, price = 0, name = symbol, pct = '';
+        if (holding.assetType === 'etf') { market = etfs.find(e => e.symbol === symbol); price = market?.price || 0; name = market?.name || symbol; }
+        else if (holding.assetType === 'index') { market = marketIndexes.find(i => i.id === symbol); price = market?.value || 0; name = market?.name || symbol; }
+        else {
+            market = stocks.find(s => s.symbol === symbol);
+            price = market?.price || 0; name = market?.name || symbol;
+            if (market?.totalShares > 0) pct = `${(holding.shares / market.totalShares * 100).toFixed(2)}%`;
         }
-        hasOwnedStocks = true;
+        if (!market) continue;
+        const value = price * holding.shares;
+        const pl = value - holding.avgPrice * holding.shares;
+        positionsValue += value;
+        totalPL += pl;
+        const locked = holding.lockedShares > 0 ? ` 🔒${holding.lockedShares}` : '';
+        row(`${escapeHtml(name)} <span class="text-xs text-muted">${escapeHtml(symbol)} · ${holding.shares.toLocaleString('pl-PL')} szt.${locked}</span>`,
+            pct || '—', holding.avgPrice.toFixed(2),
+            `<span class="${pl > 0 ? 'profit' : pl < 0 ? 'loss' : ''}">${pl >= 0 ? '+' : ''}${fmt(pl)}</span><span class="text-xs text-muted d-block">${fmt(value)}</span>`,
+            holding.lockedShares > 0 ? 'dimmed' : '', holding.lockedShares > 0 ? `${holding.lockedShares} akcji zablokowanych (zastaw)` : '');
     }
 
-    // --- Wyświetlanie Bonów Skarbowych ---
-    const playerTBills = allBonds.filter(b => b.ownerId === 'player' && b.isTBill === true);
-    if (playerTBills.length > 0) {
-        const tBillHeader = document.createElement('li');
-        tBillHeader.innerHTML = `<hr><strong>Bony Skarbowe (${playerTBills.length} szt.):</strong>`;
-        myStocksList.appendChild(tBillHeader);
-        let nextMaturity = Infinity;
-        playerTBills.forEach(tBill => { nextMaturity = Math.min(nextMaturity, tBill.maturityDate); });
-        const remainingTime = Math.max(0, Math.ceil((nextMaturity - Date.now()) / 1000));
-        const tBillItem = document.createElement('li');
-        tBillItem.textContent = `- Posiadasz ${playerTBills.length} bonów (najbliższy wykup za: ${remainingTime}s)`;
-        myStocksList.appendChild(tBillItem);
-        hasOwnedStocks = true;
-    }
+    if (!isPrivate) {
+        // Lokaty, PPP, obligacje projektowe, pożyczki pomostowe
+        const deposits = typeof getFundDeposits === 'function' ? getFundDeposits() : [];
+        const ppp = playerFund?.ppp || [];
+        const projectBonds = typeof getProjectBonds === 'function' && typeof specialProjects === 'object' && specialProjects ? getProjectBonds() : [];
+        if (deposits.length || ppp.length || projectBonds.length) section('Lokaty i finansowanie projektów');
+        for (const d of deposits) row(`🏦 Lokata · ${escapeHtml(d.bankName)}`, `${(d.rate * 100).toFixed(1)}%/r`, fmt(d.principal), `<span class="profit">+${fmt(d.accrued)}</span><span class="text-xs text-muted d-block">${d.weeksLeft} tyg.</span>`);
+        for (const st of ppp) row(`${st.icon || '🏙️'} PPP · ${escapeHtml(st.name)}`, `${(st.rate * 100).toFixed(1)}%/r`, fmt(st.principal), `${st.unpaid > 0 ? '<span class="loss">zaległe odsetki</span>' : '—'}<span class="text-xs text-muted d-block">${st.weeksLeft} tyg.</span>`);
+        for (const b of projectBonds) row(`📜 Obligacje projektu · ${escapeHtml(b.name)}`, `${(PROJECT_BOND_RATE * 100).toFixed(0)}%/r`, fmt(b.principal), `<span class="profit">+${fmt(b.interestPaid || 0)}</span>`);
+        positionsValue += deposits.reduce((sum, d) => sum + d.principal + d.accrued, 0) + ppp.reduce((sum, st) => sum + st.principal, 0) + projectBonds.reduce((sum, b) => sum + b.principal, 0);
 
-    // --- Wyświetlanie Wkładu w Pulę Inwestycyjną ---
-    const playerPoolStake = investmentPool.playerStakes['player'] || 0;
-    if (playerPoolStake > 0) {
-        const poolItem = document.createElement('li');
-        poolItem.innerHTML = `<hr>🏊‍♂️ Wkład w pulę inwestycyjną: <strong>${playerPoolStake.toFixed(2)} PLN</strong>`;
-        myStocksList.appendChild(poolItem);
-        hasOwnedStocks = true;
-    }
-
-    // Komunikat, jeśli brak aktywów
-    if (!hasOwnedStocks) {
-        myStocksList.innerHTML = '<li>Brak posiadanych aktywów.</li>';
-    }
-
-    // --- Wyświetlanie Pasywów (Kredytów Komercyjnych) ---
-    const myLiabilitiesList = document.getElementById('my-liabilities-list');
-    myLiabilitiesList.innerHTML = '';
-    let hasLiabilities = false;
-    for (const loan of playerFund?.pawnLoans || []) { // zastawy funduszu w lombardzie (finance.js)
-        const loanItem = document.createElement('li');
-        loanItem.innerHTML = `🏦 Lombard: <strong class="loss">${loan.principal.toFixed(2)} zł</strong> [zastaw: ${loan.shares} ${escapeHtml(loan.symbol)}] · ${loan.weeksLeft} tyg.`;
-        myLiabilitiesList.appendChild(loanItem);
-        hasLiabilities = true;
-    }
-
-    if (!hasLiabilities) {
-        myLiabilitiesList.innerHTML = '<li>Brak zobowiązań.</li>';
-    }
-
-    // --- Podsumowanie Wartości Portfela ---
-    const totalPlElement = document.getElementById('total-profit-loss');
-    if (totalPlElement) {
-        totalPlElement.textContent = totalPortfolioProfitLoss.toFixed(2);
-        totalPlElement.className = (totalPortfolioProfitLoss > 0) ? 'profit' : (totalPortfolioProfitLoss < 0) ? 'loss' : '';
-    }
-
-    const totalPortfolioValueElement = document.getElementById('total-portfolio-value');
-    if (totalPortfolioValueElement) {
-        let startupValue = 0;
-        for (const symbol in playerPortfolio) {
-            if (playerPortfolio[symbol].assetType === 'Startup') {
-                startupValue += playerPortfolio[symbol].investedAmount;
+        // Obligacje i bony
+        const bonds = allBonds.filter(b => b.ownerId === 'player' && !b.isTBill);
+        if (bonds.length) {
+            section('Obligacje');
+            const groups = {};
+            for (const bond of bonds) {
+                const key = `${bond.issuerName}_${bond.type}`;
+                const g = groups[key] || (groups[key] = { name: bond.issuerName, type: bond.type, rate: bond.interestRate, count: 0, value: 0, cost: 0, defaulted: 0, next: Infinity });
+                g.count++; g.value += getBondValue(bond); g.cost += bond.purchasePrice || bond.faceValue || 0;
+                g.next = Math.min(g.next, Number(bond.remainingGameMs) || 0);
+                if (bond.defaulted) g.defaulted++;
+            }
+            for (const g of Object.values(groups)) {
+                positionsValue += g.value;
+                row(`📄 ${escapeHtml(g.name)} <span class="text-xs text-muted">${escapeHtml(g.type)} · ${g.count} szt.</span>`, `${(g.rate * 100).toFixed(1)}%/r`, fmt(g.cost),
+                    `${g.defaulted ? '<span class="loss">⚠️ niewypłacalny</span>' : fmt(g.value)}<span class="text-xs text-muted d-block">zapada za ~${Math.ceil(g.next / 60000)} min gry</span>`);
             }
         }
-        // Aktywa funduszu: gotówka + akcje/ETF/indeksy + obligacje i bony (fund.js)
-        const totalPortfolioValue = playerFund ? getFundAssets() : playerCash + totalStocksValue + startupValue;
-        totalPortfolioValueElement.textContent = totalPortfolioValue.toFixed(2);
+        const tBills = allBonds.filter(b => b.ownerId === 'player' && b.isTBill);
+        if (tBills.length) { section('Bony skarbowe'); row(`🧾 Bony skarbowe · ${tBills.length} szt.`, '—', '—', '—'); }
+        const poolStake = investmentPool?.playerStakes?.player || 0;
+        if (poolStake > 0) { section('Pula inwestycyjna'); row('🏊 Wkład w pulę', '—', fmt(poolStake), '—'); }
     }
+
+    body.innerHTML = rows.length ? rows.join('') : `<tr><td colspan="4" class="text-muted">Brak pozycji ${isPrivate ? 'na koncie prywatnym' : 'w funduszu'}.</td></tr>`;
+
+    // Pasywa
+    const liabilities = document.getElementById('my-liabilities-list');
+    if (liabilities) {
+        const loans = isPrivate ? [] : (playerFund?.pawnLoans || []);
+        liabilities.innerHTML = loans.length
+            ? loans.map(loan => `<li>🏦 Lombard: <strong class="loss">${loan.principal.toFixed(2)} zł</strong> [zastaw: ${loan.shares} ${escapeHtml(loan.symbol)}] · ${loan.weeksLeft} tyg.</li>`).join('')
+            : '<li>Brak zobowiązań.</li>';
+    }
+
+    // Nagłówek i kafelki zależnie od konta
+    const header = document.getElementById('portfolio-positions-header');
+    if (header) header.textContent = isPrivate ? 'Pozycje konta prywatnego' : 'Pozycje funduszu';
+    const setKpi = (id, label, value, sub) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = value;
+        const card = el.closest('.portfolio-kpi-card');
+        if (card) { card.querySelector('.portfolio-kpi-label').textContent = label; card.querySelector('.portfolio-kpi-sub').textContent = sub; }
+    };
+    const cash = isPrivate ? (playerWallet?.cash || 0) : playerCash;
+    const total = isPrivate ? cash + positionsValue : (playerFund ? getFundAssets() : playerCash + positionsValue);
+    setKpi('total-portfolio-value', isPrivate ? 'Majątek prywatny' : 'Aktywa funduszu', total.toFixed(2), isPrivate ? 'zł (Twoje pieniądze)' : 'zł (pieniądze klientów)');
+    setKpi('cash-portfolio', isPrivate ? 'Gotówka prywatna' : 'Gotówka funduszu', `${cash.toFixed(2)} zł`, 'zł wolne');
+    const plEl = document.getElementById('total-profit-loss');
+    if (plEl) { plEl.textContent = totalPL.toFixed(2); plEl.className = `portfolio-kpi-value ${totalPL > 0 ? 'profit' : totalPL < 0 ? 'loss' : ''}`; }
 }
 
 function displayEventMessage(message, durationSeconds, percentageInfo = null, category = 'market') {
@@ -5665,8 +5608,9 @@ function refreshInvestmentViews(symbol) {
 function renderDefenseButtons(target) {
     return Object.entries(TAKEOVER_DEFENSES).map(([type, defense]) => {
         const check = canUseDefense(target, type, 'player');
+        const action = type === 'negotiate' ? `openNegotiationModal('${target.symbol}', true)` : `activateDefenseMechanism('${target.symbol}', '${type}', 'player')`;
         return `<button class="btn-secondary" ${check.ok ? '' : 'disabled'} title="${escapeHtml(defense.desc)}"
-            onclick="activateDefenseMechanism('${target.symbol}', '${type}', 'player')">
+            onclick="${action}">
             ${defense.label}<br><span class="text-xs">${check.ok ? formatZl(check.cost, 0) : escapeHtml(check.reason)}</span></button>`;
     }).join('');
 }
@@ -5706,6 +5650,62 @@ function openTakeoverModal(symbol) {
         </div>`}
         ${pct > 0.5 ? `<h4 class="mt-3">Obrona (akcjonariusz większościowy)</h4><div class="defense-grid">${renderDefenseButtons(target)}</div>` : ''}`;
     modal.style.display = 'block';
+}
+
+/** U1: osobne okno negocjacji (rundy, żądanie premii, kontroferta agresora). */
+function openNegotiationModal(symbol, start = false) {
+    if (start && !startPlayerNegotiation(symbol)) return;
+    let modal = document.getElementById('negotiation-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'negotiation-modal';
+        modal.className = 'modal';
+        modal.innerHTML = '<button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button><h2 class="mt-0">🤝 Negocjacje</h2><div id="negotiation-body"></div>';
+        document.body.appendChild(modal);
+    }
+    renderNegotiation(symbol);
+    modal.style.display = 'block';
+}
+
+function negotiationAction(symbol, fn, ...args) {
+    const result = fn(symbol, ...args);
+    const labels = { accepted: '✅ Agresor przyjął żądanie!', counter: '↩️ Agresor składa kontrofertę.', walkout: '🚪 Agresor zerwał rozmowy i wycofał ofertę.' };
+    if (labels[result]) showToast(labels[result], result === 'walkout' ? 'warning' : 'success', 5000);
+    renderNegotiation(symbol);
+    if (typeof refreshTakeoverViews === 'function') refreshTakeoverViews(symbol);
+}
+
+function renderNegotiation(symbol) {
+    const body = document.getElementById('negotiation-body');
+    if (!body) return;
+    const target = stocks.find(s => s.symbol === symbol);
+    const pair = target && getTakeoverAgainst(target);
+    const neg = pair?.process.negotiation;
+    if (!pair || !neg) { body.innerHTML = '<p class="text-muted">Negocjacje zakończone — oferta przejęcia nie jest już aktualna.</p>'; return; }
+    const { initiator, process } = pair;
+    const offer = process.offerDetails;
+    const owner = findMajorityShareholder(initiator);
+    const history = neg.history.map(h => `<li>Runda ${h.round}: ${h.result === 'counterAccepted' ? `przyjęto kontrofertę +${(h.counter * 100).toFixed(0)} pkt` : `żądanie +${(h.demand * 100).toFixed(0)} pkt → ${{ accepted: '✅ przyjęte', counter: `↩️ kontroferta +${(h.counter * 100).toFixed(0)} pkt`, walkout: '🚪 zerwanie' }[h.result]}`}</li>`).join('');
+    const demandInput = Number(document.getElementById('neg-demand')?.value) || 15;
+    body.innerHTML = `
+        <div class="bank-ticker">
+            <div class="bank-ticker-item"><span>Agresor</span><strong>${escapeHtml(initiator.name)}</strong></div>
+            <div class="bank-ticker-item"><span>Właściciel agresora</span><strong>${escapeHtml(owner?.name || 'rozproszony')}</strong></div>
+            <div class="bank-ticker-item"><span>Cena oferty</span><strong>${formatZl(offer.buyoutPricePerShare)} (premia ${((offer.premium || 0) * 100).toFixed(0)}%)</strong></div>
+            <div class="bank-ticker-item"><span>Runda</span><strong>${Math.min(neg.round, NEGOTIATION_MAX_ROUNDS)}/${NEGOTIATION_MAX_ROUNDS}</strong></div>
+        </div>
+        ${neg.open ? `
+            <p class="text-sm">Im wyższe żądanie, tym mniejsza szansa zgody. Agresor może przyjąć, złożyć kontrofertę albo zerwać rozmowy (i wycofać ofertę). Charakter właściciela agresora wpływa na jego upór.</p>
+            <div class="bank-card-form">
+                <label class="text-sm">Żądam podniesienia premii o <input type="number" id="neg-demand" min="2" max="50" step="1" value="${demandInput}" class="w-xs" oninput="document.getElementById('neg-chance').textContent = (getNegotiationAcceptChance(stocks.find(s => s.symbol === '${initiator.symbol}'), this.value / 100, ${neg.round}) * 100).toFixed(0) + '%'"> pkt proc.</label>
+                <span class="text-sm">szansa zgody ≈ <strong id="neg-chance">${(getNegotiationAcceptChance(initiator, demandInput / 100, neg.round) * 100).toFixed(0)}%</strong></span>
+                <button onclick="negotiationAction('${symbol}', negotiationDemand, document.getElementById('neg-demand').value / 100)">Złóż żądanie</button>
+            </div>
+            ${neg.counter ? `<div class="mail-action"><p>Kontroferta agresora: premia <strong>+${(neg.counter * 100).toFixed(0)} pkt proc.</strong></p>
+                <button onclick="negotiationAction('${symbol}', negotiationAcceptCounter)">✅ Przyjmij kontrofertę</button></div>` : ''}
+            <button class="btn-secondary mt-2" onclick="negotiationAction('${symbol}', negotiationEnd)">Zakończ negocjacje (oferta bez zmian)</button>`
+        : '<p class="text-info">Negocjacje zakończone.</p>'}
+        ${history ? `<h4>Przebieg</h4><ul class="list-plain text-sm">${history}</ul>` : ''}`;
 }
 
 function openRescueOfferingModal() {

@@ -560,6 +560,15 @@ function createBondRecord(ownerId, offer, durationMinutes, annualRate) {
     };
 }
 
+// U1: oprocentowanie = stopa bazowa BC + premia za oczekiwaną niewypłacalność (+ mała nadwyżka), z limitem.
+const BOND_DEFAULT_PER_QUARTER = 0.05;  // szansa niewypłacalności na kwartał = ryzyko × 5%
+
+function getRiskBondRate(risk, extra = 0) {
+    const base = Math.max(0.01, Number(centralBank?.baseInterestRate) || 0.05);
+    const annualDefault = 1 - Math.pow(1 - Math.max(0, risk) * BOND_DEFAULT_PER_QUARTER, 4);
+    return base + Math.min(0.15, annualDefault * 1.1 + 0.005 + extra);
+}
+
 function issueNewBondOffer() {
     if (activeBonds.length >= 10) return;
 
@@ -571,7 +580,7 @@ function issueNewBondOffer() {
         type = 'Komunalna';
         risk = issuer.risk;
         duration = getRandomIntInRange(15, 35);
-        annual = 0.04 + risk * 0.5;
+        annual = getRiskBondRate(risk);
     } else if (roll < 0.60) {
         const company = getRandomElement(stocks.filter(s => !s.assetType && !s.isBankrupt));
         if (!company) return;
@@ -580,13 +589,13 @@ function issueNewBondOffer() {
         type = 'Korporacyjna (Giełdowa)';
         risk = issuer.risk;
         duration = getRandomIntInRange(10, 50);
-        annual = 0.05 + risk * 0.6;
+        annual = getRiskBondRate(risk);
     } else {
         issuer = getRandomElement(bondIssuers.corporate_non_public);
         type = 'Korporacyjna (Pozagiełdowa)';
         risk = issuer.risk;
         duration = getRandomIntInRange(20, 50);
-        annual = 0.07 + risk * 0.8;
+        annual = getRiskBondRate(risk, 0.01); // pozagiełdowe: mała premia za brak płynności
     }
 
     const offer = {
@@ -682,7 +691,7 @@ function payBondOwner(ownerId, amount) {
 function payBondCoupons() {
     for (const bond of allBonds) {
         if (bond.defaulted || bond.isTBill) continue;
-        if (!bond.isStateBond && Math.random() < (Number(bond.risk) || 0) * 0.1) {
+        if (!bond.isStateBond && Math.random() < (Number(bond.risk) || 0) * BOND_DEFAULT_PER_QUARTER) {
             bond.defaulted = true;
             if (bond.ownerId === 'player') logEvent(`💥 Niewypłacalność emitenta ${bond.issuerName}! Kupony przestają płynąć.`, 'error');
             continue;

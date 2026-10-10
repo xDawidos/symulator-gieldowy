@@ -511,7 +511,92 @@ function notifyFundOfTakeover(initiator, target) {
         body: `${initiator.name} oferuje ${process.offerDetails.buyoutPricePerShare.toFixed(2)} zł za akcję ${target.name} (premia ${((process.offerDetails.premium || 0) * 100).toFixed(0)}%). Fundusz ma ${(pct * 100).toFixed(1)}% akcji — zdecyduj: sprzedaż po cenie oferty albo głos przeciw${pct > 0.5 ? ', a jako większościowy akcjonariusz także obrona' : ''}.`,
         importance: 3, symbol: target.symbol, action: { type: 'takeover', symbol: target.symbol }
     });
-    showToast(`🚨 Wrogie przejęcie ${target.name}! Decyzja funduszu w poczcie.`, 'warning', 7000);
+    // U1: decyzja o przejęciu wyskakuje na ekranie i pauzuje grę (wyjątek od zasady „bez okien”).
+    if (document.getElementById('takeover-modal') && typeof openTakeoverModal === 'function') {
+        if (typeof isGamePaused !== 'undefined' && !isGamePaused && typeof togglePauseGame === 'function') togglePauseGame();
+        openTakeoverModal(target.symbol);
+        showToast(`🚨 Wrogie przejęcie ${target.name}! Gra wstrzymana do Twojej decyzji.`, 'warning', 7000);
+    } else {
+        showToast(`🚨 Wrogie przejęcie ${target.name}! Decyzja funduszu w poczcie.`, 'warning', 7000);
+    }
+}
+
+// =================================================================================
+// U1: NEGOCJACJE W RUNDACH (osobny panel; fundusz z większością)
+// =================================================================================
+
+const NEGOTIATION_MAX_ROUNDS = 3;
+
+/** Szansa przyjęcia żądania: charakter właściciela agresora, wysokość żądania, zmęczenie rundami. */
+function getNegotiationAcceptChance(initiator, demand, round = 1) {
+    return Math.max(0.05, Math.min(0.95, getAggressorPersistence(initiator) + 0.25 - demand * 2.5 - (round - 1) * 0.1));
+}
+
+function startPlayerNegotiation(symbol) {
+    const target = stocks.find(s => s.symbol === symbol);
+    const pair = target && getTakeoverAgainst(target);
+    if (!pair) { showToast('Spółka nie jest celem przejęcia.', 'warning'); return false; }
+    if (getFundStakePct(target) <= 0.5) { showToast('Negocjuje akcjonariusz większościowy (> 50%).', 'warning'); return false; }
+    const check = canUseDefense(target, 'negotiate', 'player');
+    if (!check.ok) { showToast(`Nie można negocjować: ${check.reason}.`, 'warning'); return false; }
+    getDefensePayer('player', target).pay(check.cost);
+    pair.process.defenseActive = 'negotiate';
+    pair.process.defenseBy = playerProfile?.fundName || 'Fundusz';
+    pair.process.negotiation = { round: 1, counter: null, open: true, history: [] };
+    syncTakeover(pair.initiator, target);
+    logEvent(`🤝 ${target.name} rozpoczyna negocjacje z ${pair.initiator.name} (doradcy: ${formatZl(check.cost, 0)}).`, 'review');
+    return true;
+}
+
+/** Runda: fundusz żąda podniesienia premii o `demand` (np. 0,15 = 15 pkt proc.). */
+function negotiationDemand(symbol, demand) {
+    const target = stocks.find(s => s.symbol === symbol);
+    const pair = target && getTakeoverAgainst(target);
+    const neg = pair?.process.negotiation;
+    demand = Number(demand);
+    if (!neg?.open) { showToast('Negocjacje są zakończone.', 'default'); return null; }
+    if (!(demand >= 0.02 && demand <= 0.5)) { showToast('Żądanie: od 2 do 50 pkt proc. premii.', 'warning'); return null; }
+    const { initiator, process } = pair;
+    const newTotal = process.offerDetails.buyoutPricePerShare * (1 + demand) * target.totalShares;
+    const affordable = process.financing !== 'cash' || initiator.cash >= newTotal;
+    const chance = affordable ? getNegotiationAcceptChance(initiator, demand, neg.round) : 0;
+    let result;
+    if (Math.random() < chance) {
+        raiseTakeoverOffer(initiator, target, process, demand);
+        neg.open = false;
+        result = 'accepted';
+        logEvent(`🤝 ${initiator.name} przyjmuje żądanie: premia +${(demand * 100).toFixed(0)} pkt proc. (cena ${process.offerDetails.buyoutPricePerShare.toFixed(2)} zł).`, 'review');
+    } else if (neg.round < NEGOTIATION_MAX_ROUNDS && affordable && Math.random() < 0.6) {
+        neg.counter = Math.round(demand * getRandomInRange(0.3, 0.6) * 100) / 100;
+        result = 'counter';
+    } else {
+        neg.open = false;
+        result = 'walkout';
+        logEvent(`🤝 ${initiator.name} zrywa negocjacje i wycofuje ofertę za ${target.name}.`, 'review');
+        abortTakeover(initiator, target, 'Agresor zerwał negocjacje.');
+    }
+    neg.history.push({ round: neg.round, demand, result, counter: neg.counter });
+    neg.round++;
+    return result;
+}
+
+function negotiationAcceptCounter(symbol) {
+    const target = stocks.find(s => s.symbol === symbol);
+    const pair = target && getTakeoverAgainst(target);
+    const neg = pair?.process.negotiation;
+    if (!neg?.open || !(neg.counter > 0)) return false;
+    raiseTakeoverOffer(pair.initiator, target, pair.process, neg.counter);
+    neg.open = false;
+    neg.history.push({ round: neg.round, result: 'counterAccepted', counter: neg.counter });
+    logEvent(`🤝 Porozumienie: ${pair.initiator.name} podnosi premię za ${target.name} o ${(neg.counter * 100).toFixed(0)} pkt proc.`, 'review');
+    return true;
+}
+
+function negotiationEnd(symbol) {
+    const target = stocks.find(s => s.symbol === symbol);
+    const neg = target && getTakeoverAgainst(target)?.process.negotiation;
+    if (neg) neg.open = false;
+    return true;
 }
 
 /** Fundusz sprzedaje (niezablokowane) akcje celu agresorowi po cenie oferty. */
