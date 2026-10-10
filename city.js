@@ -522,6 +522,7 @@ function investInPpp(offerId, amount) {
     const stake = { id: `${offer.id}_${playerFund.ppp.length + 1}`, name: offer.name, icon: offer.icon, principal: amount, rate: offer.rate, weeksLeft: offer.termWeeks, termWeeks: offer.termWeeks, unpaid: 0, extensions: 0 };
     playerFund.ppp.push(stake);
     recordPayment('player-fund', 'external:miasto', amount, `PPP: ${offer.name}`);
+    if (typeof noteCorporateGoal === 'function') noteCorporateGoal('project');
     logEvent(`🤝 Fundusz współfinansuje projekt miejski ${offer.icon} ${offer.name}: ${amount.toLocaleString('pl-PL')} zł na ${offer.termWeeks} tyg.`, 'review');
     if (offer.raised >= offer.total) ppp.offers = ppp.offers.filter(item => item !== offer);
     if (typeof refreshFundViews === 'function') refreshFundViews();

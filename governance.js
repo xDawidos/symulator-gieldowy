@@ -109,6 +109,12 @@ function createPendingAgm(stock) {
 function getVoteForProbability(holder, item, stock) {
     const health = Number(stock.financialHealth) || 0;
     const clamp = value => Math.max(0.02, Math.min(0.98, value));
+    // B3: Gwardia głosuje według relacji z graczem w spółkach z udziałem funduszu.
+    if (holder.entity?.isGuard && typeof getRelation === 'function' && getFundStakePct(stock) >= 0.05) {
+        const relation = getRelation(holder.entity.id);
+        if (relation <= RELATION_HOSTILE) return item.kind === 'board' ? 0.1 : 0.02;
+        if (relation >= RELATION_FRIENDLY && item.kind === 'activist') return 0.85;
+    }
     if (item.kind === 'board') {
         if (holder.kind === 'insiders') return 1;
         if (holder.kind === 'state' || holder.kind === 'city') return 0.9;

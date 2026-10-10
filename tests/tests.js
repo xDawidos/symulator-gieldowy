@@ -3206,6 +3206,91 @@ group('Balans B2: poczta i powiadomienia', () => {
 // Uruchomienie
 // --------------------------------------------------------------------------------
 
+group('Balans B3: cele korporacji, przyzwoity fundusz, obligacje projektowe, Gwardia', () => {
+    function world() {
+        const a = makeCompany('AAA', { cash: 5_000_000 });
+        resetWorld([a]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        macro = createMacroState(); oversight = createOversight(); specialProjects = createSpecialProjects();
+        playerCash = 1_000_000;
+        return a;
+    }
+
+    test('cele: 2 losowe cele, spełniony +5, niespełniony −3', () => {
+        world();
+        const goals = ensureCorporateGoals();
+        assert(goals.ids.length === 2, 'dwa cele');
+        goals.ids = ['compliance', 'board'];
+        const result = settleCorporateGoals();
+        assert(result.delta === 5 - 3, `delta ${result.delta}`);
+        assert(corporation.goals.ids.length === 2 && corporation.lastGoals.length === 2, 'nowe cele przydzielone');
+    });
+
+    test('cele: dywidendy i udział w projekcie są liczone', () => {
+        world();
+        ensureCorporateGoals();
+        noteCorporateGoal('dividends', getFundAssets() * 0.03);
+        noteCorporateGoal('project');
+        corporation.goals.ids = ['dividends', 'project'];
+        assert(getCorporateGoalsView().every(goal => goal.done), 'spełnione');
+    });
+
+    test('przyzwoity fundusz: dotacje obniżają karę o 25%', () => {
+        world();
+        playerWallet.cash = 1e6;
+        const cash = playerCash;
+        punishEntity('player', 'KNF');
+        const normal = cash - playerCash;
+        oversight = createOversight();
+        donateToInstitution('knf', getDecentFundThreshold() + 100);
+        assert(isDecentFund(), 'status');
+        const cash2 = playerCash;
+        punishEntity('player', 'KNF');
+        const reduced = cash2 - playerCash;
+        assert(reduced < normal * 0.8, `kara ${reduced} vs ${normal}`);
+    });
+
+    test('obligacje projektowe: odsetki, wykup z premią, liczą się do aktywów', () => {
+        const a = world();
+        const b = makeCompany('BBB', { cash: 5_000_000 });
+        stocks.push(b);
+        const project = { id: 'pX', name: 'Test', icon: '🏗️', cost: 1_000_000, quarters: 2, participants: [{ symbol: 'AAA', name: a.name, amount: 450_000 }, { symbol: 'BBB', name: b.name, amount: 450_000 }], status: 'building', progress: 0 };
+        specialProjects.active.push(project);
+        const assets = getFundAssets();
+        assert(buyProjectBond('pX', 50_000), 'zakup');
+        assert(Math.abs(getFundAssets() - assets) < 1, 'aktywa bez zmian przy zakupie');
+        const cash = playerCash;
+        payProjectBondInterest(project);
+        assert(playerCash > cash, 'odsetki');
+        const before = playerCash;
+        redeemProjectBonds(project, true);
+        assert(playerCash - before >= 50_000 * 1.05 - 1 && getFundProjectBondsValue() === 0, 'wykup z premią');
+    });
+
+    test('obligacje projektowe: upadek w budowie = odzysk 50%', () => {
+        world();
+        const project = { id: 'pY', name: 'Test', icon: '🏗️', cost: 1_000_000, quarters: 2, participants: [], status: 'building', progress: 0.5 };
+        specialProjects.active.push(project);
+        buyProjectBond('pY', 20_000);
+        const cash = playerCash;
+        expireProject(project, 'test');
+        assert(Math.abs(playerCash - cash - 10_000) < 1, 'połowa');
+    });
+
+    test('wroga Gwardia głosuje przeciw na walnych spółek funduszu', () => {
+        const a = world();
+        botRelations = createBotRelations();
+        const guard = spawnGuardFund();
+        playerPortfolio.AAA = { shares: a.totalShares * 0.1, avgPrice: 100, assetType: 'stock' };
+        botRelations.values[guard.id] = -60;
+        const holder = { kind: 'ai', entity: guard };
+        assert(getVoteForProbability(holder, { kind: 'board', type: 'dividend' }, a) <= 0.1, 'przeciw');
+        botRelations.values[guard.id] = 60;
+        assert(getVoteForProbability(holder, { kind: 'activist', type: 'raiseDividend' }, a) >= 0.8, 'przyjazna popiera wnioski');
+    });
+});
+
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

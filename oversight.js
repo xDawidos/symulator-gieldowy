@@ -81,10 +81,20 @@ function donateToInstitution(kind, amount) {
     if (!institution || !(amount >= 100)) { showToast('Dotacja: minimum 100 zł.', 'warning'); return false; }
     if (playerWallet.cash < amount) { showToast('Za mało pieniędzy w portfelu prywatnym.', 'error'); return false; }
     playerWallet.cash -= amount;
+    oversight.decentScore = (Number(oversight.decentScore) || 0) + amount;
     recordPayment('player-wallet', 'external:skarb-panstwa', amount, `Dotacja: ${kind === 'police' ? 'Policja' : 'KNF'}`);
     const upgraded = fundInstitution(institution, amount);
     showToast(upgraded ? `${kind === 'police' ? 'Policja' : 'KNF'} awansuje na poziom ${institution.level}!` : 'Dziękujemy za wsparcie.', 'success');
     return true;
+}
+
+/** B3: reputacja „przyzwoitego funduszu” z dotacji (wygasa ok. 10% na kwartał). */
+function getDecentFundThreshold() {
+    return Math.max(5000, (typeof getFundAssets === 'function' ? getFundAssets() : 0) * 0.005);
+}
+
+function isDecentFund() {
+    return (Number(oversight?.decentScore) || 0) >= getDecentFundThreshold();
 }
 
 /** Łapówka dla policji (od korupcji 40): spokój od śledztw, ale korupcja rośnie i bywa ujawniona. */
@@ -214,7 +224,7 @@ function punishEntity(id, institutionName) {
     const ai = id === 'player' ? null : aiCompetitors.find(a => a.id === id);
     const name = ai ? ai.name : 'Twój fundusz';
     const assets = ai ? ai.cash : getFundAssets();
-    const fine = Math.round(Math.max(500, assets * STRIKE_FINES[Math.min(record.strikes, STRIKE_FINES.length) - 1]));
+    const fine = Math.round(Math.max(500, assets * STRIKE_FINES[Math.min(record.strikes, STRIKE_FINES.length) - 1]) * (!ai && isDecentFund() ? 0.75 : 1));
     let seized = 0;
 
     if (ai) {
@@ -292,7 +302,8 @@ function processOversightQuarterly() {
         record.suspicion = Math.max(0, record.suspicion * 0.85);
     }
     // Rutynowa kontrola KNF dużego funduszu: czysta = zaufanie klientów rośnie.
-    if (playerFund && Math.random() < 0.1 * getKnfAttention() && (getRecord('player').suspicion < 5)) {
+    const decent = isDecentFund();
+    if (playerFund && Math.random() < (decent ? 0.2 : 0.1) * getKnfAttention() && (getRecord('player').suspicion < (decent ? 15 : 5))) {
         playerFund.trust = Math.min(100, playerFund.trust + 2);
         logEvent('✅ Rutynowa kontrola KNF w Twoim funduszu: bez zastrzeżeń. Klienci to doceniają.', 'review');
     }
@@ -300,6 +311,7 @@ function processOversightQuarterly() {
     // Korupcja: nowe czyny, walka instytucji, powrót do poziomu bazowego.
     oversight.corruption = clampValue(oversight.corruption + oversight.pendingCorruption - (police + knf) * 3 + (CORRUPTION_BASE - oversight.corruption) * 0.1, 0, 100); // testy ogólne: bez gracza ~15–25
     oversight.pendingCorruption = 0;
+    oversight.decentScore = (Number(oversight.decentScore) || 0) * 0.9;
 }
 
 function hasCeoTrait(stock, id) {
@@ -353,6 +365,7 @@ function renderOversightPanel() {
             <div class="bank-ticker-item"><span>Uwaga KNF wobec funduszu</span><strong>${(getKnfAttention() * 100).toFixed(0)}%</strong></div>
             <div class="bank-ticker-item"><span>Podejrzenia wobec funduszu</span><strong class="${suspicion.cls}">${suspicion.label}</strong></div>
             <div class="bank-ticker-item"><span>Przewinienia</span><strong>${record.strikes}/${CONVICTION_STRIKES}</strong></div>
+            <div class="bank-ticker-item" title="Dotacje dla policji i KNF: kary niższe o 25%, kontrole KNF częściej kończą się czysto. Nie zmniejszają podejrzeń."><span>Przyzwoity fundusz</span><strong class="${isDecentFund() ? 'text-up' : ''}">${isDecentFund() ? '✅ tak' : `${formatZl(oversight.decentScore || 0, 0)} / ${formatZl(getDecentFundThreshold(), 0)}`}</strong></div>
             <div class="bank-ticker-item"><span>Wpływy mafii</span><strong>${typeof getMafiaStage === 'function' ? `${getMafiaStage().icon} ${getMafiaStage().name}` : '—'}</strong></div>
         </div>
         <div class="oversight-gauge"><span style="width:${oversight.corruption}%"></span></div>

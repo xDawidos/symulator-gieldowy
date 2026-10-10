@@ -41,7 +41,7 @@ const TIMED_PROJECT_TEMPLATES = [
 let specialProjects = createSpecialProjects();
 
 function createSpecialProjects() {
-    return { completed: [], active: [], timedOffers: [], nextId: 1 };
+    return { completed: [], active: [], timedOffers: [], bonds: [], nextId: 1 };
 }
 
 function ensureSpecialProjects() {
@@ -148,6 +148,7 @@ function joinConsortium(projectId, symbol, amount) {
     if (!(amount >= project.cost * 0.05)) { showToast(`Minimalny wkład: ${formatProjectMoney(project.cost * 0.05)}.`, 'warning'); return false; }
     if (stock.cash < amount) { showToast(`${stock.name} nie ma tyle gotówki.`, 'error'); return false; }
     project.participants.push({ symbol, name: stock.name, amount, player: true });
+    if (typeof noteCorporateGoal === 'function') noteCorporateGoal('project');
     logEvent(`🏗️ ${stock.name} (spółka Twojego funduszu) dołącza do konsorcjum ${project.name} z wkładem ${formatProjectMoney(amount)}.`, 'review');
     return true;
 }
@@ -155,7 +156,7 @@ function joinConsortium(projectId, symbol, amount) {
 /** Start budowy: wpłaty uczestników (gotówka → inwestycja w aktywach), wykonawca. */
 function startProjectBuild(project) {
     const builder = findBuilder(project);
-    const needed = project.cost * (1 - BUILDER_SHARE);
+    const needed = project.cost * (1 - BUILDER_SHARE) - getProjectBondTotal(project);
     const funding = project.participants.filter(p => stocks.some(s => s.symbol === p.symbol && s.cash >= p.amount)).reduce((sum, p) => sum + p.amount, 0);
     if (!builder || funding < needed * 0.999) return false;
     // Skalowanie wkładów do kosztu (nadwyżka nie jest pobierana).
@@ -181,6 +182,7 @@ function startProjectBuild(project) {
 
 function completeProject(project) {
     const quarter = getProjectQuarter();
+    redeemProjectBonds(project, true);
     const total = getProjectFunding(project) + (project.builder?.amount || 0);
     const until = project.timed ? quarter + Math.min(MAX_TIMED_BONUS_QUARTERS, project.bonusQuarters || MAX_TIMED_BONUS_QUARTERS) : null;
     const members = [...project.participants, ...(project.builder ? [{ ...project.builder, builder: true }] : [])];
@@ -223,6 +225,7 @@ function processSpecialProjectsQuarterly() {
                 if (project.waited >= 4) expireProject(project, 'zabrakło finansowania');
             }
         } else if (project.status === 'building') {
+            payProjectBondInterest(project);
             project.progress = Math.min(1, project.progress + 1 / project.quarters);
             if (project.progress >= 1) completeProject(project);
         }
@@ -270,6 +273,7 @@ function topUpConsortium(project) {
 
 function expireProject(project, reason) {
     specialProjects.active = specialProjects.active.filter(p => p !== project);
+    redeemProjectBonds(project, false);
     logEvent(`❌ Projekt ${project.icon} ${project.name} nie dojdzie do skutku (${reason}).`, 'city');
 }
 
@@ -292,9 +296,101 @@ function launchTimedProject(templateId, symbol, amount) {
 // WIDOK: zakładka „Projekty specjalne” w oknie Miasta
 // =================================================================================
 
+// =================================================================================
+// OBLIGACJE PROJEKTOWE (B3): fundusz bez większości finansuje część projektu długiem
+// =================================================================================
+
+const PROJECT_BOND_RATE = 0.07;          // rocznie, wypłacane co kwartał przez konsorcjum
+const PROJECT_BOND_PREMIUM = 0.05;       // premia przy ukończeniu
+const PROJECT_BOND_MAX_SHARE = 0.2;      // obligacje do 20% kosztu projektu
+const PROJECT_BOND_FUND_LIMIT = 0.1;     // fundusz: najwyżej 10% aktywów w obligacjach projektowych
+
+function getProjectBonds() {
+    ensureSpecialProjects();
+    if (!Array.isArray(specialProjects.bonds)) specialProjects.bonds = [];
+    return specialProjects.bonds;
+}
+
+function getProjectBondTotal(project) {
+    return getProjectBonds().filter(bond => bond.projectId === project.id).reduce((sum, bond) => sum + bond.principal, 0);
+}
+
+function getFundProjectBondsValue() {
+    return typeof specialProjects === 'object' && specialProjects ? getProjectBonds().reduce((sum, bond) => sum + bond.principal, 0) : 0;
+}
+
+/** Konsorcjum płaci proporcjonalnie do wkładów; zwraca kwotę faktycznie zapłaconą. */
+function chargeConsortium(project, amount) {
+    const total = getProjectFunding(project);
+    let paid = 0;
+    for (const member of project.participants) {
+        const stock = stocks.find(s => s.symbol === member.symbol);
+        if (!stock || stock.isBankrupt || total <= 0) continue;
+        const due = amount * member.amount / total;
+        const pay = Math.max(0, Math.min(due, stock.cash));
+        if (pay <= 0) continue;
+        adjustCompanyCash(stock, -pay);
+        adjustBalanceSheet(stock, { assets: -pay, retainedEarnings: -pay });
+        paid += pay;
+    }
+    return paid;
+}
+
+function buyProjectBond(projectId, amount) {
+    const project = specialProjects.active.find(p => p.id === projectId);
+    amount = Math.floor(Number(amount));
+    if (!project) { showToast('Projekt nie jest już realizowany.', 'warning'); return false; }
+    const room = project.cost * PROJECT_BOND_MAX_SHARE - getProjectBondTotal(project);
+    const fundRoom = getFundAssets() * PROJECT_BOND_FUND_LIMIT - getFundProjectBondsValue();
+    if (!(amount >= 100)) { showToast('Minimalna kwota obligacji: 100 zł.', 'warning'); return false; }
+    if (amount > room) { showToast(`Emisja obligacji tego projektu: zostało ${formatZl(Math.max(0, room), 0)}.`, 'warning'); return false; }
+    if (amount > fundRoom) { showToast(`Limit funduszu (10% aktywów): zostało ${formatZl(Math.max(0, fundRoom), 0)}.`, 'warning'); return false; }
+    if (playerCash < amount) { showToast('Za mało gotówki funduszu.', 'error'); return false; }
+    playerCash -= amount;
+    recordPayment('player-fund', 'external:konsorcjum', amount, `Obligacje projektowe: ${project.name}`);
+    getProjectBonds().push({ projectId: project.id, name: project.name, icon: project.icon, principal: amount, quarter: getProjectQuarter(), interestPaid: 0 });
+    if (typeof noteCorporateGoal === 'function') noteCorporateGoal('project');
+    logEvent(`📜 Fundusz kupuje obligacje projektowe ${project.icon} ${project.name} za ${formatZl(amount, 0)} (${(PROJECT_BOND_RATE * 100).toFixed(0)}% rocznie + ${(PROJECT_BOND_PREMIUM * 100).toFixed(0)}% premii przy ukończeniu).`, 'review');
+    return true;
+}
+
+/** Odsetki co kwartał w trakcie budowy; brak gotówki konsorcjum = odsetki przepadają. */
+function payProjectBondInterest(project) {
+    for (const bond of getProjectBonds().filter(b => b.projectId === project.id)) {
+        const paid = chargeConsortium(project, bond.principal * PROJECT_BOND_RATE / 4);
+        if (paid > 0) { playerCash += paid; bond.interestPaid += paid; recordPayment('external:konsorcjum', 'player-fund', paid, `Odsetki: obligacje ${project.name}`); }
+    }
+}
+
+/** Wykup: przy ukończeniu nominał + premia od konsorcjum; projekt upadły w trakcie budowy = odzysk 50%, przed budową = zwrot całości. */
+function redeemProjectBonds(project, completed) {
+    const bonds = getProjectBonds().filter(b => b.projectId === project.id);
+    if (!bonds.length) return;
+    let returned = 0, principal = 0;
+    for (const bond of bonds) {
+        principal += bond.principal;
+        if (completed) returned += chargeConsortium(project, bond.principal * (1 + PROJECT_BOND_PREMIUM));
+        else returned += project.status === 'building' ? bond.principal * 0.5 : bond.principal;
+    }
+    playerCash += returned;
+    if (returned > 0) recordPayment('external:konsorcjum', 'player-fund', returned, `Wykup obligacji: ${project.name}`);
+    const remaining = getProjectBonds().filter(b => b.projectId !== project.id); // ensureSpecialProjects podmienia obiekt
+    specialProjects.bonds = remaining;
+    logEvent(`📜 Obligacje projektowe ${project.icon} ${project.name}: wykup ${formatZl(returned, 0)} (nominał ${formatZl(principal, 0)})${returned < principal ? ' — strata funduszu' : ''}.`, 'review');
+}
+
 function renderProjectStages(project) {
     const info = getInvestmentStageInfo({ progress: project.progress, totalDuration: 1 });
     return renderStageBar(info.segments, info.current.label);
+}
+
+function renderProjectBondForm(project) {
+    if (!playerFund) return '';
+    const own = getProjectBonds().filter(b => b.projectId === project.id).reduce((sum, b) => sum + b.principal, 0);
+    const room = Math.max(0, Math.min(project.cost * PROJECT_BOND_MAX_SHARE - getProjectBondTotal(project), getFundAssets() * PROJECT_BOND_FUND_LIMIT - getFundProjectBondsValue()));
+    return `<p class="text-xs text-muted">📜 Obligacje projektowe: ${(PROJECT_BOND_RATE * 100).toFixed(0)}% rocznie od konsorcjum, +${(PROJECT_BOND_PREMIUM * 100).toFixed(0)}% przy ukończeniu, upadek w budowie = odzysk 50%.${own ? ` Twoje: ${formatZl(own, 0)}.` : ''}</p>
+        ${room >= 100 ? `<div class="bank-card-form"><input type="text" inputmode="numeric" id="bond-amt-${project.id}" value="${Math.floor(room)}" aria-label="Kwota obligacji">
+        <button class="btn-secondary" onclick="buyProjectBond('${project.id}', parseFloat(document.getElementById('bond-amt-${project.id}').value)); renderCitySpecialProjects();">Kup obligacje (fundusz)</button></div>` : ''}`;
 }
 
 function renderCitySpecialProjects() {
@@ -320,6 +416,7 @@ function renderCitySpecialProjects() {
             <p class="text-sm">Koszt ${formatProjectMoney(project.cost)} · zebrano ${formatProjectMoney(funding)} · wykonawca: ${escapeHtml(project.builder?.name || '—')}</p>
             <p class="text-xs text-muted">Konsorcjum (${project.participants.length}/${MAX_CONSORTIUM_MEMBERS}): ${project.participants.map(p => `${p.player ? '⭐ ' : ''}${escapeHtml(p.name)}`).join(', ') || '—'}</p>
             ${join}
+            ${renderProjectBondForm(project)}
         </article>`;
     }).join('');
 

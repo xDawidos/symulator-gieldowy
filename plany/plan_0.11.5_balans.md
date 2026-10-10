@@ -43,6 +43,7 @@ Kolejność: B1 → B2 → B3 → B4 → B5. Po każdej części testy, przebieg
 - **Dotacje dla policji i KNF:** reputacja „przyzwoitego funduszu”. Kolejne kontrole KNF częściej kończą się czysto (+zaufanie), a mandaty są niższe o 25%. Bez wpływu na podejrzenia, żeby nie było „odpustu”.
 - **Projekty specjalne dla funduszu bez większości:** obligacje projektowe. Fundusz kupuje część finansowania jako dług (oprocentowanie + premia przy ukończeniu, ryzyko przy niepowodzeniu). Bonusy wzrostu w karcie spółki w formie widocznej plakietki.
 - **Gwardia widoczna:** relacja jak z botami w zakładce Firma. Przyjazna Gwardia proponuje współinwestycje w zbrojeniówkę. Wroga Gwardia głosuje przeciw na walnych spółek, w których fundusz ma udziały.
+- **Wdrożone w B3:** pula 6 celów: rada nadzorcza w 2 spółkach, PPP/konsorcjum/obligacje projektu, zero compliance, wynik ponad lokatę i inflację, dywersyfikacja (≥ 6 spółek, żadna > 25% aktywów; zamiast limitu ETF, który był spełniony „za darmo”), dywidendy ≥ 2% aktywów. Cel „debiut startupu” odłożony. Premia za cel: 5% budżetu korporacji (max 10 tys. zł) do portfela prywatnego. Przyzwoity fundusz: dotacje ≥ max(5 tys. zł, 0,5% aktywów), wygasają 10% na kwartał. Obligacje projektowe: 7% rocznie od konsorcjum, +5% przy ukończeniu, upadek w budowie = odzysk 50%; do 20% kosztu projektu i 10% aktywów funduszu.
 
 ## B4. Pogłębienie płytkich mechanik
 

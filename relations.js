@@ -276,7 +276,8 @@ function offerBotBlock(ai) {
         .map(([symbol, holding]) => ({ stock: stocks.find(s => s.symbol === symbol), shares: holding.shares }))
         .filter(item => item.stock && !item.stock.assetType && !item.stock.isBankrupt && item.shares > 0 && canAccessExchange(item.stock.exchange));
     if (!holdings.length) return null;
-    const pick = getRandomElement(holdings);
+    const defense = ai.isGuard && typeof isDefenseCompany === 'function' ? holdings.filter(item => isDefenseCompany(item.stock)) : [];
+    const pick = getRandomElement(defense.length ? defense : holdings);
     const shares = Math.max(1, Math.floor(Math.min(pick.shares * 0.5, pick.stock.totalShares * 0.03)));
     const price = pick.stock.price * (1 - BOT_BLOCK_DISCOUNT);
     botRelations.blockOffer = { aiId: ai.id, symbol: pick.stock.symbol, shares, price };
@@ -361,10 +362,13 @@ function renderCorporationFirm() {
     const targets = getPlayerTargets().map(t => `
         <li class="firm-target ${t.done ? 'done' : ''}"><span>${t.done ? '✅' : '🎯'} ${escapeHtml(t.label)}</span><strong>${escapeHtml(t.value)}</strong>
         <span class="firm-target-bar"><span style="width:${(t.progress * 100).toFixed(0)}%"></span></span></li>`).join('');
+    const goals = getCorporateGoalsView().map(t => `
+        <li class="firm-target ${t.done ? 'done' : ''}"><span>${t.done ? '✅' : '🎯'} ${escapeHtml(t.label)}</span><strong>${escapeHtml(t.value)}</strong>
+        <span class="firm-target-bar"><span style="width:${(t.progress * 100).toFixed(0)}%"></span></span></li>`).join('');
     const relations = getRelationPeople().map(person => {
         const value = getRelation(person.id);
         const mood = getRelationMood(value);
-        return `<tr><td>${escapeHtml(person.name)}<span class="text-xs text-muted d-block">${person.kind === 'colleague' ? `kolega · ${escapeHtml(CAREER_POSITIONS[getPositionIndex(person.entity.positionId)].name)}` : 'inwestor giełdowy'}</span></td>
+        return `<tr><td>${escapeHtml(person.name)}<span class="text-xs text-muted d-block">${person.kind === 'colleague' ? `kolega · ${escapeHtml(CAREER_POSITIONS[getPositionIndex(person.entity.positionId)].name)}` : person.entity?.isGuard ? 'fundusz patriotyczny · głosuje na walnych, współinwestuje w obronność' : 'inwestor giełdowy'}</span></td>
             <td>${renderRelationBar(value)}</td><td class="${mood.cls}">${mood.icon} ${value.toFixed(0)} · ${mood.label}</td>
             <td><div class="d-flex gap-1"><input type="text" inputmode="numeric" class="w-xs" id="gift-${person.id}" value="200" aria-label="Kwota prezentu">
                 <button class="btn-xs" onclick="corporationAction(giveGiftToBot, '${person.id}', parseFloat(document.getElementById('gift-${person.id}').value))">🎁</button></div></td></tr>`;
@@ -379,6 +383,9 @@ function renderCorporationFirm() {
                 <div class="firm-boss"><strong>${escapeHtml(boss.name)}</strong>${boss.positionId ? `<span class="text-xs text-muted">${escapeHtml(CAREER_POSITIONS[getPositionIndex(boss.positionId)].name)}</span>` : ''}
                     <span class="${bossMood.cls}">${bossMood.icon} ${boss.opinion >= RELATION_FRIENDLY ? 'lubi Cię' : boss.opinion <= RELATION_HOSTILE ? 'nie lubi Cię' : boss.opinion > 10 ? 'ma o Tobie dobre zdanie' : boss.opinion < -10 ? 'ma zastrzeżenia' : 'jest neutralny'} (${boss.opinion.toFixed(0)})</span></div>
                 <h4>Targety</h4><ul class="list-plain firm-targets">${targets}</ul>
+                <h4>Cele zarządu na ten cykl oceny</h4>
+                <p class="fund-muted">Spełniony cel: +${GOAL_MET_BONUS} pkt oceny i premia z budżetu korporacji; niespełniony: −${GOAL_MISSED_PENALTY} pkt.</p>
+                <ul class="list-plain firm-targets">${goals}</ul>
             </section>
         </div>
         <h4>Relacje (−100…100)</h4>

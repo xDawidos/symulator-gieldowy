@@ -6473,6 +6473,7 @@ function payDividendToShareholders(stock, dividendPerShare) {
         if (typeof playerFund !== 'undefined' && playerFund) {
             // Fundusz nie płaci podatku od dywidend — dywidenda podnosi NAV.
             playerCash += grossDividend;
+            if (typeof noteCorporateGoal === 'function') noteCorporateGoal('dividends', grossDividend);
             logEvent(`💰 Fundusz otrzymuje ${grossDividend.toFixed(2)} zł dywidendy od ${stock.name}.`, 'review');
         } else {
             // Podatki (San Escobar)

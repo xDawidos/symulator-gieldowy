@@ -300,7 +300,130 @@ function closeCorporationPeriod(playerPeriod) {
     }
 
     checkMilestones(playerPeriod);
+    ensureCorporateGoals();
     if (playerPeriod.number % BOARD_REVIEW_EVERY_PERIODS === 0) runBoardEvaluation();
+}
+
+// =================================================================================
+// CELE KORPORACJI (KPI na cykl oceny) — B3
+// =================================================================================
+
+const GOAL_MET_BONUS = 5;
+const GOAL_MISSED_PENALTY = 3;
+
+function countBoardSeatCompanies() {
+    return typeof getBoardSeats === 'function' ? stocks.filter(s => !s.assetType && !s.isBankrupt && getBoardSeats(s).seats >= 1).length : 0;
+}
+
+function getUnreviewedComplianceHits() {
+    return (playerProfile?.cv || []).filter(entry => entry.type === 'compliance' && !entry.reviewed).length;
+}
+
+function getGoalCycleReturn(goals) {
+    return goals.startNav > 0 ? getFundNav() / goals.startNav - 1 : 0;
+}
+
+function getGoalCycleHurdle(goals) {
+    const years = Math.max(0, (macro?.quarter || 0) - goals.quarter) / 4;
+    return Math.max(getDepositRate(), macro?.inflation || 0) * years;
+}
+
+function getDiversificationStats() {
+    const assets = Math.max(1, getFundAssets());
+    const positions = stocks.filter(s => !s.assetType && (playerPortfolio[s.symbol]?.shares || 0) > 0)
+        .map(s => playerPortfolio[s.symbol].shares * s.price / assets);
+    return { count: positions.length, maxShare: positions.length ? Math.max(...positions) : 0 };
+}
+
+const CORPORATE_GOAL_POOL = {
+    board: {
+        label: 'Miejsce w radzie nadzorczej w 2 spółkach',
+        value: () => `${countBoardSeatCompanies()}/2`,
+        progress: () => Math.min(1, countBoardSeatCompanies() / 2),
+        check: () => countBoardSeatCompanies() >= 2
+    },
+    project: {
+        label: 'Udział w PPP, konsorcjum lub obligacjach projektu',
+        value: goals => goals.progress.project || (playerFund?.ppp || []).length ? 'tak' : 'nie',
+        progress: goals => goals.progress.project || (playerFund?.ppp || []).length ? 1 : 0,
+        check: goals => Boolean(goals.progress.project || (playerFund?.ppp || []).length)
+    },
+    compliance: {
+        label: 'Zero przewinień compliance w cyklu',
+        value: () => `${getUnreviewedComplianceHits()} przewinień`,
+        progress: () => getUnreviewedComplianceHits() ? 0 : 1,
+        check: () => getUnreviewedComplianceHits() === 0
+    },
+    hurdle: {
+        label: 'Wynik cyklu powyżej lokaty i inflacji',
+        value: goals => `${(getGoalCycleReturn(goals) * 100).toFixed(1)}% vs ${(getGoalCycleHurdle(goals) * 100).toFixed(1)}%`,
+        progress: goals => { const h = getGoalCycleHurdle(goals); return h > 0 ? Math.max(0, Math.min(1, getGoalCycleReturn(goals) / h)) : 1; },
+        check: goals => getGoalCycleReturn(goals) >= getGoalCycleHurdle(goals)
+    },
+    diversify: {
+        label: 'Dywersyfikacja: ≥ 6 spółek, żadna > 25% aktywów',
+        value: () => { const d = getDiversificationStats(); return `${d.count} spółek, max ${(d.maxShare * 100).toFixed(0)}%`; },
+        progress: () => { const d = getDiversificationStats(); return Math.min(1, d.count / 6) * (d.maxShare > 0.25 ? 0.5 : 1); },
+        check: () => { const d = getDiversificationStats(); return d.count >= 6 && d.maxShare <= 0.25; }
+    },
+    dividends: {
+        label: 'Dywidendy z portfela ≥ 2% aktywów',
+        value: goals => `${formatZl(goals.progress.dividends || 0, 0)} / ${formatZl(getFundAssets() * 0.02, 0)}`,
+        progress: goals => Math.min(1, (goals.progress.dividends || 0) / Math.max(1, getFundAssets() * 0.02)),
+        check: goals => (goals.progress.dividends || 0) >= getFundAssets() * 0.02
+    }
+};
+
+/** Zarząd przydziela 2 losowe cele na cykl oceny. */
+function assignCorporateGoals() {
+    const ids = Object.keys(CORPORATE_GOAL_POOL).sort(() => Math.random() - 0.5).slice(0, 2);
+    corporation.goals = { ids, quarter: macro?.quarter || 0, startNav: playerFund ? getFundNav() : 0, progress: { project: false, dividends: 0 } };
+    return corporation.goals;
+}
+
+function ensureCorporateGoals() {
+    if (!corporation) return null;
+    if (!corporation.goals || !Array.isArray(corporation.goals.ids)) assignCorporateGoals();
+    if (!(corporation.goals.startNav > 0) && playerFund) corporation.goals.startNav = getFundNav();
+    return corporation.goals;
+}
+
+/** Zdarzenia liczone do celów: udział w projekcie, dywidendy. */
+function noteCorporateGoal(kind, amount = 0) {
+    const goals = ensureCorporateGoals();
+    if (!goals) return;
+    if (kind === 'project') goals.progress.project = true;
+    if (kind === 'dividends') goals.progress.dividends = (goals.progress.dividends || 0) + Math.max(0, amount);
+}
+
+function getCorporateGoalsView() {
+    const goals = ensureCorporateGoals();
+    if (!goals) return [];
+    return goals.ids.filter(id => CORPORATE_GOAL_POOL[id]).map(id => {
+        const goal = CORPORATE_GOAL_POOL[id];
+        return { id, label: goal.label, value: goal.value(goals), progress: goal.progress(goals), done: goal.check(goals) };
+    });
+}
+
+/** Rozliczenie celów przy ocenie: +5 za spełniony, −3 za niespełniony, premia z budżetu korporacji. */
+function settleCorporateGoals() {
+    const view = getCorporateGoalsView();
+    let delta = 0, bonus = 0;
+    for (const goal of view) {
+        delta += goal.done ? GOAL_MET_BONUS : -GOAL_MISSED_PENALTY;
+        if (goal.done) {
+            const pay = Math.round(Math.max(0, Math.min(corporation.budget * 0.05, 10000)));
+            if (pay > 0) {
+                corporation.budget -= pay;
+                playerWallet.cash += pay;
+                recordPayment('external:korporacja', 'player-wallet', pay, `Premia za cel: ${goal.label}`);
+                bonus += pay;
+            }
+        }
+    }
+    corporation.lastGoals = view.map(goal => ({ label: goal.label, done: goal.done }));
+    assignCorporateGoals();
+    return { delta, bonus, view };
 }
 
 // =================================================================================
@@ -358,6 +481,9 @@ function runBoardEvaluation() {
         participant.score = computeEvaluationScore(participant.periods, participant.trust, rankBonus, participant.complianceHits);
         participant.from = participant.positionId;
     });
+    const player = participants.find(p => p.isPlayer);
+    const goals = settleCorporateGoals();
+    player.score = Math.max(0, Math.min(100, player.score + goals.delta));
 
     applyPositionChanges(participants);
 
@@ -371,11 +497,13 @@ function runBoardEvaluation() {
     corporation.reviews.push(review);
     if (corporation.reviews.length > 10) corporation.reviews.shift();
 
-    const player = participants.find(p => p.isPlayer);
     corporation.lastPlayerScore = player.score;
     corporation.boardReputation = Math.max(0, Math.min(100, corporation.boardReputation + (player.score - 50) * 0.2));
 
     reportPlayerReview(player);
+    if (goals.view.length) {
+        logEvent(`🎯 Cele korporacji: ${goals.view.map(g => `${g.done ? '✅' : '❌'} ${g.label}`).join('; ')} (${goals.delta >= 0 ? '+' : ''}${goals.delta} pkt oceny${goals.bonus ? `, premia ${formatZl(goals.bonus, 0)} do portfela` : ''}). Nowe cele w zakładce Firma.`, 'review');
+    }
     syncExchangeAccessWithPosition();
     checkVictory();
     return review;
