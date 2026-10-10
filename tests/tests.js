@@ -3471,6 +3471,24 @@ group('Uwagi U1: błędy i exploity', () => {
     });
 });
 
+group('Uwagi U2: interfejs', () => {
+    test('zmiana tygodniowa liczona od zamknięcia tygodnia gry', () => {
+        const a = makeCompany('AAA');
+        resetWorld([a]);
+        a.price = 100; recordWeeklyCloses();
+        a.price = 110;
+        assertNear(getStockChangePct(a, 1), 0.1, 'zmiana +10%');
+    });
+
+    test('filtr posiadanych: fundusz albo konto prywatne', () => {
+        const a = makeCompany('AAA'); const b = makeCompany('BBB');
+        resetWorld([a, b]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        playerPortfolio.AAA = { shares: 5, avgPrice: 10, assetType: 'stock' };
+        assert(isStockOwnedByPlayer(a) && !isStockOwnedByPlayer(b), 'tylko posiadane');
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

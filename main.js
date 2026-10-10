@@ -324,6 +324,8 @@ gameTimers.weekly = setInterval(() => {
         processBankStartupSponsorship(); //
 
 
+        if (typeof recordWeeklyCloses === 'function') recordWeeklyCloses(); // U2: zmiana tygodniowa w tabeli spółek
+
         // Fundusz gracza: opłata za zarządzanie, zaufanie, decyzje klientów
         processFundWeekly();
         processFundPawnLoansWeekly(); // zastawy funduszy w lombardzie (finance.js)

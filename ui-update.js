@@ -1,6 +1,6 @@
 // Sektorowe chipsy
 function setSectorChip(el, sector) {
-    document.querySelectorAll('.sector-chip').forEach(c => c.classList.remove('active'));
+    document.querySelectorAll('.sector-chip:not(.owned-chip)').forEach(c => c.classList.remove('active'));
     el.classList.add('active');
     const sel = document.getElementById('sector-filter');
     if (sel) {

@@ -5254,7 +5254,7 @@ function makeSubsidiary(parentStock, childStock) {
     }
      // Odśwież też opis, jeśli jest otwarty
     if (document.getElementById('description-modal')?.style.display === 'block') {
-        const currentSymbol = document.getElementById('description-modal-title').textContent.match(/\(([^)]+)\)/)?.[1];
+        const currentSymbol = typeof companyCardView !== 'undefined' ? companyCardView.symbol : null;
          if(currentSymbol === parentStock.symbol || currentSymbol === childStock.symbol) {
              openDescriptionModal(currentSymbol);
          }

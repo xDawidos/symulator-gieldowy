@@ -1,7 +1,8 @@
 // ui.js (Połączony)
 // Funkcje odpowiedzialne za aktualizację i wyświetlanie interfejsu użytkownika
 
-let startupPanelCollapsed = false; // <<< DODANE Z ui2.js
+let ownedOnlyFilter = false; // U2: filtr „tylko posiadane” (fundusz lub konto prywatne)
+let startupPanelCollapsed = true; // U2: domyślnie zwinięty (stan zapamiętany w localStorage)
 
 function getCurrentInputValues() {
     const values = {};
@@ -70,6 +71,8 @@ function displayStocks(previousInputValues = {}) {
     );
   }
 
+  if (ownedOnlyFilter) baseStocksToDisplay = baseStocksToDisplay.filter(isStockOwnedByPlayer);
+
   stockTableBody.innerHTML = '';
   // Zakładka poziomu rynku (ui-update.js: setMarketLevel) — pokazujemy tylko wybraną giełdę.
   const sortedExchanges = Object.keys(exchanges)
@@ -125,13 +128,7 @@ function displayStocks(previousInputValues = {}) {
 
     const availableShares = getAvailableShares(stock);
 
-    let changePct = 0;
-    if (Array.isArray(stock.priceHistory) && stock.priceHistory.length >= 2) {
-      const prevPrice = stock.priceHistory[stock.priceHistory.length - 2];
-      if (prevPrice > 0) {
-        changePct = ((stock.price - prevPrice) / prevPrice) * 100;
-      }
-    }
+    const changePct = getStockChangePct(stock, 1) * 100; // U2: zmiana tygodniowa w czasie gry
 
     const changeClass = changePct > 0 ? 'up' : changePct < 0 ? 'down' : 'flat';
     const changeSign = changePct > 0 ? '+' : '';
@@ -273,7 +270,7 @@ function displayStocks(previousInputValues = {}) {
       priceCell.appendChild(phaseBadge);
     }
 
-    // KOMÓRKA 4: ZMIANA 24h
+    // KOMÓRKA 4: ZMIANA TYGODNIOWA (czas gry)
     const changeCell = row.insertCell();
     changeCell.classList.add('cell-number');
     changeCell.innerHTML = `
@@ -676,6 +673,38 @@ function openSkillsModal() {
     }
 }
 
+
+// =================================================================================
+// U2: ZMIANA TYGODNIOWA, FILTR POSIADANYCH
+// =================================================================================
+
+/** Co tydzień gry: cena zamknięcia tygodnia (do 14 tygodni wstecz). */
+function recordWeeklyCloses() {
+    for (const stock of stocks) {
+        if (stock.isBankrupt) continue;
+        if (!Array.isArray(stock.weeklyCloses)) stock.weeklyCloses = [];
+        stock.weeklyCloses.push(stock.price);
+        if (stock.weeklyCloses.length > 14) stock.weeklyCloses.shift();
+    }
+}
+
+/** Zmiana kursu względem zamknięcia sprzed `weeks` tygodni gry (ułamek). */
+function getStockChangePct(stock, weeks = 1) {
+    const closes = stock?.weeklyCloses || [];
+    const ref = closes[closes.length - weeks];
+    return ref > 0 ? stock.price / ref - 1 : 0;
+}
+
+function isStockOwnedByPlayer(stock) {
+    return (playerPortfolio[stock.symbol]?.shares || 0) > 0 || (playerWallet?.portfolio?.[stock.symbol]?.shares || 0) > 0
+        || (playerPortfolio[stock.symbol]?.investedAmount || 0) > 0;
+}
+
+function toggleOwnedFilter(chip) {
+    ownedOnlyFilter = !ownedOnlyFilter;
+    if (chip) chip.classList.toggle('active', ownedOnlyFilter);
+    displayStocks(getCurrentInputValues());
+}
 
 function toggleExchangeVisibility(exchangeKey) {
     exchangeCollapseState[exchangeKey] = !exchangeCollapseState[exchangeKey];
@@ -1260,10 +1289,6 @@ function openStockDetailsModal(symbol) {
     if (badges) badges.innerHTML = renderDividendBadges(stock); // arystokrata, stopa dywidendy, seria (dividends.js)
     renderOwnershipPieChart(symbol); // Wywołujemy naszą funkcję do renderowania wykresu
 
-    const invButton = document.getElementById('details-investments-btn');
-    if (invButton) invButton.onclick = () => openCompanyInvestments(symbol);
-    const govButton = document.getElementById('details-governance-btn');
-    if (govButton) govButton.onclick = () => openGovernanceModal(symbol);
 
     const insights = document.getElementById('analyst-insights');
     if (insights) {
@@ -1846,138 +1871,157 @@ function applyInitialTheme() {
   document.body.classList.toggle('dark-mode', currentTheme === 'dark');
 }
 
-function openDescriptionModal(symbol) {
+// =================================================================================
+// U2: KARTA SPÓŁKI (okno informacji): nagłówek, kafelki wskaźników, zakładki
+// =================================================================================
+
+let companyCardView = { symbol: null, tab: 'overview' };
+
+const COMPANY_CARD_TABS = [
+    ['overview', '📋 Przegląd'],
+    ['finance', '📊 Finanse'],
+    ['owners', '👥 Akcjonariat'],
+    ['manage', '🏛️ Zarządzanie']
+];
+
+function openDescriptionModal(symbol, tab = null) {
     const stock = stocks.find(s => s.symbol === symbol);
-    if (!stock) return;
-    console.log(`[MODAL_DESC] Otwieranie opisu dla: ${symbol}`, stock);
-
     const modal = document.getElementById('description-modal');
-    document.getElementById('description-modal-title').textContent = `${stock.name} (${stock.symbol})`;
-    document.getElementById('description-modal-content').innerHTML = assembleDescription(stock);
-
-    const phaseInfoDiv = document.getElementById('description-modal-phase'); // Potrzebny nowy div w HTML
-    console.log(`[MODAL_DESC] ${symbol} - Wartość stock.corporatePhase:`, stock.corporatePhase);
-    if (phaseInfoDiv && stock.corporatePhase && getSkillLevel('financialAnalyst') >= 1) {
-         phaseInfoDiv.innerHTML = `<strong>Faza cyklu życia:</strong> ${stock.corporatePhase}`;
-         // Można dodać kolorowanie w zależności od fazy
-         if(stock.corporatePhase === CORPORATE_PHASES.GOLDEN_YEAR || stock.corporatePhase === CORPORATE_PHASES.GROWTH) phaseInfoDiv.style.color = 'var(--color-up)';
-         else if(stock.corporatePhase === CORPORATE_PHASES.DECLINE || stock.corporatePhase === CORPORATE_PHASES.SHADOW_DESCENT) phaseInfoDiv.style.color = 'var(--color-down)';
-         else phaseInfoDiv.style.color = ''; // Domyślny kolor
-
-         phaseInfoDiv.style.display = 'block';
-    } else if (phaseInfoDiv) {
-        phaseInfoDiv.style.display = 'none';
-        console.log(`[MODAL_DESC] ${symbol} - Ukrywanie sekcji fazy (brak elementu lub brak danych)`);
-    }
-
-    const ceoInfoDiv = document.getElementById('description-modal-ceo');
-    ceoInfoDiv.innerHTML = ''; // Wyczyśćmy na start
-
-    if (stock.ceo && stock.ceo.name) {
-        const tenureYears = Math.floor(stock.ceo.tenure / 4);
-        let ceoHTML = `
-            <div class="d-flex items-center gap-3 mb-2">
-                <div class="stat-tile text-center p-2">
-                    <span class="text-xl">👔</span>
-                </div>
-                <div class="flex-1">
-                    <h4 class="m-0">${stock.ceo.name}</h4>
-                    <p class="my-1 text-sm text-muted">Wiek: ${stock.ceo.age}, Staż w firmie: ${tenureYears} lat</p>
-                </div>
-            </div>
-        `;
-        if (stock.ceo.traits && stock.ceo.traits.length > 0) {
-            ceoHTML += `<h4>Cechy:</h4><div class="ceo-traits-container">`;
-            stock.ceo.traits.forEach(trait => {
-                const traitData = ceoTraits[trait.id];
-                if (traitData) {
-                    ceoHTML += `<span class="ceo-trait" style="background-color: ${traitData.color};" title="${traitData.description}">${traitData.name}</span>`;
-                }
-            });
-            ceoHTML += '</div>';
-        }
-        ceoInfoDiv.innerHTML = ceoHTML;
-        ceoInfoDiv.style.display = 'block';
-    } else {
-        ceoInfoDiv.style.display = 'none';
-    }
-
-    const analyticalDiv = document.getElementById('description-modal-analytical');
-    analyticalDiv.innerHTML = '';
-    let indicatorsHTML = '<h4>Kluczowe Wskaźniki Finansowe:</h4>';
-    let indicatorsAdded = false;
-
-    console.log(`[MODAL_DESC] ${symbol} - Dane do wskaźników: balanceSheet=`, stock.balanceSheet, `quarterlyEarnings=`, stock.quarterlyEarnings, `totalShares=`, stock.totalShares);
-
-    // Sprawdzamy, czy spółka ma zaimplementowany bilans
-    if (stock.balanceSheet && stock.balanceSheet.assets > 0) {
-        // 1. Kapitalizacja Rynkowa
-        const marketCap = stock.price * stock.totalShares;
-        indicatorsHTML += `<p><strong>Kapitalizacja rynkowa:</strong> ${marketCap.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN</p>`;
-
-        // 2. Fundamenty (4 ostatnie kwartały): przychody, EBITDA, zysk, EPS, C/Z, C/WK, na akcję
-        const f = stock.fundamentals ? updateFundamentalRatios(stock) : null;
-        if (f) {
-            const money = value => Number.isFinite(value) ? `${value.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN` : 'N/A';
-            const perShare = value => Number.isFinite(value) ? `${value.toFixed(2)} PLN` : 'N/A';
-            const ratio = value => value === null || !Number.isFinite(value) ? (f.epsTtm < 0 ? 'Strata' : 'N/A') : value.toFixed(2);
-
-            indicatorsHTML += `<p><strong>Przychody (4 kw.):</strong> ${f.revenueTtm > 0 ? money(f.revenueTtm) : 'N/A'}</p>`;
-            indicatorsHTML += `<p><strong>EBITDA (4 kw.):</strong> ${money(f.ebitdaTtm)}</p>`;
-            indicatorsHTML += `<p><strong>Zysk netto (4 kw.):</strong> ${money(f.netIncomeTtm)}</p>`;
-            indicatorsHTML += `<p><strong>Zysk na akcję (EPS):</strong> ${perShare(f.epsTtm)}</p>`;
-            indicatorsHTML += `<p><strong>Cena/Zysk (C/Z):</strong> ${ratio(f.peRatio)}</p>`;
-            indicatorsHTML += `<p><strong>Sprzedaż na akcję:</strong> ${f.revenueTtm > 0 ? perShare(f.salesPerShare) : 'N/A'}</p>`;
-            indicatorsHTML += `<p><strong>Wartość księgowa na akcję:</strong> ${perShare(f.bookValuePerShare)} (C/WK: ${f.pbRatio ? f.pbRatio.toFixed(2) : 'N/A'})</p>`;
-
-            if (getSkillLevel('financialAnalyst') >= 1 && f.fairValue > 0) {
-                indicatorsHTML += `<p><strong>Wycena analityczna:</strong> ${perShare(f.fairValue)} (${((f.fairValue / stock.price - 1) * 100).toFixed(1)}% vs kurs)</p>`;
-            }
-        }
-
-        // Dywidenda: strategia, ostatnia wypłata, ogłoszona wypłata
-        if (stock.assetType !== 'REIT') {
-            const last = stock.lastDividend;
-            indicatorsHTML += `<p><strong>Strategia dywidendowa:</strong> ${getDividendPolicyLabel(stock.dividendPolicy)}</p>`;
-            indicatorsHTML += `<p><strong>Ostatnia dywidenda:</strong> ${last ? `${last.dps.toFixed(4)} PLN/akcję (stopa ${(last.yield * 100).toFixed(2)}%)` : 'brak'}</p>`;
-            if (stock.pendingDividend) {
-                indicatorsHTML += `<p><strong>Ogłoszona wypłata:</strong> ${stock.pendingDividend.dps.toFixed(4)} PLN/akcję za ${Math.ceil(Math.max(0, stock.dividendTimer) / 1000)} s</p>`;
-            }
-        }
-
-        // 3. Wskaźnik Aktywów do Pasywów
-        let assetsToLiabilities_display = "∞"; // Nieskończoność, jeśli brak długu
-        if (stock.balanceSheet.liabilities > 0) {
-            const ratio = stock.balanceSheet.assets / stock.balanceSheet.liabilities;
-            assetsToLiabilities_display = ratio.toFixed(2);
-        }
-        indicatorsHTML += `<p><strong>Aktywa / Pasywa:</strong> ${assetsToLiabilities_display}</p>`;
-
-        indicatorsAdded = true;
-        console.log(`[MODAL_DESC] ${symbol} - Wskaźniki obliczone.`); // <--- LOG 4
-    } else {
-        console.log(`[MODAL_DESC] ${symbol} - Warunki do obliczenia wskaźników niespełnione.`); // <--- LOG 5
-    }
-
-    if (indicatorsAdded) {
-        analyticalDiv.innerHTML = indicatorsHTML;
-        analyticalDiv.style.display = 'block';
-    } else {
-        analyticalDiv.style.display = 'none';
-        console.log(`[MODAL_DESC] ${symbol} - Ukrywanie sekcji wskaźników.`); // <--- LOG 6
-    }
-    // --- KONIEC NOWEJ LOGIKI WSKAŹNIKÓW ---
-
-    const researchInfoDiv = document.getElementById('description-modal-research');
-    if (stock.research && stock.research.isResearching && stock.research.currentTech) {
-        const techName = technologies[stock.research.currentTech].name;
-        researchInfoDiv.innerHTML = `🔬 Aktualnie w fazie R&D: <strong>${techName}</strong>`;
-        researchInfoDiv.style.display = 'block';
-    } else {
-        researchInfoDiv.style.display = 'none';
-    }
-
+    if (!stock || !modal) return;
+    if (companyCardView.symbol !== symbol) companyCardView.tab = 'overview';
+    companyCardView.symbol = symbol;
+    if (tab) companyCardView.tab = tab;
+    renderCompanyCard();
     modal.style.display = 'block';
+}
+
+function setCompanyCardTab(tab) {
+    companyCardView.tab = tab;
+    renderCompanyCard();
+}
+
+function formatRatio(value, eps) {
+    if (value === null || value === undefined || !Number.isFinite(value)) return eps < 0 ? 'strata' : '—';
+    return value.toFixed(1);
+}
+
+function renderCompanyCard() {
+    const stock = stocks.find(s => s.symbol === companyCardView.symbol);
+    if (!stock) return;
+    const f = stock.fundamentals ? updateFundamentalRatios(stock) : null;
+    const week = getStockChangePct(stock, 1);
+    const sector = (stock.sector || []).join(', ') || '—';
+    const exchange = exchanges[stock.exchange]?.name || stock.exchange || '—';
+    const health = Number(stock.financialHealth) || 0;
+    const healthLabel = health >= 3 ? 'bardzo dobra' : health >= 1 ? 'dobra' : health > -1 ? 'przeciętna' : health > -3 ? 'słaba' : 'krytyczna';
+    const dividendYield = typeof getTrailingDividendYield === 'function' ? getTrailingDividendYield(stock) : 0;
+    const debtRatio = stock.balanceSheet?.assets > 0 ? stock.balanceSheet.liabilities / stock.balanceSheet.assets : null;
+
+    document.getElementById('company-card-header').innerHTML = `
+        <div class="cc-header">
+            <div>
+                <h2 class="m-0">${escapeHtml(stock.name)} <span class="text-muted text-sm">${escapeHtml(stock.symbol)}</span></h2>
+                <div class="text-sm text-muted">${escapeHtml(sector)} · ${escapeHtml(exchange)}${stock.isStateOwned ? ' · 🏛️ Skarb Państwa' : ''}${stock.ceo?.name ? ` · prezes ${escapeHtml(stock.ceo.name)}` : ''}</div>
+            </div>
+            <div class="cc-price">
+                <strong>${formatZl(stock.price)}</strong>
+                <span class="${week > 0 ? 'text-up' : week < 0 ? 'text-down' : 'text-muted'}">${week >= 0 ? '+' : ''}${(week * 100).toFixed(2)}% tydz.</span>
+            </div>
+        </div>
+        ${typeof renderDividendBadges === 'function' ? renderDividendBadges(stock) : ''}`;
+
+    const tile = (label, value, hint, cls = '') => `<div class="cc-kpi" title="${escapeHtml(hint)}"><span>${label}</span><strong class="${cls}">${value}</strong></div>`;
+    document.getElementById('company-card-kpis').innerHTML = [
+        tile('Kapitalizacja', formatZl(getMarketCapValue(stock), 0), 'Kurs × liczba akcji: ile rynek płaci za całą spółkę.'),
+        tile('C/Z', formatRatio(f?.peRatio, f?.epsTtm), 'Cena / zysk na akcję z 4 kwartałów. Niżej = taniej względem zysków (porównuj w sektorze).'),
+        tile('C/WK', f?.pbRatio ? f.pbRatio.toFixed(2) : '—', 'Cena / wartość księgowa na akcję. Poniżej 1 = rynek wycenia spółkę niżej niż jej majątek netto.'),
+        tile('Stopa dywidendy', `${(dividendYield * 100).toFixed(2)}%`, 'Dywidendy z ostatniego roku / kurs.'),
+        tile('Zadłużenie', debtRatio === null ? '—' : `${(debtRatio * 100).toFixed(0)}%`, 'Zobowiązania / aktywa. Powyżej ~70% spółka jest mocno zadłużona.', debtRatio > 0.7 ? 'text-down' : ''),
+        tile('Kondycja', `${health.toFixed(1)} · ${healthLabel}`, 'Kondycja finansowa od −5 (bankructwo) do +5.', health >= 1 ? 'text-up' : health <= -2 ? 'text-down' : '')
+    ].join('');
+
+    document.getElementById('company-card-tabs').innerHTML = COMPANY_CARD_TABS
+        .map(([id, label]) => `<button class="${companyCardView.tab === id ? 'active' : ''}" onclick="setCompanyCardTab('${id}')">${label}</button>`).join('');
+
+    const body = document.getElementById('company-card-body');
+    if (companyCardView.tab === 'finance') body.innerHTML = renderCompanyCardFinance(stock, f);
+    else if (companyCardView.tab === 'owners') body.innerHTML = renderCompanyCardOwners(stock);
+    else if (companyCardView.tab === 'manage') body.innerHTML = renderCompanyCardManage(stock);
+    else body.innerHTML = renderCompanyCardOverview(stock);
+}
+
+function renderCompanyCardOverview(stock) {
+    const traits = (stock.ceo?.traits || []).map(trait => {
+        const data = ceoTraits[trait.id];
+        return data ? `<span class="ceo-trait" style="background-color: ${data.color};" title="${escapeHtml(data.description)}">${escapeHtml(data.name)}</span>` : '';
+    }).join('');
+    const phase = stock.corporatePhase && getSkillLevel('financialAnalyst') >= 1 ? `<p class="text-sm"><strong>Faza cyklu życia:</strong> ${escapeHtml(stock.corporatePhase)}</p>` : '';
+    const research = stock.research?.isResearching && stock.research.currentTech ? `<p class="text-sm">🔬 W fazie R&D: <strong>${escapeHtml(technologies[stock.research.currentTech]?.name || stock.research.currentTech)}</strong></p>` : '';
+    const insights = typeof getAnalystInsights === 'function' ? getAnalystInsights(stock) : [];
+    return `
+        <div class="cc-grid">
+            <section><h4>O spółce</h4><div class="text-sm text-justify">${assembleDescription(stock)}</div>${phase}${research}</section>
+            <section>
+                ${stock.ceo?.name ? `<h4>Prezes</h4><p class="m-0"><strong>👔 ${escapeHtml(stock.ceo.name)}</strong></p>
+                    <p class="text-xs text-muted mt-0">wiek ${stock.ceo.age ?? '—'}, staż ${Math.floor((stock.ceo.tenure || 0) / 4)} lat</p>
+                    <div class="ceo-traits-container">${traits}</div>` : ''}
+                ${insights.length ? `<h4>Analityk</h4>${insights.map(line => `<p class="text-sm">🔎 ${escapeHtml(line)}</p>`).join('')}` : ''}
+            </section>
+        </div>`;
+}
+
+function renderCompanyCardFinance(stock, f) {
+    if (!f || !(stock.balanceSheet?.assets > 0)) return '<p class="text-muted">Spółka nie publikuje jeszcze pełnych danych finansowych.</p>';
+    const money = value => Number.isFinite(value) ? formatZl(value, 0) : '—';
+    const perShare = value => Number.isFinite(value) ? formatZl(value) : '—';
+    const row = (label, value, hint) => `<tr><td title="${escapeHtml(hint)}">${label} <span class="text-muted">ⓘ</span></td><td class="cell-number">${value}</td></tr>`;
+    const last = stock.lastDividend;
+    const fair = getSkillLevel('financialAnalyst') >= 1 && f.fairValue > 0
+        ? row('Wycena analityczna', `${perShare(f.fairValue)} (${((f.fairValue / stock.price - 1) * 100).toFixed(1)}% vs kurs)`, 'Wartość godziwa z zysków i majątku (szkolenie Analityk Finansowy).') : '';
+    return `
+        <div class="cc-grid">
+            <section><h4>Wyniki (4 ostatnie kwartały)</h4>
+                <table class="asset-mini-table w-full"><tbody>
+                    ${row('Przychody', f.revenueTtm > 0 ? money(f.revenueTtm) : '—', 'Sprzedaż spółki z ostatniego roku.')}
+                    ${row('EBITDA', money(f.ebitdaTtm), 'Zysk operacyjny przed amortyzacją, odsetkami i podatkiem.')}
+                    ${row('Zysk netto', money(f.netIncomeTtm), 'Zysk po wszystkich kosztach i podatku.')}
+                    ${row('Zysk na akcję (EPS)', perShare(f.epsTtm), 'Zysk netto / liczba akcji.')}
+                    ${row('Sprzedaż na akcję', f.revenueTtm > 0 ? perShare(f.salesPerShare) : '—', 'Przychody / liczba akcji.')}
+                    ${fair}
+                </tbody></table></section>
+            <section><h4>Bilans i dywidenda</h4>
+                <table class="asset-mini-table w-full"><tbody>
+                    ${row('Aktywa', money(stock.balanceSheet.assets), 'Wszystko, co spółka posiada.')}
+                    ${row('Zobowiązania', money(stock.balanceSheet.liabilities), 'Długi i inne zobowiązania.')}
+                    ${row('Gotówka', money(stock.cash), 'Pieniądze na koncie spółki.')}
+                    ${row('Wartość księgowa / akcję', perShare(f.bookValuePerShare), '(Aktywa − zobowiązania) / liczba akcji.')}
+                    ${stock.assetType !== 'REIT' ? row('Polityka dywidendy', escapeHtml(getDividendPolicyLabel(stock.dividendPolicy)), 'Jak dużą część zysku spółka wypłaca.') : ''}
+                    ${row('Ostatnia dywidenda', last ? `${last.dps.toFixed(4)} zł (${(last.yield * 100).toFixed(2)}%)` : 'brak', 'Ostatnia wypłata na akcję i stopa w dniu wypłaty.')}
+                </tbody></table></section>
+        </div>`;
+}
+
+function renderCompanyCardOwners(stock) {
+    const fundPct = typeof getFundStakePct === 'function' ? getFundStakePct(stock) : 0;
+    const wallet = playerWallet?.portfolio?.[stock.symbol]?.shares || 0;
+    return `
+        <p class="text-sm">Fundusz: <strong>${(fundPct * 100).toFixed(2)}%</strong>${wallet ? ` · konto prywatne: <strong>${wallet.toLocaleString('pl-PL')} akcji</strong>` : ''} · wolny obrót: <strong>${getAvailableShares(stock).toLocaleString('pl-PL')}</strong> z ${stock.totalShares.toLocaleString('pl-PL')} akcji</p>
+        <div class="gov-bars">${typeof renderShareholderBars === 'function' ? renderShareholderBars(stock) : ''}</div>
+        <button class="btn-secondary mt-2" onclick="openStockDetailsModal('${stock.symbol}')">🥧 Wykres akcjonariatu</button>`;
+}
+
+function renderCompanyCardManage(stock) {
+    const pct = typeof getFundStakePct === 'function' ? getFundStakePct(stock) : 0;
+    const governed = typeof isGovernedCompany === 'function' && isGovernedCompany(stock);
+    const seats = typeof getBoardSeats === 'function' ? getBoardSeats(stock) : { label: '—' };
+    return `
+        <p class="text-sm">Udział funduszu: <strong>${(pct * 100).toFixed(2)}%</strong> · rada nadzorcza: <strong>${escapeHtml(seats.label)}</strong>.
+            Od 5% głosujesz na walnych, od 20% masz miejsce w radzie, powyżej 50% kontrolujesz spółkę.</p>
+        <div class="d-flex gap-2 flex-wrap">
+            ${governed ? `<button class="btn-secondary" onclick="openGovernanceModal('${stock.symbol}')">🗳️ Walne zgromadzenie</button>` : ''}
+            <button class="btn-secondary" onclick="openCompanyInvestments('${stock.symbol}')">📈 Inwestycje spółki</button>
+            ${pct > 0.5 ? `<button onclick="openManagementModal('${stock.symbol}')">👑 Zarządzaj spółką</button>` : ''}
+        </div>`;
 }
 
 function updateStateOfferInfo() {

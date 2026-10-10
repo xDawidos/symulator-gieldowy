@@ -4387,3 +4387,23 @@ img, svg, video { max-width: 100%; }
 
 /* U1: grupy w tabeli pozycji portfela */
 .portfolio-group-row td { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted, #8b949e); padding-top: 10px; border-bottom: 1px solid var(--border-color, #30363d); }
+
+/* U2: NewHorizons — zwijanie i bez wewnętrznego przewijania (nie „wisi” nad listą spółek) */
+body.dark-mode #startup-incubator-panel.panel, #startup-incubator-panel.panel { max-height: none; overflow: visible; }
+#startup-incubator-panel.collapsed .startup-panel-content { display: none !important; }
+#startup-incubator-panel.collapsed h2 { margin-bottom: 0; border-bottom: none; }
+
+/* U2: karta spółki */
+.company-card .cc-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding-right: 32px; }
+.company-card .cc-price { display: flex; flex-direction: column; align-items: flex-end; font-size: 1.4rem; }
+.company-card .cc-price span { font-size: 0.85rem; }
+.cc-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 12px 0; }
+.cc-kpi { background: var(--bg-elevated, #1c2128); border: 1px solid var(--border-color, #30363d); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; cursor: help; }
+.cc-kpi span { font-size: 0.72rem; color: var(--text-muted, #8b949e); text-transform: uppercase; letter-spacing: 0.03em; }
+.cc-kpi strong { font-size: 1rem; }
+.cc-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border-color, #30363d); margin-bottom: 12px; flex-wrap: wrap; }
+.cc-tabs button { background: transparent; border: none; border-bottom: 2px solid transparent; border-radius: 0; color: var(--text-muted, #8b949e); padding: 8px 12px; }
+.cc-tabs button.active { color: var(--accent-info, #58a6ff); border-bottom-color: var(--accent-info, #58a6ff); }
+.cc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.cc-grid h4 { margin: 0 0 8px; }
+.sector-chip.owned-chip.active { background: var(--accent-warning, #d29922); color: #000; }
