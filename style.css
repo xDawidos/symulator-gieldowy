@@ -4371,3 +4371,9 @@ img, svg, video { max-width: 100%; }
 .grey-card p { margin: 0 0 var(--space-1); }
 .mafia-demand { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: var(--space-3) 0; padding: var(--space-3); border: 1px solid var(--color-down); border-radius: var(--radius-md); background: var(--bg-elevated-2); }
 .mafia-demand strong { flex: 1 1 260px; }
+
+/* ===================== 0.11.3 PILNE WIADOMOŚCI ===================== */
+.breaking-news { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 4000; max-width: min(720px, calc(100vw - 32px)); padding: 10px 18px; border-radius: var(--radius-md); background: #b3131b; color: #fff; font-size: 15px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); animation: breaking-in 0.25s ease-out; }
+.breaking-news[hidden] { display: none; }
+.breaking-news strong { margin-right: 8px; letter-spacing: 0.06em; }
+@keyframes breaking-in { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }

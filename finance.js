@@ -184,7 +184,7 @@ const FUND_DEPOSIT_BREAK_PENALTY = 0.01;
 const FUND_DEPOSIT_MIN = 500;
 
 function canBankTakeFundDeposits(bank) {
-    return Boolean(bank?.isActive && FUND_DEPOSIT_BANK_TYPES().includes(bank.type));
+    return Boolean(bank?.isActive && !bank.frozen && FUND_DEPOSIT_BANK_TYPES().includes(bank.type)); // zamrożony parabank nie przyjmuje lokat
 }
 
 /** Oprocentowanie roczne lokaty: stopa depozytowa + połowa marży banku + premia za długość. */

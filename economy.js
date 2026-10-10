@@ -301,6 +301,7 @@ function updateStockPrices() {
         if (stock.assetType === 'Holding') {
             return; 
         }
+        if (stock.tradeHalted) return; // notowania zawieszone (afera, scandals.js)
 
         let priceGrowthModifier = 1.0;
         let volatilityModifier = 1.0;

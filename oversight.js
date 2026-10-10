@@ -352,6 +352,8 @@ function renderOversightPanel() {
             ${card('knf', 'Komisja Nadzoru Finansowego', '🏦', 'Kontroluje fundusze — im większy fundusz, tym częściej. Czysta kontrola podnosi zaufanie klientów.')}
         </div>
         ${oversight.corruption >= BRIBE_CORRUPTION_THRESHOLD ? `<p class="text-sm mt-3">💼 Przy tej korupcji komendant „bywa wyrozumiały”: <button class="btn-danger" onclick="bribePolice(); updateStateModalContent();">Łapówka (${formatZl(Math.max(2000, getFundAssets() * 0.01), 0)} z funduszu)</button> — spokój na ${BRIBE_IMMUNITY_QUARTERS} kw.</p>` : ''}
+        <h4>Wojny PR</h4>
+        ${typeof renderPrWars === 'function' ? renderPrWars() : ''}
         <h4>Ostatnie wykrycia</h4>
         <ul class="list-plain text-sm">${oversight.history.map(h => `<li>⚖️ ${escapeHtml(h.institution)}: ${escapeHtml(h.name)} — przewinienie nr ${h.strike}, kara ${formatZl(h.fine, 0)}</li>`).join('') || '<li class="text-muted">Brak.</li>'}</ul>`;
 }

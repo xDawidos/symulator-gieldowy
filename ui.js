@@ -5218,6 +5218,7 @@ function renderCommercialBanksList() {
                 <div><dt>Lokata 16 tyg.</dt><dd>${canBankTakeFundDeposits(bank) ? (getFundDepositRate(bank, 16) * 100).toFixed(2) + '%' : '—'}</dd></div>
                 <div><dt>Kapitał</dt><dd>${formatZl(bank.cash, 0)}</dd></div>
             </dl>
+            ${typeof renderParabankExtras === 'function' ? renderParabankExtras(bank) : ''}
             ${deposit}
             ${sales}
         </article>`;

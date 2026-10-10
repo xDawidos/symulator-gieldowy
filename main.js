@@ -378,6 +378,7 @@ gameTimers.weekly = setInterval(() => {
         reconcileSharesHeld(); // audyt A1: akcje w obrocie = suma posiadaczy
         processOversightQuarterly(); // korupcja, policja, KNF (oversight.js)
         processMafiaQuarterly(); // mafia, Bruno Gato, porachunki (mafia.js)
+        processScandalsQuarterly(); // parabanki i wojny PR (scandals.js)
         advanceEconomyCycle(); // nowa faza koniunktury przed raportami
         advanceMacroQuarter(); // inflacja, bezrobocie, cykle sektorów, wybory (macro.js)
         processCityQuarterly(); // festyn raz w roku (city.js)
@@ -820,6 +821,7 @@ function createNewWorld() {
     botRelations = createBotRelations(); // relacje z botami (relations.js)
     oversight = createOversight(); // korupcja i nadzór (oversight.js)
     mafia = createMafia(); // mafia (mafia.js)
+    scandals = createScandals(); // afery (scandals.js)
     updateMarketTrendFromCycle();
     stocks.forEach(stock => {
         if (stock.balanceSheet && stock.assetType !== 'Startup') initializeFundamentals(stock, true);

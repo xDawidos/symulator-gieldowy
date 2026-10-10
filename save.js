@@ -121,6 +121,7 @@ function buildSaveSnapshot() {
         specialProjects,
         oversight,
         mafia,
+        scandals,
         playerProfile,
         playerFund,
         corporation,
@@ -424,6 +425,8 @@ function applySaveSnapshot(snapshot) {
     ensureOversight();
     mafia = snapshot.mafia && typeof snapshot.mafia === 'object' ? snapshot.mafia : createMafia(); // v11: mafia
     ensureMafia();
+    scandals = snapshot.scandals && typeof snapshot.scandals === 'object' ? snapshot.scandals : createScandals(); // v11: afery
+    ensureScandals();
     ensureMacroState();
     if (snapshot.economyCycle && ECONOMY_PHASES[snapshot.economyCycle.phase]) {
         economyCycle = snapshot.economyCycle;

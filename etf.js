@@ -40,7 +40,7 @@ const ETF_START_SET = [
 ];
 
 function getEtfIssuers() {
-    return commercialBanks.filter(bank => bank.isActive && [BANK_TYPES.INVESTMENT, BANK_TYPES.INTERNET].includes(bank.type));
+    return commercialBanks.filter(bank => bank.isActive && !bank.isParabank && [BANK_TYPES.INVESTMENT, BANK_TYPES.INTERNET].includes(bank.type));
 }
 
 function randomEtfRules(template) {

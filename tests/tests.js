@@ -2865,6 +2865,82 @@ group('Mafia (0.11.2)', () => {
     });
 });
 
+group('Afery: parabanki i wojny PR (0.11.3)', () => {
+    function world() {
+        const a = makeCompany('AAA', { cash: 2_000_000, sector: ['Technologia'] });
+        const b = makeCompany('BBB', { cash: 2_000_000, sector: ['Technologia'] });
+        [a, b].forEach(s => { s.insiderShares = 0; s.reputation = { player: 0 }; s.ceo = { name: 'X', traits: [] }; });
+        resetWorld([a, b]);
+        commercialBanks.splice(0, commercialBanks.length);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        macro = createMacroState();
+        oversight = createOversight();
+        scandals = createScandals();
+        playerCash = 1_000_000;
+        return { a, b };
+    }
+
+    test('parabank kusi najwyższą lokatą i wchodzi na giełdę', () => {
+        world();
+        const parabank = spawnParabank();
+        const bank = commercialBanks.find(b => b.id === parabank.bankId);
+        assert(bank.isParabank && canBankTakeFundDeposits(bank) && stocks.some(s => s.symbol === parabank.symbol), 'bank i akcje');
+        assert(getFundDepositRate(bank, 16) > getDepositRate() + 0.04, 'wysoka lokata');
+    });
+
+    test('upadek: śledztwo → lokata przepada (10–30% zwrotu), zaufanie i compliance, notowania zawieszone', () => {
+        world();
+        const parabank = spawnParabank();
+        const deposit = openFundDeposit(parabank.bankId, 500_000, 16);
+        assert(deposit, 'lokata');
+        const trust = playerFund.trust;
+        const cash = playerCash;
+        collapseParabank(parabank, 'investigation');
+        const back = playerCash - cash;
+        const stock = stocks.find(s => s.symbol === parabank.symbol);
+        assert(back >= 50_000 - 1 && back <= 150_000 + 1, `odzysk ${back}`);
+        assert(playerFund.trust < trust && playerProfile.cv.some(e => e.type === 'compliance'), 'zaufanie i CV');
+        assert(stock.tradeHalted && stock.price === 0.01, 'notowania zawieszone');
+        assert(!canBankTakeFundDeposits(commercialBanks.find(b => b.id === parabank.bankId)), 'zamrożony');
+    });
+
+    test('po śledztwie policji: wycena likwidacyjna, potem spółka znika z rozliczeniem posiadaczy', () => {
+        world();
+        const parabank = spawnParabank();
+        buyParabankShares(parabank.id, 100);
+        collapseParabank(parabank, 'investigation');
+        collapseParabank(parabank, 'police');
+        const stock = stocks.find(s => s.symbol === parabank.symbol);
+        assert(!stock.tradeHalted && stock.price < parabank.peakPrice * 0.16, 'wycena likwidacyjna');
+        const cash = playerCash;
+        collapseParabank(parabank, 'fled');
+        assert(!stocks.some(s => s.symbol === parabank.symbol) && !playerPortfolio[parabank.symbol] && playerCash > cash, 'zniknęła, fundusz rozliczony');
+    });
+
+    test('kredyt bez BIK: syndyk żąda natychmiastowej spłaty przy upadku', () => {
+        world();
+        const parabank = spawnParabank();
+        assert(takeParabankLoan(parabank.id, 100_000) && playerCash === 1_100_000, 'kredyt');
+        collapseParabank(parabank, 'investigation');
+        assert(!parabank.loan && playerCash < 1_100_000, 'spłata');
+    });
+
+    test('wojna PR: dwie spółki z branży, wsparcie większościowca, rozstrzygnięcie', () => {
+        const { a } = world();
+        const war = startPrWar();
+        assert(war && [war.a, war.b].includes('AAA'), 'wojna');
+        playerPortfolio.AAA = { shares: 6000, avgPrice: 100, assetType: 'stock' };
+        const cash = a.cash;
+        assert(supportPrCampaign('AAA') && a.cash < cash && war.boost.AAA > 0, 'wsparcie');
+        war.quartersLeft = 1;
+        const random = Math.random;
+        Math.random = () => 0.99; // KNF nie przerywa
+        processPrWarsQuarterly();
+        Math.random = random;
+        assert(!scandals.prWars.includes(war), 'rozstrzygnięta');
+    });
+});
+
 // --------------------------------------------------------------------------------
 // Uruchomienie
 // --------------------------------------------------------------------------------
