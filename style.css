@@ -4377,3 +4377,10 @@ img, svg, video { max-width: 100%; }
 .breaking-news[hidden] { display: none; }
 .breaking-news strong { margin-right: 8px; letter-spacing: 0.06em; }
 @keyframes breaking-in { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+/* ===================== B2: POWIADOMIENIA ===================== */
+.notif-bar { position: fixed; right: 16px; bottom: 16px; z-index: 3500; display: flex; flex-direction: column; gap: var(--space-2); max-width: min(380px, calc(100vw - 32px)); }
+.notif-item { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--border-color); border-left: 3px solid var(--accent-info); border-radius: var(--radius-md); background: var(--bg-elevated); box-shadow: var(--shadow-soft); font-size: 13px; }
+.notif-item span { flex: 1; }
+.notif-close { background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 2px 6px; }
+.nav-badge-alert { position: absolute; top: 4px; right: 6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--color-down); color: #fff; font-size: 11px; line-height: 18px; text-align: center; }

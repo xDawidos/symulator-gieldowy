@@ -2664,6 +2664,11 @@ function renderBondMarketInBank() {
 }
 
 function openFestivalResultsModal(participants, festivalName) {
+    // B2: nie przerywamy gry — powiadomienie z przyciskiem „Otwórz”.
+    pushNotification(`🎪 Wyniki wydarzenia: ${festivalName}`, () => showFestivalResultsModal(participants, festivalName));
+}
+
+function showFestivalResultsModal(participants, festivalName) {
     const modal = document.getElementById('festival-results-modal');
     document.getElementById('festival-results-title').textContent = `Wyniki wydarzenia: ${festivalName}`;
     const body = document.getElementById('festival-results-body');
@@ -2883,6 +2888,10 @@ function closeInteractionModal() {
 }
 
 function openBankIPOOfferModal(message) {
+    pushNotification('🏦 Oferta IPO banku dla funduszu', () => showBankIPOOfferModal(message), () => Boolean(currentBankIPOOffer));
+}
+
+function showBankIPOOfferModal(message) {
     const modal = document.getElementById('bank-ipo-offer-modal');
     if (!modal || !currentBankIPOOffer) return;
 
@@ -5841,4 +5850,37 @@ function renderMacroPanel() {
             const phase = SECTOR_CYCLE_PHASES[cycle.phase];
             return `<div class="macro-sector is-${cycle.phase}"><span>${phase.icon} ${escapeHtml(sector)}</span><strong>${phase.name}</strong><span class="text-xs text-muted">${cycle.quartersLeft} kw.</span></div>`;
         }).join('')}</div>`;
+}
+
+// =================================================================================
+// POWIADOMIENIA (B2): zamiast okien otwieranych samoczynnie w trakcie gry
+// =================================================================================
+
+const notificationActions = new Map();
+let notificationSeq = 0;
+
+/** Powiadomienie w rogu ekranu: „Otwórz” lub ✕. isValid — gdy zwróci false, powiadomienie znika. */
+function pushNotification(text, onOpen, isValid = null) {
+    const bar = document.getElementById('notif-bar');
+    if (!bar) { if (typeof onOpen === 'function') onOpen(); return; }
+    const id = `n${++notificationSeq}`;
+    notificationActions.set(id, { onOpen, isValid });
+    const item = document.createElement('div');
+    item.className = 'notif-item';
+    item.dataset.id = id;
+    item.innerHTML = `<span>${escapeHtml(text)}</span><button class="btn-xs" onclick="openNotification('${id}')">Otwórz</button><button class="notif-close" aria-label="Zamknij" onclick="dismissNotification('${id}')">✕</button>`;
+    bar.prepend(item);
+    while (bar.children.length > 4) dismissNotification(bar.lastElementChild.dataset.id);
+}
+
+function openNotification(id) {
+    const entry = notificationActions.get(id);
+    dismissNotification(id);
+    if (entry && (!entry.isValid || entry.isValid())) entry.onOpen?.();
+    else showToast('To powiadomienie jest już nieaktualne.', 'default');
+}
+
+function dismissNotification(id) {
+    notificationActions.delete(id);
+    document.querySelector(`#notif-bar [data-id="${id}"]`)?.remove();
 }

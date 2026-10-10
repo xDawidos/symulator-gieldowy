@@ -158,6 +158,7 @@ function giveGiftToBot(id, amount) {
 function processRelationsQuarterly() {
     ensureBotRelations();
     botRelations.blockOffer = null; // oferta pakietu ważna do końca kwartału
+    botRelations.mockedThisQuarter = false;
     for (const id of Object.keys(botRelations.values)) {
         botRelations.values[id] *= 1 - RELATION_DECAY;
         if (Math.abs(botRelations.values[id]) < 0.5) delete botRelations.values[id];
@@ -178,7 +179,7 @@ function getPlayerCompanies() {
 
 function runHostileBot(person, value) {
     const roll = Math.random();
-    if (roll < 0.35) sendBotMail(person, 'hostile');
+    if (roll < 0.35 && !botRelations.mockedThisQuarter) { botRelations.mockedThisQuarter = true; sendBotMail(person, 'hostile'); } // B2: najwyżej 1 na kwartał
     if (person.kind !== 'investor') return;
     const ai = person.entity;
     const companies = getPlayerCompanies();

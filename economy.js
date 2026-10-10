@@ -423,14 +423,14 @@ function updateStockPrices() {
         }
 
         // Reszta funkcji (blokada handlu, bankructwo, historia cen, świece, ETFy) bez zmian...
-        if (stock.price < 1.00 && !stock.isTradeLocked) {
-            if (Math.random() < 0.80) {
-                stock.isTradeLocked = true;
-                logEvent(`⛔ Trading halted for ${stock.name} (${stock.symbol}) due to low price!`, 'review');
-            }
-        } else if (stock.price > 1.50 && stock.isTradeLocked) {
+        // B2: blokada dopiero po ~2 tygodniach gry poniżej 1 zł (wcześniej 80% szans co tick).
+        stock.belowOneTicks = stock.price < 1.00 ? (stock.belowOneTicks || 0) + 1 : 0;
+        if (stock.price < 1.00 && !stock.isTradeLocked && !stock.tradeHalted && stock.belowOneTicks >= 120) {
+            stock.isTradeLocked = true;
+            logEvent(`⛔ Handel akcjami ${stock.name} (${stock.symbol}) wstrzymany — kurs od dwóch tygodni poniżej 1 zł.`, 'review');
+        } else if (stock.price > 1.50 && stock.isTradeLocked && !stock.tradeHalted) {
             stock.isTradeLocked = false;
-            logEvent(`✅ Trading resumed for ${stock.name} (${stock.symbol})!`, 'review');
+            logEvent(`✅ Wznowiono handel akcjami ${stock.name} (${stock.symbol}).`, 'review');
         }
 
         if (stock.financialHealth <= -5 && !stock.isBankrupt) {

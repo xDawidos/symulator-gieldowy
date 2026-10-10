@@ -1177,6 +1177,7 @@ group('Poczta, miasto i państwo (etap E1)', () => {
         assert(lastMail().sender === 'corporation' && lastMail().importance === 3, 'korporacja, ważne');
         logEvent('🏛️ Rząd podnosi podatki dla firm.', 'state');
         assert(lastMail().sender === 'OBSER', 'państwo → OBSER');
+        playerPortfolio.AAA = { shares: 1, avgPrice: 100, assetType: 'stock' }; // B2: newsy o spółkach z portfela przychodzą osobno
         logEvent('Skandal! Prezes Alfa Tech przyłapany na luksusowych wakacjach.', 'company');
         assert(lastMail().sender === 'FLESZ' && lastMail().symbol === 'AAA', 'skandal → FLESZ ze spółką');
         logEvent('Alfa Tech ogłasza świetne wyniki kwartalne.', 'company');
@@ -1190,6 +1191,7 @@ group('Poczta, miasto i państwo (etap E1)', () => {
         const count = mailbox.messages.length;
         logEvent('Alfa Tech otwiera nowy sklep.', 'company'); // ważność 1
         assert(mailbox.messages.length === count, 'mało ważny mail odfiltrowany');
+        playerPortfolio.AAA = { shares: 1, avgPrice: 100, assetType: 'stock' }; // B2: wyniki spółki z portfela przychodzą osobno
         logEvent('Alfa Tech ogłasza wyniki kwartalne.', 'company'); // ważność 2
         assert(mailbox.messages.length === count + 1, 'ważny mail przyszedł');
         const cash0 = media[0].cash;
@@ -3147,6 +3149,56 @@ group('Balans B1: exploity', () => {
         a.sharesHeld = 100;
         sellStock('AAA', 50);
         assert(playerPortfolio.AAA.shares === 100, 'nie sprzedano zablokowanych');
+    });
+});
+
+group('Balans B2: poczta i powiadomienia', () => {
+    function world() {
+        const a = makeCompany('AAA'); a.name = 'Alfa Tech';
+        resetWorld([a]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        macro = createMacroState(); mafia = createMafia();
+        mailbox = createMailbox();
+        return a;
+    }
+
+    test('ważny nieprzeczytany mail nie wypada przy przepełnieniu skrzynki', () => {
+        world();
+        const important = addMail({ sender: CORPORATION_SENDER, subject: 'Decyzja', body: '', importance: 3, action: { type: 'agm', symbol: 'AAA' } });
+        for (let i = 0; i < MAIL_LIMIT + 20; i++) addMail({ sender: 'PULS', subject: `news ${i}`, body: '', importance: 1 });
+        assert(mailbox.messages.includes(important), 'przypięty');
+    });
+
+    test('rutyna o spółkach spoza portfela trafia do wydania gazety', () => {
+        world();
+        const count = mailbox.messages.length;
+        logEvent('Alfa Tech ogłasza wyniki kwartalne.', 'company');
+        assert(mailbox.messages.length === count && mailbox.digest.length === 1, 'w wydaniu');
+        processMailWeekly(); processMailWeekly();
+        assert(mailbox.messages.some(m => /Wydanie rynkowe/.test(m.subject)) && mailbox.digest.length === 0, 'wydanie opublikowane');
+    });
+
+    test('okno wyników festynu → powiadomienie z przyciskiem „Otwórz”', () => {
+        world();
+        const bar = document.getElementById('notif-bar') || Object.assign(document.body.appendChild(document.createElement('div')), { id: 'notif-bar' });
+        const before = bar.children.length;
+        openFestivalResultsModal([], 'Test');
+        assert(bar.children.length === before + 1, 'powiadomienie');
+        bar.querySelectorAll('.notif-item').forEach(item => dismissNotification(item.dataset.id));
+    });
+
+    test('żądanie mafii: termin do końca następnego kwartału', () => {
+        world();
+        mafia.contacted = true;
+        mafia.demand = { type: 'haracz', amount: 100, quarter: macro.quarter, deadline: macro.quarter + 1 };
+        macro.quarter += 1;
+        const random = Math.random; Math.random = () => 0.99;
+        processMafiaQuarterly();
+        assert(mafia.demand !== null, 'jeszcze czeka');
+        macro.quarter += 1;
+        processMafiaQuarterly();
+        Math.random = random;
+        assert(!mafia.demand || mafia.demand.quarter >= macro.quarter, 'po terminie rozstrzygnięte');
     });
 });
 

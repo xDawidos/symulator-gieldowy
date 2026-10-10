@@ -24,7 +24,7 @@ const MAIL_RULES = {
     FLESZ: /prezes|CEO|skandal|plotk|afer|dymisj|TikTok|influencer|celebryt|szejk|romans|sensac/i
 };
 const CORPORATION_CATEGORIES = ['review', 'success', 'warning', 'error'];
-const ROUTINE_NEWS = /RAPORT|badani|Nowa oferta|przetarg|kampania marketingowa/i;
+const ROUTINE_NEWS = /RAPORT|badani|Nowa oferta|przetarg|kampania marketingowa|emisja obligacji/i;
 const NOISE_PATTERNS = /otrzymuje .* dywidendy|Fundusz .* nabywa|\[AI\]/i;
 
 let mailbox = createMailbox();
@@ -79,16 +79,45 @@ function addMail({ sender, subject, body = '', importance = 1, isSpam = false, s
     return message;
 }
 
+/** B2: ważne, nieprzeczytane wiadomości (decyzje, kary, oferty) nie wypadają ze skrzynki. */
+function isPinnedMail(message) {
+    return !message.read && (Boolean(message.action) || message.importance >= 3);
+}
+
 function trimMailbox() {
     while (mailbox.messages.length > MAIL_LIMIT) {
-        // Najpierw najstarsze przeczytane (bez gwiazdki), potem najstarsze w ogóle.
+        // Najpierw najstarsze przeczytane (bez gwiazdki), potem najstarsze nieprzypięte.
         let index = -1;
         for (let i = mailbox.messages.length - 1; i >= 0; i--) {
             const message = mailbox.messages[i];
             if (message.read && !message.starred) { index = i; break; }
         }
-        mailbox.messages.splice(index >= 0 ? index : mailbox.messages.length - 1, 1);
+        if (index < 0) {
+            for (let i = mailbox.messages.length - 1; i >= 0; i--) {
+                if (!isPinnedMail(mailbox.messages[i]) && !mailbox.messages[i].starred) { index = i; break; }
+            }
+        }
+        if (index < 0) break; // same przypięte — skrzynka może chwilowo przekroczyć limit
+        mailbox.messages.splice(index, 1);
     }
+}
+
+/** B2: rutynowe wiadomości trafiają do wydania gazety (raz na 2 tygodnie gry) zamiast osobnych maili. */
+const DIGEST_EVERY_WEEKS = 2;
+const DIGEST_MAX_ITEMS = 40;
+
+function addToDigest(text) {
+    if (!Array.isArray(mailbox.digest)) mailbox.digest = [];
+    mailbox.digest.push(text.slice(0, 160));
+    if (mailbox.digest.length > DIGEST_MAX_ITEMS) mailbox.digest.shift();
+}
+
+function publishDigest() {
+    mailbox.digestWeeks = (mailbox.digestWeeks || 0) + 1;
+    if (mailbox.digestWeeks < DIGEST_EVERY_WEEKS || !mailbox.digest?.length) return null;
+    mailbox.digestWeeks = 0;
+    const items = mailbox.digest.splice(0);
+    return addMail({ sender: 'PULS', subject: `📰 Wydanie rynkowe: ${items.length} ${items.length === 1 ? 'wiadomość' : 'wiadomości'}`, body: items.map(item => `• ${item}`).join('  '), importance: 1 });
 }
 
 function getMailSenderName(sender) {
@@ -135,8 +164,8 @@ function routeEventToMail(text, category) {
     const held = stock && (playerPortfolio[stock.symbol] || playerWallet?.portfolio?.[stock.symbol]);
     if (held) importance = Math.max(importance, 2);                                        // spółki z portfela zawsze ważne
     else if (ROUTINE_NEWS.test(text) && importance < 3) importance = 1;                   // rutyna o innych spółkach
-    // Czasopisma nie piszą o wszystkim: drobne wiadomości tylko czasem (bez spółki — rzadziej).
-    if (sender !== CORPORATION_SENDER && importance < 2 && Math.random() > (stock ? 0.25 : 0.1)) return null;
+    // B2: rutyna i wiadomości o spółkach spoza portfela trafiają do wydania gazety; państwo i gospodarka — osobno.
+    if (sender !== CORPORATION_SENDER && !held && (importance < 2 || (importance < 3 && (stock || ROUTINE_NEWS.test(text))))) { addToDigest(text); return null; }
     const subject = text.split(/(?<=[.!?])\s/)[0].slice(0, 120);
     return addMail({ sender, subject, body: text, importance, symbol: stock?.symbol || null });
 }
@@ -147,6 +176,7 @@ function routeEventToMail(text, category) {
 
 function processMailWeekly() {
     if (!mailbox) return;
+    publishDigest();
     chargeMagazineSubscriptions();
     sendCompanyAdSpam();
     sendMagazineSpam();
@@ -185,7 +215,7 @@ const AD_TEMPLATES = [
 
 function sendCompanyAdSpam() {
     const advertisers = stocks.filter(s => !s.assetType && !s.isBankrupt && s.cash > COMPANY_AD_COST * 10);
-    const count = getRandomIntInRange(1, 3);
+    const count = Math.random() < 0.5 ? 1 : 0; // B2: mniej reklam (wcześniej 1–3 tygodniowo)
     for (let i = 0; i < count && advertisers.length; i++) {
         const stock = getRandomElement(advertisers);
         const media = stocks.find(s => s.symbol === getRandomElement(Object.keys(MAGAZINES)));
@@ -201,7 +231,7 @@ function sendCompanyAdSpam() {
 
 function sendMagazineSpam() {
     for (const [symbol, def] of Object.entries(MAGAZINES)) {
-        if (mailbox.subscriptions[symbol] !== 'free' || Math.random() > 0.5) continue;
+        if (mailbox.subscriptions[symbol] !== 'free' || Math.random() > 0.2) continue; // B2: rzadziej
         addMail({
             sender: symbol,
             subject: getRandomElement([`Przejdź na ${def.label} Premium — pierwszy tydzień taniej!`, `Nie przegap ważnych wiadomości — ${def.label} Premium`, `Ankieta czytelników ${def.label} (zajmie tylko 45 minut)`]),

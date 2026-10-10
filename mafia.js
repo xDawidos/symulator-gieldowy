@@ -226,7 +226,7 @@ function mafiaEntryTicket(symbol) {
     stock.sharesHeld += quantity;
     mafia.acquired[symbol] = (mafia.acquired[symbol] || 0) + quantity;
     mafiaTrace(20 + (typeof isGuardProtected === 'function' && isGuardProtected(stock) ? 15 : 0), 3, 15, cost * 0.05); // Gwardia patrzy na ręce
-    mafia.demand = { type: 'favor', amount: Math.round(cost * 0.15), quarter: macro.quarter + 1 };
+    mafia.demand = { type: 'favor', amount: Math.round(cost * 0.15), quarter: macro.quarter + 1, deadline: macro.quarter + 2 };
     logEvent(`🎟️ Fundusz dostaje „spod lady” ${quantity.toLocaleString('pl-PL')} akcji ${stock.name}. Pan Gato zapamięta przysługę.`, 'review');
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return true;
@@ -285,14 +285,14 @@ function createMafiaDemand() {
         if (holdings.length) {
             const [symbol, h] = getRandomElement(holdings);
             const stock = stocks.find(s => s.symbol === symbol);
-            mafia.demand = { type: 'offer', symbol, shares: Math.ceil(h.shares * 0.5), price: stock.price * 0.8, quarter: macro.quarter };
+            mafia.demand = { type: 'offer', symbol, shares: Math.ceil(h.shares * 0.5), price: stock.price * 0.8, quarter: macro.quarter, deadline: macro.quarter + 1 };
             addMail({ sender: CORPORATION_SENDER, subject: '🌹 Propozycja nie do odrzucenia', body: `Pan Gato chce odkupić połowę Twojego pakietu ${stock.name} po ${formatZl(stock.price * 0.8)} za akcję. Odmowa będzie… nierozsądna.`, importance: 3 });
             return;
         }
     }
     if (!mafia.protection && (stage >= 1 || mafia.ties.player >= 2) && Math.random() < 0.3) {
-        mafia.demand = { type: 'haracz', amount: Math.round(getFundAssets() * MAFIA_PROTECTION_FEE * 1.5), quarter: macro.quarter };
-        addMail({ sender: CORPORATION_SENDER, subject: '💰 Opłata za „spokój”', body: `Pan Gato przypomina, że w tej okolicy bywa niebezpiecznie. ${formatZl(mafia.demand.amount, 0)} zapewni funduszowi spokój. Odpowiedz w Szarej strefie przed końcem kwartału.`, importance: 3 });
+        mafia.demand = { type: 'haracz', amount: Math.round(getFundAssets() * MAFIA_PROTECTION_FEE * 1.5), quarter: macro.quarter, deadline: macro.quarter + 1 };
+        addMail({ sender: CORPORATION_SENDER, subject: '💰 Opłata za „spokój”', body: `Pan Gato przypomina, że w tej okolicy bywa niebezpiecznie. ${formatZl(mafia.demand.amount, 0)} zapewni funduszowi spokój. Odpowiedz w Szarej strefie do końca przyszłego kwartału.`, importance: 3 });
     }
 }
 
@@ -305,8 +305,12 @@ function processMafiaQuarterly() {
     const quarter = macro.quarter;
     const stageBefore = getMafiaStageIndex();
 
-    // Nieodebrane żądanie z poprzedniego kwartału = odmowa.
-    if (mafia.demand && mafia.demand.quarter < quarter) answerMafiaDemand(false);
+    // B2: termin do końca następnego kwartału, przypomnienie kwartał przed karą.
+    if (mafia.demand) {
+        const deadline = mafia.demand.deadline ?? mafia.demand.quarter + 1;
+        if (quarter > deadline) answerMafiaDemand(false);
+        else if (quarter === deadline && typeof showBreakingNews === 'function') showBreakingNews('Pan Gato czeka na odpowiedź — termin mija w tym kwartale (Szara strefa).', false);
+    }
 
     // Boty współpracujące z mafią; wrogie boty zlecają sabotaż spółek gracza.
     for (const ai of aiCompetitors) {
@@ -363,6 +367,7 @@ function processMafiaQuarterly() {
     spawnFrontCompanies();
     runMafiaFeud();
     createMafiaDemand();
+    updateGreyZoneBadge();
 
     // Policja osłabia mafię; kryzys przy najwyższym etapie.
     const police = getInstitutionEffectiveness(oversight.police);
@@ -560,4 +565,15 @@ function releaseMafiaLockedShares() {
         holding.lockedShares = Math.max(0, (holding.lockedShares || 0) - holding.mafiaLocked);
         holding.mafiaLocked = 0;
     }
+}
+
+/** B2: znacznik oczekującego żądania na przycisku „Szara strefa”. */
+function updateGreyZoneBadge() {
+    const button = document.getElementById('open-grey-btn');
+    if (!button) return;
+    let badge = button.querySelector('.nav-badge-alert');
+    if (mafia?.demand) {
+        if (!badge) { badge = document.createElement('span'); badge.className = 'nav-badge-alert'; button.style.position = 'relative'; button.appendChild(badge); }
+        badge.textContent = '1';
+    } else if (badge) badge.remove();
 }
