@@ -529,6 +529,50 @@ function investInPpp(offerId, amount) {
     return stake;
 }
 
+// B4: zdarzenia PPP — wcześniejszy wykup z premią, propozycja restrukturyzacji.
+const PPP_EARLY_BUYOUT_PREMIUM = 0.03;
+
+/** Zwraca true, gdy udział zniknął (wykup). */
+function processPppEvents(stake) {
+    if (city.budget > stake.principal * 4 && stake.weeksLeft > 8 && Math.random() < 0.01) {
+        const paid = stake.principal * (1 + PPP_EARLY_BUYOUT_PREMIUM);
+        city.budget -= paid;
+        playerCash += paid;
+        playerFund.ppp = playerFund.ppp.filter(item => item !== stake);
+        addMail({ sender: CORPORATION_SENDER, subject: `🏙️ Wcześniejszy wykup PPP: ${stake.name}`, body: `Miasto ma nadwyżkę i wykupuje udział funduszu przed terminem: ${formatZl(paid, 0)} (nominał + ${(PPP_EARLY_BUYOUT_PREMIUM * 100).toFixed(0)}% premii).`, importance: 2 });
+        return true;
+    }
+    if (!stake.restructure && city.budget < stake.principal && stake.weeksLeft <= 8 && Math.random() < 0.25) {
+        stake.restructure = 'pending';
+        addMail({ sender: CORPORATION_SENDER, subject: `🏙️ Miasto prosi o restrukturyzację PPP: ${stake.name}`, body: `Budżet miasta nie wystarczy na spłatę ${formatZl(stake.principal, 0)}. Propozycja: przesunięcie spłaty o pół roku i oprocentowanie +1 pkt proc. Odmowa: miasto szuka pomocy w Skarbie Państwa — jeśli jej nie dostanie, grozi niewypłacalność (odzysk ${(PPP_RECOVERY * 100).toFixed(0)}%).`, importance: 3, action: { type: 'pppRestructure', stakeId: stake.id } });
+    }
+    return false;
+}
+
+function respondPppRestructure(stakeId, accept) {
+    const stake = (playerFund?.ppp || []).find(item => item.id === stakeId);
+    if (!stake || stake.restructure !== 'pending') { showToast('Ta propozycja jest nieaktualna.', 'default'); return false; }
+    if (accept) {
+        stake.restructure = 'accepted';
+        stake.weeksLeft += 26;
+        stake.rate += 0.01;
+        stake.extensions = 0;
+        logEvent(`🤝 Fundusz zgadza się na restrukturyzację PPP ${stake.name}: spłata za ${stake.weeksLeft} tyg., ${(stake.rate * 100).toFixed(1)}% rocznie.`, 'review');
+    } else {
+        stake.restructure = 'refused';
+        const help = Math.min(Math.max(0, governmentTreasury), stake.principal);
+        if (Math.random() < 0.5 && help >= stake.principal) {
+            governmentTreasury -= help;
+            city.budget += help;
+            logEvent(`🏛️ Skarb Państwa ratuje miasto — PPP ${stake.name} zostanie spłacone w terminie.`, 'review');
+        } else {
+            stake.extensions = 2; // bez dalszych przesunięć
+            logEvent(`⚠️ Fundusz odmawia restrukturyzacji PPP ${stake.name}; miasto nie dostaje pomocy — spłata zagrożona.`, 'review');
+        }
+    }
+    return true;
+}
+
 /** Co tydzień: odsetki i spłaty PPP z budżetu miasta, wygasanie ofert. */
 function processPppWeekly() {
     const ppp = ensurePpp();
@@ -542,10 +586,13 @@ function processPppWeekly() {
         if (city.budget >= interest) {
             city.budget -= interest;
             playerCash += interest;
+            if (stake.unpaid > 0) logEvent(`🏙️ Miasto nadrabia zaległe odsetki PPP ${stake.name}.`, 'review');
             stake.unpaid = 0;
         } else {
+            if (!stake.unpaid) logEvent(`⚠️ Miasto opóźnia odsetki PPP ${stake.icon} ${stake.name} — odsetki narastają.`, 'review');
             stake.unpaid = interest;
         }
+        if (processPppEvents(stake)) continue;
         stake.weeksLeft--;
         if (stake.weeksLeft > 0) continue;
 

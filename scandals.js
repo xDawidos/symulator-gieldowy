@@ -226,20 +226,30 @@ function startPrWar() {
         scandals.prWars.push(war);
         logEvent(`📢 Wojna PR: ${a.name} kontra ${b.name}. Media pełne „ujawnionych dokumentów”.`, 'company');
         for (const stock of [a, b]) {
-            if (getFundStakePct(stock) > 0.5) addMail({ sender: CORPORATION_SENDER, subject: `📢 Wojna PR: ${stock.name} jest stroną`, body: 'Jako większościowiec możesz wesprzeć kampanię (z gotówki spółki) albo zaproponować rozejm — w oknie Państwa → Nadzór.', importance: 2, symbol: stock.symbol });
+            if (getFundStakePct(stock) >= PR_WAR_MIN_STAKE) addMail({ sender: CORPORATION_SENDER, subject: `📢 Wojna PR: ${stock.name} jest stroną`, body: 'Od 20% akcji możesz podpowiedzieć zarządowi kampanię (z gotówki spółki); większościowiec może też zaproponować rozejm — w oknie Państwa → Nadzór.', importance: 2, symbol: stock.symbol });
         }
         return war;
     }
     return null;
 }
 
-/** Gracz (większość) wspiera kampanię swojej spółki — 1% kapitalizacji z gotówki spółki. */
+const PR_WAR_MIN_STAKE = 0.2; // B4: od 20% akcji fundusz może podpowiedzieć zarządowi kampanię
+
+/** Gracz wspiera kampanię spółki — 1% kapitalizacji z gotówki spółki. Bez większości zarząd może odmówić. */
 function supportPrCampaign(symbol) {
     const war = scandals.prWars.find(w => w.a === symbol || w.b === symbol);
     const stock = stocks.find(s => s.symbol === symbol);
-    if (!war || !stock || getFundStakePct(stock) <= 0.5) return false;
+    const stake = stock ? getFundStakePct(stock) : 0;
+    if (!war || !stock || stake < PR_WAR_MIN_STAKE) return false;
     const cost = Math.round(getMarketCapValue(stock) * 0.01);
     if (stock.cash < cost) { showToast('Spółka nie ma gotówki na kampanię.', 'error'); return false; }
+    const quarter = typeof macro === 'object' ? macro.quarter : 0;
+    if (stake <= 0.5) {
+        if (!war.suggested) war.suggested = {};
+        if (war.suggested[symbol] === quarter) { showToast('Zarząd już rozważał Twoją sugestię w tym kwartale.', 'default'); return false; }
+        war.suggested[symbol] = quarter;
+        if (Math.random() >= stake * 2) { showToast(`Zarząd ${stock.name} nie przyjmuje sugestii (szansa ${(stake * 200).toFixed(0)}%).`, 'warning'); return false; }
+    }
     adjustCompanyCash(stock, -cost);
     adjustBalanceSheet(stock, { assets: -cost, retainedEarnings: -cost });
     war.boost[symbol] += 0.3;
@@ -326,9 +336,10 @@ function renderParabankExtras(bank) {
 function renderPrWars() {
     if (!scandals.prWars.length) return '<p class="text-sm text-muted">Brak trwających wojen PR.</p>';
     return `<ul class="list-plain text-sm">${scandals.prWars.map(war => {
-        const mine = [war.a, war.b].find(symbol => { const s = stocks.find(x => x.symbol === symbol); return s && getFundStakePct(s) > 0.5; });
+        const mine = [war.a, war.b].find(symbol => { const s = stocks.find(x => x.symbol === symbol); return s && getFundStakePct(s) >= PR_WAR_MIN_STAKE; });
+        const majority = mine && getFundStakePct(stocks.find(x => x.symbol === mine)) > 0.5;
         return `<li>📢 ${escapeHtml(war.a)} ⚔️ ${escapeHtml(war.b)} · zostało ${war.quartersLeft} kw. · przewaga: ${war.score >= 0 ? war.a : war.b}
-            ${mine ? `<button class="btn-xs" onclick="supportPrCampaign('${mine}'); updateStateModalContent();">Wesprzyj ${escapeHtml(mine)}</button> <button class="btn-xs btn-secondary" onclick="proposePrTruce('${mine}'); updateStateModalContent();">Rozejm</button>` : ''}</li>`;
+            ${mine ? `<button class="btn-xs" onclick="supportPrCampaign('${mine}'); updateStateModalContent();">${majority ? 'Wesprzyj' : 'Podpowiedz kampanię'} ${escapeHtml(mine)}</button>${majority ? ` <button class="btn-xs btn-secondary" onclick="proposePrTruce('${mine}'); updateStateModalContent();">Rozejm</button>` : ''}` : ''}</li>`;
     }).join('')}</ul>`;
 }
 

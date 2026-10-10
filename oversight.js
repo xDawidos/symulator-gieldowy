@@ -296,7 +296,8 @@ function processOversightQuarterly() {
         if (id === 'player' && oversight.convicted) continue;
         const knfFactor = id === 'player' ? getKnfAttention() : 0.5;
         const pPolice = record.immuneUntil >= quarter ? 0 : police * record.suspicion / 150;
-        const pKnf = knf * knfFactor * record.suspicion / 200;
+        const favor = id === 'player' && typeof getPoliticalFavor === 'function' ? getPoliticalFavor() : 0;
+        const pKnf = knf * knfFactor * record.suspicion / 200 * (1 - 0.3 * favor);
         if (record.suspicion > 0 && Math.random() < Math.min(0.85, pPolice)) punishEntity(id, 'Policja');
         else if (record.suspicion > 0 && Math.random() < Math.min(0.85, pKnf)) punishEntity(id, 'KNF');
         record.suspicion = Math.max(0, record.suspicion * 0.85);

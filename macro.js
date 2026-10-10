@@ -41,7 +41,7 @@ function createMacroState() {
         expectation: { change: 0, label: 'bez zmian' },
         lastDecision: null,
         sectorCycles: createSectorCycles(),
-        election: { quartersLeft: getRandomIntInRange(6, 12), ruling: Math.random() < 0.5 ? 'market' : 'state', campaign: false },
+        election: { quartersLeft: getRandomIntInRange(6, 12), ruling: Math.random() < 0.5 ? 'market' : 'state', campaign: false, donations: { market: 0, state: 0 }, favor: null },
         recentEvents: [],
         shocks: { inflation: 0 }
     };
@@ -254,8 +254,61 @@ function runCentralBankAI() {
 // WYBORY I SPÓŁKI PAŃSTWOWE
 // =================================================================================
 
+// B4: fundusz może wesprzeć partię z pieniędzy funduszu (ryzyko KNF i wizerunku).
+const ELECTION_DONATION_LIMIT = 0.02;   // łącznie do 2% aktywów funduszu na kampanię
+const POLITICAL_FAVOR_QUARTERS = 8;
+
+function getPoliticalFavor() {
+    const favor = macro.election?.favor;
+    return favor && favor.quartersLeft > 0 ? favor.sign : 0;
+}
+
+function supportElectionCampaign(partyId, amount) {
+    const election = macro.election;
+    amount = Math.floor(Number(amount));
+    if (!RULING_PARTIES[partyId] || !playerFund) return false;
+    if (!election.campaign) { showToast('Darowizny przyjmowane są tylko w trakcie kampanii.', 'warning'); return false; }
+    if (!election.donations) election.donations = { market: 0, state: 0 };
+    const assets = getFundAssets();
+    const given = election.donations.market + election.donations.state;
+    if (!(amount >= 100)) { showToast('Minimalna darowizna: 100 zł.', 'warning'); return false; }
+    if (given + amount > assets * ELECTION_DONATION_LIMIT) { showToast(`Limit: 2% aktywów funduszu na kampanię (zostało ${formatZl(Math.max(0, assets * ELECTION_DONATION_LIMIT - given), 0)}).`, 'warning'); return false; }
+    if (playerCash < amount) { showToast('Za mało gotówki funduszu.', 'error'); return false; }
+    playerCash -= amount;
+    recordPayment('player-fund', `external:partia-${partyId}`, amount, `Darowizna: ${RULING_PARTIES[partyId].name}`);
+    election.donations[partyId] += amount;
+    const share = amount / Math.max(1, assets);
+    if (typeof getRecord === 'function') getRecord('player').suspicion += 5 + share * 1000;
+    if (share > 0.005) playerFund.trust = Math.max(0, playerFund.trust - share * 300);
+    logEvent(`🗳️ Fundusz przekazuje ${formatZl(amount, 0)} na kampanię: ${RULING_PARTIES[partyId].name}. Media pytają o pieniądze klientów.`, 'review');
+    return true;
+}
+
+/** Przechył szans wyborczych od darowizn funduszu (do ±10 pkt proc.). */
+function getDonationTilt() {
+    const d = macro.election?.donations;
+    if (!d) return 0;
+    const assets = Math.max(1, typeof getFundAssets === 'function' ? getFundAssets() : 1);
+    return clampValue((d.state - d.market) / assets * 5, -0.1, 0.1);
+}
+
+function settlePoliticalFavor() {
+    const election = macro.election;
+    const d = election.donations || { market: 0, state: 0 };
+    if (d.market + d.state > 0) {
+        const backed = d.state > d.market ? 'state' : 'market';
+        const won = backed === election.ruling;
+        election.favor = { sign: won ? 1 : -1, quartersLeft: POLITICAL_FAVOR_QUARTERS };
+        addMail({ sender: CORPORATION_SENDER, subject: won ? '🗳️ Wsparta partia wygrała wybory' : '🗳️ Wsparta partia przegrała wybory',
+            body: won ? 'Nowa władza pamięta o wsparciu: łagodniejsze kontrole KNF i więcej kontraktów MON dla spółek funduszu przez 2 lata gry.'
+                : 'Wygrani pamiętają, kogo wspierał fundusz: KNF przygląda się uważniej, kontrakty MON omijają spółki funduszu przez 2 lata gry.', importance: 2 });
+    }
+    election.donations = { market: 0, state: 0 };
+}
+
 function advanceElectionCycle() {
     const election = macro.election;
+    if (election.favor?.quartersLeft > 0) election.favor.quartersLeft--;
     election.quartersLeft--;
     if (election.quartersLeft === 1 && !election.campaign) {
         election.campaign = true;
@@ -266,11 +319,13 @@ function advanceElectionCycle() {
 
     // Zła koniunktura i wysoka inflacja szkodzą rządzącym.
     const badTimes = economyCycle.phase === 'recession' || macro.inflation > 0.05 || macro.unemployment > 0.09;
-    const change = Math.random() < (badTimes ? 0.7 : 0.35);
+    const tilt = getDonationTilt() * (election.ruling === 'market' ? 1 : -1); // darowizny dla opozycji zwiększają szansę zmiany
+    const change = Math.random() < (badTimes ? 0.7 : 0.35) + tilt;
     const previous = election.ruling;
     if (change) election.ruling = previous === 'market' ? 'state' : 'market';
     election.campaign = false;
     election.quartersLeft = ELECTION_INTERVAL_QUARTERS;
+    settlePoliticalFavor();
     const party = getRulingParty();
     logEvent(`🗳️ WYBORY: ${change ? `zmiana władzy — wygrywa ${party.name}` : `${party.name} utrzymuje władzę`}. ${party === RULING_PARTIES.state ? 'Więcej dotacji i nacjonalizacji.' : 'Kurs na prywatyzację i mniej dotacji.'}`, 'state');
     if (change) {

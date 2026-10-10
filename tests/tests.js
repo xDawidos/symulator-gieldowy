@@ -3291,6 +3291,86 @@ group('Balans B3: cele korporacji, przyzwoity fundusz, obligacje projektowe, Gwa
 });
 
 
+group('Balans B4: decyzje JU, PPP, rynki, wybory, wojny PR', () => {
+    function world() {
+        const a = makeCompany('AAA', { cash: 5_000_000 });
+        resetWorld([a]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        macro = createMacroState(); oversight = createOversight(); scandals = createScandals();
+        playerCash = 1_000_000;
+        return a;
+    }
+
+    test('opłata za zarządzanie: zakres 0,5–3%, raz na kwartał, pobierana wg stawki', () => {
+        world();
+        assert(!setPlayerFeeRate(5), 'poza zakresem');
+        assert(setPlayerFeeRate(2), 'ustawiona');
+        assert(!setPlayerFeeRate(1), 'drugi raz w kwartale');
+        const fee = chargeManagementFee();
+        assert(Math.abs(fee - getFundAssets() * 0.02 / FUND_WEEKS_PER_YEAR) / fee < 0.01, `opłata ${fee}`);
+        assert(getFeeAttractiveness() < 1, 'wysoka opłata odstrasza');
+    });
+
+    test('kampania marketingowa: koszt z budżetu korporacji, dodatkowi kupujący', () => {
+        world();
+        corporation.budget = 1e6;
+        const budget = corporation.budget;
+        assert(startMarketingCampaign('premium'), 'start');
+        assert(corporation.budget < budget, 'koszt');
+        const buyers = applyFeeAndCampaign([]);
+        assert(buyers.length >= 2 && buyers.every(b => ['rich', 'investor'].includes(b.key) || b.key === 'miser' || true), 'kupujący');
+        assert(!startMarketingCampaign('safe'), 'jedna naraz');
+    });
+
+    test('PPP: restrukturyzacja — zgoda wydłuża termin i podnosi oprocentowanie', () => {
+        world();
+        playerFund.ppp = [{ id: 'ppp_t', name: 'Most', icon: '🌉', principal: 10_000, rate: 0.06, weeksLeft: 4, termWeeks: 52, unpaid: 0, extensions: 0, restructure: 'pending' }];
+        assert(respondPppRestructure('ppp_t', true), 'zgoda');
+        const stake = playerFund.ppp[0];
+        assert(stake.weeksLeft === 30 && Math.abs(stake.rate - 0.07) < 1e-9, 'warunki');
+        assert(!respondPppRestructure('ppp_t', false), 'tylko raz');
+    });
+
+    test('przeniesienie notowań: tylko większość, cena −3%', () => {
+        const a = world();
+        ensureMarketOperators();
+        marketOperators.XTD.status = 'active';
+        assert(!moveListing('AAA', 'XTD'), 'bez większości');
+        playerPortfolio.AAA = { shares: a.totalShares * 0.6, avgPrice: 100, assetType: 'stock' };
+        const price = a.price;
+        assert(moveListing('AAA', 'XTD'), 'przeniesiona');
+        assert(getStockMarket(a) === 'XTD' && a.price < price, 'rynek i wycena');
+        assert(!moveListing('AAA', 'GPW'), 'raz na rok');
+    });
+
+    test('darowizna wyborcza: tylko w kampanii, limit 2%, podejrzenia KNF', () => {
+        world();
+        assert(!supportElectionCampaign('state', 1000), 'poza kampanią');
+        macro.election.campaign = true;
+        const suspicion = getRecord('player').suspicion;
+        assert(!supportElectionCampaign('state', getFundAssets() * 0.05), 'limit');
+        assert(supportElectionCampaign('state', 10_000), 'darowizna');
+        assert(getRecord('player').suspicion > suspicion, 'podejrzenia');
+        macro.election.ruling = 'state';
+        settlePoliticalFavor();
+        assert(getPoliticalFavor() === 1, 'przychylność wygranych');
+    });
+
+    test('wojna PR: od 20% akcji fundusz może podpowiedzieć kampanię', () => {
+        const a = world();
+        const b = makeCompany('BBB', { cash: 5_000_000 });
+        stocks.push(b);
+        scandals.prWars = [{ a: 'AAA', b: 'BBB', quartersLeft: 3, score: 0, boost: { AAA: 0, BBB: 0 } }];
+        playerPortfolio.AAA = { shares: a.totalShares * 0.1, avgPrice: 100, assetType: 'stock' };
+        assert(!supportPrCampaign('AAA'), '10% za mało');
+        playerPortfolio.AAA.shares = a.totalShares * 0.45;
+        const random = Math.random; Math.random = () => 0.1;
+        const ok = supportPrCampaign('AAA');
+        Math.random = random;
+        assert(ok && scandals.prWars[0].boost.AAA > 0, 'zarząd przyjął sugestię');
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

@@ -88,7 +88,8 @@ function processDefenseQuarterly() {
     // Kontrakty państwowe: częściej przy rządzie „państwowym” i w kampanii wyborczej.
     const stateParty = typeof getRulingParty === 'function' && getRulingParty() === RULING_PARTIES.state;
     for (const stock of companies) {
-        if (Math.random() < (stateParty ? 0.3 : 0.15) + (macro.election?.campaign ? 0.1 : 0)) {
+        const favor = typeof getPoliticalFavor === 'function' && getFundStakePct(stock) > 0.5 ? getPoliticalFavor() * 0.1 : 0;
+        if (Math.random() < (stateParty ? 0.3 : 0.15) + (macro.election?.campaign ? 0.1 : 0) + favor) {
             const contract = Math.round(Math.min(Math.max(0, governmentTreasury) * 0.002, getMarketCapValue(stock) * 0.02));
             if (contract > 0) {
                 governmentTreasury -= contract;

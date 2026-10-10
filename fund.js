@@ -422,9 +422,37 @@ function processFundWeekly() {
     }
 }
 
+// B4: gracz ustala opłatę za zarządzanie (0,5–3% rocznie).
+const FEE_RATE_MIN = 0.005;
+const FEE_RATE_MAX = 0.03;
+
+function getPlayerFeeRate() {
+    return Math.max(FEE_RATE_MIN, Math.min(FEE_RATE_MAX, Number(playerFund?.feeRate) || MANAGEMENT_FEE_ANNUAL));
+}
+
+/** Atrakcyjność opłaty dla nowych klientów: 1 przy standardzie 0,8%, mniej przy wyższej. */
+function getFeeAttractiveness() {
+    return Math.max(0.3, Math.min(1.6, MANAGEMENT_FEE_ANNUAL / getPlayerFeeRate()));
+}
+
+/** Zmiana opłaty (w % rocznie), najwyżej raz na kwartał. */
+function setPlayerFeeRate(percent) {
+    if (!playerFund) return false;
+    const rate = Number(percent) / 100;
+    if (!(rate >= FEE_RATE_MIN - 1e-9 && rate <= FEE_RATE_MAX + 1e-9)) { showToast('Opłata: od 0,5% do 3% rocznie.', 'warning'); return false; }
+    const quarter = typeof macro === 'object' ? macro.quarter : 0;
+    if (playerFund.feeChangedQuarter === quarter) { showToast('Opłatę można zmienić raz na kwartał.', 'warning'); return false; }
+    const previous = getPlayerFeeRate();
+    playerFund.feeRate = rate;
+    playerFund.feeChangedQuarter = quarter;
+    logEvent(`💼 Fundusz zmienia opłatę za zarządzanie: ${(previous * 100).toFixed(2)}% → ${(rate * 100).toFixed(2)}% rocznie.`, 'review');
+    showToast(rate < previous ? 'Niższa opłata przyciągnie klientów, ale budżet korporacji będzie mniejszy.' : 'Wyższa opłata zasili budżet, ale odstraszy klientów wrażliwych na koszty.', 'default', 6000);
+    return true;
+}
+
 function chargeManagementFee() {
     const assets = getFundAssets();
-    const fee = Math.min(Math.max(0, playerCash), assets * MANAGEMENT_FEE_ANNUAL / FUND_WEEKS_PER_YEAR);
+    const fee = Math.min(Math.max(0, playerCash), assets * getPlayerFeeRate() / FUND_WEEKS_PER_YEAR);
     if (!(fee > 0)) return 0;
 
     playerCash -= fee;

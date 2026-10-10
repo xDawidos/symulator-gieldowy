@@ -4985,6 +4985,12 @@ function renderMailPreview(message) {
             ? '<div class="mail-action"><button onclick="openRescueOfferingModal()">Otwórz ofertę emisji</button></div>'
             : '<p class="fund-muted">Ta emisja jest już zamknięta.</p>';
     }
+    if (message.action?.type === 'pppRestructure') {
+        const stake = (playerFund?.ppp || []).find(item => item.id === message.action.stakeId);
+        action = stake?.restructure === 'pending'
+            ? `<div class="mail-action"><button onclick="mailAction(respondPppRestructure, '${stake.id}', true)">Zgódź się</button> <button class="btn-secondary" onclick="mailAction(respondPppRestructure, '${stake.id}', false)">Odmów</button></div>`
+            : '<p class="fund-muted">Decyzja w sprawie restrukturyzacji została podjęta.</p>';
+    }
     if (message.action?.type === 'privatization') {
         const offer = privatizationOffer?.symbol === message.action.symbol ? privatizationOffer : null;
         action = offer
@@ -5261,6 +5267,25 @@ function formatPremium(value) {
     return `<span class="${pct > 0.05 ? 'text-up' : pct < -0.05 ? 'text-down' : 'text-muted'}">${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%</span>`;
 }
 
+/** B4: opłata za zarządzanie i kampania marketingowa (pod paskiem rynku JU). */
+function renderJuDecisions() {
+    const ticker = document.getElementById('ju-ticker');
+    if (!ticker || !playerFund) return;
+    let box = document.getElementById('ju-decisions');
+    if (!box) { box = document.createElement('div'); box.id = 'ju-decisions'; box.className = 'bank-grid mt-3'; ticker.after(box); }
+    if (box.contains(document.activeElement)) return;
+    const campaign = playerFund.campaign;
+    box.innerHTML = `
+        <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">💼</span><div><h4>Opłata za zarządzanie</h4><span class="bank-card-type">teraz ${(getPlayerFeeRate() * 100).toFixed(2)}% rocznie · standard ${(MANAGEMENT_FEE_ANNUAL * 100).toFixed(1)}%</span></div></header>
+            <p class="text-sm">Niższa opłata przyciąga klientów (zwłaszcza skner), wyższa zasila budżet korporacji i Twój udział, ale klienci wrażliwi na koszty odchodzą. Zmiana raz na kwartał.</p>
+            <div class="bank-card-form"><input type="text" inputmode="decimal" id="fee-rate-input" value="${(getPlayerFeeRate() * 100).toFixed(2)}" aria-label="Opłata w % rocznie">
+            <button onclick="setPlayerFeeRate(parseFloat(document.getElementById('fee-rate-input').value.replace(',', '.'))); renderJuMarket();">Ustaw (0,5–3%)</button></div></article>
+        <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">📣</span><div><h4>Kampania marketingowa</h4><span class="bank-card-type">koszt ${formatZl(getMarketingCost(), 0)} z budżetu korporacji · ${MARKETING_WEEKS} tyg.</span></div></header>
+            ${campaign?.weeksLeft > 0 ? `<p class="text-sm">Trwa: ${MARKETING_TARGETS[campaign.target].icon} ${MARKETING_TARGETS[campaign.target].label}, zostało ${campaign.weeksLeft} tyg.</p>`
+                : `<p class="text-sm">Dodatkowi kupujący JU z wybranej grupy klientów. Nowe wpłaty nadal wymagają zaufania ≥ 50.</p>
+                <div class="bank-card-form">${Object.entries(MARKETING_TARGETS).map(([id, t]) => `<button class="btn-secondary" onclick="startMarketingCampaign('${id}'); renderJuMarket();">${t.icon} ${t.label}</button>`).join('')}</div>`}</article>`;
+}
+
 function renderJuMarket() {
     const modal = document.getElementById('clients-modal');
     if (!modal || modal.style.display !== 'block' || !playerFund) return;
@@ -5278,6 +5303,7 @@ function renderJuMarket() {
         ['Tydzień rynku', juMarket.week],
         ['Najlepiej sprzedaje się', best ? escapeHtml(best.name) : '—']
     ].map(([label, value]) => `<div class="bank-ticker-item"><span>${label}</span><strong>${value}</strong></div>`).join('');
+    renderJuDecisions();
 
     // Tabela funduszy rynku wtórnego
     const rows = funds.map(fund => {
@@ -5805,6 +5831,9 @@ function renderGovernanceDetail(stock) {
             <select id="gov-proposal-type" aria-label="Rodzaj wniosku">${Object.entries(ACTIVIST_PROPOSALS).map(([id, p]) => `<option value="${id}" title="${escapeHtml(p.desc)}">${p.label}</option>`).join('')}</select>
             <button onclick="submitShareholderProposal('${stock.symbol}', document.getElementById('gov-proposal-type').value)">Zgłoś na walne</button>
         </div>` : '<p class="text-muted text-sm">Głosuje, zgłasza wnioski i prowadzi kampanie tylko akcjonariusz większościowy (> 50%). Poniżej fundusz głosuje „za” wnioskami zarządu.</p>'}
+        ${typeof getListingMoveTargets === 'function' && getListingMoveTargets(stock).length ? `<h4>Rynek notowań</h4>
+            <p class="text-sm">Teraz: <strong>${escapeHtml(getMarketLabel(getStockMarket(stock)))}</strong>. Rynki alternatywne mają niższą prowizję i opłatę za notowanie, ale mniej inwestorów (wycena −3%). Koszt: 0,3% kapitalizacji z gotówki spółki, raz na rok.</p>
+            <div class="bank-card-form">${getListingMoveTargets(stock).map(id => `<button class="btn-secondary" onclick="moveListing('${stock.symbol}', '${id}'); openGovernanceModal('${stock.symbol}');">Przenieś na ${escapeHtml(getMarketLabel(id))}</button>`).join('')}</div>` : ''}
         ${insight ? `<h4>Wgląd rady nadzorczej</h4>
             <p class="text-sm">Prognoza wyniku kwartału: <strong class="${insight.forecast >= 0 ? 'text-up' : 'text-down'}">${formatZl(insight.forecast, 0)}</strong></p>
             <ul class="list-plain text-sm">${insight.plans.map(p => `<li>• ${escapeHtml(p)}</li>`).join('') || '<li class="text-muted">Brak planów inwestycyjnych.</li>'}</ul>` : ''}
@@ -5843,7 +5872,12 @@ function renderMacroPanel() {
                 <p class="text-xs text-muted">Cechy prezesa: ${(centralBank.ceo?.traits || []).map(t => escapeHtml(t.name)).join(', ') || 'brak'}. Rynek reaguje mocniej na niespodziankę niż na decyzję zgodną z oczekiwaniami.</p></article>
             <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">🗳️</span><div><h4>Polityka</h4><span class="bank-card-type">${escapeHtml(getRulingParty().name)}</span></div></header>
                 <p class="text-sm">${election.campaign ? '<strong class="text-warn">Trwa kampania wyborcza.</strong>' : `Wybory za ${election.quartersLeft} kw.`}</p>
-                <p class="text-xs text-muted">Prywatyzacje ×${getRulingParty().privatization} · nacjonalizacje ×${getRulingParty().nationalization} · dotacje ×${getRulingParty().subsidies}</p></article>
+                <p class="text-xs text-muted">Prywatyzacje ×${getRulingParty().privatization} · nacjonalizacje ×${getRulingParty().nationalization} · dotacje ×${getRulingParty().subsidies}</p>
+                ${getPoliticalFavor() ? `<p class="text-sm ${getPoliticalFavor() > 0 ? 'text-up' : 'text-down'}">${getPoliticalFavor() > 0 ? '🤝 Władza jest przychylna funduszowi' : '😠 Władza jest nieprzychylna funduszowi'} (${election.favor.quartersLeft} kw.)</p>` : ''}
+                ${election.campaign && playerFund ? `<p class="text-xs text-muted">Darowizna z pieniędzy funduszu (do 2% aktywów): przychylność wygranych, ale podejrzenia KNF i spadek zaufania klientów. Wpłacono: ${formatZl((election.donations?.market || 0) + (election.donations?.state || 0), 0)}.</p>
+                <div class="bank-card-form"><select id="donation-party" aria-label="Partia">${Object.entries(RULING_PARTIES).map(([id, p]) => `<option value="${id}">${escapeHtml(p.name)}</option>`).join('')}</select>
+                <input type="text" inputmode="numeric" id="donation-amount" value="${Math.max(100, Math.round(getFundAssets() * 0.005))}" aria-label="Kwota darowizny">
+                <button class="btn-secondary" onclick="supportElectionCampaign(document.getElementById('donation-party').value, parseFloat(document.getElementById('donation-amount').value)); updateStateModalContent();">Wesprzyj kampanię</button></div>` : ''}</article>
         </div>
         <h4>Cykle sektorów</h4>
         <div class="macro-sectors">${sectors.map(([sector, cycle]) => {

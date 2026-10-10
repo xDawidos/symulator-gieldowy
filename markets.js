@@ -20,6 +20,8 @@ const OPERATOR_SPONSOR_CHANCE = 0.12;           // co kwartał w fazie startupu
 const OPERATOR_SPAWN_CHANCE = 0.1;              // co kwartał, od 4. kwartału gry
 const OPERATOR_LISTING_FEE = 0.0002;            // opłata za notowanie: % kapitalizacji członka na kwartał
 const OPERATOR_EXCLUSIVITY_CHANCE = 0.1;
+const LISTING_FEE_FACTOR = { GPW: 1, XTD: 0.7, PLU5: 0.5, EURONEXT: 1 }; // B4: tańsze rynki alternatywne
+const LISTING_MOVE_PRICE_EFFECT = { GPW: 0.02, XTD: -0.03, PLU5: -0.03 };  // mniej inwestorów = niższa wycena
 
 const MEMBER_NAME_PREFIXES = ['Nova', 'Prime', 'Delta', 'Orion', 'Vega', 'Atlas', 'Zenit', 'Polar', 'Astra', 'Kappa', 'Sigma', 'Aurora', 'Vistula', 'Baltica'];
 
@@ -276,7 +278,7 @@ function processMarketsQuarterly() {
 
 function collectListingFees(operator, operatorStock) {
     for (const stock of stocks.filter(s => getStockMarket(s) === operator.id && s !== operatorStock && !s.assetType && !s.isBankrupt)) {
-        const fee = Math.min(Math.max(0, stock.cash) * 0.05, getMarketCapValue(stock) * OPERATOR_LISTING_FEE);
+        const fee = Math.min(Math.max(0, stock.cash) * 0.05, getMarketCapValue(stock) * OPERATOR_LISTING_FEE * (LISTING_FEE_FACTOR[operator.id] ?? 1));
         if (!(fee > 0)) continue;
         adjustCompanyCash(stock, -fee);
         adjustBalanceSheet(stock, { assets: -fee, retainedEarnings: -fee });
@@ -316,6 +318,34 @@ function signExclusivity(operator, operatorStock) {
     stock.market = operator.id;
     logEvent(`✍️ ${stock.name} podpisuje umowę na wyłączność z ${MARKET_OPERATOR_DEFS[operator.id].name} i przechodzi na rynek ${getMarketLabel(operator.id)}.`, 'market');
     return stock;
+}
+
+// =================================================================================
+// B4: PRZENIESIENIE NOTOWAŃ SPÓŁKI FUNDUSZU (większość > 50%)
+// =================================================================================
+
+function getListingMoveTargets(stock) {
+    if (!stock || stock.assetType || stock.marketOperator || stock.isStateOwned || getFundStakePct(stock) <= 0.5) return [];
+    ensureMarketOperators();
+    return Object.keys(LISTING_MOVE_PRICE_EFFECT).filter(id => id !== getStockMarket(stock) && marketOperators[id]?.status === 'active');
+}
+
+function moveListing(symbol, marketId) {
+    const stock = stocks.find(s => s.symbol === symbol);
+    if (!getListingMoveTargets(stock).includes(marketId)) { showToast('Przeniesienie notowań niemożliwe (wymaga większości i aktywnego rynku).', 'warning'); return false; }
+    const quarter = typeof macro === 'object' ? macro.quarter : 0;
+    if (stock.listingMovedQuarter !== undefined && quarter - stock.listingMovedQuarter < 4) { showToast('Notowania można przenieść raz na rok gry.', 'warning'); return false; }
+    const cost = Math.round(getMarketCapValue(stock) * 0.003);
+    if (stock.cash < cost) { showToast(`${stock.name} nie ma gotówki na przeniesienie (${formatZl(cost, 0)}).`, 'error'); return false; }
+    adjustCompanyCash(stock, -cost);
+    adjustBalanceSheet(stock, { assets: -cost, retainedEarnings: -cost });
+    const from = getStockMarket(stock);
+    stock.market = marketId;
+    stock.listingMovedQuarter = quarter;
+    const effect = LISTING_MOVE_PRICE_EFFECT[marketId];
+    applyPriceEffect(symbol, effect, effect >= 0 ? 'positive' : 'negative', 'company');
+    logEvent(`🔀 ${stock.name} przenosi notowania z ${getMarketLabel(from)} na ${getMarketLabel(marketId)} (prowizja ${(MARKET_OPERATOR_DEFS[marketId].commission * 100).toFixed(2)}%, opłata za notowanie ×${LISTING_FEE_FACTOR[marketId]}).`, 'market');
+    return true;
 }
 
 // =================================================================================

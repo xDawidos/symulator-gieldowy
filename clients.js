@@ -131,7 +131,8 @@ function processClientsWeekly() {
         const drift = (trust - 50) / 50 * 0.04
             + excess * def.chase * 0.8
             - current.maxDrawdown * def.volAversion * 0.3
-            - (def.feeSensitivity || 0) * 0.01
+            - (def.feeSensitivity || 0) * 0.01 * getPlayerFeeRate() / MANAGEMENT_FEE_ANNUAL
+            - (getPlayerFeeRate() - MANAGEMENT_FEE_ANNUAL) * 0.4
             - (def.comparesRivals && lastRankBad ? 0.05 : 0);
         client.satisfaction = Math.max(0, Math.min(1, client.satisfaction + drift));
 
@@ -237,7 +238,7 @@ function recordFundWeek(fundId, entry) {
 function runPlayerJuMarket(fund) {
     const nav = fund.nav;
     const sellers = playerFund.clients.filter(client => client.pendingSellUnits > 0);
-    let buyers = generateOutsideBuyers(fund);
+    let buyers = applyFeeAndCampaign(generateOutsideBuyers(fund));
     const supplyValue = sellers.reduce((sum, client) => sum + client.pendingSellUnits * nav, 0);
     const demandValue = buyers.reduce((sum, buyer) => sum + buyer.value, 0);
     const premium = computeJuPremium(demandValue, supplyValue);
@@ -298,6 +299,58 @@ function runPlayerJuMarket(fund) {
     }
 
     recordFundWeek('player', { volume, premium, buyers: demandValue, sellers: supplyValue, newClients, inflow, clients: playerFund.clients.length, nav });
+}
+
+// =================================================================================
+// B4: KAMPANIA MARKETINGOWA I OPŁATA A NAPŁYW KLIENTÓW
+// =================================================================================
+
+const MARKETING_TARGETS = {
+    premium: { label: 'Zamożni klienci', icon: '💎', keys: ['rich', 'investor'] },
+    safe:    { label: 'Ostrożni oszczędzający', icon: '🛡️', keys: ['careful', 'fearful', 'miser'] },
+    dynamic: { label: 'Dynamiczni inwestorzy', icon: '🦁', keys: ['brave', 'sly'] }
+};
+const MARKETING_WEEKS = 8;
+
+function getMarketingCost() {
+    return Math.round(Math.max(5000, getFundAssets() * 0.01));
+}
+
+/** Kampania z budżetu korporacji: przez 8 tygodni dodatkowi kupujący JU z wybranej grupy. */
+function startMarketingCampaign(target) {
+    const def = MARKETING_TARGETS[target];
+    if (!def || !playerFund || !corporation) return false;
+    if (playerFund.campaign?.weeksLeft > 0) { showToast('Kampania już trwa.', 'warning'); return false; }
+    const cost = getMarketingCost();
+    if (corporation.budget < cost) { showToast(`Budżet korporacji nie wystarczy (${formatZl(cost, 0)}).`, 'error'); return false; }
+    corporation.budget -= cost;
+    recordPayment('external:korporacja', 'external:agencja-reklamowa', cost, `Kampania marketingowa: ${def.label}`);
+    playerFund.campaign = { target, weeksLeft: MARKETING_WEEKS };
+    logEvent(`📣 Kampania marketingowa funduszu (${def.icon} ${def.label}) za ${formatZl(cost, 0)} z budżetu korporacji.`, 'review');
+    return true;
+}
+
+/** Opłata odstrasza część kupujących (sknery najbardziej), niska przyciąga dodatkowych; kampania dokłada kupujących. */
+function applyFeeAndCampaign(buyers) {
+    const attractiveness = typeof getFeeAttractiveness === 'function' ? getFeeAttractiveness() : 1;
+    let result = buyers;
+    if (attractiveness < 1) {
+        result = buyers.filter(buyer => Math.random() < (buyer.key === 'miser' ? attractiveness * attractiveness : attractiveness));
+    } else if (attractiveness > 1 && Math.random() < attractiveness - 1) {
+        const key = Math.random() < 0.5 ? 'miser' : randomCharacter(playerFund.trust);
+        const def = CLIENT_TYPES[key];
+        result.push({ name: randomClientPersonName(), key, def, value: getRandomInRange(def.size[0], def.size[1]) });
+    }
+    const campaign = playerFund.campaign;
+    if (campaign?.weeksLeft > 0) {
+        campaign.weeksLeft--;
+        for (let i = 0; i < 2; i++) {
+            const key = getRandomElement(MARKETING_TARGETS[campaign.target]?.keys || ['careful']);
+            const def = CLIENT_TYPES[key];
+            result.push({ name: randomClientPersonName(), key, def, value: getRandomInRange(def.size[0], def.size[1]) });
+        }
+    }
+    return result;
 }
 
 /** Fundusze botów i zewnętrzne: zagregowane zlecenia (bez listy osób), wpisy na taśmie. */
