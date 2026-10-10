@@ -2272,7 +2272,7 @@ group('Makroekonomia (0.10.2 M1)', () => {
         const snapshot = JSON.parse(JSON.stringify(buildSaveSnapshot()));
         macro = createMacroState();
         applySaveSnapshot(snapshot);
-        assert(snapshot.version === 10 && macro.inflation === 0.061 && macro.election.ruling === 'state', 'odtworzone');
+        assert(snapshot.version === SAVE_FORMAT_VERSION && macro.inflation === 0.061 && macro.election.ruling === 'state', 'odtworzone');
     });
 });
 
@@ -2654,6 +2654,94 @@ group('Audyt A1: przepływy pieniędzy i akcji', () => {
         a.stateOwnershipPct = 0.2;
         assert(reconcileSharesHeld() >= 1 && a.sharesHeld === 700, `sharesHeld ${a.sharesHeld}`);
         assert(getFreeFloatShares(a) === 8000 && getAvailableShares(a) === 7300, 'wolny obrót bez pakietu państwa');
+    });
+});
+
+group('Nadzór i korupcja (0.11.1)', () => {
+    function world() {
+        const a = makeCompany('AAA', { cash: 2_000_000, liabilities: 1_000_000 });
+        a.insiderShares = 0; a.reputation = { player: 0 };
+        resetWorld([a]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        macro = createMacroState();
+        oversight = createOversight();
+        playerCash = 1_000_000;
+        return a;
+    }
+    function withRandom(value, fn) {
+        const random = Math.random;
+        Math.random = () => value;
+        try { return fn(); } finally { Math.random = random; }
+    }
+
+    test('usługa szarej strefy: płaci fundusz, rośnie podejrzenie i korupcja', () => {
+        const a = world();
+        playerPortfolio.AAA = { shares: 6000, avgPrice: 100, assetType: 'stock' };
+        const cash = playerCash, liabilities = a.balanceSheet.liabilities;
+        assert(greyDebtWriteOff('AAA'), 'usługa');
+        assert(playerCash < cash && a.balanceSheet.liabilities < liabilities, 'dług umorzony, fundusz zapłacił');
+        assert(getRecord('player').suspicion === GREY_SERVICES.debt.risk && oversight.pendingCorruption === GREY_SERVICES.debt.corruption, 'ślady');
+    });
+
+    test('drabina kar: mandat, zaufanie, wpis compliance; trzecie wykrycie = rekwizycja i blokada handlu', () => {
+        world();
+        const trust = playerFund.trust;
+        punishEntity('player', 'KNF');
+        assert(playerFund.trust < trust && playerProfile.cv.some(e => e.type === 'compliance'), 'zaufanie i CV');
+        getRecord('player').illegalGains = 50_000;
+        punishEntity('player', 'Policja');
+        punishEntity('player', 'Policja');
+        assert(getRecord('player').illegalGains === 0 && isTradingBlocked('player'), 'rekwizycja i blokada');
+    });
+
+    test('piąte wykrycie = wyrok (porażka)', () => {
+        world();
+        for (let i = 0; i < CONVICTION_STRIKES; i++) punishEntity('player', 'Policja');
+        assert(oversight.convicted, 'skazany');
+    });
+
+    test('śledztwo: duże podejrzenie przy skutecznej policji kończy się wykryciem; łapówka chroni', () => {
+        world();
+        oversight.police.level = 5;
+        getRecord('player').suspicion = 200;
+        withRandom(0.01, () => processOversightQuarterly());
+        assert(getRecord('player').strikes === 1, 'wykryty');
+        world();
+        oversight.corruption = 60;
+        getRecord('player').suspicion = 200;
+        oversight.knf.level = 0;
+        assert(bribePolice(), 'łapówka');
+        const random = Math.random;
+        let call = 0;
+        Math.random = () => (++call === 1 ? 0.01 : 0.99); // policja „trafiłaby”, KNF nie
+        processOversightQuarterly();
+        Math.random = random;
+        assert(getRecord('player').strikes === 0, 'łapówka chroni przed policją');
+    });
+
+    test('korupcja podnosi zmienność, skuteczne instytucje ją obniżają', () => {
+        world();
+        oversight.corruption = 80;
+        assert(getCorruptionVolatilityFactor() > 1.2, 'zmienność');
+        oversight.police.level = 5; oversight.knf.level = 5;
+        const before = oversight.corruption;
+        withRandom(0.99, () => processOversightQuarterly());
+        assert(oversight.corruption < before, 'spadek korupcji');
+    });
+
+    test('niezależny prezes chroni spółkę przed aferą', () => {
+        const a = world();
+        a.ceo = { name: 'X', traits: [{ id: 'niezalezny' }] };
+        assert(triggerCorruptionScandal() === null, 'brak afery');
+    });
+
+    test('zapis v11 zachowuje nadzór', () => {
+        world();
+        oversight.corruption = 42; getRecord('player').strikes = 2;
+        const snapshot = JSON.parse(JSON.stringify(buildSaveSnapshot()));
+        oversight = createOversight();
+        applySaveSnapshot(snapshot);
+        assert(snapshot.version === 11 && oversight.corruption === 42 && oversight.records.player.strikes === 2, 'odtworzone');
     });
 });
 

@@ -634,6 +634,7 @@ function checkCompliance(symbol) {
     if (!suspicious) return;
 
     playerWallet.complianceRisk++;
+    if (typeof getRecord === 'function') getRecord('player').suspicion += 5; // KNF też widzi front-running
     if (Math.random() < Math.min(0.9, 0.15 * playerWallet.complianceRisk)) {
         const fine = Math.max(50, playerWallet.cash * 0.10);
         const paid = Math.min(playerWallet.cash, fine);

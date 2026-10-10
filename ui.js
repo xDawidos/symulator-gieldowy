@@ -5356,6 +5356,7 @@ function updateStateModalContent() {
         ['Stopa bazowa BC', `${((centralBank.baseInterestRate || 0) * 100).toFixed(2)}%`],
         ['Inflacja', `${(macro.inflation * 100).toFixed(1)}%`],
         ['Rząd', escapeHtml(getRulingParty().name)],
+        ['Korupcja', `${(oversight?.corruption || 0).toFixed(0)}/100`],
         ['Spółki państwowe', stocks.filter(s => s.isStateOwned && !s.isBankrupt).length]
     ]);
 
@@ -5377,6 +5378,8 @@ function updateStateModalContent() {
         body.innerHTML = renderMacroPanel();
     } else if (stateTab === 'markets') {
         body.innerHTML = renderMarketsPanel();
+    } else if (stateTab === 'oversight') {
+        body.innerHTML = renderOversightPanel();
     } else if (stateTab === 'taxes') {
         body.innerHTML = `
             <table class="asset-mini-table w-full">

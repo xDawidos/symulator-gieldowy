@@ -248,6 +248,25 @@ const ceoTraits = {
         rarity: "exceptional",
         color: "#ffc107",
         description: "Jego władza jest absolutna. Spółka, której przewodzi, nie może zostać wrogo przejęta przez innego gracza lub AI."
+    },
+    // === 0.11 CIEMNA STREFA ===
+    sklonny_do_korupcji: {
+        name: "Skłonny do korupcji",
+        rarity: "common",
+        color: "#a0a0a0",
+        description: "Lubi „załatwiać” sprawy. Czasem podnosi korupcję w kraju, a spółka częściej trafia w afery."
+    },
+    skorumpowany: {
+        name: "Skorumpowany",
+        rarity: "rare",
+        color: "#4caf50",
+        description: "Bierze i daje. Co kwartał podnosi korupcję w kraju; spółka jest pierwszym celem śledztw i afer."
+    },
+    niezalezny: {
+        name: "Niezależny",
+        rarity: "rare",
+        color: "#4caf50",
+        description: "Nie da się go kupić. Spółka jest odporna na afery korupcyjne (a od wersji 0.11.2 — na wpływy mafii)."
     }
 };
 // generowanie startupów

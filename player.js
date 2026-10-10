@@ -286,6 +286,7 @@ function buyStock(symbol, quantity) {
         showToast("Nie masz odpowiednich znajomości, aby inwestować w tę strategiczną spółkę Skarbu Państwa!");
         return;
     }
+    if (typeof isTradingBlocked === 'function' && isTradingBlocked('player')) { showToast('Blokada handlu nałożona przez organy ścigania.', 'error'); return; }
     if (stockToBuy.isTradeLocked) {
         showToast(`Handel akcjami ${stockToBuy.name} jest tymczasowo wstrzymany!`);
         return;
@@ -378,6 +379,7 @@ function sellStock(symbol, quantity) {
         return;
     }
 
+    if (typeof isTradingBlocked === 'function' && isTradingBlocked('player')) { showToast('Blokada handlu nałożona przez organy ścigania.', 'error'); return; }
     if (stockToSell.isTradeLocked) {
         showToast(`Handel akcjami ${stockToSell.name} jest tymczasowo wstrzymany!`);
         return;

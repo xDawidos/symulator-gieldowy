@@ -4361,3 +4361,11 @@ img, svg, video { max-width: 100%; }
 #pause-game-btn.is-paused { background-color: var(--color-up); color: #fff; }
 .chart-type-btn { background: transparent; border: 2px solid transparent; }
 .chart-type-btn.active { background: var(--bg-elevated-2); border-color: var(--accent-info); }
+
+/* ===================== 0.11 NADZÓR I SZARA STREFA ===================== */
+.oversight-gauge { height: 10px; margin-top: var(--space-3); border-radius: 5px; overflow: hidden; background: linear-gradient(90deg, var(--color-up), var(--color-warn), var(--color-down)); opacity: 0.35; position: relative; }
+.oversight-gauge span { display: block; height: 100%; background: var(--text-main); opacity: 0.9; }
+.grey-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--space-3); margin-top: var(--space-3); }
+.grey-card { padding: var(--space-3); border: 1px solid var(--border-color); border-left: 3px solid var(--color-down); border-radius: var(--radius-md); background: var(--bg-elevated-2); }
+.grey-card h4 { margin: 0 0 var(--space-1); }
+.grey-card p { margin: 0 0 var(--space-1); }

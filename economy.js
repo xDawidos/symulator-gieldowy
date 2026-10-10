@@ -369,7 +369,7 @@ function updateStockPrices() {
 
         // --- Ruch ceny jako zmiana PROCENTOWA ---
         // Δ% = szum + powrót do wartości godziwej + nastrój rynku + dryf (fazy, CEO, M&A) + boosty
-        let effectiveVolatility = stock.volatilityFactor * volatilityModifier;
+        let effectiveVolatility = stock.volatilityFactor * volatilityModifier * (typeof getCorruptionVolatilityFactor === 'function' ? getCorruptionVolatilityFactor() : 1); // korupcja (0.11)
         if (isVolatilityCapped) {
             effectiveVolatility = Math.max(0.5, Math.min(effectiveVolatility, 3.0));
         }

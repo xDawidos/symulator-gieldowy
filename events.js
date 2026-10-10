@@ -215,6 +215,10 @@ function triggerMainMarketEventCycle() {
         triggerSixthSenseEvent(); // przeczucie zwrotu w sektorze (macro.js) — cykl zdarzeń trwa dalej
     }
 
+    if (Math.random() < (oversight?.corruption || 0) / 400) { // Afera korupcyjna (oversight.js)
+        triggerCorruptionScandal();
+        return;
+    }
     if (Math.random() < 0.05) { // Szok makro (macro.js)
         triggerMacroShockEvent();
         return;
