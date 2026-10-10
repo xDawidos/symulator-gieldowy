@@ -3044,6 +3044,112 @@ group('Testy ogólne 0.11: benchmark GIG i wykup posiadaczy', () => {
     });
 });
 
+group('Balans B1: exploity', () => {
+    function world() {
+        const a = makeCompany('AAA', { cash: 2_000_000, liabilities: 5_000_000 });
+        a.insiderShares = 0; a.reputation = { player: 0 }; a.ceo = { name: 'X', traits: [] };
+        ['guard_fund', 'mafia_bruno'].forEach(id => { const i = aiCompetitors.findIndex(ai => ai.id === id); if (i >= 0) aiCompetitors.splice(i, 1); });
+        resetWorld([a]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        macro = createMacroState(); oversight = createOversight(); mafia = createMafia(); scandals = createScandals();
+        playerCash = 1_000_000;
+        aiCompetitors.forEach(ai => { ai.cash = 1e8; });
+        return a;
+    }
+
+    test('pakiet pod stołem: raz na kwartał, duży pakiet = mała premia i duże ryzyko', () => {
+        const a = world();
+        playerPortfolio.AAA = { shares: 5000, avgPrice: 100, assetType: 'stock' };
+        a.sharesHeld = 5000;
+        const cash = playerCash;
+        assert(greyUnderTable('AAA', 2000), 'pierwszy');
+        const gain = playerCash - cash;
+        assert(gain < 2000 * a.price * 1.05, `premia ≤ 4% przy dużym pakiecie (${gain})`);
+        assert(getRecord('player').suspicion > GREY_SERVICES.underTable.risk, 'ryzyko rośnie z wielkością');
+        assert(!greyUnderTable('AAA', 10), 'drugi w tym samym kwartale zablokowany');
+    });
+
+    test('umorzenie długu: najwyżej 15% zobowiązań i 5% aktywów funduszu', () => {
+        const a = world();
+        playerPortfolio.AAA = { shares: 6000, avgPrice: 100, assetType: 'stock' };
+        const liabilities = a.balanceSheet.liabilities, assets = getFundAssets();
+        greyDebtWriteOff('AAA');
+        const writtenOff = liabilities - a.balanceSheet.liabilities;
+        assert(writtenOff <= liabilities * 0.15 + 1 && writtenOff <= assets * 0.05 + 1, `umorzono ${writtenOff}`);
+    });
+
+    test('parabank: losowy termin upadku 3–8 kw., panika przy sprzedaży dużego pakietu', () => {
+        world();
+        const parabank = spawnParabank();
+        assert(parabank.collapseAt >= 3 && parabank.collapseAt <= 8, 'losowy termin');
+        const stock = stocks.find(s => s.symbol === parabank.symbol);
+        const random = Math.random;
+        Math.random = () => 0.1;
+        onParabankSharesSold(stock, stock.totalShares * 0.05);
+        Math.random = random;
+        assert(parabank.panic, 'panika');
+    });
+
+    test('dopłata za akcje: rabat tylko do 25% kosztu, nowe akcje do 10% spółki, płacisz tylko za objęte', () => {
+        const a = world();
+        playerPortfolio.AAA = { shares: 6000, avgPrice: 100, assetType: 'stock' };
+        a.sharesHeld = 6000;
+        startInternalInvestment(a, { id: 't', name: 'T', durationDays: 28, assetValue: 0, incomeBonus: 0.1 }, 400_000);
+        const uid = a.activeInvestments[0].uid;
+        const cash = playerCash;
+        fundTopUpInvestment('AAA', uid, 300_000, 'shares');
+        const paid = cash - playerCash;
+        assert(a.topUpShares <= 1000 && paid <= 1000 * 100 + 1, `akcje ${a.topUpShares}, zapłacono ${paid}`);
+        assert(!fundTopUpInvestment('AAA', uid, 10_000, 'shares'), 'limit wyczerpany');
+    });
+
+    test('wejściówka: akcje zablokowane bez dostępu do giełdy', () => {
+        const a = world();
+        contactMafia();
+        a.exchange = 'DIAMOND';
+        mafiaEntryTicket('AAA');
+        const holding = playerPortfolio.AAA;
+        assert(holding.lockedShares === holding.shares && holding.mafiaLocked > 0, 'zablokowane');
+    });
+
+    test('cynk: czasem prowokacja policyjna (podejrzenia bez zmiany kursu)', () => {
+        const a = world();
+        a.exchange = 'JUNK';
+        contactMafia();
+        mafia.pumps = [{ symbol: 'AAA', quarter: macro.quarter, outcome: 'sting' }];
+        const price = a.price, suspicion = getRecord('player').suspicion;
+        const random = Math.random;
+        Math.random = () => 0.99;
+        processMafiaQuarterly();
+        Math.random = random;
+        assert(Math.abs(a.price / price - 1) < 0.1 && getRecord('player').suspicion > suspicion + 20, 'prowokacja');
+    });
+
+    test('prezenty: malejący efekt, Stoik odmawia, samymi prezentami najwyżej do 60', () => {
+        world();
+        botRelations = createBotRelations();
+        const reckless = aiCompetitors.find(ai => ai.personality === 'reckless');
+        const calm = aiCompetitors.find(ai => ai.personality === 'calm');
+        playerWallet.cash = 1e6;
+        assert(!giveGiftToBot(calm.id, 1000), 'Stoik odmawia');
+        giveGiftToBot(reckless.id, 1500);
+        const first = getRelation(reckless.id);
+        macro.quarter++;
+        giveGiftToBot(reckless.id, 1500);
+        assert(getRelation(reckless.id) - first < first, 'drugi słabszy');
+        for (let i = 0; i < 10; i++) { macro.quarter++; giveGiftToBot(reckless.id, 1500); }
+        assert(getRelation(reckless.id) <= 60, 'limit 60');
+    });
+
+    test('sprzedaż funduszu respektuje akcje zablokowane (zastaw)', () => {
+        const a = world();
+        playerPortfolio.AAA = { shares: 100, avgPrice: 100, assetType: 'stock', lockedShares: 80 };
+        a.sharesHeld = 100;
+        sellStock('AAA', 50);
+        assert(playerPortfolio.AAA.shares === 100, 'nie sprzedano zablokowanych');
+    });
+});
+
 // --------------------------------------------------------------------------------
 // Uruchomienie
 // --------------------------------------------------------------------------------

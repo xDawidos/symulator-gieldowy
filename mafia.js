@@ -194,7 +194,8 @@ function mafiaTip() {
     if (playerCash < cost) { showToast(`Cynk kosztuje ${formatZl(cost, 0)}.`, 'error'); return false; }
     playerCash -= cost;
     const stock = getRandomElement(pool);
-    mafia.pumps.push({ symbol: stock.symbol, quarter: macro.quarter + 1, success: Math.random() < 0.6 });
+    const roll = Math.random(); // B1: 50% sukces, 35% porażka, 15% prowokacja policyjna
+    mafia.pumps.push({ symbol: stock.symbol, quarter: macro.quarter + 1, outcome: roll < 0.5 ? 'success' : roll < 0.85 ? 'fail' : 'sting' });
     mafiaTrace(20, 2, 10, cost);
     addMail({ sender: CORPORATION_SENDER, subject: '🤫 Cynk', body: `„${stock.name} (${stock.symbol}). W przyszłym kwartale coś się wydarzy. Ja nic nie mówiłem.”`, importance: 3, symbol: stock.symbol });
     return true;
@@ -220,10 +221,12 @@ function mafiaEntryTicket(symbol) {
     const holding = playerPortfolio[symbol] || (playerPortfolio[symbol] = { shares: 0, avgPrice: 0, assetType: 'stock' });
     holding.avgPrice = (holding.avgPrice * holding.shares + cost) / (holding.shares + quantity);
     holding.shares += quantity;
+    // B1: akcje zablokowane, dopóki stanowisko nie daje dostępu do tej giełdy.
+    if (!canAccessExchange(stock.exchange)) { holding.lockedShares = (holding.lockedShares || 0) + quantity; holding.mafiaLocked = (holding.mafiaLocked || 0) + quantity; }
     stock.sharesHeld += quantity;
     mafia.acquired[symbol] = (mafia.acquired[symbol] || 0) + quantity;
     mafiaTrace(20 + (typeof isGuardProtected === 'function' && isGuardProtected(stock) ? 15 : 0), 3, 15, cost * 0.05); // Gwardia patrzy na ręce
-    mafia.demand = { type: 'favor', amount: Math.round(cost * 0.1), quarter: macro.quarter + 1 };
+    mafia.demand = { type: 'favor', amount: Math.round(cost * 0.15), quarter: macro.quarter + 1 };
     logEvent(`🎟️ Fundusz dostaje „spod lady” ${quantity.toLocaleString('pl-PL')} akcji ${stock.name}. Pan Gato zapamięta przysługę.`, 'review');
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return true;
@@ -343,13 +346,18 @@ function processMafiaQuarterly() {
     // Cynki: przekręt dochodzi do skutku (albo nie).
     for (const pump of mafia.pumps.filter(p => p.quarter <= quarter)) {
         const stock = stocks.find(s => s.symbol === pump.symbol);
-        if (stock) {
-            stock.price *= pump.success ? getRandomInRange(1.4, 1.8) : getRandomInRange(0.55, 0.7);
-            logEvent(pump.success ? `🚀 ${stock.name}: niespodziewany kontrakt — kurs wystrzelił!` : `💥 ${stock.name}: „inwestor strategiczny” zniknął — kurs się załamał.`, 'company');
+        const outcome = pump.outcome || (pump.success ? 'success' : 'fail');
+        if (stock && outcome === 'sting') {
+            getRecord('player').suspicion += 30;
+            logEvent(`🚓 ${stock.name}: „przekręt” okazał się policyjną prowokacją. Śledczy notują, kto kupował.`, 'state');
+        } else if (stock) {
+            stock.price *= outcome === 'success' ? getRandomInRange(1.4, 1.8) : getRandomInRange(0.55, 0.7);
+            logEvent(outcome === 'success' ? `🚀 ${stock.name}: niespodziewany kontrakt — kurs wystrzelił!` : `💥 ${stock.name}: „inwestor strategiczny” zniknął — kurs się załamał.`, 'company');
         }
     }
     mafia.pumps = mafia.pumps.filter(p => p.quarter > quarter);
 
+    releaseMafiaLockedShares();
     runBrunoQuarterly();
     runMafiaInfiltration();
     spawnFrontCompanies();
@@ -535,11 +543,21 @@ function renderMafiaSection() {
                 <div class="bank-card-form">${mafia.loan ? `<button onclick="repayMafiaLoan(); renderGreyZone(); displayCash();">Spłać</button>` : `<input type="text" inputmode="numeric" id="mafia-loan" value="${Math.floor(getFundAssets() * 0.1)}" aria-label="Kwota"><button class="btn-danger" onclick="mafiaLoan(parseFloat(document.getElementById('mafia-loan').value)); renderGreyZone(); displayCash();">Pożycz</button>`}</div></article>
             <article class="grey-card"><h4>🔥 Sabotaż</h4><p class="text-sm text-muted">Bardzo negatywne zdarzenie w wybranej spółce (−5…−10%, kondycja). Nie działa na spółki z niezależnym prezesem.</p>
                 <div class="bank-card-form"><select id="mafia-sabotage" aria-label="Spółka">${option(companies)}</select><button class="btn-danger" onclick="mafiaSabotage(document.getElementById('mafia-sabotage').value); renderGreyZone(); displayCash();">Zleć</button></div></article>
-            <article class="grey-card"><h4>🤫 Cynk</h4><p class="text-sm text-muted">Przekręt na spółce ze śmieciówki: w przyszłym kwartale kurs +40…80% (60%) albo −30…45%.</p>
+            <article class="grey-card"><h4>🤫 Cynk</h4><p class="text-sm text-muted">Przekręt na spółce ze śmieciówki: w przyszłym kwartale kurs +40…80% albo −30…45%. Czasem to policyjna prowokacja.</p>
                 <div class="bank-card-form"><button class="btn-danger" onclick="mafiaTip(); renderGreyZone(); displayCash();">Kup cynk</button></div></article>
             <article class="grey-card"><h4>🛡️ Ochrona</h4><p class="text-sm text-muted">${(MAFIA_PROTECTION_FEE * 100).toFixed(0)}% aktywów funduszu na kwartał. Chroni przed żądaniami haraczu i atakami wrogich botów.</p>
                 <div class="bank-card-form"><button class="${mafia.protection ? 'btn-secondary' : 'btn-danger'}" onclick="toggleMafiaProtection(); renderGreyZone();">${mafia.protection ? 'Zrezygnuj' : 'Wykup ochronę'}</button></div></article>
-            <article class="grey-card"><h4>🎟️ Wejściówka</h4><p class="text-sm text-muted">Do 2% akcji spółki z najwyższych giełd −15%, bez względu na stanowisko. Potem przysługa. Akcje podlegają rekwizycji.</p>
+            <article class="grey-card"><h4>🎟️ Wejściówka</h4><p class="text-sm text-muted">Do 2% akcji spółki z najwyższych giełd −15%. Sprzedasz je dopiero, gdy stanowisko da dostęp do tej giełdy. Przysługa 15%, akcje podlegają rekwizycji.</p>
                 <div class="bank-card-form">${elite.length ? `<select id="mafia-ticket" aria-label="Spółka">${option(elite)}</select><button class="btn-danger" onclick="mafiaEntryTicket(document.getElementById('mafia-ticket').value); renderGreyZone(); displayCash();">Załatw</button>` : '<span class="text-xs text-muted">brak spółek</span>'}</div></article>
         </div>`;
+}
+
+/** B1: odblokowanie akcji z wejściówki, gdy stanowisko pozwala już handlować na tej giełdzie. */
+function releaseMafiaLockedShares() {
+    for (const [symbol, holding] of Object.entries(playerPortfolio)) {
+        const stock = stocks.find(s => s.symbol === symbol);
+        if (!holding.mafiaLocked || !stock || !canAccessExchange(stock.exchange)) continue;
+        holding.lockedShares = Math.max(0, (holding.lockedShares || 0) - holding.mafiaLocked);
+        holding.mafiaLocked = 0;
+    }
 }

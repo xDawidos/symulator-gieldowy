@@ -133,12 +133,20 @@ function giveGiftToBot(id, amount) {
     if (playerWallet.cash < amount) { showToast('Za mało pieniędzy w portfelu prywatnym.', 'error'); return false; }
     const quarter = typeof macro === 'object' ? macro.quarter : 0;
     if (botRelations.lastGift[id] === quarter) { showToast(`${person.name} dostał już prezent w tym kwartale.`, 'warning'); return false; }
+    // B1: charaktery i malejący efekt — przyjaźni nie da się po prostu kupić.
+    const personality = person.entity.personality;
+    if (personality === 'calm') { showToast(`${person.name} grzecznie odmawia przyjęcia prezentu.`, 'default'); return false; }
+    if (['whale', 'pro_investor'].includes(personality) && amount < 1000) { showToast(`${person.name} nie zauważa tak drobnych gestów (minimum 1000 zł).`, 'default'); return false; }
     playerWallet.cash -= amount;
     if (person.kind === 'investor') person.entity.cash += amount;
     else person.entity.fund.cash += amount;
     recordPayment('player-wallet', `external:${person.id}`, amount, `Prezent dla ${person.name}`);
     botRelations.lastGift[id] = quarter;
-    const gain = changeRelation(id, Math.min(GIFT_MAX_GAIN, amount / 100 * GIFT_RELATION_PER_100), 'prezent');
+    botRelations.giftCount = botRelations.giftCount || {};
+    const count = botRelations.giftCount[id] = (botRelations.giftCount[id] || 0) + 1;
+    const raw = Math.min(GIFT_MAX_GAIN, amount / 100 * GIFT_RELATION_PER_100) * Math.pow(0.5, count - 1);
+    const room = Math.max(0, 60 - getRelation(id)); // samymi prezentami najwyżej do 60
+    const gain = changeRelation(id, Math.min(raw, room), 'prezent');
     showToast(`${person.name}: relacja ${gain >= 0 ? '+' : ''}${gain.toFixed(1)}.`, 'success');
     return true;
 }

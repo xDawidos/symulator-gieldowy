@@ -374,8 +374,8 @@ function sellStock(symbol, quantity) {
     const stockToSell = stocks.find(stock => stock.symbol === symbol);
     const holding = playerPortfolio[symbol];
 
-    if (!holding || holding.shares < quantity) {
-        showToast(`Nie masz wystarczającej liczby akcji ${stockToSell ? stockToSell.name : symbol}.`);
+    if (!holding || holding.shares - (holding.lockedShares || 0) < quantity) {
+        showToast(`Nie masz wystarczającej liczby wolnych akcji ${stockToSell ? stockToSell.name : symbol}${holding?.lockedShares ? ` (zablokowane: ${holding.lockedShares})` : ''}.`);
         return;
     }
 
@@ -435,6 +435,7 @@ function sellStock(symbol, quantity) {
     logFundTrade(symbol, 'sell');
     if (typeof onFundTrade === 'function') onFundTrade(stockToSell, quantity, 'sell'); // relacje z botami (relations.js)
     if (typeof chargeMarketCommission === 'function') chargeMarketCommission(stockToSell, quantity * stockToSell.price, 'player'); // prowizja operatora rynku
+    if (typeof onParabankSharesSold === 'function') onParabankSharesSold(stockToSell, quantity); // panika w parabanku (B1)
 
     // Logowanie z informacją o podatku
     logEvent(`Sprzedano ${quantity} szt. ${symbol}. Zysk brutto: ${profit.toFixed(2)} PLN, Podatek: ${taxToPay.toFixed(2)} PLN.`);

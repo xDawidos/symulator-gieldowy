@@ -185,6 +185,7 @@ function etfSell(etf, stock, shares) {
     if (etf.holdings[stock.symbol] <= 0) delete etf.holdings[stock.symbol];
     stock.sharesHeld = Math.max(0, stock.sharesHeld - shares);
     etf.cash += shares * stock.price;
+    if (!etf.silentTrades && typeof chargeMarketCommission === 'function') chargeMarketCommission(stock, shares * stock.price, etf); // B1: równe zasady
     if (!etf.silentTrades) applyTradeImpact(stock, shares, -1);
     return shares;
 }
@@ -195,6 +196,7 @@ function etfBuy(etf, stock, shares) {
     etf.holdings[stock.symbol] = (etf.holdings[stock.symbol] || 0) + shares;
     stock.sharesHeld += shares;
     etf.cash -= shares * stock.price;
+    if (!etf.silentTrades && typeof chargeMarketCommission === 'function') chargeMarketCommission(stock, shares * stock.price, etf);
     if (!etf.silentTrades) applyTradeImpact(stock, shares, 1);
     return shares;
 }

@@ -1627,6 +1627,7 @@ function runInvestmentBankAI(bank) {
                 if (quantityToSell > 0) {
                     const proceeds = stock.price * quantityToSell;
                     bank.cash += proceeds;
+                    if (typeof chargeMarketCommission === 'function') chargeMarketCommission(stock, proceeds, bank);
                     holding.shares -= quantityToSell;
                     stock.sharesHeld -= quantityToSell; // Akcje wracają na rynek
                     if (holding.shares <= 0) {
@@ -1666,8 +1667,12 @@ function runInvestmentBankAI(bank) {
                 }
 
                 bank.cash -= cost;
-                bank.stockPortfolio[targetStock.symbol] = { shares: quantity, avgPrice: targetStock.price };
+                const existing = bank.stockPortfolio[targetStock.symbol]; // dokupienie, nie nadpisanie pakietu
+                bank.stockPortfolio[targetStock.symbol] = existing
+                    ? { shares: existing.shares + quantity, avgPrice: (existing.avgPrice * existing.shares + cost) / (existing.shares + quantity) }
+                    : { shares: quantity, avgPrice: targetStock.price };
                 targetStock.sharesHeld += quantity;
+                if (typeof chargeMarketCommission === 'function') chargeMarketCommission(targetStock, cost, bank);
                 console.log(`[AI Bank Inw.] ${bank.name} kupił ${quantity} akcji ${targetStock.symbol}.`);
                 return; // Tylko jedna transakcja
             }

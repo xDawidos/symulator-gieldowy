@@ -144,13 +144,28 @@ function fundTopUpInvestment(symbol, uid, amount, mode) {
     amount = Math.min(amount, remaining);
     if (!(amount > 0)) { showToast('Fundusz sfinansował już całą inwestycję.', 'default'); return false; }
 
+    let newShares = 0;
+    if (mode === 'shares') {
+        // B1: rabat 5% tylko do 25% kosztu inwestycji; nowe akcje ponad limit najwyżej +10% akcji spółki.
+        if (!Number.isFinite(stock.topUpBaseShares)) stock.topUpBaseShares = stock.totalShares; // limit liczony od akcji sprzed pierwszej dopłaty
+        const capShares = Math.max(0, Math.floor(stock.topUpBaseShares * 0.1) - (stock.topUpShares || 0));
+        if (capShares <= 0) { showToast('Limit nowych akcji z dopłat (10% spółki) wyczerpany — wybierz udział w zysku.', 'warning'); return false; }
+        const discountRoom = Math.max(0, project.cost * 0.25 - (project.discountedTopUp || 0));
+        const discountPrice = stock.price * (1 - FUND_TOPUP_DISCOUNT);
+        const discountedShares = Math.min(capShares, Math.floor(Math.min(amount, discountRoom) / discountPrice));
+        const fullShares = Math.min(capShares - discountedShares, Math.floor((amount - discountedShares * discountPrice) / stock.price));
+        newShares = discountedShares + Math.max(0, fullShares);
+        if (newShares <= 0) { showToast('Kwota za mała na choćby jedną akcję.', 'warning'); return false; }
+        amount = Math.round(discountedShares * discountPrice + Math.max(0, fullShares) * stock.price); // płacisz tylko za objęte akcje
+        project.discountedTopUp = (project.discountedTopUp || 0) + discountedShares * discountPrice;
+    }
+
     playerCash -= amount;
     adjustCompanyCash(stock, amount);
     project.fundTopUp = (project.fundTopUp || 0) + amount;
 
     if (mode === 'shares') {
-        const price = stock.price * (1 - FUND_TOPUP_DISCOUNT);
-        const newShares = Math.floor(amount / price);
+        stock.topUpShares = (stock.topUpShares || 0) + newShares;
         stock.maxShares = Math.max(Number(stock.maxShares) || 0, stock.totalShares) + newShares; // ponad limit emisji
         stock.totalShares += newShares;
         stock.sharesHeld += newShares;

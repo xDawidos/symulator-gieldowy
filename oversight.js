@@ -17,8 +17,8 @@ const STRIKE_FINES = [0.02, 0.05, 0.08, 0.10];  // % aktywów funduszu
 
 const GREY_SERVICES = {
     leak:      { label: 'Przeciek z Banku Centralnego', icon: '📨', risk: 15, corruption: 3, desc: 'Urzędnik zdradza planowaną decyzję o stopach przed posiedzeniem (zwykle trafnie).' },
-    debt:      { label: 'Umorzenie długu za łapówkę', icon: '🧾', risk: 25, corruption: 6, desc: 'Urzędnik „gubi” część zobowiązań spółki, w której fundusz ma większość.' },
-    underTable:{ label: 'Pakiet „pod stołem”', icon: '🤝', risk: 20, corruption: 4, desc: 'Sprzedaż pakietu botowi poza rynkiem z premią 10%.' },
+    debt:      { label: 'Umorzenie długu za łapówkę', icon: '🧾', risk: 25, corruption: 6, desc: 'Urzędnik „gubi” do 15% zobowiązań spółki funduszu (najwyżej 5% aktywów funduszu). Powtórka w ciągu roku — podwójne ryzyko.' },
+    underTable:{ label: 'Pakiet „pod stołem”', icon: '🤝', risk: 20, corruption: 4, desc: 'Raz na kwartał: pakiet dla bota poza rynkiem z premią 10% (4% przy dużym pakiecie). Im większy pakiet, tym większe ryzyko.' },
     tender:    { label: 'Ustawiony przetarg', icon: '🏗️', risk: 25, corruption: 5, desc: 'Spółka budowlana funduszu dostaje zawyżony kontrakt miejski.' }
 };
 
@@ -113,13 +113,13 @@ function getGreyServiceCost(id) {
 }
 
 /** Wspólna część każdej usługi: opłata z funduszu, podejrzenia, korupcja. */
-function commitCorruptAct(serviceId, extraCost = 0) {
+function commitCorruptAct(serviceId, extraCost = 0, riskMultiplier = 1, extraRisk = 0) {
     const service = GREY_SERVICES[serviceId];
     const cost = getGreyServiceCost(serviceId) + extraCost;
     if (playerCash < cost) { showToast(`Za mało gotówki funduszu (${formatZl(cost, 0)}).`, 'error'); return false; }
     playerCash -= cost;
     recordPayment('player-fund', 'external:szara-strefa', cost, 'Usługa doradcza');
-    getRecord('player').suspicion += service.risk;
+    getRecord('player').suspicion += service.risk * riskMultiplier + extraRisk;
     oversight.pendingCorruption += service.corruption;
     return true;
 }
@@ -137,9 +137,12 @@ function greyLeak() {
 function greyDebtWriteOff(symbol) {
     const stock = stocks.find(s => s.symbol === symbol);
     if (!stock || getFundStakePct(stock) <= 0.5) { showToast('Tylko spółka, w której fundusz ma większość.', 'warning'); return false; }
-    const writeOff = Math.round(Math.max(0, stock.balanceSheet?.liabilities || 0) * 0.3);
+    // B1: najwyżej 15% zobowiązań i 5% aktywów funduszu; łapówka 10%; powtórka w ciągu roku = podwójne ryzyko.
+    const writeOff = Math.round(Math.min(Math.max(0, stock.balanceSheet?.liabilities || 0) * 0.15, getFundAssets() * 0.05));
     if (writeOff <= 0) { showToast('Spółka nie ma zobowiązań.', 'default'); return false; }
-    if (!commitCorruptAct('debt', Math.round(writeOff * 0.05))) return false;
+    const repeat = Number.isFinite(stock.debtWriteOffQuarter) && getOversightQuarter() - stock.debtWriteOffQuarter < 4;
+    if (!commitCorruptAct('debt', Math.round(writeOff * 0.1), repeat ? 2 : 1)) return false;
+    stock.debtWriteOffQuarter = getOversightQuarter();
     adjustBalanceSheet(stock, { liabilities: -writeOff, retainedEarnings: writeOff });
     getRecord('player').illegalGains += writeOff * getFundStakePct(stock);
     logEvent(`🧾 ${stock.name}: część zobowiązań (${formatZl(writeOff, 0)}) „zaginęła” w urzędzie.`, 'company');
@@ -151,11 +154,17 @@ function greyUnderTable(symbol, quantity) {
     const holding = playerPortfolio[symbol];
     quantity = Math.floor(Number(quantity));
     if (!stock || !holding || !(quantity > 0) || holding.shares - (holding.lockedShares || 0) < quantity) { showToast('Za mało akcji do sprzedaży.', 'warning'); return false; }
-    const price = stock.price * 1.1;
+    // B1: raz na kwartał; premia 10% (4% przy pakiecie ≥ 10% aktywów); ryzyko rośnie z wielkością pakietu.
+    const record = getRecord('player');
+    if (record.lastUnderTable === getOversightQuarter()) { showToast('Jeden taki „interes” na kwartał — kupcy się płoszą.', 'warning'); return false; }
+    const share = quantity * stock.price / Math.max(1, getFundAssets());
+    const premium = share >= 0.1 ? 0.04 : 0.1;
+    const price = stock.price * (1 + premium);
     const value = quantity * price;
-    const buyer = aiCompetitors.filter(ai => ai.personality !== 'market_maker' && ai.cash >= value).sort((a, b) => b.cash - a.cash)[0];
+    const buyer = aiCompetitors.filter(ai => ai.personality !== 'market_maker' && !ai.isMafia && !ai.isGuard && ai.cash >= value).sort((a, b) => b.cash - a.cash)[0];
     if (!buyer) { showToast('Nikt nie ma tyle gotówki na taki pakiet.', 'warning'); return false; }
-    if (!commitCorruptAct('underTable')) return false;
+    if (!commitCorruptAct('underTable', 0, 1, Math.floor(share * 100))) return false;
+    record.lastUnderTable = getOversightQuarter();
     buyer.cash -= value;
     const target = buyer.portfolio[symbol] || (buyer.portfolio[symbol] = { shares: 0, avgPrice: 0 });
     target.avgPrice = (target.avgPrice * target.shares + value) / (target.shares + quantity);
@@ -163,7 +172,7 @@ function greyUnderTable(symbol, quantity) {
     holding.shares -= quantity; // sharesHeld bez zmian — akcje zmieniają właściciela
     if (holding.shares <= 0) delete playerPortfolio[symbol];
     playerCash += value;
-    getRecord('player').illegalGains += quantity * stock.price * 0.1;
+    getRecord('player').illegalGains += quantity * stock.price * premium;
     logEvent(`🤝 Fundusz przekazuje ${quantity.toLocaleString('pl-PL')} akcji ${stock.name} „poza rynkiem” (kupujący: ${buyer.name}).`, 'review');
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return true;

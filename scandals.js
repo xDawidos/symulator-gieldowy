@@ -69,7 +69,8 @@ function spawnParabank() {
     const stock = createListedCompany({ name: scenario.name, symbol: uniqueSymbol(scenario.bankName.replace(/[^A-Za-z]/g, '').slice(0, 4).toUpperCase()), sector: ['Finanse'], price: getRandomInRange(20, 40), totalShares: 50000, exchange: 'BRONZE' });
     stock.isParabankStock = true;
     stocks.push(stock);
-    const parabank = { id: `pb${scandals.nextId++}`, scenario: scenario.id, bankId: bank.id, symbol: stock.symbol, phase: 'open', quarters: 0, raised: 0, peakPrice: stock.price, knfWarned: false, collapseQuarter: null };
+    // B1: termin upadku losowy i ukryty (3–8 kw.) — bez „pewnego” zarobku na akcjach.
+    const parabank = { id: `pb${scandals.nextId++}`, scenario: scenario.id, bankId: bank.id, symbol: stock.symbol, phase: 'open', quarters: 0, raised: 0, peakPrice: stock.price, knfWarned: false, collapseAt: getRandomIntInRange(3, 8) };
     scandals.parabanks.push(parabank);
     logEvent(`🏦 Nowy gracz na rynku: ${scenario.bankName} — ${scenario.desc}. Akcje ${stock.name} debiutują na Rynku Brązowym.`, 'market');
     addMail({ sender: 'PULS', subject: `🎁 ${scenario.bankName}: oferta, jakiej nie było`, body: `${scenario.bankName} kusi: ${scenario.desc}. Lokata dla funduszy nawet ${(getFundDepositRate(bank, 16) * 100).toFixed(1)}% rocznie. Akcje banku dla inwestorów instytucjonalnych z rabatem 10%.`, importance: 2, symbol: stock.symbol });
@@ -138,14 +139,15 @@ function processParabanksQuarterly() {
                 parabank.botLosses = (parabank.botLosses || 0) + amount;
             }
             if (stock) {
-                stock.price *= getRandomInRange(1.08, 1.2);
+                stock.price *= getRandomInRange(0.9, 1.2); // entuzjazm z szumem
                 parabank.peakPrice = Math.max(parabank.peakPrice, stock.price);
             }
             if (!parabank.knfWarned && Math.random() < getInstitutionEffectiveness(oversight.knf) * 0.35) {
                 parabank.knfWarned = true;
+                parabank.collapseAt = Math.max(parabank.quarters + 1, (parabank.collapseAt || scenario.target) - getRandomIntInRange(1, 2)); // ostrzeżenie przyspiesza śledztwo
                 addMail({ sender: 'OBSER', subject: `⚠️ KNF: ${scenario.bankName} na liście ostrzeżeń publicznych`, body: `Komisja Nadzoru Finansowego ostrzega: ${scenario.bankName} nie ma licencji bankowej, a lokaty nie są objęte gwarancją. Uważaj.`, importance: 3, symbol: parabank.symbol });
             }
-            if (parabank.quarters >= scenario.target) collapseParabank(parabank, 'investigation');
+            if (parabank.panic || parabank.quarters >= (parabank.collapseAt || scenario.target)) collapseParabank(parabank, 'investigation');
         } else if (parabank.phase === 'investigation') {
             collapseParabank(parabank, 'police');
         } else if (parabank.phase === 'police') {
@@ -328,4 +330,13 @@ function renderPrWars() {
         return `<li>📢 ${escapeHtml(war.a)} ⚔️ ${escapeHtml(war.b)} · zostało ${war.quartersLeft} kw. · przewaga: ${war.score >= 0 ? war.a : war.b}
             ${mine ? `<button class="btn-xs" onclick="supportPrCampaign('${mine}'); updateStateModalContent();">Wesprzyj ${escapeHtml(mine)}</button> <button class="btn-xs btn-secondary" onclick="proposePrTruce('${mine}'); updateStateModalContent();">Rozejm</button>` : ''}</li>`;
     }).join('')}</ul>`;
+}
+
+/** B1: sprzedaż dużego pakietu akcji parabanku w fazie otwarcia może wywołać panikę i wcześniejsze śledztwo. */
+function onParabankSharesSold(stock, quantity) {
+    const parabank = scandals?.parabanks?.find(p => p.symbol === stock.symbol && p.phase === 'open');
+    if (!parabank || quantity / Math.max(1, stock.totalShares) < 0.02 || Math.random() > 0.5) return false;
+    parabank.panic = true;
+    logEvent(`📉 Duży pakiet ${stock.name} trafia na rynek — klienci banku zaczynają się niepokoić.`, 'market');
+    return true;
 }
