@@ -14,7 +14,7 @@ Czego to uczy:
 - **Strategia spółki:** dlaczego specjalizacja daje wyższą marżę, a dywersyfikacja niższe ryzyko.
 - **Łańcuch dostaw:** ryzyko kontrahenta.
 
-Kolejność: T1 → T2 → T3 → T4 → T5. Każda część z testami, przebiegiem ×50 i commitem.
+Kolejność: T0 → T1 → T2 → T3 → T4 → T5. Każda część z testami, przebiegiem ×50 (po T0: ×100 albo ×200) i commitem.
 
 ---
 
@@ -127,6 +127,20 @@ Decyzje podejmuje prezes według cech, kondycji i cykli. **Większościowiec mo�
 
 ---
 
+## T0. Szybsze przebiegi testowe: prędkości ×100 i ×200 (przed T1)
+
+Cel: przebiegi symulacyjne (6,5 roku gry) trwają dziś przy ×50 ok. 2,5–3 min na grę. Przy ×100 będzie to ok. 1,3 min, a przy ×200 ok. 40 s, więc testy ×N można powtarzać po każdej części.
+
+- **Przyciski:** `x100` i `x200` obok ukrytych `x10` / `x50` w `index.html` (klasa `debug-only`, widoczne tylko w trybie debug), `setGameSpeed(100)` / `setGameSpeed(200)`.
+- **Zapis gry:** prędkości testowe nie są zapisywane — `applySaveSnapshot` przyjmuje dziś tylko 1, 2, 5 i tak zostaje (wczytana gra startuje z normalną prędkością).
+- **Pętle:** przy ×200 tik rynku co 5 ms, a kwartał co 1,5 s. Trzeba sprawdzić pętle liczone jako `X / speedMultiplier`:
+  - czy żadna nie schodzi poniżej ~4 ms (minimalny interwał przeglądarki) — jeśli tak, ograniczyć ją dolnym progiem albo wykonywać kilka kroków w jednym wywołaniu;
+  - odświeżanie UI przy dużych prędkościach już jest rzadsze (`uiRefreshTick`) — rozszerzyć regułę na ×100 i ×200;
+  - autozapis co `60000 / speed` (300 ms przy ×200) — przy prędkościach testowych wyłączyć albo rzadziej.
+- **Pomiar:** czas tiku (dziś śr. ok. 1,5 ms, p95 ok. 5 ms). Jeśli tik trwa dłużej niż interwał, gra zwalnia i ×200 nie jest prawdziwym ×200 — raportować w przebiegu „rzeczywistą prędkość” (kwartały gry na minutę).
+- **Zgodność wyników:** krótki test porównawczy (np. 4 gry × 26 kw. przy ×50 i przy ×200) — GIG, liczba spółek, maile na kwartał i niezmienniki pieniędzy i akcji mają się zgadzać w granicach losowości. Kolejność zdarzeń w kwartale nie może zależeć od prędkości.
+- **Testy:** `setGameSpeed(200)` ustawia wszystkie pętle; prędkość testowa nie trafia do zapisu.
+
 ## Zapis gry i testy
 
 - **Zapis:**
@@ -146,7 +160,7 @@ Decyzje podejmuje prezes według cech, kondycji i cykli. **Większościowiec mo�
   - kooperacja przenosi szok partnera;
   - czerwona flaga przy kooperacji spółek jednego właściciela.
 
-## Jak sprawdzimy (przebieg ×50, 6,5 roku gry)
+## Jak sprawdzimy (przebieg ×50, a po T0 ×100/×200; 6,5 roku gry)
 
 | Miara | Cel |
 |---|---|
