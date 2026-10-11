@@ -2450,6 +2450,7 @@ function processFinancialReports() {
              if (bankruptcyChance > 0 && Math.random() < bankruptcyChance) {
                  if (typeof mafiaRescueFromBankruptcy === 'function' && mafiaRescueFromBankruptcy(stock)) continue; // „inwestor” w ostatniej chwili (mafia.js)
                  logEvent(`🔥 BANKRUCTWO! Spółka ${stock.name} (${stock.symbol}) ogłasza upadłość!`, 'review');
+                 if (typeof onAcademyEvent === 'function') onAcademyEvent('bankruptcy', stock); // przed usunięciem akcji gracza
                  removeStockFromGame(stock.symbol); 
                  stock.isBankrupt = true;
                  stock.timeOfDeath = Date.now();
@@ -2472,6 +2473,7 @@ function processFinancialReports() {
         let magnitude = 0;
         let eventMessage = '';
         const surprise = Math.max(-1, Math.min(1, earningsSurprise));
+        stock.lastSurprise = surprise; // N2: wynik vs konsensus (karta spółki)
 
         if (surprise >= 0.5) {
             reportResult = 'excellent';
@@ -2482,6 +2484,7 @@ function processFinancialReports() {
         } else if (surprise <= -0.5) {
             reportResult = 'tragic';
             eventMessage = `📉 TRAGICZNY RAPORT! ${stock.name} (${stock.symbol}) mocno rozczarowuje wynikami.`;
+            if (typeof onAcademyEvent === 'function') onAcademyEvent('tragicReport', stock);
         } else if (surprise <= -0.15) {
             reportResult = 'bad';
             eventMessage = `📉 SŁABY RAPORT: ${stock.name} (${stock.symbol}) notuje wyniki poniżej prognoz.`;

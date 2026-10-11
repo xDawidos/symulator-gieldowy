@@ -1935,21 +1935,29 @@ function renderCompanyCard() {
         </div>
         ${typeof renderDividendBadges === 'function' ? renderDividendBadges(stock) : ''}`;
 
-    const tile = (label, value, hint, cls = '') => `<div class="cc-kpi" title="${escapeHtml(hint)}"><span>${label}</span><strong class="${cls}">${value}</strong></div>`;
+    // N1: porównanie z medianą sektora pod wartością kafelka.
+    const med = typeof getSectorMedians === 'function' ? getSectorMedians(stock.sector?.[0]) : null;
+    const vs = (value, sectorValue, options) => { const c = med && typeof compareWithSector === 'function' ? compareWithSector(value, sectorValue, options) : null; return c ? `<em class="${c.cls}">${c.text}</em>` : ''; };
+    const tile = (label, value, hint, cls = '', extra = '') => `<div class="cc-kpi" title="${escapeHtml(hint)}"><span>${label}</span><strong class="${cls}">${value}</strong>${extra}</div>`;
+    const pctFmt = v => `${(v * 100).toFixed(1)}%`;
     document.getElementById('company-card-kpis').innerHTML = [
         tile('Kapitalizacja', formatZl(getMarketCapValue(stock), 0), 'Kurs × liczba akcji: ile rynek płaci za całą spółkę.'),
-        tile('C/Z', formatRatio(f?.peRatio, f?.epsTtm), 'Cena / zysk na akcję z 4 kwartałów. Niżej = taniej względem zysków (porównuj w sektorze).'),
-        tile('C/WK', f?.pbRatio ? f.pbRatio.toFixed(2) : '—', 'Cena / wartość księgowa na akcję. Poniżej 1 = rynek wycenia spółkę niżej niż jej majątek netto.'),
-        tile('Stopa dywidendy', `${(dividendYield * 100).toFixed(2)}%`, 'Dywidendy z ostatniego roku / kurs.'),
-        tile('Zadłużenie', debtRatio === null ? '—' : `${(debtRatio * 100).toFixed(0)}%`, 'Zobowiązania / aktywa. Powyżej ~70% spółka jest mocno zadłużona.', debtRatio > 0.7 ? 'text-down' : ''),
+        tile('C/Z', formatRatio(f?.peRatio, f?.epsTtm), 'Cena / zysk na akcję z 4 kwartałów. Niżej = taniej względem zysków (porównuj w sektorze).', '', vs(f?.peRatio > 0 ? f.peRatio : NaN, med?.pe)),
+        tile('C/WK', f?.pbRatio ? f.pbRatio.toFixed(2) : '—', 'Cena / wartość księgowa na akcję. Poniżej 1 = rynek wycenia spółkę niżej niż jej majątek netto.', '', vs(f?.pbRatio, med?.pb, { format: v => v.toFixed(2) })),
+        tile('Stopa dywidendy', `${(dividendYield * 100).toFixed(2)}%`, 'Dywidendy z ostatniego roku / kurs.', '', dividendYield > 0 ? vs(dividendYield, med?.dy, { lowerIsCheap: false, format: pctFmt, labels: ['wyższa', 'niższa'] }) : ''),
+        tile('Zadłużenie', debtRatio === null ? '—' : `${(debtRatio * 100).toFixed(0)}%`, 'Zobowiązania / aktywa. Powyżej ~70% spółka jest mocno zadłużona.', debtRatio > 0.7 ? 'text-down' : '', vs(debtRatio, med?.debt, { format: pctFmt, labels: ['niższe', 'wyższe'] })),
         tile('Kondycja', `${health.toFixed(1)} · ${healthLabel}`, 'Kondycja finansowa od −5 (bankructwo) do +5.', health >= 1 ? 'text-up' : health <= -2 ? 'text-down' : '')
     ].join('');
 
     document.getElementById('company-card-tabs').innerHTML = COMPANY_CARD_TABS
         .map(([id, label]) => `<button class="${companyCardView.tab === id ? 'active' : ''}" onclick="setCompanyCardTab('${id}')">${label}</button>`).join('');
 
+    if (typeof unlockAcademyEntry === 'function') ['cwk', 'dywidenda', 'zadluzenie'].forEach(id => unlockAcademyEntry(id));
     const body = document.getElementById('company-card-body');
-    if (companyCardView.tab === 'finance') body.innerHTML = renderCompanyCardFinance(stock, f);
+    if (companyCardView.tab === 'finance') {
+        if (typeof unlockAcademyEntry === 'function') ['eps', 'marza', 'roe', 'plynnosc'].forEach(id => unlockAcademyEntry(id));
+        body.innerHTML = renderCompanyCardFinance(stock, f);
+    }
     else if (companyCardView.tab === 'owners') body.innerHTML = renderCompanyCardOwners(stock);
     else if (companyCardView.tab === 'manage') body.innerHTML = renderCompanyCardManage(stock);
     else body.innerHTML = renderCompanyCardOverview(stock);
@@ -1983,6 +1991,11 @@ function renderCompanyCardFinance(stock, f) {
     const last = stock.lastDividend;
     const fair = getSkillLevel('financialAnalyst') >= 1 && f.fairValue > 0
         ? row('Wycena analityczna', `${perShare(f.fairValue)} (${((f.fairValue / stock.price - 1) * 100).toFixed(1)}% vs kurs)`, 'Wartość godziwa z zysków i majątku (szkolenie Analityk Finansowy).') : '';
+    const metrics = typeof getCompanyMetrics === 'function' ? getCompanyMetrics(stock) : null;
+    const pct = v => v === null || v === undefined || !Number.isFinite(v) ? '—' : `${(v * 100).toFixed(1)}%`;
+    const extra = metrics ? row('Marża netto', pct(metrics.margin), 'Zysk netto / przychody.') + row('ROE', pct(metrics.roe), 'Zysk netto / kapitał własny.')
+        + row('Płynność (gotówka / zobowiązania)', metrics.liquidity === null ? '—' : metrics.liquidity.toFixed(2), 'Ile gotówki przypada na złotówkę zobowiązań.')
+        + row('Wzrost zysku r/r', pct(metrics.growth), 'Zysk z 4 ostatnich kwartałów vs 4 wcześniejszych.') : '';
     return `
         <div class="cc-grid">
             <section><h4>Wyniki (4 ostatnie kwartały)</h4>
@@ -1992,6 +2005,7 @@ function renderCompanyCardFinance(stock, f) {
                     ${row('Zysk netto', money(f.netIncomeTtm), 'Zysk po wszystkich kosztach i podatku.')}
                     ${row('Zysk na akcję (EPS)', perShare(f.epsTtm), 'Zysk netto / liczba akcji.')}
                     ${row('Sprzedaż na akcję', f.revenueTtm > 0 ? perShare(f.salesPerShare) : '—', 'Przychody / liczba akcji.')}
+                    ${extra}
                     ${fair}
                 </tbody></table></section>
             <section><h4>Bilans i dywidenda</h4>
@@ -2003,7 +2017,32 @@ function renderCompanyCardFinance(stock, f) {
                     ${stock.assetType !== 'REIT' ? row('Polityka dywidendy', escapeHtml(getDividendPolicyLabel(stock.dividendPolicy)), 'Jak dużą część zysku spółka wypłaca.') : ''}
                     ${row('Ostatnia dywidenda', last ? `${last.dps.toFixed(4)} zł (${(last.yield * 100).toFixed(2)}%)` : 'brak', 'Ostatnia wypłata na akcję i stopa w dniu wypłaty.')}
                 </tbody></table></section>
-        </div>`;
+        </div>
+        ${renderValuationSection(stock, f)}`;
+}
+
+/** N2: metody wyceny (Analityk Finansowy 1–2) i konsensus (poziom 3). */
+function renderValuationSection(stock, f) {
+    const level = getSkillLevel('financialAnalyst');
+    if (level < 1 || typeof getValuationMethods !== 'function') {
+        return '<p class="text-xs text-muted mt-2">🔒 Metody wyceny i konsensus analityków odblokujesz szkoleniem „Analityk Finansowy”.</p>';
+    }
+    const v = getValuationMethods(stock);
+    if (!v) return '';
+    const fmt = value => value > 0 ? `${formatZl(value)} <span class="${value > stock.price ? 'text-up' : 'text-down'}">(${((value / stock.price - 1) * 100).toFixed(0)}%)</span>` : '—';
+    const rows = [
+        ['Porównawcza: EPS × mediana C/Z sektora', fmt(v.pe)],
+        ...(level >= 2 ? [
+            ['Majątkowa: wartość księgowa × mediana C/WK sektora', fmt(v.book)],
+            [`Dywidendowa (Gordon): D·(1+g)/(r−g), r = ${(v.r * 100).toFixed(1)}%, g = ${(v.g * 100).toFixed(1)}%`, v.gordon ? fmt(v.gordon) : 'spółka nie płaci dywidend']
+        ] : [])
+    ];
+    const consensus = level >= 3 ? `
+        <p class="text-sm">📊 Konsensus na najbliższy raport: zysk na akcję ≈ <strong>${formatZl(f.expectedEps)}</strong> za kwartał.
+        ${Number.isFinite(stock.lastSurprise) ? `Ostatni raport: <span class="${stock.lastSurprise > 0 ? 'text-up' : stock.lastSurprise < 0 ? 'text-down' : ''}">${stock.lastSurprise >= 0 ? '+' : ''}${(stock.lastSurprise * 100).toFixed(0)}% vs konsensus</span> — kurs reaguje na niespodziankę, nie na sam wynik.` : ''}</p>` : '';
+    return `<h4 class="mt-3">Wycena (kurs ${formatZl(stock.price)})</h4>
+        <table class="asset-mini-table w-full"><tbody>${rows.map(([label, value]) => `<tr><td>${label}</td><td class="cell-number">${value}</td></tr>`).join('')}</tbody></table>
+        <p class="text-xs text-muted">Różne metody dają różne wyniki — traktuj je jako przedział, nie jedną cenę.${level < 2 ? ' Kolejne metody: Analityk Finansowy poziom 2.' : ''}</p>${consensus}`;
 }
 
 function renderCompanyCardOwners(stock) {
@@ -4397,11 +4436,23 @@ function renderSkillsPanel() {
     renderCvPanel();
 }
 
+let cvTab = 'cv'; // N1: 'cv' | 'academy'
+
+function setCvTab(tab) {
+    cvTab = tab;
+    renderCvPanel();
+}
+
 function renderCvPanel() {
     const list = document.getElementById('skills-list');
     const money = document.getElementById('skills-modal-xp');
     if (!list) return;
     if (money) money.textContent = playerWallet.cash.toFixed(2);
+    const tabs = `<div class="cc-tabs"><button class="${cvTab === 'cv' ? 'active' : ''}" onclick="setCvTab('cv')">📄 CV i szkolenia</button><button class="${cvTab === 'academy' ? 'active' : ''}" onclick="setCvTab('academy')">📘 Akademia</button></div>`;
+    if (cvTab === 'academy' && typeof renderAcademyPanel === 'function') {
+        list.innerHTML = tabs + renderAcademyPanel();
+        return;
+    }
 
     const trainings = getAvailableTrainings();
     const completed = trainings.filter(id => getSkillLevel(id) > 0);
@@ -4433,7 +4484,7 @@ function renderCvPanel() {
         </article>`;
     }).join('');
 
-    list.innerHTML = `
+    list.innerHTML = tabs + `
         <section class="cv-card">
             <div class="cv-avatar" aria-hidden="true">${escapeHtml((playerProfile?.name || '?').slice(0, 1).toUpperCase())}</div>
             <div>

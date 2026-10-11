@@ -693,7 +693,10 @@ function payBondCoupons() {
         if (bond.defaulted || bond.isTBill) continue;
         if (!bond.isStateBond && Math.random() < (Number(bond.risk) || 0) * BOND_DEFAULT_PER_QUARTER) {
             bond.defaulted = true;
-            if (bond.ownerId === 'player') logEvent(`💥 Niewypłacalność emitenta ${bond.issuerName}! Kupony przestają płynąć.`, 'error');
+            if (bond.ownerId === 'player') {
+                logEvent(`💥 Niewypłacalność emitenta ${bond.issuerName}! Kupony przestają płynąć.`, 'error');
+                if (typeof onAcademyEvent === 'function') onAcademyEvent('bondDefault');
+            }
             continue;
         }
         const coupon = bond.faceValue * bond.interestRate / 4;

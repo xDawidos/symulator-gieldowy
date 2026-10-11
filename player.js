@@ -128,7 +128,9 @@ const skills = {
         name: 'Analityk Finansowy 🧐',
         unlockedLevel: 0,
         levels: [
-            { level: 1, cost: 500, description: 'Odblokowuje wgląd w ostatnie raporty finansowe spółek w tabeli rynku.' }
+            { level: 1, cost: 500, description: 'Skaner spółek (filtry: C/Z względem sektora, C/WK, dywidenda, zadłużenie, kondycja), wycena porównawcza z C/Z sektora i fazy cyklu spółek w tabeli rynku.' },
+            { level: 2, cost: 1500, description: 'Skaner: ROE, marża i wzrost zysku rok do roku. Wycena trzema metodami: C/Z sektora, wartość księgowa (C/WK sektora) i model dywidend Gordona.' },
+            { level: 3, cost: 3000, description: 'Konsensus analityków: prognoza zysku przed raportem i wynik vs konsensus po raporcie. Skaner pokazuje potencjał do wartości godziwej.' }
         ]
     },
     'etfExpert': {

@@ -3519,6 +3519,70 @@ group('Uwagi U3: fundamenty spółek', () => {
     });
 });
 
+group('Nauka N1/N2: Akademia, mediany sektora, skaner, wycena', () => {
+    function world() {
+        const list = [];
+        for (let i = 0; i < 6; i++) {
+            const c = makeCompany(`N${i}`, { cash: 200_000, fixedAssets: 800_000 });
+            c.price = 100; c.sector = ['Żywność']; c.financialHealth = i - 2; c.exchange = 'JUNK';
+            initializeFundamentals(c, true);
+            list.push(c);
+        }
+        resetWorld(list);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        macro = createMacroState();
+        sectorMedianCache = { at: 0, data: {} };
+        return list;
+    }
+
+    test('mediana sektora i porównanie wskaźnika', () => {
+        const list = world();
+        const med = getSectorMedians('Żywność');
+        const pes = list.map(s => s.fundamentals.peRatio).sort((a, b) => a - b);
+        assertNear(med.pe, (pes[2] + pes[3]) / 2, 'mediana C/Z');
+        assert(compareWithSector(med.pe * 0.5, med.pe).text.includes('tania'), 'tania względem sektora');
+        assert(compareWithSector(med.pe * 2, med.pe).text.includes('droga'), 'droga względem sektora');
+    });
+
+    test('Akademia: hasła bazowe, odblokowanie, quiz z nagrodą tylko raz', () => {
+        world();
+        assert(isAcademyUnlocked('cz') && !isAcademyUnlocked('roe'), 'bazowe');
+        assert(unlockAcademyEntry('roe') && isAcademyUnlocked('roe'), 'odblokowane');
+        assert(!submitAcademyQuiz('etf', [0, 0, 0]), 'zablokowany quiz');
+        const cash = playerWallet.cash;
+        const wrong = submitAcademyQuiz('roe', [1, 0, 0]);
+        assert(!wrong.passed && wrong.correct === 2, 'błędna odpowiedź');
+        const ok = submitAcademyQuiz('roe', ACADEMY_ENTRIES.roe.quiz.map(q => q.c));
+        assert(ok.passed && playerWallet.cash === cash + ACADEMY_QUIZ_REWARD, 'nagroda');
+        assert(submitAcademyQuiz('roe', ACADEMY_ENTRIES.roe.quiz.map(q => q.c)).reward === 0, 'nagroda tylko raz');
+    });
+
+    test('każde hasło ma 3 pytania z poprawną odpowiedzią i przykład bez błędu', () => {
+        world();
+        for (const [id, entry] of Object.entries(ACADEMY_ENTRIES)) {
+            assert(entry.quiz.length === 3 && entry.quiz.every(q => q.c >= 0 && q.c < q.a.length), `quiz ${id}`);
+            entry.example();
+        }
+    });
+
+    test('skaner: filtry zadłużenia i kondycji, sortowanie', () => {
+        const list = world();
+        list[0].balanceSheet.liabilities = list[0].balanceSheet.assets * 0.9;
+        const rows = runScanner({ ...SCANNER_DEFAULT_FILTERS, debtMax: 50, healthMin: 0 }, 'health', -1);
+        assert(rows.every(r => r.m.debt <= 0.5 && r.m.health >= 0), 'filtry');
+        assert(!rows.some(r => r.stock === list[0]), 'zadłużona odfiltrowana');
+        assert(rows.length >= 2 && rows[0].m.health >= rows[rows.length - 1].m.health, 'sortowanie malejąco');
+    });
+
+    test('metody wyceny: porównawcza, majątkowa, Gordon tylko z dywidendą', () => {
+        const list = world();
+        const v = getValuationMethods(list[3]);
+        assert(v.pe > 0 && v.book > 0, 'porównawcza i majątkowa');
+        assert(v.gordon === null, 'bez dywidendy brak Gordona');
+        assert(v.g < v.r, 'g < r');
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;
