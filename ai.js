@@ -1239,8 +1239,7 @@ function runStateActions() {
         // Jeśli państwo ma za mało udziałów (np. przez oferty gracza), dokupuje
         if (stock.stateOwnershipPct < 0.50) {
             const sharesToBuy = Math.floor(stock.totalShares * 0.02); // Dokup 2%
-            const publicFloat = Math.floor(stock.totalShares * (1 - stock.stateOwnershipPct));
-            const availableShares = publicFloat - stock.sharesHeld;
+            const availableShares = getAvailableShares(stock); // wolny obrót bez pakietów inwestorów, insiderów i akcji własnych
 
             if (sharesToBuy > 0 && sharesToBuy <= availableShares) {
                 // Pakiet państwa jest poza wolnym obrotem (getFreeFloatShares) — sharesHeld się nie zmienia.
@@ -1668,11 +1667,10 @@ function runInvestmentBankAI(bank) {
             potentialTargets.sort((a, b) => (b.financialHealth / b.volatilityFactor) - (a.financialHealth / a.volatilityFactor)); // Prosty wskaźnik atrakcyjności
             const targetStock = potentialTargets[0];
             const investmentAmount = bank.cash * getRandomInRange(0.1, 0.25); // Inwestuje 10-25% gotówki
-            const quantity = Math.floor(investmentAmount / targetStock.price);
+            const quantity = Math.min(Math.floor(investmentAmount / targetStock.price), getAvailableShares(targetStock)); // najwyżej wolne akcje
             const cost = quantity * targetStock.price;
-            const availableShares = getAvailableShares(targetStock);
 
-            if (quantity > 0 && cost <= bank.cash && quantity <= availableShares) {
+            if (quantity > 0 && cost <= bank.cash) {
                 // Sprawdź limit 30% dla innych banków
                 const targetIsBank = commercialBanks.some(b => b.id === `bank_${targetStock.symbol}`); // Placeholder - sprawdzimy jak banki wejdą na giełdę
                 if (targetIsBank) {

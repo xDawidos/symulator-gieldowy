@@ -452,10 +452,12 @@ function applySaveSnapshot(snapshot) {
 
     ensureMarketOperators(); // starsze zapisy: GPW jako notowana spółka
     if ((snapshot.version || 0) < 12 && !stocks.some(s => s.defenseId)) initDefenseSector(); // v12: zbrojeniówka i Gwardia w starszych zapisach
-    const reconciled = reconcileSharesHeld(); // audyt A1: akcje w obrocie = suma posiadaczy
-    if (reconciled) report.warnings.push(`Uzgodniono akcje w obrocie w ${reconciled} spółkach (audyt A1).`);
     // v10: ETF-y z portfelami (starsze zapisy dostają nowy zestaw)
     if (!restoreEtfs(snapshot.etfs)) report.warnings.push('Utworzono nowe ETF-y z portfelami (migracja v10).');
+    // Uzgodnienie dopiero po odtworzeniu ETF-ów: wcześniej liczyło pakiety ETF-ów sprzed wczytania (przy starcie
+    // strony — żadne), zaniżało sharesHeld, a zawyżone getAvailableShares pozwalało kupić ponad wolny obrót.
+    const reconciled = reconcileSharesHeld(); // audyt A1: akcje w obrocie = suma posiadaczy
+    if (reconciled) report.warnings.push(`Uzgodniono akcje w obrocie w ${reconciled} spółkach (audyt A1).`);
 
     report.ok = true;
     return report;

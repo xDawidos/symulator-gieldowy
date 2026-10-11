@@ -2655,7 +2655,11 @@ function initializeOwnership(stock) {
 
     const privateCompany = !stock.assetType && !stock.isBankStock && !stock.isStateOwned;
     // Pakiety insiderów 15–40%: gracz i boty nadal mogą zdobyć większość (>50%) z wolnego obrotu.
-    stock.insiderShares = privateCompany ? Math.floor((Number(stock.totalShares) || 0) * getRandomInRange(0.15, 0.40)) : 0;
+    const wanted = privateCompany ? Math.floor((Number(stock.totalShares) || 0) * getRandomInRange(0.15, 0.40)) : 0;
+    // Starszy zapis: pula insiderów powstaje z akcji jeszcze nieposiadanych — nie zabiera pakietów inwestorom.
+    stock.insiderShares = 0;
+    const held = stock.symbol ? getTrackedHeldShares(stock) : 0;
+    stock.insiderShares = Math.max(0, Math.min(wanted, Math.floor(getFreeFloatShares(stock) - held)));
 }
 
 function getFreeFloatShares(stock) {
@@ -2668,7 +2672,10 @@ function getFreeFloatShares(stock) {
 
 /** Akcje, które można dziś kupić na rynku (wolny obrót minus akcje posiadane przez inwestorów). */
 function getAvailableShares(stock) {
-    return Math.max(0, Math.floor(getFreeFloatShares(stock) - Math.max(0, Number(stock?.sharesHeld) || 0)));
+    // Także faktyczni posiadacze: zaniżone sharesHeld nie może pozwolić kupić ponad wolny obrót.
+    const tracked = stock?.symbol && Array.isArray(stocks) ? getTrackedHeldShares(stock) : 0;
+    const held = Math.max(0, Number(stock?.sharesHeld) || 0, tracked);
+    return Math.max(0, Math.floor(getFreeFloatShares(stock) - held));
 }
 
 // =================================================================================
@@ -5962,7 +5969,7 @@ function runMunicipalCompanyLogic() {
         exchange: 'BRONZE', 
         totalShares: totalShares,
         maxShares: totalShares * 2,
-        sharesHeld: Math.floor(totalShares * cityOwnershipPct), // Akcje "zajęte" przez miasto
+        sharesHeld: 0, insiderShares: 0, // pakiet miasta (stateOwnershipPct) jest poza wolnym obrotem — nie liczy się do sharesHeld
         sector: ['Usługi', 'Nieruchomości'], // Uogólniony sektor
         financialHealth: 5, // Bardzo zdrowe
         lastReport: 'good',
@@ -7907,11 +7914,26 @@ function getTrackedHeldShares(stock) {
     return total;
 }
 
+/**
+ * Posiadacze mają więcej akcji niż wolny obrót (zapisy sprzed poprawki): nadwyżkę oddają akcje własne,
+ * potem pula insiderów — pakiety inwestorów zostają nietknięte.
+ */
+function releaseOverheldShares(stock) {
+    let excess = Math.ceil(getTrackedHeldShares(stock) - getFreeFloatShares(stock));
+    for (const key of ['treasuryShares', 'insiderShares']) {
+        if (excess <= 0) break;
+        const pool = Math.max(0, Number(stock[key]) || 0);
+        const released = Math.min(pool, excess);
+        if (released > 0) { stock[key] = pool - released; excess -= released; }
+    }
+}
+
 /** Uzgadnia sharesHeld z posiadaczami (wczytanie zapisu i co kwartał). Zwraca liczbę poprawionych spółek. */
 function reconcileSharesHeld() {
     let fixed = 0;
     for (const stock of stocks) {
         if (stock.assetType === 'Startup' || stock.isBankrupt) continue;
+        releaseOverheldShares(stock);
         const tracked = Math.min(getTrackedHeldShares(stock), Math.max(0, getFreeFloatShares(stock)));
         if (Math.abs((Number(stock.sharesHeld) || 0) - tracked) > 0.5) {
             if (typeof isDebugMode === 'function' && isDebugMode()) console.warn(`[A1] sharesHeld ${stock.symbol}: ${stock.sharesHeld} → ${tracked}`);

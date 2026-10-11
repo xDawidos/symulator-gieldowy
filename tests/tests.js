@@ -3732,6 +3732,80 @@ group('Nauka N4/N5: Mentor, certyfikaty, wykres, wpływ zlecenia', () => {
     });
 });
 
+group('Akcje ponad wolny obrót: ETF, bank, insiderzy (CZB 7596 ≠ 8195)', () => {
+    // Wolny obrót 10000 − 3000 insiderów = 7000; ETF trzyma 4000 → do kupienia 3000.
+    function worldFloat() {
+        const a = makeCompany('AAA');
+        a.insiderShares = 3000; a.sharesHeld = 0; a.financialHealth = 2;
+        resetWorld([a]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        allBonds.length = 0;
+        const etf = createEtf({ symbol: 'TST', templateKey: 'Technologia', seed: 1000 });
+        etf.holdings = { AAA: 4000 };
+        etfs.push(etf);
+        a.sharesHeld = 4000;
+        return { a, etf };
+    }
+    const overheld = stock => getTrackedHeldShares(stock) - getFreeFloatShares(stock);
+
+    test('wczytanie zapisu przy starcie strony: sharesHeld liczy pakiety ETF-ów z zapisu', () => {
+        worldFloat();
+        const snapshot = JSON.parse(JSON.stringify(buildSaveSnapshot()));
+        etfs.length = 0; // świeża strona: ETF-y z zapisu odtwarzane w applySaveSnapshot
+        const report = applySaveSnapshot(snapshot);
+        assert(report.ok, report.errors.join(' '));
+        const a = stocks.find(s => s.symbol === 'AAA');
+        assert(a.sharesHeld === 4000, `sharesHeld po wczytaniu: ${a.sharesHeld} (oczekiwano 4000)`);
+        assert(getAvailableShares(a) === 3000, `dostępne: ${getAvailableShares(a)}`);
+        const ai = aiCompetitors[0];
+        ai.cash = 10_000_000;
+        aiBuyStock(ai, 'AAA', 10000);
+        assert(overheld(a) <= 0, `posiadacze ponad wolny obrót o ${overheld(a)}`);
+        assert(checkWorldInvariants().length === 0, checkWorldInvariants().join('; '));
+    });
+
+    test('zaniżone sharesHeld nie pozwala ETF-owi ani bankowi kupić ponad wolny obrót', () => {
+        const { a, etf } = worldFloat();
+        a.sharesHeld = 0; // np. stary zapis
+        assert(getAvailableShares(a) === 3000, `dostępne przy zaniżonym sharesHeld: ${getAvailableShares(a)}`);
+        const bank = { id: 'bnk', name: 'Bank Testowy', type: BANK_TYPES.INVESTMENT, isActive: true, cash: 50_000_000, initialCapital: 1_000_000, stockPortfolio: {}, loanPortfolio: {} };
+        commercialBanks.push(bank);
+        const random = Math.random;
+        Math.random = () => 0.31; // bez sprzedaży, zakup za ~15% gotówki (≈ 73 000 akcji)
+        try { runInvestmentBankAI(bank); } finally { Math.random = random; }
+        assert(bank.stockPortfolio.AAA?.shares === 3000, `bank kupił ${bank.stockPortfolio.AAA?.shares} (wolne były 3000)`);
+        a.sharesHeld = 0; // znów zaniżone
+        etf.cash = 10_000_000;
+        let bought = 0;
+        for (let i = 0; i < 20; i++) bought += etfBuy(etf, a, 10000);
+        commercialBanks.splice(commercialBanks.indexOf(bank), 1);
+        assert(bought === 0 && etf.holdings.AAA === 4000, `ETF dokupił ${bought} przy braku wolnych akcji`);
+        assert(overheld(a) <= 0, `posiadacze ponad wolny obrót o ${overheld(a)}`);
+    });
+
+    test('pula insiderów (stary zapis) nie zjada akcji posiadanych przez inwestorów', () => {
+        const { a } = worldFloat();
+        a.insiderShares = undefined; // zapis sprzed puli insiderów: ETF ma 4000, gracz kupuje 5500
+        playerPortfolio.AAA = { shares: 5500, avgPrice: 100, assetType: 'stock' };
+        a.sharesHeld += 5500;
+        const held = getTrackedHeldShares(a);
+        initializeOwnership(a);
+        assert(a.insiderShares <= 10000 - held, `insiderzy ${a.insiderShares} przy posiadaczach ${held}`);
+        assert(overheld(a) <= 0, `posiadacze ponad wolny obrót o ${overheld(a)}`);
+    });
+
+    test('uzgadnianie leczy nadmiar: oddają go insiderzy, pakiety inwestorów zostają', () => {
+        const { a, etf } = worldFloat();
+        etf.holdings.AAA = 4506 + 3424; // jak CZB: bank + ETF ponad wolny obrót
+        a.sharesHeld = 7000;
+        assert(overheld(a) === 930, `nadmiar przed: ${overheld(a)}`);
+        reconcileSharesHeld();
+        assert(etf.holdings.AAA === 7930 && a.insiderShares === 2070, `ETF ${etf.holdings.AAA}, insiderzy ${a.insiderShares}`);
+        assert(a.sharesHeld === 7930 && overheld(a) === 0, `sharesHeld ${a.sharesHeld}`);
+        assert(checkWorldInvariants().length === 0, checkWorldInvariants().join('; '));
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;
