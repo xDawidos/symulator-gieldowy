@@ -105,9 +105,9 @@ Każdy poziom odblokowuje narzędzie w zakładce Finanse karty spółki i hasła
   - zadania Mentora zaliczają się i wypłacają nagrody;
   - kurs spada o dywidendę w dniu odcięcia.
 
-## Decyzje do podjęcia
+## Decyzje (podjęte)
 
-1. **Księgowy: obniżka podatków** — usunąć (narzędzia są wystarczającą nagrodą) czy zostawić małą (np. −2%)?
-2. **Certyfikaty** — tylko nagroda (prestiż, premia) czy warunek awansu na wyższe stanowiska?
-3. **Kreatywna księgowość: częstość** — rzadko (ok. 3–5% spółek naraz) czy częściej (ok. 10%), żeby czerwone flagi miały duże znaczenie?
-4. **Akademia** — tylko słownik czy także krótkie quizy (np. 3 pytania za XP)?
+1. **Księgowy:** zostaje mała obniżka podatków −2% (jeden poziom), główną nagrodą są narzędzia.
+2. **Certyfikaty:** warunek awansu na wyższe stanowiska (od Kierownika projektu wzwyż) — zadania Mentora prowadzą do certyfikatów.
+3. **Kreatywna księgowość:** rzadko, ok. 3–5% spółek naraz, głównie słabe spółki i prezesi ze skłonnością do nadużyć.
+4. **Akademia:** słownik z przykładami z gry + krótkie quizy (3 pytania) za XP po odblokowaniu hasła.
