@@ -1396,7 +1396,7 @@ function processOversightQuarterly() {
     ensureOversight();
     const quarter = getOversightQuarter();
     // Państwo finansuje instytucje (więcej przy rządzie „państwowym”).
-    const share = STATE_INSTITUTION_FUNDING * (typeof getRulingParty === 'function' && getRulingParty() === RULING_PARTIES.state ? 1.3 : 1);
+    const share = STATE_INSTITUTION_FUNDING * (typeof getRulingParty === 'function' && (macro.election?.ruling === 'state' || macro.election?.coalition?.partner === 'state') ? 1.3 : 1);
     for (const institution of [oversight.police, oversight.knf]) {
         const amount = Math.max(0, governmentTreasury) * share / 2;
         governmentTreasury -= amount;
@@ -2091,6 +2091,7 @@ function renderMafiaSection() {
     }[demand.type] : '';
     const companies = stocks.filter(s => !s.assetType && !s.isBankrupt && !isMafiaImmune(s));
     const elite = stocks.filter(s => !s.assetType && !s.isBankrupt && ['RUBY', 'EMERALD', 'DIAMOND', 'PLATINUM'].includes(s.exchange));
+    const unionized = stocks.filter(s => !s.isBankrupt && s.workforce?.union); // 0.13
     const option = list => list.map(s => `<option value="${s.symbol}">${escapeHtml(s.name)} (${s.symbol})</option>`).join('');
     return `<h3 class="mt-4">🕶️ Pan Gato</h3>
         <div class="bank-ticker"><div class="bank-ticker-item"><span>Wpływy mafii</span><strong>${stage.icon} ${stage.name}</strong></div>
@@ -2109,6 +2110,8 @@ function renderMafiaSection() {
                 <div class="bank-card-form"><button class="btn-danger" onclick="mafiaTip(); renderGreyZone(); displayCash();">Kup cynk</button></div></article>
             <article class="grey-card"><h4>🛡️ Ochrona</h4><p class="text-sm text-muted">${(MAFIA_PROTECTION_FEE * 100).toFixed(0)}% aktywów funduszu na kwartał. Chroni przed żądaniami haraczu i atakami wrogich botów.</p>
                 <div class="bank-card-form"><button class="${mafia.protection ? 'btn-secondary' : 'btn-danger'}" onclick="toggleMafiaProtection(); renderGreyZone();">${mafia.protection ? 'Zrezygnuj' : 'Wykup ochronę'}</button></div></article>
+            <article class="grey-card"><h4>🪓 „Rozbicie” związku</h4><p class="text-sm text-muted">Związek zakładowy w wybranej spółce „sam się rozwiązuje”. Ryzyko wykrycia ${(UNION_BUST_DETECTION * 100).toFixed(0)}%: strajk generalny w całym sektorze, afera, wpis compliance i spadek zaufania klientów.</p>
+                <div class="bank-card-form">${unionized.length ? `<select id="mafia-union" aria-label="Spółka">${option(unionized)}</select><button class="btn-danger" onclick="mafiaBustUnion(document.getElementById('mafia-union').value); renderGreyZone(); displayCash();">Zleć</button>` : '<span class="text-xs text-muted">brak związków zakładowych</span>'}</div></article>
             <article class="grey-card"><h4>🎟️ Wejściówka</h4><p class="text-sm text-muted">Do 2% akcji spółki z najwyższych giełd −15%. Sprzedasz je dopiero, gdy stanowisko da dostęp do tej giełdy. Przysługa 15%, akcje podlegają rekwizycji.</p>
                 <div class="bank-card-form">${elite.length ? `<select id="mafia-ticket" aria-label="Spółka">${option(elite)}</select><button class="btn-danger" onclick="mafiaEntryTicket(document.getElementById('mafia-ticket').value); renderGreyZone(); displayCash();">Załatw</button>` : '<span class="text-xs text-muted">brak spółek</span>'}</div></article>
         </div>`;

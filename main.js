@@ -26,8 +26,10 @@ const LEGACY_SAVE_KEYS = ['gra_inwestycyjna_dawid_save_v2', 'gra_inwestycyjna_da
 // v6: skrzynka mailowa, burmistrz i kampania, festyn, oferta prywatyzacyjna. v4/v5 migrują przy wczytaniu.
 // v7: obligacje i oferty (czas gry, kupony), depozyty i księgi banków, zastawy funduszy, giełdy elitarne.
 // v8: klienci z charakterami i rynek wtórny JU (migracja typów klientów przy wczytaniu).
-const SAVE_FORMAT_VERSION = 12;
-const SUPPORTED_SAVE_VERSIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12];
+// v13: społeczeństwo i rynek pracy (society, stock.workforce, trzecia partia). Starsze zapisy: kraj od zera,
+// zatrudnienie według giełdy, polityka według cech prezesa, związki tylko w spółkach państwowych (30%).
+const SAVE_FORMAT_VERSION = 13;
+const SUPPORTED_SAVE_VERSIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
 
 let lastSaveReport = null;
 let saveDisabledUntilReload = false;
@@ -124,6 +126,7 @@ function buildSaveSnapshot() {
         paymentTotals,
         economyCycle,
         macro,
+        society,
         etfs: serializeEtfs(),
         botRelations,
         marketOperators,
@@ -437,6 +440,11 @@ function applySaveSnapshot(snapshot) {
     scandals = snapshot.scandals && typeof snapshot.scandals === 'object' ? snapshot.scandals : createScandals(); // v11: afery
     ensureScandals();
     ensureMacroState();
+    // v13: kraj i zatrudnienie (starsze zapisy: kraj od zera, populacja miasta bez zmian).
+    society = snapshot.society && typeof snapshot.society === 'object' ? snapshot.society : createSocietyState();
+    ensureSocietyState();
+    if (!snapshot.society) report.warnings.push('Zapis bez danych kraju — utworzono społeczeństwo i zatrudnienie w spółkach (migracja v13).');
+    stocks.forEach(stock => { if (typeof ensureWorkforce === 'function') ensureWorkforce(stock); });
     if (snapshot.economyCycle && ECONOMY_PHASES[snapshot.economyCycle.phase]) {
         economyCycle = snapshot.economyCycle;
     } else {
@@ -932,6 +940,7 @@ gameTimers.weekly = setInterval(() => {
         advanceEconomyCycle(); // nowa faza koniunktury przed raportami
         advanceMacroQuarter(); // inflacja, bezrobocie, cykle sektorów, wybory (macro.js)
         processCityQuarterly(); // festyn raz w roku (city.js)
+        processWorkforceQuarter(); // 0.13: zatrudnienie, zadowolenie, związki i strajki przed raportami (workforce.js)
         processFinancialReports(); // zawiera koszty R&D, wynik kontraktów, pozycje okresu i dywidendy
         updateInfluence();
         updateCeoTenureAndAge(); // Zmieniona nazwa, ale to samo
