@@ -215,24 +215,14 @@ const skills = {
 
     // ZMIANA OD KOLEGI: Dodano nową umiejętność "Księgowy"
     'accountant': {
-        name: 'Księgowy 🧐',
+        name: 'Księgowy → Audytor 🧐',
         unlockedLevel: 0,
         levels: [
-            {
-                level: 1,
-                cost: 600, // Przykładowy koszt XP
-                description: 'Odblokowuje możliwość wglądu w podstawowe finanse ("faktury") spółki za opłatą 2000 PLN. Dostęp może być zablokowany przy negatywnych relacjach. Dodatkowo obniża podatki od zysków o 2%.'
-            },
-            {
-                level: 2,
-                cost: 1500, // Przykładowy koszt XP
-                description: 'Wgląd w finanse jest darmowy dla spółek, w których posiadasz ponad 50% akcji. Obniża podatki od zysków o 4%.'
-            },
-            {
-                level: 3,
-                cost: 3500, // Przykładowy koszt XP
-                description: 'Twoje doświadczenie pozwala Ci wykrywać anomalie. Zyskujesz 15% szans przy każdym wglądzie w finanse na wykrycie nieprawidłowości (co może zapobiec negatywnemu zdarzeniu) lub ukrytego potencjału (co może dać mały bonus). Obniża podatki od zysków o 6%.'
-            }
+            { level: 1, cost: 600, description: 'Rachunek zysków i strat w karcie spółki (8 kwartałów: przychody → EBITDA → amortyzacja → odsetki → podatek → zysk). Obniża podatki prywatne o 2%.' },
+            { level: 2, cost: 1500, description: 'Bilans: gotówka, należności, kapitał własny, zobowiązania, dług netto.' },
+            { level: 3, cost: 3000, description: 'Przepływy pieniężne: gotówka z działalności vs zysk netto — czy zysk jest „prawdziwy”.' },
+            { level: 4, cost: 5000, description: 'Czerwone flagi kreatywnej księgowości w karcie spółki, na liście i w skanerze.' },
+            { level: 5, cost: 8000, description: 'Audytor: zlecasz audyt spółki (koszt z funduszu) — wynik w kolejnym kwartale.' }
         ]
     },
 
@@ -416,7 +406,7 @@ function sellStock(symbol, quantity) {
         if (sanEscobarLvl >= 4) playerTaxModifier = 0.0;
         // Księgowy: -2% za każdy poziom (min 90%)
         const accLvl = getSkillLevel('accountant');
-        if (accLvl > 0) playerTaxModifier *= Math.max(0.9, 1.0 - accLvl * 0.02);
+        if (accLvl > 0) playerTaxModifier *= 0.98; // N3: stała obniżka 2%
 
         taxToPay = profit * taxRateCapitalGains * playerTaxModifier;
         governmentTreasury += taxToPay; // Podatek do budżetu
@@ -548,7 +538,7 @@ function sellIndex(indexId, quantity) {
         if (sanEscobarLvl >= 1) playerTaxModifier = 0.95; // Lvl 1: 5% zniżki
         if (sanEscobarLvl >= 4) playerTaxModifier = 0.0; // Lvl 4: 0% podatku
         // Księgowy: -2% za każdy poziom (min 90%)
-        { const _accLvl = getSkillLevel('accountant'); if (_accLvl > 0) playerTaxModifier *= Math.max(0.9, 1.0 - _accLvl * 0.02); }
+        { const _accLvl = getSkillLevel('accountant'); if (_accLvl > 0) playerTaxModifier *= 0.98; }
 
         taxToPay = profit * taxRateCapitalGains * playerTaxModifier;
         governmentTreasury += taxToPay; // Podatek do budżetu

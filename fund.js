@@ -674,7 +674,7 @@ function getPrivateTaxModifier() {
     if (sanEscobar >= 1) modifier = 0.95;
     if (sanEscobar >= 4) modifier = 0;
     const accountant = getSkillLevel('accountant');
-    if (accountant > 0) modifier *= Math.max(0.9, 1 - accountant * 0.02);
+    if (accountant > 0) modifier *= 0.98; // N3: stała obniżka 2%
     return modifier;
 }
 

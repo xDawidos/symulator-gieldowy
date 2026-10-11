@@ -383,6 +383,7 @@ gameTimers.weekly = setInterval(() => {
         processMafiaQuarterly(); // mafia, Bruno Gato, porachunki (mafia.js)
         processScandalsQuarterly(); // parabanki i wojny PR (scandals.js)
         processDefenseQuarterly(); // zbrojeniówka i fundusz Gwardia (defense.js)
+        if (typeof processAccountingQuarterly === 'function') processAccountingQuarterly(); // N3: kreatywna księgowość, audyty (accounting.js)
         advanceEconomyCycle(); // nowa faza koniunktury przed raportami
         advanceMacroQuarter(); // inflacja, bezrobocie, cykle sektorów, wybory (macro.js)
         processCityQuarterly(); // festyn raz w roku (city.js)

@@ -475,6 +475,11 @@ function processAiLoansWeekly(ai) {
                 const loan = ai.loans[i];
                 if (loan.isPawnLoan) continue; // Pomiń lombardowe, już obsłużone
 
+                // Naprawa kredytów ze starych zapisów (hipoteki bez oprocentowania → NaN).
+                if (!Number.isFinite(loan.interestRate)) loan.interestRate = getLoanRate() * 1.1;
+                if (!Number.isFinite(loan.amount)) loan.amount = Math.max(0, Number(loan.weeklyPayment) || 0) * 26;
+                if (!Number.isFinite(ai.cash)) ai.cash = 0;
+
                 // Obliczanie odsetek
                 const weeklyInterestRate = loan.interestRate / 52;
                 loan.amount += loan.amount * weeklyInterestRate; 
@@ -1929,6 +1934,7 @@ function aiTakeMortgageLoan(ai, bankId, collateralSymbol, collateralQuantity, re
         bankId: bankId,
         bankName: bank.name,
         amount: finalLoanAmount, // Pozostała kwota
+        interestRate: interestRate, // brak tego pola dawał NaN w odsetkach → NaN w gotówce bota
         weeklyPayment: weeklyPayment, // Rata
         maturityDate: maturityDate,
         collateral: { symbol: collateralSymbol, quantity: collateralQuantity }

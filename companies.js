@@ -1987,7 +1987,10 @@ function recordQuarterFundamentals(stock, quarter) {
         revenue: quarter.revenue,
         ebitda: quarter.ebitda,
         netIncome: quarter.netIncome,
-        eps
+        eps,
+        // N3: dane dla Księgowego (rachunek wyników, przepływy, należności)
+        depreciation: quarter.depreciation, interest: quarter.interest, tax: quarter.tax,
+        ocf: quarter.ocf, receivables: quarter.receivables
     });
     if (fundamentals.history.length > FUNDAMENTALS_HISTORY_QUARTERS) fundamentals.history.shift();
 
@@ -2364,8 +2367,11 @@ function processFinancialReports() {
         const periodResults = takePeriodResults(stock);
         const constructionResult = periodResults.constructionRevenue - periodResults.constructionCosts;
         const reportedQuarterlyEarnings = operatingCashResult - recognizedResearchExpense + periodResults.total;
+        // N3: spółka-oszust publikuje zysk wyższy od prawdziwego (gotówka płynie z prawdziwego).
+        const fakeEarnings = typeof getFraudInflation === 'function' ? getFraudInflation(stock, quarterModel, reportedQuarterlyEarnings) : 0;
+        const publishedEarnings = reportedQuarterlyEarnings + fakeEarnings;
 
-        stock.quarterlyEarnings = reportedQuarterlyEarnings;
+        stock.quarterlyEarnings = publishedEarnings;
         stock.lastReportBreakdown = {
             reportedAt: Date.now(),
             operating: operatingCashResult,
@@ -2375,7 +2381,7 @@ function processFinancialReports() {
             propertyIncome: periodResults.propertyIncome,
             investmentExpense: periodResults.investmentExpense,
             otherIncome: periodResults.otherIncome,
-            total: reportedQuarterlyEarnings
+            total: publishedEarnings
         };
 
         // Gotówka: zysk netto + amortyzacja (koszt niegotówkowy). Aktywa i kapitał: zysk netto.
@@ -2383,10 +2389,14 @@ function processFinancialReports() {
         adjustBalanceSheet(stock, { assets: operatingCashResult, retainedEarnings: operatingCashResult });
 
         // Fundamenty kwartału (EPS z wyniku raportowanego: z R&D i kontraktami).
+        const accounting = typeof recordAccountingQuarter === 'function' && quarterModel ? recordAccountingQuarter(stock, quarterModel, reportedQuarterlyEarnings, fakeEarnings) : null;
         const earningsSurprise = recordQuarterFundamentals(stock, {
             revenue: (quarterModel ? quarterModel.revenue : 0) + periodResults.constructionRevenue,
-            ebitda: quarterModel ? quarterModel.ebitda : reportedQuarterlyEarnings,
-            netIncome: reportedQuarterlyEarnings
+            ebitda: (quarterModel ? quarterModel.ebitda : reportedQuarterlyEarnings) + fakeEarnings,
+            netIncome: publishedEarnings,
+            depreciation: quarterModel?.depreciation, interest: quarterModel?.interest, tax: quarterModel?.tax,
+            ocf: accounting ? accounting.ocf : reportedQuarterlyEarnings + nonCashCosts,
+            receivables: accounting?.receivables
         });
         if (quarterModel) {
             stock.lastReportBreakdown.revenue = quarterModel.revenue;
@@ -2474,6 +2484,7 @@ function processFinancialReports() {
         let eventMessage = '';
         const surprise = Math.max(-1, Math.min(1, earningsSurprise));
         stock.lastSurprise = surprise; // N2: wynik vs konsensus (karta spółki)
+        stock.surpriseHistory = [...(stock.surpriseHistory || []), surprise].slice(-4); // N3: czerwona flaga „zawsze tuż nad konsensusem”
 
         if (surprise >= 0.5) {
             reportResult = 'excellent';
@@ -2502,7 +2513,7 @@ function processFinancialReports() {
 
         // Dywidenda: zarząd może zmienić strategię, potem ogłasza wypłatę z zysku kwartału.
         reviewDividendPolicy(stock);
-        declareQuarterDividend(stock, reportedQuarterlyEarnings);
+        declareQuarterDividend(stock, publishedEarnings); // oszust wypłaca dywidendę z „zysku na papierze”
         updateDividendStreak(stock); // seria wypłat i status arystokraty (dividends.js)
 
         // Aktualizacja zmienności (bez zmian)

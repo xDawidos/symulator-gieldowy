@@ -3583,6 +3583,91 @@ group('Nauka N1/N2: Akademia, mediany sektora, skaner, wycena', () => {
     });
 });
 
+group('Nauka N3: kreatywna księgowość, czerwone flagi, audyt', () => {
+    function world(n = 4) {
+        const list = [];
+        for (let i = 0; i < n; i++) {
+            const c = makeCompany(`K${i}`, { cash: 500_000, fixedAssets: 800_000 });
+            c.price = 100; c.financialHealth = 0;
+            initializeFundamentals(c, true);
+            list.push(c);
+        }
+        resetWorld(list);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        macro = createMacroState(); oversight = createOversight();
+        playerCash = 1_000_000;
+        return list;
+    }
+
+    test('oszust: zysk zawyżony, różnica w należnościach, gotówka z prawdziwego zysku', () => {
+        const [a] = world();
+        a.fraud = { start: 0, correctAt: 5, total: 0 };
+        const model = { revenue: 100_000, depreciation: 5_000 };
+        const fake = getFraudInflation(a, model, 10_000);
+        assert(fake > 0 && fake <= model.revenue * FRAUD_FAKE_CAP + 1e-6, `zawyżenie ${fake}`);
+        const assets = a.balanceSheet.assets;
+        const acc = recordAccountingQuarter(a, model, 10_000, fake);
+        assertNear(a.balanceSheet.assets - assets, fake, 'należności w aktywach');
+        assertNear(acc.ocf, 10_000 + 5_000, 'przepływy = prawdziwy zysk + amortyzacja (bez zawyżenia)');
+        assert(getFraudInflation({ ...a, fraud: null }, model, 10_000) === 0, 'uczciwa spółka nie zawyża');
+    });
+
+    test('korekta wyników: odpis, spadek kursu, koniec oszustwa', () => {
+        const [a] = world();
+        a.fraud = { start: 0, correctAt: 1, total: 50_000 };
+        a.balanceSheet.assets += 50_000; a.balanceSheet.retainedEarnings += 50_000;
+        const assets = a.balanceSheet.assets, price = a.price;
+        revealFraud(a, 'test');
+        assert(!a.fraud && a.balanceSheet.assets <= assets - 50_000 + 1 && a.price < price, 'korekta');
+        assert(a.fraudHistory.length === 1, 'historia');
+    });
+
+    test('czerwone flagi: zysk bez gotówki + zmiana audytora; uczciwa spółka bez flag', () => {
+        const [a, b] = world();
+        a.fundamentals.history = [1, 2, 3, 4, 5].map(() => ({ revenue: 100, netIncome: 20, ocf: 2, receivables: 50 }));
+        a.fundamentals.history[0].receivables = 20;
+        a.auditorChangedQuarter = macro.quarter;
+        assert(getRedFlags(a).length >= 3, 'flagi oszusta');
+        b.fundamentals.history = [1, 2, 3, 4, 5].map(() => ({ revenue: 100, netIncome: 20, ocf: 22, receivables: 25 }));
+        assert(getRedFlags(b).length === 0, 'uczciwa bez flag');
+    });
+
+    test('audyt: wymaga poziomu 5, kosztuje fundusz, wykrywa oszustwo', () => {
+        const [a] = world();
+        assert(!orderAudit(a.symbol), 'bez szkolenia');
+        skills.accountant.unlockedLevel = 5;
+        a.fraud = { start: 0, correctAt: 9, total: 30_000 };
+        const cash = playerCash;
+        assert(orderAudit(a.symbol) && playerCash < cash, 'zlecony i opłacony');
+        macro.quarter += 1;
+        const random = Math.random; Math.random = () => 0.99;
+        finishAudit(a);
+        Math.random = random;
+        skills.accountant.unlockedLevel = 0;
+        assert(a.audit.done && !a.audit.clean && a.audit.inflation === 30_000, 'wykryte');
+    });
+
+    test('oszustw najwyżej 5% notowanych spółek', () => {
+        world(40);
+        const random = Math.random; Math.random = () => 0.0001;
+        try { processAccountingQuarterly(); } finally { Math.random = random; }
+        assert(stocks.filter(s => s.fraud).length <= 2, `oszustów ${stocks.filter(s => s.fraud).length}`);
+    });
+});
+
+group('Naprawa: hipoteki botów bez oprocentowania (NaN w gotówce)', () => {
+    test('stary kredyt bez oprocentowania nie psuje gotówki bota', () => {
+        const a = makeCompany('AAA');
+        resetWorld([a]);
+        const ai = aiCompetitors[0];
+        ai.cash = 10_000;
+        ai.loans = [{ id: 'mort_x', bankId: null, bankName: 'Test', amount: 1000, weeklyPayment: 30, maturityDate: Date.now() + 1e6 }];
+        processAiLoansWeekly(ai);
+        assert(Number.isFinite(ai.cash) && Number.isFinite(ai.loans[0]?.amount ?? 0), `gotówka ${ai.cash}`);
+        ai.loans = [];
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

@@ -154,6 +154,7 @@ function renderScannerResults() {
     const box = document.getElementById('scanner-results');
     if (!box) return;
     const level = getAnalystLevel();
+    const flagsOn = typeof getRedFlags === 'function' && getSkillLevel('accountant') >= 4;
     const rows = runScanner();
     const pct = v => v === null || v === undefined || !Number.isFinite(v) ? '—' : `${(v * 100).toFixed(1)}%`;
     const fx = v => v === null || v === undefined || !Number.isFinite(v) ? '—' : v.toFixed(1);
@@ -166,7 +167,7 @@ function renderScannerResults() {
                 ${head('name', 'Spółka', 'Nazwa')}${head('cap', 'Kapitalizacja', 'Kurs × liczba akcji')}${head('pe', 'C/Z', 'Cena / zysk')}${head('pb', 'C/WK', 'Cena / wartość księgowa')}
                 ${head('dy', 'Dywid.', 'Stopa dywidendy')}${head('debt', 'Zadłuż.', 'Zobowiązania / aktywa')}
                 ${level >= 2 ? head('roe', 'ROE', 'Zysk / kapitał własny') + head('margin', 'Marża', 'Zysk netto / przychody') + head('growth', 'Zysk r/r', 'Wzrost zysku rok do roku') : ''}
-                ${head('health', 'Kondycja', 'Kondycja finansowa')}${level >= 3 ? head('upside', 'Potencjał', 'Wartość godziwa / kurs − 1') : ''}
+                ${head('health', 'Kondycja', 'Kondycja finansowa')}${level >= 3 ? head('upside', 'Potencjał', 'Wartość godziwa / kurs − 1') : ''}${flagsOn ? '<th title="Czerwone flagi (Księgowy poz. 4)">🚩</th>' : ''}
             </tr></thead>
             <tbody>${rows.slice(0, 120).map(({ stock, m, med, upside }) => `<tr class="clickable" onclick="openDescriptionModal('${stock.symbol}')">
                 <td>${escapeHtml(stock.name)} <span class="text-xs text-muted">${escapeHtml(stock.symbol)} · ${escapeHtml(stock.sector?.[0] || '')}</span></td>
@@ -178,6 +179,7 @@ function renderScannerResults() {
                 ${level >= 2 ? `<td class="cell-number ${cls(m.roe, med.roe, false)}">${pct(m.roe)}</td><td class="cell-number ${cls(m.margin, med.margin, false)}">${pct(m.margin)}</td><td class="cell-number ${m.growth > 0 ? 'text-up' : m.growth < 0 ? 'text-down' : ''}">${pct(m.growth)}</td>` : ''}
                 <td class="cell-number">${m.health.toFixed(1)}</td>
                 ${level >= 3 ? `<td class="cell-number ${upside > 0.15 ? 'text-up' : upside < -0.15 ? 'text-down' : ''}">${pct(upside)}</td>` : ''}
+                ${flagsOn ? (() => { const flags = getRedFlags(stock); return `<td class="cell-number ${flags.length >= 2 ? 'text-down' : ''}" title="${escapeHtml(flags.map(f => f.label).join(', '))}">${flags.length || ''}</td>`; })() : ''}
             </tr>`).join('') || '<tr><td colspan="11" class="text-muted">Żadna spółka nie spełnia filtrów.</td></tr>'}</tbody>
         </table></div>`;
 }

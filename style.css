@@ -4423,3 +4423,10 @@ body.dark-mode #startup-incubator-panel.panel, #startup-incubator-panel.panel { 
 .scanner-table-wrap { max-height: 55vh; overflow: auto; }
 .scanner-table th.clickable { cursor: pointer; white-space: nowrap; }
 @media (max-width: 700px) { .academy-layout { grid-template-columns: 1fr; } .academy-list { max-height: 30vh; } }
+
+/* N3: bilans w karcie spółki */
+.acc-balance { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.acc-bars { display: flex; height: 14px; border-radius: 6px; overflow: hidden; background: var(--bg-elevated, #1c2128); margin: 4px 0; }
+.acc-bar.cash { background: #3fb950; } .acc-bar.recv { background: #d29922; } .acc-bar.other { background: #8b949e; }
+.acc-bar.equity { background: #58a6ff; } .acc-bar.debt { background: #f85149; }
+@media (max-width: 700px) { .acc-balance { grid-template-columns: 1fr; } }

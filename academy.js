@@ -297,6 +297,36 @@ const ACADEMY_ENTRIES = {
             { q: 'Dlaczego zarządzający aktywnie nie trzyma wszystkiego w ETF?', a: ['Bo wtedy nie pobije benchmarku', 'Bo ETF są zakazane', 'Bo ETF nie mają spółek'], c: 0 }
         ]
     },
+    przeplywy: {
+        title: 'Przepływy pieniężne', icon: '💧',
+        text: 'Zysk w rachunku wyników to nie to samo co gotówka. Przepływy z działalności pokazują, ile pieniędzy faktycznie wpłynęło. Zdrowa spółka zamienia większość zysku w gotówkę; jeśli zysk rośnie, a gotówka nie — sprzedaż może być „na papierze” (należności, których nikt nie zapłaci).',
+        example: () => { const s = pickListed(x => (x.fundamentals.history || []).some(q => Number.isFinite(q.ocf)))[0]; const q = s?.fundamentals.history.slice(-1)[0]; return q && Number.isFinite(q.ocf) ? `${s.name}: ostatni kwartał zysk ${formatZl(q.netIncome, 0)}, gotówka z działalności ${formatZl(q.ocf, 0)}.` : ''; },
+        quiz: [
+            { q: 'Spółka ma 10 mln zł zysku, ale 1 mln zł gotówki z działalności. To…', a: ['sygnał ostrzegawczy — zysk mało „gotówkowy”', 'świetny wynik', 'bez znaczenia'], c: 0 },
+            { q: 'Dlaczego amortyzację dodaje się do zysku przy liczeniu gotówki?', a: ['To koszt bez wydatku pieniędzy w tym okresie', 'Bo to przychód', 'Bo tak każe podatek'], c: 0 },
+            { q: 'Rosnące należności przy stałej sprzedaży oznaczają, że…', a: ['klienci płacą coraz później (albo sprzedaż jest fikcyjna)', 'spółka ma więcej gotówki', 'spada zadłużenie'], c: 0 }
+        ]
+    },
+    kreatywna: {
+        title: 'Kreatywna księgowość', icon: '🎭',
+        text: 'Zarząd pod presją może „poprawiać” wyniki: księgować sprzedaż, za którą nikt nie zapłaci, odraczać koszty, trafiać idealnie w oczekiwania. Prędzej czy później przychodzi korekta i kurs gwałtownie spada. Sygnały: zysk bez gotówki, puchnące należności, zmiany audytora, wyniki zawsze minimalnie nad konsensusem.',
+        example: () => { const s = stocks.filter(x => x.fraudHistory?.length).sort((a, b) => b.fraudHistory.slice(-1)[0].quarter - a.fraudHistory.slice(-1)[0].quarter)[0]; return s ? `Ostatnia korekta: ${s.name} — odpis ${formatZl(s.fraudHistory.slice(-1)[0].writeOff, 0)}.` : 'Jeszcze żadna spółka nie musiała korygować wyników.'; },
+        quiz: [
+            { q: 'Który zestaw najbardziej sugeruje zawyżanie zysków?', a: ['Zysk rośnie, gotówka spada, należności puchną', 'Wysoka dywidenda i brak długu', 'Spadek kursu po słabym raporcie'], c: 0 },
+            { q: 'Co zwykle dzieje się z kursem po ujawnieniu oszustwa?', a: ['Gwałtowny spadek', 'Wzrost — bo zarząd się zmienia', 'Nic'], c: 0 },
+            { q: 'Dlaczego częsta zmiana audytora jest podejrzana?', a: ['Spółka może szukać mniej dociekliwego badania', 'Bo audyt jest tańszy', 'To zawsze dobry znak'], c: 0 }
+        ]
+    },
+    audyt: {
+        title: 'Audyt', icon: '🔍',
+        text: 'Audytor niezależnie sprawdza sprawozdania: czy przychody i należności istnieją, czy majątek jest wyceniony uczciwie. Badanie kosztuje i trwa, ale chroni przed dużą stratą — zwłaszcza przed dużą inwestycją. Audytor też bywa omylny.',
+        example: () => { const s = stocks.find(x => x.audit?.done); return s ? `Ostatni audyt zlecony przez fundusz: ${s.name} — ${s.audit.clean ? 'bez zastrzeżeń' : 'wykryte nieprawidłowości'}.` : 'Fundusz nie zlecał jeszcze audytu.'; },
+        quiz: [
+            { q: 'Kiedy zlecenie audytu ma największy sens?', a: ['Przed dużą inwestycją w spółkę z czerwonymi flagami', 'Po sprzedaży wszystkich akcji', 'Nigdy — raporty wystarczą'], c: 0 },
+            { q: 'Czy „czysty” audyt gwarantuje brak oszustwa?', a: ['Nie — audytor może coś przeoczyć', 'Tak, zawsze', 'Tylko w bankach'], c: 0 },
+            { q: 'Co audytor sprawdza?', a: ['Czy sprawozdania odpowiadają rzeczywistości', 'Kurs akcji', 'Pensję prezesa w prasie'], c: 0 }
+        ]
+    },
     bankructwo: {
         title: 'Bankructwo', icon: '💥',
         text: 'Spółka bankrutuje, gdy nie jest w stanie spłacać zobowiązań. Akcjonariusze są na końcu kolejki — zwykle tracą wszystko. Sygnały ostrzegawcze: rosnące zadłużenie, straty, spadająca gotówka, słaba kondycja.',
@@ -365,6 +395,8 @@ function checkAcademyTriggers() {
     if ((typeof getFundDeposits === 'function' && getFundDeposits().length) || (playerFund.ppp || []).length) unlockAcademyEntry('lokata');
     if (Object.values(playerPortfolio).some(h => h.assetType === 'etf' && h.shares > 0)) unlockAcademyEntry('etf');
     if (getSkillLevel('financialAnalyst') >= 1) unlockAcademyEntry('wycena');
+    if (getSkillLevel('accountant') >= 3) unlockAcademyEntry('przeplywy');
+    if (getSkillLevel('accountant') >= 4) unlockAcademyEntry('kreatywna');
     if (stocks.some(s => s.isBankrupt)) unlockAcademyEntry('bankructwo');
 }
 

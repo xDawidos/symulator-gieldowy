@@ -179,6 +179,10 @@ function displayStocks(previousInputValues = {}) {
       markerPrefix += '🏛️ ';
       nameCell.title = 'Spółka Skarbu Państwa';
     }
+    if (typeof getRedFlags === 'function' && getSkillLevel('accountant') >= 4 && !stock.assetType) {
+      const flags = getRedFlags(stock);
+      if (flags.length >= 2) { markerPrefix += '🚩 '; nameCell.title = `Czerwone flagi: ${flags.map(f => f.label).join(', ')}`; }
+    }
 
     const nameSpan = document.createElement('span');
     nameSpan.className = 'stock-name';
@@ -2018,7 +2022,8 @@ function renderCompanyCardFinance(stock, f) {
                     ${row('Ostatnia dywidenda', last ? `${last.dps.toFixed(4)} zł (${(last.yield * 100).toFixed(2)}%)` : 'brak', 'Ostatnia wypłata na akcję i stopa w dniu wypłaty.')}
                 </tbody></table></section>
         </div>
-        ${renderValuationSection(stock, f)}`;
+        ${renderValuationSection(stock, f)}
+        ${typeof renderAccountingSection === 'function' ? renderAccountingSection(stock) : ''}`;
 }
 
 /** N2: metody wyceny (Analityk Finansowy 1–2) i konsensus (poziom 3). */
