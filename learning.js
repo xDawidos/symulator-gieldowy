@@ -359,6 +359,161 @@ const ACADEMY_ENTRIES = {
 };
 
 // ---------------------------------------------------------------------------------
+// 0.13: hasła o społeczeństwie i rynku pracy (dopisane do ACADEMY_ENTRIES)
+// ---------------------------------------------------------------------------------
+
+function societyReady() {
+    return typeof society === 'object' && society && society.classes;
+}
+
+function workforceListed() {
+    return typeof getWorkforceCompanies === 'function' ? getWorkforceCompanies() : [];
+}
+
+Object.assign(ACADEMY_ENTRIES, {
+    strukturaSpoleczna: {
+        title: 'Struktura społeczna a popyt', icon: '👥',
+        text: 'Ludzie z różnych klas wydają inaczej: zamożni więcej na turystykę, nieruchomości i finanse, biedniejsi — na żywność i podstawowe usługi. Gdy rośnie klasa średnia, rośnie popyt na dobra „wyższego rzędu”. Indeks popytu w zakładce Kraj streszcza strukturę klas w jednej liczbie (start = 1,00).',
+        example: () => societyReady() ? `Dziś: klasa biedna ${(society.classes.poor * 100).toFixed(1)}%, indeks popytu ${society.demandIndex.toFixed(3)}.` : '',
+        quiz: [
+            { q: 'Klasa średnia rośnie kosztem biednej. Co dzieje się z indeksem popytu?', a: ['Rośnie', 'Spada', 'Nie zmienia się'], c: 0 },
+            { q: 'Która branża najbardziej korzysta na bogaceniu się społeczeństwa?', a: ['Turystyka', 'Żywność', 'Energia'], c: 0 },
+            { q: 'Co najszybciej przesuwa ludzi w górę drabiny zamożności?', a: ['Wzrost PKB przy niskim bezrobociu', 'Wysoka inflacja', 'Recesja'], c: 0 }
+        ]
+    },
+    elastycznosc: {
+        title: 'Dobra luksusowe i podstawowe (elastyczność)', icon: '🛍️',
+        text: 'Elastyczność dochodowa mówi, jak mocno popyt na dobro reaguje na zmianę zamożności. Dobra luksusowe (podróże, gry, mieszkania) mają elastyczność > 1 — w dobrych czasach rosną szybciej niż gospodarka, w złych spadają mocniej. Dobra podstawowe (żywność) mają elastyczność < 1: to sektory defensywne.',
+        example: () => `W grze: Turystyka ×${DEMAND_ELASTICITY['Turystyka']}, Gaming ×${DEMAND_ELASTICITY['Gaming']}, Żywność ×${DEMAND_ELASTICITY['Żywność']} — tyle razy mocniej przychody reagują na indeks popytu.`,
+        quiz: [
+            { q: 'Społeczeństwo ubożeje. Który sektor ucierpi najmniej?', a: ['Żywność', 'Turystyka', 'Nieruchomości'], c: 0 },
+            { q: 'Elastyczność dochodowa większa od 1 oznacza…', a: ['dobro luksusowe — popyt rośnie szybciej niż dochody', 'dobro podstawowe', 'brak reakcji na dochody'], c: 0 },
+            { q: 'Dlaczego spółki spożywcze nazywa się defensywnymi?', a: ['Ludzie jedzą także w kryzysie', 'Mają zawsze wysoką dywidendę', 'Państwo gwarantuje ich zyski'], c: 0 }
+        ]
+    },
+    kosztPracy: {
+        title: 'Koszt pracy i wydajność', icon: '👷',
+        text: 'Płace to często największy koszt spółki: od kilku procent przychodów u dewelopera do 40% w usługach. Liczy się nie sama płaca, ale płaca na jednostkę pracy — wydajność. Wyższe płace przy jeszcze wyższej wydajności obniżają koszt. Zakładka Zatrudnienie pokazuje koszt pracy w % przychodów na tle sektora.',
+        example: () => { const s = bestBy(workforceListed(), x => x.workforce.laborShare); return s ? `Najbardziej pracochłonna: ${s.name} — koszt pracy ok. ${(s.workforce.laborShare * getLaborCostIndex(s) * 100).toFixed(0)}% przychodów.` : ''; },
+        quiz: [
+            { q: 'Płace rosną o 5%, wydajność o 10%. Koszt pracy na jednostkę produkcji…', a: ['spada', 'rośnie', 'się nie zmienia'], c: 0 },
+            { q: 'W której branży koszt pracy jest zwykle największy względem przychodów?', a: ['Usługi', 'Nieruchomości', 'Energia'], c: 0 },
+            { q: 'Koszt pracy 30% przychodów, płace +10%. O ile spada marża (bez innych zmian)?', a: ['O 3 pkt proc.', 'O 10 pkt proc.', 'O 30 pkt proc.'], c: 0 }
+        ]
+    },
+    dzwignia: {
+        title: 'Dźwignia operacyjna', icon: '🏋️',
+        text: 'Gdy duża część kosztów jest stała albo sztywna (płace, umowy), mała zmiana przychodów mocno zmienia zysk. To dźwignia operacyjna: w dobrych czasach zysk rośnie szybciej niż sprzedaż, w złych — spada szybciej. Strajk, który obniża przychody o 10%, może zabrać dużo więcej niż 10% zysku.',
+        example: () => { const s = workforceListed().find(x => x.workforce.strike); return s ? `${s.name}: strajk obniża przychody kwartału o ${(s.workforce.strike.pct * 100).toFixed(0)}%.` : 'Obecnie żadna spółka nie strajkuje.'; },
+        quiz: [
+            { q: 'Przychody 100, koszty stałe 80, zysk 20. Przychody spadają o 10%. Zysk spada o…', a: ['50%', '10%', '20%'], c: 0 },
+            { q: 'Wysoka dźwignia operacyjna oznacza…', a: ['większe wahania zysku niż przychodów', 'wysokie zadłużenie', 'niską wycenę'], c: 0 },
+            { q: 'Kiedy dźwignia operacyjna pomaga akcjonariuszom?', a: ['Gdy przychody rosną', 'Gdy przychody spadają', 'Nigdy'], c: 0 }
+        ]
+    },
+    szaraStrefa: {
+        title: 'Szara strefa', icon: '🕶️',
+        text: 'Zatrudnianie „na czarno” obniża koszty (niższe płace, brak podatków), więc podnosi marżę — dopóki nie przyjdzie Inspekcja Pracy. Kara bywa wielokrotnością zaoszczędzonych pieniędzy, a do tego dochodzi spadek kursu i utrata klientów, którzy nie chcą takich spółek w portfelu. Dla państwa to utracone podatki.',
+        example: () => { const s = workforceListed().filter(x => getGreyShare(x) > 0.05).sort((a, b) => getGreyShare(b) - getGreyShare(a))[0]; return s ? `${s.name}: ok. ${(getGreyShare(s) * 100).toFixed(0)}% zatrudnionych bez umów.` : 'Żadna spółka nie ma dziś ponad 5% szarej strefy.'; },
+        quiz: [
+            { q: 'Dlaczego szara strefa podnosi marżę?', a: ['Niższe płace i brak podatków od pracy', 'Wyższe ceny produktów', 'Lepsza wydajność'], c: 0 },
+            { q: 'Co grozi spółce złapanej przez Inspekcję Pracy?', a: ['Kara, spadek kursu i utrata części klientów', 'Nic', 'Tylko upomnienie'], c: 0 },
+            { q: 'Kto traci na szarej strefie poza pracownikami?', a: ['Budżet państwa', 'Tylko konkurenci', 'Nikt'], c: 0 }
+        ]
+    },
+    phillips: {
+        title: 'Krzywa Phillipsa', icon: '📉',
+        text: 'Krzywa Phillipsa opisuje zależność: gdy bezrobocie jest niskie, firmy konkurują o ludzi i płace rosną szybciej; gdy wysokie — płace stoją. Rosnące płace podnoszą inflację, a Bank Centralny odpowiada stopami. Dlatego dane z rynku pracy poruszają kursy.',
+        example: () => societyReady() ? `Bezrobocie ${(macro.unemployment * 100).toFixed(1)}% (naturalne ${(NATURAL_UNEMPLOYMENT * 100).toFixed(0)}%), realne płace pracowników: ${society.wages.workers.toFixed(3)}.` : '',
+        quiz: [
+            { q: 'Bezrobocie spada poniżej naturalnego. Co dzieje się z płacami?', a: ['Rosną szybciej', 'Spadają', 'Nic'], c: 0 },
+            { q: 'Szybki wzrost płac może skłonić Bank Centralny do…', a: ['podwyżki stóp', 'obniżki stóp', 'drukowania pieniędzy'], c: 0 },
+            { q: 'Realny wzrost płac to wzrost…', a: ['ponad inflację', 'razem z inflacją', 'tylko w sektorze publicznym'], c: 0 }
+        ]
+    },
+    niedobor: {
+        title: 'Niedobór talentów i płace', icon: '🧠',
+        text: 'Specjalistów nie da się „wyprodukować” w kwartał — kształcenie trwa latami. Gdy firmy potrzebują ich więcej, niż kształci kraj, płace specjalistów rosną, a spółki technologiczne, badawcze i medyczne wolniej się rozwijają. Edukacja to inwestycja z opóźnieniem 4–8 lat.',
+        example: () => societyReady() ? `Niedobór specjalistów: ${society.shortage.toFixed(2)} (powyżej 1 = brakuje ludzi), edukacja ${society.education.toFixed(0)}/100.` : '',
+        quiz: [
+            { q: 'Niedobór specjalistów rośnie. Którym spółkom to szkodzi najbardziej?', a: ['Technologicznym i badawczym', 'Spożywczym', 'Deweloperom'], c: 0 },
+            { q: 'Państwo zwiększa nakłady na edukację. Kiedy rynek pracy to odczuje?', a: ['Po kilku latach', 'Od razu', 'Nigdy'], c: 0 },
+            { q: 'Co robi spółka z zadowoloną załogą i gotówką, gdy brakuje specjalistów?', a: ['Podkupuje ich od słabszych konkurentów', 'Zwalnia ludzi', 'Obniża płace'], c: 0 }
+        ]
+    },
+    drenaz: {
+        title: 'Drenaż mózgów', icon: '✈️',
+        text: 'Gdy kraj traci atrakcyjność (niskie płace, złe nastroje w firmach, bezrobocie), najszybciej wyjeżdżają najlepiej wykształceni — mają najwięcej możliwości za granicą. To drenaż mózgów: kraj traci specjalistów, w których wykształcenie zainwestował, a niedobór talentów rośnie.',
+        example: () => societyReady() ? `Atrakcyjność kraju: ${Number(society.migration.attractiveness || 0).toFixed(0)}/100; fale emigracji w tej grze: ${society.migration.emigrationWaves || 0}.` : '',
+        quiz: [
+            { q: 'Kto wyjeżdża najczęściej przy fali emigracji?', a: ['Specjaliści', 'Emeryci', 'Prezesi spółek państwowych'], c: 0 },
+            { q: 'Jak drenaż mózgów wpływa na płace specjalistów w kraju?', a: ['Podnosi je — jest ich mniej', 'Obniża je', 'Nie wpływa'], c: 0 },
+            { q: 'Co poprawia atrakcyjność kraju?', a: ['Zadowoleni pracownicy, realne płace i niskie bezrobocie', 'Wysoka inflacja', 'Szara strefa'], c: 0 }
+        ]
+    },
+    zwiazek: {
+        title: 'Związek zawodowy i układ zbiorowy', icon: '✊',
+        text: 'Związek zawodowy negocjuje płace w imieniu pracowników. Co roku może żądać podwyżki: zgoda podnosi koszty, ale daje spokój; odmowa grozi strajkiem. Układ zbiorowy to umowa na kilka lat — koszty są przewidywalne, a ryzyko strajku znika. Związki powstają głównie tam, gdzie ludzie są niezadowoleni.',
+        example: () => { const n = workforceListed().filter(x => x.workforce.union).length; return `Związki zakładowe działają w ${n} spółkach; sektorowe: ${Object.keys(society?.sectorUnions || {}).join(', ') || 'brak'}.`; },
+        quiz: [
+            { q: 'Co daje spółce układ zbiorowy?', a: ['Spokój i przewidywalne płace na kilka lat', 'Niższe płace', 'Zwolnienie z podatków'], c: 0 },
+            { q: 'Gdzie najłatwiej powstaje związek?', a: ['W dużej firmie z niezadowoloną załogą', 'W małej firmie z zadowoloną załogą', 'Wszędzie tak samo'], c: 0 },
+            { q: 'Związek sektorowy różni się od zakładowego tym, że…', a: ['obejmuje wszystkie spółki branży', 'działa tylko w spółkach państwowych', 'nie może strajkować'], c: 0 }
+        ]
+    },
+    strajk: {
+        title: 'Strajk jako ryzyko operacyjne', icon: '🪧',
+        text: 'Strajk zatrzymuje część sprzedaży: przychody kwartału spadają, a przez dźwignię operacyjną zysk spada jeszcze mocniej. Kurs reaguje od razu, ale strajki zwykle się kończą — rynek często przesadza w panice. Inwestor długoterminowy pyta: czy porozumienie będzie drogie na lata?',
+        example: () => { const list = workforceListed().filter(x => x.workforce.strike); return list.length ? `Strajkują: ${list.slice(0, 3).map(x => x.name).join(', ')}.` : `Od początku gry było ${society?.stats?.strikes || 0} strajków.`; },
+        quiz: [
+            { q: 'Strajk obniża przychody kwartału o 10%. Zysk spółki z wysokimi kosztami stałymi…', a: ['spada o więcej niż 10%', 'spada dokładnie o 10%', 'rośnie'], c: 0 },
+            { q: 'Kurs spadł na wieść o strajku. Kiedy to bywa okazją?', a: ['Gdy spółka jest zdrowa, a porozumienie nie będzie drogie', 'Zawsze', 'Nigdy'], c: 0 },
+            { q: 'Jak spółka może zmniejszyć ryzyko strajków?', a: ['Dbać o zadowolenie i zawrzeć układ zbiorowy', 'Obniżyć płace', 'Zatrudniać na czarno'], c: 0 }
+        ]
+    },
+    esg: {
+        title: 'ESG: litera S', icon: '🌱',
+        text: 'ESG to ocena spółek pod kątem środowiska (E), społeczeństwa (S) i ładu korporacyjnego (G). Litera S to m.in. traktowanie pracowników: płace, bezpieczeństwo, brak pracy na czarno. Coraz więcej inwestorów — jak klienci „Etyczni” w Twoim funduszu — omija spółki, które źle traktują ludzi.',
+        example: () => { const avg = typeof getAverageSatisfaction === 'function' ? getAverageSatisfaction() : null; return avg !== null ? `Średnie zadowolenie pracowników na giełdzie: ${avg.toFixed(0)}/100.` : ''; },
+        quiz: [
+            { q: 'Czego dotyczy litera S w ESG?', a: ['Społeczeństwa i pracowników', 'Sprzedaży', 'Strategii podatkowej'], c: 0 },
+            { q: 'Klient „Etyczny” wycofa pieniądze, gdy fundusz…', a: ['ma duże udziały w spółkach z niezadowoloną załogą lub szarą strefą', 'ma obligacje skarbowe', 'płaci dywidendy'], c: 0 },
+            { q: 'Dlaczego mniejszościowy inwestor patrzy na zadowolenie pracowników?', a: ['Bo wpływa na strajki, koszty i klientów funduszu', 'Bo może zmienić płace', 'Nie patrzy'], c: 0 }
+        ]
+    },
+    placaMinimalna: {
+        title: 'Płaca minimalna', icon: '💵',
+        text: 'Płaca minimalna podnosi zarobki najsłabiej opłacanych i pomaga biednym awansować. Ma jednak koszt: firmy pracochłonne (usługi, budowlanka, handel) płacą więcej, część miejsc pracy znika (bezrobocie lekko rośnie), a niektóre firmy uciekają w szarą strefę.',
+        example: () => societyReady() ? `Dziś płaca minimalna: ${describeLawLevel('minWage')} (realne płace taniej siły: ${society.wages.cheap.toFixed(3)}).` : '',
+        quiz: [
+            { q: 'Płaca minimalna rośnie. Które spółki ucierpią najbardziej?', a: ['Pracochłonne: usługi, budowlanka', 'Deweloperzy', 'Energetyka'], c: 0 },
+            { q: 'Jaki jest typowy skutek uboczny wyższej płacy minimalnej?', a: ['Nieco wyższe bezrobocie', 'Niższa inflacja', 'Spadek zatrudnienia w administracji'], c: 0 },
+            { q: 'Kto zyskuje na wyższej płacy minimalnej?', a: ['Najsłabiej opłacani pracownicy', 'Akcjonariusze firm usługowych', 'Szara strefa'], c: 0 }
+        ]
+    },
+    deficyt: {
+        title: 'Deficyt budżetowy i rentowność obligacji', icon: '🏦',
+        text: 'Gdy państwo wydaje więcej, niż zbiera z podatków, ma deficyt i musi pożyczać. Długo utrzymujący się deficyt niepokoi inwestorów — żądają wyższego oprocentowania obligacji skarbowych. W końcu rząd musi podnieść podatki albo ciąć wydatki, co uderza w zyski firm albo w konsumpcję.',
+        example: () => societyReady() ? `Saldo budżetu w ostatnim kwartale: ${formatZl(society.budget.balance || 0, 0)}; deficyt od ${society.budget.deficitQuarters} kw.` : '',
+        quiz: [
+            { q: 'Deficyt utrzymuje się latami. Co dzieje się z rentownością obligacji?', a: ['Rośnie', 'Spada', 'Nie zmienia się'], c: 0 },
+            { q: 'Rząd podnosi CIT, by załatać budżet. Co z zyskiem netto spółek?', a: ['Spada', 'Rośnie', 'Bez zmian'], c: 0 },
+            { q: 'Dlaczego w recesji deficyt zwykle rośnie?', a: ['Wpływy z podatków spadają szybciej niż wydatki', 'Państwo przestaje płacić', 'Rosną dywidendy'], c: 0 }
+        ]
+    },
+    zapowiedz: {
+        title: 'Rynek dyskontuje zapowiedzi', icon: '📣',
+        text: 'Ceny akcji odzwierciedlają oczekiwania. Gdy rząd zapowiada ustawę (np. program mieszkań), kursy budowlanki rosną w dniu ogłoszenia, a nie w dniu wejścia w życie. Kto kupuje „na fakcie”, często spóźnia się z zyskiem. Zarabia ten, kto przewidzi zapowiedź — np. z programu wyborczego partii.',
+        example: () => societyReady() && society.lastAnnouncement ? `Ostatnia zapowiedź: ${SOCIAL_LAWS[society.lastAnnouncement.law].name} → ${describeLawLevel(society.lastAnnouncement.law, society.lastAnnouncement.to)}.` : 'Rząd nie zapowiedział jeszcze żadnej ustawy.',
+        quiz: [
+            { q: 'Kiedy kurs budowlanki reaguje na program mieszkań socjalnych?', a: ['Przy zapowiedzi', 'Gdy ruszą budowy', 'Po wyborach'], c: 0 },
+            { q: 'Jak przewidzieć zapowiedzi ustaw?', a: ['Śledzić programy partii i sondaże', 'Czytać tylko raporty spółek', 'Nie da się'], c: 0 },
+            { q: 'Co znaczy „kupuj plotki, sprzedawaj fakty”?', a: ['Kurs rośnie na oczekiwaniach, a fakt bywa już w cenie', 'Plotki zawsze są prawdziwe', 'Fakty nie mają znaczenia'], c: 0 }
+        ]
+    }
+});
+
+// ---------------------------------------------------------------------------------
 // STAN, ODBLOKOWYWANIE, PODPOWIEDZI PO BŁĘDZIE
 // ---------------------------------------------------------------------------------
 
@@ -417,6 +572,18 @@ function checkAcademyTriggers() {
     if (getSkillLevel('accountant') >= 3) unlockAcademyEntry('przeplywy');
     if (getSkillLevel('accountant') >= 4) unlockAcademyEntry('kreatywna');
     if (stocks.some(s => s.isBankrupt)) unlockAcademyEntry('bankructwo');
+    // 0.13: społeczeństwo i rynek pracy
+    if (held.some(s => s.workforce?.union || (typeof getSectorUnion === 'function' && getSectorUnion(s)))) unlockAcademyEntry('zwiazek');
+    if (held.some(s => s.workforce?.strike)) { unlockAcademyEntry('strajk'); unlockAcademyEntry('dzwignia'); }
+    if (held.some(s => typeof getGreyShare === 'function' && getGreyShare(s) > 0.05) && getSkillLevel('accountant') >= 4) unlockAcademyEntry('szaraStrefa');
+    if (held.some(s => ['Turystyka', 'Gaming', 'Żywność'].includes(s.sector?.[0]))) unlockAcademyEntry('elastycznosc');
+    if (typeof society === 'object' && society) {
+        if (Math.abs((macro?.unemployment || NATURAL_UNEMPLOYMENT) - NATURAL_UNEMPLOYMENT) > 0.015) unlockAcademyEntry('phillips');
+        if (society.shortage > 1.05) unlockAcademyEntry('niedobor');
+        if ((society.migration?.emigrationWaves || 0) > 0) unlockAcademyEntry('drenaz');
+        if (society.budget?.deficitQuarters >= 2) unlockAcademyEntry('deficyt');
+        if (playerFund.clients?.some(c => c.type === 'ethical')) unlockAcademyEntry('esg');
+    }
 }
 
 /** Zdarzenia z podpowiedzią po błędzie gracza. */
@@ -555,7 +722,7 @@ const SCANNER_PRESETS = {
     safe:     { label: '🛡️ Bezpieczne', filters: { debtMax: 40, healthMin: 2 } }
 };
 
-const SCANNER_DEFAULT_FILTERS = { sector: 'all', peBelowSector: false, pbMax: '', dyMin: '', debtMax: '', growthMin: '', healthMin: '', accessibleOnly: true };
+const SCANNER_DEFAULT_FILTERS = { sector: 'all', peBelowSector: false, pbMax: '', dyMin: '', debtMax: '', growthMin: '', healthMin: '', accessibleOnly: true, greyOnly: false };
 
 let scannerView = { filters: { ...SCANNER_DEFAULT_FILTERS }, sort: 'cap', dir: -1 };
 
@@ -608,9 +775,11 @@ function runScanner(filters = scannerView.filters, sort = scannerView.sort, dir 
         if (num(filters.debtMax) !== null && !(m.debt !== null && m.debt * 100 <= num(filters.debtMax))) continue;
         if (num(filters.growthMin) !== null && !(m.growth !== null && m.growth * 100 >= num(filters.growthMin))) continue;
         if (num(filters.healthMin) !== null && !(m.health >= num(filters.healthMin))) continue;
-        rows.push({ stock, m, med, upside: m.fair ? m.fair / stock.price - 1 : null });
+        const work = getScannerWorkforce(stock);
+        if (filters.greyOnly && !(work && work.grey > 0.05)) continue;
+        rows.push({ stock, m, med, work, upside: m.fair ? m.fair / stock.price - 1 : null });
     }
-    const key = row => sort === 'name' ? row.stock.name : sort === 'upside' ? row.upside : row.m[sort];
+    const key = row => sort === 'name' ? row.stock.name : sort === 'upside' ? row.upside : sort === 'labor' ? row.work?.laborVsSector ?? null : sort === 'satisfaction' ? row.work?.satisfaction ?? null : row.m[sort];
     rows.sort((a, b) => {
         const va = key(a), vb = key(b);
         if (va === null || va === undefined) return 1;
@@ -618,6 +787,23 @@ function runScanner(filters = scannerView.filters, sort = scannerView.sort, dir 
         return typeof va === 'string' ? va.localeCompare(vb, 'pl') * dir : (va - vb) * dir;
     });
     return rows;
+}
+
+/** 0.13: dane zatrudnienia do skanera (koszt pracy względem sektora, zadowolenie, związek, ryzyko strajku, szara strefa). */
+let scannerLaborSectorCache = { at: -1, data: {} };
+function getScannerWorkforce(stock) {
+    if (!stock.workforce || typeof getLaborCostIndex !== 'function') return null;
+    const quarter = typeof macro === 'object' ? macro.quarter : 0;
+    if (scannerLaborSectorCache.at !== quarter || !scannerLaborSectorCache.data.__n || scannerLaborSectorCache.data.__n !== stocks.length) {
+        const data = { __n: stocks.length };
+        const groups = {};
+        for (const s of stocks) if (s.workforce && !s.isBankrupt) (groups[s.sector?.[0]] = groups[s.sector?.[0]] || []).push(s.workforce.laborShare * getLaborCostIndex(s));
+        for (const [sector, list] of Object.entries(groups)) data[sector] = median(list);
+        scannerLaborSectorCache = { at: quarter, data };
+    }
+    const labor = stock.workforce.laborShare * getLaborCostIndex(stock);
+    const sector = scannerLaborSectorCache.data[stock.sector?.[0]] || labor;
+    return { labor, laborVsSector: sector > 0 ? labor / sector - 1 : 0, satisfaction: stock.workforce.satisfaction, union: getUnionStatus(stock), risk: getStrikeRisk(stock), grey: getGreyShare(stock) };
 }
 
 function openScanner() {
@@ -688,6 +874,7 @@ function renderScannerFilters() {
             ${getAnalystLevel() >= 2 ? input('growthMin', 'Wzrost zysku r/r ≥', '%', 'Zysk z 4 ostatnich kwartałów vs 4 wcześniejszych') : ''}
             ${input('healthMin', 'Kondycja ≥', '−5…5', 'Kondycja finansowa spółki')}
             <label class="text-sm"><input type="checkbox" ${f.accessibleOnly ? 'checked' : ''} onchange="setScannerFilter('accessibleOnly', this.checked)"> tylko dostępne giełdy</label>
+            ${getSkillLevel('accountant') >= 4 ? `<label class="text-sm" title="Czerwona flaga: ponad 5% zatrudnionych bez umów (Księgowy poz. 4)"><input type="checkbox" ${f.greyOnly ? 'checked' : ''} onchange="setScannerFilter('greyOnly', this.checked)"> 🚩 szara strefa &gt; 5%</label>` : ''}
         </div>
         <div class="d-flex gap-2 items-center mt-2"><input type="text" id="scanner-preset-name" class="w-md" placeholder="Nazwa własnego presetu"><button class="btn-xs" onclick="saveScannerPreset()">💾 Zapisz filtry</button></div>`;
 }
@@ -709,9 +896,9 @@ function renderScannerResults() {
                 ${head('name', 'Spółka', 'Nazwa')}${head('cap', 'Kapitalizacja', 'Kurs × liczba akcji')}${head('pe', 'C/Z', 'Cena / zysk')}${head('pb', 'C/WK', 'Cena / wartość księgowa')}
                 ${head('dy', 'Dywid.', 'Stopa dywidendy')}${head('debt', 'Zadłuż.', 'Zobowiązania / aktywa')}
                 ${level >= 2 ? head('roe', 'ROE', 'Zysk / kapitał własny') + head('margin', 'Marża', 'Zysk netto / przychody') + head('growth', 'Zysk r/r', 'Wzrost zysku rok do roku') : ''}
-                ${head('health', 'Kondycja', 'Kondycja finansowa')}${level >= 3 ? head('upside', 'Potencjał', 'Wartość godziwa / kurs − 1') : ''}${flagsOn ? '<th title="Czerwone flagi (Księgowy poz. 4)">🚩</th>' : ''}
+                ${head('health', 'Kondycja', 'Kondycja finansowa')}${head('labor', 'Praca', 'Koszt pracy w % przychodów (w nawiasie: względem mediany sektora)')}${head('satisfaction', 'Zadow.', 'Zadowolenie pracowników 0–100')}<th title="Związek zawodowy: brak / zakładowy / sektorowy">Związek</th><th title="Ryzyko strajku">Strajk</th>${level >= 3 ? head('upside', 'Potencjał', 'Wartość godziwa / kurs − 1') : ''}${flagsOn ? '<th title="Czerwone flagi (Księgowy poz. 4)">🚩</th>' : ''}
             </tr></thead>
-            <tbody>${rows.slice(0, 120).map(({ stock, m, med, upside }) => `<tr class="clickable" onclick="openDescriptionModal('${stock.symbol}')">
+            <tbody>${rows.slice(0, 120).map(({ stock, m, med, work, upside }) => `<tr class="clickable" onclick="openDescriptionModal('${stock.symbol}')">
                 <td>${escapeHtml(stock.name)} <span class="text-xs text-muted">${escapeHtml(stock.symbol)} · ${escapeHtml(stock.sector?.[0] || '')}</span></td>
                 <td class="cell-number">${formatZl(m.cap, 0)}</td>
                 <td class="cell-number ${cls(m.pe, med.pe, true)}">${fx(m.pe)}</td>
@@ -720,10 +907,20 @@ function renderScannerResults() {
                 <td class="cell-number ${cls(m.debt, med.debt, true)}">${pct(m.debt)}</td>
                 ${level >= 2 ? `<td class="cell-number ${cls(m.roe, med.roe, false)}">${pct(m.roe)}</td><td class="cell-number ${cls(m.margin, med.margin, false)}">${pct(m.margin)}</td><td class="cell-number ${m.growth > 0 ? 'text-up' : m.growth < 0 ? 'text-down' : ''}">${pct(m.growth)}</td>` : ''}
                 <td class="cell-number">${m.health.toFixed(1)}</td>
+                ${renderScannerWorkforceCells(work)}
                 ${level >= 3 ? `<td class="cell-number ${upside > 0.15 ? 'text-up' : upside < -0.15 ? 'text-down' : ''}">${pct(upside)}</td>` : ''}
                 ${flagsOn ? (() => { const flags = getRedFlags(stock); return `<td class="cell-number ${flags.length >= 2 ? 'text-down' : ''}" title="${escapeHtml(flags.map(f => f.label).join(', '))}">${flags.length || ''}</td>`; })() : ''}
-            </tr>`).join('') || '<tr><td colspan="11" class="text-muted">Żadna spółka nie spełnia filtrów.</td></tr>'}</tbody>
+            </tr>`).join('') || '<tr><td colspan="15" class="text-muted">Żadna spółka nie spełnia filtrów.</td></tr>'}</tbody>
         </table></div>`;
+}
+
+function renderScannerWorkforceCells(work) {
+    if (!work) return '<td>—</td><td>—</td><td>—</td><td>—</td>';
+    const vs = work.laborVsSector;
+    return `<td class="cell-number ${vs > 0.05 ? 'text-down' : vs < -0.05 ? 'text-up' : ''}" title="względem mediany sektora: ${vs >= 0 ? '+' : ''}${(vs * 100).toFixed(0)}%">${(work.labor * 100).toFixed(1)}%</td>
+        <td class="cell-number ${work.satisfaction >= 70 ? 'text-up' : work.satisfaction < 40 ? 'text-down' : ''}">${work.satisfaction.toFixed(0)}</td>
+        <td>${{ none: '—', company: '✊ zakł.', sector: '✊ sekt.' }[work.union]}</td>
+        <td class="${work.risk === 'wysokie' || work.risk === 'trwa' ? 'text-down' : ''}">${escapeHtml(work.risk || '—')}</td>`;
 }
 
 // #################################################################################
@@ -839,6 +1036,27 @@ const MENTOR_TASKS = {
         check: () => stocks.some(s => s.audit),
         progress: () => 'zleć audyt w karcie spółki'
     },
+    satisfiedMargin: {
+        track: 'analyst', title: 'Szczęśliwa załoga, gruba marża',
+        text: 'Kup spółkę z zadowoleniem pracowników > 70 i marżą powyżej mediany jej sektora (skaner: kolumny Zadow. i Marża).',
+        lesson: 'kosztPracy',
+        check: () => heldStocks().some(s => { const m = getCompanyMetrics(s); const med = getSectorMedians(s.sector?.[0]); return (s.workforce?.satisfaction || 0) > 70 && m?.margin !== null && med?.margin !== undefined && m.margin > med.margin; }),
+        progress: () => 'kup spółkę z zadowoleniem > 70 i marżą ponad sektor'
+    },
+    lawAnnouncement: {
+        track: 'analyst', title: 'Zarób na zapowiedzi',
+        text: 'Kup spółkę budowlaną lub dewelopera, zanim rząd zapowie program mieszkań socjalnych, i bądź na plusie w dniu zapowiedzi.',
+        lesson: 'zapowiedz',
+        check: () => Boolean(getMentor().events.lawProfit),
+        progress: () => typeof society === 'object' && society ? `mieszkania socjalne: ${describeLawLevel('housing')}; programy partii w zakładce Kraj` : ''
+    },
+    strikeHold: {
+        track: 'risk', title: 'Spokój w czasie strajku',
+        text: 'Trzymaj spółkę przez strajk (nie sprzedawaj w panice) i sprzedaj ją potem z zyskiem.',
+        lesson: 'strajk',
+        check: () => Boolean(getMentor().events.strikeProfit),
+        progress: () => { const s = heldStocks().find(x => playerPortfolio[x.symbol]?.heldThroughStrike); return s ? `${s.symbol}: przetrwany strajk — sprzedaj z zyskiem` : 'czekaj na strajk w spółce z portfela'; }
+    },
     auditQuiz: {
         track: 'audit', title: 'Egzamin audytora',
         text: 'Zalicz quizy Akademii: Przepływy pieniężne, Kreatywna księgowość, Audyt.',
@@ -926,6 +1144,10 @@ function noteMentorEvent(kind, stock = null) {
         if (events.financeViews.length > 20) events.financeViews.shift();
     }
     if (kind === 'sell' && stock && typeof getRedFlags === 'function' && getSkillLevel('accountant') >= 4 && getRedFlags(stock).length >= 2) events.flaggedSell = true;
+    // 0.13: sprzedaż z zyskiem po przetrwanym strajku; zysk w dniu zapowiedzi programu mieszkań.
+    const holding = stock ? playerPortfolio[stock.symbol] : null;
+    if (kind === 'sell' && holding?.heldThroughStrike && !stock.workforce?.strike && stock.price > (Number(holding.avgPrice) || Infinity)) events.strikeProfit = true;
+    if (kind === 'lawAnnouncement' && stock && holding?.shares > 0 && stock.price > (Number(holding.avgPrice) || Infinity)) events.lawProfit = true;
     checkMentorTasks();
 }
 

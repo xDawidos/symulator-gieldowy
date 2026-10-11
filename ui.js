@@ -2659,7 +2659,8 @@ const COMPANY_CARD_TABS = [
     ['overview', '📋 Przegląd'],
     ['finance', '📊 Finanse'],
     ['owners', '👥 Akcjonariat'],
-    ['manage', '🏛️ Zarządzanie']
+    ['manage', '🏛️ Zarządzanie'],
+    ['workforce', '👷 Zatrudnienie']
 ];
 
 function openDescriptionModal(symbol, tab = null) {
@@ -2729,6 +2730,7 @@ function renderCompanyCard() {
     ].join('');
 
     document.getElementById('company-card-tabs').innerHTML = COMPANY_CARD_TABS
+        .filter(([id]) => id !== 'workforce' || (typeof hasWorkforce === 'function' && hasWorkforce(stock)))
         .map(([id, label]) => `<button class="${companyCardView.tab === id ? 'active' : ''}" onclick="setCompanyCardTab('${id}')">${label}</button>`).join('');
 
     if (typeof unlockAcademyEntry === 'function') ['cwk', 'dywidenda', 'zadluzenie'].forEach(id => unlockAcademyEntry(id));
@@ -2740,6 +2742,7 @@ function renderCompanyCard() {
     }
     else if (companyCardView.tab === 'owners') body.innerHTML = renderCompanyCardOwners(stock);
     else if (companyCardView.tab === 'manage') body.innerHTML = renderCompanyCardManage(stock);
+    else if (companyCardView.tab === 'workforce') body.innerHTML = renderCompanyCardWorkforce(stock);
     else body.innerHTML = renderCompanyCardOverview(stock);
 }
 
@@ -3411,11 +3414,12 @@ function renderBondMarketInBank() {
 
         let interestText;
         if (type === 'shortTerm') {
-            interestText = `${(offer.interest * 100).toFixed(1)}% (stałe)`;
+            interestText = `${((offer.interest + getDeficitBondPremium()) * 100).toFixed(2)}% (stałe)`;
         } else {
             const inflationProxy = marketVolatilityIndex / 100;
-            interestText = `~${((inflationProxy + offer.interestBase) * 100).toFixed(1)}% (zmienne)`;
+            interestText = `~${((inflationProxy + offer.interestBase + getDeficitBondPremium()) * 100).toFixed(1)}% (zmienne)`;
         }
+        if (getDeficitBondPremium() > 0) interestText += ' · +0,25 pp za deficyt';
         row.insertCell().textContent = interestText;
         row.insertCell().textContent = offer.available;
 
@@ -5814,6 +5818,13 @@ function renderMailPreview(message) {
             ? '<div class="mail-action"><button onclick="openRescueOfferingModal()">Otwórz ofertę emisji</button></div>'
             : '<p class="fund-muted">Ta emisja jest już zamknięta.</p>';
     }
+    if (message.action?.type === 'unionDemand') {
+        const stock = stocks.find(s => s.symbol === message.action.symbol);
+        const pending = stock?.workforce?.pendingDemand;
+        action = pending
+            ? `<div class="mail-action">${pending.choice ? `<p>Wybrano: <strong>${{ agree: 'zgoda', negotiate: 'negocjacje', refuse: 'odmowa' }[pending.choice]}</strong> — możesz zmienić do końca kwartału.</p>` : ''}<button onclick="mailAction(respondUnionDemand, '${stock.symbol}', 'agree')">Zgoda</button> <button class="btn-secondary" onclick="mailAction(respondUnionDemand, '${stock.symbol}', 'negotiate')">Negocjacje</button> <button class="btn-danger" onclick="mailAction(respondUnionDemand, '${stock.symbol}', 'refuse')">Odmowa</button></div>`
+            : '<p class="fund-muted">Sprawa została już rozstrzygnięta.</p>';
+    }
     if (message.action?.type === 'pppRestructure') {
         const stake = (playerFund?.ppp || []).find(item => item.id === message.action.stakeId);
         action = stake?.restructure === 'pending'
@@ -6241,6 +6252,8 @@ function updateStateModalContent() {
             </div>`;
     } else if (stateTab === 'macro') {
         body.innerHTML = renderMacroPanel();
+    } else if (stateTab === 'country') {
+        body.innerHTML = renderCountryPanel();
     } else if (stateTab === 'markets') {
         body.innerHTML = renderMarketsPanel();
     } else if (stateTab === 'oversight') {
@@ -6760,7 +6773,7 @@ function renderMacroPanel() {
                 <p class="text-sm">${election.campaign ? '<strong class="text-warn">Trwa kampania wyborcza.</strong>' : `Wybory za ${election.quartersLeft} kw.`}</p>
                 <p class="text-xs text-muted">Prywatyzacje ×${getRulingParty().privatization} · nacjonalizacje ×${getRulingParty().nationalization} · dotacje ×${getRulingParty().subsidies}</p>
                 ${getPoliticalFavor() ? `<p class="text-sm ${getPoliticalFavor() > 0 ? 'text-up' : 'text-down'}">${getPoliticalFavor() > 0 ? '🤝 Władza jest przychylna funduszowi' : '😠 Władza jest nieprzychylna funduszowi'} (${election.favor.quartersLeft} kw.)</p>` : ''}
-                ${election.campaign && playerFund ? `<p class="text-xs text-muted">Darowizna z pieniędzy funduszu (do 2% aktywów): przychylność wygranych, ale podejrzenia KNF i spadek zaufania klientów. Wpłacono: ${formatZl((election.donations?.market || 0) + (election.donations?.state || 0), 0)}.</p>
+                ${election.campaign && playerFund ? `<p class="text-xs text-muted">Darowizna z pieniędzy funduszu (do 2% aktywów): przychylność wygranych, ale podejrzenia KNF i spadek zaufania klientów. Wpłacono: ${formatZl(Object.values(election.donations || {}).reduce((sum, value) => sum + (Number(value) || 0), 0), 0)}.</p>
                 <div class="bank-card-form"><select id="donation-party" aria-label="Partia">${Object.entries(RULING_PARTIES).map(([id, p]) => `<option value="${id}">${escapeHtml(p.name)}</option>`).join('')}</select>
                 <input type="text" inputmode="numeric" id="donation-amount" value="${Math.max(100, Math.round(getFundAssets() * 0.005))}" aria-label="Kwota darowizny">
                 <button class="btn-secondary" onclick="supportElectionCampaign(document.getElementById('donation-party').value, parseFloat(document.getElementById('donation-amount').value)); updateStateModalContent();">Wesprzyj kampanię</button></div>` : ''}</article>
@@ -6803,4 +6816,145 @@ function openNotification(id) {
 function dismissNotification(id) {
     notificationActions.delete(id);
     document.querySelector(`#notif-bar [data-id="${id}"]`)?.remove();
+}
+
+// =================================================================================
+// 0.13: ZAKŁADKA „KRAJ” (okno Państwo) i „ZATRUDNIENIE” (karta spółki)
+// =================================================================================
+
+const CLASS_COLORS = { poor: '#c2410c', lowerMid: '#d97706', mid: '#16a34a', upperMid: '#0891b2', rich: '#2563eb', veryRich: '#7c3aed' };
+const PARTY_COLORS = { people: '#65a30d', state: '#dc2626', market: '#2563eb' };
+
+function openCountryPanel() {
+    stateTab = 'country';
+    openStateModal();
+    if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('strukturaSpoleczna');
+}
+
+function renderSocietyClassBar() {
+    const segments = SOCIETY_CLASSES.map(cls => {
+        const share = society.classes[cls.id] || 0;
+        return `<span class="society-seg" style="width:${(share * 100).toFixed(2)}%;background:${CLASS_COLORS[cls.id]}" title="${escapeHtml(cls.name)}: ${(share * 100).toFixed(1)}%"></span>`;
+    }).join('');
+    const legend = SOCIETY_CLASSES.map(cls => `<li><span class="society-dot" style="background:${CLASS_COLORS[cls.id]}"></span>${cls.icon} ${escapeHtml(cls.name)} <strong>${((society.classes[cls.id] || 0) * 100).toFixed(1)}%</strong>
+        <span class="text-xs text-muted">konsumpcja ×${getClassWeight(cls).toFixed(2)} · ${escapeHtml(cls.sectors.join(', '))}</span></li>`).join('');
+    return `<div class="society-classbar" role="img" aria-label="Struktura klas">${segments}</div><ul class="list-plain society-legend">${legend}</ul>`;
+}
+
+function renderPartyBars(support) {
+    return PARTY_IDS.map(id => `<div class="party-row"><span>${escapeHtml(RULING_PARTIES[id].name)}${macro.election.ruling === id ? ' 👑' : macro.election.coalition?.partner === id ? ' 🤝' : ''}</span>
+        <span class="party-bar"><span style="width:${Math.min(100, support[id] || 0).toFixed(1)}%;background:${PARTY_COLORS[id]}"></span></span><strong>${(support[id] || 0).toFixed(0)}%</strong></div>`).join('');
+}
+
+function renderCountryPanel() {
+    ensureSocietyState();
+    const pct = (v, d = 1) => `${(v * 100).toFixed(d)}%`;
+    const series = key => society.history.map(entry => entry[key]);
+    const card = (icon, title, value, sub, key) => `
+        <article class="bank-card macro-card"><header class="bank-card-head"><span class="bank-card-icon">${icon}</span><div><h4>${title}</h4><span class="bank-card-type">${sub}</span></div></header>
+            <div class="macro-value">${value}</div>${key && typeof renderSparkline === 'function' ? renderSparkline(series(key)) : ''}</article>`;
+    const m = society.migration;
+    const budget = society.budget;
+    const pending = society.pendingLaw;
+    const support = macro.election.campaign && macro.election.support ? macro.election.support : computePartySupport(false);
+    const wf = getWorkforceCompanies();
+    const unions = wf.filter(s => s.workforce.union).length;
+    const striking = wf.filter(s => s.workforce.strike);
+    const sectorUnions = Object.keys(society.sectorUnions || {});
+    const lastGrowth = Number(society.lastGrowth) || 0;
+    const laws = Object.entries(SOCIAL_LAWS).map(([id, law]) => {
+        const level = society.laws[id];
+        return `<tr><td>${law.icon} ${escapeHtml(law.name)}</td><td><strong>${escapeHtml(describeLawLevel(id))}</strong></td>
+            <td class="text-xs text-muted">${pending?.law === id ? `📜 zapowiedź: → ${escapeHtml(describeLawLevel(id, pending.to))} od przyszłego kwartału` : `zmiany: ${society.lawChanges[id] || 0}`}</td>
+            <td>${law.levels.map((_, i) => `<span class="law-pip ${i <= level ? 'on' : ''}"></span>`).join('')}</td></tr>`;
+    }).join('');
+    const wages = WORKFORCE_GROUPS.map(g => `<tr><td>${escapeHtml(g.name)}</td><td class="cell-number ${society.wages[g.id] > 1.005 ? 'text-down' : society.wages[g.id] < 0.995 ? 'text-up' : ''}">${society.wages[g.id].toFixed(3)}</td></tr>`).join('');
+    return `
+        <p class="bank-lead">Kraj to ludzie: od struktury klas zależy popyt (sektory luksusowe kontra podstawowe), od płac i zadowolenia — koszt pracy w spółkach, od ustaw — budżet państwa i bezrobocie. Liczby płac to indeksy realne (1,00 = poziom startowy, bez inflacji).</p>
+        <div class="bank-grid">
+            ${card('👥', 'Populacja', formatPopulation(society.population), `${lastGrowth >= 0 ? '+' : ''}${(lastGrowth * 100).toFixed(2)}% w kwartale`, 'population')}
+            ${card('🛒', 'Indeks popytu', society.demandIndex.toFixed(3), 'start = 1,000 · Σ udział × waga', 'demand')}
+            ${card('🎓', 'Edukacja', `${society.education.toFixed(0)}/100`, `priorytet państwa: ${EDUCATION_LABELS[society.educationPriority]} (cel ${EDUCATION_TARGETS[society.educationPriority]})`, 'education')}
+            ${card('✈️', 'Migracja', `${(m.lastPeople || 0) >= 0 ? '+' : ''}${Math.round(m.lastPeople || 0).toLocaleString('pl-PL')}`, `atrakcyjność kraju ${Number(m.attractiveness || 0).toFixed(0)}/100${m.lowQuarters ? ` · ⚠️ ${m.lowQuarters} kw. poniżej 40` : ''}`, 'migration')}
+            ${card('🧠', 'Niedobór specjalistów', society.shortage.toFixed(2), society.shortage > 1 ? 'popyt > podaż: płace specjalistów rosną' : 'podaż wystarcza', 'shortage')}
+        </div>
+        <div class="bank-grid mt-3">
+            <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">🏘️</span><div><h4>Struktura społeczna</h4><span class="bank-card-type">6 klas zamożności</span></div></header>
+                ${renderSocietyClassBar()}
+                <p class="text-xs text-muted">Co kwartał część każdej klasy awansuje albo spada o szczebel: wzrost PKB pomaga, bezrobocie i inflacja szkodzą. Płaca minimalna i mieszkania socjalne przesuwają biednych do klasy średniej niższej.</p></article>
+            <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">💼</span><div><h4>Rynek pracy</h4><span class="bank-card-type">bezrobocie ${pct(macro.unemployment)} · indeksy płac realnych</span></div></header>
+                <table class="asset-mini-table w-full"><tbody>${wages}</tbody></table>
+                <p class="text-xs text-muted">Krzywa Phillipsa: niskie bezrobocie podnosi płace, wysokie je hamuje. Niedobór specjalistów zależy od edukacji i drenażu mózgów.</p>
+                <p class="text-sm">✊ Związki zakładowe: <strong>${unions}</strong>/${wf.length} spółek · sektorowe: <strong>${sectorUnions.length ? escapeHtml(sectorUnions.join(', ')) : 'brak'}</strong> · strajki teraz: <strong>${striking.length}</strong>${striking.length ? ` (${striking.slice(0, 4).map(s => escapeHtml(s.name)).join(', ')})` : ''}</p></article>
+        </div>
+        <div class="bank-grid mt-3">
+            <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">📜</span><div><h4>Ustawy</h4><span class="bank-card-type">rząd zmienia 1 ustawę na rok, zapowiedź kwartał wcześniej</span></div></header>
+                <table class="asset-mini-table w-full"><tbody>${laws}</tbody></table>
+                ${pending ? `<p class="text-sm">📣 Rynek już reaguje na zapowiedź — tak działa dyskontowanie: kurs zmienia się przy ogłoszeniu, nie w dniu wejścia ustawy w życie.</p>` : ''}
+                ${society.housingProgram > 0 ? `<p class="text-sm">🏗️ Trwa program mieszkań socjalnych (${society.housingProgram} kw.): przetargi dla budowlanki i deweloperów.</p>` : ''}</article>
+            <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">🏦</span><div><h4>Budżet państwa</h4><span class="bank-card-type">Skarb Państwa ${formatZl(governmentTreasury, 0)}</span></div></header>
+                <dl class="bank-card-rates">
+                    <div><dt>Saldo kwartału</dt><dd class="${budget.balance < 0 ? 'text-down' : 'text-up'}">${formatZl(budget.balance || 0, 0)}</dd></div>
+                    <div><dt>Deficyt od</dt><dd>${budget.deficitQuarters} kw.</dd></div>
+                    <div><dt>Zasiłki</dt><dd>${formatZl(budget.socialSpending || 0, 0)}</dd></div>
+                    <div><dt>Podatki od pracy</dt><dd>${formatZl(budget.laborTaxes || 0, 0)}</dd></div>
+                    <div><dt>Ubytek przez szarą strefę</dt><dd class="${budget.greyTaxLoss > 0 ? 'text-down' : ''}">${formatZl(budget.greyTaxLoss || 0, 0)}</dd></div>
+                    <div><dt>CIT</dt><dd>${(getCompanyIncomeTaxRate() * 100).toFixed(0)}%</dd></div>
+                </dl>
+                <p class="text-xs text-muted">Deficyt przez 4 kwartały podnosi rentowność obligacji skarbowych o 0,25 pp${budget.bondPremium ? ' (teraz: ✅ premia naliczana)' : ''}. Przez 8 kwartałów — rząd podnosi CIT albo tnie ustawy (zależnie od partii).</p></article>
+            <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">🗳️</span><div><h4>Partie</h4><span class="bank-card-type">${escapeHtml(getRulingParty().name)} · wybory za ${macro.election.quartersLeft} kw.</span></div></header>
+                ${renderPartyBars(support)}
+                <p class="text-xs text-muted">Sondaż: poparcie liczone z klas (biedni wolą Ludowców, zamożni Koalicję Rynkową), plus zmęczenie władzą, koniunktura i szum. Zwycięzca poniżej 40% rządzi w koalicji z drugą partią.</p></article>
+        </div>`;
+}
+
+// ---------- Karta spółki: Zatrudnienie ----------
+function renderCompanyCardWorkforce(stock) {
+    const wf = ensureWorkforce(stock);
+    if (!wf) return '<p class="text-muted">Ta spółka nie ma modelu zatrudnienia (bank, fundusz, startup).</p>';
+    if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('kosztPracy');
+    const counts = getWorkforceGroupCounts(stock);
+    const policy = LABOR_POLICIES[wf.policy] || LABOR_POLICIES.standard;
+    const index = getLaborCostIndex(stock);
+    const laborPct = wf.laborShare * index;
+    const peers = getWorkforceCompanies().filter(s => s.sector?.[0] === stock.sector?.[0]);
+    const sectorPct = peers.length ? peers.reduce((sum, s) => sum + s.workforce.laborShare * getLaborCostIndex(s), 0) / peers.length : laborPct;
+    const controls = typeof canFundControlAgm === 'function' && canFundControlAgm(stock);
+    const locked = isLaborPolicyLocked(stock);
+    const union = wf.union || getSectorUnion(stock);
+    const status = getUnionStatus(stock);
+    const pending = wf.pendingDemand;
+    const premium = 1 + (Number(wf.wagePremium) || 0);
+    const rows = WORKFORCE_GROUPS.map(g => {
+        const wage = (g.id === 'grey' ? getMarketWage('cheap') * GREY_WAGE_FACTOR : getMarketWage(g.id) * premium) * (Number(wf.payMult) || 1);
+        return `<tr class="${g.id === 'grey' && counts.grey > 0 ? 'text-down' : ''}"><td>${escapeHtml(g.name)}</td><td class="cell-number">${counts[g.id].toLocaleString('pl-PL')}</td><td class="cell-number">${wage.toFixed(2)}</td></tr>`;
+    }).join('');
+    const satClass = wf.satisfaction >= 70 ? 'text-up' : wf.satisfaction < 35 ? 'text-down' : '';
+    const policyButtons = controls ? `<div class="d-flex gap-2 flex-wrap mt-2">${LABOR_POLICY_ORDER.map(id => `<button class="btn-xs ${id === wf.policy ? '' : 'btn-secondary'}" ${locked || id === wf.policy ? 'disabled' : ''} onclick="setLaborPolicy('${stock.symbol}', '${id}'); renderCompanyCard();">${LABOR_POLICIES[id].icon} ${LABOR_POLICIES[id].name}</button>`).join('')}</div>
+        <p class="text-xs text-muted">${locked ? `Blokada: kolejna zmiana za ${wf.policyLockUntil - getWorkforceQuarter()} kw.` : 'Możesz (nie musisz) zmienić politykę. Marża dochodzi do nowej polityki w 2 kwartały, zadowolenie zmienia się od razu (obniżka −15, podwyżka +5). Blokada: 4 kwartały.'}</p>` : '<p class="text-xs text-muted">Politykę ustala prezes według cech. Zmienić ją może większościowy akcjonariusz (> 50%).</p>';
+    const decision = pending && controls ? `<div class="mail-action"><p>✊ ${pending.strike ? 'Trwa strajk' : `Związek żąda +${(pending.raise * 100).toFixed(1)}%`} — decyzja do końca kwartału${pending.choice ? ` (wybrano: <strong>${{ agree: 'zgoda', negotiate: 'negocjacje', refuse: 'odmowa' }[pending.choice]}</strong>)` : ' (bez odpowiedzi zdecyduje prezes)'}.</p>
+        <button onclick="respondUnionDemand('${stock.symbol}', 'agree'); renderCompanyCard();">Zgoda</button> <button class="btn-secondary" onclick="respondUnionDemand('${stock.symbol}', 'negotiate'); renderCompanyCard();">Negocjacje</button> <button class="btn-danger" onclick="respondUnionDemand('${stock.symbol}', 'refuse'); renderCompanyCard();">Odmowa</button></div>` : '';
+    const poachTargets = controls ? stocks.filter(s => s !== stock && hasWorkforce(s) && s.ceo && !s.isBankrupt).sort((a, b) => (b.ceo.traits?.length || 0) - (a.ceo.traits?.length || 0)).slice(0, 25) : [];
+    const poach = controls ? `<h4 class="mt-3">👔 Podkup prezesa</h4>
+        <p class="text-xs text-muted">Koszt: 1% kapitalizacji spółki, z której odchodzi prezes — płaci ${escapeHtml(stock.name)} ze swojej gotówki. Szansa: 60% − zadowolenie pracowników tamtej spółki / 2. Prezes zabiera swoje cechy. Limit: 1 na rok.</p>
+        <div class="bank-card-form"><select id="poach-ceo-source" aria-label="Spółka">${poachTargets.map(s => `<option value="${s.symbol}">${escapeHtml(s.ceo.name)} — ${escapeHtml(s.name)} (${(s.ceo.traits || []).map(t => escapeHtml(t.name)).join(', ') || 'bez cech'})</option>`).join('')}</select>
+        <button onclick="playerPoachCeo('${stock.symbol}', document.getElementById('poach-ceo-source').value); renderCompanyCard();">Złóż ofertę</button></div>` : '';
+    const sat = wf.satisfactionHistory.length > 1 && typeof renderSparkline === 'function' ? renderSparkline(wf.satisfactionHistory, { width: 140, height: 30 }) : '';
+    return `
+        <div class="cc-grid">
+            <section><h4>Zatrudnienie: ${wf.employees.toLocaleString('pl-PL')} osób</h4>
+                <table class="asset-mini-table w-full"><thead><tr><th>Grupa</th><th class="cell-number">Osób</th><th class="cell-number" title="Płaca względem startowego poziomu rynku (1,00), z polityką i podwyżkami związkowymi">Płaca</th></tr></thead><tbody>${rows}</tbody></table>
+                <p class="text-sm">Koszt pracy: <strong class="${laborPct > sectorPct * 1.05 ? 'text-down' : laborPct < sectorPct * 0.95 ? 'text-up' : ''}">${(laborPct * 100).toFixed(1)}% przychodów</strong> · średnia sektora ${(sectorPct * 100).toFixed(1)}% · indeks kosztu pracy ${index.toFixed(3)}</p>
+                <p class="text-xs text-muted">Marża = marża bazowa + ${(wf.laborShare * 100).toFixed(0)}% × (1 − indeks). Niższy indeks (tańsza praca, wyższa wydajność) podnosi marżę — ale z dźwignią operacyjną działa to w obie strony.</p></section>
+            <section><h4>Ludzie i polityka</h4>
+                <p class="m-0">Zadowolenie: <strong class="${satClass}">${wf.satisfaction.toFixed(0)}/100</strong> ${sat}</p>
+                <p class="text-xs text-muted mt-0">cel ${getSatisfactionTarget(stock).toFixed(0)} · wydajność ${(((wf.productivity || 1) + (wf.productivityBonus || 0)) * 100).toFixed(1)}%${wf.rotation ? ` · rotacja ${(wf.rotation * 100).toFixed(1)}%/kw.` : ''}${wf.layoffs ? ' · ⚠️ zwolnienia' : ''}</p>
+                <p class="m-0">Polityka kadrowa: <strong>${policy.icon} ${policy.name}</strong> <span class="text-xs text-muted">(${{ owner: 'decyzja funduszu', bot: 'decyzja większościowca', ceo: 'decyzja prezesa' }[wf.policySetBy] || 'decyzja prezesa'})</span></p>
+                ${policyButtons}
+                <p class="m-0 mt-2">Związek: <strong>${{ none: 'brak', company: '✊ zakładowy', sector: '✊ sektorowy' }[status]}</strong>${union?.agreementUntil >= getWorkforceQuarter() ? ` · 📄 układ zbiorowy do kw. ${union.agreementUntil}` : ''}${wf.strike ? ` · <strong class="text-down">STRAJK (−${(wf.strike.pct * 100).toFixed(0)}% przychodów, ${wf.strike.quarters}. kw.)</strong>` : ''}</p>
+                <p class="text-xs text-muted">Ryzyko strajku: ${escapeHtml(getStrikeRisk(stock) || '—')}${wf.greyCaughtQuarter !== null && wf.greyCaughtQuarter !== undefined ? ` · 🦺 kara Inspekcji Pracy w kw. ${wf.greyCaughtQuarter}` : ''}</p>
+                ${decision}
+            </section>
+        </div>
+        ${poach}`;
 }

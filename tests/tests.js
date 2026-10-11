@@ -2250,7 +2250,8 @@ group('Makroekonomia (0.10.2 M1)', () => {
         Math.random = () => 0.1;
         advanceElectionCycle();
         Math.random = random;
-        assert(macro.election.ruling === 'state' && macro.election.quartersLeft === ELECTION_INTERVAL_QUARTERS, 'nowy rząd');
+        // 0.13: trzy partie — w recesji rządząca Koalicja Rynkowa przegrywa (wygrywa Blok Państwowy albo Ludowcy).
+        assert(macro.election.ruling !== 'market' && macro.election.quartersLeft === ELECTION_INTERVAL_QUARTERS, 'nowy rząd');
         assert(getRulingParty().nationalization > 1, 'więcej nacjonalizacji');
     });
 
@@ -3803,6 +3804,318 @@ group('Akcje ponad wolny obrót: ETF, bank, insiderzy (CZB 7596 ≠ 8195)', () =
         assert(etf.holdings.AAA === 7930 && a.insiderShares === 2070, `ETF ${etf.holdings.AAA}, insiderzy ${a.insiderShares}`);
         assert(a.sharesHeld === 7930 && overheld(a) === 0, `sharesHeld ${a.sharesHeld}`);
         assert(checkWorldInvariants().length === 0, checkWorldInvariants().join('; '));
+    });
+});
+
+group('Społeczeństwo i rynek pracy (0.13 S1–S6)', () => {
+    function worldS() {
+        const a = makeCompany('AAA', { cash: 5_000_000 });
+        const b = makeCompany('BBB', { cash: 5_000_000 });
+        [a, b].forEach(s => { s.insiderShares = 0; s.exchange = 'SILVER'; s.ceo = { name: 'Jan Test', age: 50, tenure: 4, traits: [] }; });
+        resetWorld([a, b]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        society = createSocietyState();
+        macro = createMacroState();
+        macro.inflation = 0.025; macro.unemployment = NATURAL_UNEMPLOYMENT;
+        [a, b].forEach(s => { initializeFundamentals(s); ensureWorkforce(s); });
+        return { a, b };
+    }
+    /** Neutralne zatrudnienie: polityka Standardowa, płace 1,0, bez związku i rotacji. */
+    function neutral(stock) {
+        Object.assign(stock.workforce, { policy: 'standard', payMult: 1, productivity: 1, productivityBonus: 0, wagePremium: 0, rotation: 0, union: null, strike: null, greyCleanUntil: -1 });
+    }
+    function quarterOf(stock, seed = 777) {
+        const copy = JSON.parse(JSON.stringify(stock));
+        const result = withSeededRandom(seed, () => computeQuarterResults(copy));
+        return { ...result, margin: result.ebitda / result.revenue, base: copy.fundamentals.revenue };
+    }
+
+    test('S2 kalibracja: neutralne zatrudnienie nie zmienia marży ani zysku względem 0.12', () => {
+        const { a } = worldS();
+        neutral(a);
+        assertNear(getLaborCostIndex(a), 1, 'indeks kosztu pracy', 1e-12);
+        const with013 = quarterOf(a);
+        const without = quarterOf({ ...a, workforce: undefined });
+        assert(Math.abs(with013.margin - without.margin) < 0.001, `marża ${with013.margin} vs ${without.margin}`);
+        assertNear(with013.netIncome, without.netIncome, 'zysk netto', 1e-9);
+        // Każda spółka i sektor: indeks 1,0 przy neutralnych ustawieniach (także z szarą strefą w strukturze bazowej).
+        for (const sector of ['Budowlany', 'Usługi', 'Bankowość', 'Gaming', 'Obronność', 'Logistyka']) {
+            const s = makeCompany('S' + sector.slice(0, 3), { sector: [sector] });
+            s.exchange = 'GOLD'; initializeFundamentals(s); ensureWorkforce(s); neutral(s);
+            assertNear(getLaborCostIndex(s), 1, `indeks ${sector}`, 1e-12);
+        }
+    });
+
+    test('S2 marża = marża_0.12 + udział × (1 − indeks)', () => {
+        const { a } = worldS();
+        neutral(a);
+        const base = quarterOf(a);
+        society.wages.specialists = 1.2;
+        const index = getLaborCostIndex(a);
+        const after = quarterOf(a);
+        assert(index > 1, 'droższa praca specjalistów');
+        assertNear(after.margin - base.margin, a.workforce.laborShare * (1 - index), 'odchylenie marży', 1e-9);
+        assert(after.labor > base.labor, 'koszt pracy w RZiS rośnie');
+    });
+
+    test('S1 indeks popytu = 1,00 na starcie, awans klas go podnosi', () => {
+        worldS();
+        assertNear(getDemandIndex(), 1, 'start', 1e-12);
+        const before = getDemandIndex();
+        applyClassMobility(society, 0.008);
+        assert(getDemandIndex() > before, `awans: ${getDemandIndex()}`);
+        assert(getSocietyGrowthAdj({ sector: ['Turystyka'] }) === 0 || society.demandIndex === 1, 'wzrost liczony z zapisanego indeksu');
+        society.demandIndex = 1.05;
+        assertNear(getSocietyGrowthAdj({ sector: ['Turystyka'] }), 0.05 * 1.5 * 0.02, 'Turystyka +0,15 pp przy popycie 1,05', 1e-12);
+    });
+
+    test('S1 udziały klas sumują się do 100% po 100 kwartałach (bez dryfu do 0 ani 50%)', () => {
+        worldS();
+        for (let q = 0; q < 100; q++) {
+            applyClassMobility(society, getRandomInRange(-0.008, 0.008), getRandomInRange(0, 0.006));
+            if (q % 10 === 0) addToPoorClass(0.003);
+        }
+        const total = Object.values(society.classes).reduce((x, y) => x + y, 0);
+        assertNear(total, 1, 'suma udziałów', 1e-9);
+        assert(society.classes.poor > 0.1 && society.classes.poor < 0.35, `klasa biedna ${society.classes.poor}`);
+    });
+
+    test('S1 kwartał kraju: populacja, miasto rośnie razem z krajem, historia', () => {
+        worldS();
+        city.population = 30000;
+        const pop = society.population;
+        advanceSocietyQuarter();
+        assert(society.quarter === 1 && society.history.length === 1, 'historia');
+        assert(society.population !== pop, 'populacja się zmienia');
+        assertNear(city.population / 30000 - 1, society.population / pop - 1, 'tempo miasta = tempo kraju', 1e-3);
+    });
+
+    test('S3 niedobór specjalistów podnosi ich indeks płac', () => {
+        worldS();
+        const supply = getSpecialistSupply();
+        society.specSupplyStart = supply;
+        society.specDemandScale = 1.3 / SPECIALIST_SHORTAGE_START / getSpecialistDemandIndex();
+        advanceWages();
+        assert(society.shortage > 1.2, `niedobór ${society.shortage}`);
+        assert(society.wages.specialists > society.wages.workers + 0.02, `specjaliści ${society.wages.specialists} vs pracownicy ${society.wages.workers}`);
+    });
+
+    test('S3 krzywa Phillipsa: niskie bezrobocie podnosi płace realne, wysokie obniża', () => {
+        worldS();
+        macro.unemployment = 0.03;
+        advanceWages();
+        const up = society.wages.workers;
+        society.wages.workers = 1;
+        macro.unemployment = 0.12;
+        advanceWages();
+        assert(up > 1 && society.wages.workers <= 1, `płace ${up} / ${society.wages.workers}`);
+    });
+
+    test('S2 polityka Wyzysk podnosi marżę i szansę na związek', () => {
+        const { a } = worldS();
+        neutral(a);
+        a.workforce.satisfaction = getSatisfactionTarget(a);
+        const marginStd = getLaborMarginAdj(a), unionStd = getUnionChance(a);
+        a.workforce.policy = 'exploit'; a.workforce.payMult = LABOR_POLICIES.exploit.pay; a.workforce.productivity = 0.97;
+        a.workforce.satisfaction = getSatisfactionTarget(a);
+        assert(getLaborMarginAdj(a) > marginStd + 0.01, `marża ${getLaborMarginAdj(a)} vs ${marginStd}`);
+        assert(getUnionChance(a) > unionStd * 3, `związek ${getUnionChance(a)} vs ${unionStd}`);
+        assert(getWorkforceStructure(a).grey >= 0.1, 'szara strefa +10 pp');
+    });
+
+    test('S2 zmiana polityki przez większościowca: blokada 4 kw., zadowolenie od razu, marża stopniowo', () => {
+        const { a } = worldS();
+        neutral(a);
+        assert(!setLaborPolicy('AAA', 'exploit'), 'bez większości nie wolno');
+        playerPortfolio.AAA = { shares: 6000, avgPrice: 100, assetType: 'stock' };
+        a.sharesHeld = 6000;
+        const sat = a.workforce.satisfaction;
+        assert(setLaborPolicy('AAA', 'exploit'), 'większościowiec zmienia politykę');
+        assert(a.workforce.satisfaction === Math.max(0, sat - 15), 'zadowolenie −15 od razu');
+        assert(!setLaborPolicy('AAA', 'social'), 'blokada 4 kwartałów');
+        updateWorkforcePolicy(a);
+        assert(a.workforce.payMult < 1 && a.workforce.payMult > LABOR_POLICIES.exploit.pay, `pierwszy kwartał: ${a.workforce.payMult}`);
+        updateWorkforcePolicy(a);
+        assertNear(a.workforce.payMult, LABOR_POLICIES.exploit.pay, 'po 2 kwartałach', 1e-9);
+        assert(a.workforce.policy === 'exploit' && a.workforce.policySetBy === 'owner', 'prezes nie nadpisuje decyzji właściciela');
+    });
+
+    test('S4 strajk obniża przychody kwartału (baza przychodów bez zmian)', () => {
+        const { a } = worldS();
+        neutral(a);
+        const normal = quarterOf(a);
+        a.workforce.strike = { pct: 0.1, quarters: 1, decidedQuarter: 0 };
+        const strike = quarterOf(a);
+        assertNear(strike.revenue / normal.revenue, 0.9, 'przychody −10%', 1e-9);
+        assertNear(strike.base, normal.base, 'baza przychodów', 1e-9);
+        assert(strike.netIncome < normal.netIncome * 0.9, 'dźwignia operacyjna: zysk spada mocniej');
+    });
+
+    test('S4 układ zbiorowy blokuje żądania przez 8 kwartałów', () => {
+        const { a } = worldS();
+        neutral(a);
+        a.workforce.union = createUnion('company');
+        a.workforce.union.nextDemand = society.quarter;
+        a.workforce.union.agreementUntil = society.quarter + COLLECTIVE_AGREEMENT_QUARTERS;
+        const premium = a.workforce.wagePremium;
+        for (let q = 0; q <= COLLECTIVE_AGREEMENT_QUARTERS; q++) {
+            processUnionDemands([a]);
+            assert(!a.workforce.strike && a.workforce.wagePremium === premium && !a.workforce.pendingDemand, `kwartał ${q}: brak żądań`);
+            society.quarter++;
+        }
+        processUnionDemands([a]);
+        assert(a.workforce.union.nextDemand === society.quarter + UNION_DEMAND_EVERY, 'po układzie związek znów żąda');
+    });
+
+    test('S4 gracz-większościowiec dostaje przypięty mail; brak odpowiedzi = decyzja prezesa, nie kara', () => {
+        const { a } = worldS();
+        neutral(a);
+        playerPortfolio.AAA = { shares: 6000, avgPrice: 100, assetType: 'stock' };
+        a.workforce.union = createUnion('company');
+        a.workforce.union.nextDemand = society.quarter;
+        a.ceo.traits = [{ id: 'lojalny_pracownikom', name: 'Przyjaciel załogi' }];
+        const mails = mailbox.messages.length;
+        processUnionDemands([a]);
+        assert(a.workforce.pendingDemand && mailbox.messages.length === mails + 1, 'mail z decyzją');
+        assert(isPinnedMail(mailbox.messages[0]) && mailbox.messages[0].action.type === 'unionDemand', 'przypięty mail z akcją');
+        society.quarter++;
+        processUnionDemands([a]);
+        assert(!a.workforce.pendingDemand && a.workforce.wagePremium > 0 && !a.workforce.strike, 'prezes (lojalny) zgodził się');
+        // Odpowiedź gracza ma pierwszeństwo.
+        a.workforce.union.nextDemand = society.quarter; a.workforce.union.agreementUntil = -1;
+        processUnionDemands([a]);
+        assert(respondUnionDemand('AAA', 'refuse'), 'odpowiedź gracza');
+        a.workforce.satisfaction = 20;
+        society.quarter++;
+        const premium = a.workforce.wagePremium;
+        processUnionDemands([a]);
+        assert(a.workforce.wagePremium === premium, 'odmowa gracza wykonana (bez podwyżki)');
+    });
+
+    test('S2 Inspekcja Pracy nalicza karę 3× oszczędności z 4 kwartałów', () => {
+        const { a } = worldS();
+        a.workforce.greySavings = [1000, 2000, 3000, 4000];
+        const cash = a.cash, treasury = governmentTreasury, mark = externalMark();
+        const result = runLaborInspection(a, true);
+        assert(result.fine === 30000 && result.paid === 30000, `kara ${result.fine}`);
+        assert(a.cash === cash - 30000 && governmentTreasury === treasury + 30000, 'gotówka spółki → Skarb Państwa');
+        assertNear(externalNetFlow(mark), -30000, 'przepływ zewnętrzny', 1e-9);
+        assert(a.workforce.greyCaughtQuarter === society.quarter, 'wpis o złapaniu');
+    });
+
+    test('S5 płaca minimalna podnosi płace i bezrobocie (zapowiedź kwartał wcześniej)', () => {
+        worldS();
+        const shift = getSocietyUnemploymentShift();
+        announceLawChange('minWage', 1, 'people');
+        assert(society.pendingLaw && society.laws.minWage === 1, 'najpierw zapowiedź');
+        society.quarter++;
+        applyPendingLaw();
+        assert(society.laws.minWage === 2 && society.lawChanges.minWage === 1, 'ustawa w życie');
+        assert(society.wages.workers >= 1 + MIN_WAGE_STEP - 1e-9 && society.wages.cheap >= 1 + MIN_WAGE_STEP - 1e-9, 'płace +4%');
+        assertNear(getSocietyUnemploymentShift() - shift, 0.002, 'bezrobocie +0,2 pp', 1e-9);
+    });
+
+    test('S5 poparcie partii sumuje się do 100%, koalicja przy zwycięzcy < 40%', () => {
+        worldS();
+        const support = computePartySupport(true);
+        assertNear(PARTY_IDS.reduce((sum, id) => sum + support[id], 0), 100, 'suma poparcia', 1e-9);
+        const result = resolveElection({ people: 36, state: 34, market: 30 });
+        assert(result.winner === 'people' && result.coalition?.partner === 'state', 'koalicja z drugą partią');
+        macro.election.ruling = result.winner; macro.election.coalition = result.coalition;
+        const party = getRulingParty();
+        assert(party.coalition && party.nationalization > 1 && party.nationalization < 1.6, `parametry ważone: ${party.nationalization}`);
+        assert(!resolveElection({ people: 20, state: 35, market: 45 }).coalition, 'powyżej 40% bez koalicji');
+    });
+
+    test('S5 deficyt: 4 kw. → rentowność obligacji +0,25 pp; 8 kw. → CIT +2 pp albo cięcie zasiłków', () => {
+        worldS();
+        macro.election.ruling = 'state';
+        for (let q = 0; q < 8; q++) { society.budget.balance = -100; society.budget.hasBalance = true; updateBudgetBalance(); }
+        assert(society.budget.bondPremium === DEFICIT_BOND_PREMIUM && getDeficitBondPremium() === 0.0025, 'premia obligacji');
+        assertNear(getCompanyIncomeTaxRate(), COMPANY_INCOME_TAX_RATE + 0.02, 'CIT (Blok Państwowy)', 1e-12);
+        allBonds.length = 0; stateBondOffer.shortTerm.available = 5; playerCash = 1_000_000;
+        assert(buyStateBond('player', 'shortTerm', 1), 'zakup obligacji');
+        assertNear(allBonds[allBonds.length - 1].interestRate, stateBondOffer.shortTerm.interest + 0.0025, 'rentowność +0,25 pp', 1e-12);
+        society.budget.balance = 100; society.budget.hasBalance = true; updateBudgetBalance();
+        assert(society.budget.bondPremium === 0, 'nadwyżka znosi premię');
+    });
+
+    test('S4/S6 klient Etyczny i cele korporacji reagują na szarą strefę i strajki', () => {
+        const { a } = worldS();
+        playerPortfolio.AAA = { shares: 2500, avgPrice: 100, assetType: 'stock' };
+        assert(getFundEthicsIssue() === null, 'bez problemów');
+        a.workforce.greyCaughtQuarter = macro.quarter;
+        assert(getFundEthicsIssue(), 'szara strefa w portfelu');
+        ensureCorporateGoals();
+        noteStrikeForGoals(a);
+        assert(!CORPORATE_GOAL_POOL.noStrikes.check(corporation.goals), 'strajk w spółce z udziałem > 20%');
+        assert(playerPortfolio.AAA.heldThroughStrike, 'Mentor: przetrwany strajk');
+        assert(!CORPORATE_GOAL_POOL.satisfaction.available() || playerFund.clients.some(c => c.type === 'ethical'), 'cel zadowolenia tylko z klientami Etycznymi');
+        assert(CLIENT_TYPES.ethical && getClientCharacter({ type: 'ethical' }).ethical, 'charakter Etyczny');
+    });
+
+    test('S3 podkupienie prezesa: koszt 1% kapitalizacji z gotówki spółki gracza, limit 1 na rok', () => {
+        const { a, b } = worldS();
+        playerPortfolio.AAA = { shares: 6000, avgPrice: 100, assetType: 'stock' };
+        b.ceo = { name: 'Gwiazda Branży', age: 50, tenure: 8, traits: [{ id: 'wizjoner', name: 'Wizjoner' }] };
+        b.workforce.satisfaction = 0; // szansa 60%
+        const cash = a.cash, cost = Math.round(getMarketCapValue(b) * CEO_POACH_COST);
+        const result = withSeededRandom(5, () => playerPoachCeo('AAA', 'BBB'));
+        assert(result && a.cash === cash - cost, `koszt ${cash - a.cash} vs ${cost}`);
+        if (result.success) assert(a.ceo.name === 'Gwiazda Branży' && b.ceo.name !== 'Gwiazda Branży', 'prezes przechodzi z cechami');
+        assert(playerPoachCeo('AAA', 'BBB') === null, 'limit 1 na rok');
+    });
+
+    test('S6 skaner: kolumny zatrudnienia, czerwona flaga „szara strefa > 5%”, raport kwartalny', () => {
+        const { a, b } = worldS();
+        a.workforce.policy = 'exploit';
+        assert(getRedFlags(a).some(f => f.id === 'grey') && !getRedFlags(b).some(f => f.id === 'grey'), 'flaga szarej strefy');
+        const rows = runScanner({ ...SCANNER_DEFAULT_FILTERS, accessibleOnly: false, greyOnly: true });
+        assert(rows.length === 1 && rows[0].stock === a && rows[0].work.grey > 0.05, 'filtr szarej strefy');
+        const mails = mailbox.nextId;
+        publishSocietyReport([a, b]);
+        assert(mailbox.nextId === mails + 1 && mailbox.messages[0].subject.includes('Raport z rynku pracy'), 'jeden zbiorczy mail');
+    });
+
+    test('S6 niezmienniki pieniędzy i akcji po kwartałach z zatrudnieniem, związkami i strajkami', () => {
+        const { a, b } = worldS();
+        syncSharesHeldWithInitialPortfolios();
+        a.workforce.policy = 'exploit'; a.workforce.satisfaction = 10; a.workforce.union = createUnion('company'); a.workforce.union.nextDemand = 0;
+        b.workforce.satisfaction = 90;
+        a.workforce.greySavings = [500, 500, 500, 500];
+        for (let q = 0; q < 6; q++) {
+            const money = moneyInModel(), mark = externalMark();
+            society.quarter++;
+            processWorkforceQuarter();
+            assertNear(moneyInModel() - money, externalNetFlow(mark), `kwartał ${q}: pieniądze tylko przez granicę modelu`, 1e-6);
+            processFinancialReports();
+        }
+        const problems = checkWorldInvariants();
+        assert(problems.length === 0, problems.join('; '));
+        assert((society.stats?.strikes || 0) >= 0 && a.workforce.satisfactionHistory.length > 0, 'stan zatrudnienia');
+    });
+
+    test('zapis v13 i migracja starego zapisu (v12): kraj od zera, spółki i gotówka bez zmian', () => {
+        const { a, b } = worldS();
+        a.isStateOwned = true;
+        society.population = 39_000_000; society.laws.minWage = 3;
+        a.workforce.union = createUnion('company');
+        const fresh = applySaveSnapshot(JSON.parse(JSON.stringify(buildSaveSnapshot())));
+        assert(fresh.ok && society.population === 39_000_000 && society.laws.minWage === 3, 'v13 odtwarza kraj');
+        assert(stocks.find(s => s.symbol === 'AAA').workforce.union, 'v13 odtwarza związek');
+
+        const snapshot = JSON.parse(JSON.stringify(buildSaveSnapshot()));
+        snapshot.version = 12;
+        delete snapshot.society;
+        snapshot.stocks.forEach(s => delete s.workforce);
+        const cash = snapshot.stocks.map(s => s.cash), cityPop = snapshot.city.population;
+        const report = applySaveSnapshot(snapshot);
+        assert(report.ok, report.errors.join(' '));
+        assert(stocks.length === 2 && stocks.every((s, i) => s.cash === cash[i]), 'spółki i gotówka bez zmian');
+        assert(stocks.every(s => s.workforce && s.workforce.employees > 0), 'zatrudnienie według giełdy');
+        assert(stocks.every(s => Math.abs(s.workforce.satisfaction - getSatisfactionTarget(s)) < 1e-9), 'zadowolenie = cel polityki');
+        assert(!stocks.find(s => s.symbol === 'BBB').workforce.union, 'związki tylko w spółkach państwowych');
+        assert(city.population === cityPop && society.laws.minWage === SOCIAL_LAWS.minWage.start, 'miasto bez zmian, kraj od zera');
     });
 });
 

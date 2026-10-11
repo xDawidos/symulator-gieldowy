@@ -34,6 +34,11 @@
         <span class="nav-label">Miasto</span>
       </button>
 
+      <button class="sidebar-nav-btn" id="open-country-btn" onclick="openCountryPanel()">
+        <span class="nav-icon">👥</span>
+        <span class="nav-label">Kraj</span>
+      </button>
+
       <button class="sidebar-nav-btn" id="open-construction-btn" onclick="openConstructionSectorModal()">
         <span class="nav-icon">🏗️</span>
         <span class="nav-label">Budownictwo</span>
@@ -679,6 +684,7 @@
         <nav class="bank-tabs" role="tablist">
             <button class="bank-tab-btn active" data-tab="overview" onclick="switchStateTab('overview')">📊 Przegląd</button>
             <button class="bank-tab-btn" data-tab="macro" onclick="switchStateTab('macro')">📈 Makro</button>
+            <button class="bank-tab-btn" data-tab="country" onclick="switchStateTab('country')">👥 Kraj</button>
             <button class="bank-tab-btn" data-tab="markets" onclick="switchStateTab('markets')">🏛️ Rynki</button>
             <button class="bank-tab-btn" data-tab="oversight" onclick="switchStateTab('oversight')">⚖️ Nadzór</button>
             <button class="bank-tab-btn" data-tab="taxes" onclick="switchStateTab('taxes')">💰 Podatki</button>

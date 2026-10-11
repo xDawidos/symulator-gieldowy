@@ -1389,7 +1389,9 @@ const CLIENT_TYPES = {
     rich:        { key: 'rich',        label: 'Bogaty',     icon: '💎', patience: 0.8,  volAversion: 0.8, chase: 0.8, loyalty: 0.5, size: [2500, 9000], buyBias: 0.9, secondaryBias: 0.6, feeSensitivity: 0.2, trustNeed: 0,   panic: false },
     miser:       { key: 'miser',       label: 'Sknera',     icon: '🪙', patience: 0.6,  volAversion: 1.0, chase: 0.6, loyalty: 0.4, size: [150, 700],   buyBias: 0.3, secondaryBias: 0.9, feeSensitivity: 1.5, trustNeed: 5,   panic: false },
     institution: { key: 'institution', label: 'Instytucja', icon: '🏛️', patience: 0.5,  volAversion: 0.8, chase: 1.0, loyalty: 0.3, size: [2000, 6000], buyBias: 0.5, secondaryBias: 0.5, feeSensitivity: 0.5, trustNeed: 0,   panic: false, comparesRivals: true },
-    investor:    { key: 'investor',    label: 'Inwestor',   icon: '🐋', patience: 0.6,  volAversion: 0.6, chase: 1.2, loyalty: 0.4, size: [2000, 10000], buyBias: 0.7, secondaryBias: 0.8, feeSensitivity: 0.4, trustNeed: 0,  panic: false, comparesRivals: true }
+    investor:    { key: 'investor',    label: 'Inwestor',   icon: '🐋', patience: 0.6,  volAversion: 0.6, chase: 1.2, loyalty: 0.4, size: [2000, 10000], buyBias: 0.7, secondaryBias: 0.8, feeSensitivity: 0.4, trustNeed: 0,  panic: false, comparesRivals: true },
+    // 0.13: odchodzi, gdy spółki z udziałem funduszu > 10% mają niezadowoloną załogę albo szarą strefę (litera S w ESG).
+    ethical:     { key: 'ethical',     label: 'Etyczny',    icon: '🌱', patience: 0.6,  volAversion: 0.8, chase: 0.6, loyalty: 0.5, size: [500, 2500],  buyBias: 0.6, secondaryBias: 0.6, feeSensitivity: 0.3, trustNeed: 0,   panic: false, ethical: true }
 };
 
 const CLIENT_FIRST_NAMES = ['Anna', 'Piotr', 'Maria', 'Tomasz', 'Ewa', 'Jan', 'Kasia', 'Marek', 'Zofia', 'Adam', 'Halina', 'Krzysztof', 'Agata', 'Paweł', 'Irena'];
@@ -2511,6 +2513,36 @@ function getDiversificationStats() {
     return { count: positions.length, maxShare: positions.length ? Math.max(...positions) : 0 };
 }
 
+/** 0.13: powód niezadowolenia klientów Etycznych (null = brak). */
+function getFundEthicsIssue() {
+    if (typeof stocks === 'undefined') return null;
+    const big = stocks.filter(s => s.workforce && !s.isBankrupt && getFundStakePct(s) > 0.1);
+    const caught = big.find(s => Number.isFinite(s.workforce.greyCaughtQuarter) && (macro?.quarter ?? 0) - s.workforce.greyCaughtQuarter <= 4);
+    if (caught) return `w portfelu jest ${caught.name}, złapana na szarej strefie`;
+    if (big.length && typeof getAverageSatisfaction === 'function' && getAverageSatisfaction(big) < 45) return 'spółki z dużym udziałem funduszu źle traktują pracowników';
+    return null;
+}
+
+/** Średnie zadowolenie pracowników w spółkach portfela (ważone wartością pozycji). */
+function getPortfolioSatisfaction() {
+    let sum = 0, weight = 0;
+    for (const s of stocks) {
+        const shares = playerPortfolio[s.symbol]?.shares || 0;
+        if (!s.workforce || shares <= 0 || s.isBankrupt) continue;
+        sum += s.workforce.satisfaction * shares * s.price;
+        weight += shares * s.price;
+    }
+    return weight > 0 ? sum / weight : null;
+}
+
+/** Strajk w spółce z udziałem funduszu > 20% (cel korporacji). */
+function noteStrikeForGoals(stock) {
+    if (playerPortfolio?.[stock.symbol]?.shares > 0) playerPortfolio[stock.symbol].heldThroughStrike = true; // Mentor: przetrwany strajk
+    if (!corporation || getFundStakePct(stock) <= 0.2) return;
+    const goals = ensureCorporateGoals();
+    if (goals) goals.progress.strike = stock.symbol;
+}
+
 const CORPORATE_GOAL_POOL = {
     board: {
         label: 'Miejsce w radzie nadzorczej w 2 spółkach',
@@ -2542,6 +2574,19 @@ const CORPORATE_GOAL_POOL = {
         progress: () => { const d = getDiversificationStats(); return Math.min(1, d.count / 6) * (d.maxShare > 0.25 ? 0.5 : 1); },
         check: () => { const d = getDiversificationStats(); return d.count >= 6 && d.maxShare <= 0.25; }
     },
+    noStrikes: {
+        label: 'Żadna spółka z udziałem funduszu > 20% nie strajkuje',
+        value: goals => goals.progress.strike ? `strajk: ${goals.progress.strike}` : 'brak strajków',
+        progress: goals => goals.progress.strike ? 0 : 1,
+        check: goals => !goals.progress.strike
+    },
+    satisfaction: {
+        label: 'Średnie zadowolenie pracowników w portfelu ≥ 55',
+        available: () => (playerFund?.clients || []).some(client => client.type === 'ethical'),
+        value: () => { const v = getPortfolioSatisfaction(); return v === null ? 'brak spółek' : `${v.toFixed(0)}/100`; },
+        progress: () => { const v = getPortfolioSatisfaction(); return v === null ? 0 : Math.min(1, v / 55); },
+        check: () => (getPortfolioSatisfaction() ?? 0) >= 55
+    },
     dividends: {
         label: 'Dywidendy z portfela ≥ 2% aktywów',
         value: goals => `${formatZl(goals.progress.dividends || 0, 0)} / ${formatZl(getFundAssets() * 0.02, 0)}`,
@@ -2552,7 +2597,7 @@ const CORPORATE_GOAL_POOL = {
 
 /** Zarząd przydziela 2 losowe cele na cykl oceny. */
 function assignCorporateGoals() {
-    const ids = Object.keys(CORPORATE_GOAL_POOL).sort(() => Math.random() - 0.5).slice(0, 2);
+    const ids = Object.keys(CORPORATE_GOAL_POOL).filter(id => !CORPORATE_GOAL_POOL[id].available || CORPORATE_GOAL_POOL[id].available()).sort(() => Math.random() - 0.5).slice(0, 2);
     corporation.goals = { ids, quarter: macro?.quarter || 0, startNav: playerFund ? getFundNav() : 0, progress: { project: false, dividends: 0 } };
     return corporation.goals;
 }
@@ -3143,7 +3188,8 @@ const CLIENT_MOTIVES = {
     rich: ['Lokuje nadwyżki z biznesu.', 'Dywersyfikuje majątek rodzinny.', 'Ma czas i duże kwoty.'],
     miser: ['Liczy każdą złotówkę opłat.', 'Kupuje tylko z rabatem.', 'Opłata za zarządzanie to dla niego zdrada.'],
     institution: ['Mandat inwestycyjny zarządu.', 'Długoterminowa lokata instytucji.'],
-    investor: ['Wielki inwestor szukający alfy.', 'Testuje nowego zarządcę.']
+    investor: ['Wielki inwestor szukający alfy.', 'Testuje nowego zarządcę.'],
+    ethical: ['Nie chce zarabiać na krzywdzie ludzi.', 'Sprawdza, jak spółki traktują pracowników.', 'Inwestuje zgodnie z ESG.']
 };
 const CLIENT_NAMES = ['Anna', 'Piotr', 'Maria', 'Tomasz', 'Ewa', 'Jan', 'Kasia', 'Marek', 'Zofia', 'Adam', 'Halina', 'Krzysztof', 'Agata', 'Paweł', 'Irena',
     'Bartek', 'Ola', 'Kamil', 'Jadwiga', 'Stefan', 'Iga', 'Mateusz', 'Bożena', 'Rafał', 'Wanda', 'Szymon', 'Natalia', 'Edward', 'Kinga', 'Leon'];
@@ -3168,7 +3214,7 @@ function getClientCharacter(client) {
 }
 
 function randomCharacter(trust = 50) {
-    const weights = { sly: 1.2, careful: 1.4, fearful: 1, brave: 0.8 + trust / 100, rich: 0.3 + trust / 200, miser: 1 };
+    const weights = { sly: 1.2, careful: 1.4, fearful: 1, brave: 0.8 + trust / 100, rich: 0.3 + trust / 200, miser: 1, ethical: 0.6 };
     const total = Object.values(weights).reduce((sum, w) => sum + w, 0);
     let roll = Math.random() * total;
     for (const [key, weight] of Object.entries(weights)) {
@@ -3239,8 +3285,13 @@ function processClientsWeekly() {
     let redemptionBudget = Math.floor(playerFund.units * MAX_WEEKLY_REDEMPTION_SHARE);
     let newMoneyBudget = getFundAssets() * MAX_WEEKLY_NEW_MONEY_SHARE;
 
+    const ethicsIssue = typeof getFundEthicsIssue === 'function' ? getFundEthicsIssue() : null;
     for (const client of [...playerFund.clients]) {
         const def = getClientCharacter(client);
+        if (def.ethical && ethicsIssue) {
+            client.satisfaction = Math.max(0, client.satisfaction - 0.08);
+            if (!client.ethicsNoted || client.ethicsNoted !== ethicsIssue) { client.ethicsNoted = ethicsIssue; noteClientHistory(client, `Niepokoi się: ${ethicsIssue}.`); }
+        }
 
         // Zadowolenie: zaufanie, wynik vs GIG (pogoń za wynikiem), obsunięcie, opłaty (sknera), porównanie z rywalami.
         const drift = (trust - 50) / 50 * 0.04
