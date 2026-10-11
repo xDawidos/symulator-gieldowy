@@ -1937,7 +1937,8 @@ function renderCompanyCard() {
                 <span class="${week > 0 ? 'text-up' : week < 0 ? 'text-down' : 'text-muted'}">${week >= 0 ? '+' : ''}${(week * 100).toFixed(2)}% tydz.</span>
             </div>
         </div>
-        ${typeof renderDividendBadges === 'function' ? renderDividendBadges(stock) : ''}`;
+        ${typeof renderDividendBadges === 'function' ? renderDividendBadges(stock) : ''}
+        ${stock.pendingDividend ? `<p class="text-sm cc-exdiv">✂️ Ogłoszona dywidenda <strong>${stock.pendingDividend.dps.toFixed(2)} zł/akcję</strong> — dzień odcięcia za ok. ${Math.max(1, Math.round(stock.dividendTimer / BASE_DELAYS.weekly))} tydz. gry. Dywidendę dostaje, kto ma akcje w dniu odcięcia; tego dnia kurs spada o mniej więcej jej wartość.</p>` : ''}`;
 
     // N1: porównanie z medianą sektora pod wartością kafelka.
     const med = typeof getSectorMedians === 'function' ? getSectorMedians(stock.sector?.[0]) : null;
@@ -1960,6 +1961,7 @@ function renderCompanyCard() {
     const body = document.getElementById('company-card-body');
     if (companyCardView.tab === 'finance') {
         if (typeof unlockAcademyEntry === 'function') ['eps', 'marza', 'roe', 'plynnosc'].forEach(id => unlockAcademyEntry(id));
+        if (typeof noteMentorEvent === 'function') noteMentorEvent('financeView', stock);
         body.innerHTML = renderCompanyCardFinance(stock, f);
     }
     else if (companyCardView.tab === 'owners') body.innerHTML = renderCompanyCardOwners(stock);
@@ -4453,9 +4455,13 @@ function renderCvPanel() {
     const money = document.getElementById('skills-modal-xp');
     if (!list) return;
     if (money) money.textContent = playerWallet.cash.toFixed(2);
-    const tabs = `<div class="cc-tabs"><button class="${cvTab === 'cv' ? 'active' : ''}" onclick="setCvTab('cv')">📄 CV i szkolenia</button><button class="${cvTab === 'academy' ? 'active' : ''}" onclick="setCvTab('academy')">📘 Akademia</button></div>`;
+    const tabs = `<div class="cc-tabs"><button class="${cvTab === 'cv' ? 'active' : ''}" onclick="setCvTab('cv')">📄 CV i szkolenia</button><button class="${cvTab === 'academy' ? 'active' : ''}" onclick="setCvTab('academy')">📘 Akademia</button><button class="${cvTab === 'mentor' ? 'active' : ''}" onclick="setCvTab('mentor')">🎓 Mentor</button></div>`;
     if (cvTab === 'academy' && typeof renderAcademyPanel === 'function') {
         list.innerHTML = tabs + renderAcademyPanel();
+        return;
+    }
+    if (cvTab === 'mentor' && typeof renderMentorPanel === 'function') {
+        list.innerHTML = tabs + renderMentorPanel();
         return;
     }
 

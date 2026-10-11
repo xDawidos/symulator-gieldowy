@@ -2198,6 +2198,7 @@ function payCompanyDividend(stock, dividendPerShare, purpose = 'Dywidenda') {
     recordPayment(stock, 'external:akcjonariusze', total, purpose);
 
     stock.lastDividend = { dps, total, paidAt: Date.now(), yield: dps / Math.max(0.01, stock.price) };
+    if (typeof addChartEvent === 'function') addChartEvent(stock, '✂️', `Odcięcie dywidendy: ${dps.toFixed(2)} zł/akcję — kurs spada o mniej więcej tyle`);
     recordDividendPayment(stock, dps);
     payDividendToShareholders(stock, dps);
     return total;
@@ -2510,6 +2511,7 @@ function processFinancialReports() {
             logEvent(eventMessage);
             applyPriceEffect(stock.symbol, magnitude, magnitude < 0 ? 'negative' : 'positive', 'review');
         }
+        if (typeof addChartEvent === 'function' && Math.abs(surprise) >= 0.15) addChartEvent(stock, surprise > 0 ? '📈' : '📉', `Raport kwartalny: zysk ${surprise >= 0 ? '+' : ''}${(surprise * 100).toFixed(0)}% vs konsensus`);
 
         // Dywidenda: zarząd może zmienić strategię, potem ogłasza wypłatę z zysku kwartału.
         reviewDividendPolicy(stock);

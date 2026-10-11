@@ -99,6 +99,7 @@ function revealFraud(stock, by) {
     stock.financialHealth = Math.max(-5, (Number(stock.financialHealth) || 0) - 1.5);
     stock.fraudHistory = [...(stock.fraudHistory || []), { quarter: getAccountingQuarter(), writeOff, by }].slice(-3);
     if (typeof replaceCeo === 'function' && stock.ceo) replaceCeo(stock);
+    if (typeof addChartEvent === 'function') addChartEvent(stock, '🧾', `Korekta wyników: odpis ${formatZl(writeOff, 0)}`);
     const text = `🧾 KOREKTA WYNIKÓW: ${stock.name} (${stock.symbol}) zawyżała zyski — odpis ${formatZl(writeOff, 0)}, kurs −${(drop * 100).toFixed(0)}%, zarząd odwołany (wykrył: ${by}).`;
     logEvent(text, 'company');
     if (typeof showBreakingNews === 'function') showBreakingNews(text, false);

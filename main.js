@@ -326,6 +326,7 @@ gameTimers.weekly = setInterval(() => {
 
         if (typeof recordWeeklyCloses === 'function') recordWeeklyCloses(); // U2: zmiana tygodniowa w tabeli spółek
         if (typeof checkAcademyTriggers === 'function') checkAcademyTriggers(); // N1: hasła Akademii przy pierwszym kontakcie
+        if (typeof checkMentorTasks === 'function') checkMentorTasks(); // N4: zadania mentora i certyfikaty
 
         // Fundusz gracza: opłata za zarządzanie, zaufanie, decyzje klientów
         processFundWeekly();

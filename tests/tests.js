@@ -1028,6 +1028,7 @@ group('Kariera w korporacji (etap C)', () => {
         b2.positionId = 'projectLead';
         setPeriods(b1.fund.periods, -0.01);
         playerProfile.positionId = 'senior';
+        getMentor().certificates.analyst = 0; // N4: awans na Kierownika projektu wymaga certyfikatu
         setPeriods(playerFund.periods, 0.06);
         runBoardEvaluation();
         assert(playerProfile.positionId === 'projectLead', `gracz: ${playerProfile.positionId}`);
@@ -3665,6 +3666,69 @@ group('Naprawa: hipoteki botów bez oprocentowania (NaN w gotówce)', () => {
         processAiLoansWeekly(ai);
         assert(Number.isFinite(ai.cash) && Number.isFinite(ai.loans[0]?.amount ?? 0), `gotówka ${ai.cash}`);
         ai.loans = [];
+    });
+});
+
+group('Nauka N4/N5: Mentor, certyfikaty, wykres, wpływ zlecenia', () => {
+    function world() {
+        const list = [];
+        for (let i = 0; i < 6; i++) {
+            const c = makeCompany(`M${i}`, { cash: 200_000, fixedAssets: 800_000 });
+            c.price = 100; c.sector = [['Żywność', 'Energia', 'Chemia', 'Gaming', 'Finanse', 'Przemysł'][i]]; c.exchange = 'JUNK';
+            initializeFundamentals(c, true);
+            list.push(c);
+        }
+        resetWorld(list);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        macro = createMacroState();
+        playerCash = 100_000;
+        return list;
+    }
+
+    test('mentor: 3 aktywne zadania, zaliczenie daje nagrodę, certyfikat po wymaganej liczbie', () => {
+        world();
+        assignMentorTasks();
+        const mentor = getMentor();
+        assert(mentor.active.length === MENTOR_ACTIVE_TASKS, 'aktywne zadania');
+        const cash = playerWallet.cash;
+        ['cz', 'cwk', 'wycena'].forEach(id => { unlockAcademyEntry(id); getAcademy().quizzes[id] = true; });
+        mentor.events.financeViews = ['A', 'B', 'C'];
+        checkMentorTasks(); checkMentorTasks();
+        assert(mentor.done.valuationQuiz !== undefined && mentor.done.compareValuation !== undefined, 'zadania zaliczone');
+        assert(playerWallet.cash >= cash + 2 * MENTOR_REWARD, 'nagrody');
+        mentor.done.bookValue = 0;
+        checkMentorTasks();
+        assert(hasCertificate('analyst'), 'certyfikat analityka');
+    });
+
+    test('awans na Kierownika projektu wymaga certyfikatu', () => {
+        world();
+        playerProfile.positionId = 'senior';
+        const participants = [{ id: 'player', isPlayer: true, positionId: 'senior', score: 95, periods: [] }];
+        applyPositionChanges(participants);
+        assert(participants[0].positionId === 'senior' && participants[0].blockedBy === 'analyst', 'awans wstrzymany');
+        getMentor().certificates.analyst = 0;
+        const again = [{ id: 'player', isPlayer: true, positionId: 'senior', score: 95, periods: [] }];
+        applyPositionChanges(again);
+        assert(again[0].positionId === 'projectLead', 'awans z certyfikatem');
+    });
+
+    test('zadanie dywersyfikacji: 5 sektorów, żadna pozycja > 30%', () => {
+        const list = world();
+        list.slice(0, 5).forEach(s => { playerPortfolio[s.symbol] = { shares: 50, avgPrice: 100, assetType: 'stock' }; s.sharesHeld = 50; });
+        assert(MENTOR_TASKS.diversify.check({ data: {} }), 'zaliczone');
+    });
+
+    test('wykres: wydarzenia spółki zapisywane (najwyżej 20)', () => {
+        const [a] = world();
+        for (let i = 0; i < 25; i++) addChartEvent(a, '📄', `raport ${i}`);
+        assert(a.chartEvents.length === 20 && a.chartEvents[19].label === 'raport 24', 'znaczniki');
+    });
+
+    test('wpływ zlecenia: większe zlecenie = większy wpływ, limit 2%', () => {
+        const [a] = world();
+        const small = estimateOrderImpact(a, 1), big = estimateOrderImpact(a, 100000);
+        assert(small.impact < big.impact && big.impact <= 0.02, `wpływ ${small.impact} / ${big.impact}`);
     });
 });
 

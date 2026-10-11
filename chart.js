@@ -184,6 +184,41 @@ function calculateNiceYAxisRange(minPrice, maxPrice) {
 /**
  * Główna funkcja renderująca wykres, która decyduje, jaki typ wykresu narysować.
  */
+// N5: wydarzenia spółki (raporty, dywidendy, przejęcia, korekty) jako znaczniki na wykresie.
+function addChartEvent(stock, icon, label) {
+    if (!stock) return;
+    if (!Array.isArray(stock.chartEvents)) stock.chartEvents = [];
+    stock.chartEvents.push({ time: Date.now(), icon, label });
+    if (stock.chartEvents.length > 20) stock.chartEvents.shift();
+}
+
+function drawChartEvents(stock, svg, historyForMapping, getX, padding, chartHeight) {
+    const svgNs = "http://www.w3.org/2000/svg";
+    const tooltip = document.getElementById('chart-tooltip');
+    const first = historyForMapping[0]?.time;
+    for (const event of stock.chartEvents || []) {
+        if (!first || event.time < first) continue;
+        let index = 0, best = Infinity;
+        historyForMapping.forEach((point, i) => { const d = Math.abs((point.time || 0) - event.time); if (d < best) { best = d; index = i; } });
+        const x = getX(index, historyForMapping.length);
+        const line = document.createElementNS(svgNs, "line");
+        line.setAttribute("x1", x); line.setAttribute("x2", x);
+        line.setAttribute("y1", padding.top); line.setAttribute("y2", padding.top + chartHeight);
+        line.setAttribute("stroke", "#8b949e"); line.setAttribute("stroke-dasharray", "3,3"); line.setAttribute("stroke-width", "1");
+        svg.appendChild(line);
+        const label = document.createElementNS(svgNs, "text");
+        label.setAttribute("x", x); label.setAttribute("y", padding.top + 12);
+        label.setAttribute("font-size", "13"); label.setAttribute("text-anchor", "middle");
+        label.textContent = event.icon;
+        label.style.cursor = "help";
+        if (tooltip) {
+            label.addEventListener('mouseover', e => { tooltip.textContent = event.label; tooltip.style.display = 'block'; tooltip.style.left = `${e.pageX + 15}px`; tooltip.style.top = `${e.pageY + 15}px`; });
+            label.addEventListener('mouseout', () => { tooltip.style.display = 'none'; });
+        }
+        svg.appendChild(label);
+    }
+}
+
 function renderChartSVGForStock(stock, svgAreaElement, width, height) {
     svgAreaElement.innerHTML = '';
     const svgNs = "http://www.w3.org/2000/svg";
@@ -253,6 +288,8 @@ function renderChartSVGForStock(stock, svgAreaElement, width, height) {
         drawLineChart(dataToDraw, svg, getX, getY);
     }
     
+    drawChartEvents(stock, svg, historyForMapping, getX, padding, chartHeight); // N5
+
     // --- SEKCJA RYSOWANIA ZNACZNIKÓW TRANSAKCJI (z niestandardowym dymkiem) ---
     const tooltip = document.getElementById('chart-tooltip');
 

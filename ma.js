@@ -489,6 +489,7 @@ function onTakeoverStarted(initiator, target, options = {}) {
     const process = initiator.mergerProcess;
     process.hostile = !options.friendly;
     syncTakeover(initiator, target);
+    if (typeof addChartEvent === 'function') addChartEvent(target, '🤝', `${options.friendly ? 'Oferta przejęcia' : 'Wrogie przejęcie'}: ${initiator.name}`);
     if (typeof onTakeoverStartedRelations === 'function') onTakeoverStartedRelations(initiator, target);
     if (getFundStakePct(target) >= 0.2 && playerFund) notifyFundOfTakeover(initiator, target);
 

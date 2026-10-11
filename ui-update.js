@@ -39,7 +39,7 @@ function renderStockDrawer(symbol) {
       <div class="stock-drawer-actions">
         <div class="stock-drawer-actions-row">
           <div class="qty-input-wrapper">
-            <input type="text" inputmode="numeric" pattern="[0-9]*" id="dqty-${symbol}" value="1" aria-label="Liczba akcji" oninput="this.value=this.value.replace(/[^0-9]/g, '')">
+            <input type="text" inputmode="numeric" pattern="[0-9]*" id="dqty-${symbol}" value="1" aria-label="Liczba akcji" oninput="this.value=this.value.replace(/[^0-9]/g, ''); updateDrawerImpact('${symbol}')">
             <span class="chip-max" onclick="setDrawerMax('${symbol}')">MAX</span>
           </div>
         </div>
@@ -57,10 +57,34 @@ function renderStockDrawer(symbol) {
           <button class="btn-ghost-icon" title="Inwestycje spółki"
             onclick="openCompanyInvestments('${symbol}')">🏗️</button>` : ''}
         </div>
+        <div class="stock-drawer-impact text-xs" id="dimpact-${symbol}"></div>
       </div>
     </div>`;
     dr.appendChild(td);
     row.after(dr);
+    updateDrawerImpact(symbol);
+}
+
+/** N5: szacunek kosztu i wpływu zlecenia na kurs (płynność rynku). */
+function estimateOrderImpact(stock, quantity) {
+    const freeFloat = Math.max(1, typeof getFreeFloatShares === 'function' ? getFreeFloatShares(stock) : stock.totalShares);
+    const impact = Math.min(0.02, 0.5 * Math.abs(quantity) / freeFloat);
+    const marketId = typeof getStockMarket === 'function' ? getStockMarket(stock) : 'GPW';
+    const commission = typeof MARKET_OPERATOR_DEFS !== 'undefined' ? (MARKET_OPERATOR_DEFS[marketId]?.commission || 0) : 0;
+    const value = quantity * stock.price;
+    return { value, impact, commission: value * commission, freeFloat, available: typeof getAvailableShares === 'function' ? getAvailableShares(stock) : null };
+}
+
+function updateDrawerImpact(symbol) {
+    const box = document.getElementById('dimpact-' + symbol);
+    const stock = typeof stocks !== 'undefined' ? stocks.find(s => s.symbol === symbol) : null;
+    if (!box || !stock || stock.assetType) { if (box) box.textContent = ''; return; }
+    const quantity = Math.max(0, parseInt(document.getElementById('dqty-' + symbol)?.value, 10) || 0);
+    if (!quantity) { box.textContent = ''; return; }
+    const e = estimateOrderImpact(stock, quantity);
+    box.innerHTML = `Wartość ~${formatZl(e.value, 0)} · prowizja ~${formatZl(e.commission, 2)} · kurs po zleceniu ~${e.impact >= 0.0005 ? `${(e.impact * 100).toFixed(2)}%` : '0%'} w Twoją niekorzyść`
+        + `${e.impact >= 0.01 ? ' <span class="text-warn">— duże zlecenie przy małym obrocie (płynność!)</span>' : ''} · w obrocie ${e.freeFloat.toLocaleString('pl-PL')} akcji`;
+    if (e.impact >= 0.01 && typeof unlockAcademyEntry === 'function') unlockAcademyEntry('wplyw');
 }
 
 function closeOpenStockDrawer() {

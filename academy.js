@@ -144,7 +144,7 @@ const ACADEMY_ENTRIES = {
         quiz: [
             { q: 'Kurs 40 zł, dywidendy z roku 2 zł. Stopa dywidendy = ?', a: ['5%', '2%', '20%'], c: 0 },
             { q: 'Kiedy wysoka stopa dywidendy jest sygnałem ostrzegawczym?', a: ['Gdy spółka wypłaca więcej, niż zarabia', 'Zawsze jest dobra', 'Gdy spółka ma mało długów'], c: 0 },
-            { q: 'Skąd spółka bierze pieniądze na dywidendę?', a: ['Z zysku i gotówki', 'Z emisji akcji dla akcjonariuszy', 'Od Banku Centralnego'], c: 0 }
+            { q: 'Co dzieje się z kursem w dniu odcięcia dywidendy?', a: ['Spada mniej więcej o wartość dywidendy', 'Rośnie o wartość dywidendy', 'Nic się nie zmienia'], c: 0 }
         ]
     },
     zadluzenie: {
@@ -325,6 +325,16 @@ const ACADEMY_ENTRIES = {
             { q: 'Kiedy zlecenie audytu ma największy sens?', a: ['Przed dużą inwestycją w spółkę z czerwonymi flagami', 'Po sprzedaży wszystkich akcji', 'Nigdy — raporty wystarczą'], c: 0 },
             { q: 'Czy „czysty” audyt gwarantuje brak oszustwa?', a: ['Nie — audytor może coś przeoczyć', 'Tak, zawsze', 'Tylko w bankach'], c: 0 },
             { q: 'Co audytor sprawdza?', a: ['Czy sprawozdania odpowiadają rzeczywistości', 'Kurs akcji', 'Pensję prezesa w prasie'], c: 0 }
+        ]
+    },
+    wplyw: {
+        title: 'Płynność rynku i wpływ zlecenia', icon: '🌊',
+        text: 'Gdy w obrocie jest mało akcji, duże zlecenie samo przesuwa kurs: kupując, podbijasz cenę, sprzedając — zbijasz. Do tego dochodzi prowizja rynku. Duży fundusz w małej spółce płaci więc więcej, niż pokazuje kurs — dlatego dzieli zlecenia albo wybiera płynne spółki.',
+        example: () => { const s = pickListed().sort((a, b) => getFreeFloatShares(a) - getFreeFloatShares(b))[0]; return s ? `Najmniej płynna: ${s.name} — w wolnym obrocie ${getFreeFloatShares(s).toLocaleString('pl-PL')} akcji.` : ''; },
+        quiz: [
+            { q: 'Kupujesz 20% wolnego obrotu małej spółki jednym zleceniem. Co się stanie?', a: ['Sam podbijesz kurs i kupisz drożej', 'Kupisz po kursie z ekranu', 'Kurs spadnie'], c: 0 },
+            { q: 'Jak ograniczyć wpływ dużego zlecenia?', a: ['Podzielić je na mniejsze części w czasie', 'Kupić wszystko naraz', 'Kupić na koncie prywatnym'], c: 0 },
+            { q: 'Co oznacza „płynna spółka”?', a: ['Dużo akcji w obrocie, łatwo kupić i sprzedać', 'Spółka z dużą gotówką', 'Spółka bez długu'], c: 0 }
         ]
     },
     bankructwo: {

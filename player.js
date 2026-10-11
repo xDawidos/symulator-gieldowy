@@ -432,6 +432,7 @@ function sellStock(symbol, quantity) {
     if (typeof onFundTrade === 'function') onFundTrade(stockToSell, quantity, 'sell'); // relacje z botami (relations.js)
     if (typeof chargeMarketCommission === 'function') chargeMarketCommission(stockToSell, quantity * stockToSell.price, 'player'); // prowizja operatora rynku
     if (typeof onParabankSharesSold === 'function') onParabankSharesSold(stockToSell, quantity); // panika w parabanku (B1)
+    if (typeof noteMentorEvent === 'function') noteMentorEvent('sell', stockToSell); // N4: zadanie „ucieczka przed korektą”
 
     // Logowanie z informacją o podatku
     logEvent(`Sprzedano ${quantity} szt. ${symbol}. Zysk brutto: ${profit.toFixed(2)} PLN, Podatek: ${taxToPay.toFixed(2)} PLN.`);

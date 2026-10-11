@@ -518,6 +518,13 @@ function applyPositionChanges(participants) {
 
         if (participant.score >= PROMOTION_SCORE && level < maxIndex) {
             const target = CAREER_POSITIONS[level + 1].id;
+            // N4: gracz awansuje na wyższe stanowiska tylko z certyfikatem mentora.
+            const certificate = participant.isPlayer && typeof getRequiredCertificate === 'function' ? getRequiredCertificate(target) : null;
+            if (certificate && !hasCertificate(certificate)) {
+                participant.blockedBy = certificate;
+                resetWeak(participant);
+                continue;
+            }
             const limit = POSITION_LIMITS[target];
             const occupants = participants.filter(p => p !== participant && p.positionId === target);
 
@@ -568,6 +575,9 @@ function reportPlayerReview(player) {
     } else if (toIndex < fromIndex) {
         text = `📉 Ocena zarządu: ${Math.round(player.score)}/100 — degradacja na stanowisko: ${position}.`;
         playerProfile.cv.push({ type: 'demotion', text: `Degradacja na stanowisko: ${position}.` });
+    } else if (player.blockedBy) {
+        const track = MENTOR_TRACKS[player.blockedBy];
+        text = `📋 Ocena zarządu: ${Math.round(player.score)}/100 — wynik na awans, ale brakuje certyfikatu: ${track.icon} ${track.label} (zadania mentora w CV).`;
     } else if (player.score < WEAK_SCORE) {
         text = `⚠️ Ocena zarządu: ${Math.round(player.score)}/100 — ostrzeżenie. Druga słaba ocena z rzędu oznacza degradację${fromIndex === 0 ? ' i utratę premii' : ''}.`;
         if (fromIndex === 0 && corporation.playerWeakReviews >= 2) playerFund.bonusSuspendedUntilPeriod = (playerFund.current?.number || 0) + BOARD_REVIEW_EVERY_PERIODS;
