@@ -299,3 +299,7 @@ Ta część pilnuje, żeby nowego systemu nie dało się w całości pominąć.
 2. **Poziom populacji:** kraj (miliony) z klasami, edukacją i migracją w makro; miasto jest jego częścią i rośnie razem z krajem.
 3. **Pracownicy:** liczby w 5 grupach, płace jako indeks, koszt pracy jako linia RZiS, jedno zadowolenie na spółkę; nazwani są tylko prezesi.
 4. **Większościowiec** może (nie musi) wpływać na politykę kadrową i odpowiedzi na związki; domyślnie decyduje prezes.
+5. **Klient „Etyczny”:** tak — odchodzi przy niskim zadowoleniu w spółkach portfela albo szarej strefie (S4, S6).
+6. **„Rozbicie związku” w ciemnej strefie:** tak, ryzykowne (30% wykrycia → strajk generalny w sektorze i afera).
+7. **Deficyt budżetu:** po 4 kw. rentowność obligacji +0,25 pp; po 8 kw. CIT +2 pp albo cięcie ustaw (zależnie od partii).
+8. **Trzy partie:** zwycięzca poniżej 40% tworzy koalicję z drugą partią; parametry średnio ważone poparciem.
