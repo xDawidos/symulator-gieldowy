@@ -1,4 +1,13 @@
 // =================================================================================
+// learning.js: Nauka giełdy: Akademia (słownik, quizy, mediany sektora), skaner spółek i wyceny, mentor i certyfikaty.
+// Złączone pliki: academy.js, scanner.js, mentor.js (w kolejności ładowania).
+// =================================================================================
+
+// #################################################################################
+// ## academy.js
+// #################################################################################
+
+// =================================================================================
 // 0.12 N1: AKADEMIA — słownik pojęć giełdowych z przykładami z gry, quizy,
 // porównanie wskaźników spółki z medianą sektora.
 // Stan w playerProfile.academy: { unlocked: { id: kwartał }, quizzes: { id: true } }.
@@ -525,4 +534,433 @@ function renderAcademyPanel() {
             <nav class="academy-list">${list}</nav>
             <section class="academy-detail">${detail}</section>
         </div>`;
+}
+
+// #################################################################################
+// ## scanner.js
+// #################################################################################
+
+// =================================================================================
+// 0.12 N2: SKANER SPÓŁEK, METODY WYCENY, KONSENSUS ANALITYKÓW
+// Szkolenie „Analityk Finansowy”:
+//   1 — skaner + wycena porównawcza (C/Z sektora),
+//   2 — ROE, marża, wzrost zysku; wycena z C/WK sektora i modelem dywidend (Gordona),
+//   3 — konsensus przed raportem i wynik vs konsensus, potencjał do wyceny w skanerze.
+// =================================================================================
+
+const SCANNER_PRESETS = {
+    value:    { label: '💎 Tanie wartościowe', filters: { peBelowSector: true, pbMax: 1.5, debtMax: 60 } },
+    dividend: { label: '💰 Dywidendowe', filters: { dyMin: 4, debtMax: 70, healthMin: 0 } },
+    growth:   { label: '🚀 Wzrostowe', filters: { growthMin: 10, healthMin: 1 } },
+    safe:     { label: '🛡️ Bezpieczne', filters: { debtMax: 40, healthMin: 2 } }
+};
+
+const SCANNER_DEFAULT_FILTERS = { sector: 'all', peBelowSector: false, pbMax: '', dyMin: '', debtMax: '', growthMin: '', healthMin: '', accessibleOnly: true };
+
+let scannerView = { filters: { ...SCANNER_DEFAULT_FILTERS }, sort: 'cap', dir: -1 };
+
+function getAnalystLevel() {
+    return getSkillLevel('financialAnalyst');
+}
+
+// ---------------------------------------------------------------------------------
+// METODY WYCENY
+// ---------------------------------------------------------------------------------
+
+/** Wycena kilkoma metodami: { pe, book, gordon } (zł/akcję albo null). */
+function getValuationMethods(stock) {
+    const m = getCompanyMetrics(stock);
+    const f = stock.fundamentals;
+    if (!m || !f) return null;
+    const med = getSectorMedians(stock.sector?.[0]) || {};
+    const pe = m.eps > 0 && med.pe ? m.eps * med.pe : null;
+    const book = f.bookValuePerShare > 0 && med.pb ? f.bookValuePerShare * med.pb : null;
+    // Model Gordona: D1 / (r − g); r = stopa bazowa + 5 pkt premii za ryzyko akcji, g ≤ r − 2 pkt.
+    const dps = stock.price * (m.dy || 0);
+    const r = Math.max(0.04, (Number(centralBank?.baseInterestRate) || 0.05) + 0.05);
+    const g = Math.max(-0.02, Math.min(r - 0.02, m.growth !== null ? m.growth * 0.5 : 0.02));
+    const gordon = dps > 0 ? dps * (1 + g) / (r - g) : null;
+    return { pe, book, gordon, r, g };
+}
+
+// ---------------------------------------------------------------------------------
+// SKANER
+// ---------------------------------------------------------------------------------
+
+function num(value) {
+    const n = parseFloat(String(value).replace(',', '.'));
+    return Number.isFinite(n) ? n : null;
+}
+
+/** Wiersze skanera po filtrach i sortowaniu. */
+function runScanner(filters = scannerView.filters, sort = scannerView.sort, dir = scannerView.dir) {
+    const rows = [];
+    for (const stock of stocks) {
+        if (stock.assetType || stock.isBankrupt) continue;
+        if (filters.sector !== 'all' && !stock.sector?.includes(filters.sector)) continue;
+        if (filters.accessibleOnly && !canAccessExchange(stock.exchange)) continue;
+        const m = getCompanyMetrics(stock);
+        if (!m) continue;
+        const med = getSectorMedians(stock.sector?.[0]) || {};
+        if (filters.peBelowSector && !(m.pe && med.pe && m.pe < med.pe)) continue;
+        if (num(filters.pbMax) !== null && !(m.pb && m.pb <= num(filters.pbMax))) continue;
+        if (num(filters.dyMin) !== null && !(m.dy * 100 >= num(filters.dyMin))) continue;
+        if (num(filters.debtMax) !== null && !(m.debt !== null && m.debt * 100 <= num(filters.debtMax))) continue;
+        if (num(filters.growthMin) !== null && !(m.growth !== null && m.growth * 100 >= num(filters.growthMin))) continue;
+        if (num(filters.healthMin) !== null && !(m.health >= num(filters.healthMin))) continue;
+        rows.push({ stock, m, med, upside: m.fair ? m.fair / stock.price - 1 : null });
+    }
+    const key = row => sort === 'name' ? row.stock.name : sort === 'upside' ? row.upside : row.m[sort];
+    rows.sort((a, b) => {
+        const va = key(a), vb = key(b);
+        if (va === null || va === undefined) return 1;
+        if (vb === null || vb === undefined) return -1;
+        return typeof va === 'string' ? va.localeCompare(vb, 'pl') * dir : (va - vb) * dir;
+    });
+    return rows;
+}
+
+function openScanner() {
+    if (getAnalystLevel() < 1) {
+        showToast('Skaner spółek odblokujesz szkoleniem „Analityk Finansowy” (CV i szkolenia).', 'warning', 6000);
+        return;
+    }
+    let modal = document.getElementById('scanner-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'scanner-modal';
+        modal.className = 'modal modal-xl';
+        modal.innerHTML = '<button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button><h2 class="mt-0">🔎 Skaner spółek</h2><div id="scanner-filters"></div><div id="scanner-results"></div>';
+        document.body.appendChild(modal);
+    }
+    renderScannerFilters();
+    renderScannerResults();
+    modal.style.display = 'block';
+    if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('wycena');
+}
+
+function setScannerFilter(key, value) {
+    scannerView.filters[key] = value;
+    renderScannerResults();
+}
+
+function applyScannerPreset(id) {
+    const preset = SCANNER_PRESETS[id] || (playerProfile?.scannerPresets || []).find(p => p.name === id);
+    if (!preset) return;
+    scannerView.filters = { ...SCANNER_DEFAULT_FILTERS, ...(preset.filters || {}) };
+    renderScannerFilters();
+    renderScannerResults();
+}
+
+function saveScannerPreset() {
+    const name = (document.getElementById('scanner-preset-name')?.value || '').trim().slice(0, 30);
+    if (!name || !playerProfile) { showToast('Podaj nazwę presetu.', 'warning'); return; }
+    if (!Array.isArray(playerProfile.scannerPresets)) playerProfile.scannerPresets = [];
+    playerProfile.scannerPresets = playerProfile.scannerPresets.filter(p => p.name !== name);
+    playerProfile.scannerPresets.push({ name, filters: { ...scannerView.filters } });
+    if (playerProfile.scannerPresets.length > 8) playerProfile.scannerPresets.shift();
+    showToast(`Zapisano preset „${name}”.`, 'success');
+    renderScannerFilters();
+}
+
+function setScannerSort(key) {
+    if (scannerView.sort === key) scannerView.dir *= -1;
+    else { scannerView.sort = key; scannerView.dir = key === 'name' || key === 'pe' || key === 'pb' || key === 'debt' ? 1 : -1; }
+    renderScannerResults();
+}
+
+function renderScannerFilters() {
+    const box = document.getElementById('scanner-filters');
+    if (!box) return;
+    const f = scannerView.filters;
+    const sectors = [...new Set(stocks.filter(s => !s.assetType && !s.isBankrupt).map(s => s.sector?.[0]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pl'));
+    const input = (key, label, placeholder, title) => `<label class="text-sm" title="${escapeHtml(title)}">${label} <input type="text" inputmode="decimal" class="w-xs" value="${escapeHtml(f[key] ?? '')}" placeholder="${placeholder}" oninput="setScannerFilter('${key}', this.value)"></label>`;
+    const own = (playerProfile?.scannerPresets || []).map(p => `<button class="btn-xs btn-secondary" onclick="applyScannerPreset('${escapeHtml(p.name).replace(/'/g, '&#39;')}')">⭐ ${escapeHtml(p.name)}</button>`).join('');
+    box.innerHTML = `
+        <div class="d-flex gap-2 flex-wrap mb-2">${Object.entries(SCANNER_PRESETS).map(([id, p]) => `<button class="btn-xs btn-secondary" onclick="applyScannerPreset('${id}')">${p.label}</button>`).join('')}${own}
+            <button class="btn-xs" onclick="scannerView.filters = { ...SCANNER_DEFAULT_FILTERS }; renderScannerFilters(); renderScannerResults();">Wyczyść</button></div>
+        <div class="scanner-filters">
+            <label class="text-sm">Sektor <select onchange="setScannerFilter('sector', this.value)"><option value="all">wszystkie</option>${sectors.map(s => `<option ${f.sector === s ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('')}</select></label>
+            <label class="text-sm" title="C/Z niższe od mediany sektora"><input type="checkbox" ${f.peBelowSector ? 'checked' : ''} onchange="setScannerFilter('peBelowSector', this.checked)"> C/Z poniżej sektora</label>
+            ${input('pbMax', 'C/WK ≤', 'np. 1', 'Kurs / wartość księgowa na akcję')}
+            ${input('dyMin', 'Dywidenda ≥', '%', 'Stopa dywidendy z ostatniego roku, w %')}
+            ${input('debtMax', 'Zadłużenie ≤', '%', 'Zobowiązania / aktywa, w %')}
+            ${getAnalystLevel() >= 2 ? input('growthMin', 'Wzrost zysku r/r ≥', '%', 'Zysk z 4 ostatnich kwartałów vs 4 wcześniejszych') : ''}
+            ${input('healthMin', 'Kondycja ≥', '−5…5', 'Kondycja finansowa spółki')}
+            <label class="text-sm"><input type="checkbox" ${f.accessibleOnly ? 'checked' : ''} onchange="setScannerFilter('accessibleOnly', this.checked)"> tylko dostępne giełdy</label>
+        </div>
+        <div class="d-flex gap-2 items-center mt-2"><input type="text" id="scanner-preset-name" class="w-md" placeholder="Nazwa własnego presetu"><button class="btn-xs" onclick="saveScannerPreset()">💾 Zapisz filtry</button></div>`;
+}
+
+function renderScannerResults() {
+    const box = document.getElementById('scanner-results');
+    if (!box) return;
+    const level = getAnalystLevel();
+    const flagsOn = typeof getRedFlags === 'function' && getSkillLevel('accountant') >= 4;
+    const rows = runScanner();
+    const pct = v => v === null || v === undefined || !Number.isFinite(v) ? '—' : `${(v * 100).toFixed(1)}%`;
+    const fx = v => v === null || v === undefined || !Number.isFinite(v) ? '—' : v.toFixed(1);
+    const head = (key, label, title) => `<th class="clickable" title="${escapeHtml(title)}" onclick="setScannerSort('${key}')">${label}${scannerView.sort === key ? (scannerView.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
+    const cls = (v, med, lowerBetter) => !Number.isFinite(v) || !Number.isFinite(med) ? '' : (lowerBetter ? v < med * 0.85 : v > med * 1.15) ? 'text-up' : (lowerBetter ? v > med * 1.15 : v < med * 0.85) ? 'text-down' : '';
+    box.innerHTML = `
+        <p class="text-sm text-muted">Znaleziono: <strong>${rows.length}</strong>. Kolor: na zielono lepiej niż mediana sektora, na czerwono gorzej. Kliknij spółkę, by otworzyć kartę. Banki pomijamy — ich bilans zawiera depozyty klientów, więc C/WK i zadłużenie liczy się inaczej.</p>
+        <div class="scanner-table-wrap"><table class="asset-mini-table w-full scanner-table">
+            <thead><tr>
+                ${head('name', 'Spółka', 'Nazwa')}${head('cap', 'Kapitalizacja', 'Kurs × liczba akcji')}${head('pe', 'C/Z', 'Cena / zysk')}${head('pb', 'C/WK', 'Cena / wartość księgowa')}
+                ${head('dy', 'Dywid.', 'Stopa dywidendy')}${head('debt', 'Zadłuż.', 'Zobowiązania / aktywa')}
+                ${level >= 2 ? head('roe', 'ROE', 'Zysk / kapitał własny') + head('margin', 'Marża', 'Zysk netto / przychody') + head('growth', 'Zysk r/r', 'Wzrost zysku rok do roku') : ''}
+                ${head('health', 'Kondycja', 'Kondycja finansowa')}${level >= 3 ? head('upside', 'Potencjał', 'Wartość godziwa / kurs − 1') : ''}${flagsOn ? '<th title="Czerwone flagi (Księgowy poz. 4)">🚩</th>' : ''}
+            </tr></thead>
+            <tbody>${rows.slice(0, 120).map(({ stock, m, med, upside }) => `<tr class="clickable" onclick="openDescriptionModal('${stock.symbol}')">
+                <td>${escapeHtml(stock.name)} <span class="text-xs text-muted">${escapeHtml(stock.symbol)} · ${escapeHtml(stock.sector?.[0] || '')}</span></td>
+                <td class="cell-number">${formatZl(m.cap, 0)}</td>
+                <td class="cell-number ${cls(m.pe, med.pe, true)}">${fx(m.pe)}</td>
+                <td class="cell-number ${cls(m.pb, med.pb, true)}">${m.pb ? m.pb.toFixed(2) : '—'}</td>
+                <td class="cell-number ${cls(m.dy, med.dy, false)}">${pct(m.dy)}</td>
+                <td class="cell-number ${cls(m.debt, med.debt, true)}">${pct(m.debt)}</td>
+                ${level >= 2 ? `<td class="cell-number ${cls(m.roe, med.roe, false)}">${pct(m.roe)}</td><td class="cell-number ${cls(m.margin, med.margin, false)}">${pct(m.margin)}</td><td class="cell-number ${m.growth > 0 ? 'text-up' : m.growth < 0 ? 'text-down' : ''}">${pct(m.growth)}</td>` : ''}
+                <td class="cell-number">${m.health.toFixed(1)}</td>
+                ${level >= 3 ? `<td class="cell-number ${upside > 0.15 ? 'text-up' : upside < -0.15 ? 'text-down' : ''}">${pct(upside)}</td>` : ''}
+                ${flagsOn ? (() => { const flags = getRedFlags(stock); return `<td class="cell-number ${flags.length >= 2 ? 'text-down' : ''}" title="${escapeHtml(flags.map(f => f.label).join(', '))}">${flags.length || ''}</td>`; })() : ''}
+            </tr>`).join('') || '<tr><td colspan="11" class="text-muted">Żadna spółka nie spełnia filtrów.</td></tr>'}</tbody>
+        </table></div>`;
+}
+
+// #################################################################################
+// ## mentor.js
+// #################################################################################
+
+// =================================================================================
+// 0.12 N4: MENTOR — zadania szkoleniowe i certyfikaty (warunek awansu, decyzja użytkownika).
+// Trzy ścieżki: Analityk (przed Kierownikiem projektu), Ryzyko (przed Członkiem zarządu),
+// Audyt (przed CEO). Certyfikat = zaliczona wymagana liczba zadań ze ścieżki.
+// Stan: playerProfile.mentor = { active: [{ id, since, data }], done: { id: kwartał },
+//       certificates: { track: kwartał }, events: { financeViews: [], flaggedSell: false } }.
+// =================================================================================
+
+const MENTOR_NAME = 'Halina Wróblewska';
+const MENTOR_ACTIVE_TASKS = 3;
+const MENTOR_REWARD = 150; // zł do portfela prywatnego za zadanie
+
+const MENTOR_TRACKS = {
+    analyst: { label: 'Certyfikat Analityka', icon: '📐', required: 3, position: 'projectLead' },
+    risk:    { label: 'Certyfikat Zarządzania Ryzykiem', icon: '🛡️', required: 3, position: 'board' },
+    audit:   { label: 'Certyfikat Audytora', icon: '🔍', required: 2, position: 'ceo' }
+};
+
+function mentorQuarter() {
+    return typeof macro === 'object' ? macro.quarter : 0;
+}
+
+function heldStocks() {
+    return stocks.filter(s => !s.assetType && !s.isBankrupt && (playerPortfolio[s.symbol]?.shares || 0) > 0);
+}
+
+function quizzesPassed(ids) {
+    const quizzes = typeof getAcademy === 'function' ? getAcademy().quizzes : {};
+    return ids.filter(id => quizzes[id]).length;
+}
+
+/** check(task) → true (zaliczone) | false; progress(task) → tekst postępu. */
+const MENTOR_TASKS = {
+    cheapPe: {
+        track: 'analyst', title: 'Tania względem sektora',
+        text: 'Kup spółkę z C/Z poniżej mediany jej sektora i dodatnim zyskiem. Trzymaj ją 2 kwartały.',
+        lesson: 'cz',
+        check: task => {
+            const pick = heldStocks().find(s => { const m = getCompanyMetrics(s); const med = getSectorMedians(s.sector?.[0]); return m?.pe && med?.pe && m.pe < med.pe && m.eps > 0; });
+            if (!pick) { task.data = {}; return false; }
+            if (task.data.symbol !== pick.symbol) task.data = { symbol: pick.symbol, from: mentorQuarter() };
+            return mentorQuarter() - task.data.from >= 2;
+        },
+        progress: task => task.data?.symbol ? `${task.data.symbol}: ${mentorQuarter() - task.data.from}/2 kw.` : 'brak takiej spółki w portfelu'
+    },
+    bookValue: {
+        track: 'analyst', title: 'Poniżej wartości księgowej',
+        text: 'Znajdź w skanerze spółkę z C/WK < 1 i dodatnim zyskiem, i kup ją do funduszu.',
+        lesson: 'cwk',
+        check: () => heldStocks().some(s => { const m = getCompanyMetrics(s); return m?.pb && m.pb < 1 && m.eps > 0; }),
+        progress: () => 'kup spółkę z C/WK < 1'
+    },
+    compareValuation: {
+        track: 'analyst', title: 'Trzy spojrzenia na wycenę',
+        text: 'Otwórz zakładkę Finanse w kartach 3 różnych spółek i porównaj ich wskaźniki.',
+        lesson: 'wycena',
+        check: () => (getMentor().events.financeViews || []).length >= 3,
+        progress: () => `${Math.min(3, (getMentor().events.financeViews || []).length)}/3 spółek`
+    },
+    valuationQuiz: {
+        track: 'analyst', title: 'Egzamin z wyceny',
+        text: 'Zalicz quizy Akademii: C/Z, C/WK i Wycena.',
+        lesson: 'wycena',
+        check: () => quizzesPassed(['cz', 'cwk', 'wycena']) >= 3,
+        progress: () => `${quizzesPassed(['cz', 'cwk', 'wycena'])}/3 quizy`
+    },
+    diversify: {
+        track: 'risk', title: 'Pięć koszyków',
+        text: 'Zbuduj portfel z co najmniej 5 sektorów, w którym żadna spółka nie przekracza 30% aktywów.',
+        lesson: 'dywersyfikacja',
+        check: () => { const held = heldStocks(); const sectors = new Set(held.map(s => s.sector?.[0])); const assets = Math.max(1, getFundAssets()); return sectors.size >= 5 && held.every(s => playerPortfolio[s.symbol].shares * s.price / assets <= 0.3); },
+        progress: () => `${new Set(heldStocks().map(s => s.sector?.[0])).size}/5 sektorów`
+    },
+    safeAssets: {
+        track: 'risk', title: 'Bezpieczna część portfela',
+        text: 'Ulokuj część pieniędzy funduszu w obligacjach albo na lokacie.',
+        lesson: 'obligacje',
+        check: () => allBonds.some(b => b.ownerId === 'player') || (typeof getFundDeposits === 'function' && getFundDeposits().length > 0),
+        progress: () => 'kup obligacje albo załóż lokatę'
+    },
+    calmPeriod: {
+        track: 'risk', title: 'Spokojna ręka',
+        text: 'Zakończ okres oceny z obsunięciem funduszu poniżej 5%.',
+        lesson: 'zmiennosc',
+        check: task => (playerFund?.periods || []).some(p => p.number > (task.data.fromPeriod ?? 0) && p.maxDrawdown < 0.05),
+        init: task => { task.data.fromPeriod = playerFund?.periods?.slice(-1)[0]?.number ?? 0; },
+        progress: () => `bieżące obsunięcie ${((playerFund?.current?.maxDrawdown || 0) * 100).toFixed(1)}%`
+    },
+    riskQuiz: {
+        track: 'risk', title: 'Egzamin z ryzyka',
+        text: 'Zalicz quizy Akademii: Dywersyfikacja, Zmienność i obsunięcie, Obligacje.',
+        lesson: 'dywersyfikacja',
+        check: () => quizzesPassed(['dywersyfikacja', 'zmiennosc', 'obligacje']) >= 3,
+        progress: () => `${quizzesPassed(['dywersyfikacja', 'zmiennosc', 'obligacje'])}/3 quizy`
+    },
+    sellFlagged: {
+        track: 'audit', title: 'Ucieczka przed korektą',
+        text: 'Sprzedaj akcje spółki, która ma co najmniej 2 czerwone flagi (szkolenie Księgowy, poziom 4).',
+        lesson: 'kreatywna',
+        check: () => Boolean(getMentor().events.flaggedSell),
+        progress: () => 'sprzedaj spółkę z 🚩🚩'
+    },
+    orderAudit: {
+        track: 'audit', title: 'Sprawdź u źródła',
+        text: 'Zleć audyt spółki (szkolenie Księgowy, poziom 5).',
+        lesson: 'audyt',
+        check: () => stocks.some(s => s.audit),
+        progress: () => 'zleć audyt w karcie spółki'
+    },
+    auditQuiz: {
+        track: 'audit', title: 'Egzamin audytora',
+        text: 'Zalicz quizy Akademii: Przepływy pieniężne, Kreatywna księgowość, Audyt.',
+        lesson: 'audyt',
+        check: () => quizzesPassed(['przeplywy', 'kreatywna', 'audyt']) >= 3,
+        progress: () => `${quizzesPassed(['przeplywy', 'kreatywna', 'audyt'])}/3 quizy`
+    }
+};
+
+function getMentor() {
+    if (!playerProfile) return { active: [], done: {}, certificates: {}, events: {} };
+    if (!playerProfile.mentor) playerProfile.mentor = { active: [], done: {}, certificates: {}, events: { financeViews: [], flaggedSell: false } };
+    const mentor = playerProfile.mentor;
+    if (!mentor.events) mentor.events = { financeViews: [], flaggedSell: false };
+    return mentor;
+}
+
+function hasCertificate(track) {
+    return track in getMentor().certificates;
+}
+
+/** Certyfikat wymagany do awansu na dane stanowisko (null = brak wymogu). */
+function getRequiredCertificate(positionId) {
+    return Object.entries(MENTOR_TRACKS).find(([, t]) => t.position === positionId)?.[0] || null;
+}
+
+function getTrackProgress(track) {
+    const mentor = getMentor();
+    return Object.entries(MENTOR_TASKS).filter(([id, t]) => t.track === track && mentor.done[id] !== undefined).length;
+}
+
+/** Uzupełnia aktywne zadania (najpierw ścieżka potrzebna do najbliższego awansu). */
+function assignMentorTasks() {
+    const mentor = getMentor();
+    if (mentor.active.length >= MENTOR_ACTIVE_TASKS) return;
+    const order = Object.keys(MENTOR_TRACKS).filter(track => !hasCertificate(track));
+    const busy = new Set(mentor.active.map(t => t.id));
+    for (const track of order) {
+        const free = Object.entries(MENTOR_TASKS).filter(([id, t]) => t.track === track && mentor.done[id] === undefined && !busy.has(id));
+        for (const [id, def] of free) {
+            if (mentor.active.length >= MENTOR_ACTIVE_TASKS) return;
+            const task = { id, since: mentorQuarter(), data: {} };
+            if (def.init) def.init(task);
+            mentor.active.push(task);
+            busy.add(id);
+        }
+    }
+}
+
+/** Co tydzień i po zdarzeniach: sprawdza zadania, wypłaca nagrody, nadaje certyfikaty. */
+function checkMentorTasks() {
+    if (!playerProfile || !playerFund) return;
+    const mentor = getMentor();
+    assignMentorTasks();
+    for (const task of [...mentor.active]) {
+        const def = MENTOR_TASKS[task.id];
+        if (!def) { mentor.active = mentor.active.filter(t => t !== task); continue; }
+        let ok = false;
+        try { ok = def.check(task); } catch (e) { ok = false; }
+        if (!ok) continue;
+        mentor.active = mentor.active.filter(t => t !== task);
+        mentor.done[task.id] = mentorQuarter();
+        playerWallet.cash += MENTOR_REWARD;
+        recordPayment('external:korporacja', 'player-wallet', MENTOR_REWARD, `Zadanie mentora: ${def.title}`);
+        if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry(def.lesson);
+        if (typeof pushNotification === 'function') pushNotification(`🎓 ${MENTOR_NAME}: zadanie „${def.title}” zaliczone (+${MENTOR_REWARD} zł)`, () => openMentor());
+    }
+    // Certyfikaty: ścieżka z wymaganą liczbą zadań.
+    for (const [id, track] of Object.entries(MENTOR_TRACKS)) {
+        if (hasCertificate(id) || getTrackProgress(id) < track.required) continue;
+        mentor.certificates[id] = mentorQuarter();
+        mentor.active = mentor.active.filter(task => MENTOR_TASKS[task.id]?.track !== id); // reszta ścieżki niepotrzebna
+        playerProfile.cv.push({ type: 'training', text: `${track.icon} ${track.label}` });
+        if (typeof addMail === 'function') addMail({ sender: CORPORATION_SENDER, subject: `${track.icon} ${track.label}`, body: `Gratulacje! Zdobywasz ${track.label}. Spełniasz wymóg certyfikatu do awansu na stanowisko: ${CAREER_POSITIONS[getPositionIndex(track.position)].name}.`, importance: 2 });
+    }
+    assignMentorTasks();
+}
+
+/** Zdarzenia z gry liczone do zadań. */
+function noteMentorEvent(kind, stock = null) {
+    if (!playerProfile) return;
+    const events = getMentor().events;
+    if (kind === 'financeView' && stock && !events.financeViews.includes(stock.symbol)) {
+        events.financeViews.push(stock.symbol);
+        if (events.financeViews.length > 20) events.financeViews.shift();
+    }
+    if (kind === 'sell' && stock && typeof getRedFlags === 'function' && getSkillLevel('accountant') >= 4 && getRedFlags(stock).length >= 2) events.flaggedSell = true;
+    checkMentorTasks();
+}
+
+// ---------------------------------------------------------------------------------
+// WIDOK: zakładka „Mentor” w oknie CV
+// ---------------------------------------------------------------------------------
+
+function openMentor() {
+    if (typeof cvTab !== 'undefined') cvTab = 'mentor';
+    if (typeof openSkillsModal === 'function') openSkillsModal();
+}
+
+function renderMentorPanel() {
+    assignMentorTasks();
+    const mentor = getMentor();
+    const certs = Object.entries(MENTOR_TRACKS).map(([track, t]) => {
+        const progress = getTrackProgress(track);
+        const has = hasCertificate(track);
+        return `<article class="mentor-cert ${has ? 'done' : ''}"><span class="mentor-cert-icon">${has ? t.icon : '🔒'}</span>
+            <div><strong>${escapeHtml(t.label)}</strong><span class="text-xs text-muted d-block">wymagany do awansu na: ${escapeHtml(CAREER_POSITIONS[getPositionIndex(t.position)].name)}</span>
+            <span class="text-sm">${has ? '✅ zdobyty' : `zadania: ${progress}/${t.required}`}</span></div></article>`;
+    }).join('');
+    const active = mentor.active.map(task => {
+        const def = MENTOR_TASKS[task.id];
+        let progress = '';
+        try { progress = def.progress(task); } catch (e) { progress = ''; }
+        return `<li class="mentor-task"><div><strong>${MENTOR_TRACKS[def.track].icon} ${escapeHtml(def.title)}</strong>
+            <p class="text-sm m-0">${escapeHtml(def.text)}</p><span class="text-xs text-muted">${escapeHtml(progress)} · nagroda ${MENTOR_REWARD} zł</span></div>
+            <button class="btn-xs btn-secondary" onclick="openAcademy('${def.lesson}')">📘 Hasło</button></li>`;
+    }).join('');
+    const done = Object.keys(mentor.done).map(id => MENTOR_TASKS[id]).filter(Boolean).map(def => `<li>✅ ${escapeHtml(def.title)}</li>`).join('');
+    return `
+        <p class="fund-muted">${MENTOR_NAME}, Twoja mentorka w korporacji, daje zadania, które uczą analizy i zarządzania ryzykiem. Zarząd awansuje na wyższe stanowiska tylko z certyfikatem.</p>
+        <div class="mentor-certs">${certs}</div>
+        <h4>Aktywne zadania</h4>
+        <ul class="list-plain mentor-tasks">${active || '<li class="text-muted">Wszystkie zadania wykonane — gratulacje!</li>'}</ul>
+        ${done ? `<h4>Wykonane</h4><ul class="list-plain text-sm">${done}</ul>` : ''}`;
 }

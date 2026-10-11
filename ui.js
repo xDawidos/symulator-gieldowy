@@ -1,3 +1,777 @@
+// =================================================================================
+// ui.js: Interfejs: odświeżanie widoków, wykresy, okna i panele.
+// Złączone pliki: ui-update.js, chart.js, ui.js (w kolejności ładowania).
+// =================================================================================
+
+// #################################################################################
+// ## ui-update.js
+// #################################################################################
+
+// Sektorowe chipsy
+function setSectorChip(el, sector) {
+    document.querySelectorAll('.sector-chip:not(.owned-chip)').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+    const sel = document.getElementById('sector-filter');
+    if (sel) {
+        sel.value = sector;
+        if (typeof displayStocks === 'function')
+            displayStocks(typeof getCurrentInputValues === 'function' ? getCurrentInputValues() : {});
+    }
+}
+
+// Taby poziomów rynku
+let currentMarketLevel = 'ALL';
+
+/** Przycisk 📊 w panelu kupna: struktura akcjonariatu (kto ma jaki % udziałów). */
+function openCompanyReport(symbol) {
+    if (typeof openStockDetailsModal === 'function') openStockDetailsModal(symbol);
+}
+
+let openStockDrawerSymbol = null;
+
+function renderStockDrawer(symbol) {
+    if (!symbol) return;
+    const drawerId = 'drawer-' + symbol;
+    if (document.getElementById(drawerId)) return;
+    const row = document.querySelector('#stock-table-body tr[data-symbol="' + symbol + '"]');
+    if (!row) return;
+    const cols = row.querySelectorAll('td').length || 7;
+    const stockData = typeof stocks !== 'undefined' ? stocks.find(s => s.symbol === symbol) : null;
+    const isCompanyStock = Boolean(stockData && !stockData.assetType);
+    const dr = document.createElement('tr');
+    dr.id = drawerId;
+    dr.className = 'stock-row-drawer open';
+    const td = document.createElement('td');
+    td.colSpan = cols;
+    td.style.padding = '0';
+    td.innerHTML = `<div class="stock-drawer-inner">
+      <div class="stock-drawer-actions">
+        <div class="stock-drawer-actions-row">
+          <div class="qty-input-wrapper">
+            <input type="text" inputmode="numeric" pattern="[0-9]*" id="dqty-${symbol}" value="1" aria-label="Liczba akcji" oninput="this.value=this.value.replace(/[^0-9]/g, ''); updateDrawerImpact('${symbol}')">
+            <span class="chip-max" onclick="setDrawerMax('${symbol}')">MAX</span>
+          </div>
+        </div>
+        <div class="stock-drawer-actions-row">
+          <button class="btn-buy"
+            onclick="buyStock('${symbol}',document.getElementById('dqty-${symbol}').value)">Kup</button>
+          <button class="btn-sell"
+            onclick="sellStock('${symbol}',document.getElementById('dqty-${symbol}').value)">Sprzedaj</button>
+          <button class="btn-ghost-icon" title="Wykres"
+            onclick="showPriceHistoryModal('${symbol}')">📈</button>
+          <button class="btn-ghost-icon" title="Akcjonariat — kto ma jaki % udziałów"
+            onclick="openCompanyReport('${symbol}')">📊</button>
+          ${isCompanyStock ? `<button class="btn-ghost-icon" title="Walne zgromadzenie — akcjonariat, uchwały, głosowanie (większościowiec)"
+            onclick="openGovernanceModal('${symbol}')">🗳️</button>
+          <button class="btn-ghost-icon" title="Inwestycje spółki"
+            onclick="openCompanyInvestments('${symbol}')">🏗️</button>` : ''}
+        </div>
+        <div class="stock-drawer-impact text-xs" id="dimpact-${symbol}"></div>
+      </div>
+    </div>`;
+    dr.appendChild(td);
+    row.after(dr);
+    updateDrawerImpact(symbol);
+}
+
+/** N5: szacunek kosztu i wpływu zlecenia na kurs (płynność rynku). */
+function estimateOrderImpact(stock, quantity) {
+    const freeFloat = Math.max(1, typeof getFreeFloatShares === 'function' ? getFreeFloatShares(stock) : stock.totalShares);
+    const impact = Math.min(0.02, 0.5 * Math.abs(quantity) / freeFloat);
+    const marketId = typeof getStockMarket === 'function' ? getStockMarket(stock) : 'GPW';
+    const commission = typeof MARKET_OPERATOR_DEFS !== 'undefined' ? (MARKET_OPERATOR_DEFS[marketId]?.commission || 0) : 0;
+    const value = quantity * stock.price;
+    return { value, impact, commission: value * commission, freeFloat, available: typeof getAvailableShares === 'function' ? getAvailableShares(stock) : null };
+}
+
+function updateDrawerImpact(symbol) {
+    const box = document.getElementById('dimpact-' + symbol);
+    const stock = typeof stocks !== 'undefined' ? stocks.find(s => s.symbol === symbol) : null;
+    if (!box || !stock || stock.assetType) { if (box) box.textContent = ''; return; }
+    const quantity = Math.max(0, parseInt(document.getElementById('dqty-' + symbol)?.value, 10) || 0);
+    if (!quantity) { box.textContent = ''; return; }
+    const e = estimateOrderImpact(stock, quantity);
+    box.innerHTML = `Wartość ~${formatZl(e.value, 0)} · prowizja ~${formatZl(e.commission, 2)} · kurs po zleceniu ~${e.impact >= 0.0005 ? `${(e.impact * 100).toFixed(2)}%` : '0%'} w Twoją niekorzyść`
+        + `${e.impact >= 0.01 ? ' <span class="text-warn">— duże zlecenie przy małym obrocie (płynność!)</span>' : ''} · w obrocie ${e.freeFloat.toLocaleString('pl-PL')} akcji`;
+    if (e.impact >= 0.01 && typeof unlockAcademyEntry === 'function') unlockAcademyEntry('wplyw');
+}
+
+function closeOpenStockDrawer() {
+    if (!openStockDrawerSymbol) return;
+    const previousDrawer = document.getElementById('drawer-' + openStockDrawerSymbol);
+    if (previousDrawer) previousDrawer.remove();
+    openStockDrawerSymbol = null;
+}
+
+function toggleStockDrawer(symbol) {
+    if (openStockDrawerSymbol === symbol) {
+        closeOpenStockDrawer();
+        return;
+    }
+    closeOpenStockDrawer();
+    openStockDrawerSymbol = symbol;
+    renderStockDrawer(symbol);
+}
+
+function setMarketLevel(el, level) {
+    currentMarketLevel = level;
+    document.querySelectorAll('.market-level-tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    if (typeof displayStocks === 'function')
+        displayStocks(typeof getCurrentInputValues === 'function' ? getCurrentInputValues() : {});
+}
+
+// KPI rynku
+function updateMarketKPIs() {
+    if (typeof stocks === 'undefined') return;
+    const active = stocks.filter(s => !s.isBankrupt && s.price > 0);
+    const el = document.getElementById('mkpi-active');
+    if (el) el.textContent = active.length;
+    const getPct = s => s.previousPrice
+        ? ((s.price - s.previousPrice) / s.previousPrice * 100) : 0;
+    const sorted = [...active].sort((a, b) => getPct(b) - getPct(a));
+    const fmt = v => (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+    if (sorted.length) {
+        const g = sorted[0], l = sorted[sorted.length - 1];
+        const gEl = document.getElementById('mkpi-top-gainer');
+        const gName = document.getElementById('mkpi-top-gainer-name');
+        const lEl = document.getElementById('mkpi-top-loser');
+        const lName = document.getElementById('mkpi-top-loser-name');
+        if (gEl) gEl.textContent = fmt(getPct(g));
+        if (gName) gName.textContent = g.symbol;
+        if (lEl) lEl.textContent = fmt(getPct(l));
+        if (lName) lName.textContent = l.symbol;
+    }
+    // Najsilniejszy sektor dnia: średnia zmiana ceny spółek (każda spółka liczy się w każdym swoim sektorze).
+    const sectorStats = {};
+    active.filter(s => !s.assetType).forEach(s => {
+        (Array.isArray(s.sector) ? s.sector : [s.sector]).forEach(sector => {
+            const stat = sectorStats[sector] || (sectorStats[sector] = { sum: 0, count: 0 });
+            stat.sum += getPct(s);
+            stat.count++;
+        });
+    });
+    const best = Object.entries(sectorStats)
+        .filter(([, stat]) => stat.count >= 2)
+        .map(([sector, stat]) => [sector, stat.sum / stat.count])
+        .sort((a, b) => b[1] - a[1])[0];
+    const tsEl = document.getElementById('mkpi-top-sector');
+    const tsSubEl = document.getElementById('mkpi-top-sector-sub');
+    if (tsEl) tsEl.textContent = best ? best[0] : '—';
+    if (tsSubEl) tsSubEl.textContent = best ? `średnio ${fmt(best[1])} dziś` : 'brak danych';
+}
+
+// Topbar KPI: gotówka funduszu, NAV/JU, prywatne pieniądze gracza
+function updateTopbarKPIs() {
+    const fmt = new Intl.NumberFormat('pl-PL', {minimumFractionDigits:2, maximumFractionDigits:2});
+    if (typeof playerCash !== 'undefined') {
+        const v = fmt.format(playerCash);
+        const isPrivate = typeof activeTradingAccount !== 'undefined' && activeTradingAccount === 'private';
+        ['cash','cash-portfolio'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = (id === 'cash-portfolio' && isPrivate ? fmt.format(playerWallet?.cash || 0) : v) + ' zł';
+        });
+    }
+    if (typeof playerFund !== 'undefined' && playerFund) {
+        const navEl = document.getElementById('topbar-portfolio-value');
+        if (navEl) navEl.textContent = getFundNav().toFixed(4) + ' zł';
+        const walletEl = document.getElementById('topbar-daily-pnl');
+        if (walletEl) walletEl.textContent = fmt.format(playerWallet.cash) + ' zł';
+    }
+    if (typeof currentDay !== 'undefined') {
+        const d = document.getElementById('topbar-day');
+        if (d) d.textContent = currentDay;
+    }
+    if (typeof marketTrend !== 'undefined') {
+        const map = {
+            bullish_strong:'Hossa silna', bullish_moderate:'Hossa umiarkowana',
+            neutral:'Rynek neutralny', bearish_moderate:'Bessa umiarkowana', bearish_strong:'Bessa silna'
+        };
+        const el = document.getElementById('topbar-market-status');
+        if (el) {
+            el.textContent = map[marketTrend] || marketTrend;
+            el.className = 'topbar-market-status' +
+                (marketTrend.startsWith('bearish') ? ' bear' :
+                 marketTrend === 'neutral' ? ' neutral' : '');
+        }
+    }
+}
+
+// Prywatne pieniądze gracza (XP zastąpione szkoleniami za pieniądze)
+function updateXPBar() {
+    if (typeof displayXP === 'function') displayXP();
+}
+
+function setDrawerMax(symbol) {
+    if (typeof playerCash === 'undefined' || typeof stocks === 'undefined') return;
+    const s = stocks.find(x => x.symbol === symbol);
+    if (!s || s.price <= 0) return;
+    const input = document.getElementById('dqty-' + symbol);
+    if (input) input.value = Math.max(1, Math.floor(playerCash / s.price));
+}
+
+// Auto-odświeżanie co 3s
+setInterval(function() {
+    updateTopbarKPIs();
+    updateMarketKPIs();
+    updateXPBar();
+}, 3000);
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(function() { updateTopbarKPIs(); updateMarketKPIs(); updateXPBar(); }, 800);
+});
+
+// #################################################################################
+// ## chart.js
+// #################################################################################
+
+// --- Funkcje związane z wykresem historii cen ---
+
+/**
+ * Agreguje szczegółowe świece (np. 15s) w większe interwały (np. 1m).
+ * @param {Array} candles - Tablica obiektów świec do przetworzenia.
+ * @param {number} interval - Docelowy interwał w milisekundach.
+ * @returns {Array} - Nowa tablica z zagregowanymi świecami.
+ */
+function aggregateCandles(candles, interval) {
+    const baseInterval = 15000;
+    if (interval < baseInterval * 1.5 || candles.length === 0) {
+        return candles;
+    }
+
+    const result = [];
+    const groupByKey = {};
+
+    for (const candle of candles) {
+        const key = Math.floor(candle.time / interval) * interval;
+        if (!groupByKey[key]) {
+            groupByKey[key] = {
+                time: key,
+                open: candle.open,
+                high: candle.high,
+                low: candle.low,
+                close: candle.close,
+            };
+        } else {
+            groupByKey[key].high = Math.max(groupByKey[key].high, candle.high);
+            groupByKey[key].low = Math.min(groupByKey[key].low, candle.low);
+            groupByKey[key].close = candle.close;
+        }
+    }
+
+    for (const key in groupByKey) {
+        result.push(groupByKey[key]);
+    }
+    
+    return result;
+}
+
+/**
+ * Przerzedza dane dla wykresu liniowego na podstawie czasu.
+ * @param {Array} lineHistory - Pełna historia cen jako obiekty {time, price}.
+ * @param {number} interval - Docelowy interwał w milisekundach.
+ * @returns {Array} - Nowa, przefiltrowana tablica cen.
+ */
+function filterLineData(lineHistory, interval) {
+    if (interval <= 1000 || lineHistory.length === 0) {
+        return lineHistory.map(p => p.price);
+    }
+    
+    const filtered = [];
+    let lastTime = 0;
+
+    for (const point of lineHistory) {
+        if (point.time >= lastTime + interval) {
+            filtered.push(point.price);
+            lastTime = point.time;
+        }
+    }
+    
+    if (lineHistory.length > 0) {
+        const lastPoint = lineHistory[lineHistory.length - 1];
+        if (!filtered.includes(lastPoint.price)) {
+            filtered.push(lastPoint.price);
+        }
+    }
+
+    return filtered.length > 1 ? filtered : lineHistory.map(p => p.price);
+}
+
+/**
+ * Rysuje kolorowy, segmentowy wykres liniowy.
+ */
+function drawLineChart(data, svg, getX, getY) {
+    const svgNs = "http://www.w3.org/2000/svg";
+    if (data.length < 2) return;
+
+    const colorProfit = '#28a745';
+    const colorLoss = '#dc3545';
+    const colorNeutral = '#6c757d';
+
+    for (let i = 1; i < data.length; i++) {
+        const prevPrice = data[i - 1];
+        const currentPrice = data[i];
+
+        let segmentColor = colorNeutral;
+        if (currentPrice > prevPrice) segmentColor = colorProfit;
+        else if (currentPrice < prevPrice) segmentColor = colorLoss;
+
+        const x1 = getX(i - 1, data.length);
+        const y1 = getY(prevPrice);
+        const x2 = getX(i, data.length);
+        const y2 = getY(currentPrice);
+
+        if (![x1, y1, x2, y2].some(isNaN)) {
+            const line = document.createElementNS(svgNs, "line");
+            line.setAttribute("x1", x1.toString());
+            line.setAttribute("y1", y1.toString());
+            line.setAttribute("x2", x2.toString());
+            line.setAttribute("y2", y2.toString());
+            line.setAttribute("stroke", segmentColor);
+            line.setAttribute("stroke-width", "2");
+            svg.appendChild(line);
+        }
+    }
+}
+
+/**
+ * Rysuje wykres świecowy.
+ */
+function drawCandlestickChart(history, svg, chartWidth, getX, getY) {
+    const svgNs = "http://www.w3.org/2000/svg";
+    if (history.length < 1) return;
+
+    const candleWidth = Math.max(2, (chartWidth / history.length) * 0.7);
+
+    history.forEach((candle, index) => {
+        if (!candle) return;
+        
+        const x = getX(index, history.length);
+        const yOpen = getY(candle.open);
+        const yClose = getY(candle.close);
+        const yHigh = getY(candle.high);
+        const yLow = getY(candle.low);
+        
+        const isBullish = candle.close >= candle.open;
+        const color = isBullish ? '#28a745' : '#dc3545';
+
+        const wick = document.createElementNS(svgNs, "line");
+        wick.setAttribute("x1", x.toString()); wick.setAttribute("y1", yHigh.toString());
+        wick.setAttribute("x2", x.toString()); wick.setAttribute("y2", yLow.toString());
+        wick.setAttribute("stroke", color); wick.setAttribute("stroke-width", "1");
+        svg.appendChild(wick);
+        
+        const body = document.createElementNS(svgNs, "rect");
+        body.setAttribute("x", (x - candleWidth / 2).toString()); body.setAttribute("y", (isBullish ? yClose : yOpen).toString());
+        body.setAttribute("width", candleWidth.toString()); body.setAttribute("height", Math.abs(yOpen - yClose).toString());
+        body.setAttribute("fill", color);
+        svg.appendChild(body);
+    });
+}
+
+/**
+ * Oblicza optymalny zakres i krok dla osi Y wykresu.
+ */
+function calculateNiceYAxisRange(minPrice, maxPrice) {
+    let rangeMin = minPrice;
+    let rangeMax = maxPrice;
+    
+    const dataRange = rangeMax - rangeMin;
+    const avgPrice = (rangeMax + rangeMin) / 2;
+    const minVisibleRange = Math.max(avgPrice * 0.2, 2.0);
+
+    if (dataRange < minVisibleRange) {
+        const center = (rangeMax + rangeMin) / 2;
+        rangeMin = center - (minVisibleRange / 2);
+        rangeMax = center + (minVisibleRange / 2);
+    }
+
+    const range = rangeMax - rangeMin;
+    if (range <= 0) {
+        return { min: Math.floor(minPrice) - 1, max: Math.ceil(maxPrice) + 1, step: 1 };
+    }
+    const targetTickCount = 4;
+    const roughStep = range / (targetTickCount - 1);
+    const exponent = Math.floor(Math.log10(roughStep));
+    const powerOf10 = Math.pow(10, exponent);
+    const magnitude = roughStep / powerOf10;
+    let niceMagnitude;
+    if (magnitude < 1.5) niceMagnitude = 1;
+    else if (magnitude < 3) niceMagnitude = 2;
+    else if (magnitude < 7) niceMagnitude = 5;
+    else niceMagnitude = 10;
+    const niceStep = niceMagnitude * powerOf10;
+    const niceMin = Math.floor(rangeMin / niceStep) * niceStep;
+    const niceMax = Math.ceil(rangeMax / niceStep) * niceStep;
+    const finalStep = niceStep > 0 ? niceStep : 1;
+    
+    return { min: niceMin, max: (niceMax > niceMin ? niceMax : niceMin + finalStep), step: finalStep };
+}
+
+/**
+ * Główna funkcja renderująca wykres, która decyduje, jaki typ wykresu narysować.
+ */
+// N5: wydarzenia spółki (raporty, dywidendy, przejęcia, korekty) jako znaczniki na wykresie.
+function addChartEvent(stock, icon, label) {
+    if (!stock) return;
+    if (!Array.isArray(stock.chartEvents)) stock.chartEvents = [];
+    stock.chartEvents.push({ time: Date.now(), icon, label });
+    if (stock.chartEvents.length > 20) stock.chartEvents.shift();
+}
+
+function drawChartEvents(stock, svg, historyForMapping, getX, padding, chartHeight) {
+    const svgNs = "http://www.w3.org/2000/svg";
+    const tooltip = document.getElementById('chart-tooltip');
+    const first = historyForMapping[0]?.time;
+    for (const event of stock.chartEvents || []) {
+        if (!first || event.time < first) continue;
+        let index = 0, best = Infinity;
+        historyForMapping.forEach((point, i) => { const d = Math.abs((point.time || 0) - event.time); if (d < best) { best = d; index = i; } });
+        const x = getX(index, historyForMapping.length);
+        const line = document.createElementNS(svgNs, "line");
+        line.setAttribute("x1", x); line.setAttribute("x2", x);
+        line.setAttribute("y1", padding.top); line.setAttribute("y2", padding.top + chartHeight);
+        line.setAttribute("stroke", "#8b949e"); line.setAttribute("stroke-dasharray", "3,3"); line.setAttribute("stroke-width", "1");
+        svg.appendChild(line);
+        const label = document.createElementNS(svgNs, "text");
+        label.setAttribute("x", x); label.setAttribute("y", padding.top + 12);
+        label.setAttribute("font-size", "13"); label.setAttribute("text-anchor", "middle");
+        label.textContent = event.icon;
+        label.style.cursor = "help";
+        if (tooltip) {
+            label.addEventListener('mouseover', e => { tooltip.textContent = event.label; tooltip.style.display = 'block'; tooltip.style.left = `${e.pageX + 15}px`; tooltip.style.top = `${e.pageY + 15}px`; });
+            label.addEventListener('mouseout', () => { tooltip.style.display = 'none'; });
+        }
+        svg.appendChild(label);
+    }
+}
+
+function renderChartSVGForStock(stock, svgAreaElement, width, height) {
+    svgAreaElement.innerHTML = '';
+    const svgNs = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgNs, "svg");
+    svg.setAttribute("width", width);
+    svg.setAttribute("height", height);
+    svg.style.display = "block";
+
+    const padding = { top: 10, bottom: 20, left: 45, right: 10 };
+    const chartWidth = width - padding.left - padding.right;
+    const chartHeight = height - padding.top - padding.bottom;
+
+    let dataToDraw, minPrice, maxPrice, historyForMapping;
+
+    if (playerChartSettings.type === 'candlestick') {
+        const fullHistory = (stock.candlestickHistory || []).concat(stock.currentCandle || []);
+        dataToDraw = aggregateCandles(fullHistory, playerChartSettings.candleInterval);
+        historyForMapping = dataToDraw; // Do mapowania transakcji użyjemy zagregowanych danych
+        if (dataToDraw.length === 0) {
+            svgAreaElement.innerHTML = `<p style="text-align: center; padding-top: 60px;">Brak danych do narysowania wykresu.</p>`;
+            return;
+        }
+        minPrice = Math.min(...dataToDraw.map(c => c.low));
+        maxPrice = Math.max(...dataToDraw.map(c => c.high));
+    } else { // 'line'
+        historyForMapping = stock.lineHistory || []; // Do mapowania transakcji użyjemy pełnej, surowej historii
+        dataToDraw = filterLineData(historyForMapping, playerChartSettings.lineInterval);
+        if (dataToDraw.length === 0) {
+            svgAreaElement.innerHTML = `<p style="text-align: center; padding-top: 60px;">Brak danych do narysowania wykresu.</p>`;
+            return;
+        }
+        minPrice = Math.min(...dataToDraw);
+        maxPrice = Math.max(...dataToDraw);
+    }
+
+    const yAxis = calculateNiceYAxisRange(minPrice, maxPrice);
+    const getX = (index, historyLength) => padding.left + (index / Math.max(1, historyLength - 1)) * (chartWidth - 20) + 10;
+    const getY = (price) => padding.top + chartHeight - ((price - yAxis.min) / Math.max(0.1, yAxis.max - yAxis.min)) * chartHeight;
+
+    // Rysowanie siatki i osi Y
+    if (yAxis.step > 0) {
+        for (let priceVal = yAxis.min; priceVal <= yAxis.max; priceVal += yAxis.step) {
+            if (isNaN(priceVal)) continue;
+            const y = getY(priceVal);
+            const gridLine = document.createElementNS(svgNs, "line");
+            gridLine.setAttribute("x1", padding.left.toString());
+            gridLine.setAttribute("y1", y.toString());
+            gridLine.setAttribute("x2", (padding.left + chartWidth).toString());
+            gridLine.setAttribute("y2", y.toString());
+            gridLine.setAttribute("stroke", "#e0e0e0");
+            gridLine.setAttribute("stroke-dasharray", "2,2");
+            svg.appendChild(gridLine);
+            const textLabel = document.createElementNS(svgNs, "text");
+            textLabel.setAttribute("x", (padding.left - 8).toString());
+            textLabel.setAttribute("y", (y + 4).toString());
+            textLabel.setAttribute("font-size", "10");
+            textLabel.setAttribute("text-anchor", "end");
+            textLabel.textContent = priceVal.toFixed(2);
+            svg.appendChild(textLabel);
+        }
+    }
+    
+    // Wywołaj odpowiednią funkcję rysującą
+    if (playerChartSettings.type === 'candlestick') {
+        drawCandlestickChart(dataToDraw, svg, chartWidth, getX, getY);
+    } else {
+        drawLineChart(dataToDraw, svg, getX, getY);
+    }
+    
+    drawChartEvents(stock, svg, historyForMapping, getX, padding, chartHeight); // N5
+
+    // --- SEKCJA RYSOWANIA ZNACZNIKÓW TRANSAKCJI (z niestandardowym dymkiem) ---
+    const tooltip = document.getElementById('chart-tooltip');
+
+    (stock.playerTransactions || []).forEach(tx => {
+        if (tx.type === 'buy') {
+            let closestPointIndex = -1;
+            let minTimeDiff = Infinity;
+
+            historyForMapping.forEach((point, index) => {
+                const timeDiff = Math.abs((point.time || 0) - tx.time);
+                if (timeDiff < minTimeDiff) {
+                    minTimeDiff = timeDiff;
+                    closestPointIndex = index;
+                }
+            });
+
+            if (closestPointIndex !== -1) {
+                const x = getX(closestPointIndex, historyForMapping.length);
+                const y = getY(tx.price);
+
+                const marker = document.createElementNS(svgNs, "circle");
+                marker.setAttribute("cx", x.toString());
+                marker.setAttribute("cy", y.toString());
+                marker.setAttribute("r", "5");
+                marker.setAttribute("fill", "rgba(0, 123, 255, 0.7)");
+                marker.setAttribute("stroke", "white");
+                marker.setAttribute("stroke-width", "1.5");
+                marker.style.cursor = "pointer";
+                svg.appendChild(marker);
+
+                marker.addEventListener('mouseover', (event) => {
+                    tooltip.innerHTML = `Kupiono: ${tx.quantity} szt. po ${tx.price.toFixed(2)} PLN`;
+                    tooltip.style.display = 'block';
+                    tooltip.style.left = `${event.pageX + 15}px`;
+                    tooltip.style.top = `${event.pageY + 15}px`;
+                });
+
+                marker.addEventListener('mousemove', (event) => {
+                    tooltip.style.left = `${event.pageX + 15}px`;
+                    tooltip.style.top = `${event.pageY + 15}px`;
+                });
+
+                marker.addEventListener('mouseout', () => {
+                    tooltip.style.display = 'none';
+                });
+            }
+        }
+    });
+    // --- KONIEC SEKCJI ---
+    if (stock.priceAlerts) {
+        // Linia alertu zakupu (zielona)
+        if (stock.priceAlerts.buy !== null) {
+            const y = getY(stock.priceAlerts.buy);
+            const line = document.createElementNS(svgNs, "line");
+            line.setAttribute("x1", padding.left.toString());
+            line.setAttribute("y1", y.toString());
+            line.setAttribute("x2", (padding.left + chartWidth).toString());
+            line.setAttribute("y2", y.toString());
+            line.setAttribute("stroke", "#28a745");
+            line.setAttribute("stroke-width", "1.5");
+            line.setAttribute("stroke-dasharray", "4,4");
+            svg.appendChild(line);
+        }
+        // Linia alertu sprzedaży (czerwona)
+        if (stock.priceAlerts.sell !== null) {
+            const y = getY(stock.priceAlerts.sell);
+            const line = document.createElementNS(svgNs, "line");
+            line.setAttribute("x1", padding.left.toString());
+            line.setAttribute("y1", y.toString());
+            line.setAttribute("x2", (padding.left + chartWidth).toString());
+            line.setAttribute("y2", y.toString());
+            line.setAttribute("stroke", "#dc3545");
+            line.setAttribute("stroke-width", "1.5");
+            line.setAttribute("stroke-dasharray", "4,4");
+            svg.appendChild(line);
+        }
+    }
+    
+    svgAreaElement.appendChild(svg);
+}
+
+// --- Pozostałe funkcje pliku ---
+
+function closePriceChartModal() {
+    const modal = document.getElementById('price-chart-modal');
+    if (modal) modal.style.display = 'none';
+    currentlyDisplayedChartSymbol = null;
+}
+
+function renderOwnershipPieChart(symbol) {
+    const stock = stocks.find(s => s.symbol === symbol);
+    if (!stock) return;
+
+    const container = document.getElementById('pie-chart-container');
+    const legend = document.getElementById('pie-chart-legend');
+    container.innerHTML = '';
+    legend.innerHTML = '';
+
+    // 1. Zbieranie danych o akcjonariuszach
+    const owners = [];
+    const playerShares = playerPortfolio[symbol] ? playerPortfolio[symbol].shares : 0;
+    if (playerShares > 0) {
+        const fundName = typeof playerProfile !== 'undefined' && playerProfile?.fundName ? playerProfile.fundName : 'Twój fundusz';
+        owners.push({ name: `💼 ${fundName}`, shares: playerShares, color: '#007bff' });
+    }
+    const privateShares = typeof playerWallet !== 'undefined' ? (playerWallet.portfolio[symbol]?.shares || 0) : 0;
+    if (privateShares > 0) {
+        owners.push({ name: '🧍 Ty (prywatnie)', shares: privateShares, color: '#3cc9ff' });
+    }
+    if (stock.insiderShares > 0) {
+        owners.push({ name: '👔 Zarząd i pracownicy', shares: stock.insiderShares, color: '#8a63d2' });
+    }
+
+    let aiColorIndex = 0;
+    const aiColors = ['#dc3545', '#ffc107', '#28a745', '#6f42c1', '#fd7e14', '#20c997'];
+    aiCompetitors.forEach((ai) => {
+        if (ai.portfolio[symbol] && ai.portfolio[symbol].shares > 0) {
+            owners.push({
+                name: ai.name,
+                shares: ai.portfolio[symbol].shares,
+                color: aiColors[aiColorIndex % aiColors.length]
+            });
+            aiColorIndex++;
+        }
+    });
+
+    let investmentBankColorIndex = 0;
+    const investmentBankColors = ['#198754', '#0a58ca', '#ffc107', '#4682B4', '#2E8B57']; // Odcienie zieleni, niebieskiego, złoty
+
+    commercialBanks.forEach(bank => {
+        if (bank.isActive && bank.type === BANK_TYPES.INVESTMENT && bank.stockPortfolio[symbol]) {
+            const holding = bank.stockPortfolio[symbol];
+            if (holding.shares > 0) {
+                owners.push({
+                    name: `🏦 ${bank.name}`,
+                    shares: holding.shares,
+                    color: investmentBankColors[investmentBankColorIndex % investmentBankColors.length]
+                });
+                investmentBankColorIndex++;
+            }
+        }
+    });
+
+    const holdingCompanies = stocks.filter(s => s.assetType === 'Holding');
+    let holdingColorIndex = 0;
+    // --- NOWA PALETA KOLORÓW DLA FUNDUSZY HOLDINGOWYCH ---
+    const holdingColors = ['#0d6efd', '#17a2b8', '#6610f2', '#8FBC8F', '#B8860B']; // Odcienie niebieskiego, fioletu, zieleni, złota
+
+    holdingCompanies.forEach(holding => {
+        const holdingData = holding.holdingPortfolio[symbol];
+        if (holdingData && holdingData.quantity > 0) {
+            owners.push({
+                name: `💼 ${holding.name}`,
+                shares: holdingData.quantity,
+                color: holdingColors[holdingColorIndex % holdingColors.length]
+            });
+            holdingColorIndex++;
+        }
+    });
+
+    const stateShares = Math.floor(stock.totalShares * (stock.stateOwnershipPct || 0));
+    if (stateShares > 0 && !stock.isStateOwned) {
+        owners.push({ name: '🏛️ Skarb Państwa', shares: stateShares, color: '#663399' });
+    }
+    
+    // --- POCZĄTEK NOWEJ LOGIKI - DODANIE AKCJI WŁASNYCH ---
+    const treasuryShares = stock.treasuryShares || 0;
+    if (treasuryShares > 0) {
+        owners.push({ name: 'Dyrektor (Akcje Własne)', shares: treasuryShares, color: '#ff5733' }); // Pomarańczowy kolor dla wyróżnienia
+    }
+    // --- KONIEC NOWEJ LOGIKI ---
+
+    // 2. Obliczanie "wolnego obrotu"
+    const ownedShares = owners.reduce((sum, owner) => sum + owner.shares, 0);
+    
+    const totalTradableShares = stock.isStateOwned 
+        ? Math.floor(stock.totalShares * (1 - stock.stateOwnershipPct)) 
+        : stock.totalShares;
+        
+    const freeFloatShares = totalTradableShares - ownedShares;
+    if (freeFloatShares > 0) {
+        owners.push({ name: 'Wolny obrót', shares: freeFloatShares, color: '#6c757d' });
+    }
+    
+    owners.sort((a, b) => b.shares - a.shares);
+
+    // 3. Rysowanie wykresu SVG (bez zmian)
+    const svgNS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("viewBox", "0 0 32 32");
+    // Kliny rysowane grubym obrysem okręgu wychodzą poza koło — przycinamy SVG do koła.
+    svg.style.borderRadius = '50%';
+    svg.style.overflow = 'hidden';
+    svg.style.width = '100%';
+    svg.style.height = '100%';
+    svg.style.display = 'block';
+    container.appendChild(svg);
+    
+    const radius = 15.9;
+    const circumference = 2 * Math.PI * radius;
+    let cumulativeAngle = 0;
+
+    owners.forEach(owner => {
+        const percentage = owner.shares / totalTradableShares;
+        if (percentage <= 0) return;
+
+        const circle = document.createElementNS(svgNS, "circle");
+        circle.setAttribute("r", radius);
+        circle.setAttribute("cx", "16");
+        circle.setAttribute("cy", "16");
+        circle.setAttribute("fill", "transparent");
+        circle.setAttribute("stroke", owner.color);
+        circle.setAttribute("stroke-width", "32");
+        circle.setAttribute("stroke-dasharray", `${percentage * circumference} ${circumference}`);
+        circle.setAttribute("transform", `rotate(${cumulativeAngle - 90}, 16, 16)`);
+        svg.appendChild(circle);
+        
+        cumulativeAngle += percentage * 360;
+
+        // 4. Tworzenie legendy (bez zmian)
+        const legendItem = document.createElement('div');
+        legendItem.style.display = 'flex';
+        legendItem.style.alignItems = 'center';
+        legendItem.style.justifyContent = 'center';
+        legendItem.style.marginBottom = '5px';
+        
+        const colorBox = document.createElement('span');
+        colorBox.className = 'pie-legend-color-box';
+        colorBox.style.width = '12px';
+        colorBox.style.height = '12px';
+        colorBox.style.backgroundColor = owner.color;
+        colorBox.style.marginRight = '8px';
+        colorBox.style.border = '1px solid #333';
+
+        const ownerLabel = document.createElement('span');
+        const ownerPercentTotal = (owner.shares / stock.totalShares * 100).toFixed(2);
+        ownerLabel.textContent = `${owner.name}: ${owner.shares.toLocaleString('pl-PL')} szt. (${ownerPercentTotal}%)`;
+        
+        legendItem.appendChild(colorBox);
+        legendItem.appendChild(ownerLabel);
+        legend.appendChild(legendItem);
+    });
+
+    // Informacja o udziałach państwa (bez zmian)
+    if (stock.isStateOwned && stateShares > 0) {
+        const statePercent = (stock.stateOwnershipPct * 100).toFixed(2);
+        const legendItem = document.createElement('div');
+        legendItem.innerHTML = `<hr><p style="font-weight: bold; margin-bottom: 5px; text-align: center;">🏛️ Skarb Państwa kontroluje ${statePercent}% akcji (poza wolnym obrotem)</p>`;
+        legend.appendChild(legendItem);
+    }
+}
+
+// #################################################################################
+// ## ui.js
+// #################################################################################
+
 // ui.js (Połączony)
 // Funkcje odpowiedzialne za aktualizację i wyświetlanie interfejsu użytkownika
 

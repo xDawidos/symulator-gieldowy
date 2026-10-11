@@ -1,3 +1,12 @@
+// =================================================================================
+// finance.js: Finanse: banki, lokaty, obligacje, lombard, ETF-y, operatorzy rynków.
+// Złączone pliki: finance.js, etf.js, markets.js (w kolejności ładowania).
+// =================================================================================
+
+// #################################################################################
+// ## finance.js
+// #################################################################################
+
 // finance.js — Instytucje finansowe (etap E2)
 //
 // Banki: depozyty spółek z odsetkami, rezerwy, kredyty z zaległościami i odpisami, wynik = marża
@@ -1067,4 +1076,792 @@ function processBridgeLoansWeekly() {
             closeBridgeLoan(loan, paid, `💥 ${company.name} spłaca tylko ${paid.toFixed(0)} z ${due.toFixed(0)} zł pożyczki pomostowej.`);
         }
     }
+}
+
+// #################################################################################
+// ## etf.js
+// #################################################################################
+
+// etf.js — ETF-y z prawdziwym portfelem (wersja 0.10.2, część M3)
+//
+// Każdy ETF ma emitenta (bank inwestycyjny / internetowy albo GPW), strategię z losowymi zasadami
+// (sektor, maks. udział jednej spółki, tylko płacący dywidendę, tylko giełda złota+, tylko spółki
+// państwowe, tylko arystokraci, REIT-y, holdingi), portfel prawdziwych akcji kupionych na rynku
+// (widoczny w akcjonariacie spółek) i cenę = wartość aktywów netto / liczba jednostek.
+// Co kwartał przegląda skład (rebalancing). Co roku sprawdza cel wzrostu (5–12%): gdy go nie dowozi,
+// zmienia sposób ważenia. Banki tworzą nowe ETF-y; małe ETF-y banków są zamykane.
+
+const ETF_CASH_BUFFER = 0.03;
+const ETF_START_UNITS = 10000;
+const ETF_MAX_COUNT = 22;
+const ETF_CLOSE_NAV = 150000;
+const ETF_MIN_SHARES = 5000;
+const ETF_MAX_TRADE_PCT = 0.05; // jednorazowo najwyżej 5% akcji spółki
+const ETF_WEIGHTINGS = { cap: 'wg kapitalizacji', equal: 'równe wagi', value: 'niedowartościowane' };
+
+const ETF_TEMPLATES = [
+    { key: 'Technologia', label: 'Tech', rules: { sectors: ['Technologia', 'Gaming', 'Badania'] } },
+    { key: 'Bankowość', label: 'Banki', rules: { sectors: ['Bankowość', 'Bankowość Komercyjna', 'Finanse'] } },
+    { key: 'Przemysł', label: 'Przemysł', rules: { sectors: ['Przemysł', 'Chemia'] } },
+    { key: 'Energia', label: 'Energia', rules: { sectors: ['Energia'] } },
+    { key: 'Nieruchomości', label: 'Nieruchomości', rules: { sectors: ['Nieruchomości', 'Budowlany'] } },
+    { key: 'Medycyna', label: 'Zdrowie', rules: { sectors: ['Medycyna'] } },
+    { key: 'Konsument', label: 'Konsument', rules: { sectors: ['Dobra konsumpcyjne', 'Żywność', 'Turystyka'] } },
+    { key: 'Usługi', label: 'Usługi', rules: { sectors: ['Usługi', 'Logistyka', 'Transport', 'Media'] } },
+    { key: 'Dywidendowy', label: 'Dywidendowy', rules: { dividendOnly: true } },
+    { key: 'Arystokraci', label: 'Arystokratów', rules: { aristocratsOnly: true } },
+    { key: 'Złoty', label: 'Blue Chip', rules: { minExchangeLevel: 3 } },
+    { key: 'Państwowy', label: 'Skarbu Państwa', rules: { stateOnly: true } },
+    { key: 'REIT', label: 'REIT', rules: { assetType: 'REIT' } },
+    { key: 'Holding', label: 'Holdingów', rules: { assetType: 'Holding' } },
+    { key: 'Obronność', label: 'Zbrojeniowy', rules: { sectors: ['Obronność'] } }
+];
+
+// Startowy zestaw (symbole zachowane z poprzednich wersji tam, gdzie się da).
+const ETF_START_SET = [
+    ['TSX', 'Technologia'], ['FSX', 'Bankowość'], ['PSX', 'Przemysł'], ['ESX', 'Energia'], ['NSX', 'Nieruchomości'],
+    ['MHX', 'Medycyna'], ['DKX', 'Konsument'], ['USX', 'Usługi'], ['DVX', 'Dywidendowy'], ['ARX', 'Arystokraci'],
+    ['BCX', 'Złoty'], ['SPX', 'Państwowy'], ['RTX', 'REIT'], ['HDX', 'Holding']
+];
+
+function getEtfIssuers() {
+    return commercialBanks.filter(bank => bank.isActive && !bank.isParabank && [BANK_TYPES.INVESTMENT, BANK_TYPES.INTERNET].includes(bank.type));
+}
+
+function randomEtfRules(template) {
+    const rules = { sectors: [], assetType: null, maxWeight: getRandomInRange(0.1, 0.25), dividendOnly: false, minExchangeLevel: 0, stateOnly: false, aristocratsOnly: false, ...template.rules };
+    // Losowe dodatkowe zasady — każdy ETF jest trochę inny.
+    if (!rules.dividendOnly && !rules.assetType && Math.random() < 0.2) rules.dividendOnly = true;
+    if (!rules.minExchangeLevel && !rules.assetType && Math.random() < 0.15) rules.minExchangeLevel = 2;
+    return rules;
+}
+
+function describeEtfRules(etf) {
+    const r = etf.rules;
+    const parts = [];
+    if (r.sectors?.length) parts.push(r.sectors.join(', '));
+    if (r.assetType) parts.push(r.assetType === 'REIT' ? 'tylko REIT-y' : 'tylko holdingi');
+    if (r.dividendOnly) parts.push('tylko płacący dywidendę');
+    if (r.aristocratsOnly) parts.push('tylko arystokraci');
+    if (r.stateOnly) parts.push('tylko spółki państwowe');
+    if (r.minExchangeLevel) parts.push(`giełda: ${Object.values(exchanges).find(e => e.level === r.minExchangeLevel)?.name || r.minExchangeLevel}+`);
+    parts.push(`maks. ${(r.maxWeight * 100).toFixed(0)}% na spółkę`);
+    parts.push(ETF_WEIGHTINGS[etf.weighting]);
+    return parts.join(' · ');
+}
+
+function createEtf({ symbol, templateKey, issuer = null, seed }) {
+    const template = ETF_TEMPLATES.find(t => t.key === templateKey) || ETF_TEMPLATES[0];
+    const issuerName = issuer?.name || 'GPW';
+    const etf = {
+        symbol,
+        name: `${issuerName} ${template.label} ETF`,
+        template: template.key,
+        issuerId: issuer?.id || null,
+        issuerName,
+        rules: randomEtfRules(template),
+        weighting: getRandomElement(Object.keys(ETF_WEIGHTINGS)),
+        holdings: {},
+        cash: seed,
+        units: ETF_START_UNITS,
+        price: seed / ETF_START_UNITS,
+        priceHistory: [],
+        yearTarget: getRandomInRange(0.05, 0.12),
+        yearStartPrice: seed / ETF_START_UNITS,
+        quartersInYear: 0,
+        ageQuarters: 0,
+        lastResult: null
+    };
+    etf.description = `Emitent: ${issuerName}. Zasady: ${describeEtfRules(etf)}.`;
+    return etf;
+}
+
+/** Nowa gra (i migracja starszych zapisów): startowy zestaw ETF-ów z portfelami. */
+function initializeEtfs() {
+    etfs.length = 0;
+    const issuers = getEtfIssuers();
+    for (const [symbol, templateKey] of ETF_START_SET) {
+        const issuer = Math.random() < 0.6 && issuers.length ? getRandomElement(issuers) : null;
+        const etf = createEtf({ symbol, templateKey, issuer, seed: getRandomIntInRange(5, 20) * 100000 });
+        etfs.push(etf);
+        rebalanceEtf(etf, true);
+        updateEtfPrice(etf);
+    }
+}
+
+// =================================================================================
+// SKŁAD I WYCENA
+// =================================================================================
+
+function isEtfEligible(etf, stock) {
+    const r = etf.rules;
+    if (!stock || stock.isBankrupt || stock.canBeTraded === false || stock.exchange === 'INCUBATOR' || !(stock.price > 0)) return false;
+    // Ostrożność: bez małych emisji i cen oderwanych od wartości godziwej.
+    if ((stock.totalShares || 0) < ETF_MIN_SHARES) return false;
+    const fair = Number(stock.fundamentals?.fairValue);
+    if (fair > 0 && (stock.price > fair * 4 || stock.price < fair / 4)) return false;
+    if (r.assetType ? stock.assetType !== r.assetType : Boolean(stock.assetType)) return false;
+    if (r.sectors?.length && !stock.sector?.some(sector => r.sectors.includes(sector))) return false;
+    if (r.dividendOnly && !(stock.assetType === 'REIT' || (stock.dividendHistory || []).length > 0 || stock.dividendPolicy && stock.dividendPolicy !== 'Growth')) return false;
+    if (r.aristocratsOnly && !stock.isDividendAristocrat) return false;
+    if (r.stateOnly && !stock.isStateOwned) return false;
+    if (r.minExchangeLevel && (exchanges[stock.exchange]?.level || 0) < r.minExchangeLevel) return false;
+    return true;
+}
+
+function getEtfUniverse(etf) {
+    let universe = stocks.filter(stock => isEtfEligible(etf, stock));
+    // Arystokratów jeszcze nie ma — tymczasowo płacący dywidendę.
+    if (!universe.length && etf.rules.aristocratsOnly) universe = stocks.filter(stock => isEtfEligible({ ...etf, rules: { ...etf.rules, aristocratsOnly: false, dividendOnly: true } }, stock));
+    return universe;
+}
+
+function getEtfTargetWeights(etf, universe) {
+    const raw = universe.map(stock => {
+        if (etf.weighting === 'equal') return 1;
+        if (etf.weighting === 'value') {
+            const fair = Number(stock.fundamentals?.fairValue) || stock.price;
+            return Math.max(0.2, Math.min(3, fair / stock.price)) * Math.sqrt(stock.price * stock.totalShares);
+        }
+        return stock.price * stock.totalShares;
+    });
+    let weights = normalizeWeights(raw);
+    // Limit udziału jednej spółki — nadwyżkę rozdziel na pozostałe (kilka przejść).
+    const cap = Math.max(etf.rules.maxWeight, 1 / Math.max(1, universe.length));
+    for (let pass = 0; pass < 5; pass++) {
+        const over = weights.reduce((sum, w) => sum + Math.max(0, w - cap), 0);
+        if (over < 1e-9) break;
+        const free = weights.reduce((sum, w) => sum + (w < cap ? w : 0), 0) || 1;
+        weights = weights.map(w => w >= cap ? cap : w + over * w / free);
+    }
+    return weights;
+}
+
+function normalizeWeights(values) {
+    const total = values.reduce((sum, v) => sum + v, 0) || 1;
+    return values.map(v => v / total);
+}
+
+function getEtfNav(etf) {
+    let value = Math.max(0, Number(etf.cash) || 0);
+    for (const [symbol, shares] of Object.entries(etf.holdings)) {
+        const stock = stocks.find(s => s.symbol === symbol);
+        if (stock) value += shares * stock.price;
+    }
+    return value;
+}
+
+function updateEtfPrice(etf) {
+    etf.price = Math.max(0.01, getEtfNav(etf) / Math.max(1, etf.units));
+    etf.priceHistory.push(etf.price);
+    if (etf.priceHistory.length > 15) etf.priceHistory.shift();
+}
+
+/** Wołane co tik (economy.js) zamiast średniej cen sektora. */
+function updateEtfPrices() {
+    etfs.forEach(updateEtfPrice);
+}
+
+function etfSell(etf, stock, shares) {
+    shares = Math.min(shares, etf.holdings[stock.symbol] || 0);
+    if (!(shares > 0)) return 0;
+    etf.holdings[stock.symbol] -= shares;
+    if (etf.holdings[stock.symbol] <= 0) delete etf.holdings[stock.symbol];
+    stock.sharesHeld = Math.max(0, stock.sharesHeld - shares);
+    etf.cash += shares * stock.price;
+    if (!etf.silentTrades && typeof chargeMarketCommission === 'function') chargeMarketCommission(stock, shares * stock.price, etf); // B1: równe zasady
+    if (!etf.silentTrades) applyTradeImpact(stock, shares, -1);
+    return shares;
+}
+
+function etfBuy(etf, stock, shares) {
+    shares = Math.floor(Math.min(shares, getAvailableShares(stock), etf.cash / stock.price, stock.totalShares * ETF_MAX_TRADE_PCT));
+    if (!(shares > 0)) return 0;
+    etf.holdings[stock.symbol] = (etf.holdings[stock.symbol] || 0) + shares;
+    stock.sharesHeld += shares;
+    etf.cash -= shares * stock.price;
+    if (!etf.silentTrades && typeof chargeMarketCommission === 'function') chargeMarketCommission(stock, shares * stock.price, etf);
+    if (!etf.silentTrades) applyTradeImpact(stock, shares, 1);
+    return shares;
+}
+
+/** Przegląd składu: sprzedaj nadwyżki i spółki spoza zasad, dokup braki. */
+function rebalanceEtf(etf, silent = false) {
+    etf.silentTrades = silent;
+    const universe = getEtfUniverse(etf);
+    const weights = getEtfTargetWeights(etf, universe);
+    const investable = getEtfNav(etf) * (1 - ETF_CASH_BUFFER);
+    const targets = new Map(universe.map((stock, i) => [stock.symbol, Math.floor(investable * weights[i] / stock.price)]));
+
+    for (const symbol of Object.keys(etf.holdings)) {
+        const stock = stocks.find(s => s.symbol === symbol);
+        if (!stock) { delete etf.holdings[symbol]; continue; }
+        const excess = etf.holdings[symbol] - (targets.get(symbol) || 0);
+        if (excess > 0) etfSell(etf, stock, excess);
+    }
+    for (const stock of universe) {
+        const missing = (targets.get(stock.symbol) || 0) - (etf.holdings[stock.symbol] || 0);
+        if (missing > 0) etfBuy(etf, stock, missing);
+    }
+    etf.silentTrades = false;
+}
+
+/** Sprzedaż akcji proporcjonalnie, by mieć gotówkę na umorzenie jednostek. */
+function raiseEtfCash(etf, amount) {
+    const nav = getEtfNav(etf);
+    if (etf.cash >= amount || nav <= 0) return;
+    const fraction = Math.min(1, (amount - etf.cash) / Math.max(1, nav - etf.cash) * 1.02);
+    for (const [symbol, shares] of Object.entries(etf.holdings)) {
+        const stock = stocks.find(s => s.symbol === symbol);
+        if (stock) etfSell(etf, stock, Math.ceil(shares * fraction));
+    }
+}
+
+// =================================================================================
+// CO KWARTAŁ: REBALANCING, CEL ROCZNY, NOWE I ZAMYKANE ETF-y
+// =================================================================================
+
+function processEtfsQuarterly() {
+    for (const etf of [...etfs]) {
+        etf.ageQuarters++;
+        etf.quartersInYear++;
+        rebalanceEtf(etf);
+        updateEtfPrice(etf);
+        if (etf.quartersInYear >= 4) reviewEtfYear(etf);
+        if (etf.issuerId && etf.ageQuarters >= 8 && getEtfNav(etf) < ETF_CLOSE_NAV) closeEtf(etf, 'za małe aktywa');
+    }
+    maybeLaunchBankEtf();
+}
+
+function reviewEtfYear(etf) {
+    const result = etf.price / Math.max(0.01, etf.yearStartPrice) - 1;
+    const hit = result >= etf.yearTarget;
+    etf.lastResult = { result, target: etf.yearTarget, hit };
+    if (!hit) {
+        const previous = etf.weighting;
+        etf.weighting = getRandomElement(Object.keys(ETF_WEIGHTINGS).filter(w => w !== previous));
+        if (Math.random() < 0.3) etf.rules.maxWeight = Math.max(0.08, Math.min(0.35, etf.rules.maxWeight + getRandomInRange(-0.05, 0.05)));
+        etf.description = `Emitent: ${etf.issuerName}. Zasady: ${describeEtfRules(etf)}.`;
+        logEvent(`📊 ${etf.name} nie osiągnął celu (${(result * 100).toFixed(1)}% vs ${(etf.yearTarget * 100).toFixed(1)}%) — zmienia strategię na „${ETF_WEIGHTINGS[etf.weighting]}”.`, 'market');
+    }
+    etf.yearTarget = getRandomInRange(0.05, 0.12);
+    etf.yearStartPrice = etf.price;
+    etf.quartersInYear = 0;
+}
+
+function makeEtfSymbol(issuer) {
+    const base = (issuer?.name || 'ETF').replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 2) || 'EX';
+    for (let i = 0; i < 50; i++) {
+        const symbol = `${base}${String.fromCharCode(65 + Math.floor(Math.random() * 26))}X`;
+        if (!etfs.some(e => e.symbol === symbol) && !stocks.some(s => s.symbol === symbol)) return symbol;
+    }
+    return `${base}${Date.now() % 1000}`;
+}
+
+function maybeLaunchBankEtf() {
+    if (etfs.length >= ETF_MAX_COUNT) return null;
+    const issuers = getEtfIssuers().filter(bank => bank.cash > 2e6 && etfs.filter(e => e.issuerId === bank.id).length < 3);
+    if (!issuers.length || Math.random() > 0.15) return null;
+    const issuer = getRandomElement(issuers);
+    const seed = Math.round(issuer.cash * 0.05);
+    issuer.cash -= seed;
+    const etf = createEtf({ symbol: makeEtfSymbol(issuer), templateKey: getRandomElement(ETF_TEMPLATES).key, issuer, seed });
+    etfs.push(etf);
+    rebalanceEtf(etf);
+    updateEtfPrice(etf);
+    logEvent(`🆕 ${issuer.name} wprowadza na giełdę ${etf.name} (${etf.symbol}). ${etf.description}`, 'market');
+    return etf;
+}
+
+/** Likwidacja: sprzedaż akcji, wypłata posiadaczom jednostek (fundusz gracza po cenie jednostki). */
+function closeEtf(etf, reason) {
+    for (const [symbol, shares] of Object.entries(etf.holdings)) {
+        const stock = stocks.find(s => s.symbol === symbol);
+        if (stock) etfSell(etf, stock, shares);
+    }
+    const price = etf.cash / Math.max(1, etf.units);
+    const holding = playerPortfolio[etf.symbol];
+    if (holding) {
+        playerCash += holding.shares * price;
+        delete playerPortfolio[etf.symbol];
+        showToast(`${etf.name} zostaje zamknięty — fundusz dostaje ${formatZl(holding.shares * price, 0)}.`, 'warning', 7000);
+    }
+    const issuer = commercialBanks.find(b => b.id === etf.issuerId);
+    if (issuer) issuer.cash += Math.max(0, etf.cash - (holding ? holding.shares * price : 0)) * 0.5; // część wraca do emitenta (jego wkład)
+    etfs.splice(etfs.indexOf(etf), 1);
+    logEvent(`🔒 ${etf.name} zostaje zamknięty (${reason}).`, 'market');
+}
+
+/** Spółka znika z gry (przejęcie, bankructwo): pakiety ETF-ów. pricePerShare — wypłata w przejęciu. */
+function settleEtfHoldings(symbol, pricePerShare = 0) {
+    for (const etf of etfs) {
+        const shares = etf.holdings[symbol] || 0;
+        if (!shares) continue;
+        etf.cash += shares * pricePerShare;
+        delete etf.holdings[symbol];
+    }
+}
+
+// =================================================================================
+// HANDEL FUNDUSZU GRACZA (jednostki ETF: kreacja i umorzenie po wartości aktywów)
+// =================================================================================
+
+function getEtfCharismaBonus() {
+    return [0, 0.005, 0.01, 0.015][Math.min(3, getSkillLevel('sharkCharisma'))] || 0;
+}
+
+function buyEtf(symbol, quantity) {
+    if (getSkillLevel('etfExpert') === 0) { showToast("Musisz odblokować umiejętność 'Ekspert Rynków Globalnych', aby handlować funduszami ETF!"); return false; }
+    const etf = etfs.find(e => e.symbol === symbol);
+    quantity = Math.floor(Number(quantity));
+    if (!etf || !(quantity > 0)) { showToast('Nieprawidłowe zlecenie ETF.', 'error'); return false; }
+    const value = etf.price * quantity;
+    const cost = value * (1 - getEtfCharismaBonus());
+    if (playerCash < cost) { showToast('Nie masz wystarczająco gotówki, aby dokonać tego zakupu!'); return false; }
+
+    playerCash -= cost;
+    etf.units += quantity;
+    etf.cash += value; // kreacja jednostek po wartości aktywów (rabat z charyzmy płaci emitent)
+    const holding = playerPortfolio[symbol];
+    if (holding) {
+        holding.avgPrice = (holding.avgPrice * holding.shares + cost) / (holding.shares + quantity);
+        holding.shares += quantity;
+    } else {
+        playerPortfolio[symbol] = { shares: quantity, avgPrice: cost / quantity, assetType: 'etf' };
+    }
+    displayCash();
+    displayPortfolio();
+    if (typeof checkPlayerTierUpgrade === 'function') checkPlayerTierUpgrade();
+    return true;
+}
+
+function sellEtf(symbol, quantity) {
+    if (getSkillLevel('etfExpert') === 0) { showToast("Musisz odblokować umiejętność 'Ekspert Rynków Globalnych', aby handlować funduszami ETF!"); return false; }
+    const etf = etfs.find(e => e.symbol === symbol);
+    const holding = playerPortfolio[symbol];
+    quantity = Math.floor(Number(quantity));
+    if (!etf || !holding || !(quantity > 0) || holding.shares < quantity) {
+        showToast(`Nie masz wystarczającej liczby jednostek ${etf ? etf.name : symbol}. Posiadasz: ${holding ? holding.shares : 0}`);
+        return false;
+    }
+    const value = etf.price * quantity;
+    raiseEtfCash(etf, value);
+    const paid = Math.min(value, etf.cash);
+    etf.cash -= paid;
+    etf.units -= quantity;
+    const proceeds = paid * (1 + getEtfCharismaBonus());
+    const profit = proceeds - holding.avgPrice * quantity;
+    playerCash += proceeds;
+    holding.shares -= quantity;
+    if (holding.shares <= 0) delete playerPortfolio[symbol];
+    logEvent(`Fundusz umarza ${quantity} jedn. ${etf.name} (wynik ${profit >= 0 ? '+' : ''}${profit.toFixed(2)} zł).`, 'review');
+    displayCash();
+    displayPortfolio();
+    if (typeof checkPlayerTierUpgrade === 'function') checkPlayerTierUpgrade();
+    return true;
+}
+
+/** Skład ETF-u (top pozycje z wagami) — do tabeli i okna szczegółów. */
+function getEtfTopHoldings(etf, limit = 3) {
+    const nav = getEtfNav(etf) || 1;
+    return Object.entries(etf.holdings)
+        .map(([symbol, shares]) => { const stock = stocks.find(s => s.symbol === symbol); return stock ? { symbol, weight: shares * stock.price / nav } : null; })
+        .filter(Boolean).sort((a, b) => b.weight - a.weight).slice(0, limit);
+}
+
+// =================================================================================
+// ZAPIS
+// =================================================================================
+
+function serializeEtfs() {
+    return etfs.map(etf => ({ ...etf, silentTrades: undefined }));
+}
+
+function restoreEtfs(saved) {
+    if (!Array.isArray(saved) || !saved.length || !saved[0].holdings) { initializeEtfs(); return false; }
+    etfs.length = 0;
+    for (const etf of saved) etfs.push({ ...etf, priceHistory: Array.isArray(etf.priceHistory) ? etf.priceHistory : [] });
+    return true;
+}
+
+// #################################################################################
+// ## markets.js
+// #################################################################################
+
+// markets.js — Spółki rynkowe i maklerzy (wersja 0.10.2, część M5)
+//
+// GPW to główny operator: notowana spółka, na której są wszystkie dotychczasowe spółki. XTD i PLU5
+// rodzą się jako startupy — bardzo drogie, rozwijają się powoli, ale mogą nagle zyskać sponsora, który
+// wchodzi na giełdę jako „członek rynku XTD”. Gdy operator zadebiutuje, na jego rynek wchodzi 5–10
+// nowych spółek z istniejących sektorów. Euronext jest widoczny, ale nieaktywny.
+// Operatorzy pobierają prowizję od transakcji na swoim rynku i opłatę za notowanie, inwestują w swoje
+// spółki członkowskie i podpisują umowy na wyłączność. Zamknięcie operatora usuwa jego spółki z widoku
+// gracza — posiadacze akcji są rozliczani po ostatniej cenie.
+
+const MARKET_OPERATOR_DEFS = {
+    GPW:      { name: 'Giełda Papierów Wartościowych', short: 'GPW', commission: 0.003, color: '#1f6feb', main: true },
+    XTD:      { name: 'XTD Markets', short: 'XTD', commission: 0.002, color: '#8957e5' },
+    PLU5:     { name: 'PLU5 Exchange', short: 'PLU5', commission: 0.0015, color: '#d29922' },
+    EURONEXT: { name: 'Euronext', short: 'Euronext', commission: 0.0025, color: '#3fb950', dormantForever: true }
+};
+const OPERATOR_STARTUP_GOAL = [300000, 600000];  // bardzo drogie startupy
+const OPERATOR_STARTUP_SLOWDOWN = 0.25;         // rozwój 4× wolniej niż zwykły startup
+const OPERATOR_SPONSOR_CHANCE = 0.12;           // co kwartał w fazie startupu
+const OPERATOR_SPAWN_CHANCE = 0.1;              // co kwartał, od 4. kwartału gry
+const OPERATOR_LISTING_FEE = 0.0002;            // opłata za notowanie: % kapitalizacji członka na kwartał
+const OPERATOR_EXCLUSIVITY_CHANCE = 0.1;
+const LISTING_FEE_FACTOR = { GPW: 1, XTD: 0.7, PLU5: 0.5, EURONEXT: 1 }; // B4: tańsze rynki alternatywne
+const LISTING_MOVE_PRICE_EFFECT = { GPW: 0.02, XTD: -0.03, PLU5: -0.03 };  // mniej inwestorów = niższa wycena
+
+const MEMBER_NAME_PREFIXES = ['Nova', 'Prime', 'Delta', 'Orion', 'Vega', 'Atlas', 'Zenit', 'Polar', 'Astra', 'Kappa', 'Sigma', 'Aurora', 'Vistula', 'Baltica'];
+
+let marketOperators = null;
+
+function createMarketOperators() {
+    const operators = {};
+    for (const [id, def] of Object.entries(MARKET_OPERATOR_DEFS)) {
+        operators[id] = { id, status: def.main ? 'active' : def.dormantForever ? 'inactive' : 'dormant', symbol: null, startupSymbol: null, sponsors: [], members: 0, commissionsTotal: 0 };
+    }
+    return operators;
+}
+
+function getStockMarket(stock) {
+    return stock?.market || 'GPW';
+}
+
+function getMarketLabel(id) {
+    return MARKET_OPERATOR_DEFS[id]?.short || id;
+}
+
+/** Nowa gra (i migracja): stan operatorów + notowana spółka GPW. */
+function initMarketOperators() {
+    marketOperators = createMarketOperators();
+    let gpw = stocks.find(s => s.marketOperator === 'GPW');
+    if (!gpw) {
+        gpw = createListedCompany({ name: MARKET_OPERATOR_DEFS.GPW.name, symbol: uniqueSymbol('GPW'), sector: ['Finanse'], price: getRandomInRange(110, 160), totalShares: 400000, exchange: 'SILVER' });
+        gpw.marketOperator = 'GPW';
+        stocks.push(gpw);
+    }
+    marketOperators.GPW.symbol = gpw.symbol;
+    return marketOperators;
+}
+
+function ensureMarketOperators() {
+    if (!marketOperators || !marketOperators.GPW) initMarketOperators();
+    for (const id of Object.keys(MARKET_OPERATOR_DEFS)) if (!marketOperators[id]) marketOperators[id] = createMarketOperators()[id];
+    return marketOperators;
+}
+
+function uniqueSymbol(base) {
+    let symbol = base;
+    while (stocks.some(s => s.symbol === symbol) || (typeof etfs !== 'undefined' && etfs.some(e => e.symbol === symbol))) symbol += 'X';
+    return symbol;
+}
+
+// =================================================================================
+// NOWE SPÓŁKI (sponsor, członkowie nowego rynku)
+// =================================================================================
+
+/** Zwykła notowana spółka zbudowana jak debiutant ze startupu (pełna inicjalizacja). */
+function createListedCompany({ name, symbol, sector, price, totalShares, exchange = 'BRONZE', market = 'GPW' }) {
+    const base = generateNewStartup();
+    const stock = {
+        ...base,
+        name: name || base.name,
+        symbol: symbol || base.symbol,
+        sector: sector || base.sector,
+        exchange,
+        market,
+        price,
+        totalShares,
+        maxShares: totalShares,
+        sharesHeld: 0,
+        insiderShares: 0,
+        financialHealth: getRandomIntInRange(0, 3),
+        volatilityFactor: getRandomInRange(0.8, 1.8),
+        reputation: { player: 0 }
+    };
+    delete stock.assetType;
+    ['fundingGoal', 'currentFunding', 'developmentProgress', 'successChance', 'stage', 'isScam', 'isWhiteCrow', 'investors', 'ipoPriceBonus', 'overfundingEndTime'].forEach(key => delete stock[key]);
+    const equity = price * totalShares;
+    stock.balanceSheet = { assets: equity * 1.2, liabilities: equity * 0.2, shareCapital: equity * 0.3, retainedEarnings: equity * 0.7 };
+    stock.cash = equity * getRandomInRange(0.05, 0.12);
+    stock.quarterlyEarnings = 0;
+    if (typeof initializeDepartments === 'function') initializeDepartments(stock);
+    if (typeof initializeDescriptionParts === 'function') initializeDescriptionParts(stock);
+    if (typeof initializeResearchForStock === 'function') initializeResearchForStock(stock);
+    if (typeof generateCEO === 'function') generateCEO(stock);
+    initializeFundamentals(stock, true);
+    setCompanyDividendPolicy(stock, getRandomElement(['Growth', 'Balanced']));
+    return stock;
+}
+
+function spawnMarketMember(operatorId, reason) {
+    const sectors = Object.keys(SECTOR_PROFILES).filter(s => !['Bankowość', 'Bankowość Komercyjna'].includes(s));
+    const sector = [getRandomElement(sectors)];
+    const base = generateNewStartup();
+    // Generator startupów nie zna wszystkich sektorów — wtedy nazwa „marka + sektor”.
+    const name = base.name.startsWith('DejwCorp') || !base.sector?.includes(sector[0])
+        ? `${getRandomElement(MEMBER_NAME_PREFIXES)} ${sector[0]}` : base.name;
+    const symbol = uniqueSymbol((name.normalize('NFD').replace(/[^A-Za-z ]/g, '').split(' ').map(w => w.slice(0, 2)).join('').toUpperCase() || 'NEW').slice(0, 4));
+    const stock = createListedCompany({
+        name, symbol, sector,
+        price: getRandomInRange(25, 70), totalShares: getRandomIntInRange(20, 80) * 1000, exchange: 'BRONZE', market: operatorId
+    });
+    stocks.push(stock);
+    logEvent(`🏛️ ${stock.name} (${stock.symbol}) wchodzi na giełdę jako członek rynku ${getMarketLabel(operatorId)}${reason ? ` — ${reason}` : ''}.`, 'market');
+    return stock;
+}
+
+// =================================================================================
+// CYKL ŻYCIA OPERATORÓW
+// =================================================================================
+
+function spawnOperatorStartup(operator) {
+    const def = MARKET_OPERATOR_DEFS[operator.id];
+    const startup = generateNewStartup();
+    startup.name = def.name;
+    startup.symbol = uniqueSymbol(def.short.toUpperCase());
+    startup.sector = ['Finanse'];
+    startup.fundingGoal = Math.round(getRandomIntInRange(...OPERATOR_STARTUP_GOAL) / 1000) * 1000;
+    startup.successChance = getRandomInRange(0.55, 0.75);
+    startup.isScam = false;
+    startup.operatorStartup = operator.id;
+    stocks.push(startup);
+    operator.status = 'startup';
+    operator.startupSymbol = startup.symbol;
+    logEvent(`🚀 W inkubatorze pojawia się ${def.name} — przyszły operator rynku (cel finansowania ${startup.fundingGoal.toLocaleString('pl-PL')} zł).`, 'market');
+    return startup;
+}
+
+/** Debiut startupu-operatora (wołane z handleSuccessfulIPO). */
+function activateMarketOperator(startup) {
+    const operator = ensureMarketOperators()[startup.operatorStartup];
+    if (!operator) return;
+    operator.status = 'active';
+    operator.symbol = startup.symbol;
+    startup.marketOperator = operator.id;
+    startup.market = operator.id;
+    const count = getRandomIntInRange(5, 10);
+    // B5: na zatłoczonym rynku część miejsc zapełniają przenosiny z GPW zamiast nowych debiutów.
+    const fresh = Math.max(1, Math.round(count * getDebutFactor()));
+    for (let i = 0; i < fresh; i++) spawnMarketMember(operator.id, 'otwarcie nowego rynku');
+    for (let i = fresh; i < count; i++) signExclusivity(operator, startup);
+    logEvent(`🏛️ ${MARKET_OPERATOR_DEFS[operator.id].name} debiutuje i otwiera własny rynek: ${fresh} nowych spółek${count > fresh ? `, ${count - fresh} przechodzi z GPW` : ''}!`, 'market');
+}
+
+/** Upadek startupu-operatora (wołane z removeStartup). */
+function onOperatorStartupRemoved(startup) {
+    const operator = marketOperators?.[startup.operatorStartup];
+    if (operator && operator.status === 'startup') closeMarketOperator(operator, 'startup operatora upadł');
+}
+
+/** Wykup wszystkich śledzonych posiadaczy po cenie (bez usuwania spółki). Zwraca wypłaconą kwotę. */
+function buyOutAllHolders(stock, price) {
+    const symbol = stock.symbol;
+    let paid = 0;
+    const fund = playerPortfolio[symbol];
+    if (fund?.shares > 0) {
+        playerCash += fund.shares * price;
+        paid += fund.shares * price;
+        recordPayment(`external:${symbol}`, 'player-fund', fund.shares * price, `Wykup akcji ${symbol}`);
+    }
+    delete playerPortfolio[symbol];
+    const wallet = playerWallet?.portfolio?.[symbol];
+    if (wallet?.shares > 0) { playerWallet.cash += wallet.shares * price; paid += wallet.shares * price; }
+    if (playerWallet?.portfolio) delete playerWallet.portfolio[symbol];
+    for (const ai of aiCompetitors) {
+        if (ai.portfolio?.[symbol]?.shares > 0) { ai.cash += ai.portfolio[symbol].shares * price; paid += ai.portfolio[symbol].shares * price; }
+        if (ai.portfolio) delete ai.portfolio[symbol];
+    }
+    for (const manager of corporation?.managers || []) {
+        const held = manager.fund?.portfolio?.[symbol]?.shares || 0;
+        if (held > 0) { manager.fund.cash += held * price; paid += held * price; }
+        if (manager.fund?.portfolio) delete manager.fund.portfolio[symbol];
+    }
+    for (const bank of commercialBanks) {
+        if (bank.stockPortfolio?.[symbol]?.shares > 0) { bank.cash += bank.stockPortfolio[symbol].shares * price; paid += bank.stockPortfolio[symbol].shares * price; }
+        if (bank.stockPortfolio) delete bank.stockPortfolio[symbol];
+    }
+    for (const owner of stocks) {
+        const shares = (owner.holdingPortfolio?.[symbol]?.quantity || 0) + (owner.equityStakes?.[symbol] || 0);
+        if (shares > 0) { adjustCompanyCash(owner, shares * price); paid += shares * price; }
+        if (owner.holdingPortfolio) delete owner.holdingPortfolio[symbol];
+        if (owner.equityStakes) delete owner.equityStakes[symbol];
+    }
+    if (typeof settleEtfHoldings === 'function') settleEtfHoldings(symbol, price);
+    if (stock.cityShares > 0 && typeof city === 'object') { city.budget += stock.cityShares * price; stock.cityShares = 0; }
+    stock.sharesHeld = 0;
+    return paid;
+}
+
+/** Rozliczenie posiadaczy po ostatniej cenie i zdjęcie spółki z rynku. */
+function delistStockAtPrice(stock, price) {
+    buyOutAllHolders(stock, price);
+    removeStockFromGame(stock.symbol);
+}
+
+function closeMarketOperator(operator, reason) {
+    if (!operator || operator.status === 'closed' || MARKET_OPERATOR_DEFS[operator.id]?.main) return;
+    const members = stocks.filter(s => getStockMarket(s) === operator.id && s.marketOperator !== operator.id);
+    for (const stock of members) delistStockAtPrice(stock, stock.price);
+    operator.status = 'closed';
+    operator.sponsors = [];
+    logEvent(`🔒 Rynek ${getMarketLabel(operator.id)} zostaje zamknięty (${reason}). ${members.length} spółek znika z notowań — posiadacze rozliczeni po ostatniej cenie.`, 'market');
+}
+
+// =================================================================================
+// PROWIZJE I PRZYCHODY
+// =================================================================================
+
+function getOperatorStock(operatorId) {
+    const operator = marketOperators?.[operatorId];
+    return operator?.status === 'active' && operator.symbol ? stocks.find(s => s.symbol === operator.symbol && !s.isBankrupt) : null;
+}
+
+/** Prowizja od transakcji na rynku spółki; payer: 'player' albo bot. Zwraca pobraną kwotę. */
+function chargeMarketCommission(stock, value, payer) {
+    if (!marketOperators || !(value > 0)) return 0;
+    const operatorId = getStockMarket(stock);
+    const operatorStock = getOperatorStock(operatorId);
+    if (!operatorStock || operatorStock === stock) return 0;
+    const fee = value * MARKET_OPERATOR_DEFS[operatorId].commission;
+    if (payer === 'player') {
+        playerCash -= fee;
+        recordPayment('player-fund', operatorStock, fee, `Prowizja ${getMarketLabel(operatorId)}`);
+    } else if (payer && Number.isFinite(payer.cash)) {
+        payer.cash -= fee;
+    } else return 0;
+    adjustCompanyCash(operatorStock, fee);
+    adjustBalanceSheet(operatorStock, { assets: fee, retainedEarnings: fee });
+    marketOperators[operatorId].commissionsTotal += fee;
+    return fee;
+}
+
+// =================================================================================
+// CO KWARTAŁ
+// =================================================================================
+
+function processMarketsQuarterly() {
+    ensureMarketOperators();
+    const quarter = typeof macro === 'object' ? macro.quarter : 0;
+    for (const operator of Object.values(marketOperators)) {
+        const def = MARKET_OPERATOR_DEFS[operator.id];
+        operator.members = stocks.filter(s => getStockMarket(s) === operator.id && s.marketOperator !== operator.id && !s.assetType).length;
+
+        if (operator.status === 'dormant' && quarter >= 4 && Math.random() < OPERATOR_SPAWN_CHANCE) {
+            spawnOperatorStartup(operator);
+        } else if (operator.status === 'startup') {
+            const startup = stocks.find(s => s.symbol === operator.startupSymbol);
+            if (!startup) { closeMarketOperator(operator, 'startup operatora zniknął'); continue; }
+            if (Math.random() < OPERATOR_SPONSOR_CHANCE * getDebutFactor()) {
+                const sponsor = spawnMarketMember(operator.id, `sponsor ${def.name}`);
+                operator.sponsors.push(sponsor.symbol);
+                startup.successChance = Math.min(0.95, startup.successChance + 0.05);
+            }
+        } else if (operator.status === 'active') {
+            const operatorStock = getOperatorStock(operator.id);
+            if (!operatorStock) { if (!def.main) closeMarketOperator(operator, 'upadek operatora'); continue; }
+            collectListingFees(operator, operatorStock);
+            investInMembers(operator, operatorStock);
+            if (!def.main && Math.random() < OPERATOR_EXCLUSIVITY_CHANCE) signExclusivity(operator, operatorStock);
+        }
+    }
+}
+
+function collectListingFees(operator, operatorStock) {
+    for (const stock of stocks.filter(s => getStockMarket(s) === operator.id && s !== operatorStock && !s.assetType && !s.isBankrupt)) {
+        const fee = Math.min(Math.max(0, stock.cash) * 0.05, getMarketCapValue(stock) * OPERATOR_LISTING_FEE * (LISTING_FEE_FACTOR[operator.id] ?? 1));
+        if (!(fee > 0)) continue;
+        adjustCompanyCash(stock, -fee);
+        adjustBalanceSheet(stock, { assets: -fee, retainedEarnings: -fee });
+        adjustCompanyCash(operatorStock, fee);
+        adjustBalanceSheet(operatorStock, { assets: fee, retainedEarnings: fee });
+    }
+}
+
+/** Operator inwestuje część gotówki w spółki swojego rynku (pakiety liczone w obrocie). */
+function investInMembers(operator, operatorStock) {
+    const members = stocks.filter(s => getStockMarket(s) === operator.id && s !== operatorStock && !s.assetType && !s.isBankrupt);
+    if (!members.length || operatorStock.cash <= 0) return;
+    const target = getRandomElement(members);
+    const budget = operatorStock.cash * 0.05;
+    const quantity = Math.floor(Math.min(getAvailableShares(target), budget / Math.max(0.01, target.price), target.totalShares * 0.02));
+    if (quantity <= 0) return;
+    const cost = quantity * target.price;
+    adjustCompanyCash(operatorStock, -cost); // gotówka → akcje (aktywa bez zmian)
+    target.sharesHeld += quantity;
+    if (!operatorStock.equityStakes) operatorStock.equityStakes = {};
+    operatorStock.equityStakes[target.symbol] = (operatorStock.equityStakes[target.symbol] || 0) + quantity;
+}
+
+/** Umowa na wyłączność: spółka z GPW przechodzi na rynek operatora (premia za podpis). */
+function signExclusivity(operator, operatorStock) {
+    const candidates = stocks.filter(s => getStockMarket(s) === 'GPW' && !s.marketOperator && !s.assetType && !s.isBankrupt && !s.isStateOwned
+        && ['BRONZE', 'SILVER'].includes(s.exchange));
+    if (!candidates.length) return null;
+    const stock = getRandomElement(candidates);
+    const bonus = Math.min(operatorStock.cash * 0.1, getMarketCapValue(stock) * 0.005);
+    if (bonus > 0) {
+        adjustCompanyCash(operatorStock, -bonus);
+        adjustBalanceSheet(operatorStock, { assets: -bonus, retainedEarnings: -bonus });
+        adjustCompanyCash(stock, bonus);
+        adjustBalanceSheet(stock, { assets: bonus, retainedEarnings: bonus });
+    }
+    stock.market = operator.id;
+    logEvent(`✍️ ${stock.name} podpisuje umowę na wyłączność z ${MARKET_OPERATOR_DEFS[operator.id].name} i przechodzi na rynek ${getMarketLabel(operator.id)}.`, 'market');
+    return stock;
+}
+
+// =================================================================================
+// B4: PRZENIESIENIE NOTOWAŃ SPÓŁKI FUNDUSZU (większość > 50%)
+// =================================================================================
+
+function getListingMoveTargets(stock) {
+    if (!stock || stock.assetType || stock.marketOperator || stock.isStateOwned || getFundStakePct(stock) <= 0.5) return [];
+    ensureMarketOperators();
+    return Object.keys(LISTING_MOVE_PRICE_EFFECT).filter(id => id !== getStockMarket(stock) && marketOperators[id]?.status === 'active');
+}
+
+function moveListing(symbol, marketId) {
+    const stock = stocks.find(s => s.symbol === symbol);
+    if (!getListingMoveTargets(stock).includes(marketId)) { showToast('Przeniesienie notowań niemożliwe (wymaga większości i aktywnego rynku).', 'warning'); return false; }
+    const quarter = typeof macro === 'object' ? macro.quarter : 0;
+    if (stock.listingMovedQuarter !== undefined && quarter - stock.listingMovedQuarter < 4) { showToast('Notowania można przenieść raz na rok gry.', 'warning'); return false; }
+    const cost = Math.round(getMarketCapValue(stock) * 0.003);
+    if (stock.cash < cost) { showToast(`${stock.name} nie ma gotówki na przeniesienie (${formatZl(cost, 0)}).`, 'error'); return false; }
+    adjustCompanyCash(stock, -cost);
+    adjustBalanceSheet(stock, { assets: -cost, retainedEarnings: -cost });
+    const from = getStockMarket(stock);
+    stock.market = marketId;
+    stock.listingMovedQuarter = quarter;
+    const effect = LISTING_MOVE_PRICE_EFFECT[marketId];
+    applyPriceEffect(symbol, effect, effect >= 0 ? 'positive' : 'negative', 'company');
+    logEvent(`🔀 ${stock.name} przenosi notowania z ${getMarketLabel(from)} na ${getMarketLabel(marketId)} (prowizja ${(MARKET_OPERATOR_DEFS[marketId].commission * 100).toFixed(2)}%, opłata za notowanie ×${LISTING_FEE_FACTOR[marketId]}).`, 'market');
+    return true;
+}
+
+// =================================================================================
+// WIDOK: zakładka „Rynki” w oknie Państwa
+// =================================================================================
+
+function renderMarketsPanel() {
+    ensureMarketOperators();
+    const statusLabel = { active: '🟢 aktywny', startup: '🧪 startup w inkubatorze', dormant: '⏳ jeszcze nie istnieje', closed: '🔒 zamknięty', inactive: '⏸️ nieaktywny — wkrótce' };
+    return `<p class="bank-lead">Operatorzy rynków pobierają prowizję od każdej transakcji na swoim rynku (płaci też fundusz) i opłatę za notowanie, inwestują w spółki członkowskie i podpisują umowy na wyłączność. Zamknięcie operatora zdejmuje jego spółki z notowań — posiadacze są rozliczani po ostatniej cenie.</p>
+        <div class="bank-grid">${Object.values(marketOperators).filter(operator => operator.status === 'active').map(operator => { // tylko rynki notowane na giełdzie
+            const def = MARKET_OPERATOR_DEFS[operator.id];
+            const stock = operator.symbol ? stocks.find(s => s.symbol === operator.symbol) : null;
+            const startup = operator.startupSymbol ? stocks.find(s => s.symbol === operator.startupSymbol && s.assetType === 'Startup') : null;
+            return `<article class="bank-card market-card" style="border-top: 3px solid ${def.color}">
+                <header class="bank-card-head"><span class="bank-card-icon">🏛️</span><div><h4>${escapeHtml(def.name)}</h4><span class="bank-card-type">${statusLabel[operator.status] || operator.status}</span></div></header>
+                <dl class="bank-card-rates">
+                    <div><dt>Prowizja</dt><dd>${(def.commission * 100).toFixed(2)}%</dd></div>
+                    <div><dt>Spółki</dt><dd>${operator.members}</dd></div>
+                    <div><dt>Kurs operatora</dt><dd>${stock ? formatZl(stock.price) : '—'}</dd></div>
+                </dl>
+                ${startup ? `<p class="text-sm">Finansowanie startupu: ${formatZl(startup.currentFunding, 0)} / ${formatZl(startup.fundingGoal, 0)} · sponsorzy: ${operator.sponsors.length}</p>` : ''}
+                ${operator.commissionsTotal > 0 ? `<p class="text-xs text-muted">Prowizje łącznie: ${formatZl(operator.commissionsTotal, 0)}</p>` : ''}
+            </article>`;
+        }).join('')}</div>`;
 }
