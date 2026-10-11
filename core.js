@@ -2770,7 +2770,8 @@ const SECTOR_CYCLE_PHASES = {
 
 const RULING_PARTIES = {
     market: { name: 'Koalicja Rynkowa', privatization: 1.6, nationalization: 0.5, subsidies: 0.7, stateMood: -0.02 },
-    state:  { name: 'Blok Państwowy',   privatization: 0.4, nationalization: 1.6, subsidies: 1.5, stateMood: 0.03 }
+    state:  { name: 'Blok Państwowy',   privatization: 0.4, nationalization: 1.6, subsidies: 1.5, stateMood: 0.03 },
+    people: { name: 'Ludowcy',          privatization: 0.8, nationalization: 1.0, subsidies: 1.3, stateMood: 0.01 } // 0.13: płaca minimalna, zasiłki, mieszkania
 };
 
 let macro = createMacroState();
@@ -2785,7 +2786,7 @@ function createMacroState() {
         expectation: { change: 0, label: 'bez zmian' },
         lastDecision: null,
         sectorCycles: createSectorCycles(),
-        election: { quartersLeft: getRandomIntInRange(6, 12), ruling: Math.random() < 0.5 ? 'market' : 'state', campaign: false, donations: { market: 0, state: 0 }, favor: null },
+        election: { quartersLeft: getRandomIntInRange(6, 12), ruling: Math.random() < 0.5 ? 'market' : 'state', campaign: false, donations: { market: 0, state: 0, people: 0 }, favor: null, coalition: null, support: null },
         recentEvents: [],
         shocks: { inflation: 0 }
     };
@@ -2806,14 +2807,11 @@ function ensureMacroState() {
     macro = { ...fresh, ...(macro || {}) };
     macro.sectorCycles = { ...fresh.sectorCycles, ...(macro.sectorCycles || {}) };
     macro.election = { ...fresh.election, ...(macro.election || {}) };
+    macro.election.donations = { market: 0, state: 0, people: 0, ...(macro.election.donations || {}) };
     macro.shocks = { ...fresh.shocks, ...(macro.shocks || {}) };
     if (!Array.isArray(macro.history)) macro.history = [];
     if (!Array.isArray(macro.recentEvents)) macro.recentEvents = [];
     return macro;
-}
-
-function getRulingParty() {
-    return RULING_PARTIES[macro.election?.ruling] || RULING_PARTIES.market;
 }
 
 // =================================================================================
@@ -2870,7 +2868,11 @@ function advanceMacroQuarter() {
     macro.shocks.inflation *= 0.5;
 
     // Bezrobocie: prawo Okuna + powrót do naturalnej stopy.
-    macro.unemployment = clampValue(macro.unemployment - (macro.gdpAnnual - 0.018) * 0.3 + (NATURAL_UNEMPLOYMENT - macro.unemployment) * 0.2 + gaussianRandom() * 0.002, 0.02, 0.2);
+    // 0.13: naturalne bezrobocie przesuwają ustawy i podaż pracy (względem ustawień startowych).
+    const naturalRate = NATURAL_UNEMPLOYMENT + (typeof getSocietyUnemploymentShift === 'function' ? getSocietyUnemploymentShift() : 0);
+    macro.unemployment = clampValue(macro.unemployment - (macro.gdpAnnual - 0.018) * 0.3 + (naturalRate - macro.unemployment) * 0.2 + gaussianRandom() * 0.002, 0.02, 0.2);
+
+    if (typeof advanceSocietyQuarter === 'function') advanceSocietyQuarter(); // 0.13: kraj, rynek pracy, ustawy (society.js)
 
     advanceSectorCycles();
     advanceElectionCycle();
@@ -3012,15 +3014,15 @@ function supportElectionCampaign(partyId, amount) {
     amount = Math.floor(Number(amount));
     if (!RULING_PARTIES[partyId] || !playerFund) return false;
     if (!election.campaign) { showToast('Darowizny przyjmowane są tylko w trakcie kampanii.', 'warning'); return false; }
-    if (!election.donations) election.donations = { market: 0, state: 0 };
+    election.donations = { market: 0, state: 0, people: 0, ...(election.donations || {}) };
     const assets = getFundAssets();
-    const given = election.donations.market + election.donations.state;
+    const given = Object.values(election.donations).reduce((sum, value) => sum + (Number(value) || 0), 0);
     if (!(amount >= 100)) { showToast('Minimalna darowizna: 100 zł.', 'warning'); return false; }
     if (given + amount > assets * ELECTION_DONATION_LIMIT) { showToast(`Limit: 2% aktywów funduszu na kampanię (zostało ${formatZl(Math.max(0, assets * ELECTION_DONATION_LIMIT - given), 0)}).`, 'warning'); return false; }
     if (playerCash < amount) { showToast('Za mało gotówki funduszu.', 'error'); return false; }
     playerCash -= amount;
     recordPayment('player-fund', `external:partia-${partyId}`, amount, `Darowizna: ${RULING_PARTIES[partyId].name}`);
-    election.donations[partyId] += amount;
+    election.donations[partyId] = (Number(election.donations[partyId]) || 0) + amount;
     const share = amount / Math.max(1, assets);
     if (typeof getRecord === 'function') getRecord('player').suspicion += 5 + share * 1000;
     if (share > 0.005) playerFund.trust = Math.max(0, playerFund.trust - share * 300);
@@ -3028,50 +3030,49 @@ function supportElectionCampaign(partyId, amount) {
     return true;
 }
 
-/** Przechył szans wyborczych od darowizn funduszu (do ±10 pkt proc.). */
-function getDonationTilt() {
-    const d = macro.election?.donations;
-    if (!d) return 0;
-    const assets = Math.max(1, typeof getFundAssets === 'function' ? getFundAssets() : 1);
-    return clampValue((d.state - d.market) / assets * 5, -0.1, 0.1);
-}
-
 function settlePoliticalFavor() {
     const election = macro.election;
-    const d = election.donations || { market: 0, state: 0 };
-    if (d.market + d.state > 0) {
-        const backed = d.state > d.market ? 'state' : 'market';
-        const won = backed === election.ruling;
+    const d = { market: 0, state: 0, people: 0, ...(election.donations || {}) };
+    const total = Object.values(d).reduce((sum, value) => sum + (Number(value) || 0), 0);
+    if (total > 0) {
+        const backed = Object.keys(d).sort((a, b) => d[b] - d[a])[0];
+        const won = backed === election.ruling || backed === election.coalition?.partner;
         election.favor = { sign: won ? 1 : -1, quartersLeft: POLITICAL_FAVOR_QUARTERS };
         addMail({ sender: CORPORATION_SENDER, subject: won ? '🗳️ Wsparta partia wygrała wybory' : '🗳️ Wsparta partia przegrała wybory',
             body: won ? 'Nowa władza pamięta o wsparciu: łagodniejsze kontrole KNF i więcej kontraktów MON dla spółek funduszu przez 2 lata gry.'
                 : 'Wygrani pamiętają, kogo wspierał fundusz: KNF przygląda się uważniej, kontrakty MON omijają spółki funduszu przez 2 lata gry.', importance: 2 });
     }
-    election.donations = { market: 0, state: 0 };
+    election.donations = { market: 0, state: 0, people: 0 };
 }
 
+/** 0.13: wybory z poparciem liczonym z klas (3 partie), koalicja przy zwycięzcy < 40%. */
 function advanceElectionCycle() {
     const election = macro.election;
     if (election.favor?.quartersLeft > 0) election.favor.quartersLeft--;
     election.quartersLeft--;
     if (election.quartersLeft === 1 && !election.campaign) {
         election.campaign = true;
+        if (typeof computePartySupport === 'function') election.support = computePartySupport(false); // sondaże
         logEvent(`🗳️ Rusza kampania przed wyborami parlamentarnymi. Rządzi ${getRulingParty().name} — spółki państwowe pod lupą.`, 'state');
         return;
     }
     if (election.quartersLeft > 0) return;
 
-    // Zła koniunktura i wysoka inflacja szkodzą rządzącym.
-    const badTimes = economyCycle.phase === 'recession' || macro.inflation > 0.05 || macro.unemployment > 0.09;
-    const tilt = getDonationTilt() * (election.ruling === 'market' ? 1 : -1); // darowizny dla opozycji zwiększają szansę zmiany
-    const change = Math.random() < (badTimes ? 0.7 : 0.35) + tilt;
     const previous = election.ruling;
-    if (change) election.ruling = previous === 'market' ? 'state' : 'market';
+    const result = resolveElection(computePartySupport(true));
+    election.terms = result.winner === previous ? (Number(election.terms) || 1) + 1 : 1;
+    election.ruling = result.winner;
+    election.coalition = result.coalition;
+    election.support = result.support;
+    election.history = [...(election.history || []), { quarter: macro.quarter, winner: result.winner, coalition: result.coalition?.partner || null }].slice(-8);
+    const change = previous !== result.winner;
     election.campaign = false;
     election.quartersLeft = ELECTION_INTERVAL_QUARTERS;
     settlePoliticalFavor();
+    if (typeof drawEducationPriority === 'function') drawEducationPriority();
     const party = getRulingParty();
-    logEvent(`🗳️ WYBORY: ${change ? `zmiana władzy — wygrywa ${party.name}` : `${party.name} utrzymuje władzę`}. ${party === RULING_PARTIES.state ? 'Więcej dotacji i nacjonalizacji.' : 'Kurs na prywatyzację i mniej dotacji.'}`, 'state');
+    const results = PARTY_IDS.map(id => `${RULING_PARTIES[id].name} ${result.support[id].toFixed(0)}%`).join(', ');
+    logEvent(`🗳️ WYBORY: ${change ? `zmiana władzy — wygrywa ${RULING_PARTIES[result.winner].name}` : `${RULING_PARTIES[result.winner].name} utrzymuje władzę`}${result.coalition ? ` (koalicja z: ${RULING_PARTIES[result.coalition.partner].name})` : ''}. Wyniki: ${results}. ${party.nationalization > 1 ? 'Więcej dotacji i nacjonalizacji.' : 'Kurs na prywatyzację i mniej dotacji.'}`, 'state');
     if (change) {
         for (const stock of stocks.filter(s => s.isStateOwned && !s.isBankrupt)) {
             applyPriceEffect(stock.symbol, party.stateMood * 2, party.stateMood > 0 ? 'positive' : 'negative', 'market');
@@ -3180,4 +3181,715 @@ function getMacroTrustPenalty(fundReturn, elapsedMs) {
     const hurdle = Math.max(getDepositRate(), macro.inflation) * years;
     const shortfall = hurdle - fundReturn;
     return shortfall > 0 ? Math.min(15, shortfall * 300) : 0;
+}
+
+// #################################################################################
+// ## society.js
+// #################################################################################
+
+// society.js — Społeczeństwo i rynek pracy (wersja 0.13, części S1, S3, S5)
+//
+// Kraj (miliony mieszkańców) z 6 klasami zamożności, edukacją, migracją i zdarzeniami demograficznymi.
+// Struktura klas daje indeks popytu (wzrost przychodów sektorów konsumenckich). Rynek pracy: realne indeksy
+// płac 5 grup (krzywa Phillipsa), niedobór specjalistów zależny od edukacji, migracja według atrakcyjności
+// kraju. Państwo: ustawy (płaca minimalna, zasiłki, mieszkania socjalne, prawa pracownicze), budżet
+// i skutki deficytu, trzy partie (Ludowcy), poparcie liczone z klas i koalicje.
+//
+// Zasada kalibracji: przy ustawieniach startowych (popyt 1,0, płace 1,0, ustawy na poziomie startowym)
+// nic nie zmienia wyników spółek względem 0.12 — nowe systemy tylko odchylają wynik od tej bazy.
+
+const SOCIETY_CLASSES = [
+    { id: 'poor',     name: 'Biedna',         start: 0.22, weight: 0.6,  icon: '🥖', sectors: ['Żywność', 'Usługi'] },
+    { id: 'lowerMid', name: 'Średnia niższa', start: 0.26, weight: 0.85, icon: '🧺', sectors: ['Żywność', 'Dobra konsumpcyjne'] },
+    { id: 'mid',      name: 'Średnia',        start: 0.24, weight: 1.0,  icon: '🏠', sectors: ['Dobra konsumpcyjne', 'Gaming', 'Usługi'] },
+    { id: 'upperMid', name: 'Średnia wyższa', start: 0.15, weight: 1.3,  icon: '✈️', sectors: ['Turystyka', 'Gaming', 'Nieruchomości'] },
+    { id: 'rich',     name: 'Zamożna',        start: 0.10, weight: 1.8,  icon: '🛥️', sectors: ['Turystyka', 'Nieruchomości', 'Finanse'] },
+    { id: 'veryRich', name: 'Bardzo zamożna', start: 0.03, weight: 3.0,  icon: '💎', sectors: ['Nieruchomości', 'Finanse'] }
+];
+
+// Elastyczność przychodów sektora względem indeksu popytu (dobra luksusowe > 1, podstawowe < 1).
+const DEMAND_ELASTICITY = { 'Turystyka': 1.5, 'Gaming': 1.3, 'Nieruchomości': 1.2, 'Dobra konsumpcyjne': 1.0, 'Usługi': 0.8, 'Media': 0.6, 'Żywność': 0.3 };
+const DEMAND_GROWTH_SCALE = 0.02;           // +(popyt − 1) × elastyczność × 2 pp na kwartał
+const POPULATION_NATURAL_GROWTH = 0.0005;   // +0,05% na kwartał
+const CLASS_MOBILITY_LIMIT = 0.008;         // ±0,8% udziału klasy na kwartał
+const CLASS_REVERSION = 0.03;               // pokoleniowa wymiana: powolny powrót do struktury startowej
+const EDUCATION_TARGETS = { low: 45, medium: 60, high: 75 };
+const EDUCATION_LABELS = { low: 'niski', medium: 'średni', high: 'wysoki' };
+const SPECIALIST_SHORTAGE_SECTORS = ['Technologia', 'Badania', 'Medycyna'];
+const SOCIETY_HISTORY_LIMIT = 16;
+
+// Grupy zatrudnienia (płace jako indeksy realne — bez inflacji, ta jest już w przychodach).
+const WORKFORCE_GROUPS = [
+    { id: 'board',       name: 'Dyrekcja i zarząd' },
+    { id: 'specialists', name: 'Specjaliści' },
+    { id: 'workers',     name: 'Pracownicy' },
+    { id: 'cheap',       name: 'Tania siła robocza' },
+    { id: 'grey',        name: 'Szara strefa' }
+];
+
+// Zdarzenia demograficzne (szansa na rok). Fala emigracji jest wyzwalana przez migrację (S3).
+const DEMOGRAPHIC_EVENTS = [
+    { id: 'epidemic', chance: 0.04, icon: '🦠', name: 'Epidemia', population: -0.003,
+      text: 'Epidemia: szpitale pełne, ludzie zostają w domach. Turystyka traci, medycyna zyskuje.',
+      revenue: { 'Turystyka': -0.10, 'Medycyna': 0.05 }, quarters: 2 },
+    { id: 'babyBoom', chance: 0.05, icon: '👶', name: 'Wyż demograficzny', populationPerQuarter: 0.002, quarters: 4, education: -1,
+      text: 'Wyż demograficzny: rodzi się więcej dzieci. Rośnie popyt na mieszkania, szkoły są przepełnione.',
+      growth: { 'Nieruchomości': 0.003 } },
+    { id: 'refugees', chance: 0.04, icon: '🧳', name: 'Napływ imigrantów', population: 0.008,
+      text: 'Napływ imigrantów i uchodźców: więcej taniej siły roboczej, wyższe wydatki państwa.' },
+    { id: 'disaster', chance: 0.03, icon: '🌊', name: 'Klęska żywiołowa', population: -0.001,
+      text: 'Klęska żywiołowa: powódź niszczy uprawy i domy. Budowlanka ma pracę przy odbudowie, żywność drożeje.',
+      revenue: { 'Budowlany': 0.06, 'Żywność': -0.05 }, quarters: 2 }
+];
+
+// Ustawy: poziomy i start (ustawienia startowe = kalibracja 0.12).
+const SOCIAL_LAWS = {
+    minWage:  { name: 'Płaca minimalna',      icon: '💵', levels: ['brak', 'niska', 'średnia', 'wysoka'], start: 1 },
+    benefits: { name: 'Zasiłki',              icon: '🤲', levels: ['brak', 'niskie', 'średnie', 'wysokie'], start: 1 },
+    housing:  { name: 'Mieszkania socjalne',  icon: '🏘️', levels: ['brak', 'program', 'duży program'], start: 1 },
+    rights:   { name: 'Prawa pracownicze',    icon: '⚖️', levels: ['liberalne', 'standardowe', 'ochronne'], start: 1 }
+};
+const MIN_WAGE_STEP = 0.04;          // płace pracowników i taniej siły +4% na poziom
+const HOUSING_PROGRAM_QUARTERS = 8;
+const RIGHTS_SATISFACTION = [0, 5, 10];
+const RIGHTS_UNION_MULT = [0.7, 1, 1.5];
+
+// Programy partii: kierunek zmian ustaw i priorytet edukacji.
+const PARTY_PROGRAMS = {
+    market: { moves: [['minWage', -1], ['benefits', -1], ['housing', -1], ['rights', -1]], education: 'high', deficit: 'cut' },
+    state:  { moves: [['rights', 1], ['housing', 1]], education: 'high', deficit: 'cit' },
+    people: { moves: [['minWage', 1], ['benefits', 1], ['housing', 1]], education: 'medium', deficit: 'cit' }
+};
+// Preferencje wyborcze klas: [Ludowcy, Blok Państwowy, Koalicja Rynkowa].
+const CLASS_VOTE = { poor: [50, 35, 15], lowerMid: [35, 35, 30], mid: [20, 35, 45], upperMid: [10, 30, 60], rich: [5, 20, 75], veryRich: [5, 15, 80] };
+const PARTY_IDS = ['people', 'state', 'market'];
+const COALITION_THRESHOLD = 0.40;
+const ELECTION_FATIGUE = 5;          // pp na każdą kadencję u władzy
+const ELECTION_BAD_TIMES = 10;       // pp przy złej koniunkturze
+const PROTEST_TO_PEOPLE = 0.75;      // część odpływu od rządzących, która trafia do Ludowców
+const DEFICIT_BOND_QUARTERS = 4;
+const DEFICIT_BOND_PREMIUM = 0.0025;
+const DEFICIT_ACTION_QUARTERS = 8;
+const DEFICIT_CIT_STEP = 0.02;
+
+let society = createSocietyState();
+
+function createSocietyState() {
+    const classes = Object.fromEntries(SOCIETY_CLASSES.map(c => [c.id, c.start]));
+    const laws = Object.fromEntries(Object.entries(SOCIAL_LAWS).map(([id, law]) => [id, law.start]));
+    const state = {
+        population: Math.round(getRandomInRange(36e6, 40e6)),
+        classes,
+        demandIndex: 1,
+        education: 55,
+        educationPriority: 'medium',
+        migration: { last: 0, attractiveness: 55, lowQuarters: 0, emigrationWaves: 0 },
+        wages: Object.fromEntries(WORKFORCE_GROUPS.map(g => [g.id, 1])),
+        wageHistory: [],
+        shortage: 1,
+        specDemandScale: null,
+        specialistSupplyAdj: 1,
+        priceLevel: 1,
+        laws,
+        pendingLaw: null,
+        lawChanges: {},
+        lawTimer: getRandomIntInRange(2, 4),
+        housingProgram: 0,
+        budget: { balance: 0, extraSpending: 0, publicServices: 0, deficitQuarters: 0, socialSpending: 0, greyTaxLoss: 0, bondPremium: 0, citAdd: 0, deficitActed: false },
+        events: [],              // aktywne zdarzenia: { id, quartersLeft }
+        lastEvent: null,
+        support: { people: 27, state: 32, market: 41 },
+        quarter: 0,
+        history: [],
+        report: []               // wpisy do kwartalnego raportu (jeden mail na kwartał)
+    };
+    state.demandBase = computeRawDemand(state);
+    return state;
+}
+
+function ensureSocietyState() {
+    const fresh = createSocietyState();
+    if (!society || typeof society !== 'object') society = fresh;
+    society = { ...fresh, ...society };
+    society.classes = { ...fresh.classes, ...(society.classes || {}) };
+    society.laws = { ...fresh.laws, ...(society.laws || {}) };
+    society.wages = { ...fresh.wages, ...(society.wages || {}) };
+    society.migration = { ...fresh.migration, ...(society.migration || {}) };
+    society.budget = { ...fresh.budget, ...(society.budget || {}) };
+    for (const key of ['events', 'history', 'report', 'wageHistory']) if (!Array.isArray(society[key])) society[key] = [];
+    if (!society.lawChanges || typeof society.lawChanges !== 'object') society.lawChanges = {};
+    if (!(society.demandBase > 0)) society.demandBase = fresh.demandBase;
+    return society;
+}
+
+// =================================================================================
+// S1: KLASY, POPYT, EDUKACJA, DEMOGRAFIA
+// =================================================================================
+
+/** Waga konsumpcji klasy (zasiłki podnoszą konsumpcję biednych o 0,1 na poziom ponad start). */
+function getClassWeight(cls, state = society) {
+    const benefits = (Number(state?.laws?.benefits) || 0) - SOCIAL_LAWS.benefits.start;
+    return cls.weight + (cls.id === 'poor' ? 0.1 * benefits : 0);
+}
+
+function computeRawDemand(state = society) {
+    return SOCIETY_CLASSES.reduce((sum, cls) => sum + (Number(state.classes?.[cls.id]) || 0) * getClassWeight(cls, state), 0);
+}
+
+/** Indeks popytu: Σ(udział × waga) / wartość startowa (start = 1,00). */
+function getDemandIndex(state = society) {
+    if (!state) return 1;
+    return computeRawDemand(state) / (state.demandBase || 1);
+}
+
+function getSocietySectorList(stock) {
+    return Array.isArray(stock?.sector) ? stock.sector : [];
+}
+
+/** Dodatek do kwartalnego wzrostu przychodów: popyt (sektory konsumenckie), niedobór specjalistów, wyż. */
+function getSocietyGrowthAdj(stock) {
+    if (typeof society !== 'object' || !society) return 0;
+    const sectors = getSocietySectorList(stock);
+    if (!sectors.length) return 0;
+    const demand = society.demandIndex - 1;
+    const shortage = Math.max(0, (Number(society.shortage) || 1) - 1);
+    let total = 0;
+    for (const sector of sectors) {
+        let adj = demand * (DEMAND_ELASTICITY[sector] || 0) * DEMAND_GROWTH_SCALE;
+        if (SPECIALIST_SHORTAGE_SECTORS.includes(sector)) adj -= shortage / 0.1 * 0.001;
+        for (const event of society.events) {
+            const def = DEMOGRAPHIC_EVENTS.find(e => e.id === event.id);
+            if (def?.growth?.[sector]) adj += def.growth[sector];
+        }
+        if (society.housingProgram > 0 && (sector === 'Budowlany' || sector === 'Nieruchomości')) adj += 0.003;
+        total += adj;
+    }
+    return total / sectors.length;
+}
+
+/** Jednorazowy mnożnik przychodów kwartału (epidemia, klęska) — nie zmienia bazy przychodów. */
+function getSocietyRevenueFactor(stock) {
+    if (typeof society !== 'object' || !society?.events?.length) return 1;
+    const sectors = getSocietySectorList(stock);
+    if (!sectors.length) return 1;
+    let effect = 0;
+    for (const event of society.events) {
+        const def = DEMOGRAPHIC_EVENTS.find(e => e.id === event.id);
+        if (!def?.revenue) continue;
+        const values = sectors.map(sector => def.revenue[sector]).filter(v => v !== undefined);
+        if (values.length) effect += values.reduce((a, b) => a + b, 0) / sectors.length;
+    }
+    return Math.max(0.5, 1 + effect);
+}
+
+/** Przesuwa udziały klas o jeden szczebel (s > 0 w górę, s < 0 w dół) i dodaje przesunięcia ustaw. */
+function applyClassMobility(state, s, poorUp = 0) {
+    const ids = SOCIETY_CLASSES.map(c => c.id);
+    const shares = ids.map(id => Number(state.classes[id]) || 0);
+    const next = [...shares];
+    if (s > 0) {
+        for (let i = 0; i < shares.length - 1; i++) { const moved = shares[i] * s; next[i] -= moved; next[i + 1] += moved; }
+    } else if (s < 0) {
+        for (let i = 1; i < shares.length; i++) { const moved = shares[i] * -s; next[i] -= moved; next[i - 1] += moved; }
+    }
+    if (poorUp > 0) { const moved = next[0] * poorUp; next[0] -= moved; next[1] += moved; }
+    // Wymiana pokoleń: powolny powrót do struktury startowej (bez dryfu do 0 albo 50%).
+    SOCIETY_CLASSES.forEach((cls, i) => { next[i] += (cls.start - next[i]) * CLASS_REVERSION; });
+    const total = next.reduce((a, b) => a + Math.max(0, b), 0) || 1;
+    ids.forEach((id, i) => { state.classes[id] = Math.max(0, next[i]) / total; });
+}
+
+/** Dopisuje udział do klasy biednej (imigracja) i normalizuje sumę do 100%. */
+function addToPoorClass(share) {
+    society.classes.poor += Math.max(0, share);
+    const total = Object.values(society.classes).reduce((a, b) => a + b, 0) || 1;
+    for (const id of Object.keys(society.classes)) society.classes[id] /= total;
+}
+
+/** Przesunięcie klas z gospodarki: PKB, bezrobocie, inflacja. */
+function getClassMobilityShift() {
+    const gdp = Number(macro?.gdpAnnual) || 0;
+    const unemployment = Number(macro?.unemployment) || NATURAL_UNEMPLOYMENT;
+    const inflation = Number(macro?.inflation) || INFLATION_TARGET;
+    return clampValue((gdp - 0.02) * 0.4 - (unemployment - 0.06) * 0.5 - (inflation - INFLATION_TARGET) * 0.2, -CLASS_MOBILITY_LIMIT, CLASS_MOBILITY_LIMIT);
+}
+
+/** Wpis do dziennika bez osobnego maila (trafia do kwartalnego raportu kraju). */
+function logSociety(text, category = 'state') {
+    if (typeof eventLog !== 'undefined') {
+        eventLog.unshift({ text, category });
+        if (typeof MAX_LOG_ENTRIES !== 'undefined' && eventLog.length > MAX_LOG_ENTRIES) eventLog.pop();
+    }
+    if (society) {
+        society.report.push(text.slice(0, 200));
+        if (society.report.length > 20) society.report.shift();
+    }
+}
+
+function triggerDemographicEvent(def) {
+    society.lastEvent = { id: def.id, quarter: society.quarter };
+    if (def.population) society.population = Math.round(society.population * (1 + def.population));
+    if (def.education) society.education = clampValue(society.education + def.education, 0, 100);
+    if (def.quarters) {
+        society.events = society.events.filter(e => e.id !== def.id);
+        society.events.push({ id: def.id, quartersLeft: def.quarters });
+    }
+    if (def.id === 'refugees') {
+        addToPoorClass(0.004); // imigranci zasilają głównie klasę biedną
+        society.wages.cheap = Math.max(0.8, society.wages.cheap - 0.01);
+        const cost = Math.round(Math.max(0, (society.budget.taxBase || 0) * 0.1));
+        governmentTreasury -= cost;
+        society.budget.extraSpending = (Number(society.budget.extraSpending) || 0) + cost;
+    }
+    if (def.id === 'disaster' && typeof applyPriceEffect === 'function' && typeof stocks !== 'undefined') {
+        for (const stock of stocks) {
+            if (stock.assetType || stock.isBankrupt) continue;
+            if (stock.sector?.includes('Budowlany')) applyPriceEffect(stock.symbol, 0.03, 'positive', 'market');
+            else if (stock.sector?.includes('Żywność')) applyPriceEffect(stock.symbol, -0.03, 'negative', 'market');
+        }
+    }
+    logSociety(`${def.icon} ${def.text}`);
+}
+
+function processDemographicEvents() {
+    society.events.forEach(event => {
+        const def = DEMOGRAPHIC_EVENTS.find(e => e.id === event.id);
+        if (def?.populationPerQuarter) society.population = Math.round(society.population * (1 + def.populationPerQuarter));
+        event.quartersLeft--;
+    });
+    society.events = society.events.filter(event => event.quartersLeft > 0);
+    for (const def of DEMOGRAPHIC_EVENTS) {
+        if (society.events.some(e => e.id === def.id)) continue;
+        if (Math.random() < def.chance / 4) { triggerDemographicEvent(def); break; } // najwyżej jedno nowe zdarzenie na kwartał
+    }
+}
+
+/** Edukacja dryfuje ±1 na kwartał w stronę celu wynikającego z priorytetu państwa. */
+function advanceEducation() {
+    const target = EDUCATION_TARGETS[society.educationPriority] ?? EDUCATION_TARGETS.medium;
+    const gap = target - society.education;
+    society.education = clampValue(society.education + clampValue(gap, -1, 1) * (Math.abs(gap) < 1 ? 1 : getRandomInRange(0.5, 1)), 0, 100);
+}
+
+/** Priorytet edukacji na kadencję: zwykle program partii rządzącej, czasem inaczej. */
+function drawEducationPriority() {
+    const program = PARTY_PROGRAMS[macro?.election?.ruling]?.education || 'medium';
+    society.educationPriority = Math.random() < 0.6 ? program : getRandomElement(Object.keys(EDUCATION_TARGETS));
+}
+
+/** Miasto rośnie razem z krajem (tempo krajowe co kwartał; składnik lokalny bez zmian). */
+function growCityWithCountry(growthRate) {
+    if (typeof city !== 'object' || !city || !Number.isFinite(city.population)) return;
+    city.population = Math.max(1000, Math.round(city.population * (1 + growthRate)));
+}
+
+/** Co kwartał (z advanceMacroQuarter): demografia, klasy, popyt, rynek pracy, ustawy i budżet. */
+function advanceSocietyQuarter() {
+    ensureSocietyState();
+    society.quarter++;
+    society.report = [];
+    const before = society.population;
+    society.priceLevel *= 1 + (Number(macro?.inflation) || 0) / 4;
+
+    society.population = Math.round(society.population * (1 + POPULATION_NATURAL_GROWTH));
+    processDemographicEvents();
+    if (typeof advanceLaborMarket === 'function') advanceLaborMarket();      // S3: płace, niedobór, migracja
+    if (typeof advanceSocialPolicy === 'function') advanceSocialPolicy();    // S5: ustawy, budżet
+
+    const poorUp = typeof getLawPoorMobility === 'function' ? getLawPoorMobility() : 0;
+    applyClassMobility(society, getClassMobilityShift(), poorUp);
+    society.demandIndex = getDemandIndex();
+    advanceEducation();
+
+    const growth = before > 0 ? society.population / before - 1 : 0;
+    society.lastGrowth = growth;
+    growCityWithCountry(growth);
+
+    society.history.push({
+        quarter: society.quarter, population: society.population, demand: society.demandIndex, education: society.education,
+        poor: society.classes.poor, migration: society.migration.last, shortage: society.shortage, wages: { ...society.wages }
+    });
+    if (society.history.length > SOCIETY_HISTORY_LIMIT) society.history.shift();
+}
+
+/** Strukturalna zmiana bezrobocia względem startu (ustawy, podaż pracy) — wołane w advanceMacroQuarter. */
+function getSocietyUnemploymentShift() {
+    if (typeof society !== 'object' || !society) return 0;
+    const laws = society.laws || {};
+    const minWage = ((Number(laws.minWage) || 0) - SOCIAL_LAWS.minWage.start) * 0.002;
+    const benefits = ((Number(laws.benefits) || 0) - SOCIAL_LAWS.benefits.start) * 0.001;
+    const supply = clampValue(((Number(society.lastGrowth) || POPULATION_NATURAL_GROWTH) - POPULATION_NATURAL_GROWTH) * 1, -0.002, 0.002);
+    return minWage + benefits + supply;
+}
+
+function formatPopulation(value) {
+    return `${(value / 1e6).toFixed(2).replace('.', ',')} mln`;
+}
+
+// =================================================================================
+// S3: RYNEK PRACY — płace (krzywa Phillipsa), niedobór specjalistów, migracja
+// =================================================================================
+
+const LABOR_FORCE_SHARE = 0.5;
+const WAGE_REVERSION = 0.05;           // realne płace wracają do produktywności (indeks 1,0 lub podłoga płacy minimalnej)
+const WAGE_LIMITS = [0.7, 1.6];
+const SPECIALIST_SHORTAGE_START = 0.97;
+const SPECIALIST_ADAPTATION = 0.1;
+
+function getSpecialistSupply() {
+    const education = clampValue(Number(society.education) || 55, 0, 100);
+    return society.population * LABOR_FORCE_SHARE * (0.10 + education / 100 * 0.25) * (Number(society.specialistSupplyAdj) || 1);
+}
+
+/** Popyt spółek na specjalistów jako indeks względem ich zatrudnienia na starcie (debiuty nie zawyżają popytu). */
+function getSpecialistDemandIndex() {
+    if (typeof stocks === 'undefined' || typeof getWorkforceGroupCounts !== 'function') return 1;
+    let now = 0, start = 0;
+    for (const stock of stocks) {
+        const wf = stock.workforce;
+        if (!wf || stock.isBankrupt || !(wf.employeesStart > 0)) continue;
+        now += getWorkforceGroupCounts(stock).specialists;
+        start += wf.employeesStart * (wf.base.specialists || 0);
+    }
+    return start > 0 ? now / start : 1;
+}
+
+/**
+ * Niedobór = popyt na specjalistów / podaż (oba jako indeksy względem startu; na starcie ~0,97).
+ * Podaż zależy od populacji, edukacji i drenażu mózgów. Rynek się dostosowuje (szkolenia, automatyzacja):
+ * luka zamyka się o 10% na kwartał, więc trwały niedobór daje dopiero długi spadek edukacji albo emigracja.
+ */
+function updateSpecialistShortage() {
+    const supply = getSpecialistSupply();
+    if (!(supply > 0)) return society.shortage;
+    if (!(society.specSupplyStart > 0)) society.specSupplyStart = supply;
+    if (!(society.specDemandScale > 0)) society.specDemandScale = 1;
+    society.shortage = SPECIALIST_SHORTAGE_START * getSpecialistDemandIndex() / (supply / society.specSupplyStart) * society.specDemandScale;
+    society.specDemandScale *= 1 + SPECIALIST_ADAPTATION * (SPECIALIST_SHORTAGE_START - society.shortage) / SPECIALIST_SHORTAGE_START;
+    return society.shortage;
+}
+
+/** Podłoga płac pracowników i taniej siły z płacy minimalnej (względem poziomu startowego). */
+function getMinWageFloor() {
+    return 1 + MIN_WAGE_STEP * ((Number(society.laws?.minWage) || 0) - SOCIAL_LAWS.minWage.start);
+}
+
+function getAverageWageIndex() {
+    const weights = { board: 0.03, specialists: 0.25, workers: 0.5, cheap: 0.2, grey: 0.02 };
+    return Object.entries(weights).reduce((sum, [id, w]) => sum + (Number(society.wages[id]) || 1) * w, 0);
+}
+
+/** Indeksy płac realnych 5 grup: krzywa Phillipsa, niedobór, imigracja, płaca minimalna. */
+function advanceWages() {
+    const unemployment = Number(macro?.unemployment) || NATURAL_UNEMPLOYMENT;
+    const phillips = 0.5 * (NATURAL_UNEMPLOYMENT - unemployment) / 4;   // realnie: inflacja jest już w przychodach
+    const floor = getMinWageFloor();
+    const shortage = updateSpecialistShortage();
+    const immigration = (Number(society.migration.last) || 0) > 0.0015;
+    for (const group of WORKFORCE_GROUPS) {
+        if (group.id === 'grey') continue;
+        let w = Number(society.wages[group.id]) || 1;
+        const anchor = group.id === 'workers' || group.id === 'cheap' ? Math.max(1, floor) : 1;
+        w += phillips - (w - anchor) * WAGE_REVERSION;
+        if (group.id === 'specialists' && shortage > 1) w += clampValue(0.02 * (shortage - 1) / 0.1, 0, 0.03);
+        if (group.id === 'cheap' && immigration) w -= 0.005;
+        if (group.id === 'workers' || group.id === 'cheap') w = Math.max(w, floor);
+        society.wages[group.id] = clampValue(w, ...WAGE_LIMITS);
+    }
+    society.wages.grey = society.wages.cheap;
+
+    // Sprzężenie z inflacją: realny wzrost płac powyżej 2% rocznie → inflacja +0,1 pp.
+    society.wageHistory.push(getAverageWageIndex());
+    if (society.wageHistory.length > 5) society.wageHistory.shift();
+    const yearAgo = society.wageHistory.length >= 5 ? society.wageHistory[0] : null;
+    if (yearAgo && getAverageWageIndex() / yearAgo - 1 > 0.02 && macro?.shocks) macro.shocks.inflation += 0.001;
+}
+
+/** Atrakcyjność kraju 0–100: zadowolenie pracowników, realne płace, bezrobocie. */
+function getCountryAttractiveness() {
+    const satisfaction = typeof getAverageSatisfaction === 'function' ? getAverageSatisfaction() : 60;
+    const unemployment = Number(macro?.unemployment) || NATURAL_UNEMPLOYMENT;
+    return clampValue(0.4 * satisfaction + 0.3 * 50 * getAverageWageIndex() + 0.3 * (100 - unemployment * 500), 0, 100);
+}
+
+function advanceMigration() {
+    const m = society.migration;
+    const attractiveness = getCountryAttractiveness();
+    m.attractiveness = attractiveness;
+    const net = Math.round((attractiveness - 50) * 0.00004 * society.population);
+    society.population += net;
+    m.last = net / Math.max(1, society.population);
+    m.lastPeople = net;
+    if (net > 0) addToPoorClass(m.last * 0.6); // imigranci: głównie klasa biedna i tania siła robocza
+    m.lowQuarters = attractiveness < 40 ? m.lowQuarters + 1 : 0;
+    if (m.lowQuarters >= 4) {
+        m.lowQuarters = 0;
+        m.emigrationWaves = (m.emigrationWaves || 0) + 1;
+        society.population = Math.round(society.population * 0.995);
+        society.specialistSupplyAdj = Math.max(0.7, (Number(society.specialistSupplyAdj) || 1) * 0.97); // drenaż mózgów
+        society.lastEvent = { id: 'emigration', quarter: society.quarter };
+        logSociety('✈️ Fala emigracji: kraj od roku traci atrakcyjność, wyjeżdżają głównie specjaliści. Niedobór talentów rośnie.');
+        if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('drenaz');
+    }
+}
+
+function advanceLaborMarket() {
+    advanceWages();
+    advanceMigration();
+}
+
+// =================================================================================
+// S5: USTAWY, BUDŻET PAŃSTWA, PARTIE I WYBORY
+// =================================================================================
+
+const LAW_ANNOUNCEMENT_EFFECTS = {
+    minWage:  { 1: { 'Żywność': -0.015, 'Usługi': -0.02, 'Turystyka': -0.02, 'Budowlany': -0.015 }, '-1': { 'Usługi': 0.01, 'Turystyka': 0.01, 'Budowlany': 0.01 } },
+    benefits: { 1: { 'Żywność': 0.015, 'Dobra konsumpcyjne': 0.015 }, '-1': { 'Żywność': -0.01, 'Dobra konsumpcyjne': -0.01 } },
+    housing:  { 1: { 'Budowlany': 0.04, 'Nieruchomości': 0.03 }, '-1': { 'Budowlany': -0.03, 'Nieruchomości': -0.02 } },
+    rights:   { 1: { 'Przemysł': -0.01, 'Budowlany': -0.01, 'Usługi': -0.01 }, '-1': { 'Przemysł': 0.01, 'Budowlany': 0.01, 'Usługi': 0.01 } }
+};
+
+/** Przesunięcia biednych do średniej niższej z ustaw (na kwartał). */
+function getLawPoorMobility() {
+    const laws = society?.laws || {};
+    return 0.002 * (Number(laws.minWage) || 0) + 0.0015 * (Number(laws.housing) || 0);
+}
+
+function describeLawLevel(lawId, level = society.laws[lawId]) {
+    return SOCIAL_LAWS[lawId]?.levels[level] ?? String(level);
+}
+
+/** Partia, która zmienia ustawy (w koalicji — silniejsza). */
+function getLawMakingParty() {
+    return macro?.election?.ruling || 'market';
+}
+
+function pickLawChange(partyId = getLawMakingParty()) {
+    const program = PARTY_PROGRAMS[partyId] || PARTY_PROGRAMS.market;
+    const options = program.moves.filter(([law, delta]) => {
+        const level = Number(society.laws[law]) || 0;
+        return level + delta >= 0 && level + delta < SOCIAL_LAWS[law].levels.length;
+    });
+    return options.length ? getRandomElement(options) : null;
+}
+
+/** Zapowiedź zmiany ustawy kwartał wcześniej: rynek reaguje na zapowiedź (dyskontowanie). */
+function announceLawChange(law, delta, partyId = getLawMakingParty(), reason = '') {
+    const from = Number(society.laws[law]) || 0;
+    society.pendingLaw = { law, delta, from, to: from + delta, party: partyId, effectiveQuarter: society.quarter + 1, reason };
+    const effects = LAW_ANNOUNCEMENT_EFFECTS[law]?.[delta > 0 ? 1 : '-1'] || {};
+    if (typeof stocks !== 'undefined' && typeof applyPriceEffect === 'function') {
+        for (const stock of stocks) {
+            if (stock.assetType || stock.isBankrupt) continue;
+            const values = (stock.sector || []).map(sector => effects[sector]).filter(v => v !== undefined);
+            if (values.length) {
+                applyPriceEffect(stock.symbol, values[0] * getRandomInRange(0.8, 1.2), values[0] > 0 ? 'positive' : 'negative', 'market');
+                if (values[0] > 0 && law === 'housing' && typeof noteMentorEvent === 'function' && typeof playerPortfolio !== 'undefined' && playerPortfolio[stock.symbol]?.shares > 0) noteMentorEvent('lawAnnouncement', stock);
+            }
+        }
+    }
+    society.lastAnnouncement = { ...society.pendingLaw, quarter: society.quarter };
+    logSociety(`📜 Zapowiedź ustawy: ${SOCIAL_LAWS[law].icon} ${SOCIAL_LAWS[law].name} — ${describeLawLevel(law, from)} → ${describeLawLevel(law, from + delta)} od przyszłego kwartału (${RULING_PARTIES[partyId]?.name || 'rząd'}${reason ? `, ${reason}` : ''}). Rynek dyskontuje zapowiedź.`);
+    const affected = Object.keys(effects);
+    if (typeof unlockAcademyEntry === 'function' && typeof playerPortfolio !== 'undefined' && stocks.some(s => (playerPortfolio[s.symbol]?.shares || 0) > 0 && s.sector?.some(sec => affected.includes(sec)))) unlockAcademyEntry('zapowiedz');
+}
+
+function applyPendingLaw() {
+    const pending = society.pendingLaw;
+    if (!pending || pending.effectiveQuarter > society.quarter) return null;
+    society.pendingLaw = null;
+    const law = pending.law;
+    society.laws[law] = clampValue(pending.to, 0, SOCIAL_LAWS[law].levels.length - 1);
+    society.lawChanges[law] = (society.lawChanges[law] || 0) + 1;
+    if (law === 'housing' && pending.delta > 0) society.housingProgram = HOUSING_PROGRAM_QUARTERS;
+    if (law === 'housing' && society.laws.housing === 0) society.housingProgram = 0;
+    if (law === 'minWage' && pending.delta > 0) {
+        const floor = getMinWageFloor();
+        for (const id of ['workers', 'cheap']) society.wages[id] = Math.max(society.wages[id], floor);
+        society.wages.grey = society.wages.cheap;
+        if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('placaMinimalna');
+    }
+    logSociety(`📜 Weszła w życie ustawa: ${SOCIAL_LAWS[law].icon} ${SOCIAL_LAWS[law].name} — ${describeLawLevel(law)}.`);
+    return pending;
+}
+
+/** Program mieszkań socjalnych: kontrakty dla budowlanki i deweloperów (istniejący system przetargów). */
+function commissionSocialHousing() {
+    if (typeof getInvestmentCatalogForCompany !== 'function' || typeof startCompanyInvestment !== 'function') return null;
+    const candidates = stocks
+        .filter(s => !s.assetType && !s.isBankrupt && (s.sector || []).includes('Nieruchomości'))
+        .map(stock => ({ stock, options: getInvestmentCatalogForCompany(stock).filter(item => CONSTRUCTION_KINDS.includes(item.kind) && (Number(stock.departments?.development?.level) || 0) >= item.minDevLevel) }))
+        .filter(item => item.options.length)
+        .sort((a, b) => Number(!!b.stock.isStateOwned) - Number(!!a.stock.isStateOwned) || Math.random() - 0.5);
+    for (const { stock, options } of candidates.slice(0, 4)) {
+        const investment = getRandomElement(options);
+        const spec = getConstructionSpec(investment.id);
+        const grant = Math.round(spec.cost * 1.2);
+        if (governmentTreasury < grant * 2) return null;
+        governmentTreasury -= grant;
+        adjustCompanyCash(stock, grant);
+        adjustBalanceSheet(stock, { assets: grant, retainedEarnings: grant });
+        const result = startCompanyInvestment(stock, investment.id, 'owner');
+        if (result.ok) {
+            recordPayment('external:skarb-panstwa', stock, grant, `Program mieszkań socjalnych: ${spec.name}`);
+            society.budget.extraSpending = (Number(society.budget.extraSpending) || 0) + grant;
+            logSociety(`🏘️ Program mieszkań socjalnych: ${stock.name} zamawia „${spec.name}” (dotacja ${formatZl(grant, 0)}) — przetarg dla firm budowlanych.`);
+            return stock.symbol;
+        }
+        adjustCompanyCash(stock, -grant);
+        adjustBalanceSheet(stock, { assets: -grant, retainedEarnings: -grant });
+        governmentTreasury += grant;
+    }
+    return null;
+}
+
+/** CIT spółek: 19% + ewentualna podwyżka po długim deficycie. */
+function getCompanyIncomeTaxRate() {
+    return COMPANY_INCOME_TAX_RATE + (typeof society === 'object' && society ? Number(society.budget?.citAdd) || 0 : 0);
+}
+
+/** Premia w rentowności obligacji skarbowych przy utrzymującym się deficycie. */
+function getDeficitBondPremium() {
+    return typeof society === 'object' && society ? Number(society.budget?.bondPremium) || 0 : 0;
+}
+
+/**
+ * Budżet kwartału. Gotówka Skarbu Państwa zmienia się tylko o różnice względem startu (zasiłki ponad poziom startowy,
+ * ubytek podatków przez szarą strefę, programy mieszkaniowe, imigracja) — reszta jak w 0.12. Saldo budżetu to wpływy
+ * (CIT + podatki od pracy) minus wydatki (usługi publiczne podążają za wpływami z opóźnieniem + programy socjalne):
+ * w recesji wpływy spadają szybciej niż wydatki, więc pojawia się deficyt.
+ */
+function settleSocialBudget() {
+    const budget = society.budget;
+    const cit = Number(budget.citQuarter) || 0;
+    budget.taxBase = budget.taxBase > 0 ? budget.taxBase * 0.7 + cit * 0.3 : cit;
+    budget.citQuarter = 0;
+    const extra = Number(budget.extraSpending) || 0;
+    budget.extraSpending = 0;
+    const base = Math.max(0, budget.taxBase || 0);
+    const poorRatio = (society.classes.poor || 0) / SOCIETY_CLASSES[0].start;
+    const benefits = base * 0.1 * (Number(society.laws.benefits) || 0) * poorRatio;
+    // Szara strefa: utracone podatki od pracy (część oszczędności spółek).
+    const greyExtra = typeof stocks !== 'undefined' ? stocks.reduce((sum, s) => sum + (Number(s.workforce?.greyExtraSaving) || 0), 0) : 0;
+    budget.greyTaxLoss = Math.max(0, greyExtra * 0.5);
+    const laborTaxesGross = base * 0.1 * SOCIAL_LAWS.benefits.start; // na starcie równoważą zasiłki
+    const laborTaxes = laborTaxesGross - budget.greyTaxLoss;
+    governmentTreasury += laborTaxes - benefits;
+    budget.socialSpending = benefits + extra;
+    budget.laborTaxes = laborTaxes;
+    if (!(cit > 0)) return;
+    const revenue = cit + laborTaxes;
+    const baseline = cit + laborTaxesGross;
+    if (!(budget.publicServices > 0)) budget.publicServices = baseline * 0.97;
+    budget.revenue = revenue;
+    budget.spending = budget.publicServices + benefits + extra;
+    budget.balance = revenue - budget.spending;
+    budget.hasBalance = true;
+    budget.publicServices = budget.publicServices * 0.8 + baseline * 0.97 * 0.2; // usługi publiczne: sztywne, z opóźnieniem
+}
+
+/** Deficyt: 4 kw. → rentowność obligacji +0,25 pp; 8 kw. → CIT +2 pp albo cięcie ustaw (według partii). */
+function updateBudgetBalance() {
+    const budget = society.budget;
+    if (!budget.hasBalance) return;
+    budget.hasBalance = false;
+    budget.deficitQuarters = budget.balance < 0 ? budget.deficitQuarters + 1 : 0;
+    if (budget.deficitQuarters === 0) { budget.bondPremium = 0; budget.deficitActed = false; }
+    if (budget.deficitQuarters >= DEFICIT_BOND_QUARTERS && !budget.bondPremium) {
+        budget.bondPremium = DEFICIT_BOND_PREMIUM;
+        logSociety(`🏦 Deficyt budżetu od ${budget.deficitQuarters} kwartałów: rentowność obligacji skarbowych rośnie o 0,25 pp.`);
+        if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('deficyt');
+    }
+    if (budget.deficitQuarters >= DEFICIT_ACTION_QUARTERS && !budget.deficitActed) {
+        budget.deficitActed = true;
+        const party = getLawMakingParty();
+        const cut = PARTY_PROGRAMS[party]?.deficit === 'cut' && (Number(society.laws.benefits) || 0) > 0;
+        if (cut && !society.pendingLaw) announceLawChange('benefits', -1, party, 'cięcie wydatków po 2 latach deficytu');
+        else if (budget.citAdd < DEFICIT_CIT_STEP * 2) {
+            budget.citAdd += DEFICIT_CIT_STEP;
+            logSociety(`🏦 Dwa lata deficytu: rząd podnosi CIT o 2 pp (do ${((COMPANY_INCOME_TAX_RATE + budget.citAdd) * 100).toFixed(0)}%). Zyski spółek po podatku spadną.`);
+        }
+    }
+}
+
+function advanceSocialPolicy() {
+    applyPendingLaw();
+    settleSocialBudget();
+    if (society.housingProgram > 0) {
+        society.housingProgram--;
+        if (Math.random() < 0.5 * Math.max(1, Number(society.laws.housing) || 0)) commissionSocialHousing();
+    }
+    society.lawTimer--;
+    if (society.lawTimer <= 0) {
+        society.lawTimer = 4;
+        const change = !society.pendingLaw && Math.random() < 0.85 ? pickLawChange() : null;
+        if (change) announceLawChange(change[0], change[1]);
+    }
+    updateBudgetBalance();
+}
+
+// ---------------------------------------------------------------------------------
+// WYBORY: poparcie z klas, darowizny, koalicje
+// ---------------------------------------------------------------------------------
+
+/** Poparcie bazowe z klas (w %, suma 100). */
+function getClassBasedSupport() {
+    const support = { people: 0, state: 0, market: 0 };
+    for (const cls of SOCIETY_CLASSES) {
+        const share = Number(society?.classes?.[cls.id]) || 0;
+        const prefs = CLASS_VOTE[cls.id];
+        PARTY_IDS.forEach((id, i) => { support[id] += share * prefs[i]; });
+    }
+    return support;
+}
+
+/** Poparcie partii (w %, suma 100): klasy, zmęczenie władzą, koniunktura, darowizny, szum ±5 pp. */
+function computePartySupport(withNoise = true) {
+    ensureSocietyState();
+    const election = macro.election;
+    const support = getClassBasedSupport();
+    const ruling = election.ruling;
+    // Zmęczenie władzą rośnie z każdą kadencją; zła koniunktura (recesja, inflacja, bezrobocie) szkodzi rządzącym,
+    // a głosy protestu zbierają głównie Ludowcy.
+    const badTimes = economyCycle.phase === 'recession' || macro.inflation > 0.05 || macro.unemployment > 0.09;
+    const penalty = ELECTION_FATIGUE * Math.max(1, Number(election.terms) || 1) + (badTimes ? ELECTION_BAD_TIMES : 0);
+    if (support[ruling] !== undefined) {
+        support[ruling] -= penalty;
+        const others = PARTY_IDS.filter(id => id !== ruling);
+        others.forEach(id => { support[id] += penalty * (ruling === 'people' ? 0.5 : id === 'people' ? PROTEST_TO_PEOPLE : 1 - PROTEST_TO_PEOPLE); });
+    }
+    const donations = election.donations || {};
+    const assets = Math.max(1, typeof getFundAssets === 'function' && playerFund ? getFundAssets() : 1);
+    PARTY_IDS.forEach(id => { support[id] += Math.min(10, (Number(donations[id]) || 0) / assets * 500); });
+    if (withNoise) PARTY_IDS.forEach(id => { support[id] += (Math.random() - 0.5) * 10; });
+    PARTY_IDS.forEach(id => { support[id] = Math.max(1, support[id]); });
+    const total = PARTY_IDS.reduce((sum, id) => sum + support[id], 0);
+    PARTY_IDS.forEach(id => { support[id] = support[id] / total * 100; });
+    return support;
+}
+
+/** Wynik wyborów: zwycięzca, a przy < 40% koalicja z drugą partią (parametry ważone poparciem). */
+function resolveElection(support) {
+    const ranked = [...PARTY_IDS].sort((a, b) => support[b] - support[a]);
+    const winner = ranked[0];
+    const coalition = support[winner] < COALITION_THRESHOLD * 100 ? { partner: ranked[1], weights: { [winner]: support[winner], [ranked[1]]: support[ranked[1]] } } : null;
+    return { winner, coalition, support };
+}
+
+function getRulingParty() {
+    const election = macro?.election;
+    const main = RULING_PARTIES[election?.ruling] || RULING_PARTIES.market;
+    const coalition = election?.coalition;
+    const partner = coalition ? RULING_PARTIES[coalition.partner] : null;
+    if (!partner) return main;
+    const wMain = Number(coalition.weights?.[election.ruling]) || 1, wPartner = Number(coalition.weights?.[coalition.partner]) || 1;
+    const mix = key => (main[key] * wMain + partner[key] * wPartner) / (wMain + wPartner);
+    return {
+        name: `${main.name} + ${partner.name}`,
+        privatization: Math.round(mix('privatization') * 100) / 100,
+        nationalization: Math.round(mix('nationalization') * 100) / 100,
+        subsidies: Math.round(mix('subsidies') * 100) / 100,
+        stateMood: mix('stateMood'),
+        coalition: true
+    };
 }

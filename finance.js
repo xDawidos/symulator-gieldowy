@@ -643,9 +643,10 @@ function buyStateBond(buyer, type, quantity) {
     offer.available -= quantity;
     governmentTreasury += 1000 * quantity;
 
-    const annual = type === 'shortTerm'
+    const deficitPremium = typeof getDeficitBondPremium === 'function' ? getDeficitBondPremium() : 0; // 0.13: długi deficyt podnosi rentowność
+    const annual = (type === 'shortTerm'
         ? offer.interest
-        : Math.max(0.01, marketVolatilityIndex / 100 + offer.interestBase);
+        : Math.max(0.01, marketVolatilityIndex / 100 + offer.interestBase)) + deficitPremium;
     const duration = type === 'shortTerm' ? 10 : type === 'mediumTerm' ? 25 : 45;
     const ownerId = buyer === 'player' ? 'player' : buyer.id;
     const template = { issuerName: 'Skarb Państwa', type: `Skarbowa (${type})`, faceValue: 1000, risk: 0, isStateBond: true };
