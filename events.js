@@ -1,3 +1,352 @@
+// =================================================================================
+// events.js: Zdarzenia i poczta: skrzynka, czasopisma, wydanie gazety, zdarzenia losowe rynku.
+// Złączone pliki: mail.js, events.js (w kolejności ładowania).
+// =================================================================================
+
+// #################################################################################
+// ## mail.js
+// #################################################################################
+
+// mail.js — Skrzynka mailowa (etap E1)
+//
+// Zastępuje gazetę i popupy reklam. Zdarzenia z logEvent trafiają jako maile do czasopism-spółek
+// (PULS, FLESZ, OBSER) według ich profilu albo od korporacji (sprawy gracza). Subskrypcja darmowa
+// przysyła wszystko razem ze spamem, premium (płatna z portfela prywatnego) tylko ważne maile.
+// Szkolenie „Filtr antyspamowy” (adblock) przenosi spam do folderu Spam.
+
+const MAIL_LIMIT = 100;          // zapis gry: skrzynka ograniczona do 100 najnowszych (było 150)
+const MAIL_HARD_LIMIT = 150;     // także przypięte decyzje — zapis gry mieści się w localStorage
+const MAIL_FOLDERS = ['inbox', 'starred', 'corporation', 'PULS', 'FLESZ', 'OBSER', 'spam'];
+const CORPORATION_SENDER = 'corporation';
+
+const MAGAZINES = {
+    PULS:  { label: 'Puls Rynku', premiumWeekly: 15, profile: 'Rynek, spółki, raporty i dywidendy' },
+    FLESZ: { label: 'Flesz Giełdowy', premiumWeekly: 10, profile: 'Prezesi, skandale i plotki (nie zawsze prawdziwe)' },
+    OBSER: { label: 'Obserwator Finansowy', premiumWeekly: 20, profile: 'Gospodarka, państwo, banki i miasto' }
+};
+const FREE_READER_AD_REVENUE = 5;   // zł tygodniowo dla czasopisma za darmowego czytelnika
+const COMPANY_AD_COST = 200;        // tyle płaci spółka za mail sponsorowany
+
+// Słowa kluczowe profili (sprawdzane w kolejności: korporacja, OBSER, FLESZ, reszta → PULS).
+const MAIL_RULES = {
+    corporation: /fundusz|Twój|Twoje|Twoja|Ocena zarządu|premi|Koniec okresu|zarząd|klient|\bJU\b|compliance|Przejęt|przejęci|Analityk|konsolidac|nadzór|Kamień milowy|ZWYCIĘSTWO|szkoleni|kieszonkow|Zatrudnion/i,
+    OBSER: /PKB|koniunktur|stop[aąy] procent|Bank Centraln|inflac|recesj|ożywieni|rząd|państw|Skarb|miast|burmistrz|prezydent miasta|wybor|festyn|festiwal|obligac|\bbank|antymonopol|nacjonaliz|prywatyz|podat/i,
+    FLESZ: /prezes|CEO|skandal|plotk|afer|dymisj|TikTok|influencer|celebryt|szejk|romans|sensac/i
+};
+const CORPORATION_CATEGORIES = ['review', 'success', 'warning', 'error'];
+const ROUTINE_NEWS = /RAPORT|badani|Nowa oferta|przetarg|kampania marketingowa|emisja obligacji|AWANS|przechodzi na giełdę|wchodzi w fazę/i;
+// B5: wiadomości państwowe i miejskie, które zostają osobnym mailem (decyzje, okazje, ważne zmiany); reszta trafia do wydania.
+const STATE_KEEP_NEWS = /PPP|projekt czasowy|PRYWATYZACJA|Oferta prywatyzacyjna|WYBORY|kampania|Gazeta Ekonomiczna|KONIUNKTURA|BANKRUCTWO|parabank|liście ostrzeżeń|podat/i;
+const NOISE_PATTERNS = /otrzymuje .* dywidendy|Fundusz .* nabywa|\[AI\]/i;
+
+let mailbox = createMailbox();
+
+function createMailbox() {
+    return {
+        messages: [],
+        subscriptions: { PULS: 'free', FLESZ: 'free', OBSER: 'free' },
+        nextId: 1,
+        rumors: []   // plotki FLESZ czekające na sprostowanie lub potwierdzenie
+    };
+}
+
+// =================================================================================
+// DODAWANIE MAILI I FILTRY
+// =================================================================================
+
+function getMailClockMs() {
+    return playerFund?.clockMs ?? 0;
+}
+
+/** Folder wiadomości: spam trafia do „Spam” tylko przy odpowiednim poziomie filtra. */
+function getMailFolder(message) {
+    if (message.isSpam) {
+        const filter = getSkillLevel('adblock');
+        if (message.spamKind === 'ad' && filter >= 1) return 'spam';
+        if (message.spamKind === 'magazine' && filter >= 2) return 'spam';
+    }
+    return message.sender === CORPORATION_SENDER ? 'corporation' : message.sender;
+}
+
+function addMail({ sender, subject, body = '', importance = 1, isSpam = false, spamKind = null, symbol = null, action = null }) {
+    if (!mailbox) return null;
+
+    // Premium: tylko ważne maile, bez spamu tego czasopisma.
+    const subscription = MAGAZINES[sender] ? mailbox.subscriptions[sender] : 'free';
+    if (MAGAZINES[sender]) {
+        if (!subscription) return null;
+        if (subscription === 'premium' && (isSpam || importance < 2)) return null;
+    }
+
+    const message = {
+        id: mailbox.nextId++,
+        sender, subject, body, importance, isSpam, spamKind, symbol, action,
+        read: false,
+        starred: false,
+        at: getMailClockMs()
+    };
+    mailbox.messages.unshift(message);
+    trimMailbox();
+    if (typeof updateMailBadge === 'function') updateMailBadge();
+    return message;
+}
+
+/** B2: ważne, nieprzeczytane wiadomości (decyzje, kary, oferty) nie wypadają ze skrzynki. */
+function isPinnedMail(message) {
+    return !message.read && (Boolean(message.action) || message.importance >= 3);
+}
+
+function trimMailbox() {
+    while (mailbox.messages.length > MAIL_LIMIT) {
+        // Najpierw najstarsze przeczytane (bez gwiazdki), potem najstarsze nieprzypięte.
+        let index = -1;
+        for (let i = mailbox.messages.length - 1; i >= 0; i--) {
+            const message = mailbox.messages[i];
+            if (message.read && !message.starred) { index = i; break; }
+        }
+        if (index < 0) {
+            for (let i = mailbox.messages.length - 1; i >= 0; i--) {
+                if (!isPinnedMail(mailbox.messages[i]) && !mailbox.messages[i].starred) { index = i; break; }
+            }
+        }
+        // Same przypięte: najpierw odpadają najstarsze ważne bez akcji (decyzje z przyciskami zostają).
+        if (index < 0 && mailbox.messages.length > MAIL_LIMIT) {
+            for (let i = mailbox.messages.length - 1; i >= 0; i--) {
+                if (!mailbox.messages[i].action && !mailbox.messages[i].starred) { index = i; break; }
+            }
+        }
+        if (index < 0 && mailbox.messages.length > MAIL_HARD_LIMIT) index = mailbox.messages.length - 1; // twardy limit (zapis gry)
+        if (index < 0) break; // same decyzje z akcją — skrzynka może chwilowo przekroczyć limit
+        mailbox.messages.splice(index, 1);
+    }
+}
+
+/** B2: rutynowe wiadomości trafiają do wydania gazety (raz na 2 tygodnie gry) zamiast osobnych maili. */
+const DIGEST_EVERY_WEEKS = 2;
+const DIGEST_MAX_ITEMS = 40;
+
+function addToDigest(text) {
+    if (!Array.isArray(mailbox.digest)) mailbox.digest = [];
+    mailbox.digest.push(text.slice(0, 160));
+    if (mailbox.digest.length > DIGEST_MAX_ITEMS) mailbox.digest.shift();
+}
+
+function publishDigest() {
+    mailbox.digestWeeks = (mailbox.digestWeeks || 0) + 1;
+    if (mailbox.digestWeeks < DIGEST_EVERY_WEEKS || !mailbox.digest?.length) return null;
+    mailbox.digestWeeks = 0;
+    const items = mailbox.digest.splice(0);
+    return addMail({ sender: 'PULS', subject: `📰 Wydanie rynkowe: ${items.length} ${items.length === 1 ? 'wiadomość' : 'wiadomości'}`, body: items.map(item => `• ${item}`).join('  '), importance: 1 });
+}
+
+function getMailSenderName(sender) {
+    if (sender === CORPORATION_SENDER) return `🏢 ${corporation?.name || playerProfile?.corporation || 'Korporacja'}`;
+    if (MAGAZINES[sender]) return `📰 ${MAGAZINES[sender].label}`;
+    if (String(sender).startsWith('bot:') && typeof findRelationPerson === 'function') return `👤 ${findRelationPerson(String(sender).slice(4))?.name || 'Inwestor'}`;
+    const stock = stocks.find(s => s.symbol === sender);
+    return stock ? `📣 ${stock.name}` : String(sender);
+}
+
+// =================================================================================
+// ZDARZENIA → MAILE
+// =================================================================================
+
+function findMentionedStock(text) {
+    let best = null;
+    for (const stock of stocks) {
+        if (!stock.name || stock.name.length < 3) continue;
+        if (text.includes(stock.name) && (!best || stock.name.length > best.name.length)) best = stock;
+    }
+    return best;
+}
+
+function getMailImportance(text, sender) {
+    if (/ZWYCIĘSTWO|AWANS|degradac|NACJONALIZACJA|BANKRUCTWO|bankrut|upad|Przejęto|prywatyzac|wybory|Kamień milowy|kara/i.test(text)) return 3;
+    if (/Ocena zarządu|Koniec okresu|raport|wyniki|dywidend|przejęci|fuzj|IPO|debiut|emisj|stop[aąy] procent|faza|recesj|ożywieni|antymonopol|skandal/i.test(text)) return 2;
+    if (sender === CORPORATION_SENDER) return 1;
+    return 1;
+}
+
+/** Wołane z logEvent: kieruje zdarzenie do właściwego nadawcy. */
+function routeEventToMail(text, category) {
+    if (!mailbox || !text || NOISE_PATTERNS.test(text)) return null;
+
+    let sender;
+    if (CORPORATION_CATEGORIES.includes(category) && MAIL_RULES.corporation.test(text)) sender = CORPORATION_SENDER;
+    else if (category === 'state' || category === 'city' || MAIL_RULES.OBSER.test(text)) sender = 'OBSER';
+    else if (MAIL_RULES.FLESZ.test(text)) sender = 'FLESZ';
+    else if (['market', 'company', 'construction', 'review', 'success', 'warning'].includes(category)) sender = 'PULS';
+    else return null;
+
+    const stock = findMentionedStock(text);
+    let importance = Math.max(getMailImportance(text, sender), category === 'state' || category === 'city' ? 2 : 0);
+    const held = stock && (playerPortfolio[stock.symbol] || playerWallet?.portfolio?.[stock.symbol]);
+    if (held) importance = Math.max(importance, 2);                                        // spółki z portfela zawsze ważne
+    else if (ROUTINE_NEWS.test(text) && importance < 3) importance = 1;                   // rutyna o innych spółkach
+    // B2: rutyna i wiadomości o spółkach spoza portfela trafiają do wydania gazety; państwo i gospodarka — osobno.
+    if (sender !== CORPORATION_SENDER && !held && (importance < 2 || (importance < 3 && (stock || ROUTINE_NEWS.test(text))))) { addToDigest(text); return null; }
+    if (sender === 'OBSER' && importance < 3 && !STATE_KEEP_NEWS.test(text)) { addToDigest(text); return null; }
+    const subject = text.split(/(?<=[.!?])\s/)[0].slice(0, 120);
+    return addMail({ sender, subject, body: text, importance, symbol: stock?.symbol || null });
+}
+
+// =================================================================================
+// CO TYDZIEŃ: SUBSKRYPCJE, SPAM, PLOTKI
+// =================================================================================
+
+function processMailWeekly() {
+    if (!mailbox) return;
+    publishDigest();
+    chargeMagazineSubscriptions();
+    sendCompanyAdSpam();
+    sendMagazineSpam();
+    processTabloidRumors();
+}
+
+function chargeMagazineSubscriptions() {
+    for (const [symbol, def] of Object.entries(MAGAZINES)) {
+        const stock = stocks.find(s => s.symbol === symbol);
+        const subscription = mailbox.subscriptions[symbol];
+        if (!subscription || !stock) continue;
+
+        if (subscription === 'premium') {
+            if (playerWallet.cash >= def.premiumWeekly) {
+                playerWallet.cash -= def.premiumWeekly;
+                adjustCompanyCash(stock, def.premiumWeekly);
+                recordPayment('player-wallet', stock, def.premiumWeekly, `Prenumerata premium: ${def.label}`);
+            } else {
+                mailbox.subscriptions[symbol] = 'free';
+                addMail({ sender: symbol, subject: 'Prenumerata premium wygasła — brak środków', body: `Nie udało się pobrać ${def.premiumWeekly} zł z Twojego konta. Wracasz do wersji darmowej.`, importance: 2 });
+            }
+        } else {
+            // Darmowy czytelnik = przychód od reklamodawców (z zewnątrz modelu).
+            adjustCompanyCash(stock, FREE_READER_AD_REVENUE);
+            recordPayment('external:reklamodawcy', stock, FREE_READER_AD_REVENUE, 'Reklamy w wersji darmowej');
+        }
+    }
+}
+
+const AD_TEMPLATES = [
+    s => [`🔥 ${s.name} — okazja, której nie możesz przegapić!`, `Zainwestuj w ${s.name} (${s.symbol}) już dziś! Analitycy* są zachwyceni. *Analitycy opłaceni przez ${s.name}.`],
+    s => [`Tylko dziś: ${s.name} z rabatem 50%!`, `Produkty ${s.name} taniej niż kiedykolwiek. Kup teraz, zanim zrobią to inni!`],
+    s => [`Gratulacje! Wygrałeś voucher od ${s.name} 🎁`, `Kliknij, aby odebrać nagrodę. (To nie jest phishing, słowo ${s.name}.)`],
+    s => [`${s.name} szuka partnerów biznesowych`, `Dołącz do sieci ${s.name} i zarabiaj od pierwszego dnia!`]
+];
+
+function sendCompanyAdSpam() {
+    const advertisers = stocks.filter(s => !s.assetType && !s.isBankrupt && s.cash > COMPANY_AD_COST * 10);
+    const count = Math.random() < 0.5 ? 1 : 0; // B2: mniej reklam (wcześniej 1–3 tygodniowo)
+    for (let i = 0; i < count && advertisers.length; i++) {
+        const stock = getRandomElement(advertisers);
+        const media = stocks.find(s => s.symbol === getRandomElement(Object.keys(MAGAZINES)));
+        adjustCompanyCash(stock, -COMPANY_AD_COST);
+        if (media) {
+            adjustCompanyCash(media, COMPANY_AD_COST);
+            recordPayment(stock, media, COMPANY_AD_COST, 'Kampania mailowa');
+        }
+        const [subject, body] = getRandomElement(AD_TEMPLATES)(stock);
+        addMail({ sender: stock.symbol, subject, body, importance: 0, isSpam: true, spamKind: 'ad', symbol: stock.symbol });
+    }
+}
+
+function sendMagazineSpam() {
+    for (const [symbol, def] of Object.entries(MAGAZINES)) {
+        if (mailbox.subscriptions[symbol] !== 'free' || Math.random() > 0.07) continue; // B2/B5: rzadziej
+        addMail({
+            sender: symbol,
+            subject: getRandomElement([`Przejdź na ${def.label} Premium — pierwszy tydzień taniej!`, `Nie przegap ważnych wiadomości — ${def.label} Premium`, `Ankieta czytelników ${def.label} (zajmie tylko 45 minut)`]),
+            body: `Wersja premium to tylko ważne wiadomości i zero spamu za ${def.premiumWeekly} zł tygodniowo. Zarządzaj prenumeratą w zakładce „Subskrypcje”.`,
+            importance: 0, isSpam: true, spamKind: 'magazine'
+        });
+    }
+}
+
+/** FLESZ publikuje plotki — część okazuje się prawdziwa, część dostaje sprostowanie. */
+function processTabloidRumors() {
+    for (const rumor of [...mailbox.rumors]) {
+        rumor.weeksLeft--;
+        if (rumor.weeksLeft > 0) continue;
+        mailbox.rumors = mailbox.rumors.filter(item => item !== rumor);
+        const stock = stocks.find(s => s.symbol === rumor.symbol);
+        if (!stock) continue;
+        const held = playerPortfolio[stock.symbol] || playerWallet?.portfolio?.[stock.symbol];
+        if (!held) { // B5: rozstrzygnięcie plotki o spółce spoza portfela — w wydaniu gazety
+            if (rumor.isTrue) applyPriceEffect(stock.symbol, rumor.positive ? 0.03 : -0.03, rumor.positive ? 'positive' : 'negative', 'company');
+            addToDigest(rumor.isTrue ? `Flesz: plotka o ${stock.name} potwierdzona.` : `Flesz: plotka o ${stock.name} okazała się nieprawdziwa.`);
+            continue;
+        }
+        if (rumor.isTrue) {
+            applyPriceEffect(stock.symbol, rumor.positive ? 0.03 : -0.03, rumor.positive ? 'positive' : 'negative', 'company');
+            addMail({ sender: 'FLESZ', subject: `Potwierdzamy: plotka o ${stock.name} była prawdziwa!`, body: `Nasze źródła się nie myliły. Rynek reaguje na wiadomości o ${stock.name}.`, importance: 2, symbol: stock.symbol });
+        } else {
+            addMail({ sender: 'FLESZ', subject: `Sprostowanie: ${stock.name}`, body: `Informacja o ${stock.name} sprzed kilku dni okazała się nieprawdziwa. Przepraszamy czytelników.`, importance: 2, symbol: stock.symbol });
+        }
+    }
+
+    if (Math.random() > 0.2) return;
+    const stock = getRandomElement(stocks.filter(s => !s.assetType && !s.isBankrupt));
+    if (!stock) return;
+    const positive = Math.random() < 0.5;
+    mailbox.rumors.push({ symbol: stock.symbol, positive, isTrue: Math.random() < 0.5, weeksLeft: getRandomIntInRange(1, 3) });
+    addMail({
+        sender: 'FLESZ',
+        subject: positive ? `PLOTKA: ${stock.name} szykuje wielki kontrakt?` : `PLOTKA: kłopoty w zarządzie ${stock.name}?`,
+        body: positive
+            ? `Nieoficjalnie: ${stock.name} jest o krok od podpisania umowy, która zmieni wszystko. Spółka milczy.`
+            : `Według naszych informatorów prezes ${stock.name} ma poważne problemy. Spółka nie komentuje.`,
+        importance: 1, symbol: stock.symbol
+    });
+}
+
+// =================================================================================
+// AKCJE GRACZA
+// =================================================================================
+
+function setMagazineSubscription(symbol, level) {
+    if (!MAGAZINES[symbol] || ![null, 'free', 'premium'].includes(level)) return false;
+    if (level === 'premium' && playerWallet.cash < MAGAZINES[symbol].premiumWeekly) {
+        showToast(`Premium kosztuje ${MAGAZINES[symbol].premiumWeekly} zł tygodniowo — za mało środków.`, 'error');
+        return false;
+    }
+    mailbox.subscriptions[symbol] = level;
+    return true;
+}
+
+function markMailRead(id, read = true) {
+    const message = mailbox.messages.find(m => m.id === id);
+    if (message) message.read = read;
+    if (typeof updateMailBadge === 'function') updateMailBadge();
+}
+
+function toggleMailStar(id) {
+    const message = mailbox.messages.find(m => m.id === id);
+    if (message) message.starred = !message.starred;
+}
+
+function deleteMail(id) {
+    mailbox.messages = mailbox.messages.filter(m => m.id !== id);
+    if (typeof updateMailBadge === 'function') updateMailBadge();
+}
+
+function markAllMailRead(folder) {
+    getMailInFolder(folder).forEach(message => { message.read = true; });
+    if (typeof updateMailBadge === 'function') updateMailBadge();
+}
+
+function getMailInFolder(folder) {
+    if (folder === 'starred') return mailbox.messages.filter(m => m.starred);
+    if (folder === 'inbox') return mailbox.messages.filter(m => getMailFolder(m) !== 'spam');
+    return mailbox.messages.filter(m => getMailFolder(m) === folder);
+}
+
+function getUnreadMailCount(folder = 'inbox') {
+    return getMailInFolder(folder).filter(m => !m.read).length;
+}
+
+// #################################################################################
+// ## events.js
+// #################################################################################
+
 // --- Zmienne i dane dla systemu zdarzeń ---
 const positiveTraits = ['wyjadacz', 'pewniak', 'prowiec', 'doswiadczony', 'filar_w_branzy', 'oddany', 'stoik', 'wizjoner', 'rekin', 'kapitalista', 'bogacz', 'legenda'];
 const negativeTraits = ['tyran', 'rozrzutny', 'glowa_w_chmurach', 'nieudacznik', 'skompromitowany'];
@@ -12,6 +361,7 @@ function logEvent(message, category = 'market') { // Domyślna kategoria to 'mar
     if (eventLog.length > MAX_LOG_ENTRIES) {
         eventLog.pop();
     }
+    if (typeof routeEventToMail === 'function') routeEventToMail(message, category); // skrzynka mailowa (mail.js)
 }
 
 
@@ -58,7 +408,7 @@ const companySpecificEventsPrompts = [
     { id: 'cs_neg_10', message: stockName => `${stockName} przez pomyłkę wysłało cały roczny zapas produktów na biegun południowy. 🐧🎁 Pingwiny są zachwycone, akcjonariusze mniej. 🤦`, type: 'negative', category: 'company' },
     { id: 'cs_neg_11', message: stockName => `Nowy system komputerowy ${stockName} działa tylko wtedy, gdy pada deszcz i Merkury jest w retrogradacji. 🌧️🪐💻 Czyli rzadko.`, type: 'negative', category: 'company' },
     { id: 'cs_neg_12', message: stockName => `Prezes ${stockName} ogłosił, że Ziemia jest płaska, a akcje firmy to najlepszy sposób na dotarcie do jej krawędzi. 🌍🔚 Inwestorzy uciekają. 🏃‍♂️💨`, type: 'negative', category: 'company' },
-    { id: 'cs_neg_13', message: stockName => `${stockName} próbowało zaoszczędzić na tuszu do drukarek, drukując raporty roczne sokiem z buraków. beetroot📜 Nieczytelne, tak jak przyszłość firmy.`, type: 'negative', category: 'company' },
+    { id: 'cs_neg_13', message: stockName => `${stockName} próbowało zaoszczędzić na tuszu do drukarek, drukując raporty roczne sokiem z buraków. 🥕📜 Nieczytelne, tak jak przyszłość firmy.`, type: 'negative', category: 'company' },
     { id: 'cs_neg_14', message: stockName => `Woda w dystrybutorach ${stockName} okazała się być wodą z kałuży. 💧🤢 Pracownicy strajkują, akcje toną.`, type: 'negative', category: 'company' },
     { id: 'cs_neg_15', message: stockName => `${stockName} zorganizowało konkurs "Najgorszy pomysł na produkt". 🤦‍♀️ Niestety, wszystkie zgłoszenia pochodziły z działu R&D firmy.`, type: 'negative', category: 'company' },
     { id: 'cs_neg_16', message: stockName => `Siedziba ${stockName} została uznana za zabytek i nie można w niej instalować Wi-Fi. 🏛️🚫📶 Firma wraca do epoki kamienia łupanego.`, type: 'negative', category: 'company' },
@@ -111,7 +461,7 @@ const sectorEventsPrompts = [
     { id: 'sec_neg_2', message: () => `Wybucha globalny kryzys finansowy po tym, jak okazało się, że światowe rezerwy złota to tylko pozłacane sztabki czekolady. 🍫📉 Sektory 'Bankowość' i 'Finanse' najmocniej odczuwają skutki.`, type: 'negative', targetSectors: ['Bankowość', 'Finanse'] },
     { id: 'sec_neg_3', message: () => `Strajk generalny w sektorze energetycznym. ⚡ Pracownicy domagają się wygodniejszych foteli. Dostawy prądu zagrożone, ceny akcji spadają.`, type: 'negative', targetSectors: ['Energia'] },
     { id: 'sec_neg_4', message: () => `Plaga inteligentnych szkodników niszczy uprawy i włamuje się do systemów firm spożywczych, zamawiając za nie tysiące ton karmy dla chomików. 🐛🐹 Sektory 'Żywność' i 'Technologia Żywności' w chaosie.`, type: 'negative', targetSectors: ['Żywność', 'Technologia Żywności'] },
-    { id: 'sec_neg_5', message: () => `Okazuje się, że "innowacyjne" domy z sektora 'Nieruchomości' są w rzeczywistości zbudowane z kartonu i taśmy klejącej. 📦 Tape Pierwszy deszcz ujawnia prawdę.`, type: 'negative', targetSectors: ['Nieruchomości'] },
+    { id: 'sec_neg_5', message: () => `Okazuje się, że "innowacyjne" domy z sektora 'Nieruchomości' są w rzeczywistości zbudowane z kartonu i taśmy klejącej. 📦 Pierwszy deszcz ujawnia prawdę.`, type: 'negative', targetSectors: ['Nieruchomości'] },
     { id: 'sec_neg_6', message: () => `Globalna awaria chmury obliczeniowej. Wszystkie firmy z sektora 'Technologia', które "trzymały dane w chmurze", odkrywają, że chmury czasem po prostu znikają. ☁️💨`, type: 'negative', targetSectors: ['Technologia'] },
     { id: 'sec_neg_7', message: () => `W kopalniach z sektora 'Przemysł Wydobywczy' odkryto smoka. 🐲 Jest bardzo zrzędliwy i nie pozwala nikomu pracować. Wydobycie wstrzymane.`, type: 'negative', targetSectors: ['Przemysł Wydobywczy'] },
     { id: 'sec_neg_8', message: () => `Nowa ustawa "Prawo do Bycia Offline" drastycznie zmniejsza popyt na smartfony i inne gadżety. 📵 Sektor 'Technologia' przeżywa kryzys egzystencjalny.`, type: 'negative', targetSectors: ['Technologia'] },
@@ -183,8 +533,8 @@ const startupOfferEventsPrompts = [
         id: 'so_7',
         type: 'BONUS_SHARES',
         value: 0.10, // 10% więcej udziałów
-        getMessage: (startupName) => `[OFERTA SPECJALNA] Program 'Early Bird' w ${startupName}! Zainwestuj teraz, aby otrzymać 10% dodatkowych udziałów.`,
-        offerText: "Kto rano wstaje... ten inwestuje z zyskiem! Dołącz do naszego programu 'Early Bird' i zgarnij 10% więcej udziałów za swoją inwestycję."
+        getMessage: (startupName) => `[OFERTA SPECJALNA] Program 'Ranny Ptaszek' w ${startupName}! Zainwestuj teraz, aby otrzymać 10% dodatkowych udziałów.`,
+        offerText: "Kto rano wstaje... ten inwestuje z zyskiem! Dołącz do naszego programu 'Ranny Ptaszek' i zgarnij 10% więcej udziałów za swoją inwestycję."
     },
     {
         id: 'so_8',
@@ -209,14 +559,21 @@ const startupOfferEventsPrompts = [
     }
 ];
 
-function getRandomInRange(min, max) { return Math.random() * (max - min) + min; }
-function getRandomIntInRange(min, max) { return Math.floor(Math.random() * (max - min + 1)) + Math.ceil(min); }
-function getRandomElement(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
-
-
 function triggerMainMarketEventCycle() {
     if (isSkillUnlocked('sixthSense') && Math.random() < 0.15) {
-        triggerSixthSenseEvent();
+        triggerSixthSenseEvent(); // przeczucie zwrotu w sektorze (macro.js) — cykl zdarzeń trwa dalej
+    }
+
+    if (Math.random() < (oversight?.corruption || 0) / 400) { // Afera korupcyjna (oversight.js)
+        triggerCorruptionScandal();
+        return;
+    }
+    if (Math.random() < 0.05) { // Szok makro (macro.js)
+        triggerMacroShockEvent();
+        return;
+    }
+    if (Math.random() < (macro.election?.campaign ? 0.12 : 0.06)) { // Spółki państwowe (macro.js)
+        triggerStateCompanyEventCycle();
         return;
     }
 
@@ -246,11 +603,11 @@ function triggerMainMarketEventCycle() {
         triggerStartupOfferEvent();
         return;
     }
-    if (Math.random() < 0.03) { // Prywatyzacja
+    if (Math.random() < 0.03 * getRulingParty().privatization) { // Prywatyzacja (wg partii rządzącej)
         triggerStatePrivatizationEvent();
         return;
     }
-    if (Math.random() < 0.02) { // Nacjonalizacja
+    if (Math.random() < 0.02 * getRulingParty().nationalization) { // Nacjonalizacja (wg partii rządzącej)
         triggerNationalizationEvent();
         return;
     }
@@ -281,12 +638,16 @@ function triggerMainMarketEventCycle() {
             displayEventMessage(eventData.message(targetBankStock.name), duration, magnitude, 'company');
             applyPriceEffect(targetBankStock.symbol, magnitude, eventData.type, 'company');
 
-            if (eventData.id === 'bank_pos_1' || eventData.id === 'bank_neg_2') {
-                 activeBankStocks.forEach(bankStock => {
-                     if (bankStock.symbol !== targetBankStock.symbol) {
-                         applyPriceEffect(bankStock.symbol, magnitude * 0.5, eventData.type, 'market');
-                     }
-                 });
+            const spreadToAllBanks = [
+                'bank_pos_1', 'bank_pos_4', 'bank_pos_5', 'bank_pos_6',
+                'bank_neg_2', 'bank_neg_5', 'bank_neg_7'
+            ];
+            if (spreadToAllBanks.includes(eventData.id)) {
+                activeBankStocks.forEach(bankStock => {
+                    if (bankStock.symbol !== targetBankStock.symbol) {
+                        applyPriceEffect(bankStock.symbol, magnitude * 0.5, eventData.type, 'market');
+                    }
+                });
             }
             return; // Zakończ cykl
         }
@@ -295,7 +656,7 @@ function triggerMainMarketEventCycle() {
     // Standardowe eventy (jeśli żaden specjalny nie wystąpił)
     const eventTypeRoll = Math.random();
     if (eventTypeRoll < 0.30) { 
-        const eventData = getRandomElement(marketWideEventsPrompts);
+        const eventData = pickEventByCycle(marketWideEventsPrompts);
         const duration = getRandomIntInRange(25, 75);
         const magnitude = getRandomInRange(0.03, 0.08) * (eventData.type === 'positive' ? 1 : -1);
         displayEventMessage(eventData.message(), duration, magnitude, 'market');
@@ -303,7 +664,7 @@ function triggerMainMarketEventCycle() {
             applyPriceEffect(stock.symbol, magnitude, eventData.type, 'market');
         });
     } else if (eventTypeRoll < 0.60) { 
-        const eventData = getRandomElement(sectorEventsPrompts);
+        const eventData = pickEventByCycle(sectorEventsPrompts);
         const duration = getRandomIntInRange(20, 60);
         const magnitude = getRandomInRange(0.05, 0.12) * (eventData.type === 'positive' ? 1 : -1);
         displayEventMessage(eventData.message(), duration, magnitude, 'market');
@@ -322,102 +683,15 @@ function triggerMainMarketEventCycle() {
     }
 }
 
-function triggerDividendEventCycle() {
-    // Ta funkcja wydaje się być przestarzała (mamy system dywidend kwartalnych)
-    // Zostawiam ją, jeśli jest używana w innym miejscu, ale warto to sprawdzić.
-    if (Math.random() <= 0.025) {
-        // ... (kod bez zmian) ...
-    }
-}
-
-function triggerSixthSenseEvent() {
-    // ... (kod bez zmian) ...
-}
-
-const premiumNewsPrompts = [
-    // ... (kod bez zmian) ...
-];
-
-function triggerStateCompanyEventCycle() {
-    // ... (kod bez zmian) ...
-}
-
-function triggerMergerAndAcquisitionEvent() {
-    // ... (kod bez zmian) ...
-}
-
-function handleTakeoverAcceptance(acquirer, target, buyoutPrice) {
-    // ... (kod bez zmian) ...
-}
-
-function handleTakeoverRejection(acquirer, target) {
-    // ... (kod bez zmian) ...
-}
-
-function triggerHostileTakeoverEvent() {
-    // ... (kod bez zmian) ...
-}
-
-function findMajorityShareholder(stock) {
-    // ... (kod bez zmian) ...
+/** Losuje zdarzenie z przewagą pozytywnych w ekspansji i negatywnych w recesji. */
+function pickEventByCycle(events) {
+    const wantPositive = Math.random() < getCyclePositiveEventBias();
+    const pool = events.filter(event => (event.type === 'positive') === wantPositive);
+    return pickMacroEvent(pool.length > 0 ? pool : events); // bez powtórek ostatnich zdarzeń (macro.js)
 }
 
 // --- POPRAWIONA WERSJA triggerRescueOfferingEvent ---
-function triggerRescueOfferingEvent() {
-    // Użyj balanceSheet.liabilities zamiast corporateDebt
-    const potentialTargets = stocks.filter(s => {
-        if (!s.balanceSheet || s.balanceSheet.liabilities <= 0 || s.isBankrupt || s.assetType) return false;
-        const marketValue = s.price * s.totalShares;
-        return s.balanceSheet.liabilities > (marketValue * 0.3); // Sprawdź zadłużenie z bilansu
-    });
-
-    if (potentialTargets.length === 0) return;
-
-    const targetCompany = getRandomElement(potentialTargets);
-    
-    const promotionalPrice = targetCompany.price * (1 - getRandomInRange(0.15, 0.25));
-    if (promotionalPrice <= 0) return;
-
-    // Użyj balanceSheet.liabilities do obliczenia potrzebnych akcji
-    const sharesToIssue = Math.ceil(targetCompany.balanceSheet.liabilities / promotionalPrice);
-    if (sharesToIssue <= 0) return;
-
-    logEvent(`[RYNEK] Spółka ${targetCompany.name} ogłasza "emisję ratunkową" (${sharesToIssue} akcji po ~${promotionalPrice.toFixed(2)} PLN), aby spłacić swoje długi!`, 'market');
-
-    let totalCashRaised = 0;
-    let totalSharesBought = 0;
-
-    // ... (reszta funkcji: Runda dla AI i Runda dla Gracza - bez zmian) ...
-    aiCompetitors.forEach(ai => {
-        // ...
-    });
-    const playerShares = playerPortfolio[targetCompany.symbol]?.shares || 0;
-    if (playerShares > 0) {
-        // ...
-    } else {
-        finalizeRescueOffering(targetCompany, totalCashRaised, totalSharesBought);
-    }
-}
-
-function triggerStartupFundingEvent() {
-    // ... (kod bez zmian) ...
-} 
-
-const gamingStartupEvents = [
-    // ... (kod bez zmian) ...
-];
-
-function triggerGamingStartupEvent(startup) {
-    // ... (kod bez zmian) ...
-}
-
-function triggerStartupOfferEvent() {
-    // ... (kod bez zmian) ...
-}
-
-function triggerStatePrivatizationEvent() {
-    // ... (kod bez zmian) ...
-}
+ 
 
 function triggerNationalizationEvent() {
     // Wersja z gameLogic.js jest nowsza i poprawna (używa balanceSheet i centralBank.funds)
@@ -447,35 +721,35 @@ function triggerNationalizationEvent() {
     }
     centralBank.funds -= totalCost;
     logEvent(`🏛️ NACJONALIZACJA! Bank Centralny przejmuje kontrolę nad ${target.name} za ${totalCost.toFixed(0)} PLN w celu ochrony gospodarki!`, 'review');
-    if (playerPortfolio[target.symbol]) {
-        const holding = playerPortfolio[target.symbol];
-        const cashGained = buyoutPrice * holding.shares;
-        playerCash += cashGained;
-        delete playerPortfolio[target.symbol];
-        showToast(`Państwo przymusowo wykupiło Twoje akcje w ${target.name} po cenie ${buyoutPrice.toFixed(2)} PLN.`, 'warning', 7000);
-    }
-    aiCompetitors.forEach(ai => {
-        if (ai.portfolio[target.symbol]) {
-            const cashGained = buyoutPrice * ai.portfolio[target.symbol].shares;
-            ai.cash += cashGained;
-            delete ai.portfolio[target.symbol];
-        }
-    });
+    if (playerPortfolio[target.symbol]) showToast(`Państwo przymusowo wykupiło Twoje akcje w ${target.name} po cenie ${buyoutPrice.toFixed(2)} PLN.`, 'warning', 7000);
+    buyOutAllHolders(target, buyoutPrice); // wszyscy posiadacze, nie tylko gracz i boty (testy ogólne 0.11)
     target.isStateOwned = true;
     target.stateOwnershipPct = getRandomInRange(0.75, 0.90);
     target.eventResistance = 0.6;
     target.balanceSheet.liabilities = 0;
     target.financialHealth = 1;
-    target.sharesHeld = Math.floor(target.totalShares * target.stateOwnershipPct);
+    target.sharesHeld = 0; // inwestorzy wykupieni; pakiet państwa jest poza wolnym obrotem
     return;
 }
 
+// Zdarzenia działów R&D: przyspieszenie albo opóźnienie trwających badań (A2: wcześniej pusty stub).
 const researchEventsPrompts = [
-    // ... (kod bez zmian) ...
+    { type: 'positive', progress: 0.25, message: name => `🔬 Przełom w laboratorium ${name}! Badania przyspieszają.` },
+    { type: 'positive', progress: 0.15, message: name => `🧑‍🔬 ${name} podkupuje zespół naukowców konkurencji — prace idą szybciej.` },
+    { type: 'negative', progress: -0.2, message: name => `🧪 Nieudany eksperyment w ${name} — część wyników do powtórki.` },
+    { type: 'negative', progress: -0.1, message: name => `🔌 Awaria aparatury w ${name} opóźnia badania.` }
 ];
 
 function triggerResearchEvent() {
-    // ... (kod bez zmian) ...
+    const researching = stocks.filter(s => !s.isBankrupt && s.research?.isResearching && s.research.currentTech);
+    if (!researching.length) return null;
+    const stock = getRandomElement(researching);
+    const event = pickEventByCycle(researchEventsPrompts.map((e, i) => ({ ...e, id: `rnd_${i}` })));
+    const tech = typeof technologies !== 'undefined' ? technologies[stock.research.currentTech] : null;
+    const required = Number(tech?.cost) || 100;
+    stock.research.progress = Math.max(0, (Number(stock.research.progress) || 0) + required * event.progress);
+    logEvent(event.message(stock.name), 'company');
+    return event;
 }
 
 // --- NOWE EVENTY Z PLIKU KOLEGI ---
@@ -495,7 +769,6 @@ const festivalPlayerEvents = [
         rarity: 0.10,
         message: () => `💡 Podczas prezentacji na stoisku wpadasz na genialny pomysł biznesowy! Otrzymujesz bonus XP.`,
         effect: () => {
-            playerXP += 50;
             displayXP();
         }
     },
@@ -618,11 +891,8 @@ const festivalPlayerEvents = [
                 if (stock) {
                     applyPriceEffect(stock.symbol, 0.05, 'positive', 'review');
                 }
-            } else if (playerCompany) {
-                playerCompany.cashInvested += 10000;
-                playerCompany.value += 10000;
             }
-            playerCash += 5000;
+            playerWallet.cash += 5000; // nagroda trafia do portfela prywatnego, nie do funduszu
             displayCash();
         }
     },
@@ -635,56 +905,6 @@ const festivalPlayerEvents = [
             stocks.forEach(s => { if (!s.assetType) changeReputation('player', s.symbol, 3); });
         }
     },
-    {
-        id: 'fest_bank_loan_discount',
-        rarity: 0.15, // Dość częste, jeśli są banki
-        message: (bankName) => `🏦 Specjalna oferta festynowa od ${bankName}! Oferują Ci ${getRandomIntInRange(5, 15)}% zniżki na oprocentowanie *nowego* kredytu komercyjnego zaciągniętego w ciągu najbliższych 2 minut!`,
-        condition: (participant) => {
-            // Warunek: Gracz uczestniczy ORAZ na festynie jest co najmniej jeden bank
-            return festival.participants.some(p => p.isBank === true);
-        },
-        effect: (participant) => {
-            // Wybierz losowy bank uczestniczący w festynie
-            const participatingBanks = festival.participants.filter(p => p.isBank === true);
-            if (participatingBanks.length === 0) return; // Na wszelki wypadek
-            const offeringBank = getRandomElement(participatingBanks);
-            const discountPercentage = getRandomInRange(0.05, 0.15); // Zniżka 5-15%
-            const bonusDuration = 120 * 1000; // 2 minuty czasu RZECZYWISTEGO
-
-            activePlayerBankBonuses.push({
-                bankId: offeringBank.ownerId,
-                type: 'loan',
-                value: discountPercentage, // Wartość zniżki (np. 0.1 dla 10%)
-                expiryTime: Date.now() + bonusDuration
-            });
-            // Informacja dla gracza (już jest w message, ale można dodać log)
-            logEvent(`[Festyn Bank] Otrzymano ofertę zniżki ${Math.round(discountPercentage*100)}% na kredyt w ${offeringBank.ownerName}.`);
-        }
-    },
-    {
-        id: 'fest_bank_deposit_bonus',
-        rarity: 0.15, // Dość częste, jeśli są banki
-        message: (bankName) => `💰 Bonus depozytowy od ${bankName}! Złóż *nowy* depozyt w ciągu 2 minut, a otrzymasz +${getRandomInRange(0.5, 1.5).toFixed(1)}% do standardowego oprocentowania przez rok!`,
-        condition: (participant) => {
-            // Warunek: Gracz uczestniczy ORAZ na festynie jest co najmniej jeden bank
-            return festival.participants.some(p => p.isBank === true);
-        },
-        effect: (participant) => {
-            const participatingBanks = festival.participants.filter(p => p.isBank === true);
-            if (participatingBanks.length === 0) return;
-            const offeringBank = getRandomElement(participatingBanks);
-            const bonusPercentagePoint = getRandomInRange(0.005, 0.015); // Bonus 0.5-1.5 punktu procentowego
-            const bonusDuration = 120 * 1000;
-
-            activePlayerBankBonuses.push({
-                bankId: offeringBank.ownerId,
-                type: 'deposit',
-                value: bonusPercentagePoint, // Wartość bonusu (np. 0.01 dla +1%)
-                expiryTime: Date.now() + bonusDuration
-            });
-            logEvent(`[Festyn Bank] Otrzymano ofertę bonusu +${(bonusPercentagePoint*100).toFixed(1)}% do depozytu w ${offeringBank.ownerName}.`);
-        }
-    }
 ];
 
 /**
@@ -718,31 +938,6 @@ function triggerFestivalPlayerEvent() {
 }
 
 // Funkcja pomocnicza do wywołania eventu festynowego
-function triggerEvent(chosenEvent, playerParticipant) {
-    let targetName = 'Twoja Działalność';
-    const target = playerParticipant.promotionTarget;
-    if (target.type === 'company') {
-        const stock = stocks.find(s => s.symbol === target.id);
-        if (stock) targetName = stock.name;
-    } else if (target.type === 'player_company' && playerCompany) {
-        targetName = playerCompany.name;
-    } else if (target.type === 'city') {
-        targetName = 'Miasto Gdańsk';
-    }
-
-    const message = chosenEvent.message(targetName);
-    logEvent(`[FESTYN] ${message}`, 'review');
-    showToast(message, 'default', 6000);
-
-    chosenEvent.effect(playerParticipant);
-
-    // Odśwież widok festynu, jeśli jest otwarty
-    const modal = document.getElementById('city-investment-modal');
-    if (modal && modal.style.display === 'block') {
-        updateCityModalContent(); // Użyj głównej funkcji aktualizującej
-    }
-}
-
 function triggerSingleFestivalEvent(chosenEvent, playerParticipant) {
     let targetName = 'Twoja Działalność'; // Domyślnie
     let bankNameForMessage = ''; // Nazwa banku dla eventów bankowych
@@ -752,8 +947,6 @@ function triggerSingleFestivalEvent(chosenEvent, playerParticipant) {
     if (target.type === 'company') {
         const stock = stocks.find(s => s.symbol === target.id);
         if (stock) targetName = stock.name;
-    } else if (target.type === 'player_company' && playerCompany) {
-        targetName = playerCompany.name;
     } else if (target.type === 'city') {
         targetName = 'Miasto Gdańsk';
     }
@@ -960,6 +1153,7 @@ function triggerBankIPOEvent() {
     }
     const inactiveBanks = commercialBanks.filter(b => !b.isActive);
     if (inactiveBanks.length === 0) return;
+    if (typeof hasFreeListingSlot === 'function' && !hasFreeListingSlot()) return; // P1: twardy sufit spółek krajowych
     const bankToIPO = getRandomElement(inactiveBanks);
     const ipoValuation = bankToIPO.initialCapital * getRandomInRange(1.1, 1.5);
     const ipoSharePrice = getRandomInRange(50, 150);
@@ -1058,10 +1252,21 @@ const bankingSectorEventsPrompts = [
     { id: 'bank_pos_1', message: bankName => `✅ Regulacje złagodzone! ${bankName} i inne banki komercyjne mają teraz większą swobodę w akcji kredytowej.`, type: 'positive' },
     { id: 'bank_pos_2', message: bankName => `💡 Innowacja w ${bankName}! Nowa aplikacja mobilna przyciąga tysiące nowych klientów.`, type: 'positive' },
     { id: 'bank_pos_3', message: bankName => `⭐ ${bankName} otrzymuje międzynarodową nagrodę za stabilność finansową.`, type: 'positive' },
+    { id: 'bank_pos_4', message: bankName => `🏦 ${bankName} wprowadza nowy produkt depozytowy, a klienci masowo lokują swoje środki.`, type: 'positive' },
+    { id: 'bank_pos_5', message: bankName => `🤝 Strategiczną fuzją ${bankName} zwiększa swój zasięg i kontynuuje ekspansję.`, type: 'positive' },
+    { id: 'bank_pos_6', message: bankName => `🏢 ${bankName} przejmuje lokalny serwis finansowy i wchłania jego klientów oraz kapitał.`, type: 'positive' },
+    { id: 'bank_pos_7', message: bankName => `💳 ${bankName} oferuje klientom nowy, elastyczny kredyt o niskim oprocentowaniu. Popyt rośnie, a bilans się umacnia.`, type: 'positive' },
+    { id: 'bank_pos_8', message: bankName => `🏦 ${bankName} wprowadza program skupu depozytów z gwarantowaną rentownością. Klienci masowo wpłacają swoje oszczędności.`, type: 'positive' },
     // Negatywne
     { id: 'bank_neg_1', message: bankName => `🚨 Skandal w ${bankName}! Wyciekły dane klientów, reputacja banku spada.`, type: 'negative' },
     { id: 'bank_neg_2', message: bankName => `⚖️ Nowe, restrykcyjne regulacje Banku Centralnego uderzają w rentowność ${bankName} i innych banków.`, type: 'negative' },
     { id: 'bank_neg_3', message: bankName => `📉 ${bankName} publikuje gorsze od oczekiwań wyniki finansowe z powodu rosnących rezerw na złe kredyty.`, type: 'negative' },
+    { id: 'bank_neg_4', message: bankName => `💧 Kryzys płynności w ${bankName}! Bank ogranicza akcję kredytową, co osłabia zaufanie inwestorów.`, type: 'negative' },
+    { id: 'bank_neg_5', message: bankName => `🏛️ Bank Centralny podnosi wymogi rezerw obowiązkowych, a ${bankName} musi zablokować część kapitału.`, type: 'negative' },
+    { id: 'bank_neg_6', message: bankName => `🛠️ Nowy produkt kredytowy ${bankName} spotyka się z krytyką. Klienci zaczynają rozważać zmiany.`, type: 'negative' },
+    { id: 'bank_neg_7', message: bankName => `📉 Przejęcie zadłużonej firmy przez ${bankName} obciąża jego bilans i wywołuje obawy o stabilność.`, type: 'negative' },
+    { id: 'bank_neg_8', message: bankName => `🔥 Bank ${bankName} traci płynność po serii niespodziewanych wypłat. Rynkowe plotki wprowadzają nerwowość.`, type: 'negative' },
+    { id: 'bank_neg_9', message: bankName => `📵 Bank ${bankName} wchłania bankrutującego konkurenta, ale przejęcie wymaga dodatkowych rezerw i podkopuje zyski.`, type: 'negative' },
 ];
 
 const governmentInterventions = [
@@ -1197,3 +1402,5 @@ function triggerGovernmentSpendingEvent() {
          if (typeof updateStateModalContent === 'function') updateStateModalContent();
     }
 }
+
+// Technologie budowlane (constructionEffects) są zdefiniowane w technologies.js.

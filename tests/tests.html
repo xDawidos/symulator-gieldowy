@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Testy gry</title>
+    <style>
+        :root { --bg: #f6f7f9; --fg: #1c1e21; --ok: #1a7f37; --fail: #cf222e; --muted: #57606a; --card: #fff; --border: #d0d7de; }
+        @media (prefers-color-scheme: dark) {
+            :root { --bg: #0d1117; --fg: #e6edf3; --ok: #3fb950; --fail: #f85149; --muted: #8b949e; --card: #161b22; --border: #30363d; }
+        }
+        body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--fg); margin: 0; padding: 16px; }
+        h1 { font-size: 20px; margin: 0 0 4px; }
+        #summary { color: var(--muted); margin-bottom: 16px; }
+        .group { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; margin-bottom: 12px; }
+        .group h2 { font-size: 15px; margin: 0 0 8px; }
+        .test { font-size: 13px; padding: 3px 0; }
+        .ok { color: var(--ok); }
+        .fail { color: var(--fail); font-weight: 600; }
+        .detail { color: var(--muted); font-size: 12px; margin-left: 18px; white-space: pre-wrap; }
+        table { border-collapse: collapse; font-size: 12px; margin-top: 6px; }
+        td, th { border: 1px solid var(--border); padding: 3px 8px; text-align: right; }
+        th:first-child, td:first-child { text-align: left; }
+    </style>
+    <script>window.__GAME_TEST_MODE__ = true;</script>
+</head>
+<body>
+    <h1>Testy: budownictwo, R&amp;D, rynek, fundusz, zapis</h1>
+    <div id="summary">Uruchamianie…</div>
+    <div id="results"></div>
+    <div id="toast-notification" hidden></div>
+
+    <script src="../core.js"></script>
+    <script src="../companies.js"></script>
+    <script src="../ai.js"></script>
+    <script src="../player.js"></script>
+    <script src="../finance.js"></script>
+    <script src="../state.js"></script>
+    <script src="../ma.js"></script>
+    <script src="../learning.js"></script>
+    <script src="../events.js"></script>
+    <script src="../ui.js"></script>
+    <script src="../main.js"></script>
+    <script src="tests.js"></script>
+</body>
+</html>

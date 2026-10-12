@@ -1,7 +1,746 @@
+// =================================================================================
+// ui.js: Interfejs: odświeżanie widoków, wykresy, okna i panele.
+// Złączone pliki: ui-update.js, chart.js, ui.js (w kolejności ładowania).
+// =================================================================================
+
+// #################################################################################
+// ## ui-update.js
+// #################################################################################
+
+// Sektorowe chipsy
+function setSectorChip(el, sector) {
+    document.querySelectorAll('.sector-chip:not(.owned-chip)').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+    const sel = document.getElementById('sector-filter');
+    if (sel) {
+        sel.value = sector;
+        if (typeof displayStocks === 'function')
+            displayStocks(typeof getCurrentInputValues === 'function' ? getCurrentInputValues() : {});
+    }
+}
+
+/** 0.13.1 (B10): lista sektorów z faktycznych spółek (typy specjalne jako osobne pozycje, np. REIT). */
+let sectorFilterSignature = '';
+function getMarketSectorList() {
+    const set = new Set();
+    for (const stock of stocks || []) {
+        if (stock.isBankrupt || stock.assetType === 'Startup') continue;
+        if (stock.assetType === 'REIT') { set.add('REIT'); continue; }
+        (Array.isArray(stock.sector) ? stock.sector : []).forEach(sector => sector && set.add(sector));
+    }
+    return [...set].sort((a, b) => a === 'REIT' ? 1 : b === 'REIT' ? -1 : a.localeCompare(b, 'pl'));
+}
+
+function renderSectorFilters() {
+    const chips = document.getElementById('sector-chips');
+    const select = document.getElementById('sector-filter');
+    if (!chips || !select || typeof stocks === 'undefined') return;
+    const sectors = getMarketSectorList();
+    const signature = sectors.join('|');
+    if (signature === sectorFilterSignature) return;
+    sectorFilterSignature = signature;
+    const current = select.value || 'all';
+    const label = sector => sector === 'REIT' ? 'Fundusze REIT' : sector;
+    select.innerHTML = `<option value="all">Wszystkie sektory</option>${sectors.map(sector => `<option value="${escapeHtml(sector)}">${escapeHtml(label(sector))}</option>`).join('')}`;
+    select.value = sectors.includes(current) ? current : 'all';
+    chips.querySelectorAll('.sector-chip[data-sector]:not([data-sector="all"])').forEach(chip => chip.remove());
+    chips.insertAdjacentHTML('beforeend', sectors.map(sector => `<span class="sector-chip${select.value === sector ? ' active' : ''}" data-sector="${escapeHtml(sector)}" onclick="setSectorChip(this, this.dataset.sector)">${escapeHtml(sector)}</span>`).join(''));
+    chips.querySelector('.sector-chip[data-sector="all"]')?.classList.toggle('active', select.value === 'all');
+}
+
+// Taby poziomów rynku
+let currentMarketLevel = 'ALL';
+
+/** Przycisk 📊 w panelu kupna: struktura akcjonariatu (kto ma jaki % udziałów). */
+function openCompanyReport(symbol) {
+    if (typeof openStockDetailsModal === 'function') openStockDetailsModal(symbol);
+}
+
+let openStockDrawerSymbol = null;
+
+function renderStockDrawer(symbol) {
+    if (!symbol) return;
+    const drawerId = 'drawer-' + symbol;
+    if (document.getElementById(drawerId)) return;
+    const row = document.querySelector('#stock-table-body tr[data-symbol="' + symbol + '"]');
+    if (!row) return;
+    const cols = row.querySelectorAll('td').length || 7;
+    const stockData = typeof stocks !== 'undefined' ? stocks.find(s => s.symbol === symbol) : null;
+    const isCompanyStock = Boolean(stockData && !stockData.assetType);
+    const dr = document.createElement('tr');
+    dr.id = drawerId;
+    dr.className = 'stock-row-drawer open';
+    const td = document.createElement('td');
+    td.colSpan = cols;
+    td.style.padding = '0';
+    td.innerHTML = `<div class="stock-drawer-inner">
+      <div class="stock-drawer-actions">
+        <div class="stock-drawer-actions-row">
+          <div class="qty-input-wrapper">
+            <input type="text" inputmode="numeric" pattern="[0-9]*" id="dqty-${symbol}" value="1" aria-label="Liczba akcji" oninput="this.value=this.value.replace(/[^0-9]/g, ''); updateDrawerImpact('${symbol}')">
+            <span class="chip-max" onclick="setDrawerMax('${symbol}')">MAX</span>
+          </div>
+        </div>
+        <div class="stock-drawer-actions-row">
+          <button class="btn-buy"
+            onclick="buyStock('${symbol}',document.getElementById('dqty-${symbol}').value)">Kup</button>
+          <button class="btn-sell"
+            onclick="sellStock('${symbol}',document.getElementById('dqty-${symbol}').value)">Sprzedaj</button>
+          <button class="btn-ghost-icon" title="Wykres"
+            onclick="showPriceHistoryModal('${symbol}')">📈</button>
+          <button class="btn-ghost-icon" title="Akcjonariat — kto ma jaki % udziałów"
+            onclick="openCompanyReport('${symbol}')">📊</button>
+          ${isCompanyStock ? `<button class="btn-ghost-icon" title="Walne zgromadzenie — akcjonariat, uchwały, głosowanie (większościowiec)"
+            onclick="openGovernanceModal('${symbol}')">🗳️</button>
+          <button class="btn-ghost-icon" title="Inwestycje spółki"
+            onclick="openCompanyInvestments('${symbol}')">🏗️</button>` : ''}
+        </div>
+        <div class="stock-drawer-impact text-xs" id="dimpact-${symbol}"></div>
+      </div>
+    </div>`;
+    dr.appendChild(td);
+    row.after(dr);
+    updateDrawerImpact(symbol);
+}
+
+/** N5: szacunek kosztu i wpływu zlecenia na kurs (płynność rynku). */
+function estimateOrderImpact(stock, quantity) {
+    const freeFloat = Math.max(1, typeof getFreeFloatShares === 'function' ? getFreeFloatShares(stock) : stock.totalShares);
+    const impact = Math.min(0.02, 0.5 * Math.abs(quantity) / freeFloat);
+    const marketId = typeof getStockMarket === 'function' ? getStockMarket(stock) : 'GPW';
+    const commission = typeof getBuyCommissionRate === 'function' ? getBuyCommissionRate(stock) : (typeof getMarketDef === 'function' ? (getMarketDef(marketId)?.commission || 0) : 0);
+    const value = quantity * stock.price;
+    return { value, impact, commission: value * commission, freeFloat, available: typeof getAvailableShares === 'function' ? getAvailableShares(stock) : null };
+}
+
+function updateDrawerImpact(symbol) {
+    const box = document.getElementById('dimpact-' + symbol);
+    const stock = typeof stocks !== 'undefined' ? stocks.find(s => s.symbol === symbol) : null;
+    if (!box || !stock || stock.assetType) { if (box) box.textContent = ''; return; }
+    const quantity = Math.max(0, parseInt(document.getElementById('dqty-' + symbol)?.value, 10) || 0);
+    if (!quantity) { box.textContent = ''; return; }
+    const e = estimateOrderImpact(stock, quantity);
+    box.innerHTML = `Wartość ~${formatZl(e.value, 0)} · prowizja ~${formatZl(e.commission, 2)} · kurs po zleceniu ~${e.impact >= 0.0005 ? `${(e.impact * 100).toFixed(2)}%` : '0%'} w Twoją niekorzyść`
+        + `${e.impact >= 0.01 ? ' <span class="text-warn">— duże zlecenie przy małym obrocie (płynność!)</span>' : ''} · w obrocie ${e.freeFloat.toLocaleString('pl-PL')} akcji`;
+    if (e.impact >= 0.01 && typeof unlockAcademyEntry === 'function') unlockAcademyEntry('wplyw');
+}
+
+function closeOpenStockDrawer() {
+    if (!openStockDrawerSymbol) return;
+    const previousDrawer = document.getElementById('drawer-' + openStockDrawerSymbol);
+    if (previousDrawer) previousDrawer.remove();
+    openStockDrawerSymbol = null;
+}
+
+function toggleStockDrawer(symbol) {
+    if (openStockDrawerSymbol === symbol) {
+        closeOpenStockDrawer();
+        return;
+    }
+    closeOpenStockDrawer();
+    openStockDrawerSymbol = symbol;
+    renderStockDrawer(symbol);
+}
+
+function setMarketLevel(el, level) {
+    currentMarketLevel = level;
+    document.querySelectorAll('.market-level-tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    if (typeof displayStocks === 'function')
+        displayStocks(typeof getCurrentInputValues === 'function' ? getCurrentInputValues() : {});
+}
+
+// KPI rynku
+function updateMarketKPIs() {
+    if (typeof stocks === 'undefined') return;
+    const active = stocks.filter(s => !s.isBankrupt && s.price > 0);
+    const el = document.getElementById('mkpi-active');
+    if (el) el.textContent = active.length;
+    const getPct = s => s.previousPrice
+        ? ((s.price - s.previousPrice) / s.previousPrice * 100) : 0;
+    const sorted = [...active].sort((a, b) => getPct(b) - getPct(a));
+    const fmt = v => (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+    if (sorted.length) {
+        const g = sorted[0], l = sorted[sorted.length - 1];
+        const gEl = document.getElementById('mkpi-top-gainer');
+        const gName = document.getElementById('mkpi-top-gainer-name');
+        const lEl = document.getElementById('mkpi-top-loser');
+        const lName = document.getElementById('mkpi-top-loser-name');
+        if (gEl) gEl.textContent = fmt(getPct(g));
+        if (gName) gName.textContent = g.symbol;
+        if (lEl) lEl.textContent = fmt(getPct(l));
+        if (lName) lName.textContent = l.symbol;
+    }
+    // Najsilniejszy sektor dnia: średnia zmiana ceny spółek (każda spółka liczy się w każdym swoim sektorze).
+    const sectorStats = {};
+    active.filter(s => !s.assetType).forEach(s => {
+        (Array.isArray(s.sector) ? s.sector : [s.sector]).forEach(sector => {
+            const stat = sectorStats[sector] || (sectorStats[sector] = { sum: 0, count: 0 });
+            stat.sum += getPct(s);
+            stat.count++;
+        });
+    });
+    const best = Object.entries(sectorStats)
+        .filter(([, stat]) => stat.count >= 2)
+        .map(([sector, stat]) => [sector, stat.sum / stat.count])
+        .sort((a, b) => b[1] - a[1])[0];
+    const tsEl = document.getElementById('mkpi-top-sector');
+    const tsSubEl = document.getElementById('mkpi-top-sector-sub');
+    if (tsEl) tsEl.textContent = best ? best[0] : '—';
+    if (tsSubEl) tsSubEl.textContent = best ? `średnio ${fmt(best[1])} dziś` : 'brak danych';
+}
+
+// Topbar KPI: gotówka funduszu, NAV/JU, prywatne pieniądze gracza
+function updateTopbarKPIs() {
+    const fmt = new Intl.NumberFormat('pl-PL', {minimumFractionDigits:2, maximumFractionDigits:2});
+    if (typeof playerCash !== 'undefined') {
+        const v = fmt.format(playerCash);
+        const isPrivate = typeof activeTradingAccount !== 'undefined' && activeTradingAccount === 'private';
+        ['cash','cash-portfolio'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = (id === 'cash-portfolio' && isPrivate ? fmt.format(playerWallet?.cash || 0) : v) + ' zł';
+        });
+    }
+    if (typeof playerFund !== 'undefined' && playerFund) {
+        const navEl = document.getElementById('topbar-portfolio-value');
+        if (navEl) navEl.textContent = getFundNav().toFixed(4) + ' zł';
+        const walletEl = document.getElementById('topbar-daily-pnl');
+        if (walletEl) walletEl.textContent = fmt.format(playerWallet.cash) + ' zł';
+    }
+    if (typeof currentDay !== 'undefined') {
+        const d = document.getElementById('topbar-day');
+        if (d) d.textContent = currentDay;
+    }
+    if (typeof marketTrend !== 'undefined') {
+        const map = {
+            bullish_strong:'Hossa silna', bullish_moderate:'Hossa umiarkowana',
+            neutral:'Rynek neutralny', bearish_moderate:'Bessa umiarkowana', bearish_strong:'Bessa silna'
+        };
+        const el = document.getElementById('topbar-market-status');
+        if (el) {
+            el.textContent = map[marketTrend] || marketTrend;
+            el.className = 'topbar-market-status' +
+                (marketTrend.startsWith('bearish') ? ' bear' :
+                 marketTrend === 'neutral' ? ' neutral' : '');
+        }
+    }
+}
+
+// Prywatne pieniądze gracza (XP zastąpione szkoleniami za pieniądze)
+function updateXPBar() {
+    if (typeof displayXP === 'function') displayXP();
+}
+
+function setDrawerMax(symbol) {
+    if (typeof playerCash === 'undefined' || typeof stocks === 'undefined') return;
+    const s = stocks.find(x => x.symbol === symbol);
+    if (!s || s.price <= 0) return;
+    const input = document.getElementById('dqty-' + symbol);
+    // 0.13.1 (B1): max = min(akcje dostępne w obrocie, gotówka / cena z prowizją) — dla aktywnego konta.
+    const max = typeof getMaxBuyQuantity === 'function' ? getMaxBuyQuantity(s) : Math.floor(playerCash / s.price);
+    if (input) input.value = Math.max(0, max);
+    if (max <= 0) showToast(getAvailableShares(s) <= 0 ? 'Brak akcji dostępnych na rynku — wszystkie w wolnym obrocie są u inwestorów.' : 'Za mało gotówki na choćby jedną akcję (z prowizją).', 'warning');
+    if (typeof updateDrawerImpact === 'function') updateDrawerImpact(symbol);
+}
+
+// Auto-odświeżanie co 3s
+setInterval(function() {
+    updateTopbarKPIs();
+    updateMarketKPIs();
+    updateXPBar();
+}, 3000);
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(function() { updateTopbarKPIs(); updateMarketKPIs(); updateXPBar(); }, 800);
+});
+
+// #################################################################################
+// ## chart.js
+// #################################################################################
+
+// --- Funkcje związane z wykresem historii cen ---
+
+/**
+ * Agreguje szczegółowe świece (np. 15s) w większe interwały (np. 1m).
+ * @param {Array} candles - Tablica obiektów świec do przetworzenia.
+ * @param {number} interval - Docelowy interwał w milisekundach.
+ * @returns {Array} - Nowa tablica z zagregowanymi świecami.
+ */
+function aggregateCandles(candles, interval) {
+    const baseInterval = 15000;
+    if (interval < baseInterval * 1.5 || candles.length === 0) {
+        return candles;
+    }
+
+    const result = [];
+    const groupByKey = {};
+
+    for (const candle of candles) {
+        const key = Math.floor(candle.time / interval) * interval;
+        if (!groupByKey[key]) {
+            groupByKey[key] = {
+                time: key,
+                open: candle.open,
+                high: candle.high,
+                low: candle.low,
+                close: candle.close,
+            };
+        } else {
+            groupByKey[key].high = Math.max(groupByKey[key].high, candle.high);
+            groupByKey[key].low = Math.min(groupByKey[key].low, candle.low);
+            groupByKey[key].close = candle.close;
+        }
+    }
+
+    for (const key in groupByKey) {
+        result.push(groupByKey[key]);
+    }
+    
+    return result;
+}
+
+/**
+ * Przerzedza dane dla wykresu liniowego na podstawie czasu.
+ * @param {Array} lineHistory - Pełna historia cen jako obiekty {time, price}.
+ * @param {number} interval - Docelowy interwał w milisekundach.
+ * @returns {Array} - Nowa, przefiltrowana tablica cen.
+ */
+function filterLineData(lineHistory, interval) {
+    if (interval <= 1000 || lineHistory.length === 0) {
+        return lineHistory.map(p => p.price);
+    }
+    
+    const filtered = [];
+    let lastTime = 0;
+
+    for (const point of lineHistory) {
+        if (point.time >= lastTime + interval) {
+            filtered.push(point.price);
+            lastTime = point.time;
+        }
+    }
+    
+    if (lineHistory.length > 0) {
+        const lastPoint = lineHistory[lineHistory.length - 1];
+        if (!filtered.includes(lastPoint.price)) {
+            filtered.push(lastPoint.price);
+        }
+    }
+
+    return filtered.length > 1 ? filtered : lineHistory.map(p => p.price);
+}
+
+/**
+ * Rysuje kolorowy, segmentowy wykres liniowy.
+ */
+function drawLineChart(data, svg, getX, getY) {
+    const svgNs = "http://www.w3.org/2000/svg";
+    if (data.length < 2) return;
+
+    const colorProfit = '#28a745';
+    const colorLoss = '#dc3545';
+    const colorNeutral = '#6c757d';
+
+    for (let i = 1; i < data.length; i++) {
+        const prevPrice = data[i - 1];
+        const currentPrice = data[i];
+
+        let segmentColor = colorNeutral;
+        if (currentPrice > prevPrice) segmentColor = colorProfit;
+        else if (currentPrice < prevPrice) segmentColor = colorLoss;
+
+        const x1 = getX(i - 1, data.length);
+        const y1 = getY(prevPrice);
+        const x2 = getX(i, data.length);
+        const y2 = getY(currentPrice);
+
+        if (![x1, y1, x2, y2].some(isNaN)) {
+            const line = document.createElementNS(svgNs, "line");
+            line.setAttribute("x1", x1.toString());
+            line.setAttribute("y1", y1.toString());
+            line.setAttribute("x2", x2.toString());
+            line.setAttribute("y2", y2.toString());
+            line.setAttribute("stroke", segmentColor);
+            line.setAttribute("stroke-width", "2");
+            svg.appendChild(line);
+        }
+    }
+}
+
+/**
+ * Rysuje wykres świecowy.
+ */
+function drawCandlestickChart(history, svg, chartWidth, getX, getY) {
+    const svgNs = "http://www.w3.org/2000/svg";
+    if (history.length < 1) return;
+
+    const candleWidth = Math.max(2, (chartWidth / history.length) * 0.7);
+
+    history.forEach((candle, index) => {
+        if (!candle) return;
+        
+        const x = getX(index, history.length);
+        const yOpen = getY(candle.open);
+        const yClose = getY(candle.close);
+        const yHigh = getY(candle.high);
+        const yLow = getY(candle.low);
+        
+        const isBullish = candle.close >= candle.open;
+        const color = isBullish ? '#28a745' : '#dc3545';
+
+        const wick = document.createElementNS(svgNs, "line");
+        wick.setAttribute("x1", x.toString()); wick.setAttribute("y1", yHigh.toString());
+        wick.setAttribute("x2", x.toString()); wick.setAttribute("y2", yLow.toString());
+        wick.setAttribute("stroke", color); wick.setAttribute("stroke-width", "1");
+        svg.appendChild(wick);
+        
+        const body = document.createElementNS(svgNs, "rect");
+        body.setAttribute("x", (x - candleWidth / 2).toString()); body.setAttribute("y", (isBullish ? yClose : yOpen).toString());
+        body.setAttribute("width", candleWidth.toString()); body.setAttribute("height", Math.abs(yOpen - yClose).toString());
+        body.setAttribute("fill", color);
+        svg.appendChild(body);
+    });
+}
+
+/**
+ * Oblicza optymalny zakres i krok dla osi Y wykresu.
+ */
+function calculateNiceYAxisRange(minPrice, maxPrice) {
+    let rangeMin = minPrice;
+    let rangeMax = maxPrice;
+    
+    const dataRange = rangeMax - rangeMin;
+    const avgPrice = (rangeMax + rangeMin) / 2;
+    const minVisibleRange = Math.max(avgPrice * 0.2, 2.0);
+
+    if (dataRange < minVisibleRange) {
+        const center = (rangeMax + rangeMin) / 2;
+        rangeMin = center - (minVisibleRange / 2);
+        rangeMax = center + (minVisibleRange / 2);
+    }
+
+    const range = rangeMax - rangeMin;
+    if (range <= 0) {
+        return { min: Math.floor(minPrice) - 1, max: Math.ceil(maxPrice) + 1, step: 1 };
+    }
+    const targetTickCount = 4;
+    const roughStep = range / (targetTickCount - 1);
+    const exponent = Math.floor(Math.log10(roughStep));
+    const powerOf10 = Math.pow(10, exponent);
+    const magnitude = roughStep / powerOf10;
+    let niceMagnitude;
+    if (magnitude < 1.5) niceMagnitude = 1;
+    else if (magnitude < 3) niceMagnitude = 2;
+    else if (magnitude < 7) niceMagnitude = 5;
+    else niceMagnitude = 10;
+    const niceStep = niceMagnitude * powerOf10;
+    const niceMin = Math.floor(rangeMin / niceStep) * niceStep;
+    const niceMax = Math.ceil(rangeMax / niceStep) * niceStep;
+    const finalStep = niceStep > 0 ? niceStep : 1;
+    
+    return { min: niceMin, max: (niceMax > niceMin ? niceMax : niceMin + finalStep), step: finalStep };
+}
+
+/**
+ * Główna funkcja renderująca wykres, która decyduje, jaki typ wykresu narysować.
+ */
+// N5: wydarzenia spółki (raporty, dywidendy, przejęcia, korekty) jako znaczniki na wykresie.
+function addChartEvent(stock, icon, label) {
+    if (!stock) return;
+    if (!Array.isArray(stock.chartEvents)) stock.chartEvents = [];
+    stock.chartEvents.push({ time: Date.now(), icon, label });
+    if (stock.chartEvents.length > 20) stock.chartEvents.shift();
+}
+
+function drawChartEvents(stock, svg, historyForMapping, getX, padding, chartHeight) {
+    const svgNs = "http://www.w3.org/2000/svg";
+    const tooltip = document.getElementById('chart-tooltip');
+    const first = historyForMapping[0]?.time;
+    for (const event of stock.chartEvents || []) {
+        if (!first || event.time < first) continue;
+        let index = 0, best = Infinity;
+        historyForMapping.forEach((point, i) => { const d = Math.abs((point.time || 0) - event.time); if (d < best) { best = d; index = i; } });
+        const x = getX(index, historyForMapping.length);
+        const line = document.createElementNS(svgNs, "line");
+        line.setAttribute("x1", x); line.setAttribute("x2", x);
+        line.setAttribute("y1", padding.top); line.setAttribute("y2", padding.top + chartHeight);
+        line.setAttribute("stroke", "#8b949e"); line.setAttribute("stroke-dasharray", "3,3"); line.setAttribute("stroke-width", "1");
+        svg.appendChild(line);
+        const label = document.createElementNS(svgNs, "text");
+        label.setAttribute("x", x); label.setAttribute("y", padding.top + 12);
+        label.setAttribute("font-size", "13"); label.setAttribute("text-anchor", "middle");
+        label.textContent = event.icon;
+        label.style.cursor = "help";
+        if (tooltip) {
+            label.addEventListener('mouseover', e => { tooltip.textContent = event.label; tooltip.style.display = 'block'; tooltip.style.left = `${e.pageX + 15}px`; tooltip.style.top = `${e.pageY + 15}px`; });
+            label.addEventListener('mouseout', () => { tooltip.style.display = 'none'; });
+        }
+        svg.appendChild(label);
+    }
+}
+
+function renderChartSVGForStock(stock, svgAreaElement, width, height) {
+    svgAreaElement.innerHTML = '';
+    const svgNs = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgNs, "svg");
+    svg.setAttribute("width", width);
+    svg.setAttribute("height", height);
+    svg.style.display = "block";
+
+    const padding = { top: 10, bottom: 20, left: 45, right: 10 };
+    const chartWidth = width - padding.left - padding.right;
+    const chartHeight = height - padding.top - padding.bottom;
+
+    let dataToDraw, minPrice, maxPrice, historyForMapping;
+
+    if (playerChartSettings.type === 'candlestick') {
+        const fullHistory = (stock.candlestickHistory || []).concat(stock.currentCandle || []);
+        dataToDraw = aggregateCandles(fullHistory, playerChartSettings.candleInterval);
+        historyForMapping = dataToDraw; // Do mapowania transakcji użyjemy zagregowanych danych
+        if (dataToDraw.length === 0) {
+            svgAreaElement.innerHTML = `<p style="text-align: center; padding-top: 60px;">Brak danych do narysowania wykresu.</p>`;
+            return;
+        }
+        minPrice = Math.min(...dataToDraw.map(c => c.low));
+        maxPrice = Math.max(...dataToDraw.map(c => c.high));
+    } else { // 'line'
+        historyForMapping = stock.lineHistory || []; // Do mapowania transakcji użyjemy pełnej, surowej historii
+        dataToDraw = filterLineData(historyForMapping, playerChartSettings.lineInterval);
+        if (dataToDraw.length === 0) {
+            svgAreaElement.innerHTML = `<p style="text-align: center; padding-top: 60px;">Brak danych do narysowania wykresu.</p>`;
+            return;
+        }
+        minPrice = Math.min(...dataToDraw);
+        maxPrice = Math.max(...dataToDraw);
+    }
+
+    const yAxis = calculateNiceYAxisRange(minPrice, maxPrice);
+    const getX = (index, historyLength) => padding.left + (index / Math.max(1, historyLength - 1)) * (chartWidth - 20) + 10;
+    const getY = (price) => padding.top + chartHeight - ((price - yAxis.min) / Math.max(0.1, yAxis.max - yAxis.min)) * chartHeight;
+
+    // Rysowanie siatki i osi Y
+    if (yAxis.step > 0) {
+        for (let priceVal = yAxis.min; priceVal <= yAxis.max; priceVal += yAxis.step) {
+            if (isNaN(priceVal)) continue;
+            const y = getY(priceVal);
+            const gridLine = document.createElementNS(svgNs, "line");
+            gridLine.setAttribute("x1", padding.left.toString());
+            gridLine.setAttribute("y1", y.toString());
+            gridLine.setAttribute("x2", (padding.left + chartWidth).toString());
+            gridLine.setAttribute("y2", y.toString());
+            gridLine.setAttribute("stroke", "#e0e0e0");
+            gridLine.setAttribute("stroke-dasharray", "2,2");
+            svg.appendChild(gridLine);
+            const textLabel = document.createElementNS(svgNs, "text");
+            textLabel.setAttribute("x", (padding.left - 8).toString());
+            textLabel.setAttribute("y", (y + 4).toString());
+            textLabel.setAttribute("font-size", "10");
+            textLabel.setAttribute("text-anchor", "end");
+            textLabel.textContent = priceVal.toFixed(2);
+            svg.appendChild(textLabel);
+        }
+    }
+    
+    // Wywołaj odpowiednią funkcję rysującą
+    if (playerChartSettings.type === 'candlestick') {
+        drawCandlestickChart(dataToDraw, svg, chartWidth, getX, getY);
+    } else {
+        drawLineChart(dataToDraw, svg, getX, getY);
+    }
+    
+    drawChartEvents(stock, svg, historyForMapping, getX, padding, chartHeight); // N5
+
+    // --- SEKCJA RYSOWANIA ZNACZNIKÓW TRANSAKCJI (z niestandardowym dymkiem) ---
+    const tooltip = document.getElementById('chart-tooltip');
+
+    (stock.playerTransactions || []).forEach(tx => {
+        if (tx.type === 'buy') {
+            let closestPointIndex = -1;
+            let minTimeDiff = Infinity;
+
+            historyForMapping.forEach((point, index) => {
+                const timeDiff = Math.abs((point.time || 0) - tx.time);
+                if (timeDiff < minTimeDiff) {
+                    minTimeDiff = timeDiff;
+                    closestPointIndex = index;
+                }
+            });
+
+            if (closestPointIndex !== -1) {
+                const x = getX(closestPointIndex, historyForMapping.length);
+                const y = getY(tx.price);
+
+                const marker = document.createElementNS(svgNs, "circle");
+                marker.setAttribute("cx", x.toString());
+                marker.setAttribute("cy", y.toString());
+                marker.setAttribute("r", "5");
+                marker.setAttribute("fill", "rgba(0, 123, 255, 0.7)");
+                marker.setAttribute("stroke", "white");
+                marker.setAttribute("stroke-width", "1.5");
+                marker.style.cursor = "pointer";
+                svg.appendChild(marker);
+
+                marker.addEventListener('mouseover', (event) => {
+                    tooltip.innerHTML = `Kupiono: ${tx.quantity} szt. po ${tx.price.toFixed(2)} PLN`;
+                    tooltip.style.display = 'block';
+                    tooltip.style.left = `${event.pageX + 15}px`;
+                    tooltip.style.top = `${event.pageY + 15}px`;
+                });
+
+                marker.addEventListener('mousemove', (event) => {
+                    tooltip.style.left = `${event.pageX + 15}px`;
+                    tooltip.style.top = `${event.pageY + 15}px`;
+                });
+
+                marker.addEventListener('mouseout', () => {
+                    tooltip.style.display = 'none';
+                });
+            }
+        }
+    });
+    // --- KONIEC SEKCJI ---
+    if (stock.priceAlerts) {
+        // Linia alertu zakupu (zielona)
+        if (stock.priceAlerts.buy !== null) {
+            const y = getY(stock.priceAlerts.buy);
+            const line = document.createElementNS(svgNs, "line");
+            line.setAttribute("x1", padding.left.toString());
+            line.setAttribute("y1", y.toString());
+            line.setAttribute("x2", (padding.left + chartWidth).toString());
+            line.setAttribute("y2", y.toString());
+            line.setAttribute("stroke", "#28a745");
+            line.setAttribute("stroke-width", "1.5");
+            line.setAttribute("stroke-dasharray", "4,4");
+            svg.appendChild(line);
+        }
+        // Linia alertu sprzedaży (czerwona)
+        if (stock.priceAlerts.sell !== null) {
+            const y = getY(stock.priceAlerts.sell);
+            const line = document.createElementNS(svgNs, "line");
+            line.setAttribute("x1", padding.left.toString());
+            line.setAttribute("y1", y.toString());
+            line.setAttribute("x2", (padding.left + chartWidth).toString());
+            line.setAttribute("y2", y.toString());
+            line.setAttribute("stroke", "#dc3545");
+            line.setAttribute("stroke-width", "1.5");
+            line.setAttribute("stroke-dasharray", "4,4");
+            svg.appendChild(line);
+        }
+    }
+    
+    svgAreaElement.appendChild(svg);
+}
+
+// --- Pozostałe funkcje pliku ---
+
+function closePriceChartModal() {
+    const modal = document.getElementById('price-chart-modal');
+    if (modal) modal.style.display = 'none';
+    currentlyDisplayedChartSymbol = null;
+}
+
+function renderOwnershipPieChart(symbol) {
+    const stock = stocks.find(s => s.symbol === symbol);
+    if (!stock) return;
+
+    const container = document.getElementById('pie-chart-container');
+    const legend = document.getElementById('pie-chart-legend');
+    container.innerHTML = '';
+    legend.innerHTML = '';
+
+    // 1. Zbieranie danych o akcjonariuszach — 0.13.1 (B3): pełny rejestr (fundusze, boty, banki, ETF-y, holdingi…),
+    // a „Na rynku” to akcje naprawdę dostępne do kupienia (getAvailableShares), nie reszta po kilku posiadaczach.
+    const KIND_COLORS = { player: '#007bff', wallet: '#3cc9ff', insiders: '#8a63d2', state: '#663399', city: '#20c997', bank: '#198754', etf: '#0dcaf0', botFund: '#b8860b', holding: '#17a2b8', company: '#6610f2' };
+    const aiColors = ['#dc3545', '#ffc107', '#28a745', '#6f42c1', '#fd7e14', '#e83e8c'];
+    let aiColorIndex = 0;
+    const owners = getShareholders(stock).map(holder => ({
+        name: holder.kind === 'player' ? `💼 ${holder.name}` : holder.kind === 'wallet' ? '🧍 Ty (prywatnie)' : holder.kind === 'bank' ? `🏦 ${holder.name}` : holder.kind === 'etf' ? `📦 ETF ${holder.name}` : holder.kind === 'insiders' ? '👔 Zarząd i pracownicy' : holder.kind === 'state' ? '🏛️ Skarb Państwa' : holder.name,
+        shares: holder.shares,
+        color: KIND_COLORS[holder.kind] || aiColors[aiColorIndex++ % aiColors.length]
+    }));
+    const treasuryShares = Number(stock.treasuryShares) || 0;
+    if (treasuryShares > 0) owners.push({ name: '🔁 Akcje własne spółki', shares: treasuryShares, color: '#ff5733' });
+    const availableShares = getAvailableShares(stock);
+    if (availableShares > 0) owners.push({ name: '🛒 Na rynku (do kupienia)', shares: availableShares, color: '#6c757d' });
+    const unlisted = stock.totalShares - owners.reduce((sum, owner) => sum + owner.shares, 0);
+    if (unlisted >= 1) owners.push({ name: 'Rozproszeni akcjonariusze', shares: unlisted, color: '#adb5bd' });
+
+    owners.sort((a, b) => b.shares - a.shares);
+
+    // 3. Rysowanie wykresu SVG (bez zmian)
+    const svgNS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("viewBox", "0 0 32 32");
+    // Kliny rysowane grubym obrysem okręgu wychodzą poza koło — przycinamy SVG do koła.
+    svg.style.borderRadius = '50%';
+    svg.style.overflow = 'hidden';
+    svg.style.width = '100%';
+    svg.style.height = '100%';
+    svg.style.display = 'block';
+    container.appendChild(svg);
+    
+    const radius = 15.9;
+    const circumference = 2 * Math.PI * radius;
+    let cumulativeAngle = 0;
+
+    owners.forEach(owner => {
+        const percentage = owner.shares / Math.max(1, stock.totalShares); // cały akcjonariat (także Skarb Państwa i zarząd)
+        if (percentage <= 0) return;
+
+        const circle = document.createElementNS(svgNS, "circle");
+        circle.setAttribute("r", radius);
+        circle.setAttribute("cx", "16");
+        circle.setAttribute("cy", "16");
+        circle.setAttribute("fill", "transparent");
+        circle.setAttribute("stroke", owner.color);
+        circle.setAttribute("stroke-width", "32");
+        circle.setAttribute("stroke-dasharray", `${percentage * circumference} ${circumference}`);
+        circle.setAttribute("transform", `rotate(${cumulativeAngle - 90}, 16, 16)`);
+        svg.appendChild(circle);
+        
+        cumulativeAngle += percentage * 360;
+
+        // 4. Tworzenie legendy (bez zmian)
+        const legendItem = document.createElement('div');
+        legendItem.style.display = 'flex';
+        legendItem.style.alignItems = 'center';
+        legendItem.style.justifyContent = 'center';
+        legendItem.style.marginBottom = '5px';
+        
+        const colorBox = document.createElement('span');
+        colorBox.className = 'pie-legend-color-box';
+        colorBox.style.width = '12px';
+        colorBox.style.height = '12px';
+        colorBox.style.backgroundColor = owner.color;
+        colorBox.style.marginRight = '8px';
+        colorBox.style.border = '1px solid #333';
+
+        const ownerLabel = document.createElement('span');
+        const ownerPercentTotal = (owner.shares / stock.totalShares * 100).toFixed(2);
+        ownerLabel.textContent = `${owner.name}: ${owner.shares.toLocaleString('pl-PL')} szt. (${ownerPercentTotal}%)`;
+        
+        legendItem.appendChild(colorBox);
+        legendItem.appendChild(ownerLabel);
+        legend.appendChild(legendItem);
+    });
+
+    // Informacja o udziałach państwa
+    if (stock.isStateOwned && (stock.stateOwnershipPct || 0) > 0) {
+        const statePercent = (stock.stateOwnershipPct * 100).toFixed(2);
+        const legendItem = document.createElement('div');
+        legendItem.innerHTML = `<hr><p style="font-weight: bold; margin-bottom: 5px; text-align: center;">🏛️ Skarb Państwa kontroluje ${statePercent}% akcji (poza wolnym obrotem)</p>`;
+        legend.appendChild(legendItem);
+    }
+}
+
+// #################################################################################
+// ## ui.js
+// #################################################################################
+
 // ui.js (Połączony)
 // Funkcje odpowiedzialne za aktualizację i wyświetlanie interfejsu użytkownika
 
-let startupPanelCollapsed = false; // <<< DODANE Z ui2.js
+let ownedOnlyFilter = false; // U2: filtr „tylko posiadane” (fundusz lub konto prywatne)
+let startupPanelCollapsed = true; // U2: domyślnie zwinięty (stan zapamiętany w localStorage)
 
 function getCurrentInputValues() {
     const values = {};
@@ -15,327 +754,489 @@ function getCurrentInputValues() {
 }
 
 function displayCash() {
+    // Gotówka FUNDUSZU (pieniądze klientów); prywatne pieniądze gracza pokazuje displayXP.
     const cashElement = document.getElementById('cash');
     if (cashElement) {
         cashElement.textContent = playerCash.toFixed(2);
     }
+    if (typeof displayXP === 'function') displayXP();
 }
 
 
 
 function displayStocks(previousInputValues = {}) {
-    const stockTableBody = document.getElementById('stock-table-body');
-    if (!stockTableBody) return;
+  const stockTableBody = document.getElementById('stock-table-body');
+  if (!stockTableBody) return;
 
-    // Aktualizacja nagłówka ceny (strzałki sortowania)
-    const priceHeader = document.getElementById('price-header-cell');
-    if (priceHeader) {
-        let headerText = 'Cena (PLN)';
-        if (currentSortState === 'price_asc') headerText += ' ▲';
-        else if (currentSortState === 'price_desc') headerText += ' ▼';
-        priceHeader.innerHTML = headerText;
-    }
+  // Panel kupna (drawer) przenosimy między odświeżeniami tabeli zamiast budować go od nowa:
+  // wpisana ilość, kursor i kliknięcia w przyciski nie giną co sekundę.
+  const openDrawer = typeof openStockDrawerSymbol !== 'undefined' && openStockDrawerSymbol
+    ? document.getElementById(`drawer-${openStockDrawerSymbol}`)
+    : null;
+  const drawerInput = openDrawer ? openDrawer.querySelector('input') : null;
+  const drawerState = drawerInput ? {
+    focused: document.activeElement === drawerInput,
+    selectionStart: drawerInput.selectionStart,
+    selectionEnd: drawerInput.selectionEnd
+  } : null;
+  if (openDrawer) openDrawer.remove();
 
-    const selectedSector = document.getElementById('sector-filter').value;
-    
-    // Filtrowanie spółek do wyświetlenia
-    let baseStocksToDisplay;
-    if (selectedSector === 'all') {
-        baseStocksToDisplay = stocks.filter(stock => !stock.isSubsidiaryOf);
-    } else if (selectedSector === 'REIT') {
-        baseStocksToDisplay = stocks.filter(stock => stock.assetType === 'REIT' && !stock.isSubsidiaryOf);
-    } else {
-        baseStocksToDisplay = stocks.filter(stock => Array.isArray(stock.sector) && stock.sector.includes(selectedSector) && !stock.isSubsidiaryOf);
-    }
+  // Nagłówek ceny (strzałki sortowania)
+  const priceHeader = document.getElementById('price-header-cell');
+  if (priceHeader) {
+    let headerText = 'Cena PLN';
+    if (currentSortState === 'price_asc') headerText += ' ▲';
+    else if (currentSortState === 'price_desc') headerText += ' ▼';
+    priceHeader.textContent = headerText;
+  }
 
-    stockTableBody.innerHTML = '';
-    const sortedExchanges = Object.keys(exchanges).sort((a, b) => exchanges[a].level - exchanges[b].level);
-    const hasAnalystSkill = getSkillLevel('financialAnalyst') > 0; // Używamy helpera
+  if (typeof renderSectorFilters === 'function') renderSectorFilters();
+  const selectedSector = document.getElementById('sector-filter').value;
 
-    // --- Funkcja pomocnicza do renderowania wiersza ---
-    const renderStockRow = (stock, isSubsidiary = false, parentSymbol = null) => {
-        // ===>>> TU BYŁ BŁĄD: Definiujemy hasAccess na początku <<<===
-        const exchangeData = exchanges[stock.exchange];
-        const hasAccess = exchangeData ? exchangeData.level <= playerAccessLevel : false;
-        const isLocked = stock.isTradeLocked;
-        // ==========================================================
+  // Filtrowanie spółek do wyświetlenia
+  let baseStocksToDisplay;
+  if (selectedSector === 'all') {
+    baseStocksToDisplay = stocks.filter(stock => !stock.isSubsidiaryOf);
+  } else if (selectedSector === 'REIT') {
+    baseStocksToDisplay = stocks.filter(
+      stock => stock.assetType === 'REIT' && !stock.isSubsidiaryOf
+    );
+  } else {
+    baseStocksToDisplay = stocks.filter(
+      stock =>
+        Array.isArray(stock.sector) &&
+        stock.sector.includes(selectedSector) &&
+        !stock.isSubsidiaryOf
+    );
+  }
 
-        const row = stockTableBody.insertRow();
-        row.dataset.symbol = stock.symbol;
+  if (ownedOnlyFilter) baseStocksToDisplay = baseStocksToDisplay.filter(isStockOwnedByPlayer);
+  // D1: spółki rynków internetowych tylko w zakładce „Internet”.
+  const internetTab = typeof currentMarketLevel !== 'undefined' && currentMarketLevel === 'INTERNET';
+  if (typeof isInternetMarketStock === 'function') baseStocksToDisplay = baseStocksToDisplay.filter(stock => isInternetMarketStock(stock) === internetTab);
 
-        // --- Style wiersza ---
-        if (stock.isBankrupt) {
-            row.style.backgroundColor = '#ffe6e6';
-            row.style.border = '2px solid red';
-            row.style.textDecoration = 'line-through';
-            row.title = 'BANKRUCTWO!';
-            row.querySelectorAll('input, button').forEach(el => el.disabled = true);
-        } else if (isLocked) {
-            row.style.backgroundColor = '#e9ecef';
-            row.style.color = '#6c757d';
-            row.title = 'HANDEL WSTRZYMANY';
-        } else if (stock.financialHealth === -4) {
-            row.style.backgroundColor = '#fff3cd';
-            row.title = 'UWAGA: Spółka jest na krawędzi bankructwa!';
-        }
+  stockTableBody.innerHTML = '';
+  // Zakładka poziomu rynku (ui-update.js: setMarketLevel) — pokazujemy tylko wybraną giełdę.
+  const sortedExchanges = Object.keys(exchanges)
+    .filter(key => typeof currentMarketLevel === 'undefined' || currentMarketLevel === 'ALL' || key === currentMarketLevel)
+    .sort((a, b) => exchanges[a].level - exchanges[b].level);
+  const hasAnalystSkill = getSkillLevel('financialAnalyst') > 0;
 
-        if (isSubsidiary) {
-            row.classList.add('subsidiary-row');
-            if (parentSymbol) row.classList.add(`subsidiary-of-${parentSymbol}`);
-            row.style.display = 'none';
-        }
-        row.className += ` exchange-group-${stock.exchange}`;
+  // --- Funkcja pomocnicza do renderowania wiersza ---
+  const renderStockRow = (stock, isSubsidiary = false, parentSymbol = null) => {
+    const exchangeData = exchanges[stock.exchange];
+    const hasAccess = exchangeData ? exchangeData.level <= playerAccessLevel : false;
+    const isLocked = stock.isTradeLocked;
 
-        const sharesOwned = playerPortfolio[stock.symbol] ? playerPortfolio[stock.symbol].shares : 0;
-        const playerSharePct = stock.totalShares > 0 ? (sharesOwned / stock.totalShares) * 100 : 0;
+    const row = stockTableBody.insertRow();
+    row.dataset.symbol = stock.symbol;
+    row.classList.add('stock-row');
+    row.dataset.level = stock.exchange || 'ALL';
+    row.classList.add('clickable');
 
-        // Komórka 1: Nazwa
-        const nameCell = row.insertCell();
-        const nameWrapper = document.createElement('div');
-        nameWrapper.style.display = 'flex';
-        nameWrapper.style.alignItems = 'center';
-        if (isSubsidiary) nameWrapper.style.paddingLeft = '25px';
-
-        if (stock.subsidiaries && stock.subsidiaries.length > 0) {
-            const toggleBtn = document.createElement('span');
-            toggleBtn.textContent = stock.isSubsidiaryExpanded ? '▼ ' : '▶ ';
-            toggleBtn.style.cursor = 'pointer';
-            toggleBtn.style.marginRight = '5px';
-            toggleBtn.onclick = (e) => {
-                e.stopPropagation();
-                toggleSubsidiaryVisibility(stock.symbol);
-            };
-            toggleBtn.classList.add('subsidiary-toggle');
-            nameWrapper.appendChild(toggleBtn);
-        }
-
-        let stockNameContent = '';
-        if (playerSharePct > 50) stockNameContent += '👑 ';
-        if (stock.assetType === 'ResearchInstitute') stockNameContent += '🧪 ';
-        if (stock.isMonopolist) stockNameContent += '🦁 '; // Ikona monopolisty
-
-        if (stock.isStateOwned) {
-            stockNameContent += `🏛️ ${stock.name}`;
-            nameCell.title = 'Spółka Skarbu Państwa';
-        } else {
-            stockNameContent += stock.name;
-        }
-
-        const nameSpan = document.createElement('span');
-        nameSpan.innerHTML = stockNameContent;
-        if (sharesOwned > 0) nameSpan.style.fontWeight = 'bold';
-
-        const infoButton = document.createElement('button');
-        infoButton.textContent = 'i';
-        infoButton.className = 'info-btn';
-        infoButton.onclick = () => openDescriptionModal(stock.symbol);
-
-        nameWrapper.appendChild(nameSpan);
-        nameWrapper.appendChild(infoButton);
-
-        // Pasek M&A
-        if (stock.mergerProcess) {
-            const process = stock.mergerProcess;
-            const mergerStatusContainer = document.createElement('div');
-            mergerStatusContainer.style.marginLeft = '10px';
-            mergerStatusContainer.style.width = '70px';
-            mergerStatusContainer.title = `Proces M&A: ${process.statusMessage}`;
-
-            const statusText = document.createElement('span');
-            statusText.textContent = `Etap: ${process.stage}/7`;
-            statusText.style.fontSize = '10px';
-            statusText.style.display = 'block';
-
-            const progressBar = document.createElement('progress');
-            progressBar.value = process.progress;
-            progressBar.max = 100;
-            progressBar.style.width = '100%';
-            
-            if (process.decisionRequired) progressBar.classList.add('decision');
-            else if (process.complications > 0) progressBar.classList.add('complication');
-
-            mergerStatusContainer.appendChild(statusText);
-            mergerStatusContainer.appendChild(progressBar);
-            nameWrapper.appendChild(mergerStatusContainer);
-        }
-
-        nameCell.appendChild(nameWrapper);
-
-        // Komórka 2: Cena
-        row.insertCell().textContent = stock.price.toFixed(2);
-
-        // Komórka 3: Dostępne
-        let availableShares;
-        const treasuryShares = stock.treasuryShares || 0;
-        if (stock.isStateOwned) {
-            const publicFloat = Math.floor(stock.totalShares * (1 - stock.stateOwnershipPct));
-            availableShares = publicFloat - stock.sharesHeld - treasuryShares;
-        } else {
-            availableShares = stock.totalShares - stock.sharesHeld - treasuryShares;
-        }
-        row.insertCell().textContent = Math.max(0, Math.floor(availableShares)).toLocaleString('pl-PL');
-
-        // Komórka 4: Posiadane
-        row.insertCell().textContent = sharesOwned.toLocaleString('pl-PL');
-
-        // Komórka 5: Akcje (Input + Przyciski)
-        const actionsCell = row.insertCell();
-        const quantityInput = document.createElement('input');
-        quantityInput.type = 'number';
-        quantityInput.min = '1';
-        quantityInput.value = previousInputValues[stock.symbol] !== undefined ? previousInputValues[stock.symbol] : '1';
-        quantityInput.style.width = '50px';
-        quantityInput.id = `quantity-${stock.symbol}`;
-        
-        // Logika blokowania
-        const isDisabled = !hasAccess || isLocked || stock.isBeingMerged || stock.canBeTraded === false;
-        quantityInput.disabled = isDisabled;
-        actionsCell.appendChild(quantityInput);
-
-        // Przycisk Kup
-        const buyButton = document.createElement('button');
-        buyButton.textContent = hasAccess ? 'Kup' : '🔒';
-        buyButton.disabled = isDisabled;
-        if (hasAccess && isLocked) buyButton.textContent = '⛔';
-        
-        if (!isDisabled) {
-            buyButton.onclick = () => {
-                const quantity = parseInt(quantityInput.value, 10);
-                if (!isNaN(quantity) && quantity > 0) buyStock(stock.symbol, quantity);
-            };
-        }
-        actionsCell.appendChild(buyButton);
-
-        // Przycisk Sprzedaj
-        const sellButton = document.createElement('button');
-        sellButton.textContent = 'Sprzedaj';
-        sellButton.disabled = isDisabled || sharesOwned === 0;
-        if (isLocked) sellButton.textContent = '⛔';
-
-        if (!isDisabled) {
-            sellButton.onclick = () => {
-                const quantity = parseInt(quantityInput.value, 10);
-                if (!isNaN(quantity) && quantity > 0) sellStock(stock.symbol, quantity);
-            };
-        }
-        actionsCell.appendChild(sellButton);
-
-        // Przycisk Sprzedaj MAX
-        const sellAllButton = document.createElement('button');
-        sellAllButton.textContent = 'MAX';
-        sellAllButton.title = "Sprzedaj wszystko";
-        sellAllButton.style.marginLeft = '2px';
-        sellAllButton.disabled = isDisabled || sharesOwned === 0;
-
-        if (!isDisabled) {
-            sellAllButton.onclick = () => {
-                if (confirm(`Czy na pewno chcesz sprzedać wszystkie akcje ${stock.name}?`)) {
-                    sellAllShares(stock.symbol);
-                }
-            };
-        }
-        actionsCell.appendChild(sellAllButton);
-
-        // Przycisk Wykres
-        const historyButton = document.createElement('button');
-        historyButton.textContent = '📈';
-        historyButton.title = 'Wykres';
-        historyButton.style.marginLeft = '5px';
-        historyButton.disabled = !hasAccess;
-        historyButton.onclick = () => showPriceHistoryModal(stock.symbol);
-        actionsCell.appendChild(historyButton);
-
-        // Przycisk Akcjonariat
-        const detailsButton = document.createElement('button');
-        detailsButton.textContent = '📊';
-        detailsButton.title = "Akcjonariat";
-        detailsButton.style.marginLeft = '2px';
-        detailsButton.disabled = !hasAccess;
-        detailsButton.onclick = () => openStockDetailsModal(stock.symbol);
-        actionsCell.appendChild(detailsButton);
-
-        // Przycisk Zarządzaj
-        if (playerSharePct > 50) {
-            const manageButton = document.createElement('button');
-            manageButton.textContent = '👑';
-            manageButton.title = 'Panel Zarządzania';
-            manageButton.style.marginLeft = '5px';
-            manageButton.style.border = '1px solid #007bff';
-            manageButton.onclick = () => openManagementModal(stock.symbol);
-            actionsCell.appendChild(manageButton);
-        }
-
-        // Komórka 6: Raport
-        const reportCell = row.insertCell();
-        reportCell.style.textAlign = 'center';
-        
-        const hasDebt = stock.balanceSheet ? stock.balanceSheet.liabilities > 0 : false;
-        let reportContent = '';
-
-        if (hasAnalystSkill) {
-            switch (stock.lastReport) {
-                case 'excellent': reportContent = '💎'; break;
-                case 'good': reportContent = '📈'; break;
-                case 'neutral': reportContent = '😐'; break;
-                case 'bad': reportContent = '📉'; break;
-                case 'tragic': reportContent = '🔥'; break;
-                default: reportContent = '-';
-            }
-        } else {
-            reportContent = '🔒';
-        }
-
-        if (hasDebt && (hasAnalystSkill || playerSharePct > 50)) {
-            reportContent += ' <span style="color:red; font-size: 10px;">DŁUG</span>';
-        }
-        
-        reportCell.innerHTML = reportContent;
-
-        return row;
-    };
-
-    // --- Pętla renderująca giełdy ---
-    sortedExchanges.forEach(exchangeKey => {
-        const exchange = exchanges[exchangeKey];
-        let stocksOnThisExchange = baseStocksToDisplay.filter(stock => stock.exchange === exchangeKey);
-
-        if (currentSortState === 'price_asc') {
-            stocksOnThisExchange.sort((a, b) => a.price - b.price);
-        } else if (currentSortState === 'price_desc') {
-            stocksOnThisExchange.sort((a, b) => b.price - a.price);
-        }
-
-        if (stocksOnThisExchange.length > 0) {
-            const headerRow = stockTableBody.insertRow();
-            headerRow.className = 'exchange-header';
-            headerRow.onclick = () => toggleExchangeVisibility(exchangeKey);
-            const headerCell = headerRow.insertCell();
-            headerCell.colSpan = "6";
-            const icon = exchangeCollapseState[exchangeKey] ? '▶' : '▼';
-            headerCell.innerHTML = `<h4 style="margin: 5px 0; color: ${exchange.color}; display: flex; justify-content: space-between;">${exchange.name}<span>${icon}</span></h4>`;
-        }
-
-        stocksOnThisExchange.forEach(stock => {
-            const mainRow = renderStockRow(stock, false);
-            if (exchangeCollapseState[exchangeKey]) mainRow.style.display = 'none';
-
-            if (stock.subsidiaries && stock.subsidiaries.length > 0) {
-                stock.subsidiaries.forEach(subSymbol => {
-                    const subStock = stocks.find(s => s.symbol === subSymbol);
-                    if (subStock) {
-                        const subRow = renderStockRow(subStock, true, stock.symbol);
-                        if (exchangeCollapseState[exchangeKey] || !stock.isSubsidiaryExpanded) subRow.style.display = 'none';
-                        else subRow.style.display = '';
-                    }
-                });
-            }
-        });
+    row.addEventListener('click', e => {
+      if (
+        !e.target.closest('button') &&
+        !e.target.closest('input') &&
+        !e.target.closest('.subsidiary-toggle')
+      ) {
+        toggleStockDrawer(stock.symbol);
+      }
     });
+
+    if (stock.isBankrupt) {
+      row.classList.add('bankrupt-row');
+      row.title = 'BANKRUCTWO!';
+    } else if (isLocked) {
+      row.classList.add('locked-row');
+      row.title = 'HANDEL WSTRZYMANY';
+    } else if (stock.financialHealth <= -4) {
+      row.classList.add('warning-row');
+      row.title = 'UWAGA: Spółka jest na krawędzi bankructwa!';
+    }
+
+    if (isSubsidiary) {
+      row.classList.add('subsidiary-row');
+      if (parentSymbol) row.classList.add(`subsidiary-of-${parentSymbol}`);
+      row.style.display = 'none';
+    }
+
+    row.classList.add(`exchange-group-${stock.exchange}`);
+
+    const ownedPortfolio = typeof activeTradingAccount !== 'undefined' && activeTradingAccount === 'private' ? (playerWallet?.portfolio || {}) : playerPortfolio;
+    const sharesOwned = ownedPortfolio[stock.symbol]?.shares || 0;
+    const playerSharePct =
+      stock.totalShares > 0 ? (sharesOwned / stock.totalShares) * 100 : 0;
+
+    const availableShares = getAvailableShares(stock);
+
+    const changePct = getStockChangePct(stock, 1) * 100; // U2: zmiana tygodniowa w czasie gry
+
+    const changeClass = changePct > 0 ? 'up' : changePct < 0 ? 'down' : 'flat';
+    const changeSign = changePct > 0 ? '+' : '';
+    const primarySector =
+      Array.isArray(stock.sector) && stock.sector.length > 0
+        ? stock.sector[0]
+        : 'Rynek';
+    const availabilityPct =
+      stock.totalShares > 0
+        ? Math.max(
+            0,
+            Math.min(100, (availableShares / stock.totalShares) * 100)
+          )
+        : 0;
+
+    const isDisabled =
+      !hasAccess || isLocked || stock.isBeingMerged || stock.canBeTraded === false;
+
+    // KOMÓRKA 1: SPÓŁKA
+    const nameCell = row.insertCell();
+    nameCell.classList.add('stock-company-cell');
+
+    const identityWrap = document.createElement('div');
+    identityWrap.className = 'stock-identity';
+
+    const topLine = document.createElement('div');
+    topLine.className = 'stock-name-line';
+    if (isSubsidiary) topLine.style.paddingLeft = '25px';
+
+    if (stock.subsidiaries && stock.subsidiaries.length > 0) {
+      const toggleBtn = document.createElement('span');
+      toggleBtn.textContent = stock.isSubsidiaryExpanded ? '▼' : '▶';
+      toggleBtn.classList.add('clickable');
+      toggleBtn.classList.add('mr-1');
+      toggleBtn.onclick = e => {
+        e.stopPropagation();
+        toggleSubsidiaryVisibility(stock.symbol);
+      };
+      toggleBtn.classList.add('subsidiary-toggle');
+      topLine.appendChild(toggleBtn);
+    }
+
+    let markerPrefix = '';
+    if (playerSharePct > 50) markerPrefix += '👑 ';
+    if (stock.assetType === 'ResearchInstitute') markerPrefix += '🧪 ';
+    if (stock.isMonopolist) markerPrefix += '🦁 ';
+    if (stock.isStateOwned) {
+      markerPrefix += '🏛️ ';
+      nameCell.title = 'Spółka Skarbu Państwa';
+    }
+    if (typeof getRedFlags === 'function' && getSkillLevel('accountant') >= 4 && !stock.assetType) {
+      const flags = getRedFlags(stock);
+      if (flags.length >= 2) { markerPrefix += '🚩 '; nameCell.title = `Czerwone flagi: ${flags.map(f => f.label).join(', ')}`; }
+    }
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'stock-name';
+    nameSpan.textContent = `${markerPrefix}${stock.name}`;
+    topLine.appendChild(nameSpan);
+
+    if (sharesOwned > 0) {
+      const ownedDot = document.createElement('span');
+      ownedDot.className = 'owned-dot';
+      ownedDot.title = 'Masz akcje tej spółki';
+      topLine.appendChild(ownedDot);
+    }
+
+    const infoButton = document.createElement('button');
+    infoButton.textContent = 'i';
+    infoButton.className = 'info-btn';
+    infoButton.onclick = () => openDescriptionModal(stock.symbol);
+    topLine.appendChild(infoButton);
+
+    const metaLine = document.createElement('div');
+    metaLine.className = 'stock-meta';
+    const marketId = typeof getStockMarket === 'function' ? getStockMarket(stock) : 'GPW';
+    metaLine.textContent = `${primarySector} • ${stock.symbol}${marketId !== 'GPW' ? ` • członek rynku ${getMarketLabel(marketId)}` : ''}${stock.isDividendAristocrat ? ' • 👑 dywidendowy arystokrata' : ''}`;
+
+    identityWrap.appendChild(topLine);
+    identityWrap.appendChild(metaLine);
+
+    if (stock.mergerProcess) {
+      const process = stock.mergerProcess;
+      const mergerStatusContainer = document.createElement('div');
+      mergerStatusContainer.classList.add('mt-1');
+      mergerStatusContainer.classList.add('w-sm');
+      mergerStatusContainer.title = `Proces M&A: ${process.statusMessage}`;
+
+      const statusText = document.createElement('span');
+      statusText.textContent = `Etap: ${process.stage}/7`;
+      statusText.classList.add('text-xs');
+      statusText.style.display = 'block';
+
+      const progressBar = document.createElement('progress');
+      progressBar.value = process.progress;
+      progressBar.max = 100;
+      progressBar.classList.add('w-full');
+
+      if (process.decisionRequired) progressBar.classList.add('decision');
+      else if (process.complications > 0)
+        progressBar.classList.add('complication');
+
+      mergerStatusContainer.appendChild(statusText);
+      mergerStatusContainer.appendChild(progressBar);
+      identityWrap.appendChild(mergerStatusContainer);
+    }
+
+    nameCell.appendChild(identityWrap);
+
+    // KOMÓRKA 2: SEKTOR
+    const sectorCell = row.insertCell();
+    sectorCell.textContent = primarySector;
+
+    // KOMÓRKA 3: CENA
+    const priceCell = row.insertCell();
+    priceCell.classList.add('cell-number', 'cell-price');
+    priceCell.innerHTML = `
+      <div class="price-main">
+        ${stock.price.toLocaleString('pl-PL', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        })} PLN
+      </div>
+    `;
+
+    if (stock.corporatePhase && getSkillLevel('financialAnalyst') >= 1) {
+      const phaseBadge = document.createElement('div');
+      phaseBadge.classList.add('phase-badge');
+      const phaseColors = {
+        Wzrost: '#28a745',
+        Stabilność: '#6c757d',
+        Spadek: '#dc3545',
+        Reorganizacja: '#ffc107',
+        'Złoty Rok ✨': '#ffd700',
+        'Zejście w Cień 👻': '#6f42c1',
+        'Impuls Innowacji 💡': '#17a2b8'
+      };
+      const col = phaseColors[stock.corporatePhase] || '#6c757d';
+      phaseBadge.style.color = col;
+      phaseBadge.style.border = '1px solid ' + col;
+      phaseBadge.textContent = stock.corporatePhase;
+      phaseBadge.title = 'Faza cyklu spółki';
+      priceCell.appendChild(phaseBadge);
+    }
+
+    // KOMÓRKA 4: ZMIANA TYGODNIOWA (czas gry)
+    const changeCell = row.insertCell();
+    changeCell.classList.add('cell-number');
+    changeCell.innerHTML = `
+      <span class="change-pill ${changeClass}">
+        ${changeSign}${changePct.toFixed(2)}%
+      </span>
+    `;
+
+    // KOMÓRKA 5: WOLUMEN / dostępne
+    const availableCell = row.insertCell();
+    availableCell.innerHTML = `
+      <div class="availability-cell">
+        <div class="availability-value">
+          ${availableShares.toLocaleString('pl-PL')}
+        </div>
+        <div class="mini-progress">
+          <div class="mini-progress-bar" style="width:${availabilityPct}%"></div>
+        </div>
+      </div>
+    `;
+
+    // KOMÓRKA 6: Moje akcje
+    const ownedCell = row.insertCell();
+    ownedCell.classList.add('cell-number');
+    ownedCell.innerHTML =
+      sharesOwned > 0
+        ? `<span class="owned-badge">${sharesOwned.toLocaleString(
+            'pl-PL'
+          )}</span>`
+        : `<span class="owned-zero">0</span>`;
+
+    // KOMÓRKA 7: Akcja
+    const actionsCell = row.insertCell();
+    actionsCell.classList.add('trade-actions-cell');
+    actionsCell.classList.add('text-center');
+
+    if (!hasAccess) {
+      const lockSpan = document.createElement('span');
+      lockSpan.textContent = '🔒';
+      lockSpan.title = 'Brak dostępu do giełdy';
+      lockSpan.classList.add('text-lg');
+      actionsCell.appendChild(lockSpan);
+    } else if (isLocked || stock.isBeingMerged || stock.canBeTraded === false) {
+      const stopSpan = document.createElement('span');
+      stopSpan.textContent = '⛔';
+      stopSpan.title = 'Handel wstrzymany';
+      stopSpan.classList.add('text-lg');
+      actionsCell.appendChild(stopSpan);
+    } else {
+      const drawerBtn = document.createElement('button');
+      drawerBtn.className = 'btn-ghost-icon drawer-toggle-btn';
+      drawerBtn.dataset.symbol = stock.symbol;
+      drawerBtn.title = 'Kup / Sprzedaj / Wykres';
+      drawerBtn.innerHTML =
+        sharesOwned > 0
+          ? '<span class="text-up">▼</span>'
+          : '▼';
+      drawerBtn.onclick = e => {
+        e.stopPropagation();
+        toggleStockDrawer(stock.symbol);
+      };
+      actionsCell.appendChild(drawerBtn);
+    }
+
+    const hiddenQty = document.createElement('input');
+    hiddenQty.type = 'number';
+    hiddenQty.id = `quantity-${stock.symbol}`;
+    hiddenQty.value =
+      previousInputValues[stock.symbol] !== undefined
+        ? previousInputValues[stock.symbol]
+        : '1';
+    hiddenQty.style.display = 'none';
+    actionsCell.appendChild(hiddenQty);
+
+    if (hasAnalystSkill) {
+      const reportMap = {
+        excellent: { icon: '💎', label: 'Doskonały' },
+        good: { icon: '📈', label: 'Dobry' },
+        neutral: { icon: '😐', label: 'Neutralny' },
+        bad: { icon: '📉', label: 'Zły' },
+        tragic: { icon: '🔥', label: 'Tragiczny' }
+      };
+      const rep = reportMap[stock.lastReport];
+      if (rep) {
+        const repSpan = document.createElement('span');
+        repSpan.textContent = rep.icon;
+        repSpan.title = `Raport: ${rep.label}`;
+        repSpan.classList.add('row-icon');
+        actionsCell.appendChild(repSpan);
+      }
+    }
+
+    const hasDebt = stock.balanceSheet
+      ? stock.balanceSheet.liabilities > 0
+      : false;
+    if (hasDebt && (hasAnalystSkill || playerSharePct > 50)) {
+      const debtSpan = document.createElement('span');
+      debtSpan.textContent = '💳';
+      debtSpan.title = 'Spółka ma zobowiązania';
+      debtSpan.classList.add('row-icon', 'row-icon-sm');
+      actionsCell.appendChild(debtSpan);
+    }
+
+    if (playerSharePct > 50) {
+      const manageButton = document.createElement('button');
+      manageButton.textContent = '👑';
+      manageButton.title = 'Panel Zarządzania';
+      manageButton.className = 'btn-ghost-icon';
+      manageButton.classList.add('ml-1');
+      manageButton.onclick = e => {
+        e.stopPropagation();
+        openManagementModal(stock.symbol);
+      };
+      actionsCell.appendChild(manageButton);
+    }
+
+    return row;
+  };
+
+  // --- D1: zakładka „Internet” — rynki internetowe i ich spółki (rozwijane listy) ---
+  if (internetTab) {
+    const ids = typeof getInternetMarketIds === 'function' ? getInternetMarketIds().filter(id => ['active', 'startup'].includes(marketOperators[id].status)) : [];
+    if (!ids.length) {
+      const cell = stockTableBody.insertRow().insertCell();
+      cell.colSpan = 7;
+      cell.className = 'text-muted text-sm';
+      cell.textContent = 'Żaden rynek internetowy jeszcze nie działa. XTD, PLU5 i kolejne rynki powstają jako startupy w inkubatorze — mają gwarancję debiutu.';
+    }
+    for (const id of ids) {
+      const operator = marketOperators[id];
+      const def = getMarketDef(id) || { name: id, commission: 0, color: '#888' };
+      const members = baseStocksToDisplay.filter(stock => getStockMarket(stock) === id && stock.symbol !== operator.symbol);
+      const operatorStock = operator.symbol ? baseStocksToDisplay.find(stock => stock.symbol === operator.symbol) : null;
+      const key = `net:${id}`;
+      const collapsed = Boolean(exchangeCollapseState[key]);
+      const concession = typeof hasInternetConcession === 'function' && hasInternetConcession(id);
+      const headerRow = stockTableBody.insertRow();
+      headerRow.className = 'exchange-header internet-market-header';
+      const headerCell = headerRow.insertCell();
+      headerCell.colSpan = 7;
+      headerCell.innerHTML = `<div class="d-flex justify-between items-center gap-2 flex-wrap">
+          <h4 class="my-1 clickable" style="color:${def.color}" onclick="toggleExchangeVisibility('${key}')">🌐 ${escapeHtml(def.name)} <span class="text-xs text-muted">${escapeHtml(def.short || id)} · prowizja ${((def.commission || 0) * 100).toFixed(2)}% · spółki ${getMarketMembers(id).length}/${INTERNET_MEMBER_LIMIT}${operator.status === 'startup' ? ' · operator w inkubatorze' : ''}</span> <span>${collapsed ? '▶' : '▼'}</span></h4>
+          ${operator.status === 'active' ? (concession ? '<span class="text-up text-sm">🔑 koncesja: handel bez prowizji</span>' : `<button class="btn-xs" onclick="event.stopPropagation(); buyInternetConcession('${id}'); displayStocks(getCurrentInputValues());">🔑 Koncesja (${formatZl(getInternetConcessionCost(id), 0)})</button>`) : ''}
+        </div>`;
+      for (const stock of [operatorStock, ...members].filter(Boolean)) {
+        const row = renderStockRow(stock, false);
+        if (collapsed) row.style.display = 'none';
+      }
+    }
+  }
+
+  // --- Pętla renderująca giełdy ---
+  if (!internetTab) sortedExchanges.forEach(exchangeKey => {
+    const exchange = exchanges[exchangeKey];
+    let stocksOnThisExchange = baseStocksToDisplay.filter(
+      stock => stock.exchange === exchangeKey
+    );
+
+    if (currentSortState === 'price_asc') {
+      stocksOnThisExchange.sort((a, b) => a.price - b.price);
+    } else if (currentSortState === 'price_desc') {
+      stocksOnThisExchange.sort((a, b) => b.price - a.price);
+    }
+
+    if (stocksOnThisExchange.length > 0) {
+      const headerRow = stockTableBody.insertRow();
+      headerRow.className = 'exchange-header';
+      headerRow.onclick = () => toggleExchangeVisibility(exchangeKey);
+      const headerCell = headerRow.insertCell();
+      headerCell.colSpan = 7;
+      const icon = exchangeCollapseState[exchangeKey] ? '▶' : '▼';
+      headerCell.innerHTML = `<h4 style="color: ${
+        exchange.color
+      }" class="my-1 d-flex justify-between">${
+        exchange.name
+      }<span>${icon}</span></h4>`;
+    }
+
+    stocksOnThisExchange.forEach(stock => {
+      const mainRow = renderStockRow(stock, false);
+      if (exchangeCollapseState[exchangeKey]) mainRow.style.display = 'none';
+
+      if (stock.subsidiaries && stock.subsidiaries.length > 0) {
+        stock.subsidiaries.forEach(subSymbol => {
+          const subStock = stocks.find(s => s.symbol === subSymbol);
+          if (subStock) {
+            const subRow = renderStockRow(subStock, true, stock.symbol);
+            if (
+              exchangeCollapseState[exchangeKey] ||
+              !stock.isSubsidiaryExpanded
+            )
+              subRow.style.display = 'none';
+            else subRow.style.display = '';
+          }
+        });
+      }
+    });
+  });
+
+  if (typeof openStockDrawerSymbol !== 'undefined' && openStockDrawerSymbol) {
+    const targetRow = document.querySelector(`#stock-table-body tr[data-symbol="${openStockDrawerSymbol}"]`);
+    if (targetRow) {
+      if (openDrawer) {
+        targetRow.after(openDrawer);
+      } else {
+        renderStockDrawer(openStockDrawerSymbol);
+      }
+      if (drawerInput && drawerState?.focused) {
+        drawerInput.focus();
+        try { drawerInput.setSelectionRange(drawerState.selectionStart, drawerState.selectionEnd); } catch (e) { /* brak zaznaczenia */ }
+      }
+    } else {
+      openStockDrawerSymbol = null;
+    }
+  }
 }
 
 function showPriceHistoryModal(symbol) {
     const stock = stocks.find(s => s.symbol === symbol);
-    if (!stock) { alert(`Nie znaleziono akcji o symbolu ${symbol}.`); return; }
+    if (!stock) { showToast(`Nie znaleziono akcji o symbolu ${symbol}.`); return; }
 
     currentlyDisplayedChartSymbol = symbol;
 
@@ -405,264 +1306,128 @@ function showPriceHistoryModal(symbol) {
     redrawChart();
 }
 
-function renderSkillsPanel() {
-    const skillsListDiv = document.getElementById('skills-list');
-    const xpCounterSpan = document.getElementById('skills-modal-xp');
-    if (!skillsListDiv || !xpCounterSpan) return;
-
-    skillsListDiv.innerHTML = '';
-    xpCounterSpan.textContent = playerXP.toFixed(2);
-
-    for (const skillId in skills) {
-        const skillData = skills[skillId];
-        const currentLevel = getSkillLevel(skillId);
-        const nextLevelInfo = getNextSkillLevelInfo(skillId);
-
-        const skillDiv = document.createElement('div');
-        skillDiv.style.border = '1px solid #ddd';
-        skillDiv.style.padding = '10px';
-        skillDiv.style.marginBottom = '10px';
-        skillDiv.style.borderRadius = '5px';
-
-        const skillName = document.createElement('h4');
-        skillName.textContent = `${skillData.name} (Poziom: ${currentLevel})`;
-        skillName.style.margin = '0 0 5px 0';
-
-        skillDiv.appendChild(skillName);
-
-        if (nextLevelInfo) {
-            // --- POCZĄTEK POPRAWKI: Sprawdzanie wymagań ---
-            const requirement = nextLevelInfo.requires;
-            const requirementMet = requirement ? getSkillLevel(requirement.skillId) >= requirement.level : true;
-
-            if (!requirementMet) {
-                const reqText = document.createElement('p');
-                const requiredSkill = skills[requirement.skillId];
-                reqText.textContent = `Wymaga: ${requiredSkill.name} (Poziom ${requirement.level})`;
-                reqText.style.color = '#dc3545';
-                reqText.style.fontWeight = 'bold';
-                reqText.style.fontSize = '12px';
-                skillDiv.appendChild(reqText);
-            }
-
-
-            const skillDesc = document.createElement('p');
-            skillDesc.textContent = `Następny poziom: ${nextLevelInfo.description}`;
-            skillDesc.style.margin = '0 0 10px 0';
-            skillDesc.style.fontSize = '14px';
-
-            const skillCost = document.createElement('p');
-            skillCost.textContent = `Koszt: ${nextLevelInfo.cost} XP`;
-            skillCost.style.margin = '0';
-            skillCost.style.fontWeight = 'bold';
-
-            const buyButton = document.createElement('button');
-            buyButton.textContent = `Ulepsz do poz. ${nextLevelInfo.level}`;
-            buyButton.onclick = () => buySkill(skillId);
-
-            // Przycisk jest nieaktywny, jeśli brakuje XP LUB nie spełniono wymagań
-            if (playerXP < nextLevelInfo.cost || !requirementMet) {
-                buyButton.disabled = true;
-            }
-
-            skillDiv.appendChild(skillDesc);
-            skillDiv.appendChild(skillCost);
-            skillDiv.appendChild(buyButton);
-        } else {
-            const maxLevelText = document.createElement('p');
-            maxLevelText.textContent = 'Osiągnięto maksymalny poziom umiejętności.';
-            maxLevelText.style.fontWeight = 'bold';
-            maxLevelText.style.color = '#28a745';
-            skillDiv.appendChild(maxLevelText);
-        }
-        skillsListDiv.appendChild(skillDiv);
-        updateWorkButtonVisibility();
-        updateDividendTrackerButtonVisibility();
+const skillCategoryDefinitions = {
+    bear: {
+        title: 'Bessa & Obrona',
+        description: 'Umiejętności chroniące kapitał podczas spadków, regulacji i ryzyka finansowego.'
+    },
+    bull: {
+        title: 'Hossa & Wzrost',
+        description: 'Zwiększaj zyski, dźwignię bankową i śmiałe inwestycje na rynku.'
+    },
+    balance: {
+        title: 'Równowaga & Kontrola',
+        description: 'Wsparcie analityczne, zarządzanie ryzykiem i bardziej stabilne decyzje.'
     }
-}
+};
 
 // Ta funkcja jest z ui.js (baza), zachowujemy ją, ponieważ obsługuje bankowość komercyjną
+/** Pozycje portfela jako wiersze tabeli: fundusz albo konto prywatne (przełącznik kont). */
 function displayPortfolio() {
-    const myStocksList = document.getElementById('my-stocks-list');
-    if (!myStocksList) {
-        return;
-    }
+    const body = document.getElementById('my-stocks-list');
+    if (!body) return;
+    const isPrivate = typeof activeTradingAccount !== 'undefined' && activeTradingAccount === 'private';
+    const portfolio = isPrivate ? (playerWallet?.portfolio || {}) : playerPortfolio;
+    const fmt = value => formatZl(value, 0);
+    const rows = [];
+    let totalPL = 0, positionsValue = 0;
 
-    myStocksList.innerHTML = ''; // Wyczyść listę przed ponownym renderowaniem
-    let hasOwnedStocks = false; // Zmieniona nazwa flagi dla jasności
-    let totalPortfolioProfitLoss = 0;
-    let totalStocksValue = 0; // Wartość tylko akcji, ETFów i indeksów
+    const section = title => rows.push(`<tr class="portfolio-group-row"><td colspan="4">${title}</td></tr>`);
+    const row = (name, share, cost, result, cls = '', title = '') =>
+        rows.push(`<tr class="${cls}"${title ? ` title="${escapeHtml(title)}"` : ''}><td>${name}</td><td class="cell-number">${share}</td><td class="cell-number">${cost}</td><td class="cell-number">${result}</td></tr>`);
 
-    // --- Wyświetlanie Aktywów ---
-    for (const symbol in playerPortfolio) {
-        hasOwnedStocks = true;
-        const holding = playerPortfolio[symbol];
-
+    // Akcje, ETF-y, indeksy, startupy
+    const equity = Object.entries(portfolio).filter(([, h]) => h && (h.assetType === 'Startup' ? h.investedAmount > 0 : h.shares > 0));
+    if (equity.length) section('Akcje i fundusze');
+    for (const [symbol, holding] of equity) {
         if (holding.assetType === 'Startup') {
-            // Wyświetlanie Inwestycji w Startupy
-            const startupData = stocks.find(s => s.symbol === symbol);
-            if (startupData) {
-                const listItem = document.createElement('li');
-                listItem.textContent = `🚀 ${startupData.name} (Inwestycja): ${holding.investedAmount.toFixed(2)} PLN`;
-                if (holding.isInsured) {
-                    listItem.textContent += ' 🛡️(Ubezp.)'; // Oznacz ubezpieczone
-                }
-                myStocksList.appendChild(listItem);
-            }
-        } else {
-            // Wyświetlanie Akcji, ETFów, Indeksów
-            let marketData, currentPrice = 0, name = symbol;
-            if (holding.assetType === 'etf') {
-                marketData = etfs.find(e => e.symbol === symbol);
-                if (marketData) { currentPrice = marketData.price; name = marketData.name; }
-            } else if (holding.assetType === 'index') {
-                marketData = marketIndexes.find(i => i.id === symbol);
-                if (marketData) { currentPrice = marketData.value; name = marketData.name; }
-            } else { // Zakładamy, że to standardowe akcje
-                marketData = stocks.find(s => s.symbol === symbol);
-                if (marketData) { currentPrice = marketData.price; name = marketData.name; }
-            }
-
-            if (!marketData || holding.shares <= 0) continue; // Pomiń, jeśli brak danych lub udziałów
-
-            const currentValue = currentPrice * holding.shares;
-            const purchaseValue = holding.avgPrice * holding.shares;
-            const profitLoss = currentValue - purchaseValue;
-            totalStocksValue += currentValue; // Sumuj wartość rynkową
-            totalPortfolioProfitLoss += profitLoss; // Sumuj zysk/stratę
-
-            const listItem = document.createElement('li');
-            const profitLossSpan = document.createElement('span');
-            profitLossSpan.textContent = ` (Z/S: ${profitLoss.toFixed(2)} PLN)`;
-            if (profitLoss > 0) profitLossSpan.className = 'profit';
-            else if (profitLoss < 0) profitLossSpan.className = 'loss';
-
-            const unitName = (holding.assetType === 'etf' || holding.assetType === 'index') ? 'jedn.' : 'szt.';
-            listItem.textContent = `${name} (${symbol}): ${holding.shares} ${unitName}`;
-
-            // --- 👇 TUTAJ JEST DODANY BLOK DLA ZABLOKOWANYCH AKCJI 👇 ---
-            if (holding.lockedShares && holding.lockedShares > 0) {
-                listItem.textContent += ` (Zablokowane: ${holding.lockedShares})`;
-                listItem.style.opacity = '0.7'; // Lekko przygaś
-                listItem.title = `${holding.lockedShares} akcji jest zablokowanych jako zabezpieczenie kredytu hipotecznego.`;
-            }
-            // --- 👆 KONIEC BLOKU 👆 ---
-
-            listItem.textContent += ` | Śr. cena zakupu: ${holding.avgPrice.toFixed(2)} | Wartość: ${currentValue.toFixed(2)} PLN`;
-            listItem.appendChild(profitLossSpan);
-            myStocksList.appendChild(listItem);
+            const startup = stocks.find(s => s.symbol === symbol);
+            positionsValue += holding.investedAmount;
+            row(`🚀 ${escapeHtml(startup?.name || symbol)}`, 'startup', fmt(holding.investedAmount), holding.isInsured ? '🛡️ ubezp.' : '—');
+            continue;
         }
-    }
-
-    // --- Wyświetlanie Obligacji ---
-    const playerBonds = allBonds.filter(b => b.ownerId === 'player' && b.isStateBond !== undefined); // Filtruj obligacje (nie bony)
-    if (playerBonds.length > 0) {
-        const bondHeader = document.createElement('li');
-        bondHeader.innerHTML = `<hr><strong>Obligacje (${playerBonds.length} szt.):</strong>`;
-        myStocksList.appendChild(bondHeader);
-        const groupedBonds = {};
-        playerBonds.forEach(bond => {
-            const key = `${bond.issuerName}_${bond.type}`;
-            if (!groupedBonds[key]) {
-                groupedBonds[key] = { count: 0, name: bond.issuerName, type: bond.type, nextMaturity: bond.maturityDate };
-            }
-            groupedBonds[key].count++;
-            groupedBonds[key].nextMaturity = Math.min(groupedBonds[key].nextMaturity, bond.maturityDate);
-        });
-        for (const key in groupedBonds) {
-            const group = groupedBonds[key];
-            const remainingTime = Math.max(0, Math.ceil((group.nextMaturity - Date.now()) / 1000));
-            const bondItem = document.createElement('li');
-            bondItem.textContent = `- ${group.name} (${group.type}): ${group.count} szt. (najbliższa za: ${remainingTime}s)`;
-            myStocksList.appendChild(bondItem);
+        let market, price = 0, name = symbol, pct = '';
+        if (holding.assetType === 'etf') { market = etfs.find(e => e.symbol === symbol); price = market?.price || 0; name = market?.name || symbol; }
+        else if (holding.assetType === 'index') { market = marketIndexes.find(i => i.id === symbol); price = market?.value || 0; name = market?.name || symbol; }
+        else {
+            market = stocks.find(s => s.symbol === symbol);
+            price = market?.price || 0; name = market?.name || symbol;
+            if (market?.totalShares > 0) pct = `${(holding.shares / market.totalShares * 100).toFixed(2)}%`;
         }
-        hasOwnedStocks = true;
+        if (!market) continue;
+        const value = price * holding.shares;
+        const pl = value - holding.avgPrice * holding.shares;
+        positionsValue += value;
+        totalPL += pl;
+        const locked = holding.lockedShares > 0 ? ` 🔒${holding.lockedShares}` : '';
+        row(`${escapeHtml(name)} <span class="text-xs text-muted">${escapeHtml(symbol)} · ${holding.shares.toLocaleString('pl-PL')} szt.${locked}</span>`,
+            pct || '—', holding.avgPrice.toFixed(2),
+            `<span class="${pl > 0 ? 'profit' : pl < 0 ? 'loss' : ''}">${pl >= 0 ? '+' : ''}${fmt(pl)}</span><span class="text-xs text-muted d-block">${fmt(value)}</span>`,
+            holding.lockedShares > 0 ? 'dimmed' : '', holding.lockedShares > 0 ? `${holding.lockedShares} akcji zablokowanych (zastaw)` : '');
     }
 
-    // --- Wyświetlanie Bonów Skarbowych ---
-    const playerTBills = allBonds.filter(b => b.ownerId === 'player' && b.isTBill === true);
-    if (playerTBills.length > 0) {
-        const tBillHeader = document.createElement('li');
-        tBillHeader.innerHTML = `<hr><strong>Bony Skarbowe (${playerTBills.length} szt.):</strong>`;
-        myStocksList.appendChild(tBillHeader);
-        let nextMaturity = Infinity;
-        playerTBills.forEach(tBill => { nextMaturity = Math.min(nextMaturity, tBill.maturityDate); });
-        const remainingTime = Math.max(0, Math.ceil((nextMaturity - Date.now()) / 1000));
-        const tBillItem = document.createElement('li');
-        tBillItem.textContent = `- Posiadasz ${playerTBills.length} bonów (najbliższy wykup za: ${remainingTime}s)`;
-        myStocksList.appendChild(tBillItem);
-        hasOwnedStocks = true;
-    }
+    if (!isPrivate) {
+        // Lokaty, PPP, obligacje projektowe, pożyczki pomostowe
+        const deposits = typeof getFundDeposits === 'function' ? getFundDeposits() : [];
+        const ppp = playerFund?.ppp || [];
+        const projectBonds = typeof getProjectBonds === 'function' && typeof specialProjects === 'object' && specialProjects ? getProjectBonds() : [];
+        if (deposits.length || ppp.length || projectBonds.length) section('Lokaty i finansowanie projektów');
+        for (const d of deposits) row(`🏦 Lokata · ${escapeHtml(d.bankName)}`, `${(d.rate * 100).toFixed(1)}%/r`, fmt(d.principal), `<span class="profit">+${fmt(d.accrued)}</span><span class="text-xs text-muted d-block">${d.weeksLeft} tyg.</span>`);
+        for (const st of ppp) row(`${st.icon || '🏙️'} PPP · ${escapeHtml(st.name)}`, `${(st.rate * 100).toFixed(1)}%/r`, fmt(st.principal), `${st.unpaid > 0 ? '<span class="loss">zaległe odsetki</span>' : '—'}<span class="text-xs text-muted d-block">${st.weeksLeft} tyg.</span>`);
+        for (const b of projectBonds) row(`📜 Obligacje projektu · ${escapeHtml(b.name)}`, `${(PROJECT_BOND_RATE * 100).toFixed(0)}%/r`, fmt(b.principal), `<span class="profit">+${fmt(b.interestPaid || 0)}</span>`);
+        positionsValue += deposits.reduce((sum, d) => sum + d.principal + d.accrued, 0) + ppp.reduce((sum, st) => sum + st.principal, 0) + projectBonds.reduce((sum, b) => sum + b.principal, 0);
 
-    // --- Wyświetlanie Depozytów Komercyjnych ---
-    if (playerCommercialDeposits.length > 0) {
-        const depositHeader = document.createElement('li');
-        depositHeader.innerHTML = `<hr><strong>Depozyty Komercyjne:</strong>`;
-        myStocksList.appendChild(depositHeader);
-        playerCommercialDeposits.forEach(dep => {
-            const depItem = document.createElement('li');
-            depItem.textContent = `- ${dep.bankName}: ${dep.amount.toFixed(2)} PLN (${(dep.interestRate * 100).toFixed(1)}%)`;
-            myStocksList.appendChild(depItem);
-        });
-        hasOwnedStocks = true;
-    }
-
-    // --- Wyświetlanie Wkładu w Pulę Inwestycyjną ---
-    const playerPoolStake = investmentPool.playerStakes['player'] || 0;
-    if (playerPoolStake > 0) {
-        const poolItem = document.createElement('li');
-        poolItem.innerHTML = `<hr>🏊‍♂️ Wkład w pulę inwestycyjną: <strong>${playerPoolStake.toFixed(2)} PLN</strong>`;
-        myStocksList.appendChild(poolItem);
-        hasOwnedStocks = true;
-    }
-
-    // Komunikat, jeśli brak aktywów
-    if (!hasOwnedStocks) {
-        myStocksList.innerHTML = '<li>Brak posiadanych aktywów.</li>';
-    }
-
-    // --- Wyświetlanie Pasywów (Kredytów Komercyjnych) ---
-    const myLiabilitiesList = document.getElementById('my-liabilities-list');
-    myLiabilitiesList.innerHTML = '';
-    let hasLiabilities = false;
-    if (playerCommercialLoans.length > 0) {
-        playerCommercialLoans.forEach(loan => {
-            const loanItem = document.createElement('li');
-            loanItem.style.backgroundColor = '#fff'; // Dostosuj style wg potrzeb
-            loanItem.innerHTML = `Kredyt (${loan.bankName}): <strong class="loss">${loan.amount.toFixed(2)} PLN</strong> (Rata: ${loan.weeklyPayment.toFixed(2)} PLN/tydz.)`;
-            if (loan.collateral) {
-                loanItem.innerHTML += ` [Zastaw: ${loan.collateral.quantity} ${loan.collateral.symbol}]`;
+        // Obligacje i bony
+        const bonds = allBonds.filter(b => b.ownerId === 'player' && !b.isTBill);
+        if (bonds.length) {
+            section('Obligacje');
+            const groups = {};
+            for (const bond of bonds) {
+                const key = `${bond.issuerName}_${bond.type}`;
+                const g = groups[key] || (groups[key] = { name: bond.issuerName, type: bond.type, rate: bond.interestRate, count: 0, value: 0, cost: 0, defaulted: 0, next: Infinity });
+                g.count++; g.value += getBondValue(bond); g.cost += bond.purchasePrice || bond.faceValue || 0;
+                g.next = Math.min(g.next, Number(bond.remainingGameMs) || 0);
+                if (bond.defaulted) g.defaulted++;
             }
-            myLiabilitiesList.appendChild(loanItem);
-        });
-        hasLiabilities = true;
-    }
-    // W przyszłości można tu dodać inne pasywa
-
-    if (!hasLiabilities) {
-        myLiabilitiesList.innerHTML = '<li>Brak zobowiązań.</li>';
-    }
-
-    // --- Podsumowanie Wartości Portfela ---
-    const totalPlElement = document.getElementById('total-profit-loss');
-    if (totalPlElement) {
-        totalPlElement.textContent = totalPortfolioProfitLoss.toFixed(2);
-        totalPlElement.className = (totalPortfolioProfitLoss > 0) ? 'profit' : (totalPortfolioProfitLoss < 0) ? 'loss' : '';
-    }
-
-    const totalPortfolioValueElement = document.getElementById('total-portfolio-value');
-    if (totalPortfolioValueElement) {
-        let startupValue = 0;
-        for (const symbol in playerPortfolio) {
-            if (playerPortfolio[symbol].assetType === 'Startup') {
-                startupValue += playerPortfolio[symbol].investedAmount;
+            for (const g of Object.values(groups)) {
+                positionsValue += g.value;
+                row(`📄 ${escapeHtml(g.name)} <span class="text-xs text-muted">${escapeHtml(g.type)} · ${g.count} szt.</span>`, `${(g.rate * 100).toFixed(1)}%/r`, fmt(g.cost),
+                    `${g.defaulted ? '<span class="loss">⚠️ niewypłacalny</span>' : fmt(g.value)}<span class="text-xs text-muted d-block">zapada za ~${Math.ceil(g.next / 60000)} min gry</span>`);
             }
         }
-        const totalDeposits = playerCommercialDeposits.reduce((sum, dep) => sum + dep.amount, 0);
-        // Całkowita wartość = Gotówka + Wartość akcji/ETF/Indeksów + Wartość inwestycji w startupy + Depozyty + Wkład w pulę
-        const totalPortfolioValue = playerCash + totalStocksValue + startupValue + totalDeposits + playerPoolStake;
-        totalPortfolioValueElement.textContent = totalPortfolioValue.toFixed(2);
+        const tBills = allBonds.filter(b => b.ownerId === 'player' && b.isTBill);
+        if (tBills.length) { section('Bony skarbowe'); row(`🧾 Bony skarbowe · ${tBills.length} szt.`, '—', '—', '—'); }
+        const poolStake = investmentPool?.playerStakes?.player || 0;
+        if (poolStake > 0) { section('Pula inwestycyjna'); row('🏊 Wkład w pulę', '—', fmt(poolStake), '—'); }
     }
+
+    body.innerHTML = rows.length ? rows.join('') : `<tr><td colspan="4" class="text-muted">Brak pozycji ${isPrivate ? 'na koncie prywatnym' : 'w funduszu'}.</td></tr>`;
+
+    // Pasywa
+    const liabilities = document.getElementById('my-liabilities-list');
+    if (liabilities) {
+        const loans = isPrivate ? [] : (playerFund?.pawnLoans || []);
+        liabilities.innerHTML = loans.length
+            ? loans.map(loan => `<li>🏦 Lombard: <strong class="loss">${loan.principal.toFixed(2)} zł</strong> [zastaw: ${loan.shares} ${escapeHtml(loan.symbol)}] · ${loan.weeksLeft} tyg.</li>`).join('')
+            : '<li>Brak zobowiązań.</li>';
+    }
+
+    // Nagłówek i kafelki zależnie od konta
+    const header = document.getElementById('portfolio-positions-header');
+    if (header) header.textContent = isPrivate ? 'Pozycje konta prywatnego' : 'Pozycje funduszu';
+    const setKpi = (id, label, value, sub) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = value;
+        const card = el.closest('.portfolio-kpi-card');
+        if (card) { card.querySelector('.portfolio-kpi-label').textContent = label; card.querySelector('.portfolio-kpi-sub').textContent = sub; }
+    };
+    const cash = isPrivate ? (playerWallet?.cash || 0) : playerCash;
+    const total = isPrivate ? cash + positionsValue : (playerFund ? getFundAssets() : playerCash + positionsValue);
+    setKpi('total-portfolio-value', isPrivate ? 'Majątek prywatny' : 'Aktywa funduszu', total.toFixed(2), isPrivate ? 'zł (Twoje pieniądze)' : 'zł (pieniądze klientów)');
+    setKpi('cash-portfolio', isPrivate ? 'Gotówka prywatna' : 'Gotówka funduszu', `${cash.toFixed(2)} zł`, 'zł wolne');
+    const plEl = document.getElementById('total-profit-loss');
+    if (plEl) { plEl.textContent = totalPL.toFixed(2); plEl.className = `portfolio-kpi-value ${totalPL > 0 ? 'profit' : totalPL < 0 ? 'loss' : ''}`; }
 }
 
 function displayEventMessage(message, durationSeconds, percentageInfo = null, category = 'market') {
@@ -678,13 +1443,6 @@ function displayEventMessage(message, durationSeconds, percentageInfo = null, ca
     }
 }
 
-function displayXP() {
-    const xpElement = document.getElementById('player-xp');
-    if (xpElement) {
-        xpElement.textContent = playerXP.toFixed(2);
-    }
-}
-
 function openSkillsModal() {
     const modal = document.getElementById('skills-modal');
     if (modal) {
@@ -694,19 +1452,36 @@ function openSkillsModal() {
 }
 
 
-function displayEventLog() {
-    const logList = document.getElementById('event-log-list');
-    if (!logList) return;
+// =================================================================================
+// U2: ZMIANA TYGODNIOWA, FILTR POSIADANYCH
+// =================================================================================
 
-    logList.innerHTML = '';
+/** Co tydzień gry: cena zamknięcia tygodnia (do 14 tygodni wstecz). */
+function recordWeeklyCloses() {
+    for (const stock of stocks) {
+        if (stock.isBankrupt) continue;
+        if (!Array.isArray(stock.weeklyCloses)) stock.weeklyCloses = [];
+        stock.weeklyCloses.push(stock.price);
+        if (stock.weeklyCloses.length > 14) stock.weeklyCloses.shift();
+    }
+}
 
-    eventLog.forEach(message => {
-        const listItem = document.createElement('li');
-        listItem.textContent = message;
-        listItem.style.borderBottom = '1px solid #eee';
-        listItem.style.padding = '4px 2px';
-        logList.appendChild(listItem);
-    });
+/** Zmiana kursu względem zamknięcia sprzed `weeks` tygodni gry (ułamek). */
+function getStockChangePct(stock, weeks = 1) {
+    const closes = stock?.weeklyCloses || [];
+    const ref = closes[closes.length - weeks];
+    return ref > 0 ? stock.price / ref - 1 : 0;
+}
+
+function isStockOwnedByPlayer(stock) {
+    return (playerPortfolio[stock.symbol]?.shares || 0) > 0 || (playerWallet?.portfolio?.[stock.symbol]?.shares || 0) > 0
+        || (playerPortfolio[stock.symbol]?.investedAmount || 0) > 0;
+}
+
+function toggleOwnedFilter(chip) {
+    ownedOnlyFilter = !ownedOnlyFilter;
+    if (chip) chip.classList.toggle('active', ownedOnlyFilter);
+    displayStocks(getCurrentInputValues());
 }
 
 function toggleExchangeVisibility(exchangeKey) {
@@ -714,59 +1489,64 @@ function toggleExchangeVisibility(exchangeKey) {
     displayStocks(getCurrentInputValues());
 }
 
-// POPRAWKA: Usunięto zduplikowaną, starszą wersję funkcji. Pozostaje jedna, poprawna.
+/** Ranking funduszy: gracz, zarządcy korporacji i fundusze zewnętrzne — zwrot z 4 okresów, stabilność, zaufanie. */
+function getFundRanking() {
+    const compound = returns => returns.reduce((acc, r) => acc * (1 + r), 1) - 1;
+    const average = (periods, key) => periods.length ? periods.reduce((sum, p) => sum + p[key], 0) / periods.length : 0;
+    const playerPeriods = (playerFund?.periods || []).slice(-FUND_PERIODS_SHOWN);
+    const rows = [{
+        name: `💼 ${playerProfile?.fundName || 'Twój fundusz'}`, owner: `${playerProfile?.name || 'Ty'} · ${getPlayerPosition().name}`,
+        ret: compound(playerPeriods.map(p => p.fundReturn)), vol: average(playerPeriods, 'volatility'),
+        trust: playerFund?.trust ?? null, assets: playerFund ? getFundAssets() : 0, mine: true
+    }];
+
+    for (const manager of corporation?.managers || []) {
+        const periods = manager.fund.periods.slice(-FUND_PERIODS_SHOWN);
+        rows.push({
+            name: `🏢 Fundusz ${manager.name.split(' ')[1] || manager.name}`,
+            owner: `${manager.name} · ${CAREER_POSITIONS[getPositionIndex(manager.positionId)].name}`,
+            ret: compound(periods.map(p => p.fundReturn)), vol: average(periods, 'volatility'),
+            trust: manager.fund.trust, assets: getBotFundAssets(manager.fund)
+        });
+    }
+
+    // 0.13.1 (B9): Fundusz „Gwardia” w rankingu funduszy (wynik od powstania, bez okresów oceny).
+    const guard = typeof getGuardFund === 'function' ? getGuardFund() : aiCompetitors.find(ai => ai.isGuard);
+    if (guard) {
+        const value = (Number(guard.cash) || 0) + Object.entries(guard.portfolio || {}).reduce((sum, [symbol, holding]) => sum + (stocks.find(s => s.symbol === symbol)?.price || 0) * (holding.shares || 0), 0);
+        if (!(guard.startValue > 0)) guard.startValue = value;
+        rows.push({ name: `🛡️ ${guard.name}`, owner: 'Fundusz patriotyczny · obronność (wynik od powstania)', ret: guard.startValue > 0 ? value / guard.startValue - 1 : 0, vol: null, trust: null, assets: value });
+    }
+
+    for (const fund of getExternalFunds()) {
+        const returns = playerPeriods.map(p => p.rivals.find(r => r.symbol === fund.symbol)?.return).filter(Number.isFinite);
+        rows.push({
+            name: `🌐 ${getExternalFirmName(fund)}`, owner: fund.managedByCorporation ? 'Przejęty przez korporację' : 'Firma zewnętrzna',
+            ret: compound(returns), vol: null, trust: null, assets: getExternalFundValue(fund) * fund.totalShares
+        });
+    }
+    return rows.sort((a, b) => b.ret - a.ret);
+}
+
 function displayLeaderboard() {
-    const leaderboardList = document.getElementById('leaderboard-list');
-    if (!leaderboardList) return;
+    const container = document.getElementById('leaderboard-list');
+    if (!container) return;
+    if (!playerFund) { container.innerHTML = '<p class="fund-muted">Brak funduszu.</p>'; return; }
 
-    // Filtrujemy botów, aby ukryć "Inwestorów Mniejszościowych"
-    const competitorsForLeaderboard = aiCompetitors.filter(ai => ai.personality !== 'market_maker');
-
-    const allPlayers = [
-        { name: 'Ty (Gracz)', cash: playerCash, portfolio: playerPortfolio },
-        ...competitorsForLeaderboard // <-- TUTAJ BYŁ BŁĄD (literówka)
-    ];
-
-    const rankedPlayers = allPlayers.map(player => {
-        let stocksValue = 0;
-        for (const symbol in player.portfolio) {
-            const holding = player.portfolio[symbol];
-            // --- POPRAWKA: Uwzględnienie różnych typów aktywów (akcje, etf, indeksy) ---
-            let marketData;
-            let currentPrice = 0;
-
-            if (holding.assetType === 'etf') {
-                marketData = etfs.find(e => e.symbol === symbol);
-                if (marketData) currentPrice = marketData.price;
-            } else if (holding.assetType === 'index') {
-                marketData = marketIndexes.find(i => i.id === symbol);
-                if (marketData) currentPrice = marketData.value;
-            } else {
-                marketData = stocks.find(s => s.symbol === symbol);
-                if (marketData) currentPrice = marketData.price;
-            }
-
-            if (marketData) {
-                stocksValue += currentPrice * holding.shares;
-            }
-        }
-        const poolStake = investmentPool.playerStakes[player.id] || 0;
-        const totalValue = player.cash + stocksValue + poolStake;
-        return { name: player.name, totalValue: totalValue };
-    });
-
-    rankedPlayers.sort((a, b) => b.totalValue - a.totalValue);
-
-    leaderboardList.innerHTML = '';
-    rankedPlayers.forEach((player, index) => {
-        const listItem = document.createElement('li');
-        if (player.name === 'Ty (Gracz)') {
-            listItem.style.fontWeight = 'bold';
-            listItem.style.color = '#0056b3';
-        }
-        listItem.textContent = `#${index + 1}: ${player.name} - ${player.totalValue.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}`;
-        leaderboardList.appendChild(listItem);
-    });
+    container.innerHTML = `
+        <p class="fund-muted">Zwrot skumulowany z ${FUND_PERIODS_SHOWN} ostatnich okresów. Liczy się wynik, nie wielkość funduszu.</p>
+        <table class="asset-mini-table leaderboard-table">
+            <thead><tr><th>#</th><th>Fundusz</th><th>Zwrot</th><th>Zmienność</th><th>Zaufanie</th><th>Aktywa</th></tr></thead>
+            <tbody>${getFundRanking().map((row, index) => `
+                <tr class="${row.mine ? 'mine' : ''}">
+                    <td>${index + 1}</td>
+                    <td>${escapeHtml(row.name)}<br><small class="fund-muted">${escapeHtml(row.owner)}</small></td>
+                    <td class="${row.ret >= 0 ? 'profit' : 'loss'}">${formatPct(row.ret)}</td>
+                    <td>${row.vol === null ? '—' : formatPct(row.vol)}</td>
+                    <td>${row.trust === null ? '—' : row.trust.toFixed(0)}</td>
+                    <td>${formatZl(row.assets, 0)}</td>
+                </tr>`).join('')}</tbody>
+        </table>`;
 }
 
 function openLeaderboardModal() {
@@ -793,8 +1573,10 @@ function displayEtfs() {
 
     etfs.forEach(etf => {
         const row = etfTableBody.insertRow();
-        row.insertCell().textContent = `${etf.name} (${etf.symbol})`;
+        row.insertCell().innerHTML = `<strong>${escapeHtml(etf.name)}</strong> (${etf.symbol})<span class="text-xs text-muted d-block">${escapeHtml(describeEtfRules(etf))}</span>`;
         row.insertCell().textContent = etf.price.toFixed(2);
+        row.insertCell().textContent = getEtfTopHoldings(etf).map(h => `${h.symbol} ${(h.weight * 100).toFixed(0)}%`).join(', ') || '—';
+        row.insertCell().textContent = `${(etf.yearTarget * 100).toFixed(1)}%${etf.lastResult ? (etf.lastResult.hit ? ' ✅' : ' ❌') : ''}`;
 
         const sharesOwned = playerPortfolio[etf.symbol] ? playerPortfolio[etf.symbol].shares : 0;
         row.insertCell().textContent = sharesOwned;
@@ -805,7 +1587,7 @@ function displayEtfs() {
         quantityInput.type = 'number';
         quantityInput.min = '1';
         quantityInput.value = '1';
-        quantityInput.style.width = '50px';
+        quantityInput.classList.add('w-xs');
         quantityInput.id = `quantity-${etf.symbol}`;
         actionsCell.appendChild(quantityInput);
 
@@ -826,187 +1608,6 @@ function displayEtfs() {
         actionsCell.appendChild(sellButton);
     });
 }
-
-function switchNewspaperTab(symbol) {
-    const mediaStock = stocks.find(s => s.symbol === symbol);
-    if (!mediaStock) {
-        console.error(`Nie znaleziono spółki medialnej o symbolu: ${symbol}`);
-        return;
-    }
-    
-    const modal = document.getElementById('newspaper-modal');
-    if (!modal) return;
-    
-    // 1. Zaktualizuj przyciski zakładek
-    modal.querySelectorAll('.bank-tab-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    const activeBtn = document.getElementById(`tab-btn-newspaper-${symbol}`);
-    if (activeBtn) {
-        activeBtn.classList.add('active');
-    }
-
-    // 2. Przypisz aktualnie otwartą gazetę do modala (do użycia przez PR)
-    modal.dataset.currentNewspaper = symbol;
-    
-    // 3. Wywołaj funkcję, która odświeża całą treść gazety
-    updateNewspaperContent(mediaStock);
-}
-
-/**
- * Otwiera modal gazety i domyślnie włącza pierwszą zakładkę.
- */
-function openNewspaperModal() {
-    const modal = document.getElementById('newspaper-modal');
-    if (!modal) return;
-    
-    // Domyślnie otwórz pierwszą gazetę ('PULS')
-    switchNewspaperTab('PULS'); 
-    
-    modal.style.setProperty('display', 'flex', 'important');
-}
-
-/**
- * Aktualizuje treść modala gazety na podstawie danych konkretnej spółki medialnej.
- * @param {object} mediaStock - Obiekt spółki medialnej (np. PULS, FLESZ).
- */
-function updateNewspaperContent(mediaStock) {
-    if (!mediaStock || !mediaStock.newspaperData) return;
-
-    // 1. Ustaw tytuł gazety
-    const newspaperTitle = document.getElementById('newspaper-title');
-    if (newspaperTitle) newspaperTitle.textContent = mediaStock.name;
-
-    // 2. Aktualizacja daty
-    const newspaperDate = document.getElementById('newspaper-date');
-    if (newspaperDate) newspaperDate.textContent = `Gdańsk, ${new Date().toLocaleDateString('pl-PL')}`;
-
-    // 3. Logika Reklamy (dla przychodu spółki medialnej)
-    const adContainer = document.getElementById('newspaper-ad-container');
-    if (adContainer) {
-        if (Math.random() < 0.6) { // 60% szans na reklamę
-            const adStock = getRandomElement(stocks.filter(s => !s.assetType && !s.isBankrupt && s.symbol !== mediaStock.symbol));
-            if (adStock) {
-                adContainer.innerHTML = `<p><strong>REKLAMA:</strong> Zainwestuj w <strong>${adStock.name} (${adStock.symbol})</strong>! Niesamowity potencjał wzrostu! Kup teraz!</p>`;
-                adContainer.style.display = 'block';
-                
-                // Mechanika przychodu za kliknięcie (teraz za KAŻDYM przełączeniem zakładki)
-                mediaStock.cash += mediaStock.newspaperData.adRevenuePerClick;
-                // Można dodać logikę pobierania kasy od reklamodawcy
-                if (adStock.cash > mediaStock.newspaperData.adRevenuePerClick) {
-                    adStock.cash -= mediaStock.newspaperData.adRevenuePerClick;
-                }
-            }
-        } else {
-            adContainer.style.display = 'none'; // Brak reklamy
-        }
-    }
-
-    // 4. Logika Subskrypcji (na razie ukryta)
-    const statusText = document.getElementById('subscription-status-text');
-    const buyButton = document.getElementById('buy-subscription-btn');
-    if (statusText && buyButton) {
-        statusText.innerHTML = "Wiadomości premium (już wkrótce)."; // Placeholder
-        buyButton.style.display = 'none'; // Ukryj stary przycisk
-    }
-
-    // 5. Wypełnianie Kolumn (TODO Krok 2: Zmienić 'eventLog' na 'mediaStock.newspaperData.eventLog')
-    const newspaperLog = eventLog; // Na razie nadal używamy głównego logu
-    
-    const marketNewsList = document.getElementById('market-news-list');
-    const companyNewsList = document.getElementById('company-news-list');
-    const premiumContentList = document.getElementById('premium-content');
-
-    // ===>>> NOWA LOGIKA DLA NASTAWIENIA GAZETY <<<===
-    const premiumTitle = document.getElementById('premium-section-title');
-    premiumContentList.innerHTML = ''; // Wyczyść stare plotki
-
-    if (mediaStock.stance === 'pro-player') {
-        premiumTitle.textContent = 'Strefa Inwestora (Wgląd Analityczny)';
-        premiumTitle.style.color = '#28a745';
-        // TODO: W przyszłości ta gazeta może pokazywać tu prawdziwe wskazówki
-        premiumContentList.innerHTML = '<li style="color: #666;">Jesteśmy po Twojej stronie. Szukamy dla Ciebie najlepszych okazji.</li>';
-    } else if (mediaStock.stance === 'anti-player') {
-        premiumTitle.textContent = 'Felieton Krytyczny';
-        premiumTitle.style.color = '#dc3545';
-        // TODO: Tutaj gazeta może krytykować ostatnie ruchy gracza
-        premiumContentList.innerHTML = '<li style="color: #666;">Obserwujemy Twoje ruchy... i nie jesteśmy pod wrażeniem. Uważaj.</li>';
-    } else {
-        premiumTitle.textContent = 'Strefa Premium';
-        premiumTitle.style.color = ''; // Domyślny kolor
-        premiumContentList.innerHTML = '<li style="color: #666;">Neutralne analizy (już wkrótce).</li>';
-    }
-    // ===>>> KONIEC LOGIKI NASTAWIENIA <<<===
-
-    // Wypełnianie głównych newsów (bez zmian)
-    const marketMessages = newspaperLog.filter(e => e.category === 'market').slice(0, 15);
-    if (marketMessages.length > 0) {
-        marketNewsList.innerHTML = '';
-        marketMessages.forEach(msg => { marketNewsList.innerHTML += `<li>${msg.text}</li>`; });
-    } else {
-         marketNewsList.innerHTML = '<li>Brak ważnych wiadomości z rynku.</li>';
-    }
-
-    const companyMessages = newspaperLog.filter(e => e.category === 'company' || e.category === 'review' || e.category === 'state').slice(0, 15);
-    if (companyMessages.length > 0) {
-        companyNewsList.innerHTML = '';
-        companyMessages.forEach(msg => { companyNewsList.innerHTML += `<li>${msg.text}</li>`; });
-    } else {
-        companyNewsList.innerHTML = '<li>Brak doniesień ze spółek.</li>';
-    }
-
-    // 6. Sekcja "Wpływ na Media" (logika bez zmian)
-    const mediaSection = document.getElementById('media-influence-section');
-    const positiveControls = document.getElementById('positive-pr-controls');
-    const blackControls = document.getElementById('black-pr-controls');
-    const skillLvl = getSkillLevel('mediaManipulation');
-
-    if (skillLvl > 0 && mediaSection && positiveControls && blackControls) {
-        mediaSection.style.display = 'block';
-        
-        // Pozytywny PR (Lvl 1+)
-        positiveControls.style.display = 'block';
-        const posSelect = document.getElementById('positive-pr-select');
-        posSelect.innerHTML = ''; 
-        const ownedStocks = stocks.filter(s => {
-            const holding = playerPortfolio[s.symbol];
-            return holding && !s.assetType && (holding.shares / s.totalShares > 0.5);
-        });
-        if (ownedStocks.length > 0) {
-            ownedStocks.forEach(s => { posSelect.innerHTML += `<option value="${s.symbol}">${s.name} (${s.symbol})</option>`; });
-            document.getElementById('positive-pr-btn').disabled = false;
-        } else {
-            posSelect.innerHTML = '<option value="">(Brak spółek 👑)</option>';
-            document.getElementById('positive-pr-btn').disabled = true;
-        }
-
-        // Czarny PR (Lvl 2+)
-        if (skillLvl >= 2) {
-            blackControls.style.display = 'block';
-            const blackSelect = document.getElementById('black-pr-select');
-            blackSelect.innerHTML = ''; 
-            const targetStocks = stocks.filter(s => {
-                 const holding = playerPortfolio[s.symbol];
-                 const isOwned = holding && !s.assetType && (holding.shares / s.totalShares > 0.5);
-                 return !s.assetType && !s.isBankrupt && !s.isSubsidiaryOf && !isOwned;
-            });
-            if (targetStocks.length > 0) {
-                targetStocks.forEach(s => { blackSelect.innerHTML += `<option value="${s.symbol}">${s.name} (${s.symbol})</option>`; });
-                document.getElementById('black-pr-btn').disabled = false;
-            } else {
-                 blackSelect.innerHTML = '<option value="">(Brak celów)</option>';
-                 document.getElementById('black-pr-btn').disabled = true;
-            }
-            const currentRisk = BLACK_PR_BASE_RISK + (blackPRRiskCounter * BLACK_PR_RISK_INCREASE);
-            document.getElementById('black-pr-risk-display').textContent = `${(currentRisk * 100).toFixed(1)}%`;
-        } else {
-            blackControls.style.display = 'none';
-        }
-    } else if (mediaSection) {
-        mediaSection.style.display = 'none';
-    }
-}
-
 
 function displayMarketIndexes() {
     const indexesPanel = document.getElementById('indexes-panel');
@@ -1073,7 +1674,7 @@ function displayMarketIndexes() {
         vixDiv.innerHTML = `
             <span class="index-name">Niestabilność Rynku (WNR)</span>
             <span class="index-value" style="color: ${color};">${marketVolatilityIndex.toFixed(2)}</span>
-            <span class="index-change" style="color: ${color}; font-weight: bold;">${description}</span>
+            <span class="index-change fw-bold" style="color: ${color}">${description}</span>
         `;
         indexesContainer.appendChild(vixDiv);
     }
@@ -1100,151 +1701,36 @@ function renderDepartmentsSection(stock, container) {
     // --- 1. KARTY DZIAŁÓW ---
     const deptsDiv = document.createElement('div');
     deptsDiv.style.display = 'flex';
-    deptsDiv.style.justifyContent = 'space-between';
-    deptsDiv.style.marginBottom = '15px';
+    deptsDiv.classList.add('justify-between');
+    deptsDiv.classList.add('mb-3');
     
     const deptNames = { research: "Badania (R&D)", development: "Rozwój (Inv)", economy: "Ekonomia" };
     
     for (const [key, data] of Object.entries(stock.departments)) {
         const deptCard = document.createElement('div');
-        deptCard.style.border = '1px solid #ccc';
-        deptCard.style.padding = '8px';
-        deptCard.style.borderRadius = '4px';
-        deptCard.style.textAlign = 'center';
-        deptCard.style.flex = '1';
-        deptCard.style.margin = '0 4px';
-        deptCard.style.backgroundColor = '#fff';
+        deptCard.classList.add('dept-card');
         
         let upgradeBtn = '';
         if (data.level < 3) {
             const cost = 50000 * Math.pow(2, data.level);
-            upgradeBtn = `<button onclick="fundDepartmentUpgrade('${stock.symbol}', '${key}')" style="font-size: 10px; margin-top: 5px; width: 100%;">Ulepsz (${(cost/1000).toFixed(0)}k)</button>`;
+            upgradeBtn = `<button onclick="fundDepartmentUpgrade('${stock.symbol}', '${key}')" class="text-xs mt-1 w-full">Ulepsz (${(cost/1000).toFixed(0)}k)</button>`;
         } else {
-            upgradeBtn = `<span style="font-size: 10px; color: green; font-weight: bold;">MAX LEVEL</span>`;
+            upgradeBtn = `<span class="text-xs text-up fw-bold">MAX LEVEL</span>`;
         }
 
         deptCard.innerHTML = `
-            <div style="font-weight: bold; font-size: 12px; margin-bottom: 4px;">${deptNames[key]}</div>
-            <div style="font-size: 18px; color: #007bff;">Lvl ${data.level}</div>
+            <div class="fw-bold text-sm mb-1">${deptNames[key]}</div>
+            <div class="text-lg text-info">Lvl ${data.level}</div>
             ${upgradeBtn}
         `;
         deptsDiv.appendChild(deptCard);
     }
     deptSection.appendChild(deptsDiv);
 
-    // --- 2. TRWAJĄCE INWESTYCJE ---
-    const activeDiv = document.createElement('div');
-    activeDiv.innerHTML = `<h5>🚧 Trwające Projekty (${stock.activeInvestments.length}/${stock.departments.development.level})</h5>`;
-    
-    if (stock.activeInvestments.length > 0) {
-        const invList = document.createElement('ul');
-        invList.style.listStyle = 'none';
-        invList.style.padding = '0';
-        
-        stock.activeInvestments.forEach(inv => {
-            const li = document.createElement('li');
-            li.style.marginBottom = '8px';
-            li.style.padding = '8px';
-            li.style.backgroundColor = '#f8f9fa';
-            li.style.borderLeft = '3px solid #007bff';
-            
-            const progressPct = (inv.progress / inv.totalDuration) * 100;
-            const contractorInfo = inv.contractor ? `<br><small>Wykonawca: ${inv.contractor}</small>` : '<br><small>Realizacja własna</small>';
-            
-            li.innerHTML = `
-                <div style="display: flex; justify-content: space-between;">
-                    <strong>${inv.name}</strong>
-                    <button onclick="blockInvestment('${stock.symbol}', '${inv.id}')" style="font-size: 9px; background-color: #ffdddd; border: 1px solid red; color: red;">Anuluj</button>
-                </div>
-                <progress value="${inv.progress}" max="${inv.totalDuration}" style="width: 100%; height: 10px; margin-top: 4px;"></progress>
-                <div style="font-size: 10px; color: #666; display: flex; justify-content: space-between;">
-                    <span>${progressPct.toFixed(0)}%</span>
-                    <span>${inv.progress.toFixed(1)} / ${inv.totalDuration} tyg.</span>
-                </div>
-                ${contractorInfo}
-            `;
-            invList.appendChild(li);
-        });
-        activeDiv.appendChild(invList);
-    } else {
-        activeDiv.innerHTML += `<p style="font-size: 12px; color: #888; font-style: italic;">Brak aktywnych projektów.</p>`;
-    }
-    deptSection.appendChild(activeDiv);
-
-    // --- 3. KATALOG DOSTĘPNYCH INWESTYCJI ---
-    const catalogDiv = document.createElement('div');
-    catalogDiv.style.marginTop = '15px';
-    catalogDiv.innerHTML = `<h5>📋 Katalog Inwestycji</h5>`;
-
-    // Pobierz inwestycje ogólne + sektorowe
-    let availableOptions = [...INVESTMENT_CATALOG['general']];
-    if (stock.sector[0] && INVESTMENT_CATALOG[stock.sector[0]]) {
-        availableOptions = availableOptions.concat(INVESTMENT_CATALOG[stock.sector[0]]);
-    }
-
-    const table = document.createElement('table');
-    table.style.fontSize = '11px';
-    table.style.width = '100%';
-    table.innerHTML = `
-        <thead>
-            <tr style="background-color: #e9ecef;">
-                <th>Nazwa</th>
-                <th>Koszt</th>
-                <th>Czas</th>
-                <th>Efekt</th>
-                <th>Akcja</th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    `;
-    const tbody = table.querySelector('tbody');
-
-    availableOptions.forEach(inv => {
-        const tr = document.createElement('tr');
-            
-            // Logika kosztów i wymagań
-            const realCost = stock.departments.development.level >= 3 ? inv.cost * 0.9 : inv.cost;
-            const isAffordable = stock.cash >= realCost;
-            const hasLevel = stock.departments.development.level >= inv.minDevLevel;
-            const isLimitReached = stock.activeInvestments.length >= stock.departments.development.level;
-
-            // Przycisk akcji
-            let statusBtn = '';
-            if (!hasLevel) {
-                statusBtn = `<span style="color: gray; font-size: 9px;">Wymaga Lvl ${inv.minDevLevel}</span>`;
-            } else if (!isAffordable) {
-                statusBtn = `<span style="color: #dc3545; font-size: 9px;">Brak środków</span>`;
-            } else if (isLimitReached) {
-                statusBtn = `<span style="color: #ffc107; font-size: 9px;">Limit projektów</span>`;
-            } else {
-                statusBtn = `<button onclick="forceCompanyInvestment('${stock.symbol}', '${inv.id}')" style="padding: 2px 8px; font-size: 11px; background-color: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer;">Start</button>`;
-            }
-
-            // Ikona (domyślna jeśli brak pliku)
-            const iconSrc = inv.icon || 'img/box.png'; 
-
-            tr.innerHTML = `
-                <td style="display: flex; align-items: center;">
-                    <img src="${iconSrc}" style="width: 24px; height: 24px; margin-right: 8px; object-fit: contain;" onerror="this.style.display='none'">
-                    <span>${inv.name}</span>
-                </td>
-                <td>${(realCost/1000).toFixed(0)}k PLN</td>
-                <td>${inv.duration} tyg.</td>
-                <td>
-                    <div style="font-size: 10px; color: #555;">
-                        ${inv.assetValue > 0 ? `<div>🏠 +${(inv.assetValue/1000).toFixed(0)}k</div>` : ''}
-                        ${inv.incomeBonus > 0 ? `<div>💰 +${(inv.incomeBonus*100).toFixed(0)}%</div>` : ''}
-                        ${inv.healthBonus > 0 ? `<div>❤️ +${inv.healthBonus}</div>` : ''}
-                    </div>
-                </td>
-                <td style="text-align: center;">${statusBtn}</td>
-            `;
-            tbody.appendChild(tr);
-        });
-    
-    catalogDiv.appendChild(table);
-    deptSection.appendChild(catalogDiv);
+    // --- 2. INWESTYCJE: w toku (etapy), działające, katalog (investments.js) ---
+    renderInvestmentPanel(stock, deptSection, true);
 }
+
 
 
 
@@ -1303,7 +1789,7 @@ function openManagementModal(symbol, defaultTab = 'main') {
     const policySelect = document.getElementById('policy-select');
     if (policySelect) {
         policySelect.dataset.symbol = symbol;
-        policySelect.value = stock.dividendPolicy || 'Growth';
+        policySelect.value = normalizeDividendPolicy(stock.dividendPolicy);
         // Uwaga: onchange jest zazwyczaj zdefiniowany w HTML, ale upewnij się, że działa
     }
 
@@ -1391,11 +1877,11 @@ function openManagementModal(symbol, defaultTab = 'main') {
             if (stock.playerHasFinancialAccess || (accountantLevel >= 2 && isMajorityOwner)) {
                 viewFinancesBtn.disabled = false;
                 financesInfo.textContent = 'Dostęp aktywny.';
-                financesInfo.style.color = 'green';
+                financesInfo.className = 'text-up';
             } else {
                 viewFinancesBtn.disabled = false;
                 financesInfo.textContent = 'Wymagana opłata: 2000 PLN.';
-                financesInfo.style.color = '#666';
+                financesInfo.className = 'text-muted';
             }
         } else {
             financialSection.style.display = 'none';
@@ -1481,17 +1967,10 @@ function openManagementModal(symbol, defaultTab = 'main') {
                 maDefense.style.display = 'block';
                 safeSetText('ma-defense-info', `Atakuje: ${stock.mergerProcess.initiatorSymbol}`);
                 
-                const poisonBtn = document.getElementById('ma-defense-poisonpill-btn');
-                if (poisonBtn) {
-                    if(stock.mergerProcess.defenseActive) {
-                        poisonBtn.disabled = true;
-                        poisonBtn.textContent = `Obrona aktywna: ${stock.mergerProcess.defenseActive}`;
-                    } else {
-                        poisonBtn.disabled = false;
-                        poisonBtn.textContent = 'Aktywuj "Zatrutą Pigułkę"';
-                        poisonBtn.onclick = () => activateDefenseMechanism(symbol, 'poisonPill');
-                    }
-                }
+                const defenseBox = document.getElementById('ma-defense-buttons');
+                if (defenseBox) defenseBox.innerHTML = getFundStakePct(stock) > 0.5
+                    ? `<div class="defense-grid">${renderDefenseButtons(stock)}</div><button class="mt-2" onclick="openTakeoverModal('${symbol}')">Szczegóły oferty</button>`
+                    : '<p class="text-xs text-muted">Obronę uruchamia akcjonariusz większościowy.</p>';
             } else {
                 maDefense.style.display = 'none';
             }
@@ -1509,7 +1988,7 @@ function openManagementModal(symbol, defaultTab = 'main') {
         if (typeof renderDepartmentsSection === 'function') {
             renderDepartmentsSection(stock, deptsContent);
         } else {
-            deptsContent.innerHTML = '<p style="color:red">Błąd: Brak funkcji renderDepartmentsSection.</p>';
+            deptsContent.innerHTML = '<p class="text-down">Błąd: Brak funkcji renderDepartmentsSection.</p>';
         }
     }
 
@@ -1536,86 +2015,13 @@ function switchManagementTab(tabName) {
     document.getElementById(`tab-btn-mgmt-${tabName}`).classList.add('active');
 }
 
-function toggleAutoRepay(isEnabled) {
-    // Ta funkcja jest specyficzna dla ui2.js (prosty kredyt). 
-    // W ui.js (baza) system auto-spłaty nie jest zaimplementowany dla kredytów komercyjnych.
-    // Na razie zostawiamy ją, ale może nie być używana.
-    isAutoRepayEnabled = isEnabled;
-    logEvent(`System automatycznej spłaty kredytu został ${isEnabled ? 'WŁĄCZONY' : 'WYŁĄCZONY'}.`, 'market');
-}
-
-
 // Plik: ui.js
 // Ta funkcja jest z ui.js (baza) i obsługuje złożony modal bankowy (z zakładkami)
 function openBankModal() {
-    const centralTabContent = document.getElementById('bank-content-central');
-    if (centralTabContent && centralBank.ceo) {
-        let ceoInfoHtml = `
-            <div style="text-align: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px dashed #ccc;">
-                <strong>Prezes Banku Centralnego:</strong> ${centralBank.ceo.name}<br>
-                <span style="font-size: 11px; color: #6c757d;">
-        `;
-        centralBank.ceo.traits.forEach(trait => {
-            ceoInfoHtml += `<span title="${trait.description}">[${trait.name}] </span>`;
-        });
-        ceoInfoHtml += `</span></div>`;
-
-        // Sprawdź, czy info już istnieje, aby uniknąć duplikacji
-        if (!centralTabContent.querySelector('.central-bank-ceo-info')) {
-            const infoDiv = document.createElement('div');
-            infoDiv.className = 'central-bank-ceo-info'; // Dodaj klasę do identyfikacji
-            infoDiv.innerHTML = ceoInfoHtml;
-            // Wstaw info pod nagłówkiem H2
-            centralTabContent.insertBefore(infoDiv, centralTabContent.children[1]);
-        }
-    }
-
-    // Logika z ui2.js dotycząca 'playerLoan' (prosty kredyt) jest zastąpiona
-    // przez system bankowości komercyjnej z ui.js.
-    // Poniższe elementy z ui2.js (dotyczące playerLoan) mogą nie istnieć w HTML dla ui.js
-
-    // Aktualizacja checkboxa auto-spłaty (z ui2.js)
-    const autoRepayToggle = document.getElementById('auto-repay-toggle');
-    if (autoRepayToggle) {
-        autoRepayToggle.checked = isAutoRepayEnabled;
-    }
-
-    // Aktualizacja informacji o pominiętych ratach (z ui2.js)
-    const missedPaymentsInfo = document.getElementById('missed-payments-info');
-    if (missedPaymentsInfo) {
-        // Zakładamy, że 'playerLoan' nadal istnieje równolegle, albo ta sekcja powinna być usunięta
-        // Jeśli ui.js *całkowicie* usuwa playerLoan, ten blok jest martwy.
-        // Na potrzeby łączenia, zakładamy, że HTML może jeszcze to mieć.
-        if (typeof playerLoan !== 'undefined' && playerLoan.missedPayments > 0) {
-            if (playerLoan.missedPayments >= 3) {
-                missedPaymentsInfo.textContent = `KONTO ZABLOKOWANE! Posiadasz ${playerLoan.missedPayments} pominiętych rat. Spłać część długu, aby odblokować inwestycje.`;
-                missedPaymentsInfo.style.color = '#dc3545';
-            } else {
-                missedPaymentsInfo.textContent = `Liczba pominiętych rat: ${playerLoan.missedPayments}. Przy 3 ratach konto zostanie zablokowane.`;
-                missedPaymentsInfo.style.color = '#ffc107';
-            }
-            missedPaymentsInfo.style.display = 'block';
-        } else {
-            missedPaymentsInfo.style.display = 'none';
-        }
-    }
-
-
-    // Aktualizacja sekcji licencji (z bazy ui.js)
-    const licenseInfoText = document.getElementById('license-info-text');
-    const licenseButton = document.getElementById('buy-license-btn');
-    const nextLevel = playerAccessLevel + 1;
-    const nextExchange = Object.values(exchanges).find(e => e.level === nextLevel);
-
-    if (licenseInfoText && licenseButton) { // Sprawdź, czy elementy istnieją
-        if (nextExchange) {
-            licenseInfoText.innerHTML = `Następny poziom dostępu: <strong>${nextExchange.name}</strong><br>Koszt licencji: <strong>${nextExchange.licenseCost.toLocaleString('pl-PL')} PLN</strong>`;
-            licenseButton.style.display = 'block';
-            licenseButton.disabled = playerCash < nextExchange.licenseCost;
-        } else {
-            licenseInfoText.textContent = "Gratulacje! Posiadasz dostęp do wszystkich giełd.";
-            licenseButton.style.display = 'none';
-        }
+    const ceoInfo = document.querySelector('#bank-content-central .central-bank-ceo-info');
+    if (ceoInfo && centralBank.ceo) {
+        const traits = centralBank.ceo.traits.map(trait => `<span class="bank-trait" title="${escapeHtml(trait.description)}">${escapeHtml(trait.name)}</span>`).join('');
+        ceoInfo.innerHTML = `<div class="bank-ceo"><span class="bank-ceo-label">Prezes Banku Centralnego</span><strong>${escapeHtml(centralBank.ceo.name)}</strong><div class="bank-traits">${traits}</div></div>`;
     }
 
 
@@ -1651,6 +2057,7 @@ function openBankModal() {
         baseRateEl.textContent = (centralBank.baseInterestRate * 100).toFixed(1);
     }
 
+    renderBankTicker();
     switchBankTab('central'); // Ustaw domyślną zakładkę
     document.getElementById('bank-modal').style.display = 'block';
 }
@@ -1664,376 +2071,27 @@ function openStockDetailsModal(symbol) {
     const title = document.getElementById('details-title');
 
     title.textContent = `Struktura Akcjonariatu: ${stock.name} (${symbol})`;
+    const badges = document.getElementById('details-badges');
+    if (badges) badges.innerHTML = renderDividendBadges(stock); // arystokrata, stopa dywidendy, seria (dividends.js)
     renderOwnershipPieChart(symbol); // Wywołujemy naszą funkcję do renderowania wykresu
 
+
+    const insights = document.getElementById('analyst-insights');
+    if (insights) {
+        const lines = typeof getAnalystInsights === 'function' ? getAnalystInsights(stock) : [];
+        insights.innerHTML = lines.map(line => `<p>🔎 ${escapeHtml(line)}</p>`).join('');
+    }
+
     modal.style.display = 'block';
 }
 
-let nextNumberToClick = 1;
-const WORK_REWARD = 100;
-
-function updateWorkButtonVisibility() {
-    const workBtn = document.getElementById('open-work-btn');
-    if (getSkillLevel('work') > 0) {
-        workBtn.style.display = 'inline-block';
-    } else {
-        workBtn.style.display = 'none';
-    }
-}
-
-function openWorkModal() {
-    const workLevel = getSkillLevel('work');
-    if (workLevel === 0) return;
-
-    const modal = document.getElementById('work-modal');
-    const activePanel = document.getElementById('active-work-panel');
-    const passivePanel = document.getElementById('passive-work-panel');
-    const companyPanel = document.getElementById('company-panel');
-    const separator = document.getElementById('work-separator');
-
-    // Ukrywamy wszystko
-    activePanel.style.display = 'none';
-    passivePanel.style.display = 'none';
-    companyPanel.style.display = 'none';
-    separator.style.display = 'none';
-
-    if (workLevel >= 4 && playerCompany) {
-        // --- NOWA LOGIKA DLA PANELU FIRMY ---
-        companyPanel.style.display = 'block';
-
-        document.getElementById('company-name').textContent = playerCompany.name;
-        document.getElementById('company-value').textContent = playerCompany.value.toLocaleString('pl-PL', { maximumFractionDigits: 0 });
-
-        // Aktualizacja dochodu (teraz jest liczony w updateCompanyStatus)
-        // Musimy pobrać ostatnio obliczony dochód lub pokazać 0
-        const lastCycleIncomeElement = document.getElementById('company-income');
-        // Tu można by przechowywać ostatni dochód w playerCompany, na razie 0
-        lastCycleIncomeElement.textContent = "0.00"; // Placeholder
-
-        // Lista pracowników
-        const employeeList = document.getElementById('employee-list');
-        const employeeCountSpan = document.getElementById('employee-count');
-        employeeList.innerHTML = '';
-        employeeCountSpan.textContent = playerCompany.employees.length;
-        if (playerCompany.employees.length > 0) {
-            playerCompany.employees.forEach(emp => {
-                const li = document.createElement('li');
-                li.style.display = 'flex';
-                li.style.justifyContent = 'space-between';
-                li.style.alignItems = 'center';
-                li.style.marginBottom = '5px';
-                li.style.padding = '3px';
-                li.style.borderBottom = '1px dotted #eee';
-
-                const performancePercent = Math.round(emp.performance * 100);
-                const moraleText = emp.morale.toFixed(0);
-                let statusText = '';
-                if (emp.status === 'vacation') statusText = '🏖️';
-                else if (emp.status === 'sick') statusText = 'ố';
-
-                li.innerHTML = `
-                    <span>${statusText} ${emp.name} (Wyd: ${performancePercent}%, Morale: ${moraleText})</span>
-                    <button onclick="fireEmployee(${emp.id})" style="font-size: 11px; padding: 2px 5px; background-color: #ffdddd;">Zwolnij</button>
-                `;
-                employeeList.appendChild(li);
-            });
-        } else {
-            employeeList.innerHTML = '<li>Brak pracowników.</li>';
-        }
-
-        // Lista sprzętu
-        const equipmentList = document.getElementById('equipment-list');
-        const equipmentCountSpan = document.getElementById('equipment-count');
-        const employeeSlotsSpan = document.getElementById('employee-slots-for-equipment');
-        equipmentList.innerHTML = '';
-        const totalEquipment = playerCompany.equipment.reduce((sum, eq) => sum + eq.quantity, 0);
-        equipmentCountSpan.textContent = totalEquipment;
-        employeeSlotsSpan.textContent = playerCompany.employees.length; // Max sprzętu = liczba pracowników
-
-        if (playerCompany.equipment.length > 0) {
-            playerCompany.equipment.forEach(eq => {
-                const li = document.createElement('li');
-                li.textContent = `- ${eq.name}: ${eq.quantity} szt.`;
-                equipmentList.appendChild(li);
-            });
-        } else {
-            equipmentList.innerHTML = '<li>Brak sprzętu.</li>';
-        }
-
-        // Wypełnienie selecta sprzętu
-        const equipmentSelect = document.getElementById('equipment-select');
-        equipmentSelect.innerHTML = ''; // Wyczyść opcje
-        for (const id in EQUIPMENT_TYPES) {
-            const eq = EQUIPMENT_TYPES[id];
-            const option = document.createElement('option');
-            option.value = id;
-            option.textContent = `${eq.name} (${eq.purchaseCost} PLN)`;
-            equipmentSelect.appendChild(option);
-        }
-
-        // Dział HR
-        const hrLevelSpan = document.getElementById('hr-level');
-        const hrReductionSpan = document.getElementById('hr-salary-reduction');
-        const hrCostSpan = document.getElementById('hr-upgrade-cost');
-        const hrUpgradeBtn = document.getElementById('upgrade-hr-btn');
-        const hrCostP = document.getElementById('hr-upgrade-cost-p');
-
-        hrLevelSpan.textContent = playerCompany.hrLevel;
-        hrReductionSpan.textContent = `${playerCompany.hrLevel * 5}%`;
-
-        if (playerCompany.hrLevel < 10) {
-            const upgradeCost = 5000 * Math.pow(2, playerCompany.hrLevel); // Przykładowy rosnący koszt
-            hrCostSpan.textContent = upgradeCost.toLocaleString('pl-PL');
-            hrUpgradeBtn.disabled = playerCash < upgradeCost;
-            hrUpgradeBtn.style.display = 'inline-block';
-            hrCostP.style.display = 'block';
-        } else {
-            hrCostSpan.textContent = 'MAX';
-            hrUpgradeBtn.disabled = true;
-            hrUpgradeBtn.style.display = 'none';
-            hrCostP.style.display = 'none';
-        }
-
-        // Przycisk IPO (bez zmian)
-        const ipoBtn = document.getElementById('ipo-btn');
-        ipoBtn.disabled = playerCompany.value < 25000;
-        // --- KONIEC NOWEJ LOGIKI ---
-
-    } else if (workLevel === 3) {
-        // Poziom 3: panel aktywny i pasywny (bez zmian)
-        activePanel.style.display = 'block';
-        passivePanel.style.display = 'block';
-        separator.style.display = 'block';
-        startWorkMinigame();
-        updatePassiveWorkUI();
-    } else {
-        // Poziom 1 i 2: panel aktywny (bez zmian)
-        activePanel.style.display = 'block';
-        startWorkMinigame();
-    }
-    modal.style.display = 'block';
-}
-
-// Nowa funkcja do kupowania wybranego sprzętu
-function buySelectedEquipment() {
-    const select = document.getElementById('equipment-select');
-    if (select.value) {
-        buyEquipment(select.value, 1); // Kupujemy jedną sztukę
-    }
-}
-
-// Nowa funkcja do ulepszania HR
-function upgradeHR() {
-    if (!playerCompany || playerCompany.hrLevel >= 10) return;
-    const upgradeCost = 5000 * Math.pow(2, playerCompany.hrLevel);
-    if (playerCash < upgradeCost) {
-        alert("Za mało gotówki na ulepszenie HR!");
-        return;
-    }
-    playerCash -= upgradeCost;
-    playerCompany.hrLevel++;
-    logEvent(`🏢 Ulepszono dział HR do poziomu ${playerCompany.hrLevel}!`);
-    displayCash();
-    openWorkModal(); // Odśwież widok
-}
-
-// Nowe funkcje do obsługi modala zatrudniania
-function openHireModal() {
-    const modal = document.getElementById('hire-employee-modal');
-    document.getElementById('candidate-list').innerHTML = ''; // Wyczyść listę kandydatów
-    modal.style.display = 'block';
-}
-
-function generateCandidates(contractType) {
-    const candidateListDiv = document.getElementById('candidate-list');
-    candidateListDiv.innerHTML = ''; // Wyczyść poprzednich
-    const candidateCount = 3; // Pokaż 3 kandydatów
-
-    for (let i = 0; i < candidateCount; i++) {
-        const isPermanent = contractType === 'permanent';
-        const performanceMultiplier = isPermanent ? getRandomInRange(0.9, 1.4) : getRandomInRange(0.7, 1.1); // Lepsza wydajność na stałe
-        const salaryMultiplier = isPermanent ? getRandomInRange(1.0, 1.3) : getRandomInRange(0.8, 1.0); // Wyższa pensja na stałe
-        const baseSalary = EMPLOYEE_BASE_SALARY;
-
-        const candidate = {
-            name: generateEmployeeName(),
-            performance: performanceMultiplier,
-            salary: baseSalary * salaryMultiplier,
-            contractType: contractType
-        };
-
-        const card = createCandidateCard(candidate);
-        candidateListDiv.appendChild(card);
-    }
-}
-
-function createCandidateCard(candidate) {
-    const card = document.createElement('div');
-    card.style.border = "1px solid #ccc";
-    card.style.padding = "10px";
-    card.style.borderRadius = "5px";
-    card.style.width = "160px";
-    card.style.textAlign = "center";
-
-    const hrLevel = playerCompany ? playerCompany.hrLevel : 0;
-    let performanceText = '??';
-    let salaryText = '??';
-
-    // Logika odkrywania statystyk z HR
-    if (hrLevel >= 8) { // Wysoki poziom HR odkrywa wszystko
-        performanceText = `${Math.round(candidate.performance * 100)}%`;
-        salaryText = `${candidate.salary.toFixed(2)} PLN/tydz.`;
-    } else if (hrLevel >= 4) { // Średni poziom daje zakresy
-        const perfLower = Math.max(70, Math.round(candidate.performance * 100) - 10);
-        const perfUpper = Math.min(150, Math.round(candidate.performance * 100) + 10);
-        performanceText = `${perfLower}-${perfUpper}%`;
-        const salaryLower = Math.max(50, candidate.salary - 15);
-        const salaryUpper = candidate.salary + 15;
-        salaryText = `${salaryLower.toFixed(0)}-${salaryUpper.toFixed(0)} PLN/tydz.`;
-    } else { // Niski poziom daje tylko "gwiazdki" lub ogólniki
-        if (candidate.performance > 1.2) performanceText = '⭐⭐⭐ (Wysoka)';
-        else if (candidate.performance > 0.9) performanceText = '⭐⭐ (Średnia)';
-        else performanceText = '⭐ (Niska)';
-
-        if (candidate.salary > EMPLOYEE_BASE_SALARY * 1.1) salaryText = 'Wysoka';
-        else if (candidate.salary < EMPLOYEE_BASE_SALARY * 0.9) salaryText = 'Niska';
-        else salaryText = 'Średnia';
-    }
-
-    card.innerHTML = `
-        <h5 style="margin: 0 0 5px 0;">${candidate.name}</h5>
-        <p style="font-size: 12px; margin: 3px 0;">Umowa: ${candidate.contractType === 'permanent' ? 'o Pracę' : 'Zlecenie'}</p>
-        <p style="font-size: 12px; margin: 3px 0;">Wydajność: ${performanceText}</p>
-        <p style="font-size: 12px; margin: 3px 0;">Pensja: ${salaryText}</p>
-        <button onclick='confirmHire(${JSON.stringify(candidate)})' style="margin-top: 10px;">Zatrudnij</button>
-    `;
-    return card;
-}
-
-// Nowa funkcja do potwierdzenia zatrudnienia wybranego kandydata
-function confirmHire(candidateData) {
-     if (!playerCompany) return;
-
-     // Koszt zatrudnienia = pierwsza pensja
-     const hiringCost = candidateData.salary;
-     if (playerCash < hiringCost) {
-         alert(`Nie stać Cię na zatrudnienie tego pracownika (wymagana pierwsza pensja: ${hiringCost.toFixed(2)} PLN).`);
-         return;
-     }
-     playerCash -= hiringCost;
-
-     const newEmployee = {
-        id: Date.now() + Math.random(),
-        name: candidateData.name,
-        performance: candidateData.performance,
-        salary: candidateData.salary,
-        morale: getRandomIntInRange(60, 80),
-        status: 'working',
-        contractType: candidateData.contractType,
-        vacationEnds: 0
-    };
-
-    playerCompany.employees.push(newEmployee);
-    logEvent(`👨‍💼 Zatrudniono nowego pracownika: ${newEmployee.name} (${newEmployee.contractType === 'permanent' ? 'Umowa o Pracę' : 'Zlecenie'}). Zapłacono pierwszą pensję ${hiringCost.toFixed(2)} PLN.`);
-    displayCash();
-
-    // Zamknij modal zatrudniania i odśwież panel firmy
-    document.getElementById('hire-employee-modal').style.display='none';
-    if (document.getElementById('work-modal')?.style.display === 'block') {
-        openWorkModal();
-    }
-}
-
-// Funkcja pomocnicza do odświeżania panelu pasywnego
-// Funkcja pomocnicza do odświeżania panelu pasywnego
-function updatePassiveWorkUI() {
-    const progressBar = document.getElementById('passive-work-progress');
-    const rewardInfo = document.getElementById('passive-reward-info');
-    const collectBtn = document.getElementById('collect-reward-btn');
-    const timerSpan = document.getElementById('passive-work-timer'); // Nowy element
-
-    const progressPercent = (workPassiveProgress / PASSIVE_WORK_INTERVAL) * 100;
-    progressBar.value = progressPercent > 100 ? 100 : progressPercent;
-
-    // Nowa logika licznika
-    const remainingTime = PASSIVE_WORK_INTERVAL - workPassiveProgress;
-    const remainingSeconds = Math.max(0, Math.ceil(remainingTime / 1000));
-    if (timerSpan) {
-        timerSpan.textContent = remainingSeconds;
-    }
-
-    if (progressPercent >= 100) {
-        rewardInfo.textContent = "100.00";
-        collectBtn.disabled = false;
-    } else {
-        rewardInfo.textContent = "0.00";
-        collectBtn.disabled = true;
-    }
-}
-
-function startWorkMinigame() {
-    const grid = document.getElementById('work-grid');
-    grid.innerHTML = '';
-    nextNumberToClick = 1;
-    document.getElementById('next-number-info').textContent = nextNumberToClick;
-
-    const numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-
-    // --- NOWA LOGIKA: Tasowanie zależy od poziomu ---
-    // Poziom 1: Tasujemy liczby
-    if (getSkillLevel('work') === 1) {
-        for (let i = numbers.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [numbers[i], numbers[j]] = [numbers[j], numbers[i]];
-        }
-    }
-    // Poziom 2 (i wyższe): Liczby pozostają posortowane
-
-    numbers.forEach(num => {
-        const cell = document.createElement('button');
-        cell.textContent = num;
-        cell.style.padding = '20px';
-        cell.style.fontSize = '18px';
-        cell.style.textAlign = 'center';
-        cell.onclick = () => onNumberClick(num);
-        grid.appendChild(cell);
-    });
-}
-
-function onNumberClick(clickedNumber) {
-    if (clickedNumber === nextNumberToClick) {
-        nextNumberToClick++;
-        document.getElementById('next-number-info').textContent = nextNumberToClick;
-
-        const buttons = document.getElementById('work-grid').children;
-        for (const btn of buttons) {
-            if (parseInt(btn.textContent) === clickedNumber) {
-                btn.disabled = true;
-                btn.style.backgroundColor = '#28a745';
-                btn.style.color = 'white';
-            }
-        }
-
-        if (nextNumberToClick > 10) {
-            // --- NOWA LOGIKA: Nagroda zależy od poziomu ---
-            const workLevel = getSkillLevel('work');
-            const reward = (workLevel >= 2) ? 200 : 100; // Poziom 2 i wyższe dają 200 PLN
-
-            playerCash += reward;
-            logEvent(`✍️ Wykonano zadanie! Otrzymujesz ${reward} PLN.`, 'review');
-            displayCash();
-            alert(`Dobrze wykonana robota! Otrzymujesz ${reward} PLN.`);
-
-            // Zamykamy modal po wykonaniu zadania
-            document.getElementById('work-modal').style.display = 'none';
-        }
-    }
-}
 
 function updateDividendTrackerButtonVisibility() {
     const btn = document.getElementById('open-dividend-tracker-btn');
     if (!btn) return;
-    btn.style.display = getSkillLevel('dividendAnalyst') > 0 ? 'inline-block' : 'none';
+    // 0.13.1 (B8): panel zawsze dostępny; szkolenie odkrywa terminy i szacunki ogłoszonych wypłat.
+    btn.style.display = 'inline-block';
+    btn.title = getSkillLevel('dividendAnalyst') > 0 ? 'Panel Analityka Dywidend' : 'Panel dywidend (szkolenie „Analityk Dywidend” pokaże terminy i szacunki)';
 }
 
 function renderDividendTrackerContent() {
@@ -2043,23 +2101,45 @@ function renderDividendTrackerContent() {
     body.innerHTML = '';
     const skillLvl = getSkillLevel('dividendAnalyst');
 
+    // Bez szkolenia: spółki, które ostatnio wypłaciły dywidendę (stopa z ostatniego roku) + zachęta do szkolenia.
+    if (skillLvl < 1) {
+        const payers = stocks.filter(s => !s.isBankrupt && !s.assetType && s.lastDividend)
+            .map(s => ({ s, dy: typeof getTrailingDividendYield === 'function' ? getTrailingDividendYield(s) : (s.lastDividend.yield || 0) }))
+            .sort((a, b) => b.dy - a.dy).slice(0, 15);
+        const info = body.insertRow().insertCell();
+        info.colSpan = 5;
+        info.className = 'text-center text-sm text-muted';
+        info.textContent = '🔒 Szkolenie „Analityk Dywidend” (CV i szkolenia) pokaże ogłoszone wypłaty, czas do dnia odcięcia i szacowaną kwotę.';
+        payers.forEach(({ s, dy }) => {
+            const row = body.insertRow();
+            row.insertCell().textContent = s.isDividendAristocrat ? `👑 ${s.name}` : s.name;
+            row.insertCell().textContent = getDividendPolicyLabel(s.dividendPolicy);
+            row.insertCell().textContent = s.pendingDividend ? 'ogłoszona' : '—';
+            row.insertCell().textContent = `ostatnio ${s.lastDividend.dps.toFixed(4)} PLN`;
+            row.insertCell().textContent = `${(dy * 100).toFixed(2)}%`;
+        });
+        if (!payers.length) { const cell = body.insertRow().insertCell(); cell.colSpan = 5; cell.className = 'text-center'; cell.textContent = 'Jeszcze żadna spółka nie wypłaciła dywidendy.'; }
+        return;
+    }
+
+    // Ogłoszone (oczekujące) dywidendy i REIT-y — najbliższe wypłaty na górze.
     const dividendStocks = stocks
-        .filter(s => (s.dividendPolicy && s.dividendPolicy !== 'Growth') || s.assetType === 'REIT')
+        .filter(s => !s.isBankrupt && (s.pendingDividend || s.assetType === 'REIT'))
         .sort((a, b) => a.dividendTimer - b.dividendTimer);
 
     if (dividendStocks.length === 0) {
         const row = body.insertRow();
         const cell = row.insertCell();
-        cell.colSpan = 4;
-        cell.textContent = "Brak spółek dywidendowych na rynku lub wymaganego poziomu umiejętności.";
-        cell.style.textAlign = "center";
+        cell.colSpan = 5;
+        cell.textContent = "Teraz żadna spółka nie ma ogłoszonej dywidendy — zarządy ogłaszają je po raportach kwartalnych.";
+        cell.classList.add('text-center');
         return;
     }
 
     dividendStocks.forEach(stock => {
         const row = body.insertRow();
-        row.insertCell().textContent = stock.name;
-        row.insertCell().textContent = stock.assetType === 'REIT' ? 'REIT (Częsta)' : stock.dividendPolicy;
+        row.insertCell().textContent = stock.isDividendAristocrat ? `👑 ${stock.name}` : stock.name;
+        row.insertCell().textContent = stock.assetType === 'REIT' ? 'REIT (co 2 min)' : getDividendPolicyLabel(stock.dividendPolicy);
 
         // ⏳ Czas do wypłaty
         const timeLeftCell = row.insertCell();
@@ -2084,6 +2164,11 @@ function renderDividendTrackerContent() {
         } else {
             estimateCell.textContent = "???";
         }
+
+        // 📈 Stopa dywidendy (dywidenda / cena)
+        const yieldCell = row.insertCell();
+        const dps = Number(stock.estimatedDividend) || 0;
+        yieldCell.textContent = skillLvl >= 3 && stock.price > 0 ? `${(dps / stock.price * 100).toFixed(2)}%` : '???';
     });
 }
 
@@ -2093,37 +2178,16 @@ function openDividendTrackerModal() {
     modal.style.display = 'flex'; // ważne! nie 'block', bo w CSS masz flex
 }
 
-function openRescueOfferingModal(offerDetails) {
-    const modal = document.getElementById('rescue-offering-modal');
-    const message = document.getElementById('rescue-offering-message');
-
-    // Destrukturyzacja obiektu dla łatwiejszego dostępu
-    const { targetCompany, sharesOffered, promotionalPrice, totalCost } = offerDetails;
-
-    // Tworzenie treści wiadomości
-    message.innerHTML = `Spółka <strong>${targetCompany.name}</strong>, w której masz udziały, jest w tarapatach! <br><br>
-        Aby spłacić długi, oferują Ci zakup <strong>${sharesOffered}</strong> nowych akcji po promocyjnej cenie <strong>${promotionalPrice.toFixed(2)} PLN</strong> za sztukę. <br><br>
-        Całkowity koszt: <strong>${totalCost.toFixed(2)} PLN</strong>. <br><br>
-        Czy chcesz skorzystać z okazji i pomóc firmie?`;
-
-    // Ustawienie akcji dla przycisków
-    document.getElementById('accept-rescue-btn').onclick = () => acceptRescueOffer(offerDetails);
-    document.getElementById('decline-rescue-btn').onclick = () => declineRescueOffer(offerDetails);
-
-    modal.style.display = 'block';
-}
-
 function displayStartups(previousInputValues = {}) {
     const startupPanel = document.getElementById('startup-incubator-panel');
     const startupTableBody = document.getElementById('startup-table-body');
     if (!startupTableBody || !startupPanel) return;
 
-    if (!isSkillUnlocked('startupInvestor')) {
-        startupPanel.style.display = 'none';
-        return;
-    } else {
-        startupPanel.style.display = 'block';
-    }
+    // Inkubator: inwestuje fundusz (limit 10% aktywów); szkolenie „Anioł Biznesu” daje tylko bonusy.
+    startupPanel.style.display = FEATURE_FLAGS.startups ? 'block' : 'none';
+    if (!FEATURE_FLAGS.startups) return;
+    const limitInfo = document.getElementById('startup-fund-limit');
+    if (limitInfo) limitInfo.textContent = `Fundusz w startupach: ${getFundStartupExposure().toFixed(0)} zł z limitu ${(getFundAssets() * STARTUP_FUND_LIMIT).toFixed(0)} zł (${(STARTUP_FUND_LIMIT * 100).toFixed(0)}% aktywów).` + (getCrowdingPressure() > 0 ? ` 🧱 Rynek nasycony (${getListedCompanyCount()}/${LISTING_SOFT_CAP} spółek): finansowanie startupów mniejsze o ${((1 - getStartupFundingFactor()) * 100).toFixed(0)}%, cele zbiórek wyższe.` : '');
 
     const startups = stocks.filter(s => s.assetType === 'Startup');
     startupTableBody.innerHTML = '';
@@ -2148,7 +2212,7 @@ function displayStartups(previousInputValues = {}) {
         // --- KONIEC LOGIKI DLA POZIOMU 3 i 6 ---
 
         if (startup.isScamDetected) {
-            row.style.backgroundColor = '#FFD2D2';
+            
             row.title = 'UWAGA! Ten start-up to prawdopodobnie oszustwo!';
         }
 
@@ -2158,7 +2222,7 @@ function displayStartups(previousInputValues = {}) {
         if (startup.isPrivatized) {
             nameHTML += ` <span title="Projekt sprywatyzowany. Sukces gwarantowany, ale możliwe komplikacje.">🏢</span>`;
         }
-        nameHTML += ` <button onclick="openInvestorsModal('${startup.symbol}')" style="margin-left: 10px; padding: 2px 6px; font-size: 12px;">🏆 Ranking</button>`;
+        nameHTML += ` <button onclick="openInvestorsModal('${startup.symbol}')" class="ml-2 btn-xs text-sm">🏆 Ranking</button>`;
         nameCell.innerHTML = nameHTML;
 
         // Komórka 2: Cel Finansowania
@@ -2172,15 +2236,15 @@ function displayStartups(previousInputValues = {}) {
         const amountInput = document.createElement('input');
         amountInput.type = 'number';
         amountInput.placeholder = 'Kwota';
-        amountInput.style.width = '80px';
+        amountInput.classList.add('w-sm');
         amountInput.id = `invest-amount-${startup.symbol}`;
         amountInput.value = previousInputValues[startup.symbol] || '';
         const investButton = document.createElement('button');
 
         switch (startup.stage) {
             case 'funding': {
-                fundingCell.innerHTML = `${startup.currentFunding.toFixed(2)} PLN <progress value="${startup.currentFunding}" max="${startup.fundingGoal}" style="width: 100%;"></progress>`;
-                progressCell.innerHTML = `<progress value="0" max="100" style="width: 100%;"></progress>`;
+                fundingCell.innerHTML = `${startup.currentFunding.toFixed(2)} PLN <progress value="${startup.currentFunding}" max="${startup.fundingGoal}" class="w-full"></progress>`;
+                progressCell.innerHTML = `<progress value="0" max="100" class="w-full"></progress>`;
                 investButton.textContent = 'Zainwestuj';
                 investButton.onclick = () => {
                     const amount = parseFloat(amountInput.value);
@@ -2196,7 +2260,7 @@ function displayStartups(previousInputValues = {}) {
                     const privatizeButton = document.createElement('button');
                     privatizeButton.textContent = '🏢 Prywatyzuj';
                     privatizeButton.title = 'Wykup projekt na wyłączność. Gwarantuje to sukces, ale wprowadza ryzyko dodatkowych kosztów lub opóźnień.';
-                    privatizeButton.style.marginLeft = '4px';
+                    privatizeButton.classList.add('ml-1');
                     privatizeButton.onclick = () => privatizeStartup(startup.symbol);
                     actionsCell.appendChild(privatizeButton);
                 }
@@ -2206,9 +2270,9 @@ function displayStartups(previousInputValues = {}) {
                 const autoInvestButton = document.createElement('button');
                 autoInvestButton.textContent = '🔄';
                 autoInvestButton.title = 'Ustaw automatyczne inwestowanie';
-                autoInvestButton.style.marginLeft = '4px';
+                autoInvestButton.classList.add('ml-1');
                 if (autoInvestSettings && autoInvestSettings.isEnabled) {
-                    autoInvestButton.style.borderColor = '#28a745';
+                    autoInvestButton.style.borderColor = 'var(--color-up)';
                     autoInvestButton.style.borderWidth = '2px';
                 }
                 autoInvestButton.onclick = () => openStartupAutoInvestModal(startup.symbol);
@@ -2218,35 +2282,43 @@ function displayStartups(previousInputValues = {}) {
             }
 
             case 'development':
-                fundingCell.innerHTML = `<strong style="color: #007bff;">W trakcie rozwoju...</strong>`;
+                fundingCell.innerHTML = `<strong class="text-info">W trakcie rozwoju...</strong>`;
 
                 if (startup.pendingExtraCost) {
-                    progressCell.innerHTML = `<span style="color: red; font-weight: bold;">WSTRZYMANO</span>`;
+                    progressCell.innerHTML = `<span class="text-down fw-bold">WSTRZYMANO</span>`;
                     actionsCell.innerHTML = `<span>Wymaga: ${startup.pendingExtraCost.toFixed(2)} PLN</span>
                                            <button onclick="payExtraStartupCost('${startup.symbol}')">Zapłać</button>`;
                 } else if (startup.developmentPausedUntil && Date.now() < startup.developmentPausedUntil) {
                     const timeLeft = Math.ceil((startup.developmentPausedUntil - Date.now()) / 1000);
-                    progressCell.innerHTML = `<span style="color: orange;">OPÓŹNIENIE (${timeLeft}s)</span>`;
+                    progressCell.innerHTML = `<span class="text-warn">OPÓŹNIENIE (${timeLeft}s)</span>`;
                     actionsCell.innerHTML = 'Prace wstrzmane';
                 } else {
-                    progressCell.innerHTML = `<progress value="${startup.developmentProgress}" max="100" style="width: 100%;"></progress>`;
+                    progressCell.innerHTML = `<progress value="${startup.developmentProgress}" max="100" class="w-full"></progress>`;
                     actionsCell.innerHTML = 'Zablokowane';
                 }
                 break;
 
+            case 'awaitingListing': { // P1: gotowy do debiutu, giełda pełna
+                const waited = (typeof macro === 'object' ? macro.quarter : 0) - (startup.awaitingListing?.since || 0);
+                fundingCell.innerHTML = `<strong class="text-warn">⏳ Czeka na miejsce na giełdzie</strong>`;
+                progressCell.innerHTML = `<span class="text-sm">${waited}/${AWAITING_LISTING_MAX_QUARTERS} kw. — potem przejęcie przez inwestora</span>`;
+                actionsCell.textContent = `Giełda pełna (${getListedCompanyCount()}/${LISTING_HARD_CAP})`;
+                break;
+            }
+
             case 'financial_complications':
                 const timeLeftFC = Math.max(0, Math.floor(startup.rescueTimeLeft / 1000));
                 fundingCell.innerHTML = `
-                    <strong style="color: #dc3545;">Wymagane dofinansowanie!</strong>
-                    <progress value="${startup.rescueCurrent}" max="${startup.rescueGoal}" style="width: 100%;"></progress>
+                    <strong class="text-down">Wymagane dofinansowanie!</strong>
+                    <progress value="${startup.rescueCurrent}" max="${startup.rescueGoal}" class="w-full"></progress>
                     <span>${startup.rescueCurrent.toLocaleString('pl-PL')} / ${startup.rescueGoal.toLocaleString('pl-PL')} PLN</span>
                 `;
-                progressCell.innerHTML = `<strong style="color: #dc3545;">Pozostały czas: ${timeLeftFC}s</strong>`;
+                progressCell.innerHTML = `<strong class="text-down">Pozostały czas: ${timeLeftFC}s</strong>`;
 
                 const rescueInput = document.createElement('input');
                 rescueInput.type = 'number';
                 rescueInput.placeholder = 'Kwota';
-                rescueInput.style.width = '80px';
+                rescueInput.classList.add('w-sm');
                 const rescueButton = document.createElement('button');
                 rescueButton.textContent = 'Dofinansuj';
                 rescueButton.onclick = () => {
@@ -2267,8 +2339,8 @@ function displayStartups(previousInputValues = {}) {
 
             case 'overfunding': {
                 const timeLeftOF = Math.max(0, Math.floor(startup.overfundingTimeLeft / 1000));
-                fundingCell.innerHTML = `<strong style="color: #28a745;">Cel osiągnięty!</strong><br>Czas na bonus: ${timeLeftOF}s`;
-                progressCell.innerHTML = `<progress value="0" max="100" style="width: 100%;"></progress>`;
+                fundingCell.innerHTML = `<strong class="text-up">Cel osiągnięty!</strong><br>Czas na bonus: ${timeLeftOF}s`;
+                progressCell.innerHTML = `<progress value="0" max="100" class="w-full"></progress>`;
                 investButton.textContent = 'Zainwestuj (Bonus)';
 
                 // Tworzenie przycisku auto-inwestycji (ten kod jest poprawny)
@@ -2276,9 +2348,9 @@ function displayStartups(previousInputValues = {}) {
                 const autoInvestButton = document.createElement('button');
                 autoInvestButton.textContent = '🔄'; // Użyłem sugerowanej przez Ciebie emotki
                 autoInvestButton.title = 'Ustaw automatyczne inwestowanie';
-                autoInvestButton.style.marginLeft = '4px';
+                autoInvestButton.classList.add('ml-1');
                 if (autoInvestSettings && autoInvestSettings.isEnabled) {
-                    autoInvestButton.style.borderColor = '#28a745'; // Zielona ramka dla aktywnych
+                    autoInvestButton.style.borderColor = 'var(--color-up)'; // Zielona ramka dla aktywnych
                     autoInvestButton.style.borderWidth = '2px';
                 }
                 autoInvestButton.onclick = () => openStartupAutoInvestModal(startup.symbol); // To też jest potrzebne!
@@ -2305,7 +2377,7 @@ function displayStartups(previousInputValues = {}) {
             const insuranceButton = document.createElement('button');
             insuranceButton.textContent = '🛡️ Ubezpiecz';
             insuranceButton.title = 'Koszt: 5% Twojej dotychczasowej inwestycji';
-            insuranceButton.style.marginLeft = '4px';
+            insuranceButton.classList.add('ml-1');
             insuranceButton.onclick = () => buyStartupInsurance(startup.symbol);
             actionsCell.appendChild(insuranceButton);
         }
@@ -2328,7 +2400,7 @@ function openInvestorsModal(symbol) {
         .sort(([, a], [, b]) => b - a); // Sortuj malejąco po kwocie
 
     if (sortedInvestors.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="3" style="text-align: center;">Brak inwestorów.</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="3" class="text-center">Brak inwestorów.</td></tr>';
     } else {
         sortedInvestors.forEach(([name, amount], index) => {
             const row = tableBody.insertRow();
@@ -2338,7 +2410,7 @@ function openInvestorsModal(symbol) {
 
             if (name === "Ty (Gracz)") {
                 row.style.fontWeight = 'bold';
-                row.style.backgroundColor = '#E3F2FD'; // Lekkie podświetlenie dla gracza
+                row.classList.add('player-row'); // Dodaj klasę CSS dla gracza
             }
         });
     }
@@ -2380,11 +2452,11 @@ function displayInvestmentPool() {
             const name = id === 'player' ? 'Ty (Gracz)' : aiCompetitors.find(a => a.id === id)?.name || 'Nieznany AI';
 
             const barContainer = document.createElement('div');
-            barContainer.style.marginBottom = '5px';
+            barContainer.classList.add('mb-1');
             barContainer.innerHTML = `
                 <span>${name}: ${amount.toLocaleString('pl-PL')} PLN</span>
-                <div style="width: 100%; background-color: #eee;">
-                    <div style="width: ${percentage}%; background-color: #007bff; color: white; text-align: right; padding-right: 5px; box-sizing: border-box;">
+                <div class="w-full bg-muted">
+                    <div style="width: ${percentage}%" class="bg-info text-on-accent text-right">
                         ${percentage.toFixed(1)}%
                     </div>
                 </div>
@@ -2405,10 +2477,10 @@ function updateAutoInvestStatus() {
 
     if (playerAutoInvest.isEnabled) {
         statusEl.innerHTML = `✅ Aktywne: <strong>${playerAutoInvest.amount} PLN</strong> co <strong>${playerAutoInvest.interval / 1000}s</strong>`;
-        statusEl.style.color = '#28a745';
+        statusEl.style.color = 'var(--color-up)';
     } else {
         statusEl.textContent = '❌ Nieaktywne';
-        statusEl.style.color = '#dc3545';
+        statusEl.style.color = 'var(--color-down)';
     }
 }
 
@@ -2455,10 +2527,10 @@ function setupAutoInvestModal() {
     function updateToggleButton() {
         if (playerAutoInvest.isEnabled) {
             toggleBtn.textContent = 'Wyłącz Automatyzację';
-            toggleBtn.style.backgroundColor = '#dc3545';
+            toggleBtn.style.backgroundColor = 'var(--color-down)';
         } else {
             toggleBtn.textContent = 'Włącz Automatyzację';
-            toggleBtn.style.backgroundColor = '#28a745';
+            toggleBtn.style.backgroundColor = 'var(--color-up)';
         }
     }
 }
@@ -2510,7 +2582,7 @@ function openStartupOfferModal(offerDetails) {
     newAcceptBtn.onclick = () => {
         const amount = document.getElementById('startup-offer-amount').valueAsNumber;
         if (isNaN(amount) || amount <= 0) {
-            alert("Proszę wpisać poprawną, dodatnią kwotę inwestycji.");
+            showToast("Proszę wpisać poprawną, dodatnią kwotę inwestycji.");
             return;
         }
         acceptStartupOffer(startup.symbol, amount, offer.type, offer.value);
@@ -2557,10 +2629,10 @@ function openStartupAutoInvestModal(symbol) {
     function updateToggleButton() {
         if (settings.isEnabled) {
             toggleBtn.textContent = 'Wyłącz Automatyzację';
-            toggleBtn.style.backgroundColor = '#dc3545';
+            toggleBtn.style.backgroundColor = 'var(--color-down)';
         } else {
             toggleBtn.textContent = 'Włącz Automatyzację';
-            toggleBtn.style.backgroundColor = '#28a745';
+            toggleBtn.style.backgroundColor = 'var(--color-up)';
         }
     }
     updateToggleButton();
@@ -2587,63 +2659,6 @@ function openStartupAutoInvestModal(symbol) {
     modal.style.display = 'block';
 }
 
-function updateChartTypeButtons() {
-    const candlestickBtn = document.getElementById('chart-type-candlestick-btn');
-    const lineBtn = document.getElementById('chart-type-line-btn');
-
-    if (candlestickBtn && lineBtn) {
-        if (playerChartSettings.type === 'candlestick') {
-            candlestickBtn.style.borderColor = '#007bff'; // Aktywny
-            lineBtn.style.borderColor = 'transparent'; // Nieaktywny
-        } else {
-            candlestickBtn.style.borderColor = 'transparent';
-            lineBtn.style.borderColor = '#007bff';
-        }
-    }
-}
-
-function openStockDetailModal(stockSymbol) {
-    const stock = stocks.find(s => s.symbol === stockSymbol);
-    if (!stock) {
-        return;
-    }
-
-    const modal = document.getElementById('stock-detail-modal');
-    modal.style.display = 'block';
-
-    document.getElementById('stock-detail-name').textContent = stock.name;
-    document.getElementById('stock-detail-symbol').textContent = stock.symbol;
-    document.getElementById('stock-detail-price').textContent = `Cena: ${stock.price.toFixed(2)} PLN`;
-    document.getElementById('stock-detail-volatility').textContent = `Zmienność: ${stock.volatilityFactor.toFixed(2)}`;
-    document.getElementById('stock-detail-sector').textContent = `Sektor: ${stock.sector.join(', ')}`;
-    document.getElementById('stock-detail-ceo').textContent = `CEO: ${stock.ceo}`;
-    document.getElementById('stock-detail-desc').textContent = stock.description;
-
-    const chartContainer = document.getElementById('stock-chart-svg');
-    renderChartSVGForStock(stock, chartContainer, 400, 200); // Rysuj wykres przy otwarciu
-
-    // --- NOWY FRAGMENT - OBSŁUGA PRZYCISKÓW WYKRESÓW ---
-    const candlestickBtn = document.getElementById('chart-type-candlestick-btn');
-    const lineBtn = document.getElementById('chart-type-line-btn');
-
-    if (candlestickBtn) {
-        candlestickBtn.onclick = () => {
-            playerChartSettings.type = 'candlestick';
-            updateChartTypeButtons();
-            renderChartSVGForStock(stock, chartContainer, 400, 200);
-        };
-    }
-    if (lineBtn) {
-        lineBtn.onclick = () => {
-            playerChartSettings.type = 'line';
-            updateChartTypeButtons();
-            renderChartSVGForStock(stock, chartContainer, 400, 200);
-        };
-    }
-    updateChartTypeButtons(); // Ustaw początkowe zaznaczenie
-    // --- KONIEC NOWEGO FRAGMENTU ---
-}
-
 // Ta funkcja jest zduplikowana w obu plikach, ale jest identyczna. Zostawiamy jedną.
 function updateChartTypeButtons() {
     const candlestickBtn = document.getElementById('chart-type-candlestick-btn');
@@ -2651,148 +2666,237 @@ function updateChartTypeButtons() {
 
     if (!candlestickBtn || !lineBtn) return;
 
-    // Zresetuj style obu przycisków
-    candlestickBtn.style.backgroundColor = 'transparent';
-    lineBtn.style.backgroundColor = 'transparent';
-    candlestickBtn.style.border = '2px solid transparent';
-    lineBtn.style.border = '2px solid transparent';
-
-    // Ustaw styl dla aktywnego przycisku
-    if (playerChartSettings.type === 'candlestick') {
-        candlestickBtn.style.backgroundColor = '#e0e0e0';
-        candlestickBtn.style.border = '2px solid #007bff';
-    } else {
-        lineBtn.style.backgroundColor = '#e0e0e0';
-        lineBtn.style.border = '2px solid #007bff';
-    }
+    // Aktywny typ wykresu — klasa zamiast stylów (motyw jasny/ciemny).
+    candlestickBtn.classList.add('chart-type-btn');
+    lineBtn.classList.add('chart-type-btn');
+    candlestickBtn.classList.toggle('active', playerChartSettings.type === 'candlestick');
+    lineBtn.classList.toggle('active', playerChartSettings.type !== 'candlestick');
 }
 
-function toggleDarkMode() {
-    document.body.classList.toggle('dark-mode');
+// Motyw: ciemny domyślnie; wybór gracza zapamiętany w przeglądarce (wygoda, nie stan gry).
+const THEME_KEY = 'gra_inwestycyjna_theme';
+let currentTheme = 'dark';
 
-    // Zapisz wybór w pamięci przeglądarki
-    if (document.body.classList.contains('dark-mode')) {
-        localStorage.setItem('theme', 'dark');
-    } else {
-        localStorage.setItem('theme', 'light');
-    }
+function toggleDarkMode() {
+  currentTheme = document.body.classList.contains('dark-mode') ? 'light' : 'dark';
+  try { localStorage.setItem(THEME_KEY, currentTheme); } catch (e) { /* brak dostępu do pamięci */ }
+  document.body.classList.toggle('dark-mode', currentTheme === 'dark');
 }
 
 function applyInitialTheme() {
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'dark') {
-        document.body.classList.add('dark-mode');
-    }
+  try { currentTheme = localStorage.getItem(THEME_KEY) || currentTheme; } catch (e) { /* zostaje domyślny */ }
+  document.body.classList.toggle('dark-mode', currentTheme === 'dark');
 }
 
-function openDescriptionModal(symbol) {
+// =================================================================================
+// U2: KARTA SPÓŁKI (okno informacji): nagłówek, kafelki wskaźników, zakładki
+// =================================================================================
+
+let companyCardView = { symbol: null, tab: 'overview' };
+
+const COMPANY_CARD_TABS = [
+    ['overview', '📋 Przegląd'],
+    ['finance', '📊 Finanse'],
+    ['owners', '👥 Akcjonariat'],
+    ['manage', '🏛️ Zarządzanie'],
+    ['workforce', '👷 Zatrudnienie']
+];
+
+function openDescriptionModal(symbol, tab = null) {
     const stock = stocks.find(s => s.symbol === symbol);
-    if (!stock) return;
-    console.log(`[MODAL_DESC] Otwieranie opisu dla: ${symbol}`, stock);
-
     const modal = document.getElementById('description-modal');
-    document.getElementById('description-modal-title').textContent = `${stock.name} (${stock.symbol})`;
-    document.getElementById('description-modal-content').innerHTML = assembleDescription(stock);
-
-    const phaseInfoDiv = document.getElementById('description-modal-phase'); // Potrzebny nowy div w HTML
-    console.log(`[MODAL_DESC] ${symbol} - Wartość stock.corporatePhase:`, stock.corporatePhase);
-    if (phaseInfoDiv && stock.corporatePhase) {
-         phaseInfoDiv.innerHTML = `<strong>Faza cyklu życia:</strong> ${stock.corporatePhase}`;
-         // Można dodać kolorowanie w zależności od fazy
-         if(stock.corporatePhase === CORPORATE_PHASES.GOLDEN_YEAR || stock.corporatePhase === CORPORATE_PHASES.GROWTH) phaseInfoDiv.style.color = '#28a745';
-         else if(stock.corporatePhase === CORPORATE_PHASES.DECLINE || stock.corporatePhase === CORPORATE_PHASES.SHADOW_DESCENT) phaseInfoDiv.style.color = '#dc3545';
-         else phaseInfoDiv.style.color = ''; // Domyślny kolor
-
-         phaseInfoDiv.style.display = 'block';
-    } else if (phaseInfoDiv) {
-        phaseInfoDiv.style.display = 'none';
-        console.log(`[MODAL_DESC] ${symbol} - Ukrywanie sekcji fazy (brak elementu lub brak danych)`);
-    }
-
-    const ceoInfoDiv = document.getElementById('description-modal-ceo');
-    ceoInfoDiv.innerHTML = ''; // Wyczyśćmy na start
-
-    if (stock.ceo && stock.ceo.name) {
-        const tenureYears = Math.floor(stock.ceo.tenure / 4);
-        let ceoHTML = `
-            <div style="text-align: center; margin-bottom: 10px;">
-                <h3 style="margin: 0;">${stock.ceo.name}</h3>
-                <p style="margin: 5px 0; font-size: 12px; color: #666;">Wiek: ${stock.ceo.age}, Staż w firmie: ${tenureYears} lat</p>
-            </div>
-        `;
-        if (stock.ceo.traits && stock.ceo.traits.length > 0) {
-            ceoHTML += `<h4>Cechy:</h4><div class="ceo-traits-container">`;
-            stock.ceo.traits.forEach(trait => {
-                const traitData = ceoTraits[trait.id];
-                if (traitData) {
-                    ceoHTML += `<span class="ceo-trait" style="background-color: ${traitData.color};" title="${traitData.description}">${traitData.name}</span>`;
-                }
-            });
-            ceoHTML += '</div>';
-        }
-        ceoInfoDiv.innerHTML = ceoHTML;
-        ceoInfoDiv.style.display = 'block';
-    } else {
-        ceoInfoDiv.style.display = 'none';
-    }
-
-    const analyticalDiv = document.getElementById('description-modal-analytical');
-    analyticalDiv.innerHTML = '';
-    let indicatorsHTML = '<h4>Kluczowe Wskaźniki Finansowe:</h4>';
-    let indicatorsAdded = false;
-
-    console.log(`[MODAL_DESC] ${symbol} - Dane do wskaźników: balanceSheet=`, stock.balanceSheet, `quarterlyEarnings=`, stock.quarterlyEarnings, `totalShares=`, stock.totalShares);
-
-    // Sprawdzamy, czy spółka ma zaimplementowany bilans
-    if (stock.balanceSheet && stock.balanceSheet.assets > 0) {
-        // 1. Kapitalizacja Rynkowa
-        const marketCap = stock.price * stock.totalShares;
-        indicatorsHTML += `<p><strong>Kapitalizacja rynkowa:</strong> ${marketCap.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN</p>`;
-
-        // 2. Wskaźnik Ceny do Zysku (C/Z, P/E)
-        const earningsPerShare = stock.quarterlyEarnings / stock.totalShares;
-        let peRatio_display = "N/A"; // Domyślna wartość (Not Applicable)
-        if (earningsPerShare > 0) {
-            const peRatio = stock.price / earningsPerShare;
-            peRatio_display = peRatio.toFixed(2);
-        } else if (stock.quarterlyEarnings < 0) {
-            peRatio_display = "Strata";
-        }
-        indicatorsHTML += `<p><strong>Cena/Zysk (C/Z):</strong> ${peRatio_display}</p>`;
-
-        // 3. Wskaźnik Aktywów do Pasywów
-        let assetsToLiabilities_display = "∞"; // Nieskończoność, jeśli brak długu
-        if (stock.balanceSheet.liabilities > 0) {
-            const ratio = stock.balanceSheet.assets / stock.balanceSheet.liabilities;
-            assetsToLiabilities_display = ratio.toFixed(2);
-        }
-        indicatorsHTML += `<p><strong>Aktywa / Pasywa:</strong> ${assetsToLiabilities_display}</p>`;
-
-        indicatorsAdded = true;
-        console.log(`[MODAL_DESC] ${symbol} - Wskaźniki obliczone.`); // <--- LOG 4
-    } else {
-        console.log(`[MODAL_DESC] ${symbol} - Warunki do obliczenia wskaźników niespełnione.`); // <--- LOG 5
-    }
-
-    if (indicatorsAdded) {
-        analyticalDiv.innerHTML = indicatorsHTML;
-        analyticalDiv.style.display = 'block';
-    } else {
-        analyticalDiv.style.display = 'none';
-        console.log(`[MODAL_DESC] ${symbol} - Ukrywanie sekcji wskaźników.`); // <--- LOG 6
-    }
-    // --- KONIEC NOWEJ LOGIKI WSKAŹNIKÓW ---
-
-    const researchInfoDiv = document.getElementById('description-modal-research');
-    if (stock.research && stock.research.isResearching && stock.research.currentTech) {
-        const techName = technologies[stock.research.currentTech].name;
-        researchInfoDiv.innerHTML = `🔬 Aktualnie w fazie R&D: <strong>${techName}</strong>`;
-        researchInfoDiv.style.display = 'block';
-    } else {
-        researchInfoDiv.style.display = 'none';
-    }
-
+    if (!stock || !modal) return;
+    if (companyCardView.symbol !== symbol) companyCardView.tab = 'overview';
+    companyCardView.symbol = symbol;
+    if (tab) companyCardView.tab = tab;
+    renderCompanyCard();
     modal.style.display = 'block';
+}
+
+function setCompanyCardTab(tab) {
+    companyCardView.tab = tab;
+    renderCompanyCard();
+}
+
+function formatRatio(value, eps) {
+    if (value === null || value === undefined || !Number.isFinite(value)) return eps < 0 ? 'strata' : '—';
+    return value.toFixed(1);
+}
+
+function renderCompanyCard() {
+    const stock = stocks.find(s => s.symbol === companyCardView.symbol);
+    if (!stock) return;
+    // U3: każda notowana spółka (także państwowa i miejska) ma bilans i wyniki do wskaźników.
+    if (!stock.assetType || stock.assetType === 'Holding') {
+        if (!stock.balanceSheet && typeof initializeBalanceSheetForStock === 'function') initializeBalanceSheetForStock(stock);
+        if (!stock.fundamentals && stock.balanceSheet && typeof initializeFundamentals === 'function') initializeFundamentals(stock, true);
+    }
+    const f = stock.fundamentals ? updateFundamentalRatios(stock) : null;
+    const week = getStockChangePct(stock, 1);
+    const sector = (stock.sector || []).join(', ') || '—';
+    const exchange = exchanges[stock.exchange]?.name || stock.exchange || '—';
+    const health = Number(stock.financialHealth) || 0;
+    const healthLabel = health >= 3 ? 'bardzo dobra' : health >= 1 ? 'dobra' : health > -1 ? 'przeciętna' : health > -3 ? 'słaba' : 'krytyczna';
+    const dividendYield = typeof getTrailingDividendYield === 'function' ? getTrailingDividendYield(stock) : 0;
+    const debtRatio = stock.balanceSheet?.assets > 0 ? stock.balanceSheet.liabilities / stock.balanceSheet.assets : null;
+
+    document.getElementById('company-card-header').innerHTML = `
+        <div class="cc-header">
+            <div>
+                <h2 class="m-0">${escapeHtml(stock.name)} <span class="text-muted text-sm">${escapeHtml(stock.symbol)}</span></h2>
+                <div class="text-sm text-muted">${escapeHtml(sector)} · ${escapeHtml(exchange)}${stock.isStateOwned ? ' · 🏛️ Skarb Państwa' : ''}${stock.ceo?.name ? ` · prezes ${escapeHtml(stock.ceo.name)}` : ''}</div>
+            </div>
+            <div class="cc-price">
+                <strong>${formatZl(stock.price)}</strong>
+                <span class="${week > 0 ? 'text-up' : week < 0 ? 'text-down' : 'text-muted'}">${week >= 0 ? '+' : ''}${(week * 100).toFixed(2)}% tydz.</span>
+            </div>
+        </div>
+        ${typeof renderDividendBadges === 'function' ? renderDividendBadges(stock) : ''}
+        ${stock.pendingDividend ? `<p class="text-sm cc-exdiv">✂️ Ogłoszona dywidenda <strong>${stock.pendingDividend.dps.toFixed(2)} zł/akcję</strong> — dzień odcięcia za ok. ${Math.max(1, Math.round(stock.dividendTimer / BASE_DELAYS.weekly))} tydz. gry. Dywidendę dostaje, kto ma akcje w dniu odcięcia; tego dnia kurs spada o mniej więcej jej wartość.</p>` : ''}`;
+
+    // N1: porównanie z medianą sektora pod wartością kafelka.
+    const med = typeof getSectorMedians === 'function' ? getSectorMedians(stock.sector?.[0]) : null;
+    const vs = (value, sectorValue, options) => { const c = med && typeof compareWithSector === 'function' ? compareWithSector(value, sectorValue, options) : null; return c ? `<em class="${c.cls}">${c.text}</em>` : ''; };
+    const tile = (label, value, hint, cls = '', extra = '') => `<div class="cc-kpi" title="${escapeHtml(hint)}"><span>${label}</span><strong class="${cls}">${value}</strong>${extra}</div>`;
+    const pctFmt = v => `${(v * 100).toFixed(1)}%`;
+    document.getElementById('company-card-kpis').innerHTML = [
+        tile('Kapitalizacja', formatZl(getMarketCapValue(stock), 0), 'Kurs × liczba akcji: ile rynek płaci za całą spółkę.'),
+        tile('C/Z', formatRatio(f?.peRatio, f?.epsTtm), 'Cena / zysk na akcję z 4 kwartałów. Niżej = taniej względem zysków (porównuj w sektorze).', '', vs(f?.peRatio > 0 ? f.peRatio : NaN, med?.pe)),
+        tile('C/WK', f?.pbRatio ? f.pbRatio.toFixed(2) : '—', 'Cena / wartość księgowa na akcję. Poniżej 1 = rynek wycenia spółkę niżej niż jej majątek netto.', '', vs(f?.pbRatio, med?.pb, { format: v => v.toFixed(2) })),
+        tile('Stopa dywidendy', `${(dividendYield * 100).toFixed(2)}%`, 'Dywidendy z ostatniego roku / kurs.', '', dividendYield > 0 ? vs(dividendYield, med?.dy, { lowerIsCheap: false, format: pctFmt, labels: ['wyższa', 'niższa'] }) : ''),
+        tile('Zadłużenie', debtRatio === null ? '—' : `${(debtRatio * 100).toFixed(0)}%`, 'Zobowiązania / aktywa. Powyżej ~70% spółka jest mocno zadłużona.', debtRatio > 0.7 ? 'text-down' : '', vs(debtRatio, med?.debt, { format: pctFmt, labels: ['niższe', 'wyższe'] })),
+        tile('Kondycja', `${health.toFixed(1)} · ${healthLabel}`, 'Kondycja finansowa od −5 (bankructwo) do +5.', health >= 1 ? 'text-up' : health <= -2 ? 'text-down' : '')
+    ].join('');
+
+    document.getElementById('company-card-tabs').innerHTML = COMPANY_CARD_TABS
+        .filter(([id]) => id !== 'workforce' || (typeof hasWorkforce === 'function' && hasWorkforce(stock)))
+        .map(([id, label]) => `<button class="${companyCardView.tab === id ? 'active' : ''}" onclick="setCompanyCardTab('${id}')">${label}</button>`).join('');
+
+    if (typeof unlockAcademyEntry === 'function') ['cwk', 'dywidenda', 'zadluzenie'].forEach(id => unlockAcademyEntry(id));
+    const body = document.getElementById('company-card-body');
+    if (companyCardView.tab === 'finance') {
+        if (typeof unlockAcademyEntry === 'function') ['eps', 'marza', 'roe', 'plynnosc'].forEach(id => unlockAcademyEntry(id));
+        if (typeof noteMentorEvent === 'function') noteMentorEvent('financeView', stock);
+        body.innerHTML = renderCompanyCardFinance(stock, f);
+    }
+    else if (companyCardView.tab === 'owners') body.innerHTML = renderCompanyCardOwners(stock);
+    else if (companyCardView.tab === 'manage') body.innerHTML = renderCompanyCardManage(stock);
+    else if (companyCardView.tab === 'workforce') body.innerHTML = renderCompanyCardWorkforce(stock);
+    else body.innerHTML = renderCompanyCardOverview(stock);
+}
+
+function renderCompanyCardOverview(stock) {
+    const traits = (stock.ceo?.traits || []).map(trait => {
+        const data = ceoTraits[trait.id];
+        return data ? `<span class="ceo-trait" style="background-color: ${data.color};" title="${escapeHtml(data.description)}">${escapeHtml(data.name)}</span>` : '';
+    }).join('');
+    const phase = stock.corporatePhase && getSkillLevel('financialAnalyst') >= 1 ? `<p class="text-sm"><strong>Faza cyklu życia:</strong> ${escapeHtml(stock.corporatePhase)}</p>` : '';
+    const research = stock.research?.isResearching && stock.research.currentTech ? `<p class="text-sm">🔬 W fazie R&D: <strong>${escapeHtml(technologies[stock.research.currentTech]?.name || stock.research.currentTech)}</strong></p>` : '';
+    const insights = typeof getAnalystInsights === 'function' ? getAnalystInsights(stock) : [];
+    return `
+        <div class="cc-grid">
+            <section><h4>O spółce</h4><div class="text-sm text-justify">${assembleDescription(stock)}</div>${phase}${research}</section>
+            <section>
+                ${stock.ceo?.name ? `<h4>Prezes</h4><p class="m-0"><strong>👔 ${escapeHtml(stock.ceo.name)}</strong></p>
+                    <p class="text-xs text-muted mt-0">wiek ${stock.ceo.age ?? '—'}, staż ${Math.floor((stock.ceo.tenure || 0) / 4)} lat</p>
+                    <div class="ceo-traits-container">${traits}</div>` : ''}
+                ${insights.length ? `<h4>Analityk</h4>${insights.map(line => `<p class="text-sm">🔎 ${escapeHtml(line)}</p>`).join('')}` : ''}
+            </section>
+        </div>`;
+}
+
+function renderCompanyCardFinance(stock, f) {
+    if (!f || !(stock.balanceSheet?.assets > 0)) return '<p class="text-muted">Spółka nie publikuje jeszcze pełnych danych finansowych.</p>';
+    const money = value => Number.isFinite(value) ? formatZl(value, 0) : '—';
+    const perShare = value => Number.isFinite(value) ? formatZl(value) : '—';
+    const row = (label, value, hint) => `<tr><td title="${escapeHtml(hint)}">${label} <span class="text-muted">ⓘ</span></td><td class="cell-number">${value}</td></tr>`;
+    const last = stock.lastDividend;
+    const shownFair = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(stock) : f.fairValue;
+    const fair = getSkillLevel('financialAnalyst') >= 1 && shownFair > 0
+        ? row('Wycena analityczna', `${perShare(shownFair)} (${((shownFair / stock.price - 1) * 100).toFixed(1)}% vs kurs)${f.fairValue > 0 ? '' : stock.assetType === 'Holding' ? ' · NAV portfela' : ' · z majątku'}`, 'Wartość godziwa z zysków i majątku; holdingi i REIT-y — z wartości aktywów netto (szkolenie Analityk Finansowy).') : '';
+    const metrics = typeof getCompanyMetrics === 'function' ? getCompanyMetrics(stock) : null;
+    const pct = v => v === null || v === undefined || !Number.isFinite(v) ? '—' : `${(v * 100).toFixed(1)}%`;
+    const extra = metrics ? row('Marża netto', pct(metrics.margin), 'Zysk netto / przychody.') + row('ROE', pct(metrics.roe), 'Zysk netto / kapitał własny.')
+        + row('Płynność (gotówka / zobowiązania)', metrics.liquidity === null ? '—' : metrics.liquidity.toFixed(2), 'Ile gotówki przypada na złotówkę zobowiązań.')
+        + row('Wzrost zysku r/r', pct(metrics.growth), 'Zysk z 4 ostatnich kwartałów vs 4 wcześniejszych.') : '';
+    return `
+        <div class="cc-grid">
+            <section><h4>Wyniki (4 ostatnie kwartały)</h4>
+                <table class="asset-mini-table w-full"><tbody>
+                    ${row('Przychody', f.revenueTtm > 0 ? money(f.revenueTtm) : '—', 'Sprzedaż spółki z ostatniego roku.')}
+                    ${row('EBITDA', money(f.ebitdaTtm), 'Zysk operacyjny przed amortyzacją, odsetkami i podatkiem.')}
+                    ${row('Zysk netto', money(f.netIncomeTtm), 'Zysk po wszystkich kosztach i podatku.')}
+                    ${row('Zysk na akcję (EPS)', perShare(f.epsTtm), 'Zysk netto / liczba akcji.')}
+                    ${row('Sprzedaż na akcję', f.revenueTtm > 0 ? perShare(f.salesPerShare) : '—', 'Przychody / liczba akcji.')}
+                    ${extra}
+                    ${fair}
+                </tbody></table></section>
+            <section><h4>Bilans i dywidenda</h4>
+                <table class="asset-mini-table w-full"><tbody>
+                    ${row('Aktywa', money(stock.balanceSheet.assets), 'Wszystko, co spółka posiada.')}
+                    ${row('Zobowiązania', money(stock.balanceSheet.liabilities), 'Długi i inne zobowiązania.')}
+                    ${row('Gotówka', money(stock.cash), 'Pieniądze na koncie spółki.')}
+                    ${row('Wartość księgowa / akcję', perShare(f.bookValuePerShare), '(Aktywa − zobowiązania) / liczba akcji.')}
+                    ${stock.assetType !== 'REIT' ? row('Polityka dywidendy', escapeHtml(getDividendPolicyLabel(stock.dividendPolicy)), 'Jak dużą część zysku spółka wypłaca.') : ''}
+                    ${row('Ostatnia dywidenda', last ? `${last.dps.toFixed(4)} zł (${(last.yield * 100).toFixed(2)}%)` : 'brak', 'Ostatnia wypłata na akcję i stopa w dniu wypłaty.')}
+                </tbody></table></section>
+        </div>
+        ${renderValuationSection(stock, f)}
+        ${typeof renderAccountingSection === 'function' ? renderAccountingSection(stock) : ''}`;
+}
+
+/** N2: metody wyceny (Analityk Finansowy 1–2) i konsensus (poziom 3). */
+function renderValuationSection(stock, f) {
+    const level = getSkillLevel('financialAnalyst');
+    if (level < 1 || typeof getValuationMethods !== 'function') {
+        return '<p class="text-xs text-muted mt-2">🔒 Metody wyceny i konsensus analityków odblokujesz szkoleniem „Analityk Finansowy”.</p>';
+    }
+    const v = getValuationMethods(stock);
+    if (!v) return '';
+    const fmt = value => value > 0 ? `${formatZl(value)} <span class="${value > stock.price ? 'text-up' : 'text-down'}">(${((value / stock.price - 1) * 100).toFixed(0)}%)</span>` : '—';
+    const rows = [
+        ['Porównawcza: EPS × mediana C/Z sektora', fmt(v.pe)],
+        ...(level >= 2 ? [
+            ['Majątkowa: wartość księgowa × mediana C/WK sektora', fmt(v.book)],
+            [`Dywidendowa (Gordon): D·(1+g)/(r−g), r = ${(v.r * 100).toFixed(1)}%, g = ${(v.g * 100).toFixed(1)}%`, v.gordon ? fmt(v.gordon) : 'spółka nie płaci dywidend']
+        ] : [])
+    ];
+    const consensus = level >= 3 ? `
+        <p class="text-sm">📊 Konsensus na najbliższy raport: zysk na akcję ≈ <strong>${formatZl(f.expectedEps)}</strong> za kwartał.
+        ${Number.isFinite(stock.lastSurprise) ? `Ostatni raport: <span class="${stock.lastSurprise > 0 ? 'text-up' : stock.lastSurprise < 0 ? 'text-down' : ''}">${stock.lastSurprise >= 0 ? '+' : ''}${(stock.lastSurprise * 100).toFixed(0)}% vs konsensus</span> — kurs reaguje na niespodziankę, nie na sam wynik.` : ''}</p>` : '';
+    return `<h4 class="mt-3">Wycena (kurs ${formatZl(stock.price)})</h4>
+        <table class="asset-mini-table w-full"><tbody>${rows.map(([label, value]) => `<tr><td>${label}</td><td class="cell-number">${value}</td></tr>`).join('')}</tbody></table>
+        <p class="text-xs text-muted">Różne metody dają różne wyniki — traktuj je jako przedział, nie jedną cenę.${level < 2 ? ' Kolejne metody: Analityk Finansowy poziom 2.' : ''}</p>${consensus}`;
+}
+
+function renderCompanyCardOwners(stock) {
+    const fundPct = typeof getFundStakePct === 'function' ? getFundStakePct(stock) : 0;
+    const wallet = playerWallet?.portfolio?.[stock.symbol]?.shares || 0;
+    // 0.13.1 (B3): wolny obrót = dostępne na rynku + akcje u inwestorów (gdzie są akcje).
+    const freeFloat = getFreeFloatShares(stock), available = getAvailableShares(stock);
+    const byKind = {};
+    for (const holder of getShareholders(stock)) if (!['state', 'insiders'].includes(holder.kind)) byKind[holder.kind] = (byKind[holder.kind] || 0) + holder.shares;
+    const kindLabels = { player: 'Twój fundusz', wallet: 'konto prywatne', ai: 'inwestorzy (boty)', botFund: 'fundusze kolegów', bank: 'banki', etf: 'ETF-y', holding: 'holdingi', company: 'spółki', city: 'miasto' };
+    const where = Object.entries(byKind).sort((a, b) => b[1] - a[1]).map(([kind, shares]) => `${kindLabels[kind] || kind} ${shares.toLocaleString('pl-PL')}`).join(' · ');
+    return `
+        <p class="text-sm">Fundusz: <strong>${(fundPct * 100).toFixed(2)}%</strong>${wallet ? ` · konto prywatne: <strong>${wallet.toLocaleString('pl-PL')} akcji</strong>` : ''}</p>
+        <p class="text-sm">Wolny obrót: <strong>${freeFloat.toLocaleString('pl-PL')}</strong> z ${stock.totalShares.toLocaleString('pl-PL')} akcji = <strong>${available.toLocaleString('pl-PL')}</strong> dostępnych na rynku + <strong>${Math.max(0, freeFloat - available).toLocaleString('pl-PL')}</strong> u inwestorów${where ? ` (${escapeHtml(where)})` : ''}.${available <= 0 ? ' <span class="text-warn">Teraz nie da się kupić — akcje kupisz, gdy ktoś je sprzeda.</span>' : ''}</p>
+        <div class="gov-bars">${typeof renderShareholderBars === 'function' ? renderShareholderBars(stock) : ''}</div>
+        <button class="btn-secondary mt-2" onclick="openStockDetailsModal('${stock.symbol}')">🥧 Wykres akcjonariatu</button>`;
+}
+
+function renderCompanyCardManage(stock) {
+    const pct = typeof getFundStakePct === 'function' ? getFundStakePct(stock) : 0;
+    const governed = typeof isGovernedCompany === 'function' && isGovernedCompany(stock);
+    const seats = typeof getBoardSeats === 'function' ? getBoardSeats(stock) : { label: '—' };
+    return `
+        <p class="text-sm">Udział funduszu: <strong>${(pct * 100).toFixed(2)}%</strong> · rada nadzorcza: <strong>${escapeHtml(seats.label)}</strong>.
+            Od 5% głosujesz na walnych, od 20% masz miejsce w radzie, powyżej 50% kontrolujesz spółkę.</p>
+        <div class="d-flex gap-2 flex-wrap">
+            ${governed ? `<button class="btn-secondary" onclick="openGovernanceModal('${stock.symbol}')">🗳️ Walne zgromadzenie</button>` : ''}
+            <button class="btn-secondary" onclick="openCompanyInvestments('${stock.symbol}')">📈 Inwestycje spółki</button>
+            ${pct > 0.5 ? `<button onclick="openManagementModal('${stock.symbol}')">👑 Zarządzaj spółką</button>` : ''}
+        </div>`;
 }
 
 function updateStateOfferInfo() {
@@ -2844,7 +2948,7 @@ function setPriceAlert(symbol, type) {
     if (isNaN(value)) { // Jeśli pole jest puste, usuń alert
         stock.priceAlerts[type] = null;
     } else if (value <= 0) {
-        alert("Cena musi być dodatnia!");
+        showToast("Cena musi być dodatnia!");
         return;
     } else {
         stock.priceAlerts[type] = value;
@@ -2999,31 +3103,27 @@ function openCeoChoiceModal(symbol, candidates, successChance) {
 
     candidates.forEach((candidate, index) => {
         const card = document.createElement('div');
-        card.style.border = "1px solid #ccc";
-        card.style.borderRadius = "8px";
-        card.style.padding = "15px";
-        card.style.textAlign = "center";
-        card.style.flex = "1";
+        card.classList.add('choice-card');
 
         let traitsHTML = '';
         if (candidate.traits && candidate.traits.length > 0) {
             candidate.traits.forEach(trait => {
                 const traitData = ceoTraits[trait.id];
                 if (traitData) {
-                    traitsHTML += `<span class="ceo-trait" style="background-color: ${traitData.color}; margin: 2px;" title="${traitData.description}">${traitData.name}</span>`;
+                    traitsHTML += `<span class="ceo-trait m-half" style="background-color: ${traitData.color}" title="${traitData.description}">${traitData.name}</span>`;
                 }
             });
         } else {
-            traitsHTML = '<p style="font-size: 12px; color: #888;">Brak wyróżniających cech</p>';
+            traitsHTML = '<p class="text-sm text-muted">Brak wyróżniających cech</p>';
         }
 
         const tenureYears = Math.floor(candidate.tenure / 4);
         card.innerHTML = `
-            <h4 style="margin: 0 0 5px 0;">${candidate.name}</h4>
-            <p style="margin: 5px 0; font-size: 12px; color: #666;">Wiek: ${candidate.age}, Doświadczenie: ${tenureYears} lat</p>
-            <div class="ceo-traits-container" style="margin-top: 10px; min-height: 50px;">${traitsHTML}</div>
+            <h4 class="mb-1">${candidate.name}</h4>
+            <p class="my-1 text-sm text-muted">Wiek: ${candidate.age}, Doświadczenie: ${tenureYears} lat</p>
+            <div class="ceo-traits-container mt-2 min-h-50" >${traitsHTML}</div>
             <button onclick="confirmCeoChange('${symbol}', ${index})">Zatwierdź Kandydata</button>
-            <p style="margin-top: 10px; font-weight: bold; font-size: 14px;">Szansa: ${(successChance * 100).toFixed(0)}%</p>
+            <p class="mt-2 fw-bold text-md">Szansa: ${(successChance * 100).toFixed(0)}%</p>
         `;
         container.appendChild(card);
     });
@@ -3051,16 +3151,80 @@ function closeSettingsModal() {
     }
 }
 
+/** Przycisk zamykania w oknie: zamyka najbliższe okno .modal. */
+function closeModalFrom(element) {
+    const modal = element?.closest('.modal');
+    if (modal) modal.style.display = 'none';
+}
 
+function closeVisibleModals() {
+    document.querySelectorAll('div[id$="-modal"]').forEach(modal => {
+        if (modal instanceof HTMLElement) modal.style.display = 'none';
+    });
+}
+
+function initializeDraggableModals() {
+    // Tylko kontenery okien (div) — przycisk #theme-toggle-btn-modal też kończy się na "-modal".
+    const modals = Array.from(document.querySelectorAll('div[id$="-modal"]'));
+    modals.forEach(modal => {
+        if (!(modal instanceof HTMLElement)) return;
+        modal.classList.add('modal');
+        modal.style.position = 'fixed';
+        modal.style.touchAction = 'none';
+        const dragHandle = modal.querySelector('.modal-header') || modal;
+        dragHandle.style.cursor = 'move';
+
+        const onMouseDown = e => {
+            if (e.button !== 0) return;
+            if (e.target.closest('button, input, select, textarea, a, .close-btn')) return;
+            e.preventDefault();
+
+            const rect = modal.getBoundingClientRect();
+            const startX = e.clientX;
+            const startY = e.clientY;
+            const initialLeft = rect.left;
+            const initialTop = rect.top;
+
+            modal.style.transform = 'none';
+            modal.style.left = `${initialLeft}px`;
+            modal.style.top = `${initialTop}px`;
+
+            const onMouseMove = moveEvent => {
+                const dx = moveEvent.clientX - startX;
+                const dy = moveEvent.clientY - startY;
+                modal.style.left = `${initialLeft + dx}px`;
+                modal.style.top = `${initialTop + dy}px`;
+            };
+
+            const onMouseUp = () => {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+                document.body.style.userSelect = '';
+            };
+
+            document.body.style.userSelect = 'none';
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        };
+
+        dragHandle.addEventListener('mousedown', onMouseDown);
+    });
+}
+
+window.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+        closeVisibleModals();
+    }
+});
+
+window.addEventListener('DOMContentLoaded', initializeDraggableModals);
 
 function openCityInvestmentModal() {
     const modal = document.getElementById('city-investment-modal');
     if (!modal) return;
     
-    // Zawsze wywołuj aktualizację danych
-    updateCityModalContent(); 
-
     modal.style.display = 'block';
+    updateCityModalContent(); // po pokazaniu — funkcja aktualizuje tylko widoczne okno
 }
 
 /**
@@ -3093,7 +3257,7 @@ function updateCityModalContent() {
         tabsContainer.style.display = 'flex'; // Pokaż zakładki
 
         // Aktualizuj zakładkę "Panel Główny"
-        document.getElementById('city-budget-display').textContent = `${city.budget.toLocaleString('pl-PL')} PLN`;
+        document.getElementById('city-budget-display').textContent = city.budget.toLocaleString('pl-PL', { maximumFractionDigits: 0 });
         document.getElementById('city-population-display').textContent = city.population.toLocaleString('pl-PL');
         document.getElementById('city-infra-level').textContent = (city.infrastructureLevel * 100).toFixed(0) + '%';
         // Odliczanie festynu
@@ -3103,19 +3267,28 @@ function updateCityModalContent() {
         document.getElementById('next-festival-countdown').textContent = nextFestivalCountdown > 0 ? `${minutes}m ${seconds.toString().padStart(2, '0')}s` : "Wkrótce...";
         
         // Zarząd
-        document.getElementById('city-election-timer').textContent = city.mayor.electionYear;
+        document.getElementById('city-election-timer').textContent = `${city.mayor.electionYear} ${city.mayor.electionYear === 1 ? 'rok' : 'lata'}`;
+        renderCityTicker();
+        renderCityPpp();
+        renderCitySpecialProjects();
         document.getElementById('city-mayor-name').textContent = city.mayor.name;
-        document.getElementById('city-mayor-policy').textContent = city.mayor.policy; // TODO: Przetłumaczyć
+        const policy = MAYOR_POLICIES[city.mayor.policy];
+        document.getElementById('city-mayor-policy').textContent = `${policy?.label || city.mayor.policy} — ${policy?.description || ''}`;
+        const support = document.getElementById('city-mayor-support');
+        if (support) support.textContent = `${Number(city.mayor.support || 0).toFixed(0)}%`;
+        const electionTab = document.getElementById('tab-btn-city-election');
+        if (electionTab) electionTab.style.display = city.election ? '' : 'none';
+        renderCityElection();
         
         // Wkład gracza
-        document.getElementById('city-total-donated').textContent = `${city.playerDonatedAmount.toFixed(2)} PLN`; // Użyj nowego pola
+        document.getElementById('city-total-donated').textContent = city.playerDonatedAmount.toFixed(2); // Użyj nowego pola
         const statusEl = document.getElementById('city-unlock-status');
         if (city.playerHasUnlocked) {
             statusEl.textContent = "Odblokowane!";
-            statusEl.style.color = '#28a745';
+            statusEl.style.color = 'var(--color-up)';
         } else {
-            statusEl.textContent = `Zablokowane (Cel: 10,000 PLN)`;
-            statusEl.style.color = '#dc3545';
+            statusEl.textContent = `Zablokowane (cel: ${CITY_UNLOCK_DONATION.toLocaleString('pl-PL')} zł)`;
+            statusEl.style.color = 'var(--color-down)';
         }
 
         // Aktualizuj zakładkę "Spółki Miejskie"
@@ -3144,7 +3317,6 @@ function updateCityModalContent() {
                     <tr>
                         <td>${comp.name}</td>
                         <td>${comp.value.toLocaleString('pl-PL')} PLN</td>
-                        <td>${(comp.cityOwnership * 100).toFixed(1)}%</td>
                         <td><progress value="${comp.developmentProgress}" max="100"></progress></td>
                     </tr>`;
             });
@@ -3168,7 +3340,7 @@ function renderFestivalView(festivalContainer) {
     }
     
     const playerParticipant = festival.participants.find(p => p.ownerId === 'player');
-    const timeLeft = Math.max(0, Math.ceil((festival.endTime - Date.now()) / 1000));
+    const timeLeft = Math.max(0, Math.ceil((Number(festival.remainingMs) || 0) / 1000));
 
     // --- Sekcja Gracza ---
     let playerSectionHTML = '';
@@ -3179,7 +3351,7 @@ function renderFestivalView(festivalContainer) {
         playerSectionHTML = `
             <h4>Twoje stoisko (Poziom ${playerParticipant.level}: ${currentLevel.name})</h4>
             <p>Zdobyte zainteresowanie: <strong>${playerParticipant.interest.toFixed(1)}</strong></p>
-            <div style="margin-bottom: 10px;">
+            <div class="mb-2">
                 ${nextLevel ? `<button onclick="playerUpgradeStall()">Ulepsz do: "${nextLevel.name}" (${nextLevel.cost} PLN)</button>` : '<p>Osiągnięto maksymalny poziom stoiska.</p>'}
             </div>
             <div>
@@ -3196,7 +3368,7 @@ function renderFestivalView(festivalContainer) {
         for (const symbol in playerPortfolio) {
             const stock = stocks.find(s => s.symbol === symbol);
             // Sprawdź, czy stock istnieje, czy gracz ma akcje i czy te akcje dają ponad 50%
-            if (stock && playerPortfolio[symbol].shares > 0 && stock.totalShares > 0 && (playerPortfolio[symbol].shares / stock.totalShares > 0.5)) {
+            if (stock && playerPortfolio[symbol].shares > 0 && stock.totalShares > 0 && (playerPortfolio[symbol].shares / stock.totalShares >= 0.05)) { // fundusz ≥5% akcji
                 companyButtonsHTML += `<button onclick="playerJoinFestival({type: 'company', id: '${symbol}'})">Spółkę ${symbol}</button>`;
             }
         }
@@ -3205,7 +3377,6 @@ function renderFestivalView(festivalContainer) {
             <p>Co chcesz promować?</p>
             <div id="join-festival-options">
                 <button onclick="playerJoinFestival({type: 'self'})">Siebie</button>
-                <button onclick="playerJoinFestival({type: 'player_company'})" ${!playerCompany ? 'disabled title="Musisz założyć własną firmę"' : ''}>Własną firmę</button>
                 ${companyButtonsHTML}
             </div>
         `;
@@ -3214,7 +3385,7 @@ function renderFestivalView(festivalContainer) {
     // --- Sekcja Rankingu Uczestników ---
     let participantsTableHTML = `
         <h4>Ranking Stoisk na Żywo</h4>
-        <table style="width: 100%;">
+        <table class="w-full">
             <thead><tr><th>#</th><th>Wystawca</th><th>Cel Promocji</th><th>Zainteresowanie</th></tr></thead>
             <tbody>
     `;
@@ -3226,11 +3397,10 @@ function renderFestivalView(festivalContainer) {
         switch (p.promotionTarget.type) {
             case 'self': targetName = 'Własny wizerunek'; break;
             case 'company': targetName = p.promotionTarget.id; break;
-            case 'player_company': targetName = playerCompany ? playerCompany.name : 'Moja Firma'; break;
             case 'city': targetName = 'Miasto Gdańsk'; break;
             case 'bank_promo': targetName = p.ownerName; break; // Dla banków
         }
-        participantsTableHTML += `<tr style="${p.ownerId === 'player' ? 'font-weight: bold; background-color: #e3f2fd;' : ''}">
+        participantsTableHTML += `<tr style="${p.ownerId === 'player' ? 'font-weight: bold; background-color: var(--bg-elevated-2);' : ''}">
             <td>${index + 1}</td>
             <td>${ownerName}</td>
             <td>${targetName}</td>
@@ -3253,10 +3423,10 @@ function renderFestivalView(festivalContainer) {
 
     // --- Finalne złożenie widoku (renderowanie do kontenera) ---
     festivalContainer.innerHTML = `
-        <h2 style="margin-top: 0; text-align: center;">🎉 Trwa ${festival.name}! 🎉</h2>
+        <h2 class="mt-0 text-center">🎉 Trwa ${festival.name}! 🎉</h2>
         <div class="bank-section">
             <p>Koniec za: <strong>${timeLeft}s</strong> | Zainteresowanie wydarzeniem: <strong>${festival.globalInterest.toFixed(1)}</strong></p>
-            <p style="font-size: 12px;">Atrakcje: ${festival.attractions.join(', ')}</p>
+            <p class="text-sm">Atrakcje: ${festival.attractions.join(', ')}</p>
             <button onclick="playerPromoteEvent()">Promuj wydarzenie (500 PLN)</button>
         </div>
         <div class="bank-section">
@@ -3269,28 +3439,6 @@ function renderFestivalView(festivalContainer) {
             ${bonusesHTML}
         </div>
     `;
-}
-
-function switchBankTab(tabName) {
-    // Ukryj wszystkie kontenery zakładek
-    document.querySelectorAll('.bank-tab-content').forEach(content => {
-        content.style.display = 'none';
-    });
-    // Pokaż wybrany kontener
-    document.getElementById(`bank-content-${tabName}`).style.display = 'block';
-
-    // Zaktualizuj wygląd przycisków zakładek
-    document.querySelectorAll('.bank-tab-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    document.getElementById(`tab-btn-${tabName}`).classList.add('active');
-
-    // Jeśli aktywowano zakładkę obligacji, odśwież jej zawartość
-    if (tabName === 'bonds') {
-        renderBondMarketInBank();
-    } else if (tabName === 'commercial') { // <-- DODANE Z ui.js
-        renderCommercialBanksList();
-    }
 }
 
 /**
@@ -3313,11 +3461,12 @@ function renderBondMarketInBank() {
 
         let interestText;
         if (type === 'shortTerm') {
-            interestText = `${(offer.interest * 100).toFixed(1)}% (stałe)`;
+            interestText = `${((offer.interest + getDeficitBondPremium()) * 100).toFixed(2)}% (stałe)`;
         } else {
             const inflationProxy = marketVolatilityIndex / 100;
-            interestText = `~${((inflationProxy + offer.interestBase) * 100).toFixed(1)}% (zmienne)`;
+            interestText = `~${((inflationProxy + offer.interestBase + getDeficitBondPremium()) * 100).toFixed(1)}% (zmienne)`;
         }
+        if (getDeficitBondPremium() > 0) interestText += ' · +0,25 pp za deficyt';
         row.insertCell().textContent = interestText;
         row.insertCell().textContent = offer.available;
 
@@ -3326,7 +3475,7 @@ function renderBondMarketInBank() {
         input.type = 'number';
         input.min = '1';
         input.value = '1';
-        input.style.width = '50px';
+        input.classList.add('w-xs');
         const buyBtn = document.createElement('button');
         buyBtn.textContent = 'Kup';
 
@@ -3344,7 +3493,7 @@ function renderBondMarketInBank() {
     activeBonds.forEach(bond => {
         const row = otherBondsBody.insertRow();
         if (bond.isRescueBond) {
-            row.style.backgroundColor = '#fff0f0'; // Lekko czerwone tło
+            
             row.title = 'Obligacja ratunkowa - podwyższone ryzyko!';
         }
         row.insertCell().textContent = bond.issuerName;
@@ -3355,8 +3504,8 @@ function renderBondMarketInBank() {
         row.insertCell().textContent = `${(bond.risk * 100).toFixed(0)}%`;
         const riskCell = row.insertCell();
         riskCell.textContent = `${(bond.risk * 100).toFixed(0)}%`;
-        if (bond.risk > 0.5) riskCell.style.color = '#dc3545'; // Oznacz wysokie ryzyko
-        else if (bond.risk > 0.3) riskCell.style.color = '#ffc107'; // Oznacz średnie ryzyko
+        if (bond.risk > 0.5) riskCell.style.color = 'var(--color-down)'; // Oznacz wysokie ryzyko
+        else if (bond.risk > 0.3) riskCell.style.color = 'var(--color-warn)'; // Oznacz średnie ryzyko
         row.insertCell().textContent = bond.available;
 
         const actionsCell = row.insertCell();
@@ -3364,7 +3513,7 @@ function renderBondMarketInBank() {
         input.type = 'number';
         input.min = '1';
         input.value = '1';
-        input.style.width = '50px';
+        input.classList.add('w-xs');
         const buyBtn = document.createElement('button');
         buyBtn.textContent = 'Kup';
 
@@ -3378,6 +3527,11 @@ function renderBondMarketInBank() {
 }
 
 function openFestivalResultsModal(participants, festivalName) {
+    // B2: nie przerywamy gry — powiadomienie z przyciskiem „Otwórz”.
+    pushNotification(`🎪 Wyniki wydarzenia: ${festivalName}`, () => showFestivalResultsModal(participants, festivalName));
+}
+
+function showFestivalResultsModal(participants, festivalName) {
     const modal = document.getElementById('festival-results-modal');
     document.getElementById('festival-results-title').textContent = `Wyniki wydarzenia: ${festivalName}`;
     const body = document.getElementById('festival-results-body');
@@ -3415,7 +3569,7 @@ function openFestivalResultsModal(participants, festivalName) {
 
         if (p.ownerId === 'player') {
             row.style.fontWeight = 'bold';
-            row.style.backgroundColor = '#e3f2fd';
+            
         }
     });
 
@@ -3466,88 +3620,6 @@ function updateTBillAuctionSection() {
 }
 
 // --- PONIŻEJ FUNKCJE Z BAZY ui.js (Bankowość Komercyjna) ---
-
-function renderCommercialBanksList() {
-    const listContainer = document.getElementById('commercial-banks-list');
-    if (!listContainer) return;
-
-    listContainer.innerHTML = ''; // Wyczyść starą listę
-    const activeBanks = commercialBanks.filter(b => b.isActive);
-
-    if (activeBanks.length === 0) {
-        listContainer.innerHTML = '<p>Obecnie na rynku nie działają żadne banki komercyjne.</p>';
-        return;
-    }
-
-    activeBanks.forEach(bank => {
-        // Oblicz aktualne oprocentowanie (później dodamy stopy BC)
-        // Na razie użyjmy uproszczonych wartości bazowych + marży
-        const currentLoanRate = (LOAN_INTEREST_RATE + bank.baseInterestRateMargin) * 100;
-        const currentDepositRate = (DEPOSIT_INTEREST_RATE + bank.baseInterestRateMargin * 0.5) * 100; // Depozyty zwykle mniej oprocentowane
-
-        const bankDiv = document.createElement('div');
-        bankDiv.className = 'bank-section commercial-bank-item'; // Dodajemy klasę dla styli
-        bankDiv.style.borderLeft = `5px solid ${getBankColor(bank.type)}`; // Kolorowa ramka wg typu
-
-        let buttonsHTML = '';
-        const canUseCooperative = bank.type === BANK_TYPES.COOPERATIVE ? (playerPortfolio[`${bank.id}_STOCK`] !== undefined && playerPortfolio[`${bank.id}_STOCK`].shares > 0) : true;
-        const canInteract = [BANK_TYPES.UNIVERSAL, BANK_TYPES.INTERNATIONAL, BANK_TYPES.INTERNET, BANK_TYPES.COOPERATIVE].includes(bank.type);
-
-        if (canInteract && canUseCooperative) {
-            buttonsHTML += `<button onclick="openCommercialLoanModal('${bank.id}')">Weź kredyt</button> `;
-            buttonsHTML += `<button onclick="openCommercialDepositModal('${bank.id}')">Złóż depozyt</button> `;
-        }
-        if (bank.type === BANK_TYPES.MORTGAGE) {
-            buttonsHTML += `<button onclick="openMortgageModal('${bank.id}')">Weź hipotekę</button> `;
-        }
-        if (bank.type === BANK_TYPES.INVESTMENT) {
-            buttonsHTML += `<button onclick="openSellSharesToBankModal('${bank.id}')">Sprzedaj akcje</button>`;
-        }
-
-        bankDiv.innerHTML = `
-            <h4>${bank.name} (${bank.type})</h4>
-            <p>Oproc. kredytu: <strong>${currentLoanRate.toFixed(1)}%</strong> | Oproc. depozytu: <strong>${currentDepositRate.toFixed(1)}%</strong></p>
-            <div class="bank-actions">
-                ${buttonsHTML || '<p>...</p>'}
-            </div>
-        `;
-
-        // --- 👇 DODAJ TEN BLOK DLA BANKÓW INWESTYCYJNYCH 👇 ---
-        if (bank.type === BANK_TYPES.INVESTMENT && Object.keys(bank.stockPortfolio).length > 0) {
-            let salesHTML = '<div class="bank-stock-sales"><h5>Akcje na sprzedaż:</h5><ul>';
-            for (const symbol in bank.stockPortfolio) {
-                const stock = stocks.find(s => s.symbol === symbol);
-                const holding = bank.stockPortfolio[symbol];
-                if (stock && holding.shares > 0) {
-                    const sellPrice = stock.price * 1.10; // Marża +10%
-                    salesHTML += `<li>${symbol} (${holding.shares} szt.) - Cena: ${sellPrice.toFixed(2)} PLN 
-                                  <input type="number" id="buy-from-bank-${bank.id}-${symbol}" min="1" value="1" style="width:40px; margin-left:5px;">
-                                  <button onclick="buySharesFromInvestmentBank('${bank.id}', '${symbol}')">Kup</button>
-                                </li>`;
-                }
-            }
-            salesHTML += '</ul></div>';
-            bankDiv.innerHTML += salesHTML; // Dodaj HTML do diva banku
-        }
-        // --- 👆 KONIEC NOWEGO BLOKU 👆 ---
-
-        listContainer.appendChild(bankDiv);
-    });
-}
-
-/** Funkcja pomocnicza do kolorowania banków wg typu */
-function getBankColor(type) {
-    switch (type) {
-        case BANK_TYPES.INVESTMENT: return '#20c997'; // Turkusowy
-        case BANK_TYPES.CORPORATE: return '#6f42c1'; // Fioletowy
-        case BANK_TYPES.UNIVERSAL: return '#0d6efd'; // Niebieski
-        case BANK_TYPES.INTERNATIONAL: return '#fd7e14'; // Pomarańczowy
-        case BANK_TYPES.COOPERATIVE: return '#28a745'; // Zielony
-        case BANK_TYPES.INTERNET: return '#ffc107'; // Żółty
-        case BANK_TYPES.MORTGAGE: return '#dc3545'; // Czerwony
-        default: return '#6c757d'; // Szary
-    }
-}
 
 function openSellSharesToBankModal(bankId) {
     const bank = commercialBanks.find(b => b.id === bankId);
@@ -3678,155 +3750,11 @@ function closeInteractionModal() {
     }
 }
 
-function openCommercialLoanModal(bankId) {
-    const bank = commercialBanks.find(b => b.id === bankId);
-    const modal = document.getElementById('commercial-loan-modal');
-    if (!bank || !modal) return;
-
-    // Oblicz limit kredytowy gracza
-    const netWorth = calculateNetWorth('player');
-    const existingLoansTotal = playerCommercialLoans.reduce((sum, loan) => sum + loan.amount, 0);
-    const maxLoanPossible = Math.max(0, netWorth * 0.3 - existingLoansTotal);
-
-    // Wypełnij dane modala
-    modal.querySelector('#commercial-loan-bank-name').textContent = bank.name;
-    modal.querySelector('#commercial-loan-rate').textContent = (bank.interestRateLoan * 100).toFixed(1);
-    modal.querySelector('#commercial-loan-limit').textContent = maxLoanPossible.toFixed(0);
-    modal.querySelector('#commercial-loan-amount').value = ''; // Wyczyść pole kwoty
-
-    // Wyświetl istniejące pożyczki gracza w tym banku i w innych
-    const loansList = modal.querySelector('#existing-loans-list');
-    loansList.innerHTML = ''; // Wyczyść listę
-    if (playerCommercialLoans.length > 0) {
-        playerCommercialLoans.forEach(loan => {
-            const li = document.createElement('li');
-            li.style.marginBottom = '8px'; // Odstęp między pożyczkami
-            li.innerHTML = `
-                <span>${loan.bankName}: ${loan.amount.toFixed(2)} PLN (Rata: ${loan.weeklyPayment.toFixed(2)})</span>
-                <input type="number" placeholder="Kwota spłaty" style="width: 80px; margin-left: 10px;">
-                <button style="margin-left: 5px;">Spłać</button>
-            `;
-            // Dodaj obsługę przycisku spłaty dla tej konkretnej pożyczki
-            const repayInput = li.querySelector('input');
-            const repayBtn = li.querySelector('button');
-            repayBtn.onclick = () => repayCommercialLoan(loan.id, parseFloat(repayInput.value));
-            loansList.appendChild(li);
-        });
-    } else {
-        loansList.innerHTML = '<li>Brak aktywnych kredytów komercyjnych.</li>';
-    }
-
-    // Ustaw akcję dla głównego przycisku "Weź Kredyt"
-    modal.querySelector('#take-commercial-loan-btn').onclick = () => takeCommercialLoan(bankId, parseFloat(modal.querySelector('#commercial-loan-amount').value));
-
-    modal.style.display = 'block'; // Pokaż modal
-}
-
-function openCommercialDepositModal(bankId) {
-    const bank = commercialBanks.find(b => b.id === bankId);
-    const modal = document.getElementById('commercial-deposit-modal');
-    if (!bank || !modal) return;
-
-    // Znajdź istniejący depozyt gracza w tym banku
-    const existingDeposit = playerCommercialDeposits.find(d => d.bankId === bankId);
-
-    // Wypełnij dane modala
-    modal.querySelector('#commercial-deposit-bank-name').textContent = bank.name;
-    modal.querySelector('#commercial-deposit-rate').textContent = (bank.interestRateDeposit * 100).toFixed(1);
-    modal.querySelector('#commercial-deposit-existing').textContent = existingDeposit ? existingDeposit.amount.toFixed(2) : '0.00';
-    modal.querySelector('#commercial-deposit-amount').value = ''; // Wyczyść pole kwoty
-
-    // Ustaw akcję dla przycisku "Wpłać"
-    modal.querySelector('#make-commercial-deposit-btn').onclick = () => makeCommercialDeposit(bankId, parseFloat(modal.querySelector('#commercial-deposit-amount').value));
-
-    // Ustaw akcję i stan dla przycisku "Wypłać"
-    const withdrawBtn = modal.querySelector('#withdraw-commercial-deposit-btn');
-    withdrawBtn.onclick = () => withdrawCommercialDeposit(existingDeposit ? existingDeposit.id : null, parseFloat(modal.querySelector('#commercial-deposit-amount').value));
-    withdrawBtn.disabled = !existingDeposit || existingDeposit.amount <= 0; // Wyłącz, jeśli nie ma depozytu
-
-    modal.style.display = 'block'; // Pokaż modal
-}
-
-function openMortgageModal(bankId) {
-    const bank = commercialBanks.find(b => b.id === bankId);
-    const modal = document.getElementById('mortgage-modal');
-    if (!bank || !modal) return;
-
-    // Wypełnij dane modala
-    modal.querySelector('#mortgage-bank-name').textContent = bank.name;
-    modal.querySelector('#mortgage-rate').textContent = (bank.interestRateLoan * 100).toFixed(1); // Używamy oprocentowania kredytu
-    modal.querySelector('#mortgage-collateral-quantity').value = '1'; // Resetuj ilość
-    modal.querySelector('#mortgage-loan-amount').value = ''; // Wyczyść kwotę
-
-    // Wypełnij listę rozwijaną akcjami gracza (dostępnymi na zastaw)
-    const select = modal.querySelector('#mortgage-collateral-select');
-    select.innerHTML = '<option value="">-- Wybierz akcje na zastaw --</option>'; // Opcja pusta
-    let hasEligibleShares = false; // Flaga sprawdzająca, czy gracz ma co zastawić
-    Object.keys(playerPortfolio).forEach(symbol => {
-        const holding = playerPortfolio[symbol];
-        const stock = stocks.find(s => s.symbol === symbol && !s.assetType); // Tylko standardowe akcje
-        const availableShares = holding.shares - (holding.lockedShares || 0); // Akcje dostępne do zastawienia
-        if (stock && availableShares > 0) {
-            const option = document.createElement('option');
-            option.value = symbol;
-            // Pokaż dostępne / wszystkie posiadane
-            option.textContent = `${stock.name} (${symbol}) - dostępne: ${availableShares} / ${holding.shares}`;
-            select.appendChild(option);
-            hasEligibleShares = true; // Gracz ma co zastawić
-        }
-    });
-
-    // Funkcja pomocnicza do aktualizacji wartości zastawu i limitu pożyczki
-    const updateCollateralValue = () => {
-        const selectedSymbol = select.value;
-        const quantityInput = modal.querySelector('#mortgage-collateral-quantity');
-        let quantity = quantityInput.valueAsNumber || 0;
-        const holding = playerPortfolio[selectedSymbol];
-        const stock = stocks.find(s => s.symbol === selectedSymbol);
-        const availableShares = holding ? holding.shares - (holding.lockedShares || 0) : 0;
-        const collateralValueEl = modal.querySelector('#mortgage-collateral-value');
-        const loanAmountInput = modal.querySelector('#mortgage-loan-amount');
-
-        // Walidacja ilości
-        if (quantity > availableShares) {
-            quantityInput.value = availableShares; // Nie pozwól wpisać więcej niż dostępne
-            quantity = availableShares; // Użyj poprawionej wartości
-        }
-        if (quantity < 1 && availableShares > 0) {
-            quantityInput.value = 1;
-            quantity = 1;
-        }
-
-        if (stock && quantity > 0) {
-            const collateralValue = stock.price * quantity;
-            collateralValueEl.textContent = collateralValue.toFixed(2);
-            loanAmountInput.max = (collateralValue * 0.5).toFixed(0); // Ustaw max kwotę pożyczki
-        } else {
-            collateralValueEl.textContent = '0.00';
-            loanAmountInput.max = 0;
-            loanAmountInput.value = ''; // Wyczyść kwotę, jeśli zastaw jest nieważny
-        }
-    };
-    // Przypisz eventy do selecta i inputa ilości
-    select.onchange = updateCollateralValue;
-    modal.querySelector('#mortgage-collateral-quantity').oninput = updateCollateralValue;
-    updateCollateralValue(); // Wywołaj raz na start, aby ustawić wartości początkowe
-
-    // Ustaw akcję dla przycisku "Weź Hipotekę"
-    const takeBtn = modal.querySelector('#take-mortgage-loan-btn');
-    takeBtn.onclick = () => {
-        const symbol = select.value;
-        const quantity = parseInt(modal.querySelector('#mortgage-collateral-quantity').value);
-        const amount = parseFloat(modal.querySelector('#mortgage-loan-amount').value);
-        takeMortgageLoan(bankId, symbol, quantity, amount);
-    };
-    // Wyłącz przycisk, jeśli gracz nie ma żadnych akcji do zastawienia
-    takeBtn.disabled = !hasEligibleShares;
-
-    modal.style.display = 'block'; // Pokaż modal
-}
-
 function openBankIPOOfferModal(message) {
+    pushNotification('🏦 Oferta IPO banku dla funduszu', () => showBankIPOOfferModal(message), () => Boolean(currentBankIPOOffer));
+}
+
+function showBankIPOOfferModal(message) {
     const modal = document.getElementById('bank-ipo-offer-modal');
     if (!modal || !currentBankIPOOffer) return;
 
@@ -3892,7 +3820,7 @@ function openFinancialDetailsModal(symbol) {
     const hasAccess = stock.playerHasFinancialAccess || (accountantLevel >= 2 && (playerPortfolio[symbol]?.shares / stock.totalShares) > 0.5);
 
     if (!hasAccess || accountantLevel === 0) { // Jeśli nie ma dostępu LUB nie ma umiejętności
-        content.innerHTML = '<p style="color: red;">Brak dostępu do danych finansowych.</p>';
+        content.innerHTML = '<p class="text-down">Brak dostępu do danych finansowych.</p>';
         modal.style.display = 'block';
         return;
     }
@@ -3909,6 +3837,7 @@ function openFinancialDetailsModal(symbol) {
             <hr>
             <p><strong>Zysk Kwartalny (Ostatni):</strong> ${stock.quarterlyEarnings.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN</p>
             <p><strong>Dług Korporacyjny (jeśli dotyczy):</strong> ${(stock.corporateDebt || 0).toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN</p>
+            ${renderFinancialPeriodPreview(stock)}
         `;
     } else {
         content.innerHTML = '<p>Brak szczegółowych danych bilansowych dla tej spółki.</p>';
@@ -3925,6 +3854,33 @@ function openFinancialDetailsModal(symbol) {
     }
 
     modal.style.display = 'block'; // Pokaż modal
+}
+
+/** Podgląd pozycji okresu: koszty R&D, kontrakty, nieruchomości i ostatni raport. */
+function renderFinancialPeriodPreview(stock) {
+    const fmt = value => (Number(value) || 0).toLocaleString('pl-PL', { maximumFractionDigits: 0 }) + ' PLN';
+    const rd = getResearchCostSummary(stock);
+    const period = getPendingPeriodResult(stock);
+    const last = stock.lastReportBreakdown;
+
+    let html = `
+        <hr>
+        <h4>Bieżący okres (do następnego raportu):</h4>
+        <p>R&D — koszty rozpoczęcia: ${fmt(rd.pendingStartup)}, utrzymania: ${fmt(rd.pendingMaintenance)}</p>
+        <p>Kontrakty budowlane — przychody: ${fmt(period.constructionRevenue)}, koszty: ${fmt(period.constructionCosts)}</p>
+        <p>Nieruchomości (netto): ${fmt(period.propertyIncome)} · Koszty inwestycji: ${fmt(period.investmentExpense)} · Pozostałe: ${fmt(period.otherIncome)}</p>
+        <p class="text-xs text-muted">Pozycje te są już rozliczone w gotówce i bilansie; raport kwartalny tylko je wykaże.</p>
+        <p>R&D łącznie od początku — rozpoczęcia: ${fmt(rd.totalStartup)}, utrzymanie: ${fmt(rd.totalMaintenance)}</p>`;
+
+    if (last) {
+        html += `
+        <h4>Ostatni raport kwartalny:</h4>
+        <p>Wynik operacyjny: ${fmt(last.operating)} · Koszty R&D: −${fmt(last.researchExpense)}</p>
+        <p>Kontrakty: ${fmt(last.constructionRevenue - last.constructionCosts)} · Nieruchomości: ${fmt(last.propertyIncome)} · Inwestycje: −${fmt(last.investmentExpense)}</p>
+        <p><strong>Wynik raportowany: ${fmt(last.total)}</strong></p>`;
+    }
+
+    return html;
 }
 
 /**
@@ -3965,7 +3921,7 @@ function handleViewFinancesClick(symbol) {
     }
 
     // Zapytaj gracza o potwierdzenie płatności
-    if (confirm(`Czy chcesz zapłacić ${accessCost} PLN za jednorazowy wgląd w finanse ${stock.name}?`)) {
+    gameConfirm(`Czy chcesz zapłacić ${accessCost} PLN za jednorazowy wgląd w finanse ${stock.name}?`, () => {
         playerCash -= accessCost; // Pobierz opłatę
         stock.playerHasFinancialAccess = true; // Ustaw flagę dostępu
         displayCash(); // Zaktualizuj UI gotówki
@@ -3974,15 +3930,14 @@ function handleViewFinancesClick(symbol) {
         openFinancialDetailsModal(symbol); // Otwórz modal finansowy
         // Odśwież modal zarządzania, aby zaktualizować tekst przycisku/info
         openManagementModal(symbol); // Ponownie otwórz modal zarządzania, by odświeżyć info
-    }
+    });
 }
 
 function openStateModal() {
     const modal = document.getElementById('state-modal');
-    if(modal) {
-        updateStateModalContent();
-        modal.style.display = 'block';
-    }
+    if (!modal) return;
+    modal.style.display = 'block';
+    switchStateTab(stateTab);
 }
 
 function toggleSubsidiaryVisibility(parentSymbol) {
@@ -4009,33 +3964,6 @@ function toggleSubsidiaryVisibility(parentSymbol) {
     }
 }
 
-function updateStateModalContent() {
-    const treasuryDisplay = document.getElementById('government-treasury-display');
-    if (treasuryDisplay) {
-        treasuryDisplay.textContent = governmentTreasury.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' });
-    }
-
-    // --- >>> UPROSZCZONA LOGIKA DLA URZĘDU ANTYMONOPOLOWEGO <<< ---
-    const levelEl = document.getElementById('antitrust-level');
-    const capacityEl = document.getElementById('antitrust-capacity');
-    const accuracyEl = document.getElementById('antitrust-accuracy');
-    const maxLevelInfoEl = document.getElementById('antitrust-max-level-info');
-
-    // Sprawdź, czy elementy istnieją
-    if (levelEl && capacityEl && accuracyEl && maxLevelInfoEl) {
-        levelEl.textContent = `${antitrustOffice.level}`;
-        capacityEl.textContent = `${(antitrustOffice.analysisCapacity * 100).toFixed(0)}%`;
-        accuracyEl.textContent = `${(antitrustOffice.accuracy * 100).toFixed(0)}%`;
-
-        if (antitrustOffice.level >= 5) { // Jeśli osiągnięto max poziom
-            maxLevelInfoEl.style.display = 'block';
-        } else {
-            maxLevelInfoEl.style.display = 'none';
-        }
-    }
-    // --- >>> KONIEC UPROSZCZONEJ LOGIKI <<< ---
-}
-
 function openMaTargetModal(initiatorSymbol) {
     const initiatorStock = stocks.find(s => s.symbol === initiatorSymbol);
     if (!initiatorStock) return;
@@ -4054,7 +3982,7 @@ function openMaTargetModal(initiatorSymbol) {
     );
 
     if (potentialTargets.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Brak dostępnych celów na rynku.</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="4" class="text-center">Brak dostępnych celów na rynku.</td></tr>';
     } else {
         potentialTargets.forEach(target => {
             const row = tableBody.insertRow();
@@ -4073,11 +4001,11 @@ function openMaTargetModal(initiatorSymbol) {
             takeoverCashBtn.textContent = 'Przejęcie (Gotówka)';
             takeoverCashBtn.title = 'Wrogie przejęcie finansowane z gotówki spółki.';
             takeoverCashBtn.onclick = () => {
-                 if (confirm(`Czy na pewno chcesz zainicjować WROGIE PRZEJĘCIE ${target.name} przez ${initiatorStock.name}? Płatność w GOTÓWCE.`)) {
+                 gameConfirm(`Czy na pewno chcesz zainicjować WROGIE PRZEJĘCIE ${target.name} przez ${initiatorStock.name}? Płatność w GOTÓWCE.`, () => {
                     initiateMergerProcess(initiatorStock, target, 'przejęcie', 'cash');
                     document.getElementById('ma-target-modal').style.display='none';
                     openManagementModal(initiatorSymbol);
-                }
+                });
             };
             actionCell.appendChild(takeoverCashBtn);
 
@@ -4085,14 +4013,14 @@ function openMaTargetModal(initiatorSymbol) {
             const takeoverLboBtn = document.createElement('button');
             takeoverLboBtn.textContent = 'Przejęcie (LBO)';
             takeoverLboBtn.title = 'Wrogie przejęcie finansowane długiem (LBO). Bank sfinansuje transakcję, a Twoja spółka przejmie dług.';
-            takeoverLboBtn.style.marginLeft = '5px';
-            takeoverLboBtn.style.borderColor = '#ffc107'; // Żółta ramka dla odróżnienia
+            takeoverLboBtn.classList.add('ml-1');
+            takeoverLboBtn.style.borderColor = 'var(--color-warn)'; // Żółta ramka dla odróżnienia
             takeoverLboBtn.onclick = () => {
-                 if (confirm(`Czy na pewno chcesz zainicjować WROGIE PRZEJĘCIE ${target.name} przez ${initiatorStock.name}? Transakcja zostanie sfinansowana KREDYTEM (LBO), który obciąży Twoją spółkę.`)) {
+                 gameConfirm(`Czy na pewno chcesz zainicjować WROGIE PRZEJĘCIE ${target.name} przez ${initiatorStock.name}? Transakcja zostanie sfinansowana KREDYTEM (LBO), który obciąży Twoją spółkę.`, () => {
                     initiateMergerProcess(initiatorStock, target, 'przejęcie', 'lbo');
                     document.getElementById('ma-target-modal').style.display='none';
                     openManagementModal(initiatorSymbol);
-                }
+                });
             };
             // LBO jest ryzykowne, jeśli firma ma złą kondycję
             if (initiatorStock.financialHealth < 0) {
@@ -4111,14 +4039,14 @@ function openMaTargetModal(initiatorSymbol) {
                 const mergerBtn = document.createElement('button');
                 mergerBtn.textContent = 'Fuzja';
                 mergerBtn.title = 'Przyjazna fuzja (wymiana akcji)';
-                mergerBtn.style.marginLeft = '10px'; // Trochę większy odstęp
-                mergerBtn.style.borderColor = '#28a745'; // Zielona ramka
+                mergerBtn.classList.add('ml-2');
+                mergerBtn.style.borderColor = 'var(--color-up)'; // Zielona ramka
                 mergerBtn.onclick = () => {
-                    if (confirm(`Czy na pewno chcesz zaproponować FUZJĘ ${target.name} z ${initiatorStock.name}? Będzie to polegało na wymianie akcji.`)) {
+                    gameConfirm(`Czy na pewno chcesz zaproponować FUZJĘ ${target.name} z ${initiatorStock.name}? Będzie to polegało na wymianie akcji.`, () => {
                         initiateMergerProcess(initiatorStock, target, 'fuzja', 'stockSwap');
                         document.getElementById('ma-target-modal').style.display='none';
                         openManagementModal(initiatorSymbol);
-                    }
+                    });
                 };
                 actionCell.appendChild(mergerBtn);
             }
@@ -4150,125 +4078,422 @@ function openComplicationModal(stock, decisionData) {
     modal.style.display = 'block';
 }
 
+// --- Panel Lombardu ---
+
+// ============================================
+// ZMIENNE GLOBALNE
+// ============================================
+let currentConstructionTab = 'main'; // 'main', 'subcontractors'
+
+// ============================================
+// FUNKCJE ZARZĄDZANIA ZAKŁADKAMI
+// ============================================
+
 /**
- * Funkcja pomocnicza wywoływana przez przycisk w modalu komplikacji.
- * Przekazuje wybór gracza do logiki gry.
- * @param {string} stockSymbol - Symbol spółki, której dotyczy decyzja.
- * @param {string} optionId - ID wybranej opcji ('cancel', 'expensive', 'stronger').
+ * Przełącza zakładkę w modal sektora budowlanego
  */
-function resolveComplicationDecision(stockSymbol, optionId) {
-    const stock = stocks.find(s => s.symbol === stockSymbol);
-    if (!stock || !stock.mergerProcess || !stock.mergerProcess.decisionRequired) {
-        console.error(`[M&A Decision] Nie znaleziono spółki lub procesu decyzyjnego dla ${stockSymbol}`);
+function showConstructionTab(tabName) {
+    currentConstructionTab = tabName;
+    
+    const modal = document.getElementById('construction-sector-modal');
+    if (!modal) return;
+    
+    const tabButtons = modal.querySelectorAll('.tab-btn');
+    tabButtons.forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.getAttribute('onclick') && btn.getAttribute('onclick').includes(tabName)) {
+            btn.classList.add('active');
+        }
+    });
+    
+    const tabContents = modal.querySelectorAll('.tab-content');
+    tabContents.forEach(content => {
+        content.classList.remove('active');
+    });
+    
+    const activeContent = modal.querySelector(`#construction-${tabName}`);
+    if (activeContent) {
+        activeContent.classList.add('active');
+    }
+    
+    if (tabName === 'main') {
+        renderConstructionCompaniesList();
+        renderConstructionProjectsList();
+    }
+    if (tabName === 'subcontractors') {
+        renderConstructionSubcontractorsList();
+    }
+}
+
+/**
+ * Renderuje listę aktywnych przetargów
+ */
+function renderTendersList() {
+    const container = document.getElementById('tenders-list');
+    if (!container) return;
+
+    const expandedIds = new Set(
+        [...container.querySelectorAll('details[open]')]
+            .map(element => element.dataset.tenderId)
+    );
+
+    const fragment = document.createDocumentFragment();
+
+    const visibleTenders = activeTenders.filter(
+        tender => ['open', 'closed', 'awarded'].includes(tender.status)
+    );
+
+    if (visibleTenders.length === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'construction-empty';
+        empty.textContent = 'Brak otwartych lub realizowanych przetargów.';
+        fragment.appendChild(empty);
+    }
+
+    const statusNames = {
+        open: 'Przyjmowanie ofert',
+        closed: 'Oczekiwanie na rozstrzygnięcie',
+        awarded: 'Kontrakt przyznany'
+    };
+
+    for (const tender of visibleTenders) {
+        const card = document.createElement('article');
+        card.className = 'construction-live-card';
+
+        const title = document.createElement('h4');
+        title.textContent = `🏗️ ${tender.buildingType?.name || 'Inwestycja'}`;
+
+        const status = document.createElement('span');
+        status.className = 'construction-live-status';
+        status.textContent = statusNames[tender.status];
+
+        card.append(title, status);
+
+        card.append(
+            createConstructionInfoRow(
+                'Zamawiający',
+                tender.clientCompany?.name || 'Brak danych'
+            ),
+            createConstructionInfoRow(
+                'Budżet',
+                formatConstructionMoney(tender.budget)
+            )
+        );
+
+        if (tender.status === 'open') {
+            card.appendChild(createConstructionInfoRow(
+                'Czas na oferty',
+                formatConstructionTime(tender.remainingGameMs)
+            ));
+        }
+
+        if (tender.winner) {
+            card.append(
+                createConstructionInfoRow(
+                    'Wykonawca',
+                    tender.winner.bidder?.name || 'Brak danych'
+                ),
+                createConstructionInfoRow(
+                    'Wartość kontraktu',
+                    formatConstructionMoney(tender.winner.price)
+                )
+            );
+        }
+
+        const bids = [...(tender.bids || [])].sort(
+            (a, b) => calculateBidScore(b, tender) -
+                calculateBidScore(a, tender)
+        );
+
+        const details = document.createElement('details');
+        details.dataset.tenderId = tender.id;
+        details.open = expandedIds.has(tender.id);
+
+        const summary = document.createElement('summary');
+        summary.textContent = `Oferty wykonawców (${bids.length})`;
+        details.appendChild(summary);
+
+        if (bids.length === 0) {
+            const empty = document.createElement('p');
+            empty.textContent = 'Nie złożono jeszcze żadnej oferty.';
+            details.appendChild(empty);
+        }
+
+        for (const bid of bids) {
+            const offer = document.createElement('div');
+            offer.className = 'construction-live-offer';
+
+            offer.append(
+                createConstructionInfoRow(
+                    'Spółka',
+                    bid.bidder?.name || 'Brak danych'
+                ),
+                createConstructionInfoRow(
+                    'Cena',
+                    formatConstructionMoney(bid.price)
+                ),
+                createConstructionInfoRow(
+                    'Deklarowany czas',
+                    `${bid.time} dni budowy`
+                ),
+                createConstructionInfoRow(
+                    'Ocena oferty',
+                    `${calculateBidScore(bid, tender).toFixed(1)} / 100`
+                )
+            );
+
+            details.appendChild(offer);
+        }
+
+        card.appendChild(details);
+        fragment.appendChild(card);
+    }
+
+    container.replaceChildren(fragment);
+}
+
+function renderConstructionCompaniesList() {
+    const container = document.getElementById('construction-companies-list');
+    if (!container) return;
+
+    const builders = stocks.filter(company => isConstructionCompany(company) && !company.isBankrupt);
+    if (builders.length === 0) {
+        container.innerHTML = '<p class="construction-empty">Brak spółek budowlanych w grze.</p>';
         return;
     }
 
-    const process = stock.mergerProcess;
-    const partnerStock = stocks.find(s => s.symbol === process.partnerSymbol);
-    const decisionData = process.decisionRequired;
+    const fragment = document.createDocumentFragment();
 
-    // Znajdź wybraną opcję
-    const chosenOption = decisionData.options.find(opt => opt.id === optionId);
-    if (!chosenOption) {
-        console.error(`[M&A Decision] Nie znaleziono opcji o ID: ${optionId}`);
+    for (const company of builders) {
+        const stats = company.constructionStats || {};
+        const active = getActiveProjectsForBuilder(company);
+        const openBids = getOpenBidsForBuilder(company).length;
+        const bonuses = getConstructionTechnologyBonuses(company);
+
+        const card = document.createElement('div');
+        card.className = 'construction-company-card';
+
+        const heading = document.createElement('h4');
+        heading.textContent = company.name;
+        card.appendChild(heading);
+
+        card.append(
+            createConstructionInfoRow('Moce wykonawcze', `${active.length} / ${stats.maxProjects || 0} budów (oferty w toku: ${openBids})`),
+            createConstructionInfoRow('Doświadczenie', `${stats.experience || 0} (limit rośnie co 10 pkt, maks. 5 budów)`),
+            createConstructionInfoRow('Wygrane przetargi / ukończone', `${stats.wonTenders || 0} / ${stats.completedProjects || 0}`),
+            createConstructionInfoRow('Gotówka', formatConstructionMoney(company.cash)),
+            createConstructionInfoRow('Kredyt obrotowy na budowy', formatConstructionMoney(company.constructionCredit || 0)),
+            createConstructionInfoRow('Technologie: tempo / koszt / ryzyko', `+${(bonuses.speedBonus * 100).toFixed(0)}% / −${(bonuses.costReduction * 100).toFixed(0)}% / −${(bonuses.delayReduction * 100).toFixed(0)}%`)
+        );
+
+        const list = document.createElement('ul');
+        if (active.length === 0) {
+            const li = document.createElement('li');
+            li.textContent = 'Brak aktywnych budów';
+            list.appendChild(li);
+        }
+        for (const project of active) {
+            const li = document.createElement('li');
+            li.textContent = `${project.tender.buildingType.name} — ${(project.progress * 100).toFixed(0)}%, ${getConstructionProjectStatusLabel(project)}`;
+            list.appendChild(li);
+        }
+        card.appendChild(list);
+        fragment.appendChild(card);
+    }
+
+    container.replaceChildren(fragment);
+}
+
+function renderConstructionSubcontractorsList() {
+    const container = document.getElementById('subcontractors-list');
+    const summary = document.getElementById('subcontractors-summary');
+    if (!container) return;
+
+    const busyCount = specialists.filter(spec => spec.busyProjectId).length;
+
+    if (summary) {
+        summary.innerHTML = `
+            <div class="construction-stat-card"><span class="construction-stat-label">Specjaliści</span><strong>${specialists.length}</strong></div>
+            <div class="construction-stat-card"><span class="construction-stat-label">Zajęci przy budowach</span><strong>${busyCount}</strong></div>`;
+    }
+
+    if (specialists.length === 0) {
+        container.innerHTML = '<p class="construction-empty">Brak dostępnych specjalistów.</p>';
         return;
     }
 
-    // Wykonaj konsekwencję (która jest funkcją zdefiniowaną w gameLogic.js)
-    console.log(`[M&A Decision] Gracz wybrał: ${chosenOption.text}`);
-    chosenOption.consequence();
+    const fragment = document.createDocumentFragment();
+    const intro = document.createElement('p');
+    intro.className = 'construction-empty';
+    intro.textContent = 'Wykonawcy zatrudniają podwykonawców, gdy budowa grozi opóźnieniem. ' +
+        `Wynagrodzenie (${(CONSTRUCTION_RULES.subcontractorFeeRate * 100).toFixed(0)}% pozostałych kosztów) jest kosztem kontraktu; ` +
+        'moce podwykonawcy zwalniają się po odbiorze lub anulowaniu budowy.';
+    fragment.appendChild(intro);
 
-    // Resetuj flagę decyzji (już nie jest wymagana)
-    // Funkcje consequence (cancelMerger, itp.) powinny same resetować process.decisionRequired = null
-    // Ale na wszelki wypadek, jeśli tego nie robią:
-    if (stock.mergerProcess) stock.mergerProcess.decisionRequired = null;
-    if (partnerStock && partnerStock.mergerProcess) partnerStock.mergerProcess.decisionRequired = null;
-    
-    // Odśwież UI, aby pokazać nowy status (jeśli proces nie został anulowany)
-    displayStocks(getCurrentInputValues());
-    if (document.getElementById('management-modal')?.style.display === 'block') {
-        openManagementModal(stockSymbol);
+    const grid = document.createElement('div');
+    grid.className = 'subcontractor-grid specialist-grid';
+
+    for (const spec of specialists) {
+        const project = spec.busyProjectId ? constructionProjects.find(item => item.id === spec.busyProjectId) : null;
+        const card = document.createElement('article');
+        card.className = 'subcontractor-card specialist-card';
+
+        const top = document.createElement('div');
+        top.className = 'card-topline';
+        const name = document.createElement('h4');
+        name.textContent = spec.name;
+        const badge = document.createElement('span');
+        badge.className = `status-badge ${project ? 'busy' : 'available'}`;
+        badge.textContent = project ? 'Zajęty' : 'Dostępny';
+        top.append(name, badge);
+        card.appendChild(top);
+
+        card.append(
+            createConstructionInfoRow('Poziom', spec.level),
+            createConstructionInfoRow('Specjalność', spec.specialty),
+            createConstructionInfoRow('Bonus tempa', `+${(spec.bonus * 100).toFixed(1)}%`),
+            createConstructionInfoRow('Kontrakty', spec.contractsCompleted),
+            createConstructionInfoRow('Gotówka', formatConstructionMoney(spec.cash)),
+            createConstructionInfoRow('Obecna budowa', project ? `${project.tender.buildingType.name} (${project.builder.name})` : '—')
+        );
+
+
+        grid.appendChild(card);
     }
+
+    fragment.appendChild(grid);
+    container.replaceChildren(fragment);
 }
 
-function openDebtOfferModal(collectorStock, targetLoan, newInterestRate) {
-    const modal = document.getElementById('debt-offer-modal');
-    if (!modal || !currentDebtOffer) return; // currentDebtOffer jest ustawiane w gameLogic
+/** Jednolity opis statusu budowy — używany we wszystkich widokach. */
+function getConstructionProjectStatusLabel(project) {
+    if (project.settled) return project.status === 'completed' ? 'Odebrana' : 'Anulowana';
+    if (project.status === 'paused') {
+        if (project.delayReason === 'Brak środków wykonawcy.') return 'Wstrzymana — brak finansowania';
+        return `Wstrzymana — ${project.delayReason || 'przerwa'}`;
+    }
+    return getProjectedRemainingMs(project) > getProjectTimeLeftMs(project) ? 'W toku — zagrożony termin' : 'W toku';
+}
 
-    const messageEl = document.getElementById('debt-offer-message');
-    const acceptBtn = document.getElementById('debt-offer-accept-btn');
-    const declineBtn = document.getElementById('debt-offer-decline-btn');
+function renderConstructionProjectsList() {
+    const container = document.getElementById('construction-projects-list');
+    if (!container) return;
 
-    messageEl.innerHTML = `
-        Firma <strong>${collectorStock.name}</strong> zauważyła Twoje problemy z kredytem w <strong>${targetLoan.bankName}</strong>.<br><br>
-        Oferujemy natychmiastową spłatę Twojego długu w wysokości <strong>${targetLoan.amount.toFixed(2)} PLN</strong>.<br><br>
-        W zamian zaczniesz spłacać tę kwotę nam, ale z nowym, wyższym oprocentowaniem: <strong>${(newInterestRate * 100).toFixed(1)}%</strong> rocznie (zamiast obecnych ${(targetLoan.interestRate * 100).toFixed(1)}%).<br><br>
-        Twoje pominięte raty zostaną wyzerowane. Czy akceptujesz ofertę?
-    `;
+    const fragment = document.createDocumentFragment();
+    const projects = constructionProjects.filter(project => !project.settled);
 
-    // Używamy .onclick, aby mieć pewność, że stare listenery są usuwane
-    acceptBtn.onclick = () => {
-        acceptDebtOffer(); // Wywołuje funkcję z gameLogic
-        modal.style.display = 'none';
-    };
-    
-    declineBtn.onclick = () => {
-        declineDebtOffer(); // Wywołuje funkcję z gameLogic
-        modal.style.display = 'none';
-    };
+    if (projects.length === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'construction-empty';
+        empty.textContent = 'Brak aktywnych budów.';
+        fragment.appendChild(empty);
+    }
 
+    for (const project of projects) {
+        const card = document.createElement('article');
+        card.className = 'construction-live-card';
+        card.dataset.projectId = project.id;
+
+        const title = document.createElement('h4');
+        title.textContent = `🏗️ ${project.tender?.buildingType?.name || 'Budowa'}`;
+
+        const status = document.createElement('span');
+        status.className = 'construction-live-status';
+        if (project.status === 'paused') status.classList.add('is-paused');
+        status.textContent = getConstructionProjectStatusLabel(project);
+
+        card.append(title, status);
+
+        const progress = Math.max(0, Math.min(1, Number(project.progress) || 0));
+        const remainingWork = getProjectedRemainingMs(project) + Math.max(0, Number(project.pauseRemainingMs) || 0);
+        const timeLeft = getProjectTimeLeftMs(project);
+        const nextMilestone = CONSTRUCTION_RULES.milestones[project.milestonesPaid];
+
+        card.append(
+            createConstructionInfoRow('Zamawiający', project.tender?.clientCompany?.name || 'Brak danych'),
+            createConstructionInfoRow('Wykonawca', project.builder?.name || 'Brak danych'),
+            createConstructionInfoRow('Postęp', `${(progress * 100).toFixed(1)}%`),
+            createConstructionInfoRow('Prognoza do końca', formatConstructionTime(remainingWork)),
+            createConstructionInfoRow('Do terminu umownego', timeLeft >= 0 ? formatConstructionTime(timeLeft) : `po terminie o ${formatConstructionTime(-timeLeft)}`),
+            createConstructionInfoRow('Opóźnienia (wykonawca / zewnętrzne)', `${formatConstructionTime(project.contractorDelayMs)} / ${formatConstructionTime(project.excusedDelayMs)}`)
+        );
+
+        const bar = document.createElement('progress');
+        bar.className = 'construction-live-progress';
+        bar.max = 1;
+        bar.value = progress;
+        bar.setAttribute('aria-label', `Postęp budowy: ${(progress * 100).toFixed(1)}%`);
+        card.appendChild(bar);
+
+        const details = document.createElement('details');
+        const summary = document.createElement('summary');
+        summary.textContent = 'Rozliczenia kontraktu';
+        details.appendChild(summary);
+
+        details.append(
+            createConstructionInfoRow('Wartość umowy', formatConstructionMoney(getContractValue(project))),
+            createConstructionInfoRow('Zmiany zamówienia', formatConstructionMoney(project.changeOrderAmount)),
+            createConstructionInfoRow('Depozyt zamawiającego', formatConstructionMoney(project.escrowBalance)),
+            createConstructionInfoRow('Wypłacono wykonawcy (zaliczka + etapy)', formatConstructionMoney(project.paidToBuilder)),
+            createConstructionInfoRow('Następny etap płatności', nextMilestone ? `${Math.round(nextMilestone * 100)}% postępu` : 'Odbiór końcowy'),
+            createConstructionInfoRow('Koszty poniesione / planowane', `${formatConstructionMoney(project.costsPaid)} / ${formatConstructionMoney(project.estimatedCost)}`),
+            createConstructionInfoRow('Planowany wynik kontraktu', formatConstructionMoney(getContractValue(project) - project.estimatedCost)),
+            createConstructionInfoRow('Podwykonawca', project.subcontractor ? `${project.subcontractor.name} (${formatConstructionMoney(project.subcontractor.fee)})` : 'Brak')
+        );
+
+        card.appendChild(details);
+        fragment.appendChild(card);
+    }
+
+    container.replaceChildren(fragment);
+}
+
+// ============================================
+// GŁÓWNA FUNKCJA OTWIERANIA MODALU
+// ============================================
+
+function openConstructionSectorModal() {
+    const modal = document.getElementById('construction-sector-modal');
+
+    if (!modal) {
+        console.error('Nie znaleziono construction-sector-modal.');
+        return;
+    }
+
+    currentConstructionTab = 'main';
+
+    if (!document.getElementById('tenders-list')) {
+        const mainTab = modal.querySelector('#construction-main');
+
+        if (mainTab) {
+            const section = document.createElement('section');
+            section.className = 'construction-tenders-section';
+
+            const heading = document.createElement('h3');
+            heading.textContent = 'Przetargi i zamówienia';
+
+            const list = document.createElement('div');
+            list.id = 'tenders-list';
+
+            section.append(heading, list);
+            mainTab.prepend(section);
+        } else {
+            console.warn(
+                'Brak construction-main. Sekcja przetargów nie została dodana.'
+            );
+        }
+    }
+
+    renderConstructionSubcontractorsList();
+
+    modal.hidden = false;
     modal.style.display = 'block';
+
+    showConstructionTab('main');
+    updateConstructionSectorUI();
 }
 
-/**
- * Zamyka modal oferty długu (jeśli gracz kliknie 'X' lub 'Odrzuć').
- */
-function closeDebtOfferModal() {
-    const modal = document.getElementById('debt-offer-modal');
-    if (modal) {
-        modal.style.display = 'none';
-    }
-    // Funkcja declineDebtOffer() w gameLogic wyczyści currentDebtOffer
-}
-
-function openPawnOfferModal(pawnShop, targetStock, quantity, loanAmount, newInterestRate, durationWeeks) {
-    const modal = document.getElementById('pawn-offer-modal');
-    if (!modal || !currentPawnOffer) return; // currentPawnOffer jest ustawiane w gameLogic
-
-    const messageEl = document.getElementById('pawn-offer-message');
-    const acceptBtn = document.getElementById('pawn-offer-accept-btn');
-    const declineBtn = document.getElementById('pawn-offer-decline-btn');
-
-    messageEl.innerHTML = `
-        Firma <strong>${pawnShop.name}</strong> widzi, że potrzebujesz gotówki.<br><br>
-        Oferujemy natychmiastową pożyczkę w wysokości <strong>${loanAmount.toFixed(2)} PLN</strong>.
-        Jako zabezpieczenie musisz zastawić <strong>${quantity} szt.</strong> swoich akcji <strong>${targetStock.name} (${targetStock.symbol})</strong>.<br><br>
-        Będziesz mieć <strong>${durationWeeks} tygodni</strong> na spłatę kwoty <strong>${loanAmount.toFixed(2)} PLN</strong> wraz z odsetkami (${(newInterestRate * 100).toFixed(1)}% rocznie).
-    `;
-
-    acceptBtn.onclick = () => {
-        acceptPawnOffer(); // Wywołuje funkcję z gameLogic
-        modal.style.display = 'none';
-    };
-    
-    declineBtn.onclick = () => {
-        declinePawnOffer(); // Wywołuje funkcję z gameLogic
-        modal.style.display = 'none';
-    };
-
-    modal.style.display = 'block';
-}
-
-/**
- * Zamyka modal oferty lombardu (używane przez declinePawnOffer).
- */
-function closePawnOfferModal() {
-    const modal = document.getElementById('pawn-offer-modal');
-    if (modal) {
-        modal.style.display = 'none';
-    }
-}
-
+// --- Panel Windykatora ---
 function switchCityTab(tabName) {
     // Ukryj wszystkie kontenery zakładek miasta
     document.querySelectorAll('#city-investment-modal .bank-tab-content').forEach(content => {
@@ -4284,3 +4509,2528 @@ function switchCityTab(tabName) {
     document.getElementById(`tab-btn-city-${tabName}`).classList.add('active');
 }
 
+// ============================================
+// FUNKCJE POMOCNICZE DLA SEKTORA BUDOWLANEGO
+// ============================================
+
+function formatConstructionTime(milliseconds) {
+    const value = Number(milliseconds);
+
+    if (!Number.isFinite(value)) return 'Brak danych';
+
+    const seconds = Math.ceil(Math.max(0, value) / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const remainder = seconds % 60;
+
+    return `${minutes} min ${String(remainder).padStart(2, '0')} s symulacji`;
+}
+
+function formatConstructionMoney(value) {
+    const amount = Number(value);
+
+    if (!Number.isFinite(amount)) return 'Brak danych';
+
+    return amount.toLocaleString('pl-PL', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }) + ' PLN';
+}
+
+function createConstructionInfoRow(label, value) {
+    const row = document.createElement('p');
+    row.className = 'construction-info-row';
+
+    const labelElement = document.createElement('span');
+    labelElement.className = 'construction-info-label';
+    labelElement.textContent = label;
+
+    const valueElement = document.createElement('span');
+    valueElement.className = 'construction-info-value';
+    valueElement.textContent = String(value);
+
+    row.append(labelElement, valueElement);
+
+    return row;
+}
+
+function updateConstructionSectorUI() {
+    const modal = document.getElementById('construction-sector-modal');
+
+    if (
+        !modal ||
+        modal.hidden ||
+        getComputedStyle(modal).display === 'none'
+    ) {
+        return;
+    }
+
+    renderTendersList();
+    renderConstructionProjectsList();
+    renderConstructionCompaniesList();
+    renderConstructionHistoryList();
+    renderConstructionResearchList();
+    renderConstructionTicker();
+    renderConstructionFinancing();
+}
+
+function getConstructionHistoryRows(companies = stocks) {
+    const rows = [];
+
+    for (const company of companies) {
+        if (!Array.isArray(company?.constructionHistory)) continue;
+
+        const seenProjects = new Set();
+
+        for (const entry of company.constructionHistory) {
+            if (
+                !entry.projectId ||
+                seenProjects.has(entry.projectId)
+            ) {
+                continue;
+            }
+
+            seenProjects.add(entry.projectId);
+
+            const revenue = Number(entry.revenue);
+            const costs = Number(entry.costs);
+
+            if (
+                !Number.isFinite(revenue) ||
+                revenue < 0 ||
+                !Number.isFinite(costs) ||
+                costs < 0
+            ) {
+                continue;
+            }
+
+            const cancelled = entry.status === 'cancelled';
+            const completedAt = Number(entry.completedAt);
+
+            rows.push({
+                projectId: entry.projectId,
+                builderName: company.name || company.symbol || 'Spółka',
+                builderSymbol: company.symbol || '',
+                buildingName: entry.buildingName || 'Inwestycja',
+                clientName: entry.clientName || 'Brak danych',
+                status: cancelled ? 'cancelled' : 'completed',
+                revenue,
+                costs,
+                profit: revenue - costs,
+                margin: revenue > 0
+                    ? (revenue - costs) / revenue * 100
+                    : null,
+                delays: Math.max(0, Number(entry.delays) || 0),
+                penalty: Math.max(0, Number(entry.penalty) || 0),
+                bonus: Math.max(0, Number(entry.bonus) || 0),
+                elapsedGameMs: Number.isFinite(entry.elapsedGameMs)
+                    ? entry.elapsedGameMs
+                    : null,
+                completedAt: Number.isFinite(completedAt) &&
+                    completedAt > 0
+                    ? completedAt
+                    : null,
+                reason: entry.reason || ''
+            });
+        }
+    }
+
+    rows.sort((a, b) => {
+        const dateDifference =
+            (b.completedAt || 0) - (a.completedAt || 0);
+
+        if (dateDifference !== 0) return dateDifference;
+
+        return String(a.projectId).localeCompare(String(b.projectId));
+    });
+
+    return rows;
+}
+
+function renderConstructionHistoryList(companies = stocks) {
+    const modal = document.getElementById('construction-sector-modal');
+    const mainTab = modal?.querySelector('#construction-main');
+
+    if (!mainTab) return;
+
+    let container = mainTab.querySelector('#construction-history-list');
+
+    if (!container) {
+        const section = document.createElement('section');
+        section.className = 'construction-history-section';
+
+        const heading = document.createElement('h3');
+        heading.textContent = 'Historia kontraktów';
+
+        container = document.createElement('div');
+        container.id = 'construction-history-list';
+
+        section.append(heading, container);
+        mainTab.appendChild(section);
+    }
+
+    const expandedIds = new Set(
+        [...container.querySelectorAll('details[open]')]
+            .map(element => element.dataset.historyKey)
+    );
+
+    const rows = getConstructionHistoryRows(companies);
+    const fragment = document.createDocumentFragment();
+
+    if (rows.length === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'construction-empty';
+        empty.textContent = 'Brak zakończonych lub anulowanych kontraktów.';
+
+        fragment.appendChild(empty);
+        container.replaceChildren(fragment);
+        return;
+    }
+
+    const totals = rows.reduce((sum, row) => {
+        sum.revenue += row.revenue;
+        sum.costs += row.costs;
+        sum.profit += row.profit;
+
+        if (row.status === 'completed') {
+            sum.completed++;
+        } else {
+            sum.cancelled++;
+        }
+
+        return sum;
+    }, {
+        revenue: 0,
+        costs: 0,
+        profit: 0,
+        completed: 0,
+        cancelled: 0
+    });
+
+    const summaryCard = document.createElement('article');
+    summaryCard.className = 'construction-live-card';
+
+    const summaryTitle = document.createElement('h4');
+    summaryTitle.textContent = 'Wyniki kontraktów w dostępnej historii';
+
+    summaryCard.append(
+        summaryTitle,
+        createConstructionInfoRow('Ukończone', totals.completed),
+        createConstructionInfoRow('Anulowane', totals.cancelled),
+        createConstructionInfoRow(
+            'Przychody',
+            formatConstructionMoney(totals.revenue)
+        ),
+        createConstructionInfoRow(
+            'Koszty',
+            formatConstructionMoney(totals.costs)
+        ),
+        createConstructionInfoRow(
+            'Wynik',
+            formatConstructionMoney(totals.profit)
+        )
+    );
+
+    fragment.appendChild(summaryCard);
+
+    for (const row of rows.slice(0, 30)) {
+        const card = document.createElement('article');
+        card.className = 'construction-live-card';
+        card.dataset.historyProjectId = row.projectId;
+
+        const heading = document.createElement('h4');
+        heading.textContent = row.buildingName;
+
+        const status = document.createElement('span');
+        status.className = 'construction-live-status';
+        status.textContent = row.status === 'cancelled'
+            ? 'Kontrakt anulowany'
+            : 'Kontrakt ukończony';
+
+        if (row.status === 'cancelled') {
+            status.classList.add('is-paused');
+        }
+
+        card.append(
+            heading,
+            status,
+            createConstructionInfoRow('Wykonawca', row.builderName),
+            createConstructionInfoRow(
+                'Wynik kontraktu',
+                formatConstructionMoney(row.profit)
+            )
+        );
+
+        const key = JSON.stringify([
+            row.builderSymbol || row.builderName,
+            row.projectId
+        ]);
+
+        const details = document.createElement('details');
+        details.dataset.historyKey = key;
+        details.open = expandedIds.has(key);
+
+        const detailsTitle = document.createElement('summary');
+        detailsTitle.textContent = 'Rozliczenie i szczegóły';
+
+        details.append(
+            detailsTitle,
+            createConstructionInfoRow('Zamawiający', row.clientName),
+            createConstructionInfoRow(
+                'Przychód',
+                formatConstructionMoney(row.revenue)
+            ),
+            createConstructionInfoRow(
+                'Koszty realizacji',
+                formatConstructionMoney(row.costs)
+            ),
+            createConstructionInfoRow(
+                'Marża kontraktu',
+                row.margin === null
+                    ? 'Nie dotyczy'
+                    : `${row.margin.toFixed(1)}%`
+            ),
+            createConstructionInfoRow(
+                'Czas realizacji',
+                row.elapsedGameMs === null
+                    ? 'Brak danych'
+                    : formatConstructionTime(row.elapsedGameMs)
+            ),
+            createConstructionInfoRow('Opóźnienia', row.delays),
+            createConstructionInfoRow('Kara umowna / premia', `${formatConstructionMoney(row.penalty)} / ${formatConstructionMoney(row.bonus)}`),
+            createConstructionInfoRow(
+                'Data odbioru',
+                row.completedAt === null
+                    ? 'Brak danych'
+                    : new Date(row.completedAt).toLocaleString('pl-PL')
+            )
+        );
+
+        if (row.reason) {
+            details.appendChild(createConstructionInfoRow(
+                'Powód anulowania',
+                row.reason
+            ));
+        }
+
+        card.appendChild(details);
+        fragment.appendChild(card);
+    }
+
+    if (rows.length > 30) {
+        const note = document.createElement('p');
+        note.className = 'construction-empty';
+        note.textContent =
+            `Wyświetlono 30 z ${rows.length} kontraktów. ` +
+            'Pełna historia pozostaje w danych spółek.';
+
+        fragment.appendChild(note);
+    }
+
+    container.replaceChildren(fragment);
+}
+
+function renderConstructionResearchList(companies = stocks) {
+    const modal = document.getElementById('construction-sector-modal');
+    const mainTab = modal?.querySelector('#construction-main');
+
+    if (!mainTab) return;
+
+    let container = mainTab.querySelector(
+        '#construction-research-list'
+    );
+
+    if (!container) {
+        const section = document.createElement('section');
+        section.className = 'construction-research-section';
+
+        const heading = document.createElement('h3');
+        heading.textContent = 'Badania spółek budowlanych';
+
+        container = document.createElement('div');
+        container.id = 'construction-research-list';
+
+        section.append(heading, container);
+        mainTab.appendChild(section);
+    }
+
+    const expandedCompanies = new Set(
+        [...container.querySelectorAll('details[open]')]
+            .map(element => element.dataset.researchCompany)
+    );
+
+    const builders = companies.filter(
+        company =>
+            !company.isBankrupt &&
+            Array.isArray(company.sector) &&
+            company.sector.includes('Budowlany')
+    );
+
+    const fragment = document.createDocumentFragment();
+
+    if (builders.length === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'construction-empty';
+        empty.textContent = 'Brak aktywnych spółek budowlanych.';
+        fragment.appendChild(empty);
+    }
+
+    for (const company of builders) {
+        const card = document.createElement('article');
+        card.className = 'construction-live-card';
+
+        const heading = document.createElement('h4');
+        heading.textContent = `🔬 ${company.name}`;
+
+        const research = company.research;
+        const currentTech = technologies[research?.currentTech];
+        const bonuses = getConstructionTechnologyBonuses(company);
+
+        let researchStatus = 'Nie prowadzi badań';
+
+        if (research?.currentTech) {
+            researchStatus = research.isResearching
+                ? 'Badanie w toku'
+                : 'Badanie wstrzymane';
+        } else if (research?.choiceAvailableUntil) {
+            researchStatus = 'Oczekiwanie na wybór badania';
+        }
+
+        card.append(
+            heading,
+            createConstructionInfoRow('Status R&D', researchStatus),
+            createConstructionInfoRow(
+                'Specjalizacja',
+                research?.specialization || 'Nie wybrano'
+            ),
+            createConstructionInfoRow(
+                'Aktualne badanie',
+                currentTech?.name ||
+                (research?.currentTech ? 'Nieznana technologia' : 'Brak')
+            ),
+            createConstructionInfoRow(
+                'Bonus szybkości nowych budów',
+                `${(bonuses.speedBonus * 100).toFixed(1)}%`
+            ),
+            createConstructionInfoRow(
+                'Obniżka kosztów nowych budów',
+                `${(bonuses.costReduction * 100).toFixed(1)}%`
+            ),
+            createConstructionInfoRow(
+                'Względna redukcja ryzyka opóźnień',
+                `${(bonuses.delayReduction * 100).toFixed(1)}%`
+            )
+        );
+
+        const requiredPoints = Number(currentTech?.cost);
+        const currentPoints = Number(research?.progress);
+
+        if (
+            Number.isFinite(requiredPoints) &&
+            requiredPoints > 0 &&
+            Number.isFinite(currentPoints)
+        ) {
+            const progress = Math.max(
+                0,
+                Math.min(1, currentPoints / requiredPoints)
+            );
+
+            card.appendChild(createConstructionInfoRow(
+                'Postęp badania',
+                `${(progress * 100).toFixed(1)}%`
+            ));
+
+            const bar = document.createElement('progress');
+            bar.className = 'construction-live-progress';
+            bar.max = 1;
+            bar.value = progress;
+            bar.setAttribute('aria-label', 'Postęp badania');
+
+            card.appendChild(bar);
+        }
+
+        const options = getConstructionResearchOptions(company);
+
+        const details = document.createElement('details');
+        const companyKey = company.symbol || company.id || company.name;
+
+        details.dataset.researchCompany = companyKey;
+        details.open = expandedCompanies.has(companyKey);
+
+        const summary = document.createElement('summary');
+        summary.textContent =
+            `Technologie sektorowe (${options.length})`;
+
+        details.appendChild(summary);
+
+        for (const option of options) {
+            const item = document.createElement('div');
+            item.className = 'construction-live-offer';
+
+            const title = document.createElement('h4');
+            title.textContent = `${option.icon} ${option.name}`;
+
+            const description = document.createElement('p');
+            description.textContent = option.description;
+
+            item.append(
+                title,
+                description,
+                createConstructionInfoRow('Status', option.status),
+                createConstructionInfoRow(
+                    'Koszt rozpoczęcia',
+                    formatConstructionMoney(option.initialCashCost)
+                ),
+                createConstructionInfoRow(
+                    'Wymagany postęp',
+                    Number.isFinite(option.researchPoints)
+                        ? `${option.researchPoints} pkt`
+                        : 'Brak danych'
+                ),
+                createConstructionInfoRow(
+                    'Kierunek badań',
+                    option.type
+                )
+            );
+
+            details.appendChild(item);
+        }
+
+        card.appendChild(details);
+        fragment.appendChild(card);
+    }
+
+    container.replaceChildren(fragment);
+}
+
+function updateResearchChoiceTimerUI() {
+    const modal = document.getElementById('research-modal');
+    const timer = document.getElementById('rd-choice-timer');
+
+    if (
+        !modal ||
+        !timer ||
+        modal.hidden ||
+        getComputedStyle(modal).display === 'none'
+    ) {
+        return;
+    }
+
+    const company = stocks.find(
+        stock => stock.symbol === modal.dataset.currentSymbol
+    );
+
+    const research = company?.research;
+
+    if (
+        !research ||
+        research.currentTech ||
+        !research.choiceAvailableUntil
+    ) {
+        timer.textContent = '—';
+        return;
+    }
+
+    const remaining = Number.isFinite(research.choiceRemainingGameMs)
+        ? Math.max(0, research.choiceRemainingGameMs)
+        : 15000;
+
+    timer.textContent =
+        `${Math.ceil(remaining / 1000)} s symulacji` +
+        (isGamePaused ? ' — pauza' : '');
+}
+
+// =================================================================================
+// FUNDUSZ GRACZA (etap B): panel funduszu, wykres okresów, rywale, klienci,
+// konto prywatne, CV ze szkoleniami i scenka startowa
+// =================================================================================
+
+function formatZl(value, digits = 2) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return '—';
+    return number.toLocaleString('pl-PL', { minimumFractionDigits: digits, maximumFractionDigits: digits }) + ' zł';
+}
+
+function formatPct(value, digits = 2) {
+    const number = Number(value) * 100;
+    if (!Number.isFinite(number)) return '—';
+    return `${number >= 0 ? '+' : ''}${number.toFixed(digits)}%`;
+}
+
+function escapeHtml(text) {
+    return String(text).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
+// =================================================================================
+// PANEL FUNDUSZU
+// =================================================================================
+
+/** B5: panel „Dlaczego klienci odchodzą / przychodzą” — rozbicie przepływów ostatniego i bieżącego kwartału. */
+function renderFundFlowReasons() {
+    const box = document.getElementById('fund-flow-reasons');
+    if (!box || typeof getFundFlowStats !== 'function') return;
+    const stats = getFundFlowStats();
+    const quarterTable = (quarter, label) => {
+        if (!quarter) return `<p class="text-muted text-sm">${label}: brak danych.</p>`;
+        const rows = (entries, names, sign) => Object.entries(entries).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1])
+            .map(([key, value]) => `<li>${names[key] || key}: <strong class="${sign > 0 ? 'text-up' : 'text-down'}">${sign > 0 ? '+' : '−'}${formatZl(value, 0)}</strong></li>`).join('');
+        const base = Math.max(1, quarter.startUnits);
+        const net = (quarter.inUnits - quarter.outUnits) / base * 100;
+        return `<div class="text-sm"><strong>${label}</strong> (kw. ${quarter.quarter}): napływ ${(quarter.inUnits / base * 100).toFixed(1)}% JU, odpływ ${(quarter.outUnits / base * 100).toFixed(1)}% JU, netto ${net >= 0 ? '+' : ''}${net.toFixed(1)}%
+            <div class="d-flex gap-2 flex-wrap"><div><em>Odchodzą, bo:</em><ul>${rows(quarter.out, FUND_FLOW_OUT_REASONS, -1) || '<li>nikt nie odszedł</li>'}</ul></div>
+            <div><em>Przychodzą:</em><ul>${rows(quarter.in, FUND_FLOW_IN_REASONS, 1) || '<li>brak wpłat</li>'}</ul></div></div></div>`;
+    };
+    box.innerHTML = quarterTable(stats.last, 'Ostatni kwartał') + quarterTable(stats.current, 'Bieżący kwartał')
+        + `<p class="text-xs text-muted">Napływ nowych klientów (emisja ${isFundOpenForSubscriptions() ? 'otwarta' : 'zamknięta'}): ok. ${(isFundOpenForSubscriptions() ? getOrganicInflowRate() * 100 : 0).toFixed(1)}% aktywów rocznie — zależy od zaufania, reputacji i wyniku vs GIG.</p>`;
+}
+
+/** Skrót z powiadomienia: otwiera panel przepływów funduszu. */
+function showFundFlowPanel() {
+    const details = document.getElementById('fund-flow-details');
+    if (details) { details.open = true; details.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    renderFundFlowReasons();
+}
+
+function displayFundPanel() {
+    if (!playerFund) return;
+    const openBox = document.getElementById('fund-open-subscriptions');
+    if (openBox) openBox.checked = isFundOpenForSubscriptions(); // B5: domyślnie otwarta
+    renderFundFlowReasons();
+
+    const title = document.getElementById('fund-panel-title');
+    if (title) title.textContent = `💼 ${playerProfile?.fundName || 'Mój fundusz'}`;
+
+    document.getElementById('account-btn-fund')?.classList.toggle('active', activeTradingAccount === 'fund');
+    document.getElementById('account-btn-private')?.classList.toggle('active', activeTradingAccount === 'private');
+
+    renderFundSummary();
+    renderFundPeriodsChart();
+    renderFundRivalsTable();
+    renderFundClients();
+    renderPrivatePanel();
+    renderCareerPanel();
+    renderPawnPanel();
+}
+
+function renderFundSummary() {
+    const container = document.getElementById('fund-summary');
+    if (!container) return;
+
+    const current = playerFund.current;
+    const nav = getFundNav();
+    const periodProgress = Math.min(1, current.elapsedMs / FUND_PERIOD_MS);
+    const periodReturn = getPeriodReturn(current.startNav, nav);
+    const benchmarkReturn = getPeriodReturn(current.startBenchmark, getBenchmarkValue());
+    const trust = Math.round(playerFund.trust);
+    const trustClass = trust >= 60 ? 'good' : trust >= 40 ? 'mid' : 'bad';
+
+    container.innerHTML = `
+        <div class="fund-kpis">
+            <div><span>NAV / JU</span><strong>${nav.toFixed(4)} zł</strong></div>
+            <div><span>Liczba JU</span><strong>${playerFund.units.toFixed(1)}</strong></div>
+            <div><span>Klienci</span><strong>${playerFund.clients.length}</strong></div>
+            <div><span>Stanowisko</span><strong>${escapeHtml(getPlayerPosition().name)}</strong></div>
+        </div>
+        <div class="fund-trust">
+            <span>Zaufanie klientów: <strong>${trust}/100</strong></span>
+            <div class="fund-trust-bar"><div class="fund-trust-fill ${trustClass}" style="width:${trust}%"></div></div>
+        </div>
+        ${(() => { const reasons = typeof getTrustDropReasons === 'function' ? getTrustDropReasons() : []; return reasons.length ? `<div class="text-xs text-warn">⚠️ Zaufanie spada: ${escapeHtml(reasons[0])}</div>` : ''; })()}
+        <div class="fund-period-line">
+            Okres ${current.number}: ${formatPct(periodReturn)} vs GIG ${formatPct(benchmarkReturn)}
+            · emisje ${current.emissions}/${MAX_EMISSIONS_PER_PERIOD}
+            · obsunięcie ${(current.maxDrawdown * 100).toFixed(1)}%
+        </div>
+        <div class="fund-period-progress" title="Postęp okresu oceny (15 min gry)">
+            <div style="width:${(periodProgress * 100).toFixed(1)}%"></div>
+        </div>`;
+}
+
+/** Wykres słupkowy: 4 ostatnie okresy + bieżący — fundusz vs GIG vs średnia funduszy zewnętrznych. */
+function renderFundPeriodsChart() {
+    const container = document.getElementById('fund-periods-chart');
+    if (!container) return;
+
+    const current = playerFund.current;
+    const rivalsNow = getExternalFunds().filter(fund => current.startRivals[fund.symbol] > 0)
+        .map(fund => getPeriodReturn(current.startRivals[fund.symbol], getExternalFundValue(fund)));
+
+    const rows = playerFund.periods.slice(-FUND_PERIODS_SHOWN).map(period => ({
+        label: `Okres ${period.number}`,
+        fund: period.fundReturn,
+        benchmark: period.benchmarkReturn,
+        rivals: period.rivals.length ? period.rivals.reduce((sum, rival) => sum + rival.return, 0) / period.rivals.length : 0
+    }));
+    rows.push({
+        label: `Teraz`,
+        fund: getPeriodReturn(current.startNav, getFundNav()),
+        benchmark: getPeriodReturn(current.startBenchmark, getBenchmarkValue()),
+        rivals: rivalsNow.length ? rivalsNow.reduce((sum, value) => sum + value, 0) / rivalsNow.length : 0,
+        partial: true
+    });
+
+    const series = [
+        { key: 'fund', label: 'Twój fundusz', color: '#22C55E' },
+        { key: 'benchmark', label: 'GIG', color: '#38BDF8' },
+        { key: 'rivals', label: 'Fundusze zewnętrzne (śr.)', color: '#F59E0B' }
+    ];
+
+    const width = 320;
+    const height = 150;
+    const pad = { top: 10, bottom: 22, left: 34, right: 6 };
+    const values = rows.flatMap(row => series.map(item => row[item.key]));
+    const maxAbs = Math.max(0.01, ...values.map(Math.abs));
+    const plotH = height - pad.top - pad.bottom;
+    const zeroY = pad.top + plotH / 2;
+    const groupW = (width - pad.left - pad.right) / rows.length;
+    const barW = Math.max(4, groupW / (series.length + 1));
+
+    let svg = `<svg viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Stopy zwrotu w ostatnich okresach">`;
+    svg += `<line x1="${pad.left}" x2="${width - pad.right}" y1="${zeroY}" y2="${zeroY}" stroke="currentColor" stroke-opacity="0.35"/>`;
+    svg += `<text x="${pad.left - 4}" y="${pad.top + 8}" font-size="8" text-anchor="end" fill="currentColor">${formatPct(maxAbs, 1)}</text>`;
+    svg += `<text x="${pad.left - 4}" y="${height - pad.bottom}" font-size="8" text-anchor="end" fill="currentColor">${formatPct(-maxAbs, 1)}</text>`;
+
+    rows.forEach((row, index) => {
+        const groupX = pad.left + index * groupW + barW / 2;
+        series.forEach((item, seriesIndex) => {
+            const value = row[item.key];
+            const h = Math.abs(value) / maxAbs * (plotH / 2);
+            const x = groupX + seriesIndex * barW;
+            const y = value >= 0 ? zeroY - h : zeroY;
+            svg += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${(barW - 1).toFixed(1)}" height="${Math.max(0.5, h).toFixed(1)}" fill="${item.color}" fill-opacity="${row.partial ? 0.55 : 1}"><title>${row.label} — ${item.label}: ${formatPct(value)}</title></rect>`;
+        });
+        svg += `<text x="${(pad.left + index * groupW + groupW / 2).toFixed(1)}" y="${height - 8}" font-size="8" text-anchor="middle" fill="currentColor">${row.label}</text>`;
+    });
+    svg += '</svg>';
+
+    const legend = series.map(item => `<span><i style="background:${item.color}"></i>${item.label}</span>`).join('');
+    container.innerHTML = svg + `<div class="fund-legend">${legend}</div>`;
+}
+
+function renderFundRivalsTable() {
+    const container = document.getElementById('fund-rivals-table');
+    if (!container) return;
+
+    const last = playerFund.periods[playerFund.periods.length - 1];
+    if (!last) {
+        container.innerHTML = '<p class="fund-muted">Porównanie z rywalami pojawi się po pierwszym okresie (15 min gry).</p>';
+        return;
+    }
+
+    const rows = [
+        { name: `💼 ${playerProfile?.fundName || 'Twój fundusz'}`, ret: last.fundReturn, extra: `zmienność ${(last.volatility * 100).toFixed(2)}%, obsunięcie ${(last.maxDrawdown * 100).toFixed(1)}%`, mine: true },
+        { name: '📈 GIG (benchmark)', ret: last.benchmarkReturn, extra: '' },
+        ...last.rivals.map(rival => ({ name: rival.name, ret: rival.return, extra: '' }))
+    ].sort((a, b) => b.ret - a.ret);
+
+    container.innerHTML = `
+        <table class="asset-mini-table fund-rivals">
+            <caption>Okres ${last.number}: miejsce ${last.rank}/${last.rankOf}, premia ${formatZl(last.bonus)}</caption>
+            <thead><tr><th>Fundusz</th><th>Zwrot</th></tr></thead>
+            <tbody>${rows.map(row => `
+                <tr class="${row.mine ? 'mine' : ''}" title="${escapeHtml(row.extra)}">
+                    <td>${escapeHtml(row.name)}</td>
+                    <td class="${row.ret >= 0 ? 'profit' : 'loss'}">${formatPct(row.ret)}</td>
+                </tr>`).join('')}</tbody>
+        </table>`;
+}
+
+function renderFundClients() {
+    const container = document.getElementById('fund-clients-list');
+    if (!container) return;
+    const nav = getFundNav();
+
+    const clients = [...playerFund.clients].sort((a, b) => b.units - a.units);
+    container.innerHTML = `
+        <table class="asset-mini-table">
+            <thead><tr><th>Klient</th><th>Wartość</th><th>Zadowolenie</th></tr></thead>
+            <tbody>${clients.map(client => {
+                const def = CLIENT_TYPES[client.type] || CLIENT_TYPES.careful;
+                const sat = Math.round(client.satisfaction * 100);
+                return `<tr>
+                    <td title="${def.label}">${def.icon} ${escapeHtml(client.name)}</td>
+                    <td>${formatZl(client.units * nav, 0)}</td>
+                    <td class="${sat >= 55 ? 'profit' : sat < 35 ? 'loss' : ''}">${sat}%</td>
+                </tr>`;
+            }).join('')}</tbody>
+        </table>`;
+}
+
+function renderPrivatePanel() {
+    const container = document.getElementById('fund-private-panel');
+    if (!container) return;
+    const nav = getFundNav();
+
+    const holdings = Object.entries(playerWallet.portfolio).map(([symbol, holding]) => {
+        const stock = stocks.find(s => s.symbol === symbol);
+        const value = (stock?.price || 0) * holding.shares;
+        const pl = value - holding.avgPrice * holding.shares;
+        return `<li>${symbol}: ${holding.shares} szt. · ${formatZl(value)} <span class="${pl >= 0 ? 'profit' : 'loss'}">(${pl >= 0 ? '+' : ''}${pl.toFixed(2)})</span></li>`;
+    }).join('') || '<li class="fund-muted">Brak prywatnych akcji.</li>';
+
+    container.innerHTML = `
+        <p>Moje pieniądze: <strong>${formatZl(playerWallet.cash)}</strong>
+           · JU własnego funduszu: <strong>${playerWallet.fundUnits.toFixed(2)}</strong> (${formatZl(playerWallet.fundUnits * nav)})</p>
+        <ul class="fund-private-list">${holdings}</ul>
+        <div class="fund-emission">
+            <input type="number" id="private-ju-amount" min="1" value="50" aria-label="Kwota lub liczba JU">
+            <button class="btn-secondary" onclick="buyOwnFundUnits(document.getElementById('private-ju-amount').value)">Kup JU za zł</button>
+            <button class="btn-secondary" onclick="sellOwnFundUnits(document.getElementById('private-ju-amount').value)">Umórz JU</button>
+        </div>
+        <p class="fund-muted">Prywatny handel akcjami: przełącz konto na „Prywatne” i kupuj w tabeli rynku.
+           Kupowanie akcji, które fundusz kupił w tym tygodniu, grozi kontrolą compliance.</p>`;
+}
+
+function handleFundEmission() {
+    const input = document.getElementById('fund-emission-units');
+    const units = Math.floor(Number(input?.value) || 0);
+    if (!(units > 0)) return;
+    const result = issueFundUnits(units);
+    showToast(result.issued > 0 ? `Emisja: sprzedano ${result.issued.toFixed(1)} JU (${formatZl(result.raised)})` : 'Emisja: brak chętnych', result.issued > 0 ? 'success' : 'warning');
+    refreshFundViews();
+}
+
+// =================================================================================
+// CV I SZKOLENIA (zastępuje drzewko umiejętności)
+// =================================================================================
+
+function renderSkillsPanel() {
+    renderCvPanel();
+}
+
+let cvTab = 'cv'; // N1: 'cv' | 'academy'
+
+function setCvTab(tab) {
+    cvTab = tab;
+    renderCvPanel();
+}
+
+function renderCvPanel() {
+    const list = document.getElementById('skills-list');
+    const money = document.getElementById('skills-modal-xp');
+    if (!list) return;
+    if (money) money.textContent = playerWallet.cash.toFixed(2);
+    const tabs = `<div class="cc-tabs"><button class="${cvTab === 'cv' ? 'active' : ''}" onclick="setCvTab('cv')">📄 CV i szkolenia</button><button class="${cvTab === 'academy' ? 'active' : ''}" onclick="setCvTab('academy')">📘 Akademia</button><button class="${cvTab === 'mentor' ? 'active' : ''}" onclick="setCvTab('mentor')">🎓 Mentor</button></div>`;
+    if (cvTab === 'academy' && typeof renderAcademyPanel === 'function') {
+        list.innerHTML = tabs + renderAcademyPanel();
+        return;
+    }
+    if (cvTab === 'mentor' && typeof renderMentorPanel === 'function') {
+        list.innerHTML = tabs + renderMentorPanel();
+        return;
+    }
+
+    const trainings = getAvailableTrainings();
+    const completed = trainings.filter(id => getSkillLevel(id) > 0);
+    const periods = playerFund?.periods || [];
+    const bestExcess = periods.length ? Math.max(...periods.map(p => p.fundReturn - p.benchmarkReturn)) : null;
+
+    const medals = completed.map(id => {
+        const medal = getTrainingMedal(getSkillLevel(id));
+        return `<span class="cv-medal cv-medal-${medal.id}" title="${escapeHtml(skills[id].name)} — poziom ${getSkillLevel(id)}">${medal.icon} ${escapeHtml(skills[id].name)}</span>`;
+    }).join('') || '<span class="fund-muted">Brak ukończonych szkoleń.</span>';
+
+    const history = (playerProfile?.cv || []).slice(-8).reverse()
+        .map(entry => `<li class="cv-entry-${entry.type}">${escapeHtml(entry.text)}</li>`).join('');
+
+    const cards = trainings.map(id => {
+        const skill = skills[id];
+        const level = getSkillLevel(id);
+        const next = getNextSkillLevelInfo(id);
+        const medal = getTrainingMedal(level);
+        const cost = getTrainingCost(id);
+        const reqMet = !next?.requires || getSkillLevel(next.requires.skillId) >= next.requires.level;
+        const canBuy = next && reqMet && playerWallet.cash >= cost;
+
+        return `<article class="cv-training">
+            <h4>${escapeHtml(skill.name)} ${medal ? `<span class="cv-medal cv-medal-${medal.id}">${medal.icon}</span>` : ''}</h4>
+            <p class="fund-muted">Poziom ${level}/${skill.levels.length}</p>
+            ${next ? `<p>${escapeHtml(next.description || '')}</p>` : '<p><strong>Ukończone w pełni.</strong></p>'}
+            ${next ? `<button ${canBuy ? '' : 'disabled'} onclick="buyTraining('${id}')">${reqMet ? `Szkolenie: ${cost} zł` : 'Wymaga wcześniejszego szkolenia'}</button>` : ''}
+        </article>`;
+    }).join('');
+
+    list.innerHTML = tabs + `
+        <section class="cv-card">
+            <div class="cv-avatar" aria-hidden="true">${escapeHtml((playerProfile?.name || '?').slice(0, 1).toUpperCase())}</div>
+            <div>
+                <h3>${escapeHtml(playerProfile?.name || 'Gracz')}</h3>
+                <p>${escapeHtml(getPlayerPosition().name)} · ${escapeHtml(playerProfile?.corporation || '')}</p>
+                <p class="fund-muted">Fundusz: ${escapeHtml(playerProfile?.fundName || '')} · okresów: ${periods.length}
+                   ${bestExcess !== null ? `· najlepszy wynik vs GIG: ${formatPct(bestExcess)}` : ''}</p>
+            </div>
+        </section>
+        <h4>Odznaki szkoleń</h4>
+        <div class="cv-medals">${medals}</div>
+        <h4>Historia zawodowa</h4>
+        <ul class="cv-history">${history}</ul>
+        <h4>Dostępne szkolenia</h4>
+        <div class="cv-trainings">${cards}</div>`;
+}
+
+function displayXP() {
+    const element = document.getElementById('player-xp');
+    if (element) element.textContent = formatZl(playerWallet.cash);
+}
+
+// =================================================================================
+// SCENKA STARTOWA: SMS OD BABCI
+// =================================================================================
+
+const INTRO_SMS = [
+    'Cześć Wnusiu! 😊',
+    'Słyszałam, że dostałeś pracę w tej wielkiej firmie od pieniędzy. Jestem z Ciebie taka dumna! ❤️',
+    'Wysyłam Ci 100 zł kieszonkowego na dobry start. Kup sobie coś mądrego, może jakąś książkę albo kurs.',
+    'Tylko nie przepuść wszystkiego od razu! Całuję, Babcia 👵'
+];
+
+function showIntroScene() {
+    const overlay = document.getElementById('intro-overlay');
+    const thread = document.getElementById('intro-sms-thread');
+    const form = document.getElementById('intro-form');
+    if (!overlay || !thread || !form) return;
+
+    // Tryb debug: opcja „Pomijaj scenkę z babcią” — od razu profil domyślny z formularza.
+    if (isDebugMode() && isIntroSkipEnabled()) {
+        completeIntroScene();
+        return;
+    }
+
+    overlay.hidden = false;
+    thread.innerHTML = '';
+    form.hidden = true;
+    const skip = document.getElementById('intro-skip-btn');
+    if (skip) skip.hidden = !isDebugMode();
+
+    let index = 0;
+    const typeNext = () => {
+        if (index >= INTRO_SMS.length) {
+            const transfer = document.createElement('div');
+            transfer.className = 'intro-transfer';
+            transfer.textContent = `💸 Przelew przychodzący: +${GRANDMA_POCKET_MONEY},00 zł od: Babcia`;
+            thread.appendChild(transfer);
+            renderIntroCountries();
+            form.hidden = false;
+            return;
+        }
+        const bubble = document.createElement('div');
+        bubble.className = 'intro-sms typing';
+        bubble.textContent = '…';
+        thread.appendChild(bubble);
+        setTimeout(() => {
+            bubble.classList.remove('typing');
+            bubble.textContent = INTRO_SMS[index++];
+            setTimeout(typeNext, 450);
+        }, 700);
+    };
+    typeNext();
+}
+
+function renderIntroCountries() {
+    const container = document.getElementById('intro-countries');
+    if (!container) return;
+    container.innerHTML = START_COUNTRIES.map(country => `
+        <button type="button" class="intro-country ${country.available ? 'selected' : 'locked'}" ${country.available ? '' : 'disabled'}
+            title="${country.available ? 'Dostępny' : `Przepustka: ${country.passCost.toLocaleString('pl-PL')} zł (wkrótce)`}">
+            ${country.flag} ${country.name}${country.available ? '' : ' 🔒'}
+        </button>`).join('');
+}
+
+function completeIntroScene(event) {
+    if (event) event.preventDefault();
+    const value = id => (document.getElementById(id)?.value || '').trim();
+
+    playerProfile.name = value('intro-name') || playerProfile.name;
+    playerProfile.corporation = value('intro-corporation') || playerProfile.corporation;
+    playerProfile.fundName = value('intro-fund') || playerProfile.fundName;
+    playerProfile.country = 'PL';
+    playerProfile.cv = [{ type: 'start', text: `Zatrudnienie w ${playerProfile.corporation} jako Młodszy zarządca funduszu „${playerProfile.fundName}”.` }];
+
+    document.getElementById('intro-overlay').hidden = true;
+    if (typeof syncCeoTitle === 'function') syncCeoTitle(); // nazwa korporacji z formularza
+    logEvent(`💼 Witaj, ${playerProfile.name}! Zarządzasz funduszem „${playerProfile.fundName}” w ${playerProfile.corporation}. Wznów grę, aby zacząć.`, 'review');
+
+    // Jedno powitanie w poczcie — z nazwami z formularza (startNewCareer wysłał wcześniej domyślne).
+    mailbox = createMailbox();
+    addMail({
+        sender: 'corporation',
+        subject: `Witamy w ${playerProfile.corporation}, ${playerProfile.name}!`,
+        body: `Od dziś zarządzasz funduszem „${playerProfile.fundName}”. Wyniki oceniamy co 4 okresy. Wiadomości z rynku przysyłają czasopisma — prenumeraty ustawisz w zakładce Subskrypcje.`,
+        importance: 2
+    });
+    refreshFundViews();
+}
+
+// =================================================================================
+// TRYB DEBUG (ustawienia): prędkości ×10/×50, dodawanie pieniędzy, wymuszenie okresu i oceny
+// =================================================================================
+
+const DEBUG_MODE_KEY = 'gra_inwestycyjna_debug_mode';
+
+function isDebugMode() {
+    try { return localStorage.getItem(DEBUG_MODE_KEY) === '1'; } catch (e) { return false; }
+}
+
+function applyDebugModeUi() {
+    const enabled = isDebugMode();
+    document.querySelectorAll('.debug-only').forEach(element => { element.hidden = !enabled; });
+    const tools = document.getElementById('debug-tools');
+    if (tools) tools.hidden = !enabled;
+    const button = document.getElementById('debug-toggle-btn');
+    if (button) button.textContent = `🛠️ Tryb debug: ${enabled ? 'włączony' : 'wyłączony'}`;
+    const skipButton = document.getElementById('debug-skip-intro-btn');
+    if (skipButton) skipButton.textContent = `⏭️ Pomijaj scenkę z babcią: ${isIntroSkipEnabled() ? 'tak' : 'nie'}`;
+    if (!enabled && currentSpeedMultiplier > 5) setGameSpeed(5);
+}
+
+const INTRO_SKIP_KEY = 'gra_inwestycyjna_skip_intro';
+
+function isIntroSkipEnabled() {
+    try { return localStorage.getItem(INTRO_SKIP_KEY) === '1'; } catch (e) { return false; }
+}
+
+/** Przełącznik w ustawieniach debug: kolejne nowe gry startują bez scenki z babcią. */
+function toggleIntroSkip() {
+    try { localStorage.setItem(INTRO_SKIP_KEY, isIntroSkipEnabled() ? '0' : '1'); } catch (e) { /* brak localStorage */ }
+    applyDebugModeUi();
+}
+
+/** Pomija trwającą scenkę (przycisk w scence, widoczny w trybie debug). */
+function skipIntroScene() {
+    completeIntroScene();
+}
+
+function toggleDebugMode() {
+    try { localStorage.setItem(DEBUG_MODE_KEY, isDebugMode() ? '0' : '1'); } catch (e) { /* brak localStorage */ }
+    applyDebugModeUi();
+}
+
+function debugAddWallet(amount) {
+    playerWallet.cash += amount;
+    logEvent(`🛠️ [DEBUG] +${amount} zł do portfela prywatnego.`, 'review');
+    refreshFundViews();
+}
+
+/** Dodaje gotówkę funduszowi bez nowych JU (NAV rośnie). */
+function debugAddFund(amount) {
+    playerCash += amount;
+    logEvent(`🛠️ [DEBUG] +${amount} zł do gotówki funduszu.`, 'review');
+    refreshFundViews();
+}
+
+function debugEndPeriod() {
+    if (playerFund) closeFundPeriod();
+    refreshFundViews();
+}
+
+function debugBoardReview() {
+    if (typeof runBoardEvaluation === 'function') runBoardEvaluation();
+    refreshFundViews();
+}
+
+/**
+ * Niezmienniki świata gry (testy i tryb debug): skończone liczby, brak ujemnej gotówki funduszy,
+ * akcje w obrocie w granicach, JU klientów = JU funduszu, zastawy ≤ posiadanych, istniejące giełdy.
+ * Zwraca listę naruszeń (pusta = OK).
+ */
+function checkWorldInvariants() {
+    const problems = [];
+    const finite = (value, label) => { if (!Number.isFinite(Number(value))) problems.push(`${label}: ${value}`); };
+    const EPS = 1e-6;
+
+    for (const stock of stocks) {
+        if (stock.isBankrupt || stock.assetType === 'Startup') continue; // startup: wycena po wpłatach, bez gotówki i akcji
+        finite(stock.price, `cena ${stock.symbol}`);
+        if (!(stock.price > 0)) problems.push(`cena ${stock.symbol} ≤ 0`);
+        finite(stock.cash, `gotówka ${stock.symbol}`);
+        if (!exchanges[stock.exchange] && stock.exchange !== 'INCUBATOR') problems.push(`nieznana giełda ${stock.symbol}: ${stock.exchange}`);
+        if (stock.sharesHeld < -EPS || stock.sharesHeld > stock.totalShares + EPS) problems.push(`sharesHeld ${stock.symbol}: ${stock.sharesHeld}/${stock.totalShares}`);
+        const tracked = getTrackedHeldShares(stock);
+        if (Math.abs(stock.sharesHeld - tracked) > 0.5) problems.push(`akcje w obrocie ${stock.symbol}: ${Math.round(stock.sharesHeld)} ≠ posiadacze ${Math.round(tracked)}`);
+        if (Number(stock.cash) < 0 && !stock.assetType) problems.push(`ujemna gotówka ${stock.symbol}: ${Math.round(stock.cash)}`);
+    }
+
+    if (playerFund) {
+        finite(playerCash, 'gotówka funduszu');
+        if (playerCash < -EPS) problems.push(`ujemna gotówka funduszu: ${playerCash}`);
+        finite(getFundNav(), 'NAV');
+        const clientUnits = playerFund.clients.reduce((sum, client) => sum + client.units, 0);
+        if (Math.abs(clientUnits - playerFund.units) > Math.max(EPS, playerFund.units * 1e-9)) problems.push(`JU klientów ${clientUnits} ≠ JU funduszu ${playerFund.units}`);
+        finite(playerWallet?.cash, 'portfel prywatny');
+    }
+    const checkPortfolio = (portfolio, owner) => {
+        for (const [symbol, holding] of Object.entries(portfolio || {})) {
+            if (holding.assetType === 'Startup') { finite(holding.investedAmount, `startup ${owner} ${symbol}`); continue; }
+            finite(holding.shares, `akcje ${owner} ${symbol}`);
+            if (holding.shares < -EPS) problems.push(`ujemne akcje ${owner} ${symbol}`);
+            if ((holding.lockedShares || 0) > holding.shares + EPS) problems.push(`zastaw > posiadanych ${owner} ${symbol}`);
+        }
+    };
+    checkPortfolio(playerPortfolio, 'fundusz');
+    for (const ai of aiCompetitors) { finite(ai.cash, `gotówka ${ai.name}`); checkPortfolio(ai.portfolio, ai.name); }
+    for (const manager of corporation?.managers || []) {
+        finite(manager.fund.cash, `gotówka funduszu ${manager.name}`);
+        if (manager.fund.cash < -EPS) problems.push(`ujemna gotówka funduszu ${manager.name}`);
+        finite(getBotFundNav(manager.fund), `NAV ${manager.name}`);
+        checkPortfolio(manager.fund.portfolio, manager.name);
+    }
+    for (const bond of allBonds) finite(bond.faceValue, `obligacja ${bond.id}`);
+    if (corporation) finite(corporation.budget, 'budżet korporacji');
+    return problems;
+}
+
+function debugCheckInvariants() {
+    const problems = checkWorldInvariants();
+    showToast(problems.length ? `Naruszenia: ${problems.length} (szczegóły w konsoli)` : 'Świat gry spójny ✔', problems.length ? 'error' : 'success', 6000);
+    if (problems.length) console.warn('[niezmienniki]', problems);
+    return problems;
+}
+
+document.addEventListener('DOMContentLoaded', applyDebugModeUi);
+
+// =================================================================================
+// KARIERA I KORPORACJA (etap C)
+// =================================================================================
+
+let corporationTab = 'firm';
+
+function renderCareerPanel() {
+    const container = document.getElementById('fund-career-panel');
+    if (!container || !corporation) return;
+
+    const periodsDone = playerFund.periods.length;
+    const inCycle = periodsDone % BOARD_REVIEW_EVERY_PERIODS;
+    const reviewProgress = (inCycle + playerFund.current.elapsedMs / FUND_PERIOD_MS) / BOARD_REVIEW_EVERY_PERIODS;
+    const takeovers = getTakeoverProgress();
+    const score = corporation.lastPlayerScore;
+
+    container.innerHTML = `
+        <div class="career-panel">
+            <div class="career-row"><span>Stanowisko</span><strong>${escapeHtml(getPlayerPosition().name)}</strong></div>
+            <div class="career-row"><span>Ocena zarządu za</span><span>${BOARD_REVIEW_EVERY_PERIODS - inCycle} okr.${score !== null ? ` (ostatnio ${Math.round(score)}/100)` : ''}</span></div>
+            <div class="career-progress" title="Do następnej oceny zarządu"><span style="width:${Math.min(100, reviewProgress * 100).toFixed(0)}%"></span></div>
+            ${corporation.playerWeakReviews > 0 ? `<div class="loss">⚠️ Słabe oceny z rzędu: ${corporation.playerWeakReviews}/2</div>` : ''}
+            <div class="career-row"><span>Budżet korporacji</span><span>${formatZl(corporation.budget, 0)}</span></div>
+            <div class="career-row"><span>Cel: przejęcia</span><span>${takeovers.done}/${takeovers.required}</span></div>
+            ${corporation.victory ? `<div class="profit">👑 Zwycięstwo: ${corporation.victory.type === 'ceo' ? 'CEO' : 'dominacja'}</div>` : ''}
+            <button class="btn-secondary" onclick="openCorporationModal()">🏢 Korporacja</button>
+        </div>`;
+}
+
+function openCorporationModal(tab = corporationTab) {
+    if (!corporation) return;
+    document.getElementById('corporation-overlay').hidden = false;
+    setCorporationTab(tab);
+}
+
+function closeCorporationModal() {
+    document.getElementById('corporation-overlay').hidden = true;
+}
+
+function setCorporationTab(tab) {
+    corporationTab = tab;
+    document.querySelectorAll('.corp-tabs button').forEach(button => button.classList.toggle('active', button.dataset.tab === tab));
+    const title = document.getElementById('corporation-title');
+    if (title) title.textContent = `🏢 ${corporation.name}`;
+    renderCorporationBody();
+}
+
+/** Akcja z okna korporacji: wykonaj i odśwież widoki. */
+function corporationAction(fn, ...args) {
+    fn(...args);
+    refreshFundViews();
+    renderCorporationBody();
+}
+
+function renderCorporationBody() {
+    const body = document.getElementById('corporation-body');
+    if (!body || !corporation) return;
+    const renderers = { firm: renderCorporationFirm, board: renderCorporationBoard, analysts: renderCorporationAnalysts, cooperation: renderCorporationCooperation, takeovers: renderCorporationTakeovers };
+    body.innerHTML = (renderers[corporationTab] || renderCorporationFirm)();
+}
+
+function renderCorporationBoard() {
+    const lastReview = corporation.reviews[corporation.reviews.length - 1];
+    const people = [
+        { name: playerProfile.name, positionId: playerProfile.positionId, mine: true, score: lastReview?.results.find(r => r.isPlayer)?.score },
+        ...corporation.managers.map(manager => ({
+            name: manager.name, positionId: manager.positionId, manager,
+            personality: MANAGER_PERSONALITIES[manager.personality].label,
+            score: lastReview?.results.find(r => !r.isPlayer && r.name === manager.name)?.score
+        }))
+    ].sort((a, b) => getPositionIndex(b.positionId) - getPositionIndex(a.positionId));
+
+    const supervise = canSuperviseFunds();
+    const positionName = id => CAREER_POSITIONS[getPositionIndex(id)].name;
+
+    return `
+        <p class="fund-muted">Ocena zarządu co ${BOARD_REVIEW_EVERY_PERIODS} okresy: nadwyżka nad GIG, stabilność, zaufanie klientów, miejsce w rankingu, compliance.
+        Awans od ${PROMOTION_SCORE} pkt (przy braku miejsca — zamiana z najsłabszym na wyższym stanowisku), 2 oceny poniżej ${WEAK_SCORE} z rzędu = degradacja.
+        Limity: CEO 1, zarząd 3, kierownicy projektu 2. Twoja reputacja w zarządzie: ${corporation.boardReputation.toFixed(0)}/100.</p>
+        <table class="asset-mini-table">
+            <thead><tr><th>Osoba</th><th>Stanowisko</th><th>Styl</th><th>Ostatnia ocena</th><th></th></tr></thead>
+            <tbody>${people.map(person => {
+                const supervised = person.manager && corporation.supervisedManagerId === person.manager.id;
+                const canTake = supervise && person.manager && getPositionIndex(person.positionId) < getPositionIndex(playerProfile.positionId);
+                const action = supervised
+                    ? `<button onclick="corporationAction(consolidateSupervisedFund)">🔗 Konsoliduj (głosowanie)</button>`
+                    : canTake ? `<button onclick="corporationAction(superviseManagerFund, '${person.manager.id}')">👔 Nadzoruj</button>` : '';
+                return `<tr class="${person.mine ? 'mine' : ''}">
+                    <td>${escapeHtml(person.name)}${person.mine ? ' (Ty)' : ''}</td>
+                    <td>${escapeHtml(positionName(person.positionId))}</td>
+                    <td>${escapeHtml(person.personality || '—')}</td>
+                    <td>${person.score ?? '—'}</td>
+                    <td>${action}</td>
+                </tr>`;
+            }).join('')}</tbody>
+        </table>
+        ${supervise ? '' : '<p class="fund-muted">Nadzór nad funduszem innego zarządcy i konsolidacja — od stanowiska Kierownik projektu.</p>'}
+        <h4>Historia ocen</h4>
+        <ul>${corporation.reviews.slice().reverse().map(review => {
+            const me = review.results.find(r => r.isPlayer);
+            return `<li>Po okresie ${review.periodNumber}: ${me.score}/100, ${escapeHtml(positionName(me.from))} → ${escapeHtml(positionName(me.to))}</li>`;
+        }).join('') || '<li class="fund-muted">Jeszcze nie było oceny.</li>'}</ul>`;
+}
+
+function renderCorporationAnalysts() {
+    const allowed = canHireAnalysts();
+    return `
+        <p class="fund-muted">Analitycy (od stanowiska Starszy zarządca) dodają wgląd w oknie akcjonariatu spółki. Zatrudnienie i tygodniowa pensja z portfela prywatnego (${formatZl(playerWallet.cash)}). Gwiazdki = dokładność.</p>
+        <div class="corp-cards">${Object.entries(ANALYST_TYPES).map(([type, def]) => {
+            const hired = getAnalyst(type);
+            return `<article class="corp-card">
+                <h4>${escapeHtml(def.label)} ${hired ? '★'.repeat(hired.stars) : ''}</h4>
+                <p>${escapeHtml(def.description)}</p>
+                <p class="fund-muted">${hired ? `Pensja: ${formatZl(hired.salary)} / tydzień` : `Zatrudnienie: ${formatZl(def.hireCost, 0)}, pensja ok. ${formatZl(def.salary, 0)} / tydzień`}</p>
+                ${hired ? '<p class="profit">Zatrudniony</p>' : `<button ${allowed ? '' : 'disabled'} onclick="corporationAction(hireAnalyst, '${type}')">Zatrudnij</button>`}
+            </article>`;
+        }).join('')}</div>`;
+}
+
+function renderCorporationCooperation() {
+    const period = playerFund.current.number;
+    const companies = stocks.filter(stock => !stock.assetType && !stock.isBankrupt && !stock.isBankStock)
+        .sort((a, b) => (Number(b.reputation?.player) || 0) - (Number(a.reputation?.player) || 0))
+        .slice(0, 12);
+
+    return `
+        <p class="fund-muted">Spotkanie z inwestorem (${formatZl(MEETING_COST, 0)}, raz na okres): szansa zależy od zaufania, wyniku vs GIG i charakteru inwestora — sukces = zakup JU.
+        Lunch z prezesem (${formatZl(CEO_LUNCH_COST, 0)}) poprawia relacje; przy dobrej opinii spółka z nadwyżką gotówki lokuje część w JU (uwaga na konflikt interesów, gdy fundusz ma &gt;5% jej akcji).</p>
+        <h4>Wielcy inwestorzy</h4>
+        <div class="corp-cards">${getBigInvestors().map(ai => {
+            const met = corporation.lastMeetings[ai.id] === period;
+            return `<article class="corp-card">
+                <h4>${escapeHtml(ai.name)}</h4>
+                <p class="fund-muted">Gotówka: ${formatZl(ai.cash, 0)}</p>
+                <button ${met ? 'disabled' : ''} onclick="corporationAction(meetInvestor, '${ai.id}')">${met ? 'Spotkanie odbyte' : '☕ Spotkanie'}</button>
+            </article>`;
+        }).join('')}</div>
+        <h4>Prezesi spółek</h4>
+        <table class="asset-mini-table">
+            <thead><tr><th>Spółka</th><th>Prezes</th><th>Relacje</th><th>Gotówka</th><th></th></tr></thead>
+            <tbody>${companies.map(stock => {
+                const met = corporation.lastMeetings[stock.symbol] === period;
+                return `<tr>
+                    <td>${escapeHtml(stock.symbol)}</td>
+                    <td>${escapeHtml(stock.ceo?.name || stock.ceo || '—')}</td>
+                    <td>${(Number(stock.reputation?.player) || 0).toFixed(0)}</td>
+                    <td>${formatZl(stock.cash || 0, 0)}</td>
+                    <td><button ${met ? 'disabled' : ''} onclick="corporationAction(lunchWithCeo, '${stock.symbol}')">🍽️ Lunch</button></td>
+                </tr>`;
+            }).join('')}</tbody>
+        </table>`;
+}
+
+function renderCorporationTakeovers() {
+    const allowed = canProposeTakeovers();
+    const progress = getTakeoverProgress();
+    return `
+        <p class="fund-muted">Fundusze zewnętrzne to firmy zarządzające. Przejęcie proponuje członek zarządu; zarząd głosuje (reputacja, ostatnia ocena), a cena (${(EXTERNAL_FIRM_VALUE_PER_AUM * 100).toFixed(0)}% aktywów) schodzi z budżetu korporacji (${formatZl(corporation.budget, 0)}).
+        Proces ma 7 etapów (postęp co kwartał) i może mieć komplikacje. Cel zwycięstwa: przejąć wskazane 🎯 fundusze (${progress.done}/${progress.required}).</p>
+        <div class="corp-cards">${getExternalFunds().map(stock => {
+            const isTarget = corporation.takeoverTargets.includes(stock.symbol);
+            const process = stock.mergerProcess?.type === 'fundTakeover' ? stock.mergerProcess : null;
+            const price = getExternalFirmValuation(stock);
+            let action;
+            if (stock.managedByCorporation) action = '<p class="profit">✅ Przejęty</p>';
+            else if (process) action = `<p>Etap ${process.stage}/7 · postęp ${process.progress}%</p>`;
+            else action = `<button ${allowed && corporation.budget >= price ? '' : 'disabled'} onclick="corporationAction(proposeFundTakeover, '${stock.symbol}')">🗳️ Wniosek o przejęcie</button>`;
+            return `<article class="corp-card ${isTarget ? 'target' : ''} ${stock.managedByCorporation ? 'done' : ''}">
+                <h4>${isTarget ? '🎯 ' : ''}${escapeHtml(getExternalFirmName(stock))}</h4>
+                <p>Aktywa: ${formatZl(getExternalFundValue(stock) * stock.totalShares, 0)}</p>
+                <p>Cena przejęcia: ${formatZl(price, 0)}</p>
+                ${action}
+            </article>`;
+        }).join('')}</div>
+        ${allowed ? '' : '<p class="fund-muted">Wnioski o przejęcie — od stanowiska Członek zarządu.</p>'}`;
+}
+
+function showVictoryScreen(victory) {
+    const overlay = document.getElementById('victory-overlay');
+    const body = document.getElementById('victory-body');
+    if (!overlay || !body) return;
+    body.innerHTML = `
+        <p>${victory.type === 'ceo'
+            ? `${escapeHtml(playerProfile.name)} zostaje <strong>CEO</strong> ${escapeHtml(corporation.name)}!`
+            : `${escapeHtml(corporation.name)} przejmuje wszystkie wskazane fundusze — <strong>dominacja</strong>!`}</p>
+        <p>Okresy: ${victory.periods} · aktywa funduszu: ${formatZl(victory.assets, 0)} · przejęcia: ${corporation.acquiredFunds.length}</p>
+        <p class="fund-muted">Możesz grać dalej.</p>`;
+    overlay.hidden = false;
+}
+
+// =================================================================================
+// SKRZYNKA MAILOWA (etap E1) — układ jak Gmail
+// =================================================================================
+
+let mailView = { folder: 'inbox', selectedId: null, pane: 'mail' }; // pane: mail | subscriptions | media
+
+const MAIL_FOLDER_LABELS = {
+    inbox: '📥 Odebrane', starred: '⭐ Oznaczone', corporation: '🏢 Korporacja',
+    PULS: '📰 Puls Rynku', FLESZ: '📰 Flesz Giełdowy', OBSER: '📰 Obserwator', spam: '🚫 Spam'
+};
+
+function openMailbox(folder = mailView.folder) {
+    mailView.folder = folder;
+    mailView.pane = 'mail';
+    document.getElementById('mail-overlay').hidden = false;
+    renderMailbox();
+}
+
+function closeMailbox() {
+    document.getElementById('mail-overlay').hidden = true;
+}
+
+function updateMailBadge() {
+    const badge = document.querySelector('#open-mail-btn .nav-badge');
+    if (!badge || !mailbox) return;
+    const unread = getUnreadMailCount('inbox');
+    badge.textContent = unread > 99 ? '99+' : String(unread);
+    badge.hidden = unread === 0;
+}
+
+function formatMailTime(clockMs) {
+    const totalMinutes = Math.floor((clockMs || 0) / 60000);
+    return `${Math.floor(totalMinutes / 60)}:${String(totalMinutes % 60).padStart(2, '0')}`;
+}
+
+function setMailFolder(folder) {
+    mailView = { folder, selectedId: null, pane: 'mail' };
+    renderMailbox();
+}
+
+function setMailPane(pane) {
+    mailView.pane = pane;
+    mailView.selectedId = null;
+    renderMailbox();
+}
+
+function selectMail(id) {
+    mailView.selectedId = id;
+    markMailRead(id);
+    renderMailbox();
+}
+
+function mailAction(fn, ...args) {
+    fn(...args);
+    renderMailbox();
+}
+
+function renderMailbox() {
+    const overlay = document.getElementById('mail-overlay');
+    updateMailBadge();
+    if (!overlay || overlay.hidden || !mailbox) return;
+
+    const folders = document.getElementById('mail-folders');
+    folders.innerHTML = MAIL_FOLDERS.map(folder => {
+        const unread = getUnreadMailCount(folder);
+        const active = mailView.pane === 'mail' && mailView.folder === folder;
+        return `<button class="mail-folder ${active ? 'active' : ''}" onclick="setMailFolder('${folder}')">
+            <span>${MAIL_FOLDER_LABELS[folder]}</span>${unread ? `<b>${unread}</b>` : ''}</button>`;
+    }).join('') + `
+        <hr>
+        <button class="mail-folder ${mailView.pane === 'subscriptions' ? 'active' : ''}" onclick="setMailPane('subscriptions')">⚙️ Subskrypcje</button>`;
+
+    const list = document.getElementById('mail-list');
+    const preview = document.getElementById('mail-preview');
+
+    if (mailView.pane === 'subscriptions') {
+        list.hidden = true;
+        preview.innerHTML = renderMailSubscriptions();
+        return;
+    }
+
+    list.hidden = false;
+    const messages = getMailInFolder(mailView.folder);
+    list.innerHTML = `
+        <div class="mail-list-toolbar">
+            <strong>${MAIL_FOLDER_LABELS[mailView.folder]}</strong>
+            <button class="btn-secondary" onclick="mailAction(markAllMailRead, '${mailView.folder}')">Oznacz wszystkie jako przeczytane</button>
+        </div>
+        ${messages.length ? messages.slice(0, 80).map(message => `
+            <div class="mail-row ${message.read ? '' : 'unread'} ${message.id === mailView.selectedId ? 'selected' : ''}" onclick="selectMail(${message.id})">
+                <button class="mail-star ${message.starred ? 'on' : ''}" onclick="event.stopPropagation(); mailAction(toggleMailStar, ${message.id})" aria-label="Gwiazdka">${message.starred ? '★' : '☆'}</button>
+                <span class="mail-from">${escapeHtml(getMailSenderName(message.sender))}</span>
+                <span class="mail-subject">${message.importance >= 3 ? '❗ ' : ''}${message.isSpam ? '<span class="mail-tag">Reklama</span> ' : ''}${escapeHtml(message.subject)}
+                    <span class="mail-snippet"> — ${escapeHtml(message.body.slice(0, 80))}</span></span>
+                <span class="mail-time">${formatMailTime(message.at)}</span>
+            </div>`).join('') : '<p class="fund-muted mail-empty">Brak wiadomości w tym folderze.</p>'}`;
+
+    const selected = mailbox.messages.find(m => m.id === mailView.selectedId);
+    preview.innerHTML = selected ? renderMailPreview(selected) : '<p class="fund-muted mail-empty">Wybierz wiadomość z listy.</p>';
+}
+
+function renderMailPreview(message) {
+    let action = '';
+    if (message.action?.type === 'botBlock') {
+        const offer = botRelations.blockOffer?.symbol === message.action.symbol ? botRelations.blockOffer : null;
+        action = offer
+            ? `<div class="mail-action"><p>${offer.shares.toLocaleString('pl-PL')} akcji po ${formatZl(offer.price)} · razem ${formatZl(offer.shares * offer.price, 0)}</p><button onclick="mailAction(acceptBotBlock)">Kup pakiet z rabatem</button></div>`
+            : '<p class="fund-muted">Oferta pakietu wygasła.</p>';
+    } else if (message.action?.type === 'agm') {
+        action = `<div class="mail-action"><button onclick="openGovernanceModal('${message.action.symbol}')">Otwórz walne zgromadzenie</button></div>`;
+    } else if (message.action?.type === 'takeover') {
+        action = `<div class="mail-action"><button onclick="openTakeoverModal('${message.action.symbol}')">Otwórz decyzję w sprawie przejęcia</button></div>`;
+    } else if (message.action?.type === 'rescue') {
+        action = rescueOffer?.symbol === message.action.symbol && !rescueOffer.closed
+            ? '<div class="mail-action"><button onclick="openRescueOfferingModal()">Otwórz ofertę emisji</button></div>'
+            : '<p class="fund-muted">Ta emisja jest już zamknięta.</p>';
+    }
+    if (message.action?.type === 'unionDemand') {
+        const stock = stocks.find(s => s.symbol === message.action.symbol);
+        const pending = stock?.workforce?.pendingDemand;
+        action = pending
+            ? `<div class="mail-action">${pending.choice ? `<p>Wybrano: <strong>${{ agree: 'zgoda', negotiate: 'negocjacje', refuse: 'odmowa' }[pending.choice]}</strong> — możesz zmienić do końca kwartału.</p>` : ''}<button onclick="mailAction(respondUnionDemand, '${stock.symbol}', 'agree')">Zgoda</button> <button class="btn-secondary" onclick="mailAction(respondUnionDemand, '${stock.symbol}', 'negotiate')">Negocjacje</button> <button class="btn-danger" onclick="mailAction(respondUnionDemand, '${stock.symbol}', 'refuse')">Odmowa</button></div>`
+            : '<p class="fund-muted">Sprawa została już rozstrzygnięta.</p>';
+    }
+    if (message.action?.type === 'pppRestructure') {
+        const stake = (playerFund?.ppp || []).find(item => item.id === message.action.stakeId);
+        action = stake?.restructure === 'pending'
+            ? `<div class="mail-action"><button onclick="mailAction(respondPppRestructure, '${stake.id}', true)">Zgódź się</button> <button class="btn-secondary" onclick="mailAction(respondPppRestructure, '${stake.id}', false)">Odmów</button></div>`
+            : '<p class="fund-muted">Decyzja w sprawie restrukturyzacji została podjęta.</p>';
+    }
+    if (message.action?.type === 'privatization') {
+        const offer = privatizationOffer?.symbol === message.action.symbol ? privatizationOffer : null;
+        action = offer
+            ? `<div class="mail-action">
+                   <p>Cena: <strong>${formatZl(offer.price)}</strong> · dostępne: ${offer.remaining.toLocaleString('pl-PL')} akcji · limit funduszu: ${(Math.floor(offer.shares * offer.maxFundShare) - offer.fundShares).toLocaleString('pl-PL')}</p>
+                   <input type="text" inputmode="numeric" id="privatization-qty" value="10" aria-label="Liczba akcji">
+                   <button onclick="mailAction(subscribePrivatization, parseInt(document.getElementById('privatization-qty').value, 10))">Zapisz fundusz</button>
+               </div>`
+            : '<p class="fund-muted">Zapisy na tę ofertę są zamknięte.</p>';
+    }
+    return `
+        <article class="mail-message">
+            <h3>${escapeHtml(message.subject)}</h3>
+            <p class="fund-muted">Od: ${escapeHtml(getMailSenderName(message.sender))} · ${formatMailTime(message.at)}${message.isSpam ? ' · reklama' : ''}</p>
+            <p>${escapeHtml(message.body)}</p>
+            ${action}
+            <div class="mail-message-actions">
+                ${message.symbol ? `<button onclick="openStockDetailsModal('${message.symbol}')">Pokaż spółkę</button>` : ''}
+                <button onclick="mailAction(toggleMailStar, ${message.id})">${message.starred ? '★ Usuń gwiazdkę' : '☆ Oznacz gwiazdką'}</button>
+                <button onclick="mailAction(markMailRead, ${message.id}, false)">Oznacz jako nieprzeczytane</button>
+                <button onclick="mailView.selectedId = null; mailAction(deleteMail, ${message.id})">🗑️ Usuń</button>
+            </div>
+        </article>`;
+}
+
+function renderMailSubscriptions() {
+    const filter = getSkillLevel('adblock');
+    return `
+        <h3>Subskrypcje czasopism</h3>
+        <p class="fund-muted">Wersja darmowa przysyła wszystkie wiadomości czasopisma razem z jego spamem. Premium (płatne co tydzień z portfela prywatnego: ${formatZl(playerWallet.cash)}) — tylko ważne wiadomości, bez spamu. Każde czasopismo to spółka z giełdy.</p>
+        <table class="asset-mini-table">
+            <thead><tr><th>Czasopismo</th><th>Profil</th><th>Premium / tydz.</th><th>Subskrypcja</th></tr></thead>
+            <tbody>${Object.entries(MAGAZINES).map(([symbol, def]) => {
+                const current = mailbox.subscriptions[symbol];
+                const option = (level, label) => `<button class="${current === level ? 'active' : ''}" onclick="mailAction(setMagazineSubscription, '${symbol}', ${level ? `'${level}'` : 'null'})">${label}</button>`;
+                return `<tr>
+                    <td>${escapeHtml(def.label)}</td>
+                    <td>${escapeHtml(def.profile)}</td>
+                    <td>${formatZl(def.premiumWeekly, 0)}</td>
+                    <td class="mail-sub-options">${option('free', 'Darmowa')}${option('premium', 'Premium')}${option(null, 'Wyłącz')}</td>
+                </tr>`;
+            }).join('')}</tbody>
+        </table>
+        <p class="fund-muted">Filtr antyspamowy (szkolenie w CV): poziom ${filter}/2 — ${filter >= 2 ? 'reklamy i spam czasopism trafiają do folderu Spam' : filter >= 1 ? 'reklamy spółek trafiają do folderu Spam' : 'spam trafia do skrzynki odbiorczej'}.</p>`;
+}
+
+// =================================================================================
+// MIASTO: KAMPANIA WYBORCZA (etap E1)
+// =================================================================================
+
+function renderCityElection() {
+    const container = document.getElementById('city-content-election');
+    if (!container || container.contains(document.activeElement)) return; // nie przerywaj wpisywania kwoty
+    if (!city.election) {
+        const last = city.lastElection;
+        container.innerHTML = last
+            ? `<h4>Ostatnie wybory</h4><ul>${last.map(r => `<li>${escapeHtml(r.name)} (${escapeHtml(MAYOR_POLICIES[r.policy].label)}): ${(r.share * 100).toFixed(0)}%</li>`).join('')}</ul>`
+            : '<p class="fund-muted">Kampania rusza na rok przed wyborami.</p>';
+        return;
+    }
+    container.innerHTML = `
+        <h4>Kampania wyborcza — wybory za ${city.mayor.electionYear} ${city.mayor.electionYear === 1 ? 'rok' : 'lata'}</h4>
+        <p class="fund-muted">Darowizny z portfela prywatnego (${formatZl(playerWallet.cash)}) zwiększają szanse kandydata. Darowizna od ${PLAYER_DONATION_COMPLIANCE_LIMIT} zł zwraca uwagę compliance. Wygrany pamięta wsparcie.</p>
+        <table class="asset-mini-table">
+            <thead><tr><th>Kandydat</th><th>Polityka</th><th>Siła kampanii</th><th>Twoje wsparcie</th><th></th></tr></thead>
+            <tbody>${city.election.candidates.map(c => `<tr>
+                <td>${escapeHtml(c.name)}${c.incumbent ? ' (urzędujący)' : ''}</td>
+                <td title="${escapeHtml(MAYOR_POLICIES[c.policy].description)}">${escapeHtml(MAYOR_POLICIES[c.policy].label)}</td>
+                <td>${getCandidateScore(c).toFixed(0)}</td>
+                <td>${formatZl(c.playerDonations, 0)}</td>
+                <td><input type="text" inputmode="numeric" id="campaign-${c.id}" value="100" size="6" aria-label="Kwota darowizny">
+                    <button onclick="donateToCampaign('${c.id}', parseFloat(document.getElementById('campaign-${c.id}').value)); updateCityModalContent();">Wesprzyj</button></td>
+            </tr>`).join('')}</tbody>
+        </table>`;
+}
+
+// =================================================================================
+// LOMBARD FUNDUSZU (etap E2)
+// =================================================================================
+
+function renderPawnPanel() {
+    const container = document.getElementById('fund-pawn-panel');
+    if (!container || !playerFund || container.contains(document.activeElement)) return; // nie przerywaj wpisywania
+    const account = getFundAccount();
+    const pawnShop = getPawnShop();
+    const holdings = Object.entries(playerPortfolio)
+        .filter(([, h]) => (h.assetType === 'stock' || !h.assetType) && h.shares - (h.lockedShares || 0) > 0);
+
+    container.innerHTML = `
+        <p class="fund-muted">Zastaw do ${(PAWN_MAX_SHARE_OF_ASSETS * 100).toFixed(0)}% aktywów funduszu, ${(PAWN_LOAN_TO_VALUE * 100).toFixed(0)}% wartości akcji, ${(PAWN_ANNUAL_RATE * 100).toFixed(0)}% rocznie, ${PAWN_WEEKS} tygodni.
+        Każdy zastaw obniża zaufanie klientów i zwiększa ryzyko compliance. ${COLLECTOR_AFTER_MISSED} niezapłacone odsetki = windykator zajmuje akcje.</p>
+        <div class="career-row"><span>Zadłużenie / limit</span><span>${formatZl(getPawnOutstanding(account), 0)} / ${formatZl(getPawnOutstanding(account) + getPawnCapacity(account), 0)}</span></div>
+        ${account.loans.map(loan => `
+            <div class="career-row">
+                <span>${escapeHtml(loan.symbol)} × ${loan.shares} · ${formatZl(loan.principal, 0)} · ${loan.weeksLeft} tyg.${loan.missed ? ` · <span class="loss">zaległość ${loan.missed}</span>` : ''}</span>
+                <button onclick="repayFundPawn('${loan.id}')">Spłać</button>
+            </div>`).join('')}
+        ${pawnShop && holdings.length ? `
+            <div class="fund-emission">
+                <select id="pawn-symbol" aria-label="Akcje do zastawu">${holdings.map(([symbol, h]) => `<option value="${symbol}">${symbol} (wolne: ${h.shares - (h.lockedShares || 0)})</option>`).join('')}</select>
+                <input type="text" inputmode="numeric" id="pawn-qty" value="10" aria-label="Liczba akcji">
+                <button class="btn-secondary" onclick="pawnFundShares(document.getElementById('pawn-symbol').value, parseInt(document.getElementById('pawn-qty').value, 10))">Zastaw</button>
+            </div>` : `<p class="fund-muted">${pawnShop ? 'Brak wolnych akcji do zastawu.' : 'Lombard jest nieczynny.'}</p>`}`;
+}
+
+/** Okno lombardu: warunki, zastawy funduszu gracza i zapas przejętych akcji. */
+function openPawnShopPanel() {
+    const modal = document.getElementById('pawnshop-modal');
+    const body = document.getElementById('pawnshop-body');
+    if (!modal || !body) return;
+    const pawnShop = getPawnShop();
+    const holdings = shop => Object.entries(shop?.holdingPortfolio || {})
+        .map(([symbol, item]) => `<li>${item.quantity} × ${escapeHtml(symbol)} (przejęte po ${formatZl(item.purchasePrice)})</li>`).join('');
+
+    body.innerHTML = pawnShop ? `
+        <p><strong>${escapeHtml(pawnShop.name)}</strong> (${escapeHtml(pawnShop.symbol)}) · gotówka ${formatZl(pawnShop.cash, 0)}</p>
+        <p class="fund-muted">Pożyczki pod zastaw akcji dla funduszy: ${(PAWN_LOAN_TO_VALUE * 100).toFixed(0)}% wartości, ${(PAWN_ANNUAL_RATE * 100).toFixed(0)}% rocznie, ${PAWN_WEEKS} tygodni, do ${(PAWN_MAX_SHARE_OF_ASSETS * 100).toFixed(0)}% aktywów funduszu. Zastaw ustawisz w panelu funduszu (sekcja „Lombard”).</p>
+        <h4>Zastawy Twojego funduszu</h4>
+        <ul>${(playerFund?.pawnLoans || []).map(loan => `<li>${loan.shares} × ${escapeHtml(loan.symbol)}: ${formatZl(loan.principal)} · ${loan.weeksLeft} tyg.${loan.missed ? ` · zaległość ${loan.missed}` : ''}</li>`).join('') || '<li class="fund-muted">Brak.</li>'}</ul>
+        <h4>Akcje przejęte przez lombard</h4>
+        <ul>${holdings(pawnShop) || '<li class="fund-muted">Brak.</li>'}</ul>`
+        : '<p class="loss">Lombard nie jest dostępny.</p>';
+    modal.style.display = 'block';
+}
+
+/** Okno windykatora: zasady i akcje zajęte dłużnikom (fundusze, boty). */
+function openDebtCollectorPanel() {
+    const modal = document.getElementById('debtcollector-modal');
+    const body = document.getElementById('debtcollector-body');
+    if (!modal || !body) return;
+    const collector = getDebtCollector();
+    const seized = Object.entries(collector?.holdingPortfolio || {})
+        .map(([symbol, item]) => `<li>${item.quantity} × ${escapeHtml(symbol)}</li>`).join('');
+    const botDebts = aiCompetitors.reduce((sum, ai) => sum + (ai.loans || []).filter(loan => (loan.missedPayments || 0) > 0).length, 0);
+
+    body.innerHTML = collector ? `
+        <p><strong>${escapeHtml(collector.name)}</strong> (${escapeHtml(collector.symbol)}) · gotówka ${formatZl(collector.cash, 0)}</p>
+        <p class="fund-muted">Windykator przejmuje zaległe długi (kredyty botów z zaległościami, niespłacone zastawy funduszy po ${COLLECTOR_AFTER_MISSED} nieopłaconych odsetkach) i zajmuje akcje dłużników z dyskontem ${(100 - COLLECTOR_DISCOUNT * 100).toFixed(0)}%.</p>
+        <p>Kredyty botów z zaległościami: <strong>${botDebts}</strong></p>
+        <h4>Zajęte akcje</h4>
+        <ul>${seized || '<li class="fund-muted">Brak.</li>'}</ul>`
+        : '<p class="loss">Windykator nie jest dostępny.</p>';
+    modal.style.display = 'block';
+}
+
+// =================================================================================
+// CENTRUM BANKOWE (okno banku): wskaźniki, zakładki, banki komercyjne, lokaty funduszu
+// =================================================================================
+
+const BANK_TYPE_STYLES = {
+    INVESTMENT: 'invest', CORPORATE: 'corporate', UNIVERSAL: 'universal', INTERNATIONAL: 'international',
+    COOPERATIVE: 'cooperative', INTERNET: 'internet', MORTGAGE: 'mortgage'
+};
+
+function getBankTypeClass(type) {
+    const key = Object.keys(BANK_TYPES).find(name => BANK_TYPES[name] === type);
+    return `bank-type-${BANK_TYPE_STYLES[key] || 'other'}`;
+}
+
+/** Pasek wskaźników na górze okna banku. */
+function renderBankTicker() {
+    const ticker = document.getElementById('bank-ticker');
+    if (!ticker) return;
+    const pct = value => `${(value * 100).toFixed(2)}%`;
+    const items = [
+        ['Stopa bazowa BC', pct(centralBank.baseInterestRate || 0)],
+        ['Kredyt (rynek)', pct(getLoanRate())],
+        ['Depozyt (rynek)', pct(getDepositRate())],
+        ['Gotówka funduszu', formatZl(playerCash, 0)],
+        ['Lokaty funduszu', formatZl(getFundDepositsValue(), 0)],
+        ['Obligacje funduszu', formatZl(getFundBondsValue(), 0)]
+    ];
+    ticker.innerHTML = items.map(([label, value]) => `<div class="bank-ticker-item"><span>${label}</span><strong>${value}</strong></div>`).join('');
+}
+
+function switchBankTab(tabName) {
+    const modal = document.getElementById('bank-modal');
+    if (!modal) return;
+    modal.querySelectorAll('.bank-tab-content').forEach(content => { content.style.display = 'none'; });
+    document.getElementById(`bank-content-${tabName}`).style.display = 'block';
+    modal.querySelectorAll('.bank-tab-btn').forEach(button => button.classList.toggle('active', button.id === `tab-btn-${tabName}`));
+    renderBankTicker();
+    if (tabName === 'bonds') renderBondMarketInBank();
+    else if (tabName === 'commercial') renderCommercialBanksList();
+}
+
+function renderFundDeposits() {
+    const container = document.getElementById('fund-deposits-list');
+    if (!container) return;
+    const deposits = getFundDeposits();
+    container.innerHTML = deposits.length ? deposits.map(deposit => `
+        <div class="bank-deposit">
+            <div class="bank-deposit-info">
+                <strong>${escapeHtml(deposit.bankName)}</strong>
+                <span class="text-muted text-sm">${deposit.termWeeks} tyg. · ${(deposit.rate * 100).toFixed(2)}% rocznie · zostało ${deposit.weeksLeft} tyg.</span>
+            </div>
+            <div class="bank-deposit-amount">${formatZl(deposit.principal)} <span class="text-up text-sm">+${formatZl(deposit.accrued)}</span></div>
+            <div class="bank-deposit-progress"><span style="width:${(100 * (1 - deposit.weeksLeft / deposit.termWeeks)).toFixed(0)}%"></span></div>
+            <button class="btn-secondary text-sm" onclick="breakFundDeposit('${deposit.id}'); renderFundDeposits(); renderBankTicker();">Zerwij</button>
+        </div>`).join('') : '<p class="text-muted">Fundusz nie ma lokat. Wybierz bank poniżej.</p>';
+}
+
+/** Karty banków: typ, oprocentowanie, lokata funduszu, sprzedaż akcji (bank inwestycyjny). */
+function renderCommercialBanksList() {
+    renderFundDeposits();
+    const list = document.getElementById('commercial-banks-list');
+    if (!list) return;
+    const banks = commercialBanks.filter(bank => bank.isActive);
+    if (!banks.length) { list.innerHTML = '<p class="text-muted">Na rynku nie działa żaden bank komercyjny.</p>'; return; }
+
+    list.innerHTML = banks.map(bank => {
+        const loanRate = (getLoanRate() + (Number(bank.baseInterestRateMargin) || 0)) * 100;
+        const terms = FUND_DEPOSIT_TERMS.map(term => `<option value="${term.weeks}">${term.label} · ${(getFundDepositRate(bank, term.weeks) * 100).toFixed(2)}%</option>`).join('');
+        const deposit = canBankTakeFundDeposits(bank) ? `
+            <div class="bank-card-form">
+                <select id="deposit-term-${bank.id}" aria-label="Okres lokaty">${terms}</select>
+                <input type="text" inputmode="numeric" id="deposit-amount-${bank.id}" value="${Math.max(FUND_DEPOSIT_MIN, Math.floor(playerCash * 0.1))}" aria-label="Kwota lokaty">
+                <button onclick="openFundDeposit('${bank.id}', parseFloat(document.getElementById('deposit-amount-${bank.id}').value), parseInt(document.getElementById('deposit-term-${bank.id}').value, 10)); renderCommercialBanksList(); renderBankTicker();">Załóż lokatę</button>
+            </div>` : '<p class="text-muted text-sm">Bank nie przyjmuje lokat funduszy.</p>';
+
+        let sales = '';
+        if (bank.type === BANK_TYPES.INVESTMENT && bank.stockPortfolio) {
+            const offers = Object.entries(bank.stockPortfolio).filter(([, holding]) => holding.shares > 0).map(([symbol, holding]) => {
+                const stock = stocks.find(s => s.symbol === symbol);
+                return stock ? `<li><span>${escapeHtml(symbol)} · ${holding.shares} szt. · ${formatZl(stock.price * 1.10)}</span>
+                    <span class="bank-card-form"><input type="text" inputmode="numeric" id="buy-from-bank-${bank.id}-${symbol}" value="1" aria-label="Liczba akcji">
+                    <button onclick="buySharesFromInvestmentBank('${bank.id}', '${symbol}')">Kup</button></span></li>` : '';
+            }).join('');
+            sales = `<div class="bank-card-sales"><h5>Akcje na sprzedaż (+10% do kursu)</h5>${offers ? `<ul class="list-plain">${offers}</ul>` : '<p class="text-muted text-sm">Brak ofert.</p>'}
+                <button class="btn-secondary text-sm" onclick="openSellSharesToBankModal('${bank.id}')">Sprzedaj akcje bankowi</button></div>`;
+        }
+
+        return `<article class="bank-card ${getBankTypeClass(bank.type)}">
+            <header class="bank-card-head">
+                <span class="bank-card-icon" aria-hidden="true">🏦</span>
+                <div><h4>${escapeHtml(bank.name)}</h4><span class="bank-card-type">${escapeHtml(bank.type)}</span></div>
+            </header>
+            <dl class="bank-card-rates">
+                <div><dt>Kredyt</dt><dd>${loanRate.toFixed(2)}%</dd></div>
+                <div><dt>Lokata 16 tyg.</dt><dd>${canBankTakeFundDeposits(bank) ? (getFundDepositRate(bank, 16) * 100).toFixed(2) + '%' : '—'}</dd></div>
+                <div><dt>Kapitał</dt><dd>${formatZl(bank.cash, 0)}</dd></div>
+            </dl>
+            ${typeof renderParabankExtras === 'function' ? renderParabankExtras(bank) : ''}
+            ${deposit}
+            ${sales}
+        </article>`;
+    }).join('');
+}
+
+// =================================================================================
+// KLIENCI I RYNEK JU (okno obserwacji — gracz nie handluje)
+// =================================================================================
+
+let juView = { filter: 'all', clientId: null };
+
+function openJuMarket() {
+    document.getElementById('clients-modal').style.display = 'block';
+    renderJuMarket();
+}
+
+function setJuClientFilter(filter) {
+    juView.filter = filter;
+    juView.clientId = null;
+    renderJuMarket();
+}
+
+function showJuClient(id) {
+    juView.clientId = juView.clientId === id ? null : id;
+    renderJuMarket();
+}
+
+function formatPremium(value) {
+    const pct = (value || 0) * 100;
+    return `<span class="${pct > 0.05 ? 'text-up' : pct < -0.05 ? 'text-down' : 'text-muted'}">${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%</span>`;
+}
+
+/** B4: opłata za zarządzanie i kampania marketingowa (pod paskiem rynku JU). */
+function renderJuDecisions() {
+    const ticker = document.getElementById('ju-ticker');
+    if (!ticker || !playerFund) return;
+    let box = document.getElementById('ju-decisions');
+    if (!box) { box = document.createElement('div'); box.id = 'ju-decisions'; box.className = 'bank-grid mt-3'; ticker.after(box); }
+    if (box.contains(document.activeElement)) return;
+    const campaign = playerFund.campaign;
+    box.innerHTML = `
+        <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">💼</span><div><h4>Opłata za zarządzanie</h4><span class="bank-card-type">teraz ${(getPlayerFeeRate() * 100).toFixed(2)}% rocznie · standard ${(MANAGEMENT_FEE_ANNUAL * 100).toFixed(1)}%</span></div></header>
+            <p class="text-sm">Niższa opłata przyciąga klientów (zwłaszcza skner), wyższa zasila budżet korporacji i Twój udział, ale klienci wrażliwi na koszty odchodzą. Zmiana raz na kwartał.</p>
+            <div class="bank-card-form"><input type="text" inputmode="decimal" id="fee-rate-input" value="${(getPlayerFeeRate() * 100).toFixed(2)}" aria-label="Opłata w % rocznie">
+            <button onclick="setPlayerFeeRate(parseFloat(document.getElementById('fee-rate-input').value.replace(',', '.'))); renderJuMarket();">Ustaw (0,5–3%)</button></div></article>
+        <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">📣</span><div><h4>Kampania marketingowa</h4><span class="bank-card-type">koszt ${formatZl(getMarketingCost(), 0)} z budżetu korporacji · ${MARKETING_WEEKS} tyg.</span></div></header>
+            ${campaign?.weeksLeft > 0 ? `<p class="text-sm">Trwa: ${MARKETING_TARGETS[campaign.target].icon} ${MARKETING_TARGETS[campaign.target].label}, zostało ${campaign.weeksLeft} tyg.</p>`
+                : `<p class="text-sm">Dodatkowi kupujący JU z wybranej grupy klientów. Nowe wpłaty nadal wymagają zaufania ≥ 50.</p>
+                <div class="bank-card-form">${Object.entries(MARKETING_TARGETS).map(([id, t]) => `<button class="btn-secondary" onclick="startMarketingCampaign('${id}'); renderJuMarket();">${t.icon} ${t.label}</button>`).join('')}</div>`}</article>`;
+}
+
+function renderJuMarket() {
+    const modal = document.getElementById('clients-modal');
+    if (!modal || modal.style.display !== 'block' || !playerFund) return;
+
+    const funds = getJuMarketFunds();
+    const playerStats = juMarket.stats.player?.history[0];
+    const weekFlows = playerStats ? playerStats.inflow : 0;
+    const best = funds.find(fund => fund.id === juMarket.bestFundId);
+
+    document.getElementById('ju-ticker').innerHTML = [
+        ['Klienci funduszu', playerFund.clients.length],
+        ['Wpłaty nowych (tydz.)', formatZl(weekFlows, 0)],
+        ['Premia JU funduszu', formatPremium(playerStats?.premium)],
+        ['Wolumen JU (tydz.)', (playerStats?.volume || 0).toFixed(1)],
+        ['Tydzień rynku', juMarket.week],
+        ['Najlepiej sprzedaje się', best ? escapeHtml(best.name) : '—']
+    ].map(([label, value]) => `<div class="bank-ticker-item"><span>${label}</span><strong>${value}</strong></div>`).join('');
+    renderJuDecisions();
+
+    // Tabela funduszy rynku wtórnego
+    const rows = funds.map(fund => {
+        const history = juMarket.stats[fund.id]?.history || [];
+        const last = history[0] || {};
+        const trend = history.slice(0, 4).reduce((sum, item) => sum + (item.premium || 0), 0) / Math.max(1, Math.min(4, history.length));
+        return { fund, last, trend, popularity: getJuPopularity(fund.id, fund.assets) };
+    }).sort((a, b) => b.popularity - a.popularity);
+    document.getElementById('ju-funds-table').innerHTML = `
+        <table class="asset-mini-table ju-table">
+            <thead><tr><th>#</th><th>Fundusz</th><th>NAV</th><th>Cena JU vs NAV</th><th>Trend (4 tyg.)</th><th>Wolumen</th><th>Nowi klienci</th><th>Klienci</th></tr></thead>
+            <tbody>${rows.map((row, index) => `
+                <tr class="${row.fund.kind === 'player' ? 'mine' : ''} ${row.fund.id === juMarket.bestFundId ? 'ju-best' : ''}">
+                    <td>${index + 1}</td>
+                    <td>${row.fund.kind === 'player' ? '💼' : row.fund.kind === 'bot' ? '🏢' : '🌐'} ${escapeHtml(row.fund.name)}</td>
+                    <td>${row.fund.nav.toFixed(2)}</td>
+                    <td>${formatPremium(row.last.premium)}</td>
+                    <td>${formatPremium(row.trend)}</td>
+                    <td>${(row.last.volume || 0).toFixed(1)}</td>
+                    <td>${row.last.newClients || 0}</td>
+                    <td>${row.last.clients ?? '—'}</td>
+                </tr>`).join('')}</tbody>
+        </table>`;
+
+    // Taśma transakcji
+    document.getElementById('ju-tape').innerHTML = juMarket.tape.length
+        ? juMarket.tape.map(item => `<li class="ju-tape-${item.kind}"><span class="text-muted">t.${item.week}</span> ${escapeHtml(item.text)}</li>`).join('')
+        : '<li class="text-muted">Rynek ruszy po pierwszym tygodniu gry.</li>';
+
+    // Klienci funduszu gracza z filtrem po charakterze
+    const filters = ['all', ...CLIENT_CHARACTER_KEYS, 'institution', 'investor'];
+    document.getElementById('ju-client-filters').innerHTML = filters.map(key => {
+        const def = CLIENT_TYPES[key];
+        const count = key === 'all' ? playerFund.clients.length : playerFund.clients.filter(client => client.type === key).length;
+        if (key !== 'all' && !count) return '';
+        return `<button class="${juView.filter === key ? 'active' : ''}" onclick="setJuClientFilter('${key}')">${key === 'all' ? 'Wszyscy' : `${def.icon} ${def.label}`} (${count})</button>`;
+    }).join('');
+
+    const nav = getFundNav();
+    const clients = playerFund.clients
+        .filter(client => juView.filter === 'all' || client.type === juView.filter)
+        .sort((a, b) => b.units - a.units);
+    document.getElementById('ju-clients').innerHTML = clients.map(client => {
+        const def = getClientCharacter(client);
+        const gain = client.avgCost > 0 ? nav / client.avgCost - 1 : 0;
+        const card = juView.clientId === client.id ? `
+            <div class="ju-client-card">
+                <p class="fst-italic">„${escapeHtml(client.motive || '')}”</p>
+                <p>Średni koszt JU: ${client.avgCost.toFixed(2)} zł · zysk na JU: ${formatPremium(gain)}${client.loyal ? ' · 💙 lojalny' : ''}${client.pendingSellUnits > 0 ? ` · wystawił ${client.pendingSellUnits.toFixed(1)} JU na rynku wtórnym` : ''}</p>
+                <ul class="list-plain text-sm">${(client.history || []).map(item => `<li><span class="text-muted">t.${item.week}</span> ${escapeHtml(item.text)}</li>`).join('') || '<li class="text-muted">Brak historii.</li>'}</ul>
+            </div>` : '';
+        return `<div class="ju-client ${juView.clientId === client.id ? 'open' : ''}" onclick="showJuClient(${client.id})">
+            <span class="ju-client-icon" title="${escapeHtml(def.label)}">${def.icon}</span>
+            <span class="ju-client-name">${escapeHtml(client.name)}<small class="text-muted"> ${escapeHtml(def.label)}</small></span>
+            <span class="ju-client-units">${client.units.toFixed(1)} JU · ${formatZl(client.units * nav, 0)}</span>
+            <span class="ju-satisfaction" title="Zadowolenie"><span style="width:${(client.satisfaction * 100).toFixed(0)}%"></span></span>
+        </div>${card}`;
+    }).join('') || '<p class="text-muted">Brak klientów w tej grupie.</p>';
+}
+
+// =================================================================================
+// OKNA PAŃSTWA, MIASTA I BUDOWNICTWA (etap F3): nagłówek, wskaźniki, nowe mechaniki
+// =================================================================================
+
+function renderTicker(elementId, items) {
+    const ticker = document.getElementById(elementId);
+    if (ticker) ticker.innerHTML = items.map(([label, value]) => `<div class="bank-ticker-item"><span>${label}</span><strong>${value}</strong></div>`).join('');
+}
+
+// ---------- Państwo ----------
+let stateTab = 'overview';
+
+function switchStateTab(tab) {
+    stateTab = tab;
+    document.querySelectorAll('#state-modal .bank-tab-btn').forEach(button => button.classList.toggle('active', button.dataset.tab === tab));
+    updateStateModalContent();
+}
+
+function updateStateModalContent() {
+    const modal = document.getElementById('state-modal');
+    if (!modal || modal.style.display !== 'block') return;
+    const phase = getEconomyPhaseInfo();
+    renderTicker('state-ticker', [
+        ['Skarb Państwa', formatZl(governmentTreasury, 0)],
+        ['Faza koniunktury', escapeHtml(phase.name || '—')],
+        ['Stopa bazowa BC', `${((centralBank.baseInterestRate || 0) * 100).toFixed(2)}%`],
+        ['Inflacja', `${(macro.inflation * 100).toFixed(1)}%`],
+        ['Rząd', escapeHtml(getRulingParty().name)],
+        ['Korupcja', `${(oversight?.corruption || 0).toFixed(0)}/100`],
+        ['Spółki państwowe', stocks.filter(s => s.isStateOwned && !s.isBankrupt).length]
+    ]);
+
+    const body = document.getElementById('state-body');
+    if (!body) return;
+    if (stateTab === 'overview') {
+        body.innerHTML = `
+            <div class="bank-grid">
+                <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">⚖️</span><div><h4>Urząd antymonopolowy</h4><span class="bank-card-type">poziom ${antitrustOffice.level}/5</span></div></header>
+                    <dl class="bank-card-rates"><div><dt>Szansa analizy</dt><dd>${(antitrustOffice.analysisCapacity * 100).toFixed(0)}%</dd></div><div><dt>Dokładność</dt><dd>${(antitrustOffice.accuracy * 100).toFixed(0)}%</dd></div><div><dt>Monopoliści</dt><dd>${stocks.filter(s => s.isMonopolist).length}</dd></div></dl>
+                    <p class="text-sm text-muted">Karze monopolistów i może zablokować skup akcji przez spółkę z Giełdy Diamentowej. Państwo samo inwestuje w rozwój urzędu.</p></article>
+                <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">📊</span><div><h4>Koniunktura</h4><span class="bank-card-type">${escapeHtml(phase.name || '')}</span></div></header>
+                    <p class="text-sm">${escapeHtml(phase.description || 'Faza cyklu gospodarczego wpływa na wyniki spółek, sektory wrażliwe na cykl i stopy procentowe.')}</p>
+                    <p class="text-sm text-muted">Wskaźnik koniunktury: ${Number(economyCycle.index || 0).toFixed(0)}/100 · zmiana PKB w kwartale: ${((economyCycle.gdpGrowth || 0) * 100).toFixed(2)}%.</p></article>
+                <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">🏭</span><div><h4>Spółki Skarbu Państwa</h4><span class="bank-card-type">nacjonalizacje i prywatyzacje</span></div></header>
+                    <ul class="list-plain text-sm">${stocks.filter(s => s.isStateOwned && !s.isBankrupt).slice(0, 8).map(s => `<li>${escapeHtml(s.name)} — ${((s.stateOwnershipPct || 0) * 100).toFixed(0)}%</li>`).join('') || '<li class="text-muted">Brak.</li>'}</ul></article>
+            </div>`;
+    } else if (stateTab === 'macro') {
+        body.innerHTML = renderMacroPanel();
+    } else if (stateTab === 'country') {
+        body.innerHTML = renderCountryPanel();
+    } else if (stateTab === 'markets') {
+        body.innerHTML = renderMarketsPanel();
+    } else if (stateTab === 'oversight') {
+        body.innerHTML = renderOversightPanel();
+    } else if (stateTab === 'taxes') {
+        body.innerHTML = `
+            <table class="asset-mini-table w-full">
+                <thead><tr><th>Podatek</th><th>Stawka</th><th>Kogo dotyczy</th></tr></thead>
+                <tbody>
+                    <tr><td>Dywidendy</td><td>${(TAX_RATES.dividend * 100).toFixed(0)}%</td><td>inwestorzy prywatni i Twoje konto prywatne; <strong>fundusz zwolniony</strong> (dywidenda podnosi NAV)</td></tr>
+                    <tr><td>Zyski kapitałowe</td><td>${(TAX_RATES.capitalGains * 100).toFixed(0)}%</td><td>konto prywatne (z ulgami szkoleń); klienci funduszu płacą przy umorzeniu JU</td></tr>
+                    <tr><td>CIT spółek</td><td>wg progów</td><td>zysk spółek giełdowych (raport kwartalny)</td></tr>
+                    <tr><td>Podatek miejski</td><td>od zysku spółek</td><td>spółki; stawkę zmienia polityka burmistrza (${escapeHtml(MAYOR_POLICIES[city.mayor?.policy]?.label || '—')})</td></tr>
+                    <tr><td>Podatek od bogactwa</td><td>progi</td><td>wielcy inwestorzy prywatni (boty); nie dotyczy funduszu</td></tr>
+                </tbody>
+            </table>`;
+    } else if (stateTab === 'pension') {
+        const ranking = getPensionRanking().slice(0, 8);
+        const last = statePension.history[0];
+        body.innerHTML = `
+            <p class="bank-lead">Raz w roku gry Skarb Państwa powierza mandaty emerytalne (napływ kapitału) 3 najlepszym funduszom: liczy się wynik vs GIG z 4 okresów i zaufanie klientów. Następny przydział: przy rocznym rozliczeniu (wybory za ${city.mayor?.electionYear ?? '—'} ${city.mayor?.electionYear === 1 ? 'rok' : 'lata'}).</p>
+            <table class="asset-mini-table w-full">
+                <thead><tr><th>#</th><th>Fundusz</th><th>Ocena kwalifikacji</th><th></th></tr></thead>
+                <tbody>${ranking.map((fund, index) => `<tr class="${fund.kind === 'player' ? 'mine' : ''}"><td>${index + 1}</td><td>${escapeHtml(fund.name)}</td><td>${fund.score.toFixed(1)}</td><td>${index < 3 ? '🏅 mandat' : ''}</td></tr>`).join('')}</tbody>
+            </table>
+            <h4>Ostatni przydział</h4>
+            <p class="text-sm">${last ? last.grants.map(g => `${escapeHtml(g.name)}: ${formatZl(g.amount, 0)}`).join(' · ') : 'Jeszcze nie było przydziału.'}</p>`;
+    } else {
+        const entries = eventLog.filter(entry => entry.category === 'state').slice(0, 15);
+        body.innerHTML = `<p class="bank-lead">Rzeczywiste działania państwa w tej grze (z dziennika zdarzeń).</p>
+            <ul class="ju-tape list-plain">${entries.map(entry => `<li>${escapeHtml(entry.text)}</li>`).join('') || '<li class="text-muted">Brak działań państwa.</li>'}</ul>`;
+    }
+}
+
+// ---------- Miasto: PPP ----------
+function renderCityPpp() {
+    const container = document.getElementById('city-content-ppp');
+    if (!container || container.contains(document.activeElement) || !playerFund) return;
+    const ppp = ensurePpp();
+    container.innerHTML = `
+        <p class="bank-lead">Partnerstwo publiczno-prywatne: fundusz współfinansuje inwestycje miasta. Odsetki co tydzień z budżetu miasta, kapitał w terminie. Ryzyko rośnie przy słabym budżecie i niskim poparciu burmistrza. Limit: ${(PPP_FUND_LIMIT * 100).toFixed(0)}% aktywów (wolne: ${formatZl(getFundPppCapacity(), 0)}).</p>
+        <h4>Udziały funduszu</h4>
+        <div class="bank-deposits">${playerFund.ppp.map(stake => `
+            <div class="bank-deposit"><div class="bank-deposit-info"><strong>${stake.icon} ${escapeHtml(stake.name)}</strong><span class="text-muted text-sm">${(stake.rate * 100).toFixed(1)}% rocznie · zostało ${stake.weeksLeft} tyg.${stake.unpaid ? ' · ⚠️ zaległe odsetki' : ''}</span></div>
+            <div class="bank-deposit-amount">${formatZl(stake.principal)}</div><span></span>
+            <div class="bank-deposit-progress"><span style="width:${(100 * (1 - stake.weeksLeft / stake.termWeeks)).toFixed(0)}%"></span></div></div>`).join('') || '<p class="text-muted">Fundusz nie ma udziałów w projektach miejskich.</p>'}</div>
+        <h4>Projekty szukające finansowania</h4>
+        <div class="bank-grid">${ppp.offers.map(offer => `
+            <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${offer.icon}</span><div><h4>${escapeHtml(offer.name)}</h4><span class="bank-card-type">oferta ważna ${offer.weeksLeft} tyg.</span></div></header>
+                <dl class="bank-card-rates"><div><dt>Oprocentowanie</dt><dd>${(offer.rate * 100).toFixed(1)}%</dd></div><div><dt>Okres</dt><dd>${offer.termWeeks} tyg.</dd></div><div><dt>Do zebrania</dt><dd>${formatZl(offer.total - offer.raised, 0)}</dd></div></dl>
+                <div class="bank-card-form"><input type="text" inputmode="numeric" id="ppp-amount-${offer.id}" value="${Math.min(offer.total - offer.raised, Math.floor(getFundPppCapacity()))}" aria-label="Kwota udziału">
+                <button onclick="investInPpp('${offer.id}', parseFloat(document.getElementById('ppp-amount-${offer.id}').value)); renderCityPpp();">Współfinansuj</button></div>
+            </article>`).join('') || '<p class="text-muted">Brak otwartych projektów — miasto ogłasza nowe co kwartał.</p>'}</div>`;
+}
+
+// ---------- Budownictwo: finansowanie pomostowe ----------
+function renderConstructionFinancing() {
+    const container = document.getElementById('construction-financing-body');
+    if (!container || !playerFund) return;
+    const loans = getFundBridgeLoans();
+    container.innerHTML = `
+        <p class="bank-lead">Spółki budowlane z budową w toku i niską gotówką proszą fundusz o pożyczkę pomostową. Spłata z odsetkami w terminie; przy braku gotówki jedno przedłużenie o 4 tygodnie, potem częściowa spłata; upadek wykonawcy = odzysk ${(BRIDGE_RECOVERY * 100).toFixed(0)}%. Limit: ${(BRIDGE_FUND_LIMIT * 100).toFixed(0)}% aktywów (wolne: ${formatZl(getFundBridgeCapacity(), 0)}).</p>
+        <h4>Pożyczki funduszu</h4>
+        <div class="bank-deposits">${loans.map(loan => `
+            <div class="bank-deposit"><div class="bank-deposit-info"><strong>🏗️ ${escapeHtml(loan.name)}</strong><span class="text-muted text-sm">${escapeHtml(loan.project)} · ${(loan.rate * 100).toFixed(1)}% · zostało ${loan.weeksLeft} tyg.${loan.extended ? ' · przedłużona' : ''}</span></div>
+            <div class="bank-deposit-amount">${formatZl(loan.principal)} <span class="text-up text-sm">+${formatZl(loan.accrued)}</span></div><span></span>
+            <div class="bank-deposit-progress"><span style="width:${(100 * (1 - loan.weeksLeft / loan.termWeeks)).toFixed(0)}%"></span></div></div>`).join('') || '<p class="text-muted">Fundusz nie finansuje żadnej budowy.</p>'}</div>
+        <h4>Prośby o finansowanie</h4>
+        <div class="bank-grid">${bridgeLoanOffers.map(offer => `
+            <article class="bank-card bank-type-internet"><header class="bank-card-head"><span class="bank-card-icon">🏗️</span><div><h4>${escapeHtml(offer.name)}</h4><span class="bank-card-type">${escapeHtml(offer.project)}</span></div></header>
+                <dl class="bank-card-rates"><div><dt>Kwota</dt><dd>${formatZl(offer.amount, 0)}</dd></div><div><dt>Oprocentowanie</dt><dd>${(offer.rate * 100).toFixed(1)}%</dd></div><div><dt>Okres</dt><dd>${offer.weeks} tyg.</dd></div></dl>
+                <button onclick="fundBridgeLoan('${offer.id}'); renderConstructionFinancing();">Udziel pożyczki</button>
+            </article>`).join('') || '<p class="text-muted">Brak próśb — pojawiają się, gdy budowlańcom brakuje gotówki na kontrakty.</p>'}</div>`;
+}
+
+function renderConstructionTicker() {
+    const builders = stocks.filter(s => !s.isBankrupt && (s.sector || []).includes('Budowlany'));
+    const projects = constructionProjects.filter(p => !p.settled);
+    renderTicker('construction-ticker', [
+        ['Firmy budowlane', builders.length],
+        ['Budowy w toku', projects.length],
+        ['Otwarte przetargi', activeTenders.filter(t => t.status === 'open').length],
+        ['Pożyczki funduszu', formatZl(getFundBridgeLoansValue(), 0)],
+        ['Prośby o finansowanie', bridgeLoanOffers.length]
+    ]);
+}
+
+function renderCityTicker() {
+    renderTicker('city-ticker', [
+        ['Budżet miasta', formatZl(city.budget, 0)],
+        ['Mieszkańcy', Number(city.population || 0).toLocaleString('pl-PL')],
+        ['Burmistrz', escapeHtml(city.mayor?.name || '—')],
+        ['Poparcie', `${Number(city.mayor?.support || 0).toFixed(0)}%`],
+        ['Udziały PPP funduszu', formatZl(getFundPppValue(), 0)]
+    ]);
+}
+
+// =================================================================================
+// OKNO POTWIERDZENIA GRY (zamiast confirm())
+// =================================================================================
+
+let gameConfirmAction = null;
+
+function gameConfirm(message, onConfirm) {
+    let modal = document.getElementById('game-confirm-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'game-confirm-modal';
+        modal.className = 'modal modal-sm game-confirm';
+        modal.innerHTML = `
+            <button class="close-btn" onclick="closeGameConfirm(false)" aria-label="Zamknij">&times;</button>
+            <h3 class="mt-0">Potwierdzenie</h3>
+            <p id="game-confirm-message"></p>
+            <div class="d-flex gap-2 justify-between">
+                <button class="btn-secondary" onclick="closeGameConfirm(false)">Anuluj</button>
+                <button onclick="closeGameConfirm(true)">Potwierdź</button>
+            </div>`;
+        document.body.appendChild(modal);
+    }
+    gameConfirmAction = onConfirm;
+    document.getElementById('game-confirm-message').textContent = message;
+    modal.style.display = 'block';
+}
+
+function closeGameConfirm(confirmed) {
+    const modal = document.getElementById('game-confirm-modal');
+    if (modal) modal.style.display = 'none';
+    const action = gameConfirmAction;
+    gameConfirmAction = null;
+    if (confirmed && typeof action === 'function') action();
+}
+
+// =================================================================================
+// PANEL INWESTYCJI SPÓŁKI (etap G4): gotówka, w toku (etapy), działające, katalog
+// =================================================================================
+
+function renderStageBar(segments, currentLabel) {
+    return `<div class="inv-stages" title="${escapeHtml(currentLabel)}">${segments.map(segment => `
+        <div class="inv-stage ${segment.fill >= 1 ? 'done' : segment.fill > 0 ? 'active' : ''}" style="flex:${segment.share}">
+            <span class="inv-stage-fill" style="width:${(segment.fill * 100).toFixed(0)}%"></span>
+            <span class="inv-stage-label">${segment.label}</span>
+        </div>`).join('')}</div>`;
+}
+
+/** Panel inwestycji; canAct = władza większościowego akcjonariusza (zlecanie, blokada, dopłata). */
+function renderInvestmentPanel(stock, container, canAct) {
+    if (!Array.isArray(stock.activeInvestments)) stock.activeInvestments = [];
+    const devLevel = Number(stock.departments?.development?.level) || 0;
+    const stockKey = getEntityKey(stock);
+    const tenders = activeTenders.filter(t => ['open', 'closed'].includes(t.status) && getEntityKey(t.clientCompany) === stockKey);
+    const projects = constructionProjects.filter(p => !p.settled && getEntityKey(p.tender?.clientCompany) === stockKey);
+    const fundCan = canAct && canFundTopUp(stock);
+    const section = document.createElement('div');
+    section.className = 'inv-panel';
+
+    const internal = stock.activeInvestments.map(project => {
+        const info = getInvestmentStageInfo(project);
+        const topUp = fundCan ? `
+            <div class="bank-card-form">
+                <input type="text" inputmode="numeric" id="topup-${project.uid}" value="${Math.min(Math.floor(playerCash), Math.max(0, project.cost - (project.fundTopUp || 0)))}" aria-label="Kwota dopłaty">
+                <select id="topup-mode-${project.uid}" aria-label="Forma dopłaty"><option value="shares">za nowe akcje (−5%)</option><option value="income">za udział w zysku</option></select>
+                <button onclick="fundTopUpInvestment('${stock.symbol}', '${project.uid}', parseFloat(document.getElementById('topup-${project.uid}').value), document.getElementById('topup-mode-${project.uid}').value); refreshInvestmentViews('${stock.symbol}');">Dopłać z funduszu</button>
+            </div>` : '';
+        const funding = [
+            project.fundTopUp ? `fundusz: ${formatZl(project.fundTopUp, 0)}${project.fundIncomePct ? ` (${(project.fundIncomePct * 100).toFixed(0)}% zysku)` : ''}` : '',
+            project.publicFunding === 'state' ? 'dofinansowanie BC' : project.publicFunding === 'city' ? 'dofinansowanie miasta' : ''
+        ].filter(Boolean).join(' · ');
+        return `<li class="inv-item">
+            <div class="d-flex justify-between items-center"><strong>${escapeHtml(project.name)}</strong>
+                ${canAct ? `<button class="text-xs" onclick="blockInvestment('${stock.symbol}', '${project.uid || project.id}')">Zablokuj</button>` : ''}</div>
+            ${renderStageBar(info.segments, info.current.label)}
+            <div class="text-xs text-muted">Etap: ${info.current.label} · ${(info.fraction * 100).toFixed(0)}% · koszt ${formatZl(project.cost, 0)}${funding ? ` · ${funding}` : ''}</div>
+            ${topUp}
+        </li>`;
+    });
+    const building = [
+        ...tenders.map(t => ({ name: t.buildingType.name, label: 'Projekt — przetarg', segments: INVESTMENT_STAGES.map((s, i) => ({ ...s, fill: i === 0 ? 0.5 : 0 })), detail: t.status === 'open' ? `oferty: ${t.bids.length}` : 'rozstrzyganie' })),
+        ...projects.map(p => ({ name: p.tender.buildingType.name, label: 'Budowa', segments: INVESTMENT_STAGES.map((s, i) => ({ ...s, fill: i === 0 ? 1 : i === 1 ? Math.min(1, p.progress) : 0 })), detail: `wykonawca: ${p.builder.name} · ${getConstructionProjectStatusLabel(p)}` }))
+    ].map(item => `<li class="inv-item"><strong>${escapeHtml(item.name)}</strong>${renderStageBar(item.segments, item.label)}<div class="text-xs text-muted">${escapeHtml(item.detail)}</div></li>`);
+
+    const operating = (stock.operatingInvestments || []).map(op => {
+        const quality = INVESTMENT_QUALITY[op.quality] || INVESTMENT_QUALITY.ok;
+        return `<tr>
+            <td>${escapeHtml(op.name)}</td>
+            <td title="Wydajność ${(op.efficiency * 100).toFixed(0)}%">${quality.icon} ${quality.label}</td>
+            <td>${(op.roi * 100).toFixed(0)}% / rok</td>
+            <td class="${op.lastResult >= 0 ? 'profit' : 'loss'}">${formatZl(op.lastResult, 0)}</td>
+            <td class="${op.totalResult >= 0 ? 'profit' : 'loss'}">${formatZl(op.totalResult, 0)}</td>
+            <td>${op.fundIncomePct ? `${(op.fundIncomePct * 100).toFixed(0)}% (wypł. ${formatZl(op.fundPaid, 0)})` : '—'}</td>
+        </tr>`;
+    }).join('');
+
+    const limitReached = countCompanyInvestmentOrders(stock) >= Math.max(1, devLevel);
+    const catalog = getInvestmentCatalogForCompany(stock).map(inv => {
+        const cost = getInvestmentCostForCompany(stock, inv);
+        const isConstruction = CONSTRUCTION_KINDS.includes(inv.kind);
+        let action = '';
+        if (devLevel < inv.minDevLevel) action = `<span class="text-muted">dział rozwoju ${inv.minDevLevel}</span>`;
+        else if (hasCompanyInvestmentInProgress(stock, inv.id)) action = '<span class="text-info">w toku</span>';
+        else if (!canAct) action = '<span class="text-muted">—</span>';
+        else if (!canFinanceAmount(stock, isConstruction ? getConstructionSpec(inv.id).cost * 1.2 : cost)) action = '<span class="text-down">brak środków</span>';
+        else if (limitReached) action = '<span class="text-warn">limit projektów</span>';
+        else action = `<button class="btn-xs" onclick="forceCompanyInvestment('${stock.symbol}', '${inv.id}')">${isConstruction ? 'Przetarg' : 'Zleć'}</button>`;
+        return `<tr>
+            <td><img src="${inv.icon || 'img/box.png'}" class="icon-24 mr-2 va-middle" onerror="this.style.display='none'">${escapeHtml(inv.name)}</td>
+            <td>${formatZl(cost, 0)}</td>
+            <td>${inv.durationDays} dni</td>
+            <td>${(getExpectedAnnualRoi(inv.incomeBonus) * 100).toFixed(0)}% / rok</td>
+            <td>${action}</td>
+        </tr>`;
+    }).join('');
+
+    section.innerHTML = `
+        <div class="inv-cash"><span>💰 Gotówka spółki</span><strong>${formatZl(stock.cash, 0)}</strong></div>
+        <h5>🚧 W toku (${countCompanyInvestmentOrders(stock)}/${Math.max(1, devLevel)})</h5>
+        <ul class="list-plain inv-list">${[...internal, ...building].join('') || '<li class="text-muted">Brak inwestycji w toku.</li>'}</ul>
+        ${fundCan ? '<p class="text-xs text-muted">Jako większościowy akcjonariusz fundusz może dopłacić do inwestycji w toku: za nowe akcje (emisja po cenie −5%, także ponad limit) albo za udział w zyskach tej inwestycji (do 60%).</p>' : ''}
+        <h5>⚙️ Działające</h5>
+        ${operating ? `<table class="asset-mini-table w-full text-xs"><thead><tr><th>Inwestycja</th><th>Jakość</th><th>Oczek. zwrot</th><th>Ost. kwartał</th><th>Łącznie</th><th>Udział funduszu</th></tr></thead><tbody>${operating}</tbody></table>` : '<p class="text-muted text-sm">Brak działających inwestycji.</p>'}
+        <h5>📋 Katalog inwestycji</h5>
+        <table class="asset-mini-table w-full text-xs"><thead><tr><th>Inwestycja</th><th>Koszt</th><th>Czas</th><th>Oczek. zwrot</th><th></th></tr></thead><tbody>${catalog}</tbody></table>`;
+    container.appendChild(section);
+}
+
+/** Okno inwestycji dla dowolnej spółki (podgląd; akcje tylko przy władzy korony). */
+function openCompanyInvestments(symbol) {
+    const stock = stocks.find(s => s.symbol === symbol);
+    const modal = document.getElementById('company-investments-modal');
+    const body = document.getElementById('company-investments-body');
+    if (!stock || !modal || !body) return;
+    document.getElementById('company-investments-title').textContent = `📈 Inwestycje: ${stock.name} (${stock.symbol})`;
+    body.innerHTML = '';
+    renderInvestmentPanel(stock, body, getFundStakePct(stock) > 0.5);
+    modal.style.display = 'block';
+}
+
+/** Odświeża otwarte widoki inwestycji po dopłacie funduszu. */
+function refreshInvestmentViews(symbol) {
+    const modal = document.getElementById('company-investments-modal');
+    if (modal && modal.style.display === 'block') openCompanyInvestments(symbol);
+    const management = document.getElementById('management-modal');
+    if (management && management.style.display === 'block') openManagementModal(symbol, 'depts');
+}
+
+// =================================================================================
+// OKNA: WROGIE PRZEJĘCIE I EMISJA RATUNKOWA (etap G2)
+// =================================================================================
+
+/** Przyciski obron dla spółki-celu (fundusz z większością). */
+function renderDefenseButtons(target) {
+    return Object.entries(TAKEOVER_DEFENSES).map(([type, defense]) => {
+        const check = canUseDefense(target, type, 'player');
+        const action = type === 'negotiate' ? `openNegotiationModal('${target.symbol}', true)` : `activateDefenseMechanism('${target.symbol}', '${type}', 'player')`;
+        return `<button class="btn-secondary" ${check.ok ? '' : 'disabled'} title="${escapeHtml(defense.desc)}"
+            onclick="${action}">
+            ${defense.label}<br><span class="text-xs">${check.ok ? formatZl(check.cost, 0) : escapeHtml(check.reason)}</span></button>`;
+    }).join('');
+}
+
+function openTakeoverModal(symbol) {
+    const target = stocks.find(s => s.symbol === symbol);
+    const pair = target && getTakeoverAgainst(target);
+    const modal = document.getElementById('takeover-modal');
+    const body = document.getElementById('takeover-body');
+    if (!modal || !body) return;
+    if (!pair) {
+        body.innerHTML = '<p class="text-muted">Ta oferta przejęcia nie jest już aktualna.</p>';
+        modal.style.display = 'block';
+        return;
+    }
+    const { initiator, process } = pair;
+    const offer = process.offerDetails;
+    const holding = playerPortfolio[symbol];
+    const pct = getFundStakePct(target);
+    const value = (holding?.shares || 0) * offer.buyoutPricePerShare;
+    const decided = { sold: 'Fundusz sprzedał pakiet agresorowi.', against: 'Fundusz głosuje przeciw przejęciu.' }[process.fundDecision];
+    const defense = process.defenseActive && process.defenseActive !== 'none'
+        ? `<p>Aktywna obrona: <strong>${TAKEOVER_DEFENSES[process.defenseActive]?.label || process.defenseActive}</strong>${process.defenseBy ? ` (${escapeHtml(process.defenseBy)})` : ''}</p>` : '';
+
+    body.innerHTML = `
+        <div class="bank-ticker">
+            <div class="bank-ticker-item"><span>${process.hostile === false ? 'Przyjazny oferent' : 'Agresor'}</span><strong>${escapeHtml(initiator.name)}</strong></div>
+            <div class="bank-ticker-item"><span>Cena oferty (premia ${((offer.premium || 0) * 100).toFixed(0)}%)</span><strong>${formatZl(offer.buyoutPricePerShare)}</strong></div>
+            <div class="bank-ticker-item"><span>Udział funduszu</span><strong>${(pct * 100).toFixed(1)}% · ${formatZl(value, 0)}</strong></div>
+        </div>
+        <p class="text-sm">${escapeHtml(process.statusMessage || '')}</p>
+        ${defense}
+        ${decided ? `<p class="text-info">${decided}</p>` : `
+        <div class="d-flex gap-2 flex-wrap">
+            <button onclick="sellFundSharesToAggressor('${symbol}')">💰 Sprzedaj akcje po cenie oferty</button>
+            <button class="btn-danger" onclick="voteAgainstTakeover('${symbol}')">🗳️ Głosuj przeciw</button>
+        </div>`}
+        ${pct > 0.5 ? `<h4 class="mt-3">Obrona (akcjonariusz większościowy)</h4><div class="defense-grid">${renderDefenseButtons(target)}</div>` : ''}`;
+    modal.style.display = 'block';
+}
+
+/** U1: osobne okno negocjacji (rundy, żądanie premii, kontroferta agresora). */
+function openNegotiationModal(symbol, start = false) {
+    if (start && !startPlayerNegotiation(symbol)) return;
+    let modal = document.getElementById('negotiation-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'negotiation-modal';
+        modal.className = 'modal';
+        modal.innerHTML = '<button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button><h2 class="mt-0">🤝 Negocjacje</h2><div id="negotiation-body"></div>';
+        document.body.appendChild(modal);
+    }
+    renderNegotiation(symbol);
+    modal.style.display = 'block';
+}
+
+function negotiationAction(symbol, fn, ...args) {
+    const result = fn(symbol, ...args);
+    const labels = { accepted: '✅ Agresor przyjął żądanie!', counter: '↩️ Agresor składa kontrofertę.', walkout: '🚪 Agresor zerwał rozmowy i wycofał ofertę.' };
+    if (labels[result]) showToast(labels[result], result === 'walkout' ? 'warning' : 'success', 5000);
+    renderNegotiation(symbol);
+    if (typeof refreshTakeoverViews === 'function') refreshTakeoverViews(symbol);
+}
+
+function renderNegotiation(symbol) {
+    const body = document.getElementById('negotiation-body');
+    if (!body) return;
+    const target = stocks.find(s => s.symbol === symbol);
+    const pair = target && getTakeoverAgainst(target);
+    const neg = pair?.process.negotiation;
+    if (!pair || !neg) { body.innerHTML = '<p class="text-muted">Negocjacje zakończone — oferta przejęcia nie jest już aktualna.</p>'; return; }
+    const { initiator, process } = pair;
+    const offer = process.offerDetails;
+    const owner = findMajorityShareholder(initiator);
+    const history = neg.history.map(h => `<li>Runda ${h.round}: ${h.result === 'counterAccepted' ? `przyjęto kontrofertę +${(h.counter * 100).toFixed(0)} pkt` : `żądanie +${(h.demand * 100).toFixed(0)} pkt → ${{ accepted: '✅ przyjęte', counter: `↩️ kontroferta +${(h.counter * 100).toFixed(0)} pkt`, walkout: '🚪 zerwanie' }[h.result]}`}</li>`).join('');
+    const demandInput = Number(document.getElementById('neg-demand')?.value) || 15;
+    body.innerHTML = `
+        <div class="bank-ticker">
+            <div class="bank-ticker-item"><span>Agresor</span><strong>${escapeHtml(initiator.name)}</strong></div>
+            <div class="bank-ticker-item"><span>Właściciel agresora</span><strong>${escapeHtml(owner?.name || 'rozproszony')}</strong></div>
+            <div class="bank-ticker-item"><span>Cena oferty</span><strong>${formatZl(offer.buyoutPricePerShare)} (premia ${((offer.premium || 0) * 100).toFixed(0)}%)</strong></div>
+            <div class="bank-ticker-item"><span>Runda</span><strong>${Math.min(neg.round, NEGOTIATION_MAX_ROUNDS)}/${NEGOTIATION_MAX_ROUNDS}</strong></div>
+        </div>
+        ${neg.open ? `
+            <p class="text-sm">Im wyższe żądanie, tym mniejsza szansa zgody. Agresor może przyjąć, złożyć kontrofertę albo zerwać rozmowy (i wycofać ofertę). Charakter właściciela agresora wpływa na jego upór.</p>
+            <div class="bank-card-form">
+                <label class="text-sm">Żądam podniesienia premii o <input type="number" id="neg-demand" min="2" max="50" step="1" value="${demandInput}" class="w-xs" oninput="document.getElementById('neg-chance').textContent = (getNegotiationAcceptChance(stocks.find(s => s.symbol === '${initiator.symbol}'), this.value / 100, ${neg.round}) * 100).toFixed(0) + '%'"> pkt proc.</label>
+                <span class="text-sm">szansa zgody ≈ <strong id="neg-chance">${(getNegotiationAcceptChance(initiator, demandInput / 100, neg.round) * 100).toFixed(0)}%</strong></span>
+                <button onclick="negotiationAction('${symbol}', negotiationDemand, document.getElementById('neg-demand').value / 100)">Złóż żądanie</button>
+            </div>
+            ${neg.counter ? `<div class="mail-action"><p>Kontroferta agresora: premia <strong>+${(neg.counter * 100).toFixed(0)} pkt proc.</strong></p>
+                <button onclick="negotiationAction('${symbol}', negotiationAcceptCounter)">✅ Przyjmij kontrofertę</button></div>` : ''}
+            <button class="btn-secondary mt-2" onclick="negotiationAction('${symbol}', negotiationEnd)">Zakończ negocjacje (oferta bez zmian)</button>`
+        : '<p class="text-info">Negocjacje zakończone.</p>'}
+        ${history ? `<h4>Przebieg</h4><ul class="list-plain text-sm">${history}</ul>` : ''}`;
+}
+
+function openRescueOfferingModal() {
+    const offer = rescueOffer;
+    const stock = offer && stocks.find(s => s.symbol === offer.symbol);
+    const modal = document.getElementById('rescue-offering-modal');
+    const message = document.getElementById('rescue-offering-message');
+    if (!modal || !message) return;
+    if (!stock || offer.closed) {
+        message.innerHTML = '<p class="text-muted">Ta emisja jest już zamknięta.</p>';
+        modal.style.display = 'block';
+        return;
+    }
+    const maxAffordable = Math.min(offer.fundReserved, Math.floor(playerCash / offer.price));
+    message.innerHTML = `
+        <p><strong>${escapeHtml(stock.name)}</strong> ma kłopoty z długiem i oferuje funduszowi do <strong>${offer.fundReserved.toLocaleString('pl-PL')}</strong> nowych akcji
+        po <strong>${formatZl(offer.price)}</strong> (rynek: ${formatZl(stock.price)}). Pieniądze idą na spłatę zobowiązań.</p>
+        <div class="bank-card-form">
+            <input type="text" inputmode="numeric" id="rescue-qty" value="${maxAffordable}" aria-label="Liczba akcji">
+            <button onclick="acceptRescueOffer(parseInt(document.getElementById('rescue-qty').value, 10))">✅ Obejmij akcje</button>
+            <button class="btn-secondary" onclick="declineRescueOffer()">❌ Odrzuć</button>
+        </div>`;
+    modal.style.display = 'block';
+}
+
+function closeRescueOfferingModal() {
+    const modal = document.getElementById('rescue-offering-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+// =================================================================================
+// OKNO „WALNE ZGROMADZENIA” (etap G3)
+// =================================================================================
+
+let governanceView = { symbol: null };
+
+function getGovernanceCompanies() {
+    return stocks.filter(s => isGovernedCompany(s) && (playerPortfolio[s.symbol]?.shares || 0) > 0)
+        .sort((a, b) => ensureGovernance(a).quartersToAgm - ensureGovernance(b).quartersToAgm || getFundStakePct(b) - getFundStakePct(a));
+}
+
+function openGovernanceModal(symbol = null) {
+    const modal = document.getElementById('governance-modal');
+    if (!modal) return;
+    if (symbol) governanceView.symbol = symbol;
+    renderGovernance();
+    modal.style.display = 'block';
+}
+
+function refreshGovernanceView(symbol) {
+    const modal = document.getElementById('governance-modal');
+    if (modal && modal.style.display === 'block') openGovernanceModal(symbol);
+}
+
+function renderGovernance() {
+    const list = document.getElementById('governance-list');
+    const detail = document.getElementById('governance-detail');
+    if (!list || !detail) return;
+    const companies = getGovernanceCompanies();
+    if (!governanceView.symbol || !stocks.some(s => s.symbol === governanceView.symbol)) governanceView.symbol = companies[0]?.symbol || null;
+
+    list.innerHTML = companies.length ? companies.map(stock => {
+        const gov = ensureGovernance(stock);
+        const pct = getFundStakePct(stock);
+        return `<button class="gov-company ${stock.symbol === governanceView.symbol ? 'active' : ''}" onclick="openGovernanceModal('${stock.symbol}')">
+            <strong>${escapeHtml(stock.symbol)}</strong> <span class="text-xs">${(pct * 100).toFixed(1)}%</span>
+            <span class="text-xs text-muted d-block">${gov.pendingAgm ? '🗳️ walne w przyszłym kwartale' : `walne za ${gov.quartersToAgm} kw.`}</span>
+        </button>`;
+    }).join('') : '<p class="text-muted text-sm">Fundusz nie ma akcji żadnej spółki.</p>';
+
+    const stock = stocks.find(s => s.symbol === governanceView.symbol);
+    detail.innerHTML = stock ? renderGovernanceDetail(stock) : '<p class="text-muted">Kup akcje spółki, aby uczestniczyć w jej walnych zgromadzeniach.</p>';
+}
+
+function renderShareholderBars(stock) {
+    const holders = getShareholders(stock);
+    const listed = holders.reduce((sum, h) => sum + h.shares, 0);
+    const rows = [...holders.slice(0, 7), { name: 'Rozproszeni akcjonariusze', kind: 'retail', pct: Math.max(0, stock.totalShares - listed) / stock.totalShares }];
+    return rows.map(h => `<div class="gov-bar ${h.kind === 'player' ? 'is-fund' : ''}">
+        <span class="gov-bar-name">${escapeHtml(h.name)}</span>
+        <span class="gov-bar-track"><span style="width:${Math.min(100, h.pct * 100).toFixed(1)}%"></span></span>
+        <span class="gov-bar-pct">${h.entity?.isMafia ? `~${Math.max(5, Math.round(h.pct * 20) * 5)}%` : `${(h.pct * 100).toFixed(1)}%`}</span>
+    </div>`).join('');
+}
+
+function renderGovernanceDetail(stock) {
+    const gov = ensureGovernance(stock);
+    const pct = getFundStakePct(stock);
+    const seats = getBoardSeats(stock);
+    const insight = getBoardInsight(stock);
+    const canPropose = canFundControlAgm(stock);
+    const last = gov.history[0];
+
+    const agenda = gov.pendingAgm ? gov.pendingAgm.items.map(item => `
+        <li class="gov-item ${item.kind === 'activist' ? 'is-activist' : ''}">
+            <div><strong>${escapeHtml(item.label)}</strong> <span class="text-xs text-muted">${item.kind === 'activist' ? 'wniosek akcjonariusza' : 'wniosek zarządu'}</span></div>
+            <div class="d-flex gap-2 items-center">
+                ${canPropose ? `<select aria-label="Głos funduszu" onchange="setAgmVote('${stock.symbol}', '${item.id}', this.value)">
+                    ${[['for', 'Za'], ['against', 'Przeciw'], ['abstain', 'Wstrzymuję się']].map(([value, label]) => `<option value="${value}" ${item.playerVote === value ? 'selected' : ''}>${label}</option>`).join('')}
+                </select>` : '<span class="text-xs text-muted">fundusz: za</span>'}
+                ${item.by === 'player' ? (item.campaign ? '<span class="text-xs text-info">📣 kampania trwa</span>'
+                    : `<button class="btn-xs" onclick="runProxyCampaign('${stock.symbol}', '${item.id}')">📣 Kampania (${formatZl(getCampaignCost(stock), 0)})</button>`) : ''}
+            </div>
+        </li>`).join('') : '';
+
+    const history = gov.history.map(record => `
+        <details class="gov-history"><summary>Walne — frekwencja ${(record.turnout * 100).toFixed(0)}%, przyjęte ${record.results.filter(r => r.passed).length}/${record.results.length}</summary>
+            <ul class="list-plain">${record.results.map(r => `<li>${r.passed ? '✅' : '❌'} ${escapeHtml(r.label)} — za ${(r.for / Math.max(1, r.for + r.against) * 100).toFixed(0)}%${r.effect ? ` · ${escapeHtml(r.effect)}` : ''}</li>`).join('')}</ul>
+        </details>`).join('');
+
+    return `
+        <div class="bank-ticker">
+            <div class="bank-ticker-item"><span>${escapeHtml(stock.name)}</span><strong>${(pct * 100).toFixed(1)}% głosów</strong></div>
+            <div class="bank-ticker-item"><span>Rada nadzorcza</span><strong>${seats.label}</strong></div>
+            <div class="bank-ticker-item"><span>Najbliższe walne</span><strong>${gov.pendingAgm ? 'w przyszłym kwartale' : `za ${gov.quartersToAgm} kw.`}</strong></div>
+            <div class="bank-ticker-item"><span>Ostatnia frekwencja</span><strong>${last ? (last.turnout * 100).toFixed(0) + '%' : '—'}</strong></div>
+        </div>
+        <h4>Akcjonariat</h4>
+        <div class="gov-bars">${renderShareholderBars(stock)}</div>
+        <h4>Porządek obrad</h4>
+        ${agenda ? `<ul class="list-plain gov-agenda">${agenda}</ul>` : '<p class="text-muted text-sm">Porządek obrad pojawi się kwartał przed zgromadzeniem.</p>'}
+        <h4>Wniosek akcjonariusza</h4>
+        ${canPropose ? `<div class="bank-card-form">
+            <select id="gov-proposal-type" aria-label="Rodzaj wniosku">${Object.entries(ACTIVIST_PROPOSALS).map(([id, p]) => `<option value="${id}" title="${escapeHtml(p.desc)}">${p.label}</option>`).join('')}</select>
+            <button onclick="submitShareholderProposal('${stock.symbol}', document.getElementById('gov-proposal-type').value)">Zgłoś na walne</button>
+        </div>` : '<p class="text-muted text-sm">Głosuje, zgłasza wnioski i prowadzi kampanie tylko akcjonariusz większościowy (> 50%). Poniżej fundusz głosuje „za” wnioskami zarządu.</p>'}
+        ${typeof getListingMoveTargets === 'function' && getListingMoveTargets(stock).length ? `<h4>Rynek notowań</h4>
+            <p class="text-sm">Teraz: <strong>${escapeHtml(getMarketLabel(getStockMarket(stock)))}</strong>. Rynki alternatywne mają niższą prowizję i opłatę za notowanie, ale mniej inwestorów (wycena −3%). Koszt: 0,3% kapitalizacji z gotówki spółki, raz na rok.</p>
+            <div class="bank-card-form">${getListingMoveTargets(stock).map(id => `<button class="btn-secondary" onclick="moveListing('${stock.symbol}', '${id}'); openGovernanceModal('${stock.symbol}');">Przenieś na ${escapeHtml(getMarketLabel(id))}</button>`).join('')}</div>` : ''}
+        ${insight ? `<h4>Wgląd rady nadzorczej</h4>
+            <p class="text-sm">Prognoza wyniku kwartału: <strong class="${insight.forecast >= 0 ? 'text-up' : 'text-down'}">${formatZl(insight.forecast, 0)}</strong></p>
+            <ul class="list-plain text-sm">${insight.plans.map(p => `<li>• ${escapeHtml(p)}</li>`).join('') || '<li class="text-muted">Brak planów inwestycyjnych.</li>'}</ul>` : ''}
+        ${history ? `<h4>Historia uchwał</h4>${history}` : ''}`;
+}
+
+// ---------- Państwo: panel Makro (0.10.2) ----------
+function renderSparkline(values, { width = 160, height = 36 } = {}) {
+    if (values.length < 2) return '<span class="text-xs text-muted">za mało danych</span>';
+    const min = Math.min(...values), max = Math.max(...values);
+    const span = max - min || 1;
+    const points = values.map((value, i) => `${(i / (values.length - 1) * width).toFixed(1)},${(height - 3 - (value - min) / span * (height - 6)).toFixed(1)}`).join(' ');
+    return `<svg class="macro-spark" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true"><polyline points="${points}"/></svg>`;
+}
+
+function renderMacroPanel() {
+    const pct = (value, digits = 1) => `${(value * 100).toFixed(digits)}%`;
+    const series = key => macro.history.map(entry => entry[key]);
+    const card = (icon, title, value, sub, key) => `
+        <article class="bank-card macro-card"><header class="bank-card-head"><span class="bank-card-icon">${icon}</span><div><h4>${title}</h4><span class="bank-card-type">${sub}</span></div></header>
+            <div class="macro-value">${value}</div>${renderSparkline(series(key))}</article>`;
+    const decision = macro.lastDecision;
+    const election = macro.election;
+    const sectors = Object.entries(macro.sectorCycles).sort(([a], [b]) => a.localeCompare(b, 'pl'));
+    return `
+        <div class="bank-grid">
+            ${card('🔥', 'Inflacja', pct(macro.inflation), `cel BC ${pct(INFLATION_TARGET)}`, 'inflation')}
+            ${card('👷', 'Bezrobocie', pct(macro.unemployment), `naturalne ${pct(NATURAL_UNEMPLOYMENT)}`, 'unemployment')}
+            ${card('🏭', 'PKB r/r', pct(macro.gdpAnnual), escapeHtml(getEconomyPhaseInfo().name), 'gdp')}
+            ${card('🏛️', 'Stopa referencyjna', pct(centralBank.baseInterestRate, 2), `kredyty ${pct(LOAN_INTEREST_RATE, 2)} · lokaty ${pct(DEPOSIT_INTEREST_RATE, 2)}`, 'rate')}
+        </div>
+        <div class="bank-grid mt-3">
+            <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">📰</span><div><h4>Posiedzenia Banku Centralnego</h4><span class="bank-card-type">co kwartał · prezes ${escapeHtml(centralBank.ceo?.name || '—')}</span></div></header>
+                <p class="text-sm">Ostatnia decyzja: <strong>${decision ? describeRateChange(decision.change) : '—'}</strong>${decision && Math.abs(decision.surprise) >= 0.001 ? ' <span class="text-warn">(niespodzianka)</span>' : ''}</p>
+                <p class="text-sm">Oczekiwania analityków na następne posiedzenie: <strong>${escapeHtml(macro.expectation?.label || '—')}</strong></p>
+                <p class="text-xs text-muted">Cechy prezesa: ${(centralBank.ceo?.traits || []).map(t => escapeHtml(t.name)).join(', ') || 'brak'}. Rynek reaguje mocniej na niespodziankę niż na decyzję zgodną z oczekiwaniami.</p></article>
+            <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">🗳️</span><div><h4>Polityka</h4><span class="bank-card-type">${escapeHtml(getRulingParty().name)}</span></div></header>
+                <p class="text-sm">${election.campaign ? '<strong class="text-warn">Trwa kampania wyborcza.</strong>' : `Wybory za ${election.quartersLeft} kw.`}</p>
+                <p class="text-xs text-muted">Prywatyzacje ×${getRulingParty().privatization} · nacjonalizacje ×${getRulingParty().nationalization} · dotacje ×${getRulingParty().subsidies}</p>
+                ${getPoliticalFavor() ? `<p class="text-sm ${getPoliticalFavor() > 0 ? 'text-up' : 'text-down'}">${getPoliticalFavor() > 0 ? '🤝 Władza jest przychylna funduszowi' : '😠 Władza jest nieprzychylna funduszowi'} (${election.favor.quartersLeft} kw.)</p>` : ''}
+                ${election.campaign && playerFund ? `<p class="text-xs text-muted">Darowizna z pieniędzy funduszu (do 2% aktywów): przychylność wygranych, ale podejrzenia KNF i spadek zaufania klientów. Wpłacono: ${formatZl(Object.values(election.donations || {}).reduce((sum, value) => sum + (Number(value) || 0), 0), 0)}.</p>
+                <div class="bank-card-form"><select id="donation-party" aria-label="Partia">${Object.entries(RULING_PARTIES).map(([id, p]) => `<option value="${id}">${escapeHtml(p.name)}</option>`).join('')}</select>
+                <input type="text" inputmode="numeric" id="donation-amount" value="${Math.max(100, Math.round(getFundAssets() * 0.005))}" aria-label="Kwota darowizny">
+                <button class="btn-secondary" onclick="supportElectionCampaign(document.getElementById('donation-party').value, parseFloat(document.getElementById('donation-amount').value)); updateStateModalContent();">Wesprzyj kampanię</button></div>` : ''}</article>
+        </div>
+        <h4>Cykle sektorów</h4>
+        <div class="macro-sectors">${sectors.map(([sector, cycle]) => {
+            const phase = SECTOR_CYCLE_PHASES[cycle.phase];
+            return `<div class="macro-sector is-${cycle.phase}"><span>${phase.icon} ${escapeHtml(sector)}</span><strong>${phase.name}</strong><span class="text-xs text-muted">${cycle.quartersLeft} kw.</span></div>`;
+        }).join('')}</div>`;
+}
+
+// =================================================================================
+// POWIADOMIENIA (B2): zamiast okien otwieranych samoczynnie w trakcie gry
+// =================================================================================
+
+const notificationActions = new Map();
+let notificationSeq = 0;
+
+/** Powiadomienie w rogu ekranu: „Otwórz” lub ✕. isValid — gdy zwróci false, powiadomienie znika. */
+function pushNotification(text, onOpen, isValid = null) {
+    const bar = document.getElementById('notif-bar');
+    if (!bar) { if (typeof onOpen === 'function') onOpen(); return; }
+    const id = `n${++notificationSeq}`;
+    notificationActions.set(id, { onOpen, isValid });
+    const item = document.createElement('div');
+    item.className = 'notif-item';
+    item.dataset.id = id;
+    item.innerHTML = `<span>${escapeHtml(text)}</span><button class="btn-xs" onclick="openNotification('${id}')">Otwórz</button><button class="notif-close" aria-label="Zamknij" onclick="dismissNotification('${id}')">✕</button>`;
+    bar.prepend(item);
+    while (bar.children.length > 4) dismissNotification(bar.lastElementChild.dataset.id);
+}
+
+function openNotification(id) {
+    const entry = notificationActions.get(id);
+    dismissNotification(id);
+    if (entry && (!entry.isValid || entry.isValid())) entry.onOpen?.();
+    else showToast('To powiadomienie jest już nieaktualne.', 'default');
+}
+
+function dismissNotification(id) {
+    notificationActions.delete(id);
+    document.querySelector(`#notif-bar [data-id="${id}"]`)?.remove();
+}
+
+// =================================================================================
+// 0.13: ZAKŁADKA „KRAJ” (okno Państwo) i „ZATRUDNIENIE” (karta spółki)
+// =================================================================================
+
+const CLASS_COLORS = { poor: '#c2410c', lowerMid: '#d97706', mid: '#16a34a', upperMid: '#0891b2', rich: '#2563eb', veryRich: '#7c3aed' };
+const PARTY_COLORS = { people: '#65a30d', state: '#dc2626', market: '#2563eb' };
+
+function openCountryPanel() {
+    stateTab = 'country';
+    openStateModal();
+    if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('strukturaSpoleczna');
+}
+
+function renderSocietyClassBar() {
+    const segments = SOCIETY_CLASSES.map(cls => {
+        const share = society.classes[cls.id] || 0;
+        return `<span class="society-seg" style="width:${(share * 100).toFixed(2)}%;background:${CLASS_COLORS[cls.id]}" title="${escapeHtml(cls.name)}: ${(share * 100).toFixed(1)}%"></span>`;
+    }).join('');
+    const legend = SOCIETY_CLASSES.map(cls => `<li><span class="society-dot" style="background:${CLASS_COLORS[cls.id]}"></span>${cls.icon} ${escapeHtml(cls.name)} <strong>${((society.classes[cls.id] || 0) * 100).toFixed(1)}%</strong>
+        <span class="text-xs text-muted">konsumpcja ×${getClassWeight(cls).toFixed(2)} · ${escapeHtml(cls.sectors.join(', '))}</span></li>`).join('');
+    return `<div class="society-classbar" role="img" aria-label="Struktura klas">${segments}</div><ul class="list-plain society-legend">${legend}</ul>`;
+}
+
+function renderPartyBars(support) {
+    return PARTY_IDS.map(id => `<div class="party-row"><span>${escapeHtml(RULING_PARTIES[id].name)}${macro.election.ruling === id ? ' 👑' : macro.election.coalition?.partner === id ? ' 🤝' : ''}</span>
+        <span class="party-bar"><span style="width:${Math.min(100, support[id] || 0).toFixed(1)}%;background:${PARTY_COLORS[id]}"></span></span><strong>${(support[id] || 0).toFixed(0)}%</strong></div>`).join('');
+}
+
+function renderCountryPanel() {
+    ensureSocietyState();
+    const pct = (v, d = 1) => `${(v * 100).toFixed(d)}%`;
+    const series = key => society.history.map(entry => entry[key]);
+    const card = (icon, title, value, sub, key) => `
+        <article class="bank-card macro-card"><header class="bank-card-head"><span class="bank-card-icon">${icon}</span><div><h4>${title}</h4><span class="bank-card-type">${sub}</span></div></header>
+            <div class="macro-value">${value}</div>${key && typeof renderSparkline === 'function' ? renderSparkline(series(key)) : ''}</article>`;
+    const m = society.migration;
+    const budget = society.budget;
+    const pending = society.pendingLaw;
+    const support = macro.election.campaign && macro.election.support ? macro.election.support : computePartySupport(false);
+    const wf = getWorkforceCompanies();
+    const unions = wf.filter(s => s.workforce.union).length;
+    const striking = wf.filter(s => s.workforce.strike);
+    const sectorUnions = Object.keys(society.sectorUnions || {});
+    const lastGrowth = Number(society.lastGrowth) || 0;
+    const laws = Object.entries(SOCIAL_LAWS).map(([id, law]) => {
+        const level = society.laws[id];
+        return `<tr><td>${law.icon} ${escapeHtml(law.name)}</td><td><strong>${escapeHtml(describeLawLevel(id))}</strong></td>
+            <td class="text-xs text-muted">${pending?.law === id ? `📜 zapowiedź: → ${escapeHtml(describeLawLevel(id, pending.to))} od przyszłego kwartału` : `zmiany: ${society.lawChanges[id] || 0}`}</td>
+            <td>${law.levels.map((_, i) => `<span class="law-pip ${i <= level ? 'on' : ''}"></span>`).join('')}</td></tr>`;
+    }).join('');
+    const wages = WORKFORCE_GROUPS.map(g => `<tr><td>${escapeHtml(g.name)}</td><td class="cell-number ${society.wages[g.id] > 1.005 ? 'text-down' : society.wages[g.id] < 0.995 ? 'text-up' : ''}">${society.wages[g.id].toFixed(3)}</td></tr>`).join('');
+    return `
+        <p class="bank-lead">Kraj to ludzie: od struktury klas zależy popyt (sektory luksusowe kontra podstawowe), od płac i zadowolenia — koszt pracy w spółkach, od ustaw — budżet państwa i bezrobocie. Liczby płac to indeksy realne (1,00 = poziom startowy, bez inflacji).</p>
+        <div class="bank-grid">
+            ${card('👥', 'Populacja', formatPopulation(society.population), `${lastGrowth >= 0 ? '+' : ''}${(lastGrowth * 100).toFixed(2)}% w kwartale`, 'population')}
+            ${card('🛒', 'Indeks popytu', society.demandIndex.toFixed(3), 'start = 1,000 · Σ udział × waga', 'demand')}
+            ${card('🎓', 'Edukacja', `${society.education.toFixed(0)}/100`, `priorytet państwa: ${EDUCATION_LABELS[society.educationPriority]} (cel ${EDUCATION_TARGETS[society.educationPriority]})`, 'education')}
+            ${card('✈️', 'Migracja', `${(m.lastPeople || 0) >= 0 ? '+' : ''}${Math.round(m.lastPeople || 0).toLocaleString('pl-PL')}`, `atrakcyjność kraju ${Number(m.attractiveness || 0).toFixed(0)}/100${m.lowQuarters ? ` · ⚠️ ${m.lowQuarters} kw. poniżej 40` : ''}`, 'migration')}
+            ${card('🧠', 'Niedobór specjalistów', society.shortage.toFixed(2), society.shortage > 1 ? 'popyt > podaż: płace specjalistów rosną' : 'podaż wystarcza', 'shortage')}
+        </div>
+        <div class="bank-grid mt-3">
+            <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">🏘️</span><div><h4>Struktura społeczna</h4><span class="bank-card-type">6 klas zamożności</span></div></header>
+                ${renderSocietyClassBar()}
+                <p class="text-xs text-muted">Co kwartał część każdej klasy awansuje albo spada o szczebel: wzrost PKB pomaga, bezrobocie i inflacja szkodzą. Płaca minimalna i mieszkania socjalne przesuwają biednych do klasy średniej niższej.</p></article>
+            <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">💼</span><div><h4>Rynek pracy</h4><span class="bank-card-type">bezrobocie ${pct(macro.unemployment)} · indeksy płac realnych</span></div></header>
+                <table class="asset-mini-table w-full"><tbody>${wages}</tbody></table>
+                <p class="text-xs text-muted">Krzywa Phillipsa: niskie bezrobocie podnosi płace, wysokie je hamuje. Niedobór specjalistów zależy od edukacji i drenażu mózgów.</p>
+                <p class="text-sm">✊ Związki zakładowe: <strong>${unions}</strong>/${wf.length} spółek · sektorowe: <strong>${sectorUnions.length ? escapeHtml(sectorUnions.join(', ')) : 'brak'}</strong> · strajki teraz: <strong>${striking.length}</strong>${striking.length ? ` (${striking.slice(0, 4).map(s => escapeHtml(s.name)).join(', ')})` : ''}</p></article>
+        </div>
+        <div class="bank-grid mt-3">
+            <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">📜</span><div><h4>Ustawy</h4><span class="bank-card-type">rząd zmienia 1 ustawę na rok, zapowiedź kwartał wcześniej</span></div></header>
+                <table class="asset-mini-table w-full"><tbody>${laws}</tbody></table>
+                ${pending ? `<p class="text-sm">📣 Rynek już reaguje na zapowiedź — tak działa dyskontowanie: kurs zmienia się przy ogłoszeniu, nie w dniu wejścia ustawy w życie.</p>` : ''}
+                ${society.housingProgram > 0 ? `<p class="text-sm">🏗️ Trwa program mieszkań socjalnych (${society.housingProgram} kw.): przetargi dla budowlanki i deweloperów.</p>` : ''}</article>
+            <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">🏦</span><div><h4>Budżet państwa</h4><span class="bank-card-type">Skarb Państwa ${formatZl(governmentTreasury, 0)}</span></div></header>
+                <dl class="bank-card-rates">
+                    <div><dt>Saldo kwartału</dt><dd class="${budget.balance < 0 ? 'text-down' : 'text-up'}">${formatZl(budget.balance || 0, 0)}</dd></div>
+                    <div><dt>Deficyt od</dt><dd>${budget.deficitQuarters} kw.</dd></div>
+                    <div><dt>Zasiłki</dt><dd>${formatZl(budget.socialSpending || 0, 0)}</dd></div>
+                    <div><dt>Podatki od pracy</dt><dd>${formatZl(budget.laborTaxes || 0, 0)}</dd></div>
+                    <div><dt>Ubytek przez szarą strefę</dt><dd class="${budget.greyTaxLoss > 0 ? 'text-down' : ''}">${formatZl(budget.greyTaxLoss || 0, 0)}</dd></div>
+                    <div><dt>CIT</dt><dd>${(getCompanyIncomeTaxRate() * 100).toFixed(0)}%</dd></div>
+                </dl>
+                <p class="text-xs text-muted">Deficyt przez 4 kwartały podnosi rentowność obligacji skarbowych o 0,25 pp${budget.bondPremium ? ' (teraz: ✅ premia naliczana)' : ''}. Przez 8 kwartałów — rząd podnosi CIT albo tnie ustawy (zależnie od partii).</p></article>
+            <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">🗳️</span><div><h4>Partie</h4><span class="bank-card-type">${escapeHtml(getRulingParty().name)} · wybory za ${macro.election.quartersLeft} kw.</span></div></header>
+                ${renderPartyBars(support)}
+                <p class="text-xs text-muted">Sondaż: poparcie liczone z klas (biedni wolą Ludowców, zamożni Koalicję Rynkową), plus zmęczenie władzą, koniunktura i szum. Zwycięzca poniżej 40% rządzi w koalicji z drugą partią.</p></article>
+        </div>`;
+}
+
+// ---------- Karta spółki: Zatrudnienie ----------
+function renderCompanyCardWorkforce(stock) {
+    const wf = ensureWorkforce(stock);
+    if (!wf) return '<p class="text-muted">Ta spółka nie ma modelu zatrudnienia (bank, fundusz, startup).</p>';
+    if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('kosztPracy');
+    const counts = getWorkforceGroupCounts(stock);
+    const policy = LABOR_POLICIES[wf.policy] || LABOR_POLICIES.standard;
+    const index = getLaborCostIndex(stock);
+    const laborPct = wf.laborShare * index;
+    const peers = getWorkforceCompanies().filter(s => s.sector?.[0] === stock.sector?.[0]);
+    const sectorPct = peers.length ? peers.reduce((sum, s) => sum + s.workforce.laborShare * getLaborCostIndex(s), 0) / peers.length : laborPct;
+    const controls = typeof canFundControlAgm === 'function' && canFundControlAgm(stock);
+    const locked = isLaborPolicyLocked(stock);
+    const union = wf.union || getSectorUnion(stock);
+    const status = getUnionStatus(stock);
+    const pending = wf.pendingDemand;
+    const premium = 1 + (Number(wf.wagePremium) || 0);
+    const rows = WORKFORCE_GROUPS.map(g => {
+        const wage = (g.id === 'grey' ? getMarketWage('cheap') * GREY_WAGE_FACTOR : getMarketWage(g.id) * premium) * (Number(wf.payMult) || 1);
+        return `<tr class="${g.id === 'grey' && counts.grey > 0 ? 'text-down' : ''}"><td>${escapeHtml(g.name)}</td><td class="cell-number">${counts[g.id].toLocaleString('pl-PL')}</td><td class="cell-number">${wage.toFixed(2)}</td></tr>`;
+    }).join('');
+    const satClass = wf.satisfaction >= 70 ? 'text-up' : wf.satisfaction < 35 ? 'text-down' : '';
+    const policyButtons = controls ? `<div class="d-flex gap-2 flex-wrap mt-2">${LABOR_POLICY_ORDER.map(id => `<button class="btn-xs ${id === wf.policy ? '' : 'btn-secondary'}" ${locked || id === wf.policy ? 'disabled' : ''} onclick="setLaborPolicy('${stock.symbol}', '${id}'); renderCompanyCard();">${LABOR_POLICIES[id].icon} ${LABOR_POLICIES[id].name}</button>`).join('')}</div>
+        <p class="text-xs text-muted">${locked ? `Blokada: kolejna zmiana za ${wf.policyLockUntil - getWorkforceQuarter()} kw.` : 'Możesz (nie musisz) zmienić politykę. Marża dochodzi do nowej polityki w 2 kwartały, zadowolenie zmienia się od razu (obniżka −15, podwyżka +5). Blokada: 4 kwartały.'}</p>` : '<p class="text-xs text-muted">Politykę ustala prezes według cech. Zmienić ją może większościowy akcjonariusz (> 50%).</p>';
+    const decision = pending && controls ? `<div class="mail-action"><p>✊ ${pending.strike ? 'Trwa strajk' : `Związek żąda +${(pending.raise * 100).toFixed(1)}%`} — decyzja do końca kwartału${pending.choice ? ` (wybrano: <strong>${{ agree: 'zgoda', negotiate: 'negocjacje', refuse: 'odmowa' }[pending.choice]}</strong>)` : ' (bez odpowiedzi zdecyduje prezes)'}.</p>
+        <button onclick="respondUnionDemand('${stock.symbol}', 'agree'); renderCompanyCard();">Zgoda</button> <button class="btn-secondary" onclick="respondUnionDemand('${stock.symbol}', 'negotiate'); renderCompanyCard();">Negocjacje</button> <button class="btn-danger" onclick="respondUnionDemand('${stock.symbol}', 'refuse'); renderCompanyCard();">Odmowa</button></div>` : '';
+    const poachTargets = controls ? stocks.filter(s => s !== stock && hasWorkforce(s) && s.ceo && !s.isBankrupt).sort((a, b) => (b.ceo.traits?.length || 0) - (a.ceo.traits?.length || 0)).slice(0, 25) : [];
+    const poach = controls ? `<h4 class="mt-3">👔 Podkup prezesa</h4>
+        <p class="text-xs text-muted">Koszt: 1% kapitalizacji spółki, z której odchodzi prezes — płaci ${escapeHtml(stock.name)} ze swojej gotówki. Szansa: 60% − zadowolenie pracowników tamtej spółki / 2. Prezes zabiera swoje cechy. Limit: 1 na rok.</p>
+        <div class="bank-card-form"><select id="poach-ceo-source" aria-label="Spółka">${poachTargets.map(s => `<option value="${s.symbol}">${escapeHtml(s.ceo.name)} — ${escapeHtml(s.name)} (${(s.ceo.traits || []).map(t => escapeHtml(t.name)).join(', ') || 'bez cech'})</option>`).join('')}</select>
+        <button onclick="playerPoachCeo('${stock.symbol}', document.getElementById('poach-ceo-source').value); renderCompanyCard();">Złóż ofertę</button></div>` : '';
+    const sat = wf.satisfactionHistory.length > 1 && typeof renderSparkline === 'function' ? renderSparkline(wf.satisfactionHistory, { width: 140, height: 30 }) : '';
+    return `
+        <div class="cc-grid">
+            <section><h4>Zatrudnienie: ${wf.employees.toLocaleString('pl-PL')} osób</h4>
+                <table class="asset-mini-table w-full"><thead><tr><th>Grupa</th><th class="cell-number">Osób</th><th class="cell-number" title="Płaca względem startowego poziomu rynku (1,00), z polityką i podwyżkami związkowymi">Płaca</th></tr></thead><tbody>${rows}</tbody></table>
+                <p class="text-sm">Koszt pracy: <strong class="${laborPct > sectorPct * 1.05 ? 'text-down' : laborPct < sectorPct * 0.95 ? 'text-up' : ''}">${(laborPct * 100).toFixed(1)}% przychodów</strong> · średnia sektora ${(sectorPct * 100).toFixed(1)}% · indeks kosztu pracy ${index.toFixed(3)}</p>
+                <p class="text-xs text-muted">Marża = marża bazowa + ${(wf.laborShare * 100).toFixed(0)}% × (1 − indeks). Niższy indeks (tańsza praca, wyższa wydajność) podnosi marżę — ale z dźwignią operacyjną działa to w obie strony.</p></section>
+            <section><h4>Ludzie i polityka</h4>
+                <p class="m-0">Zadowolenie: <strong class="${satClass}">${wf.satisfaction.toFixed(0)}/100</strong> ${sat}</p>
+                <p class="text-xs text-muted mt-0">cel ${getSatisfactionTarget(stock).toFixed(0)} · wydajność ${(((wf.productivity || 1) + (wf.productivityBonus || 0)) * 100).toFixed(1)}%${wf.rotation ? ` · rotacja ${(wf.rotation * 100).toFixed(1)}%/kw.` : ''}${wf.layoffs ? ' · ⚠️ zwolnienia' : ''}</p>
+                <p class="m-0">Polityka kadrowa: <strong>${policy.icon} ${policy.name}</strong> <span class="text-xs text-muted">(${{ owner: 'decyzja funduszu', bot: 'decyzja większościowca', ceo: 'decyzja prezesa' }[wf.policySetBy] || 'decyzja prezesa'})</span></p>
+                ${policyButtons}
+                <p class="m-0 mt-2">Związek: <strong>${{ none: 'brak', company: '✊ zakładowy', sector: '✊ sektorowy' }[status]}</strong>${union?.agreementUntil >= getWorkforceQuarter() ? ` · 📄 układ zbiorowy do kw. ${union.agreementUntil}` : ''}${wf.strike ? ` · <strong class="text-down">STRAJK (−${(wf.strike.pct * 100).toFixed(0)}% przychodów, ${wf.strike.quarters}. kw.)</strong>` : ''}</p>
+                <p class="text-xs text-muted">Ryzyko strajku: ${escapeHtml(getStrikeRisk(stock) || '—')}${wf.greyCaughtQuarter !== null && wf.greyCaughtQuarter !== undefined ? ` · 🦺 kara Inspekcji Pracy w kw. ${wf.greyCaughtQuarter}` : ''}</p>
+                ${decision}
+            </section>
+        </div>
+        ${poach}`;
+}
