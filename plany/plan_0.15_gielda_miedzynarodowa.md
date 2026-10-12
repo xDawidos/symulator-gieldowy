@@ -306,6 +306,7 @@ Trzy drogi, które się uzupełniają: pojedyncze spółki, bilety dla wybranych
 
 ## G4. Sektory, podsektory, specjalizacje i spółki specjalne
 
+- **Kategorie (0.14 T1a):** w tabelach G2 banki zapisane jako „Finanse” (Wall Street Corp., Deutsche Goldhaus, UBZ Bankgesellschaft, Howam To Bank, PanDa Bank, Waschmabank, Crédit le Krecik, Bank of Bharat, Praha Bank, banki państwowe) dostają sektor **Bankowość** i podsektor (komercyjny, inwestycyjny albo międzynarodowy). Nowe sektory trafiają do rejestru `SECTORS`: Motoryzacja do grupy Przemysł i surowce, Rybołówstwo i Alkohole do Konsumpcji.
 - **Nowe sektory:** Motoryzacja, Rybołówstwo, Alkohole (podsektor: Piwowarstwo i napoje). Każdy dostaje profil wyceny oraz dane z 0.13 i 0.14:
 
   | Sektor | Zarząd / Specjaliści / Pracownicy / Tania siła / Szara strefa (%) | Koszt pracy (% przychodów) | Elastyczność popytu (0.13 S1) | Powiązane branże (0.14 T3) |

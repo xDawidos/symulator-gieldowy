@@ -27,7 +27,56 @@ Kolejność: T0 (✅ zrobione, `117feec`) → T1 → T2 → T3 → T4 → T5 →
 - Niezmiennik akcji („akcje w obrocie = suma posiadaczy”) jest kluczowy, bo spin-off dzieli akcje między wszystkich posiadaczy. Błąd „akcje ponad wolny obrót” (bank inwestycyjny + ETF) **naprawiono w 0.13.1** (`b3cd5a5`, „duchy posiadaczy” P3). Brakuje jeszcze potwierdzenia w długim przebiegu (mapa, A1); bez niego nie zaczynamy T4.
 - **Limity spółek z 0.13.1** (`companies.js`): miękki limit krajowy 100 (`LISTING_SOFT_CAP`), twardy 110 (`LISTING_HARD_CAP`), łącznie 150 zwykłych spółek (`LISTING_TOTAL_CAP`). Decyzja: limit krajowy jest **luźny, ok. 110**; 111–115 jest w porządku.
 
-## T1. Segmenty działalności (fundament danych)
+## T1. Porządek kategorii, segmenty działalności i filtry (fundament danych)
+
+### T1a. Słownik sektorów (porządek kategorii)
+
+**Problem (stan kodu):**
+- Duble:
+  - `Bankowość Komercyjna` ma profil identyczny z `Bankowość`;
+  - `Finanse Konsumenckie` jest prawie takie samo jak `Finanse`;
+  - `Logistyka` jest prawie taka sama jak `Transport`.
+
+  Każda nazwa ma **osobny cykl sektora** (`macro.sectorCycles`) i osobne mediany, więc dwa banki z różnymi etykietami zachowują się różnie w makro.
+- Typ banku `Międzynarodowy` (`BANK_TYPES.INTERNATIONAL`) trafił do `stock.sector` jako etykieta bez profilu i pojawia się jako chip filtra.
+- Etykieta `Usługi` dopisywana jako druga „z rozpędu” (np. przy Mediach i pożyczkach) zapycha filtr.
+- Mediany, Akademia i skaner biorą `sector[0]`, więc kolejność w tablicy decyduje o porównaniu.
+- Gaming ma profil, ale 0 spółek (spółki dochodzą w 0.15 G0).
+
+**Rozwiązanie:**
+- **Jeden rejestr `SECTORS`** (w `core.js`, zastępuje rozproszone listy): nazwa, ikona, grupa, profil (`SECTOR_PROFILES`), podsektory (T2). Jest jedynym źródłem dla profili, cykli, mediany, filtrów, skanera i Akademii.
+- **Kanoniczna lista sektorów i grup** (kolejność wyświetlania):
+
+| Grupa | Sektory |
+|---|---|
+| 💰 Finanse | Bankowość; Finanse |
+| 🛒 Konsumpcja | Żywność; Dobra konsumpcyjne; Turystyka; Media; Gaming |
+| 🏭 Przemysł i surowce | Przemysł; Chemia; Energia; Budowlany; Transport i logistyka |
+| 🏥 Zdrowie i nauka | Medycyna; Badania |
+| 💻 Technologia | Technologia |
+| 🏢 Nieruchomości | Nieruchomości |
+| 🛡️ Obronność | Obronność |
+| 🧰 Usługi | Usługi |
+
+- **Mapowanie starych nazw** (przy wczytaniu zapisu i w definicjach spółek):
+
+| Dziś | Po zmianie |
+|---|---|
+| `Bankowość Komercyjna` | sektor `Bankowość`, podsektor **Bank komercyjny** |
+| bank typu inwestycyjnego | `Bankowość`, podsektor **Bank inwestycyjny** |
+| `Międzynarodowy` (etykieta) | usunięta z sektorów → `Bankowość`, podsektor **Bank międzynarodowy** |
+| `Finanse Konsumenckie` | sektor `Finanse`, podsektor **Pożyczki konsumenckie** (profil: C/Z 10, stopy 0,8 jako modyfikator podsektora) |
+| operatorzy rynków, domy maklerskie | `Finanse`, podsektor **Rynki kapitałowe** |
+| `Logistyka`, `Transport` | jeden sektor **Transport i logistyka** (podsektory: Logistyka, Lotnictwo z T2) |
+| `common` (w definicjach technologii) | zostaje jako klucz technologii, ale **nie jest sektorem**: filtr i rejestr go pomijają |
+
+- **Para `Bankowość` + `Finanse` na jednej spółce** (np. `['Bankowość Komercyjna', 'Finanse']`) daje jeden segment `Bankowość`. Bank to bank; nie liczymy go dwa razy w finansach.
+- **Reguła drugiej etykiety:** sektor poboczny zostaje tylko wtedy, gdy jest prawdziwym segmentem (T1b, udział ≥ 20%). Doklejone `Usługi` usuwamy, jeśli spółka nie ma takiego segmentu.
+- **Cykle sektorów:** `macro.sectorCycles` tylko dla kanonicznych sektorów. Przy migracji cykl zdublowanej nazwy znika, a zostaje cykl sektora docelowego.
+- **Typ instrumentu osobno od sektora:** REIT, holding, ETF, startup, fundusz i operator rynku to **filtr „Typ”**, a nie chip sektora. Dziś REIT jest wyjątkiem w `getMarketSectorList`.
+- **Test rejestru:** każda spółka (także startupy, zbrojeniówka, przykrywki mafii i spółki z 0.15) ma wyłącznie sektory z rejestru; brak `Międzynarodowy`, `common` i starych nazw po migracji.
+
+### T1b. Segmenty działalności
 
 - **`stock.segments = [{ sector, subsector|null, share }]`**: udziały w przychodach, w sumie 1,0, najwyżej 3 segmenty.
   - `stock.sector` zostaje dla zgodności i jest wyliczany z segmentów.
@@ -35,11 +84,20 @@ Kolejność: T0 (✅ zrobione, `117feec`) → T1 → T2 → T3 → T4 → T5 →
 - **Migracja:** dzisiejsze spółki wielosektorowe dostają równe udziały, czyli wynik taki sam jak teraz.
 - **Karta spółki:** wykres „Struktura przychodów” (segmenty), segment główny wyróżniony.
 - **Cykl sektora** działa na spółkę proporcjonalnie do udziałów segmentów, a nie średnią jak dziś.
+- **Sektor główny** = segment o największym udziale. Mediany sektora, Akademia, skaner i opisy spółek biorą sektor główny zamiast `sector[0]`.
 - **Akademia:** hasło „Segmenty działalności”.
+
+### T1c. Filtry i widok kategorii
+- **Chipy sektorów pogrupowane** według tabeli z T1a: ikona grupy i liczba spółek przy każdym sektorze (np. „Bankowość 9”). Ukryte są sektory z 0 spółek.
+- **Domyślnie filtr pokazuje spółki, dla których to sektor główny.** Przełącznik **„także segmenty poboczne”** pokazuje też spółki z tym segmentem pobocznym (oznaczone ikoną ◐).
+- **Po wybraniu sektora** pojawia się drugi rząd chipów z jego **podsektorami** (T2) i liczbą spółek. W skanerze jest ten sam filtr.
+- **Filtr „Typ”:** akcje / REIT / holding / ETF / startup / operator rynku.
+- **Karta spółki:** sektor główny z ikoną, podsektor i specjalizacja (T3) oraz pasek segmentów (T1b).
+- **Zapamiętany wybór** filtra (sektor, podsektor, przełącznik) w `localStorage`, jak inne ustawienia widoku.
 
 ## T2. Podsektory
 
-Jeden lub dwa podsektory na sektor. Każdy modyfikuje profil rodzica i ma własną nazwę na karcie i w skanerze. **Tylko trzy mają własną mechanikę**, żeby zakres nie eksplodował.
+Jeden do trzech podsektorów na sektor (Bankowość ma trzy z porządku nazw w T1a). Każdy modyfikuje profil rodzica i ma własną nazwę na karcie i w skanerze. **Tylko trzy mają własną mechanikę**, żeby zakres nie eksplodował.
 
 | Sektor | Podsektor | Różnica profilu względem sektora | Mechanika własna |
 |---|---|---|---|
@@ -52,7 +110,11 @@ Jeden lub dwa podsektory na sektor. Każdy modyfikuje profil rodzica i ma własn
 | Technologia | Sztuczna inteligencja | C/Z 35, wzrost +6 pp, zmienność ×1,3 | — |
 | Przemysł | Robotyka | wzrost +2 pp, marża +2 pp | — |
 | Nieruchomości | Magazyny | beta 1,0, wzrost +2 pp | — |
-| Transport | Lotnictwo | beta 1,8, wrażliwość na ceny energii | — |
+| Transport i logistyka | Lotnictwo | beta 1,8, wrażliwość na ceny energii | — |
+| Transport i logistyka | Logistyka | profil dawnej Logistyki (C/Z 14, wzrost +1 pp) | — |
+| Bankowość | Bank komercyjny / inwestycyjny / międzynarodowy | inwestycyjny: beta 1,4, zmienność ×1,2; międzynarodowy: wrażliwość na kursy walut (0.15) | — (porządek nazw z T1a) |
+| Finanse | Pożyczki konsumenckie | C/Z 10, stopy 0,8 (dawne `Finanse Konsumenckie`) | — |
+| Finanse | Rynki kapitałowe | beta 1,5 (obroty rosną w hossie) | — |
 | Obronność | Drony | wzrost +4 pp, C/Z 22 | — |
 | Żywność | Rolnictwo | dotacje Ludowców (0.13), pogoda | — |
 
@@ -177,9 +239,13 @@ Cel: przebiegi symulacyjne (6,5 roku gry) trwają dziś przy ×50 ok. 2,5–3 mi
   - status koncernu, kooperacje;
   - T6: transfer zysku córki, pożyczki wewnątrzgrupowe, trwające wezwania.
 
-  **Migracja:** segmenty z obecnych sektorów (równe udziały), podsektory przydzielane raz przy wczytaniu.
+  **Migracja:** najpierw mapowanie starych nazw sektorów (T1a: Bankowość Komercyjna, Finanse Konsumenckie, Międzynarodowy, Logistyka, Transport) i połączenie cykli sektorów. Potem segmenty z obecnych sektorów (równe udziały, bez doklejonych `Usługi`) i podsektory przydzielane raz przy wczytaniu.
 - **Testy:**
-  - średnia ważona profilu = dzisiejszy wynik przy równych udziałach;
+  - T1a: każda spółka ma tylko sektory z rejestru; po migracji brak `Bankowość Komercyjna`, `Finanse Konsumenckie`, `Międzynarodowy`, `Logistyka`, `common`;
+  - T1a: liczba cykli sektorów = liczba sektorów kanonicznych;
+  - T1c: filtr „Bankowość” (domyślny) obejmuje wszystkie banki; przełącznik „także segmenty poboczne” zwiększa listę, nie zmniejsza;
+  - T1c: filtr „Typ = REIT” nie zależy od sektora;
+  - średnia ważona profilu = dzisiejszy wynik przy równych udziałach (dla spółek bez zmienionych nazw);
   - rozszerzenie zwiększa liczbę segmentów i udziały sumują się do 1;
   - dyskonto konglomeratu;
   - spin-off zachowuje akcje, gotówkę i dług;
@@ -215,3 +281,7 @@ Cel: przebiegi symulacyjne (6,5 roku gry) trwają dziś przy ×50 ok. 2,5–3 mi
 4. **Limit przy spin-offie:** luźny limit krajowy ok. 110 — spin-off dozwolony do 115 spółek krajowych, powyżej tylko carve-out (córka zależna nie liczy się do limitu krajowego).
 5. **Spółki zależne** (z pliku pomysłów) wchodzą do 0.14 jako T6.
 6. **Pojęcia:** podsektor ma własny profil wyceny (T2); specjalizacja to lżejsza etykieta niszy z jednym modyfikatorem (T3) — tak samo w 0.15.
+7. **Porządek kategorii** w 0.14 T1 (T1a), przed segmentami: jedna migracja zapisu.
+8. **Bankowość i Finanse** to dwa sektory z podsektorami: Bankowość (bank komercyjny, inwestycyjny, międzynarodowy) i Finanse (pożyczki konsumenckie, rynki kapitałowe, fintech).
+9. **Transport i Logistyka** łączą się w sektor „Transport i logistyka” z podsektorami Logistyka i Lotnictwo.
+10. **Filtr sektora:** domyślnie sektor główny i przełącznik „także segmenty poboczne”; chipy pogrupowane z liczbą spółek, a po wyborze sektora lista podsektorów; osobny filtr „Typ”.

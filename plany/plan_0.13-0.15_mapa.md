@@ -62,7 +62,7 @@ Z raportu, „Niesprawdzone” 2–3:
 
 | Część | Zakres | Uwagi spójności |
 |---|---|---|
-| T1 | segmenty z udziałami, średnia ważona profilu | fundament dla T2–T6 i dla spółek zagranicznych z 0.15 |
+| T1 | **T1a porządek kategorii** (rejestr `SECTORS`, mapowanie dubli: Bankowość Komercyjna → Bankowość, Finanse Konsumenckie → Finanse, Międzynarodowy → podsektor, Logistyka + Transport → Transport i logistyka), **T1b segmenty** z udziałami, **T1c filtry** (grupy, sektor główny + przełącznik, podsektory, filtr „Typ”) | fundament dla T2–T6 i dla spółek zagranicznych z 0.15; jedna migracja zapisu |
 | T2 | 12 podsektorów, 3 z własną mechaniką (Biotechnologia, Energetyka jądrowa, Fintech) | 0.15 dopisuje: Przemysł ciężki, Słodycze, Herbata, Piwowarstwo |
 | T3 | rozszerzenie, wejście w podsektor, **specjalizacja-nisza**, pivot, dyskonto konglomeratu | „specjalizacja” = etykieta bez profilu (TV, Rozrywka, Farmaceutyki, Wywiad); 0.15 dopisuje Premium |
 | T4 | spin-off i carve-out | **wymaga A1**; spin-off do 115 spółek krajowych, powyżej tylko carve-out |
@@ -79,6 +79,7 @@ Ustalenia spójności (wpisane do planu 0.15):
 - **Nowe sektory** (Motoryzacja, Rybołówstwo, Alkohole) dostają strukturę zatrudnienia, koszt pracy, elastyczność popytu i branże powiązane (tabela w G4).
 - **Wydarzenia giełdowe** liczone w kwartałach gry: 1% na kwartał, podwajane do 32%, przerwa 2 kwartały.
 - **PanDa Bank** korzysta z istniejącego parabanku z 0.11 i 0.11.5.
+- **Kategorie w 0.15:** banki z tabel G2 (np. Deutsche Goldhaus, UBZ, PanDa Bank, Waschmabank) dostają sektor **Bankowość** i podsektor, a nie `Finanse`. Nowe sektory (Motoryzacja, Rybołówstwo, Alkohole) trafiają do rejestru `SECTORS` z T1a: Motoryzacja do grupy Przemysł i surowce, Rybołówstwo i Alkohole do Konsumpcji.
 - **Wersje zapisu:** 0.13 = v13, 0.14 = v14, 0.15 = v15.
 - **Do potwierdzenia przed G0/G2** (lista „Do potwierdzenia” w planie 0.15): spółki państwowe, nazwa Banku Żywności, nazwa spółki z croissantami, nazwy rynków.
 
@@ -94,3 +95,4 @@ Ustalenia spójności (wpisane do planu 0.15):
 4. Spółki zagraniczne mają osobny limit na kraj (1,5 × liczba startowa), poza limitami krajowymi.
 5. Pracownicy za granicą: model 0.13 i stały profil kraju.
 6. Pojęcia: podsektor ma profil wyceny, a specjalizacja to nisza z jednym modyfikatorem.
+7. Porządek kategorii i filtrów to 0.14 T1a/T1c: dwa sektory finansowe z podsektorami, „Transport i logistyka”, filtr domyślnie po sektorze głównym z przełącznikiem.
