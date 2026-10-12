@@ -3134,7 +3134,14 @@ function processFinancialReports() {
         const equity = stock.balanceSheet.assets - stock.balanceSheet.liabilities;
         if ((equity <= 0 || stock.financialHealth <= -5 || isCullCandidate(stock)) && !stock.isBankrupt) {
              let bankruptcyChance = 0.30;
-             if (stock.ceo?.traits?.some(t => t.id === 'bogacz')) {
+             if (typeof isProtectedMarketOperator === 'function' && isProtectedMarketOperator(stock)) {
+                 // D1: operator rynku internetowego z kilkoma spółkami nie upada — spółki członkowskie składają się na ratunek.
+                 bankruptcyChance = 0;
+                 const bailout = Math.max(0, -equity) + getMarketCapValue(stock) * 0.05;
+                 stock.balanceSheet.assets += bailout;
+                 stock.balanceSheet.retainedEarnings += bailout;
+                 stock.financialHealth = Math.max(stock.financialHealth, -1);
+             } else if (stock.ceo?.traits?.some(t => t.id === 'bogacz')) {
                  bankruptcyChance = 0;
                  logEvent(`[CEO] Prywatne środki i wpływy prezesa ratują ${stock.name} przed bankructwem!`);
                  const bailout = Math.abs(equity) + (stock.price * stock.totalShares * 0.1);
@@ -6496,6 +6503,12 @@ function cleanupBankruptStocks(speedMultiplier) {
 function finalizeStartup(startup) {
     const symbol = startup.symbol;
     logEvent(`[START-UP] Nadszedł dzień sądu dla ${startup.name}!`, 'review');
+
+    // D1: startup operatora rynku internetowego ma gwarancję debiutu.
+    if (startup.operatorStartup) {
+        startup.isScam = false;
+        startup.successChance = Math.max(startup.successChance || 0, 1);
+    }
 
     // Scenariusz oszustwa jest sprawdzany na samym początku
     if (startup.isScam) {

@@ -2090,7 +2090,8 @@ function getBuyCommissionRate(stock) {
     const operatorId = getStockMarket(stock);
     const operatorStock = getOperatorStock(operatorId);
     if (!operatorStock || operatorStock === stock) return 0;
-    return Number(MARKET_OPERATOR_DEFS[operatorId]?.commission) || 0;
+    if (typeof hasInternetConcession === 'function' && hasInternetConcession(operatorId)) return 0; // D1: koncesja
+    return Number(getMarketDef(operatorId)?.commission) || 0;
 }
 
 /** 0.13.1 (B1/B2): pełny koszt zakupu — cena (z rabatem), prowizja, razem. */

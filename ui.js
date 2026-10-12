@@ -108,7 +108,7 @@ function estimateOrderImpact(stock, quantity) {
     const freeFloat = Math.max(1, typeof getFreeFloatShares === 'function' ? getFreeFloatShares(stock) : stock.totalShares);
     const impact = Math.min(0.02, 0.5 * Math.abs(quantity) / freeFloat);
     const marketId = typeof getStockMarket === 'function' ? getStockMarket(stock) : 'GPW';
-    const commission = typeof MARKET_OPERATOR_DEFS !== 'undefined' ? (MARKET_OPERATOR_DEFS[marketId]?.commission || 0) : 0;
+    const commission = typeof getBuyCommissionRate === 'function' ? getBuyCommissionRate(stock) : (typeof getMarketDef === 'function' ? (getMarketDef(marketId)?.commission || 0) : 0);
     const value = quantity * stock.price;
     return { value, impact, commission: value * commission, freeFloat, available: typeof getAvailableShares === 'function' ? getAvailableShares(stock) : null };
 }
@@ -811,6 +811,9 @@ function displayStocks(previousInputValues = {}) {
   }
 
   if (ownedOnlyFilter) baseStocksToDisplay = baseStocksToDisplay.filter(isStockOwnedByPlayer);
+  // D1: spółki rynków internetowych tylko w zakładce „Internet”.
+  const internetTab = typeof currentMarketLevel !== 'undefined' && currentMarketLevel === 'INTERNET';
+  if (typeof isInternetMarketStock === 'function') baseStocksToDisplay = baseStocksToDisplay.filter(stock => isInternetMarketStock(stock) === internetTab);
 
   stockTableBody.innerHTML = '';
   // Zakładka poziomu rynku (ui-update.js: setMarketLevel) — pokazujemy tylko wybraną giełdę.
@@ -1133,8 +1136,40 @@ function displayStocks(previousInputValues = {}) {
     return row;
   };
 
+  // --- D1: zakładka „Internet” — rynki internetowe i ich spółki (rozwijane listy) ---
+  if (internetTab) {
+    const ids = typeof getInternetMarketIds === 'function' ? getInternetMarketIds().filter(id => ['active', 'startup'].includes(marketOperators[id].status)) : [];
+    if (!ids.length) {
+      const cell = stockTableBody.insertRow().insertCell();
+      cell.colSpan = 7;
+      cell.className = 'text-muted text-sm';
+      cell.textContent = 'Żaden rynek internetowy jeszcze nie działa. XTD, PLU5 i kolejne rynki powstają jako startupy w inkubatorze — mają gwarancję debiutu.';
+    }
+    for (const id of ids) {
+      const operator = marketOperators[id];
+      const def = getMarketDef(id) || { name: id, commission: 0, color: '#888' };
+      const members = baseStocksToDisplay.filter(stock => getStockMarket(stock) === id && stock.symbol !== operator.symbol);
+      const operatorStock = operator.symbol ? baseStocksToDisplay.find(stock => stock.symbol === operator.symbol) : null;
+      const key = `net:${id}`;
+      const collapsed = Boolean(exchangeCollapseState[key]);
+      const concession = typeof hasInternetConcession === 'function' && hasInternetConcession(id);
+      const headerRow = stockTableBody.insertRow();
+      headerRow.className = 'exchange-header internet-market-header';
+      const headerCell = headerRow.insertCell();
+      headerCell.colSpan = 7;
+      headerCell.innerHTML = `<div class="d-flex justify-between items-center gap-2 flex-wrap">
+          <h4 class="my-1 clickable" style="color:${def.color}" onclick="toggleExchangeVisibility('${key}')">🌐 ${escapeHtml(def.name)} <span class="text-xs text-muted">${escapeHtml(def.short || id)} · prowizja ${((def.commission || 0) * 100).toFixed(2)}% · spółki ${getMarketMembers(id).length}/${INTERNET_MEMBER_LIMIT}${operator.status === 'startup' ? ' · operator w inkubatorze' : ''}</span> <span>${collapsed ? '▶' : '▼'}</span></h4>
+          ${operator.status === 'active' ? (concession ? '<span class="text-up text-sm">🔑 koncesja: handel bez prowizji</span>' : `<button class="btn-xs" onclick="event.stopPropagation(); buyInternetConcession('${id}'); displayStocks(getCurrentInputValues());">🔑 Koncesja (${formatZl(getInternetConcessionCost(id), 0)})</button>`) : ''}
+        </div>`;
+      for (const stock of [operatorStock, ...members].filter(Boolean)) {
+        const row = renderStockRow(stock, false);
+        if (collapsed) row.style.display = 'none';
+      }
+    }
+  }
+
   // --- Pętla renderująca giełdy ---
-  sortedExchanges.forEach(exchangeKey => {
+  if (!internetTab) sortedExchanges.forEach(exchangeKey => {
     const exchange = exchanges[exchangeKey];
     let stocksOnThisExchange = baseStocksToDisplay.filter(
       stock => stock.exchange === exchangeKey

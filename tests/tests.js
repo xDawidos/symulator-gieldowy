@@ -4350,7 +4350,7 @@ group('T0: prędkości testowe ×100 i ×200', () => {
     });
 });
 
-group('0.13.1 D2: limit spółek krajowych', () => {
+group('0.13.1 D1/D2: rynki internetowe i limit spółek krajowych', () => {
     function worldD(count = 0) {
         const list = [];
         for (let i = 0; i < count; i++) { const c = makeCompany(`C${String(i).padStart(3, '0')}`); c.insiderShares = 0; list.push(c); }
@@ -4361,12 +4361,13 @@ group('0.13.1 D2: limit spółek krajowych', () => {
         return list;
     }
 
-    test('D2: limit liczy tylko spółki krajowe (bez zależnych i startupów)', () => {
+    test('D2: limit liczy tylko spółki krajowe (bez zależnych, startupów i rynków internetowych)', () => {
         const list = worldD(110);
         const before = getListedCompanyCount();
         list[0].isSubsidiaryOf = list[1].symbol;
+        list[2].market = 'XTD';
         list[3].assetType = 'Startup';
-        assert(getListedCompanyCount() === before - 2, `liczone ${getListedCompanyCount()} z ${before}`);
+        assert(getListedCompanyCount() === before - 3, `liczone ${getListedCompanyCount()} z ${before}`);
         assert(!hasFreeListingSlot() && getCrowdingPressure() > 0, 'ponad limitem');
         assert(getStartupFundingFactor() < 1 && getStartupTermsFactor() < 1, 'finansowanie startupów mniejsze i droższe');
         list.slice(0, 30).forEach(s => { s.isBankrupt = true; });
@@ -4383,6 +4384,36 @@ group('0.13.1 D2: limit spółek krajowych', () => {
         assert(Math.max(...goals) > 40_000, `cele zbiórek: max ${Math.max(...goals)}`);
     });
 
+    test('D1: startup operatora ma gwarancję debiutu, rynek ma limit 8 spółek', () => {
+        worldD(20);
+        const startup = spawnOperatorStartup(marketOperators.XTD);
+        startup.isScam = true; startup.successChance = 0;
+        withSeededRandom(3, () => finalizeStartup(startup));
+        assert(marketOperators.XTD.status === 'active' && getOperatorStock('XTD'), 'operator zadebiutował');
+        assert(isInternetMarketStock(getOperatorStock('XTD')), 'operator w zakładce Internet');
+        for (let i = 0; i < 15; i++) spawnMarketMember('XTD', 'test');
+        assert(getMarketMembers('XTD').length === INTERNET_MEMBER_LIMIT, `spółki rynku: ${getMarketMembers('XTD').length}`);
+        assert(getMarketMembers('XTD').every(isInternetMarketStock) && !getMarketMembers('XTD').some(isCountedListedCompany), 'poza limitem krajowym');
+    });
+
+    test('D1: chroniony operator nie upada; koncesja = handel bez prowizji; nowe rynki z puli', () => {
+        worldD(20);
+        const startup = spawnOperatorStartup(marketOperators.PLU5);
+        withSeededRandom(4, () => finalizeStartup(startup));
+        const operator = getOperatorStock('PLU5');
+        while (getMarketMembers('PLU5').length < INTERNET_PROTECTION_MEMBERS) spawnMarketMember('PLU5', 'test');
+        assert(isProtectedMarketOperator(operator), 'ochrona przy ≥ 3 spółkach');
+        const member = getMarketMembers('PLU5')[0];
+        assert(getBuyCommissionRate(member) > 0, 'prowizja bez koncesji');
+        playerCash = 1_000_000;
+        assert(buyInternetConcession('PLU5') && hasInternetConcession('PLU5'), 'koncesja kupiona');
+        assert(getBuyCommissionRate(member) === 0 && chargeMarketCommission(member, 10_000, 'player') === 0, 'bez prowizji');
+        assert(!buyInternetConcession('PLU5'), 'jednorazowa');
+        const fresh = spawnInternetMarket();
+        assert(fresh && isInternetMarket(fresh.id) && fresh.status === 'startup' && getMarketDef(fresh.id).name, 'nowy rynek internetowy jako startup');
+        const snapshot = JSON.parse(JSON.stringify(buildSaveSnapshot()));
+        assert(applySaveSnapshot(snapshot).ok && getMarketDef(fresh.id)?.short === fresh.id && hasInternetConcession('PLU5'), 'rynek i koncesja w zapisie');
+    });
 });
 
 function runAllTests() {
