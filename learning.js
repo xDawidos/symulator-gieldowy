@@ -544,15 +544,17 @@ function unlockAcademyEntry(id, hint = '') {
 
 // Kilka haseł odblokowanych naraz = jedno powiadomienie.
 let academyNotifyQueue = [];
+const ACADEMY_NOTIFY_WINDOW_MS = 2000;
 function queueAcademyNotification(id) {
     academyNotifyQueue.push(id);
     if (academyNotifyQueue.length > 1) return;
+    // Hasła odblokowane w ciągu 2 s (np. na starcie gry) trafiają do jednego powiadomienia.
     setTimeout(() => {
         const ids = academyNotifyQueue;
         academyNotifyQueue = [];
         const titles = ids.map(x => `„${ACADEMY_ENTRIES[x].title}”`);
-        pushNotification(ids.length === 1 ? `📘 Nowe hasło w Akademii: ${titles[0]}` : `📘 Nowe hasła w Akademii (${ids.length}): ${titles.join(', ')}`, () => openAcademy(ids[0]));
-    }, 0);
+        pushNotification(ids.length === 1 ? `📘 Nowe hasło w Akademii: ${titles[0]}` : `📘 Nowe hasła w Akademii (${ids.length}): ${titles.slice(0, 4).join(', ')}${ids.length > 4 ? '…' : ''}`, () => openAcademy(ids[0]));
+    }, ACADEMY_NOTIFY_WINDOW_MS);
 }
 
 /** Co tydzień: hasła odblokowują się przy pierwszym kontakcie z pojęciem. */

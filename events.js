@@ -14,8 +14,8 @@
 // przysyła wszystko razem ze spamem, premium (płatna z portfela prywatnego) tylko ważne maile.
 // Szkolenie „Filtr antyspamowy” (adblock) przenosi spam do folderu Spam.
 
-const MAIL_LIMIT = 150;
-const MAIL_HARD_LIMIT = 250;     // także przypięte decyzje — zapis gry mieści się w localStorage
+const MAIL_LIMIT = 100;          // zapis gry: skrzynka ograniczona do 100 najnowszych (było 150)
+const MAIL_HARD_LIMIT = 150;     // także przypięte decyzje — zapis gry mieści się w localStorage
 const MAIL_FOLDERS = ['inbox', 'starred', 'corporation', 'PULS', 'FLESZ', 'OBSER', 'spam'];
 const CORPORATION_SENDER = 'corporation';
 

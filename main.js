@@ -95,8 +95,13 @@ function serializeProjectForSave(project) {
 // wyniki do 7 cyfr znaczących), a tryb kompaktowy (gdy zwykły zapis przekroczy limit) skraca historie mocniej.
 const SAVED_LINE_HISTORY_POINTS = 90;
 const SAVED_CANDLES = 40;
-const SAVED_LINE_HISTORY_POINTS_COMPACT = 40;
-const SAVE_SIZE_TARGET = 3_000_000; // znaków — zapas względem limitu localStorage
+const SAVE_SIZE_TARGET = 2_500_000; // znaków — zapas względem limitu localStorage (~5 MB)
+// Poziomy zapisu: 0 — zwykły, 1 — kompaktowy (zapis > 2,5 MB), 2 — awaryjny (przeglądarka odmówiła miejsca).
+const SAVE_COMPACT_LEVELS = [
+    { line: SAVED_LINE_HISTORY_POINTS, candles: SAVED_CANDLES, ledger: RESEARCH_LEDGER_KEEP_RECOGNIZED, chartEvents: 20, agm: 4, mails: 100, journal: 100 },
+    { line: 40, candles: 15, ledger: 2, chartEvents: 5, agm: 1, mails: 60, journal: 20 },
+    { line: 12, candles: 4, ledger: 0, chartEvents: 0, agm: 0, mails: 25, journal: 0 }
+];
 
 function roundPrice(value) {
     return Number.isFinite(value) ? Math.round(value * 1e4) / 1e4 : value;
@@ -115,22 +120,35 @@ function compactPricePoints(points) {
     });
 }
 
-function serializeStocksForSave(compact = false) {
+const roundList = list => Array.isArray(list) ? list.map(value => roundSignificant(value)) : list;
+const roundRecords = list => Array.isArray(list) ? list.map(item => item && typeof item === 'object' ? Object.fromEntries(Object.entries(item).map(([key, value]) => [key, roundSignificant(value)])) : roundSignificant(item)) : list;
+
+function serializeStocksForSave(level = 0) {
+    const limits = SAVE_COMPACT_LEVELS[Math.max(0, Math.min(2, Number(level) || 0))];
     const serialized = serializeWithStockRefs(stocks, stocks);
-    const linePoints = compact ? SAVED_LINE_HISTORY_POINTS_COMPACT : SAVED_LINE_HISTORY_POINTS;
     for (const company of serialized) {
-        if (Array.isArray(company.lineHistory)) company.lineHistory = compactPricePoints(company.lineHistory.slice(-linePoints));
-        if (Array.isArray(company.candlestickHistory)) company.candlestickHistory = compactPricePoints(company.candlestickHistory.slice(compact ? -15 : -SAVED_CANDLES));
-        if (Array.isArray(company.fundamentals?.history)) {
-            company.fundamentals.history = company.fundamentals.history.map(quarter => Object.fromEntries(Object.entries(quarter).map(([key, value]) => [key, roundSignificant(value)])));
+        if (company.isBankrupt) {
+            // Upadła spółka: tylko dane do listy i statystyk — bez historii wykresów i raportów.
+            company.lineHistory = []; company.candlestickHistory = []; company.chartEvents = []; company.priceHistory = [];
+            if (company.fundamentals) company.fundamentals.history = (company.fundamentals.history || []).slice(-1);
+            if (company.research) company.research.ledger = [];
+            if (company.governance) company.governance.history = [];
+            continue;
+        }
+        if (Array.isArray(company.lineHistory)) company.lineHistory = compactPricePoints(company.lineHistory.slice(-limits.line));
+        if (Array.isArray(company.candlestickHistory)) company.candlestickHistory = compactPricePoints(company.candlestickHistory.slice(-limits.candles));
+        if (Array.isArray(company.priceHistory)) company.priceHistory = roundList(company.priceHistory.slice(-limits.line));
+        if (Array.isArray(company.fundamentals?.history)) company.fundamentals.history = roundRecords(company.fundamentals.history); // ≤ 8 kwartałów
+        for (const key of ['weeklyCloses', 'dividendHistory', 'researchCostHistory']) if (Array.isArray(company[key])) company[key] = roundRecords(company[key]);
+        if (company.workforce) {
+            company.workforce.greySavings = roundList(company.workforce.greySavings);
+            for (const key of ['payMult', 'productivity', 'productivityBonus', 'satisfaction', 'wagePremium', 'rotation', 'lastLaborIndex', 'greyExtraSaving']) company.workforce[key] = roundSignificant(company.workforce[key]);
         }
         if (Array.isArray(company.research?.ledger)) {
-            company.research.ledger = company.research.ledger.filter((entry, index, list) => !entry.recognized || index >= list.length - (compact ? 2 : RESEARCH_LEDGER_KEEP_RECOGNIZED));
+            company.research.ledger = company.research.ledger.filter((entry, index, list) => !entry.recognized || index >= list.length - limits.ledger);
         }
-        if (compact) {
-            if (Array.isArray(company.chartEvents)) company.chartEvents = company.chartEvents.slice(-5);
-            if (Array.isArray(company.governance?.history)) company.governance.history = company.governance.history.slice(0, 1);
-        }
+        if (Array.isArray(company.chartEvents)) company.chartEvents = limits.chartEvents ? company.chartEvents.slice(-limits.chartEvents) : [];
+        if (Array.isArray(company.governance?.history)) company.governance.history = company.governance.history.slice(0, limits.agm);
     }
     return serialized;
 }
@@ -158,26 +176,28 @@ function expandSavedBonds(saved) {
     return result;
 }
 
-/** Buduje obiekt zapisu (bez zapisywania go) — używane przez saveGameState i testy. compact: mniejszy zapis awaryjny. */
-function buildSaveSnapshot({ compact = false } = {}) {
+/** Buduje obiekt zapisu (bez zapisywania go) — używane przez saveGameState i testy. compact: 0 / 1 / 2 (lub true = 1). */
+function buildSaveSnapshot({ compact = 0 } = {}) {
     const now = Date.now();
+    const level = compact === true ? 1 : Math.max(0, Math.min(2, Number(compact) || 0));
+    const limits = SAVE_COMPACT_LEVELS[level];
     return {
         version: SAVE_FORMAT_VERSION,
         savedAt: now,
-        compact,
+        compact: level,
         currentSpeedMultiplier,
         playerCash,
         governmentTreasury,
-        stocks: serializeStocksForSave(compact),
+        stocks: serializeStocksForSave(level),
         commercialBanks: serializeWithStockRefs(commercialBanks),
         playerPortfolio: serializeWithStockRefs(playerPortfolio),
         aiCompetitors: serializeWithStockRefs(aiCompetitors),
         city: serializeWithStockRefs(city),
         centralBank: serializeWithStockRefs(centralBank),
         specialists: serializeWithStockRefs(specialists),
-        activeTenders: activeTenders.map(serializeTenderForSave),
+        activeTenders: activeTenders.filter(tender => ['open', 'closed', 'awarded'].includes(tender.status)).map(serializeTenderForSave), // zakończone przetargi nie trafiają do zapisu
         constructionProjects: constructionProjects.filter(project => !project.settled).map(serializeProjectForSave),
-        paymentJournal: paymentJournal.slice(compact ? -20 : -100),
+        paymentJournal: limits.journal ? paymentJournal.slice(-limits.journal) : [],
         paymentTotals,
         economyCycle,
         macro,
@@ -192,7 +212,7 @@ function buildSaveSnapshot({ compact = false } = {}) {
         playerProfile,
         playerFund,
         corporation,
-        mailbox: compact ? { ...mailbox, messages: mailbox.messages.slice(0, 60), digest: [] } : mailbox,
+        mailbox: { ...mailbox, messages: mailbox.messages.slice(0, limits.mails), digest: level ? [] : mailbox.digest },
         juMarket,
         investmentPool,
         statePension,
@@ -212,32 +232,40 @@ function buildSaveSnapshot({ compact = false } = {}) {
     };
 }
 
+let saveWarningShown = false;
+
+/** Jednorazowe ostrzeżenie dla gracza (zamiast błędu w konsoli przy każdym autozapisie). */
+function warnSaveOnce(message) {
+    if (saveWarningShown) return;
+    saveWarningShown = true;
+    if (typeof showToast === 'function') showToast(message, 'warning', 10000);
+}
+
 function saveGameState() {
     if (typeof localStorage === 'undefined') return false;
     if (saveDisabledUntilReload) return false;
     if (typeof window !== 'undefined' && window.__GAME_TEST_MODE__) return false; // testy nie nadpisują zapisu gracza
 
-    try {
-        let snapshot = buildSaveSnapshot();
-        let text = JSON.stringify(snapshot);
-        // Zapis za duży (albo przeglądarka odmawia): wersja kompaktowa z krótszymi historiami.
-        if (text.length > SAVE_SIZE_TARGET) { snapshot = buildSaveSnapshot({ compact: true }); text = JSON.stringify(snapshot); }
+    // Zapis za duży albo przeglądarka odmawia miejsca: kolejne poziomy przycięcia (kompaktowy, awaryjny).
+    let lastError = null;
+    for (let level = 0; level < SAVE_COMPACT_LEVELS.length; level++) {
         try {
+            const snapshot = buildSaveSnapshot({ compact: level });
+            const text = JSON.stringify(snapshot);
+            if (text.length > SAVE_SIZE_TARGET && level < SAVE_COMPACT_LEVELS.length - 1) continue;
+            if (level > 0) localStorage.removeItem(GAME_SAVE_KEY); // stary zapis zwalnia miejsce dla nowego
             localStorage.setItem(GAME_SAVE_KEY, text);
-        } catch (quotaError) {
-            if (snapshot.compact) throw quotaError;
-            snapshot = buildSaveSnapshot({ compact: true });
-            text = JSON.stringify(snapshot);
-            localStorage.removeItem(GAME_SAVE_KEY); // stary zapis zwalnia miejsce dla nowego
-            localStorage.setItem(GAME_SAVE_KEY, text);
+            lastSaveReport = { ok: true, at: snapshot.savedAt, size: text.length, compact: level };
+            if (level === 2) warnSaveOnce('⚠️ Zapis gry jest bardzo duży — zapisano wersję awaryjną (krótsze wykresy i historia).');
+            return true;
+        } catch (error) {
+            lastError = error;
         }
-        lastSaveReport = { ok: true, at: snapshot.savedAt, size: text.length, compact: snapshot.compact };
-        return true;
-    } catch (error) {
-        console.error('[save] Nie udało się zapisać gry:', error);
-        lastSaveReport = { ok: false, error: String(error) };
-        return false;
     }
+    lastSaveReport = { ok: false, error: String(lastError) };
+    if (!saveWarningShown) console.error('[save] Nie udało się zapisać gry:', lastError);
+    warnSaveOnce('⚠️ Nie udało się zapisać gry — przeglądarka nie ma miejsca. Postęp z tej sesji może nie zostać zachowany.');
+    return false;
 }
 
 function isFiniteNumber(value) {

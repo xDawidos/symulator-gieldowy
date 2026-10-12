@@ -4173,6 +4173,20 @@ group('Zapis gry: rozmiar po długiej grze (limit localStorage)', () => {
         assert(stock.lineHistory.length === SAVED_LINE_HISTORY_POINTS && stock.research.ledger.filter(e => !e.recognized).length === 10, 'historie i nierozpoznane koszty R&D zachowane');
     });
 
+    test('poziomy zapisu: kompaktowy i awaryjny coraz mniejsze; upadłe spółki i zakończone przetargi bez historii', () => {
+        const list = longWorld();
+        list[0].isBankrupt = true;
+        activeTenders = [{ id: 't1', status: 'completed', bids: [], clientCompany: list[1], buildingType: { id: 'warehouse' }, budget: 1000 }, { id: 't2', status: 'open', bids: [], clientCompany: list[1], buildingType: { id: 'warehouse' }, budget: 1000 }];
+        const sizes = [0, 1, 2].map(level => JSON.stringify(buildSaveSnapshot({ compact: level })).length);
+        assert(sizes[0] > sizes[1] && sizes[1] > sizes[2], `rozmiary ${sizes.join(' / ')}`);
+        const snapshot = buildSaveSnapshot();
+        assert(snapshot.activeTenders.length === 1 && snapshot.activeTenders[0].id === 't2', 'tylko trwające przetargi');
+        assert(snapshot.stocks[0].lineHistory.length === 0 && snapshot.stocks[0].research.ledger.length === 0, 'upadła spółka bez historii');
+        assert(snapshot.mailbox.messages.length <= 100, `skrzynka w zapisie: ${snapshot.mailbox.messages.length}`);
+        addTable('Poziomy zapisu (znaki)', ['zwykły', 'kompaktowy', 'awaryjny'], [sizes]);
+        activeTenders = [];
+    });
+
     test('dziennik R&D trzyma najwyżej kilka rozpoznanych wpisów', () => {
         const [s] = longWorld();
         recognizeResearchExpenses(s);
