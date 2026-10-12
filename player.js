@@ -621,7 +621,7 @@ function processPoolInvestments() {
 
     const targetStartup = getRandomElement(availableStartups);
     // 0.13.1 (B6): pula dokłada najwyżej brakującą kwotę celu; reszta zostaje w puli (proporcjonalnie do wkładów).
-    const investmentAmount = Math.min(investmentPool.totalFunds, getStartupFundingGap(targetStartup));
+    const investmentAmount = Math.min(investmentPool.totalFunds * (targetStartup.operatorStartup ? 1 : getStartupFundingFactor()), getStartupFundingGap(targetStartup)); // D2: mniejsze rundy na nasyconym rynku
     const investedShare = investmentAmount / investmentPool.totalFunds;
     const invested = Object.fromEntries(Object.entries(investmentPool.contributors).map(([id, amount]) => [id, amount * investedShare]));
 
@@ -2483,7 +2483,7 @@ function botFundInvestInStartups(manager) {
     const candidates = stocks.filter(s => s.assetType === 'Startup' && s.stage === 'funding' && getStartupFundingGap(s) >= 100);
     const startup = candidates.sort((a, b) => (b.successChance || 0) - (a.successChance || 0))[Math.floor(Math.random() * Math.min(3, candidates.length))];
     if (!startup) return 0;
-    const amount = Math.floor(Math.min(getStartupFundingGap(startup), getBotFundAssets(fund) * 0.01, fund.cash * 0.2));
+    const amount = Math.floor(Math.min(getStartupFundingGap(startup), getBotFundAssets(fund) * 0.01 * getStartupFundingFactor(), fund.cash * 0.2)); // D2
     if (!(amount >= 100)) return 0;
     fund.cash -= amount;
     if (!fund.startups) fund.startups = {};

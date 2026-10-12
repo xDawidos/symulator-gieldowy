@@ -1210,7 +1210,7 @@ function aiCanInvestInStartups(ai) {
 function aiInvestInStartup(ai, symbol, amount) {
     const startup = stocks.find(s => s.symbol === symbol);
     if (!startup || startup.assetType !== 'Startup') return;
-    amount = Math.min(amount, typeof getStartupFundingGap === 'function' ? getStartupFundingGap(startup) : amount); // 0.13.1 (B6): najwyżej brakująca kwota celu
+    amount = Math.min(amount * (startup.operatorStartup || typeof getStartupFundingFactor !== 'function' ? 1 : getStartupFundingFactor()), typeof getStartupFundingGap === 'function' ? getStartupFundingGap(startup) : amount); // 0.13.1 (B6): najwyżej brakująca kwota celu; D2: mniej na nasyconym rynku
     if (ai.cash < amount || !(amount >= 1)) {
         return; // Zabezpieczenia: czy start-up istnieje, czy bota stać etc.
     }

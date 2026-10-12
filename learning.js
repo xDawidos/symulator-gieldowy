@@ -510,6 +510,16 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Jak przewidzieć zapowiedzi ustaw?', a: ['Śledzić programy partii i sondaże', 'Czytać tylko raporty spółek', 'Nie da się'], c: 0 },
             { q: 'Co znaczy „kupuj plotki, sprzedawaj fakty”?', a: ['Kurs rośnie na oczekiwaniach, a fakt bywa już w cenie', 'Plotki zawsze są prawdziwe', 'Fakty nie mają znaczenia'], c: 0 }
         ]
+    },
+    rynekNasycony: {
+        title: 'Rynek nasycony', icon: '🧱',
+        text: `Giełda ma ograniczoną pojemność: kapitał inwestorów i uwaga analityków rozkładają się na wszystkie notowane spółki. Gdy krajowych spółek jest więcej niż ok. ${LISTING_SOFT_CAP}, debiuty zdarzają się rzadziej, startupy dostają mniejsze i droższe finansowanie (inwestor żąda większego udziału), a słabe firmy szybciej trafiają do koszyka śmieciowego, upadają albo są przejmowane. Do limitu nie liczą się spółki zależne, startupy z inkubatora ani spółki z rynków internetowych.`,
+        example: () => typeof getListedCompanyCount === 'function' ? `Dziś: ${getListedCompanyCount()} spółek krajowych (miękki limit ${LISTING_SOFT_CAP}), presja rynku ${(getCrowdingPressure() * 100).toFixed(0)}%.` : '',
+        quiz: [
+            { q: 'Na giełdzie jest dużo więcej spółek niż zwykle. Co dzieje się ze startupami?', a: ['Dostają mniej pieniędzy na gorszych warunkach', 'Łatwiej debiutują', 'Nic się nie zmienia'], c: 0 },
+            { q: 'Które spółki najszybciej znikają z nasyconego rynku?', a: ['Słabe i zadłużone', 'Największe', 'Te z dywidendą'], c: 0 },
+            { q: 'Czy spółka zależna innej spółki liczy się do limitu krajowych spółek?', a: ['Nie', 'Tak', 'Tylko w kryzysie'], c: 0 }
+        ]
     }
 });
 
@@ -574,6 +584,7 @@ function checkAcademyTriggers() {
     if (getSkillLevel('accountant') >= 3) unlockAcademyEntry('przeplywy');
     if (getSkillLevel('accountant') >= 4) unlockAcademyEntry('kreatywna');
     if (stocks.some(s => s.isBankrupt)) unlockAcademyEntry('bankructwo');
+    if (typeof getCrowdingPressure === 'function' && getCrowdingPressure() > 0) unlockAcademyEntry('rynekNasycony');
     // 0.13: społeczeństwo i rynek pracy
     if (held.some(s => s.workforce?.union || (typeof getSectorUnion === 'function' && getSectorUnion(s)))) unlockAcademyEntry('zwiazek');
     if (held.some(s => s.workforce?.strike)) { unlockAcademyEntry('strajk'); unlockAcademyEntry('dzwignia'); }

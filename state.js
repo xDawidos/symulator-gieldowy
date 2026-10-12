@@ -1999,7 +1999,7 @@ function runMafiaInfiltration() {
 /** Spółki-przykrywki na Giełdzie Śmieciowej (pierwsza zawsze „Całkowicie Legalna Firma”). */
 function spawnFrontCompanies() {
     const fronts = stocks.filter(s => s.mafiaFront && !s.isBankrupt);
-    if (getMafiaStageIndex() < 1 || fronts.length >= 3 || Math.random() > 0.15 * getDebutFactor()) return;
+    if (getMafiaStageIndex() < 1 || fronts.length >= 3 || !hasFreeListingSlot() || Math.random() > 0.15 * getDebutFactor()) return; // D2: tylko przy wolnym miejscu
     const name = FRONT_COMPANY_NAMES.find(n => !stocks.some(s => s.name === n)) || `${getRandomElement(MEMBER_NAME_PREFIXES)} Usługi`;
     const stock = createListedCompany({ name, symbol: uniqueSymbol(name.replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() || 'CLF'), sector: ['Usługi'], price: getRandomInRange(2, 8), totalShares: 20000, exchange: 'JUNK' });
     stock.mafiaFront = true;
@@ -2468,7 +2468,7 @@ function processScandalsQuarterly() {
     processParabanksQuarterly();
     processPrWarsQuarterly();
     const active = scandals.parabanks.some(p => p.phase !== 'gone');
-    if (!active && (typeof macro !== 'object' || macro.quarter >= 4) && Math.random() < PARABANK_SPAWN_CHANCE * getDebutFactor()) spawnParabank();
+    if (!active && hasFreeListingSlot() && (typeof macro !== 'object' || macro.quarter >= 4) && Math.random() < PARABANK_SPAWN_CHANCE * getDebutFactor()) spawnParabank(); // D2
 }
 
 // =================================================================================

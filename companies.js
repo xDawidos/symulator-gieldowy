@@ -2525,31 +2525,70 @@ const INFLATION_PASS_THROUGH = 0.15;   // inflacja w przychodach (było 0,3)
 
 // B5: zatłoczony rynek (ponad ~100 spółek) — bez sztywnego limitu: więcej fuzji i przejęć,
 // ostrzejsza konkurencja (niższe marże), łatwiejsze upadki najsłabszych i nieco mniej debiutów.
+// 0.13.1 (D2): limit dotyczy spółek krajowych — bez spółek zależnych, startupów w inkubatorze i rynków internetowych
+// (te mają własny limit na rynek). Powyżej limitu: rzadsze debiuty i nowe spółki z wydarzeń tylko przy wolnym miejscu,
+// słabe spółki szybciej spadają i upadają, a startupy dostają mniejsze i droższe finansowanie.
 const LISTING_SOFT_CAP = 100;
+const LISTING_PRESSURE_RANGE = 20;   // pełna presja przy 120 spółkach krajowych
+
+/** Spółka liczona do limitu spółek krajowych. */
+function isCountedListedCompany(stock) {
+    return Boolean(stock && !stock.assetType && !stock.isBankrupt && !stock.isSubsidiaryOf
+        && !(typeof isInternetMarketStock === 'function' && isInternetMarketStock(stock)));
+}
 
 function getListedCompanyCount() {
-    return stocks.filter(s => !s.assetType && !s.isBankrupt).length;
+    return stocks.filter(isCountedListedCompany).length;
 }
 
-/** Presja zatłoczenia: 0 do 100 spółek, liniowo do 1 przy 120. */
+/** Presja zatłoczenia: 0 do 100 spółek krajowych, liniowo do 1 przy 120. */
 function getCrowdingPressure() {
-    return Math.max(0, Math.min(1, (getListedCompanyCount() - LISTING_SOFT_CAP) / 20));
+    return Math.max(0, Math.min(1, (getListedCompanyCount() - LISTING_SOFT_CAP) / LISTING_PRESSURE_RANGE));
 }
 
-/** Mnożnik szans na debiut: łagodnie, najwyżej −30%. */
+/** Mnożnik szans na debiut: ponad limitem do −70%. */
 function getDebutFactor() {
+    return 1 - 0.7 * getCrowdingPressure();
+}
+
+/** Nowa spółka krajowa z wydarzenia (przykrywka, parabank…) tylko przy wolnym miejscu. */
+function hasFreeListingSlot() {
+    return getListedCompanyCount() < LISTING_SOFT_CAP;
+}
+
+/** D2: finansowanie startupów na nasyconym rynku — mniejsze wpłaty (do −50%) … */
+function getStartupFundingFactor() {
+    return 1 - 0.5 * getCrowdingPressure();
+}
+
+/** … i gorsze warunki udziałów dla inwestorów przy debiucie (do −30% akcji). */
+function getStartupTermsFactor() {
     return 1 - 0.3 * getCrowdingPressure();
+}
+
+/** D2: co kwartał słabe spółki krajowe na nasyconym rynku tanieją szybciej (spadek na Giełdę Śmieciową). */
+function applyCrowdingPressureToWeak() {
+    const pressure = getCrowdingPressure();
+    if (pressure <= 0) return 0;
+    let hit = 0;
+    for (const stock of stocks) {
+        if (!isCountedListedCompany(stock) || stock.isStateOwned || stock.marketOperator || (Number(stock.financialHealth) || 0) >= -1) continue;
+        applyPriceEffect(stock.symbol, -0.04 * pressure, 'negative', 'market');
+        hit++;
+    }
+    return hit;
 }
 
 /** Ponad limitem: najmniejsze spółki (dolne 25% kapitalizacji) z kondycją ≤ −3 mogą upaść. */
 let cullThresholdCache = { quarter: -1, cap: 0 };
 function isCullCandidate(stock) {
-    if (stock.assetType || stock.isStateOwned || stock.isBankStock || stock.marketOperator || (Number(stock.financialHealth) || 0) > -3) return false;
-    if (getCrowdingPressure() <= 0) return false;
+    const pressure = getCrowdingPressure();
+    if (stock.assetType || stock.isStateOwned || stock.isBankStock || stock.marketOperator || !isCountedListedCompany(stock) || (Number(stock.financialHealth) || 0) > -3 + 1.5 * pressure) return false;
+    if (pressure <= 0) return false;
     const quarter = typeof macro === 'object' ? macro.quarter : 0;
     if (cullThresholdCache.quarter !== quarter) {
-        const caps = stocks.filter(s => !s.assetType && !s.isBankrupt).map(getMarketCapValue).sort((a, b) => a - b);
-        cullThresholdCache = { quarter, cap: caps[Math.floor(caps.length * 0.25)] || 0 };
+        const caps = stocks.filter(isCountedListedCompany).map(getMarketCapValue).sort((a, b) => a - b);
+        cullThresholdCache = { quarter, cap: caps[Math.floor(caps.length * (0.25 + 0.15 * pressure))] || 0 };
     }
     return getMarketCapValue(stock) <= cullThresholdCache.cap;
 }
@@ -3849,7 +3888,7 @@ function generateNewStartup() {
     let successChance = getRandomInRange(0.50, 0.75); // Bazowa szansa na sukces: 50-75%
     let isScam = false;
     let isWhiteCrow = false;
-    let fundingGoal = Math.round(getRandomIntInRange(5000, 40000) / 500) * 500; // skala funduszu gracza (etap F2)
+    let fundingGoal = Math.round(getRandomIntInRange(5000, 40000) * (1 + 0.5 * getCrowdingPressure()) / 500) * 500; // skala funduszu gracza (etap F2); D2: nasycony rynek = trudniejszy cel
 
     // --- LOGIKA SPECJALNYCH PRZYPADKÓW ---
     const specialRoll = Math.random();
@@ -6561,7 +6600,8 @@ function processBankStartupSponsorship() {
         // Niska szansa (np. 2%) w każdym cyklu tygodniowym na próbę sponsorowania
         if (Math.random() < 0.02 && bank.cash > 50000) { // Bank musi mieć trochę gotówki
             const targetStartup = getRandomElement(potentialStartups);
-            const investmentAmount = getRandomIntInRange(5000, 20000); // Kwota sponsorowania
+            const investmentAmount = Math.round(Math.min(getRandomIntInRange(5000, 20000) * getStartupFundingFactor(), Math.max(0, targetStartup.fundingGoal - targetStartup.currentFunding))); // Kwota sponsorowania (D2: mniej na nasyconym rynku, B6: do celu)
+            if (!(investmentAmount >= 100)) return;
 
             if (bank.cash >= investmentAmount) {
                 bank.cash -= investmentAmount;
@@ -8507,7 +8547,7 @@ function handleSuccessfulIPO(startup, successMultiplier) {
     const base = Math.max(totalClaims, startup.fundingGoal + (startup.ipoPriceBonus || 0));
     const ipoPrice = getRandomInRange(25, 50);
     const totalShares = Math.max(1000, Math.floor(base * successMultiplier / ipoPrice));
-    const investorShares = Math.floor(totalShares * STARTUP_INVESTORS_SHARE);
+    const investorShares = Math.floor(totalShares * STARTUP_INVESTORS_SHARE * (startup.operatorStartup ? 1 : getStartupTermsFactor())); // D2: gorsze warunki na nasyconym rynku
     let sharesHeld = 0;
 
     // Wyczyść roszczenia startupowe, potem przydziel akcje.

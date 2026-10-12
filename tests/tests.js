@@ -3388,7 +3388,7 @@ group('Balans B5: rynek i tempo', () => {
         resetWorld(list.slice(0, 80));
         assert(getDebutFactor() === 1, 'poniżej limitu bez zmian');
         resetWorld(list);
-        assert(getCrowdingPressure() === 1 && Math.abs(getDebutFactor() - 0.7) < 1e-9, `ponad limitem ${getDebutFactor()}`);
+        assert(getCrowdingPressure() === 1 && Math.abs(getDebutFactor() - 0.3) < 1e-9, `ponad limitem ${getDebutFactor()}`); // 0.13.1 (D2): do −70%
     });
 
     test('ponad limitem: mała spółka z kondycją ≤ −3 jest kandydatem do upadku', () => {
@@ -4348,6 +4348,41 @@ group('T0: prędkości testowe ×100 i ×200', () => {
             assert(currentSpeedMultiplier === 2, 'wczytanie ignoruje prędkość testową');
         } finally { currentSpeedMultiplier = saved; }
     });
+});
+
+group('0.13.1 D2: limit spółek krajowych', () => {
+    function worldD(count = 0) {
+        const list = [];
+        for (let i = 0; i < count; i++) { const c = makeCompany(`C${String(i).padStart(3, '0')}`); c.insiderShares = 0; list.push(c); }
+        resetWorld(list);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        marketOperators = null;
+        ensureMarketOperators();
+        return list;
+    }
+
+    test('D2: limit liczy tylko spółki krajowe (bez zależnych i startupów)', () => {
+        const list = worldD(110);
+        const before = getListedCompanyCount();
+        list[0].isSubsidiaryOf = list[1].symbol;
+        list[3].assetType = 'Startup';
+        assert(getListedCompanyCount() === before - 2, `liczone ${getListedCompanyCount()} z ${before}`);
+        assert(!hasFreeListingSlot() && getCrowdingPressure() > 0, 'ponad limitem');
+        assert(getStartupFundingFactor() < 1 && getStartupTermsFactor() < 1, 'finansowanie startupów mniejsze i droższe');
+        list.slice(0, 30).forEach(s => { s.isBankrupt = true; });
+        assert(hasFreeListingSlot() && getStartupFundingFactor() === 1, 'poniżej limitu bez zmian');
+    });
+
+    test('D2: na nasyconym rynku słabe spółki tanieją, a cel zbiórki startupu rośnie', () => {
+        const list = worldD(120);
+        list[5].financialHealth = -3;
+        const price = list[5].price, healthy = list[6].price;
+        assert(applyCrowdingPressureToWeak() >= 1, 'presja na słabe');
+        assert(list[5].price < price && list[6].price === healthy, 'tanieje tylko słaba spółka');
+        const goals = Array.from({ length: 40 }, () => generateNewStartup().fundingGoal);
+        assert(Math.max(...goals) > 40_000, `cele zbiórek: max ${Math.max(...goals)}`);
+    });
+
 });
 
 function runAllTests() {
