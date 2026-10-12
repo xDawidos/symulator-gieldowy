@@ -91,29 +91,83 @@ function serializeProjectForSave(project) {
 }
 
 // Historia cen do wykresów jest największą częścią stanu; w zapisie trzymamy jej końcówkę,
-// żeby zmieścić się w limicie localStorage (~5 MB).
+// żeby zmieścić się w limicie localStorage (~5 MB). Liczby historii są zaokrąglane (cena do 0,0001 zł,
+// wyniki do 7 cyfr znaczących), a tryb kompaktowy (gdy zwykły zapis przekroczy limit) skraca historie mocniej.
 const SAVED_LINE_HISTORY_POINTS = 120;
+const SAVED_LINE_HISTORY_POINTS_COMPACT = 40;
+const SAVE_SIZE_TARGET = 3_000_000; // znaków — zapas względem limitu localStorage
 
-function serializeStocksForSave() {
+function roundPrice(value) {
+    return Number.isFinite(value) ? Math.round(value * 1e4) / 1e4 : value;
+}
+
+function roundSignificant(value, digits = 7) {
+    return typeof value === 'number' && Number.isFinite(value) && value !== 0 ? Number(value.toPrecision(digits)) : value;
+}
+
+function compactPricePoints(points) {
+    return points.map(point => {
+        if (!point || typeof point !== 'object') return point;
+        const copy = { ...point };
+        for (const key of ['price', 'open', 'high', 'low', 'close']) if (key in copy) copy[key] = roundPrice(copy[key]);
+        return copy;
+    });
+}
+
+function serializeStocksForSave(compact = false) {
     const serialized = serializeWithStockRefs(stocks, stocks);
+    const linePoints = compact ? SAVED_LINE_HISTORY_POINTS_COMPACT : SAVED_LINE_HISTORY_POINTS;
     for (const company of serialized) {
-        if (Array.isArray(company.lineHistory) && company.lineHistory.length > SAVED_LINE_HISTORY_POINTS) {
-            company.lineHistory = company.lineHistory.slice(-SAVED_LINE_HISTORY_POINTS);
+        if (Array.isArray(company.lineHistory)) company.lineHistory = compactPricePoints(company.lineHistory.slice(-linePoints));
+        if (Array.isArray(company.candlestickHistory)) company.candlestickHistory = compactPricePoints(company.candlestickHistory);
+        if (Array.isArray(company.fundamentals?.history)) {
+            company.fundamentals.history = company.fundamentals.history.map(quarter => Object.fromEntries(Object.entries(quarter).map(([key, value]) => [key, roundSignificant(value)])));
+        }
+        if (Array.isArray(company.research?.ledger)) {
+            company.research.ledger = company.research.ledger.filter((entry, index, list) => !entry.recognized || index >= list.length - (compact ? 2 : RESEARCH_LEDGER_KEEP_RECOGNIZED));
+        }
+        if (compact) {
+            if (Array.isArray(company.chartEvents)) company.chartEvents = company.chartEvents.slice(-5);
+            if (Array.isArray(company.governance?.history)) company.governance.history = company.governance.history.slice(0, 1);
         }
     }
     return serialized;
 }
 
-/** Buduje obiekt zapisu (bez zapisywania go) — używane przez saveGameState i testy. */
-function buildSaveSnapshot() {
+/** Obligacje kupione w jednej transakcji to identyczne rekordy — w zapisie łączymy je w grupy z licznikiem. */
+function compactBondsForSave(bonds) {
+    const groups = new Map();
+    for (const bond of bonds) {
+        const { id, ...rest } = bond;
+        const key = JSON.stringify(rest);
+        const group = groups.get(key);
+        if (group) group.__count++;
+        else groups.set(key, { ...rest, id, __count: 1 });
+    }
+    return [...groups.values()];
+}
+
+function expandSavedBonds(saved) {
+    const result = [];
+    for (const bond of saved) {
+        const count = Math.max(1, Math.floor(Number(bond.__count) || 1));
+        const { __count, ...rest } = bond;
+        for (let i = 0; i < count; i++) result.push(i === 0 ? rest : { ...rest, id: nextSimulationId('bond') });
+    }
+    return result;
+}
+
+/** Buduje obiekt zapisu (bez zapisywania go) — używane przez saveGameState i testy. compact: mniejszy zapis awaryjny. */
+function buildSaveSnapshot({ compact = false } = {}) {
     const now = Date.now();
     return {
         version: SAVE_FORMAT_VERSION,
         savedAt: now,
+        compact,
         currentSpeedMultiplier,
         playerCash,
         governmentTreasury,
-        stocks: serializeStocksForSave(),
+        stocks: serializeStocksForSave(compact),
         commercialBanks: serializeWithStockRefs(commercialBanks),
         playerPortfolio: serializeWithStockRefs(playerPortfolio),
         aiCompetitors: serializeWithStockRefs(aiCompetitors),
@@ -122,7 +176,7 @@ function buildSaveSnapshot() {
         specialists: serializeWithStockRefs(specialists),
         activeTenders: activeTenders.map(serializeTenderForSave),
         constructionProjects: constructionProjects.filter(project => !project.settled).map(serializeProjectForSave),
-        paymentJournal: paymentJournal.slice(-100),
+        paymentJournal: paymentJournal.slice(compact ? -20 : -100),
         paymentTotals,
         economyCycle,
         macro,
@@ -137,13 +191,13 @@ function buildSaveSnapshot() {
         playerProfile,
         playerFund,
         corporation,
-        mailbox,
+        mailbox: compact ? { ...mailbox, messages: mailbox.messages.slice(0, 60), digest: [] } : mailbox,
         juMarket,
         investmentPool,
         statePension,
         bridgeLoanOffers,
         rescueOffer,
-        allBonds,
+        allBonds: compactBondsForSave(allBonds),
         activeBonds,
         cityInvestment,
         privatizationOffer,
@@ -163,9 +217,20 @@ function saveGameState() {
     if (typeof window !== 'undefined' && window.__GAME_TEST_MODE__) return false; // testy nie nadpisują zapisu gracza
 
     try {
-        const snapshot = buildSaveSnapshot();
-        localStorage.setItem(GAME_SAVE_KEY, JSON.stringify(snapshot));
-        lastSaveReport = { ok: true, at: snapshot.savedAt };
+        let snapshot = buildSaveSnapshot();
+        let text = JSON.stringify(snapshot);
+        // Zapis za duży (albo przeglądarka odmawia): wersja kompaktowa z krótszymi historiami.
+        if (text.length > SAVE_SIZE_TARGET) { snapshot = buildSaveSnapshot({ compact: true }); text = JSON.stringify(snapshot); }
+        try {
+            localStorage.setItem(GAME_SAVE_KEY, text);
+        } catch (quotaError) {
+            if (snapshot.compact) throw quotaError;
+            snapshot = buildSaveSnapshot({ compact: true });
+            text = JSON.stringify(snapshot);
+            localStorage.removeItem(GAME_SAVE_KEY); // stary zapis zwalnia miejsce dla nowego
+            localStorage.setItem(GAME_SAVE_KEY, text);
+        }
+        lastSaveReport = { ok: true, at: snapshot.savedAt, size: text.length, compact: snapshot.compact };
         return true;
     } catch (error) {
         console.error('[save] Nie udało się zapisać gry:', error);
@@ -396,7 +461,7 @@ function applySaveSnapshot(snapshot) {
     // Obligacje (v7; wcześniej nie były zapisywane). Stare rekordy bez czasu gry migruje checkBondMaturities.
     allBonds.length = 0;
     activeBonds.length = 0;
-    if (Array.isArray(snapshot.allBonds)) allBonds.push(...snapshot.allBonds.filter(bond => bond && isFiniteNumber(bond.faceValue)));
+    if (Array.isArray(snapshot.allBonds)) allBonds.push(...expandSavedBonds(snapshot.allBonds.filter(bond => bond && isFiniteNumber(bond.faceValue)))); // zapis: grupy obligacji z licznikiem
     if (Array.isArray(snapshot.activeBonds)) activeBonds.push(...snapshot.activeBonds);
 
     if (snapshot.corporation && Array.isArray(snapshot.corporation.managers)) {

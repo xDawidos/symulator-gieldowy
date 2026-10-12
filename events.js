@@ -15,6 +15,7 @@
 // Szkolenie „Filtr antyspamowy” (adblock) przenosi spam do folderu Spam.
 
 const MAIL_LIMIT = 150;
+const MAIL_HARD_LIMIT = 250;     // także przypięte decyzje — zapis gry mieści się w localStorage
 const MAIL_FOLDERS = ['inbox', 'starred', 'corporation', 'PULS', 'FLESZ', 'OBSER', 'spam'];
 const CORPORATION_SENDER = 'corporation';
 
@@ -108,7 +109,14 @@ function trimMailbox() {
                 if (!isPinnedMail(mailbox.messages[i]) && !mailbox.messages[i].starred) { index = i; break; }
             }
         }
-        if (index < 0) break; // same przypięte — skrzynka może chwilowo przekroczyć limit
+        // Same przypięte: najpierw odpadają najstarsze ważne bez akcji (decyzje z przyciskami zostają).
+        if (index < 0 && mailbox.messages.length > MAIL_LIMIT) {
+            for (let i = mailbox.messages.length - 1; i >= 0; i--) {
+                if (!mailbox.messages[i].action && !mailbox.messages[i].starred) { index = i; break; }
+            }
+        }
+        if (index < 0 && mailbox.messages.length > MAIL_HARD_LIMIT) index = mailbox.messages.length - 1; // twardy limit (zapis gry)
+        if (index < 0) break; // same decyzje z akcją — skrzynka może chwilowo przekroczyć limit
         mailbox.messages.splice(index, 1);
     }
 }

@@ -7536,7 +7536,7 @@ function getAvailableCompanyResearch(company, affordableOnly = false) {
 // Inwestycje bankowe (research.isInvestment) mają osobną ścieżkę i nie korzystają z tego dziennika.
 // =================================================================================
 
-const RESEARCH_LEDGER_KEEP_RECOGNIZED = 40;
+const RESEARCH_LEDGER_KEEP_RECOGNIZED = 8; // zapis gry: dziennik R&D był największą częścią spółki (limit localStorage)
 
 function ensureResearchLedger(company) {
     if (!company || !company.research || typeof company.research !== 'object') {

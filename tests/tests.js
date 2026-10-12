@@ -4119,6 +4119,67 @@ group('Społeczeństwo i rynek pracy (0.13 S1–S6)', () => {
     });
 });
 
+group('Zapis gry: rozmiar po długiej grze (limit localStorage)', () => {
+    /** Świat po ~100 kwartałach: 125 spółek z pełnymi historiami, 600 maili, 3000 obligacji botów. */
+    function longWorld() {
+        const list = [];
+        for (let i = 0; i < 125; i++) {
+            const s = makeCompany(`S${String(i).padStart(3, '0')}`);
+            s.insiderShares = 0;
+            s.ceo = { name: 'Jan Test', age: 50, tenure: 4, traits: [] };
+            const t0 = 1_790_000_000_000;
+            s.lineHistory = Array.from({ length: 900 }, (_, k) => ({ time: t0 + k * 1000, price: 100 + Math.random() * 3.123456789 }));
+            s.candlestickHistory = Array.from({ length: 30 }, (_, k) => ({ time: t0 + k * 15000, open: 100.123456789, high: 103.987654321, low: 98.55555555, close: 101.3333333 }));
+            s.research.ledger = Array.from({ length: 300 }, (_, k) => ({ id: `research_maintenance_${i}_${k}`, kind: 'maintenance', techId: 'COMMON_LOGISTICS_1', amount: 50, timestamp: t0 + k, recognized: k < 290, source: 'cash' }));
+            s.chartEvents = Array.from({ length: 20 }, (_, k) => ({ time: t0 + k, icon: '📈', label: 'Raport kwartalny: zysk +29% vs konsensus' }));
+            list.push(s);
+        }
+        resetWorld(list);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        society = createSocietyState();
+        list.forEach(s => {
+            initializeFundamentals(s);
+            for (let q = 0; q < 8; q++) s.fundamentals.history.push({ revenue: 1022.2756548820767, ebitda: 228.6505294239866, netIncome: 91.11275726852443, eps: 0.10448710695931701, depreciation: 51.1137827, interest: 65.0518611, tax: 21.3721282, labor: 156.2877094, ocf: 144.6482176, receivables: 167.6191994 });
+            s.fundamentals.history = s.fundamentals.history.slice(-8);
+            ensureWorkforce(s);
+        });
+        for (let i = 0; i < 600; i++) addMail({ sender: CORPORATION_SENDER, subject: `📈 AWANS: spółka ${i} przechodzi na wyższą giełdę`, body: 'x'.repeat(110), importance: 3 });
+        allBonds.length = 0;
+        for (let i = 0; i < 3000; i++) allBonds.push(createBondRecord(`ai${i % 6}`, { issuerName: 'Skarb Państwa', type: 'Skarbowa (mediumTerm)', faceValue: 1000, risk: 0, isStateBond: true }, 25, 0.04));
+        allBonds.forEach((bond, i) => { bond.remainingGameMs = 600000 + Math.floor(i / 200) * 1000; });
+        return list;
+    }
+
+    test('zapis po ~100 kwartałach mieści się w 3 MB, a kompaktowy jest jeszcze mniejszy', () => {
+        longWorld();
+        const size = JSON.stringify(buildSaveSnapshot()).length;
+        const compact = JSON.stringify(buildSaveSnapshot({ compact: true })).length;
+        assert(size < SAVE_SIZE_TARGET, `zapis ${(size / 1e6).toFixed(2)} MB`);
+        assert(compact < size * 0.8, `kompaktowy ${(compact / 1e6).toFixed(2)} MB vs ${(size / 1e6).toFixed(2)} MB`);
+        assert(mailbox.messages.length <= MAIL_HARD_LIMIT && mailbox.messages.length <= MAIL_LIMIT + 1, `skrzynka ${mailbox.messages.length}`);
+        addTable('Rozmiar zapisu (znaki)', ['Wariant', 'Rozmiar'], [['zwykły', size], ['kompaktowy', compact]]);
+    });
+
+    test('obligacje grupowane w zapisie wracają w tej samej liczbie i wartości', () => {
+        longWorld();
+        const count = allBonds.length, value = allBonds.reduce((sum, bond) => sum + bond.faceValue, 0);
+        const snapshot = JSON.parse(JSON.stringify(buildSaveSnapshot()));
+        assert(snapshot.allBonds.length === 90, `grupy (15 terminów × 6 właścicieli): ${snapshot.allBonds.length}`);
+        const report = applySaveSnapshot(snapshot);
+        assert(report.ok, report.errors.join(' '));
+        assert(allBonds.length === count && allBonds.reduce((sum, bond) => sum + bond.faceValue, 0) === value, 'liczba i nominał obligacji');
+        assert(new Set(allBonds.map(bond => bond.id)).size === count, 'unikalne identyfikatory');
+        const stock = stocks[0];
+        assert(stock.lineHistory.length === SAVED_LINE_HISTORY_POINTS && stock.research.ledger.filter(e => !e.recognized).length === 10, 'historie i nierozpoznane koszty R&D zachowane');
+    });
+
+    test('dziennik R&D trzyma najwyżej kilka rozpoznanych wpisów', () => {
+        const [s] = longWorld();
+        recognizeResearchExpenses(s);
+        assert(s.research.ledger.length <= RESEARCH_LEDGER_KEEP_RECOGNIZED, `wpisy: ${s.research.ledger.length}`);
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;
