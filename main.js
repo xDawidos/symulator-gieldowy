@@ -94,7 +94,7 @@ function serializeProjectForSave(project) {
 // żeby zmieścić się w limicie localStorage (~5 MB). Liczby historii są zaokrąglane (cena do 0,0001 zł,
 // wyniki do 7 cyfr znaczących), a tryb kompaktowy (gdy zwykły zapis przekroczy limit) skraca historie mocniej.
 const SAVED_LINE_HISTORY_POINTS = 90;
-const SAVED_CANDLES = 40;
+const SAVED_CANDLES = 24;
 const SAVE_SIZE_TARGET = 2_500_000; // znaków — zapas względem limitu localStorage (~5 MB)
 // Poziomy zapisu: 0 — zwykły, 1 — kompaktowy (zapis > 2,5 MB), 2 — awaryjny (przeglądarka odmówiła miejsca).
 const SAVE_COMPACT_LEVELS = [
