@@ -93,7 +93,8 @@ function serializeProjectForSave(project) {
 // Historia cen do wykresów jest największą częścią stanu; w zapisie trzymamy jej końcówkę,
 // żeby zmieścić się w limicie localStorage (~5 MB). Liczby historii są zaokrąglane (cena do 0,0001 zł,
 // wyniki do 7 cyfr znaczących), a tryb kompaktowy (gdy zwykły zapis przekroczy limit) skraca historie mocniej.
-const SAVED_LINE_HISTORY_POINTS = 120;
+const SAVED_LINE_HISTORY_POINTS = 90;
+const SAVED_CANDLES = 40;
 const SAVED_LINE_HISTORY_POINTS_COMPACT = 40;
 const SAVE_SIZE_TARGET = 3_000_000; // znaków — zapas względem limitu localStorage
 
@@ -119,7 +120,7 @@ function serializeStocksForSave(compact = false) {
     const linePoints = compact ? SAVED_LINE_HISTORY_POINTS_COMPACT : SAVED_LINE_HISTORY_POINTS;
     for (const company of serialized) {
         if (Array.isArray(company.lineHistory)) company.lineHistory = compactPricePoints(company.lineHistory.slice(-linePoints));
-        if (Array.isArray(company.candlestickHistory)) company.candlestickHistory = compactPricePoints(company.candlestickHistory);
+        if (Array.isArray(company.candlestickHistory)) company.candlestickHistory = compactPricePoints(company.candlestickHistory.slice(compact ? -15 : -SAVED_CANDLES));
         if (Array.isArray(company.fundamentals?.history)) {
             company.fundamentals.history = company.fundamentals.history.map(quarter => Object.fromEntries(Object.entries(quarter).map(([key, value]) => [key, roundSignificant(value)])));
         }
