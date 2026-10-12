@@ -846,6 +846,18 @@ const ceoTraits = {
         color: "#a0a0a0",
         description: "Lubi „załatwiać” sprawy. Czasem podnosi korupcję w kraju, a spółka częściej trafia w afery."
     },
+    chciwy: {
+        name: "Chciwy",
+        rarity: "rare",
+        color: "#f44336",
+        description: "Tnie koszty na ludziach: narzuca politykę kadrową „Wyzysk” (wyższa marża, ale strajki, odejścia i kontrole Inspekcji Pracy)."
+    },
+    lojalny_pracownikom: {
+        name: "Przyjaciel załogi",
+        rarity: "rare",
+        color: "#4caf50",
+        description: "Lojalny wobec pracowników: polityka kadrowa „Prospołeczna” — wyższe płace, wyższa wydajność, mniej związków i strajków."
+    },
     skorumpowany: {
         name: "Skorumpowany",
         rarity: "rare",
@@ -2424,6 +2436,36 @@ function hasRevenueModel(stock) {
  * Banki są wyłączone: ich bilans zawiera depozyty klientów (wartość księgowa wielokrotnie
  * przewyższa kapitalizację), a zysk to stały % aktywów — model banku do osobnej kalibracji.
  */
+/**
+ * 0.13.1 (B11): wycena do wyświetlenia dla spółek bez wyceny z zysków (holdingi, REIT-y, fundusze):
+ * holding — NAV (gotówka + portfel po kursie − dług) na akcję; REIT — NAV albo stopa dywidendy 7% (co wyższe).
+ * Nie zmienia kotwicy cen rynku (fundamentals.fairValue).
+ */
+function getAssetBasedFairValue(stock) {
+    if (!stock) return null;
+    const shares = Math.max(1, Number(stock.totalShares) || 1);
+    const liabilities = Math.max(0, Number(stock.balanceSheet?.liabilities) || 0);
+    if (stock.assetType === 'Holding') {
+        let value = Math.max(0, Number(stock.cash) || 0);
+        for (const [symbol, holding] of Object.entries(stock.holdingPortfolio || {})) value += (stocks.find(s => s.symbol === symbol)?.price || 0) * (Number(holding?.quantity) || 0);
+        for (const [symbol, quantity] of Object.entries(stock.equityStakes || {})) value += (stocks.find(s => s.symbol === symbol)?.price || 0) * (Number(quantity) || 0);
+        return Math.max(0, value - liabilities) / shares || null;
+    }
+    if (stock.assetType === 'REIT') {
+        const nav = Math.max(0, (Number(stock.balanceSheet?.assets) || 0) - liabilities) / shares;
+        const income = (Number(stock.dividendPerShare) || 0) * (4 * BASE_DELAYS.quarterly / 120000) / 0.07; // dywidenda co 2 min gry (10× w roku) / 7%
+        return Math.max(nav, income) || null;
+    }
+    const equity = (Number(stock.balanceSheet?.assets) || 0) - liabilities;
+    return equity > 0 ? equity / shares : null;
+}
+
+/** Wartość godziwa do pokazania graczowi (z zysków albo z majątku). */
+function getDisplayedFairValue(stock) {
+    const fair = Number(stock?.fundamentals?.fairValue);
+    return fair > 0 ? fair : getAssetBasedFairValue(stock);
+}
+
 function hasValuationAnchor(stock) {
     return Boolean(stock && !stock.assetType);
 }
@@ -2483,31 +2525,114 @@ const INFLATION_PASS_THROUGH = 0.15;   // inflacja w przychodach (było 0,3)
 
 // B5: zatłoczony rynek (ponad ~100 spółek) — bez sztywnego limitu: więcej fuzji i przejęć,
 // ostrzejsza konkurencja (niższe marże), łatwiejsze upadki najsłabszych i nieco mniej debiutów.
+// 0.13.1 (D2): limit dotyczy spółek krajowych — bez spółek zależnych, startupów w inkubatorze i rynków internetowych
+// (te mają własny limit na rynek). Powyżej limitu: rzadsze debiuty i nowe spółki z wydarzeń tylko przy wolnym miejscu,
+// słabe spółki szybciej spadają i upadają, a startupy dostają mniejsze i droższe finansowanie.
 const LISTING_SOFT_CAP = 100;
+const LISTING_HARD_CAP = 110;        // P1: twardy sufit — od 110 spółek krajowych żadnych nowych debiutów ani przenosin na rynek krajowy
+const LISTING_PRESSURE_RANGE = LISTING_HARD_CAP - LISTING_SOFT_CAP;   // hamulec 100–110 (pełna presja przy suficie)
+const LISTING_TOTAL_CAP = 150;       // P1: zwykłe spółki łącznie (krajowe, zależne, rynków internetowych); bez stałych podmiotów i startupów
+const AWAITING_LISTING_MAX_QUARTERS = 8; // startup bez miejsca na giełdzie czeka najwyżej 2 lata, potem zostaje przejęty
+
+/** Spółka liczona do limitu spółek krajowych. */
+function isCountedListedCompany(stock) {
+    return Boolean(stock && !stock.assetType && !stock.isBankrupt && !stock.isSubsidiaryOf
+        && !(typeof isInternetMarketStock === 'function' && isInternetMarketStock(stock)));
+}
 
 function getListedCompanyCount() {
-    return stocks.filter(s => !s.assetType && !s.isBankrupt).length;
+    return stocks.filter(isCountedListedCompany).length;
 }
 
-/** Presja zatłoczenia: 0 do 100 spółek, liniowo do 1 przy 120. */
+/** Presja zatłoczenia: 0 do 100 spółek krajowych, liniowo do 1 przy 110 (twardy sufit). */
 function getCrowdingPressure() {
-    return Math.max(0, Math.min(1, (getListedCompanyCount() - LISTING_SOFT_CAP) / 20));
+    return Math.max(0, Math.min(1, (getListedCompanyCount() - LISTING_SOFT_CAP) / LISTING_PRESSURE_RANGE));
 }
 
-/** Mnożnik szans na debiut: łagodnie, najwyżej −30%. */
+/** Mnożnik szans na debiut: ponad limitem do −70%. */
 function getDebutFactor() {
+    return 1 - 0.7 * getCrowdingPressure();
+}
+
+/** P1: każda nowa spółka krajowa (debiut startupu, zależna, bank, wydarzenie, przenosiny na rynek krajowy) tylko poniżej sufitu. */
+function hasFreeListingSlot() {
+    return getListedCompanyCount() < LISTING_HARD_CAP && hasFreeTotalListingSlot();
+}
+
+/** Zwykłe spółki do łącznego sufitu: bez stałych podmiotów (holdingi, REIT-y, instytuty, banki, Fundacja, operatorzy rynków) i startupów. */
+function isOrdinaryCompany(stock) {
+    return Boolean(stock && !stock.isBankrupt && !stock.assetType && !stock.isBankStock && !stock.marketOperator && stock.symbol !== 'FPF');
+}
+
+function getTotalCompanyCount() {
+    return stocks.filter(isOrdinaryCompany).length;
+}
+
+/** P1: miejsce pod łącznym sufitem (także dla spółek zależnych i członków rynków internetowych). */
+function hasFreeTotalListingSlot() {
+    return getTotalCompanyCount() < LISTING_TOTAL_CAP;
+}
+
+/** P1: startup gotowy do debiutu, a giełda pełna — czeka w inkubatorze (stage 'awaitingListing'). */
+function parkStartupForListing(startup, successMultiplier) {
+    startup.stage = 'awaitingListing';
+    startup.awaitingListing = { multiplier: successMultiplier, since: typeof macro === 'object' ? macro.quarter : 0 };
+    logEvent(`⏳ ${startup.name} jest gotowy do debiutu, ale giełda jest pełna (${getListedCompanyCount()}/${LISTING_HARD_CAP} spółek) — czeka w inkubatorze na wolne miejsce.`, 'review');
+}
+
+/** P1: co kwartał — czekające startupy debiutują po kolei, gdy zwolni się miejsce; po 8 kwartałach przejmuje je inwestor. */
+function processAwaitingListings() {
+    const quarter = typeof macro === 'object' ? macro.quarter : 0;
+    const waiting = stocks.filter(s => s.assetType === 'Startup' && s.stage === 'awaitingListing')
+        .sort((a, b) => (a.awaitingListing?.since || 0) - (b.awaitingListing?.since || 0));
+    for (const startup of waiting) {
+        const info = startup.awaitingListing || { multiplier: 1.5, since: quarter };
+        if (hasFreeListingSlot()) {
+            startup.stage = 'finalized';
+            delete startup.awaitingListing;
+            logEvent(`🔔 Zwolniło się miejsce na giełdzie — ${startup.name} debiutuje po ${quarter - info.since} kw. oczekiwania.`, 'market');
+            handleSuccessfulIPO(startup, info.multiplier);
+        } else if (quarter - info.since >= AWAITING_LISTING_MAX_QUARTERS) {
+            const payout = Math.min(2, Math.max(1.05, info.multiplier));
+            logEvent(`🤝 ${startup.name} nie doczekał się miejsca na giełdzie — projekt przejmuje inwestor branżowy, udziałowcy dostają ${(payout * 100 - 100).toFixed(0)}% ponad wkład.`, 'market');
+            removeStartup(startup, 1, payout);
+        }
+    }
+}
+
+/** D2: finansowanie startupów na nasyconym rynku — mniejsze wpłaty (do −50%) … */
+function getStartupFundingFactor() {
+    return 1 - 0.5 * getCrowdingPressure();
+}
+
+/** … i gorsze warunki udziałów dla inwestorów przy debiucie (do −30% akcji). */
+function getStartupTermsFactor() {
     return 1 - 0.3 * getCrowdingPressure();
+}
+
+/** D2: co kwartał słabe spółki krajowe na nasyconym rynku tanieją szybciej (spadek na Giełdę Śmieciową). */
+function applyCrowdingPressureToWeak() {
+    const pressure = getCrowdingPressure();
+    if (pressure <= 0) return 0;
+    let hit = 0;
+    for (const stock of stocks) {
+        if (!isCountedListedCompany(stock) || stock.isStateOwned || stock.marketOperator || (Number(stock.financialHealth) || 0) >= -1) continue;
+        applyPriceEffect(stock.symbol, -0.04 * pressure, 'negative', 'market');
+        hit++;
+    }
+    return hit;
 }
 
 /** Ponad limitem: najmniejsze spółki (dolne 25% kapitalizacji) z kondycją ≤ −3 mogą upaść. */
 let cullThresholdCache = { quarter: -1, cap: 0 };
 function isCullCandidate(stock) {
-    if (stock.assetType || stock.isStateOwned || stock.isBankStock || stock.marketOperator || (Number(stock.financialHealth) || 0) > -3) return false;
-    if (getCrowdingPressure() <= 0) return false;
+    const pressure = getCrowdingPressure();
+    if (stock.assetType || stock.isStateOwned || stock.isBankStock || stock.marketOperator || !isCountedListedCompany(stock) || (Number(stock.financialHealth) || 0) > -3 + 1.5 * pressure) return false;
+    if (pressure <= 0) return false;
     const quarter = typeof macro === 'object' ? macro.quarter : 0;
     if (cullThresholdCache.quarter !== quarter) {
-        const caps = stocks.filter(s => !s.assetType && !s.isBankrupt).map(getMarketCapValue).sort((a, b) => a - b);
-        cullThresholdCache = { quarter, cap: caps[Math.floor(caps.length * 0.25)] || 0 };
+        const caps = stocks.filter(isCountedListedCompany).map(getMarketCapValue).sort((a, b) => a - b);
+        cullThresholdCache = { quarter, cap: caps[Math.floor(caps.length * (0.25 + 0.15 * pressure))] || 0 };
     }
     return getMarketCapValue(stock) <= cullThresholdCache.cap;
 }
@@ -2536,21 +2661,29 @@ function computeQuarterResults(stock) {
     const projectAdj = (typeof getSpecialProjectGrowth === 'function' ? getSpecialProjectGrowth(stock) : 0) // bonusy projektów specjalnych
         + (typeof getMafiaFrontGrowth === 'function' ? getMafiaFrontGrowth(stock) : 0) // spółki-przykrywki rosną z wpływami mafii
         + (typeof getDefenseGrowthBonus === 'function' ? getDefenseGrowthBonus(stock) : 0); // zbrojeniówka: bonus od siły policji
-    const growth = profile.growth / 4 * SECTOR_GROWTH_FACTOR + (Number(stock.growthAdj) || 0) + profile.beta * gdp + health * 0.004 + phaseAdj + sectorAdj + projectAdj + inflation / 4 * INFLATION_PASS_THROUGH + gaussianRandom() * 0.02;
+    const societyAdj = typeof getSocietyGrowthAdj === 'function' ? getSocietyGrowthAdj(stock) : 0; // 0.13: popyt klas, niedobór specjalistów
+    const growth = profile.growth / 4 * SECTOR_GROWTH_FACTOR + (Number(stock.growthAdj) || 0) + profile.beta * gdp + health * 0.004 + phaseAdj + sectorAdj + projectAdj + societyAdj + inflation / 4 * INFLATION_PASS_THROUGH + gaussianRandom() * 0.02;
     fundamentals.revenue = Math.max(1000, fundamentals.revenue * (1 + Math.max(-0.25, Math.min(0.25, growth))));
 
-    const revenue = fundamentals.revenue;
+    // 0.13: strajk, epidemia, klęska — przychody tylko tego kwartału (baza przychodów bez zmian).
+    const quarterFactor = (typeof getStrikeRevenueFactor === 'function' ? getStrikeRevenueFactor(stock) : 1) * (typeof getSocietyRevenueFactor === 'function' ? getSocietyRevenueFactor(stock) : 1);
+    const baseRevenue = fundamentals.revenue;
+    const revenue = baseRevenue * quarterFactor;
+    const lostRevenue = baseRevenue - revenue; // dźwignia operacyjna: 40% kosztów jest sztywnych w krótkim terminie
     const inflationSqueeze = Math.max(0, inflation - 0.04) * 0.5; // wysoka inflacja zjada marże
-    const margin = Math.max(-0.4, Math.min(0.6, profile.margin * (1 + (Number(stock.marginAdj) || 0)) + health * 0.015 + phaseAdj * 0.5 + profile.beta * gdp * (gdp < 0 ? 3 : 2) - inflationSqueeze - getCrowdingPressure() * 0.02)); // B5: recesja mocniej tnie marże; zatłoczony rynek = ostrzejsza konkurencja
+    // 0.13: marża = marża_0.12 + udział_kosztu_pracy × (1 − indeks); neutralnie (indeks 1,0) bez zmian.
+    const laborAdj = typeof getLaborMarginAdj === 'function' ? getLaborMarginAdj(stock) : 0;
+    const labor = revenue * (typeof getLaborShare === 'function' ? getLaborShare(stock) : 0) * (typeof getLaborCostIndex === 'function' ? getLaborCostIndex(stock) : 1);
+    const margin = Math.max(-0.4, Math.min(0.6, profile.margin * (1 + (Number(stock.marginAdj) || 0)) + health * 0.015 + phaseAdj * 0.5 + profile.beta * gdp * (gdp < 0 ? 3 : 2) - inflationSqueeze - getCrowdingPressure() * 0.02 + laborAdj)); // B5: recesja mocniej tnie marże; zatłoczony rynek = ostrzejsza konkurencja; 0.13: koszt pracy
     const fixedExpenses = Math.max(0, Number(stock.fixedExpenses) || 0);
 
     // Działające inwestycje: kwartalny zysk lub strata (investments.js).
     const investmentResult = typeof processOperatingInvestments === 'function' ? processOperatingInvestments(stock) : 0;
-    const ebitda = revenue * margin - fixedExpenses + investmentResult;
-    const depreciation = revenue * profile.da;
+    const ebitda = baseRevenue * margin - lostRevenue * (margin + (1 - margin) * 0.4) - fixedExpenses + investmentResult;
+    const depreciation = baseRevenue * profile.da;
     const interest = Math.max(0, Number(stock.balanceSheet?.liabilities) || 0) * getLoanRate() / 4;
     const ebt = ebitda - depreciation - interest;
-    const tax = ebt > 0 ? ebt * COMPANY_INCOME_TAX_RATE : 0;
+    const tax = ebt > 0 ? ebt * (typeof getCompanyIncomeTaxRate === 'function' ? getCompanyIncomeTaxRate() : COMPANY_INCOME_TAX_RATE) : 0;
     let netIncome = ebt - tax;
 
     // Spółki państwowe: Skarb Państwa pokrywa 70% straty (dotacja).
@@ -2562,8 +2695,9 @@ function computeQuarterResults(stock) {
     }
 
     governmentTreasury += tax;
+    if (typeof society === 'object' && society?.budget) society.budget.citQuarter = (Number(society.budget.citQuarter) || 0) + tax;
 
-    return { revenue, ebitda, depreciation, interest, tax, subsidy, netIncome, investmentResult };
+    return { revenue, ebitda, depreciation, interest, tax, subsidy, netIncome, investmentResult, labor };
 }
 
 /** Zapisuje kwartał w historii i przelicza wskaźniki. Zwraca niespodziankę EPS względem oczekiwań. */
@@ -2578,8 +2712,8 @@ function recordQuarterFundamentals(stock, quarter) {
         ebitda: quarter.ebitda,
         netIncome: quarter.netIncome,
         eps,
-        // N3: dane dla Księgowego (rachunek wyników, przepływy, należności)
-        depreciation: quarter.depreciation, interest: quarter.interest, tax: quarter.tax,
+        // N3: dane dla Księgowego (rachunek wyników, przepływy, należności); 0.13: koszt pracy
+        depreciation: quarter.depreciation, interest: quarter.interest, tax: quarter.tax, labor: quarter.labor,
         ocf: quarter.ocf, receivables: quarter.receivables
     });
     if (fundamentals.history.length > FUNDAMENTALS_HISTORY_QUARTERS) fundamentals.history.shift();
@@ -2655,20 +2789,32 @@ function initializeOwnership(stock) {
 
     const privateCompany = !stock.assetType && !stock.isBankStock && !stock.isStateOwned;
     // Pakiety insiderów 15–40%: gracz i boty nadal mogą zdobyć większość (>50%) z wolnego obrotu.
-    stock.insiderShares = privateCompany ? Math.floor((Number(stock.totalShares) || 0) * getRandomInRange(0.15, 0.40)) : 0;
+    const wanted = privateCompany ? Math.floor((Number(stock.totalShares) || 0) * getRandomInRange(0.15, 0.40)) : 0;
+    // Starszy zapis: pula insiderów powstaje z akcji jeszcze nieposiadanych — nie zabiera pakietów inwestorom.
+    stock.insiderShares = 0;
+    const held = stock.symbol ? getTrackedHeldShares(stock) : 0;
+    stock.insiderShares = Math.max(0, Math.min(wanted, Math.floor(getFreeFloatShares(stock) - held)));
 }
 
 function getFreeFloatShares(stock) {
+    return Math.max(0, getRawFreeFloatShares(stock));
+}
+
+/** Wolny obrót bez przycięcia do zera: ujemny, gdy insiderzy + akcje własne + pakiet państwa > wszystkie akcje. */
+function getRawFreeFloatShares(stock) {
     const total = Math.max(0, Number(stock?.totalShares) || 0);
     const insiders = Math.max(0, Number(stock?.insiderShares) || 0);
     const treasury = Math.max(0, Number(stock?.treasuryShares) || 0);
     const state = Math.floor(total * Math.max(0, Number(stock?.stateOwnershipPct) || 0)); // pakiet państwa (także mniejszościowy) poza obrotem
-    return Math.max(0, total - insiders - treasury - state);
+    return total - insiders - treasury - state;
 }
 
 /** Akcje, które można dziś kupić na rynku (wolny obrót minus akcje posiadane przez inwestorów). */
 function getAvailableShares(stock) {
-    return Math.max(0, Math.floor(getFreeFloatShares(stock) - Math.max(0, Number(stock?.sharesHeld) || 0)));
+    // Także faktyczni posiadacze: zaniżone sharesHeld nie może pozwolić kupić ponad wolny obrót.
+    const tracked = stock?.symbol && Array.isArray(stocks) ? getTrackedHeldShares(stock) : 0;
+    const held = Math.max(0, Number(stock?.sharesHeld) || 0, tracked);
+    return Math.max(0, Math.floor(getFreeFloatShares(stock) - held));
 }
 
 // =================================================================================
@@ -2985,7 +3131,7 @@ function processFinancialReports() {
             revenue: (quarterModel ? quarterModel.revenue : 0) + periodResults.constructionRevenue,
             ebitda: (quarterModel ? quarterModel.ebitda : reportedQuarterlyEarnings) + fakeEarnings,
             netIncome: publishedEarnings,
-            depreciation: quarterModel?.depreciation, interest: quarterModel?.interest, tax: quarterModel?.tax,
+            depreciation: quarterModel?.depreciation, interest: quarterModel?.interest, tax: quarterModel?.tax, labor: quarterModel?.labor,
             ocf: accounting ? accounting.ocf : reportedQuarterlyEarnings + nonCashCosts,
             receivables: accounting?.receivables
         });
@@ -3032,12 +3178,23 @@ function processFinancialReports() {
             const debtRepayment = Math.min(stock.cash * 0.5, reportedQuarterlyEarnings * getRandomInRange(0.1, 0.3));
             repayCompanyDebt(stock, Math.min(debtRepayment, stock.balanceSheet.liabilities));
         }
+        // P3: kredyt na płynność pokrywa tylko część straty — gdy gotówka i tak spadła poniżej zera, bank dokredytowuje
+        // do zera z małym buforem (dług rośnie, kapitał bez zmian; o upadłości decyduje kapitał poniżej).
+        coverNegativeCash(stock, reportedQuarterlyEarnings);
 
         // Logika bankructwa (bez zmian)
         const equity = stock.balanceSheet.assets - stock.balanceSheet.liabilities;
         if ((equity <= 0 || stock.financialHealth <= -5 || isCullCandidate(stock)) && !stock.isBankrupt) {
              let bankruptcyChance = 0.30;
-             if (stock.ceo?.traits?.some(t => t.id === 'bogacz')) {
+             if (typeof isProtectedMarketOperator === 'function' && isProtectedMarketOperator(stock)) {
+                 // D1 (decyzja 2): ratunek operatora rynku internetowego finansują spółki członkowskie z własnej gotówki,
+                 // proporcjonalnie do kapitalizacji. Pełny ratunek = brak upadku; niepełny — mniejsza ochrona i słabsza kondycja.
+                 const needed = Math.max(0, -equity) + getMarketCapValue(stock) * 0.05;
+                 const raised = fundMarketOperatorBailout(stock, needed);
+                 const coverage = needed > 0 ? raised / needed : 1;
+                 bankruptcyChance = coverage >= 1 ? 0 : 0.30 * (1 - coverage);
+                 stock.financialHealth = coverage >= 1 ? Math.max(stock.financialHealth, -1) : stock.financialHealth - 1;
+             } else if (stock.ceo?.traits?.some(t => t.id === 'bogacz')) {
                  bankruptcyChance = 0;
                  logEvent(`[CEO] Prywatne środki i wpływy prezesa ratują ${stock.name} przed bankructwem!`);
                  const bailout = Math.abs(equity) + (stock.price * stock.totalShares * 0.1);
@@ -3295,7 +3452,7 @@ function resolveMerger(stock1, stock2, process) {
             const playerTargetShares = playerPortfolio[target.symbol]?.shares || 0;
             const playerInitiatorShares = playerPortfolio[initiator.symbol]?.shares || 0;
             const totalNewSharesForPlayer = (playerTargetShares * exchangeRatio) + (playerInitiatorShares * initiatorRatio);
-            if (playerTargetShares > 0) delete playerPortfolio[target.symbol];
+            if (playerTargetShares > 0) delete playerPortfolio[target.symbol]; // wymiana opisana niżej w dzienniku (fuzja)
             if (totalNewSharesForPlayer > 0) {
                  playerPortfolio[initiator.symbol] = { shares: totalNewSharesForPlayer, avgPrice: totalNewValue / newTotalShares, assetType: 'stock' };
                  logEvent(`🔄 Twoje akcje ${target.symbol} i ${initiator.symbol} zostały wymienione na ${totalNewSharesForPlayer.toFixed(0)} akcji nowej spółki.`, 'review');
@@ -3428,8 +3585,7 @@ function updateStartups(deltaTime) {
                     startup.overfundingTimeLeft = 120000; // Ustawiamy timer na 2 minuty
                     logEvent(`[START-UP] ${startup.name} osiągnął cel finansowy! Rozpoczyna się 2-minutowy okres na dodatkowe inwestycje bonusowe.`, 'review');
                 }
-                displayStartups(getCurrentStartupInputValues());
-                break;
+                break; // T0: inkubator rysuje część UI pętli (raz na wywołanie), nie każdy tik
 
             case 'overfunding':
                 // Etap "dopłacania" po osiągnięciu celu
@@ -3440,8 +3596,7 @@ function updateStartups(deltaTime) {
                     startup.stage = 'development';
                     logEvent(`[START-UP] Okres dodatkowych inwestycji dla ${startup.name} zakończył się...`, 'review');
                 }
-                displayStartups(getCurrentStartupInputValues());
-                break;
+                break; // T0: inkubator rysuje część UI pętli (raz na wywołanie), nie każdy tik
 
             case 'development':
                 // Wstrzymanie: niezapłacony koszt dodatkowy albo opóźnienie techniczne (prywatyzacja).
@@ -3793,7 +3948,7 @@ function generateNewStartup() {
     let successChance = getRandomInRange(0.50, 0.75); // Bazowa szansa na sukces: 50-75%
     let isScam = false;
     let isWhiteCrow = false;
-    let fundingGoal = Math.round(getRandomIntInRange(5000, 40000) / 500) * 500; // skala funduszu gracza (etap F2)
+    let fundingGoal = Math.round(getRandomIntInRange(5000, 40000) * (1 + 0.5 * getCrowdingPressure()) / 500) * 500; // skala funduszu gracza (etap F2); D2: nasycony rynek = trudniejszy cel
 
     // --- LOGIKA SPECJALNYCH PRZYPADKÓW ---
     const specialRoll = Math.random();
@@ -4786,6 +4941,7 @@ function startCollateralAuction(originalOwnerId, symbol, quantity) {
                 holding.shares -= remainingToSeize; // Odejmij resztę z wolnych akcji
             }
             if (holding.shares <= 0) delete playerPortfolio[symbol];
+            if (typeof notePlayerPositionLoss === 'function') notePlayerPositionLoss(symbol, quantity, 'licytacja akcji z zastawu (niespłacona pożyczka)');
         }
     } else {
         const ai = aiCompetitors.find(a => a.id === originalOwnerId);
@@ -5962,7 +6118,7 @@ function runMunicipalCompanyLogic() {
         exchange: 'BRONZE', 
         totalShares: totalShares,
         maxShares: totalShares * 2,
-        sharesHeld: Math.floor(totalShares * cityOwnershipPct), // Akcje "zajęte" przez miasto
+        sharesHeld: 0, insiderShares: 0, // pakiet miasta (stateOwnershipPct) jest poza wolnym obrotem — nie liczy się do sharesHeld
         sector: ['Usługi', 'Nieruchomości'], // Uogólniony sektor
         financialHealth: 5, // Bardzo zdrowe
         lastReport: 'good',
@@ -6384,13 +6540,18 @@ function cleanupBankruptStocks(speedMultiplier) {
 
     // stocks.filter tworzy nową tablicę, więc musimy nadpisać starą
     const originalCount = stocks.length;
+    const removed = [];
     stocks = stocks.filter(stock => {
         if (!stock.isBankrupt) {
             return true; // Zostawiamy aktywne spółki
         }
         // Jeśli spółka jest bankrutem, sprawdzamy, czy minął już czas
-        return (now - stock.timeOfDeath) < oneMinuteInGame;
+        if ((now - stock.timeOfDeath) < oneMinuteInGame) return true;
+        removed.push(stock);
+        return false;
     });
+    // P3: usunięta spółka nie zostawia „duchów” — ani swoich pakietów, ani cudzych pakietów swoich akcji (symbol może wrócić).
+    for (const stock of removed) { releaseCompanyStakes(stock); purgeSymbolHolders(stock.symbol); }
 
     if (stocks.length < originalCount) {
         console.log("Usunięto zbankrutowane spółki z listy.");
@@ -6400,6 +6561,12 @@ function cleanupBankruptStocks(speedMultiplier) {
 function finalizeStartup(startup) {
     const symbol = startup.symbol;
     logEvent(`[START-UP] Nadszedł dzień sądu dla ${startup.name}!`, 'review');
+
+    // D1: startup operatora rynku internetowego ma gwarancję debiutu.
+    if (startup.operatorStartup) {
+        startup.isScam = false;
+        startup.successChance = Math.max(startup.successChance || 0, 1);
+    }
 
     // Scenariusz oszustwa jest sprawdzany na samym początku
     if (startup.isScam) {
@@ -6504,7 +6671,8 @@ function processBankStartupSponsorship() {
         // Niska szansa (np. 2%) w każdym cyklu tygodniowym na próbę sponsorowania
         if (Math.random() < 0.02 && bank.cash > 50000) { // Bank musi mieć trochę gotówki
             const targetStartup = getRandomElement(potentialStartups);
-            const investmentAmount = getRandomIntInRange(5000, 20000); // Kwota sponsorowania
+            const investmentAmount = Math.round(Math.min(getRandomIntInRange(5000, 20000) * getStartupFundingFactor(), Math.max(0, targetStartup.fundingGoal - targetStartup.currentFunding))); // Kwota sponsorowania (D2: mniej na nasyconym rynku, B6: do celu)
+            if (!(investmentAmount >= 100)) return;
 
             if (bank.cash >= investmentAmount) {
                 bank.cash -= investmentAmount;
@@ -6664,6 +6832,7 @@ function removeStockFromGame(symbol) {
 
     // 2. Usuń z portfela gracza
     if (playerPortfolio[symbol]) {
+        if (typeof notePlayerPositionLoss === 'function') notePlayerPositionLoss(symbol, playerPortfolio[symbol].shares, 'bankructwo spółki — akcje są bezwartościowe');
         delete playerPortfolio[symbol];
     }
 
@@ -6689,8 +6858,26 @@ function removeStockFromGame(symbol) {
     });
 
     if (typeof settleEtfHoldings === 'function') settleEtfHoldings(symbol, 0); // ETF-y tracą pakiet (bankructwo)
+    purgeSymbolHolders(symbol); // P3: pakiety spółek, funduszy botów i portfela prywatnego
 
     console.log(`[M&A] Spółka ${symbol} została całkowicie usunięta z gry.`);
+}
+
+/**
+ * P3: usuwa wszystkie pozycje w akcjach o danym symbolu (spółka zniknęła z gry). Bez tego symbol użyty ponownie
+ * (nowy startup, nowa spółka zależna) dziedziczy „duchy posiadaczy” — akcje w obrocie ≠ posiadacze.
+ */
+function purgeSymbolHolders(symbol) {
+    if (!symbol) return;
+    for (const owner of stocks) {
+        if (owner.equityStakes && symbol in owner.equityStakes) delete owner.equityStakes[symbol];
+        if (owner.holdingPortfolio && symbol in owner.holdingPortfolio) delete owner.holdingPortfolio[symbol];
+    }
+    for (const manager of corporation?.managers || []) if (manager.fund?.portfolio?.[symbol]) delete manager.fund.portfolio[symbol];
+    for (const ai of aiCompetitors) if (ai.portfolio?.[symbol]) delete ai.portfolio[symbol];
+    for (const bank of commercialBanks) if (bank.stockPortfolio?.[symbol]) delete bank.stockPortfolio[symbol];
+    if (playerWallet?.portfolio?.[symbol]) delete playerWallet.portfolio[symbol];
+    if (typeof etfs !== 'undefined') for (const etf of etfs) if (etf.holdings && symbol in etf.holdings) delete etf.holdings[symbol];
 }
 
 
@@ -6899,6 +7086,12 @@ function borrowForCompany(stock, amount, purpose = 'Kredyt') {
     recordPayment(bank ? bank.id : 'external:bank_credit', stock, value, purpose);
 
     return value;
+}
+
+/** P3: kredyt ratunkowy — gotówka spółki wraca do zera z buforem 5% straty kwartału. Zwraca kwotę kredytu. */
+function coverNegativeCash(stock, quarterResult = 0) {
+    if (!stock || stock.assetType || !(Number(stock.cash) < 0)) return 0;
+    return borrowForCompany(stock, -Number(stock.cash) + Math.abs(Math.min(0, Number(quarterResult) || 0)) * 0.05 + 1, 'Kredyt ratunkowy na pokrycie ujemnej gotówki');
 }
 
 /** Spłata długu: gotówka, aktywa i zobowiązania maleją o tę samą kwotę. */
@@ -7508,7 +7701,7 @@ function getAvailableCompanyResearch(company, affordableOnly = false) {
 // Inwestycje bankowe (research.isInvestment) mają osobną ścieżkę i nie korzystają z tego dziennika.
 // =================================================================================
 
-const RESEARCH_LEDGER_KEEP_RECOGNIZED = 40;
+const RESEARCH_LEDGER_KEEP_RECOGNIZED = 8; // zapis gry: dziennik R&D był największą częścią spółki (limit localStorage)
 
 function ensureResearchLedger(company) {
     if (!company || !company.research || typeof company.research !== 'object') {
@@ -7907,11 +8100,55 @@ function getTrackedHeldShares(stock) {
     return total;
 }
 
+/**
+ * Posiadacze mają więcej akcji niż wolny obrót (zapisy sprzed poprawki): nadwyżkę oddają akcje własne,
+ * potem pula insiderów — pakiety inwestorów zostają nietknięte.
+ */
+function releaseOverheldShares(stock) {
+    // P3: od wolnego obrotu bez przycięcia — gdy pule przekraczają wszystkie akcje, trzeba zwolnić także tę „ujemną” część.
+    let excess = Math.ceil(getTrackedHeldShares(stock) - getRawFreeFloatShares(stock));
+    for (const key of ['treasuryShares', 'insiderShares']) {
+        if (excess <= 0) break;
+        const pool = Math.max(0, Number(stock[key]) || 0);
+        const released = Math.min(pool, excess);
+        if (released > 0) { stock[key] = pool - released; excess -= released; }
+    }
+    // P3: dalej pakiet państwa (akcje sprzedane z niego inwestorom bez korekty udziału)…
+    if (excess > 0 && stock.stateOwnershipPct > 0 && stock.totalShares > 0) {
+        const stateShares = Math.floor(stock.totalShares * stock.stateOwnershipPct);
+        const released = Math.min(stateShares, excess);
+        stock.stateOwnershipPct = Math.max(0, (stateShares - released) / stock.totalShares);
+        excess -= released;
+    }
+    // … a na końcu „duchy posiadaczy”: pakiety spółek upadłych, potem pozostałych posiadaczy (bez funduszu i portfela gracza).
+    if (excess > 0) trimGhostHolders(stock, excess);
+}
+
+/** P3: zdejmuje nadmiarowe akcje z pakietów posiadaczy, których nie pokrywa wolny obrót. Zwraca zdjętą liczbę. */
+function trimGhostHolders(stock, excess) {
+    const symbol = stock.symbol;
+    let left = excess;
+    const take = (get, set) => { if (left <= 0) return; const have = Math.max(0, Number(get()) || 0); const cut = Math.min(have, left); if (cut > 0) { set(have - cut); left -= cut; } };
+    const owners = stocks.filter(o => o !== stock && (o.equityStakes?.[symbol] || o.holdingPortfolio?.[symbol]));
+    for (const owner of [...owners.filter(o => o.isBankrupt), ...owners.filter(o => !o.isBankrupt)]) {
+        if (owner.equityStakes?.[symbol]) take(() => owner.equityStakes[symbol], v => { if (v > 0) owner.equityStakes[symbol] = v; else delete owner.equityStakes[symbol]; });
+        if (owner.holdingPortfolio?.[symbol]) take(() => owner.holdingPortfolio[symbol].quantity, v => { if (v > 0) owner.holdingPortfolio[symbol].quantity = v; else delete owner.holdingPortfolio[symbol]; });
+    }
+    if (typeof etfs !== 'undefined') for (const etf of etfs) if (etf.holdings?.[symbol]) take(() => etf.holdings[symbol], v => { etf.holdings[symbol] = v; });
+    for (const bank of commercialBanks) if (bank.stockPortfolio?.[symbol]) take(() => bank.stockPortfolio[symbol].shares, v => { if (v > 0) bank.stockPortfolio[symbol].shares = v; else delete bank.stockPortfolio[symbol]; });
+    for (const manager of corporation?.managers || []) if (manager.fund?.portfolio?.[symbol]) take(() => manager.fund.portfolio[symbol].shares, v => { if (v > 0) manager.fund.portfolio[symbol].shares = v; else delete manager.fund.portfolio[symbol]; });
+    for (const ai of aiCompetitors) if (ai.portfolio?.[symbol]?.shares) take(() => ai.portfolio[symbol].shares, v => { if (v > 0) ai.portfolio[symbol].shares = v; else delete ai.portfolio[symbol]; });
+    take(() => stock.cityShares, v => { stock.cityShares = v; });
+    if (left < excess && typeof isDebugMode === 'function' && isDebugMode()) console.warn(`[P3] ${symbol}: zdjęto ${excess - left} akcji „duchów posiadaczy”`);
+    return excess - left;
+}
+
 /** Uzgadnia sharesHeld z posiadaczami (wczytanie zapisu i co kwartał). Zwraca liczbę poprawionych spółek. */
 function reconcileSharesHeld() {
     let fixed = 0;
     for (const stock of stocks) {
         if (stock.assetType === 'Startup' || stock.isBankrupt) continue;
+        releaseOverheldShares(stock);
         const tracked = Math.min(getTrackedHeldShares(stock), Math.max(0, getFreeFloatShares(stock)));
         if (Math.abs((Number(stock.sharesHeld) || 0) - tracked) > 0.5) {
             if (typeof isDebugMode === 'function' && isDebugMode()) console.warn(`[A1] sharesHeld ${stock.symbol}: ${stock.sharesHeld} → ${tracked}`);
@@ -8379,6 +8616,10 @@ function refundOtherStartupClaims(startup) {
         const amount = bank.startupInvestments?.[symbol];
         if (amount > 0) { bank.cash += amount; delete bank.startupInvestments[symbol]; }
     }
+    for (const manager of corporation?.managers || []) {
+        const amount = manager.fund.startups?.[symbol];
+        if (amount > 0) { manager.fund.cash += amount; delete manager.fund.startups[symbol]; }
+    }
     for (const investment of startup.poolInvestors || []) {
         for (const [id, contribution] of Object.entries(investment.contributors || {})) {
             const share = investment.amount * contribution / Math.max(1e-9, Object.values(investment.contributors).reduce((a, b) => a + b, 0));
@@ -8416,17 +8657,23 @@ function collectStartupClaims(startup) {
         const amount = bank.startupInvestments?.[symbol] || 0;
         if (amount > 0) claims.push({ kind: 'bank', bank, amount });
     }
+    for (const manager of corporation?.managers || []) {
+        const amount = manager.fund.startups?.[symbol] || 0;
+        if (amount > 0) claims.push({ kind: 'botFund', manager, amount });
+    }
     return claims;
 }
 
 function handleSuccessfulIPO(startup, successMultiplier) {
+    if (!startup.operatorStartup && !hasFreeListingSlot()) { parkStartupForListing(startup, successMultiplier); return; } // P1: twardy sufit
     const symbol = startup.symbol;
     const claims = collectStartupClaims(startup);
+    purgeSymbolHolders(symbol); // P3: symbol mógł należeć do usuniętej spółki — bez cudzych „duchów” w nowej
     const totalClaims = claims.reduce((sum, claim) => sum + claim.amount, 0);
     const base = Math.max(totalClaims, startup.fundingGoal + (startup.ipoPriceBonus || 0));
     const ipoPrice = getRandomInRange(25, 50);
     const totalShares = Math.max(1000, Math.floor(base * successMultiplier / ipoPrice));
-    const investorShares = Math.floor(totalShares * STARTUP_INVESTORS_SHARE);
+    const investorShares = Math.floor(totalShares * STARTUP_INVESTORS_SHARE * (startup.operatorStartup ? 1 : getStartupTermsFactor())); // D2: gorsze warunki na nasyconym rynku
     let sharesHeld = 0;
 
     // Wyczyść roszczenia startupowe, potem przydziel akcje.
@@ -8452,6 +8699,11 @@ function handleSuccessfulIPO(startup, successMultiplier) {
         } else if (claim.kind === 'bank') {
             claim.bank.stockPortfolio[symbol] = { shares, avgPrice: ipoPrice };
             delete claim.bank.startupInvestments[symbol];
+        } else if (claim.kind === 'botFund') {
+            const holding = claim.manager.fund.portfolio[symbol] || { shares: 0, avgPrice: claim.amount / shares };
+            holding.shares += shares;
+            claim.manager.fund.portfolio[symbol] = holding;
+            delete claim.manager.fund.startups[symbol];
         }
     }
     // Średnia cena zakupu funduszu = zainwestowana kwota / akcje (realny koszt w NAV).
@@ -8501,6 +8753,11 @@ function removeStartup(startup, refundMin = 0, refundMax = 0) {
         delete ai.portfolio[symbol];
     }
     for (const bank of commercialBanks) if (bank.startupInvestments) delete bank.startupInvestments[symbol];
+    for (const manager of corporation?.managers || []) {
+        const amount = manager.fund.startups?.[symbol];
+        if (amount > 0) manager.fund.cash += amount * (refundMax > 0 ? getRandomInRange(refundMin, refundMax) : 0);
+        if (manager.fund.startups) delete manager.fund.startups[symbol];
+    }
     delete playerPortfolio[symbol];
     if (startup.operatorStartup && typeof onOperatorStartupRemoved === 'function') onOperatorStartupRemoved(startup); // upadek operatora: sponsorzy znikają
     const index = stocks.findIndex(s => s.symbol === symbol);
@@ -8641,7 +8898,7 @@ function processDefenseQuarterly() {
     const police = typeof getInstitutionEffectiveness === 'function' ? getInstitutionEffectiveness(oversight.police) : 0.3;
 
     // Kontrakty państwowe: częściej przy rządzie „państwowym” i w kampanii wyborczej.
-    const stateParty = typeof getRulingParty === 'function' && getRulingParty() === RULING_PARTIES.state;
+    const stateParty = macro.election?.ruling === 'state' || macro.election?.coalition?.partner === 'state';
     for (const stock of companies) {
         const favor = typeof getPoliticalFavor === 'function' && getFundStakePct(stock) > 0.5 ? getPoliticalFavor() * 0.1 : 0;
         if (Math.random() < (stateParty ? 0.3 : 0.15) + (macro.election?.campaign ? 0.1 : 0) + favor) {
@@ -8834,6 +9091,8 @@ function getRedFlags(stock) {
     if (surprises.length === 3 && surprises.every(s => s >= 0 && s <= 0.08)) {
         flags.push({ id: 'beat', label: 'Wyniki zawsze tuż nad konsensusem', desc: 'Trzy raporty z rzędu minimalnie powyżej oczekiwań — możliwe „zarządzanie wynikiem”.' });
     }
+    const grey = typeof getGreyShare === 'function' ? getGreyShare(stock) : 0;
+    if (grey > 0.05) flags.push({ id: 'grey', label: 'Szara strefa', desc: `Ok. ${(grey * 100).toFixed(0)}% zatrudnionych bez umów — wyższa marża dziś, ryzyko kary Inspekcji Pracy jutro.` });
     return flags;
 }
 
@@ -8894,12 +9153,13 @@ function renderAccountingSection(stock) {
         html += `<h4 class="mt-3">📒 Rachunek zysków i strat (kwartały)</h4>
             <div class="scanner-table-wrap"><table class="asset-mini-table w-full"><thead><tr><th></th>${cols}</tr></thead><tbody>
                 ${rowOf('Przychody', 'revenue', 'Sprzedaż w kwartale.')}
+                ${history.some(q => Number.isFinite(q.labor)) ? rowOf('w tym koszt pracy', 'labor', 'Płace i świadczenia: udział w przychodach × indeks kosztu pracy (0.13).') : ''}
                 ${rowOf('EBITDA', 'ebitda', 'Wynik operacyjny przed amortyzacją.')}
                 ${rowOf('− Amortyzacja', 'depreciation', 'Zużycie majątku — koszt bez wydatku gotówki.')}
                 ${rowOf('− Odsetki', 'interest', 'Koszt długu.')}
                 ${rowOf('− Podatek', 'tax', 'Podatek dochodowy.')}
                 ${rowOf('= Zysk netto', 'netIncome', 'To, co zostaje dla akcjonariuszy.')}
-            </tbody></table></div>`;
+            </tbody></table></div>${renderLaborCostBar(stock, history)}`;
     } else return locked(1, 'Rachunek zysków i strat, bilans, przepływy, czerwone flagi i audyt');
 
     // 2. Bilans
@@ -8949,4 +9209,765 @@ function renderAccountingSection(stock) {
                 <p class="text-xs text-muted">Audytor sprawdza dokumenty u źródła. Rzadko, ale zdarza się, że przeoczy oszustwo.</p>`}`;
     } else html += locked(5, 'Audyt');
     return html;
+}
+
+// #################################################################################
+// ## workforce.js
+// #################################################################################
+
+// workforce.js — Pracownicy w spółkach (wersja 0.13, części S2–S4)
+//
+// Każda spółka z modelem przychodów ma 5 grup zatrudnienia (struktura według sektora), koszt pracy jako
+// udział w przychodach i indeks kosztu pracy (płace grup × polityka kadrowa / wydajność + koszty związku).
+// Marża = marża_0.12 + udział_kosztu_pracy × (1 − indeks) — przy ustawieniach neutralnych (polityka
+// Standardowa, płace 1,0, brak związku) wynik jest identyczny jak w 0.12. Liczby pracowników są fabularne
+// (start według giełdy, potem proporcjonalnie do realnych przychodów). Prezes ustala politykę według cech;
+// większościowiec (gracz lub bot) może ją zmienić. Zadowolenie 0–100, rotacja, szara strefa i Inspekcja
+// Pracy, związki zakładowe i sektorowe, żądania co 4 kwartały, strajki, podkupowanie specjalistów i prezesów.
+
+// Struktura zatrudnienia (udziały) i koszt pracy (% przychodów) według sektora.
+const WORKFORCE_TEMPLATES = {
+    'Technologia':   { board: 4, specialists: 45, workers: 41, cheap: 10, grey: 0, labor: 0.30 },
+    'Badania':       { board: 4, specialists: 50, workers: 36, cheap: 10, grey: 0, labor: 0.40 },
+    'Medycyna':      { board: 4, specialists: 40, workers: 46, cheap: 10, grey: 0, labor: 0.30 },
+    'Finanse':       { board: 5, specialists: 35, workers: 55, cheap: 5,  grey: 0, labor: 0.22 },
+    'Przemysł':      { board: 2, specialists: 15, workers: 58, cheap: 23, grey: 2, labor: 0.25 },
+    'Chemia':        { board: 2, specialists: 15, workers: 58, cheap: 23, grey: 2, labor: 0.15 },
+    'Budowlany':     { board: 2, specialists: 10, workers: 45, cheap: 35, grey: 8, labor: 0.30 },
+    'Żywność':       { board: 2, specialists: 8,  workers: 50, cheap: 35, grey: 5, labor: 0.20 },
+    'Usługi':        { board: 2, specialists: 8,  workers: 50, cheap: 33, grey: 7, labor: 0.40 },
+    'Turystyka':     { board: 2, specialists: 8,  workers: 50, cheap: 33, grey: 7, labor: 0.35 },
+    'Energia':       { board: 3, specialists: 25, workers: 62, cheap: 10, grey: 0, labor: 0.12 },
+    'Nieruchomości': { board: 5, specialists: 20, workers: 55, cheap: 18, grey: 2, labor: 0.08 }
+};
+// Pozostałe sektory: najbliższy wzorzec (koszt pracy można nadpisać).
+const WORKFORCE_TEMPLATE_ALIASES = {
+    'Gaming': ['Technologia'], 'Media': ['Technologia', 0.30], 'Bankowość': ['Finanse', 0.20], 'Bankowość Komercyjna': ['Finanse', 0.20],
+    'Finanse Konsumenckie': ['Finanse', 0.25], 'Obronność': ['Przemysł'], 'Dobra konsumpcyjne': ['Żywność', 0.20],
+    'Logistyka': ['Usługi', 0.35], 'Transport': ['Usługi', 0.35]
+};
+const WORKFORCE_DEFAULT_TEMPLATE = { board: 3, specialists: 20, workers: 55, cheap: 20, grey: 2, labor: 0.25 };
+
+// Zatrudnienie na starcie według giełdy (liczby fabularne).
+const WORKFORCE_EMPLOYEES_BY_EXCHANGE = {
+    JUNK: [20, 150], BRONZE: [100, 600], SILVER: [400, 2500], GOLD: [2000, 10000], PLATINUM: [8000, 40000],
+    RUBY: [30000, 120000], EMERALD: [30000, 120000], DIAMOND: [30000, 120000]
+};
+
+const LABOR_POLICIES = {
+    exploit:  { name: 'Wyzysk',       icon: '⛓️', pay: 0.85, target: 20, union: 3,   productivity: -0.03, grey: 0.10, inspection: 3 },
+    saving:   { name: 'Oszczędna',    icon: '✂️', pay: 0.93, target: 40, union: 1.8, productivity: 0,     grey: 0,    inspection: 1 },
+    standard: { name: 'Standardowa',  icon: '⚖️', pay: 1.00, target: 60, union: 1,   productivity: 0,     grey: 0,    inspection: 1 },
+    social:   { name: 'Prospołeczna', icon: '🤝', pay: 1.08, target: 80, union: 0.4, productivity: 0.04,  grey: 0,    inspection: 1, rotation: 0.5 }
+};
+const LABOR_POLICY_ORDER = ['exploit', 'saving', 'standard', 'social'];
+const LABOR_POLICY_LOCK_QUARTERS = 4;
+const GREY_WAGE_FACTOR = 0.6;
+const UNION_COST = 0.01;
+const UNION_BASE_CHANCE = 0.03;      // plan: 2% — podniesione po przebiegach ×50 (cel: 15–35% spółek ze związkiem po 6,5 roku)
+const UNION_DEMAND_EVERY = 4;
+const COLLECTIVE_AGREEMENT_QUARTERS = 8;
+const PRODUCTIVITY_TREND = 0.004;      // realny wzrost wydajności na kwartał (zatrudnienie rośnie wolniej niż przychody)
+const CEO_POACH_COST = 0.01;           // 1% kapitalizacji spółki, z której odchodzi prezes
+const CEO_POACH_COOLDOWN = 4;          // limit gracza: 1 na rok
+const UNION_BUST_DETECTION = 0.3;
+
+const EXPLOIT_CEO_TRAITS = ['chciwy', 'skorumpowany', 'czlonek_mafii'];
+const SAVING_CEO_TRAITS = ['tyran', 'skapiec'];
+const SOCIAL_CEO_TRAITS = ['lojalny_pracownikom', 'czlowiek_z_ludu', 'szczodry'];
+
+function getWorkforceQuarter() {
+    return typeof society === 'object' && society ? society.quarter : (typeof macro === 'object' ? macro.quarter : 0);
+}
+
+function getWorkforceTemplate(stock) {
+    const sectors = Array.isArray(stock?.sector) && stock.sector.length ? stock.sector : [];
+    const templates = sectors.map(sector => {
+        if (WORKFORCE_TEMPLATES[sector]) return WORKFORCE_TEMPLATES[sector];
+        const alias = WORKFORCE_TEMPLATE_ALIASES[sector];
+        if (alias) return { ...WORKFORCE_TEMPLATES[alias[0]], labor: alias[1] ?? WORKFORCE_TEMPLATES[alias[0]].labor };
+        return WORKFORCE_DEFAULT_TEMPLATE;
+    });
+    if (!templates.length) templates.push(WORKFORCE_DEFAULT_TEMPLATE);
+    const result = {};
+    for (const key of ['board', 'specialists', 'workers', 'cheap', 'grey', 'labor']) {
+        result[key] = templates.reduce((sum, t) => sum + t[key], 0) / templates.length;
+    }
+    return result;
+}
+
+function hasWorkforce(stock) {
+    return typeof hasRevenueModel === 'function' && hasRevenueModel(stock) && !stock.isBankrupt;
+}
+
+/** Polityka kadrowa według cech prezesa i kondycji (bez udziału właściciela). */
+function getCeoLaborPolicy(stock) {
+    const traits = (stock.ceo?.traits || []).map(t => t.id);
+    if (traits.some(id => SOCIAL_CEO_TRAITS.includes(id))) return 'social';
+    if (traits.some(id => EXPLOIT_CEO_TRAITS.includes(id))) return 'exploit';
+    if (traits.some(id => SAVING_CEO_TRAITS.includes(id)) || (Number(stock.financialHealth) || 0) < -1.5) return 'saving';
+    return 'standard';
+}
+
+/** Tworzy zatrudnienie spółki (nowa gra, nowe spółki i migracja starych zapisów). */
+function ensureWorkforce(stock) {
+    if (!hasWorkforce(stock)) return null;
+    if (stock.workforce && stock.workforce.version === 1) return stock.workforce;
+    const template = getWorkforceTemplate(stock);
+    const range = WORKFORCE_EMPLOYEES_BY_EXCHANGE[stock.exchange] || WORKFORCE_EMPLOYEES_BY_EXCHANGE.BRONZE;
+    const employees = Math.round(Math.exp(getRandomInRange(Math.log(range[0]), Math.log(range[1]))));
+    const policy = getCeoLaborPolicy(stock);
+    const base = { board: template.board / 100, specialists: template.specialists / 100, workers: template.workers / 100, cheap: template.cheap / 100, grey: template.grey / 100 };
+    stock.workforce = {
+        version: 1,
+        base,
+        laborShare: template.labor,
+        employees,
+        employeesStart: employees,
+        revenueStart: Math.max(1, Number(stock.fundamentals?.revenue) || 1),
+        priceLevelStart: typeof society === 'object' && society ? society.priceLevel : 1,
+        sinceQuarter: getWorkforceQuarter(),
+        policy,
+        policySetBy: 'ceo',
+        policyLockUntil: -1,
+        payMult: LABOR_POLICIES[policy].pay,
+        productivity: 1,
+        productivityBonus: 0,
+        satisfaction: 0,
+        satisfactionHistory: [],
+        wagePremium: 0,
+        rotation: 0,
+        greySavings: [],
+        greyCaughtQuarter: null,
+        greyCleanUntil: -1,
+        layoffs: false,
+        union: null,
+        strike: null,
+        lastLaborIndex: 1
+    };
+    const wf = stock.workforce;
+    if (stock.isStateOwned && Math.random() < 0.3) wf.union = createUnion('company');
+    wf.satisfaction = getSatisfactionTarget(stock); // start: zadowolenie równe celowi polityki
+    return wf;
+}
+
+function createUnion(type) {
+    return { type, since: getWorkforceQuarter(), nextDemand: getWorkforceQuarter() + getRandomIntInRange(1, UNION_DEMAND_EVERY), agreementUntil: -1, pendingDemand: null };
+}
+
+/** Struktura zatrudnienia z szarą strefą (Wyzysk +10 pp, płaca minimalna +2 pp w spółkach Oszczędnych/Wyzysk). */
+function getWorkforceStructure(stock) {
+    const wf = stock.workforce;
+    if (!wf) return null;
+    const structure = { ...wf.base };
+    const policy = LABOR_POLICIES[wf.policy] || LABOR_POLICIES.standard;
+    let extraGrey = 0;
+    if (wf.greyCleanUntil < getWorkforceQuarter()) {
+        extraGrey += policy.grey;
+        if ((wf.policy === 'exploit' || wf.policy === 'saving') && typeof society === 'object' && society) extraGrey += 0.02 * (Number(society.laws?.minWage) || 0);
+    }
+    const fromCheap = Math.min(structure.cheap, extraGrey);
+    structure.cheap -= fromCheap;
+    const fromWorkers = Math.min(structure.workers, extraGrey - fromCheap);
+    structure.workers -= fromWorkers;
+    structure.grey += fromCheap + fromWorkers;
+    return structure;
+}
+
+function getMarketWage(group) {
+    return typeof society === 'object' && society ? (Number(society.wages?.[group]) || 1) : 1;
+}
+
+/** Koszt grup względem struktury bazowej przy płacach 1,0 (kalibracja: neutralnie = 1). */
+function getWorkforceCostRatio(stock, structure = getWorkforceStructure(stock)) {
+    const wf = stock.workforce;
+    if (!wf || !structure) return 1;
+    const premium = 1 + (Number(wf.wagePremium) || 0);
+    let cost = 0, base = 0;
+    for (const group of WORKFORCE_GROUPS) {
+        const greyFactor = group.id === 'grey' ? GREY_WAGE_FACTOR : 1;
+        const wage = group.id === 'grey' ? getMarketWage('cheap') : getMarketWage(group.id);
+        cost += (structure[group.id] || 0) * wage * greyFactor * (group.id === 'grey' ? 1 : premium);
+        base += (wf.base[group.id] || 0) * greyFactor;
+    }
+    return base > 0 ? cost / base : 1;
+}
+
+/** Indeks kosztu pracy spółki: płace × polityka / wydajność + związek + rekrutacja. Bez losowości. */
+function getLaborCostIndex(stock) {
+    const wf = stock?.workforce;
+    if (!wf) return 1;
+    const productivity = Math.max(0.5, (Number(wf.productivity) || 1) + (Number(wf.productivityBonus) || 0));
+    let index = getWorkforceCostRatio(stock) * (Number(wf.payMult) || 1) / productivity;
+    if (wf.union || getSectorUnion(stock)) index += UNION_COST;
+    index += (Number(wf.rotation) || 0) * 0.3;
+    return clampValue(index, 0.5, 2);
+}
+
+function getLaborShare(stock) {
+    return Number(stock?.workforce?.laborShare) || 0;
+}
+
+/** Odchylenie marży od 0.12: udział × (1 − indeks). */
+function getLaborMarginAdj(stock) {
+    const wf = stock?.workforce;
+    if (!wf) return 0;
+    return getLaborShare(stock) * (1 - getLaborCostIndex(stock));
+}
+
+/** Mnożnik przychodów kwartału ze strajku (spółki i sektora). */
+function getStrikeRevenueFactor(stock) {
+    const strike = stock?.workforce?.strike;
+    return strike ? Math.max(0.5, 1 - (Number(strike.pct) || 0)) : 1;
+}
+
+function getSectorUnion(stock) {
+    if (typeof society !== 'object' || !society?.sectorUnions) return null;
+    const sector = stock?.sector?.[0];
+    return sector ? society.sectorUnions[sector] || null : null;
+}
+
+function getUnionStatus(stock) {
+    if (getSectorUnion(stock)) return 'sector';
+    return stock?.workforce?.union ? 'company' : 'none';
+}
+
+function getRightsLevel() {
+    return typeof society === 'object' && society ? clampValue(Number(society.laws?.rights) || 0, 0, 2) : 1;
+}
+
+/** Cel zadowolenia: polityka, płace vs rynek, prawa, kondycja, układ zbiorowy, zwolnienia, związek, zasiłki. */
+function getSatisfactionTarget(stock) {
+    const wf = stock.workforce;
+    const policy = LABOR_POLICIES[wf.policy] || LABOR_POLICIES.standard;
+    const health = clampValue(Number(stock.financialHealth) || 0, -5, 5);
+    const benefits = typeof society === 'object' && society ? ((Number(society.laws?.benefits) || 0) - SOCIAL_LAWS.benefits.start) * 2 : 0;
+    let target = policy.target
+        + clampValue((Number(wf.wagePremium) || 0) / 0.05, -1, 1) * 10
+        + RIGHTS_SATISFACTION[getRightsLevel()]
+        + health
+        + benefits;
+    const union = wf.union || getSectorUnion(stock);
+    if (union) target += 5;
+    if (union && union.agreementUntil >= getWorkforceQuarter()) target += 10;
+    if (wf.layoffs) target -= 10;
+    return clampValue(target, 0, 100);
+}
+
+function getWorkforceGroupCounts(stock) {
+    const structure = getWorkforceStructure(stock);
+    const employees = Number(stock.workforce?.employees) || 0;
+    return Object.fromEntries(WORKFORCE_GROUPS.map(g => [g.id, Math.round(employees * (structure?.[g.id] || 0))]));
+}
+
+function isLaborPolicyLocked(stock) {
+    return (stock.workforce?.policyLockUntil ?? -1) > getWorkforceQuarter();
+}
+
+/** Zmiana polityki: blokada 4 kw., marża stopniowo (2 kw.), zadowolenie od razu −15 / +5. */
+function applyLaborPolicy(stock, policy, setBy = 'ceo') {
+    const wf = stock.workforce;
+    if (!wf || !LABOR_POLICIES[policy] || wf.policy === policy) return false;
+    const lower = LABOR_POLICY_ORDER.indexOf(policy) < LABOR_POLICY_ORDER.indexOf(wf.policy);
+    wf.satisfaction = clampValue(wf.satisfaction + (lower ? -15 : 5), 0, 100);
+    wf.payStep = (LABOR_POLICIES[policy].pay - wf.payMult) / 2; // marża dochodzi do nowej polityki w 2 kwartały
+    wf.policy = policy;
+    wf.policySetBy = setBy;
+    wf.policyLockUntil = getWorkforceQuarter() + LABOR_POLICY_LOCK_QUARTERS;
+    return true;
+}
+
+/** Gracz-większościowiec zmienia politykę kadrową (opcjonalnie — domyślnie decyduje prezes). */
+function setLaborPolicy(symbol, policy) {
+    const stock = stocks.find(s => s.symbol === symbol);
+    if (!stock || !ensureWorkforce(stock)) return false;
+    if (typeof canFundControlAgm !== 'function' || !canFundControlAgm(stock)) { showToast('Politykę kadrową zmienia tylko większościowy akcjonariusz (> 50%).', 'warning'); return false; }
+    if (isLaborPolicyLocked(stock)) { showToast(`Polityka zablokowana jeszcze ${stock.workforce.policyLockUntil - getWorkforceQuarter()} kw.`, 'warning'); return false; }
+    if (!applyLaborPolicy(stock, policy, 'owner')) return false;
+    logSociety(`👥 ${stock.name}: nowa polityka kadrowa „${LABOR_POLICIES[policy].name}” (decyzja funduszu).`, 'company');
+    if (policy === 'exploit' && typeof unlockAcademyEntry === 'function') unlockAcademyEntry('szaraStrefa');
+    return true;
+}
+
+// ---------------------------------------------------------------------------------
+// CO KWARTAŁ (przed raportami): polityka, zatrudnienie, zadowolenie, rotacja, szara strefa
+// ---------------------------------------------------------------------------------
+
+function updateWorkforcePolicy(stock) {
+    const wf = stock.workforce;
+    const playerControls = typeof canFundControlAgm === 'function' && canFundControlAgm(stock);
+    if (wf.policySetBy === 'owner' && playerControls) { /* polityka właściciela zostaje */ }
+    else if (!isLaborPolicyLocked(stock)) {
+        let wanted = getCeoLaborPolicy(stock);
+        const bot = typeof getMajorityBot === 'function' ? getMajorityBot(stock) : null;
+        if (bot && Math.random() < 0.1) wanted = ['dividend_chaser', 'banker', 'whale'].includes(bot.personality) ? 'saving' : 'standard';
+        if (wanted !== wf.policy) applyLaborPolicy(stock, wanted, bot ? 'bot' : 'ceo');
+    }
+    // Marża dochodzi do nowej polityki w 2 kwartały (połowa różnicy na kwartał).
+    const targetPay = (LABOR_POLICIES[wf.policy] || LABOR_POLICIES.standard).pay;
+    const step = Number(wf.payStep) || (targetPay - wf.payMult) / 2;
+    wf.payMult += step;
+    if ((step >= 0 && wf.payMult >= targetPay - 1e-9) || (step < 0 && wf.payMult <= targetPay + 1e-9)) { wf.payMult = targetPay; wf.payStep = 0; }
+}
+
+function updateWorkforceEmployees(stock) {
+    const wf = stock.workforce;
+    const revenue = Number(stock.fundamentals?.revenue) || wf.revenueStart;
+    const priceLevel = typeof society === 'object' && society ? society.priceLevel : 1;
+    const quarters = Math.max(0, getWorkforceQuarter() - wf.sinceQuarter);
+    const real = revenue / wf.revenueStart / Math.max(0.5, priceLevel / (wf.priceLevelStart || 1));
+    const productivity = Math.pow(1 + PRODUCTIVITY_TREND, quarters) * Math.max(0.5, wf.productivity);
+    const next = Math.max(5, Math.round(wf.employeesStart * real / productivity));
+    // Zwolnienia: spadek przychodów o ponad 10% r/r albo kondycja < −2.
+    const history = (stock.fundamentals?.history || []).filter(q => !q.synthetic);
+    const yearAgo = history.length >= 5 ? history[history.length - 5].revenue : null;
+    const revenueDrop = yearAgo > 0 && history[history.length - 1].revenue < yearAgo * 0.9;
+    wf.layoffs = (revenueDrop || (Number(stock.financialHealth) || 0) < -2) && next < wf.employees;
+    if (wf.layoffs) wf.satisfaction = clampValue(wf.satisfaction - 10, 0, 100);
+    wf.employees = next;
+}
+
+function updateWorkforceSatisfaction(stock) {
+    const wf = stock.workforce;
+    const target = getSatisfactionTarget(stock);
+    wf.satisfaction = clampValue(wf.satisfaction + (target - wf.satisfaction) * 0.25, 0, 100);
+    wf.satisfactionHistory.push(Math.round(wf.satisfaction));
+    if (wf.satisfactionHistory.length > 8) wf.satisfactionHistory.shift();
+
+    // Rotacja przy niskim zadowoleniu (wydajność −1…3%, koszt rekrutacji w indeksie kosztu pracy).
+    const policy = LABOR_POLICIES[wf.policy] || LABOR_POLICIES.standard;
+    wf.rotation = 0;
+    if (wf.satisfaction < 35) {
+        wf.rotation = getRandomInRange(0.03, 0.08) * (policy.rotation || 1) * (wf.union || getSectorUnion(stock) ? 0.7 : 1);
+    }
+    const targetProductivity = 1 + policy.productivity + (wf.satisfaction > 70 ? 0.02 : 0) - wf.rotation * 0.35;
+    wf.productivity += (targetProductivity - wf.productivity) * 0.5;
+    if (Math.abs(targetProductivity - wf.productivity) < 0.0005) wf.productivity = targetProductivity;
+    wf.productivityBonus = Math.abs(wf.productivityBonus) < 0.0005 ? 0 : wf.productivityBonus * 0.75;
+    // Przewaga płacowa z podwyżek związkowych powoli wygasa (rynek dogania).
+    wf.wagePremium = Math.abs(wf.wagePremium) < 0.0005 ? 0 : wf.wagePremium * 0.95;
+}
+
+/** Oszczędność na szarej strefie w kwartale (płace ×0,6, bez podatków). */
+function recordGreySavings(stock) {
+    const wf = stock.workforce;
+    const structure = getWorkforceStructure(stock);
+    const baseCost = WORKFORCE_GROUPS.reduce((sum, g) => sum + (wf.base[g.id] || 0) * (g.id === 'grey' ? GREY_WAGE_FACTOR : 1), 0) || 1;
+    const revenue = Number(stock.fundamentals?.revenue) || 0;
+    const saving = revenue * wf.laborShare * (structure.grey || 0) * getMarketWage('cheap') * (1 - GREY_WAGE_FACTOR) / baseCost;
+    wf.greyExtraSaving = structure.grey > 0 ? saving * Math.max(0, structure.grey - (wf.base.grey || 0)) / structure.grey : 0; // ponad strukturę sektora (budżet państwa)
+    wf.greySavings.push(saving);
+    if (wf.greySavings.length > 4) wf.greySavings.shift();
+    return saving;
+}
+
+/** Kontrola Inspekcji Pracy: szansa = udział szarej strefy × 20% × mnożnik polityki. Kara 3× oszczędność z 4 kw. */
+function runLaborInspection(stock, force = false) {
+    const wf = stock.workforce;
+    const structure = getWorkforceStructure(stock);
+    const policy = LABOR_POLICIES[wf.policy] || LABOR_POLICIES.standard;
+    let chance = (structure.grey || 0) * 0.2 * policy.inspection;
+    if (wf.policy === 'exploit' && getRightsLevel() === 2) chance *= 2;
+    if (!force && !(Math.random() < chance)) return null;
+    const fine = Math.round(3 * wf.greySavings.reduce((a, b) => a + b, 0));
+    const paid = Math.max(0, Math.min(fine, Number(stock.cash) || 0));
+    if (paid > 0) {
+        adjustCompanyCash(stock, -paid);
+        adjustBalanceSheet(stock, { assets: -paid, retainedEarnings: -paid });
+        governmentTreasury += paid;
+        recordPayment(stock, 'external:skarb-panstwa', paid, 'Kara Inspekcji Pracy');
+    }
+    applyPriceEffect(stock.symbol, -0.04, 'negative', 'company');
+    wf.greyCaughtQuarter = getWorkforceQuarter();
+    wf.greyCleanUntil = getWorkforceQuarter() + 4;
+    wf.greySavings = [];
+    logSociety(`🦺 Inspekcja Pracy w ${stock.name}: pracownicy bez umów, kara ${formatZl(paid, 0)}. Kurs spada.`, 'company');
+    if (typeof canFundControlAgm === 'function' && canFundControlAgm(stock) && playerProfile) {
+        playerProfile.cv.push({ type: 'compliance', text: `Inspekcja Pracy: szara strefa w ${stock.name} (spółka kontrolowana przez fundusz), kara ${formatZl(paid, 0)}.` });
+    }
+    if (typeof unlockAcademyEntry === 'function' && (playerPortfolio?.[stock.symbol]?.shares || 0) > 0) unlockAcademyEntry('szaraStrefa', `${stock.name}: kara za szarą strefę`);
+    return { fine, paid };
+}
+
+// ---------------------------------------------------------------------------------
+// S3: odejścia między firmami i podkupowanie
+// ---------------------------------------------------------------------------------
+
+function getWorkforceCompanies() {
+    return stocks.filter(s => hasWorkforce(s) && s.workforce);
+}
+
+function processWorkforceMoves(companies) {
+    const bySector = {};
+    for (const stock of companies) (bySector[stock.sector?.[0] || '—'] = bySector[stock.sector?.[0] || '—'] || []).push(stock);
+    for (const list of Object.values(bySector)) {
+        if (list.length < 2) continue;
+        // Odejścia: z firm z zadowoleniem < 35 do firm z zadowoleniem > 60 (wydajność −1% / +0,5%).
+        const happy = list.filter(s => s.workforce.satisfaction > 60);
+        for (const source of list.filter(s => s.workforce.satisfaction < 35)) {
+            if (!happy.length) break;
+            const target = getRandomElement(happy);
+            source.workforce.productivityBonus -= 0.01;
+            target.workforce.productivityBonus += 0.005;
+        }
+        // Podkupowanie specjalistów: spółka z gotówką i zadowoleniem > 70 od najsłabszej z sektora.
+        const weakest = [...list].sort((a, b) => a.workforce.satisfaction - b.workforce.satisfaction)[0];
+        for (const buyer of list.filter(s => s !== weakest && s.workforce.satisfaction > 70)) {
+            const cost = Math.round((Number(buyer.fundamentals?.revenue) || 0) * buyer.workforce.laborShare * 0.02);
+            if (!(cost > 0) || (Number(buyer.cash) || 0) < cost * 5) continue;
+            adjustCompanyCash(buyer, -cost);
+            adjustBalanceSheet(buyer, { assets: -cost, retainedEarnings: -cost });
+            recordPayment(buyer, 'external:pracownicy', cost, 'Podkupienie specjalistów');
+            buyer.workforce.productivityBonus += 0.01;
+            weakest.workforce.productivityBonus -= 0.01;
+            weakest.workforce.satisfaction = clampValue(weakest.workforce.satisfaction - 2, 0, 100);
+        }
+    }
+}
+
+/** Podkupienie prezesa: koszt 1% kapitalizacji źródła z gotówki kupującej spółki; szansa 60% − zadowolenie/2. */
+function poachCeo(buyer, source, byPlayer = false) {
+    if (!buyer || !source || buyer === source || !source.ceo || !ensureWorkforce(buyer) || !ensureWorkforce(source)) return { ok: false, reason: 'Brak spółki lub prezesa.' };
+    const cost = Math.round(getMarketCapValue(source) * CEO_POACH_COST);
+    if ((Number(buyer.cash) || 0) < cost) return { ok: false, reason: `Spółka potrzebuje ${formatZl(cost, 0)} gotówki.` };
+    adjustCompanyCash(buyer, -cost);
+    adjustBalanceSheet(buyer, { assets: -cost, retainedEarnings: -cost });
+    recordPayment(buyer, 'external:headhunterzy', cost, `Podkupienie prezesa ${source.ceo.name}`);
+    const chance = clampValue(0.6 - source.workforce.satisfaction / 200, 0.05, 0.6);
+    if (!(Math.random() < chance)) {
+        logSociety(`👔 Prezes ${source.ceo.name} odrzuca ofertę ${buyer.name} i zostaje w ${source.name}.`, 'company');
+        return { ok: true, success: false, cost, chance };
+    }
+    const ceo = source.ceo;
+    replaceCeo(buyer, { ...ceo, traits: [...(ceo.traits || [])] });
+    replaceCeo(source);
+    applyPriceEffect(source.symbol, -0.03, 'negative', 'company');
+    logSociety(`👔 ${buyer.name} podkupuje prezesa ${ceo.name} z ${source.name}${byPlayer ? ' (decyzja funduszu)' : ''}. ${source.name} dostaje nowego prezesa.`, 'company');
+    return { ok: true, success: true, cost, chance };
+}
+
+/** Akcja gracza-większościowca: „Podkup prezesa” (limit 1 na rok). */
+function playerPoachCeo(buyerSymbol, sourceSymbol) {
+    const buyer = stocks.find(s => s.symbol === buyerSymbol);
+    const source = stocks.find(s => s.symbol === sourceSymbol);
+    if (!buyer || typeof canFundControlAgm !== 'function' || !canFundControlAgm(buyer)) { showToast('Prezesa podkupuje tylko spółka, w której fundusz ma > 50%.', 'warning'); return null; }
+    const last = playerProfile?.ceoPoachQuarter;
+    if (Number.isFinite(last) && getWorkforceQuarter() - last < CEO_POACH_COOLDOWN) { showToast(`Limit: jedno podkupienie prezesa na rok (kolejne za ${CEO_POACH_COOLDOWN - (getWorkforceQuarter() - last)} kw.).`, 'warning'); return null; }
+    const result = poachCeo(buyer, source, true);
+    if (!result.ok) { showToast(result.reason, 'error'); return null; }
+    if (playerProfile) playerProfile.ceoPoachQuarter = getWorkforceQuarter();
+    showToast(result.success ? `Udało się! ${buyer.name} ma nowego prezesa.` : `Prezes odmówił (szansa była ${(result.chance * 100).toFixed(0)}%).`, result.success ? 'success' : 'warning', 6000);
+    return result;
+}
+
+function processBotCeoPoaching(companies) {
+    for (const buyer of companies) {
+        const bot = typeof getMajorityBot === 'function' ? getMajorityBot(buyer) : null;
+        if (!bot || !['reckless', 'whale'].includes(bot.personality) || !(Math.random() < 0.025)) continue;
+        const candidates = companies.filter(s => s !== buyer && s.sector?.[0] === buyer.sector?.[0] && s.ceo && !(typeof canFundControlAgm === 'function' && canFundControlAgm(s)));
+        const best = candidates.sort((a, b) => (b.ceo.traits?.length || 0) - (a.ceo.traits?.length || 0))[0];
+        if (best) poachCeo(buyer, best);
+    }
+}
+
+// ---------------------------------------------------------------------------------
+// S4: związki zawodowe, żądania, strajki
+// ---------------------------------------------------------------------------------
+
+function getUnionChance(stock) {
+    const wf = stock.workforce;
+    const policy = LABOR_POLICIES[wf.policy] || LABOR_POLICIES.standard;
+    return UNION_BASE_CHANCE * Math.max(0.2, (50 - wf.satisfaction) / 10) * policy.union * RIGHTS_UNION_MULT[getRightsLevel()] * (wf.employees >= 200 ? 1 : 0.3);
+}
+
+function processUnionFormation(companies) {
+    if (!society.sectorUnions) society.sectorUnions = {};
+    for (const stock of companies) {
+        if (stock.workforce.union || !(Math.random() < getUnionChance(stock))) continue;
+        stock.workforce.union = createUnion('company');
+        logSociety(`✊ W ${stock.name} powstaje związek zawodowy (zadowolenie ${stock.workforce.satisfaction.toFixed(0)}/100).`, 'company');
+        if (typeof unlockAcademyEntry === 'function' && (playerPortfolio?.[stock.symbol]?.shares || 0) > 0) unlockAcademyEntry('zwiazek');
+    }
+    const bySector = {};
+    for (const stock of companies) (bySector[stock.sector?.[0]] = bySector[stock.sector?.[0]] || []).push(stock);
+    for (const [sector, list] of Object.entries(bySector)) {
+        if (!sector || sector === 'undefined' || society.sectorUnions[sector] || list.length < 2) continue;
+        const unions = list.filter(s => s.workforce.union).length;
+        const avg = list.reduce((sum, s) => sum + s.workforce.satisfaction, 0) / list.length;
+        if ((unions >= 3 || avg < 40) && Math.random() < 0.15) {
+            society.sectorUnions[sector] = createUnion('sector');
+            logSociety(`✊ Powstaje związek sektorowy w branży ${sector}: żądania i strajki obejmą wszystkie spółki sektora.`, 'state');
+        }
+    }
+}
+
+/** Wielkość żądania płacowego: 3–8% (więcej przy wysokiej inflacji i niskim bezrobociu). */
+function getUnionDemandSize() {
+    const inflation = Number(macro?.inflation) || INFLATION_TARGET;
+    const unemployment = Number(macro?.unemployment) || NATURAL_UNEMPLOYMENT;
+    return clampValue(0.03 + (inflation - INFLATION_TARGET) * 0.5 + (NATURAL_UNEMPLOYMENT - unemployment) * 0.5 + getRandomInRange(0, 0.02), 0.03, 0.08);
+}
+
+/** Odpowiedź prezesa według cech, polityki i kondycji. */
+function getCeoUnionResponse(stock) {
+    const wf = stock.workforce;
+    const traits = (stock.ceo?.traits || []).map(t => t.id);
+    const health = Number(stock.financialHealth) || 0;
+    if (wf.policy === 'social' || traits.some(id => SOCIAL_CEO_TRAITS.includes(id))) return 'agree';
+    if (wf.strike && wf.strike.quarters >= 2) return Math.random() < 0.6 ? 'agree' : 'negotiate'; // długi strajk: zarząd ustępuje
+    if (wf.policy === 'exploit' || traits.some(id => EXPLOIT_CEO_TRAITS.includes(id))) return Math.random() < 0.7 ? 'refuse' : 'negotiate';
+    const roll = Math.random();
+    if (health > 1) return roll < 0.4 ? 'agree' : roll < 0.9 ? 'negotiate' : 'refuse';
+    if (health < -1) return roll < 0.5 ? 'refuse' : 'negotiate';
+    return roll < 0.25 ? 'agree' : roll < 0.8 ? 'negotiate' : 'refuse';
+}
+
+function startStrike(stock, strength = 1, raise = 0) {
+    const wf = stock.workforce;
+    const pct = getRandomInRange(0.05, 0.15) * strength;
+    const fresh = !wf.strike;
+    wf.strike = { pct, quarters: (wf.strike?.quarters || 0) + 1, sector: Boolean(wf.strike?.sector), raise: raise || wf.strike?.raise || getUnionDemandSize(), decidedQuarter: getWorkforceQuarter() };
+    wf.satisfaction = clampValue(wf.satisfaction - 10, 0, 100);
+    applyPriceEffect(stock.symbol, -getRandomInRange(0.03, 0.08) * strength, 'negative', 'company');
+    // Kontrahenci budowlanki naliczają kary.
+    if (stock.sector?.includes('Budowlany') && typeof getActiveProjectsForBuilder === 'function' && getActiveProjectsForBuilder(stock).length) {
+        const penalty = Math.round(Math.min(Math.max(0, Number(stock.cash) || 0), (Number(stock.fundamentals?.revenue) || 0) * 0.01));
+        if (penalty > 0) {
+            adjustCompanyCash(stock, -penalty);
+            adjustBalanceSheet(stock, { assets: -penalty, retainedEarnings: -penalty });
+            recordPayment(stock, 'external:kontrahenci', penalty, 'Kary umowne za opóźnienia (strajk)');
+        }
+    }
+    if (fresh && typeof society === 'object' && society) {
+        if (!society.stats) society.stats = { strikes: 0 };
+        society.stats.strikes = (society.stats.strikes || 0) + 1;
+    }
+    if (typeof noteStrikeForGoals === 'function') noteStrikeForGoals(stock);
+    if (typeof unlockAcademyEntry === 'function' && (playerPortfolio?.[stock.symbol]?.shares || 0) > 0) unlockAcademyEntry('strajk', `${stock.name}: strajk`);
+    return wf.strike;
+}
+
+/** Rozstrzyga żądanie lub trwający strajk w spółce: agree | negotiate | refuse. */
+function resolveUnionDemand(stock, choice, raise, union) {
+    const wf = stock.workforce;
+    const ended = Boolean(wf.strike);
+    const accept = (share, satisfaction) => {
+        wf.wagePremium += raise * share;
+        wf.satisfaction = clampValue(wf.satisfaction + satisfaction, 0, 100);
+        wf.strike = null;
+        if (union && share >= 1 && Math.random() < 0.6) union.agreementUntil = getWorkforceQuarter() + COLLECTIVE_AGREEMENT_QUARTERS;
+        return union?.agreementUntil >= getWorkforceQuarter() ? 'agreement' : 'accepted';
+    };
+    if (choice === 'agree') return accept(1, 10);
+    if (choice === 'negotiate') {
+        if (Math.random() < 0.5) return accept(0.5, 5);
+        startStrike(stock, 0.5, raise);
+        return 'strike';
+    }
+    const strikeChance = clampValue(0.4 + (50 - wf.satisfaction) / 100, 0.4, 0.7);
+    if (ended || Math.random() < strikeChance) { startStrike(stock, 1, raise); return 'strike'; }
+    wf.satisfaction = clampValue(wf.satisfaction - 5, 0, 100);
+    return 'refused';
+}
+
+const UNION_OUTCOME_TEXT = { agreement: 'zgoda i układ zbiorowy (spokój na 2 lata)', accepted: 'porozumienie', strike: 'STRAJK', refused: 'odmowa bez strajku' };
+
+function sendUnionDecisionMail(stock, demand, striking) {
+    if (typeof addMail !== 'function') return;
+    addMail({
+        sender: CORPORATION_SENDER,
+        subject: striking ? `✊ Strajk w ${stock.name} — decyzja funduszu` : `✊ Związek w ${stock.name} żąda podwyżki ${(demand.raise * 100).toFixed(1)}%`,
+        body: `${striking ? 'Strajk trwa i obniża przychody spółki.' : `Związek zawodowy żąda podwyżki płac o ${(demand.raise * 100).toFixed(1)}%.`} Jako większościowy akcjonariusz możesz zdecydować do końca kwartału: zgoda (płace w górę, zadowolenie +10, możliwy układ zbiorowy), negocjacje (połowa podwyżki, 50% szans na porozumienie) albo odmowa (ryzyko strajku). Bez Twojej odpowiedzi zdecyduje prezes według swoich cech — to nie jest kara.`,
+        importance: 3, symbol: stock.symbol, action: { type: 'unionDemand', symbol: stock.symbol }
+    });
+}
+
+/** Odpowiedź gracza na żądanie związku (mail lub zakładka Zatrudnienie). */
+function respondUnionDemand(symbol, choice) {
+    const stock = stocks.find(s => s.symbol === symbol);
+    const pending = stock?.workforce?.pendingDemand;
+    if (!pending || !['agree', 'negotiate', 'refuse'].includes(choice)) return false;
+    pending.choice = choice;
+    showToast(`Decyzja zapisana: ${{ agree: 'zgoda', negotiate: 'negocjacje', refuse: 'odmowa' }[choice]}. Zarząd wykona ją na koniec kwartału.`, 'success');
+    return true;
+}
+
+function processUnionDemands(companies) {
+    const quarter = getWorkforceQuarter();
+    // 1. Decyzje zaległe (żądania z poprzedniego kwartału w spółkach gracza).
+    for (const stock of companies) {
+        const wf = stock.workforce;
+        const pending = wf.pendingDemand;
+        if (!pending) continue;
+        if (pending.quarter >= quarter) continue;
+        const choice = pending.choice || getCeoUnionResponse(stock);
+        const union = wf.union || getSectorUnion(stock);
+        const outcome = resolveUnionDemand(stock, choice, pending.raise, union);
+        wf.pendingDemand = null;
+        logSociety(`✊ ${stock.name}: ${pending.choice ? 'fundusz' : 'prezes'} wybiera ${{ agree: 'zgodę', negotiate: 'negocjacje', refuse: 'odmowę' }[choice]} — ${UNION_OUTCOME_TEXT[outcome]}.`, 'company');
+    }
+    // 2. Trwające strajki: kolejny kwartał znów wymaga decyzji.
+    for (const stock of companies) {
+        const wf = stock.workforce;
+        if (!wf.strike || wf.pendingDemand || wf.strike.decidedQuarter === quarter) continue;
+        const raise = wf.strike.raise || getUnionDemandSize();
+        if (typeof canFundControlAgm === 'function' && canFundControlAgm(stock)) {
+            wf.pendingDemand = { raise, quarter, choice: null, strike: true };
+            sendUnionDecisionMail(stock, wf.pendingDemand, true);
+            continue;
+        }
+        const outcome = resolveUnionDemand(stock, getCeoUnionResponse(stock), raise, wf.union || getSectorUnion(stock));
+        if (outcome !== 'strike') logSociety(`✊ ${stock.name}: koniec strajku (${UNION_OUTCOME_TEXT[outcome]}).`, 'company');
+    }
+    // 3. Związki zakładowe: żądania co 4 kwartały (poza układem zbiorowym).
+    for (const stock of companies) {
+        const wf = stock.workforce;
+        const union = wf.union;
+        if (!union || getSectorUnion(stock) || wf.strike || wf.pendingDemand) continue;
+        if (union.agreementUntil >= quarter || union.nextDemand > quarter) continue;
+        union.nextDemand = quarter + UNION_DEMAND_EVERY;
+        const raise = getUnionDemandSize();
+        if (typeof canFundControlAgm === 'function' && canFundControlAgm(stock)) {
+            wf.pendingDemand = { raise, quarter, choice: null };
+            sendUnionDecisionMail(stock, wf.pendingDemand, false);
+            continue;
+        }
+        const choice = getCeoUnionResponse(stock);
+        const outcome = resolveUnionDemand(stock, choice, raise, union);
+        logSociety(`✊ ${stock.name}: związek żąda +${(raise * 100).toFixed(1)}% — ${UNION_OUTCOME_TEXT[outcome]}.`, 'company');
+    }
+    // 4. Związki sektorowe: wspólne żądanie; gdy większość spółek odmawia — strajk całego sektora.
+    for (const [sector, union] of Object.entries(society.sectorUnions || {})) {
+        if (union.agreementUntil >= quarter || union.nextDemand > quarter) continue;
+        const list = companies.filter(s => s.sector?.[0] === sector);
+        if (!list.length) { delete society.sectorUnions[sector]; continue; }
+        union.nextDemand = quarter + UNION_DEMAND_EVERY;
+        const raise = getUnionDemandSize();
+        const decided = list.filter(s => !(typeof canFundControlAgm === 'function' && canFundControlAgm(s)));
+        for (const stock of list.filter(s => !decided.includes(s))) {
+            if (stock.workforce.pendingDemand) continue;
+            stock.workforce.pendingDemand = { raise, quarter, choice: null, sector };
+            sendUnionDecisionMail(stock, stock.workforce.pendingDemand, false);
+        }
+        const choices = decided.map(stock => [stock, getCeoUnionResponse(stock)]);
+        const refusing = choices.filter(([, c]) => c === 'refuse').length;
+        const sectorStrike = choices.length && refusing / choices.length >= 0.5 && Math.random() < 0.6;
+        for (const [stock, choice] of choices) {
+            if (sectorStrike) { startStrike(stock, 1, raise); stock.workforce.strike.sector = true; }
+            else resolveUnionDemand(stock, choice === 'refuse' ? 'negotiate' : choice, raise, union);
+        }
+        if (!sectorStrike && Math.random() < 0.5) union.agreementUntil = quarter + COLLECTIVE_AGREEMENT_QUARTERS;
+        logSociety(sectorStrike
+            ? `✊ STRAJK w całym sektorze ${sector}: związek sektorowy żądał +${(raise * 100).toFixed(1)}%, większość zarządów odmówiła.`
+            : `✊ Związek sektorowy (${sector}) wywalczył podwyżki${union.agreementUntil >= quarter ? ' i układ zbiorowy' : ''}.`, 'state');
+    }
+}
+
+/** Ciemna strefa: „rozbicie związku” u „przyjaciół”. 30% wykrycia → strajk generalny w sektorze i afera. */
+function mafiaBustUnion(symbol) {
+    if (typeof requireMafiaContact === 'function' && !requireMafiaContact()) return false;
+    const stock = stocks.find(s => s.symbol === symbol);
+    if (!stock?.workforce?.union) { showToast('W tej spółce nie ma związku zakładowego.', 'warning'); return false; }
+    const cost = typeof getSabotageCost === 'function' ? getSabotageCost(stock) : 5000;
+    if (playerCash < cost) { showToast(`Usługa kosztuje ${formatZl(cost, 0)} z funduszu.`, 'error'); return false; }
+    playerCash -= cost;
+    recordPayment('player-fund', 'external:szara-strefa', cost, 'Doradztwo kadrowe');
+    stock.workforce.union = null;
+    stock.workforce.pendingDemand = null;
+    if (typeof mafiaTrace === 'function') mafiaTrace(30, 3, 15, cost);
+    if (Math.random() < UNION_BUST_DETECTION) {
+        const sector = stock.sector?.[0];
+        for (const other of getWorkforceCompanies().filter(s => s.sector?.[0] === sector)) { startStrike(other, 1); other.workforce.strike.sector = true; }
+        if (playerFund) playerFund.trust = Math.max(0, playerFund.trust - 10);
+        if (playerProfile) playerProfile.cv.push({ type: 'compliance', text: `Afera: fundusz zlecił rozbicie związku w ${stock.name}.` });
+        if (typeof getRecord === 'function') getRecord('player').suspicion += 20;
+        logEvent(`📰 AFERA: wyszło na jaw, że fundusz ${playerProfile?.fundName || ''} zlecił „rozbicie” związku w ${stock.name}. Strajk generalny w sektorze ${sector}!`, 'review');
+        return 'detected';
+    }
+    logSociety(`🕶️ Związek zawodowy w ${stock.name} „sam się rozwiązał”.`, 'company');
+    return true;
+}
+
+// ---------------------------------------------------------------------------------
+// GŁÓWNA PĘTLA KWARTAŁU (main.js, po makro, przed raportami)
+// ---------------------------------------------------------------------------------
+
+function processWorkforceQuarter() {
+    if (typeof society !== 'object' || !society) return;
+    ensureSocietyState();
+    const companies = stocks.filter(hasWorkforce);
+    companies.forEach(ensureWorkforce);
+    for (const stock of companies) {
+        updateWorkforcePolicy(stock);
+        updateWorkforceEmployees(stock);
+        updateWorkforceSatisfaction(stock);
+        recordGreySavings(stock);
+        runLaborInspection(stock);
+    }
+    processWorkforceMoves(companies);
+    processBotCeoPoaching(companies);
+    processUnionFormation(companies);
+    processUnionDemands(companies);
+    for (const stock of companies) stock.workforce.lastLaborIndex = getLaborCostIndex(stock);
+    publishSocietyReport(companies);
+}
+
+/** S6: jeden zbiorczy mail na kwartał — „Raport z rynku pracy i kraju” (zamiast osobnych wiadomości). */
+function publishSocietyReport(companies = getWorkforceCompanies()) {
+    if (typeof addMail !== 'function' || !mailbox || typeof society !== 'object' || !society) return null;
+    const pct = (v, d = 1) => `${(v * 100).toFixed(d)}%`;
+    const striking = companies.filter(s => s.workforce.strike);
+    const held = companies.filter(s => (playerPortfolio?.[s.symbol]?.shares || 0) > 0);
+    const heldNotes = held.filter(s => s.workforce.strike || s.workforce.satisfaction < 40 || getGreyShare(s) > 0.05 || s.workforce.pendingDemand)
+        .slice(0, 4).map(s => `${s.name}: ${s.workforce.strike ? 'strajk' : s.workforce.pendingDemand ? 'żądanie związku' : getGreyShare(s) > 0.05 ? 'szara strefa' : `zadowolenie ${s.workforce.satisfaction.toFixed(0)}`}`);
+    const growth = Number(society.lastGrowth) || 0;
+    const lines = [
+        `Populacja ${formatPopulation(society.population)} (${growth >= 0 ? '+' : ''}${pct(growth, 2)} w kwartale, migracja ${(society.migration.lastPeople || 0) >= 0 ? '+' : ''}${Math.round(society.migration.lastPeople || 0).toLocaleString('pl-PL')}), bezrobocie ${pct(macro.unemployment)}, indeks popytu ${society.demandIndex.toFixed(3)}.`,
+        `Płace realne: pracownicy ${society.wages.workers.toFixed(3)}, specjaliści ${society.wages.specialists.toFixed(3)} (niedobór ${society.shortage.toFixed(2)}), edukacja ${society.education.toFixed(0)}/100.`,
+        `Strajki: ${striking.length ? striking.slice(0, 4).map(s => s.name).join(', ') : 'brak'}; związki zakładowe w ${companies.filter(s => s.workforce.union).length} spółkach${Object.keys(society.sectorUnions || {}).length ? `, sektorowe: ${Object.keys(society.sectorUnions).join(', ')}` : ''}.`,
+        society.pendingLaw ? `Zapowiedź ustawy: ${SOCIAL_LAWS[society.pendingLaw.law].name} → ${describeLawLevel(society.pendingLaw.law, society.pendingLaw.to)}.` : '',
+        society.budget.hasBalance !== undefined ? `Budżet: saldo ${formatZl(society.budget.balance || 0, 0)}${society.budget.deficitQuarters ? ` (deficyt od ${society.budget.deficitQuarters} kw.)` : ''}.` : '',
+        heldNotes.length ? `Twoje spółki: ${heldNotes.join('; ')}.` : '',
+        ...society.report.slice(-5).map(item => `• ${item}`)
+    ].filter(Boolean);
+    society.lastReportQuarter = society.quarter;
+    return addMail({ sender: 'OBSER', subject: `👥 Raport z rynku pracy i kraju — kwartał ${society.quarter}`, body: lines.join('  '), importance: 2 });
+}
+
+/** Średnie zadowolenie ważone zatrudnieniem (atrakcyjność kraju, KPI). */
+function getAverageSatisfaction(list = getWorkforceCompanies()) {
+    let sum = 0, weight = 0;
+    for (const stock of list) {
+        if (!stock.workforce) continue;
+        sum += stock.workforce.satisfaction * stock.workforce.employees;
+        weight += stock.workforce.employees;
+    }
+    return weight > 0 ? sum / weight : 60;
+}
+
+/** Ryzyko strajku dla skanera: niskie / średnie / wysokie. */
+function getStrikeRisk(stock) {
+    const wf = stock?.workforce;
+    if (!wf) return null;
+    if (wf.strike) return 'trwa';
+    const union = wf.union || getSectorUnion(stock);
+    if (!union) return wf.satisfaction < 35 ? 'średnie' : 'niskie';
+    if (union.agreementUntil >= getWorkforceQuarter()) return 'niskie';
+    return wf.satisfaction < 45 || wf.policy === 'exploit' ? 'wysokie' : 'średnie';
+}
+
+function getGreyShare(stock) {
+    const structure = stock?.workforce ? getWorkforceStructure(stock) : null;
+    return structure ? structure.grey || 0 : 0;
+}
+
+/** Księgowy poz. 1: koszt pracy jako osobny słupek (struktura przychodów ostatniego kwartału). */
+function renderLaborCostBar(stock, history) {
+    const last = [...history].reverse().find(q => Number.isFinite(q.labor) && q.revenue > 0);
+    if (!last) return '';
+    const labor = Math.max(0, last.labor / last.revenue), ebitda = Math.max(0, last.ebitda / last.revenue);
+    const other = Math.max(0, 1 - labor - ebitda);
+    const seg = (value, cls) => `<span class="${cls}" style="width:${Math.min(100, value * 100).toFixed(1)}%"></span>`;
+    return `<div class="labor-bar" role="img" aria-label="Struktura przychodów">${seg(labor, 'labor')}${seg(other, 'other')}${seg(ebitda, 'ebitda')}</div>
+        <p class="text-xs">🟨 koszt pracy ${(labor * 100).toFixed(1)}% · ⬜ pozostałe koszty ${(other * 100).toFixed(1)}% · 🟩 EBITDA ${(ebitda * 100).toFixed(1)}% przychodów (ostatni kwartał)</p>`;
 }

@@ -26,8 +26,10 @@ const LEGACY_SAVE_KEYS = ['gra_inwestycyjna_dawid_save_v2', 'gra_inwestycyjna_da
 // v6: skrzynka mailowa, burmistrz i kampania, festyn, oferta prywatyzacyjna. v4/v5 migrują przy wczytaniu.
 // v7: obligacje i oferty (czas gry, kupony), depozyty i księgi banków, zastawy funduszy, giełdy elitarne.
 // v8: klienci z charakterami i rynek wtórny JU (migracja typów klientów przy wczytaniu).
-const SAVE_FORMAT_VERSION = 12;
-const SUPPORTED_SAVE_VERSIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12];
+// v13: społeczeństwo i rynek pracy (society, stock.workforce, trzecia partia). Starsze zapisy: kraj od zera,
+// zatrudnienie według giełdy, polityka według cech prezesa, związki tylko w spółkach państwowych (30%).
+const SAVE_FORMAT_VERSION = 13;
+const SUPPORTED_SAVE_VERSIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
 
 let lastSaveReport = null;
 let saveDisabledUntilReload = false;
@@ -89,41 +91,117 @@ function serializeProjectForSave(project) {
 }
 
 // Historia cen do wykresów jest największą częścią stanu; w zapisie trzymamy jej końcówkę,
-// żeby zmieścić się w limicie localStorage (~5 MB).
-const SAVED_LINE_HISTORY_POINTS = 120;
+// żeby zmieścić się w limicie localStorage (~5 MB). Liczby historii są zaokrąglane (cena do 0,0001 zł,
+// wyniki do 7 cyfr znaczących), a tryb kompaktowy (gdy zwykły zapis przekroczy limit) skraca historie mocniej.
+const SAVED_LINE_HISTORY_POINTS = 90;
+const SAVED_CANDLES = 24;
+const SAVE_SIZE_TARGET = 2_500_000; // znaków — zapas względem limitu localStorage (~5 MB)
+// Poziomy zapisu: 0 — zwykły, 1 — kompaktowy (zapis > 2,5 MB), 2 — awaryjny (przeglądarka odmówiła miejsca).
+const SAVE_COMPACT_LEVELS = [
+    { line: SAVED_LINE_HISTORY_POINTS, candles: SAVED_CANDLES, ledger: RESEARCH_LEDGER_KEEP_RECOGNIZED, chartEvents: 20, agm: 4, mails: 100, journal: 100 },
+    { line: 40, candles: 15, ledger: 2, chartEvents: 5, agm: 1, mails: 60, journal: 20 },
+    { line: 12, candles: 4, ledger: 0, chartEvents: 0, agm: 0, mails: 25, journal: 0 }
+];
 
-function serializeStocksForSave() {
+function roundPrice(value) {
+    return Number.isFinite(value) ? Math.round(value * 1e4) / 1e4 : value;
+}
+
+function roundSignificant(value, digits = 7) {
+    return typeof value === 'number' && Number.isFinite(value) && value !== 0 ? Number(value.toPrecision(digits)) : value;
+}
+
+function compactPricePoints(points) {
+    return points.map(point => {
+        if (!point || typeof point !== 'object') return point;
+        const copy = { ...point };
+        for (const key of ['price', 'open', 'high', 'low', 'close']) if (key in copy) copy[key] = roundPrice(copy[key]);
+        return copy;
+    });
+}
+
+const roundList = list => Array.isArray(list) ? list.map(value => roundSignificant(value)) : list;
+const roundRecords = list => Array.isArray(list) ? list.map(item => item && typeof item === 'object' ? Object.fromEntries(Object.entries(item).map(([key, value]) => [key, roundSignificant(value)])) : roundSignificant(item)) : list;
+
+function serializeStocksForSave(level = 0) {
+    const limits = SAVE_COMPACT_LEVELS[Math.max(0, Math.min(2, Number(level) || 0))];
     const serialized = serializeWithStockRefs(stocks, stocks);
     for (const company of serialized) {
-        if (Array.isArray(company.lineHistory) && company.lineHistory.length > SAVED_LINE_HISTORY_POINTS) {
-            company.lineHistory = company.lineHistory.slice(-SAVED_LINE_HISTORY_POINTS);
+        if (company.isBankrupt) {
+            // Upadła spółka: tylko dane do listy i statystyk — bez historii wykresów i raportów.
+            company.lineHistory = []; company.candlestickHistory = []; company.chartEvents = []; company.priceHistory = [];
+            if (company.fundamentals) company.fundamentals.history = (company.fundamentals.history || []).slice(-1);
+            if (company.research) company.research.ledger = [];
+            if (company.governance) company.governance.history = [];
+            continue;
         }
+        if (Array.isArray(company.lineHistory)) company.lineHistory = compactPricePoints(company.lineHistory.slice(-limits.line));
+        if (Array.isArray(company.candlestickHistory)) company.candlestickHistory = compactPricePoints(company.candlestickHistory.slice(-limits.candles));
+        if (Array.isArray(company.priceHistory)) company.priceHistory = roundList(company.priceHistory.slice(-limits.line));
+        if (Array.isArray(company.fundamentals?.history)) company.fundamentals.history = roundRecords(company.fundamentals.history); // ≤ 8 kwartałów
+        for (const key of ['weeklyCloses', 'dividendHistory', 'researchCostHistory']) if (Array.isArray(company[key])) company[key] = roundRecords(company[key]);
+        if (company.workforce) {
+            company.workforce.greySavings = roundList(company.workforce.greySavings);
+            for (const key of ['payMult', 'productivity', 'productivityBonus', 'satisfaction', 'wagePremium', 'rotation', 'lastLaborIndex', 'greyExtraSaving']) company.workforce[key] = roundSignificant(company.workforce[key]);
+        }
+        if (Array.isArray(company.research?.ledger)) {
+            company.research.ledger = company.research.ledger.filter((entry, index, list) => !entry.recognized || index >= list.length - limits.ledger);
+        }
+        if (Array.isArray(company.chartEvents)) company.chartEvents = limits.chartEvents ? company.chartEvents.slice(-limits.chartEvents) : [];
+        if (Array.isArray(company.governance?.history)) company.governance.history = company.governance.history.slice(0, limits.agm);
     }
     return serialized;
 }
 
-/** Buduje obiekt zapisu (bez zapisywania go) — używane przez saveGameState i testy. */
-function buildSaveSnapshot() {
+/** Obligacje kupione w jednej transakcji to identyczne rekordy — w zapisie łączymy je w grupy z licznikiem. */
+function compactBondsForSave(bonds) {
+    const groups = new Map();
+    for (const bond of bonds) {
+        const { id, ...rest } = bond;
+        const key = JSON.stringify(rest);
+        const group = groups.get(key);
+        if (group) group.__count++;
+        else groups.set(key, { ...rest, id, __count: 1 });
+    }
+    return [...groups.values()];
+}
+
+function expandSavedBonds(saved) {
+    const result = [];
+    for (const bond of saved) {
+        const count = Math.max(1, Math.floor(Number(bond.__count) || 1));
+        const { __count, ...rest } = bond;
+        for (let i = 0; i < count; i++) result.push(i === 0 ? rest : { ...rest, id: nextSimulationId('bond') });
+    }
+    return result;
+}
+
+/** Buduje obiekt zapisu (bez zapisywania go) — używane przez saveGameState i testy. compact: 0 / 1 / 2 (lub true = 1). */
+function buildSaveSnapshot({ compact = 0 } = {}) {
     const now = Date.now();
+    const level = compact === true ? 1 : Math.max(0, Math.min(2, Number(compact) || 0));
+    const limits = SAVE_COMPACT_LEVELS[level];
     return {
         version: SAVE_FORMAT_VERSION,
         savedAt: now,
-        currentSpeedMultiplier,
+        compact: level,
+        currentSpeedMultiplier: SAVED_SPEEDS.includes(currentSpeedMultiplier) ? currentSpeedMultiplier : 1, // T0: prędkości testowe nie trafiają do zapisu
         playerCash,
         governmentTreasury,
-        stocks: serializeStocksForSave(),
+        stocks: serializeStocksForSave(level),
         commercialBanks: serializeWithStockRefs(commercialBanks),
         playerPortfolio: serializeWithStockRefs(playerPortfolio),
         aiCompetitors: serializeWithStockRefs(aiCompetitors),
         city: serializeWithStockRefs(city),
         centralBank: serializeWithStockRefs(centralBank),
         specialists: serializeWithStockRefs(specialists),
-        activeTenders: activeTenders.map(serializeTenderForSave),
+        activeTenders: activeTenders.filter(tender => ['open', 'closed', 'awarded'].includes(tender.status)).map(serializeTenderForSave), // zakończone przetargi nie trafiają do zapisu
         constructionProjects: constructionProjects.filter(project => !project.settled).map(serializeProjectForSave),
-        paymentJournal: paymentJournal.slice(-100),
+        paymentJournal: limits.journal ? paymentJournal.slice(-limits.journal) : [],
         paymentTotals,
         economyCycle,
         macro,
+        society,
         etfs: serializeEtfs(),
         botRelations,
         marketOperators,
@@ -134,13 +212,13 @@ function buildSaveSnapshot() {
         playerProfile,
         playerFund,
         corporation,
-        mailbox,
+        mailbox: { ...mailbox, messages: mailbox.messages.slice(0, limits.mails), digest: level ? [] : mailbox.digest },
         juMarket,
         investmentPool,
         statePension,
         bridgeLoanOffers,
         rescueOffer,
-        allBonds,
+        allBonds: compactBondsForSave(allBonds),
         activeBonds,
         cityInvestment,
         privatizationOffer,
@@ -154,21 +232,40 @@ function buildSaveSnapshot() {
     };
 }
 
+let saveWarningShown = false;
+
+/** Jednorazowe ostrzeżenie dla gracza (zamiast błędu w konsoli przy każdym autozapisie). */
+function warnSaveOnce(message) {
+    if (saveWarningShown) return;
+    saveWarningShown = true;
+    if (typeof showToast === 'function') showToast(message, 'warning', 10000);
+}
+
 function saveGameState() {
     if (typeof localStorage === 'undefined') return false;
     if (saveDisabledUntilReload) return false;
     if (typeof window !== 'undefined' && window.__GAME_TEST_MODE__) return false; // testy nie nadpisują zapisu gracza
 
-    try {
-        const snapshot = buildSaveSnapshot();
-        localStorage.setItem(GAME_SAVE_KEY, JSON.stringify(snapshot));
-        lastSaveReport = { ok: true, at: snapshot.savedAt };
-        return true;
-    } catch (error) {
-        console.error('[save] Nie udało się zapisać gry:', error);
-        lastSaveReport = { ok: false, error: String(error) };
-        return false;
+    // Zapis za duży albo przeglądarka odmawia miejsca: kolejne poziomy przycięcia (kompaktowy, awaryjny).
+    let lastError = null;
+    for (let level = 0; level < SAVE_COMPACT_LEVELS.length; level++) {
+        try {
+            const snapshot = buildSaveSnapshot({ compact: level });
+            const text = JSON.stringify(snapshot);
+            if (text.length > SAVE_SIZE_TARGET && level < SAVE_COMPACT_LEVELS.length - 1) continue;
+            if (level > 0) localStorage.removeItem(GAME_SAVE_KEY); // stary zapis zwalnia miejsce dla nowego
+            localStorage.setItem(GAME_SAVE_KEY, text);
+            lastSaveReport = { ok: true, at: snapshot.savedAt, size: text.length, compact: level };
+            if (level === 2) warnSaveOnce('⚠️ Zapis gry jest bardzo duży — zapisano wersję awaryjną (krótsze wykresy i historia).');
+            return true;
+        } catch (error) {
+            lastError = error;
+        }
     }
+    lastSaveReport = { ok: false, error: String(lastError) };
+    if (!saveWarningShown) console.error('[save] Nie udało się zapisać gry:', lastError);
+    warnSaveOnce('⚠️ Nie udało się zapisać gry — przeglądarka nie ma miejsca. Postęp z tej sesji może nie zostać zachowany.');
+    return false;
 }
 
 function isFiniteNumber(value) {
@@ -393,7 +490,7 @@ function applySaveSnapshot(snapshot) {
     // Obligacje (v7; wcześniej nie były zapisywane). Stare rekordy bez czasu gry migruje checkBondMaturities.
     allBonds.length = 0;
     activeBonds.length = 0;
-    if (Array.isArray(snapshot.allBonds)) allBonds.push(...snapshot.allBonds.filter(bond => bond && isFiniteNumber(bond.faceValue)));
+    if (Array.isArray(snapshot.allBonds)) allBonds.push(...expandSavedBonds(snapshot.allBonds.filter(bond => bond && isFiniteNumber(bond.faceValue)))); // zapis: grupy obligacji z licznikiem
     if (Array.isArray(snapshot.activeBonds)) activeBonds.push(...snapshot.activeBonds);
 
     if (snapshot.corporation && Array.isArray(snapshot.corporation.managers)) {
@@ -405,7 +502,7 @@ function applySaveSnapshot(snapshot) {
     syncExchangeAccessWithPosition();
 
     if (isFiniteNumber(snapshot.governmentTreasury)) governmentTreasury = snapshot.governmentTreasury;
-    if (isFiniteNumber(snapshot.currentSpeedMultiplier) && [1, 2, 5].includes(snapshot.currentSpeedMultiplier)) {
+    if (isFiniteNumber(snapshot.currentSpeedMultiplier) && SAVED_SPEEDS.includes(snapshot.currentSpeedMultiplier)) {
         currentSpeedMultiplier = snapshot.currentSpeedMultiplier;
     }
 
@@ -437,6 +534,11 @@ function applySaveSnapshot(snapshot) {
     scandals = snapshot.scandals && typeof snapshot.scandals === 'object' ? snapshot.scandals : createScandals(); // v11: afery
     ensureScandals();
     ensureMacroState();
+    // v13: kraj i zatrudnienie (starsze zapisy: kraj od zera, populacja miasta bez zmian).
+    society = snapshot.society && typeof snapshot.society === 'object' ? snapshot.society : createSocietyState();
+    ensureSocietyState();
+    if (!snapshot.society) report.warnings.push('Zapis bez danych kraju — utworzono społeczeństwo i zatrudnienie w spółkach (migracja v13).');
+    stocks.forEach(stock => { if (typeof ensureWorkforce === 'function') ensureWorkforce(stock); });
     if (snapshot.economyCycle && ECONOMY_PHASES[snapshot.economyCycle.phase]) {
         economyCycle = snapshot.economyCycle;
     } else {
@@ -452,10 +554,12 @@ function applySaveSnapshot(snapshot) {
 
     ensureMarketOperators(); // starsze zapisy: GPW jako notowana spółka
     if ((snapshot.version || 0) < 12 && !stocks.some(s => s.defenseId)) initDefenseSector(); // v12: zbrojeniówka i Gwardia w starszych zapisach
-    const reconciled = reconcileSharesHeld(); // audyt A1: akcje w obrocie = suma posiadaczy
-    if (reconciled) report.warnings.push(`Uzgodniono akcje w obrocie w ${reconciled} spółkach (audyt A1).`);
     // v10: ETF-y z portfelami (starsze zapisy dostają nowy zestaw)
     if (!restoreEtfs(snapshot.etfs)) report.warnings.push('Utworzono nowe ETF-y z portfelami (migracja v10).');
+    // Uzgodnienie dopiero po odtworzeniu ETF-ów: wcześniej liczyło pakiety ETF-ów sprzed wczytania (przy starcie
+    // strony — żadne), zaniżało sharesHeld, a zawyżone getAvailableShares pozwalało kupić ponad wolny obrót.
+    const reconciled = reconcileSharesHeld(); // audyt A1: akcje w obrocie = suma posiadaczy
+    if (reconciled) report.warnings.push(`Uzgodniono akcje w obrocie w ${reconciled} spółkach (audyt A1).`);
 
     report.ok = true;
     return report;
@@ -562,6 +666,7 @@ const gameTimers = {
 
 // Zmienna przechowująca aktualną prędkość gry
 let currentSpeedMultiplier = 1;
+let debugStockTick = null; // T0: krok logiki gry dla testów symulacyjnych (bez odświeżania interfejsu)
 let uiRefreshTick = 0;
 
 // Zapis i wczytanie gry: save.js
@@ -575,11 +680,71 @@ let uiRefreshTick = 0;
 function clearIntervals() {
     for (const key in gameTimers) {
         if (gameTimers[key]) {
-            clearInterval(gameTimers[key]);
+            if (typeof gameTimers[key] !== 'object') clearInterval(gameTimers[key]); // obiekty = pętle zegara gry
             gameTimers[key] = null;
         }
     }
+    if (typeof gameScheduler !== 'undefined') { // pętle zegara gry (T0): zapamiętujemy fazę na wypadek zmiany prędkości
+        gameScheduler.jobs.forEach((job, index) => { gameScheduler.phase[index] = { periodMs: job.periodMs, nextAt: job.nextAt }; });
+        gameScheduler.jobs = [];
+    }
     console.log("Wszystkie pętle gry zostały zatrzymane.");
+}
+
+// T0 (plan 0.14): prędkości testowe ×100 i ×200 (przyciski debug). Nie trafiają do zapisu — wczytana gra
+// wraca do prędkości z listy SAVED_SPEEDS (applySaveSnapshot).
+const TEST_SPEEDS = [100, 200];
+const SAVED_SPEEDS = [1, 2, 5];
+const MAX_AUTOSAVE_SPEED = 50;
+const MIN_TICK_INTERVAL_MS = 10;
+const MAX_TICK_CATCHUP = 30; // najwięcej kroków logiki w jednym wywołaniu pętli (bez „spirali” przy zawieszeniu karty)
+
+/** Ile tików rynku wykonać w jednym wywołaniu, żeby interwał nie spadł poniżej MIN_TICK_INTERVAL_MS. */
+function getTickStepsPerCall(speedMultiplier) {
+    return Math.max(1, Math.ceil(MIN_TICK_INTERVAL_MS * speedMultiplier / BASE_DELAYS.stockUpdate)); // ×50: 1, ×100: 1 (10 ms), ×200: 2
+}
+
+/**
+ * T0: zegar gry. Wszystkie pętle gry (tydzień, kwartał, zdarzenia, obligacje…) są wyzwalane przez tiki rynku
+ * (1 tik = 1 s gry), a nie przez osobne timery przeglądarki. Kwartał to zawsze 300 tików, tydzień 60 — przy każdej
+ * prędkości ta sama kolejność zdarzeń. Gdy komputer nie nadąża (×200, kilka kart), gra biegnie wolniej, ale spójnie.
+ */
+const gameScheduler = { clockMs: 0, jobs: [], phase: {} };
+
+/** Rejestruje pętlę gry: realDelay = okres gry / prędkość (jak dawne setInterval), zwraca identyfikator. */
+function setGameInterval(fn, realDelay) {
+    const periodMs = Math.max(1, Math.round(realDelay * (currentSpeedMultiplier || 1)));
+    const index = gameScheduler.jobs.length;
+    const saved = gameScheduler.phase[index]; // zmiana prędkości nie zeruje postępu tygodnia ani kwartału
+    const nextAt = saved && saved.periodMs === periodMs ? saved.nextAt : gameScheduler.clockMs + periodMs;
+    const job = { fn, periodMs, nextAt, id: `job${index}_${periodMs}` };
+    gameScheduler.jobs.push(job);
+    return job;
+}
+
+/** Wołane po logice każdego tiku: przesuwa zegar gry i uruchamia pętle, którym minął okres. */
+function runGameScheduler(deltaMs) {
+    gameScheduler.clockMs += deltaMs;
+    for (const job of gameScheduler.jobs) {
+        while (gameScheduler.clockMs >= job.nextAt) {
+            job.nextAt += job.periodMs;
+            job.fn();
+        }
+    }
+}
+
+/** Pomiar rzeczywistej prędkości: kwartały gry na minutę czasu rzeczywistego (ostatnie kwartały). */
+const gameSpeedStats = { quarterTimes: [] };
+function noteQuarterForSpeedStats() {
+    gameSpeedStats.quarterTimes.push(performance.now());
+    if (gameSpeedStats.quarterTimes.length > 6) gameSpeedStats.quarterTimes.shift();
+}
+
+function getMeasuredGameSpeed() {
+    const times = gameSpeedStats.quarterTimes;
+    if (times.length < 2) return null;
+    const msPerQuarter = (times[times.length - 1] - times[0]) / (times.length - 1);
+    return { quartersPerMinute: 60000 / msPerQuarter, effectiveMultiplier: BASE_DELAYS.quarterly / msPerQuarter };
 }
 
 /**
@@ -601,7 +766,7 @@ function setGameSpeed(speedMultiplier) {
     // --- URUCHOMIENIE NOWYCH PĘTLI Z NOWĄ PRĘDKOŚCIĄ ---
 
     // Pętla sprawdzania niespłaconych hipotek (z bazy main.js)
-    gameTimers.mortgageCheck = setInterval(() => {
+    gameTimers.mortgageCheck = setGameInterval(() => {
         if (isGamePaused) return;
         checkMortgageDefaults();
     }, BASE_DELAYS.weekly / speedMultiplier); // Sprawdzaj co tydzień
@@ -610,18 +775,20 @@ function setGameSpeed(speedMultiplier) {
         if (typeof saveGameState === 'function') {
             saveGameState();
         }
-    }, 60000 / speedMultiplier);
+    }, 60000 / Math.min(speedMultiplier, MAX_AUTOSAVE_SPEED)); // T0: przy ×100/×200 autozapis nie częściej niż przy ×50
 
     // Pętla sprawdzania zapadalności bonów skarbowych
-    gameTimers.tBillMaturityCheck = setInterval(() => {
+    gameTimers.tBillMaturityCheck = setGameInterval(() => {
         if (isGamePaused) return;
         checkTBillMaturities();
     }, 5000 / speedMultiplier);
 
-    // Główna pętla gry (aktualizacje co sekundę czasu gry)
-    gameTimers.stockUpdate = setInterval(() => {
+    // Główna pętla gry (aktualizacje co sekundę czasu gry). T0: przy prędkościach testowych (> ×50) kilka tików
+    // w jednym wywołaniu zamiast interwału krótszego niż ~10 ms (przeglądarka nie nadążyłaby z timerami).
+    const tickSteps = getTickStepsPerCall(speedMultiplier);
+    const stockTick = (skipUi = false) => {
 
-        document.querySelectorAll('#stock-table-body tr').forEach(row => {
+        if (!skipUi) document.querySelectorAll('#stock-table-body tr').forEach(row => {
     const symbol = row.dataset.symbol;
     if (!symbol) return;
     
@@ -718,11 +885,13 @@ function setGameSpeed(speedMultiplier) {
         updateResearchProgress(gameTimeDelta);
         processConstructionProjects(gameTimeDelta);
         updateTenderSystem(gameTimeDelta); // zawiera też oferty AI
-        updateConstructionSectorUI();
+        if (!skipUi) updateConstructionSectorUI(); // T0: UI raz na wywołanie pętli
 
         // Przy prędkościach debug (×10, ×50) odświeżamy interfejs rzadziej — logika gry liczy się co tik.
+        runGameScheduler(gameTimeDelta); // T0: tydzień, kwartał, zdarzenia — według zegara gry
+        if (skipUi) return; // T0: dodatkowe kroki logiki w jednym wywołaniu — interfejs raz na wywołanie
         uiRefreshTick++;
-        if (speedMultiplier >= 10 && uiRefreshTick % Math.round(speedMultiplier / 5) !== 0) return;
+        if (speedMultiplier >= 10 && uiRefreshTick % Math.max(1, Math.round(speedMultiplier / (5 * tickSteps))) !== 0) return;
 
         // --- ODŚWIEŻANIE INTERFEJSU ---
         displayStocks(currentMarketInputs);
@@ -843,10 +1012,24 @@ function setGameSpeed(speedMultiplier) {
             }
         }
 
-    }, BASE_DELAYS.stockUpdate / speedMultiplier);
+    };
+    // T0: doganianie czasu — tyle kroków logiki, ile sekund gry upłynęło od ostatniego wywołania (najwyżej
+    // MAX_TICK_CATCHUP), żeby kwartał zawsze miał ~300 tików także przy ×50/×100/×200, gdy przeglądarka nie nadąża.
+    debugStockTick = stockTick; // testy symulacyjne: tiki logiki bez timerów przeglądarki
+    let lastTickAt = performance.now();
+    let tickBacklog = 0;
+    gameTimers.stockUpdate = setInterval(() => {
+        const now = performance.now();
+        tickBacklog += (now - lastTickAt) * speedMultiplier / BASE_DELAYS.stockUpdate;
+        lastTickAt = now;
+        const steps = Math.max(1, Math.min(MAX_TICK_CATCHUP, Math.floor(tickBacklog)));
+        tickBacklog = Math.max(0, Math.min(tickBacklog - steps, MAX_TICK_CATCHUP));
+        if (isGamePaused) { tickBacklog = 0; stockTick(); return; }
+        for (let step = 0; step < steps; step++) stockTick(step < steps - 1);
+    }, BASE_DELAYS.stockUpdate * tickSteps / speedMultiplier);
 
     // Pętla tygodniowa (z bazy main.js - bankowość komercyjna)
-gameTimers.weekly = setInterval(() => {
+gameTimers.weekly = setGameInterval(() => {
         if (isGamePaused) return;
 
         // ===>>> NOWE WYWOŁANIE SKANERA WINDYKATORA <<<===
@@ -910,8 +1093,9 @@ gameTimers.weekly = setInterval(() => {
     }, BASE_DELAYS.weekly / speedMultiplier);
 
     // Pętla kwartalna (z bazy main.js - zawiera AI Banku Centralnego)
-    gameTimers.quarterly = setInterval(() => {
+    gameTimers.quarterly = setGameInterval(() => {
         if (isGamePaused) return;
+        noteQuarterForSpeedStats();
         reviewCompanyPlacements();
         processEliteExchangesQuarterly(); // Rubin / Szmaragd / Diament, spółki zależne (finance.js)
         payBondCoupons(); // kupony kwartalne (finance.js)
@@ -930,6 +1114,9 @@ gameTimers.weekly = setInterval(() => {
         advanceEconomyCycle(); // nowa faza koniunktury przed raportami
         advanceMacroQuarter(); // inflacja, bezrobocie, cykle sektorów, wybory (macro.js)
         processCityQuarterly(); // festyn raz w roku (city.js)
+        applyCrowdingPressureToWeak(); // D2: nasycony rynek — słabe spółki tanieją szybciej
+        processAwaitingListings(); // P1: startupy czekające na wolne miejsce na giełdzie
+        processWorkforceQuarter(); // 0.13: zatrudnienie, zadowolenie, związki i strajki przed raportami (workforce.js)
         processFinancialReports(); // zawiera koszty R&D, wynik kontraktów, pozycje okresu i dywidendy
         updateInfluence();
         updateCeoTenureAndAge(); // Zmieniona nazwa, ale to samo
@@ -971,7 +1158,7 @@ gameTimers.weekly = setInterval(() => {
     }, BASE_DELAYS.quarterly / speedMultiplier);
 
     // Pętla reputacji (powolny powrót do zera)
-    gameTimers.reputationDecay = setInterval(() => {
+    gameTimers.reputationDecay = setGameInterval(() => {
         if (isGamePaused) return;
         stocks.forEach(stock => {
             if (stock.reputation) {
@@ -990,39 +1177,39 @@ gameTimers.weekly = setInterval(() => {
     }, 180000 / speedMultiplier); // 3 minuty czasu gry
 
     // Pętla wydarzeń losowych
-    gameTimers.event = setInterval(() => {
+    gameTimers.event = setGameInterval(() => {
         if (isGamePaused) return;
         triggerMainMarketEventCycle();
     }, BASE_DELAYS.event / speedMultiplier);
 
     // Pętle dla obligacji (z bazy main.js)
-    gameTimers.stateBondIssuance = setInterval(() => {
+    gameTimers.stateBondIssuance = setGameInterval(() => {
         if (isGamePaused) return;
         issueStateBonds();
     }, 15 * 60 * 1000 / speedMultiplier); // 15 minut
 
-    gameTimers.otherBondIssuance = setInterval(() => {
+    gameTimers.otherBondIssuance = setGameInterval(() => {
         if (isGamePaused) return;
         issueNewBondOffer();
     }, 40 * 1000 / speedMultiplier); // Co 40 sekund
 
-    gameTimers.bondMaturityCheck = setInterval(() => {
+    gameTimers.bondMaturityCheck = setGameInterval(() => {
         if (isGamePaused) return;
         checkBondMaturities(5000); // 5 s czasu gry
     }, 5000 / speedMultiplier); // Co 5 sekund
 
     // Pętle dla zdarzeń CEO, półrocznych i rocznych
-    gameTimers.ceoEvent = setInterval(() => {
+    gameTimers.ceoEvent = setGameInterval(() => {
         if (isGamePaused) return;
         triggerCeoEvent();
     }, BASE_DELAYS.quarterly * 2 / speedMultiplier); // Co 2 kwartały
 
-    gameTimers.semiAnnual = setInterval(() => {
+    gameTimers.semiAnnual = setGameInterval(() => {
         if (isGamePaused) return;
         triggerSemiAnnualEvents();
     }, BASE_DELAYS.quarterly * 2 / speedMultiplier); // Co pół roku
 
-    gameTimers.yearly = setInterval(() => {
+    gameTimers.yearly = setGameInterval(() => {
         if (isGamePaused) return;
         updateCeoTenureAndAge();
         triggerYearlyCeoEvents();

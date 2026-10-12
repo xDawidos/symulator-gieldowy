@@ -4439,3 +4439,17 @@ body.dark-mode #startup-incubator-panel.panel, #startup-incubator-panel.panel { 
 .mentor-task { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; border-bottom: 1px solid var(--border-color, #30363d); padding: 8px 0; }
 .cc-exdiv { background: var(--bg-elevated, #1c2128); border-radius: 8px; padding: 6px 10px; }
 .stock-drawer-impact { color: var(--text-muted, #8b949e); padding: 4px 2px 0; }
+
+/* 0.13: Kraj (struktura klas, partie, ustawy) i Zatrudnienie */
+.society-classbar { display: flex; height: 18px; border-radius: 8px; overflow: hidden; background: var(--bg-elevated, #1c2128); margin: 6px 0 8px; }
+.society-seg { display: block; height: 100%; min-width: 2px; }
+.society-legend li { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; font-size: 13px; padding: 2px 0; }
+.society-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+.party-row { display: grid; grid-template-columns: minmax(110px, 1.2fr) 2fr auto; gap: 8px; align-items: center; font-size: 13px; margin: 4px 0; }
+.party-bar { display: block; height: 10px; border-radius: 5px; background: var(--bg-elevated, #1c2128); overflow: hidden; }
+.party-bar > span { display: block; height: 100%; }
+.law-pip { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 3px; border: 1px solid var(--border-color, #30363d); }
+.law-pip.on { background: var(--accent-info, #2563eb); border-color: transparent; }
+.labor-bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--bg-elevated, #1c2128); margin: 4px 0; }
+.labor-bar .labor { background: #d29922; } .labor-bar .ebitda { background: #3fb950; } .labor-bar .other { background: #8b949e; }
+@media (max-width: 700px) { .party-row { grid-template-columns: 1fr 1fr auto; } }

@@ -14,7 +14,8 @@
 // przysyła wszystko razem ze spamem, premium (płatna z portfela prywatnego) tylko ważne maile.
 // Szkolenie „Filtr antyspamowy” (adblock) przenosi spam do folderu Spam.
 
-const MAIL_LIMIT = 150;
+const MAIL_LIMIT = 100;          // zapis gry: skrzynka ograniczona do 100 najnowszych (było 150)
+const MAIL_HARD_LIMIT = 150;     // także przypięte decyzje — zapis gry mieści się w localStorage
 const MAIL_FOLDERS = ['inbox', 'starred', 'corporation', 'PULS', 'FLESZ', 'OBSER', 'spam'];
 const CORPORATION_SENDER = 'corporation';
 
@@ -108,7 +109,14 @@ function trimMailbox() {
                 if (!isPinnedMail(mailbox.messages[i]) && !mailbox.messages[i].starred) { index = i; break; }
             }
         }
-        if (index < 0) break; // same przypięte — skrzynka może chwilowo przekroczyć limit
+        // Same przypięte: najpierw odpadają najstarsze ważne bez akcji (decyzje z przyciskami zostają).
+        if (index < 0 && mailbox.messages.length > MAIL_LIMIT) {
+            for (let i = mailbox.messages.length - 1; i >= 0; i--) {
+                if (!mailbox.messages[i].action && !mailbox.messages[i].starred) { index = i; break; }
+            }
+        }
+        if (index < 0 && mailbox.messages.length > MAIL_HARD_LIMIT) index = mailbox.messages.length - 1; // twardy limit (zapis gry)
+        if (index < 0) break; // same decyzje z akcją — skrzynka może chwilowo przekroczyć limit
         mailbox.messages.splice(index, 1);
     }
 }
@@ -1145,6 +1153,7 @@ function triggerBankIPOEvent() {
     }
     const inactiveBanks = commercialBanks.filter(b => !b.isActive);
     if (inactiveBanks.length === 0) return;
+    if (typeof hasFreeListingSlot === 'function' && !hasFreeListingSlot()) return; // P1: twardy sufit spółek krajowych
     const bankToIPO = getRandomElement(inactiveBanks);
     const ipoValuation = bankToIPO.initialCapital * getRandomInRange(1.1, 1.5);
     const ipoSharePrice = getRandomInRange(50, 150);

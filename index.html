@@ -34,6 +34,11 @@
         <span class="nav-label">Miasto</span>
       </button>
 
+      <button class="sidebar-nav-btn" id="open-country-btn" onclick="openCountryPanel()">
+        <span class="nav-icon">👥</span>
+        <span class="nav-label">Kraj</span>
+      </button>
+
       <button class="sidebar-nav-btn" id="open-construction-btn" onclick="openConstructionSectorModal()">
         <span class="nav-icon">🏗️</span>
         <span class="nav-label">Budownictwo</span>
@@ -124,6 +129,8 @@
       <button class="speed-btn" data-speed="5" onclick="setGameSpeed(5)">x5</button>
       <button class="speed-btn debug-only" data-speed="10" onclick="setGameSpeed(10)" hidden>x10</button>
       <button class="speed-btn debug-only" data-speed="50" onclick="setGameSpeed(50)" hidden>x50</button>
+      <button class="speed-btn debug-only" data-speed="100" onclick="setGameSpeed(100)" hidden title="Prędkość testowa (bez zapisu prędkości)">x100</button>
+      <button class="speed-btn debug-only" data-speed="200" onclick="setGameSpeed(200)" hidden title="Prędkość testowa (bez zapisu prędkości)">x200</button>
     </div>
   </div>
 
@@ -207,34 +214,11 @@
     </div>
 
     <!-- Chipsy sektorów -->
-    <div class="sector-chips">
+    <div class="sector-chips" id="sector-chips">
       <span class="sector-chip owned-chip" onclick="toggleOwnedFilter(this)" title="Pokaż tylko spółki, które masz w funduszu lub na koncie prywatnym">⭐ Posiadane</span>
       <span class="sector-chip active" data-sector="all"
             onclick="setSectorChip(this,'all')">Wszystkie</span>
-      <span class="sector-chip" data-sector="Żywność"
-            onclick="setSectorChip(this,'Żywność')">Żywność</span>
-      <span class="sector-chip" data-sector="Gaming"
-            onclick="setSectorChip(this,'Gaming')">Gaming</span>
-      <span class="sector-chip" data-sector="Finanse"
-            onclick="setSectorChip(this,'Finanse')">Finanse</span>
-      <span class="sector-chip" data-sector="Technologia"
-            onclick="setSectorChip(this,'Technologia')">Technologia</span>
-      <span class="sector-chip" data-sector="Bankowość"
-            onclick="setSectorChip(this,'Bankowość')">Bankowość</span>
-      <span class="sector-chip" data-sector="Nieruchomości"
-            onclick="setSectorChip(this,'Nieruchomości')">Nieruchomości</span>
-      <span class="sector-chip" data-sector="Energia"
-            onclick="setSectorChip(this,'Energia')">Energia</span>
-      <span class="sector-chip" data-sector="Chemia"
-            onclick="setSectorChip(this,'Chemia')">Chemia</span>
-      <span class="sector-chip" data-sector="Przemysł"
-            onclick="setSectorChip(this,'Przemysł')">Przemysł</span>
-      <span class="sector-chip" data-sector="Medycyna"
-            onclick="setSectorChip(this,'Medycyna')">Medycyna</span>
-      <span class="sector-chip" data-sector="Budowlany"
-            onclick="setSectorChip(this,'Budowlany')">Budowlany</span>
-      <span class="sector-chip" data-sector="REIT"
-            onclick="setSectorChip(this,'REIT')">REIT</span>
+      <!-- 0.13.1 (B10): pozostałe chipy budowane z faktycznych sektorów spółek (renderSectorFilters) -->
     </div>
 
     <!-- Poziomy rynku jako taby -->
@@ -257,7 +241,9 @@
               onclick="setMarketLevel(this,'EMERALD')">🟢 Szmaragdowa</button>
       <button class="market-level-tab" data-level="DIAMOND"
               onclick="setMarketLevel(this,'DIAMOND')">💠 Diamentowa</button>
-      <button class="market-level-tab" id="open-dividend-tracker-btn" style="display: none;"
+      <button class="market-level-tab" data-level="INTERNET"
+              onclick="setMarketLevel(this,'INTERNET')" title="Rynki internetowe (XTD, PLU5 i nowe) i ich spółki">🌐 Internet</button>
+      <button class="market-level-tab" id="open-dividend-tracker-btn"
               onclick="openDividendTrackerModal()" title="Panel Analityka Dywidend">💰 Dywidendy</button>
     </div>
 
@@ -265,22 +251,6 @@
     <select id="sector-filter" style="display: none;"
             onchange="displayStocks(getCurrentInputValues())">
       <option value="all">Wszystkie sektory</option>
-      <option value="Żywność">Żywność</option>
-      <option value="Gaming">Gaming</option>
-      <option value="Finanse">Finanse</option>
-      <option value="Technologia">Technologia</option>
-      <option value="Bankowość">Bankowość</option>
-      <option value="Nieruchomości">Nieruchomości</option>
-      <option value="Energia">Energia</option>
-      <option value="Chemia">Chemia</option>
-      <option value="Przemysł">Przemysł</option>
-      <option value="Dobra konsumpcyjne">Dobra konsumpcyjne</option>
-      <option value="Usługi">Usługi</option>
-      <option value="Badania">Badania</option>
-      <option value="Turystyka">Turystyka</option>
-      <option value="Medycyna">Medycyna</option>
-      <option value="Budowlany">Budowlany</option>
-      <option value="REIT">Fundusze REIT</option>
     </select>
 
     <!-- Tabela uproszczona -->
@@ -334,6 +304,13 @@
       <input type="number" id="fund-emission-units" min="1" value="100" aria-label="Liczba JU do emisji">
       <button class="btn-secondary" onclick="handleFundEmission()">📥 Emisja JU</button>
     </div>
+    <label class="fund-open-subscriptions text-sm" title="Gdy włączone, zadowoleni i nowi klienci sami dokupują JU po NAV (nowe jednostki). Wyłączone: JU przybywa tylko przez Twoją emisję.">
+      <input type="checkbox" id="fund-open-subscriptions" onchange="setFundOpenSubscriptions(this.checked)"> Emisja ciągła (wpłaty klientów bez mojej emisji)
+    </label>
+    <details id="fund-flow-details" class="fund-flow-details">
+      <summary class="text-sm">👥 Dlaczego klienci odchodzą / przychodzą</summary>
+      <div id="fund-flow-reasons"></div>
+    </details>
 
     <!-- Wykres 4 okresów i porównanie z rywalami -->
     <div class="portfolio-section-header">Wyniki: 4 ostatnie okresy</div>
@@ -679,6 +656,7 @@
         <nav class="bank-tabs" role="tablist">
             <button class="bank-tab-btn active" data-tab="overview" onclick="switchStateTab('overview')">📊 Przegląd</button>
             <button class="bank-tab-btn" data-tab="macro" onclick="switchStateTab('macro')">📈 Makro</button>
+            <button class="bank-tab-btn" data-tab="country" onclick="switchStateTab('country')">👥 Kraj</button>
             <button class="bank-tab-btn" data-tab="markets" onclick="switchStateTab('markets')">🏛️ Rynki</button>
             <button class="bank-tab-btn" data-tab="oversight" onclick="switchStateTab('oversight')">⚖️ Nadzór</button>
             <button class="bank-tab-btn" data-tab="taxes" onclick="switchStateTab('taxes')">💰 Podatki</button>

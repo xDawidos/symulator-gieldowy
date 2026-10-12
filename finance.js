@@ -408,6 +408,7 @@ function seizeShares(account, symbol, quantity, institution) {
     quantity = Math.min(quantity, holding.shares);
     holding.shares -= quantity;
     holding.lockedShares = Math.max(0, Math.min(holding.lockedShares || 0, holding.shares));
+    if (account.portfolio === playerPortfolio && typeof notePlayerPositionLoss === 'function') notePlayerPositionLoss(symbol, quantity, `konfiskata akcji przez ${institution?.name || 'organy państwa'}`);
     if (holding.shares <= 0) delete account.portfolio[symbol];
     if (institution) {
         if (!institution.holdingPortfolio) institution.holdingPortfolio = {};
@@ -643,9 +644,10 @@ function buyStateBond(buyer, type, quantity) {
     offer.available -= quantity;
     governmentTreasury += 1000 * quantity;
 
-    const annual = type === 'shortTerm'
+    const deficitPremium = typeof getDeficitBondPremium === 'function' ? getDeficitBondPremium() : 0; // 0.13: długi deficyt podnosi rentowność
+    const annual = (type === 'shortTerm'
         ? offer.interest
-        : Math.max(0.01, marketVolatilityIndex / 100 + offer.interestBase);
+        : Math.max(0.01, marketVolatilityIndex / 100 + offer.interestBase)) + deficitPremium;
     const duration = type === 'shortTerm' ? 10 : type === 'mediumTerm' ? 25 : 45;
     const ownerId = buyer === 'player' ? 'player' : buyer.id;
     const template = { issuerName: 'Skarb Państwa', type: `Skarbowa (${type})`, faceValue: 1000, risk: 0, isStateBond: true };
@@ -815,12 +817,14 @@ function applyEliteBonuses(stock) {
 
 /** Nowa spółka zależna: kapitał od matki, te same badania, polityki i sektor; IPO na niższej giełdzie. */
 function foundSubsidiary(parent) {
+    if (typeof hasFreeListingSlot === 'function' && !hasFreeListingSlot()) return null; // P1: twardy sufit spółek krajowych
     const capital = Math.max(100000, Math.min(parent.cash * 0.1, getMarketCap(parent) * 0.05));
     if (parent.cash < capital) return null;
 
     let suffix = 1;
     let symbol;
     do { symbol = `${parent.symbol.slice(0, 3)}Z${suffix++}`; } while (stocks.some(s => s.symbol === symbol));
+    if (typeof purgeSymbolHolders === 'function') purgeSymbolHolders(symbol); // P3: symbol po usuniętej spółce — bez „duchów”
 
     const totalShares = 10000;
     const price = Math.round(capital / totalShares * 1.5 * 100) / 100;
@@ -952,6 +956,7 @@ function processSubsidiaryIndependence() {
     for (const child of stocks.filter(s => s.isSubsidiaryOf && Number.isFinite(s.parentStakePct))) {
         const parent = stocks.find(s => s.symbol === child.isSubsidiaryOf);
         if (!parent || parent.isBankrupt) { child.isSubsidiaryOf = null; continue; }
+        if (!hasFreeListingSlot()) continue; // P1: uwolniona zależna liczy się do limitu — przy pełnej giełdzie matka nie sprzedaje
         if (Math.random() > 0.03 || getMarketCap(child) < getMarketCap(parent) * 0.3) continue;
 
         const sold = child.parentStakePct * 0.5;
@@ -1383,6 +1388,7 @@ function closeEtf(etf, reason) {
     const holding = playerPortfolio[etf.symbol];
     if (holding) {
         playerCash += holding.shares * price;
+        if (typeof notePlayerPositionLoss === 'function') notePlayerPositionLoss(etf.symbol, holding.shares, 'zamknięcie ETF-u — rozliczenie po wartości aktywów', holding.shares * price);
         delete playerPortfolio[etf.symbol];
         showToast(`${etf.name} zostaje zamknięty — fundusz dostaje ${formatZl(holding.shares * price, 0)}.`, 'warning', 7000);
     }
@@ -1530,7 +1536,128 @@ function getStockMarket(stock) {
 }
 
 function getMarketLabel(id) {
-    return MARKET_OPERATOR_DEFS[id]?.short || id;
+    return getMarketDef(id)?.short || id;
+}
+
+// =================================================================================
+// 0.13.1 (D1): RYNKI INTERNETOWE — XTD, PLU5 i nowe rynki powstające w trakcie gry
+// Startup operatora ma gwarancję debiutu; po debiucie operator nie upada, dopóki ma ≥ 3 spółki.
+// Każdy rynek ma limit 8 spółek członkowskich (nie liczą się do limitu spółek krajowych).
+// Gracz może kupić jednorazową koncesję na rynek: handel jego spółkami bez prowizji.
+// =================================================================================
+
+const INTERNET_MEMBER_LIMIT = 8;
+const INTERNET_PROTECTION_MEMBERS = 3;
+const MAX_INTERNET_MARKETS = 4;
+const NEW_INTERNET_MARKET_CHANCE = 0.04;   // co kwartał, od 8. kwartału, gdy rynków < MAX_INTERNET_MARKETS
+const INTERNET_MARKET_POOL = [
+    { short: 'NETX', name: 'NetXchange', color: '#0ea5e9' }, { short: 'BRSN', name: 'Bursa.net', color: '#14b8a6' },
+    { short: 'TH24', name: 'TradeHub 24', color: '#f97316' }, { short: 'EGLD', name: 'eGiełda', color: '#a855f7' },
+    { short: 'KLIK', name: 'KlikMarket', color: '#ec4899' }, { short: 'CHMR', name: 'Chmura Kapitału', color: '#22c55e' }
+];
+
+/** Definicja rynku: stała (GPW, XTD, PLU5, Euronext) albo zapisana przy rynku powstałym w trakcie gry. */
+function getMarketDef(id) {
+    return MARKET_OPERATOR_DEFS[id] || (typeof marketOperators === 'object' && marketOperators ? marketOperators[id]?.def : null) || null;
+}
+
+function isInternetMarket(id) {
+    const def = getMarketDef(id);
+    return Boolean(def && !def.main && !def.dormantForever);
+}
+
+/** Spółka notowana na rynku internetowym (członek albo sam operator) — osobna zakładka i osobny limit. */
+function isInternetMarketStock(stock) {
+    return Boolean(stock && !stock.isBankrupt && isInternetMarket(getStockMarket(stock)));
+}
+
+function getInternetMarketIds() {
+    ensureMarketOperators();
+    return Object.keys(marketOperators).filter(id => isInternetMarket(id));
+}
+
+function getMarketMembers(operatorId) {
+    const operator = marketOperators?.[operatorId];
+    return stocks.filter(s => getStockMarket(s) === operatorId && !s.isBankrupt && !s.assetType && s.symbol !== operator?.symbol);
+}
+
+function hasInternetMemberSlot(operatorId) {
+    return getMarketMembers(operatorId).length < INTERNET_MEMBER_LIMIT;
+}
+
+/**
+ * Decyzja 2: spółki członkowskie składają się na ratunek operatora proporcjonalnie do kapitalizacji — każda najwyżej
+ * MEMBER_BAILOUT_CASH_SHARE swojej dodatniej gotówki (bez tworzenia pieniędzy). Zwraca zebraną kwotę.
+ */
+const MEMBER_BAILOUT_CASH_SHARE = 0.3;
+function fundMarketOperatorBailout(operatorStock, needed) {
+    const operatorId = operatorStock?.marketOperator;
+    if (!operatorId || !(needed > 0)) return 0;
+    const members = getMarketMembers(operatorId);
+    const totalCap = members.reduce((sum, member) => sum + Math.max(0, getMarketCapValue(member)), 0);
+    if (!(totalCap > 0)) return 0;
+    let raised = 0;
+    for (const member of members) {
+        const share = needed * Math.max(0, getMarketCapValue(member)) / totalCap;
+        const paid = Math.min(share, Math.max(0, Number(member.cash) || 0) * MEMBER_BAILOUT_CASH_SHARE);
+        if (!(paid > 0)) continue;
+        adjustCompanyCash(member, -paid);
+        adjustBalanceSheet(member, { assets: -paid, retainedEarnings: -paid });
+        raised += paid;
+    }
+    if (raised > 0) {
+        adjustCompanyCash(operatorStock, raised);
+        adjustBalanceSheet(operatorStock, { assets: raised, retainedEarnings: raised });
+    }
+    logEvent(`🛟 Spółki rynku ${getMarketLabel(operatorId)} składają się na ratunek operatora: ${formatZl(raised, 0)} z potrzebnych ${formatZl(needed, 0)}${raised < needed ? ' — ratunek niepełny, operator słabnie' : ''}.`, 'market');
+    return raised;
+}
+
+/** Operator chroniony przed upadkiem: rynek internetowy z co najmniej kilkoma spółkami. */
+function isProtectedMarketOperator(stock) {
+    return Boolean(stock?.marketOperator && isInternetMarket(stock.marketOperator) && getMarketMembers(stock.marketOperator).length >= INTERNET_PROTECTION_MEMBERS);
+}
+
+/** Nowy rynek internetowy w trakcie gry (startup operatora z puli nazw). */
+function spawnInternetMarket() {
+    ensureMarketOperators();
+    const used = new Set(Object.values(marketOperators).map(op => getMarketDef(op.id)?.short));
+    const pick = INTERNET_MARKET_POOL.find(item => !used.has(item.short));
+    if (!pick) return null;
+    const id = pick.short;
+    marketOperators[id] = { id, status: 'dormant', symbol: null, startupSymbol: null, sponsors: [], members: 0, commissionsTotal: 0,
+        def: { name: pick.name, short: pick.short, commission: Math.round(getRandomInRange(0.001, 0.0025) * 10000) / 10000, color: pick.color, internet: true } };
+    LISTING_FEE_FACTOR[id] = 0.6;
+    spawnOperatorStartup(marketOperators[id]);
+    return marketOperators[id];
+}
+
+// --- Koncesja gracza ---
+function getInternetConcessionCost(operatorId) {
+    const operatorStock = getOperatorStock(operatorId);
+    const cap = operatorStock ? getMarketCapValue(operatorStock) : 0;
+    return Math.round(Math.max(500, Math.min(50000, cap * 0.002)));
+}
+
+function hasInternetConcession(operatorId) {
+    return playerFund?.internetConcessions?.[operatorId] !== undefined; // wartość = kwartał zakupu (także 0)
+}
+
+function buyInternetConcession(operatorId) {
+    if (!playerFund || !isInternetMarket(operatorId)) return false;
+    if (hasInternetConcession(operatorId)) { showToast('Fundusz ma już koncesję na ten rynek.', 'default'); return false; }
+    const operatorStock = getOperatorStock(operatorId);
+    if (!operatorStock) { showToast('Rynek jeszcze nie działa — koncesję kupisz po debiucie operatora.', 'warning'); return false; }
+    const cost = getInternetConcessionCost(operatorId);
+    if (playerCash < cost) { showToast(`Koncesja kosztuje ${formatZl(cost, 0)} z gotówki funduszu.`, 'error'); return false; }
+    playerCash -= cost;
+    adjustCompanyCash(operatorStock, cost);
+    adjustBalanceSheet(operatorStock, { assets: cost, retainedEarnings: cost });
+    recordPayment('player-fund', operatorStock, cost, `Koncesja ${getMarketLabel(operatorId)}`);
+    if (!playerFund.internetConcessions) playerFund.internetConcessions = {};
+    playerFund.internetConcessions[operatorId] = typeof macro === 'object' ? macro.quarter : 0;
+    logEvent(`🔑 Fundusz kupuje koncesję na rynek ${getMarketLabel(operatorId)} za ${formatZl(cost, 0)} — handel jego spółkami bez prowizji.`, 'review');
+    return true;
 }
 
 /** Nowa gra (i migracja): stan operatorów + notowana spółka GPW. */
@@ -1548,6 +1675,7 @@ function initMarketOperators() {
 
 function ensureMarketOperators() {
     if (!marketOperators || !marketOperators.GPW) initMarketOperators();
+    for (const op of Object.values(marketOperators)) if (op?.def?.short && LISTING_FEE_FACTOR[op.id] === undefined) LISTING_FEE_FACTOR[op.id] = 0.6; // rynki z zapisu
     for (const id of Object.keys(MARKET_OPERATOR_DEFS)) if (!marketOperators[id]) marketOperators[id] = createMarketOperators()[id];
     return marketOperators;
 }
@@ -1593,10 +1721,12 @@ function createListedCompany({ name, symbol, sector, price, totalShares, exchang
     if (typeof generateCEO === 'function') generateCEO(stock);
     initializeFundamentals(stock, true);
     setCompanyDividendPolicy(stock, getRandomElement(['Growth', 'Balanced']));
+    if (typeof purgeSymbolHolders === 'function') purgeSymbolHolders(stock.symbol); // P3: symbol po usuniętej spółce — bez „duchów”
     return stock;
 }
 
 function spawnMarketMember(operatorId, reason) {
+    if (isInternetMarket(operatorId) ? !(hasInternetMemberSlot(operatorId) && hasFreeTotalListingSlot()) : !hasFreeListingSlot()) return null; // D1: limit spółek na rynek; P1: sufit krajowy i łączny
     const sectors = Object.keys(SECTOR_PROFILES).filter(s => !['Bankowość', 'Bankowość Komercyjna'].includes(s));
     const sector = [getRandomElement(sectors)];
     const base = generateNewStartup();
@@ -1618,7 +1748,7 @@ function spawnMarketMember(operatorId, reason) {
 // =================================================================================
 
 function spawnOperatorStartup(operator) {
-    const def = MARKET_OPERATOR_DEFS[operator.id];
+    const def = getMarketDef(operator.id);
     const startup = generateNewStartup();
     startup.name = def.name;
     startup.symbol = uniqueSymbol(def.short.toUpperCase());
@@ -1642,12 +1772,12 @@ function activateMarketOperator(startup) {
     operator.symbol = startup.symbol;
     startup.marketOperator = operator.id;
     startup.market = operator.id;
-    const count = getRandomIntInRange(5, 10);
-    // B5: na zatłoczonym rynku część miejsc zapełniają przenosiny z GPW zamiast nowych debiutów.
-    const fresh = Math.max(1, Math.round(count * getDebutFactor()));
+    // D1: rynek internetowy ma własny limit (INTERNET_MEMBER_LIMIT) — wliczają się sponsorzy z fazy startupu.
+    const count = Math.max(0, Math.min(getRandomIntInRange(5, 8), INTERNET_MEMBER_LIMIT - getMarketMembers(operator.id).length));
+    const fresh = Math.max(Math.min(1, count), Math.round(count * 0.7));
     for (let i = 0; i < fresh; i++) spawnMarketMember(operator.id, 'otwarcie nowego rynku');
     for (let i = fresh; i < count; i++) signExclusivity(operator, startup);
-    logEvent(`🏛️ ${MARKET_OPERATOR_DEFS[operator.id].name} debiutuje i otwiera własny rynek: ${fresh} nowych spółek${count > fresh ? `, ${count - fresh} przechodzi z GPW` : ''}!`, 'market');
+    logEvent(`🏛️ ${getMarketDef(operator.id).name} debiutuje i otwiera własny rynek internetowy: ${fresh} nowych spółek${count > fresh ? `, ${count - fresh} przechodzi z GPW` : ''}!`, 'market');
 }
 
 /** Upadek startupu-operatora (wołane z removeStartup). */
@@ -1662,6 +1792,7 @@ function buyOutAllHolders(stock, price) {
     let paid = 0;
     const fund = playerPortfolio[symbol];
     if (fund?.shares > 0) {
+        if (typeof notePlayerPositionLoss === 'function') notePlayerPositionLoss(symbol, fund.shares, 'przymusowy wykup wszystkich akcjonariuszy (zamknięcie rynku / wycofanie z obrotu)', fund.shares * price);
         playerCash += fund.shares * price;
         paid += fund.shares * price;
         recordPayment(`external:${symbol}`, 'player-fund', fund.shares * price, `Wykup akcji ${symbol}`);
@@ -1702,7 +1833,7 @@ function delistStockAtPrice(stock, price) {
 }
 
 function closeMarketOperator(operator, reason) {
-    if (!operator || operator.status === 'closed' || MARKET_OPERATOR_DEFS[operator.id]?.main) return;
+    if (!operator || operator.status === 'closed' || getMarketDef(operator.id)?.main) return;
     const members = stocks.filter(s => getStockMarket(s) === operator.id && s.marketOperator !== operator.id);
     for (const stock of members) delistStockAtPrice(stock, stock.price);
     operator.status = 'closed';
@@ -1725,8 +1856,9 @@ function chargeMarketCommission(stock, value, payer) {
     const operatorId = getStockMarket(stock);
     const operatorStock = getOperatorStock(operatorId);
     if (!operatorStock || operatorStock === stock) return 0;
-    const fee = value * MARKET_OPERATOR_DEFS[operatorId].commission;
+    const fee = value * (getMarketDef(operatorId)?.commission || 0);
     if (payer === 'player') {
+        if (hasInternetConcession(operatorId)) return 0; // D1: koncesja — gracz handluje bez prowizji
         playerCash -= fee;
         recordPayment('player-fund', operatorStock, fee, `Prowizja ${getMarketLabel(operatorId)}`);
     } else if (payer && Number.isFinite(payer.cash)) {
@@ -1745,8 +1877,11 @@ function chargeMarketCommission(stock, value, payer) {
 function processMarketsQuarterly() {
     ensureMarketOperators();
     const quarter = typeof macro === 'object' ? macro.quarter : 0;
+    // D1: kolejne rynki internetowe w trakcie gry.
+    const liveInternet = Object.values(marketOperators).filter(op => isInternetMarket(op.id) && ['startup', 'active'].includes(op.status)).length;
+    if (quarter >= 8 && liveInternet < MAX_INTERNET_MARKETS && hasFreeTotalListingSlot() && Math.random() < NEW_INTERNET_MARKET_CHANCE) spawnInternetMarket(); // P1: łączny sufit
     for (const operator of Object.values(marketOperators)) {
-        const def = MARKET_OPERATOR_DEFS[operator.id];
+        const def = getMarketDef(operator.id);
         operator.members = stocks.filter(s => getStockMarket(s) === operator.id && s.marketOperator !== operator.id && !s.assetType).length;
 
         if (operator.status === 'dormant' && quarter >= 4 && Math.random() < OPERATOR_SPAWN_CHANCE) {
@@ -1754,14 +1889,16 @@ function processMarketsQuarterly() {
         } else if (operator.status === 'startup') {
             const startup = stocks.find(s => s.symbol === operator.startupSymbol);
             if (!startup) { closeMarketOperator(operator, 'startup operatora zniknął'); continue; }
-            if (Math.random() < OPERATOR_SPONSOR_CHANCE * getDebutFactor()) {
+            if (Math.random() < OPERATOR_SPONSOR_CHANCE) { // D1: rynki internetowe mają własny limit, nie krajowy
                 const sponsor = spawnMarketMember(operator.id, `sponsor ${def.name}`);
+                if (!sponsor) continue;
                 operator.sponsors.push(sponsor.symbol);
                 startup.successChance = Math.min(0.95, startup.successChance + 0.05);
             }
         } else if (operator.status === 'active') {
             const operatorStock = getOperatorStock(operator.id);
             if (!operatorStock) { if (!def.main) closeMarketOperator(operator, 'upadek operatora'); continue; }
+            if (isProtectedMarketOperator(operatorStock) && (Number(operatorStock.financialHealth) || 0) < -2) operatorStock.financialHealth = -1; // D1: chroniony operator
             collectListingFees(operator, operatorStock);
             investInMembers(operator, operatorStock);
             if (!def.main && Math.random() < OPERATOR_EXCLUSIVITY_CHANCE) signExclusivity(operator, operatorStock);
@@ -1797,6 +1934,7 @@ function investInMembers(operator, operatorStock) {
 
 /** Umowa na wyłączność: spółka z GPW przechodzi na rynek operatora (premia za podpis). */
 function signExclusivity(operator, operatorStock) {
+    if (isInternetMarket(operator.id) && !hasInternetMemberSlot(operator.id)) return null; // D1: limit spółek rynku
     const candidates = stocks.filter(s => getStockMarket(s) === 'GPW' && !s.marketOperator && !s.assetType && !s.isBankrupt && !s.isStateOwned
         && ['BRONZE', 'SILVER'].includes(s.exchange));
     if (!candidates.length) return null;
@@ -1809,7 +1947,7 @@ function signExclusivity(operator, operatorStock) {
         adjustBalanceSheet(stock, { assets: bonus, retainedEarnings: bonus });
     }
     stock.market = operator.id;
-    logEvent(`✍️ ${stock.name} podpisuje umowę na wyłączność z ${MARKET_OPERATOR_DEFS[operator.id].name} i przechodzi na rynek ${getMarketLabel(operator.id)}.`, 'market');
+    logEvent(`✍️ ${stock.name} podpisuje umowę na wyłączność z ${getMarketDef(operator.id).name} i przechodzi na rynek ${getMarketLabel(operator.id)}.`, 'market');
     return stock;
 }
 
@@ -1820,7 +1958,14 @@ function signExclusivity(operator, operatorStock) {
 function getListingMoveTargets(stock) {
     if (!stock || stock.assetType || stock.marketOperator || stock.isStateOwned || getFundStakePct(stock) <= 0.5) return [];
     ensureMarketOperators();
-    return Object.keys(LISTING_MOVE_PRICE_EFFECT).filter(id => id !== getStockMarket(stock) && marketOperators[id]?.status === 'active');
+    const fromInternet = isInternetMarketStock(stock);
+    return Object.keys(marketOperators).filter(id => id !== getStockMarket(stock) && marketOperators[id]?.status === 'active' && (id in LISTING_MOVE_PRICE_EFFECT || isInternetMarket(id))
+        && (isInternetMarket(id) ? hasInternetMemberSlot(id) : (!fromInternet || hasFreeListingSlot()))); // P2: także nowe rynki internetowe; P1: limity rynków
+}
+
+/** Efekt ceny przy przenosinach: rynki internetowe spoza listy jak XTD/PLU5. */
+function getListingMovePriceEffect(marketId) {
+    return LISTING_MOVE_PRICE_EFFECT[marketId] ?? (isInternetMarket(marketId) ? -0.03 : 0);
 }
 
 function moveListing(symbol, marketId) {
@@ -1835,9 +1980,9 @@ function moveListing(symbol, marketId) {
     const from = getStockMarket(stock);
     stock.market = marketId;
     stock.listingMovedQuarter = quarter;
-    const effect = LISTING_MOVE_PRICE_EFFECT[marketId];
+    const effect = getListingMovePriceEffect(marketId);
     applyPriceEffect(symbol, effect, effect >= 0 ? 'positive' : 'negative', 'company');
-    logEvent(`🔀 ${stock.name} przenosi notowania z ${getMarketLabel(from)} na ${getMarketLabel(marketId)} (prowizja ${(MARKET_OPERATOR_DEFS[marketId].commission * 100).toFixed(2)}%, opłata za notowanie ×${LISTING_FEE_FACTOR[marketId]}).`, 'market');
+    logEvent(`🔀 ${stock.name} przenosi notowania z ${getMarketLabel(from)} na ${getMarketLabel(marketId)} (prowizja ${((getMarketDef(marketId)?.commission || 0) * 100).toFixed(2)}%, opłata za notowanie ×${LISTING_FEE_FACTOR[marketId] ?? 1}).`, 'market');
     return true;
 }
 
@@ -1850,7 +1995,7 @@ function renderMarketsPanel() {
     const statusLabel = { active: '🟢 aktywny', startup: '🧪 startup w inkubatorze', dormant: '⏳ jeszcze nie istnieje', closed: '🔒 zamknięty', inactive: '⏸️ nieaktywny — wkrótce' };
     return `<p class="bank-lead">Operatorzy rynków pobierają prowizję od każdej transakcji na swoim rynku (płaci też fundusz) i opłatę za notowanie, inwestują w spółki członkowskie i podpisują umowy na wyłączność. Zamknięcie operatora zdejmuje jego spółki z notowań — posiadacze są rozliczani po ostatniej cenie.</p>
         <div class="bank-grid">${Object.values(marketOperators).filter(operator => operator.status === 'active').map(operator => { // tylko rynki notowane na giełdzie
-            const def = MARKET_OPERATOR_DEFS[operator.id];
+            const def = getMarketDef(operator.id) || { name: operator.id, commission: 0, color: '#888' };
             const stock = operator.symbol ? stocks.find(s => s.symbol === operator.symbol) : null;
             const startup = operator.startupSymbol ? stocks.find(s => s.symbol === operator.startupSymbol && s.assetType === 'Startup') : null;
             return `<article class="bank-card market-card" style="border-top: 3px solid ${def.color}">

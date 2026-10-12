@@ -306,20 +306,14 @@ function buyStock(symbol, quantity) {
         return;
     }
 
-    let totalCost = stockToBuy.price * quantity;
-    const charismaLevel = getSkillLevel('sharkCharisma');
-    if (charismaLevel > 0) {
-        let charismaBonus = 0;
-        if (charismaLevel === 1) charismaBonus = 0.005;
-        if (charismaLevel === 2) charismaBonus = 0.01;
-        if (charismaLevel === 3) charismaBonus = 0.015;
-        totalCost *= (1 - charismaBonus);
-    }
-
-    if (playerCash < totalCost) {
-        showToast("Nie masz wystarczająco gotówki, aby dokonać tego zakupu!");
+    // 0.13.1 (B2): koszt z prowizją operatora rynku liczony przed transakcją — zakup nigdy nie daje ujemnej gotówki.
+    const quote = getBuyQuote(stockToBuy, quantity, 'fund');
+    const totalCost = quote.cost;
+    if (playerCash < quote.total) {
+        showToast(`Nie masz wystarczająco gotówki: ${formatZl(quote.total)} z prowizją, maksymalnie ${getMaxBuyQuantity(stockToBuy, 'fund')} akcji.`);
         return;
     }
+    const tradeValue = stockToBuy.price * quantity; // podstawa prowizji: cena przed wpływem zlecenia
 
     // Transakcja
     playerCash -= totalCost;
@@ -353,7 +347,7 @@ function buyStock(symbol, quantity) {
     }
 
     if (typeof onFundTrade === 'function') onFundTrade(stockToBuy, quantity, 'buy'); // relacje z botami (relations.js)
-    if (typeof chargeMarketCommission === 'function') chargeMarketCommission(stockToBuy, quantity * stockToBuy.price, 'player'); // prowizja operatora rynku
+    if (typeof chargeMarketCommission === 'function') chargeMarketCommission(stockToBuy, tradeValue, 'player'); // prowizja operatora rynku (ujęta w quote)
 
     // Reputacja za duży pakiet
     const playerShares = playerPortfolio[symbol]?.shares || 0;
@@ -620,13 +614,16 @@ function processPoolInvestments() {
         return; // Nie inwestuj, jeśli w puli jest za mało środków
     }
 
-    const availableStartups = stocks.filter(s => s.assetType === 'Startup' && s.stage === 'funding');
+    const availableStartups = stocks.filter(s => s.assetType === 'Startup' && s.stage === 'funding' && getStartupFundingGap(s) >= 1);
     if (availableStartups.length === 0) {
         return; // Brak celów inwestycyjnych
     }
 
     const targetStartup = getRandomElement(availableStartups);
-    const investmentAmount = investmentPool.totalFunds;
+    // 0.13.1 (B6): pula dokłada najwyżej brakującą kwotę celu; reszta zostaje w puli (proporcjonalnie do wkładów).
+    const investmentAmount = Math.min(investmentPool.totalFunds * (targetStartup.operatorStartup ? 1 : getStartupFundingFactor()), getStartupFundingGap(targetStartup)); // D2: mniejsze rundy na nasyconym rynku
+    const investedShare = investmentAmount / investmentPool.totalFunds;
+    const invested = Object.fromEntries(Object.entries(investmentPool.contributors).map(([id, amount]) => [id, amount * investedShare]));
 
     // "Inwestujemy" w imieniu puli
     targetStartup.currentFunding += investmentAmount;
@@ -637,14 +634,23 @@ function processPoolInvestments() {
     }
     targetStartup.poolInvestors.push({
         amount: investmentAmount,
-        contributors: { ...investmentPool.contributors } // Kopia obecnych współtwórców
+        contributors: invested // wkłady użyte w tej rundzie
     });
 
-    logEvent(`[PULA] 💰 Pula inwestycyjna zainwestowała ${investmentAmount.toFixed(2)} PLN w ${targetStartup.name}!`);
+    logEvent(`[PULA] 💰 Pula inwestycyjna zainwestowała ${investmentAmount.toFixed(2)} PLN w ${targetStartup.name}${investedShare < 1 ? ` (brakowało tyle do celu; w puli zostaje ${(investmentPool.totalFunds - investmentAmount).toFixed(2)} PLN)` : ''}!`);
 
-    // Resetujemy pulę
-    investmentPool.totalFunds = 0;
-    investmentPool.contributors = {};
+    // Pomniejszamy pulę o zainwestowaną część.
+    investmentPool.totalFunds -= investmentAmount;
+    for (const id of Object.keys(investmentPool.contributors)) {
+        investmentPool.contributors[id] -= invested[id];
+        if (investmentPool.contributors[id] < 0.01) delete investmentPool.contributors[id];
+    }
+    if (investmentPool.totalFunds < 0.01) { investmentPool.totalFunds = 0; investmentPool.contributors = {}; }
+}
+
+/** Brakująca kwota do celu zbiórki startupu. */
+function getStartupFundingGap(startup) {
+    return Math.max(0, (Number(startup?.fundingGoal) || 0) - (Number(startup?.currentFunding) || 0));
 }
 
 
@@ -1228,7 +1234,9 @@ function makeOfferToState() {
 
     // Transakcja udana
     playerCash -= totalCost;
+    if (!playerPortfolio[symbol]) playerPortfolio[symbol] = { shares: 0, avgPrice: offerPrice, assetType: 'stock' };
     playerPortfolio[symbol].shares += quantity;
+    stock.sharesHeld += quantity; // akcje z pakietu państwa wchodzą do obrotu u funduszu (niezmiennik: obrót = posiadacze)
     
     const newOwnedByState = stateShares - quantity;
     stock.stateOwnershipPct = newOwnedByState / stock.totalShares;
@@ -1389,7 +1397,9 @@ const CLIENT_TYPES = {
     rich:        { key: 'rich',        label: 'Bogaty',     icon: '💎', patience: 0.8,  volAversion: 0.8, chase: 0.8, loyalty: 0.5, size: [2500, 9000], buyBias: 0.9, secondaryBias: 0.6, feeSensitivity: 0.2, trustNeed: 0,   panic: false },
     miser:       { key: 'miser',       label: 'Sknera',     icon: '🪙', patience: 0.6,  volAversion: 1.0, chase: 0.6, loyalty: 0.4, size: [150, 700],   buyBias: 0.3, secondaryBias: 0.9, feeSensitivity: 1.5, trustNeed: 5,   panic: false },
     institution: { key: 'institution', label: 'Instytucja', icon: '🏛️', patience: 0.5,  volAversion: 0.8, chase: 1.0, loyalty: 0.3, size: [2000, 6000], buyBias: 0.5, secondaryBias: 0.5, feeSensitivity: 0.5, trustNeed: 0,   panic: false, comparesRivals: true },
-    investor:    { key: 'investor',    label: 'Inwestor',   icon: '🐋', patience: 0.6,  volAversion: 0.6, chase: 1.2, loyalty: 0.4, size: [2000, 10000], buyBias: 0.7, secondaryBias: 0.8, feeSensitivity: 0.4, trustNeed: 0,  panic: false, comparesRivals: true }
+    investor:    { key: 'investor',    label: 'Inwestor',   icon: '🐋', patience: 0.6,  volAversion: 0.6, chase: 1.2, loyalty: 0.4, size: [2000, 10000], buyBias: 0.7, secondaryBias: 0.8, feeSensitivity: 0.4, trustNeed: 0,  panic: false, comparesRivals: true },
+    // 0.13: odchodzi, gdy spółki z udziałem funduszu > 10% mają niezadowoloną załogę albo szarą strefę (litera S w ESG).
+    ethical:     { key: 'ethical',     label: 'Etyczny',    icon: '🌱', patience: 0.6,  volAversion: 0.8, chase: 0.6, loyalty: 0.5, size: [500, 2500],  buyBias: 0.6, secondaryBias: 0.6, feeSensitivity: 0.3, trustNeed: 0,   panic: false, ethical: true }
 };
 
 const CLIENT_FIRST_NAMES = ['Anna', 'Piotr', 'Maria', 'Tomasz', 'Ewa', 'Jan', 'Kasia', 'Marek', 'Zofia', 'Adam', 'Halina', 'Krzysztof', 'Agata', 'Paweł', 'Irena'];
@@ -1719,6 +1729,10 @@ function payPerformanceBonus(period) {
 }
 
 /** Docelowe zaufanie: wyniki 4 ostatnich okresów (i bieżącego) vs GIG, zmienność, obsunięcie, emisje. */
+const TRUST_TARGET_FLOOR = 15;      // 0.13.1 (B12): dolny próg celu zaufania
+const TRUST_GAIN_BONUS_MAX = 10;    // dodatni wynik okresu (+150 pkt × zwrot, do +10)
+const TRUST_CALM_BONUS = 5;         // okres bez wymuszonej sprzedaży i z obsunięciem < 5%
+
 function computeTrustTarget() {
     const periods = playerFund.periods.slice(-FUND_PERIODS_SHOWN);
     const current = playerFund.current;
@@ -1745,8 +1759,12 @@ function computeTrustTarget() {
     score -= extraEmissions * 8;
     // Klienci porównują wynik z lokatą i inflacją (macro.js).
     if (typeof getMacroTrustPenalty === 'function') score -= getMacroTrustPenalty(partial.fundReturn, current.elapsedMs);
+    // 0.13.1 (B12): droga powrotu — zysk w bieżącym okresie (nawet poniżej GIG) i spokojny czas odbudowują zaufanie,
+    // a cel nigdy nie spada poniżej progu, z którego da się wyjść dobrymi wynikami.
+    score += Math.min(TRUST_GAIN_BONUS_MAX, Math.max(0, partial.fundReturn) * 150);
+    if (current.forcedSales === 0 && current.maxDrawdown < 0.05) score += TRUST_CALM_BONUS * partial.weight;
 
-    return Math.max(0, Math.min(100, score));
+    return Math.max(TRUST_TARGET_FLOOR, Math.min(100, score));
 }
 
 /** Co tydzień gry: opłata za zarządzanie, zaufanie, decyzje klientów, zdarzenia. */
@@ -1849,6 +1867,38 @@ function redeemClientUnits(client, units) {
     return paid;
 }
 
+/**
+ * 0.13.1 (B4): każde zmniejszenie pozycji funduszu bez ręcznej sprzedaży (umorzenia, zastaw, konfiskata,
+ * wykup, bankructwo, fuzja) zostawia ślad z przyczyną: dziennik pozycji, wpis w poczcie korporacji, powiadomienie.
+ */
+function notePlayerPositionLoss(symbol, quantity, reason, value = null) {
+    if (!(quantity > 0)) return;
+    if (playerFund) {
+        if (!Array.isArray(playerFund.positionLog)) playerFund.positionLog = [];
+        playerFund.positionLog.unshift({ symbol, quantity: Math.round(quantity), reason, value, quarter: typeof macro === 'object' ? macro.quarter : 0 });
+        if (playerFund.positionLog.length > 30) playerFund.positionLog.length = 30;
+    }
+    const text = `📉 Twoje akcje ${symbol}: −${Math.round(quantity).toLocaleString('pl-PL')} szt. bez Twojej decyzji — ${reason}${value ? ` (${formatZl(value, 0)})` : ''}.`;
+    logEvent(text, 'warning');
+    if (typeof pushNotification === 'function') pushNotification(text, null);
+}
+
+/**
+ * 0.13.1 (B5, decyzja „stabilność funduszu”): emisja ciągła (wpłaty klientów po NAV poza emisją gracza)
+ * domyślnie OTWARTA; gracz może ją zamknąć przełącznikiem — wtedy JU przybywa tylko przez jego emisję.
+ */
+function isFundOpenForSubscriptions() {
+    return Boolean(playerFund) && playerFund.openSubscriptions !== false;
+}
+
+function setFundOpenSubscriptions(open) {
+    if (!playerFund) return false;
+    playerFund.openSubscriptions = Boolean(open);
+    showToast(open ? '📥 Emisja ciągła otwarta: zadowoleni i nowi klienci mogą dokupować JU po NAV.' : '🔒 Emisja ciągła zamknięta: nowe JU tylko przez Twoją emisję.', 'default', 5000);
+    if (typeof refreshFundViews === 'function') refreshFundViews();
+    return true;
+}
+
 /** Wymuszona sprzedaż: największe pozycje, z dodatkową stratą na cenie i spadkiem zaufania. */
 function forceLiquidation(amountNeeded) {
     let needed = amountNeeded;
@@ -1874,7 +1924,7 @@ function forceLiquidation(amountNeeded) {
         needed -= proceeds;
 
         playerFund.current.forcedSales++;
-        logEvent(`⚠️ Wymuszona sprzedaż ${quantity} szt. ${symbol} na umorzenia klientów.`, 'review');
+        notePlayerPositionLoss(symbol, quantity, 'wymuszona sprzedaż: klienci umarzają JU, a w funduszu brakuje gotówki (trzymaj zapas gotówki)', proceeds);
     }
 
     if (playerFund.current.forcedSales > 0) playerFund.trust = Math.max(0, playerFund.trust - 2);
@@ -1958,6 +2008,7 @@ function issueFundUnits(requestedUnits, options = {}) {
     playerFund.units += raised / nav;
     current.inflow += raised;
     recordPayment('external:klienci', 'player-fund', raised, 'Emisja JU');
+    if (typeof noteFundFlow === 'function') noteFundFlow('in', 'emission', raised, raised / nav); // B5: panel przyczyn
 
     logEvent(`📥 Emisja: sprzedano ${(raised / nav).toFixed(1)} z ${requested} JU po ${nav.toFixed(2)} zł (${raised.toFixed(2)} zł, nowych klientów: ${newClients.length}).`, 'review');
     return { issued: raised / nav, raised, newClients: newClients.length };
@@ -2029,6 +2080,41 @@ function checkCompliance(symbol) {
         logEvent(`🚨 COMPLIANCE: wykryto prywatne transakcje przed transakcjami funduszu (${symbol}). Kara ${paid.toFixed(2)} zł, wpis w CV.`, 'error');
         if (typeof showToast === 'function') showToast('Kontrola compliance! Kara i wpis w CV.', 'error', 6000);
     }
+}
+
+/** Rabat „Charyzma rekina” przy zakupach funduszu. */
+function getCharismaDiscount() {
+    return [0, 0.005, 0.01, 0.015][getSkillLevel('sharkCharisma')] || 0;
+}
+
+/** Stawka prowizji operatora rynku dla zakupu przez fundusz (0, gdy rynek nie pobiera). */
+function getBuyCommissionRate(stock) {
+    if (typeof marketOperators === 'undefined' || !marketOperators || typeof getStockMarket !== 'function' || typeof getOperatorStock !== 'function') return 0;
+    const operatorId = getStockMarket(stock);
+    const operatorStock = getOperatorStock(operatorId);
+    if (!operatorStock || operatorStock === stock) return 0;
+    if (typeof hasInternetConcession === 'function' && hasInternetConcession(operatorId)) return 0; // D1: koncesja
+    return Number(getMarketDef(operatorId)?.commission) || 0;
+}
+
+/** 0.13.1 (B1/B2): pełny koszt zakupu — cena (z rabatem), prowizja, razem. */
+function getBuyQuote(stock, quantity, account = activeTradingAccount) {
+    const value = (Number(stock?.price) || 0) * Math.max(0, quantity);
+    if (account === 'private') return { cost: value, fee: 0, total: value };
+    const cost = value * (1 - getCharismaDiscount());
+    const fee = value * getBuyCommissionRate(stock);
+    return { cost, fee, total: cost + fee };
+}
+
+/** Największa liczba akcji do kupienia: min(dostępne w obrocie, gotówka / koszt jednej akcji z prowizją). */
+function getMaxBuyQuantity(stock, account = activeTradingAccount) {
+    if (!stock || !(stock.price > 0)) return 0;
+    const cash = account === 'private' ? Number(playerWallet?.cash) || 0 : Number(playerCash) || 0;
+    const unit = getBuyQuote(stock, 1, account).total;
+    const byCash = unit > 0 ? Math.floor(cash / unit + 1e-9) : 0;
+    let quantity = Math.max(0, Math.min(getAvailableShares(stock), byCash));
+    while (quantity > 0 && getBuyQuote(stock, quantity, account).total > cash) quantity--; // zaokrąglenia
+    return quantity;
 }
 
 function buyStockPrivate(symbol, quantity) {
@@ -2223,6 +2309,7 @@ function createBotFund(startCash) {
 
 function getBotFundNav(fund) {
     let value = Math.max(0, fund.cash);
+    for (const amount of Object.values(fund.startups || {})) value += Number(amount) || 0; // 0.13.1 (B7): udziały w startupach po koszcie
     for (const symbol in fund.portfolio) {
         const stock = stocks.find(s => s.symbol === symbol);
         if (stock) value += stock.price * fund.portfolio[symbol].shares;
@@ -2393,6 +2480,25 @@ function runManagerTrading(manager) {
 }
 
 /** Co tydzień: handel, opłaty do budżetu, napływy/odpływy klientów botów wg zaufania. */
+/** 0.13.1 (B7): fundusze kolegów finansują startupy (do 1% aktywów, najwyżej brakującą kwotę celu). */
+function botFundInvestInStartups(manager) {
+    const fund = manager.fund;
+    if (!(Math.random() < 0.08)) return 0;
+    const candidates = stocks.filter(s => s.assetType === 'Startup' && s.stage === 'funding' && getStartupFundingGap(s) >= 100);
+    const startup = candidates.sort((a, b) => (b.successChance || 0) - (a.successChance || 0))[Math.floor(Math.random() * Math.min(3, candidates.length))];
+    if (!startup) return 0;
+    const amount = Math.floor(Math.min(getStartupFundingGap(startup), getBotFundAssets(fund) * 0.01 * getStartupFundingFactor(), fund.cash * 0.2)); // D2
+    if (!(amount >= 100)) return 0;
+    fund.cash -= amount;
+    if (!fund.startups) fund.startups = {};
+    fund.startups[startup.symbol] = (fund.startups[startup.symbol] || 0) + amount;
+    startup.currentFunding += amount;
+    const label = `Fundusz ${manager.name}`;
+    startup.investors[label] = (startup.investors[label] || 0) + amount;
+    startup.successChance = Math.min(1, (startup.successChance || 0) + amount / Math.max(1, startup.fundingGoal) * 0.05);
+    return amount;
+}
+
 function processCorporationWeekly() {
     if (!corporation) return;
 
@@ -2413,6 +2519,8 @@ function processCorporationWeekly() {
                 playerWallet.cash += playerShare;
             }
         }
+
+        botFundInvestInStartups(manager);
 
         // Zaufanie i przepływy klientów (uproszczony model klientów botów).
         const nav = getBotFundNav(fund);
@@ -2511,6 +2619,36 @@ function getDiversificationStats() {
     return { count: positions.length, maxShare: positions.length ? Math.max(...positions) : 0 };
 }
 
+/** 0.13: powód niezadowolenia klientów Etycznych (null = brak). */
+function getFundEthicsIssue() {
+    if (typeof stocks === 'undefined') return null;
+    const big = stocks.filter(s => s.workforce && !s.isBankrupt && getFundStakePct(s) > 0.1);
+    const caught = big.find(s => Number.isFinite(s.workforce.greyCaughtQuarter) && (macro?.quarter ?? 0) - s.workforce.greyCaughtQuarter <= 4);
+    if (caught) return `w portfelu jest ${caught.name}, złapana na szarej strefie`;
+    if (big.length && typeof getAverageSatisfaction === 'function' && getAverageSatisfaction(big) < 45) return 'spółki z dużym udziałem funduszu źle traktują pracowników';
+    return null;
+}
+
+/** Średnie zadowolenie pracowników w spółkach portfela (ważone wartością pozycji). */
+function getPortfolioSatisfaction() {
+    let sum = 0, weight = 0;
+    for (const s of stocks) {
+        const shares = playerPortfolio[s.symbol]?.shares || 0;
+        if (!s.workforce || shares <= 0 || s.isBankrupt) continue;
+        sum += s.workforce.satisfaction * shares * s.price;
+        weight += shares * s.price;
+    }
+    return weight > 0 ? sum / weight : null;
+}
+
+/** Strajk w spółce z udziałem funduszu > 20% (cel korporacji). */
+function noteStrikeForGoals(stock) {
+    if (playerPortfolio?.[stock.symbol]?.shares > 0) playerPortfolio[stock.symbol].heldThroughStrike = true; // Mentor: przetrwany strajk
+    if (!corporation || getFundStakePct(stock) <= 0.2) return;
+    const goals = ensureCorporateGoals();
+    if (goals) goals.progress.strike = stock.symbol;
+}
+
 const CORPORATE_GOAL_POOL = {
     board: {
         label: 'Miejsce w radzie nadzorczej w 2 spółkach',
@@ -2542,6 +2680,19 @@ const CORPORATE_GOAL_POOL = {
         progress: () => { const d = getDiversificationStats(); return Math.min(1, d.count / 6) * (d.maxShare > 0.25 ? 0.5 : 1); },
         check: () => { const d = getDiversificationStats(); return d.count >= 6 && d.maxShare <= 0.25; }
     },
+    noStrikes: {
+        label: 'Żadna spółka z udziałem funduszu > 20% nie strajkuje',
+        value: goals => goals.progress.strike ? `strajk: ${goals.progress.strike}` : 'brak strajków',
+        progress: goals => goals.progress.strike ? 0 : 1,
+        check: goals => !goals.progress.strike
+    },
+    satisfaction: {
+        label: 'Średnie zadowolenie pracowników w portfelu ≥ 55',
+        available: () => (playerFund?.clients || []).some(client => client.type === 'ethical'),
+        value: () => { const v = getPortfolioSatisfaction(); return v === null ? 'brak spółek' : `${v.toFixed(0)}/100`; },
+        progress: () => { const v = getPortfolioSatisfaction(); return v === null ? 0 : Math.min(1, v / 55); },
+        check: () => (getPortfolioSatisfaction() ?? 0) >= 55
+    },
     dividends: {
         label: 'Dywidendy z portfela ≥ 2% aktywów',
         value: goals => `${formatZl(goals.progress.dividends || 0, 0)} / ${formatZl(getFundAssets() * 0.02, 0)}`,
@@ -2552,7 +2703,7 @@ const CORPORATE_GOAL_POOL = {
 
 /** Zarząd przydziela 2 losowe cele na cykl oceny. */
 function assignCorporateGoals() {
-    const ids = Object.keys(CORPORATE_GOAL_POOL).sort(() => Math.random() - 0.5).slice(0, 2);
+    const ids = Object.keys(CORPORATE_GOAL_POOL).filter(id => !CORPORATE_GOAL_POOL[id].available || CORPORATE_GOAL_POOL[id].available()).sort(() => Math.random() - 0.5).slice(0, 2);
     corporation.goals = { ids, quarter: macro?.quarter || 0, startNav: playerFund ? getFundNav() : 0, progress: { project: false, dividends: 0 } };
     return corporation.goals;
 }
@@ -2810,8 +2961,10 @@ function getAnalystInsights(stock) {
     const f = stock.fundamentals;
 
     const company = getAnalyst('company');
-    if (company && f) {
-        insights.push(`Analityk spółki (${'★'.repeat(company.stars)}): wartość godziwa ≈ ${(f.fairValue * noise(company.stars)).toFixed(2)} zł, prognoza EPS na kwartał ≈ ${(f.expectedEps * noise(company.stars)).toFixed(3)} zł.`);
+    if (company && (f || stock.assetType)) {
+        const fair = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(stock) : f?.fairValue;
+        const method = f?.fairValue > 0 ? '' : stock.assetType === 'Holding' ? ' (NAV portfela)' : stock.assetType === 'REIT' ? ' (NAV / dywidenda)' : ' (wartość księgowa)';
+        insights.push(`Analityk spółki (${'★'.repeat(company.stars)}): wartość godziwa ${fair > 0 ? `≈ ${(fair * noise(company.stars)).toFixed(2)} zł${method}` : 'brak wyceny (brak zysku i majątku netto)'}${f?.expectedEps ? `, prognoza EPS na kwartał ≈ ${(f.expectedEps * noise(company.stars)).toFixed(3)} zł` : ''}.`);
     }
     const sector = getAnalyst('sector');
     if (sector) {
@@ -2890,7 +3043,7 @@ function consolidateSupervisedFund(forceApproval = null) {
 // =================================================================================
 
 function getBigInvestors() {
-    return aiCompetitors.filter(ai => ai.personality !== 'market_maker');
+    return aiCompetitors.filter(ai => ai.personality !== 'market_maker' && !ai.isGuard && !ai.isMafia); // 0.13.1 (B9): Gwardia to fundusz, nie wielki inwestor
 }
 
 function getLastPeriodExcess() {
@@ -2908,6 +3061,7 @@ function addOutsideSubscription(type, name, value) {
     playerFund.current.inflow += value;
     const client = addFundClient(type, units, nav);
     client.name = name;
+    if (typeof noteFundFlow === 'function') noteFundFlow('in', 'newClients', value, units); // B5: panel przyczyn
     return client;
 }
 
@@ -2954,7 +3108,7 @@ function lunchWithCeo(symbol) {
 
 /** Wielcy inwestorzy sami zgłaszają się do funduszu z dobrymi wynikami. */
 function processInvestorInterest() {
-    if (!playerFund || playerFund.trust < 60 || getLastPeriodExcess() <= 0) return;
+    if (!playerFund || !isFundOpenForSubscriptions() || playerFund.trust < 60 || getLastPeriodExcess() <= 0) return; // 0.13.1 (B5)
     for (const investor of getBigInvestors()) {
         if (Math.random() > 0.03 || investor.cash < 2000) continue;
         const amount = investor.cash * 0.05;
@@ -2966,7 +3120,7 @@ function processInvestorInterest() {
 
 /** Spółki z dobrą opinią o graczu lokują nadwyżki gotówki w JU funduszu. */
 function processCorporateSubscriptions() {
-    if (!playerFund) return;
+    if (!playerFund || !isFundOpenForSubscriptions()) return; // 0.13.1 (B5): lokaty spółek w JU tylko przy otwartej emisji
     for (const stock of stocks) {
         if (stock.assetType || stock.isBankrupt || stock.isBankStock) continue;
         const reputation = Number(stock.reputation?.player) || 0;
@@ -3143,7 +3297,8 @@ const CLIENT_MOTIVES = {
     rich: ['Lokuje nadwyżki z biznesu.', 'Dywersyfikuje majątek rodzinny.', 'Ma czas i duże kwoty.'],
     miser: ['Liczy każdą złotówkę opłat.', 'Kupuje tylko z rabatem.', 'Opłata za zarządzanie to dla niego zdrada.'],
     institution: ['Mandat inwestycyjny zarządu.', 'Długoterminowa lokata instytucji.'],
-    investor: ['Wielki inwestor szukający alfy.', 'Testuje nowego zarządcę.']
+    investor: ['Wielki inwestor szukający alfy.', 'Testuje nowego zarządcę.'],
+    ethical: ['Nie chce zarabiać na krzywdzie ludzi.', 'Sprawdza, jak spółki traktują pracowników.', 'Inwestuje zgodnie z ESG.']
 };
 const CLIENT_NAMES = ['Anna', 'Piotr', 'Maria', 'Tomasz', 'Ewa', 'Jan', 'Kasia', 'Marek', 'Zofia', 'Adam', 'Halina', 'Krzysztof', 'Agata', 'Paweł', 'Irena',
     'Bartek', 'Ola', 'Kamil', 'Jadwiga', 'Stefan', 'Iga', 'Mateusz', 'Bożena', 'Rafał', 'Wanda', 'Szymon', 'Natalia', 'Edward', 'Kinga', 'Leon'];
@@ -3168,7 +3323,7 @@ function getClientCharacter(client) {
 }
 
 function randomCharacter(trust = 50) {
-    const weights = { sly: 1.2, careful: 1.4, fearful: 1, brave: 0.8 + trust / 100, rich: 0.3 + trust / 200, miser: 1 };
+    const weights = { sly: 1.2, careful: 1.4, fearful: 1, brave: 0.8 + trust / 100, rich: 0.3 + trust / 200, miser: 1, ethical: 0.6 };
     const total = Object.values(weights).reduce((sum, w) => sum + w, 0);
     let roll = Math.random() * total;
     for (const [key, weight] of Object.entries(weights)) {
@@ -3225,10 +3380,111 @@ function getTrustThreshold(character) {
     return 55 + (character.trustNeed || 0);
 }
 
+// --- B5: stabilność funduszu — przepływy klientów i ich przyczyny ---
+const SATISFACTION_MEAN = 0.5;          // zadowolenie wraca do średniej (wynik ≈ GIG → neutralnie)
+const SATISFACTION_REVERSION = 0.04;    // tempo powrotu na tydzień
+const SATISFACTION_UNHAPPY = 0.35;
+const FUND_FLOW_WARN_SHARE = 0.10;      // ostrzeżenie: napływ lub odpływ w kwartale > 10% JU
+const ORGANIC_INFLOW_BASE = 0.02;       // roczny napływ nowych klientów przy zaufaniu 50 i wyniku = GIG
+const TOPUP_INFLOW_BASE = 0.015;        // roczne dopłaty obecnych klientów przy wyniku = GIG (zależne od wielkości funduszu)
+const FUND_FLOW_OUT_REASONS = { performance: '📉 wynik gorszy od GIG', trust: '🤝 niskie zaufanie', fees: '💸 opłaty', drawdown: '🎢 obsunięcie', noBuyer: '🛒 brak kupca na rynku wtórnym', panic: '😱 panika', ethics: '🌱 etyka spółek', other: '❔ inne' };
+const FUND_FLOW_IN_REASONS = { topup: '➕ dopłaty obecnych klientów', newClients: '🆕 nowi klienci', emission: '📥 Twoja emisja' };
+
+function createFundFlowQuarter(quarter) {
+    return { quarter, startUnits: playerFund?.units || 0, in: {}, out: {}, inUnits: 0, outUnits: 0, warned: false };
+}
+
+/** Bieżący kwartał przepływów; przy zmianie kwartału poprzedni trafia do last (panel „Dlaczego klienci…”). */
+function getFundFlowStats() {
+    if (!playerFund) return null;
+    const quarter = typeof macro === 'object' ? macro.quarter : 0;
+    if (!playerFund.flowStats) playerFund.flowStats = { current: createFundFlowQuarter(quarter), last: null };
+    const stats = playerFund.flowStats;
+    if (stats.current.quarter !== quarter) {
+        stats.last = stats.current;
+        stats.current = createFundFlowQuarter(quarter);
+    }
+    return stats;
+}
+
+/** Zapisuje przepływ (kierunek 'in' / 'out', przyczyna, wartość w zł, JU) i ostrzega przy przekroczeniu 10% JU w kwartale. */
+function noteFundFlow(direction, reason, value, units) {
+    const stats = getFundFlowStats();
+    if (!stats || !(value > 0)) return;
+    const quarter = stats.current;
+    quarter[direction][reason] = (quarter[direction][reason] || 0) + value;
+    quarter[direction === 'in' ? 'inUnits' : 'outUnits'] += Math.max(0, Number(units) || 0);
+    const base = Math.max(1, quarter.startUnits);
+    if (!quarter.warned && (quarter.inUnits > base * FUND_FLOW_WARN_SHARE || quarter.outUnits > base * FUND_FLOW_WARN_SHARE)) {
+        quarter.warned = true;
+        const inflow = quarter.inUnits > base * FUND_FLOW_WARN_SHARE;
+        const text = inflow
+            ? `📥 Duży napływ do funduszu: +${(quarter.inUnits / base * 100).toFixed(0)}% JU w tym kwartale. Emisję ciągłą możesz zamknąć w panelu funduszu.`
+            : `📤 Duży odpływ z funduszu: −${(quarter.outUnits / base * 100).toFixed(0)}% JU w tym kwartale. Zobacz „Dlaczego klienci odchodzą” w panelu funduszu.`;
+        logEvent(text, 'review');
+        if (typeof pushNotification === 'function') pushNotification(text, () => { if (typeof showFundFlowPanel === 'function') showFundFlowPanel(); });
+    }
+}
+
+/** Składniki tygodniowej zmiany zadowolenia klienta (do decyzji i do rozbicia przyczyn odejść). */
+function getClientSatisfactionDrift(client, def, ctx) {
+    const fee = getPlayerFeeRate();
+    const parts = {
+        reversion: (SATISFACTION_MEAN - client.satisfaction) * SATISFACTION_REVERSION,
+        performance: ctx.excess * def.chase * 0.3 - (def.comparesRivals && ctx.lastRankBad ? 0.02 : 0),
+        trust: (ctx.trust - 50) / 50 * 0.012,                                   // słabszy składnik zaufania
+        drawdown: -Math.max(0, ctx.maxDrawdown - 0.05) * def.volAversion * 0.3,  // dopiero obsunięcie ponad 5%
+        // Opłata standardowa jest neutralna: kara dopiero powyżej MANAGEMENT_FEE_ANNUAL, niższa — mała premia.
+        fees: -(def.feeSensitivity || 0) * 0.01 * Math.max(0, fee / MANAGEMENT_FEE_ANNUAL - 1) - (fee - MANAGEMENT_FEE_ANNUAL) * 0.4,
+        ethics: def.ethical && ctx.ethicsIssue ? -0.08 : 0
+    };
+    return parts;
+}
+
+/** Główna przyczyna niezadowolenia: najbardziej ujemny składnik. */
+function getDominantOutflowReason(parts, def, fraction) {
+    if (def.panic && fraction >= 1) return 'panic';
+    let reason = 'other', worst = 0;
+    for (const key of ['performance', 'trust', 'drawdown', 'fees', 'ethics']) if (parts[key] < worst) { worst = parts[key]; reason = key; }
+    if (reason === 'other') { // tydzień bez ujemnego składnika (np. początek okresu): przyczyna z dłuższego horyzontu
+        if (getRecentExcessAnnual() < 0) reason = 'performance';
+        else if ((playerFund?.trust ?? 50) < 50) reason = 'trust';
+    }
+    return reason;
+}
+
+/** Wynik vs GIG w skali roku: ostatni zamknięty okres (3 kwartały) i bieżący okres. */
+function getRecentExcessAnnual() {
+    const last = typeof getLastPeriodExcess === 'function' ? getLastPeriodExcess() * 4 / 3 : 0;
+    const current = playerFund?.current;
+    const partialYears = current ? Math.max(0.25, (current.elapsedMs || 0) / FUND_PERIOD_MS * 0.75) : 1;
+    const partial = current ? (getPeriodReturn(current.startNav, getFundNav()) - getPeriodReturn(current.startBenchmark, getBenchmarkValue())) / partialYears : 0;
+    return playerFund?.periods?.length ? (last + partial) / 2 : partial;
+}
+
+/** Roczna stopa napływu nowych klientów (przy otwartej emisji): zaufanie, reputacja, wynik vs GIG. */
+function getOrganicInflowRate(trust = playerFund?.trust ?? 50) {
+    const reputation = getPlayerReputationFactor();
+    return Math.max(0, Math.min(0.5, ORGANIC_INFLOW_BASE + (trust - 50) / 50 * 0.04 + getRecentExcessAnnual() * 1.2 + reputation * 0.03));
+}
+
+/** Roczna stopa dopłat obecnych klientów (zadowoleni z zaufaniem): rośnie z wynikiem vs GIG. */
+function getTopupInflowRate(trust = playerFund?.trust ?? 50) {
+    return Math.max(0, Math.min(0.3, TOPUP_INFLOW_BASE + (trust - 50) / 50 * 0.03 + getRecentExcessAnnual() * 1.0));
+}
+
+/** Średnia reputacja gracza w spółkach (−1…1). */
+function getPlayerReputationFactor() {
+    const values = stocks.filter(s => !s.assetType && !s.isBankrupt && Number.isFinite(Number(s.reputation?.player))).map(s => Number(s.reputation.player));
+    if (!values.length) return 0;
+    return Math.max(-1, Math.min(1, values.reduce((a, b) => a + b, 0) / values.length / 100));
+}
+
 /** Co tydzień: zadowolenie i decyzje klientów funduszu gracza. */
 function processClientsWeekly() {
     if (!playerFund) return;
     playerFund.clients.forEach(ensureClientProfile);
+    getFundFlowStats();
 
     const nav = getFundNav();
     const current = playerFund.current;
@@ -3237,36 +3493,47 @@ function processClientsWeekly() {
     const lastRankBad = lastPeriod && lastPeriod.rankOf > 1 && lastPeriod.rank === lastPeriod.rankOf;
     const trust = playerFund.trust;
     let redemptionBudget = Math.floor(playerFund.units * MAX_WEEKLY_REDEMPTION_SHARE);
-    let newMoneyBudget = getFundAssets() * MAX_WEEKLY_NEW_MONEY_SHARE;
+    // B5: dopłaty jako roczna stopa od aktywów (mały fundusz nie rośnie o setki procent od kilku stałych kwot).
+    let newMoneyBudget = Math.min(getFundAssets() * MAX_WEEKLY_NEW_MONEY_SHARE, getFundAssets() * getTopupInflowRate(trust) / 52 * getRandomInRange(0.5, 1.5));
 
+    const ethicsIssue = typeof getFundEthicsIssue === 'function' ? getFundEthicsIssue() : null;
+    const ctx = { excess, trust, maxDrawdown: current.maxDrawdown, lastRankBad, ethicsIssue };
     for (const client of [...playerFund.clients]) {
         const def = getClientCharacter(client);
+        if (def.ethical && ethicsIssue && (!client.ethicsNoted || client.ethicsNoted !== ethicsIssue)) {
+            client.ethicsNoted = ethicsIssue;
+            noteClientHistory(client, `Niepokoi się: ${ethicsIssue}.`);
+        }
 
-        // Zadowolenie: zaufanie, wynik vs GIG (pogoń za wynikiem), obsunięcie, opłaty (sknera), porównanie z rywalami.
-        const drift = (trust - 50) / 50 * 0.04
-            + excess * def.chase * 0.8
-            - current.maxDrawdown * def.volAversion * 0.3
-            - (def.feeSensitivity || 0) * 0.01 * getPlayerFeeRate() / MANAGEMENT_FEE_ANNUAL
-            - (getPlayerFeeRate() - MANAGEMENT_FEE_ANNUAL) * 0.4
-            - (def.comparesRivals && lastRankBad ? 0.05 : 0);
+        // B5: zadowolenie wraca do średniej — wynik ≈ GIG przy standardowej opłacie jest neutralny; lepszy wynik podnosi,
+        // gorszy obniża. Składniki: wynik vs GIG (pogoń za wynikiem), zaufanie (słabe), obsunięcie > 5%, opłaty ponad normę, etyka.
+        const parts = getClientSatisfactionDrift(client, def, ctx);
+        const drift = Object.values(parts).reduce((sum, value) => sum + value, 0);
         client.satisfaction = Math.max(0, Math.min(1, client.satisfaction + drift));
+        const unhappy = client.satisfaction < SATISFACTION_UNHAPPY;
 
-        // Sprzedaż czekająca na kupca zbyt długo → klient umarza.
+        // Oferta czeka na kupca zbyt długo: zadowolony (i neutralny) klient ją WYCOFUJE, niezadowolony umarza.
         if (client.pendingSellUnits > 0) {
             client.pendingSellWeeks++;
-            if (client.pendingSellWeeks >= JU_SELL_ORDER_PATIENCE && redemptionBudget > 0) {
-                const units = Math.min(client.pendingSellUnits, redemptionBudget, client.units);
-                const paid = redeemClientUnits(client, units);
-                redemptionBudget -= units;
-                client.pendingSellUnits = 0;
-                client.pendingSellWeeks = 0;
-                noteClientHistory(client, `Brak kupca na rynku wtórnym — umorzenie ${units.toFixed(1)} JU (${paid.toFixed(0)} zł).`);
+            if (client.pendingSellWeeks >= JU_SELL_ORDER_PATIENCE) {
+                if (!unhappy) {
+                    noteClientHistory(client, `Brak kupca na rynku wtórnym — wycofuje ofertę ${client.pendingSellUnits.toFixed(1)} JU i zostaje w funduszu.`);
+                    client.pendingSellUnits = 0;
+                    client.pendingSellWeeks = 0;
+                } else if (redemptionBudget > 0) {
+                    const units = Math.min(client.pendingSellUnits, redemptionBudget, client.units);
+                    const paid = redeemClientUnits(client, units);
+                    redemptionBudget -= units;
+                    client.pendingSellUnits = 0;
+                    client.pendingSellWeeks = 0;
+                    noteFundFlow('out', 'noBuyer', paid, units);
+                    noteClientHistory(client, `Brak kupca na rynku wtórnym — umorzenie ${units.toFixed(1)} JU (${paid.toFixed(0)} zł).`);
+                }
             }
             continue;
         }
 
         const satisfied = client.satisfaction >= 0.6;
-        const unhappy = client.satisfaction < 0.35;
         const highTrust = trust >= getTrustThreshold(def);
 
         if (unhappy) {
@@ -3276,16 +3543,18 @@ function processClientsWeekly() {
             const units = Math.min(redemptionBudget, Math.max(1, client.units * fraction));
             const paid = redeemClientUnits(client, units);
             redemptionBudget -= units;
+            noteFundFlow('out', getDominantOutflowReason(parts, def, fraction), paid, units);
             noteClientHistory(client, `Niezadowolony — umarza ${units.toFixed(1)} JU (${paid.toFixed(0)} zł).`);
         } else if (satisfied && highTrust) {
-            if (Math.random() >= def.buyBias * 0.3 || newMoneyBudget <= 0) continue;
+            if (!isFundOpenForSubscriptions() || Math.random() >= def.buyBias * 0.3 || newMoneyBudget <= 0) continue; // 0.13.1 (B5): nowe JU tylko przy otwartej emisji
             const value = Math.min(newMoneyBudget, getRandomInRange(def.size[0], def.size[1]) * 0.4);
             const units = subscribeClient(client, value);
             newMoneyBudget -= value;
+            noteFundFlow('in', 'topup', value, units);
             noteClientHistory(client, `Dokupuje ${units.toFixed(1)} JU za ${value.toFixed(0)} zł.`);
             pushTape('topup', `${def.icon} ${client.name} dokupuje ${units.toFixed(1)} JU funduszu ${playerProfile.fundName} (${formatPlnShort(value)}).`);
         } else if (satisfied && !highTrust) {
-            if (Math.random() >= def.secondaryBias * 0.35) continue;
+            if (Math.random() >= def.secondaryBias * 0.15) continue; // B5: niskie zaufanie słabiej wypycha zadowolonych
             client.pendingSellUnits = client.units * getRandomInRange(0.2, def.key === 'sly' ? 0.6 : 0.45);
             client.pendingSellWeeks = 0;
             noteClientHistory(client, `Zadowolony z wyników, ale nie ufa funduszowi — wystawia ${client.pendingSellUnits.toFixed(1)} JU na rynku wtórnym.`);
@@ -3395,9 +3664,10 @@ function runPlayerJuMarket(fund) {
     }
 
     // Niewykorzystany popyt: nowi klienci wpłacają do funduszu po NAV (gdy zaufanie pozwala).
-    let budget = getFundAssets() * MAX_WEEKLY_NEW_MONEY_SHARE;
+    // B5: organiczny napływ (przy otwartej emisji) — roczna stopa z zaufania, reputacji i wyniku vs GIG, rozłożona na tygodnie.
+    let budget = isFundOpenForSubscriptions() ? Math.min(getFundAssets() * MAX_WEEKLY_NEW_MONEY_SHARE, getFundAssets() * getOrganicInflowRate(fund.trust) / 52 * getRandomInRange(0.5, 1.5)) : 0;
     for (const buyer of buyers) {
-        if (fund.trust < 50 || budget <= 0 || buyer.value < nav) continue;
+        if (budget <= 0 || buyer.value < nav) continue;
         const value = Math.min(buyer.value, budget);
         let client = buyer.client;
         if (!client) {
@@ -3408,6 +3678,7 @@ function runPlayerJuMarket(fund) {
             pushTape('new', `🆕 Nowy klient: ${buyer.def.icon} ${client.name} (${buyer.def.label}) wpłaca ${formatPlnShort(value)} do funduszu ${fund.name}.`);
         }
         const units = subscribeClient(client, value);
+        noteFundFlow('in', 'newClients', value, units);
         noteClientHistory(client, `Wpłaca ${value.toFixed(0)} zł (${units.toFixed(1)} JU po NAV).`);
         inflow += value;
         budget -= value;

@@ -705,7 +705,7 @@ function makeAiDecision(ai) {
             }
 
             // Inwestycje w startupy (jeśli ma umiejętność)
-            if ((ai.unlockedSkills['startupInvestor'] || 0) >= 1) {
+            if (aiCanInvestInStartups(ai)) { // 0.13.1 (B7)
                 if (Math.random() < 0.25) {
                     const targetStartup = getRandomElement(stocks.filter(s => s.assetType === 'Startup' && s.stage === 'funding'));
                     if (targetStartup && ai.cash > 1000) {
@@ -802,7 +802,7 @@ function makeAiDecision(ai) {
                 }
 
                 // Inwestycje w startupy (jeśli ma umiejętność)
-                if ((ai.unlockedSkills['startupInvestor'] || 0) >= 1) {
+                if (aiCanInvestInStartups(ai)) { // 0.13.1 (B7)
                     if (Math.random() < 0.15) {
                         const successThreshold = ai.personality === 'pro_investor' ? 0.65 : 0.55;
                         const potentialStartups = stocks.filter(s => s.assetType === 'Startup' && s.stage === 'funding' && s.successChance > successThreshold);
@@ -1201,9 +1201,17 @@ function checkAiTierUpgrade(ai) {
         logEvent(message);
     }
 }
+/** 0.13.1 (B7): boty-inwestorzy finansują startupy także bez szkolenia (poza animatorem rynku, mafią i Gwardią). */
+function aiCanInvestInStartups(ai) {
+    if (!ai || ai.isMafia || ai.isGuard || ai.personality === 'market_maker') return false;
+    return (ai.unlockedSkills?.['startupInvestor'] || 0) >= 1 || ['pro_investor', 'yolo_trader', 'reckless', 'whale', 'calm', 'dividend_chaser'].includes(ai.personality);
+}
+
 function aiInvestInStartup(ai, symbol, amount) {
     const startup = stocks.find(s => s.symbol === symbol);
-    if (!startup || startup.assetType !== 'Startup' || ai.cash < amount || amount <= 0) {
+    if (!startup || startup.assetType !== 'Startup') return;
+    amount = Math.min(amount * (startup.operatorStartup || typeof getStartupFundingFactor !== 'function' ? 1 : getStartupFundingFactor()), typeof getStartupFundingGap === 'function' ? getStartupFundingGap(startup) : amount); // 0.13.1 (B6): najwyżej brakująca kwota celu; D2: mniej na nasyconym rynku
+    if (ai.cash < amount || !(amount >= 1)) {
         return; // Zabezpieczenia: czy start-up istnieje, czy bota stać etc.
     }
 
@@ -1239,8 +1247,7 @@ function runStateActions() {
         // Jeśli państwo ma za mało udziałów (np. przez oferty gracza), dokupuje
         if (stock.stateOwnershipPct < 0.50) {
             const sharesToBuy = Math.floor(stock.totalShares * 0.02); // Dokup 2%
-            const publicFloat = Math.floor(stock.totalShares * (1 - stock.stateOwnershipPct));
-            const availableShares = publicFloat - stock.sharesHeld;
+            const availableShares = getAvailableShares(stock); // wolny obrót bez pakietów inwestorów, insiderów i akcji własnych
 
             if (sharesToBuy > 0 && sharesToBuy <= availableShares) {
                 // Pakiet państwa jest poza wolnym obrotem (getFreeFloatShares) — sharesHeld się nie zmienia.
@@ -1668,11 +1675,10 @@ function runInvestmentBankAI(bank) {
             potentialTargets.sort((a, b) => (b.financialHealth / b.volatilityFactor) - (a.financialHealth / a.volatilityFactor)); // Prosty wskaźnik atrakcyjności
             const targetStock = potentialTargets[0];
             const investmentAmount = bank.cash * getRandomInRange(0.1, 0.25); // Inwestuje 10-25% gotówki
-            const quantity = Math.floor(investmentAmount / targetStock.price);
+            const quantity = Math.min(Math.floor(investmentAmount / targetStock.price), getAvailableShares(targetStock)); // najwyżej wolne akcje
             const cost = quantity * targetStock.price;
-            const availableShares = getAvailableShares(targetStock);
 
-            if (quantity > 0 && cost <= bank.cash && quantity <= availableShares) {
+            if (quantity > 0 && cost <= bank.cash) {
                 // Sprawdź limit 30% dla innych banków
                 const targetIsBank = commercialBanks.some(b => b.id === `bank_${targetStock.symbol}`); // Placeholder - sprawdzimy jak banki wejdą na giełdę
                 if (targetIsBank) {

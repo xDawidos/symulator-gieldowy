@@ -1396,7 +1396,7 @@ function processOversightQuarterly() {
     ensureOversight();
     const quarter = getOversightQuarter();
     // Państwo finansuje instytucje (więcej przy rządzie „państwowym”).
-    const share = STATE_INSTITUTION_FUNDING * (typeof getRulingParty === 'function' && getRulingParty() === RULING_PARTIES.state ? 1.3 : 1);
+    const share = STATE_INSTITUTION_FUNDING * (typeof getRulingParty === 'function' && (macro.election?.ruling === 'state' || macro.election?.coalition?.partner === 'state') ? 1.3 : 1);
     for (const institution of [oversight.police, oversight.knf]) {
         const amount = Math.max(0, governmentTreasury) * share / 2;
         governmentTreasury -= amount;
@@ -1497,14 +1497,25 @@ function renderOversightPanel() {
         </div>
         <div class="oversight-gauge"><span style="width:${oversight.corruption}%"></span></div>
         <div class="bank-grid mt-3">
-            ${card('police', 'Policja', '🚓', 'Ściga korupcję i (wkrótce) mafię. Przy wysokiej korupcji sama staje się skorumpowana i działa gorzej.')}
+            ${card('police', 'Policja', '🚓', 'Ściga korupcję i mafię: co kwartał zbija wpływy mafii, zatrzymuje jej ludzi w zarządach spółek, rekwiruje akcje zdobyte z pomocą „przyjaciół” i ściga fundusze, które z nimi współpracują. Przy wysokiej korupcji sama staje się skorumpowana i działa gorzej.')}
             ${card('knf', 'Komisja Nadzoru Finansowego', '🏦', 'Kontroluje fundusze — im większy fundusz, tym częściej. Czysta kontrola podnosi zaufanie klientów.')}
+            ${renderMafiaStateCard()}
         </div>
         ${oversight.corruption >= BRIBE_CORRUPTION_THRESHOLD ? `<p class="text-sm mt-3">💼 Przy tej korupcji komendant „bywa wyrozumiały”: <button class="btn-danger" onclick="bribePolice(); updateStateModalContent();">Łapówka (${formatZl(Math.max(2000, getFundAssets() * 0.01), 0)} z funduszu)</button> — spokój na ${BRIBE_IMMUNITY_QUARTERS} kw.</p>` : ''}
         <h4>Wojny PR</h4>
         ${typeof renderPrWars === 'function' ? renderPrWars() : ''}
         <h4>Ostatnie wykrycia</h4>
         <ul class="list-plain text-sm">${oversight.history.map(h => `<li>⚖️ ${escapeHtml(h.institution)}: ${escapeHtml(h.name)} — przewinienie nr ${h.strike}, kara ${formatZl(h.fine, 0)}</li>`).join('') || '<li class="text-muted">Brak.</li>'}</ul>`;
+}
+
+/** 0.13.1 (B13): mafia widoczna w zakładce Nadzór (szczegóły i usługi w „Szarej strefie”). */
+function renderMafiaStateCard() {
+    if (typeof mafia !== 'object' || typeof getMafiaStage !== 'function') return '';
+    const stage = getMafiaStage();
+    const infiltrated = stocks.filter(s => s.mafiaBoard && !s.isBankrupt).length;
+    return `<article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">🕶️</span><div><h4>Mafia</h4><span class="bank-card-type">${stage.icon} ${escapeHtml(stage.name)} · wpływy ${Math.round(mafia.influence || 0)}/${MAFIA_MAX_INFLUENCE}</span></div></header>
+        <p class="text-sm">Działa w tle od początku gry: przy wyższych wpływach przejmuje spółki-przykrywki i wprowadza ludzi do zarządów (${infiltrated} ${infiltrated === 1 ? 'spółka' : 'spółek'} z ich człowiekiem). Gracza dotyka dopiero po kontakcie z „przyjaciółmi” w Szarej strefie.</p>
+        <button class="btn-secondary" onclick="openGreyZone()">🕶️ Szara strefa</button></article>`;
 }
 
 function openGreyZone() {
@@ -1988,7 +1999,7 @@ function runMafiaInfiltration() {
 /** Spółki-przykrywki na Giełdzie Śmieciowej (pierwsza zawsze „Całkowicie Legalna Firma”). */
 function spawnFrontCompanies() {
     const fronts = stocks.filter(s => s.mafiaFront && !s.isBankrupt);
-    if (getMafiaStageIndex() < 1 || fronts.length >= 3 || Math.random() > 0.15 * getDebutFactor()) return;
+    if (getMafiaStageIndex() < 1 || fronts.length >= 3 || !hasFreeListingSlot() || Math.random() > 0.15 * getDebutFactor()) return; // D2: tylko przy wolnym miejscu
     const name = FRONT_COMPANY_NAMES.find(n => !stocks.some(s => s.name === n)) || `${getRandomElement(MEMBER_NAME_PREFIXES)} Usługi`;
     const stock = createListedCompany({ name, symbol: uniqueSymbol(name.replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() || 'CLF'), sector: ['Usługi'], price: getRandomInRange(2, 8), totalShares: 20000, exchange: 'JUNK' });
     stock.mafiaFront = true;
@@ -2053,6 +2064,7 @@ function seizeMafiaAssets() {
         if (!stock || shares <= 0) continue;
         holding.shares -= shares;
         if (holding.shares <= 0) delete playerPortfolio[symbol];
+        if (typeof notePlayerPositionLoss === 'function') notePlayerPositionLoss(symbol, shares, 'rekwizycja policji (akcje zdobyte przez mafię)');
         const price = stock.price * 0.9;
         const buyer = aiCompetitors.filter(ai => !ai.isMafia && ai.cash >= shares * price).sort(() => Math.random() - 0.5)[0];
         if (buyer) {
@@ -2091,6 +2103,7 @@ function renderMafiaSection() {
     }[demand.type] : '';
     const companies = stocks.filter(s => !s.assetType && !s.isBankrupt && !isMafiaImmune(s));
     const elite = stocks.filter(s => !s.assetType && !s.isBankrupt && ['RUBY', 'EMERALD', 'DIAMOND', 'PLATINUM'].includes(s.exchange));
+    const unionized = stocks.filter(s => !s.isBankrupt && s.workforce?.union); // 0.13
     const option = list => list.map(s => `<option value="${s.symbol}">${escapeHtml(s.name)} (${s.symbol})</option>`).join('');
     return `<h3 class="mt-4">🕶️ Pan Gato</h3>
         <div class="bank-ticker"><div class="bank-ticker-item"><span>Wpływy mafii</span><strong>${stage.icon} ${stage.name}</strong></div>
@@ -2109,6 +2122,8 @@ function renderMafiaSection() {
                 <div class="bank-card-form"><button class="btn-danger" onclick="mafiaTip(); renderGreyZone(); displayCash();">Kup cynk</button></div></article>
             <article class="grey-card"><h4>🛡️ Ochrona</h4><p class="text-sm text-muted">${(MAFIA_PROTECTION_FEE * 100).toFixed(0)}% aktywów funduszu na kwartał. Chroni przed żądaniami haraczu i atakami wrogich botów.</p>
                 <div class="bank-card-form"><button class="${mafia.protection ? 'btn-secondary' : 'btn-danger'}" onclick="toggleMafiaProtection(); renderGreyZone();">${mafia.protection ? 'Zrezygnuj' : 'Wykup ochronę'}</button></div></article>
+            <article class="grey-card"><h4>🪓 „Rozbicie” związku</h4><p class="text-sm text-muted">Związek zakładowy w wybranej spółce „sam się rozwiązuje”. Ryzyko wykrycia ${(UNION_BUST_DETECTION * 100).toFixed(0)}%: strajk generalny w całym sektorze, afera, wpis compliance i spadek zaufania klientów.</p>
+                <div class="bank-card-form">${unionized.length ? `<select id="mafia-union" aria-label="Spółka">${option(unionized)}</select><button class="btn-danger" onclick="mafiaBustUnion(document.getElementById('mafia-union').value); renderGreyZone(); displayCash();">Zleć</button>` : '<span class="text-xs text-muted">brak związków zakładowych</span>'}</div></article>
             <article class="grey-card"><h4>🎟️ Wejściówka</h4><p class="text-sm text-muted">Do 2% akcji spółki z najwyższych giełd −15%. Sprzedasz je dopiero, gdy stanowisko da dostęp do tej giełdy. Przysługa 15%, akcje podlegają rekwizycji.</p>
                 <div class="bank-card-form">${elite.length ? `<select id="mafia-ticket" aria-label="Spółka">${option(elite)}</select><button class="btn-danger" onclick="mafiaEntryTicket(document.getElementById('mafia-ticket').value); renderGreyZone(); displayCash();">Załatw</button>` : '<span class="text-xs text-muted">brak spółek</span>'}</div></article>
         </div>`;
@@ -2453,7 +2468,7 @@ function processScandalsQuarterly() {
     processParabanksQuarterly();
     processPrWarsQuarterly();
     const active = scandals.parabanks.some(p => p.phase !== 'gone');
-    if (!active && (typeof macro !== 'object' || macro.quarter >= 4) && Math.random() < PARABANK_SPAWN_CHANCE * getDebutFactor()) spawnParabank();
+    if (!active && hasFreeListingSlot() && (typeof macro !== 'object' || macro.quarter >= 4) && Math.random() < PARABANK_SPAWN_CHANCE * getDebutFactor()) spawnParabank(); // D2
 }
 
 // =================================================================================

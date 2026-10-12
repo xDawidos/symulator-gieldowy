@@ -1114,6 +1114,10 @@ group('Kariera w korporacji (etap C)', () => {
         const cash0 = a.cash;
         const random = Math.random;
         Math.random = () => 0;
+        playerFund.openSubscriptions = false; // B5: domyślnie otwarta — test przełącznika
+        processCorporateSubscriptions();
+        assert(a.cash === cash0, '0.13.1 (B5): przy zamkniętej emisji ciągłej spółka nie kupuje JU');
+        playerFund.openSubscriptions = true;
         processCorporateSubscriptions();
         Math.random = random;
         assert(a.cash < cash0 && playerFund.clients.some(c => c.name.startsWith(a.name)), 'spółka kupiła JU');
@@ -1579,8 +1583,12 @@ group('Klienci z charakterami i rynek JU (etap F1) + nowe spółki (F4)', () => 
 
         client.satisfaction = 0.9; playerFund.trust = 90;
         const units0 = client.units;
+        playerFund.openSubscriptions = false; // B5: domyślnie otwarta — test przełącznika
         processClientsWeekly();
-        assert(client.units > units0, 'dokupił JU');
+        assert(client.units === units0, '0.13.1 (B5): przy zamkniętej emisji ciągłej nie powstają nowe JU');
+        playerFund.openSubscriptions = true;
+        processClientsWeekly();
+        assert(client.units > units0, 'dokupił JU (emisja ciągła otwarta)');
 
         client.satisfaction = 0.9; playerFund.trust = 20;
         const fundUnits = playerFund.units, cash = playerCash;
@@ -1620,14 +1628,20 @@ group('Klienci z charakterami i rynek JU (etap F1) + nowe spółki (F4)', () => 
         assert(computeJuPremium(1e9, 0) <= JU_MARKET_MAX_PREMIUM && computeJuPremium(0, 1e9) >= -JU_MARKET_MAX_PREMIUM, 'limit');
     });
 
-    test('sprzedaż bez kupca przez 2 tygodnie kończy się umorzeniem', () => {
+    test('brak kupca przez 2 tygodnie: niezadowolony umarza, zadowolony wycofuje ofertę (B5)', () => {
         worldF1();
         const client = playerFund.clients.find(c => !c.loyal);
         playerFund.clients.forEach(c => { c.satisfaction = 0.5; });
+        client.satisfaction = 0.05;
         client.pendingSellUnits = 10;
         const units = client.units;
         for (let i = 0; i < JU_SELL_ORDER_PATIENCE; i++) processClientsWeekly();
-        assert(client.units < units && client.pendingSellUnits === 0, 'umorzone po braku kupca');
+        assert(client.units < units && client.pendingSellUnits === 0, 'niezadowolony: umorzone po braku kupca');
+        const happy = playerFund.clients.find(c => c !== client && !c.loyal && playerFund.clients.includes(c));
+        happy.satisfaction = 0.9; happy.pendingSellUnits = 10;
+        const happyUnits = happy.units;
+        for (let i = 0; i < JU_SELL_ORDER_PATIENCE; i++) { happy.satisfaction = 0.9; processClientsWeekly(); }
+        assert(happy.units >= happyUnits && happy.pendingSellUnits === 0, 'zadowolony: wycofał ofertę, JU zostają');
     });
 
     test('nowe spółki elitarne: BEW i NRB na Rubinie, ORT na Szmaragdzie', () => {
@@ -2250,7 +2264,8 @@ group('Makroekonomia (0.10.2 M1)', () => {
         Math.random = () => 0.1;
         advanceElectionCycle();
         Math.random = random;
-        assert(macro.election.ruling === 'state' && macro.election.quartersLeft === ELECTION_INTERVAL_QUARTERS, 'nowy rząd');
+        // 0.13: trzy partie — w recesji rządząca Koalicja Rynkowa przegrywa (wygrywa Blok Państwowy albo Ludowcy).
+        assert(macro.election.ruling !== 'market' && macro.election.quartersLeft === ELECTION_INTERVAL_QUARTERS, 'nowy rząd');
         assert(getRulingParty().nationalization > 1, 'więcej nacjonalizacji');
     });
 
@@ -3381,7 +3396,7 @@ group('Balans B5: rynek i tempo', () => {
         resetWorld(list.slice(0, 80));
         assert(getDebutFactor() === 1, 'poniżej limitu bez zmian');
         resetWorld(list);
-        assert(getCrowdingPressure() === 1 && Math.abs(getDebutFactor() - 0.7) < 1e-9, `ponad limitem ${getDebutFactor()}`);
+        assert(getCrowdingPressure() === 1 && Math.abs(getDebutFactor() - 0.3) < 1e-9, `ponad limitem ${getDebutFactor()}`); // 0.13.1 (D2): do −70%
     });
 
     test('ponad limitem: mała spółka z kondycją ≤ −3 jest kandydatem do upadku', () => {
@@ -3729,6 +3744,927 @@ group('Nauka N4/N5: Mentor, certyfikaty, wykres, wpływ zlecenia', () => {
         const [a] = world();
         const small = estimateOrderImpact(a, 1), big = estimateOrderImpact(a, 100000);
         assert(small.impact < big.impact && big.impact <= 0.02, `wpływ ${small.impact} / ${big.impact}`);
+    });
+});
+
+group('Akcje ponad wolny obrót: ETF, bank, insiderzy (CZB 7596 ≠ 8195)', () => {
+    // Wolny obrót 10000 − 3000 insiderów = 7000; ETF trzyma 4000 → do kupienia 3000.
+    function worldFloat() {
+        const a = makeCompany('AAA');
+        a.insiderShares = 3000; a.sharesHeld = 0; a.financialHealth = 2;
+        resetWorld([a]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        allBonds.length = 0;
+        const etf = createEtf({ symbol: 'TST', templateKey: 'Technologia', seed: 1000 });
+        etf.holdings = { AAA: 4000 };
+        etfs.push(etf);
+        a.sharesHeld = 4000;
+        return { a, etf };
+    }
+    const overheld = stock => getTrackedHeldShares(stock) - getFreeFloatShares(stock);
+
+    test('wczytanie zapisu przy starcie strony: sharesHeld liczy pakiety ETF-ów z zapisu', () => {
+        worldFloat();
+        const snapshot = JSON.parse(JSON.stringify(buildSaveSnapshot()));
+        etfs.length = 0; // świeża strona: ETF-y z zapisu odtwarzane w applySaveSnapshot
+        const report = applySaveSnapshot(snapshot);
+        assert(report.ok, report.errors.join(' '));
+        const a = stocks.find(s => s.symbol === 'AAA');
+        assert(a.sharesHeld === 4000, `sharesHeld po wczytaniu: ${a.sharesHeld} (oczekiwano 4000)`);
+        assert(getAvailableShares(a) === 3000, `dostępne: ${getAvailableShares(a)}`);
+        const ai = aiCompetitors[0];
+        ai.cash = 10_000_000;
+        aiBuyStock(ai, 'AAA', 10000);
+        assert(overheld(a) <= 0, `posiadacze ponad wolny obrót o ${overheld(a)}`);
+        assert(checkWorldInvariants().length === 0, checkWorldInvariants().join('; '));
+    });
+
+    test('zaniżone sharesHeld nie pozwala ETF-owi ani bankowi kupić ponad wolny obrót', () => {
+        const { a, etf } = worldFloat();
+        a.sharesHeld = 0; // np. stary zapis
+        assert(getAvailableShares(a) === 3000, `dostępne przy zaniżonym sharesHeld: ${getAvailableShares(a)}`);
+        const bank = { id: 'bnk', name: 'Bank Testowy', type: BANK_TYPES.INVESTMENT, isActive: true, cash: 50_000_000, initialCapital: 1_000_000, stockPortfolio: {}, loanPortfolio: {} };
+        commercialBanks.push(bank);
+        const random = Math.random;
+        Math.random = () => 0.31; // bez sprzedaży, zakup za ~15% gotówki (≈ 73 000 akcji)
+        try { runInvestmentBankAI(bank); } finally { Math.random = random; }
+        assert(bank.stockPortfolio.AAA?.shares === 3000, `bank kupił ${bank.stockPortfolio.AAA?.shares} (wolne były 3000)`);
+        a.sharesHeld = 0; // znów zaniżone
+        etf.cash = 10_000_000;
+        let bought = 0;
+        for (let i = 0; i < 20; i++) bought += etfBuy(etf, a, 10000);
+        commercialBanks.splice(commercialBanks.indexOf(bank), 1);
+        assert(bought === 0 && etf.holdings.AAA === 4000, `ETF dokupił ${bought} przy braku wolnych akcji`);
+        assert(overheld(a) <= 0, `posiadacze ponad wolny obrót o ${overheld(a)}`);
+    });
+
+    test('pula insiderów (stary zapis) nie zjada akcji posiadanych przez inwestorów', () => {
+        const { a } = worldFloat();
+        a.insiderShares = undefined; // zapis sprzed puli insiderów: ETF ma 4000, gracz kupuje 5500
+        playerPortfolio.AAA = { shares: 5500, avgPrice: 100, assetType: 'stock' };
+        a.sharesHeld += 5500;
+        const held = getTrackedHeldShares(a);
+        initializeOwnership(a);
+        assert(a.insiderShares <= 10000 - held, `insiderzy ${a.insiderShares} przy posiadaczach ${held}`);
+        assert(overheld(a) <= 0, `posiadacze ponad wolny obrót o ${overheld(a)}`);
+    });
+
+    test('uzgadnianie leczy nadmiar: oddają go insiderzy, pakiety inwestorów zostają', () => {
+        const { a, etf } = worldFloat();
+        etf.holdings.AAA = 4506 + 3424; // jak CZB: bank + ETF ponad wolny obrót
+        a.sharesHeld = 7000;
+        assert(overheld(a) === 930, `nadmiar przed: ${overheld(a)}`);
+        reconcileSharesHeld();
+        assert(etf.holdings.AAA === 7930 && a.insiderShares === 2070, `ETF ${etf.holdings.AAA}, insiderzy ${a.insiderShares}`);
+        assert(a.sharesHeld === 7930 && overheld(a) === 0, `sharesHeld ${a.sharesHeld}`);
+        assert(checkWorldInvariants().length === 0, checkWorldInvariants().join('; '));
+    });
+});
+
+group('Społeczeństwo i rynek pracy (0.13 S1–S6)', () => {
+    function worldS() {
+        const a = makeCompany('AAA', { cash: 5_000_000 });
+        const b = makeCompany('BBB', { cash: 5_000_000 });
+        [a, b].forEach(s => { s.insiderShares = 0; s.exchange = 'SILVER'; s.ceo = { name: 'Jan Test', age: 50, tenure: 4, traits: [] }; });
+        resetWorld([a, b]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        society = createSocietyState();
+        macro = createMacroState();
+        macro.inflation = 0.025; macro.unemployment = NATURAL_UNEMPLOYMENT;
+        [a, b].forEach(s => { initializeFundamentals(s); ensureWorkforce(s); });
+        return { a, b };
+    }
+    /** Neutralne zatrudnienie: polityka Standardowa, płace 1,0, bez związku i rotacji. */
+    function neutral(stock) {
+        Object.assign(stock.workforce, { policy: 'standard', payMult: 1, productivity: 1, productivityBonus: 0, wagePremium: 0, rotation: 0, union: null, strike: null, greyCleanUntil: -1 });
+    }
+    function quarterOf(stock, seed = 777) {
+        const copy = JSON.parse(JSON.stringify(stock));
+        const result = withSeededRandom(seed, () => computeQuarterResults(copy));
+        return { ...result, margin: result.ebitda / result.revenue, base: copy.fundamentals.revenue };
+    }
+
+    test('S2 kalibracja: neutralne zatrudnienie nie zmienia marży ani zysku względem 0.12', () => {
+        const { a } = worldS();
+        neutral(a);
+        assertNear(getLaborCostIndex(a), 1, 'indeks kosztu pracy', 1e-12);
+        const with013 = quarterOf(a);
+        const without = quarterOf({ ...a, workforce: undefined });
+        assert(Math.abs(with013.margin - without.margin) < 0.001, `marża ${with013.margin} vs ${without.margin}`);
+        assertNear(with013.netIncome, without.netIncome, 'zysk netto', 1e-9);
+        // Każda spółka i sektor: indeks 1,0 przy neutralnych ustawieniach (także z szarą strefą w strukturze bazowej).
+        for (const sector of ['Budowlany', 'Usługi', 'Bankowość', 'Gaming', 'Obronność', 'Logistyka']) {
+            const s = makeCompany('S' + sector.slice(0, 3), { sector: [sector] });
+            s.exchange = 'GOLD'; initializeFundamentals(s); ensureWorkforce(s); neutral(s);
+            assertNear(getLaborCostIndex(s), 1, `indeks ${sector}`, 1e-12);
+        }
+    });
+
+    test('S2 marża = marża_0.12 + udział × (1 − indeks)', () => {
+        const { a } = worldS();
+        neutral(a);
+        const base = quarterOf(a);
+        society.wages.specialists = 1.2;
+        const index = getLaborCostIndex(a);
+        const after = quarterOf(a);
+        assert(index > 1, 'droższa praca specjalistów');
+        assertNear(after.margin - base.margin, a.workforce.laborShare * (1 - index), 'odchylenie marży', 1e-9);
+        assert(after.labor > base.labor, 'koszt pracy w RZiS rośnie');
+    });
+
+    test('S1 indeks popytu = 1,00 na starcie, awans klas go podnosi', () => {
+        worldS();
+        assertNear(getDemandIndex(), 1, 'start', 1e-12);
+        const before = getDemandIndex();
+        applyClassMobility(society, 0.008);
+        assert(getDemandIndex() > before, `awans: ${getDemandIndex()}`);
+        assert(getSocietyGrowthAdj({ sector: ['Turystyka'] }) === 0 || society.demandIndex === 1, 'wzrost liczony z zapisanego indeksu');
+        society.demandIndex = 1.05;
+        assertNear(getSocietyGrowthAdj({ sector: ['Turystyka'] }), 0.05 * 1.5 * 0.02, 'Turystyka +0,15 pp przy popycie 1,05', 1e-12);
+    });
+
+    test('S1 udziały klas sumują się do 100% po 100 kwartałach (bez dryfu do 0 ani 50%)', () => {
+        worldS();
+        for (let q = 0; q < 100; q++) {
+            applyClassMobility(society, getRandomInRange(-0.008, 0.008), getRandomInRange(0, 0.006));
+            if (q % 10 === 0) addToPoorClass(0.003);
+        }
+        const total = Object.values(society.classes).reduce((x, y) => x + y, 0);
+        assertNear(total, 1, 'suma udziałów', 1e-9);
+        assert(society.classes.poor > 0.1 && society.classes.poor < 0.35, `klasa biedna ${society.classes.poor}`);
+    });
+
+    test('S1 kwartał kraju: populacja, miasto rośnie razem z krajem, historia', () => {
+        worldS();
+        city.population = 30000;
+        const pop = society.population;
+        advanceSocietyQuarter();
+        assert(society.quarter === 1 && society.history.length === 1, 'historia');
+        assert(society.population !== pop, 'populacja się zmienia');
+        assertNear(city.population / 30000 - 1, society.population / pop - 1, 'tempo miasta = tempo kraju', 1e-3);
+    });
+
+    test('S3 niedobór specjalistów podnosi ich indeks płac', () => {
+        worldS();
+        const supply = getSpecialistSupply();
+        society.specSupplyStart = supply;
+        society.specDemandScale = 1.3 / SPECIALIST_SHORTAGE_START / getSpecialistDemandIndex();
+        advanceWages();
+        assert(society.shortage > 1.2, `niedobór ${society.shortage}`);
+        assert(society.wages.specialists > society.wages.workers + 0.02, `specjaliści ${society.wages.specialists} vs pracownicy ${society.wages.workers}`);
+    });
+
+    test('S3 krzywa Phillipsa: niskie bezrobocie podnosi płace realne, wysokie obniża', () => {
+        worldS();
+        macro.unemployment = 0.03;
+        advanceWages();
+        const up = society.wages.workers;
+        society.wages.workers = 1;
+        macro.unemployment = 0.12;
+        advanceWages();
+        assert(up > 1 && society.wages.workers <= 1, `płace ${up} / ${society.wages.workers}`);
+    });
+
+    test('S2 polityka Wyzysk podnosi marżę i szansę na związek', () => {
+        const { a } = worldS();
+        neutral(a);
+        a.workforce.satisfaction = getSatisfactionTarget(a);
+        const marginStd = getLaborMarginAdj(a), unionStd = getUnionChance(a);
+        a.workforce.policy = 'exploit'; a.workforce.payMult = LABOR_POLICIES.exploit.pay; a.workforce.productivity = 0.97;
+        a.workforce.satisfaction = getSatisfactionTarget(a);
+        assert(getLaborMarginAdj(a) > marginStd + 0.01, `marża ${getLaborMarginAdj(a)} vs ${marginStd}`);
+        assert(getUnionChance(a) > unionStd * 3, `związek ${getUnionChance(a)} vs ${unionStd}`);
+        assert(getWorkforceStructure(a).grey >= 0.1, 'szara strefa +10 pp');
+    });
+
+    test('S2 zmiana polityki przez większościowca: blokada 4 kw., zadowolenie od razu, marża stopniowo', () => {
+        const { a } = worldS();
+        neutral(a);
+        assert(!setLaborPolicy('AAA', 'exploit'), 'bez większości nie wolno');
+        playerPortfolio.AAA = { shares: 6000, avgPrice: 100, assetType: 'stock' };
+        a.sharesHeld = 6000;
+        const sat = a.workforce.satisfaction;
+        assert(setLaborPolicy('AAA', 'exploit'), 'większościowiec zmienia politykę');
+        assert(a.workforce.satisfaction === Math.max(0, sat - 15), 'zadowolenie −15 od razu');
+        assert(!setLaborPolicy('AAA', 'social'), 'blokada 4 kwartałów');
+        updateWorkforcePolicy(a);
+        assert(a.workforce.payMult < 1 && a.workforce.payMult > LABOR_POLICIES.exploit.pay, `pierwszy kwartał: ${a.workforce.payMult}`);
+        updateWorkforcePolicy(a);
+        assertNear(a.workforce.payMult, LABOR_POLICIES.exploit.pay, 'po 2 kwartałach', 1e-9);
+        assert(a.workforce.policy === 'exploit' && a.workforce.policySetBy === 'owner', 'prezes nie nadpisuje decyzji właściciela');
+    });
+
+    test('S4 strajk obniża przychody kwartału (baza przychodów bez zmian)', () => {
+        const { a } = worldS();
+        neutral(a);
+        const normal = quarterOf(a);
+        a.workforce.strike = { pct: 0.1, quarters: 1, decidedQuarter: 0 };
+        const strike = quarterOf(a);
+        assertNear(strike.revenue / normal.revenue, 0.9, 'przychody −10%', 1e-9);
+        assertNear(strike.base, normal.base, 'baza przychodów', 1e-9);
+        assert(strike.netIncome < normal.netIncome * 0.9, 'dźwignia operacyjna: zysk spada mocniej');
+    });
+
+    test('S4 układ zbiorowy blokuje żądania przez 8 kwartałów', () => {
+        const { a } = worldS();
+        neutral(a);
+        a.workforce.union = createUnion('company');
+        a.workforce.union.nextDemand = society.quarter;
+        a.workforce.union.agreementUntil = society.quarter + COLLECTIVE_AGREEMENT_QUARTERS;
+        const premium = a.workforce.wagePremium;
+        for (let q = 0; q <= COLLECTIVE_AGREEMENT_QUARTERS; q++) {
+            processUnionDemands([a]);
+            assert(!a.workforce.strike && a.workforce.wagePremium === premium && !a.workforce.pendingDemand, `kwartał ${q}: brak żądań`);
+            society.quarter++;
+        }
+        processUnionDemands([a]);
+        assert(a.workforce.union.nextDemand === society.quarter + UNION_DEMAND_EVERY, 'po układzie związek znów żąda');
+    });
+
+    test('S4 gracz-większościowiec dostaje przypięty mail; brak odpowiedzi = decyzja prezesa, nie kara', () => {
+        const { a } = worldS();
+        neutral(a);
+        playerPortfolio.AAA = { shares: 6000, avgPrice: 100, assetType: 'stock' };
+        a.workforce.union = createUnion('company');
+        a.workforce.union.nextDemand = society.quarter;
+        a.ceo.traits = [{ id: 'lojalny_pracownikom', name: 'Przyjaciel załogi' }];
+        const mails = mailbox.messages.length;
+        processUnionDemands([a]);
+        assert(a.workforce.pendingDemand && mailbox.messages.length === mails + 1, 'mail z decyzją');
+        assert(isPinnedMail(mailbox.messages[0]) && mailbox.messages[0].action.type === 'unionDemand', 'przypięty mail z akcją');
+        society.quarter++;
+        processUnionDemands([a]);
+        assert(!a.workforce.pendingDemand && a.workforce.wagePremium > 0 && !a.workforce.strike, 'prezes (lojalny) zgodził się');
+        // Odpowiedź gracza ma pierwszeństwo.
+        a.workforce.union.nextDemand = society.quarter; a.workforce.union.agreementUntil = -1;
+        processUnionDemands([a]);
+        assert(respondUnionDemand('AAA', 'refuse'), 'odpowiedź gracza');
+        a.workforce.satisfaction = 20;
+        society.quarter++;
+        const premium = a.workforce.wagePremium;
+        processUnionDemands([a]);
+        assert(a.workforce.wagePremium === premium, 'odmowa gracza wykonana (bez podwyżki)');
+    });
+
+    test('S2 Inspekcja Pracy nalicza karę 3× oszczędności z 4 kwartałów', () => {
+        const { a } = worldS();
+        a.workforce.greySavings = [1000, 2000, 3000, 4000];
+        const cash = a.cash, treasury = governmentTreasury, mark = externalMark();
+        const result = runLaborInspection(a, true);
+        assert(result.fine === 30000 && result.paid === 30000, `kara ${result.fine}`);
+        assert(a.cash === cash - 30000 && governmentTreasury === treasury + 30000, 'gotówka spółki → Skarb Państwa');
+        assertNear(externalNetFlow(mark), -30000, 'przepływ zewnętrzny', 1e-9);
+        assert(a.workforce.greyCaughtQuarter === society.quarter, 'wpis o złapaniu');
+    });
+
+    test('S5 płaca minimalna podnosi płace i bezrobocie (zapowiedź kwartał wcześniej)', () => {
+        worldS();
+        const shift = getSocietyUnemploymentShift();
+        announceLawChange('minWage', 1, 'people');
+        assert(society.pendingLaw && society.laws.minWage === 1, 'najpierw zapowiedź');
+        society.quarter++;
+        applyPendingLaw();
+        assert(society.laws.minWage === 2 && society.lawChanges.minWage === 1, 'ustawa w życie');
+        assert(society.wages.workers >= 1 + MIN_WAGE_STEP - 1e-9 && society.wages.cheap >= 1 + MIN_WAGE_STEP - 1e-9, 'płace +4%');
+        assertNear(getSocietyUnemploymentShift() - shift, 0.002, 'bezrobocie +0,2 pp', 1e-9);
+    });
+
+    test('S5 poparcie partii sumuje się do 100%, koalicja przy zwycięzcy < 40%', () => {
+        worldS();
+        const support = computePartySupport(true);
+        assertNear(PARTY_IDS.reduce((sum, id) => sum + support[id], 0), 100, 'suma poparcia', 1e-9);
+        const result = resolveElection({ people: 36, state: 34, market: 30 });
+        assert(result.winner === 'people' && result.coalition?.partner === 'state', 'koalicja z drugą partią');
+        macro.election.ruling = result.winner; macro.election.coalition = result.coalition;
+        const party = getRulingParty();
+        assert(party.coalition && party.nationalization > 1 && party.nationalization < 1.6, `parametry ważone: ${party.nationalization}`);
+        assert(!resolveElection({ people: 20, state: 35, market: 45 }).coalition, 'powyżej 40% bez koalicji');
+    });
+
+    test('S5 deficyt: 4 kw. → rentowność obligacji +0,25 pp; 8 kw. → CIT +2 pp albo cięcie zasiłków', () => {
+        worldS();
+        macro.election.ruling = 'state';
+        for (let q = 0; q < 8; q++) { society.budget.balance = -100; society.budget.hasBalance = true; updateBudgetBalance(); }
+        assert(society.budget.bondPremium === DEFICIT_BOND_PREMIUM && getDeficitBondPremium() === 0.0025, 'premia obligacji');
+        assertNear(getCompanyIncomeTaxRate(), COMPANY_INCOME_TAX_RATE + 0.02, 'CIT (Blok Państwowy)', 1e-12);
+        allBonds.length = 0; stateBondOffer.shortTerm.available = 5; playerCash = 1_000_000;
+        assert(buyStateBond('player', 'shortTerm', 1), 'zakup obligacji');
+        assertNear(allBonds[allBonds.length - 1].interestRate, stateBondOffer.shortTerm.interest + 0.0025, 'rentowność +0,25 pp', 1e-12);
+        society.budget.balance = 100; society.budget.hasBalance = true; updateBudgetBalance();
+        assert(society.budget.bondPremium === 0, 'nadwyżka znosi premię');
+    });
+
+    test('S4/S6 klient Etyczny i cele korporacji reagują na szarą strefę i strajki', () => {
+        const { a } = worldS();
+        playerPortfolio.AAA = { shares: 2500, avgPrice: 100, assetType: 'stock' };
+        assert(getFundEthicsIssue() === null, 'bez problemów');
+        a.workforce.greyCaughtQuarter = macro.quarter;
+        assert(getFundEthicsIssue(), 'szara strefa w portfelu');
+        ensureCorporateGoals();
+        noteStrikeForGoals(a);
+        assert(!CORPORATE_GOAL_POOL.noStrikes.check(corporation.goals), 'strajk w spółce z udziałem > 20%');
+        assert(playerPortfolio.AAA.heldThroughStrike, 'Mentor: przetrwany strajk');
+        assert(!CORPORATE_GOAL_POOL.satisfaction.available() || playerFund.clients.some(c => c.type === 'ethical'), 'cel zadowolenia tylko z klientami Etycznymi');
+        assert(CLIENT_TYPES.ethical && getClientCharacter({ type: 'ethical' }).ethical, 'charakter Etyczny');
+    });
+
+    test('S3 podkupienie prezesa: koszt 1% kapitalizacji z gotówki spółki gracza, limit 1 na rok', () => {
+        const { a, b } = worldS();
+        playerPortfolio.AAA = { shares: 6000, avgPrice: 100, assetType: 'stock' };
+        b.ceo = { name: 'Gwiazda Branży', age: 50, tenure: 8, traits: [{ id: 'wizjoner', name: 'Wizjoner' }] };
+        b.workforce.satisfaction = 0; // szansa 60%
+        const cash = a.cash, cost = Math.round(getMarketCapValue(b) * CEO_POACH_COST);
+        const result = withSeededRandom(5, () => playerPoachCeo('AAA', 'BBB'));
+        assert(result && a.cash === cash - cost, `koszt ${cash - a.cash} vs ${cost}`);
+        if (result.success) assert(a.ceo.name === 'Gwiazda Branży' && b.ceo.name !== 'Gwiazda Branży', 'prezes przechodzi z cechami');
+        assert(playerPoachCeo('AAA', 'BBB') === null, 'limit 1 na rok');
+    });
+
+    test('S6 skaner: kolumny zatrudnienia, czerwona flaga „szara strefa > 5%”, raport kwartalny', () => {
+        const { a, b } = worldS();
+        a.workforce.policy = 'exploit';
+        assert(getRedFlags(a).some(f => f.id === 'grey') && !getRedFlags(b).some(f => f.id === 'grey'), 'flaga szarej strefy');
+        const rows = runScanner({ ...SCANNER_DEFAULT_FILTERS, accessibleOnly: false, greyOnly: true });
+        assert(rows.length === 1 && rows[0].stock === a && rows[0].work.grey > 0.05, 'filtr szarej strefy');
+        const mails = mailbox.nextId;
+        publishSocietyReport([a, b]);
+        assert(mailbox.nextId === mails + 1 && mailbox.messages[0].subject.includes('Raport z rynku pracy'), 'jeden zbiorczy mail');
+    });
+
+    test('S6 niezmienniki pieniędzy i akcji po kwartałach z zatrudnieniem, związkami i strajkami', () => {
+        const { a, b } = worldS();
+        syncSharesHeldWithInitialPortfolios();
+        a.workforce.policy = 'exploit'; a.workforce.satisfaction = 10; a.workforce.union = createUnion('company'); a.workforce.union.nextDemand = 0;
+        b.workforce.satisfaction = 90;
+        a.workforce.greySavings = [500, 500, 500, 500];
+        for (let q = 0; q < 6; q++) {
+            const money = moneyInModel(), mark = externalMark();
+            society.quarter++;
+            processWorkforceQuarter();
+            assertNear(moneyInModel() - money, externalNetFlow(mark), `kwartał ${q}: pieniądze tylko przez granicę modelu`, 1e-6);
+            processFinancialReports();
+        }
+        const problems = checkWorldInvariants();
+        assert(problems.length === 0, problems.join('; '));
+        assert((society.stats?.strikes || 0) >= 0 && a.workforce.satisfactionHistory.length > 0, 'stan zatrudnienia');
+    });
+
+    test('zapis v13 i migracja starego zapisu (v12): kraj od zera, spółki i gotówka bez zmian', () => {
+        const { a, b } = worldS();
+        a.isStateOwned = true;
+        society.population = 39_000_000; society.laws.minWage = 3;
+        a.workforce.union = createUnion('company');
+        const fresh = applySaveSnapshot(JSON.parse(JSON.stringify(buildSaveSnapshot())));
+        assert(fresh.ok && society.population === 39_000_000 && society.laws.minWage === 3, 'v13 odtwarza kraj');
+        assert(stocks.find(s => s.symbol === 'AAA').workforce.union, 'v13 odtwarza związek');
+
+        const snapshot = JSON.parse(JSON.stringify(buildSaveSnapshot()));
+        snapshot.version = 12;
+        delete snapshot.society;
+        snapshot.stocks.forEach(s => delete s.workforce);
+        const cash = snapshot.stocks.map(s => s.cash), cityPop = snapshot.city.population;
+        const report = applySaveSnapshot(snapshot);
+        assert(report.ok, report.errors.join(' '));
+        assert(stocks.length === 2 && stocks.every((s, i) => s.cash === cash[i]), 'spółki i gotówka bez zmian');
+        assert(stocks.every(s => s.workforce && s.workforce.employees > 0), 'zatrudnienie według giełdy');
+        assert(stocks.every(s => Math.abs(s.workforce.satisfaction - getSatisfactionTarget(s)) < 1e-9), 'zadowolenie = cel polityki');
+        assert(!stocks.find(s => s.symbol === 'BBB').workforce.union, 'związki tylko w spółkach państwowych');
+        assert(city.population === cityPop && society.laws.minWage === SOCIAL_LAWS.minWage.start, 'miasto bez zmian, kraj od zera');
+    });
+});
+
+group('Zapis gry: rozmiar po długiej grze (limit localStorage)', () => {
+    /** Świat po ~100 kwartałach: 125 spółek z pełnymi historiami, 600 maili, 3000 obligacji botów. */
+    function longWorld() {
+        const list = [];
+        for (let i = 0; i < 125; i++) {
+            const s = makeCompany(`S${String(i).padStart(3, '0')}`);
+            s.insiderShares = 0;
+            s.ceo = { name: 'Jan Test', age: 50, tenure: 4, traits: [] };
+            const t0 = 1_790_000_000_000;
+            s.lineHistory = Array.from({ length: 900 }, (_, k) => ({ time: t0 + k * 1000, price: 100 + Math.random() * 3.123456789 }));
+            s.candlestickHistory = Array.from({ length: 30 }, (_, k) => ({ time: t0 + k * 15000, open: 100.123456789, high: 103.987654321, low: 98.55555555, close: 101.3333333 }));
+            s.research.ledger = Array.from({ length: 300 }, (_, k) => ({ id: `research_maintenance_${i}_${k}`, kind: 'maintenance', techId: 'COMMON_LOGISTICS_1', amount: 50, timestamp: t0 + k, recognized: k < 290, source: 'cash' }));
+            s.chartEvents = Array.from({ length: 20 }, (_, k) => ({ time: t0 + k, icon: '📈', label: 'Raport kwartalny: zysk +29% vs konsensus' }));
+            list.push(s);
+        }
+        resetWorld(list);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        society = createSocietyState();
+        list.forEach(s => {
+            initializeFundamentals(s);
+            for (let q = 0; q < 8; q++) s.fundamentals.history.push({ revenue: 1022.2756548820767, ebitda: 228.6505294239866, netIncome: 91.11275726852443, eps: 0.10448710695931701, depreciation: 51.1137827, interest: 65.0518611, tax: 21.3721282, labor: 156.2877094, ocf: 144.6482176, receivables: 167.6191994 });
+            s.fundamentals.history = s.fundamentals.history.slice(-8);
+            ensureWorkforce(s);
+        });
+        for (let i = 0; i < 600; i++) addMail({ sender: CORPORATION_SENDER, subject: `📈 AWANS: spółka ${i} przechodzi na wyższą giełdę`, body: 'x'.repeat(110), importance: 3 });
+        allBonds.length = 0;
+        for (let i = 0; i < 3000; i++) allBonds.push(createBondRecord(`ai${i % 6}`, { issuerName: 'Skarb Państwa', type: 'Skarbowa (mediumTerm)', faceValue: 1000, risk: 0, isStateBond: true }, 25, 0.04));
+        allBonds.forEach((bond, i) => { bond.remainingGameMs = 600000 + Math.floor(i / 200) * 1000; });
+        return list;
+    }
+
+    test('zapis po ~100 kwartałach mieści się w 3 MB, a kompaktowy jest jeszcze mniejszy', () => {
+        longWorld();
+        const size = JSON.stringify(buildSaveSnapshot()).length;
+        const compact = JSON.stringify(buildSaveSnapshot({ compact: true })).length;
+        assert(size < SAVE_SIZE_TARGET, `zapis ${(size / 1e6).toFixed(2)} MB`);
+        assert(compact < size * 0.8, `kompaktowy ${(compact / 1e6).toFixed(2)} MB vs ${(size / 1e6).toFixed(2)} MB`);
+        assert(mailbox.messages.length <= MAIL_HARD_LIMIT && mailbox.messages.length <= MAIL_LIMIT + 1, `skrzynka ${mailbox.messages.length}`);
+        addTable('Rozmiar zapisu (znaki)', ['Wariant', 'Rozmiar'], [['zwykły', size], ['kompaktowy', compact]]);
+    });
+
+    test('obligacje grupowane w zapisie wracają w tej samej liczbie i wartości', () => {
+        longWorld();
+        const count = allBonds.length, value = allBonds.reduce((sum, bond) => sum + bond.faceValue, 0);
+        const snapshot = JSON.parse(JSON.stringify(buildSaveSnapshot()));
+        assert(snapshot.allBonds.length === 90, `grupy (15 terminów × 6 właścicieli): ${snapshot.allBonds.length}`);
+        const report = applySaveSnapshot(snapshot);
+        assert(report.ok, report.errors.join(' '));
+        assert(allBonds.length === count && allBonds.reduce((sum, bond) => sum + bond.faceValue, 0) === value, 'liczba i nominał obligacji');
+        assert(new Set(allBonds.map(bond => bond.id)).size === count, 'unikalne identyfikatory');
+        const stock = stocks[0];
+        assert(stock.lineHistory.length === SAVED_LINE_HISTORY_POINTS && stock.research.ledger.filter(e => !e.recognized).length === 10, 'historie i nierozpoznane koszty R&D zachowane');
+    });
+
+    test('poziomy zapisu: kompaktowy i awaryjny coraz mniejsze; upadłe spółki i zakończone przetargi bez historii', () => {
+        const list = longWorld();
+        list[0].isBankrupt = true;
+        activeTenders = [{ id: 't1', status: 'completed', bids: [], clientCompany: list[1], buildingType: { id: 'warehouse' }, budget: 1000 }, { id: 't2', status: 'open', bids: [], clientCompany: list[1], buildingType: { id: 'warehouse' }, budget: 1000 }];
+        const sizes = [0, 1, 2].map(level => JSON.stringify(buildSaveSnapshot({ compact: level })).length);
+        assert(sizes[0] > sizes[1] && sizes[1] > sizes[2], `rozmiary ${sizes.join(' / ')}`);
+        const snapshot = buildSaveSnapshot();
+        assert(snapshot.activeTenders.length === 1 && snapshot.activeTenders[0].id === 't2', 'tylko trwające przetargi');
+        assert(snapshot.stocks[0].lineHistory.length === 0 && snapshot.stocks[0].research.ledger.length === 0, 'upadła spółka bez historii');
+        assert(snapshot.mailbox.messages.length <= 100, `skrzynka w zapisie: ${snapshot.mailbox.messages.length}`);
+        addTable('Poziomy zapisu (znaki)', ['zwykły', 'kompaktowy', 'awaryjny'], [sizes]);
+        activeTenders = [];
+    });
+
+    test('dziennik R&D trzyma najwyżej kilka rozpoznanych wpisów', () => {
+        const [s] = longWorld();
+        recognizeResearchExpenses(s);
+        assert(s.research.ledger.length <= RESEARCH_LEDGER_KEEP_RECOGNIZED, `wpisy: ${s.research.ledger.length}`);
+    });
+});
+
+group('Poprawki 0.13.1 (B1–B13)', () => {
+    function worldB() {
+        const a = makeCompany('AAA', { cash: 5_000_000 });
+        const b = makeCompany('BBB', { cash: 5_000_000, sector: ['Obronność'] });
+        [a, b].forEach(s => { s.insiderShares = 1000; s.sharesHeld = 0; s.ceo = { name: 'Jan Test', age: 50, tenure: 4, traits: [] }; });
+        resetWorld([a, b]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        return { a, b };
+    }
+    function withCommission(rate, fn) {
+        const original = window.getBuyCommissionRate;
+        window.getBuyCommissionRate = () => rate;
+        try { return fn(); } finally { window.getBuyCommissionRate = original; }
+    }
+
+    test('B1/B2: „Max” = min(dostępne, gotówka / cena z prowizją); zakup nigdy nie daje ujemnej gotówki', () => {
+        const { a } = worldB();
+        withCommission(0.01, () => {
+            playerCash = 50_500; // 500 akcji po 100 zł + 1% prowizji = 50 500
+            assert(getMaxBuyQuantity(a, 'fund') === 500, `max ${getMaxBuyQuantity(a, 'fund')}`);
+            buyStock('AAA', 501);
+            assert(playerCash === 50_500 && !playerPortfolio.AAA, 'za drogo z prowizją — odmowa');
+            buyStock('AAA', getMaxBuyQuantity(a, 'fund'));
+        });
+        assert(playerCash >= -1e-9, `gotówka ${playerCash}`);
+        playerCash = 10_000_000;
+        assert(getMaxBuyQuantity(a, 'fund') === getAvailableShares(a), 'limit wolnego obrotu');
+        a.sharesHeld = getFreeFloatShares(a); playerPortfolio.AAA = { shares: getFreeFloatShares(a), avgPrice: 100, assetType: 'stock' };
+        assert(getMaxBuyQuantity(a, 'fund') === 0, 'nic do kupienia');
+    });
+
+    test('B3: wolny obrót = dostępne na rynku + akcje u inwestorów', () => {
+        const { a } = worldB();
+        aiCompetitors[0].portfolio.AAA = { shares: 3000, avgPrice: 100 };
+        playerPortfolio.AAA = { shares: 2000, avgPrice: 100, assetType: 'stock' };
+        a.sharesHeld = 5000;
+        assert(getFreeFloatShares(a) === getAvailableShares(a) + getTrackedHeldShares(a), `${getFreeFloatShares(a)} ≠ ${getAvailableShares(a)} + ${getTrackedHeldShares(a)}`);
+        const text = renderCompanyCardOwners(a);
+        assert(text.includes('dostępnych na rynku') && text.includes('u inwestorów'), 'rozbicie w karcie');
+    });
+
+    test('B4: wymuszona sprzedaż zostawia ślad z przyczyną', () => {
+        const { a } = worldB();
+        playerPortfolio.AAA = { shares: 1000, avgPrice: 100, assetType: 'stock' };
+        a.sharesHeld = 1000;
+        playerCash = 0;
+        forceLiquidation(20_000);
+        const entry = playerFund.positionLog?.[0];
+        assert(entry && entry.symbol === 'AAA' && entry.quantity > 0 && /umarzają/.test(entry.reason), 'dziennik pozycji');
+    });
+
+    test('B6: pula inwestuje tylko brakującą kwotę celu, reszta zostaje w puli', () => {
+        const { a } = worldB();
+        const startup = makeCompany('STU');
+        Object.assign(startup, { assetType: 'Startup', stage: 'funding', fundingGoal: 20_000, currentFunding: 9_500, investors: {}, successChance: 0.5 });
+        stocks.push(startup);
+        investmentPool.totalFunds = 100_000; investmentPool.contributors = { player: 100_000 };
+        processPoolInvestments();
+        assert(startup.currentFunding === 20_000, `finansowanie ${startup.currentFunding}`);
+        assertNear(investmentPool.totalFunds, 89_500, 'reszta w puli', 1e-9);
+        assertNear(investmentPool.contributors.player, 89_500, 'wkład gracza pomniejszony', 1e-9);
+        investmentPool.totalFunds = 0; investmentPool.contributors = {};
+    });
+
+    test('B7: boty i fundusze kolegów finansują startupy (bez przekraczania celu)', () => {
+        worldB();
+        const startup = makeCompany('STU');
+        Object.assign(startup, { assetType: 'Startup', stage: 'funding', fundingGoal: 20_000, currentFunding: 0, investors: {}, successChance: 0.6, price: 10 });
+        stocks.push(startup);
+        const ai = aiCompetitors.find(x => x.personality === 'pro_investor') || aiCompetitors[0];
+        assert(aiCanInvestInStartups({ personality: 'pro_investor', unlockedSkills: {} }), 'bot bez szkolenia może inwestować');
+        ai.cash = 1_000_000;
+        aiInvestInStartup(ai, 'STU', 500_000);
+        assert(startup.currentFunding === 20_000 && ai.portfolio.STU.investedAmount === 20_000, 'tylko brakująca kwota');
+        startup.currentFunding = 0;
+        const manager = corporation.managers[0];
+        manager.fund.cash = 5_000_000;
+        const nav = getBotFundNav(manager.fund);
+        const random = Math.random; Math.random = () => 0.01;
+        let amount = 0;
+        try { amount = botFundInvestInStartups(manager); } finally { Math.random = random; }
+        assert(amount > 0 && manager.fund.startups.STU === amount, 'fundusz kolegi inwestuje');
+        assertNear(getBotFundNav(manager.fund), nav, 'NAV funduszu bez zmian (udział po koszcie)', 1e-9);
+        const claims = collectStartupClaims(startup);
+        assert(claims.some(c => c.kind === 'botFund' && c.amount === amount), 'roszczenie przy debiucie');
+    });
+
+    test('B8–B13: panel dywidend, Gwardia jako fundusz, sektory, wycena holdingu, próg zaufania, mafia w Nadzorze', () => {
+        const { a } = worldB();
+        updateDividendTrackerButtonVisibility();
+        const guard = { id: 'guard_fund', name: 'Fundusz „Gwardia”', cash: 1000, portfolio: { AAA: { shares: 100, avgPrice: 100 } }, isGuard: true, personality: 'guard' };
+        aiCompetitors.push(guard);
+        try {
+            assert(!getBigInvestors().includes(guard), 'Gwardia nie jest „wielkim inwestorem”');
+            assert(getShareholders(a).find(h => h.entity === guard)?.name.includes('fundusz'), 'w akcjonariacie jako fundusz');
+        } finally { aiCompetitors.splice(aiCompetitors.indexOf(guard), 1); }
+        assert(getMarketSectorList().includes('Obronność'), 'filtr: wszystkie sektory spółek');
+        const holding = makeCompany('MIN', { cash: 1_000_000 });
+        Object.assign(holding, { assetType: 'Holding', holdingPortfolio: { AAA: { quantity: 100, purchasePrice: 100 } }, totalShares: 1000, balanceSheet: { assets: 0, liabilities: 0 } });
+        stocks.push(holding);
+        assertNear(getDisplayedFairValue(holding), (1_000_000 + 100 * a.price) / 1000, 'NAV holdingu', 1e-9);
+        playerFund.periods = Array.from({ length: 4 }, () => ({ fundReturn: -0.4, benchmarkReturn: 0.1, maxDrawdown: 0.5, volatility: 0.3 }));
+        assert(computeTrustTarget() >= TRUST_TARGET_FLOOR, 'cel zaufania nie spada poniżej progu');
+        assert(renderMafiaStateCard().includes('Mafia'), 'mafia w zakładce Nadzór');
+    });
+});
+
+group('T0: prędkości testowe ×100 i ×200', () => {
+    test('kroki tiku: interwał ≥ 10 ms, ten sam czas gry na sekundę', () => {
+        for (const speed of [1, 2, 5, 10, 50, 100, 200]) {
+            const steps = getTickStepsPerCall(speed);
+            const interval = BASE_DELAYS.stockUpdate * steps / speed;
+            assert(interval >= MIN_TICK_INTERVAL_MS - 1e-9 || speed <= 50, `×${speed}: interwał ${interval} ms`);
+            assertNear(steps * BASE_DELAYS.stockUpdate / interval, speed, `×${speed}: tempo gry`, 1e-9);
+        }
+        assert(getTickStepsPerCall(200) === 2 && getTickStepsPerCall(50) === 1, 'kroki');
+    });
+
+    test('zegar gry: kwartał = 300 tików przy każdej prędkości, kolejność pętli stała', () => {
+        const saved = { jobs: gameScheduler.jobs, clock: gameScheduler.clockMs, speed: currentSpeedMultiplier };
+        try {
+            for (const speed of [1, 50, 200]) {
+                gameScheduler.jobs = []; gameScheduler.clockMs = 0; currentSpeedMultiplier = speed;
+                const fired = [];
+                setGameInterval(() => fired.push('week'), BASE_DELAYS.weekly / speed);
+                setGameInterval(() => fired.push('quarter'), BASE_DELAYS.quarterly / speed);
+                for (let tick = 0; tick < 600; tick++) runGameScheduler(BASE_DELAYS.stockUpdate);
+                assert(fired.filter(x => x === 'quarter').length === 2 && fired.filter(x => x === 'week').length === 10, `×${speed}: ${fired.join(',')}`);
+                assert(fired.indexOf('quarter') === 5, `×${speed}: kwartał po 5. tygodniu`);
+            }
+        } finally { gameScheduler.jobs = saved.jobs; gameScheduler.clockMs = saved.clock; currentSpeedMultiplier = saved.speed; }
+    });
+
+    test('prędkość testowa nie trafia do zapisu', () => {
+        const a = makeCompany('AAA'); a.insiderShares = 0;
+        resetWorld([a]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        const saved = currentSpeedMultiplier;
+        try {
+            currentSpeedMultiplier = 200;
+            const snapshot = JSON.parse(JSON.stringify(buildSaveSnapshot()));
+            assert(snapshot.currentSpeedMultiplier === 1, `zapisano ×${snapshot.currentSpeedMultiplier}`);
+            snapshot.currentSpeedMultiplier = 100;
+            currentSpeedMultiplier = 2;
+            applySaveSnapshot(snapshot);
+            assert(currentSpeedMultiplier === 2, 'wczytanie ignoruje prędkość testową');
+        } finally { currentSpeedMultiplier = saved; }
+    });
+});
+
+group('0.13.1 D1/D2: rynki internetowe i limit spółek krajowych', () => {
+    function worldD(count = 0) {
+        const list = [];
+        for (let i = 0; i < count; i++) { const c = makeCompany(`C${String(i).padStart(3, '0')}`); c.insiderShares = 0; list.push(c); }
+        resetWorld(list);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        marketOperators = null;
+        ensureMarketOperators();
+        return list;
+    }
+
+    test('D2: limit liczy tylko spółki krajowe (bez zależnych, startupów i rynków internetowych)', () => {
+        const list = worldD(116);
+        const before = getListedCompanyCount();
+        list[0].isSubsidiaryOf = list[1].symbol;
+        list[2].market = 'XTD';
+        list[3].assetType = 'Startup';
+        assert(getListedCompanyCount() === before - 3, `liczone ${getListedCompanyCount()} z ${before}`);
+        assert(!hasFreeListingSlot() && getCrowdingPressure() > 0, 'ponad limitem');
+        assert(getStartupFundingFactor() < 1 && getStartupTermsFactor() < 1, 'finansowanie startupów mniejsze i droższe');
+        list.slice(0, 30).forEach(s => { s.isBankrupt = true; });
+        assert(hasFreeListingSlot() && getStartupFundingFactor() === 1, 'poniżej limitu bez zmian');
+    });
+
+    test('D2: na nasyconym rynku słabe spółki tanieją, a cel zbiórki startupu rośnie', () => {
+        const list = worldD(120);
+        list[5].financialHealth = -3;
+        const price = list[5].price, healthy = list[6].price;
+        assert(applyCrowdingPressureToWeak() >= 1, 'presja na słabe');
+        assert(list[5].price < price && list[6].price === healthy, 'tanieje tylko słaba spółka');
+        const goals = Array.from({ length: 40 }, () => generateNewStartup().fundingGoal);
+        assert(Math.max(...goals) > 40_000, `cele zbiórek: max ${Math.max(...goals)}`);
+    });
+
+    test('D1: startup operatora ma gwarancję debiutu, rynek ma limit 8 spółek', () => {
+        worldD(20);
+        const startup = spawnOperatorStartup(marketOperators.XTD);
+        startup.isScam = true; startup.successChance = 0;
+        withSeededRandom(3, () => finalizeStartup(startup));
+        assert(marketOperators.XTD.status === 'active' && getOperatorStock('XTD'), 'operator zadebiutował');
+        assert(isInternetMarketStock(getOperatorStock('XTD')), 'operator w zakładce Internet');
+        for (let i = 0; i < 15; i++) spawnMarketMember('XTD', 'test');
+        assert(getMarketMembers('XTD').length === INTERNET_MEMBER_LIMIT, `spółki rynku: ${getMarketMembers('XTD').length}`);
+        assert(getMarketMembers('XTD').every(isInternetMarketStock) && !getMarketMembers('XTD').some(isCountedListedCompany), 'poza limitem krajowym');
+    });
+
+    test('decyzja 2: ratunek operatora płacą spółki rynku proporcjonalnie do kapitalizacji, bez tworzenia gotówki', () => {
+        worldD(20);
+        const startup = spawnOperatorStartup(marketOperators.PLU5);
+        withSeededRandom(4, () => finalizeStartup(startup));
+        const operator = getOperatorStock('PLU5');
+        while (getMarketMembers('PLU5').length < INTERNET_PROTECTION_MEMBERS) spawnMarketMember('PLU5', 'test');
+        const members = getMarketMembers('PLU5');
+        members.forEach(m => { m.cash = 1_000_000; });
+        const total = () => operator.cash + members.reduce((a, m) => a + m.cash, 0);
+        const before = total(), opCash = operator.cash;
+        const raised = fundMarketOperatorBailout(operator, 90_000);
+        assert(Math.abs(raised - 90_000) < 1e-6 && Math.abs(total() - before) < 1e-6 && operator.cash > opCash, `zebrano ${raised}, suma gotówki bez zmian`);
+        const big = members.reduce((a, m) => getMarketCapValue(m) > getMarketCapValue(a) ? m : a);
+        assert(1_000_000 - big.cash >= Math.max(...members.map(m => 1_000_000 - m.cash)) - 1e-6, 'największa spółka płaci najwięcej');
+        members.forEach(m => { m.cash = 100; });
+        assert(fundMarketOperatorBailout(operator, 1_000_000) < 1_000, 'bez gotówki — ratunek niepełny');
+    });
+
+    test('D1: chroniony operator nie upada; koncesja = handel bez prowizji; nowe rynki z puli', () => {
+        worldD(20);
+        const startup = spawnOperatorStartup(marketOperators.PLU5);
+        withSeededRandom(4, () => finalizeStartup(startup));
+        const operator = getOperatorStock('PLU5');
+        while (getMarketMembers('PLU5').length < INTERNET_PROTECTION_MEMBERS) spawnMarketMember('PLU5', 'test');
+        assert(isProtectedMarketOperator(operator), 'ochrona przy ≥ 3 spółkach');
+        const member = getMarketMembers('PLU5')[0];
+        assert(getBuyCommissionRate(member) > 0, 'prowizja bez koncesji');
+        playerCash = 1_000_000;
+        assert(buyInternetConcession('PLU5') && hasInternetConcession('PLU5'), 'koncesja kupiona');
+        assert(getBuyCommissionRate(member) === 0 && chargeMarketCommission(member, 10_000, 'player') === 0, 'bez prowizji');
+        assert(!buyInternetConcession('PLU5'), 'jednorazowa');
+        const fresh = spawnInternetMarket();
+        assert(fresh && isInternetMarket(fresh.id) && fresh.status === 'startup' && getMarketDef(fresh.id).name, 'nowy rynek internetowy jako startup');
+        const snapshot = JSON.parse(JSON.stringify(buildSaveSnapshot()));
+        assert(applySaveSnapshot(snapshot).ok && getMarketDef(fresh.id)?.short === fresh.id && hasInternetConcession('PLU5'), 'rynek i koncesja w zapisie');
+    });
+});
+
+group('0.13.1 P1/P2: twardy sufit spółek i przenosiny na nowe rynki', () => {
+    function worldP(count) {
+        const list = [];
+        for (let i = 0; i < count; i++) { const c = makeCompany(`P${String(i).padStart(3, '0')}`); c.insiderShares = 0; list.push(c); }
+        resetWorld(list);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        marketOperators = null;
+        ensureMarketOperators();
+        return list;
+    }
+    function readyStartup() {
+        const startup = generateNewStartup();
+        stocks.push(startup);
+        startup.stage = 'finalized';
+        return startup;
+    }
+
+    test('P1: przy suficie 110 startup czeka w inkubatorze i debiutuje po zwolnieniu miejsca', () => {
+        const list = worldP(LISTING_HARD_CAP);
+        assert(!hasFreeListingSlot() && getCrowdingPressure() === 1, 'giełda pełna');
+        const before = getListedCompanyCount();
+        const startup = readyStartup();
+        handleSuccessfulIPO(startup, 2);
+        assert(startup.assetType === 'Startup' && startup.stage === 'awaitingListing', `czeka: ${startup.stage}`);
+        assert(getListedCompanyCount() === before, 'bez nowej spółki');
+        processAwaitingListings();
+        assert(startup.stage === 'awaitingListing', 'nadal pełna');
+        list.slice(0, before - LISTING_HARD_CAP + 1).forEach(s => { s.isBankrupt = true; });
+        processAwaitingListings();
+        assert(!startup.assetType && stocks.includes(startup) && getListedCompanyCount() === LISTING_HARD_CAP, `debiut na zwolnione miejsce (${getListedCompanyCount()})`);
+    });
+
+    test('P1: po 8 kwartałach czekania startup zostaje przejęty (zwrot ≥ wkładu)', () => {
+        worldP(LISTING_HARD_CAP + 2);
+        const startup = readyStartup();
+        playerPortfolio[startup.symbol] = { shares: 0, investedAmount: 1000, assetType: 'Startup' };
+        handleSuccessfulIPO(startup, 3);
+        const cash = playerCash;
+        startup.awaitingListing.since = macro.quarter - AWAITING_LISTING_MAX_QUARTERS;
+        processAwaitingListings();
+        assert(!stocks.includes(startup) && playerCash >= cash + 1000, `przejęty, zwrot ${playerCash - cash}`);
+    });
+
+    test('P1: pełna giełda blokuje zależne, uwolnienie zależnej, członków GPW i przenosiny na rynek krajowy', () => {
+        const list = worldP(LISTING_HARD_CAP);
+        list[0].exchange = 'RUBY';
+        assert(foundSubsidiary(list[0]) === null, 'brak nowej zależnej');
+        assert(spawnMarketMember('GPW', 'test') === null, 'brak nowego członka GPW');
+        marketOperators.XTD.status = 'active';
+        const net = list[1];
+        net.market = 'XTD';
+        playerPortfolio[net.symbol] = { shares: net.totalShares * 0.6, avgPrice: 100, assetType: 'stock' };
+        assert(!getListingMoveTargets(net).includes('GPW'), 'z rynku internetowego na pełną GPW — nie');
+        list.slice(2, 4 + getListedCompanyCount() - LISTING_HARD_CAP).forEach(s => { s.isBankrupt = true; });
+        assert(getListingMoveTargets(net).includes('GPW'), 'przy wolnym miejscu — tak');
+    });
+
+    test('P2: nowy rynek internetowy jest celem przenosin (z limitem spółek rynku)', () => {
+        const list = worldP(20);
+        const fresh = spawnInternetMarket();
+        fresh.status = 'active';
+        const stock = list[0];
+        playerPortfolio[stock.symbol] = { shares: stock.totalShares * 0.6, avgPrice: 100, assetType: 'stock' };
+        assert(getListingMoveTargets(stock).includes(fresh.id), `cele: ${getListingMoveTargets(stock).join(',')}`);
+        const price = stock.price;
+        assert(moveListing(stock.symbol, fresh.id) && getStockMarket(stock) === fresh.id && stock.price < price, 'przeniesiona na nowy rynek');
+        for (let i = 1; i <= INTERNET_MEMBER_LIMIT; i++) list[i].market = fresh.id;
+        playerPortfolio[list[15].symbol] = { shares: list[15].totalShares * 0.6, avgPrice: 100, assetType: 'stock' };
+        assert(!getListingMoveTargets(list[15]).includes(fresh.id), 'pełny rynek internetowy nie przyjmuje');
+    });
+
+    test('P1: łączny sufit 150 podmiotów blokuje też członków rynków internetowych i spółki zależne', () => {
+        const list = worldP(30);
+        marketOperators.XTD.status = 'active';
+        assert(spawnMarketMember('XTD', 'test'), 'przy wolnym miejscu — członek rynku');
+        while (getTotalCompanyCount() < LISTING_TOTAL_CAP) { const c = makeCompany(`Z${stocks.length}`); c.isSubsidiaryOf = list[0].symbol; stocks.push(c); }
+        assert(hasInternetMemberSlot('XTD') && spawnMarketMember('XTD', 'test') === null, 'łączny sufit');
+        assert(getListedCompanyCount() < LISTING_HARD_CAP && !hasFreeListingSlot(), 'krajowe poniżej 110, ale brak miejsca');
+        list[1].exchange = 'RUBY';
+        assert(foundSubsidiary(list[1]) === null, 'brak nowej zależnej');
+    });
+
+    test('łączny sufit liczy tylko zwykłe spółki (bez holdingów, REIT-ów, banków i operatorów rynków)', () => {
+        const list = worldP(10);
+        const base = getTotalCompanyCount();
+        list[0].assetType = 'Holding'; list[1].assetType = 'REIT'; list[2].isBankStock = true; list[3].marketOperator = 'XTD';
+        assert(getTotalCompanyCount() === base - 4, `liczone ${getTotalCompanyCount()} z ${base}`);
+    });
+});
+
+group('0.13.1 P3: gotówka spółek nie spada poniżej zera', () => {
+    test('kredyt ratunkowy wyrównuje ujemną gotówkę, kapitał bez zmian', () => {
+        const a = makeCompany('NEG');
+        resetWorld([a]);
+        a.cash = -50_000;
+        const equity = a.balanceSheet.assets - a.balanceSheet.liabilities;
+        const loan = coverNegativeCash(a, -100_000);
+        assert(loan > 50_000 && a.cash > 0 && a.cash < 6_000, `gotówka ${a.cash}`);
+        assert(Math.abs(a.balanceSheet.assets - a.balanceSheet.liabilities - equity) < 1e-6, 'kapitał bez zmian');
+        assert(coverNegativeCash(a, -100_000) === 0, 'dodatnia gotówka — bez kredytu');
+    });
+});
+
+group('0.13.1 P3: „duchy posiadaczy” (akcje w obrocie = posiadacze)', () => {
+    test('reconcile przy zerowym wolnym obrocie zdejmuje pakiety-duchy, nie rusza funduszu gracza', () => {
+        const a = makeCompany('PLX'), owner = makeCompany('OWN');
+        resetWorld([a, owner]);
+        a.insiderShares = a.totalShares; a.treasuryShares = 0; a.stateOwnershipPct = 0; a.sharesHeld = 0;
+        aiCompetitors[0].portfolio.PLX = { shares: 126, avgPrice: 10 };
+        owner.isBankrupt = true; owner.equityStakes = { PLX: 100 };
+        reconcileSharesHeld();
+        assert(Math.abs(a.sharesHeld - getTrackedHeldShares(a)) <= 0.5, `obrót ${a.sharesHeld} vs posiadacze ${getTrackedHeldShares(a)}`);
+        assert(!checkWorldInvariants().some(x => x.includes('PLX')), 'niezmiennik pusty');
+    });
+
+    test('nadwyżka posiadaczy: najpierw insiderzy i pakiet państwa, gracz zachowuje akcje', () => {
+        const a = makeCompany('STX');
+        resetWorld([a]);
+        a.insiderShares = 0; a.treasuryShares = 0; a.stateOwnershipPct = 0.9; a.sharesHeld = 0;
+        playerPortfolio.STX = { shares: Math.floor(a.totalShares * 0.2), avgPrice: 10, assetType: 'stock' };
+        reconcileSharesHeld();
+        assert(playerPortfolio.STX.shares === Math.floor(a.totalShares * 0.2), 'akcje funduszu bez zmian');
+        assert(a.stateOwnershipPct < 0.9 && Math.abs(a.sharesHeld - getTrackedHeldShares(a)) <= 0.5, `pakiet państwa ${a.stateOwnershipPct}`);
+    });
+
+    test('pule insiderów i państwa ponad wszystkie akcje: reconcile wyrównuje obrót z posiadaczami', () => {
+        const a = makeCompany('CTX');
+        resetWorld([a]);
+        a.totalShares = 1_306_166; a.insiderShares = 229_477; a.treasuryShares = 0; a.stateOwnershipPct = 0.8332844614890867;
+        aiCompetitors[0].portfolio.CTX = { shares: 84_957, avgPrice: 1 }; a.sharesHeld = 84_957;
+        assert(getRawFreeFloatShares(a) < 0 && getFreeFloatShares(a) === 0, 'pule ponad wszystkie akcje');
+        reconcileSharesHeld();
+        assert(a.sharesHeld === 84_957 && Math.abs(a.sharesHeld - getTrackedHeldShares(a)) <= 0.5 && getFreeFloatShares(a) >= a.sharesHeld, `obrót ${a.sharesHeld}, wolny obrót ${getFreeFloatShares(a)}`);
+    });
+
+    test('usunięta spółka nie zostawia pakietów — nowa spółka z tym samym symbolem startuje czysto', () => {
+        const a = makeCompany('DEJC'), gpw = makeCompany('GPWX');
+        resetWorld([a, gpw]);
+        gpw.equityStakes = { DEJC: 25 };
+        corporation?.managers?.[0] && (corporation.managers[0].fund.portfolio.DEJC = { shares: 10, avgPrice: 1 });
+        a.isBankrupt = true; a.timeOfDeath = Date.now() - 10 * 60_000;
+        cleanupBankruptStocks(1);
+        assert(!stocks.includes(a) && !gpw.equityStakes.DEJC, 'pakiet usuniętej spółki zniknął');
+        const startup = generateNewStartup();
+        startup.symbol = 'DEJC';
+        stocks.push(startup);
+        gpw.equityStakes.DEJC = 25; // stary „duch” z zapisu sprzed poprawki
+        handleSuccessfulIPO(startup, 2);
+        assert(!gpw.equityStakes.DEJC && Math.abs(startup.sharesHeld - getTrackedHeldShares(startup)) <= 0.5, `obrót ${startup.sharesHeld} vs ${getTrackedHeldShares(startup)}`);
+    });
+});
+
+group('0.13.1 B5: stabilność funduszu', () => {
+    function simulateFund(annualExcess, seed, weeks = 104) {
+        return withSeededRandom(seed, () => {
+            const a = makeCompany('AAA', { cash: 600_000, fixedAssets: 800_000 });
+            a.insiderShares = 0; a.sharesHeld = 0; a.reputation = { player: 0 };
+            resetWorld([a]);
+            allBonds.length = 0;
+            marketIndexes.find(index => index.id === 'GIG').value = 100;
+            startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+            const units0 = playerFund.units;
+            let unitsYear1 = units0;
+            for (let week = 0; week < weeks; week++) {
+                macro.quarter = Math.floor(week / 13);
+                const inPeriod = week % 39; // okres funduszu = 3 kwartały
+                const current = playerFund.current;
+                current.elapsedMs = inPeriod / 39 * FUND_PERIOD_MS;
+                current.startNav = getFundNav();
+                current.startBenchmark = getBenchmarkValue() / (1 - annualExcess * inPeriod / 52); // wynik vs GIG narasta w okresie
+                current.maxDrawdown = 0;
+                playerFund.trust = 50;
+                processClientsWeekly();
+                runJuMarketWeekly();
+                if (week === 51) unitsYear1 = playerFund.units;
+            }
+            return { year1: unitsYear1 / units0 - 1, year2: playerFund.units / unitsYear1 - 1 };
+        });
+    }
+
+    test('emisja ciągła domyślnie otwarta, przełącznik ją zamyka', () => {
+        simulateFund(0, 1, 1);
+        assert(isFundOpenForSubscriptions(), 'domyślnie otwarta');
+        setFundOpenSubscriptions(false);
+        assert(!isFundOpenForSubscriptions() && getOrganicInflowRate() >= 0, 'zamknięta');
+    });
+
+    test('wynik = GIG, zaufanie 50: zmiana JU w roku w granicach ±5% (8 kwartałów)', () => {
+        for (const seed of [1, 2, 3]) {
+            const r = simulateFund(0, seed);
+            assert(Math.abs(r.year1) <= 0.05 && Math.abs(r.year2) <= 0.05, `ziarno ${seed}: rok 1 ${(r.year1 * 100).toFixed(1)}%, rok 2 ${(r.year2 * 100).toFixed(1)}%`);
+        }
+    });
+
+    test('+5 pp/rok vs GIG → wzrost; −5 pp → powolny spadek, nie krach', () => {
+        for (const seed of [1, 2]) {
+            const neutral = simulateFund(0, seed), up = simulateFund(0.05, seed), down = simulateFund(-0.05, seed);
+            assert(up.year2 > 0.03 && up.year2 > neutral.year2, `ziarno ${seed}: wzrost ${(up.year2 * 100).toFixed(1)}%`);
+            assert(down.year2 < neutral.year2 && down.year1 > -0.25 && down.year2 > -0.25, `ziarno ${seed}: spadek ${(down.year1 * 100).toFixed(1)}% / ${(down.year2 * 100).toFixed(1)}%`);
+        }
+    });
+
+    test('zadowolenie wraca do średniej; standardowa opłata nie obniża zadowolenia', () => {
+        simulateFund(0, 4, 1);
+        const def = CLIENT_TYPES.miser;
+        const client = { satisfaction: 0.5 };
+        const parts = getClientSatisfactionDrift(client, def, { excess: 0, trust: 50, maxDrawdown: 0, lastRankBad: false, ethicsIssue: null });
+        assert(Math.abs(Object.values(parts).reduce((a, b) => a + b, 0)) < 1e-9, `dryf przy GIG i standardowej opłacie: ${JSON.stringify(parts)}`);
+        const low = getClientSatisfactionDrift({ satisfaction: 0.2 }, def, { excess: 0, trust: 20, maxDrawdown: 0, lastRankBad: false, ethicsIssue: null });
+        assert(Object.values(low).reduce((a, b) => a + b, 0) > 0, 'niskie zaufanie samo nie spycha zadowolenia w dół od 0,2');
+    });
+
+    test('panel przyczyn: odpływ i napływ zapisane z przyczyną, ostrzeżenie przy > 10% JU w kwartale', () => {
+        simulateFund(0, 5, 1);
+        const stats = getFundFlowStats();
+        const base = stats.current.startUnits;
+        const out0 = stats.current.out.performance || 0, in0 = stats.current.in.newClients || 0;
+        noteFundFlow('out', 'performance', 1000, base * 0.11);
+        noteFundFlow('in', 'newClients', 500, 1);
+        assert(stats.current.out.performance === out0 + 1000 && stats.current.in.newClients === in0 + 500, 'przyczyny');
+        assert(stats.current.warned, 'ostrzeżenie o odpływie > 10%');
+        macro.quarter++;
+        assert(getFundFlowStats().last.out.performance === out0 + 1000, 'ostatni kwartał w panelu');
     });
 });
 
