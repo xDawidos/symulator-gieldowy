@@ -1,4 +1,4 @@
-# Plan 0.15 „Giełda międzynarodowa” (szkic, po 0.14)
+# Plan 0.15 „Giełda międzynarodowa” (szkic, po 0.14; mapa całości: `plan_0.13-0.15_mapa.md`)
 
 Cel: nasza giełda wychodzi za granicę.
 - Dochodzą waluty i kantor, a potem forex.
@@ -13,7 +13,7 @@ Czego to uczy:
 
 Kolejność: G0 → G1 → G2 → G3 → G4 → G5 → G6 → G7 → G8. Każdy etap z testami, przebiegiem ×200 (po 0.14 T0) i commitem.
 
-**Zależność:** budujemy po 0.14, bo korzystamy z jej podsektorów (T2), specjalizacji (T3) i spin-offów (T4).
+**Zależność:** budujemy po 0.14, bo korzystamy z jej segmentów (T1), podsektorów (T2), specjalizacji-nisz (T3), spin-offów (T4) i spółek zależnych (T6). Pracownicy i związki z 0.13 obejmują też spółki zagraniczne (G2, „Profil kraju”).
 
 ---
 
@@ -23,6 +23,7 @@ Kolejność: G0 → G1 → G2 → G3 → G4 → G5 → G6 → G7 → G8. Każdy 
 - **Operatorzy rynków** (`finance.js`, markets): GPW, XTD, PLU5, uśpiony EURONEXT (`dormantForever`). Mają prowizje, opłaty za notowanie i inwestowanie w spółki członkowskie.
 - **Sektor `Gaming`:** ma profil (`core.js`) i technologie (`companies.js`), ale **żadnej spółki**.
 - **Akcje w obrocie:** niezmiennik „akcje w obrocie = suma posiadaczy” (`getTrackedHeldShares`, `getAvailableShares`) musi objąć spółki w obcych walutach i nowych posiadaczy (boty zagraniczne, posiadacze biletów).
+- **Limity spółek z 0.13.1:** krajowe luźno ok. 110 (111–115 w porządku), łącznie 150 zwykłych spółek. **Spółki zagraniczne nie liczą się do żadnego z nich** — każdy kraj ma własny limit (G2).
 - **Rozmiar zapisu:** po poprawce z 0.13 zapis ma ok. 2,35 MB po 200 kw. Ponad 120 nowych spółek go zwiększy, dlatego spółki krajów, które nie dołączyły, **nie są zapisywane** (tworzone przy dołączeniu z definicji).
 
 ## G0. Porządki na starcie (spółki polskie i uniwersalne)
@@ -77,6 +78,22 @@ Zmiany obowiązują tylko w nowych grach. Stare zapisy zachowują swoje spółki
   - kraj ma przewagę w swoich mocnych branżach;
   - **gigant** zaczyna na wyższym poziomie giełdy, z dużą kapitalizacją.
 - **Spółki specjalne** (pogrubione w tabelach) mają po jednej własnej mechanice.
+- **Profil kraju dla pracowników (0.13):** spółki zagraniczne mają model pracowników, zadowolenia i związków z 0.13. Pełne społeczeństwo (klasy, ustawy, partie, migracja) jest tylko w kraju startowym. Kraj ma **stały profil**, który zmienia cel zadowolenia, szansę na związek i udział szarej strefy. Marży nie zmienia (zasada kalibracji z 0.13: marżę wyznacza profil sektora).
+
+  | Kraj | Płace (indeks wzgl. PL, do wglądu) | Prawa pracownicze | Szansa związku | Szara strefa |
+  |---|---|---|---|---|
+  | 🇩🇪 Niemcy | 1,6 | ochronne | ×1,2 (współdecydowanie) | 0 |
+  | 🇫🇷 Francja | 1,5 | ochronne | ×2,0 (częste strajki) | 0 |
+  | 🇸🇪 Szwecja | 1,5 | ochronne | ×1,5, zadowolenie +5 | 0 |
+  | 🇨🇭 Szwajcaria | 1,9 | standard | ×0,6 | 0 |
+  | 🇺🇸 USA | 1,7 | liberalne | ×0,5 | +2 pp |
+  | 🇯🇵 Japonia | 1,3 | standard | ×0,4 (lojalność) | 0 |
+  | 🇨🇳 Chiny | 0,6 | liberalne | ×0,2 (związki państwowe) | +5 pp |
+  | 🇮🇳 Indie | 0,3 | liberalne | ×0,8 | +10 pp |
+  | 🇨🇿 Czechy | 0,9 | standard | ×0,8 | +2 pp |
+  | 🇹🇼 Tajwan | 0,9 | standard | ×0,4 | 0 |
+
+- **Limity spółek (decyzja):** spółki zagraniczne **nie liczą się** do krajowego limitu ok. 110 ani do łącznych 150. Każdy kraj ma własny limit: 1,5 × liczba startowa (np. USA 19 → 28 razem z państwowymi). W zapisie są tylko spółki krajów, które dołączyły.
 - **Spółki państwowe** (propozycja, 1–4 na kraj, zależnie od wielkości):
   - pakiet obcego państwa jest poza wolnym obrotem (jak `stateOwnershipPct`);
   - obce państwo **nie korzysta** z naszego `governmentTreasury`;
@@ -255,7 +272,7 @@ Przewaga: chemia, motoryzacja, medycyna, przemysł.
 ### Rozszerzanie liczby spółek w innych krajach (propozycja)
 - **Debiuty krajowe:** po dołączeniu kraju jego startupy debiutują na jego rynku, tak jak polskie startupy. Szansa zależy od koniunktury kraju.
 - **Spin-offy z 0.14 (T4):** dotyczą też spółek zagranicznych. Spółka córka zostaje w kraju matki.
-- **Limit na kraj:** najwyżej 1,5 × liczba startowa (np. USA 15 → 22). Upadłości i przejęcia zwalniają miejsce.
+- **Limit na kraj:** najwyżej 1,5 × liczba startowa (decyzja; patrz „Limity spółek” wyżej). Upadłości, przejęcia i wchłonięcia córek (0.14 T6) zwalniają miejsce. Spin-off zagranicznej spółki ponad limit kraju jest możliwy tylko jako carve-out.
 - **Wydarzenie „Gigant wkracza na scenę”** (G3) może sprowadzić pojedynczą spółkę z kraju, który jeszcze nie dołączył.
 
 ## G3. Otwieranie regionów
@@ -278,7 +295,7 @@ Trzy drogi, które się uzupełniają: pojedyncze spółki, bilety dla wybranych
    - **pozytywne:** nasza giełda przejmuje giełdę X;
    - **neutralne:** powstaje giełda międzynarodowa z naszą i najwyżej 2 innymi, kolejne dołączają powoli;
    - **negatywne, wariant B:** naszą giełdę przejmuje giełda X. Kraj X i tak dołącza, ale na swoich warunkach: jego waluta jest rozliczeniowa dla nowych notowań, opłaty za notowanie rosną, a kurs GPW spada;
-   - **szansa:** 1% na każde 5 minut czasu gry, podwajana do limitu 32%. Po wydarzeniu wraca do 1% i jest 10 minut przerwy. Proporcje: pozytywne 50%, neutralne 30%, negatywne 20%;
+   - **szansa:** liczona w **kwartałach gry**, nie w minutach, bo od 0.14 T0 zegar gry nie zależy od prędkości (1 kwartał = 5 min przy ×1). 1% na kwartał, podwajana co kwartał do limitu 32%. Po wydarzeniu wraca do 1% i są 2 kwartały przerwy. Proporcje: pozytywne 50%, neutralne 30%, negatywne 20%;
    - **skutki dołączenia kraju:**
      - spółki kraju trafiają na naszą giełdę z normalną prowizją, bez biletu;
      - pojawiają się boty kraju (G6);
@@ -289,17 +306,23 @@ Trzy drogi, które się uzupełniają: pojedyncze spółki, bilety dla wybranych
 
 ## G4. Sektory, podsektory, specjalizacje i spółki specjalne
 
-- **Nowe sektory:** Motoryzacja, Rybołówstwo, Alkohole (podsektor: Piwowarstwo i napoje). Każdy dostaje profil wyceny i elastyczność popytu.
+- **Nowe sektory:** Motoryzacja, Rybołówstwo, Alkohole (podsektor: Piwowarstwo i napoje). Każdy dostaje profil wyceny oraz dane z 0.13 i 0.14:
+
+  | Sektor | Zarząd / Specjaliści / Pracownicy / Tania siła / Szara strefa (%) | Koszt pracy (% przychodów) | Elastyczność popytu (0.13 S1) | Powiązane branże (0.14 T3) |
+  |---|---|---|---|---|
+  | Motoryzacja | 3 / 20 / 55 / 20 / 2 | 22 | 1,3 | Przemysł, Technologia |
+  | Rybołówstwo | 2 / 5 / 45 / 38 / 10 | 25 | 0,3 | Żywność |
+  | Alkohole | 3 / 10 / 55 / 30 / 2 | 18 | 0,4 (defensywne) | Żywność |
 - **Turystyka:** gigantyczna premia za każde nowe państwo — przychód i kurs w górę, malejąco w czasie.
 - **Podsektory** (mechanizm z 0.14 T2): Półprzewodniki i AI (Technologia), Przemysł ciężki (Przemysł), Słodycze i Herbata (Żywność; Herbata tylko w Chinach).
-- **Specjalizacje** (0.14 T3): TV i Rozrywka (Media), Farmaceutyki (Medycyna), premium (Motoryzacja), szpiegostwo (obronność).
+- **Specjalizacje-nisze** (0.14 T3, bez własnego profilu wyceny): TV i Rozrywka (Media), Farmaceutyki (Medycyna) i Wywiad i obronność (Technologia) są już w 0.14. 0.15 dopisuje Premium (Motoryzacja).
 - **Gaming:** pierwsze spółki — DVD Project Black i WayPlay (PL) oraz Pokeman (JP).
 - **Waschmabank** — bank „bez pytań”:
   - mafia i Bruno Gato wpłacają brudną gotówkę i odbierają czystą; bank bierze 10–20% prowizji, więc ma bardzo wysoką marżę;
   - co kwartał szansa na kontrolę albo przeciek („Swiss Leaks”): kurs spada o 30–60%, bank płaci karę, prezesowi grozi areszt;
   - gracz może trzymać tam część gotówki poza kontrolą nadzoru (0.11). Jeśli to wyjdzie na jaw: afera i utrata reputacji;
   - złoto w skarbcu to tylko informacja na karcie spółki.
-- **PanDa Bank (parabank):** lokaty z wysokim oprocentowaniem przyciągają klientów. Co kwartał rośnie ryzyko upadku. Przy upadku inwestorzy i deponenci tracą, a nadzór wszczyna aferę.
+- **PanDa Bank (parabank):** używa **istniejącej mechaniki parabanku z 0.11** razem z poprawkami balansu z 0.11.5 (losowy termin upadku, kurs z szumem). Nie budujemy drugiej. Lokaty z wysokim oprocentowaniem przyciągają klientów, co kwartał rośnie ryzyko upadku, a przy upadku inwestorzy i deponenci tracą i wybucha afera.
 - **Pozostałe spółki specjalne:** po jednej mechanice, jak w tabelach G2.
 
 ## G5. Prezesi — cechy krajowe
@@ -378,6 +401,7 @@ Polski Grzegorz „Bankier” Kacperczyk zostaje bez zmian.
 
 - `checkWorldInvariants()` puste, również po zapisie i wczytaniu w połowie przebiegu.
 - Zapis < 3 MB po 6,5 roku przy 3–4 dołączonych krajach.
+- Spółki krajowe nadal ≤ 115, zwykłe ≤ 150. Każdy kraj ≤ 1,5 × liczba startowa.
 - Kursy walut nie wychodzą poza widełki. NAV funduszu bez walut nie zmienia się od samego ruchu kursów.
 - W typowym przebiegu dołączają 2–4 kraje, a nie wszystkie od razu.
 - Boty zagraniczne nie zdobywają ponad 50% żadnej spółki w pierwszym roku po dołączeniu.
@@ -405,3 +429,6 @@ Polski Grzegorz „Bankier” Kacperczyk zostaje bez zmian.
 - Nazwa spółki od croissantów (robocza: Croissanterie Dupont).
 - Nazwy rynków poza DAX, SSE i Wall Street Exchange.
 - Rozszerzanie liczby spółek w innych krajach (limit 1,5 × liczba startowa).
+11. **Limity:** spółki zagraniczne mają osobny limit na kraj (1,5 × liczba startowa) i nie liczą się do krajowych ok. 110 ani do łącznych 150.
+12. **Pracownicy za granicą:** model 0.13 i stały profil kraju (tabela w G2). Pełne społeczeństwo tylko w kraju startowym.
+13. **Wydarzenia giełdowe** liczone w kwartałach gry, nie w minutach.

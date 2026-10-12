@@ -6,7 +6,7 @@ Notatki z planowania, jeszcze bez planu. Każdy punkt przed budową dostaje wła
 - **Podkupowanie ludzi:** spółki „wykupują” pracowników innych firm oraz prywatnych inwestorów, żeby u nich pracowali (nawiązanie do pracowników z 0.13).
 - **Odejścia i nowe firmy:** pracownicy mogą odchodzić i zakładać własne firmy, które trafiają do inkubatora jako startupy.
 
-## Spółki zależne — nowa aktualizacja (do rozpisania z użytkownikiem)
+## ~~Spółki zależne~~ → przeniesione do planu 0.14 jako T6 (decyzja z 2026-10-12)
 - **Limit spółek:** córki gigantów nie liczą się do limitu aktywnych spółek (wprowadzane w 0.13.1).
 - **Do ustalenia:**
   - jak córki powstają i rosną;

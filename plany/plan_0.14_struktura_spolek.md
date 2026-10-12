@@ -1,4 +1,4 @@
-# Plan 0.14 „Struktura spółek” (szkic, po 0.13)
+# Plan 0.14 „Struktura spółek” (po 0.13; mapa całości: `plan_0.13-0.15_mapa.md`)
 
 Cel: spółki żyją jak prawdziwe grupy kapitałowe.
 - Zaczynają w jednej branży, rozszerzają działalność na kolejne segmenty, specjalizują się albo zmieniają profil.
@@ -14,7 +14,9 @@ Czego to uczy:
 - **Strategia spółki:** dlaczego specjalizacja daje wyższą marżę, a dywersyfikacja niższe ryzyko.
 - **Łańcuch dostaw:** ryzyko kontrahenta.
 
-Kolejność: T0 → T1 → T2 → T3 → T4 → T5. Każda część z testami, przebiegiem ×50 (po T0: ×100 albo ×200) i commitem.
+Kolejność: T0 (✅ zrobione, `117feec`) → T1 → T2 → T3 → T4 → T5 → T6. Każda część z testami, przebiegiem ×200 i commitem.
+
+**Warunek startu:** domknięty etap A z mapy (`plan_0.13-0.15_mapa.md`): weryfikacja 0.13.1 i pomiar 0.13.
 
 ---
 
@@ -22,8 +24,8 @@ Kolejność: T0 → T1 → T2 → T3 → T4 → T5. Każda część z testami, p
 
 - `stock.sector` jest już **tablicą**, a `getSectorProfile` (`core.js`) liczy **zwykłą średnią** profili sektorów. Spółka może mieć kilka branż, ale bez wag.
 - Spółki zależne istnieją (`makeSubsidiary`, `isSubsidiaryOf`, `subsidiaries`; 50% zysku córki trafia do matki). Powstają jednak tylko przez przejęcie lub dominujący wpływ, nigdy przez wydzielenie.
-- Niezmiennik akcji („akcje w obrocie = suma posiadaczy”) jest kluczowy. Znany otwarty błąd z bankiem inwestycyjnym i jego ETF-em **musi być naprawiony przed T4**, bo spin-off dzieli akcje między wszystkich posiadaczy.
-- Ostrzeżenie z testów 0.11: liczba spółek rośnie z 73 do ~97 w 6,5 roku i tabela robi się długa. Spin-offy dokładają spółki, więc potrzebny jest limit (T4).
+- Niezmiennik akcji („akcje w obrocie = suma posiadaczy”) jest kluczowy, bo spin-off dzieli akcje między wszystkich posiadaczy. Błąd „akcje ponad wolny obrót” (bank inwestycyjny + ETF) **naprawiono w 0.13.1** (`b3cd5a5`, „duchy posiadaczy” P3). Brakuje jeszcze potwierdzenia w długim przebiegu (mapa, A1); bez niego nie zaczynamy T4.
+- **Limity spółek z 0.13.1** (`companies.js`): miękki limit krajowy 100 (`LISTING_SOFT_CAP`), twardy 110 (`LISTING_HARD_CAP`), łącznie 150 zwykłych spółek (`LISTING_TOTAL_CAP`). Decyzja: limit krajowy jest **luźny, ok. 110**; 111–115 jest w porządku.
 
 ## T1. Segmenty działalności (fundament danych)
 
@@ -70,9 +72,14 @@ Decyzje podejmuje prezes według cech, kondycji i cykli. **Większościowiec mo�
   - Koszt: 10–20% rocznych przychodów, budowa 4–8 kw. Nowy segment startuje z udziałem 10% i rośnie o 2–5 pp na kwartał do celu 20–40%.
   - **Powiązane branże** (tabela, np. Technologia–Gaming, Chemia–Przemysł, Energia–Przemysł, Budowlany–Nieruchomości, Medycyna–Badania) mają szansę sukcesu 80% i synergię +1 pp marży. Niepowiązane: 55% i brak synergii.
   - Porażka: odpis 50–100% kosztu i kurs −5–10%.
-- **Specjalizacja (wejście w podsektor):**
+- **Wejście w podsektor:**
   - Koszt 5–10% rocznych przychodów, 2–4 kw.
   - Segment dostaje podsektor. Przy udziale ≥ 70% jednego segmentu spółka dostaje premię „skupienia”: marża +1,5 pp.
+- **Specjalizacja (nisza) — pojęcie wspólne z 0.15:**
+  - Lżejsza od podsektora etykieta segmentu: **bez własnego profilu wyceny**, z jednym modyfikatorem albo jednym typem zdarzeń.
+  - Lista na 0.14: Media → TV, Rozrywka; Medycyna → Farmaceutyki; Technologia → Wywiad i obronność. 0.15 dopisuje Motoryzacja → Premium.
+  - Przykłady modyfikatorów: TV i Rozrywka — zdarzenie „hit albo klapa sezonu”; Farmaceutyki — marża +2 pp i ryzyko wygaśnięcia patentu; Wywiad — przychody rosną z wydatkami na obronność.
+  - Koszt 3–5% rocznych przychodów, 2 kw.; zmiana specjalizacji kosztuje tyle samo i zeruje premię „skupienia” na 2 kw.
 - **Zmiana profilu (pivot):**
   - Udział segmentu głównego spada o 20–40 pp na rzecz nowego.
   - Przez 4 kw. marża −3 pp i zmienność ×1,3. Potem nowy profil.
@@ -103,7 +110,7 @@ Decyzje podejmuje prezes według cech, kondycji i cykli. **Większościowiec mo�
   - Kurs matki spada o wartość wydzielonej części; znacznik na wykresie (jak dzień odcięcia dywidendy).
   - Wariant **carve-out (25% przypadków):** matka zachowuje 51–80%, a córka jest `isSubsidiaryOf`, z istniejącym transferem zysku.
 - **ETF-y i indeksy:** córka trafia do portfeli ETF-ów razem z matką; przy rebalansowaniu może wypaść.
-- **Limit liczby spółek:** gdy na rynku jest ≥ 110 spółek notowanych, spin-off jest możliwy tylko jako carve-out. Bot-większościowiec chętniej przejmuje słabe spółki (M&A), co zmniejsza listę.
+- **Limit liczby spółek (decyzja):** spin-off może przekroczyć twardy sufit 110 **do 115 spółek krajowych** (limit luźny). Powyżej 115 albo przy pełnym łącznym suficie 150 możliwy jest tylko carve-out: córka zależna nie liczy się do limitu krajowego (zgodnie z 0.13.1). Bot-większościowiec chętniej przejmuje słabe spółki (M&A), a wchłonięcia z T6 zwalniają miejsca.
 - **Niezmienniki (testy obowiązkowe):**
   - akcje córki w obrocie = suma posiadaczy;
   - wartość matki przed = matka po + córka (± efekt zapowiedzi);
@@ -125,6 +132,28 @@ Decyzje podejmuje prezes według cech, kondycji i cykli. **Większościowiec mo�
 - **Karta koncernu:** mapa grupy (zależne, kooperanci) i suma części vs kapitalizacja, czyli dyskonto lub premia holdingowa.
 - **Akademia:** hasła „Grupa kapitałowa i holding”, „Ryzyko kontrahenta”, „Transakcje z podmiotami powiązanymi”.
 
+## T6. Spółki zależne: zarządzanie, usamodzielnienie, wchłonięcie, sprzedaż
+
+Przeniesione z `pomysly_na_kolejne_wersje.md` (decyzja: część 0.14). Dziś córki powstają tylko przez przejęcie lub dominujący wpływ i oddają matce stałe 50% zysku.
+
+- **Skąd się biorą córki:** przejęcie i dominujący wpływ (bez zmian), carve-out (T4), a do tego koncern (T5) może zamiast rozszerzenia segmentu **założyć córkę**. Córka startuje na giełdzie BRONZE z 20–30% akcji w ofercie publicznej, a ofertę kupują boty, fundusze i gracz.
+- **Zarządzanie przez matkę:**
+  - matka ustala **transfer zysku 30–70%** (dziś stałe 50%); wyższy transfer obniża kurs córki, bo mniejszościowi dostają mniej;
+  - pożyczka wewnątrzgrupowa: matka może dokapitalizować córkę w kryzysie (do 20% gotówki matki);
+  - polityka kadrowa (0.13) może być wspólna dla grupy;
+  - gracz-większościowiec matki może tym sterować, ale nie musi; domyślnie decyduje prezes matki.
+- **Usamodzielnienie:** matka schodzi poniżej 50%, sprzedając akcje w ofercie wtórnej (kurs córki −3–6%) albo oddając resztę akcjonariuszom jako spin-off (T4). Córka traci `isSubsidiaryOf`.
+- **Wchłonięcie:**
+  - przy ≥ 90% akcji matka może **przymusowo wykupić** resztę z premią 10–20% i połączyć spółki;
+  - segment córki wraca do matki (T1), córka znika z giełdy i **zwalnia miejsce w limicie**;
+  - gracz z pakietem mniejszościowym dostaje gotówkę po cenie wykupu.
+- **Sprzedaż pakietu kontrolnego:**
+  - matka sprzedaje pakiet innemu inwestorowi (bot, fundusz bota, koncern) z **premią za kontrolę** 15–30%;
+  - kupujący, który przekracza 50%, ogłasza **wezwanie** na resztę akcji po tej samej cenie przez istniejący proces M&A (`ma.js`); mniejszościowi mogą sprzedać albo zostać.
+- **Ochrona przed tunelowaniem:** transakcje matka–córka po cenach odbiegających od rynku o ponad 10% dają czerwoną flagę „transakcje z podmiotami powiązanymi” (jak w T5).
+- **Częstotliwość (cel na przebieg):** wchłonięcia 1–2, usamodzielnienia 1–2, sprzedaże pakietów 0–2, nowe córki koncernów 1–3.
+- **Akademia:** hasła „Premia za kontrolę”, „Wezwanie i ochrona mniejszości”, „Przymusowy wykup (squeeze-out)”.
+
 ---
 
 ## T0. Szybsze przebiegi testowe: prędkości ×100 i ×200 (przed T1)
@@ -145,7 +174,8 @@ Cel: przebiegi symulacyjne (6,5 roku gry) trwają dziś przy ×50 ok. 2,5–3 mi
 
 - **Zapis:**
   - `segments`, podsektor, procesy rozszerzeń, pivotów i spin-offów, badania kliniczne i budowy bloków;
-  - status koncernu, kooperacje.
+  - status koncernu, kooperacje;
+  - T6: transfer zysku córki, pożyczki wewnątrzgrupowe, trwające wezwania.
 
   **Migracja:** segmenty z obecnych sektorów (równe udziały), podsektory przydzielane raz przy wczytaniu.
 - **Testy:**
@@ -158,18 +188,22 @@ Cel: przebiegi symulacyjne (6,5 roku gry) trwają dziś przy ×50 ok. 2,5–3 mi
   - limit 110 spółek;
   - badanie kliniczne daje wynik binarny;
   - kooperacja przenosi szok partnera;
-  - czerwona flaga przy kooperacji spółek jednego właściciela.
+  - czerwona flaga przy kooperacji spółek jednego właściciela;
+  - T6: wchłonięcie przy ≥ 90% usuwa córkę, oddaje segment matce i zwalnia miejsce w limicie;
+  - T6: sprzedaż pakietu kontrolnego wywołuje wezwanie po tej samej cenie;
+  - T6: transfer zysku 30–70% zmienia gotówkę matki i córki zgodnie z ustawieniem.
 
 ## Jak sprawdzimy (przebieg ×50, a po T0 ×100/×200; 6,5 roku gry)
 
 | Miara | Cel |
 |---|---|
 | Spin-offy | 2–5 na przebieg |
-| Liczba spółek po 6,5 roku | ≤ 115 |
+| Liczba spółek po 6,5 roku | krajowe ≤ 115, zwykłe łącznie ≤ 150 |
 | Suma wartości matka + córka 2 kw. po spin-offie vs przed zapowiedzią | średnio +3–8% |
 | Rozszerzenia / pivoty rocznie | 2–4 / 1–2 |
 | Spółki z ≥ 2 segmentami po 6,5 roku | 25–45% |
 | Koncerny | 3–8; kooperacje aktywne 4–12 |
+| Spółki zależne (T6) | wchłonięcia 1–2, usamodzielnienia 1–2, sprzedaże 0–2 na przebieg |
 | GIG rocznie vs 0.13 | różnica ≤ ±2 pp |
 | Niezmiennik akcji | 0 naruszeń |
 
@@ -177,4 +211,7 @@ Cel: przebiegi symulacyjne (6,5 roku gry) trwają dziś przy ×50 ok. 2,5–3 mi
 
 1. **Rola gracza w wydzieleniu:** większościowiec może, ale nie musi, wpływać na specjalizację, rozszerzenia i wydzielenia. Domyślnie decyduje prezes i walne. Każdy akcjonariusz dostaje akcje córki proporcjonalnie do posiadanych akcji matki.
 2. **Podsektory:** 1–2 na sektor; tylko Biotechnologia, Energetyka jądrowa i Fintech mają własną mechanikę.
-3. **Warunek wstępny:** naprawa błędu „więcej akcji niż wolny obrót” (bank inwestycyjny + ETF) przed T4.
+3. **Warunek wstępny:** błąd „więcej akcji niż wolny obrót” (bank inwestycyjny + ETF) naprawiono w 0.13.1. Przed T4 trzeba go potwierdzić długim przebiegiem (mapa, A1).
+4. **Limit przy spin-offie:** luźny limit krajowy ok. 110 — spin-off dozwolony do 115 spółek krajowych, powyżej tylko carve-out (córka zależna nie liczy się do limitu krajowego).
+5. **Spółki zależne** (z pliku pomysłów) wchodzą do 0.14 jako T6.
+6. **Pojęcia:** podsektor ma własny profil wyceny (T2); specjalizacja to lżejsza etykieta niszy z jednym modyfikatorem (T3) — tak samo w 0.15.
