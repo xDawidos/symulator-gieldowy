@@ -4543,6 +4543,20 @@ group('0.13.1 P3: gotówka spółek nie spada poniżej zera', () => {
         assert(Math.abs(a.balanceSheet.assets - a.balanceSheet.liabilities - equity) < 1e-6, 'kapitał bez zmian');
         assert(coverNegativeCash(a, -100_000) === 0, 'dodatnia gotówka — bez kredytu');
     });
+
+    test('A1: naprawa usterek po inwestycji ponad gotówkę — kredyt od razu, gotówka ≥ 0', () => {
+        const a = makeCompany('FIXN', { cash: 1_000 });
+        resetWorld([a]);
+        if (a.departments?.development) a.departments.development.level = 0;
+        const liabilities = a.balanceSheet.liabilities;
+        const original = Math.random;
+        Math.random = () => 0.2; // weryfikacja: „usterki” (próg 0,12–0,37 przy dziale rozwoju 0)
+        try { finishInvestment(a, { id: 'game_studio', uid: 'fixn1', cost: 300_000, data: { assetValue: 250_000 } }); }
+        finally { Math.random = original; }
+        assert(a.cash >= 0, `gotówka ${a.cash}`);
+        assert(a.balanceSheet.liabilities > liabilities, 'naprawa sfinansowana kredytem');
+        assert(!checkWorldInvariants().some(x => x.includes('FIXN')), 'niezmiennik pusty');
+    });
 });
 
 group('0.13.1 P3: „duchy posiadaczy” (akcje w obrocie = posiadacze)', () => {
@@ -4591,6 +4605,34 @@ group('0.13.1 P3: „duchy posiadaczy” (akcje w obrocie = posiadacze)', () => 
         gpw.equityStakes.DEJC = 25; // stary „duch” z zapisu sprzed poprawki
         handleSuccessfulIPO(startup, 2);
         assert(!gpw.equityStakes.DEJC && Math.abs(startup.sharesHeld - getTrackedHeldShares(startup)) <= 0.5, `obrót ${startup.sharesHeld} vs ${getTrackedHeldShares(startup)}`);
+    });
+});
+
+group('0.14 A3: licznik przycięć „duchów posiadaczy”', () => {
+    test('każde przycięcie trafia do rejestru (symbol, posiadacz, akcje, kwartał) i jest ostrzeżeniem, nie naruszeniem', () => {
+        const a = makeCompany('GHX'), owner = makeCompany('OWX');
+        resetWorld([a, owner]);
+        ghostTrimLog.length = 0;
+        a.totalShares = 100; a.insiderShares = 0; a.treasuryShares = 0; a.stateOwnershipPct = 0; a.sharesHeld = 0; // pule puste: nadwyżka 226 − 0
+        aiCompetitors[0].portfolio.GHX = { shares: 226, avgPrice: 10 };
+        owner.isBankrupt = true; owner.equityStakes = { GHX: 100 };
+        reconcileSharesHeld();
+        const entries = ghostTrimLog.filter(t => t.symbol === 'GHX');
+        assert(entries.length === 2, `wpisy: ${entries.length}`);
+        assert(entries[0].holder === 'spółka OWX' && entries[0].shares === 100 && entries[0].source === 'game', JSON.stringify(entries[0]));
+        assert(entries[1].holder.startsWith('bot ') && entries[1].shares === 126 && aiCompetitors[0].portfolio.GHX.shares === 100 && entries[1].quarter === macro.quarter, JSON.stringify(entries[1]));
+        const problems = checkWorldInvariants();
+        assert(!problems.some(x => x.includes('GHX')), 'nie ma naruszenia');
+        assert(problems.warnings.filter(w => w.includes('GHX')).length === 2, `ostrzeżenia: ${problems.warnings}`);
+        ghostTrimLog.length = 0;
+    });
+
+    test('bez nadwyżki rejestr zostaje pusty', () => {
+        const a = makeCompany('CLX');
+        resetWorld([a]);
+        ghostTrimLog.length = 0;
+        reconcileSharesHeld();
+        assert(ghostTrimLog.length === 0 && checkWorldInvariants().warnings.length === 0, `wpisy: ${ghostTrimLog.length}`);
     });
 });
 
@@ -4665,6 +4707,63 @@ group('0.13.1 B5: stabilność funduszu', () => {
         assert(stats.current.warned, 'ostrzeżenie o odpływie > 10%');
         macro.quarter++;
         assert(getFundFlowStats().last.out.performance === out0 + 1000, 'ostatni kwartał w panelu');
+    });
+});
+
+group('Etap A: decyzje balansu (zaufanie vs GIG, lokaty spółek, polityki kadrowe)', () => {
+    function world(companies = 2) {
+        const list = Array.from({ length: companies }, (_, i) => makeCompany(`LK${i}`, { cash: 5_000_000, fixedAssets: 800_000 }));
+        list.forEach(company => { company.insiderShares = 0; company.sharesHeld = 0; company.reputation = { player: 0 }; });
+        resetWorld(list);
+        allBonds.length = 0;
+        marketIndexes.find(index => index.id === 'GIG').value = 100;
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        return list;
+    }
+
+    test('cel zaufania: obsunięcie i zmienność równe GIG nie obniżają zaufania, nadwyżka ponad GIG — tak', () => {
+        world();
+        const base = { rivals: [], rank: 1, rankOf: 1, fundReturn: 0.05, benchmarkReturn: 0.05 };
+        playerFund.current.elapsedMs = 0;
+        playerFund.periods = Array.from({ length: 4 }, (_, number) => ({ ...base, number, maxDrawdown: 0, volatility: 0 }));
+        const calm = computeTrustTarget();
+        playerFund.periods = Array.from({ length: 4 }, (_, number) => ({ ...base, number, maxDrawdown: 0.12, volatility: 0.03, benchmarkDrawdown: 0.12, benchmarkVolatility: 0.03 }));
+        const likeGig = computeTrustTarget();
+        playerFund.periods = Array.from({ length: 4 }, (_, number) => ({ ...base, number, maxDrawdown: 0.20, volatility: 0.05, benchmarkDrawdown: 0.12, benchmarkVolatility: 0.03 }));
+        const riskier = computeTrustTarget();
+        assertNear(likeGig, calm, 'fundusz = GIG ma ten sam cel co spokojny', 1e-9);
+        assert(riskier < likeGig - 3, `ryzyko ponad GIG obniża cel: ${riskier.toFixed(1)} vs ${likeGig.toFixed(1)}`);
+    });
+
+    test('okres zapisuje obsunięcie i zmienność GIG', () => {
+        world();
+        const gig = marketIndexes.find(index => index.id === 'GIG');
+        for (const value of [100, 110, 90, 95]) { gig.value = value; updateFund(1); processFundWeekly(); }
+        assertNear(playerFund.current.benchmarkDrawdown, 1 - 90 / 110, 'obsunięcie GIG', 1e-9);
+        playerFund.current.elapsedMs = FUND_PERIOD_MS;
+        updateFund(1);
+        const period = playerFund.periods[playerFund.periods.length - 1];
+        assert(period.benchmarkDrawdown > 0.18 && period.benchmarkVolatility > 0, JSON.stringify({ d: period.benchmarkDrawdown, v: period.benchmarkVolatility }));
+    });
+
+    test('lokaty spółek w JU: każda ≤ 5% aktywów funduszu, łącznie ≤ 10% na kwartał', () => {
+        const companies = world(12);
+        companies.forEach(company => { company.reputation.player = REPUTATION_LEVELS.CORRECT + 10; });
+        const assets0 = getFundAssets();
+        const random = Math.random;
+        Math.random = () => 0;
+        try { for (let week = 0; week < 5; week++) processCorporateSubscriptions(); }
+        finally { Math.random = random; }
+        const lokaty = playerFund.clients.filter(client => client.name.endsWith('(lokata)'));
+        const inflow = getFundAssets() - assets0;
+        assert(lokaty.length >= 2, `lokaty: ${lokaty.length}`);
+        assert(inflow <= assets0 * CORPORATE_SUBSCRIPTION_QUARTER_CAP * 1.0001 + 1, `napływ ${inflow.toFixed(0)} z ${assets0.toFixed(0)}`);
+        assert(lokaty.every(client => client.units * getFundNav() <= assets0 * CORPORATE_SUBSCRIPTION_MAX_SHARE * 1.2 + 1), 'pojedyncza lokata ≤ 5% aktywów');
+    });
+
+    test('polityki kadrowe: Oszczędna płaci ×0,95, Wyzysk ma kontrole Inspekcji ×4', () => {
+        assert(LABOR_POLICIES.saving.pay === 0.95 && LABOR_POLICIES.exploit.inspection === 4, JSON.stringify([LABOR_POLICIES.saving, LABOR_POLICIES.exploit]));
+        assert(LABOR_POLICIES.exploit.pay < LABOR_POLICIES.saving.pay && LABOR_POLICIES.saving.pay < LABOR_POLICIES.standard.pay, 'kolejność płac');
     });
 });
 

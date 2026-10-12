@@ -116,8 +116,8 @@ Kolejność: S1 → S2 → S3 → S4 → S5 → S6. Każda część z testami, p
 
 | Polityka | Płace | Cel zadowolenia | Szansa na związek | Wydajność | Inne |
 |---|---|---|---|---|---|
-| Wyzysk | ×0,85 | 20 | ×3 | −3% | szara strefa +10 pp, kontrole Inspekcji Pracy ×3 |
-| Oszczędna | ×0,93 | 40 | ×1,8 | 0 | — |
+| Wyzysk | ×0,85 | 20 | ×3 | −3% | szara strefa +10 pp, kontrole Inspekcji Pracy ×4 (było ×3, strojenie A2) |
+| Oszczędna | ×0,95 (było ×0,93, strojenie A2) | 40 | ×1,8 | 0 | — |
 | Standardowa | ×1,00 | 60 | ×1 | 0 | — |
 | Prospołeczna | ×1,08 | 80 | ×0,4 | +4% | rotacja −50%, przyciąga specjalistów |
 
@@ -283,6 +283,47 @@ Ta część pilnuje, żeby nowego systemu nie dało się w całości pominąć.
 | Każda ustawa zmieniona ≥ 1 raz | ≥ 70% przebiegów |
 | Nowe maile | ≤ 3 na kwartał średnio |
 | Czas kroku gry | wzrost ≤ 10% |
+
+## Wyniki pomiaru (etap A2, 2026-10-13)
+
+**Jak mierzyliśmy:** `tests/przebiegi.html` uruchamia grę w ramce z wirtualnym zegarem (×50, 26 kwartałów = 6,5 roku, nowa gra na przebieg, gracz bierny). Zestawy:
+- **obecny kod** (`zmiany-AI` po A1): 20 przebiegów;
+- **0.12** (`b3cd5a5`, ostatni commit przed 0.13): 15 przebiegów;
+- **obecny kod bez wpływu 0.13 na wyniki spółek** (preset `bez-013`: bez kosztu pracy, strajków, popytu klas i zdarzeń demograficznych): 12 przebiegów. Oddziela skutki 0.13 od zmian 0.13.1 (np. presji zatłoczenia);
+- **losowe polityki kadrowe** (preset `polityki-losowe`: każda spółka startowa dostaje losową politykę na cały przebieg): 10 przebiegów, ok. 150–240 spółek na politykę. Usuwa efekt doboru — w zwykłej grze Wyzysk wybierają prezesi „chciwi” i z „nadużyciami”, a Oszczędną spółki w słabej kondycji.
+
+| Miara | Cel | Wynik | Ocena |
+|---|---|---|---|
+| GIG rocznie vs 0.12 | ≤ ±2 pp | 17,0% vs 16,8% (bez 0.13: 17,2%) → **+0,2 pp** | ✅ |
+| Średnia marża (EBITDA/przychody, ważona) vs 0.12 | ≤ ±1 pp | 23,9% (Standardowa 24,0%) vs 24,5% (bez 0.13: 24,5%) → **−0,6 pp** | ✅ |
+| Populacja po 6,5 roku | +1…+6%; spadek w ≥ 10% przebiegów | średnio +2,8% (1,9…4,7%); okresowy spadek w 3/20 (15%) | ✅ |
+| Klasa biedna | 12–30%, bez dryfu | 21,0…24,0% (koniec śr. 23,2%) | ✅ |
+| Spółki ze związkiem zakładowym | 15–35% | śr. 19,3% (7,5…26,5%) | ✅ |
+| Związki sektorowe | 1–3 | śr. 2,25 na koniec (najwyżej 4) | ✅ (pojedynczo 4) |
+| Strajki | 2–6 na rok | śr. 3,7 (0,9…6,3 w pojedynczych przebiegach) | ✅ |
+| TSR polityk (zwykła gra, wybór prezesa) | ±3 pp/rok | Standard 14,8%; Oszczędna 12,4% (−2,4); Prospołeczna 11,0% (−3,8); Wyzysk 9,6% (−5,2) | ⚠️ zaburzone doborem |
+| TSR polityk (losowe przypisanie) | ±3 pp/rok | Standard 14,1%; Wyzysk 13,9% (**−0,2**); Prospołeczna 16,7% (**+2,6**); Oszczędna 19,2% (**+5,1**) | ❌ Oszczędna |
+| Rozrzut TSR (losowe przypisanie, odch. std.) | Wyzysk największy | Oszczędna 18,6; Prospołeczna 16,1; **Wyzysk 15,3**; Standard 12,6 | ❌ |
+| Ludowcy wygrywają wybory | 20–40% | 9 z 37 wyborów = **24%** (koalicje w 19/37) | ✅ |
+| Każda ustawa zmieniona ≥ 1 raz | ≥ 70% przebiegów | płaca min. 75%, zasiłki 85%, mieszkania 85%, prawa 85% | ✅ |
+| Nowe maile 0.13 | ≤ 3 na kwartał | **1,0** na kwartał (raport z rynku pracy; wszystkie maile 23,4 vs 21,9 w 0.12) | ✅ |
+| Czas kroku gry | wzrost ≤ 10% | 0.12: 3,27 s/kw.; 0.13 przed T0 (`62478bb`): 3,05 s (−7%); obecny kod: 1,42 s (T0) | ✅ |
+
+**Wnioski:**
+- 0.13 nie przestroiło gospodarki: GIG i marże zostają w granicach (zasada kalibracji działa). Społeczeństwo, związki, strajki, wybory, ustawy i poczta mieszczą się w celach.
+- **Odchylenie: polityki kadrowe.** Przy losowym przypisaniu Oszczędna daje ok. +5 pp TSR rocznie ponad Standardową, a największy rozrzut ma Oszczędna, nie Wyzysk. Oszczędna ma niższe płace (×0,93) bez kary wydajności, a cel zadowolenia 40 trzyma ją powyżej progu rotacji (35). **Strojenie wymaga decyzji użytkownika** (zmiana balansu) — propozycje w raporcie `raporty/weryfikacja_0.13.1.md`.
+- W zwykłej grze różnice TSR polityk wynikają głównie z tego, kto wybiera politykę (słabe spółki → Oszczędna, „chciwi” prezesi → Wyzysk), a nie z samej polityki.
+- Poza zakresem 0.13: GIG rośnie ok. 17% rocznie w obu wersjach (komentarz B5 w `companies.js` mówi o celu 7–9%).
+
+**Po strojeniu (decyzja użytkownika 2026-10-13: Oszczędna płace ×0,93 → ×0,95, Wyzysk kontrole Inspekcji ×3 → ×4).** Krótki pomiar kontrolny (ok. 5 min; 7 przebiegów na zestaw: 3 przy ×50 i 3–4 przy ×200, mała próba):
+
+| Miara | Przed | Po | Ocena |
+|---|---|---|---|
+| TSR Oszczędna vs Standard (losowe przypisanie) | +5,1 pp | **+2,6 pp** (17,7% vs 15,1%) | ✅ |
+| TSR Prospołeczna / Wyzysk vs Standard | +2,6 / −0,2 pp | +2,3 / −0,2 pp | ✅ |
+| Największy rozrzut TSR | Oszczędna | Prospołeczna 20,9; Oszczędna 18,8; Wyzysk 15,3; Standard 11,1 | ❌ Wyzysk nadal nie największy |
+| GIG / marża (obecny kod) | 17,0% / 23,9% | 18,9% / 25,3% (7 przebiegów, odch. std. GIG 5,9 pp) | ⚠️ GIG +2,1 pp vs 0.12 — na granicy, w granicach szumu małej próby |
+| Związki / strajki (obecny kod) | 19,3% / 3,7 na rok | 18,7% / 3,8 na rok | ✅ |
 
 ## Ryzyka i jak im zapobiegamy
 
