@@ -4533,6 +4533,22 @@ group('0.13.1 P3: „duchy posiadaczy” (akcje w obrocie = posiadacze)', () => 
         assert(playerPortfolio.STX.shares === Math.floor(a.totalShares * 0.2), 'akcje funduszu bez zmian');
         assert(a.stateOwnershipPct < 0.9 && Math.abs(a.sharesHeld - getTrackedHeldShares(a)) <= 0.5, `pakiet państwa ${a.stateOwnershipPct}`);
     });
+
+    test('usunięta spółka nie zostawia pakietów — nowa spółka z tym samym symbolem startuje czysto', () => {
+        const a = makeCompany('DEJC'), gpw = makeCompany('GPWX');
+        resetWorld([a, gpw]);
+        gpw.equityStakes = { DEJC: 25 };
+        corporation?.managers?.[0] && (corporation.managers[0].fund.portfolio.DEJC = { shares: 10, avgPrice: 1 });
+        a.isBankrupt = true; a.timeOfDeath = Date.now() - 10 * 60_000;
+        cleanupBankruptStocks(1);
+        assert(!stocks.includes(a) && !gpw.equityStakes.DEJC, 'pakiet usuniętej spółki zniknął');
+        const startup = generateNewStartup();
+        startup.symbol = 'DEJC';
+        stocks.push(startup);
+        gpw.equityStakes.DEJC = 25; // stary „duch” z zapisu sprzed poprawki
+        handleSuccessfulIPO(startup, 2);
+        assert(!gpw.equityStakes.DEJC && Math.abs(startup.sharesHeld - getTrackedHeldShares(startup)) <= 0.5, `obrót ${startup.sharesHeld} vs ${getTrackedHeldShares(startup)}`);
+    });
 });
 
 function runAllTests() {

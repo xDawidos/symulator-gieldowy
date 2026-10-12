@@ -6530,13 +6530,18 @@ function cleanupBankruptStocks(speedMultiplier) {
 
     // stocks.filter tworzy nową tablicę, więc musimy nadpisać starą
     const originalCount = stocks.length;
+    const removed = [];
     stocks = stocks.filter(stock => {
         if (!stock.isBankrupt) {
             return true; // Zostawiamy aktywne spółki
         }
         // Jeśli spółka jest bankrutem, sprawdzamy, czy minął już czas
-        return (now - stock.timeOfDeath) < oneMinuteInGame;
+        if ((now - stock.timeOfDeath) < oneMinuteInGame) return true;
+        removed.push(stock);
+        return false;
     });
+    // P3: usunięta spółka nie zostawia „duchów” — ani swoich pakietów, ani cudzych pakietów swoich akcji (symbol może wrócić).
+    for (const stock of removed) { releaseCompanyStakes(stock); purgeSymbolHolders(stock.symbol); }
 
     if (stocks.length < originalCount) {
         console.log("Usunięto zbankrutowane spółki z listy.");
@@ -6843,8 +6848,26 @@ function removeStockFromGame(symbol) {
     });
 
     if (typeof settleEtfHoldings === 'function') settleEtfHoldings(symbol, 0); // ETF-y tracą pakiet (bankructwo)
+    purgeSymbolHolders(symbol); // P3: pakiety spółek, funduszy botów i portfela prywatnego
 
     console.log(`[M&A] Spółka ${symbol} została całkowicie usunięta z gry.`);
+}
+
+/**
+ * P3: usuwa wszystkie pozycje w akcjach o danym symbolu (spółka zniknęła z gry). Bez tego symbol użyty ponownie
+ * (nowy startup, nowa spółka zależna) dziedziczy „duchy posiadaczy” — akcje w obrocie ≠ posiadacze.
+ */
+function purgeSymbolHolders(symbol) {
+    if (!symbol) return;
+    for (const owner of stocks) {
+        if (owner.equityStakes && symbol in owner.equityStakes) delete owner.equityStakes[symbol];
+        if (owner.holdingPortfolio && symbol in owner.holdingPortfolio) delete owner.holdingPortfolio[symbol];
+    }
+    for (const manager of corporation?.managers || []) if (manager.fund?.portfolio?.[symbol]) delete manager.fund.portfolio[symbol];
+    for (const ai of aiCompetitors) if (ai.portfolio?.[symbol]) delete ai.portfolio[symbol];
+    for (const bank of commercialBanks) if (bank.stockPortfolio?.[symbol]) delete bank.stockPortfolio[symbol];
+    if (playerWallet?.portfolio?.[symbol]) delete playerWallet.portfolio[symbol];
+    if (typeof etfs !== 'undefined') for (const etf of etfs) if (etf.holdings && symbol in etf.holdings) delete etf.holdings[symbol];
 }
 
 
@@ -8634,6 +8657,7 @@ function handleSuccessfulIPO(startup, successMultiplier) {
     if (!startup.operatorStartup && !hasFreeListingSlot()) { parkStartupForListing(startup, successMultiplier); return; } // P1: twardy sufit
     const symbol = startup.symbol;
     const claims = collectStartupClaims(startup);
+    purgeSymbolHolders(symbol); // P3: symbol mógł należeć do usuniętej spółki — bez cudzych „duchów” w nowej
     const totalClaims = claims.reduce((sum, claim) => sum + claim.amount, 0);
     const base = Math.max(totalClaims, startup.fundingGoal + (startup.ipoPriceBonus || 0));
     const ipoPrice = getRandomInRange(25, 50);

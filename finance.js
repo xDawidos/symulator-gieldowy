@@ -824,6 +824,7 @@ function foundSubsidiary(parent) {
     let suffix = 1;
     let symbol;
     do { symbol = `${parent.symbol.slice(0, 3)}Z${suffix++}`; } while (stocks.some(s => s.symbol === symbol));
+    if (typeof purgeSymbolHolders === 'function') purgeSymbolHolders(symbol); // P3: symbol po usuniętej spółce — bez „duchów”
 
     const totalShares = 10000;
     const price = Math.round(capital / totalShares * 1.5 * 100) / 100;
@@ -1692,6 +1693,7 @@ function createListedCompany({ name, symbol, sector, price, totalShares, exchang
     if (typeof generateCEO === 'function') generateCEO(stock);
     initializeFundamentals(stock, true);
     setCompanyDividendPolicy(stock, getRandomElement(['Growth', 'Balanced']));
+    if (typeof purgeSymbolHolders === 'function') purgeSymbolHolders(stock.symbol); // P3: symbol po usuniętej spółce — bez „duchów”
     return stock;
 }
 
