@@ -4512,6 +4512,29 @@ group('0.13.1 P3: gotówka spółek nie spada poniżej zera', () => {
     });
 });
 
+group('0.13.1 P3: „duchy posiadaczy” (akcje w obrocie = posiadacze)', () => {
+    test('reconcile przy zerowym wolnym obrocie zdejmuje pakiety-duchy, nie rusza funduszu gracza', () => {
+        const a = makeCompany('PLX'), owner = makeCompany('OWN');
+        resetWorld([a, owner]);
+        a.insiderShares = a.totalShares; a.treasuryShares = 0; a.stateOwnershipPct = 0; a.sharesHeld = 0;
+        aiCompetitors[0].portfolio.PLX = { shares: 126, avgPrice: 10 };
+        owner.isBankrupt = true; owner.equityStakes = { PLX: 100 };
+        reconcileSharesHeld();
+        assert(Math.abs(a.sharesHeld - getTrackedHeldShares(a)) <= 0.5, `obrót ${a.sharesHeld} vs posiadacze ${getTrackedHeldShares(a)}`);
+        assert(!checkWorldInvariants().some(x => x.includes('PLX')), 'niezmiennik pusty');
+    });
+
+    test('nadwyżka posiadaczy: najpierw insiderzy i pakiet państwa, gracz zachowuje akcje', () => {
+        const a = makeCompany('STX');
+        resetWorld([a]);
+        a.insiderShares = 0; a.treasuryShares = 0; a.stateOwnershipPct = 0.9; a.sharesHeld = 0;
+        playerPortfolio.STX = { shares: Math.floor(a.totalShares * 0.2), avgPrice: 10, assetType: 'stock' };
+        reconcileSharesHeld();
+        assert(playerPortfolio.STX.shares === Math.floor(a.totalShares * 0.2), 'akcje funduszu bez zmian');
+        assert(a.stateOwnershipPct < 0.9 && Math.abs(a.sharesHeld - getTrackedHeldShares(a)) <= 0.5, `pakiet państwa ${a.stateOwnershipPct}`);
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

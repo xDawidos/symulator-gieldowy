@@ -8079,6 +8079,34 @@ function releaseOverheldShares(stock) {
         const released = Math.min(pool, excess);
         if (released > 0) { stock[key] = pool - released; excess -= released; }
     }
+    // P3: dalej pakiet państwa (akcje sprzedane z niego inwestorom bez korekty udziału)…
+    if (excess > 0 && stock.stateOwnershipPct > 0 && stock.totalShares > 0) {
+        const stateShares = Math.floor(stock.totalShares * stock.stateOwnershipPct);
+        const released = Math.min(stateShares, excess);
+        stock.stateOwnershipPct = Math.max(0, (stateShares - released) / stock.totalShares);
+        excess -= released;
+    }
+    // … a na końcu „duchy posiadaczy”: pakiety spółek upadłych, potem pozostałych posiadaczy (bez funduszu i portfela gracza).
+    if (excess > 0) trimGhostHolders(stock, excess);
+}
+
+/** P3: zdejmuje nadmiarowe akcje z pakietów posiadaczy, których nie pokrywa wolny obrót. Zwraca zdjętą liczbę. */
+function trimGhostHolders(stock, excess) {
+    const symbol = stock.symbol;
+    let left = excess;
+    const take = (get, set) => { if (left <= 0) return; const have = Math.max(0, Number(get()) || 0); const cut = Math.min(have, left); if (cut > 0) { set(have - cut); left -= cut; } };
+    const owners = stocks.filter(o => o !== stock && (o.equityStakes?.[symbol] || o.holdingPortfolio?.[symbol]));
+    for (const owner of [...owners.filter(o => o.isBankrupt), ...owners.filter(o => !o.isBankrupt)]) {
+        if (owner.equityStakes?.[symbol]) take(() => owner.equityStakes[symbol], v => { if (v > 0) owner.equityStakes[symbol] = v; else delete owner.equityStakes[symbol]; });
+        if (owner.holdingPortfolio?.[symbol]) take(() => owner.holdingPortfolio[symbol].quantity, v => { if (v > 0) owner.holdingPortfolio[symbol].quantity = v; else delete owner.holdingPortfolio[symbol]; });
+    }
+    if (typeof etfs !== 'undefined') for (const etf of etfs) if (etf.holdings?.[symbol]) take(() => etf.holdings[symbol], v => { etf.holdings[symbol] = v; });
+    for (const bank of commercialBanks) if (bank.stockPortfolio?.[symbol]) take(() => bank.stockPortfolio[symbol].shares, v => { if (v > 0) bank.stockPortfolio[symbol].shares = v; else delete bank.stockPortfolio[symbol]; });
+    for (const manager of corporation?.managers || []) if (manager.fund?.portfolio?.[symbol]) take(() => manager.fund.portfolio[symbol].shares, v => { if (v > 0) manager.fund.portfolio[symbol].shares = v; else delete manager.fund.portfolio[symbol]; });
+    for (const ai of aiCompetitors) if (ai.portfolio?.[symbol]?.shares) take(() => ai.portfolio[symbol].shares, v => { if (v > 0) ai.portfolio[symbol].shares = v; else delete ai.portfolio[symbol]; });
+    take(() => stock.cityShares, v => { stock.cityShares = v; });
+    if (left < excess && typeof isDebugMode === 'function' && isDebugMode()) console.warn(`[P3] ${symbol}: zdjęto ${excess - left} akcji „duchów posiadaczy”`);
+    return excess - left;
 }
 
 /** Uzgadnia sharesHeld z posiadaczami (wczytanie zapisu i co kwartał). Zwraca liczbę poprawionych spółek. */

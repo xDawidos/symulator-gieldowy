@@ -1234,7 +1234,9 @@ function makeOfferToState() {
 
     // Transakcja udana
     playerCash -= totalCost;
+    if (!playerPortfolio[symbol]) playerPortfolio[symbol] = { shares: 0, avgPrice: offerPrice, assetType: 'stock' };
     playerPortfolio[symbol].shares += quantity;
+    stock.sharesHeld += quantity; // akcje z pakietu państwa wchodzą do obrotu u funduszu (niezmiennik: obrót = posiadacze)
     
     const newOwnedByState = stateShares - quantity;
     stock.stateOwnershipPct = newOwnedByState / stock.totalShares;
