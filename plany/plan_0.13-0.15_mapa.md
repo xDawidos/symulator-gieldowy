@@ -85,6 +85,13 @@ Ustalenia spójności (wpisane do planu 0.15):
 - **Wersje zapisu:** 0.13 = v13, 0.14 = v14, 0.15 = v15.
 - **Do potwierdzenia przed G0/G2** (lista „Do potwierdzenia” w planie 0.15): spółki państwowe, nazwa Banku Żywności, nazwa spółki z croissantami, nazwy rynków.
 
+## Otwarte sprawy (z raportu `weryfikacja_0.13.1.md`, do zaplanowania)
+
+- **Rynek za byczy:** GIG rośnie ok. 17% rocznie w 0.12 i 0.13, a komentarz B5 w `companies.js` zakłada cel 7–9%. Problem znany od testów 0.11. Wymaga osobnego planu balansu rynku; kandydat na krótką wersję między 0.14 a 0.15 albo część G0.
+- **Rozmiar zapisu:** w bardzo długiej grze (od ok. 40 lat gry) zapis dochodzi do 2,5 MB, a 0.14 (segmenty) i 0.15 (spółki zagraniczne) go powiększą. W T1 obowiązuje cel przyrostu ≤ 3%. Przed 0.15 G2 potrzebny jest pomiar zapisu z 3–4 dołączonymi krajami (cel < 3 MB z planu 0.15).
+- **Polityki kadrowe:** Wyzysk nie ma największego rozrzutu wyników (cel z 0.13). Do ponownego pomiaru dłuższą serią; ewentualne strojenie (np. większa zmienność kar Inspekcji i strajków przy Wyzysku) po decyzji użytkownika.
+- **Obserwacja:** koszty fuzji w `ma.js` (`initiator.cash -= process.costs`) bez sprawdzenia gotówki to możliwe źródło jednorazowej ujemnej gotówki (PROL). Zlecone przy 0.14 T1.
+
 ## Po 0.15
 
 - „Rynek pracy 2” z `pomysly_na_kolejne_wersje.md`: pracownicy zakładają firmy, które trafiają do inkubatora, oraz podkupowanie prywatnych inwestorów. Podkupowanie specjalistów i prezesów już istnieje (0.13 S3), więc RP2 je rozszerza, a nie powtarza.
