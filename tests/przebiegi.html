@@ -49,7 +49,19 @@ const PRESETS = {
             return origWeekly.apply(this, arguments);
         };
     })();`,
-    'fundusz-gig-zamkniety': null // jak wyżej + emisja ciągła zamknięta (ustawiane niżej)
+    'fundusz-gig-zamkniety': null, // jak wyżej + emisja ciągła zamknięta (ustawiane niżej)
+    // A2: obecny kod bez wpływu 0.13 na wyniki spółek (koszt pracy, strajki, popyt klas, zdarzenia demograficzne) —
+    // oddziela skutki 0.13 od zmian 0.13.1 przy porównaniu z 0.12.
+    'bez-013': `getLaborMarginAdj = () => 0; getStrikeRevenueFactor = () => 1; getSocietyRevenueFactor = () => 1; getSocietyGrowthAdj = () => 0;`,
+    // A2: TSR polityk kadrowych bez efektu doboru — każda spółka startowa dostaje losową politykę na cały przebieg.
+    'polityki-losowe': `for (const stock of stocks) {
+        if (stock.assetType || stock.isBankrupt || !ensureWorkforce(stock)) continue;
+        const wf = stock.workforce;
+        const policy = LABOR_POLICY_ORDER[Math.floor(Math.random() * LABOR_POLICY_ORDER.length)];
+        wf.policy = policy; wf.payMult = LABOR_POLICIES[policy].pay; wf.payStep = 0;
+        wf.policySetBy = 'test'; wf.policyLockUntil = 1e9;
+        wf.satisfaction = getSatisfactionTarget(stock);
+    }`
 };
 PRESETS['fundusz-gig-zamkniety'] = PRESETS['fundusz-gig'] + 'setFundOpenSubscriptions(false);';
 const PATCH = (PRESETS[params.get('preset')] || '') + (params.get('patch') || ''); // kod wykonywany w ramce po starcie gry
