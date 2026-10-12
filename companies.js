@@ -2531,7 +2531,7 @@ const INFLATION_PASS_THROUGH = 0.15;   // inflacja w przychodach (było 0,3)
 const LISTING_SOFT_CAP = 100;
 const LISTING_HARD_CAP = 110;        // P1: twardy sufit — od 110 spółek krajowych żadnych nowych debiutów ani przenosin na rynek krajowy
 const LISTING_PRESSURE_RANGE = LISTING_HARD_CAP - LISTING_SOFT_CAP;   // hamulec 100–110 (pełna presja przy suficie)
-const LISTING_TOTAL_CAP = 150;       // P1: wszystkie notowane podmioty (krajowe, zależne, rynki internetowe, holdingi, REIT…) bez startupów
+const LISTING_TOTAL_CAP = 150;       // P1: zwykłe spółki łącznie (krajowe, zależne, rynków internetowych); bez stałych podmiotów i startupów
 const AWAITING_LISTING_MAX_QUARTERS = 8; // startup bez miejsca na giełdzie czeka najwyżej 2 lata, potem zostaje przejęty
 
 /** Spółka liczona do limitu spółek krajowych. */
@@ -2559,9 +2559,13 @@ function hasFreeListingSlot() {
     return getListedCompanyCount() < LISTING_HARD_CAP && hasFreeTotalListingSlot();
 }
 
-/** Wszystkie notowane podmioty poza startupami w inkubatorze. */
+/** Zwykłe spółki do łącznego sufitu: bez stałych podmiotów (holdingi, REIT-y, instytuty, banki, Fundacja, operatorzy rynków) i startupów. */
+function isOrdinaryCompany(stock) {
+    return Boolean(stock && !stock.isBankrupt && !stock.assetType && !stock.isBankStock && !stock.marketOperator && stock.symbol !== 'FPF');
+}
+
 function getTotalCompanyCount() {
-    return stocks.filter(s => !s.isBankrupt && s.assetType !== 'Startup').length;
+    return stocks.filter(isOrdinaryCompany).length;
 }
 
 /** P1: miejsce pod łącznym sufitem (także dla spółek zależnych i członków rynków internetowych). */

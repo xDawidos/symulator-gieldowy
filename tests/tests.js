@@ -4497,6 +4497,13 @@ group('0.13.1 P1/P2: twardy sufit spółek i przenosiny na nowe rynki', () => {
         list[1].exchange = 'RUBY';
         assert(foundSubsidiary(list[1]) === null, 'brak nowej zależnej');
     });
+
+    test('łączny sufit liczy tylko zwykłe spółki (bez holdingów, REIT-ów, banków i operatorów rynków)', () => {
+        const list = worldP(10);
+        const base = getTotalCompanyCount();
+        list[0].assetType = 'Holding'; list[1].assetType = 'REIT'; list[2].isBankStock = true; list[3].marketOperator = 'XTD';
+        assert(getTotalCompanyCount() === base - 4, `liczone ${getTotalCompanyCount()} z ${base}`);
+    });
 });
 
 group('0.13.1 P3: gotówka spółek nie spada poniżej zera', () => {
