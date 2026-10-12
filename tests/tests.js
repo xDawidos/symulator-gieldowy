@@ -4307,6 +4307,49 @@ group('Poprawki 0.13.1 (B1–B13)', () => {
     });
 });
 
+group('T0: prędkości testowe ×100 i ×200', () => {
+    test('kroki tiku: interwał ≥ 10 ms, ten sam czas gry na sekundę', () => {
+        for (const speed of [1, 2, 5, 10, 50, 100, 200]) {
+            const steps = getTickStepsPerCall(speed);
+            const interval = BASE_DELAYS.stockUpdate * steps / speed;
+            assert(interval >= MIN_TICK_INTERVAL_MS - 1e-9 || speed <= 50, `×${speed}: interwał ${interval} ms`);
+            assertNear(steps * BASE_DELAYS.stockUpdate / interval, speed, `×${speed}: tempo gry`, 1e-9);
+        }
+        assert(getTickStepsPerCall(200) === 2 && getTickStepsPerCall(50) === 1, 'kroki');
+    });
+
+    test('zegar gry: kwartał = 300 tików przy każdej prędkości, kolejność pętli stała', () => {
+        const saved = { jobs: gameScheduler.jobs, clock: gameScheduler.clockMs, speed: currentSpeedMultiplier };
+        try {
+            for (const speed of [1, 50, 200]) {
+                gameScheduler.jobs = []; gameScheduler.clockMs = 0; currentSpeedMultiplier = speed;
+                const fired = [];
+                setGameInterval(() => fired.push('week'), BASE_DELAYS.weekly / speed);
+                setGameInterval(() => fired.push('quarter'), BASE_DELAYS.quarterly / speed);
+                for (let tick = 0; tick < 600; tick++) runGameScheduler(BASE_DELAYS.stockUpdate);
+                assert(fired.filter(x => x === 'quarter').length === 2 && fired.filter(x => x === 'week').length === 10, `×${speed}: ${fired.join(',')}`);
+                assert(fired.indexOf('quarter') === 5, `×${speed}: kwartał po 5. tygodniu`);
+            }
+        } finally { gameScheduler.jobs = saved.jobs; gameScheduler.clockMs = saved.clock; currentSpeedMultiplier = saved.speed; }
+    });
+
+    test('prędkość testowa nie trafia do zapisu', () => {
+        const a = makeCompany('AAA'); a.insiderShares = 0;
+        resetWorld([a]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        const saved = currentSpeedMultiplier;
+        try {
+            currentSpeedMultiplier = 200;
+            const snapshot = JSON.parse(JSON.stringify(buildSaveSnapshot()));
+            assert(snapshot.currentSpeedMultiplier === 1, `zapisano ×${snapshot.currentSpeedMultiplier}`);
+            snapshot.currentSpeedMultiplier = 100;
+            currentSpeedMultiplier = 2;
+            applySaveSnapshot(snapshot);
+            assert(currentSpeedMultiplier === 2, 'wczytanie ignoruje prędkość testową');
+        } finally { currentSpeedMultiplier = saved; }
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

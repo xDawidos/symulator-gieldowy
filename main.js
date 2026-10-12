@@ -185,7 +185,7 @@ function buildSaveSnapshot({ compact = 0 } = {}) {
         version: SAVE_FORMAT_VERSION,
         savedAt: now,
         compact: level,
-        currentSpeedMultiplier,
+        currentSpeedMultiplier: SAVED_SPEEDS.includes(currentSpeedMultiplier) ? currentSpeedMultiplier : 1, // T0: prędkości testowe nie trafiają do zapisu
         playerCash,
         governmentTreasury,
         stocks: serializeStocksForSave(level),
@@ -502,7 +502,7 @@ function applySaveSnapshot(snapshot) {
     syncExchangeAccessWithPosition();
 
     if (isFiniteNumber(snapshot.governmentTreasury)) governmentTreasury = snapshot.governmentTreasury;
-    if (isFiniteNumber(snapshot.currentSpeedMultiplier) && [1, 2, 5].includes(snapshot.currentSpeedMultiplier)) {
+    if (isFiniteNumber(snapshot.currentSpeedMultiplier) && SAVED_SPEEDS.includes(snapshot.currentSpeedMultiplier)) {
         currentSpeedMultiplier = snapshot.currentSpeedMultiplier;
     }
 
@@ -679,11 +679,71 @@ let uiRefreshTick = 0;
 function clearIntervals() {
     for (const key in gameTimers) {
         if (gameTimers[key]) {
-            clearInterval(gameTimers[key]);
+            if (typeof gameTimers[key] !== 'object') clearInterval(gameTimers[key]); // obiekty = pętle zegara gry
             gameTimers[key] = null;
         }
     }
+    if (typeof gameScheduler !== 'undefined') { // pętle zegara gry (T0): zapamiętujemy fazę na wypadek zmiany prędkości
+        gameScheduler.jobs.forEach((job, index) => { gameScheduler.phase[index] = { periodMs: job.periodMs, nextAt: job.nextAt }; });
+        gameScheduler.jobs = [];
+    }
     console.log("Wszystkie pętle gry zostały zatrzymane.");
+}
+
+// T0 (plan 0.14): prędkości testowe ×100 i ×200 (przyciski debug). Nie trafiają do zapisu — wczytana gra
+// wraca do prędkości z listy SAVED_SPEEDS (applySaveSnapshot).
+const TEST_SPEEDS = [100, 200];
+const SAVED_SPEEDS = [1, 2, 5];
+const MAX_AUTOSAVE_SPEED = 50;
+const MIN_TICK_INTERVAL_MS = 10;
+const MAX_TICK_CATCHUP = 30; // najwięcej kroków logiki w jednym wywołaniu pętli (bez „spirali” przy zawieszeniu karty)
+
+/** Ile tików rynku wykonać w jednym wywołaniu, żeby interwał nie spadł poniżej MIN_TICK_INTERVAL_MS. */
+function getTickStepsPerCall(speedMultiplier) {
+    return Math.max(1, Math.ceil(MIN_TICK_INTERVAL_MS * speedMultiplier / BASE_DELAYS.stockUpdate)); // ×50: 1, ×100: 1 (10 ms), ×200: 2
+}
+
+/**
+ * T0: zegar gry. Wszystkie pętle gry (tydzień, kwartał, zdarzenia, obligacje…) są wyzwalane przez tiki rynku
+ * (1 tik = 1 s gry), a nie przez osobne timery przeglądarki. Kwartał to zawsze 300 tików, tydzień 60 — przy każdej
+ * prędkości ta sama kolejność zdarzeń. Gdy komputer nie nadąża (×200, kilka kart), gra biegnie wolniej, ale spójnie.
+ */
+const gameScheduler = { clockMs: 0, jobs: [], phase: {} };
+
+/** Rejestruje pętlę gry: realDelay = okres gry / prędkość (jak dawne setInterval), zwraca identyfikator. */
+function setGameInterval(fn, realDelay) {
+    const periodMs = Math.max(1, Math.round(realDelay * (currentSpeedMultiplier || 1)));
+    const index = gameScheduler.jobs.length;
+    const saved = gameScheduler.phase[index]; // zmiana prędkości nie zeruje postępu tygodnia ani kwartału
+    const nextAt = saved && saved.periodMs === periodMs ? saved.nextAt : gameScheduler.clockMs + periodMs;
+    const job = { fn, periodMs, nextAt, id: `job${index}_${periodMs}` };
+    gameScheduler.jobs.push(job);
+    return job;
+}
+
+/** Wołane po logice każdego tiku: przesuwa zegar gry i uruchamia pętle, którym minął okres. */
+function runGameScheduler(deltaMs) {
+    gameScheduler.clockMs += deltaMs;
+    for (const job of gameScheduler.jobs) {
+        while (gameScheduler.clockMs >= job.nextAt) {
+            job.nextAt += job.periodMs;
+            job.fn();
+        }
+    }
+}
+
+/** Pomiar rzeczywistej prędkości: kwartały gry na minutę czasu rzeczywistego (ostatnie kwartały). */
+const gameSpeedStats = { quarterTimes: [] };
+function noteQuarterForSpeedStats() {
+    gameSpeedStats.quarterTimes.push(performance.now());
+    if (gameSpeedStats.quarterTimes.length > 6) gameSpeedStats.quarterTimes.shift();
+}
+
+function getMeasuredGameSpeed() {
+    const times = gameSpeedStats.quarterTimes;
+    if (times.length < 2) return null;
+    const msPerQuarter = (times[times.length - 1] - times[0]) / (times.length - 1);
+    return { quartersPerMinute: 60000 / msPerQuarter, effectiveMultiplier: BASE_DELAYS.quarterly / msPerQuarter };
 }
 
 /**
@@ -705,7 +765,7 @@ function setGameSpeed(speedMultiplier) {
     // --- URUCHOMIENIE NOWYCH PĘTLI Z NOWĄ PRĘDKOŚCIĄ ---
 
     // Pętla sprawdzania niespłaconych hipotek (z bazy main.js)
-    gameTimers.mortgageCheck = setInterval(() => {
+    gameTimers.mortgageCheck = setGameInterval(() => {
         if (isGamePaused) return;
         checkMortgageDefaults();
     }, BASE_DELAYS.weekly / speedMultiplier); // Sprawdzaj co tydzień
@@ -714,18 +774,20 @@ function setGameSpeed(speedMultiplier) {
         if (typeof saveGameState === 'function') {
             saveGameState();
         }
-    }, 60000 / speedMultiplier);
+    }, 60000 / Math.min(speedMultiplier, MAX_AUTOSAVE_SPEED)); // T0: przy ×100/×200 autozapis nie częściej niż przy ×50
 
     // Pętla sprawdzania zapadalności bonów skarbowych
-    gameTimers.tBillMaturityCheck = setInterval(() => {
+    gameTimers.tBillMaturityCheck = setGameInterval(() => {
         if (isGamePaused) return;
         checkTBillMaturities();
     }, 5000 / speedMultiplier);
 
-    // Główna pętla gry (aktualizacje co sekundę czasu gry)
-    gameTimers.stockUpdate = setInterval(() => {
+    // Główna pętla gry (aktualizacje co sekundę czasu gry). T0: przy prędkościach testowych (> ×50) kilka tików
+    // w jednym wywołaniu zamiast interwału krótszego niż ~10 ms (przeglądarka nie nadążyłaby z timerami).
+    const tickSteps = getTickStepsPerCall(speedMultiplier);
+    const stockTick = (skipUi = false) => {
 
-        document.querySelectorAll('#stock-table-body tr').forEach(row => {
+        if (!skipUi) document.querySelectorAll('#stock-table-body tr').forEach(row => {
     const symbol = row.dataset.symbol;
     if (!symbol) return;
     
@@ -822,11 +884,13 @@ function setGameSpeed(speedMultiplier) {
         updateResearchProgress(gameTimeDelta);
         processConstructionProjects(gameTimeDelta);
         updateTenderSystem(gameTimeDelta); // zawiera też oferty AI
-        updateConstructionSectorUI();
+        if (!skipUi) updateConstructionSectorUI(); // T0: UI raz na wywołanie pętli
 
         // Przy prędkościach debug (×10, ×50) odświeżamy interfejs rzadziej — logika gry liczy się co tik.
+        runGameScheduler(gameTimeDelta); // T0: tydzień, kwartał, zdarzenia — według zegara gry
+        if (skipUi) return; // T0: dodatkowe kroki logiki w jednym wywołaniu — interfejs raz na wywołanie
         uiRefreshTick++;
-        if (speedMultiplier >= 10 && uiRefreshTick % Math.round(speedMultiplier / 5) !== 0) return;
+        if (speedMultiplier >= 10 && uiRefreshTick % Math.max(1, Math.round(speedMultiplier / (5 * tickSteps))) !== 0) return;
 
         // --- ODŚWIEŻANIE INTERFEJSU ---
         displayStocks(currentMarketInputs);
@@ -947,10 +1011,23 @@ function setGameSpeed(speedMultiplier) {
             }
         }
 
-    }, BASE_DELAYS.stockUpdate / speedMultiplier);
+    };
+    // T0: doganianie czasu — tyle kroków logiki, ile sekund gry upłynęło od ostatniego wywołania (najwyżej
+    // MAX_TICK_CATCHUP), żeby kwartał zawsze miał ~300 tików także przy ×50/×100/×200, gdy przeglądarka nie nadąża.
+    let lastTickAt = performance.now();
+    let tickBacklog = 0;
+    gameTimers.stockUpdate = setInterval(() => {
+        const now = performance.now();
+        tickBacklog += (now - lastTickAt) * speedMultiplier / BASE_DELAYS.stockUpdate;
+        lastTickAt = now;
+        const steps = Math.max(1, Math.min(MAX_TICK_CATCHUP, Math.floor(tickBacklog)));
+        tickBacklog = Math.max(0, Math.min(tickBacklog - steps, MAX_TICK_CATCHUP));
+        if (isGamePaused) { tickBacklog = 0; stockTick(); return; }
+        for (let step = 0; step < steps; step++) stockTick(step < steps - 1);
+    }, BASE_DELAYS.stockUpdate * tickSteps / speedMultiplier);
 
     // Pętla tygodniowa (z bazy main.js - bankowość komercyjna)
-gameTimers.weekly = setInterval(() => {
+gameTimers.weekly = setGameInterval(() => {
         if (isGamePaused) return;
 
         // ===>>> NOWE WYWOŁANIE SKANERA WINDYKATORA <<<===
@@ -1014,8 +1091,9 @@ gameTimers.weekly = setInterval(() => {
     }, BASE_DELAYS.weekly / speedMultiplier);
 
     // Pętla kwartalna (z bazy main.js - zawiera AI Banku Centralnego)
-    gameTimers.quarterly = setInterval(() => {
+    gameTimers.quarterly = setGameInterval(() => {
         if (isGamePaused) return;
+        noteQuarterForSpeedStats();
         reviewCompanyPlacements();
         processEliteExchangesQuarterly(); // Rubin / Szmaragd / Diament, spółki zależne (finance.js)
         payBondCoupons(); // kupony kwartalne (finance.js)
@@ -1076,7 +1154,7 @@ gameTimers.weekly = setInterval(() => {
     }, BASE_DELAYS.quarterly / speedMultiplier);
 
     // Pętla reputacji (powolny powrót do zera)
-    gameTimers.reputationDecay = setInterval(() => {
+    gameTimers.reputationDecay = setGameInterval(() => {
         if (isGamePaused) return;
         stocks.forEach(stock => {
             if (stock.reputation) {
@@ -1095,39 +1173,39 @@ gameTimers.weekly = setInterval(() => {
     }, 180000 / speedMultiplier); // 3 minuty czasu gry
 
     // Pętla wydarzeń losowych
-    gameTimers.event = setInterval(() => {
+    gameTimers.event = setGameInterval(() => {
         if (isGamePaused) return;
         triggerMainMarketEventCycle();
     }, BASE_DELAYS.event / speedMultiplier);
 
     // Pętle dla obligacji (z bazy main.js)
-    gameTimers.stateBondIssuance = setInterval(() => {
+    gameTimers.stateBondIssuance = setGameInterval(() => {
         if (isGamePaused) return;
         issueStateBonds();
     }, 15 * 60 * 1000 / speedMultiplier); // 15 minut
 
-    gameTimers.otherBondIssuance = setInterval(() => {
+    gameTimers.otherBondIssuance = setGameInterval(() => {
         if (isGamePaused) return;
         issueNewBondOffer();
     }, 40 * 1000 / speedMultiplier); // Co 40 sekund
 
-    gameTimers.bondMaturityCheck = setInterval(() => {
+    gameTimers.bondMaturityCheck = setGameInterval(() => {
         if (isGamePaused) return;
         checkBondMaturities(5000); // 5 s czasu gry
     }, 5000 / speedMultiplier); // Co 5 sekund
 
     // Pętle dla zdarzeń CEO, półrocznych i rocznych
-    gameTimers.ceoEvent = setInterval(() => {
+    gameTimers.ceoEvent = setGameInterval(() => {
         if (isGamePaused) return;
         triggerCeoEvent();
     }, BASE_DELAYS.quarterly * 2 / speedMultiplier); // Co 2 kwartały
 
-    gameTimers.semiAnnual = setInterval(() => {
+    gameTimers.semiAnnual = setGameInterval(() => {
         if (isGamePaused) return;
         triggerSemiAnnualEvents();
     }, BASE_DELAYS.quarterly * 2 / speedMultiplier); // Co pół roku
 
-    gameTimers.yearly = setInterval(() => {
+    gameTimers.yearly = setGameInterval(() => {
         if (isGamePaused) return;
         updateCeoTenureAndAge();
         triggerYearlyCeoEvents();

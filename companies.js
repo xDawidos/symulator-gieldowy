@@ -3486,8 +3486,7 @@ function updateStartups(deltaTime) {
                     startup.overfundingTimeLeft = 120000; // Ustawiamy timer na 2 minuty
                     logEvent(`[START-UP] ${startup.name} osiągnął cel finansowy! Rozpoczyna się 2-minutowy okres na dodatkowe inwestycje bonusowe.`, 'review');
                 }
-                displayStartups(getCurrentStartupInputValues());
-                break;
+                break; // T0: inkubator rysuje część UI pętli (raz na wywołanie), nie każdy tik
 
             case 'overfunding':
                 // Etap "dopłacania" po osiągnięciu celu
@@ -3498,8 +3497,7 @@ function updateStartups(deltaTime) {
                     startup.stage = 'development';
                     logEvent(`[START-UP] Okres dodatkowych inwestycji dla ${startup.name} zakończył się...`, 'review');
                 }
-                displayStartups(getCurrentStartupInputValues());
-                break;
+                break; // T0: inkubator rysuje część UI pętli (raz na wywołanie), nie każdy tik
 
             case 'development':
                 // Wstrzymanie: niezapłacony koszt dodatkowy albo opóźnienie techniczne (prywatyzacja).
