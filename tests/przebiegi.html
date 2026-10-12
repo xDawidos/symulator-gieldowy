@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Przebiegi symulacyjne</title>
+    <style>
+        :root { --bg: #f6f7f9; --fg: #1c1e21; --muted: #57606a; --border: #d0d7de; }
+        @media (prefers-color-scheme: dark) { :root { --bg: #0d1117; --fg: #e6edf3; --muted: #8b949e; --border: #30363d; } }
+        body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--fg); margin: 0; padding: 16px; }
+        #status { color: var(--muted); margin: 8px 0; white-space: pre-wrap; font-size: 13px; }
+        iframe { width: 100%; height: 320px; border: 1px solid var(--border); }
+    </style>
+</head>
+<body>
+    <h1>Przebiegi symulacyjne (wirtualny zegar)</h1>
+    <p>Parametry w adresie: <code>?target=../index.html&amp;runs=12&amp;quarters=26&amp;speed=50&amp;label=cur</code>.
+        Gra działa w ramce z podmienionym zegarem (setInterval, setTimeout, Date.now, performance.now), więc przebieg
+        nie zależy od dławienia timerów przeglądarki. Zapis gry w ramce jest wyłączony (ramka nie czyta, nie zapisuje i nie kasuje zapisu gracza). Wyniki: <code>localStorage["__sim_&lt;label&gt;"]</code>.</p>
+    <div id="status">Start…</div>
+    <iframe id="frame"></iframe>
+<script>
+'use strict';
+const params = new URLSearchParams(location.search);
+const TARGET = params.get('target') || '../index.html';
+const RUNS = Number(params.get('runs')) || 12;
+const QUARTERS = Number(params.get('quarters')) || 26;
+const SPEED = Number(params.get('speed')) || 50;
+const LABEL = params.get('label') || 'cur';
+// Gotowe ustawienia (preset): kod wykonywany w ramce po starcie gry.
+const PRESETS = {
+    // A4: fundusz gracza śledzi GIG (wirtualna pozycja indeksowa zamiast akcji) — kalibracja JU w długiej grze.
+    'fundusz-gig': `(function () {
+        const gig = () => Number(marketIndexes.find(i => i.id === 'GIG')?.value) || 0;
+        const pos = window.__idx = { units: 0 };
+        const value = () => pos.units * gig();
+        const origValue = getFundPortfolioValue;
+        getFundPortfolioValue = function () { return origValue() + value(); };
+        const origLiquidation = forceLiquidation;
+        forceLiquidation = function (amount) {
+            const sold = Math.min(value(), amount);
+            if (sold > 0) { pos.units -= sold / gig(); playerCash += sold; amount -= sold; }
+            return amount > 0 ? origLiquidation(amount) : undefined;
+        };
+        const origWeekly = processClientsWeekly;
+        processClientsWeekly = function () {
+            const g = gig();
+            if (g > 0) { const spare = playerCash - getFundAssets() * 0.05; if (spare > 0) { pos.units += spare / g; playerCash -= spare; } }
+            return origWeekly.apply(this, arguments);
+        };
+    })();`,
+    'fundusz-gig-zamkniety': null // jak wyżej + emisja ciągła zamknięta (ustawiane niżej)
+};
+PRESETS['fundusz-gig-zamkniety'] = PRESETS['fundusz-gig'] + 'setFundOpenSubscriptions(false);';
+const PATCH = (PRESETS[params.get('preset')] || '') + (params.get('patch') || ''); // kod wykonywany w ramce po starcie gry
+const SAVE_KEY = 'gra_inwestycyjna_dawid_save_v4';
+const RESULT_KEY = `__sim_${LABEL}`;
+const statusEl = document.getElementById('status');
+const frame = document.getElementById('frame');
+
+// Wirtualny zegar wstrzykiwany przed skryptami gry.
+const STUB = `(function () {
+    let t = 0, seq = 0; const base = Date.now(); const timers = new Map();
+    const add = (fn, d, args, iv) => { const id = ++seq; timers.set(id, { id, fn, args, at: t + Math.max(iv ? 1 : 0, Number(d) || 0), iv: iv ? Math.max(1, Number(d) || 0) : 0 }); return id; };
+    window.setTimeout = (fn, d, ...args) => add(fn, d, args, false);
+    window.setInterval = (fn, d, ...args) => add(fn, d, args, true);
+    window.clearTimeout = window.clearInterval = id => { timers.delete(id); };
+    window.requestAnimationFrame = fn => add(() => fn(t), 16, [], false);
+    window.cancelAnimationFrame = id => { timers.delete(id); };
+    Date.now = () => base + t;
+    performance.now = () => t;
+    const setItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (k, v) { if (k === '${SAVE_KEY}') return; return setItem.call(this, k, v); };
+    const getItem = Storage.prototype.getItem, removeItem = Storage.prototype.removeItem;
+    Storage.prototype.getItem = function (k) { return k === '${SAVE_KEY}' ? null : getItem.call(this, k); }; // zawsze nowa gra
+    Storage.prototype.removeItem = function (k) { if (k === '${SAVE_KEY}') return; return removeItem.call(this, k); };
+    window.__vt = { errors: [], now: () => t, advance(ms) {
+        const end = t + ms;
+        for (;;) {
+            let next = null;
+            for (const tm of timers.values()) if (tm.at <= end && (!next || tm.at < next.at || (tm.at === next.at && tm.id < next.id))) next = tm;
+            if (!next) break;
+            t = next.at;
+            if (next.iv) next.at += next.iv; else timers.delete(next.id);
+            try { typeof next.fn === 'function' ? next.fn(...next.args) : (0, eval)(next.fn); }
+            catch (e) { if (window.__vt.errors.length < 20) window.__vt.errors.push(String(e && e.stack || e).slice(0, 400)); }
+        }
+        t = end;
+    } };
+    window.alert = () => {}; window.confirm = () => true;
+})();`;
+
+// Pomiar w ramce (działa także bez systemów 0.13 — wersja 0.12).
+const PROBE = `(function () {
+    const s = window.__sim = { mails: 0, mails013: 0, mailBy: {}, invLog: [], trimWarnings: 0, quarters: [], dps: {}, policy: {}, price0: {}, elections: [], pop: [], poor: [], unions: [], strikesStart: 0 };
+    if (typeof addMail === 'function') { const orig = addMail; addMail = function (...a) { s.mails++; const k = String(a[0]?.sender || '?'); s.mailBy[k] = (s.mailBy[k] || 0) + 1; if (/^(👥|✊)/u.test(String(a[0]?.subject || ''))) s.mails013++; return orig.apply(this, a); }; }
+    s.bailouts = []; s.flowWarnings = { in: 0, out: 0 }; s.fund = [];
+    if (typeof fundMarketOperatorBailout === 'function') {
+        const orig = fundMarketOperatorBailout;
+        fundMarketOperatorBailout = function (operatorStock, needed) {
+            const members = typeof getMarketMembers === 'function' ? getMarketMembers(operatorStock?.marketOperator) : [];
+            const before = new Map(members.map(m => [m, Math.max(0, Number(m.cash) || 0)]));
+            const raised = orig.apply(this, arguments);
+            let maxShare = 0;
+            for (const [m, cash] of before) if (cash > 0) maxShare = Math.max(maxShare, (cash - (Number(m.cash) || 0)) / cash);
+            s.bailouts.push({ q: macro.quarter, op: operatorStock?.symbol, needed: Math.round(needed), raised: Math.round(raised), members: members.length, maxShare });
+            return raised;
+        };
+    }
+    if (typeof logEvent === 'function') {
+        const origLog = logEvent;
+        logEvent = function (text) { const t = String(text || ''); if (t.startsWith('📥 Duży napływ')) s.flowWarnings.in++; else if (t.startsWith('📤 Duży odpływ')) s.flowWarnings.out++; return origLog.apply(this, arguments); };
+    }
+    // Śledzenie ujemnej gotówki spółek: przy przejściu poniżej zera zapisujemy stos wywołań (źródło naruszenia).
+    s.negCash = [];
+    s.traceCash = function () {
+        for (const c of stocks) {
+            if (c.__cashTraced || c.assetType) continue;
+            let value = c.cash;
+            Object.defineProperty(c, 'cash', { configurable: true, enumerable: true, get() { return value; }, set(v) {
+                if (Number(v) < 0 && !(Number(value) < 0) && s.negCash.length < 40) s.negCash.push({ q: macro.quarter, symbol: c.symbol, from: Math.round(value), to: Math.round(v), stack: String(new Error().stack).split(String.fromCharCode(10)).slice(2, 7).map(x => x.trim().split(' (')[0]).join(' < ') });
+                value = v;
+            } });
+            Object.defineProperty(c, '__cashTraced', { value: true, enumerable: false });
+        }
+    };
+    s.sample = function () {
+        s.traceCash();
+        if (typeof playerFund === 'object' && playerFund) {
+            const last = playerFund.flowStats?.last;
+            s.fund.push({ q: macro.quarter, units: playerFund.units, nav: typeof getFundNav === 'function' ? getFundNav() : null, trust: playerFund.trust,
+                open: typeof isFundOpenForSubscriptions === 'function' ? isFundOpenForSubscriptions() : null,
+                last: last ? { q: last.quarter, in: last.in, out: last.out, inUnits: last.inUnits, outUnits: last.outUnits, startUnits: last.startUnits } : null });
+        }
+        const gig = marketIndexes.find(i => i.id === 'GIG')?.value;
+        const companies = stocks.filter(x => !x.assetType && !x.isBankrupt);
+        let rev = 0, ebitda = 0, revStd = 0, ebitdaStd = 0;
+        for (const c of companies) {
+            const h = c.fundamentals?.history?.[c.fundamentals.history.length - 1];
+            if (!h || !(h.revenue > 0)) continue;
+            rev += h.revenue; ebitda += h.ebitda;
+            const pol = c.workforce?.policy;
+            if (!c.workforce || pol === 'standard') { revStd += h.revenue; ebitdaStd += h.ebitda; }
+            if (pol) { s.policy[c.symbol] = s.policy[c.symbol] || {}; s.policy[c.symbol][pol] = (s.policy[c.symbol][pol] || 0) + 1; }
+            if (s.price0[c.symbol] === undefined) s.price0[c.symbol] = { price: c.price, q: macro.quarter };
+            s.dps[c.symbol] = (s.dps[c.symbol] || 0) + (Number(c.lastDeclaredDps) || 0);
+        }
+        if (typeof checkWorldInvariants === 'function') {
+            const inv = checkWorldInvariants();
+            for (const msg of inv) if (s.invLog.length < 30) s.invLog.push('kw. ' + macro.quarter + ': ' + msg);
+            s.trimWarnings = (inv.warnings || []).length;
+        }
+        const soc = typeof society === 'object' && society ? society : null;
+        const wfCompanies = companies.filter(c => c.workforce);
+        s.quarters.push({ q: macro.quarter, gig, margin: rev ? ebitda / rev : null, marginStd: revStd ? ebitdaStd / revStd : null,
+            pop: soc?.population, poor: soc?.classes?.poor,
+            unionShare: wfCompanies.length ? wfCompanies.filter(c => c.workforce.union).length / wfCompanies.length : null,
+            sectorUnions: soc ? Object.keys(soc.sectorUnions || {}).length : null,
+            striking: wfCompanies.filter(c => c.workforce.strike).length,
+            strikes: soc?.stats?.strikes || 0, mails: s.mails, mails013: s.mails013, companies: companies.length });
+    };
+    s.finish = function () {
+        const soc = typeof society === 'object' && society ? society : null;
+        const tsr = {};
+        for (const c of stocks.filter(x => !x.assetType && !x.isBankrupt)) {
+            const p0 = s.price0[c.symbol]; const pol = s.policy[c.symbol];
+            if (!p0 || !(p0.price > 0) || !pol) continue;
+            const years = (macro.quarter - p0.q) / 4; if (years < 4) continue;
+            const total = Object.values(pol).reduce((a, b) => a + b, 0);
+            const [main, n] = Object.entries(pol).sort((a, b) => b[1] - a[1])[0];
+            if (n / total < 0.75) continue;
+            const annual = Math.pow(Math.max(0.01, (c.price + (s.dps[c.symbol] || 0)) / p0.price), 1 / years) - 1;
+            (tsr[main] = tsr[main] || []).push(annual);
+        }
+        const panel = document.getElementById('fund-flow-reasons');
+        if (typeof renderFundFlowReasons === 'function') { try { renderFundFlowReasons(); } catch (e) { s.panelError = String(e); } }
+        return { tsr, negCash: s.negCash, mailBy: s.mailBy, bailouts: s.bailouts, flowWarnings: s.flowWarnings, fund: s.fund, panelText: panel ? panel.textContent.split(/\\s+/).join(' ').slice(0, 600) : null, panelError: s.panelError || null, elections: (macro.election?.history || []).filter(e => e.quarter >= s.quarters[0].q),
+            lawChanges: soc ? { ...soc.lawChanges } : null, laws: soc ? { ...soc.laws } : null,
+            invariants: typeof checkWorldInvariants === 'function' ? checkWorldInvariants().slice(0, 5) : null, invLog: s.invLog, trimWarnings: s.trimWarnings,
+            trims: typeof ghostTrimLog !== 'undefined' ? ghostTrimLog.length : null };
+    };
+})();`;
+
+const yieldNow = () => new Promise(resolve => { const ch = new MessageChannel(); ch.port1.onmessage = () => resolve(); ch.port2.postMessage(0); });
+
+async function loadFrame() {
+    const html = await (await fetch(TARGET, { cache: 'no-store' })).text();
+    const baseHref = new URL(TARGET, location.href).href;
+    const doc = html.replace(/<head>/i, `<head><base href="${baseHref}"><script>${STUB}<\/script>`);
+    await new Promise(resolve => { frame.onload = resolve; frame.srcdoc = doc; });
+    const w = frame.contentWindow;
+    for (let i = 0; i < 50 && w.eval('typeof stocks') === 'undefined'; i++) await yieldNow();
+    w.__vt.advance(100); // DOMContentLoaded i timery startowe
+    return w;
+}
+
+async function oneRun(index) {
+    localStorage.setItem('gra_inwestycyjna_debug_mode', '1');
+    localStorage.setItem('gra_inwestycyjna_skip_intro', '1');
+    const w = await loadFrame();
+    w.eval(`isGamePaused = false; setGameSpeed(${SPEED}); if (gameTimers.autoSave) clearInterval(gameTimers.autoSave);`);
+    if (PATCH) w.eval(PATCH);
+    w.eval(PROBE);
+    const quarterMs = 300000 / SPEED;
+    const startQ = w.eval('macro.quarter');
+    w.eval('__sim.sample()');
+    const realStart = performance.now();
+    const msPerQuarter = [];
+    let q = startQ;
+    while (q < startQ + QUARTERS) {
+        const t0 = performance.now();
+        while (w.eval('macro.quarter') === q) { w.__vt.advance(quarterMs / 10); await yieldNow(); }
+        msPerQuarter.push(performance.now() - t0);
+        q = w.eval('macro.quarter');
+        w.eval('__sim.sample()');
+        statusEl.textContent = `${LABEL}: przebieg ${index + 1}/${RUNS}, kwartał ${q - startQ}/${QUARTERS}`;
+    }
+    const finish = w.eval('__sim.finish()');
+    const result = { run: index, quarters: w.eval('__sim.quarters'), ...JSON.parse(JSON.stringify(finish)),
+        msPerQuarter: msPerQuarter.slice(2).reduce((a, b) => a + b, 0) / Math.max(1, msPerQuarter.length - 2),
+        realMs: performance.now() - realStart, errors: w.__vt.errors.slice(0, 5) };
+    return JSON.parse(JSON.stringify(result));
+}
+
+(async () => {
+    const results = [];
+    localStorage.setItem(RESULT_KEY, '[]');
+    for (let i = 0; i < RUNS; i++) {
+        try { results.push(await oneRun(i)); }
+        catch (e) { results.push({ run: i, error: String(e && e.stack || e) }); }
+        localStorage.setItem(RESULT_KEY, JSON.stringify(results));
+    }
+    frame.srcdoc = '';
+    statusEl.textContent = `${LABEL}: gotowe (${results.length} przebiegów).`;
+    window.__done = true;
+})();
+</script>
+</body>
+</html>

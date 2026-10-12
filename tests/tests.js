@@ -4543,6 +4543,20 @@ group('0.13.1 P3: gotówka spółek nie spada poniżej zera', () => {
         assert(Math.abs(a.balanceSheet.assets - a.balanceSheet.liabilities - equity) < 1e-6, 'kapitał bez zmian');
         assert(coverNegativeCash(a, -100_000) === 0, 'dodatnia gotówka — bez kredytu');
     });
+
+    test('A1: naprawa usterek po inwestycji ponad gotówkę — kredyt od razu, gotówka ≥ 0', () => {
+        const a = makeCompany('FIXN', { cash: 1_000 });
+        resetWorld([a]);
+        if (a.departments?.development) a.departments.development.level = 0;
+        const liabilities = a.balanceSheet.liabilities;
+        const original = Math.random;
+        Math.random = () => 0.2; // weryfikacja: „usterki” (próg 0,12–0,37 przy dziale rozwoju 0)
+        try { finishInvestment(a, { id: 'game_studio', uid: 'fixn1', cost: 300_000, data: { assetValue: 250_000 } }); }
+        finally { Math.random = original; }
+        assert(a.cash >= 0, `gotówka ${a.cash}`);
+        assert(a.balanceSheet.liabilities > liabilities, 'naprawa sfinansowana kredytem');
+        assert(!checkWorldInvariants().some(x => x.includes('FIXN')), 'niezmiennik pusty');
+    });
 });
 
 group('0.13.1 P3: „duchy posiadaczy” (akcje w obrocie = posiadacze)', () => {

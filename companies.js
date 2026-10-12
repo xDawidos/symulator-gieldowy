@@ -7272,6 +7272,7 @@ function finishInvestment(stock, project) {
         const fix = Math.round(cost * 0.05);
         adjustCompanyCash(stock, -fix);
         adjustBalanceSheet(stock, { assets: -fix, retainedEarnings: -fix });
+        coverNegativeCash(stock); // A1: naprawa ponad gotówkę — kredyt ratunkowy od razu, nie dopiero przy raporcie (P3)
     }
     const building = project.phase === 'equipment' && project.buildingId
         ? (stock.portfolio?.buildings || []).find(item => item.id === project.buildingId) : null;
