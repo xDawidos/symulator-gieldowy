@@ -9273,8 +9273,8 @@ const WORKFORCE_EMPLOYEES_BY_EXCHANGE = {
 };
 
 const LABOR_POLICIES = {
-    exploit:  { name: 'Wyzysk',       icon: '⛓️', pay: 0.85, target: 20, union: 3,   productivity: -0.03, grey: 0.10, inspection: 3 },
-    saving:   { name: 'Oszczędna',    icon: '✂️', pay: 0.93, target: 40, union: 1.8, productivity: 0,     grey: 0,    inspection: 1 },
+    exploit:  { name: 'Wyzysk',       icon: '⛓️', pay: 0.85, target: 20, union: 3,   productivity: -0.03, grey: 0.10, inspection: 4 }, // A2: kontrole ×3 → ×4 (rozrzut TSR)
+    saving:   { name: 'Oszczędna',    icon: '✂️', pay: 0.95, target: 40, union: 1.8, productivity: 0,     grey: 0,    inspection: 1 }, // A2: płace ×0,93 → ×0,95 (TSR +5 pp ponad Standardową)
     standard: { name: 'Standardowa',  icon: '⚖️', pay: 1.00, target: 60, union: 1,   productivity: 0,     grey: 0,    inspection: 1 },
     social:   { name: 'Prospołeczna', icon: '🤝', pay: 1.08, target: 80, union: 0.4, productivity: 0.04,  grey: 0,    inspection: 1, rotation: 0.5 }
 };

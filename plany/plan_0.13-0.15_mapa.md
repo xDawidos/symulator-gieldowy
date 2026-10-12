@@ -12,13 +12,13 @@ Stan na 2026-10-13: etap A (domknięcie 0.13 i 0.13.1) zrobiony na gałęzi work
 
 | Wersja | Część | Stan |
 |---|---|---|
-| 0.13 | S1–S6 (kraj, pracownicy, rynek pracy, związki, ustawy, spięcie z grą) | ✅ kod: `77fdeb0`, `cf0d161`, `62478bb`, 21 testów. ✅ pomiar A2 (`441d5d5`): wszystkie miary w celu poza TSR polityk; ❌ TSR (Oszczędna +5 pp, rozrzut Wyzysku) — do decyzji |
-| 0.13.1 | B1–B13, D1/D2 (rynki internetowe, miękki limit), P1–P3 (sufity, „duchy posiadaczy”), decyzje 1–2, B5 | ✅ kod, testy 313/313. ✅ weryfikacja pełna (`raporty/weryfikacja_0.13.1.md`): OK z uwagami; ⚠️ B5 w długiej grze (zaufanie, lokaty spółek) — do decyzji |
+| 0.13 | S1–S6 (kraj, pracownicy, rynek pracy, związki, ustawy, spięcie z grą) | ✅ kod: `77fdeb0`, `cf0d161`, `62478bb`, 21 testów. ✅ pomiar A2 (`441d5d5`): wszystkie miary w celu; po strojeniu Oszczędna +2,6 pp. ⚠️ otwarte: rozrzut TSR Wyzysku nie jest największy |
+| 0.13.1 | B1–B13, D1/D2 (rynki internetowe, miękki limit), P1–P3 (sufity, „duchy posiadaczy”), decyzje 1–2, B5 | ✅ kod, testy 317/317. ✅ weryfikacja pełna (`raporty/weryfikacja_0.13.1.md`): OK z uwagami; decyzje balansu (zaufanie vs GIG, lokaty spółek) wdrożone |
 | 0.14 | T0 (prędkości ×100/×200) | ✅ `117feec` |
 | 0.14 | T1–T6 | ⬜ nie zaczęte (T6 dopisane 2026-10-12) |
 | 0.15 | G0–G8 | ⬜ szkic, nie zaczęte |
 
-**Etap A zrobiony (A1–A4).** Zostało: 6 części 0.14 + 9 etapów 0.15 = 15 pozycji, plus 3 decyzje balansu z raportu 0.13.1 (zaufanie funduszu vs GIG, lokaty spółek w JU, polityki kadrowe).
+**Etap A zrobiony (A1–A4) razem z 3 decyzjami balansu.** Zostało: 6 części 0.14 + 9 etapów 0.15 = 15 pozycji.
 
 ---
 

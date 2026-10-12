@@ -5,8 +5,8 @@
   - `ee91a58` — A3: licznik przycięć „duchów posiadaczy”;
   - `2ab2c4e` — A1: naprawa usterek po inwestycji bez ujemnej gotówki, stanowisko `tests/przebiegi.html`;
   - `441d5d5` — A2: pomiar 0.13 (wyniki w `plan_0.13_spoleczenstwo.md`).
-- **Werdykt:** **OK z uwagami.** Spójność świata (akcje, posiadacze, sufity, zapis) potwierdzona w długiej grze. Dwie sprawy balansu funduszu (B5) i jedna polityk kadrowych (0.13) wymagają decyzji — lista na końcu.
-- **Testy:** 313/313 (`tests/tests.html`; było 310, doszły 2 testy A3 i 1 test A1).
+- **Werdykt:** **OK z uwagami.** Spójność świata (akcje, posiadacze, sufity, zapis) potwierdzona w długiej grze. Trzy sprawy balansu (zaufanie vs GIG, lokaty spółek w JU, polityki kadrowe) zdecydowane i wdrożone — sekcja na końcu.
+- **Testy:** 317/317 (`tests/tests.html`; było 310, doszły 2 testy A3, 1 test A1 i 4 testy decyzji balansu).
 
 ## Jak sprawdzaliśmy
 
@@ -60,11 +60,26 @@
 4. **`trimGhostHolders` nie maskuje dziś błędów:** licznik jest pusty w ok. 1760 kwartałach gry (A1 + przebiegi seryjne). Rejestr zostaje jako czujnik.
 5. **Zapis na granicy 2,5 MB** w bardzo długiej grze (od ok. 40 lat gry), patrz A1.
 
-## Do decyzji
+## Decyzje (podjęte 2026-10-13) i pomiar kontrolny
 
-1. **Cel zaufania vs GIG:** liczyć obsunięcie i zmienność względem GIG (kara tylko za nadwyżkę ponad indeks) czy zostawić?
-2. **Lokaty spółek w JU:** ograniczyć (np. lokata do 5% aktywów funduszu albo roczna stopa jak w B5) czy zostawić?
-3. **Polityki kadrowe:** stroić liczbami z planu (np. Oszczędna płace ×0,93 → ×0,95 albo cel zadowolenia 40 → 35; Wyzysk kontrole Inspekcji ×3 → ×4) czy zostawić?
+1. **Cel zaufania liczy obsunięcie i zmienność ponad GIG.** Okres funduszu zapisuje obsunięcie i tygodniową zmienność GIG (`benchmarkDrawdown`, `benchmarkVolatility`); kara tylko za nadwyżkę. Starsze okresy bez tych pól liczą się jak dotąd.
+2. **Lokaty spółek w JU:** jedna lokata najwyżej 5% aktywów funduszu (`CORPORATE_SUBSCRIPTION_MAX_SHARE`), wszystkie lokaty spółek najwyżej 10% aktywów na kwartał (`CORPORATE_SUBSCRIPTION_QUARTER_CAP`).
+3. **Polityki kadrowe:** Oszczędna płace ×0,93 → ×0,95; Wyzysk kontrole Inspekcji Pracy ×3 → ×4.
+
+Testy: 317/317 (4 nowe w grupie „Etap A: decyzje balansu”).
+
+**Pomiar kontrolny** (skrócony na prośbę użytkownika do ok. 5 min; po 7 przebiegów, w tym 3–4 przy ×200):
+
+| Miara | Przed | Po |
+|---|---|---|
+| Fundusz = GIG: mediana zaufania | 30–39 | **53–57** |
+| Fundusz = GIG: zmiana JU rocznie | −3…−34% (jeden przebieg z eksplozją do 11 mln JU) | **−0,5…−7,7%**, bez eksplozji (NAV 12–15% rocznie, ok. 2–4 pp pod GIG przez opłatę i 5% gotówki) |
+| Ostrzeżenia > 10% JU na przebieg | 1–11 napływ, 5–12 odpływ | 3–7 napływ, 3–6 odpływ |
+| TSR Oszczędna vs Standard (losowo) | +5,1 pp | +2,6 pp ✅ |
+| Największy rozrzut TSR | Oszczędna | Prospołeczna ❌ (Wyzysk nadal nie największy) |
+| Niezmienniki, przycięcia | 0 / 0 | 0 / 0 |
+
+**Zostaje otwarte:** rozrzut TSR Wyzysku (cel „największy rozrzut” niespełniony) i GIG +2,1 pp vs 0.12 w małej próbie. Oba warto sprawdzić dłuższą serią przy następnej weryfikacji.
 
 ## Problemy koncepcyjne do decyzji planowania
 

@@ -1604,6 +1604,9 @@ function beginFundPeriod() {
         peakNav: nav,
         maxDrawdown: 0,
         weeklyNavs: [nav],
+        peakBenchmark: getBenchmarkValue(), // decyzja po A4: obsunięcie i zmienność GIG w okresie (zaufanie liczy nadwyżkę)
+        benchmarkDrawdown: 0,
+        weeklyBenchmarks: [getBenchmarkValue()],
         emissions: 0,
         inflow: 0,
         outflow: 0,
@@ -1623,6 +1626,11 @@ function updateFund(deltaMs) {
     const nav = getFundNav();
     if (nav > current.peakNav) current.peakNav = nav;
     if (current.peakNav > 0) current.maxDrawdown = Math.max(current.maxDrawdown, 1 - nav / current.peakNav);
+    const benchmark = getBenchmarkValue();
+    if (benchmark > 0) {
+        if (!(benchmark <= current.peakBenchmark)) current.peakBenchmark = benchmark;
+        current.benchmarkDrawdown = Math.max(Number(current.benchmarkDrawdown) || 0, 1 - benchmark / current.peakBenchmark);
+    }
 
     if (typeof updateCorporationTick === 'function') updateCorporationTick();
     if (current.elapsedMs >= FUND_PERIOD_MS) closeFundPeriod();
@@ -1661,6 +1669,9 @@ function closeFundPeriod() {
     const nav = getFundNav();
     const weeklyReturns = [];
     for (let i = 1; i < current.weeklyNavs.length; i++) weeklyReturns.push(getPeriodReturn(current.weeklyNavs[i - 1], current.weeklyNavs[i]));
+    const benchmarkReturns = [];
+    const benchmarks = current.weeklyBenchmarks || [];
+    for (let i = 1; i < benchmarks.length; i++) if (benchmarks[i - 1] > 0) benchmarkReturns.push(getPeriodReturn(benchmarks[i - 1], benchmarks[i]));
 
     const rivals = getExternalFunds()
         .filter(fund => current.startRivals[fund.symbol] > 0)
@@ -1673,6 +1684,8 @@ function closeFundPeriod() {
         rivals,
         volatility: standardDeviation(weeklyReturns),
         maxDrawdown: current.maxDrawdown,
+        benchmarkVolatility: standardDeviation(benchmarkReturns),
+        benchmarkDrawdown: Number(current.benchmarkDrawdown) || 0,
         inflow: current.inflow,
         outflow: current.outflow,
         emissions: current.emissions,
@@ -1741,6 +1754,8 @@ function computeTrustTarget() {
         benchmarkReturn: getPeriodReturn(current.startBenchmark, getBenchmarkValue()),
         maxDrawdown: current.maxDrawdown,
         volatility: 0,
+        benchmarkDrawdown: Number(current.benchmarkDrawdown) || 0,
+        benchmarkVolatility: 0,
         weight: Math.min(1, current.elapsedMs / FUND_PERIOD_MS)
     };
 
@@ -1749,7 +1764,10 @@ function computeTrustTarget() {
     const all = [...periods.map((period, index) => ({ ...period, weight: 0.5 + index * 0.25 })), partial];
     for (const period of all) {
         const excess = period.fundReturn - period.benchmarkReturn;
-        const contribution = excess * 400 - period.maxDrawdown * 60 - period.volatility * 200;
+        // Decyzja po A4: obsunięcie i zmienność liczone ponad te same miary GIG — fundusz = GIG ma cel ok. 50.
+        const drawdown = Math.max(0, (Number(period.maxDrawdown) || 0) - (Number(period.benchmarkDrawdown) || 0));
+        const volatility = Math.max(0, (Number(period.volatility) || 0) - (Number(period.benchmarkVolatility) || 0));
+        const contribution = excess * 400 - drawdown * 60 - volatility * 200;
         score += contribution * period.weight;
         weightSum += period.weight;
     }
@@ -1778,6 +1796,8 @@ function processFundWeekly() {
     playerFund.trust += (target - playerFund.trust) * 0.25;
 
     playerFund.current.weeklyNavs.push(getFundNav());
+    if (!Array.isArray(playerFund.current.weeklyBenchmarks)) playerFund.current.weeklyBenchmarks = [];
+    playerFund.current.weeklyBenchmarks.push(getBenchmarkValue());
     playerFund.navHistory.push({ clockMs: playerFund.clockMs, nav: getFundNav() });
     if (playerFund.navHistory.length > 80) playerFund.navHistory.shift();
 
@@ -3118,16 +3138,23 @@ function processInvestorInterest() {
     }
 }
 
+/** Decyzja po A4: lokata spółki najwyżej 5% aktywów funduszu, wszystkie lokaty spółek najwyżej 10% aktywów na kwartał. */
+const CORPORATE_SUBSCRIPTION_MAX_SHARE = 0.05;
+const CORPORATE_SUBSCRIPTION_QUARTER_CAP = 0.10;
+
 /** Spółki z dobrą opinią o graczu lokują nadwyżki gotówki w JU funduszu. */
 function processCorporateSubscriptions() {
     if (!playerFund || !isFundOpenForSubscriptions()) return; // 0.13.1 (B5): lokaty spółek w JU tylko przy otwartej emisji
+    const flow = getFundFlowStats().current;
+    const quarterCap = Math.max(1, flow.startUnits) * getFundNav() * CORPORATE_SUBSCRIPTION_QUARTER_CAP;
     for (const stock of stocks) {
         if (stock.assetType || stock.isBankrupt || stock.isBankStock) continue;
         const reputation = Number(stock.reputation?.player) || 0;
         if (reputation < REPUTATION_LEVELS.CORRECT || stock.cash < 500000 || Math.random() > 0.03) continue;
 
-        const amount = Math.min(stock.cash * 0.02, getFundAssets() * 0.5);
+        const amount = Math.min(stock.cash * 0.02, getFundAssets() * CORPORATE_SUBSCRIPTION_MAX_SHARE, quarterCap - (Number(flow.corporateIn) || 0));
         if (!(amount > 1)) continue;
+        flow.corporateIn = (Number(flow.corporateIn) || 0) + amount;
         adjustCompanyCash(stock, -amount); // gotówka → inwestycja w JU (aktywa bez zmian)
         recordPayment(stock, 'player-fund', amount, 'Lokata spółki w JU funduszu');
         addOutsideSubscription('institution', `${stock.name} (lokata)`, amount);

@@ -4710,6 +4710,63 @@ group('0.13.1 B5: stabilność funduszu', () => {
     });
 });
 
+group('Etap A: decyzje balansu (zaufanie vs GIG, lokaty spółek, polityki kadrowe)', () => {
+    function world(companies = 2) {
+        const list = Array.from({ length: companies }, (_, i) => makeCompany(`LK${i}`, { cash: 5_000_000, fixedAssets: 800_000 }));
+        list.forEach(company => { company.insiderShares = 0; company.sharesHeld = 0; company.reputation = { player: 0 }; });
+        resetWorld(list);
+        allBonds.length = 0;
+        marketIndexes.find(index => index.id === 'GIG').value = 100;
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        return list;
+    }
+
+    test('cel zaufania: obsunięcie i zmienność równe GIG nie obniżają zaufania, nadwyżka ponad GIG — tak', () => {
+        world();
+        const base = { rivals: [], rank: 1, rankOf: 1, fundReturn: 0.05, benchmarkReturn: 0.05 };
+        playerFund.current.elapsedMs = 0;
+        playerFund.periods = Array.from({ length: 4 }, (_, number) => ({ ...base, number, maxDrawdown: 0, volatility: 0 }));
+        const calm = computeTrustTarget();
+        playerFund.periods = Array.from({ length: 4 }, (_, number) => ({ ...base, number, maxDrawdown: 0.12, volatility: 0.03, benchmarkDrawdown: 0.12, benchmarkVolatility: 0.03 }));
+        const likeGig = computeTrustTarget();
+        playerFund.periods = Array.from({ length: 4 }, (_, number) => ({ ...base, number, maxDrawdown: 0.20, volatility: 0.05, benchmarkDrawdown: 0.12, benchmarkVolatility: 0.03 }));
+        const riskier = computeTrustTarget();
+        assertNear(likeGig, calm, 'fundusz = GIG ma ten sam cel co spokojny', 1e-9);
+        assert(riskier < likeGig - 3, `ryzyko ponad GIG obniża cel: ${riskier.toFixed(1)} vs ${likeGig.toFixed(1)}`);
+    });
+
+    test('okres zapisuje obsunięcie i zmienność GIG', () => {
+        world();
+        const gig = marketIndexes.find(index => index.id === 'GIG');
+        for (const value of [100, 110, 90, 95]) { gig.value = value; updateFund(1); processFundWeekly(); }
+        assertNear(playerFund.current.benchmarkDrawdown, 1 - 90 / 110, 'obsunięcie GIG', 1e-9);
+        playerFund.current.elapsedMs = FUND_PERIOD_MS;
+        updateFund(1);
+        const period = playerFund.periods[playerFund.periods.length - 1];
+        assert(period.benchmarkDrawdown > 0.18 && period.benchmarkVolatility > 0, JSON.stringify({ d: period.benchmarkDrawdown, v: period.benchmarkVolatility }));
+    });
+
+    test('lokaty spółek w JU: każda ≤ 5% aktywów funduszu, łącznie ≤ 10% na kwartał', () => {
+        const companies = world(12);
+        companies.forEach(company => { company.reputation.player = REPUTATION_LEVELS.CORRECT + 10; });
+        const assets0 = getFundAssets();
+        const random = Math.random;
+        Math.random = () => 0;
+        try { for (let week = 0; week < 5; week++) processCorporateSubscriptions(); }
+        finally { Math.random = random; }
+        const lokaty = playerFund.clients.filter(client => client.name.endsWith('(lokata)'));
+        const inflow = getFundAssets() - assets0;
+        assert(lokaty.length >= 2, `lokaty: ${lokaty.length}`);
+        assert(inflow <= assets0 * CORPORATE_SUBSCRIPTION_QUARTER_CAP * 1.0001 + 1, `napływ ${inflow.toFixed(0)} z ${assets0.toFixed(0)}`);
+        assert(lokaty.every(client => client.units * getFundNav() <= assets0 * CORPORATE_SUBSCRIPTION_MAX_SHARE * 1.2 + 1), 'pojedyncza lokata ≤ 5% aktywów');
+    });
+
+    test('polityki kadrowe: Oszczędna płaci ×0,95, Wyzysk ma kontrole Inspekcji ×4', () => {
+        assert(LABOR_POLICIES.saving.pay === 0.95 && LABOR_POLICIES.exploit.inspection === 4, JSON.stringify([LABOR_POLICIES.saving, LABOR_POLICIES.exploit]));
+        assert(LABOR_POLICIES.exploit.pay < LABOR_POLICIES.saving.pay && LABOR_POLICIES.saving.pay < LABOR_POLICIES.standard.pay, 'kolejność płac');
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

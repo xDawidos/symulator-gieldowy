@@ -116,8 +116,8 @@ Kolejność: S1 → S2 → S3 → S4 → S5 → S6. Każda część z testami, p
 
 | Polityka | Płace | Cel zadowolenia | Szansa na związek | Wydajność | Inne |
 |---|---|---|---|---|---|
-| Wyzysk | ×0,85 | 20 | ×3 | −3% | szara strefa +10 pp, kontrole Inspekcji Pracy ×3 |
-| Oszczędna | ×0,93 | 40 | ×1,8 | 0 | — |
+| Wyzysk | ×0,85 | 20 | ×3 | −3% | szara strefa +10 pp, kontrole Inspekcji Pracy ×4 (było ×3, strojenie A2) |
+| Oszczędna | ×0,95 (było ×0,93, strojenie A2) | 40 | ×1,8 | 0 | — |
 | Standardowa | ×1,00 | 60 | ×1 | 0 | — |
 | Prospołeczna | ×1,08 | 80 | ×0,4 | +4% | rotacja −50%, przyciąga specjalistów |
 
@@ -314,6 +314,16 @@ Ta część pilnuje, żeby nowego systemu nie dało się w całości pominąć.
 - **Odchylenie: polityki kadrowe.** Przy losowym przypisaniu Oszczędna daje ok. +5 pp TSR rocznie ponad Standardową, a największy rozrzut ma Oszczędna, nie Wyzysk. Oszczędna ma niższe płace (×0,93) bez kary wydajności, a cel zadowolenia 40 trzyma ją powyżej progu rotacji (35). **Strojenie wymaga decyzji użytkownika** (zmiana balansu) — propozycje w raporcie `raporty/weryfikacja_0.13.1.md`.
 - W zwykłej grze różnice TSR polityk wynikają głównie z tego, kto wybiera politykę (słabe spółki → Oszczędna, „chciwi” prezesi → Wyzysk), a nie z samej polityki.
 - Poza zakresem 0.13: GIG rośnie ok. 17% rocznie w obu wersjach (komentarz B5 w `companies.js` mówi o celu 7–9%).
+
+**Po strojeniu (decyzja użytkownika 2026-10-13: Oszczędna płace ×0,93 → ×0,95, Wyzysk kontrole Inspekcji ×3 → ×4).** Krótki pomiar kontrolny (ok. 5 min; 7 przebiegów na zestaw: 3 przy ×50 i 3–4 przy ×200, mała próba):
+
+| Miara | Przed | Po | Ocena |
+|---|---|---|---|
+| TSR Oszczędna vs Standard (losowe przypisanie) | +5,1 pp | **+2,6 pp** (17,7% vs 15,1%) | ✅ |
+| TSR Prospołeczna / Wyzysk vs Standard | +2,6 / −0,2 pp | +2,3 / −0,2 pp | ✅ |
+| Największy rozrzut TSR | Oszczędna | Prospołeczna 20,9; Oszczędna 18,8; Wyzysk 15,3; Standard 11,1 | ❌ Wyzysk nadal nie największy |
+| GIG / marża (obecny kod) | 17,0% / 23,9% | 18,9% / 25,3% (7 przebiegów, odch. std. GIG 5,9 pp) | ⚠️ GIG +2,1 pp vs 0.12 — na granicy, w granicach szumu małej próby |
+| Związki / strajki (obecny kod) | 19,3% / 3,7 na rok | 18,7% / 3,8 na rok | ✅ |
 
 ## Ryzyka i jak im zapobiegamy
 
