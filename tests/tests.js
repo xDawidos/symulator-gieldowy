@@ -4594,6 +4594,34 @@ group('0.13.1 P3: „duchy posiadaczy” (akcje w obrocie = posiadacze)', () => 
     });
 });
 
+group('0.14 A3: licznik przycięć „duchów posiadaczy”', () => {
+    test('każde przycięcie trafia do rejestru (symbol, posiadacz, akcje, kwartał) i jest ostrzeżeniem, nie naruszeniem', () => {
+        const a = makeCompany('GHX'), owner = makeCompany('OWX');
+        resetWorld([a, owner]);
+        ghostTrimLog.length = 0;
+        a.totalShares = 100; a.insiderShares = 0; a.treasuryShares = 0; a.stateOwnershipPct = 0; a.sharesHeld = 0; // pule puste: nadwyżka 226 − 0
+        aiCompetitors[0].portfolio.GHX = { shares: 226, avgPrice: 10 };
+        owner.isBankrupt = true; owner.equityStakes = { GHX: 100 };
+        reconcileSharesHeld();
+        const entries = ghostTrimLog.filter(t => t.symbol === 'GHX');
+        assert(entries.length === 2, `wpisy: ${entries.length}`);
+        assert(entries[0].holder === 'spółka OWX' && entries[0].shares === 100 && entries[0].source === 'game', JSON.stringify(entries[0]));
+        assert(entries[1].holder.startsWith('bot ') && entries[1].shares === 126 && aiCompetitors[0].portfolio.GHX.shares === 100 && entries[1].quarter === macro.quarter, JSON.stringify(entries[1]));
+        const problems = checkWorldInvariants();
+        assert(!problems.some(x => x.includes('GHX')), 'nie ma naruszenia');
+        assert(problems.warnings.filter(w => w.includes('GHX')).length === 2, `ostrzeżenia: ${problems.warnings}`);
+        ghostTrimLog.length = 0;
+    });
+
+    test('bez nadwyżki rejestr zostaje pusty', () => {
+        const a = makeCompany('CLX');
+        resetWorld([a]);
+        ghostTrimLog.length = 0;
+        reconcileSharesHeld();
+        assert(ghostTrimLog.length === 0 && checkWorldInvariants().warnings.length === 0, `wpisy: ${ghostTrimLog.length}`);
+    });
+});
+
 group('0.13.1 B5: stabilność funduszu', () => {
     function simulateFund(annualExcess, seed, weeks = 104) {
         return withSeededRandom(seed, () => {

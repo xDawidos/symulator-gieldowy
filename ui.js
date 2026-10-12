@@ -5575,13 +5575,19 @@ function checkWorldInvariants() {
     }
     for (const bond of allBonds) finite(bond.faceValue, `obligacja ${bond.id}`);
     if (corporation) finite(corporation.budget, 'budżet korporacji');
+    // A3: przycięcia „duchów posiadaczy” to ostrzeżenia, nie naruszenia — mogą maskować prawdziwy rozjazd.
+    problems.warnings = (typeof ghostTrimLog !== 'undefined' ? ghostTrimLog : []).map(t =>
+        `przycięcie ${t.symbol}: ${t.holder} −${Math.round(t.shares)} akcji (kwartał ${t.quarter}, ${t.source === 'load' ? 'wczytanie' : 'gra'})`);
     return problems;
 }
 
 function debugCheckInvariants() {
     const problems = checkWorldInvariants();
-    showToast(problems.length ? `Naruszenia: ${problems.length} (szczegóły w konsoli)` : 'Świat gry spójny ✔', problems.length ? 'error' : 'success', 6000);
+    const warnings = problems.warnings || [];
+    const note = warnings.length ? `, przycięcia: ${warnings.length}` : '';
+    showToast(problems.length ? `Naruszenia: ${problems.length}${note} (szczegóły w konsoli)` : `Świat gry spójny ✔${note}`, problems.length ? 'error' : warnings.length ? 'warning' : 'success', 6000);
     if (problems.length) console.warn('[niezmienniki]', problems);
+    if (warnings.length) console.warn('[niezmienniki: przycięcia]', warnings);
     return problems;
 }
 

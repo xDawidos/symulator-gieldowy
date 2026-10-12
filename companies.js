@@ -8124,22 +8124,39 @@ function releaseOverheldShares(stock) {
     if (excess > 0) trimGhostHolders(stock, excess);
 }
 
+/** A3: rejestr przycięć „duchów posiadaczy” (ostrzeżenie w checkWorldInvariants; źródło: 'load' przy wczytaniu, 'game' w grze). */
+const GHOST_TRIM_LOG_LIMIT = 200;
+let ghostTrimLog = [];
+let ghostTrimSource = 'game';
+
 /** P3: zdejmuje nadmiarowe akcje z pakietów posiadaczy, których nie pokrywa wolny obrót. Zwraca zdjętą liczbę. */
 function trimGhostHolders(stock, excess) {
     const symbol = stock.symbol;
     let left = excess;
-    const take = (get, set) => { if (left <= 0) return; const have = Math.max(0, Number(get()) || 0); const cut = Math.min(have, left); if (cut > 0) { set(have - cut); left -= cut; } };
+    let holder = '';
+    const quarter = typeof macro === 'object' && macro ? macro.quarter : null;
+    const take = (get, set) => {
+        if (left <= 0) return;
+        const have = Math.max(0, Number(get()) || 0); const cut = Math.min(have, left);
+        if (cut > 0) {
+            set(have - cut); left -= cut;
+            ghostTrimLog.push({ symbol, holder, shares: cut, quarter, source: ghostTrimSource });
+            if (ghostTrimLog.length > GHOST_TRIM_LOG_LIMIT) ghostTrimLog.shift();
+            console.warn(`[P3] ${symbol}: zdjęto ${cut} akcji „duchowi posiadacza” ${holder} (kwartał ${quarter}, ${ghostTrimSource === 'load' ? 'wczytanie' : 'gra'})`);
+        }
+    };
     const owners = stocks.filter(o => o !== stock && (o.equityStakes?.[symbol] || o.holdingPortfolio?.[symbol]));
     for (const owner of [...owners.filter(o => o.isBankrupt), ...owners.filter(o => !o.isBankrupt)]) {
+        holder = `spółka ${owner.symbol}`;
         if (owner.equityStakes?.[symbol]) take(() => owner.equityStakes[symbol], v => { if (v > 0) owner.equityStakes[symbol] = v; else delete owner.equityStakes[symbol]; });
         if (owner.holdingPortfolio?.[symbol]) take(() => owner.holdingPortfolio[symbol].quantity, v => { if (v > 0) owner.holdingPortfolio[symbol].quantity = v; else delete owner.holdingPortfolio[symbol]; });
     }
-    if (typeof etfs !== 'undefined') for (const etf of etfs) if (etf.holdings?.[symbol]) take(() => etf.holdings[symbol], v => { etf.holdings[symbol] = v; });
-    for (const bank of commercialBanks) if (bank.stockPortfolio?.[symbol]) take(() => bank.stockPortfolio[symbol].shares, v => { if (v > 0) bank.stockPortfolio[symbol].shares = v; else delete bank.stockPortfolio[symbol]; });
-    for (const manager of corporation?.managers || []) if (manager.fund?.portfolio?.[symbol]) take(() => manager.fund.portfolio[symbol].shares, v => { if (v > 0) manager.fund.portfolio[symbol].shares = v; else delete manager.fund.portfolio[symbol]; });
-    for (const ai of aiCompetitors) if (ai.portfolio?.[symbol]?.shares) take(() => ai.portfolio[symbol].shares, v => { if (v > 0) ai.portfolio[symbol].shares = v; else delete ai.portfolio[symbol]; });
+    if (typeof etfs !== 'undefined') for (const etf of etfs) if (etf.holdings?.[symbol]) holder = `ETF ${etf.symbol || etf.name}`, take(() => etf.holdings[symbol], v => { etf.holdings[symbol] = v; });
+    for (const bank of commercialBanks) if (bank.stockPortfolio?.[symbol]) holder = `bank ${bank.name}`, take(() => bank.stockPortfolio[symbol].shares, v => { if (v > 0) bank.stockPortfolio[symbol].shares = v; else delete bank.stockPortfolio[symbol]; });
+    for (const manager of corporation?.managers || []) if (manager.fund?.portfolio?.[symbol]) holder = `fundusz ${manager.name}`, take(() => manager.fund.portfolio[symbol].shares, v => { if (v > 0) manager.fund.portfolio[symbol].shares = v; else delete manager.fund.portfolio[symbol]; });
+    for (const ai of aiCompetitors) if (ai.portfolio?.[symbol]?.shares) holder = `bot ${ai.name}`, take(() => ai.portfolio[symbol].shares, v => { if (v > 0) ai.portfolio[symbol].shares = v; else delete ai.portfolio[symbol]; });
+    holder = 'miasto';
     take(() => stock.cityShares, v => { stock.cityShares = v; });
-    if (left < excess && typeof isDebugMode === 'function' && isDebugMode()) console.warn(`[P3] ${symbol}: zdjęto ${excess - left} akcji „duchów posiadaczy”`);
     return excess - left;
 }
 
