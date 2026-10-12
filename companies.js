@@ -2793,11 +2793,16 @@ function initializeOwnership(stock) {
 }
 
 function getFreeFloatShares(stock) {
+    return Math.max(0, getRawFreeFloatShares(stock));
+}
+
+/** Wolny obrót bez przycięcia do zera: ujemny, gdy insiderzy + akcje własne + pakiet państwa > wszystkie akcje. */
+function getRawFreeFloatShares(stock) {
     const total = Math.max(0, Number(stock?.totalShares) || 0);
     const insiders = Math.max(0, Number(stock?.insiderShares) || 0);
     const treasury = Math.max(0, Number(stock?.treasuryShares) || 0);
     const state = Math.floor(total * Math.max(0, Number(stock?.stateOwnershipPct) || 0)); // pakiet państwa (także mniejszościowy) poza obrotem
-    return Math.max(0, total - insiders - treasury - state);
+    return total - insiders - treasury - state;
 }
 
 /** Akcje, które można dziś kupić na rynku (wolny obrót minus akcje posiadane przez inwestorów). */
@@ -8095,7 +8100,8 @@ function getTrackedHeldShares(stock) {
  * potem pula insiderów — pakiety inwestorów zostają nietknięte.
  */
 function releaseOverheldShares(stock) {
-    let excess = Math.ceil(getTrackedHeldShares(stock) - getFreeFloatShares(stock));
+    // P3: od wolnego obrotu bez przycięcia — gdy pule przekraczają wszystkie akcje, trzeba zwolnić także tę „ujemną” część.
+    let excess = Math.ceil(getTrackedHeldShares(stock) - getRawFreeFloatShares(stock));
     for (const key of ['treasuryShares', 'insiderShares']) {
         if (excess <= 0) break;
         const pool = Math.max(0, Number(stock[key]) || 0);

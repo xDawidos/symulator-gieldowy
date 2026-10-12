@@ -4534,6 +4534,16 @@ group('0.13.1 P3: „duchy posiadaczy” (akcje w obrocie = posiadacze)', () => 
         assert(a.stateOwnershipPct < 0.9 && Math.abs(a.sharesHeld - getTrackedHeldShares(a)) <= 0.5, `pakiet państwa ${a.stateOwnershipPct}`);
     });
 
+    test('pule insiderów i państwa ponad wszystkie akcje: reconcile wyrównuje obrót z posiadaczami', () => {
+        const a = makeCompany('CTX');
+        resetWorld([a]);
+        a.totalShares = 1_306_166; a.insiderShares = 229_477; a.treasuryShares = 0; a.stateOwnershipPct = 0.8332844614890867;
+        aiCompetitors[0].portfolio.CTX = { shares: 84_957, avgPrice: 1 }; a.sharesHeld = 84_957;
+        assert(getRawFreeFloatShares(a) < 0 && getFreeFloatShares(a) === 0, 'pule ponad wszystkie akcje');
+        reconcileSharesHeld();
+        assert(a.sharesHeld === 84_957 && Math.abs(a.sharesHeld - getTrackedHeldShares(a)) <= 0.5 && getFreeFloatShares(a) >= a.sharesHeld, `obrót ${a.sharesHeld}, wolny obrót ${getFreeFloatShares(a)}`);
+    });
+
     test('usunięta spółka nie zostawia pakietów — nowa spółka z tym samym symbolem startuje czysto', () => {
         const a = makeCompany('DEJC'), gpw = makeCompany('GPWX');
         resetWorld([a, gpw]);
