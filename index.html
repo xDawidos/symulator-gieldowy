@@ -307,6 +307,10 @@
     <label class="fund-open-subscriptions text-sm" title="Gdy włączone, zadowoleni i nowi klienci sami dokupują JU po NAV (nowe jednostki). Wyłączone: JU przybywa tylko przez Twoją emisję.">
       <input type="checkbox" id="fund-open-subscriptions" onchange="setFundOpenSubscriptions(this.checked)"> Emisja ciągła (wpłaty klientów bez mojej emisji)
     </label>
+    <details id="fund-flow-details" class="fund-flow-details">
+      <summary class="text-sm">👥 Dlaczego klienci odchodzą / przychodzą</summary>
+      <div id="fund-flow-reasons"></div>
+    </details>
 
     <!-- Wykres 4 okresów i porównanie z rywalami -->
     <div class="portfolio-section-header">Wyniki: 4 ostatnie okresy</div>

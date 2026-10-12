@@ -1884,11 +1884,11 @@ function notePlayerPositionLoss(symbol, quantity, reason, value = null) {
 }
 
 /**
- * 0.13.1 (B5): emisja ciągła (wpłaty klientów po NAV poza emisją gracza) tylko za zgodą gracza.
- * Domyślnie zamknięta — liczba JU rośnie wyłącznie przez emisję gracza i zakup JU z konta prywatnego.
+ * 0.13.1 (B5, decyzja „stabilność funduszu”): emisja ciągła (wpłaty klientów po NAV poza emisją gracza)
+ * domyślnie OTWARTA; gracz może ją zamknąć przełącznikiem — wtedy JU przybywa tylko przez jego emisję.
  */
 function isFundOpenForSubscriptions() {
-    return Boolean(playerFund?.openSubscriptions);
+    return Boolean(playerFund) && playerFund.openSubscriptions !== false;
 }
 
 function setFundOpenSubscriptions(open) {
@@ -2008,6 +2008,7 @@ function issueFundUnits(requestedUnits, options = {}) {
     playerFund.units += raised / nav;
     current.inflow += raised;
     recordPayment('external:klienci', 'player-fund', raised, 'Emisja JU');
+    if (typeof noteFundFlow === 'function') noteFundFlow('in', 'emission', raised, raised / nav); // B5: panel przyczyn
 
     logEvent(`📥 Emisja: sprzedano ${(raised / nav).toFixed(1)} z ${requested} JU po ${nav.toFixed(2)} zł (${raised.toFixed(2)} zł, nowych klientów: ${newClients.length}).`, 'review');
     return { issued: raised / nav, raised, newClients: newClients.length };
@@ -3060,6 +3061,7 @@ function addOutsideSubscription(type, name, value) {
     playerFund.current.inflow += value;
     const client = addFundClient(type, units, nav);
     client.name = name;
+    if (typeof noteFundFlow === 'function') noteFundFlow('in', 'newClients', value, units); // B5: panel przyczyn
     return client;
 }
 
@@ -3378,10 +3380,111 @@ function getTrustThreshold(character) {
     return 55 + (character.trustNeed || 0);
 }
 
+// --- B5: stabilność funduszu — przepływy klientów i ich przyczyny ---
+const SATISFACTION_MEAN = 0.5;          // zadowolenie wraca do średniej (wynik ≈ GIG → neutralnie)
+const SATISFACTION_REVERSION = 0.04;    // tempo powrotu na tydzień
+const SATISFACTION_UNHAPPY = 0.35;
+const FUND_FLOW_WARN_SHARE = 0.10;      // ostrzeżenie: napływ lub odpływ w kwartale > 10% JU
+const ORGANIC_INFLOW_BASE = 0.02;       // roczny napływ nowych klientów przy zaufaniu 50 i wyniku = GIG
+const TOPUP_INFLOW_BASE = 0.015;        // roczne dopłaty obecnych klientów przy wyniku = GIG (zależne od wielkości funduszu)
+const FUND_FLOW_OUT_REASONS = { performance: '📉 wynik gorszy od GIG', trust: '🤝 niskie zaufanie', fees: '💸 opłaty', drawdown: '🎢 obsunięcie', noBuyer: '🛒 brak kupca na rynku wtórnym', panic: '😱 panika', ethics: '🌱 etyka spółek', other: '❔ inne' };
+const FUND_FLOW_IN_REASONS = { topup: '➕ dopłaty obecnych klientów', newClients: '🆕 nowi klienci', emission: '📥 Twoja emisja' };
+
+function createFundFlowQuarter(quarter) {
+    return { quarter, startUnits: playerFund?.units || 0, in: {}, out: {}, inUnits: 0, outUnits: 0, warned: false };
+}
+
+/** Bieżący kwartał przepływów; przy zmianie kwartału poprzedni trafia do last (panel „Dlaczego klienci…”). */
+function getFundFlowStats() {
+    if (!playerFund) return null;
+    const quarter = typeof macro === 'object' ? macro.quarter : 0;
+    if (!playerFund.flowStats) playerFund.flowStats = { current: createFundFlowQuarter(quarter), last: null };
+    const stats = playerFund.flowStats;
+    if (stats.current.quarter !== quarter) {
+        stats.last = stats.current;
+        stats.current = createFundFlowQuarter(quarter);
+    }
+    return stats;
+}
+
+/** Zapisuje przepływ (kierunek 'in' / 'out', przyczyna, wartość w zł, JU) i ostrzega przy przekroczeniu 10% JU w kwartale. */
+function noteFundFlow(direction, reason, value, units) {
+    const stats = getFundFlowStats();
+    if (!stats || !(value > 0)) return;
+    const quarter = stats.current;
+    quarter[direction][reason] = (quarter[direction][reason] || 0) + value;
+    quarter[direction === 'in' ? 'inUnits' : 'outUnits'] += Math.max(0, Number(units) || 0);
+    const base = Math.max(1, quarter.startUnits);
+    if (!quarter.warned && (quarter.inUnits > base * FUND_FLOW_WARN_SHARE || quarter.outUnits > base * FUND_FLOW_WARN_SHARE)) {
+        quarter.warned = true;
+        const inflow = quarter.inUnits > base * FUND_FLOW_WARN_SHARE;
+        const text = inflow
+            ? `📥 Duży napływ do funduszu: +${(quarter.inUnits / base * 100).toFixed(0)}% JU w tym kwartale. Emisję ciągłą możesz zamknąć w panelu funduszu.`
+            : `📤 Duży odpływ z funduszu: −${(quarter.outUnits / base * 100).toFixed(0)}% JU w tym kwartale. Zobacz „Dlaczego klienci odchodzą” w panelu funduszu.`;
+        logEvent(text, 'review');
+        if (typeof pushNotification === 'function') pushNotification(text, () => { if (typeof showFundFlowPanel === 'function') showFundFlowPanel(); });
+    }
+}
+
+/** Składniki tygodniowej zmiany zadowolenia klienta (do decyzji i do rozbicia przyczyn odejść). */
+function getClientSatisfactionDrift(client, def, ctx) {
+    const fee = getPlayerFeeRate();
+    const parts = {
+        reversion: (SATISFACTION_MEAN - client.satisfaction) * SATISFACTION_REVERSION,
+        performance: ctx.excess * def.chase * 0.3 - (def.comparesRivals && ctx.lastRankBad ? 0.02 : 0),
+        trust: (ctx.trust - 50) / 50 * 0.012,                                   // słabszy składnik zaufania
+        drawdown: -Math.max(0, ctx.maxDrawdown - 0.05) * def.volAversion * 0.3,  // dopiero obsunięcie ponad 5%
+        // Opłata standardowa jest neutralna: kara dopiero powyżej MANAGEMENT_FEE_ANNUAL, niższa — mała premia.
+        fees: -(def.feeSensitivity || 0) * 0.01 * Math.max(0, fee / MANAGEMENT_FEE_ANNUAL - 1) - (fee - MANAGEMENT_FEE_ANNUAL) * 0.4,
+        ethics: def.ethical && ctx.ethicsIssue ? -0.08 : 0
+    };
+    return parts;
+}
+
+/** Główna przyczyna niezadowolenia: najbardziej ujemny składnik. */
+function getDominantOutflowReason(parts, def, fraction) {
+    if (def.panic && fraction >= 1) return 'panic';
+    let reason = 'other', worst = 0;
+    for (const key of ['performance', 'trust', 'drawdown', 'fees', 'ethics']) if (parts[key] < worst) { worst = parts[key]; reason = key; }
+    if (reason === 'other') { // tydzień bez ujemnego składnika (np. początek okresu): przyczyna z dłuższego horyzontu
+        if (getRecentExcessAnnual() < 0) reason = 'performance';
+        else if ((playerFund?.trust ?? 50) < 50) reason = 'trust';
+    }
+    return reason;
+}
+
+/** Wynik vs GIG w skali roku: ostatni zamknięty okres (3 kwartały) i bieżący okres. */
+function getRecentExcessAnnual() {
+    const last = typeof getLastPeriodExcess === 'function' ? getLastPeriodExcess() * 4 / 3 : 0;
+    const current = playerFund?.current;
+    const partialYears = current ? Math.max(0.25, (current.elapsedMs || 0) / FUND_PERIOD_MS * 0.75) : 1;
+    const partial = current ? (getPeriodReturn(current.startNav, getFundNav()) - getPeriodReturn(current.startBenchmark, getBenchmarkValue())) / partialYears : 0;
+    return playerFund?.periods?.length ? (last + partial) / 2 : partial;
+}
+
+/** Roczna stopa napływu nowych klientów (przy otwartej emisji): zaufanie, reputacja, wynik vs GIG. */
+function getOrganicInflowRate(trust = playerFund?.trust ?? 50) {
+    const reputation = getPlayerReputationFactor();
+    return Math.max(0, Math.min(0.5, ORGANIC_INFLOW_BASE + (trust - 50) / 50 * 0.04 + getRecentExcessAnnual() * 1.2 + reputation * 0.03));
+}
+
+/** Roczna stopa dopłat obecnych klientów (zadowoleni z zaufaniem): rośnie z wynikiem vs GIG. */
+function getTopupInflowRate(trust = playerFund?.trust ?? 50) {
+    return Math.max(0, Math.min(0.3, TOPUP_INFLOW_BASE + (trust - 50) / 50 * 0.03 + getRecentExcessAnnual() * 1.0));
+}
+
+/** Średnia reputacja gracza w spółkach (−1…1). */
+function getPlayerReputationFactor() {
+    const values = stocks.filter(s => !s.assetType && !s.isBankrupt && Number.isFinite(Number(s.reputation?.player))).map(s => Number(s.reputation.player));
+    if (!values.length) return 0;
+    return Math.max(-1, Math.min(1, values.reduce((a, b) => a + b, 0) / values.length / 100));
+}
+
 /** Co tydzień: zadowolenie i decyzje klientów funduszu gracza. */
 function processClientsWeekly() {
     if (!playerFund) return;
     playerFund.clients.forEach(ensureClientProfile);
+    getFundFlowStats();
 
     const nav = getFundNav();
     const current = playerFund.current;
@@ -3390,41 +3493,47 @@ function processClientsWeekly() {
     const lastRankBad = lastPeriod && lastPeriod.rankOf > 1 && lastPeriod.rank === lastPeriod.rankOf;
     const trust = playerFund.trust;
     let redemptionBudget = Math.floor(playerFund.units * MAX_WEEKLY_REDEMPTION_SHARE);
-    let newMoneyBudget = getFundAssets() * MAX_WEEKLY_NEW_MONEY_SHARE;
+    // B5: dopłaty jako roczna stopa od aktywów (mały fundusz nie rośnie o setki procent od kilku stałych kwot).
+    let newMoneyBudget = Math.min(getFundAssets() * MAX_WEEKLY_NEW_MONEY_SHARE, getFundAssets() * getTopupInflowRate(trust) / 52 * getRandomInRange(0.5, 1.5));
 
     const ethicsIssue = typeof getFundEthicsIssue === 'function' ? getFundEthicsIssue() : null;
+    const ctx = { excess, trust, maxDrawdown: current.maxDrawdown, lastRankBad, ethicsIssue };
     for (const client of [...playerFund.clients]) {
         const def = getClientCharacter(client);
-        if (def.ethical && ethicsIssue) {
-            client.satisfaction = Math.max(0, client.satisfaction - 0.08);
-            if (!client.ethicsNoted || client.ethicsNoted !== ethicsIssue) { client.ethicsNoted = ethicsIssue; noteClientHistory(client, `Niepokoi się: ${ethicsIssue}.`); }
+        if (def.ethical && ethicsIssue && (!client.ethicsNoted || client.ethicsNoted !== ethicsIssue)) {
+            client.ethicsNoted = ethicsIssue;
+            noteClientHistory(client, `Niepokoi się: ${ethicsIssue}.`);
         }
 
-        // Zadowolenie: zaufanie, wynik vs GIG (pogoń za wynikiem), obsunięcie, opłaty (sknera), porównanie z rywalami.
-        const drift = (trust - 50) / 50 * 0.04
-            + excess * def.chase * 0.8
-            - current.maxDrawdown * def.volAversion * 0.3
-            - (def.feeSensitivity || 0) * 0.01 * getPlayerFeeRate() / MANAGEMENT_FEE_ANNUAL
-            - (getPlayerFeeRate() - MANAGEMENT_FEE_ANNUAL) * 0.4
-            - (def.comparesRivals && lastRankBad ? 0.05 : 0);
+        // B5: zadowolenie wraca do średniej — wynik ≈ GIG przy standardowej opłacie jest neutralny; lepszy wynik podnosi,
+        // gorszy obniża. Składniki: wynik vs GIG (pogoń za wynikiem), zaufanie (słabe), obsunięcie > 5%, opłaty ponad normę, etyka.
+        const parts = getClientSatisfactionDrift(client, def, ctx);
+        const drift = Object.values(parts).reduce((sum, value) => sum + value, 0);
         client.satisfaction = Math.max(0, Math.min(1, client.satisfaction + drift));
+        const unhappy = client.satisfaction < SATISFACTION_UNHAPPY;
 
-        // Sprzedaż czekająca na kupca zbyt długo → klient umarza.
+        // Oferta czeka na kupca zbyt długo: zadowolony (i neutralny) klient ją WYCOFUJE, niezadowolony umarza.
         if (client.pendingSellUnits > 0) {
             client.pendingSellWeeks++;
-            if (client.pendingSellWeeks >= JU_SELL_ORDER_PATIENCE && redemptionBudget > 0) {
-                const units = Math.min(client.pendingSellUnits, redemptionBudget, client.units);
-                const paid = redeemClientUnits(client, units);
-                redemptionBudget -= units;
-                client.pendingSellUnits = 0;
-                client.pendingSellWeeks = 0;
-                noteClientHistory(client, `Brak kupca na rynku wtórnym — umorzenie ${units.toFixed(1)} JU (${paid.toFixed(0)} zł).`);
+            if (client.pendingSellWeeks >= JU_SELL_ORDER_PATIENCE) {
+                if (!unhappy) {
+                    noteClientHistory(client, `Brak kupca na rynku wtórnym — wycofuje ofertę ${client.pendingSellUnits.toFixed(1)} JU i zostaje w funduszu.`);
+                    client.pendingSellUnits = 0;
+                    client.pendingSellWeeks = 0;
+                } else if (redemptionBudget > 0) {
+                    const units = Math.min(client.pendingSellUnits, redemptionBudget, client.units);
+                    const paid = redeemClientUnits(client, units);
+                    redemptionBudget -= units;
+                    client.pendingSellUnits = 0;
+                    client.pendingSellWeeks = 0;
+                    noteFundFlow('out', 'noBuyer', paid, units);
+                    noteClientHistory(client, `Brak kupca na rynku wtórnym — umorzenie ${units.toFixed(1)} JU (${paid.toFixed(0)} zł).`);
+                }
             }
             continue;
         }
 
         const satisfied = client.satisfaction >= 0.6;
-        const unhappy = client.satisfaction < 0.35;
         const highTrust = trust >= getTrustThreshold(def);
 
         if (unhappy) {
@@ -3434,16 +3543,18 @@ function processClientsWeekly() {
             const units = Math.min(redemptionBudget, Math.max(1, client.units * fraction));
             const paid = redeemClientUnits(client, units);
             redemptionBudget -= units;
+            noteFundFlow('out', getDominantOutflowReason(parts, def, fraction), paid, units);
             noteClientHistory(client, `Niezadowolony — umarza ${units.toFixed(1)} JU (${paid.toFixed(0)} zł).`);
         } else if (satisfied && highTrust) {
             if (!isFundOpenForSubscriptions() || Math.random() >= def.buyBias * 0.3 || newMoneyBudget <= 0) continue; // 0.13.1 (B5): nowe JU tylko przy otwartej emisji
             const value = Math.min(newMoneyBudget, getRandomInRange(def.size[0], def.size[1]) * 0.4);
             const units = subscribeClient(client, value);
             newMoneyBudget -= value;
+            noteFundFlow('in', 'topup', value, units);
             noteClientHistory(client, `Dokupuje ${units.toFixed(1)} JU za ${value.toFixed(0)} zł.`);
             pushTape('topup', `${def.icon} ${client.name} dokupuje ${units.toFixed(1)} JU funduszu ${playerProfile.fundName} (${formatPlnShort(value)}).`);
         } else if (satisfied && !highTrust) {
-            if (Math.random() >= def.secondaryBias * 0.35) continue;
+            if (Math.random() >= def.secondaryBias * 0.15) continue; // B5: niskie zaufanie słabiej wypycha zadowolonych
             client.pendingSellUnits = client.units * getRandomInRange(0.2, def.key === 'sly' ? 0.6 : 0.45);
             client.pendingSellWeeks = 0;
             noteClientHistory(client, `Zadowolony z wyników, ale nie ufa funduszowi — wystawia ${client.pendingSellUnits.toFixed(1)} JU na rynku wtórnym.`);
@@ -3553,9 +3664,10 @@ function runPlayerJuMarket(fund) {
     }
 
     // Niewykorzystany popyt: nowi klienci wpłacają do funduszu po NAV (gdy zaufanie pozwala).
-    let budget = isFundOpenForSubscriptions() ? getFundAssets() * MAX_WEEKLY_NEW_MONEY_SHARE : 0; // 0.13.1 (B5): bez otwartej emisji nie powstają nowe JU
+    // B5: organiczny napływ (przy otwartej emisji) — roczna stopa z zaufania, reputacji i wyniku vs GIG, rozłożona na tygodnie.
+    let budget = isFundOpenForSubscriptions() ? Math.min(getFundAssets() * MAX_WEEKLY_NEW_MONEY_SHARE, getFundAssets() * getOrganicInflowRate(fund.trust) / 52 * getRandomInRange(0.5, 1.5)) : 0;
     for (const buyer of buyers) {
-        if (fund.trust < 50 || budget <= 0 || buyer.value < nav) continue;
+        if (budget <= 0 || buyer.value < nav) continue;
         const value = Math.min(buyer.value, budget);
         let client = buyer.client;
         if (!client) {
@@ -3566,6 +3678,7 @@ function runPlayerJuMarket(fund) {
             pushTape('new', `🆕 Nowy klient: ${buyer.def.icon} ${client.name} (${buyer.def.label}) wpłaca ${formatPlnShort(value)} do funduszu ${fund.name}.`);
         }
         const units = subscribeClient(client, value);
+        noteFundFlow('in', 'newClients', value, units);
         noteClientHistory(client, `Wpłaca ${value.toFixed(0)} zł (${units.toFixed(1)} JU po NAV).`);
         inflow += value;
         budget -= value;

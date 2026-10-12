@@ -5064,10 +5064,37 @@ function escapeHtml(text) {
 // PANEL FUNDUSZU
 // =================================================================================
 
+/** B5: panel „Dlaczego klienci odchodzą / przychodzą” — rozbicie przepływów ostatniego i bieżącego kwartału. */
+function renderFundFlowReasons() {
+    const box = document.getElementById('fund-flow-reasons');
+    if (!box || typeof getFundFlowStats !== 'function') return;
+    const stats = getFundFlowStats();
+    const quarterTable = (quarter, label) => {
+        if (!quarter) return `<p class="text-muted text-sm">${label}: brak danych.</p>`;
+        const rows = (entries, names, sign) => Object.entries(entries).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1])
+            .map(([key, value]) => `<li>${names[key] || key}: <strong class="${sign > 0 ? 'text-up' : 'text-down'}">${sign > 0 ? '+' : '−'}${formatZl(value, 0)}</strong></li>`).join('');
+        const base = Math.max(1, quarter.startUnits);
+        const net = (quarter.inUnits - quarter.outUnits) / base * 100;
+        return `<div class="text-sm"><strong>${label}</strong> (kw. ${quarter.quarter}): napływ ${(quarter.inUnits / base * 100).toFixed(1)}% JU, odpływ ${(quarter.outUnits / base * 100).toFixed(1)}% JU, netto ${net >= 0 ? '+' : ''}${net.toFixed(1)}%
+            <div class="d-flex gap-2 flex-wrap"><div><em>Odchodzą, bo:</em><ul>${rows(quarter.out, FUND_FLOW_OUT_REASONS, -1) || '<li>nikt nie odszedł</li>'}</ul></div>
+            <div><em>Przychodzą:</em><ul>${rows(quarter.in, FUND_FLOW_IN_REASONS, 1) || '<li>brak wpłat</li>'}</ul></div></div></div>`;
+    };
+    box.innerHTML = quarterTable(stats.last, 'Ostatni kwartał') + quarterTable(stats.current, 'Bieżący kwartał')
+        + `<p class="text-xs text-muted">Napływ nowych klientów (emisja ${isFundOpenForSubscriptions() ? 'otwarta' : 'zamknięta'}): ok. ${(isFundOpenForSubscriptions() ? getOrganicInflowRate() * 100 : 0).toFixed(1)}% aktywów rocznie — zależy od zaufania, reputacji i wyniku vs GIG.</p>`;
+}
+
+/** Skrót z powiadomienia: otwiera panel przepływów funduszu. */
+function showFundFlowPanel() {
+    const details = document.getElementById('fund-flow-details');
+    if (details) { details.open = true; details.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    renderFundFlowReasons();
+}
+
 function displayFundPanel() {
     if (!playerFund) return;
     const openBox = document.getElementById('fund-open-subscriptions');
-    if (openBox) openBox.checked = Boolean(playerFund.openSubscriptions); // 0.13.1 (B5)
+    if (openBox) openBox.checked = isFundOpenForSubscriptions(); // B5: domyślnie otwarta
+    renderFundFlowReasons();
 
     const title = document.getElementById('fund-panel-title');
     if (title) title.textContent = `💼 ${playerProfile?.fundName || 'Mój fundusz'}`;

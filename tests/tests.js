@@ -1114,6 +1114,7 @@ group('Kariera w korporacji (etap C)', () => {
         const cash0 = a.cash;
         const random = Math.random;
         Math.random = () => 0;
+        playerFund.openSubscriptions = false; // B5: domyślnie otwarta — test przełącznika
         processCorporateSubscriptions();
         assert(a.cash === cash0, '0.13.1 (B5): przy zamkniętej emisji ciągłej spółka nie kupuje JU');
         playerFund.openSubscriptions = true;
@@ -1582,6 +1583,7 @@ group('Klienci z charakterami i rynek JU (etap F1) + nowe spółki (F4)', () => 
 
         client.satisfaction = 0.9; playerFund.trust = 90;
         const units0 = client.units;
+        playerFund.openSubscriptions = false; // B5: domyślnie otwarta — test przełącznika
         processClientsWeekly();
         assert(client.units === units0, '0.13.1 (B5): przy zamkniętej emisji ciągłej nie powstają nowe JU');
         playerFund.openSubscriptions = true;
@@ -1626,14 +1628,20 @@ group('Klienci z charakterami i rynek JU (etap F1) + nowe spółki (F4)', () => 
         assert(computeJuPremium(1e9, 0) <= JU_MARKET_MAX_PREMIUM && computeJuPremium(0, 1e9) >= -JU_MARKET_MAX_PREMIUM, 'limit');
     });
 
-    test('sprzedaż bez kupca przez 2 tygodnie kończy się umorzeniem', () => {
+    test('brak kupca przez 2 tygodnie: niezadowolony umarza, zadowolony wycofuje ofertę (B5)', () => {
         worldF1();
         const client = playerFund.clients.find(c => !c.loyal);
         playerFund.clients.forEach(c => { c.satisfaction = 0.5; });
+        client.satisfaction = 0.05;
         client.pendingSellUnits = 10;
         const units = client.units;
         for (let i = 0; i < JU_SELL_ORDER_PATIENCE; i++) processClientsWeekly();
-        assert(client.units < units && client.pendingSellUnits === 0, 'umorzone po braku kupca');
+        assert(client.units < units && client.pendingSellUnits === 0, 'niezadowolony: umorzone po braku kupca');
+        const happy = playerFund.clients.find(c => c !== client && !c.loyal && playerFund.clients.includes(c));
+        happy.satisfaction = 0.9; happy.pendingSellUnits = 10;
+        const happyUnits = happy.units;
+        for (let i = 0; i < JU_SELL_ORDER_PATIENCE; i++) { happy.satisfaction = 0.9; processClientsWeekly(); }
+        assert(happy.units >= happyUnits && happy.pendingSellUnits === 0, 'zadowolony: wycofał ofertę, JU zostają');
     });
 
     test('nowe spółki elitarne: BEW i NRB na Rubinie, ORT na Szmaragdzie', () => {
@@ -4583,6 +4591,80 @@ group('0.13.1 P3: „duchy posiadaczy” (akcje w obrocie = posiadacze)', () => 
         gpw.equityStakes.DEJC = 25; // stary „duch” z zapisu sprzed poprawki
         handleSuccessfulIPO(startup, 2);
         assert(!gpw.equityStakes.DEJC && Math.abs(startup.sharesHeld - getTrackedHeldShares(startup)) <= 0.5, `obrót ${startup.sharesHeld} vs ${getTrackedHeldShares(startup)}`);
+    });
+});
+
+group('0.13.1 B5: stabilność funduszu', () => {
+    function simulateFund(annualExcess, seed, weeks = 104) {
+        return withSeededRandom(seed, () => {
+            const a = makeCompany('AAA', { cash: 600_000, fixedAssets: 800_000 });
+            a.insiderShares = 0; a.sharesHeld = 0; a.reputation = { player: 0 };
+            resetWorld([a]);
+            allBonds.length = 0;
+            marketIndexes.find(index => index.id === 'GIG').value = 100;
+            startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+            const units0 = playerFund.units;
+            let unitsYear1 = units0;
+            for (let week = 0; week < weeks; week++) {
+                macro.quarter = Math.floor(week / 13);
+                const inPeriod = week % 39; // okres funduszu = 3 kwartały
+                const current = playerFund.current;
+                current.elapsedMs = inPeriod / 39 * FUND_PERIOD_MS;
+                current.startNav = getFundNav();
+                current.startBenchmark = getBenchmarkValue() / (1 - annualExcess * inPeriod / 52); // wynik vs GIG narasta w okresie
+                current.maxDrawdown = 0;
+                playerFund.trust = 50;
+                processClientsWeekly();
+                runJuMarketWeekly();
+                if (week === 51) unitsYear1 = playerFund.units;
+            }
+            return { year1: unitsYear1 / units0 - 1, year2: playerFund.units / unitsYear1 - 1 };
+        });
+    }
+
+    test('emisja ciągła domyślnie otwarta, przełącznik ją zamyka', () => {
+        simulateFund(0, 1, 1);
+        assert(isFundOpenForSubscriptions(), 'domyślnie otwarta');
+        setFundOpenSubscriptions(false);
+        assert(!isFundOpenForSubscriptions() && getOrganicInflowRate() >= 0, 'zamknięta');
+    });
+
+    test('wynik = GIG, zaufanie 50: zmiana JU w roku w granicach ±5% (8 kwartałów)', () => {
+        for (const seed of [1, 2, 3]) {
+            const r = simulateFund(0, seed);
+            assert(Math.abs(r.year1) <= 0.05 && Math.abs(r.year2) <= 0.05, `ziarno ${seed}: rok 1 ${(r.year1 * 100).toFixed(1)}%, rok 2 ${(r.year2 * 100).toFixed(1)}%`);
+        }
+    });
+
+    test('+5 pp/rok vs GIG → wzrost; −5 pp → powolny spadek, nie krach', () => {
+        for (const seed of [1, 2]) {
+            const neutral = simulateFund(0, seed), up = simulateFund(0.05, seed), down = simulateFund(-0.05, seed);
+            assert(up.year2 > 0.03 && up.year2 > neutral.year2, `ziarno ${seed}: wzrost ${(up.year2 * 100).toFixed(1)}%`);
+            assert(down.year2 < neutral.year2 && down.year1 > -0.25 && down.year2 > -0.25, `ziarno ${seed}: spadek ${(down.year1 * 100).toFixed(1)}% / ${(down.year2 * 100).toFixed(1)}%`);
+        }
+    });
+
+    test('zadowolenie wraca do średniej; standardowa opłata nie obniża zadowolenia', () => {
+        simulateFund(0, 4, 1);
+        const def = CLIENT_TYPES.miser;
+        const client = { satisfaction: 0.5 };
+        const parts = getClientSatisfactionDrift(client, def, { excess: 0, trust: 50, maxDrawdown: 0, lastRankBad: false, ethicsIssue: null });
+        assert(Math.abs(Object.values(parts).reduce((a, b) => a + b, 0)) < 1e-9, `dryf przy GIG i standardowej opłacie: ${JSON.stringify(parts)}`);
+        const low = getClientSatisfactionDrift({ satisfaction: 0.2 }, def, { excess: 0, trust: 20, maxDrawdown: 0, lastRankBad: false, ethicsIssue: null });
+        assert(Object.values(low).reduce((a, b) => a + b, 0) > 0, 'niskie zaufanie samo nie spycha zadowolenia w dół od 0,2');
+    });
+
+    test('panel przyczyn: odpływ i napływ zapisane z przyczyną, ostrzeżenie przy > 10% JU w kwartale', () => {
+        simulateFund(0, 5, 1);
+        const stats = getFundFlowStats();
+        const base = stats.current.startUnits;
+        const out0 = stats.current.out.performance || 0, in0 = stats.current.in.newClients || 0;
+        noteFundFlow('out', 'performance', 1000, base * 0.11);
+        noteFundFlow('in', 'newClients', 500, 1);
+        assert(stats.current.out.performance === out0 + 1000 && stats.current.in.newClients === in0 + 500, 'przyczyny');
+        assert(stats.current.warned, 'ostrzeżenie o odpływie > 10%');
+        macro.quarter++;
+        assert(getFundFlowStats().last.out.performance === out0 + 1000, 'ostatni kwartał w panelu');
     });
 });
 
