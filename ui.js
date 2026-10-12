@@ -2298,6 +2298,14 @@ function displayStartups(previousInputValues = {}) {
                 }
                 break;
 
+            case 'awaitingListing': { // P1: gotowy do debiutu, giełda pełna
+                const waited = (typeof macro === 'object' ? macro.quarter : 0) - (startup.awaitingListing?.since || 0);
+                fundingCell.innerHTML = `<strong class="text-warn">⏳ Czeka na miejsce na giełdzie</strong>`;
+                progressCell.innerHTML = `<span class="text-sm">${waited}/${AWAITING_LISTING_MAX_QUARTERS} kw. — potem przejęcie przez inwestora</span>`;
+                actionsCell.textContent = `Giełda pełna (${getListedCompanyCount()}/${LISTING_HARD_CAP})`;
+                break;
+            }
+
             case 'financial_complications':
                 const timeLeftFC = Math.max(0, Math.floor(startup.rescueTimeLeft / 1000));
                 fundingCell.innerHTML = `

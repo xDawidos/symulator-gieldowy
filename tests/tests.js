@@ -4362,7 +4362,7 @@ group('0.13.1 D1/D2: rynki internetowe i limit spółek krajowych', () => {
     }
 
     test('D2: limit liczy tylko spółki krajowe (bez zależnych, startupów i rynków internetowych)', () => {
-        const list = worldD(110);
+        const list = worldD(116);
         const before = getListedCompanyCount();
         list[0].isSubsidiaryOf = list[1].symbol;
         list[2].market = 'XTD';
@@ -4413,6 +4413,89 @@ group('0.13.1 D1/D2: rynki internetowe i limit spółek krajowych', () => {
         assert(fresh && isInternetMarket(fresh.id) && fresh.status === 'startup' && getMarketDef(fresh.id).name, 'nowy rynek internetowy jako startup');
         const snapshot = JSON.parse(JSON.stringify(buildSaveSnapshot()));
         assert(applySaveSnapshot(snapshot).ok && getMarketDef(fresh.id)?.short === fresh.id && hasInternetConcession('PLU5'), 'rynek i koncesja w zapisie');
+    });
+});
+
+group('0.13.1 P1/P2: twardy sufit spółek i przenosiny na nowe rynki', () => {
+    function worldP(count) {
+        const list = [];
+        for (let i = 0; i < count; i++) { const c = makeCompany(`P${String(i).padStart(3, '0')}`); c.insiderShares = 0; list.push(c); }
+        resetWorld(list);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        marketOperators = null;
+        ensureMarketOperators();
+        return list;
+    }
+    function readyStartup() {
+        const startup = generateNewStartup();
+        stocks.push(startup);
+        startup.stage = 'finalized';
+        return startup;
+    }
+
+    test('P1: przy suficie 110 startup czeka w inkubatorze i debiutuje po zwolnieniu miejsca', () => {
+        const list = worldP(LISTING_HARD_CAP);
+        assert(!hasFreeListingSlot() && getCrowdingPressure() === 1, 'giełda pełna');
+        const before = getListedCompanyCount();
+        const startup = readyStartup();
+        handleSuccessfulIPO(startup, 2);
+        assert(startup.assetType === 'Startup' && startup.stage === 'awaitingListing', `czeka: ${startup.stage}`);
+        assert(getListedCompanyCount() === before, 'bez nowej spółki');
+        processAwaitingListings();
+        assert(startup.stage === 'awaitingListing', 'nadal pełna');
+        list.slice(0, before - LISTING_HARD_CAP + 1).forEach(s => { s.isBankrupt = true; });
+        processAwaitingListings();
+        assert(!startup.assetType && stocks.includes(startup) && getListedCompanyCount() === LISTING_HARD_CAP, `debiut na zwolnione miejsce (${getListedCompanyCount()})`);
+    });
+
+    test('P1: po 8 kwartałach czekania startup zostaje przejęty (zwrot ≥ wkładu)', () => {
+        worldP(LISTING_HARD_CAP + 2);
+        const startup = readyStartup();
+        playerPortfolio[startup.symbol] = { shares: 0, investedAmount: 1000, assetType: 'Startup' };
+        handleSuccessfulIPO(startup, 3);
+        const cash = playerCash;
+        startup.awaitingListing.since = macro.quarter - AWAITING_LISTING_MAX_QUARTERS;
+        processAwaitingListings();
+        assert(!stocks.includes(startup) && playerCash >= cash + 1000, `przejęty, zwrot ${playerCash - cash}`);
+    });
+
+    test('P1: pełna giełda blokuje zależne, uwolnienie zależnej, członków GPW i przenosiny na rynek krajowy', () => {
+        const list = worldP(LISTING_HARD_CAP);
+        list[0].exchange = 'RUBY';
+        assert(foundSubsidiary(list[0]) === null, 'brak nowej zależnej');
+        assert(spawnMarketMember('GPW', 'test') === null, 'brak nowego członka GPW');
+        marketOperators.XTD.status = 'active';
+        const net = list[1];
+        net.market = 'XTD';
+        playerPortfolio[net.symbol] = { shares: net.totalShares * 0.6, avgPrice: 100, assetType: 'stock' };
+        assert(!getListingMoveTargets(net).includes('GPW'), 'z rynku internetowego na pełną GPW — nie');
+        list.slice(2, 4 + getListedCompanyCount() - LISTING_HARD_CAP).forEach(s => { s.isBankrupt = true; });
+        assert(getListingMoveTargets(net).includes('GPW'), 'przy wolnym miejscu — tak');
+    });
+
+    test('P2: nowy rynek internetowy jest celem przenosin (z limitem spółek rynku)', () => {
+        const list = worldP(20);
+        const fresh = spawnInternetMarket();
+        fresh.status = 'active';
+        const stock = list[0];
+        playerPortfolio[stock.symbol] = { shares: stock.totalShares * 0.6, avgPrice: 100, assetType: 'stock' };
+        assert(getListingMoveTargets(stock).includes(fresh.id), `cele: ${getListingMoveTargets(stock).join(',')}`);
+        const price = stock.price;
+        assert(moveListing(stock.symbol, fresh.id) && getStockMarket(stock) === fresh.id && stock.price < price, 'przeniesiona na nowy rynek');
+        for (let i = 1; i <= INTERNET_MEMBER_LIMIT; i++) list[i].market = fresh.id;
+        playerPortfolio[list[15].symbol] = { shares: list[15].totalShares * 0.6, avgPrice: 100, assetType: 'stock' };
+        assert(!getListingMoveTargets(list[15]).includes(fresh.id), 'pełny rynek internetowy nie przyjmuje');
+    });
+
+    test('P1: łączny sufit 150 podmiotów blokuje też członków rynków internetowych i spółki zależne', () => {
+        const list = worldP(30);
+        marketOperators.XTD.status = 'active';
+        assert(spawnMarketMember('XTD', 'test'), 'przy wolnym miejscu — członek rynku');
+        while (getTotalCompanyCount() < LISTING_TOTAL_CAP) { const c = makeCompany(`Z${stocks.length}`); c.isSubsidiaryOf = list[0].symbol; stocks.push(c); }
+        assert(hasInternetMemberSlot('XTD') && spawnMarketMember('XTD', 'test') === null, 'łączny sufit');
+        assert(getListedCompanyCount() < LISTING_HARD_CAP && !hasFreeListingSlot(), 'krajowe poniżej 110, ale brak miejsca');
+        list[1].exchange = 'RUBY';
+        assert(foundSubsidiary(list[1]) === null, 'brak nowej zależnej');
     });
 });
 

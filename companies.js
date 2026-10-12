@@ -2529,7 +2529,10 @@ const INFLATION_PASS_THROUGH = 0.15;   // inflacja w przychodach (było 0,3)
 // (te mają własny limit na rynek). Powyżej limitu: rzadsze debiuty i nowe spółki z wydarzeń tylko przy wolnym miejscu,
 // słabe spółki szybciej spadają i upadają, a startupy dostają mniejsze i droższe finansowanie.
 const LISTING_SOFT_CAP = 100;
-const LISTING_PRESSURE_RANGE = 20;   // pełna presja przy 120 spółkach krajowych
+const LISTING_HARD_CAP = 110;        // P1: twardy sufit — od 110 spółek krajowych żadnych nowych debiutów ani przenosin na rynek krajowy
+const LISTING_PRESSURE_RANGE = LISTING_HARD_CAP - LISTING_SOFT_CAP;   // hamulec 100–110 (pełna presja przy suficie)
+const LISTING_TOTAL_CAP = 150;       // P1: wszystkie notowane podmioty (krajowe, zależne, rynki internetowe, holdingi, REIT…) bez startupów
+const AWAITING_LISTING_MAX_QUARTERS = 8; // startup bez miejsca na giełdzie czeka najwyżej 2 lata, potem zostaje przejęty
 
 /** Spółka liczona do limitu spółek krajowych. */
 function isCountedListedCompany(stock) {
@@ -2541,7 +2544,7 @@ function getListedCompanyCount() {
     return stocks.filter(isCountedListedCompany).length;
 }
 
-/** Presja zatłoczenia: 0 do 100 spółek krajowych, liniowo do 1 przy 120. */
+/** Presja zatłoczenia: 0 do 100 spółek krajowych, liniowo do 1 przy 110 (twardy sufit). */
 function getCrowdingPressure() {
     return Math.max(0, Math.min(1, (getListedCompanyCount() - LISTING_SOFT_CAP) / LISTING_PRESSURE_RANGE));
 }
@@ -2551,9 +2554,46 @@ function getDebutFactor() {
     return 1 - 0.7 * getCrowdingPressure();
 }
 
-/** Nowa spółka krajowa z wydarzenia (przykrywka, parabank…) tylko przy wolnym miejscu. */
+/** P1: każda nowa spółka krajowa (debiut startupu, zależna, bank, wydarzenie, przenosiny na rynek krajowy) tylko poniżej sufitu. */
 function hasFreeListingSlot() {
-    return getListedCompanyCount() < LISTING_SOFT_CAP;
+    return getListedCompanyCount() < LISTING_HARD_CAP && hasFreeTotalListingSlot();
+}
+
+/** Wszystkie notowane podmioty poza startupami w inkubatorze. */
+function getTotalCompanyCount() {
+    return stocks.filter(s => !s.isBankrupt && s.assetType !== 'Startup').length;
+}
+
+/** P1: miejsce pod łącznym sufitem (także dla spółek zależnych i członków rynków internetowych). */
+function hasFreeTotalListingSlot() {
+    return getTotalCompanyCount() < LISTING_TOTAL_CAP;
+}
+
+/** P1: startup gotowy do debiutu, a giełda pełna — czeka w inkubatorze (stage 'awaitingListing'). */
+function parkStartupForListing(startup, successMultiplier) {
+    startup.stage = 'awaitingListing';
+    startup.awaitingListing = { multiplier: successMultiplier, since: typeof macro === 'object' ? macro.quarter : 0 };
+    logEvent(`⏳ ${startup.name} jest gotowy do debiutu, ale giełda jest pełna (${getListedCompanyCount()}/${LISTING_HARD_CAP} spółek) — czeka w inkubatorze na wolne miejsce.`, 'review');
+}
+
+/** P1: co kwartał — czekające startupy debiutują po kolei, gdy zwolni się miejsce; po 8 kwartałach przejmuje je inwestor. */
+function processAwaitingListings() {
+    const quarter = typeof macro === 'object' ? macro.quarter : 0;
+    const waiting = stocks.filter(s => s.assetType === 'Startup' && s.stage === 'awaitingListing')
+        .sort((a, b) => (a.awaitingListing?.since || 0) - (b.awaitingListing?.since || 0));
+    for (const startup of waiting) {
+        const info = startup.awaitingListing || { multiplier: 1.5, since: quarter };
+        if (hasFreeListingSlot()) {
+            startup.stage = 'finalized';
+            delete startup.awaitingListing;
+            logEvent(`🔔 Zwolniło się miejsce na giełdzie — ${startup.name} debiutuje po ${quarter - info.since} kw. oczekiwania.`, 'market');
+            handleSuccessfulIPO(startup, info.multiplier);
+        } else if (quarter - info.since >= AWAITING_LISTING_MAX_QUARTERS) {
+            const payout = Math.min(2, Math.max(1.05, info.multiplier));
+            logEvent(`🤝 ${startup.name} nie doczekał się miejsca na giełdzie — projekt przejmuje inwestor branżowy, udziałowcy dostają ${(payout * 100 - 100).toFixed(0)}% ponad wkład.`, 'market');
+            removeStartup(startup, 1, payout);
+        }
+    }
 }
 
 /** D2: finansowanie startupów na nasyconym rynku — mniejsze wpłaty (do −50%) … */
@@ -8554,6 +8594,7 @@ function collectStartupClaims(startup) {
 }
 
 function handleSuccessfulIPO(startup, successMultiplier) {
+    if (!startup.operatorStartup && !hasFreeListingSlot()) { parkStartupForListing(startup, successMultiplier); return; } // P1: twardy sufit
     const symbol = startup.symbol;
     const claims = collectStartupClaims(startup);
     const totalClaims = claims.reduce((sum, claim) => sum + claim.amount, 0);

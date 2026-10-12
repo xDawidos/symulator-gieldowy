@@ -817,6 +817,7 @@ function applyEliteBonuses(stock) {
 
 /** Nowa spółka zależna: kapitał od matki, te same badania, polityki i sektor; IPO na niższej giełdzie. */
 function foundSubsidiary(parent) {
+    if (typeof hasFreeListingSlot === 'function' && !hasFreeListingSlot()) return null; // P1: twardy sufit spółek krajowych
     const capital = Math.max(100000, Math.min(parent.cash * 0.1, getMarketCap(parent) * 0.05));
     if (parent.cash < capital) return null;
 
@@ -954,6 +955,7 @@ function processSubsidiaryIndependence() {
     for (const child of stocks.filter(s => s.isSubsidiaryOf && Number.isFinite(s.parentStakePct))) {
         const parent = stocks.find(s => s.symbol === child.isSubsidiaryOf);
         if (!parent || parent.isBankrupt) { child.isSubsidiaryOf = null; continue; }
+        if (!hasFreeListingSlot()) continue; // P1: uwolniona zależna liczy się do limitu — przy pełnej giełdzie matka nie sprzedaje
         if (Math.random() > 0.03 || getMarketCap(child) < getMarketCap(parent) * 0.3) continue;
 
         const sold = child.parentStakePct * 0.5;
@@ -1694,7 +1696,7 @@ function createListedCompany({ name, symbol, sector, price, totalShares, exchang
 }
 
 function spawnMarketMember(operatorId, reason) {
-    if (isInternetMarket(operatorId) && !hasInternetMemberSlot(operatorId)) return null; // D1: limit spółek na rynek
+    if (isInternetMarket(operatorId) ? !(hasInternetMemberSlot(operatorId) && hasFreeTotalListingSlot()) : !hasFreeListingSlot()) return null; // D1: limit spółek na rynek; P1: sufit krajowy i łączny
     const sectors = Object.keys(SECTOR_PROFILES).filter(s => !['Bankowość', 'Bankowość Komercyjna'].includes(s));
     const sector = [getRandomElement(sectors)];
     const base = generateNewStartup();
@@ -1847,7 +1849,7 @@ function processMarketsQuarterly() {
     const quarter = typeof macro === 'object' ? macro.quarter : 0;
     // D1: kolejne rynki internetowe w trakcie gry.
     const liveInternet = Object.values(marketOperators).filter(op => isInternetMarket(op.id) && ['startup', 'active'].includes(op.status)).length;
-    if (quarter >= 8 && liveInternet < MAX_INTERNET_MARKETS && Math.random() < NEW_INTERNET_MARKET_CHANCE) spawnInternetMarket();
+    if (quarter >= 8 && liveInternet < MAX_INTERNET_MARKETS && hasFreeTotalListingSlot() && Math.random() < NEW_INTERNET_MARKET_CHANCE) spawnInternetMarket(); // P1: łączny sufit
     for (const operator of Object.values(marketOperators)) {
         const def = getMarketDef(operator.id);
         operator.members = stocks.filter(s => getStockMarket(s) === operator.id && s.marketOperator !== operator.id && !s.assetType).length;
@@ -1926,7 +1928,14 @@ function signExclusivity(operator, operatorStock) {
 function getListingMoveTargets(stock) {
     if (!stock || stock.assetType || stock.marketOperator || stock.isStateOwned || getFundStakePct(stock) <= 0.5) return [];
     ensureMarketOperators();
-    return Object.keys(LISTING_MOVE_PRICE_EFFECT).filter(id => id !== getStockMarket(stock) && marketOperators[id]?.status === 'active');
+    const fromInternet = isInternetMarketStock(stock);
+    return Object.keys(marketOperators).filter(id => id !== getStockMarket(stock) && marketOperators[id]?.status === 'active' && (id in LISTING_MOVE_PRICE_EFFECT || isInternetMarket(id))
+        && (isInternetMarket(id) ? hasInternetMemberSlot(id) : (!fromInternet || hasFreeListingSlot()))); // P2: także nowe rynki internetowe; P1: limity rynków
+}
+
+/** Efekt ceny przy przenosinach: rynki internetowe spoza listy jak XTD/PLU5. */
+function getListingMovePriceEffect(marketId) {
+    return LISTING_MOVE_PRICE_EFFECT[marketId] ?? (isInternetMarket(marketId) ? -0.03 : 0);
 }
 
 function moveListing(symbol, marketId) {
@@ -1941,9 +1950,9 @@ function moveListing(symbol, marketId) {
     const from = getStockMarket(stock);
     stock.market = marketId;
     stock.listingMovedQuarter = quarter;
-    const effect = LISTING_MOVE_PRICE_EFFECT[marketId];
+    const effect = getListingMovePriceEffect(marketId);
     applyPriceEffect(symbol, effect, effect >= 0 ? 'positive' : 'negative', 'company');
-    logEvent(`🔀 ${stock.name} przenosi notowania z ${getMarketLabel(from)} na ${getMarketLabel(marketId)} (prowizja ${((getMarketDef(marketId)?.commission || 0) * 100).toFixed(2)}%, opłata za notowanie ×${LISTING_FEE_FACTOR[marketId]}).`, 'market');
+    logEvent(`🔀 ${stock.name} przenosi notowania z ${getMarketLabel(from)} na ${getMarketLabel(marketId)} (prowizja ${((getMarketDef(marketId)?.commission || 0) * 100).toFixed(2)}%, opłata za notowanie ×${LISTING_FEE_FACTOR[marketId] ?? 1}).`, 'market');
     return true;
 }
 

@@ -1153,6 +1153,7 @@ function triggerBankIPOEvent() {
     }
     const inactiveBanks = commercialBanks.filter(b => !b.isActive);
     if (inactiveBanks.length === 0) return;
+    if (typeof hasFreeListingSlot === 'function' && !hasFreeListingSlot()) return; // P1: twardy sufit spółek krajowych
     const bankToIPO = getRandomElement(inactiveBanks);
     const ipoValuation = bankToIPO.initialCapital * getRandomInRange(1.1, 1.5);
     const ipoSharePrice = getRandomInRange(50, 150);

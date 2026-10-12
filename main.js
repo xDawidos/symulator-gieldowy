@@ -666,6 +666,7 @@ const gameTimers = {
 
 // Zmienna przechowująca aktualną prędkość gry
 let currentSpeedMultiplier = 1;
+let debugStockTick = null; // T0: krok logiki gry dla testów symulacyjnych (bez odświeżania interfejsu)
 let uiRefreshTick = 0;
 
 // Zapis i wczytanie gry: save.js
@@ -1014,6 +1015,7 @@ function setGameSpeed(speedMultiplier) {
     };
     // T0: doganianie czasu — tyle kroków logiki, ile sekund gry upłynęło od ostatniego wywołania (najwyżej
     // MAX_TICK_CATCHUP), żeby kwartał zawsze miał ~300 tików także przy ×50/×100/×200, gdy przeglądarka nie nadąża.
+    debugStockTick = stockTick; // testy symulacyjne: tiki logiki bez timerów przeglądarki
     let lastTickAt = performance.now();
     let tickBacklog = 0;
     gameTimers.stockUpdate = setInterval(() => {
@@ -1113,6 +1115,7 @@ gameTimers.weekly = setGameInterval(() => {
         advanceMacroQuarter(); // inflacja, bezrobocie, cykle sektorów, wybory (macro.js)
         processCityQuarterly(); // festyn raz w roku (city.js)
         applyCrowdingPressureToWeak(); // D2: nasycony rynek — słabe spółki tanieją szybciej
+        processAwaitingListings(); // P1: startupy czekające na wolne miejsce na giełdzie
         processWorkforceQuarter(); // 0.13: zatrudnienie, zadowolenie, związki i strajki przed raportami (workforce.js)
         processFinancialReports(); // zawiera koszty R&D, wynik kontraktów, pozycje okresu i dywidendy
         updateInfluence();
