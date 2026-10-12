@@ -212,34 +212,11 @@
     </div>
 
     <!-- Chipsy sektorów -->
-    <div class="sector-chips">
+    <div class="sector-chips" id="sector-chips">
       <span class="sector-chip owned-chip" onclick="toggleOwnedFilter(this)" title="Pokaż tylko spółki, które masz w funduszu lub na koncie prywatnym">⭐ Posiadane</span>
       <span class="sector-chip active" data-sector="all"
             onclick="setSectorChip(this,'all')">Wszystkie</span>
-      <span class="sector-chip" data-sector="Żywność"
-            onclick="setSectorChip(this,'Żywność')">Żywność</span>
-      <span class="sector-chip" data-sector="Gaming"
-            onclick="setSectorChip(this,'Gaming')">Gaming</span>
-      <span class="sector-chip" data-sector="Finanse"
-            onclick="setSectorChip(this,'Finanse')">Finanse</span>
-      <span class="sector-chip" data-sector="Technologia"
-            onclick="setSectorChip(this,'Technologia')">Technologia</span>
-      <span class="sector-chip" data-sector="Bankowość"
-            onclick="setSectorChip(this,'Bankowość')">Bankowość</span>
-      <span class="sector-chip" data-sector="Nieruchomości"
-            onclick="setSectorChip(this,'Nieruchomości')">Nieruchomości</span>
-      <span class="sector-chip" data-sector="Energia"
-            onclick="setSectorChip(this,'Energia')">Energia</span>
-      <span class="sector-chip" data-sector="Chemia"
-            onclick="setSectorChip(this,'Chemia')">Chemia</span>
-      <span class="sector-chip" data-sector="Przemysł"
-            onclick="setSectorChip(this,'Przemysł')">Przemysł</span>
-      <span class="sector-chip" data-sector="Medycyna"
-            onclick="setSectorChip(this,'Medycyna')">Medycyna</span>
-      <span class="sector-chip" data-sector="Budowlany"
-            onclick="setSectorChip(this,'Budowlany')">Budowlany</span>
-      <span class="sector-chip" data-sector="REIT"
-            onclick="setSectorChip(this,'REIT')">REIT</span>
+      <!-- 0.13.1 (B10): pozostałe chipy budowane z faktycznych sektorów spółek (renderSectorFilters) -->
     </div>
 
     <!-- Poziomy rynku jako taby -->
@@ -262,7 +239,7 @@
               onclick="setMarketLevel(this,'EMERALD')">🟢 Szmaragdowa</button>
       <button class="market-level-tab" data-level="DIAMOND"
               onclick="setMarketLevel(this,'DIAMOND')">💠 Diamentowa</button>
-      <button class="market-level-tab" id="open-dividend-tracker-btn" style="display: none;"
+      <button class="market-level-tab" id="open-dividend-tracker-btn"
               onclick="openDividendTrackerModal()" title="Panel Analityka Dywidend">💰 Dywidendy</button>
     </div>
 
@@ -270,22 +247,6 @@
     <select id="sector-filter" style="display: none;"
             onchange="displayStocks(getCurrentInputValues())">
       <option value="all">Wszystkie sektory</option>
-      <option value="Żywność">Żywność</option>
-      <option value="Gaming">Gaming</option>
-      <option value="Finanse">Finanse</option>
-      <option value="Technologia">Technologia</option>
-      <option value="Bankowość">Bankowość</option>
-      <option value="Nieruchomości">Nieruchomości</option>
-      <option value="Energia">Energia</option>
-      <option value="Chemia">Chemia</option>
-      <option value="Przemysł">Przemysł</option>
-      <option value="Dobra konsumpcyjne">Dobra konsumpcyjne</option>
-      <option value="Usługi">Usługi</option>
-      <option value="Badania">Badania</option>
-      <option value="Turystyka">Turystyka</option>
-      <option value="Medycyna">Medycyna</option>
-      <option value="Budowlany">Budowlany</option>
-      <option value="REIT">Fundusze REIT</option>
     </select>
 
     <!-- Tabela uproszczona -->
@@ -339,6 +300,9 @@
       <input type="number" id="fund-emission-units" min="1" value="100" aria-label="Liczba JU do emisji">
       <button class="btn-secondary" onclick="handleFundEmission()">📥 Emisja JU</button>
     </div>
+    <label class="fund-open-subscriptions text-sm" title="Gdy włączone, zadowoleni i nowi klienci sami dokupują JU po NAV (nowe jednostki). Wyłączone: JU przybywa tylko przez Twoją emisję.">
+      <input type="checkbox" id="fund-open-subscriptions" onchange="setFundOpenSubscriptions(this.checked)"> Emisja ciągła (wpłaty klientów bez mojej emisji)
+    </label>
 
     <!-- Wykres 4 okresów i porównanie z rywalami -->
     <div class="portfolio-section-header">Wyniki: 4 ostatnie okresy</div>

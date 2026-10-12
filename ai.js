@@ -705,7 +705,7 @@ function makeAiDecision(ai) {
             }
 
             // Inwestycje w startupy (jeśli ma umiejętność)
-            if ((ai.unlockedSkills['startupInvestor'] || 0) >= 1) {
+            if (aiCanInvestInStartups(ai)) { // 0.13.1 (B7)
                 if (Math.random() < 0.25) {
                     const targetStartup = getRandomElement(stocks.filter(s => s.assetType === 'Startup' && s.stage === 'funding'));
                     if (targetStartup && ai.cash > 1000) {
@@ -802,7 +802,7 @@ function makeAiDecision(ai) {
                 }
 
                 // Inwestycje w startupy (jeśli ma umiejętność)
-                if ((ai.unlockedSkills['startupInvestor'] || 0) >= 1) {
+                if (aiCanInvestInStartups(ai)) { // 0.13.1 (B7)
                     if (Math.random() < 0.15) {
                         const successThreshold = ai.personality === 'pro_investor' ? 0.65 : 0.55;
                         const potentialStartups = stocks.filter(s => s.assetType === 'Startup' && s.stage === 'funding' && s.successChance > successThreshold);
@@ -1201,9 +1201,17 @@ function checkAiTierUpgrade(ai) {
         logEvent(message);
     }
 }
+/** 0.13.1 (B7): boty-inwestorzy finansują startupy także bez szkolenia (poza animatorem rynku, mafią i Gwardią). */
+function aiCanInvestInStartups(ai) {
+    if (!ai || ai.isMafia || ai.isGuard || ai.personality === 'market_maker') return false;
+    return (ai.unlockedSkills?.['startupInvestor'] || 0) >= 1 || ['pro_investor', 'yolo_trader', 'reckless', 'whale', 'calm', 'dividend_chaser'].includes(ai.personality);
+}
+
 function aiInvestInStartup(ai, symbol, amount) {
     const startup = stocks.find(s => s.symbol === symbol);
-    if (!startup || startup.assetType !== 'Startup' || ai.cash < amount || amount <= 0) {
+    if (!startup || startup.assetType !== 'Startup') return;
+    amount = Math.min(amount, typeof getStartupFundingGap === 'function' ? getStartupFundingGap(startup) : amount); // 0.13.1 (B6): najwyżej brakująca kwota celu
+    if (ai.cash < amount || !(amount >= 1)) {
         return; // Zabezpieczenia: czy start-up istnieje, czy bota stać etc.
     }
 

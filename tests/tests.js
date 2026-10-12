@@ -1115,6 +1115,9 @@ group('Kariera w korporacji (etap C)', () => {
         const random = Math.random;
         Math.random = () => 0;
         processCorporateSubscriptions();
+        assert(a.cash === cash0, '0.13.1 (B5): przy zamkniętej emisji ciągłej spółka nie kupuje JU');
+        playerFund.openSubscriptions = true;
+        processCorporateSubscriptions();
         Math.random = random;
         assert(a.cash < cash0 && playerFund.clients.some(c => c.name.startsWith(a.name)), 'spółka kupiła JU');
     });
@@ -1580,7 +1583,10 @@ group('Klienci z charakterami i rynek JU (etap F1) + nowe spółki (F4)', () => 
         client.satisfaction = 0.9; playerFund.trust = 90;
         const units0 = client.units;
         processClientsWeekly();
-        assert(client.units > units0, 'dokupił JU');
+        assert(client.units === units0, '0.13.1 (B5): przy zamkniętej emisji ciągłej nie powstają nowe JU');
+        playerFund.openSubscriptions = true;
+        processClientsWeekly();
+        assert(client.units > units0, 'dokupił JU (emisja ciągła otwarta)');
 
         client.satisfaction = 0.9; playerFund.trust = 20;
         const fundUnits = playerFund.units, cash = playerCash;
@@ -4191,6 +4197,113 @@ group('Zapis gry: rozmiar po długiej grze (limit localStorage)', () => {
         const [s] = longWorld();
         recognizeResearchExpenses(s);
         assert(s.research.ledger.length <= RESEARCH_LEDGER_KEEP_RECOGNIZED, `wpisy: ${s.research.ledger.length}`);
+    });
+});
+
+group('Poprawki 0.13.1 (B1–B13)', () => {
+    function worldB() {
+        const a = makeCompany('AAA', { cash: 5_000_000 });
+        const b = makeCompany('BBB', { cash: 5_000_000, sector: ['Obronność'] });
+        [a, b].forEach(s => { s.insiderShares = 1000; s.sharesHeld = 0; s.ceo = { name: 'Jan Test', age: 50, tenure: 4, traits: [] }; });
+        resetWorld([a, b]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        return { a, b };
+    }
+    function withCommission(rate, fn) {
+        const original = window.getBuyCommissionRate;
+        window.getBuyCommissionRate = () => rate;
+        try { return fn(); } finally { window.getBuyCommissionRate = original; }
+    }
+
+    test('B1/B2: „Max” = min(dostępne, gotówka / cena z prowizją); zakup nigdy nie daje ujemnej gotówki', () => {
+        const { a } = worldB();
+        withCommission(0.01, () => {
+            playerCash = 50_500; // 500 akcji po 100 zł + 1% prowizji = 50 500
+            assert(getMaxBuyQuantity(a, 'fund') === 500, `max ${getMaxBuyQuantity(a, 'fund')}`);
+            buyStock('AAA', 501);
+            assert(playerCash === 50_500 && !playerPortfolio.AAA, 'za drogo z prowizją — odmowa');
+            buyStock('AAA', getMaxBuyQuantity(a, 'fund'));
+        });
+        assert(playerCash >= -1e-9, `gotówka ${playerCash}`);
+        playerCash = 10_000_000;
+        assert(getMaxBuyQuantity(a, 'fund') === getAvailableShares(a), 'limit wolnego obrotu');
+        a.sharesHeld = getFreeFloatShares(a); playerPortfolio.AAA = { shares: getFreeFloatShares(a), avgPrice: 100, assetType: 'stock' };
+        assert(getMaxBuyQuantity(a, 'fund') === 0, 'nic do kupienia');
+    });
+
+    test('B3: wolny obrót = dostępne na rynku + akcje u inwestorów', () => {
+        const { a } = worldB();
+        aiCompetitors[0].portfolio.AAA = { shares: 3000, avgPrice: 100 };
+        playerPortfolio.AAA = { shares: 2000, avgPrice: 100, assetType: 'stock' };
+        a.sharesHeld = 5000;
+        assert(getFreeFloatShares(a) === getAvailableShares(a) + getTrackedHeldShares(a), `${getFreeFloatShares(a)} ≠ ${getAvailableShares(a)} + ${getTrackedHeldShares(a)}`);
+        const text = renderCompanyCardOwners(a);
+        assert(text.includes('dostępnych na rynku') && text.includes('u inwestorów'), 'rozbicie w karcie');
+    });
+
+    test('B4: wymuszona sprzedaż zostawia ślad z przyczyną', () => {
+        const { a } = worldB();
+        playerPortfolio.AAA = { shares: 1000, avgPrice: 100, assetType: 'stock' };
+        a.sharesHeld = 1000;
+        playerCash = 0;
+        forceLiquidation(20_000);
+        const entry = playerFund.positionLog?.[0];
+        assert(entry && entry.symbol === 'AAA' && entry.quantity > 0 && /umarzają/.test(entry.reason), 'dziennik pozycji');
+    });
+
+    test('B6: pula inwestuje tylko brakującą kwotę celu, reszta zostaje w puli', () => {
+        const { a } = worldB();
+        const startup = makeCompany('STU');
+        Object.assign(startup, { assetType: 'Startup', stage: 'funding', fundingGoal: 20_000, currentFunding: 9_500, investors: {}, successChance: 0.5 });
+        stocks.push(startup);
+        investmentPool.totalFunds = 100_000; investmentPool.contributors = { player: 100_000 };
+        processPoolInvestments();
+        assert(startup.currentFunding === 20_000, `finansowanie ${startup.currentFunding}`);
+        assertNear(investmentPool.totalFunds, 89_500, 'reszta w puli', 1e-9);
+        assertNear(investmentPool.contributors.player, 89_500, 'wkład gracza pomniejszony', 1e-9);
+        investmentPool.totalFunds = 0; investmentPool.contributors = {};
+    });
+
+    test('B7: boty i fundusze kolegów finansują startupy (bez przekraczania celu)', () => {
+        worldB();
+        const startup = makeCompany('STU');
+        Object.assign(startup, { assetType: 'Startup', stage: 'funding', fundingGoal: 20_000, currentFunding: 0, investors: {}, successChance: 0.6, price: 10 });
+        stocks.push(startup);
+        const ai = aiCompetitors.find(x => x.personality === 'pro_investor') || aiCompetitors[0];
+        assert(aiCanInvestInStartups({ personality: 'pro_investor', unlockedSkills: {} }), 'bot bez szkolenia może inwestować');
+        ai.cash = 1_000_000;
+        aiInvestInStartup(ai, 'STU', 500_000);
+        assert(startup.currentFunding === 20_000 && ai.portfolio.STU.investedAmount === 20_000, 'tylko brakująca kwota');
+        startup.currentFunding = 0;
+        const manager = corporation.managers[0];
+        manager.fund.cash = 5_000_000;
+        const nav = getBotFundNav(manager.fund);
+        const random = Math.random; Math.random = () => 0.01;
+        let amount = 0;
+        try { amount = botFundInvestInStartups(manager); } finally { Math.random = random; }
+        assert(amount > 0 && manager.fund.startups.STU === amount, 'fundusz kolegi inwestuje');
+        assertNear(getBotFundNav(manager.fund), nav, 'NAV funduszu bez zmian (udział po koszcie)', 1e-9);
+        const claims = collectStartupClaims(startup);
+        assert(claims.some(c => c.kind === 'botFund' && c.amount === amount), 'roszczenie przy debiucie');
+    });
+
+    test('B8–B13: panel dywidend, Gwardia jako fundusz, sektory, wycena holdingu, próg zaufania, mafia w Nadzorze', () => {
+        const { a } = worldB();
+        updateDividendTrackerButtonVisibility();
+        const guard = { id: 'guard_fund', name: 'Fundusz „Gwardia”', cash: 1000, portfolio: { AAA: { shares: 100, avgPrice: 100 } }, isGuard: true, personality: 'guard' };
+        aiCompetitors.push(guard);
+        try {
+            assert(!getBigInvestors().includes(guard), 'Gwardia nie jest „wielkim inwestorem”');
+            assert(getShareholders(a).find(h => h.entity === guard)?.name.includes('fundusz'), 'w akcjonariacie jako fundusz');
+        } finally { aiCompetitors.splice(aiCompetitors.indexOf(guard), 1); }
+        assert(getMarketSectorList().includes('Obronność'), 'filtr: wszystkie sektory spółek');
+        const holding = makeCompany('MIN', { cash: 1_000_000 });
+        Object.assign(holding, { assetType: 'Holding', holdingPortfolio: { AAA: { quantity: 100, purchasePrice: 100 } }, totalShares: 1000, balanceSheet: { assets: 0, liabilities: 0 } });
+        stocks.push(holding);
+        assertNear(getDisplayedFairValue(holding), (1_000_000 + 100 * a.price) / 1000, 'NAV holdingu', 1e-9);
+        playerFund.periods = Array.from({ length: 4 }, () => ({ fundReturn: -0.4, benchmarkReturn: 0.1, maxDrawdown: 0.5, volatility: 0.3 }));
+        assert(computeTrustTarget() >= TRUST_TARGET_FLOOR, 'cel zaufania nie spada poniżej progu');
+        assert(renderMafiaStateCard().includes('Mafia'), 'mafia w zakładce Nadzór');
     });
 });
 

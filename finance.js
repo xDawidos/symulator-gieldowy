@@ -408,6 +408,7 @@ function seizeShares(account, symbol, quantity, institution) {
     quantity = Math.min(quantity, holding.shares);
     holding.shares -= quantity;
     holding.lockedShares = Math.max(0, Math.min(holding.lockedShares || 0, holding.shares));
+    if (account.portfolio === playerPortfolio && typeof notePlayerPositionLoss === 'function') notePlayerPositionLoss(symbol, quantity, `konfiskata akcji przez ${institution?.name || 'organy państwa'}`);
     if (holding.shares <= 0) delete account.portfolio[symbol];
     if (institution) {
         if (!institution.holdingPortfolio) institution.holdingPortfolio = {};
@@ -1384,6 +1385,7 @@ function closeEtf(etf, reason) {
     const holding = playerPortfolio[etf.symbol];
     if (holding) {
         playerCash += holding.shares * price;
+        if (typeof notePlayerPositionLoss === 'function') notePlayerPositionLoss(etf.symbol, holding.shares, 'zamknięcie ETF-u — rozliczenie po wartości aktywów', holding.shares * price);
         delete playerPortfolio[etf.symbol];
         showToast(`${etf.name} zostaje zamknięty — fundusz dostaje ${formatZl(holding.shares * price, 0)}.`, 'warning', 7000);
     }
@@ -1663,6 +1665,7 @@ function buyOutAllHolders(stock, price) {
     let paid = 0;
     const fund = playerPortfolio[symbol];
     if (fund?.shares > 0) {
+        if (typeof notePlayerPositionLoss === 'function') notePlayerPositionLoss(symbol, fund.shares, 'przymusowy wykup wszystkich akcjonariuszy (zamknięcie rynku / wycofanie z obrotu)', fund.shares * price);
         playerCash += fund.shares * price;
         paid += fund.shares * price;
         recordPayment(`external:${symbol}`, 'player-fund', fund.shares * price, `Wykup akcji ${symbol}`);

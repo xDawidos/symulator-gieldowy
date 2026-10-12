@@ -2436,6 +2436,36 @@ function hasRevenueModel(stock) {
  * Banki są wyłączone: ich bilans zawiera depozyty klientów (wartość księgowa wielokrotnie
  * przewyższa kapitalizację), a zysk to stały % aktywów — model banku do osobnej kalibracji.
  */
+/**
+ * 0.13.1 (B11): wycena do wyświetlenia dla spółek bez wyceny z zysków (holdingi, REIT-y, fundusze):
+ * holding — NAV (gotówka + portfel po kursie − dług) na akcję; REIT — NAV albo stopa dywidendy 7% (co wyższe).
+ * Nie zmienia kotwicy cen rynku (fundamentals.fairValue).
+ */
+function getAssetBasedFairValue(stock) {
+    if (!stock) return null;
+    const shares = Math.max(1, Number(stock.totalShares) || 1);
+    const liabilities = Math.max(0, Number(stock.balanceSheet?.liabilities) || 0);
+    if (stock.assetType === 'Holding') {
+        let value = Math.max(0, Number(stock.cash) || 0);
+        for (const [symbol, holding] of Object.entries(stock.holdingPortfolio || {})) value += (stocks.find(s => s.symbol === symbol)?.price || 0) * (Number(holding?.quantity) || 0);
+        for (const [symbol, quantity] of Object.entries(stock.equityStakes || {})) value += (stocks.find(s => s.symbol === symbol)?.price || 0) * (Number(quantity) || 0);
+        return Math.max(0, value - liabilities) / shares || null;
+    }
+    if (stock.assetType === 'REIT') {
+        const nav = Math.max(0, (Number(stock.balanceSheet?.assets) || 0) - liabilities) / shares;
+        const income = (Number(stock.dividendPerShare) || 0) * (4 * BASE_DELAYS.quarterly / 120000) / 0.07; // dywidenda co 2 min gry (10× w roku) / 7%
+        return Math.max(nav, income) || null;
+    }
+    const equity = (Number(stock.balanceSheet?.assets) || 0) - liabilities;
+    return equity > 0 ? equity / shares : null;
+}
+
+/** Wartość godziwa do pokazania graczowi (z zysków albo z majątku). */
+function getDisplayedFairValue(stock) {
+    const fair = Number(stock?.fundamentals?.fairValue);
+    return fair > 0 ? fair : getAssetBasedFairValue(stock);
+}
+
 function hasValuationAnchor(stock) {
     return Boolean(stock && !stock.assetType);
 }
@@ -3323,7 +3353,7 @@ function resolveMerger(stock1, stock2, process) {
             const playerTargetShares = playerPortfolio[target.symbol]?.shares || 0;
             const playerInitiatorShares = playerPortfolio[initiator.symbol]?.shares || 0;
             const totalNewSharesForPlayer = (playerTargetShares * exchangeRatio) + (playerInitiatorShares * initiatorRatio);
-            if (playerTargetShares > 0) delete playerPortfolio[target.symbol];
+            if (playerTargetShares > 0) delete playerPortfolio[target.symbol]; // wymiana opisana niżej w dzienniku (fuzja)
             if (totalNewSharesForPlayer > 0) {
                  playerPortfolio[initiator.symbol] = { shares: totalNewSharesForPlayer, avgPrice: totalNewValue / newTotalShares, assetType: 'stock' };
                  logEvent(`🔄 Twoje akcje ${target.symbol} i ${initiator.symbol} zostały wymienione na ${totalNewSharesForPlayer.toFixed(0)} akcji nowej spółki.`, 'review');
@@ -4814,6 +4844,7 @@ function startCollateralAuction(originalOwnerId, symbol, quantity) {
                 holding.shares -= remainingToSeize; // Odejmij resztę z wolnych akcji
             }
             if (holding.shares <= 0) delete playerPortfolio[symbol];
+            if (typeof notePlayerPositionLoss === 'function') notePlayerPositionLoss(symbol, quantity, 'licytacja akcji z zastawu (niespłacona pożyczka)');
         }
     } else {
         const ai = aiCompetitors.find(a => a.id === originalOwnerId);
@@ -6692,6 +6723,7 @@ function removeStockFromGame(symbol) {
 
     // 2. Usuń z portfela gracza
     if (playerPortfolio[symbol]) {
+        if (typeof notePlayerPositionLoss === 'function') notePlayerPositionLoss(symbol, playerPortfolio[symbol].shares, 'bankructwo spółki — akcje są bezwartościowe');
         delete playerPortfolio[symbol];
     }
 
@@ -8422,6 +8454,10 @@ function refundOtherStartupClaims(startup) {
         const amount = bank.startupInvestments?.[symbol];
         if (amount > 0) { bank.cash += amount; delete bank.startupInvestments[symbol]; }
     }
+    for (const manager of corporation?.managers || []) {
+        const amount = manager.fund.startups?.[symbol];
+        if (amount > 0) { manager.fund.cash += amount; delete manager.fund.startups[symbol]; }
+    }
     for (const investment of startup.poolInvestors || []) {
         for (const [id, contribution] of Object.entries(investment.contributors || {})) {
             const share = investment.amount * contribution / Math.max(1e-9, Object.values(investment.contributors).reduce((a, b) => a + b, 0));
@@ -8459,6 +8495,10 @@ function collectStartupClaims(startup) {
         const amount = bank.startupInvestments?.[symbol] || 0;
         if (amount > 0) claims.push({ kind: 'bank', bank, amount });
     }
+    for (const manager of corporation?.managers || []) {
+        const amount = manager.fund.startups?.[symbol] || 0;
+        if (amount > 0) claims.push({ kind: 'botFund', manager, amount });
+    }
     return claims;
 }
 
@@ -8495,6 +8535,11 @@ function handleSuccessfulIPO(startup, successMultiplier) {
         } else if (claim.kind === 'bank') {
             claim.bank.stockPortfolio[symbol] = { shares, avgPrice: ipoPrice };
             delete claim.bank.startupInvestments[symbol];
+        } else if (claim.kind === 'botFund') {
+            const holding = claim.manager.fund.portfolio[symbol] || { shares: 0, avgPrice: claim.amount / shares };
+            holding.shares += shares;
+            claim.manager.fund.portfolio[symbol] = holding;
+            delete claim.manager.fund.startups[symbol];
         }
     }
     // Średnia cena zakupu funduszu = zainwestowana kwota / akcje (realny koszt w NAV).
@@ -8544,6 +8589,11 @@ function removeStartup(startup, refundMin = 0, refundMax = 0) {
         delete ai.portfolio[symbol];
     }
     for (const bank of commercialBanks) if (bank.startupInvestments) delete bank.startupInvestments[symbol];
+    for (const manager of corporation?.managers || []) {
+        const amount = manager.fund.startups?.[symbol];
+        if (amount > 0) manager.fund.cash += amount * (refundMax > 0 ? getRandomInRange(refundMin, refundMax) : 0);
+        if (manager.fund.startups) delete manager.fund.startups[symbol];
+    }
     delete playerPortfolio[symbol];
     if (startup.operatorStartup && typeof onOperatorStartupRemoved === 'function') onOperatorStartupRemoved(startup); // upadek operatora: sponsorzy znikają
     const index = stocks.findIndex(s => s.symbol === symbol);

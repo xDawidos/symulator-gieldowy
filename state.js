@@ -1497,14 +1497,25 @@ function renderOversightPanel() {
         </div>
         <div class="oversight-gauge"><span style="width:${oversight.corruption}%"></span></div>
         <div class="bank-grid mt-3">
-            ${card('police', 'Policja', '🚓', 'Ściga korupcję i (wkrótce) mafię. Przy wysokiej korupcji sama staje się skorumpowana i działa gorzej.')}
+            ${card('police', 'Policja', '🚓', 'Ściga korupcję i mafię: co kwartał zbija wpływy mafii, zatrzymuje jej ludzi w zarządach spółek, rekwiruje akcje zdobyte z pomocą „przyjaciół” i ściga fundusze, które z nimi współpracują. Przy wysokiej korupcji sama staje się skorumpowana i działa gorzej.')}
             ${card('knf', 'Komisja Nadzoru Finansowego', '🏦', 'Kontroluje fundusze — im większy fundusz, tym częściej. Czysta kontrola podnosi zaufanie klientów.')}
+            ${renderMafiaStateCard()}
         </div>
         ${oversight.corruption >= BRIBE_CORRUPTION_THRESHOLD ? `<p class="text-sm mt-3">💼 Przy tej korupcji komendant „bywa wyrozumiały”: <button class="btn-danger" onclick="bribePolice(); updateStateModalContent();">Łapówka (${formatZl(Math.max(2000, getFundAssets() * 0.01), 0)} z funduszu)</button> — spokój na ${BRIBE_IMMUNITY_QUARTERS} kw.</p>` : ''}
         <h4>Wojny PR</h4>
         ${typeof renderPrWars === 'function' ? renderPrWars() : ''}
         <h4>Ostatnie wykrycia</h4>
         <ul class="list-plain text-sm">${oversight.history.map(h => `<li>⚖️ ${escapeHtml(h.institution)}: ${escapeHtml(h.name)} — przewinienie nr ${h.strike}, kara ${formatZl(h.fine, 0)}</li>`).join('') || '<li class="text-muted">Brak.</li>'}</ul>`;
+}
+
+/** 0.13.1 (B13): mafia widoczna w zakładce Nadzór (szczegóły i usługi w „Szarej strefie”). */
+function renderMafiaStateCard() {
+    if (typeof mafia !== 'object' || typeof getMafiaStage !== 'function') return '';
+    const stage = getMafiaStage();
+    const infiltrated = stocks.filter(s => s.mafiaBoard && !s.isBankrupt).length;
+    return `<article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">🕶️</span><div><h4>Mafia</h4><span class="bank-card-type">${stage.icon} ${escapeHtml(stage.name)} · wpływy ${Math.round(mafia.influence || 0)}/${MAFIA_MAX_INFLUENCE}</span></div></header>
+        <p class="text-sm">Działa w tle od początku gry: przy wyższych wpływach przejmuje spółki-przykrywki i wprowadza ludzi do zarządów (${infiltrated} ${infiltrated === 1 ? 'spółka' : 'spółek'} z ich człowiekiem). Gracza dotyka dopiero po kontakcie z „przyjaciółmi” w Szarej strefie.</p>
+        <button class="btn-secondary" onclick="openGreyZone()">🕶️ Szara strefa</button></article>`;
 }
 
 function openGreyZone() {
@@ -2053,6 +2064,7 @@ function seizeMafiaAssets() {
         if (!stock || shares <= 0) continue;
         holding.shares -= shares;
         if (holding.shares <= 0) delete playerPortfolio[symbol];
+        if (typeof notePlayerPositionLoss === 'function') notePlayerPositionLoss(symbol, shares, 'rekwizycja policji (akcje zdobyte przez mafię)');
         const price = stock.price * 0.9;
         const buyer = aiCompetitors.filter(ai => !ai.isMafia && ai.cash >= shares * price).sort(() => Math.random() - 0.5)[0];
         if (buyer) {

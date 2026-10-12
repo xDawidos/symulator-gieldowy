@@ -306,20 +306,14 @@ function buyStock(symbol, quantity) {
         return;
     }
 
-    let totalCost = stockToBuy.price * quantity;
-    const charismaLevel = getSkillLevel('sharkCharisma');
-    if (charismaLevel > 0) {
-        let charismaBonus = 0;
-        if (charismaLevel === 1) charismaBonus = 0.005;
-        if (charismaLevel === 2) charismaBonus = 0.01;
-        if (charismaLevel === 3) charismaBonus = 0.015;
-        totalCost *= (1 - charismaBonus);
-    }
-
-    if (playerCash < totalCost) {
-        showToast("Nie masz wystarczająco gotówki, aby dokonać tego zakupu!");
+    // 0.13.1 (B2): koszt z prowizją operatora rynku liczony przed transakcją — zakup nigdy nie daje ujemnej gotówki.
+    const quote = getBuyQuote(stockToBuy, quantity, 'fund');
+    const totalCost = quote.cost;
+    if (playerCash < quote.total) {
+        showToast(`Nie masz wystarczająco gotówki: ${formatZl(quote.total)} z prowizją, maksymalnie ${getMaxBuyQuantity(stockToBuy, 'fund')} akcji.`);
         return;
     }
+    const tradeValue = stockToBuy.price * quantity; // podstawa prowizji: cena przed wpływem zlecenia
 
     // Transakcja
     playerCash -= totalCost;
@@ -353,7 +347,7 @@ function buyStock(symbol, quantity) {
     }
 
     if (typeof onFundTrade === 'function') onFundTrade(stockToBuy, quantity, 'buy'); // relacje z botami (relations.js)
-    if (typeof chargeMarketCommission === 'function') chargeMarketCommission(stockToBuy, quantity * stockToBuy.price, 'player'); // prowizja operatora rynku
+    if (typeof chargeMarketCommission === 'function') chargeMarketCommission(stockToBuy, tradeValue, 'player'); // prowizja operatora rynku (ujęta w quote)
 
     // Reputacja za duży pakiet
     const playerShares = playerPortfolio[symbol]?.shares || 0;
@@ -620,13 +614,16 @@ function processPoolInvestments() {
         return; // Nie inwestuj, jeśli w puli jest za mało środków
     }
 
-    const availableStartups = stocks.filter(s => s.assetType === 'Startup' && s.stage === 'funding');
+    const availableStartups = stocks.filter(s => s.assetType === 'Startup' && s.stage === 'funding' && getStartupFundingGap(s) >= 1);
     if (availableStartups.length === 0) {
         return; // Brak celów inwestycyjnych
     }
 
     const targetStartup = getRandomElement(availableStartups);
-    const investmentAmount = investmentPool.totalFunds;
+    // 0.13.1 (B6): pula dokłada najwyżej brakującą kwotę celu; reszta zostaje w puli (proporcjonalnie do wkładów).
+    const investmentAmount = Math.min(investmentPool.totalFunds, getStartupFundingGap(targetStartup));
+    const investedShare = investmentAmount / investmentPool.totalFunds;
+    const invested = Object.fromEntries(Object.entries(investmentPool.contributors).map(([id, amount]) => [id, amount * investedShare]));
 
     // "Inwestujemy" w imieniu puli
     targetStartup.currentFunding += investmentAmount;
@@ -637,14 +634,23 @@ function processPoolInvestments() {
     }
     targetStartup.poolInvestors.push({
         amount: investmentAmount,
-        contributors: { ...investmentPool.contributors } // Kopia obecnych współtwórców
+        contributors: invested // wkłady użyte w tej rundzie
     });
 
-    logEvent(`[PULA] 💰 Pula inwestycyjna zainwestowała ${investmentAmount.toFixed(2)} PLN w ${targetStartup.name}!`);
+    logEvent(`[PULA] 💰 Pula inwestycyjna zainwestowała ${investmentAmount.toFixed(2)} PLN w ${targetStartup.name}${investedShare < 1 ? ` (brakowało tyle do celu; w puli zostaje ${(investmentPool.totalFunds - investmentAmount).toFixed(2)} PLN)` : ''}!`);
 
-    // Resetujemy pulę
-    investmentPool.totalFunds = 0;
-    investmentPool.contributors = {};
+    // Pomniejszamy pulę o zainwestowaną część.
+    investmentPool.totalFunds -= investmentAmount;
+    for (const id of Object.keys(investmentPool.contributors)) {
+        investmentPool.contributors[id] -= invested[id];
+        if (investmentPool.contributors[id] < 0.01) delete investmentPool.contributors[id];
+    }
+    if (investmentPool.totalFunds < 0.01) { investmentPool.totalFunds = 0; investmentPool.contributors = {}; }
+}
+
+/** Brakująca kwota do celu zbiórki startupu. */
+function getStartupFundingGap(startup) {
+    return Math.max(0, (Number(startup?.fundingGoal) || 0) - (Number(startup?.currentFunding) || 0));
 }
 
 
@@ -1721,6 +1727,10 @@ function payPerformanceBonus(period) {
 }
 
 /** Docelowe zaufanie: wyniki 4 ostatnich okresów (i bieżącego) vs GIG, zmienność, obsunięcie, emisje. */
+const TRUST_TARGET_FLOOR = 15;      // 0.13.1 (B12): dolny próg celu zaufania
+const TRUST_GAIN_BONUS_MAX = 10;    // dodatni wynik okresu (+150 pkt × zwrot, do +10)
+const TRUST_CALM_BONUS = 5;         // okres bez wymuszonej sprzedaży i z obsunięciem < 5%
+
 function computeTrustTarget() {
     const periods = playerFund.periods.slice(-FUND_PERIODS_SHOWN);
     const current = playerFund.current;
@@ -1747,8 +1757,12 @@ function computeTrustTarget() {
     score -= extraEmissions * 8;
     // Klienci porównują wynik z lokatą i inflacją (macro.js).
     if (typeof getMacroTrustPenalty === 'function') score -= getMacroTrustPenalty(partial.fundReturn, current.elapsedMs);
+    // 0.13.1 (B12): droga powrotu — zysk w bieżącym okresie (nawet poniżej GIG) i spokojny czas odbudowują zaufanie,
+    // a cel nigdy nie spada poniżej progu, z którego da się wyjść dobrymi wynikami.
+    score += Math.min(TRUST_GAIN_BONUS_MAX, Math.max(0, partial.fundReturn) * 150);
+    if (current.forcedSales === 0 && current.maxDrawdown < 0.05) score += TRUST_CALM_BONUS * partial.weight;
 
-    return Math.max(0, Math.min(100, score));
+    return Math.max(TRUST_TARGET_FLOOR, Math.min(100, score));
 }
 
 /** Co tydzień gry: opłata za zarządzanie, zaufanie, decyzje klientów, zdarzenia. */
@@ -1851,6 +1865,38 @@ function redeemClientUnits(client, units) {
     return paid;
 }
 
+/**
+ * 0.13.1 (B4): każde zmniejszenie pozycji funduszu bez ręcznej sprzedaży (umorzenia, zastaw, konfiskata,
+ * wykup, bankructwo, fuzja) zostawia ślad z przyczyną: dziennik pozycji, wpis w poczcie korporacji, powiadomienie.
+ */
+function notePlayerPositionLoss(symbol, quantity, reason, value = null) {
+    if (!(quantity > 0)) return;
+    if (playerFund) {
+        if (!Array.isArray(playerFund.positionLog)) playerFund.positionLog = [];
+        playerFund.positionLog.unshift({ symbol, quantity: Math.round(quantity), reason, value, quarter: typeof macro === 'object' ? macro.quarter : 0 });
+        if (playerFund.positionLog.length > 30) playerFund.positionLog.length = 30;
+    }
+    const text = `📉 Twoje akcje ${symbol}: −${Math.round(quantity).toLocaleString('pl-PL')} szt. bez Twojej decyzji — ${reason}${value ? ` (${formatZl(value, 0)})` : ''}.`;
+    logEvent(text, 'warning');
+    if (typeof pushNotification === 'function') pushNotification(text, null);
+}
+
+/**
+ * 0.13.1 (B5): emisja ciągła (wpłaty klientów po NAV poza emisją gracza) tylko za zgodą gracza.
+ * Domyślnie zamknięta — liczba JU rośnie wyłącznie przez emisję gracza i zakup JU z konta prywatnego.
+ */
+function isFundOpenForSubscriptions() {
+    return Boolean(playerFund?.openSubscriptions);
+}
+
+function setFundOpenSubscriptions(open) {
+    if (!playerFund) return false;
+    playerFund.openSubscriptions = Boolean(open);
+    showToast(open ? '📥 Emisja ciągła otwarta: zadowoleni i nowi klienci mogą dokupować JU po NAV.' : '🔒 Emisja ciągła zamknięta: nowe JU tylko przez Twoją emisję.', 'default', 5000);
+    if (typeof refreshFundViews === 'function') refreshFundViews();
+    return true;
+}
+
 /** Wymuszona sprzedaż: największe pozycje, z dodatkową stratą na cenie i spadkiem zaufania. */
 function forceLiquidation(amountNeeded) {
     let needed = amountNeeded;
@@ -1876,7 +1922,7 @@ function forceLiquidation(amountNeeded) {
         needed -= proceeds;
 
         playerFund.current.forcedSales++;
-        logEvent(`⚠️ Wymuszona sprzedaż ${quantity} szt. ${symbol} na umorzenia klientów.`, 'review');
+        notePlayerPositionLoss(symbol, quantity, 'wymuszona sprzedaż: klienci umarzają JU, a w funduszu brakuje gotówki (trzymaj zapas gotówki)', proceeds);
     }
 
     if (playerFund.current.forcedSales > 0) playerFund.trust = Math.max(0, playerFund.trust - 2);
@@ -2031,6 +2077,40 @@ function checkCompliance(symbol) {
         logEvent(`🚨 COMPLIANCE: wykryto prywatne transakcje przed transakcjami funduszu (${symbol}). Kara ${paid.toFixed(2)} zł, wpis w CV.`, 'error');
         if (typeof showToast === 'function') showToast('Kontrola compliance! Kara i wpis w CV.', 'error', 6000);
     }
+}
+
+/** Rabat „Charyzma rekina” przy zakupach funduszu. */
+function getCharismaDiscount() {
+    return [0, 0.005, 0.01, 0.015][getSkillLevel('sharkCharisma')] || 0;
+}
+
+/** Stawka prowizji operatora rynku dla zakupu przez fundusz (0, gdy rynek nie pobiera). */
+function getBuyCommissionRate(stock) {
+    if (typeof marketOperators === 'undefined' || !marketOperators || typeof getStockMarket !== 'function' || typeof getOperatorStock !== 'function') return 0;
+    const operatorId = getStockMarket(stock);
+    const operatorStock = getOperatorStock(operatorId);
+    if (!operatorStock || operatorStock === stock) return 0;
+    return Number(MARKET_OPERATOR_DEFS[operatorId]?.commission) || 0;
+}
+
+/** 0.13.1 (B1/B2): pełny koszt zakupu — cena (z rabatem), prowizja, razem. */
+function getBuyQuote(stock, quantity, account = activeTradingAccount) {
+    const value = (Number(stock?.price) || 0) * Math.max(0, quantity);
+    if (account === 'private') return { cost: value, fee: 0, total: value };
+    const cost = value * (1 - getCharismaDiscount());
+    const fee = value * getBuyCommissionRate(stock);
+    return { cost, fee, total: cost + fee };
+}
+
+/** Największa liczba akcji do kupienia: min(dostępne w obrocie, gotówka / koszt jednej akcji z prowizją). */
+function getMaxBuyQuantity(stock, account = activeTradingAccount) {
+    if (!stock || !(stock.price > 0)) return 0;
+    const cash = account === 'private' ? Number(playerWallet?.cash) || 0 : Number(playerCash) || 0;
+    const unit = getBuyQuote(stock, 1, account).total;
+    const byCash = unit > 0 ? Math.floor(cash / unit + 1e-9) : 0;
+    let quantity = Math.max(0, Math.min(getAvailableShares(stock), byCash));
+    while (quantity > 0 && getBuyQuote(stock, quantity, account).total > cash) quantity--; // zaokrąglenia
+    return quantity;
 }
 
 function buyStockPrivate(symbol, quantity) {
@@ -2225,6 +2305,7 @@ function createBotFund(startCash) {
 
 function getBotFundNav(fund) {
     let value = Math.max(0, fund.cash);
+    for (const amount of Object.values(fund.startups || {})) value += Number(amount) || 0; // 0.13.1 (B7): udziały w startupach po koszcie
     for (const symbol in fund.portfolio) {
         const stock = stocks.find(s => s.symbol === symbol);
         if (stock) value += stock.price * fund.portfolio[symbol].shares;
@@ -2395,6 +2476,25 @@ function runManagerTrading(manager) {
 }
 
 /** Co tydzień: handel, opłaty do budżetu, napływy/odpływy klientów botów wg zaufania. */
+/** 0.13.1 (B7): fundusze kolegów finansują startupy (do 1% aktywów, najwyżej brakującą kwotę celu). */
+function botFundInvestInStartups(manager) {
+    const fund = manager.fund;
+    if (!(Math.random() < 0.08)) return 0;
+    const candidates = stocks.filter(s => s.assetType === 'Startup' && s.stage === 'funding' && getStartupFundingGap(s) >= 100);
+    const startup = candidates.sort((a, b) => (b.successChance || 0) - (a.successChance || 0))[Math.floor(Math.random() * Math.min(3, candidates.length))];
+    if (!startup) return 0;
+    const amount = Math.floor(Math.min(getStartupFundingGap(startup), getBotFundAssets(fund) * 0.01, fund.cash * 0.2));
+    if (!(amount >= 100)) return 0;
+    fund.cash -= amount;
+    if (!fund.startups) fund.startups = {};
+    fund.startups[startup.symbol] = (fund.startups[startup.symbol] || 0) + amount;
+    startup.currentFunding += amount;
+    const label = `Fundusz ${manager.name}`;
+    startup.investors[label] = (startup.investors[label] || 0) + amount;
+    startup.successChance = Math.min(1, (startup.successChance || 0) + amount / Math.max(1, startup.fundingGoal) * 0.05);
+    return amount;
+}
+
 function processCorporationWeekly() {
     if (!corporation) return;
 
@@ -2415,6 +2515,8 @@ function processCorporationWeekly() {
                 playerWallet.cash += playerShare;
             }
         }
+
+        botFundInvestInStartups(manager);
 
         // Zaufanie i przepływy klientów (uproszczony model klientów botów).
         const nav = getBotFundNav(fund);
@@ -2855,8 +2957,10 @@ function getAnalystInsights(stock) {
     const f = stock.fundamentals;
 
     const company = getAnalyst('company');
-    if (company && f) {
-        insights.push(`Analityk spółki (${'★'.repeat(company.stars)}): wartość godziwa ≈ ${(f.fairValue * noise(company.stars)).toFixed(2)} zł, prognoza EPS na kwartał ≈ ${(f.expectedEps * noise(company.stars)).toFixed(3)} zł.`);
+    if (company && (f || stock.assetType)) {
+        const fair = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(stock) : f?.fairValue;
+        const method = f?.fairValue > 0 ? '' : stock.assetType === 'Holding' ? ' (NAV portfela)' : stock.assetType === 'REIT' ? ' (NAV / dywidenda)' : ' (wartość księgowa)';
+        insights.push(`Analityk spółki (${'★'.repeat(company.stars)}): wartość godziwa ${fair > 0 ? `≈ ${(fair * noise(company.stars)).toFixed(2)} zł${method}` : 'brak wyceny (brak zysku i majątku netto)'}${f?.expectedEps ? `, prognoza EPS na kwartał ≈ ${(f.expectedEps * noise(company.stars)).toFixed(3)} zł` : ''}.`);
     }
     const sector = getAnalyst('sector');
     if (sector) {
@@ -2935,7 +3039,7 @@ function consolidateSupervisedFund(forceApproval = null) {
 // =================================================================================
 
 function getBigInvestors() {
-    return aiCompetitors.filter(ai => ai.personality !== 'market_maker');
+    return aiCompetitors.filter(ai => ai.personality !== 'market_maker' && !ai.isGuard && !ai.isMafia); // 0.13.1 (B9): Gwardia to fundusz, nie wielki inwestor
 }
 
 function getLastPeriodExcess() {
@@ -2999,7 +3103,7 @@ function lunchWithCeo(symbol) {
 
 /** Wielcy inwestorzy sami zgłaszają się do funduszu z dobrymi wynikami. */
 function processInvestorInterest() {
-    if (!playerFund || playerFund.trust < 60 || getLastPeriodExcess() <= 0) return;
+    if (!playerFund || !isFundOpenForSubscriptions() || playerFund.trust < 60 || getLastPeriodExcess() <= 0) return; // 0.13.1 (B5)
     for (const investor of getBigInvestors()) {
         if (Math.random() > 0.03 || investor.cash < 2000) continue;
         const amount = investor.cash * 0.05;
@@ -3011,7 +3115,7 @@ function processInvestorInterest() {
 
 /** Spółki z dobrą opinią o graczu lokują nadwyżki gotówki w JU funduszu. */
 function processCorporateSubscriptions() {
-    if (!playerFund) return;
+    if (!playerFund || !isFundOpenForSubscriptions()) return; // 0.13.1 (B5): lokaty spółek w JU tylko przy otwartej emisji
     for (const stock of stocks) {
         if (stock.assetType || stock.isBankrupt || stock.isBankStock) continue;
         const reputation = Number(stock.reputation?.player) || 0;
@@ -3329,7 +3433,7 @@ function processClientsWeekly() {
             redemptionBudget -= units;
             noteClientHistory(client, `Niezadowolony — umarza ${units.toFixed(1)} JU (${paid.toFixed(0)} zł).`);
         } else if (satisfied && highTrust) {
-            if (Math.random() >= def.buyBias * 0.3 || newMoneyBudget <= 0) continue;
+            if (!isFundOpenForSubscriptions() || Math.random() >= def.buyBias * 0.3 || newMoneyBudget <= 0) continue; // 0.13.1 (B5): nowe JU tylko przy otwartej emisji
             const value = Math.min(newMoneyBudget, getRandomInRange(def.size[0], def.size[1]) * 0.4);
             const units = subscribeClient(client, value);
             newMoneyBudget -= value;
@@ -3446,7 +3550,7 @@ function runPlayerJuMarket(fund) {
     }
 
     // Niewykorzystany popyt: nowi klienci wpłacają do funduszu po NAV (gdy zaufanie pozwala).
-    let budget = getFundAssets() * MAX_WEEKLY_NEW_MONEY_SHARE;
+    let budget = isFundOpenForSubscriptions() ? getFundAssets() * MAX_WEEKLY_NEW_MONEY_SHARE : 0; // 0.13.1 (B5): bez otwartej emisji nie powstają nowe JU
     for (const buyer of buyers) {
         if (fund.trust < 50 || budget <= 0 || buyer.value < nav) continue;
         const value = Math.min(buyer.value, budget);

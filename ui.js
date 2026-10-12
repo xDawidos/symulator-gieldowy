@@ -19,6 +19,35 @@ function setSectorChip(el, sector) {
     }
 }
 
+/** 0.13.1 (B10): lista sektorów z faktycznych spółek (typy specjalne jako osobne pozycje, np. REIT). */
+let sectorFilterSignature = '';
+function getMarketSectorList() {
+    const set = new Set();
+    for (const stock of stocks || []) {
+        if (stock.isBankrupt || stock.assetType === 'Startup') continue;
+        if (stock.assetType === 'REIT') { set.add('REIT'); continue; }
+        (Array.isArray(stock.sector) ? stock.sector : []).forEach(sector => sector && set.add(sector));
+    }
+    return [...set].sort((a, b) => a === 'REIT' ? 1 : b === 'REIT' ? -1 : a.localeCompare(b, 'pl'));
+}
+
+function renderSectorFilters() {
+    const chips = document.getElementById('sector-chips');
+    const select = document.getElementById('sector-filter');
+    if (!chips || !select || typeof stocks === 'undefined') return;
+    const sectors = getMarketSectorList();
+    const signature = sectors.join('|');
+    if (signature === sectorFilterSignature) return;
+    sectorFilterSignature = signature;
+    const current = select.value || 'all';
+    const label = sector => sector === 'REIT' ? 'Fundusze REIT' : sector;
+    select.innerHTML = `<option value="all">Wszystkie sektory</option>${sectors.map(sector => `<option value="${escapeHtml(sector)}">${escapeHtml(label(sector))}</option>`).join('')}`;
+    select.value = sectors.includes(current) ? current : 'all';
+    chips.querySelectorAll('.sector-chip[data-sector]:not([data-sector="all"])').forEach(chip => chip.remove());
+    chips.insertAdjacentHTML('beforeend', sectors.map(sector => `<span class="sector-chip${select.value === sector ? ' active' : ''}" data-sector="${escapeHtml(sector)}" onclick="setSectorChip(this, this.dataset.sector)">${escapeHtml(sector)}</span>`).join(''));
+    chips.querySelector('.sector-chip[data-sector="all"]')?.classList.toggle('active', select.value === 'all');
+}
+
 // Taby poziomów rynku
 let currentMarketLevel = 'ALL';
 
@@ -207,7 +236,11 @@ function setDrawerMax(symbol) {
     const s = stocks.find(x => x.symbol === symbol);
     if (!s || s.price <= 0) return;
     const input = document.getElementById('dqty-' + symbol);
-    if (input) input.value = Math.max(1, Math.floor(playerCash / s.price));
+    // 0.13.1 (B1): max = min(akcje dostępne w obrocie, gotówka / cena z prowizją) — dla aktywnego konta.
+    const max = typeof getMaxBuyQuantity === 'function' ? getMaxBuyQuantity(s) : Math.floor(playerCash / s.price);
+    if (input) input.value = Math.max(0, max);
+    if (max <= 0) showToast(getAvailableShares(s) <= 0 ? 'Brak akcji dostępnych na rynku — wszystkie w wolnym obrocie są u inwestorów.' : 'Za mało gotówki na choćby jedną akcję (z prowizją).', 'warning');
+    if (typeof updateDrawerImpact === 'function') updateDrawerImpact(symbol);
 }
 
 // Auto-odświeżanie co 3s
@@ -614,92 +647,23 @@ function renderOwnershipPieChart(symbol) {
     container.innerHTML = '';
     legend.innerHTML = '';
 
-    // 1. Zbieranie danych o akcjonariuszach
-    const owners = [];
-    const playerShares = playerPortfolio[symbol] ? playerPortfolio[symbol].shares : 0;
-    if (playerShares > 0) {
-        const fundName = typeof playerProfile !== 'undefined' && playerProfile?.fundName ? playerProfile.fundName : 'Twój fundusz';
-        owners.push({ name: `💼 ${fundName}`, shares: playerShares, color: '#007bff' });
-    }
-    const privateShares = typeof playerWallet !== 'undefined' ? (playerWallet.portfolio[symbol]?.shares || 0) : 0;
-    if (privateShares > 0) {
-        owners.push({ name: '🧍 Ty (prywatnie)', shares: privateShares, color: '#3cc9ff' });
-    }
-    if (stock.insiderShares > 0) {
-        owners.push({ name: '👔 Zarząd i pracownicy', shares: stock.insiderShares, color: '#8a63d2' });
-    }
-
+    // 1. Zbieranie danych o akcjonariuszach — 0.13.1 (B3): pełny rejestr (fundusze, boty, banki, ETF-y, holdingi…),
+    // a „Na rynku” to akcje naprawdę dostępne do kupienia (getAvailableShares), nie reszta po kilku posiadaczach.
+    const KIND_COLORS = { player: '#007bff', wallet: '#3cc9ff', insiders: '#8a63d2', state: '#663399', city: '#20c997', bank: '#198754', etf: '#0dcaf0', botFund: '#b8860b', holding: '#17a2b8', company: '#6610f2' };
+    const aiColors = ['#dc3545', '#ffc107', '#28a745', '#6f42c1', '#fd7e14', '#e83e8c'];
     let aiColorIndex = 0;
-    const aiColors = ['#dc3545', '#ffc107', '#28a745', '#6f42c1', '#fd7e14', '#20c997'];
-    aiCompetitors.forEach((ai) => {
-        if (ai.portfolio[symbol] && ai.portfolio[symbol].shares > 0) {
-            owners.push({
-                name: ai.name,
-                shares: ai.portfolio[symbol].shares,
-                color: aiColors[aiColorIndex % aiColors.length]
-            });
-            aiColorIndex++;
-        }
-    });
+    const owners = getShareholders(stock).map(holder => ({
+        name: holder.kind === 'player' ? `💼 ${holder.name}` : holder.kind === 'wallet' ? '🧍 Ty (prywatnie)' : holder.kind === 'bank' ? `🏦 ${holder.name}` : holder.kind === 'etf' ? `📦 ETF ${holder.name}` : holder.kind === 'insiders' ? '👔 Zarząd i pracownicy' : holder.kind === 'state' ? '🏛️ Skarb Państwa' : holder.name,
+        shares: holder.shares,
+        color: KIND_COLORS[holder.kind] || aiColors[aiColorIndex++ % aiColors.length]
+    }));
+    const treasuryShares = Number(stock.treasuryShares) || 0;
+    if (treasuryShares > 0) owners.push({ name: '🔁 Akcje własne spółki', shares: treasuryShares, color: '#ff5733' });
+    const availableShares = getAvailableShares(stock);
+    if (availableShares > 0) owners.push({ name: '🛒 Na rynku (do kupienia)', shares: availableShares, color: '#6c757d' });
+    const unlisted = stock.totalShares - owners.reduce((sum, owner) => sum + owner.shares, 0);
+    if (unlisted >= 1) owners.push({ name: 'Rozproszeni akcjonariusze', shares: unlisted, color: '#adb5bd' });
 
-    let investmentBankColorIndex = 0;
-    const investmentBankColors = ['#198754', '#0a58ca', '#ffc107', '#4682B4', '#2E8B57']; // Odcienie zieleni, niebieskiego, złoty
-
-    commercialBanks.forEach(bank => {
-        if (bank.isActive && bank.type === BANK_TYPES.INVESTMENT && bank.stockPortfolio[symbol]) {
-            const holding = bank.stockPortfolio[symbol];
-            if (holding.shares > 0) {
-                owners.push({
-                    name: `🏦 ${bank.name}`,
-                    shares: holding.shares,
-                    color: investmentBankColors[investmentBankColorIndex % investmentBankColors.length]
-                });
-                investmentBankColorIndex++;
-            }
-        }
-    });
-
-    const holdingCompanies = stocks.filter(s => s.assetType === 'Holding');
-    let holdingColorIndex = 0;
-    // --- NOWA PALETA KOLORÓW DLA FUNDUSZY HOLDINGOWYCH ---
-    const holdingColors = ['#0d6efd', '#17a2b8', '#6610f2', '#8FBC8F', '#B8860B']; // Odcienie niebieskiego, fioletu, zieleni, złota
-
-    holdingCompanies.forEach(holding => {
-        const holdingData = holding.holdingPortfolio[symbol];
-        if (holdingData && holdingData.quantity > 0) {
-            owners.push({
-                name: `💼 ${holding.name}`,
-                shares: holdingData.quantity,
-                color: holdingColors[holdingColorIndex % holdingColors.length]
-            });
-            holdingColorIndex++;
-        }
-    });
-
-    const stateShares = Math.floor(stock.totalShares * (stock.stateOwnershipPct || 0));
-    if (stateShares > 0 && !stock.isStateOwned) {
-        owners.push({ name: '🏛️ Skarb Państwa', shares: stateShares, color: '#663399' });
-    }
-    
-    // --- POCZĄTEK NOWEJ LOGIKI - DODANIE AKCJI WŁASNYCH ---
-    const treasuryShares = stock.treasuryShares || 0;
-    if (treasuryShares > 0) {
-        owners.push({ name: 'Dyrektor (Akcje Własne)', shares: treasuryShares, color: '#ff5733' }); // Pomarańczowy kolor dla wyróżnienia
-    }
-    // --- KONIEC NOWEJ LOGIKI ---
-
-    // 2. Obliczanie "wolnego obrotu"
-    const ownedShares = owners.reduce((sum, owner) => sum + owner.shares, 0);
-    
-    const totalTradableShares = stock.isStateOwned 
-        ? Math.floor(stock.totalShares * (1 - stock.stateOwnershipPct)) 
-        : stock.totalShares;
-        
-    const freeFloatShares = totalTradableShares - ownedShares;
-    if (freeFloatShares > 0) {
-        owners.push({ name: 'Wolny obrót', shares: freeFloatShares, color: '#6c757d' });
-    }
-    
     owners.sort((a, b) => b.shares - a.shares);
 
     // 3. Rysowanie wykresu SVG (bez zmian)
@@ -719,7 +683,7 @@ function renderOwnershipPieChart(symbol) {
     let cumulativeAngle = 0;
 
     owners.forEach(owner => {
-        const percentage = owner.shares / totalTradableShares;
+        const percentage = owner.shares / Math.max(1, stock.totalShares); // cały akcjonariat (także Skarb Państwa i zarząd)
         if (percentage <= 0) return;
 
         const circle = document.createElementNS(svgNS, "circle");
@@ -759,8 +723,8 @@ function renderOwnershipPieChart(symbol) {
         legend.appendChild(legendItem);
     });
 
-    // Informacja o udziałach państwa (bez zmian)
-    if (stock.isStateOwned && stateShares > 0) {
+    // Informacja o udziałach państwa
+    if (stock.isStateOwned && (stock.stateOwnershipPct || 0) > 0) {
         const statePercent = (stock.stateOwnershipPct * 100).toFixed(2);
         const legendItem = document.createElement('div');
         legendItem.innerHTML = `<hr><p style="font-weight: bold; margin-bottom: 5px; text-align: center;">🏛️ Skarb Państwa kontroluje ${statePercent}% akcji (poza wolnym obrotem)</p>`;
@@ -826,6 +790,7 @@ function displayStocks(previousInputValues = {}) {
     priceHeader.textContent = headerText;
   }
 
+  if (typeof renderSectorFilters === 'function') renderSectorFilters();
   const selectedSector = document.getElementById('sector-filter').value;
 
   // Filtrowanie spółek do wyświetlenia
@@ -1510,6 +1475,14 @@ function getFundRanking() {
         });
     }
 
+    // 0.13.1 (B9): Fundusz „Gwardia” w rankingu funduszy (wynik od powstania, bez okresów oceny).
+    const guard = typeof getGuardFund === 'function' ? getGuardFund() : aiCompetitors.find(ai => ai.isGuard);
+    if (guard) {
+        const value = (Number(guard.cash) || 0) + Object.entries(guard.portfolio || {}).reduce((sum, [symbol, holding]) => sum + (stocks.find(s => s.symbol === symbol)?.price || 0) * (holding.shares || 0), 0);
+        if (!(guard.startValue > 0)) guard.startValue = value;
+        rows.push({ name: `🛡️ ${guard.name}`, owner: 'Fundusz patriotyczny · obronność (wynik od powstania)', ret: guard.startValue > 0 ? value / guard.startValue - 1 : 0, vol: null, trust: null, assets: value });
+    }
+
     for (const fund of getExternalFunds()) {
         const returns = playerPeriods.map(p => p.rivals.find(r => r.symbol === fund.symbol)?.return).filter(Number.isFinite);
         rows.push({
@@ -2081,7 +2054,9 @@ function openStockDetailsModal(symbol) {
 function updateDividendTrackerButtonVisibility() {
     const btn = document.getElementById('open-dividend-tracker-btn');
     if (!btn) return;
-    btn.style.display = getSkillLevel('dividendAnalyst') > 0 ? 'inline-block' : 'none';
+    // 0.13.1 (B8): panel zawsze dostępny; szkolenie odkrywa terminy i szacunki ogłoszonych wypłat.
+    btn.style.display = 'inline-block';
+    btn.title = getSkillLevel('dividendAnalyst') > 0 ? 'Panel Analityka Dywidend' : 'Panel dywidend (szkolenie „Analityk Dywidend” pokaże terminy i szacunki)';
 }
 
 function renderDividendTrackerContent() {
@@ -2090,6 +2065,27 @@ function renderDividendTrackerContent() {
 
     body.innerHTML = '';
     const skillLvl = getSkillLevel('dividendAnalyst');
+
+    // Bez szkolenia: spółki, które ostatnio wypłaciły dywidendę (stopa z ostatniego roku) + zachęta do szkolenia.
+    if (skillLvl < 1) {
+        const payers = stocks.filter(s => !s.isBankrupt && !s.assetType && s.lastDividend)
+            .map(s => ({ s, dy: typeof getTrailingDividendYield === 'function' ? getTrailingDividendYield(s) : (s.lastDividend.yield || 0) }))
+            .sort((a, b) => b.dy - a.dy).slice(0, 15);
+        const info = body.insertRow().insertCell();
+        info.colSpan = 5;
+        info.className = 'text-center text-sm text-muted';
+        info.textContent = '🔒 Szkolenie „Analityk Dywidend” (CV i szkolenia) pokaże ogłoszone wypłaty, czas do dnia odcięcia i szacowaną kwotę.';
+        payers.forEach(({ s, dy }) => {
+            const row = body.insertRow();
+            row.insertCell().textContent = s.isDividendAristocrat ? `👑 ${s.name}` : s.name;
+            row.insertCell().textContent = getDividendPolicyLabel(s.dividendPolicy);
+            row.insertCell().textContent = s.pendingDividend ? 'ogłoszona' : '—';
+            row.insertCell().textContent = `ostatnio ${s.lastDividend.dps.toFixed(4)} PLN`;
+            row.insertCell().textContent = `${(dy * 100).toFixed(2)}%`;
+        });
+        if (!payers.length) { const cell = body.insertRow().insertCell(); cell.colSpan = 5; cell.className = 'text-center'; cell.textContent = 'Jeszcze żadna spółka nie wypłaciła dywidendy.'; }
+        return;
+    }
 
     // Ogłoszone (oczekujące) dywidendy i REIT-y — najbliższe wypłaty na górze.
     const dividendStocks = stocks
@@ -2100,7 +2096,7 @@ function renderDividendTrackerContent() {
         const row = body.insertRow();
         const cell = row.insertCell();
         cell.colSpan = 5;
-        cell.textContent = "Brak spółek dywidendowych na rynku lub wymaganego poziomu umiejętności.";
+        cell.textContent = "Teraz żadna spółka nie ma ogłoszonej dywidendy — zarządy ogłaszają je po raportach kwartalnych.";
         cell.classList.add('text-center');
         return;
     }
@@ -2772,8 +2768,9 @@ function renderCompanyCardFinance(stock, f) {
     const perShare = value => Number.isFinite(value) ? formatZl(value) : '—';
     const row = (label, value, hint) => `<tr><td title="${escapeHtml(hint)}">${label} <span class="text-muted">ⓘ</span></td><td class="cell-number">${value}</td></tr>`;
     const last = stock.lastDividend;
-    const fair = getSkillLevel('financialAnalyst') >= 1 && f.fairValue > 0
-        ? row('Wycena analityczna', `${perShare(f.fairValue)} (${((f.fairValue / stock.price - 1) * 100).toFixed(1)}% vs kurs)`, 'Wartość godziwa z zysków i majątku (szkolenie Analityk Finansowy).') : '';
+    const shownFair = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(stock) : f.fairValue;
+    const fair = getSkillLevel('financialAnalyst') >= 1 && shownFair > 0
+        ? row('Wycena analityczna', `${perShare(shownFair)} (${((shownFair / stock.price - 1) * 100).toFixed(1)}% vs kurs)${f.fairValue > 0 ? '' : stock.assetType === 'Holding' ? ' · NAV portfela' : ' · z majątku'}`, 'Wartość godziwa z zysków i majątku; holdingi i REIT-y — z wartości aktywów netto (szkolenie Analityk Finansowy).') : '';
     const metrics = typeof getCompanyMetrics === 'function' ? getCompanyMetrics(stock) : null;
     const pct = v => v === null || v === undefined || !Number.isFinite(v) ? '—' : `${(v * 100).toFixed(1)}%`;
     const extra = metrics ? row('Marża netto', pct(metrics.margin), 'Zysk netto / przychody.') + row('ROE', pct(metrics.roe), 'Zysk netto / kapitał własny.')
@@ -2832,8 +2829,15 @@ function renderValuationSection(stock, f) {
 function renderCompanyCardOwners(stock) {
     const fundPct = typeof getFundStakePct === 'function' ? getFundStakePct(stock) : 0;
     const wallet = playerWallet?.portfolio?.[stock.symbol]?.shares || 0;
+    // 0.13.1 (B3): wolny obrót = dostępne na rynku + akcje u inwestorów (gdzie są akcje).
+    const freeFloat = getFreeFloatShares(stock), available = getAvailableShares(stock);
+    const byKind = {};
+    for (const holder of getShareholders(stock)) if (!['state', 'insiders'].includes(holder.kind)) byKind[holder.kind] = (byKind[holder.kind] || 0) + holder.shares;
+    const kindLabels = { player: 'Twój fundusz', wallet: 'konto prywatne', ai: 'inwestorzy (boty)', botFund: 'fundusze kolegów', bank: 'banki', etf: 'ETF-y', holding: 'holdingi', company: 'spółki', city: 'miasto' };
+    const where = Object.entries(byKind).sort((a, b) => b[1] - a[1]).map(([kind, shares]) => `${kindLabels[kind] || kind} ${shares.toLocaleString('pl-PL')}`).join(' · ');
     return `
-        <p class="text-sm">Fundusz: <strong>${(fundPct * 100).toFixed(2)}%</strong>${wallet ? ` · konto prywatne: <strong>${wallet.toLocaleString('pl-PL')} akcji</strong>` : ''} · wolny obrót: <strong>${getAvailableShares(stock).toLocaleString('pl-PL')}</strong> z ${stock.totalShares.toLocaleString('pl-PL')} akcji</p>
+        <p class="text-sm">Fundusz: <strong>${(fundPct * 100).toFixed(2)}%</strong>${wallet ? ` · konto prywatne: <strong>${wallet.toLocaleString('pl-PL')} akcji</strong>` : ''}</p>
+        <p class="text-sm">Wolny obrót: <strong>${freeFloat.toLocaleString('pl-PL')}</strong> z ${stock.totalShares.toLocaleString('pl-PL')} akcji = <strong>${available.toLocaleString('pl-PL')}</strong> dostępnych na rynku + <strong>${Math.max(0, freeFloat - available).toLocaleString('pl-PL')}</strong> u inwestorów${where ? ` (${escapeHtml(where)})` : ''}.${available <= 0 ? ' <span class="text-warn">Teraz nie da się kupić — akcje kupisz, gdy ktoś je sprzeda.</span>' : ''}</p>
         <div class="gov-bars">${typeof renderShareholderBars === 'function' ? renderShareholderBars(stock) : ''}</div>
         <button class="btn-secondary mt-2" onclick="openStockDetailsModal('${stock.symbol}')">🥧 Wykres akcjonariatu</button>`;
 }
@@ -5019,6 +5023,8 @@ function escapeHtml(text) {
 
 function displayFundPanel() {
     if (!playerFund) return;
+    const openBox = document.getElementById('fund-open-subscriptions');
+    if (openBox) openBox.checked = Boolean(playerFund.openSubscriptions); // 0.13.1 (B5)
 
     const title = document.getElementById('fund-panel-title');
     if (title) title.textContent = `💼 ${playerProfile?.fundName || 'Mój fundusz'}`;
