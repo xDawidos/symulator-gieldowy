@@ -4499,6 +4499,19 @@ group('0.13.1 P1/P2: twardy sufit spółek i przenosiny na nowe rynki', () => {
     });
 });
 
+group('0.13.1 P3: gotówka spółek nie spada poniżej zera', () => {
+    test('kredyt ratunkowy wyrównuje ujemną gotówkę, kapitał bez zmian', () => {
+        const a = makeCompany('NEG');
+        resetWorld([a]);
+        a.cash = -50_000;
+        const equity = a.balanceSheet.assets - a.balanceSheet.liabilities;
+        const loan = coverNegativeCash(a, -100_000);
+        assert(loan > 50_000 && a.cash > 0 && a.cash < 6_000, `gotówka ${a.cash}`);
+        assert(Math.abs(a.balanceSheet.assets - a.balanceSheet.liabilities - equity) < 1e-6, 'kapitał bez zmian');
+        assert(coverNegativeCash(a, -100_000) === 0, 'dodatnia gotówka — bez kredytu');
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

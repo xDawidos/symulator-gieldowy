@@ -3169,6 +3169,9 @@ function processFinancialReports() {
             const debtRepayment = Math.min(stock.cash * 0.5, reportedQuarterlyEarnings * getRandomInRange(0.1, 0.3));
             repayCompanyDebt(stock, Math.min(debtRepayment, stock.balanceSheet.liabilities));
         }
+        // P3: kredyt na płynność pokrywa tylko część straty — gdy gotówka i tak spadła poniżej zera, bank dokredytowuje
+        // do zera z małym buforem (dług rośnie, kapitał bez zmian; o upadłości decyduje kapitał poniżej).
+        coverNegativeCash(stock, reportedQuarterlyEarnings);
 
         // Logika bankructwa (bez zmian)
         const equity = stock.balanceSheet.assets - stock.balanceSheet.liabilities;
@@ -3178,8 +3181,8 @@ function processFinancialReports() {
                  // D1: operator rynku internetowego z kilkoma spółkami nie upada — spółki członkowskie składają się na ratunek.
                  bankruptcyChance = 0;
                  const bailout = Math.max(0, -equity) + getMarketCapValue(stock) * 0.05;
-                 stock.balanceSheet.assets += bailout;
-                 stock.balanceSheet.retainedEarnings += bailout;
+                 adjustCompanyCash(stock, bailout); // ratunek w gotówce (P3: bez „pustych” aktywów)
+                 adjustBalanceSheet(stock, { assets: bailout, retainedEarnings: bailout });
                  stock.financialHealth = Math.max(stock.financialHealth, -1);
              } else if (stock.ceo?.traits?.some(t => t.id === 'bogacz')) {
                  bankruptcyChance = 0;
@@ -7050,6 +7053,12 @@ function borrowForCompany(stock, amount, purpose = 'Kredyt') {
     recordPayment(bank ? bank.id : 'external:bank_credit', stock, value, purpose);
 
     return value;
+}
+
+/** P3: kredyt ratunkowy — gotówka spółki wraca do zera z buforem 5% straty kwartału. Zwraca kwotę kredytu. */
+function coverNegativeCash(stock, quarterResult = 0) {
+    if (!stock || stock.assetType || !(Number(stock.cash) < 0)) return 0;
+    return borrowForCompany(stock, -Number(stock.cash) + Math.abs(Math.min(0, Number(quarterResult) || 0)) * 0.05 + 1, 'Kredyt ratunkowy na pokrycie ujemnej gotówki');
 }
 
 /** Spłata długu: gotówka, aktywa i zobowiązania maleją o tę samą kwotę. */
