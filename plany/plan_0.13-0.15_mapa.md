@@ -4,25 +4,27 @@ Jeden spójny porządek prac na wersje 0.13 → 0.15. Szczegóły są w planach 
 - `plan_0.13_spoleczenstwo.md`;
 - `plan_0.14_struktura_spolek.md`;
 - `plan_0.15_gielda_miedzynarodowa.md`;
-- `raporty/weryfikacja_0.13.1_czesciowa.md`.
+- `raporty/weryfikacja_0.13.1.md`.
 
-Stan na 2026-10-12: gałąź robocza `zmiany-AI` jest zsynchronizowana z `main` (`7cfe6cd`, PR #7).
+Stan na 2026-10-13: etap A (domknięcie 0.13 i 0.13.1) zrobiony na gałęzi worktree (commity `ee91a58`, `2ab2c4e`, `441d5d5` i raport), do scalenia z `zmiany-AI`.
 
 ## Stan
 
 | Wersja | Część | Stan |
 |---|---|---|
-| 0.13 | S1–S6 (kraj, pracownicy, rynek pracy, związki, ustawy, spięcie z grą) | ✅ kod: `77fdeb0`, `cf0d161`, `62478bb`, 21 testów. ❌ brak pomiaru według „Jak sprawdzimy” |
-| 0.13.1 | B1–B13, D1/D2 (rynki internetowe, miękki limit), P1–P3 (sufity, „duchy posiadaczy”), decyzje 1–2, B5 | ✅ kod, testy 310/310. ⚠️ weryfikacja częściowa (długi przebieg przerwany) |
+| 0.13 | S1–S6 (kraj, pracownicy, rynek pracy, związki, ustawy, spięcie z grą) | ✅ kod: `77fdeb0`, `cf0d161`, `62478bb`, 21 testów. ✅ pomiar A2 (`441d5d5`): wszystkie miary w celu poza TSR polityk; ❌ TSR (Oszczędna +5 pp, rozrzut Wyzysku) — do decyzji |
+| 0.13.1 | B1–B13, D1/D2 (rynki internetowe, miękki limit), P1–P3 (sufity, „duchy posiadaczy”), decyzje 1–2, B5 | ✅ kod, testy 313/313. ✅ weryfikacja pełna (`raporty/weryfikacja_0.13.1.md`): OK z uwagami; ⚠️ B5 w długiej grze (zaufanie, lokaty spółek) — do decyzji |
 | 0.14 | T0 (prędkości ×100/×200) | ✅ `117feec` |
 | 0.14 | T1–T6 | ⬜ nie zaczęte (T6 dopisane 2026-10-12) |
 | 0.15 | G0–G8 | ⬜ szkic, nie zaczęte |
 
-**Zostało: 4 zadania domknięcia (etap A) + 6 części 0.14 + 9 etapów 0.15 = 19 pozycji.** Etap A to głównie weryfikacja, z jedną małą zmianą w kodzie (A3).
+**Etap A zrobiony (A1–A4).** Zostało: 6 części 0.14 + 9 etapów 0.15 = 15 pozycji, plus 3 decyzje balansu z raportu 0.13.1 (zaufanie funduszu vs GIG, lokaty spółek w JU, polityki kadrowe).
 
 ---
 
-## Etap A — domknięcie 0.13 i 0.13.1 (przed 0.14 T1)
+## Etap A — domknięcie 0.13 i 0.13.1 (przed 0.14 T1) — ✅ zrobione 2026-10-13
+
+Wyniki: A1, A3, A4 w `raporty/weryfikacja_0.13.1.md`; A2 w `plan_0.13_spoleczenstwo.md` („Wyniki pomiaru”). Stanowisko przebiegów: `tests/przebiegi.html`.
 
 ### A1. Długi przebieg weryfikacyjny (×200, z zapisem i wczytaniem w połowie)
 Z raportu 0.13.1, punkt „Niesprawdzone” 1:
