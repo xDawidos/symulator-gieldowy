@@ -4396,6 +4396,24 @@ group('0.13.1 D1/D2: rynki internetowe i limit spółek krajowych', () => {
         assert(getMarketMembers('XTD').every(isInternetMarketStock) && !getMarketMembers('XTD').some(isCountedListedCompany), 'poza limitem krajowym');
     });
 
+    test('decyzja 2: ratunek operatora płacą spółki rynku proporcjonalnie do kapitalizacji, bez tworzenia gotówki', () => {
+        worldD(20);
+        const startup = spawnOperatorStartup(marketOperators.PLU5);
+        withSeededRandom(4, () => finalizeStartup(startup));
+        const operator = getOperatorStock('PLU5');
+        while (getMarketMembers('PLU5').length < INTERNET_PROTECTION_MEMBERS) spawnMarketMember('PLU5', 'test');
+        const members = getMarketMembers('PLU5');
+        members.forEach(m => { m.cash = 1_000_000; });
+        const total = () => operator.cash + members.reduce((a, m) => a + m.cash, 0);
+        const before = total(), opCash = operator.cash;
+        const raised = fundMarketOperatorBailout(operator, 90_000);
+        assert(Math.abs(raised - 90_000) < 1e-6 && Math.abs(total() - before) < 1e-6 && operator.cash > opCash, `zebrano ${raised}, suma gotówki bez zmian`);
+        const big = members.reduce((a, m) => getMarketCapValue(m) > getMarketCapValue(a) ? m : a);
+        assert(1_000_000 - big.cash >= Math.max(...members.map(m => 1_000_000 - m.cash)) - 1e-6, 'największa spółka płaci najwięcej');
+        members.forEach(m => { m.cash = 100; });
+        assert(fundMarketOperatorBailout(operator, 1_000_000) < 1_000, 'bez gotówki — ratunek niepełny');
+    });
+
     test('D1: chroniony operator nie upada; koncesja = handel bez prowizji; nowe rynki z puli', () => {
         worldD(20);
         const startup = spawnOperatorStartup(marketOperators.PLU5);

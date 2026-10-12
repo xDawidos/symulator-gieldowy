@@ -1585,6 +1585,34 @@ function hasInternetMemberSlot(operatorId) {
     return getMarketMembers(operatorId).length < INTERNET_MEMBER_LIMIT;
 }
 
+/**
+ * Decyzja 2: spółki członkowskie składają się na ratunek operatora proporcjonalnie do kapitalizacji — każda najwyżej
+ * MEMBER_BAILOUT_CASH_SHARE swojej dodatniej gotówki (bez tworzenia pieniędzy). Zwraca zebraną kwotę.
+ */
+const MEMBER_BAILOUT_CASH_SHARE = 0.3;
+function fundMarketOperatorBailout(operatorStock, needed) {
+    const operatorId = operatorStock?.marketOperator;
+    if (!operatorId || !(needed > 0)) return 0;
+    const members = getMarketMembers(operatorId);
+    const totalCap = members.reduce((sum, member) => sum + Math.max(0, getMarketCapValue(member)), 0);
+    if (!(totalCap > 0)) return 0;
+    let raised = 0;
+    for (const member of members) {
+        const share = needed * Math.max(0, getMarketCapValue(member)) / totalCap;
+        const paid = Math.min(share, Math.max(0, Number(member.cash) || 0) * MEMBER_BAILOUT_CASH_SHARE);
+        if (!(paid > 0)) continue;
+        adjustCompanyCash(member, -paid);
+        adjustBalanceSheet(member, { assets: -paid, retainedEarnings: -paid });
+        raised += paid;
+    }
+    if (raised > 0) {
+        adjustCompanyCash(operatorStock, raised);
+        adjustBalanceSheet(operatorStock, { assets: raised, retainedEarnings: raised });
+    }
+    logEvent(`🛟 Spółki rynku ${getMarketLabel(operatorId)} składają się na ratunek operatora: ${formatZl(raised, 0)} z potrzebnych ${formatZl(needed, 0)}${raised < needed ? ' — ratunek niepełny, operator słabnie' : ''}.`, 'market');
+    return raised;
+}
+
 /** Operator chroniony przed upadkiem: rynek internetowy z co najmniej kilkoma spółkami. */
 function isProtectedMarketOperator(stock) {
     return Boolean(stock?.marketOperator && isInternetMarket(stock.marketOperator) && getMarketMembers(stock.marketOperator).length >= INTERNET_PROTECTION_MEMBERS);

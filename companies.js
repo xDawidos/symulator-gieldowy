@@ -3187,12 +3187,13 @@ function processFinancialReports() {
         if ((equity <= 0 || stock.financialHealth <= -5 || isCullCandidate(stock)) && !stock.isBankrupt) {
              let bankruptcyChance = 0.30;
              if (typeof isProtectedMarketOperator === 'function' && isProtectedMarketOperator(stock)) {
-                 // D1: operator rynku internetowego z kilkoma spółkami nie upada — spółki członkowskie składają się na ratunek.
-                 bankruptcyChance = 0;
-                 const bailout = Math.max(0, -equity) + getMarketCapValue(stock) * 0.05;
-                 adjustCompanyCash(stock, bailout); // ratunek w gotówce (P3: bez „pustych” aktywów)
-                 adjustBalanceSheet(stock, { assets: bailout, retainedEarnings: bailout });
-                 stock.financialHealth = Math.max(stock.financialHealth, -1);
+                 // D1 (decyzja 2): ratunek operatora rynku internetowego finansują spółki członkowskie z własnej gotówki,
+                 // proporcjonalnie do kapitalizacji. Pełny ratunek = brak upadku; niepełny — mniejsza ochrona i słabsza kondycja.
+                 const needed = Math.max(0, -equity) + getMarketCapValue(stock) * 0.05;
+                 const raised = fundMarketOperatorBailout(stock, needed);
+                 const coverage = needed > 0 ? raised / needed : 1;
+                 bankruptcyChance = coverage >= 1 ? 0 : 0.30 * (1 - coverage);
+                 stock.financialHealth = coverage >= 1 ? Math.max(stock.financialHealth, -1) : stock.financialHealth - 1;
              } else if (stock.ceo?.traits?.some(t => t.id === 'bogacz')) {
                  bankruptcyChance = 0;
                  logEvent(`[CEO] Prywatne środki i wpływy prezesa ratują ${stock.name} przed bankructwem!`);
