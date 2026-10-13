@@ -16,10 +16,11 @@ Stan na 2026-10-13: etap A (domknięcie 0.13 i 0.13.1) zrobiony na gałęzi work
 | 0.13.1 | B1–B13, D1/D2 (rynki internetowe, miękki limit), P1–P3 (sufity, „duchy posiadaczy”), decyzje 1–2, B5 | ✅ kod, testy 317/317. ✅ weryfikacja pełna (`raporty/weryfikacja_0.13.1.md`): OK z uwagami; decyzje balansu (zaufanie vs GIG, lokaty spółek) wdrożone |
 | 0.14 | T0 (prędkości ×100/×200) | ✅ `117feec` |
 | 0.14 | T1 (rejestr sektorów, segmenty, filtry) | ✅ `7af0d0b` (T1a+T1b), `5dcb464` (T1c), zapis v14; testy 330/330; zapis +0,005%, marża +0,35 pp, GIG +1,2 pp przy tych samych warunkach (szum) |
-| 0.14 | T2–T6 | ⬜ nie zaczęte (T6 dopisane 2026-10-12) |
+| 0.14 | T2 (podsektory, badania kliniczne, blok jądrowy, KNF) + decyzja 11 | ✅ `89a810d`…`1329525`; testy 345/345; 20+20 przebiegów ×200 vs T1: GIG 17,9 vs 17,8%, marża 24,45 vs 24,38%; badania kliniczne 3,9/przebieg, KNF 1,8, budowy bloków 0,15; zapis +0,03% |
+| 0.14 | T3–T6 | ⬜ nie zaczęte (T6 dopisane 2026-10-12) |
 | 0.15 | G0–G8 | ⬜ szkic, nie zaczęte |
 
-**Etap A zrobiony (A1–A4) razem z 3 decyzjami balansu; 0.14 T1 zrobione.** Zostało: 5 części 0.14 + 9 etapów 0.15 = 14 pozycji.
+**Etap A zrobiony (A1–A4) razem z 3 decyzjami balansu; 0.14 T1 i T2 zrobione.** Zostało: 4 części 0.14 + 9 etapów 0.15 = 13 pozycji.
 
 ---
 
