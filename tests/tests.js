@@ -5106,6 +5106,50 @@ group('0.14 T2: Biotechnologia — badania kliniczne', () => {
     });
 });
 
+group('0.14 T2: Energetyka jądrowa — budowa bloku', () => {
+    function nuclear(symbol = 'NUKE') {
+        const s = makeCompany(symbol, { sector: ['Energia'], cash: 5_000_000 });
+        s.segments = [{ sector: 'Energia', subsector: 'Energetyka jądrowa', share: 1 }]; s.sector = ['Energia'];
+        initializeFundamentals(s, true);
+        resetWorld([s]);
+        return s;
+    }
+
+    test('budowa 8–16 kw. z gotówki, potem zgoda regulatora i stabilny przychód', () => {
+        const s = nuclear();
+        const block = startNuclearBlock(s, 0);
+        assert(block.quarters >= 8 && block.quarters <= 16 && block.stage === 'construction', JSON.stringify(block));
+        const cash0 = s.cash, equity0 = s.balanceSheet.assets - s.balanceSheet.liabilities;
+        payNuclearInstallment(s);
+        assert(s.cash < cash0 && Math.abs((s.balanceSheet.assets - s.balanceSheet.liabilities) - equity0) < 1e-6, 'gotówka → budowa, kapitał bez zmian');
+        const revenue0 = s.fundamentals.revenue;
+        assert(reviewNuclearBlock(s, 0.9, block.dueQuarter) === 'operating' && s.nuclearBlock.stage === 'operating', 'uruchomienie');
+        assertNear(s.fundamentals.revenue, revenue0 * 1.15, 'przychód +15%', 1e-6);
+    });
+
+    test('regulator: opóźnienie 2–4 kw. (najwyżej 2 razy)', () => {
+        const s = nuclear();
+        startNuclearBlock(s, 0);
+        assert(reviewNuclearBlock(s, 0.1, 12) === 'delayed' && s.nuclearBlock.dueQuarter >= 14 && s.nuclearBlock.dueQuarter <= 16, 'opóźnienie');
+        assert(reviewNuclearBlock(s, 0.1, 16) === 'delayed', 'drugie opóźnienie');
+        assert(reviewNuclearBlock(s, 0.1, 20) === 'operating', 'po 2 opóźnieniach blok rusza');
+    });
+
+    test('kontrakt z państwem zależy od partii rządzącej', () => {
+        const s = nuclear();
+        startNuclearBlock(s, 0); reviewNuclearBlock(s, 0.9, 10);
+        const ruling = macro.election.ruling, coalition = macro.election.coalition, treasury = governmentTreasury;
+        try {
+            governmentTreasury = 1e9;
+            macro.election.coalition = null;
+            macro.election.ruling = 'market';
+            assert(payNuclearStateContract(s) === 0, 'Koalicja Rynkowa: bez kontraktu');
+            macro.election.ruling = 'state';
+            assert(payNuclearStateContract(s) > 0, 'Blok Państwowy: kontrakt');
+        } finally { macro.election.ruling = ruling; macro.election.coalition = coalition; governmentTreasury = treasury; }
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

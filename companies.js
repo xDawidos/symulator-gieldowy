@@ -10090,7 +10090,101 @@ function processClinicalTrials(quarter = getSubsectorQuarter()) {
     }
 }
 
+// Energetyka jądrowa: budowa bloku 8–16 kw. → zgoda regulatora (ryzyko opóźnienia) → stabilny przychód.
+// Kontrakty z państwem zależą od partii rządzącej (0.13): Blok Państwowy i Ludowcy płacą więcej, Koalicja Rynkowa mniej.
+const NUCLEAR_START_CHANCE = 0.04;          // na kwartał, gdy spółka jądrowa nie buduje i ma gotówkę
+const NUCLEAR_BUILD_QUARTERS = [8, 16];
+const NUCLEAR_COST_REVENUE_QUARTERS = 2;   // koszt bloku ≈ 2 kwartały przychodów (rozłożony na budowę)
+const NUCLEAR_REGULATOR_DELAY_CHANCE = 0.35;
+const NUCLEAR_REGULATOR_DELAY = [2, 4];
+const NUCLEAR_MAX_DELAYS = 2;
+const NUCLEAR_REVENUE_BOOST = 0.15;        // działający blok: przychody +15% (trwale)
+const NUCLEAR_STATE_CONTRACT = 0.02;       // kontrakt z państwem: 2% przychodów kwartału × (dotacje partii − 1) / 0,5
+
+function startNuclearBlock(stock, quarter = getSubsectorQuarter()) {
+    const revenue = Math.max(1000, Number(stock.fundamentals?.revenue) || 1000);
+    const quarters = getRandomIntInRange(...NUCLEAR_BUILD_QUARTERS);
+    stock.nuclearBlock = { stage: 'construction', startedQuarter: quarter, dueQuarter: quarter + quarters, cost: Math.round(revenue * NUCLEAR_COST_REVENUE_QUARTERS), spent: 0, quarters, delays: 0 };
+    noteSubsectorStat('nuclearBlocks');
+    logEvent(`☢️ ${stock.name} rozpoczyna budowę bloku jądrowego (ok. ${quarters} kw., koszt ${formatZl(stock.nuclearBlock.cost, 0)}). Przychód dopiero po zgodzie regulatora.`, 'company');
+    if (typeof addChartEvent === 'function') addChartEvent(stock, '☢️', 'Start budowy bloku jądrowego');
+    return stock.nuclearBlock;
+}
+
+/** Kwartał budowy: koszt z gotówki (gotówka → majątek trwały, kapitał bez zmian; brak gotówki = kredyt ratunkowy). */
+function payNuclearInstallment(stock) {
+    const block = stock.nuclearBlock;
+    const installment = Math.min(block.cost - block.spent, Math.ceil(block.cost / block.quarters));
+    if (!(installment > 0)) return 0;
+    adjustCompanyCash(stock, -installment); // aktywa bez zmian: gotówka zamienia się w budowę w toku
+    block.spent += installment;
+    if (typeof recordPayment === 'function') recordPayment(stock, 'external:budowa_bloku', installment, 'Budowa bloku jądrowego');
+    if (typeof coverNegativeCash === 'function') coverNegativeCash(stock);
+    return installment;
+}
+
+/** Zgoda regulatora po budowie: delayRoll < 35% → opóźnienie 2–4 kw. (najwyżej 2 razy), inaczej blok rusza. */
+function reviewNuclearBlock(stock, delayRoll = Math.random(), quarter = getSubsectorQuarter()) {
+    const block = stock.nuclearBlock;
+    if (block.delays < NUCLEAR_MAX_DELAYS && delayRoll < NUCLEAR_REGULATOR_DELAY_CHANCE) {
+        const delay = getRandomIntInRange(...NUCLEAR_REGULATOR_DELAY);
+        block.stage = 'approval';
+        block.delays++;
+        block.dueQuarter = quarter + delay;
+        applyPriceEffect(stock.symbol, -0.05, 'negative', 'company');
+        logEvent(`⏳ Regulator wstrzymuje uruchomienie bloku jądrowego ${stock.name} — opóźnienie o ${delay} kw.`, 'company');
+        if (typeof addChartEvent === 'function') addChartEvent(stock, '⏳', `Regulator: opóźnienie bloku o ${delay} kw.`);
+        return 'delayed';
+    }
+    block.stage = 'operating';
+    block.operatingSince = quarter;
+    if (stock.fundamentals) stock.fundamentals.revenue *= 1 + NUCLEAR_REVENUE_BOOST;
+    if (!Number.isFinite(stock.baseVolatilityFactor)) stock.baseVolatilityFactor = stock.volatilityFactor;
+    stock.baseVolatilityFactor *= 0.9; // stabilny przychód
+    stock.volatilityFactor = Math.min(stock.volatilityFactor, stock.baseVolatilityFactor * 2);
+    noteSubsectorStat('nuclearBlocksDone');
+    applyPriceEffect(stock.symbol, 0.08, 'positive', 'company');
+    logEvent(`⚡ Blok jądrowy ${stock.name} rusza po ${quarter - block.startedQuarter} kw. — stabilny przychód (+15%) i kontrakty z państwem.`, 'company');
+    if (typeof addChartEvent === 'function') addChartEvent(stock, '⚡', 'Blok jądrowy uruchomiony');
+    if (isPlayerHolding(stock) && typeof unlockAcademyEntry === 'function') unlockAcademyEntry('dlugiHoryzont', `${stock.name}: blok jądrowy`);
+    return 'operating';
+}
+
+/** Kontrakt z państwem dla działającego bloku: zależy od dotacji partii rządzącej (Skarb Państwa płaci). */
+function payNuclearStateContract(stock) {
+    const party = typeof getRulingParty === 'function' ? getRulingParty() : null;
+    const factor = Math.max(0, ((Number(party?.subsidies) || 1) - 1) / 0.5);
+    const amount = Math.round((Number(stock.fundamentals?.revenue) || 0) * NUCLEAR_STATE_CONTRACT * factor);
+    if (!(amount > 0) || typeof governmentTreasury === 'undefined' || governmentTreasury < amount) return 0;
+    governmentTreasury -= amount;
+    adjustCompanyCash(stock, amount);
+    adjustBalanceSheet(stock, { assets: amount, retainedEarnings: amount });
+    if (typeof recordPayment === 'function') recordPayment('external:skarb-panstwa', stock, amount, 'Kontrakt z państwem (blok jądrowy)');
+    return amount;
+}
+
+function processNuclearBlocks(quarter = getSubsectorQuarter()) {
+    for (const stock of stocks) {
+        if (stock.assetType || stock.isBankrupt || getSubsectorMechanicShare(stock, 'nuclear') <= 0) continue;
+        const block = stock.nuclearBlock;
+        if (!block) {
+            const cost = (Number(stock.fundamentals?.revenue) || 0) * NUCLEAR_COST_REVENUE_QUARTERS;
+            if ((Number(stock.cash) || 0) >= cost * 0.3 && Math.random() < NUCLEAR_START_CHANCE) startNuclearBlock(stock, quarter);
+            continue;
+        }
+        if (block.stage === 'construction') {
+            payNuclearInstallment(stock);
+            if (block.dueQuarter <= quarter) reviewNuclearBlock(stock, Math.random(), quarter);
+        } else if (block.stage === 'approval') {
+            if (block.dueQuarter <= quarter) reviewNuclearBlock(stock, Math.random(), quarter);
+        } else if (block.stage === 'operating') {
+            payNuclearStateContract(stock);
+        }
+    }
+}
+
 /** Co kwartał (pętla kwartalna): mechaniki własne podsektorów. */
 function processSubsectorMechanicsQuarterly() {
     processClinicalTrials();
+    processNuclearBlocks();
 }
