@@ -746,7 +746,7 @@ const SCANNER_PRESETS = {
     safe:     { label: '🛡️ Bezpieczne', filters: { debtMax: 40, healthMin: 2 } }
 };
 
-const SCANNER_DEFAULT_FILTERS = { sector: 'all', peBelowSector: false, pbMax: '', dyMin: '', debtMax: '', growthMin: '', healthMin: '', accessibleOnly: true, greyOnly: false };
+const SCANNER_DEFAULT_FILTERS = { sector: 'all', subsector: null, secondary: false, peBelowSector: false, pbMax: '', dyMin: '', debtMax: '', growthMin: '', healthMin: '', accessibleOnly: true, greyOnly: false };
 
 let scannerView = { filters: { ...SCANNER_DEFAULT_FILTERS }, sort: 'cap', dir: -1 };
 
@@ -788,7 +788,7 @@ function runScanner(filters = scannerView.filters, sort = scannerView.sort, dir 
     const rows = [];
     for (const stock of stocks) {
         if (stock.assetType || stock.isBankrupt) continue;
-        if (filters.sector !== 'all' && !stock.sector?.includes(filters.sector)) continue;
+        if (!stockMatchesSectorFilter(stock, { sector: filters.sector || 'all', subsector: filters.subsector || null, secondary: Boolean(filters.secondary) })) continue; // T1c
         if (filters.accessibleOnly && !canAccessExchange(stock.exchange)) continue;
         const m = getCompanyMetrics(stock);
         if (!m) continue;
@@ -873,6 +873,15 @@ function saveScannerPreset() {
     renderScannerFilters();
 }
 
+/** T1c: zmiana filtra sektora w skanerze (ten sam renderer co lista spółek). */
+function setScannerSectorFilter(changes) {
+    const f = scannerView.filters;
+    Object.assign(f, changes);
+    if ('sector' in changes) f.subsector = null;
+    renderScannerFilters();
+    renderScannerResults();
+}
+
 function setScannerSort(key) {
     if (scannerView.sort === key) scannerView.dir *= -1;
     else { scannerView.sort = key; scannerView.dir = key === 'name' || key === 'pe' || key === 'pb' || key === 'debt' ? 1 : -1; }
@@ -883,14 +892,15 @@ function renderScannerFilters() {
     const box = document.getElementById('scanner-filters');
     if (!box) return;
     const f = scannerView.filters;
-    const sectors = [...new Set(stocks.filter(s => !s.assetType && !s.isBankrupt).map(s => getMainSector(s)).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pl'));
+    // T1c: ten sam filtr sektora co na liście spółek (chipy z liczbą spółek, podsektory, segmenty poboczne).
+    const sectorChips = renderSectorFilterChips(stocks.filter(s => !s.assetType && !s.isBankrupt), { sector: f.sector || 'all', subsector: f.subsector || null, secondary: Boolean(f.secondary), type: 'all' }, 'setScannerSectorFilter', { hideType: true });
     const input = (key, label, placeholder, title) => `<label class="text-sm" title="${escapeHtml(title)}">${label} <input type="text" inputmode="decimal" class="w-xs" value="${escapeHtml(f[key] ?? '')}" placeholder="${placeholder}" oninput="setScannerFilter('${key}', this.value)"></label>`;
     const own = (playerProfile?.scannerPresets || []).map(p => `<button class="btn-xs btn-secondary" onclick="applyScannerPreset('${escapeHtml(p.name).replace(/'/g, '&#39;')}')">⭐ ${escapeHtml(p.name)}</button>`).join('');
     box.innerHTML = `
         <div class="d-flex gap-2 flex-wrap mb-2">${Object.entries(SCANNER_PRESETS).map(([id, p]) => `<button class="btn-xs btn-secondary" onclick="applyScannerPreset('${id}')">${p.label}</button>`).join('')}${own}
             <button class="btn-xs" onclick="scannerView.filters = { ...SCANNER_DEFAULT_FILTERS }; renderScannerFilters(); renderScannerResults();">Wyczyść</button></div>
+        <div class="sector-chips scanner-sector-chips">${sectorChips.chips}</div>${sectorChips.extra}
         <div class="scanner-filters">
-            <label class="text-sm">Sektor <select onchange="setScannerFilter('sector', this.value)"><option value="all">wszystkie</option>${sectors.map(s => `<option ${f.sector === s ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('')}</select></label>
             <label class="text-sm" title="C/Z niższe od mediany sektora"><input type="checkbox" ${f.peBelowSector ? 'checked' : ''} onchange="setScannerFilter('peBelowSector', this.checked)"> C/Z poniżej sektora</label>
             ${input('pbMax', 'C/WK ≤', 'np. 1', 'Kurs / wartość księgowa na akcję')}
             ${input('dyMin', 'Dywidenda ≥', '%', 'Stopa dywidendy z ostatniego roku, w %')}

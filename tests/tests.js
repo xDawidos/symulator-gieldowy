@@ -4305,7 +4305,7 @@ group('Poprawki 0.13.1 (B1–B13)', () => {
             assert(!getBigInvestors().includes(guard), 'Gwardia nie jest „wielkim inwestorem”');
             assert(getShareholders(a).find(h => h.entity === guard)?.name.includes('fundusz'), 'w akcjonariacie jako fundusz');
         } finally { aiCompetitors.splice(aiCompetitors.indexOf(guard), 1); }
-        assert(getMarketSectorList().includes('Obronność'), 'filtr: wszystkie sektory spółek');
+        assert(getSectorFilterCounts(getSectorFilterBaseList()).sectors['Obronność'] > 0, 'filtr: wszystkie sektory spółek (T1c: chipy z liczbą spółek)');
         const holding = makeCompany('MIN', { cash: 1_000_000 });
         Object.assign(holding, { assetType: 'Holding', holdingPortfolio: { AAA: { quantity: 100, purchasePrice: 100 } }, totalShares: 1000, balanceSheet: { assets: 0, liabilities: 0 } });
         stocks.push(holding);
@@ -4912,6 +4912,55 @@ group('0.14 T1b: segmenty działalności', () => {
         sectorMedianCache.at = 0;
         const chem = getSectorMedians('Chemia'), energy = getSectorMedians('Energia');
         assert(chem?.count === 1 && energy?.count === 1, `Chemia ${chem?.count}, Energia ${energy?.count}`);
+    });
+});
+
+group('0.14 T1c: filtr sektora i typu', () => {
+    function world() {
+        const banks = [
+            ['BK1', ['Bankowość'], BANK_TYPES.UNIVERSAL], ['BK2', ['Bankowość Komercyjna', 'Finanse'], BANK_TYPES.INVESTMENT],
+            ['BK3', ['Bankowość Komercyjna', 'Finanse', 'Międzynarodowy'], BANK_TYPES.INTERNATIONAL]
+        ].map(([symbol, sector, type]) => { const s = makeCompany(symbol, { sector }); s.isBankStock = true; s.bankData = { id: symbol, type }; return s; });
+        const food = makeCompany('BZY', { sector: ['Żywność', 'Bankowość'] });            // bank poboczny
+        const reitA = makeCompany('RA', { sector: ['Nieruchomości'] }); reitA.assetType = 'REIT';
+        const reitB = makeCompany('RB', { sector: ['Usługi'] }); reitB.assetType = 'REIT';
+        const plain = makeCompany('PL', { sector: ['Nieruchomości'] });
+        resetWorld([...banks, food, reitA, reitB, plain]);
+        ensureAllStockSegments();
+        return { banks, food, reitA, reitB, plain };
+    }
+    const pick = filter => stocks.filter(s => stockMatchesSectorFilter(s, filter)).map(s => s.symbol);
+
+    test('filtr „Bankowość” (domyślny) obejmuje wszystkie banki; przełącznik zwiększa listę, nie zmniejsza', () => {
+        const { banks, food } = world();
+        const main = pick({ sector: 'Bankowość' });
+        assert(banks.every(b => main.includes(b.symbol)), `banki: ${main}`);
+        assert(!main.includes(food.symbol), 'spółka z bankiem jako drugim segmentem nie jest w filtrze domyślnym');
+        const withSecondary = pick({ sector: 'Bankowość', secondary: true });
+        assert(withSecondary.length >= main.length && main.every(s => withSecondary.includes(s)), `${main} ⊆ ${withSecondary}`);
+        assert(withSecondary.includes(food.symbol), 'przełącznik dodaje segment poboczny');
+        const counts = getSectorFilterCounts(stocks, { sector: 'Bankowość' });
+        assert(counts.sectors['Bankowość'] === main.length, 'liczba na chipie = lista');
+        assert(counts.subsectors['Bank inwestycyjny'] === 1 && counts.subsectors['Bank międzynarodowy'] === 1, JSON.stringify(counts.subsectors));
+        assert(pick({ sector: 'Bankowość', subsector: 'Bank międzynarodowy' }).join() === 'BK3', 'podsektor');
+    });
+
+    test('filtr „Typ = REIT” nie zależy od sektora', () => {
+        const { reitA, reitB, plain } = world();
+        const reits = pick({ type: 'REIT' });
+        assert(reits.includes(reitA.symbol) && reits.includes(reitB.symbol) && !reits.includes(plain.symbol), `${reits}`);
+        assert(pick({ sector: 'Nieruchomości', type: 'REIT' }).join() === 'RA', 'sektor zawęża, typ nie');
+        assert(getInstrumentType({ marketOperator: 'GPW' }) === 'operator' && getInstrumentType({ assetType: 'Holding' }) === 'holding', 'typy');
+    });
+
+    test('wybór filtra zapamiętany w localStorage', () => {
+        const before = sectorFilterState;
+        sectorFilterState = { sector: 'Energia', subsector: null, secondary: true, type: 'stock' };
+        saveSectorFilterState();
+        const loaded = loadSectorFilterState();
+        sectorFilterState = before;
+        saveSectorFilterState();
+        assert(loaded.sector === 'Energia' && loaded.secondary === true && loaded.type === 'stock', JSON.stringify(loaded));
     });
 });
 

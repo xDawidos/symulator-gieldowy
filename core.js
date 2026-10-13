@@ -1716,7 +1716,7 @@ const SECTORS = {
     'Turystyka':             { icon: '✈️', profile: { beta: 1.5, rateSens: 0.8, pe: 15, margin: 0.15, growth: 0.04, ps: 1.5, da: 0.06 } },
     'Media':                 { icon: '📺', profile: { beta: 1.1, rateSens: 0.6, pe: 14, margin: 0.18, growth: 0.02, ps: 1.8, da: 0.04 } },
     'Gaming':                { icon: '🎮', profile: { beta: 1.4, rateSens: 1.0, pe: 20, margin: 0.25, growth: 0.07, ps: 3.0, da: 0.06 } },
-    'Przemysł':              { icon: '🏭', profile: { beta: 1.3, rateSens: 0.8, pe: 13, margin: 0.14, growth: 0.03, ps: 1.0, da: 0.05 } },
+    'Przemysł':              { icon: '⚙️', profile: { beta: 1.3, rateSens: 0.8, pe: 13, margin: 0.14, growth: 0.03, ps: 1.0, da: 0.05 } },
     'Chemia':                { icon: '⚗️', profile: { beta: 1.2, rateSens: 0.7, pe: 13, margin: 0.16, growth: 0.03, ps: 1.1, da: 0.05 } },
     'Energia':               { icon: '⚡', profile: { beta: 0.8, rateSens: 0.9, pe: 12, margin: 0.25, growth: 0.02, ps: 1.5, da: 0.08 } },
     'Budowlany':             { icon: '🏗️', profile: { beta: 1.5, rateSens: 1.3, pe: 11, margin: 0.10, growth: 0.03, ps: 0.7, da: 0.03 } },
@@ -1869,6 +1869,58 @@ function getMainSubsector(stock) {
 /** Spółka ma segment w danym sektorze (główny albo poboczny). */
 function hasSectorSegment(stock, sector) {
     return getStockSegments(stock).some(seg => seg.sector === sector);
+}
+
+// ---------------------------------------------------------------------------------
+// 0.14 T1c: filtr sektora i typu (lista spółek, skaner)
+// ---------------------------------------------------------------------------------
+
+const INSTRUMENT_TYPES = [
+    { id: 'all', label: 'Wszystkie typy' },
+    { id: 'stock', label: 'Akcje' },
+    { id: 'REIT', label: 'REIT' },
+    { id: 'holding', label: 'Holdingi' },
+    { id: 'etf', label: 'ETF' },
+    { id: 'startup', label: 'Startupy' },
+    { id: 'operator', label: 'Operatorzy rynków' }
+];
+const DEFAULT_SECTOR_FILTER = { sector: 'all', subsector: null, secondary: false, type: 'all' };
+
+/** Typ instrumentu (osobno od sektora). ETF-y są osobną listą (etfs), nie spółkami. */
+function getInstrumentType(stock) {
+    if (stock?.marketOperator) return 'operator';
+    if (stock?.assetType === 'REIT') return 'REIT';
+    if (stock?.assetType === 'Holding') return 'holding';
+    if (stock?.assetType === 'Startup') return 'startup';
+    return 'stock';
+}
+
+/** Czy spółka pasuje do filtra: domyślnie sektor główny, z przełącznikiem także segmenty poboczne; podsektor; typ. */
+function stockMatchesSectorFilter(stock, filter = DEFAULT_SECTOR_FILTER) {
+    const f = { ...DEFAULT_SECTOR_FILTER, ...(filter || {}) };
+    if (f.type !== 'all' && getInstrumentType(stock) !== f.type) return false;
+    if (!f.sector || f.sector === 'all') return true;
+    const main = getMainSegment(stock);
+    const candidates = f.secondary ? getStockSegments(stock).filter(seg => seg.sector === f.sector) : (main?.sector === f.sector ? [main] : []);
+    if (!candidates.length) return false;
+    return !f.subsector || candidates.some(seg => seg.subsector === f.subsector);
+}
+
+/** Liczby spółek do chipów: sektor (główny; z przełącznikiem także poboczny) i podsektory wybranego sektora. */
+function getSectorFilterCounts(list, filter = DEFAULT_SECTOR_FILTER) {
+    const f = { ...DEFAULT_SECTOR_FILTER, ...(filter || {}) };
+    const sectors = {}, subsectors = {};
+    for (const stock of list) {
+        if (f.type !== 'all' && getInstrumentType(stock) !== f.type) continue;
+        const segments = getStockSegments(stock);
+        const main = getMainSegment(stock);
+        const counted = f.secondary ? segments : (main ? [main] : []);
+        for (const sector of new Set(counted.map(seg => seg.sector))) sectors[sector] = (sectors[sector] || 0) + 1;
+        if (f.sector && f.sector !== 'all') {
+            for (const sub of new Set(counted.filter(seg => seg.sector === f.sector && seg.subsector).map(seg => seg.subsector))) subsectors[sub] = (subsectors[sub] || 0) + 1;
+        }
+    }
+    return { sectors, subsectors };
 }
 
 /** Profil spółki: średnia profili segmentów ważona udziałami (0.14 T1b). */
