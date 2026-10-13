@@ -2673,7 +2673,7 @@ function computeQuarterResults(stock) {
     // 0.13: marża = marża_0.12 + udział_kosztu_pracy × (1 − indeks); neutralnie (indeks 1,0) bez zmian.
     const laborAdj = typeof getLaborMarginAdj === 'function' ? getLaborMarginAdj(stock) : 0;
     const labor = revenue * (typeof getLaborShare === 'function' ? getLaborShare(stock) : 0) * (typeof getLaborCostIndex === 'function' ? getLaborCostIndex(stock) : 1);
-    const margin = Math.max(-0.4, Math.min(0.6, profile.margin * (1 + (Number(stock.marginAdj) || 0)) + health * 0.015 + phaseAdj * 0.5 + profile.beta * gdp * (gdp < 0 ? 3 : 2) - inflationSqueeze - getCrowdingPressure() * 0.02 + laborAdj)); // B5: recesja mocniej tnie marże; zatłoczony rynek = ostrzejsza konkurencja; 0.13: koszt pracy
+    const margin = Math.max(-0.4, Math.min(0.6, profile.margin * (1 + (Number(stock.marginAdj) || 0)) + health * 0.015 + phaseAdj * 0.5 + profile.beta * gdp * (gdp < 0 ? 3 : 2) - inflationSqueeze - getCrowdingPressure() * 0.02 + laborAdj + getStrategyMarginAdj(stock))); // T3: synergia, skupienie, nisze, pivot; B5: recesja mocniej tnie marże; zatłoczony rynek = ostrzejsza konkurencja; 0.13: koszt pracy
     const fixedExpenses = Math.max(0, Number(stock.fixedExpenses) || 0);
 
     // Działające inwestycje: kwartalny zysk lub strata (investments.js).
@@ -10261,4 +10261,191 @@ function processSubsectorMechanicsQuarterly() {
     processClinicalTrials();
     processNuclearBlocks();
     processKnfChecks();
+}
+
+// #################################################################################
+// ## strategy.js — rozszerzanie, specjalizacja i zmiana profilu (0.14 T3)
+// #################################################################################
+//
+// Decyzje podejmuje prezes (cechy, kondycja, cykle). Większościowiec może je zatwierdzić, zablokować albo zlecić,
+// ale nie musi. Udziały segmentów zmieniają się stopniowo (bez skoków), a wynik rozszerzenia losowany jest dopiero
+// po zakończeniu budowy.
+
+// Branże powiązane (synergia +1 pp marży, rozszerzenie 80% zamiast 55%, brak dyskonta konglomeratu).
+const RELATED_SECTOR_PAIRS = [
+    ['Technologia', 'Gaming'], ['Chemia', 'Przemysł'], ['Energia', 'Przemysł'], ['Budowlany', 'Nieruchomości'],
+    ['Medycyna', 'Badania'], ['Technologia', 'Badania'], ['Technologia', 'Media'], ['Bankowość', 'Finanse'],
+    ['Żywność', 'Dobra konsumpcyjne'], ['Turystyka', 'Transport i logistyka'], ['Przemysł', 'Obronność'],
+    ['Technologia', 'Obronność'], ['Przemysł', 'Transport i logistyka'], ['Media', 'Dobra konsumpcyjne'],
+    ['Usługi', 'Technologia'], ['Chemia', 'Medycyna'], ['Energia', 'Chemia'], ['Przemysł', 'Budowlany']
+];
+const EXPANSION_MIN_HEALTH = 2;
+const EXPANSION_MIN_CASH = 0.15;          // × roczne przychody
+const EXPANSION_COST = [0.10, 0.20];      // × roczne przychody
+const EXPANSION_QUARTERS = [4, 8];
+const EXPANSION_SUCCESS = { related: 0.80, unrelated: 0.55 };
+const EXPANSION_START_SHARE = 0.10;
+const EXPANSION_TARGET_SHARE = [0.20, 0.40];
+const EXPANSION_STEP = [0.02, 0.05];       // pp na kwartał
+const EXPANSION_WRITE_OFF = [0.5, 1.0];
+const EXPANSION_FAIL_DROP = [0.05, 0.10];
+const EXPANSION_BASE_CHANCE = 0.045;       // na kwartał, prezes spółki spełniającej warunki
+const SYNERGY_MARGIN = 0.01;
+
+function areSectorsRelated(a, b) {
+    return a !== b && RELATED_SECTOR_PAIRS.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
+}
+
+function getStrategyQuarter() {
+    return typeof macro === 'object' && macro ? Number(macro.quarter) || 0 : 0;
+}
+
+function getAnnualRevenue(stock) {
+    const f = stock?.fundamentals;
+    return Math.max(0, Number(f?.revenueTtm) || (Number(f?.revenue) || 0) * 4);
+}
+
+function ensureStrategy(stock) {
+    if (!stock.strategy || typeof stock.strategy !== 'object') stock.strategy = { process: null, growth: null, pivot: null };
+    return stock.strategy;
+}
+
+/** Spółka, która może prowadzić strategię segmentów (bez banków, operatorów, córek i instrumentów). */
+function isStrategyCompany(stock) {
+    return Boolean(stock && !stock.assetType && !stock.isBankrupt && !stock.isBankStock && !stock.marketOperator && !stock.isSubsidiaryOf
+        && stock.fundamentals && isValidSegmentList(stock.segments));
+}
+
+function noteStrategyStat(key) {
+    if (typeof noteSubsectorStat === 'function') noteSubsectorStat(key);
+}
+
+/** Udziały segmentów po zmianie: przeliczenie listy sektorów (sektor główny pierwszy). */
+function refreshSectorsFromSegments(stock) {
+    const total = stock.segments.reduce((sum, seg) => sum + seg.share, 0);
+    stock.segments.forEach(seg => { seg.share = seg.share / total; });
+    stock.sector = getSectorsFromSegments(stock.segments);
+}
+
+/** Nowy segment z małym udziałem — pozostałe oddają proporcjonalnie. */
+function addStockSegment(stock, sector, share = EXPANSION_START_SHARE, subsector = null) {
+    stock.segments.forEach(seg => { seg.share *= 1 - share; });
+    stock.segments.push({ sector, subsector, share });
+    refreshSectorsFromSegments(stock);
+    return stock.segments[stock.segments.length - 1];
+}
+
+/** Przesuwa udział (stopniowo) z pozostałych segmentów do wskazanego; zwraca faktycznie przesunięte pp. */
+function shiftSegmentShare(stock, sector, delta) {
+    const target = stock.segments.find(seg => seg.sector === sector);
+    if (!target || !(delta > 0)) return 0;
+    const others = stock.segments.filter(seg => seg !== target);
+    const pool = others.reduce((sum, seg) => sum + seg.share, 0);
+    const moved = Math.min(delta, Math.max(0, pool - 0.05 * others.length)); // każdy pozostały segment zachowuje ≥ 5%
+    if (!(moved > 0)) return 0;
+    others.forEach(seg => { seg.share -= moved * seg.share / pool; });
+    target.share += moved;
+    refreshSectorsFromSegments(stock);
+    return moved;
+}
+
+function canStartExpansion(stock) {
+    const strategy = stock.strategy;
+    return isStrategyCompany(stock) && !(strategy?.process) && !(strategy?.pivot) && stock.segments.length < MAX_SEGMENTS
+        && (Number(stock.financialHealth) || 0) >= EXPANSION_MIN_HEALTH && (Number(stock.cash) || 0) >= getAnnualRevenue(stock) * EXPANSION_MIN_CASH
+        && getAnnualRevenue(stock) > 0;
+}
+
+/** Sektor docelowy rozszerzenia: najczęściej powiązany z głównym (jeśli jest wolny), inaczej dowolny inny. */
+function pickExpansionSector(stock) {
+    const have = new Set(stock.segments.map(seg => seg.sector));
+    const main = getMainSector(stock);
+    const free = SECTOR_NAMES.filter(name => !have.has(name) && name !== 'Bankowość');
+    const related = free.filter(name => have.size && [...have].some(sector => areSectorsRelated(sector, name)));
+    if (related.length && Math.random() < 0.8) return getRandomElement(related);
+    return free.length ? getRandomElement(free) : null;
+}
+
+function startExpansion(stock, sector, quarter = getStrategyQuarter(), by = 'ceo') {
+    if (!sector || stock.segments.some(seg => seg.sector === sector)) return null;
+    const cost = Math.round(getAnnualRevenue(stock) * getRandomInRange(...EXPANSION_COST));
+    adjustCompanyCash(stock, -cost); // gotówka → budowa nowego segmentu (aktywa bez zmian do rozliczenia)
+    if (typeof recordPayment === 'function') recordPayment(stock, 'external:rozszerzenie', cost, `Rozszerzenie o segment ${sector}`);
+    if (typeof coverNegativeCash === 'function') coverNegativeCash(stock);
+    const related = stock.segments.some(seg => areSectorsRelated(seg.sector, sector));
+    ensureStrategy(stock).process = { type: 'expand', sector, related, cost, by, startQuarter: quarter, dueQuarter: quarter + getRandomIntInRange(...EXPANSION_QUARTERS) };
+    noteStrategyStat('expansions');
+    logEvent(`🧩 ${stock.name} rozszerza działalność o segment ${sector}${related ? ' (branża powiązana)' : ''} — budowa ${stock.strategy.process.dueQuarter - quarter} kw., koszt ${formatZl(cost, 0)}.`, 'company');
+    if (typeof addChartEvent === 'function') addChartEvent(stock, '🧩', `Start rozszerzenia: ${sector}`);
+    return stock.strategy.process;
+}
+
+/** Rozliczenie rozszerzenia po budowie: roll losowany teraz (80% powiązane, 55% niepowiązane). */
+function resolveExpansion(stock, roll = Math.random(), quarter = getStrategyQuarter()) {
+    const process = stock.strategy?.process;
+    if (!process || process.type !== 'expand') return null;
+    stock.strategy.process = null;
+    const chance = process.related ? EXPANSION_SUCCESS.related : EXPANSION_SUCCESS.unrelated;
+    if (roll < chance && stock.segments.length < MAX_SEGMENTS && !stock.segments.some(seg => seg.sector === process.sector)) {
+        addStockSegment(stock, process.sector, EXPANSION_START_SHARE);
+        stock.strategy.growth = { sector: process.sector, target: getRandomInRange(...EXPANSION_TARGET_SHARE), step: getRandomInRange(...EXPANSION_STEP) };
+        noteStrategyStat('expansionsDone');
+        logEvent(`✅ ${stock.name}: nowy segment ${process.sector} rusza (10% przychodów, docelowo ${(stock.strategy.growth.target * 100).toFixed(0)}%).`, 'company');
+        if (typeof addChartEvent === 'function') addChartEvent(stock, '✅', `Nowy segment: ${process.sector}`);
+        return 'success';
+    }
+    const writeOff = Math.round(process.cost * getRandomInRange(...EXPANSION_WRITE_OFF));
+    adjustBalanceSheet(stock, { assets: -writeOff, retainedEarnings: -writeOff });
+    applyBinaryPriceJump(stock, -getRandomInRange(...EXPANSION_FAIL_DROP), '❌', `Nieudane rozszerzenie: ${process.sector}`);
+    noteStrategyStat('expansionsFailed');
+    logEvent(`❌ ${stock.name}: rozszerzenie o segment ${process.sector} nie wyszło — odpis ${formatZl(writeOff, 0)}, kurs w dół.`, 'company');
+    return 'failure';
+}
+
+/** Co kwartał: nowy segment rośnie o 2–5 pp do celu 20–40%. */
+function growNewSegment(stock) {
+    const growth = stock.strategy?.growth;
+    if (!growth) return;
+    const seg = stock.segments.find(s => s.sector === growth.sector);
+    if (!seg || seg.share >= growth.target - 1e-9) { stock.strategy.growth = null; return; }
+    shiftSegmentShare(stock, growth.sector, Math.min(growth.step, growth.target - seg.share));
+}
+
+/** Synergia: +1 pp marży, gdy spółka ma segmenty z branż powiązanych. */
+function getSynergyMarginAdj(stock) {
+    const segments = getStockSegments(stock);
+    for (let i = 0; i < segments.length; i++) for (let j = i + 1; j < segments.length; j++) if (areSectorsRelated(segments[i].sector, segments[j].sector)) return SYNERGY_MARGIN;
+    return 0;
+}
+
+/** Dodatek do marży ze strategii (computeQuarterResults). */
+function getStrategyMarginAdj(stock) {
+    return getSynergyMarginAdj(stock);
+}
+
+/** Szansa prezesa na rozszerzenie: cechy i koniunktura. */
+function getCeoExpansionChance(stock) {
+    const traits = (stock.ceo?.traits || []).map(t => t.id);
+    let chance = EXPANSION_BASE_CHANCE;
+    if (traits.includes('wizjoner')) chance *= 2;
+    if (traits.includes('ryzykant')) chance *= 1.5;
+    if (traits.includes('stoik') || traits.includes('ksiegowy')) chance *= 0.5;
+    const phase = typeof economyCycle === 'object' ? economyCycle?.phase : null;
+    if (phase === 'recession') chance *= 0.4; else if (phase === 'expansion' || phase === 'overheating') chance *= 1.2;
+    return chance;
+}
+
+/** Co kwartał (pętla kwartalna): procesy strategii spółek. */
+function processStrategyQuarterly(quarter = getStrategyQuarter()) {
+    for (const stock of stocks) {
+        if (!isStrategyCompany(stock)) continue;
+        const strategy = stock.strategy;
+        if (strategy?.growth) growNewSegment(stock);
+        const process = strategy?.process;
+        if (process) {
+            if (process.dueQuarter <= quarter && process.type === 'expand') resolveExpansion(stock, Math.random(), quarter);
+            continue;
+        }
+        if (canStartExpansion(stock) && Math.random() < getCeoExpansionChance(stock)) startExpansion(stock, pickExpansionSector(stock), quarter);
+    }
 }

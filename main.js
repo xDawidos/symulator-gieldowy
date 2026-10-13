@@ -1142,6 +1142,7 @@ gameTimers.weekly = setGameInterval(() => {
         processEtfsQuarterly(); // rebalancing, cele roczne, nowe i zamykane ETF-y (etf.js)
         processRelationsQuarterly(); // relacje z botami: wrogowie i przyjaciele (relations.js)
         processMarketsQuarterly(); // operatorzy rynków i maklerzy (markets.js)
+        processStrategyQuarterly(); // 0.14 T3: rozszerzenia, podsektory, nisze, pivoty (strategy.js)
         processSubsectorMechanicsQuarterly(); // 0.14 T2: badania kliniczne, bloki jądrowe, kontrole KNF (subsectors.js)
         processSpecialProjectsQuarterly(); // konsorcja i projekty specjalne (projects.js)
         reconcileSharesHeld(); // audyt A1: akcje w obrocie = suma posiadaczy

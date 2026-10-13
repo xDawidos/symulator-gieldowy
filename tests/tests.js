@@ -5220,6 +5220,60 @@ group('0.14 decyzja 12: państwowy program jądrowy', () => {
     });
 });
 
+group('0.14 T3: rozszerzenie o nowy segment', () => {
+    function firm(symbol, sectors = ['Technologia'], opts = {}) {
+        const s = makeCompany(symbol, { sector: sectors, cash: opts.cash ?? 2_000_000 });
+        s.financialHealth = opts.health ?? 3;
+        initializeFundamentals(s, true);
+        s.fundamentals.revenueTtm = 1_000_000;
+        resetWorld([s]);
+        ensureStockSegments(s);
+        return s;
+    }
+    const sum = s => s.segments.reduce((a, x) => a + x.share, 0);
+
+    test('warunki: kondycja ≥ 2, gotówka ≥ 15% rocznych przychodów, < 3 segmenty; koszt 10–20% przychodów', () => {
+        assert(canStartExpansion(firm('EX1')), 'spełnia');
+        assert(!canStartExpansion(firm('EX2', ['Technologia'], { health: 1 })), 'kondycja');
+        assert(!canStartExpansion(firm('EX3', ['Technologia'], { cash: 100_000 })), 'gotówka');
+        assert(!canStartExpansion(firm('EX4', ['Technologia', 'Chemia', 'Energia'])), '3 segmenty');
+        const s = firm('EX5');
+        const cash0 = s.cash;
+        const p = startExpansion(s, 'Gaming', 0);
+        assert(p.cost >= 100_000 && p.cost <= 200_000 && Math.abs(cash0 - s.cash - p.cost) < 1, `koszt ${p.cost}`);
+        assert(p.dueQuarter >= 4 && p.dueQuarter <= 8 && p.related, 'budowa 4–8 kw., Technologia–Gaming powiązane');
+    });
+
+    test('sukces: segment 10%, potem stopniowo do 20–40% (≤ 5 pp/kw.), udziały sumują się do 1', () => {
+        const s = firm('EX6');
+        startExpansion(s, 'Gaming', 0);
+        assert(resolveExpansion(s, 0.79, 6) === 'success', 'powiązane: 80%');
+        const seg = s.segments.find(x => x.sector === 'Gaming');
+        assertNear(seg.share, 0.10, 'start 10%', 1e-9);
+        assertNear(sum(s), 1, 'suma', 1e-9);
+        let prev = seg.share;
+        for (let q = 0; q < 20; q++) { growNewSegment(s); assert(seg.share - prev <= 0.05 + 1e-9, 'krok ≤ 5 pp'); prev = seg.share; assertNear(sum(s), 1, 'suma', 1e-9); }
+        assert(seg.share >= 0.2 - 1e-9 && seg.share <= 0.4 + 1e-9 && !s.strategy.growth, `cel ${seg.share}`);
+    });
+
+    test('niepowiązane: sukces 55%; porażka — odpis 50–100% kosztu i kurs −5…−10%', () => {
+        const s = firm('EX7');
+        startExpansion(s, 'Żywność', 0);
+        assert(!s.strategy.process.related, 'Technologia–Żywność niepowiązane');
+        const assets0 = s.balanceSheet.assets, price0 = s.price, cost = s.strategy.process.cost;
+        assert(resolveExpansion(s, 0.6, 6) === 'failure', '0,6 > 55%');
+        const writeOff = assets0 - s.balanceSheet.assets;
+        assert(writeOff >= cost * 0.5 - 1 && writeOff <= cost + 1, `odpis ${writeOff}`);
+        assert(s.price <= price0 * 0.95 + 1e-9 && s.price >= price0 * 0.9 - 1e-9 && s.segments.length === 1, 'kurs i brak segmentu');
+    });
+
+    test('synergia +1 pp marży tylko dla branż powiązanych', () => {
+        assert(getSynergyMarginAdj(firm('SY1', ['Chemia', 'Przemysł'])) === 0.01, 'Chemia–Przemysł');
+        assert(getSynergyMarginAdj(firm('SY2', ['Chemia', 'Turystyka'])) === 0, 'niepowiązane');
+        assert(getSynergyMarginAdj(firm('SY3', ['Chemia'])) === 0, 'jeden segment');
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;
