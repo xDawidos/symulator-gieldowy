@@ -5348,6 +5348,37 @@ group('0.14 T3: specjalizacja-nisza', () => {
     });
 });
 
+group('0.14 T3: zmiana profilu (pivot)', () => {
+    function firm(symbol, segments) {
+        const s = makeCompany(symbol, { sector: segments.map(x => x.sector), cash: 2_000_000 });
+        s.financialHealth = 1; s.segments = segments; s.sector = getSectorsFromSegments(segments);
+        initializeFundamentals(s, true); s.fundamentals.revenueTtm = 1_000_000;
+        resetWorld([s]);
+        return s;
+    }
+    test('segment główny traci 20–40 pp stopniowo przez 4 kw.; marża −3 pp i zmienność ×1,3 w trakcie', () => {
+        const s = firm('PV1', [{ sector: 'Chemia', subsector: null, share: 1 }]);
+        const pivot = startPivot(s, 'Medycyna', 0);
+        assert(pivot && pivot.total >= 0.2 && pivot.total <= 0.4 && s.segments.length === 2, JSON.stringify(pivot));
+        assert(getPivotMarginAdj(s) === -0.03 && getStrategyVolatilityFactor(s) === 1.3, 'kary w trakcie');
+        const chem = () => s.segments.find(x => x.sector === 'Chemia').share;
+        let prev = chem();
+        for (let q = 1; q <= 3; q++) { assert(advancePivot(s, 0.9, q) === 'running', 'trwa'); assert(prev - chem() <= pivot.perQuarter + 1e-9, 'stopniowo'); prev = chem(); }
+        assert(advancePivot(s, 0.9, 4) === 'done' && !s.strategy.pivot, 'koniec');
+        assertNear(chem(), 1 - 0.05 - pivot.total * 0.95, 'segment główny po pivocie', 0.02);
+        assert(getPivotMarginAdj(s) === 0 && getStrategyVolatilityFactor(s) === 1, 'po pivocie bez kar');
+        assertNear(s.segments.reduce((a, x) => a + x.share, 0), 1, 'suma udziałów', 1e-9);
+    });
+    test('porażka pivotu (30%): nowy segment znika, koszty zostają', () => {
+        const s = firm('PV2', [{ sector: 'Chemia', subsector: null, share: 1 }]);
+        const cash0 = s.cash;
+        const pivot = startPivot(s, 'Medycyna', 0);
+        for (let q = 1; q <= 3; q++) advancePivot(s, 0.9, q);
+        assert(advancePivot(s, 0.29, 4) === 'failed' && s.segments.length === 1 && s.segments[0].sector === 'Chemia', 'segment znika');
+        assert(Math.abs(cash0 - s.cash - pivot.cost) < 1, 'koszty zostają');
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

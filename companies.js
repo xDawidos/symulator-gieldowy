@@ -10420,7 +10420,7 @@ function getSynergyMarginAdj(stock) {
 
 /** Dodatek do marży ze strategii (computeQuarterResults). */
 function getStrategyMarginAdj(stock) {
-    return getSynergyMarginAdj(stock) + getFocusMarginAdj(stock) + getNicheMarginAdj(stock);
+    return getSynergyMarginAdj(stock) + getFocusMarginAdj(stock) + getNicheMarginAdj(stock) + getPivotMarginAdj(stock);
 }
 
 /** Szansa prezesa na rozszerzenie: cechy i koniunktura. */
@@ -10442,6 +10442,7 @@ function processStrategyQuarterly(quarter = getStrategyQuarter()) {
         const strategy = stock.strategy;
         if (strategy?.growth) growNewSegment(stock);
         if (stock.segments.some(seg => seg.niche)) processNicheEvents(stock, quarter);
+        if (strategy?.pivot) { advancePivot(stock, null, quarter); continue; }
         const process = strategy?.process;
         if (process) {
             if (process.dueQuarter <= quarter) {
@@ -10451,7 +10452,8 @@ function processStrategyQuarterly(quarter = getStrategyQuarter()) {
             }
             continue;
         }
-        if (canStartExpansion(stock) && Math.random() < getCeoExpansionChance(stock)) startExpansion(stock, pickExpansionSector(stock), quarter);
+        if (canPivot(stock) && Math.random() < getCeoPivotChance(stock)) startPivot(stock, null, quarter);
+        else if (canStartExpansion(stock) && Math.random() < getCeoExpansionChance(stock)) startExpansion(stock, pickExpansionSector(stock), quarter);
         else if (canEnterSubsector(stock) && Math.random() < SUBSECTOR_ENTRY_CHANCE) startSubsectorEntry(stock, null, quarter);
         else if (canChooseNiche(stock) && !getNicheCandidate(stock).niche && Math.random() < NICHE_CHANCE) startNiche(stock, null, quarter); // prezes nie przełącza nisz
     }
@@ -10620,4 +10622,88 @@ function processNicheEvents(stock, quarter = getStrategyQuarter()) {
             logEvent(`📜 ${stock.name}: wygasa patent na kluczowy lek — konkurencja generyków, premia marży znika na ${PATENT_EXPIRY_QUARTERS} kw.`, 'company');
         }
     }
+}
+
+// --- T3.4: zmiana profilu (pivot) ---
+const PIVOT_SHIFT = [0.20, 0.40];              // segment główny traci 20–40 pp (stopniowo przez 4 kw.)
+const PIVOT_QUARTERS = 4;
+const PIVOT_MARGIN = -0.03;
+const PIVOT_VOLATILITY = 1.3;
+const PIVOT_FAIL_CHANCE = 0.30;
+const PIVOT_COST = 0.10;                       // × roczne przychody
+const PIVOT_BASE_CHANCE = 0.0025;              // na kwartał; ×3 przy słabej kondycji albo spadku w cyklu sektora
+
+function canPivot(stock) {
+    return isStrategyCompany(stock) && !stock.strategy?.process && !stock.strategy?.pivot && getAnnualRevenue(stock) > 0;
+}
+
+function getCeoPivotChance(stock) {
+    const cycle = typeof macro === 'object' ? macro?.sectorCycles?.[getMainSector(stock)] : null;
+    const weak = (Number(stock.financialHealth) || 0) <= -1 || ['decline', 'trough'].includes(cycle?.phase);
+    return PIVOT_BASE_CHANCE * (weak ? 3 : 1);
+}
+
+/** Sektor docelowy pivotu: inny niż główny; połowa przypadków — powiązany. */
+function pickPivotSector(stock) {
+    const main = getMainSector(stock);
+    const have = new Set(stock.segments.map(seg => seg.sector));
+    const pool = stock.segments.length >= MAX_SEGMENTS ? [...have].filter(name => name !== main) : SECTOR_NAMES.filter(name => name !== main && name !== 'Bankowość');
+    const related = pool.filter(name => areSectorsRelated(main, name));
+    return related.length && Math.random() < 0.5 ? getRandomElement(related) : getRandomElement(pool);
+}
+
+function startPivot(stock, toSector = null, quarter = getStrategyQuarter(), by = 'ceo') {
+    const from = getMainSector(stock);
+    const to = toSector && toSector !== from ? toSector : pickPivotSector(stock);
+    if (!to || to === from || (!stock.segments.some(seg => seg.sector === to) && stock.segments.length >= MAX_SEGMENTS)) return null;
+    const cost = Math.round(getAnnualRevenue(stock) * PIVOT_COST);
+    adjustCompanyCash(stock, -cost);
+    adjustBalanceSheet(stock, { assets: -cost, retainedEarnings: -cost });
+    if (typeof recordPayment === 'function') recordPayment(stock, 'external:pivot', cost, `Zmiana profilu na ${to}`);
+    if (typeof coverNegativeCash === 'function') coverNegativeCash(stock);
+    const created = !stock.segments.some(seg => seg.sector === to);
+    if (created) addStockSegment(stock, to, 0.05);
+    const total = getRandomInRange(...PIVOT_SHIFT);
+    ensureStrategy(stock).pivot = { from, to, created, total, perQuarter: total / PIVOT_QUARTERS, moved: 0, startQuarter: quarter, until: quarter + PIVOT_QUARTERS, cost, by };
+    stock.strategy.growth = null;
+    noteStrategyStat('pivots');
+    logEvent(`🔄 ${stock.name} zmienia profil: z ${from} w stronę ${to} (−${(total * 100).toFixed(0)} pp segmentu głównego przez ${PIVOT_QUARTERS} kw.). Przejściowo niższa marża i większa zmienność.`, 'company');
+    if (typeof addChartEvent === 'function') addChartEvent(stock, '🔄', `Pivot: ${from} → ${to}`);
+    return stock.strategy.pivot;
+}
+
+/** Kwartał pivotu: stopniowe przesunięcie udziału; na końcu 30% szans, że „nie wyszło” (segment znika, koszty zostają). */
+function advancePivot(stock, failRoll = null, quarter = getStrategyQuarter()) {
+    const pivot = stock.strategy?.pivot;
+    if (!pivot) return null;
+    if (pivot.moved < pivot.total - 1e-9) {
+        const fromSeg = stock.segments.find(seg => seg.sector === pivot.from), toSeg = stock.segments.find(seg => seg.sector === pivot.to);
+        const step = Math.min(pivot.perQuarter, pivot.total - pivot.moved, Math.max(0, (fromSeg?.share || 0) - 0.05));
+        if (fromSeg && toSeg && step > 0) { fromSeg.share -= step; toSeg.share += step; pivot.moved += step; refreshSectorsFromSegments(stock); }
+    }
+    if (quarter < pivot.until) return 'running';
+    stock.strategy.pivot = null;
+    const roll = failRoll ?? Math.random();
+    if (roll < PIVOT_FAIL_CHANCE) {
+        const toSeg = stock.segments.find(seg => seg.sector === pivot.to);
+        if (toSeg && stock.segments.length > 1) {
+            stock.segments = stock.segments.filter(seg => seg !== toSeg);
+            refreshSectorsFromSegments(stock);
+        }
+        noteStrategyStat('pivotFails');
+        applyBinaryPriceJump(stock, -0.08, '💥', `Pivot nieudany: ${pivot.to}`);
+        logEvent(`💥 ${stock.name}: zmiana profilu na ${pivot.to} nie wyszła — segment zamknięty, koszty zostają.`, 'company');
+        return 'failed';
+    }
+    logEvent(`🔄 ${stock.name}: zmiana profilu zakończona — nowy segment główny ${getMainSector(stock)}.`, 'company');
+    return 'done';
+}
+
+function getPivotMarginAdj(stock) {
+    return stock.strategy?.pivot ? PIVOT_MARGIN : 0;
+}
+
+/** Zmienność kursu w trakcie pivotu (updateStockPrices). */
+function getStrategyVolatilityFactor(stock) {
+    return stock?.strategy?.pivot ? PIVOT_VOLATILITY : 1;
 }
