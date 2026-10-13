@@ -220,7 +220,14 @@ const PROBE = `(function () {
                 copy.stocks.forEach(x => { if (typeof x.seg === 'string') { x.sector = getSectorsFromSegments(decodeSavedSegments(x.seg)); delete x.seg; } });
                 legacy = JSON.stringify(copy).length;
             }
-            saveSizes = { now, legacy, stocks: stocks.length };
+            // 0.14 T2: ten sam stan bez pól podsektorów i mechanik (porównanie przyrostu zapisu).
+            const noT2 = JSON.parse(JSON.stringify(snap));
+            noT2.stocks.forEach(x => {
+                for (const key of ['clinicalTrial', 'clinicalCooldownUntil', 'approvedDrugs', 'nuclearBlock', 'knfBanUntil', 'lastKnfCheck']) delete x[key];
+                if (typeof x.seg === 'string') x.seg = x.seg.split(';').map(part => { const f = part.split('|'); f[1] = ''; return f.join('|'); }).join(';');
+            });
+            if (noT2.macro) delete noT2.macro.subsectorsAssigned;
+            saveSizes = { now, legacy, noT2: JSON.stringify(noT2).length, stocks: stocks.length };
         }
         return { tsr, sectorIssues, saveSizes, subStart: s.subStart, subEnd: s.subEnd, mechanics: s.mechanics || null, badPrice: s.badPrice, negCash: s.negCash, mailBy: s.mailBy, bailouts: s.bailouts, flowWarnings: s.flowWarnings, fund: s.fund, panelText: panel ? panel.textContent.split(/\\s+/).join(' ').slice(0, 600) : null, panelError: s.panelError || null, elections: (macro.election?.history || []).filter(e => e.quarter >= s.quarters[0].q),
             lawChanges: soc ? { ...soc.lawChanges } : null, laws: soc ? { ...soc.laws } : null,

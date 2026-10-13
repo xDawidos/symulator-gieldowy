@@ -1944,7 +1944,28 @@ function segmentsMatchSectors(stock) {
 }
 
 /** Segmenty spółki (bez zmiany obiektu): zapisane albo wyprowadzone z sektorów. */
+// Pamięć podręczna segmentów (wołane co tik dla każdej spółki: profil, cykl, zmienność). Klucz z treści sektorów
+// i segmentów — zmiana w miejscu (np. dopisany sektor, nowy podsektor) unieważnia wpis.
+const stockSegmentCache = new WeakMap();
+
+function getStockSegmentKey(stock) {
+    let key = Array.isArray(stock.sector) ? stock.sector.join(',') : String(stock.sector);
+    key += `#${stock.marketOperator || ''}#${stock.bankData?.type || ''}#${stock.isBankStock ? 1 : 0}#`;
+    if (Array.isArray(stock.segments)) for (const seg of stock.segments) key += `${seg?.sector}|${seg?.subsector}|${seg?.share};`;
+    return key;
+}
+
 function getStockSegments(stock) {
+    if (!stock || typeof stock !== 'object') return deriveSegmentsFromSectors(stock);
+    const key = getStockSegmentKey(stock);
+    const cached = stockSegmentCache.get(stock);
+    if (cached && cached.key === key && cached.segmentsRef === stock.segments) return cached.result;
+    const result = computeStockSegments(stock);
+    stockSegmentCache.set(stock, { key, segmentsRef: stock.segments, result });
+    return result;
+}
+
+function computeStockSegments(stock) {
     if (isValidSegmentList(stock?.segments) && segmentsMatchSectors(stock)) return stock.segments;
     const current = Array.isArray(stock?.sector) ? stock.sector : [];
     if (isValidSegmentList(stock?.segments) && current.length === stock.segments.length && stock.segments.every(seg => current.includes(seg.sector))) return stock.segments;
@@ -2049,7 +2070,16 @@ function getSectorFilterCounts(list, filter = DEFAULT_SECTOR_FILTER) {
 
 /** Profil spółki: średnia profili segmentów ważona udziałami (0.14 T1b). */
 function getSectorProfile(stock) {
-    const weighted = getStockSegments(stock).map(seg => [getSectorSubsectorProfile(seg.sector, seg.subsector), seg.share]).filter(([profile]) => profile);
+    const segments = getStockSegments(stock);
+    const cached = stock && typeof stock === 'object' ? stockSegmentCache.get(stock) : null;
+    if (cached && cached.result === segments && cached.profile) return { ...cached.profile }; // kopia: wołający mogą modyfikować
+    const profile = computeSectorProfile(segments);
+    if (cached && cached.result === segments) cached.profile = profile;
+    return { ...profile };
+}
+
+function computeSectorProfile(segments) {
+    const weighted = segments.map(seg => [getSectorSubsectorProfile(seg.sector, seg.subsector), seg.share]).filter(([profile]) => profile);
     if (weighted.length === 0) return { ...DEFAULT_SECTOR_PROFILE };
     const total = weighted.reduce((sum, [, share]) => sum + share, 0);
     const result = {};
