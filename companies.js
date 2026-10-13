@@ -2661,7 +2661,7 @@ function computeQuarterResults(stock) {
     const societyAdj = (typeof getSocietyGrowthAdj === 'function' ? getSocietyGrowthAdj(stock) : 0) + getSubsectorGrowthAdj(stock); // 0.13: popyt klas, niedobór specjalistów; T2: podsektory
     const growth = profile.growth / 4 * SECTOR_GROWTH_FACTOR + (Number(stock.growthAdj) || 0) + profile.beta * gdp + health * 0.004 + phaseAdj + sectorAdj + projectAdj + societyAdj + inflation / 4 * INFLATION_PASS_THROUGH + gaussianRandom() * 0.02;
     // T2 (Fintech): zakaz nowych klientów po kontroli KNF — wzrost przychodów 0 przez 2 kwartały.
-    const growthCapped = typeof isKnfGrowthBlocked === 'function' && isKnfGrowthBlocked(stock) ? Math.min(0, growth) : growth;
+    const growthCapped = isKnfGrowthBlocked(stock) ? Math.min(0, growth) : growth;
     fundamentals.revenue = Math.max(1000, fundamentals.revenue * (1 + Math.max(-0.25, Math.min(0.25, growthCapped))));
 
     // 0.13: strajk, epidemia, klęska — przychody tylko tego kwartału (baza przychodów bez zmian).
@@ -10183,8 +10183,60 @@ function processNuclearBlocks(quarter = getSubsectorQuarter()) {
     }
 }
 
+// Fintech: licencja KNF — 10% szans na kontrolę w roku. Słaba kondycja (< 0): kara (5% gotówki) albo zakaz nowych
+// klientów (wzrost przychodów 0 przez 2 kw.); dobra kondycja: kontrola bez uwag (kurs +2%).
+const KNF_CHECK_ANNUAL = 0.10;
+const KNF_CHECK_QUARTERLY = 1 - Math.pow(1 - KNF_CHECK_ANNUAL, 1 / 4);
+const KNF_WEAK_HEALTH = 0;
+const KNF_FINE_CASH_SHARE = 0.05;
+const KNF_BAN_QUARTERS = 2;
+
+/** Zakaz nowych klientów po kontroli KNF: wzrost przychodów najwyżej 0 (computeQuarterResults). */
+function isKnfGrowthBlocked(stock, quarter = getSubsectorQuarter()) {
+    return (Number(stock?.knfBanUntil) || -1) > quarter;
+}
+
+/** Kontrola KNF: sanctionRoll < 0,5 → kara, inaczej zakaz nowych klientów (tylko przy słabej kondycji). */
+function runKnfInspection(stock, sanctionRoll = Math.random(), quarter = getSubsectorQuarter()) {
+    noteSubsectorStat('knfChecks');
+    stock.lastKnfCheck = quarter;
+    let outcome;
+    if ((Number(stock.financialHealth) || 0) >= KNF_WEAK_HEALTH) {
+        outcome = 'clean';
+        applyPriceEffect(stock.symbol, 0.02, 'positive', 'company');
+        logEvent(`🏛️ KNF kontroluje ${stock.name} (fintech) — bez zastrzeżeń, licencja potwierdzona.`, 'company');
+    } else if (sanctionRoll < 0.5) {
+        outcome = 'fine';
+        const fine = Math.round(Math.max(0, Number(stock.cash) || 0) * KNF_FINE_CASH_SHARE);
+        if (fine > 0) {
+            adjustCompanyCash(stock, -fine);
+            adjustBalanceSheet(stock, { assets: -fine, retainedEarnings: -fine });
+            if (typeof governmentTreasury !== 'undefined') governmentTreasury += fine;
+            if (typeof recordPayment === 'function') recordPayment(stock, 'external:skarb-panstwa', fine, 'Kara KNF');
+        }
+        applyPriceEffect(stock.symbol, -0.06, 'negative', 'company');
+        logEvent(`⚖️ KNF nakłada na ${stock.name} karę ${formatZl(fine, 0)} za uchybienia w licencji fintech.`, 'company');
+    } else {
+        outcome = 'ban';
+        stock.knfBanUntil = quarter + KNF_BAN_QUARTERS;
+        applyPriceEffect(stock.symbol, -0.10, 'negative', 'company');
+        logEvent(`🚫 KNF zakazuje ${stock.name} przyjmowania nowych klientów na ${KNF_BAN_QUARTERS} kw. — wzrost przychodów wstrzymany.`, 'company');
+    }
+    if (typeof addChartEvent === 'function') addChartEvent(stock, outcome === 'clean' ? '🏛️' : outcome === 'fine' ? '⚖️' : '🚫', `Kontrola KNF: ${outcome === 'clean' ? 'bez uwag' : outcome === 'fine' ? 'kara' : 'zakaz nowych klientów'}`);
+    if (isPlayerHolding(stock) && typeof unlockAcademyEntry === 'function') unlockAcademyEntry('regulacja', `${stock.name}: kontrola KNF`);
+    return outcome;
+}
+
+function processKnfChecks(quarter = getSubsectorQuarter()) {
+    for (const stock of stocks) {
+        if (stock.assetType || stock.isBankrupt || getSubsectorMechanicShare(stock, 'knf') <= 0) continue;
+        if (Math.random() < KNF_CHECK_QUARTERLY) runKnfInspection(stock, Math.random(), quarter);
+    }
+}
+
 /** Co kwartał (pętla kwartalna): mechaniki własne podsektorów. */
 function processSubsectorMechanicsQuarterly() {
     processClinicalTrials();
     processNuclearBlocks();
+    processKnfChecks();
 }

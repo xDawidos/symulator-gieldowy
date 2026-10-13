@@ -5150,6 +5150,41 @@ group('0.14 T2: Energetyka jądrowa — budowa bloku', () => {
     });
 });
 
+group('0.14 T2: Fintech — licencja KNF', () => {
+    function fintech(symbol = 'FINX', health = 1) {
+        const s = makeCompany(symbol, { sector: ['Finanse'], cash: 1_000_000 });
+        s.segments = [{ sector: 'Finanse', subsector: 'Fintech', share: 1 }]; s.sector = ['Finanse'];
+        s.financialHealth = health;
+        initializeFundamentals(s, true);
+        resetWorld([s]);
+        return s;
+    }
+
+    test('dobra kondycja: kontrola bez uwag; słaba: kara albo zakaz nowych klientów (wzrost 0 na 2 kw.)', () => {
+        const ok = fintech('FOK', 2);
+        assert(runKnfInspection(ok, 0.1, 5) === 'clean', 'bez uwag');
+        const fined = fintech('FFI', -2);
+        const cash0 = fined.cash;
+        assert(runKnfInspection(fined, 0.1, 5) === 'fine' && Math.abs(cash0 - fined.cash - cash0 * 0.05) < 1, 'kara 5% gotówki');
+        const banned = fintech('FBN', -2);
+        assert(runKnfInspection(banned, 0.9, 5) === 'ban' && isKnfGrowthBlocked(banned, 6) && !isKnfGrowthBlocked(banned, 7), 'zakaz na 2 kw.');
+        macro.quarter = 6;
+        const revenue0 = banned.fundamentals.revenue;
+        banned.growthAdj = 0.05; // nawet przy dużym dodatku wzrostu
+        const random = Math.random; Math.random = () => 0.5;
+        try { computeQuarterResults(banned); } finally { Math.random = random; }
+        assert(banned.fundamentals.revenue <= revenue0 + 1e-6, `przychody bez wzrostu: ${revenue0} → ${banned.fundamentals.revenue}`);
+    });
+
+    test('częstotliwość: 10% na rok (ok. 2,6% na kwartał)', () => withSeededRandom(3, () => {
+        const s = fintech('FRQ', 2);
+        society.stats = { knfChecks: 0 };
+        for (let q = 0; q < 4000; q++) processKnfChecks(q);
+        const perYear = society.stats.knfChecks / 1000;
+        assert(perYear > 0.08 && perYear < 0.12, `kontroli na rok: ${perYear}`);
+    }));
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

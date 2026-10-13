@@ -422,6 +422,16 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Od czego zależą kontrakty z państwem dla elektrowni?', a: ['od partii rządzącej', 'od kursu akcji', 'od liczby akcjonariuszy'], c: 0 }
         ]
     },
+    regulacja: {
+        title: 'Regulacja (fintech)', icon: '🏛️',
+        text: 'Fintech działa na licencji nadzoru finansowego (KNF). Kontrola może przyjść w każdej chwili; firma w słabej kondycji ryzykuje karę albo zakaz przyjmowania nowych klientów, co zatrzymuje wzrost — główny argument za wysoką wyceną fintechu. Ryzyko regulacyjne nie widać w wynikach, dopóki nie nastąpi.',
+        example: () => { const s = stocks.find(x => !x.isBankrupt && getSubsectorMechanicShare(x, 'knf') > 0); return s ? `${s.name} (fintech): kondycja ${(Number(s.financialHealth) || 0).toFixed(1)}${isKnfGrowthBlocked(s) ? ' — trwa zakaz nowych klientów' : ''}. Kontrola KNF: ok. 10% szans w roku.` : 'Kontrola KNF: ok. 10% szans w roku; przy słabej kondycji kara albo zakaz nowych klientów na 2 kwartały.'; },
+        quiz: [
+            { q: 'Co grozi fintechowi w słabej kondycji przy kontroli KNF?', a: ['kara albo zakaz nowych klientów', 'nic, kontrola dotyczy tylko banków', 'automatyczna dywidenda'], c: 0 },
+            { q: 'Dlaczego zakaz nowych klientów mocno uderza w kurs fintechu?', a: ['wycena opiera się na szybkim wzroście', 'fintech traci wszystkie aktywa', 'kurs zależy tylko od dywidendy'], c: 0 },
+            { q: 'Kiedy ryzyko regulacyjne widać w wynikach spółki?', a: ['dopiero gdy się zmaterializuje', 'zawsze w każdym raporcie', 'nigdy'], c: 0 }
+        ]
+    },
     segmenty: {
         title: 'Segmenty działalności', icon: '🧩',
         text: 'Duża spółka rzadko robi jedną rzecz. Segmenty to części działalności, np. bank z ubezpieczeniami albo przemysł z energetyką. Wycenę i ryzyko spółki liczy się jako średnią segmentów ważoną ich udziałem w przychodach. Segment główny (największy udział) decyduje, z jakim sektorem porównujemy spółkę.',
