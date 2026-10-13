@@ -1710,7 +1710,7 @@ const SECTORS = {
         subsectors: {
             'Pożyczki konsumenckie': { profile: { beta: 1.2, rateSens: 0.8, pe: 10, ps: 2.0 } }, // dawne „Finanse Konsumenckie”
             'Rynki kapitałowe': { profile: { beta: 1.5 } },                                         // obroty rosną w hossie
-            'Fintech': { profile: { beta: 1.5, pe: 25 }, delta: { growth: 0.05 }, specialist: true, mechanic: 'knf', weight: 2 } // T2: licencja KNF
+            'Fintech': { profile: { beta: 1.5, pe: 25 }, delta: { growth: 0.05 }, specialist: true, mechanic: 'knf', weight: 4 } // T2: licencja KNF (waga ×4 w losowaniu — decyzja użytkownika)
         } },
     'Żywność':               { icon: '🍞', profile: { beta: 0.5, rateSens: 0.4, pe: 15, margin: 0.12, growth: 0.03, ps: 1.0, da: 0.03 },
         subsectors: { 'Rolnictwo': { peopleSubsidy: true } } },                                             // dotacje Ludowców (0.13)
@@ -1860,11 +1860,13 @@ const SUBSECTOR_START_ASSIGNMENTS = {
     WZM: ['Żywność', 'Rolnictwo'],                 // Wieczne Ziemniaki
     KOB: ['Żywność', 'Rolnictwo'],                 // KolenBreg
     GROM: ['Obronność', 'Drony'],                  // Grom Systems
-    WIP: ['Finanse', 'Fintech']                    // WinPost — płatności (segmenty: Fintech 60%, Technologia 40%)
+    WIP: ['Finanse', 'Fintech'],                   // WinPost — płatności (segmenty: Fintech 60%, Technologia 40%)
+    CRO: ['Finanse', 'Fintech']                    // Cyber-Ochrona — cyberbezpieczeństwo płatności (Fintech 50%, Usługi 50%)
 };
 // Spółki przekształcone przy przydziale (decyzja użytkownika: jedna istniejąca spółka staje się fintechem).
 const SUBSECTOR_START_SEGMENTS = {
-    WIP: [{ sector: 'Finanse', subsector: 'Fintech', share: 0.6 }, { sector: 'Technologia', subsector: null, share: 0.4 }]
+    WIP: [{ sector: 'Finanse', subsector: 'Fintech', share: 0.6 }, { sector: 'Technologia', subsector: null, share: 0.4 }],
+    CRO: [{ sector: 'Finanse', subsector: 'Fintech', share: 0.5 }, { sector: 'Usługi', subsector: null, share: 0.5 }]
 };
 
 /** Raz na świat (nowa gra albo pierwsze wczytanie zapisu sprzed T2): podsektory z tabeli startowej. */

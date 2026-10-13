@@ -166,11 +166,12 @@ const PROBE = `(function () {
         }
         const gig = marketIndexes.find(i => i.id === 'GIG')?.value;
         const companies = stocks.filter(x => !x.assetType && !x.isBankrupt);
-        let rev = 0, ebitda = 0, revStd = 0, ebitdaStd = 0;
+        let rev = 0, ebitda = 0, revStd = 0, ebitdaStd = 0, revNoSub = 0, ebitdaNoSub = 0;
         for (const c of companies) {
             const h = c.fundamentals?.history?.[c.fundamentals.history.length - 1];
             if (!h || !(h.revenue > 0)) continue;
             rev += h.revenue; ebitda += h.ebitda;
+            if (typeof getStockSegments !== 'function' || !getStockSegments(c).some(seg => seg.subsector)) { revNoSub += h.revenue; ebitdaNoSub += h.ebitda; } // T2: marża porównywalna (bez podsektora)
             const pol = c.workforce?.policy;
             if (!c.workforce || pol === 'standard') { revStd += h.revenue; ebitdaStd += h.ebitda; }
             if (pol) { s.policy[c.symbol] = s.policy[c.symbol] || {}; s.policy[c.symbol][pol] = (s.policy[c.symbol][pol] || 0) + 1; }
@@ -184,7 +185,7 @@ const PROBE = `(function () {
         }
         const soc = typeof society === 'object' && society ? society : null;
         const wfCompanies = companies.filter(c => c.workforce);
-        s.quarters.push({ q: macro.quarter, gig, margin: rev ? ebitda / rev : null, marginStd: revStd ? ebitdaStd / revStd : null,
+        s.quarters.push({ q: macro.quarter, gig, margin: rev ? ebitda / rev : null, marginNoSub: revNoSub ? ebitdaNoSub / revNoSub : null, marginStd: revStd ? ebitdaStd / revStd : null,
             pop: soc?.population, poor: soc?.classes?.poor,
             unionShare: wfCompanies.length ? wfCompanies.filter(c => c.workforce.union).length / wfCompanies.length : null,
             sectorUnions: soc ? Object.keys(soc.sectorUnions || {}).length : null,

@@ -5042,7 +5042,7 @@ group('0.14 T2: podsektory', () => {
             if (sub) { withSub++; counts[sub] = (counts[sub] || 0) + 1; }
         }
         assert(withSub > 520 && withSub < 680, `z podsektorem: ${withSub}/2000`);
-        assert(counts['Fintech'] > counts['Rynki kapitałowe'] * 1.5 && counts['Fintech'] > counts['Pożyczki konsumenckie'] * 1.5, JSON.stringify(counts));
+        assert(counts['Fintech'] > counts['Rynki kapitałowe'] * 3 && counts['Fintech'] > counts['Pożyczki konsumenckie'] * 3, JSON.stringify(counts));
         const bank = { sector: ['Bankowość'], segments: [seg('Bankowość')] };
         for (let i = 0; i < 50; i++) assignRandomSubsector(bank, 1);
         assert(!bank.segments[0].subsector, 'typ banku nie jest losowany');
