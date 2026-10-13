@@ -72,6 +72,7 @@ Z raportu, „Niesprawdzone” 2–3:
 | T4 | spin-off i carve-out | **wymaga A1**; spin-off do 115 spółek krajowych, powyżej tylko carve-out |
 | T5 | koncerny, kooperacje, ochrona przed tunelowaniem | kooperacje przenoszą strajki z 0.13 |
 | T6 | spółki zależne: transfer 30–70%, usamodzielnienie, wchłonięcie przy ≥ 90%, sprzedaż z wezwaniem | przeniesione z `pomysly_na_kolejne_wersje.md`; wchłonięcia zwalniają miejsca w limicie |
+| **0.14.1** | **Rynek startupów — naprawa** (`plan_0.14.1_startupy.md`): audyt przepływów, rozliczenie puli przy każdym końcu startupu, pula w NAV, wypłata z puli z opłatą 2%, panel puli | **po T3, przed T4**; zgłoszenie użytkownika: wpłata do puli bez akcji |
 
 ## Etap C — 0.15 „Giełda międzynarodowa” (G0 → G8)
 
