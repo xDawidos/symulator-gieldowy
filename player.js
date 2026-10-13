@@ -676,6 +676,48 @@ function startPoolLedgerFromFacts() {
     for (const id of ids) getPoolLedger(id).deposited = (Number(investmentPool.contributors?.[id]) || 0) + getPoolInvestedInStartups(id);
 }
 
+// 0.14.1 R3 (błąd C): wycofanie niezainwestowanej części z opłatą 2% i status puli.
+const POOL_WITHDRAW_FEE = 0.02;
+
+/** Gracz wycofuje część niezainwestowanych środków; 2% opłaty dla pozostałych uczestników (proporcjonalnie), a bez nich — zarządcy inkubatora. */
+function withdrawFromPool(amount) {
+    const available = Number(investmentPool.contributors?.player) || 0;
+    amount = Math.min(Number(amount) || 0, available);
+    if (!(amount > 0)) { if (typeof showToast === 'function') showToast('Brak niezainwestowanych środków do wycofania (zainwestowane zostają w startupach do ich końca).', 'warning'); return 0; }
+    const fee = amount * POOL_WITHDRAW_FEE;
+    const paid = amount - fee;
+    investmentPool.contributors.player = available - amount;
+    if (investmentPool.contributors.player < 0.01) delete investmentPool.contributors.player;
+    investmentPool.totalFunds = Math.max(0, (Number(investmentPool.totalFunds) || 0) - amount);
+    const others = Object.entries(investmentPool.contributors).filter(([id, value]) => id !== 'player' && value > 0);
+    const othersTotal = others.reduce((sum, [, value]) => sum + value, 0);
+    if (othersTotal > 0) {
+        for (const [id, value] of others) {
+            const share = fee * value / othersTotal;
+            investmentPool.contributors[id] += share;
+            notePoolLedger(id, 'feesReceived', share);
+        }
+        investmentPool.totalFunds += fee;
+    } // brak innych uczestników — opłata przypada zarządcy inkubatora (wychodzi z gry, jak wpłata do puli bez zapisu płatności)
+    playerCash += paid;
+    notePoolLedger('player', 'withdrawn', paid);
+    notePoolLedger('player', 'feesPaid', fee);
+    recomputePoolStakes();
+    if (typeof displayCash === 'function') displayCash();
+    logEvent(`🏊 Fundusz wycofuje ${paid.toFixed(0)} zł z puli inwestycyjnej (opłata ${fee.toFixed(0)} zł${othersTotal > 0 ? ' dla pozostałych uczestników' : ' dla zarządcy inkubatora'}).`, 'review');
+    if (typeof displayInvestmentPool === 'function') displayInvestmentPool();
+    if (typeof refreshFundViews === 'function') refreshFundViews();
+    return paid;
+}
+
+/** Status puli dla panelu: dlaczego pieniądze czekają. */
+function getPoolStatus() {
+    if ((Number(investmentPool.totalFunds) || 0) < 1000) return { code: 'low', text: 'Za mało środków (min. 1000 zł) — pula czeka na wpłaty.' };
+    const open = stocks.some(s => s.assetType === 'Startup' && s.stage === 'funding' && getStartupFundingGap(s) >= 1);
+    if (!open) return { code: 'noTargets', text: 'Pula czeka: brak startupów w fazie zbiórki.' };
+    return { code: 'ready', text: `Następna inwestycja za ${Math.max(0, Math.ceil((Number(investmentPool.investmentTimer) || 0) / 1000))} s gry.` };
+}
+
 function processPoolInvestments() {
     if (investmentPool.totalFunds < 1000) {
         return; // Nie inwestuj, jeśli w puli jest za mało środków
@@ -1530,7 +1572,12 @@ function getFundAssets() {
     const ppp = typeof getFundPppValue === 'function' ? getFundPppValue() : 0;                 // projekty miejskie (city.js)
     const bridge = typeof getFundBridgeLoansValue === 'function' ? getFundBridgeLoansValue() : 0; // pożyczki pomostowe (finance.js)
     const projectBonds = typeof getFundProjectBondsValue === 'function' ? getFundProjectBondsValue() : 0; // obligacje projektowe (projects.js)
-    return Math.max(0, Number(playerCash) || 0) + getFundPortfolioValue() + getFundBondsValue() + deposits + ppp + bridge + projectBonds;
+    return Math.max(0, Number(playerCash) || 0) + getFundPortfolioValue() + getFundBondsValue() + deposits + ppp + bridge + projectBonds + getFundPoolValue();
+}
+
+/** 0.14.1 R2 (błąd B): pula w NAV — niezainwestowana część gracza (nominalnie) + jego wkłady przez pulę w żyjące startupy (po koszcie). */
+function getFundPoolValue() {
+    return Math.max(0, Number(investmentPool?.playerStakes?.player) || 0); // playerStakes = fakty (recomputePoolStakes przy każdej zmianie)
 }
 
 function getFundNav() {

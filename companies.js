@@ -8521,7 +8521,7 @@ function getFundStartupExposure() {
     for (const holding of Object.values(playerPortfolio)) {
         if (holding.assetType === 'Startup') exposure += Number(holding.investedAmount) || 0;
     }
-    return exposure + (Number(investmentPool?.playerStakes?.player) || 0);
+    return exposure + getFundPoolValue(); // 0.14.1 R2: wkład przez pulę z faktów (niezainwestowane + w żyjących startupach)
 }
 
 function getFundStartupCapacity() {

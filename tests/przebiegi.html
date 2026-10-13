@@ -64,6 +64,7 @@ const PRESETS = {
                 const target = stocks.find(s => s.assetType === 'Startup' && s.stage === 'funding');
                 const direct = Math.floor(Math.min(assets * 0.01, getFundStartupCapacity(), playerCash * 0.2));
                 if (target && direct >= 100) investInStartup(target.symbol, direct);
+                if (typeof withdrawFromPool === 'function' && macro.quarter % 5 === 4 && (investmentPool.contributors.player || 0) > 0) withdrawFromPool(investmentPool.contributors.player / 2); // 0.14.1 R3
             } catch (e) { (window.__presetErrors = window.__presetErrors || []).push(String(e)); }
             return orig.apply(this, arguments);
         };
