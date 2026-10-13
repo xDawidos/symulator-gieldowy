@@ -701,6 +701,7 @@ const gameTimers = {
 let currentSpeedMultiplier = 1;
 let debugStockTick = null; // T0: krok logiki gry dla testów symulacyjnych (bez odświeżania interfejsu)
 let uiRefreshTick = 0;
+let researchInstituteTick = 0; // instytuty badawcze: co 10 tików gry
 
 // Zapis i wczytanie gry: save.js
 
@@ -883,7 +884,8 @@ function setGameSpeed(speedMultiplier) {
         const currentStartupInputs = getCurrentStartupInputValues();
 
 
-        if (Date.now() % 10 < 1) { // Prosty sposób na uruchamianie co 10 ticków
+        researchInstituteTick = (researchInstituteTick + 1) % 10;
+        if (researchInstituteTick === 0) { // co 10 tików gry (wcześniej Date.now() % 10 — zależne od zegara, w przebiegach testowych co tik)
             updateResearchInstitutes();
             checkResearchInstitutePositions();
         }
