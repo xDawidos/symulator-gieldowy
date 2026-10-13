@@ -5452,6 +5452,55 @@ group('0.14 T3: Akademia i skaner', () => {
     });
 });
 
+group('0.14.1 R0: niezmienniki puli i inkubatora', () => {
+    function poolWorld() {
+        const a = makeCompany('AAA', { cash: 600_000, fixedAssets: 800_000 });
+        a.insiderShares = 0; a.sharesHeld = 0;
+        resetWorld([a]);
+        allBonds.length = 0;
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        investmentPool.totalFunds = 0; investmentPool.contributors = {}; investmentPool.playerStakes = {};
+        startPoolLedgerFromFacts();
+        const s = generateNewStartup();
+        s.symbol = 'STRT'; s.stage = 'funding'; s.fundingGoal = 20_000; s.currentFunding = 0; s.investors = {}; s.isScam = false;
+        stocks.push(s);
+        playerCash = 100_000;
+        return s;
+    }
+
+    test('wpłata do puli i inwestycja puli w startup: niezmienniki puli i inkubatora czyste', () => {
+        const s = poolWorld();
+        contributeToInvestmentPool('player', 5000);
+        processPoolInvestments();
+        assert(s.poolInvestors?.length === 1, 'pula weszła w startup');
+        assert(checkPoolInvariants().length === 0, checkPoolInvariants().join('; '));
+        assert(checkIncubatorInvariants().length === 0, checkIncubatorInvariants().join('; '));
+    });
+
+    test('anioł biznesu: wpłata bez roszczenia nie psuje niezmiennika inkubatora', () => {
+        const s = poolWorld();
+        investInStartup('STRT', 1000);
+        triggerStartupFundingEvent();
+        assert(s.unclaimedFunding > 0 && checkIncubatorInvariants().length === 0, checkIncubatorInvariants().join('; '));
+    });
+
+    test('debiut: wkład puli → akcje, księga się zgadza', () => {
+        const s = poolWorld();
+        contributeToInvestmentPool('player', 5000);
+        processPoolInvestments();
+        handleSuccessfulIPO(s, 2);
+        assert((playerPortfolio.STRT?.shares || 0) > 0 && checkPoolInvariants().length === 0, checkPoolInvariants().join('; '));
+    });
+
+    test('błąd A (stan przed R1): upadek startupu z wkładem puli — niezmiennik puli zgłasza rozjazd', () => {
+        const s = poolWorld();
+        contributeToInvestmentPool('player', 5000);
+        processPoolInvestments();
+        removeStartup(s, 0.5, 0.7);
+        assert(checkPoolInvariants().some(x => x.includes('pula player')), 'rozjazd wykryty');
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

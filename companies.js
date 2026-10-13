@@ -3574,10 +3574,9 @@ function updateStartups(deltaTime) {
                     if (roll < 0.02) { donation = startup.fundingGoal * getRandomInRange(0.01, 0.03); }
                     else if (roll < 0.30) { donation = startup.fundingGoal * getRandomInRange(0.001, 0.004); }
                     if (donation > 0) {
-                        startup.currentFunding += donation;
-                        if (startup.currentFunding > startup.fundingGoal) {
-                            startup.currentFunding = startup.fundingGoal;
-                        }
+                        const before = startup.currentFunding;
+                        startup.currentFunding = Math.min(startup.fundingGoal, startup.currentFunding + donation);
+                        startup.unclaimedFunding = (Number(startup.unclaimedFunding) || 0) + (startup.currentFunding - before); // 0.14.1 R0: drobni inwestorzy bez roszczeń (wolny obrót po debiucie)
                     }
                 }
 
@@ -8620,6 +8619,8 @@ function privatizeStartup(symbol) {
     startup.originalSuccessChance = startup.successChance;
     startup.successChance = 1;
     startup.currentFunding = startup.fundingGoal;
+    startup.unclaimedFunding = 0; // wszystkie wcześniejsze wpłaty zastąpione wykupem funduszu
+    startup.privatizationPremium = price - startup.fundingGoal; // 0.14.1 R0: premia 20% ponad cel (niezmiennik inkubatora)
     startup.investors = { 'Fundusz': price };
     playerPortfolio[symbol] = { investedAmount: price, assetType: 'Startup', isInsured: playerPortfolio[symbol]?.isInsured || false };
     logEvent(`🏢 Fundusz prywatyzuje start-up ${startup.name} za ${cost.toFixed(2)} zł — gwarantowany debiut.`, 'review');
@@ -8648,6 +8649,7 @@ function refundOtherStartupClaims(startup) {
             if (id === 'player') playerCash += share;
             else { const ai = aiCompetitors.find(item => item.id === id); if (ai) ai.cash += share; }
             if (investmentPool.playerStakes[id]) investmentPool.playerStakes[id] = Math.max(0, investmentPool.playerStakes[id] - contribution);
+            notePoolLedger(id, 'withdrawn', contribution); notePoolLedger(id, 'refunded', share);
         }
     }
     startup.poolInvestors = [];
@@ -8712,12 +8714,13 @@ function handleSuccessfulIPO(startup, successMultiplier) {
             const holding = playerPortfolio[symbol] || { shares: 0, avgPrice: ipoPrice, assetType: 'stock' };
             holding.shares += shares;
             playerPortfolio[symbol] = holding;
-            if (claim.pool) investmentPool.playerStakes.player = Math.max(0, (investmentPool.playerStakes.player || 0) - claim.contribution);
+            if (claim.pool) { investmentPool.playerStakes.player = Math.max(0, (investmentPool.playerStakes.player || 0) - claim.contribution); notePoolLedger('player', 'toShares', claim.contribution); }
         } else if (claim.kind === 'ai') {
             const holding = claim.ai.portfolio[symbol] || { shares: 0, avgPrice: ipoPrice };
             holding.shares += shares;
             claim.ai.portfolio[symbol] = holding;
             if (claim.pool && investmentPool.playerStakes[claim.id]) investmentPool.playerStakes[claim.id] = Math.max(0, investmentPool.playerStakes[claim.id] - claim.contribution);
+            if (claim.pool) notePoolLedger(claim.id, 'toShares', claim.contribution);
         } else if (claim.kind === 'bank') {
             claim.bank.stockPortfolio[symbol] = { shares, avgPrice: ipoPrice };
             delete claim.bank.startupInvestments[symbol];
@@ -8796,7 +8799,9 @@ function triggerStartupFundingEvent() {
     const startup = getRandomElement(candidates);
     if (!startup) return null;
     const amount = Math.round(startup.fundingGoal * getRandomInRange(0.05, 0.15));
-    startup.currentFunding = Math.min(startup.fundingGoal, startup.currentFunding + amount);
+    const added = Math.max(0, Math.min(startup.fundingGoal, startup.currentFunding + amount) - startup.currentFunding);
+    startup.currentFunding += added;
+    startup.unclaimedFunding = (Number(startup.unclaimedFunding) || 0) + added; // 0.14.1 R0: wpłata bez roszczenia (niezmiennik inkubatora)
     logEvent(`[INKUBATOR] 👼 Anioł biznesu wspiera ${startup.name} kwotą ${amount.toLocaleString('pl-PL')} zł.`, 'market');
     return startup.symbol;
 }

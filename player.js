@@ -606,7 +606,74 @@ function contributeToInvestmentPool(contributorId, amount) {
     investmentPool.totalFunds += amount;
     investmentPool.contributors[contributorId] = (investmentPool.contributors[contributorId] || 0) + amount;
     investmentPool.playerStakes[contributorId] = (investmentPool.playerStakes[contributorId] || 0) + amount;
+    notePoolLedger(contributorId, 'deposited', amount); // 0.14.1 R0: księga puli
     console.log(`[PULA] ${contributorId} wpłacił(a) ${amount.toFixed(2)} PLN do puli inwestycyjnej.`, 'market');
+}
+
+// 0.14.1 R0: księga puli per uczestnik — wpłaty, wypłaty, zamiana na akcje, zwroty do puli, straty, opłaty.
+// Niezmiennik: wpłaty − wypłaty = niezainwestowane + w startupach + na akcje + straty (+ opłaty otrzymane − zapłacone).
+const POOL_LEDGER_KEYS = ['deposited', 'withdrawn', 'toShares', 'refunded', 'lost', 'feesPaid', 'feesReceived'];
+
+function getPoolLedger(id) {
+    if (!investmentPool.ledger || typeof investmentPool.ledger !== 'object') investmentPool.ledger = {};
+    if (!investmentPool.ledger[id]) investmentPool.ledger[id] = Object.fromEntries(POOL_LEDGER_KEYS.map(key => [key, 0]));
+    return investmentPool.ledger[id];
+}
+
+function notePoolLedger(id, key, amount) {
+    if (!(amount > 0) || !investmentPool.ledgerSince) return; // stare zapisy: księga od chwili włączenia (R1 migracja)
+    const entry = getPoolLedger(id);
+    entry[key] = (Number(entry[key]) || 0) + amount;
+}
+
+/** Wkład uczestnika puli w żyjące startupy (z faktów: poolInvestors). */
+function getPoolInvestedInStartups(id) {
+    let total = 0;
+    for (const startup of stocks) {
+        if (startup.assetType !== 'Startup') continue;
+        for (const round of startup.poolInvestors || []) total += Number(round.contributors?.[id]) || 0;
+    }
+    return total;
+}
+
+/** Niezmiennik puli: lista rozjazdów (ostrzeżenia) dla uczestników z księgą. */
+function checkPoolInvariants(tolerance = 1) {
+    const issues = [];
+    if (!investmentPool.ledgerSince) return issues;
+    for (const [id, entry] of Object.entries(investmentPool.ledger || {})) {
+        const left = entry.deposited - entry.withdrawn - entry.feesPaid + entry.feesReceived;
+        const right = (Number(investmentPool.contributors?.[id]) || 0) + getPoolInvestedInStartups(id) + entry.toShares + entry.lost;
+        if (Math.abs(left - right) > tolerance) issues.push(`pula ${id}: wpłaty−wypłaty ${left.toFixed(0)} ≠ niezainwestowane+startupy+akcje+straty ${right.toFixed(0)}`);
+    }
+    const contributorsSum = Object.values(investmentPool.contributors || {}).reduce((a, b) => a + (Number(b) || 0), 0);
+    if (Math.abs(contributorsSum - (Number(investmentPool.totalFunds) || 0)) > tolerance) issues.push(`pula: suma wkładów ${contributorsSum.toFixed(0)} ≠ środki puli ${Number(investmentPool.totalFunds || 0).toFixed(0)}`);
+    return issues;
+}
+
+/** Niezmiennik inkubatora: roszczenia ≈ zebrane środki (z wpłatami bez roszczeń: anioł biznesu, premia prywatyzacji). */
+function getStartupClaimsTotal(startup) {
+    return typeof collectStartupClaims === 'function' ? collectStartupClaims(startup).reduce((sum, claim) => sum + claim.amount, 0) : 0;
+}
+
+function checkIncubatorInvariants(tolerance = 1) {
+    const issues = [];
+    for (const startup of stocks) {
+        if (startup.assetType !== 'Startup' || startup.isBankrupt) continue;
+        const expected = (Number(startup.currentFunding) || 0) - (Number(startup.unclaimedFunding) || 0) + (Number(startup.ipoPriceBonus) || 0)
+            + (Number(startup.rescueCurrent) || 0) + (Number(startup.privatizationPremium) || 0);
+        const claims = getStartupClaimsTotal(startup);
+        if (Math.abs(claims - expected) > Math.max(tolerance, expected * 1e-6)) issues.push(`startup ${startup.symbol}: roszczenia ${claims.toFixed(0)} ≠ zebrane ${expected.toFixed(0)}`);
+    }
+    return issues;
+}
+
+/** Włącza księgę puli: stan otwarcia = fakty (niezainwestowane + w startupach) jako „wpłacone”. */
+function startPoolLedgerFromFacts() {
+    investmentPool.ledger = {};
+    investmentPool.ledgerSince = (typeof macro === 'object' && macro ? Number(macro.quarter) || 0 : 0) + 1e-9;
+    const ids = new Set(Object.keys(investmentPool.contributors || {}));
+    for (const startup of stocks) for (const round of startup.poolInvestors || []) Object.keys(round.contributors || {}).forEach(id => ids.add(id));
+    for (const id of ids) getPoolLedger(id).deposited = (Number(investmentPool.contributors?.[id]) || 0) + getPoolInvestedInStartups(id);
 }
 
 function processPoolInvestments() {

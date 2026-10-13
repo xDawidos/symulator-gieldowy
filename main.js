@@ -514,6 +514,7 @@ function applySaveSnapshot(snapshot) {
     juMarket = snapshot.juMarket && Array.isArray(snapshot.juMarket.tape) ? { ...createJuMarket(), ...snapshot.juMarket } : createJuMarket();
     if (playerFund) playerFund.clients.forEach(ensureClientProfile);
     if (snapshot.investmentPool && typeof snapshot.investmentPool === 'object') Object.assign(investmentPool, snapshot.investmentPool);
+    if (!investmentPool.ledgerSince && typeof startPoolLedgerFromFacts === 'function') startPoolLedgerFromFacts(); // 0.14.1 R0: księga puli od teraz
     statePension = snapshot.statePension && Array.isArray(snapshot.statePension.history) ? snapshot.statePension : { history: [], lastRanking: [] };
     bridgeLoanOffers = Array.isArray(snapshot.bridgeLoanOffers) ? snapshot.bridgeLoanOffers : [];
     rescueOffer = snapshot.rescueOffer && !snapshot.rescueOffer.closed ? snapshot.rescueOffer : null; // oferta emisji ratunkowej dla funduszu
@@ -1623,6 +1624,7 @@ function createNewWorld() {
     specialProjects = createSpecialProjects(); // projekty specjalne miasta (projects.js)
     ensureAllStockSegments(); // 0.14 T1a: sektory z rejestru i segmenty (przed ETF-ami i zatrudnieniem)
     applyStartSubsectors(); // 0.14 T2: podsektory spółek startowych (tabela)
+    startPoolLedgerFromFacts(); // 0.14.1 R0: księga puli inwestycyjnej od startu gry
     initializeEtfs(); // ETF-y z portfelami prawdziwych akcji (etf.js)
     console.log("[M&A Init] Inicjalizacja nastawienia mediów...");
     const mediaCompanies = stocks.filter(s => s.specializationSectors?.includes('Media'));

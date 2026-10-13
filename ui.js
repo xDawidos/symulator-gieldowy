@@ -5660,8 +5660,10 @@ function checkWorldInvariants() {
     for (const bond of allBonds) finite(bond.faceValue, `obligacja ${bond.id}`);
     if (corporation) finite(corporation.budget, 'budżet korporacji');
     // A3: przycięcia „duchów posiadaczy” to ostrzeżenia, nie naruszenia — mogą maskować prawdziwy rozjazd.
+    // 0.14.1 R0: niezmienniki puli i inkubatora jako ostrzeżenia (rozjazd = pieniądze bez rozliczenia).
+    const moneyWarnings = [...(typeof checkPoolInvariants === 'function' ? checkPoolInvariants() : []), ...(typeof checkIncubatorInvariants === 'function' ? checkIncubatorInvariants() : [])];
     problems.warnings = (typeof ghostTrimLog !== 'undefined' ? ghostTrimLog : []).map(t =>
-        `przycięcie ${t.symbol}: ${t.holder} −${Math.round(t.shares)} akcji (kwartał ${t.quarter}, ${t.source === 'load' ? 'wczytanie' : 'gra'})`);
+        `przycięcie ${t.symbol}: ${t.holder} −${Math.round(t.shares)} akcji (kwartał ${t.quarter}, ${t.source === 'load' ? 'wczytanie' : 'gra'})`).concat(moneyWarnings);
     return problems;
 }
 
