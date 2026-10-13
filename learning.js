@@ -65,7 +65,10 @@ function getSectorMedians(sector) {
         for (const stock of stocks) {
             if (stock.assetType || stock.isBankrupt || !getMainSector(stock)) continue;
             const m = getCompanyMetrics(stock);
-            if (m) (groups[getMainSector(stock)] = groups[getMainSector(stock)] || []).push(m);
+            if (!m) continue;
+            (groups[getMainSector(stock)] = groups[getMainSector(stock)] || []).push(m);
+            const sub = getMainSubsector(stock); // T2: mediana podsektora (klucz „sektor|podsektor”)
+            if (sub) (groups[`${getMainSector(stock)}|${sub}`] = groups[`${getMainSector(stock)}|${sub}`] || []).push(m);
         }
         const data = {};
         for (const [name, list] of Object.entries(groups)) {
@@ -75,6 +78,14 @@ function getSectorMedians(sector) {
         sectorMedianCache = { at: now, data };
     }
     return sectorMedianCache.data[sector] || null;
+}
+
+/** T2: mediany podsektora — tylko przy co najmniej 3 spółkach (inaczej null). */
+function getSubsectorMedians(sector, subsector) {
+    if (!subsector) return null;
+    getSectorMedians(sector); // odświeża pamięć podręczną
+    const data = sectorMedianCache.data[`${sector}|${subsector}`];
+    return data && data.count >= 3 ? data : null;
 }
 
 /** Opis wskaźnika względem sektora: { text, cls } albo null. lowerIsCheap: niższa wartość = „taniej/lepiej”. */
@@ -927,13 +938,14 @@ function renderScannerResults() {
         <p class="text-sm text-muted">Znaleziono: <strong>${rows.length}</strong>. Kolor: na zielono lepiej niż mediana sektora, na czerwono gorzej. Kliknij spółkę, by otworzyć kartę. Banki pomijamy — ich bilans zawiera depozyty klientów, więc C/WK i zadłużenie liczy się inaczej.</p>
         <div class="scanner-table-wrap"><table class="asset-mini-table w-full scanner-table">
             <thead><tr>
-                ${head('name', 'Spółka', 'Nazwa')}${head('cap', 'Kapitalizacja', 'Kurs × liczba akcji')}${head('pe', 'C/Z', 'Cena / zysk')}${head('pb', 'C/WK', 'Cena / wartość księgowa')}
+                ${head('name', 'Spółka', 'Nazwa')}<th title="Podsektor segmentu głównego (filtr: chipy podsektorów nad tabelą)">Podsektor</th>${head('cap', 'Kapitalizacja', 'Kurs × liczba akcji')}${head('pe', 'C/Z', 'Cena / zysk')}${head('pb', 'C/WK', 'Cena / wartość księgowa')}
                 ${head('dy', 'Dywid.', 'Stopa dywidendy')}${head('debt', 'Zadłuż.', 'Zobowiązania / aktywa')}
                 ${level >= 2 ? head('roe', 'ROE', 'Zysk / kapitał własny') + head('margin', 'Marża', 'Zysk netto / przychody') + head('growth', 'Zysk r/r', 'Wzrost zysku rok do roku') : ''}
                 ${head('health', 'Kondycja', 'Kondycja finansowa')}${head('labor', 'Praca', 'Koszt pracy w % przychodów (w nawiasie: względem mediany sektora)')}${head('satisfaction', 'Zadow.', 'Zadowolenie pracowników 0–100')}<th title="Związek zawodowy: brak / zakładowy / sektorowy">Związek</th><th title="Ryzyko strajku">Strajk</th>${level >= 3 ? head('upside', 'Potencjał', 'Wartość godziwa / kurs − 1') : ''}${flagsOn ? '<th title="Czerwone flagi (Księgowy poz. 4)">🚩</th>' : ''}
             </tr></thead>
             <tbody>${rows.slice(0, 120).map(({ stock, m, med, work, upside }) => `<tr class="clickable" onclick="openDescriptionModal('${stock.symbol}')">
                 <td>${escapeHtml(stock.name)} <span class="text-xs text-muted">${escapeHtml(stock.symbol)} · ${escapeHtml(getMainSector(stock) || '')}</span></td>
+                <td class="text-xs" title="${escapeHtml(getSubsectorMedians(getMainSector(stock), getMainSubsector(stock)) ? `Mediana C/Z podsektora: ${getSubsectorMedians(getMainSector(stock), getMainSubsector(stock)).pe?.toFixed(1)}` : 'Podsektor (T2)')}">${escapeHtml(getMainSubsector(stock) || '—')}</td>
                 <td class="cell-number">${formatZl(m.cap, 0)}</td>
                 <td class="cell-number ${cls(m.pe, med.pe, true)}">${fx(m.pe)}</td>
                 <td class="cell-number ${cls(m.pb, med.pb, true)}">${m.pb ? m.pb.toFixed(2) : '—'}</td>

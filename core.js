@@ -1705,28 +1705,48 @@ const SECTOR_GROUPS = [
 
 const SECTORS = {
     'Bankowość':             { icon: '🏦', profile: { beta: 1.1, rateSens: -0.3, pe: 11, margin: 0.40, growth: 0.03, ps: 2.5, da: 0.02 },
-        subsectors: { 'Bank komercyjny': {}, 'Bank inwestycyjny': {}, 'Bank międzynarodowy': {} } },
+        subsectors: { 'Bank komercyjny': {}, 'Bank inwestycyjny': { profile: { beta: 1.4 }, vol: 1.2 }, 'Bank międzynarodowy': {} } }, // międzynarodowy: kursy walut w 0.15
     'Finanse':               { icon: '💳', profile: { beta: 1.3, rateSens: 0.5, pe: 13, margin: 0.30, growth: 0.04, ps: 2.5, da: 0.02 },
         subsectors: {
             'Pożyczki konsumenckie': { profile: { beta: 1.2, rateSens: 0.8, pe: 10, ps: 2.0 } }, // dawne „Finanse Konsumenckie”
-            'Rynki kapitałowe': {}
+            'Rynki kapitałowe': { profile: { beta: 1.5 } },                                         // obroty rosną w hossie
+            'Fintech': { profile: { beta: 1.5, pe: 25 }, delta: { growth: 0.05 }, specialist: true, mechanic: 'knf', weight: 2 } // T2: licencja KNF
         } },
-    'Żywność':               { icon: '🍞', profile: { beta: 0.5, rateSens: 0.4, pe: 15, margin: 0.12, growth: 0.03, ps: 1.0, da: 0.03 } },
+    'Żywność':               { icon: '🍞', profile: { beta: 0.5, rateSens: 0.4, pe: 15, margin: 0.12, growth: 0.03, ps: 1.0, da: 0.03 },
+        subsectors: { 'Rolnictwo': { peopleSubsidy: true } } },                                             // dotacje Ludowców (0.13)
     'Dobra konsumpcyjne':    { icon: '🛍️', profile: { beta: 1.0, rateSens: 0.6, pe: 16, margin: 0.14, growth: 0.04, ps: 1.3, da: 0.03 } },
     'Turystyka':             { icon: '✈️', profile: { beta: 1.5, rateSens: 0.8, pe: 15, margin: 0.15, growth: 0.04, ps: 1.5, da: 0.06 } },
     'Media':                 { icon: '📺', profile: { beta: 1.1, rateSens: 0.6, pe: 14, margin: 0.18, growth: 0.02, ps: 1.8, da: 0.04 } },
     'Gaming':                { icon: '🎮', profile: { beta: 1.4, rateSens: 1.0, pe: 20, margin: 0.25, growth: 0.07, ps: 3.0, da: 0.06 } },
-    'Przemysł':              { icon: '⚙️', profile: { beta: 1.3, rateSens: 0.8, pe: 13, margin: 0.14, growth: 0.03, ps: 1.0, da: 0.05 } },
+    'Przemysł':              { icon: '⚙️', profile: { beta: 1.3, rateSens: 0.8, pe: 13, margin: 0.14, growth: 0.03, ps: 1.0, da: 0.05 },
+        subsectors: { 'Robotyka': { delta: { growth: 0.02, margin: 0.02 } } } },
     'Chemia':                { icon: '⚗️', profile: { beta: 1.2, rateSens: 0.7, pe: 13, margin: 0.16, growth: 0.03, ps: 1.1, da: 0.05 } },
-    'Energia':               { icon: '⚡', profile: { beta: 0.8, rateSens: 0.9, pe: 12, margin: 0.25, growth: 0.02, ps: 1.5, da: 0.08 } },
+    'Energia':               { icon: '⚡', profile: { beta: 0.8, rateSens: 0.9, pe: 12, margin: 0.25, growth: 0.02, ps: 1.5, da: 0.08 },
+        subsectors: {
+            'Energetyka jądrowa': { profile: { beta: 0.4, da: 0.14, pe: 14 }, mechanic: 'nuclear' },        // T2: budowa bloku
+            'OZE': { mult: { rateSens: 1.5 }, partySubsidy: true }                                           // dotacje według partii
+        } },
     'Budowlany':             { icon: '🏗️', profile: { beta: 1.5, rateSens: 1.3, pe: 11, margin: 0.10, growth: 0.03, ps: 0.7, da: 0.03 } },
     'Transport i logistyka': { icon: '🚚', profile: { beta: 1.2, rateSens: 0.7, pe: 13, margin: 0.14, growth: 0.03, ps: 1.0, da: 0.07 }, // dawny „Transport”
-        subsectors: { 'Logistyka': { profile: { pe: 14, margin: 0.12, growth: 0.04, da: 0.06 } } } },           // dawna „Logistyka”
-    'Medycyna':              { icon: '💊', profile: { beta: 0.6, rateSens: 0.6, pe: 20, margin: 0.22, growth: 0.05, ps: 3.0, da: 0.05 } },
+        subsectors: {
+            'Logistyka': { profile: { pe: 14, margin: 0.12, growth: 0.04, da: 0.06 } },                      // dawna „Logistyka”
+            'Lotnictwo': { profile: { beta: 1.8 }, energySens: 0.5 }                                         // drogie paliwo: odwrotnie do cyklu Energii
+        } },
+    'Medycyna':              { icon: '💊', profile: { beta: 0.6, rateSens: 0.6, pe: 20, margin: 0.22, growth: 0.05, ps: 3.0, da: 0.05 },
+        subsectors: {
+            'Biotechnologia': { profile: { beta: 1.6, pe: 30 }, delta: { growth: 0.04, margin: -0.10 }, specialist: true, mechanic: 'clinical' }, // T2: badania kliniczne
+            'Sprzęt medyczny': { profile: { beta: 0.8 }, delta: { margin: 0.03 } }
+        } },
     'Badania':               { icon: '🔬', profile: { beta: 0.9, rateSens: 0.8, pe: 25, margin: 0.20, growth: 0.07, ps: 4.0, da: 0.05 } },
-    'Technologia':           { icon: '💻', profile: { beta: 1.3, rateSens: 1.2, pe: 22, margin: 0.28, growth: 0.08, ps: 3.5, da: 0.05 } },
-    'Nieruchomości':         { icon: '🏢', profile: { beta: 1.4, rateSens: 1.6, pe: 14, margin: 0.35, growth: 0.03, ps: 4.0, da: 0.10 } },
-    'Obronność':             { icon: '🛡️', profile: { beta: 0.5, rateSens: 0.5, pe: 17, margin: 0.20, growth: 0.04, ps: 1.8, da: 0.05 } }, // 0.11.4: defensywna
+    'Technologia':           { icon: '💻', profile: { beta: 1.3, rateSens: 1.2, pe: 22, margin: 0.28, growth: 0.08, ps: 3.5, da: 0.05 },
+        subsectors: {
+            'Półprzewodniki': { profile: { beta: 1.8 }, cycleDepth: 1.5, specialist: true },
+            'Sztuczna inteligencja': { profile: { pe: 35 }, delta: { growth: 0.06 }, vol: 1.3, specialist: true }
+        } },
+    'Nieruchomości':         { icon: '🏢', profile: { beta: 1.4, rateSens: 1.6, pe: 14, margin: 0.35, growth: 0.03, ps: 4.0, da: 0.10 },
+        subsectors: { 'Magazyny': { profile: { beta: 1.0 }, delta: { growth: 0.02 } } } },
+    'Obronność':             { icon: '🛡️', profile: { beta: 0.5, rateSens: 0.5, pe: 17, margin: 0.20, growth: 0.04, ps: 1.8, da: 0.05 }, // 0.11.4: defensywna
+        subsectors: { 'Drony': { profile: { pe: 22 }, delta: { growth: 0.04 } } } },
     'Usługi':                { icon: '🧰', profile: { beta: 0.9, rateSens: 0.5, pe: 16, margin: 0.15, growth: 0.04, ps: 1.4, da: 0.03 } }
 };
 for (const group of SECTOR_GROUPS) for (const name of group.sectors) SECTORS[name].group = group.id;
@@ -1763,8 +1783,112 @@ function getSectorSubsectorProfile(sector, subsector = null) {
     const def = SECTORS[sector];
     if (!def) return null;
     const sub = subsector ? def.subsectors?.[subsector] : null;
-    return sub?.profile ? { ...def.profile, ...sub.profile } : def.profile;
+    if (!sub || (!sub.profile && !sub.delta && !sub.mult)) return def.profile;
+    // T2: podsektor = nadpisania pól profilu (np. beta, C/Z), przyrosty (wzrost, marża w pp) i mnożniki (np. stopy ×1,5).
+    const result = { ...def.profile, ...(sub.profile || {}) };
+    for (const [key, value] of Object.entries(sub.delta || {})) result[key] += value;
+    for (const [key, value] of Object.entries(sub.mult || {})) result[key] *= value;
+    return result;
 }
+
+/** Definicja podsektora z rejestru (albo null). */
+function getSubsectorDef(sector, subsector) {
+    return (subsector && SECTORS[sector]?.subsectors?.[subsector]) || null;
+}
+
+/** Średnia ważona udziałami cechy podsektorów spółki (np. vol, cycleDepth); brak = wartość domyślna. */
+function getSubsectorModifier(stock, key, fallback = 1) {
+    const segments = getStockSegments(stock);
+    if (!segments.length) return fallback;
+    return segments.reduce((sum, seg) => sum + (getSubsectorDef(seg.sector, seg.subsector)?.[key] ?? fallback) * seg.share, 0);
+}
+
+/** Udział spółki w segmentach z daną mechaniką podsektora ('clinical' | 'nuclear' | 'knf'), 0 gdy brak. */
+function getSubsectorMechanicShare(stock, mechanic) {
+    return getStockSegments(stock).reduce((sum, seg) => sum + (getSubsectorDef(seg.sector, seg.subsector)?.mechanic === mechanic ? seg.share : 0), 0);
+}
+
+/**
+ * T2 + 0.13: dodatek do kwartalnego wzrostu z podsektorów — mocniejszy niedobór specjalistów (Biotechnologia, SI,
+ * Półprzewodniki, Fintech), dotacje partii (Rolnictwo: Ludowcy; OZE: według partii), Lotnictwo odwrotnie do cyklu Energii.
+ */
+function getSubsectorGrowthAdj(stock) {
+    let total = 0;
+    const shortage = typeof society === 'object' && society ? Math.max(0, (Number(society.shortage) || 1) - 1) : 0;
+    const election = typeof macro === 'object' ? macro?.election : null;
+    const peopleInPower = election && (election.ruling === 'people' || election.coalition?.partner === 'people');
+    const party = typeof getRulingParty === 'function' && election ? getRulingParty() : null;
+    for (const seg of getStockSegments(stock)) {
+        const def = getSubsectorDef(seg.sector, seg.subsector);
+        if (!def) continue;
+        let adj = 0;
+        if (def.specialist) adj -= shortage / 0.1 * 0.001;
+        if (def.peopleSubsidy && peopleInPower) adj += 0.003;
+        if (def.partySubsidy && party) adj += ((Number(party.subsidies) || 1) - 1) * 0.004;
+        if (def.energySens && macro?.sectorCycles?.['Energia']) adj -= def.energySens * SECTOR_CYCLE_PHASES[macro.sectorCycles['Energia'].phase].adj;
+        total += adj * seg.share;
+    }
+    return total;
+}
+
+const SUBSECTOR_RANDOM_CHANCE = 0.3; // nowe spółki i startupy: szansa na podsektor (waga podsektora, np. Fintech ×2)
+
+/** Losuje podsektor segmentu głównego nowej spółki (gdy sektor ma podsektory). Zwraca nazwę albo null. */
+function assignRandomSubsector(stock, chance = SUBSECTOR_RANDOM_CHANCE) {
+    const main = getMainSegment(stock);
+    if (!main || main.subsector || !isValidSegmentList(stock.segments)) return null;
+    const options = Object.entries(SECTORS[main.sector]?.subsectors || {}).filter(([name]) => !name.startsWith('Bank '));
+    if (!options.length || !(Math.random() < chance)) return null;
+    const total = options.reduce((sum, [, def]) => sum + (def.weight || 1), 0);
+    let roll = Math.random() * total;
+    for (const [name, def] of options) { roll -= def.weight || 1; if (roll <= 0) { main.subsector = name; return name; } }
+    main.subsector = options[options.length - 1][0];
+    return main.subsector;
+}
+
+// T2: przydział startowy podsektorów (jawna tabela, bez losowania): symbol → [sektor segmentu, podsektor].
+const SUBSECTOR_START_ASSIGNMENTS = {
+    BLP: ['Medycyna', 'Sprzęt medyczny'],          // Błyskawiczna Proteza
+    VTG: ['Medycyna', 'Biotechnologia'],           // VitaGen
+    PUR: ['Energia', 'Energetyka jądrowa'],        // Państwowy Uran
+    BEW: ['Energia', 'OZE'],                       // Bałtycka Energia Wiatrowa
+    ENG: ['Energia', 'OZE'],                       // Energa
+    CTX: ['Technologia', 'Sztuczna inteligencja'], // Cortex Neural
+    WiS: ['Technologia', 'Półprzewodniki'],        // Wolf & Stein Tech.
+    NRB: ['Przemysł', 'Robotyka'],                 // Nova Robotics
+    LIN: ['Nieruchomości', 'Magazyny'],            // Linapol
+    WZM: ['Żywność', 'Rolnictwo'],                 // Wieczne Ziemniaki
+    KOB: ['Żywność', 'Rolnictwo'],                 // KolenBreg
+    GROM: ['Obronność', 'Drony'],                  // Grom Systems
+    WIP: ['Finanse', 'Fintech']                    // WinPost — płatności (segmenty: Fintech 60%, Technologia 40%)
+};
+// Spółki przekształcone przy przydziale (decyzja użytkownika: jedna istniejąca spółka staje się fintechem).
+const SUBSECTOR_START_SEGMENTS = {
+    WIP: [{ sector: 'Finanse', subsector: 'Fintech', share: 0.6 }, { sector: 'Technologia', subsector: null, share: 0.4 }]
+};
+
+/** Raz na świat (nowa gra albo pierwsze wczytanie zapisu sprzed T2): podsektory z tabeli startowej. */
+function applyStartSubsectors() {
+    if (typeof macro === 'object' && macro?.subsectorsAssigned) return 0;
+    let assigned = 0;
+    for (const stock of stocks) {
+        const entry = SUBSECTOR_START_ASSIGNMENTS[stock.symbol];
+        if (!entry || stock.isBankrupt) continue;
+        if (SUBSECTOR_START_SEGMENTS[stock.symbol]) {
+            stock.segments = SUBSECTOR_START_SEGMENTS[stock.symbol].map(seg => ({ ...seg }));
+            stock.sector = getSectorsFromSegments(stock.segments);
+            assigned++;
+            continue;
+        }
+        ensureStockSegments(stock);
+        const seg = stock.segments.find(s => s.sector === entry[0]);
+        if (seg && !seg.subsector) { seg.subsector = entry[1]; assigned++; }
+    }
+    if (typeof macro === 'object' && macro) macro.subsectorsAssigned = true;
+    return assigned;
+}
+
+
 
 /** Podsektor banku z jego typu (porządek nazw T1a). */
 function getBankSubsector(stock, rawSectors = []) {
@@ -2219,7 +2343,7 @@ function updateStockPrices() {
 
         // --- Ruch ceny jako zmiana PROCENTOWA ---
         // Δ% = szum + powrót do wartości godziwej + nastrój rynku + dryf (fazy, CEO, M&A) + boosty
-        let effectiveVolatility = stock.volatilityFactor * volatilityModifier * (typeof getCorruptionVolatilityFactor === 'function' ? getCorruptionVolatilityFactor() : 1); // korupcja (0.11)
+        let effectiveVolatility = stock.volatilityFactor * volatilityModifier * (typeof getCorruptionVolatilityFactor === 'function' ? getCorruptionVolatilityFactor() : 1) * getSubsectorModifier(stock, 'vol'); // korupcja (0.11); T2: podsektor (SI ×1,3)
         if (isVolatilityCapped) {
             effectiveVolatility = Math.max(0.5, Math.min(effectiveVolatility, 3.0));
         }
@@ -3037,14 +3161,15 @@ function ensureMacroState() {
 
 /** Cykle segmentów spółki z wagami udziałów (0.14 T1b: cykl działa proporcjonalnie do segmentu). */
 function getStockSectorCycles(stock) {
-    return getStockSegments(stock).map(seg => ({ cycle: macro.sectorCycles?.[seg.sector], share: seg.share })).filter(item => item.cycle);
+    return getStockSegments(stock).map(seg => ({ cycle: macro.sectorCycles?.[seg.sector], share: seg.share, depth: getSubsectorDef(seg.sector, seg.subsector)?.cycleDepth || 1 })).filter(item => item.cycle);
 }
 
 function weightedCycleValue(stock, key, fallback) {
     const cycles = getStockSectorCycles(stock);
     const total = cycles.reduce((sum, item) => sum + item.share, 0);
     if (!(total > 0)) return fallback;
-    return cycles.reduce((sum, item) => sum + SECTOR_CYCLE_PHASES[item.cycle.phase][key] * item.share, 0) / total;
+    // T2: głębszy cykl (Półprzewodniki ×1,5) — odchylenie od neutralnej wartości razy głębokość.
+    return cycles.reduce((sum, item) => sum + (fallback + (SECTOR_CYCLE_PHASES[item.cycle.phase][key] - fallback) * item.depth) * item.share, 0) / total;
 }
 
 /** Dodatek do kwartalnego wzrostu przychodów z fazy sektora. */

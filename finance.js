@@ -1712,6 +1712,7 @@ function createListedCompany({ name, symbol, sector, price, totalShares, exchang
     };
     delete stock.assetType;
     ensureStockSegments(stock); // T1a: sektor z rejestru i segmenty od razu
+    assignRandomSubsector(stock); // T2: podsektor nowej spółki według szansy
     ['fundingGoal', 'currentFunding', 'developmentProgress', 'successChance', 'stage', 'isScam', 'isWhiteCrow', 'investors', 'ipoPriceBonus', 'overfundingEndTime'].forEach(key => delete stock[key]);
     const equity = price * totalShares;
     stock.balanceSheet = { assets: equity * 1.2, liabilities: equity * 0.2, shareCapital: equity * 0.3, retainedEarnings: equity * 0.7 };

@@ -4974,6 +4974,93 @@ group('0.14 decyzja 11: zdarzenia sektora Bankowość', () => {
     });
 });
 
+group('0.14 T2: podsektory', () => {
+    const seg = (sector, subsector = null, share = 1) => ({ sector, subsector, share });
+    const withSegments = (symbol, segments) => {
+        const s = makeCompany(symbol, { sector: segments.map(x => x.sector) });
+        s.segments = segments; s.sector = getSectorsFromSegments(segments);
+        return s;
+    };
+
+    test('modyfikatory podsektora według tabeli T2; spółka bez podsektora — profil sektora bez zmian', () => {
+        const bio = getSectorSubsectorProfile('Medycyna', 'Biotechnologia'), med = SECTOR_PROFILES['Medycyna'];
+        assert(bio.beta === 1.6 && bio.pe === 30 && Math.abs(bio.growth - (med.growth + 0.04)) < 1e-12 && Math.abs(bio.margin - (med.margin - 0.10)) < 1e-12, JSON.stringify(bio));
+        assert(getSectorSubsectorProfile('Energia', 'OZE').rateSens === SECTOR_PROFILES['Energia'].rateSens * 1.5, 'OZE stopy ×1,5');
+        assert(getSectorSubsectorProfile('Energia', 'Energetyka jądrowa').da === 0.14, 'atom amortyzacja');
+        assert(getSectorSubsectorProfile('Bankowość', 'Bank inwestycyjny').beta === 1.4, 'bank inwestycyjny');
+        assert(getSectorSubsectorProfile('Finanse', 'Pożyczki konsumenckie').pe === 10, 'Pożyczki = dawne Finanse Konsumenckie');
+        for (const name of SECTOR_NAMES) assert(getSectorSubsectorProfile(name, null) === SECTOR_PROFILES[name], `bez podsektora: ${name}`);
+        const plain = withSegments('PLN', [seg('Technologia')]), ai = withSegments('AIX', [seg('Technologia', 'Sztuczna inteligencja')]);
+        resetWorld([plain, ai]);
+        assert(getSubsectorModifier(plain, 'vol') === 1 && getSubsectorModifier(ai, 'vol') === 1.3, 'zmienność SI ×1,3');
+        assert(getSubsectorGrowthAdj(plain) === 0, 'bez podsektora: brak dodatku wzrostu');
+    });
+
+    test('Półprzewodniki: cykl ×1,5; Lotnictwo: odwrotnie do cyklu Energii', () => {
+        const chips = withSegments('CHP', [seg('Technologia', 'Półprzewodniki')]), air = withSegments('AIR', [seg('Transport i logistyka', 'Lotnictwo')]);
+        resetWorld([chips, air]);
+        macro.sectorCycles['Technologia'] = { phase: 'boom', quartersLeft: 3 };
+        macro.sectorCycles['Energia'] = { phase: 'boom', quartersLeft: 3 };
+        assertNear(getSectorCycleAdj(chips), SECTOR_CYCLE_PHASES.boom.adj * 1.5, 'głębszy cykl', 1e-12);
+        assertNear(getSectorValuationFactor(chips), 1 + (SECTOR_CYCLE_PHASES.boom.val - 1) * 1.5, 'wycena', 1e-12);
+        assert(getSubsectorGrowthAdj(air) < 0, 'boom Energii (drogie paliwo) szkodzi Lotnictwu');
+    });
+
+    test('0.13: specjaliści (niedobór) i dotacje Ludowców dla Rolnictwa', () => {
+        const bio = withSegments('BIO', [seg('Medycyna', 'Biotechnologia')]), farm = withSegments('FRM', [seg('Żywność', 'Rolnictwo')]);
+        resetWorld([bio, farm]);
+        const shortage = society.shortage, ruling = macro.election.ruling, coalition = macro.election.coalition;
+        try {
+            society.shortage = 1.2;
+            assertNear(getSubsectorGrowthAdj(bio), -0.002, 'mocniejszy niedobór specjalistów', 1e-12);
+            macro.election.ruling = 'market'; macro.election.coalition = null;
+            assert(getSubsectorGrowthAdj(farm) === 0, 'bez Ludowców bez dotacji');
+            macro.election.ruling = 'people';
+            assert(getSubsectorGrowthAdj(farm) > 0, 'Ludowcy dotują rolnictwo');
+        } finally { society.shortage = shortage; macro.election.ruling = ruling; macro.election.coalition = coalition; }
+    });
+
+    test('przydział startowy z tabeli (raz), WinPost staje się fintechem; tabela tylko z podsektorów rejestru', () => {
+        for (const [symbol, [sector, sub]] of Object.entries(SUBSECTOR_START_ASSIGNMENTS)) assert(getSubsectorDef(sector, sub), `${symbol}: ${sector}/${sub}`);
+        const vtg = makeCompany('VTG', { sector: ['Medycyna', 'Technologia'] }), wip = makeCompany('WIP', { sector: ['Technologia', 'Usługi'] }), other = makeCompany('OTH', { sector: ['Chemia'] });
+        resetWorld([vtg, wip, other]);
+        ensureAllStockSegments();
+        macro.subsectorsAssigned = false;
+        assert(applyStartSubsectors() === 2, 'dwie spółki z tabeli');
+        assert(vtg.segments.find(s => s.sector === 'Medycyna').subsector === 'Biotechnologia' && !vtg.segments.find(s => s.sector === 'Technologia').subsector, 'VitaGen');
+        assert(getMainSector(wip) === 'Finanse' && getMainSubsector(wip) === 'Fintech' && wip.segments.length === 2, JSON.stringify(wip.segments));
+        assert(!getMainSubsector(other), 'spoza tabeli bez podsektora');
+        assert(applyStartSubsectors() === 0, 'tylko raz');
+    });
+
+    test('nowe spółki: ok. 30% dostaje podsektor, Fintech z premią', () => withSeededRandom(7, () => {
+        const counts = {};
+        let withSub = 0;
+        for (let i = 0; i < 2000; i++) {
+            const s = { sector: ['Finanse'], segments: [seg('Finanse')] };
+            const sub = assignRandomSubsector(s);
+            if (sub) { withSub++; counts[sub] = (counts[sub] || 0) + 1; }
+        }
+        assert(withSub > 520 && withSub < 680, `z podsektorem: ${withSub}/2000`);
+        assert(counts['Fintech'] > counts['Rynki kapitałowe'] * 1.5 && counts['Fintech'] > counts['Pożyczki konsumenckie'] * 1.5, JSON.stringify(counts));
+        const bank = { sector: ['Bankowość'], segments: [seg('Bankowość')] };
+        for (let i = 0; i < 50; i++) assignRandomSubsector(bank, 1);
+        assert(!bank.segments[0].subsector, 'typ banku nie jest losowany');
+    }));
+
+    test('mediana podsektora dopiero przy ≥ 3 spółkach', () => {
+        const list = ['A1', 'A2', 'A3', 'A4'].map(symbol => withSegments(symbol, [seg('Technologia', 'Sztuczna inteligencja')]));
+        list.forEach(s => initializeFundamentals(s, true));
+        resetWorld(list.slice(0, 2));
+        sectorMedianCache.at = 0;
+        assert(getSubsectorMedians('Technologia', 'Sztuczna inteligencja') === null, '2 spółki — brak mediany');
+        resetWorld(list.slice(0, 3));
+        sectorMedianCache.at = 0;
+        const m = getSubsectorMedians('Technologia', 'Sztuczna inteligencja');
+        assert(m && m.count === 3, `mediana: ${JSON.stringify(m)}`);
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

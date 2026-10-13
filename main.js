@@ -565,6 +565,8 @@ function applySaveSnapshot(snapshot) {
     scandals = snapshot.scandals && typeof snapshot.scandals === 'object' ? snapshot.scandals : createScandals(); // v11: afery
     ensureScandals();
     ensureMacroState();
+    const startSubsectors = applyStartSubsectors(); // 0.14 T2: zapis sprzed T2 — podsektory z tabeli startowej raz
+    if (startSubsectors) report.warnings.push(`Podsektory ${startSubsectors} spółek startowych (migracja 0.14 T2).`);
     // v13: kraj i zatrudnienie (starsze zapisy: kraj od zera, populacja miasta bez zmian).
     society = snapshot.society && typeof snapshot.society === 'object' ? snapshot.society : createSocietyState();
     ensureSocietyState();
@@ -1618,6 +1620,7 @@ function createNewWorld() {
     initDefenseSector(); // spółki zbrojeniowe i fundusz Gwardia (defense.js)
     specialProjects = createSpecialProjects(); // projekty specjalne miasta (projects.js)
     ensureAllStockSegments(); // 0.14 T1a: sektory z rejestru i segmenty (przed ETF-ami i zatrudnieniem)
+    applyStartSubsectors(); // 0.14 T2: podsektory spółek startowych (tabela)
     initializeEtfs(); // ETF-y z portfelami prawdziwych akcji (etf.js)
     console.log("[M&A Init] Inicjalizacja nastawienia mediów...");
     const mediaCompanies = stocks.filter(s => s.specializationSectors?.includes('Media'));

@@ -97,6 +97,16 @@ function formatMainSectorLabel(stock) {
     return `${SECTORS[main]?.icon || ''} ${main}${sub ? ` · ${sub}` : ''}`.trim();
 }
 
+/** T2: mediana podsektora obok mediany sektora (gdy podsektor ma ≥ 3 spółki). */
+function renderSubsectorMedianLine(stock, sectorMed) {
+    const sub = getMainSubsector(stock);
+    const subMed = typeof getSubsectorMedians === 'function' ? getSubsectorMedians(getMainSector(stock), sub) : null;
+    if (!subMed) return '';
+    const fx = v => Number.isFinite(v) ? v.toFixed(1) : '—';
+    const pct = v => Number.isFinite(v) ? `${(v * 100).toFixed(1)}%` : '—';
+    return `<p class="text-xs text-muted cc-submed">Mediany: podsektor ${escapeHtml(sub)} (${subMed.count} spółek) — C/Z ${fx(subMed.pe)}, marża ${pct(subMed.margin)}; sektor ${escapeHtml(getMainSector(stock))} — C/Z ${fx(sectorMed?.pe)}, marża ${pct(sectorMed?.margin)}.</p>`;
+}
+
 /** T1b: „Struktura przychodów” — pasek segmentów (tylko przy ≥ 2 segmentach), segment główny wyróżniony. */
 function renderSegmentBar(stock) {
     const segments = [...getStockSegments(stock)].sort((a, b) => b.share - a.share);
@@ -2810,7 +2820,7 @@ function renderCompanyCard() {
         tile('Stopa dywidendy', `${(dividendYield * 100).toFixed(2)}%`, 'Dywidendy z ostatniego roku / kurs.', '', dividendYield > 0 ? vs(dividendYield, med?.dy, { lowerIsCheap: false, format: pctFmt, labels: ['wyższa', 'niższa'] }) : ''),
         tile('Zadłużenie', debtRatio === null ? '—' : `${(debtRatio * 100).toFixed(0)}%`, 'Zobowiązania / aktywa. Powyżej ~70% spółka jest mocno zadłużona.', debtRatio > 0.7 ? 'text-down' : '', vs(debtRatio, med?.debt, { format: pctFmt, labels: ['niższe', 'wyższe'] })),
         tile('Kondycja', `${health.toFixed(1)} · ${healthLabel}`, 'Kondycja finansowa od −5 (bankructwo) do +5.', health >= 1 ? 'text-up' : health <= -2 ? 'text-down' : '')
-    ].join('');
+    ].join('') + renderSubsectorMedianLine(stock, med);
 
     document.getElementById('company-card-tabs').innerHTML = COMPANY_CARD_TABS
         .filter(([id]) => id !== 'workforce' || (typeof hasWorkforce === 'function' && hasWorkforce(stock)))

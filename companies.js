@@ -2658,7 +2658,7 @@ function computeQuarterResults(stock) {
     const projectAdj = (typeof getSpecialProjectGrowth === 'function' ? getSpecialProjectGrowth(stock) : 0) // bonusy projektów specjalnych
         + (typeof getMafiaFrontGrowth === 'function' ? getMafiaFrontGrowth(stock) : 0) // spółki-przykrywki rosną z wpływami mafii
         + (typeof getDefenseGrowthBonus === 'function' ? getDefenseGrowthBonus(stock) : 0); // zbrojeniówka: bonus od siły policji
-    const societyAdj = typeof getSocietyGrowthAdj === 'function' ? getSocietyGrowthAdj(stock) : 0; // 0.13: popyt klas, niedobór specjalistów
+    const societyAdj = (typeof getSocietyGrowthAdj === 'function' ? getSocietyGrowthAdj(stock) : 0) + getSubsectorGrowthAdj(stock); // 0.13: popyt klas, niedobór specjalistów; T2: podsektory
     const growth = profile.growth / 4 * SECTOR_GROWTH_FACTOR + (Number(stock.growthAdj) || 0) + profile.beta * gdp + health * 0.004 + phaseAdj + sectorAdj + projectAdj + societyAdj + inflation / 4 * INFLATION_PASS_THROUGH + gaussianRandom() * 0.02;
     fundamentals.revenue = Math.max(1000, fundamentals.revenue * (1 + Math.max(-0.25, Math.min(0.25, growth))));
 
@@ -3992,6 +3992,7 @@ function generateNewStartup() {
     };
 
     ensureStockSegments(newStartup); // T1a: sektory z rejestru (np. dawne „Finanse Konsumenckie”)
+    assignRandomSubsector(newStartup); // T2: część startupów dostaje podsektor (Fintech ×2)
     return newStartup;
 }
 
