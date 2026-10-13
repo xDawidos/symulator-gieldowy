@@ -4964,6 +4964,16 @@ group('0.14 T1c: filtr sektora i typu', () => {
     });
 });
 
+group('0.14 decyzja 11: zdarzenia sektora Bankowość', () => {
+    test('podatek bankowy i masowe pozwy: negatywne, tylko Bankowość (bilans: 3 pozytywne, 4 negatywne)', () => {
+        const banking = sectorEventsPrompts.filter(e => e.targetSectors.includes('Bankowość'));
+        const added = sectorEventsPrompts.filter(e => ['sec_neg_11', 'sec_neg_12'].includes(e.id));
+        assert(added.length === 2 && added.every(e => e.type === 'negative' && e.targetSectors.join() === 'Bankowość' && e.message().includes('Bankowość')), 'dwa nowe zdarzenia');
+        const pos = banking.filter(e => e.type === 'positive').length, neg = banking.filter(e => e.type === 'negative').length;
+        assert(pos === 3 && neg === 4, `pozytywne ${pos}, negatywne ${neg}`);
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

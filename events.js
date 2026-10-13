@@ -467,6 +467,9 @@ const sectorEventsPrompts = [
     { id: 'sec_neg_8', message: () => `Nowa ustawa "Prawo do Bycia Offline" drastycznie zmniejsza popyt na smartfony i inne gadżety. 📵 Sektor 'Technologia' przeżywa kryzys egzystencjalny.`, type: 'negative', targetSectors: ['Technologia'] },
     { id: 'sec_neg_9', message: () => `Wszystkie bankomaty z sektora 'Bankowość' w wyniku błędu zaczynają mówić zagadkami. 🤖❓ Wypłacenie pieniędzy staje się grą miejską, co zniechęca klientów.`, type: 'negative', targetSectors: ['Bankowość'] },
     { id: 'sec_neg_10', message: () => `Kryzys na rynku napojów. Okazuje się, że ludzie odkryli wodę z kranu. 💧 Sektor 'Dobra konsumpcyjne' w panice.`, type: 'negative', targetSectors: ['Dobra konsumpcyjne'] },
+    // 0.14 (decyzja 11): równowaga zdarzeń sektora Bankowość po porządku nazw (T1a)
+    { id: 'sec_neg_11', message: () => `Rząd wprowadza podatek bankowy od aktywów. 🏦💸 Zyski banków spadną, a sektor 'Bankowość' traci na giełdzie.`, type: 'negative', targetSectors: ['Bankowość'] },
+    { id: 'sec_neg_12', message: () => `Masowe pozwy kredytobiorców: sądy unieważniają tysiące umów kredytowych. ⚖️ Banki tworzą rezerwy, a sektor 'Bankowość' tanieje.`, type: 'negative', targetSectors: ['Bankowość'] },
 ];
 
 const stateCompanyEventsPrompts = [
