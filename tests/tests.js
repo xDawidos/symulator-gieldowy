@@ -5492,12 +5492,93 @@ group('0.14.1 R0: niezmienniki puli i inkubatora', () => {
         assert((playerPortfolio.STRT?.shares || 0) > 0 && checkPoolInvariants().length === 0, checkPoolInvariants().join('; '));
     });
 
-    test('błąd A (stan przed R1): upadek startupu z wkładem puli — niezmiennik puli zgłasza rozjazd', () => {
+    test('błąd A naprawiony (R1): upadek startupu z wkładem puli — niezmiennik puli czysty', () => {
         const s = poolWorld();
         contributeToInvestmentPool('player', 5000);
         processPoolInvestments();
         removeStartup(s, 0.5, 0.7);
-        assert(checkPoolInvariants().some(x => x.includes('pula player')), 'rozjazd wykryty');
+        assert(checkPoolInvariants().length === 0, checkPoolInvariants().join('; '));
+    });
+});
+
+group('0.14.1 R1: rozliczenie puli przy każdym końcu startupu', () => {
+    function world(goal = 20_000) {
+        const a = makeCompany('AAA', { cash: 600_000, fixedAssets: 800_000 });
+        a.insiderShares = 0; a.sharesHeld = 0;
+        resetWorld([a]);
+        allBonds.length = 0;
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        investmentPool.totalFunds = 0; investmentPool.contributors = {}; investmentPool.playerStakes = {}; investmentPool.history = []; investmentPool.quarterReport = [];
+        startPoolLedgerFromFacts();
+        const s = generateNewStartup();
+        s.symbol = 'PSTR'; s.stage = 'funding'; s.fundingGoal = goal; s.currentFunding = 0; s.investors = {}; s.isScam = false;
+        stocks.push(s);
+        playerCash = 100_000;
+        contributeToInvestmentPool('player', 5000);
+        processPoolInvestments();
+        return s;
+    }
+    const stake = () => investmentPool.playerStakes.player || 0;
+    const facts = () => (investmentPool.contributors.player || 0) + getPoolInvestedInStartups('player');
+
+    test('przejęcie po oczekiwaniu: uczestnicy puli dostają 105–200% wkładu (do puli)', () => {
+        const s = world();
+        const invested = getPoolInvestedInStartups('player');
+        removeStartup(s, 1.05, 2.0);
+        const back = investmentPool.contributors.player || 0;
+        assert(invested > 0 && back >= invested * 1.05 - 1e-6 && back <= invested * 2 + 1e-6, `zwrot ${back} z ${invested}`);
+        assert(Math.abs(stake() - facts()) < 1e-6 && checkPoolInvariants().length === 0, 'fakty i księga');
+        assert(investmentPool.history[0]?.kind === 'takeover' && investmentPool.quarterReport.length === 1, 'wpis dla gracza');
+    });
+
+    test('oszustwo: 0; porażka: zwrot według ścieżki; NAV i limit 10% bez martwych pieniędzy', () => {
+        const s = world();
+        removeStartup(s, 0, 0);
+        assert((investmentPool.contributors.player || 0) === 0 && stake() === 0 && investmentPool.history[0].kind === 'loss', 'oszustwo: strata, stake 0');
+        assert(getFundStartupExposure() === 0, 'limit 10% się nie blokuje');
+        const t = world();
+        const invested = getPoolInvestedInStartups('player');
+        removeStartup(t, 0.5, 0.7);
+        const back = investmentPool.contributors.player || 0;
+        assert(back >= invested * 0.5 - 1e-6 && back <= invested * 0.7 + 1e-6 && checkPoolInvariants().length === 0, `porażka: ${back} z ${invested}`);
+    });
+
+    test('komplikacje → ratunek: akcje; komplikacje → upadek: zwrot 5–15%', () => {
+        const s = world();
+        s.stage = 'financial_complications'; s.rescueGoal = 1000; s.rescueCurrent = 0;
+        playerRescuesStartup('PSTR', 1000);
+        assert((playerPortfolio.PSTR?.shares || 0) > 0 && stake() === facts(), 'ratunek → debiut z akcjami');
+        const t = world();
+        const invested = getPoolInvestedInStartups('player');
+        removeStartup(t, 0.05, 0.15);
+        const back = investmentPool.contributors.player || 0;
+        assert(back >= invested * 0.05 - 1e-6 && back <= invested * 0.15 + 1e-6, `upadek: ${back}`);
+    });
+
+    test('prywatyzacja: zwrot wkładu puli wraca do puli (nie na konto)', () => {
+        const s = world();
+        const invested = getPoolInvestedInStartups('player');
+        const cash0 = playerCash;
+        refundOtherStartupClaims(s); // ścieżka prywatyzacji: zwrot wpłat innych inwestorów
+        assert(playerCash === cash0 && Math.abs((investmentPool.contributors.player || 0) - invested) < 1e-6 && stake() === facts(), 'zwrot do puli');
+    });
+
+    test('banki: zwrot przy końcu bez debiutu jak u innych inwestorów', () => {
+        const s = world();
+        const bank = commercialBanks[0];
+        bank.startupInvestments = { PSTR: 10_000 };
+        const cash0 = Number(bank.cash) || 0;
+        removeStartup(s, 1.05, 2.0);
+        assert(bank.cash - cash0 >= 10_500 - 1e-6 && !bank.startupInvestments.PSTR, `bank: +${bank.cash - cash0}`);
+    });
+
+    test('migracja: martwy wkład w pulę schodzi do faktów, bez zwrotu pieniędzy', () => {
+        world();
+        investmentPool.playerStakes.player = 99_999;
+        investmentPool.stakesMigrated = false;
+        const cash0 = playerCash;
+        const diff = migratePoolStakesToFacts();
+        assert(diff > 90_000 && Math.abs(stake() - facts()) < 1e-6 && playerCash === cash0 && investmentPool.stakesMigrated, `korekta ${diff}`);
     });
 });
 

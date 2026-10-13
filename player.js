@@ -605,8 +605,8 @@ function contributeToInvestmentPool(contributorId, amount) {
 
     investmentPool.totalFunds += amount;
     investmentPool.contributors[contributorId] = (investmentPool.contributors[contributorId] || 0) + amount;
-    investmentPool.playerStakes[contributorId] = (investmentPool.playerStakes[contributorId] || 0) + amount;
     notePoolLedger(contributorId, 'deposited', amount); // 0.14.1 R0: księga puli
+    recomputePoolStakes(); // 0.14.1 R1: wkład w pulę = fakty
     console.log(`[PULA] ${contributorId} wpłacił(a) ${amount.toFixed(2)} PLN do puli inwestycyjnej.`, 'market');
 }
 
@@ -621,7 +621,7 @@ function getPoolLedger(id) {
 }
 
 function notePoolLedger(id, key, amount) {
-    if (!(amount > 0) || !investmentPool.ledgerSince) return; // stare zapisy: księga od chwili włączenia (R1 migracja)
+    if (!Number.isFinite(amount) || amount === 0 || !investmentPool.ledgerSince) return; // strata może być ujemna (zysk z przejęcia); stare zapisy: księga od chwili włączenia
     const entry = getPoolLedger(id);
     entry[key] = (Number(entry[key]) || 0) + amount;
 }
