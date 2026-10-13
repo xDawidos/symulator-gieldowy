@@ -841,6 +841,7 @@ function foundSubsidiary(parent) {
         insiderShares: 0,
         exchange: exchangeKey,
         sector: [...(parent.sector || [])],
+        segments: getStockSegments(parent).map(seg => ({ ...seg })), // T1b: córka dziedziczy segmenty matki
         specializationSectors: [...(parent.specializationSectors || parent.sector || [])],
         financialHealth: 1,
         volatilityFactor: Number(parent.baseVolatilityFactor || parent.volatilityFactor) || 1,
@@ -1106,13 +1107,13 @@ const ETF_WEIGHTINGS = { cap: 'wg kapitalizacji', equal: 'równe wagi', value: '
 
 const ETF_TEMPLATES = [
     { key: 'Technologia', label: 'Tech', rules: { sectors: ['Technologia', 'Gaming', 'Badania'] } },
-    { key: 'Bankowość', label: 'Banki', rules: { sectors: ['Bankowość', 'Bankowość Komercyjna', 'Finanse'] } },
+    { key: 'Bankowość', label: 'Banki', rules: { sectors: ['Bankowość', 'Finanse'] } },
     { key: 'Przemysł', label: 'Przemysł', rules: { sectors: ['Przemysł', 'Chemia'] } },
     { key: 'Energia', label: 'Energia', rules: { sectors: ['Energia'] } },
     { key: 'Nieruchomości', label: 'Nieruchomości', rules: { sectors: ['Nieruchomości', 'Budowlany'] } },
     { key: 'Medycyna', label: 'Zdrowie', rules: { sectors: ['Medycyna'] } },
     { key: 'Konsument', label: 'Konsument', rules: { sectors: ['Dobra konsumpcyjne', 'Żywność', 'Turystyka'] } },
-    { key: 'Usługi', label: 'Usługi', rules: { sectors: ['Usługi', 'Logistyka', 'Transport', 'Media'] } },
+    { key: 'Usługi', label: 'Usługi', rules: { sectors: ['Usługi', 'Transport i logistyka', 'Media'] } },
     { key: 'Dywidendowy', label: 'Dywidendowy', rules: { dividendOnly: true } },
     { key: 'Arystokraci', label: 'Arystokratów', rules: { aristocratsOnly: true } },
     { key: 'Złoty', label: 'Blue Chip', rules: { minExchangeLevel: 3 } },
@@ -1206,7 +1207,7 @@ function isEtfEligible(etf, stock) {
     const fair = Number(stock.fundamentals?.fairValue);
     if (fair > 0 && (stock.price > fair * 4 || stock.price < fair / 4)) return false;
     if (r.assetType ? stock.assetType !== r.assetType : Boolean(stock.assetType)) return false;
-    if (r.sectors?.length && !stock.sector?.some(sector => r.sectors.includes(sector))) return false;
+    if (r.sectors?.length && !stock.sector?.some(sector => r.sectors.some(name => canonicalSectorName(name) === sector))) return false; // T1a: reguły ze starych zapisów
     if (r.dividendOnly && !(stock.assetType === 'REIT' || (stock.dividendHistory || []).length > 0 || stock.dividendPolicy && stock.dividendPolicy !== 'Growth')) return false;
     if (r.aristocratsOnly && !stock.isDividendAristocrat) return false;
     if (r.stateOnly && !stock.isStateOwned) return false;
@@ -1710,6 +1711,7 @@ function createListedCompany({ name, symbol, sector, price, totalShares, exchang
         reputation: { player: 0 }
     };
     delete stock.assetType;
+    ensureStockSegments(stock); // T1a: sektor z rejestru i segmenty od razu
     ['fundingGoal', 'currentFunding', 'developmentProgress', 'successChance', 'stage', 'isScam', 'isWhiteCrow', 'investors', 'ipoPriceBonus', 'overfundingEndTime'].forEach(key => delete stock[key]);
     const equity = price * totalShares;
     stock.balanceSheet = { assets: equity * 1.2, liabilities: equity * 0.2, shareCapital: equity * 0.3, retainedEarnings: equity * 0.7 };
@@ -1727,7 +1729,7 @@ function createListedCompany({ name, symbol, sector, price, totalShares, exchang
 
 function spawnMarketMember(operatorId, reason) {
     if (isInternetMarket(operatorId) ? !(hasInternetMemberSlot(operatorId) && hasFreeTotalListingSlot()) : !hasFreeListingSlot()) return null; // D1: limit spółek na rynek; P1: sufit krajowy i łączny
-    const sectors = Object.keys(SECTOR_PROFILES).filter(s => !['Bankowość', 'Bankowość Komercyjna'].includes(s));
+    const sectors = SECTOR_NAMES.filter(s => s !== 'Bankowość');
     const sector = [getRandomElement(sectors)];
     const base = generateNewStartup();
     // Generator startupów nie zna wszystkich sektorów — wtedy nazwa „marka + sektor”.

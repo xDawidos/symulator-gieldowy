@@ -695,12 +695,12 @@ const MAX_MEMBER_SHARE = 0.6;              // jedna spółka finansuje najwyżej
 
 const MEGA_PROJECTS = [
     { id: 'stadium',    name: 'Stadion Narodowy',              icon: '🏟️', cost: 30e6, quarters: 6, sectors: ['Usługi', 'Turystyka', 'Media'],        bonus: { growth: 0.006, valuation: 0.03, health: 0.3 } },
-    { id: 'airport',    name: 'Port lotniczy',                 icon: '✈️', cost: 60e6, quarters: 8, sectors: ['Transport', 'Logistyka', 'Turystyka'], bonus: { growth: 0.010, valuation: 0.05, health: 0.4 } },
+    { id: 'airport',    name: 'Port lotniczy',                 icon: '✈️', cost: 60e6, quarters: 8, sectors: ['Transport i logistyka', 'Turystyka'], bonus: { growth: 0.010, valuation: 0.05, health: 0.4 } },
     { id: 'nuclear',    name: 'Elektrownia jądrowa',           icon: '☢️', cost: 80e6, quarters: 10, sectors: ['Energia', 'Przemysł'],                 bonus: { growth: 0.010, valuation: 0.06, health: 0.6 } },
-    { id: 'metro',      name: 'Metro',                         icon: '🚇', cost: 50e6, quarters: 8, sectors: ['Transport', 'Nieruchomości'],          bonus: { growth: 0.008, valuation: 0.04, health: 0.3 } },
-    { id: 'seaport',    name: 'Port morski',                   icon: '⚓', cost: 45e6, quarters: 7, sectors: ['Logistyka', 'Transport', 'Przemysł'],   bonus: { growth: 0.008, valuation: 0.04, health: 0.4 } },
+    { id: 'metro',      name: 'Metro',                         icon: '🚇', cost: 50e6, quarters: 8, sectors: ['Transport i logistyka', 'Nieruchomości'],          bonus: { growth: 0.008, valuation: 0.04, health: 0.3 } },
+    { id: 'seaport',    name: 'Port morski',                   icon: '⚓', cost: 45e6, quarters: 7, sectors: ['Transport i logistyka', 'Przemysł'],   bonus: { growth: 0.008, valuation: 0.04, health: 0.4 } },
     { id: 'research',   name: 'Centrum badawcze',              icon: '🔬', cost: 25e6, quarters: 5, sectors: ['Badania', 'Medycyna', 'Technologia'],  bonus: { growth: 0.006, valuation: 0.05, health: 0.3 } },
-    { id: 'bridge',     name: 'Most nad rzeką',                icon: '🌉', cost: 20e6, quarters: 5, sectors: ['Transport', 'Logistyka', 'Budowlany'],  bonus: { growth: 0.004, valuation: 0.02, health: 0.2 } },
+    { id: 'bridge',     name: 'Most nad rzeką',                icon: '🌉', cost: 20e6, quarters: 5, sectors: ['Transport i logistyka', 'Budowlany'],  bonus: { growth: 0.004, valuation: 0.02, health: 0.2 } },
     { id: 'hospital',   name: 'Szpital kliniczny',             icon: '🏥', cost: 35e6, quarters: 6, sectors: ['Medycyna', 'Usługi'],                  bonus: { growth: 0.006, valuation: 0.04, health: 0.4 } },
     { id: 'techcampus', name: 'Kampus technologiczny',         icon: '💻', cost: 40e6, quarters: 6, sectors: ['Technologia', 'Gaming', 'Badania'],    bonus: { growth: 0.009, valuation: 0.05, health: 0.3 } },
     { id: 'expo',       name: 'Centrum wystawiennicze',        icon: '🏛️', cost: 22e6, quarters: 5, sectors: ['Usługi', 'Media', 'Dobra konsumpcyjne'], bonus: { growth: 0.005, valuation: 0.03, health: 0.2 } },
@@ -711,7 +711,7 @@ const TIMED_PROJECT_TEMPLATES = [
     { id: 'games',    name: 'Igrzyska akademickie',     icon: '🏅', cost: 6e6, quarters: 3, sectors: ['Usługi', 'Turystyka', 'Media'], bonus: { growth: 0.003, valuation: 0.01, health: 0.1 } },
     { id: 'climate',  name: 'Szczyt klimatyczny',       icon: '🌍', cost: 4e6, quarters: 2, sectors: ['Energia', 'Chemia', 'Usługi'],  bonus: { growth: 0.002, valuation: 0.015, health: 0.1 } },
     { id: 'techfest', name: 'Festiwal technologii',     icon: '🤖', cost: 5e6, quarters: 2, sectors: ['Technologia', 'Gaming'],        bonus: { growth: 0.003, valuation: 0.015, health: 0.1 } },
-    { id: 'station',  name: 'Remont dworca głównego',   icon: '🚉', cost: 8e6, quarters: 3, sectors: ['Transport', 'Budowlany'],       bonus: { growth: 0.003, valuation: 0.01, health: 0.15 } },
+    { id: 'station',  name: 'Remont dworca głównego',   icon: '🚉', cost: 8e6, quarters: 3, sectors: ['Transport i logistyka', 'Budowlany'],       bonus: { growth: 0.003, valuation: 0.01, health: 0.15 } },
     { id: 'culture',  name: 'Europejska Stolica Kultury', icon: '🎭', cost: 7e6, quarters: 3, sectors: ['Media', 'Turystyka', 'Usługi'], bonus: { growth: 0.003, valuation: 0.02, health: 0.1 } },
     { id: 'floodwall', name: 'Wały przeciwpowodziowe',  icon: '🌊', cost: 5e6, quarters: 2, sectors: ['Budowlany', 'Nieruchomości'],   bonus: { growth: 0.002, valuation: 0.01, health: 0.2 } }
 ];
@@ -780,7 +780,7 @@ function findBuilder(project) {
 function findConsortiumCandidates(project, exclude = []) {
     const minContribution = project.cost * 0.1;
     return stocks.filter(s => !s.assetType && !s.isBankrupt && !s.mergerProcess && !exclude.includes(s.symbol) && s.cash >= minContribution && !s.sector?.includes('Budowlany'))
-        .map(s => ({ stock: s, score: (s.sector?.some(sec => project.sectors.includes(sec)) ? 2 : 1) * s.cash }))
+        .map(s => ({ stock: s, score: (s.sector?.some(sec => project.sectors.some(name => canonicalSectorName(name) === sec)) ? 2 : 1) * s.cash }))
         .sort((a, b) => b.score - a.score).map(c => c.stock);
 }
 

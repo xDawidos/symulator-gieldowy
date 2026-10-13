@@ -628,7 +628,7 @@ function triggerMainMarketEventCycle() {
 
     // Eventy bankowe
     if (Math.random() < 0.04) {
-        const activeBankStocks = stocks.filter(s => s.sector.includes('Bankowość Komercyjna') && !s.isBankrupt);
+        const activeBankStocks = stocks.filter(s => s.isBankStock && !s.isBankrupt) // T1a: wszystkie banki;
         if (activeBankStocks.length > 0) {
             const targetBankStock = getRandomElement(activeBankStocks);
             const eventData = getRandomElement(bankingSectorEventsPrompts);
@@ -1220,7 +1220,7 @@ function resolveBankIPO(decision) {
         totalShares: offer.ipoTotalShares,
         maxShares: offer.ipoTotalShares * 2,
         sharesHeld: playerBoughtShares,
-        sector: ['Bankowość Komercyjna', 'Finanse'],
+        sector: ['Bankowość'], // T1a: podsektor z typu banku
         financialHealth: 2,
         balanceSheet: {
             assets: bankToIPO.cash + offer.ipoTotalShares * offer.ipoSharePrice * 0.2,

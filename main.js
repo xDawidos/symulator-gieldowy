@@ -28,8 +28,8 @@ const LEGACY_SAVE_KEYS = ['gra_inwestycyjna_dawid_save_v2', 'gra_inwestycyjna_da
 // v8: klienci z charakterami i rynek wtórny JU (migracja typów klientów przy wczytaniu).
 // v13: społeczeństwo i rynek pracy (society, stock.workforce, trzecia partia). Starsze zapisy: kraj od zera,
 // zatrudnienie według giełdy, polityka według cech prezesa, związki tylko w spółkach państwowych (30%).
-const SAVE_FORMAT_VERSION = 13;
-const SUPPORTED_SAVE_VERSIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
+const SAVE_FORMAT_VERSION = 14; // 0.14 T1: segmenty spółek, sektory z rejestru
+const SUPPORTED_SAVE_VERSIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
 
 let lastSaveReport = null;
 let saveDisabledUntilReload = false;
@@ -123,10 +123,29 @@ function compactPricePoints(points) {
 const roundList = list => Array.isArray(list) ? list.map(value => roundSignificant(value)) : list;
 const roundRecords = list => Array.isArray(list) ? list.map(item => item && typeof item === 'object' ? Object.fromEntries(Object.entries(item).map(([key, value]) => [key, roundSignificant(value)])) : roundSignificant(item)) : list;
 
+/** 0.14 T1: segmenty w zapisie zwięźle — „sektor|podsektor|udział” rozdzielone „;”; stock.sector wyliczany przy wczytaniu. */
+function encodeSegmentsForSave(segments) {
+    return segments.map(seg => `${seg.sector}|${seg.subsector || ''}|${Math.round(seg.share * 1e4) / 1e4}`).join(';');
+}
+
+function decodeSavedSegments(text) {
+    const segments = String(text).split(';').map(part => {
+        const [sector, subsector, share] = part.split('|');
+        return { sector, subsector: subsector || null, share: Number(share) };
+    }).filter(seg => seg.sector && seg.share > 0);
+    const total = segments.reduce((sum, seg) => sum + seg.share, 0);
+    return total > 0 ? segments.map(seg => ({ ...seg, share: seg.share / total })) : [];
+}
+
 function serializeStocksForSave(level = 0) {
     const limits = SAVE_COMPACT_LEVELS[Math.max(0, Math.min(2, Number(level) || 0))];
     const serialized = serializeWithStockRefs(stocks, stocks);
     for (const company of serialized) {
+        if (Array.isArray(company.segments) && company.segments.length) {
+            company.seg = encodeSegmentsForSave(company.segments);
+            delete company.segments;
+            delete company.sector; // wyliczany z segmentów
+        }
         if (company.isBankrupt) {
             // Upadła spółka: tylko dane do listy i statystyk — bez historii wykresów i raportów.
             company.lineHistory = []; company.candlestickHistory = []; company.chartEvents = []; company.priceHistory = [];
@@ -325,6 +344,11 @@ function applySaveSnapshot(snapshot) {
             continue;
         }
         bySymbol.set(company.symbol, company);
+        if (typeof company.seg === 'string') { // v14: segmenty zwięźle, sektor z segmentów
+            company.segments = decodeSavedSegments(company.seg);
+            company.sector = getSectorsFromSegments(company.segments);
+            delete company.seg;
+        }
         restoredStocks.push(company);
     }
 
@@ -440,6 +464,11 @@ function applySaveSnapshot(snapshot) {
 
     // --- Wszystko poprawne: podmieniamy stan gry ---
     stocks = restoredStocks;
+    // v14 (0.14 T1): jedna migracja — najpierw stare nazwy sektorów (Bankowość Komercyjna, Finanse Konsumenckie,
+    // Międzynarodowy, Logistyka, Transport), potem segmenty z równymi udziałami; specjalizacje holdingów po nowemu.
+    const migratedSectors = ensureAllStockSegments();
+    stocks.forEach(stock => { if (Array.isArray(stock.specializationSectors)) stock.specializationSectors = [...new Set(stock.specializationSectors.map(canonicalSectorName).filter(Boolean))]; });
+    if (migratedSectors && (snapshot.version || 0) < 14) report.warnings.push(`Sektory i segmenty ${migratedSectors} spółek według rejestru 0.14 (migracja v14).`);
 
     const resolveOther = value => resolveStockRefs(value, bySymbol, missing);
     if (Array.isArray(snapshot.commercialBanks)) commercialBanks = resolveOther(snapshot.commercialBanks);
@@ -1101,6 +1130,7 @@ gameTimers.weekly = setGameInterval(() => {
         if (isGamePaused) return;
         noteQuarterForSpeedStats();
         reviewCompanyPlacements();
+        ensureAllStockSegments(); // 0.14 T1a: nowe i zmienione spółki — sektory z rejestru, segmenty
         processEliteExchangesQuarterly(); // Rubin / Szmaragd / Diament, spółki zależne (finance.js)
         payBondCoupons(); // kupony kwartalne (finance.js)
         processPublicInvestmentFunding(); // BC → spółki państwowe, miasto → spółki miejskie (investments.js)
@@ -1585,6 +1615,7 @@ function createNewWorld() {
     initMarketOperators(); // GPW i przyszli operatorzy rynków (markets.js)
     initDefenseSector(); // spółki zbrojeniowe i fundusz Gwardia (defense.js)
     specialProjects = createSpecialProjects(); // projekty specjalne miasta (projects.js)
+    ensureAllStockSegments(); // 0.14 T1a: sektory z rejestru i segmenty (przed ETF-ami i zatrudnieniem)
     initializeEtfs(); // ETF-y z portfelami prawdziwych akcji (etf.js)
     console.log("[M&A Init] Inicjalizacja nastawienia mediów...");
     const mediaCompanies = stocks.filter(s => s.specializationSectors?.includes('Media'));

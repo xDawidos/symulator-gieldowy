@@ -19,6 +19,22 @@ function setSectorChip(el, sector) {
     }
 }
 
+/** T1b: „🏦 Bankowość · Bank komercyjny” — sektor główny z ikoną i podsektorem. */
+function formatMainSectorLabel(stock) {
+    const main = getMainSector(stock);
+    if (!main) return '—';
+    const sub = getMainSubsector(stock);
+    return `${SECTORS[main]?.icon || ''} ${main}${sub ? ` · ${sub}` : ''}`.trim();
+}
+
+/** T1b: „Struktura przychodów” — pasek segmentów (tylko przy ≥ 2 segmentach), segment główny wyróżniony. */
+function renderSegmentBar(stock) {
+    const segments = [...getStockSegments(stock)].sort((a, b) => b.share - a.share);
+    if (segments.length < 2) return '';
+    const parts = segments.map((seg, i) => `<span class="cc-seg${i === 0 ? ' cc-seg-main' : ''}" style="flex:${seg.share}" title="${escapeHtml(`${seg.sector}${seg.subsector ? ` · ${seg.subsector}` : ''}: ${(seg.share * 100).toFixed(0)}% przychodów`)}">${SECTORS[seg.sector]?.icon || ''} ${escapeHtml(seg.sector)} ${(seg.share * 100).toFixed(0)}%</span>`).join('');
+    return `<div class="cc-segments"><span class="text-xs text-muted">Struktura przychodów</span><div class="cc-seg-bar">${parts}</div></div>`;
+}
+
 /** 0.13.1 (B10): lista sektorów z faktycznych spółek (typy specjalne jako osobne pozycje, np. REIT). */
 let sectorFilterSignature = '';
 function getMarketSectorList() {
@@ -791,6 +807,8 @@ function displayStocks(previousInputValues = {}) {
   }
 
   if (typeof renderSectorFilters === 'function') renderSectorFilters();
+
+  // Filtrowanie spółek do wyświetlenia
   const selectedSector = document.getElementById('sector-filter').value;
 
   // Filtrowanie spółek do wyświetlenia
@@ -876,7 +894,7 @@ function displayStocks(previousInputValues = {}) {
     const changeSign = changePct > 0 ? '+' : '';
     const primarySector =
       Array.isArray(stock.sector) && stock.sector.length > 0
-        ? stock.sector[0]
+        ? getMainSector(stock)
         : 'Rynek';
     const availabilityPct =
       stock.totalShares > 0
@@ -2733,7 +2751,7 @@ function renderCompanyCard() {
     }
     const f = stock.fundamentals ? updateFundamentalRatios(stock) : null;
     const week = getStockChangePct(stock, 1);
-    const sector = (stock.sector || []).join(', ') || '—';
+    const sector = formatMainSectorLabel(stock); // T1b: sektor główny z ikoną i podsektorem
     const exchange = exchanges[stock.exchange]?.name || stock.exchange || '—';
     const health = Number(stock.financialHealth) || 0;
     const healthLabel = health >= 3 ? 'bardzo dobra' : health >= 1 ? 'dobra' : health > -1 ? 'przeciętna' : health > -3 ? 'słaba' : 'krytyczna';
@@ -2751,11 +2769,12 @@ function renderCompanyCard() {
                 <span class="${week > 0 ? 'text-up' : week < 0 ? 'text-down' : 'text-muted'}">${week >= 0 ? '+' : ''}${(week * 100).toFixed(2)}% tydz.</span>
             </div>
         </div>
+        ${renderSegmentBar(stock)}
         ${typeof renderDividendBadges === 'function' ? renderDividendBadges(stock) : ''}
         ${stock.pendingDividend ? `<p class="text-sm cc-exdiv">✂️ Ogłoszona dywidenda <strong>${stock.pendingDividend.dps.toFixed(2)} zł/akcję</strong> — dzień odcięcia za ok. ${Math.max(1, Math.round(stock.dividendTimer / BASE_DELAYS.weekly))} tydz. gry. Dywidendę dostaje, kto ma akcje w dniu odcięcia; tego dnia kurs spada o mniej więcej jej wartość.</p>` : ''}`;
 
     // N1: porównanie z medianą sektora pod wartością kafelka.
-    const med = typeof getSectorMedians === 'function' ? getSectorMedians(stock.sector?.[0]) : null;
+    const med = typeof getSectorMedians === 'function' ? getSectorMedians(getMainSector(stock)) : null;
     const vs = (value, sectorValue, options) => { const c = med && typeof compareWithSector === 'function' ? compareWithSector(value, sectorValue, options) : null; return c ? `<em class="${c.cls}">${c.text}</em>` : ''; };
     const tile = (label, value, hint, cls = '', extra = '') => `<div class="cc-kpi" title="${escapeHtml(hint)}"><span>${label}</span><strong class="${cls}">${value}</strong>${extra}</div>`;
     const pctFmt = v => `${(v * 100).toFixed(1)}%`;
@@ -6999,7 +7018,7 @@ function renderCompanyCardWorkforce(stock) {
     const policy = LABOR_POLICIES[wf.policy] || LABOR_POLICIES.standard;
     const index = getLaborCostIndex(stock);
     const laborPct = wf.laborShare * index;
-    const peers = getWorkforceCompanies().filter(s => s.sector?.[0] === stock.sector?.[0]);
+    const peers = getWorkforceCompanies().filter(s => getMainSector(s) === getMainSector(stock));
     const sectorPct = peers.length ? peers.reduce((sum, s) => sum + s.workforce.laborShare * getLaborCostIndex(s), 0) / peers.length : laborPct;
     const controls = typeof canFundControlAgm === 'function' && canFundControlAgm(stock);
     const locked = isLaborPolicyLocked(stock);

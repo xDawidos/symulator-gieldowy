@@ -63,9 +63,9 @@ function getSectorMedians(sector) {
     if (now - sectorMedianCache.at > 2000) {
         const groups = {};
         for (const stock of stocks) {
-            if (stock.assetType || stock.isBankrupt || !stock.sector?.[0]) continue;
+            if (stock.assetType || stock.isBankrupt || !getMainSector(stock)) continue;
             const m = getCompanyMetrics(stock);
-            if (m) (groups[stock.sector[0]] = groups[stock.sector[0]] || []).push(m);
+            if (m) (groups[getMainSector(stock)] = groups[getMainSector(stock)] || []).push(m);
         }
         const data = {};
         for (const [name, list] of Object.entries(groups)) {
@@ -117,8 +117,8 @@ const ACADEMY_ENTRIES = {
         text: 'C/Z to kurs podzielony przez zysk na akcję z ostatnich 4 kwartałów. Mówi, ile lat zysku „płacisz” kupując akcję. Niskie C/Z bywa okazją, ale też sygnałem problemów — zawsze porównuj ze spółkami z tego samego sektora.',
         example: () => {
             const s = bestBy(pickListed(x => x.fundamentals.peRatio > 0), x => getMarketCapValue(x));
-            const med = s && getSectorMedians(s.sector[0]);
-            return s && med?.pe ? `${s.name}: C/Z ${s.fundamentals.peRatio.toFixed(1)}, mediana sektora ${s.sector[0]}: ${med.pe.toFixed(1)}.` : '';
+            const med = s && getSectorMedians(getMainSector(s));
+            return s && med?.pe ? `${s.name}: C/Z ${s.fundamentals.peRatio.toFixed(1)}, mediana sektora ${getMainSector(s)}: ${med.pe.toFixed(1)}.` : '';
         },
         quiz: [
             { q: 'Kurs 50 zł, zysk na akcję 5 zł. Ile wynosi C/Z?', a: ['10', '5', '250'], c: 0 },
@@ -391,6 +391,16 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Dlaczego spółki spożywcze nazywa się defensywnymi?', a: ['Ludzie jedzą także w kryzysie', 'Mają zawsze wysoką dywidendę', 'Państwo gwarantuje ich zyski'], c: 0 }
         ]
     },
+    segmenty: {
+        title: 'Segmenty działalności', icon: '🧩',
+        text: 'Duża spółka rzadko robi jedną rzecz. Segmenty to części działalności, np. bank z ubezpieczeniami albo przemysł z energetyką. Wycenę i ryzyko spółki liczy się jako średnią segmentów ważoną ich udziałem w przychodach. Segment główny (największy udział) decyduje, z jakim sektorem porównujemy spółkę.',
+        example: () => { const s = bestBy(stocks.filter(x => !x.assetType && !x.isBankrupt && getStockSegments(x).length > 1), x => getStockSegments(x).length); return s ? `${s.name}: ${getStockSegments(s).map(seg => `${seg.sector} ${(seg.share * 100).toFixed(0)}%`).join(', ')} — sektor główny ${getMainSector(s)}.` : ''; },
+        quiz: [
+            { q: 'Spółka ma 70% przychodów z energetyki i 30% z chemii. Jej sektor główny to…', a: ['Energia', 'Chemia', 'oba po równo'], c: 0 },
+            { q: 'Profil ryzyka spółki z kilkoma segmentami to…', a: ['średnia segmentów ważona udziałami', 'profil najmniejszego segmentu', 'zawsze profil rynku'], c: 0 },
+            { q: 'Z czyją medianą C/Z porównuje się spółkę wielosegmentową?', a: ['sektora głównego', 'każdego segmentu osobno', 'całego rynku'], c: 0 }
+        ]
+    },
     kosztPracy: {
         title: 'Koszt pracy i wydajność', icon: '👷',
         text: 'Płace to często największy koszt spółki: od kilku procent przychodów u dewelopera do 40% w usługach. Liczy się nie sama płaca, ale płaca na jednostkę pracy — wydajność. Wyższe płace przy jeszcze wyższej wydajności obniżają koszt. Zakładka Zatrudnienie pokazuje koszt pracy w % przychodów na tle sektora.',
@@ -589,7 +599,8 @@ function checkAcademyTriggers() {
     if (held.some(s => s.workforce?.union || (typeof getSectorUnion === 'function' && getSectorUnion(s)))) unlockAcademyEntry('zwiazek');
     if (held.some(s => s.workforce?.strike)) { unlockAcademyEntry('strajk'); unlockAcademyEntry('dzwignia'); }
     if (held.some(s => typeof getGreyShare === 'function' && getGreyShare(s) > 0.05) && getSkillLevel('accountant') >= 4) unlockAcademyEntry('szaraStrefa');
-    if (held.some(s => ['Turystyka', 'Gaming', 'Żywność'].includes(s.sector?.[0]))) unlockAcademyEntry('elastycznosc');
+    if (held.some(s => ['Turystyka', 'Gaming', 'Żywność'].includes(getMainSector(s)))) unlockAcademyEntry('elastycznosc');
+    if (held.some(s => getStockSegments(s).length > 1)) unlockAcademyEntry('segmenty'); // 0.14 T1b
     if (typeof society === 'object' && society) {
         if (Math.abs((macro?.unemployment || NATURAL_UNEMPLOYMENT) - NATURAL_UNEMPLOYMENT) > 0.015) unlockAcademyEntry('phillips');
         if (society.shortage > 1.05) unlockAcademyEntry('niedobor');
@@ -752,7 +763,7 @@ function getValuationMethods(stock) {
     const m = getCompanyMetrics(stock);
     const f = stock.fundamentals;
     if (!m || !f) return null;
-    const med = getSectorMedians(stock.sector?.[0]) || {};
+    const med = getSectorMedians(getMainSector(stock)) || {};
     const pe = m.eps > 0 && med.pe ? m.eps * med.pe : null;
     const book = f.bookValuePerShare > 0 && med.pb ? f.bookValuePerShare * med.pb : null;
     // Model Gordona: D1 / (r − g); r = stopa bazowa + 5 pkt premii za ryzyko akcji, g ≤ r − 2 pkt.
@@ -781,7 +792,7 @@ function runScanner(filters = scannerView.filters, sort = scannerView.sort, dir 
         if (filters.accessibleOnly && !canAccessExchange(stock.exchange)) continue;
         const m = getCompanyMetrics(stock);
         if (!m) continue;
-        const med = getSectorMedians(stock.sector?.[0]) || {};
+        const med = getSectorMedians(getMainSector(stock)) || {};
         if (filters.peBelowSector && !(m.pe && med.pe && m.pe < med.pe)) continue;
         if (num(filters.pbMax) !== null && !(m.pb && m.pb <= num(filters.pbMax))) continue;
         if (num(filters.dyMin) !== null && !(m.dy * 100 >= num(filters.dyMin))) continue;
@@ -810,12 +821,12 @@ function getScannerWorkforce(stock) {
     if (scannerLaborSectorCache.at !== quarter || !scannerLaborSectorCache.data.__n || scannerLaborSectorCache.data.__n !== stocks.length) {
         const data = { __n: stocks.length };
         const groups = {};
-        for (const s of stocks) if (s.workforce && !s.isBankrupt) (groups[s.sector?.[0]] = groups[s.sector?.[0]] || []).push(s.workforce.laborShare * getLaborCostIndex(s));
+        for (const s of stocks) if (s.workforce && !s.isBankrupt) (groups[getMainSector(s)] = groups[getMainSector(s)] || []).push(s.workforce.laborShare * getLaborCostIndex(s));
         for (const [sector, list] of Object.entries(groups)) data[sector] = median(list);
         scannerLaborSectorCache = { at: quarter, data };
     }
     const labor = stock.workforce.laborShare * getLaborCostIndex(stock);
-    const sector = scannerLaborSectorCache.data[stock.sector?.[0]] || labor;
+    const sector = scannerLaborSectorCache.data[getMainSector(stock)] || labor;
     return { labor, laborVsSector: sector > 0 ? labor / sector - 1 : 0, satisfaction: stock.workforce.satisfaction, union: getUnionStatus(stock), risk: getStrikeRisk(stock), grey: getGreyShare(stock) };
 }
 
@@ -872,7 +883,7 @@ function renderScannerFilters() {
     const box = document.getElementById('scanner-filters');
     if (!box) return;
     const f = scannerView.filters;
-    const sectors = [...new Set(stocks.filter(s => !s.assetType && !s.isBankrupt).map(s => s.sector?.[0]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pl'));
+    const sectors = [...new Set(stocks.filter(s => !s.assetType && !s.isBankrupt).map(s => getMainSector(s)).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pl'));
     const input = (key, label, placeholder, title) => `<label class="text-sm" title="${escapeHtml(title)}">${label} <input type="text" inputmode="decimal" class="w-xs" value="${escapeHtml(f[key] ?? '')}" placeholder="${placeholder}" oninput="setScannerFilter('${key}', this.value)"></label>`;
     const own = (playerProfile?.scannerPresets || []).map(p => `<button class="btn-xs btn-secondary" onclick="applyScannerPreset('${escapeHtml(p.name).replace(/'/g, '&#39;')}')">⭐ ${escapeHtml(p.name)}</button>`).join('');
     box.innerHTML = `
@@ -912,7 +923,7 @@ function renderScannerResults() {
                 ${head('health', 'Kondycja', 'Kondycja finansowa')}${head('labor', 'Praca', 'Koszt pracy w % przychodów (w nawiasie: względem mediany sektora)')}${head('satisfaction', 'Zadow.', 'Zadowolenie pracowników 0–100')}<th title="Związek zawodowy: brak / zakładowy / sektorowy">Związek</th><th title="Ryzyko strajku">Strajk</th>${level >= 3 ? head('upside', 'Potencjał', 'Wartość godziwa / kurs − 1') : ''}${flagsOn ? '<th title="Czerwone flagi (Księgowy poz. 4)">🚩</th>' : ''}
             </tr></thead>
             <tbody>${rows.slice(0, 120).map(({ stock, m, med, work, upside }) => `<tr class="clickable" onclick="openDescriptionModal('${stock.symbol}')">
-                <td>${escapeHtml(stock.name)} <span class="text-xs text-muted">${escapeHtml(stock.symbol)} · ${escapeHtml(stock.sector?.[0] || '')}</span></td>
+                <td>${escapeHtml(stock.name)} <span class="text-xs text-muted">${escapeHtml(stock.symbol)} · ${escapeHtml(getMainSector(stock) || '')}</span></td>
                 <td class="cell-number">${formatZl(m.cap, 0)}</td>
                 <td class="cell-number ${cls(m.pe, med.pe, true)}">${fx(m.pe)}</td>
                 <td class="cell-number ${cls(m.pb, med.pb, true)}">${m.pb ? m.pb.toFixed(2) : '—'}</td>
@@ -978,7 +989,7 @@ const MENTOR_TASKS = {
         text: 'Kup spółkę z C/Z poniżej mediany jej sektora i dodatnim zyskiem. Trzymaj ją 2 kwartały.',
         lesson: 'cz',
         check: task => {
-            const pick = heldStocks().find(s => { const m = getCompanyMetrics(s); const med = getSectorMedians(s.sector?.[0]); return m?.pe && med?.pe && m.pe < med.pe && m.eps > 0; });
+            const pick = heldStocks().find(s => { const m = getCompanyMetrics(s); const med = getSectorMedians(getMainSector(s)); return m?.pe && med?.pe && m.pe < med.pe && m.eps > 0; });
             if (!pick) { task.data = {}; return false; }
             if (task.data.symbol !== pick.symbol) task.data = { symbol: pick.symbol, from: mentorQuarter() };
             return mentorQuarter() - task.data.from >= 2;
@@ -1010,8 +1021,8 @@ const MENTOR_TASKS = {
         track: 'risk', title: 'Pięć koszyków',
         text: 'Zbuduj portfel z co najmniej 5 sektorów, w którym żadna spółka nie przekracza 30% aktywów.',
         lesson: 'dywersyfikacja',
-        check: () => { const held = heldStocks(); const sectors = new Set(held.map(s => s.sector?.[0])); const assets = Math.max(1, getFundAssets()); return sectors.size >= 5 && held.every(s => playerPortfolio[s.symbol].shares * s.price / assets <= 0.3); },
-        progress: () => `${new Set(heldStocks().map(s => s.sector?.[0])).size}/5 sektorów`
+        check: () => { const held = heldStocks(); const sectors = new Set(held.map(s => getMainSector(s))); const assets = Math.max(1, getFundAssets()); return sectors.size >= 5 && held.every(s => playerPortfolio[s.symbol].shares * s.price / assets <= 0.3); },
+        progress: () => `${new Set(heldStocks().map(s => getMainSector(s))).size}/5 sektorów`
     },
     safeAssets: {
         track: 'risk', title: 'Bezpieczna część portfela',
@@ -1053,7 +1064,7 @@ const MENTOR_TASKS = {
         track: 'analyst', title: 'Szczęśliwa załoga, gruba marża',
         text: 'Kup spółkę z zadowoleniem pracowników > 70 i marżą powyżej mediany jej sektora (skaner: kolumny Zadow. i Marża).',
         lesson: 'kosztPracy',
-        check: () => heldStocks().some(s => { const m = getCompanyMetrics(s); const med = getSectorMedians(s.sector?.[0]); return (s.workforce?.satisfaction || 0) > 70 && m?.margin !== null && med?.margin !== undefined && m.margin > med.margin; }),
+        check: () => heldStocks().some(s => { const m = getCompanyMetrics(s); const med = getSectorMedians(getMainSector(s)); return (s.workforce?.satisfaction || 0) > 70 && m?.margin !== null && med?.margin !== undefined && m.margin > med.margin; }),
         progress: () => 'kup spółkę z zadowoleniem > 70 i marżą ponad sektor'
     },
     lawAnnouncement: {

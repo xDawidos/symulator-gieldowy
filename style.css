@@ -4438,6 +4438,11 @@ body.dark-mode #startup-incubator-panel.panel, #startup-incubator-panel.panel { 
 .mentor-cert-icon { font-size: 1.6rem; }
 .mentor-task { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; border-bottom: 1px solid var(--border-color, #30363d); padding: 8px 0; }
 .cc-exdiv { background: var(--bg-elevated, #1c2128); border-radius: 8px; padding: 6px 10px; }
+/* 0.14 T1b: struktura przychodów (segmenty) */
+.cc-segments { margin: 6px 0 4px; }
+.cc-seg-bar { display: flex; gap: 2px; border-radius: 6px; overflow: hidden; margin-top: 2px; }
+.cc-seg { min-width: 0; padding: 2px 6px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--bg-elevated, #1c2128); color: var(--text-muted, #8b949e); }
+.cc-seg-main { background: var(--accent-soft, #1f6feb33); color: inherit; font-weight: 600; }
 .stock-drawer-impact { color: var(--text-muted, #8b949e); padding: 4px 2px 0; }
 
 /* 0.13: Kraj (struktura klas, partie, ustawy) i Zatrudnienie */
