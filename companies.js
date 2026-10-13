@@ -10100,11 +10100,24 @@ const NUCLEAR_REGULATOR_DELAY = [2, 4];
 const NUCLEAR_MAX_DELAYS = 2;
 const NUCLEAR_REVENUE_BOOST = 0.15;        // działający blok: przychody +15% (trwale)
 const NUCLEAR_STATE_CONTRACT = 0.02;       // kontrakt z państwem: 2% przychodów kwartału × (dotacje partii − 1) / 0,5
+// Decyzja 12: państwowy program jądrowy — spółka państwowa buduje bez własnej gotówki (Skarb Państwa finansuje raty),
+// a szansa startu zależy od partii rządzącej (mnożnik dotacji: Blok Państwowy 1,5, Ludowcy 1,3, Koalicja Rynkowa 0,7).
+const NUCLEAR_STATE_START_CHANCE = 0.035;
+
+/** Szansa startu budowy w kwartale: spółka państwowa — według partii (bez warunku gotówki), prywatna — 4% przy gotówce. */
+function getNuclearStartChance(stock) {
+    if (!stock.isStateOwned) {
+        const cost = (Number(stock.fundamentals?.revenue) || 0) * NUCLEAR_COST_REVENUE_QUARTERS;
+        return (Number(stock.cash) || 0) >= cost * 0.3 ? NUCLEAR_START_CHANCE : 0;
+    }
+    const subsidies = Number(typeof getRulingParty === 'function' ? getRulingParty()?.subsidies : 1) || 1;
+    return NUCLEAR_STATE_START_CHANCE * Math.max(0.3, (subsidies - 0.5) / 0.5);
+}
 
 function startNuclearBlock(stock, quarter = getSubsectorQuarter()) {
     const revenue = Math.max(1000, Number(stock.fundamentals?.revenue) || 1000);
     const quarters = getRandomIntInRange(...NUCLEAR_BUILD_QUARTERS);
-    stock.nuclearBlock = { stage: 'construction', startedQuarter: quarter, dueQuarter: quarter + quarters, cost: Math.round(revenue * NUCLEAR_COST_REVENUE_QUARTERS), spent: 0, quarters, delays: 0 };
+    stock.nuclearBlock = { stage: 'construction', startedQuarter: quarter, dueQuarter: quarter + quarters, cost: Math.round(revenue * NUCLEAR_COST_REVENUE_QUARTERS), spent: 0, quarters, delays: 0, stateFunded: Boolean(stock.isStateOwned) };
     noteSubsectorStat('nuclearBlocks');
     logEvent(`☢️ ${stock.name} rozpoczyna budowę bloku jądrowego (ok. ${quarters} kw., koszt ${formatZl(stock.nuclearBlock.cost, 0)}). Przychód dopiero po zgodzie regulatora.`, 'company');
     if (typeof addChartEvent === 'function') addChartEvent(stock, '☢️', 'Start budowy bloku jądrowego');
@@ -10116,6 +10129,16 @@ function payNuclearInstallment(stock) {
     const block = stock.nuclearBlock;
     const installment = Math.min(block.cost - block.spent, Math.ceil(block.cost / block.quarters));
     if (!(installment > 0)) return 0;
+    // Decyzja 12: rata spółki państwowej ze Skarbu Państwa (dokapitalizowanie: aktywa i kapitał rosną, gotówka spółki bez zmian).
+    if (block.stateFunded && typeof governmentTreasury !== 'undefined' && governmentTreasury >= installment) {
+        governmentTreasury -= installment;
+        adjustBalanceSheet(stock, { assets: installment });
+        if (stock.balanceSheet) stock.balanceSheet.shareCapital = (Number(stock.balanceSheet.shareCapital) || 0) + installment; // dokapitalizowanie przez Skarb Państwa
+        block.spent += installment;
+        block.stateSpent = (block.stateSpent || 0) + installment;
+        if (typeof recordPayment === 'function') recordPayment('external:skarb-panstwa', 'external:budowa_bloku', installment, `Budowa bloku jądrowego ${stock.symbol} (Skarb Państwa)`);
+        return installment;
+    }
     adjustCompanyCash(stock, -installment); // aktywa bez zmian: gotówka zamienia się w budowę w toku
     block.spent += installment;
     if (typeof recordPayment === 'function') recordPayment(stock, 'external:budowa_bloku', installment, 'Budowa bloku jądrowego');
@@ -10168,8 +10191,7 @@ function processNuclearBlocks(quarter = getSubsectorQuarter()) {
         if (stock.assetType || stock.isBankrupt || getSubsectorMechanicShare(stock, 'nuclear') <= 0) continue;
         const block = stock.nuclearBlock;
         if (!block) {
-            const cost = (Number(stock.fundamentals?.revenue) || 0) * NUCLEAR_COST_REVENUE_QUARTERS;
-            if ((Number(stock.cash) || 0) >= cost * 0.3 && Math.random() < NUCLEAR_START_CHANCE) startNuclearBlock(stock, quarter);
+            if (Math.random() < getNuclearStartChance(stock)) startNuclearBlock(stock, quarter);
             continue;
         }
         if (block.stage === 'construction') {

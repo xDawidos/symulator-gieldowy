@@ -5185,6 +5185,41 @@ group('0.14 T2: Fintech — licencja KNF', () => {
     }));
 });
 
+group('0.14 decyzja 12: państwowy program jądrowy', () => {
+    test('spółka państwowa buduje blok bez własnej gotówki — raty płaci Skarb Państwa', () => {
+        const s = makeCompany('PNUK', { sector: ['Energia'], cash: 0, fixedAssets: 5_000_000 });
+        s.segments = [{ sector: 'Energia', subsector: 'Energetyka jądrowa', share: 1 }]; s.sector = ['Energia'];
+        s.isStateOwned = true;
+        initializeFundamentals(s, true);
+        resetWorld([s]);
+        const treasury = governmentTreasury;
+        try {
+            governmentTreasury = 1e12;
+            const block = startNuclearBlock(s, 0);
+            assert(block.stateFunded, 'finansowanie państwowe');
+            const cash0 = s.cash, assets0 = s.balanceSheet.assets;
+            const paid = payNuclearInstallment(s);
+            assert(paid > 0 && s.cash === cash0 && s.balanceSheet.assets === assets0 + paid && governmentTreasury === 1e12 - paid, 'Skarb płaci, gotówka spółki bez zmian');
+        } finally { governmentTreasury = treasury; }
+    });
+
+    test('szansa startu według partii: Blok Państwowy > Ludowcy > Koalicja Rynkowa; prywatna spółka bez gotówki nie zaczyna', () => {
+        const s = makeCompany('PNK2', { sector: ['Energia'], cash: 0 });
+        s.segments = [{ sector: 'Energia', subsector: 'Energetyka jądrowa', share: 1 }]; s.sector = ['Energia'];
+        initializeFundamentals(s, true);
+        resetWorld([s]);
+        assert(getNuclearStartChance(s) === 0, 'prywatna bez gotówki');
+        s.isStateOwned = true;
+        const ruling = macro.election.ruling, coalition = macro.election.coalition;
+        try {
+            macro.election.coalition = null;
+            const chance = id => { macro.election.ruling = id; return getNuclearStartChance(s); };
+            assert(chance('state') > chance('people') && chance('people') > chance('market') && chance('market') > 0, 'kolejność partii');
+        } finally { macro.election.ruling = ruling; macro.election.coalition = coalition; }
+        assert(SUBSECTOR_START_ASSIGNMENTS.PUR[1] === 'Energetyka jądrowa' && SUBSECTOR_START_ASSIGNMENTS.TRN[1] === 'Energetyka jądrowa', '2 spółki jądrowe na starcie');
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

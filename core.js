@@ -1851,6 +1851,7 @@ const SUBSECTOR_START_ASSIGNMENTS = {
     BLP: ['Medycyna', 'Sprzęt medyczny'],          // Błyskawiczna Proteza
     VTG: ['Medycyna', 'Biotechnologia'],           // VitaGen
     PUR: ['Energia', 'Energetyka jądrowa'],        // Państwowy Uran
+    TRN: ['Energia', 'Energetyka jądrowa'],        // Tauron (państwowy) — decyzja 12: państwowy program jądrowy
     BEW: ['Energia', 'OZE'],                       // Bałtycka Energia Wiatrowa
     ENG: ['Energia', 'OZE'],                       // Energa
     CTX: ['Technologia', 'Sztuczna inteligencja'], // Cortex Neural
