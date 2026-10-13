@@ -5440,6 +5440,18 @@ group('0.14 T3: kto decyduje — prezes, większościowiec', () => {
     });
 });
 
+group('0.14 T3: Akademia i skaner', () => {
+    test('hasła Akademii i filtr specjalizacji w skanerze', () => {
+        for (const id of ['dywersyfikacja', 'synergia', 'konglomerat']) assert(ACADEMY_ENTRIES[id]?.quiz?.length === 3, id);
+        const tv = makeCompany('NTV', { sector: ['Media'] }); tv.segments = [{ sector: 'Media', subsector: null, share: 1, niche: 'TV' }]; tv.sector = ['Media'];
+        const plain = makeCompany('NPL', { sector: ['Media'] });
+        [tv, plain].forEach(s => initializeFundamentals(s, true));
+        resetWorld([tv, plain]); ensureAllStockSegments();
+        const rows = runScanner({ ...SCANNER_DEFAULT_FILTERS, accessibleOnly: false, niche: 'TV' });
+        assert(rows.length === 1 && rows[0].stock.symbol === 'NTV', rows.map(r => r.stock.symbol).join());
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;
