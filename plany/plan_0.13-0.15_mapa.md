@@ -15,10 +15,11 @@ Stan na 2026-10-13: etap A (domknięcie 0.13 i 0.13.1) zrobiony na gałęzi work
 | 0.13 | S1–S6 (kraj, pracownicy, rynek pracy, związki, ustawy, spięcie z grą) | ✅ kod: `77fdeb0`, `cf0d161`, `62478bb`, 21 testów. ✅ pomiar A2 (`441d5d5`): wszystkie miary w celu; po strojeniu Oszczędna +2,6 pp. ⚠️ otwarte: rozrzut TSR Wyzysku nie jest największy |
 | 0.13.1 | B1–B13, D1/D2 (rynki internetowe, miękki limit), P1–P3 (sufity, „duchy posiadaczy”), decyzje 1–2, B5 | ✅ kod, testy 317/317. ✅ weryfikacja pełna (`raporty/weryfikacja_0.13.1.md`): OK z uwagami; decyzje balansu (zaufanie vs GIG, lokaty spółek) wdrożone |
 | 0.14 | T0 (prędkości ×100/×200) | ✅ `117feec` |
-| 0.14 | T1–T6 | ⬜ nie zaczęte (T6 dopisane 2026-10-12) |
+| 0.14 | T1 (rejestr sektorów, segmenty, filtry) | ✅ `7af0d0b` (T1a+T1b), `5dcb464` (T1c), zapis v14; testy 330/330; zapis +0,005%, marża +0,35 pp, GIG +1,2 pp przy tych samych warunkach (szum) |
+| 0.14 | T2–T6 | ⬜ nie zaczęte (T6 dopisane 2026-10-12) |
 | 0.15 | G0–G8 | ⬜ szkic, nie zaczęte |
 
-**Etap A zrobiony (A1–A4) razem z 3 decyzjami balansu.** Zostało: 6 części 0.14 + 9 etapów 0.15 = 15 pozycji.
+**Etap A zrobiony (A1–A4) razem z 3 decyzjami balansu; 0.14 T1 zrobione.** Zostało: 5 części 0.14 + 9 etapów 0.15 = 14 pozycji.
 
 ---
 

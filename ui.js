@@ -7,45 +7,102 @@
 // ## ui-update.js
 // #################################################################################
 
-// Sektorowe chipsy
-function setSectorChip(el, sector) {
-    document.querySelectorAll('.sector-chip:not(.owned-chip)').forEach(c => c.classList.remove('active'));
-    el.classList.add('active');
-    const sel = document.getElementById('sector-filter');
-    if (sel) {
-        sel.value = sector;
-        if (typeof displayStocks === 'function')
-            displayStocks(typeof getCurrentInputValues === 'function' ? getCurrentInputValues() : {});
-    }
+// 0.14 T1c: filtr sektora — chipy pogrupowane z liczbą spółek (sektor główny), przełącznik „także segmenty poboczne”,
+// podsektory wybranego sektora, osobny filtr „Typ”. Wybór zapamiętany w localStorage (jak inne ustawienia widoku).
+const SECTOR_FILTER_KEY = 'gra_inwestycyjna_sector_filter';
+let sectorFilterState = loadSectorFilterState();
+let sectorFilterSignature = '';
+
+function loadSectorFilterState() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(SECTOR_FILTER_KEY) || 'null');
+        if (saved && typeof saved === 'object') return { ...DEFAULT_SECTOR_FILTER, ...saved };
+    } catch (e) { /* brak localStorage */ }
+    return { ...DEFAULT_SECTOR_FILTER };
 }
 
-/** 0.13.1 (B10): lista sektorów z faktycznych spółek (typy specjalne jako osobne pozycje, np. REIT). */
-let sectorFilterSignature = '';
-function getMarketSectorList() {
-    const set = new Set();
-    for (const stock of stocks || []) {
-        if (stock.isBankrupt || stock.assetType === 'Startup') continue;
-        if (stock.assetType === 'REIT') { set.add('REIT'); continue; }
-        (Array.isArray(stock.sector) ? stock.sector : []).forEach(sector => sector && set.add(sector));
-    }
-    return [...set].sort((a, b) => a === 'REIT' ? 1 : b === 'REIT' ? -1 : a.localeCompare(b, 'pl'));
+function saveSectorFilterState() {
+    try { localStorage.setItem(SECTOR_FILTER_KEY, JSON.stringify(sectorFilterState)); } catch (e) { /* brak localStorage */ }
+}
+
+/** Zmiana filtra listy spółek (sektor / podsektor / poboczne / typ). */
+function setSectorFilter(changes) {
+    sectorFilterState = { ...sectorFilterState, ...changes };
+    if ('sector' in changes) sectorFilterState.subsector = null; // nowy sektor — podsektory od nowa
+    const select = document.getElementById('sector-filter');
+    if (select) select.value = sectorFilterState.sector;
+    saveSectorFilterState();
+    sectorFilterSignature = '';
+    if (typeof displayStocks === 'function') displayStocks(typeof getCurrentInputValues === 'function' ? getCurrentInputValues() : {});
+}
+
+// Zgodność: stare wywołania z chipów i kodu.
+function setSectorChip(el, sector) {
+    setSectorFilter({ sector });
+}
+
+/** Spółki widoczne w filtrze listy (bez spółek zależnych i upadłych). */
+function getSectorFilterBaseList() {
+    return (stocks || []).filter(stock => !stock.isBankrupt && !stock.isSubsidiaryOf && stock.assetType !== 'Startup');
+}
+
+/**
+ * Wspólny renderer chipów (lista spółek i skaner). state: { sector, subsector, secondary, type },
+ * onChange: nazwa funkcji globalnej przyjmującej obiekt zmian.
+ */
+function renderSectorFilterChips(list, state, onChange, options = {}) {
+    const { sectors, subsectors } = getSectorFilterCounts(list, state);
+    const call = changes => `${onChange}(${escapeHtml(JSON.stringify(changes))})`;
+    const chip = (label, active, changes, title = '') => `<span class="sector-chip${active ? ' active' : ''}" ${title ? `title="${escapeHtml(title)}"` : ''} onclick="${call(changes)}">${label}</span>`;
+    const groups = SECTOR_GROUPS.map(group => {
+        const items = group.sectors.filter(name => sectors[name] > 0 || state.sector === name);
+        if (!items.length) return '';
+        const label = group.sectors.length > 1 ? `<span class="sector-group" title="${escapeHtml(group.name)}">${group.icon}</span>` : ''; // grupa jednosektorowa: wystarczy ikona sektora
+        return `${label}${items.map(name => chip(`${SECTORS[name].icon} ${escapeHtml(name)} <small>${sectors[name] || 0}</small>`, state.sector === name, { sector: name }, `${group.name}: ${name}`)).join('')}`;
+    }).join('');
+    const subNames = state.sector !== 'all' ? Object.keys(SECTORS[state.sector]?.subsectors || {}).filter(name => subsectors[name] > 0) : [];
+    const subRow = subNames.length
+        ? `<div class="sector-subchips">${chip('Cały sektor', !state.subsector, { subsector: null })}${subNames.map(name => chip(`${escapeHtml(name)} <small>${subsectors[name]}</small>`, state.subsector === name, { subsector: name })).join('')}</div>` : '';
+    const typeOptions = INSTRUMENT_TYPES.filter(t => options.types ? options.types.includes(t.id) : true)
+        .map(t => `<option value="${t.id}" ${state.type === t.id ? 'selected' : ''}>${t.label}</option>`).join('');
+    const controls = `<div class="sector-filter-controls">
+        <label class="text-sm" title="Domyślnie filtr pokazuje spółki, dla których to sektor główny (największy segment). Włączone: także spółki z tym segmentem pobocznym (◐).">
+            <input type="checkbox" ${state.secondary ? 'checked' : ''} onchange="${onChange}({ secondary: this.checked })"> także segmenty poboczne</label>
+        ${options.hideType ? '' : `<label class="text-sm">Typ <select onchange="${onChange}({ type: this.value })">${typeOptions}</select></label>`}
+    </div>`;
+    return { chips: chip('Wszystkie', state.sector === 'all', { sector: 'all' }) + groups, extra: subRow + controls };
 }
 
 function renderSectorFilters() {
     const chips = document.getElementById('sector-chips');
-    const select = document.getElementById('sector-filter');
-    if (!chips || !select || typeof stocks === 'undefined') return;
-    const sectors = getMarketSectorList();
-    const signature = sectors.join('|');
+    const extra = document.getElementById('sector-filter-extra');
+    if (!chips || typeof stocks === 'undefined') return;
+    const list = getSectorFilterBaseList();
+    const { chips: chipHtml, extra: extraHtml } = renderSectorFilterChips(list, sectorFilterState, 'setSectorFilter');
+    const signature = chipHtml + extraHtml;
     if (signature === sectorFilterSignature) return;
     sectorFilterSignature = signature;
-    const current = select.value || 'all';
-    const label = sector => sector === 'REIT' ? 'Fundusze REIT' : sector;
-    select.innerHTML = `<option value="all">Wszystkie sektory</option>${sectors.map(sector => `<option value="${escapeHtml(sector)}">${escapeHtml(label(sector))}</option>`).join('')}`;
-    select.value = sectors.includes(current) ? current : 'all';
-    chips.querySelectorAll('.sector-chip[data-sector]:not([data-sector="all"])').forEach(chip => chip.remove());
-    chips.insertAdjacentHTML('beforeend', sectors.map(sector => `<span class="sector-chip${select.value === sector ? ' active' : ''}" data-sector="${escapeHtml(sector)}" onclick="setSectorChip(this, this.dataset.sector)">${escapeHtml(sector)}</span>`).join(''));
-    chips.querySelector('.sector-chip[data-sector="all"]')?.classList.toggle('active', select.value === 'all');
+    chips.querySelectorAll('.sector-chip:not(.owned-chip), .sector-group').forEach(node => node.remove());
+    chips.insertAdjacentHTML('beforeend', chipHtml);
+    if (extra) extra.innerHTML = extraHtml;
+    const select = document.getElementById('sector-filter');
+    if (select) select.value = sectorFilterState.sector;
+}
+
+/** T1b: „🏦 Bankowość · Bank komercyjny” — sektor główny z ikoną i podsektorem. */
+function formatMainSectorLabel(stock) {
+    const main = getMainSector(stock);
+    if (!main) return '—';
+    const sub = getMainSubsector(stock);
+    return `${SECTORS[main]?.icon || ''} ${main}${sub ? ` · ${sub}` : ''}`.trim();
+}
+
+/** T1b: „Struktura przychodów” — pasek segmentów (tylko przy ≥ 2 segmentach), segment główny wyróżniony. */
+function renderSegmentBar(stock) {
+    const segments = [...getStockSegments(stock)].sort((a, b) => b.share - a.share);
+    if (segments.length < 2) return '';
+    const parts = segments.map((seg, i) => `<span class="cc-seg${i === 0 ? ' cc-seg-main' : ''}" style="flex:${seg.share}" title="${escapeHtml(`${seg.sector}${seg.subsector ? ` · ${seg.subsector}` : ''}: ${(seg.share * 100).toFixed(0)}% przychodów`)}">${SECTORS[seg.sector]?.icon || ''} ${escapeHtml(seg.sector)} ${(seg.share * 100).toFixed(0)}%</span>`).join('');
+    return `<div class="cc-segments"><span class="text-xs text-muted">Struktura przychodów</span><div class="cc-seg-bar">${parts}</div></div>`;
 }
 
 // Taby poziomów rynku
@@ -791,24 +848,10 @@ function displayStocks(previousInputValues = {}) {
   }
 
   if (typeof renderSectorFilters === 'function') renderSectorFilters();
-  const selectedSector = document.getElementById('sector-filter').value;
 
   // Filtrowanie spółek do wyświetlenia
-  let baseStocksToDisplay;
-  if (selectedSector === 'all') {
-    baseStocksToDisplay = stocks.filter(stock => !stock.isSubsidiaryOf);
-  } else if (selectedSector === 'REIT') {
-    baseStocksToDisplay = stocks.filter(
-      stock => stock.assetType === 'REIT' && !stock.isSubsidiaryOf
-    );
-  } else {
-    baseStocksToDisplay = stocks.filter(
-      stock =>
-        Array.isArray(stock.sector) &&
-        stock.sector.includes(selectedSector) &&
-        !stock.isSubsidiaryOf
-    );
-  }
+  // 0.14 T1c: sektor główny (albo także poboczne), podsektor i typ instrumentu.
+  let baseStocksToDisplay = stocks.filter(stock => !stock.isSubsidiaryOf && stockMatchesSectorFilter(stock, sectorFilterState));
 
   if (ownedOnlyFilter) baseStocksToDisplay = baseStocksToDisplay.filter(isStockOwnedByPlayer);
   // D1: spółki rynków internetowych tylko w zakładce „Internet”.
@@ -874,10 +917,10 @@ function displayStocks(previousInputValues = {}) {
 
     const changeClass = changePct > 0 ? 'up' : changePct < 0 ? 'down' : 'flat';
     const changeSign = changePct > 0 ? '+' : '';
-    const primarySector =
-      Array.isArray(stock.sector) && stock.sector.length > 0
-        ? stock.sector[0]
-        : 'Rynek';
+    const mainSector = getMainSector(stock);
+    // T1c: ◐ — spółka widoczna dzięki segmentowi pobocznemu (przełącznik „także segmenty poboczne”).
+    const viaSecondary = sectorFilterState.secondary && sectorFilterState.sector !== 'all' && mainSector !== sectorFilterState.sector;
+    const primarySector = mainSector ? `${viaSecondary ? `◐ ${sectorFilterState.sector} (poboczny) · ` : ''}${mainSector}` : 'Rynek';
     const availabilityPct =
       stock.totalShares > 0
         ? Math.max(
@@ -2733,7 +2776,7 @@ function renderCompanyCard() {
     }
     const f = stock.fundamentals ? updateFundamentalRatios(stock) : null;
     const week = getStockChangePct(stock, 1);
-    const sector = (stock.sector || []).join(', ') || '—';
+    const sector = formatMainSectorLabel(stock); // T1b: sektor główny z ikoną i podsektorem
     const exchange = exchanges[stock.exchange]?.name || stock.exchange || '—';
     const health = Number(stock.financialHealth) || 0;
     const healthLabel = health >= 3 ? 'bardzo dobra' : health >= 1 ? 'dobra' : health > -1 ? 'przeciętna' : health > -3 ? 'słaba' : 'krytyczna';
@@ -2751,11 +2794,12 @@ function renderCompanyCard() {
                 <span class="${week > 0 ? 'text-up' : week < 0 ? 'text-down' : 'text-muted'}">${week >= 0 ? '+' : ''}${(week * 100).toFixed(2)}% tydz.</span>
             </div>
         </div>
+        ${renderSegmentBar(stock)}
         ${typeof renderDividendBadges === 'function' ? renderDividendBadges(stock) : ''}
         ${stock.pendingDividend ? `<p class="text-sm cc-exdiv">✂️ Ogłoszona dywidenda <strong>${stock.pendingDividend.dps.toFixed(2)} zł/akcję</strong> — dzień odcięcia za ok. ${Math.max(1, Math.round(stock.dividendTimer / BASE_DELAYS.weekly))} tydz. gry. Dywidendę dostaje, kto ma akcje w dniu odcięcia; tego dnia kurs spada o mniej więcej jej wartość.</p>` : ''}`;
 
     // N1: porównanie z medianą sektora pod wartością kafelka.
-    const med = typeof getSectorMedians === 'function' ? getSectorMedians(stock.sector?.[0]) : null;
+    const med = typeof getSectorMedians === 'function' ? getSectorMedians(getMainSector(stock)) : null;
     const vs = (value, sectorValue, options) => { const c = med && typeof compareWithSector === 'function' ? compareWithSector(value, sectorValue, options) : null; return c ? `<em class="${c.cls}">${c.text}</em>` : ''; };
     const tile = (label, value, hint, cls = '', extra = '') => `<div class="cc-kpi" title="${escapeHtml(hint)}"><span>${label}</span><strong class="${cls}">${value}</strong>${extra}</div>`;
     const pctFmt = v => `${(v * 100).toFixed(1)}%`;
@@ -6999,7 +7043,7 @@ function renderCompanyCardWorkforce(stock) {
     const policy = LABOR_POLICIES[wf.policy] || LABOR_POLICIES.standard;
     const index = getLaborCostIndex(stock);
     const laborPct = wf.laborShare * index;
-    const peers = getWorkforceCompanies().filter(s => s.sector?.[0] === stock.sector?.[0]);
+    const peers = getWorkforceCompanies().filter(s => getMainSector(s) === getMainSector(stock));
     const sectorPct = peers.length ? peers.reduce((sum, s) => sum + s.workforce.laborShare * getLaborCostIndex(s), 0) / peers.length : laborPct;
     const controls = typeof canFundControlAgm === 'function' && canFundControlAgm(stock);
     const locked = isLaborPolicyLocked(stock);

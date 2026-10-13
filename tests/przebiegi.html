@@ -136,8 +136,18 @@ const PROBE = `(function () {
             Object.defineProperty(c, '__cashTraced', { value: true, enumerable: false });
         }
     };
+    s.badPrice = [];
     s.sample = function () {
         s.traceCash();
+        // Pierwsze nieskończone / nieprawidłowe ceny: zrzut stanu spółki (diagnoza).
+        for (const c of stocks) {
+            if (Number.isFinite(c.price) || s.badPrice.some(b => b.symbol === c.symbol) || s.badPrice.length >= 5) continue;
+            s.badPrice.push({ q: macro.quarter, symbol: c.symbol, name: c.name, price: String(c.price), assetType: c.assetType || null, sector: c.sector, segments: c.segments,
+                exchange: c.exchange, totalShares: c.totalShares, cash: c.cash, health: c.financialHealth, vol: c.volatilityFactor, bankrupt: c.isBankrupt,
+                eq: c.balanceSheet ? c.balanceSheet.assets - c.balanceSheet.liabilities : null, fair: c.fundamentals?.fairValue, pe: c.fundamentals?.peRatio,
+                hist: (c.priceHistory || []).slice(-6).map(String), marketOperator: c.marketOperator || null, sub: c.isSubsidiaryOf || null,
+                profile: typeof getSectorProfile === 'function' ? getSectorProfile(c) : null });
+        }
         if (typeof playerFund === 'object' && playerFund) {
             const last = playerFund.flowStats?.last;
             s.fund.push({ q: macro.quarter, units: playerFund.units, nav: typeof getFundNav === 'function' ? getFundNav() : null, trust: playerFund.trust,
@@ -186,7 +196,23 @@ const PROBE = `(function () {
         }
         const panel = document.getElementById('fund-flow-reasons');
         if (typeof renderFundFlowReasons === 'function') { try { renderFundFlowReasons(); } catch (e) { s.panelError = String(e); } }
-        return { tsr, negCash: s.negCash, mailBy: s.mailBy, bailouts: s.bailouts, flowWarnings: s.flowWarnings, fund: s.fund, panelText: panel ? panel.textContent.split(/\\s+/).join(' ').slice(0, 600) : null, panelError: s.panelError || null, elections: (macro.election?.history || []).filter(e => e.quarter >= s.quarters[0].q),
+        // 0.14 T1: sektory z rejestru i rozmiar zapisu (v14 vs ten sam stan w dawnym formacie: lista sektorów zamiast segmentów).
+        let sectorIssues = null, saveSizes = null;
+        if (typeof isCanonicalSector === 'function') {
+            sectorIssues = stocks.filter(x => !(x.sector || []).every(isCanonicalSector) || !isValidSegmentList(getStockSegments(x))).map(x => x.symbol + ':' + (x.sector || []).join('+')).slice(0, 10);
+        }
+        if (typeof buildSaveSnapshot === 'function') {
+            const snap = buildSaveSnapshot({ compact: 0 });
+            const now = JSON.stringify(snap).length;
+            let legacy = null;
+            if (typeof decodeSavedSegments === 'function') {
+                const copy = JSON.parse(JSON.stringify(snap));
+                copy.stocks.forEach(x => { if (typeof x.seg === 'string') { x.sector = getSectorsFromSegments(decodeSavedSegments(x.seg)); delete x.seg; } });
+                legacy = JSON.stringify(copy).length;
+            }
+            saveSizes = { now, legacy, stocks: stocks.length };
+        }
+        return { tsr, sectorIssues, saveSizes, badPrice: s.badPrice, negCash: s.negCash, mailBy: s.mailBy, bailouts: s.bailouts, flowWarnings: s.flowWarnings, fund: s.fund, panelText: panel ? panel.textContent.split(/\\s+/).join(' ').slice(0, 600) : null, panelError: s.panelError || null, elections: (macro.election?.history || []).filter(e => e.quarter >= s.quarters[0].q),
             lawChanges: soc ? { ...soc.lawChanges } : null, laws: soc ? { ...soc.laws } : null,
             invariants: typeof checkWorldInvariants === 'function' ? checkWorldInvariants().slice(0, 5) : null, invLog: s.invLog, trimWarnings: s.trimWarnings,
             trims: typeof ghostTrimLog !== 'undefined' ? ghostTrimLog.length : null };

@@ -319,7 +319,7 @@ const sectorSpecifics = {
         "regulacje medialne", "content marketing", "dziennikarstwo śledcze"
     ] 
 },
-    'Finanse Konsumenckie': { 
+    'Pożyczki konsumenckie': { 
     activity: [
         "Spółka jest liderem na rynku pożyczek pozabankowych, tzw. 'chwilówek'.", 
         "Firma specjalizuje się w windykacji należności i zarządzaniu portfelami długów.", 
@@ -345,7 +345,7 @@ const sectorSpecifics = {
     'Gaming': { activity: ["Studio produkuje gry komputerowe z segmentu AAA, celując w rynek globalny.", "Firma jest wydawcą gier mobilnych opartych na modelu free-to-play, generujących stałe przychody.", "Spółka specjalizuje się w portowaniu gier na różne platformy sprzętowe.", "Firma jest producentem gier planszowych i karcianych, które z sukcesem digitalizuje."], keywords: ["nadchodząca premiera", "silnik graficzny", "monetyzacja", "społeczność graczy", "koszty marketingu", "recenzje w mediach"] },
     'Finanse': { 
 activity: ["Fundusz specjalizuje się w aktywnym zarządzaniu portfelem akcji spółek giełdowych.", "Spółka jest funduszem inwestycyjnym zamkniętym, skupującym pakiety akcji w wybranych sektorach.", "Podmiot koncentruje się na długoterminowych inwestycjach w spółki o solidnych fundamentach.", "Główną działalnością firmy jest trading i spekulacja na rynkach kapitałowych."], keywords: ["analiza rynkowa", "dywersyfikacja portfela", "stopy procentowe", "wyniki spółek portfelowych", "przepływy kapitału", "globalne trendy"] },
-'Bankowość Komercyjna': { activity: ["Bank oferuje usługi finansowe dla klientów indywidualnych i korporacyjnych.", "Instytucja specjalizuje się w zarządzaniu aktywami i operacjach inwestycyjnych.", "Bank koncentruje się na obsłudze dużych przedsiębiorstw i finansowaniu projektów."], keywords: ["stopy procentowe", "regulacje finansowe", "akcja kredytowa", "marża odsetkowa", "płynność", "ryzyko kredytowe"] }
+'Bank komercyjny': { activity: ["Bank oferuje usługi finansowe dla klientów indywidualnych i korporacyjnych.", "Instytucja specjalizuje się w zarządzaniu aktywami i operacjach inwestycyjnych.", "Bank koncentruje się na obsłudze dużych przedsiębiorstw i finansowaniu projektów."], keywords: ["stopy procentowe", "regulacje finansowe", "akcja kredytowa", "marża odsetkowa", "płynność", "ryzyko kredytowe"] }
 };
 const researchInstituteDescriptions = ["Jesteśmy inkubatorem innowacji. Nie prowadzimy własnych badań komercyjnych, lecz analizujemy i syntetyzujemy postęp technologiczny całego rynku. Nasza wartość rośnie wraz z każdą nową technologią odkrytą przez inne firmy, a nasza obecność stymuluje rozwój sąsiadujących z nami przedsiębiorstw.", "Nasza misja to katalizowanie postępu. Działamy jako centrum analityczne, czerpiąc wartość z globalnego rozwoju technologicznego. Inwestorzy postrzegają nas jako barometr innowacyjności całej gospodarki, a bliska współpraca z nami to gwarancja przyspieszenia dla każdego działu R&D.", "Specjalizujemy się w metaanalizie i prognozowaniu trendów. Każdy sukces badawczy na rynku, niezależnie od sektora, jest cegiełką budującą naszą fundamentalną wartość. Firmy, które lokują się w naszym otoczeniu, zyskują unikalny dostęp do naszej wiedzy, co przyspiesza ich własne projekty.", "Działamy na styku nauki i biznesu, przekuwając odkrycia innych w czystą wartość kapitałową. Nasz model biznesowy opiera się na założeniu, że fala innowacji podnosi wszystkie łodzie - a nasza jest pierwszą, która to odczuwa. Stanowimy również centrum kompetencyjne dla firm w naszym sąsiedztwie.", "Nie tworzymy technologii – my ją udoskonalamy i standaryzujemy. Nasza wartość jest bezpośrednio powiązana z sumą innowacji na rynku. Jesteśmy jak papier lakmusowy postępu; im więcej dzieje się w laboratoriach na całym świecie, tym lepiej dla naszych akcjonariuszy.", "Postrzegamy postęp technologiczny jako ekosystem. Naszą rolą jest bycie jego centralnym hubem, który zyskuje na każdej udanej innowacji. Firmy współpracujące z nami otrzymują od nas wsparcie, które skraca ich cykle badawcze i pozwala szybciej komercjalizować odkrycia."];
 
@@ -507,8 +507,7 @@ function getVolatilitySentence(stock) {
 function initializeDescriptionParts(stock) {
     generateCEO(stock);
     
-    const sector = stock.sector[0];
-    const sectorInfo = sectorSpecifics[sector] || { activity: ["Firma działa w swojej branży."], keywords: ["rynek", "konkurencja", "klienci"] };
+    const sectorInfo = sectorSpecifics[getMainSubsector(stock)] || sectorSpecifics[getMainSector(stock)] || { activity: ["Firma działa w swojej branży."], keywords: ["rynek", "konkurencja", "klienci"] };
 
     stock.descriptionParts = {
         activitySentence: getRandomElement(sectorInfo.activity),
@@ -524,7 +523,7 @@ function assembleDescription(stock) {
 
         const ceoName = stock.ceo.name;
         const verb = getRandomElement(startupVerbs);
-        const sector = stock.sector[0];
+        const sector = getMainSector(stock);
 
         const sentence1 = `${stock.name} ${verb} zrewolucjonizować rynek w kategorii ${sector}.`;
         const sentence2 = "Projekt zakłada stworzenie innowacyjnej platformy o globalnym potencjale, która ma przyciągnąć szerokie grono odbiorców.";
@@ -547,7 +546,7 @@ function assembleDescription(stock) {
         const parts = stock.descriptionParts;
         const ceoName = stock.ceo.name;
         
-        const sentence1_dynamic = `${stock.name} to ${getCompanyDescriptor(stock)} w kategorii ${stock.sector[0]}.`;
+        const sentence1_dynamic = `${stock.name} to ${getCompanyDescriptor(stock)} w kategorii ${getMainSector(stock)}.`;
         const sentence3_dynamic = getVolatilitySentence(stock);
         const sentence7_dynamic = `'${getCEOQuote(stock)}' - komentuje ${ceoName.split(' ').pop()}.`;
         const sentence2_static = parts.activitySentence;
@@ -896,7 +895,7 @@ const ceoTraits = {
     }
 };
 // generowanie startupów
-const startupSectors = [['Technologia'], ['Gaming'], ['Medycyna'], ['Media'], ['Energia'], ['Żywność'], ['Nieruchomości'], ['Chemia'], ['Przemysł'], ['Dobra konsumencje'], ['Usługi'], ['Turystyka'], ['Bankowość'], ['Finanse Konsumenckie']];
+const startupSectors = [['Technologia'], ['Gaming'], ['Medycyna'], ['Media'], ['Energia'], ['Żywność'], ['Nieruchomości'], ['Chemia'], ['Przemysł'], ['Dobra konsumpcyjne'], ['Usługi'], ['Turystyka'], ['Bankowość'], ['Finanse Konsumenckie']];
 
 const techPrefixes = ['Quantum', 'Cyber', 'Data', 'Nano', 'Aero', 'Geo'];
 const techSuffixes = ['Leap', 'Verse', 'Solutions', 'Dynamics', 'Core'];
@@ -1099,7 +1098,7 @@ const initialStocks = [
         sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [],
         balanceSheet: { assets: 6000000, liabilities: 0, shareCapital: 600000, retainedEarnings: 5400000 }, // Ustawiamy bilans banku
         quarterlyEarnings: 0, lineHistory: [], playerTransactions: [],
-        sector: ['Bankowość Komercyjna', 'Bankowość'], // Zmieniamy sektor
+        sector: ['Bankowość'], // T1a: bank komercyjny (podsektor z typu banku)
         financialHealth: 2, // Domyślna kondycja
         lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0,
         dividendPolicy: 'Balanced', // Domyślna polityka
@@ -1332,7 +1331,7 @@ const initialStocks = [
         sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [],
         balanceSheet: { assets: 8000000, liabilities: 0, shareCapital: 800000, retainedEarnings: 7200000 }, // Ustawiamy bilans banku
         quarterlyEarnings: 0, lineHistory: [], playerTransactions: [],
-        sector: ['Bankowość Komercyjna', 'Finanse'], // Zmieniamy sektor
+        sector: ['Bankowość'], // T1a: bank inwestycyjny (podsektor z typu banku)
         financialHealth: 2, // Domyślna kondycja
         lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0,
         dividendPolicy: 'Balanced', // Domyślna polityka
@@ -1447,7 +1446,7 @@ const initialStocks = [
         sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [],
         balanceSheet: { assets: 20000000, liabilities: 0, shareCapital: 2000000, retainedEarnings: 18000000 }, // Ustawiamy bilans banku
         quarterlyEarnings: 0, lineHistory: [], playerTransactions: [],
-        sector: ['Bankowość Komercyjna', 'Finanse', 'Międzynarodowy'], // Zmieniamy sektor
+        sector: ['Bankowość'], // T1a: bank międzynarodowy (podsektor z typu banku)
         financialHealth: 3, // Domyślna kondycja (lepsza)
         lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0,
         dividendPolicy: 'Balanced', // Domyślna polityka
@@ -1522,7 +1521,7 @@ const initialStocks = [
         name: 'WRONA',
         price: 650.00, volatilityFactor: 1.8, symbol: 'WRN', exchange: 'GOLD',
         totalShares: 90000, maxShares: 100000, sharesHeld: 0,
-        sector: ['Finanse Konsumenckie', 'Usługi'],
+        sector: ['Finanse'], segments: [{ sector: 'Finanse', subsector: 'Pożyczki konsumenckie', share: 1 }], // T1a: dawne Finanse Konsumenckie
         financialHealth: 2, lastReport: 'brak', cash: 5000000, // Potrzebuje dużo gotówki na start
         assetType: 'DebtCollector', // Unikalny typ dla logiki
         balanceSheet: { assets: 5000000, liabilities: 0, shareCapital: 50000, retainedEarnings: 450000 },
@@ -1534,7 +1533,7 @@ const initialStocks = [
         name: 'LOMBARDEX S.A.',
         price: 65.00, volatilityFactor: 1.5, symbol: 'LOM', exchange: 'SILVER',
         totalShares: 35000, maxShares: 45000, sharesHeld: 0,
-        sector: ['Finanse Konsumenckie', 'Usługi'],
+        sector: ['Finanse'], segments: [{ sector: 'Finanse', subsector: 'Pożyczki konsumenckie', share: 1 }], // T1a: dawne Finanse Konsumenckie
         financialHealth: 1, lastReport: 'brak', cash: 400000, // Też potrzebuje gotówki na pożyczki
         assetType: 'PawnShop', // Unikalny typ dla logiki
         balanceSheet: { assets: 400000, liabilities: 0, shareCapital: 40000, retainedEarnings: 360000 },
@@ -1547,7 +1546,7 @@ const initialStocks = [
         name: 'Retax Biuro Obrachunkowe',
         price: 40.00, volatilityFactor: 0.8, symbol: 'TAX', exchange: 'BRONZE',
         totalShares: 20000, maxShares: 30000, sharesHeld: 0,
-        sector: ['Finanse Konsumenckie', 'Usługi'],
+        sector: ['Finanse'], segments: [{ sector: 'Finanse', subsector: 'Pożyczki konsumenckie', share: 1 }], // T1a: dawne Finanse Konsumenckie
         financialHealth: 3, lastReport: 'brak', cash: 50000, // Stabilny biznes, nie wymaga dużo gotówki
         assetType: 'Accounting', // Unikalny typ dla logiki
         balanceSheet: { assets: 50000, liabilities: 0, shareCapital: 5000, retainedEarnings: 45000 },
@@ -1723,7 +1722,7 @@ const initialStocks = [
         financialHealth: 5, lastReport: 'brak', cash: 2000000,
         assetType: 'Holding', // Działa jak Holding
         holdingPortfolio: {},
-        specializationSectors: ['Finanse Konsumenckie'], // Specjalizacja (na razie pusta)
+        specializationSectors: ['Finanse'], // Specjalizacja (na razie pusta)
         balanceSheet: { assets: 2000000, liabilities: 0, shareCapital: 200000, retainedEarnings: 1800000 },
         quarterlyEarnings: 0, priceHistory: [], candlestickHistory: [], lineHistory: [], playerTransactions: [],
         
@@ -2035,11 +2034,6 @@ const INVESTMENT_CATALOG = {
         { id: 'wind_farm', name: "Farma Wiatrowa", icon: 'img/fabrykaicon.png', cost: 800000, duration: 35, assetValue: 650000, incomeBonus: 0.15, healthBonus: 0.8, minDevLevel: 2, maintenance: 4000 },
         { id: 'solar_park', name: "Park Słoneczny", icon: 'img/fabrykaicon.png', cost: 600000, duration: 25, assetValue: 500000, incomeBonus: 0.12, healthBonus: 0.6, minDevLevel: 2, maintenance: 3000 }
     ],
-    'Logistyka': [
-        { id: 'logistics_hub', name: "Centrum Logistyczne", icon: 'img/box.png', cost: 500000, duration: 24, assetValue: 400000, incomeBonus: 0.12, healthBonus: 0.3, minDevLevel: 2, maintenance: 2500 },
-        { id: 'distribution_center', name: "Centrum Dystrybucyjne", icon: 'img/box.png', cost: 700000, duration: 30, assetValue: 550000, incomeBonus: 0.16, healthBonus: 0.4, minDevLevel: 2, maintenance: 3500 },
-        { id: 'warehouse_automation', name: "Automatyczna Hala Magazynowa", icon: 'img/box.png', cost: 900000, duration: 40, assetValue: 700000, incomeBonus: 0.2, healthBonus: 0.5, minDevLevel: 3, maintenance: 4500 }
-    ],
     'Budowlany': [
         { id: 'office_building', name: "Biurowiec", icon: 'img/branch.png', cost: 600000, duration: 30, assetValue: 500000, incomeBonus: 0.15, healthBonus: 0.4, minDevLevel: 2, maintenance: 3000 },
         { id: 'warehouse', name: "Hala Magazynowa", icon: 'img/box.png', cost: 400000, duration: 20, assetValue: 350000, incomeBonus: 0.1, healthBonus: 0.2, minDevLevel: 1, maintenance: 2000 },
@@ -2110,7 +2104,10 @@ const INVESTMENT_CATALOG = {
         { id: 'broadcasting_center', name: "Centrum Nadawcze", icon: 'img/branch.png', cost: 1000000, duration: 35, assetValue: 800000, incomeBonus: 0.18, healthBonus: 0.5, minDevLevel: 2, maintenance: 6000 },
         { id: 'cinema_complex', name: "Kompleks Kinowy", icon: 'img/branch.png', cost: 800000, duration: 28, assetValue: 650000, incomeBonus: 0.16, healthBonus: 0.4, minDevLevel: 2, maintenance: 4500 }
     ],
-    'Transport': [
+    'Transport i logistyka': [ // T1a: dawne katalogi Logistyka i Transport
+        { id: 'logistics_hub', name: "Centrum Logistyczne", icon: 'img/box.png', cost: 500000, duration: 24, assetValue: 400000, incomeBonus: 0.12, healthBonus: 0.3, minDevLevel: 2, maintenance: 2500 },
+        { id: 'distribution_center', name: "Centrum Dystrybucyjne", icon: 'img/box.png', cost: 700000, duration: 30, assetValue: 550000, incomeBonus: 0.16, healthBonus: 0.4, minDevLevel: 2, maintenance: 3500 },
+        { id: 'warehouse_automation', name: "Automatyczna Hala Magazynowa", icon: 'img/box.png', cost: 900000, duration: 40, assetValue: 700000, incomeBonus: 0.2, healthBonus: 0.5, minDevLevel: 3, maintenance: 4500 },
         { id: 'cargo_terminal', name: "Terminal Cargo", icon: 'img/box.png', cost: 1100000, duration: 38, assetValue: 900000, incomeBonus: 0.2, healthBonus: 0.55, minDevLevel: 3, maintenance: 6500 },
         { id: 'container_port', name: "Port Kontenerowy", icon: 'img/box.png', cost: 1600000, duration: 55, assetValue: 1300000, incomeBonus: 0.26, healthBonus: 0.75, minDevLevel: 4, maintenance: 9500 },
         { id: 'fuel_station_network', name: "Sieć Stacji Paliw", icon: 'img/branch.png', cost: 700000, duration: 22, assetValue: 550000, incomeBonus: 0.14, healthBonus: 0.35, minDevLevel: 2, maintenance: 4000 }
@@ -2261,7 +2258,7 @@ function createBankStockObject(bank, exchangeLevel = 'SILVER') {
         totalShares: ipoTotalShares,
         maxShares: ipoTotalShares * 2, // Możliwość przyszłych emisji
         sharesHeld: 0, // Na starcie nikt nie ma akcji
-        sector: ['Bankowość Komercyjna', 'Finanse'], // Sektory
+        sector: ['Bankowość'], // Sektory (T1a: podsektor z typu banku)
         financialHealth: getRandomIntInRange(1, 3), // Startują ze zdrową kondycją
         balanceSheet: { // Uproszczony bilans na start
             assets: bank.cash,
@@ -3487,6 +3484,7 @@ function resolveMerger(stock1, stock2, process) {
                 initiator.cash += target.cash;
             }
             initiator.cash -= process.costs;
+            coverNegativeCash(initiator); // koszty fuzji ponad gotówkę — kredyt ratunkowy od razu (kandydat na PROL −30 231 z A1)
             initiator.financialHealth = Math.max(-5, Math.min(5, ((initiator.financialHealth + target.financialHealth) / 2) + 1.0));
             if (!initiator.subsidiaries) initiator.subsidiaries = [];
             initiator.subsidiaries.push({ symbol: target.symbol, name: target.name, date: Date.now() });
@@ -3975,7 +3973,7 @@ function generateNewStartup() {
         price: getRandomInRange(0.5, 2.5),
         totalShares: 100000, maxShares: 100000, sharesHeld: 0, priceHistory: [], // Zysk za ostatni kwartał (dla wskaźnika C/Z) candlestickHistory: [], priceAlerts: { buy: null, sell: null },
         lineHistory: [], playerTransactions: [], playerTransactions: [],
-        sector: sector,
+        sector: [...sector], // kopia (lista startowa jest współdzielona)
         financialHealth: 0,
         volatilityFactor: getRandomInRange(2.5, 4.5),
         dividendPolicy: 'None',
@@ -3993,6 +3991,7 @@ function generateNewStartup() {
         investors: {}
     };
 
+    ensureStockSegments(newStartup); // T1a: sektory z rejestru (np. dawne „Finanse Konsumenckie”)
     return newStartup;
 }
 
@@ -8845,7 +8844,7 @@ const DEFENSE_COMPANIES = [
     { name: 'Husaria Arms', symbol: 'HUSA', exchange: 'GOLD', price: [450, 900] }
 ];
 const DEFENSE_CEO_TRAITS = ['emerytowany_policjant', 'general', 'byly_wojskowy'];
-const GUARD_LIKED_SECTORS = [DEFENSE_SECTOR, 'Energia', 'Przemysł', 'Bankowość', 'Żywność', 'Transport'];
+const GUARD_LIKED_SECTORS = [DEFENSE_SECTOR, 'Energia', 'Przemysł', 'Bankowość', 'Żywność', 'Transport i logistyka'];
 const GUARD_DISLIKED_SECTORS = ['Technologia', 'Gaming', 'Badania'];
 
 function isDefenseCompany(stock) {
@@ -9260,9 +9259,9 @@ const WORKFORCE_TEMPLATES = {
 };
 // Pozostałe sektory: najbliższy wzorzec (koszt pracy można nadpisać).
 const WORKFORCE_TEMPLATE_ALIASES = {
-    'Gaming': ['Technologia'], 'Media': ['Technologia', 0.30], 'Bankowość': ['Finanse', 0.20], 'Bankowość Komercyjna': ['Finanse', 0.20],
-    'Finanse Konsumenckie': ['Finanse', 0.25], 'Obronność': ['Przemysł'], 'Dobra konsumpcyjne': ['Żywność', 0.20],
-    'Logistyka': ['Usługi', 0.35], 'Transport': ['Usługi', 0.35]
+    'Gaming': ['Technologia'], 'Media': ['Technologia', 0.30], 'Bankowość': ['Finanse', 0.20],
+    'Pożyczki konsumenckie': ['Finanse', 0.25], 'Obronność': ['Przemysł'], 'Dobra konsumpcyjne': ['Żywność', 0.20],
+    'Transport i logistyka': ['Usługi', 0.35] // T1a: aliasy po sektorze głównym albo podsektorze
 };
 const WORKFORCE_DEFAULT_TEMPLATE = { board: 3, specialists: 20, workers: 55, cheap: 20, grey: 2, labor: 0.25 };
 
@@ -9299,17 +9298,19 @@ function getWorkforceQuarter() {
 }
 
 function getWorkforceTemplate(stock) {
-    const sectors = Array.isArray(stock?.sector) && stock.sector.length ? stock.sector : [];
-    const templates = sectors.map(sector => {
-        if (WORKFORCE_TEMPLATES[sector]) return WORKFORCE_TEMPLATES[sector];
-        const alias = WORKFORCE_TEMPLATE_ALIASES[sector];
-        if (alias) return { ...WORKFORCE_TEMPLATES[alias[0]], labor: alias[1] ?? WORKFORCE_TEMPLATES[alias[0]].labor };
-        return WORKFORCE_DEFAULT_TEMPLATE;
-    });
-    if (!templates.length) templates.push(WORKFORCE_DEFAULT_TEMPLATE);
+    const pick = name => {
+        if (!name) return null;
+        if (WORKFORCE_TEMPLATES[name]) return WORKFORCE_TEMPLATES[name];
+        const alias = WORKFORCE_TEMPLATE_ALIASES[name];
+        return alias ? { ...WORKFORCE_TEMPLATES[alias[0]], labor: alias[1] ?? WORKFORCE_TEMPLATES[alias[0]].labor } : null;
+    };
+    // T1b: segmenty ważone udziałami; podsektor (np. Pożyczki konsumenckie) przed sektorem.
+    const weighted = getStockSegments(stock).map(seg => [pick(seg.subsector) || pick(seg.sector) || WORKFORCE_DEFAULT_TEMPLATE, seg.share]);
+    if (!weighted.length) weighted.push([WORKFORCE_DEFAULT_TEMPLATE, 1]);
+    const total = weighted.reduce((sum, [, share]) => sum + share, 0);
     const result = {};
     for (const key of ['board', 'specialists', 'workers', 'cheap', 'grey', 'labor']) {
-        result[key] = templates.reduce((sum, t) => sum + t[key], 0) / templates.length;
+        result[key] = weighted.reduce((sum, [t, share]) => sum + t[key] * share, 0) / total;
     }
     return result;
 }
@@ -9441,7 +9442,7 @@ function getStrikeRevenueFactor(stock) {
 
 function getSectorUnion(stock) {
     if (typeof society !== 'object' || !society?.sectorUnions) return null;
-    const sector = stock?.sector?.[0];
+    const sector = stock ? getMainSector(stock) : null;
     return sector ? society.sectorUnions[sector] || null : null;
 }
 
@@ -9617,7 +9618,7 @@ function getWorkforceCompanies() {
 
 function processWorkforceMoves(companies) {
     const bySector = {};
-    for (const stock of companies) (bySector[stock.sector?.[0] || '—'] = bySector[stock.sector?.[0] || '—'] || []).push(stock);
+    for (const stock of companies) (bySector[getMainSector(stock) || '—'] = bySector[getMainSector(stock) || '—'] || []).push(stock);
     for (const list of Object.values(bySector)) {
         if (list.length < 2) continue;
         // Odejścia: z firm z zadowoleniem < 35 do firm z zadowoleniem > 60 (wydajność −1% / +0,5%).
@@ -9682,7 +9683,7 @@ function processBotCeoPoaching(companies) {
     for (const buyer of companies) {
         const bot = typeof getMajorityBot === 'function' ? getMajorityBot(buyer) : null;
         if (!bot || !['reckless', 'whale'].includes(bot.personality) || !(Math.random() < 0.025)) continue;
-        const candidates = companies.filter(s => s !== buyer && s.sector?.[0] === buyer.sector?.[0] && s.ceo && !(typeof canFundControlAgm === 'function' && canFundControlAgm(s)));
+        const candidates = companies.filter(s => s !== buyer && getMainSector(s) === getMainSector(buyer) && s.ceo && !(typeof canFundControlAgm === 'function' && canFundControlAgm(s)));
         const best = candidates.sort((a, b) => (b.ceo.traits?.length || 0) - (a.ceo.traits?.length || 0))[0];
         if (best) poachCeo(buyer, best);
     }
@@ -9707,7 +9708,7 @@ function processUnionFormation(companies) {
         if (typeof unlockAcademyEntry === 'function' && (playerPortfolio?.[stock.symbol]?.shares || 0) > 0) unlockAcademyEntry('zwiazek');
     }
     const bySector = {};
-    for (const stock of companies) (bySector[stock.sector?.[0]] = bySector[stock.sector?.[0]] || []).push(stock);
+    for (const stock of companies) (bySector[getMainSector(stock)] = bySector[getMainSector(stock)] || []).push(stock);
     for (const [sector, list] of Object.entries(bySector)) {
         if (!sector || sector === 'undefined' || society.sectorUnions[sector] || list.length < 2) continue;
         const unions = list.filter(s => s.workforce.union).length;
@@ -9857,7 +9858,7 @@ function processUnionDemands(companies) {
     // 4. Związki sektorowe: wspólne żądanie; gdy większość spółek odmawia — strajk całego sektora.
     for (const [sector, union] of Object.entries(society.sectorUnions || {})) {
         if (union.agreementUntil >= quarter || union.nextDemand > quarter) continue;
-        const list = companies.filter(s => s.sector?.[0] === sector);
+        const list = companies.filter(s => getMainSector(s) === sector);
         if (!list.length) { delete society.sectorUnions[sector]; continue; }
         union.nextDemand = quarter + UNION_DEMAND_EVERY;
         const raise = getUnionDemandSize();
@@ -9894,8 +9895,8 @@ function mafiaBustUnion(symbol) {
     stock.workforce.pendingDemand = null;
     if (typeof mafiaTrace === 'function') mafiaTrace(30, 3, 15, cost);
     if (Math.random() < UNION_BUST_DETECTION) {
-        const sector = stock.sector?.[0];
-        for (const other of getWorkforceCompanies().filter(s => s.sector?.[0] === sector)) { startStrike(other, 1); other.workforce.strike.sector = true; }
+        const sector = getMainSector(stock);
+        for (const other of getWorkforceCompanies().filter(s => getMainSector(s) === sector)) { startStrike(other, 1); other.workforce.strike.sector = true; }
         if (playerFund) playerFund.trust = Math.max(0, playerFund.trust - 10);
         if (playerProfile) playerProfile.cv.push({ type: 'compliance', text: `Afera: fundusz zlecił rozbicie związku w ${stock.name}.` });
         if (typeof getRecord === 'function') getRecord('player').suspicion += 20;

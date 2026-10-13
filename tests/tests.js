@@ -2545,13 +2545,14 @@ group('Rynki i maklerzy (0.10.2 M5)', () => {
         assert(getStockMarket(sponsor) === 'XTD' && !sponsor.assetType && sponsor.fundamentals, 'sponsor notowany');
     });
 
-    test('debiut operatora otwiera rynek z 5–10 spółkami', () => {
+    test('debiut operatora otwiera rynek z 5–8 spółkami (ok. 70% nowych, reszta z GPW)', () => {
         worldM5();
         const startup = spawnOperatorStartup(marketOperators.XTD);
         const before = stocks.length;
         activateMarketOperator(startup);
         const added = stocks.length - before;
-        assert(marketOperators.XTD.status === 'active' && added >= 5 && added <= 10, `nowe spółki: ${added}`);
+        const members = getMarketMembers('XTD').length;
+        assert(marketOperators.XTD.status === 'active' && added >= 4 && added <= 6 && members >= added, `nowe spółki: ${added}, członkowie: ${members}`);
     });
 
     test('zamknięcie operatora: spółki znikają, fundusz rozliczony po ostatniej cenie', () => {
@@ -4304,7 +4305,7 @@ group('Poprawki 0.13.1 (B1–B13)', () => {
             assert(!getBigInvestors().includes(guard), 'Gwardia nie jest „wielkim inwestorem”');
             assert(getShareholders(a).find(h => h.entity === guard)?.name.includes('fundusz'), 'w akcjonariacie jako fundusz');
         } finally { aiCompetitors.splice(aiCompetitors.indexOf(guard), 1); }
-        assert(getMarketSectorList().includes('Obronność'), 'filtr: wszystkie sektory spółek');
+        assert(getSectorFilterCounts(getSectorFilterBaseList()).sectors['Obronność'] > 0, 'filtr: wszystkie sektory spółek (T1c: chipy z liczbą spółek)');
         const holding = makeCompany('MIN', { cash: 1_000_000 });
         Object.assign(holding, { assetType: 'Holding', holdingPortfolio: { AAA: { quantity: 100, purchasePrice: 100 } }, totalShares: 1000, balanceSheet: { assets: 0, liabilities: 0 } });
         stocks.push(holding);
@@ -4764,6 +4765,202 @@ group('Etap A: decyzje balansu (zaufanie vs GIG, lokaty spółek, polityki kadro
     test('polityki kadrowe: Oszczędna płaci ×0,95, Wyzysk ma kontrole Inspekcji ×4', () => {
         assert(LABOR_POLICIES.saving.pay === 0.95 && LABOR_POLICIES.exploit.inspection === 4, JSON.stringify([LABOR_POLICIES.saving, LABOR_POLICIES.exploit]));
         assert(LABOR_POLICIES.exploit.pay < LABOR_POLICIES.saving.pay && LABOR_POLICIES.saving.pay < LABOR_POLICIES.standard.pay, 'kolejność płac');
+    });
+});
+
+group('0.14 T1a: rejestr sektorów i porządek nazw', () => {
+    const OLD_PROFILES = {
+        'Bankowość Komercyjna': { beta: 1.1, rateSens: -0.3, pe: 11, margin: 0.40, growth: 0.03, ps: 2.5, da: 0.02 },
+        'Finanse Konsumenckie': { beta: 1.2, rateSens: 0.8, pe: 10, margin: 0.30, growth: 0.04, ps: 2.0, da: 0.02 },
+        'Logistyka': { beta: 1.2, rateSens: 0.7, pe: 14, margin: 0.12, growth: 0.04, ps: 1.0, da: 0.06 },
+        'Transport': { beta: 1.2, rateSens: 0.7, pe: 13, margin: 0.14, growth: 0.03, ps: 1.0, da: 0.07 }
+    };
+    const average = names => {
+        const profiles = names.map(name => SECTOR_PROFILES[name] || OLD_PROFILES[name]);
+        return Object.fromEntries(Object.keys(DEFAULT_SECTOR_PROFILE).map(key => [key, profiles.reduce((sum, p) => sum + p[key], 0) / profiles.length]));
+    };
+    const sameProfile = (a, b) => Object.keys(DEFAULT_SECTOR_PROFILE).every(key => Math.abs(a[key] - b[key]) < 1e-12);
+    const isClean = stock => (stock.sector || []).every(isCanonicalSector) && !(stock.sector || []).some(name => LEGACY_SECTOR_NAMES.includes(name)) && isValidSegmentList(stock.segments);
+
+    test('rejestr: 18 sektorów w 8 grupach, bez starych nazw i bez „common”', () => {
+        assert(SECTOR_NAMES.length === 18 && new Set(SECTOR_NAMES).size === 18 && SECTOR_GROUPS.length === 8, `sektory ${SECTOR_NAMES.length}`);
+        assert(SECTOR_NAMES.every(name => SECTORS[name].group && SECTORS[name].icon && SECTORS[name].profile), 'grupa, ikona, profil');
+        assert(!LEGACY_SECTOR_NAMES.some(isCanonicalSector), 'brak starych nazw w rejestrze');
+        assert(Object.keys(SECTOR_PROFILES).length === 18, 'profile tylko dla sektorów z rejestru');
+    });
+
+    test('mapowanie starych nazw na sektor i podsektor', () => {
+        const seg = (sector, extra = {}) => deriveSegmentsFromSectors({ sector, ...extra });
+        const intl = seg(['Bankowość Komercyjna', 'Finanse', 'Międzynarodowy'], { isBankStock: true, bankData: { type: BANK_TYPES.INTERNATIONAL } });
+        assert(intl.length === 1 && intl[0].sector === 'Bankowość' && intl[0].subsector === 'Bank międzynarodowy' && intl[0].share === 1, JSON.stringify(intl));
+        const inv = seg(['Bankowość Komercyjna', 'Finanse'], { isBankStock: true, bankData: { type: BANK_TYPES.INVESTMENT } });
+        assert(inv.length === 1 && inv[0].subsector === 'Bank inwestycyjny', JSON.stringify(inv));
+        assert(seg(['Bankowość Komercyjna', 'Bankowość'], { isBankStock: true, bankData: { type: BANK_TYPES.UNIVERSAL } })[0].subsector === 'Bank komercyjny', 'bank komercyjny');
+        const loans = seg(['Finanse Konsumenckie', 'Usługi']);
+        assert(loans.length === 1 && loans[0].sector === 'Finanse' && loans[0].subsector === 'Pożyczki konsumenckie', JSON.stringify(loans));
+        assert(seg(['Logistyka'])[0].sector === 'Transport i logistyka' && seg(['Logistyka'])[0].subsector === 'Logistyka', 'Logistyka');
+        assert(seg(['Transport'])[0].sector === 'Transport i logistyka' && !seg(['Transport'])[0].subsector, 'Transport');
+        assert(seg(['Technologia', 'Usługi']).length === 1, 'doklejone „Usługi” usunięte');
+        const two = seg(['Usługi', 'Nieruchomości']);
+        assert(two.length === 2 && two[0].share === 0.5, '„Usługi” jako sektor główny zostają');
+        const op = seg(['Finanse'], { marketOperator: 'GPW' });
+        assert(op.length === 1 && op[0].subsector === 'Rynki kapitałowe', 'operator rynku');
+        assert(seg(['common', 'Międzynarodowy']).length === 0, '„common” i „Międzynarodowy” to nie sektory');
+    });
+
+    test('kalibracja: spółki bez zmienionych nazw mają ten sam profil co średnia sprzed 0.14', () => {
+        const combos = [...SECTOR_NAMES.map(name => [name]), ['Budowlany', 'Przemysł'], ['Żywność', 'Technologia'], ['Usługi', 'Nieruchomości'],
+            ['Przemysł', 'Energia'], ['Medycyna', 'Technologia'], ['Energia', 'Chemia'], ['Bankowość', 'Żywność']];
+        for (const sector of combos) assert(sameProfile(getSectorProfile({ sector }), average(sector)), `profil ${sector.join('+')}`);
+        assert(sameProfile(getSectorProfile({ sector: ['Finanse Konsumenckie'] }), OLD_PROFILES['Finanse Konsumenckie']), 'Pożyczki konsumenckie = dawne Finanse Konsumenckie');
+        assert(sameProfile(getSectorProfile({ sector: ['Logistyka'] }), OLD_PROFILES['Logistyka']), 'podsektor Logistyka = dawna Logistyka');
+        assert(sameProfile(getSectorProfile({ sector: ['Transport'] }), OLD_PROFILES['Transport']), 'Transport i logistyka = dawny Transport');
+    });
+
+    test('cykle sektorów: tyle, ile sektorów kanonicznych; Transport i logistyka przejmuje cykl Transportu', () => {
+        const cycles = createSectorCycles();
+        assert(Object.keys(cycles).length === SECTOR_NAMES.length && SECTOR_NAMES.every(name => cycles[name]), 'cykle');
+        const transport = { phase: 'boom', quartersLeft: 2 };
+        const merged = normalizeSectorCycles({ 'Transport': transport, 'Logistyka': { phase: 'trough', quartersLeft: 1 }, 'Bankowość Komercyjna': { phase: 'peak', quartersLeft: 1 }, 'Międzynarodowy': {} });
+        assert(Object.keys(merged).length === SECTOR_NAMES.length && merged['Transport i logistyka'] === transport, 'migracja cykli');
+        assert(!Object.keys(merged).some(name => LEGACY_SECTOR_NAMES.includes(name)), 'bez starych nazw');
+    });
+
+    test('nowe startupy i spółki rynków mają tylko sektory z rejestru', () => {
+        resetWorld([makeCompany('AAA')]);
+        for (let i = 0; i < 60; i++) {
+            const startup = generateNewStartup();
+            assert(isClean(startup), `startup ${startup.sector}`);
+        }
+    });
+
+    test('zapis v14: segmenty zwięźle, sektor wyliczany; migracja v13 usuwa stare nazwy', () => {
+        const bank = makeCompany('BNK', { sector: ['Bankowość Komercyjna', 'Finanse', 'Międzynarodowy'] });
+        bank.isBankStock = true; bank.bankData = { id: 'bks', type: BANK_TYPES.INTERNATIONAL };
+        const loans = makeCompany('LOAN', { sector: ['Finanse Konsumenckie', 'Usługi'] });
+        const mixed = makeCompany('MIX', { sector: ['Budowlany', 'Przemysł'] });
+        const logi = makeCompany('LOGI', { sector: ['Logistyka', 'Transport'] });
+        resetWorld([bank, loans, mixed, logi]);
+        const legacy = JSON.parse(JSON.stringify(buildSaveSnapshot()));
+        for (const company of legacy.stocks) {
+            delete company.seg; delete company.segments;
+            company.sector = { BNK: ['Bankowość Komercyjna', 'Finanse', 'Międzynarodowy'], LOAN: ['Finanse Konsumenckie', 'Usługi'], MIX: ['Budowlany', 'Przemysł'], LOGI: ['Logistyka', 'Transport'] }[company.symbol];
+        }
+        legacy.version = 13;
+        legacy.macro.sectorCycles = { 'Transport': { phase: 'boom', quartersLeft: 2 }, 'Bankowość Komercyjna': { phase: 'peak', quartersLeft: 1 } };
+        const report = applySaveSnapshot(legacy);
+        assert(report.ok, report.errors.join(' '));
+        assert(stocks.every(isClean), stocks.map(s => `${s.symbol}:${s.sector}`).join(' '));
+        const bySymbol = Object.fromEntries(stocks.map(s => [s.symbol, s]));
+        assert(getMainSubsector(bySymbol.BNK) === 'Bank międzynarodowy' && getMainSubsector(bySymbol.LOAN) === 'Pożyczki konsumenckie', 'podsektory');
+        assert(bySymbol.MIX.segments.length === 2 && bySymbol.MIX.segments[0].share === 0.5, 'równe udziały');
+        assert(bySymbol.LOGI.segments.length === 1 && bySymbol.LOGI.sector[0] === 'Transport i logistyka', 'Logistyka + Transport = jeden sektor');
+        assert(Object.keys(macro.sectorCycles).length === SECTOR_NAMES.length && macro.sectorCycles['Transport i logistyka'].phase === 'boom', 'cykle po migracji');
+
+        const snapshot = JSON.parse(JSON.stringify(buildSaveSnapshot()));
+        assert(snapshot.version === 14 && snapshot.stocks.every(s => typeof s.seg === 'string' && !s.sector && !s.segments), 'v14: tylko seg');
+        assert(applySaveSnapshot(snapshot).ok, 'wczytanie v14');
+        const mix = stocks.find(s => s.symbol === 'MIX');
+        assert(mix.segments.length === 2 && mix.sector.join() === 'Budowlany,Przemysł' && isValidSegmentList(mix.segments), JSON.stringify(mix.segments));
+    });
+});
+
+group('0.14 T1b: segmenty działalności', () => {
+    const seg = (sector, share, subsector = null) => ({ sector, subsector, share });
+
+    test('profil = średnia ważona udziałami; sektor główny = największy segment; sector wyliczany z segmentów', () => {
+        const a = makeCompany('SEG', { sector: ['Chemia', 'Energia'] });
+        a.segments = [seg('Chemia', 0.3), seg('Energia', 0.7)];
+        a.sector = ['Chemia', 'Energia']; // stara kolejność — ensureStockSegments przelicza
+        resetWorld([a]);
+        ensureStockSegments(a);
+        assert(a.sector.join() === 'Energia,Chemia' && getMainSector(a) === 'Energia', a.sector.join());
+        const p = getSectorProfile(a);
+        for (const key of Object.keys(DEFAULT_SECTOR_PROFILE)) assertNear(p[key], 0.7 * SECTOR_PROFILES['Energia'][key] + 0.3 * SECTOR_PROFILES['Chemia'][key], key, 1e-12);
+    });
+
+    test('cykl sektora działa proporcjonalnie do udziałów segmentów', () => {
+        const a = makeCompany('CYC', { sector: ['Energia', 'Chemia'] });
+        a.segments = [seg('Energia', 0.75), seg('Chemia', 0.25)];
+        resetWorld([a]);
+        ensureStockSegments(a);
+        macro.sectorCycles['Energia'] = { phase: 'boom', quartersLeft: 3 };
+        macro.sectorCycles['Chemia'] = { phase: 'trough', quartersLeft: 3 };
+        assertNear(getSectorCycleAdj(a), 0.75 * SECTOR_CYCLE_PHASES.boom.adj + 0.25 * SECTOR_CYCLE_PHASES.trough.adj, 'wzrost', 1e-12);
+        assertNear(getSectorValuationFactor(a), 0.75 * SECTOR_CYCLE_PHASES.boom.val + 0.25 * SECTOR_CYCLE_PHASES.trough.val, 'wycena', 1e-12);
+    });
+
+    test('segmenty: najwyżej 3, udziały sumują się do 1; dopisany sektor przebudowuje segmenty', () => {
+        const a = makeCompany('MANY', { sector: ['Przemysł', 'Energia', 'Chemia', 'Budowlany'] });
+        resetWorld([a]);
+        ensureStockSegments(a);
+        assert(a.segments.length === 3 && Math.abs(a.segments.reduce((s, x) => s + x.share, 0) - 1) < 1e-9, JSON.stringify(a.segments));
+        const b = makeCompany('GROW', { sector: ['Przemysł'] });
+        resetWorld([b]);
+        ensureStockSegments(b);
+        b.sector.push('Budowlany'); // np. budowa własnego działu budowlanego
+        assert(ensureStockSegments(b) && b.segments.length === 2 && b.segments.every(x => x.share === 0.5), 'przebudowa');
+        assert(!ensureStockSegments(b), 'idempotentne');
+    });
+
+    test('mediany sektora liczone po sektorze głównym', () => {
+        const a = makeCompany('MED1', { sector: ['Chemia'] }), b = makeCompany('MED2', { sector: ['Energia', 'Chemia'] });
+        b.segments = [seg('Energia', 0.6), seg('Chemia', 0.4)];
+        [a, b].forEach(s => { initializeFundamentals(s, true); });
+        resetWorld([a, b]);
+        ensureAllStockSegments();
+        sectorMedianCache.at = 0;
+        const chem = getSectorMedians('Chemia'), energy = getSectorMedians('Energia');
+        assert(chem?.count === 1 && energy?.count === 1, `Chemia ${chem?.count}, Energia ${energy?.count}`);
+    });
+});
+
+group('0.14 T1c: filtr sektora i typu', () => {
+    function world() {
+        const banks = [
+            ['BK1', ['Bankowość'], BANK_TYPES.UNIVERSAL], ['BK2', ['Bankowość Komercyjna', 'Finanse'], BANK_TYPES.INVESTMENT],
+            ['BK3', ['Bankowość Komercyjna', 'Finanse', 'Międzynarodowy'], BANK_TYPES.INTERNATIONAL]
+        ].map(([symbol, sector, type]) => { const s = makeCompany(symbol, { sector }); s.isBankStock = true; s.bankData = { id: symbol, type }; return s; });
+        const food = makeCompany('BZY', { sector: ['Żywność', 'Bankowość'] });            // bank poboczny
+        const reitA = makeCompany('RA', { sector: ['Nieruchomości'] }); reitA.assetType = 'REIT';
+        const reitB = makeCompany('RB', { sector: ['Usługi'] }); reitB.assetType = 'REIT';
+        const plain = makeCompany('PL', { sector: ['Nieruchomości'] });
+        resetWorld([...banks, food, reitA, reitB, plain]);
+        ensureAllStockSegments();
+        return { banks, food, reitA, reitB, plain };
+    }
+    const pick = filter => stocks.filter(s => stockMatchesSectorFilter(s, filter)).map(s => s.symbol);
+
+    test('filtr „Bankowość” (domyślny) obejmuje wszystkie banki; przełącznik zwiększa listę, nie zmniejsza', () => {
+        const { banks, food } = world();
+        const main = pick({ sector: 'Bankowość' });
+        assert(banks.every(b => main.includes(b.symbol)), `banki: ${main}`);
+        assert(!main.includes(food.symbol), 'spółka z bankiem jako drugim segmentem nie jest w filtrze domyślnym');
+        const withSecondary = pick({ sector: 'Bankowość', secondary: true });
+        assert(withSecondary.length >= main.length && main.every(s => withSecondary.includes(s)), `${main} ⊆ ${withSecondary}`);
+        assert(withSecondary.includes(food.symbol), 'przełącznik dodaje segment poboczny');
+        const counts = getSectorFilterCounts(stocks, { sector: 'Bankowość' });
+        assert(counts.sectors['Bankowość'] === main.length, 'liczba na chipie = lista');
+        assert(counts.subsectors['Bank inwestycyjny'] === 1 && counts.subsectors['Bank międzynarodowy'] === 1, JSON.stringify(counts.subsectors));
+        assert(pick({ sector: 'Bankowość', subsector: 'Bank międzynarodowy' }).join() === 'BK3', 'podsektor');
+    });
+
+    test('filtr „Typ = REIT” nie zależy od sektora', () => {
+        const { reitA, reitB, plain } = world();
+        const reits = pick({ type: 'REIT' });
+        assert(reits.includes(reitA.symbol) && reits.includes(reitB.symbol) && !reits.includes(plain.symbol), `${reits}`);
+        assert(pick({ sector: 'Nieruchomości', type: 'REIT' }).join() === 'RA', 'sektor zawęża, typ nie');
+        assert(getInstrumentType({ marketOperator: 'GPW' }) === 'operator' && getInstrumentType({ assetType: 'Holding' }) === 'holding', 'typy');
+    });
+
+    test('wybór filtra zapamiętany w localStorage', () => {
+        const before = sectorFilterState;
+        sectorFilterState = { sector: 'Energia', subsector: null, secondary: true, type: 'stock' };
+        saveSectorFilterState();
+        const loaded = loadSectorFilterState();
+        sectorFilterState = before;
+        saveSectorFilterState();
+        assert(loaded.sector === 'Energia' && loaded.secondary === true && loaded.type === 'stock', JSON.stringify(loaded));
     });
 });
 

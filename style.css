@@ -3115,6 +3115,14 @@ button:hover {
   color: var(--accent-info);
 }
 
+/* 0.14 T1c: grupy sektorów, liczba spółek, podsektory i przełączniki filtra */
+.sector-chip small { margin-left: 6px; opacity: 0.7; font-weight: 500; }
+.sector-group { display: inline-flex; align-items: center; padding: 0 2px 0 8px; font-size: 15px; opacity: 0.8; }
+.sector-filter-extra { margin: -6px 0 12px; }
+.sector-subchips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.sector-subchips .sector-chip { min-height: 28px; font-size: 12px; }
+.sector-filter-controls { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+
 .market-level-tabs {
   display: flex;
   flex-wrap: wrap;
@@ -4438,6 +4446,11 @@ body.dark-mode #startup-incubator-panel.panel, #startup-incubator-panel.panel { 
 .mentor-cert-icon { font-size: 1.6rem; }
 .mentor-task { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; border-bottom: 1px solid var(--border-color, #30363d); padding: 8px 0; }
 .cc-exdiv { background: var(--bg-elevated, #1c2128); border-radius: 8px; padding: 6px 10px; }
+/* 0.14 T1b: struktura przychodów (segmenty) */
+.cc-segments { margin: 6px 0 4px; }
+.cc-seg-bar { display: flex; gap: 2px; border-radius: 6px; overflow: hidden; margin-top: 2px; }
+.cc-seg { min-width: 0; padding: 2px 6px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--bg-elevated, #1c2128); color: var(--text-muted, #8b949e); }
+.cc-seg-main { background: var(--accent-soft, #1f6feb33); color: inherit; font-weight: 600; }
 .stock-drawer-impact { color: var(--text-muted, #8b949e); padding: 4px 2px 0; }
 
 /* 0.13: Kraj (struktura klas, partie, ustawy) i Zatrudnienie */

@@ -1690,41 +1690,247 @@ function getGdpDriver() {
 // rateSens: wrażliwość wyceny na stopy procentowe; pe: bazowe C/Z; margin: typowa marża EBITDA;
 // growth: trend wzrostu przychodów rocznie; ps: typowa kapitalizacja / roczne przychody (kalibracja startowa);
 // da: amortyzacja jako część przychodów.
-const SECTOR_PROFILES = {
-    'Technologia':          { beta: 1.3, rateSens: 1.2, pe: 22, margin: 0.28, growth: 0.08, ps: 3.5, da: 0.05 },
-    'Gaming':               { beta: 1.4, rateSens: 1.0, pe: 20, margin: 0.25, growth: 0.07, ps: 3.0, da: 0.06 },
-    'Medycyna':             { beta: 0.6, rateSens: 0.6, pe: 20, margin: 0.22, growth: 0.05, ps: 3.0, da: 0.05 },
-    'Żywność':              { beta: 0.5, rateSens: 0.4, pe: 15, margin: 0.12, growth: 0.03, ps: 1.0, da: 0.03 },
-    'Dobra konsumpcyjne':   { beta: 1.0, rateSens: 0.6, pe: 16, margin: 0.14, growth: 0.04, ps: 1.3, da: 0.03 },
-    'Energia':              { beta: 0.8, rateSens: 0.9, pe: 12, margin: 0.25, growth: 0.02, ps: 1.5, da: 0.08 },
-    'Chemia':               { beta: 1.2, rateSens: 0.7, pe: 13, margin: 0.16, growth: 0.03, ps: 1.1, da: 0.05 },
-    'Przemysł':             { beta: 1.3, rateSens: 0.8, pe: 13, margin: 0.14, growth: 0.03, ps: 1.0, da: 0.05 },
-    'Budowlany':            { beta: 1.5, rateSens: 1.3, pe: 11, margin: 0.10, growth: 0.03, ps: 0.7, da: 0.03 },
-    'Nieruchomości':        { beta: 1.4, rateSens: 1.6, pe: 14, margin: 0.35, growth: 0.03, ps: 4.0, da: 0.10 },
-    'Bankowość':            { beta: 1.1, rateSens: -0.3, pe: 11, margin: 0.40, growth: 0.03, ps: 2.5, da: 0.02 },
-    'Bankowość Komercyjna': { beta: 1.1, rateSens: -0.3, pe: 11, margin: 0.40, growth: 0.03, ps: 2.5, da: 0.02 },
-    'Finanse':              { beta: 1.3, rateSens: 0.5, pe: 13, margin: 0.30, growth: 0.04, ps: 2.5, da: 0.02 },
-    'Finanse Konsumenckie': { beta: 1.2, rateSens: 0.8, pe: 10, margin: 0.30, growth: 0.04, ps: 2.0, da: 0.02 },
-    'Usługi':               { beta: 0.9, rateSens: 0.5, pe: 16, margin: 0.15, growth: 0.04, ps: 1.4, da: 0.03 },
-    'Turystyka':            { beta: 1.5, rateSens: 0.8, pe: 15, margin: 0.15, growth: 0.04, ps: 1.5, da: 0.06 },
-    'Media':                { beta: 1.1, rateSens: 0.6, pe: 14, margin: 0.18, growth: 0.02, ps: 1.8, da: 0.04 },
-    'Logistyka':            { beta: 1.2, rateSens: 0.7, pe: 14, margin: 0.12, growth: 0.04, ps: 1.0, da: 0.06 },
-    'Transport':            { beta: 1.2, rateSens: 0.7, pe: 13, margin: 0.14, growth: 0.03, ps: 1.0, da: 0.07 },
-    'Badania':              { beta: 0.9, rateSens: 0.8, pe: 25, margin: 0.20, growth: 0.07, ps: 4.0, da: 0.05 },
-    'Obronność':            { beta: 0.5, rateSens: 0.5, pe: 17, margin: 0.20, growth: 0.04, ps: 1.8, da: 0.05 } // 0.11.4: defensywna, kontrakty państwowe
+// 0.14 T1a: jeden rejestr sektorów — jedyne źródło nazw, ikon, grup, profili i podsektorów
+// (profile, cykle, mediany, filtry, skaner, Akademia). Podsektor może nadpisać pola profilu sektora.
+const SECTOR_GROUPS = [
+    { id: 'finance',  name: 'Finanse',            icon: '💰', sectors: ['Bankowość', 'Finanse'] },
+    { id: 'consumer', name: 'Konsumpcja',         icon: '🛒', sectors: ['Żywność', 'Dobra konsumpcyjne', 'Turystyka', 'Media', 'Gaming'] },
+    { id: 'industry', name: 'Przemysł i surowce', icon: '🏭', sectors: ['Przemysł', 'Chemia', 'Energia', 'Budowlany', 'Transport i logistyka'] },
+    { id: 'health',   name: 'Zdrowie i nauka',    icon: '🏥', sectors: ['Medycyna', 'Badania'] },
+    { id: 'tech',     name: 'Technologia',        icon: '💻', sectors: ['Technologia'] },
+    { id: 'realty',   name: 'Nieruchomości',      icon: '🏢', sectors: ['Nieruchomości'] },
+    { id: 'defense',  name: 'Obronność',          icon: '🛡️', sectors: ['Obronność'] },
+    { id: 'services', name: 'Usługi',             icon: '🧰', sectors: ['Usługi'] }
+];
+
+const SECTORS = {
+    'Bankowość':             { icon: '🏦', profile: { beta: 1.1, rateSens: -0.3, pe: 11, margin: 0.40, growth: 0.03, ps: 2.5, da: 0.02 },
+        subsectors: { 'Bank komercyjny': {}, 'Bank inwestycyjny': {}, 'Bank międzynarodowy': {} } },
+    'Finanse':               { icon: '💳', profile: { beta: 1.3, rateSens: 0.5, pe: 13, margin: 0.30, growth: 0.04, ps: 2.5, da: 0.02 },
+        subsectors: {
+            'Pożyczki konsumenckie': { profile: { beta: 1.2, rateSens: 0.8, pe: 10, ps: 2.0 } }, // dawne „Finanse Konsumenckie”
+            'Rynki kapitałowe': {}
+        } },
+    'Żywność':               { icon: '🍞', profile: { beta: 0.5, rateSens: 0.4, pe: 15, margin: 0.12, growth: 0.03, ps: 1.0, da: 0.03 } },
+    'Dobra konsumpcyjne':    { icon: '🛍️', profile: { beta: 1.0, rateSens: 0.6, pe: 16, margin: 0.14, growth: 0.04, ps: 1.3, da: 0.03 } },
+    'Turystyka':             { icon: '✈️', profile: { beta: 1.5, rateSens: 0.8, pe: 15, margin: 0.15, growth: 0.04, ps: 1.5, da: 0.06 } },
+    'Media':                 { icon: '📺', profile: { beta: 1.1, rateSens: 0.6, pe: 14, margin: 0.18, growth: 0.02, ps: 1.8, da: 0.04 } },
+    'Gaming':                { icon: '🎮', profile: { beta: 1.4, rateSens: 1.0, pe: 20, margin: 0.25, growth: 0.07, ps: 3.0, da: 0.06 } },
+    'Przemysł':              { icon: '⚙️', profile: { beta: 1.3, rateSens: 0.8, pe: 13, margin: 0.14, growth: 0.03, ps: 1.0, da: 0.05 } },
+    'Chemia':                { icon: '⚗️', profile: { beta: 1.2, rateSens: 0.7, pe: 13, margin: 0.16, growth: 0.03, ps: 1.1, da: 0.05 } },
+    'Energia':               { icon: '⚡', profile: { beta: 0.8, rateSens: 0.9, pe: 12, margin: 0.25, growth: 0.02, ps: 1.5, da: 0.08 } },
+    'Budowlany':             { icon: '🏗️', profile: { beta: 1.5, rateSens: 1.3, pe: 11, margin: 0.10, growth: 0.03, ps: 0.7, da: 0.03 } },
+    'Transport i logistyka': { icon: '🚚', profile: { beta: 1.2, rateSens: 0.7, pe: 13, margin: 0.14, growth: 0.03, ps: 1.0, da: 0.07 }, // dawny „Transport”
+        subsectors: { 'Logistyka': { profile: { pe: 14, margin: 0.12, growth: 0.04, da: 0.06 } } } },           // dawna „Logistyka”
+    'Medycyna':              { icon: '💊', profile: { beta: 0.6, rateSens: 0.6, pe: 20, margin: 0.22, growth: 0.05, ps: 3.0, da: 0.05 } },
+    'Badania':               { icon: '🔬', profile: { beta: 0.9, rateSens: 0.8, pe: 25, margin: 0.20, growth: 0.07, ps: 4.0, da: 0.05 } },
+    'Technologia':           { icon: '💻', profile: { beta: 1.3, rateSens: 1.2, pe: 22, margin: 0.28, growth: 0.08, ps: 3.5, da: 0.05 } },
+    'Nieruchomości':         { icon: '🏢', profile: { beta: 1.4, rateSens: 1.6, pe: 14, margin: 0.35, growth: 0.03, ps: 4.0, da: 0.10 } },
+    'Obronność':             { icon: '🛡️', profile: { beta: 0.5, rateSens: 0.5, pe: 17, margin: 0.20, growth: 0.04, ps: 1.8, da: 0.05 } }, // 0.11.4: defensywna
+    'Usługi':                { icon: '🧰', profile: { beta: 0.9, rateSens: 0.5, pe: 16, margin: 0.15, growth: 0.04, ps: 1.4, da: 0.03 } }
 };
+for (const group of SECTOR_GROUPS) for (const name of group.sectors) SECTORS[name].group = group.id;
+
+/** Kanoniczne sektory w kolejności wyświetlania (według grup). */
+const SECTOR_NAMES = SECTOR_GROUPS.flatMap(group => group.sectors);
+// Zgodność: profile sektorów jako słownik (generatory, testy).
+const SECTOR_PROFILES = Object.fromEntries(SECTOR_NAMES.map(name => [name, SECTORS[name].profile]));
 
 const DEFAULT_SECTOR_PROFILE = { beta: 1.0, rateSens: 0.7, pe: 14, margin: 0.15, growth: 0.03, ps: 1.5, da: 0.04 };
 
-/** Profil spółki: średnia profili jej sektorów. */
-function getSectorProfile(stock) {
-    const sectors = Array.isArray(stock?.sector) ? stock.sector : [];
-    const profiles = sectors.map(sector => SECTOR_PROFILES[sector]).filter(Boolean);
-    if (profiles.length === 0) return { ...DEFAULT_SECTOR_PROFILE };
+// Stare nazwy (definicje sprzed 0.14 i zapisy ≤ v13) → [sektor, podsektor].
+const LEGACY_SECTOR_MAP = {
+    'Bankowość Komercyjna': ['Bankowość', 'Bank komercyjny'],
+    'Finanse Konsumenckie': ['Finanse', 'Pożyczki konsumenckie'],
+    'Logistyka': ['Transport i logistyka', 'Logistyka'],
+    'Transport': ['Transport i logistyka', null],
+    'Dobra konsumencje': ['Dobra konsumpcyjne', null] // literówka z dawnego generatora startupów
+};
+const LEGACY_SECTOR_NAMES = ['Bankowość Komercyjna', 'Finanse Konsumenckie', 'Logistyka', 'Transport', 'Międzynarodowy', 'common', 'Dobra konsumencje'];
+const MAX_SEGMENTS = 3;
 
+function isCanonicalSector(name) {
+    return typeof name === 'string' && Object.prototype.hasOwnProperty.call(SECTORS, name);
+}
+
+/** Kanoniczna nazwa sektora dla nazwy z listy (także starej); null, gdy to nie sektor. */
+function canonicalSectorName(name) {
+    return LEGACY_SECTOR_MAP[name]?.[0] || (isCanonicalSector(name) ? name : null);
+}
+
+/** Profil sektora (z podsektorem: nadpisane pola podsektora). */
+function getSectorSubsectorProfile(sector, subsector = null) {
+    const def = SECTORS[sector];
+    if (!def) return null;
+    const sub = subsector ? def.subsectors?.[subsector] : null;
+    return sub?.profile ? { ...def.profile, ...sub.profile } : def.profile;
+}
+
+/** Podsektor banku z jego typu (porządek nazw T1a). */
+function getBankSubsector(stock, rawSectors = []) {
+    const type = stock?.bankData?.type;
+    if (type === BANK_TYPES.INVESTMENT) return 'Bank inwestycyjny';
+    if (type === BANK_TYPES.INTERNATIONAL || rawSectors.includes(BANK_TYPES.INTERNATIONAL)) return 'Bank międzynarodowy';
+    return stock?.isBankStock || stock?.bankData ? 'Bank komercyjny' : null;
+}
+
+/**
+ * Segmenty z (dawnej) listy sektorów: mapowanie nazw, bez etykiet niebędących sektorami („Międzynarodowy”, „common”),
+ * bez „Usługi” doklejonych na dalszej pozycji, para Bankowość + Finanse = jeden segment Bankowość, podsektor banku
+ * z jego typu, operatorzy rynków → Finanse / Rynki kapitałowe. Równe udziały (wynik jak dawna średnia), najwyżej 3.
+ */
+function deriveSegmentsFromSectors(stock) {
+    const raw = (Array.isArray(stock?.sector) ? stock.sector : [stock?.sector]).filter(name => typeof name === 'string' && name);
+    const entries = [];
+    raw.forEach((name, index) => {
+        const mapped = LEGACY_SECTOR_MAP[name] || (isCanonicalSector(name) ? [name, null] : null);
+        if (!mapped) return;
+        if (mapped[0] === 'Usługi' && index > 0) return;
+        const existing = entries.find(entry => entry.sector === mapped[0]);
+        if (existing) { if (!existing.subsector && mapped[1]) existing.subsector = mapped[1]; return; }
+        entries.push({ sector: mapped[0], subsector: mapped[1] });
+    });
+    let list = entries.some(entry => entry.sector === 'Bankowość') ? entries.filter(entry => entry.sector !== 'Finanse') : entries;
+    const bank = list.find(entry => entry.sector === 'Bankowość');
+    if (bank) bank.subsector = getBankSubsector(stock, raw) || bank.subsector; // typ banku przed etykietą „Bankowość Komercyjna”
+    if (stock?.marketOperator) {
+        list = list.filter(entry => entry.sector === 'Finanse');
+        if (!list.length) list.push({ sector: 'Finanse', subsector: null });
+        list[0].subsector = 'Rynki kapitałowe';
+    }
+    list = list.slice(0, MAX_SEGMENTS);
+    return list.map(entry => ({ sector: entry.sector, subsector: entry.subsector || null, share: 1 / list.length }));
+}
+
+function isValidSegmentList(segments) {
+    return Array.isArray(segments) && segments.length > 0 && segments.length <= MAX_SEGMENTS
+        && segments.every(seg => isCanonicalSector(seg?.sector) && seg.share > 0)
+        && Math.abs(segments.reduce((sum, seg) => sum + seg.share, 0) - 1) < 1e-6;
+}
+
+/** Sektory w kolejności udziałów (sektor główny pierwszy). */
+function getSectorsFromSegments(segments) {
+    return [...segments].sort((a, b) => b.share - a.share).map(seg => seg.sector);
+}
+
+function segmentsMatchSectors(stock) {
+    const derived = getSectorsFromSegments(stock.segments);
+    const current = Array.isArray(stock.sector) ? stock.sector : [];
+    return derived.length === current.length && derived.every((sector, i) => sector === current[i]);
+}
+
+/** Segmenty spółki (bez zmiany obiektu): zapisane albo wyprowadzone z sektorów. */
+function getStockSegments(stock) {
+    if (isValidSegmentList(stock?.segments) && segmentsMatchSectors(stock)) return stock.segments;
+    const current = Array.isArray(stock?.sector) ? stock.sector : [];
+    if (isValidSegmentList(stock?.segments) && current.length === stock.segments.length && stock.segments.every(seg => current.includes(seg.sector))) return stock.segments;
+    return deriveSegmentsFromSectors(stock);
+}
+
+/** Ustawia stock.segments i wyliczony z nich stock.sector (idempotentne). Zwraca true, gdy coś zmieniono. */
+function ensureStockSegments(stock) {
+    if (!stock || typeof stock !== 'object') return false;
+    if (isValidSegmentList(stock.segments) && segmentsMatchSectors(stock)) return false;
+    // Te same sektory w innej kolejności: prawdą są segmenty (udziały), sektor tylko się przelicza.
+    const current = Array.isArray(stock.sector) ? stock.sector : [];
+    if (isValidSegmentList(stock.segments) && current.length === stock.segments.length && stock.segments.every(seg => current.includes(seg.sector))) {
+        stock.sector = getSectorsFromSegments(stock.segments);
+        return true;
+    }
+    const segments = deriveSegmentsFromSectors(stock);
+    stock.segments = segments;
+    stock.sector = getSectorsFromSegments(segments);
+    return true;
+}
+
+/** Wszystkie spółki: segmenty i sektory z rejestru (nowa gra, wczytanie, co kwartał). Zwraca liczbę poprawionych. */
+function ensureAllStockSegments() {
+    if (typeof stocks === 'undefined' || !Array.isArray(stocks)) return 0;
+    let changed = 0;
+    for (const stock of stocks) if (ensureStockSegments(stock)) changed++;
+    return changed;
+}
+
+function getMainSegment(stock) {
+    const segments = getStockSegments(stock);
+    return segments.length ? segments.reduce((best, seg) => seg.share > best.share ? seg : best) : null;
+}
+
+/** Sektor główny = segment o największym udziale (zamiast sector[0]). */
+function getMainSector(stock) {
+    return getMainSegment(stock)?.sector || null;
+}
+
+/** Podsektor segmentu głównego. */
+function getMainSubsector(stock) {
+    return getMainSegment(stock)?.subsector || null;
+}
+
+/** Spółka ma segment w danym sektorze (główny albo poboczny). */
+function hasSectorSegment(stock, sector) {
+    return getStockSegments(stock).some(seg => seg.sector === sector);
+}
+
+// ---------------------------------------------------------------------------------
+// 0.14 T1c: filtr sektora i typu (lista spółek, skaner)
+// ---------------------------------------------------------------------------------
+
+const INSTRUMENT_TYPES = [
+    { id: 'all', label: 'Wszystkie typy' },
+    { id: 'stock', label: 'Akcje' },
+    { id: 'REIT', label: 'REIT' },
+    { id: 'holding', label: 'Holdingi' },
+    { id: 'etf', label: 'ETF' },
+    { id: 'startup', label: 'Startupy' },
+    { id: 'operator', label: 'Operatorzy rynków' }
+];
+const DEFAULT_SECTOR_FILTER = { sector: 'all', subsector: null, secondary: false, type: 'all' };
+
+/** Typ instrumentu (osobno od sektora). ETF-y są osobną listą (etfs), nie spółkami. */
+function getInstrumentType(stock) {
+    if (stock?.marketOperator) return 'operator';
+    if (stock?.assetType === 'REIT') return 'REIT';
+    if (stock?.assetType === 'Holding') return 'holding';
+    if (stock?.assetType === 'Startup') return 'startup';
+    return 'stock';
+}
+
+/** Czy spółka pasuje do filtra: domyślnie sektor główny, z przełącznikiem także segmenty poboczne; podsektor; typ. */
+function stockMatchesSectorFilter(stock, filter = DEFAULT_SECTOR_FILTER) {
+    const f = { ...DEFAULT_SECTOR_FILTER, ...(filter || {}) };
+    if (f.type !== 'all' && getInstrumentType(stock) !== f.type) return false;
+    if (!f.sector || f.sector === 'all') return true;
+    const main = getMainSegment(stock);
+    const candidates = f.secondary ? getStockSegments(stock).filter(seg => seg.sector === f.sector) : (main?.sector === f.sector ? [main] : []);
+    if (!candidates.length) return false;
+    return !f.subsector || candidates.some(seg => seg.subsector === f.subsector);
+}
+
+/** Liczby spółek do chipów: sektor (główny; z przełącznikiem także poboczny) i podsektory wybranego sektora. */
+function getSectorFilterCounts(list, filter = DEFAULT_SECTOR_FILTER) {
+    const f = { ...DEFAULT_SECTOR_FILTER, ...(filter || {}) };
+    const sectors = {}, subsectors = {};
+    for (const stock of list) {
+        if (f.type !== 'all' && getInstrumentType(stock) !== f.type) continue;
+        const segments = getStockSegments(stock);
+        const main = getMainSegment(stock);
+        const counted = f.secondary ? segments : (main ? [main] : []);
+        for (const sector of new Set(counted.map(seg => seg.sector))) sectors[sector] = (sectors[sector] || 0) + 1;
+        if (f.sector && f.sector !== 'all') {
+            for (const sub of new Set(counted.filter(seg => seg.sector === f.sector && seg.subsector).map(seg => seg.subsector))) subsectors[sub] = (subsectors[sub] || 0) + 1;
+        }
+    }
+    return { sectors, subsectors };
+}
+
+/** Profil spółki: średnia profili segmentów ważona udziałami (0.14 T1b). */
+function getSectorProfile(stock) {
+    const weighted = getStockSegments(stock).map(seg => [getSectorSubsectorProfile(seg.sector, seg.subsector), seg.share]).filter(([profile]) => profile);
+    if (weighted.length === 0) return { ...DEFAULT_SECTOR_PROFILE };
+    const total = weighted.reduce((sum, [, share]) => sum + share, 0);
     const result = {};
     for (const key of Object.keys(DEFAULT_SECTOR_PROFILE)) {
-        result[key] = profiles.reduce((sum, profile) => sum + profile[key], 0) / profiles.length;
+        result[key] = weighted.reduce((sum, [profile, share]) => sum + profile[key] * share, 0) / total;
     }
     return result;
 }
@@ -2795,9 +3001,20 @@ function createMacroState() {
 function createSectorCycles() {
     const cycles = {};
     const phases = Object.keys(SECTOR_CYCLE_PHASES);
-    for (const sector of Object.keys(SECTOR_PROFILES)) {
+    for (const sector of SECTOR_NAMES) {
         const phase = getRandomElement(phases);
         cycles[sector] = { phase, quartersLeft: getRandomIntInRange(...SECTOR_CYCLE_PHASES[phase].length) };
+    }
+    return cycles;
+}
+
+/** T1a: cykle tylko dla sektorów kanonicznych; „Transport i logistyka” przejmuje cykl dawnego Transportu. */
+function normalizeSectorCycles(saved, fresh = createSectorCycles()) {
+    const source = saved && typeof saved === 'object' ? saved : {};
+    const cycles = {};
+    for (const sector of SECTOR_NAMES) {
+        const legacy = Object.keys(LEGACY_SECTOR_MAP).find(name => LEGACY_SECTOR_MAP[name][0] === sector && !LEGACY_SECTOR_MAP[name][1] && source[name]);
+        cycles[sector] = source[sector] || (legacy ? source[legacy] : null) || fresh[sector];
     }
     return cycles;
 }
@@ -2805,7 +3022,7 @@ function createSectorCycles() {
 function ensureMacroState() {
     const fresh = createMacroState();
     macro = { ...fresh, ...(macro || {}) };
-    macro.sectorCycles = { ...fresh.sectorCycles, ...(macro.sectorCycles || {}) };
+    macro.sectorCycles = normalizeSectorCycles(macro.sectorCycles, fresh.sectorCycles);
     macro.election = { ...fresh.election, ...(macro.election || {}) };
     macro.election.donations = { market: 0, state: 0, people: 0, ...(macro.election.donations || {}) };
     macro.shocks = { ...fresh.shocks, ...(macro.shocks || {}) };
@@ -2818,22 +3035,26 @@ function ensureMacroState() {
 // CYKLE SEKTORÓW
 // =================================================================================
 
+/** Cykle segmentów spółki z wagami udziałów (0.14 T1b: cykl działa proporcjonalnie do segmentu). */
 function getStockSectorCycles(stock) {
-    return (Array.isArray(stock?.sector) ? stock.sector : []).map(sector => macro.sectorCycles?.[sector]).filter(Boolean);
+    return getStockSegments(stock).map(seg => ({ cycle: macro.sectorCycles?.[seg.sector], share: seg.share })).filter(item => item.cycle);
+}
+
+function weightedCycleValue(stock, key, fallback) {
+    const cycles = getStockSectorCycles(stock);
+    const total = cycles.reduce((sum, item) => sum + item.share, 0);
+    if (!(total > 0)) return fallback;
+    return cycles.reduce((sum, item) => sum + SECTOR_CYCLE_PHASES[item.cycle.phase][key] * item.share, 0) / total;
 }
 
 /** Dodatek do kwartalnego wzrostu przychodów z fazy sektora. */
 function getSectorCycleAdj(stock) {
-    const cycles = getStockSectorCycles(stock);
-    if (!cycles.length) return 0;
-    return cycles.reduce((sum, cycle) => sum + SECTOR_CYCLE_PHASES[cycle.phase].adj, 0) / cycles.length;
+    return weightedCycleValue(stock, 'adj', 0);
 }
 
 /** Mnożnik wyceny z fazy sektora (boom drożej, spadek taniej). */
 function getSectorValuationFactor(stock) {
-    const cycles = getStockSectorCycles(stock);
-    if (!cycles.length) return 1;
-    return cycles.reduce((sum, cycle) => sum + SECTOR_CYCLE_PHASES[cycle.phase].val, 0) / cycles.length;
+    return weightedCycleValue(stock, 'val', 1);
 }
 
 function advanceSectorCycles() {

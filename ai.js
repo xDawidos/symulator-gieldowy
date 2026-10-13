@@ -885,7 +885,7 @@ function makeAiDecision(ai) {
             const banker = ai;
             const bankerNetWorth = aiNetWorth;
             const bankerPortfolioSize = portfolioSize;
-            const financeSectors = ['Finanse', 'Bankowość Komercyjna'];
+            const financeSectors = ['Finanse', 'Bankowość'];
 
             // 1. Sprzedaż
             let soldSomethingBanker = false;
@@ -2004,7 +2004,7 @@ function aiUseMediaInfluence(ai) {
                 // Jeśli AI kontroluje spółkę, atakuje rywala z sektora
                 const controlled = stocks.find(s => s.symbol === controlledStock);
                 targetStock = getRandomElement(stocks.filter(s => 
-                    !s.assetType && !s.isBankrupt && s.sector.includes(controlled.sector[0]) && s.symbol !== controlledStock
+                    !s.assetType && !s.isBankrupt && s.sector.includes(getMainSector(controlled)) && s.symbol !== controlledStock
                 ));
             } else {
                 // Jeśli AI nie kontroluje niczego, atakuje losową spółkę
