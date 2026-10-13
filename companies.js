@@ -10420,7 +10420,7 @@ function getSynergyMarginAdj(stock) {
 
 /** Dodatek do marży ze strategii (computeQuarterResults). */
 function getStrategyMarginAdj(stock) {
-    return getSynergyMarginAdj(stock);
+    return getSynergyMarginAdj(stock) + getFocusMarginAdj(stock);
 }
 
 /** Szansa prezesa na rozszerzenie: cechy i koniunktura. */
@@ -10443,9 +10443,66 @@ function processStrategyQuarterly(quarter = getStrategyQuarter()) {
         if (strategy?.growth) growNewSegment(stock);
         const process = strategy?.process;
         if (process) {
-            if (process.dueQuarter <= quarter && process.type === 'expand') resolveExpansion(stock, Math.random(), quarter);
+            if (process.dueQuarter <= quarter) {
+                if (process.type === 'expand') resolveExpansion(stock, Math.random(), quarter);
+                else if (process.type === 'subsector') resolveSubsectorEntry(stock);
+            }
             continue;
         }
         if (canStartExpansion(stock) && Math.random() < getCeoExpansionChance(stock)) startExpansion(stock, pickExpansionSector(stock), quarter);
+        else if (canEnterSubsector(stock) && Math.random() < SUBSECTOR_ENTRY_CHANCE) startSubsectorEntry(stock, null, quarter);
     }
+}
+
+// --- T3.2: wejście w podsektor i premia „skupienia” ---
+const SUBSECTOR_ENTRY_COST = [0.05, 0.10];      // × roczne przychody
+const SUBSECTOR_ENTRY_QUARTERS = [2, 4];
+const SUBSECTOR_ENTRY_CHANCE = 0.015;           // na kwartał, prezes
+const FOCUS_SHARE = 0.70;
+const FOCUS_MARGIN = 0.015;
+
+/** Segment, który może wejść w podsektor (sektor ma podsektory, segment jeszcze nie; bez typów banków). */
+function getSubsectorEntryCandidate(stock) {
+    const options = [...stock.segments].sort((a, b) => b.share - a.share)
+        .filter(seg => !seg.subsector && Object.keys(SECTORS[seg.sector]?.subsectors || {}).some(name => !name.startsWith('Bank ')));
+    return options[0] || null;
+}
+
+function canEnterSubsector(stock) {
+    return isStrategyCompany(stock) && !stock.strategy?.process && !stock.strategy?.pivot && Boolean(getSubsectorEntryCandidate(stock))
+        && (Number(stock.financialHealth) || 0) >= 1 && (Number(stock.cash) || 0) >= getAnnualRevenue(stock) * SUBSECTOR_ENTRY_COST[1] && getAnnualRevenue(stock) > 0;
+}
+
+function startSubsectorEntry(stock, subsector = null, quarter = getStrategyQuarter(), by = 'ceo') {
+    const seg = getSubsectorEntryCandidate(stock);
+    if (!seg) return null;
+    const options = Object.entries(SECTORS[seg.sector].subsectors).filter(([name]) => !name.startsWith('Bank '));
+    const chosen = subsector && options.some(([name]) => name === subsector) ? subsector : getRandomElement(options)[0];
+    const cost = Math.round(getAnnualRevenue(stock) * getRandomInRange(...SUBSECTOR_ENTRY_COST));
+    adjustCompanyCash(stock, -cost);
+    adjustBalanceSheet(stock, { assets: -cost, retainedEarnings: -cost }); // koszt okresu (kompetencje, licencje)
+    if (typeof recordPayment === 'function') recordPayment(stock, 'external:podsektor', cost, `Wejście w podsektor ${chosen}`);
+    if (typeof coverNegativeCash === 'function') coverNegativeCash(stock);
+    ensureStrategy(stock).process = { type: 'subsector', sector: seg.sector, subsector: chosen, cost, by, startQuarter: quarter, dueQuarter: quarter + getRandomIntInRange(...SUBSECTOR_ENTRY_QUARTERS) };
+    logEvent(`🎯 ${stock.name} wchodzi w podsektor ${chosen} (${seg.sector}) — ${stock.strategy.process.dueQuarter - quarter} kw., koszt ${formatZl(cost, 0)}.`, 'company');
+    return stock.strategy.process;
+}
+
+function resolveSubsectorEntry(stock) {
+    const process = stock.strategy?.process;
+    if (!process || process.type !== 'subsector') return null;
+    stock.strategy.process = null;
+    const seg = stock.segments.find(s => s.sector === process.sector);
+    if (!seg || seg.subsector) return null;
+    seg.subsector = process.subsector;
+    noteStrategyStat('subsectorEntries');
+    logEvent(`🎯 ${stock.name}: segment ${process.sector} działa teraz w podsektorze ${process.subsector}.`, 'company');
+    if (typeof addChartEvent === 'function') addChartEvent(stock, '🎯', `Podsektor: ${process.subsector}`);
+    return process.subsector;
+}
+
+/** Premia „skupienia”: segment z podsektorem (start T2 albo wejście w T3) z udziałem ≥ 70% — marża +1,5 pp. */
+function getFocusMarginAdj(stock, quarter = getStrategyQuarter()) {
+    if ((Number(stock.strategy?.focusResetUntil) || -1) > quarter) return 0; // zmiana specjalizacji zeruje premię na 2 kw.
+    return getStockSegments(stock).some(seg => seg.subsector && seg.share >= FOCUS_SHARE - 1e-9) ? FOCUS_MARGIN : 0;
 }

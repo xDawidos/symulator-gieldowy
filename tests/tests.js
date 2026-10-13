@@ -5274,6 +5274,31 @@ group('0.14 T3: rozszerzenie o nowy segment', () => {
     });
 });
 
+group('0.14 T3: wejście w podsektor i premia skupienia', () => {
+    function firm(symbol, segments) {
+        const s = makeCompany(symbol, { sector: segments.map(x => x.sector), cash: 2_000_000 });
+        s.financialHealth = 2; s.segments = segments; s.sector = getSectorsFromSegments(segments);
+        initializeFundamentals(s, true); s.fundamentals.revenueTtm = 1_000_000;
+        resetWorld([s]);
+        return s;
+    }
+    test('koszt 5–10% rocznych przychodów, 2–4 kw., segment dostaje podsektor', () => {
+        const s = firm('SUB1', [{ sector: 'Technologia', subsector: null, share: 1 }]);
+        assert(canEnterSubsector(s), 'może wejść');
+        const cash0 = s.cash;
+        const p = startSubsectorEntry(s, 'Półprzewodniki', 0);
+        assert(p.cost >= 50_000 && p.cost <= 100_000 && Math.abs(cash0 - s.cash - p.cost) < 1 && p.dueQuarter >= 2 && p.dueQuarter <= 4, JSON.stringify(p));
+        assert(resolveSubsectorEntry(s) === 'Półprzewodniki' && getMainSubsector(s) === 'Półprzewodniki', 'podsektor');
+        const bank = firm('SUB2', [{ sector: 'Bankowość', subsector: null, share: 1 }]);
+        assert(!getSubsectorEntryCandidate(bank), 'typ banku nie jest podsektorem do wyboru');
+    });
+    test('premia skupienia +1,5 pp: segment z podsektorem ≥ 70%; bez podsektora — brak premii', () => {
+        assert(getFocusMarginAdj(firm('F1', [{ sector: 'Technologia', subsector: 'Półprzewodniki', share: 0.75 }, { sector: 'Chemia', subsector: null, share: 0.25 }])) === 0.015, '75% z podsektorem');
+        assert(getFocusMarginAdj(firm('F2', [{ sector: 'Technologia', subsector: 'Półprzewodniki', share: 0.6 }, { sector: 'Chemia', subsector: null, share: 0.4 }])) === 0, '60%');
+        assert(getFocusMarginAdj(firm('F3', [{ sector: 'Technologia', subsector: null, share: 1 }])) === 0, 'bez podsektora (decyzja użytkownika)');
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;
