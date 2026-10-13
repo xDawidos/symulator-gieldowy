@@ -125,13 +125,13 @@ const roundRecords = list => Array.isArray(list) ? list.map(item => item && type
 
 /** 0.14 T1: segmenty w zapisie zwięźle — „sektor|podsektor|udział” rozdzielone „;”; stock.sector wyliczany przy wczytaniu. */
 function encodeSegmentsForSave(segments) {
-    return segments.map(seg => `${seg.sector}|${seg.subsector || ''}|${Math.round(seg.share * 1e4) / 1e4}`).join(';');
+    return segments.map(seg => `${seg.sector}|${seg.subsector || ''}|${Math.round(seg.share * 1e4) / 1e4}${seg.niche ? `|${seg.niche}` : ''}`).join(';'); // T3: nisza jako 4. pole
 }
 
 function decodeSavedSegments(text) {
     const segments = String(text).split(';').map(part => {
-        const [sector, subsector, share] = part.split('|');
-        return { sector, subsector: subsector || null, share: Number(share) };
+        const [sector, subsector, share, niche] = part.split('|');
+        return niche ? { sector, subsector: subsector || null, share: Number(share), niche } : { sector, subsector: subsector || null, share: Number(share) };
     }).filter(seg => seg.sector && seg.share > 0);
     const total = segments.reduce((sum, seg) => sum + seg.share, 0);
     return total > 0 ? segments.map(seg => ({ ...seg, share: seg.share / total })) : [];
@@ -1142,6 +1142,7 @@ gameTimers.weekly = setGameInterval(() => {
         processEtfsQuarterly(); // rebalancing, cele roczne, nowe i zamykane ETF-y (etf.js)
         processRelationsQuarterly(); // relacje z botami: wrogowie i przyjaciele (relations.js)
         processMarketsQuarterly(); // operatorzy rynków i maklerzy (markets.js)
+        processStrategyQuarterly(); // 0.14 T3: rozszerzenia, podsektory, nisze, pivoty (strategy.js)
         processSubsectorMechanicsQuarterly(); // 0.14 T2: badania kliniczne, bloki jądrowe, kontrole KNF (subsectors.js)
         processSpecialProjectsQuarterly(); // konsorcja i projekty specjalne (projects.js)
         reconcileSharesHeld(); // audyt A1: akcje w obrocie = suma posiadaczy

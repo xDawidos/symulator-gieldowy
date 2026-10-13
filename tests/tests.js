@@ -5185,6 +5185,273 @@ group('0.14 T2: Fintech — licencja KNF', () => {
     }));
 });
 
+group('0.14 decyzja 12: państwowy program jądrowy', () => {
+    test('spółka państwowa buduje blok bez własnej gotówki — raty płaci Skarb Państwa', () => {
+        const s = makeCompany('PNUK', { sector: ['Energia'], cash: 0, fixedAssets: 5_000_000 });
+        s.segments = [{ sector: 'Energia', subsector: 'Energetyka jądrowa', share: 1 }]; s.sector = ['Energia'];
+        s.isStateOwned = true;
+        initializeFundamentals(s, true);
+        resetWorld([s]);
+        const treasury = governmentTreasury;
+        try {
+            governmentTreasury = 1e12;
+            const block = startNuclearBlock(s, 0);
+            assert(block.stateFunded, 'finansowanie państwowe');
+            const cash0 = s.cash, assets0 = s.balanceSheet.assets;
+            const paid = payNuclearInstallment(s);
+            assert(paid > 0 && s.cash === cash0 && s.balanceSheet.assets === assets0 + paid && governmentTreasury === 1e12 - paid, 'Skarb płaci, gotówka spółki bez zmian');
+        } finally { governmentTreasury = treasury; }
+    });
+
+    test('szansa startu według partii: Blok Państwowy > Ludowcy > Koalicja Rynkowa; prywatna spółka bez gotówki nie zaczyna', () => {
+        const s = makeCompany('PNK2', { sector: ['Energia'], cash: 0 });
+        s.segments = [{ sector: 'Energia', subsector: 'Energetyka jądrowa', share: 1 }]; s.sector = ['Energia'];
+        initializeFundamentals(s, true);
+        resetWorld([s]);
+        assert(getNuclearStartChance(s) === 0, 'prywatna bez gotówki');
+        s.isStateOwned = true;
+        const ruling = macro.election.ruling, coalition = macro.election.coalition;
+        try {
+            macro.election.coalition = null;
+            const chance = id => { macro.election.ruling = id; return getNuclearStartChance(s); };
+            assert(chance('state') > chance('people') && chance('people') > chance('market') && chance('market') > 0, 'kolejność partii');
+        } finally { macro.election.ruling = ruling; macro.election.coalition = coalition; }
+        assert(SUBSECTOR_START_ASSIGNMENTS.PUR[1] === 'Energetyka jądrowa' && SUBSECTOR_START_ASSIGNMENTS.TRN[1] === 'Energetyka jądrowa', '2 spółki jądrowe na starcie');
+    });
+});
+
+group('0.14 T3: rozszerzenie o nowy segment', () => {
+    function firm(symbol, sectors = ['Technologia'], opts = {}) {
+        const s = makeCompany(symbol, { sector: sectors, cash: opts.cash ?? 2_000_000 });
+        s.financialHealth = opts.health ?? 3;
+        initializeFundamentals(s, true);
+        s.fundamentals.revenueTtm = 1_000_000;
+        resetWorld([s]);
+        ensureStockSegments(s);
+        return s;
+    }
+    const sum = s => s.segments.reduce((a, x) => a + x.share, 0);
+
+    test('warunki: kondycja ≥ 2, gotówka ≥ 15% rocznych przychodów, < 3 segmenty; koszt 10–20% przychodów', () => {
+        assert(canStartExpansion(firm('EX1')), 'spełnia');
+        assert(!canStartExpansion(firm('EX2', ['Technologia'], { health: 1 })), 'kondycja');
+        assert(!canStartExpansion(firm('EX3', ['Technologia'], { cash: 100_000 })), 'gotówka');
+        assert(!canStartExpansion(firm('EX4', ['Technologia', 'Chemia', 'Energia'])), '3 segmenty');
+        const s = firm('EX5');
+        const cash0 = s.cash;
+        const p = startExpansion(s, 'Gaming', 0);
+        assert(p.cost >= 100_000 && p.cost <= 200_000 && Math.abs(cash0 - s.cash - p.cost) < 1, `koszt ${p.cost}`);
+        assert(p.dueQuarter >= 4 && p.dueQuarter <= 8 && p.related, 'budowa 4–8 kw., Technologia–Gaming powiązane');
+    });
+
+    test('sukces: segment 10%, potem stopniowo do 20–40% (≤ 5 pp/kw.), udziały sumują się do 1', () => {
+        const s = firm('EX6');
+        startExpansion(s, 'Gaming', 0);
+        assert(resolveExpansion(s, 0.79, 6) === 'success', 'powiązane: 80%');
+        const seg = s.segments.find(x => x.sector === 'Gaming');
+        assertNear(seg.share, 0.10, 'start 10%', 1e-9);
+        assertNear(sum(s), 1, 'suma', 1e-9);
+        let prev = seg.share;
+        for (let q = 0; q < 20; q++) { growNewSegment(s); assert(seg.share - prev <= 0.05 + 1e-9, 'krok ≤ 5 pp'); prev = seg.share; assertNear(sum(s), 1, 'suma', 1e-9); }
+        assert(seg.share >= 0.2 - 1e-9 && seg.share <= 0.4 + 1e-9 && !s.strategy.growth, `cel ${seg.share}`);
+    });
+
+    test('niepowiązane: sukces 55%; porażka — odpis 50–100% kosztu i kurs −5…−10%', () => {
+        const s = firm('EX7');
+        startExpansion(s, 'Żywność', 0);
+        assert(!s.strategy.process.related, 'Technologia–Żywność niepowiązane');
+        const assets0 = s.balanceSheet.assets, price0 = s.price, cost = s.strategy.process.cost;
+        assert(resolveExpansion(s, 0.6, 6) === 'failure', '0,6 > 55%');
+        const writeOff = assets0 - s.balanceSheet.assets;
+        assert(writeOff >= cost * 0.5 - 1 && writeOff <= cost + 1, `odpis ${writeOff}`);
+        assert(s.price <= price0 * 0.95 + 1e-9 && s.price >= price0 * 0.9 - 1e-9 && s.segments.length === 1, 'kurs i brak segmentu');
+    });
+
+    test('synergia +1 pp marży tylko dla branż powiązanych', () => {
+        assert(getSynergyMarginAdj(firm('SY1', ['Chemia', 'Przemysł'])) === 0.01, 'Chemia–Przemysł');
+        assert(getSynergyMarginAdj(firm('SY2', ['Chemia', 'Turystyka'])) === 0, 'niepowiązane');
+        assert(getSynergyMarginAdj(firm('SY3', ['Chemia'])) === 0, 'jeden segment');
+    });
+});
+
+group('0.14 T3: wejście w podsektor i premia skupienia', () => {
+    function firm(symbol, segments) {
+        const s = makeCompany(symbol, { sector: segments.map(x => x.sector), cash: 2_000_000 });
+        s.financialHealth = 2; s.segments = segments; s.sector = getSectorsFromSegments(segments);
+        initializeFundamentals(s, true); s.fundamentals.revenueTtm = 1_000_000;
+        resetWorld([s]);
+        return s;
+    }
+    test('koszt 5–10% rocznych przychodów, 2–4 kw., segment dostaje podsektor', () => {
+        const s = firm('SUB1', [{ sector: 'Technologia', subsector: null, share: 1 }]);
+        assert(canEnterSubsector(s), 'może wejść');
+        const cash0 = s.cash;
+        const p = startSubsectorEntry(s, 'Półprzewodniki', 0);
+        assert(p.cost >= 50_000 && p.cost <= 100_000 && Math.abs(cash0 - s.cash - p.cost) < 1 && p.dueQuarter >= 2 && p.dueQuarter <= 4, JSON.stringify(p));
+        assert(resolveSubsectorEntry(s) === 'Półprzewodniki' && getMainSubsector(s) === 'Półprzewodniki', 'podsektor');
+        const bank = firm('SUB2', [{ sector: 'Bankowość', subsector: null, share: 1 }]);
+        assert(!getSubsectorEntryCandidate(bank), 'typ banku nie jest podsektorem do wyboru');
+    });
+    test('premia skupienia +1,5 pp: segment z podsektorem ≥ 70%; bez podsektora — brak premii', () => {
+        assert(getFocusMarginAdj(firm('F1', [{ sector: 'Technologia', subsector: 'Półprzewodniki', share: 0.75 }, { sector: 'Chemia', subsector: null, share: 0.25 }])) === 0.015, '75% z podsektorem');
+        assert(getFocusMarginAdj(firm('F2', [{ sector: 'Technologia', subsector: 'Półprzewodniki', share: 0.6 }, { sector: 'Chemia', subsector: null, share: 0.4 }])) === 0, '60%');
+        assert(getFocusMarginAdj(firm('F3', [{ sector: 'Technologia', subsector: null, share: 1 }])) === 0, 'bez podsektora (decyzja użytkownika)');
+    });
+});
+
+group('0.14 T3: specjalizacja-nisza', () => {
+    function firm(symbol, segments, cash = 2_000_000) {
+        const s = makeCompany(symbol, { sector: segments.map(x => x.sector), cash });
+        s.financialHealth = 2; s.segments = segments; s.sector = getSectorsFromSegments(segments);
+        initializeFundamentals(s, true); s.fundamentals.revenueTtm = 1_000_000;
+        resetWorld([s]);
+        return s;
+    }
+    test('rejestr nisz (rozszerzalny), koszt 3–5% i 2 kw.; Farmaceutyki: marża +2 pp, patent może wygasnąć', () => {
+        assert(Object.keys(SECTORS['Media'].niches).join() === 'TV,Rozrywka' && SECTORS['Medycyna'].niches['Farmaceutyki'] && SECTORS['Technologia'].niches['Wywiad i obronność'], 'nisze 0.14');
+        assert(!SECTORS['Medycyna'].niches['Farmaceutyki'].profile, 'nisza bez własnego profilu wyceny');
+        const s = firm('PH1', [{ sector: 'Medycyna', subsector: null, share: 1 }]);
+        const p0 = getSectorProfile(s);
+        const cash0 = s.cash;
+        const p = startNiche(s, 'Farmaceutyki', 0);
+        assert(p.cost >= 30_000 && p.cost <= 50_000 && Math.abs(cash0 - s.cash - p.cost) < 1 && p.dueQuarter === 2, JSON.stringify(p));
+        resolveNiche(s, 2);
+        assert(s.segments[0].niche === 'Farmaceutyki' && JSON.stringify(getSectorProfile(s)) === JSON.stringify(p0), 'profil bez zmian');
+        assertNear(getNicheMarginAdj(s, 3), 0.02, 'marża +2 pp', 1e-12);
+        s.strategy.patentExpiredUntil = 10;
+        assert(getNicheMarginAdj(s, 5) === 0 && getNicheMarginAdj(s, 10) === 0.02, 'wygasły patent zdejmuje premię na czas');
+    });
+    test('zmiana specjalizacji: blokada 4 kw. i zerowanie premii skupienia na 2 kw.', () => {
+        const s = firm('TV1', [{ sector: 'Media', subsector: null, share: 1, niche: 'TV' }]);
+        s.segments[0].subsector = null;
+        startNiche(s, 'Rozrywka', 10);
+        assert(isNicheLocked(s, 13) && !isNicheLocked(s, 14) && startNiche(s, 'TV', 12) === null, 'blokada 4 kw.');
+        resolveNiche(s, 12);
+        s.segments[0].subsector = 'Pożyczki konsumenckie'; // dowolny podsektor do testu premii (≥ 70%)
+        assert(getFocusMarginAdj(s, 13) === 0 && getFocusMarginAdj(s, 14) === 0.015, 'premia skupienia wraca po 2 kw.');
+    });
+    test('TV/Rozrywka: hit albo klapa sezonu zmienia kurs i przychody kwartału; Wywiad rośnie z wydatkami na obronność', () => {
+        const s = firm('TV2', [{ sector: 'Media', subsector: null, share: 1, niche: 'TV' }]);
+        const p0 = s.price;
+        const random = Math.random; let calls = 0;
+        Math.random = () => (calls++ === 0 ? 0.05 : 0.2); // sezon tak, hit
+        try { processNicheEvents(s, 1); } finally { Math.random = random; }
+        assert(s.price >= p0 * 1.1 - 1e-9 && s.strategy.seasonFactor > 1, `hit: ${s.price / p0}`);
+        assert(consumeNicheRevenueFactor(s) > 1 && consumeNicheRevenueFactor(s) === 1, 'jednorazowy mnożnik przychodów');
+        const intel = firm('INT1', [{ sector: 'Technologia', subsector: null, share: 1, niche: 'Wywiad i obronność' }]);
+        assert(getNicheGrowthAdj(intel) >= 0 && getNicheGrowthAdj(firm('INT2', [{ sector: 'Technologia', subsector: null, share: 1 }])) === 0, 'Wywiad');
+    });
+    test('zapis: nisza w segmentach (4. pole), bez niszy format bez zmian', () => {
+        assert(encodeSegmentsForSave([{ sector: 'Media', subsector: null, share: 1, niche: 'TV' }]) === 'Media||1|TV', 'z niszą');
+        assert(encodeSegmentsForSave([{ sector: 'Media', subsector: null, share: 1 }]) === 'Media||1', 'bez niszy');
+        assert(decodeSavedSegments('Media||1|TV')[0].niche === 'TV' && !('niche' in decodeSavedSegments('Media||1')[0]), 'odczyt');
+    });
+});
+
+group('0.14 T3: zmiana profilu (pivot)', () => {
+    function firm(symbol, segments) {
+        const s = makeCompany(symbol, { sector: segments.map(x => x.sector), cash: 2_000_000 });
+        s.financialHealth = 1; s.segments = segments; s.sector = getSectorsFromSegments(segments);
+        initializeFundamentals(s, true); s.fundamentals.revenueTtm = 1_000_000;
+        resetWorld([s]);
+        return s;
+    }
+    test('segment główny traci 20–40 pp stopniowo przez 4 kw.; marża −3 pp i zmienność ×1,3 w trakcie', () => {
+        const s = firm('PV1', [{ sector: 'Chemia', subsector: null, share: 1 }]);
+        const pivot = startPivot(s, 'Medycyna', 0);
+        assert(pivot && pivot.total >= 0.2 && pivot.total <= 0.4 && s.segments.length === 2, JSON.stringify(pivot));
+        assert(getPivotMarginAdj(s) === -0.03 && getStrategyVolatilityFactor(s) === 1.3, 'kary w trakcie');
+        const chem = () => s.segments.find(x => x.sector === 'Chemia').share;
+        let prev = chem();
+        for (let q = 1; q <= 3; q++) { assert(advancePivot(s, 0.9, q) === 'running', 'trwa'); assert(prev - chem() <= pivot.perQuarter + 1e-9, 'stopniowo'); prev = chem(); }
+        assert(advancePivot(s, 0.9, 4) === 'done' && !s.strategy.pivot, 'koniec');
+        assertNear(chem(), 1 - 0.05 - pivot.total * 0.95, 'segment główny po pivocie', 0.02);
+        assert(getPivotMarginAdj(s) === 0 && getStrategyVolatilityFactor(s) === 1, 'po pivocie bez kar');
+        assertNear(s.segments.reduce((a, x) => a + x.share, 0), 1, 'suma udziałów', 1e-9);
+    });
+    test('porażka pivotu (30%): nowy segment znika, koszty zostają', () => {
+        const s = firm('PV2', [{ sector: 'Chemia', subsector: null, share: 1 }]);
+        const cash0 = s.cash;
+        const pivot = startPivot(s, 'Medycyna', 0);
+        for (let q = 1; q <= 3; q++) advancePivot(s, 0.9, q);
+        assert(advancePivot(s, 0.29, 4) === 'failed' && s.segments.length === 1 && s.segments[0].sector === 'Chemia', 'segment znika');
+        assert(Math.abs(cash0 - s.cash - pivot.cost) < 1, 'koszty zostają');
+    });
+});
+
+group('0.14 T3: dyskonto konglomeratu', () => {
+    const firm = (symbol, segments) => { const s = makeCompany(symbol, { sector: segments.map(x => x[0]) }); s.segments = segments.map(([sector, share]) => ({ sector, subsector: null, share })); s.sector = getSectorsFromSegments(s.segments); return s; };
+    test('−4% za każdy niepowiązany segment ponad pierwszy, najwyżej −10%; powiązane bez dyskonta', () => {
+        assert(getConglomerateDiscount(firm('C1', [['Chemia', 1]])) === 0, 'jeden segment');
+        assert(getConglomerateDiscount(firm('C2', [['Chemia', 0.6], ['Przemysł', 0.4]])) === 0, 'powiązane');
+        assertNear(getConglomerateDiscount(firm('C3', [['Chemia', 0.6], ['Turystyka', 0.4]])), 0.04, 'jeden niepowiązany', 1e-12);
+        assertNear(getConglomerateDiscount(firm('C4', [['Chemia', 0.5], ['Turystyka', 0.3], ['Media', 0.2]])), 0.08, 'dwa niepowiązane', 1e-12);
+        assert(CONGLOMERATE_DISCOUNT_MAX === 0.10, 'limit −10%');
+    });
+    test('dyskonto działa przez cel wyceny (fairValue ×0,96), nie przez skok kursu', () => {
+        const a = firm('CV1', [['Chemia', 0.6], ['Turystyka', 0.4]]);
+        initializeFundamentals(a, true);
+        resetWorld([a]);
+        a.ledgerQuarters = 8;
+        const price0 = a.price;
+        const original = getConglomerateDiscount;
+        let withoutDiscount;
+        try { getConglomerateDiscount = () => 0; updateFundamentalRatios(a); withoutDiscount = a.fundamentals.fairValue; }
+        finally { getConglomerateDiscount = original; }
+        updateFundamentalRatios(a);
+        assert(withoutDiscount > 0 && Math.abs(a.fundamentals.fairValue / withoutDiscount - 0.96) < 1e-9, `${a.fundamentals.fairValue} / ${withoutDiscount}`);
+        assert(a.price === price0, 'kurs bez skoku');
+    });
+});
+
+group('0.14 T3: kto decyduje — prezes, większościowiec', () => {
+    function firm(symbol) {
+        const s = makeCompany(symbol, { sector: ['Technologia'], cash: 2_000_000 });
+        s.financialHealth = 3; initializeFundamentals(s, true); s.fundamentals.revenueTtm = 1_000_000;
+        resetWorld([s]); ensureStockSegments(s);
+        return s;
+    }
+    test('gracz-większościowiec: przypięty mail; blokada zatrzymuje, brak odpowiedzi = decyzja prezesa', () => {
+        const s = firm('DEC1');
+        const control = canFundControlAgm;
+        try {
+            canFundControlAgm = () => true;
+            assert(proposeStrategy(s, { type: 'expand', target: 'Gaming' }, 5) === 'pending' && s.strategy.pendingProposal, 'czeka na decyzję');
+            assert(respondStrategyProposal('DEC1', 'block') && resolveStrategyProposal(s, 6) === 'blocked' && !s.strategy.process, 'zablokowane');
+            proposeStrategy(s, { type: 'expand', target: 'Gaming' }, 7);
+            assert(resolveStrategyProposal(s, 7) === null, 'w tym samym kwartale bez decyzji');
+            assert(resolveStrategyProposal(s, 8) === 'started' && s.strategy.process?.type === 'expand' && s.strategy.process.by === 'ceo', 'brak odpowiedzi = prezes');
+        } finally { canFundControlAgm = control; }
+    });
+    test('zlecenie większościowca od razu; bez kontroli — odmowa; nisza z blokadą 4 kw.', () => {
+        const s = firm('DEC2');
+        const control = canFundControlAgm;
+        try {
+            canFundControlAgm = () => false;
+            assert(orderStrategy('DEC2', 'expand', 'Gaming') === null, 'tylko większościowiec');
+            canFundControlAgm = () => true;
+            const p = orderStrategy('DEC2', 'expand', 'Gaming');
+            assert(p && p.by === 'owner' && p.sector === 'Gaming', 'zlecone');
+            const m = firm('DEC3'); m.segments = [{ sector: 'Media', subsector: null, share: 1 }]; m.sector = ['Media'];
+            assert(orderStrategy('DEC3', 'niche', 'TV'), 'pierwsza nisza');
+            resolveNiche(m, getStrategyQuarter() + 2);
+            assert(orderStrategy('DEC3', 'niche', 'Rozrywka') === null, 'blokada przełączania 4 kw.');
+        } finally { canFundControlAgm = control; }
+    });
+});
+
+group('0.14 T3: Akademia i skaner', () => {
+    test('hasła Akademii i filtr specjalizacji w skanerze', () => {
+        for (const id of ['dywersyfikacja', 'synergia', 'konglomerat']) assert(ACADEMY_ENTRIES[id]?.quiz?.length === 3, id);
+        const tv = makeCompany('NTV', { sector: ['Media'] }); tv.segments = [{ sector: 'Media', subsector: null, share: 1, niche: 'TV' }]; tv.sector = ['Media'];
+        const plain = makeCompany('NPL', { sector: ['Media'] });
+        [tv, plain].forEach(s => initializeFundamentals(s, true));
+        resetWorld([tv, plain]); ensureAllStockSegments();
+        const rows = runScanner({ ...SCANNER_DEFAULT_FILTERS, accessibleOnly: false, niche: 'TV' });
+        assert(rows.length === 1 && rows[0].stock.symbol === 'NTV', rows.map(r => r.stock.symbol).join());
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

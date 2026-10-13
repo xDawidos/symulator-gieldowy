@@ -432,6 +432,36 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Kiedy ryzyko regulacyjne widać w wynikach spółki?', a: ['dopiero gdy się zmaterializuje', 'zawsze w każdym raporcie', 'nigdy'], c: 0 }
         ]
     },
+    dywersyfikacja: {
+        title: 'Dywersyfikacja a specjalizacja', icon: '⚖️',
+        text: 'Spółka może rosnąć wszerz (nowe segmenty: mniejsze ryzyko jednej branży, ale rozproszona uwaga) albo w głąb (podsektor, nisza: wyższa marża dzięki skupieniu, ale większa zależność od jednego rynku). W grze segment z podsektorem, który daje co najmniej 70% przychodów, ma premię „skupienia” +1,5 pp marży.',
+        example: () => { const s = stocks.find(x => !x.isBankrupt && !x.assetType && typeof getFocusMarginAdj === 'function' && getFocusMarginAdj(x) > 0); return s ? `${s.name}: skupiona na ${getMainSubsector(s)} — premia +1,5 pp marży.` : 'Premia skupienia: +1,5 pp marży przy ≥ 70% przychodów z segmentu z podsektorem.'; },
+        quiz: [
+            { q: 'Co daje spółce specjalizacja (skupienie)?', a: ['wyższą marżę, ale większą zależność od jednego rynku', 'zawsze niższe ryzyko', 'automatycznie wyższą dywidendę'], c: 0 },
+            { q: 'Co daje dywersyfikacja segmentów?', a: ['mniejsze ryzyko jednej branży', 'zawsze wyższą wycenę', 'brak kosztów'], c: 0 },
+            { q: 'Kiedy w grze działa premia skupienia?', a: ['segment z podsektorem daje ≥ 70% przychodów', 'spółka ma 3 segmenty', 'spółka nie ma podsektora'], c: 0 }
+        ]
+    },
+    synergia: {
+        title: 'Synergia', icon: '🔗',
+        text: 'Synergia to korzyść z połączenia działalności, które do siebie pasują: wspólni klienci, technologia albo łańcuch dostaw (np. chemia i przemysł, budownictwo i nieruchomości). W grze segmenty z branż powiązanych dają +1 pp marży, a rozszerzenie w branżę powiązaną udaje się w 80% przypadków (niepowiązaną — w 55%).',
+        example: () => { const s = stocks.find(x => !x.isBankrupt && !x.assetType && typeof getSynergyMarginAdj === 'function' && getSynergyMarginAdj(x) > 0); return s ? `${s.name}: ${getStockSegments(s).map(seg => seg.sector).join(' + ')} — synergia +1 pp marży.` : 'Przykłady branż powiązanych: Technologia–Gaming, Chemia–Przemysł, Energia–Przemysł, Medycyna–Badania.'; },
+        quiz: [
+            { q: 'Które rozszerzenie ma większą szansę powodzenia?', a: ['w branżę powiązaną (80%)', 'w dowolną branżę (zawsze 80%)', 'w branżę niepowiązaną'], c: 0 },
+            { q: 'Ile daje synergia w grze?', a: ['+1 pp marży', '+10% kursu od razu', 'nic'], c: 0 },
+            { q: 'Które segmenty są powiązane?', a: ['Budowlany i Nieruchomości', 'Gaming i Rolnictwo', 'Bankowość i Turystyka'], c: 0 }
+        ]
+    },
+    konglomerat: {
+        title: 'Dyskonto konglomeratu', icon: '🏚️',
+        text: 'Inwestorzy płacą mniej za spółkę z wieloma niepowiązanymi biznesami: trudniej ją ocenić, a zarząd może przenosić pieniądze między segmentami nieefektywnie. W grze wycena docelowa spada o 4% za każdy niepowiązany segment ponad pierwszy (najwyżej −10%). Rozbicie konglomeratu (np. wydzielenie spółki) często tę wartość odblokowuje.',
+        example: () => { const s = stocks.find(x => !x.isBankrupt && !x.assetType && typeof getConglomerateDiscount === 'function' && getConglomerateDiscount(x) > 0); return s ? `${s.name}: dyskonto konglomeratu −${(getConglomerateDiscount(s) * 100).toFixed(0)}% (${getStockSegments(s).map(seg => seg.sector).join(', ')}).` : 'Dyskonto: −4% za każdy niepowiązany segment ponad pierwszy, najwyżej −10%.'; },
+        quiz: [
+            { q: 'Dlaczego konglomeraty bywają wyceniane taniej?', a: ['trudniej je ocenić i zarządzać kapitałem', 'mają zawsze mniejsze zyski', 'nie płacą podatków'], c: 0 },
+            { q: 'Spółka ma segment główny Chemia i dwa niepowiązane. Dyskonto w grze?', a: ['−8%', '−4%', '−20%'], c: 0 },
+            { q: 'Czy segment powiązany zwiększa dyskonto?', a: ['nie', 'tak, o 4%', 'tak, o 10%'], c: 0 }
+        ]
+    },
     segmenty: {
         title: 'Segmenty działalności', icon: '🧩',
         text: 'Duża spółka rzadko robi jedną rzecz. Segmenty to części działalności, np. bank z ubezpieczeniami albo przemysł z energetyką. Wycenę i ryzyko spółki liczy się jako średnią segmentów ważoną ich udziałem w przychodach. Segment główny (największy udział) decyduje, z jakim sektorem porównujemy spółkę.',
@@ -642,6 +672,9 @@ function checkAcademyTriggers() {
     if (held.some(s => typeof getGreyShare === 'function' && getGreyShare(s) > 0.05) && getSkillLevel('accountant') >= 4) unlockAcademyEntry('szaraStrefa');
     if (held.some(s => ['Turystyka', 'Gaming', 'Żywność'].includes(getMainSector(s)))) unlockAcademyEntry('elastycznosc');
     if (held.some(s => getStockSegments(s).length > 1)) unlockAcademyEntry('segmenty'); // 0.14 T1b
+    if (held.some(s => typeof getConglomerateDiscount === 'function' && getConglomerateDiscount(s) > 0)) unlockAcademyEntry('konglomerat'); // 0.14 T3
+    if (held.some(s => typeof getSynergyMarginAdj === 'function' && getSynergyMarginAdj(s) > 0)) unlockAcademyEntry('synergia');
+    if (held.some(s => s.strategy?.process || s.strategy?.pivot || (typeof getFocusMarginAdj === 'function' && getFocusMarginAdj(s) > 0))) unlockAcademyEntry('dywersyfikacja');
     if (typeof society === 'object' && society) {
         if (Math.abs((macro?.unemployment || NATURAL_UNEMPLOYMENT) - NATURAL_UNEMPLOYMENT) > 0.015) unlockAcademyEntry('phillips');
         if (society.shortage > 1.05) unlockAcademyEntry('niedobor');
@@ -787,7 +820,7 @@ const SCANNER_PRESETS = {
     safe:     { label: '🛡️ Bezpieczne', filters: { debtMax: 40, healthMin: 2 } }
 };
 
-const SCANNER_DEFAULT_FILTERS = { sector: 'all', subsector: null, secondary: false, peBelowSector: false, pbMax: '', dyMin: '', debtMax: '', growthMin: '', healthMin: '', accessibleOnly: true, greyOnly: false };
+const SCANNER_DEFAULT_FILTERS = { sector: 'all', subsector: null, secondary: false, niche: '', peBelowSector: false, pbMax: '', dyMin: '', debtMax: '', growthMin: '', healthMin: '', accessibleOnly: true, greyOnly: false };
 
 let scannerView = { filters: { ...SCANNER_DEFAULT_FILTERS }, sort: 'cap', dir: -1 };
 
@@ -830,6 +863,7 @@ function runScanner(filters = scannerView.filters, sort = scannerView.sort, dir 
     for (const stock of stocks) {
         if (stock.assetType || stock.isBankrupt) continue;
         if (!stockMatchesSectorFilter(stock, { sector: filters.sector || 'all', subsector: filters.subsector || null, secondary: Boolean(filters.secondary) })) continue; // T1c
+        if (filters.niche && !getStockSegments(stock).some(seg => seg.niche === filters.niche)) continue; // T3: filtr specjalizacji
         if (filters.accessibleOnly && !canAccessExchange(stock.exchange)) continue;
         const m = getCompanyMetrics(stock);
         if (!m) continue;
@@ -942,6 +976,7 @@ function renderScannerFilters() {
             <button class="btn-xs" onclick="scannerView.filters = { ...SCANNER_DEFAULT_FILTERS }; renderScannerFilters(); renderScannerResults();">Wyczyść</button></div>
         <div class="sector-chips scanner-sector-chips">${sectorChips.chips}</div>${sectorChips.extra}
         <div class="scanner-filters">
+            <label class="text-sm">Specjalizacja <select onchange="setScannerFilter('niche', this.value)"><option value="">wszystkie</option>${SECTOR_NAMES.flatMap(name => Object.keys(SECTORS[name].niches || {})).map(n => `<option ${f.niche === n ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}</select></label>
             <label class="text-sm" title="C/Z niższe od mediany sektora"><input type="checkbox" ${f.peBelowSector ? 'checked' : ''} onchange="setScannerFilter('peBelowSector', this.checked)"> C/Z poniżej sektora</label>
             ${input('pbMax', 'C/WK ≤', 'np. 1', 'Kurs / wartość księgowa na akcję')}
             ${input('dyMin', 'Dywidenda ≥', '%', 'Stopa dywidendy z ostatniego roku, w %')}
@@ -968,14 +1003,14 @@ function renderScannerResults() {
         <p class="text-sm text-muted">Znaleziono: <strong>${rows.length}</strong>. Kolor: na zielono lepiej niż mediana sektora, na czerwono gorzej. Kliknij spółkę, by otworzyć kartę. Banki pomijamy — ich bilans zawiera depozyty klientów, więc C/WK i zadłużenie liczy się inaczej.</p>
         <div class="scanner-table-wrap"><table class="asset-mini-table w-full scanner-table">
             <thead><tr>
-                ${head('name', 'Spółka', 'Nazwa')}<th title="Podsektor segmentu głównego (filtr: chipy podsektorów nad tabelą)">Podsektor</th>${head('cap', 'Kapitalizacja', 'Kurs × liczba akcji')}${head('pe', 'C/Z', 'Cena / zysk')}${head('pb', 'C/WK', 'Cena / wartość księgowa')}
+                ${head('name', 'Spółka', 'Nazwa')}<th title="Podsektor segmentu głównego i specjalizacja-nisza (🏷️); filtr: chipy podsektorów i pole „Specjalizacja”">Podsektor / nisza</th>${head('cap', 'Kapitalizacja', 'Kurs × liczba akcji')}${head('pe', 'C/Z', 'Cena / zysk')}${head('pb', 'C/WK', 'Cena / wartość księgowa')}
                 ${head('dy', 'Dywid.', 'Stopa dywidendy')}${head('debt', 'Zadłuż.', 'Zobowiązania / aktywa')}
                 ${level >= 2 ? head('roe', 'ROE', 'Zysk / kapitał własny') + head('margin', 'Marża', 'Zysk netto / przychody') + head('growth', 'Zysk r/r', 'Wzrost zysku rok do roku') : ''}
                 ${head('health', 'Kondycja', 'Kondycja finansowa')}${head('labor', 'Praca', 'Koszt pracy w % przychodów (w nawiasie: względem mediany sektora)')}${head('satisfaction', 'Zadow.', 'Zadowolenie pracowników 0–100')}<th title="Związek zawodowy: brak / zakładowy / sektorowy">Związek</th><th title="Ryzyko strajku">Strajk</th>${level >= 3 ? head('upside', 'Potencjał', 'Wartość godziwa / kurs − 1') : ''}${flagsOn ? '<th title="Czerwone flagi (Księgowy poz. 4)">🚩</th>' : ''}
             </tr></thead>
             <tbody>${rows.slice(0, 120).map(({ stock, m, med, work, upside }) => `<tr class="clickable" onclick="openDescriptionModal('${stock.symbol}')">
                 <td>${escapeHtml(stock.name)} <span class="text-xs text-muted">${escapeHtml(stock.symbol)} · ${escapeHtml(getMainSector(stock) || '')}</span></td>
-                <td class="text-xs" title="${escapeHtml(getSubsectorMedians(getMainSector(stock), getMainSubsector(stock)) ? `Mediana C/Z podsektora: ${getSubsectorMedians(getMainSector(stock), getMainSubsector(stock)).pe?.toFixed(1)}` : 'Podsektor (T2)')}">${escapeHtml(getMainSubsector(stock) || '—')}</td>
+                <td class="text-xs" title="${escapeHtml(getSubsectorMedians(getMainSector(stock), getMainSubsector(stock)) ? `Mediana C/Z podsektora: ${getSubsectorMedians(getMainSector(stock), getMainSubsector(stock)).pe?.toFixed(1)}` : 'Podsektor (T2)')}">${escapeHtml(getMainSubsector(stock) || '—')}${getStockSegments(stock).find(seg => seg.niche) ? ` · 🏷️ ${escapeHtml(getStockSegments(stock).find(seg => seg.niche).niche)}` : ''}</td>
                 <td class="cell-number">${formatZl(m.cap, 0)}</td>
                 <td class="cell-number ${cls(m.pe, med.pe, true)}">${fx(m.pe)}</td>
                 <td class="cell-number ${cls(m.pb, med.pb, true)}">${m.pb ? m.pb.toFixed(2) : '—'}</td>

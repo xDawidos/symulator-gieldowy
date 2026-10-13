@@ -112,7 +112,11 @@ function renderSegmentBar(stock) {
     const segments = [...getStockSegments(stock)].sort((a, b) => b.share - a.share);
     if (segments.length < 2) return '';
     const parts = segments.map((seg, i) => `<span class="cc-seg${i === 0 ? ' cc-seg-main' : ''}" style="flex:${seg.share}" title="${escapeHtml(`${seg.sector}${seg.subsector ? ` · ${seg.subsector}` : ''}: ${(seg.share * 100).toFixed(0)}% przychodów`)}">${SECTORS[seg.sector]?.icon || ''} ${escapeHtml(seg.sector)} ${(seg.share * 100).toFixed(0)}%</span>`).join('');
-    return `<div class="cc-segments"><span class="text-xs text-muted">Struktura przychodów</span><div class="cc-seg-bar">${parts}</div></div>`;
+    const discount = typeof getConglomerateDiscount === 'function' ? getConglomerateDiscount(stock) : 0;
+    const synergy = typeof getSynergyMarginAdj === 'function' && getSynergyMarginAdj(stock) > 0;
+    const notes = [discount > 0 ? `<span class="text-down" title="Rynek wycenia spółkę z niepowiązanymi segmentami taniej (−4% za segment, najwyżej −10%).">dyskonto konglomeratu −${(discount * 100).toFixed(0)}%</span>` : '',
+        synergy ? '<span class="text-up" title="Segmenty z branż powiązanych: +1 pp marży.">synergia +1 pp marży</span>' : ''].filter(Boolean).join(' · ');
+    return `<div class="cc-segments"><span class="text-xs text-muted">Struktura przychodów${notes ? ` · ${notes}` : ''}</span><div class="cc-seg-bar">${parts}</div></div>`;
 }
 
 // Taby poziomów rynku
@@ -2950,7 +2954,33 @@ function renderCompanyCardManage(stock) {
             ${governed ? `<button class="btn-secondary" onclick="openGovernanceModal('${stock.symbol}')">🗳️ Walne zgromadzenie</button>` : ''}
             <button class="btn-secondary" onclick="openCompanyInvestments('${stock.symbol}')">📈 Inwestycje spółki</button>
             ${pct > 0.5 ? `<button onclick="openManagementModal('${stock.symbol}')">👑 Zarządzaj spółką</button>` : ''}
-        </div>`;
+        </div>
+        ${renderStrategyOrders(stock)}`;
+}
+
+/** 0.14 T3.6: zlecenia większościowca (rozszerzenie, podsektor, specjalizacja, pivot) — opcjonalne, domyślnie decyduje prezes. */
+function renderStrategyOrders(stock) {
+    if (typeof isStrategyCompany !== 'function' || !isStrategyCompany(stock)) return '';
+    const strategy = stock.strategy || {};
+    const status = strategy.pivot ? `🔄 trwa zmiana profilu na ${escapeHtml(strategy.pivot.to)} (do kw. ${strategy.pivot.until})`
+        : strategy.process ? `⏳ w toku: ${escapeHtml(describeStrategyProposal({ type: strategy.process.type, target: strategy.process.sector === getMainSector(stock) && strategy.process.type !== 'expand' ? (strategy.process.subsector || strategy.process.niche) : strategy.process.sector }))} (do kw. ${strategy.process.dueQuarter})`
+        : strategy.pendingProposal ? `🧭 propozycja prezesa: ${escapeHtml(describeStrategyProposal(strategy.pendingProposal))} — decyzja w poczcie` : 'brak trwających procesów';
+    if (!(typeof canFundControlAgm === 'function' && canFundControlAgm(stock))) return `<p class="text-sm text-muted mt-2">Strategia spółki: ${status}. Zlecać może tylko większościowy akcjonariusz.</p>`;
+    const have = new Set(stock.segments.map(seg => seg.sector));
+    const sectorOptions = SECTOR_NAMES.filter(name => !have.has(name) && name !== 'Bankowość')
+        .map(name => `<option value="${escapeHtml(name)}">${SECTORS[name].icon} ${escapeHtml(name)}${[...have].some(h => areSectorsRelated(h, name)) ? ' (powiązana)' : ''}</option>`).join('');
+    const nicheSeg = typeof getNicheCandidate === 'function' ? getNicheCandidate(stock) : null;
+    const nicheOptions = nicheSeg ? Object.keys(SECTORS[nicheSeg.sector].niches).filter(n => n !== nicheSeg.niche).map(n => `<option>${escapeHtml(n)}</option>`).join('') : '';
+    const sym = stock.symbol;
+    return `<div class="strategy-orders mt-2">
+        <p class="text-sm">Strategia spółki: ${status}. Zlecenia są opcjonalne — bez nich decyduje prezes.</p>
+        <div class="d-flex gap-2 flex-wrap items-center">
+            <select id="strategy-expand-${sym}" aria-label="Nowy segment">${sectorOptions}</select>
+            <button class="btn-secondary" onclick="orderStrategy('${sym}', 'expand', document.getElementById('strategy-expand-${sym}').value)">🧩 Rozszerz (10–20% przychodów)</button>
+            <button class="btn-secondary" onclick="orderStrategy('${sym}', 'pivot', document.getElementById('strategy-expand-${sym}').value)">🔄 Pivot w ten sektor</button>
+            <button class="btn-secondary" onclick="orderStrategy('${sym}', 'subsector')">🎯 Wejdź w podsektor</button>
+            ${nicheOptions ? `<select id="strategy-niche-${sym}" aria-label="Specjalizacja">${nicheOptions}</select><button class="btn-secondary" onclick="orderStrategy('${sym}', 'niche', document.getElementById('strategy-niche-${sym}').value)">🏷️ Specjalizacja${nicheSeg.niche ? ' (zmiana)' : ''}</button>` : ''}
+        </div></div>`;
 }
 
 function updateStateOfferInfo() {
@@ -5960,6 +5990,13 @@ function renderMailPreview(message) {
         action = pending
             ? `<div class="mail-action">${pending.choice ? `<p>Wybrano: <strong>${{ agree: 'zgoda', negotiate: 'negocjacje', refuse: 'odmowa' }[pending.choice]}</strong> — możesz zmienić do końca kwartału.</p>` : ''}<button onclick="mailAction(respondUnionDemand, '${stock.symbol}', 'agree')">Zgoda</button> <button class="btn-secondary" onclick="mailAction(respondUnionDemand, '${stock.symbol}', 'negotiate')">Negocjacje</button> <button class="btn-danger" onclick="mailAction(respondUnionDemand, '${stock.symbol}', 'refuse')">Odmowa</button></div>`
             : '<p class="fund-muted">Sprawa została już rozstrzygnięta.</p>';
+    }
+    if (message.action?.type === 'strategyDecision') { // 0.14 T3.6: plan prezesa w spółce kontrolowanej przez fundusz
+        const stock = stocks.find(s => s.symbol === message.action.symbol);
+        const pending = stock?.strategy?.pendingProposal;
+        action = pending
+            ? `<div class="mail-action">${pending.choice ? `<p>Wybrano: <strong>${pending.choice === 'approve' ? 'zatwierdzenie' : 'blokada'}</strong> — możesz zmienić do końca kwartału.</p>` : ''}<button onclick="mailAction(respondStrategyProposal, '${stock.symbol}', 'approve')">Zatwierdź</button> <button class="btn-danger" onclick="mailAction(respondStrategyProposal, '${stock.symbol}', 'block')">Zablokuj</button></div>`
+            : '<p class="fund-muted">Decyzja została już podjęta.</p>';
     }
     if (message.action?.type === 'pppRestructure') {
         const stake = (playerFund?.ppp || []).find(item => item.id === message.action.stakeId);
