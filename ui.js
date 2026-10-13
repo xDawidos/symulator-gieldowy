@@ -1454,8 +1454,15 @@ function displayPortfolio() {
         }
         const tBills = allBonds.filter(b => b.ownerId === 'player' && b.isTBill);
         if (tBills.length) { section('Bony skarbowe'); row(`🧾 Bony skarbowe · ${tBills.length} szt.`, '—', '—', '—'); }
-        const poolStake = investmentPool?.playerStakes?.player || 0;
-        if (poolStake > 0) { section('Pula inwestycyjna'); row('🏊 Wkład w pulę', '—', fmt(poolStake), '—'); }
+        // 0.14.1 R4: dwie pozycje puli, zgodne z NAV (niezainwestowane nominalnie, wkłady w żyjące startupy po koszcie)
+        const poolFree = Number(investmentPool?.contributors?.player) || 0;
+        const poolInvested = getPoolInvestedInStartups('player');
+        if (poolFree + poolInvested > 0) {
+            section('Pula inwestycyjna');
+            if (poolFree > 0) row('🏊 Pula — niezainwestowane', '—', fmt(poolFree), `${fmt(poolFree)}<span class="text-xs text-muted d-block">do wycofania (opłata 2%)</span>`);
+            if (poolInvested > 0) row('🏊 Pula — w startupach', '—', fmt(poolInvested), `${fmt(poolInvested)}<span class="text-xs text-muted d-block">po koszcie, do debiutu lub końca startupu</span>`);
+            positionsValue += poolFree + poolInvested;
+        }
     }
 
     body.innerHTML = rows.length ? rows.join('') : `<tr><td colspan="4" class="text-muted">Brak pozycji ${isPrivate ? 'na koncie prywatnym' : 'w funduszu'}.</td></tr>`;
@@ -2462,7 +2469,8 @@ function openInvestorsModal(symbol) {
         sortedInvestors.forEach(([name, amount], index) => {
             const row = tableBody.insertRow();
             row.insertCell().textContent = `#${index + 1}`;
-            row.insertCell().textContent = name;
+            const mine = name === 'Pula Inwestycyjna' ? getPoolStartupShare(startup, 'player') : 0; // 0.14.1 R4
+            row.insertCell().textContent = mine > 0 ? `${name} (w tym Ty: ${mine.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} zł)` : name;
             row.insertCell().textContent = `${amount.toLocaleString('pl-PL')} PLN`;
 
             if (name === "Ty (Gracz)") {
@@ -2496,6 +2504,10 @@ function displayInvestmentPool() {
 
     totalFundsEl.textContent = `${investmentPool.totalFunds.toLocaleString('pl-PL')} PLN`;
     timerEl.textContent = `${Math.floor(investmentPool.investmentTimer / 1000)}`;
+    const statusEl = document.getElementById('pool-status'); // 0.14.1 R3: dlaczego pieniądze czekają
+    if (statusEl) statusEl.textContent = getPoolStatus().text;
+    const withdrawBtn = document.getElementById('pool-withdraw-btn');
+    if (withdrawBtn) withdrawBtn.disabled = !((investmentPool.contributors.player || 0) > 0);
 
     contributorsListEl.innerHTML = '';
     const contributors = Object.entries(investmentPool.contributors);
@@ -2522,8 +2534,39 @@ function displayInvestmentPool() {
         });
     }
 
+    renderPoolDetails(); // 0.14.1 R4
+
     // Na końcu dodaj tę linię:
     updateAutoInvestStatus();
+}
+
+const POOL_STAGE_LABELS = { funding: 'zbiórka', overfunding: 'nadsubskrypcja', development: 'rozwój', awaitingListing: 'czeka na giełdę', financial_complications: 'komplikacje' };
+const POOL_KIND_LABELS = { ipo: '📈 debiut', takeover: '🤝 przejęcie', refund: '📉 upadek', loss: '💀 strata', privatized: '🏢 prywatyzacja' };
+
+/** Wkład uczestnika przez pulę w dany startup (suma rund). */
+function getPoolStartupShare(startup, id) {
+    return (startup.poolInvestors || []).reduce((sum, round) => sum + (Number(round.contributors?.[id]) || 0), 0);
+}
+
+/** 0.14.1 R4: panel puli — niezainwestowane, wkłady w startupy, historia rozliczeń. */
+function renderPoolDetails() {
+    const el = document.getElementById('pool-details');
+    if (!el) return;
+    const fmtZl = value => `${(Number(value) || 0).toLocaleString('pl-PL', { maximumFractionDigits: 0 })} zł`;
+    const free = Number(investmentPool.contributors?.player) || 0;
+    const rows = stocks.filter(s => s.assetType === 'Startup' && (s.poolInvestors || []).length).map(s => {
+        const pool = (s.poolInvestors || []).reduce((sum, round) => sum + (Number(round.amount) || 0), 0);
+        const mine = getPoolStartupShare(s, 'player');
+        return `<tr><td>${escapeHtml(s.name)} (${escapeHtml(s.symbol)})</td><td>${POOL_STAGE_LABELS[s.stage] || escapeHtml(s.stage || '—')}</td><td>${fmtZl(pool)}</td><td>${mine > 0 ? `${fmtZl(mine)} · ${(mine / pool * 100).toFixed(1)}%` : '—'}</td></tr>`;
+    });
+    const history = (investmentPool.history || []).map(h => `<li><span class="text-muted">kw. ${h.quarter ?? '—'}</span> ${POOL_KIND_LABELS[h.kind] || ''} ${escapeHtml(h.text || '')}</li>`);
+    el.innerHTML = `
+        <h4>Niezainwestowane</h4>
+        <p>Razem: <strong>${fmtZl(investmentPool.totalFunds)}</strong> · Twoje: <strong>${fmtZl(free)}</strong></p>
+        <h4>W startupach</h4>
+        ${rows.length ? `<table class="w-full text-sm"><thead><tr><th>Startup</th><th>Etap</th><th>Kwota puli</th><th>Twój udział</th></tr></thead><tbody>${rows.join('')}</tbody></table>` : '<p class="text-muted">Pula nie ma teraz wkładów w startupach.</p>'}
+        <h4>Ostatnie rozliczenia (Twój udział)</h4>
+        ${history.length ? `<ul class="text-sm">${history.join('')}</ul>` : '<p class="text-muted">Brak rozliczeń.</p>'}`;
 }
 
 // --- NOWY FRAGMENT - FUNKCJE DLA MODALA AUTO-INWESTOWANIA ---

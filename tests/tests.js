@@ -5582,6 +5582,85 @@ group('0.14.1 R1: rozliczenie puli przy każdym końcu startupu', () => {
     });
 });
 
+group('0.14.1 R2–R3: pula w NAV, wycofanie i status', () => {
+    function world(goal = 20_000) {
+        const a = makeCompany('AAA', { cash: 600_000, fixedAssets: 800_000 });
+        a.insiderShares = 0; a.sharesHeld = 0;
+        resetWorld([a]);
+        allBonds.length = 0;
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        investmentPool.totalFunds = 0; investmentPool.contributors = {}; investmentPool.playerStakes = {}; investmentPool.history = []; investmentPool.quarterReport = [];
+        startPoolLedgerFromFacts();
+        const s = generateNewStartup();
+        s.symbol = 'PSTR'; s.stage = 'funding'; s.fundingGoal = goal; s.currentFunding = 0; s.investors = {}; s.isScam = false;
+        stocks.push(s);
+        playerCash = 100_000;
+        return s;
+    }
+
+    test('wpłata do puli nie zmienia NAV; inwestycja puli też nie (po koszcie)', () => {
+        const s = world(3000);
+        const nav0 = getFundAssets();
+        contributeToInvestmentPool('player', 5000);
+        assert(Math.abs(getFundAssets() - nav0) < 1e-6, `wpłata: ${getFundAssets()} vs ${nav0}`);
+        processPoolInvestments();
+        assert(getPoolInvestedInStartups('player') > 0 && Math.abs(getFundAssets() - nav0) < 1e-6, 'inwestycja puli');
+        assert(Math.abs(getFundStartupExposure() - 5000) < 1e-6, `ekspozycja ${getFundStartupExposure()}`);
+    });
+
+    test('upadek startupu obniża NAV o stratę', () => {
+        const s = world(3000);
+        contributeToInvestmentPool('player', 5000);
+        processPoolInvestments();
+        const nav0 = getFundAssets();
+        const invested = getPoolInvestedInStartups('player');
+        removeStartup(s, 0.5, 0.5);
+        assert(Math.abs(nav0 - getFundAssets() - invested * 0.5) < 1e-6, `spadek ${nav0 - getFundAssets()} vs ${invested * 0.5}`);
+    });
+
+    test('wycofanie: tylko niezainwestowane, opłata 2% dla pozostałych uczestników', () => {
+        const s = world(3000);
+        contributeToInvestmentPool('player', 5000);
+        processPoolInvestments(); // 3000 w startupie, 2000 niezainwestowane
+        const bot = aiCompetitors[0];
+        bot.cash = 100_000;
+        contributeToInvestmentPool(bot.id, 1000);
+        const cash0 = playerCash, nav0 = getFundAssets();
+        const paid = withdrawFromPool(99_999);
+        assert(Math.abs(paid - 2000 * 0.98) < 1e-6 && Math.abs(playerCash - cash0 - paid) < 1e-6, `wypłata ${paid}`);
+        assert(Math.abs(investmentPool.contributors[bot.id] - 1040) < 1e-6, `bot ${investmentPool.contributors[bot.id]}`);
+        assert(Math.abs(nav0 - getFundAssets() - 40) < 1e-6 && getPoolInvestedInStartups('player') > 0, 'NAV −opłata, wkład w startupie zostaje');
+        assert(checkPoolInvariants().length === 0, checkPoolInvariants().join('; '));
+        assert(withdrawFromPool(100) === 0, 'nic więcej do wycofania');
+    });
+
+    test('wycofanie bez innych uczestników: opłata dla zarządcy inkubatora', () => {
+        world(3000);
+        contributeToInvestmentPool('player', 1000);
+        const paid = withdrawFromPool(1000);
+        assert(Math.abs(paid - 980) < 1e-6 && investmentPool.totalFunds === 0 && !investmentPool.contributors.player, `wypłata ${paid}`);
+        assert(checkPoolInvariants().length === 0, checkPoolInvariants().join('; '));
+    });
+
+    test('R4: udział gracza w startupie przez pulę = suma rund; NAV = pozycje portfela puli', () => {
+        const s = world(3000);
+        contributeToInvestmentPool('player', 5000);
+        processPoolInvestments();
+        const mine = getPoolStartupShare(s, 'player');
+        assert(Math.abs(mine - 3000) < 1e-6, `udział ${mine}`);
+        assert(Math.abs((investmentPool.contributors.player || 0) + mine - getFundPoolValue()) < 1e-6, 'dwie pozycje = wartość w NAV');
+    });
+
+    test('status puli: za mało środków / brak startupów / następna inwestycja', () => {
+        const s = world(3000);
+        assert(getPoolStatus().code === 'low', 'pusta pula');
+        contributeToInvestmentPool('player', 2000);
+        assert(getPoolStatus().code === 'ready', 'jest startup w zbiórce');
+        s.stage = 'development';
+        assert(getPoolStatus().code === 'noTargets', 'brak startupów w zbiórce');
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

@@ -164,21 +164,24 @@
                             <h4>Całkowite środki w puli:</h4>
                             <h3 id="pool-total-funds">0.00 PLN</h3>
                             <p>Następna inwestycja za: <span id="pool-timer">60</span>s</p>
+                            <p class="text-sm text-muted" id="pool-status"></p>
                         </div>
                         <div>
                             <h4>Twoja wpłata:</h4>
                             <div id="pool-controls-container">
                                 <input class="w-md" type="number" id="pool-contribution-amount" placeholder="Wpłać do puli">
                                 <button onclick="contributeToInvestmentPool('player', document.getElementById('pool-contribution-amount').valueAsNumber)">Wpłać</button>
+                                <button class="ml-2" id="pool-withdraw-btn" onclick="withdrawFromPool(document.getElementById('pool-contribution-amount').valueAsNumber || investmentPool.contributors.player || 0)" title="Wycofuje niezainwestowane środki (kwota z pola albo całość); opłata 2% dla pozostałych uczestników">Wycofaj z puli</button>
                                 <button class="ml-2" id="open-autoinvest-modal-btn">🤖 Ustawienia Auto</button>
                                 <div class="text-sm text-muted mt-1" id="autoinvest-status"></div>
                             </div>
                         </div>
                     </div>
                     <div class="mt-4" id="pool-contributors-chart">
-                        <h4>Wpłacający w tej rundzie:</h4>
+                        <h4>Niezainwestowane środki uczestników:</h4>
                         <div id="pool-contributors-list">Brak wpłat.</div>
                     </div>
+                    <div class="mt-4" id="pool-details"></div>
                 </div>
 
                 <table id="startup-table" class="startup-panel-content"> <thead>
