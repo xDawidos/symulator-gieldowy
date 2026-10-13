@@ -112,7 +112,11 @@ function renderSegmentBar(stock) {
     const segments = [...getStockSegments(stock)].sort((a, b) => b.share - a.share);
     if (segments.length < 2) return '';
     const parts = segments.map((seg, i) => `<span class="cc-seg${i === 0 ? ' cc-seg-main' : ''}" style="flex:${seg.share}" title="${escapeHtml(`${seg.sector}${seg.subsector ? ` · ${seg.subsector}` : ''}: ${(seg.share * 100).toFixed(0)}% przychodów`)}">${SECTORS[seg.sector]?.icon || ''} ${escapeHtml(seg.sector)} ${(seg.share * 100).toFixed(0)}%</span>`).join('');
-    return `<div class="cc-segments"><span class="text-xs text-muted">Struktura przychodów</span><div class="cc-seg-bar">${parts}</div></div>`;
+    const discount = typeof getConglomerateDiscount === 'function' ? getConglomerateDiscount(stock) : 0;
+    const synergy = typeof getSynergyMarginAdj === 'function' && getSynergyMarginAdj(stock) > 0;
+    const notes = [discount > 0 ? `<span class="text-down" title="Rynek wycenia spółkę z niepowiązanymi segmentami taniej (−4% za segment, najwyżej −10%).">dyskonto konglomeratu −${(discount * 100).toFixed(0)}%</span>` : '',
+        synergy ? '<span class="text-up" title="Segmenty z branż powiązanych: +1 pp marży.">synergia +1 pp marży</span>' : ''].filter(Boolean).join(' · ');
+    return `<div class="cc-segments"><span class="text-xs text-muted">Struktura przychodów${notes ? ` · ${notes}` : ''}</span><div class="cc-seg-bar">${parts}</div></div>`;
 }
 
 // Taby poziomów rynku

@@ -5379,6 +5379,31 @@ group('0.14 T3: zmiana profilu (pivot)', () => {
     });
 });
 
+group('0.14 T3: dyskonto konglomeratu', () => {
+    const firm = (symbol, segments) => { const s = makeCompany(symbol, { sector: segments.map(x => x[0]) }); s.segments = segments.map(([sector, share]) => ({ sector, subsector: null, share })); s.sector = getSectorsFromSegments(s.segments); return s; };
+    test('−4% za każdy niepowiązany segment ponad pierwszy, najwyżej −10%; powiązane bez dyskonta', () => {
+        assert(getConglomerateDiscount(firm('C1', [['Chemia', 1]])) === 0, 'jeden segment');
+        assert(getConglomerateDiscount(firm('C2', [['Chemia', 0.6], ['Przemysł', 0.4]])) === 0, 'powiązane');
+        assertNear(getConglomerateDiscount(firm('C3', [['Chemia', 0.6], ['Turystyka', 0.4]])), 0.04, 'jeden niepowiązany', 1e-12);
+        assertNear(getConglomerateDiscount(firm('C4', [['Chemia', 0.5], ['Turystyka', 0.3], ['Media', 0.2]])), 0.08, 'dwa niepowiązane', 1e-12);
+        assert(CONGLOMERATE_DISCOUNT_MAX === 0.10, 'limit −10%');
+    });
+    test('dyskonto działa przez cel wyceny (fairValue ×0,96), nie przez skok kursu', () => {
+        const a = firm('CV1', [['Chemia', 0.6], ['Turystyka', 0.4]]);
+        initializeFundamentals(a, true);
+        resetWorld([a]);
+        a.ledgerQuarters = 8;
+        const price0 = a.price;
+        const original = getConglomerateDiscount;
+        let withoutDiscount;
+        try { getConglomerateDiscount = () => 0; updateFundamentalRatios(a); withoutDiscount = a.fundamentals.fairValue; }
+        finally { getConglomerateDiscount = original; }
+        updateFundamentalRatios(a);
+        assert(withoutDiscount > 0 && Math.abs(a.fundamentals.fairValue / withoutDiscount - 0.96) < 1e-9, `${a.fundamentals.fairValue} / ${withoutDiscount}`);
+        assert(a.price === price0, 'kurs bez skoku');
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

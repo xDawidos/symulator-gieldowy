@@ -2761,6 +2761,8 @@ function updateFundamentalRatios(stock) {
                 ? 0.75 * earningsValue + 0.25 * Math.min(bvps, earningsValue * 2) // B5: kotwica księgowa najwyżej 2× wartość z zysku
                 : Math.max(0.01, bvps * 0.7);
         }
+        // T3: dyskonto konglomeratu — przez cel wyceny (kurs dochodzi do niego stopniowo, bez skoku w chwili decyzji).
+        if (fundamentals.fairValue > 0) fundamentals.fairValue *= 1 - getConglomerateDiscount(stock);
     } else {
         fundamentals.fairValue = null;
     }
@@ -10706,4 +10708,17 @@ function getPivotMarginAdj(stock) {
 /** Zmienność kursu w trakcie pivotu (updateStockPrices). */
 function getStrategyVolatilityFactor(stock) {
     return stock?.strategy?.pivot ? PIVOT_VOLATILITY : 1;
+}
+
+// --- T3.5: dyskonto konglomeratu (przez cel wyceny fairValue, nie skokiem kursu) ---
+const CONGLOMERATE_DISCOUNT_STEP = 0.04;
+const CONGLOMERATE_DISCOUNT_MAX = 0.10;
+
+/** −4% wyceny docelowej za każdy segment niepowiązany z głównym (ponad pierwszy), najwyżej −10%. */
+function getConglomerateDiscount(stock) {
+    const segments = [...getStockSegments(stock)].sort((a, b) => b.share - a.share);
+    if (segments.length < 2) return 0;
+    const main = segments[0].sector;
+    const unrelated = segments.slice(1).filter(seg => !areSectorsRelated(main, seg.sector)).length;
+    return Math.min(CONGLOMERATE_DISCOUNT_MAX, unrelated * CONGLOMERATE_DISCOUNT_STEP);
 }
