@@ -10291,7 +10291,7 @@ const EXPANSION_TARGET_SHARE = [0.20, 0.40];
 const EXPANSION_STEP = [0.02, 0.05];       // pp na kwartał
 const EXPANSION_WRITE_OFF = [0.5, 1.0];
 const EXPANSION_FAIL_DROP = [0.05, 0.10];
-const EXPANSION_BASE_CHANCE = 0.045;       // na kwartał, prezes spółki spełniającej warunki
+const EXPANSION_BASE_CHANCE = 0.055;       // na kwartał, prezes spółki spełniającej warunki
 const SYNERGY_MARGIN = 0.01;
 
 function areSectorsRelated(a, b) {
@@ -10454,10 +10454,14 @@ function processStrategyQuarterly(quarter = getStrategyQuarter()) {
             }
             continue;
         }
-        if (canPivot(stock) && Math.random() < getCeoPivotChance(stock)) startPivot(stock, null, quarter);
-        else if (canStartExpansion(stock) && Math.random() < getCeoExpansionChance(stock)) startExpansion(stock, pickExpansionSector(stock), quarter);
-        else if (canEnterSubsector(stock) && Math.random() < SUBSECTOR_ENTRY_CHANCE) startSubsectorEntry(stock, null, quarter);
-        else if (canChooseNiche(stock) && !getNicheCandidate(stock).niche && Math.random() < NICHE_CHANCE) startNiche(stock, null, quarter); // prezes nie przełącza nisz
+        if (strategy?.pendingProposal) { resolveStrategyProposal(stock, quarter); continue; } // T3.6: decyzja większościowca
+        // Prezes proponuje (cechy, kondycja, cykle); większościowiec może zatwierdzić, zablokować albo zlecić sam.
+        let proposal = null;
+        if (canPivot(stock) && Math.random() < getCeoPivotChance(stock)) proposal = { type: 'pivot', target: pickPivotSector(stock) };
+        else if (canStartExpansion(stock) && Math.random() < getCeoExpansionChance(stock)) proposal = { type: 'expand', target: pickExpansionSector(stock) };
+        else if (canEnterSubsector(stock) && Math.random() < SUBSECTOR_ENTRY_CHANCE) proposal = { type: 'subsector', target: null };
+        else if (canChooseNiche(stock) && !getNicheCandidate(stock).niche && Math.random() < NICHE_CHANCE) proposal = { type: 'niche', target: null }; // prezes nie przełącza nisz
+        if (proposal && (proposal.type === 'subsector' || proposal.type === 'niche' || proposal.target)) proposeStrategy(stock, proposal, quarter);
     }
 }
 
@@ -10721,4 +10725,87 @@ function getConglomerateDiscount(stock) {
     const main = segments[0].sector;
     const unrelated = segments.slice(1).filter(seg => !areSectorsRelated(main, seg.sector)).length;
     return Math.min(CONGLOMERATE_DISCOUNT_MAX, unrelated * CONGLOMERATE_DISCOUNT_STEP);
+}
+
+// --- T3.6: kto decyduje (decyzja 1) — prezes proponuje; większościowiec może zatwierdzić, zablokować albo zlecić ---
+const STRATEGY_BOT_BLOCK_CHANCE = 0.2;
+const STRATEGY_LABELS = { expand: 'rozszerzenie o segment', subsector: 'wejście w podsektor', niche: 'specjalizację', pivot: 'zmianę profilu' };
+
+function describeStrategyProposal(proposal) {
+    return `${STRATEGY_LABELS[proposal.type] || proposal.type}${proposal.target ? ` (${proposal.target})` : ''}`;
+}
+
+/** Wykonuje decyzję strategii (warunki sprawdzane w chwili wykonania). Zwraca proces albo null. */
+function executeStrategy(stock, proposal, quarter = getStrategyQuarter(), by = 'ceo') {
+    switch (proposal.type) {
+        case 'expand': return canStartExpansion(stock) ? startExpansion(stock, proposal.target || pickExpansionSector(stock), quarter, by) : null;
+        case 'subsector': return canEnterSubsector(stock) ? startSubsectorEntry(stock, proposal.target || null, quarter, by) : null;
+        case 'niche': return canChooseNiche(stock) ? startNiche(stock, proposal.target || null, quarter, by) : null;
+        case 'pivot': return canPivot(stock) ? startPivot(stock, proposal.target || null, quarter, by) : null;
+        default: return null;
+    }
+}
+
+function sendStrategyDecisionMail(stock, proposal) {
+    if (typeof addMail !== 'function') return;
+    addMail({
+        sender: CORPORATION_SENDER,
+        subject: `🧭 ${stock.name}: prezes proponuje ${describeStrategyProposal(proposal)}`,
+        body: `Prezes spółki, którą kontrolujesz, proponuje ${describeStrategyProposal(proposal)}. Możesz zatwierdzić albo zablokować decyzję do końca kwartału. Bez Twojej odpowiedzi zarząd wykona plan prezesa — to nie jest kara.`,
+        importance: 3, symbol: stock.symbol, action: { type: 'strategyDecision', symbol: stock.symbol }
+    });
+}
+
+/** Propozycja prezesa: gracz-większościowiec dostaje przypięty mail; bot-większościowiec czasem blokuje; inaczej start. */
+function proposeStrategy(stock, proposal, quarter = getStrategyQuarter()) {
+    if (typeof canFundControlAgm === 'function' && canFundControlAgm(stock)) {
+        ensureStrategy(stock).pendingProposal = { ...proposal, quarter, choice: null };
+        sendStrategyDecisionMail(stock, proposal);
+        return 'pending';
+    }
+    const bot = typeof getMajorityBot === 'function' ? getMajorityBot(stock) : null;
+    if (bot && Math.random() < STRATEGY_BOT_BLOCK_CHANCE) {
+        logEvent(`🚫 ${bot.name} jako większościowy akcjonariusz blokuje w ${stock.name} ${describeStrategyProposal(proposal)}.`, 'company');
+        return 'blocked';
+    }
+    return executeStrategy(stock, proposal, quarter, 'ceo') ? 'started' : 'invalid';
+}
+
+/** Kwartał po propozycji: blokada albo wykonanie (zatwierdzenie lub brak odpowiedzi = decyzja prezesa). */
+function resolveStrategyProposal(stock, quarter = getStrategyQuarter()) {
+    const pending = stock.strategy?.pendingProposal;
+    if (!pending || quarter <= pending.quarter) return null;
+    stock.strategy.pendingProposal = null;
+    if (pending.choice === 'block') {
+        logEvent(`🚫 Fundusz blokuje w ${stock.name} ${describeStrategyProposal(pending)}.`, 'review');
+        return 'blocked';
+    }
+    return executeStrategy(stock, pending, quarter, pending.choice === 'approve' ? 'owner' : 'ceo') ? 'started' : 'invalid';
+}
+
+/** Odpowiedź gracza na mail (zatwierdź / zablokuj); można zmienić do końca kwartału. */
+function respondStrategyProposal(symbol, choice) {
+    const stock = stocks.find(s => s.symbol === symbol);
+    const pending = stock?.strategy?.pendingProposal;
+    if (!pending || !['approve', 'block'].includes(choice)) return false;
+    pending.choice = choice;
+    if (typeof showToast === 'function') showToast(choice === 'approve' ? 'Zatwierdzono plan prezesa — ruszy na koniec kwartału.' : 'Plan prezesa zablokowany.', 'success');
+    return true;
+}
+
+/** Zlecenie większościowca (karta spółki): od razu, jeśli spełnione warunki (nisza: blokada 4 kw.). */
+function orderStrategy(symbol, type, target = null) {
+    const stock = stocks.find(s => s.symbol === symbol);
+    if (!stock || !(typeof canFundControlAgm === 'function' && canFundControlAgm(stock))) {
+        if (typeof showToast === 'function') showToast('Strategię zleca tylko większościowy akcjonariusz (> 50%).', 'warning');
+        return null;
+    }
+    if (type === 'niche' && isNicheLocked(stock)) {
+        if (typeof showToast === 'function') showToast(`Specjalizację można zmienić za ${stock.strategy.nicheLockUntil - getStrategyQuarter()} kw.`, 'warning');
+        return null;
+    }
+    const result = executeStrategy(stock, { type, target: target || null }, getStrategyQuarter(), 'owner');
+    if (typeof showToast === 'function') showToast(result ? `Zlecono: ${describeStrategyProposal({ type, target })}.` : 'Warunki niespełnione (kondycja, gotówka, liczba segmentów albo trwający proces).', result ? 'success' : 'warning');
+    if (result && typeof renderCompanyCard === 'function') renderCompanyCard();
+    return result;
 }

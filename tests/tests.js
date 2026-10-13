@@ -5404,6 +5404,42 @@ group('0.14 T3: dyskonto konglomeratu', () => {
     });
 });
 
+group('0.14 T3: kto decyduje — prezes, większościowiec', () => {
+    function firm(symbol) {
+        const s = makeCompany(symbol, { sector: ['Technologia'], cash: 2_000_000 });
+        s.financialHealth = 3; initializeFundamentals(s, true); s.fundamentals.revenueTtm = 1_000_000;
+        resetWorld([s]); ensureStockSegments(s);
+        return s;
+    }
+    test('gracz-większościowiec: przypięty mail; blokada zatrzymuje, brak odpowiedzi = decyzja prezesa', () => {
+        const s = firm('DEC1');
+        const control = canFundControlAgm;
+        try {
+            canFundControlAgm = () => true;
+            assert(proposeStrategy(s, { type: 'expand', target: 'Gaming' }, 5) === 'pending' && s.strategy.pendingProposal, 'czeka na decyzję');
+            assert(respondStrategyProposal('DEC1', 'block') && resolveStrategyProposal(s, 6) === 'blocked' && !s.strategy.process, 'zablokowane');
+            proposeStrategy(s, { type: 'expand', target: 'Gaming' }, 7);
+            assert(resolveStrategyProposal(s, 7) === null, 'w tym samym kwartale bez decyzji');
+            assert(resolveStrategyProposal(s, 8) === 'started' && s.strategy.process?.type === 'expand' && s.strategy.process.by === 'ceo', 'brak odpowiedzi = prezes');
+        } finally { canFundControlAgm = control; }
+    });
+    test('zlecenie większościowca od razu; bez kontroli — odmowa; nisza z blokadą 4 kw.', () => {
+        const s = firm('DEC2');
+        const control = canFundControlAgm;
+        try {
+            canFundControlAgm = () => false;
+            assert(orderStrategy('DEC2', 'expand', 'Gaming') === null, 'tylko większościowiec');
+            canFundControlAgm = () => true;
+            const p = orderStrategy('DEC2', 'expand', 'Gaming');
+            assert(p && p.by === 'owner' && p.sector === 'Gaming', 'zlecone');
+            const m = firm('DEC3'); m.segments = [{ sector: 'Media', subsector: null, share: 1 }]; m.sector = ['Media'];
+            assert(orderStrategy('DEC3', 'niche', 'TV'), 'pierwsza nisza');
+            resolveNiche(m, getStrategyQuarter() + 2);
+            assert(orderStrategy('DEC3', 'niche', 'Rozrywka') === null, 'blokada przełączania 4 kw.');
+        } finally { canFundControlAgm = control; }
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;
