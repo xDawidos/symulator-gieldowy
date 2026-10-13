@@ -285,3 +285,4 @@ Cel: przebiegi symulacyjne (6,5 roku gry) trwają dziś przy ×50 ok. 2,5–3 mi
 8. **Bankowość i Finanse** to dwa sektory z podsektorami: Bankowość (bank komercyjny, inwestycyjny, międzynarodowy) i Finanse (pożyczki konsumenckie, rynki kapitałowe, fintech).
 9. **Transport i Logistyka** łączą się w sektor „Transport i logistyka” z podsektorami Logistyka i Lotnictwo.
 10. **Filtr sektora:** domyślnie sektor główny i przełącznik „także segmenty poboczne”; chipy pogrupowane z liczbą spółek, a po wyborze sektora lista podsektorów; osobny filtr „Typ”.
+11. **Zdarzenia sektora Bankowość:** po porządku nazw (T1a) banki dostają zdarzenia sektora Bankowość, co jest poprawne. Dla równowagi (4 pozytywne : 2 negatywne) dochodzą 2 negatywne zdarzenia bankowe: podatek bankowy i masowe pozwy kredytobiorców. Realizacja razem z T2.
