@@ -2660,7 +2660,9 @@ function computeQuarterResults(stock) {
         + (typeof getDefenseGrowthBonus === 'function' ? getDefenseGrowthBonus(stock) : 0); // zbrojeniówka: bonus od siły policji
     const societyAdj = (typeof getSocietyGrowthAdj === 'function' ? getSocietyGrowthAdj(stock) : 0) + getSubsectorGrowthAdj(stock); // 0.13: popyt klas, niedobór specjalistów; T2: podsektory
     const growth = profile.growth / 4 * SECTOR_GROWTH_FACTOR + (Number(stock.growthAdj) || 0) + profile.beta * gdp + health * 0.004 + phaseAdj + sectorAdj + projectAdj + societyAdj + inflation / 4 * INFLATION_PASS_THROUGH + gaussianRandom() * 0.02;
-    fundamentals.revenue = Math.max(1000, fundamentals.revenue * (1 + Math.max(-0.25, Math.min(0.25, growth))));
+    // T2 (Fintech): zakaz nowych klientów po kontroli KNF — wzrost przychodów 0 przez 2 kwartały.
+    const growthCapped = typeof isKnfGrowthBlocked === 'function' && isKnfGrowthBlocked(stock) ? Math.min(0, growth) : growth;
+    fundamentals.revenue = Math.max(1000, fundamentals.revenue * (1 + Math.max(-0.25, Math.min(0.25, growthCapped))));
 
     // 0.13: strajk, epidemia, klęska — przychody tylko tego kwartału (baza przychodów bez zmian).
     const quarterFactor = (typeof getStrikeRevenueFactor === 'function' ? getStrikeRevenueFactor(stock) : 1) * (typeof getSocietyRevenueFactor === 'function' ? getSocietyRevenueFactor(stock) : 1);
@@ -9990,4 +9992,105 @@ function renderLaborCostBar(stock, history) {
     const seg = (value, cls) => `<span class="${cls}" style="width:${Math.min(100, value * 100).toFixed(1)}%"></span>`;
     return `<div class="labor-bar" role="img" aria-label="Struktura przychodów">${seg(labor, 'labor')}${seg(other, 'other')}${seg(ebitda, 'ebitda')}</div>
         <p class="text-xs">🟨 koszt pracy ${(labor * 100).toFixed(1)}% · ⬜ pozostałe koszty ${(other * 100).toFixed(1)}% · 🟩 EBITDA ${(ebitda * 100).toFixed(1)}% przychodów (ostatni kwartał)</p>`;
+}
+
+// #################################################################################
+// ## subsectors.js — mechaniki własne podsektorów (0.14 T2)
+// #################################################################################
+//
+// Biotechnologia: badania kliniczne (faza I → II → III, wynik binarny losowany dopiero w chwili ogłoszenia).
+// Mechaniki binarne omijają tarcze PR i cechy prezesa (applyPriceEffect) — inaczej „ochroniona” porażka dawałaby
+// darmowy zysk. Wyniki trafiają do dziennika (poczta zbiorcza) i jako znacznik na wykres.
+
+const CLINICAL_PHASES = {
+    1: { name: 'I', chance: 0.60 },
+    2: { name: 'II', chance: 0.45 },
+    3: { name: 'III', chance: 0.60 }
+};
+const CLINICAL_DURATION = [3, 6];          // kwartały na fazę
+const CLINICAL_START_CHANCE = 0.35;        // szansa na kwartał, że biotech bez programu zaczyna nowy
+const CLINICAL_COOLDOWN = [2, 4];          // przerwa po zakończeniu programu (porażka albo rejestracja leku)
+const CLINICAL_SUCCESS_JUMP = [0.40, 0.80];
+const CLINICAL_FAILURE_DROP = [0.40, 0.70];
+const CLINICAL_APPROVAL_GROWTH = 0.004;    // zarejestrowany lek: +0,4 pp wzrostu przychodów na kwartał (trwale)
+const DRUG_NAMES = ['Neurovax', 'Cardiolin', 'Hemastat', 'Oncoprim', 'Vitaflex', 'Immunor', 'Glicozen', 'Respira', 'Dermalix', 'Osteon'];
+
+function getSubsectorQuarter() {
+    return typeof macro === 'object' && macro ? Number(macro.quarter) || 0 : 0;
+}
+
+function noteSubsectorStat(key) {
+    if (typeof society !== 'object' || !society) return;
+    if (!society.stats) society.stats = {};
+    society.stats[key] = (society.stats[key] || 0) + 1;
+}
+
+/** Skok kursu z mechaniki binarnej: bez tarcz i cech prezesa (żadna strona wyniku nie jest „chroniona”). */
+function applyBinaryPriceJump(stock, pct, icon, label) {
+    stock.price = Math.max(0.01, stock.price * (1 + pct));
+    if (!Number.isFinite(stock.baseVolatilityFactor)) stock.baseVolatilityFactor = stock.volatilityFactor;
+    stock.volatilityFactor = Math.min(stock.baseVolatilityFactor * 2, stock.volatilityFactor * 1.05);
+    if (typeof addChartEvent === 'function') addChartEvent(stock, icon, label);
+}
+
+function isPlayerHolding(stock) {
+    return typeof playerPortfolio !== 'undefined' && (playerPortfolio[stock.symbol]?.shares || 0) > 0;
+}
+
+/** Nowy program: faza I, termin ogłoszenia wyniku za 3–6 kw. Wynik NIE jest losowany z góry. */
+function startClinicalTrial(stock, quarter = getSubsectorQuarter()) {
+    stock.clinicalTrial = { phase: 1, drug: getRandomElement(DRUG_NAMES), startedQuarter: quarter, dueQuarter: quarter + getRandomIntInRange(...CLINICAL_DURATION) };
+    logEvent(`🧪 ${stock.name} rozpoczyna badania kliniczne leku ${stock.clinicalTrial.drug} (faza I). Wynik za kilka kwartałów — ryzyko binarne.`, 'company');
+    if (typeof addChartEvent === 'function') addChartEvent(stock, '🧪', `Start badań: ${stock.clinicalTrial.drug} (faza I)`);
+    return stock.clinicalTrial;
+}
+
+/** Ogłoszenie wyniku fazy: losowanie w tej chwili (roll do testów). Zwraca { success, phase, change }. */
+function resolveClinicalPhase(stock, roll = Math.random(), quarter = getSubsectorQuarter()) {
+    const trial = stock.clinicalTrial;
+    if (!trial) return null;
+    const def = CLINICAL_PHASES[trial.phase];
+    const success = roll < def.chance;
+    const share = Math.max(0.2, getSubsectorMechanicShare(stock, 'clinical')); // biotech jako segment poboczny — słabszy efekt
+    const change = (success ? getRandomInRange(...CLINICAL_SUCCESS_JUMP) : -getRandomInRange(...CLINICAL_FAILURE_DROP)) * share;
+    const phase = trial.phase;
+    applyBinaryPriceJump(stock, change, success ? '💊' : '☠️', `Faza ${def.name} ${trial.drug}: ${success ? 'sukces' : 'porażka'} (${(change * 100).toFixed(0)}%)`);
+    noteSubsectorStat('clinicalResults');
+    if (success && phase < 3) {
+        trial.phase++;
+        trial.dueQuarter = quarter + getRandomIntInRange(...CLINICAL_DURATION);
+        logEvent(`💊 ${stock.name}: lek ${trial.drug} przechodzi fazę ${def.name} badań klinicznych — kurs ${(change * 100).toFixed(0)}%. Następna faza: ${CLINICAL_PHASES[trial.phase].name}.`, 'company');
+    } else {
+        if (success) {
+            stock.growthAdj = (Number(stock.growthAdj) || 0) + CLINICAL_APPROVAL_GROWTH * share;
+            stock.financialHealth = Math.min(5, (Number(stock.financialHealth) || 0) + 1);
+            stock.approvedDrugs = (Number(stock.approvedDrugs) || 0) + 1;
+            logEvent(`🏅 ${stock.name}: lek ${trial.drug} zarejestrowany po fazie III — kurs ${(change * 100).toFixed(0)}%, trwale wyższy wzrost przychodów.`, 'company');
+        } else {
+            stock.financialHealth = Math.max(-5, (Number(stock.financialHealth) || 0) - 0.5);
+            logEvent(`☠️ ${stock.name}: lek ${trial.drug} nie przechodzi fazy ${def.name} badań klinicznych — kurs ${(change * 100).toFixed(0)}%. Program zamknięty.`, 'company');
+        }
+        stock.clinicalTrial = null;
+        stock.clinicalCooldownUntil = quarter + getRandomIntInRange(...CLINICAL_COOLDOWN);
+    }
+    if (isPlayerHolding(stock) && typeof unlockAcademyEntry === 'function') unlockAcademyEntry('ryzykoBinarne', `${stock.name}: faza ${def.name}`);
+    return { success, phase, change };
+}
+
+/** Co kwartał: biotechy zaczynają programy i ogłaszają wyniki faz w terminie. */
+function processClinicalTrials(quarter = getSubsectorQuarter()) {
+    for (const stock of stocks) {
+        if (stock.assetType || stock.isBankrupt || getSubsectorMechanicShare(stock, 'clinical') <= 0) continue;
+        if (!stock.clinicalTrial) {
+            if ((Number(stock.clinicalCooldownUntil) || 0) > quarter) continue;
+            if (Math.random() < CLINICAL_START_CHANCE) startClinicalTrial(stock, quarter);
+            continue;
+        }
+        if (stock.clinicalTrial.dueQuarter <= quarter) resolveClinicalPhase(stock, Math.random(), quarter);
+    }
+}
+
+/** Co kwartał (pętla kwartalna): mechaniki własne podsektorów. */
+function processSubsectorMechanicsQuarterly() {
+    processClinicalTrials();
 }

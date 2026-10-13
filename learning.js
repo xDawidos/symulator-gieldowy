@@ -402,6 +402,16 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Dlaczego spółki spożywcze nazywa się defensywnymi?', a: ['Ludzie jedzą także w kryzysie', 'Mają zawsze wysoką dywidendę', 'Państwo gwarantuje ich zyski'], c: 0 }
         ]
     },
+    ryzykoBinarne: {
+        title: 'Ryzyko binarne (biotechnologia)', icon: '🧪',
+        text: 'Wynik badania klinicznego jest zero-jedynkowy: lek przechodzi fazę albo nie. Kurs biotechu potrafi wtedy wzrosnąć o połowę albo spaść o połowę w jeden dzień. Wyniku nie da się przewidzieć z wykresu — zarządzający dzieli więc ryzyko: mała pozycja w kilku biotechach zamiast jednej dużej.',
+        example: () => { const s = stocks.find(x => x.clinicalTrial && !x.isBankrupt); return s ? `${s.name}: lek ${s.clinicalTrial.drug} w fazie ${CLINICAL_PHASES[s.clinicalTrial.phase].name}, wynik ok. kwartału ${s.clinicalTrial.dueQuarter}. Szanse faz: I 60%, II 45%, III 60%.` : 'Szanse faz badań: I 60%, II 45%, III 60% — łącznie lek przechodzi wszystkie fazy w ok. 16% przypadków.'; },
+        quiz: [
+            { q: 'Lek przechodzi fazy z szansą 60%, 45% i 60%. Jaka jest szansa przejścia wszystkich trzech?', a: ['ok. 16%', 'ok. 55%', 'ok. 45%'], c: 0 },
+            { q: 'Jak ograniczyć ryzyko binarne w portfelu?', a: ['kilka małych pozycji w różnych biotechach', 'jedna duża pozycja przed wynikiem', 'kupić tuż przed ogłoszeniem'], c: 0 },
+            { q: 'Czy wynik badania da się odczytać z wykresu przed ogłoszeniem?', a: ['nie — jest losowany w chwili ogłoszenia', 'tak, z wolumenu', 'tak, z poprzedniej fazy'], c: 0 }
+        ]
+    },
     segmenty: {
         title: 'Segmenty działalności', icon: '🧩',
         text: 'Duża spółka rzadko robi jedną rzecz. Segmenty to części działalności, np. bank z ubezpieczeniami albo przemysł z energetyką. Wycenę i ryzyko spółki liczy się jako średnią segmentów ważoną ich udziałem w przychodach. Segment główny (największy udział) decyduje, z jakim sektorem porównujemy spółkę.',

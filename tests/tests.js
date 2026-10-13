@@ -5061,6 +5061,51 @@ group('0.14 T2: podsektory', () => {
     });
 });
 
+group('0.14 T2: Biotechnologia — badania kliniczne', () => {
+    function biotech(symbol = 'BIOX') {
+        const s = makeCompany(symbol, { sector: ['Medycyna'] });
+        s.segments = [{ sector: 'Medycyna', subsector: 'Biotechnologia', share: 1 }]; s.sector = ['Medycyna'];
+        resetWorld([s]);
+        return s;
+    }
+
+    test('wynik fazy losowany dopiero przy ogłoszeniu: sukces podnosi kurs, porażka obniża i zamyka program', () => {
+        const s = biotech();
+        startClinicalTrial(s, 10);
+        assert(Object.keys(s.clinicalTrial).sort().join() === 'drug,dueQuarter,phase,startedQuarter', 'brak wyniku zapisanego z góry: ' + Object.keys(s.clinicalTrial));
+        assert(s.clinicalTrial.dueQuarter >= 13 && s.clinicalTrial.dueQuarter <= 16, 'faza 3–6 kw.');
+        const p0 = s.price;
+        const ok = resolveClinicalPhase(s, 0.1, 14);
+        assert(ok.success && s.price >= p0 * 1.4 - 1e-9 && s.price <= p0 * 1.8 + 1e-9 && s.clinicalTrial.phase === 2, `sukces: ${s.price / p0}`);
+        s.prShieldExpiry = Date.now() + 1e9; // tarcza PR nie chroni przed wynikiem binarnym
+        const p1 = s.price;
+        const bad = resolveClinicalPhase(s, 0.99, 18);
+        assert(!bad.success && s.price <= p1 * 0.6 + 1e-9 && s.price >= p1 * 0.3 - 1e-9 && !s.clinicalTrial && s.clinicalCooldownUntil >= 20, `porażka: ${s.price / p1}`);
+    });
+
+    test('faza III: rejestracja leku trwale podnosi wzrost; szanse faz 60 / 45 / 60%', () => {
+        const s = biotech();
+        startClinicalTrial(s, 0);
+        s.clinicalTrial.phase = 3;
+        const g0 = Number(s.growthAdj) || 0;
+        assert(resolveClinicalPhase(s, 0.59, 5).success && s.approvedDrugs === 1 && s.growthAdj > g0 && !s.clinicalTrial, 'rejestracja');
+        assert(CLINICAL_PHASES[1].chance === 0.6 && CLINICAL_PHASES[2].chance === 0.45 && CLINICAL_PHASES[3].chance === 0.6, 'szanse');
+        startClinicalTrial(s, 10); s.clinicalTrial.phase = 2;
+        assert(!resolveClinicalPhase(s, 0.46, 12).success, 'faza II: 46% > 45% = porażka');
+    });
+
+    test('częstotliwość: 1 biotech, 26 kwartałów — średnio 2–6 wyników', () => {
+        let total = 0;
+        for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) total += withSeededRandom(seed, () => {
+            const s = biotech();
+            society.stats = { clinicalResults: 0 };
+            for (let q = 1; q <= 26; q++) processClinicalTrials(q);
+            return society.stats.clinicalResults;
+        });
+        assert(total / 8 >= 2 && total / 8 <= 6, `średnio ${total / 8}`);
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;
