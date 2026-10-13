@@ -1716,7 +1716,8 @@ const SECTORS = {
         subsectors: { 'Rolnictwo': { peopleSubsidy: true } } },                                             // dotacje Ludowców (0.13)
     'Dobra konsumpcyjne':    { icon: '🛍️', profile: { beta: 1.0, rateSens: 0.6, pe: 16, margin: 0.14, growth: 0.04, ps: 1.3, da: 0.03 } },
     'Turystyka':             { icon: '✈️', profile: { beta: 1.5, rateSens: 0.8, pe: 15, margin: 0.15, growth: 0.04, ps: 1.5, da: 0.06 } },
-    'Media':                 { icon: '📺', profile: { beta: 1.1, rateSens: 0.6, pe: 14, margin: 0.18, growth: 0.02, ps: 1.8, da: 0.04 } },
+    'Media':                 { icon: '📺', profile: { beta: 1.1, rateSens: 0.6, pe: 14, margin: 0.18, growth: 0.02, ps: 1.8, da: 0.04 },
+        niches: { 'TV': { event: 'season' }, 'Rozrywka': { event: 'season' } } },                               // T3: hit albo klapa sezonu
     'Gaming':                { icon: '🎮', profile: { beta: 1.4, rateSens: 1.0, pe: 20, margin: 0.25, growth: 0.07, ps: 3.0, da: 0.06 } },
     'Przemysł':              { icon: '⚙️', profile: { beta: 1.3, rateSens: 0.8, pe: 13, margin: 0.14, growth: 0.03, ps: 1.0, da: 0.05 },
         subsectors: { 'Robotyka': { delta: { growth: 0.02, margin: 0.02 } } } },
@@ -1736,13 +1737,15 @@ const SECTORS = {
         subsectors: {
             'Biotechnologia': { profile: { beta: 1.6, pe: 30 }, delta: { growth: 0.04, margin: -0.10 }, specialist: true, mechanic: 'clinical' }, // T2: badania kliniczne
             'Sprzęt medyczny': { profile: { beta: 0.8 }, delta: { margin: 0.03 } }
-        } },
+        },
+        niches: { 'Farmaceutyki': { margin: 0.02, patent: true } } },                                         // T3: marża +2 pp, ryzyko wygaśnięcia patentu
     'Badania':               { icon: '🔬', profile: { beta: 0.9, rateSens: 0.8, pe: 25, margin: 0.20, growth: 0.07, ps: 4.0, da: 0.05 } },
     'Technologia':           { icon: '💻', profile: { beta: 1.3, rateSens: 1.2, pe: 22, margin: 0.28, growth: 0.08, ps: 3.5, da: 0.05 },
         subsectors: {
             'Półprzewodniki': { profile: { beta: 1.8 }, cycleDepth: 1.5, specialist: true },
             'Sztuczna inteligencja': { profile: { pe: 35 }, delta: { growth: 0.06 }, vol: 1.3, specialist: true }
-        } },
+        },
+        niches: { 'Wywiad i obronność': { defenseGrowth: true } } },                                           // T3: rośnie z wydatkami na obronność
     'Nieruchomości':         { icon: '🏢', profile: { beta: 1.4, rateSens: 1.6, pe: 14, margin: 0.35, growth: 0.03, ps: 4.0, da: 0.10 },
         subsectors: { 'Magazyny': { profile: { beta: 1.0 }, delta: { growth: 0.02 } } } },
     'Obronność':             { icon: '🛡️', profile: { beta: 0.5, rateSens: 0.5, pe: 17, margin: 0.20, growth: 0.04, ps: 1.8, da: 0.05 }, // 0.11.4: defensywna
@@ -1954,7 +1957,7 @@ const stockSegmentCache = new WeakMap();
 function getStockSegmentKey(stock) {
     let key = Array.isArray(stock.sector) ? stock.sector.join(',') : String(stock.sector);
     key += `#${stock.marketOperator || ''}#${stock.bankData?.type || ''}#${stock.isBankStock ? 1 : 0}#`;
-    if (Array.isArray(stock.segments)) for (const seg of stock.segments) key += `${seg?.sector}|${seg?.subsector}|${seg?.share};`;
+    if (Array.isArray(stock.segments)) for (const seg of stock.segments) key += `${seg?.sector}|${seg?.subsector}|${seg?.share}|${seg?.niche || ''};`;
     return key;
 }
 

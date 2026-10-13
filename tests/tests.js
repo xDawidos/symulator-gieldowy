@@ -5299,6 +5299,55 @@ group('0.14 T3: wejście w podsektor i premia skupienia', () => {
     });
 });
 
+group('0.14 T3: specjalizacja-nisza', () => {
+    function firm(symbol, segments, cash = 2_000_000) {
+        const s = makeCompany(symbol, { sector: segments.map(x => x.sector), cash });
+        s.financialHealth = 2; s.segments = segments; s.sector = getSectorsFromSegments(segments);
+        initializeFundamentals(s, true); s.fundamentals.revenueTtm = 1_000_000;
+        resetWorld([s]);
+        return s;
+    }
+    test('rejestr nisz (rozszerzalny), koszt 3–5% i 2 kw.; Farmaceutyki: marża +2 pp, patent może wygasnąć', () => {
+        assert(Object.keys(SECTORS['Media'].niches).join() === 'TV,Rozrywka' && SECTORS['Medycyna'].niches['Farmaceutyki'] && SECTORS['Technologia'].niches['Wywiad i obronność'], 'nisze 0.14');
+        assert(!SECTORS['Medycyna'].niches['Farmaceutyki'].profile, 'nisza bez własnego profilu wyceny');
+        const s = firm('PH1', [{ sector: 'Medycyna', subsector: null, share: 1 }]);
+        const p0 = getSectorProfile(s);
+        const cash0 = s.cash;
+        const p = startNiche(s, 'Farmaceutyki', 0);
+        assert(p.cost >= 30_000 && p.cost <= 50_000 && Math.abs(cash0 - s.cash - p.cost) < 1 && p.dueQuarter === 2, JSON.stringify(p));
+        resolveNiche(s, 2);
+        assert(s.segments[0].niche === 'Farmaceutyki' && JSON.stringify(getSectorProfile(s)) === JSON.stringify(p0), 'profil bez zmian');
+        assertNear(getNicheMarginAdj(s, 3), 0.02, 'marża +2 pp', 1e-12);
+        s.strategy.patentExpiredUntil = 10;
+        assert(getNicheMarginAdj(s, 5) === 0 && getNicheMarginAdj(s, 10) === 0.02, 'wygasły patent zdejmuje premię na czas');
+    });
+    test('zmiana specjalizacji: blokada 4 kw. i zerowanie premii skupienia na 2 kw.', () => {
+        const s = firm('TV1', [{ sector: 'Media', subsector: null, share: 1, niche: 'TV' }]);
+        s.segments[0].subsector = null;
+        startNiche(s, 'Rozrywka', 10);
+        assert(isNicheLocked(s, 13) && !isNicheLocked(s, 14) && startNiche(s, 'TV', 12) === null, 'blokada 4 kw.');
+        resolveNiche(s, 12);
+        s.segments[0].subsector = 'Pożyczki konsumenckie'; // dowolny podsektor do testu premii (≥ 70%)
+        assert(getFocusMarginAdj(s, 13) === 0 && getFocusMarginAdj(s, 14) === 0.015, 'premia skupienia wraca po 2 kw.');
+    });
+    test('TV/Rozrywka: hit albo klapa sezonu zmienia kurs i przychody kwartału; Wywiad rośnie z wydatkami na obronność', () => {
+        const s = firm('TV2', [{ sector: 'Media', subsector: null, share: 1, niche: 'TV' }]);
+        const p0 = s.price;
+        const random = Math.random; let calls = 0;
+        Math.random = () => (calls++ === 0 ? 0.05 : 0.2); // sezon tak, hit
+        try { processNicheEvents(s, 1); } finally { Math.random = random; }
+        assert(s.price >= p0 * 1.1 - 1e-9 && s.strategy.seasonFactor > 1, `hit: ${s.price / p0}`);
+        assert(consumeNicheRevenueFactor(s) > 1 && consumeNicheRevenueFactor(s) === 1, 'jednorazowy mnożnik przychodów');
+        const intel = firm('INT1', [{ sector: 'Technologia', subsector: null, share: 1, niche: 'Wywiad i obronność' }]);
+        assert(getNicheGrowthAdj(intel) >= 0 && getNicheGrowthAdj(firm('INT2', [{ sector: 'Technologia', subsector: null, share: 1 }])) === 0, 'Wywiad');
+    });
+    test('zapis: nisza w segmentach (4. pole), bez niszy format bez zmian', () => {
+        assert(encodeSegmentsForSave([{ sector: 'Media', subsector: null, share: 1, niche: 'TV' }]) === 'Media||1|TV', 'z niszą');
+        assert(encodeSegmentsForSave([{ sector: 'Media', subsector: null, share: 1 }]) === 'Media||1', 'bez niszy');
+        assert(decodeSavedSegments('Media||1|TV')[0].niche === 'TV' && !('niche' in decodeSavedSegments('Media||1')[0]), 'odczyt');
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

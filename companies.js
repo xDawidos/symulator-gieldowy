@@ -2658,14 +2658,14 @@ function computeQuarterResults(stock) {
     const projectAdj = (typeof getSpecialProjectGrowth === 'function' ? getSpecialProjectGrowth(stock) : 0) // bonusy projektów specjalnych
         + (typeof getMafiaFrontGrowth === 'function' ? getMafiaFrontGrowth(stock) : 0) // spółki-przykrywki rosną z wpływami mafii
         + (typeof getDefenseGrowthBonus === 'function' ? getDefenseGrowthBonus(stock) : 0); // zbrojeniówka: bonus od siły policji
-    const societyAdj = (typeof getSocietyGrowthAdj === 'function' ? getSocietyGrowthAdj(stock) : 0) + getSubsectorGrowthAdj(stock); // 0.13: popyt klas, niedobór specjalistów; T2: podsektory
+    const societyAdj = (typeof getSocietyGrowthAdj === 'function' ? getSocietyGrowthAdj(stock) : 0) + getSubsectorGrowthAdj(stock) + getNicheGrowthAdj(stock); // 0.13: popyt klas, niedobór specjalistów; T2: podsektory; T3: nisze
     const growth = profile.growth / 4 * SECTOR_GROWTH_FACTOR + (Number(stock.growthAdj) || 0) + profile.beta * gdp + health * 0.004 + phaseAdj + sectorAdj + projectAdj + societyAdj + inflation / 4 * INFLATION_PASS_THROUGH + gaussianRandom() * 0.02;
     // T2 (Fintech): zakaz nowych klientów po kontroli KNF — wzrost przychodów 0 przez 2 kwartały.
     const growthCapped = isKnfGrowthBlocked(stock) ? Math.min(0, growth) : growth;
     fundamentals.revenue = Math.max(1000, fundamentals.revenue * (1 + Math.max(-0.25, Math.min(0.25, growthCapped))));
 
     // 0.13: strajk, epidemia, klęska — przychody tylko tego kwartału (baza przychodów bez zmian).
-    const quarterFactor = (typeof getStrikeRevenueFactor === 'function' ? getStrikeRevenueFactor(stock) : 1) * (typeof getSocietyRevenueFactor === 'function' ? getSocietyRevenueFactor(stock) : 1);
+    const quarterFactor = (typeof getStrikeRevenueFactor === 'function' ? getStrikeRevenueFactor(stock) : 1) * (typeof getSocietyRevenueFactor === 'function' ? getSocietyRevenueFactor(stock) : 1) * consumeNicheRevenueFactor(stock); // T3: sezon TV/Rozrywka
     const baseRevenue = fundamentals.revenue;
     const revenue = baseRevenue * quarterFactor;
     const lostRevenue = baseRevenue - revenue; // dźwignia operacyjna: 40% kosztów jest sztywnych w krótkim terminie
@@ -10420,7 +10420,7 @@ function getSynergyMarginAdj(stock) {
 
 /** Dodatek do marży ze strategii (computeQuarterResults). */
 function getStrategyMarginAdj(stock) {
-    return getSynergyMarginAdj(stock) + getFocusMarginAdj(stock);
+    return getSynergyMarginAdj(stock) + getFocusMarginAdj(stock) + getNicheMarginAdj(stock);
 }
 
 /** Szansa prezesa na rozszerzenie: cechy i koniunktura. */
@@ -10441,16 +10441,19 @@ function processStrategyQuarterly(quarter = getStrategyQuarter()) {
         if (!isStrategyCompany(stock)) continue;
         const strategy = stock.strategy;
         if (strategy?.growth) growNewSegment(stock);
+        if (stock.segments.some(seg => seg.niche)) processNicheEvents(stock, quarter);
         const process = strategy?.process;
         if (process) {
             if (process.dueQuarter <= quarter) {
                 if (process.type === 'expand') resolveExpansion(stock, Math.random(), quarter);
                 else if (process.type === 'subsector') resolveSubsectorEntry(stock);
+                else if (process.type === 'niche') resolveNiche(stock, quarter);
             }
             continue;
         }
         if (canStartExpansion(stock) && Math.random() < getCeoExpansionChance(stock)) startExpansion(stock, pickExpansionSector(stock), quarter);
         else if (canEnterSubsector(stock) && Math.random() < SUBSECTOR_ENTRY_CHANCE) startSubsectorEntry(stock, null, quarter);
+        else if (canChooseNiche(stock) && !getNicheCandidate(stock).niche && Math.random() < NICHE_CHANCE) startNiche(stock, null, quarter); // prezes nie przełącza nisz
     }
 }
 
@@ -10505,4 +10508,116 @@ function resolveSubsectorEntry(stock) {
 function getFocusMarginAdj(stock, quarter = getStrategyQuarter()) {
     if ((Number(stock.strategy?.focusResetUntil) || -1) > quarter) return 0; // zmiana specjalizacji zeruje premię na 2 kw.
     return getStockSegments(stock).some(seg => seg.subsector && seg.share >= FOCUS_SHARE - 1e-9) ? FOCUS_MARGIN : 0;
+}
+
+// --- T3.3: specjalizacja-nisza (decyzja 6: etykieta segmentu bez profilu wyceny, z jednym modyfikatorem albo typem zdarzeń) ---
+// Rejestr nisz: SECTORS[sektor].niches (core.js) — 0.15 dopisze np. Motoryzacja → Premium.
+const NICHE_COST = [0.03, 0.05];               // × roczne przychody
+const NICHE_QUARTERS = 2;
+const NICHE_CHANCE = 0.02;                     // na kwartał, prezes
+const NICHE_LOCK_QUARTERS = 4;                 // blokada kolejnej zmiany (także dla większościowca)
+const NICHE_FOCUS_RESET = 2;                   // zmiana specjalizacji zeruje premię skupienia na 2 kw.
+const SEASON_EVENT_CHANCE = 0.10;              // TV / Rozrywka: „hit albo klapa sezonu” na kwartał
+const SEASON_PRICE = [0.10, 0.20];
+const SEASON_REVENUE = 0.08;
+const PATENT_EXPIRY_CHANCE = 0.03;             // Farmaceutyki: wygaśnięcie patentu na kwartał
+const PATENT_EXPIRY_QUARTERS = 8;
+
+function getNicheDef(sector, niche) {
+    return (niche && SECTORS[sector]?.niches?.[niche]) || null;
+}
+
+/** Segment z sektorem, który ma nisze; preferowany segment główny. */
+function getNicheCandidate(stock) {
+    return [...stock.segments].sort((a, b) => b.share - a.share).find(seg => Object.keys(SECTORS[seg.sector]?.niches || {}).length) || null;
+}
+
+function isNicheLocked(stock, quarter = getStrategyQuarter()) {
+    return (Number(stock.strategy?.nicheLockUntil) || -1) > quarter;
+}
+
+function canChooseNiche(stock) {
+    return isStrategyCompany(stock) && !stock.strategy?.process && !stock.strategy?.pivot && Boolean(getNicheCandidate(stock)) && !isNicheLocked(stock)
+        && (Number(stock.cash) || 0) >= getAnnualRevenue(stock) * NICHE_COST[1] && getAnnualRevenue(stock) > 0;
+}
+
+function startNiche(stock, niche = null, quarter = getStrategyQuarter(), by = 'ceo') {
+    const seg = getNicheCandidate(stock);
+    if (!seg || isNicheLocked(stock, quarter)) return null;
+    const options = Object.keys(SECTORS[seg.sector].niches).filter(name => name !== seg.niche);
+    if (!options.length) return null;
+    const chosen = niche && options.includes(niche) ? niche : getRandomElement(options);
+    const cost = Math.round(getAnnualRevenue(stock) * getRandomInRange(...NICHE_COST));
+    adjustCompanyCash(stock, -cost);
+    adjustBalanceSheet(stock, { assets: -cost, retainedEarnings: -cost });
+    if (typeof recordPayment === 'function') recordPayment(stock, 'external:specjalizacja', cost, `Specjalizacja ${chosen}`);
+    if (typeof coverNegativeCash === 'function') coverNegativeCash(stock);
+    const strategy = ensureStrategy(stock);
+    strategy.process = { type: 'niche', sector: seg.sector, niche: chosen, change: Boolean(seg.niche), cost, by, startQuarter: quarter, dueQuarter: quarter + NICHE_QUARTERS };
+    strategy.nicheLockUntil = quarter + NICHE_LOCK_QUARTERS;
+    logEvent(`🏷️ ${stock.name} ${seg.niche ? `zmienia specjalizację z ${seg.niche} na` : 'specjalizuje się:'} ${chosen} (${seg.sector}).`, 'company');
+    return strategy.process;
+}
+
+function resolveNiche(stock, quarter = getStrategyQuarter()) {
+    const process = stock.strategy?.process;
+    if (!process || process.type !== 'niche') return null;
+    stock.strategy.process = null;
+    const seg = stock.segments.find(s => s.sector === process.sector);
+    if (!seg) return null;
+    seg.niche = process.niche;
+    if (process.change) stock.strategy.focusResetUntil = quarter + NICHE_FOCUS_RESET;
+    stock.strategy.patentExpiredUntil = -1;
+    noteStrategyStat('niches');
+    if (typeof addChartEvent === 'function') addChartEvent(stock, '🏷️', `Specjalizacja: ${process.niche}`);
+    return seg.niche;
+}
+
+/** Marża z nisz: Farmaceutyki +2 pp × udział (chyba że patent wygasł). */
+function getNicheMarginAdj(stock, quarter = getStrategyQuarter()) {
+    let adj = 0;
+    for (const seg of getStockSegments(stock)) {
+        const def = getNicheDef(seg.sector, seg.niche);
+        if (def?.margin && !((Number(stock.strategy?.patentExpiredUntil) || -1) > quarter)) adj += def.margin * seg.share;
+    }
+    return adj;
+}
+
+/** Wzrost z nisz: Wywiad i obronność rośnie z wydatkami na obronność (siła policji jak bonus zbrojeniówki). */
+function getNicheGrowthAdj(stock) {
+    let adj = 0;
+    for (const seg of getStockSegments(stock)) {
+        const def = getNicheDef(seg.sector, seg.niche);
+        if (def?.defenseGrowth && typeof getInstitutionEffectiveness === 'function' && typeof oversight === 'object' && oversight?.police) adj += getInstitutionEffectiveness(oversight.police) * 0.004 * seg.share;
+    }
+    return adj;
+}
+
+/** Jednorazowy mnożnik przychodów kwartału z sezonu (TV/Rozrywka) — zużywany przy raporcie. */
+function consumeNicheRevenueFactor(stock) {
+    const factor = Number(stock.strategy?.seasonFactor) || 1;
+    if (stock.strategy?.seasonFactor) stock.strategy.seasonFactor = null;
+    return factor;
+}
+
+/** Zdarzenia nisz co kwartał: sezon (hit albo klapa), wygaśnięcie patentu. */
+function processNicheEvents(stock, quarter = getStrategyQuarter()) {
+    for (const seg of stock.segments) {
+        const def = getNicheDef(seg.sector, seg.niche);
+        if (!def) continue;
+        if (def.event === 'season' && Math.random() < SEASON_EVENT_CHANCE) {
+            const hit = Math.random() < 0.5; // wynik sezonu losowany w chwili premiery
+            const change = (hit ? 1 : -1) * getRandomInRange(...SEASON_PRICE) * seg.share;
+            applyBinaryPriceJump(stock, change, hit ? '🎬' : '🍅', `${seg.niche}: ${hit ? 'hit' : 'klapa'} sezonu`);
+            ensureStrategy(stock).seasonFactor = 1 + (hit ? 1 : -1) * SEASON_REVENUE * seg.share;
+            noteStrategyStat('seasonEvents');
+            logEvent(`${hit ? '🎬' : '🍅'} ${stock.name} (${seg.niche}): ${hit ? 'hit sezonu — oglądalność bije rekordy' : 'klapa sezonu — widzowie przełączają kanał'}.`, 'company');
+        }
+        if (def.patent && !((Number(stock.strategy?.patentExpiredUntil) || -1) > quarter) && Math.random() < PATENT_EXPIRY_CHANCE) {
+            ensureStrategy(stock).patentExpiredUntil = quarter + PATENT_EXPIRY_QUARTERS;
+            applyBinaryPriceJump(stock, -0.08 * seg.share, '📜', 'Wygasł patent');
+            noteStrategyStat('patentExpiries');
+            logEvent(`📜 ${stock.name}: wygasa patent na kluczowy lek — konkurencja generyków, premia marży znika na ${PATENT_EXPIRY_QUARTERS} kw.`, 'company');
+        }
+    }
 }
