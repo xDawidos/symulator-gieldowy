@@ -1,12 +1,15 @@
-# Plan 0.14.1 „Rynek startupów — naprawa” (po 0.14 T3, przed T4)
+# Plan 0.14.1 „Poprawki z gry: startupy, portfel prywatny, widok spółek” (po 0.14 T3, przed T4)
 
 Cel: pieniądze w inkubatorze nigdy nie znikają po cichu. Każda złotówka wpłacona do startupu, bezpośrednio albo przez pulę, kończy jako akcje po debiucie, zwrot albo **zgłoszona** strata. Gracz widzi, gdzie są jego pieniądze.
 
-Zgłoszenie użytkownika (2026-10-14): wpłacił do puli, pieniądze zeszły z konta, a mimo długiego czasu nie dostał żadnych akcji.
+Zgłoszenia użytkownika (2026-10-14):
+1. Wpłacił do puli, pieniądze zeszły z konta, a mimo długiego czasu nie dostał żadnych akcji (R0–R4).
+2. Gracz dostaje za dużo prywatnych pieniędzy (R5).
+3. Układ tabeli akcji jest nieczytelny: podtypy i specjalizacje spółek są słabo widoczne (R6).
 
 Zakres (decyzja): **tylko naprawa błędów i widoczność**. Zasady działania puli (losowy wybór startupu, interwał) zostają. Dochodzi wypłata niezainwestowanej części z opłatą 2%.
 
-Kolejność: R0 → R1 → R2 → R3 → R4. Każda część z testami, przebiegiem ×200 i commitem.
+Kolejność: R0 → R1 → R2 → R3 → R4 → R5 → R6. Każda część z testami, przebiegiem ×200 i commitem.
 
 ---
 
@@ -95,6 +98,64 @@ Przejść **wszystkie ścieżki** życia startupu i wpisać do raportu, czy każ
 - **Portfel funduszu:** dwa wiersze zamiast jednego: „Pula — niezainwestowane” i „Pula — w startupach”, z wartościami zgodnymi z NAV (R2).
 - **Karta startupu:** w liście inwestorów pozycja „Pula Inwestycyjna (w tym Ty: X zł)”.
 
+## R5. Portfel prywatny: mniej pieniędzy, więcej wyborów
+
+**Cel (decyzja):** pieniądze prywatne są **rzadkie i służą do wyborów**. Na niższych stanowiskach starcza na część szkoleń, spotkań i analityków, więc gracz musi wybierać. Duże kwoty pojawiają się dopiero wyżej, głównie z premii za wynik.
+
+**Źródła dziś** (wpływy do `player-wallet`):
+
+| Źródło | Gdzie | Dziś |
+|---|---|---|
+| Cele korporacji | `settleCorporateGoals` | min(5% budżetu korporacji, **10 000 zł**) za każdy spełniony cel. Fundusz startuje z 10 000 zł, a portfel prywatny ze 100 zł. **Użytkownik wskazał to źródło jako za hojne.** |
+| Premia za wynik | `computePerformanceBonus` | 20% × nadwyżka nad GIG × aktywa × mnożnik stanowiska (1,0–3,0) |
+| Udział w opłacie | `chargeManagementFee` | 15–40% opłaty za zarządzanie, co tydzień |
+| Nadzorowany fundusz | `processCorporationWeekly` | udział w opłacie nadzorowanego funduszu |
+| Zdarzenie z nagrodą | `events.js` (ok. linii 898) | stałe 5000 zł |
+| Mentor, quizy Akademii | `learning.js` | 150 zł / 60 zł |
+| Handel prywatny, dywidendy | konto prywatne | uczciwy dochód z inwestycji (bez zmian) |
+
+**Kroki:**
+1. **Pomiar** (przed zmianami):
+   - przebiegi z presetem gracza aktywnego: fundusz bije GIG o +2–3 pp i awansuje; plus preset „fundusz = GIG”;
+   - zbieramy wpływy prywatne na rok według źródła i stanowiska, z dziennika płatności (`recordPayment` → `player-wallet`);
+   - porównujemy je z kosztami wyborów dostępnych na stanowisku: szkolenia, spotkania, lunch z CEO, analitycy, stoisko na festynie.
+2. **Cele korporacji (od razu, decyzja):** wypłata za spełniony cel = min(5% budżetu korporacji, **1% aktywów funduszu gracza × mnożnik stanowiska**, **3000 zł**). Przy funduszu 10 000 zł to ok. 100 zł; wyżej rośnie z funduszem i stanowiskiem. Główną nagrodą celu zostaje ocena zarządu (+5).
+3. **Zdarzenie 5000 zł:** kwota skalowana do pozycji gracza, np. 2% aktywów funduszu (minimum 200 zł, maksimum 5000 zł).
+4. **Pozostałe źródła** stroimy po pomiarze, żeby spełnić cele z tabeli „Jak sprawdzimy”. Najpierw udział w opłacie (feeShare) i stała 0,20 w premii; wzór premii zostaje.
+
+**Cele:**
+
+| Stanowisko | Wpływy prywatne na rok (gracz aktywny) |
+|---|---|
+| Młodszy zarządca, Zarządca | starczają na **ok. połowę** szkoleń i wydatków dostępnych na stanowisku; nie da się kupić wszystkiego w pierwszych 2 latach |
+| Starszy zarządca, Kierownik projektu | większość wydatków stanowiska i skromne inwestowanie prywatne |
+| Członek zarządu, CEO | duże kwoty, głównie z premii za wynik (≥ 60% wpływów) |
+
+Dodatkowo: cele korporacji to ≤ 25% wpływów prywatnych na każdym stanowisku.
+
+## R6. Widok spółek: giełda → poziom → sektor, opis działalności pod nazwą
+
+Decyzja użytkownika: tabela akcji jest ułożona hierarchicznie, a pod nazwą spółki widać, czym się zajmuje.
+
+- **Układ tabeli:**
+  - nagłówek **rynku** (GPW i rynki internetowe; zakładka „Internet” jak dziś);
+  - nagłówek **poziomu giełdy** (Śmieciowa … Diamentowa);
+  - w każdym poziomie **cienki podnagłówek sektora** (ikona i nazwa, np. „─ 🏦 Bankowość ─”), ułożony w kolejności grup z rejestru `SECTORS` (0.14 T1a);
+  - spółka trafia pod podnagłówek swojego **sektora głównego** (największy segment);
+  - sortowanie po cenie (nagłówek kolumny) działa wewnątrz każdego podnagłówka sektora;
+  - spółki zależne nadal wcięte pod spółką-matką.
+- **Pod nazwą spółki** (mniejszą czcionką):
+  - działalność według segmentów, od największego, w formacie **„Sektor (podsektor albo specjalizacja)”**;
+  - przy dwóch lub trzech działalnościach wszystkie, rozdzielone „ · ”;
+  - gdy segment ma i podsektor, i specjalizację-niszę (T3), w nawiasie oba: „Medycyna (Biotechnologia, Farmaceutyki)”;
+  - przykłady: „Bankowość (Bank komercyjny)”, „Finanse (Fintech) · Technologia”, „Technologia (Sztuczna inteligencja) · Gaming”.
+- **Znaczniki** przy nazwie (dzisiejsze ikony) **zostają bez zmian**.
+- **Kolumna „Sektor”** znika z tabeli, bo ta sama informacja jest pod nazwą. Zwolnione miejsce zostaje dla pozostałych kolumn.
+- **Filtry z 0.14 T1c** (chipy sektorów, podsektory, przełącznik segmentów pobocznych, „Typ”) bez zmian. Przy aktywnym filtrze puste podnagłówki sektorów się nie pokazują.
+- **Skaner:** ten sam opis działalności w kolumnie spółki.
+- **Testy:** kolejność wierszy (rynek → poziom → podnagłówek sektora → spółki); opis działalności dla spółki z 1, 2 i 3 segmentami, z podsektorem i niszą; spółka zależna pod matką; sortowanie po cenie wewnątrz sektora.
+- **Wydajność:** tabela renderuje się nie wolniej niż dziś (pomiar `displayStocks` przy ~110 spółkach).
+
 ---
 
 ## Zapis gry i testy
@@ -128,6 +189,8 @@ Preset przebiegu: gracz co kwartał wpłaca do puli i inwestuje bezpośrednio w 
 | `playerStakes.player` vs fakty | różnica 0 przez cały przebieg |
 | Wkład w pulę „uwięziony” > 8 kw. bez startupu w zbiórce | widoczny status w panelu; wypłata możliwa |
 | GIG, marże, niezmienniki świata | bez zmian względem stanu po T3 |
+| R5: wpływy prywatne według stanowiska | w celach z tabeli R5; cele korporacji ≤ 25% wpływów |
+| R6: czas `displayStocks` | nie dłuższy niż przed zmianą |
 
 ## Decyzje (podjęte 2026-10-14)
 
@@ -136,3 +199,5 @@ Preset przebiegu: gracz co kwartał wpłaca do puli i inwestuje bezpośrednio w 
 3. **Wypłata z puli:** tak, tylko niezainwestowana część, z opłatą 2%.
 
 4. **Stare zapisy:** bez zwrotu wstecz pieniędzy utraconych przez błąd A. Przy wczytaniu tylko korekta martwego „Wkładu w pulę” do faktów, z wpisem w dzienniku; limit 10% się odblokowuje.
+5. **Portfel prywatny:** pieniądze prywatne mają być rzadkie i służyć do wyborów. Cele korporacji płacą za dużo, więc obcinamy je od razu: min(5% budżetu, 1% aktywów funduszu × mnożnik stanowiska, 3000 zł). Resztę źródeł stroimy po pomiarze.
+6. **Widok spółek:** układ rynek → poziom giełdy → podnagłówek sektora głównego; pod nazwą spółki „Sektor (podsektor albo specjalizacja)”, wszystkie działalności rozdzielone „ · ”. Znaczniki bez zmian; kolumna „Sektor” usunięta.
