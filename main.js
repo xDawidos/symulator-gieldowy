@@ -273,7 +273,9 @@ function isFiniteNumber(value) {
 }
 
 function sanitizeCompanyNumbers(company, warnings) {
-    if (!isFiniteNumber(company.cash)) {
+    if (company.assetType === 'Startup' && company.cash === undefined) {
+        company.cash = 0; // startup nie ma gotówki (wycena po wpłatach) — bez ostrzeżenia w konsoli
+    } else if (!isFiniteNumber(company.cash)) {
         warnings.push(`${company.symbol}: nieprawidłowa gotówka (${company.cash}) — ustawiono 0.`);
         company.cash = 0;
     }

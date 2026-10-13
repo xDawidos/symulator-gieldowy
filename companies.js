@@ -3487,6 +3487,7 @@ function resolveMerger(stock1, stock2, process) {
                 initiator.cash += target.cash;
             }
             initiator.cash -= process.costs;
+            coverNegativeCash(initiator); // koszty fuzji ponad gotówkę — kredyt ratunkowy od razu (kandydat na PROL −30 231 z A1)
             initiator.financialHealth = Math.max(-5, Math.min(5, ((initiator.financialHealth + target.financialHealth) / 2) + 1.0));
             if (!initiator.subsidiaries) initiator.subsidiaries = [];
             initiator.subsidiaries.push({ symbol: target.symbol, name: target.name, date: Date.now() });
