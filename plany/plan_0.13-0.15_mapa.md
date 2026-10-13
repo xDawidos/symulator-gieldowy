@@ -17,10 +17,11 @@ Stan na 2026-10-13: etap A (domknięcie 0.13 i 0.13.1) zrobiony na gałęzi work
 | 0.14 | T0 (prędkości ×100/×200) | ✅ `117feec` |
 | 0.14 | T1 (rejestr sektorów, segmenty, filtry) | ✅ `7af0d0b` (T1a+T1b), `5dcb464` (T1c), zapis v14; testy 330/330; zapis +0,005%, marża +0,35 pp, GIG +1,2 pp przy tych samych warunkach (szum) |
 | 0.14 | T2 (podsektory, badania kliniczne, blok jądrowy, KNF) + decyzja 11 | ✅ `89a810d`…`1329525`; testy 345/345; 20+20 przebiegów ×200 vs T1: GIG 17,9 vs 17,8%, marża 24,45 vs 24,38%; badania kliniczne 3,9/przebieg, KNF 1,8, budowy bloków 0,15; zapis +0,03% |
-| 0.14 | T3–T6 | ⬜ nie zaczęte (T6 dopisane 2026-10-12) |
+| 0.14 | T3 (rozszerzenia, podsektory, nisze, pivot, dyskonto konglomeratu, decyzje) + decyzja 12 | ✅ `1859e47`…`7816984`; testy 364/364; 20+20 przebiegów ×200 vs T2: GIG 18,2 vs 18,6%, marża 25,1 vs 25,4%; rozszerzenia 3,7/rok, pivoty 1,5/rok, spółki z ≥ 2 segmentami 28%, budowy bloków 1,4/przebieg; zapis +0,1–0,24% |
+| 0.14 | T4–T6 | ⬜ nie zaczęte (T6 dopisane 2026-10-12) |
 | 0.15 | G0–G8 | ⬜ szkic, nie zaczęte |
 
-**Etap A zrobiony (A1–A4) razem z 3 decyzjami balansu; 0.14 T1 i T2 zrobione.** Zostało: 4 części 0.14 + 9 etapów 0.15 = 13 pozycji.
+**Etap A zrobiony (A1–A4) razem z 3 decyzjami balansu; 0.14 T1–T3 zrobione.** Zostało: 3 części 0.14 + 9 etapów 0.15 = 12 pozycji.
 
 ---
 
