@@ -4023,12 +4023,12 @@ function generateNewStartup() {
 
     ensureStockSegments(newStartup); // T1a: sektory z rejestru (np. dawne „Finanse Konsumenckie”)
     assignRandomSubsector(newStartup); // T2: część startupów dostaje podsektor (Fintech ×2)
-    return newStartup;
     newStartup.name = generateCompanyName(getMainSector(newStartup), getMainSubsector(newStartup)); // 0.14.2 P4
     symbol = newStartup.name.normalize('NFD').replace(/[^A-Za-z]/g, '').toUpperCase();
     symbol = (symbol.substring(0, 3) + symbol.charAt(Math.floor(symbol.length / 2))) || 'NEWS';
     while (stocks.some(s => s.symbol === symbol)) symbol += 'X';
     newStartup.symbol = symbol;
+    return newStartup;
 }
 
 function maintainStartupCount() {

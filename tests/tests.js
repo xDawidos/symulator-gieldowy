@@ -6155,7 +6155,9 @@ group('0.14.2 P4: nazwy startupów dla każdego sektora, DejwCorp najwyżej raz 
         resetWorld([makeCompany('AAA')]);
         usedCompanyNames = []; dejwCorpUsed = false;
         const names = [];
-        for (let i = 0; i < 500; i++) { const s = generateNewStartup(); names.push(s.name); stocks.push(s); }
+        try { for (let i = 0; i < 500; i++) { const s = generateNewStartup(); names.push(s.name); stocks.push(s); } } catch (e) { throw new Error(String(e.stack).split(String.fromCharCode(10)).slice(0, 4).join(' | ')); }
+        const bad = stocks.filter(s => s.assetType === 'Startup' && !s.name);
+        assert(bad.length === 0, `bez nazwy: ${bad.length}, np. ${JSON.stringify(bad[0] ? { sector: bad[0].sector, segments: bad[0].segments, symbol: bad[0].symbol } : null)}`);
         const dejw = names.filter(n => /DejwCorp/.test(n)).length;
         const unique = new Set(names.map(n => n.toLowerCase())).size;
         assert(dejw <= 1, `DejwCorp: ${dejw}`);
