@@ -19,6 +19,9 @@ Stan na 2026-10-13: etap A (domknięcie 0.13 i 0.13.1) zrobiony na gałęzi work
 | 0.14 | T1 (rejestr sektorów, segmenty, filtry) | ✅ `7af0d0b` (T1a+T1b), `5dcb464` (T1c), zapis v14; testy 330/330; zapis +0,005%, marża +0,35 pp, GIG +1,2 pp przy tych samych warunkach (szum) |
 | 0.14 | T2 (podsektory, badania kliniczne, blok jądrowy, KNF) + decyzja 11 | ✅ `89a810d`…`1329525`; testy 345/345; 20+20 przebiegów ×200 vs T1: GIG 17,9 vs 17,8%, marża 24,45 vs 24,38%; badania kliniczne 3,9/przebieg, KNF 1,8, budowy bloków 0,15; zapis +0,03% |
 | 0.14 | T3 (rozszerzenia, podsektory, nisze, pivot, dyskonto konglomeratu, decyzje) + decyzja 12 | ✅ `1859e47`…`7816984`; testy 364/364; 20+20 przebiegów ×200 vs T2: GIG 18,2 vs 18,6%, marża 25,1 vs 25,4%; rozszerzenia 3,7/rok, pivoty 1,5/rok, spółki z ≥ 2 segmentami 28%, budowy bloków 1,4/przebieg; zapis +0,1–0,24% |
+| 0.14.1 | R0–R6 (pula startupów: rozliczenie, NAV, wypłata, panel; portfel prywatny; widok spółek giełda → poziom → sektor) | ✅ `9789f8d`…`e876a20` (scalone `a31cccb`); testy 398/398; 3+3 przebiegi ×200 vs T3: GIG śr. 1398 vs 1449 (szum), marża 0,281 vs 0,265, ostrzeżenia puli 0, zapis +0,3%. R5: premia 0,60, cel za cel min(5% budżetu; 1% aktywów × mnożnik; 3000 zł); ⚠️ cele R5 dla niższych stanowisk niespełnione (mały fundusz w symulacji), u CEO cele korporacji do 64% wpływów — wracamy w 0.15 H1 |
+| 0.14.2 | P1 (instytuty: kurs z zysków, licencje √technologii), P2 (emisja ratunkowa per spółka) | ✅ `5a9108d`, `b98864d`, `e876a20`; instytuty po 3. roku 0,7–1,0× wartości godziwej, kurs ×13 w 12 lat; P2 odtworzone i naprawione (test „zapłata = przyrost akcji”) |
+| 0.14.2 | P3–P10 | ⬜ w toku |
 | 0.14 | T4–T6 | ⬜ nie zaczęte (T6 dopisane 2026-10-12) |
 | 0.15 | Hossa i bessa (H0–H6) | ⬜ plan, nie zaczęte |
 | 0.16 | Giełda międzynarodowa G0–G8 (dawniej 0.15) | ⬜ szkic, nie zaczęte |
