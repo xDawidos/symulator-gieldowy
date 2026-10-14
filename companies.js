@@ -3124,6 +3124,8 @@ function processFinancialReports() {
         };
 
         // Gotówka: zysk netto + amortyzacja (koszt niegotówkowy). Aktywa i kapitał: zysk netto.
+        // 0.14.2 P10: strata większa niż gotówka (np. KFX startuje z gotówką 0) — kredyt przed obciążeniem, nie po nim.
+        const preBorrowed = !stock.assetType && operatingCashResult + nonCashCosts < 0 ? ensureCompanyCash(stock, -(operatingCashResult + nonCashCosts), 'Kredyt na płynność po stracie') : 0;
         adjustCompanyCash(stock, operatingCashResult + nonCashCosts);
         adjustBalanceSheet(stock, { assets: operatingCashResult, retainedEarnings: operatingCashResult });
 
@@ -3173,8 +3175,8 @@ function processFinancialReports() {
         // Finansowanie: decyzje na podstawie pełnego wyniku (z R&D i kontraktami).
         if (reportedQuarterlyEarnings < 0 && stock.assetType !== 'Holding' && !stock.isBankStock) {
             // Firma ze stratą zaciąga mały dług, aby zachować płynność (gotówka i dług rosną razem).
-            const debtIncrease = Math.abs(reportedQuarterlyEarnings) * getRandomInRange(0.1, 0.4);
-            borrowForCompany(stock, debtIncrease, 'Kredyt na płynność po stracie');
+            const debtIncrease = Math.abs(reportedQuarterlyEarnings) * getRandomInRange(0.1, 0.4) - preBorrowed; // P10: kredyt sprzed obciążenia się wlicza
+            if (debtIncrease > 0) borrowForCompany(stock, debtIncrease, 'Kredyt na płynność po stracie');
         } else if (reportedQuarterlyEarnings > 0 && stock.balanceSheet.liabilities > 0 && stock.cash > 0) {
             // Firma z zyskiem spłaca część długu.
             const debtRepayment = Math.min(stock.cash * 0.5, reportedQuarterlyEarnings * getRandomInRange(0.1, 0.3));
@@ -7110,6 +7112,20 @@ function borrowForCompany(stock, amount, purpose = 'Kredyt') {
     return value;
 }
 
+/** 0.14.2 P10: przed wydatkiem — brakującą część kredytem, żeby gotówka nie zeszła poniżej zera nawet na chwilę. Zwraca kredyt. */
+function ensureCompanyCash(stock, amount, purpose = 'Kredyt na pokrycie wydatku') {
+    const shortfall = Number(amount) - Math.max(0, Number(stock?.cash) || 0);
+    if (!stock || !(shortfall > 0)) return 0;
+    return borrowForCompany(stock, shortfall + 1, purpose);
+}
+
+/** 0.14.2 P10: koszt decyzji strategii (rozszerzenie, podsektor, nisza, pivot) — brak gotówki pokrywa kredyt przed zapłatą. */
+function payStrategyCost(stock, cost, recipient, purpose) {
+    ensureCompanyCash(stock, cost, `Kredyt: ${purpose}`);
+    adjustCompanyCash(stock, -cost);
+    if (typeof recordPayment === 'function') recordPayment(stock, recipient, cost, purpose);
+}
+
 /** P3: kredyt ratunkowy — gotówka spółki wraca do zera z buforem 5% straty kwartału. Zwraca kwotę kredytu. */
 function coverNegativeCash(stock, quarterResult = 0) {
     if (!stock || stock.assetType || !(Number(stock.cash) < 0)) return 0;
@@ -10479,9 +10495,7 @@ function pickExpansionSector(stock) {
 function startExpansion(stock, sector, quarter = getStrategyQuarter(), by = 'ceo') {
     if (!sector || stock.segments.some(seg => seg.sector === sector)) return null;
     const cost = Math.round(getAnnualRevenue(stock) * getRandomInRange(...EXPANSION_COST));
-    adjustCompanyCash(stock, -cost); // gotówka → budowa nowego segmentu (aktywa bez zmian do rozliczenia)
-    if (typeof recordPayment === 'function') recordPayment(stock, 'external:rozszerzenie', cost, `Rozszerzenie o segment ${sector}`);
-    if (typeof coverNegativeCash === 'function') coverNegativeCash(stock);
+    payStrategyCost(stock, cost, 'external:rozszerzenie', `Rozszerzenie o segment ${sector}`); // gotówka → budowa nowego segmentu (aktywa bez zmian do rozliczenia)
     const related = stock.segments.some(seg => areSectorsRelated(seg.sector, sector));
     ensureStrategy(stock).process = { type: 'expand', sector, related, cost, by, startQuarter: quarter, dueQuarter: quarter + getRandomIntInRange(...EXPANSION_QUARTERS) };
     noteStrategyStat('expansions');
@@ -10598,10 +10612,8 @@ function startSubsectorEntry(stock, subsector = null, quarter = getStrategyQuart
     const options = Object.entries(SECTORS[seg.sector].subsectors).filter(([name]) => !name.startsWith('Bank '));
     const chosen = subsector && options.some(([name]) => name === subsector) ? subsector : getRandomElement(options)[0];
     const cost = Math.round(getAnnualRevenue(stock) * getRandomInRange(...SUBSECTOR_ENTRY_COST));
-    adjustCompanyCash(stock, -cost);
+    payStrategyCost(stock, cost, 'external:podsektor', `Wejście w podsektor ${chosen}`);
     adjustBalanceSheet(stock, { assets: -cost, retainedEarnings: -cost }); // koszt okresu (kompetencje, licencje)
-    if (typeof recordPayment === 'function') recordPayment(stock, 'external:podsektor', cost, `Wejście w podsektor ${chosen}`);
-    if (typeof coverNegativeCash === 'function') coverNegativeCash(stock);
     ensureStrategy(stock).process = { type: 'subsector', sector: seg.sector, subsector: chosen, cost, by, startQuarter: quarter, dueQuarter: quarter + getRandomIntInRange(...SUBSECTOR_ENTRY_QUARTERS) };
     logEvent(`🎯 ${stock.name} wchodzi w podsektor ${chosen} (${seg.sector}) — ${stock.strategy.process.dueQuarter - quarter} kw., koszt ${formatZl(cost, 0)}.`, 'company');
     return stock.strategy.process;
@@ -10664,10 +10676,8 @@ function startNiche(stock, niche = null, quarter = getStrategyQuarter(), by = 'c
     if (!options.length) return null;
     const chosen = niche && options.includes(niche) ? niche : getRandomElement(options);
     const cost = Math.round(getAnnualRevenue(stock) * getRandomInRange(...NICHE_COST));
-    adjustCompanyCash(stock, -cost);
+    payStrategyCost(stock, cost, 'external:specjalizacja', `Specjalizacja ${chosen}`);
     adjustBalanceSheet(stock, { assets: -cost, retainedEarnings: -cost });
-    if (typeof recordPayment === 'function') recordPayment(stock, 'external:specjalizacja', cost, `Specjalizacja ${chosen}`);
-    if (typeof coverNegativeCash === 'function') coverNegativeCash(stock);
     const strategy = ensureStrategy(stock);
     strategy.process = { type: 'niche', sector: seg.sector, niche: chosen, change: Boolean(seg.niche), cost, by, startQuarter: quarter, dueQuarter: quarter + NICHE_QUARTERS };
     strategy.nicheLockUntil = quarter + NICHE_LOCK_QUARTERS;
@@ -10771,10 +10781,8 @@ function startPivot(stock, toSector = null, quarter = getStrategyQuarter(), by =
     const to = toSector && toSector !== from ? toSector : pickPivotSector(stock);
     if (!to || to === from || (!stock.segments.some(seg => seg.sector === to) && stock.segments.length >= MAX_SEGMENTS)) return null;
     const cost = Math.round(getAnnualRevenue(stock) * PIVOT_COST);
-    adjustCompanyCash(stock, -cost);
+    payStrategyCost(stock, cost, 'external:pivot', `Zmiana profilu na ${to}`);
     adjustBalanceSheet(stock, { assets: -cost, retainedEarnings: -cost });
-    if (typeof recordPayment === 'function') recordPayment(stock, 'external:pivot', cost, `Zmiana profilu na ${to}`);
-    if (typeof coverNegativeCash === 'function') coverNegativeCash(stock);
     const created = !stock.segments.some(seg => seg.sector === to);
     if (created) addStockSegment(stock, to, 0.05);
     const total = getRandomInRange(...PIVOT_SHIFT);

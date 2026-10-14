@@ -5972,6 +5972,54 @@ group('0.14.2 P2: emisja ratunkowa — oferty per spółka; zapłata funduszu = 
     });
 });
 
+group('0.14.2 P10: gotówka spółki nie schodzi poniżej zera (strategia T3, strata w raporcie)', () => {
+    function watchNegative(fn) {
+        const orig = adjustCompanyCash, hits = [];
+        adjustCompanyCash = function (stock, amount, ...rest) {
+            const r = orig.call(this, stock, amount, ...rest);
+            if (Number(stock.cash) < 0) hits.push(`${stock.symbol}: ${Math.round(stock.cash)}`);
+            return r;
+        };
+        try { fn(); } finally { adjustCompanyCash = orig; }
+        return hits;
+    }
+    function poorCompany() {
+        const a = makeCompany('POOR', { cash: 0, fixedAssets: 3_000_000 });
+        resetWorld([a]);
+        ensureAllStockSegments();
+        initializeFundamentals(a, true);
+        a.cash = 1000; a.financialHealth = 2;
+        return a;
+    }
+
+    test('pivot, rozszerzenie, podsektor i nisza przy pustej kasie: kredyt przed zapłatą, gotówka ≥ 0', () => {
+        for (const start of [
+            a => startPivot(a, 'Technologia', 0),
+            a => startExpansion(a, 'Chemia', 0),
+            a => startSubsectorEntry(a, null, 0),
+            a => { a.segments = [{ sector: 'Medycyna', subsector: null, share: 1 }]; a.sector = ['Medycyna']; return startNiche(a, 'Farmaceutyki', 0); }
+        ]) {
+            const a = poorCompany();
+            const debt0 = a.balanceSheet.liabilities;
+            let result;
+            const hits = watchNegative(() => { result = start(a); });
+            assert(hits.length === 0, hits.join('; '));
+            if (result) assert(a.balanceSheet.liabilities > debt0 && a.cash >= 0, `kredyt ${a.balanceSheet.liabilities - debt0}, gotówka ${a.cash}`);
+        }
+    });
+
+    test('raport ze stratą większą niż gotówka (jak KFX): kredyt przed obciążeniem, dług nie rośnie podwójnie', () => {
+        const a = poorCompany();
+        a.cash = 0;
+        a.fixedExpenses = 400_000; // pewna strata kwartału
+        const debt0 = a.balanceSheet.liabilities;
+        const hits = watchNegative(() => processFinancialReports());
+        assert(hits.length === 0 && a.cash >= 0, hits.join('; '));
+        const loss = -a.lastReportBreakdown.total;
+        assert(loss > 0 && a.balanceSheet.liabilities - debt0 <= loss * 1.6, `dług +${Math.round(a.balanceSheet.liabilities - debt0)} przy stracie ${Math.round(loss)}`);
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;
