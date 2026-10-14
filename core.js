@@ -2017,6 +2017,27 @@ function getMainSubsector(stock) {
     return getMainSegment(stock)?.subsector || null;
 }
 
+// 0.14.1 R6: opis działalności pod nazwą spółki — segmenty od największego, „Sektor (podsektor, nisza)”, rozdzielone „ · ”.
+const stockActivityCache = new WeakMap();
+function getStockActivityLabel(stock) {
+    if (!stock || typeof stock !== 'object') return '';
+    const key = getStockSegmentKey(stock);
+    const cached = stockActivityCache.get(stock);
+    if (cached && cached.key === key) return cached.label;
+    const label = [...getStockSegments(stock)].sort((a, b) => b.share - a.share).map(seg => {
+        const parts = [seg.subsector, seg.niche].filter(Boolean);
+        return parts.length ? `${seg.sector} (${parts.join(', ')})` : seg.sector;
+    }).join(' · ');
+    stockActivityCache.set(stock, { key, label });
+    return label;
+}
+
+/** Kolejność sektorów w tabeli spółek (grupy rejestru); spółki bez sektora na końcu. */
+function getSectorDisplayOrder(sector) {
+    const index = SECTOR_NAMES.indexOf(sector);
+    return index < 0 ? SECTOR_NAMES.length : index;
+}
+
 /** Spółka ma segment w danym sektorze (główny albo poboczny). */
 function hasSectorSegment(stock, sector) {
     return getStockSegments(stock).some(seg => seg.sector === sector);

@@ -835,6 +835,8 @@ function displayCash() {
 
 
 
+const STOCK_TABLE_COLS = 6; // 0.14.1 R6: bez kolumny „Sektor”
+
 function displayStocks(previousInputValues = {}) {
   const stockTableBody = document.getElementById('stock-table-body');
   if (!stockTableBody) return;
@@ -934,7 +936,8 @@ function displayStocks(previousInputValues = {}) {
     const mainSector = getMainSector(stock);
     // T1c: ◐ — spółka widoczna dzięki segmentowi pobocznemu (przełącznik „także segmenty poboczne”).
     const viaSecondary = sectorFilterState.secondary && sectorFilterState.sector !== 'all' && mainSector !== sectorFilterState.sector;
-    const primarySector = mainSector ? `${viaSecondary ? `◐ ${sectorFilterState.sector} (poboczny) · ` : ''}${mainSector}` : 'Rynek';
+    const activity = getStockActivityLabel(stock); // 0.14.1 R6: działalność pod nazwą zamiast kolumny „Sektor”
+    const primarySector = mainSector ? `${viaSecondary ? `◐ ${sectorFilterState.sector} (poboczny) · ` : ''}${activity || mainSector}` : 'Rynek';
     const availabilityPct =
       stock.totalShares > 0
         ? Math.max(
@@ -1037,11 +1040,7 @@ function displayStocks(previousInputValues = {}) {
 
     nameCell.appendChild(identityWrap);
 
-    // KOMÓRKA 2: SEKTOR
-    const sectorCell = row.insertCell();
-    sectorCell.textContent = primarySector;
-
-    // KOMÓRKA 3: CENA
+    // KOMÓRKA 2: CENA
     const priceCell = row.insertCell();
     priceCell.classList.add('cell-number', 'cell-price');
     priceCell.innerHTML = `
@@ -1198,7 +1197,7 @@ function displayStocks(previousInputValues = {}) {
     const ids = typeof getInternetMarketIds === 'function' ? getInternetMarketIds().filter(id => ['active', 'startup'].includes(marketOperators[id].status)) : [];
     if (!ids.length) {
       const cell = stockTableBody.insertRow().insertCell();
-      cell.colSpan = 7;
+      cell.colSpan = STOCK_TABLE_COLS;
       cell.className = 'text-muted text-sm';
       cell.textContent = 'Żaden rynek internetowy jeszcze nie działa. XTD, PLU5 i kolejne rynki powstają jako startupy w inkubatorze — mają gwarancję debiutu.';
     }
@@ -1213,7 +1212,7 @@ function displayStocks(previousInputValues = {}) {
       const headerRow = stockTableBody.insertRow();
       headerRow.className = 'exchange-header internet-market-header';
       const headerCell = headerRow.insertCell();
-      headerCell.colSpan = 7;
+      headerCell.colSpan = STOCK_TABLE_COLS;
       headerCell.innerHTML = `<div class="d-flex justify-between items-center gap-2 flex-wrap">
           <h4 class="my-1 clickable" style="color:${def.color}" onclick="toggleExchangeVisibility('${key}')">🌐 ${escapeHtml(def.name)} <span class="text-xs text-muted">${escapeHtml(def.short || id)} · prowizja ${((def.commission || 0) * 100).toFixed(2)}% · spółki ${getMarketMembers(id).length}/${INTERNET_MEMBER_LIMIT}${operator.status === 'startup' ? ' · operator w inkubatorze' : ''}</span> <span>${collapsed ? '▶' : '▼'}</span></h4>
           ${operator.status === 'active' ? (concession ? '<span class="text-up text-sm">🔑 koncesja: handel bez prowizji</span>' : `<button class="btn-xs" onclick="event.stopPropagation(); buyInternetConcession('${id}'); displayStocks(getCurrentInputValues());">🔑 Koncesja (${formatZl(getInternetConcessionCost(id), 0)})</button>`) : ''}
@@ -1225,6 +1224,15 @@ function displayStocks(previousInputValues = {}) {
     }
   }
 
+  // --- 0.14.1 R6: nagłówek rynku GPW (rynki internetowe mają własne nagłówki w zakładce „Internet”) ---
+  if (!internetTab && baseStocksToDisplay.some(stock => sortedExchanges.includes(stock.exchange))) {
+    const marketCell = stockTableBody.insertRow();
+    marketCell.className = 'exchange-header market-header';
+    const cell = marketCell.insertCell();
+    cell.colSpan = STOCK_TABLE_COLS;
+    cell.innerHTML = '<h4 class="my-1">🏛️ GPW — Giełda Papierów Wartościowych</h4>';
+  }
+
   // --- Pętla renderująca giełdy ---
   if (!internetTab) sortedExchanges.forEach(exchangeKey => {
     const exchange = exchanges[exchangeKey];
@@ -1232,18 +1240,18 @@ function displayStocks(previousInputValues = {}) {
       stock => stock.exchange === exchangeKey
     );
 
-    if (currentSortState === 'price_asc') {
-      stocksOnThisExchange.sort((a, b) => a.price - b.price);
-    } else if (currentSortState === 'price_desc') {
-      stocksOnThisExchange.sort((a, b) => b.price - a.price);
-    }
+    // 0.14.1 R6: grupy sektora głównego w kolejności rejestru; sortowanie po cenie wewnątrz grupy.
+    const sectorOf = new Map(stocksOnThisExchange.map(stock => [stock, getMainSector(stock)]));
+    const priceDir = currentSortState === 'price_asc' ? 1 : currentSortState === 'price_desc' ? -1 : 0;
+    stocksOnThisExchange.sort((a, b) =>
+      (getSectorDisplayOrder(sectorOf.get(a)) - getSectorDisplayOrder(sectorOf.get(b))) || (priceDir ? (a.price - b.price) * priceDir : 0));
 
     if (stocksOnThisExchange.length > 0) {
       const headerRow = stockTableBody.insertRow();
       headerRow.className = 'exchange-header';
       headerRow.onclick = () => toggleExchangeVisibility(exchangeKey);
       const headerCell = headerRow.insertCell();
-      headerCell.colSpan = 7;
+      headerCell.colSpan = STOCK_TABLE_COLS;
       const icon = exchangeCollapseState[exchangeKey] ? '▶' : '▼';
       headerCell.innerHTML = `<h4 style="color: ${
         exchange.color
@@ -1252,7 +1260,18 @@ function displayStocks(previousInputValues = {}) {
       }<span>${icon}</span></h4>`;
     }
 
+    let lastSector;
     stocksOnThisExchange.forEach(stock => {
+      const sector = sectorOf.get(stock) || null;
+      if (sector !== lastSector) {
+        lastSector = sector;
+        const subRow = stockTableBody.insertRow();
+        subRow.className = 'sector-subheader';
+        if (exchangeCollapseState[exchangeKey]) subRow.style.display = 'none';
+        const subCell = subRow.insertCell();
+        subCell.colSpan = STOCK_TABLE_COLS;
+        subCell.textContent = `─ ${sector ? `${SECTORS[sector]?.icon || ''} ${sector}` : 'Pozostałe'} ─`;
+      }
       const mainRow = renderStockRow(stock, false);
       if (exchangeCollapseState[exchangeKey]) mainRow.style.display = 'none';
 

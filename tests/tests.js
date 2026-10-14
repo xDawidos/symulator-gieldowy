@@ -5704,6 +5704,63 @@ group('0.14.1 R5: portfel prywatny — cele korporacji i nagroda z festynu', () 
     });
 });
 
+group('0.14.1 R6: widok spółek — rynek → poziom → sektor, opis działalności', () => {
+    const seg = (stock, segments) => { stock.segments = segments; stock.sector = getSectorsFromSegments(segments); return stock; };
+
+    test('opis działalności: 1, 2 i 3 segmenty, podsektor i nisza, od największego', () => {
+        const a = seg(makeCompany('AAA'), [{ sector: 'Bankowość', subsector: 'Bank komercyjny', share: 1 }]);
+        assert(getStockActivityLabel(a) === 'Bankowość (Bank komercyjny)', getStockActivityLabel(a));
+        const b = seg(makeCompany('BBB'), [{ sector: 'Technologia', subsector: null, share: 0.3 }, { sector: 'Finanse', subsector: 'Fintech', share: 0.7 }]);
+        assert(getStockActivityLabel(b) === 'Finanse (Fintech) · Technologia', getStockActivityLabel(b));
+        const c = seg(makeCompany('CCC'), [{ sector: 'Medycyna', subsector: 'Biotechnologia', niche: 'Farmaceutyki', share: 0.5 }, { sector: 'Badania', subsector: null, share: 0.2 }, { sector: 'Technologia', subsector: 'Sztuczna inteligencja', share: 0.3 }]);
+        assert(getStockActivityLabel(c) === 'Medycyna (Biotechnologia, Farmaceutyki) · Technologia (Sztuczna inteligencja) · Badania', getStockActivityLabel(c));
+        c.segments[0].share = 0.1; c.segments[1].share = 0.6; c.sector = getSectorsFromSegments(c.segments);
+        assert(getStockActivityLabel(c).startsWith('Badania · '), 'cache odświeża się po zmianie udziałów');
+    });
+
+    test('tabela: rynek → poziom → podnagłówek sektora; cena sortowana w sektorze; zależna pod matką', () => {
+        const mk = (symbol, sector, price, exchange = 'BRONZE') => { const s = seg(makeCompany(symbol), [{ sector, subsector: null, share: 1 }]); s.price = price; s.exchange = exchange; return s; };
+        const tech1 = mk('TEA', 'Technologia', 50), bank1 = mk('BKA', 'Bankowość', 10), tech2 = mk('TEB', 'Technologia', 20), bank2 = mk('BKB', 'Bankowość', 30);
+        const child = mk('SUB', 'Gaming', 5); child.isSubsidiaryOf = 'TEA'; tech1.subsidiaries = ['SUB'];
+        resetWorld([tech1, bank1, tech2, bank2, child]);
+        const table = document.createElement('table'); const body = document.createElement('tbody'); body.id = 'stock-table-body'; table.appendChild(body); document.body.appendChild(table);
+        const saved = { sort: currentSortState, filter: sectorFilterState, level: currentMarketLevel, owned: ownedOnlyFilter };
+        try {
+            sectorFilterState = { sector: 'all', subsector: null, secondary: false, type: 'all' }; currentMarketLevel = 'ALL'; ownedOnlyFilter = false;
+            currentSortState = 'price_asc';
+            displayStocks();
+            const rows = [...body.rows].map(r => r.classList.contains('market-header') ? 'M' : r.classList.contains('exchange-header') ? 'E' : r.classList.contains('sector-subheader') ? r.textContent.replace(/[^A-Za-zżąśćęłóźńŻĄŚĆĘŁÓŹŃ]/g, '') : r.dataset.symbol);
+            assert(rows.join(',') === 'M,E,Bankowość,BKA,BKB,Technologia,TEB,TEA,SUB', rows.join(','));
+            assert(body.rows[0].cells[0].colSpan === 6 && document.querySelector('#stock-table-body tr[data-symbol="BKA"]').cells.length === 6, '6 kolumn');
+            currentSortState = 'price_desc';
+            displayStocks();
+            const order = [...body.rows].map(r => r.dataset.symbol).filter(Boolean);
+            assert(order.join(',') === 'BKB,BKA,TEA,SUB,TEB', order.join(','));
+            assert(body.querySelector('tr[data-symbol="BKA"] .stock-meta').textContent.startsWith('Bankowość'), 'opis pod nazwą');
+            sectorFilterState = { sector: 'Bankowość', subsector: null, secondary: false, type: 'all' };
+            displayStocks();
+            assert(![...body.rows].some(r => r.classList.contains('sector-subheader') && r.textContent.includes('Technologia')), 'pusty podnagłówek ukryty przy filtrze');
+        } finally {
+            currentSortState = saved.sort; sectorFilterState = saved.filter; currentMarketLevel = saved.level; ownedOnlyFilter = saved.owned;
+            table.remove();
+        }
+    });
+
+    test('wydajność: displayStocks przy ~110 spółkach', () => {
+        const list = Array.from({ length: 110 }, (_, i) => { const s = seg(makeCompany(`P${i}`), [{ sector: SECTOR_NAMES[i % SECTOR_NAMES.length], subsector: null, share: 1 }]); s.price = 10 + i; return s; });
+        resetWorld(list);
+        const table = document.createElement('table'); const body = document.createElement('tbody'); body.id = 'stock-table-body'; table.appendChild(body); document.body.appendChild(table);
+        try {
+            displayStocks();
+            const t0 = performance.now();
+            for (let i = 0; i < 5; i++) displayStocks();
+            const ms = (performance.now() - t0) / 5;
+            window.__r6DisplayMs = ms;
+            assert(ms < 100, `displayStocks: ${ms.toFixed(1)} ms`);
+        } finally { table.remove(); }
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;
