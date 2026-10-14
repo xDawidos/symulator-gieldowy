@@ -8746,7 +8746,10 @@ function handleSuccessfulIPO(startup, successMultiplier) {
     const shareBase = Math.max(totalClaims, Number(startup.fundingGoal) || 0);
     for (const claim of claims) {
         const shares = shareBase > 0 ? Math.floor(investorShares * claim.amount / shareBase) : 0;
-        if (shares <= 0) continue;
+        if (shares <= 0) {
+            if (claim.pool) notePoolLedger(claim.kind === 'player' ? 'player' : claim.id, 'lost', claim.contribution); // 0.14.2: wkład puli za mały na 1 akcję — księga bez rozjazdu
+            continue;
+        }
         sharesHeld += shares;
         if (claim.kind === 'player') {
             const holding = playerPortfolio[symbol] || { shares: 0, avgPrice: ipoPrice, assetType: 'stock' };
