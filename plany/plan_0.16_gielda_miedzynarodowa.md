@@ -1,4 +1,4 @@
-# Plan 0.15 „Giełda międzynarodowa” (szkic, po 0.14; mapa całości: `plan_0.13-0.15_mapa.md`)
+# Plan 0.16 „Giełda międzynarodowa” (szkic, po 0.15 „Hossa i bessa”; dawniej 0.15; mapa całości: `plan_0.13-0.16_mapa.md`)
 
 Cel: nasza giełda wychodzi za granicę.
 - Dochodzą waluty i kantor, a potem forex.
@@ -13,7 +13,7 @@ Czego to uczy:
 
 Kolejność: G0 → G1 → G2 → G3 → G4 → G5 → G6 → G7 → G8. Każdy etap z testami, przebiegiem ×200 (po 0.14 T0) i commitem.
 
-**Zależność:** budujemy po 0.14, bo korzystamy z jej segmentów (T1), podsektorów (T2), specjalizacji-nisz (T3), spin-offów (T4) i spółek zależnych (T6). Pracownicy i związki z 0.13 obejmują też spółki zagraniczne (G2, „Profil kraju”).
+**Zależność:** budujemy po 0.14 i po 0.15 „Hossa i bessa” (nastrój rynku, fazy, bańki i krachy obejmą potem także rynki zagraniczne — korelacja i zarażanie między krajami), a także po 0.14, bo korzystamy z jej segmentów (T1), podsektorów (T2), specjalizacji-nisz (T3), spin-offów (T4) i spółek zależnych (T6). Pracownicy i związki z 0.13 obejmują też spółki zagraniczne (G2, „Profil kraju”).
 
 ---
 
@@ -385,10 +385,10 @@ Polski Grzegorz „Bankier” Kacperczyk zostaje bez zmian.
   - zakładka Miasto: lotnisko (budowa przez przetarg, sprzedaż biletów, animacja startu);
   - okno wydarzenia „Gigant wkracza na scenę” z pauzą gry;
   - karta spółki: kraj, waluta, cena w walucie i w złotych.
-- **Zapis v15:**
+- **Zapis v16:**
   - zapisujemy: kursy walut, `cashByCurrency`, bilety, dołączone kraje, szanse wydarzeń;
   - spółki krajów, które nie dołączyły, **nie trafiają do zapisu**;
-  - migracja v14 → v15: stara gra dostaje waluty i kantor, ale bez nowych krajów.
+  - migracja v15 → v16: stara gra dostaje waluty i kantor, ale bez nowych krajów.
 - **Testy:**
   - przeliczenia `toPln` i NAV przy zmianie kursu;
   - niezmiennik akcji dla spółek w walutach;

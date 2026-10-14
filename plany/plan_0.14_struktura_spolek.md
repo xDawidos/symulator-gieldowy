@@ -1,4 +1,4 @@
-# Plan 0.14 „Struktura spółek” (po 0.13; mapa całości: `plan_0.13-0.15_mapa.md`)
+# Plan 0.14 „Struktura spółek” (po 0.13; mapa całości: `plan_0.13-0.16_mapa.md`)
 
 Cel: spółki żyją jak prawdziwe grupy kapitałowe.
 - Zaczynają w jednej branży, rozszerzają działalność na kolejne segmenty, specjalizują się albo zmieniają profil.
@@ -16,7 +16,7 @@ Czego to uczy:
 
 Kolejność: T0 (✅ zrobione, `117feec`) → T1 → T2 → T3 → T4 → T5 → T6. Każda część z testami, przebiegiem ×200 i commitem.
 
-**Warunek startu:** domknięty etap A z mapy (`plan_0.13-0.15_mapa.md`): weryfikacja 0.13.1 i pomiar 0.13.
+**Warunek startu:** domknięty etap A z mapy (`plan_0.13-0.16_mapa.md`): weryfikacja 0.13.1 i pomiar 0.13.
 
 ---
 
@@ -41,7 +41,7 @@ Kolejność: T0 (✅ zrobione, `117feec`) → T1 → T2 → T3 → T4 → T5 →
 - Typ banku `Międzynarodowy` (`BANK_TYPES.INTERNATIONAL`) trafił do `stock.sector` jako etykieta bez profilu i pojawia się jako chip filtra.
 - Etykieta `Usługi` dopisywana jako druga „z rozpędu” (np. przy Mediach i pożyczkach) zapycha filtr.
 - Mediany, Akademia i skaner biorą `sector[0]`, więc kolejność w tablicy decyduje o porównaniu.
-- Gaming ma profil, ale 0 spółek (spółki dochodzą w 0.15 G0).
+- Gaming ma profil, ale 0 spółek (spółki dochodzą w 0.16 G0).
 
 **Rozwiązanie:**
 - **Jeden rejestr `SECTORS`** (w `core.js`, zastępuje rozproszone listy): nazwa, ikona, grupa, profil (`SECTOR_PROFILES`), podsektory (T2). Jest jedynym źródłem dla profili, cykli, mediany, filtrów, skanera i Akademii.
@@ -74,7 +74,7 @@ Kolejność: T0 (✅ zrobione, `117feec`) → T1 → T2 → T3 → T4 → T5 →
 - **Reguła drugiej etykiety:** sektor poboczny zostaje tylko wtedy, gdy jest prawdziwym segmentem (T1b, udział ≥ 20%). Doklejone `Usługi` usuwamy, jeśli spółka nie ma takiego segmentu.
 - **Cykle sektorów:** `macro.sectorCycles` tylko dla kanonicznych sektorów. Przy migracji cykl zdublowanej nazwy znika, a zostaje cykl sektora docelowego.
 - **Typ instrumentu osobno od sektora:** REIT, holding, ETF, startup, fundusz i operator rynku to **filtr „Typ”**, a nie chip sektora. Dziś REIT jest wyjątkiem w `getMarketSectorList`.
-- **Test rejestru:** każda spółka (także startupy, zbrojeniówka, przykrywki mafii i spółki z 0.15) ma wyłącznie sektory z rejestru; brak `Międzynarodowy`, `common` i starych nazw po migracji.
+- **Test rejestru:** każda spółka (także startupy, zbrojeniówka, przykrywki mafii i spółki z 0.16) ma wyłącznie sektory z rejestru; brak `Międzynarodowy`, `common` i starych nazw po migracji.
 
 ### T1b. Segmenty działalności
 
@@ -112,7 +112,7 @@ Jeden do trzech podsektorów na sektor (Bankowość ma trzy z porządku nazw w T
 | Nieruchomości | Magazyny | beta 1,0, wzrost +2 pp | — |
 | Transport i logistyka | Lotnictwo | beta 1,8, wrażliwość na ceny energii | — |
 | Transport i logistyka | Logistyka | profil dawnej Logistyki (C/Z 14, wzrost +1 pp) | — |
-| Bankowość | Bank komercyjny / inwestycyjny / międzynarodowy | inwestycyjny: beta 1,4, zmienność ×1,2; międzynarodowy: wrażliwość na kursy walut (0.15) | — (porządek nazw z T1a) |
+| Bankowość | Bank komercyjny / inwestycyjny / międzynarodowy | inwestycyjny: beta 1,4, zmienność ×1,2; międzynarodowy: wrażliwość na kursy walut (0.16) | — (porządek nazw z T1a) |
 | Finanse | Pożyczki konsumenckie | C/Z 10, stopy 0,8 (dawne `Finanse Konsumenckie`) | — |
 | Finanse | Rynki kapitałowe | beta 1,5 (obroty rosną w hossie) | — |
 | Obronność | Drony | wzrost +4 pp, C/Z 22 | — |
@@ -137,9 +137,9 @@ Decyzje podejmuje prezes według cech, kondycji i cykli. **Większościowiec mo�
 - **Wejście w podsektor:**
   - Koszt 5–10% rocznych przychodów, 2–4 kw.
   - Segment dostaje podsektor. Przy udziale ≥ 70% jednego segmentu spółka dostaje premię „skupienia”: marża +1,5 pp.
-- **Specjalizacja (nisza) — pojęcie wspólne z 0.15:**
+- **Specjalizacja (nisza) — pojęcie wspólne z 0.16:**
   - Lżejsza od podsektora etykieta segmentu: **bez własnego profilu wyceny**, z jednym modyfikatorem albo jednym typem zdarzeń.
-  - Lista na 0.14: Media → TV, Rozrywka; Medycyna → Farmaceutyki; Technologia → Wywiad i obronność. 0.15 dopisuje Motoryzacja → Premium.
+  - Lista na 0.14: Media → TV, Rozrywka; Medycyna → Farmaceutyki; Technologia → Wywiad i obronność. 0.16 dopisuje Motoryzacja → Premium.
   - Przykłady modyfikatorów: TV i Rozrywka — zdarzenie „hit albo klapa sezonu”; Farmaceutyki — marża +2 pp i ryzyko wygaśnięcia patentu; Wywiad — przychody rosną z wydatkami na obronność.
   - Koszt 3–5% rocznych przychodów, 2 kw.; zmiana specjalizacji kosztuje tyle samo i zeruje premię „skupienia” na 2 kw.
 - **Zmiana profilu (pivot):**
@@ -280,7 +280,7 @@ Cel: przebiegi symulacyjne (6,5 roku gry) trwają dziś przy ×50 ok. 2,5–3 mi
 3. **Warunek wstępny:** błąd „więcej akcji niż wolny obrót” (bank inwestycyjny + ETF) naprawiono w 0.13.1. Przed T4 trzeba go potwierdzić długim przebiegiem (mapa, A1).
 4. **Limit przy spin-offie:** luźny limit krajowy ok. 110 — spin-off dozwolony do 115 spółek krajowych, powyżej tylko carve-out (córka zależna nie liczy się do limitu krajowego).
 5. **Spółki zależne** (z pliku pomysłów) wchodzą do 0.14 jako T6.
-6. **Pojęcia:** podsektor ma własny profil wyceny (T2); specjalizacja to lżejsza etykieta niszy z jednym modyfikatorem (T3) — tak samo w 0.15.
+6. **Pojęcia:** podsektor ma własny profil wyceny (T2); specjalizacja to lżejsza etykieta niszy z jednym modyfikatorem (T3) — tak samo w 0.16.
 7. **Porządek kategorii** w 0.14 T1 (T1a), przed segmentami: jedna migracja zapisu.
 8. **Bankowość i Finanse** to dwa sektory z podsektorami: Bankowość (bank komercyjny, inwestycyjny, międzynarodowy) i Finanse (pożyczki konsumenckie, rynki kapitałowe, fintech).
 9. **Transport i Logistyka** łączą się w sektor „Transport i logistyka” z podsektorami Logistyka i Lotnictwo.

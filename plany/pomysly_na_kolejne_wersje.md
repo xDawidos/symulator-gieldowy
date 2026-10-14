@@ -2,7 +2,7 @@
 
 Notatki z planowania, jeszcze bez planu. Każdy punkt przed budową dostaje własny plan z decyzjami.
 
-## Rynek pracy 2 (po 0.15)
+## Rynek pracy 2 (po 0.16)
 - **Podkupowanie ludzi:** spółki „wykupują” pracowników innych firm oraz prywatnych inwestorów, żeby u nich pracowali (nawiązanie do pracowników z 0.13).
 - **Odejścia i nowe firmy:** pracownicy mogą odchodzić i zakładać własne firmy, które trafiają do inkubatora jako startupy.
 
