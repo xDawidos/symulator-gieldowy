@@ -112,6 +112,7 @@ PRESETS['gracz-aktywny'] = PRESETS['fundusz-gig'] + `(function () {
             const last = playerFund?.periods?.at?.(-1);
             if (last) w.excess.push(Math.round((last.fundReturn - last.benchmarkReturn) * 10000) / 100);
             w.assets = Math.round(getFundAssets());
+            (w.assetsQ = w.assetsQ || []).push(w.assets);
         } catch (e) { (window.__presetErrors = window.__presetErrors || []).push(String(e)); }
         return r;
     };
