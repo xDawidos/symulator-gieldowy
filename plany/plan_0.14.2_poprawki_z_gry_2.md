@@ -12,7 +12,7 @@ Zgłoszenia użytkownika z gry (2026-10-14), ze zrzutami ekranu:
 - rynki ETF i akcji nie dają się zwinąć;
 - nie wiadomo, co znaczy „Impuls Innowacji”.
 
-Kolejność: **P1 → P2 najpierw** (błędy, które psują grę i pieniądze), potem P3 → P8. Każda część z testami, przebiegiem ×200 i commitem.
+Kolejność: **P1 → P2 najpierw** (błędy, które psują grę i pieniądze), potem P3 → P9. Każda część z testami, przebiegiem ×200 i commitem.
 
 **Koordynacja z 0.14.1:** R6 (widok spółek z podnagłówkami sektorów) i P3 dotykają tej samej tabeli. P3 robimy po R6 i na jego układzie: córka zawsze stoi pod matką, także gdy jest w innym sektorze.
 
@@ -147,6 +147,31 @@ Decyzja: **przewijany pasek newsów u góry i tylko ważne dymki.**
   - **dymek** na znaczniku fazy: co to za faza i w skrócie, co daje (np. „Impuls Innowacji: przełom badawczy, przez ok. X tyg. szybszy wzrost przychodów i wyższa zmienność”);
   - **hasło w Akademii** „Fazy rozwoju spółki” z listą faz, czasem trwania i wpływem na kurs i wyniki.
 
+## P9. Wycena spółek specjalnych i małych spółek ze stratą (znaleziska bezpiecznika z P1)
+
+Bezpiecznik z P1 (cena > 100× wartości godziwej albo C/Z > 1000) w przebiegach ×200 wskazał kolejne spółki bez sensownej kotwicy wyceny. Nie naprawiono ich w P1, bo wykraczały poza jego zakres.
+
+| Spółka / typ | Objaw | Prawdopodobna przyczyna (do potwierdzenia) |
+|---|---|---|
+| Banki BKMORT1, BKCOOP1 | wartość z majątku ok. 0, cena 60–130 | bilans banku (kapitał własny) nie jest podstawą wyceny banków-spółek |
+| TAX (biuro rachunkowe), WRN (windykator) | C/Z w dziesiątkach tysięcy | zysk liczony osobną ścieżką `assetType` (prowizje, odsetki) jest bliski zera względem ceny; brak kotwicy |
+| REIT HOR | ok. 47× wartości | REIT bez wyceny z NAV nieruchomości |
+| Zwykłe spółki SMAF, MAJB, KRA (20 lat) | cena > 100× przy ujemnym zysku i małym kapitale | przy stracie wartość godziwa z C/Z nie działa, a cena nie ma kotwicy w majątku ani przychodach |
+
+**Zasada naprawy:** każdy typ spółki ma jawny model wartości godziwej:
+- **banki:** C/WK sektora Bankowość × kapitał własny z bilansu; brak bilansu → inicjalizacja z kapitalizacji startowej;
+- **biuro rachunkowe, windykator, lombard:** C/Z sektora Finanse z ich własnego zysku, z podłogą wyceny z majątku (C/WK 0,5);
+- **REIT-y:** wartość aktywów netto (NAV) nieruchomości ± premia lub dyskonto 0–20%;
+- **holdingi:** NAV portfela (jest od 0.13.1 B11), sprawdzić kotwicę ceny;
+- **zwykłe spółki ze stratą:** wartość godziwa = max(C/WK sektora × kapitał własny × 0,5; C/S sektora × przychody × 0,3). Cena wraca do niej jak przy zysku, tylko wolniej.
+
+**Cele i testy:**
+- 20 lat ×200: **0 ostrzeżeń bezpiecznika** poza pierwszymi 2 kwartałami po wczytaniu starego zapisu, gdy działa migracja;
+- test dla każdego typu (bank, biuro rachunkowe, windykator, lombard, REIT, holding, spółka ze stratą): 500 kwartałów → cena 0,3–3× wartości godziwej;
+- migracja: cena > 10× wartości godziwej → jednorazowa rewizja z wpisem, jak w P1.
+
+**Skala licencji instytutów (otwarte z P1):** zysk instytutu rośnie liniowo z liczbą technologii na rynku (5 tys. zł/tech/kwartał dla każdego instytutu), więc kurs rośnie ok. ×50 w 12 lat. W 1.–2. roku kurs nie nadąża za zyskiem (stosunek 0,2–0,3). Decyzja użytkownika w czacie kodu; rekomendacja planowania: **licencje malejące** (np. pierwiastek z liczby technologii albo udział instytutu w rynku licencji dzielony między instytuty), żeby kurs rósł mniej więcej jak rynek.
+
 ---
 
 ## Zapis gry i testy
@@ -164,7 +189,7 @@ Decyzja: **przewijany pasek newsów u góry i tylko ważne dymki.**
 | Miara | Cel |
 |---|---|
 | Cena instytutów / wartość godziwa | 0,3–3× przez cały przebieg (także 20 lat) |
-| Spółki z ceną > 100× wartości godziwej | 0 |
+| Spółki z ceną > 100× wartości godziwej (każdy typ, 20 lat) | 0 (P9) |
 | Emisja ratunkowa: zapłata vs przyrost akcji gracza | zgodne w 100% przypadków |
 | Córki: różne nazwy / inny sektor niż matka | ≥ 75% unikalnych nazw / ≥ 50% |
 | Nazwy awaryjne („DejwCorp”) | ≤ 1 na grę |
