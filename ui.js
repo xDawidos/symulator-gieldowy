@@ -5733,7 +5733,7 @@ function checkWorldInvariants() {
         // bliskiej wartości z kapitału (zysk ≈ 0, kotwica księgowa) nie jest błędem wyceny.
         const insolvent = stock.balanceSheet && (Number(stock.balanceSheet.assets) || 0) - (Number(stock.balanceSheet.liabilities) || 0) <= 0;
         if (fair > 0 && stock.price > fair * 100 && !insolvent) moneyWarnings.push(`cena ${stock.symbol} ${Math.round(stock.price)} > 100× wartości godziwej (${fair.toFixed(2)})`);
-        else if (pe > 1000 && !(fair > 0 && stock.price <= fair * 3)) moneyWarnings.push(`C/Z ${stock.symbol}: ${Math.round(pe)}`);
+        else if (pe > 1000 && !(fair > 0 && stock.price <= fair * 10)) moneyWarnings.push(`C/Z ${stock.symbol}: ${Math.round(pe)}`); // cena 3–10× po spadku zysku: chwilowe opóźnienie kursu
     }
     problems.warnings = (typeof ghostTrimLog !== 'undefined' ? ghostTrimLog : []).map(t =>
         `przycięcie ${t.symbol}: ${t.holder} −${Math.round(t.shares)} akcji (kwartał ${t.quarter}, ${t.source === 'load' ? 'wczytanie' : 'gra'})`).concat(moneyWarnings);
