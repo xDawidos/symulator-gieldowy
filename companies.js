@@ -5663,7 +5663,7 @@ function updateResearchInstitutes() {
 // =================================================================================
 
 const INSTITUTE_GRANT_INCOME = 30000;     // granty i zlecenia badawcze na kwartał (bez technologii na rynku)
-const INSTITUTE_INCOME_PER_TECH = 5000;   // licencja od każdej technologii odblokowanej na rynku, na kwartał
+const INSTITUTE_LICENCE_SCALE = 25000;    // licencje: 25 tys. zł × √(technologie rynku) na kwartał (decyzja użytkownika: wzrost malejący, nie liniowy)
 const INSTITUTE_COMPETITION_QUARTER_CHANCE = 1 / 6; // średnio raz na 1,5 roku gry (6 kwartałów)
 const INSTITUTE_DESCRIPTIONS = {
     GUM: 'GUM Med Research to instytut badań medycznych przy uczelni medycznej w Gdańsku. Prowadzi badania kliniczne na zlecenie spółek farmaceutycznych i biotechnologicznych, a z patentów sprzedaje licencje. Zarabia na grantach oraz na opłatach licencyjnych od technologii wdrażanych na rynku, więc rośnie razem z innowacyjnością całej gospodarki.',
@@ -5678,7 +5678,7 @@ function countMarketTechs() {
 
 /** Zysk kwartalny instytutu: granty + licencje od technologii rynku. */
 function getInstituteQuarterlyIncome(techs = countMarketTechs()) {
-    return INSTITUTE_GRANT_INCOME + Math.max(0, Number(techs) || 0) * INSTITUTE_INCOME_PER_TECH;
+    return INSTITUTE_GRANT_INCOME + Math.sqrt(Math.max(0, Number(techs) || 0)) * INSTITUTE_LICENCE_SCALE;
 }
 
 /** Co kwartał, rzadko: konkurencja instytutów — ruch kursu ±10–20%, tylko wpis w dzienniku (bez dymku). */
