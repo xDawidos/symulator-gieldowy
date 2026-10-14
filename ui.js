@@ -6052,8 +6052,8 @@ function renderMailPreview(message) {
     } else if (message.action?.type === 'takeover') {
         action = `<div class="mail-action"><button onclick="openTakeoverModal('${message.action.symbol}')">Otwórz decyzję w sprawie przejęcia</button></div>`;
     } else if (message.action?.type === 'rescue') {
-        action = rescueOffer?.symbol === message.action.symbol && !rescueOffer.closed
-            ? '<div class="mail-action"><button onclick="openRescueOfferingModal()">Otwórz ofertę emisji</button></div>'
+        action = getRescueOffer(message.action.symbol) // 0.14.2 P2: oferta tej spółki, nie „bieżąca”
+            ? `<div class="mail-action"><button onclick="openRescueOfferingModal('${message.action.symbol}')">Otwórz ofertę emisji</button></div>`
             : '<p class="fund-muted">Ta emisja jest już zamknięta.</p>';
     }
     if (message.action?.type === 'unionDemand') {
@@ -6851,13 +6851,13 @@ function renderNegotiation(symbol) {
         ${history ? `<h4>Przebieg</h4><ul class="list-plain text-sm">${history}</ul>` : ''}`;
 }
 
-function openRescueOfferingModal() {
-    const offer = rescueOffer;
-    const stock = offer && stocks.find(s => s.symbol === offer.symbol);
+function openRescueOfferingModal(symbol) {
+    const offer = getRescueOffer(symbol);
+    const stock = offer && stocks.find(s => s.symbol === symbol);
     const modal = document.getElementById('rescue-offering-modal');
     const message = document.getElementById('rescue-offering-message');
     if (!modal || !message) return;
-    if (!stock || offer.closed) {
+    if (!stock) {
         message.innerHTML = '<p class="text-muted">Ta emisja jest już zamknięta.</p>';
         modal.style.display = 'block';
         return;
@@ -6868,8 +6868,8 @@ function openRescueOfferingModal() {
         po <strong>${formatZl(offer.price)}</strong> (rynek: ${formatZl(stock.price)}). Pieniądze idą na spłatę zobowiązań.</p>
         <div class="bank-card-form">
             <input type="text" inputmode="numeric" id="rescue-qty" value="${maxAffordable}" aria-label="Liczba akcji">
-            <button onclick="acceptRescueOffer(parseInt(document.getElementById('rescue-qty').value, 10))">✅ Obejmij akcje</button>
-            <button class="btn-secondary" onclick="declineRescueOffer()">❌ Odrzuć</button>
+            <button onclick="acceptRescueOffer('${symbol}', parseInt(document.getElementById('rescue-qty').value, 10))">✅ Obejmij akcje ${escapeHtml(symbol)}</button>
+            <button class="btn-secondary" onclick="declineRescueOffer('${symbol}')">❌ Odrzuć</button>
         </div>`;
     modal.style.display = 'block';
 }

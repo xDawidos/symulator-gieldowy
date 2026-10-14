@@ -2089,12 +2089,12 @@ group('Obrony i wrogie przejęcia (etap G2)', () => {
         const liabilities = b.balanceSheet.liabilities, shares = b.totalShares;
         withRandom(0.0, () => triggerRescueOfferingEvent(b));
         assert(bot.portfolio.BBB?.shares > 0, 'nowy akcjonariusz-bot');
-        assert(rescueOffer?.symbol === 'BBB' && rescueOffer.fundReserved > 0, 'pula funduszu');
+        assert(getRescueOffer('BBB')?.fundReserved > 0, 'pula funduszu');
         playerCash = 1_000_000;
-        assert(acceptRescueOffer(100), 'fundusz obejmuje');
+        assert(acceptRescueOffer('BBB', 100), 'fundusz obejmuje');
         assert(playerPortfolio.BBB.shares === 100 && b.totalShares > shares + 100 && b.balanceSheet.liabilities < liabilities, 'akcje i dług');
         assert(b.sharesHeld === b.totalShares - shares, 'akcje w obrocie');
-        assert(rescueOffer.closed, 'zamknięta');
+        assert(!getRescueOffer('BBB'), 'zamknięta');
     });
 });
 
@@ -5851,6 +5851,124 @@ group('0.14.2 P1: instytuty badawcze — kurs z zysków, bez wykładniczego wzro
         inst.price = inst.fundamentals.fairValue * 500;
         const warnings = checkWorldInvariants().warnings || [];
         assert(warnings.some(w => w.includes('GUM') && w.includes('100×')), warnings.join('; '));
+    });
+});
+
+group('0.14.2 P2: emisja ratunkowa — oferty per spółka; zapłata funduszu = przyrost akcji', () => {
+    function world() {
+        const x = makeCompany('XXX', { cash: 100_000 }), y = makeCompany('YYY', { cash: 100_000 });
+        for (const s of [x, y]) { s.insiderShares = 0; s.sharesHeld = 0; s.reputation = { player: 0 }; s.ceo = { name: 'Prezes', traits: [] }; s.balanceSheet.liabilities = 2_000_000; }
+        resetWorld([x, y]);
+        allBonds.length = 0;
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        rescueOffers = {};
+        playerCash = 1_000_000;
+        return { x, y };
+    }
+    function botsDecline(fn) { const r = Math.random; Math.random = () => 0.999; try { return fn(); } finally { Math.random = r; } }
+    function capture(fn) {
+        const log = logEvent, lines = [];
+        logEvent = (text, ...rest) => { lines.push(String(text)); return log(text, ...rest); };
+        try { return { result: fn(), lines }; } finally { logEvent = log; }
+    }
+    function lastPayment(purposePrefix) { return [...paymentJournal].reverse().find(e => e.purpose.startsWith(purposePrefix)); }
+
+    test('błąd z gry: okno oferty XXX, w tle emisja YYY → „Obejmij” kupuje XXX, nie YYY', () => {
+        const { x, y } = world();
+        botsDecline(() => triggerRescueOfferingEvent(x));
+        botsDecline(() => triggerRescueOfferingEvent(y)); // dawniej nadpisywała globalną ofertę
+        assert(getRescueOffer('XXX') && getRescueOffer('YYY'), 'dwie otwarte oferty');
+        const issued = acceptRescueOffer('XXX', 100);
+        assert(issued === 100 && playerPortfolio.XXX?.shares === 100 && !playerPortfolio.YYY, `XXX ${playerPortfolio.XXX?.shares}, YYY ${playerPortfolio.YYY?.shares}`);
+        assert(!getRescueOffer('XXX') && getRescueOffer('YYY'), 'oferta YYY nadal otwarta');
+    });
+
+    test('niezmiennik: emisja ratunkowa — zapłata = akcje × cena, przyrost akcji = liczba z komunikatu', () => {
+        const { x } = world();
+        botsDecline(() => triggerRescueOfferingEvent(x));
+        const offer = getRescueOffer('XXX');
+        const cash0 = playerCash, shares0 = playerPortfolio.XXX?.shares || 0;
+        const { result, lines } = capture(() => acceptRescueOffer('XXX', 250));
+        const paid = cash0 - playerCash, got = playerPortfolio.XXX.shares - shares0;
+        assert(result === 250 && got === 250 && Math.abs(paid - 250 * offer.price) < 1e-6, `zapłata ${paid}, akcje ${got}`);
+        assert(Math.abs(lastPayment('Emisja ratunkowa XXX').amount - paid) < 1e-6, 'dziennik płatności');
+        assert(lines.some(l => l.includes('Fundusz obejmuje 250 akcji') && l.includes('XXX')), lines.join(' | '));
+        assert(isStockOwnedByPlayer(x), 'filtr „Moje”');
+    });
+
+    test('oferty zapisywane i wczytywane per spółka; stare zapisy z jedną ofertą', () => {
+        const { x, y } = world();
+        botsDecline(() => { triggerRescueOfferingEvent(x); triggerRescueOfferingEvent(y); });
+        const snapshot = JSON.parse(JSON.stringify(buildSaveSnapshot()));
+        assert(snapshot.rescueOffers?.XXX && snapshot.rescueOffers?.YYY, 'w zapisie');
+        rescueOffers = {};
+        for (const offer of [...Object.values(snapshot.rescueOffers || {}), snapshot.rescueOffer].filter(o => o?.symbol && !o.closed)) rescueOffers[offer.symbol] = offer; // jak przy wczytaniu (main.js)
+        assert(getRescueOffer('XXX') && getRescueOffer('YYY'), 'po wczytaniu');
+        const legacy = { rescueOffer: { symbol: 'XXX', price: 5, total: 100, fundReserved: 40, closed: false } };
+        rescueOffers = {};
+        for (const offer of [...Object.values(legacy.rescueOffers || {}), legacy.rescueOffer].filter(o => o?.symbol && !o.closed)) rescueOffers[offer.symbol] = offer;
+        assert(getRescueOffer('XXX')?.fundReserved === 40, 'stary zapis');
+    });
+
+    test('oferta bez decyzji wygasa po kwartale', () => {
+        const { x } = world();
+        botsDecline(() => triggerRescueOfferingEvent(x));
+        getRescueOffer('XXX').quarter = macro.quarter - 2;
+        expireRescueOffers();
+        assert(!getRescueOffer('XXX') && !acceptRescueOffer('XXX', 10), 'wygasła');
+    });
+
+    test('niezmiennik: dopłata za akcje do inwestycji — zapłata i przyrost akcji z komunikatu', () => {
+        const a = makeCompany('AAA', { cash: 5_000_000 });
+        a.insiderShares = 0; a.reputation = { player: 0 };
+        resetWorld([a]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        playerCash = 1_000_000;
+        playerPortfolio.AAA = { shares: 6000, avgPrice: 100, assetType: 'stock' };
+        a.sharesHeld = 6000; a.maxShares = 10000;
+        startInternalInvestment(a, { id: 'test_line', name: 'Linia testowa', kind: 'internal', durationDays: 28, assetValue: 300_000, incomeBonus: 0.2, healthBonus: 0, maintenance: 0 }, 400_000);
+        const project = a.activeInvestments?.[0];
+        assert(project, 'inwestycja w toku');
+        const cash0 = playerCash, shares0 = playerPortfolio.AAA.shares;
+        const { lines } = capture(() => fundTopUpInvestment('AAA', project.uid, 95_000, 'shares'));
+        const got = playerPortfolio.AAA.shares - shares0, paid = cash0 - playerCash;
+        const msg = lines.find(l => l.includes('obejmuje'));
+        const msgShares = Number((msg?.match(/obejmuje ([\d\s\u00a0]+) nowych/)?.[1] || '').replace(/\D/g, ''));
+        assert(got > 0 && got === msgShares && Math.abs(lastPayment('Dopłata za akcje').amount - paid) < 1e-6, `akcje ${got}, komunikat ${msgShares}, zapłata ${paid}`);
+    });
+
+    test('niezmiennik: debiut startupu — akcje funduszu × cena debiutu = wartość z komunikatu', () => {
+        const a = makeCompany('AAA', { cash: 600_000, fixedAssets: 800_000 });
+        resetWorld([a]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        playerCash = 100_000;
+        const s = generateNewStartup();
+        s.symbol = 'NEWS'; s.stage = 'funding'; s.fundingGoal = 8000; s.currentFunding = 0; s.investors = {}; s.isScam = false;
+        stocks.push(s);
+        const cash0 = playerCash;
+        assert(investInStartup('NEWS', 5000), 'wpłata');
+        assert(Math.abs(cash0 - playerCash - 5000) < 1e-6, 'zapłata');
+        const { lines } = capture(() => handleSuccessfulIPO(s, 2));
+        const shares = playerPortfolio.NEWS?.shares || 0;
+        const msg = lines.find(l => l.startsWith('🔔 IPO'));
+        const value = Number((msg?.match(/→ (\d+) zł/)?.[1]) || 0);
+        assert(shares > 0 && Math.abs(Math.round(shares * s.price) - value) <= 1, `akcje ${shares} × ${s.price} vs ${value}`);
+    });
+
+    test('niezmiennik: wezwanie — fundusz oddaje akcje, wpływ = akcje × cena oferty', () => {
+        const a = makeCompany('AGR', { cash: 50_000_000, fixedAssets: 800_000 });
+        const b = makeCompany('BBB', { cash: 1_000_000, fixedAssets: 800_000 });
+        [a, b].forEach(c => { c.insiderShares = 0; c.sharesHeld = 0; c.reputation = { player: 0 }; c.ceo = { name: 'Prezes', traits: [] }; });
+        resetWorld([a, b]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        playerPortfolio.BBB = { shares: 2500, avgPrice: 80, assetType: 'stock' };
+        b.sharesHeld = 2500;
+        const r = Math.random; Math.random = () => 0.99;
+        try { initiateMergerProcess(a, b, 'przejęcie', 'cash', 0.3); } finally { Math.random = r; }
+        const price = a.mergerProcess.offerDetails.buyoutPricePerShare;
+        const cash0 = playerCash;
+        assert(sellFundSharesToAggressor('BBB'), 'sprzedaż');
+        assert(Math.abs(playerCash - cash0 - 2500 * price) < 1e-6 && !playerPortfolio.BBB && a.equityStakes.BBB === 2500, 'wpływ i akcje');
     });
 });
 

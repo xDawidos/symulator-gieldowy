@@ -236,7 +236,7 @@ function buildSaveSnapshot({ compact = 0 } = {}) {
         investmentPool,
         statePension,
         bridgeLoanOffers,
-        rescueOffer,
+        rescueOffers: Object.fromEntries(Object.entries(rescueOffers).filter(([, offer]) => !offer.closed)), // 0.14.2 P2: oferty per spółka
         allBonds: compactBondsForSave(allBonds),
         activeBonds,
         cityInvestment,
@@ -519,7 +519,9 @@ function applySaveSnapshot(snapshot) {
     if (typeof migrateResearchInstituteValuation === 'function') migrateResearchInstituteValuation(); // 0.14.2 P1: kosmiczne ceny instytutów → rewizja
     statePension = snapshot.statePension && Array.isArray(snapshot.statePension.history) ? snapshot.statePension : { history: [], lastRanking: [] };
     bridgeLoanOffers = Array.isArray(snapshot.bridgeLoanOffers) ? snapshot.bridgeLoanOffers : [];
-    rescueOffer = snapshot.rescueOffer && !snapshot.rescueOffer.closed ? snapshot.rescueOffer : null; // oferta emisji ratunkowej dla funduszu
+    // 0.14.2 P2: oferty emisji ratunkowej per spółka (stare zapisy: jedna oferta `rescueOffer`)
+    rescueOffers = {};
+    for (const offer of [...Object.values(snapshot.rescueOffers || {}), snapshot.rescueOffer].filter(o => o?.symbol && !o.closed)) rescueOffers[offer.symbol] = offer;
 
     // Obligacje (v7; wcześniej nie były zapisywane). Stare rekordy bez czasu gry migruje checkBondMaturities.
     allBonds.length = 0;
@@ -1146,6 +1148,7 @@ gameTimers.weekly = setGameInterval(() => {
         processMarketsQuarterly(); // operatorzy rynków i maklerzy (markets.js)
         sendPoolQuarterReport(); // 0.14.1 R1: zbiorczy raport rozliczeń puli (tylko gdy były)
         maybeInstituteCompetitionEvent(); // 0.14.2 P1: rzadka konkurencja instytutów (bez dymku)
+        expireRescueOffers(); // 0.14.2 P2: oferty emisji ratunkowej bez decyzji wygasają
         processStrategyQuarterly(); // 0.14 T3: rozszerzenia, podsektory, nisze, pivoty (strategy.js)
         processSubsectorMechanicsQuarterly(); // 0.14 T2: badania kliniczne, bloki jądrowe, kontrole KNF (subsectors.js)
         processSpecialProjectsQuarterly(); // konsorcja i projekty specjalne (projects.js)
