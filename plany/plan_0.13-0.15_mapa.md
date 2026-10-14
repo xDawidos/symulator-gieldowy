@@ -74,6 +74,7 @@ Z raportu, „Niesprawdzone” 2–3:
 | T5 | koncerny, kooperacje, ochrona przed tunelowaniem | kooperacje przenoszą strajki z 0.13 |
 | T6 | spółki zależne: transfer 30–70%, usamodzielnienie, wchłonięcie przy ≥ 90%, sprzedaż z wezwaniem | przeniesione z `pomysly_na_kolejne_wersje.md`; wchłonięcia zwalniają miejsca w limicie |
 | **0.14.1** | **Poprawki z gry** (`plan_0.14.1_startupy.md`): R0–R4 rynek startupów (audyt przepływów, rozliczenie puli przy każdym końcu startupu, pula w NAV, wypłata z puli z opłatą 2%, panel puli); R5 portfel prywatny (cele korporacji obcięte, pomiar i strojenie źródeł); R6 widok spółek (rynek → poziom → sektor, działalność pod nazwą) | **po T3, przed T4**; zgłoszenie użytkownika: wpłata do puli bez akcji |
+| **0.14.2** | **Poprawki z gry 2** (`plan_0.14.2_poprawki_z_gry_2.md`): P1 instytuty badawcze (kurs rósł wykładniczo — krytyczne), P2 emisja ratunkowa bez akcji (krytyczne), P3 spółki zależne (widoczność pod matką, nazwy, inny sektor), P4 nazwy startupów (DejwCorp), P5 bank inwestycyjny, P6 inwestycje wg sektora (atom), P7 pasek newsów zamiast zalewu dymków, P8 zwijane rynki i fazy spółek | po 0.14.1, przed T4 |
 
 ## Etap C — 0.15 „Giełda międzynarodowa” (G0 → G8)
 
