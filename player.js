@@ -1837,11 +1837,13 @@ function closeFundPeriod() {
 }
 
 /** Premia za wyniki: tylko za nadwyżkę nad benchmarkiem; rośnie z pozycją w rankingu i stanowiskiem. */
+const PERFORMANCE_BONUS_RATE = 0.60; // 0.14.1 R5 (decyzja użytkownika): było 0,20 — premia głównym źródłem dużych kwot na wysokich stanowiskach
+
 function computePerformanceBonus(period, position = getPlayerPosition()) {
     const excess = period.fundReturn - period.benchmarkReturn;
     if (!(excess > 0)) return 0;
     const rankBonus = period.rankOf > 1 && period.rank === 1 ? 1.25 : 1;
-    return excess * period.assets * 0.20 * position.bonusMult * rankBonus;
+    return excess * period.assets * PERFORMANCE_BONUS_RATE * position.bonusMult * rankBonus;
 }
 
 function payPerformanceBonus(period) {
