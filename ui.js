@@ -835,6 +835,8 @@ function displayCash() {
 
 
 
+const STOCK_TABLE_COLS = 6; // 0.14.1 R6: bez kolumny „Sektor”
+
 function displayStocks(previousInputValues = {}) {
   const stockTableBody = document.getElementById('stock-table-body');
   if (!stockTableBody) return;
@@ -934,7 +936,8 @@ function displayStocks(previousInputValues = {}) {
     const mainSector = getMainSector(stock);
     // T1c: ◐ — spółka widoczna dzięki segmentowi pobocznemu (przełącznik „także segmenty poboczne”).
     const viaSecondary = sectorFilterState.secondary && sectorFilterState.sector !== 'all' && mainSector !== sectorFilterState.sector;
-    const primarySector = mainSector ? `${viaSecondary ? `◐ ${sectorFilterState.sector} (poboczny) · ` : ''}${mainSector}` : 'Rynek';
+    const activity = getStockActivityLabel(stock); // 0.14.1 R6: działalność pod nazwą zamiast kolumny „Sektor”
+    const primarySector = mainSector ? `${viaSecondary ? `◐ ${sectorFilterState.sector} (poboczny) · ` : ''}${activity || mainSector}` : 'Rynek';
     const availabilityPct =
       stock.totalShares > 0
         ? Math.max(
@@ -1037,11 +1040,7 @@ function displayStocks(previousInputValues = {}) {
 
     nameCell.appendChild(identityWrap);
 
-    // KOMÓRKA 2: SEKTOR
-    const sectorCell = row.insertCell();
-    sectorCell.textContent = primarySector;
-
-    // KOMÓRKA 3: CENA
+    // KOMÓRKA 2: CENA
     const priceCell = row.insertCell();
     priceCell.classList.add('cell-number', 'cell-price');
     priceCell.innerHTML = `
@@ -1198,7 +1197,7 @@ function displayStocks(previousInputValues = {}) {
     const ids = typeof getInternetMarketIds === 'function' ? getInternetMarketIds().filter(id => ['active', 'startup'].includes(marketOperators[id].status)) : [];
     if (!ids.length) {
       const cell = stockTableBody.insertRow().insertCell();
-      cell.colSpan = 7;
+      cell.colSpan = STOCK_TABLE_COLS;
       cell.className = 'text-muted text-sm';
       cell.textContent = 'Żaden rynek internetowy jeszcze nie działa. XTD, PLU5 i kolejne rynki powstają jako startupy w inkubatorze — mają gwarancję debiutu.';
     }
@@ -1213,7 +1212,7 @@ function displayStocks(previousInputValues = {}) {
       const headerRow = stockTableBody.insertRow();
       headerRow.className = 'exchange-header internet-market-header';
       const headerCell = headerRow.insertCell();
-      headerCell.colSpan = 7;
+      headerCell.colSpan = STOCK_TABLE_COLS;
       headerCell.innerHTML = `<div class="d-flex justify-between items-center gap-2 flex-wrap">
           <h4 class="my-1 clickable" style="color:${def.color}" onclick="toggleExchangeVisibility('${key}')">🌐 ${escapeHtml(def.name)} <span class="text-xs text-muted">${escapeHtml(def.short || id)} · prowizja ${((def.commission || 0) * 100).toFixed(2)}% · spółki ${getMarketMembers(id).length}/${INTERNET_MEMBER_LIMIT}${operator.status === 'startup' ? ' · operator w inkubatorze' : ''}</span> <span>${collapsed ? '▶' : '▼'}</span></h4>
           ${operator.status === 'active' ? (concession ? '<span class="text-up text-sm">🔑 koncesja: handel bez prowizji</span>' : `<button class="btn-xs" onclick="event.stopPropagation(); buyInternetConcession('${id}'); displayStocks(getCurrentInputValues());">🔑 Koncesja (${formatZl(getInternetConcessionCost(id), 0)})</button>`) : ''}
@@ -1225,6 +1224,15 @@ function displayStocks(previousInputValues = {}) {
     }
   }
 
+  // --- 0.14.1 R6: nagłówek rynku GPW (rynki internetowe mają własne nagłówki w zakładce „Internet”) ---
+  if (!internetTab && baseStocksToDisplay.some(stock => sortedExchanges.includes(stock.exchange))) {
+    const marketCell = stockTableBody.insertRow();
+    marketCell.className = 'exchange-header market-header';
+    const cell = marketCell.insertCell();
+    cell.colSpan = STOCK_TABLE_COLS;
+    cell.innerHTML = '<h4 class="my-1">🏛️ GPW — Giełda Papierów Wartościowych</h4>';
+  }
+
   // --- Pętla renderująca giełdy ---
   if (!internetTab) sortedExchanges.forEach(exchangeKey => {
     const exchange = exchanges[exchangeKey];
@@ -1232,18 +1240,18 @@ function displayStocks(previousInputValues = {}) {
       stock => stock.exchange === exchangeKey
     );
 
-    if (currentSortState === 'price_asc') {
-      stocksOnThisExchange.sort((a, b) => a.price - b.price);
-    } else if (currentSortState === 'price_desc') {
-      stocksOnThisExchange.sort((a, b) => b.price - a.price);
-    }
+    // 0.14.1 R6: grupy sektora głównego w kolejności rejestru; sortowanie po cenie wewnątrz grupy.
+    const sectorOf = new Map(stocksOnThisExchange.map(stock => [stock, getMainSector(stock)]));
+    const priceDir = currentSortState === 'price_asc' ? 1 : currentSortState === 'price_desc' ? -1 : 0;
+    stocksOnThisExchange.sort((a, b) =>
+      (getSectorDisplayOrder(sectorOf.get(a)) - getSectorDisplayOrder(sectorOf.get(b))) || (priceDir ? (a.price - b.price) * priceDir : 0));
 
     if (stocksOnThisExchange.length > 0) {
       const headerRow = stockTableBody.insertRow();
       headerRow.className = 'exchange-header';
       headerRow.onclick = () => toggleExchangeVisibility(exchangeKey);
       const headerCell = headerRow.insertCell();
-      headerCell.colSpan = 7;
+      headerCell.colSpan = STOCK_TABLE_COLS;
       const icon = exchangeCollapseState[exchangeKey] ? '▶' : '▼';
       headerCell.innerHTML = `<h4 style="color: ${
         exchange.color
@@ -1252,7 +1260,18 @@ function displayStocks(previousInputValues = {}) {
       }<span>${icon}</span></h4>`;
     }
 
+    let lastSector;
     stocksOnThisExchange.forEach(stock => {
+      const sector = sectorOf.get(stock) || null;
+      if (sector !== lastSector) {
+        lastSector = sector;
+        const subRow = stockTableBody.insertRow();
+        subRow.className = 'sector-subheader';
+        if (exchangeCollapseState[exchangeKey]) subRow.style.display = 'none';
+        const subCell = subRow.insertCell();
+        subCell.colSpan = STOCK_TABLE_COLS;
+        subCell.textContent = `─ ${sector ? `${SECTORS[sector]?.icon || ''} ${sector}` : 'Pozostałe'} ─`;
+      }
       const mainRow = renderStockRow(stock, false);
       if (exchangeCollapseState[exchangeKey]) mainRow.style.display = 'none';
 
@@ -1454,8 +1473,15 @@ function displayPortfolio() {
         }
         const tBills = allBonds.filter(b => b.ownerId === 'player' && b.isTBill);
         if (tBills.length) { section('Bony skarbowe'); row(`🧾 Bony skarbowe · ${tBills.length} szt.`, '—', '—', '—'); }
-        const poolStake = investmentPool?.playerStakes?.player || 0;
-        if (poolStake > 0) { section('Pula inwestycyjna'); row('🏊 Wkład w pulę', '—', fmt(poolStake), '—'); }
+        // 0.14.1 R4: dwie pozycje puli, zgodne z NAV (niezainwestowane nominalnie, wkłady w żyjące startupy po koszcie)
+        const poolFree = Number(investmentPool?.contributors?.player) || 0;
+        const poolInvested = getPoolInvestedInStartups('player');
+        if (poolFree + poolInvested > 0) {
+            section('Pula inwestycyjna');
+            if (poolFree > 0) row('🏊 Pula — niezainwestowane', '—', fmt(poolFree), `${fmt(poolFree)}<span class="text-xs text-muted d-block">do wycofania (opłata 2%)</span>`);
+            if (poolInvested > 0) row('🏊 Pula — w startupach', '—', fmt(poolInvested), `${fmt(poolInvested)}<span class="text-xs text-muted d-block">po koszcie, do debiutu lub końca startupu</span>`);
+            positionsValue += poolFree + poolInvested;
+        }
     }
 
     body.innerHTML = rows.length ? rows.join('') : `<tr><td colspan="4" class="text-muted">Brak pozycji ${isPrivate ? 'na koncie prywatnym' : 'w funduszu'}.</td></tr>`;
@@ -2462,7 +2488,8 @@ function openInvestorsModal(symbol) {
         sortedInvestors.forEach(([name, amount], index) => {
             const row = tableBody.insertRow();
             row.insertCell().textContent = `#${index + 1}`;
-            row.insertCell().textContent = name;
+            const mine = name === 'Pula Inwestycyjna' ? getPoolStartupShare(startup, 'player') : 0; // 0.14.1 R4
+            row.insertCell().textContent = mine > 0 ? `${name} (w tym Ty: ${mine.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} zł)` : name;
             row.insertCell().textContent = `${amount.toLocaleString('pl-PL')} PLN`;
 
             if (name === "Ty (Gracz)") {
@@ -2496,6 +2523,10 @@ function displayInvestmentPool() {
 
     totalFundsEl.textContent = `${investmentPool.totalFunds.toLocaleString('pl-PL')} PLN`;
     timerEl.textContent = `${Math.floor(investmentPool.investmentTimer / 1000)}`;
+    const statusEl = document.getElementById('pool-status'); // 0.14.1 R3: dlaczego pieniądze czekają
+    if (statusEl) statusEl.textContent = getPoolStatus().text;
+    const withdrawBtn = document.getElementById('pool-withdraw-btn');
+    if (withdrawBtn) withdrawBtn.disabled = !((investmentPool.contributors.player || 0) > 0);
 
     contributorsListEl.innerHTML = '';
     const contributors = Object.entries(investmentPool.contributors);
@@ -2522,8 +2553,39 @@ function displayInvestmentPool() {
         });
     }
 
+    renderPoolDetails(); // 0.14.1 R4
+
     // Na końcu dodaj tę linię:
     updateAutoInvestStatus();
+}
+
+const POOL_STAGE_LABELS = { funding: 'zbiórka', overfunding: 'nadsubskrypcja', development: 'rozwój', awaitingListing: 'czeka na giełdę', financial_complications: 'komplikacje' };
+const POOL_KIND_LABELS = { ipo: '📈 debiut', takeover: '🤝 przejęcie', refund: '📉 upadek', loss: '💀 strata', privatized: '🏢 prywatyzacja' };
+
+/** Wkład uczestnika przez pulę w dany startup (suma rund). */
+function getPoolStartupShare(startup, id) {
+    return (startup.poolInvestors || []).reduce((sum, round) => sum + (Number(round.contributors?.[id]) || 0), 0);
+}
+
+/** 0.14.1 R4: panel puli — niezainwestowane, wkłady w startupy, historia rozliczeń. */
+function renderPoolDetails() {
+    const el = document.getElementById('pool-details');
+    if (!el) return;
+    const fmtZl = value => `${(Number(value) || 0).toLocaleString('pl-PL', { maximumFractionDigits: 0 })} zł`;
+    const free = Number(investmentPool.contributors?.player) || 0;
+    const rows = stocks.filter(s => s.assetType === 'Startup' && (s.poolInvestors || []).length).map(s => {
+        const pool = (s.poolInvestors || []).reduce((sum, round) => sum + (Number(round.amount) || 0), 0);
+        const mine = getPoolStartupShare(s, 'player');
+        return `<tr><td>${escapeHtml(s.name)} (${escapeHtml(s.symbol)})</td><td>${POOL_STAGE_LABELS[s.stage] || escapeHtml(s.stage || '—')}</td><td>${fmtZl(pool)}</td><td>${mine > 0 ? `${fmtZl(mine)} · ${(mine / pool * 100).toFixed(1)}%` : '—'}</td></tr>`;
+    });
+    const history = (investmentPool.history || []).map(h => `<li><span class="text-muted">kw. ${h.quarter ?? '—'}</span> ${POOL_KIND_LABELS[h.kind] || ''} ${escapeHtml(h.text || '')}</li>`);
+    el.innerHTML = `
+        <h4>Niezainwestowane</h4>
+        <p>Razem: <strong>${fmtZl(investmentPool.totalFunds)}</strong> · Twoje: <strong>${fmtZl(free)}</strong></p>
+        <h4>W startupach</h4>
+        ${rows.length ? `<table class="w-full text-sm"><thead><tr><th>Startup</th><th>Etap</th><th>Kwota puli</th><th>Twój udział</th></tr></thead><tbody>${rows.join('')}</tbody></table>` : '<p class="text-muted">Pula nie ma teraz wkładów w startupach.</p>'}
+        <h4>Ostatnie rozliczenia (Twój udział)</h4>
+        ${history.length ? `<ul class="text-sm">${history.join('')}</ul>` : '<p class="text-muted">Brak rozliczeń.</p>'}`;
 }
 
 // --- NOWY FRAGMENT - FUNKCJE DLA MODALA AUTO-INWESTOWANIA ---
@@ -5660,8 +5722,18 @@ function checkWorldInvariants() {
     for (const bond of allBonds) finite(bond.faceValue, `obligacja ${bond.id}`);
     if (corporation) finite(corporation.budget, 'budżet korporacji');
     // A3: przycięcia „duchów posiadaczy” to ostrzeżenia, nie naruszenia — mogą maskować prawdziwy rozjazd.
+    // 0.14.1 R0: niezmienniki puli i inkubatora jako ostrzeżenia (rozjazd = pieniądze bez rozliczenia).
+    const moneyWarnings = [...(typeof checkPoolInvariants === 'function' ? checkPoolInvariants() : []), ...(typeof checkIncubatorInvariants === 'function' ? checkIncubatorInvariants() : [])];
+    // 0.14.2 P1: bezpiecznik ceny — kurs > 100× wartości godziwej albo C/Z > 1000.
+    for (const stock of stocks) {
+        if (stock.isBankrupt || stock.assetType === 'Startup') continue;
+        const fair = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(stock) : null;
+        const pe = Number(stock.fundamentals?.peRatio);
+        if (fair > 0 && stock.price > fair * 100) moneyWarnings.push(`cena ${stock.symbol} ${Math.round(stock.price)} > 100× wartości godziwej (${fair.toFixed(2)})`);
+        else if (pe > 1000) moneyWarnings.push(`C/Z ${stock.symbol}: ${Math.round(pe)}`);
+    }
     problems.warnings = (typeof ghostTrimLog !== 'undefined' ? ghostTrimLog : []).map(t =>
-        `przycięcie ${t.symbol}: ${t.holder} −${Math.round(t.shares)} akcji (kwartał ${t.quarter}, ${t.source === 'load' ? 'wczytanie' : 'gra'})`);
+        `przycięcie ${t.symbol}: ${t.holder} −${Math.round(t.shares)} akcji (kwartał ${t.quarter}, ${t.source === 'load' ? 'wczytanie' : 'gra'})`).concat(moneyWarnings);
     return problems;
 }
 
@@ -5980,8 +6052,8 @@ function renderMailPreview(message) {
     } else if (message.action?.type === 'takeover') {
         action = `<div class="mail-action"><button onclick="openTakeoverModal('${message.action.symbol}')">Otwórz decyzję w sprawie przejęcia</button></div>`;
     } else if (message.action?.type === 'rescue') {
-        action = rescueOffer?.symbol === message.action.symbol && !rescueOffer.closed
-            ? '<div class="mail-action"><button onclick="openRescueOfferingModal()">Otwórz ofertę emisji</button></div>'
+        action = getRescueOffer(message.action.symbol) // 0.14.2 P2: oferta tej spółki, nie „bieżąca”
+            ? `<div class="mail-action"><button onclick="openRescueOfferingModal('${message.action.symbol}')">Otwórz ofertę emisji</button></div>`
             : '<p class="fund-muted">Ta emisja jest już zamknięta.</p>';
     }
     if (message.action?.type === 'unionDemand') {
@@ -6779,13 +6851,13 @@ function renderNegotiation(symbol) {
         ${history ? `<h4>Przebieg</h4><ul class="list-plain text-sm">${history}</ul>` : ''}`;
 }
 
-function openRescueOfferingModal() {
-    const offer = rescueOffer;
-    const stock = offer && stocks.find(s => s.symbol === offer.symbol);
+function openRescueOfferingModal(symbol) {
+    const offer = getRescueOffer(symbol);
+    const stock = offer && stocks.find(s => s.symbol === symbol);
     const modal = document.getElementById('rescue-offering-modal');
     const message = document.getElementById('rescue-offering-message');
     if (!modal || !message) return;
-    if (!stock || offer.closed) {
+    if (!stock) {
         message.innerHTML = '<p class="text-muted">Ta emisja jest już zamknięta.</p>';
         modal.style.display = 'block';
         return;
@@ -6796,8 +6868,8 @@ function openRescueOfferingModal() {
         po <strong>${formatZl(offer.price)}</strong> (rynek: ${formatZl(stock.price)}). Pieniądze idą na spłatę zobowiązań.</p>
         <div class="bank-card-form">
             <input type="text" inputmode="numeric" id="rescue-qty" value="${maxAffordable}" aria-label="Liczba akcji">
-            <button onclick="acceptRescueOffer(parseInt(document.getElementById('rescue-qty').value, 10))">✅ Obejmij akcje</button>
-            <button class="btn-secondary" onclick="declineRescueOffer()">❌ Odrzuć</button>
+            <button onclick="acceptRescueOffer('${symbol}', parseInt(document.getElementById('rescue-qty').value, 10))">✅ Obejmij akcje ${escapeHtml(symbol)}</button>
+            <button class="btn-secondary" onclick="declineRescueOffer('${symbol}')">❌ Odrzuć</button>
         </div>`;
     modal.style.display = 'block';
 }

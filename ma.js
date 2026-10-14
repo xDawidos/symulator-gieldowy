@@ -684,7 +684,15 @@ function refreshTakeoverViews(symbol) {
 // G2: EMISJA RATUNKOWA
 // =================================================================================
 
-let rescueOffer = null;
+// 0.14.2 P2: oferty per spółka (dawniej jedna globalna oferta — nowa emisja innej spółki podmieniała ofertę
+// w otwartym oknie, więc „Obejmij” kupował akcje innej spółki niż na ekranie).
+let rescueOffers = {};
+const RESCUE_OFFER_QUARTERS = 1; // oferta dla funduszu ważna do końca następnego kwartału
+
+function getRescueOffer(symbol) {
+    const offer = rescueOffers[symbol];
+    return offer && !offer.closed ? offer : null;
+}
 
 /** Nowe akcje z emisji ratunkowej: pieniądze spłacają dług, kupujący (także nowi) dostają akcje. */
 function issueRescueShares(stock, buyer, shares, price) {
@@ -736,7 +744,8 @@ function triggerRescueOfferingEvent(forcedTarget = null) {
     const total = Math.floor(Math.min(stock.balanceSheet.liabilities * 0.5 / price, stock.totalShares * 0.3));
     if (!(price > 0) || total <= 0) return null;
 
-    const offer = { symbol: stock.symbol, price, total, remaining: total, fundReserved: 0, closed: false };
+    if (getRescueOffer(stock.symbol)) finalizeRescueOffering(stock); // poprzednia emisja tej spółki zamknięta przed nową
+    const offer = { symbol: stock.symbol, price, total, remaining: total, fundReserved: 0, closed: false, quarter: typeof macro === 'object' ? macro.quarter : 0 };
     logEvent(`📢 EMISJA RATUNKOWA: ${stock.name} oferuje ${total.toLocaleString('pl-PL')} nowych akcji po ${price.toFixed(2)} zł, aby spłacić długi.`, 'market');
 
     // Fundusz: pula zarezerwowana (do 40%) — gracz decyduje w oknie/poczcie.
@@ -751,47 +760,65 @@ function triggerRescueOfferingEvent(forcedTarget = null) {
     }
 
     if (offer.fundReserved > 0) {
-        rescueOffer = offer;
+        rescueOffers[stock.symbol] = offer;
         addMail({
             sender: CORPORATION_SENDER,
             subject: `Emisja ratunkowa: ${stock.name}`,
             body: `${stock.name} oferuje funduszowi do ${offer.fundReserved.toLocaleString('pl-PL')} nowych akcji po ${price.toFixed(2)} zł (dyskonto do rynku). Pieniądze idą na spłatę długu.`,
             importance: 2, symbol: stock.symbol, action: { type: 'rescue', symbol: stock.symbol }
         });
-        if ((playerPortfolio[stock.symbol]?.shares || 0) > 0) openRescueOfferingModal();
+        if ((playerPortfolio[stock.symbol]?.shares || 0) > 0) openRescueOfferingModal(stock.symbol);
     } else {
         finalizeRescueOffering(stock);
     }
     return offer;
 }
 
-function acceptRescueOffer(quantity) {
-    const offer = rescueOffer;
-    const stock = offer && !offer.closed && stocks.find(s => s.symbol === offer.symbol);
+/** Fundusz obejmuje akcje z emisji ratunkowej spółki `symbol` (zawsze tej z maila/okna, nie „bieżącej” oferty). */
+function acceptRescueOffer(symbol, quantity) {
+    const offer = getRescueOffer(symbol);
+    const stock = offer && stocks.find(s => s.symbol === symbol);
     if (!stock) { showToast('Oferta emisji ratunkowej jest zamknięta.', 'default'); return false; }
     quantity = Math.min(Math.floor(Number(quantity) || 0), offer.fundReserved);
     if (!(quantity > 0)) { showToast('Podaj liczbę akcji.', 'warning'); return false; }
     if (playerCash < quantity * offer.price) { showToast('Za mało gotówki funduszu.', 'error'); return false; }
-    issueRescueShares(stock, 'player', quantity, offer.price);
-    logEvent(`📢 Fundusz obejmuje ${quantity.toLocaleString('pl-PL')} akcji z emisji ratunkowej ${stock.name}.`, 'review');
+    const before = playerPortfolio[symbol]?.shares || 0;
+    const issued = issueRescueShares(stock, 'player', quantity, offer.price);
+    if (!(issued > 0) || (playerPortfolio[symbol]?.shares || 0) - before !== issued) { showToast('Nie udało się objąć akcji.', 'error'); return false; }
+    logEvent(`📢 Fundusz obejmuje ${issued.toLocaleString('pl-PL')} akcji ${stock.name} (${symbol}) z emisji ratunkowej po ${formatZl(offer.price)} — razem ${formatZl(issued * offer.price, 0)}.`, 'review');
     changeReputation('player', stock.symbol, 10);
     finalizeRescueOffering(stock);
     if (typeof refreshFundViews === 'function') refreshFundViews();
+    if (typeof displayStocks === 'function' && typeof getCurrentInputValues === 'function') displayStocks(getCurrentInputValues()); // filtr „Moje”
     closeRescueOfferingModal();
-    return true;
+    return issued;
 }
 
-function declineRescueOffer() {
-    const stock = rescueOffer && stocks.find(s => s.symbol === rescueOffer.symbol);
-    if (stock && !rescueOffer.closed) {
+function declineRescueOffer(symbol) {
+    const offer = getRescueOffer(symbol);
+    const stock = offer && stocks.find(s => s.symbol === symbol);
+    if (stock) {
         if ((playerPortfolio[stock.symbol]?.shares || 0) > 0) changeReputation('player', stock.symbol, -5);
         finalizeRescueOffering(stock);
     }
     closeRescueOfferingModal();
 }
 
+/** Co kwartał: oferty bez decyzji wygasają po RESCUE_OFFER_QUARTERS (emisja zamknięta bez funduszu). */
+function expireRescueOffers() {
+    const quarter = typeof macro === 'object' ? macro.quarter : 0;
+    for (const [symbol, offer] of Object.entries(rescueOffers)) {
+        const stock = stocks.find(s => s.symbol === symbol);
+        if (!stock || stock.isBankrupt) { delete rescueOffers[symbol]; continue; }
+        if (!offer.closed && quarter - (offer.quarter || 0) > RESCUE_OFFER_QUARTERS) {
+            logEvent(`📢 Oferta emisji ratunkowej ${stock.name} dla funduszu wygasła bez decyzji.`, 'review');
+            finalizeRescueOffering(stock);
+        }
+    }
+}
+
 function finalizeRescueOffering(stock) {
-    if (rescueOffer?.symbol === stock.symbol) rescueOffer.closed = true;
+    if (rescueOffers[stock.symbol]) { rescueOffers[stock.symbol].closed = true; delete rescueOffers[stock.symbol]; }
     const raised = stock.rescueRaised || 0;
     stock.rescueRaised = 0;
     if (raised > 0) stock.financialHealth = Math.min(5, (Number(stock.financialHealth) || 0) + 0.5);

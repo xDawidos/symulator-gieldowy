@@ -1531,6 +1531,21 @@ body.dark-mode .owned-zero {
   color: #c0c4cc;
 }
 
+/* 0.14.1 R6: cienki podnagłówek sektora w tabeli spółek */
+#stock-table tr.sector-subheader td {
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: #6b7280;
+  background: #f3f4f6;
+  text-align: left;
+}
+body.dark-mode #stock-table tr.sector-subheader td {
+  color: #c0c4cc;
+  background: #1f2430;
+}
+
 body.dark-mode .change-pill.up {
   background: #1f5130;
   color: #d7ffe1;

@@ -236,7 +236,7 @@ function buildSaveSnapshot({ compact = 0 } = {}) {
         investmentPool,
         statePension,
         bridgeLoanOffers,
-        rescueOffer,
+        rescueOffers: Object.fromEntries(Object.entries(rescueOffers).filter(([, offer]) => !offer.closed)), // 0.14.2 P2: oferty per spółka
         allBonds: compactBondsForSave(allBonds),
         activeBonds,
         cityInvestment,
@@ -514,9 +514,14 @@ function applySaveSnapshot(snapshot) {
     juMarket = snapshot.juMarket && Array.isArray(snapshot.juMarket.tape) ? { ...createJuMarket(), ...snapshot.juMarket } : createJuMarket();
     if (playerFund) playerFund.clients.forEach(ensureClientProfile);
     if (snapshot.investmentPool && typeof snapshot.investmentPool === 'object') Object.assign(investmentPool, snapshot.investmentPool);
+    if (!investmentPool.ledgerSince && typeof startPoolLedgerFromFacts === 'function') startPoolLedgerFromFacts(); // 0.14.1 R0: księga puli od teraz
+    if (typeof migratePoolStakesToFacts === 'function') migratePoolStakesToFacts(); // 0.14.1 R1: martwy wkład w pulę → fakty (bez zwrotu wstecz)
+    if (typeof migrateResearchInstituteValuation === 'function') migrateResearchInstituteValuation(); // 0.14.2 P1: kosmiczne ceny instytutów → rewizja
     statePension = snapshot.statePension && Array.isArray(snapshot.statePension.history) ? snapshot.statePension : { history: [], lastRanking: [] };
     bridgeLoanOffers = Array.isArray(snapshot.bridgeLoanOffers) ? snapshot.bridgeLoanOffers : [];
-    rescueOffer = snapshot.rescueOffer && !snapshot.rescueOffer.closed ? snapshot.rescueOffer : null; // oferta emisji ratunkowej dla funduszu
+    // 0.14.2 P2: oferty emisji ratunkowej per spółka (stare zapisy: jedna oferta `rescueOffer`)
+    rescueOffers = {};
+    for (const offer of [...Object.values(snapshot.rescueOffers || {}), snapshot.rescueOffer].filter(o => o?.symbol && !o.closed)) rescueOffers[offer.symbol] = offer;
 
     // Obligacje (v7; wcześniej nie były zapisywane). Stare rekordy bez czasu gry migruje checkBondMaturities.
     allBonds.length = 0;
@@ -888,8 +893,7 @@ function setGameSpeed(speedMultiplier) {
 
         researchInstituteTick = (researchInstituteTick + 1) % 10;
         if (researchInstituteTick === 0) { // co 10 tików gry (wcześniej Date.now() % 10 — zależne od zegara, w przebiegach testowych co tik)
-            updateResearchInstitutes();
-            checkResearchInstitutePositions();
+            updateResearchInstitutes(); // 0.14.2 P1: mechanika „sąsiadów w tablicy” usunięta
         }
 
         // --- AKTUALIZACJA LOGIKI GRY ---
@@ -1142,6 +1146,9 @@ gameTimers.weekly = setGameInterval(() => {
         processEtfsQuarterly(); // rebalancing, cele roczne, nowe i zamykane ETF-y (etf.js)
         processRelationsQuarterly(); // relacje z botami: wrogowie i przyjaciele (relations.js)
         processMarketsQuarterly(); // operatorzy rynków i maklerzy (markets.js)
+        sendPoolQuarterReport(); // 0.14.1 R1: zbiorczy raport rozliczeń puli (tylko gdy były)
+        maybeInstituteCompetitionEvent(); // 0.14.2 P1: rzadka konkurencja instytutów (bez dymku)
+        expireRescueOffers(); // 0.14.2 P2: oferty emisji ratunkowej bez decyzji wygasają
         processStrategyQuarterly(); // 0.14 T3: rozszerzenia, podsektory, nisze, pivoty (strategy.js)
         processSubsectorMechanicsQuarterly(); // 0.14 T2: badania kliniczne, bloki jądrowe, kontrole KNF (subsectors.js)
         processSpecialProjectsQuarterly(); // konsorcja i projekty specjalne (projects.js)
@@ -1623,6 +1630,9 @@ function createNewWorld() {
     specialProjects = createSpecialProjects(); // projekty specjalne miasta (projects.js)
     ensureAllStockSegments(); // 0.14 T1a: sektory z rejestru i segmenty (przed ETF-ami i zatrudnieniem)
     applyStartSubsectors(); // 0.14 T2: podsektory spółek startowych (tabela)
+    startPoolLedgerFromFacts(); // 0.14.1 R0: księga puli inwestycyjnej od startu gry
+    migrateResearchInstituteValuation(); // 0.14.2 P1: instytuty wyceniane z zysków od startu
+    investmentPool.stakesMigrated = true;
     initializeEtfs(); // ETF-y z portfelami prawdziwych akcji (etf.js)
     console.log("[M&A Init] Inicjalizacja nastawienia mediów...");
     const mediaCompanies = stocks.filter(s => s.specializationSectors?.includes('Media'));

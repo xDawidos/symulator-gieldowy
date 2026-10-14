@@ -895,7 +895,10 @@ const festivalPlayerEvents = [
                     applyPriceEffect(stock.symbol, 0.05, 'positive', 'review');
                 }
             }
-            playerWallet.cash += 5000; // nagroda trafia do portfela prywatnego, nie do funduszu
+            // 0.14.1 R5: nagroda skalowana do pozycji gracza — 2% aktywów funduszu (200–5000 zł), do portfela prywatnego.
+            const reward = Math.round(Math.min(5000, Math.max(200, (playerFund ? getFundAssets() : 0) * 0.02)));
+            playerWallet.cash += reward;
+            recordPayment('external:korporacja', 'player-wallet', reward, 'Nagroda: inwestor VC na festynie');
             displayCash();
         }
     },

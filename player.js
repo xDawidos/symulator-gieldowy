@@ -605,8 +605,117 @@ function contributeToInvestmentPool(contributorId, amount) {
 
     investmentPool.totalFunds += amount;
     investmentPool.contributors[contributorId] = (investmentPool.contributors[contributorId] || 0) + amount;
-    investmentPool.playerStakes[contributorId] = (investmentPool.playerStakes[contributorId] || 0) + amount;
+    notePoolLedger(contributorId, 'deposited', amount); // 0.14.1 R0: księga puli
+    recomputePoolStakes(); // 0.14.1 R1: wkład w pulę = fakty
     console.log(`[PULA] ${contributorId} wpłacił(a) ${amount.toFixed(2)} PLN do puli inwestycyjnej.`, 'market');
+}
+
+// 0.14.1 R0: księga puli per uczestnik — wpłaty, wypłaty, zamiana na akcje, zwroty do puli, straty, opłaty.
+// Niezmiennik: wpłaty − wypłaty = niezainwestowane + w startupach + na akcje + straty (+ opłaty otrzymane − zapłacone).
+const POOL_LEDGER_KEYS = ['deposited', 'withdrawn', 'toShares', 'refunded', 'lost', 'feesPaid', 'feesReceived'];
+
+function getPoolLedger(id) {
+    if (!investmentPool.ledger || typeof investmentPool.ledger !== 'object') investmentPool.ledger = {};
+    if (!investmentPool.ledger[id]) investmentPool.ledger[id] = Object.fromEntries(POOL_LEDGER_KEYS.map(key => [key, 0]));
+    return investmentPool.ledger[id];
+}
+
+function notePoolLedger(id, key, amount) {
+    if (!Number.isFinite(amount) || amount === 0 || !investmentPool.ledgerSince) return; // strata może być ujemna (zysk z przejęcia); stare zapisy: księga od chwili włączenia
+    const entry = getPoolLedger(id);
+    entry[key] = (Number(entry[key]) || 0) + amount;
+}
+
+/** Wkład uczestnika puli w żyjące startupy (z faktów: poolInvestors). */
+function getPoolInvestedInStartups(id) {
+    let total = 0;
+    for (const startup of stocks) {
+        if (startup.assetType !== 'Startup') continue;
+        for (const round of startup.poolInvestors || []) total += Number(round.contributors?.[id]) || 0;
+    }
+    return total;
+}
+
+/** Niezmiennik puli: lista rozjazdów (ostrzeżenia) dla uczestników z księgą. */
+function checkPoolInvariants(tolerance = 1) {
+    const issues = [];
+    if (!investmentPool.ledgerSince) return issues;
+    for (const [id, entry] of Object.entries(investmentPool.ledger || {})) {
+        const left = entry.deposited - entry.withdrawn - entry.feesPaid + entry.feesReceived;
+        const right = (Number(investmentPool.contributors?.[id]) || 0) + getPoolInvestedInStartups(id) + entry.toShares + entry.lost;
+        if (Math.abs(left - right) > tolerance) issues.push(`pula ${id}: wpłaty−wypłaty ${left.toFixed(0)} ≠ niezainwestowane+startupy+akcje+straty ${right.toFixed(0)}`);
+    }
+    const contributorsSum = Object.values(investmentPool.contributors || {}).reduce((a, b) => a + (Number(b) || 0), 0);
+    if (Math.abs(contributorsSum - (Number(investmentPool.totalFunds) || 0)) > tolerance) issues.push(`pula: suma wkładów ${contributorsSum.toFixed(0)} ≠ środki puli ${Number(investmentPool.totalFunds || 0).toFixed(0)}`);
+    return issues;
+}
+
+/** Niezmiennik inkubatora: roszczenia ≈ zebrane środki (z wpłatami bez roszczeń: anioł biznesu, premia prywatyzacji). */
+function getStartupClaimsTotal(startup) {
+    return typeof collectStartupClaims === 'function' ? collectStartupClaims(startup).reduce((sum, claim) => sum + claim.amount, 0) : 0;
+}
+
+function checkIncubatorInvariants(tolerance = 1) {
+    const issues = [];
+    for (const startup of stocks) {
+        if (startup.assetType !== 'Startup' || startup.isBankrupt) continue;
+        const expected = (Number(startup.currentFunding) || 0) - (Number(startup.unclaimedFunding) || 0) + (Number(startup.ipoPriceBonus) || 0)
+            + (Number(startup.rescueCurrent) || 0) + (Number(startup.privatizationPremium) || 0);
+        const claims = getStartupClaimsTotal(startup);
+        if (Math.abs(claims - expected) > Math.max(tolerance, expected * 1e-6)) issues.push(`startup ${startup.symbol}: roszczenia ${claims.toFixed(0)} ≠ zebrane ${expected.toFixed(0)}`);
+    }
+    return issues;
+}
+
+/** Włącza księgę puli: stan otwarcia = fakty (niezainwestowane + w startupach) jako „wpłacone”. */
+function startPoolLedgerFromFacts() {
+    investmentPool.ledger = {};
+    investmentPool.ledgerSince = (typeof macro === 'object' && macro ? Number(macro.quarter) || 0 : 0) + 1e-9;
+    const ids = new Set(Object.keys(investmentPool.contributors || {}));
+    for (const startup of stocks) for (const round of startup.poolInvestors || []) Object.keys(round.contributors || {}).forEach(id => ids.add(id));
+    for (const id of ids) getPoolLedger(id).deposited = (Number(investmentPool.contributors?.[id]) || 0) + getPoolInvestedInStartups(id);
+}
+
+// 0.14.1 R3 (błąd C): wycofanie niezainwestowanej części z opłatą 2% i status puli.
+const POOL_WITHDRAW_FEE = 0.02;
+
+/** Gracz wycofuje część niezainwestowanych środków; 2% opłaty dla pozostałych uczestników (proporcjonalnie), a bez nich — zarządcy inkubatora. */
+function withdrawFromPool(amount) {
+    const available = Number(investmentPool.contributors?.player) || 0;
+    amount = Math.min(Number(amount) || 0, available);
+    if (!(amount > 0)) { if (typeof showToast === 'function') showToast('Brak niezainwestowanych środków do wycofania (zainwestowane zostają w startupach do ich końca).', 'warning'); return 0; }
+    const fee = amount * POOL_WITHDRAW_FEE;
+    const paid = amount - fee;
+    investmentPool.contributors.player = available - amount;
+    if (investmentPool.contributors.player < 0.01) delete investmentPool.contributors.player;
+    investmentPool.totalFunds = Math.max(0, (Number(investmentPool.totalFunds) || 0) - amount);
+    const others = Object.entries(investmentPool.contributors).filter(([id, value]) => id !== 'player' && value > 0);
+    const othersTotal = others.reduce((sum, [, value]) => sum + value, 0);
+    if (othersTotal > 0) {
+        for (const [id, value] of others) {
+            const share = fee * value / othersTotal;
+            investmentPool.contributors[id] += share;
+            notePoolLedger(id, 'feesReceived', share);
+        }
+        investmentPool.totalFunds += fee;
+    } // brak innych uczestników — opłata przypada zarządcy inkubatora (wychodzi z gry, jak wpłata do puli bez zapisu płatności)
+    playerCash += paid;
+    notePoolLedger('player', 'withdrawn', paid);
+    notePoolLedger('player', 'feesPaid', fee);
+    recomputePoolStakes();
+    if (typeof displayCash === 'function') displayCash();
+    logEvent(`🏊 Fundusz wycofuje ${paid.toFixed(0)} zł z puli inwestycyjnej (opłata ${fee.toFixed(0)} zł${othersTotal > 0 ? ' dla pozostałych uczestników' : ' dla zarządcy inkubatora'}).`, 'review');
+    if (typeof displayInvestmentPool === 'function') displayInvestmentPool();
+    if (typeof refreshFundViews === 'function') refreshFundViews();
+    return paid;
+}
+
+/** Status puli dla panelu: dlaczego pieniądze czekają. */
+function getPoolStatus() {
+    if ((Number(investmentPool.totalFunds) || 0) < 1000) return { code: 'low', text: 'Za mało środków (min. 1000 zł) — pula czeka na wpłaty.' };
+    const open = stocks.some(s => s.assetType === 'Startup' && s.stage === 'funding' && getStartupFundingGap(s) >= 1);
+    if (!open) return { code: 'noTargets', text: 'Pula czeka: brak startupów w fazie zbiórki.' };
+    return { code: 'ready', text: `Następna inwestycja za ${Math.max(0, Math.ceil((Number(investmentPool.investmentTimer) || 0) / 1000))} s gry.` };
 }
 
 function processPoolInvestments() {
@@ -1463,7 +1572,12 @@ function getFundAssets() {
     const ppp = typeof getFundPppValue === 'function' ? getFundPppValue() : 0;                 // projekty miejskie (city.js)
     const bridge = typeof getFundBridgeLoansValue === 'function' ? getFundBridgeLoansValue() : 0; // pożyczki pomostowe (finance.js)
     const projectBonds = typeof getFundProjectBondsValue === 'function' ? getFundProjectBondsValue() : 0; // obligacje projektowe (projects.js)
-    return Math.max(0, Number(playerCash) || 0) + getFundPortfolioValue() + getFundBondsValue() + deposits + ppp + bridge + projectBonds;
+    return Math.max(0, Number(playerCash) || 0) + getFundPortfolioValue() + getFundBondsValue() + deposits + ppp + bridge + projectBonds + getFundPoolValue();
+}
+
+/** 0.14.1 R2 (błąd B): pula w NAV — niezainwestowana część gracza (nominalnie) + jego wkłady przez pulę w żyjące startupy (po koszcie). */
+function getFundPoolValue() {
+    return Math.max(0, Number(investmentPool?.playerStakes?.player) || 0); // playerStakes = fakty (recomputePoolStakes przy każdej zmianie)
 }
 
 function getFundNav() {
@@ -1723,11 +1837,13 @@ function closeFundPeriod() {
 }
 
 /** Premia za wyniki: tylko za nadwyżkę nad benchmarkiem; rośnie z pozycją w rankingu i stanowiskiem. */
+const PERFORMANCE_BONUS_RATE = 0.60; // 0.14.1 R5 (decyzja użytkownika): było 0,20 — premia głównym źródłem dużych kwot na wysokich stanowiskach
+
 function computePerformanceBonus(period, position = getPlayerPosition()) {
     const excess = period.fundReturn - period.benchmarkReturn;
     if (!(excess > 0)) return 0;
     const rankBonus = period.rankOf > 1 && period.rank === 1 ? 1.25 : 1;
-    return excess * period.assets * 0.20 * position.bonusMult * rankBonus;
+    return excess * period.assets * PERFORMANCE_BONUS_RATE * position.bonusMult * rankBonus;
 }
 
 function payPerformanceBonus(period) {
@@ -2537,6 +2653,7 @@ function processCorporationWeekly() {
                 const playerShare = fee * getPlayerPosition().feeShare * 0.5;
                 corporation.budget -= playerShare;
                 playerWallet.cash += playerShare;
+                recordPayment('external:korporacja', 'player-wallet', playerShare, 'Udział w opłacie nadzorowanego funduszu');
             }
         }
 
@@ -2752,6 +2869,13 @@ function getCorporateGoalsView() {
     });
 }
 
+// 0.14.1 R5: premia za cel = min(5% budżetu korporacji, 1% aktywów funduszu × mnożnik stanowiska, 3000 zł) — główną nagrodą celu jest ocena zarządu.
+const CORPORATE_GOAL_PAY_CAP = 3000;
+function getCorporateGoalPay() {
+    const byFund = (playerFund ? getFundAssets() : 0) * 0.01 * getPlayerPosition().bonusMult;
+    return Math.round(Math.max(0, Math.min(corporation.budget * 0.05, byFund, CORPORATE_GOAL_PAY_CAP)));
+}
+
 /** Rozliczenie celów przy ocenie: +5 za spełniony, −3 za niespełniony, premia z budżetu korporacji. */
 function settleCorporateGoals() {
     const view = getCorporateGoalsView();
@@ -2759,7 +2883,7 @@ function settleCorporateGoals() {
     for (const goal of view) {
         delta += goal.done ? GOAL_MET_BONUS : -GOAL_MISSED_PENALTY;
         if (goal.done) {
-            const pay = Math.round(Math.max(0, Math.min(corporation.budget * 0.05, 10000)));
+            const pay = getCorporateGoalPay();
             if (pay > 0) {
                 corporation.budget -= pay;
                 playerWallet.cash += pay;

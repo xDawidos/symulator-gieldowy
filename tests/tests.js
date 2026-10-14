@@ -2089,12 +2089,12 @@ group('Obrony i wrogie przejęcia (etap G2)', () => {
         const liabilities = b.balanceSheet.liabilities, shares = b.totalShares;
         withRandom(0.0, () => triggerRescueOfferingEvent(b));
         assert(bot.portfolio.BBB?.shares > 0, 'nowy akcjonariusz-bot');
-        assert(rescueOffer?.symbol === 'BBB' && rescueOffer.fundReserved > 0, 'pula funduszu');
+        assert(getRescueOffer('BBB')?.fundReserved > 0, 'pula funduszu');
         playerCash = 1_000_000;
-        assert(acceptRescueOffer(100), 'fundusz obejmuje');
+        assert(acceptRescueOffer('BBB', 100), 'fundusz obejmuje');
         assert(playerPortfolio.BBB.shares === 100 && b.totalShares > shares + 100 && b.balanceSheet.liabilities < liabilities, 'akcje i dług');
         assert(b.sharesHeld === b.totalShares - shares, 'akcje w obrocie');
-        assert(rescueOffer.closed, 'zamknięta');
+        assert(!getRescueOffer('BBB'), 'zamknięta');
     });
 });
 
@@ -5449,6 +5449,526 @@ group('0.14 T3: Akademia i skaner', () => {
         resetWorld([tv, plain]); ensureAllStockSegments();
         const rows = runScanner({ ...SCANNER_DEFAULT_FILTERS, accessibleOnly: false, niche: 'TV' });
         assert(rows.length === 1 && rows[0].stock.symbol === 'NTV', rows.map(r => r.stock.symbol).join());
+    });
+});
+
+group('0.14.1 R0: niezmienniki puli i inkubatora', () => {
+    function poolWorld() {
+        const a = makeCompany('AAA', { cash: 600_000, fixedAssets: 800_000 });
+        a.insiderShares = 0; a.sharesHeld = 0;
+        resetWorld([a]);
+        allBonds.length = 0;
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        investmentPool.totalFunds = 0; investmentPool.contributors = {}; investmentPool.playerStakes = {};
+        startPoolLedgerFromFacts();
+        const s = generateNewStartup();
+        s.symbol = 'STRT'; s.stage = 'funding'; s.fundingGoal = 20_000; s.currentFunding = 0; s.investors = {}; s.isScam = false;
+        stocks.push(s);
+        playerCash = 100_000;
+        return s;
+    }
+
+    test('wpłata do puli i inwestycja puli w startup: niezmienniki puli i inkubatora czyste', () => {
+        const s = poolWorld();
+        contributeToInvestmentPool('player', 5000);
+        processPoolInvestments();
+        assert(s.poolInvestors?.length === 1, 'pula weszła w startup');
+        assert(checkPoolInvariants().length === 0, checkPoolInvariants().join('; '));
+        assert(checkIncubatorInvariants().length === 0, checkIncubatorInvariants().join('; '));
+    });
+
+    test('anioł biznesu: wpłata bez roszczenia nie psuje niezmiennika inkubatora', () => {
+        const s = poolWorld();
+        investInStartup('STRT', 1000);
+        triggerStartupFundingEvent();
+        assert(s.unclaimedFunding > 0 && checkIncubatorInvariants().length === 0, checkIncubatorInvariants().join('; '));
+    });
+
+    test('debiut: wkład puli → akcje, księga się zgadza', () => {
+        const s = poolWorld();
+        contributeToInvestmentPool('player', 5000);
+        processPoolInvestments();
+        handleSuccessfulIPO(s, 2);
+        assert((playerPortfolio.STRT?.shares || 0) > 0 && checkPoolInvariants().length === 0, checkPoolInvariants().join('; '));
+    });
+
+    test('błąd A naprawiony (R1): upadek startupu z wkładem puli — niezmiennik puli czysty', () => {
+        const s = poolWorld();
+        contributeToInvestmentPool('player', 5000);
+        processPoolInvestments();
+        removeStartup(s, 0.5, 0.7);
+        assert(checkPoolInvariants().length === 0, checkPoolInvariants().join('; '));
+    });
+});
+
+group('0.14.1 R1: rozliczenie puli przy każdym końcu startupu', () => {
+    function world(goal = 20_000) {
+        const a = makeCompany('AAA', { cash: 600_000, fixedAssets: 800_000 });
+        a.insiderShares = 0; a.sharesHeld = 0;
+        resetWorld([a]);
+        allBonds.length = 0;
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        investmentPool.totalFunds = 0; investmentPool.contributors = {}; investmentPool.playerStakes = {}; investmentPool.history = []; investmentPool.quarterReport = [];
+        startPoolLedgerFromFacts();
+        const s = generateNewStartup();
+        s.symbol = 'PSTR'; s.stage = 'funding'; s.fundingGoal = goal; s.currentFunding = 0; s.investors = {}; s.isScam = false;
+        stocks.push(s);
+        playerCash = 100_000;
+        contributeToInvestmentPool('player', 5000);
+        processPoolInvestments();
+        return s;
+    }
+    const stake = () => investmentPool.playerStakes.player || 0;
+    const facts = () => (investmentPool.contributors.player || 0) + getPoolInvestedInStartups('player');
+
+    test('przejęcie po oczekiwaniu: uczestnicy puli dostają 105–200% wkładu (do puli)', () => {
+        const s = world();
+        const invested = getPoolInvestedInStartups('player');
+        removeStartup(s, 1.05, 2.0);
+        const back = investmentPool.contributors.player || 0;
+        assert(invested > 0 && back >= invested * 1.05 - 1e-6 && back <= invested * 2 + 1e-6, `zwrot ${back} z ${invested}`);
+        assert(Math.abs(stake() - facts()) < 1e-6 && checkPoolInvariants().length === 0, 'fakty i księga');
+        assert(investmentPool.history[0]?.kind === 'takeover' && investmentPool.quarterReport.length === 1, 'wpis dla gracza');
+    });
+
+    test('oszustwo: 0; porażka: zwrot według ścieżki; NAV i limit 10% bez martwych pieniędzy', () => {
+        const s = world();
+        removeStartup(s, 0, 0);
+        assert((investmentPool.contributors.player || 0) === 0 && stake() === 0 && investmentPool.history[0].kind === 'loss', 'oszustwo: strata, stake 0');
+        assert(getFundStartupExposure() === 0, 'limit 10% się nie blokuje');
+        const t = world();
+        const invested = getPoolInvestedInStartups('player');
+        removeStartup(t, 0.5, 0.7);
+        const back = investmentPool.contributors.player || 0;
+        assert(back >= invested * 0.5 - 1e-6 && back <= invested * 0.7 + 1e-6 && checkPoolInvariants().length === 0, `porażka: ${back} z ${invested}`);
+    });
+
+    test('komplikacje → ratunek: akcje; komplikacje → upadek: zwrot 5–15%', () => {
+        const s = world();
+        s.stage = 'financial_complications'; s.rescueGoal = 1000; s.rescueCurrent = 0;
+        playerRescuesStartup('PSTR', 1000);
+        assert((playerPortfolio.PSTR?.shares || 0) > 0 && stake() === facts(), 'ratunek → debiut z akcjami');
+        const t = world();
+        const invested = getPoolInvestedInStartups('player');
+        removeStartup(t, 0.05, 0.15);
+        const back = investmentPool.contributors.player || 0;
+        assert(back >= invested * 0.05 - 1e-6 && back <= invested * 0.15 + 1e-6, `upadek: ${back}`);
+    });
+
+    test('prywatyzacja: zwrot wkładu puli wraca do puli (nie na konto)', () => {
+        const s = world();
+        const invested = getPoolInvestedInStartups('player');
+        const cash0 = playerCash;
+        refundOtherStartupClaims(s); // ścieżka prywatyzacji: zwrot wpłat innych inwestorów
+        assert(playerCash === cash0 && Math.abs((investmentPool.contributors.player || 0) - invested) < 1e-6 && stake() === facts(), 'zwrot do puli');
+    });
+
+    test('banki: zwrot przy końcu bez debiutu jak u innych inwestorów', () => {
+        const s = world();
+        const bank = commercialBanks[0];
+        bank.startupInvestments = { PSTR: 10_000 };
+        const cash0 = Number(bank.cash) || 0;
+        removeStartup(s, 1.05, 2.0);
+        assert(bank.cash - cash0 >= 10_500 - 1e-6 && !bank.startupInvestments.PSTR, `bank: +${bank.cash - cash0}`);
+    });
+
+    test('migracja: martwy wkład w pulę schodzi do faktów, bez zwrotu pieniędzy', () => {
+        world();
+        investmentPool.playerStakes.player = 99_999;
+        investmentPool.stakesMigrated = false;
+        const cash0 = playerCash;
+        const diff = migratePoolStakesToFacts();
+        assert(diff > 90_000 && Math.abs(stake() - facts()) < 1e-6 && playerCash === cash0 && investmentPool.stakesMigrated, `korekta ${diff}`);
+    });
+});
+
+group('0.14.1 R2–R3: pula w NAV, wycofanie i status', () => {
+    function world(goal = 20_000) {
+        const a = makeCompany('AAA', { cash: 600_000, fixedAssets: 800_000 });
+        a.insiderShares = 0; a.sharesHeld = 0;
+        resetWorld([a]);
+        allBonds.length = 0;
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        investmentPool.totalFunds = 0; investmentPool.contributors = {}; investmentPool.playerStakes = {}; investmentPool.history = []; investmentPool.quarterReport = [];
+        startPoolLedgerFromFacts();
+        const s = generateNewStartup();
+        s.symbol = 'PSTR'; s.stage = 'funding'; s.fundingGoal = goal; s.currentFunding = 0; s.investors = {}; s.isScam = false;
+        stocks.push(s);
+        playerCash = 100_000;
+        return s;
+    }
+
+    test('wpłata do puli nie zmienia NAV; inwestycja puli też nie (po koszcie)', () => {
+        const s = world(3000);
+        const nav0 = getFundAssets();
+        contributeToInvestmentPool('player', 5000);
+        assert(Math.abs(getFundAssets() - nav0) < 1e-6, `wpłata: ${getFundAssets()} vs ${nav0}`);
+        processPoolInvestments();
+        assert(getPoolInvestedInStartups('player') > 0 && Math.abs(getFundAssets() - nav0) < 1e-6, 'inwestycja puli');
+        assert(Math.abs(getFundStartupExposure() - 5000) < 1e-6, `ekspozycja ${getFundStartupExposure()}`);
+    });
+
+    test('upadek startupu obniża NAV o stratę', () => {
+        const s = world(3000);
+        contributeToInvestmentPool('player', 5000);
+        processPoolInvestments();
+        const nav0 = getFundAssets();
+        const invested = getPoolInvestedInStartups('player');
+        removeStartup(s, 0.5, 0.5);
+        assert(Math.abs(nav0 - getFundAssets() - invested * 0.5) < 1e-6, `spadek ${nav0 - getFundAssets()} vs ${invested * 0.5}`);
+    });
+
+    test('wycofanie: tylko niezainwestowane, opłata 2% dla pozostałych uczestników', () => {
+        const s = world(3000);
+        contributeToInvestmentPool('player', 5000);
+        processPoolInvestments(); // 3000 w startupie, 2000 niezainwestowane
+        const bot = aiCompetitors[0];
+        bot.cash = 100_000;
+        contributeToInvestmentPool(bot.id, 1000);
+        const cash0 = playerCash, nav0 = getFundAssets();
+        const paid = withdrawFromPool(99_999);
+        assert(Math.abs(paid - 2000 * 0.98) < 1e-6 && Math.abs(playerCash - cash0 - paid) < 1e-6, `wypłata ${paid}`);
+        assert(Math.abs(investmentPool.contributors[bot.id] - 1040) < 1e-6, `bot ${investmentPool.contributors[bot.id]}`);
+        assert(Math.abs(nav0 - getFundAssets() - 40) < 1e-6 && getPoolInvestedInStartups('player') > 0, 'NAV −opłata, wkład w startupie zostaje');
+        assert(checkPoolInvariants().length === 0, checkPoolInvariants().join('; '));
+        assert(withdrawFromPool(100) === 0, 'nic więcej do wycofania');
+    });
+
+    test('wycofanie bez innych uczestników: opłata dla zarządcy inkubatora', () => {
+        world(3000);
+        contributeToInvestmentPool('player', 1000);
+        const paid = withdrawFromPool(1000);
+        assert(Math.abs(paid - 980) < 1e-6 && investmentPool.totalFunds === 0 && !investmentPool.contributors.player, `wypłata ${paid}`);
+        assert(checkPoolInvariants().length === 0, checkPoolInvariants().join('; '));
+    });
+
+    test('R4: udział gracza w startupie przez pulę = suma rund; NAV = pozycje portfela puli', () => {
+        const s = world(3000);
+        contributeToInvestmentPool('player', 5000);
+        processPoolInvestments();
+        const mine = getPoolStartupShare(s, 'player');
+        assert(Math.abs(mine - 3000) < 1e-6, `udział ${mine}`);
+        assert(Math.abs((investmentPool.contributors.player || 0) + mine - getFundPoolValue()) < 1e-6, 'dwie pozycje = wartość w NAV');
+    });
+
+    test('status puli: za mało środków / brak startupów / następna inwestycja', () => {
+        const s = world(3000);
+        assert(getPoolStatus().code === 'low', 'pusta pula');
+        contributeToInvestmentPool('player', 2000);
+        assert(getPoolStatus().code === 'ready', 'jest startup w zbiórce');
+        s.stage = 'development';
+        assert(getPoolStatus().code === 'noTargets', 'brak startupów w zbiórce');
+    });
+});
+
+group('0.14.1 R5: portfel prywatny — cele korporacji i nagroda z festynu', () => {
+    function world(cash) {
+        const a = makeCompany('AAA', { cash: 5_000_000 });
+        resetWorld([a]);
+        allBonds.length = 0;
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        investmentPool.totalFunds = 0; investmentPool.contributors = {}; investmentPool.playerStakes = {};
+        playerCash = cash;
+        corporation.budget = 10_000_000;
+    }
+
+    test('premia za cel = min(5% budżetu, 1% aktywów × mnożnik stanowiska, 3000 zł)', () => {
+        world(10_000);
+        assert(getCorporateGoalPay() === 100, `fundusz 10 tys.: ${getCorporateGoalPay()}`);
+        playerProfile.positionId = 'senior';
+        assert(getCorporateGoalPay() === 160, `starszy zarządca: ${getCorporateGoalPay()}`);
+        playerCash = 5_000_000;
+        assert(getCorporateGoalPay() === 3000, 'sufit 3000 zł');
+        corporation.budget = 20_000;
+        assert(getCorporateGoalPay() === 1000, '5% budżetu korporacji');
+    });
+
+    test('spełniony cel wypłaca premię według nowej formuły', () => {
+        world(10_000);
+        ensureCorporateGoals();
+        corporation.goals.ids = ['compliance'];
+        const wallet0 = playerWallet.cash;
+        const result = settleCorporateGoals();
+        assert(result.bonus === (result.view[0].done ? 100 : 0) && playerWallet.cash - wallet0 === result.bonus, `premia ${result.bonus}`);
+    });
+
+    test('inwestor VC na festynie: 2% aktywów funduszu, 200–5000 zł', () => {
+        const event = festivalPlayerEvents.find(e => e.id === 'fest_vp_1');
+        const participant = { promotionTarget: { type: 'player_company' } };
+        for (const [cash, expected] of [[1_000, 200], [100_000, 2000], [10_000_000, 5000]]) {
+            world(cash);
+            const wallet0 = playerWallet.cash;
+            event.effect(participant);
+            assert(Math.round(playerWallet.cash - wallet0) === expected, `fundusz ${cash}: ${playerWallet.cash - wallet0}`);
+        }
+    });
+});
+
+group('0.14.1 R6: widok spółek — rynek → poziom → sektor, opis działalności', () => {
+    const seg = (stock, segments) => { stock.segments = segments; stock.sector = getSectorsFromSegments(segments); return stock; };
+
+    test('opis działalności: 1, 2 i 3 segmenty, podsektor i nisza, od największego', () => {
+        const a = seg(makeCompany('AAA'), [{ sector: 'Bankowość', subsector: 'Bank komercyjny', share: 1 }]);
+        assert(getStockActivityLabel(a) === 'Bankowość (Bank komercyjny)', getStockActivityLabel(a));
+        const b = seg(makeCompany('BBB'), [{ sector: 'Technologia', subsector: null, share: 0.3 }, { sector: 'Finanse', subsector: 'Fintech', share: 0.7 }]);
+        assert(getStockActivityLabel(b) === 'Finanse (Fintech) · Technologia', getStockActivityLabel(b));
+        const c = seg(makeCompany('CCC'), [{ sector: 'Medycyna', subsector: 'Biotechnologia', niche: 'Farmaceutyki', share: 0.5 }, { sector: 'Badania', subsector: null, share: 0.2 }, { sector: 'Technologia', subsector: 'Sztuczna inteligencja', share: 0.3 }]);
+        assert(getStockActivityLabel(c) === 'Medycyna (Biotechnologia, Farmaceutyki) · Technologia (Sztuczna inteligencja) · Badania', getStockActivityLabel(c));
+        c.segments[0].share = 0.1; c.segments[1].share = 0.6; c.sector = getSectorsFromSegments(c.segments);
+        assert(getStockActivityLabel(c).startsWith('Badania · '), 'cache odświeża się po zmianie udziałów');
+    });
+
+    test('tabela: rynek → poziom → podnagłówek sektora; cena sortowana w sektorze; zależna pod matką', () => {
+        const mk = (symbol, sector, price, exchange = 'BRONZE') => { const s = seg(makeCompany(symbol), [{ sector, subsector: null, share: 1 }]); s.price = price; s.exchange = exchange; return s; };
+        const tech1 = mk('TEA', 'Technologia', 50), bank1 = mk('BKA', 'Bankowość', 10), tech2 = mk('TEB', 'Technologia', 20), bank2 = mk('BKB', 'Bankowość', 30);
+        const child = mk('SUB', 'Gaming', 5); child.isSubsidiaryOf = 'TEA'; tech1.subsidiaries = ['SUB'];
+        resetWorld([tech1, bank1, tech2, bank2, child]);
+        const table = document.createElement('table'); const body = document.createElement('tbody'); body.id = 'stock-table-body'; table.appendChild(body); document.body.appendChild(table);
+        const saved = { sort: currentSortState, filter: sectorFilterState, level: currentMarketLevel, owned: ownedOnlyFilter };
+        try {
+            sectorFilterState = { sector: 'all', subsector: null, secondary: false, type: 'all' }; currentMarketLevel = 'ALL'; ownedOnlyFilter = false;
+            currentSortState = 'price_asc';
+            displayStocks();
+            const rows = [...body.rows].map(r => r.classList.contains('market-header') ? 'M' : r.classList.contains('exchange-header') ? 'E' : r.classList.contains('sector-subheader') ? r.textContent.replace(/[^A-Za-zżąśćęłóźńŻĄŚĆĘŁÓŹŃ]/g, '') : r.dataset.symbol);
+            assert(rows.join(',') === 'M,E,Bankowość,BKA,BKB,Technologia,TEB,TEA,SUB', rows.join(','));
+            assert(body.rows[0].cells[0].colSpan === 6 && document.querySelector('#stock-table-body tr[data-symbol="BKA"]').cells.length === 6, '6 kolumn');
+            currentSortState = 'price_desc';
+            displayStocks();
+            const order = [...body.rows].map(r => r.dataset.symbol).filter(Boolean);
+            assert(order.join(',') === 'BKB,BKA,TEA,SUB,TEB', order.join(','));
+            assert(body.querySelector('tr[data-symbol="BKA"] .stock-meta').textContent.startsWith('Bankowość'), 'opis pod nazwą');
+            sectorFilterState = { sector: 'Bankowość', subsector: null, secondary: false, type: 'all' };
+            displayStocks();
+            assert(![...body.rows].some(r => r.classList.contains('sector-subheader') && r.textContent.includes('Technologia')), 'pusty podnagłówek ukryty przy filtrze');
+        } finally {
+            currentSortState = saved.sort; sectorFilterState = saved.filter; currentMarketLevel = saved.level; ownedOnlyFilter = saved.owned;
+            table.remove();
+        }
+    });
+
+    test('wydajność: displayStocks przy ~110 spółkach', () => {
+        const list = Array.from({ length: 110 }, (_, i) => { const s = seg(makeCompany(`P${i}`), [{ sector: SECTOR_NAMES[i % SECTOR_NAMES.length], subsector: null, share: 1 }]); s.price = 10 + i; return s; });
+        resetWorld(list);
+        const table = document.createElement('table'); const body = document.createElement('tbody'); body.id = 'stock-table-body'; table.appendChild(body); document.body.appendChild(table);
+        try {
+            displayStocks();
+            const t0 = performance.now();
+            for (let i = 0; i < 5; i++) displayStocks();
+            const ms = (performance.now() - t0) / 5;
+            window.__r6DisplayMs = ms;
+            assert(ms < 100, `displayStocks: ${ms.toFixed(1)} ms`);
+        } finally { table.remove(); }
+    });
+});
+
+group('0.14.2 P1: instytuty badawcze — kurs z zysków, bez wykładniczego wzrostu', () => {
+    function instituteWorld() {
+        const inst = makeCompany('GUM', { cash: 0, fixedAssets: 0 });
+        Object.assign(inst, { name: 'GUM Med Research', assetType: 'ResearchInstitute', sector: ['Badania'], price: 78, totalShares: 42000, volatilityFactor: 0.7, financialHealth: 1, research: { isResearching: false, unlockedTechs: [] } });
+        delete inst.segments; delete inst.fundamentals;
+        const co = makeCompany('TECH', { cash: 5_000_000 });
+        co.research = { isResearching: false, unlockedTechs: [] };
+        resetWorld([inst, co]);
+        ensureAllStockSegments();
+        migrateResearchInstituteValuation();
+        return { inst, co };
+    }
+    function withNeutralCycle(fn) {
+        const saved = economyCycle;
+        economyCycle = createEconomyCycle('recovery');
+        economyCycle.gdpGrowth = 0;
+        try { return fn(); } finally { economyCycle = saved; }
+    }
+
+    test('500 kwartałów (ok. 125 lat) przy rosnącej liczbie technologii: kurs 0,3–3× wartości godziwej', () => {
+        const { inst, co } = instituteWorld();
+        let worst = { lo: Infinity, hi: 0 };
+        withSeededRandom(14, () => withNeutralCycle(() => {
+            for (let q = 0; q < 500; q++) {
+                co.research.unlockedTechs.push(`T${q}`); // +1 technologia na rynku co kwartał
+                for (let tick = 0; tick < 300; tick++) {
+                    updateStockPrices();
+                    if (tick % 10 === 0) updateResearchInstitutes();
+                }
+                processFinancialReports();
+                if (q >= 8) {
+                    const ratio = inst.price / inst.fundamentals.fairValue;
+                    worst = { lo: Math.min(worst.lo, ratio), hi: Math.max(worst.hi, ratio) };
+                }
+            }
+        }));
+        assert(worst.lo >= 0.3 && worst.hi <= 3, `cena / wartość godziwa: ${worst.lo.toFixed(2)}–${worst.hi.toFixed(2)}`);
+        assert(Number.isFinite(inst.price) && inst.price < 1e6, `cena ${inst.price}`);
+        assert(inst.fundamentals.peRatio > 0 && inst.fundamentals.peRatio < 100, `C/Z ${inst.fundamentals.peRatio}`);
+    });
+
+    test('dwa instytuty obok siebie w tablicy: bez skoków kursu i bez dymków', () => {
+        const { inst } = instituteWorld();
+        const second = makeCompany('IBS', { cash: 0, fixedAssets: 0 });
+        Object.assign(second, { assetType: 'ResearchInstitute', sector: ['Badania'], price: 80, research: { isResearching: false, unlockedTechs: [] } });
+        stocks.splice(1, 0, second);
+        const prices = [inst.price, second.price];
+        const toast = showToast; let toasts = 0;
+        showToast = () => { toasts++; };
+        try { for (let i = 0; i < 200; i++) updateResearchInstitutes(); } finally { showToast = toast; }
+        assert(inst.price === prices[0] && second.price === prices[1] && toasts === 0, `ceny ${inst.price}/${second.price}, dymki ${toasts}`);
+        assert(typeof checkResearchInstitutePositions === 'undefined', 'mechanika sąsiadów usunięta');
+    });
+
+    test('konkurencja instytutów: rzadkie zdarzenie ±10–20%, tylko wpis w dzienniku', () => {
+        const { inst } = instituteWorld();
+        const second = makeCompany('IBS', { cash: 0, fixedAssets: 0 });
+        Object.assign(second, { assetType: 'ResearchInstitute', sector: ['Badania'], price: 80, research: { isResearching: false, unlockedTechs: [] } });
+        stocks.push(second);
+        let events = 0;
+        const toast = showToast; let toasts = 0;
+        showToast = () => { toasts++; };
+        try {
+            withSeededRandom(5, () => {
+                for (let q = 0; q < 600; q++) {
+                    const e = maybeInstituteCompetitionEvent();
+                    if (e) { events++; assert(Math.abs(e.change) >= 0.1 && Math.abs(e.change) <= 0.2, `ruch ${e.change}`); }
+                }
+            });
+        } finally { showToast = toast; }
+        assert(events > 60 && events < 150 && toasts === 0, `zdarzeń ${events} na 600 kw., dymków ${toasts}`);
+    });
+
+    test('migracja: kosmiczna cena instytutu → rewizja do wartości godziwej z wpisem', () => {
+        const { inst } = instituteWorld();
+        inst.price = 6.4e15;
+        inst.fundamentals = null;
+        const log0 = typeof eventLog !== 'undefined' ? eventLog.length : 0;
+        const fixed = migrateResearchInstituteValuation();
+        assert(fixed.includes('GUM') && inst.price > 1 && inst.price < 1000, `cena po rewizji ${inst.price}`);
+        assert(Math.abs(inst.price / inst.fundamentals.fairValue - 1) < 1e-9, 'cena = wartość godziwa');
+        assert(migrateResearchInstituteValuation().length === 0, 'drugi raz bez zmian');
+    });
+
+    test('opis instytutu i bezpiecznik ceny w checkWorldInvariants', () => {
+        const { inst } = instituteWorld();
+        assert(!assembleDescription(inst).includes('Brak opisu'), 'opis');
+        inst.price = inst.fundamentals.fairValue * 500;
+        const warnings = checkWorldInvariants().warnings || [];
+        assert(warnings.some(w => w.includes('GUM') && w.includes('100×')), warnings.join('; '));
+    });
+});
+
+group('0.14.2 P2: emisja ratunkowa — oferty per spółka; zapłata funduszu = przyrost akcji', () => {
+    function world() {
+        const x = makeCompany('XXX', { cash: 100_000 }), y = makeCompany('YYY', { cash: 100_000 });
+        for (const s of [x, y]) { s.insiderShares = 0; s.sharesHeld = 0; s.reputation = { player: 0 }; s.ceo = { name: 'Prezes', traits: [] }; s.balanceSheet.liabilities = 2_000_000; }
+        resetWorld([x, y]);
+        allBonds.length = 0;
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        rescueOffers = {};
+        playerCash = 1_000_000;
+        return { x, y };
+    }
+    function botsDecline(fn) { const r = Math.random; Math.random = () => 0.999; try { return fn(); } finally { Math.random = r; } }
+    function capture(fn) {
+        const log = logEvent, lines = [];
+        logEvent = (text, ...rest) => { lines.push(String(text)); return log(text, ...rest); };
+        try { return { result: fn(), lines }; } finally { logEvent = log; }
+    }
+    function lastPayment(purposePrefix) { return [...paymentJournal].reverse().find(e => e.purpose.startsWith(purposePrefix)); }
+
+    test('błąd z gry: okno oferty XXX, w tle emisja YYY → „Obejmij” kupuje XXX, nie YYY', () => {
+        const { x, y } = world();
+        botsDecline(() => triggerRescueOfferingEvent(x));
+        botsDecline(() => triggerRescueOfferingEvent(y)); // dawniej nadpisywała globalną ofertę
+        assert(getRescueOffer('XXX') && getRescueOffer('YYY'), 'dwie otwarte oferty');
+        const issued = acceptRescueOffer('XXX', 100);
+        assert(issued === 100 && playerPortfolio.XXX?.shares === 100 && !playerPortfolio.YYY, `XXX ${playerPortfolio.XXX?.shares}, YYY ${playerPortfolio.YYY?.shares}`);
+        assert(!getRescueOffer('XXX') && getRescueOffer('YYY'), 'oferta YYY nadal otwarta');
+    });
+
+    test('niezmiennik: emisja ratunkowa — zapłata = akcje × cena, przyrost akcji = liczba z komunikatu', () => {
+        const { x } = world();
+        botsDecline(() => triggerRescueOfferingEvent(x));
+        const offer = getRescueOffer('XXX');
+        const cash0 = playerCash, shares0 = playerPortfolio.XXX?.shares || 0;
+        const { result, lines } = capture(() => acceptRescueOffer('XXX', 250));
+        const paid = cash0 - playerCash, got = playerPortfolio.XXX.shares - shares0;
+        assert(result === 250 && got === 250 && Math.abs(paid - 250 * offer.price) < 1e-6, `zapłata ${paid}, akcje ${got}`);
+        assert(Math.abs(lastPayment('Emisja ratunkowa XXX').amount - paid) < 1e-6, 'dziennik płatności');
+        assert(lines.some(l => l.includes('Fundusz obejmuje 250 akcji') && l.includes('XXX')), lines.join(' | '));
+        assert(isStockOwnedByPlayer(x), 'filtr „Moje”');
+    });
+
+    test('oferty zapisywane i wczytywane per spółka; stare zapisy z jedną ofertą', () => {
+        const { x, y } = world();
+        botsDecline(() => { triggerRescueOfferingEvent(x); triggerRescueOfferingEvent(y); });
+        const snapshot = JSON.parse(JSON.stringify(buildSaveSnapshot()));
+        assert(snapshot.rescueOffers?.XXX && snapshot.rescueOffers?.YYY, 'w zapisie');
+        rescueOffers = {};
+        for (const offer of [...Object.values(snapshot.rescueOffers || {}), snapshot.rescueOffer].filter(o => o?.symbol && !o.closed)) rescueOffers[offer.symbol] = offer; // jak przy wczytaniu (main.js)
+        assert(getRescueOffer('XXX') && getRescueOffer('YYY'), 'po wczytaniu');
+        const legacy = { rescueOffer: { symbol: 'XXX', price: 5, total: 100, fundReserved: 40, closed: false } };
+        rescueOffers = {};
+        for (const offer of [...Object.values(legacy.rescueOffers || {}), legacy.rescueOffer].filter(o => o?.symbol && !o.closed)) rescueOffers[offer.symbol] = offer;
+        assert(getRescueOffer('XXX')?.fundReserved === 40, 'stary zapis');
+    });
+
+    test('oferta bez decyzji wygasa po kwartale', () => {
+        const { x } = world();
+        botsDecline(() => triggerRescueOfferingEvent(x));
+        getRescueOffer('XXX').quarter = macro.quarter - 2;
+        expireRescueOffers();
+        assert(!getRescueOffer('XXX') && !acceptRescueOffer('XXX', 10), 'wygasła');
+    });
+
+    test('niezmiennik: dopłata za akcje do inwestycji — zapłata i przyrost akcji z komunikatu', () => {
+        const a = makeCompany('AAA', { cash: 5_000_000 });
+        a.insiderShares = 0; a.reputation = { player: 0 };
+        resetWorld([a]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        playerCash = 1_000_000;
+        playerPortfolio.AAA = { shares: 6000, avgPrice: 100, assetType: 'stock' };
+        a.sharesHeld = 6000; a.maxShares = 10000;
+        startInternalInvestment(a, { id: 'test_line', name: 'Linia testowa', kind: 'internal', durationDays: 28, assetValue: 300_000, incomeBonus: 0.2, healthBonus: 0, maintenance: 0 }, 400_000);
+        const project = a.activeInvestments?.[0];
+        assert(project, 'inwestycja w toku');
+        const cash0 = playerCash, shares0 = playerPortfolio.AAA.shares;
+        const { lines } = capture(() => fundTopUpInvestment('AAA', project.uid, 95_000, 'shares'));
+        const got = playerPortfolio.AAA.shares - shares0, paid = cash0 - playerCash;
+        const msg = lines.find(l => l.includes('obejmuje'));
+        const msgShares = Number((msg?.match(/obejmuje ([\d\s\u00a0]+) nowych/)?.[1] || '').replace(/\D/g, ''));
+        assert(got > 0 && got === msgShares && Math.abs(lastPayment('Dopłata za akcje').amount - paid) < 1e-6, `akcje ${got}, komunikat ${msgShares}, zapłata ${paid}`);
+    });
+
+    test('niezmiennik: debiut startupu — akcje funduszu × cena debiutu = wartość z komunikatu', () => {
+        const a = makeCompany('AAA', { cash: 600_000, fixedAssets: 800_000 });
+        resetWorld([a]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        playerCash = 100_000;
+        const s = generateNewStartup();
+        s.symbol = 'NEWS'; s.stage = 'funding'; s.fundingGoal = 8000; s.currentFunding = 0; s.investors = {}; s.isScam = false;
+        stocks.push(s);
+        const cash0 = playerCash;
+        assert(investInStartup('NEWS', 5000), 'wpłata');
+        assert(Math.abs(cash0 - playerCash - 5000) < 1e-6, 'zapłata');
+        const { lines } = capture(() => handleSuccessfulIPO(s, 2));
+        const shares = playerPortfolio.NEWS?.shares || 0;
+        const msg = lines.find(l => l.startsWith('🔔 IPO'));
+        const value = Number((msg?.match(/→ (\d+) zł/)?.[1]) || 0);
+        assert(shares > 0 && Math.abs(Math.round(shares * s.price) - value) <= 1, `akcje ${shares} × ${s.price} vs ${value}`);
+    });
+
+    test('niezmiennik: wezwanie — fundusz oddaje akcje, wpływ = akcje × cena oferty', () => {
+        const a = makeCompany('AGR', { cash: 50_000_000, fixedAssets: 800_000 });
+        const b = makeCompany('BBB', { cash: 1_000_000, fixedAssets: 800_000 });
+        [a, b].forEach(c => { c.insiderShares = 0; c.sharesHeld = 0; c.reputation = { player: 0 }; c.ceo = { name: 'Prezes', traits: [] }; });
+        resetWorld([a, b]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        playerPortfolio.BBB = { shares: 2500, avgPrice: 80, assetType: 'stock' };
+        b.sharesHeld = 2500;
+        const r = Math.random; Math.random = () => 0.99;
+        try { initiateMergerProcess(a, b, 'przejęcie', 'cash', 0.3); } finally { Math.random = r; }
+        const price = a.mergerProcess.offerDetails.buyoutPricePerShare;
+        const cash0 = playerCash;
+        assert(sellFundSharesToAggressor('BBB'), 'sprzedaż');
+        assert(Math.abs(playerCash - cash0 - 2500 * price) < 1e-6 && !playerPortfolio.BBB && a.equityStakes.BBB === 2500, 'wpływ i akcje');
     });
 });
 
