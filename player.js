@@ -2651,6 +2651,7 @@ function processCorporationWeekly() {
                 const playerShare = fee * getPlayerPosition().feeShare * 0.5;
                 corporation.budget -= playerShare;
                 playerWallet.cash += playerShare;
+                recordPayment('external:korporacja', 'player-wallet', playerShare, 'Udział w opłacie nadzorowanego funduszu');
             }
         }
 
@@ -2866,6 +2867,13 @@ function getCorporateGoalsView() {
     });
 }
 
+// 0.14.1 R5: premia za cel = min(5% budżetu korporacji, 1% aktywów funduszu × mnożnik stanowiska, 3000 zł) — główną nagrodą celu jest ocena zarządu.
+const CORPORATE_GOAL_PAY_CAP = 3000;
+function getCorporateGoalPay() {
+    const byFund = (playerFund ? getFundAssets() : 0) * 0.01 * getPlayerPosition().bonusMult;
+    return Math.round(Math.max(0, Math.min(corporation.budget * 0.05, byFund, CORPORATE_GOAL_PAY_CAP)));
+}
+
 /** Rozliczenie celów przy ocenie: +5 za spełniony, −3 za niespełniony, premia z budżetu korporacji. */
 function settleCorporateGoals() {
     const view = getCorporateGoalsView();
@@ -2873,7 +2881,7 @@ function settleCorporateGoals() {
     for (const goal of view) {
         delta += goal.done ? GOAL_MET_BONUS : -GOAL_MISSED_PENALTY;
         if (goal.done) {
-            const pay = Math.round(Math.max(0, Math.min(corporation.budget * 0.05, 10000)));
+            const pay = getCorporateGoalPay();
             if (pay > 0) {
                 corporation.budget -= pay;
                 playerWallet.cash += pay;

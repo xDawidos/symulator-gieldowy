@@ -81,6 +81,41 @@ const PRESETS = {
     }`
 };
 PRESETS['fundusz-gig-zamkniety'] = PRESETS['fundusz-gig'] + 'setFundOpenSubscriptions(false);';
+// 0.14.1 R5: gracz aktywny — fundusz jak GIG + nadwyżka window.__alpha na rok (domyślnie 0,03; patch=window.__alpha=0 → fundusz = GIG);
+// stanowisko co 4 kwartały o szczebel wyżej (junior → CEO); wpływy do portfela prywatnego według źródła i stanowiska.
+PRESETS['gracz-aktywny'] = PRESETS['fundusz-gig'] + `(function () {
+    const w = window.__wallet = { byPos: {}, quartersAt: {}, excess: [] };
+    const origPay = recordPayment;
+    recordPayment = function (from, to, amount, purpose) {
+        if (to === 'player-wallet' && amount > 0) {
+            const pos = playerProfile?.positionId || 'junior', key = String(purpose || '?').split(':')[0];
+            const b = w.byPos[pos] = w.byPos[pos] || {};
+            b[key] = (b[key] || 0) + amount;
+        }
+        return origPay.apply(this, arguments);
+    };
+    const origWeekly = processClientsWeekly;
+    processClientsWeekly = function () {
+        const alpha = window.__alpha ?? 0.03;
+        if (window.__idx && alpha) window.__idx.units *= 1 + alpha / 52;
+        return origWeekly.apply(this, arguments);
+    };
+    const origQ = advanceMacroQuarter;
+    advanceMacroQuarter = function () {
+        const posBefore = playerProfile?.positionId || 'junior';
+        const r = origQ.apply(this, arguments);
+        try {
+            w.quartersAt[posBefore] = (w.quartersAt[posBefore] || 0) + 1;
+            const idx = Math.min(CAREER_POSITIONS.length - 1, Math.floor(macro.quarter / 4));
+            playerProfile.positionId = CAREER_POSITIONS[idx].id;
+            if (typeof syncExchangeAccessWithPosition === 'function') syncExchangeAccessWithPosition();
+            const last = playerFund?.periods?.at?.(-1);
+            if (last) w.excess.push(Math.round((last.fundReturn - last.benchmarkReturn) * 10000) / 100);
+            w.assets = Math.round(getFundAssets());
+        } catch (e) { (window.__presetErrors = window.__presetErrors || []).push(String(e)); }
+        return r;
+    };
+})();`;
 const PATCH = (PRESETS[params.get('preset')] || '') + (params.get('patch') || ''); // kod wykonywany w ramce po starcie gry
 const SAVE_KEY = 'gra_inwestycyjna_dawid_save_v4';
 const RESULT_KEY = `__sim_${LABEL}`;
@@ -257,7 +292,7 @@ const PROBE = `(function () {
             noT3.stocks.forEach(x => { delete x.strategy; if (typeof x.seg === 'string') x.seg = x.seg.split(';').map(part => part.split('|').slice(0, 3).join('|')).join(';'); });
             saveSizes = { now, legacy, noT2: JSON.stringify(noT2).length, noT3: JSON.stringify(noT3).length, stocks: stocks.length };
         }
-        return { tsr, moneyWarn: s.moneyWarn || [], moneyWarnQuarters: s.moneyWarnQuarters || 0, poolStake: s.poolStake, presetErrors: window.__presetErrors || [], sectorIssues, saveSizes, subStart: s.subStart, subEnd: s.subEnd, multiSegEnd: s.multiSeg, mechanics: s.mechanics || null, badPrice: s.badPrice, negCash: s.negCash, mailBy: s.mailBy, bailouts: s.bailouts, flowWarnings: s.flowWarnings, fund: s.fund, panelText: panel ? panel.textContent.split(/\\s+/).join(' ').slice(0, 600) : null, panelError: s.panelError || null, elections: (macro.election?.history || []).filter(e => e.quarter >= s.quarters[0].q),
+        return { tsr, moneyWarn: s.moneyWarn || [], moneyWarnQuarters: s.moneyWarnQuarters || 0, poolStake: s.poolStake, wallet: window.__wallet || null, presetErrors: window.__presetErrors || [], sectorIssues, saveSizes, subStart: s.subStart, subEnd: s.subEnd, multiSegEnd: s.multiSeg, mechanics: s.mechanics || null, badPrice: s.badPrice, negCash: s.negCash, mailBy: s.mailBy, bailouts: s.bailouts, flowWarnings: s.flowWarnings, fund: s.fund, panelText: panel ? panel.textContent.split(/\\s+/).join(' ').slice(0, 600) : null, panelError: s.panelError || null, elections: (macro.election?.history || []).filter(e => e.quarter >= s.quarters[0].q),
             lawChanges: soc ? { ...soc.lawChanges } : null, laws: soc ? { ...soc.laws } : null,
             invariants: typeof checkWorldInvariants === 'function' ? checkWorldInvariants().slice(0, 5) : null, invLog: s.invLog, trimWarnings: s.trimWarnings,
             trims: typeof ghostTrimLog !== 'undefined' ? ghostTrimLog.length : null };

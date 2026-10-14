@@ -5661,6 +5661,49 @@ group('0.14.1 R2–R3: pula w NAV, wycofanie i status', () => {
     });
 });
 
+group('0.14.1 R5: portfel prywatny — cele korporacji i nagroda z festynu', () => {
+    function world(cash) {
+        const a = makeCompany('AAA', { cash: 5_000_000 });
+        resetWorld([a]);
+        allBonds.length = 0;
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        investmentPool.totalFunds = 0; investmentPool.contributors = {}; investmentPool.playerStakes = {};
+        playerCash = cash;
+        corporation.budget = 10_000_000;
+    }
+
+    test('premia za cel = min(5% budżetu, 1% aktywów × mnożnik stanowiska, 3000 zł)', () => {
+        world(10_000);
+        assert(getCorporateGoalPay() === 100, `fundusz 10 tys.: ${getCorporateGoalPay()}`);
+        playerProfile.positionId = 'senior';
+        assert(getCorporateGoalPay() === 160, `starszy zarządca: ${getCorporateGoalPay()}`);
+        playerCash = 5_000_000;
+        assert(getCorporateGoalPay() === 3000, 'sufit 3000 zł');
+        corporation.budget = 20_000;
+        assert(getCorporateGoalPay() === 1000, '5% budżetu korporacji');
+    });
+
+    test('spełniony cel wypłaca premię według nowej formuły', () => {
+        world(10_000);
+        ensureCorporateGoals();
+        corporation.goals.ids = ['compliance'];
+        const wallet0 = playerWallet.cash;
+        const result = settleCorporateGoals();
+        assert(result.bonus === (result.view[0].done ? 100 : 0) && playerWallet.cash - wallet0 === result.bonus, `premia ${result.bonus}`);
+    });
+
+    test('inwestor VC na festynie: 2% aktywów funduszu, 200–5000 zł', () => {
+        const event = festivalPlayerEvents.find(e => e.id === 'fest_vp_1');
+        const participant = { promotionTarget: { type: 'player_company' } };
+        for (const [cash, expected] of [[1_000, 200], [100_000, 2000], [10_000_000, 5000]]) {
+            world(cash);
+            const wallet0 = playerWallet.cash;
+            event.effect(participant);
+            assert(Math.round(playerWallet.cash - wallet0) === expected, `fundusz ${cash}: ${playerWallet.cash - wallet0}`);
+        }
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;
