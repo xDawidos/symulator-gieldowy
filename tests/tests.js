@@ -5848,6 +5848,7 @@ group('0.14.2 P1: instytuty badawcze — kurs z zysków, bez wykładniczego wzro
     test('opis instytutu i bezpiecznik ceny w checkWorldInvariants', () => {
         const { inst } = instituteWorld();
         assert(!assembleDescription(inst).includes('Brak opisu'), 'opis');
+        inst.balanceSheet.assets = 1_000_000; // wypłacalny (spółki z ujemnym kapitałem bezpiecznik pomija — P9)
         inst.price = inst.fundamentals.fairValue * 500;
         const warnings = checkWorldInvariants().warnings || [];
         assert(warnings.some(w => w.includes('GUM') && w.includes('100×')), warnings.join('; '));

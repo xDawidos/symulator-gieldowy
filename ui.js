@@ -5729,8 +5729,11 @@ function checkWorldInvariants() {
         if (stock.isBankrupt || stock.assetType === 'Startup') continue;
         const fair = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(stock) : null;
         const pe = Number(stock.fundamentals?.peRatio);
-        if (fair > 0 && stock.price > fair * 100) moneyWarnings.push(`cena ${stock.symbol} ${Math.round(stock.price)} > 100× wartości godziwej (${fair.toFixed(2)})`);
-        else if (pe > 1000) moneyWarnings.push(`C/Z ${stock.symbol}: ${Math.round(pe)}`);
+        // 0.14.2 P9: spółka z ujemnym kapitałem czeka na upadłość (wartość godziwa bez znaczenia); C/Z > 1000 przy cenie
+        // bliskiej wartości z kapitału (zysk ≈ 0, kotwica księgowa) nie jest błędem wyceny.
+        const insolvent = stock.balanceSheet && (Number(stock.balanceSheet.assets) || 0) - (Number(stock.balanceSheet.liabilities) || 0) <= 0;
+        if (fair > 0 && stock.price > fair * 100 && !insolvent) moneyWarnings.push(`cena ${stock.symbol} ${Math.round(stock.price)} > 100× wartości godziwej (${fair.toFixed(2)})`);
+        else if (pe > 1000 && !(fair > 0 && stock.price <= fair * 3)) moneyWarnings.push(`C/Z ${stock.symbol}: ${Math.round(pe)}`);
     }
     problems.warnings = (typeof ghostTrimLog !== 'undefined' ? ghostTrimLog : []).map(t =>
         `przycięcie ${t.symbol}: ${t.holder} −${Math.round(t.shares)} akcji (kwartał ${t.quarter}, ${t.source === 'load' ? 'wczytanie' : 'gra'})`).concat(moneyWarnings);
