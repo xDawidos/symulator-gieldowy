@@ -93,7 +93,7 @@ const technologies = {
     'REALTY_DYNAMIC_WALLS_1': { name: "Dynamiczne Ściany", icon: '🧱', description: "System przesuwnych ścian pozwalający na dowolną rekonfigurację mieszkania.", type: "wzmacnianie pozycji na rynku", cost: 380, initialCashCost: 3800, sector: 'Nieruchomości', applyEffect: (stock) => { applyPriceEffect(stock.symbol, 0.07, 'positive'); } },
 
     // Energia
-    'ENERGY_FUSION_1': { name: "Reaktor Fuzyjny",minResearchLevel: 2, icon: '☀️', description: "Przełom w badaniach nad fuzją jądrową obiecuje tanią, czystą energię.", type: "wzmacnianie pozycji na rynku", cost: 2000, initialCashCost: 20000, sector: 'Energia', applyEffect: (stock) => { applyPriceEffect(stock.symbol, 0.50, 'positive'); stock.financialHealth += 2; } },
+    'ENERGY_FUSION_1': { name: "Reaktor Fuzyjny",minResearchLevel: 2, requires: { subsector: 'Energetyka jądrowa', orTech: 'ENERGY_SMART_GRID_1' }, icon: '☀️', description: "Przełom w badaniach nad fuzją jądrową obiecuje tanią, czystą energię.", type: "wzmacnianie pozycji na rynku", cost: 2000, initialCashCost: 20000, sector: 'Energia', applyEffect: (stock) => { applyPriceEffect(stock.symbol, 0.50, 'positive'); stock.financialHealth += 2; } },
     'ENERGY_BATTERY_1': { name: "Magazyny Bateryjne", icon: '🔋', description: "Rozwój technologii magazynowania energii stabilizuje sieć i zyski.", type: "wzmacnianie ceny i zysków", cost: 400, initialCashCost: 4000, sector: 'Energia', applyEffect: (stock) => { stock.volatilityFactor *= 0.8; } },
     'ENERGY_WIRELESS_1': { name: "Bezprzewodowy Przesył Energii", icon: '📡', description: "Technologia przesyłu energii na odległość eliminuje potrzebę budowy drogich linii energetycznych.", type: "wzmacnianie pozycji na rynku", cost: 1200, initialCashCost: 12000, sector: 'Energia', applyEffect: (stock) => { applyPriceEffect(stock.symbol, 0.30, 'positive'); } },
     'ENERGY_SMART_GRID_1': { name: "Inteligentna Sieć (Smart Grid)", icon: '🌐', description: "Sieć energetyczna, która sama zarządza popytem i podażą, minimalizując straty.", type: "wzmacnianie rozwoju", cost: 500, initialCashCost: 5000, sector: 'Energia', applyEffect: (stock) => { stock.financialHealth += 2.0; stock.volatilityFactor *= 0.88; } },
@@ -2079,7 +2079,7 @@ const INVESTMENT_CATALOG = {
         { id: 'pharma_factory', name: "Fabryka Leków", icon: 'img/fabrykaicon.png', cost: 1000000, duration: 40, assetValue: 800000, incomeBonus: 0.22, healthBonus: 1.0, minDevLevel: 3, maintenance: 6000 }
     ],
     'Energia': [
-        { id: 'energy_plant', name: "Rozbudowa Elektrowni", icon: 'img/fabrykaicon.png', cost: 1200000, duration: 30, assetValue: 1000000, incomeBonus: 0.18, healthBonus: 1.0, minDevLevel: 3, maintenance: 6000 },
+        { id: 'energy_plant', name: "Rozbudowa Elektrowni", requiresSector: 'Energia', icon: 'img/fabrykaicon.png', cost: 1200000, duration: 30, assetValue: 1000000, incomeBonus: 0.18, healthBonus: 1.0, minDevLevel: 3, maintenance: 6000 },
         { id: 'wind_farm', name: "Farma Wiatrowa", icon: 'img/fabrykaicon.png', cost: 800000, duration: 35, assetValue: 650000, incomeBonus: 0.15, healthBonus: 0.8, minDevLevel: 2, maintenance: 4000 },
         { id: 'solar_park', name: "Park Słoneczny", icon: 'img/fabrykaicon.png', cost: 600000, duration: 25, assetValue: 500000, incomeBonus: 0.12, healthBonus: 0.6, minDevLevel: 2, maintenance: 3000 }
     ],
@@ -2192,15 +2192,38 @@ function getCatalogEntryById(id) {
     return null;
 }
 
-/** Wszystkie pozycje katalogu dostępne dla spółki: ogólne + wszystkie jej sektory, bez duplikatów. */
+// 0.14.2 P6: inwestycje i technologie sektorowe tylko dla sektora głównego albo segmentu z udziałem ≥ 25%
+// (dawniej każdy segment poboczny, nawet kilkuprocentowy, otwierał cały katalog sektora — np. elektrownię).
+const SECTOR_CATALOG_MIN_SHARE = 0.25;
+
+function getCatalogSectorsForCompany(company) {
+    const segments = typeof getStockSegments === 'function' ? getStockSegments(company) : [];
+    if (!segments.length) return Array.isArray(company?.sector) ? company.sector.slice(0, 1) : [];
+    const main = getMainSector(company);
+    return [...new Set(segments.filter(seg => seg.sector === main || seg.share >= SECTOR_CATALOG_MIN_SHARE).map(seg => seg.sector))];
+}
+
+/** Wymagania pozycji (requiresSector: sektor z ≥ 25%; requires.subsector / requires.orTech dla technologii). */
+function meetsCatalogRequirements(company, item) {
+    if (item?.requiresSector && !getCatalogSectorsForCompany(company).includes(item.requiresSector)) return false;
+    const req = item?.requires;
+    if (req && (req.subsector || req.orTech)) {
+        const hasSub = req.subsector && getStockSegments(company).some(seg => seg.subsector === req.subsector);
+        const hasTech = req.orTech && (company.research?.unlockedTechs || []).includes(req.orTech);
+        if (!hasSub && !hasTech) return false;
+    }
+    return true;
+}
+
+/** Pozycje katalogu dostępne dla spółki: ogólne + sektor główny i segmenty ≥ 25% (0.14.2 P6), bez duplikatów. */
 function getInvestmentCatalogForCompany(company) {
-    const sectors = Array.isArray(company?.sector) ? company.sector : [];
+    const sectors = getCatalogSectorsForCompany(company);
     const seen = new Set();
     const result = [];
 
     for (const key of ['general', ...sectors]) {
         for (const item of INVESTMENT_CATALOG[key] || []) {
-            if (seen.has(item.id)) continue;
+            if (seen.has(item.id) || !meetsCatalogRequirements(company, item)) continue;
             seen.add(item.id);
             result.push(item);
         }
@@ -7762,7 +7785,8 @@ function getAvailableCompanyResearch(company, affordableOnly = false) {
             id === research.currentTech ||
             tech.type !== research.specialization ||
             !(tech.sector === 'common' ||
-                company.sector.includes(tech.sector)) ||
+                getCatalogSectorsForCompany(company).includes(tech.sector)) || // 0.14.2 P6: segment ≥ 25%
+            !meetsCatalogRequirements(company, tech) ||
             !Number.isFinite(points) ||
             points <= 0 ||
             !Number.isFinite(initialCost) ||

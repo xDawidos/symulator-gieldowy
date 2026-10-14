@@ -6241,6 +6241,39 @@ group('0.14.2 P5: bank inwestycyjny — pakiet do odsprzedaży, popularne spół
     });
 });
 
+group('0.14.2 P6: inwestycje i technologie według sektora i podsektora', () => {
+    const seg = (stock, segments) => { stock.segments = segments; stock.sector = getSectorsFromSegments(segments); return stock; };
+    const ids = c => getInvestmentCatalogForCompany(c).map(i => i.id);
+
+    test('elektrownia tylko dla Energii (segment ≥ 25%); spółka z 10% Energii jej nie widzi', () => {
+        const tech = seg(makeCompany('TEC', { devLevel: 5 }), [{ sector: 'Technologia', subsector: null, share: 1 }]);
+        const side = seg(makeCompany('SID', { devLevel: 5 }), [{ sector: 'Technologia', subsector: null, share: 0.9 }, { sector: 'Energia', subsector: null, share: 0.1 }]);
+        const energy = seg(makeCompany('ENE', { devLevel: 5 }), [{ sector: 'Energia', subsector: null, share: 0.7 }, { sector: 'Chemia', subsector: null, share: 0.3 }]);
+        resetWorld([tech, side, energy]);
+        assert(!ids(tech).includes('energy_plant') && !ids(side).includes('energy_plant'), 'spoza Energii');
+        assert(ids(energy).includes('energy_plant') && ids(energy).includes('chemical_plant'), 'Energia + Chemia 30%');
+    });
+
+    test('bot losuje inwestycje tylko z sektora spółki (200 prób)', () => {
+        const c = seg(makeCompany('BOT', { cash: 1e9, devLevel: 5 }), [{ sector: 'Technologia', subsector: null, share: 0.9 }, { sector: 'Energia', subsector: null, share: 0.1 }]);
+        resetWorld([c]);
+        const energyIds = INVESTMENT_CATALOG['Energia'].map(i => i.id);
+        let wrong = 0;
+        for (let i = 0; i < 200; i++) { c.activeInvestments = []; c.cash = 1e9; startRandomInvestment(c); if (c.activeInvestments.some(p => energyIds.includes(p.id))) wrong++; }
+        assert(wrong === 0, `inwestycje z Energii: ${wrong}`);
+    });
+
+    test('Reaktor Fuzyjny: Energia z podsektorem jądrowym albo po Smart Grid', () => {
+        const mk = (sym, sub) => { const c = seg(makeCompany(sym, { cash: 1e9 }), [{ sector: 'Energia', subsector: sub, share: 1 }]); c.departments = { research: { level: 5 } }; c.research = { specialization: 'wzmacnianie pozycji na rynku', unlockedTechs: [], currentTech: null }; return c; };
+        const plain = mk('EPL', null), nuke = mk('ENU', 'Energetyka jądrowa');
+        resetWorld([plain, nuke]);
+        assert(!getAvailableCompanyResearch(plain).includes('ENERGY_FUSION_1'), 'bez podsektora i Smart Grid');
+        assert(getAvailableCompanyResearch(nuke).includes('ENERGY_FUSION_1'), 'Energetyka jądrowa');
+        plain.research.unlockedTechs = ['ENERGY_SMART_GRID_1'];
+        assert(getAvailableCompanyResearch(plain).includes('ENERGY_FUSION_1'), 'po Smart Grid');
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;
