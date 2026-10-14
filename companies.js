@@ -924,6 +924,55 @@ const tourismSuffixes = ['Pol', 'Travel', 'Sun', 'Fly', 'Tour', 'Ways'];
 const bankingPrefixes = ['Fin', 'Euro', 'Pol', 'Pro', 'Secure', 'Capital', 'Super', 'Mega', 'Giga', 'Star', 'Amber'];
 const bankingSuffixes = ['Bank', 'Trust', 'Vest', 'Kapitał', 'Finance', 'Invest', 'Vabank', 'Parabank', 'Gold'];
 
+// 0.14.2 P4: człony nazw dla KAŻDEGO sektora rejestru SECTORS (dawniej brakujące sektory dostawały „DejwCorp”).
+const SECTOR_NAME_PARTS = {
+    'Bankowość': { prefixes: bankingPrefixes, suffixes: bankingSuffixes },
+    'Finanse': { prefixes: [...financePrefixes, 'Kredo', 'Monet'], suffixes: [...financeSuffixes, 'Pay', 'Pożyczka', 'Lend'] },
+    'Żywność': { prefixes: foodPrefixes, suffixes: foodSuffixes },
+    'Dobra konsumpcyjne': { prefixes: consumerPrefixes, suffixes: consumerSuffixes },
+    'Turystyka': { prefixes: tourismPrefixes, suffixes: tourismSuffixes },
+    'Media': { prefixes: ['Tele', 'Medi', 'Vizja', 'Echo', 'Kadr', 'Ekran', 'Fala'], suffixes: ['Vision', 'Press', 'Studio', 'Cast', 'Media', 'Info', 'Kanał'] },
+    'Gaming': { prefixes: gamingPrefixes, suffixes: gamingSuffixes },
+    'Przemysł': { prefixes: industryPrefixes, suffixes: industrySuffixes },
+    'Chemia': { prefixes: [...chemPrefixes, 'Azo', 'Kwas'], suffixes: [...chemSuffixes, 'Lab', 'Polimer'] },
+    'Energia': { prefixes: energyPrefixes, suffixes: energySuffixes },
+    'Budowlany': { prefixes: ['Bud', 'Mur', 'Beton', 'Dach', 'Most', 'Fundament', 'Kran'], suffixes: ['Bud', 'Bet', 'Mix', 'Struktura', 'Montaż', 'Inwest', 'Projekt'] },
+    'Transport i logistyka': { prefixes: ['Trans', 'Kargo', 'Spedo', 'Euro', 'Rail', 'Fast', 'Log'], suffixes: ['Trans', 'Cargo', 'Express', 'Logistics', 'Flota', 'Hub', 'Way'] },
+    'Medycyna': { prefixes: medPrefixes, suffixes: medSuffixes },
+    'Badania': { prefixes: ['Inno', 'Lab', 'Scien', 'Proto', 'Expe', 'Nova', 'Delta'], suffixes: ['Lab', 'Research', 'Tech', 'Instytut', 'Probe', 'Insight', 'Metric'] },
+    'Technologia': { prefixes: [...techPrefixes, 'Byte', 'Cloud'], suffixes: [...techSuffixes, 'Soft', 'Logic'] },
+    'Nieruchomości': { prefixes: realtyPrefixes, suffixes: realtySuffixes },
+    'Obronność': { prefixes: ['Arma', 'Tarcza', 'Grom', 'Husar', 'Bastion', 'Stal', 'Orzeł'], suffixes: ['Def', 'Guard', 'Shield', 'Arms', 'Tech', 'Systemy', 'Ochrona'] },
+    'Usługi': { prefixes: servicesPrefixes, suffixes: servicesSuffixes }
+};
+// Podsektory z własną mechaniką (0.14 T2) mają własne człony nazw.
+const SUBSECTOR_NAME_PARTS = {
+    'Biotechnologia': { prefixes: ['Gen', 'Bio', 'Cell', 'Helix', 'Immu'], suffixes: ['Thera', 'Gen', 'Cell', 'Bio', 'Medix'] },
+    'Fintech': { prefixes: ['Pay', 'Coin', 'Smart', 'Ledger', 'Swift'], suffixes: ['Pay', 'Fin', 'Wallet', 'Tech', 'Flow'] },
+    'Energetyka jądrowa': { prefixes: ['Atom', 'Nukle', 'Izo', 'Reakto', 'Uran'], suffixes: ['Atom', 'Energia', 'Power', 'Core', 'Reaktor'] }
+};
+const DEJWCORP_CHANCE = 0.01; // niespodzianka: najwyżej raz na grę
+let usedCompanyNames = [];    // nazwy użyte w grze (także spółek usuniętych) — w zapisie
+let dejwCorpUsed = false;
+
+/** 0.14.2 P4: unikalna nazwa spółki dla sektora (i podsektora z własną mechaniką); „DejwCorp” najwyżej raz na grę (1%). */
+function generateCompanyName(sector, subsector = null) {
+    const taken = new Set([...usedCompanyNames, ...stocks.map(s => s.name)].map(name => String(name).toLowerCase()));
+    const remember = name => { usedCompanyNames.push(name); return name; };
+    if (!dejwCorpUsed && Math.random() < DEJWCORP_CHANCE && !taken.has('dejwcorp')) { dejwCorpUsed = true; return remember('DejwCorp'); }
+    const parts = (subsector && SUBSECTOR_NAME_PARTS[subsector] && Math.random() < 0.7) ? SUBSECTOR_NAME_PARTS[subsector] : (SECTOR_NAME_PARTS[sector] || SECTOR_NAME_PARTS['Usługi']);
+    for (let attempt = 0; attempt < 40; attempt++) {
+        const prefix = getRandomElement(parts.prefixes), suffix = getRandomElement(parts.suffixes);
+        if (prefix.toLowerCase() === suffix.toLowerCase()) continue;
+        const name = `${prefix}${suffix}`;
+        if (!taken.has(name.toLowerCase())) return remember(name);
+    }
+    const base = `${getRandomElement(parts.prefixes)}${getRandomElement(parts.suffixes)}`;
+    let n = 2;
+    while (taken.has(`${base} ${n}`.toLowerCase())) n++;
+    return remember(`${base} ${n}`);
+}
+
 
 //cechy prezesów banku
 const centralBankGovernorTraits = {
@@ -3920,55 +3969,8 @@ function generateNewStartup() {
     do {
         sector = getRandomElement(startupSectors);
     } while (sector[0] === 'Bankowość'); // Losuj ponownie, jeśli wylosowano Bankowość
-    switch (sector[0]) {
-        case 'Technologia':
-            name = `${getRandomElement(techPrefixes)}${getRandomElement(techSuffixes)}`;
-            break;
-        case 'Gaming':
-            name = `${getRandomElement(gamingPrefixes)}${getRandomElement(gamingSuffixes)}`;
-            break;
-        case 'Medycyna':
-            name = `${getRandomElement(medPrefixes)}${getRandomElement(medSuffixes)}`;
-            break;
-        case 'Energia':
-            name = `${getRandomElement(energyPrefixes)}${getRandomElement(energySuffixes)}`;
-            break;
-        case 'Finanse':
-            name = `${getRandomElement(financePrefixes)}${getRandomElement(financeSuffixes)}`;
-            break;
-        case 'Żywność':
-            name = `${getRandomElement(foodPrefixes)}${getRandomElement(foodSuffixes)}`;
-            break;
-        case 'Nieruchomości':
-            name = `${getRandomElement(realtyPrefixes)}${getRandomElement(realtySuffixes)}`;
-            break;
-        case 'Chemia':
-            name = `${getRandomElement(chemPrefixes)}${getRandomElement(chemSuffixes)}`;
-            break;
-        case 'Przemysł':
-            name = `${getRandomElement(industryPrefixes)}${getRandomElement(industrySuffixes)}`;
-            break;
-        case 'Dobra konsumpcyjne':
-            name = `${getRandomElement(consumerPrefixes)}${getRandomElement(consumerSuffixes)}`;
-            break;
-        case 'Usługi':
-            name = `${getRandomElement(servicesPrefixes)}${getRandomElement(servicesSuffixes)}`;
-            break;
-        case 'Turystyka':
-            name = `${getRandomElement(tourismPrefixes)}${getRandomElement(tourismSuffixes)}`;
-            break;
-        case 'Bankowość':
-            name = `${getRandomElement(bankingPrefixes)}${getRandomElement(bankingSuffixes)}`;
-            break;
-        default:
-            name = 'DejwCorp';
-            break;
-    }
-    let symbol = (name.substring(0, 3) + name.charAt(Math.floor(name.length / 2))).toUpperCase();
-
-    while (stocks.some(s => s.symbol === symbol)) {
-        symbol += 'X';
-    }
+    // 0.14.2 P4: nazwa i symbol dopiero po sektorze z rejestru i podsektorze (niżej).
+    let symbol = null;
 
 
     let successChance = getRandomInRange(0.50, 0.75); // Bazowa szansa na sukces: 50-75%
@@ -4022,6 +4024,11 @@ function generateNewStartup() {
     ensureStockSegments(newStartup); // T1a: sektory z rejestru (np. dawne „Finanse Konsumenckie”)
     assignRandomSubsector(newStartup); // T2: część startupów dostaje podsektor (Fintech ×2)
     return newStartup;
+    newStartup.name = generateCompanyName(getMainSector(newStartup), getMainSubsector(newStartup)); // 0.14.2 P4
+    symbol = newStartup.name.normalize('NFD').replace(/[^A-Za-z]/g, '').toUpperCase();
+    symbol = (symbol.substring(0, 3) + symbol.charAt(Math.floor(symbol.length / 2))) || 'NEWS';
+    while (stocks.some(s => s.symbol === symbol)) symbol += 'X';
+    newStartup.symbol = symbol;
 }
 
 function maintainStartupCount() {

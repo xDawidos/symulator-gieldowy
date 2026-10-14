@@ -6150,6 +6150,39 @@ group('0.14.2 P3: spółki zależne — zawsze pod matką, własny segment i naz
     });
 });
 
+group('0.14.2 P4: nazwy startupów dla każdego sektora, DejwCorp najwyżej raz na grę', () => {
+    test('500 startupów: 0 nazw awaryjnych poza niespodzianką, ≥ 90% unikalnych', () => {
+        resetWorld([makeCompany('AAA')]);
+        usedCompanyNames = []; dejwCorpUsed = false;
+        const names = [];
+        for (let i = 0; i < 500; i++) { const s = generateNewStartup(); names.push(s.name); stocks.push(s); }
+        const dejw = names.filter(n => /DejwCorp/.test(n)).length;
+        const unique = new Set(names.map(n => n.toLowerCase())).size;
+        assert(dejw <= 1, `DejwCorp: ${dejw}`);
+        assert(unique / names.length >= 0.9, `unikalne ${unique}/500`);
+        assert(names.every(n => n && !/undefined/.test(n)), 'bez pustych nazw');
+    });
+
+    test('każdy sektor rejestru ma człony nazw; podsektor z mechaniką ma własne', () => {
+        const missing = SECTOR_NAMES.filter(name => !SECTOR_NAME_PARTS[name]);
+        assert(missing.length === 0, `brak: ${missing.join(', ')}`);
+        resetWorld([makeCompany('AAA')]);
+        usedCompanyNames = []; dejwCorpUsed = true;
+        const bio = Array.from({ length: 30 }, () => generateCompanyName('Medycyna', 'Biotechnologia'));
+        const parts = SUBSECTOR_NAME_PARTS['Biotechnologia'];
+        assert(bio.filter(n => parts.prefixes.some(p => n.startsWith(p))).length >= 10, bio.slice(0, 5).join(', '));
+    });
+
+    test('DejwCorp: przy szansie 100% tylko raz', () => {
+        resetWorld([makeCompany('AAA')]);
+        usedCompanyNames = []; dejwCorpUsed = false;
+        const r = Math.random; Math.random = () => 0;
+        let names;
+        try { names = [generateCompanyName('Media'), generateCompanyName('Media'), generateCompanyName('Media')]; } finally { Math.random = r; }
+        assert(names.filter(n => n === 'DejwCorp').length === 1, names.join(', '));
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

@@ -1783,10 +1783,7 @@ function spawnMarketMember(operatorId, reason) {
     if (isInternetMarket(operatorId) ? !(hasInternetMemberSlot(operatorId) && hasFreeTotalListingSlot()) : !hasFreeListingSlot()) return null; // D1: limit spółek na rynek; P1: sufit krajowy i łączny
     const sectors = SECTOR_NAMES.filter(s => s !== 'Bankowość');
     const sector = [getRandomElement(sectors)];
-    const base = generateNewStartup();
-    // Generator startupów nie zna wszystkich sektorów — wtedy nazwa „marka + sektor”.
-    const name = base.name.startsWith('DejwCorp') || !base.sector?.includes(sector[0])
-        ? `${getRandomElement(MEMBER_NAME_PREFIXES)} ${sector[0]}` : base.name;
+    const name = generateCompanyName(sector[0]); // 0.14.2 P4: człony nazw dla każdego sektora
     const symbol = uniqueSymbol((name.normalize('NFD').replace(/[^A-Za-z ]/g, '').split(' ').map(w => w.slice(0, 2)).join('').toUpperCase() || 'NEW').slice(0, 4));
     const stock = createListedCompany({
         name, symbol, sector,

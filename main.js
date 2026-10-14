@@ -237,6 +237,7 @@ function buildSaveSnapshot({ compact = 0 } = {}) {
         statePension,
         bridgeLoanOffers,
         rescueOffers: Object.fromEntries(Object.entries(rescueOffers).filter(([, offer]) => !offer.closed)), // 0.14.2 P2: oferty per spółka
+        usedCompanyNames, dejwCorpUsed, // 0.14.2 P4: unikalne nazwy spółek, „DejwCorp” najwyżej raz
         allBonds: compactBondsForSave(allBonds),
         activeBonds,
         cityInvestment,
@@ -522,6 +523,8 @@ function applySaveSnapshot(snapshot) {
     statePension = snapshot.statePension && Array.isArray(snapshot.statePension.history) ? snapshot.statePension : { history: [], lastRanking: [] };
     bridgeLoanOffers = Array.isArray(snapshot.bridgeLoanOffers) ? snapshot.bridgeLoanOffers : [];
     // 0.14.2 P2: oferty emisji ratunkowej per spółka (stare zapisy: jedna oferta `rescueOffer`)
+    usedCompanyNames = Array.isArray(snapshot.usedCompanyNames) ? snapshot.usedCompanyNames : stocks.map(s => s.name); // 0.14.2 P4
+    dejwCorpUsed = Boolean(snapshot.dejwCorpUsed) || stocks.some(s => /^DejwCorp/.test(s.name));
     rescueOffers = {};
     for (const offer of [...Object.values(snapshot.rescueOffers || {}), snapshot.rescueOffer].filter(o => o?.symbol && !o.closed)) rescueOffers[offer.symbol] = offer;
 
@@ -1634,6 +1637,7 @@ function createNewWorld() {
     applyStartSubsectors(); // 0.14 T2: podsektory spółek startowych (tabela)
     startPoolLedgerFromFacts(); // 0.14.1 R0: księga puli inwestycyjnej od startu gry
     migrateResearchInstituteValuation(); // 0.14.2 P1: instytuty wyceniane z zysków od startu
+    usedCompanyNames = stocks.map(stock => stock.name); dejwCorpUsed = stocks.some(stock => /^DejwCorp/.test(stock.name)); // 0.14.2 P4
     investmentPool.stakesMigrated = true;
     initializeEtfs(); // ETF-y z portfelami prawdziwych akcji (etf.js)
     console.log("[M&A Init] Inicjalizacja nastawienia mediów...");
