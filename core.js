@@ -2432,7 +2432,7 @@ function updateStockPrices() {
                 const fairValue = Number(stock.fundamentals?.fairValue);
                 if (fairValue > 0) {
                     const gap = Math.max(-0.9, Math.min(3, fairValue / price - 1));
-                    changePct += PRICE_MEAN_REVERSION_PER_TICK * gap;
+                    changePct += PRICE_MEAN_REVERSION_PER_TICK * gap * (stock.fundamentals.lossAnchor ? LOSS_REVERSION_FACTOR : 1); // 0.14.2 P9: przy stracie wolniej
                 }
 
                 // Nastrój rynku wg fazy cyklu i bety sektora.

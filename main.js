@@ -517,6 +517,7 @@ function applySaveSnapshot(snapshot) {
     if (!investmentPool.ledgerSince && typeof startPoolLedgerFromFacts === 'function') startPoolLedgerFromFacts(); // 0.14.1 R0: księga puli od teraz
     if (typeof migratePoolStakesToFacts === 'function') migratePoolStakesToFacts(); // 0.14.1 R1: martwy wkład w pulę → fakty (bez zwrotu wstecz)
     if (typeof migrateResearchInstituteValuation === 'function') migrateResearchInstituteValuation(); // 0.14.2 P1: kosmiczne ceny instytutów → rewizja
+    if (typeof migrateValuationOutliers === 'function') migrateValuationOutliers(); // 0.14.2 P9: banki, REIT-y, usługi finansowe, spółki ze stratą
     statePension = snapshot.statePension && Array.isArray(snapshot.statePension.history) ? snapshot.statePension : { history: [], lastRanking: [] };
     bridgeLoanOffers = Array.isArray(snapshot.bridgeLoanOffers) ? snapshot.bridgeLoanOffers : [];
     // 0.14.2 P2: oferty emisji ratunkowej per spółka (stare zapisy: jedna oferta `rescueOffer`)

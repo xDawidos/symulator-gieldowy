@@ -6020,6 +6020,75 @@ group('0.14.2 P10: gotówka spółki nie schodzi poniżej zera (strategia T3, st
     });
 });
 
+group('0.14.2 P9: wycena każdego typu spółki (banki, REIT, usługi finansowe, spółki ze stratą)', () => {
+    function typed(symbol, setup) {
+        const c = makeCompany(symbol, { cash: 2_000_000, fixedAssets: 3_000_000 });
+        setup(c);
+        return c;
+    }
+    function world() {
+        const bank = typed('BNK', c => { c.isBankStock = true; c.sector = ['Bankowość']; c.price = 150; });
+        const reit = typed('RET', c => { c.assetType = 'REIT'; c.sector = ['Nieruchomości']; c.price = 300; c.dividendPerShare = 0; });
+        const tax = typed('TAX', c => { c.assetType = 'Accounting'; c.sector = ['Finanse']; c.price = 400; c.quarterlyEarnings = 0; });
+        const wrn = typed('WRN', c => { c.assetType = 'DebtCollector'; c.sector = ['Finanse']; c.price = 30; });
+        const lom = typed('LOM', c => { c.assetType = 'PawnShop'; c.sector = ['Finanse']; c.price = 250; c.holdingPortfolio = {}; });
+        const loss = typed('LOSS', c => { c.price = 1000; c.fixedExpenses = 300_000; }); // stała strata, cena ok. 3× wartości z majątku
+        const list = [bank, reit, tax, wrn, lom, loss];
+        resetWorld(list);
+        ensureAllStockSegments();
+        list.forEach(c => { delete c.fundamentals; initializeFundamentals(c, true); });
+        return list;
+    }
+
+    test('500 kwartałów: każdy typ 0,3–3× wartości godziwej (od 8. kwartału)', () => {
+        const list = world();
+        const worst = Object.fromEntries(list.map(c => [c.symbol, { lo: Infinity, hi: 0 }]));
+        const saved = economyCycle; economyCycle = createEconomyCycle('recovery'); economyCycle.gdpGrowth = 0;
+        try {
+            withSeededRandom(9, () => {
+                for (let q = 0; q < 500; q++) {
+                    processFinancialReports();
+                    for (let tick = 0; tick < 300; tick++) updateStockPrices();
+                    if (q < 8) continue;
+                    for (const c of list) {
+                        if (c.isBankrupt || c.balanceSheet.assets - c.balanceSheet.liabilities <= 0) continue; // przy ujemnym kapitale (tuż przed upadłością) kotwica traci sens
+                        const r = c.price / getDisplayedFairValue(c);
+                        worst[c.symbol] = { lo: Math.min(worst[c.symbol].lo, r), hi: Math.max(worst[c.symbol].hi, r) };
+                    }
+                }
+            });
+        } finally { economyCycle = saved; }
+        const bad = Object.entries(worst).filter(([, w]) => w.lo < 0.3 || w.hi > 3).map(([k, w]) => `${k} ${w.lo.toFixed(2)}–${w.hi.toFixed(2)}`);
+        assert(bad.length === 0, bad.join('; ') || 'ok');
+    });
+
+    test('modele: bank = C/WK × kapitał, REIT = NAV ± 20%, usługi finansowe z podłogą C/WK 0,5, strata = max(kapitał, przychody)', () => {
+        const [bank, reit, tax, , , loss] = world();
+        const bvps = c => (c.balanceSheet.assets - c.balanceSheet.liabilities) / c.totalShares;
+        updateFundamentalRatios(bank);
+        assert(Math.abs(bank.fundamentals.fairValue / bvps(bank) - getSectorPb(getSectorProfile(bank)) * (1 + Math.max(-0.3, Math.min(0.3, bank.financialHealth * 0.03)))) < 1e-9, 'bank');
+        updateFundamentalRatios(reit);
+        const navRatio = reit.fundamentals.fairValue / bvps(reit);
+        assert(navRatio >= 0.8 - 1e-9 && navRatio <= 1.2 + 1e-9, `REIT ${navRatio}`);
+        updateFundamentalRatios(tax);
+        assert(tax.fundamentals.fairValue >= bvps(tax) * 0.5 - 1e-9, 'podłoga C/WK 0,5');
+        loss.fundamentals.history.forEach(h => { h.netIncome = -1000; h.eps = -1000 / loss.totalShares; });
+        updateFundamentalRatios(loss);
+        assert(loss.fundamentals.lossAnchor && loss.fundamentals.fairValue >= getSectorPb(getSectorProfile(loss)) * bvps(loss) * 0.5 - 1e-9, 'strata');
+    });
+
+    test('migracja: cena > 10× wartości godziwej → rewizja z wpisem; holding trzyma kurs NAV', () => {
+        const [bank, , , , , loss] = world();
+        updateFundamentalRatios(bank);
+        bank.price = bank.fundamentals.fairValue * 50;
+        const fixed = migrateValuationOutliers();
+        assert(fixed.includes('BNK') && Math.abs(bank.price / bank.fundamentals.fairValue - 1) < 1e-9, `rewizja ${fixed}`);
+        assert(migrateValuationOutliers().length === 0, 'drugi raz bez zmian');
+        const warnings = (checkWorldInvariants().warnings || []).filter(w => /100×|C\/Z/.test(w));
+        assert(warnings.length === 0, warnings.join('; '));
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

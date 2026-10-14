@@ -2463,8 +2463,22 @@ function getDisplayedFairValue(stock) {
     return fair > 0 ? fair : getAssetBasedFairValue(stock);
 }
 
+// 0.14.2 P9: każdy typ spółki ma jawny model wartości godziwej (holdingi: kurs = NAV portfela, osobna ścieżka; startupy bez wyceny).
+const VALUATION_ANCHOR_TYPES = ['ResearchInstitute', 'REIT', 'Accounting', 'DebtCollector', 'PawnShop'];
+const FINANCE_SERVICE_TYPES = ['Accounting', 'DebtCollector', 'PawnShop'];
+const SECTOR_ROE_FOR_PB = 0.10;         // C/WK sektora ≈ C/Z sektora × typowa rentowność kapitału (10%)
+const REIT_PREMIUM_MAX = 0.20;          // REIT: NAV ± premia/dyskonto do 20% (z kondycji)
+const LOSS_PB_FACTOR = 0.5;             // spółka ze stratą: max(C/WK × kapitał × 0,5; C/S × przychody × 0,3)
+const LOSS_PS_FACTOR = 0.3;
+const LOSS_REVERSION_FACTOR = 0.75;     // przy stracie cena wraca do wartości godziwej wolniej
+
 function hasValuationAnchor(stock) {
-    return Boolean(stock && (!stock.assetType || stock.assetType === 'ResearchInstitute')); // 0.14.2 P1: instytut wyceniany z zysków
+    return Boolean(stock && (!stock.assetType || VALUATION_ANCHOR_TYPES.includes(stock.assetType))); // 0.14.2 P1/P9
+}
+
+/** C/WK sektora z jego C/Z (rejestr SECTORS nie ma osobnego C/WK). */
+function getSectorPb(profile) {
+    return Math.max(0.3, (Number(profile?.pe) || 14) * SECTOR_ROE_FOR_PB);
 }
 
 function getLoanRate() {
@@ -2754,14 +2768,24 @@ function updateFundamentalRatios(stock) {
         const healthPremium = 1 + Math.max(-0.3, Math.min(0.3, (Number(stock.financialHealth) || 0) * 0.03));
         const bvps = Math.max(0, fundamentals.bookValuePerShare);
 
+        fundamentals.lossAnchor = false;
         if (stock.isBankStock) {
-            // Bank: wycena z zysku (marża odsetkowa); wartość księgowa zawiera depozyty, więc bez kotwicy P/BV.
-            fundamentals.fairValue = fundamentals.epsTtm > 0 && (stock.ledgerQuarters || 0) >= 4 ? fundamentals.epsTtm * profile.pe * healthPremium : null;
-        } else {
+            // 0.14.2 P9: bank — C/WK sektora Bankowość × kapitał własny (depozyty są poza bilansem spółki-banku).
+            fundamentals.fairValue = bvps > 0 ? getSectorPb(profile) * bvps * healthPremium : null;
+        } else if (stock.assetType === 'REIT') {
+            // 0.14.2 P9: REIT — NAV nieruchomości ± premia/dyskonto do 20% z kondycji.
+            fundamentals.fairValue = bvps > 0 ? bvps * (1 + Math.max(-REIT_PREMIUM_MAX, Math.min(REIT_PREMIUM_MAX, (Number(stock.financialHealth) || 0) * 0.04))) : null;
+        } else if (FINANCE_SERVICE_TYPES.includes(stock.assetType)) {
+            // 0.14.2 P9: biuro rachunkowe, windykator, lombard — C/Z sektora Finanse z własnego zysku, podłoga C/WK 0,5.
+            const financePe = SECTORS['Finanse']?.profile?.pe || 13;
+            fundamentals.fairValue = Math.max(0.01, (Number(fundamentals.epsTtm) || 0) * financePe * healthPremium, bvps * 0.5);
+        } else if (fundamentals.epsTtm > 0) {
             const earningsValue = fundamentals.epsTtm * profile.pe * getValuationMultiplier(stock) * healthPremium;
-            fundamentals.fairValue = fundamentals.epsTtm > 0
-                ? 0.75 * earningsValue + 0.25 * Math.min(bvps, earningsValue * 2) // B5: kotwica księgowa najwyżej 2× wartość z zysku
-                : Math.max(0.01, bvps * 0.7);
+            fundamentals.fairValue = 0.75 * earningsValue + 0.25 * Math.min(bvps, earningsValue * 2); // B5: kotwica księgowa najwyżej 2× wartość z zysku
+        } else {
+            // 0.14.2 P9: strata — max(C/WK sektora × kapitał × 0,5; C/S sektora × przychody × 0,3); cena wraca wolniej.
+            fundamentals.fairValue = Math.max(0.01, getSectorPb(profile) * bvps * LOSS_PB_FACTOR, (Number(profile.ps) || 1) * (fundamentals.salesPerShare || 0) * LOSS_PS_FACTOR);
+            fundamentals.lossAnchor = true;
         }
         // T3: dyskonto konglomeratu — przez cel wyceny (kurs dochodzi do niego stopniowo, bez skoku w chwili decyzji).
         if (fundamentals.fairValue > 0) fundamentals.fairValue *= 1 - getConglomerateDiscount(stock);
@@ -5697,6 +5721,25 @@ function maybeInstituteCompetitionEvent() {
     return { symbol: stock.symbol, change };
 }
 
+/** 0.14.2 P9: migracja (wczytanie) — każda spółka z kotwicą wyceny: cena > 10× wartości godziwej → jednorazowa rewizja z wpisem. */
+function migrateValuationOutliers() {
+    const fixed = [];
+    for (const stock of stocks) {
+        if (stock.isBankrupt || stock.assetType === 'ResearchInstitute' || !hasValuationAnchor(stock) || !stock.fundamentals) continue; // instytuty: migrateResearchInstituteValuation
+        updateFundamentalRatios(stock);
+        const fair = Number(stock.fundamentals.fairValue);
+        if (!(fair > 0) || !(stock.price > fair * 10)) continue;
+        const old = stock.price;
+        stock.price = fair;
+        if (stock.currentCandle) Object.assign(stock.currentCandle, { close: fair, high: Math.max(stock.currentCandle.high, fair), low: Math.min(stock.currentCandle.low, fair) });
+        updateFundamentalRatios(stock);
+        fixed.push(stock.symbol);
+        const owned = (typeof playerPortfolio === 'object' && playerPortfolio?.[stock.symbol]?.shares > 0) || (typeof playerWallet === 'object' && playerWallet?.portfolio?.[stock.symbol]?.shares > 0);
+        logEvent(`📐 Rewizja wyceny: ${stock.name} — kurs ${formatZl(old, 2)} → ${formatZl(fair, 2)} (wartość godziwa z modelu ${stock.isBankStock ? 'banku: C/WK × kapitał' : stock.assetType === 'REIT' ? 'REIT: NAV' : stock.assetType ? 'usług finansowych: C/Z z podłogą C/WK' : 'spółki ze stratą: kapitał i przychody'}, 0.14.2).${owned ? ' Twoje akcje tracą nienależny zysk.' : ''}`, 'review');
+    }
+    return fixed;
+}
+
 /** Migracja (wczytanie, nowa gra): wycena instytutów z modelu zysku; kosmiczna cena (> 10× wartości godziwej) → jednorazowa rewizja. */
 function migrateResearchInstituteValuation() {
     const fixed = [];
@@ -7308,6 +7351,7 @@ function finishInvestment(stock, project) {
     const quality = rollVerificationQuality(stock);
     if (quality === 'defects') {
         const fix = Math.round(cost * 0.05);
+        ensureCompanyCash(stock, fix, 'Kredyt na naprawę wad inwestycji'); // 0.14.2 P10: kredyt przed zapłatą
         adjustCompanyCash(stock, -fix);
         adjustBalanceSheet(stock, { assets: -fix, retainedEarnings: -fix });
         coverNegativeCash(stock); // A1: naprawa ponad gotówkę — kredyt ratunkowy od razu, nie dopiero przy raporcie (P3)
@@ -7351,7 +7395,6 @@ function payDividendToShareholders(stock, dividendPerShare) {
     const taxRateDividend = TAX_RATES.dividend; // Pobieramy z economy.js
 
     // 1. Wypłata dla Gracza
-        ensureCompanyCash(stock, fix, 'Kredyt na naprawę wad inwestycji'); // 0.14.2 P10: kredyt przed zapłatą
     if (playerPortfolio[stock.symbol]) {
         let finalDividendPerShare = dividendPerShare;
         const playerRep = stock.reputation ? stock.reputation['player'] : 0;
