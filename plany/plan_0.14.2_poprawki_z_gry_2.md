@@ -12,7 +12,7 @@ Zgłoszenia użytkownika z gry (2026-10-14), ze zrzutami ekranu:
 - rynki ETF i akcji nie dają się zwinąć;
 - nie wiadomo, co znaczy „Impuls Innowacji”.
 
-Kolejność: **P1 → P2 najpierw** (błędy, które psują grę i pieniądze), potem P3 → P9. Każda część z testami, przebiegiem ×200 i commitem.
+Kolejność: **P1 → P2 najpierw** (błędy, które psują grę i pieniądze), potem P3 → P10. Każda część z testami, przebiegiem ×200 i commitem.
 
 **Koordynacja z 0.14.1:** R6 (widok spółek z podnagłówkami sektorów) i P3 dotykają tej samej tabeli. P3 robimy po R6 i na jego układzie: córka zawsze stoi pod matką, także gdy jest w innym sektorze.
 
@@ -171,6 +171,19 @@ Bezpiecznik z P1 (cena > 100× wartości godziwej albo C/Z > 1000) w przebiegach
 - migracja: cena > 10× wartości godziwej → jednorazowa rewizja z wpisem, jak w P1.
 
 **Skala licencji instytutów (otwarte z P1):** zysk instytutu rośnie liniowo z liczbą technologii na rynku (5 tys. zł/tech/kwartał dla każdego instytutu), więc kurs rośnie ok. ×50 w 12 lat. W 1.–2. roku kurs nie nadąża za zyskiem (stosunek 0,2–0,3). Decyzja użytkownika w czacie kodu; rekomendacja planowania: **licencje malejące** (np. pierwiastek z liczby technologii albo udział instytutu w rynku licencji dzielony między instytuty), żeby kurs rósł mniej więcej jak rynek.
+
+## P10. Ujemna gotówka spółek po decyzjach z T3
+
+Znalezione przy kontroli 0.14.1, było już przed nim:
+- spółki schodzą poniżej zera po `startPivot` i `startExpansion` (strategia z 0.14 T3), bo koszt jest pobierany bez sprawdzenia gotówki;
+- KFX ma ujemną gotówkę w raportach.
+
+**Naprawa** (jak w poprawkach P3 0.13.1 i A1):
+- przed startem pivotu albo rozszerzenia sprawdzić gotówkę;
+- koszt rozłożony na raty pobiera tylko tyle, ile jest gotówki, a resztę bierze kredytem ratunkowym (`coverNegativeCash`) albo wstrzymuje projekt;
+- prześledzić KFX i dopisać przyczynę do raportu.
+
+**Test:** 20 lat ×200, 0 ostrzeżeń „ujemna gotówka” na granicy kwartału.
 
 ---
 
