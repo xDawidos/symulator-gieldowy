@@ -7351,6 +7351,7 @@ function payDividendToShareholders(stock, dividendPerShare) {
     const taxRateDividend = TAX_RATES.dividend; // Pobieramy z economy.js
 
     // 1. Wypłata dla Gracza
+        ensureCompanyCash(stock, fix, 'Kredyt na naprawę wad inwestycji'); // 0.14.2 P10: kredyt przed zapłatą
     if (playerPortfolio[stock.symbol]) {
         let finalDividendPerShare = dividendPerShare;
         const playerRep = stock.reputation ? stock.reputation['player'] : 0;
