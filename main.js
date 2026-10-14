@@ -1154,6 +1154,7 @@ gameTimers.weekly = setGameInterval(() => {
         sendPoolQuarterReport(); // 0.14.1 R1: zbiorczy raport rozliczeń puli (tylko gdy były)
         maybeInstituteCompetitionEvent(); // 0.14.2 P1: rzadka konkurencja instytutów (bez dymku)
         expireRescueOffers(); // 0.14.2 P2: oferty emisji ratunkowej bez decyzji wygasają
+        migrateValuationOutliers(); // 0.14.2 P9: kurs > 10× wartości godziwej → rewizja wyceny (także w trakcie gry)
         processStrategyQuarterly(); // 0.14 T3: rozszerzenia, podsektory, nisze, pivoty (strategy.js)
         processSubsectorMechanicsQuarterly(); // 0.14 T2: badania kliniczne, bloki jądrowe, kontrole KNF (subsectors.js)
         processSpecialProjectsQuarterly(); // konsorcja i projekty specjalne (projects.js)
