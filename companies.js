@@ -3399,6 +3399,7 @@ function processFinancialReports() {
     stocks.forEach(stock => {
         if (!stock.isBankrupt && stock.fundamentals) updateFundamentalRatios(stock);
     });
+    migrateValuationOutliers(); // 0.14.2 P9: rewizja zaraz po nowej wartości godziwej (bez kwartału „okna”)
 
     displayStocks(getCurrentInputValues());
     displayPortfolio();
