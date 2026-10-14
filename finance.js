@@ -1903,6 +1903,7 @@ function getOperatorStock(operatorId) {
 
 /** Prowizja od transakcji na rynku spółki; payer: 'player' albo bot. Zwraca pobraną kwotę. */
 function chargeMarketCommission(stock, value, payer) {
+    if (stock && value > 0) stock.turnoverQ = (Number(stock.turnoverQ) || 0) + value; // 0.14.2 P5: obrót kwartału (popularność)
     if (!marketOperators || !(value > 0)) return 0;
     const operatorId = getStockMarket(stock);
     const operatorStock = getOperatorStock(operatorId);
@@ -1926,6 +1927,7 @@ function chargeMarketCommission(stock, value, payer) {
 // =================================================================================
 
 function processMarketsQuarterly() {
+    for (const stock of stocks) { stock.lastTurnover = Number(stock.turnoverQ) || 0; stock.turnoverQ = 0; } // 0.14.2 P5
     ensureMarketOperators();
     const quarter = typeof macro === 'object' ? macro.quarter : 0;
     // D1: kolejne rynki internetowe w trakcie gry.

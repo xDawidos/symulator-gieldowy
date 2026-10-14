@@ -3787,15 +3787,17 @@ group('Akcje ponad wolny obrót: ETF, bank, insiderzy (CZB 7596 ≠ 8195)', () =
         const bank = { id: 'bnk', name: 'Bank Testowy', type: BANK_TYPES.INVESTMENT, isActive: true, cash: 50_000_000, initialCapital: 1_000_000, stockPortfolio: {}, loanPortfolio: {} };
         commercialBanks.push(bank);
         const random = Math.random;
-        Math.random = () => 0.31; // bez sprzedaży, zakup za ~15% gotówki (≈ 73 000 akcji)
+        a.lastTurnover = 1e9; // 0.14.2 P5: bank kupuje spółki popularne (obrót kwartału)
+        Math.random = () => 0.31;
         try { runInvestmentBankAI(bank); } finally { Math.random = random; }
-        assert(bank.stockPortfolio.AAA?.shares === 3000, `bank kupił ${bank.stockPortfolio.AAA?.shares} (wolne były 3000)`);
+        assert(bank.stockPortfolio.AAA?.shares > 0 && bank.stockPortfolio.AAA.shares <= 3000, `bank kupił ${bank.stockPortfolio.AAA?.shares} (wolne były 3000)`);
         a.sharesHeld = 0; // znów zaniżone
         etf.cash = 10_000_000;
         let bought = 0;
         for (let i = 0; i < 20; i++) bought += etfBuy(etf, a, 10000);
         commercialBanks.splice(commercialBanks.indexOf(bank), 1);
-        assert(bought === 0 && etf.holdings.AAA === 4000, `ETF dokupił ${bought} przy braku wolnych akcji`);
+        const bankShares = bank.stockPortfolio.AAA?.shares || 0; // 0.14.2 P5: bank bierze pozycję, nie cały wolny obrót
+        assert(bought === 3000 - bankShares && etf.holdings.AAA === 4000 + bought, `ETF dokupił ${bought}, wolne po banku ${3000 - bankShares}`);
         assert(overheld(a) <= 0, `posiadacze ponad wolny obrót o ${overheld(a)}`);
     });
 
@@ -6182,6 +6184,60 @@ group('0.14.2 P4: nazwy startupów dla każdego sektora, DejwCorp najwyżej raz 
         let names;
         try { names = [generateCompanyName('Media'), generateCompanyName('Media'), generateCompanyName('Media')]; } finally { Math.random = r; }
         assert(names.filter(n => n === 'DejwCorp').length === 1, names.join(', '));
+    });
+});
+
+group('0.14.2 P5: bank inwestycyjny — pakiet do odsprzedaży, popularne spółki, portfel skoncentrowany', () => {
+    function world(n = 30) {
+        const list = Array.from({ length: n }, (_, i) => { const c = makeCompany(`S${i}`, { cash: 1_000_000 }); c.insiderShares = 0; c.sharesHeld = 0; c.exchange = 'SILVER'; c.price = 50; c.totalShares = 100_000; c.maxShares = 100_000; c.lastTurnover = 1e6 * (n - i); c.reputation = { player: 0 }; return c; });
+        resetWorld(list);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        const bank = { id: 'ibtest', name: 'Bank Inwestycyjny Test', type: BANK_TYPES.INVESTMENT, isActive: true, cash: 50_000_000, initialCapital: 10_000_000, stockPortfolio: {}, loanPortfolio: {} };
+        commercialBanks.push(bank);
+        return { list, bank };
+    }
+    const cleanup = bank => commercialBanks.splice(commercialBanks.indexOf(bank), 1);
+
+    test('portfel: ≤ 12 pozycji, każda ≥ 1%, drobne (< 0,5%) sprzedane', () => {
+        const { list, bank } = world();
+        try {
+            bank.stockPortfolio.S29 = { shares: 100, avgPrice: 50 }; list[29].sharesHeld += 100; // stary drobny pakiet
+            withSeededRandom(3, () => { for (let i = 0; i < 400; i++) runInvestmentBankAI(bank); });
+            const pos = Object.entries(bank.stockPortfolio);
+            const small = pos.filter(([sym, h]) => h.shares / stocks.find(s => s.symbol === sym).totalShares < 0.005);
+            assert(pos.length > 0 && pos.length <= 12 && small.length === 0, `pozycje ${pos.length}, drobne ${small.map(p => p[0])}`);
+        } finally { cleanup(bank); }
+    });
+
+    test('pakiet do odsprzedaży: bot z 45% → bank skupuje 10–15%, bot odkupuje z premią i ma > 50%', () => {
+        const { list, bank } = world(5);
+        try {
+            const target = list[4]; const ai = aiCompetitors[0];
+            ai.cash = 1e9; ai.portfolio[target.symbol] = { shares: 45_000, avgPrice: 50 }; target.sharesHeld = 45_000;
+            runInvestmentBankAI(bank);
+            const block = bank.stockPortfolio[target.symbol]?.shares || 0;
+            assert(block >= 10_000 && block <= 15_000 && bank.resaleBlocks[target.symbol], `pakiet ${block}`);
+            const r = Math.random; Math.random = () => 0.05;
+            try { runInvestmentBankAI(bank); } finally { Math.random = r; }
+            assert(!bank.stockPortfolio[target.symbol] && ai.portfolio[target.symbol].shares > 50_000 && bank.resaleStats.resold === 1, `bot ${ai.portfolio[target.symbol].shares}`);
+            assert(checkWorldInvariants().length === 0, checkWorldInvariants().join('; '));
+        } finally { cleanup(bank); }
+    });
+
+    test('gracz z 45%: mail z ofertą pakietu, odkupienie przenosi akcje i gotówkę', () => {
+        const { list, bank } = world(5);
+        try {
+            const target = list[4];
+            playerPortfolio[target.symbol] = { shares: 45_000, avgPrice: 50, assetType: 'stock' }; target.sharesHeld = 45_000;
+            playerCash = 5_000_000;
+            runInvestmentBankAI(bank);
+            const block = bank.stockPortfolio[target.symbol]?.shares || 0;
+            runInvestmentBankAI(bank);
+            assert(bank.resaleOffer?.symbol === target.symbol && mailbox.messages.some(m => m.action?.type === 'bankBlock'), 'mail z ofertą');
+            const cash0 = playerCash, price = bank.resaleOffer.price;
+            assert(acceptBankBlockOffer(bank.id), 'odkupienie');
+            assert(playerPortfolio[target.symbol].shares === 45_000 + block && Math.abs(cash0 - playerCash - block * price) < 1e-6, 'akcje i zapłata');
+        } finally { cleanup(bank); }
     });
 });
 

@@ -6050,6 +6050,12 @@ function renderMailPreview(message) {
         action = offer
             ? `<div class="mail-action"><p>${offer.shares.toLocaleString('pl-PL')} akcji po ${formatZl(offer.price)} · razem ${formatZl(offer.shares * offer.price, 0)}</p><button onclick="mailAction(acceptBotBlock)">Kup pakiet z rabatem</button></div>`
             : '<p class="fund-muted">Oferta pakietu wygasła.</p>';
+    } else if (message.action?.type === 'bankBlock') { // 0.14.2 P5: pakiet od banku inwestycyjnego
+        const bank = commercialBanks.find(b => b.id === message.action.bankId);
+        const offer = bank?.resaleOffer?.symbol === message.action.symbol ? bank.resaleOffer : null;
+        action = offer && (bank.stockPortfolio?.[offer.symbol]?.shares || 0) >= offer.shares
+            ? `<div class="mail-action"><p>${offer.shares.toLocaleString('pl-PL')} akcji po ${formatZl(offer.price)} · razem ${formatZl(offer.shares * offer.price, 0)}</p><button onclick="mailAction(acceptBankBlockOffer, '${bank.id}')">Odkup pakiet</button></div>`
+            : '<p class="fund-muted">Oferta pakietu wygasła.</p>';
     } else if (message.action?.type === 'agm') {
         action = `<div class="mail-action"><button onclick="openGovernanceModal('${message.action.symbol}')">Otwórz walne zgromadzenie</button></div>`;
     } else if (message.action?.type === 'takeover') {
