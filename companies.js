@@ -2830,8 +2830,7 @@ function updateFundamentalRatios(stock) {
             fundamentals.fairValue = Math.max(0.01, (Number(fundamentals.epsTtm) || 0) * financePe * healthPremium, bvps * 0.5);
         } else if (fundamentals.epsTtm > 0) {
             const earningsValue = fundamentals.epsTtm * profile.pe * getValuationMultiplier(stock) * healthPremium;
-            const lossFloor = Math.max(getSectorPb(profile) * bvps * LOSS_PB_FACTOR, (Number(profile.ps) || 1) * (fundamentals.salesPerShare || 0) * LOSS_PS_FACTOR);
-            fundamentals.fairValue = Math.max(0.75 * earningsValue + 0.25 * Math.min(bvps, earningsValue * 2), lossFloor); // B5: kotwica księgowa najwyżej 2× wartość z zysku; 0.14.2 P9: zysk ≈ 0 nie wycenia niżej niż strata
+            fundamentals.fairValue = 0.75 * earningsValue + 0.25 * Math.min(bvps, earningsValue * 2); // B5: kotwica księgowa najwyżej 2× wartość z zysku
         } else {
             // 0.14.2 P9: strata — max(C/WK sektora × kapitał × 0,5; C/S sektora × przychody × 0,3); cena wraca wolniej.
             fundamentals.fairValue = Math.max(0.01, getSectorPb(profile) * bvps * LOSS_PB_FACTOR, (Number(profile.ps) || 1) * (fundamentals.salesPerShare || 0) * LOSS_PS_FACTOR);
@@ -4024,12 +4023,12 @@ function generateNewStartup() {
 
     ensureStockSegments(newStartup); // T1a: sektory z rejestru (np. dawne „Finanse Konsumenckie”)
     assignRandomSubsector(newStartup); // T2: część startupów dostaje podsektor (Fintech ×2)
+    return newStartup;
     newStartup.name = generateCompanyName(getMainSector(newStartup), getMainSubsector(newStartup)); // 0.14.2 P4
     symbol = newStartup.name.normalize('NFD').replace(/[^A-Za-z]/g, '').toUpperCase();
     symbol = (symbol.substring(0, 3) + symbol.charAt(Math.floor(symbol.length / 2))) || 'NEWS';
     while (stocks.some(s => s.symbol === symbol)) symbol += 'X';
     newStartup.symbol = symbol;
-    return newStartup;
 }
 
 function maintainStartupCount() {
