@@ -5761,6 +5761,99 @@ group('0.14.1 R6: widok spółek — rynek → poziom → sektor, opis działaln
     });
 });
 
+group('0.14.2 P1: instytuty badawcze — kurs z zysków, bez wykładniczego wzrostu', () => {
+    function instituteWorld() {
+        const inst = makeCompany('GUM', { cash: 0, fixedAssets: 0 });
+        Object.assign(inst, { name: 'GUM Med Research', assetType: 'ResearchInstitute', sector: ['Badania'], price: 78, totalShares: 42000, volatilityFactor: 0.7, financialHealth: 1, research: { isResearching: false, unlockedTechs: [] } });
+        delete inst.segments; delete inst.fundamentals;
+        const co = makeCompany('TECH', { cash: 5_000_000 });
+        co.research = { isResearching: false, unlockedTechs: [] };
+        resetWorld([inst, co]);
+        ensureAllStockSegments();
+        migrateResearchInstituteValuation();
+        return { inst, co };
+    }
+    function withNeutralCycle(fn) {
+        const saved = economyCycle;
+        economyCycle = createEconomyCycle('recovery');
+        economyCycle.gdpGrowth = 0;
+        try { return fn(); } finally { economyCycle = saved; }
+    }
+
+    test('500 kwartałów (ok. 125 lat) przy rosnącej liczbie technologii: kurs 0,3–3× wartości godziwej', () => {
+        const { inst, co } = instituteWorld();
+        let worst = { lo: Infinity, hi: 0 };
+        withSeededRandom(14, () => withNeutralCycle(() => {
+            for (let q = 0; q < 500; q++) {
+                co.research.unlockedTechs.push(`T${q}`); // +1 technologia na rynku co kwartał
+                for (let tick = 0; tick < 300; tick++) {
+                    updateStockPrices();
+                    if (tick % 10 === 0) updateResearchInstitutes();
+                }
+                processFinancialReports();
+                if (q >= 8) {
+                    const ratio = inst.price / inst.fundamentals.fairValue;
+                    worst = { lo: Math.min(worst.lo, ratio), hi: Math.max(worst.hi, ratio) };
+                }
+            }
+        }));
+        assert(worst.lo >= 0.3 && worst.hi <= 3, `cena / wartość godziwa: ${worst.lo.toFixed(2)}–${worst.hi.toFixed(2)}`);
+        assert(Number.isFinite(inst.price) && inst.price < 1e6, `cena ${inst.price}`);
+        assert(inst.fundamentals.peRatio > 0 && inst.fundamentals.peRatio < 100, `C/Z ${inst.fundamentals.peRatio}`);
+    });
+
+    test('dwa instytuty obok siebie w tablicy: bez skoków kursu i bez dymków', () => {
+        const { inst } = instituteWorld();
+        const second = makeCompany('IBS', { cash: 0, fixedAssets: 0 });
+        Object.assign(second, { assetType: 'ResearchInstitute', sector: ['Badania'], price: 80, research: { isResearching: false, unlockedTechs: [] } });
+        stocks.splice(1, 0, second);
+        const prices = [inst.price, second.price];
+        const toast = showToast; let toasts = 0;
+        showToast = () => { toasts++; };
+        try { for (let i = 0; i < 200; i++) updateResearchInstitutes(); } finally { showToast = toast; }
+        assert(inst.price === prices[0] && second.price === prices[1] && toasts === 0, `ceny ${inst.price}/${second.price}, dymki ${toasts}`);
+        assert(typeof checkResearchInstitutePositions === 'undefined', 'mechanika sąsiadów usunięta');
+    });
+
+    test('konkurencja instytutów: rzadkie zdarzenie ±10–20%, tylko wpis w dzienniku', () => {
+        const { inst } = instituteWorld();
+        const second = makeCompany('IBS', { cash: 0, fixedAssets: 0 });
+        Object.assign(second, { assetType: 'ResearchInstitute', sector: ['Badania'], price: 80, research: { isResearching: false, unlockedTechs: [] } });
+        stocks.push(second);
+        let events = 0;
+        const toast = showToast; let toasts = 0;
+        showToast = () => { toasts++; };
+        try {
+            withSeededRandom(5, () => {
+                for (let q = 0; q < 600; q++) {
+                    const e = maybeInstituteCompetitionEvent();
+                    if (e) { events++; assert(Math.abs(e.change) >= 0.1 && Math.abs(e.change) <= 0.2, `ruch ${e.change}`); }
+                }
+            });
+        } finally { showToast = toast; }
+        assert(events > 60 && events < 150 && toasts === 0, `zdarzeń ${events} na 600 kw., dymków ${toasts}`);
+    });
+
+    test('migracja: kosmiczna cena instytutu → rewizja do wartości godziwej z wpisem', () => {
+        const { inst } = instituteWorld();
+        inst.price = 6.4e15;
+        inst.fundamentals = null;
+        const log0 = typeof eventLog !== 'undefined' ? eventLog.length : 0;
+        const fixed = migrateResearchInstituteValuation();
+        assert(fixed.includes('GUM') && inst.price > 1 && inst.price < 1000, `cena po rewizji ${inst.price}`);
+        assert(Math.abs(inst.price / inst.fundamentals.fairValue - 1) < 1e-9, 'cena = wartość godziwa');
+        assert(migrateResearchInstituteValuation().length === 0, 'drugi raz bez zmian');
+    });
+
+    test('opis instytutu i bezpiecznik ceny w checkWorldInvariants', () => {
+        const { inst } = instituteWorld();
+        assert(!assembleDescription(inst).includes('Brak opisu'), 'opis');
+        inst.price = inst.fundamentals.fairValue * 500;
+        const warnings = checkWorldInvariants().warnings || [];
+        assert(warnings.some(w => w.includes('GUM') && w.includes('100×')), warnings.join('; '));
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

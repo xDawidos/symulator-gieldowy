@@ -250,7 +250,13 @@ const PROBE = `(function () {
             unionShare: wfCompanies.length ? wfCompanies.filter(c => c.workforce.union).length / wfCompanies.length : null,
             sectorUnions: soc ? Object.keys(soc.sectorUnions || {}).length : null,
             striking: wfCompanies.filter(c => c.workforce.strike).length,
-            strikes: soc?.stats?.strikes || 0, mails: s.mails, mails013: s.mails013, companies: companies.length });
+            strikes: soc?.stats?.strikes || 0, mails: s.mails, mails013: s.mails013, companies: companies.length,
+            tig5: marketIndexes.find(i => i.id === 'TIG5')?.value,
+            // 0.14.2 P1: instytuty — cena względem wartości z modelu zysku (granty 30 tys. + 5 tys. zł za technologię na kwartał, C/Z sektora Badania)
+            inst: (() => { const techs = stocks.reduce((n, x) => n + (x.research?.unlockedTechs?.length || 0), 0); return stocks.filter(x => x.assetType === 'ResearchInstitute').map(x => +(x.price / ((30000 + techs * 5000) * 4 * 25 / x.totalShares)).toFixed(3)); })(),
+            maxFairRatio: (() => { let m = 0; for (const x of stocks) { const f = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(x) : null; if (f > 0 && !x.isBankrupt) m = Math.max(m, x.price / f); } return +m.toFixed(2); })(),
+            maxFairWho: (() => { let m = 0, who = null; for (const x of stocks) { const f = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(x) : null; if (f > 0 && !x.isBankrupt && x.price / f > m) { m = x.price / f; who = x.symbol + ':' + (x.assetType || (x.isBankStock ? 'bank' : 'std')) + ':' + (+x.price).toPrecision(3) + '/' + (+f).toPrecision(3); } } return who; })(),
+            invWarn: typeof checkWorldInvariants === 'function' ? (checkWorldInvariants().warnings || []).filter(w => /100×|C\\/Z/.test(w)).slice(0, 5) : null });
     };
     s.finish = function () {
         const soc = typeof society === 'object' && society ? society : null;

@@ -533,7 +533,7 @@ function assembleDescription(stock) {
         return stock.description;
     } 
     else if (stock.assetType === 'ResearchInstitute') {
-        return stock.description || "Brak opisu dla tego instytutu.";
+        return stock.description || INSTITUTE_DESCRIPTIONS[stock.symbol] || `${stock.name} to instytut badawczy. Zarabia na grantach i licencjach od technologii odblokowanych na rynku.`; // 0.14.2 P1
     } 
     else {
         if (!stock.descriptionParts || !stock.ceo || !stock.ceo.name) {
@@ -2464,7 +2464,7 @@ function getDisplayedFairValue(stock) {
 }
 
 function hasValuationAnchor(stock) {
-    return Boolean(stock && !stock.assetType);
+    return Boolean(stock && (!stock.assetType || stock.assetType === 'ResearchInstitute')); // 0.14.2 P1: instytut wyceniany z zysków
 }
 
 function getLoanRate() {
@@ -2482,7 +2482,9 @@ function initializeFundamentals(stock, force = false) {
 
     // Kalibracja: roczny zysk netto ≈ kapitalizacja / (C/Z sektora × luka wyceny spółki).
     // U3: luka wyceny sprawia, że na starcie są spółki tanie i drogie względem zysków.
-    const netAnnual = marketCap / (profile.pe * stock.valuationGap);
+    const netAnnual = stock.assetType === 'ResearchInstitute'
+        ? getInstituteQuarterlyIncome() * 4 // 0.14.2 P1: z licencji i grantów, nie z (być może kosmicznej) ceny
+        : marketCap / (profile.pe * stock.valuationGap);
     const ebtAnnual = netAnnual / (1 - COMPANY_INCOME_TAX_RATE);
     const operatingMargin = Math.max(0.05, profile.margin * (1 + stock.marginAdj) - profile.da);
     const revenue = hasRevenueModel(stock)
@@ -3019,8 +3021,7 @@ function processFinancialReports() {
 
         } else if (stock.assetType === 'ResearchInstitute') {
             // 🧪 Instytuty
-            const earningsPerTech = 5000;
-            quarterlyEarnings = totalUnlockedTechs * earningsPerTech * getRandomInRange(0.9, 1.1);
+            quarterlyEarnings = getInstituteQuarterlyIncome(totalUnlockedTechs) * getRandomInRange(0.9, 1.1); // 0.14.2 P1: granty + licencje
         
         // ===>>> NOWA LOGIKA DLA FINANSÓW KONSUMENCKICH <<<===
         } else if (stock.assetType === 'DebtCollector') {
@@ -5637,69 +5638,87 @@ function updateResearchInstitutes() {
     
     // 3. Zastosuj bonusy do każdego instytutu
     researchInstitutes.forEach(stock => {
-        let priceBonus = 0;
         let healthBonus = 0;
         let volatilityModifier = 1.0;
 
-        // Bonus do ceny za technologie zysków
-        priceBonus += totalTechsByType['wzmacnianie ceny i zysków'] * 0.05; // +0.05 PLN do ceny za każdą taką tech.
+        // 0.14.2 P1: technologie zysków nie ruszają już kursu bezpośrednio — podnoszą zysk z licencji (raport kwartalny),
+        // a kurs dochodzi do wartości godziwej jak u każdej spółki.
 
         // Bonus do kondycji za technologie rozwoju
         healthBonus += totalTechsByType['wzmacnianie rozwoju'] * 0.02;
 
         // Bonus do stabilności (niższa zmienność) za technologie pozycji na rynku
         const marketPositionTechs = totalTechsByType['wzmacnianie pozycji na rynku'];
-        volatilityModifier -= (marketPositionTechs * 0.005); // -0.5% do zmienności za każdą taką tech.
+        volatilityModifier = Math.max(0.5, volatilityModifier - marketPositionTechs * 0.005); // -0.5% za każdą taką tech., najwyżej −50%
         
         // Zastosuj efekty: procentowy dryf ceny i stałe (nieskładane) modyfikatory.
-        stock.price *= 1 + priceBonus * 0.002;
         stock.financialHealth = Math.min(5, stock.financialHealth + healthBonus * 0.01);
         if (!Number.isFinite(stock.baseVolatilityFactor)) stock.baseVolatilityFactor = stock.volatilityFactor;
         stock.volatilityFactor = Math.max(0.1, stock.baseVolatilityFactor * volatilityModifier);
     });
 }
 
-function checkResearchInstitutePositions() {
-    // 1. Zresetuj wszystkie bonusy prędkości badań
-    stocks.forEach(s => {
-        if(s.research) s.research.researchSpeedMultiplier = 1.0;
-    });
+// =================================================================================
+// 0.14.2 P1: INSTYTUTY — ZYSK Z GRANTÓW I LICENCJI, WYCENA Z ZYSKÓW, RZADKA KONKURENCJA
+// =================================================================================
 
-    const researchInstitutesIndices = [];
-    stocks.forEach((s, index) => {
-        if (s.assetType === 'ResearchInstitute') {
-            researchInstitutesIndices.push(index);
+const INSTITUTE_GRANT_INCOME = 30000;     // granty i zlecenia badawcze na kwartał (bez technologii na rynku)
+const INSTITUTE_INCOME_PER_TECH = 5000;   // licencja od każdej technologii odblokowanej na rynku, na kwartał
+const INSTITUTE_COMPETITION_QUARTER_CHANCE = 1 / 6; // średnio raz na 1,5 roku gry (6 kwartałów)
+const INSTITUTE_DESCRIPTIONS = {
+    GUM: 'GUM Med Research to instytut badań medycznych przy uczelni medycznej w Gdańsku. Prowadzi badania kliniczne na zlecenie spółek farmaceutycznych i biotechnologicznych, a z patentów sprzedaje licencje. Zarabia na grantach oraz na opłatach licencyjnych od technologii wdrażanych na rynku, więc rośnie razem z innowacyjnością całej gospodarki.',
+    IBS: 'Instytut Badań Stosowanych przenosi wyniki nauki do przemysłu: projektuje prototypy, testuje materiały i certyfikuje rozwiązania dla spółek produkcyjnych i energetycznych. Przychody to zlecenia badawcze, granty i licencje od technologii, które spółki odblokowują na rynku. Spokojny, mało zmienny walor dla cierpliwych inwestorów.',
+    UnG: 'Uniwersytet Gdański — spółka celowa uczelni, która komercjalizuje badania wydziałów: od chemii i biologii po informatykę. Utrzymuje się z grantów, programów badawczych i licencji na technologie wykorzystywane przez spółki giełdowe. Wycena zależy od tego, jak dużo nowych technologii pojawia się na rynku.'
+};
+
+/** Liczba technologii odblokowanych na całym rynku (podstawa licencji instytutów). */
+function countMarketTechs() {
+    return stocks.reduce((sum, s) => sum + (s.research?.unlockedTechs?.length || 0), 0);
+}
+
+/** Zysk kwartalny instytutu: granty + licencje od technologii rynku. */
+function getInstituteQuarterlyIncome(techs = countMarketTechs()) {
+    return INSTITUTE_GRANT_INCOME + Math.max(0, Number(techs) || 0) * INSTITUTE_INCOME_PER_TECH;
+}
+
+/** Co kwartał, rzadko: konkurencja instytutów — ruch kursu ±10–20%, tylko wpis w dzienniku (bez dymku). */
+function maybeInstituteCompetitionEvent() {
+    const institutes = stocks.filter(s => s.assetType === 'ResearchInstitute' && !s.isBankrupt);
+    if (institutes.length < 2 || Math.random() >= INSTITUTE_COMPETITION_QUARTER_CHANCE) return null;
+    const stock = getRandomElement(institutes);
+    const up = Math.random() < 0.5;
+    const change = getRandomInRange(0.10, 0.20) * (up ? 1 : -1);
+    applyPriceEffect(stock.symbol, change, 'neutral');
+    logEvent(up
+        ? `🧪 Konkurencja instytutów: ${stock.name} wygrywa duży grant badawczy — kurs ${(change * 100).toFixed(0)}%.`
+        : `🧪 Konkurencja instytutów: ${stock.name} przegrywa spór patentowy z innym instytutem — kurs ${(change * 100).toFixed(0)}%.`, 'market');
+    return { symbol: stock.symbol, change };
+}
+
+/** Migracja (wczytanie, nowa gra): wycena instytutów z modelu zysku; kosmiczna cena (> 10× wartości godziwej) → jednorazowa rewizja. */
+function migrateResearchInstituteValuation() {
+    const fixed = [];
+    for (const stock of stocks) {
+        if (stock.research) stock.research.researchSpeedMultiplier = 1; // dawny bonus „sąsiada w tablicy”
+        if (stock.assetType !== 'ResearchInstitute' || stock.isBankrupt) continue;
+        if (!stock.balanceSheet) stock.balanceSheet = { assets: 0, liabilities: 0, shareCapital: 0, retainedEarnings: 0 };
+        if (!stock.fundamentals?.instituteModel) {
+            initializeFundamentals(stock, true);
+            stock.fundamentals.instituteModel = true;
         }
-    });
-
-    researchInstitutesIndices.forEach(index => {
-        const neighbors = [stocks[index - 1], stocks[index + 1]];
-        
-        // 2. Zastosuj bonus do sąsiadów
-        neighbors.forEach(neighbor => {
-            if (neighbor && neighbor.research && neighbor.research.isResearching) {
-                neighbor.research.researchSpeedMultiplier = 1.05; // Bonus +5%
-            }
-        });
-
-        // 3. Sprawdź, czy sąsiad też jest instytutem badawczym
-        const nextStock = stocks[index + 1];
-        if (nextStock && nextStock.assetType === 'ResearchInstitute') {
-            const stockToMove = Math.random() < 0.5 ? stocks[index] : nextStock;
-            const direction = Math.random() < 0.5 ? 'up' : 'down';
-            
-            let priceChange = direction === 'up' ? 2.5 : -0.8; // Mnożnik x2.5 lub /5
-            
-            applyPriceEffect(stockToMove.symbol, priceChange, 'neutral');
-            
-            const message = direction === 'up' 
-                ? `Wybuch innowacji! Konkurencja między ${stockToMove.name} a sąsiadem owocuje przełomem i skokowym wzrostem wyceny!`
-                : `Konflikt o patenty! Wojna podjazdowa między ${stockToMove.name} a sąsiadem negatywnie wpływa na jego wycenę.`;
-                
-            showToast(message, direction === 'up' ? 'success' : 'error', 6000);
-            logEvent(`🧪 ${message}`);
+        updateFundamentalRatios(stock);
+        const fair = Number(stock.fundamentals.fairValue);
+        if (fair > 0 && stock.price > fair * 10) {
+            const old = stock.price;
+            stock.price = fair;
+            if (stock.currentCandle) Object.assign(stock.currentCandle, { close: fair, high: Math.max(stock.currentCandle.high, fair), low: Math.min(stock.currentCandle.low, fair) });
+            updateFundamentalRatios(stock);
+            fixed.push(stock.symbol);
+            const owned = (typeof playerPortfolio === 'object' && playerPortfolio?.[stock.symbol]?.shares > 0) || (typeof playerWallet === 'object' && playerWallet?.portfolio?.[stock.symbol]?.shares > 0);
+            logEvent(`🧪 Rewizja wyceny instytutu: ${stock.name} — kurs ${formatZl(old, 0)} → ${formatZl(fair, 2)} (wartość z zysków: granty i licencje). Poprzedni wzrost wynikał z błędu wyceny (0.14.2).${owned ? ' Twoje akcje tracą nienależny zysk.' : ''}`, 'review');
         }
-    });
+    }
+    return fixed;
 }
 
 function unlockResearchTier(symbol, tierName, cost) {

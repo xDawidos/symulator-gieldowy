@@ -5724,6 +5724,14 @@ function checkWorldInvariants() {
     // A3: przycięcia „duchów posiadaczy” to ostrzeżenia, nie naruszenia — mogą maskować prawdziwy rozjazd.
     // 0.14.1 R0: niezmienniki puli i inkubatora jako ostrzeżenia (rozjazd = pieniądze bez rozliczenia).
     const moneyWarnings = [...(typeof checkPoolInvariants === 'function' ? checkPoolInvariants() : []), ...(typeof checkIncubatorInvariants === 'function' ? checkIncubatorInvariants() : [])];
+    // 0.14.2 P1: bezpiecznik ceny — kurs > 100× wartości godziwej albo C/Z > 1000.
+    for (const stock of stocks) {
+        if (stock.isBankrupt || stock.assetType === 'Startup') continue;
+        const fair = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(stock) : null;
+        const pe = Number(stock.fundamentals?.peRatio);
+        if (fair > 0 && stock.price > fair * 100) moneyWarnings.push(`cena ${stock.symbol} ${Math.round(stock.price)} > 100× wartości godziwej (${fair.toFixed(2)})`);
+        else if (pe > 1000) moneyWarnings.push(`C/Z ${stock.symbol}: ${Math.round(pe)}`);
+    }
     problems.warnings = (typeof ghostTrimLog !== 'undefined' ? ghostTrimLog : []).map(t =>
         `przycięcie ${t.symbol}: ${t.holder} −${Math.round(t.shares)} akcji (kwartał ${t.quarter}, ${t.source === 'load' ? 'wczytanie' : 'gra'})`).concat(moneyWarnings);
     return problems;
