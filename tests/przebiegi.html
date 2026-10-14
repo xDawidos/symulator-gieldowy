@@ -256,6 +256,9 @@ const PROBE = `(function () {
             inst: (() => { const techs = stocks.reduce((n, x) => n + (x.research?.unlockedTechs?.length || 0), 0); return stocks.filter(x => x.assetType === 'ResearchInstitute').map(x => +(x.price / ((30000 + Math.sqrt(techs) * 25000) * 4 * 25 / x.totalShares)).toFixed(3)); })(),
             maxFairRatio: (() => { let m = 0; for (const x of stocks) { const f = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(x) : null; if (f > 0 && !x.isBankrupt) m = Math.max(m, x.price / f); } return +m.toFixed(2); })(),
             maxFairWho: (() => { let m = 0, who = null; for (const x of stocks) { const f = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(x) : null; if (f > 0 && !x.isBankrupt && x.price / f > m) { m = x.price / f; who = x.symbol + ':' + (x.assetType || (x.isBankStock ? 'bank' : 'std')) + ':' + (+x.price).toPrecision(3) + '/' + (+f).toPrecision(3); } } return who; })(),
+            // 0.14.2 P3/P4: córki (liczba, unikalne nazwy, inny sektor niż matka) i nazwy awaryjne startupów
+            subs: (() => { const kids = stocks.filter(x => x.isSubsidiaryOf && !x.isBankrupt); const names = new Set(kids.map(x => x.name)); const other = kids.filter(x => { const p = stocks.find(y => y.symbol === x.isSubsidiaryOf); return p && getMainSector(p) !== getMainSector(x); }).length; return { n: kids.length, unique: names.size, otherSector: other }; })(),
+            dejw: stocks.filter(x => /DejwCorp/.test(x.name)).length,
             invWarn: typeof checkWorldInvariants === 'function' ? (checkWorldInvariants().warnings || []).filter(w => /100×|C\\/Z/.test(w)).slice(0, 5) : null });
     };
     s.finish = function () {

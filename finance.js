@@ -815,7 +815,42 @@ function applyEliteBonuses(stock) {
     stock.eventResistance = Math.min(0.9, stock.baseEventResistance + (def ? def.resistance : 0));
 }
 
-/** Nowa spółka zależna: kapitał od matki, te same badania, polityki i sektor; IPO na niższej giełdzie. */
+// 0.14.2 P3: córka dostaje własny, jeden segment i własną nazwę.
+const SUBSIDIARY_EXTRA_WORDS = ['Nova', 'Plus', 'Labs', 'Serwis', 'Invest'];
+
+/** Segment córki: 50% segment poboczny matki (jeśli jest); dalej 80% branża powiązana z sektorem głównym, 20% sektor matki. */
+function pickSubsidiarySegment(parent) {
+    const segments = [...getStockSegments(parent)].sort((a, b) => b.share - a.share);
+    const main = segments[0] || { sector: getMainSector(parent) || 'Usługi', subsector: null };
+    const secondary = segments.slice(1);
+    if (secondary.length && Math.random() < 0.5) {
+        const seg = getRandomElement(secondary);
+        return { sector: seg.sector, subsector: seg.subsector || null, share: 1 };
+    }
+    const related = SECTOR_NAMES.filter(name => name !== main.sector && name !== 'Bankowość' && typeof areSectorsRelated === 'function' && areSectorsRelated(main.sector, name));
+    if (related.length && Math.random() < 0.8) return { sector: getRandomElement(related), subsector: null, share: 1 };
+    const otherSubs = Object.keys(SECTORS[main.sector]?.subsectors || {}).filter(name => name !== main.subsector && !name.startsWith('Bank '));
+    return { sector: main.sector, subsector: otherSubs.length && Math.random() < 0.5 ? getRandomElement(otherSubs) : (main.subsector || null), share: 1 };
+}
+
+/** Nazwa córki: „Matka Słowo”, „Pierwszy-człon Słowo”, zlepek („Cortenergy”), a w sektorze matki także „Matka Nova”. Bez powtórzeń. */
+function pickSubsidiaryName(parent, sector) {
+    const words = SECTOR_NAME_WORDS[sector] || ['Group'];
+    const first = String(parent.name).split(/[\s-]+/)[0] || parent.name;
+    const candidates = [];
+    for (const word of words) {
+        candidates.push(`${parent.name} ${word}`, `${first} ${word}`, `${first.slice(0, Math.min(5, Math.max(3, first.length - 2)))}${word.toLowerCase()}`, `${first.slice(0, 4)}${word.toLowerCase()}`);
+    }
+    if (sector === getMainSector(parent)) for (const extra of SUBSIDIARY_EXTRA_WORDS) candidates.push(`${parent.name} ${extra}`, `${first} ${extra}`);
+    const taken = new Set(stocks.map(s => String(s.name).toLowerCase()));
+    const free = [...new Set(candidates)].filter(name => !taken.has(name.toLowerCase()));
+    if (free.length) return getRandomElement(free);
+    let n = 2;
+    while (taken.has(`${first} ${words[0]} ${n}`.toLowerCase())) n++;
+    return `${first} ${words[0]} ${n}`;
+}
+
+/** Nowa spółka zależna: kapitał od matki, te same badania i polityki; własny segment i nazwa (0.14.2 P3); IPO na niższej giełdzie. */
 function foundSubsidiary(parent) {
     if (typeof hasFreeListingSlot === 'function' && !hasFreeListingSlot()) return null; // P1: twardy sufit spółek krajowych
     const capital = Math.max(100000, Math.min(parent.cash * 0.1, getMarketCap(parent) * 0.05));
@@ -831,8 +866,9 @@ function foundSubsidiary(parent) {
     const exchangeKey = Object.keys(exchanges).find(key => !isEliteExchange(key) && exchanges[key].minPrice <= price && price < exchanges[key].maxPrice) || 'SILVER';
     const parentStake = 0.6;
 
+    const segment = pickSubsidiarySegment(parent);
     const child = {
-        name: `${parent.name} ${getRandomElement(['Nova', 'Plus', 'Labs', 'Serwis', 'Invest'])}`,
+        name: pickSubsidiaryName(parent, segment.sector),
         symbol,
         price,
         totalShares,
@@ -840,9 +876,9 @@ function foundSubsidiary(parent) {
         sharesHeld: Math.floor(totalShares * parentStake),
         insiderShares: 0,
         exchange: exchangeKey,
-        sector: [...(parent.sector || [])],
-        segments: getStockSegments(parent).map(seg => ({ ...seg })), // T1b: córka dziedziczy segmenty matki
-        specializationSectors: [...(parent.specializationSectors || parent.sector || [])],
+        sector: [segment.sector],
+        segments: [segment], // 0.14.2 P3: jeden własny segment (profil, cykl i pracownicy z niego, nie z matki)
+        specializationSectors: [segment.sector],
         financialHealth: 1,
         volatilityFactor: Number(parent.baseVolatilityFactor || parent.volatilityFactor) || 1,
         cash: capital,
@@ -950,6 +986,21 @@ function processEliteExchangesQuarterly() {
     }
     runDiamondStrategy();
     processSubsidiaryIndependence();
+    syncSubsidiaryLinks(); // 0.14.2 P3: lista córek z faktów (upadłe i uwolnione znikają z listy)
+}
+
+/** 0.14.2 P3: lista córek z faktów (isSubsidiaryOf); wpisy-obiekty z fuzji/przejęć (wchłonięte spółki) → absorbedCompanies. */
+function syncSubsidiaryLinks() {
+    let fixed = 0;
+    for (const stock of stocks) {
+        const legacy = (stock.subsidiaries || []).filter(item => item && typeof item === 'object');
+        if (legacy.length) stock.absorbedCompanies = [...(stock.absorbedCompanies || []), ...legacy];
+        const children = stocks.filter(child => child.isSubsidiaryOf === stock.symbol && !child.isBankrupt).map(child => child.symbol);
+        const before = JSON.stringify(stock.subsidiaries || []);
+        if (children.length) stock.subsidiaries = children; else delete stock.subsidiaries;
+        if (before !== JSON.stringify(stock.subsidiaries || [])) fixed++;
+    }
+    return fixed;
 }
 
 /** Spółka zależna może się uwolnić, gdy matka sprzeda udziały (mniej niż 50%). */

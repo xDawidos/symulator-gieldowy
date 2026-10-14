@@ -1754,6 +1754,28 @@ const SECTORS = {
 };
 for (const group of SECTOR_GROUPS) for (const name of group.sectors) SECTORS[name].group = group.id;
 
+// 0.14.2 P3/P4: słowa sektorów do nazw spółek zależnych i startupów.
+const SECTOR_NAME_WORDS = {
+    'Bankowość': ['Bank', 'Kredyt', 'Depozyt'],
+    'Finanse': ['Capital', 'Finance', 'Invest', 'Fund'],
+    'Żywność': ['Food', 'Agro', 'Smak', 'Farm'],
+    'Dobra konsumpcyjne': ['Home', 'Style', 'Market', 'Dom'],
+    'Turystyka': ['Travel', 'Tour', 'Holiday', 'Hotel'],
+    'Media': ['Media', 'Studio', 'Vision', 'Press'],
+    'Gaming': ['Games', 'Play', 'Pixel', 'Arcade'],
+    'Przemysł': ['Industry', 'Steel', 'Mech', 'Works'],
+    'Chemia': ['Chem', 'Lab', 'Synthesis', 'Polymer'],
+    'Energia': ['Energy', 'Power', 'Volt', 'Grid'],
+    'Budowlany': ['Build', 'Bud', 'Construct', 'Beton'],
+    'Transport i logistyka': ['Logistics', 'Cargo', 'Trans', 'Express'],
+    'Medycyna': ['Med', 'Pharma', 'Care', 'Health'],
+    'Badania': ['Research', 'Science', 'Lab', 'Nova'],
+    'Technologia': ['Tech', 'Soft', 'Digital', 'Data'],
+    'Nieruchomości': ['Estate', 'Properties', 'Development', 'Dom'],
+    'Obronność': ['Defense', 'Guard', 'Shield', 'Arms'],
+    'Usługi': ['Service', 'Serwis', 'Partner', 'Pro']
+};
+
 /** Kanoniczne sektory w kolejności wyświetlania (według grup). */
 const SECTOR_NAMES = SECTOR_GROUPS.flatMap(group => group.sectors);
 // Zgodność: profile sektorów jako słownik (generatory, testy).

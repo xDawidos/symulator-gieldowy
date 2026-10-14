@@ -6090,6 +6090,66 @@ group('0.14.2 P9: wycena każdego typu spółki (banki, REIT, usługi finansowe,
     });
 });
 
+group('0.14.2 P3: spółki zależne — zawsze pod matką, własny segment i nazwa', () => {
+    const seg = (stock, segments) => { stock.segments = segments; stock.sector = getSectorsFromSegments(segments); return stock; };
+    function withTable(fn) {
+        const table = document.createElement('table'); const body = document.createElement('tbody'); body.id = 'stock-table-body'; table.appendChild(body); document.body.appendChild(table);
+        const saved = { sort: currentSortState, filter: sectorFilterState, level: currentMarketLevel, owned: ownedOnlyFilter };
+        try { sectorFilterState = { sector: 'all', subsector: null, secondary: false, type: 'all' }; currentMarketLevel = 'ALL'; ownedOnlyFilter = false; currentSortState = 'none'; return fn(body); }
+        finally { currentSortState = saved.sort; sectorFilterState = saved.filter; currentMarketLevel = saved.level; ownedOnlyFilter = saved.owned; table.remove(); }
+    }
+    const visible = (body, symbol) => { const row = body.querySelector(`tr[data-symbol="${symbol}"]`); return Boolean(row) && row.style.display !== 'none'; };
+
+    test('córka pod matką na Platynie i w każdej zakładce/filtrze; domyślnie rozwinięta; znacznik poziomu i udziału', () => {
+        const parent = seg(makeCompany('PLT'), [{ sector: 'Technologia', subsector: null, share: 1 }]); parent.exchange = 'PLATINUM'; parent.price = 900;
+        const child = seg(makeCompany('PLTZ1'), [{ sector: 'Energia', subsector: null, share: 1 }]); child.exchange = 'SILVER'; child.isSubsidiaryOf = 'PLT'; child.parentStakePct = 0.6;
+        const other = seg(makeCompany('OTH'), [{ sector: 'Energia', subsector: null, share: 1 }]); other.exchange = 'SILVER';
+        resetWorld([parent, child, other]);
+        withTable(body => {
+            displayStocks();
+            const order = [...body.rows].map(r => r.dataset.symbol).filter(Boolean);
+            assert(order.indexOf('PLTZ1') === order.indexOf('PLT') + 1 && visible(body, 'PLTZ1'), `kolejność ${order}`);
+            const meta = body.querySelector('tr[data-symbol="PLTZ1"] .stock-meta').textContent;
+            assert(meta.includes('zależna od PLT') && meta.includes('60%') && meta.includes(exchanges.SILVER.name), meta);
+            currentMarketLevel = 'PLATINUM'; displayStocks();
+            assert(visible(body, 'PLTZ1'), 'zakładka Platyny: córka z innego poziomu pod matką');
+            currentMarketLevel = 'ALL'; sectorFilterState = { sector: 'Technologia', subsector: null, secondary: false, type: 'all' }; displayStocks();
+            assert(visible(body, 'PLTZ1') && !visible(body, 'OTH'), 'filtr sektora: córka z innego sektora i tak pod matką');
+            sectorFilterState = { sector: 'Energia', subsector: null, secondary: false, type: 'all' }; displayStocks();
+            assert(visible(body, 'PLTZ1'), 'matka poza filtrem: córka samodzielnie, nie znika');
+            sectorFilterState = { sector: 'all', subsector: null, secondary: false, type: 'all' }; displayStocks();
+            toggleSubsidiaryVisibility('PLT');
+            assert(!visible(body, 'PLTZ1'), 'zwinięcie');
+            toggleSubsidiaryVisibility('PLT');
+            assert(visible(body, 'PLTZ1'), 'rozwinięcie');
+        });
+    });
+
+    test('fuzja/przejęcie: wchłonięta spółka nie udaje córki; lista córek z faktów', () => {
+        const parent = makeCompany('PAR'), child = makeCompany('CHL');
+        child.isSubsidiaryOf = 'PAR';
+        parent.subsidiaries = [{ symbol: 'OLD', name: 'Wchłonięta', date: 1 }];
+        resetWorld([parent, child]);
+        syncSubsidiaryLinks();
+        assert(parent.subsidiaries.join() === 'CHL' && parent.absorbedCompanies?.[0]?.symbol === 'OLD', JSON.stringify(parent.subsidiaries));
+    });
+
+    test('20 córek jednej matki: ≥ 15 różnych nazw, każda z jednym segmentem, ≥ 50% w innym sektorze niż główny matki', () => {
+        const parent = seg(makeCompany('COR', { cash: 1e12 }), [{ sector: 'Technologia', subsector: 'Sztuczna inteligencja', share: 0.7 }, { sector: 'Media', subsector: null, share: 0.3 }]);
+        parent.name = 'Cortex Neural';
+        parent.exchange = 'RUBY';
+        resetWorld([parent]);
+        const saved = hasFreeListingSlot; hasFreeListingSlot = () => true;
+        const kids = [];
+        try { for (let i = 0; i < 20; i++) { const c = foundSubsidiary(parent); if (c) kids.push(c); } } finally { hasFreeListingSlot = saved; }
+        const names = new Set(kids.map(c => c.name));
+        const other = kids.filter(c => getMainSector(c) !== 'Technologia').length;
+        assert(kids.length === 20 && names.size >= 15, `${kids.length} córek, ${names.size} nazw: ${[...names].slice(0, 6).join(', ')}`);
+        assert(kids.every(c => c.segments.length === 1 && c.sector.length === 1), 'jeden segment');
+        assert(other >= 10, `inny sektor: ${other}/20`);
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

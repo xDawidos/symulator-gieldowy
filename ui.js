@@ -867,7 +867,13 @@ function displayStocks(previousInputValues = {}) {
 
   // Filtrowanie spółek do wyświetlenia
   // 0.14 T1c: sektor główny (albo także poboczne), podsektor i typ instrumentu.
-  let baseStocksToDisplay = stocks.filter(stock => !stock.isSubsidiaryOf && stockMatchesSectorFilter(stock, sectorFilterState));
+  // 0.14.2 P3: córki z faktów (isSubsidiaryOf) — zawsze pod widoczną matką, niezależnie od filtra i poziomu giełdy.
+  const childrenByParent = new Map();
+  for (const stock of stocks) if (stock.isSubsidiaryOf && !stock.isBankrupt) {
+    if (!childrenByParent.has(stock.isSubsidiaryOf)) childrenByParent.set(stock.isSubsidiaryOf, []);
+    childrenByParent.get(stock.isSubsidiaryOf).push(stock);
+  }
+  let baseStocksToDisplay = stocks.filter(stock => stockMatchesSectorFilter(stock, sectorFilterState));
 
   if (ownedOnlyFilter) baseStocksToDisplay = baseStocksToDisplay.filter(isStockOwnedByPlayer);
   // D1: spółki rynków internetowych tylko w zakładce „Internet”.
@@ -879,6 +885,9 @@ function displayStocks(previousInputValues = {}) {
   const sortedExchanges = Object.keys(exchanges)
     .filter(key => typeof currentMarketLevel === 'undefined' || currentMarketLevel === 'ALL' || key === currentMarketLevel)
     .sort((a, b) => exchanges[a].level - exchanges[b].level);
+  // Córka trafia pod matkę, gdy matka jest w tym widoku; inaczej (matka poza filtrem lub poziomem) stoi samodzielnie.
+  const shownParents = new Set(baseStocksToDisplay.filter(stock => !stock.isSubsidiaryOf && (internetTab || sortedExchanges.includes(stock.exchange))).map(stock => stock.symbol));
+  baseStocksToDisplay = baseStocksToDisplay.filter(stock => !stock.isSubsidiaryOf || !shownParents.has(stock.isSubsidiaryOf));
   const hasAnalystSkill = getSkillLevel('financialAnalyst') > 0;
 
   // --- Funkcja pomocnicza do renderowania wiersza ---
@@ -960,9 +969,9 @@ function displayStocks(previousInputValues = {}) {
     topLine.className = 'stock-name-line';
     if (isSubsidiary) topLine.style.paddingLeft = '25px';
 
-    if (stock.subsidiaries && stock.subsidiaries.length > 0) {
+    if (!isSubsidiary && (childrenByParent.get(stock.symbol) || []).length > 0) {
       const toggleBtn = document.createElement('span');
-      toggleBtn.textContent = stock.isSubsidiaryExpanded ? '▼' : '▶';
+      toggleBtn.textContent = stock.isSubsidiaryExpanded !== false ? '▼' : '▶'; // 0.14.2 P3: domyślnie rozwinięte
       toggleBtn.classList.add('clickable');
       toggleBtn.classList.add('mr-1');
       toggleBtn.onclick = e => {
@@ -1007,7 +1016,8 @@ function displayStocks(previousInputValues = {}) {
     const metaLine = document.createElement('div');
     metaLine.className = 'stock-meta';
     const marketId = typeof getStockMarket === 'function' ? getStockMarket(stock) : 'GPW';
-    metaLine.textContent = `${primarySector} • ${stock.symbol}${marketId !== 'GPW' ? ` • członek rynku ${getMarketLabel(marketId)}` : ''}${stock.isDividendAristocrat ? ' • 👑 dywidendowy arystokrata' : ''}`;
+    const parentNote = stock.isSubsidiaryOf ? ` • ↳ zależna od ${stock.isSubsidiaryOf}${Number.isFinite(stock.parentStakePct) ? ` (${Math.round(stock.parentStakePct * 100)}%)` : ''} · ${exchanges[stock.exchange]?.name || stock.exchange}` : ''; // 0.14.2 P3
+    metaLine.textContent = `${primarySector} • ${stock.symbol}${parentNote}${marketId !== 'GPW' ? ` • członek rynku ${getMarketLabel(marketId)}` : ''}${stock.isDividendAristocrat ? ' • 👑 dywidendowy arystokrata' : ''}`;
 
     identityWrap.appendChild(topLine);
     identityWrap.appendChild(metaLine);
@@ -1275,19 +1285,9 @@ function displayStocks(previousInputValues = {}) {
       const mainRow = renderStockRow(stock, false);
       if (exchangeCollapseState[exchangeKey]) mainRow.style.display = 'none';
 
-      if (stock.subsidiaries && stock.subsidiaries.length > 0) {
-        stock.subsidiaries.forEach(subSymbol => {
-          const subStock = stocks.find(s => s.symbol === subSymbol);
-          if (subStock) {
-            const subRow = renderStockRow(subStock, true, stock.symbol);
-            if (
-              exchangeCollapseState[exchangeKey] ||
-              !stock.isSubsidiaryExpanded
-            )
-              subRow.style.display = 'none';
-            else subRow.style.display = '';
-          }
-        });
+      for (const subStock of childrenByParent.get(stock.symbol) || []) { // 0.14.2 P3: córki z faktów, nie z listy matki
+        const subRow = renderStockRow(subStock, true, stock.symbol);
+        subRow.style.display = exchangeCollapseState[exchangeKey] || stock.isSubsidiaryExpanded === false ? 'none' : '';
       }
     });
   });
@@ -4090,7 +4090,7 @@ function toggleSubsidiaryVisibility(parentSymbol) {
     const parentStock = stocks.find(s => s.symbol === parentSymbol);
     if (!parentStock) return;
 
-    parentStock.isSubsidiaryExpanded = !parentStock.isSubsidiaryExpanded;
+    parentStock.isSubsidiaryExpanded = parentStock.isSubsidiaryExpanded === false; // 0.14.2 P3: domyślnie rozwinięte
 
     const subRows = document.querySelectorAll(`.subsidiary-of-${parentSymbol}`);
     subRows.forEach(row => {
@@ -4098,14 +4098,14 @@ function toggleSubsidiaryVisibility(parentSymbol) {
         const parentExchangeKey = parentRow ? stocks.find(s => s.symbol === parentSymbol)?.exchange : null;
         const isExchangeCollapsed = parentExchangeKey ? exchangeCollapseState[parentExchangeKey] : false;
 
-        row.style.display = (parentStock.isSubsidiaryExpanded && !isExchangeCollapsed) ? '' : 'none';
+        row.style.display = (parentStock.isSubsidiaryExpanded !== false && !isExchangeCollapsed) ? '' : 'none';
     });
 
     const parentRow = document.querySelector(`tr[data-symbol="${parentSymbol}"]`);
     if (parentRow) {
         const toggleBtn = parentRow.querySelector('.subsidiary-toggle');
         if (toggleBtn) {
-            toggleBtn.textContent = parentStock.isSubsidiaryExpanded ? '▼ ' : '▶ ';
+            toggleBtn.textContent = parentStock.isSubsidiaryExpanded !== false ? '▼ ' : '▶ ';
         }
     }
 }

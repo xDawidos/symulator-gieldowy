@@ -3461,8 +3461,7 @@ function resolveMerger(stock1, stock2, process) {
 
             // 6. Aktualizacja spółki-matki (bez zmian)
             initiator.financialHealth = Math.max(-5, Math.min(5, ((initiator.financialHealth + target.financialHealth) / 2) + 0.5));
-            if (!initiator.subsidiaries) initiator.subsidiaries = [];
-            initiator.subsidiaries.push({ symbol: target.symbol, name: target.name, date: Date.now() });
+            (initiator.absorbedCompanies = initiator.absorbedCompanies || []).push({ symbol: target.symbol, name: target.name, date: Date.now() }); // 0.14.2 P3: wchłonięta, nie córka
 
             successMessage = `✅ Przejęcie zakończone! ${initiator.name} wchłonął ${target.name}.`;
             break;
@@ -3517,8 +3516,7 @@ function resolveMerger(stock1, stock2, process) {
             initiator.cash -= process.costs;
             coverNegativeCash(initiator); // koszty fuzji ponad gotówkę — kredyt ratunkowy od razu (kandydat na PROL −30 231 z A1)
             initiator.financialHealth = Math.max(-5, Math.min(5, ((initiator.financialHealth + target.financialHealth) / 2) + 1.0));
-            if (!initiator.subsidiaries) initiator.subsidiaries = [];
-            initiator.subsidiaries.push({ symbol: target.symbol, name: target.name, date: Date.now() });
+            (initiator.absorbedCompanies = initiator.absorbedCompanies || []).push({ symbol: target.symbol, name: target.name, date: Date.now() }); // 0.14.2 P3: wchłonięta, nie córka
 
             if (target.ceo && target.financialHealth > initiator.financialHealth) {
                 initiator.ceo = target.ceo;
