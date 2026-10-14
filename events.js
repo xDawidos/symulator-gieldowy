@@ -362,7 +362,9 @@ function logEvent(message, category = 'market') { // Domyślna kategoria to 'mar
         eventLog.pop();
     }
     if (typeof routeEventToMail === 'function') routeEventToMail(message, category); // skrzynka mailowa (mail.js)
+    if (typeof pushNews === 'function' && NEWS_CATEGORIES.includes(category) && !/^\[/.test(String(message))) pushNews(message); // 0.14.2 P7: pasek newsów
 }
+const NEWS_CATEGORIES = ['market', 'company', 'state', 'city', 'construction', 'success', 'warning'];
 
 
 

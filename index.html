@@ -1165,6 +1165,11 @@
 
     <!-- Pilne wiadomości (0.11.3) -->
     <div id="breaking-news" class="breaking-news" role="alert" hidden></div>
+    <div id="news-ticker" class="news-ticker" aria-label="Pasek wiadomości">
+        <button class="news-ticker-btn" onclick="toggleNewsHistory()" title="Historia ostatnich 50 wiadomości">📰</button>
+        <div class="news-ticker-viewport"><div id="news-ticker-track" class="news-ticker-track"></div></div>
+    </div>
+    <div id="news-history" class="news-history" hidden></div>
 
     <!-- Szara strefa (0.11.1): usługi korupcyjne z funduszu -->
     <div id="grey-zone-modal" class="modal modal-lg" style="display: none;">

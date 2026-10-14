@@ -6274,6 +6274,57 @@ group('0.14.2 P6: inwestycje i technologie według sektora i podsektora', () => 
     });
 });
 
+group('0.14.2 P7: pasek newsów i dymki tylko w sprawach gracza', () => {
+    function world() {
+        const a = makeCompany('AAA'), b = makeCompany('BBB');
+        a.name = 'Alfa Testowa'; b.name = 'Beta Testowa';
+        resetWorld([a, b]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        playerPortfolio.AAA = { shares: 100, avgPrice: 10, assetType: 'stock' };
+        newsLog = []; toastGameTimes = []; userActionUntil = 0;
+        Object.assign(toastStats, { shown: 0, feedback: 0, toNews: 0, limited: 0 });
+        return { a, b };
+    }
+
+    test('zdarzenie o cudzej spółce → pasek, nie dymek; o spółce gracza → dymek', () => {
+        world();
+        showToast('Beta Testowa ogłasza nowy produkt.', 'success');
+        assert(toastStats.shown === 0 && newsLog[0]?.symbol === 'BBB', 'na pasku, z kartą spółki');
+        showToast('Alfa Testowa: wyniki powyżej oczekiwań.', 'success');
+        assert(toastStats.shown === 1, 'spółka z portfela gracza');
+    });
+
+    test('≤ 3 dymki na minutę gry; nadmiar na pasek; odpowiedź na akcję gracza zawsze', () => {
+        world();
+        for (let i = 0; i < 6; i++) showToast(`Alfa Testowa: zdarzenie ${i}`, 'default');
+        assert(toastStats.shown === 3 && toastStats.limited === 3 && newsLog.length === 3, JSON.stringify(toastStats));
+        playerFund.clockMs += 61_000;
+        showToast('Alfa Testowa: kolejna minuta', 'default');
+        assert(toastStats.shown === 4, 'nowa minuta gry');
+        userActionUntil = Date.now() + 1000;
+        showToast('Za mało gotówki!', 'error');
+        assert(toastStats.feedback === 1 && toastStats.shown === 5, 'odpowiedź na kliknięcie');
+    });
+
+    test('historia paska: najwyżej 50; logEvent z rynku trafia na pasek', () => {
+        world();
+        for (let i = 0; i < 70; i++) pushNews(`news ${i}`);
+        assert(newsLog.length === 50 && newsLog[0].text === 'news 69', 'limit 50');
+        logEvent('📈 AWANS: Beta Testowa wchodzi na Giełdę Złotą.', 'market');
+        assert(newsLog[0].symbol === 'BBB', 'logEvent → pasek');
+    });
+
+    test('znaczniki wykresu w jednym miejscu łączą się w jeden z liczbą', () => {
+        const { a } = world();
+        const t0 = Date.now();
+        a.chartEvents = [{ time: t0, icon: '✂️', label: 'Dywidenda' }, { time: t0 + 1, icon: '📉', label: 'Zrzut 1' }, { time: t0 + 2, icon: '📉', label: 'Zrzut 2' }];
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        drawChartEvents(a, svg, [{ time: t0 - 1000 }, { time: t0 }, { time: t0 + 1000 }], (i, n) => i * 100, { top: 0 }, 100);
+        const labels = [...svg.querySelectorAll('text')].map(n => n.textContent);
+        assert(labels.length === 1 && labels[0] === '✂️×3', labels.join(','));
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

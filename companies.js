@@ -9272,8 +9272,9 @@ function revealFraud(stock, by) {
     if (typeof replaceCeo === 'function' && stock.ceo) replaceCeo(stock);
     if (typeof addChartEvent === 'function') addChartEvent(stock, '🧾', `Korekta wyników: odpis ${formatZl(writeOff, 0)}`);
     const text = `🧾 KOREKTA WYNIKÓW: ${stock.name} (${stock.symbol}) zawyżała zyski — odpis ${formatZl(writeOff, 0)}, kurs −${(drop * 100).toFixed(0)}%, zarząd odwołany (wykrył: ${by}).`;
-    logEvent(text, 'company');
-    if (typeof showBreakingNews === 'function') showBreakingNews(text, false);
+    logEvent(text, 'company'); // pasek newsów (P7); mail tylko gdy gracz ma akcje (routeEventToMail)
+    const heldNow = (playerPortfolio[stock.symbol]?.shares || 0) > 0 || (playerWallet?.portfolio?.[stock.symbol]?.shares || 0) > 0;
+    if (heldNow && typeof showBreakingNews === 'function') showBreakingNews(text, false); // 0.14.2 P7: „PILNE” tylko dla spółek gracza
 
     // Afera audytora: firma, która niedawno dała „czystą” opinię.
     if (stock.audit?.done && stock.audit.clean && stock.audit.missed) {

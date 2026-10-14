@@ -526,11 +526,19 @@ function drawChartEvents(stock, svg, historyForMapping, getX, padding, chartHeig
     const svgNs = "http://www.w3.org/2000/svg";
     const tooltip = document.getElementById('chart-tooltip');
     const first = historyForMapping[0]?.time;
+    // 0.14.2 P7: znaczniki w tym samym miejscu wykresu (ten sam punkt albo < 10 px) łączymy w jeden z liczbą i listą w dymku.
+    const groups = [];
     for (const event of stock.chartEvents || []) {
         if (!first || event.time < first) continue;
         let index = 0, best = Infinity;
         historyForMapping.forEach((point, i) => { const d = Math.abs((point.time || 0) - event.time); if (d < best) { best = d; index = i; } });
         const x = getX(index, historyForMapping.length);
+        const group = groups.find(g => Math.abs(g.x - x) < 10);
+        if (group) group.events.push(event); else groups.push({ x, events: [event] });
+    }
+    for (const group of groups) {
+        const x = group.x;
+        const event = { icon: group.events.length > 1 ? `${group.events[0].icon}×${group.events.length}` : group.events[0].icon, label: group.events.map(e => `${e.icon} ${e.label}`).join(' · ') };
         const line = document.createElementNS(svgNs, "line");
         line.setAttribute("x1", x); line.setAttribute("x2", x);
         line.setAttribute("y1", padding.top); line.setAttribute("y2", padding.top + chartHeight);
@@ -2656,7 +2664,74 @@ function setupAutoInvestModal() {
 
 let toastTimer = null;
 
+// =================================================================================
+// 0.14.2 P7: PASEK NEWSÓW + DYMKI TYLKO W SPRAWACH GRACZA (≤ 3 na minutę gry)
+// =================================================================================
+const NEWS_HISTORY_LIMIT = 50;
+const NEWS_TICKER_ITEMS = 12;
+const TOAST_LIMIT_PER_GAME_MINUTE = 3;
+const PLAYER_MATTER_PATTERN = /fundusz|twoj|twój|twoje|twoich|awans|degradac|ocena zarządu|\bkar[aęy]\b|grzywn|przelew|wypłat|konto prywatne|portfel|decyzj|oferta dla|mail/i;
+let newsLog = [];
+let toastGameTimes = [];
+let userActionUntil = 0;
+const toastStats = { shown: 0, feedback: 0, toNews: 0, limited: 0 };
+if (typeof document !== 'undefined' && document.addEventListener) {
+    const markUserAction = () => { userActionUntil = Date.now() + 1500; };
+    document.addEventListener('pointerdown', markUserAction, true);
+    document.addEventListener('keydown', markUserAction, true);
+}
+
+/** Dymek dotyczy gracza: spółka z jego akcjami albo słowa o funduszu, ocenie, karach, przelewach, decyzjach. */
+function isPlayerMatter(message) {
+    const text = String(message || '');
+    const stock = typeof findMentionedStock === 'function' ? findMentionedStock(text) : null;
+    if (stock && ((playerPortfolio?.[stock.symbol]?.shares || 0) > 0 || (playerWallet?.portfolio?.[stock.symbol]?.shares || 0) > 0)) return true;
+    return PLAYER_MATTER_PATTERN.test(text);
+}
+
+/** Wpis na pasek newsów (klik otwiera kartę spółki). */
+function pushNews(text, symbol = null) {
+    if (!text) return;
+    const stock = symbol ? stocks.find(s => s.symbol === symbol) : (typeof findMentionedStock === 'function' ? findMentionedStock(String(text)) : null);
+    newsLog.unshift({ text: String(text), symbol: stock?.symbol || null });
+    if (newsLog.length > NEWS_HISTORY_LIMIT) newsLog.length = NEWS_HISTORY_LIMIT;
+    renderNewsTicker();
+}
+
+function renderNewsTicker() {
+    const track = typeof document !== 'undefined' ? document.getElementById('news-ticker-track') : null;
+    if (!track) return;
+    const item = n => `<span class="news-item${n.symbol ? ' clickable' : ''}"${n.symbol ? ` onclick="openDescriptionModal('${n.symbol}')"` : ''}>${escapeHtml(n.text)}</span>`;
+    const items = newsLog.slice(0, NEWS_TICKER_ITEMS).map(item).join('<span class="news-sep">•</span>');
+    track.innerHTML = items ? `${items}<span class="news-sep">•</span>${items}` : '<span class="news-item text-muted">Brak wiadomości.</span>'; // podwojone — płynne przewijanie
+    const history = document.getElementById('news-history');
+    if (history && !history.hidden) renderNewsHistory();
+}
+
+function renderNewsHistory() {
+    const history = document.getElementById('news-history');
+    if (!history) return;
+    history.innerHTML = `<h4 class="my-1">📰 Ostatnie wiadomości (${newsLog.length})</h4><ul class="list-plain text-sm">${newsLog.map(n => `<li${n.symbol ? ` class="clickable" onclick="openDescriptionModal('${n.symbol}')"` : ''}>${escapeHtml(n.text)}</li>`).join('') || '<li class="text-muted">Brak wiadomości.</li>'}</ul>`;
+}
+
+function toggleNewsHistory() {
+    const history = document.getElementById('news-history');
+    if (!history) return;
+    history.hidden = !history.hidden;
+    if (!history.hidden) renderNewsHistory();
+}
+
 function showToast(message, type = 'default', duration = 3000) {
+    // 0.14.2 P7: odpowiedź na akcję gracza zawsze; zdarzenia gry — tylko sprawy gracza, ≤ 3 na minutę gry, reszta na pasek.
+    if (Date.now() < userActionUntil) toastStats.feedback++;
+    else if (!isPlayerMatter(message)) { toastStats.toNews++; pushNews(message); return; }
+    else {
+        const now = typeof getGameClockMs === 'function' ? getGameClockMs() : Date.now();
+        toastGameTimes = toastGameTimes.filter(t => now - t < 60000 && now >= t);
+        if (toastGameTimes.length >= TOAST_LIMIT_PER_GAME_MINUTE) { toastStats.limited++; pushNews(message); return; }
+        toastGameTimes.push(now);
+    }
+    toastStats.shown++;
     const toastElement = document.getElementById('toast-notification');
     if (!toastElement) return;
 
