@@ -11030,7 +11030,7 @@ function orderStrategy(symbol, type, target = null) {
 // Carve-out (25%, a ponad limitem spółek zawsze): matka zachowuje 51–80% akcji córki, córka jest zależna.
 
 const SPINOFF_MIN_SHARE = 0.30;
-const SPINOFF_QUARTER_CHANCE = 0.04;      // prezes, na kwartał, dla spełniających warunki
+const SPINOFF_QUARTER_CHANCE = 0.0525;    // prezes, na kwartał, dla spełniających warunki (decyzja 13: 4% → 5,25%)
 const SPINOFF_BOT_ORDER_CHANCE = 0.10;    // bot-większościowiec zleca od razu
 const SPINOFF_FAKE_RUMOR_CHANCE = SPINOFF_QUARTER_CHANCE * 0.4 / 0.6; // 60% plotek jest prawdziwych
 const SPINOFF_ANNOUNCE_JUMP = [0.03, 0.08];
@@ -11039,7 +11039,11 @@ const SPINOFF_CARVE_KEEP = [0.51, 0.80];
 const SPINOFF_DOMESTIC_LIMIT = 115;       // decyzja 4: spin-off do 115 spółek krajowych, powyżej tylko carve-out
 const SPINOFF_LOG_LIMIT = 20;
 const SPINOFF_PLAYER_BLOCK_QUARTERS = 4;
-let spinoffLog = [];                       // { parent, child, quarter, carve, keep, valueBefore, ratio2q }
+let spinoffLog = [];                       // { parent, child, quarter, carve, keep, valueBefore, gigBefore, ratio2q, gig2q }
+
+function getGigValue() {
+    return typeof marketIndexes !== 'undefined' ? Number(marketIndexes.find(i => i.id === 'GIG')?.value) || 0 : 0;
+}
 
 function getSpinoffQuarter() {
     return typeof macro === 'object' && macro ? macro.quarter : 0;
@@ -11083,7 +11087,7 @@ function announceSpinoff(stock, by = 'ceo') {
     if (!seg || stock.spinoff) return null;
     const quarter = getSpinoffQuarter();
     const valueBefore = getMarketCapValue(stock);
-    stock.spinoff = { stage: 'announced', sector: seg.sector, subsector: seg.subsector || null, by, announcedQuarter: quarter, valueBefore };
+    stock.spinoff = { stage: 'announced', sector: seg.sector, subsector: seg.subsector || null, by, announcedQuarter: quarter, valueBefore, gigBefore: getGigValue() };
     stock.spinoffRumor = null;
     const jump = getRandomInRange(...SPINOFF_ANNOUNCE_JUMP) * (1 + (typeof gaussianRandom === 'function' ? gaussianRandom() * 0.2 : 0));
     applyPriceEffect(stock.symbol, Math.max(0.01, jump), 'positive', 'company');
@@ -11245,7 +11249,7 @@ function executeSpinoff(parent, options = {}) {
     updateFundamentalRatios(parent); updateFundamentalRatios(child);
     if (typeof syncSubsidiaryLinks === 'function') syncSubsidiaryLinks();
     if (typeof addChartEvent === 'function') { addChartEvent(parent, '✂️', `Wydzielenie: ${child.name} (${child.symbol})`); addChartEvent(child, '🆕', `Debiut po wydzieleniu z ${parent.name}`); }
-    spinoffLog.unshift({ parent: parent.symbol, child: symbol, quarter, carve, keep, valueBefore: plan.valueBefore || 0, ratio2q: null });
+    spinoffLog.unshift({ parent: parent.symbol, child: symbol, quarter, carve, keep, valueBefore: plan.valueBefore || 0, gigBefore: plan.gigBefore || 0, ratio2q: null, gig2q: null });
     spinoffLog.length = Math.min(spinoffLog.length, SPINOFF_LOG_LIMIT);
     noteStrategyStat(carve ? 'carveOuts' : 'spinoffs');
     logEvent(carve
@@ -11277,12 +11281,13 @@ function processSpinoffsQuarterly() {
         if (roll < SPINOFF_QUARTER_CHANCE) noteSpinoffRumor(stock, getSpinoffCandidateSegment(stock).sector, true);
         else if (roll < SPINOFF_QUARTER_CHANCE + SPINOFF_FAKE_RUMOR_CHANCE) noteSpinoffRumor(stock, getSpinoffCandidateSegment(stock).sector, false);
     }
-    // Pomiar: suma wartości matka + córka 2 kw. po wydzieleniu względem wartości matki przed zapowiedzią.
+    // Pomiar: suma wartości matka + córka 2 kw. po wydzieleniu względem wartości matki przed zapowiedzią (oraz zmiana GIG w tym okresie).
     for (const entry of spinoffLog) {
         if (entry.ratio2q !== null || quarter - entry.quarter < 2 || !(entry.valueBefore > 0)) continue;
         const parent = stocks.find(s => s.symbol === entry.parent), child = stocks.find(s => s.symbol === entry.child);
         if (!parent || !child) { entry.ratio2q = NaN; continue; }
         const childFloat = getMarketCapValue(child) * (entry.carve ? 1 - entry.keep : 1);
         entry.ratio2q = (getMarketCapValue(parent) + childFloat) / entry.valueBefore;
+        entry.gig2q = entry.gigBefore > 0 ? getGigValue() / entry.gigBefore : null; // decyzja 13: efekt mierzony ponad GIG z tego samego okresu
     }
 }
