@@ -185,6 +185,32 @@ Znalezione przy kontroli 0.14.1, było już przed nim:
 
 **Test:** 20 lat ×200, 0 ostrzeżeń „ujemna gotówka” na granicy kwartału.
 
+## P11. Płynny pasek newsów (zgłoszenie po 0.14.2, 2026-10-15)
+
+Zgłoszenie: pasek zacina się, gdy wchodzą nowe newsy.
+
+**Diagnoza** (`ui.js`: `pushNews`, `renderNewsTicker`; `style.css`: `.news-ticker-track`, `@keyframes news-scroll`):
+1. Każdy news przebudowuje cały pas (`track.innerHTML`), a nowy wpis trafia **na początek** (`newsLog.unshift`). Widoczna treść przeskakuje o szerokość nowego wpisu.
+2. Animacja CSS przesuwa pas o −100% jego szerokości w stałe 90 s. Gdy pas się wydłuża albo skraca, zmienia się prędkość i bieżąca pozycja, więc animacja skacze.
+3. Przy dużych prędkościach gry newsy przychodzą kilka razy na sekundę, a każdy wymusza przebudowę i przeliczenie układu.
+
+**Naprawa:**
+- **Kolejka zamiast przebudowy:** `pushNews` dopisuje news do historii i do kolejki paska, a pasu, który się przewija, nie przebudowuje.
+- **Wpisy wchodzą z prawej**, na końcu pasa. Następny wpis z kolejki jest dokładany, gdy ostatni w pełni wjechał w pole widzenia. Wpisy, które w całości wyjechały z lewej, są usuwane z jednoczesną korektą przesunięcia o ich szerokość, więc nic nie skacze.
+- **Stała prędkość w pikselach na sekundę** (ok. 60 px/s), niezależna od długości pasa. Ruch w `requestAnimationFrame` przez `transform: translate3d`, z `will-change: transform`. Animacja CSS `news-scroll` znika.
+- **Pauza po najechaniu** zostaje, a ruch wznawia się od tego samego miejsca.
+- **Nadmiar newsów:** kolejka paska najwyżej 15 wpisów. Przy przepełnieniu odpadają najstarsze rutynowe, ale zostają w historii 📰. Newsy dotyczące spółek gracza mają pierwszeństwo.
+- **Pusty pasek:** gdy kolejka jest pusta, pas zapętla ostatnie wpisy bez przebudowy (dokłada kopie z historii).
+- **`prefers-reduced-motion`:** bez przewijania; jeden news naraz, zmiana co 5 s bez animacji.
+- **Karta zakładki w tle:** gdy strona jest ukryta (`document.hidden`), ruch staje, a po powrocie nie nadrabia skokiem.
+
+**Testy:**
+- `pushNews` w trakcie przewijania nie zmienia bieżącego przesunięcia widocznych wpisów (pozycja pierwszego widocznego wpisu przed i po różni się tylko o ruch z czasu);
+- 200 newsów w 2 s (symulacja ×200) → kolejka ≤ 15, historia 50, bez wyjątków;
+- prędkość pasa stała przy 3 i przy 12 wpisach.
+
+**Kontrola ręczna:** przebieg przy ×1 i ×50 z otwartym paskiem; brak widocznych skoków przy wejściu nowego newsa.
+
 ---
 
 ## Zapis gry i testy
