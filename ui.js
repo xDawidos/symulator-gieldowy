@@ -1025,7 +1025,8 @@ function displayStocks(previousInputValues = {}) {
     metaLine.className = 'stock-meta';
     const marketId = typeof getStockMarket === 'function' ? getStockMarket(stock) : 'GPW';
     const parentNote = stock.isSubsidiaryOf ? ` • ↳ zależna od ${stock.isSubsidiaryOf}${Number.isFinite(stock.parentStakePct) ? ` (${Math.round(stock.parentStakePct * 100)}%)` : ''} · ${exchanges[stock.exchange]?.name || stock.exchange}` : ''; // 0.14.2 P3
-    metaLine.textContent = `${primarySector} • ${stock.symbol}${parentNote}${marketId !== 'GPW' ? ` • członek rynku ${getMarketLabel(marketId)}` : ''}${stock.isDividendAristocrat ? ' • 👑 dywidendowy arystokrata' : ''}`;
+    const spinNote = (stock.spinoff ? ` • ✂️ zapowiedziane wydzielenie: ${stock.spinoff.sector}` : '') + (stock.spunOffFrom && !stock.isSubsidiaryOf ? ` • ✂️ wydzielona z ${stock.spunOffFrom}` : ''); // 0.14 T4
+    metaLine.textContent = `${primarySector} • ${stock.symbol}${parentNote}${spinNote}${marketId !== 'GPW' ? ` • członek rynku ${getMarketLabel(marketId)}` : ''}${stock.isDividendAristocrat ? ' • 👑 dywidendowy arystokrata' : ''}`;
 
     identityWrap.appendChild(topLine);
     identityWrap.appendChild(metaLine);
@@ -6156,6 +6157,11 @@ function renderMailPreview(message) {
         action = offer
             ? `<div class="mail-action"><p>${offer.shares.toLocaleString('pl-PL')} akcji po ${formatZl(offer.price)} · razem ${formatZl(offer.shares * offer.price, 0)}</p><button onclick="mailAction(acceptBotBlock)">Kup pakiet z rabatem</button></div>`
             : '<p class="fund-muted">Oferta pakietu wygasła.</p>';
+    } else if (message.action?.type === 'spinoff') { // 0.14 T4: decyzja większościowca o wydzieleniu
+        const stock = stocks.find(s => s.symbol === message.action.symbol);
+        action = stock && !stock.spinoff && typeof canAnnounceSpinoff === 'function' && canAnnounceSpinoff(stock) && isPlayerSpinoffMajority(stock)
+            ? `<div class="mail-action"><button onclick="mailAction(playerSpinoffDecision, '${stock.symbol}', 'now')">✂️ Zleć zapowiedź teraz</button> <button class="btn-secondary" onclick="mailAction(playerSpinoffDecision, '${stock.symbol}', 'block')">✋ Zablokuj na rok</button><p class="text-xs text-muted">Bez decyzji — decyduje prezes.</p></div>`
+            : '<p class="fund-muted">Decyzja nie jest już aktualna.</p>';
     } else if (message.action?.type === 'bankBlock') { // 0.14.2 P5: pakiet od banku inwestycyjnego
         const bank = commercialBanks.find(b => b.id === message.action.bankId);
         const offer = bank?.resaleOffer?.symbol === message.action.symbol ? bank.resaleOffer : null;

@@ -412,6 +412,26 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Czy wynik badania da się odczytać z wykresu przed ogłoszeniem?', a: ['nie — jest losowany w chwili ogłoszenia', 'tak, z wolumenu', 'tak, z poprzedniej fazy'], c: 0 }
         ]
     },
+    spinoff: {
+        title: 'Spin-off i dywidenda rzeczowa', icon: '✂️',
+        text: 'Spin-off to wydzielenie części spółki do nowej, osobno notowanej firmy. Akcjonariusze nie płacą: każdy dostaje akcje córki proporcjonalnie do akcji matki (dywidenda rzeczowa). W dniu wydzielenia kurs matki spada mniej więcej o wartość wydzielonej części, więc wartość pozycji się nie zmienia. Rynek zwykle nagradza zapowiedź (znika dyskonto konglomeratu), ale robi to od razu — po ogłoszeniu nie ma darmowego zysku. W wariancie carve-out matka zachowuje większość akcji córki (51–80%), a córka zostaje spółką zależną.',
+        example: () => { const e = spinoffLog[0]; const c = e && stocks.find(s => s.symbol === e.child); return c ? `${c.name} (${c.symbol}) wydzielona z ${e.parent}${e.carve ? ` — carve-out, matka ma ${(e.keep * 100).toFixed(0)}%` : ''}.` : 'Spółka z dwoma niepowiązanymi segmentami (np. Technologia i Energia) może wydzielić mniejszy segment, jeśli ma ≥ 30% przychodów.'; },
+        quiz: [
+            { q: 'Ile płaci akcjonariusz za akcje spółki wydzielonej w spin-offie?', a: ['nic — dostaje je proporcjonalnie do akcji matki', 'cenę rynkową', 'połowę ceny rynkowej'], c: 0 },
+            { q: 'Co dzieje się z kursem matki w dniu wydzielenia?', a: ['spada o wartość wydzielonej części', 'rośnie o wartość córki', 'nie zmienia się'], c: 0 },
+            { q: 'Kiedy rynek wycenia korzyść ze spin-offu?', a: ['od razu przy zapowiedzi', 'dopiero rok po wydzieleniu', 'nigdy'], c: 0 }
+        ]
+    },
+    sotp: {
+        title: 'Wycena sumy części (SOTP)', icon: '🧮',
+        text: 'Sum-of-the-parts: wartość spółki z kilkoma segmentami liczy się jako sumę wartości każdego segmentu, wycenionego mnożnikami jego własnego sektora. Konglomerat z niepowiązanymi segmentami często kosztuje mniej niż suma części (dyskonto konglomeratu, w grze do −10%). Wydzielenie segmentu usuwa to dyskonto — dlatego zapowiedź spin-offu podnosi kurs, a po wydzieleniu matka + córka są warte tyle co przed, plus efekt zapowiedzi.',
+        example: () => { const s = stocks.find(x => !x.isBankrupt && !x.assetType && getStockSegments(x).length >= 2 && getConglomerateDiscount(x) > 0); return s ? `${s.name}: segmenty ${getStockSegments(s).map(g => `${g.sector} ${(g.share * 100).toFixed(0)}%`).join(', ')}, dyskonto konglomeratu ${(getConglomerateDiscount(s) * 100).toFixed(0)}%.` : 'Dyskonto konglomeratu: −4% za każdy segment niepowiązany z głównym, najwyżej −10%.'; },
+        quiz: [
+            { q: 'Czym jest wycena SOTP?', a: ['sumą wartości segmentów wycenianych osobno', 'wyceną z jednego C/Z całej spółki', 'ceną z ostatniej transakcji'], c: 0 },
+            { q: 'Co usuwa dyskonto konglomeratu?', a: ['wydzielenie niepowiązanego segmentu', 'emisja akcji', 'skup akcji'], c: 0 },
+            { q: 'Ile wynosi dyskonto konglomeratu w grze najwyżej?', a: ['10%', '50%', '0%'], c: 0 }
+        ]
+    },
     fazySpolki: {
         title: 'Fazy rozwoju spółki', icon: '🔄',
         text: 'Każda spółka jest w jakiejś fazie cyklu życia. Fazy zwykłe: Wzrost (przychody +1,5 pp na kwartał), Stabilność (bez premii, mniejsza zmienność), Spadek (−2 pp, kurs pod presją, badania wolniej), Reorganizacja (−0,5 pp, najwyższa zmienność; kończy się stabilnością przy kondycji ≥ 2 albo spadkiem przy < −3). Fazy rzadkie i czasowe: Złoty Rok ✨ (4 kwartały, +3 pp, kurs szybciej w górę), Impuls Innowacji 💡 (4–8 kwartałów, badania o 50% szybsze, +0,5 pp), Zejście w Cień 👻 (3–6 kwartałów, −4 pp, silna presja i zmienność). Po fazie czasowej spółka wraca do poprzedniej. Faza zmienia przychody, więc zysk i wartość godziwą — kurs idzie za nimi z opóźnieniem.',
