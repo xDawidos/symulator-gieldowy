@@ -211,6 +211,36 @@ Zgłoszenie: pasek zacina się, gdy wchodzą nowe newsy.
 
 **Kontrola ręczna:** przebieg przy ×1 i ×50 z otwartym paskiem; brak widocznych skoków przy wejściu nowego newsa.
 
+## P12. Limit emisji JU przy niskim zaufaniu (zgłoszenie 2026-10-15)
+
+Zgłoszenie: nawet przy zaufaniu 0% można klikać emisję, a ludzie dokupują JU.
+
+**Diagnoza** (`player.js`):
+1. **Ręczna emisja** (`issueFundUnits`): przy zaufaniu 0 obecni klienci nie kupują, ale nowi klienci = `round(trust × 4 + losowo −1…+1,5)`, czyli 0–2 przy **każdym** kliknięciu. `MAX_EMISSIONS_PER_PERIOD = 2` tylko obniża zaufanie o 4, a przy 0 nie ma czego obniżać, więc emisję można powtarzać bez końca. Gdy nie ma chętnych wśród obecnych klientów, kod dopisuje JU nowemu klientowi „institution”.
+2. **Lokaty spółek w JU** (`processCorporateSubscriptions`) nie sprawdzają zaufania funduszu, tylko reputację u prezesa spółki.
+3. **Napływ organiczny** (`getOrganicInflowRate`): `ORGANIC_INFLOW_BASE + (zaufanie − 50)/50 × 0,04 + nadwyżka × 1,2 + reputacja × 0,03` bywa dodatni przy zaufaniu 0.
+
+**Naprawa (decyzje użytkownika):**
+- **Ręczna emisja:**
+  - **niedostępna poniżej 25% zaufania**: przycisk wyłączony z wyjaśnieniem („Klienci nie ufają funduszowi — emisja możliwa od 25% zaufania”);
+  - **najwyżej 2 emisje na okres oceny**: trzecia jest zablokowana, a nie tylko karana;
+  - **wielkość jednej emisji** najwyżej (5% + 20% × zaufanie) obecnych JU, np. 15% przy zaufaniu 50%;
+  - liczba nowych klientów bez dodatniego szumu przy niskim zaufaniu: `max(0, round(zaufanie × 4 + losowo −1,5…+1))`;
+  - przy braku chętnych **nie** tworzymy sztucznego klienta „institution”; emisja kończy się „brak chętnych”.
+- **Lokaty spółek w JU:** tylko przy zaufaniu ≥ 40.
+- **Napływ organiczny** (nowi klienci z rynku): 0 poniżej 25% zaufania, między 25 a 50 mnożnik rośnie liniowo od 0 do 1, a od 50 bez zmian.
+- **Dopłaty obecnych klientów:** bez zmian (już wymagają wysokiego zaufania).
+- **UI:** w panelu funduszu przy przyciskach emisji: próg, licznik „emisje w tym okresie: X/2” i maksymalna wielkość emisji.
+
+**Testy:**
+- zaufanie 0 → przycisk wyłączony, `issueFundUnits` zwraca 0 bez zmiany JU;
+- trzecia emisja w okresie zablokowana;
+- limit wielkości przy zaufaniu 30 i 80;
+- brak sztucznego klienta;
+- lokata spółki przy zaufaniu 39 = 0, przy 40 możliwa;
+- napływ organiczny przy zaufaniu 20 = 0, a przy 37,5 połowa;
+- **kalibracja B5 bez zmian**: fundusz = GIG ma zaufanie ok. 50, a JU zmienia się o ±3% rocznie (kontrola ×200, 10 przebiegów).
+
 ---
 
 ## Zapis gry i testy
