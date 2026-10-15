@@ -3602,6 +3602,7 @@ function resolveMerger(stock1, stock2, process) {
                 initiator.balanceSheet.retainedEarnings += target.balanceSheet.retainedEarnings;
                 initiator.cash += target.cash;
             }
+            ensureCompanyCash(initiator, process.costs, 'Kredyt na koszty fuzji'); // 0.14.2 P10: kredyt przed zapłatą
             initiator.cash -= process.costs;
             coverNegativeCash(initiator); // koszty fuzji ponad gotówkę — kredyt ratunkowy od razu (kandydat na PROL −30 231 z A1)
             initiator.financialHealth = Math.max(-5, Math.min(5, ((initiator.financialHealth + target.financialHealth) / 2) + 1.0));
@@ -10359,6 +10360,7 @@ function payNuclearInstallment(stock) {
         if (typeof recordPayment === 'function') recordPayment('external:skarb-panstwa', 'external:budowa_bloku', installment, `Budowa bloku jądrowego ${stock.symbol} (Skarb Państwa)`);
         return installment;
     }
+    ensureCompanyCash(stock, installment, 'Kredyt na ratę budowy bloku jądrowego'); // 0.14.2 P10: kredyt przed ratą
     adjustCompanyCash(stock, -installment); // aktywa bez zmian: gotówka zamienia się w budowę w toku
     block.spent += installment;
     if (typeof recordPayment === 'function') recordPayment(stock, 'external:budowa_bloku', installment, 'Budowa bloku jądrowego');
