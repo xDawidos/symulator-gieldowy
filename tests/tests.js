@@ -897,13 +897,48 @@ group('Fundusz gracza (etap B)', () => {
         assert(playerFund.clients.some(c => c.loyal), 'klient lojalny zostaje');
     });
 
-    test('więcej niż 2 emisje w okresie obniżają zaufanie', () => {
+    test('P12: trzecia emisja w okresie zablokowana (także wymuszona)', () => {
         fundWorld();
+        playerFund.trust = 60;
         issueFundUnits(10, { forcedValue: 100, forcedClient: playerFund.clients[0] });
         issueFundUnits(10, { forcedValue: 100, forcedClient: playerFund.clients[0] });
-        const trust = playerFund.trust;
-        issueFundUnits(10, { forcedValue: 100, forcedClient: playerFund.clients[0] });
-        assert(trust - playerFund.trust >= 4, 'kara za trzecią emisję');
+        const units = playerFund.units;
+        const r1 = issueFundUnits(10), r2 = issueFundUnits(10, { forcedValue: 100, forcedClient: playerFund.clients[0] });
+        assert(r1.issued === 0 && r1.blocked && r2.issued === 0 && playerFund.units === units && playerFund.current.emissions === 2, 'blokada, JU bez zmian');
+    });
+
+    test('P12: zaufanie 0 → emisja niedostępna; limit wielkości przy 30 i 80; bez sztucznego klienta', () => {
+        fundWorld();
+        playerFund.trust = 0;
+        const units = playerFund.units;
+        assert(getEmissionBlockReason() && issueFundUnits(100).issued === 0 && playerFund.units === units && playerFund.current.emissions === 0, 'zaufanie 0');
+        playerFund.trust = 30;
+        assert(getMaxEmissionUnits() === Math.floor(units * (0.05 + 0.2 * 0.3)), 'limit przy 30');
+        playerFund.trust = 80;
+        assert(getMaxEmissionUnits() === Math.floor(units * (0.05 + 0.2 * 0.8)), 'limit przy 80');
+        playerFund.trust = 30;
+        playerFund.clients.forEach(c => { c.satisfaction = 0.1; });
+        const clients = playerFund.clients.length;
+        const r = Math.random; Math.random = () => 0; // nowi klienci: round(1,2 − 1,5) = 0
+        try { const res = issueFundUnits(1_000_000); assert(res.issued <= getMaxEmissionUnits() + 1e-9, 'wielkość obcięta'); } finally { Math.random = r; }
+        assert(playerFund.clients.length === clients && !playerFund.clients.some(c => c.type === 'institution' && c.units === 0), 'brak sztucznego klienta „institution”');
+    });
+
+    test('P12: lokaty spółek od zaufania 40; napływ organiczny 0 przy 20, połowa przy 37,5', () => {
+        fundWorld();
+        const full = getOrganicInflowRate(50);
+        assert(getOrganicInflowRate(20) === 0, 'zaufanie 20');
+        const half = getOrganicInflowRate(37.5), raw = Math.max(0, Math.min(0.5, ORGANIC_INFLOW_BASE + (37.5 - 50) / 50 * 0.04 + getRecentExcessAnnual() * 1.2 + getPlayerReputationFactor() * 0.03));
+        assert(Math.abs(half - raw * 0.5) < 1e-12 && full > 0, `połowa przy 37,5: ${half} vs ${raw}`);
+        const c = makeCompany('LOK', { cash: 50_000_000 }); c.reputation = { player: 100 }; stocks.push(c);
+        setFundOpenSubscriptions(true);
+        const r = Math.random; Math.random = () => 0;
+        try {
+            playerFund.trust = 39; const cash39 = c.cash; processCorporateSubscriptions();
+            assert(c.cash === cash39, 'zaufanie 39 — brak lokaty');
+            playerFund.trust = 40; processCorporateSubscriptions();
+            assert(c.cash < cash39, 'zaufanie 40 — lokata możliwa');
+        } finally { Math.random = r; }
     });
 
     test('premia za wyniki i udział w opłacie zależą od wyniku i stanowiska', () => {

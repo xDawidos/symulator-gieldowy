@@ -5497,6 +5497,17 @@ function renderFundSummary() {
         <div class="fund-period-progress" title="Postęp okresu oceny (15 min gry)">
             <div style="width:${(periodProgress * 100).toFixed(1)}%"></div>
         </div>`;
+    updateEmissionControls();
+}
+
+/** 0.14.2 P12: przycisk emisji — próg zaufania, licznik X/2, maksymalna wielkość. */
+function updateEmissionControls() {
+    const button = document.getElementById('fund-emission-btn'), info = document.getElementById('fund-emission-info');
+    if (!button || !playerFund) return;
+    const reason = getEmissionBlockReason();
+    button.disabled = Boolean(reason);
+    button.title = reason || `Najwyżej ${getMaxEmissionUnits()} JU w jednej emisji (5% + 20% × zaufanie obecnych JU).`;
+    if (info) info.textContent = `${reason ? `🔒 ${reason} ` : ''}Emisje w tym okresie: ${playerFund.current.emissions}/${MAX_EMISSIONS_PER_PERIOD} · próg zaufania ${EMISSION_MIN_TRUST}% · maks. ${getMaxEmissionUnits()} JU naraz.`;
 }
 
 /** Wykres słupkowy: 4 ostatnie okresy + bieżący — fundusz vs GIG vs średnia funduszy zewnętrznych. */
@@ -5639,7 +5650,8 @@ function handleFundEmission() {
     const units = Math.floor(Number(input?.value) || 0);
     if (!(units > 0)) return;
     const result = issueFundUnits(units);
-    showToast(result.issued > 0 ? `Emisja: sprzedano ${result.issued.toFixed(1)} JU (${formatZl(result.raised)})` : 'Emisja: brak chętnych', result.issued > 0 ? 'success' : 'warning');
+    const blockedText = result.blocked === 'size' ? 'Emisja: limit wielkości przy obecnym zaufaniu to 0 JU.' : result.blocked;
+    showToast(result.issued > 0 ? `Emisja: sprzedano ${result.issued.toFixed(1)} JU (${formatZl(result.raised)})${units > getMaxEmissionUnits() ? ` — limit wielkości ${getMaxEmissionUnits()} JU` : ''}` : blockedText || 'Emisja: brak chętnych', result.issued > 0 ? 'success' : 'warning');
     refreshFundViews();
 }
 
