@@ -2691,21 +2691,122 @@ function isPlayerMatter(message) {
     return PLAYER_MATTER_PATTERN.test(text);
 }
 
-/** Wpis na pasek newsów (klik otwiera kartę spółki). */
+// 0.14.2 P11: płynny pasek — kolejka (≤ 15, pierwszeństwo spółek gracza), wpisy dokładane z prawej, ruch w rAF
+// ze stałą prędkością (px/s) przez translate3d; wpisy, które wyjechały z lewej, znikają z korektą przesunięcia.
+const NEWS_QUEUE_LIMIT = 15;
+const NEWS_SPEED_PX = 60;
+const NEWS_REDUCED_INTERVAL_MS = 5000;
+const newsTicker = { queue: [], offset: null, track: null, viewport: null, paused: false, lastTs: null, raf: null, loopIndex: 0, reducedAt: 0,
+    widthOf: el => el.offsetWidth || 0, viewportWidth: () => newsTicker.viewport?.clientWidth || 0,
+    reduced: () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches };
+
+function isPlayerNews(entry) {
+    return Boolean(entry.symbol && ((playerPortfolio?.[entry.symbol]?.shares || 0) > 0 || (playerWallet?.portfolio?.[entry.symbol]?.shares || 0) > 0));
+}
+
+/** Kolejka paska: przy przepełnieniu odpada najstarszy wpis spoza spraw gracza (zostaje w historii 📰). */
+function enqueueTickerNews(entry) {
+    const queue = newsTicker.queue;
+    queue.push(entry);
+    while (queue.length > NEWS_QUEUE_LIMIT) {
+        const drop = queue.findIndex(n => !isPlayerNews(n));
+        queue.splice(drop >= 0 ? drop : 0, 1);
+    }
+}
+
+/** Wpis na pasek newsów (klik otwiera kartę spółki). Nie przebudowuje przewijanego pasa. */
 function pushNews(text, symbol = null) {
     if (!text) return;
     const stock = symbol ? stocks.find(s => s.symbol === symbol) : (typeof findMentionedStock === 'function' ? findMentionedStock(String(text)) : null);
-    newsLog.unshift({ text: String(text), symbol: stock?.symbol || null });
+    const entry = { text: String(text), symbol: stock?.symbol || null };
+    newsLog.unshift(entry);
     if (newsLog.length > NEWS_HISTORY_LIMIT) newsLog.length = NEWS_HISTORY_LIMIT;
-    renderNewsTicker();
+    enqueueTickerNews(entry);
+    attachNewsTicker();
+    const history = typeof document !== 'undefined' ? document.getElementById('news-history') : null;
+    if (history && !history.hidden) renderNewsHistory();
 }
 
-function renderNewsTicker() {
-    const track = typeof document !== 'undefined' ? document.getElementById('news-ticker-track') : null;
+function makeNewsElement(entry) {
+    const el = document.createElement('span');
+    el.className = 'news-entry';
+    el.innerHTML = `<span class="news-item${entry.symbol ? ' clickable' : ''}"${entry.symbol ? ` onclick="openDescriptionModal('${entry.symbol}')"` : ''}>${escapeHtml(entry.text)}</span><span class="news-sep">•</span>`;
+    return el;
+}
+
+/** Następny wpis: z kolejki, a gdy pusta — kopia z historii (zapętlenie ostatnich wpisów). */
+function nextTickerEntry() {
+    if (newsTicker.queue.length) return newsTicker.queue.shift();
+    const recent = newsLog.slice(0, NEWS_TICKER_ITEMS);
+    if (!recent.length) return null;
+    newsTicker.loopIndex = (newsTicker.loopIndex + 1) % recent.length;
+    return recent[recent.length - 1 - newsTicker.loopIndex];
+}
+
+/** Podpięcie pasa (gra: #news-ticker-track; testy: własny element) i start pętli rAF. */
+function attachNewsTicker(track = null, viewport = null) {
+    if (typeof document === 'undefined') return null;
+    if (track) { newsTicker.track = track; newsTicker.viewport = viewport || track.parentElement; newsTicker.offset = null; }
+    if (!newsTicker.track) {
+        const el = document.getElementById('news-ticker-track');
+        if (!el) return null;
+        newsTicker.track = el; newsTicker.viewport = el.parentElement;
+        const bar = document.getElementById('news-ticker');
+        if (bar) { bar.addEventListener('mouseenter', () => { newsTicker.paused = true; }); bar.addEventListener('mouseleave', () => { newsTicker.paused = false; }); }
+    }
+    if (!newsTicker.raf && !track && typeof requestAnimationFrame === 'function') {
+        const loop = ts => {
+            newsTicker.raf = requestAnimationFrame(loop);
+            const dt = newsTicker.lastTs === null ? 0 : Math.min(0.1, (ts - newsTicker.lastTs) / 1000); // bez nadrabiania skokiem
+            newsTicker.lastTs = ts;
+            stepNewsTicker(dt);
+        };
+        newsTicker.raf = requestAnimationFrame(loop);
+    }
+    return newsTicker.track;
+}
+
+/** Jeden krok ruchu o dt sekund. */
+function stepNewsTicker(dt) {
+    const t = newsTicker, track = t.track;
     if (!track) return;
-    const item = n => `<span class="news-item${n.symbol ? ' clickable' : ''}"${n.symbol ? ` onclick="openDescriptionModal('${n.symbol}')"` : ''}>${escapeHtml(n.text)}</span>`;
-    const items = newsLog.slice(0, NEWS_TICKER_ITEMS).map(item).join('<span class="news-sep">•</span>');
-    track.innerHTML = items ? `${items}<span class="news-sep">•</span>${items}` : '<span class="news-item text-muted">Brak wiadomości.</span>'; // podwojone — płynne przewijanie
+    if (typeof document !== 'undefined' && document.hidden) return;
+    if (t.reduced()) { // jeden news naraz, zmiana co 5 s bez animacji
+        t.reducedAt += dt * 1000;
+        if (track.children.length && t.reducedAt < NEWS_REDUCED_INTERVAL_MS) return;
+        const entry = nextTickerEntry();
+        t.reducedAt = 0;
+        if (entry) { track.replaceChildren(makeNewsElement(entry)); track.style.transform = ''; }
+        return;
+    }
+    const view = t.viewportWidth();
+    if (t.offset === null) t.offset = view; // pierwszy wpis wjeżdża z prawej
+    if (!t.paused) t.offset -= NEWS_SPEED_PX * dt;
+    // Wpisy, które w całości wyjechały z lewej: usunięcie z korektą przesunięcia (bez skoku).
+    while (track.firstElementChild && t.offset + (track.firstElementChild._w ?? 0) < 0) {
+        t.offset += track.firstElementChild._w ?? 0;
+        track.firstElementChild.remove();
+    }
+    // Następny wpis, gdy ostatni w pełni wjechał.
+    let total = 0;
+    for (const child of track.children) total += child._w ?? 0;
+    while (t.offset + total <= view) {
+        const entry = nextTickerEntry();
+        if (!entry) break;
+        const el = makeNewsElement(entry);
+        track.appendChild(el);
+        el._w = t.widthOf(el);
+        if (!(el._w > 0)) { el._w = 0; break; } // pasek niewidoczny (brak układu) — bez dokładania w pętli
+        total += el._w;
+    }
+    track.style.transform = `translate3d(${t.offset.toFixed(1)}px, 0, 0)`;
+}
+
+/** Zgodność: pełne odświeżenie (tylko przy starcie / wczytaniu gry). */
+function renderNewsTicker() {
+    const t = newsTicker;
+    if (!attachNewsTicker()) return;
+    t.track.replaceChildren(); t.offset = null; t.queue = newsLog.slice(0, NEWS_TICKER_ITEMS).reverse();
     const history = document.getElementById('news-history');
     if (history && !history.hidden) renderNewsHistory();
 }

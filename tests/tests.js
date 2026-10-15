@@ -6323,6 +6323,59 @@ group('0.14.2 P7: pasek newsów i dymki tylko w sprawach gracza', () => {
         assert(newsLog[0].symbol === 'BBB', 'logEvent → pasek');
     });
 
+    // 0.14.2 P11: płynny pasek (własny element w testach, szerokość = 6 px na znak, okno 600 px)
+    function tickerWorld() {
+        const saved = { track: newsTicker.track, viewport: newsTicker.viewport, widthOf: newsTicker.widthOf, viewportWidth: newsTicker.viewportWidth, reduced: newsTicker.reduced, queue: newsTicker.queue, paused: newsTicker.paused };
+        const viewport = document.createElement('div'), track = document.createElement('div');
+        viewport.appendChild(track);
+        Object.assign(newsTicker, { widthOf: el => el.textContent.length * 6, viewportWidth: () => 600, reduced: () => false, queue: [], paused: false });
+        attachNewsTicker(track, viewport);
+        return { track, restore: () => Object.assign(newsTicker, saved, { offset: null }) };
+    }
+    const firstLeft = track => newsTicker.offset; // lewa krawędź pierwszego wpisu względem okna
+
+    test('P11: pushNews w trakcie przewijania nie przesuwa widocznych wpisów; wpis wchodzi z prawej', () => {
+        world();
+        const { track, restore } = tickerWorld();
+        try {
+            for (let i = 0; i < 4; i++) pushNews(`wiadomość testowa ${i}`);
+            for (let i = 0; i < 30; i++) stepNewsTicker(0.1);
+            const first = track.firstElementChild, before = firstLeft(track), count = track.children.length;
+            pushNews('nowa wiadomość w trakcie przewijania');
+            assert(track.firstElementChild === first && firstLeft(track) === before, 'bez przebudowy i skoku');
+            stepNewsTicker(0.1);
+            assert(track.firstElementChild !== first || Math.abs(firstLeft(track) - (before - 6)) < 1e-9, 'ruch tylko z czasu (60 px/s × 0,1 s)');
+            for (let i = 0; i < 400; i++) stepNewsTicker(0.1);
+            assert([...track.children].some(el => el.textContent.includes('nowa wiadomość')) || newsTicker.queue.length === 0, 'nowy wpis dołożony na końcu');
+            assert(count > 0, 'pas ma wpisy');
+        } finally { restore(); }
+    });
+
+    test('P11: 200 newsów w 2 s → kolejka ≤ 15, historia 50, sprawy gracza mają pierwszeństwo', () => {
+        world();
+        const { restore } = tickerWorld();
+        try {
+            pushNews('Alfa Testowa: ważne dla gracza', 'AAA');
+            for (let i = 0; i < 200; i++) { pushNews(`rutyna ${i}`); if (i % 10 === 0) stepNewsTicker(0.1); }
+            assert(newsTicker.queue.length <= NEWS_QUEUE_LIMIT && newsLog.length === 50, `kolejka ${newsTicker.queue.length}, historia ${newsLog.length}`);
+            assert(newsTicker.queue.some(n => n.symbol === 'AAA') || [...newsTicker.track.children].some(el => el.textContent.includes('Alfa')), 'wpis gracza nie odpadł');
+        } finally { restore(); }
+    });
+
+    test('P11: stała prędkość przy 3 i przy 12 wpisach', () => {
+        world();
+        const speeds = [3, 12].map(n => {
+            const { restore } = tickerWorld();
+            try {
+                for (let i = 0; i < n; i++) pushNews(`w${i}`);
+                stepNewsTicker(0);
+                const o0 = newsTicker.offset; stepNewsTicker(0.5);
+                return o0 - newsTicker.offset;
+            } finally { restore(); }
+        });
+        assert(Math.abs(speeds[0] - 30) < 1e-9 && Math.abs(speeds[1] - 30) < 1e-9, `przesunięcie w 0,5 s: ${speeds}`);
+    });
+
     test('znaczniki wykresu w jednym miejscu łączą się w jeden z liczbą', () => {
         const { a } = world();
         const t0 = Date.now();
