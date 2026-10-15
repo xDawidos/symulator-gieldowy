@@ -57,7 +57,7 @@ Kolejność: H0 → H1 → H2 → H3 → H4 → H5 → H6. Każda część z tes
 - **Cel długoterminowy** (20 lat, mediana przebiegów): **GIG 7–9% rocznie** nominalnie przy inflacji 2,5–3%, czyli realnie ok. 4–6%.
 - **Rozrzut:** odchylenie standardowe rocznych stóp zwrotu GIG 12–20 pp. Rynek ma mieć złe lata, a nie spokojne 8% co roku.
 - **Kalibracje zależne od GIG trzeba sprawdzić ponownie:**
-  - B5 (zaufanie i JU dla funduszu = GIG ma dalej ok. 50);
+  - B5 (zaufanie i JU dla funduszu = GIG ma dalej ok. 50). **Stan wyjściowy z kontroli P12 (2026-10-16, 10×200):** zaufanie 53–56, ale JU −4,7…−7,4%/rok (cel ±3%) — niespełnione już od 0.13.1, więc strojenie JU robimy tutaj, po kalibracji GIG, na ≥ 20 przebiegach;
   - ocena zarządu;
   - premia za wynik (0.14.1 R5);
   - lokaty i obligacje względem akcji: przy niższym GIG lokata ma być realną alternatywą w bessie, ale nie w długim terminie.
