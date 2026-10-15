@@ -185,6 +185,62 @@ Znalezione przy kontroli 0.14.1, było już przed nim:
 
 **Test:** 20 lat ×200, 0 ostrzeżeń „ujemna gotówka” na granicy kwartału.
 
+## P11. Płynny pasek newsów (zgłoszenie po 0.14.2, 2026-10-15)
+
+Zgłoszenie: pasek zacina się, gdy wchodzą nowe newsy.
+
+**Diagnoza** (`ui.js`: `pushNews`, `renderNewsTicker`; `style.css`: `.news-ticker-track`, `@keyframes news-scroll`):
+1. Każdy news przebudowuje cały pas (`track.innerHTML`), a nowy wpis trafia **na początek** (`newsLog.unshift`). Widoczna treść przeskakuje o szerokość nowego wpisu.
+2. Animacja CSS przesuwa pas o −100% jego szerokości w stałe 90 s. Gdy pas się wydłuża albo skraca, zmienia się prędkość i bieżąca pozycja, więc animacja skacze.
+3. Przy dużych prędkościach gry newsy przychodzą kilka razy na sekundę, a każdy wymusza przebudowę i przeliczenie układu.
+
+**Naprawa:**
+- **Kolejka zamiast przebudowy:** `pushNews` dopisuje news do historii i do kolejki paska, a pasu, który się przewija, nie przebudowuje.
+- **Wpisy wchodzą z prawej**, na końcu pasa. Następny wpis z kolejki jest dokładany, gdy ostatni w pełni wjechał w pole widzenia. Wpisy, które w całości wyjechały z lewej, są usuwane z jednoczesną korektą przesunięcia o ich szerokość, więc nic nie skacze.
+- **Stała prędkość w pikselach na sekundę** (ok. 60 px/s), niezależna od długości pasa. Ruch w `requestAnimationFrame` przez `transform: translate3d`, z `will-change: transform`. Animacja CSS `news-scroll` znika.
+- **Pauza po najechaniu** zostaje, a ruch wznawia się od tego samego miejsca.
+- **Nadmiar newsów:** kolejka paska najwyżej 15 wpisów. Przy przepełnieniu odpadają najstarsze rutynowe, ale zostają w historii 📰. Newsy dotyczące spółek gracza mają pierwszeństwo.
+- **Pusty pasek:** gdy kolejka jest pusta, pas zapętla ostatnie wpisy bez przebudowy (dokłada kopie z historii).
+- **`prefers-reduced-motion`:** bez przewijania; jeden news naraz, zmiana co 5 s bez animacji.
+- **Karta zakładki w tle:** gdy strona jest ukryta (`document.hidden`), ruch staje, a po powrocie nie nadrabia skokiem.
+
+**Testy:**
+- `pushNews` w trakcie przewijania nie zmienia bieżącego przesunięcia widocznych wpisów (pozycja pierwszego widocznego wpisu przed i po różni się tylko o ruch z czasu);
+- 200 newsów w 2 s (symulacja ×200) → kolejka ≤ 15, historia 50, bez wyjątków;
+- prędkość pasa stała przy 3 i przy 12 wpisach.
+
+**Kontrola ręczna:** przebieg przy ×1 i ×50 z otwartym paskiem; brak widocznych skoków przy wejściu nowego newsa.
+
+## P12. Limit emisji JU przy niskim zaufaniu (zgłoszenie 2026-10-15)
+
+Zgłoszenie: nawet przy zaufaniu 0% można klikać emisję, a ludzie dokupują JU.
+
+**Diagnoza** (`player.js`):
+1. **Ręczna emisja** (`issueFundUnits`): przy zaufaniu 0 obecni klienci nie kupują, ale nowi klienci = `round(trust × 4 + losowo −1…+1,5)`, czyli 0–2 przy **każdym** kliknięciu. `MAX_EMISSIONS_PER_PERIOD = 2` tylko obniża zaufanie o 4, a przy 0 nie ma czego obniżać, więc emisję można powtarzać bez końca. Gdy nie ma chętnych wśród obecnych klientów, kod dopisuje JU nowemu klientowi „institution”.
+2. **Lokaty spółek w JU** (`processCorporateSubscriptions`) nie sprawdzają zaufania funduszu, tylko reputację u prezesa spółki.
+3. **Napływ organiczny** (`getOrganicInflowRate`): `ORGANIC_INFLOW_BASE + (zaufanie − 50)/50 × 0,04 + nadwyżka × 1,2 + reputacja × 0,03` bywa dodatni przy zaufaniu 0.
+
+**Naprawa (decyzje użytkownika):**
+- **Ręczna emisja:**
+  - **niedostępna poniżej 25% zaufania**: przycisk wyłączony z wyjaśnieniem („Klienci nie ufają funduszowi — emisja możliwa od 25% zaufania”);
+  - **najwyżej 2 emisje na okres oceny**: trzecia jest zablokowana, a nie tylko karana;
+  - **wielkość jednej emisji** najwyżej (5% + 20% × zaufanie) obecnych JU, np. 15% przy zaufaniu 50%;
+  - liczba nowych klientów bez dodatniego szumu przy niskim zaufaniu: `max(0, round(zaufanie × 4 + losowo −1,5…+1))`;
+  - przy braku chętnych **nie** tworzymy sztucznego klienta „institution”; emisja kończy się „brak chętnych”.
+- **Lokaty spółek w JU:** tylko przy zaufaniu ≥ 40.
+- **Napływ organiczny** (nowi klienci z rynku): 0 poniżej 25% zaufania, między 25 a 50 mnożnik rośnie liniowo od 0 do 1, a od 50 bez zmian.
+- **Dopłaty obecnych klientów:** bez zmian (już wymagają wysokiego zaufania).
+- **UI:** w panelu funduszu przy przyciskach emisji: próg, licznik „emisje w tym okresie: X/2” i maksymalna wielkość emisji.
+
+**Testy:**
+- zaufanie 0 → przycisk wyłączony, `issueFundUnits` zwraca 0 bez zmiany JU;
+- trzecia emisja w okresie zablokowana;
+- limit wielkości przy zaufaniu 30 i 80;
+- brak sztucznego klienta;
+- lokata spółki przy zaufaniu 39 = 0, przy 40 możliwa;
+- napływ organiczny przy zaufaniu 20 = 0, a przy 37,5 połowa;
+- **kalibracja B5 bez zmian**: fundusz = GIG ma zaufanie ok. 50, a JU zmienia się o ±3% rocznie (kontrola ×200, 10 przebiegów).
+
 ---
 
 ## Zapis gry i testy
