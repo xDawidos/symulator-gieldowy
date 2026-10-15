@@ -412,6 +412,16 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Czy wynik badania da się odczytać z wykresu przed ogłoszeniem?', a: ['nie — jest losowany w chwili ogłoszenia', 'tak, z wolumenu', 'tak, z poprzedniej fazy'], c: 0 }
         ]
     },
+    fazySpolki: {
+        title: 'Fazy rozwoju spółki', icon: '🔄',
+        text: 'Każda spółka jest w jakiejś fazie cyklu życia. Fazy zwykłe: Wzrost (przychody +1,5 pp na kwartał), Stabilność (bez premii, mniejsza zmienność), Spadek (−2 pp, kurs pod presją, badania wolniej), Reorganizacja (−0,5 pp, najwyższa zmienność; kończy się stabilnością przy kondycji ≥ 2 albo spadkiem przy < −3). Fazy rzadkie i czasowe: Złoty Rok ✨ (4 kwartały, +3 pp, kurs szybciej w górę), Impuls Innowacji 💡 (4–8 kwartałów, badania o 50% szybsze, +0,5 pp), Zejście w Cień 👻 (3–6 kwartałów, −4 pp, silna presja i zmienność). Po fazie czasowej spółka wraca do poprzedniej. Faza zmienia przychody, więc zysk i wartość godziwą — kurs idzie za nimi z opóźnieniem.',
+        example: () => { const s = stocks.find(x => !x.isBankrupt && !x.assetType && [CORPORATE_PHASES.GOLDEN_YEAR, CORPORATE_PHASES.INNOVATION_PUSH, CORPORATE_PHASES.SHADOW_DESCENT].includes(x.corporatePhase)) || stocks.find(x => !x.isBankrupt && !x.assetType && x.corporatePhase); return s ? `${s.name}: ${getCorporatePhaseTooltip(s.corporatePhase)}` : 'Znacznik fazy widać w tabeli rynku przy cenie (szkolenie Analityk Finansowy).'; },
+        quiz: [
+            { q: 'Która faza przyspiesza badania spółki o 50%?', a: ['Impuls Innowacji', 'Złoty Rok', 'Stabilność'], c: 0 },
+            { q: 'Ile trwa Złoty Rok?', a: ['4 kwartały', 'bez limitu', '1 kwartał'], c: 0 },
+            { q: 'Co dzieje się po zakończeniu fazy czasowej (np. Zejścia w Cień)?', a: ['spółka wraca do poprzedniej fazy', 'spółka bankrutuje', 'faza trwa do końca gry'], c: 0 }
+        ]
+    },
     dlugiHoryzont: {
         title: 'Długi horyzont inwestycji (atom)', icon: '☢️',
         text: 'Blok jądrowy buduje się latami: przez cały ten czas spółka wydaje gotówkę, a przychodu z inwestycji nie ma. Na końcu decyduje regulator — może opóźnić start. Potem blok daje stabilny przychód przez dekady. Taka inwestycja obniża dziś zyski i wolne przepływy, a jej wartość zależy od cierpliwości kapitału i od polityki (kontrakty z państwem).',

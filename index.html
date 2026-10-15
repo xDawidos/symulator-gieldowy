@@ -200,7 +200,8 @@
             
 
 <div id="market" class="panel">
-    <h2>Rynek Akcji <button class="btn-secondary btn-xs" onclick="openScanner()" title="Filtruj spółki po wskaźnikach (szkolenie Analityk Finansowy)">🔎 Skaner spółek</button></h2>
+    <h2 class="d-flex justify-between items-center"><span class="clickable" onclick="toggleSection('market')" title="Zwiń / rozwiń rynek akcji">Rynek Akcji <span id="toggle-icon-market">▼</span></span> <button class="btn-secondary btn-xs" onclick="openScanner()" title="Filtruj spółki po wskaźnikach (szkolenie Analityk Finansowy)">🔎 Skaner spółek</button></h2>
+    <div id="market-content"><!-- 0.14.2 P8: zwijany rynek akcji -->
 
     <!-- 4 mini-karty KPI -->
     <div class="market-kpi-row">
@@ -270,8 +271,10 @@
       </thead>
       <tbody id="stock-table-body"></tbody>
     </table>
+    </div><!-- /market-content -->
                 <div id="etf-section">
-                    <h3 class="mt-4">Fundusze ETF</h3>
+                    <h3 class="mt-4 clickable d-flex justify-between items-center" onclick="toggleSection('etf')" title="Zwiń / rozwiń rynek ETF">Fundusze ETF <span id="toggle-icon-etf">▼</span></h3>
+                    <div id="etf-content"><!-- 0.14.2 P8: zwijany rynek ETF -->
                     <table id="etf-table">
                         <thead>
                             <tr>
@@ -285,6 +288,7 @@
                         </thead>
                         <tbody id="etf-table-body"></tbody>
                     </table>
+                    </div>
                 </div>
             </div>
         </section>

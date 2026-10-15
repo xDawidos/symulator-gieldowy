@@ -1047,6 +1047,22 @@ const CORPORATE_PHASES = {
     INNOVATION_PUSH: 'Impuls Innowacji 💡' // Faza unikalna
 };
 
+// 0.14.2 P8: co znaczy faza i co daje (dymek na znaczniku, hasło Akademii „Fazy rozwoju spółki”).
+const CORPORATE_PHASE_INFO = {
+    'Wzrost': { duration: 'do pogorszenia kondycji albo ok. 5 lat', text: 'Spółka rośnie: przychody +1,5 pp na kwartał ponad normę, kurs dostaje lekki wiatr w plecy, zmienność trochę wyższa.' },
+    'Stabilność': { duration: 'bez limitu', text: 'Dojrzała spółka: przychody bez premii fazy, niższa zmienność kursu.' },
+    'Spadek': { duration: 'do poprawy kondycji (szansa na reorganizację)', text: 'Przychody −2 pp na kwartał, kurs pod presją, większa zmienność, badania wolniej (−30%).' },
+    'Reorganizacja': { duration: 'do kondycji ≥ 2 (stabilność) albo < −3 (spadek)', text: 'Plan naprawczy: przychody lekko w dół (−0,5 pp), najwyższa zmienność wśród faz zwykłych.' },
+    'Złoty Rok ✨': { duration: '4 kwartały', text: 'Rzadki okres prosperity: przychody +3 pp na kwartał, kurs rośnie szybciej, zmienność niższa.' },
+    'Zejście w Cień 👻': { duration: '3–6 kwartałów', text: 'Rzadki głęboki kryzys: przychody −4 pp na kwartał, silna presja na kurs, wysoka zmienność, badania wolniej.' },
+    'Impuls Innowacji 💡': { duration: '4–8 kwartałów', text: 'Przełom badawczy: badania o 50% szybsze, przychody +0,5 pp na kwartał, kurs lekko w górę, zmienność wyższa.' }
+};
+
+function getCorporatePhaseTooltip(phase) {
+    const info = CORPORATE_PHASE_INFO[phase];
+    return info ? `${phase}: ${info.text} Czas trwania: ${info.duration}. Więcej: Akademia → „Fazy rozwoju spółki”.` : 'Faza cyklu spółki';
+}
+
 // --- Pula Spółek ---
 const initialStocks = [
     // GIEŁDA ŚMIECIOWA (Poziom 0)

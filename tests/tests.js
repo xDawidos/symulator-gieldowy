@@ -6325,6 +6325,39 @@ group('0.14.2 P7: pasek newsów i dymki tylko w sprawach gracza', () => {
     });
 });
 
+group('0.14.2 P8: zwijane sekcje i wyjaśnione fazy spółek', () => {
+    test('każda faza ma opis i czas trwania; dymek mówi, co daje', () => {
+        const missing = Object.values(CORPORATE_PHASES).filter(phase => !CORPORATE_PHASE_INFO[phase]?.text || !CORPORATE_PHASE_INFO[phase]?.duration);
+        assert(missing.length === 0, `brak opisu: ${missing.join(', ')}`);
+        assert(getCorporatePhaseTooltip(CORPORATE_PHASES.INNOVATION_PUSH).includes('50%'), 'Impuls Innowacji: szybsze badania');
+    });
+
+    test('hasło Akademii „Fazy rozwoju spółki” z quizem', () => {
+        const entry = ACADEMY_ENTRIES.fazySpolki;
+        assert(entry && entry.quiz.length === 3 && Object.values(CORPORATE_PHASES).every(phase => entry.text.includes(phase.replace(/ [^ ]+$/u, '').split(' ')[0])), 'hasło i quiz');
+    });
+
+    test('zwinięcie rynku akcji i ETF zapamiętane w localStorage', () => {
+        const host = document.createElement('div');
+        host.innerHTML = '<div id="market-content"></div><span id="toggle-icon-market"></span><div id="etf-content"></div><span id="toggle-icon-etf"></span>';
+        document.body.appendChild(host);
+        const saved = ['market', 'etf'].map(k => localStorage.getItem(`sectionCollapsed:${k}`));
+        try {
+            localStorage.removeItem('sectionCollapsed:etf');
+            toggleSection('etf');
+            assert(document.getElementById('etf-content').hidden && localStorage.getItem('sectionCollapsed:etf') === '1', 'zwinięte');
+            document.getElementById('etf-content').hidden = false;
+            restoreSectionCollapse();
+            assert(document.getElementById('etf-content').hidden && !document.getElementById('market-content').hidden === !readSectionCollapsed('market'), 'odtworzone');
+            toggleSection('etf');
+            assert(!document.getElementById('etf-content').hidden, 'rozwinięte');
+        } finally {
+            ['market', 'etf'].forEach((k, i) => saved[i] === null ? localStorage.removeItem(`sectionCollapsed:${k}`) : localStorage.setItem(`sectionCollapsed:${k}`, saved[i]));
+            host.remove();
+        }
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

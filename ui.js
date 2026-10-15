@@ -1086,7 +1086,8 @@ function displayStocks(previousInputValues = {}) {
       phaseBadge.style.color = col;
       phaseBadge.style.border = '1px solid ' + col;
       phaseBadge.textContent = stock.corporatePhase;
-      phaseBadge.title = 'Faza cyklu spółki';
+      phaseBadge.title = getCorporatePhaseTooltip(stock.corporatePhase); // 0.14.2 P8: co to za faza i co daje
+      if (typeof isAcademyUnlocked === 'function' && playerProfile && !isAcademyUnlocked('fazySpolki')) unlockAcademyEntry('fazySpolki');
       priceCell.appendChild(phaseBadge);
     }
 
@@ -3999,6 +4000,36 @@ function closeBankIPOOfferModal() {
 * Przełącza widoczność panelu Inkubatora Start-upów.
 * DODANE Z ui2.js
 */
+// 0.14.2 P8: zwijane sekcje rynku akcji i ETF (stan w localStorage, nie w zapisie gry).
+const COLLAPSIBLE_SECTIONS = { market: { content: 'market-content', icon: 'toggle-icon-market' }, etf: { content: 'etf-content', icon: 'toggle-icon-etf' } };
+
+function readSectionCollapsed(key) {
+    try { return localStorage.getItem(`sectionCollapsed:${key}`) === '1'; } catch (e) { return false; }
+}
+
+function applySectionCollapse(key, collapsed) {
+    const def = COLLAPSIBLE_SECTIONS[key];
+    const content = def && document.getElementById(def.content);
+    if (!content) return;
+    content.hidden = collapsed;
+    const icon = document.getElementById(def.icon);
+    if (icon) icon.textContent = collapsed ? '▶' : '▼';
+}
+
+function toggleSection(key) {
+    const collapsed = !readSectionCollapsed(key);
+    try { localStorage.setItem(`sectionCollapsed:${key}`, collapsed ? '1' : '0'); } catch (e) { /* tryb prywatny */ }
+    applySectionCollapse(key, collapsed);
+}
+
+function restoreSectionCollapse() {
+    for (const key of Object.keys(COLLAPSIBLE_SECTIONS)) applySectionCollapse(key, readSectionCollapsed(key));
+}
+if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', restoreSectionCollapse);
+    else restoreSectionCollapse();
+}
+
 function toggleStartupPanelVisibility() {
     startupPanelCollapsed = !startupPanelCollapsed; // Odwróć stan
     const panel = document.getElementById('startup-incubator-panel');
