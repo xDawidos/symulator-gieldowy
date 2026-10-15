@@ -1735,6 +1735,14 @@ function runInvestmentBankAI(bank) {
         if (!stock || stock.isBankrupt) { delete bank.stockPortfolio[symbol]; delete bank.resaleBlocks[symbol]; continue; }
         if (bank.stockPortfolio[symbol].shares / Math.max(1, stock.totalShares) < IB_DUST_POSITION && !stock.isTradeLocked) { ibSell(bank, stock, bank.stockPortfolio[symbol].shares); return; }
     }
+    // Ponad 12 pozycji (np. akcje z debiutu startupu, w który bank wpłacił) — sprzedaj najmniejszą (poza pakietem do odsprzedaży).
+    if (Object.keys(bank.stockPortfolio).length > IB_MAX_POSITIONS) {
+        const smallest = Object.entries(bank.stockPortfolio).filter(([symbol]) => !bank.resaleBlocks[symbol])
+            .map(([symbol, h]) => ({ stock: stocks.find(s => s.symbol === symbol), h }))
+            .filter(x => x.stock && !x.stock.isTradeLocked)
+            .sort((a, b) => a.h.shares * a.stock.price - b.h.shares * b.stock.price)[0];
+        if (smallest) { ibSell(bank, smallest.stock, smallest.h.shares); return; }
+    }
 
     // 2. Pakiety do odsprzedaży: wezwanie → pakiet dla wzywającego; posiadacz 40–50% → odkupienie z premią.
     for (const [symbol, block] of Object.entries(bank.resaleBlocks)) {

@@ -6209,6 +6209,15 @@ group('0.14.2 P5: bank inwestycyjny — pakiet do odsprzedaży, popularne spół
         } finally { cleanup(bank); }
     });
 
+    test('ponad 12 pozycji (np. z debiutu startupu) → bank sprzedaje najmniejszą', () => {
+        const { list, bank } = world(14);
+        try {
+            list.forEach((c, i) => { bank.stockPortfolio[c.symbol] = { shares: 2000 + i * 100, avgPrice: 50 }; c.sharesHeld += 2000 + i * 100; });
+            for (let i = 0; i < 5; i++) runInvestmentBankAI(bank);
+            assert(Object.keys(bank.stockPortfolio).length <= 12 && !bank.stockPortfolio.S0, `pozycje ${Object.keys(bank.stockPortfolio).length}`);
+        } finally { cleanup(bank); }
+    });
+
     test('pakiet do odsprzedaży: bot z 45% → bank skupuje 10–15%, bot odkupuje z premią i ma > 50%', () => {
         const { list, bank } = world(5);
         try {
