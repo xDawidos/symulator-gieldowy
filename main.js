@@ -238,6 +238,7 @@ function buildSaveSnapshot({ compact = 0 } = {}) {
         bridgeLoanOffers,
         rescueOffers: Object.fromEntries(Object.entries(rescueOffers).filter(([, offer]) => !offer.closed)), // 0.14.2 P2: oferty per spółka
         usedCompanyNames, dejwCorpUsed, // 0.14.2 P4: unikalne nazwy spółek, „DejwCorp” najwyżej raz
+        spinoffLog, // 0.14 T4: ostatnie wydzielenia (do 20)
         allBonds: compactBondsForSave(allBonds),
         activeBonds,
         cityInvestment,
@@ -525,6 +526,7 @@ function applySaveSnapshot(snapshot) {
     // 0.14.2 P2: oferty emisji ratunkowej per spółka (stare zapisy: jedna oferta `rescueOffer`)
     usedCompanyNames = Array.isArray(snapshot.usedCompanyNames) ? snapshot.usedCompanyNames : stocks.map(s => s.name); // 0.14.2 P4
     dejwCorpUsed = Boolean(snapshot.dejwCorpUsed) || stocks.some(s => /^DejwCorp/.test(s.name));
+    spinoffLog = Array.isArray(snapshot.spinoffLog) ? snapshot.spinoffLog : []; // 0.14 T4
     rescueOffers = {};
     for (const offer of [...Object.values(snapshot.rescueOffers || {}), snapshot.rescueOffer].filter(o => o?.symbol && !o.closed)) rescueOffers[offer.symbol] = offer;
 
@@ -1155,6 +1157,7 @@ gameTimers.weekly = setGameInterval(() => {
         maybeInstituteCompetitionEvent(); // 0.14.2 P1: rzadka konkurencja instytutów (bez dymku)
         expireRescueOffers(); // 0.14.2 P2: oferty emisji ratunkowej bez decyzji wygasają
         processStrategyQuarterly(); // 0.14 T3: rozszerzenia, podsektory, nisze, pivoty (strategy.js)
+        processSpinoffsQuarterly(); // 0.14 T4: plotki, zapowiedzi i wydzielenia spółek córek
         processSubsectorMechanicsQuarterly(); // 0.14 T2: badania kliniczne, bloki jądrowe, kontrole KNF (subsectors.js)
         processSpecialProjectsQuarterly(); // konsorcja i projekty specjalne (projects.js)
         reconcileSharesHeld(); // audyt A1: akcje w obrocie = suma posiadaczy
@@ -1638,6 +1641,7 @@ function createNewWorld() {
     startPoolLedgerFromFacts(); // 0.14.1 R0: księga puli inwestycyjnej od startu gry
     migrateResearchInstituteValuation(); // 0.14.2 P1: instytuty wyceniane z zysków od startu
     usedCompanyNames = stocks.map(stock => stock.name); dejwCorpUsed = stocks.some(stock => /^DejwCorp/.test(stock.name)); // 0.14.2 P4
+    spinoffLog = []; // 0.14 T4
     investmentPool.stakesMigrated = true;
     initializeEtfs(); // ETF-y z portfelami prawdziwych akcji (etf.js)
     console.log("[M&A Init] Inicjalizacja nastawienia mediów...");

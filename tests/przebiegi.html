@@ -305,6 +305,10 @@ const PROBE = `(function () {
             dejw: stocks.filter(x => /DejwCorp/.test(x.name)).length,
             toast: typeof toastStats === 'object' ? { ...toastStats } : null, // 0.14.2 P7: dymki pokazane / na pasek / ponad limit
             rescueOpen: typeof rescueOffers === 'object' ? Object.keys(rescueOffers).length : null,
+            // 0.14 T4: wydzielenia (liczba, carve-out, suma wartości 2 kw. po), spółki krajowe i łącznie
+            spin: typeof spinoffLog !== 'undefined' ? { n: spinoffLog.length, carve: spinoffLog.filter(e => e.carve).length, ratios: spinoffLog.map(e => e.ratio2q).filter(r => Number.isFinite(r)).map(r => +r.toFixed(3)) } : null,
+            domestic: typeof getListedCompanyCount === 'function' ? getListedCompanyCount() : null,
+            totalCompanies: typeof getTotalCompanyCount === 'function' ? getTotalCompanyCount() : null,
             // 0.14.2 P5: bank inwestycyjny — pozycje, pozycje < 0,5%, pakiety do odsprzedaży
             ib: commercialBanks.filter(b => b.type === BANK_TYPES.INVESTMENT).map(b => { const pos = Object.entries(b.stockPortfolio || {}); return { pos: pos.length, dust: pos.filter(([sym, h]) => { const st = stocks.find(y => y.symbol === sym); return st && h.shares / st.totalShares < 0.005; }).length, stats: b.resaleStats || null }; }),
             invWarn: typeof checkWorldInvariants === 'function' ? (checkWorldInvariants().warnings || []).filter(w => /100×|C\\/Z/.test(w)).slice(0, 5) : null });

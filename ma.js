@@ -1003,6 +1003,10 @@ function holdAgm(stock) {
         return { label: item.label, kind: item.kind, type: item.type, by: item.by || null, playerVote: item.playerVote, ...tally, effect };
     });
 
+    if (stock.spinoff && results.some(r => r.type === 'spinoff' && !r.passed)) { // 0.14 T4: walne odrzuca wydzielenie
+        stock.spinoff = null;
+        logEvent(`🗳️ Walne ${stock.name} odrzuca wydzielenie spółki córki.`, 'company');
+    }
     for (const result of results.filter(r => r.by === 'player')) {
         changeReputation('player', stock.symbol, result.passed ? 8 : -4);
         if (playerFund) playerFund.trust = Math.max(0, Math.min(100, playerFund.trust + (result.passed ? 1 : -0.5)));
@@ -1032,6 +1036,10 @@ function applyAgmResolution(stock, item) {
             return '';
         case 'discharge':
             return '';
+        case 'spinoff': { // 0.14 T4: wydzielenie po uchwale walnego
+            const child = typeof executeSpinoff === 'function' ? executeSpinoff(stock) : null;
+            return child ? `nowa spółka: ${child.name} (${child.symbol})` : 'wydzielenie odłożone';
+        }
         case 'raiseDividend': {
             const order = DIVIDEND_POLICY_ORDER;
             const next = order[Math.min(order.length - 1, Math.max(0, order.indexOf(stock.dividendPolicy || 'Growth')) + 1)];

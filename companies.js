@@ -11021,3 +11021,268 @@ function orderStrategy(symbol, type, target = null) {
     if (result && typeof renderCompanyCard === 'function') renderCompanyCard();
     return result;
 }
+
+// =================================================================================
+// 0.14 T4: WYDZIELENIE SPÓŁKI CÓRKI (SPIN-OFF) I CARVE-OUT
+// =================================================================================
+// Przebieg: plotka (kwartał przed, Analityk poz. 3, wiarygodność 60%) → zapowiedź (kurs +3–8%) → walne po 1 kw.
+// (uchwała „spinoff” w istniejącym systemie walnych) → wydzielenie: dywidenda rzeczowa dla KAŻDEGO posiadacza akcji matki.
+// Carve-out (25%, a ponad limitem spółek zawsze): matka zachowuje 51–80% akcji córki, córka jest zależna.
+
+const SPINOFF_MIN_SHARE = 0.30;
+const SPINOFF_QUARTER_CHANCE = 0.04;      // prezes, na kwartał, dla spełniających warunki
+const SPINOFF_BOT_ORDER_CHANCE = 0.10;    // bot-większościowiec zleca od razu
+const SPINOFF_FAKE_RUMOR_CHANCE = SPINOFF_QUARTER_CHANCE * 0.4 / 0.6; // 60% plotek jest prawdziwych
+const SPINOFF_ANNOUNCE_JUMP = [0.03, 0.08];
+const SPINOFF_CARVE_CHANCE = 0.25;
+const SPINOFF_CARVE_KEEP = [0.51, 0.80];
+const SPINOFF_DOMESTIC_LIMIT = 115;       // decyzja 4: spin-off do 115 spółek krajowych, powyżej tylko carve-out
+const SPINOFF_LOG_LIMIT = 20;
+const SPINOFF_PLAYER_BLOCK_QUARTERS = 4;
+let spinoffLog = [];                       // { parent, child, quarter, carve, keep, valueBefore, ratio2q }
+
+function getSpinoffQuarter() {
+    return typeof macro === 'object' && macro ? macro.quarter : 0;
+}
+
+/** Segment do wydzielenia: nie główny, ≥ 30%, niepowiązany z głównym albo z innym podsektorem. */
+function getSpinoffCandidateSegment(stock) {
+    const segments = [...getStockSegments(stock)].sort((a, b) => b.share - a.share);
+    if (segments.length < 2) return null;
+    const main = segments[0];
+    return segments.slice(1).find(seg => seg.share >= SPINOFF_MIN_SHARE - 1e-9
+        && (!areSectorsRelated(main.sector, seg.sector) || (seg.subsector && seg.subsector !== main.subsector))) || null;
+}
+
+function isTopCapQuartile(stock) {
+    const caps = stocks.filter(s => !s.assetType && !s.isBankrupt).map(getMarketCapValue).sort((a, b) => b - a);
+    return caps.length > 0 && getMarketCapValue(stock) >= caps[Math.max(0, Math.floor(caps.length * 0.25) - 1)];
+}
+
+function canAnnounceSpinoff(stock) {
+    return isStrategyCompany(stock) && !stock.spinoff && !stock.strategy?.process && !stock.strategy?.pivot && !stock.mergerProcess
+        && (Number(stock.financialHealth) || 0) >= 1 && ((exchanges[stock.exchange]?.level || 0) >= (exchanges.GOLD?.level ?? 3) || isTopCapQuartile(stock))
+        && Boolean(getSpinoffCandidateSegment(stock));
+}
+
+function isPlayerSpinoffMajority(stock) {
+    return typeof canFundControlAgm === 'function' && canFundControlAgm(stock);
+}
+
+/** Plotka o wydzieleniu: widoczna tylko z Analitykiem poz. 3 (pasek newsów). */
+function noteSpinoffRumor(stock, sector, real) {
+    stock.spinoffRumor = { quarter: getSpinoffQuarter(), sector, real };
+    if (typeof getAnalystLevel === 'function' && getAnalystLevel() >= 3 && typeof pushNews === 'function') {
+        pushNews(`🗞️ Plotka (wiarygodność ok. 60%): ${stock.name} może wydzielić działalność ${sector} do osobnej spółki.`, stock.symbol);
+    }
+}
+
+/** Zapowiedź: kurs +3–8% (dyskonto konglomeratu znika od razu — bez darmowego zysku po ogłoszeniu); walne za 1 kw. */
+function announceSpinoff(stock, by = 'ceo') {
+    const seg = getSpinoffCandidateSegment(stock);
+    if (!seg || stock.spinoff) return null;
+    const quarter = getSpinoffQuarter();
+    const valueBefore = getMarketCapValue(stock);
+    stock.spinoff = { stage: 'announced', sector: seg.sector, subsector: seg.subsector || null, by, announcedQuarter: quarter, valueBefore };
+    stock.spinoffRumor = null;
+    const jump = getRandomInRange(...SPINOFF_ANNOUNCE_JUMP) * (1 + (typeof gaussianRandom === 'function' ? gaussianRandom() * 0.2 : 0));
+    applyPriceEffect(stock.symbol, Math.max(0.01, jump), 'positive', 'company');
+    // Walne nadzwyczajne w przyszłym kwartale (albo uchwała dopisana do najbliższego walnego).
+    const gov = ensureGovernance(stock);
+    const item = { id: 'spinoff', kind: 'board', type: 'spinoff', label: `Wydzielenie działalności ${seg.sector} do nowej spółki`, playerVote: 'for' };
+    if (gov.pendingAgm?.items) gov.pendingAgm.items = [...gov.pendingAgm.items.filter(i => i.type !== 'spinoff'), item];
+    else gov.pendingAgm = { items: [item], extraordinary: true };
+    gov.quartersToAgm = Math.min(gov.quartersToAgm || 1, 1);
+    if (typeof addChartEvent === 'function') addChartEvent(stock, '✂️', `Zapowiedź wydzielenia: ${seg.sector}`);
+    logEvent(`✂️ ${stock.name} zapowiada wydzielenie działalności ${seg.sector} (${(seg.share * 100).toFixed(0)}% przychodów) do nowej spółki — walne w przyszłym kwartale. Kurs +${(jump * 100).toFixed(0)}%.`, 'company');
+    const held = isPlayerHolding(stock) || (playerWallet?.portfolio?.[stock.symbol]?.shares || 0) > 0;
+    if (held && typeof unlockAcademyEntry === 'function') { unlockAcademyEntry('spinoff', `${stock.name}: zapowiedź wydzielenia`); unlockAcademyEntry('sotp'); }
+    if (held && typeof addMail === 'function') addMail({ sender: 'PULS', subject: `✂️ ${stock.name}: zapowiedź wydzielenia ${seg.sector}`, body: `Każdy akcjonariusz ${stock.name} dostanie akcje nowej spółki proporcjonalnie do posiadanych (dywidenda rzeczowa). Kurs ${stock.name} spadnie o wartość wydzielonej części. Decyzja na walnym w przyszłym kwartale.`, importance: 2, symbol: stock.symbol });
+    return stock.spinoff;
+}
+
+/** Gracz-większościowiec: przypięty mail z decyzją (zlecić teraz / zablokować); brak odpowiedzi = decyduje prezes. */
+function offerSpinoffDecision(stock) {
+    const quarter = getSpinoffQuarter();
+    if ((Number(stock.spinoffDecisionQuarter) || -99) > quarter - SPINOFF_PLAYER_BLOCK_QUARTERS || typeof addMail !== 'function') return;
+    stock.spinoffDecisionQuarter = quarter;
+    const seg = getSpinoffCandidateSegment(stock);
+    addMail({ sender: CORPORATION_SENDER, subject: `✂️ ${stock.name}: zarząd rozważa wydzielenie ${seg.sector}`, body: `Segment ${seg.sector} (${(seg.share * 100).toFixed(0)}% przychodów) mógłby działać jako osobna spółka. Jako większościowiec możesz zlecić zapowiedź od razu albo zablokować pomysł na rok. Bez Twojej decyzji zdecyduje prezes.`, importance: 2, symbol: stock.symbol, pinned: true, action: { type: 'spinoff', symbol: stock.symbol } });
+}
+
+function playerSpinoffDecision(symbol, choice) {
+    const stock = stocks.find(s => s.symbol === symbol);
+    if (!stock || !isPlayerSpinoffMajority(stock)) { showToast('Decyzja nie jest już aktualna.', 'default'); return false; }
+    if (choice === 'block') { stock.spinoffBlockedUntil = getSpinoffQuarter() + SPINOFF_PLAYER_BLOCK_QUARTERS; logEvent(`✋ Fundusz blokuje wydzielenie w ${stock.name} na rok.`, 'review'); return true; }
+    if (!canAnnounceSpinoff(stock)) { showToast('Spółka nie spełnia już warunków wydzielenia.', 'warning'); return false; }
+    return Boolean(announceSpinoff(stock, 'player'));
+}
+
+/** Giełda córki: 1–2 szczeble niżej niż matka (bez giełd elitarnych). */
+function pickSpinoffExchange(parent) {
+    const regular = Object.keys(exchanges).filter(key => !(typeof isEliteExchange === 'function' && isEliteExchange(key))).sort((a, b) => exchanges[a].level - exchanges[b].level);
+    const parentIndex = Math.max(0, regular.indexOf(parent.exchange) >= 0 ? regular.indexOf(parent.exchange) : regular.length - 1);
+    return regular[Math.max(1, parentIndex - getRandomIntInRange(1, 2))] || regular[1] || parent.exchange;
+}
+
+function scaleFundamentals(fundamentals, factor) {
+    const copy = JSON.parse(JSON.stringify(fundamentals || {}));
+    for (const key of ['revenue', 'expectedEps', 'lastEps']) if (Number.isFinite(copy[key])) copy[key] *= factor;
+    copy.history = (copy.history || []).map(h => { const out = { ...h }; for (const k of Object.keys(out)) if (typeof out[k] === 'number') out[k] *= factor; return out; });
+    return copy;
+}
+
+/** Dywidenda rzeczowa: każdy posiadacz akcji matki dostaje akcje córki (factor = część rozdawana). */
+function distributeSpinoffShares(parent, child, factor, costShare) {
+    const symbol = parent.symbol, cs = child.symbol;
+    const give = n => Math.floor((Number(n) || 0) * factor);
+    const splitHolding = (portfolio, key = 'shares', priceKey = 'avgPrice') => {
+        const h = portfolio?.[symbol];
+        const n = give(h?.[key]);
+        if (!(n > 0)) return;
+        const price = Number(h[priceKey]) || 0;
+        portfolio[cs] = { [key]: n, [priceKey]: price * costShare / Math.max(factor, 1e-9), ...(h.assetType ? { assetType: h.assetType } : {}) };
+        h[priceKey] = price * (1 - costShare);
+    };
+    splitHolding(playerPortfolio);
+    if (playerWallet?.portfolio) splitHolding(playerWallet.portfolio);
+    for (const ai of aiCompetitors) splitHolding(ai.portfolio);
+    for (const manager of corporation?.managers || []) splitHolding(manager.fund?.portfolio);
+    for (const bank of commercialBanks) splitHolding(bank.stockPortfolio);
+    for (const owner of stocks) {
+        if (owner === child) continue;
+        if (owner.holdingPortfolio?.[symbol]) splitHolding(owner.holdingPortfolio, 'quantity', 'purchasePrice');
+        const stake = give(owner.equityStakes?.[symbol]);
+        if (stake > 0) owner.equityStakes[cs] = (owner.equityStakes[cs] || 0) + stake;
+    }
+    if (typeof etfs !== 'undefined') for (const etf of etfs) { const n = give(etf.holdings?.[symbol]); if (n > 0) etf.holdings[cs] = n; } // córka w portfelu ETF razem z matką
+    child.cityShares = give(parent.cityShares);
+    child.insiderShares = give(parent.insiderShares);
+    child.treasuryShares = give(parent.treasuryShares);
+    child.stateOwnershipPct = (Number(parent.stateOwnershipPct) || 0) * factor;
+    child.isStateOwned = Boolean(parent.isStateOwned) && child.stateOwnershipPct > 0;
+}
+
+/** Wydzielenie (uchwała walnego): nowa spółka z segmentem, proporcjonalnym majątkiem i akcjami dla akcjonariuszy. */
+function executeSpinoff(parent, options = {}) {
+    const plan = parent.spinoff;
+    const seg = getStockSegments(parent).find(s => s.sector === plan?.sector);
+    parent.spinoff = null;
+    if (!seg || getStockSegments(parent).length < 2) return null;
+    const s = seg.share;
+    const quarter = getSpinoffQuarter();
+    const limitFull = getListedCompanyCount() >= SPINOFF_DOMESTIC_LIMIT || !(typeof hasFreeTotalListingSlot === 'function' ? hasFreeTotalListingSlot() : true);
+    const carve = options.carve ?? (limitFull || Math.random() < SPINOFF_CARVE_CHANCE);
+    if (carve && !hasFreeTotalListingSlot()) { logEvent(`✂️ ${parent.name}: wydzielenie odłożone — brak miejsca na giełdzie.`, 'company'); return null; }
+    const keep = carve ? getRandomInRange(...SPINOFF_CARVE_KEEP) : 0;
+    const factor = 1 - keep;                   // część akcji córki rozdana akcjonariuszom matki
+    const oldPrice = parent.price;
+
+    const bs = parent.balanceSheet || { assets: 0, liabilities: 0, shareCapital: 0, retainedEarnings: 0 };
+    const part = { cash: (Number(parent.cash) || 0) * s, assets: (Number(bs.assets) || 0) * s, liabilities: (Number(bs.liabilities) || 0) * s, shareCapital: (Number(bs.shareCapital) || 0) * s, retainedEarnings: (Number(bs.retainedEarnings) || 0) * s };
+    const symbol = uniqueSymbol(`${parent.symbol.slice(0, 3)}S`);
+    const child = {
+        name: pickSubsidiaryName(parent, seg.sector), symbol,
+        price: Math.max(0.01, oldPrice * s), totalShares: parent.totalShares, maxShares: parent.totalShares, sharesHeld: 0, insiderShares: 0,
+        exchange: pickSpinoffExchange(parent),
+        sector: [seg.sector], segments: [{ sector: seg.sector, subsector: seg.subsector || null, share: 1, ...(seg.niche ? { niche: seg.niche } : {}) }],
+        specializationSectors: [seg.sector],
+        financialHealth: Math.max(0, Number(parent.financialHealth) || 0), volatilityFactor: Number(parent.baseVolatilityFactor || parent.volatilityFactor) || 1,
+        cash: 0, balanceSheet: { assets: 0, liabilities: 0, shareCapital: 0, retainedEarnings: 0 }, quarterlyEarnings: 0,
+        fixedExpenses: (Number(parent.fixedExpenses) || 0) * s,
+        departments: JSON.parse(JSON.stringify(parent.departments || {})), activeInvestments: [],
+        dividendPolicy: parent.dividendPolicy, reputation: { player: 0 },
+        priceHistory: [], candlestickHistory: [], lineHistory: [], playerTransactions: [], chartEvents: [],
+        lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, bankAccountId: parent.bankAccountId,
+        corporatePhase: parent.corporatePhase, companyAge: 0, spunOffFrom: parent.symbol
+    };
+    if (typeof initializeResearchForStock === 'function') initializeResearchForStock(child); // przed przekazaniem gotówki: start badań nie zaburza sum
+    // Majątek, dług i gotówka proporcjonalnie (sumy się zgadzają).
+    if (part.cash > 0) transferCompanyCash(parent, child, part.cash, 'Wydzielenie: gotówka segmentu');
+    adjustBalanceSheet(parent, { assets: -part.assets, liabilities: -part.liabilities }); // aktywa zawierają gotówkę (transferCompanyCash zmienia tylko kasę)
+    if (parent.balanceSheet) { parent.balanceSheet.shareCapital -= part.shareCapital; parent.balanceSheet.retainedEarnings -= part.retainedEarnings; }
+    child.balanceSheet = { assets: part.assets, liabilities: part.liabilities, shareCapital: part.shareCapital, retainedEarnings: part.retainedEarnings };
+    child.cash = Math.max(0, Number(child.cash) || 0);
+    parent.fixedExpenses = (Number(parent.fixedExpenses) || 0) * (1 - s);
+    // Wyniki: przychody i historia segmentu.
+    child.fundamentals = scaleFundamentals(parent.fundamentals, s);
+    parent.fundamentals = scaleFundamentals(parent.fundamentals, 1 - s);
+    // Segmenty matki bez wydzielonego.
+    parent.segments = parent.segments.filter(x => x.sector !== seg.sector);
+    refreshSectorsFromSegments(parent);
+    if (parent.strategy?.growth?.sector === seg.sector) parent.strategy.growth = null;
+    // Pracownicy segmentu (0.13).
+    if (parent.workforce && typeof ensureWorkforce === 'function') {
+        const employees = Math.round((Number(parent.workforce.employees) || 0) * s);
+        ensureWorkforce(child);
+        if (child.workforce) {
+            child.workforce.employees = Math.max(1, employees); child.workforce.employeesStart = child.workforce.employees;
+            child.workforce.revenueStart = Math.max(1, Number(child.fundamentals?.revenue) || 1);
+        }
+        parent.workforce.employees = Math.max(1, (Number(parent.workforce.employees) || 0) - employees);
+        parent.workforce.employeesStart = Math.max(1, Math.round((Number(parent.workforce.employeesStart) || 0) * (1 - s)));
+        parent.workforce.revenueStart = Math.max(1, (Number(parent.workforce.revenueStart) || 1) * (1 - s));
+    }
+    // Akcje: dywidenda rzeczowa; kurs matki spada o wartość rozdanej części.
+    distributeSpinoffShares(parent, child, factor, s);
+    parent.price = Math.max(0.01, oldPrice * (1 - s * factor));
+    if (carve) {
+        parent.equityStakes = parent.equityStakes || {};
+        parent.equityStakes[symbol] = Math.floor(child.totalShares * keep);
+        child.isSubsidiaryOf = parent.symbol;
+        child.parentStakePct = keep;
+        // Matka: udział w córce jako aktywo (wartość księgowa części zatrzymanej).
+        const keptEquity = (part.assets - part.liabilities) * keep;
+        adjustBalanceSheet(parent, { assets: keptEquity });
+        if (parent.balanceSheet) parent.balanceSheet.retainedEarnings += keptEquity;
+    }
+    stocks.push(child);
+    child.sharesHeld = Math.min(child.totalShares, getTrackedHeldShares(child));
+    if (typeof generateCEO === 'function') generateCEO(child);
+    if (typeof initializeDescriptionParts === 'function') initializeDescriptionParts(child);
+    if (typeof initializeOwnership === 'function' && !child.ownership) { /* struktura własności liczona z posiadaczy */ }
+    if (typeof usedCompanyNames !== 'undefined') usedCompanyNames.push(child.name);
+    updateFundamentalRatios(parent); updateFundamentalRatios(child);
+    if (typeof syncSubsidiaryLinks === 'function') syncSubsidiaryLinks();
+    if (typeof addChartEvent === 'function') { addChartEvent(parent, '✂️', `Wydzielenie: ${child.name} (${child.symbol})`); addChartEvent(child, '🆕', `Debiut po wydzieleniu z ${parent.name}`); }
+    spinoffLog.unshift({ parent: parent.symbol, child: symbol, quarter, carve, keep, valueBefore: plan.valueBefore || 0, ratio2q: null });
+    spinoffLog.length = Math.min(spinoffLog.length, SPINOFF_LOG_LIMIT);
+    noteStrategyStat(carve ? 'carveOuts' : 'spinoffs');
+    logEvent(carve
+        ? `✂️ CARVE-OUT: ${parent.name} wydziela ${child.name} (${symbol}) na ${exchanges[child.exchange]?.name || child.exchange} — matka zachowuje ${(keep * 100).toFixed(0)}%, akcjonariusze dostają ${(factor * 100).toFixed(0)}% akcji córki.`
+        : `✂️ SPIN-OFF: ${parent.name} wydziela ${child.name} (${symbol}) na ${exchanges[child.exchange]?.name || child.exchange}. Każdy akcjonariusz dostaje 1 akcję ${symbol} za 1 akcję ${parent.symbol}.`, 'market');
+    const held = (playerPortfolio[symbol]?.shares || 0) + (playerWallet?.portfolio?.[symbol]?.shares || 0);
+    if (held > 0) {
+        if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('spinoff', `${parent.name}: dostajesz ${held.toLocaleString('pl-PL')} akcji ${child.name}`);
+        if (typeof addMail === 'function') addMail({ sender: 'PULS', subject: `✂️ Akcje ${child.name} z wydzielenia ${parent.name}`, body: `Dostajesz ${held.toLocaleString('pl-PL')} akcji ${child.name} (${symbol}) jako dywidendę rzeczową. Kurs ${parent.name} spadł o wartość wydzielonej części — wartość Twojej pozycji się nie zmienia.`, importance: 2, symbol });
+    }
+    return child;
+}
+
+/** Co kwartał: plotki, zapowiedzi, decyzje większościowca, wynik 2 kw. po wydzieleniu. */
+function processSpinoffsQuarterly() {
+    const quarter = getSpinoffQuarter();
+    for (const stock of [...stocks]) {
+        if (stock.isBankrupt) continue;
+        if (stock.spinoff && quarter - (stock.spinoff.announcedQuarter || 0) > 3) { stock.spinoff = null; continue; } // walne się nie odbyło
+        // Plotka sprzed kwartału zamienia się w zapowiedź.
+        if (stock.spinoffRumor?.real && stock.spinoffRumor.quarter < quarter && !stock.spinoff) { if (canAnnounceSpinoff(stock)) announceSpinoff(stock, 'ceo'); else stock.spinoffRumor = null; continue; }
+        if (stock.spinoffRumor && !stock.spinoffRumor.real && stock.spinoffRumor.quarter < quarter - 1) stock.spinoffRumor = null;
+        if (!canAnnounceSpinoff(stock) || stock.spinoffRumor) continue;
+        if ((Number(stock.spinoffBlockedUntil) || -1) > quarter) continue;
+        if (isPlayerSpinoffMajority(stock)) offerSpinoffDecision(stock);
+        const majority = typeof findMajorityShareholder === 'function' ? findMajorityShareholder(stock) : null;
+        if (majority && majority.kind !== 'player' && majority.kind !== 'wallet' && Math.random() < SPINOFF_BOT_ORDER_CHANCE) { announceSpinoff(stock, 'majority'); continue; }
+        const roll = Math.random();
+        if (roll < SPINOFF_QUARTER_CHANCE) noteSpinoffRumor(stock, getSpinoffCandidateSegment(stock).sector, true);
+        else if (roll < SPINOFF_QUARTER_CHANCE + SPINOFF_FAKE_RUMOR_CHANCE) noteSpinoffRumor(stock, getSpinoffCandidateSegment(stock).sector, false);
+    }
+    // Pomiar: suma wartości matka + córka 2 kw. po wydzieleniu względem wartości matki przed zapowiedzią.
+    for (const entry of spinoffLog) {
+        if (entry.ratio2q !== null || quarter - entry.quarter < 2 || !(entry.valueBefore > 0)) continue;
+        const parent = stocks.find(s => s.symbol === entry.parent), child = stocks.find(s => s.symbol === entry.child);
+        if (!parent || !child) { entry.ratio2q = NaN; continue; }
+        const childFloat = getMarketCapValue(child) * (entry.carve ? 1 - entry.keep : 1);
+        entry.ratio2q = (getMarketCapValue(parent) + childFloat) / entry.valueBefore;
+    }
+}

@@ -6367,6 +6367,104 @@ group('0.14.2 P8: zwijane sekcje i wyjaśnione fazy spółek', () => {
     });
 });
 
+group('0.14 T4: wydzielenie spółki córki (spin-off, carve-out)', () => {
+    function world() {
+        const a = makeCompany('MAT', { cash: 3_000_000, fixedAssets: 5_000_000, liabilities: 1_000_000 });
+        a.segments = [{ sector: 'Technologia', subsector: null, share: 0.6 }, { sector: 'Energia', subsector: null, share: 0.4 }];
+        a.sector = getSectorsFromSegments(a.segments);
+        a.exchange = 'GOLD'; a.financialHealth = 2; a.price = 100; a.reputation = { player: 0 }; a.ceo = { name: 'Prezes', traits: [] };
+        a.insiderShares = 400; a.cityShares = 50;
+        const holder = makeCompany('HOL', { cash: 1_000_000 }); holder.equityStakes = { MAT: 600 };
+        const fund = makeCompany('HLD', { cash: 1_000_000 }); fund.assetType = 'Holding'; fund.holdingPortfolio = { MAT: { quantity: 200, purchasePrice: 90 } };
+        resetWorld([a, holder, fund]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        initializeFundamentals(a, true);
+        playerPortfolio.MAT = { shares: 1000, avgPrice: 80, assetType: 'stock' };
+        playerWallet.portfolio = { MAT: { shares: 100, avgPrice: 70 } };
+        const ai = aiCompetitors[0]; ai.portfolio.MAT = { shares: 2000, avgPrice: 95 };
+        const bank = commercialBanks[0]; bank.stockPortfolio = bank.stockPortfolio || {}; bank.stockPortfolio.MAT = { shares: 500, avgPrice: 100 };
+        const manager = corporation?.managers?.[0]; if (manager) manager.fund.portfolio.MAT = { shares: 700, avgPrice: 100 };
+        const etf = { symbol: 'TETF', name: 'ETF testowy', holdings: { MAT: 300 } }; etfs.push(etf);
+        a.sharesHeld = getTrackedHeldShares(a);
+        spinoffLog = [];
+        return { a, holder, fund, ai, bank, manager, etf };
+    }
+    const cleanup = etf => { const i = etfs.indexOf(etf); if (i >= 0) etfs.splice(i, 1); };
+
+    test('warunki zapowiedzi: ≥ 2 segmenty, segment ≥ 30% niepowiązany, GOLD+, kondycja ≥ 1', () => {
+        const { a, etf } = world();
+        try {
+            assert(canAnnounceSpinoff(a) && getSpinoffCandidateSegment(a).sector === 'Energia', 'spełnia');
+            a.financialHealth = 0; assert(!canAnnounceSpinoff(a), 'kondycja'); a.financialHealth = 2;
+            a.segments = [{ sector: 'Technologia', subsector: null, share: 0.8 }, { sector: 'Energia', subsector: null, share: 0.2 }]; a.sector = getSectorsFromSegments(a.segments);
+            assert(!canAnnounceSpinoff(a), 'segment < 30%');
+        } finally { cleanup(etf); }
+    });
+
+    test('spin-off: KAŻDY posiadacz dostaje akcje córki; wartość, gotówka i dług się sumują', () => {
+        const { a, holder, fund, ai, bank, manager, etf } = world();
+        try {
+            a.spinoff = { stage: 'announced', sector: 'Energia', valueBefore: getMarketCapValue(a) };
+            const before = { cap: getMarketCapValue(a), cash: a.cash, liab: a.balanceSheet.liabilities, assets: a.balanceSheet.assets, rev: a.fundamentals.revenue };
+            const child = executeSpinoff(a, { carve: false });
+            assert(child && !child.isSubsidiaryOf, 'córka');
+            const c = child.symbol;
+            assert(playerPortfolio[c].shares === 1000 && playerWallet.portfolio[c].shares === 100 && ai.portfolio[c].shares === 2000 && bank.stockPortfolio[c].shares === 500, 'gracz, konto prywatne, bot, bank');
+            assert(etf.holdings[c] === 300 && holder.equityStakes[c] === 600 && fund.holdingPortfolio[c].quantity === 200 && child.insiderShares === 400 && child.cityShares === 50, 'ETF, spółka, holding, insiderzy, miasto');
+            if (manager) assert(manager.fund.portfolio[c].shares === 700, 'fundusz bota');
+            assert(child.sharesHeld === getTrackedHeldShares(child), 'akcje córki w obrocie = suma posiadaczy');
+            assert(Math.abs(getMarketCapValue(a) + getMarketCapValue(child) - before.cap) < 1e-6, 'wartość matki przed = matka + córka');
+            assert(Math.abs(a.cash + child.cash - before.cash) < 1e-6 && Math.abs(a.balanceSheet.liabilities + child.balanceSheet.liabilities - before.liab) < 1e-6, `gotówka ${before.cash} → ${a.cash}+${child.cash}; dług ${before.liab} → ${a.balanceSheet.liabilities}+${child.balanceSheet.liabilities}`);
+            assert(Math.abs(a.balanceSheet.assets + child.balanceSheet.assets - before.assets) < 1e-6 && Math.abs(a.fundamentals.revenue + child.fundamentals.revenue - before.rev) < 1e-6, 'aktywa i przychody');
+            assert(getStockSegments(a).length === 1 && getMainSector(child) === 'Energia' && exchanges[child.exchange].level < exchanges.GOLD.level, 'segmenty i giełda niżej');
+            const shareProblems = checkWorldInvariants().filter(p => /akcje w obrocie|sharesHeld/.test(p));
+            assert(shareProblems.length === 0, shareProblems.join('; '));
+        } finally { cleanup(etf); }
+    });
+
+    test('carve-out: matka zachowuje 51–80%, reszta dla akcjonariuszy; córka zależna; wartość dla akcjonariuszy bez zmian', () => {
+        const { a, ai, etf } = world();
+        try {
+            a.spinoff = { stage: 'announced', sector: 'Energia', valueBefore: getMarketCapValue(a) };
+            const oldPrice = a.price;
+            const child = executeSpinoff(a, { carve: true });
+            const keep = child.parentStakePct;
+            assert(child.isSubsidiaryOf === 'MAT' && keep >= 0.51 && keep <= 0.8 && a.equityStakes[child.symbol] === Math.floor(child.totalShares * keep), 'pakiet matki');
+            assert(ai.portfolio[child.symbol].shares === Math.floor(2000 * (1 - keep)), 'bot dostał część');
+            assert(Math.abs(a.price + (1 - keep) * child.price - oldPrice) < 1e-9, 'wartość na akcję matki zachowana');
+            assert(child.sharesHeld === getTrackedHeldShares(child), 'obrót = posiadacze');
+        } finally { cleanup(etf); }
+    });
+
+    test('zapowiedź → walne → wydzielenie; ponad 115 spółek krajowych tylko carve-out', () => {
+        const { a, etf } = world();
+        try {
+            const price0 = a.price;
+            announceSpinoff(a, 'ceo');
+            assert(a.price > price0 && a.spinoff?.stage === 'announced' && a.governance.pendingAgm.items.some(i => i.type === 'spinoff'), 'zapowiedź i uchwała');
+            const r = Math.random; Math.random = () => 0.2;
+            try { processGovernanceQuarter(); } finally { Math.random = r; }
+            const child = stocks.find(s => s.spunOffFrom === 'MAT');
+            assert(child && !a.spinoff, 'wydzielenie po walnym');
+            const saved = getListedCompanyCount; getListedCompanyCount = () => 115;
+            const b = world().a;
+            try { b.spinoff = { stage: 'announced', sector: 'Energia', valueBefore: 1 }; const c2 = executeSpinoff(b); assert(c2?.isSubsidiaryOf === 'MAT', 'limit → carve-out'); }
+            finally { getListedCompanyCount = saved; }
+        } finally { cleanup(etf); etfs.splice(0, etfs.length, ...etfs.filter(e => e.symbol !== 'TETF')); }
+    });
+
+    test('gracz-większościowiec: mail z decyzją; blokada na rok', () => {
+        const { a, etf } = world();
+        try {
+            playerPortfolio.MAT.shares = 6000; a.sharesHeld = getTrackedHeldShares(a);
+            offerSpinoffDecision(a);
+            assert(mailbox.messages.some(m => m.action?.type === 'spinoff' && m.action.symbol === 'MAT'), 'mail');
+            assert(playerSpinoffDecision('MAT', 'block') && a.spinoffBlockedUntil > macro.quarter, 'blokada');
+            assert(playerSpinoffDecision('MAT', 'now') && a.spinoff?.by === 'player', 'zlecenie od razu');
+        } finally { cleanup(etf); }
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;
