@@ -2698,7 +2698,8 @@ const NEWS_SPEED_PX = 60;
 const NEWS_REDUCED_INTERVAL_MS = 5000;
 const newsTicker = { queue: [], offset: null, track: null, viewport: null, paused: false, lastTs: null, raf: null, loopIndex: 0, reducedAt: 0,
     widthOf: el => el.offsetWidth || 0, viewportWidth: () => newsTicker.viewport?.clientWidth || 0,
-    reduced: () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches };
+    reduced: () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches,
+    isHidden: () => typeof document !== 'undefined' && Boolean(document.hidden) };
 
 function isPlayerNews(entry) {
     return Boolean(entry.symbol && ((playerPortfolio?.[entry.symbol]?.shares || 0) > 0 || (playerWallet?.portfolio?.[entry.symbol]?.shares || 0) > 0));
@@ -2770,7 +2771,7 @@ function attachNewsTicker(track = null, viewport = null) {
 function stepNewsTicker(dt) {
     const t = newsTicker, track = t.track;
     if (!track) return;
-    if (typeof document !== 'undefined' && document.hidden) return;
+    if (t.isHidden()) return;
     if (t.reduced()) { // jeden news naraz, zmiana co 5 s bez animacji
         t.reducedAt += dt * 1000;
         if (track.children.length && t.reducedAt < NEWS_REDUCED_INTERVAL_MS) return;

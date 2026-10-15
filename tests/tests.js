@@ -6360,10 +6360,10 @@ group('0.14.2 P7: pasek newsów i dymki tylko w sprawach gracza', () => {
 
     // 0.14.2 P11: płynny pasek (własny element w testach, szerokość = 6 px na znak, okno 600 px)
     function tickerWorld() {
-        const saved = { track: newsTicker.track, viewport: newsTicker.viewport, widthOf: newsTicker.widthOf, viewportWidth: newsTicker.viewportWidth, reduced: newsTicker.reduced, queue: newsTicker.queue, paused: newsTicker.paused };
+        const saved = { track: newsTicker.track, viewport: newsTicker.viewport, widthOf: newsTicker.widthOf, viewportWidth: newsTicker.viewportWidth, reduced: newsTicker.reduced, isHidden: newsTicker.isHidden, queue: newsTicker.queue, paused: newsTicker.paused };
         const viewport = document.createElement('div'), track = document.createElement('div');
         viewport.appendChild(track);
-        Object.assign(newsTicker, { widthOf: el => el.textContent.length * 6, viewportWidth: () => 600, reduced: () => false, queue: [], paused: false });
+        Object.assign(newsTicker, { widthOf: el => el.textContent.length * 6, viewportWidth: () => 600, reduced: () => false, isHidden: () => false, queue: [], paused: false }); // niezależnie od widoczności karty testów
         attachNewsTicker(track, viewport);
         return { track, restore: () => Object.assign(newsTicker, saved, { offset: null }) };
     }
