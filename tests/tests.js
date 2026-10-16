@@ -6590,6 +6590,9 @@ group('0.14 T5: koncerny, kooperacje, podmioty powiązane', () => {
         a.segments = a.segments.slice(0, 2); refreshSectorsFromSegments(a);
         updateConcernStatus();
         assert(!isConcern(a), 'po utracie segmentu traci status');
+        b.isSubsidiaryOf = 'KON'; // decyzja 15: ≥ 2 segmenty i ≥ 1 spółka zależna
+        updateConcernStatus();
+        assert(isConcern(a), '2 powiązane segmenty + córka → koncern');
     });
 
     test('kooperacja tylko między segmentami powiązanymi; premia × udział segmentu; najwyżej 3 na koncern', () => {

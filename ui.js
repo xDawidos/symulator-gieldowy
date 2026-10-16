@@ -994,7 +994,7 @@ function displayStocks(previousInputValues = {}) {
     if (playerSharePct > 50) markerPrefix += '👑 ';
     if (stock.assetType === 'ResearchInstitute') markerPrefix += '🧪 ';
     if (stock.isMonopolist) markerPrefix += '🦁 ';
-    if (typeof isConcern === 'function' && isConcern(stock)) { markerPrefix += '🏢 '; nameCell.title = 'Koncern: czołówka kapitalizacji, segmenty niepowiązane albo ≥ 2 spółki zależne'; } // 0.14 T5
+    if (typeof isConcern === 'function' && isConcern(stock)) { markerPrefix += '🏢 '; nameCell.title = 'Koncern: czołówka kapitalizacji i grupa (segmenty niepowiązane, ≥ 2 spółki zależne albo ≥ 2 segmenty i spółka zależna)'; } // 0.14 T5
     if (stock.isStateOwned) {
       markerPrefix += '🏛️ ';
       nameCell.title = 'Spółka Skarbu Państwa';
@@ -7476,7 +7476,7 @@ function renderCompanyCardGroup(stock) {
     const children = stocks.filter(s => s.isSubsidiaryOf === sym && !s.isBankrupt);
     const status = isConcern(stock)
         ? `<p class="text-sm">🏢 <strong>Koncern</strong> od kw. ${stock.concern.since}: ${getStockSegments(stock).length} segmenty, ${children.length} spółek zależnych, czołówka kapitalizacji. Zawiera do ${COOP_MAX_PER_CONCERN} kooperacji.</p>`
-        : `<p class="text-sm text-muted">Koncern 🏢 to spółka z górnych ${Math.round(CONCERN_TOP_SHARE * 100)}% kapitalizacji z ≥ 2 segmentami (w tym niepowiązanym z głównym) albo ≥ ${CONCERN_MIN_SUBSIDIARIES} spółkami zależnymi.</p>`;
+        : `<p class="text-sm text-muted">Koncern 🏢 to spółka z górnych ${Math.round(CONCERN_TOP_SHARE * 100)}% kapitalizacji z ≥ 2 segmentami (w tym niepowiązanym z głównym), ≥ ${CONCERN_MIN_SUBSIDIARIES} spółkami zależnymi albo ≥ 2 segmentami i spółką zależną.</p>`;
     const level = getSkillLevel('accountant');
     const groupRows = [
         parent ? `<li>⬆️ matka: ${name(parent)}${Number.isFinite(stock.parentStakePct) ? ` (${(stock.parentStakePct * 100).toFixed(0)}%)` : ''}</li>` : '',
