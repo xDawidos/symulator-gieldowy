@@ -6690,6 +6690,103 @@ group('0.14 T5: koncerny, kooperacje, podmioty powiązane', () => {
     });
 });
 
+group('0.14 T6: spółki zależne (transfer, pożyczka, usamodzielnienie, wchłonięcie, sprzedaż pakietu)', () => {
+    function world(stakeShares = 6000) {
+        const seg = (sector) => [{ sector, subsector: null, share: 1 }];
+        const p = makeCompany('MAM', { cash: 10_000_000, fixedAssets: 20_000_000 });
+        p.segments = [{ sector: 'Chemia', subsector: null, share: 0.6 }, { sector: 'Przemysł', subsector: null, share: 0.4 }];
+        const c = makeCompany('COR', { cash: 1_000_000, fixedAssets: 2_000_000 }); c.segments = seg('Medycyna');
+        const k = makeCompany('KUP', { cash: 50_000_000, fixedAssets: 50_000_000 }); k.segments = seg('Technologia'); // kupujący pakiet (koncern)
+        const all = [p, c, k];
+        all.forEach(x => { x.sector = getSectorsFromSegments(x.segments); x.ceo = { name: 'Prezes', traits: [] }; x.reputation = { player: 0 }; });
+        p.price = 500; c.price = 100; k.price = 2000;
+        resetWorld(all);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        all.forEach(x => initializeFundamentals(x, true));
+        p.equityStakes = { COR: stakeShares }; c.isSubsidiaryOf = 'MAM'; c.parentStakePct = stakeShares / c.totalShares; p.subsidiaries = ['COR'];
+        playerPortfolio.COR = { shares: 500, avgPrice: 90 }; playerPortfolio.MAM = { shares: 1000, avgPrice: 400 };
+        const ai = aiCompetitors[0]; ai.portfolio.COR = { shares: Math.min(1000, c.totalShares - stakeShares - 500), avgPrice: 95 }; ai.cash = 10_000_000;
+        all.forEach(x => { x.sharesHeld = getTrackedHeldShares(x); });
+        return { p, c, k, ai };
+    }
+    const shareProblems = () => checkWorldInvariants().filter(x => /akcje w obrocie|sharesHeld/.test(x));
+
+    test('transfer zysku 30–70% zmienia gotówkę matki i córki zgodnie z ustawieniem; wyższy transfer obniża wycenę córki', () => {
+        const { p, c } = world();
+        for (const rate of [0.3, 0.7]) {
+            setProfitTransfer(c, rate);
+            const pc = p.cash, cc = c.cash;
+            const moved = transferSubsidiaryProfit(c, 100_000);
+            assertNear(moved, 100_000 * rate, `transfer ${rate}`, 1e-6);
+            assertNear(p.cash - pc, moved, 'matka', 1e-6); assertNear(cc - c.cash, moved, 'córka', 1e-6);
+        }
+        assert(setProfitTransfer(c, 0.9) === 0.7 && setProfitTransfer(c, 0.1) === 0.3, 'zakres 30–70%');
+        assert(getTransferValuationFactor(c) > 1 && (setProfitTransfer(c, 0.7), getTransferValuationFactor(c) < 1), 'wycena córki maleje z transferem');
+    });
+
+    test('pożyczka wewnątrzgrupowa: do 20% gotówki matki, bilans się zgadza; oprocentowanie poza rynkiem → czerwona flaga', () => {
+        const { p, c } = world();
+        const before = { cash: p.cash + c.cash, assets: p.balanceSheet.assets, liab: c.balanceSheet.liabilities };
+        const value = grantGroupLoan(p, c, 1e12);
+        assertNear(value, Math.round(before.cash - 1_000_000) * 0 + Math.round(10_000_000 * SUB_LOAN_MAX_SHARE), 'limit 20%', 1);
+        assertNear(p.cash + c.cash, before.cash, 'gotówka w grupie'); assertNear(p.balanceSheet.assets, before.assets, 'matka: należność zamiast gotówki');
+        assertNear(c.balanceSheet.liabilities - before.liab, value, 'dług córki');
+        assert(!getRedFlags(p).some(f => f.id === 'groupLoan'), 'rynkowa bez flagi');
+        c.groupLoan.rate = getMarketLoanRate() * 0.5;
+        assert(getRedFlags(p).some(f => f.id === 'groupLoan') && getRedFlags(c).some(f => f.id === 'groupLoan'), 'nierynkowa → flaga u matki i córki');
+    });
+
+    test('usamodzielnienie: oferta wtórna (matka < 50%, kurs córki w dół) i spin-off reszty (akcjonariusze matki dostają akcje)', () => {
+        const { p, c } = world();
+        const price0 = c.price;
+        assert(subsidiarySecondaryOffering(c, p) > 0 && getParentStake(c, p) < 0.5 && !c.isSubsidiaryOf && c.price < price0, 'oferta wtórna');
+        assert(shareProblems().length === 0, shareProblems().join('; '));
+        const w = world();
+        const playerBefore = playerPortfolio.COR.shares;
+        const stake = w.p.equityStakes.COR;
+        assert(subsidiarySpinoffRemainder(w.c, w.p) > 0 && !w.c.isSubsidiaryOf && !w.p.equityStakes.COR, 'pakiet rozdany');
+        assert(playerPortfolio.COR.shares === playerBefore + Math.floor(stake * 1000 / w.p.totalShares), 'gracz dostał akcje córki do swoich (dopisane)');
+        assert(shareProblems().length === 0, shareProblems().join('; '));
+    });
+
+    test('wchłonięcie przy ≥ 90%: przymusowy wykup z premią, segment wraca do matki, córka znika i zwalnia miejsce w limicie', () => {
+        const { p, c, ai } = world(9200);
+        const total0 = getTotalCompanyCount(), aiShares = ai.portfolio.COR.shares, aiCash = ai.cash, cash0 = playerCash;
+        const r = absorbSubsidiary(c, p, 0.15);
+        assert(r && Math.abs(r.price - 100 * 1.15) < 1e-9, 'cena = kurs + 15%');
+        assert(!stocks.includes(c) && getTotalCompanyCount() === total0 - 1, 'córka zniknęła z giełdy');
+        assert(getStockSegments(p).some(seg => seg.sector === 'Medycyna') && isValidSegmentList(getStockSegments(p)), 'segment wrócił do matki');
+        assertNear(ai.cash - aiCash, aiShares * r.price, 'bot dostał cenę wykupu'); assertNear(playerCash - cash0, 500 * r.price, 'gracz dostał cenę wykupu');
+        assert(!absorbSubsidiary(world(8000).c), 'poniżej 90% — nie');
+    });
+
+    test('sprzedaż pakietu kontrolnego: premia za kontrolę, wezwanie po tej samej cenie; gracz może sprzedać albo zostać', () => {
+        const { p, c, k, ai } = world();
+        k.concern = { since: 0 };
+        const buyer = { kind: 'company', id: 'KUP:stake', name: k.name, entity: k };
+        const pCash = p.cash;
+        const r = Math.random; Math.random = () => 0; // boty przyjmują wezwanie
+        let t;
+        try { t = sellControllingStake(c, p, buyer, 0.2); } finally { Math.random = r; }
+        assert(t && Math.abs(t.price - 120) < 1e-9 && c.isSubsidiaryOf === 'KUP' && !p.equityStakes.COR, 'pakiet u kupującego, córka zależna od KUP');
+        assertNear(p.cash - pCash, 6000 * 120, 'matka dostała cenę z premią');
+        assert(!ai.portfolio.COR && k.equityStakes.COR >= 6000 + 1000 - 1, 'bot sprzedał w wezwaniu po tej samej cenie');
+        const cash0 = playerCash;
+        assert(playerTenderDecision('COR', 'sell') && !playerPortfolio.COR && Math.abs(playerCash - cash0 - 500 * 120) < 1e-6, 'gracz sprzedał po cenie wezwania');
+        assert(shareProblems().length === 0, shareProblems().join('; '));
+    });
+
+    test('koncern zakłada córkę na BRONZE z 20–30% akcji w ofercie; Akademia: 3 hasła', () => {
+        const { k } = world();
+        k.concern = { since: 0 };
+        const child = foundConcernSubsidiary(k);
+        assert(child && child.exchange === 'BRONZE' && child.isSubsidiaryOf === 'KUP', 'córka na BRONZE');
+        const stake = getParentStake(child, k);
+        assert(stake >= 0.7 - 1e-3 && stake <= 0.8 + 1e-3, `pakiet matki ${stake}`);
+        for (const id of ['premiaKontrola', 'wezwanie', 'squeezeOut']) assert(ACADEMY_ENTRIES[id]?.quiz?.length === 3, id);
+    });
+});
+
 function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

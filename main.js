@@ -1162,6 +1162,7 @@ gameTimers.weekly = setGameInterval(() => {
         processStrategyQuarterly(); // 0.14 T3: rozszerzenia, podsektory, nisze, pivoty (strategy.js)
         processSpinoffsQuarterly(); // 0.14 T4: plotki, zapowiedzi i wydzielenia spółek córek
         processCooperationsQuarterly(); // 0.14 T5: koncerny, kooperacje, skargi do KNF
+        processSubsidiariesQuarterly(); // 0.14 T6: spółki zależne (pożyczki, usamodzielnienie, wchłonięcie, sprzedaż pakietu)
         processSubsectorMechanicsQuarterly(); // 0.14 T2: badania kliniczne, bloki jądrowe, kontrole KNF (subsectors.js)
         processSpecialProjectsQuarterly(); // konsorcja i projekty specjalne (projects.js)
         reconcileSharesHeld(); // audyt A1: akcje w obrocie = suma posiadaczy

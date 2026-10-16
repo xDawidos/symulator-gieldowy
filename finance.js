@@ -851,8 +851,8 @@ function pickSubsidiaryName(parent, sector) {
 }
 
 /** Nowa spółka zależna: kapitał od matki, te same badania i polityki; własny segment i nazwa (0.14.2 P3); IPO na niższej giełdzie. */
-function foundSubsidiary(parent) {
-    if (typeof hasFreeListingSlot === 'function' && !hasFreeListingSlot()) return null; // P1: twardy sufit spółek krajowych
+function foundSubsidiary(parent, options = {}) {
+    if (options.ignoreDomesticCap ? !hasFreeTotalListingSlot() : (typeof hasFreeListingSlot === 'function' && !hasFreeListingSlot())) return null; // P1: twardy sufit (T6: córka koncernu liczy się tylko do łącznego)
     const capital = Math.max(100000, Math.min(parent.cash * 0.1, getMarketCap(parent) * 0.05));
     if (parent.cash < capital) return null;
 
@@ -863,8 +863,8 @@ function foundSubsidiary(parent) {
 
     const totalShares = 10000;
     const price = Math.round(capital / totalShares * 1.5 * 100) / 100;
-    const exchangeKey = Object.keys(exchanges).find(key => !isEliteExchange(key) && exchanges[key].minPrice <= price && price < exchanges[key].maxPrice) || 'SILVER';
-    const parentStake = 0.6;
+    const exchangeKey = options.exchange && exchanges[options.exchange] ? options.exchange : Object.keys(exchanges).find(key => !isEliteExchange(key) && exchanges[key].minPrice <= price && price < exchanges[key].maxPrice) || 'SILVER';
+    const parentStake = options.stake || 0.6; // T6: córka koncernu 70–80% (20–30% w ofercie publicznej)
 
     const segment = pickSubsidiarySegment(parent);
     const child = {
@@ -909,7 +909,7 @@ function foundSubsidiary(parent) {
     if (typeof initializeFundamentals === 'function') initializeFundamentals(child, true);
     if (typeof initializeDescriptionParts === 'function') initializeDescriptionParts(child);
 
-    logEvent(`🆕 IPO: ${parent.name} zakłada spółkę zależną ${child.name} (${symbol}) na ${exchanges[exchangeKey].name} — 40% akcji w ofercie publicznej.`, 'market');
+    logEvent(`🆕 IPO: ${parent.name} zakłada spółkę zależną ${child.name} (${symbol}) na ${exchanges[exchangeKey].name} — ${Math.round((1 - parentStake) * 100)}% akcji w ofercie publicznej.`, 'market');
     return child;
 }
 
@@ -985,7 +985,6 @@ function processEliteExchangesQuarterly() {
         }
     }
     runDiamondStrategy();
-    processSubsidiaryIndependence();
     syncSubsidiaryLinks(); // 0.14.2 P3: lista córek z faktów (upadłe i uwolnione znikają z listy)
 }
 
@@ -1003,28 +1002,7 @@ function syncSubsidiaryLinks() {
     return fixed;
 }
 
-/** Spółka zależna może się uwolnić, gdy matka sprzeda udziały (mniej niż 50%). */
-function processSubsidiaryIndependence() {
-    for (const child of stocks.filter(s => s.isSubsidiaryOf && Number.isFinite(s.parentStakePct))) {
-        const parent = stocks.find(s => s.symbol === child.isSubsidiaryOf);
-        if (!parent || parent.isBankrupt) { child.isSubsidiaryOf = null; continue; }
-        if (!hasFreeListingSlot()) continue; // P1: uwolniona zależna liczy się do limitu — przy pełnej giełdzie matka nie sprzedaje
-        if (Math.random() > 0.03 || getMarketCap(child) < getMarketCap(parent) * 0.3) continue;
-
-        const sold = child.parentStakePct * 0.5;
-        const proceeds = getMarketCap(child) * sold;
-        adjustCompanyCash(parent, proceeds);
-        const soldShares = Math.min(Math.floor(child.totalShares * sold), parent.equityStakes?.[child.symbol] ?? Infinity);
-        if (parent.equityStakes?.[child.symbol]) parent.equityStakes[child.symbol] -= soldShares;
-        child.sharesHeld = Math.max(0, child.sharesHeld - soldShares); // akcje wracają na rynek
-        child.parentStakePct -= sold;
-        if (child.parentStakePct < 0.5) {
-            child.isSubsidiaryOf = null;
-            parent.subsidiaries = (parent.subsidiaries || []).filter(symbol => symbol !== child.symbol);
-            logEvent(`🕊️ ${child.name} uwalnia się spod kontroli ${parent.name} — matka sprzedaje część udziałów.`, 'market');
-        }
-    }
-}
+// 0.14 T6: usamodzielnienie spółek zależnych — processSubsidiariesQuarterly (companies.js: oferta wtórna albo spin-off reszty).
 
 // =================================================================================
 // FINANSOWANIE POMOSTOWE BUDÓW (etap F3)

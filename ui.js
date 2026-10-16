@@ -6281,6 +6281,11 @@ function renderMailPreview(message) {
         action = stock && !stock.spinoff && typeof canAnnounceSpinoff === 'function' && canAnnounceSpinoff(stock) && isPlayerSpinoffMajority(stock)
             ? `<div class="mail-action"><button onclick="mailAction(playerSpinoffDecision, '${stock.symbol}', 'now')">✂️ Zleć zapowiedź teraz</button> <button class="btn-secondary" onclick="mailAction(playerSpinoffDecision, '${stock.symbol}', 'block')">✋ Zablokuj na rok</button><p class="text-xs text-muted">Bez decyzji — decyduje prezes.</p></div>`
             : '<p class="fund-muted">Decyzja nie jest już aktualna.</p>';
+    } else if (message.action?.type === 'tender') { // 0.14 T6: wezwanie po sprzedaży pakietu kontrolnego
+        const stock = stocks.find(s => s.symbol === message.action.symbol);
+        action = stock?.tender && getPlayerStakePct(stock) > 0
+            ? `<div class="mail-action"><button onclick="mailAction(playerTenderDecision, '${stock.symbol}', 'sell')">Sprzedaj po ${formatZl(stock.tender.price)}</button> <button class="btn-secondary" onclick="mailAction(playerTenderDecision, '${stock.symbol}', 'stay')">Zostaję</button></div>`
+            : '<p class="fund-muted">Wezwanie już się zakończyło.</p>';
     } else if (message.action?.type === 'bankBlock') { // 0.14.2 P5: pakiet od banku inwestycyjnego
         const bank = commercialBanks.find(b => b.id === message.action.bankId);
         const offer = bank?.resaleOffer?.symbol === message.action.symbol ? bank.resaleOffer : null;
@@ -7444,9 +7449,23 @@ function renderCompanyCardWorkforce(stock) {
         ${poach}`;
 }
 
+/** 0.14 T6: decyzje większościowca matki wobec córki (opcjonalne — bez nich decyduje prezes matki). */
+function renderSubsidiaryControls(child, stake) {
+    const c = child.symbol;
+    const transfer = [0.3, 0.4, 0.5, 0.6, 0.7].map(r => `<option value="${r}" ${Math.abs(getProfitTransferRate(child) - r) < 0.001 ? 'selected' : ''}>${r * 100}%</option>`).join('');
+    return `<div class="d-flex gap-2 flex-wrap items-center mt-1">
+        <label class="text-xs">Transfer zysku <select onchange="playerSubsidiaryAction('${c}', 'transfer', Number(this.value))">${transfer}</select></label>
+        ${child.groupLoan ? '' : `<select id="sub-loan-${c}" aria-label="Oprocentowanie pożyczki"><option value="1">pożyczka rynkowa</option><option value="0.5">pożyczka −50% (nierynkowa)</option><option value="1.5">pożyczka +50% (nierynkowa)</option></select><button class="btn-secondary btn-sm" onclick="playerSubsidiaryAction('${c}', 'loan', Number(document.getElementById('sub-loan-${c}').value))">🤲 Pożycz (do 20% gotówki)</button>`}
+        <button class="btn-secondary btn-sm" onclick="playerSubsidiaryAction('${c}', 'secondary')">🕊️ Oferta wtórna</button>
+        <button class="btn-secondary btn-sm" onclick="playerSubsidiaryAction('${c}', 'spinoff')">✂️ Spin-off reszty</button>
+        ${stake >= SUB_SQUEEZE_THRESHOLD - 1e-9 ? `<button class="btn-secondary btn-sm" onclick="playerSubsidiaryAction('${c}', 'absorb')">🧲 Wchłoń (wykup 10–20% premii)</button>` : ''}
+        <button class="btn-secondary btn-sm" onclick="playerSubsidiaryAction('${c}', 'sell')">💼 Sprzedaj pakiet kontrolny</button>
+    </div>`;
+}
+
 /** 0.14 T5: czy pokazać kartę „Grupa” (koncern, zależne, matka albo kooperacje). */
 function hasGroupCard(stock) {
-    return typeof isConcern === 'function' && (isConcern(stock) || Boolean(stock.isSubsidiaryOf) || getSubsidiaryCount(stock) > 0 || getStockCooperations(stock).length > 0);
+    return typeof isConcern === 'function' && (isConcern(stock) || Boolean(stock.isSubsidiaryOf) || getSubsidiaryCount(stock) > 0 || getStockCooperations(stock).length > 0 || Boolean(stock.tender));
 }
 
 /** 0.14 T5: karta koncernu — mapa grupy (matka, zależne, kooperanci) i suma części vs kapitalizacja. */
@@ -7458,11 +7477,11 @@ function renderCompanyCardGroup(stock) {
     const status = isConcern(stock)
         ? `<p class="text-sm">🏢 <strong>Koncern</strong> od kw. ${stock.concern.since}: ${getStockSegments(stock).length} segmenty, ${children.length} spółek zależnych, czołówka kapitalizacji. Zawiera do ${COOP_MAX_PER_CONCERN} kooperacji.</p>`
         : `<p class="text-sm text-muted">Koncern 🏢 to spółka z górnych ${Math.round(CONCERN_TOP_SHARE * 100)}% kapitalizacji z ≥ ${CONCERN_MIN_SEGMENTS} segmentami albo ≥ ${CONCERN_MIN_SUBSIDIARIES} spółkami zależnymi.</p>`;
+    const level = getSkillLevel('accountant');
     const groupRows = [
         parent ? `<li>⬆️ matka: ${name(parent)}${Number.isFinite(stock.parentStakePct) ? ` (${(stock.parentStakePct * 100).toFixed(0)}%)` : ''}</li>` : '',
-        ...children.map(c => { const stake = (stock.equityStakes?.[c.symbol] || 0) / Math.max(1, c.totalShares); return `<li>↳ zależna: ${name(c)} — ${(stake * 100).toFixed(0)}%, pakiet ${formatZl(getMarketCapValue(c) * stake, 0)}</li>`; })
+        ...children.map(c => { const stake = (stock.equityStakes?.[c.symbol] || 0) / Math.max(1, c.totalShares); return `<li>↳ zależna: ${name(c)} — ${(stake * 100).toFixed(0)}%, pakiet ${formatZl(getMarketCapValue(c) * stake, 0)} · transfer zysku ${(getProfitTransferRate(c) * 100).toFixed(0)}%${c.groupLoan ? ` · pożyczka ${formatZl(c.groupLoan.principal, 0)} (${(c.groupLoan.rate * 100).toFixed(1)}%${isOffMarketGroupLoan(c) && level >= 4 ? ' 🚩' : ''})` : ''}${canFundControlAgm(stock) ? renderSubsidiaryControls(c, stake) : ''}</li>`; })
     ].filter(Boolean).join('');
-    const level = getSkillLevel('accountant');
     const coops = getStockCooperations(stock).map(coop => {
         const side = getCoopSide(coop, stock);
         const partner = stocks.find(s => s.symbol === side.partner);
@@ -7484,8 +7503,10 @@ function renderCompanyCardGroup(stock) {
             <select id="coop-terms-${sym}" aria-label="Warunki"><option value="market">warunki rynkowe</option><option value="${sym}">korzystne dla ${escapeHtml(stock.symbol)}</option><option value="partner">korzystne dla partnera</option></select>
             <button class="btn-secondary" onclick="(() => { const p = document.getElementById('coop-partner-${sym}').value, t = document.getElementById('coop-terms-${sym}').value; playerProposeCooperation('${sym}', p, t === 'partner' ? p : t); })()">🤝 Zaproponuj kooperację (12 kw.)</button>
         </div><p class="text-xs text-muted">Umowy między spółkami jednego właściciela przy nierównych udziałach dostają czerwoną flagę; warunki nierynkowe przenoszą ok. 1% przychodów segmentu na kwartał i grożą skargą do KNF.</p>` : '';
+    const tender = stock.tender ? `<p class="text-sm">📣 Wezwanie: ${escapeHtml(stock.tender.buyerName)} kupuje akcje po <strong>${formatZl(stock.tender.price)}</strong> do kw. ${stock.tender.until}.${getPlayerStakePct(stock) > 0 ? ` <button class="btn-secondary btn-sm" onclick="playerTenderDecision('${sym}', 'sell')">Sprzedaj w wezwaniu</button>` : ''}</p>` : '';
+    const policy = canFundControlAgm(stock) && children.length ? `<label class="text-sm"><input type="checkbox" ${stock.groupPolicy ? 'checked' : ''} onchange="playerSubsidiaryAction('${children[0].symbol}', 'policy', this.checked)"> Wspólna polityka kadrowa dla grupy</label>` : '';
     if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('grupaKapitalowa');
-    return `${status}
+    return `${status}${tender}${policy}
         <div class="cc-grid">
             <section><h4>Mapa grupy</h4><ul class="text-sm">${groupRows || '<li class="text-muted">brak spółek zależnych i matki</li>'}${coops || '<li class="text-muted">brak kooperacji</li>'}</ul>${form}</section>
             <section><h4>Suma części (SOTP)</h4><table class="asset-mini-table w-full"><tbody>${sotpRows}</tbody></table>${premium}

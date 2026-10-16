@@ -2888,7 +2888,7 @@ function updateFundamentalRatios(stock) {
             fundamentals.lossAnchor = true;
         }
         // T3: dyskonto konglomeratu — przez cel wyceny (kurs dochodzi do niego stopniowo, bez skoku w chwili decyzji).
-        if (fundamentals.fairValue > 0) fundamentals.fairValue *= 1 - getConglomerateDiscount(stock);
+        if (fundamentals.fairValue > 0) fundamentals.fairValue *= (1 - getConglomerateDiscount(stock)) * getTransferValuationFactor(stock); // T6: transfer zysku córki do matki
         // Decyzja 13 (diagnoza T4): pakiety w notowanych spółkach zależnych po kursie rynkowym (suma części). Bez tego matka
         // po carve-oucie (51–80% córki) była wyceniana tylko z własnego zysku i kurs zjeżdżał o wartość pakietu.
         const stakes = getListedSubsidiaryStakeValue(stock);
@@ -3284,21 +3284,8 @@ function processFinancialReports() {
             stock.financialHealth = Math.min(5, (Number(stock.financialHealth) || 0) + change);
         }
 
-        // Transfer 50% zysku do spółki-matki — tylko z dodatniego wyniku i w granicach gotówki.
-        if (stock.isSubsidiaryOf && reportedQuarterlyEarnings > 0) {
-            const parentStock = stocks.find(s => s.symbol === stock.isSubsidiaryOf);
-            const earningsToTransfer = parentStock
-                ? Math.min(reportedQuarterlyEarnings * 0.5, Math.max(0, Number(stock.cash) || 0))
-                : 0;
-
-            if (earningsToTransfer > 0) {
-                transferCompanyCash(stock, parentStock, earningsToTransfer, 'Transfer zysku do spółki-matki');
-                adjustBalanceSheet(stock, { assets: -earningsToTransfer, retainedEarnings: -earningsToTransfer });
-                adjustBalanceSheet(parentStock, { assets: earningsToTransfer, retainedEarnings: earningsToTransfer });
-
-                logEvent(`💸 Spółka zależna ${stock.name} transferuje ${earningsToTransfer.toFixed(0)} PLN zysku do ${parentStock.name}.`, 'company');
-            }
-        }
+        // Transfer zysku do spółki-matki (0.14 T6: 30–70%, domyślnie 50%) — tylko z dodatniego wyniku i w granicach gotówki.
+        transferSubsidiaryProfit(stock, reportedQuarterlyEarnings);
 
         // Finansowanie: decyzje na podstawie pełnego wyniku (z R&D i kontraktami).
         if (reportedQuarterlyEarnings < 0 && stock.assetType !== 'Holding' && !stock.isBankStock) {
@@ -9352,6 +9339,8 @@ function getRedFlags(stock) {
     }
     const grey = typeof getGreyShare === 'function' ? getGreyShare(stock) : 0;
     const related = typeof cooperations !== 'undefined' ? cooperations.find(c => c.flag && (c.a === stock.symbol || c.b === stock.symbol)) : null; // T5: tunelowanie
+    const groupFlag = typeof getGroupRedFlag === 'function' ? getGroupRedFlag(stock) : null; // T6: pożyczka matka–córka poza rynkiem
+    if (groupFlag) flags.push(groupFlag);
     if (related) flags.push({ id: 'related', label: 'Transakcje z podmiotami powiązanymi', desc: `Kooperacja ${related.a} — ${related.b}: wspólny właściciel ${related.flag.name} ma ${(related.flag.pctA * 100).toFixed(0)}% i ${(related.flag.pctB * 100).toFixed(0)}% — ryzyko przerzucania zysku.` });
     if (grey > 0.05) flags.push({ id: 'grey', label: 'Szara strefa', desc: `Ok. ${(grey * 100).toFixed(0)}% zatrudnionych bez umów — wyższa marża dziś, ryzyko kary Inspekcji Pracy jutro.` });
     return flags;
@@ -11315,15 +11304,15 @@ function processSpinoffsQuarterly() {
 // =================================================================================
 // 0.14 T5: KONCERNY, KOOPERACJE I OCHRONA PRZED TUNELOWANIEM
 // =================================================================================
-// Koncern 🏢: ≥ 3 segmenty albo ≥ 2 spółki zależne i miejsce w górnych 15% kapitalizacji (decyzja 14).
+// Koncern 🏢: ≥ 3 segmenty albo ≥ 2 spółki zależne i miejsce w górnych 20% kapitalizacji (decyzja 14).
 // Kooperacja (dostawca–odbiorca, 8–16 kw., najwyżej 3 na koncern): obie strony +0,3 pp wzrostu na kwartał
 // i +0,5 pp marży — tylko dla segmentów powiązanych (premia × udział powiązanego segmentu).
 // Ryzyko kontrahenta: strajk, bankructwo albo korekta wyników partnera przenosi połowę szoku na drugą stronę.
 // Zerwanie przed terminem: kara umowna. Kooperacja spółek jednego właściciela z nierównymi udziałami
 // = czerwona flaga „transakcje z podmiotami powiązanymi”; pakiet mniejszościowy może złożyć skargę do KNF.
 
-const CONCERN_TOP_SHARE = 0.15;            // górne 15% kapitalizacji (decyzja 14: plan 10%, po T5 za mało koncernów)
-const CONCERN_KEEP_SHARE = 0.25;           // histereza: status zostaje w górnych 25%
+const CONCERN_TOP_SHARE = 0.20;            // górne 20% kapitalizacji (decyzja 14: plan 10%; 15% po T5 = 3,0, po T6 = 2,1 — usamodzielnienia zabierają córki)
+const CONCERN_KEEP_SHARE = 0.30;           // histereza: status zostaje w górnych 30%
 const CONCERN_MIN_SEGMENTS = 3;
 const CONCERN_MIN_SUBSIDIARIES = 2;
 const COOP_MAX_PER_CONCERN = 3;
@@ -11727,4 +11716,480 @@ function getSumOfParts(stock) {
     const total = parts.reduce((sum, p) => sum + p.value, 0);
     const cap = getMarketCapValue(stock);
     return { parts, total, cap, premium: total > 0 ? cap / total - 1 : null };
+}
+
+// =================================================================================
+// 0.14 T6: SPÓŁKI ZALEŻNE — ZARZĄDZANIE, USAMODZIELNIENIE, WCHŁONIĘCIE, SPRZEDAŻ PAKIETU
+// =================================================================================
+// Transfer zysku 30–70% (ustala matka; wyższy obniża wycenę córki), pożyczka wewnątrzgrupowa do 20% gotówki
+// matki, wspólna polityka kadrowa (opcja gracza), nowe córki koncernów (BRONZE, 20–30% w ofercie),
+// usamodzielnienie (oferta wtórna albo spin-off reszty), wchłonięcie przy ≥ 90% (przymusowy wykup z premią
+// 10–20%, zwalnia miejsce w limicie), sprzedaż pakietu kontrolnego z premią 15–30% i wezwaniem na resztę.
+// Gracz-większościowiec matki może tym sterować, ale nie musi; domyślnie decyduje prezes matki.
+
+const SUB_TRANSFER_RANGE = [0.3, 0.7];
+const SUB_TRANSFER_DEFAULT = 0.5;
+const SUB_TRANSFER_VALUATION = 0.6;        // wycena córki × (1 − (transfer − 50%) × 0,6): 30% → +12%, 70% → −12%
+const SUB_LOAN_MAX_SHARE = 0.20;           // pożyczka: najwyżej 20% gotówki matki
+const SUB_LOAN_REPAY = 0.25;               // spłata: 25% dodatniego zysku kwartału
+const SUB_LOAN_OFF_MARKET = 0.10;          // odchylenie oprocentowania > 10% od rynku = czerwona flaga
+const SUB_FOUND_CHANCE = 0.12;             // koncern zakłada córkę (na kwartał, < 3 córek; strojenie: 4% dawało 0,1 na przebieg)
+const SUB_FOUND_STAKE = [0.70, 0.80];      // 20–30% akcji w ofercie publicznej
+const SUB_CREEP_MIN = 0.65;                // matka z ≥ 65% dokupuje akcje córki (60% = córki z giełd elitarnych — bez nich; strojenie: 60% dawało 4,9 wchłonięć)
+const SUB_CREEP_CHANCE = 0.6;             // strojenie: 0,5 → 0,7–0,8 wchłonięcia, 0,7 → 2,7
+const SUB_CREEP_STEP = 0.05;
+const SUB_SQUEEZE_THRESHOLD = 0.90;
+const SUB_SQUEEZE_CHANCE = 0.6;
+const SUB_SQUEEZE_PREMIUM = [0.10, 0.20];
+const SUB_INDEPENDENCE_CHANCE = 0.01;      // strojenie: 2,5% dawało 2,8 na przebieg
+const SUB_SECONDARY_DROP = [0.03, 0.06];
+const SUB_SALE_CHANCE = 0.01;
+const SUB_CONTROL_PREMIUM = [0.15, 0.30];
+const SUB_TENDER_BOT_ACCEPT = [0.4, 0.8];
+const SUB_TENDER_QUARTERS = 1;
+
+/** Transfer części zysku córki do matki (stawka 30–70%) — tylko z dodatniego wyniku i w granicach gotówki. */
+function transferSubsidiaryProfit(stock, earnings) {
+    if (!stock.isSubsidiaryOf || !(earnings > 0)) return 0;
+    const parentStock = stocks.find(s => s.symbol === stock.isSubsidiaryOf);
+    const amount = parentStock ? Math.min(earnings * getProfitTransferRate(stock), Math.max(0, Number(stock.cash) || 0)) : 0;
+    if (!(amount > 0)) return 0;
+    transferCompanyCash(stock, parentStock, amount, 'Transfer zysku do spółki-matki');
+    adjustBalanceSheet(stock, { assets: -amount, retainedEarnings: -amount });
+    adjustBalanceSheet(parentStock, { assets: amount, retainedEarnings: amount });
+    logEvent(`💸 Spółka zależna ${stock.name} transferuje ${amount.toFixed(0)} PLN zysku do ${parentStock.name}.`, 'company');
+    return amount;
+}
+
+function getSubQuarter() {
+    return typeof macro === 'object' && macro ? Number(macro.quarter) || 0 : 0;
+}
+
+function getParentOf(child) {
+    return child?.isSubsidiaryOf ? stocks.find(s => s.symbol === child.isSubsidiaryOf && !s.isBankrupt) || null : null;
+}
+
+/** Udział matki w córce z faktów (pakiet w equityStakes). */
+function getParentStake(child, parent = getParentOf(child)) {
+    return parent ? (Number(parent.equityStakes?.[child.symbol]) || 0) / Math.max(1, child.totalShares) : 0;
+}
+
+function getProfitTransferRate(child) {
+    const rate = Number(child?.profitTransfer);
+    return Number.isFinite(rate) ? Math.max(SUB_TRANSFER_RANGE[0], Math.min(SUB_TRANSFER_RANGE[1], rate)) : SUB_TRANSFER_DEFAULT;
+}
+
+/** Mnożnik wyceny córki: mniejszościowi dostają mniej przy wyższym transferze. */
+function getTransferValuationFactor(stock) {
+    return stock?.isSubsidiaryOf ? 1 - (getProfitTransferRate(stock) - SUB_TRANSFER_DEFAULT) * SUB_TRANSFER_VALUATION : 1;
+}
+
+function setProfitTransfer(child, rate) {
+    child.profitTransfer = Math.max(SUB_TRANSFER_RANGE[0], Math.min(SUB_TRANSFER_RANGE[1], Number(rate) || SUB_TRANSFER_DEFAULT));
+    updateFundamentalRatios(child);
+    return child.profitTransfer;
+}
+
+// --- Przenoszenie akcji między posiadaczami (wezwanie, spin-off reszty) ---
+
+/** Odbiera n akcji posiadaczowi z listy getShareholders i płaci mu cenę (cash = 0 przy przekazaniu bez zapłaty). */
+function takeHolderShares(holder, symbol, n, price) {
+    const e = holder.entity, pay = n * price;
+    const cut = (portfolio, key = 'shares') => { const h = portfolio?.[symbol]; if (!h) return; h[key] -= n; if (!(h[key] > 0)) delete portfolio[symbol]; };
+    switch (holder.kind) {
+        case 'player': cut(playerPortfolio); playerCash += pay; if (pay > 0) recordPayment('external:wezwanie', 'player-fund', pay, `Sprzedaż w wezwaniu: ${symbol}`); break;
+        case 'wallet': cut(playerWallet.portfolio); playerWallet.cash += pay; break;
+        case 'ai': cut(e.portfolio); e.cash += pay; break;
+        case 'botFund': cut(e.fund.portfolio); e.fund.cash = (Number(e.fund.cash) || 0) + pay; break;
+        case 'holding': cut(e.holdingPortfolio, 'quantity'); if (pay > 0) adjustCompanyCash(e, pay); break;
+        case 'company': e.equityStakes[symbol] -= n; if (!(e.equityStakes[symbol] > 0)) delete e.equityStakes[symbol]; if (pay > 0) adjustCompanyCash(e, pay); break;
+        case 'bank': cut(e.stockPortfolio); e.cash += pay; break;
+        case 'etf': e.holdings[symbol] -= n; if (!(e.holdings[symbol] > 0)) delete e.holdings[symbol]; e.cash = (Number(e.cash) || 0) + pay; break;
+        default: return 0;
+    }
+    return pay;
+}
+
+/** Dopisuje n akcji posiadaczowi (rodzaj jak w getShareholders). */
+function giveHolderShares(holder, stock, n, price = stock.price) {
+    const symbol = stock.symbol, e = holder.entity;
+    const add = (portfolio, key = 'shares', priceKey = 'avgPrice') => {
+        const h = portfolio[symbol] || (portfolio[symbol] = { [key]: 0, [priceKey]: price });
+        h[priceKey] = ((Number(h[priceKey]) || 0) * h[key] + price * n) / (h[key] + n); h[key] += n;
+    };
+    switch (holder.kind) {
+        case 'player': add(playerPortfolio); break;
+        case 'wallet': add(playerWallet.portfolio); break;
+        case 'ai': add(e.portfolio); break;
+        case 'botFund': add(e.fund.portfolio); break;
+        case 'holding': add(e.holdingPortfolio, 'quantity', 'purchasePrice'); break;
+        case 'company': e.equityStakes = e.equityStakes || {}; e.equityStakes[symbol] = (e.equityStakes[symbol] || 0) + n; break;
+        case 'bank': add(e.stockPortfolio); break;
+        case 'etf': e.holdings[symbol] = (e.holdings[symbol] || 0) + n; break;
+        case 'state': stock.stateOwnershipPct = (Number(stock.stateOwnershipPct) || 0) + n / stock.totalShares; stock.isStateOwned = true; break;
+        case 'city': stock.cityShares = (Number(stock.cityShares) || 0) + n; break;
+        case 'insiders': stock.insiderShares = (Number(stock.insiderShares) || 0) + n; break;
+        default: return 0;
+    }
+    return n;
+}
+
+function refreshHeld(stock) {
+    stock.sharesHeld = Math.min(stock.totalShares, getTrackedHeldShares(stock));
+}
+
+// --- Nowa córka koncernu ---
+
+function foundConcernSubsidiary(concern) {
+    if (!hasFreeTotalListingSlot()) return null;
+    const child = foundSubsidiary(concern, { exchange: 'BRONZE', stake: getRandomInRange(...SUB_FOUND_STAKE), ignoreDomesticCap: true });
+    if (child) { child.profitTransfer = getRandomInRange(0.4, 0.6); noteStrategyStat('subsFounded'); }
+    return child;
+}
+
+// --- Pożyczka wewnątrzgrupowa ---
+
+function getMarketLoanRate() {
+    return typeof getLoanRate === 'function' ? getLoanRate() : 0.08;
+}
+
+function isOffMarketGroupLoan(child) {
+    const loan = child?.groupLoan;
+    return Boolean(loan && Math.abs(loan.rate / Math.max(1e-6, getMarketLoanRate()) - 1) > SUB_LOAN_OFF_MARKET);
+}
+
+/** Matka dokapitalizowuje córkę w kryzysie: do 20% gotówki matki; córka spłaca z zysku. */
+function grantGroupLoan(parent, child, amount = null, rate = null, by = 'ceo') {
+    if (!parent || !child || child.groupLoan) return 0;
+    const max = Math.max(0, Number(parent.cash) || 0) * SUB_LOAN_MAX_SHARE;
+    const value = Math.round(Math.min(max, amount ?? Math.max(0, (Number(child.balanceSheet?.assets) || 0) * 0.1)));
+    if (!(value > 0)) return 0;
+    transferCompanyCash(parent, child, value, 'Pożyczka wewnątrzgrupowa'); // matka: gotówka → należność (aktywa bez zmian)
+    adjustBalanceSheet(child, { assets: value, liabilities: value });
+    child.groupLoan = { principal: value, rate: rate ?? getMarketLoanRate(), quarter: getSubQuarter(), by };
+    noteStrategyStat('groupLoans');
+    logEvent(`🤲 ${parent.name} pożycza ${formatZl(value, 0)} spółce zależnej ${child.name} (pożyczka wewnątrzgrupowa, ${(child.groupLoan.rate * 100).toFixed(1)}%).`, 'company');
+    return value;
+}
+
+function serviceGroupLoan(child, parent) {
+    const loan = child.groupLoan;
+    if (!loan) return;
+    if (!parent) { child.groupLoan = null; return; } // matki już nie ma — dług przechodzi w zwykłe zobowiązania
+    const interest = loan.principal * loan.rate / 4;
+    const earnings = Math.max(0, Number(child.quarterlyEarnings) || Number(child.fundamentals?.history?.at?.(-1)?.netIncome) || 0);
+    const repay = Math.min(loan.principal, earnings * SUB_LOAN_REPAY);
+    const pay = Math.min(Math.max(0, Number(child.cash) || 0), interest + repay);
+    if (!(pay > 0)) return;
+    const interestPaid = Math.min(pay, interest), principalPaid = pay - interestPaid;
+    transferCompanyCash(child, parent, pay, 'Spłata pożyczki wewnątrzgrupowej');
+    adjustBalanceSheet(child, { assets: -pay, liabilities: -principalPaid, retainedEarnings: -interestPaid });
+    adjustBalanceSheet(parent, { assets: interestPaid, retainedEarnings: interestPaid });
+    loan.principal -= principalPaid;
+    if (loan.principal < 1) child.groupLoan = null;
+}
+
+// --- Usamodzielnienie ---
+
+/** Oferta wtórna: matka schodzi do 45–49%, akcje trafiają na rynek, kurs córki −3–6%. */
+function subsidiarySecondaryOffering(child, parent = getParentOf(child)) {
+    if (!parent || !hasFreeListingSlot()) return null; // usamodzielniona liczy się do limitu krajowego
+    const target = Math.floor(child.totalShares * getRandomInRange(0.45, 0.49));
+    const sell = (parent.equityStakes?.[child.symbol] || 0) - target;
+    if (!(sell > 0)) return null;
+    applyPriceEffect(child.symbol, -getRandomInRange(...SUB_SECONDARY_DROP), 'negative', 'company');
+    const proceeds = sell * child.price * 0.97;
+    parent.equityStakes[child.symbol] = target;
+    adjustCompanyCash(parent, proceeds);
+    recordPayment('external:inwestorzy', parent, proceeds, `Oferta wtórna akcji ${child.symbol}`);
+    refreshHeld(child);
+    releaseSubsidiary(child, parent, `oferta wtórna — matka ma ${(target / child.totalShares * 100).toFixed(0)}%`);
+    return sell;
+}
+
+/** Spin-off reszty: pakiet matki rozdany jej akcjonariuszom (dywidenda rzeczowa), kurs matki spada o jego wartość. */
+function subsidiarySpinoffRemainder(child, parent = getParentOf(child)) {
+    if (!parent || !hasFreeListingSlot()) return null;
+    const stake = parent.equityStakes?.[child.symbol] || 0;
+    if (!(stake > 0)) return null;
+    const holders = getShareholders(parent);
+    let given = 0;
+    for (const holder of holders) {
+        const n = Math.floor(stake * holder.shares / parent.totalShares);
+        if (n > 0) given += giveHolderShares(holder, child, n, child.price);
+    }
+    delete parent.equityStakes[child.symbol];
+    refreshHeld(child); // reszta z zaokrągleń i akcji rozproszonych trafia na rynek
+    parent.price = Math.max(0.01, parent.price - stake * child.price / parent.totalShares);
+    if (typeof addChartEvent === 'function') addChartEvent(parent, '✂️', `Spin-off reszty pakietu ${child.symbol}`);
+    releaseSubsidiary(child, parent, 'spin-off reszty pakietu — akcjonariusze matki dostają akcje córki');
+    return given;
+}
+
+/** Pożyczka wewnątrzgrupowa przy wyjściu z grupy: spłata z gotówki córki, reszta umorzona (matka odpisuje należność). */
+function settleGroupLoanOnExit(child, parent) {
+    const loan = child.groupLoan;
+    if (!loan) return;
+    child.groupLoan = null;
+    const pay = Math.min(loan.principal, Math.max(0, Number(child.cash) || 0));
+    if (pay > 0 && parent) { transferCompanyCash(child, parent, pay, 'Spłata pożyczki wewnątrzgrupowej (wyjście z grupy)'); adjustBalanceSheet(child, { assets: -pay, liabilities: -pay }); }
+    const rest = loan.principal - pay;
+    if (rest > 0) {
+        adjustBalanceSheet(child, { liabilities: -rest, retainedEarnings: rest });
+        if (parent) adjustBalanceSheet(parent, { assets: -rest, retainedEarnings: -rest });
+    }
+}
+
+function releaseSubsidiary(child, parent, how) {
+    settleGroupLoanOnExit(child, parent);
+    child.isSubsidiaryOf = null;
+    child.parentStakePct = null;
+    child.profitTransfer = null;
+    syncSubsidiaryLinks();
+    updateFundamentalRatios(child); updateFundamentalRatios(parent);
+    noteStrategyStat('subsIndependent');
+    logEvent(`🕊️ ${child.name} usamodzielnia się od ${parent.name} (${how}).`, 'market');
+}
+
+// --- Wchłonięcie (przymusowy wykup) ---
+
+/** Przy ≥ 90%: wykup reszty z premią 10–20%, połączenie spółek, segment wraca do matki, miejsce w limicie się zwalnia. */
+function absorbSubsidiary(child, parent = getParentOf(child), premium = null) {
+    if (!parent || getParentStake(child, parent) < SUB_SQUEEZE_THRESHOLD - 1e-9) return null;
+    const price = child.price * (1 + (premium ?? getRandomInRange(...SUB_SQUEEZE_PREMIUM)));
+    const parentShares = parent.equityStakes[child.symbol];
+    const external = (Number(child.insiderShares) || 0) + Math.floor(child.totalShares * (Number(child.stateOwnershipPct) || 0));
+    const cost = (child.totalShares - parentShares) * price;
+    ensureCompanyCash(parent, cost, `Kredyt: przymusowy wykup ${child.symbol}`);
+    delete parent.equityStakes[child.symbol];           // pakiet matki nie jest wypłacany
+    const paid = buyOutAllHolders(child, price) + external * price;
+    adjustCompanyCash(parent, -paid);
+    recordPayment(parent, 'external:akcjonariusze', paid, `Przymusowy wykup akcji ${child.symbol}`);
+    if (child.groupLoan) { // pożyczka znosi się w grupie: dług córki i należność matki
+        const principal = child.groupLoan.principal;
+        adjustBalanceSheet(child, { liabilities: -principal, retainedEarnings: principal });
+        adjustBalanceSheet(parent, { assets: -principal, retainedEarnings: -principal });
+        child.groupLoan = null;
+    }
+    // Połączenie: gotówka (przelew zmienia tylko kasę), bilans córki w całości, minus wypłata dla mniejszościowych.
+    if ((Number(child.cash) || 0) > 0) transferCompanyCash(child, parent, child.cash, 'Połączenie: gotówka spółki zależnej');
+    const cb = child.balanceSheet || {};
+    const childAssets = Number(cb.assets) || 0, childLiab = Number(cb.liabilities) || 0;
+    adjustBalanceSheet(parent, { assets: childAssets - paid, liabilities: childLiab, retainedEarnings: childAssets - childLiab - paid });
+    child.cash = 0;
+    mergeChildFundamentals(parent, child);
+    mergeChildSegment(parent, child);
+    if (parent.workforce && child.workforce) parent.workforce.employees = (Number(parent.workforce.employees) || 0) + (Number(child.workforce.employees) || 0);
+    parent.absorbedCompanies = [...(parent.absorbedCompanies || []), { symbol: child.symbol, name: child.name, quarter: getSubQuarter() }].slice(-10);
+    child.absorbedBy = parent.symbol;
+    removeStockFromGame(child.symbol);
+    child.isBankrupt = true; child.delisted = 'absorbed';
+    syncSubsidiaryLinks();
+    updateFundamentalRatios(parent);
+    noteStrategyStat('subsAbsorbed');
+    if (typeof addChartEvent === 'function') addChartEvent(parent, '🧲', `Wchłonięcie ${child.name}`);
+    logEvent(`🧲 ${parent.name} wchłania ${child.name} — przymusowy wykup reszty akcji po ${formatZl(price)} (premia), spółka znika z giełdy.`, 'market');
+    return { price, paid };
+}
+
+function mergeChildFundamentals(parent, child) {
+    const pf = parent.fundamentals, cf = child.fundamentals;
+    if (!pf || !cf) return;
+    pf.revenue = (Number(pf.revenue) || 0) + (Number(cf.revenue) || 0);
+    const ph = pf.history || [], ch = cf.history || [];
+    for (let i = 1; i <= Math.min(ph.length, ch.length); i++) {
+        const p = ph[ph.length - i], c = ch[ch.length - i];
+        for (const key of Object.keys(c)) if (typeof c[key] === 'number' && typeof p[key] === 'number' && key !== 'eps') p[key] += c[key];
+        if (Number.isFinite(p.netIncome)) p.eps = p.netIncome / Math.max(1, parent.totalShares);
+    }
+    parent.fixedExpenses = (Number(parent.fixedExpenses) || 0) + (Number(child.fixedExpenses) || 0);
+}
+
+/** Segment córki wraca do matki z udziałem wg przychodów (najwyżej 3 segmenty: nadmiar dopisany do głównego). */
+function mergeChildSegment(parent, child) {
+    if (!isValidSegmentList(parent.segments)) return;
+    const pr = Math.max(1, Number(parent.fundamentals?.revenue) || 1), cr = Math.max(0, Number(child.fundamentals?.revenue) || 0);
+    const share = Math.min(0.6, cr / pr); // revenue matki zawiera już przychody córki
+    const sector = getMainSector(child);
+    const existing = parent.segments.find(seg => seg.sector === sector);
+    if (existing || parent.segments.length >= 3 || !sector || share < 0.05) { // segment < 5% przychodów dopisany do głównego
+        parent.segments.forEach(seg => { seg.share *= 1 - share; });
+        (existing || [...parent.segments].sort((a, b) => b.share - a.share)[0]).share += share;
+        refreshSectorsFromSegments(parent);
+    } else addStockSegment(parent, sector, share, getMainSubsector(child));
+}
+
+// --- Sprzedaż pakietu kontrolnego i wezwanie ---
+
+/** Kupujący pakiet kontrolny: koncern (spółka) albo bot z gotówką; przy pełnym limicie krajowym tylko koncern. */
+function pickControlBuyer(child, parent, cost) {
+    const companies = stocks.filter(s => s !== parent && s !== child && isConcern(s) && (Number(s.cash) || 0) >= cost * 1.1)
+        .map(s => ({ kind: 'company', id: `${s.symbol}:stake`, name: s.name, entity: s }));
+    const bots = hasFreeListingSlot() ? aiCompetitors.filter(ai => !ai.isMafia && (Number(ai.cash) || 0) >= cost * 1.1).map(ai => ({ kind: 'ai', id: ai.id, name: ai.name, entity: ai })) : [];
+    const options = [...companies, ...bots];
+    return options.length ? getRandomElement(options) : null;
+}
+
+/** Matka sprzedaje cały pakiet z premią za kontrolę; kupujący ogłasza wezwanie po tej samej cenie. */
+function sellControllingStake(child, parent = getParentOf(child), buyer = null, premium = null) {
+    if (!parent || child.tender) return null;
+    const stake = parent.equityStakes?.[child.symbol] || 0;
+    if (stake <= child.totalShares * 0.5) return null;
+    const price = child.price * (1 + (premium ?? getRandomInRange(...SUB_CONTROL_PREMIUM)));
+    const cost = stake * price;
+    buyer = buyer || pickControlBuyer(child, parent, cost);
+    if (!buyer) return null;
+    if (buyer.kind === 'company') { ensureCompanyCash(buyer.entity, cost, `Kredyt: pakiet ${child.symbol}`); adjustCompanyCash(buyer.entity, -cost); }
+    else buyer.entity.cash -= cost;
+    delete parent.equityStakes[child.symbol];
+    adjustCompanyCash(parent, cost);
+    recordPayment(buyer.kind === 'company' ? buyer.entity : `external:${buyer.id}`, parent, cost, `Pakiet kontrolny ${child.symbol}`);
+    giveHolderShares(buyer, child, stake, price);
+    settleGroupLoanOnExit(child, parent);
+    child.isSubsidiaryOf = null; child.parentStakePct = null;
+    if (buyer.kind === 'company') { child.isSubsidiaryOf = buyer.entity.symbol; child.parentStakePct = stake / child.totalShares; child.profitTransfer = getRandomInRange(0.4, 0.6); }
+    syncSubsidiaryLinks();
+    child.tender = { buyerKind: buyer.kind, buyerId: buyer.kind === 'company' ? buyer.entity.symbol : buyer.id, buyerName: buyer.name, price, from: parent.symbol, until: getSubQuarter() + SUB_TENDER_QUARTERS, accepted: 0 };
+    noteStrategyStat('subsSold');
+    logEvent(`🤝 ${parent.name} sprzedaje pakiet kontrolny ${child.name} (${(stake / child.totalShares * 100).toFixed(0)}%) — kupuje ${buyer.name} po ${formatZl(price)} (premia za kontrolę). Wezwanie na resztę akcji po tej samej cenie.`, 'market');
+    runTenderForBots(child);
+    const held = (playerPortfolio[child.symbol]?.shares || 0) + (playerWallet?.portfolio?.[child.symbol]?.shares || 0);
+    if (held > 0 && typeof addMail === 'function') {
+        addMail({ sender: CORPORATION_SENDER, subject: `📣 Wezwanie: ${buyer.name} kupuje akcje ${child.name}`, body: `${buyer.name} przejął pakiet kontrolny ${child.name} od ${parent.name} i wzywa do sprzedaży pozostałych akcji po ${formatZl(price)} (ta sama cena co za pakiet). Możesz sprzedać albo zostać akcjonariuszem mniejszościowym. Wezwanie trwa do końca przyszłego kwartału.`, importance: 3, symbol: child.symbol, pinned: true, action: { type: 'tender', symbol: child.symbol } });
+        if (typeof unlockAcademyEntry === 'function') { unlockAcademyEntry('wezwanie', `${child.name}: wezwanie ${buyer.name}`); unlockAcademyEntry('premiaKontrola'); }
+    }
+    return child.tender;
+}
+
+function getTenderBuyer(child) {
+    const t = child.tender;
+    if (!t) return null;
+    if (t.buyerKind === 'company') { const s = stocks.find(x => x.symbol === t.buyerId && !x.isBankrupt); return s ? { kind: 'company', id: `${s.symbol}:stake`, name: s.name, entity: s } : null; }
+    const ai = aiCompetitors.find(a => a.id === t.buyerId);
+    return ai ? { kind: 'ai', id: ai.id, name: ai.name, entity: ai } : null;
+}
+
+/** Sprzedaż w wezwaniu: akcje przechodzą do wzywającego, sprzedający dostaje cenę wezwania. */
+function sellIntoTender(child, holder, n = holder.shares) {
+    const t = child.tender, buyer = getTenderBuyer(child);
+    if (!t || !buyer || !(n > 0)) return 0;
+    const cost = n * t.price;
+    if (buyer.kind === 'company') { ensureCompanyCash(buyer.entity, cost, `Kredyt: wezwanie ${child.symbol}`); adjustCompanyCash(buyer.entity, -cost); }
+    else buyer.entity.cash -= cost;
+    takeHolderShares(holder, child.symbol, n, t.price);
+    giveHolderShares(buyer, child, n, t.price);
+    t.accepted += n;
+    if (buyer.kind === 'company' && child.isSubsidiaryOf === buyer.entity.symbol) child.parentStakePct = getParentStake(child, buyer.entity);
+    refreshHeld(child);
+    return cost;
+}
+
+const TENDER_SELLER_KINDS = ['ai', 'botFund', 'holding', 'company', 'bank', 'etf'];
+
+/** Boty, fundusze, banki, ETF-y i inne spółki decydują od razu (40–80% przyjmuje). */
+function runTenderForBots(child) {
+    const t = child.tender, buyer = getTenderBuyer(child);
+    if (!t || !buyer) return;
+    const acceptShare = getRandomInRange(...SUB_TENDER_BOT_ACCEPT);
+    for (const holder of getShareholders(child)) {
+        if (!TENDER_SELLER_KINDS.includes(holder.kind) || holder.id === buyer.id) continue;
+        if (Math.random() < acceptShare) sellIntoTender(child, holder);
+    }
+}
+
+/** Gracz: sprzedaż w wezwaniu (fundusz i konto prywatne) albo pozostanie. */
+function playerTenderDecision(symbol, choice) {
+    const child = stocks.find(s => s.symbol === symbol);
+    if (!child?.tender) { showToast('Wezwanie już się zakończyło.', 'default'); return false; }
+    if (choice !== 'sell') { logEvent(`🧍 Zostajesz akcjonariuszem mniejszościowym ${child.name}.`, 'review'); return true; }
+    let raised = 0;
+    for (const holder of getShareholders(child).filter(h => h.kind === 'player' || h.kind === 'wallet')) raised += sellIntoTender(child, holder);
+    showToast(`Sprzedano akcje ${child.name} w wezwaniu: ${formatZl(raised, 0)}.`, 'success');
+    if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('wezwanie');
+    return raised > 0;
+}
+
+// --- Czerwona flaga matka–córka ---
+
+function getGroupRedFlag(stock) {
+    const child = stock.groupLoan ? stock : null;
+    if (child && isOffMarketGroupLoan(child)) return { id: 'groupLoan', label: 'Transakcje z podmiotami powiązanymi', desc: `Pożyczka wewnątrzgrupowa ${(child.groupLoan.rate * 100).toFixed(1)}% vs rynek ${(getMarketLoanRate() * 100).toFixed(1)}% — warunki odbiegają od rynkowych o ponad 10%.` };
+    for (const symbol of stock.subsidiaries || []) {
+        const c = stocks.find(s => s.symbol === symbol);
+        if (c && isOffMarketGroupLoan(c)) return { id: 'groupLoan', label: 'Transakcje z podmiotami powiązanymi', desc: `Pożyczka dla ${c.name}: ${(c.groupLoan.rate * 100).toFixed(1)}% vs rynek ${(getMarketLoanRate() * 100).toFixed(1)}%.` };
+    }
+    return null;
+}
+
+// --- Gracz-większościowiec matki ---
+
+function canPlayerManageSubsidiary(child) {
+    const parent = getParentOf(child);
+    return Boolean(parent && canFundControlAgm(parent));
+}
+
+function playerSubsidiaryAction(childSymbol, action, value = null) {
+    const child = stocks.find(s => s.symbol === childSymbol), parent = getParentOf(child);
+    if (!child || !parent || !canFundControlAgm(parent)) { showToast('Sterować córką może tylko większościowiec matki.', 'warning'); return null; }
+    let result = null;
+    if (action === 'transfer') { result = setProfitTransfer(child, value); showToast(`Transfer zysku ${child.name}: ${(result * 100).toFixed(0)}%.`, 'success'); }
+    else if (action === 'loan') { result = grantGroupLoan(parent, child, null, getMarketLoanRate() * (Number(value) || 1), 'player'); showToast(result ? `Pożyczka ${formatZl(result, 0)}${isOffMarketGroupLoan(child) ? ' — warunki nierynkowe: czerwona flaga' : ''}.` : 'Pożyczka niemożliwa (trwa już albo brak gotówki matki).', result ? 'success' : 'warning'); }
+    else if (action === 'policy') { parent.groupPolicy = Boolean(value); applyGroupPolicy(parent); result = parent.groupPolicy; }
+    else if (action === 'secondary') result = subsidiarySecondaryOffering(child, parent);
+    else if (action === 'spinoff') result = subsidiarySpinoffRemainder(child, parent);
+    else if (action === 'absorb') result = absorbSubsidiary(child, parent);
+    else if (action === 'sell') result = sellControllingStake(child, parent);
+    if (result === null && ['secondary', 'spinoff', 'absorb', 'sell'].includes(action)) showToast('Warunki niespełnione (limit spółek, udział matki, brak kupującego).', 'warning');
+    if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry(action === 'absorb' ? 'squeezeOut' : action === 'sell' ? 'premiaKontrola' : 'grupaKapitalowa');
+    if (typeof renderCompanyCard === 'function') renderCompanyCard();
+    return result;
+}
+
+function applyGroupPolicy(parent) {
+    if (!parent.groupPolicy || !parent.workforce?.policy) return;
+    for (const symbol of parent.subsidiaries || []) {
+        const c = stocks.find(s => s.symbol === symbol);
+        if (c?.workforce) c.workforce.policy = parent.workforce.policy;
+    }
+}
+
+// --- Pętla kwartalna ---
+
+function processSubsidiariesQuarterly(quarter = getSubQuarter()) {
+    for (const child of [...stocks]) {
+        if (child.isBankrupt) continue;
+        if (child.tender && quarter > child.tender.until) child.tender = null; // koniec wezwania
+        if (!child.isSubsidiaryOf) continue;
+        const parent = getParentOf(child);
+        if (!parent) { settleGroupLoanOnExit(child, null); child.isSubsidiaryOf = null; continue; }
+        child.parentStakePct = getParentStake(child, parent) || child.parentStakePct;
+        serviceGroupLoan(child, parent);
+        const playerRuns = canFundControlAgm(parent); // gracz decyduje sam (UI); prezes matki tylko pożycza w kryzysie
+        const crisis = (Number(child.financialHealth) || 0) <= -2 || (Number(child.cash) || 0) < (Number(child.balanceSheet?.assets) || 0) * 0.02;
+        if (crisis && !child.groupLoan && !playerRuns) grantGroupLoan(parent, child);
+        if (playerRuns) continue;
+        const stake = getParentStake(child, parent);
+        if (stake >= SUB_SQUEEZE_THRESHOLD - 1e-9) { if (Math.random() < SUB_SQUEEZE_CHANCE) absorbSubsidiary(child, parent); continue; }
+        if (stake >= SUB_CREEP_MIN && Math.random() < SUB_CREEP_CHANCE) creepSubsidiaryStake(child, parent);
+        const roll = Math.random();
+        if (roll < SUB_INDEPENDENCE_CHANCE) { if (Math.random() < 0.5) subsidiarySecondaryOffering(child, parent); else subsidiarySpinoffRemainder(child, parent); }
+        else if (roll < SUB_INDEPENDENCE_CHANCE + SUB_SALE_CHANCE) sellControllingStake(child, parent);
+    }
+    for (const concern of stocks.filter(s => isConcern(s) && !canFundControlAgm(s))) {
+        if (getSubsidiaryCount(concern) < 3 && Math.random() < SUB_FOUND_CHANCE) foundConcernSubsidiary(concern);
+    }
+    for (const parent of stocks.filter(s => s.groupPolicy)) applyGroupPolicy(parent);
+}
+
+/** Matka z ≥ 65% dokupuje z rynku do 5% akcji córki (droga do 90% i wchłonięcia). */
+function creepSubsidiaryStake(child, parent) {
+    const n = Math.min(getAvailableShares(child), Math.floor(child.totalShares * SUB_CREEP_STEP));
+    const cost = n * child.price * 1.02;
+    if (!(n > 0) || (Number(parent.cash) || 0) < cost * 2) return 0;
+    adjustCompanyCash(parent, -cost);
+    recordPayment(parent, 'external:rynek', cost, `Skup akcji ${child.symbol}`);
+    parent.equityStakes[child.symbol] = (parent.equityStakes[child.symbol] || 0) + n;
+    refreshHeld(child);
+    applyTradeImpact(child, n, 1);
+    return n;
 }

@@ -434,8 +434,8 @@ Object.assign(ACADEMY_ENTRIES, {
     },
     grupaKapitalowa: {
         title: 'Grupa kapitałowa i holding', icon: '🏢',
-        text: 'Grupa kapitałowa to spółka matka razem ze spółkami zależnymi, w których ma ponad 50% głosów. Holding sam niczego nie produkuje — zarządza pakietami akcji. W grze koncern 🏢 to spółka z czołówki kapitalizacji (górne 15%), która ma co najmniej 3 segmenty działalności albo 2 spółki zależne. Wartość grupy liczy się sumą części: każdy segment wyceniony mnożnikiem swojego sektora plus rynkowa wartość pakietów w zależnych. Gdy kurs jest niżej niż suma części, mówimy o dyskoncie holdingowym; gdy wyżej — o premii.',
-        example: () => { const s = stocks.find(x => typeof isConcern === 'function' && isConcern(x)); if (!s) return 'Koncern: górne 15% kapitalizacji oraz ≥ 3 segmenty albo ≥ 2 spółki zależne.'; const p = getSumOfParts(s); return `${s.name}: kapitalizacja ${formatZl(p.cap, 0)}, suma części ${formatZl(p.total, 0)}${p.premium !== null ? ` (${p.premium >= 0 ? 'premia' : 'dyskonto'} ${(Math.abs(p.premium) * 100).toFixed(0)}%)` : ''}.`; },
+        text: 'Grupa kapitałowa to spółka matka razem ze spółkami zależnymi, w których ma ponad 50% głosów. Holding sam niczego nie produkuje — zarządza pakietami akcji. W grze koncern 🏢 to spółka z czołówki kapitalizacji (górne 20%), która ma co najmniej 3 segmenty działalności albo 2 spółki zależne. Wartość grupy liczy się sumą części: każdy segment wyceniony mnożnikiem swojego sektora plus rynkowa wartość pakietów w zależnych. Gdy kurs jest niżej niż suma części, mówimy o dyskoncie holdingowym; gdy wyżej — o premii.',
+        example: () => { const s = stocks.find(x => typeof isConcern === 'function' && isConcern(x)); if (!s) return 'Koncern: górne 20% kapitalizacji oraz ≥ 3 segmenty albo ≥ 2 spółki zależne.'; const p = getSumOfParts(s); return `${s.name}: kapitalizacja ${formatZl(p.cap, 0)}, suma części ${formatZl(p.total, 0)}${p.premium !== null ? ` (${p.premium >= 0 ? 'premia' : 'dyskonto'} ${(Math.abs(p.premium) * 100).toFixed(0)}%)` : ''}.`; },
         quiz: [
             { q: 'Kiedy spółka jest zależna od matki?', a: ['gdy matka ma ponad 50% głosów', 'gdy matka ma 5% akcji', 'gdy działają w tym samym sektorze'], c: 0 },
             { q: 'Kurs koncernu jest niższy od sumy części. To…', a: ['dyskonto holdingowe', 'premia holdingowa', 'dywidenda rzeczowa'], c: 0 },
@@ -460,6 +460,36 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Właściciel ma 80% spółki A i 20% spółki B. Gdzie opłaca mu się „przenieść” zysk?', a: ['do spółki A', 'do spółki B', 'nigdzie — to bez różnicy'], c: 0 },
             { q: 'Kto traci na tunelowaniu?', a: ['akcjonariusze mniejszościowi spółki poszkodowanej', 'tylko państwo', 'nikt'], c: 0 },
             { q: 'Co może zrobić akcjonariusz mniejszościowy?', a: ['złożyć skargę do KNF', 'zablokować umowę sam', 'nic'], c: 0 }
+        ]
+    },
+    premiaKontrola: {
+        title: 'Premia za kontrolę', icon: '💼',
+        text: 'Pakiet kontrolny (ponad 50% głosów) jest wart więcej niż ta sama liczba akcji kupowana pojedynczo: daje władzę nad zarządem, dywidendą, transferem zysku i strategią. Dlatego kupujący płaci premię za kontrolę — w grze 15–30% ponad kurs. Matka może sprzedać pakiet córki innemu inwestorowi (koncernowi albo botowi); zysk z premii trafia do matki.',
+        example: () => { const s = stocks.find(x => x.tender); return s ? `${s.tender.buyerName} kupił pakiet kontrolny ${s.name} po ${formatZl(s.tender.price)}.` : 'Kurs 100 zł, premia za kontrolę 20% → pakiet kontrolny sprzedany po 120 zł za akcję.'; },
+        quiz: [
+            { q: 'Dlaczego za pakiet kontrolny płaci się więcej niż kurs?', a: ['daje władzę nad spółką', 'bo akcje są rzadkie', 'z powodu podatku'], c: 0 },
+            { q: 'Ile wynosi premia za kontrolę w grze?', a: ['15–30%', '0%', '100%'], c: 0 },
+            { q: 'Kto dostaje premię przy sprzedaży pakietu córki?', a: ['spółka matka', 'akcjonariusze mniejszościowi córki', 'giełda'], c: 0 }
+        ]
+    },
+    wezwanie: {
+        title: 'Wezwanie i ochrona mniejszości', icon: '📣',
+        text: 'Kto przejmuje kontrolę nad spółką (ponad 50%), musi ogłosić wezwanie: zaproponować wszystkim pozostałym akcjonariuszom odkupienie akcji po tej samej cenie, jaką zapłacił za pakiet kontrolny. Dzięki temu premia za kontrolę nie trafia tylko do jednego sprzedającego, a mniejszościowi mogą wyjść, jeśli nie ufają nowemu właścicielowi. Można też zostać — wtedy dalej jest się akcjonariuszem mniejszościowym.',
+        example: () => { const s = stocks.find(x => x.tender); return s ? `${s.name}: wezwanie ${s.tender.buyerName} po ${formatZl(s.tender.price)} do kw. ${s.tender.until}.` : 'Nowy właściciel zapłacił 120 zł za akcję pakietu — w wezwaniu każdy może sprzedać po 120 zł.'; },
+        quiz: [
+            { q: 'Po jakiej cenie jest wezwanie po zakupie pakietu kontrolnego?', a: ['po tej samej co za pakiet', 'po kursie z dnia wezwania', 'po wartości księgowej'], c: 0 },
+            { q: 'Czy akcjonariusz musi sprzedać w wezwaniu?', a: ['nie — może zostać', 'tak, zawsze', 'tylko fundusze'], c: 0 },
+            { q: 'Kogo chroni wezwanie?', a: ['akcjonariuszy mniejszościowych', 'tylko kupującego', 'zarząd'], c: 0 }
+        ]
+    },
+    squeezeOut: {
+        title: 'Przymusowy wykup (squeeze-out)', icon: '🧲',
+        text: 'Gdy matka ma co najmniej 90% akcji córki, może przymusowo wykupić resztę — mniejszościowi muszą sprzedać. W grze cena wykupu zawiera premię 10–20% ponad kurs. Potem spółki się łączą: segment córki wraca do matki, córka znika z giełdy i zwalnia miejsce w limicie spółek. Pakiet mniejszościowy zamienia się w gotówkę.',
+        example: () => { const s = stocks.find(x => (x.absorbedCompanies || []).some(a => a && a.quarter !== undefined)); const a = s && s.absorbedCompanies.filter(x => x.quarter !== undefined).at(-1); return a ? `${s.name} wchłonęła ${a.name} (kw. ${a.quarter}).` : 'Matka z 92% córki wykupuje pozostałe 8% po kursie + 15% i łączy spółki.'; },
+        quiz: [
+            { q: 'Od jakiego udziału matka może przymusowo wykupić resztę akcji w grze?', a: ['90%', '50%', '75%'], c: 0 },
+            { q: 'Co dostaje akcjonariusz mniejszościowy przy squeeze-oucie?', a: ['gotówkę po cenie wykupu', 'akcje matki', 'nic'], c: 0 },
+            { q: 'Co dzieje się z córką po wchłonięciu?', a: ['znika z giełdy, segment wraca do matki', 'zostaje notowana', 'bankrutuje'], c: 0 }
         ]
     },
     fazySpolki: {
@@ -739,6 +769,7 @@ function checkAcademyTriggers() {
         if (held.some(s => isConcern(s) || getSubsidiaryCount(s) > 0)) unlockAcademyEntry('grupaKapitalowa');
         if (held.some(s => getStockCooperations(s).length)) unlockAcademyEntry('ryzykoKontrahenta');
         if (getSkillLevel('accountant') >= 4 && held.some(s => getStockCooperations(s).some(c => c.flag))) unlockAcademyEntry('podmiotyPowiazane');
+        if (held.some(s => s.tender)) { unlockAcademyEntry('wezwanie'); unlockAcademyEntry('premiaKontrola'); } // 0.14 T6
     }
     if (typeof society === 'object' && society) {
         if (Math.abs((macro?.unemployment || NATURAL_UNEMPLOYMENT) - NATURAL_UNEMPLOYMENT) > 0.015) unlockAcademyEntry('phillips');
