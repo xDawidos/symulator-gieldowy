@@ -289,3 +289,8 @@ Cel: przebiegi symulacyjne (6,5 roku gry) trwają dziś przy ×50 ok. 2,5–3 mi
 12. **Państwowy program jądrowy:** budowa bloku zdarzała się 0,15 razy na przebieg. Teraz są 2 spółki jądrowe na starcie (np. Państwowy Uran i Elektrownia SA), a spółka państwowa może budować blok bez własnej gotówki: Skarb Państwa finansuje go według partii rządzącej. Cel: 0,5–1,5 budowy na przebieg. Realizacja jako pierwszy commit T3.
 13. **T4 po kontroli** (2026-10-15): efekt wydzielenia mierzymy **ponad GIG** z tego samego okresu (cel +3–8% sumy matka + córka po 2 kw.); jeśli nadal za dużo, obniżyć skok przy zapowiedzi. Szansa wydzielenia 4% → **5,25%** na kwartał (cel 2–5 na grę). Do zrobienia jako pierwszy commit nowego czatu kodu, przed T5.
 14. **Koncerny po T5** (2026-10-16): cel zmieniony z 3–8 na **3–6** średnio na przebieg. Po T5 wyszło 2,4, więc warunek luzujemy minimalnie, aż do celu (najpierw próg kapitalizacji 10% → 15%). Znaczek koncernu to 🏢, bo 🏛️ oznacza Skarb Państwa.
+15. **Poprawki po kontroli końcowej 0.14** (2026-10-16), przed 0.15:
+    - **dywidenda spółki zależnej** trafia do **każdego** akcjonariusza proporcjonalnie, także do funduszu gracza i mniejszościowych. Dziś w starym kodzie idzie w całości do matki. Transfer zysku do matki (30–70%, T6) zostaje osobnym mechanizmem; test: mniejszościowy dostaje dywidendę = stopa × jego akcje;
+    - **koncern:** dodatkowy warunek struktury „≥ 2 segmenty i ≥ 1 spółka zależna”, a próg kapitalizacji wraca na górne 15%. Cel 3–6 (decyzja 14);
+    - **mniej nowych córek koncernów** (było 3,6 na grę, cel 1–3) i **wyższa szansa rozszerzenia o segment** (było 22% spółek z ≥ 2 segmentami, cel 25–45%);
+    - **zapis 3,26 MB po 20 latach:** odchudzenie przed 0.16 (G0), nie teraz.
