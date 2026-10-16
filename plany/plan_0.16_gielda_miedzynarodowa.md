@@ -26,6 +26,13 @@ Kolejność: G0 → G1 → G2 → G3 → G4 → G5 → G6 → G7 → G8. Każdy 
 - **Limity spółek z 0.13.1:** krajowe luźno ok. 110 (111–115 w porządku), łącznie 150 zwykłych spółek. **Spółki zagraniczne nie liczą się do żadnego z nich** — każdy kraj ma własny limit (G2).
 - **Rozmiar zapisu:** po poprawce z 0.13 zapis ma ok. 2,35 MB po 200 kw. Ponad 120 nowych spółek go zwiększy, dlatego spółki krajów, które nie dołączyły, **nie są zapisywane** (tworzone przy dołączeniu z definicji).
 
+## G−1. Odchudzenie zapisu (decyzja 2026-10-16, przed G0)
+
+Po 0.14 zapis ma 3,26 MB po 20 latach gry (cel ≤ 2,5 MB), a 0.16 doda spółki zagraniczne.
+- **Pomiar:** co zajmuje miejsce (historia cen i świec, dzienniki, segmenty, newsy, rejestry płatności, historia klientów).
+- **Odchudzenie:** skrócenie historii, krótsze klucze, usuwanie pól wyliczalnych, ewentualnie kompresja.
+- **Cel:** ≤ 2,5 MB po 20 latach przed G0, a po 0.16 < 3 MB przy 3–4 dołączonych krajach.
+
 ## G0. Porządki na starcie (spółki polskie i uniwersalne)
 
 Zmiany obowiązują tylko w nowych grach. Stare zapisy zachowują swoje spółki.
