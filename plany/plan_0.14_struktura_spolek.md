@@ -268,7 +268,7 @@ Cel: przebiegi symulacyjne (6,5 roku gry) trwają dziś przy ×50 ok. 2,5–3 mi
 | Suma wartości matka + córka 2 kw. po spin-offie vs przed zapowiedzią | średnio +3–8% |
 | Rozszerzenia / pivoty rocznie | 2–4 / 1–2 |
 | Spółki z ≥ 2 segmentami po 6,5 roku | 25–45% |
-| Koncerny | 3–8; kooperacje aktywne 4–12 |
+| Koncerny | 3–6 (decyzja 14); kooperacje aktywne 4–12 |
 | Spółki zależne (T6) | wchłonięcia 1–2, usamodzielnienia 1–2, sprzedaże 0–2 na przebieg |
 | GIG rocznie vs 0.13 | różnica ≤ ±2 pp |
 | Niezmiennik akcji | 0 naruszeń |
@@ -288,3 +288,4 @@ Cel: przebiegi symulacyjne (6,5 roku gry) trwają dziś przy ×50 ok. 2,5–3 mi
 11. **Zdarzenia sektora Bankowość:** po porządku nazw (T1a) banki dostają zdarzenia sektora Bankowość, co jest poprawne. Dla równowagi (4 pozytywne : 2 negatywne) dochodzą 2 negatywne zdarzenia bankowe: podatek bankowy i masowe pozwy kredytobiorców. Realizacja razem z T2.
 12. **Państwowy program jądrowy:** budowa bloku zdarzała się 0,15 razy na przebieg. Teraz są 2 spółki jądrowe na starcie (np. Państwowy Uran i Elektrownia SA), a spółka państwowa może budować blok bez własnej gotówki: Skarb Państwa finansuje go według partii rządzącej. Cel: 0,5–1,5 budowy na przebieg. Realizacja jako pierwszy commit T3.
 13. **T4 po kontroli** (2026-10-15): efekt wydzielenia mierzymy **ponad GIG** z tego samego okresu (cel +3–8% sumy matka + córka po 2 kw.); jeśli nadal za dużo, obniżyć skok przy zapowiedzi. Szansa wydzielenia 4% → **5,25%** na kwartał (cel 2–5 na grę). Do zrobienia jako pierwszy commit nowego czatu kodu, przed T5.
+14. **Koncerny po T5** (2026-10-16): cel zmieniony z 3–8 na **3–6** średnio na przebieg. Po T5 wyszło 2,4, więc warunek luzujemy minimalnie, aż do celu (najpierw próg kapitalizacji 10% → 15%). Znaczek koncernu to 🏢, bo 🏛️ oznacza Skarb Państwa.
