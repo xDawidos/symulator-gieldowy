@@ -6522,6 +6522,12 @@ group('0.14 T4: wydzielenie spółki córki (spin-off, carve-out)', () => {
             assert(ai.portfolio[child.symbol].shares === Math.floor(2000 * (1 - keep)), 'bot dostał część');
             assert(Math.abs(a.price + (1 - keep) * child.price - oldPrice) < 1e-9, 'wartość na akcję matki zachowana');
             assert(child.sharesHeld === getTrackedHeldShares(child), 'obrót = posiadacze');
+            // Decyzja 13: wycena matki zawiera rynkową wartość pakietu w córce (inaczej kurs matki zjeżdża o wartość pakietu).
+            const stakePerShare = a.equityStakes[child.symbol] * child.price / a.totalShares;
+            assert(Math.abs(getListedSubsidiaryStakeValue(a) / a.totalShares - stakePerShare) < 1e-9, 'wartość pakietu');
+            const fairWith = a.fundamentals.fairValue;
+            a.subsidiaries = []; updateFundamentalRatios(a); const fairWithout = a.fundamentals.fairValue;
+            assert(fairWith > 0 && Math.abs(fairWith - fairWithout - stakePerShare) < 1e-6, `wartość godziwa matki + pakiet: ${fairWith} vs ${fairWithout} + ${stakePerShare}`);
         } finally { cleanup(etf); }
     });
 

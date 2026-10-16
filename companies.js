@@ -2831,6 +2831,18 @@ function recordQuarterFundamentals(stock, quarter) {
     return (eps - expected) / Math.abs(expected);
 }
 
+/** Rynkowa wartość pakietów w notowanych spółkach zależnych (zł). */
+function getListedSubsidiaryStakeValue(stock) {
+    let value = 0;
+    for (const symbol of stock?.subsidiaries || []) {
+        if (typeof symbol !== 'string') continue;
+        const child = stocks.find(s => s.symbol === symbol);
+        if (!child || child.isBankrupt || child.isSubsidiaryOf !== stock.symbol) continue;
+        value += (Number(stock.equityStakes?.[symbol]) || 0) * (Number(child.price) || 0);
+    }
+    return value;
+}
+
 function updateFundamentalRatios(stock) {
     const fundamentals = stock?.fundamentals;
     if (!fundamentals) return null;
@@ -2877,6 +2889,10 @@ function updateFundamentalRatios(stock) {
         }
         // T3: dyskonto konglomeratu — przez cel wyceny (kurs dochodzi do niego stopniowo, bez skoku w chwili decyzji).
         if (fundamentals.fairValue > 0) fundamentals.fairValue *= 1 - getConglomerateDiscount(stock);
+        // Decyzja 13 (diagnoza T4): pakiety w notowanych spółkach zależnych po kursie rynkowym (suma części). Bez tego matka
+        // po carve-oucie (51–80% córki) była wyceniana tylko z własnego zysku i kurs zjeżdżał o wartość pakietu.
+        const stakes = getListedSubsidiaryStakeValue(stock);
+        if (stakes > 0 && fundamentals.fairValue > 0) fundamentals.fairValue += stakes / shares;
     } else {
         fundamentals.fairValue = null;
     }
@@ -11250,8 +11266,8 @@ function executeSpinoff(parent, options = {}) {
     if (typeof initializeDescriptionParts === 'function') initializeDescriptionParts(child);
     if (typeof initializeOwnership === 'function' && !child.ownership) { /* struktura własności liczona z posiadaczy */ }
     if (typeof usedCompanyNames !== 'undefined') usedCompanyNames.push(child.name);
+    if (typeof syncSubsidiaryLinks === 'function') syncSubsidiaryLinks(); // przed wyceną: matka widzi pakiet w córce (carve-out)
     updateFundamentalRatios(parent); updateFundamentalRatios(child);
-    if (typeof syncSubsidiaryLinks === 'function') syncSubsidiaryLinks();
     if (typeof addChartEvent === 'function') { addChartEvent(parent, '✂️', `Wydzielenie: ${child.name} (${child.symbol})`); addChartEvent(child, '🆕', `Debiut po wydzieleniu z ${parent.name}`); }
     spinoffLog.unshift({ parent: parent.symbol, child: symbol, quarter, carve, keep, valueBefore: plan.valueBefore || 0, gigBefore: plan.gigBefore || 0, ratio2q: null, gig2q: null });
     spinoffLog.length = Math.min(spinoffLog.length, SPINOFF_LOG_LIMIT);

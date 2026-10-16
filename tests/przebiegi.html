@@ -161,6 +161,36 @@ PRESETS['gracz-aktywny'] = PRESETS['fundusz-gig'] + `(function () {
         return r;
     };
 })();`;
+// 0.14 T4 (diagnoza decyzji 13): wymuszone dodatkowe zapowiedzi wydzieleń i stan matki/córki na każdym etapie.
+PRESETS['wydzielenia'] = `(function () {
+    const D = window.__spinDiag = { entries: [], errors: [] };
+    const gig = () => Number(marketIndexes.find(i => i.id === 'GIG')?.value) || 0;
+    const snap = s => s ? { p: s.price, cap: getMarketCapValue(s), fair: getDisplayedFairValue(s), fv: s.fundamentals?.fairValue ?? null, disc: getConglomerateDiscount(s), ex: s.exchange,
+        eps: s.fundamentals?.epsTtm ?? null, rev: s.fundamentals?.revenueTtm ?? null, health: s.financialHealth, phase: s.corporatePhase, held: s.sharesHeld, tot: s.totalShares, bankrupt: !!s.isBankrupt } : null;
+    const kinds = s => { const out = {}; for (const h of getShareholders(s)) out[h.kind] = +((out[h.kind] || 0) + h.pct).toFixed(4); return out; };
+    const origA = announceSpinoff;
+    announceSpinoff = function (stock) { const pre = snap(stock); const r = origA.apply(this, arguments); if (r) D.entries.push({ parent: stock.symbol, qA: macro.quarter, gigA: gig(), preA: pre, postA: snap(stock), seq: [] }); return r; };
+    const origE = executeSpinoff;
+    executeSpinoff = function (parent) {
+        const e = D.entries.filter(x => x.parent === parent.symbol && !x.child).at(-1);
+        const pre = snap(parent), share = getStockSegments(parent).find(x => x.sector === parent.spinoff?.sector)?.share ?? null;
+        const child = origE.apply(this, arguments);
+        if (e && child) Object.assign(e, { child: child.symbol, qE: macro.quarter, gigE: gig(), share, carve: !!child.isSubsidiaryOf, keep: child.parentStakePct || 0, preE: pre, postE: { parent: snap(parent), child: snap(child), childKinds: kinds(child), parentKinds: kinds(parent) } });
+        return child;
+    };
+    const origQ = processSpinoffsQuarterly;
+    processSpinoffsQuarterly = function () {
+        try {
+            for (const e of D.entries) {
+                if (!e.child || e.seq.length >= 3) continue;
+                const p = stocks.find(x => x.symbol === e.parent), c = stocks.find(x => x.symbol === e.child);
+                e.seq.push({ q: macro.quarter, gig: gig(), parent: snap(p), child: snap(c), childKinds: c ? kinds(c) : null });
+            }
+            for (const x of stocks) if (!x.spinoff && !x.spinoffRumor && canAnnounceSpinoff(x) && Math.random() < 0.08) announceSpinoff(x, 'ceo');
+        } catch (err) { if (D.errors.length < 5) D.errors.push(String(err && err.stack || err)); }
+        return origQ.apply(this, arguments);
+    };
+})();`;
 const PATCH = (PRESETS[params.get('preset')] || '') + (params.get('patch') || ''); // kod wykonywany w ramce po starcie gry
 const SAVE_KEY = 'gra_inwestycyjna_dawid_save_v4';
 const RESULT_KEY = `__sim_${LABEL}`;
@@ -361,7 +391,7 @@ const PROBE = `(function () {
         return { tsr, moneyWarn: s.moneyWarn || [], moneyWarnQuarters: s.moneyWarnQuarters || 0, poolStake: s.poolStake, wallet: window.__wallet || null, presetErrors: window.__presetErrors || [], sectorIssues, saveSizes, subStart: s.subStart, subEnd: s.subEnd, multiSegEnd: s.multiSeg, mechanics: s.mechanics || null, badPrice: s.badPrice, negCash: s.negCash, mailBy: s.mailBy, bailouts: s.bailouts, flowWarnings: s.flowWarnings, fund: s.fund, panelText: panel ? panel.textContent.split(/\\s+/).join(' ').slice(0, 600) : null, panelError: s.panelError || null, elections: (macro.election?.history || []).filter(e => e.quarter >= s.quarters[0].q),
             lawChanges: soc ? { ...soc.lawChanges } : null, laws: soc ? { ...soc.laws } : null,
             invariants: typeof checkWorldInvariants === 'function' ? checkWorldInvariants().slice(0, 5) : null, invLog: s.invLog, trimWarnings: s.trimWarnings,
-            trims: typeof ghostTrimLog !== 'undefined' ? ghostTrimLog.length : null };
+            trims: typeof ghostTrimLog !== 'undefined' ? ghostTrimLog.length : null, spinDiag: window.__spinDiag || null };
     };
 })();`;
 
