@@ -6564,7 +6564,7 @@ group('0.14 T5: koncerny, kooperacje, podmioty powiązane', () => {
     function world() {
         const seg = (list) => list.map(([sector, share]) => ({ sector, subsector: null, share }));
         const a = makeCompany('KON', { cash: 5_000_000, fixedAssets: 20_000_000 });
-        a.segments = seg([['Chemia', 0.5], ['Przemysł', 0.3], ['Energia', 0.2]]);
+        a.segments = seg([['Chemia', 0.5], ['Przemysł', 0.3], ['Technologia', 0.2]]); // Technologia niepowiązana z Chemią → koncern
         const b = makeCompany('KOP', { cash: 2_000_000 }); b.segments = seg([['Medycyna', 1]]);
         const c = makeCompany('KOC', { cash: 2_000_000 }); c.segments = seg([['Technologia', 0.6], ['Obronność', 0.4]]);
         const d = makeCompany('KOD', { cash: 2_000_000 }); d.segments = seg([['Żywność', 1]]); // niepowiązana z koncernem
@@ -6583,7 +6583,7 @@ group('0.14 T5: koncerny, kooperacje, podmioty powiązane', () => {
         [a, b].forEach(x => { x.sharesHeld = getTrackedHeldShares(x); });
     };
 
-    test('koncern: górne 10% kapitalizacji i ≥ 3 segmenty; bez struktury — nie', () => {
+    test('koncern: górne 15% kapitalizacji i segment niepowiązany z głównym; same powiązane — nie', () => {
         const { a, b } = world();
         updateConcernStatus();
         assert(isConcern(a) && !isConcern(b), 'KON koncernem, KOP nie');

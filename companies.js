@@ -11304,16 +11304,15 @@ function processSpinoffsQuarterly() {
 // =================================================================================
 // 0.14 T5: KONCERNY, KOOPERACJE I OCHRONA PRZED TUNELOWANIEM
 // =================================================================================
-// Koncern 🏢: ≥ 3 segmenty albo ≥ 2 spółki zależne i miejsce w górnych 20% kapitalizacji (decyzja 14).
+// Koncern 🏢: ≥ 2 segmenty, w tym niepowiązany z głównym, albo ≥ 2 spółki zależne i miejsce w górnych 15% kapitalizacji (decyzja 14).
 // Kooperacja (dostawca–odbiorca, 8–16 kw., najwyżej 3 na koncern): obie strony +0,3 pp wzrostu na kwartał
 // i +0,5 pp marży — tylko dla segmentów powiązanych (premia × udział powiązanego segmentu).
 // Ryzyko kontrahenta: strajk, bankructwo albo korekta wyników partnera przenosi połowę szoku na drugą stronę.
 // Zerwanie przed terminem: kara umowna. Kooperacja spółek jednego właściciela z nierównymi udziałami
 // = czerwona flaga „transakcje z podmiotami powiązanymi”; pakiet mniejszościowy może złożyć skargę do KNF.
 
-const CONCERN_TOP_SHARE = 0.20;            // górne 20% kapitalizacji (decyzja 14: plan 10%; 15% po T5 = 3,0, po T6 = 2,1 — usamodzielnienia zabierają córki)
-const CONCERN_KEEP_SHARE = 0.30;           // histereza: status zostaje w górnych 30%
-const CONCERN_MIN_SEGMENTS = 3;
+const CONCERN_TOP_SHARE = 0.15;            // górne 15% kapitalizacji (decyzja 14: plan 10%; z warunkiem ≥ 3 segmentów było za mało koncernów)
+const CONCERN_KEEP_SHARE = 0.25;           // histereza: status zostaje w górnych 25%
 const CONCERN_MIN_SUBSIDIARIES = 2;
 const COOP_MAX_PER_CONCERN = 3;
 const COOP_MAX_PER_PARTNER = 2;            // zwykła spółka (nie koncern)
@@ -11348,9 +11347,15 @@ function getSubsidiaryCount(stock) {
     return stocks.filter(child => child.isSubsidiaryOf === stock.symbol && !child.isBankrupt).length;
 }
 
+/** Decyzja użytkownika (po 0.14): ≥ 2 segmenty, w tym co najmniej jeden niepowiązany z segmentem głównym (grupa różnych biznesów). */
+function hasUnrelatedSegments(stock) {
+    const segments = [...getStockSegments(stock)].sort((a, b) => b.share - a.share);
+    return segments.length >= 2 && segments.slice(1).some(seg => !areSectorsRelated(segments[0].sector, seg.sector));
+}
+
 /** Warunek strukturalny koncernu (bez kapitalizacji). */
 function hasConcernStructure(stock) {
-    return getStockSegments(stock).length >= CONCERN_MIN_SEGMENTS || getSubsidiaryCount(stock) >= CONCERN_MIN_SUBSIDIARIES;
+    return hasUnrelatedSegments(stock) || getSubsidiaryCount(stock) >= CONCERN_MIN_SUBSIDIARIES;
 }
 
 /** Próg kapitalizacji dla górnych `share` zwykłych spółek. */
