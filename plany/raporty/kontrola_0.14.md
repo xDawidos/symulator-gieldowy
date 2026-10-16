@@ -51,3 +51,16 @@ GIG 22,3%/rok, marża 22,1%. Niezmienniki 0, ujemna gotówka 0, bezpiecznik 0, p
 - Czerwona flaga matka–córka w T6 dotyczy pożyczki wewnątrzgrupowej z oprocentowaniem odbiegającym od rynku o > 10% oraz (z T5) kooperacji przy wspólnym właścicielu z nierównymi udziałami. Innych transakcji matka–córka po cenach nierynkowych w grze nie ma.
 - Wspólna polityka kadrowa: przełącznik gracza na karcie „Grupa” (boty z niej nie korzystają).
 - Wypłata dywidendy przez córkę nadal idzie w całości do matki (stary kod `payDividendToShareholders`; mniejszościowi nie dostają dywidendy). Tego nie ruszano — kandydat na poprawkę.
+
+## Poprawki po kontroli (decyzja 15 i decyzja użytkownika), 2026-10-16
+
+| Commit | Zmiana | Wynik 10×200 |
+|---|---|---|
+| `a44307a` | koncern: ≥ 2 segmenty z niepowiązanym albo ≥ 2 córki, próg 15% (decyzja użytkownika) | koncerny 3,5; córki 6,5, wchłonięcia 4,4 |
+| `586ee8e` | córka koncernu 12% → 4%/kw. | T6 w celu; koncerny 2,7 |
+| `a7471d9` | dywidenda córki dla wszystkich akcjonariuszy (15.1) | GIG 19,8%, marża 26,1%; koncerny 3,9 (rozrzut serii) |
+| `db121a1` | koncern także przy ≥ 2 segmentach i ≥ 1 córce (15.2) | koncerny 4,7 ✅; kooperacje 12,8; córki 3,3 |
+| `63d40a1` | córka koncernu 2,5%; rozszerzenia 6,5%/kw., sukces 85/65%; kooperacje 40% (15.3) | córki 2,2, wchłonięcia 1,6, usamodzielnienia 1,2, sprzedaże 1,0, koncerny 4,3, kooperacje 11,2 ✅; GIG 21,0 ± 0,9%, marża 28,5%; liczniki błędów 0 |
+
+⚠️ Spółki z ≥ 2 segmentami: 22–23% we wszystkich seriach, mimo rozszerzeń 2,9 → 4,0 na rok i wyższej skuteczności. To nie jest kwestia szansy rozszerzenia — do diagnozy (np. pivoty, wydzielenia, nowe jednosegmentowe spółki i startupy, łączenie albo usuwanie małych segmentów).
+⚠️ GIG 21,0% vs 18,2% przed T1 (+2,8 pp; vs `8fdbf63` +0,8 pp) — powyżej ±2 pp; serie po 10 przebiegów mają rozrzut ok. ±1 pp, a sprawa jest już w 0.15 H0.

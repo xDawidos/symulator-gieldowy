@@ -5285,7 +5285,7 @@ group('0.14 T3: rozszerzenie o nowy segment', () => {
     test('sukces: segment 10%, potem stopniowo do 20–40% (≤ 5 pp/kw.), udziały sumują się do 1', () => {
         const s = firm('EX6');
         startExpansion(s, 'Gaming', 0);
-        assert(resolveExpansion(s, 0.79, 6) === 'success', 'powiązane: 80%');
+        assert(resolveExpansion(s, 0.79, 6) === 'success', 'powiązane: 85%');
         const seg = s.segments.find(x => x.sector === 'Gaming');
         assertNear(seg.share, 0.10, 'start 10%', 1e-9);
         assertNear(sum(s), 1, 'suma', 1e-9);
@@ -5294,12 +5294,12 @@ group('0.14 T3: rozszerzenie o nowy segment', () => {
         assert(seg.share >= 0.2 - 1e-9 && seg.share <= 0.4 + 1e-9 && !s.strategy.growth, `cel ${seg.share}`);
     });
 
-    test('niepowiązane: sukces 55%; porażka — odpis 50–100% kosztu i kurs −5…−10%', () => {
+    test('niepowiązane: sukces 65% (decyzja 15); porażka — odpis 50–100% kosztu i kurs −5…−10%', () => {
         const s = firm('EX7');
         startExpansion(s, 'Żywność', 0);
         assert(!s.strategy.process.related, 'Technologia–Żywność niepowiązane');
         const assets0 = s.balanceSheet.assets, price0 = s.price, cost = s.strategy.process.cost;
-        assert(resolveExpansion(s, 0.6, 6) === 'failure', '0,6 > 55%');
+        assert(resolveExpansion(s, 0.7, 6) === 'failure', '0,7 > 65%');
         const writeOff = assets0 - s.balanceSheet.assets;
         assert(writeOff >= cost * 0.5 - 1 && writeOff <= cost + 1, `odpis ${writeOff}`);
         assert(s.price <= price0 * 0.95 + 1e-9 && s.price >= price0 * 0.9 - 1e-9 && s.segments.length === 1, 'kurs i brak segmentu');
@@ -6564,7 +6564,7 @@ group('0.14 T5: koncerny, kooperacje, podmioty powiązane', () => {
     function world() {
         const seg = (list) => list.map(([sector, share]) => ({ sector, subsector: null, share }));
         const a = makeCompany('KON', { cash: 5_000_000, fixedAssets: 20_000_000 });
-        a.segments = seg([['Chemia', 0.5], ['Przemysł', 0.3], ['Energia', 0.2]]);
+        a.segments = seg([['Chemia', 0.5], ['Przemysł', 0.3], ['Technologia', 0.2]]); // Technologia niepowiązana z Chemią → koncern
         const b = makeCompany('KOP', { cash: 2_000_000 }); b.segments = seg([['Medycyna', 1]]);
         const c = makeCompany('KOC', { cash: 2_000_000 }); c.segments = seg([['Technologia', 0.6], ['Obronność', 0.4]]);
         const d = makeCompany('KOD', { cash: 2_000_000 }); d.segments = seg([['Żywność', 1]]); // niepowiązana z koncernem
@@ -6583,13 +6583,16 @@ group('0.14 T5: koncerny, kooperacje, podmioty powiązane', () => {
         [a, b].forEach(x => { x.sharesHeld = getTrackedHeldShares(x); });
     };
 
-    test('koncern: górne 10% kapitalizacji i ≥ 3 segmenty; bez struktury — nie', () => {
+    test('koncern: górne 15% kapitalizacji i segment niepowiązany z głównym; same powiązane — nie', () => {
         const { a, b } = world();
         updateConcernStatus();
         assert(isConcern(a) && !isConcern(b), 'KON koncernem, KOP nie');
         a.segments = a.segments.slice(0, 2); refreshSectorsFromSegments(a);
         updateConcernStatus();
         assert(!isConcern(a), 'po utracie segmentu traci status');
+        b.isSubsidiaryOf = 'KON'; // decyzja 15: ≥ 2 segmenty i ≥ 1 spółka zależna
+        updateConcernStatus();
+        assert(isConcern(a), '2 powiązane segmenty + córka → koncern');
     });
 
     test('kooperacja tylko między segmentami powiązanymi; premia × udział segmentu; najwyżej 3 na koncern', () => {
@@ -6774,6 +6777,18 @@ group('0.14 T6: spółki zależne (transfer, pożyczka, usamodzielnienie, wchło
         const cash0 = playerCash;
         assert(playerTenderDecision('COR', 'sell') && !playerPortfolio.COR && Math.abs(playerCash - cash0 - 500 * 120) < 1e-6, 'gracz sprzedał po cenie wezwania');
         assert(shareProblems().length === 0, shareProblems().join('; '));
+    });
+
+    test('decyzja 15: dywidenda córki dla każdego akcjonariusza proporcjonalnie (matka tylko przez swój pakiet)', () => {
+        const { p, c, ai } = world();
+        playerFund.trust = 50;
+        const before = { player: playerCash, ai: ai.cash, parent: p.cash, child: c.cash };
+        const paid = payCompanyDividend(c, 2);
+        assertNear(paid, 2 * c.totalShares, 'wypłata = dps × wszystkie akcje');
+        assertNear(playerCash - before.player, 500 * 2, 'fundusz gracza: stopa × jego akcje');
+        assert(ai.cash - before.ai > 0 && Math.abs(ai.cash - before.ai - ai.portfolio.COR.shares * 2 * (1 - TAX_RATES.dividend)) < 1e-6, 'bot: brutto − podatek');
+        assertNear(p.cash - before.parent, 6000 * 2, 'matka: tylko za swój pakiet');
+        assertNear(before.child - c.cash, paid, 'córka płaci całość');
     });
 
     test('koncern zakłada córkę na BRONZE z 20–30% akcji w ofercie; Akademia: 3 hasła', () => {

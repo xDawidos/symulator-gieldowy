@@ -7425,21 +7425,8 @@ function finishInvestment(stock, project) {
 }
 
 function payDividendToShareholders(stock, dividendPerShare) {
-    // Obsługa spółek zależnych (transfer do matki)
-    if (stock.isSubsidiaryOf) {
-        const parentStock = stocks.find(s => s.symbol === stock.isSubsidiaryOf);
-        if (parentStock) {
-            const totalDividendFromSubsidiary = stock.totalShares * dividendPerShare;
-            if (parentStock.cash !== undefined) {
-                adjustCompanyCash(parentStock, totalDividendFromSubsidiary);
-                adjustBalanceSheet(parentStock, { assets: totalDividendFromSubsidiary, retainedEarnings: totalDividendFromSubsidiary });
-            }
-            logEvent(`💸 Spółka zależna ${stock.name} przekazuje ${totalDividendFromSubsidiary.toFixed(2)} PLN dywidendy do ${parentStock.name}.`, 'company');
-            stock.price = Math.max(stock.price * 0.9, stock.price - dividendPerShare); // odcięcie dywidendy (najwyżej −10%)
-            if (stock.price < 0.01) stock.price = 0.01;
-            return;
-        }
-    }
+    // Decyzja 15: dywidenda spółki zależnej trafia do KAŻDEGO akcjonariusza proporcjonalnie (matka przez swój pakiet
+    // w payDividendToInstitutions). Transfer zysku do matki (30–70%, T6) to osobny mechanizm.
 
     // Standardowa wypłata
     const taxRateDividend = TAX_RATES.dividend; // Pobieramy z economy.js
@@ -10514,13 +10501,13 @@ const EXPANSION_MIN_HEALTH = 2;
 const EXPANSION_MIN_CASH = 0.15;          // × roczne przychody
 const EXPANSION_COST = [0.10, 0.20];      // × roczne przychody
 const EXPANSION_QUARTERS = [4, 8];
-const EXPANSION_SUCCESS = { related: 0.80, unrelated: 0.55 };
+const EXPANSION_SUCCESS = { related: 0.85, unrelated: 0.65 }; // decyzja 15: więcej spółek z ≥ 2 segmentami (było 22%)
 const EXPANSION_START_SHARE = 0.10;
 const EXPANSION_TARGET_SHARE = [0.20, 0.40];
 const EXPANSION_STEP = [0.02, 0.05];       // pp na kwartał
 const EXPANSION_WRITE_OFF = [0.5, 1.0];
 const EXPANSION_FAIL_DROP = [0.05, 0.10];
-const EXPANSION_BASE_CHANCE = 0.055;       // na kwartał, prezes spółki spełniającej warunki
+const EXPANSION_BASE_CHANCE = 0.065;       // na kwartał, prezes spółki spełniającej warunki (decyzja 15: 5,5% → 6,5%)
 const SYNERGY_MARGIN = 0.01;
 
 function areSectorsRelated(a, b) {
@@ -11304,23 +11291,23 @@ function processSpinoffsQuarterly() {
 // =================================================================================
 // 0.14 T5: KONCERNY, KOOPERACJE I OCHRONA PRZED TUNELOWANIEM
 // =================================================================================
-// Koncern 🏢: ≥ 3 segmenty albo ≥ 2 spółki zależne i miejsce w górnych 20% kapitalizacji (decyzja 14).
+// Koncern 🏢: miejsce w górnych 15% kapitalizacji i struktura grupy: ≥ 2 segmenty, w tym niepowiązany z głównym, albo ≥ 2 spółki
+// zależne, albo ≥ 2 segmenty i ≥ 1 spółka zależna (decyzje 14–15).
 // Kooperacja (dostawca–odbiorca, 8–16 kw., najwyżej 3 na koncern): obie strony +0,3 pp wzrostu na kwartał
 // i +0,5 pp marży — tylko dla segmentów powiązanych (premia × udział powiązanego segmentu).
 // Ryzyko kontrahenta: strajk, bankructwo albo korekta wyników partnera przenosi połowę szoku na drugą stronę.
 // Zerwanie przed terminem: kara umowna. Kooperacja spółek jednego właściciela z nierównymi udziałami
 // = czerwona flaga „transakcje z podmiotami powiązanymi”; pakiet mniejszościowy może złożyć skargę do KNF.
 
-const CONCERN_TOP_SHARE = 0.20;            // górne 20% kapitalizacji (decyzja 14: plan 10%; 15% po T5 = 3,0, po T6 = 2,1 — usamodzielnienia zabierają córki)
-const CONCERN_KEEP_SHARE = 0.30;           // histereza: status zostaje w górnych 30%
-const CONCERN_MIN_SEGMENTS = 3;
+const CONCERN_TOP_SHARE = 0.15;            // górne 15% kapitalizacji (decyzja 14: plan 10%; z warunkiem ≥ 3 segmentów było za mało koncernów)
+const CONCERN_KEEP_SHARE = 0.25;           // histereza: status zostaje w górnych 25%
 const CONCERN_MIN_SUBSIDIARIES = 2;
 const COOP_MAX_PER_CONCERN = 3;
 const COOP_MAX_PER_PARTNER = 2;            // zwykła spółka (nie koncern)
 const COOP_QUARTERS = [8, 16];
 const COOP_GROWTH = 0.003;                 // +0,3 pp wzrostu przychodów na kwartał (× udział segmentu powiązanego)
 const COOP_MARGIN = 0.005;                 // +0,5 pp marży (× udział segmentu powiązanego)
-const COOP_START_CHANCE = 0.5;             // na kwartał, koncern z wolnym miejscem (strojenie: 0,25 dawało 2,9 aktywnych)
+const COOP_START_CHANCE = 0.4;             // na kwartał, koncern z wolnym miejscem (przy 3–6 koncernach 0,5 dawało 12,8 aktywnych)
 const COOP_SHOCK_SHARE = 0.5;              // połowa szoku partnera
 const COOP_BANKRUPTCY_SHOCK = 0.3;         // szok utraty kontrahenta (przed połową i udziałem segmentu)
 const COOP_BREAK_CHANCE = 0.015;           // zerwanie bez powodu (na kwartał)
@@ -11348,9 +11335,17 @@ function getSubsidiaryCount(stock) {
     return stocks.filter(child => child.isSubsidiaryOf === stock.symbol && !child.isBankrupt).length;
 }
 
+/** Decyzja użytkownika (po 0.14): ≥ 2 segmenty, w tym co najmniej jeden niepowiązany z segmentem głównym (grupa różnych biznesów). */
+function hasUnrelatedSegments(stock) {
+    const segments = [...getStockSegments(stock)].sort((a, b) => b.share - a.share);
+    return segments.length >= 2 && segments.slice(1).some(seg => !areSectorsRelated(segments[0].sector, seg.sector));
+}
+
 /** Warunek strukturalny koncernu (bez kapitalizacji). */
 function hasConcernStructure(stock) {
-    return getStockSegments(stock).length >= CONCERN_MIN_SEGMENTS || getSubsidiaryCount(stock) >= CONCERN_MIN_SUBSIDIARIES;
+    const subsidiaries = getSubsidiaryCount(stock);
+    return hasUnrelatedSegments(stock) || subsidiaries >= CONCERN_MIN_SUBSIDIARIES
+        || (getStockSegments(stock).length >= 2 && subsidiaries >= 1); // decyzja 15
 }
 
 /** Próg kapitalizacji dla górnych `share` zwykłych spółek. */
@@ -11733,7 +11728,7 @@ const SUB_TRANSFER_VALUATION = 0.6;        // wycena córki × (1 − (transfer 
 const SUB_LOAN_MAX_SHARE = 0.20;           // pożyczka: najwyżej 20% gotówki matki
 const SUB_LOAN_REPAY = 0.25;               // spłata: 25% dodatniego zysku kwartału
 const SUB_LOAN_OFF_MARKET = 0.10;          // odchylenie oprocentowania > 10% od rynku = czerwona flaga
-const SUB_FOUND_CHANCE = 0.12;             // koncern zakłada córkę (na kwartał, < 3 córek; strojenie: 4% dawało 0,1 na przebieg)
+const SUB_FOUND_CHANCE = 0.025;            // koncern zakłada córkę (na kwartał, < 3 córek; decyzja 15: 4% dawało 3,3–3,8 na przebieg)
 const SUB_FOUND_STAKE = [0.70, 0.80];      // 20–30% akcji w ofercie publicznej
 const SUB_CREEP_MIN = 0.65;                // matka z ≥ 65% dokupuje akcje córki (60% = córki z giełd elitarnych — bez nich; strojenie: 60% dawało 4,9 wchłonięć)
 const SUB_CREEP_CHANCE = 0.6;             // strojenie: 0,5 → 0,7–0,8 wchłonięcia, 0,7 → 2,7
