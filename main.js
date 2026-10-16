@@ -239,6 +239,7 @@ function buildSaveSnapshot({ compact = 0 } = {}) {
         rescueOffers: Object.fromEntries(Object.entries(rescueOffers).filter(([, offer]) => !offer.closed)), // 0.14.2 P2: oferty per spółka
         usedCompanyNames, dejwCorpUsed, // 0.14.2 P4: unikalne nazwy spółek, „DejwCorp” najwyżej raz
         spinoffLog, // 0.14 T4: ostatnie wydzielenia (do 20)
+        cooperations, cooperationLog, // 0.14 T5: kooperacje (trwające i ostatnie zakończone)
         allBonds: compactBondsForSave(allBonds),
         activeBonds,
         cityInvestment,
@@ -527,6 +528,8 @@ function applySaveSnapshot(snapshot) {
     usedCompanyNames = Array.isArray(snapshot.usedCompanyNames) ? snapshot.usedCompanyNames : stocks.map(s => s.name); // 0.14.2 P4
     dejwCorpUsed = Boolean(snapshot.dejwCorpUsed) || stocks.some(s => /^DejwCorp/.test(s.name));
     spinoffLog = Array.isArray(snapshot.spinoffLog) ? snapshot.spinoffLog : []; // 0.14 T4
+    cooperations = Array.isArray(snapshot.cooperations) ? snapshot.cooperations : []; // 0.14 T5 (pole opcjonalne)
+    cooperationLog = Array.isArray(snapshot.cooperationLog) ? snapshot.cooperationLog : [];
     rescueOffers = {};
     for (const offer of [...Object.values(snapshot.rescueOffers || {}), snapshot.rescueOffer].filter(o => o?.symbol && !o.closed)) rescueOffers[offer.symbol] = offer;
 
@@ -1158,6 +1161,7 @@ gameTimers.weekly = setGameInterval(() => {
         expireRescueOffers(); // 0.14.2 P2: oferty emisji ratunkowej bez decyzji wygasają
         processStrategyQuarterly(); // 0.14 T3: rozszerzenia, podsektory, nisze, pivoty (strategy.js)
         processSpinoffsQuarterly(); // 0.14 T4: plotki, zapowiedzi i wydzielenia spółek córek
+        processCooperationsQuarterly(); // 0.14 T5: koncerny, kooperacje, skargi do KNF
         processSubsectorMechanicsQuarterly(); // 0.14 T2: badania kliniczne, bloki jądrowe, kontrole KNF (subsectors.js)
         processSpecialProjectsQuarterly(); // konsorcja i projekty specjalne (projects.js)
         reconcileSharesHeld(); // audyt A1: akcje w obrocie = suma posiadaczy
@@ -1642,6 +1646,7 @@ function createNewWorld() {
     migrateResearchInstituteValuation(); // 0.14.2 P1: instytuty wyceniane z zysków od startu
     usedCompanyNames = stocks.map(stock => stock.name); dejwCorpUsed = stocks.some(stock => /^DejwCorp/.test(stock.name)); // 0.14.2 P4
     spinoffLog = []; // 0.14 T4
+    cooperations = []; cooperationLog = []; // 0.14 T5
     investmentPool.stakesMigrated = true;
     initializeEtfs(); // ETF-y z portfelami prawdziwych akcji (etf.js)
     console.log("[M&A Init] Inicjalizacja nastawienia mediów...");

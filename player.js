@@ -2074,19 +2074,37 @@ function forceLiquidation(amountNeeded) {
  * Emisja: gracz oferuje JU po bieżącym NAV. Zapisują się zadowoleni klienci i nowi klienci
  * (zależnie od zaufania). Niesprzedane JU nie powstają. Ponad 2 emisje w okresie obniżają zaufanie.
  */
+// 0.14.2 P12: emisja od 25% zaufania, twardo najwyżej 2 na okres, wielkość ≤ (5% + 20% × zaufanie) obecnych JU.
+const EMISSION_MIN_TRUST = 25;
+const EMISSION_SIZE_BASE = 0.05;
+const EMISSION_SIZE_TRUST = 0.20;
+
+/** Powód blokady ręcznej emisji albo null. */
+function getEmissionBlockReason() {
+    if (!playerFund) return 'Brak funduszu.';
+    if (playerFund.trust < EMISSION_MIN_TRUST) return `Klienci nie ufają funduszowi — emisja możliwa od ${EMISSION_MIN_TRUST}% zaufania.`;
+    if (playerFund.current.emissions >= MAX_EMISSIONS_PER_PERIOD) return `Limit ${MAX_EMISSIONS_PER_PERIOD} emisji w tym okresie oceny wyczerpany.`;
+    return null;
+}
+
+/** Największa jedna emisja: (5% + 20% × zaufanie) obecnych JU. */
+function getMaxEmissionUnits() {
+    if (!playerFund) return 0;
+    return Math.max(0, Math.floor(playerFund.units * (EMISSION_SIZE_BASE + EMISSION_SIZE_TRUST * playerFund.trust / 100)));
+}
+
 function issueFundUnits(requestedUnits, options = {}) {
     if (!playerFund) return { issued: 0 };
-    const requested = Math.floor(Number(requestedUnits) || 0);
+    let requested = Math.floor(Number(requestedUnits) || 0);
     if (!(requested > 0)) return { issued: 0 };
+    const blocked = options.forcedValue ? (playerFund.current.emissions >= MAX_EMISSIONS_PER_PERIOD ? 'limit' : null) : getEmissionBlockReason();
+    if (blocked) return { issued: 0, raised: 0, blocked };
+    if (!options.forcedValue) requested = Math.min(requested, getMaxEmissionUnits());
+    if (!(requested > 0)) return { issued: 0, raised: 0, blocked: 'size' };
 
     const nav = getFundNav();
     const current = playerFund.current;
     current.emissions++;
-
-    if (current.emissions > MAX_EMISSIONS_PER_PERIOD) {
-        playerFund.trust = Math.max(0, playerFund.trust - 4);
-        logEvent(`⚠️ Kolejna emisja w tym okresie — obecni klienci obawiają się rozwodnienia. Zaufanie spada.`, 'review');
-    }
 
     const trust = playerFund.trust / 100;
     let demandValue = options.forcedValue || 0;
@@ -2101,7 +2119,7 @@ function issueFundUnits(requestedUnits, options = {}) {
     }
 
     const newClients = [];
-    const newClientCount = options.forcedValue ? 0 : Math.max(0, Math.round(trust * 4 + getRandomInRange(-1, 1.5)));
+    const newClientCount = options.forcedValue ? 0 : Math.max(0, Math.round(trust * 4 + getRandomInRange(-1.5, 1))); // P12: bez dodatniego szumu przy niskim zaufaniu
     for (let i = 0; i < newClientCount; i++) {
         const type = trust > 0.7 && Math.random() < 0.2 ? 'institution' : randomCharacter(playerFund.trust);
         const def = CLIENT_TYPES[type];
@@ -2109,6 +2127,9 @@ function issueFundUnits(requestedUnits, options = {}) {
         demandValue += newClients[newClients.length - 1].value;
     }
 
+    // P12: bez sztucznego klienta — gdy brak chętnych wśród obecnych, ich część popytu przepada.
+    const buyers = playerFund.clients.filter(client => client.satisfaction > 0.6 && client.joinedPeriod <= playerFund.periodNumber);
+    if (!options.forcedClient && !buyers.length) demandValue = newClients.reduce((sum, item) => sum + item.value, 0);
     const issuedUnits = Math.min(requested, demandValue / nav);
     if (!(issuedUnits > 0)) {
         logEvent(`📭 Emisja ${requested} JU: brak chętnych.`, 'review');
@@ -2128,9 +2149,7 @@ function issueFundUnits(requestedUnits, options = {}) {
 
     const existingUnits = issuedUnits - raised / nav;
     if (existingUnits > 0) {
-        const buyers = playerFund.clients.filter(client => client.satisfaction > 0.6 && client.joinedPeriod <= playerFund.periodNumber);
-        const target = options.forcedClient || (buyers.length > 0 ? null : addFundClient('institution', 0, nav));
-        const list = target ? [target] : buyers;
+        const list = options.forcedClient ? [options.forcedClient] : buyers;
         const per = existingUnits / list.length;
         for (const client of list) {
             const cost = client.avgCost * client.units + per * nav;
@@ -2152,7 +2171,7 @@ function issueFundUnits(requestedUnits, options = {}) {
 
 /** Zdarzenie: duży klient chce wejść — emisja wymuszona (liczy się do limitu emisji). */
 function maybeTriggerForcedEmission() {
-    if (Math.random() > 0.03 || playerFund.trust < 40) return;
+    if (Math.random() > 0.03 || playerFund.trust < 40 || playerFund.current.emissions >= MAX_EMISSIONS_PER_PERIOD) return; // P12: limit 2 emisji na okres
     const nav = getFundNav();
     const value = getFundAssets() * getRandomInRange(0.1, 0.3);
     const client = addFundClient('institution', 0, nav);
@@ -3265,10 +3284,12 @@ function processInvestorInterest() {
 /** Decyzja po A4: lokata spółki najwyżej 5% aktywów funduszu, wszystkie lokaty spółek najwyżej 10% aktywów na kwartał. */
 const CORPORATE_SUBSCRIPTION_MAX_SHARE = 0.05;
 const CORPORATE_SUBSCRIPTION_QUARTER_CAP = 0.10;
+const CORPORATE_SUBSCRIPTION_MIN_TRUST = 40; // 0.14.2 P12
 
 /** Spółki z dobrą opinią o graczu lokują nadwyżki gotówki w JU funduszu. */
 function processCorporateSubscriptions() {
     if (!playerFund || !isFundOpenForSubscriptions()) return; // 0.13.1 (B5): lokaty spółek w JU tylko przy otwartej emisji
+    if (playerFund.trust < CORPORATE_SUBSCRIPTION_MIN_TRUST) return; // 0.14.2 P12: spółki nie lokują w funduszu bez zaufania
     const flow = getFundFlowStats().current;
     const quarterCap = Math.max(1, flow.startUnits) * getFundNav() * CORPORATE_SUBSCRIPTION_QUARTER_CAP;
     for (const stock of stocks) {
@@ -3616,7 +3637,8 @@ function getRecentExcessAnnual() {
 /** Roczna stopa napływu nowych klientów (przy otwartej emisji): zaufanie, reputacja, wynik vs GIG. */
 function getOrganicInflowRate(trust = playerFund?.trust ?? 50) {
     const reputation = getPlayerReputationFactor();
-    return Math.max(0, Math.min(0.5, ORGANIC_INFLOW_BASE + (trust - 50) / 50 * 0.04 + getRecentExcessAnnual() * 1.2 + reputation * 0.03));
+    const trustGate = Math.max(0, Math.min(1, (trust - 25) / 25)); // 0.14.2 P12: 0 poniżej 25, liniowo do 50, potem bez zmian
+    return trustGate * Math.max(0, Math.min(0.5, ORGANIC_INFLOW_BASE + (trust - 50) / 50 * 0.04 + getRecentExcessAnnual() * 1.2 + reputation * 0.03));
 }
 
 /** Roczna stopa dopłat obecnych klientów (zadowoleni z zaufaniem): rośnie z wynikiem vs GIG. */

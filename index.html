@@ -307,8 +307,9 @@
     <div id="fund-summary" class="fund-summary"></div>
     <div class="fund-emission">
       <input type="number" id="fund-emission-units" min="1" value="100" aria-label="Liczba JU do emisji">
-      <button class="btn-secondary" onclick="handleFundEmission()">📥 Emisja JU</button>
+      <button class="btn-secondary" id="fund-emission-btn" onclick="handleFundEmission()">📥 Emisja JU</button>
     </div>
+    <p id="fund-emission-info" class="fund-muted text-xs"></p>
     <label class="fund-open-subscriptions text-sm" title="Gdy włączone, zadowoleni i nowi klienci sami dokupują JU po NAV (nowe jednostki). Wyłączone: JU przybywa tylko przez Twoją emisję.">
       <input type="checkbox" id="fund-open-subscriptions" onchange="setFundOpenSubscriptions(this.checked)"> Emisja ciągła (wpłaty klientów bez mojej emisji)
     </label>

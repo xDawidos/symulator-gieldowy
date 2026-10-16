@@ -2762,14 +2762,14 @@ function computeQuarterResults(stock) {
     const projectAdj = (typeof getSpecialProjectGrowth === 'function' ? getSpecialProjectGrowth(stock) : 0) // bonusy projektów specjalnych
         + (typeof getMafiaFrontGrowth === 'function' ? getMafiaFrontGrowth(stock) : 0) // spółki-przykrywki rosną z wpływami mafii
         + (typeof getDefenseGrowthBonus === 'function' ? getDefenseGrowthBonus(stock) : 0); // zbrojeniówka: bonus od siły policji
-    const societyAdj = (typeof getSocietyGrowthAdj === 'function' ? getSocietyGrowthAdj(stock) : 0) + getSubsectorGrowthAdj(stock) + getNicheGrowthAdj(stock); // 0.13: popyt klas, niedobór specjalistów; T2: podsektory; T3: nisze
+    const societyAdj = (typeof getSocietyGrowthAdj === 'function' ? getSocietyGrowthAdj(stock) : 0) + getSubsectorGrowthAdj(stock) + getNicheGrowthAdj(stock) + getCooperationGrowthAdj(stock); // 0.13: popyt klas, niedobór specjalistów; T2: podsektory; T3: nisze; T5: kooperacje
     const growth = profile.growth / 4 * SECTOR_GROWTH_FACTOR + (Number(stock.growthAdj) || 0) + profile.beta * gdp + health * 0.004 + phaseAdj + sectorAdj + projectAdj + societyAdj + inflation / 4 * INFLATION_PASS_THROUGH + gaussianRandom() * 0.02;
     // T2 (Fintech): zakaz nowych klientów po kontroli KNF — wzrost przychodów 0 przez 2 kwartały.
     const growthCapped = isKnfGrowthBlocked(stock) ? Math.min(0, growth) : growth;
     fundamentals.revenue = Math.max(1000, fundamentals.revenue * (1 + Math.max(-0.25, Math.min(0.25, growthCapped))));
 
     // 0.13: strajk, epidemia, klęska — przychody tylko tego kwartału (baza przychodów bez zmian).
-    const quarterFactor = (typeof getStrikeRevenueFactor === 'function' ? getStrikeRevenueFactor(stock) : 1) * (typeof getSocietyRevenueFactor === 'function' ? getSocietyRevenueFactor(stock) : 1) * consumeNicheRevenueFactor(stock); // T3: sezon TV/Rozrywka
+    const quarterFactor = (typeof getStrikeRevenueFactor === 'function' ? getStrikeRevenueFactor(stock) : 1) * (typeof getSocietyRevenueFactor === 'function' ? getSocietyRevenueFactor(stock) : 1) * consumeNicheRevenueFactor(stock) * getCooperationShockFactor(stock); // T3: sezon TV/Rozrywka; T5: strajk kooperanta (połowa szoku)
     const baseRevenue = fundamentals.revenue;
     const revenue = baseRevenue * quarterFactor;
     const lostRevenue = baseRevenue - revenue; // dźwignia operacyjna: 40% kosztów jest sztywnych w krótkim terminie
@@ -3325,6 +3325,7 @@ function processFinancialReports() {
                  if (typeof mafiaRescueFromBankruptcy === 'function' && mafiaRescueFromBankruptcy(stock)) continue; // „inwestor” w ostatniej chwili (mafia.js)
                  logEvent(`🔥 BANKRUCTWO! Spółka ${stock.name} (${stock.symbol}) ogłasza upadłość!`, 'review');
                  if (typeof onAcademyEvent === 'function') onAcademyEvent('bankruptcy', stock); // przed usunięciem akcji gracza
+                 if (typeof onCooperationPartnerShock === 'function') onCooperationPartnerShock(stock, COOP_BANKRUPTCY_SHOCK, 'bankructwo'); // T5: kooperanci tracą kontrahenta
                  removeStockFromGame(stock.symbol); 
                  stock.isBankrupt = true;
                  stock.timeOfDeath = Date.now();
@@ -9284,6 +9285,7 @@ function revealFraud(stock, by) {
     if (writeOff > 0) adjustBalanceSheet(stock, { assets: -writeOff, retainedEarnings: -writeOff });
     const drop = 0.2 + Math.min(0.2, writeOff / Math.max(1, getMarketCapValue(stock)));
     applyPriceEffect(stock.symbol, -drop, 'negative', 'company');
+    if (typeof onCooperationPartnerShock === 'function') onCooperationPartnerShock(stock, drop, 'korekta wyników'); // T5: ryzyko kontrahenta
     stock.financialHealth = Math.max(-5, (Number(stock.financialHealth) || 0) - 1.5);
     stock.fraudHistory = [...(stock.fraudHistory || []), { quarter: getAccountingQuarter(), writeOff, by }].slice(-3);
     if (typeof replaceCeo === 'function' && stock.ceo) replaceCeo(stock);
@@ -9333,6 +9335,8 @@ function getRedFlags(stock) {
         flags.push({ id: 'beat', label: 'Wyniki zawsze tuż nad konsensusem', desc: 'Trzy raporty z rzędu minimalnie powyżej oczekiwań — możliwe „zarządzanie wynikiem”.' });
     }
     const grey = typeof getGreyShare === 'function' ? getGreyShare(stock) : 0;
+    const related = typeof cooperations !== 'undefined' ? cooperations.find(c => c.flag && (c.a === stock.symbol || c.b === stock.symbol)) : null; // T5: tunelowanie
+    if (related) flags.push({ id: 'related', label: 'Transakcje z podmiotami powiązanymi', desc: `Kooperacja ${related.a} — ${related.b}: wspólny właściciel ${related.flag.name} ma ${(related.flag.pctA * 100).toFixed(0)}% i ${(related.flag.pctB * 100).toFixed(0)}% — ryzyko przerzucania zysku.` });
     if (grey > 0.05) flags.push({ id: 'grey', label: 'Szara strefa', desc: `Ok. ${(grey * 100).toFixed(0)}% zatrudnionych bez umów — wyższa marża dziś, ryzyko kary Inspekcji Pracy jutro.` });
     return flags;
 }
@@ -10640,7 +10644,7 @@ function getSynergyMarginAdj(stock) {
 
 /** Dodatek do marży ze strategii (computeQuarterResults). */
 function getStrategyMarginAdj(stock) {
-    return getSynergyMarginAdj(stock) + getFocusMarginAdj(stock) + getNicheMarginAdj(stock) + getPivotMarginAdj(stock);
+    return getSynergyMarginAdj(stock) + getFocusMarginAdj(stock) + getNicheMarginAdj(stock) + getPivotMarginAdj(stock) + getCooperationMarginAdj(stock); // T5: kooperacje
 }
 
 /** Szansa prezesa na rozszerzenie: cechy i koniunktura. */
@@ -11030,7 +11034,7 @@ function orderStrategy(symbol, type, target = null) {
 // Carve-out (25%, a ponad limitem spółek zawsze): matka zachowuje 51–80% akcji córki, córka jest zależna.
 
 const SPINOFF_MIN_SHARE = 0.30;
-const SPINOFF_QUARTER_CHANCE = 0.04;      // prezes, na kwartał, dla spełniających warunki
+const SPINOFF_QUARTER_CHANCE = 0.0525;    // prezes, na kwartał, dla spełniających warunki (decyzja 13: 4% → 5,25%)
 const SPINOFF_BOT_ORDER_CHANCE = 0.10;    // bot-większościowiec zleca od razu
 const SPINOFF_FAKE_RUMOR_CHANCE = SPINOFF_QUARTER_CHANCE * 0.4 / 0.6; // 60% plotek jest prawdziwych
 const SPINOFF_ANNOUNCE_JUMP = [0.03, 0.08];
@@ -11039,7 +11043,11 @@ const SPINOFF_CARVE_KEEP = [0.51, 0.80];
 const SPINOFF_DOMESTIC_LIMIT = 115;       // decyzja 4: spin-off do 115 spółek krajowych, powyżej tylko carve-out
 const SPINOFF_LOG_LIMIT = 20;
 const SPINOFF_PLAYER_BLOCK_QUARTERS = 4;
-let spinoffLog = [];                       // { parent, child, quarter, carve, keep, valueBefore, ratio2q }
+let spinoffLog = [];                       // { parent, child, quarter, carve, keep, valueBefore, gigBefore, ratio2q, gig2q }
+
+function getGigValue() {
+    return typeof marketIndexes !== 'undefined' ? Number(marketIndexes.find(i => i.id === 'GIG')?.value) || 0 : 0;
+}
 
 function getSpinoffQuarter() {
     return typeof macro === 'object' && macro ? macro.quarter : 0;
@@ -11083,7 +11091,7 @@ function announceSpinoff(stock, by = 'ceo') {
     if (!seg || stock.spinoff) return null;
     const quarter = getSpinoffQuarter();
     const valueBefore = getMarketCapValue(stock);
-    stock.spinoff = { stage: 'announced', sector: seg.sector, subsector: seg.subsector || null, by, announcedQuarter: quarter, valueBefore };
+    stock.spinoff = { stage: 'announced', sector: seg.sector, subsector: seg.subsector || null, by, announcedQuarter: quarter, valueBefore, gigBefore: getGigValue() };
     stock.spinoffRumor = null;
     const jump = getRandomInRange(...SPINOFF_ANNOUNCE_JUMP) * (1 + (typeof gaussianRandom === 'function' ? gaussianRandom() * 0.2 : 0));
     applyPriceEffect(stock.symbol, Math.max(0.01, jump), 'positive', 'company');
@@ -11245,7 +11253,7 @@ function executeSpinoff(parent, options = {}) {
     updateFundamentalRatios(parent); updateFundamentalRatios(child);
     if (typeof syncSubsidiaryLinks === 'function') syncSubsidiaryLinks();
     if (typeof addChartEvent === 'function') { addChartEvent(parent, '✂️', `Wydzielenie: ${child.name} (${child.symbol})`); addChartEvent(child, '🆕', `Debiut po wydzieleniu z ${parent.name}`); }
-    spinoffLog.unshift({ parent: parent.symbol, child: symbol, quarter, carve, keep, valueBefore: plan.valueBefore || 0, ratio2q: null });
+    spinoffLog.unshift({ parent: parent.symbol, child: symbol, quarter, carve, keep, valueBefore: plan.valueBefore || 0, gigBefore: plan.gigBefore || 0, ratio2q: null, gig2q: null });
     spinoffLog.length = Math.min(spinoffLog.length, SPINOFF_LOG_LIMIT);
     noteStrategyStat(carve ? 'carveOuts' : 'spinoffs');
     logEvent(carve
@@ -11277,12 +11285,430 @@ function processSpinoffsQuarterly() {
         if (roll < SPINOFF_QUARTER_CHANCE) noteSpinoffRumor(stock, getSpinoffCandidateSegment(stock).sector, true);
         else if (roll < SPINOFF_QUARTER_CHANCE + SPINOFF_FAKE_RUMOR_CHANCE) noteSpinoffRumor(stock, getSpinoffCandidateSegment(stock).sector, false);
     }
-    // Pomiar: suma wartości matka + córka 2 kw. po wydzieleniu względem wartości matki przed zapowiedzią.
+    // Pomiar: suma wartości matka + córka 2 kw. po wydzieleniu względem wartości matki przed zapowiedzią (oraz zmiana GIG w tym okresie).
     for (const entry of spinoffLog) {
         if (entry.ratio2q !== null || quarter - entry.quarter < 2 || !(entry.valueBefore > 0)) continue;
         const parent = stocks.find(s => s.symbol === entry.parent), child = stocks.find(s => s.symbol === entry.child);
         if (!parent || !child) { entry.ratio2q = NaN; continue; }
         const childFloat = getMarketCapValue(child) * (entry.carve ? 1 - entry.keep : 1);
         entry.ratio2q = (getMarketCapValue(parent) + childFloat) / entry.valueBefore;
+        entry.gig2q = entry.gigBefore > 0 ? getGigValue() / entry.gigBefore : null; // decyzja 13: efekt mierzony ponad GIG z tego samego okresu
     }
+}
+
+// =================================================================================
+// 0.14 T5: KONCERNY, KOOPERACJE I OCHRONA PRZED TUNELOWANIEM
+// =================================================================================
+// Koncern 🏢: ≥ 3 segmenty albo ≥ 2 spółki zależne i miejsce w górnych 10% kapitalizacji.
+// Kooperacja (dostawca–odbiorca, 8–16 kw., najwyżej 3 na koncern): obie strony +0,3 pp wzrostu na kwartał
+// i +0,5 pp marży — tylko dla segmentów powiązanych (premia × udział powiązanego segmentu).
+// Ryzyko kontrahenta: strajk, bankructwo albo korekta wyników partnera przenosi połowę szoku na drugą stronę.
+// Zerwanie przed terminem: kara umowna. Kooperacja spółek jednego właściciela z nierównymi udziałami
+// = czerwona flaga „transakcje z podmiotami powiązanymi”; pakiet mniejszościowy może złożyć skargę do KNF.
+
+const CONCERN_TOP_SHARE = 0.10;            // górne 10% kapitalizacji
+const CONCERN_KEEP_SHARE = 0.20;           // histereza: status zostaje w górnych 20%
+const CONCERN_MIN_SEGMENTS = 3;
+const CONCERN_MIN_SUBSIDIARIES = 2;
+const COOP_MAX_PER_CONCERN = 3;
+const COOP_MAX_PER_PARTNER = 2;            // zwykła spółka (nie koncern)
+const COOP_QUARTERS = [8, 16];
+const COOP_GROWTH = 0.003;                 // +0,3 pp wzrostu przychodów na kwartał (× udział segmentu powiązanego)
+const COOP_MARGIN = 0.005;                 // +0,5 pp marży (× udział segmentu powiązanego)
+const COOP_START_CHANCE = 0.5;             // na kwartał, koncern z wolnym miejscem (strojenie: 0,25 dawało 2,9 aktywnych)
+const COOP_SHOCK_SHARE = 0.5;              // połowa szoku partnera
+const COOP_BANKRUPTCY_SHOCK = 0.3;         // szok utraty kontrahenta (przed połową i udziałem segmentu)
+const COOP_BREAK_CHANCE = 0.015;           // zerwanie bez powodu (na kwartał)
+const COOP_WEAK_BREAK_CHANCE = 0.25;       // partner w złej kondycji (≤ −2)
+const COOP_PENALTY = 0.02;                 // kara umowna: × roczne przychody segmentu zrywającego
+const COOP_RENEW_CHANCE = 0.6;
+const COOP_TERMS_SKEW = 0.01;              // warunki nierynkowe: 1% przychodów segmentu poszkodowanego na kwartał
+const RELATED_PARTY_MIN_STAKE = 0.2;
+const RELATED_PARTY_GAP = 0.25;            // np. 80% i 20% — nierówne udziały jednego właściciela
+const KNF_COMPLAINT_BOT_CHANCE = 0.2;
+const KNF_COMPLAINT_FINE = 0.1;            // grzywna: × zwracana kwota
+const COOP_LOG_LIMIT = 20;
+let cooperations = [];                     // { id, a, b, segA, segB, start, end, by, terms, tunneled, flag, complaint }
+let cooperationLog = [];                   // zakończone: { id, a, b, start, endedQuarter, reason }
+
+function getCoopQuarter() {
+    return typeof macro === 'object' && macro ? Number(macro.quarter) || 0 : 0;
+}
+
+function isConcernCandidateCompany(stock) {
+    return Boolean(stock && !stock.assetType && !stock.isBankrupt && !stock.marketOperator && stock.fundamentals);
+}
+
+function getSubsidiaryCount(stock) {
+    return stocks.filter(child => child.isSubsidiaryOf === stock.symbol && !child.isBankrupt).length;
+}
+
+/** Warunek strukturalny koncernu (bez kapitalizacji). */
+function hasConcernStructure(stock) {
+    return getStockSegments(stock).length >= CONCERN_MIN_SEGMENTS || getSubsidiaryCount(stock) >= CONCERN_MIN_SUBSIDIARIES;
+}
+
+/** Próg kapitalizacji dla górnych `share` zwykłych spółek. */
+function getCapThreshold(share) {
+    const caps = stocks.filter(isConcernCandidateCompany).map(getMarketCapValue).sort((a, b) => b - a);
+    return caps.length ? caps[Math.max(0, Math.ceil(caps.length * share) - 1)] : Infinity;
+}
+
+function isConcern(stock) {
+    return Boolean(stock?.concern) && !stock.isBankrupt;
+}
+
+/** Co kwartał: nadanie i odebranie statusu koncernu. */
+function updateConcernStatus() {
+    const top = getCapThreshold(CONCERN_TOP_SHARE), keep = getCapThreshold(CONCERN_KEEP_SHARE);
+    for (const stock of stocks) {
+        if (!isConcernCandidateCompany(stock)) { if (stock.concern) stock.concern = null; continue; }
+        const cap = getMarketCapValue(stock);
+        const structure = hasConcernStructure(stock);
+        if (!stock.concern && structure && cap >= top) {
+            stock.concern = { since: getCoopQuarter() };
+            noteStrategyStat('concerns');
+            logEvent(`🏢 ${stock.name} staje się koncernem — ${getStockSegments(stock).length} segmenty, ${getSubsidiaryCount(stock)} spółek zależnych, czołówka kapitalizacji.`, 'company');
+            if (isPlayerHolding(stock) && typeof unlockAcademyEntry === 'function') unlockAcademyEntry('grupaKapitalowa', `${stock.name}: koncern w Twoim portfelu`);
+        } else if (stock.concern && (!structure || cap < keep)) {
+            stock.concern = null;
+            logEvent(`🏢 ${stock.name} traci status koncernu.`, 'company');
+        }
+    }
+}
+
+function getStockCooperations(stock) {
+    const symbol = typeof stock === 'string' ? stock : stock?.symbol;
+    return cooperations.filter(c => c.a === symbol || c.b === symbol);
+}
+
+function getCooperationLimit(stock) {
+    return isConcern(stock) ? COOP_MAX_PER_CONCERN : COOP_MAX_PER_PARTNER;
+}
+
+/** Strona kooperacji z perspektywy spółki: { own, partner, ownSeg, partnerSeg }. */
+function getCoopSide(coop, stock) {
+    const isA = coop.a === stock.symbol;
+    return { isA, own: isA ? coop.a : coop.b, partner: isA ? coop.b : coop.a, ownSeg: isA ? coop.segA : coop.segB, partnerSeg: isA ? coop.segB : coop.segA };
+}
+
+/** Udział segmentu powiązanego w przychodach spółki (0, gdy segment zniknął, np. po wydzieleniu). */
+function getSegmentShare(stock, sector) {
+    return getStockSegments(stock).find(seg => seg.sector === sector)?.share || 0;
+}
+
+/** Para segmentów powiązanych o największym znaczeniu dla obu stron albo null. */
+function findCoopSegmentPair(a, b) {
+    let best = null;
+    for (const sa of getStockSegments(a)) for (const sb of getStockSegments(b)) {
+        if (!areSectorsRelated(sa.sector, sb.sector)) continue;
+        const score = sa.share * sb.share;
+        if (!best || score > best.score) best = { segA: sa.sector, segB: sb.sector, score };
+    }
+    return best;
+}
+
+function hasCooperationBetween(a, b) {
+    return cooperations.some(c => (c.a === a.symbol && c.b === b.symbol) || (c.a === b.symbol && c.b === a.symbol));
+}
+
+function isGroupRelated(a, b) {
+    return a.isSubsidiaryOf === b.symbol || b.isSubsidiaryOf === a.symbol || (a.isSubsidiaryOf && a.isSubsidiaryOf === b.isSubsidiaryOf);
+}
+
+function canCooperate(a, b) {
+    return isConcernCandidateCompany(a) && isConcernCandidateCompany(b) && a !== b && !a.isBankStock && !b.isBankStock
+        && !hasCooperationBetween(a, b) && getStockCooperations(a).length < getCooperationLimit(a) && getStockCooperations(b).length < getCooperationLimit(b)
+        && Boolean(findCoopSegmentPair(a, b));
+}
+
+/** Wspólny właściciel z nierównymi udziałami (np. 80% i 20%) → { holder, name, pctA, pctB } albo null. */
+function findRelatedPartyOwner(a, b) {
+    const listB = new Map(getShareholders(b).filter(h => !['insiders', 'city'].includes(h.kind)).map(h => [h.id, h]));
+    let found = null;
+    for (const ha of getShareholders(a)) {
+        const hb = listB.get(ha.id);
+        if (!hb || Math.min(ha.pct, hb.pct) < RELATED_PARTY_MIN_STAKE || Math.max(ha.pct, hb.pct) <= 0.5) continue;
+        if (Math.abs(ha.pct - hb.pct) < RELATED_PARTY_GAP) continue;
+        if (!found || Math.abs(ha.pct - hb.pct) > Math.abs(found.pctA - found.pctB)) found = { holder: ha.id, name: ha.name, pctA: ha.pct, pctB: hb.pct };
+    }
+    return found;
+}
+
+function refreshCoopFlag(coop) {
+    const a = stocks.find(s => s.symbol === coop.a), b = stocks.find(s => s.symbol === coop.b);
+    coop.flag = a && b ? findRelatedPartyOwner(a, b) : null;
+    return coop.flag;
+}
+
+/** Zawarcie kooperacji. terms: 'market' albo symbol strony, która zyskuje na warunkach nierynkowych (tylko gracz). */
+function startCooperation(a, b, by = 'ceo', terms = 'market', quarters = null) {
+    if (!canCooperate(a, b)) return null;
+    const pair = findCoopSegmentPair(a, b);
+    const quarter = getCoopQuarter();
+    const coop = { id: `coop-${quarter}-${a.symbol}-${b.symbol}`, a: a.symbol, b: b.symbol, segA: pair.segA, segB: pair.segB,
+        start: quarter, end: quarter + (quarters || getRandomIntInRange(...COOP_QUARTERS)), by, terms: [a.symbol, b.symbol].includes(terms) ? terms : 'market', tunneled: 0, flag: null, complaint: null };
+    cooperations.push(coop);
+    refreshCoopFlag(coop);
+    noteStrategyStat('cooperations');
+    logEvent(`🤝 Kooperacja: ${a.name} (${pair.segA}) i ${b.name} (${pair.segB}) — umowa dostawca–odbiorca do kw. ${coop.end}.`, 'company');
+    if ((isPlayerHolding(a) || isPlayerHolding(b)) && typeof unlockAcademyEntry === 'function') unlockAcademyEntry('ryzykoKontrahenta', `${a.name} i ${b.name}: kooperacja`);
+    return coop;
+}
+
+function endCooperation(coop, reason) {
+    cooperations = cooperations.filter(c => c !== coop);
+    cooperationLog.unshift({ id: coop.id, a: coop.a, b: coop.b, start: coop.start, endedQuarter: getCoopQuarter(), reason });
+    cooperationLog.length = Math.min(cooperationLog.length, COOP_LOG_LIMIT);
+}
+
+/** Przelew między spółkami z korektą bilansu (gotówka jest częścią aktywów); brak gotówki pokrywa kredyt. */
+function payBetweenCompanies(from, to, amount, purpose) {
+    const value = Math.max(0, Number(amount) || 0);
+    if (!(value > 0) || !from || !to) return 0;
+    ensureCompanyCash(from, value, `Kredyt: ${purpose}`);
+    transferCompanyCash(from, to, value, purpose);
+    adjustBalanceSheet(from, { assets: -value, retainedEarnings: -value });
+    adjustBalanceSheet(to, { assets: value, retainedEarnings: value });
+    return value;
+}
+
+/** Zerwanie przed terminem: zrywający płaci karę umowną drugiej stronie. */
+function breakCooperation(coop, breakerSymbol, reason = 'zerwanie') {
+    const breaker = stocks.find(s => s.symbol === breakerSymbol);
+    const other = stocks.find(s => s.symbol === (coop.a === breakerSymbol ? coop.b : coop.a));
+    let penalty = 0;
+    if (breaker && other && !breaker.isBankrupt && !other.isBankrupt) {
+        const seg = coop.a === breakerSymbol ? coop.segA : coop.segB;
+        penalty = Math.round(getAnnualRevenue(breaker) * Math.max(0.1, getSegmentShare(breaker, seg)) * COOP_PENALTY);
+        payBetweenCompanies(breaker, other, penalty, 'Kara umowna: zerwanie kooperacji');
+    }
+    endCooperation(coop, reason);
+    noteStrategyStat('cooperationsBroken');
+    if (breaker && other) logEvent(`💔 ${breaker.name} zrywa kooperację z ${other.name} — kara umowna ${formatZl(penalty, 0)}.`, 'company');
+    return penalty;
+}
+
+/** Wzrost przychodów z kooperacji: +0,3 pp × udział segmentu powiązanego (computeQuarterResults). */
+function getCooperationGrowthAdj(stock) {
+    let adj = 0;
+    for (const coop of cooperations) {
+        if (coop.a !== stock.symbol && coop.b !== stock.symbol) continue;
+        adj += COOP_GROWTH * getSegmentShare(stock, getCoopSide(coop, stock).ownSeg);
+    }
+    return adj;
+}
+
+/** Przepływ na warunkach nierynkowych (zł na kwartał): dodatni dla beneficjenta, ujemny dla poszkodowanego. */
+function getCoopTunnelFlow(coop, stock) {
+    if (coop.terms === 'market' || !coop.terms) return 0;
+    const harmedSymbol = coop.terms === coop.a ? coop.b : coop.a;
+    const harmed = harmedSymbol === stock.symbol ? stock : stocks.find(s => s.symbol === harmedSymbol);
+    if (!harmed) return 0;
+    const harmedSeg = harmedSymbol === coop.a ? coop.segA : coop.segB;
+    const amount = COOP_TERMS_SKEW * (Number(harmed.fundamentals?.revenue) || 0) * getSegmentShare(harmed, harmedSeg);
+    return stock.symbol === coop.terms ? amount : stock.symbol === harmedSymbol ? -amount : 0;
+}
+
+/** Marża z kooperacji: +0,5 pp × udział segmentu powiązanego, plus warunki nierynkowe (getStrategyMarginAdj). */
+function getCooperationMarginAdj(stock) {
+    let adj = 0;
+    const revenue = Math.max(1, Number(stock.fundamentals?.revenue) || 0);
+    for (const coop of cooperations) {
+        if (coop.a !== stock.symbol && coop.b !== stock.symbol) continue;
+        adj += COOP_MARGIN * getSegmentShare(stock, getCoopSide(coop, stock).ownSeg) + getCoopTunnelFlow(coop, stock) / revenue;
+    }
+    return adj;
+}
+
+/** Strajk partnera: połowa jego utraty przychodów × udział segmentu powiązanego (mnożnik przychodów kwartału). */
+function getCooperationShockFactor(stock) {
+    let factor = 1;
+    for (const coop of cooperations) {
+        if (coop.a !== stock.symbol && coop.b !== stock.symbol) continue;
+        const side = getCoopSide(coop, stock);
+        const partner = stocks.find(s => s.symbol === side.partner);
+        const pct = Number(partner?.workforce?.strike?.pct) || 0;
+        if (pct > 0) factor *= 1 - COOP_SHOCK_SHARE * pct * getSegmentShare(stock, side.ownSeg);
+    }
+    return Math.max(0.5, factor);
+}
+
+/** Szok partnera (korekta wyników, bankructwo): druga strona dostaje połowę × udział segmentu powiązanego. */
+function onCooperationPartnerShock(stock, shock, label) {
+    for (const coop of getStockCooperations(stock)) {
+        const side = getCoopSide(coop, stock);
+        const partner = stocks.find(s => s.symbol === side.partner);
+        if (!partner || partner.isBankrupt) continue;
+        const partnerSeg = side.isA ? coop.segB : coop.segA;
+        const effect = Math.abs(shock) * COOP_SHOCK_SHARE * getSegmentShare(partner, partnerSeg);
+        if (effect > 0.001) {
+            applyPriceEffect(partner.symbol, -effect, 'negative', 'company');
+            noteStrategyStat('cooperationShocks');
+            logEvent(`⛓️ Ryzyko kontrahenta: ${label} w ${stock.name} uderza w kooperanta ${partner.name} (kurs −${(effect * 100).toFixed(1)}%).`, 'company');
+            if (isPlayerHolding(partner) && typeof unlockAcademyEntry === 'function') unlockAcademyEntry('ryzykoKontrahenta', `${partner.name}: szok u kooperanta ${stock.name}`);
+        }
+        if (label === 'bankructwo') endCooperation(coop, 'bankructwo partnera');
+    }
+}
+
+/** Kandydat na kooperanta dla koncernu: segment powiązany, wolne miejsce, bez spółek z własnej grupy. */
+function pickCooperationPartner(concern) {
+    const options = stocks.filter(s => s !== concern && !isGroupRelated(concern, s) && canCooperate(concern, s))
+        .map(s => ({ s, score: findCoopSegmentPair(concern, s).score * (1 + Math.max(0, Number(s.financialHealth) || 0) * 0.1) }))
+        .sort((x, y) => y.score - x.score).slice(0, 5);
+    if (!options.length) return null;
+    const total = options.reduce((sum, o) => sum + o.score, 0);
+    let roll = Math.random() * total;
+    for (const o of options) { roll -= o.score; if (roll <= 0) return o.s; }
+    return options[0].s;
+}
+
+/** Skarga do KNF (pakiet mniejszościowy poszkodowanej strony); wynik w przyszłym kwartale. */
+function fileKnfComplaint(coopId, by = 'player') {
+    const coop = cooperations.find(c => c.id === coopId);
+    if (!coop || coop.complaint) return false;
+    coop.complaint = { quarter: getCoopQuarter(), by };
+    noteStrategyStat('knfComplaints');
+    const a = stocks.find(s => s.symbol === coop.a), b = stocks.find(s => s.symbol === coop.b);
+    logEvent(`⚖️ Skarga do KNF: transakcje z podmiotami powiązanymi w kooperacji ${a?.name || coop.a} — ${b?.name || coop.b} (zgłasza: ${by === 'player' ? 'Twój fundusz' : 'akcjonariusz mniejszościowy'}).`, 'review');
+    if (typeof unlockAcademyEntry === 'function' && by === 'player') unlockAcademyEntry('podmiotyPowiazane');
+    return true;
+}
+
+/** Rozstrzygnięcie skargi: warunki nierynkowe + skuteczna KNF → zwrot korzyści z grzywną i warunki rynkowe. */
+function resolveKnfComplaint(coop) {
+    const complaint = coop.complaint;
+    const a = stocks.find(s => s.symbol === coop.a), b = stocks.find(s => s.symbol === coop.b);
+    const skewed = coop.terms && coop.terms !== 'market';
+    const eff = typeof getInstitutionEffectiveness === 'function' && typeof oversight === 'object' && oversight?.knf ? getInstitutionEffectiveness(oversight.knf) : 0.3;
+    let result;
+    if (!skewed) result = 'oddalona';
+    else if (Math.random() < eff) {
+        const beneficiary = coop.terms === coop.a ? a : b, harmed = coop.terms === coop.a ? b : a;
+        const refund = Math.round(coop.tunneled);
+        payBetweenCompanies(beneficiary, harmed, refund, 'Zwrot korzyści: transakcje z podmiotami powiązanymi (KNF)');
+        const fine = Math.round(refund * KNF_COMPLAINT_FINE);
+        if (fine > 0) {
+            ensureCompanyCash(beneficiary, fine, 'Kredyt: grzywna KNF');
+            adjustCompanyCash(beneficiary, -fine);
+            adjustBalanceSheet(beneficiary, { assets: -fine, retainedEarnings: -fine });
+            governmentTreasury += fine;
+            recordPayment(beneficiary, 'external:knf', fine, 'Grzywna KNF: transakcje z podmiotami powiązanymi');
+        }
+        applyPriceEffect(beneficiary.symbol, -0.03, 'negative', 'company');
+        coop.terms = 'market'; coop.tunneled = 0;
+        result = 'uwzględniona';
+        logEvent(`⚖️ KNF uwzględnia skargę: ${beneficiary.name} zwraca ${harmed.name} ${formatZl(refund, 0)} korzyści z kooperacji i płaci grzywnę ${formatZl(fine, 0)}. Warunki wracają do rynkowych.`, 'review');
+    } else result = 'bez dowodów';
+    if (result !== 'uwzględniona') logEvent(`⚖️ KNF: skarga na kooperację ${a?.name || coop.a} — ${b?.name || coop.b} ${result === 'oddalona' ? 'oddalona — warunki rynkowe' : 'umorzona — brak dowodów'}.`, 'review');
+    coop.complaint = { ...complaint, result, resolvedQuarter: getCoopQuarter() };
+    noteStrategyStat(result === 'uwzględniona' ? 'knfUpheld' : 'knfDismissed');
+    return result;
+}
+
+/** Bot z pakietem ≥ 5% w spółce poszkodowanej warunkami nierynkowymi może złożyć skargę. */
+function maybeBotKnfComplaint(coop) {
+    if (coop.complaint || !coop.terms || coop.terms === 'market') return;
+    const harmed = stocks.find(s => s.symbol === (coop.terms === coop.a ? coop.b : coop.a));
+    if (!harmed) return;
+    const minority = getShareholders(harmed).some(h => ['ai', 'botFund'].includes(h.kind) && h.pct >= 0.05 && h.id !== coop.flag?.holder);
+    if (minority && Math.random() < KNF_COMPLAINT_BOT_CHANCE) fileKnfComplaint(coop.id, 'bot');
+}
+
+/** Co kwartał (pętla kwartalna): status koncernów, przebieg kooperacji, nowe umowy. */
+function processCooperationsQuarterly(quarter = getCoopQuarter()) {
+    updateConcernStatus();
+    for (const coop of [...cooperations]) {
+        const a = stocks.find(s => s.symbol === coop.a), b = stocks.find(s => s.symbol === coop.b);
+        if (!a || !b || a.isBankrupt || b.isBankrupt) { endCooperation(coop, 'partner zniknął'); continue; }
+        if (!getSegmentShare(a, coop.segA) || !getSegmentShare(b, coop.segB)) { endCooperation(coop, 'segment wydzielony lub zamknięty'); continue; }
+        if (coop.complaint && !coop.complaint.result && coop.complaint.quarter < quarter) resolveKnfComplaint(coop);
+        coop.tunneled += Math.abs(getCoopTunnelFlow(coop, a));
+        refreshCoopFlag(coop);
+        maybeBotKnfComplaint(coop);
+        if (quarter >= coop.end) {
+            const renew = coop.by !== 'player' && (Number(a.financialHealth) || 0) > 0 && (Number(b.financialHealth) || 0) > 0 && Math.random() < COOP_RENEW_CHANCE;
+            if (renew) { coop.end = quarter + getRandomIntInRange(...COOP_QUARTERS); logEvent(`🤝 ${a.name} i ${b.name} przedłużają kooperację do kw. ${coop.end}.`, 'company'); }
+            else { endCooperation(coop, 'wygasła'); noteStrategyStat('cooperationsEnded'); }
+            continue;
+        }
+        if (coop.by === 'player') continue; // umowy gracza zrywa tylko gracz
+        const weak = [a, b].find(s => (Number(s.financialHealth) || 0) <= -2);
+        if (weak && Math.random() < COOP_WEAK_BREAK_CHANCE) breakCooperation(coop, weak === a ? b.symbol : a.symbol, 'słaba kondycja partnera');
+        else if (Math.random() < COOP_BREAK_CHANCE) breakCooperation(coop, Math.random() < 0.5 ? a.symbol : b.symbol, 'zerwanie');
+    }
+    for (const concern of stocks.filter(isConcern)) {
+        if (getStockCooperations(concern).length >= COOP_MAX_PER_CONCERN || Math.random() >= COOP_START_CHANCE) continue;
+        const partner = pickCooperationPartner(concern);
+        if (partner) startCooperation(concern, partner, 'ceo');
+    }
+}
+
+// --- Gracz-większościowiec: propozycja i zerwanie kooperacji ---
+
+function getPlayerStakePct(stock) {
+    const shares = (playerPortfolio[stock.symbol]?.shares || 0) + (playerWallet?.portfolio?.[stock.symbol]?.shares || 0);
+    return shares / Math.max(1, stock.totalShares);
+}
+
+/** Partnerzy dla spółki kontrolowanej przez gracza: gracz ma w nich ≥ 20% (miejsce w radzie) i są segmenty powiązane. */
+function getPlayerCooperationPartners(stock) {
+    if (!canFundControlAgm(stock)) return [];
+    return stocks.filter(s => s !== stock && getPlayerStakePct(s) >= RELATED_PARTY_MIN_STAKE && canCooperate(stock, s));
+}
+
+function playerProposeCooperation(symbol, partnerSymbol, terms = 'market') {
+    const stock = stocks.find(s => s.symbol === symbol), partner = stocks.find(s => s.symbol === partnerSymbol);
+    if (!stock || !partner || !getPlayerCooperationPartners(stock).includes(partner)) { showToast('Kooperacja niemożliwa: brak kontroli, brak segmentów powiązanych albo limit umów.', 'warning'); return null; }
+    const coop = startCooperation(stock, partner, 'player', terms, 12);
+    if (coop && coop.flag && typeof unlockAcademyEntry === 'function') unlockAcademyEntry('podmiotyPowiazane', `${stock.name} i ${partner.name}: czerwona flaga`);
+    if (coop) showToast(`Kooperacja ${stock.name} — ${partner.name} zawarta do kw. ${coop.end}.${coop.flag ? ' Czerwona flaga: transakcje z podmiotami powiązanymi.' : ''}`, coop.flag ? 'warning' : 'success');
+    if (typeof renderCompanyCard === 'function') renderCompanyCard();
+    return coop;
+}
+
+function playerBreakCooperation(coopId, symbol) {
+    const coop = cooperations.find(c => c.id === coopId);
+    const stock = stocks.find(s => s.symbol === symbol);
+    if (!coop || !stock || !canFundControlAgm(stock) || (coop.a !== symbol && coop.b !== symbol)) { showToast('Zerwać umowę może tylko większościowiec strony.', 'warning'); return 0; }
+    const penalty = breakCooperation(coop, symbol, 'zerwanie przez większościowca');
+    if (typeof renderCompanyCard === 'function') renderCompanyCard();
+    return penalty;
+}
+
+/** Skarga gracza: tylko z pakietem mniejszościowym w spółce, której dotyczy flaga. */
+function canPlayerFileKnfComplaint(coop, stock) {
+    const pct = getPlayerStakePct(stock);
+    return Boolean(coop.flag) && !coop.complaint && pct > 0 && !canFundControlAgm(stock);
+}
+
+function playerFileKnfComplaint(coopId, symbol) {
+    const coop = cooperations.find(c => c.id === coopId), stock = stocks.find(s => s.symbol === symbol);
+    if (!coop || !stock || !canPlayerFileKnfComplaint(coop, stock)) { showToast('Skargę składa akcjonariusz mniejszościowy spółki z czerwoną flagą.', 'warning'); return false; }
+    const ok = fileKnfComplaint(coopId, 'player');
+    if (ok) showToast('Skarga złożona — KNF rozstrzygnie w przyszłym kwartale.', 'success');
+    if (typeof renderCompanyCard === 'function') renderCompanyCard();
+    return ok;
+}
+
+// --- Karta koncernu: suma części (SOTP) ---
+
+/** Suma części: segmenty wyceniane C/Z (mediana sektora, inaczej profil) lub C/S przy stracie + udziały w zależnych. */
+function getSumOfParts(stock) {
+    const f = stock.fundamentals || {};
+    const net = Number(f.netIncomeTtm) || 0, revenue = Number(f.revenueTtm) || 0;
+    const parts = getStockSegments(stock).map(seg => {
+        const profile = SECTORS[seg.sector]?.profile || {};
+        const pe = (typeof getSectorMedians === 'function' ? getSectorMedians(seg.sector)?.pe : null) || profile.pe || 12;
+        const value = net > 0 ? net * seg.share * pe : Math.max(0, revenue * seg.share * (profile.ps || 1) * 0.5);
+        return { label: `${SECTORS[seg.sector]?.icon || ''} ${seg.sector} ${(seg.share * 100).toFixed(0)}%`, value, method: net > 0 ? `C/Z ${pe.toFixed(1)}` : 'C/S × 0,5 (strata)' };
+    });
+    for (const child of stocks.filter(s => s.isSubsidiaryOf === stock.symbol && !s.isBankrupt)) {
+        const stake = (stock.equityStakes?.[child.symbol] || 0) / Math.max(1, child.totalShares);
+        if (stake > 0) parts.push({ label: `↳ ${child.name} (${(stake * 100).toFixed(0)}%)`, value: getMarketCapValue(child) * stake, method: 'wartość rynkowa pakietu' });
+    }
+    const total = parts.reduce((sum, p) => sum + p.value, 0);
+    const cap = getMarketCapValue(stock);
+    return { parts, total, cap, premium: total > 0 ? cap / total - 1 : null };
 }
