@@ -11738,7 +11738,7 @@ const SUB_TRANSFER_VALUATION = 0.6;        // wycena córki × (1 − (transfer 
 const SUB_LOAN_MAX_SHARE = 0.20;           // pożyczka: najwyżej 20% gotówki matki
 const SUB_LOAN_REPAY = 0.25;               // spłata: 25% dodatniego zysku kwartału
 const SUB_LOAN_OFF_MARKET = 0.10;          // odchylenie oprocentowania > 10% od rynku = czerwona flaga
-const SUB_FOUND_CHANCE = 0.12;             // koncern zakłada córkę (na kwartał, < 3 córek; strojenie: 4% dawało 0,1 na przebieg)
+const SUB_FOUND_CHANCE = 0.04;             // koncern zakłada córkę (na kwartał, < 3 córek; przy warunku segmentów niepowiązanych 12% dawało 6,5 na przebieg)
 const SUB_FOUND_STAKE = [0.70, 0.80];      // 20–30% akcji w ofercie publicznej
 const SUB_CREEP_MIN = 0.65;                // matka z ≥ 65% dokupuje akcje córki (60% = córki z giełd elitarnych — bez nich; strojenie: 60% dawało 4,9 wchłonięć)
 const SUB_CREEP_CHANCE = 0.6;             // strojenie: 0,5 → 0,7–0,8 wchłonięcia, 0,7 → 2,7
