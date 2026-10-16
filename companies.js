@@ -11315,15 +11315,15 @@ function processSpinoffsQuarterly() {
 // =================================================================================
 // 0.14 T5: KONCERNY, KOOPERACJE I OCHRONA PRZED TUNELOWANIEM
 // =================================================================================
-// Koncern 🏢: ≥ 3 segmenty albo ≥ 2 spółki zależne i miejsce w górnych 10% kapitalizacji.
+// Koncern 🏢: ≥ 3 segmenty albo ≥ 2 spółki zależne i miejsce w górnych 15% kapitalizacji (decyzja 14).
 // Kooperacja (dostawca–odbiorca, 8–16 kw., najwyżej 3 na koncern): obie strony +0,3 pp wzrostu na kwartał
 // i +0,5 pp marży — tylko dla segmentów powiązanych (premia × udział powiązanego segmentu).
 // Ryzyko kontrahenta: strajk, bankructwo albo korekta wyników partnera przenosi połowę szoku na drugą stronę.
 // Zerwanie przed terminem: kara umowna. Kooperacja spółek jednego właściciela z nierównymi udziałami
 // = czerwona flaga „transakcje z podmiotami powiązanymi”; pakiet mniejszościowy może złożyć skargę do KNF.
 
-const CONCERN_TOP_SHARE = 0.10;            // górne 10% kapitalizacji
-const CONCERN_KEEP_SHARE = 0.20;           // histereza: status zostaje w górnych 20%
+const CONCERN_TOP_SHARE = 0.15;            // górne 15% kapitalizacji (decyzja 14: plan 10%, po T5 za mało koncernów)
+const CONCERN_KEEP_SHARE = 0.25;           // histereza: status zostaje w górnych 25%
 const CONCERN_MIN_SEGMENTS = 3;
 const CONCERN_MIN_SUBSIDIARIES = 2;
 const COOP_MAX_PER_CONCERN = 3;

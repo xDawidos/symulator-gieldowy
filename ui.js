@@ -7457,7 +7457,7 @@ function renderCompanyCardGroup(stock) {
     const children = stocks.filter(s => s.isSubsidiaryOf === sym && !s.isBankrupt);
     const status = isConcern(stock)
         ? `<p class="text-sm">🏢 <strong>Koncern</strong> od kw. ${stock.concern.since}: ${getStockSegments(stock).length} segmenty, ${children.length} spółek zależnych, czołówka kapitalizacji. Zawiera do ${COOP_MAX_PER_CONCERN} kooperacji.</p>`
-        : `<p class="text-sm text-muted">Koncern 🏢 to spółka z górnych 10% kapitalizacji z ≥ ${CONCERN_MIN_SEGMENTS} segmentami albo ≥ ${CONCERN_MIN_SUBSIDIARIES} spółkami zależnymi.</p>`;
+        : `<p class="text-sm text-muted">Koncern 🏢 to spółka z górnych ${Math.round(CONCERN_TOP_SHARE * 100)}% kapitalizacji z ≥ ${CONCERN_MIN_SEGMENTS} segmentami albo ≥ ${CONCERN_MIN_SUBSIDIARIES} spółkami zależnymi.</p>`;
     const groupRows = [
         parent ? `<li>⬆️ matka: ${name(parent)}${Number.isFinite(stock.parentStakePct) ? ` (${(stock.parentStakePct * 100).toFixed(0)}%)` : ''}</li>` : '',
         ...children.map(c => { const stake = (stock.equityStakes?.[c.symbol] || 0) / Math.max(1, c.totalShares); return `<li>↳ zależna: ${name(c)} — ${(stake * 100).toFixed(0)}%, pakiet ${formatZl(getMarketCapValue(c) * stake, 0)}</li>`; })
