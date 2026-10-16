@@ -111,6 +111,7 @@ function resetWorld(companies) {
     commercialBanks.forEach(bank => { if (bank.stockPortfolio) bank.stockPortfolio = {}; });
     if (typeof etfs !== 'undefined') etfs.length = 0;
     activeTenders = [];
+    if (typeof cooperations !== 'undefined') { cooperations = []; cooperationLog = []; } // 0.14 T5
     constructionProjects = [];
     paymentJournal = [];
     paymentTotals = { externalIn: 0, externalOut: 0, byPurpose: {} };
@@ -6550,6 +6551,136 @@ group('0.14 T4: wydzielenie spółki córki (spin-off, carve-out)', () => {
             assert(playerSpinoffDecision('MAT', 'block') && a.spinoffBlockedUntil > macro.quarter, 'blokada');
             assert(playerSpinoffDecision('MAT', 'now') && a.spinoff?.by === 'player', 'zlecenie od razu');
         } finally { cleanup(etf); }
+    });
+});
+
+group('0.14 T5: koncerny, kooperacje, podmioty powiązane', () => {
+    function world() {
+        const seg = (list) => list.map(([sector, share]) => ({ sector, subsector: null, share }));
+        const a = makeCompany('KON', { cash: 5_000_000, fixedAssets: 20_000_000 });
+        a.segments = seg([['Chemia', 0.5], ['Przemysł', 0.3], ['Energia', 0.2]]);
+        const b = makeCompany('KOP', { cash: 2_000_000 }); b.segments = seg([['Medycyna', 1]]);
+        const c = makeCompany('KOC', { cash: 2_000_000 }); c.segments = seg([['Technologia', 0.6], ['Obronność', 0.4]]);
+        const d = makeCompany('KOD', { cash: 2_000_000 }); d.segments = seg([['Żywność', 1]]); // niepowiązana z koncernem
+        const extra = Array.from({ length: 8 }, (_, i) => { const x = makeCompany(`KX${i}`, { cash: 1_000_000 }); x.segments = seg([['Usługi', 1]]); x.price = 10; return x; });
+        const all = [a, b, c, d, ...extra];
+        all.forEach(x => { x.sector = getSectorsFromSegments(x.segments); x.ceo = { name: 'Prezes', traits: [] }; x.reputation = { player: 0 }; });
+        a.price = 1000; b.price = 50; c.price = 50; d.price = 50;
+        resetWorld(all);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        all.forEach(x => { initializeFundamentals(x, true); x.sharesHeld = getTrackedHeldShares(x); });
+        return { a, b, c, d };
+    }
+    const addCompany = (symbol, sector) => { const x = makeCompany(symbol); x.segments = [{ sector, subsector: null, share: 1 }]; x.sector = [sector]; initializeFundamentals(x, true); stocks.push(x); return x; };
+    const playerOwns = (a, b, pa, pb) => {
+        playerPortfolio[a.symbol] = { shares: pa, avgPrice: 100 }; playerPortfolio[b.symbol] = { shares: pb, avgPrice: 50 };
+        [a, b].forEach(x => { x.sharesHeld = getTrackedHeldShares(x); });
+    };
+
+    test('koncern: górne 10% kapitalizacji i ≥ 3 segmenty; bez struktury — nie', () => {
+        const { a, b } = world();
+        updateConcernStatus();
+        assert(isConcern(a) && !isConcern(b), 'KON koncernem, KOP nie');
+        a.segments = a.segments.slice(0, 2); refreshSectorsFromSegments(a);
+        updateConcernStatus();
+        assert(!isConcern(a), 'po utracie segmentu traci status');
+    });
+
+    test('kooperacja tylko między segmentami powiązanymi; premia × udział segmentu; najwyżej 3 na koncern', () => {
+        const { a, b, c, d } = world();
+        updateConcernStatus();
+        assert(!startCooperation(a, d), 'Żywność niepowiązana z Chemią/Przemysłem/Energią');
+        const coop = startCooperation(a, b); // Chemia–Medycyna
+        assert(coop && coop.segA === 'Chemia' && coop.segB === 'Medycyna' && coop.end - coop.start >= 8 && coop.end - coop.start <= 16, 'umowa 8–16 kw.');
+        assertNear(getCooperationGrowthAdj(a), COOP_GROWTH * getSegmentShare(a, 'Chemia'), 'wzrost koncernu × udział Chemii', 1e-9);
+        assertNear(getCooperationMarginAdj(b), COOP_MARGIN, 'marża partnera × udział Medycyny', 1e-9);
+        assert(getCooperationMarginAdj(d) === 0, 'bez umowy bez premii');
+        assert(startCooperation(a, c), 'druga umowa (Przemysł–Obronność)');
+        assert(startCooperation(a, addCompany('KOE', 'Medycyna')), 'trzecia umowa');
+        assert(!startCooperation(a, addCompany('KOF', 'Transport i logistyka')) && getStockCooperations(a).length === 3, 'limit 3 umów koncernu');
+    });
+
+    test('ryzyko kontrahenta: strajk partnera przenosi połowę szoku; korekta wyników i bankructwo też', () => {
+        const { a, b } = world();
+        updateConcernStatus();
+        startCooperation(a, b);
+        const share = getSegmentShare(a, 'Chemia');
+        b.workforce = { strike: { pct: 0.1 } };
+        assertNear(getCooperationShockFactor(a), 1 - 0.5 * 0.1 * share, 'przychody koncernu: −½ × 10% × udział Chemii', 1e-9);
+        const price0 = a.price;
+        onCooperationPartnerShock(b, 0.3, 'korekta wyników');
+        assert(a.price < price0 && Math.abs(a.price / price0 - (1 - 0.3 * 0.5 * share)) < 0.02, `kurs koncernu −½ szoku × udział: ${a.price / price0}`);
+        onCooperationPartnerShock(b, COOP_BANKRUPTCY_SHOCK, 'bankructwo');
+        assert(getStockCooperations(a).length === 0 && cooperationLog[0]?.reason === 'bankructwo partnera', 'bankructwo kończy umowę');
+    });
+
+    test('zerwanie: kara umowna od zrywającego dla drugiej strony; gotówka i aktywa się sumują', () => {
+        const { a, b } = world();
+        updateConcernStatus();
+        const coop = startCooperation(a, b);
+        a.fundamentals.revenueTtm = 4_000_000;
+        const before = { cash: a.cash + b.cash, assets: a.balanceSheet.assets + b.balanceSheet.assets, bCash: b.cash };
+        const penalty = breakCooperation(coop, a.symbol);
+        assertNear(penalty, Math.round(4_000_000 * getSegmentShare(a, 'Chemia') * COOP_PENALTY), 'kara = 2% rocznych przychodów segmentu', 1);
+        assertNear(b.cash - before.bCash, penalty, 'partner dostaje karę');
+        assertNear(a.cash + b.cash, before.cash, 'gotówka razem bez zmian');
+        assertNear(a.balanceSheet.assets + b.balanceSheet.assets, before.assets, 'aktywa razem');
+        assert(!cooperations.includes(coop), 'umowa zakończona');
+    });
+
+    test('czerwona flaga: wspólny właściciel z nierównymi udziałami (80% i 20%); 80% i 70% bez flagi', () => {
+        const { a, b } = world();
+        playerOwns(a, b, 8000, 2000);
+        const coop = playerProposeCooperation('KON', 'KOP', 'KON');
+        assert(coop && coop.by === 'player' && coop.terms === 'KON', 'umowa gracza z warunkami dla KON');
+        assert(coop.flag && Math.abs(coop.flag.pctA - 0.8) < 1e-9 && Math.abs(coop.flag.pctB - 0.2) < 1e-9, 'flaga z udziałami');
+        assert(getRedFlags(b).some(f => f.id === 'related') && getRedFlags(a).some(f => f.id === 'related'), 'czerwona flaga w obu spółkach');
+        assert(getCoopTunnelFlow(coop, a) > 0 && Math.abs(getCoopTunnelFlow(coop, a) + getCoopTunnelFlow(coop, b)) < 1e-9, 'warunki nierynkowe: tyle, ile traci KOP, zyskuje KON');
+        playerPortfolio.KOP.shares = 7000; b.sharesHeld = getTrackedHeldShares(b);
+        assert(!refreshCoopFlag(coop), '80% i 70% — bez flagi');
+    });
+
+    test('skarga do KNF: warunki nierynkowe → zwrot korzyści z grzywną; warunki rynkowe → oddalona', () => {
+        const { a, b } = world();
+        playerOwns(a, b, 8000, 2000);
+        const coop = playerProposeCooperation('KON', 'KOP', 'KON');
+        coop.tunneled = 50_000;
+        assert(fileKnfComplaint(coop.id, 'bot') && !fileKnfComplaint(coop.id, 'bot'), 'jedna skarga naraz');
+        const bCash = b.cash;
+        const r = Math.random; Math.random = () => 0;
+        try { assert(resolveKnfComplaint(coop) === 'uwzględniona', 'uwzględniona'); } finally { Math.random = r; }
+        assertNear(b.cash - bCash, 50_000, 'zwrot dla poszkodowanej');
+        assert(coop.terms === 'market' && coop.tunneled === 0, 'warunki rynkowe');
+        coop.complaint = null; fileKnfComplaint(coop.id, 'bot');
+        assert(resolveKnfComplaint(coop) === 'oddalona', 'rynkowe → oddalona');
+        coop.complaint = null;
+        assert(!canPlayerFileKnfComplaint(coop, a) && canPlayerFileKnfComplaint(coop, b), 'skarży mniejszościowy pakiet KOP, nie większościowiec KON');
+    });
+
+    test('kwartał: wygaśnięcie, wydzielony segment kończy umowę; zapis zawiera kooperacje', () => {
+        const { a, b, c } = world();
+        updateConcernStatus();
+        const c1 = startCooperation(a, b), c2 = startCooperation(a, c);
+        c1.end = macro.quarter; c1.by = 'player';
+        a.segments = a.segments.filter(x => x.sector !== 'Przemysł'); refreshSectorsFromSegments(a);
+        processCooperationsQuarterly(macro.quarter);
+        assert(!cooperations.includes(c1) && !cooperations.includes(c2), 'obie umowy zakończone');
+        assert(cooperationLog.some(e => e.reason === 'segment wydzielony lub zamknięty') && cooperationLog.some(e => e.reason === 'wygasła'), 'powody');
+        cooperations = [];
+        const coop = startCooperation(a, b);
+        const snap = JSON.parse(JSON.stringify(buildSaveSnapshot()));
+        assert(snap.cooperations?.some(x => x.id === coop.id) && Array.isArray(snap.cooperationLog), 'kooperacje w zapisie');
+    });
+
+    test('suma części: segmenty + pakiety w zależnych; Akademia: 3 hasła z quizem; karta „Grupa”', () => {
+        const { a, b } = world();
+        b.isSubsidiaryOf = 'KON'; a.equityStakes = { KOP: 6000 };
+        const sotp = getSumOfParts(a);
+        assert(sotp.parts.length === 4 && Math.abs(sotp.parts[3].value - getMarketCapValue(b) * 0.6) < 1e-6, 'trzy segmenty i pakiet 60%');
+        assertNear(sotp.total, sotp.parts.reduce((x, p) => x + p.value, 0), 'suma');
+        for (const id of ['grupaKapitalowa', 'ryzykoKontrahenta', 'podmiotyPowiazane']) assert(ACADEMY_ENTRIES[id]?.quiz?.length === 3, id);
+        assert(hasGroupCard(a) && hasGroupCard(b), 'karta „Grupa” dla matki i córki');
+        assert(renderCompanyCardGroup(a).includes('Suma części'), 'karta się renderuje');
     });
 });
 

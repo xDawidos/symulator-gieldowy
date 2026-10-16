@@ -994,6 +994,7 @@ function displayStocks(previousInputValues = {}) {
     if (playerSharePct > 50) markerPrefix += '👑 ';
     if (stock.assetType === 'ResearchInstitute') markerPrefix += '🧪 ';
     if (stock.isMonopolist) markerPrefix += '🦁 ';
+    if (typeof isConcern === 'function' && isConcern(stock)) { markerPrefix += '🏢 '; nameCell.title = 'Koncern: czołówka kapitalizacji, ≥ 3 segmenty albo ≥ 2 spółki zależne'; } // 0.14 T5
     if (stock.isStateOwned) {
       markerPrefix += '🏛️ ';
       nameCell.title = 'Spółka Skarbu Państwa';
@@ -1025,7 +1026,8 @@ function displayStocks(previousInputValues = {}) {
     metaLine.className = 'stock-meta';
     const marketId = typeof getStockMarket === 'function' ? getStockMarket(stock) : 'GPW';
     const parentNote = stock.isSubsidiaryOf ? ` • ↳ zależna od ${stock.isSubsidiaryOf}${Number.isFinite(stock.parentStakePct) ? ` (${Math.round(stock.parentStakePct * 100)}%)` : ''} · ${exchanges[stock.exchange]?.name || stock.exchange}` : ''; // 0.14.2 P3
-    const spinNote = (stock.spinoff ? ` • ✂️ zapowiedziane wydzielenie: ${stock.spinoff.sector}` : '') + (stock.spunOffFrom && !stock.isSubsidiaryOf ? ` • ✂️ wydzielona z ${stock.spunOffFrom}` : ''); // 0.14 T4
+    const spinNote = (stock.spinoff ? ` • ✂️ zapowiedziane wydzielenie: ${stock.spinoff.sector}` : '') + (stock.spunOffFrom && !stock.isSubsidiaryOf ? ` • ✂️ wydzielona z ${stock.spunOffFrom}` : '') // 0.14 T4
+      + (typeof getStockCooperations === 'function' && getStockCooperations(stock).length ? ` • 🤝 kooperacje: ${getStockCooperations(stock).length}` : ''); // 0.14 T5
     metaLine.textContent = `${primarySector} • ${stock.symbol}${parentNote}${spinNote}${marketId !== 'GPW' ? ` • członek rynku ${getMarketLabel(marketId)}` : ''}${stock.isDividendAristocrat ? ' • 👑 dywidendowy arystokrata' : ''}`;
 
     identityWrap.appendChild(topLine);
@@ -2997,7 +2999,8 @@ const COMPANY_CARD_TABS = [
     ['finance', '📊 Finanse'],
     ['owners', '👥 Akcjonariat'],
     ['manage', '🏛️ Zarządzanie'],
-    ['workforce', '👷 Zatrudnienie']
+    ['workforce', '👷 Zatrudnienie'],
+    ['group', '🏢 Grupa'] // 0.14 T5: karta koncernu
 ];
 
 function openDescriptionModal(symbol, tab = null) {
@@ -3042,7 +3045,7 @@ function renderCompanyCard() {
         <div class="cc-header">
             <div>
                 <h2 class="m-0">${escapeHtml(stock.name)} <span class="text-muted text-sm">${escapeHtml(stock.symbol)}</span></h2>
-                <div class="text-sm text-muted">${escapeHtml(sector)} · ${escapeHtml(exchange)}${stock.isStateOwned ? ' · 🏛️ Skarb Państwa' : ''}${stock.ceo?.name ? ` · prezes ${escapeHtml(stock.ceo.name)}` : ''}</div>
+                <div class="text-sm text-muted">${escapeHtml(sector)} · ${escapeHtml(exchange)}${stock.isStateOwned ? ' · 🏛️ Skarb Państwa' : ''}${typeof isConcern === 'function' && isConcern(stock) ? ' · 🏢 koncern' : ''}${stock.ceo?.name ? ` · prezes ${escapeHtml(stock.ceo.name)}` : ''}</div>
             </div>
             <div class="cc-price">
                 <strong>${formatZl(stock.price)}</strong>
@@ -3069,6 +3072,7 @@ function renderCompanyCard() {
 
     document.getElementById('company-card-tabs').innerHTML = COMPANY_CARD_TABS
         .filter(([id]) => id !== 'workforce' || (typeof hasWorkforce === 'function' && hasWorkforce(stock)))
+        .filter(([id]) => id !== 'group' || hasGroupCard(stock))
         .map(([id, label]) => `<button class="${companyCardView.tab === id ? 'active' : ''}" onclick="setCompanyCardTab('${id}')">${label}</button>`).join('');
 
     if (typeof unlockAcademyEntry === 'function') ['cwk', 'dywidenda', 'zadluzenie'].forEach(id => unlockAcademyEntry(id));
@@ -3081,6 +3085,7 @@ function renderCompanyCard() {
     else if (companyCardView.tab === 'owners') body.innerHTML = renderCompanyCardOwners(stock);
     else if (companyCardView.tab === 'manage') body.innerHTML = renderCompanyCardManage(stock);
     else if (companyCardView.tab === 'workforce') body.innerHTML = renderCompanyCardWorkforce(stock);
+    else if (companyCardView.tab === 'group' && hasGroupCard(stock)) body.innerHTML = renderCompanyCardGroup(stock);
     else body.innerHTML = renderCompanyCardOverview(stock);
 }
 
@@ -7437,4 +7442,53 @@ function renderCompanyCardWorkforce(stock) {
             </section>
         </div>
         ${poach}`;
+}
+
+/** 0.14 T5: czy pokazać kartę „Grupa” (koncern, zależne, matka albo kooperacje). */
+function hasGroupCard(stock) {
+    return typeof isConcern === 'function' && (isConcern(stock) || Boolean(stock.isSubsidiaryOf) || getSubsidiaryCount(stock) > 0 || getStockCooperations(stock).length > 0);
+}
+
+/** 0.14 T5: karta koncernu — mapa grupy (matka, zależne, kooperanci) i suma części vs kapitalizacja. */
+function renderCompanyCardGroup(stock) {
+    const sym = stock.symbol;
+    const name = s => s ? `<a href="#" onclick="openDescriptionModal('${s.symbol}'); return false;">${escapeHtml(s.name)}</a> <span class="text-muted">${escapeHtml(s.symbol)}</span>` : '—';
+    const parent = stock.isSubsidiaryOf ? stocks.find(s => s.symbol === stock.isSubsidiaryOf) : null;
+    const children = stocks.filter(s => s.isSubsidiaryOf === sym && !s.isBankrupt);
+    const status = isConcern(stock)
+        ? `<p class="text-sm">🏢 <strong>Koncern</strong> od kw. ${stock.concern.since}: ${getStockSegments(stock).length} segmenty, ${children.length} spółek zależnych, czołówka kapitalizacji. Zawiera do ${COOP_MAX_PER_CONCERN} kooperacji.</p>`
+        : `<p class="text-sm text-muted">Koncern 🏢 to spółka z górnych 10% kapitalizacji z ≥ ${CONCERN_MIN_SEGMENTS} segmentami albo ≥ ${CONCERN_MIN_SUBSIDIARIES} spółkami zależnymi.</p>`;
+    const groupRows = [
+        parent ? `<li>⬆️ matka: ${name(parent)}${Number.isFinite(stock.parentStakePct) ? ` (${(stock.parentStakePct * 100).toFixed(0)}%)` : ''}</li>` : '',
+        ...children.map(c => { const stake = (stock.equityStakes?.[c.symbol] || 0) / Math.max(1, c.totalShares); return `<li>↳ zależna: ${name(c)} — ${(stake * 100).toFixed(0)}%, pakiet ${formatZl(getMarketCapValue(c) * stake, 0)}</li>`; })
+    ].filter(Boolean).join('');
+    const level = getSkillLevel('accountant');
+    const coops = getStockCooperations(stock).map(coop => {
+        const side = getCoopSide(coop, stock);
+        const partner = stocks.find(s => s.symbol === side.partner);
+        const terms = coop.terms === 'market' ? 'warunki rynkowe' : coop.terms === sym ? '<span class="text-warn">warunki korzystne dla tej spółki</span>' : '<span class="text-down">warunki korzystne dla partnera</span>';
+        const flag = coop.flag && level >= 4 ? ` · <span class="text-down" title="Wspólny właściciel ${escapeHtml(coop.flag.name)}: ${(coop.flag.pctA * 100).toFixed(0)}% w ${coop.a} i ${(coop.flag.pctB * 100).toFixed(0)}% w ${coop.b}.">🚩 podmioty powiązane</span>` : '';
+        const complaint = coop.complaint ? ` · ⚖️ skarga do KNF${coop.complaint.result ? `: ${escapeHtml(coop.complaint.result)}` : ' w toku'}` : '';
+        const actions = [
+            canFundControlAgm(stock) ? `<button class="btn-secondary btn-sm" onclick="playerBreakCooperation('${coop.id}', '${sym}')">💔 Zerwij (kara umowna)</button>` : '',
+            canPlayerFileKnfComplaint(coop, stock) ? `<button class="btn-secondary btn-sm" onclick="playerFileKnfComplaint('${coop.id}', '${sym}')">⚖️ Skarga do KNF</button>` : ''
+        ].join(' ');
+        return `<li>🤝 ${name(partner)}: ${escapeHtml(side.ownSeg)} ↔ ${escapeHtml(side.partnerSeg)}, do kw. ${coop.end} · ${terms}${flag}${complaint} ${actions}</li>`;
+    }).join('');
+    const sotp = getSumOfParts(stock);
+    const sotpRows = sotp.parts.map(p => `<tr><td>${escapeHtml(p.label)}</td><td class="text-muted text-xs">${escapeHtml(p.method)}</td><td class="cell-number">${formatZl(p.value, 0)}</td></tr>`).join('');
+    const premium = sotp.premium === null ? '' : `<p class="text-sm">Kapitalizacja ${formatZl(sotp.cap, 0)} vs suma części ${formatZl(sotp.total, 0)}: <strong class="${sotp.premium >= 0 ? 'text-up' : 'text-down'}">${sotp.premium >= 0 ? 'premia' : 'dyskonto'} holdingowe ${(Math.abs(sotp.premium) * 100).toFixed(0)}%</strong>.</p>`;
+    const partners = getPlayerCooperationPartners(stock);
+    const form = partners.length ? `<div class="d-flex gap-2 flex-wrap items-center mt-2">
+            <select id="coop-partner-${sym}" aria-label="Kooperant">${partners.map(p => `<option value="${p.symbol}">${escapeHtml(p.name)} (${(getPlayerStakePct(p) * 100).toFixed(0)}%)</option>`).join('')}</select>
+            <select id="coop-terms-${sym}" aria-label="Warunki"><option value="market">warunki rynkowe</option><option value="${sym}">korzystne dla ${escapeHtml(stock.symbol)}</option><option value="partner">korzystne dla partnera</option></select>
+            <button class="btn-secondary" onclick="(() => { const p = document.getElementById('coop-partner-${sym}').value, t = document.getElementById('coop-terms-${sym}').value; playerProposeCooperation('${sym}', p, t === 'partner' ? p : t); })()">🤝 Zaproponuj kooperację (12 kw.)</button>
+        </div><p class="text-xs text-muted">Umowy między spółkami jednego właściciela przy nierównych udziałach dostają czerwoną flagę; warunki nierynkowe przenoszą ok. 1% przychodów segmentu na kwartał i grożą skargą do KNF.</p>` : '';
+    if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('grupaKapitalowa');
+    return `${status}
+        <div class="cc-grid">
+            <section><h4>Mapa grupy</h4><ul class="text-sm">${groupRows || '<li class="text-muted">brak spółek zależnych i matki</li>'}${coops || '<li class="text-muted">brak kooperacji</li>'}</ul>${form}</section>
+            <section><h4>Suma części (SOTP)</h4><table class="asset-mini-table w-full"><tbody>${sotpRows}</tbody></table>${premium}
+                <p class="text-xs text-muted">Segmenty wyceniane medianą C/Z sektora (przy stracie: C/S × 0,5), pakiety w zależnych po kursie rynkowym. Uproszczenie: zysk matki zawiera transfer zysku córek.</p></section>
+        </div>`;
 }

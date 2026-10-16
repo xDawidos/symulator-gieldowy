@@ -432,6 +432,36 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Ile wynosi dyskonto konglomeratu w grze najwyżej?', a: ['10%', '50%', '0%'], c: 0 }
         ]
     },
+    grupaKapitalowa: {
+        title: 'Grupa kapitałowa i holding', icon: '🏢',
+        text: 'Grupa kapitałowa to spółka matka razem ze spółkami zależnymi, w których ma ponad 50% głosów. Holding sam niczego nie produkuje — zarządza pakietami akcji. W grze koncern 🏢 to spółka z czołówki kapitalizacji (górne 10%), która ma co najmniej 3 segmenty działalności albo 2 spółki zależne. Wartość grupy liczy się sumą części: każdy segment wyceniony mnożnikiem swojego sektora plus rynkowa wartość pakietów w zależnych. Gdy kurs jest niżej niż suma części, mówimy o dyskoncie holdingowym; gdy wyżej — o premii.',
+        example: () => { const s = stocks.find(x => typeof isConcern === 'function' && isConcern(x)); if (!s) return 'Koncern: górne 10% kapitalizacji oraz ≥ 3 segmenty albo ≥ 2 spółki zależne.'; const p = getSumOfParts(s); return `${s.name}: kapitalizacja ${formatZl(p.cap, 0)}, suma części ${formatZl(p.total, 0)}${p.premium !== null ? ` (${p.premium >= 0 ? 'premia' : 'dyskonto'} ${(Math.abs(p.premium) * 100).toFixed(0)}%)` : ''}.`; },
+        quiz: [
+            { q: 'Kiedy spółka jest zależna od matki?', a: ['gdy matka ma ponad 50% głosów', 'gdy matka ma 5% akcji', 'gdy działają w tym samym sektorze'], c: 0 },
+            { q: 'Kurs koncernu jest niższy od sumy części. To…', a: ['dyskonto holdingowe', 'premia holdingowa', 'dywidenda rzeczowa'], c: 0 },
+            { q: 'Jak wycenia się pakiet akcji w spółce zależnej w sumie części?', a: ['wartością rynkową pakietu', 'ceną zakupu sprzed lat', 'nie wlicza się go'], c: 0 }
+        ]
+    },
+    ryzykoKontrahenta: {
+        title: 'Ryzyko kontrahenta', icon: '⛓️',
+        text: 'Kooperacja to umowa dostawca–odbiorca między spółkami z branż powiązanych (np. Chemia i Przemysł). Daje obu stronom korzyść: w grze +0,3 pp wzrostu przychodów na kwartał i +0,5 pp marży, liczone tylko od segmentu, którego dotyczy umowa. Ma też koszt ukryty: los spółki zależy od partnera. Strajk, bankructwo albo korekta wyników kooperanta przenosi połowę szoku na drugą stronę. Zerwanie umowy przed terminem kosztuje karę umowną. Dlatego analityk patrzy nie tylko na spółkę, ale też na jej głównych kontrahentów.',
+        example: () => { const c = cooperations[0]; if (!c) return 'Koncern zawiera najwyżej 3 kooperacje, każdą na 8–16 kwartałów.'; const a = stocks.find(s => s.symbol === c.a), b = stocks.find(s => s.symbol === c.b); return `${a?.name || c.a} (${c.segA}) i ${b?.name || c.b} (${c.segB}): kooperacja do kw. ${c.end}.`; },
+        quiz: [
+            { q: 'Kooperant ogłasza strajk. Co dzieje się z drugą stroną umowy?', a: ['traci część przychodów segmentu objętego umową', 'nic — umowa chroni przed wszystkim', 'zyskuje, bo przejmuje klientów'], c: 0 },
+            { q: 'Od czego liczona jest premia z kooperacji w grze?', a: ['od udziału segmentu, którego dotyczy umowa', 'od całych przychodów spółki', 'od kapitalizacji'], c: 0 },
+            { q: 'Co płaci strona zrywająca umowę przed terminem?', a: ['karę umowną drugiej stronie', 'podatek od kooperacji', 'nic'], c: 0 }
+        ]
+    },
+    podmiotyPowiazane: {
+        title: 'Transakcje z podmiotami powiązanymi', icon: '🚩',
+        text: 'Gdy jeden właściciel kontroluje dwie spółki, ale ma w nich różne udziały (np. 80% i 20%), opłaca mu się przerzucać zysk tam, gdzie ma więcej — przez ceny w umowach między spółkami. To tunelowanie: akcjonariusze mniejszościowi spółki poszkodowanej tracą. W grze taka kooperacja dostaje czerwoną flagę „transakcje z podmiotami powiązanymi” (Księgowy, poziom 4). Pakiet mniejszościowy może złożyć skargę do KNF; jeśli warunki były nierynkowe i KNF to wykaże, beneficjent zwraca korzyść z grzywną, a umowa wraca do cen rynkowych.',
+        example: () => { const c = cooperations.find(x => x.flag); if (!c) return 'Przykład: właściciel ma 80% spółki A i 20% spółki B — umowa A–B to transakcja z podmiotem powiązanym.'; return `${c.flag.name}: ${(c.flag.pctA * 100).toFixed(0)}% w ${c.a} i ${(c.flag.pctB * 100).toFixed(0)}% w ${c.b} — kooperacja z czerwoną flagą.`; },
+        quiz: [
+            { q: 'Właściciel ma 80% spółki A i 20% spółki B. Gdzie opłaca mu się „przenieść” zysk?', a: ['do spółki A', 'do spółki B', 'nigdzie — to bez różnicy'], c: 0 },
+            { q: 'Kto traci na tunelowaniu?', a: ['akcjonariusze mniejszościowi spółki poszkodowanej', 'tylko państwo', 'nikt'], c: 0 },
+            { q: 'Co może zrobić akcjonariusz mniejszościowy?', a: ['złożyć skargę do KNF', 'zablokować umowę sam', 'nic'], c: 0 }
+        ]
+    },
     fazySpolki: {
         title: 'Fazy rozwoju spółki', icon: '🔄',
         text: 'Każda spółka jest w jakiejś fazie cyklu życia. Fazy zwykłe: Wzrost (przychody +1,5 pp na kwartał), Stabilność (bez premii, mniejsza zmienność), Spadek (−2 pp, kurs pod presją, badania wolniej), Reorganizacja (−0,5 pp, najwyższa zmienność; kończy się stabilnością przy kondycji ≥ 2 albo spadkiem przy < −3). Fazy rzadkie i czasowe: Złoty Rok ✨ (4 kwartały, +3 pp, kurs szybciej w górę), Impuls Innowacji 💡 (4–8 kwartałów, badania o 50% szybsze, +0,5 pp), Zejście w Cień 👻 (3–6 kwartałów, −4 pp, silna presja i zmienność). Po fazie czasowej spółka wraca do poprzedniej. Faza zmienia przychody, więc zysk i wartość godziwą — kurs idzie za nimi z opóźnieniem.',
@@ -705,6 +735,11 @@ function checkAcademyTriggers() {
     if (held.some(s => typeof getConglomerateDiscount === 'function' && getConglomerateDiscount(s) > 0)) unlockAcademyEntry('konglomerat'); // 0.14 T3
     if (held.some(s => typeof getSynergyMarginAdj === 'function' && getSynergyMarginAdj(s) > 0)) unlockAcademyEntry('synergia');
     if (held.some(s => s.strategy?.process || s.strategy?.pivot || (typeof getFocusMarginAdj === 'function' && getFocusMarginAdj(s) > 0))) unlockAcademyEntry('dywersyfikacja');
+    if (typeof isConcern === 'function') { // 0.14 T5
+        if (held.some(s => isConcern(s) || getSubsidiaryCount(s) > 0)) unlockAcademyEntry('grupaKapitalowa');
+        if (held.some(s => getStockCooperations(s).length)) unlockAcademyEntry('ryzykoKontrahenta');
+        if (getSkillLevel('accountant') >= 4 && held.some(s => getStockCooperations(s).some(c => c.flag))) unlockAcademyEntry('podmiotyPowiazane');
+    }
     if (typeof society === 'object' && society) {
         if (Math.abs((macro?.unemployment || NATURAL_UNEMPLOYMENT) - NATURAL_UNEMPLOYMENT) > 0.015) unlockAcademyEntry('phillips');
         if (society.shortage > 1.05) unlockAcademyEntry('niedobor');

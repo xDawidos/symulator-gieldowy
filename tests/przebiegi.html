@@ -307,6 +307,10 @@ const PROBE = `(function () {
             rescueOpen: typeof rescueOffers === 'object' ? Object.keys(rescueOffers).length : null,
             // 0.14 T4: wydzielenia (liczba, carve-out, suma wartości 2 kw. po), spółki krajowe i łącznie
             spin: typeof spinoffLog !== 'undefined' ? { n: spinoffLog.length, carve: spinoffLog.filter(e => e.carve).length, ratios: spinoffLog.map(e => e.ratio2q).filter(r => Number.isFinite(r)).map(r => +r.toFixed(3)), excess: spinoffLog.filter(e => Number.isFinite(e.ratio2q) && e.gig2q > 0).map(e => +(e.ratio2q - e.gig2q).toFixed(3)) } : null,
+            // 0.14 T5: koncerny, kooperacje aktywne, flagi podmiotów powiązanych, liczniki
+            coop: typeof cooperations !== 'undefined' ? { concerns: stocks.filter(x => isConcern(x)).length, active: cooperations.length, flags: cooperations.filter(c => c.flag).length,
+                stats: (() => { const st = society?.stats || {}; return { concerns: st.concerns || 0, started: st.cooperations || 0, broken: st.cooperationsBroken || 0, ended: st.cooperationsEnded || 0, shocks: st.cooperationShocks || 0, knf: st.knfComplaints || 0 }; })(),
+                struct: stocks.filter(x => isConcernCandidateCompany(x) && hasConcernStructure(x)).length } : null,
             domestic: typeof getListedCompanyCount === 'function' ? getListedCompanyCount() : null,
             totalCompanies: typeof getTotalCompanyCount === 'function' ? getTotalCompanyCount() : null,
             // 0.14.2 P5: bank inwestycyjny — pozycje, pozycje < 0,5%, pakiety do odsprzedaży
