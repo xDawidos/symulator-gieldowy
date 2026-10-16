@@ -6776,6 +6776,18 @@ group('0.14 T6: spółki zależne (transfer, pożyczka, usamodzielnienie, wchło
         assert(shareProblems().length === 0, shareProblems().join('; '));
     });
 
+    test('decyzja 15: dywidenda córki dla każdego akcjonariusza proporcjonalnie (matka tylko przez swój pakiet)', () => {
+        const { p, c, ai } = world();
+        playerFund.trust = 50;
+        const before = { player: playerCash, ai: ai.cash, parent: p.cash, child: c.cash };
+        const paid = payCompanyDividend(c, 2);
+        assertNear(paid, 2 * c.totalShares, 'wypłata = dps × wszystkie akcje');
+        assertNear(playerCash - before.player, 500 * 2, 'fundusz gracza: stopa × jego akcje');
+        assert(ai.cash - before.ai > 0 && Math.abs(ai.cash - before.ai - ai.portfolio.COR.shares * 2 * (1 - TAX_RATES.dividend)) < 1e-6, 'bot: brutto − podatek');
+        assertNear(p.cash - before.parent, 6000 * 2, 'matka: tylko za swój pakiet');
+        assertNear(before.child - c.cash, paid, 'córka płaci całość');
+    });
+
     test('koncern zakłada córkę na BRONZE z 20–30% akcji w ofercie; Akademia: 3 hasła', () => {
         const { k } = world();
         k.concern = { since: 0 };

@@ -7425,21 +7425,8 @@ function finishInvestment(stock, project) {
 }
 
 function payDividendToShareholders(stock, dividendPerShare) {
-    // Obsługa spółek zależnych (transfer do matki)
-    if (stock.isSubsidiaryOf) {
-        const parentStock = stocks.find(s => s.symbol === stock.isSubsidiaryOf);
-        if (parentStock) {
-            const totalDividendFromSubsidiary = stock.totalShares * dividendPerShare;
-            if (parentStock.cash !== undefined) {
-                adjustCompanyCash(parentStock, totalDividendFromSubsidiary);
-                adjustBalanceSheet(parentStock, { assets: totalDividendFromSubsidiary, retainedEarnings: totalDividendFromSubsidiary });
-            }
-            logEvent(`💸 Spółka zależna ${stock.name} przekazuje ${totalDividendFromSubsidiary.toFixed(2)} PLN dywidendy do ${parentStock.name}.`, 'company');
-            stock.price = Math.max(stock.price * 0.9, stock.price - dividendPerShare); // odcięcie dywidendy (najwyżej −10%)
-            if (stock.price < 0.01) stock.price = 0.01;
-            return;
-        }
-    }
+    // Decyzja 15: dywidenda spółki zależnej trafia do KAŻDEGO akcjonariusza proporcjonalnie (matka przez swój pakiet
+    // w payDividendToInstitutions). Transfer zysku do matki (30–70%, T6) to osobny mechanizm.
 
     // Standardowa wypłata
     const taxRateDividend = TAX_RATES.dividend; // Pobieramy z economy.js
