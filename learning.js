@@ -534,10 +534,10 @@ Object.assign(ACADEMY_ENTRIES, {
     },
     synergia: {
         title: 'Synergia', icon: '🔗',
-        text: 'Synergia to korzyść z połączenia działalności, które do siebie pasują: wspólni klienci, technologia albo łańcuch dostaw (np. chemia i przemysł, budownictwo i nieruchomości). W grze segmenty z branż powiązanych dają +1 pp marży, a rozszerzenie w branżę powiązaną udaje się w 80% przypadków (niepowiązaną — w 55%).',
+        text: 'Synergia to korzyść z połączenia działalności, które do siebie pasują: wspólni klienci, technologia albo łańcuch dostaw (np. chemia i przemysł, budownictwo i nieruchomości). W grze segmenty z branż powiązanych dają +1 pp marży, a rozszerzenie w branżę powiązaną udaje się w 85% przypadków (niepowiązaną — w 65%).',
         example: () => { const s = stocks.find(x => !x.isBankrupt && !x.assetType && typeof getSynergyMarginAdj === 'function' && getSynergyMarginAdj(x) > 0); return s ? `${s.name}: ${getStockSegments(s).map(seg => seg.sector).join(' + ')} — synergia +1 pp marży.` : 'Przykłady branż powiązanych: Technologia–Gaming, Chemia–Przemysł, Energia–Przemysł, Medycyna–Badania.'; },
         quiz: [
-            { q: 'Które rozszerzenie ma większą szansę powodzenia?', a: ['w branżę powiązaną (80%)', 'w dowolną branżę (zawsze 80%)', 'w branżę niepowiązaną'], c: 0 },
+            { q: 'Które rozszerzenie ma większą szansę powodzenia?', a: ['w branżę powiązaną (85%)', 'w dowolną branżę (zawsze 85%)', 'w branżę niepowiązaną'], c: 0 },
             { q: 'Ile daje synergia w grze?', a: ['+1 pp marży', '+10% kursu od razu', 'nic'], c: 0 },
             { q: 'Które segmenty są powiązane?', a: ['Budowlany i Nieruchomości', 'Gaming i Rolnictwo', 'Bankowość i Turystyka'], c: 0 }
         ]

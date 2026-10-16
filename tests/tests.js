@@ -5285,7 +5285,7 @@ group('0.14 T3: rozszerzenie o nowy segment', () => {
     test('sukces: segment 10%, potem stopniowo do 20–40% (≤ 5 pp/kw.), udziały sumują się do 1', () => {
         const s = firm('EX6');
         startExpansion(s, 'Gaming', 0);
-        assert(resolveExpansion(s, 0.79, 6) === 'success', 'powiązane: 80%');
+        assert(resolveExpansion(s, 0.79, 6) === 'success', 'powiązane: 85%');
         const seg = s.segments.find(x => x.sector === 'Gaming');
         assertNear(seg.share, 0.10, 'start 10%', 1e-9);
         assertNear(sum(s), 1, 'suma', 1e-9);
@@ -5294,12 +5294,12 @@ group('0.14 T3: rozszerzenie o nowy segment', () => {
         assert(seg.share >= 0.2 - 1e-9 && seg.share <= 0.4 + 1e-9 && !s.strategy.growth, `cel ${seg.share}`);
     });
 
-    test('niepowiązane: sukces 55%; porażka — odpis 50–100% kosztu i kurs −5…−10%', () => {
+    test('niepowiązane: sukces 65% (decyzja 15); porażka — odpis 50–100% kosztu i kurs −5…−10%', () => {
         const s = firm('EX7');
         startExpansion(s, 'Żywność', 0);
         assert(!s.strategy.process.related, 'Technologia–Żywność niepowiązane');
         const assets0 = s.balanceSheet.assets, price0 = s.price, cost = s.strategy.process.cost;
-        assert(resolveExpansion(s, 0.6, 6) === 'failure', '0,6 > 55%');
+        assert(resolveExpansion(s, 0.7, 6) === 'failure', '0,7 > 65%');
         const writeOff = assets0 - s.balanceSheet.assets;
         assert(writeOff >= cost * 0.5 - 1 && writeOff <= cost + 1, `odpis ${writeOff}`);
         assert(s.price <= price0 * 0.95 + 1e-9 && s.price >= price0 * 0.9 - 1e-9 && s.segments.length === 1, 'kurs i brak segmentu');

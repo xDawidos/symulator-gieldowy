@@ -10501,13 +10501,13 @@ const EXPANSION_MIN_HEALTH = 2;
 const EXPANSION_MIN_CASH = 0.15;          // × roczne przychody
 const EXPANSION_COST = [0.10, 0.20];      // × roczne przychody
 const EXPANSION_QUARTERS = [4, 8];
-const EXPANSION_SUCCESS = { related: 0.80, unrelated: 0.55 };
+const EXPANSION_SUCCESS = { related: 0.85, unrelated: 0.65 }; // decyzja 15: więcej spółek z ≥ 2 segmentami (było 22%)
 const EXPANSION_START_SHARE = 0.10;
 const EXPANSION_TARGET_SHARE = [0.20, 0.40];
 const EXPANSION_STEP = [0.02, 0.05];       // pp na kwartał
 const EXPANSION_WRITE_OFF = [0.5, 1.0];
 const EXPANSION_FAIL_DROP = [0.05, 0.10];
-const EXPANSION_BASE_CHANCE = 0.055;       // na kwartał, prezes spółki spełniającej warunki
+const EXPANSION_BASE_CHANCE = 0.065;       // na kwartał, prezes spółki spełniającej warunki (decyzja 15: 5,5% → 6,5%)
 const SYNERGY_MARGIN = 0.01;
 
 function areSectorsRelated(a, b) {
@@ -11307,7 +11307,7 @@ const COOP_MAX_PER_PARTNER = 2;            // zwykła spółka (nie koncern)
 const COOP_QUARTERS = [8, 16];
 const COOP_GROWTH = 0.003;                 // +0,3 pp wzrostu przychodów na kwartał (× udział segmentu powiązanego)
 const COOP_MARGIN = 0.005;                 // +0,5 pp marży (× udział segmentu powiązanego)
-const COOP_START_CHANCE = 0.5;             // na kwartał, koncern z wolnym miejscem (strojenie: 0,25 dawało 2,9 aktywnych)
+const COOP_START_CHANCE = 0.4;             // na kwartał, koncern z wolnym miejscem (przy 3–6 koncernach 0,5 dawało 12,8 aktywnych)
 const COOP_SHOCK_SHARE = 0.5;              // połowa szoku partnera
 const COOP_BANKRUPTCY_SHOCK = 0.3;         // szok utraty kontrahenta (przed połową i udziałem segmentu)
 const COOP_BREAK_CHANCE = 0.015;           // zerwanie bez powodu (na kwartał)
@@ -11728,7 +11728,7 @@ const SUB_TRANSFER_VALUATION = 0.6;        // wycena córki × (1 − (transfer 
 const SUB_LOAN_MAX_SHARE = 0.20;           // pożyczka: najwyżej 20% gotówki matki
 const SUB_LOAN_REPAY = 0.25;               // spłata: 25% dodatniego zysku kwartału
 const SUB_LOAN_OFF_MARKET = 0.10;          // odchylenie oprocentowania > 10% od rynku = czerwona flaga
-const SUB_FOUND_CHANCE = 0.04;             // koncern zakłada córkę (na kwartał, < 3 córek; przy warunku segmentów niepowiązanych 12% dawało 6,5 na przebieg)
+const SUB_FOUND_CHANCE = 0.025;            // koncern zakłada córkę (na kwartał, < 3 córek; decyzja 15: 4% dawało 3,3–3,8 na przebieg)
 const SUB_FOUND_STAKE = [0.70, 0.80];      // 20–30% akcji w ofercie publicznej
 const SUB_CREEP_MIN = 0.65;                // matka z ≥ 65% dokupuje akcje córki (60% = córki z giełd elitarnych — bez nich; strojenie: 60% dawało 4,9 wchłonięć)
 const SUB_CREEP_CHANCE = 0.6;             // strojenie: 0,5 → 0,7–0,8 wchłonięcia, 0,7 → 2,7
