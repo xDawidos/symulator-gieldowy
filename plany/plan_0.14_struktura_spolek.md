@@ -267,7 +267,7 @@ Cel: przebiegi symulacyjne (6,5 roku gry) trwają dziś przy ×50 ok. 2,5–3 mi
 | Liczba spółek po 6,5 roku | krajowe ≤ 115, zwykłe łącznie ≤ 150 |
 | Suma wartości matka + córka 2 kw. po spin-offie vs przed zapowiedzią | średnio +3–8% |
 | Rozszerzenia / pivoty rocznie | 2–4 / 1–2 |
-| Spółki z ≥ 2 segmentami po 6,5 roku | 25–45% |
+| Spółki z ≥ 2 segmentami po 6,5 roku | 20–35% (decyzja 16) |
 | Koncerny | 3–6 (decyzja 14); kooperacje aktywne 4–12 |
 | Spółki zależne (T6) | wchłonięcia 1–2, usamodzielnienia 1–2, sprzedaże 0–2 na przebieg |
 | GIG rocznie vs 0.13 | różnica ≤ ±2 pp |
@@ -294,3 +294,4 @@ Cel: przebiegi symulacyjne (6,5 roku gry) trwają dziś przy ×50 ok. 2,5–3 mi
     - **koncern:** dodatkowy warunek struktury „≥ 2 segmenty i ≥ 1 spółka zależna”, a próg kapitalizacji wraca na górne 15%. Cel 3–6 (decyzja 14);
     - **mniej nowych córek koncernów** (było 3,6 na grę, cel 1–3) i **wyższa szansa rozszerzenia o segment** (było 22% spółek z ≥ 2 segmentami, cel 25–45%);
     - **zapis 3,26 MB po 20 latach:** odchudzenie przed 0.16 (G0), nie teraz.
+16. **Spółki z ≥ 2 segmentami** (2026-10-17): cel obniżony z 25–45% na **20–35%**. Po decyzji 15 wynik to 22%, czyli w celu; bez dalszego strojenia.
