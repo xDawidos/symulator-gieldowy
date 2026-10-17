@@ -227,6 +227,7 @@ const STUB = `(function () {
         t = end;
     } };
     window.alert = () => {}; window.confirm = () => true;
+    window.__SIM_NO_SAVE__ = true; // 0.14.3: gra w ramce nie czyta i nie zapisuje IndexedDB (start od razu)
 })();`;
 
 // Pomiar w ramce (działa także bez systemów 0.13 — wersja 0.12).
@@ -349,6 +350,25 @@ const PROBE = `(function () {
             ib: commercialBanks.filter(b => b.type === BANK_TYPES.INVESTMENT).map(b => { const pos = Object.entries(b.stockPortfolio || {}); return { pos: pos.length, dust: pos.filter(([sym, h]) => { const st = stocks.find(y => y.symbol === sym); return st && h.shares / st.totalShares < 0.005; }).length, stats: b.resaleStats || null }; }),
             invWarn: typeof checkWorldInvariants === 'function' ? (checkWorldInvariants().warnings || []).filter(w => /100×|C\\/Z/.test(w)).slice(0, 5) : null });
     };
+    // 0.14.3: kontrola zapisu (poziom, czasy na prawdziwym zegarze strony nadrzędnej, kompresja, wczytanie bez strat).
+    s.saveCheckAsync = async function () {
+        if (typeof buildSaveJson !== 'function' || typeof encodeSaveRecordGz !== 'function') return null;
+        const now = () => window.parent.performance.now();
+        let t = now();
+        const built = buildSaveJson(SAVE_IDB_RAW_LIMIT);
+        const buildMs = now() - t;
+        t = now(); const gz = await encodeSaveRecordGz(built.snapshot, built.level, built.json); const gzMs = now() - t;
+        t = now(); const back = await decodeSaveRecordAsync(gz); const gzDecodeMs = now() - t;
+        t = now(); const lz = encodeSaveRecord(built.snapshot, built.level, built.json); const lzMs = now() - t;
+        t = now(); const lzBack = decodeSaveRecord(lz); const lzDecodeMs = now() - t;
+        const lossless = JSON.stringify(back) === built.json && JSON.stringify(lzBack) === built.json;
+        const utf8 = new Blob([built.json]).size;
+        const report = applySaveSnapshot(back);
+        const inv = typeof checkWorldInvariants === 'function' ? checkWorldInvariants() : [];
+        return { level: built.level, chars: built.json.length, utf8, gzBytes: gz.compressed, gzRatio: +(utf8 / gz.compressed).toFixed(1), lzChars: lz.compressed, lzRatio: +(built.json.length / lz.compressed).toFixed(1),
+            buildMs: Math.round(buildMs), gzMs: Math.round(gzMs), gzDecodeMs: Math.round(gzDecodeMs), lzMs: Math.round(lzMs), lzDecodeMs: Math.round(lzDecodeMs),
+            lossless, loadOk: report.ok, loadErrors: report.errors.slice(0, 3), invAfterLoad: inv.slice(0, 5), localFits: JSON.stringify(lz).length <= SAVE_LOCAL_LIMIT };
+    };
     s.finish = function () {
         const soc = typeof society === 'object' && society ? society : null;
         const tsr = {};
@@ -432,9 +452,10 @@ async function oneRun(index) {
         statusEl.textContent = `${LABEL}: przebieg ${index + 1}/${RUNS}, kwartał ${q - startQ}/${QUARTERS}`;
     }
     const finish = w.eval('__sim.finish()');
+    const saveCheck = await w.eval('typeof __sim.saveCheckAsync === "function" ? __sim.saveCheckAsync() : null').catch(e => ({ error: String(e) }));
     const result = { run: index, quarters: w.eval('__sim.quarters'), ...JSON.parse(JSON.stringify(finish)),
         msPerQuarter: msPerQuarter.slice(2).reduce((a, b) => a + b, 0) / Math.max(1, msPerQuarter.length - 2),
-        realMs: performance.now() - realStart, errors: w.__vt.errors.slice(0, 5) };
+        realMs: performance.now() - realStart, errors: w.__vt.errors.slice(0, 5), saveCheck };
     return JSON.parse(JSON.stringify(result));
 }
 
