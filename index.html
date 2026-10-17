@@ -138,6 +138,7 @@
   <div class="topbar-cta-group">
     <button id="pause-game-btn" class="btn-pause" onclick="togglePauseGame()">Wznów</button>
     <button class="btn-secondary" onclick="saveGame()">Zapisz</button>
+    <button class="btn-secondary" onclick="exportSaveFile()" title="Pobierz zapis gry jako plik .json (kopia zapasowa, przeniesienie na inny komputer)">💾 Eksport</button>
     <button class="btn-danger" onclick="resetGame()">Reset</button>
     <button class="btn-secondary" onclick="openBankModal()">📊 Rynek</button>
   </div>
@@ -413,6 +414,7 @@
             <p>Zmień wygląd interfejsu.</p>
             <button class="btn-lg text-lg" id="theme-toggle-btn-modal" onclick="toggleDarkMode()">Zmień motyw</button>
         </div>
+        <div id="save-panel" class="save-panel pt-4"></div>
         <div class="debug-settings">
             <button id="debug-toggle-btn" onclick="toggleDebugMode()">🛠️ Tryb debug: wyłączony</button>
             <div id="debug-tools" class="debug-tools" hidden>
@@ -1261,6 +1263,8 @@
 <script src="learning.js"></script>
 <script src="events.js"></script>
 <script src="ui.js"></script>
+<script src="lib/lz-string.min.js"></script>
+<script src="save_store.js"></script>
 <script src="main.js"></script>
 
 </body>

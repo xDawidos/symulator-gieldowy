@@ -95,7 +95,7 @@ function serializeProjectForSave(project) {
 // wyniki do 7 cyfr znaczących), a tryb kompaktowy (gdy zwykły zapis przekroczy limit) skraca historie mocniej.
 const SAVED_LINE_HISTORY_POINTS = 90;
 const SAVED_CANDLES = 24;
-const SAVE_SIZE_TARGET = 2_500_000; // znaków — zapas względem limitu localStorage (~5 MB)
+const SAVE_SIZE_TARGET = 2_500_000; // znaków — dawny limit localStorage (~5 MB); od 0.14.3 limity w save_store.js
 // Poziomy zapisu: 0 — zwykły, 1 — kompaktowy (zapis > 2,5 MB), 2 — awaryjny (przeglądarka odmówiła miejsca).
 const SAVE_COMPACT_LEVELS = [
     { line: SAVED_LINE_HISTORY_POINTS, candles: SAVED_CANDLES, ledger: RESEARCH_LEDGER_KEEP_RECOGNIZED, chartEvents: 20, agm: 4, mails: 100, journal: 100 },
@@ -263,31 +263,120 @@ function warnSaveOnce(message) {
     if (typeof showToast === 'function') showToast(message, 'warning', 10000);
 }
 
+// 0.14.3: zapis w IndexedDB (save_store.js) z kompresją lz16; localStorage tylko jako zapas i kopia awaryjna.
+let preloadedSaveCandidates = null;   // kandydaci z IndexedDB i localStorage (wczytani przed startem gry)
+let saveMigrationPending = false;     // wczytano stary zapis (czysty JSON w localStorage) — zamiana po pierwszym udanym zapisie
+let lastSaveRecord = null;
+let restoredSaveSource = null;
+
+function getSaveBackend() {
+    return typeof saveStore === 'object' && saveStore.backend ? saveStore.backend : (typeof localStorage !== 'undefined' ? 'localStorage' : 'none');
+}
+
+/** Snapshot i JSON na najniższym poziomie, który mieści się w limicie znaków przed kompresją. */
+function buildSaveJson(rawLimit) {
+    for (let level = 0; level < SAVE_COMPACT_LEVELS.length; level++) {
+        const snapshot = buildSaveSnapshot({ compact: level });
+        const json = JSON.stringify(snapshot);
+        if (json.length <= rawLimit || level === SAVE_COMPACT_LEVELS.length - 1) return { snapshot, json, level };
+    }
+    return null;
+}
+
+/** Snapshot i rekord lz16 na najniższym możliwym poziomie (limit znaków przed kompresją albo po niej). */
+function buildSaveRecord({ rawLimit = SAVE_IDB_RAW_LIMIT, packedLimit = Infinity } = {}) {
+    let record = null;
+    for (let level = 0; level < SAVE_COMPACT_LEVELS.length; level++) {
+        const snapshot = buildSaveSnapshot({ compact: level });
+        const json = JSON.stringify(snapshot);
+        if (json.length > rawLimit && level < SAVE_COMPACT_LEVELS.length - 1) continue;
+        record = encodeSaveRecord(snapshot, level, json);
+        if (JSON.stringify(record).length <= packedLimit || level === SAVE_COMPACT_LEVELS.length - 1) return record;
+    }
+    return record;
+}
+
 function saveGameState() {
     if (typeof localStorage === 'undefined') return false;
     if (saveDisabledUntilReload) return false;
-    if (typeof window !== 'undefined' && window.__GAME_TEST_MODE__) return false; // testy nie nadpisują zapisu gracza
+    if (typeof window !== 'undefined' && (window.__GAME_TEST_MODE__ || window.__SIM_NO_SAVE__)) return false; // testy i przebiegi nie nadpisują zapisu gracza
 
-    // Zapis za duży albo przeglądarka odmawia miejsca: kolejne poziomy przycięcia (kompaktowy, awaryjny).
-    let lastError = null;
-    for (let level = 0; level < SAVE_COMPACT_LEVELS.length; level++) {
-        try {
-            const snapshot = buildSaveSnapshot({ compact: level });
-            const text = JSON.stringify(snapshot);
-            if (text.length > SAVE_SIZE_TARGET && level < SAVE_COMPACT_LEVELS.length - 1) continue;
-            if (level > 0) localStorage.removeItem(GAME_SAVE_KEY); // stary zapis zwalnia miejsce dla nowego
-            localStorage.setItem(GAME_SAVE_KEY, text);
-            lastSaveReport = { ok: true, at: snapshot.savedAt, size: text.length, compact: level };
-            if (level === 2) warnSaveOnce('⚠️ Zapis gry jest bardzo duży — zapisano wersję awaryjną (krótsze wykresy i historia).');
+    const backend = getSaveBackend();
+    try {
+        if (backend === 'indexeddb') {
+            const t0 = performance.now();
+            const { snapshot, json, level } = buildSaveJson(SAVE_IDB_RAW_LIMIT);
+            const buildMs = performance.now() - t0;
+            if (saveStore.persisted === null) saveStore.requestPersistence();
+            const encode = canGzipSave() ? encodeSaveRecordGz(snapshot, level, json) : Promise.resolve(encodeSaveRecord(snapshot, level, json));
+            encode.then(record => saveStore.write(record).then(result => ({ record, result }))).then(({ record, result }) => {
+                lastSaveReport = result.ok
+                    ? { ok: true, at: record.savedAt, size: record.size, compressed: record.compressed, format: record.format, compact: record.level, backend, compressMs: record.compressMs, buildMs: Math.round(buildMs), totalMs: Math.round(performance.now() - t0) }
+                    : { ok: false, error: result.error, backend };
+                if (!result.ok) { warnSaveOnce('⚠️ Nie udało się zapisać gry w pamięci przeglądarki — zapisz kopię do pliku (Ustawienia → Zapis).'); return; }
+                if (saveMigrationPending || isLegacyLocalSave()) finishSaveMigration(encodeSaveRecord(snapshot, level, json)); // raz: kopia lz16 zamiast starego JSON
+                if (record.level === 2) warnSaveOnce('⚠️ Zapis gry jest bardzo duży — zapisano wersję awaryjną (krótsze wykresy i historia).');
+            }).catch(error => { lastSaveReport = { ok: false, error: String(error), backend }; });
             return true;
-        } catch (error) {
-            lastError = error;
         }
+        // Zapas: localStorage (po kompresji; poziomy kompaktowe tylko gdy rekord nie mieści się w limicie).
+        const record = buildSaveRecord({ rawLimit: Infinity, packedLimit: SAVE_LOCAL_LIMIT });
+        localStorage.removeItem(GAME_SAVE_KEY); // stary zapis zwalnia miejsce dla nowego
+        writeLocalRecord(GAME_SAVE_KEY, record);
+        lastSaveRecord = record;
+        lastSaveReport = { ok: true, at: record.savedAt, size: record.size, compressed: record.compressed, compact: record.level, backend: 'localStorage', compressMs: record.compressMs };
+        if (record.level === 2) warnSaveOnce('⚠️ Zapis gry jest bardzo duży — zapisano wersję awaryjną (krótsze wykresy i historia).');
+        return true;
+    } catch (error) {
+        lastSaveReport = { ok: false, error: String(error), backend };
+        if (!saveWarningShown) console.error('[save] Nie udało się zapisać gry:', error);
+        warnSaveOnce('⚠️ Nie udało się zapisać gry — przeglądarka nie ma miejsca. Zapisz kopię do pliku (Ustawienia → Zapis).');
+        return false;
     }
-    lastSaveReport = { ok: false, error: String(lastError) };
-    if (!saveWarningShown) console.error('[save] Nie udało się zapisać gry:', lastError);
-    warnSaveOnce('⚠️ Nie udało się zapisać gry — przeglądarka nie ma miejsca. Postęp z tej sesji może nie zostać zachowany.');
-    return false;
+}
+
+/** Migracja: po pierwszym udanym zapisie do IndexedDB stary czysty JSON w localStorage zamienia się w skompresowaną kopię. */
+function finishSaveMigration(record, key = GAME_SAVE_KEY) {
+    if (!saveMigrationPending && !isLegacyLocalSave(key)) return false;
+    try { writeLocalRecord(key, record); saveMigrationPending = false; return true; } catch (error) { return false; } // za duży — kopia awaryjna przy zamknięciu karty
+}
+
+function isLegacyLocalSave(key = GAME_SAVE_KEY) {
+    try {
+        const raw = localStorage.getItem(key);
+        return Boolean(raw) && !raw.startsWith(`{"format":"${SAVE_RECORD_FORMAT}"`);
+    } catch (error) { return false; }
+}
+
+/** Zamknięcie karty: synchroniczna, skompresowana kopia awaryjna w localStorage (IndexedDB może nie zdążyć). */
+let lastEmergencyCopyAt = 0;
+
+function saveEmergencyCopy() {
+    if (saveDisabledUntilReload || typeof localStorage === 'undefined') return false;
+    if (Date.now() - lastEmergencyCopyAt < 2000) return true; // pagehide i beforeunload przychodzą zwykle razem
+    lastEmergencyCopyAt = Date.now();
+    if (typeof window !== 'undefined' && (window.__GAME_TEST_MODE__ || window.__SIM_NO_SAVE__)) return false;
+    if (getSaveBackend() !== 'indexeddb') return saveGameState();
+    saveGameState(); // asynchronicznie do IndexedDB (jeśli zdąży)
+    try {
+        const record = buildSaveRecord({ rawLimit: Infinity, packedLimit: SAVE_LOCAL_LIMIT }); // lz16 synchronicznie (ok. 1 s przy 20 latach gry)
+        writeLocalRecord(GAME_SAVE_KEY, record);
+        lastSaveRecord = record;
+        return true;
+    } catch (error) {
+        return false;
+    }
+}
+
+/** Przed startem gry: wykrycie miejsca zapisu i odczyt kandydatów (IndexedDB current/previous + localStorage). */
+async function preloadSavedGames() {
+    if (typeof saveStore !== 'object') return;
+    await saveStore.detect();
+    let idb = { current: null, previous: null };
+    try { idb = await saveStore.read(); } catch (error) { console.warn('[save] Odczyt IndexedDB nieudany:', error); }
+    let localRaw = null;
+    try { localRaw = typeof localStorage !== 'undefined' ? localStorage.getItem(GAME_SAVE_KEY) : null; } catch (error) { /* brak dostępu */ }
+    preloadedSaveCandidates = await collectSaveCandidatesAsync(idb, localRaw);
 }
 
 function isFiniteNumber(value) {
@@ -632,14 +721,14 @@ function migrateMarketModel(report) {
     if (migrated > 0 && report) report.warnings.push(`Uzupełniono fundamenty ${migrated} spółek (migracja v2).`);
 }
 
-/** Wczytuje zapis przy starcie gry. Zwraca true, jeśli stan został odtworzony. */
+/** Wczytuje zapis przy starcie gry: najnowszy poprawny z IndexedDB (current, previous) i localStorage. */
 function restoreSavedGame() {
     if (typeof localStorage === 'undefined') return false;
 
     const legacy = LEGACY_SAVE_KEYS.find(key => localStorage.getItem(key));
-    const raw = localStorage.getItem(GAME_SAVE_KEY);
+    const candidates = preloadedSaveCandidates || collectSaveCandidates(null, localStorage.getItem(GAME_SAVE_KEY));
 
-    if (!raw) {
+    if (!candidates.length) {
         if (legacy) {
             console.warn('[save] Znaleziono zapis ze starszej wersji gry (prywatny inwestor). Jest niezgodny z nowym konceptem zarządcy funduszu — rozpoczynam nową grę. Stary zapis pozostaje nietknięty.');
             logEvent('💾 Zapis ze starszej wersji gry jest niezgodny z nowym konceptem (zarządca funduszu) — rozpoczęto nową grę.', 'review');
@@ -647,26 +736,28 @@ function restoreSavedGame() {
         return false;
     }
 
-    try {
-        const report = applySaveSnapshot(JSON.parse(raw));
-        lastSaveReport = report;
-
-        if (!report.ok) {
-            console.error('[save] Zapis odrzucony:', report.errors);
-            logEvent(`💾 Nie wczytano zapisu: ${report.errors.join(' ')}`, 'review');
-            return false;
+    const rejected = [];
+    for (const candidate of candidates) {
+        if (!candidate.snapshot) { rejected.push(`${candidate.source}: uszkodzony`); continue; }
+        try {
+            const report = applySaveSnapshot(candidate.snapshot);
+            lastSaveReport = { ...report, source: candidate.source };
+            if (!report.ok) { rejected.push(`${candidate.source}: ${report.errors.join(' ')}`); continue; }
+            if (report.warnings.length > 0) console.warn('[save] Ostrzeżenia przy wczytywaniu:', report.warnings);
+            restoredSaveSource = candidate.source;
+            saveMigrationPending = candidate.legacy;
+            isGamePaused = true; // po wczytaniu gra startuje zapauzowana
+            if (rejected.length) logEvent(`💾 Najnowszy zapis był uszkodzony (${rejected.join('; ')}) — wczytano wcześniejszy.`, 'review');
+            logEvent('💾 Wczytano zapis gry. Gra jest zapauzowana.', 'review');
+            console.log(`[save] Stan gry wczytany (${candidate.source}).`);
+            return true;
+        } catch (error) {
+            rejected.push(`${candidate.source}: ${String(error)}`);
         }
-
-        if (report.warnings.length > 0) console.warn('[save] Ostrzeżenia przy wczytywaniu:', report.warnings);
-
-        isGamePaused = true; // po wczytaniu gra startuje zapauzowana
-        logEvent('💾 Wczytano zapis gry. Gra jest zapauzowana.', 'review');
-        console.log('[save] Stan gry został wczytany z localStorage.');
-        return true;
-    } catch (error) {
-        console.error('[save] Nie udało się wczytać zapisu gry:', error);
-        return false;
     }
+    console.error('[save] Żaden zapis nie nadaje się do wczytania:', rejected);
+    logEvent(`💾 Nie wczytano zapisu: ${rejected.join('; ')}`, 'review');
+    return false;
 }
 
 /** Usuwa bieżący zapis (np. z konsoli: resetSavedGame()). */
@@ -679,15 +770,134 @@ function saveGame() {
 /** Przycisk „Reset” w górnym pasku: usuwa zapis i zaczyna nową grę. */
 function resetGame() {
     if (!confirm('Rozpocząć nową grę? Obecny zapis zostanie usunięty.')) return;
-    resetSavedGame();
-    location.reload();
+    resetSavedGame().finally(() => location.reload());
 }
 
-function resetSavedGame() {
-    if (typeof localStorage === 'undefined') return;
-    localStorage.removeItem(GAME_SAVE_KEY);
+/** Usuwa zapis ze wszystkich miejsc (IndexedDB current i previous, kopia w localStorage); blokuje zapis do przeładowania. */
+async function resetSavedGame(key = GAME_SAVE_KEY) {
     saveDisabledUntilReload = true; // zapis przy zamknięciu strony nie odtworzy usuniętego stanu
+    if (typeof localStorage !== 'undefined') localStorage.removeItem(key);
+    try { if (typeof saveStore === 'object' && saveStore.backend === 'indexeddb') await saveStore.clear(); } catch (error) { console.warn('[save] Czyszczenie IndexedDB nieudane:', error); }
     console.log('[save] Zapis usunięty. Odśwież stronę, aby rozpocząć nową grę.');
+}
+
+
+// =================================================================================
+// 0.14.3 Z4: EKSPORT I IMPORT ZAPISU (plik .json)
+// =================================================================================
+
+function getSaveGameDateLabel(snapshot) {
+    const q = Math.max(0, Number(snapshot?.macro?.quarter) || 0);
+    return `rok${Math.floor(q / 4) + 1}-kw${(q % 4) + 1}`;
+}
+
+function getSaveFileName(snapshot) {
+    const fund = String(snapshot?.playerProfile?.fundName || 'fundusz').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ł/g, 'l').replace(/Ł/g, 'L')
+        .replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'fundusz';
+    return `gra-inwestycyjna_${fund}_${getSaveGameDateLabel(snapshot)}.json`;
+}
+
+/** Szybka walidacja bez zmiany stanu gry (wersja, spółki, fundusz) — przed potwierdzeniem importu. */
+function validateSaveSnapshot(snapshot) {
+    const errors = [];
+    if (!snapshot || typeof snapshot !== 'object') return ['To nie jest zapis gry.'];
+    if (!SUPPORTED_SAVE_VERSIONS.includes(snapshot.version)) errors.push(`Niezgodna wersja zapisu (${snapshot.version ?? 'brak'}). Obsługiwane: ${SUPPORTED_SAVE_VERSIONS.join(', ')}.`);
+    if (!Array.isArray(snapshot.stocks) || snapshot.stocks.length === 0) errors.push('Zapis nie zawiera spółek.');
+    else if (snapshot.stocks.some(company => !company || typeof company.symbol !== 'string')) errors.push('Zapis zawiera spółki bez symbolu.');
+    if (!snapshot.macro || typeof snapshot.macro !== 'object') errors.push('Zapis nie zawiera stanu gospodarki.');
+    return errors;
+}
+
+/** „💾 Eksportuj zapis”: czytelny JSON (bez kompresji) do pobrania. */
+function exportSaveFile() {
+    if (typeof document === 'undefined') return null;
+    const snapshot = buildSaveSnapshot({ compact: 0 });
+    const blob = new Blob([JSON.stringify(snapshot, null, 1)], { type: 'application/json' });
+    const name = getSaveFileName(snapshot);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url; link.download = name;
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    if (typeof showToast === 'function') showToast(`Zapis wyeksportowany: ${name} (${(blob.size / 1e6).toFixed(1)} MB).`, 'success');
+    return name;
+}
+
+/**
+ * Import z tekstu pliku (JSON albo rekord lz16): walidacja → potwierdzenie → zapis jako bieżący → przeładowanie.
+ * Uszkodzony albo obcy plik niczego nie nadpisuje. options: { confirmFn, reload, key } (testy: bez przeładowania, klucz testowy).
+ */
+async function importSaveText(text, options = {}) {
+    const { confirmFn = typeof confirm === 'function' ? confirm : () => false, reload = true, key = GAME_SAVE_KEY } = options;
+    const snapshot = decodeSaveRecord(text);
+    const errors = snapshot ? validateSaveSnapshot(snapshot) : ['Plik nie jest zapisem gry (uszkodzony albo obcy format).'];
+    if (errors.length) {
+        if (typeof showToast === 'function') showToast(`Nie wczytano pliku: ${errors.join(' ')}`, 'error', 8000);
+        return { ok: false, errors };
+    }
+    const label = `${snapshot.playerProfile?.fundName || 'fundusz'}, ${getSaveGameDateLabel(snapshot)}`;
+    if (!confirmFn(`Zastąpić bieżącą grę zapisem z pliku (${label})? Obecny stan zostanie zastąpiony — zrób wcześniej eksport, jeśli chcesz go zachować.`)) return { ok: false, cancelled: true };
+    snapshot.savedAt = Date.now(); // najnowszy — przy wczytaniu wygrywa z poprzednim zapisem (który zostaje jako „previous”)
+    try {
+        if (getSaveBackend() === 'indexeddb') {
+            const record = canGzipSave() ? await encodeSaveRecordGz(snapshot, 0) : encodeSaveRecord(snapshot, 0);
+            const result = await saveStore.write(record);
+            if (!result.ok) throw new Error(result.error);
+            try { writeLocalRecord(key, encodeSaveRecord(snapshot, 0)); } catch (error) { localStorage.removeItem(key); } // kopia awaryjna nie może być starsza od importu
+        } else {
+            writeLocalRecord(key, encodeSaveRecord(snapshot, 0));
+        }
+    } catch (error) {
+        if (typeof showToast === 'function') showToast(`Nie udało się zapisać importu: ${error.message || error}`, 'error', 8000);
+        return { ok: false, errors: [String(error)] };
+    }
+    saveDisabledUntilReload = true; // bieżąca gra nie nadpisze importu przy zamknięciu strony
+    if (reload && typeof location !== 'undefined') location.reload();
+    return { ok: true, label };
+}
+
+/** „📂 Wczytaj z pliku”: plik wybrany przez gracza. */
+function importSaveFile(input) {
+    const file = input?.files?.[0];
+    if (!file) return;
+    file.text().then(text => importSaveText(text)).finally(() => { input.value = ''; });
+}
+
+// =================================================================================
+// 0.14.3 Z5: PANEL ZAPISU (Ustawienia)
+// =================================================================================
+
+const SAVE_LEVEL_LABELS = ['zwykły', 'kompaktowy', 'awaryjny'];
+
+function formatSaveBytes(value) {
+    if (!(value > 0)) return '—';
+    return value >= 1e6 ? `${(value / 1e6).toLocaleString('pl-PL', { maximumFractionDigits: 2 })} MB` : `${Math.round(value / 1e3).toLocaleString('pl-PL')} KB`;
+}
+
+function renderSavePanel() {
+    const box = typeof document !== 'undefined' ? document.getElementById('save-panel') : null;
+    if (!box) return;
+    const backend = getSaveBackend();
+    const report = lastSaveReport && lastSaveReport.at ? lastSaveReport : null;
+    const where = backend === 'indexeddb' ? 'IndexedDB (pamięć bez limitu 5 MB)' : backend === 'localStorage' ? 'pamięć podstawowa (localStorage, do ok. 2,4 mln znaków)' : 'brak — gra się nie zapisuje';
+    const packed = report ? (report.format === 'gz' ? formatSaveBytes(report.compressed) : `${formatSaveBytes(report.compressed * 2)} (lz16)`) : '—';
+    const persisted = saveStore.persisted === true ? 'trwały' : saveStore.persisted === false ? 'może zostać wyczyszczony przez przeglądarkę' : 'nieznany';
+    box.innerHTML = `
+        <h4 class="mt-0">💾 Zapis gry</h4>
+        <p class="text-sm m-0">Gdzie: <strong>${where}</strong>${saveStore.detectError ? ` <span class="text-muted">(${escapeHtml(saveStore.detectError)})</span>` : ''}</p>
+        <p class="text-sm m-0">Rozmiar: ${report ? `${formatSaveBytes(report.size)} przed kompresją → <strong>${packed}</strong>` : 'jeszcze nie zapisano w tej sesji'}</p>
+        <p class="text-sm m-0">Ostatni zapis: ${report ? new Date(report.at).toLocaleTimeString('pl-PL') : '—'} · poziom: ${report ? SAVE_LEVEL_LABELS[report.compact] || '—' : '—'} · ${persisted}</p>
+        <p class="text-sm m-0" id="save-estimate">Przydział przeglądarki: …</p>
+        <div class="d-flex gap-2 flex-wrap mt-2 justify-center">
+            <button class="btn-secondary" onclick="saveGame(); setTimeout(renderSavePanel, 500)">Zapisz teraz</button>
+            <button class="btn-secondary" onclick="exportSaveFile()">💾 Eksportuj zapis</button>
+            <label class="btn-secondary">📂 Wczytaj z pliku<input type="file" accept=".json,application/json" hidden onchange="importSaveFile(this)"></label>
+        </div>
+        <p class="text-xs text-muted">Eksport to czytelny plik JSON — kopia zapasowa albo przeniesienie gry na inny komputer.</p>`;
+    saveStore.estimate().then(estimate => {
+        const el = document.getElementById('save-estimate');
+        if (el) el.textContent = estimate ? `Przydział przeglądarki: zajęte ${formatSaveBytes(estimate.usage)} z ${formatSaveBytes(estimate.quota)}.` : 'Przydział przeglądarki: brak danych.';
+    });
 }
 
 // #################################################################################
@@ -1402,7 +1612,10 @@ function initializeGame() {
     // — nie tworzymy ich nigdzie indziej).
     setGameSpeed(restoredFromSave ? currentSpeedMultiplier : 1);
     if (typeof localStorage !== 'undefined') {
-        window.addEventListener('beforeunload', saveGameState);
+        // 0.14.3 Z3: IndexedDB jest asynchroniczne — zapis także przy ukryciu karty, a przy zamknięciu synchroniczna kopia awaryjna.
+        window.addEventListener('beforeunload', saveEmergencyCopy);
+        window.addEventListener('pagehide', saveEmergencyCopy);
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveGameState(); });
     }
 }
 
@@ -1686,7 +1899,11 @@ if (typeof window !== 'undefined' && !window.__GAME_TEST_MODE__) window.addEvent
         }
 
 
-        initializeGame(); // Wywołaj inicjalizację bezpośrednio
+        // 0.14.3: najpierw odczyt zapisów z IndexedDB (asynchronicznie); przebiegi testowe startują od razu (bez zapisu).
+        if (window.__SIM_NO_SAVE__ || typeof preloadSavedGames !== 'function') initializeGame();
+        else preloadSavedGames().catch(error => console.warn('[save] Wstępny odczyt zapisów nieudany:', error)).finally(() => {
+            try { initializeGame(); } catch (e) { console.error('[loader] Błąd podczas wywoływania initializeGame():', e); alert('Wystąpił krytyczny błąd podczas inicjalizacji gry. Sprawdź konsolę deweloperską (F12).'); }
+        });
 
     } catch (e) {
         console.error('[loader] Błąd podczas wywoływania initializeGame():', e);

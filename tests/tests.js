@@ -6802,7 +6802,127 @@ group('0.14 T6: spółki zależne (transfer, pożyczka, usamodzielnienie, wchło
     });
 });
 
-function runAllTests() {
+group('0.14.3: zapis bez limitu (IndexedDB, lz16, kopia awaryjna) — osobna baza testowa, bez zapisu gracza', () => {
+    const TEST_KEY = '__test_save_key_0143';
+    function snapshotWorld() {
+        const a = makeCompany('ZAP'), b = makeCompany('ZAQ');
+        resetWorld([a, b]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        [a, b].forEach(x => initializeFundamentals(x, true));
+        return buildSaveSnapshot({ compact: 0 });
+    }
+    const keepStore = () => { const saved = { backend: saveStore.backend, db: saveStore.db, dbName: saveStore.dbName }; return () => Object.assign(saveStore, saved); };
+
+    test('kompresja lz16: snapshot i tekst z polskimi znakami wracają identyczne; stopień kompresji > 1', () => {
+        const snap = snapshotWorld();
+        const record = encodeSaveRecord(snap, 0);
+        assert(record.format === 'lz16' && record.size === JSON.stringify(snap).length, 'rekord');
+        assert(JSON.stringify(decodeSaveRecord(record)) === JSON.stringify(snap), 'snapshot identyczny');
+        assert(JSON.stringify(decodeSaveRecord(JSON.stringify(record))) === JSON.stringify(snap), 'także z tekstu rekordu');
+        assert(record.size / record.compressed > 2, `kompresja ${(record.size / record.compressed).toFixed(1)}×`);
+        const text = 'Zażółć gęślą jaźń 🏢 ' + 'abc'.repeat(500) + '\u0000￿';
+        assert(LZString.decompressFromUTF16(LZString.compressToUTF16(text)) === text, 'dowolny tekst');
+        assert(decodeSaveRecord(JSON.stringify(snap)).version === snap.version, 'stary format: czysty JSON');
+        assert(decodeSaveRecord('nie-json') === null && decodeSaveRecord({ format: 'lz16', data: 'śmieci' }) === null, 'uszkodzony → null');
+    });
+
+    test('format gz (IndexedDB): gzip przez CompressionStream wraca identyczny; kandydaci rozpakowują gz', async () => {
+        const snap = snapshotWorld();
+        assert(canGzipSave(), 'CompressionStream w przeglądarce');
+        const record = await encodeSaveRecordGz(snap, 0);
+        assert(record.format === 'gz' && record.data.byteLength === record.compressed && record.compressed < record.size, 'rekord gz');
+        assert(JSON.stringify(await decodeSaveRecordAsync(record)) === JSON.stringify(snap), 'snapshot identyczny');
+        const candidates = await collectSaveCandidatesAsync({ current: record, previous: null }, null);
+        assert(candidates[0].snapshot?.version === snap.version, 'kandydat gz rozpakowany');
+        assert(await decodeSaveRecordAsync({ format: 'gz', data: new ArrayBuffer(8) }) === null, 'uszkodzony gz → null');
+    });
+
+    test('saveStore (IndexedDB, baza testowa): dwa zapisy → current i previous; clear czyści oba', async () => {
+        const restore = keepStore();
+        try {
+            assert(await saveStore.detect() === 'indexeddb' && saveStore.dbName === SAVE_DB_TEST_NAME, `backend ${saveStore.backend} ${saveStore.detectError || ''}`);
+            await saveStore.clear();
+            const r1 = { format: 'lz16', savedAt: 1, data: 'a' }, r2 = { format: 'lz16', savedAt: 2, data: 'b' };
+            assert((await saveStore.write(r1)).ok && (await saveStore.write(r2)).ok, 'zapisy');
+            const read = await saveStore.read();
+            assert(read.current?.savedAt === 2 && read.previous?.savedAt === 1, 'current = nowy, previous = poprzedni');
+            await saveStore.clear();
+            const empty = await saveStore.read();
+            assert(!empty.current && !empty.previous, 'wyczyszczone');
+        } finally { restore(); }
+    });
+
+    test('zapas: bez IndexedDB backend = localStorage', async () => {
+        const restore = keepStore();
+        try { assert(await saveStore.detect(null, null) === 'localStorage' && /indexedDB/.test(saveStore.detectError), 'zapas'); }
+        finally { restore(); }
+    });
+
+    test('wczytanie: najnowszy uszkodzony → wczytany poprzedni (i wpis w dzienniku)', () => {
+        const snap = snapshotWorld();
+        const older = encodeSaveRecord({ ...snap, savedAt: 100 }, 0);
+        const candidates = collectSaveCandidates({ current: { format: 'lz16', savedAt: 200, data: 'uszkodzone' }, previous: older }, null);
+        assert(candidates[0].source === 'indexeddb:current' && !candidates[0].snapshot, 'najnowszy uszkodzony');
+        preloadedSaveCandidates = candidates;
+        try {
+            assert(restoreSavedGame() && restoredSaveSource === 'indexeddb:previous', `źródło ${restoredSaveSource}`);
+        } finally { preloadedSaveCandidates = null; isGamePaused = false; }
+    });
+
+    test('migracja: stary czysty JSON w localStorage → wczytany, po pierwszym zapisie zamieniony w kopię lz16 (klucz testowy)', () => {
+        const snap = snapshotWorld();
+        try {
+            localStorage.setItem(TEST_KEY, JSON.stringify(snap));
+            const candidates = collectSaveCandidates(null, localStorage.getItem(TEST_KEY));
+            assert(candidates[0].legacy && candidates[0].snapshot?.version === snap.version, 'stary zapis rozpoznany');
+            assert(isLegacyLocalSave(TEST_KEY), 'czysty JSON');
+            assert(finishSaveMigration(encodeSaveRecord(snap, 0), TEST_KEY) && !isLegacyLocalSave(TEST_KEY), 'po zapisie: kopia lz16');
+            assert(JSON.stringify(decodeSaveRecord(localStorage.getItem(TEST_KEY))) === JSON.stringify(snap), 'kopia bez strat');
+        } finally { localStorage.removeItem(TEST_KEY); saveMigrationPending = false; }
+    });
+
+    test('reset czyści IndexedDB (current, previous) i kopię w localStorage', async () => {
+        const restore = keepStore();
+        const disabled = saveDisabledUntilReload;
+        try {
+            await saveStore.detect();
+            await saveStore.write({ format: 'lz16', savedAt: 5, data: 'x' });
+            localStorage.setItem(TEST_KEY, '{"format":"lz16"}');
+            await resetSavedGame(TEST_KEY);
+            const read = await saveStore.read();
+            assert(!read.current && !read.previous && localStorage.getItem(TEST_KEY) === null && saveDisabledUntilReload, 'wszystko wyczyszczone, zapis zablokowany');
+        } finally { saveDisabledUntilReload = disabled; localStorage.removeItem(TEST_KEY); restore(); }
+    });
+
+    test('import: poprawny plik zapisany jako bieżący (baza testowa, bez przeładowania); uszkodzony odrzucony bez zmian', async () => {
+        const restore = keepStore();
+        const disabled = saveDisabledUntilReload;
+        const snap = snapshotWorld();
+        try {
+            await saveStore.detect(); await saveStore.clear();
+            const bad = await importSaveText('{"version": 999}', { confirmFn: () => true, reload: false, key: TEST_KEY });
+            assert(!bad.ok && /wersja/i.test(bad.errors.join(' ')) && !(await saveStore.read()).current && localStorage.getItem(TEST_KEY) === null, 'obcy plik: nic nie nadpisane');
+            const garbage = await importSaveText('to nie jest json', { confirmFn: () => true, reload: false, key: TEST_KEY });
+            assert(!garbage.ok && !(await saveStore.read()).current, 'uszkodzony plik');
+            const cancelled = await importSaveText(JSON.stringify(snap), { confirmFn: () => false, reload: false, key: TEST_KEY });
+            assert(cancelled.cancelled && !(await saveStore.read()).current, 'anulowane potwierdzenie');
+            const good = await importSaveText(JSON.stringify(snap, null, 1), { confirmFn: () => true, reload: false, key: TEST_KEY });
+            const read = await saveStore.read();
+            const stored = await decodeSaveRecordAsync(read.current);
+            assert(good.ok && stored?.stocks?.length === snap.stocks.length && stored.version === snap.version, 'zapisany jako bieżący');
+            assert(decodeSaveRecord(localStorage.getItem(TEST_KEY))?.version === snap.version && saveDisabledUntilReload, 'kopia lz16 i blokada zapisu do przeładowania');
+            assert(/^gra-inwestycyjna_Fundusz-Testowy_rok\d+-kw\d\.json$/.test(getSaveFileName(snap)), getSaveFileName(snap));
+            await saveStore.clear();
+        } finally { saveDisabledUntilReload = disabled; localStorage.removeItem(TEST_KEY); restore(); }
+    });
+
+    test('tryb testów: saveGameState nic nie zapisuje (zapis gracza nietknięty)', () => {
+        const before = localStorage.getItem(GAME_SAVE_KEY);
+        assert(saveGameState() === false && localStorage.getItem(GAME_SAVE_KEY) === before, 'bez zapisu');
+    });
+});
+
+async function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;
     let failed = 0;
@@ -6820,7 +6940,8 @@ function runAllTests() {
             const line = document.createElement('div');
             line.className = 'test';
             try {
-                withSeededRandom(t.seed, t.fn);
+                const out = withSeededRandom(t.seed, t.fn);
+                if (out && typeof out.then === 'function') await out; // 0.14.3: testy asynchroniczne (IndexedDB)
                 passed++;
                 line.innerHTML = `<span class="ok">✔</span> `;
                 line.append(t.name);
