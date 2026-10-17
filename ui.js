@@ -3466,6 +3466,7 @@ function openCeoChoiceModal(symbol, candidates, successChance) {
 */
 function openSettingsModal() {
     const modal = document.getElementById('settings-modal');
+    if (typeof renderSavePanel === 'function') renderSavePanel(); // 0.14.3 Z5
     if (modal) {
         modal.style.display = 'block';
     }

@@ -863,6 +863,43 @@ function importSaveFile(input) {
     file.text().then(text => importSaveText(text)).finally(() => { input.value = ''; });
 }
 
+// =================================================================================
+// 0.14.3 Z5: PANEL ZAPISU (Ustawienia)
+// =================================================================================
+
+const SAVE_LEVEL_LABELS = ['zwykły', 'kompaktowy', 'awaryjny'];
+
+function formatSaveBytes(value) {
+    if (!(value > 0)) return '—';
+    return value >= 1e6 ? `${(value / 1e6).toLocaleString('pl-PL', { maximumFractionDigits: 2 })} MB` : `${Math.round(value / 1e3).toLocaleString('pl-PL')} KB`;
+}
+
+function renderSavePanel() {
+    const box = typeof document !== 'undefined' ? document.getElementById('save-panel') : null;
+    if (!box) return;
+    const backend = getSaveBackend();
+    const report = lastSaveReport && lastSaveReport.at ? lastSaveReport : null;
+    const where = backend === 'indexeddb' ? 'IndexedDB (pamięć bez limitu 5 MB)' : backend === 'localStorage' ? 'pamięć podstawowa (localStorage, do ok. 2,4 mln znaków)' : 'brak — gra się nie zapisuje';
+    const packed = report ? (report.format === 'gz' ? formatSaveBytes(report.compressed) : `${formatSaveBytes(report.compressed * 2)} (lz16)`) : '—';
+    const persisted = saveStore.persisted === true ? 'trwały' : saveStore.persisted === false ? 'może zostać wyczyszczony przez przeglądarkę' : 'nieznany';
+    box.innerHTML = `
+        <h4 class="mt-0">💾 Zapis gry</h4>
+        <p class="text-sm m-0">Gdzie: <strong>${where}</strong>${saveStore.detectError ? ` <span class="text-muted">(${escapeHtml(saveStore.detectError)})</span>` : ''}</p>
+        <p class="text-sm m-0">Rozmiar: ${report ? `${formatSaveBytes(report.size)} przed kompresją → <strong>${packed}</strong>` : 'jeszcze nie zapisano w tej sesji'}</p>
+        <p class="text-sm m-0">Ostatni zapis: ${report ? new Date(report.at).toLocaleTimeString('pl-PL') : '—'} · poziom: ${report ? SAVE_LEVEL_LABELS[report.compact] || '—' : '—'} · ${persisted}</p>
+        <p class="text-sm m-0" id="save-estimate">Przydział przeglądarki: …</p>
+        <div class="d-flex gap-2 flex-wrap mt-2 justify-center">
+            <button class="btn-secondary" onclick="saveGame(); setTimeout(renderSavePanel, 500)">Zapisz teraz</button>
+            <button class="btn-secondary" onclick="exportSaveFile()">💾 Eksportuj zapis</button>
+            <label class="btn-secondary">📂 Wczytaj z pliku<input type="file" accept=".json,application/json" hidden onchange="importSaveFile(this)"></label>
+        </div>
+        <p class="text-xs text-muted">Eksport to czytelny plik JSON — kopia zapasowa albo przeniesienie gry na inny komputer.</p>`;
+    saveStore.estimate().then(estimate => {
+        const el = document.getElementById('save-estimate');
+        if (el) el.textContent = estimate ? `Przydział przeglądarki: zajęte ${formatSaveBytes(estimate.usage)} z ${formatSaveBytes(estimate.quota)}.` : 'Przydział przeglądarki: brak danych.';
+    });
+}
+
 // #################################################################################
 // ## main.js
 // #################################################################################
