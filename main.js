@@ -781,6 +781,88 @@ async function resetSavedGame(key = GAME_SAVE_KEY) {
     console.log('[save] Zapis usunięty. Odśwież stronę, aby rozpocząć nową grę.');
 }
 
+
+// =================================================================================
+// 0.14.3 Z4: EKSPORT I IMPORT ZAPISU (plik .json)
+// =================================================================================
+
+function getSaveGameDateLabel(snapshot) {
+    const q = Math.max(0, Number(snapshot?.macro?.quarter) || 0);
+    return `rok${Math.floor(q / 4) + 1}-kw${(q % 4) + 1}`;
+}
+
+function getSaveFileName(snapshot) {
+    const fund = String(snapshot?.playerProfile?.fundName || 'fundusz').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ł/g, 'l').replace(/Ł/g, 'L')
+        .replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'fundusz';
+    return `gra-inwestycyjna_${fund}_${getSaveGameDateLabel(snapshot)}.json`;
+}
+
+/** Szybka walidacja bez zmiany stanu gry (wersja, spółki, fundusz) — przed potwierdzeniem importu. */
+function validateSaveSnapshot(snapshot) {
+    const errors = [];
+    if (!snapshot || typeof snapshot !== 'object') return ['To nie jest zapis gry.'];
+    if (!SUPPORTED_SAVE_VERSIONS.includes(snapshot.version)) errors.push(`Niezgodna wersja zapisu (${snapshot.version ?? 'brak'}). Obsługiwane: ${SUPPORTED_SAVE_VERSIONS.join(', ')}.`);
+    if (!Array.isArray(snapshot.stocks) || snapshot.stocks.length === 0) errors.push('Zapis nie zawiera spółek.');
+    else if (snapshot.stocks.some(company => !company || typeof company.symbol !== 'string')) errors.push('Zapis zawiera spółki bez symbolu.');
+    if (!snapshot.macro || typeof snapshot.macro !== 'object') errors.push('Zapis nie zawiera stanu gospodarki.');
+    return errors;
+}
+
+/** „💾 Eksportuj zapis”: czytelny JSON (bez kompresji) do pobrania. */
+function exportSaveFile() {
+    if (typeof document === 'undefined') return null;
+    const snapshot = buildSaveSnapshot({ compact: 0 });
+    const blob = new Blob([JSON.stringify(snapshot, null, 1)], { type: 'application/json' });
+    const name = getSaveFileName(snapshot);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url; link.download = name;
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    if (typeof showToast === 'function') showToast(`Zapis wyeksportowany: ${name} (${(blob.size / 1e6).toFixed(1)} MB).`, 'success');
+    return name;
+}
+
+/**
+ * Import z tekstu pliku (JSON albo rekord lz16): walidacja → potwierdzenie → zapis jako bieżący → przeładowanie.
+ * Uszkodzony albo obcy plik niczego nie nadpisuje. options: { confirmFn, reload, key } (testy: bez przeładowania, klucz testowy).
+ */
+async function importSaveText(text, options = {}) {
+    const { confirmFn = typeof confirm === 'function' ? confirm : () => false, reload = true, key = GAME_SAVE_KEY } = options;
+    const snapshot = decodeSaveRecord(text);
+    const errors = snapshot ? validateSaveSnapshot(snapshot) : ['Plik nie jest zapisem gry (uszkodzony albo obcy format).'];
+    if (errors.length) {
+        if (typeof showToast === 'function') showToast(`Nie wczytano pliku: ${errors.join(' ')}`, 'error', 8000);
+        return { ok: false, errors };
+    }
+    const label = `${snapshot.playerProfile?.fundName || 'fundusz'}, ${getSaveGameDateLabel(snapshot)}`;
+    if (!confirmFn(`Zastąpić bieżącą grę zapisem z pliku (${label})? Obecny stan zostanie zastąpiony — zrób wcześniej eksport, jeśli chcesz go zachować.`)) return { ok: false, cancelled: true };
+    snapshot.savedAt = Date.now(); // najnowszy — przy wczytaniu wygrywa z poprzednim zapisem (który zostaje jako „previous”)
+    try {
+        if (getSaveBackend() === 'indexeddb') {
+            const record = canGzipSave() ? await encodeSaveRecordGz(snapshot, 0) : encodeSaveRecord(snapshot, 0);
+            const result = await saveStore.write(record);
+            if (!result.ok) throw new Error(result.error);
+            try { writeLocalRecord(key, encodeSaveRecord(snapshot, 0)); } catch (error) { localStorage.removeItem(key); } // kopia awaryjna nie może być starsza od importu
+        } else {
+            writeLocalRecord(key, encodeSaveRecord(snapshot, 0));
+        }
+    } catch (error) {
+        if (typeof showToast === 'function') showToast(`Nie udało się zapisać importu: ${error.message || error}`, 'error', 8000);
+        return { ok: false, errors: [String(error)] };
+    }
+    saveDisabledUntilReload = true; // bieżąca gra nie nadpisze importu przy zamknięciu strony
+    if (reload && typeof location !== 'undefined') location.reload();
+    return { ok: true, label };
+}
+
+/** „📂 Wczytaj z pliku”: plik wybrany przez gracza. */
+function importSaveFile(input) {
+    const file = input?.files?.[0];
+    if (!file) return;
+    file.text().then(text => importSaveText(text)).finally(() => { input.value = ''; });
+}
+
 // #################################################################################
 // ## main.js
 // #################################################################################

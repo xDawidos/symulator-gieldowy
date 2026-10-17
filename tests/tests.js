@@ -6894,6 +6894,28 @@ group('0.14.3: zapis bez limitu (IndexedDB, lz16, kopia awaryjna) — osobna baz
         } finally { saveDisabledUntilReload = disabled; localStorage.removeItem(TEST_KEY); restore(); }
     });
 
+    test('import: poprawny plik zapisany jako bieżący (baza testowa, bez przeładowania); uszkodzony odrzucony bez zmian', async () => {
+        const restore = keepStore();
+        const disabled = saveDisabledUntilReload;
+        const snap = snapshotWorld();
+        try {
+            await saveStore.detect(); await saveStore.clear();
+            const bad = await importSaveText('{"version": 999}', { confirmFn: () => true, reload: false, key: TEST_KEY });
+            assert(!bad.ok && /wersja/i.test(bad.errors.join(' ')) && !(await saveStore.read()).current && localStorage.getItem(TEST_KEY) === null, 'obcy plik: nic nie nadpisane');
+            const garbage = await importSaveText('to nie jest json', { confirmFn: () => true, reload: false, key: TEST_KEY });
+            assert(!garbage.ok && !(await saveStore.read()).current, 'uszkodzony plik');
+            const cancelled = await importSaveText(JSON.stringify(snap), { confirmFn: () => false, reload: false, key: TEST_KEY });
+            assert(cancelled.cancelled && !(await saveStore.read()).current, 'anulowane potwierdzenie');
+            const good = await importSaveText(JSON.stringify(snap, null, 1), { confirmFn: () => true, reload: false, key: TEST_KEY });
+            const read = await saveStore.read();
+            const stored = await decodeSaveRecordAsync(read.current);
+            assert(good.ok && stored?.stocks?.length === snap.stocks.length && stored.version === snap.version, 'zapisany jako bieżący');
+            assert(decodeSaveRecord(localStorage.getItem(TEST_KEY))?.version === snap.version && saveDisabledUntilReload, 'kopia lz16 i blokada zapisu do przeładowania');
+            assert(/^gra-inwestycyjna_Fundusz-Testowy_rok\d+-kw\d\.json$/.test(getSaveFileName(snap)), getSaveFileName(snap));
+            await saveStore.clear();
+        } finally { saveDisabledUntilReload = disabled; localStorage.removeItem(TEST_KEY); restore(); }
+    });
+
     test('tryb testów: saveGameState nic nie zapisuje (zapis gracza nietknięty)', () => {
         const before = localStorage.getItem(GAME_SAVE_KEY);
         assert(saveGameState() === false && localStorage.getItem(GAME_SAVE_KEY) === before, 'bez zapisu');
