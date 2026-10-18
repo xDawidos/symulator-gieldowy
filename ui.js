@@ -46,6 +46,13 @@ function getSectorFilterBaseList() {
     return (stocks || []).filter(stock => !stock.isBankrupt && !stock.isSubsidiaryOf && stock.assetType !== 'Startup');
 }
 
+/** 0.14.5: przełącznik grupowania sektorów według kategorii (rozwijane listy vs płaski ciąg chipów). */
+function toggleSectorGrouping(grouped) {
+    const val = typeof grouped === 'boolean' ? grouped : (sectorFilterState.grouped === false);
+    setSectorFilter({ grouped: val });
+    return val;
+}
+
 function toggleSectorGroupMenu(btn, e) {
     if (e) e.stopPropagation();
     const menu = btn.nextElementSibling;
@@ -69,6 +76,7 @@ function closeAllSectorGroupMenus() {
 }
 
 if (typeof window !== 'undefined') {
+    window.toggleSectorGrouping = toggleSectorGrouping;
     window.toggleSectorGroupMenu = toggleSectorGroupMenu;
     window.closeAllSectorGroupMenus = closeAllSectorGroupMenus;
     window.addEventListener('click', (e) => {
@@ -89,56 +97,74 @@ if (typeof window !== 'undefined') {
 }
 
 /**
- * Wspólny renderer chipów (lista spółek i skaner). state: { sector, subsector, secondary, type },
+ * Wspólny renderer chipów (lista spółek i skaner). state: { sector, subsector, secondary, type, grouped },
  * onChange: nazwa funkcji globalnej przyjmującej obiekt zmian.
  */
 function renderSectorFilterChips(list, state, onChange, options = {}) {
     const { sectors, subsectors } = getSectorFilterCounts(list, state);
     const call = changes => `${onChange}(${escapeHtml(JSON.stringify(changes))})`;
     const chip = (label, active, changes, title = '') => `<button type="button" class="sector-chip${active ? ' active' : ''}" aria-pressed="${active ? 'true' : 'false'}" ${title ? `title="${escapeHtml(title)}"` : ''} onclick="${call(changes)}">${label}</button>`;
-    const groups = SECTOR_GROUPS.map(group => {
-        const items = group.sectors.filter(name => sectors[name] > 0 || state.sector === name);
-        if (!items.length) return '';
-        if (group.sectors.length === 1) {
-            const name = group.sectors[0];
-            return chip(`${sectorIcon(name)}${escapeHtml(name)} <small>${sectors[name] || 0}</small>`, state.sector === name, { sector: name }, `${group.name}: ${name}`);
-        }
-        const isGroupActive = group.sectors.includes(state.sector);
-        const activeSectorName = isGroupActive ? state.sector : null;
-        const groupCount = items.reduce((acc, name) => acc + (sectors[name] || 0), 0);
-        let btnLabel;
-        if (activeSectorName) {
-            btnLabel = `${sectorIcon(activeSectorName)}${escapeHtml(activeSectorName)} <small>${sectors[activeSectorName] || 0}</small>`;
-        } else {
-            btnLabel = `${escapeHtml(group.name)} <small>${groupCount}</small>`;
-        }
-        const menuItems = items.map(name => {
-            const isItemActive = state.sector === name;
-            return `<button type="button" role="menuitem" class="sector-menu-item${isItemActive ? ' active' : ''}" onclick="closeAllSectorGroupMenus(); ${call({ sector: name })}">
-                <span>${sectorIcon(name)}${escapeHtml(name)}</span>
-                <small>${sectors[name] || 0}</small>
-            </button>`;
+    
+    const isGrouped = state.grouped !== false;
+    let chipsHtml = chip('Wszystkie', state.sector === 'all', { sector: 'all' });
+
+    if (isGrouped) {
+        const groups = SECTOR_GROUPS.map(group => {
+            const items = group.sectors.filter(name => sectors[name] > 0 || state.sector === name);
+            if (!items.length) return '';
+            if (group.sectors.length === 1) {
+                const name = group.sectors[0];
+                return chip(`${sectorIcon(name)}${escapeHtml(name)} <small>${sectors[name] || 0}</small>`, state.sector === name, { sector: name }, `${group.name}: ${name}`);
+            }
+            const isGroupActive = group.sectors.includes(state.sector);
+            const activeSectorName = isGroupActive ? state.sector : null;
+            const groupCount = items.reduce((acc, name) => acc + (sectors[name] || 0), 0);
+            let btnLabel;
+            if (activeSectorName) {
+                btnLabel = `${sectorIcon(activeSectorName)}${escapeHtml(activeSectorName)} <small>${sectors[activeSectorName] || 0}</small>`;
+            } else {
+                btnLabel = `${escapeHtml(group.name)} <small>${groupCount}</small>`;
+            }
+            const menuItems = items.map(name => {
+                const isItemActive = state.sector === name;
+                return `<button type="button" role="menuitem" class="sector-menu-item${isItemActive ? ' active' : ''}" onclick="closeAllSectorGroupMenus(); ${call({ sector: name })}">
+                    <span>${sectorIcon(name)}${escapeHtml(name)}</span>
+                    <small>${sectors[name] || 0}</small>
+                </button>`;
+            }).join('');
+            return `<div class="sector-group-dropdown">
+                <button type="button" class="sector-chip sector-group-btn${isGroupActive ? ' active' : ''}" aria-haspopup="menu" aria-expanded="false" onclick="toggleSectorGroupMenu(this, event)">
+                    ${btnLabel} ${uiIcon('chevron-down', 12)}
+                </button>
+                <div class="sector-group-menu" role="menu" hidden>
+                    ${menuItems}
+                </div>
+            </div>`;
         }).join('');
-        return `<div class="sector-group-dropdown">
-            <button type="button" class="sector-chip sector-group-btn${isGroupActive ? ' active' : ''}" aria-haspopup="menu" aria-expanded="false" onclick="toggleSectorGroupMenu(this, event)">
-                ${btnLabel} ${uiIcon('chevron-down', 12)}
-            </button>
-            <div class="sector-group-menu" role="menu" hidden>
-                ${menuItems}
-            </div>
-        </div>`;
-    }).join('');
+        chipsHtml += groups;
+    } else {
+        // Płaski ciąg wszystkich sektorów (bez podziału na kategorie)
+        const flatChips = SECTOR_NAMES
+            .filter(name => (sectors[name] || 0) > 0 || state.sector === name)
+            .map(name => {
+                return chip(`${sectorIcon(name)}${escapeHtml(name)} <small>${sectors[name] || 0}</small>`, state.sector === name, { sector: name });
+            }).join('');
+        chipsHtml += flatChips;
+    }
+
     const subNames = state.sector !== 'all' ? Object.keys(SECTORS[state.sector]?.subsectors || {}).filter(name => subsectors[name] > 0) : [];
     const subRow = subNames.length
         ? `<div class="sector-subchips">${chip('Cały sektor', !state.subsector, { subsector: null })}${subNames.map(name => chip(`${escapeHtml(name)} <small>${subsectors[name]}</small>`, state.subsector === name, { subsector: name })).join('')}</div>` : '';
     const typeOptions = INSTRUMENT_TYPES.filter(t => options.types ? options.types.includes(t.id) : true)
         .map(t => `<option value="${t.id}" ${state.type === t.id ? 'selected' : ''}>${t.label}</option>`).join('');
     const controls = `<div class="sector-filter-controls">
+        <label class="text-sm" title="Grupuj sektory według kategorii w rozwijanych listach. Odznacz, aby widzieć wszystkie sektory od razu.">
+            <input type="checkbox" id="sector-grouping-checkbox" ${isGrouped ? 'checked' : ''} onchange="${onChange}({ grouped: this.checked })"> grupuj kategorie</label>
         <label class="text-sm" title="Domyślnie filtr pokazuje spółki, dla których to sektor główny (największy segment). Włączone: także spółki z tym segmentem pobocznym (◐).">
             <input type="checkbox" ${state.secondary ? 'checked' : ''} onchange="${onChange}({ secondary: this.checked })"> także segmenty poboczne</label>
         ${options.hideType ? '' : `<label class="text-sm">Typ <select onchange="${onChange}({ type: this.value })">${typeOptions}</select></label>`}
     </div>`;
-    return { chips: chip('Wszystkie', state.sector === 'all', { sector: 'all' }) + groups, extra: subRow + controls };
+    return { chips: chipsHtml, extra: subRow + controls };
 }
 
 function renderSectorFilters() {
@@ -150,8 +176,15 @@ function renderSectorFilters() {
     const signature = chipHtml + extraHtml;
     if (signature === sectorFilterSignature) return;
     sectorFilterSignature = signature;
+    const owned = document.getElementById('owned-stocks-chip');
     chips.querySelectorAll('.sector-chip:not(.owned-chip), .sector-group, .sector-group-dropdown').forEach(node => node.remove());
     chips.insertAdjacentHTML('beforeend', chipHtml);
+    if (owned) {
+        const allBtn = chips.querySelector('.sector-chip');
+        if (allBtn && allBtn !== owned) {
+            allBtn.after(owned);
+        }
+    }
     if (extra) extra.innerHTML = extraHtml;
     const select = document.getElementById('sector-filter');
     if (select) select.value = sectorFilterState.sector;
@@ -877,8 +910,8 @@ function drawCandlestickChart(history, svg, chartWidth, getX, getY) {
         const body = document.createElementNS(svgNs, "rect");
         body.setAttribute("x", (x - candleWidth / 2).toString()); body.setAttribute("y", (isBullish ? yClose : yOpen).toString());
         body.setAttribute("width", candleWidth.toString()); body.setAttribute("height", Math.max(1, Math.abs(yOpen - yClose)).toString());
-        // świeca rosnąca pusta w środku, malejąca pełna — kierunek widać nie tylko po kolorze
-        body.style.fill = isBullish ? 'var(--color-bg-surface)' : color;
+        // Świece wypełnione kolorem (zielona/czerwona) — spójne wypełnienie obu kierunków
+        body.style.fill = color;
         body.style.stroke = color;
         body.setAttribute("stroke-width", "1");
         svg.appendChild(body);

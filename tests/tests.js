@@ -5000,6 +5000,38 @@ group('0.14 T1c: filtr sektora i typu', () => {
         saveSectorFilterState();
         assert(loaded.sector === 'Energia' && loaded.secondary === true && loaded.type === 'stock', JSON.stringify(loaded));
     });
+
+    test('możliwość wyłączenia grupowania kategorii i płaski ciąg chipów', () => {
+        const { banks } = world();
+        const groupedRes = renderSectorFilterChips(stocks, { sector: 'all', grouped: true }, 'dummy');
+        assert(groupedRes.chips.includes('sector-group-dropdown'), 'widok grupowany zawiera dropdowny');
+        assert(groupedRes.extra.includes('grupuj kategorie'), 'kontrolka grupowania obecna');
+        
+        const flatRes = renderSectorFilterChips(stocks, { sector: 'all', grouped: false }, 'dummy');
+        assert(!flatRes.chips.includes('sector-group-dropdown'), 'widok płaski bez dropdownów');
+        assert(flatRes.chips.includes('Bankowość'), 'płaski widok zawiera bezpośrednie chipy sektorów');
+
+        const before = sectorFilterState;
+        toggleSectorGrouping(false);
+        assert(sectorFilterState.grouped === false, 'toggleSectorGrouping wyłącza grupowanie');
+        toggleSectorGrouping(true);
+        assert(sectorFilterState.grouped === true, 'toggleSectorGrouping włącza grupowanie');
+        sectorFilterState = before;
+        saveSectorFilterState();
+    });
+
+    test('wykres świecowy rysuje pełne świece dla obu kierunków (zielona i czerwona)', () => {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        const history = [
+            { open: 100, close: 105, high: 108, low: 98 },
+            { open: 105, close: 95, high: 106, low: 94 }
+        ];
+        drawCandlestickChart(history, svg, 300, (i) => i * 100, (p) => 200 - p);
+        const rects = svg.querySelectorAll('rect');
+        assert(rects.length === 2, `liczba świec: ${rects.length}`);
+        assert(rects[0].style.fill === 'var(--color-chart-up)', `wzrostowa pełna: ${rects[0].style.fill}`);
+        assert(rects[1].style.fill === 'var(--color-chart-down)', `spadkowa pełna: ${rects[1].style.fill}`);
+    });
 });
 
 group('0.14 decyzja 11: zdarzenia sektora Bankowość', () => {

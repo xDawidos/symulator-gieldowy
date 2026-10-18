@@ -916,7 +916,7 @@ const SCANNER_PRESETS = {
     safe:     { label: '🛡️ Bezpieczne', filters: { debtMax: 40, healthMin: 2 } }
 };
 
-const SCANNER_DEFAULT_FILTERS = { sector: 'all', subsector: null, secondary: false, niche: '', peBelowSector: false, pbMax: '', dyMin: '', debtMax: '', growthMin: '', healthMin: '', accessibleOnly: true, greyOnly: false };
+const SCANNER_DEFAULT_FILTERS = { sector: 'all', subsector: null, secondary: false, type: 'all', grouped: true, niche: '', peBelowSector: false, pbMax: '', dyMin: '', debtMax: '', growthMin: '', healthMin: '', accessibleOnly: true, greyOnly: false };
 
 let scannerView = { filters: { ...SCANNER_DEFAULT_FILTERS }, sort: 'cap', dir: -1 };
 
@@ -1064,7 +1064,7 @@ function renderScannerFilters() {
     if (!box) return;
     const f = scannerView.filters;
     // T1c: ten sam filtr sektora co na liście spółek (chipy z liczbą spółek, podsektory, segmenty poboczne).
-    const sectorChips = renderSectorFilterChips(stocks.filter(s => !s.assetType && !s.isBankrupt), { sector: f.sector || 'all', subsector: f.subsector || null, secondary: Boolean(f.secondary), type: 'all' }, 'setScannerSectorFilter', { hideType: true });
+    const sectorChips = renderSectorFilterChips(stocks.filter(s => !s.assetType && !s.isBankrupt), { sector: f.sector || 'all', subsector: f.subsector || null, secondary: Boolean(f.secondary), type: 'all', grouped: f.grouped !== false }, 'setScannerSectorFilter', { hideType: true });
     const input = (key, label, placeholder, title) => `<label class="text-sm" title="${escapeHtml(title)}">${label} <input type="text" inputmode="decimal" class="w-xs" value="${escapeHtml(f[key] ?? '')}" placeholder="${placeholder}" oninput="setScannerFilter('${key}', this.value)"></label>`;
     const own = (playerProfile?.scannerPresets || []).map(p => `<button class="btn-xs btn-secondary" onclick="applyScannerPreset('${escapeHtml(p.name).replace(/'/g, '&#39;')}')">⭐ ${escapeHtml(p.name)}</button>`).join('');
     box.innerHTML = `

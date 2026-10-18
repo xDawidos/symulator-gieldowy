@@ -2078,7 +2078,7 @@ const INSTRUMENT_TYPES = [
     { id: 'startup', label: 'Startupy' },
     { id: 'operator', label: 'Operatorzy rynków' }
 ];
-const DEFAULT_SECTOR_FILTER = { sector: 'all', subsector: null, secondary: false, type: 'all' };
+const DEFAULT_SECTOR_FILTER = { sector: 'all', subsector: null, secondary: false, type: 'all', grouped: true };
 
 /** Typ instrumentu (osobno od sektora). ETF-y są osobną listą (etfs), nie spółkami. */
 function getInstrumentType(stock) {
