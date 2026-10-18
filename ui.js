@@ -2226,7 +2226,7 @@ function openManagementModal(symbol, defaultTab = 'main') {
         if (typeof renderDepartmentsSection === 'function') {
             renderDepartmentsSection(stock, deptsContent);
         } else {
-            deptsContent.innerHTML = '<p class="text-down">Błąd: Brak funkcji renderDepartmentsSection.</p>';
+            { console.warn('Brak funkcji renderDepartmentsSection'); deptsContent.innerHTML = '<p class="text-muted">Działy spółki są chwilowo niedostępne.</p>'; }
         }
     }
 

@@ -13,7 +13,7 @@
 // Stan w playerProfile.academy: { unlocked: { id: kwartał }, quizzes: { id: true } }.
 // =================================================================================
 
-const ACADEMY_QUIZ_REWARD = 60; // zł do portfela prywatnego za pierwsze zaliczenie quizu
+const ACADEMY_QUIZ_REWARD = 60; // PLN do portfela prywatnego za pierwsze zaliczenie quizu
 const ACADEMY_BASE_ENTRIES = ['kapitalizacja', 'cz', 'nav', 'benchmark'];
 
 // ---------------------------------------------------------------------------------
@@ -115,10 +115,10 @@ function bestBy(list, fn) {
 const ACADEMY_ENTRIES = {
     kapitalizacja: {
         title: 'Kapitalizacja', icon: '🏢',
-        text: 'Kapitalizacja to kurs akcji pomnożony przez liczbę akcji — tyle rynek płaci dziś za całą spółkę. Sam kurs nic nie mówi o wielkości firmy: akcja za 5 zł może należeć do większej spółki niż akcja za 500 zł.',
+        text: 'Kapitalizacja to kurs akcji pomnożony przez liczbę akcji — tyle rynek płaci dziś za całą spółkę. Sam kurs nic nie mówi o wielkości firmy: akcja za 5 PLN może należeć do większej spółki niż akcja za 500 PLN.',
         example: () => { const s = bestBy(pickListed(), x => getMarketCapValue(x)); return s ? `Największa spółka w grze: ${s.name} — kapitalizacja ${formatZl(getMarketCapValue(s), 0)} przy kursie ${formatZl(s.price)}.` : ''; },
         quiz: [
-            { q: 'Spółka ma 1 000 000 akcji po 20 zł. Jaka jest jej kapitalizacja?', a: ['20 mln zł', '1 mln zł', '20 tys. zł'], c: 0 },
+            { q: 'Spółka ma 1 000 000 akcji po 20 PLN. Jaka jest jej kapitalizacja?', a: ['20 mln PLN', '1 mln PLN', '20 tys. PLN'], c: 0 },
             { q: 'Która spółka jest większa?', a: ['Nie da się ocenić po samym kursie', 'Ta z wyższym kursem akcji', 'Ta z niższym kursem akcji'], c: 0 },
             { q: 'Kurs akcji rośnie o 10%, liczba akcji bez zmian. Kapitalizacja…', a: ['rośnie o 10%', 'się nie zmienia', 'spada o 10%'], c: 0 }
         ]
@@ -132,7 +132,7 @@ const ACADEMY_ENTRIES = {
             return s && med?.pe ? `${s.name}: C/Z ${s.fundamentals.peRatio.toFixed(1)}, mediana sektora ${getMainSector(s)}: ${med.pe.toFixed(1)}.` : '';
         },
         quiz: [
-            { q: 'Kurs 50 zł, zysk na akcję 5 zł. Ile wynosi C/Z?', a: ['10', '5', '250'], c: 0 },
+            { q: 'Kurs 50 PLN, zysk na akcję 5 PLN. Ile wynosi C/Z?', a: ['10', '5', '250'], c: 0 },
             { q: 'Spółka A ma C/Z 8, a mediana jej sektora to 14. Co to sugeruje?', a: ['Jest tania względem sektora — warto sprawdzić dlaczego', 'Na pewno zbankrutuje', 'Jest droga względem sektora'], c: 0 },
             { q: 'Spółka ma stratę. Jakie ma C/Z?', a: ['Nie da się go sensownie policzyć', 'Bardzo niskie, więc jest tania', 'Równe zero'], c: 0 }
         ]
@@ -142,7 +142,7 @@ const ACADEMY_ENTRIES = {
         text: 'EPS to zysk netto podzielony przez liczbę akcji. Gdy spółka emituje nowe akcje, ten sam zysk dzieli się na więcej części — EPS spada (rozwodnienie). Rynek patrzy na tempo wzrostu EPS.',
         example: () => { const s = bestBy(pickListed(), x => x.fundamentals.epsTtm); return s ? `${s.name}: zysk na akcję z 4 kwartałów ${formatZl(s.fundamentals.epsTtm)}.` : ''; },
         quiz: [
-            { q: 'Zysk netto 2 mln zł, 1 mln akcji. EPS = ?', a: ['2 zł', '0,5 zł', '2 mln zł'], c: 0 },
+            { q: 'Zysk netto 2 mln PLN, 1 mln akcji. EPS = ?', a: ['2 PLN', '0,5 PLN', '2 mln PLN'], c: 0 },
             { q: 'Spółka podwaja liczbę akcji, zysk bez zmian. EPS…', a: ['spada o połowę', 'rośnie dwukrotnie', 'się nie zmienia'], c: 0 },
             { q: 'Co oznacza „rozwodnienie” akcjonariuszy?', a: ['Mniejszy udział i zysk na akcję po emisji nowych akcji', 'Wypłatę dywidendy', 'Spadek zadłużenia'], c: 0 }
         ]
@@ -152,7 +152,7 @@ const ACADEMY_ENTRIES = {
         text: 'Wartość księgowa to majątek spółki minus jej długi (kapitał własny). C/WK = kurs / wartość księgowa na akcję. Poniżej 1 rynek wycenia spółkę taniej niż jej majątek netto — często dlatego, że majątek przynosi mało zysku.',
         example: () => { const s = pickListed(x => x.fundamentals.pbRatio > 0).sort((a, b) => a.fundamentals.pbRatio - b.fundamentals.pbRatio)[0]; return s ? `Najniższe C/WK: ${s.name} — ${s.fundamentals.pbRatio.toFixed(2)}.` : ''; },
         quiz: [
-            { q: 'Majątek 10 mln zł, długi 4 mln zł. Wartość księgowa to…', a: ['6 mln zł', '14 mln zł', '10 mln zł'], c: 0 },
+            { q: 'Majątek 10 mln PLN, długi 4 mln PLN. Wartość księgowa to…', a: ['6 mln PLN', '14 mln PLN', '10 mln PLN'], c: 0 },
             { q: 'C/WK = 0,7 oznacza, że…', a: ['rynek wycenia spółkę poniżej jej majątku netto', 'spółka ma 70% zadłużenia', 'spółka wypłaca 70% zysku'], c: 0 },
             { q: 'Dlaczego niskie C/WK nie zawsze jest okazją?', a: ['Majątek może przynosić słabe zyski albo być przeszacowany', 'Bo C/WK nie ma znaczenia', 'Bo takie spółki nie płacą podatków'], c: 0 }
         ]
@@ -162,7 +162,7 @@ const ACADEMY_ENTRIES = {
         text: 'Dywidenda to część zysku wypłacana akcjonariuszom. Stopa dywidendy = dywidendy z roku / kurs. Bardzo wysoka stopa bywa pułapką: jeśli spółka wypłaca więcej, niż zarabia, dywidenda zostanie obcięta.',
         example: () => { const s = bestBy(pickListed(), x => getTrailingDividendYield(x)); return s && getTrailingDividendYield(s) > 0 ? `Najwyższa stopa dywidendy: ${s.name} — ${(getTrailingDividendYield(s) * 100).toFixed(2)}%.` : 'Na razie żadna spółka nie wypłaciła dywidendy w tym roku.'; },
         quiz: [
-            { q: 'Kurs 40 zł, dywidendy z roku 2 zł. Stopa dywidendy = ?', a: ['5%', '2%', '20%'], c: 0 },
+            { q: 'Kurs 40 PLN, dywidendy z roku 2 PLN. Stopa dywidendy = ?', a: ['5%', '2%', '20%'], c: 0 },
             { q: 'Kiedy wysoka stopa dywidendy jest sygnałem ostrzegawczym?', a: ['Gdy spółka wypłaca więcej, niż zarabia', 'Zawsze jest dobra', 'Gdy spółka ma mało długów'], c: 0 },
             { q: 'Co dzieje się z kursem w dniu odcięcia dywidendy?', a: ['Spada mniej więcej o wartość dywidendy', 'Rośnie o wartość dywidendy', 'Nic się nie zmienia'], c: 0 }
         ]
@@ -172,7 +172,7 @@ const ACADEMY_ENTRIES = {
         text: 'Zadłużenie (zobowiązania / aktywa) pokazuje, jaka część majątku jest finansowana długiem. Dług zwiększa zyski w dobrych czasach, ale w recesji odsetki zjadają wynik. Powyżej ~70% spółka jest wrażliwa na kryzys i wzrost stóp.',
         example: () => { const s = bestBy(pickListed(x => x.balanceSheet?.assets > 0), x => x.balanceSheet.liabilities / x.balanceSheet.assets); return s ? `Najbardziej zadłużona: ${s.name} — ${(s.balanceSheet.liabilities / s.balanceSheet.assets * 100).toFixed(0)}% aktywów.` : ''; },
         quiz: [
-            { q: 'Aktywa 100 mln zł, zobowiązania 80 mln zł. Zadłużenie = ?', a: ['80%', '20%', '125%'], c: 0 },
+            { q: 'Aktywa 100 mln PLN, zobowiązania 80 mln PLN. Zadłużenie = ?', a: ['80%', '20%', '125%'], c: 0 },
             { q: 'Bank Centralny podnosi stopy. Która spółka ucierpi najbardziej?', a: ['Mocno zadłużona', 'Bez długów z dużą gotówką', 'Każda tak samo'], c: 0 },
             { q: 'Dlaczego dług bywa korzystny?', a: ['Pozwala rosnąć szybciej, gdy zysk z inwestycji przewyższa odsetki', 'Bo obniża ryzyko', 'Bo nie trzeba go spłacać'], c: 0 }
         ]
@@ -182,7 +182,7 @@ const ACADEMY_ENTRIES = {
         text: 'Marża netto = zysk netto / przychody. Pokazuje, ile z każdej złotówki sprzedaży zostaje jako zysk. Sektory różnią się marżami (technologia zwykle wyższe niż handel), więc porównuj spółki w obrębie sektora.',
         example: () => { const s = bestBy(pickListed(x => x.fundamentals.revenueTtm > 0), x => x.fundamentals.netIncomeTtm / x.fundamentals.revenueTtm); return s ? `Najwyższa marża netto: ${s.name} — ${(s.fundamentals.netIncomeTtm / s.fundamentals.revenueTtm * 100).toFixed(1)}%.` : ''; },
         quiz: [
-            { q: 'Przychody 10 mln zł, zysk netto 1 mln zł. Marża netto = ?', a: ['10%', '1%', '90%'], c: 0 },
+            { q: 'Przychody 10 mln PLN, zysk netto 1 mln PLN. Marża netto = ?', a: ['10%', '1%', '90%'], c: 0 },
             { q: 'Wysoka inflacja kosztów zwykle…', a: ['obniża marże', 'podnosi marże', 'nie ma wpływu na marże'], c: 0 },
             { q: 'Dlaczego porównujemy marże w obrębie sektora?', a: ['Sektory mają naturalnie różne marże', 'Bo marża zależy od kursu akcji', 'Bo poza sektorem marży nie ma'], c: 0 }
         ]
@@ -192,7 +192,7 @@ const ACADEMY_ENTRIES = {
         text: 'ROE = zysk netto / kapitał własny. Mówi, ile zysku spółka wypracowuje z pieniędzy akcjonariuszy. Wysokie ROE przy niskim zadłużeniu to znak dobrego biznesu; wysokie ROE „napompowane” długiem jest ryzykowne.',
         example: () => { const s = bestBy(pickListed(), x => getCompanyMetrics(x)?.roe); const m = s && getCompanyMetrics(s); return m?.roe ? `Najwyższe ROE: ${s.name} — ${(m.roe * 100).toFixed(1)}%.` : ''; },
         quiz: [
-            { q: 'Zysk 3 mln zł, kapitał własny 20 mln zł. ROE = ?', a: ['15%', '6,7%', '23%'], c: 0 },
+            { q: 'Zysk 3 mln PLN, kapitał własny 20 mln PLN. ROE = ?', a: ['15%', '6,7%', '23%'], c: 0 },
             { q: 'Dwie spółki mają ROE 20%. Która jest bezpieczniejsza?', a: ['Ta z mniejszym zadłużeniem', 'Ta z większym zadłużeniem', 'Są tak samo bezpieczne'], c: 0 },
             { q: 'Co mierzy ROE?', a: ['Zysk z kapitału akcjonariuszy', 'Wzrost kursu akcji', 'Wielkość sprzedaży'], c: 0 }
         ]
@@ -204,7 +204,7 @@ const ACADEMY_ENTRIES = {
         quiz: [
             { q: 'Czy spółka z zyskiem może zbankrutować?', a: ['Tak, jeśli zabraknie jej gotówki na spłatę długów', 'Nie, zysk chroni przed bankructwem', 'Tylko w recesji'], c: 0 },
             { q: 'Co poprawia płynność?', a: ['Więcej gotówki względem bieżących zobowiązań', 'Wyższy kurs akcji', 'Większa liczba akcji'], c: 0 },
-            { q: 'Spółka ma 1 mln zł gotówki i 10 mln zł zobowiązań do spłaty w tym roku. To…', a: ['sygnał ryzyka płynności', 'bardzo bezpieczna sytuacja', 'nie ma znaczenia'], c: 0 }
+            { q: 'Spółka ma 1 mln PLN gotówki i 10 mln PLN zobowiązań do spłaty w tym roku. To…', a: ['sygnał ryzyka płynności', 'bardzo bezpieczna sytuacja', 'nie ma znaczenia'], c: 0 }
         ]
     },
     raport: {
@@ -222,17 +222,17 @@ const ACADEMY_ENTRIES = {
         text: 'Wartość godziwa to szacunek, ile spółka „powinna” kosztować. Metody: porównawcza (C/Z i C/WK sektora), dywidendowa (model Gordona) i inne. Różne metody dają różne wyniki — dlatego wycena to przedział, nie jedna liczba. Kurs w długim terminie dąży do wartości.',
         example: () => { const s = bestBy(pickListed(x => x.fundamentals.fairValue > 0), x => x.fundamentals.fairValue / x.price); return s ? `Największy potencjał wg modelu: ${s.name} — wartość ${formatZl(s.fundamentals.fairValue)} przy kursie ${formatZl(s.price)}.` : ''; },
         quiz: [
-            { q: 'Wartość godziwa 120 zł, kurs 80 zł. Spółka jest…', a: ['niedowartościowana', 'przewartościowana', 'wyceniona idealnie'], c: 0 },
+            { q: 'Wartość godziwa 120 PLN, kurs 80 PLN. Spółka jest…', a: ['niedowartościowana', 'przewartościowana', 'wyceniona idealnie'], c: 0 },
             { q: 'Dlaczego warto liczyć wycenę kilkoma metodami?', a: ['Każda ma założenia — przedział jest bardziej wiarygodny', 'Bo jedna metoda zawsze jest błędna', 'Bo tak wymaga KNF'], c: 0 },
             { q: 'Model Gordona (dywidendowy) nie zadziała dla spółki, która…', a: ['nie wypłaca dywidend', 'ma niskie C/Z', 'ma dużo gotówki'], c: 0 }
         ]
     },
     nav: {
         title: 'NAV i jednostki funduszu', icon: '💼',
-        text: 'NAV (wartość aktywów netto) na jednostkę to wartość funduszu podzielona przez liczbę jednostek (JU). Klienci kupują i umarzają JU po NAV. Wynik funduszu mierzy się zmianą NAV, nie wielkością aktywów — napływ klientów nie jest zyskiem.',
-        example: () => playerFund ? `Twój fundusz: NAV ${getFundNav().toFixed(4)} zł na jednostkę, aktywa ${formatZl(getFundAssets(), 0)}.` : '',
+        text: 'NAV (wartość aktywów netto) na udział to wartość funduszu podzielona przez liczbę udziałów. Klienci kupują i umarzają udziały po NAV. Wynik funduszu mierzy się zmianą NAV, nie wielkością aktywów — napływ klientów nie jest zyskiem.',
+        example: () => playerFund ? `Twój fundusz: NAV ${getFundNav().toFixed(4)} PLN na jednostkę, aktywa ${formatZl(getFundAssets(), 0)}.` : '',
         quiz: [
-            { q: 'Klienci wpłacają do funduszu 1 mln zł. NAV na jednostkę…', a: ['się nie zmienia — przybywa jednostek', 'rośnie o 1 mln zł', 'spada'], c: 0 },
+            { q: 'Klienci wpłacają do funduszu 1 mln PLN. NAV na jednostkę…', a: ['się nie zmienia — przybywa jednostek', 'rośnie o 1 mln PLN', 'spada'], c: 0 },
             { q: 'Czym mierzy się wynik zarządzającego?', a: ['Zmianą NAV na jednostkę', 'Wielkością aktywów', 'Liczbą klientów'], c: 0 },
             { q: 'Akcje w portfelu tanieją o 10%, gotówka bez zmian. NAV…', a: ['spada', 'rośnie', 'się nie zmienia'], c: 0 }
         ]
@@ -274,7 +274,7 @@ const ACADEMY_ENTRIES = {
         quiz: [
             { q: 'Dlaczego obligacja ryzykownej firmy płaci więcej niż skarbowa?', a: ['To premia za ryzyko niewypłacalności', 'Bo firmy są bogatsze od państwa', 'Bo ma krótszy termin'], c: 0 },
             { q: 'Emitent ogłasza niewypłacalność. Co tracisz?', a: ['Kolejne kupony i często część nominału', 'Nic — obligacje są gwarantowane', 'Tylko ostatni kupon'], c: 0 },
-            { q: 'Obligacja 1000 zł z kuponem 6% rocznie płaci rocznie…', a: ['60 zł', '6 zł', '600 zł'], c: 0 }
+            { q: 'Obligacja 1000 PLN z kuponem 6% rocznie płaci rocznie…', a: ['60 PLN', '6 PLN', '600 PLN'], c: 0 }
         ]
     },
     lokata: {
@@ -322,7 +322,7 @@ const ACADEMY_ENTRIES = {
         text: 'Zysk w rachunku wyników to nie to samo co gotówka. Przepływy z działalności pokazują, ile pieniędzy faktycznie wpłynęło. Zdrowa spółka zamienia większość zysku w gotówkę; jeśli zysk rośnie, a gotówka nie — sprzedaż może być „na papierze” (należności, których nikt nie zapłaci).',
         example: () => { const s = pickListed(x => (x.fundamentals.history || []).some(q => Number.isFinite(q.ocf)))[0]; const q = s?.fundamentals.history.slice(-1)[0]; return q && Number.isFinite(q.ocf) ? `${s.name}: ostatni kwartał zysk ${formatZl(q.netIncome, 0)}, gotówka z działalności ${formatZl(q.ocf, 0)}.` : ''; },
         quiz: [
-            { q: 'Spółka ma 10 mln zł zysku, ale 1 mln zł gotówki z działalności. To…', a: ['sygnał ostrzegawczy — zysk mało „gotówkowy”', 'świetny wynik', 'bez znaczenia'], c: 0 },
+            { q: 'Spółka ma 10 mln PLN zysku, ale 1 mln PLN gotówki z działalności. To…', a: ['sygnał ostrzegawczy — zysk mało „gotówkowy”', 'świetny wynik', 'bez znaczenia'], c: 0 },
             { q: 'Dlaczego amortyzację dodaje się do zysku przy liczeniu gotówki?', a: ['To koszt bez wydatku pieniędzy w tym okresie', 'Bo to przychód', 'Bo tak każe podatek'], c: 0 },
             { q: 'Rosnące należności przy stałej sprzedaży oznaczają, że…', a: ['klienci płacą coraz później (albo sprzedaż jest fikcyjna)', 'spółka ma więcej gotówki', 'spada zadłużenie'], c: 0 }
         ]
@@ -364,7 +364,7 @@ const ACADEMY_ENTRIES = {
         quiz: [
             { q: 'Kto dostaje pieniądze jako ostatni przy bankructwie?', a: ['Akcjonariusze', 'Banki-wierzyciele', 'Pracownicy'], c: 0 },
             { q: 'Który zestaw sygnałów najbardziej wskazuje ryzyko bankructwa?', a: ['Straty, rosnący dług, mało gotówki', 'Wysoka dywidenda i brak długu', 'Rosnące przychody i zysk'], c: 0 },
-            { q: 'Czy niski kurs akcji oznacza, że spółka jest tania?', a: ['Niekoniecznie — może być bliska bankructwa', 'Tak, zawsze', 'Tak, jeśli kurs < 1 zł'], c: 0 }
+            { q: 'Czy niski kurs akcji oznacza, że spółka jest tania?', a: ['Niekoniecznie — może być bliska bankructwa', 'Tak, zawsze', 'Tak, jeśli kurs < 1 PLN'], c: 0 }
         ]
     }
 };
@@ -465,7 +465,7 @@ Object.assign(ACADEMY_ENTRIES, {
     premiaKontrola: {
         title: 'Premia za kontrolę', icon: '💼',
         text: 'Pakiet kontrolny (ponad 50% głosów) jest wart więcej niż ta sama liczba akcji kupowana pojedynczo: daje władzę nad zarządem, dywidendą, transferem zysku i strategią. Dlatego kupujący płaci premię za kontrolę — w grze 15–30% ponad kurs. Matka może sprzedać pakiet córki innemu inwestorowi (koncernowi albo botowi); zysk z premii trafia do matki.',
-        example: () => { const s = stocks.find(x => x.tender); return s ? `${s.tender.buyerName} kupił pakiet kontrolny ${s.name} po ${formatZl(s.tender.price)}.` : 'Kurs 100 zł, premia za kontrolę 20% → pakiet kontrolny sprzedany po 120 zł za akcję.'; },
+        example: () => { const s = stocks.find(x => x.tender); return s ? `${s.tender.buyerName} kupił pakiet kontrolny ${s.name} po ${formatZl(s.tender.price)}.` : 'Kurs 100 PLN, premia za kontrolę 20% → pakiet kontrolny sprzedany po 120 PLN za akcję.'; },
         quiz: [
             { q: 'Dlaczego za pakiet kontrolny płaci się więcej niż kurs?', a: ['daje władzę nad spółką', 'bo akcje są rzadkie', 'z powodu podatku'], c: 0 },
             { q: 'Ile wynosi premia za kontrolę w grze?', a: ['15–30%', '0%', '100%'], c: 0 },
@@ -475,7 +475,7 @@ Object.assign(ACADEMY_ENTRIES, {
     wezwanie: {
         title: 'Wezwanie i ochrona mniejszości', icon: '📣',
         text: 'Kto przejmuje kontrolę nad spółką (ponad 50%), musi ogłosić wezwanie: zaproponować wszystkim pozostałym akcjonariuszom odkupienie akcji po tej samej cenie, jaką zapłacił za pakiet kontrolny. Dzięki temu premia za kontrolę nie trafia tylko do jednego sprzedającego, a mniejszościowi mogą wyjść, jeśli nie ufają nowemu właścicielowi. Można też zostać — wtedy dalej jest się akcjonariuszem mniejszościowym.',
-        example: () => { const s = stocks.find(x => x.tender); return s ? `${s.name}: wezwanie ${s.tender.buyerName} po ${formatZl(s.tender.price)} do kw. ${s.tender.until}.` : 'Nowy właściciel zapłacił 120 zł za akcję pakietu — w wezwaniu każdy może sprzedać po 120 zł.'; },
+        example: () => { const s = stocks.find(x => x.tender); return s ? `${s.name}: wezwanie ${s.tender.buyerName} po ${formatZl(s.tender.price)} do kw. ${s.tender.until}.` : 'Nowy właściciel zapłacił 120 PLN za akcję pakietu — w wezwaniu każdy może sprzedać po 120 PLN.'; },
         quiz: [
             { q: 'Po jakiej cenie jest wezwanie po zakupie pakietu kontrolnego?', a: ['po tej samej co za pakiet', 'po kursie z dnia wezwania', 'po wartości księgowej'], c: 0 },
             { q: 'Czy akcjonariusz musi sprzedać w wezwaniu?', a: ['nie — może zostać', 'tak, zawsze', 'tylko fundusze'], c: 0 },
@@ -848,7 +848,7 @@ function academyQuizSubmit(id) {
     if (answers.some(a => a === undefined)) { showToast('Odpowiedz na wszystkie pytania.', 'warning'); return; }
     academyView.result = submitAcademyQuiz(id, answers);
     academyView.answers = answers;
-    if (academyView.result?.reward) showToast(`🎓 Quiz zaliczony! +${academyView.result.reward} zł do portfela.`, 'success');
+    if (academyView.result?.reward) showToast(`🎓 Quiz zaliczony! +${academyView.result.reward} PLN do portfela.`, 'success');
     renderCvPanel();
 }
 
@@ -883,7 +883,7 @@ function renderAcademyPanel() {
             <h3 class="mt-0">${entry.icon} ${escapeHtml(entry.title)}</h3>
             <p>${escapeHtml(entry.text)}</p>
             ${example ? `<p class="academy-example">🎮 <strong>W Twojej grze:</strong> ${escapeHtml(example)}</p>` : ''}
-            <h4>Quiz ${academy.quizzes[selected] ? '— zaliczony ✔' : `— za zaliczenie ${ACADEMY_QUIZ_REWARD} zł`}</h4>
+            <h4>Quiz ${academy.quizzes[selected] ? '— zaliczony ✔' : `— za zaliczenie ${ACADEMY_QUIZ_REWARD} PLN`}</h4>
             ${quiz}
             ${result ? `<p class="${result.passed ? 'text-up' : 'text-down'}">${result.passed ? '✅ Wszystko dobrze!' : `Poprawne: ${result.correct}/${result.total} — spróbuj jeszcze raz.`}</p>` : ''}
             <button onclick="academyQuizSubmit('${selected}')">Sprawdź odpowiedzi</button>`;
@@ -1144,7 +1144,7 @@ function renderScannerWorkforceCells(work) {
 
 const MENTOR_NAME = 'Halina Wróblewska';
 const MENTOR_ACTIVE_TASKS = 3;
-const MENTOR_REWARD = 150; // zł do portfela prywatnego za zadanie
+const MENTOR_REWARD = 150; // PLN do portfela prywatnego za zadanie
 
 const MENTOR_TRACKS = {
     analyst: { label: 'Certyfikat Analityka', icon: '📐', required: 3, position: 'projectLead' },
@@ -1329,7 +1329,7 @@ function checkMentorTasks() {
         playerWallet.cash += MENTOR_REWARD;
         recordPayment('external:korporacja', 'player-wallet', MENTOR_REWARD, `Zadanie mentora: ${def.title}`);
         if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry(def.lesson);
-        if (typeof pushNotification === 'function') pushNotification(`🎓 ${MENTOR_NAME}: zadanie „${def.title}” zaliczone (+${MENTOR_REWARD} zł)`, () => openMentor());
+        if (typeof pushNotification === 'function') pushNotification(`🎓 ${MENTOR_NAME}: zadanie „${def.title}” zaliczone (+${MENTOR_REWARD} PLN)`, () => openMentor());
     }
     // Certyfikaty: ścieżka z wymaganą liczbą zadań.
     for (const [id, track] of Object.entries(MENTOR_TRACKS)) {
@@ -1382,7 +1382,7 @@ function renderMentorPanel() {
         let progress = '';
         try { progress = def.progress(task); } catch (e) { progress = ''; }
         return `<li class="mentor-task"><div><strong>${MENTOR_TRACKS[def.track].icon} ${escapeHtml(def.title)}</strong>
-            <p class="text-sm m-0">${escapeHtml(def.text)}</p><span class="text-xs text-muted">${escapeHtml(progress)} · nagroda ${MENTOR_REWARD} zł</span></div>
+            <p class="text-sm m-0">${escapeHtml(def.text)}</p><span class="text-xs text-muted">${escapeHtml(progress)} · nagroda ${MENTOR_REWARD} PLN</span></div>
             <button class="btn-xs btn-secondary" onclick="openAcademy('${def.lesson}')">📘 Hasło</button></li>`;
     }).join('');
     const done = Object.keys(mentor.done).map(id => MENTOR_TASKS[id]).filter(Boolean).map(def => `<li>✅ ${escapeHtml(def.title)}</li>`).join('');

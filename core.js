@@ -95,11 +95,11 @@ function togglePauseGame() {
     const pauseButton = document.getElementById('pause-game-btn');
     if (pauseButton) {
         if (isGamePaused) {
-            pauseButton.textContent = '▶️ Wznów';
+            pauseButton.textContent = 'Wznów';
             pauseButton.classList.add('is-paused');
             console.log('--- GRA ZAPAUZOWANA ---');
         } else {
-            pauseButton.textContent = '⏸️ Pauza';
+            pauseButton.textContent = 'Pauza';
             pauseButton.classList.remove('is-paused');
             console.log('--- GRA WZNOWIONA ---');
         }
@@ -2477,7 +2477,7 @@ function updateStockPrices() {
         stock.belowOneTicks = stock.price < 1.00 ? (stock.belowOneTicks || 0) + 1 : 0;
         if (stock.price < 1.00 && !stock.isTradeLocked && !stock.tradeHalted && stock.belowOneTicks >= 120) {
             stock.isTradeLocked = true;
-            logEvent(`⛔ Handel akcjami ${stock.name} (${stock.symbol}) wstrzymany — kurs od dwóch tygodni poniżej 1 zł.`, 'review');
+            logEvent(`⛔ Handel akcjami ${stock.name} (${stock.symbol}) wstrzymany — kurs od dwóch tygodni poniżej 1 PLN.`, 'review');
         } else if (stock.price > 1.50 && stock.isTradeLocked && !stock.tradeHalted) {
             stock.isTradeLocked = false;
             logEvent(`✅ Wznowiono handel akcjami ${stock.name} (${stock.symbol}).`, 'review');
@@ -3442,7 +3442,7 @@ function supportElectionCampaign(partyId, amount) {
     election.donations = { market: 0, state: 0, people: 0, ...(election.donations || {}) };
     const assets = getFundAssets();
     const given = Object.values(election.donations).reduce((sum, value) => sum + (Number(value) || 0), 0);
-    if (!(amount >= 100)) { showToast('Minimalna darowizna: 100 zł.', 'warning'); return false; }
+    if (!(amount >= 100)) { showToast('Minimalna darowizna: 100 PLN.', 'warning'); return false; }
     if (given + amount > assets * ELECTION_DONATION_LIMIT) { showToast(`Limit: 2% aktywów funduszu na kampanię (zostało ${formatZl(Math.max(0, assets * ELECTION_DONATION_LIMIT - given), 0)}).`, 'warning'); return false; }
     if (playerCash < amount) { showToast('Za mało gotówki funduszu.', 'error'); return false; }
     playerCash -= amount;

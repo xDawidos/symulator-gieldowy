@@ -31,7 +31,7 @@ const FESTIVAL_BOOST_SECTORS = ['Turystyka', 'Usługi'];
 const PLAYER_DONATION_COMPLIANCE_LIMIT = 500;
 
 let privatizationOffer = null;
-const CITY_UNLOCK_DONATION = 1000; // odblokowanie obligacji komunalnych i festynu (wcześniej 10 000 — nierealne przy 100 zł od babci)
+const CITY_UNLOCK_DONATION = 1000; // odblokowanie obligacji komunalnych i festynu (wcześniej 10 000 — nierealne przy 100 PLN od babci)
 
 // =================================================================================
 // INICJALIZACJA I MIGRACJA
@@ -78,7 +78,7 @@ function donateToCity(amount) {
     cityInvestment.donatedAmount += amount;
     city.mayor.support = Math.min(100, city.mayor.support + amount / 1000);
     recordPayment('player-wallet', 'external:miasto', amount, 'Darowizna na miasto');
-    logEvent(`🏙️ Przekazujesz ${amount.toFixed(2)} zł na rozwój miasta. Twój wkład: ${city.playerDonatedAmount.toFixed(2)} zł.`, 'city');
+    logEvent(`🏙️ Przekazujesz ${amount.toFixed(2)} PLN na rozwój miasta. Twój wkład: ${city.playerDonatedAmount.toFixed(2)} PLN.`, 'city');
 
     if (!city.playerHasUnlocked && city.playerDonatedAmount >= CITY_UNLOCK_DONATION) {
         city.playerHasUnlocked = true;
@@ -113,7 +113,7 @@ function runCityEconomy() {
     if (governmentTreasury > 10000000) {
         stateGrant = governmentTreasury * 0.01;
         governmentTreasury -= stateGrant;
-        logEvent(`🏛️ Rząd przekazał ${stateGrant.toFixed(0)} zł dotacji dla miasta ${city.name}.`, 'state');
+        logEvent(`🏛️ Rząd przekazał ${stateGrant.toFixed(0)} PLN dotacji dla miasta ${city.name}.`, 'state');
     }
     city.budget += citizenTax + stateGrant - expenses;
 
@@ -127,7 +127,7 @@ function runCityEconomy() {
     mayor.support += (city.budget > 0 ? 3 : -8) + (city.infrastructureLevel - 1) * 5 + (50 - mayor.support) * 0.1;
     mayor.support = Math.max(5, Math.min(95, mayor.support));
 
-    logEvent(`🏙️ Roczne rozliczenie miasta ${city.name}: budżet ${city.budget.toFixed(0)} zł, mieszkańców ${city.population.toLocaleString('pl-PL')}, poparcie burmistrza ${mayor.support.toFixed(0)}%.`, 'city');
+    logEvent(`🏙️ Roczne rozliczenie miasta ${city.name}: budżet ${city.budget.toFixed(0)} PLN, mieszkańców ${city.population.toLocaleString('pl-PL')}, poparcie burmistrza ${mayor.support.toFixed(0)}%.`, 'city');
 }
 
 function runMayorPolicy() {
@@ -150,7 +150,7 @@ function runMayorPolicy() {
                 recordPayment('external:miasto', stock, grant, 'Program wsparcia biznesu');
             }
             applyPriceEffect(stock.symbol, 0.02, 'positive', 'company');
-            logEvent(`🏙️ Program wsparcia biznesu: ${stock.name} otrzymuje ${grant.toFixed(0)} zł dotacji od miasta.`, 'city');
+            logEvent(`🏙️ Program wsparcia biznesu: ${stock.name} otrzymuje ${grant.toFixed(0)} PLN dotacji od miasta.`, 'city');
         }
     } else if (policy === 'municipal') {
         municipalCompanies.forEach(company => { company.budget += 10000; });
@@ -184,7 +184,7 @@ function commissionCityTender() {
         const result = startCompanyInvestment(stock, investment.id, 'owner');
         if (result.ok) {
             recordPayment('external:miasto', stock, grant, `Dotacja miejska: ${spec.name}`);
-            logEvent(`🏙️ Burmistrz ${city.mayor.name} zleca przez ${stock.name} inwestycję „${spec.name}” (dotacja ${grant.toLocaleString('pl-PL')} zł) — przetarg dla firm budowlanych.`, 'city');
+            logEvent(`🏙️ Burmistrz ${city.mayor.name} zleca przez ${stock.name} inwestycję „${spec.name}” (dotacja ${grant.toLocaleString('pl-PL')} PLN) — przetarg dla firm budowlanych.`, 'city');
             return stock.symbol;
         }
         // Nie udało się ogłosić przetargu — dotacja wraca do miasta.
@@ -250,7 +250,7 @@ function donateToCampaign(candidateId, amount) {
         playerWallet.complianceRisk = (playerWallet.complianceRisk || 0) + 1;
         logEvent(`⚠️ Duża darowizna na kampanię polityczną zwraca uwagę działu compliance.`, 'warning');
     }
-    logEvent(`🗳️ Wspierasz kampanię: ${candidate.name} (${amount.toFixed(0)} zł).`, 'city');
+    logEvent(`🗳️ Wspierasz kampanię: ${candidate.name} (${amount.toFixed(0)} PLN).`, 'city');
     return true;
 }
 
@@ -357,11 +357,11 @@ function triggerStatePrivatizationEvent() {
         fundShares: 0,
         remainingMs: BASE_DELAYS.weekly
     };
-    logEvent(`🏛️ PRYWATYZACJA: Skarb Państwa sprzedaje ${shares.toLocaleString('pl-PL')} akcji ${stock.name} po ${privatizationOffer.price.toFixed(2)} zł (dyskonto do rynku). Zapisy przez tydzień.`, 'state');
+    logEvent(`🏛️ PRYWATYZACJA: Skarb Państwa sprzedaje ${shares.toLocaleString('pl-PL')} akcji ${stock.name} po ${privatizationOffer.price.toFixed(2)} PLN (dyskonto do rynku). Zapisy przez tydzień.`, 'state');
     addMail({
         sender: CORPORATION_SENDER,
         subject: `Oferta prywatyzacyjna: ${stock.name}`,
-        body: `Skarb Państwa sprzedaje akcje ${stock.name} po ${privatizationOffer.price.toFixed(2)} zł. Fundusz może kupić do 30% oferty. Zapisy przez tydzień gry.`,
+        body: `Skarb Państwa sprzedaje akcje ${stock.name} po ${privatizationOffer.price.toFixed(2)} PLN. Fundusz może kupić do 30% oferty. Zapisy przez tydzień gry.`,
         importance: 3, symbol: stock.symbol, action: { type: 'privatization', symbol: stock.symbol }
     });
     return privatizationOffer;
@@ -390,7 +390,7 @@ function subscribePrivatization(quantity) {
 
     offer.remaining -= quantity;
     offer.fundShares += quantity;
-    logEvent(`🏛️ Fundusz kupuje ${quantity} akcji ${stock.name} w prywatyzacji za ${cost.toFixed(2)} zł.`, 'review');
+    logEvent(`🏛️ Fundusz kupuje ${quantity} akcji ${stock.name} w prywatyzacji za ${cost.toFixed(2)} PLN.`, 'review');
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return true;
 }
@@ -450,7 +450,7 @@ function applyAntitrustPenalties() {
         governmentTreasury += fine;
         recordPayment(stock, 'external:skarb-panstwa', fine, 'Kara antymonopolowa');
         applyPriceEffect(stock.symbol, -0.03, 'negative', 'company');
-        logEvent(`⚖️ Urząd antymonopolowy nakłada na ${stock.name} karę ${fine.toLocaleString('pl-PL')} zł za nadużywanie pozycji monopolisty.`, 'state');
+        logEvent(`⚖️ Urząd antymonopolowy nakłada na ${stock.name} karę ${fine.toLocaleString('pl-PL')} PLN za nadużywanie pozycji monopolisty.`, 'state');
         penalized.push(stock.symbol);
     }
     return penalized;
@@ -504,7 +504,7 @@ function generatePppOffer() {
         risk
     };
     ppp.offers.push(offer);
-    logEvent(`🏙️ Miasto ogłasza projekt PPP: ${offer.icon} ${offer.name} — ${offer.total.toLocaleString('pl-PL')} zł, ${(offer.rate * 100).toFixed(1)}% rocznie, ${offer.termWeeks} tyg.`, 'city');
+    logEvent(`🏙️ Miasto ogłasza projekt PPP: ${offer.icon} ${offer.name} — ${offer.total.toLocaleString('pl-PL')} PLN, ${(offer.rate * 100).toFixed(1)}% rocznie, ${offer.termWeeks} tyg.`, 'city');
     return offer;
 }
 
@@ -522,7 +522,7 @@ function investInPpp(offerId, amount) {
     amount = Math.floor(Number(amount));
     if (!offer) { showToast('Oferta PPP nieaktualna.', 'error'); return null; }
     amount = Math.min(amount, offer.total - offer.raised);
-    if (!(amount >= 100)) { showToast('Minimalny udział: 100 zł.', 'error'); return null; }
+    if (!(amount >= 100)) { showToast('Minimalny udział: 100 PLN.', 'error'); return null; }
     if (amount > playerCash) { showToast('Za mało gotówki funduszu.', 'error'); return null; }
     if (amount > getFundPppCapacity() + 1e-6) { showToast(`Limit PPP: ${(PPP_FUND_LIMIT * 100).toFixed(0)}% aktywów funduszu.`, 'error'); return null; }
 
@@ -533,7 +533,7 @@ function investInPpp(offerId, amount) {
     playerFund.ppp.push(stake);
     recordPayment('player-fund', 'external:miasto', amount, `PPP: ${offer.name}`);
     if (typeof noteCorporateGoal === 'function') noteCorporateGoal('project');
-    logEvent(`🤝 Fundusz współfinansuje projekt miejski ${offer.icon} ${offer.name}: ${amount.toLocaleString('pl-PL')} zł na ${offer.termWeeks} tyg.`, 'review');
+    logEvent(`🤝 Fundusz współfinansuje projekt miejski ${offer.icon} ${offer.name}: ${amount.toLocaleString('pl-PL')} PLN na ${offer.termWeeks} tyg.`, 'review');
     if (offer.raised >= offer.total) ppp.offers = ppp.offers.filter(item => item !== offer);
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return stake;
@@ -610,7 +610,7 @@ function processPppWeekly() {
             city.budget -= stake.principal;
             playerCash += stake.principal;
             playerFund.ppp = playerFund.ppp.filter(item => item !== stake);
-            logEvent(`🏙️ Miasto spłaca udział funduszu w PPP ${stake.icon} ${stake.name}: ${stake.principal.toLocaleString('pl-PL')} zł.`, 'review');
+            logEvent(`🏙️ Miasto spłaca udział funduszu w PPP ${stake.icon} ${stake.name}: ${stake.principal.toLocaleString('pl-PL')} PLN.`, 'review');
         } else if (stake.extensions < 2) {
             stake.extensions++;
             stake.weeksLeft = 4;
@@ -619,7 +619,7 @@ function processPppWeekly() {
             const recovery = stake.principal * PPP_RECOVERY;
             playerCash += recovery;
             playerFund.ppp = playerFund.ppp.filter(item => item !== stake);
-            logEvent(`💥 Miasto nie spłaca PPP ${stake.name} — fundusz odzyskuje ${recovery.toFixed(0)} z ${stake.principal.toFixed(0)} zł.`, 'review');
+            logEvent(`💥 Miasto nie spłaca PPP ${stake.name} — fundusz odzyskuje ${recovery.toFixed(0)} z ${stake.principal.toFixed(0)} PLN.`, 'review');
         }
     }
 }
@@ -652,7 +652,7 @@ function runStatePensionProgram() {
             governmentTreasury -= amount;
             addOutsideSubscription('institution', 'Państwowy Program Emerytalny', amount);
             grants.push({ name: fund.name, amount });
-            logEvent(`🏛️ Państwowy Program Emerytalny powierza Twojemu funduszowi ${amount.toFixed(0)} zł (miejsce ${index + 1} w rankingu).`, 'review');
+            logEvent(`🏛️ Państwowy Program Emerytalny powierza Twojemu funduszowi ${amount.toFixed(0)} PLN (miejsce ${index + 1} w rankingu).`, 'review');
         } else if (fund.kind === 'bot') {
             const manager = corporation.managers.find(item => item.id === fund.id);
             if (!manager) continue;
@@ -807,7 +807,7 @@ function createProject(def, { timed = false, deadline = null } = {}) {
 }
 
 function formatProjectMoney(value) {
-    return `${(value / 1e6).toFixed(1)} mln zł`;
+    return `${(value / 1e6).toFixed(1).replace('.', ',')} mln PLN`;
 }
 
 function getProjectFunding(project) {
@@ -1020,7 +1020,7 @@ function buyProjectBond(projectId, amount) {
     if (!project) { showToast('Projekt nie jest już realizowany.', 'warning'); return false; }
     const room = project.cost * PROJECT_BOND_MAX_SHARE - getProjectBondTotal(project);
     const fundRoom = getFundAssets() * PROJECT_BOND_FUND_LIMIT - getFundProjectBondsValue();
-    if (!(amount >= 100)) { showToast('Minimalna kwota obligacji: 100 zł.', 'warning'); return false; }
+    if (!(amount >= 100)) { showToast('Minimalna kwota obligacji: 100 PLN.', 'warning'); return false; }
     if (amount > room) { showToast(`Emisja obligacji tego projektu: zostało ${formatZl(Math.max(0, room), 0)}.`, 'warning'); return false; }
     if (amount > fundRoom) { showToast(`Limit funduszu (10% aktywów): zostało ${formatZl(Math.max(0, fundRoom), 0)}.`, 'warning'); return false; }
     if (playerCash < amount) { showToast('Za mało gotówki funduszu.', 'error'); return false; }
@@ -1204,7 +1204,7 @@ function fundInstitution(institution, amount) {
 function donateToInstitution(kind, amount) {
     const institution = oversight[kind];
     amount = Math.floor(Number(amount));
-    if (!institution || !(amount >= 100)) { showToast('Dotacja: minimum 100 zł.', 'warning'); return false; }
+    if (!institution || !(amount >= 100)) { showToast('Dotacja: minimum 100 PLN.', 'warning'); return false; }
     if (playerWallet.cash < amount) { showToast('Za mało pieniędzy w portfelu prywatnym.', 'error'); return false; }
     playerWallet.cash -= amount;
     oversight.decentScore = (Number(oversight.decentScore) || 0) + amount;
@@ -1334,7 +1334,7 @@ function greyTender(symbol) {
 
 function getKnfAttention() {
     const assets = typeof getFundAssets === 'function' ? getFundAssets() : 0;
-    return clampValue(Math.log10(Math.max(1, assets)) / 7, 0.1, 1); // 10 mln zł → pełna uwaga
+    return clampValue(Math.log10(Math.max(1, assets)) / 7, 0.1, 1); // 10 mln PLN → pełna uwaga
 }
 
 function isTradingBlocked(id = 'player') {

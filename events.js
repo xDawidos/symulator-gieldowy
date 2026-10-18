@@ -24,7 +24,7 @@ const MAGAZINES = {
     FLESZ: { label: 'Flesz Giełdowy', premiumWeekly: 10, profile: 'Prezesi, skandale i plotki (nie zawsze prawdziwe)' },
     OBSER: { label: 'Obserwator Finansowy', premiumWeekly: 20, profile: 'Gospodarka, państwo, banki i miasto' }
 };
-const FREE_READER_AD_REVENUE = 5;   // zł tygodniowo dla czasopisma za darmowego czytelnika
+const FREE_READER_AD_REVENUE = 5;   // PLN tygodniowo dla czasopisma za darmowego czytelnika
 const COMPANY_AD_COST = 200;        // tyle płaci spółka za mail sponsorowany
 
 // Słowa kluczowe profili (sprawdzane w kolejności: korporacja, OBSER, FLESZ, reszta → PULS).
@@ -216,7 +216,7 @@ function chargeMagazineSubscriptions() {
                 recordPayment('player-wallet', stock, def.premiumWeekly, `Prenumerata premium: ${def.label}`);
             } else {
                 mailbox.subscriptions[symbol] = 'free';
-                addMail({ sender: symbol, subject: 'Prenumerata premium wygasła — brak środków', body: `Nie udało się pobrać ${def.premiumWeekly} zł z Twojego konta. Wracasz do wersji darmowej.`, importance: 2 });
+                addMail({ sender: symbol, subject: 'Prenumerata premium wygasła — brak środków', body: `Nie udało się pobrać ${def.premiumWeekly} PLN z Twojego konta. Wracasz do wersji darmowej.`, importance: 2 });
             }
         } else {
             // Darmowy czytelnik = przychód od reklamodawców (z zewnątrz modelu).
@@ -255,7 +255,7 @@ function sendMagazineSpam() {
         addMail({
             sender: symbol,
             subject: getRandomElement([`Przejdź na ${def.label} Premium — pierwszy tydzień taniej!`, `Nie przegap ważnych wiadomości — ${def.label} Premium`, `Ankieta czytelników ${def.label} (zajmie tylko 45 minut)`]),
-            body: `Wersja premium to tylko ważne wiadomości i zero spamu za ${def.premiumWeekly} zł tygodniowo. Zarządzaj prenumeratą w zakładce „Subskrypcje”.`,
+            body: `Wersja premium to tylko ważne wiadomości i zero spamu za ${def.premiumWeekly} PLN tygodniowo. Zarządzaj prenumeratą w zakładce „Subskrypcje”.`,
             importance: 0, isSpam: true, spamKind: 'magazine'
         });
     }
@@ -305,7 +305,7 @@ function processTabloidRumors() {
 function setMagazineSubscription(symbol, level) {
     if (!MAGAZINES[symbol] || ![null, 'free', 'premium'].includes(level)) return false;
     if (level === 'premium' && playerWallet.cash < MAGAZINES[symbol].premiumWeekly) {
-        showToast(`Premium kosztuje ${MAGAZINES[symbol].premiumWeekly} zł tygodniowo — za mało środków.`, 'error');
+        showToast(`Premium kosztuje ${MAGAZINES[symbol].premiumWeekly} PLN tygodniowo — za mało środków.`, 'error');
         return false;
     }
     mailbox.subscriptions[symbol] = level;

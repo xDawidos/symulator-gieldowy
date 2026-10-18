@@ -1026,15 +1026,15 @@ const ALL_COMMERCIAL_BANKS_DEFINITIONS = [
 let commercialBanks = []; // Zainicjowane banki
 
 const exchanges = {
-    'JUNK': { name: 'Giełda Śmieciowa 🗑️', level: 0, color: '#6c757d', minPrice: 0, maxPrice: 20, licenseCost: 0 },
-    'BRONZE': { name: 'Rynek Brązowy 🥉', level: 1, color: '#cd7f32', minPrice: 20, maxPrice: 75, licenseCost: 20000 },
-    'SILVER': { name: 'Giełda Srebrna 🥈', level: 2, color: '#c0c0c0', minPrice: 75, maxPrice: 400, licenseCost: 125000 },
-    'GOLD': { name: 'Giełda Złota 🥇', level: 3, color: '#ffd700', minPrice: 400, maxPrice: 1500, licenseCost: 250000 },
-    'PLATINUM': { name: 'Giełda Platynowa 💎', level: 4, color: '#e5e4e2', minPrice: 1500, maxPrice: Infinity, licenseCost: 500000 },
+    'JUNK': { name: 'Giełda Śmieciowa', level: 0, color: '#6c757d', minPrice: 0, maxPrice: 20, licenseCost: 0 },
+    'BRONZE': { name: 'Giełda Brązowa', level: 1, color: '#cd7f32', minPrice: 20, maxPrice: 75, licenseCost: 20000 },
+    'SILVER': { name: 'Giełda Srebrna', level: 2, color: '#c0c0c0', minPrice: 75, maxPrice: 400, licenseCost: 125000 },
+    'GOLD': { name: 'Giełda Złota', level: 3, color: '#ffd700', minPrice: 400, maxPrice: 1500, licenseCost: 250000 },
+    'PLATINUM': { name: 'Giełda Platynowa', level: 4, color: '#e5e4e2', minPrice: 1500, maxPrice: Infinity, licenseCost: 500000 },
     // Giełdy elitarne (etap E2): przydział wg rankingu kapitalizacji, nie ceny — finance.js
-    'RUBY': { name: 'Giełda Rubinowa 🔴', level: 5, color: '#c3112f', minPrice: Infinity, maxPrice: Infinity, licenseCost: 0, rankBased: true },
-    'EMERALD': { name: 'Giełda Szmaragdowa 🟢', level: 6, color: '#1f9d55', minPrice: Infinity, maxPrice: Infinity, licenseCost: 0, rankBased: true },
-    'DIAMOND': { name: 'Giełda Diamentowa 💠', level: 7, color: '#6ec6ff', minPrice: Infinity, maxPrice: Infinity, licenseCost: 0, rankBased: true }
+    'RUBY': { name: 'Giełda Rubinowa', level: 5, color: '#c3112f', minPrice: Infinity, maxPrice: Infinity, licenseCost: 0, rankBased: true },
+    'EMERALD': { name: 'Giełda Szmaragdowa', level: 6, color: '#1f9d55', minPrice: Infinity, maxPrice: Infinity, licenseCost: 0, rankBased: true },
+    'DIAMOND': { name: 'Giełda Diamentowa', level: 7, color: '#6ec6ff', minPrice: Infinity, maxPrice: Infinity, licenseCost: 0, rankBased: true }
 };
 
 const CORPORATE_PHASES = {
@@ -3065,7 +3065,7 @@ function payCompanyDividend(stock, dividendPerShare, purpose = 'Dywidenda') {
     recordPayment(stock, 'external:akcjonariusze', total, purpose);
 
     stock.lastDividend = { dps, total, paidAt: Date.now(), yield: dps / Math.max(0.01, stock.price) };
-    if (typeof addChartEvent === 'function') addChartEvent(stock, '✂️', `Odcięcie dywidendy: ${dps.toFixed(2)} zł/akcję — kurs spada o mniej więcej tyle`);
+    if (typeof addChartEvent === 'function') addChartEvent(stock, '✂️', `Odcięcie dywidendy: ${dps.toFixed(2)} PLN/akcję — kurs spada o mniej więcej tyle`);
     recordDividendPayment(stock, dps);
     payDividendToShareholders(stock, dps);
     return total;
@@ -5739,7 +5739,7 @@ function updateResearchInstitutes() {
 // =================================================================================
 
 const INSTITUTE_GRANT_INCOME = 30000;     // granty i zlecenia badawcze na kwartał (bez technologii na rynku)
-const INSTITUTE_LICENCE_SCALE = 25000;    // licencje: 25 tys. zł × √(technologie rynku) na kwartał (decyzja użytkownika: wzrost malejący, nie liniowy)
+const INSTITUTE_LICENCE_SCALE = 25000;    // licencje: 25 tys. PLN × √(technologie rynku) na kwartał (decyzja użytkownika: wzrost malejący, nie liniowy)
 const INSTITUTE_COMPETITION_QUARTER_CHANCE = 1 / 6; // średnio raz na 1,5 roku gry (6 kwartałów)
 const INSTITUTE_DESCRIPTIONS = {
     GUM: 'GUM Med Research to instytut badań medycznych przy uczelni medycznej w Gdańsku. Prowadzi badania kliniczne na zlecenie spółek farmaceutycznych i biotechnologicznych, a z patentów sprzedaje licencje. Zarabia na grantach oraz na opłatach licencyjnych od technologii wdrażanych na rynku, więc rośnie razem z innowacyjnością całej gospodarki.',
@@ -7446,7 +7446,7 @@ function payDividendToShareholders(stock, dividendPerShare) {
             // Fundusz nie płaci podatku od dywidend — dywidenda podnosi NAV.
             playerCash += grossDividend;
             if (typeof noteCorporateGoal === 'function') noteCorporateGoal('dividends', grossDividend);
-            logEvent(`💰 Fundusz otrzymuje ${grossDividend.toFixed(2)} zł dywidendy od ${stock.name}.`, 'review');
+            logEvent(`💰 Fundusz otrzymuje ${grossDividend.toFixed(2)} PLN dywidendy od ${stock.name}.`, 'review');
         } else {
             // Podatki (San Escobar)
             let playerTaxModifier = 1.0;
@@ -7469,7 +7469,7 @@ function payDividendToShareholders(stock, dividendPerShare) {
         const tax = gross * taxRateDividend * getPrivateTaxModifier();
         governmentTreasury += tax;
         playerWallet.cash += gross - tax;
-        logEvent(`💰 Prywatnie otrzymujesz ${(gross - tax).toFixed(2)} zł dywidendy od ${stock.name} (podatek ${tax.toFixed(2)} zł).`, 'review');
+        logEvent(`💰 Prywatnie otrzymujesz ${(gross - tax).toFixed(2)} PLN dywidendy od ${stock.name} (podatek ${tax.toFixed(2)} PLN).`, 'review');
     }
 
     // 2. Wypłata dla AI
@@ -8374,7 +8374,7 @@ function renderDividendBadges(stock) {
     return `<p class="dividend-badges">${badge}${market}${projects}
         <span class="text-sm">Stopa dywidendy: <strong>${yieldPct}%</strong></span>
         ${stock.assetType ? '' : `<span class="text-sm text-muted">seria: ${stock.dividendStreak || 0}/${ARISTOCRAT_MIN_STREAK} kw.</span>`}
-        ${history ? `<span class="text-xs text-muted d-block">Ostatnie wypłaty (zł/akcję): ${history}</span>` : ''}</p>`;
+        ${history ? `<span class="text-xs text-muted d-block">Ostatnie wypłaty (PLN/akcję): ${history}</span>` : ''}</p>`;
 }
 
 // #################################################################################
@@ -8492,12 +8492,12 @@ function processOperatingInvestments(stock) {
 
         if (operating.lifeQuarters && operating.quarters >= operating.lifeQuarters) {
             stock.operatingInvestments = stock.operatingInvestments.filter(item => item !== operating);
-            logEvent(`⏹️ ${stock.name}: „${operating.name}” zakończyła działanie (łączny wynik ${Math.round(operating.totalResult).toLocaleString('pl-PL')} zł).`, 'company');
+            logEvent(`⏹️ ${stock.name}: „${operating.name}” zakończyła działanie (łączny wynik ${Math.round(operating.totalResult).toLocaleString('pl-PL')} PLN).`, 'company');
         } else if (operating.lossStreak >= INVESTMENT_LOSS_STREAK_LIMIT) {
             const writeOff = Math.round(operating.cost * 0.4);
             adjustBalanceSheet(stock, { assets: -writeOff, retainedEarnings: -writeOff });
             stock.operatingInvestments = stock.operatingInvestments.filter(item => item !== operating);
-            logEvent(`📉 ${stock.name} wygasza nierentowną inwestycję „${operating.name}” (odpis ${writeOff.toLocaleString('pl-PL')} zł).`, 'company');
+            logEvent(`📉 ${stock.name} wygasza nierentowną inwestycję „${operating.name}” (odpis ${writeOff.toLocaleString('pl-PL')} PLN).`, 'company');
         }
     }
     return total;
@@ -8522,7 +8522,7 @@ function fundTopUpInvestment(symbol, uid, amount, mode) {
     amount = Math.floor(Number(amount));
     if (!stock || !project) { showToast('Inwestycja nie jest już w toku.', 'error'); return false; }
     if (!canFundTopUp(stock)) { showToast('Dopłata wymaga większości (> 50%) akcji w funduszu.', 'warning'); return false; }
-    if (!(amount >= 100) || amount > playerCash) { showToast('Za mało gotówki funduszu (minimum 100 zł).', 'error'); return false; }
+    if (!(amount >= 100) || amount > playerCash) { showToast('Za mało gotówki funduszu (minimum 100 PLN).', 'error'); return false; }
     const remaining = Math.max(0, project.cost - (project.fundTopUp || 0));
     amount = Math.min(amount, remaining);
     if (!(amount > 0)) { showToast('Fundusz sfinansował już całą inwestycję.', 'default'); return false; }
@@ -8557,14 +8557,14 @@ function fundTopUpInvestment(symbol, uid, amount, mode) {
         holding.shares += newShares;
         adjustBalanceSheet(stock, { assets: amount, retainedEarnings: amount });
         recordPayment('player-fund', stock, amount, `Dopłata za akcje: ${project.name}`);
-        logEvent(`💼 Fundusz dopłaca ${amount.toLocaleString('pl-PL')} zł do „${project.name}” (${stock.name}) i obejmuje ${newShares.toLocaleString('pl-PL')} nowych akcji.`, 'review');
+        logEvent(`💼 Fundusz dopłaca ${amount.toLocaleString('pl-PL')} PLN do „${project.name}” (${stock.name}) i obejmuje ${newShares.toLocaleString('pl-PL')} nowych akcji.`, 'review');
     } else {
         const pct = Math.min(FUND_INCOME_MAX_SHARE, FUND_INCOME_MAX_SHARE * project.fundTopUp / Math.max(1, project.cost));
         project.fundIncomePct = pct;
         project.fundInvested = (project.fundInvested || 0) + amount;
         adjustBalanceSheet(stock, { assets: amount, liabilities: amount }); // zobowiązanie wobec funduszu (udział w zysku)
         recordPayment('player-fund', stock, amount, `Dopłata za udział w zysku: ${project.name}`);
-        logEvent(`💼 Fundusz dopłaca ${amount.toLocaleString('pl-PL')} zł do „${project.name}” (${stock.name}) za ${(pct * 100).toFixed(0)}% zysku tej inwestycji.`, 'review');
+        logEvent(`💼 Fundusz dopłaca ${amount.toLocaleString('pl-PL')} PLN do „${project.name}” (${stock.name}) za ${(pct * 100).toFixed(0)}% zysku tej inwestycji.`, 'review');
     }
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return true;
@@ -8605,12 +8605,12 @@ function processPublicInvestmentFunding() {
             centralBank.funds -= amount;
             const shares = issueSharesToPublicOwner(stock, amount, 'state');
             project.publicFunding = 'state';
-            logEvent(`🏛️ Bank Centralny dofinansowuje „${project.name}” w ${stock.name}: ${amount.toLocaleString('pl-PL')} zł za ${shares.toLocaleString('pl-PL')} akcji.`, 'state');
+            logEvent(`🏛️ Bank Centralny dofinansowuje „${project.name}” w ${stock.name}: ${amount.toLocaleString('pl-PL')} PLN za ${shares.toLocaleString('pl-PL')} akcji.`, 'state');
         } else if (stock.isMunicipal && Math.random() < (city.mayor?.policy === 'municipal' ? 0.6 : 0.25) && city.budget > amount * 3) {
             city.budget -= amount;
             const shares = issueSharesToPublicOwner(stock, amount, 'city');
             project.publicFunding = 'city';
-            logEvent(`🏙️ Miasto dofinansowuje „${project.name}” w ${stock.name}: ${amount.toLocaleString('pl-PL')} zł za ${shares.toLocaleString('pl-PL')} akcji.`, 'city');
+            logEvent(`🏙️ Miasto dofinansowuje „${project.name}” w ${stock.name}: ${amount.toLocaleString('pl-PL')} PLN za ${shares.toLocaleString('pl-PL')} akcji.`, 'city');
         }
     }
 }
@@ -8652,7 +8652,7 @@ function canFundInvestInStartups(amount, silent = false) {
     if (!(amount > 0)) return fail('Wpisz poprawną kwotę.');
     if (amount > playerCash) return fail('Za mało gotówki funduszu.');
     if (amount > getFundStartupCapacity() + 1e-6) {
-        return fail(`Limit startupów: ${(STARTUP_FUND_LIMIT * 100).toFixed(0)}% aktywów funduszu (wolne: ${getFundStartupCapacity().toFixed(0)} zł).`);
+        return fail(`Limit startupów: ${(STARTUP_FUND_LIMIT * 100).toFixed(0)}% aktywów funduszu (wolne: ${getFundStartupCapacity().toFixed(0)} PLN).`);
     }
     return true;
 }
@@ -8683,10 +8683,10 @@ function investInStartup(symbol, amount) {
     if (startup.stage === 'funding') {
         startup.currentFunding += amount;
         startup.successChance = Math.min(1, startup.successChance + amount / startup.fundingGoal * 0.05);
-        logEvent(`🚀 Fundusz inwestuje ${amount.toFixed(2)} zł w ${startup.name} (faza finansowania).`, 'review');
+        logEvent(`🚀 Fundusz inwestuje ${amount.toFixed(2)} PLN w ${startup.name} (faza finansowania).`, 'review');
     } else {
         startup.ipoPriceBonus += amount;
-        logEvent(`🚀 Fundusz dopłaca ${amount.toFixed(2)} zł do ${startup.name} przed debiutem (wyższa wycena IPO).`, 'review');
+        logEvent(`🚀 Fundusz dopłaca ${amount.toFixed(2)} PLN do ${startup.name} przed debiutem (wyższa wycena IPO).`, 'review');
     }
     addFundStartupStake(startup, amount);
     if (typeof refreshFundViews === 'function') refreshFundViews();
@@ -8704,7 +8704,7 @@ function playerRescuesStartup(symbol, amount) {
     playerCash -= amount;
     startup.rescueCurrent += amount;
     addFundStartupStake(startup, amount);
-    logEvent(`🚑 Fundusz dofinansowuje ${startup.name} kwotą ${amount.toFixed(2)} zł.`, 'review');
+    logEvent(`🚑 Fundusz dofinansowuje ${startup.name} kwotą ${amount.toFixed(2)} PLN.`, 'review');
     checkStartupRescue(startup);
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return true;
@@ -8740,7 +8740,7 @@ function privatizeStartup(symbol) {
     startup.privatizationPremium = price - startup.fundingGoal; // 0.14.1 R0: premia 20% ponad cel (niezmiennik inkubatora)
     startup.investors = { 'Fundusz': price };
     playerPortfolio[symbol] = { investedAmount: price, assetType: 'Startup', isInsured: playerPortfolio[symbol]?.isInsured || false };
-    logEvent(`🏢 Fundusz prywatyzuje start-up ${startup.name} za ${cost.toFixed(2)} zł — gwarantowany debiut.`, 'review');
+    logEvent(`🏢 Fundusz prywatyzuje start-up ${startup.name} za ${cost.toFixed(2)} PLN — gwarantowany debiut.`, 'review');
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return true;
 }
@@ -8767,7 +8767,7 @@ function refundOtherStartupClaims(startup) {
             investmentPool.contributors[id] = (Number(investmentPool.contributors[id]) || 0) + share;
             investmentPool.totalFunds = (Number(investmentPool.totalFunds) || 0) + share;
             notePoolLedger(id, 'refunded', share); notePoolLedger(id, 'lost', contribution - share);
-            if (id === 'player') notePoolSettlement({ symbol, name: startup.name, kind: 'privatized', contribution, refund: share, text: `🏊 Pula: ${startup.name} sprywatyzowany przez fundusz — zwrot ${share.toFixed(0)} zł do puli.` });
+            if (id === 'player') notePoolSettlement({ symbol, name: startup.name, kind: 'privatized', contribution, refund: share, text: `🏊 Pula: ${startup.name} sprywatyzowany przez fundusz — zwrot ${share.toFixed(0)} PLN do puli.` });
         }
     }
     startup.poolInvestors = [];
@@ -8836,7 +8836,7 @@ function handleSuccessfulIPO(startup, successMultiplier) {
             const holding = playerPortfolio[symbol] || { shares: 0, avgPrice: ipoPrice, assetType: 'stock' };
             holding.shares += shares;
             playerPortfolio[symbol] = holding;
-            if (claim.pool) { notePoolLedger('player', 'toShares', claim.contribution); notePoolSettlement({ symbol, name: startup.name, kind: 'ipo', contribution: claim.contribution, shares, text: `🏊 Pula: ${startup.name} — debiut, Twój udział: ${shares.toLocaleString('pl-PL')} akcji (wkład ${claim.contribution.toFixed(0)} zł).` }); }
+            if (claim.pool) { notePoolLedger('player', 'toShares', claim.contribution); notePoolSettlement({ symbol, name: startup.name, kind: 'ipo', contribution: claim.contribution, shares, text: `🏊 Pula: ${startup.name} — debiut, Twój udział: ${shares.toLocaleString('pl-PL')} akcji (wkład ${claim.contribution.toFixed(0)} PLN).` }); }
         } else if (claim.kind === 'ai') {
             const holding = claim.ai.portfolio[symbol] || { shares: 0, avgPrice: ipoPrice };
             holding.shares += shares;
@@ -8881,7 +8881,7 @@ function handleSuccessfulIPO(startup, successMultiplier) {
     const fundValue = (playerPortfolio[symbol]?.shares || 0) * ipoPrice;
     logEvent(`🔔 IPO: ${startup.name} debiutuje po ${ipoPrice.toFixed(2)} zł (${totalShares.toLocaleString('pl-PL')} akcji).${fundClaim > 0 ? ` Fundusz: ${fundClaim.toFixed(0)} zł → ${fundValue.toFixed(0)} zł.` : ''}`, 'review');
     if (startup.operatorStartup && typeof activateMarketOperator === 'function') activateMarketOperator(startup); // nowy rynek (markets.js)
-    if (fundClaim > 0) playerProfile?.cv.push({ type: 'milestone', text: `Startup ${startup.name}: debiut na giełdzie (${fundClaim.toFixed(0)} → ${fundValue.toFixed(0)} zł).` });
+    if (fundClaim > 0) playerProfile?.cv.push({ type: 'milestone', text: `Startup ${startup.name}: debiut na giełdzie (${fundClaim.toFixed(0)} → ${fundValue.toFixed(0)} PLN).` });
 }
 
 // =================================================================================
@@ -8928,10 +8928,10 @@ function settlePoolClaims(startup, refundMin = 0, refundMax = 0) {
             if (id === 'player') {
                 const kind = refundMin >= 1 ? 'takeover' : refund > 0 ? 'refund' : 'loss';
                 const text = kind === 'takeover'
-                    ? `🏊 Pula: ${startup.name} przejęty — zwrot ${refund.toFixed(0)} zł do puli (wkład ${contribution.toFixed(0)} zł).`
+                    ? `🏊 Pula: ${startup.name} przejęty — zwrot ${refund.toFixed(0)} PLN do puli (wkład ${contribution.toFixed(0)} PLN).`
                     : kind === 'refund'
-                        ? `🏊 Pula: ${startup.name} upadł — zwrot ${refund.toFixed(0)} zł do puli, Twoja strata ${(contribution - refund).toFixed(0)} zł.`
-                        : `🏊 Pula: ${startup.name} upadł — Twoja strata ${contribution.toFixed(0)} zł.`;
+                        ? `🏊 Pula: ${startup.name} upadł — zwrot ${refund.toFixed(0)} PLN do puli, Twoja strata ${(contribution - refund).toFixed(0)} PLN.`
+                        : `🏊 Pula: ${startup.name} upadł — Twoja strata ${contribution.toFixed(0)} PLN.`;
                 notePoolSettlement({ symbol: startup.symbol, name: startup.name, kind, contribution, refund, text });
             }
         }
@@ -8957,7 +8957,7 @@ function migratePoolStakesToFacts() {
     investmentPool.stakesMigrated = true;
     const facts = Number(investmentPool.playerStakes?.player) || 0;
     const diff = stored - facts;
-    if (diff > 1) logEvent(`🏊 Korekta wkładu w pulę: ${stored.toFixed(0)} → ${facts.toFixed(0)} zł (startupy, których już nie ma, rozliczono przed poprawką 0.14.1; limit 10% się odblokowuje).`, 'review');
+    if (diff > 1) logEvent(`🏊 Korekta wkładu w pulę: ${stored.toFixed(0)} → ${facts.toFixed(0)} PLN (startupy, których już nie ma, rozliczono przed poprawką 0.14.1; limit 10% się odblokowuje).`, 'review');
     return diff;
 }
 
@@ -8968,8 +8968,8 @@ function removeStartup(startup, refundMin = 0, refundMax = 0) {
     if (holding?.investedAmount > 0) {
         const refund = holding.isInsured ? holding.investedAmount * 0.75 : holding.investedAmount * (refundMax > 0 ? getRandomInRange(refundMin, refundMax) : 0);
         if (refund > 0) playerCash += refund;
-        logEvent(`📉 Startup ${startup.name} nie debiutuje — fundusz odzyskuje ${refund.toFixed(2)} z ${holding.investedAmount.toFixed(2)} zł${holding.isInsured ? ' (ubezpieczenie)' : ''}.`, 'review');
-        playerProfile?.cv.push({ type: 'milestone', text: `Startup ${startup.name}: upadek (odzysk ${refund.toFixed(0)} zł).` });
+        logEvent(`📉 Startup ${startup.name} nie debiutuje — fundusz odzyskuje ${refund.toFixed(2)} z ${holding.investedAmount.toFixed(2)} PLN${holding.isInsured ? ' (ubezpieczenie)' : ''}.`, 'review');
+        playerProfile?.cv.push({ type: 'milestone', text: `Startup ${startup.name}: upadek (odzysk ${refund.toFixed(0)} PLN).` });
     }
     for (const ai of aiCompetitors) {
         const aiHolding = ai.portfolio[symbol];
@@ -9006,7 +9006,7 @@ function triggerStartupFundingEvent() {
     const added = Math.max(0, Math.min(startup.fundingGoal, startup.currentFunding + amount) - startup.currentFunding);
     startup.currentFunding += added;
     startup.unclaimedFunding = (Number(startup.unclaimedFunding) || 0) + added; // 0.14.1 R0: wpłata bez roszczenia (niezmiennik inkubatora)
-    logEvent(`[INKUBATOR] 👼 Anioł biznesu wspiera ${startup.name} kwotą ${amount.toLocaleString('pl-PL')} zł.`, 'market');
+    logEvent(`[INKUBATOR] 👼 Anioł biznesu wspiera ${startup.name} kwotą ${amount.toLocaleString('pl-PL')} PLN.`, 'market');
     return startup.symbol;
 }
 
