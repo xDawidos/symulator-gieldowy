@@ -1578,7 +1578,7 @@ function initializeGame() {
 
     const pauseButton = document.getElementById('pause-game-btn');
     if (isGamePaused && pauseButton) {
-        pauseButton.textContent = '▶️ Wznów';
+        pauseButton.textContent = 'Wznów';
         pauseButton.classList.add('is-paused');
     }
 

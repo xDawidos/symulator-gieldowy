@@ -704,7 +704,7 @@ function withdrawFromPool(amount) {
     notePoolLedger('player', 'feesPaid', fee);
     recomputePoolStakes();
     if (typeof displayCash === 'function') displayCash();
-    logEvent(`🏊 Fundusz wycofuje ${paid.toFixed(0)} zł z puli inwestycyjnej (opłata ${fee.toFixed(0)} zł${othersTotal > 0 ? ' dla pozostałych uczestników' : ' dla zarządcy inkubatora'}).`, 'review');
+    logEvent(`🏊 Fundusz wycofuje ${paid.toFixed(0)} PLN z puli inwestycyjnej (opłata ${fee.toFixed(0)} PLN${othersTotal > 0 ? ' dla pozostałych uczestników' : ' dla zarządcy inkubatora'}).`, 'review');
     if (typeof displayInvestmentPool === 'function') displayInvestmentPool();
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return paid;
@@ -712,7 +712,7 @@ function withdrawFromPool(amount) {
 
 /** Status puli dla panelu: dlaczego pieniądze czekają. */
 function getPoolStatus() {
-    if ((Number(investmentPool.totalFunds) || 0) < 1000) return { code: 'low', text: 'Za mało środków (min. 1000 zł) — pula czeka na wpłaty.' };
+    if ((Number(investmentPool.totalFunds) || 0) < 1000) return { code: 'low', text: 'Za mało środków (min. 1000 PLN) — pula czeka na wpłaty.' };
     const open = stocks.some(s => s.assetType === 'Startup' && s.stage === 'funding' && getStartupFundingGap(s) >= 1);
     if (!open) return { code: 'noTargets', text: 'Pula czeka: brak startupów w fazie zbiórki.' };
     return { code: 'ready', text: `Następna inwestycja za ${Math.max(0, Math.ceil((Number(investmentPool.investmentTimer) || 0) / 1000))} s gry.` };
@@ -1117,7 +1117,7 @@ function endFestival() {
 function playerJoinFestival(promotionTarget) {
     // Stoisko i promocje opłaca gracz prywatnie (portfel), nie fundusz klientów.
     if (!cityInvestment.playerHasUnlocked) {
-        showToast(`Najpierw odblokuj inwestycje miejskie (darowizna ${CITY_UNLOCK_DONATION} zł z portfela prywatnego).`, 'warning');
+        showToast(`Najpierw odblokuj inwestycje miejskie (darowizna ${CITY_UNLOCK_DONATION} PLN z portfela prywatnego).`, 'warning');
         return; // Zakończ funkcję, jeśli miasto nie jest odblokowane dla gracza
     }
     if (!festival || !festival.isActive || playerWallet.cash < FESTIVAL_STALL_LEVELS[0].cost) return;
@@ -1469,7 +1469,7 @@ const MANAGEMENT_FEE_ANNUAL = 0.008;
 const FUND_WEEKS_PER_YEAR = 20;                        // rok gry = 4 kwartały × 5 tygodni
 const CLIENT_GAINS_TAX = 0.19;                         // podatek klienta od zysku przy umorzeniu
 const MAX_EMISSIONS_PER_PERIOD = 2;
-const MAX_WEEKLY_REDEMPTION_SHARE = 0.15;              // odpływ w tygodniu maks. 15% JU
+const MAX_WEEKLY_REDEMPTION_SHARE = 0.15;              // odpływ w tygodniu maks. 15% udziałów
 const TRAINING_COST_FACTOR = 0.25;                     // dawne XP → złotówki
 const PRIVATE_GAINS_TAX = 0.19;
 
@@ -1700,7 +1700,7 @@ function startNewCareer(profile = {}) {
         addMail({ sender: 'corporation', subject: `Witamy w ${playerProfile.corporation}!`, body: `Od dziś zarządzasz funduszem „${playerProfile.fundName}”. Wyniki oceniamy co 4 okresy. Wiadomości z rynku przysyłają czasopisma — prenumeraty ustawisz w zakładce Subskrypcje.`, importance: 2 });
     }
 
-    logEvent(`💼 ${playerProfile.name} zostaje młodszym zarządcą funduszu „${playerProfile.fundName}” (${FUND_START_CASH.toLocaleString('pl-PL')} zł, ${FUND_START_UNITS} JU, ${playerFund.clients.length} klientów).`, 'review');
+    logEvent(`💼 ${playerProfile.name} zostaje młodszym zarządcą funduszu „${playerProfile.fundName}” (${FUND_START_CASH.toLocaleString('pl-PL')} PLN, ${FUND_START_UNITS} udziałów, ${playerFund.clients.length} klientów).`, 'review');
 }
 
 // =================================================================================
@@ -1826,10 +1826,10 @@ function closeFundPeriod() {
     const excess = (period.fundReturn - period.benchmarkReturn) * 100;
     logEvent(
         `📊 Koniec okresu ${period.number}: fundusz ${(period.fundReturn * 100).toFixed(2)}% vs GIG ${(period.benchmarkReturn * 100).toFixed(2)}% ` +
-        `(${excess >= 0 ? '+' : ''}${excess.toFixed(2)} pp), miejsce ${period.rank}/${period.rankOf}, premia ${period.bonus.toFixed(2)} zł.`,
+        `(${excess >= 0 ? '+' : ''}${excess.toFixed(2)} pp), miejsce ${period.rank}/${period.rankOf}, premia ${period.bonus.toFixed(2)} PLN.`,
         'review'
     );
-    if (typeof showToast === 'function') showToast(`Koniec okresu ${period.number}: premia ${period.bonus.toFixed(2)} zł`, period.bonus > 0 ? 'success' : 'default', 5000);
+    if (typeof showToast === 'function') showToast(`Koniec okresu ${period.number}: premia ${period.bonus.toFixed(2)} PLN`, period.bonus > 0 ? 'success' : 'default', 5000);
 
     playerFund.periodNumber++;
     beginFundPeriod();
@@ -1975,7 +1975,7 @@ function chargeManagementFee() {
 function redeemClientUnits(client, units) {
     if (!(units > 0) || client.units <= 0) return 0;
     units = Math.min(units, client.units);
-    if (client.units - units < 0.5) units = client.units; // bez resztek: klient odchodzi z całością (JU klientów = JU funduszu)
+    if (client.units - units < 0.5) units = client.units; // bez resztek: klient odchodzi z całością (JU klientów = udziałów funduszu)
 
     const nav = getFundNav();
     const value = units * nav;
@@ -1988,7 +1988,7 @@ function redeemClientUnits(client, units) {
     playerFund.units -= paidUnits;
     client.units -= paidUnits;
     playerFund.current.outflow += paid;
-    recordPayment('player-fund', 'external:klienci', paid, 'Umorzenie JU');
+    recordPayment('player-fund', 'external:klienci', paid, 'Umorzenie udziałów');
 
     // Klient płaci podatek od zysku — to obniża jego wypłatę netto, nie NAV.
     const gain = Math.max(0, (nav - client.avgCost) * paidUnits);
@@ -1996,9 +1996,9 @@ function redeemClientUnits(client, units) {
 
     if (client.units < 0.5) {
         playerFund.clients = playerFund.clients.filter(item => item.id !== client.id);
-        logEvent(`👋 ${client.name} (${(CLIENT_TYPES[client.type] || CLIENT_TYPES.careful).label}) wycofuje wszystkie środki: ${paid.toFixed(2)} zł (podatek klienta ${tax.toFixed(2)} zł).`, 'review');
+        logEvent(`👋 ${client.name} (${(CLIENT_TYPES[client.type] || CLIENT_TYPES.careful).label}) wycofuje wszystkie środki: ${paid.toFixed(2)} PLN (podatek klienta ${tax.toFixed(2)} PLN).`, 'review');
     } else {
-        logEvent(`📤 ${client.name} umarza ${paidUnits.toFixed(1)} JU (${paid.toFixed(2)} zł).`, 'review');
+        logEvent(`📤 ${client.name} umarza ${paidUnits.toFixed(1)} udziałów (${paid.toFixed(2)} PLN).`, 'review');
     }
     return paid;
 }
@@ -2030,7 +2030,7 @@ function isFundOpenForSubscriptions() {
 function setFundOpenSubscriptions(open) {
     if (!playerFund) return false;
     playerFund.openSubscriptions = Boolean(open);
-    showToast(open ? '📥 Emisja ciągła otwarta: zadowoleni i nowi klienci mogą dokupować JU po NAV.' : '🔒 Emisja ciągła zamknięta: nowe JU tylko przez Twoją emisję.', 'default', 5000);
+    showToast(open ? '📥 Emisja ciągła otwarta: zadowoleni i nowi klienci mogą dokupować udziały po NAV.' : '🔒 Emisja ciągła zamknięta: nowe udziały tylko przez Twoją emisję.', 'default', 5000);
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return true;
 }
@@ -2060,7 +2060,7 @@ function forceLiquidation(amountNeeded) {
         needed -= proceeds;
 
         playerFund.current.forcedSales++;
-        notePlayerPositionLoss(symbol, quantity, 'wymuszona sprzedaż: klienci umarzają JU, a w funduszu brakuje gotówki (trzymaj zapas gotówki)', proceeds);
+        notePlayerPositionLoss(symbol, quantity, 'wymuszona sprzedaż: klienci umarzają udziały, a w funduszu brakuje gotówki (trzymaj zapas gotówki)', proceeds);
     }
 
     if (playerFund.current.forcedSales > 0) playerFund.trust = Math.max(0, playerFund.trust - 2);
@@ -2132,7 +2132,7 @@ function issueFundUnits(requestedUnits, options = {}) {
     if (!options.forcedClient && !buyers.length) demandValue = newClients.reduce((sum, item) => sum + item.value, 0);
     const issuedUnits = Math.min(requested, demandValue / nav);
     if (!(issuedUnits > 0)) {
-        logEvent(`📭 Emisja ${requested} JU: brak chętnych.`, 'review');
+        logEvent(`📭 Emisja ${requested} udziałów: brak chętnych.`, 'review');
         return { issued: 0, raised: 0 };
     }
 
@@ -2162,10 +2162,10 @@ function issueFundUnits(requestedUnits, options = {}) {
     playerCash += raised;
     playerFund.units += raised / nav;
     current.inflow += raised;
-    recordPayment('external:klienci', 'player-fund', raised, 'Emisja JU');
+    recordPayment('external:klienci', 'player-fund', raised, 'Emisja udziałów');
     if (typeof noteFundFlow === 'function') noteFundFlow('in', 'emission', raised, raised / nav); // B5: panel przyczyn
 
-    logEvent(`📥 Emisja: sprzedano ${(raised / nav).toFixed(1)} z ${requested} JU po ${nav.toFixed(2)} zł (${raised.toFixed(2)} zł, nowych klientów: ${newClients.length}).`, 'review');
+    logEvent(`📥 Emisja: sprzedano ${(raised / nav).toFixed(1)} z ${requested} udziałów po ${nav.toFixed(2)} PLN (${raised.toFixed(2)} PLN, nowych klientów: ${newClients.length}).`, 'review');
     return { issued: raised / nav, raised, newClients: newClients.length };
 }
 
@@ -2175,7 +2175,7 @@ function maybeTriggerForcedEmission() {
     const nav = getFundNav();
     const value = getFundAssets() * getRandomInRange(0.1, 0.3);
     const client = addFundClient('institution', 0, nav);
-    logEvent(`🏛️ ${client.name} chce zainwestować ${value.toFixed(0)} zł — zarząd nakazuje przeprowadzić emisję.`, 'review');
+    logEvent(`🏛️ ${client.name} chce zainwestować ${value.toFixed(0)} PLN — zarząd nakazuje przeprowadzić emisję.`, 'review');
     issueFundUnits(Math.ceil(value / nav), { forcedValue: value, forcedClient: client });
 }
 
@@ -2231,8 +2231,8 @@ function checkCompliance(symbol) {
         playerWallet.fines += paid;
         playerWallet.complianceRisk = 0;
         playerFund.trust = Math.max(0, playerFund.trust - 5);
-        playerProfile?.cv.push({ type: 'compliance', text: `Kontrola compliance: front-running na ${symbol}, kara ${paid.toFixed(2)} zł.` });
-        logEvent(`🚨 COMPLIANCE: wykryto prywatne transakcje przed transakcjami funduszu (${symbol}). Kara ${paid.toFixed(2)} zł, wpis w CV.`, 'error');
+        playerProfile?.cv.push({ type: 'compliance', text: `Kontrola compliance: front-running na ${symbol}, kara ${paid.toFixed(2)} PLN.` });
+        logEvent(`🚨 COMPLIANCE: wykryto prywatne transakcje przed transakcjami funduszu (${symbol}). Kara ${paid.toFixed(2)} PLN, wpis w CV.`, 'error');
         if (typeof showToast === 'function') showToast('Kontrola compliance! Kara i wpis w CV.', 'error', 6000);
     }
 }
@@ -2290,7 +2290,7 @@ function buyStockPrivate(symbol, quantity) {
     applyTradeImpact(stock, quantity, 1);
 
     checkCompliance(symbol);
-    logEvent(`🧍 Prywatnie kupiono ${quantity} szt. ${symbol} za ${cost.toFixed(2)} zł.`, 'review');
+    logEvent(`🧍 Prywatnie kupiono ${quantity} szt. ${symbol} za ${cost.toFixed(2)} PLN.`, 'review');
     refreshFundViews();
     return true;
 }
@@ -2312,7 +2312,7 @@ function sellStockPrivate(symbol, quantity) {
     applyTradeImpact(stock, quantity, -1);
     if (holding.shares <= 0) delete playerWallet.portfolio[symbol];
 
-    logEvent(`🧍 Prywatnie sprzedano ${quantity} szt. ${symbol}: ${proceeds.toFixed(2)} zł (podatek ${tax.toFixed(2)} zł).`, 'review');
+    logEvent(`🧍 Prywatnie sprzedano ${quantity} szt. ${symbol}: ${proceeds.toFixed(2)} PLN (podatek ${tax.toFixed(2)} PLN).`, 'review');
     refreshFundViews();
     return true;
 }
@@ -2329,7 +2329,7 @@ function buyOwnFundUnits(amount) {
     playerWallet.fundUnitsCost += value;
     playerCash += value;
     playerFund.units += units;
-    recordPayment('player-wallet', 'player-fund', value, 'Zakup JU własnego funduszu');
+    recordPayment('player-wallet', 'player-fund', value, 'Zakup udziałów własnego funduszu');
     refreshFundViews();
     return units;
 }
@@ -2351,7 +2351,7 @@ function sellOwnFundUnits(units) {
     playerWallet.fundUnitsCost -= costBasis;
     playerWallet.cash += paid - tax;
     governmentTreasury += tax;
-    recordPayment('player-fund', 'player-wallet', paid, 'Umorzenie JU gracza');
+    recordPayment('player-fund', 'player-wallet', paid, 'Umorzenie udziałów gracza');
     refreshFundViews();
     return paid;
 }
@@ -2388,7 +2388,7 @@ function buyTraining(skillId) {
 
     const cost = getTrainingCost(skillId);
     if (playerWallet.cash < cost) {
-        showToast(`Szkolenie kosztuje ${cost} zł — masz ${playerWallet.cash.toFixed(2)} zł.`, 'error');
+        showToast(`Szkolenie kosztuje ${cost} PLN — masz ${playerWallet.cash.toFixed(2)} PLN.`, 'error');
         return false;
     }
 
@@ -3092,7 +3092,7 @@ function hireAnalyst(type) {
     if (!corporation || !def) return false;
     if (!canHireAnalysts()) { showToast('Analityków zatrudnia się od stanowiska Starszy zarządca.', 'warning'); return false; }
     if (corporation.analysts.some(analyst => analyst.type === type)) { showToast('Masz już takiego analityka.', 'default'); return false; }
-    if (playerWallet.cash < def.hireCost) { showToast(`Zatrudnienie kosztuje ${def.hireCost} zł.`, 'error'); return false; }
+    if (playerWallet.cash < def.hireCost) { showToast(`Zatrudnienie kosztuje ${def.hireCost} PLN.`, 'error'); return false; }
 
     playerWallet.cash -= def.hireCost;
     const stars = getRandomIntInRange(1, 5);
@@ -3127,7 +3127,7 @@ function getAnalystInsights(stock) {
     if (company && (f || stock.assetType)) {
         const fair = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(stock) : f?.fairValue;
         const method = f?.fairValue > 0 ? '' : stock.assetType === 'Holding' ? ' (NAV portfela)' : stock.assetType === 'REIT' ? ' (NAV / dywidenda)' : ' (wartość księgowa)';
-        insights.push(`Analityk spółki (${'★'.repeat(company.stars)}): wartość godziwa ${fair > 0 ? `≈ ${(fair * noise(company.stars)).toFixed(2)} zł${method}` : 'brak wyceny (brak zysku i majątku netto)'}${f?.expectedEps ? `, prognoza EPS na kwartał ≈ ${(f.expectedEps * noise(company.stars)).toFixed(3)} zł` : ''}.`);
+        insights.push(`Analityk spółki (${'★'.repeat(company.stars)}): wartość godziwa ${fair > 0 ? `≈ ${(fair * noise(company.stars)).toFixed(2)} PLN${method}` : 'brak wyceny (brak zysku i majątku netto)'}${f?.expectedEps ? `, prognoza EPS na kwartał ≈ ${(f.expectedEps * noise(company.stars)).toFixed(3)} PLN` : ''}.`);
     }
     const sector = getAnalyst('sector');
     if (sector) {
@@ -3196,8 +3196,8 @@ function consolidateSupervisedFund(forceApproval = null) {
     onColleagueEvent(manager.id, 'consolidate');
     corporation.managers = corporation.managers.filter(item => item !== manager);
     corporation.supervisedManagerId = null;
-    playerProfile.cv.push({ type: 'milestone', text: `Konsolidacja funduszu ${manager.name} (${value.toFixed(0)} zł).` });
-    logEvent(`🔗 Zarząd zatwierdza konsolidację: fundusz ${manager.name} (${value.toFixed(0)} zł) dołącza do Twojego.`, 'review');
+    playerProfile.cv.push({ type: 'milestone', text: `Konsolidacja funduszu ${manager.name} (${value.toFixed(0)} PLN).` });
+    logEvent(`🔗 Zarząd zatwierdza konsolidację: fundusz ${manager.name} (${value.toFixed(0)} PLN) dołącza do Twojego.`, 'review');
     return true;
 }
 
@@ -3233,7 +3233,7 @@ function meetInvestor(investorId, forceSuccess = null) {
     if (!investor || !playerFund || !corporation) return false;
     const period = playerFund.current.number;
     if (corporation.lastMeetings[investorId] === period) { showToast('W tym okresie już spotkałeś się z tym inwestorem.', 'default'); return false; }
-    if (playerWallet.cash < MEETING_COST) { showToast(`Spotkanie kosztuje ${MEETING_COST} zł.`, 'error'); return false; }
+    if (playerWallet.cash < MEETING_COST) { showToast(`Spotkanie kosztuje ${MEETING_COST} PLN.`, 'error'); return false; }
 
     playerWallet.cash -= MEETING_COST;
     corporation.lastMeetings[investorId] = period;
@@ -3251,7 +3251,7 @@ function meetInvestor(investorId, forceSuccess = null) {
     if (!(amount > 1)) return false;
     investor.cash -= amount;
     addOutsideSubscription('investor', investor.name, amount);
-    logEvent(`🤝 ${investor.name} kupuje JU Twojego funduszu za ${amount.toFixed(0)} zł!`, 'review');
+    logEvent(`🤝 ${investor.name} kupuje udziały Twojego funduszu za ${amount.toFixed(0)} PLN!`, 'review');
     return true;
 }
 
@@ -3260,7 +3260,7 @@ function lunchWithCeo(symbol) {
     if (!stock || !corporation) return false;
     const period = playerFund.current.number;
     if (corporation.lastMeetings[symbol] === period) { showToast('Z tym prezesem spotkałeś się już w tym okresie.', 'default'); return false; }
-    if (playerWallet.cash < CEO_LUNCH_COST) { showToast(`Lunch kosztuje ${CEO_LUNCH_COST} zł.`, 'error'); return false; }
+    if (playerWallet.cash < CEO_LUNCH_COST) { showToast(`Lunch kosztuje ${CEO_LUNCH_COST} PLN.`, 'error'); return false; }
 
     playerWallet.cash -= CEO_LUNCH_COST;
     corporation.lastMeetings[symbol] = period;
@@ -3277,7 +3277,7 @@ function processInvestorInterest() {
         const amount = investor.cash * 0.05;
         investor.cash -= amount;
         addOutsideSubscription('investor', investor.name, amount);
-        logEvent(`📈 ${investor.name} sam zgłasza się i kupuje JU za ${amount.toFixed(0)} zł.`, 'review');
+        logEvent(`📈 ${investor.name} sam zgłasza się i kupuje udziały za ${amount.toFixed(0)} PLN.`, 'review');
     }
 }
 
@@ -3288,7 +3288,7 @@ const CORPORATE_SUBSCRIPTION_MIN_TRUST = 40; // 0.14.2 P12
 
 /** Spółki z dobrą opinią o graczu lokują nadwyżki gotówki w JU funduszu. */
 function processCorporateSubscriptions() {
-    if (!playerFund || !isFundOpenForSubscriptions()) return; // 0.13.1 (B5): lokaty spółek w JU tylko przy otwartej emisji
+    if (!playerFund || !isFundOpenForSubscriptions()) return; // 0.13.1 (B5): lokaty spółek w udziałach tylko przy otwartej emisji
     if (playerFund.trust < CORPORATE_SUBSCRIPTION_MIN_TRUST) return; // 0.14.2 P12: spółki nie lokują w funduszu bez zaufania
     const flow = getFundFlowStats().current;
     const quarterCap = Math.max(1, flow.startUnits) * getFundNav() * CORPORATE_SUBSCRIPTION_QUARTER_CAP;
@@ -3300,15 +3300,15 @@ function processCorporateSubscriptions() {
         const amount = Math.min(stock.cash * 0.02, getFundAssets() * CORPORATE_SUBSCRIPTION_MAX_SHARE, quarterCap - (Number(flow.corporateIn) || 0));
         if (!(amount > 1)) continue;
         flow.corporateIn = (Number(flow.corporateIn) || 0) + amount;
-        adjustCompanyCash(stock, -amount); // gotówka → inwestycja w JU (aktywa bez zmian)
-        recordPayment(stock, 'player-fund', amount, 'Lokata spółki w JU funduszu');
+        adjustCompanyCash(stock, -amount); // gotówka → inwestycja w udziałach (aktywa bez zmian)
+        recordPayment(stock, 'player-fund', amount, 'Lokata spółki w udziałach funduszu');
         addOutsideSubscription('institution', `${stock.name} (lokata)`, amount);
 
         // Konflikt interesów: duży udział funduszu w akcjach tej samej spółki.
         const fundShare = (playerPortfolio[stock.symbol]?.shares || 0) / Math.max(1, stock.totalShares);
         if (fundShare > 0.05) playerWallet.complianceRisk++;
 
-        logEvent(`🏢 ${stock.name} lokuje ${amount.toFixed(0)} zł w JU Twojego funduszu (dobre relacje z prezesem).`, 'review');
+        logEvent(`🏢 ${stock.name} lokuje ${amount.toFixed(0)} PLN w udziałach Twojego funduszu (dobre relacje z prezesem).`, 'review');
     }
 }
 
@@ -3332,7 +3332,7 @@ function proposeFundTakeover(symbol, forceApproval = null) {
 
     const price = getExternalFirmValuation(stock);
     if (corporation.budget < price) {
-        logEvent(`🗳️ Zarząd odrzuca przejęcie ${getExternalFirmName(stock)}: budżet ${corporation.budget.toFixed(0)} zł < cena ${price} zł.`, 'review');
+        logEvent(`🗳️ Zarząd odrzuca przejęcie ${getExternalFirmName(stock)}: budżet ${corporation.budget.toFixed(0)} PLN < cena ${price} PLN.`, 'review');
         showToast('Za mały budżet korporacji na to przejęcie.', 'error');
         return false;
     }
@@ -3356,7 +3356,7 @@ function proposeFundTakeover(symbol, forceApproval = null) {
         costs: 0,
         reservedBudget: price
     };
-    logEvent(`🗳️ Zarząd zatwierdza przejęcie ${getExternalFirmName(stock)} za ${price} zł. Rozpoczyna się proces (7 etapów).`, 'review');
+    logEvent(`🗳️ Zarząd zatwierdza przejęcie ${getExternalFirmName(stock)} za ${price} PLN. Rozpoczyna się proces (7 etapów).`, 'review');
     return true;
 }
 
@@ -3372,7 +3372,7 @@ function advanceFundTakeover(stock) {
         const cost = Math.round(process.reservedBudget * 0.05);
         corporation.budget -= cost;
         process.costs += cost;
-        logEvent(`⚖️ Komplikacja przy przejęciu ${stock.name}: dodatkowe koszty prawne ${cost} zł.`, 'review');
+        logEvent(`⚖️ Komplikacja przy przejęciu ${stock.name}: dodatkowe koszty prawne ${cost} PLN.`, 'review');
     } else if (roll < 0.11) {
         corporation.budget += process.reservedBudget;
         stock.mergerProcess = null;
@@ -3402,8 +3402,8 @@ function checkMilestones(period) {
     const m = corporation.milestones;
     if (!m.fund100k && getFundAssets() >= 100000) {
         m.fund100k = Date.now();
-        playerProfile.cv.push({ type: 'milestone', text: 'Fundusz przekroczył 100 000 zł aktywów.' });
-        logEvent('🏅 Kamień milowy: fundusz powyżej 100 000 zł!', 'review');
+        playerProfile.cv.push({ type: 'milestone', text: 'Fundusz przekroczył 100 000 PLN aktywów.' });
+        logEvent('🏅 Kamień milowy: fundusz powyżej 100 000 PLN!', 'review');
     }
     const last4 = playerFund.periods.slice(-4);
     if (!m.beatGig4 && last4.length === 4 && last4.every(p => p.fundReturn > p.benchmarkReturn)) {
@@ -3556,7 +3556,7 @@ function getTrustThreshold(character) {
 const SATISFACTION_MEAN = 0.5;          // zadowolenie wraca do średniej (wynik ≈ GIG → neutralnie)
 const SATISFACTION_REVERSION = 0.04;    // tempo powrotu na tydzień
 const SATISFACTION_UNHAPPY = 0.35;
-const FUND_FLOW_WARN_SHARE = 0.10;      // ostrzeżenie: napływ lub odpływ w kwartale > 10% JU
+const FUND_FLOW_WARN_SHARE = 0.10;      // ostrzeżenie: napływ lub odpływ w kwartale > 10% udziałów
 const ORGANIC_INFLOW_BASE = 0.02;       // roczny napływ nowych klientów przy zaufaniu 50 i wyniku = GIG
 const TOPUP_INFLOW_BASE = 0.015;        // roczne dopłaty obecnych klientów przy wyniku = GIG (zależne od wielkości funduszu)
 const FUND_FLOW_OUT_REASONS = { performance: '📉 wynik gorszy od GIG', trust: '🤝 niskie zaufanie', fees: '💸 opłaty', drawdown: '🎢 obsunięcie', noBuyer: '🛒 brak kupca na rynku wtórnym', panic: '😱 panika', ethics: '🌱 etyka spółek', other: '❔ inne' };
@@ -3591,8 +3591,8 @@ function noteFundFlow(direction, reason, value, units) {
         quarter.warned = true;
         const inflow = quarter.inUnits > base * FUND_FLOW_WARN_SHARE;
         const text = inflow
-            ? `📥 Duży napływ do funduszu: +${(quarter.inUnits / base * 100).toFixed(0)}% JU w tym kwartale. Emisję ciągłą możesz zamknąć w panelu funduszu.`
-            : `📤 Duży odpływ z funduszu: −${(quarter.outUnits / base * 100).toFixed(0)}% JU w tym kwartale. Zobacz „Dlaczego klienci odchodzą” w panelu funduszu.`;
+            ? `📥 Duży napływ do funduszu: +${(quarter.inUnits / base * 100).toFixed(0)}% udziałów w tym kwartale. Emisję ciągłą możesz zamknąć w panelu funduszu.`
+            : `📤 Duży odpływ z funduszu: −${(quarter.outUnits / base * 100).toFixed(0)}% udziałów w tym kwartale. Zobacz „Dlaczego klienci odchodzą” w panelu funduszu.`;
         logEvent(text, 'review');
         if (typeof pushNotification === 'function') pushNotification(text, () => { if (typeof showFundFlowPanel === 'function') showFundFlowPanel(); });
     }
@@ -3690,7 +3690,7 @@ function processClientsWeekly() {
             client.pendingSellWeeks++;
             if (client.pendingSellWeeks >= JU_SELL_ORDER_PATIENCE) {
                 if (!unhappy) {
-                    noteClientHistory(client, `Brak kupca na rynku wtórnym — wycofuje ofertę ${client.pendingSellUnits.toFixed(1)} JU i zostaje w funduszu.`);
+                    noteClientHistory(client, `Brak kupca na rynku wtórnym — wycofuje ofertę ${client.pendingSellUnits.toFixed(1)} udziałów i zostaje w funduszu.`);
                     client.pendingSellUnits = 0;
                     client.pendingSellWeeks = 0;
                 } else if (redemptionBudget > 0) {
@@ -3700,7 +3700,7 @@ function processClientsWeekly() {
                     client.pendingSellUnits = 0;
                     client.pendingSellWeeks = 0;
                     noteFundFlow('out', 'noBuyer', paid, units);
-                    noteClientHistory(client, `Brak kupca na rynku wtórnym — umorzenie ${units.toFixed(1)} JU (${paid.toFixed(0)} zł).`);
+                    noteClientHistory(client, `Brak kupca na rynku wtórnym — umorzenie ${units.toFixed(1)} udziałów (${paid.toFixed(0)} PLN).`);
                 }
             }
             continue;
@@ -3717,30 +3717,30 @@ function processClientsWeekly() {
             const paid = redeemClientUnits(client, units);
             redemptionBudget -= units;
             noteFundFlow('out', getDominantOutflowReason(parts, def, fraction), paid, units);
-            noteClientHistory(client, `Niezadowolony — umarza ${units.toFixed(1)} JU (${paid.toFixed(0)} zł).`);
+            noteClientHistory(client, `Niezadowolony — umarza ${units.toFixed(1)} udziałów (${paid.toFixed(0)} PLN).`);
         } else if (satisfied && highTrust) {
-            if (!isFundOpenForSubscriptions() || Math.random() >= def.buyBias * 0.3 || newMoneyBudget <= 0) continue; // 0.13.1 (B5): nowe JU tylko przy otwartej emisji
+            if (!isFundOpenForSubscriptions() || Math.random() >= def.buyBias * 0.3 || newMoneyBudget <= 0) continue; // 0.13.1 (B5): nowe udziały tylko przy otwartej emisji
             const value = Math.min(newMoneyBudget, getRandomInRange(def.size[0], def.size[1]) * 0.4);
             const units = subscribeClient(client, value);
             newMoneyBudget -= value;
             noteFundFlow('in', 'topup', value, units);
-            noteClientHistory(client, `Dokupuje ${units.toFixed(1)} JU za ${value.toFixed(0)} zł.`);
-            pushTape('topup', `${def.icon} ${client.name} dokupuje ${units.toFixed(1)} JU funduszu ${playerProfile.fundName} (${formatPlnShort(value)}).`);
+            noteClientHistory(client, `Dokupuje ${units.toFixed(1)} udziałów za ${value.toFixed(0)} PLN.`);
+            pushTape('topup', `${def.icon} ${client.name} dokupuje ${units.toFixed(1)} udziałów funduszu ${playerProfile.fundName} (${formatPlnShort(value)}).`);
         } else if (satisfied && !highTrust) {
             if (Math.random() >= def.secondaryBias * 0.15) continue; // B5: niskie zaufanie słabiej wypycha zadowolonych
             client.pendingSellUnits = client.units * getRandomInRange(0.2, def.key === 'sly' ? 0.6 : 0.45);
             client.pendingSellWeeks = 0;
-            noteClientHistory(client, `Zadowolony z wyników, ale nie ufa funduszowi — wystawia ${client.pendingSellUnits.toFixed(1)} JU na rynku wtórnym.`);
+            noteClientHistory(client, `Zadowolony z wyników, ale nie ufa funduszowi — wystawia ${client.pendingSellUnits.toFixed(1)} udziałów na rynku wtórnym.`);
         } else if (def.key === 'sly' && (juMarket.stats.player?.history[0]?.premium || 0) > 0.03 && Math.random() < 0.3) {
             client.pendingSellUnits = client.units * getRandomInRange(0.2, 0.5); // realizacja premii
             client.pendingSellWeeks = 0;
-            noteClientHistory(client, 'Premia na rynku wtórnym — wystawia część JU, by zrealizować zysk.');
+            noteClientHistory(client, 'Premia na rynku wtórnym — wystawia część udziałów, by zrealizować zysk.');
         }
     }
 }
 
 function formatPlnShort(value) {
-    return `${Math.round(value).toLocaleString('pl-PL')} zł`;
+    return `${Math.round(value).toLocaleString('pl-PL')} PLN`;
 }
 
 // =================================================================================
@@ -3823,13 +3823,13 @@ function runPlayerJuMarket(fund) {
                 ensureClientProfile(client);
                 buyer.client = client;
                 newClients++;
-                noteClientHistory(client, `Dołącza, kupując JU na rynku wtórnym po ${price.toFixed(2)} zł.`);
+                noteClientHistory(client, `Dołącza, kupując udziały na rynku wtórnym po ${formatNumberPl(price, 2)} PLN.`);
             }
             client.avgCost = (client.avgCost * client.units + units * price) / (client.units + units);
             client.units += units;
             const sellerDef = getClientCharacter(seller);
-            noteClientHistory(seller, `Sprzedaje ${units.toFixed(1)} JU na rynku wtórnym po ${price.toFixed(2)} zł (${(premium * 100).toFixed(1)}% do NAV).`);
-            pushTape('trade', `${sellerDef.icon} ${seller.name} → ${buyer.def.icon} ${client.name}: ${units.toFixed(1)} JU funduszu ${fund.name} po ${price.toFixed(2)} zł (${premium >= 0 ? '+' : ''}${(premium * 100).toFixed(1)}%).`);
+            noteClientHistory(seller, `Sprzedaje ${formatNumberPl(units, 1)} udziałów na rynku wtórnym po ${formatNumberPl(price, 2)} PLN (${formatNumberPl((premium * 100), 1)}% do NAV).`);
+            pushTape('trade', `${sellerDef.icon} ${seller.name} → ${buyer.def.icon} ${client.name}: ${formatNumberPl(units, 1)} udziałów funduszu ${fund.name} po ${formatNumberPl(price, 2)} PLN (${premium >= 0 ? '+' : ''}${formatNumberPl((premium * 100), 1)}%).`);
             if (buyer.value < price) buyers.shift();
         }
         if (seller.pendingSellUnits <= 0.01) { seller.pendingSellUnits = 0; seller.pendingSellWeeks = 0; }
@@ -3852,7 +3852,7 @@ function runPlayerJuMarket(fund) {
         }
         const units = subscribeClient(client, value);
         noteFundFlow('in', 'newClients', value, units);
-        noteClientHistory(client, `Wpłaca ${value.toFixed(0)} zł (${units.toFixed(1)} JU po NAV).`);
+        noteClientHistory(client, `Wpłaca ${value.toFixed(0)} PLN (${units.toFixed(1)} udziałów po NAV).`);
         inflow += value;
         budget -= value;
     }
@@ -3929,7 +3929,7 @@ function runSyntheticJuMarket(fund) {
         const seller = CLIENT_TYPES[randomCharacter(100 - fund.trust)];
         const buyer = CLIENT_TYPES[randomCharacter(fund.trust)];
         const units = Math.max(1, Math.round(volume * getRandomInRange(0.05, 0.3)));
-        pushTape('trade', `${seller.icon} ${randomClientPersonName()} → ${buyer.icon} ${randomClientPersonName()}: ${units} JU funduszu ${fund.name} (${premium >= 0 ? '+' : ''}${(premium * 100).toFixed(1)}%).`);
+        pushTape('trade', `${seller.icon} ${randomClientPersonName()} → ${buyer.icon} ${randomClientPersonName()}: ${units} udziałów funduszu ${fund.name} (${premium >= 0 ? '+' : ''}${(premium * 100).toFixed(1)}%).`);
     }
 }
 

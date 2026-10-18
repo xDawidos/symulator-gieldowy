@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stock Market Trader Game</title>
+    <title>Capital Quest</title>
+    <link rel="icon" type="image/svg+xml" href="img/logo/favicon.svg">
+    <link rel="stylesheet" href="tokens.css">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,119 +13,101 @@
     <div class="app-shell">
   <aside class="app-sidebar" id="app-sidebar">
     <div class="sidebar-brand">
-      <div class="sidebar-logo">📈</div>
+      <img class="sidebar-logo" src="img/logo/capital-quest-znak.svg" width="36" height="36" alt="">
       <div>
-        <div class="sidebar-title">Stock Market Trader Game</div>
-        <div class="sidebar-subtitle">panel główny</div>
+        <div class="sidebar-title">Capital Quest</div>
+        <div class="sidebar-subtitle" id="sidebar-fund-name">Twój fundusz</div>
       </div>
     </div>
 
-    <nav class="sidebar-nav">
+    <nav class="sidebar-nav" aria-label="Menu gry">
+      <div class="nav-group" role="presentation">Świat</div>
       <button class="sidebar-nav-btn" id="open-bank-btn" onclick="openBankModal()">
-        <span class="nav-icon">🏦</span>
+        <svg class="ic nav-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10h18M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18M12 3l9 5H3z"/></svg>
         <span class="nav-label">Bank</span>
       </button>
-
       <button class="sidebar-nav-btn" id="open-state-btn" onclick="openStateModal()">
-        <span class="nav-icon">🏛️</span>
+        <svg class="ic nav-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21h16M6 21V11M18 21V11M10 21v-6h4v6M3 11h18L12 4z"/></svg>
         <span class="nav-label">Państwo</span>
       </button>
-
-      <button class="sidebar-nav-btn" id="open-city-btn" onclick="openCityInvestmentModal()">
-        <span class="nav-icon">🏙️</span>
-        <span class="nav-label">Miasto</span>
-      </button>
-
       <button class="sidebar-nav-btn" id="open-country-btn" onclick="openCountryPanel()">
-        <span class="nav-icon">👥</span>
+        <svg class="ic nav-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9S14.5 18.4 12 21c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg>
         <span class="nav-label">Kraj</span>
       </button>
-
+      <button class="sidebar-nav-btn" id="open-city-btn" onclick="openCityInvestmentModal()">
+        <svg class="ic nav-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18M5 21V8l5-3v16M10 21V10h9v11M13 13h3M13 16h3"/></svg>
+        <span class="nav-label">Miasto</span>
+      </button>
       <button class="sidebar-nav-btn" id="open-construction-btn" onclick="openConstructionSectorModal()">
-        <span class="nav-icon">🏗️</span>
+        <svg class="ic nav-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18M6 21V9h12v12M4 9l8-6 8 6M10 13h4v8h-4z"/></svg>
         <span class="nav-label">Budownictwo</span>
       </button>
-
-      <button class="sidebar-nav-btn" id="open-skills-btn" onclick="openSkillsModal()">
-        <span class="nav-icon">🎓</span>
-        <span class="nav-label">CV i szkolenia</span>
+      <div class="nav-group" role="presentation">Moja firma</div>
+      <button class="sidebar-nav-btn" id="open-firm-btn" onclick="openCorporationModal('firm')">
+        <svg class="ic nav-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5a1 1 0 0 1 1-1h9v17M14 9h5a1 1 0 0 1 1 1v11M8 8h2M8 12h2M8 16h2M3 21h18"/></svg>
+        <span class="nav-label">Firma</span>
       </button>
-
-            <button class="sidebar-nav-btn has-badge" id="open-mail-btn" onclick="openMailbox()">
-                <span class="nav-icon">📧</span>
-                <span class="nav-label">Poczta</span>
-                <span class="nav-badge" hidden>0</span>
-            </button>
-
-            <button class="sidebar-nav-btn" id="open-pawnshop-btn" onclick="openPawnShopPanel()">
-                <span class="nav-icon">🏦</span>
-                <span class="nav-label">Lombard</span>
-            </button>
-
-            <button class="sidebar-nav-btn" id="open-leaderboard-btn" onclick="openLeaderboardModal()">
-                <span class="nav-icon">🏆</span>
-                <span class="nav-label">Ranking</span>
-            </button>
-
-            <button class="sidebar-nav-btn" id="open-firm-btn" onclick="openCorporationModal('firm')">
-                <span class="nav-icon">🏢</span>
-                <span class="nav-label">Firma</span>
-            </button>
-
-            <button class="sidebar-nav-btn" id="open-grey-btn" onclick="openGreyZone()">
-                <span class="nav-icon">🕶️</span>
-                <span class="nav-label">Szara strefa</span>
-            </button>
-
-            <button class="sidebar-nav-btn" id="open-clients-btn" onclick="openJuMarket()">
-                <span class="nav-icon">👥</span>
-                <span class="nav-label">Klienci i rynek JU</span>
-            </button>
-
-            <button class="sidebar-nav-btn" id="open-settings-btn" onclick="openSettingsModal()">
-                <span class="nav-icon">⚙️</span>
-                <span class="nav-label">Ustawienia</span>
-            </button>
+      <button class="sidebar-nav-btn" id="open-clients-btn" onclick="openJuMarket()">
+        <svg class="ic nav-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21a7 7 0 0 1 14 0M17 11a3 3 0 1 0 0-6M22 21a6 6 0 0 0-4-5.6"/></svg>
+        <span class="nav-label">Klienci i udziały</span>
+      </button>
+      <button class="sidebar-nav-btn" id="open-pawnshop-btn" onclick="openPawnShopPanel()">
+        <svg class="ic nav-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M7 7h7.5a3 3 0 0 1 0 6H9a3 3 0 0 0 0 6h8"/></svg>
+        <span class="nav-label">Lombard</span>
+      </button>
+      <button class="sidebar-nav-btn" id="open-grey-btn" onclick="openGreyZone()">
+        <svg class="ic nav-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/></svg>
+        <span class="nav-label">Szara strefa</span>
+      </button>
+      <div class="nav-group" role="presentation">Ja</div>
+      <button class="sidebar-nav-btn has-badge" id="open-mail-btn" onclick="openMailbox()">
+        <svg class="ic nav-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v12H3zM3 7l9 6 9-6"/></svg>
+        <span class="nav-label">Poczta</span>
+        <span class="nav-badge" hidden>0</span>
+      </button>
+      <button class="sidebar-nav-btn" id="open-skills-btn" onclick="openSkillsModal()">
+        <svg class="ic nav-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 9l10-5 10 5-10 5zM6 11v5c3 2 9 2 12 0v-5M22 9v6"/></svg>
+        <span class="nav-label">CV i Akademia</span>
+      </button>
+      <button class="sidebar-nav-btn" id="open-leaderboard-btn" onclick="openLeaderboardModal()">
+        <svg class="ic nav-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4"/></svg>
+        <span class="nav-label">Ranking</span>
+      </button>
+      <button class="sidebar-nav-btn" id="open-settings-btn" onclick="openSettingsModal()">
+        <svg class="ic nav-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>
+        <span class="nav-label">Ustawienia</span>
+      </button>
     </nav>
   </aside>
 
   <div class="app-main">
     <header class="topbar" id="topbar">
+  <button class="mobile-nav-toggle icon-btn" type="button" aria-label="Menu gry"
+          aria-controls="app-sidebar" onclick="document.body.classList.toggle('sidebar-open')"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
 
-  <!-- Lewa: hamburger + tytuł ekranu + status -->
-  <div class="topbar-left">
-    <button class="mobile-nav-toggle" type="button"
-            onclick="document.body.classList.toggle('sidebar-open')">☰</button>
-    <div class="topbar-screen-title">
-      <h1>Stock Market Trader Game</h1>
-      <div class="topbar-version">wersja 0.12 nauka</div>
-    </div>
-  </div>
-
-  <div class="topbar-sep"></div>
-
-  <!-- KPI środek -->
+  <!-- KPI: gotówka funduszu, NAV / udział, konto prywatne, zaufanie -->
   <div class="topbar-kpi-group">
     <div class="topbar-kpi">
       <span class="topbar-kpi-label">Gotówka funduszu</span>
       <span class="topbar-kpi-val" id="cash">10 000,00 PLN</span>
     </div>
     <div class="topbar-kpi">
-      <span class="topbar-kpi-label">NAV / JU</span>
-      <span class="topbar-kpi-val" id="topbar-portfolio-value">10,00</span>
+      <span class="topbar-kpi-label">NAV / udział</span>
+      <span class="topbar-kpi-val" id="topbar-portfolio-value">10,0000 PLN</span>
     </div>
     <div class="topbar-kpi">
-      <span class="topbar-kpi-label">Moje pieniądze</span>
-      <span class="topbar-kpi-val" id="topbar-daily-pnl">100,00</span>
+      <span class="topbar-kpi-label">Konto prywatne</span>
+      <span class="topbar-kpi-val" id="topbar-daily-pnl">100,00 PLN</span>
+    </div>
+    <div class="topbar-kpi">
+      <span class="topbar-kpi-label">Zaufanie klientów</span>
+      <span class="topbar-kpi-val" id="topbar-trust">—</span>
     </div>
   </div>
 
-  <div class="topbar-sep"></div>
-
-  <!-- Segmented control prędkości -->
-  <div class="d-flex items-center gap-2 shrink-0" id="time-controls">
-    <span class="topbar-kpi-label">Prędkość</span>
-    <div class="speed-segmented">
+  <div class="topbar-controls" id="time-controls">
+    <span class="topbar-date" id="topbar-date"></span>
+    <div class="speed-segmented" role="radiogroup" aria-label="Prędkość gry">
       <button class="speed-btn active" data-speed="1" onclick="setGameSpeed(1)">x1</button>
       <button class="speed-btn" data-speed="2" onclick="setGameSpeed(2)">x2</button>
       <button class="speed-btn" data-speed="5" onclick="setGameSpeed(5)">x5</button>
@@ -132,15 +116,17 @@
       <button class="speed-btn debug-only" data-speed="100" onclick="setGameSpeed(100)" hidden title="Prędkość testowa (bez zapisu prędkości)">x100</button>
       <button class="speed-btn debug-only" data-speed="200" onclick="setGameSpeed(200)" hidden title="Prędkość testowa (bez zapisu prędkości)">x200</button>
     </div>
-  </div>
-
-  <!-- CTA -->
-  <div class="topbar-cta-group">
     <button id="pause-game-btn" class="btn-pause" onclick="togglePauseGame()">Wznów</button>
-    <button class="btn-secondary" onclick="saveGame()">Zapisz</button>
-    <button class="btn-secondary" onclick="exportSaveFile()" title="Pobierz zapis gry jako plik .json (kopia zapasowa, przeniesienie na inny komputer)">💾 Eksport</button>
-    <button class="btn-danger" onclick="resetGame()">Reset</button>
-    <button class="btn-secondary" onclick="openBankModal()">📊 Rynek</button>
+    <div class="topbar-menu-wrap">
+      <button class="icon-btn" id="topbar-menu-btn" type="button" aria-label="Menu: zapis, ustawienia, nowa gra" aria-haspopup="menu" aria-expanded="false" onclick="toggleTopbarMenu()"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zM13.5 12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zM21 12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/></svg></button>
+      <div class="topbar-menu" id="topbar-menu" role="menu" hidden>
+        <button role="menuitem" onclick="closeTopbarMenu(); saveGame()">Zapisz grę</button>
+        <button role="menuitem" onclick="closeTopbarMenu(); exportSaveFile()" title="Plik .json: kopia zapasowa albo przeniesienie na inny komputer">Eksportuj zapis (.json)</button>
+        <button role="menuitem" onclick="closeTopbarMenu(); openSettingsModal()">Ustawienia</button>
+        <hr>
+        <button role="menuitem" class="is-danger" onclick="closeTopbarMenu(); requestNewGame()">Nowa gra…</button>
+      </div>
+    </div>
   </div>
 
 </header>
@@ -152,13 +138,13 @@
         </div>
 
             <div id="startup-incubator-panel" class="panel">
-                <h2 class="clickable d-flex justify-between items-center" onclick="toggleStartupPanelVisibility()">
-                    Giełda NewHorizons🚀
-                    <span id="toggle-icon-startup">▼</span>
+                <h2 class="panel-head">
+                    <button class="panel-toggle" type="button" onclick="toggleStartupPanelVisibility()">Giełda NewHorizons <span id="toggle-icon-startup" aria-hidden="true">▼</span></button>
+                    <span class="market-kpi-row">start-upy · inkubator i pula</span>
                 </h2>
 
                 <p id="startup-fund-limit" class="bank-lead startup-panel-content"></p>
-                <div id="investment-pool-panel" class="panel startup-panel-content"> <h2>Pula Inwestycyjna Start-upów 🏊</h2>
+                <div id="investment-pool-panel" class="panel startup-panel-content"> <h2>Pula start-upów</h2>
                     <p>Wpłacaj środki do wspólnej puli, która automatycznie inwestuje w obiecujące projekty. Zyski dzielone są proporcjonalnie!</p>
                     <div class="d-flex justify-around items-center">
                         <div>
@@ -173,7 +159,7 @@
                                 <input class="w-md" type="number" id="pool-contribution-amount" placeholder="Wpłać do puli">
                                 <button onclick="contributeToInvestmentPool('player', document.getElementById('pool-contribution-amount').valueAsNumber)">Wpłać</button>
                                 <button class="ml-2" id="pool-withdraw-btn" onclick="withdrawFromPool(document.getElementById('pool-contribution-amount').valueAsNumber || investmentPool.contributors.player || 0)" title="Wycofuje niezainwestowane środki (kwota z pola albo całość); opłata 2% dla pozostałych uczestników">Wycofaj z puli</button>
-                                <button class="ml-2" id="open-autoinvest-modal-btn">🤖 Ustawienia Auto</button>
+                                <button class="ml-2" id="open-autoinvest-modal-btn">Automat inwestycji</button>
                                 <div class="text-sm text-muted mt-1" id="autoinvest-status"></div>
                             </div>
                         </div>
@@ -201,54 +187,48 @@
             
 
 <div id="market" class="panel">
-    <h2 class="d-flex justify-between items-center"><span class="clickable" onclick="toggleSection('market')" title="Zwiń / rozwiń rynek akcji">Rynek Akcji <span id="toggle-icon-market">▼</span></span> <button class="btn-secondary btn-xs" onclick="openScanner()" title="Filtruj spółki po wskaźnikach (szkolenie Analityk Finansowy)">🔎 Skaner spółek</button></h2>
+    <h2 class="panel-head">
+      <button class="panel-toggle" type="button" onclick="toggleSection('market')" aria-controls="market-content" title="Zwiń / rozwiń rynek akcji">Rynek akcji <span id="toggle-icon-market" aria-hidden="true">▼</span></button>
+      <!-- 0.14.5: liczba spółek i najsilniejszy sektor w jednej linii (updateMarketKPIs) -->
+      <span class="market-kpi-row">
+        <span class="market-kpi-card"><span class="mkpi-value" id="mkpi-active">—</span> <span class="mkpi-label">spółek</span></span>
+        <span class="market-kpi-card" id="popular-sector-card"><span class="mkpi-label">najsilniejszy sektor:</span> <span class="mkpi-value" id="mkpi-top-sector">—</span> <span class="mkpi-sub" id="mkpi-top-sector-sub"></span></span>
+      </span>
+      <button class="btn-secondary btn-sm" id="open-scanner-btn" onclick="openScanner()" title="Filtruj spółki po wskaźnikach (szkolenie Analityk finansowy)"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM21 21l-5-5"/></svg> Skaner spółek</button>
+    </h2>
     <div id="market-content"><!-- 0.14.2 P8: zwijany rynek akcji -->
 
-    <!-- 4 mini-karty KPI -->
-    <div class="market-kpi-row">
-      <div class="market-kpi-card">
-        <span class="mkpi-label">Spółki aktywne</span>
-        <span class="mkpi-value" id="mkpi-active">—</span>
-        <span class="mkpi-sub">na rynku dziś</span>
-      </div>
-      <div class="market-kpi-card" id="popular-sector-card">
-        <span class="mkpi-label">Najsilniejszy sektor</span>
-        <span class="mkpi-value" id="mkpi-top-sector">—</span>
-        <span class="mkpi-sub" id="mkpi-top-sector-sub">średnia zmiana dziś</span>
-      </div>
-    </div>
-
-    <!-- Chipsy sektorów -->
-    <div class="sector-chips" id="sector-chips">
-      <span class="sector-chip owned-chip" onclick="toggleOwnedFilter(this)" title="Pokaż tylko spółki, które masz w funduszu lub na koncie prywatnym">⭐ Posiadane</span>
+    <!-- Chipy sektorów -->
+    <div class="sector-chips" id="sector-chips" role="group" aria-label="Filtr sektorów">
+      <button type="button" class="sector-chip owned-chip" aria-pressed="false" onclick="toggleOwnedFilter(this)" title="Pokaż tylko spółki, które masz w funduszu lub na koncie prywatnym"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg> Posiadane</button>
       <!-- 0.14 T1c: chipy sektorów pogrupowane z liczbą spółek (renderSectorFilters) -->
     </div>
     <div class="sector-filter-extra" id="sector-filter-extra"></div>
 
-    <!-- Poziomy rynku jako taby -->
-    <div class="market-level-tabs">
+    <!-- Poziomy rynku jako taby (0.14.5: kwadrat w kolorze rangi zamiast emoji) -->
+    <div class="market-level-tabs" role="group" aria-label="Giełda">
       <button class="market-level-tab active" data-level="ALL"
               onclick="setMarketLevel(this,'ALL')">Wszystkie</button>
       <button class="market-level-tab" data-level="JUNK"
-              onclick="setMarketLevel(this,'JUNK')">♻ Śmieciowa</button>
+              onclick="setMarketLevel(this,'JUNK')"><span class="exchange-dot" style="--dot: var(--exchange-junk)" aria-hidden="true"></span>Śmieciowa</button>
       <button class="market-level-tab" data-level="BRONZE"
-              onclick="setMarketLevel(this,'BRONZE')">🥉 Brązowa</button>
+              onclick="setMarketLevel(this,'BRONZE')"><span class="exchange-dot" style="--dot: var(--exchange-bronze)" aria-hidden="true"></span>Brązowa</button>
       <button class="market-level-tab" data-level="SILVER"
-              onclick="setMarketLevel(this,'SILVER')">🥈 Srebrna</button>
+              onclick="setMarketLevel(this,'SILVER')"><span class="exchange-dot" style="--dot: var(--exchange-silver)" aria-hidden="true"></span>Srebrna</button>
       <button class="market-level-tab" data-level="GOLD"
-              onclick="setMarketLevel(this,'GOLD')">🥇 Złota</button>
+              onclick="setMarketLevel(this,'GOLD')"><span class="exchange-dot" style="--dot: var(--exchange-gold)" aria-hidden="true"></span>Złota</button>
       <button class="market-level-tab" data-level="PLATINUM"
-              onclick="setMarketLevel(this,'PLATINUM')">💎 Platynowa</button>
+              onclick="setMarketLevel(this,'PLATINUM')"><span class="exchange-dot" style="--dot: var(--exchange-platinum)" aria-hidden="true"></span>Platynowa</button>
       <button class="market-level-tab" data-level="RUBY"
-              onclick="setMarketLevel(this,'RUBY')">🔴 Rubinowa</button>
+              onclick="setMarketLevel(this,'RUBY')"><span class="exchange-dot" style="--dot: var(--exchange-ruby)" aria-hidden="true"></span>Rubinowa</button>
       <button class="market-level-tab" data-level="EMERALD"
-              onclick="setMarketLevel(this,'EMERALD')">🟢 Szmaragdowa</button>
+              onclick="setMarketLevel(this,'EMERALD')"><span class="exchange-dot" style="--dot: var(--exchange-emerald)" aria-hidden="true"></span>Szmaragdowa</button>
       <button class="market-level-tab" data-level="DIAMOND"
-              onclick="setMarketLevel(this,'DIAMOND')">💠 Diamentowa</button>
-      <button class="market-level-tab" data-level="INTERNET"
-              onclick="setMarketLevel(this,'INTERNET')" title="Rynki internetowe (XTD, PLU5 i nowe) i ich spółki">🌐 Internet</button>
+              onclick="setMarketLevel(this,'DIAMOND')"><span class="exchange-dot" style="--dot: var(--exchange-diamond)" aria-hidden="true"></span>Diamentowa</button>
+      <button class="market-level-tab" data-level="INTERNET" title="Rynki internetowe (XTD, PLU5 i nowe) i ich spółki"
+              onclick="setMarketLevel(this,'INTERNET')"><span class="exchange-dot" style="--dot: var(--exchange-internet)" aria-hidden="true"></span>Internetowa</button>
       <button class="market-level-tab" id="open-dividend-tracker-btn"
-              onclick="openDividendTrackerModal()" title="Panel Analityka Dywidend">💰 Dywidendy</button>
+              onclick="openDividendTrackerModal()" title="Panel analityka dywidend">Dywidendowe</button>
     </div>
 
     <!-- Ukryty select — zachowany dla kompatybilności z JS -->
@@ -261,13 +241,12 @@
     <table id="stock-table">
       <thead>
         <tr>
-          <th class="w-md">Spółka</th>
-          <th class="clickable w-sm" id="price-header-cell" onclick="togglePriceSort()"
-             >Cena PLN</th>
-          <th title="Zmiana kursu od zamknięcia poprzedniego tygodnia gry">Zmiana tydz.</th>
-          <th>Wolumen / dostępne</th>
-          <th>Moje akcje</th>
-          <th class="w-xs">Akcja</th>
+          <th class="col-name">Spółka</th>
+          <th class="col-price" id="price-header-cell" aria-sort="none"><button type="button" class="th-sort" onclick="togglePriceSort()">Kurs</button></th>
+          <th class="col-change" title="Zmiana kursu od zamknięcia poprzedniego tygodnia gry">Zmiana tydz.</th>
+          <th class="col-avail">Dostępne akcje</th>
+          <th class="col-owned">Moje</th>
+          <th class="col-actions"><span class="sr-only">Działania</span></th>
         </tr>
       </thead>
       <tbody id="stock-table-body"></tbody>
@@ -300,22 +279,22 @@
 
     <!-- Przełącznik konta handlu -->
     <div class="fund-account-switch" role="group" aria-label="Konto handlu">
-      <button id="account-btn-fund" class="fund-account-btn active" onclick="setTradingAccount('fund')">🏦 Fundusz</button>
-      <button id="account-btn-private" class="fund-account-btn" onclick="setTradingAccount('private')">🧍 Prywatne</button>
+      <button id="account-btn-fund" class="fund-account-btn active" onclick="setTradingAccount('fund')">Fundusz</button>
+      <button id="account-btn-private" class="fund-account-btn" onclick="setTradingAccount('private')">Konto prywatne</button>
     </div>
 
-    <!-- Fundusz: NAV, JU, zaufanie, klienci, emisja -->
+    <!-- Fundusz: NAV, udziały, zaufanie, klienci, emisja -->
     <div id="fund-summary" class="fund-summary"></div>
     <div class="fund-emission">
-      <input type="number" id="fund-emission-units" min="1" value="100" aria-label="Liczba JU do emisji">
-      <button class="btn-secondary" id="fund-emission-btn" onclick="handleFundEmission()">📥 Emisja JU</button>
+      <input type="number" id="fund-emission-units" min="1" value="100" aria-label="Liczba udziałów do emisji">
+      <button class="btn-secondary" id="fund-emission-btn" onclick="handleFundEmission()">Wyemituj udziały</button>
     </div>
     <p id="fund-emission-info" class="fund-muted text-xs"></p>
-    <label class="fund-open-subscriptions text-sm" title="Gdy włączone, zadowoleni i nowi klienci sami dokupują JU po NAV (nowe jednostki). Wyłączone: JU przybywa tylko przez Twoją emisję.">
-      <input type="checkbox" id="fund-open-subscriptions" onchange="setFundOpenSubscriptions(this.checked)"> Emisja ciągła (wpłaty klientów bez mojej emisji)
+    <label class="fund-open-subscriptions text-sm" title="Gdy włączone, zadowoleni i nowi klienci sami dokupują udziały po NAV (nowe udziały). Wyłączone: udziałów przybywa tylko przez Twoją emisję.">
+      <input type="checkbox" id="fund-open-subscriptions" onchange="setFundOpenSubscriptions(this.checked)"> Emisja ciągła — klienci sami dokupują udziały
     </label>
     <details id="fund-flow-details" class="fund-flow-details">
-      <summary class="text-sm">👥 Dlaczego klienci odchodzą / przychodzą</summary>
+      <summary class="text-sm">Skąd przychodzą i dlaczego odchodzą klienci</summary>
       <div id="fund-flow-reasons"></div>
     </details>
 
@@ -325,23 +304,23 @@
     <div id="fund-rivals-table"></div>
 
     <details class="fund-details">
-      <summary>👥 Klienci funduszu</summary>
-      <button class="btn-secondary text-sm mb-2" onclick="openJuMarket()">Otwórz rynek JU i karty klientów</button>
+      <summary>Klienci funduszu</summary>
+      <button class="btn-secondary text-sm mb-2" onclick="openJuMarket()">Otwórz klientów i rynek udziałów</button>
       <div id="fund-clients-list"></div>
     </details>
 
     <details class="fund-details" id="fund-private-section">
-      <summary>🧍 Konto prywatne</summary>
+      <summary>Konto prywatne</summary>
       <div id="fund-private-panel"></div>
     </details>
 
     <details class="fund-details" id="fund-pawn-section">
-      <summary>🏦 Lombard (zastaw akcji)</summary>
+      <summary>Lombard (zastaw akcji)</summary>
       <div id="fund-pawn-panel"></div>
     </details>
 
     <details class="fund-details" id="fund-career-section" open>
-      <summary>🏢 Kariera w korporacji</summary>
+      <summary>Kariera</summary>
       <div id="fund-career-panel"></div>
     </details>
 
@@ -363,7 +342,7 @@
         <span class="portfolio-kpi-sub">PLN całkowity</span>
       </div>
       <div class="portfolio-kpi-card">
-        <span class="portfolio-kpi-label">Moje pieniądze</span>
+        <span class="portfolio-kpi-label">Konto prywatne</span>
         <span class="portfolio-kpi-value" id="player-xp">100,00</span>
         <span class="portfolio-kpi-sub">zł prywatnie (szkolenia)</span>
       </div>
@@ -385,18 +364,16 @@
 
     <!-- Donut sektorów -->
     <div class="sector-donut-placeholder" id="sector-donut-area">
-      📊 Podział sektorowy portfela (załaduj akcje, aby zobaczyć)
+      Podział sektorowy pojawi się po zakupie pierwszych akcji.
     </div>
 
     <!-- Moje Pasywa — akcentbursztyn -->
     <div class="liabilities-section">
-      <div class="portfolio-section-header">⚠ Moje Pasywa</div>
+      <div class="portfolio-section-header">Zobowiązania</div>
       <ul class="list-plain p-0 m-0" id="my-liabilities-list"></ul>
       <div class="d-flex gap-1 mt-2">
-        <button onclick="openPawnShopPanel()" class="btn-secondary">🏦 Lombard</button>
-        <button onclick="openDebtCollectorPanel()" class="btn-secondary">
-          ⚠️ Windykator
-        </button>
+        <button onclick="openPawnShopPanel()" class="btn-secondary btn-sm">Lombard</button>
+        <button onclick="openDebtCollectorPanel()" class="btn-secondary btn-sm">Windykator</button>
       </div>
     </div>
 </div>
@@ -408,38 +385,34 @@
     <div id="settings-modal" class="modal modal-sm" style="display: none;">
         <div class="d-flex justify-between items-center divider-bottom pb-2">
             <h3 class="m-0">Ustawienia</h3>
+            <span class="text-muted text-sm" id="settings-version">Capital Quest 0.14.5</span>
             <button class="close-btn" onclick="closeSettingsModal()" aria-label="Zamknij">&times;</button>
-        </div>
-        <div class="text-center pt-4">
-            <p>Zmień wygląd interfejsu.</p>
-            <button class="btn-lg text-lg" id="theme-toggle-btn-modal" onclick="toggleDarkMode()">Zmień motyw</button>
         </div>
         <div id="save-panel" class="save-panel pt-4"></div>
         <div class="debug-settings">
-            <button id="debug-toggle-btn" onclick="toggleDebugMode()">🛠️ Tryb debug: wyłączony</button>
+            <button id="debug-toggle-btn" onclick="toggleDebugMode()">Tryb debug: wyłączony</button>
             <div id="debug-tools" class="debug-tools" hidden>
                 <button onclick="debugAddWallet(1000)">+1 000 zł prywatnie</button>
                 <button onclick="debugAddFund(10000)">+10 000 zł do funduszu</button>
                 <button onclick="debugEndPeriod()">Zakończ okres funduszu</button>
                 <button onclick="debugBoardReview()">Ocena zarządu teraz</button>
                 <button onclick="debugCheckInvariants()">Sprawdź spójność świata</button>
-                <button id="debug-skip-intro-btn" onclick="toggleIntroSkip()">⏭️ Pomijaj scenkę z babcią: nie</button>
+                <button id="debug-skip-intro-btn" onclick="toggleIntroSkip()">Pomijaj scenkę z babcią: nie</button>
             </div>
         </div>
     </div>
 
     <div id="price-chart-modal" class="modal modal-sm" style="display: none;">
         <button class="close-btn" onclick="closePriceChartModal()" aria-label="Zamknij">&times;</button>
-        <h3 class="mt-0 text-center" id="chart-title">Historia Cen</h3>
+        <h3 class="mt-0" id="chart-title">Wykres</h3>
         <div class="w-full chart-area mb-2" id="chart-svg-area"></div>
         <div class="d-flex justify-between items-center mb-3">
-            <div class="chart-controls-group">
-                <span>Typ wykresu:</span>
-                <img class="icon-btn clickable va-middle" id="chart-type-candlestick-btn" src="img/slupki.png" alt="Wykres Świecowy" title="Pokaż wykres świecowy">
-                <img class="icon-btn clickable ml-1 va-middle" id="chart-type-line-btn" src="img/wykres.png" alt="Wykres Liniowy" title="Pokaż wykres liniowy">
+            <div class="chart-controls-group speed-segmented" role="radiogroup" aria-label="Typ wykresu">
+                <button type="button" class="speed-btn" id="chart-type-candlestick-btn" title="Pokaż wykres świecowy"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16M7 8h-2v8h2M17 4v16M17 6h-2v6h2M12 7v12M12 10h2v5h-2"/></svg> Świece</button>
+                <button type="button" class="speed-btn" id="chart-type-line-btn" title="Pokaż wykres liniowy"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-6"/></svg> Linia</button>
             </div>
             <div class="chart-controls-group">
-                <span>Interwał:</span>
+                <label for="line-chart-interval-select">Okres:</label>
                 <select class="va-middle" id="line-chart-interval-select" style="display: none;">
                     <option value="1000">1 sekunda</option>
                     <option value="5000">5 sekund</option>
@@ -456,33 +429,33 @@
                     <option value="300000">5 minut</option>
                     <option value="600000">10 minut</option>
                 </select>
-                <button class="text-xl px-1 va-middle ml-2" id="open-alert-modal-btn" title="Ustaw alerty cenowe">⏰</button>
+                <button class="icon-btn ml-2" id="open-alert-modal-btn" title="Ustaw alerty cenowe" aria-label="Alerty cenowe"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0"/></svg></button>
             </div>
         </div>
     </div>
 
     <div class="modal modal-xl" id="skills-modal" style="display: none;">
         <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
-        <h2 class="mt-0 text-center">🎓 CV i szkolenia</h2>
-        <p class="text-center divider-bottom pb-2">Moje pieniądze: <span id="skills-modal-xp">0</span> zł</p>
+        <h2 class="mt-0 text-center">CV i szkolenia</h2>
+        <p class="text-center divider-bottom pb-2">Konto prywatne: <span id="skills-modal-xp">0</span> PLN</p>
         <div id="skills-list"></div>
     </div>
 
     <div id="bank-modal" class="modal modal-xl bank-window" style="display: none;">
     <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
     <header class="bank-hero">
-        <div class="bank-emblem" aria-hidden="true">🏛️</div>
+        <div class="bank-emblem" aria-hidden="true"><svg class="ic" width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10h18M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18M12 3l9 5H3z"/></svg></div>
         <div>
             <div class="bank-hero-kicker">System bankowy · obsługa funduszy</div>
-            <h2 class="bank-hero-title">Centrum Bankowe</h2>
+            <h2 class="bank-hero-title">Centrum bankowe</h2>
         </div>
     </header>
     <div class="bank-ticker" id="bank-ticker"></div>
 
     <nav class="bank-tabs" role="tablist">
-        <button id="tab-btn-central" class="bank-tab-btn active" onclick="switchBankTab('central')">🏛️ Bank Centralny</button>
-        <button id="tab-btn-commercial" class="bank-tab-btn" onclick="switchBankTab('commercial')">🏦 Banki i lokaty</button>
-        <button id="tab-btn-bonds" class="bank-tab-btn" onclick="switchBankTab('bonds')">📜 Obligacje</button>
+        <button id="tab-btn-central" class="bank-tab-btn active" onclick="switchBankTab('central')">Bank Centralny</button>
+        <button id="tab-btn-commercial" class="bank-tab-btn" onclick="switchBankTab('commercial')">Banki i lokaty</button>
+        <button id="tab-btn-bonds" class="bank-tab-btn" onclick="switchBankTab('bonds')">Obligacje</button>
     </nav>
 
     <div id="bank-content-central" class="bank-tab-content">
@@ -492,14 +465,14 @@
             </div>
 
         <div id="state-offer-section" class="bank-section">
-             <h4>🏛️ Oferta do Skarbu Państwa</h4>
+             <h4>Oferta dla Skarbu Państwa</h4>
              <p class="text-sm">Złóż ofertę kupna akcji...</p>
              <div id="state-offer-controls">
                 <label for="state-company-select">Wybierz spółkę:</label>
                 <select id="state-company-select" onchange="updateStateOfferInfo()"></select>
                 <label class="ml-2" for="state-offer-quantity">Liczba akcji:</label>
                 <input class="w-xs" type="number" id="state-offer-quantity" min="1" value="1" oninput="updateStateOfferInfo()">
-                <button class="ml-2" onclick="makeOfferToState()">Złóż Ofertę</button>
+                <button class="ml-2" onclick="makeOfferToState()">Złóż ofertę</button>
              </div>
              <div class="mt-2 text-sm" id="state-offer-info">
                 <p class="my-1">Szacowany koszt: <strong id="state-offer-cost">0.00 PLN</strong></p>
@@ -507,21 +480,21 @@
              </div>
         </div>
         <div id="t-bill-auction-section" class="bank-section divider-top-info mt-3 pt-3" style="display: none;">
-             <h4>🔔 Aukcja Bonów Skarbowych! (Wykup: 1000 PLN)</h4>
+             <h4>Aukcja bonów skarbowych · wykup 1 000 PLN</h4>
              <p>Liczba dostępnych bonów: <strong id="t-bill-auction-available">0</strong></p>
              <p>Koniec aukcji za: <strong id="t-bill-auction-timer">0</strong>s</p>
              <div>
                 <label for="t-bill-bid-quantity">Ilość:</label>
                 <input class="w-xs" type="number" id="t-bill-bid-quantity" min="1" value="1">
-                <label class="ml-2" for="t-bill-bid-price">Cena za szt. (max 999.99):</label>
-                <input class="w-sm" type="number" id="t-bill-bid-price" step="0.01" min="1" max="999.99" placeholder="Twoja oferta...">
-                <button onclick="submitPlayerTBillBid()">Złóż Ofertę</button>
+                <label class="ml-2" for="t-bill-bid-price">Cena za akcję (maks. 999,99 PLN):</label>
+                <input class="w-sm" type="number" id="t-bill-bid-price" step="0.01" min="1" max="999.99" placeholder="Twoja oferta…">
+                <button onclick="submitPlayerTBillBid()">Złóż ofertę</button>
              </div>
              <p class="text-sm text-muted">Twoje złożone oferty w tej aukcji:</p>
              <ul class="text-sm max-h-xs scroll-y" id="player-t-bill-bids"></ul>
         </div>
          <div id="collateral-auction-section" class="bank-section divider-top-danger mt-3 pt-3" style="display: none;">
-            <h4> AUKCJA AKCJI Z HIPOTEKI!</h4>
+            <h4> Aukcja akcji z hipoteki</h4>
             <p>Akcje: <strong id="collateral-auction-symbol">-</strong> (<span id="collateral-auction-available">0</span> szt.)</p>
             <p>Cena minimalna: <strong id="collateral-auction-min-price">0.00</strong> PLN</p>
             <p>Koniec aukcji za: <strong id="collateral-auction-timer">0</strong>s</p>
@@ -529,8 +502,8 @@
                 <label for="collateral-bid-quantity">Ilość:</label>
                 <input class="w-xs" type="number" id="collateral-bid-quantity" min="1" value="1">
                 <label class="ml-2" for="collateral-bid-price">Cena za szt.:</label>
-                <input class="w-sm" type="number" id="collateral-bid-price" step="0.01" min="0.01" placeholder="Twoja oferta...">
-                <button onclick="submitPlayerCollateralBid()">Złóż Ofertę</button>
+                <input class="w-sm" type="number" id="collateral-bid-price" step="0.01" min="0.01" placeholder="Twoja oferta…">
+                <button onclick="submitPlayerCollateralBid()">Złóż ofertę</button>
             </div>
             <p class="text-sm text-muted">Twoje oferty w tej aukcji:</p>
             <ul class="text-sm max-h-xs scroll-y" id="player-collateral-bids"></ul>
@@ -549,14 +522,14 @@
         <h3 class="bank-section-title">Rynek obligacji</h3>
         <p class="bank-lead">Fundusz kupuje obligacje za gotówkę; kupony co kwartał, nominał w terminie. Wycena w NAV zależy od stóp procentowych.</p>
         <div class="bank-section">
-            <h4>🏛️ Obligacje Skarbu Państwa (Cena: 1000 PLN/szt.)</h4>
+            <h4>Obligacje Skarbu Państwa · 1 000 PLN za sztukę</h4>
             <table class="w-full" id="state-bonds-table">
                  <thead><tr><th>Typ</th><th>Oproc. (roczne)</th><th>Dostępne</th><th>Akcje</th></tr></thead>
                  <tbody></tbody>
             </table>
         </div>
         <div class="bank-section">
-            <h4>🏢 Obligacje Korporacyjne i Komunalne</h4>
+            <h4>Obligacje korporacyjne i komunalne</h4>
             <table class="w-full" id="other-bonds-table">
                  <thead><tr><th>Emitent</th><th>Typ</th><th>Oproc. (roczne)</th><th>Termin</th><th>Ryzyko</th><th>Dostępne</th><th>Akcje</th></tr></thead>
                  <tbody></tbody>
@@ -567,7 +540,7 @@
 <div id="city-investment-modal" class="modal modal-xl bank-window city-window" style="display: none;">
     <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
     <header class="bank-hero city-hero">
-        <div class="bank-emblem" aria-hidden="true">🏙️</div>
+        <div class="bank-emblem" aria-hidden="true"><svg class="ic" width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18M5 21V8l5-3v16M10 21V10h9v11M13 13h3M13 16h3"/></svg></div>
         <div>
             <div class="bank-hero-kicker">Ratusz · budżet · inwestycje miejskie</div>
             <h2 class="bank-hero-title">Miasto Gdańsk</h2>
@@ -576,21 +549,22 @@
     <div class="bank-ticker" id="city-ticker"></div>
     
     <div class="bank-tabs">
-        <button id="tab-btn-city-main" class="bank-tab-btn active" onclick="switchCityTab('main')">Panel Główny</button>
-        <button id="tab-btn-city-municipal" class="bank-tab-btn" onclick="switchCityTab('municipal')">Spółki Miejskie</button>
-        <button id="tab-btn-city-private" class="bank-tab-btn" onclick="switchCityTab('private')">Firmy Prywatne</button>
-        <button id="tab-btn-city-ppp" class="bank-tab-btn" onclick="switchCityTab('ppp')">🤝 Projekty PPP</button>
-        <button id="tab-btn-city-special" class="bank-tab-btn" onclick="switchCityTab('special')">🏗️ Projekty specjalne</button>
+        <button id="tab-btn-city-main" class="bank-tab-btn active" onclick="switchCityTab('main')">Przegląd</button>
+        <button id="tab-btn-city-municipal" class="bank-tab-btn" onclick="switchCityTab('municipal')">Spółki miejskie</button>
+        <button id="tab-btn-city-private" class="bank-tab-btn" onclick="switchCityTab('private')">Firmy prywatne</button>
+        <button id="tab-btn-city-ppp" class="bank-tab-btn" onclick="switchCityTab('ppp')">Projekty PPP</button>
+        <button id="tab-btn-city-special" class="bank-tab-btn" onclick="switchCityTab('special')">Projekty specjalne</button>
         <button id="tab-btn-city-election" class="bank-tab-btn" onclick="switchCityTab('election')" style="display: none;">Wybory</button> </div>
 
     <div id="city-content-main" class="bank-tab-content">
         <div class="bank-section">
-            <h4>Gospodarka Miejska</h4>
-            <p>Budżet: <strong id="city-budget-display">0.00</strong> PLN | Populacja: <strong id="city-population-display">0</strong></p>
-            <p>Poziom Infrastruktury: <strong id="city-infra-level">1.0</strong> | Następny festyn za: <strong id="next-festival-countdown">--</strong>s</p>
+            <h4>Gospodarka miejska</h4>
+            <p hidden>Budżet: <strong id="city-budget-display">0</strong> PLN · Populacja: <strong id="city-population-display">0</strong></p><!-- 07 P1.7: te same dane są w pasku KPI okna -->
+            <p>Poziom infrastruktury: <strong id="city-infra-level">1,0</strong></p>
+            <p>Następny festyn za: <strong id="next-festival-countdown">—</strong></p>
         </div>
         <div class="bank-section">
-            <h4>Obecny Zarząd (wybory za <span id="city-election-timer">4 lata</span>)</h4>
+            <h4>Obecny zarząd (wybory za <span id="city-election-timer">4 lata</span>)</h4>
             <p>Prezydent: <strong id="city-mayor-name">...</strong></p>
             <p>Polityka: <strong id="city-mayor-policy">...</strong></p>
             <p>Poparcie: <strong id="city-mayor-support">—</strong></p>
@@ -601,7 +575,7 @@
             <p>Status: <strong id="city-unlock-status">Zablokowane (Cel: 10 000 PLN)</strong></p>
             <div>
                 <label for="city-donation-amount">Kwota datku:</label>
-                <input type="number" id="city-donation-amount" placeholder="Wpisz kwotę...">
+                <input type="number" id="city-donation-amount" placeholder="Wpisz kwotę…">
                 <button onclick="donateToCity(document.getElementById('city-donation-amount').valueAsNumber)">Przekaż datek</button>
             </div>
         </div>
@@ -611,7 +585,7 @@
     <div id="city-content-special" class="bank-tab-content" style="display: none;"></div>
 
     <div id="city-content-municipal" class="bank-tab-content" style="display: none;">
-        <h4>Spółki Miejskie (Nienotowane na Giełdzie)</h4>
+        <h4>Spółki miejskie (nienotowane)</h4>
         <p class="text-sm">Te spółki zapewniają kluczowe usługi dla miasta i emitują obligacje komunalne. Istnieje roczna szansa, że wejdą na giełdę.</p>
         <table class="w-full">
             <thead><tr><th>Nazwa</th><th>Typ</th><th>Budżet</th><th>Przychód (roczny)</th></tr></thead>
@@ -621,7 +595,7 @@
     </div>
 
     <div id="city-content-private" class="bank-tab-content" style="display: none;">
-        <h4>Lokalne Firmy Prywatne (Pozagiełdowe)</h4>
+        <h4>Lokalne firmy prywatne (pozagiełdowe)</h4>
         <p class="text-sm">Lokalne firmy rozwijają się w mieście; dojrzałe mogą trafić do inkubatora startupów albo na giełdę.</p>
         <table class="w-full">
             <thead><tr><th>Nazwa Firmy</th><th>Szac. Wartość</th><th>Postęp Rozwoju</th></tr></thead>
@@ -639,13 +613,13 @@
 
     <div class="modal modal-lg" id="leaderboard-modal" style="display: none;">
         <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
-        <h2 class="mt-0 text-center">🏆 Ranking funduszy</h2>
+        <h2 class="mt-0 text-center">Ranking funduszy</h2>
          <div id="leaderboard-list"></div>
     </div>
 
     <div class="modal modal-sm" id="sixth-sense-modal" style="display: none;">
         <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
-        <h2 class="mt-0 text-center text-info">💡 Szósty Zmysł 💡</h2>
+        <h2 class="mt-0 text-center text-info">Szósty zmysł</h2>
          <p class="text-center text-lg my-4" id="sixth-sense-message"></p>
          <button class="d-block w-full p-2 text-lg" onclick="document.getElementById('sixth-sense-modal').style.display='none';">Rozumiem</button>
     </div>
@@ -654,7 +628,7 @@
     <div id="state-modal" class="modal modal-xl bank-window state-window" style="display: none;">
         <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
         <header class="bank-hero state-hero">
-            <div class="bank-emblem" aria-hidden="true">🏛️</div>
+            <div class="bank-emblem" aria-hidden="true"><svg class="ic" width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21h16M6 21V11M18 21V11M10 21v-6h4v6M3 11h18L12 4z"/></svg></div>
             <div>
                 <div class="bank-hero-kicker">Skarb Państwa · regulacje · programy</div>
                 <h2 class="bank-hero-title">Państwo</h2>
@@ -662,31 +636,31 @@
         </header>
         <div class="bank-ticker" id="state-ticker"></div>
         <nav class="bank-tabs" role="tablist">
-            <button class="bank-tab-btn active" data-tab="overview" onclick="switchStateTab('overview')">📊 Przegląd</button>
-            <button class="bank-tab-btn" data-tab="macro" onclick="switchStateTab('macro')">📈 Makro</button>
-            <button class="bank-tab-btn" data-tab="country" onclick="switchStateTab('country')">👥 Kraj</button>
-            <button class="bank-tab-btn" data-tab="markets" onclick="switchStateTab('markets')">🏛️ Rynki</button>
-            <button class="bank-tab-btn" data-tab="oversight" onclick="switchStateTab('oversight')">⚖️ Nadzór</button>
-            <button class="bank-tab-btn" data-tab="taxes" onclick="switchStateTab('taxes')">💰 Podatki</button>
-            <button class="bank-tab-btn" data-tab="pension" onclick="switchStateTab('pension')">🏅 Program emerytalny</button>
-            <button class="bank-tab-btn" data-tab="interventions" onclick="switchStateTab('interventions')">📜 Działania państwa</button>
+            <button class="bank-tab-btn active" data-tab="overview" onclick="switchStateTab('overview')">Przegląd</button>
+            <button class="bank-tab-btn" data-tab="macro" onclick="switchStateTab('macro')">Makro</button>
+            <button class="bank-tab-btn" data-tab="country" onclick="switchStateTab('country')">Kraj</button>
+            <button class="bank-tab-btn" data-tab="markets" onclick="switchStateTab('markets')">Rynki</button>
+            <button class="bank-tab-btn" data-tab="oversight" onclick="switchStateTab('oversight')">Nadzór</button>
+            <button class="bank-tab-btn" data-tab="taxes" onclick="switchStateTab('taxes')">Podatki</button>
+            <button class="bank-tab-btn" data-tab="pension" onclick="switchStateTab('pension')">Program emerytalny</button>
+            <button class="bank-tab-btn" data-tab="interventions" onclick="switchStateTab('interventions')">Działania państwa</button>
         </nav>
         <div id="state-body" class="bank-tab-content"></div>
     </div>
 
     <div id="management-modal" class="modal" style="display: none;">
         <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
-        <h2 class="mt-0 text-center text-info" id="management-title">👑 Panel Zarządzania</h2>
+        <h2 class="mt-0 text-center text-info" id="management-title">Panel zarządzania</h2>
         
         <div class="bank-tabs mb-2 divider-bottom">
             <button id="tab-btn-mgmt-main" class="bank-tab-btn active" onclick="switchManagementTab('main')">Ogólne</button>
-            <button id="tab-btn-mgmt-depts" class="bank-tab-btn" onclick="switchManagementTab('depts')">🏢 Działy i Inwestycje</button>
+            <button id="tab-btn-mgmt-depts" class="bank-tab-btn" onclick="switchManagementTab('depts')">Działy i inwestycje</button>
         </div>
 
         <div id="mgmt-content-main" class="bank-tab-content modal-body max-h-md scroll-y">
             <div class="bank-section">
                 <div id="reputation-management-section" class="bank-section">
-                    <h4>🤝 Relacje z Zarządem</h4>
+                    <h4>Relacje z zarządem</h4>
                     <p>Twoje obecne relacje: <strong id="reputation-status">Neutralne (0)</strong></p>
                     <p class="text-sm">Popraw relacje, przekazując datek na rozwój firmy.</p>
                     <div>
@@ -694,20 +668,20 @@
                         <button id="donate-btn">Przekaż datek</button>
                     </div>
                 </div>
-                <h4>💰 Specjalna Dywidenda</h4>
+                <h4>Dywidenda specjalna</h4>
                 <p>Jako większościowy akcjonariusz, możesz zażądać od zarządu natychmiastowej wypłaty dywidendy.</p>
                 <p class="text-sm text-muted">Uwaga: Taka operacja obciąża finanse spółki i może tymczasowo obniżyć jej kurs.</p>
-                <button id="force-dividend-btn">Wymuś Wypłatę (4% wartości akcji)</button>
+                <button id="force-dividend-btn">Wymuś dywidendę specjalną (4% wartości akcji)</button>
                 <p class="text-down fw-bold" id="dividend-cooldown-info"></p>
             </div>
             <div id="ceo-management-section" class="bank-section">
-                <h4>👨‍💼 Walne Zgromadzenie</h4>
+                <h4>Walne zgromadzenie</h4>
                 <p>Jako właściciel, możesz spróbować odwołać obecnego prezesa i powołać nowego. Koszt operacji to 5% wartości firmy.</p>
                 <button id="fire-ceo-btn">Zwołaj zgromadzenie i spróbuj odwołać prezesa</button>
                 <p class="text-down fw-bold" id="fire-ceo-cooldown-info"></p>
             </div>
             <div id="policy-management-section" class="bank-section">
-                <h4>📜 Polityka Dywidendowa</h4>
+                <h4>Polityka dywidendowa</h4>
                 <p>Jako akcjonariusz większościowy, możesz wpłynąć na strategię dywidendową spółki.</p>
                 <select id="policy-select" onchange="setDividendPolicy(this.dataset.symbol, this.value)">
                     <option value="Growth">Wzrost — 0% zysku (wszystko w kapitał)</option>
@@ -717,17 +691,17 @@
                 </select>
             </div>
             <div id="bank-selection-section" class="bank-section">
-                <h4>🏦 Rachunek Bankowy Spółki</h4>
+                <h4>Rachunek bankowy spółki</h4>
                 <p class="text-sm">Wybierz bank komercyjny, w którym spółka będzie prowadzić główny rachunek.</p>
                 <label for="bank-select">Aktualny bank:</label>
                 <select class="ml-1 w-md" id="bank-select">
                     <option value="">-- Brak przypisanego banku --</option>
                 </select>
-                <button class="ml-2" id="change-bank-btn">Zmień Bank</button>
+                <button class="ml-2" id="change-bank-btn">Zmień bank</button>
                 <p class="text-xs text-muted mt-1" id="bank-change-info"></p>
             </div>
             <div id="debt-management-section" class="bank-section" style="display: none;">
-                <h4>💵 Ratunek Finansowy</h4>
+                <h4>Ratunek finansowy</h4>
                 <p>Ta spółka jest zadłużona! Możesz użyć swojej władzy, aby jej pomóc.</p>
                 <p>Aktualne zadłużenie: <strong id="corporate-debt-amount">0.00</strong> PLN</p>
                 <div>
@@ -736,28 +710,28 @@
                 </div>
             </div>
             <div id="rd-management-section" class="bank-section" style="display: none;">
-                <h4>🔬 Badania i Rozwój</h4>
+                <h4>Badania i rozwój</h4>
                 <p>Postęp bieżących badań: <strong id="rd-current-tech-name"></strong></p>
                 <progress id="rd-progress-bar" value="0" max="100"></progress>
-                <button id="open-research-panel-btn">Otwórz Panel Badań</button>
+                <button id="open-research-panel-btn">Otwórz badania i rozwój</button>
             </div>
             <div id="financial-access-section" class="bank-section" style="display: none;">
-                <h4>📊 Dostęp do Finansów</h4>
+                <h4>Dostęp do finansów</h4>
                 <p>Uzyskaj wgląd w szczegółowe dane finansowe spółki.</p>
-                <button id="view-finances-btn">Zobacz Finanse</button>
+                <button id="view-finances-btn">Pokaż finanse</button>
                 <p class="text-sm text-muted mt-1" id="finances-access-info"></p>
             </div>
             
             
 
             <div id="ma-initiation-section" class="bank-section" style="display: none;">
-                <h4><span class="text-xl">🤝</span> Fuzje i Przejęcia</h4>
+                <h4><span class="text-xl"></span> Fuzje i przejęcia</h4>
                 <p class="text-sm">Wykorzystaj swoją pozycję, aby zainicjować połączenie lub wrogie przejęcie innej spółki.</p>
-                <button id="ma-open-target-modal-btn">Rozpocznij proces M&A</button>
+                <button id="ma-open-target-modal-btn">Rozpocznij przejęcie lub fuzję</button>
             </div>
             
             <div id="ma-defense-section" class="bank-section border-danger" style="display: none;">
-                <h4 class="text-down">🚨 JESTEŚ CELEM PRZEJĘCIA! 🚨</h4>
+                <h4 class="text-down">Twoja spółka jest celem przejęcia</h4>
                 <p class="text-sm" id="ma-defense-info">... informacja o zagrożeniu ...</p>
                 <h5>Mechanizmy obronne:</h5>
                 <div id="ma-defense-buttons"></div>
@@ -777,7 +751,7 @@
 
     <div class="modal modal-sm" id="stock-details-modal" style="display: none;">
         <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
-        <h3 class="mt-0 text-center" id="details-title">Struktura Akcjonariatu</h3>
+        <h3 class="mt-0 text-center" id="details-title">Struktura akcjonariatu</h3>
         <div id="details-badges" class="text-center"></div>
          <div class="w-lg pie-area mx-auto my-4" id="pie-chart-container"></div>
          <div class="text-center mb-3" id="pie-chart-legend"></div>
@@ -797,7 +771,7 @@
     <div id="dividend-tracker-modal" class="modal" style="display: none;">
         <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
         <div class="modal-header">
-             <h2>💰 Panel Analityka Dywidend</h2>
+             <h2>Panel analityka dywidend</h2>
          </div>
          <div class="modal-body">
              <table>
@@ -809,19 +783,19 @@
 
     <div id="takeover-modal" class="modal modal-lg" style="display: none;">
         <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
-        <h2 class="mt-0">🚨 Wrogie przejęcie</h2>
+        <h2 class="mt-0">Wrogie przejęcie</h2>
         <div id="takeover-body"></div>
     </div>
 
     <div id="rescue-offering-modal" class="modal" style="display: none;">
         <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
-        <h2 class="mt-0">📢 Emisja ratunkowa</h2>
+        <h2 class="mt-0">Emisja ratunkowa</h2>
         <div id="rescue-offering-message"></div>
     </div>
 
     <div id="investors-modal" class="modal" style="display: none;">
         <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
-         <h3 id="investors-modal-title">Ranking Inwestorów</h3>
+         <h3 id="investors-modal-title">Ranking inwestorów</h3>
          <table>
              <thead><tr><th>#</th><th>Inwestor</th><th>Zainwestowana kwota</th></tr></thead>
              <tbody id="investors-table-body"></tbody>
@@ -830,14 +804,14 @@
 
     <div id="autoinvest-modal" class="modal" style="display: none;">
         <div class="modal-header">
-             <h3>🤖 Ustaw Auto-inwestowanie</h3>
+             <h3>Automat inwestycji</h3>
              <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
          </div>
          <div class="modal-body">
              <p>Automatycznie wpłacaj środki do puli inwestycyjnej start-upów.</p>
              <label for="autoinvest-amount">Kwota wpłaty (PLN):</label>
              <input type="number" id="autoinvest-amount" value="100" min="10">
-             <label for="autoinvest-interval">Częstotliwość (co ile sekund):</label>
+             <label for="autoinvest-interval">Co ile sekund:</label>
              <div>
                  <input type="range" id="autoinvest-interval" min="10" max="120" value="30" step="5">
                  <span id="autoinvest-interval-value">30s</span>
@@ -848,14 +822,14 @@
 
     <div id="startup-autoinvest-modal" class="modal" style="display: none;">
         <div class="modal-header">
-             <h3 id="startup-autoinvest-title">🤖 Ustaw Auto-inwestowanie</h3>
+             <h3 id="startup-autoinvest-title">Automat inwestycji</h3>
              <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
          </div>
          <div class="modal-body">
              <p>Automatycznie inwestuj w ten start-up.</p>
              <label for="startup-autoinvest-amount">Kwota wpłaty (PLN):</label>
              <input type="number" id="startup-autoinvest-amount" value="100" min="10">
-             <label for="startup-autoinvest-interval">Częstotliwość (co ile sekund):</label>
+             <label for="startup-autoinvest-interval">Co ile sekund:</label>
              <div>
                  <input type="range" id="startup-autoinvest-interval" min="10" max="120" value="30" step="5">
                  <span id="startup-autoinvest-interval-value">30s</span>
@@ -866,22 +840,22 @@
 
     <div id="research-modal" class="modal" style="display: none;">
         <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
-         <h2 id="research-modal-title">🔬 Panel Badań i Rozwoju</h2>
+         <h2 id="research-modal-title">Badania i rozwój</h2>
          <div class="bank-section">
-             <h4>Poziom 1: Analiza Potencjału</h4>
+             <h4>Poziom 1: analiza potencjału</h4>
              <div id="rd-tier1-locked">
                  <p>Odblokuj, aby zobaczyć specjalizację firmy.</p>
-                 <button id="rd-unlock-tier1-btn">Odblokuj (1000 PLN)</button>
+                 <button id="rd-unlock-tier1-btn">Odblokuj · 1 000 PLN</button>
              </div>
              <div id="rd-tier1-unlocked" style="display: none;">
                  <p>Specjalizacja: <strong id="rd-specialization-name"></strong></p>
              </div>
          </div>
          <div id="rd-tier2-section" class="bank-section" style="display: none;">
-             <h4>Poziom 2: Dostęp do Wyników</h4>
+             <h4>Poziom 2: dostęp do wyników</h4>
              <div id="rd-tier2-locked">
                  <p>Odblokuj, aby zobaczyć efekt badań.</p>
-                 <button id="rd-unlock-tier2-btn">Odblokuj (2500 PLN)</button>
+                 <button id="rd-unlock-tier2-btn">Odblokuj · 2 500 PLN</button>
              </div>
              <div id="rd-tier2-unlocked" style="display: none;">
                  <p>Bieżące badanie: <strong id="rd-current-tech-details-name"></strong></p>
@@ -889,10 +863,10 @@
              </div>
          </div>
          <div id="rd-tier3-section" class="bank-section" style="display: none;">
-             <h4>Poziom 3: Granty Naukowe</h4>
+             <h4>Poziom 3: granty naukowe</h4>
              <div id="rd-tier3-locked">
                  <p>Odblokuj możliwość finansowania badań.</p>
-                 <button id="rd-unlock-tier3-btn">Odblokuj (5000 PLN)</button>
+                 <button id="rd-unlock-tier3-btn">Odblokuj · 5 000 PLN</button>
              </div>
              <div id="rd-tier3-unlocked" style="display: none;">
                  <input type="number" id="rd-funding-amount" placeholder="Kwota (PLN)">
@@ -900,10 +874,10 @@
              </div>
          </div>
          <div id="rd-tier4-section" class="bank-section" style="display: none;">
-             <h4>Poziom 4: Wpływ na Badania</h4>
+             <h4>Poziom 4: wpływ na badania</h4>
              <div id="rd-tier4-locked">
                  <p>Odblokuj możliwość zmiany specjalizacji.</p>
-                 <button id="rd-unlock-tier4-btn">Odblokuj (10000 PLN)</button>
+                 <button id="rd-unlock-tier4-btn">Odblokuj · 10 000 PLN</button>
              </div>
              <div id="rd-tier4-unlocked" style="display: none;">
                  <select id="rd-specialization-select"></select>
@@ -911,10 +885,10 @@
              </div>
          </div>
          <div id="rd-tier5-section" class="bank-section" style="display: none;">
-             <h4>Poziom 5: Ingerencja w Badania</h4>
+             <h4>Poziom 5: ingerencja w badania</h4>
              <div id="rd-tier5-locked">
                  <p>Odblokuj możliwość wyboru projektu.</p>
-                 <button id="rd-unlock-tier5-btn">Odblokuj (20000 PLN)</button>
+                 <button id="rd-unlock-tier5-btn">Odblokuj · 20 000 PLN</button>
              </div>
              <div id="rd-tier5-unlocked" style="display: none;">
                  <p>Zdecyduj! Czas: <strong id="rd-choice-timer">15</strong>s</p>
@@ -927,30 +901,30 @@
 
     <div id="startup-offer-modal" class="modal" style="display: none;">
         <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
-        <h2 id="startup-offer-title">Otrzymałeś Ofertę Specjalną!</h2>
+        <h2 id="startup-offer-title">Oferta specjalna</h2>
          <p id="startup-offer-message"></p>
          <div>
              <label for="startup-offer-amount">Kwota inwestycji (PLN):</label>
-             <input type="number" id="startup-offer-amount" placeholder="Wpisz kwotę...">
+             <input type="number" id="startup-offer-amount" placeholder="Wpisz kwotę…">
          </div>
          <div>
-             <button id="accept-startup-offer-btn">✅ Zainwestuj z Bonusem</button>
-             <button id="decline-startup-offer-btn">❌ Odrzuć</button>
+             <button id="accept-startup-offer-btn">Zainwestuj z bonusem</button>
+             <button id="decline-startup-offer-btn">Odrzuć</button>
          </div>
     </div>
 
     <div id="price-alert-modal" class="modal" style="display: none;">
         <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
-        <h3 id="price-alert-title">Ustaw Alerty Cenowe</h3>
+        <h3 id="price-alert-title">Alerty cenowe</h3>
          <p>Aktualna cena: <strong id="price-alert-current-price">0.00</strong></p>
          <div>
              <label for="price-alert-buy">Powiadom, gdy cena spadnie do:</label>
-             <input type="number" id="price-alert-buy" placeholder="Cena zakupu...">
+             <input type="number" id="price-alert-buy" placeholder="Cena zakupu…">
              <button id="set-buy-alert-btn">Ustaw</button>
          </div>
          <div>
              <label for="price-alert-sell">Powiadom, gdy cena wzrośnie do:</label>
-             <input type="number" id="price-alert-sell" placeholder="Cena sprzedaży...">
+             <input type="number" id="price-alert-sell" placeholder="Cena sprzedaży…">
              <button id="set-sell-alert-btn">Ustaw</button>
          </div>
          <button onclick="document.getElementById('price-alert-modal').style.display='none';">Anuluj</button>
@@ -986,7 +960,7 @@
 
     <div id="sell-shares-to-bank-modal" class="modal modal-sm" style="display: none;">
         <button class="close-btn" onclick="closeInteractionModal()">&times;</button>
-        <h3 id="sell-shares-title">Sprzedaj Akcje Bankowi Inwestycyjnemu</h3>
+        <h3 id="sell-shares-title">Sprzedaj akcje bankowi inwestycyjnemu</h3>
         <div class="bank-section">
             <p>Bank: <strong id="sell-shares-bank-name"></strong></p>
             <p>Wybierz spółkę, której akcje chcesz sprzedać:</p>
@@ -1001,17 +975,17 @@
     </div>
 
     <div id="bank-ipo-offer-modal" class="modal modal-sm" style="display: none;">
-        <button class="close-btn" onclick="resolveBankIPO('reject')">&times;</button> <h2 class="mt-0 text-center text-info">🔔 Oferta IPO Banku! 🔔</h2>
+        <button class="close-btn" onclick="resolveBankIPO('reject')">&times;</button> <h2 class="mt-0 text-center text-info">Oferta IPO banku</h2>
         <p class="text-center text-lg my-4" id="bank-ipo-offer-message"></p>
         <div class="d-flex justify-around mt-4">
-            <button class="bg-up text-on-accent btn-lg text-lg" id="accept-bank-ipo-btn">✅ Skorzystaj z oferty</button>
-            <button class="bg-muted text-on-accent btn-lg text-lg" id="reject-bank-ipo-btn" onclick="resolveBankIPO('reject')">❌ Odrzuć</button>
+            <button class="bg-up text-on-accent btn-lg text-lg" id="accept-bank-ipo-btn">Skorzystaj z oferty</button>
+            <button class="bg-muted text-on-accent btn-lg text-lg" id="reject-bank-ipo-btn" onclick="resolveBankIPO('reject')">Odrzuć</button>
         </div>
     </div>
 
     <div id="financial-details-modal" class="modal" style="display: none;">
         <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
-        <h3 class="mt-0 text-center" id="financial-details-title">Szczegóły Finansowe</h3>
+        <h3 class="mt-0 text-center" id="financial-details-title">Szczegóły finansowe</h3>
         <div id="financial-details-content">
             <p>Ładowanie danych...</p>
         </div>
@@ -1022,7 +996,7 @@
 
     <div id="ma-target-modal" class="modal" style="display: none;">
     <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
-    <h3 class="mt-0" id="ma-target-title">Wybierz Cel dla: Nazwa Spółki</h3>
+    <h3 class="mt-0" id="ma-target-title">Wybierz cel przejęcia</h3>
     <div class="modal-body max-h-md scroll-y">
         <table class="w-full" id="ma-target-table">
             <thead>
@@ -1040,7 +1014,7 @@
 
 <div id="ma-complication-modal" class="modal modal-sm" style="display: none;">
     <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
-    <h3 class="mt-0 text-down" id="ma-complication-title">🔴 Poważne Komplikacje!</h3>
+    <h3 class="mt-0 text-down" id="ma-complication-title">Poważne komplikacje</h3>
     <div class="modal-body">
         <p class="text-md" id="ma-complication-message">...Wiadomość o komplikacji...</p>
         <div class="d-flex flex-col gap-2 mt-4" id="ma-complication-options">
@@ -1056,14 +1030,14 @@
 <!-- Modal Lombardu -->
 <div id="pawnshop-modal" class="modal" style="display: none;">
     <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
-    <h3 class="mt-0 text-up">🏦 Lombard – LOMBARDEX S.A.</h3>
+    <h3 class="mt-0 text-up">Lombard — Lombardex S.A.</h3>
     <div class="modal-body" id="pawnshop-body"></div>
 </div>
 
 <!-- Modal Windykatora -->
 <div id="debtcollector-modal" class="modal" style="display: none;">
     <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
-    <h3 class="mt-0 text-warn">⚠️ Windykator – WRONA</h3>
+    <h3 class="mt-0 text-warn">Windykator — Wrona</h3>
     <div class="modal-body" id="debtcollector-body"></div>
 </div>
 
@@ -1073,14 +1047,14 @@
     <!-- Scenka startowa: SMS od babci + profil gracza -->
     <div id="intro-overlay" class="intro-overlay" hidden>
       <div class="intro-phone" role="dialog" aria-labelledby="intro-phone-title">
-        <div class="intro-phone-header" id="intro-phone-title">💬 Babcia
-          <button type="button" id="intro-skip-btn" class="intro-skip" hidden onclick="skipIntroScene()">⏭️ Pomiń</button>
+        <div class="intro-phone-header" id="intro-phone-title">Babcia
+          <button type="button" id="intro-skip-btn" class="intro-skip" hidden onclick="skipIntroScene()">Pomiń</button>
         </div>
         <div class="intro-phone-body" id="intro-sms-thread"></div>
         <form id="intro-form" class="intro-form" hidden onsubmit="completeIntroScene(event)">
           <label>Twoje imię<input id="intro-name" maxlength="30" required value="Dawid"></label>
           <label>Nazwa korporacji<input id="intro-corporation" maxlength="40" required value="Wawelska Grupa Inwestycyjna"></label>
-          <label>Nazwa Twojego funduszu<input id="intro-fund" maxlength="40" required value="Fundusz Pierwszy Krok"></label>
+          <label>Nazwa funduszu<input id="intro-fund" maxlength="40" required value="Fundusz Pierwszy Krok"></label>
           <div class="intro-country-label">Kraj startowy</div>
           <div id="intro-countries" class="intro-countries"></div>
           <button type="submit" class="btn-pause">Zaczynam pracę</button>
@@ -1092,7 +1066,7 @@
     <div id="mail-overlay" class="intro-overlay" hidden onclick="if (event.target === this) closeMailbox()">
       <div class="mail-window" role="dialog" aria-labelledby="mail-title">
         <header class="corp-modal-header">
-          <h2 id="mail-title">📧 Poczta</h2>
+          <h2 id="mail-title">Poczta</h2>
           <button class="close-btn" onclick="closeMailbox()" aria-label="Zamknij">&times;</button>
         </header>
         <div class="mail-layout">
@@ -1108,7 +1082,7 @@
     <!-- Walne zgromadzenia: głosy funduszu, wnioski, kampanie, rada nadzorcza -->
     <div id="governance-modal" class="modal modal-xl" style="display: none;">
         <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
-        <h2 class="mt-0">🗳️ Walne zgromadzenia</h2>
+        <h2 class="mt-0">Walne zgromadzenia</h2>
         <div class="gov-layout">
             <aside id="governance-list" class="gov-list"></aside>
             <section id="governance-detail" class="gov-detail"></section>
@@ -1118,25 +1092,25 @@
     <!-- Inwestycje spółki (podgląd dla każdej spółki; akcje przy władzy korony) -->
     <div id="company-investments-modal" class="modal modal-lg" style="display: none;">
         <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
-        <h2 class="mt-0" id="company-investments-title">📈 Inwestycje spółki</h2>
+        <h2 class="mt-0" id="company-investments-title">Inwestycje spółki</h2>
         <div id="company-investments-body"></div>
     </div>
 
-    <!-- Klienci funduszu i rynek wtórny JU (tylko obserwacja) -->
+    <!-- Klienci funduszu i rynek wtórny udziałów (tylko obserwacja) -->
     <div id="clients-modal" class="modal modal-xl bank-window ju-window" style="display: none;">
         <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
         <header class="bank-hero ju-hero">
-            <div class="bank-emblem" aria-hidden="true">👥</div>
+            <div class="bank-emblem" aria-hidden="true"><svg class="ic" width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21a7 7 0 0 1 14 0M17 11a3 3 0 1 0 0-6M22 21a6 6 0 0 0-4-5.6"/></svg></div>
             <div>
                 <div class="bank-hero-kicker">Rynek wtórny jednostek uczestnictwa · tylko obserwacja</div>
-                <h2 class="bank-hero-title">Klienci i rynek JU</h2>
+                <h2 class="bank-hero-title">Klienci i udziały</h2>
             </div>
         </header>
         <div class="bank-ticker" id="ju-ticker"></div>
         <div class="ju-layout">
             <section>
                 <h3 class="bank-section-title">Fundusze na rynku wtórnym</h3>
-                <p class="bank-lead">Klienci odsprzedają sobie JU po cenie NAV ± premia zależna od popytu. Zadowolony klient przy dużym zaufaniu dokupuje JU, przy małym zaufaniu sprzedaje je innym, a niezadowolony umarza.</p>
+                <p class="bank-lead">Klienci odsprzedają sobie udziały po cenie NAV ± premia zależna od popytu. Zadowolony klient przy dużym zaufaniu dokupuje udziały, przy małym zaufaniu sprzedaje je innym, a niezadowolony umarza.</p>
                 <div id="ju-funds-table"></div>
                 <h3 class="bank-section-title">Klienci Twojego funduszu</h3>
                 <div id="ju-client-filters" class="ju-filters"></div>
@@ -1153,11 +1127,11 @@
     <div id="corporation-overlay" class="intro-overlay" hidden onclick="if (event.target === this) closeCorporationModal()">
       <div class="corp-modal" role="dialog" aria-labelledby="corporation-title">
         <header class="corp-modal-header">
-          <h2 id="corporation-title">🏢 Korporacja</h2>
+          <h2 id="corporation-title">Korporacja</h2>
           <button class="close-btn" onclick="closeCorporationModal()" aria-label="Zamknij">&times;</button>
         </header>
         <nav class="corp-tabs" role="tablist">
-          <button data-tab="firm" onclick="setCorporationTab('firm')">🏢 Firma</button>
+          <button data-tab="firm" onclick="setCorporationTab('firm')">Firma</button>
           <button data-tab="board" onclick="setCorporationTab('board')">Zarząd</button>
           <button data-tab="analysts" onclick="setCorporationTab('analysts')">Analitycy</button>
           <button data-tab="cooperation" onclick="setCorporationTab('cooperation')">Współpraca</button>
@@ -1173,22 +1147,23 @@
     <!-- Pilne wiadomości (0.11.3) -->
     <div id="breaking-news" class="breaking-news" role="alert" hidden></div>
     <div id="news-ticker" class="news-ticker" aria-label="Pasek wiadomości">
-        <button class="news-ticker-btn" onclick="toggleNewsHistory()" title="Historia ostatnich 50 wiadomości">📰</button>
+        <button class="news-ticker-btn" onclick="toggleNewsHistory()" title="Historia ostatnich 50 wiadomości" aria-label="Historia wiadomości"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h13v14H6a2 2 0 0 1-2-2zM17 9h3v8a2 2 0 0 1-2 2M7 9h7M7 13h7M7 16h4"/></svg></button>
         <div class="news-ticker-viewport"><div id="news-ticker-track" class="news-ticker-track"></div></div>
+        <button class="news-ticker-btn news-ticker-pause" id="news-ticker-pause" onclick="toggleNewsTickerPause()" aria-pressed="false" aria-label="Wstrzymaj pasek wiadomości" title="Wstrzymaj / wznów pasek"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg></button>
     </div>
     <div id="news-history" class="news-history" hidden></div>
 
     <!-- Szara strefa (0.11.1): usługi korupcyjne z funduszu -->
     <div id="grey-zone-modal" class="modal modal-lg" style="display: none;">
         <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
-        <h2 class="mt-0">🕶️ Szara strefa</h2>
+        <h2 class="mt-0">Szara strefa</h2>
         <div id="grey-zone-body"></div>
     </div>
 
     <!-- Porażka: wyrok -->
     <div id="defeat-overlay" class="intro-overlay" hidden>
       <div class="corp-modal victory-card" role="dialog" aria-labelledby="defeat-title">
-        <h2 id="defeat-title">⛓️ Wyrok</h2>
+        <h2 id="defeat-title">Wyrok</h2>
         <p>Zostałeś skazany za udział w zorganizowanej grupie przestępczej. Fundusz przejmuje zarząd komisaryczny.</p>
         <p class="fund-muted">Koniec kariery. Zacznij nową grę przyciskiem „Reset”.</p>
         <button class="btn-danger" onclick="document.getElementById('defeat-overlay').hidden = true">Zamknij</button>
@@ -1198,7 +1173,7 @@
     <!-- Ekran zwycięstwa -->
     <div id="victory-overlay" class="intro-overlay" hidden>
       <div class="corp-modal victory-card" role="dialog" aria-labelledby="victory-title">
-        <h2 id="victory-title">👑 Zwycięstwo!</h2>
+        <h2 id="victory-title">Zwycięstwo!</h2>
         <div id="victory-body"></div>
         <button class="btn-pause" onclick="document.getElementById('victory-overlay').hidden = true">Graj dalej</button>
       </div>
@@ -1208,7 +1183,7 @@
 <div id="construction-sector-modal" class="modal modal-xl bank-window construction-window" style="display: none;">
     <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
     <header class="bank-hero construction-hero">
-        <div class="bank-emblem" aria-hidden="true">🏗️</div>
+        <div class="bank-emblem" aria-hidden="true"><svg class="ic" width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18M6 21V9h12v12M4 9l8-6 8 6M10 13h4v8h-4z"/></svg></div>
         <div>
             <div class="bank-hero-kicker">Przetargi · budowy · podwykonawcy · finansowanie</div>
             <h2 class="bank-hero-title">Budownictwo</h2>
@@ -1217,19 +1192,19 @@
     <div class="bank-ticker" id="construction-ticker"></div>
     <div class="modal-body">
         <div class="tab-buttons">
-            <button class="tab-btn active" onclick="showConstructionTab('main')">Firmy Budowlane i Projekty</button>
+            <button class="tab-btn active" onclick="showConstructionTab('main')">Firmy budowlane i projekty</button>
             <button class="tab-btn" onclick="showConstructionTab('subcontractors')">Podwykonawcy</button>
-            <button class="tab-btn" onclick="showConstructionTab('financing')">💰 Finansowanie pomostowe</button>
+            <button class="tab-btn" onclick="showConstructionTab('financing')">Finansowanie pomostowe</button>
         </div>
         
         <div id="construction-main" class="tab-content active construction-main">
             <div class="construction-grid">
                 <div class="construction-left-panel">
-                    <h3>Spółki Budowlane</h3>
+                    <h3>Spółki budowlane</h3>
                     <div id="construction-companies-list"></div>
                 </div>
                 <div class="construction-right-panel">
-                    <h3>Aktywne Projekty Budowlane</h3>
+                    <h3>Aktywne projekty budowlane</h3>
                     <div id="construction-projects-list"></div>
                 </div>
             </div>
@@ -1240,7 +1215,7 @@
         <div id="construction-subcontractors" class="tab-content construction-subcontractors">
   <div class="construction-subcontractors-header">
     <div>
-      <h3>Platforma Podwykonawców</h3>
+      <h3>Platforma podwykonawców</h3>
       <p>Małe firmy budowlane i specjaliści dostępni do wsparcia projektów.</p>
     </div>
     <div class="construction-subcontractors-summary" id="subcontractors-summary"></div>

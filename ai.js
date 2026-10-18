@@ -2170,7 +2170,7 @@ const RELATION_HOSTILE = -40;
 const RELATION_FRIENDLY = 40;
 const RELATION_DECAY = 0.05;            // co kwartał 5% drogi do zera
 const RELATION_LOG_LIMIT = 30;
-const GIFT_RELATION_PER_100 = 1;        // +1 pkt za 100 zł prezentu
+const GIFT_RELATION_PER_100 = 1;        // +1 pkt za 100 PLN prezentu
 const GIFT_MAX_GAIN = 15;
 const BOT_BLOCK_DISCOUNT = 0.05;
 
@@ -2285,14 +2285,14 @@ function giveGiftToBot(id, amount) {
     const person = findRelationPerson(id);
     amount = Math.floor(Number(amount));
     if (!person) return false;
-    if (!(amount >= 100)) { showToast('Prezent: minimum 100 zł.', 'warning'); return false; }
+    if (!(amount >= 100)) { showToast('Prezent: minimum 100 PLN.', 'warning'); return false; }
     if (playerWallet.cash < amount) { showToast('Za mało pieniędzy w portfelu prywatnym.', 'error'); return false; }
     const quarter = typeof macro === 'object' ? macro.quarter : 0;
     if (botRelations.lastGift[id] === quarter) { showToast(`${person.name} dostał już prezent w tym kwartale.`, 'warning'); return false; }
     // B1: charaktery i malejący efekt — przyjaźni nie da się po prostu kupić.
     const personality = person.entity.personality;
     if (personality === 'calm') { showToast(`${person.name} grzecznie odmawia przyjęcia prezentu.`, 'default'); return false; }
-    if (['whale', 'pro_investor'].includes(personality) && amount < 1000) { showToast(`${person.name} nie zauważa tak drobnych gestów (minimum 1000 zł).`, 'default'); return false; }
+    if (['whale', 'pro_investor'].includes(personality) && amount < 1000) { showToast(`${person.name} nie zauważa tak drobnych gestów (minimum 1000 PLN).`, 'default'); return false; }
     playerWallet.cash -= amount;
     if (person.kind === 'investor') person.entity.cash += amount;
     else person.entity.fund.cash += amount;
@@ -2439,7 +2439,7 @@ function offerBotBlock(ai) {
     botRelations.blockOffer = { aiId: ai.id, symbol: pick.stock.symbol, shares, price };
     addMail({
         sender: `bot:${ai.id}`, subject: `🤝 ${ai.name}: pakiet ${pick.stock.symbol} dla Ciebie`,
-        body: `Mogę odstąpić Twojemu funduszowi ${shares.toLocaleString('pl-PL')} akcji ${pick.stock.name} po ${price.toFixed(2)} zł (${(BOT_BLOCK_DISCOUNT * 100).toFixed(0)}% poniżej rynku). Oferta ważna do końca kwartału.`,
+        body: `Mogę odstąpić Twojemu funduszowi ${shares.toLocaleString('pl-PL')} akcji ${pick.stock.name} po ${price.toFixed(2)} PLN (${(BOT_BLOCK_DISCOUNT * 100).toFixed(0)}% poniżej rynku). Oferta ważna do końca kwartału.`,
         importance: 2, symbol: pick.stock.symbol, action: { type: 'botBlock', symbol: pick.stock.symbol }
     });
     return botRelations.blockOffer;
@@ -2489,8 +2489,8 @@ function getPlayerTargets() {
     const takeovers = getTakeoverProgress();
     const hurdle = Math.max(getDepositRate(), macro?.inflation || 0) * (playerFund.current.elapsedMs / (BASE_DELAYS.quarterly * 4));
     return [
-        { label: 'Pobij GIG w tym okresie', value: `${((fundReturn - benchmark) * 100).toFixed(1)} pkt proc.`, progress: Math.max(0, Math.min(1, 0.5 + (fundReturn - benchmark) * 10)), done: fundReturn > benchmark },
-        { label: 'Wynik powyżej lokaty i inflacji', value: `${(fundReturn * 100).toFixed(1)}% vs ${(hurdle * 100).toFixed(1)}%`, progress: hurdle > 0 ? Math.max(0, Math.min(1, fundReturn / hurdle)) : 1, done: fundReturn >= hurdle },
+        { label: 'Pobij GIG w tym okresie', value: `${formatNumberPl(((fundReturn - benchmark) * 100), 1)} pkt proc.`, progress: Math.max(0, Math.min(1, 0.5 + (fundReturn - benchmark) * 10)), done: fundReturn > benchmark },
+        { label: 'Wynik powyżej lokaty i inflacji', value: `${formatNumberPl((fundReturn * 100), 1)}% vs ${formatNumberPl((hurdle * 100), 1)}%`, progress: hurdle > 0 ? Math.max(0, Math.min(1, fundReturn / hurdle)) : 1, done: fundReturn >= hurdle },
         { label: 'Zaufanie klientów ≥ 60', value: `${playerFund.trust.toFixed(0)}/100`, progress: Math.min(1, playerFund.trust / 60), done: playerFund.trust >= 60 },
         { label: `Ocena zarządu ≥ ${PROMOTION_SCORE} (awans)`, value: corporation.lastPlayerScore !== null ? `${Math.round(corporation.lastPlayerScore)}/100` : 'brak oceny', progress: Math.min(1, (corporation.lastPlayerScore || 0) / PROMOTION_SCORE), done: (corporation.lastPlayerScore || 0) >= PROMOTION_SCORE },
         { label: 'Przejęcia firm zarządzających', value: `${takeovers.done}/${takeovers.required}`, progress: takeovers.done / Math.max(1, takeovers.required), done: takeovers.done >= takeovers.required }
@@ -2516,10 +2516,10 @@ function renderCorporationFirm() {
         return `<div class="firm-level ${playerProfile.positionId === position.id ? 'mine' : ''}"><span class="firm-level-name">${escapeHtml(position.name)}</span><span>${people.join(' · ') || '<span class="text-muted">—</span>'}</span></div>`;
     }).join('');
     const targets = getPlayerTargets().map(t => `
-        <li class="firm-target ${t.done ? 'done' : ''}"><span>${t.done ? '✅' : '🎯'} ${escapeHtml(t.label)}</span><strong>${escapeHtml(t.value)}</strong>
+        <li class="firm-target ${t.done ? 'done' : ''}"><span>${typeof uiIcon === 'function' ? uiIcon(t.done ? 'ok' : 'cel', 14) : ''} ${escapeHtml(t.label)}</span><strong>${escapeHtml(t.value)}</strong>
         <span class="firm-target-bar"><span style="width:${(t.progress * 100).toFixed(0)}%"></span></span></li>`).join('');
     const goals = getCorporateGoalsView().map(t => `
-        <li class="firm-target ${t.done ? 'done' : ''}"><span>${t.done ? '✅' : '🎯'} ${escapeHtml(t.label)}</span><strong>${escapeHtml(t.value)}</strong>
+        <li class="firm-target ${t.done ? 'done' : ''}"><span>${typeof uiIcon === 'function' ? uiIcon(t.done ? 'ok' : 'cel', 14) : ''} ${escapeHtml(t.label)}</span><strong>${escapeHtml(t.value)}</strong>
         <span class="firm-target-bar"><span style="width:${(t.progress * 100).toFixed(0)}%"></span></span></li>`).join('');
     const relations = getRelationPeople().map(person => {
         const value = getRelation(person.id);
@@ -2527,7 +2527,7 @@ function renderCorporationFirm() {
         return `<tr><td>${escapeHtml(person.name)}<span class="text-xs text-muted d-block">${person.kind === 'colleague' ? `kolega · ${escapeHtml(CAREER_POSITIONS[getPositionIndex(person.entity.positionId)].name)}` : person.entity?.isGuard ? 'fundusz patriotyczny · głosuje na walnych, współinwestuje w obronność' : 'inwestor giełdowy'}</span></td>
             <td>${renderRelationBar(value)}</td><td class="${mood.cls}">${mood.icon} ${value.toFixed(0)} · ${mood.label}</td>
             <td><div class="d-flex gap-1"><input type="text" inputmode="numeric" class="w-xs" id="gift-${person.id}" value="200" aria-label="Kwota prezentu">
-                <button class="btn-xs" onclick="corporationAction(giveGiftToBot, '${person.id}', parseFloat(document.getElementById('gift-${person.id}').value))">🎁</button></div></td></tr>`;
+                <button class="btn-xs" onclick="corporationAction(giveGiftToBot, '${person.id}', parseFloat(document.getElementById('gift-${person.id}').value))">Prezent</button></div></td></tr>`;
     }).join('');
     const log = botRelations.log.slice(0, 8).map(entry => `<li><span class="${entry.delta >= 0 ? 'text-up' : 'text-down'}">${entry.delta >= 0 ? '+' : ''}${entry.delta.toFixed(1)}</span> ${escapeHtml(entry.name)} — ${escapeHtml(entry.reason)}</li>`).join('');
 
@@ -2546,6 +2546,6 @@ function renderCorporationFirm() {
         </div>
         <h4>Relacje (−100…100)</h4>
         <p class="fund-muted">Wymuszanie dywidend, zrzucanie pakietów i ataki na spółki botów psują relacje; prezenty (portfel prywatny, raz na kwartał), wspieranie ich spółek (zakup pakietu, datek) i odkupienie pakietu — poprawiają. Wrodzy boty szydzą, skupują akcje Twoich spółek i próbują je przejąć; przyjaźni dają rady i pakiety z rabatem.</p>
-        <table class="asset-mini-table w-full"><thead><tr><th>Osoba</th><th>Relacja</th><th></th><th>Prezent (zł)</th></tr></thead><tbody>${relations}</tbody></table>
+        <table class="asset-mini-table w-full"><thead><tr><th>Osoba</th><th>Relacja</th><th></th><th>Prezent (PLN)</th></tr></thead><tbody>${relations}</tbody></table>
         <h4>Ostatnie zmiany</h4><ul class="list-plain text-sm">${log || '<li class="text-muted">Brak zmian.</li>'}</ul>`;
 }

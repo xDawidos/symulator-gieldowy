@@ -1,0 +1,230 @@
+/* Tokeny redesignu 0.14.5 — kierunek A · Terminal (tylko ciemny motyw).
+   WYGENEROWANE z plany/design/tokens.json przez plany/design/narzedzia/gen_tokens.py — nie edytuj ręcznie.
+   Te same nazwy co zmienne w Figmie: color/bg/base → --color-bg-base. */
+
+:root {
+  color-scheme: dark; /* natywne paski przewijania, listy i pola w ciemnym motywie */
+  /* Prymitywy (nie używać bezpośrednio w komponentach) */
+  --ink-950: #07090D;
+  --ink-900: #0A0D12;
+  --ink-850: #0D1117;
+  --ink-800: #10141B;
+  --ink-750: #161B24;
+  --ink-700: #1F2631;
+  --ink-600: #2B3442;
+  --ink-500: #465163;
+  --ink-400: #6B778A;
+  --ink-300: #8792A3;
+  --ink-200: #B4BDCB;
+  --ink-100: #E8ECF2;
+  --amber-200: #FFD98A;
+  --amber-300: #FFC861;
+  --amber-400: #F5A524;
+  --amber-950: #1A1204;
+  --green-400: #3DDC84;
+  --red-400: #FF6B6B;
+  --blue-400: #5AB0FF;
+  --teal-400: #2DD4BF;
+  --violet-400: #B794F6;
+  --yellow-400: #EAB308;
+  --white-a04: rgba(255, 255, 255, 0.04);
+  --white-a08: rgba(255, 255, 255, 0.08);
+  --black-a60: rgba(0, 0, 0, 0.60);
+  --black-a75: rgba(0, 0, 0, 0.75);
+  --amber-a08: rgba(245, 165, 36, 0.08);
+  --amber-a14: rgba(245, 165, 36, 0.14);
+  --amber-a35: rgba(245, 165, 36, 0.35);
+  --green-a14: rgba(61, 220, 132, 0.14);
+  --red-a14: rgba(255, 107, 107, 0.14);
+  --red-a35: rgba(255, 107, 107, 0.35);
+  --blue-a14: rgba(90, 176, 255, 0.14);
+  --exchange-junk: #8B8F7A;
+  --exchange-bronze: #C08451;
+  --exchange-silver: #A8B2BD;
+  --exchange-gold: #D4AF37;
+  --exchange-platinum: #9FD3D6;
+  --exchange-ruby: #E0446E;
+  --exchange-emerald: #2ECC71;
+  --exchange-diamond: #B9F2FF;
+  --exchange-internet: #5AB0FF;
+  --orange-400: #FF9F43;
+  --green-300: #8CE5B0;
+  --rose-400: #FF5C8A;
+  --yellow-300: #FFE066;
+
+  /* Kolory semantyczne */
+  --color-bg-base: var(--ink-900); /* tło strony */
+  --color-bg-surface: var(--ink-800); /* panele, karty, okna */
+  --color-bg-raised: var(--ink-750); /* nagłówek tabeli, mini-karty, pola, dymki */
+  --color-bg-sunken: var(--ink-850); /* podnagłówki sektorów, pasek newsów */
+  --color-bg-hover: var(--white-a04); /* najechanie na wiersz/przycisk */
+  --color-bg-pressed: var(--white-a08); /* wciśnięty / wybrany wiersz */
+  --color-bg-overlay: var(--black-a75); /* zasłona pod oknem */
+  --color-bg-accent: var(--amber-400); /* przycisk główny, znacznik */
+  --color-bg-accent-hover: var(--amber-300); /* przycisk główny — najechanie */
+  --color-bg-accent-soft: var(--amber-a14); /* wybrany chip, aktywna pozycja menu */
+  --color-bg-up-soft: var(--green-a14); /* tło chipa wzrostu */
+  --color-bg-down-soft: var(--red-a14); /* tło chipa spadku */
+  --color-bg-warn-soft: var(--amber-a08); /* tło ostrzeżenia */
+  --color-bg-info-soft: var(--blue-a14); /* tło informacji */
+  --color-bg-danger: var(--red-400); /* przycisk niebezpieczny (tylko w potwierdzeniu) */
+  --color-text-primary: var(--ink-100); /* tekst główny, liczby */
+  --color-text-secondary: var(--ink-200); /* tekst drugorzędny */
+  --color-text-muted: var(--ink-300); /* podpisy, meta, etykiety (min. 12 px) */
+  --color-text-disabled: var(--ink-400); /* tekst wyłączony (nie dotyczy AA) */
+  --color-text-on-accent: var(--amber-950); /* tekst na bursztynie */
+  --color-text-on-danger: var(--ink-950); /* tekst na czerwonym przycisku */
+  --color-text-accent: var(--amber-400); /* wyróżnienie, link */
+  --color-text-up: var(--green-400); /* zysk / wzrost (zawsze ze znakiem ▲ lub +) */
+  --color-text-down: var(--red-400); /* strata / spadek (zawsze ze znakiem ▼ lub −) */
+  --color-text-warn: var(--amber-300); /* ostrzeżenie (zawsze z ikoną) */
+  --color-text-info: var(--blue-400); /* informacja */
+  --color-border-subtle: var(--ink-700); /* linie podziału, ramki kart (dekoracyjne) */
+  --color-border-default: var(--ink-600); /* ramki chipów, przycisków drugorzędnych */
+  --color-border-strong: var(--ink-400); /* ramki pól formularza (≥3:1) */
+  --color-border-accent: var(--amber-400); /* wybrany chip/segment */
+  --color-border-warn: var(--amber-a35); /* ramka ostrzeżenia */
+  --color-border-down: var(--red-a35); /* ramka błędu / okna zagrożenia */
+  --color-focus: var(--amber-200); /* obrys fokusu (2 px + 2 px odstępu) */
+  --color-chart-fund: var(--amber-400); /* wykres: Twój fundusz */
+  --color-chart-index: var(--blue-400); /* wykres: GIG / indeks */
+  --color-chart-rivals: var(--violet-400); /* wykres: rywale */
+  --color-chart-up: var(--green-400); /* świeca rosnąca (pusta w środku) */
+  --color-chart-down: var(--red-400); /* świeca malejąca (pełna) */
+  --color-section-bank: var(--amber-400); /* akcent okna: Bank */
+  --color-section-ju: var(--teal-400); /* akcent okna: Klienci i rynek JU */
+  --color-section-state: var(--red-400); /* akcent okna: Państwo */
+  --color-section-city: var(--green-400); /* akcent okna: Miasto */
+  --color-section-build: var(--yellow-400); /* akcent okna: Budownictwo */
+  --color-section-grey: var(--violet-400); /* akcent okna: Szara strefa */
+  --color-phase-accumulation: var(--teal-400); /* faza: Akumulacja (zawsze z ikoną i nazwą) */
+  --color-phase-bull: var(--green-400); /* faza: Hossa */
+  --color-phase-euphoria: var(--yellow-300); /* faza: Euforia */
+  --color-phase-distribution: var(--violet-400); /* faza: Dystrybucja */
+  --color-phase-bear: var(--red-400); /* faza: Bessa */
+  --color-phase-capitulation: var(--rose-400); /* faza: Kapitulacja */
+  --color-sentiment-extreme-fear: var(--red-400); /* wskaźnik < 20 (z liczbą i słowem) */
+  --color-sentiment-fear: var(--orange-400); /* wskaźnik 20–40 */
+  --color-sentiment-neutral: var(--ink-300); /* wskaźnik 40–60 */
+  --color-sentiment-greed: var(--green-300); /* wskaźnik 60–80 */
+  --color-sentiment-extreme-greed: var(--green-400); /* wskaźnik > 80 */
+  --color-section-market: var(--blue-400); /* akcent okna: Rynek (L5) */
+
+  /* Odstępy, promienie, rozmiary (px) */
+  --space-half: 2px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-full: 999px;
+  --size-control-sm: 28px;
+  --size-control-md: 34px;
+  --size-control-lg: 40px;
+  --size-row: 40px;
+  --size-row-compact: 32px;
+  --size-row-sector: 28px;
+  --size-icon-sm: 14px;
+  --size-icon-md: 16px;
+  --size-icon-lg: 20px;
+  --size-topbar: 60px;
+  --size-ticker: 28px;
+  --size-sidebar: 220px;
+  --size-target-min: 24px;
+
+  /* Typografia */
+  --font-family-sans: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+  --font-family-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --text-display-size: 28px; --text-display-line: 34px; --text-display-weight: 600; --text-display-track: -0.01em;
+  --text-heading-lg-size: 20px; --text-heading-lg-line: 26px; --text-heading-lg-weight: 600; --text-heading-lg-track: 0em;
+  --text-heading-md-size: 16px; --text-heading-md-line: 22px; --text-heading-md-weight: 600; --text-heading-md-track: 0em;
+  --text-heading-sm-size: 14px; --text-heading-sm-line: 20px; --text-heading-sm-weight: 600; --text-heading-sm-track: 0.04em;
+  --text-body-size: 14px; --text-body-line: 20px; --text-body-weight: 400; --text-body-track: 0em;
+  --text-body-strong-size: 14px; --text-body-strong-line: 20px; --text-body-strong-weight: 600; --text-body-strong-track: 0em;
+  --text-body-sm-size: 13px; --text-body-sm-line: 18px; --text-body-sm-weight: 400; --text-body-sm-track: 0em;
+  --text-caption-size: 12px; --text-caption-line: 16px; --text-caption-weight: 400; --text-caption-track: 0em;
+  --text-label-size: 12px; --text-label-line: 16px; --text-label-weight: 600; --text-label-track: 0.06em;
+  --text-num-sm-size: 13px; --text-num-sm-line: 18px; --text-num-sm-weight: 400; --text-num-sm-track: 0em;
+  --text-num-md-size: 14px; --text-num-md-line: 20px; --text-num-md-weight: 400; --text-num-md-track: 0em;
+  --text-num-strong-size: 14px; --text-num-strong-line: 20px; --text-num-strong-weight: 600; --text-num-strong-track: 0em;
+  --text-num-lg-size: 18px; --text-num-lg-line: 24px; --text-num-lg-weight: 600; --text-num-lg-track: 0em;
+  --text-num-xl-size: 24px; --text-num-xl-line: 30px; --text-num-xl-weight: 600; --text-num-xl-track: 0em;
+
+  /* Cienie i ruch */
+  --shadow-popover: 0px 8px 24px 0px rgba(0, 0, 0, 0.50);
+  --shadow-modal: 0px 16px 48px 0px rgba(0, 0, 0, 0.60), 0px 0px 0px 1px rgba(255, 255, 255, 0.04);
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --motion-ease: cubic-bezier(.2,.8,.2,1);
+  --focus-ring: 0 0 0 2px var(--color-bg-base), 0 0 0 4px var(--color-focus);
+
+  /* Zmienne komponentów (aliasy — komponent czyta tylko swoje zmienne) */
+  --btn-height: var(--size-control-md);
+  --btn-height-sm: var(--size-control-sm);
+  --btn-pad-x: var(--space-4);
+  --btn-pad-x-sm: var(--space-3);
+  --btn-radius: var(--radius-sm);
+  --chip-height: var(--size-control-sm);
+  --chip-pad-x: var(--space-3);
+  --chip-radius: var(--radius-sm);
+  --field-height: var(--size-control-md);
+  --field-border: var(--color-border-strong);
+  --field-bg: var(--color-bg-base);
+  --card-bg: var(--color-bg-surface);
+  --card-border: var(--color-border-subtle);
+  --card-radius: var(--radius-md);
+  --card-pad: var(--space-4);
+  --table-row: var(--size-row);
+  --table-row-sector: var(--size-row-sector);
+  --table-head-bg: var(--color-bg-raised);
+  --table-sector-bg: var(--color-bg-sunken);
+  --table-line: var(--color-border-subtle);
+  --modal-bg: var(--color-bg-surface);
+  --modal-radius: var(--radius-lg);
+  --modal-shadow: var(--shadow-modal);
+  --modal-accent: var(--color-border-default);
+  --modal-w-sm: 440px;
+  --modal-w-md: 640px;
+  --modal-w-lg: 820px;
+  --modal-w-xl: 1100px;
+  --toast-w: 360px;
+  --toast-bg: var(--color-bg-raised);
+  --toast-shadow: var(--shadow-popover);
+  --nav-item-h: var(--size-control-md);
+  --nav-active-bg: var(--color-bg-accent-soft);
+  --mood-meter-w: 120px;
+  --mood-meter-h: 4px;
+  --gauge-size: 220px;
+  --achievement-w: 220px;
+  --sparkline-h: 32px;
+
+  /* Sekcja okna: .modal--bank itd. nadpisuje --modal-accent */
+}
+.modal--bank { --modal-accent: var(--color-section-bank); }
+.modal--ju { --modal-accent: var(--color-section-ju); }
+.modal--state { --modal-accent: var(--color-section-state); }
+.modal--city { --modal-accent: var(--color-section-city); }
+.modal--build { --modal-accent: var(--color-section-build); }
+.modal--grey { --modal-accent: var(--color-section-grey); }
+
+/* Klasy typografii (te same nazwy co style tekstu w Figmie: text/body → .t-body) */
+.t-display { font-family: var(--font-family-sans); font-size: var(--text-display-size); line-height: var(--text-display-line); font-weight: var(--text-display-weight); letter-spacing: var(--text-display-track); }
+.t-heading-lg { font-family: var(--font-family-sans); font-size: var(--text-heading-lg-size); line-height: var(--text-heading-lg-line); font-weight: var(--text-heading-lg-weight); letter-spacing: var(--text-heading-lg-track); }
+.t-heading-md { font-family: var(--font-family-sans); font-size: var(--text-heading-md-size); line-height: var(--text-heading-md-line); font-weight: var(--text-heading-md-weight); letter-spacing: var(--text-heading-md-track); }
+.t-heading-sm { font-family: var(--font-family-sans); font-size: var(--text-heading-sm-size); line-height: var(--text-heading-sm-line); font-weight: var(--text-heading-sm-weight); letter-spacing: var(--text-heading-sm-track); text-transform: uppercase; }
+.t-body { font-family: var(--font-family-sans); font-size: var(--text-body-size); line-height: var(--text-body-line); font-weight: var(--text-body-weight); letter-spacing: var(--text-body-track); }
+.t-body-strong { font-family: var(--font-family-sans); font-size: var(--text-body-strong-size); line-height: var(--text-body-strong-line); font-weight: var(--text-body-strong-weight); letter-spacing: var(--text-body-strong-track); }
+.t-body-sm { font-family: var(--font-family-sans); font-size: var(--text-body-sm-size); line-height: var(--text-body-sm-line); font-weight: var(--text-body-sm-weight); letter-spacing: var(--text-body-sm-track); }
+.t-caption { font-family: var(--font-family-sans); font-size: var(--text-caption-size); line-height: var(--text-caption-line); font-weight: var(--text-caption-weight); letter-spacing: var(--text-caption-track); }
+.t-label { font-family: var(--font-family-sans); font-size: var(--text-label-size); line-height: var(--text-label-line); font-weight: var(--text-label-weight); letter-spacing: var(--text-label-track); text-transform: uppercase; }
+.t-num-sm { font-family: var(--font-family-mono); font-size: var(--text-num-sm-size); line-height: var(--text-num-sm-line); font-weight: var(--text-num-sm-weight); letter-spacing: var(--text-num-sm-track); font-variant-numeric: tabular-nums; }
+.t-num-md { font-family: var(--font-family-mono); font-size: var(--text-num-md-size); line-height: var(--text-num-md-line); font-weight: var(--text-num-md-weight); letter-spacing: var(--text-num-md-track); font-variant-numeric: tabular-nums; }
+.t-num-strong { font-family: var(--font-family-mono); font-size: var(--text-num-strong-size); line-height: var(--text-num-strong-line); font-weight: var(--text-num-strong-weight); letter-spacing: var(--text-num-strong-track); font-variant-numeric: tabular-nums; }
+.t-num-lg { font-family: var(--font-family-mono); font-size: var(--text-num-lg-size); line-height: var(--text-num-lg-line); font-weight: var(--text-num-lg-weight); letter-spacing: var(--text-num-lg-track); font-variant-numeric: tabular-nums; }
+.t-num-xl { font-family: var(--font-family-mono); font-size: var(--text-num-xl-size); line-height: var(--text-num-xl-line); font-weight: var(--text-num-xl-weight); letter-spacing: var(--text-num-xl-track); font-variant-numeric: tabular-nums; }
