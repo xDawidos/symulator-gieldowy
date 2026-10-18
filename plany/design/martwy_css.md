@@ -1,6 +1,6 @@
 # Martwe reguły w style.css (wygenerowane: narzedzia/martwy_css.py)
 
-Reguł ogółem: 1317 · martwych: 177 · bajtów do usunięcia: 18065
+Reguł ogółem: 1336 · martwych: 180 · bajtów do usunięcia: 18301
 
 | Linia | Selektor |
 |---|---|
@@ -70,114 +70,117 @@ Reguł ogółem: 1317 · martwych: 177 · bajtów do usunięcia: 18065
 | 2561 | `.topbar-actions button` |
 | 2565 | `.topbar-speed` |
 | 2930 | `.icon-btn--sm` |
-| 3550 | `.xp-bar` |
-| 3559 | `.xp-bar-fill` |
-| 3907 | `.alert--down` |
-| 3908 | `.alert--down > .ic, .alert--down strong` |
-| 3909 | `.alert--info` |
-| 3910 | `.alert--info > .ic, .alert--info strong` |
-| 3911 | `.alert--up` |
-| 3912 | `.alert--up > .ic, .alert--up strong` |
-| 4056 | `.modal.border-warn` |
-| 4057 | `.modal.border-up` |
-| 4101 | `.mb-0` |
-| 4109 | `.mb-4` |
-| 4112 | `.mr-1` |
-| 4113 | `.mr-2` |
-| 4115 | `.my-2` |
-| 4121 | `.px-1` |
-| 4122 | `.pl-4` |
-| 4130 | `.text-left` |
-| 4153 | `.d-inline-block` |
-| 4161 | `.shrink-0` |
-| 4170 | `.max-h-sm` |
-| 4172 | `.max-h-lg` |
-| 4180 | `.btn-plain` |
-| 4342 | `.pl-indent` |
-| 4343 | `.py-1` |
-| 4345 | `.h-10` |
-| 4347 | `.flex-1` |
-| 4348 | `.gap-3` |
-| 4350 | `.icon-24` |
-| 4353 | `.border-left-info` |
-| 4356 | `.stat-tile` |
-| 4359 | `.row-icon-sm` |
-| 4819 | `.market-phase` |
-| 4820 | `.phase--accumulation` |
-| 4821 | `.phase--bull` |
-| 4822 | `.phase--euphoria` |
-| 4823 | `.phase--distribution` |
-| 4824 | `.phase--bear` |
-| 4825 | `.phase--capitulation` |
-| 4828 | `.sentiment--extreme-fear` |
-| 4829 | `.sentiment--fear` |
-| 4830 | `.sentiment--neutral` |
-| 4831 | `.sentiment--greed` |
-| 4832 | `.sentiment--extreme-greed` |
-| 4833 | `.sentiment-word` |
-| 4836 | `.mood-kpi` |
-| 4842 | `button.mood-kpi` |
-| 4843 | `button.mood-kpi:hover` |
-| 4844 | `.mood-kpi-row` |
-| 4845 | `.mood-kpi .market-phase` |
-| 4846 | `.mood-kpi .market-phase .ic` |
-| 4847 | `.mood-value` |
-| 4848 | `.mood-kpi .sentiment-word` |
-| 4849 | `.mood-kpi.is-confirming .market-phase` |
-| 4850 | `.mood-confirming` |
-| 4853 | `.mood-meter` |
-| 4861 | `.mood-meter > i` |
-| 4863 | `.mood-kpi--compact .phase-name, .mood-kpi--compact .sentiment-word, .mood-kpi--compact .mood-meter, .mood-kpi--compact .` |
-| 4869 | `.mood-kpi .phase-name, .mood-kpi .sentiment-word, .mood-kpi .mood-meter, .mood-kpi .mood-confirming` |
-| 4878 | `.market-window` |
-| 4879 | `.market-grid` |
-| 4880 | `.gauge` |
-| 4881 | `.gauge svg` |
-| 4882 | `.gauge-value` |
-| 4883 | `.gauge .sentiment-word` |
-| 4884 | `.gauge-caption` |
-| 4885 | `.sentiment-cards` |
-| 4886 | `.sentiment-card` |
-| 4887 | `.sentiment-card .label` |
-| 4888 | `.sentiment-card .value` |
-| 4889 | `.sentiment-card .hint` |
-| 4890 | `.sparkline` |
-| 4891 | `.sparkline path` |
-| 4892 | `.gig-chart` |
-| 4893 | `.gig-chart svg` |
-| 4894 | `.phase-band` |
-| 4895 | `.phase-band-label` |
-| 4896 | `.phase-history` |
-| 4897 | `.phase-history li` |
-| 4898 | `.phase-history .when` |
-| 4899 | `.phase-history .retro-label` |
-| 4901 | `.market-grid` |
-| 4902 | `.sentiment-cards` |
-| 4903 | `.phase-history li` |
-| 4904 | `.phase-history li > :last-child` |
-| 4908 | `.sector-premium` |
-| 4909 | `.sector-premium.up` |
-| 4910 | `.sector-premium.down` |
-| 4911 | `.sector-premium.flat` |
-| 4914 | `.achievements` |
-| 4915 | `.achievement` |
-| 4916 | `.achievement-icon` |
-| 4917 | `.achievement h5` |
-| 4918 | `.achievement p` |
-| 4919 | `.achievement .meta` |
-| 4920 | `.achievement.is-hidden` |
-| 4921 | `.achievement.is-hidden .achievement-icon` |
-| 4922 | `.achievement.is-hidden h5` |
-| 4923 | `.achievements-summary` |
-| 4924 | `.achievements-summary .mini-progress` |
-| 4925 | `.notif-item.notif-item--achievement` |
-| 4926 | `.notif-item.notif-item--achievement > .ic` |
-| 4929 | `.level-steps` |
-| 4930 | `.level-steps > i` |
-| 4931 | `.level-steps > i.is-done` |
-| 4932 | `.level-steps > i.is-next` |
-| 4933 | `.unlock-preview` |
-| 4934 | `.unlock-preview .label` |
-| 4969 | `.notif-item.notif-item--achievement` |
-| 4971 | `.mood-meter > i` |
-| 4974 | `.level-steps > i` |
+| 3624 | `.xp-bar` |
+| 3633 | `.xp-bar-fill` |
+| 3981 | `.alert--down` |
+| 3982 | `.alert--down > .ic, .alert--down strong` |
+| 3983 | `.alert--info` |
+| 3984 | `.alert--info > .ic, .alert--info strong` |
+| 3985 | `.alert--up` |
+| 3986 | `.alert--up > .ic, .alert--up strong` |
+| 4077 | `.corp-modal-header` |
+| 4078 | `.corp-modal-header h2` |
+| 4171 | `.modal.border-warn` |
+| 4172 | `.modal.border-up` |
+| 4216 | `.mb-0` |
+| 4224 | `.mb-4` |
+| 4227 | `.mr-1` |
+| 4228 | `.mr-2` |
+| 4230 | `.my-2` |
+| 4236 | `.px-1` |
+| 4237 | `.pl-4` |
+| 4245 | `.text-left` |
+| 4246 | `.text-right` |
+| 4268 | `.d-inline-block` |
+| 4276 | `.shrink-0` |
+| 4285 | `.max-h-sm` |
+| 4287 | `.max-h-lg` |
+| 4295 | `.btn-plain` |
+| 4457 | `.pl-indent` |
+| 4458 | `.py-1` |
+| 4460 | `.h-10` |
+| 4462 | `.flex-1` |
+| 4465 | `.icon-24` |
+| 4467 | `.bg-info` |
+| 4468 | `.border-left-info` |
+| 4471 | `.stat-tile` |
+| 4474 | `.row-icon-sm` |
+| 4934 | `.market-phase` |
+| 4935 | `.phase--accumulation` |
+| 4936 | `.phase--bull` |
+| 4937 | `.phase--euphoria` |
+| 4938 | `.phase--distribution` |
+| 4939 | `.phase--bear` |
+| 4940 | `.phase--capitulation` |
+| 4943 | `.sentiment--extreme-fear` |
+| 4944 | `.sentiment--fear` |
+| 4945 | `.sentiment--neutral` |
+| 4946 | `.sentiment--greed` |
+| 4947 | `.sentiment--extreme-greed` |
+| 4948 | `.sentiment-word` |
+| 4951 | `.mood-kpi` |
+| 4957 | `button.mood-kpi` |
+| 4958 | `button.mood-kpi:hover` |
+| 4959 | `.mood-kpi-row` |
+| 4960 | `.mood-kpi .market-phase` |
+| 4961 | `.mood-kpi .market-phase .ic` |
+| 4962 | `.mood-value` |
+| 4963 | `.mood-kpi .sentiment-word` |
+| 4964 | `.mood-kpi.is-confirming .market-phase` |
+| 4965 | `.mood-confirming` |
+| 4968 | `.mood-meter` |
+| 4976 | `.mood-meter > i` |
+| 4978 | `.mood-kpi--compact .phase-name, .mood-kpi--compact .sentiment-word, .mood-kpi--compact .mood-meter, .mood-kpi--compact .` |
+| 4984 | `.mood-kpi .phase-name, .mood-kpi .sentiment-word, .mood-kpi .mood-meter, .mood-kpi .mood-confirming` |
+| 4993 | `.market-window` |
+| 4994 | `.market-grid` |
+| 4995 | `.gauge` |
+| 4996 | `.gauge svg` |
+| 4997 | `.gauge-value` |
+| 4998 | `.gauge .sentiment-word` |
+| 4999 | `.gauge-caption` |
+| 5000 | `.sentiment-cards` |
+| 5001 | `.sentiment-card` |
+| 5002 | `.sentiment-card .label` |
+| 5003 | `.sentiment-card .value` |
+| 5004 | `.sentiment-card .hint` |
+| 5005 | `.sparkline` |
+| 5006 | `.sparkline path` |
+| 5007 | `.gig-chart` |
+| 5008 | `.gig-chart svg` |
+| 5009 | `.phase-band` |
+| 5010 | `.phase-band-label` |
+| 5011 | `.phase-history` |
+| 5012 | `.phase-history li` |
+| 5013 | `.phase-history .when` |
+| 5014 | `.phase-history .retro-label` |
+| 5016 | `.market-grid` |
+| 5017 | `.sentiment-cards` |
+| 5018 | `.phase-history li` |
+| 5019 | `.phase-history li > :last-child` |
+| 5023 | `.sector-premium` |
+| 5024 | `.sector-premium.up` |
+| 5025 | `.sector-premium.down` |
+| 5026 | `.sector-premium.flat` |
+| 5029 | `.achievements` |
+| 5030 | `.achievement` |
+| 5031 | `.achievement-icon` |
+| 5032 | `.achievement h5` |
+| 5033 | `.achievement p` |
+| 5034 | `.achievement .meta` |
+| 5035 | `.achievement.is-hidden` |
+| 5036 | `.achievement.is-hidden .achievement-icon` |
+| 5037 | `.achievement.is-hidden h5` |
+| 5038 | `.achievements-summary` |
+| 5039 | `.achievements-summary .mini-progress` |
+| 5040 | `.notif-item.notif-item--achievement` |
+| 5041 | `.notif-item.notif-item--achievement > .ic` |
+| 5044 | `.level-steps` |
+| 5045 | `.level-steps > i` |
+| 5046 | `.level-steps > i.is-done` |
+| 5047 | `.level-steps > i.is-next` |
+| 5048 | `.unlock-preview` |
+| 5049 | `.unlock-preview .label` |
+| 5084 | `.notif-item.notif-item--achievement` |
+| 5086 | `.mood-meter > i` |
+| 5089 | `.level-steps > i` |
