@@ -2973,7 +2973,7 @@ function updateChartTypeButtons() {
     lineBtn.classList.toggle('active', playerChartSettings.type !== 'candlestick');
 }
 
-// Motyw: ciemny domyślnie; wybór gracza zapamiętany w przeglądarce (wygoda, nie stan gry).
+// Motyw: od 0.14.5 gra ma jeden, ciemny motyw (decyzja redesignu). toggleDarkMode zostaje dla zgodności.
 const THEME_KEY = 'gra_inwestycyjna_theme';
 let currentTheme = 'dark';
 
@@ -2984,8 +2984,8 @@ function toggleDarkMode() {
 }
 
 function applyInitialTheme() {
-  try { currentTheme = localStorage.getItem(THEME_KEY) || currentTheme; } catch (e) { /* zostaje domyślny */ }
-  document.body.classList.toggle('dark-mode', currentTheme === 'dark');
+  currentTheme = 'dark';
+  document.body.classList.add('dark-mode');
 }
 
 // =================================================================================
