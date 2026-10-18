@@ -4973,3 +4973,14 @@ button.mood-kpi:hover { background: var(--color-bg-hover) !important; border-col
   .chart-event circle { transition: stroke var(--motion-fast) linear; }
   .level-steps > i { transition: background-color var(--motion-base) linear; }
 }
+
+/* 07 P1.3: w karcie spółki stopę dywidendy pokazuje kafelek — linia z odznak byłaby powtórzeniem */
+#description-modal .dividend-yield { display: none; }
+/* 07 P1.6: na telefonie 4 KPI w siatce 2×2 zamiast ukrytego przewijania (ucinało 3. i 4. wartość) */
+@media (max-width: 480px) {
+  .topbar-kpi-group { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-1) var(--space-3); overflow: visible; }
+  .topbar-kpi-label { font-size: 11px; }
+  .topbar-kpi-val { font-size: 14px; }
+}
+/* 07 P1.4: ramka wliczona w 100% szerokości — bez 2 px poziomego przewijania okna wykresu */
+#chart-svg-area { box-sizing: border-box; }

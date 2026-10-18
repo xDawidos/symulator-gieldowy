@@ -118,7 +118,7 @@
     </div>
     <button id="pause-game-btn" class="btn-pause" onclick="togglePauseGame()">Wznów</button>
     <div class="topbar-menu-wrap">
-      <button class="icon-btn" id="topbar-menu-btn" type="button" aria-label="Menu: zapis, ustawienia, nowa gra" aria-haspopup="menu" aria-expanded="false" onclick="toggleTopbarMenu()"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+      <button class="icon-btn" id="topbar-menu-btn" type="button" aria-label="Menu: zapis, ustawienia, nowa gra" aria-haspopup="menu" aria-expanded="false" onclick="toggleTopbarMenu()"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zM13.5 12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zM21 12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/></svg></button>
       <div class="topbar-menu" id="topbar-menu" role="menu" hidden>
         <button role="menuitem" onclick="closeTopbarMenu(); saveGame()">Zapisz grę</button>
         <button role="menuitem" onclick="closeTopbarMenu(); exportSaveFile()" title="Plik .json: kopia zapasowa albo przeniesienie na inny komputer">Eksportuj zapis (.json)</button>
@@ -559,11 +559,12 @@
     <div id="city-content-main" class="bank-tab-content">
         <div class="bank-section">
             <h4>Gospodarka miejska</h4>
-            <p>Budżet: <strong id="city-budget-display">0.00</strong> PLN | Populacja: <strong id="city-population-display">0</strong></p>
-            <p>Poziom Infrastruktury: <strong id="city-infra-level">1.0</strong> | Następny festyn za: <strong id="next-festival-countdown">--</strong>s</p>
+            <p hidden>Budżet: <strong id="city-budget-display">0</strong> PLN · Populacja: <strong id="city-population-display">0</strong></p><!-- 07 P1.7: te same dane są w pasku KPI okna -->
+            <p>Poziom infrastruktury: <strong id="city-infra-level">1,0</strong></p>
+            <p>Następny festyn za: <strong id="next-festival-countdown">—</strong></p>
         </div>
         <div class="bank-section">
-            <h4>Obecny Zarząd (wybory za <span id="city-election-timer">4 lata</span>)</h4>
+            <h4>Obecny zarząd (wybory za <span id="city-election-timer">4 lata</span>)</h4>
             <p>Prezydent: <strong id="city-mayor-name">...</strong></p>
             <p>Polityka: <strong id="city-mayor-policy">...</strong></p>
             <p>Poparcie: <strong id="city-mayor-support">—</strong></p>

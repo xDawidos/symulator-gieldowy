@@ -89,7 +89,7 @@ function getSubsectorMedians(sector, subsector) {
 }
 
 /** Opis wskaźnika względem sektora: { text, cls } albo null. lowerIsCheap: niższa wartość = „taniej/lepiej”. */
-function compareWithSector(value, sectorValue, { lowerIsCheap = true, format = v => v.toFixed(1), labels = ['tania', 'droga'] } = {}) {
+function compareWithSector(value, sectorValue, { lowerIsCheap = true, format = v => formatNumberPl(v, 1), labels = ['tania', 'droga'] } = {}) {
     if (!Number.isFinite(value) || !Number.isFinite(sectorValue) || sectorValue === 0) return null;
     const ratio = value / sectorValue;
     let verdict = 'jak sektor', cls = 'text-muted';

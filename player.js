@@ -3823,13 +3823,13 @@ function runPlayerJuMarket(fund) {
                 ensureClientProfile(client);
                 buyer.client = client;
                 newClients++;
-                noteClientHistory(client, `Dołącza, kupując udziały na rynku wtórnym po ${price.toFixed(2)} PLN.`);
+                noteClientHistory(client, `Dołącza, kupując udziały na rynku wtórnym po ${formatNumberPl(price, 2)} PLN.`);
             }
             client.avgCost = (client.avgCost * client.units + units * price) / (client.units + units);
             client.units += units;
             const sellerDef = getClientCharacter(seller);
-            noteClientHistory(seller, `Sprzedaje ${units.toFixed(1)} udziałów na rynku wtórnym po ${price.toFixed(2)} PLN (${(premium * 100).toFixed(1)}% do NAV).`);
-            pushTape('trade', `${sellerDef.icon} ${seller.name} → ${buyer.def.icon} ${client.name}: ${units.toFixed(1)} udziałów funduszu ${fund.name} po ${price.toFixed(2)} PLN (${premium >= 0 ? '+' : ''}${(premium * 100).toFixed(1)}%).`);
+            noteClientHistory(seller, `Sprzedaje ${formatNumberPl(units, 1)} udziałów na rynku wtórnym po ${formatNumberPl(price, 2)} PLN (${formatNumberPl((premium * 100), 1)}% do NAV).`);
+            pushTape('trade', `${sellerDef.icon} ${seller.name} → ${buyer.def.icon} ${client.name}: ${formatNumberPl(units, 1)} udziałów funduszu ${fund.name} po ${formatNumberPl(price, 2)} PLN (${premium >= 0 ? '+' : ''}${formatNumberPl((premium * 100), 1)}%).`);
             if (buyer.value < price) buyers.shift();
         }
         if (seller.pendingSellUnits <= 0.01) { seller.pendingSellUnits = 0; seller.pendingSellWeeks = 0; }

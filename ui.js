@@ -111,6 +111,7 @@ const UI_ICON_PATHS = {
     pauza: 'M8 5v14M16 5v14',
     start: 'M7 5l12 7-12 7z',
     menu: 'M4 7h16M4 12h16M4 17h16',
+    wiecej: 'M6 12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zM13.5 12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zM21 12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z',
     dzwonek: 'M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0',
     'chevron-down': 'M6 9l6 6 6-6',
     'chevron-right': 'M9 6l6 6-6 6',
@@ -416,8 +417,8 @@ function renderSubsectorMedianLine(stock, sectorMed) {
     const sub = getMainSubsector(stock);
     const subMed = typeof getSubsectorMedians === 'function' ? getSubsectorMedians(getMainSector(stock), sub) : null;
     if (!subMed) return '';
-    const fx = v => Number.isFinite(v) ? v.toFixed(1) : '—';
-    const pct = v => Number.isFinite(v) ? `${(v * 100).toFixed(1)}%` : '—';
+    const fx = v => Number.isFinite(v) ? formatNumberPl(v, 1) : '—';
+    const pct = v => Number.isFinite(v) ? `${formatNumberPl((v * 100), 1)}%` : '—';
     return `<p class="text-xs text-muted cc-submed">Mediany: podsektor ${escapeHtml(sub)} (${subMed.count} spółek) — C/Z ${fx(subMed.pe)}, marża ${pct(subMed.margin)}; sektor ${escapeHtml(getMainSector(stock))} — C/Z ${fx(sectorMed?.pe)}, marża ${pct(sectorMed?.margin)}.</p>`;
 }
 
@@ -547,7 +548,7 @@ function updateMarketKPIs() {
     const getPct = s => s.previousPrice
         ? ((s.price - s.previousPrice) / s.previousPrice * 100) : 0;
     const sorted = [...active].sort((a, b) => getPct(b) - getPct(a));
-    const fmt = v => (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+    const fmt = v => (v >= 0 ? '+' : '') + formatNumberPl(v, 2) + '%';
     if (sorted.length) {
         const g = sorted[0], l = sorted[sorted.length - 1];
         const gEl = document.getElementById('mkpi-top-gainer');
@@ -1035,7 +1036,7 @@ function renderChartSVGForStock(stock, svgAreaElement, width, height) {
                 svg.appendChild(marker);
 
                 marker.addEventListener('mouseover', (event) => {
-                    tooltip.innerHTML = `Kupiono: ${tx.quantity} szt. po ${tx.price.toFixed(2)} PLN`;
+                    tooltip.innerHTML = `Kupiono: ${tx.quantity} szt. po ${formatNumberPl(tx.price, 2)} PLN`;
                     tooltip.style.display = 'block';
                     tooltip.style.left = `${event.pageX + 15}px`;
                     tooltip.style.top = `${event.pageY + 15}px`;
@@ -1170,7 +1171,7 @@ function renderOwnershipPieChart(symbol) {
         colorBox.style.border = '1px solid #333';
 
         const ownerLabel = document.createElement('span');
-        const ownerPercentTotal = (owner.shares / stock.totalShares * 100).toFixed(2);
+        const ownerPercentTotal = formatNumberPl((owner.shares / stock.totalShares * 100), 2);
         ownerLabel.textContent = `${owner.name}: ${owner.shares.toLocaleString('pl-PL')} szt. (${ownerPercentTotal}%)`;
         
         legendItem.appendChild(colorBox);
@@ -1180,7 +1181,7 @@ function renderOwnershipPieChart(symbol) {
 
     // Informacja o udziałach państwa
     if (stock.isStateOwned && (stock.stateOwnershipPct || 0) > 0) {
-        const statePercent = (stock.stateOwnershipPct * 100).toFixed(2);
+        const statePercent = formatNumberPl((stock.stateOwnershipPct * 100), 2);
         const legendItem = document.createElement('div');
         legendItem.innerHTML = `<hr><p style="font-weight: bold; margin-bottom: 5px; text-align: center;">${uiIcon('panstwo', 14)} Skarb Państwa kontroluje ${statePercent}% akcji (poza wolnym obrotem)</p>`;
         legend.appendChild(legendItem);
@@ -1725,8 +1726,8 @@ function showPriceHistoryModal(symbol) {
     chartTitle.textContent = `Wykres: ${stock.name} (${stock.symbol})`;
 
     const redrawChart = () => {
-        const svgWidth = svgArea.offsetWidth;
-        const svgHeight = svgArea.offsetHeight;
+        const svgWidth = svgArea.clientWidth; // bez ramki — offsetWidth dawał 2 px poziomego przewijania okna
+        const svgHeight = svgArea.clientHeight;
         renderChartSVGForStock(stock, svgArea, svgWidth, svgHeight);
     };
 
@@ -1823,7 +1824,7 @@ function displayPortfolio() {
         else {
             market = stocks.find(s => s.symbol === symbol);
             price = market?.price || 0; name = market?.name || symbol;
-            if (market?.totalShares > 0) pct = `${(holding.shares / market.totalShares * 100).toFixed(2)}%`;
+            if (market?.totalShares > 0) pct = `${formatNumberPl((holding.shares / market.totalShares * 100), 2)}%`;
         }
         if (!market) continue;
         const value = price * holding.shares;
@@ -1832,7 +1833,7 @@ function displayPortfolio() {
         totalPL += pl;
         const locked = holding.lockedShares > 0 ? ` ${uiIcon('klodka', 12)}${holding.lockedShares}` : '';
         row(`${escapeHtml(name)} <span class="text-xs text-muted">${escapeHtml(symbol)} · ${holding.shares.toLocaleString('pl-PL')} szt.${locked}</span>`,
-            pct || '—', holding.avgPrice.toFixed(2),
+            pct || '—', formatNumberPl(holding.avgPrice, 2),
             `<span class="${pl > 0 ? 'profit' : pl < 0 ? 'loss' : ''}">${pl >= 0 ? '+' : ''}${fmt(pl)}</span><span class="text-xs text-muted d-block">${fmt(value)}</span>`,
             holding.lockedShares > 0 ? 'dimmed' : '', holding.lockedShares > 0 ? `${holding.lockedShares} akcji zablokowanych (zastaw)` : '');
     }
@@ -1843,8 +1844,8 @@ function displayPortfolio() {
         const ppp = playerFund?.ppp || [];
         const projectBonds = typeof getProjectBonds === 'function' && typeof specialProjects === 'object' && specialProjects ? getProjectBonds() : [];
         if (deposits.length || ppp.length || projectBonds.length) section('Lokaty i finansowanie projektów');
-        for (const d of deposits) row(`${uiIcon('bank', 14)} Lokata · ${escapeHtml(d.bankName)}`, `${(d.rate * 100).toFixed(1)}%/r`, fmt(d.principal), `<span class="profit">+${fmt(d.accrued)}</span><span class="text-xs text-muted d-block">${d.weeksLeft} tyg.</span>`);
-        for (const st of ppp) row(`${st.icon || '🏙️'} PPP · ${escapeHtml(st.name)}`, `${(st.rate * 100).toFixed(1)}%/r`, fmt(st.principal), `${st.unpaid > 0 ? '<span class="loss">zaległe odsetki</span>' : '—'}<span class="text-xs text-muted d-block">${st.weeksLeft} tyg.</span>`);
+        for (const d of deposits) row(`${uiIcon('bank', 14)} Lokata · ${escapeHtml(d.bankName)}`, `${formatNumberPl((d.rate * 100), 1)}%/r`, fmt(d.principal), `<span class="profit">+${fmt(d.accrued)}</span><span class="text-xs text-muted d-block">${d.weeksLeft} tyg.</span>`);
+        for (const st of ppp) row(`${st.icon || '🏙️'} PPP · ${escapeHtml(st.name)}`, `${formatNumberPl((st.rate * 100), 1)}%/r`, fmt(st.principal), `${st.unpaid > 0 ? '<span class="loss">zaległe odsetki</span>' : '—'}<span class="text-xs text-muted d-block">${st.weeksLeft} tyg.</span>`);
         for (const b of projectBonds) row(`${uiIcon('raport', 14)} Obligacje projektu · ${escapeHtml(b.name)}`, `${(PROJECT_BOND_RATE * 100).toFixed(0)}%/r`, fmt(b.principal), `<span class="profit">+${fmt(b.interestPaid || 0)}</span>`);
         positionsValue += deposits.reduce((sum, d) => sum + d.principal + d.accrued, 0) + ppp.reduce((sum, st) => sum + st.principal, 0) + projectBonds.reduce((sum, b) => sum + b.principal, 0);
 
@@ -1862,7 +1863,7 @@ function displayPortfolio() {
             }
             for (const g of Object.values(groups)) {
                 positionsValue += g.value;
-                row(`${uiIcon('raport', 14)} ${escapeHtml(g.name)} <span class="text-xs text-muted">${escapeHtml(g.type)} · ${g.count} szt.</span>`, `${(g.rate * 100).toFixed(1)}%/r`, fmt(g.cost),
+                row(`${uiIcon('raport', 14)} ${escapeHtml(g.name)} <span class="text-xs text-muted">${escapeHtml(g.type)} · ${g.count} szt.</span>`, `${formatNumberPl((g.rate * 100), 1)}%/r`, fmt(g.cost),
                     `${g.defaulted ? `<span class="loss">${uiIcon('alert', 14)} niewypłacalny</span>` : fmt(g.value)}<span class="text-xs text-muted d-block">zapada za ~${Math.ceil(g.next / 60000)} min gry</span>`);
             }
         }
@@ -1914,7 +1915,7 @@ function displayEventMessage(message, durationSeconds, percentageInfo = null, ca
 
     let fullMessage = message;
     if (percentageInfo !== null) {
-        const fullMessageWithPercent = `${message} (Zmiana: ${(percentageInfo * 100).toFixed(1)}%!)`;
+        const fullMessageWithPercent = `${message} (Zmiana: ${formatNumberPl((percentageInfo * 100), 1)}%!)`;
         logEvent(fullMessageWithPercent, category);
     } else {
         logEvent(message, category);
@@ -2052,9 +2053,9 @@ function displayEtfs() {
     etfs.forEach(etf => {
         const row = etfTableBody.insertRow();
         row.insertCell().innerHTML = `<strong>${escapeHtml(etf.name)}</strong> (${etf.symbol})<span class="text-xs text-muted d-block">${escapeHtml(describeEtfRules(etf))}</span>`;
-        row.insertCell().textContent = etf.price.toFixed(2);
+        row.insertCell().textContent = formatNumberPl(etf.price, 2);
         row.insertCell().textContent = getEtfTopHoldings(etf).map(h => `${h.symbol} ${(h.weight * 100).toFixed(0)}%`).join(', ') || '—';
-        row.insertCell().textContent = `${(etf.yearTarget * 100).toFixed(1)}%${etf.lastResult ? (etf.lastResult.hit ? ' ✓' : ' ✗') : ''}`;
+        row.insertCell().textContent = `${formatNumberPl((etf.yearTarget * 100), 1)}%${etf.lastResult ? (etf.lastResult.hit ? ' ✓' : ' ✗') : ''}`;
 
         const sharesOwned = playerPortfolio[etf.symbol] ? playerPortfolio[etf.symbol].shares : 0;
         row.insertCell().textContent = sharesOwned;
@@ -2116,8 +2117,8 @@ function displayMarketIndexes() {
 
         indexDiv.innerHTML = `
             <span class="index-name">${index.name} (${index.id})</span>
-            <span class="index-value ${colorClass}">${index.value.toFixed(2)}</span>
-            <span class="index-change ${colorClass}">${arrow} ${change.toFixed(2)}</span>
+            <span class="index-value ${colorClass}">${formatNumberPl(index.value, 2)}</span>
+            <span class="index-change ${colorClass}">${arrow} ${formatNumberPl(change, 2)}</span>
         `;
 
         if (canTradeIndexes) {
@@ -2151,7 +2152,7 @@ function displayMarketIndexes() {
 
         vixDiv.innerHTML = `
             <span class="index-name">Niestabilność Rynku (WNR)</span>
-            <span class="index-value" style="color: ${color};">${marketVolatilityIndex.toFixed(2)}</span>
+            <span class="index-value" style="color: ${color};">${formatNumberPl(marketVolatilityIndex, 2)}</span>
             <span class="index-change fw-bold" style="color: ${color}">${description}</span>
         `;
         indexesContainer.appendChild(vixDiv);
@@ -2295,7 +2296,7 @@ function openManagementModal(symbol, defaultTab = 'main') {
     if (debtSection) {
         // Sprawdzamy liabilities z bilansu
         if (stock.balanceSheet && stock.balanceSheet.liabilities > 0) {
-            safeSetText('corporate-debt-amount', stock.balanceSheet.liabilities.toFixed(2));
+            safeSetText('corporate-debt-amount', formatNumberPl(stock.balanceSheet.liabilities, 2));
             
             const repaymentInput = document.getElementById('debt-repayment-amount');
             if (repaymentInput) repaymentInput.value = '';
@@ -2370,7 +2371,7 @@ function openManagementModal(symbol, defaultTab = 'main') {
     const repSection = document.getElementById('reputation-management-section');
     if (repSection) {
         if (stock.reputation && stock.reputation['player'] !== undefined) {
-            safeSetText('reputation-status', `${stock.reputation['player'].toFixed(1)}`);
+            safeSetText('reputation-status', `${formatNumberPl(stock.reputation['player'], 1)}`);
             
             const donateBtn = document.getElementById('donate-btn');
             if (donateBtn) {
@@ -2391,7 +2392,7 @@ function openManagementModal(symbol, defaultTab = 'main') {
     const influenceSection = document.getElementById('influence-section');
     if (influenceSection) {
         if (stock.influence) {
-            safeSetText('influence-total-received', stock.influence.totalReceived.toFixed(1));
+            safeSetText('influence-total-received', formatNumberPl(stock.influence.totalReceived, 1));
             
             // Wypełnij listy wpływów
             const exertedListEl = document.getElementById('influence-exerted-list');
@@ -2402,7 +2403,7 @@ function openManagementModal(symbol, defaultTab = 'main') {
                     exertedEntries.sort(([, a], [, b]) => b - a);
                     exertedEntries.forEach(([targetSym, val]) => {
                         const li = document.createElement('li');
-                        li.textContent = `${targetSym}: ${val.toFixed(1)}`;
+                        li.textContent = `${targetSym}: ${formatNumberPl(val, 1)}`;
                         exertedListEl.appendChild(li);
                     });
                 } else {
@@ -2418,7 +2419,7 @@ function openManagementModal(symbol, defaultTab = 'main') {
                     receivedEntries.sort(([, a], [, b]) => b - a);
                     receivedEntries.forEach(([sourceSym, val]) => {
                         const li = document.createElement('li');
-                        li.textContent = `${sourceSym}: ${val.toFixed(1)}`;
+                        li.textContent = `${sourceSym}: ${formatNumberPl(val, 1)}`;
                         receivedListEl.appendChild(li);
                     });
                 } else {
@@ -2532,7 +2533,7 @@ function openBankModal() {
 
     const baseRateEl = document.getElementById('bc-base-rate-display');
     if (baseRateEl) {
-        baseRateEl.textContent = (centralBank.baseInterestRate * 100).toFixed(1);
+        baseRateEl.textContent = formatNumberPl((centralBank.baseInterestRate * 100), 1);
     }
 
     renderBankTicker();
@@ -2593,8 +2594,8 @@ function renderDividendTrackerContent() {
             row.insertCell().textContent = s.isDividendAristocrat ? `${s.name} ★` : s.name;
             row.insertCell().textContent = getDividendPolicyLabel(s.dividendPolicy);
             row.insertCell().textContent = s.pendingDividend ? 'ogłoszona' : '—';
-            row.insertCell().textContent = `ostatnio ${s.lastDividend.dps.toFixed(4)} PLN`;
-            row.insertCell().textContent = `${(dy * 100).toFixed(2)}%`;
+            row.insertCell().textContent = `ostatnio ${formatNumberPl(s.lastDividend.dps, 4)} PLN`;
+            row.insertCell().textContent = `${formatNumberPl((dy * 100), 2)}%`;
         });
         if (!payers.length) { const cell = body.insertRow().insertCell(); cell.colSpan = 5; cell.className = 'text-center'; cell.textContent = 'Jeszcze żadna spółka nie wypłaciła dywidendy.'; }
         return;
@@ -2635,7 +2636,7 @@ function renderDividendTrackerContent() {
         const estimateCell = row.insertCell();
         if (skillLvl >= 3) {
             if (typeof stock.estimatedDividend === "number") {
-                estimateCell.textContent = `${stock.estimatedDividend.toFixed(4)} PLN`;
+                estimateCell.textContent = `${formatNumberPl(stock.estimatedDividend, 4)} PLN`;
             } else {
                 estimateCell.textContent = "Brak danych";
             }
@@ -2646,7 +2647,7 @@ function renderDividendTrackerContent() {
         // 📈 Stopa dywidendy (dywidenda / cena)
         const yieldCell = row.insertCell();
         const dps = Number(stock.estimatedDividend) || 0;
-        yieldCell.textContent = skillLvl >= 3 && stock.price > 0 ? `${(dps / stock.price * 100).toFixed(2)}%` : '???';
+        yieldCell.textContent = skillLvl >= 3 && stock.price > 0 ? `${formatNumberPl((dps / stock.price * 100), 2)}%` : '???';
     });
 }
 
@@ -2721,7 +2722,7 @@ function displayStartups(previousInputValues = {}) {
 
         switch (startup.stage) {
             case 'funding': {
-                fundingCell.innerHTML = `${startup.currentFunding.toFixed(2)} PLN <progress value="${startup.currentFunding}" max="${startup.fundingGoal}" class="w-full"></progress>`;
+                fundingCell.innerHTML = `${formatNumberPl(startup.currentFunding, 2)} PLN <progress value="${startup.currentFunding}" max="${startup.fundingGoal}" class="w-full"></progress>`;
                 progressCell.innerHTML = `<progress value="0" max="100" class="w-full"></progress>`;
                 investButton.textContent = 'Zainwestuj';
                 investButton.onclick = () => {
@@ -2764,7 +2765,7 @@ function displayStartups(previousInputValues = {}) {
 
                 if (startup.pendingExtraCost) {
                     progressCell.innerHTML = `<span class="text-down fw-bold">WSTRZYMANO</span>`;
-                    actionsCell.innerHTML = `<span>Wymaga: ${startup.pendingExtraCost.toFixed(2)} PLN</span>
+                    actionsCell.innerHTML = `<span>Wymaga: ${formatNumberPl(startup.pendingExtraCost, 2)} PLN</span>
                                            <button onclick="payExtraStartupCost('${startup.symbol}')">Zapłać</button>`;
                 } else if (startup.developmentPausedUntil && Date.now() < startup.developmentPausedUntil) {
                     const timeLeft = Math.ceil((startup.developmentPausedUntil - Date.now()) / 1000);
@@ -2937,12 +2938,8 @@ function displayInvestmentPool() {
             const barContainer = document.createElement('div');
             barContainer.classList.add('mb-1');
             barContainer.innerHTML = `
-                <span>${name}: ${amount.toLocaleString('pl-PL')} PLN</span>
-                <div class="w-full bg-muted">
-                    <div style="width: ${percentage}%" class="bg-info text-on-accent text-right">
-                        ${percentage.toFixed(1)}%
-                    </div>
-                </div>
+                <div class="d-flex justify-between text-sm"><span>${escapeHtml(name)}: ${formatZl(amount)}</span><span class="text-muted">${formatNumberPl(percentage, 1)}%</span></div>
+                <span class="mini-progress d-block" aria-hidden="true"><span class="mini-progress-bar" style="width: ${percentage}%"></span></span>
             `;
             contributorsListEl.appendChild(barContainer);
         });
@@ -2971,7 +2968,7 @@ function renderPoolDetails() {
     const rows = stocks.filter(s => s.assetType === 'Startup' && (s.poolInvestors || []).length).map(s => {
         const pool = (s.poolInvestors || []).reduce((sum, round) => sum + (Number(round.amount) || 0), 0);
         const mine = getPoolStartupShare(s, 'player');
-        return `<tr><td>${escapeHtml(s.name)} (${escapeHtml(s.symbol)})</td><td>${POOL_STAGE_LABELS[s.stage] || escapeHtml(s.stage || '—')}</td><td>${fmtZl(pool)}</td><td>${mine > 0 ? `${fmtZl(mine)} · ${(mine / pool * 100).toFixed(1)}%` : '—'}</td></tr>`;
+        return `<tr><td>${escapeHtml(s.name)} (${escapeHtml(s.symbol)})</td><td>${POOL_STAGE_LABELS[s.stage] || escapeHtml(s.stage || '—')}</td><td>${fmtZl(pool)}</td><td>${mine > 0 ? `${fmtZl(mine)} · ${formatNumberPl((mine / pool * 100), 1)}%` : '—'}</td></tr>`;
     });
     const history = (investmentPool.history || []).map(h => `<li><span class="text-muted">kw. ${h.quarter ?? '—'}</span> ${POOL_KIND_LABELS[h.kind] || ''} ${escapeHtml(h.text || '')}</li>`);
     el.innerHTML = `
@@ -3459,7 +3456,7 @@ function renderCompanyCard() {
     document.getElementById('company-card-kpis').innerHTML = [
         tile('Kapitalizacja', formatZl(getMarketCapValue(stock), 0), 'Kurs × liczba akcji: ile rynek płaci za całą spółkę.'),
         tile('C/Z', formatRatio(f?.peRatio, f?.epsTtm), 'Cena / zysk na akcję z 4 kwartałów. Niżej = taniej względem zysków (porównuj w sektorze).', '', vs(f?.peRatio > 0 ? f.peRatio : NaN, med?.pe)),
-        tile('C/WK', f?.pbRatio ? formatNumberPl(f.pbRatio, 2) : '—', 'Cena / wartość księgowa na akcję. Poniżej 1 = rynek wycenia spółkę niżej niż jej majątek netto.', '', vs(f?.pbRatio, med?.pb, { format: v => v.toFixed(2) })),
+        tile('C/WK', f?.pbRatio ? formatNumberPl(f.pbRatio, 2) : '—', 'Cena / wartość księgowa na akcję. Poniżej 1 = rynek wycenia spółkę niżej niż jej majątek netto.', '', vs(f?.pbRatio, med?.pb, { format: v => formatNumberPl(v, 2) })),
         tile('Stopa dywidendy', `${formatNumberPl(dividendYield * 100, 2)}%`, 'Dywidendy z ostatniego roku / kurs.', '', dividendYield > 0 ? vs(dividendYield, med?.dy, { lowerIsCheap: false, format: pctFmt, labels: ['wyższa', 'niższa'] }) : ''),
         tile('Zadłużenie', debtRatio === null ? '—' : `${formatNumberPl(debtRatio * 100, 0)}%`, 'Zobowiązania / aktywa. Powyżej ~70% spółka jest mocno zadłużona.', debtRatio > 0.7 ? 'text-down' : '', vs(debtRatio, med?.debt, { format: pctFmt, labels: ['niższe', 'wyższe'] })),
         tile('Kondycja', `${formatNumberPl(health, 1)} · ${healthLabel}`, 'Kondycja finansowa od −5 (bankructwo) do +5.', health >= 1 ? 'text-up' : health <= -2 ? 'text-down' : '')
@@ -3512,11 +3509,11 @@ function renderCompanyCardFinance(stock, f) {
     const last = stock.lastDividend;
     const shownFair = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(stock) : f.fairValue;
     const fair = getSkillLevel('financialAnalyst') >= 1 && shownFair > 0
-        ? row('Wycena analityczna', `${perShare(shownFair)} (${((shownFair / stock.price - 1) * 100).toFixed(1)}% vs kurs)${f.fairValue > 0 ? '' : stock.assetType === 'Holding' ? ' · NAV portfela' : ' · z majątku'}`, 'Wartość godziwa z zysków i majątku; holdingi i REIT-y — z wartości aktywów netto (szkolenie Analityk Finansowy).') : '';
+        ? row('Wycena analityczna', `${perShare(shownFair)} (${formatNumberPl(((shownFair / stock.price - 1) * 100), 1)}% vs kurs)${f.fairValue > 0 ? '' : stock.assetType === 'Holding' ? ' · NAV portfela' : ' · z majątku'}`, 'Wartość godziwa z zysków i majątku; holdingi i REIT-y — z wartości aktywów netto (szkolenie Analityk Finansowy).') : '';
     const metrics = typeof getCompanyMetrics === 'function' ? getCompanyMetrics(stock) : null;
-    const pct = v => v === null || v === undefined || !Number.isFinite(v) ? '—' : `${(v * 100).toFixed(1)}%`;
+    const pct = v => v === null || v === undefined || !Number.isFinite(v) ? '—' : `${formatNumberPl((v * 100), 1)}%`;
     const extra = metrics ? row('Marża netto', pct(metrics.margin), 'Zysk netto / przychody.') + row('ROE', pct(metrics.roe), 'Zysk netto / kapitał własny.')
-        + row('Płynność (gotówka / zobowiązania)', metrics.liquidity === null ? '—' : metrics.liquidity.toFixed(2), 'Ile gotówki przypada na złotówkę zobowiązań.')
+        + row('Płynność (gotówka / zobowiązania)', metrics.liquidity === null ? '—' : formatNumberPl(metrics.liquidity, 2), 'Ile gotówki przypada na złotówkę zobowiązań.')
         + row('Wzrost zysku r/r', pct(metrics.growth), 'Zysk z 4 ostatnich kwartałów vs 4 wcześniejszych.') : '';
     return `
         <div class="cc-grid">
@@ -3537,7 +3534,7 @@ function renderCompanyCardFinance(stock, f) {
                     ${row('Gotówka', money(stock.cash), 'Pieniądze na koncie spółki.')}
                     ${row('Wartość księgowa / akcję', perShare(f.bookValuePerShare), '(Aktywa − zobowiązania) / liczba akcji.')}
                     ${stock.assetType !== 'REIT' ? row('Polityka dywidendy', escapeHtml(getDividendPolicyLabel(stock.dividendPolicy)), 'Jak dużą część zysku spółka wypłaca.') : ''}
-                    ${row('Ostatnia dywidenda', last ? `${last.dps.toFixed(4)} PLN (${(last.yield * 100).toFixed(2)}%)` : 'brak', 'Ostatnia wypłata na akcję i stopa w dniu wypłaty.')}
+                    ${row('Ostatnia dywidenda', last ? `${formatNumberPl(last.dps, 4)} PLN (${formatNumberPl((last.yield * 100), 2)}%)` : 'brak', 'Ostatnia wypłata na akcję i stopa w dniu wypłaty.')}
                 </tbody></table></section>
         </div>
         ${renderValuationSection(stock, f)}
@@ -3557,7 +3554,7 @@ function renderValuationSection(stock, f) {
         ['Porównawcza: EPS × mediana C/Z sektora', fmt(v.pe)],
         ...(level >= 2 ? [
             ['Majątkowa: wartość księgowa × mediana C/WK sektora', fmt(v.book)],
-            [`Dywidendowa (Gordon): D·(1+g)/(r−g), r = ${(v.r * 100).toFixed(1)}%, g = ${(v.g * 100).toFixed(1)}%`, v.gordon ? fmt(v.gordon) : 'spółka nie płaci dywidend']
+            [`Dywidendowa (Gordon): D·(1+g)/(r−g), r = ${formatNumberPl((v.r * 100), 1)}%, g = ${formatNumberPl((v.g * 100), 1)}%`, v.gordon ? fmt(v.gordon) : 'spółka nie płaci dywidend']
         ] : [])
     ];
     const consensus = level >= 3 ? `
@@ -3578,7 +3575,7 @@ function renderCompanyCardOwners(stock) {
     const kindLabels = { player: 'Twój fundusz', wallet: 'konto prywatne', ai: 'inwestorzy (boty)', botFund: 'fundusze kolegów', bank: 'banki', etf: 'ETF-y', holding: 'holdingi', company: 'spółki', city: 'miasto' };
     const where = Object.entries(byKind).sort((a, b) => b[1] - a[1]).map(([kind, shares]) => `${kindLabels[kind] || kind} ${shares.toLocaleString('pl-PL')}`).join(' · ');
     return `
-        <p class="text-sm">Fundusz: <strong>${(fundPct * 100).toFixed(2)}%</strong>${wallet ? ` · konto prywatne: <strong>${wallet.toLocaleString('pl-PL')} akcji</strong>` : ''}</p>
+        <p class="text-sm">Fundusz: <strong>${formatNumberPl((fundPct * 100), 2)}%</strong>${wallet ? ` · konto prywatne: <strong>${wallet.toLocaleString('pl-PL')} akcji</strong>` : ''}</p>
         <p class="text-sm">Wolny obrót: <strong>${freeFloat.toLocaleString('pl-PL')}</strong> z ${stock.totalShares.toLocaleString('pl-PL')} akcji = <strong>${available.toLocaleString('pl-PL')}</strong> dostępnych na rynku + <strong>${Math.max(0, freeFloat - available).toLocaleString('pl-PL')}</strong> u inwestorów${where ? ` (${escapeHtml(where)})` : ''}.${available <= 0 ? ' <span class="text-warn">Teraz nie da się kupić — akcje kupisz, gdy ktoś je sprzeda.</span>' : ''}</p>
         <div class="gov-bars">${typeof renderShareholderBars === 'function' ? renderShareholderBars(stock) : ''}</div>
         <button class="btn-secondary mt-2" onclick="openStockDetailsModal('${stock.symbol}')">${uiIcon('akcjonariat', 14)} Wykres akcjonariatu</button>`;
@@ -3589,7 +3586,7 @@ function renderCompanyCardManage(stock) {
     const governed = typeof isGovernedCompany === 'function' && isGovernedCompany(stock);
     const seats = typeof getBoardSeats === 'function' ? getBoardSeats(stock) : { label: '—' };
     return `
-        <p class="text-sm">Udział funduszu: <strong>${(pct * 100).toFixed(2)}%</strong> · rada nadzorcza: <strong>${escapeHtml(seats.label)}</strong>.
+        <p class="text-sm">Udział funduszu: <strong>${formatNumberPl((pct * 100), 2)}%</strong> · rada nadzorcza: <strong>${escapeHtml(seats.label)}</strong>.
             Od 5% głosujesz na walnych, od 20% masz miejsce w radzie, powyżej 50% kontrolujesz spółkę.</p>
         <div class="d-flex gap-2 flex-wrap">
             ${governed ? `<button class="btn-secondary" onclick="openGovernanceModal('${stock.symbol}')">${uiIcon('glosowanie', 14)} Walne zgromadzenie</button>` : ''}
@@ -3650,7 +3647,7 @@ function updateStateOfferInfo() {
     else if (exchangeLevel >= 1) premium = 1.15; // Giełda Brązowa: 15%
 
     const offerPrice = stock.price * premium;
-    costLabel.textContent = `${(offerPrice * quantity).toFixed(2)} PLN (cena za akcję: ~${offerPrice.toFixed(2)} PLN)`;
+    costLabel.textContent = `${formatNumberPl((offerPrice * quantity), 2)} PLN (cena za akcję: ~${formatNumberPl(offerPrice, 2)} PLN)`;
 
     // Sprawdzanie cooldownu
     if (stock.stateOfferCooldownUntil && Date.now() < stock.stateOfferCooldownUntil) {
@@ -3690,7 +3687,7 @@ function openPriceAlertModal(symbol) {
 
     const modal = document.getElementById('price-alert-modal');
     document.getElementById('price-alert-title').textContent = `Alerty dla: ${stock.name}`;
-    document.getElementById('price-alert-current-price').textContent = stock.price.toFixed(2) + " PLN";
+    document.getElementById('price-alert-current-price').textContent = formatNumberPl(stock.price, 2) + " PLN";
 
     // Wypełnij pola obecnymi wartościami alertów
     const buyInput = document.getElementById('price-alert-buy');
@@ -4096,7 +4093,7 @@ function updateCityModalContent() {
         const countdownSeconds = Math.max(0, Math.floor(nextFestivalCountdown / 1000));
         const minutes = Math.floor(countdownSeconds / 60);
         const seconds = countdownSeconds % 60;
-        document.getElementById('next-festival-countdown').textContent = nextFestivalCountdown > 0 ? `${minutes}m ${seconds.toString().padStart(2, '0')}s` : "Wkrótce...";
+        document.getElementById('next-festival-countdown').textContent = nextFestivalCountdown > 0 ? `${minutes} min ${seconds.toString().padStart(2, '0')} s` : "Wkrótce...";
         
         // Zarząd
         document.getElementById('city-election-timer').textContent = `${city.mayor.electionYear} ${city.mayor.electionYear === 1 ? 'rok' : 'lata'}`;
@@ -4113,7 +4110,7 @@ function updateCityModalContent() {
         renderCityElection();
         
         // Wkład gracza
-        document.getElementById('city-total-donated').textContent = city.playerDonatedAmount.toFixed(2); // Użyj nowego pola
+        document.getElementById('city-total-donated').textContent = formatNumberPl(city.playerDonatedAmount, 2); // Użyj nowego pola
         const statusEl = document.getElementById('city-unlock-status');
         if (city.playerHasUnlocked) {
             statusEl.textContent = "Odblokowane!";
@@ -4182,7 +4179,7 @@ function renderFestivalView(festivalContainer) {
         const nextLevel = FESTIVAL_STALL_LEVELS[playerParticipant.level];
         playerSectionHTML = `
             <h4>Twoje stoisko (Poziom ${playerParticipant.level}: ${currentLevel.name})</h4>
-            <p>Zdobyte zainteresowanie: <strong>${playerParticipant.interest.toFixed(1)}</strong></p>
+            <p>Zdobyte zainteresowanie: <strong>${formatNumberPl(playerParticipant.interest, 1)}</strong></p>
             <div class="mb-2">
                 ${nextLevel ? `<button onclick="playerUpgradeStall()">Ulepsz do: "${nextLevel.name}" (${nextLevel.cost} PLN)</button>` : '<p>Osiągnięto maksymalny poziom stoiska.</p>'}
             </div>
@@ -4236,7 +4233,7 @@ function renderFestivalView(festivalContainer) {
             <td>${index + 1}</td>
             <td>${ownerName}</td>
             <td>${targetName}</td>
-            <td>${p.interest.toFixed(1)}</td>
+            <td>${formatNumberPl(p.interest, 1)}</td>
         </tr>`;
     });
     participantsTableHTML += `</tbody></table>`;
@@ -4257,7 +4254,7 @@ function renderFestivalView(festivalContainer) {
     festivalContainer.innerHTML = `
         <h2 class="mt-0 text-center">Trwa ${festival.name}!</h2>
         <div class="bank-section">
-            <p>Koniec za: <strong>${timeLeft}s</strong> | Zainteresowanie wydarzeniem: <strong>${festival.globalInterest.toFixed(1)}</strong></p>
+            <p>Koniec za: <strong>${timeLeft}s</strong> | Zainteresowanie wydarzeniem: <strong>${formatNumberPl(festival.globalInterest, 1)}</strong></p>
             <p class="text-sm">Atrakcje: ${festival.attractions.join(', ')}</p>
             <button onclick="playerPromoteEvent()">Promuj wydarzenie (500 PLN)</button>
         </div>
@@ -4293,10 +4290,10 @@ function renderBondMarketInBank() {
 
         let interestText;
         if (type === 'shortTerm') {
-            interestText = `${((offer.interest + getDeficitBondPremium()) * 100).toFixed(2)}% (stałe)`;
+            interestText = `${formatNumberPl(((offer.interest + getDeficitBondPremium()) * 100), 2)}% (stałe)`;
         } else {
             const inflationProxy = marketVolatilityIndex / 100;
-            interestText = `~${((inflationProxy + offer.interestBase + getDeficitBondPremium()) * 100).toFixed(1)}% (zmienne)`;
+            interestText = `~${formatNumberPl(((inflationProxy + offer.interestBase + getDeficitBondPremium()) * 100), 1)}% (zmienne)`;
         }
         if (getDeficitBondPremium() > 0) interestText += ' · +0,25 pp za deficyt';
         row.insertCell().textContent = interestText;
@@ -4331,7 +4328,7 @@ function renderBondMarketInBank() {
         row.insertCell().textContent = bond.issuerName;
         row.insertCell().textContent = bond.type.replace(' 🆘', '');
         row.insertCell().textContent = bond.type;
-        row.insertCell().textContent = `${(bond.interestRate * 100).toFixed(1)}%`;
+        row.insertCell().textContent = `${formatNumberPl((bond.interestRate * 100), 1)}%`;
         row.insertCell().textContent = `${bond.durationMinutes} min`;
         row.insertCell().textContent = `${(bond.risk * 100).toFixed(0)}%`;
         const riskCell = row.insertCell();
@@ -4397,7 +4394,7 @@ function showFestivalResultsModal(participants, festivalName) {
 
         row.insertCell().textContent = `#${index + 1}`;
         row.insertCell().textContent = ownerName;
-        row.insertCell().textContent = p.interest.toFixed(1);
+        row.insertCell().textContent = formatNumberPl(p.interest, 1);
 
         if (p.ownerId === 'player') {
             row.style.fontWeight = 'bold';
@@ -4441,7 +4438,7 @@ function updateTBillAuctionSection() {
         playerBidsList.innerHTML = '';
         currentTBillAuction.bids.filter(b => b.bidderId === 'player').forEach(bid => {
             const li = document.createElement('li');
-            li.textContent = `${bid.quantity} szt. po ${bid.price.toFixed(2)} PLN`;
+            li.textContent = `${bid.quantity} szt. po ${formatNumberPl(bid.price, 2)} PLN`;
             playerBidsList.appendChild(li);
         });
 
@@ -4503,7 +4500,7 @@ function openSellSharesToBankModal(bankId) {
             let priceMultiplier = 0.95; // Bazowa zniżka
             if (stock.financialHealth < 0) priceMultiplier -= 0.05;
             if (stock.financialHealth < -2) priceMultiplier -= 0.05;
-            priceEl.textContent = (stock.price * priceMultiplier).toFixed(2);
+            priceEl.textContent = formatNumberPl((stock.price * priceMultiplier), 2);
         } else {
             priceEl.textContent = '0.00';
         }
@@ -4549,7 +4546,7 @@ function updateCollateralAuctionSection() {
         const timeLeft = Math.max(0, Math.ceil((currentCollateralAuction.endTime - Date.now()) / 1000));
         document.getElementById('collateral-auction-symbol').textContent = currentCollateralAuction.stockSymbol;
         document.getElementById('collateral-auction-available').textContent = currentCollateralAuction.quantityAvailable;
-        document.getElementById('collateral-auction-min-price').textContent = currentCollateralAuction.minPrice.toFixed(2);
+        document.getElementById('collateral-auction-min-price').textContent = formatNumberPl(currentCollateralAuction.minPrice, 2);
         document.getElementById('collateral-auction-timer').textContent = timeLeft;
 
         // Wyświetl oferty gracza
@@ -4557,7 +4554,7 @@ function updateCollateralAuctionSection() {
         playerBidsList.innerHTML = '';
         currentCollateralAuction.bids.filter(b => b.bidderId === 'player').forEach(bid => {
             const li = document.createElement('li');
-            li.textContent = `${bid.quantity} szt. po ${bid.price.toFixed(2)} PLN`;
+            li.textContent = `${bid.quantity} szt. po ${formatNumberPl(bid.price, 2)} PLN`;
             playerBidsList.appendChild(li);
         });
 
@@ -4765,7 +4762,7 @@ function handleViewFinancesClick(symbol) {
         return;
     }
     if (playerRep < REPUTATION_LEVELS.NEGATIVE && !isMajorityOwner) {
-        showToast(`Twoje relacje z ${stock.name} są zbyt złe (${playerRep.toFixed(1)}), aby udostępnili Ci dane finansowe.`, 'error');
+        showToast(`Twoje relacje z ${stock.name} są zbyt złe (${formatNumberPl(playerRep, 1)}), aby udostępnili Ci dane finansowe.`, 'error');
         return;
     }
 
@@ -5102,7 +5099,7 @@ function renderTendersList() {
                 ),
                 createConstructionInfoRow(
                     'Ocena oferty',
-                    `${calculateBidScore(bid, tender).toFixed(1)} / 100`
+                    `${formatNumberPl(calculateBidScore(bid, tender), 1)} / 100`
                 )
             );
 
@@ -5215,7 +5212,7 @@ function renderConstructionSubcontractorsList() {
         card.append(
             createConstructionInfoRow('Poziom', spec.level),
             createConstructionInfoRow('Specjalność', spec.specialty),
-            createConstructionInfoRow('Bonus tempa', `+${(spec.bonus * 100).toFixed(1)}%`),
+            createConstructionInfoRow('Bonus tempa', `+${formatNumberPl((spec.bonus * 100), 1)}%`),
             createConstructionInfoRow('Kontrakty', spec.contractsCompleted),
             createConstructionInfoRow('Gotówka', formatConstructionMoney(spec.cash)),
             createConstructionInfoRow('Obecna budowa', project ? `${project.tender.buildingType.name} (${project.builder.name})` : '—')
@@ -5276,7 +5273,7 @@ function renderConstructionProjectsList() {
         card.append(
             createConstructionInfoRow('Zamawiający', project.tender?.clientCompany?.name || 'Brak danych'),
             createConstructionInfoRow('Wykonawca', project.builder?.name || 'Brak danych'),
-            createConstructionInfoRow('Postęp', `${(progress * 100).toFixed(1)}%`),
+            createConstructionInfoRow('Postęp', `${formatNumberPl((progress * 100), 1)}%`),
             createConstructionInfoRow('Prognoza do końca', formatConstructionTime(remainingWork)),
             createConstructionInfoRow('Do terminu umownego', timeLeft >= 0 ? formatConstructionTime(timeLeft) : `po terminie o ${formatConstructionTime(-timeLeft)}`),
             createConstructionInfoRow('Opóźnienia (wykonawca / zewnętrzne)', `${formatConstructionTime(project.contractorDelayMs)} / ${formatConstructionTime(project.excusedDelayMs)}`)
@@ -5286,7 +5283,7 @@ function renderConstructionProjectsList() {
         bar.className = 'construction-live-progress';
         bar.max = 1;
         bar.value = progress;
-        bar.setAttribute('aria-label', `Postęp budowy: ${(progress * 100).toFixed(1)}%`);
+        bar.setAttribute('aria-label', `Postęp budowy: ${formatNumberPl((progress * 100), 1)}%`);
         card.appendChild(bar);
 
         const details = document.createElement('details');
@@ -5651,7 +5648,7 @@ function renderConstructionHistoryList(companies = stocks) {
                 'Marża kontraktu',
                 row.margin === null
                     ? 'Nie dotyczy'
-                    : `${row.margin.toFixed(1)}%`
+                    : `${formatNumberPl(row.margin, 1)}%`
             ),
             createConstructionInfoRow(
                 'Czas realizacji',
@@ -5773,15 +5770,15 @@ function renderConstructionResearchList(companies = stocks) {
             ),
             createConstructionInfoRow(
                 'Bonus szybkości nowych budów',
-                `${(bonuses.speedBonus * 100).toFixed(1)}%`
+                `${formatNumberPl((bonuses.speedBonus * 100), 1)}%`
             ),
             createConstructionInfoRow(
                 'Obniżka kosztów nowych budów',
-                `${(bonuses.costReduction * 100).toFixed(1)}%`
+                `${formatNumberPl((bonuses.costReduction * 100), 1)}%`
             ),
             createConstructionInfoRow(
                 'Względna redukcja ryzyka opóźnień',
-                `${(bonuses.delayReduction * 100).toFixed(1)}%`
+                `${formatNumberPl((bonuses.delayReduction * 100), 1)}%`
             )
         );
 
@@ -5800,7 +5797,7 @@ function renderConstructionResearchList(companies = stocks) {
 
             card.appendChild(createConstructionInfoRow(
                 'Postęp badania',
-                `${(progress * 100).toFixed(1)}%`
+                `${formatNumberPl((progress * 100), 1)}%`
             ));
 
             const bar = document.createElement('progress');
@@ -5966,12 +5963,12 @@ function renderFundFlowReasons() {
             .map(([key, value]) => `<li>${names[key] || key}: <strong class="${sign > 0 ? 'text-up' : 'text-down'}">${sign > 0 ? '+' : '−'}${formatZl(value, 0)}</strong></li>`).join('');
         const base = Math.max(1, quarter.startUnits);
         const net = (quarter.inUnits - quarter.outUnits) / base * 100;
-        return `<div class="text-sm"><strong>${label}</strong> (kw. ${quarter.quarter}): napływ ${formatNumberPl(quarter.inUnits / base * 100, 1)}% udziałów, odpływ ${formatNumberPl(quarter.outUnits / base * 100, 1)}% udziałów, netto ${net >= 0 ? '+' : ''}${net.toFixed(1)}%
+        return `<div class="text-sm"><strong>${label}</strong> (kw. ${quarter.quarter}): napływ ${formatNumberPl(quarter.inUnits / base * 100, 1)}% udziałów, odpływ ${formatNumberPl(quarter.outUnits / base * 100, 1)}% udziałów, netto ${net >= 0 ? '+' : ''}${formatNumberPl(net, 1)}%
             <div class="d-flex gap-2 flex-wrap"><div><em>Odchodzą, bo:</em><ul>${rows(quarter.out, FUND_FLOW_OUT_REASONS, -1) || '<li>nikt nie odszedł</li>'}</ul></div>
             <div><em>Przychodzą:</em><ul>${rows(quarter.in, FUND_FLOW_IN_REASONS, 1) || '<li>brak wpłat</li>'}</ul></div></div></div>`;
     };
     box.innerHTML = quarterTable(stats.last, 'Ostatni kwartał') + quarterTable(stats.current, 'Bieżący kwartał')
-        + `<p class="text-xs text-muted">Napływ nowych klientów (emisja ${isFundOpenForSubscriptions() ? 'otwarta' : 'zamknięta'}): ok. ${(isFundOpenForSubscriptions() ? getOrganicInflowRate() * 100 : 0).toFixed(1)}% aktywów rocznie — zależy od zaufania, reputacji i wyniku vs GIG.</p>`;
+        + `<p class="text-xs text-muted">Napływ nowych klientów (emisja ${isFundOpenForSubscriptions() ? 'otwarta' : 'zamknięta'}): ok. ${formatNumberPl((isFundOpenForSubscriptions() ? getOrganicInflowRate() * 100 : 0), 1)}% aktywów rocznie — zależy od zaufania, reputacji i wyniku vs GIG.</p>`;
 }
 
 /** Skrót z powiadomienia: otwiera panel przepływów funduszu. */
@@ -6119,7 +6116,7 @@ function renderFundRivalsTable() {
     }
 
     const rows = [
-        { name: playerProfile?.fundName || 'Twój fundusz', ret: last.fundReturn, extra: `zmienność ${(last.volatility * 100).toFixed(2)}%, obsunięcie ${(last.maxDrawdown * 100).toFixed(1)}%`, mine: true },
+        { name: playerProfile?.fundName || 'Twój fundusz', ret: last.fundReturn, extra: `zmienność ${formatNumberPl((last.volatility * 100), 2)}%, obsunięcie ${formatNumberPl((last.maxDrawdown * 100), 1)}%`, mine: true },
         { name: 'GIG (indeks rynku)', ret: last.benchmarkReturn, extra: '' },
         ...last.rivals.map(rival => ({ name: rival.name, ret: rival.return, extra: '' }))
     ].sort((a, b) => b.ret - a.ret);
@@ -6166,7 +6163,7 @@ function renderPrivatePanel() {
         const stock = stocks.find(s => s.symbol === symbol);
         const value = (stock?.price || 0) * holding.shares;
         const pl = value - holding.avgPrice * holding.shares;
-        return `<li>${symbol}: ${holding.shares} szt. · ${formatZl(value)} <span class="${pl >= 0 ? 'profit' : 'loss'}">(${pl >= 0 ? '+' : ''}${pl.toFixed(2)})</span></li>`;
+        return `<li>${symbol}: ${holding.shares} szt. · ${formatZl(value)} <span class="${pl >= 0 ? 'profit' : 'loss'}">(${pl >= 0 ? '+' : ''}${formatNumberPl(pl, 2)})</span></li>`;
     }).join('') || '<li class="fund-muted">Brak prywatnych akcji.</li>';
 
     container.innerHTML = `
@@ -6211,7 +6208,7 @@ function renderCvPanel() {
     const list = document.getElementById('skills-list');
     const money = document.getElementById('skills-modal-xp');
     if (!list) return;
-    if (money) money.textContent = playerWallet.cash.toFixed(2);
+    if (money) money.textContent = formatNumberPl(playerWallet.cash, 2);
     const tabs = `<div class="cc-tabs" role="tablist"><button role="tab" aria-selected="${cvTab === 'cv'}" class="${cvTab === 'cv' ? 'active' : ''}" onclick="setCvTab('cv')">CV i szkolenia</button><button role="tab" aria-selected="${cvTab === 'academy'}" class="${cvTab === 'academy' ? 'active' : ''}" onclick="setCvTab('academy')">Akademia</button><button role="tab" aria-selected="${cvTab === 'mentor'}" class="${cvTab === 'mentor' ? 'active' : ''}" onclick="setCvTab('mentor')">Mentor</button></div>`;
     if (cvTab === 'academy' && typeof renderAcademyPanel === 'function') {
         list.innerHTML = tabs + renderAcademyPanel();
@@ -6489,7 +6486,7 @@ function checkWorldInvariants() {
         // 0.14.2 P9: spółka z ujemnym kapitałem czeka na upadłość (wartość godziwa bez znaczenia); C/Z > 1000 przy cenie
         // bliskiej wartości z kapitału (zysk ≈ 0, kotwica księgowa) nie jest błędem wyceny.
         const insolvent = stock.balanceSheet && (Number(stock.balanceSheet.assets) || 0) - (Number(stock.balanceSheet.liabilities) || 0) <= 0;
-        if (fair > 0 && stock.price > fair * 100 && !insolvent) moneyWarnings.push(`cena ${stock.symbol} ${Math.round(stock.price)} > 100× wartości godziwej (${fair.toFixed(2)})`);
+        if (fair > 0 && stock.price > fair * 100 && !insolvent) moneyWarnings.push(`cena ${stock.symbol} ${Math.round(stock.price)} > 100× wartości godziwej (${formatNumberPl(fair, 2)})`);
         else if (pe > 1000 && !(fair > 0 && stock.price <= fair * 10)) moneyWarnings.push(`C/Z ${stock.symbol}: ${Math.round(pe)}`); // cena 3–10× po spadku zysku: chwilowe opóźnienie kursu
     }
     problems.warnings = (typeof ghostTrimLog !== 'undefined' ? ghostTrimLog : []).map(t =>
@@ -7015,7 +7012,7 @@ function getBankTypeClass(type) {
 function renderBankTicker() {
     const ticker = document.getElementById('bank-ticker');
     if (!ticker) return;
-    const pct = value => `${(value * 100).toFixed(2)}%`;
+    const pct = value => `${formatNumberPl((value * 100), 2)}%`;
     const items = [
         ['Stopa bazowa BC', pct(centralBank.baseInterestRate || 0)],
         ['Kredyt (rynek)', pct(getLoanRate())],
@@ -7046,7 +7043,7 @@ function renderFundDeposits() {
         <div class="bank-deposit">
             <div class="bank-deposit-info">
                 <strong>${escapeHtml(deposit.bankName)}</strong>
-                <span class="text-muted text-sm">${deposit.termWeeks} tyg. · ${(deposit.rate * 100).toFixed(2)}% rocznie · zostało ${deposit.weeksLeft} tyg.</span>
+                <span class="text-muted text-sm">${deposit.termWeeks} tyg. · ${formatNumberPl((deposit.rate * 100), 2)}% rocznie · zostało ${deposit.weeksLeft} tyg.</span>
             </div>
             <div class="bank-deposit-amount">${formatZl(deposit.principal)} <span class="text-up text-sm">+${formatZl(deposit.accrued)}</span></div>
             <div class="bank-deposit-progress"><span style="width:${(100 * (1 - deposit.weeksLeft / deposit.termWeeks)).toFixed(0)}%"></span></div>
@@ -7064,7 +7061,7 @@ function renderCommercialBanksList() {
 
     list.innerHTML = banks.map(bank => {
         const loanRate = (getLoanRate() + (Number(bank.baseInterestRateMargin) || 0)) * 100;
-        const terms = FUND_DEPOSIT_TERMS.map(term => `<option value="${term.weeks}">${term.label} · ${(getFundDepositRate(bank, term.weeks) * 100).toFixed(2)}%</option>`).join('');
+        const terms = FUND_DEPOSIT_TERMS.map(term => `<option value="${term.weeks}">${term.label} · ${formatNumberPl((getFundDepositRate(bank, term.weeks) * 100), 2)}%</option>`).join('');
         const deposit = canBankTakeFundDeposits(bank) ? `
             <div class="bank-card-form">
                 <select id="deposit-term-${bank.id}" aria-label="Okres lokaty">${terms}</select>
@@ -7090,8 +7087,8 @@ function renderCommercialBanksList() {
                 <div><h4>${escapeHtml(bank.name)}</h4><span class="bank-card-type">${escapeHtml(bank.type)}</span></div>
             </header>
             <dl class="bank-card-rates">
-                <div><dt>Kredyt</dt><dd>${loanRate.toFixed(2)}%</dd></div>
-                <div><dt>Lokata 16 tyg.</dt><dd>${canBankTakeFundDeposits(bank) ? (getFundDepositRate(bank, 16) * 100).toFixed(2) + '%' : '—'}</dd></div>
+                <div><dt>Kredyt</dt><dd>${formatNumberPl(loanRate, 2)}%</dd></div>
+                <div><dt>Lokata 16 tyg.</dt><dd>${canBankTakeFundDeposits(bank) ? formatNumberPl((getFundDepositRate(bank, 16) * 100), 2) + '%' : '—'}</dd></div>
                 <div><dt>Kapitał</dt><dd>${formatZl(bank.cash, 0)}</dd></div>
             </dl>
             ${typeof renderParabankExtras === 'function' ? renderParabankExtras(bank) : ''}
@@ -7125,7 +7122,7 @@ function showJuClient(id) {
 
 function formatPremium(value) {
     const pct = (value || 0) * 100;
-    return `<span class="${pct > 0.05 ? 'text-up' : pct < -0.05 ? 'text-down' : 'text-muted'}">${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%</span>`;
+    return `<span class="${pct > 0.05 ? 'text-up' : pct < -0.05 ? 'text-down' : 'text-muted'}">${pct >= 0 ? '+' : ''}${formatNumberPl(pct, 1)}%</span>`;
 }
 
 /** B4: opłata za zarządzanie i kampania marketingowa (pod paskiem rynku JU). */
@@ -7137,7 +7134,7 @@ function renderJuDecisions() {
     if (box.contains(document.activeElement)) return;
     const campaign = playerFund.campaign;
     box.innerHTML = `
-        <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('teczka', 20)}</span><div><h4>Opłata za zarządzanie</h4><span class="bank-card-type">teraz ${(getPlayerFeeRate() * 100).toFixed(2)}% rocznie · standard ${(MANAGEMENT_FEE_ANNUAL * 100).toFixed(1)}%</span></div></header>
+        <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('teczka', 20)}</span><div><h4>Opłata za zarządzanie</h4><span class="bank-card-type">teraz ${formatNumberPl((getPlayerFeeRate() * 100), 2)}% rocznie · standard ${formatNumberPl((MANAGEMENT_FEE_ANNUAL * 100), 1)}%</span></div></header>
             <p class="text-sm">Niższa opłata przyciąga klientów (zwłaszcza skner), wyższa zasila budżet korporacji i Twój udział, ale klienci wrażliwi na koszty odchodzą. Zmiana raz na kwartał.</p>
             <div class="bank-card-form"><input type="text" inputmode="decimal" id="fee-rate-input" value="${(getPlayerFeeRate() * 100).toFixed(2)}" aria-label="Opłata w % rocznie">
             <button onclick="setPlayerFeeRate(parseFloat(document.getElementById('fee-rate-input').value.replace(',', '.'))); renderJuMarket();">Ustaw (0,5–3%)</button></div></article>
@@ -7180,10 +7177,10 @@ function renderJuMarket() {
                 <tr class="${row.fund.kind === 'player' ? 'mine' : ''} ${row.fund.id === juMarket.bestFundId ? 'ju-best' : ''}">
                     <td>${index + 1}</td>
                     <td>${row.fund.kind === 'player' ? `${uiIcon('teczka', 14)}` : row.fund.kind === 'bot' ? `${uiIcon('firma', 14)}` : `${uiIcon('kraj', 14)}`} ${escapeHtml(row.fund.name)}</td>
-                    <td>${row.fund.nav.toFixed(2)}</td>
+                    <td>${formatNumberPl(row.fund.nav, 2)}</td>
                     <td>${formatPremium(row.last.premium)}</td>
                     <td>${formatPremium(row.trend)}</td>
-                    <td>${(row.last.volume || 0).toFixed(1)}</td>
+                    <td>${formatNumberPl((row.last.volume || 0), 1)}</td>
                     <td>${row.last.newClients || 0}</td>
                     <td>${row.last.clients ?? '—'}</td>
                 </tr>`).join('')}</tbody>
@@ -7213,7 +7210,7 @@ function renderJuMarket() {
         const card = juView.clientId === client.id ? `
             <div class="ju-client-card">
                 <p class="fst-italic">„${escapeHtml(client.motive || '')}”</p>
-                <p>Średni koszt udziału: ${formatZl(client.avgCost)} · zysk na udziale: ${formatPremium(gain)}${client.loyal ? ` · ${uiIcon('serce', 14)} lojalny` : ''}${client.pendingSellUnits > 0 ? ` · wystawił ${client.pendingSellUnits.toFixed(1)} JU na rynku wtórnym` : ''}</p>
+                <p>Średni koszt udziału: ${formatZl(client.avgCost)} · zysk na udziale: ${formatPremium(gain)}${client.loyal ? ` · ${uiIcon('serce', 14)} lojalny` : ''}${client.pendingSellUnits > 0 ? ` · wystawił ${formatNumberPl(client.pendingSellUnits, 1)} udziałów na rynku wtórnym` : ''}</p>
                 <ul class="list-plain text-sm">${(client.history || []).map(item => `<li><span class="text-muted">t.${item.week}</span> ${escapeHtml(item.text)}</li>`).join('') || '<li class="text-muted">Brak historii.</li>'}</ul>
             </div>` : '';
         return `<div class="ju-client ${juView.clientId === client.id ? 'open' : ''}" role="button" tabindex="0" aria-expanded="${juView.clientId === client.id}" onclick="showJuClient(${client.id})">
@@ -7250,8 +7247,8 @@ function updateStateModalContent() {
     renderTicker('state-ticker', [
         ['Skarb Państwa', formatZl(governmentTreasury, 0)],
         ['Faza koniunktury', escapeHtml(phase.name || '—')],
-        ['Stopa bazowa BC', `${((centralBank.baseInterestRate || 0) * 100).toFixed(2)}%`],
-        ['Inflacja', `${(macro.inflation * 100).toFixed(1)}%`],
+        ['Stopa bazowa BC', `${formatNumberPl(((centralBank.baseInterestRate || 0) * 100), 2)}%`],
+        ['Inflacja', `${formatNumberPl((macro.inflation * 100), 1)}%`],
         ['Rząd', escapeHtml(getRulingParty().name)],
         ['Korupcja', `${(oversight?.corruption || 0).toFixed(0)}/100`],
         ['Spółki państwowe', stocks.filter(s => s.isStateOwned && !s.isBankrupt).length]
@@ -7267,7 +7264,7 @@ function updateStateModalContent() {
                     <p class="text-sm text-muted">Karze monopolistów i może zablokować skup akcji przez spółkę z Giełdy Diamentowej. Państwo samo inwestuje w rozwój urzędu.</p></article>
                 <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('wykres', 20)}</span><div><h4>Koniunktura</h4><span class="bank-card-type">${escapeHtml(phase.name || '')}</span></div></header>
                     <p class="text-sm">${escapeHtml(phase.description || 'Faza cyklu gospodarczego wpływa na wyniki spółek, sektory wrażliwe na cykl i stopy procentowe.')}</p>
-                    <p class="text-sm text-muted">Wskaźnik koniunktury: ${Number(economyCycle.index || 0).toFixed(0)}/100 · zmiana PKB w kwartale: ${((economyCycle.gdpGrowth || 0) * 100).toFixed(2)}%.</p></article>
+                    <p class="text-sm text-muted">Wskaźnik koniunktury: ${Number(economyCycle.index || 0).toFixed(0)}/100 · zmiana PKB w kwartale: ${formatNumberPl(((economyCycle.gdpGrowth || 0) * 100), 2)}%.</p></article>
                 <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('fabryka', 20)}</span><div><h4>Spółki Skarbu Państwa</h4><span class="bank-card-type">nacjonalizacje i prywatyzacje</span></div></header>
                     <ul class="list-plain text-sm">${stocks.filter(s => s.isStateOwned && !s.isBankrupt).slice(0, 8).map(s => `<li>${escapeHtml(s.name)} — ${((s.stateOwnershipPct || 0) * 100).toFixed(0)}%</li>`).join('') || '<li class="text-muted">Brak.</li>'}</ul></article>
             </div>`;
@@ -7298,7 +7295,7 @@ function updateStateModalContent() {
             <p class="bank-lead">Raz w roku gry Skarb Państwa powierza mandaty emerytalne (napływ kapitału) 3 najlepszym funduszom: liczy się wynik vs GIG z 4 okresów i zaufanie klientów. Następny przydział: przy rocznym rozliczeniu (wybory za ${city.mayor?.electionYear ?? '—'} ${city.mayor?.electionYear === 1 ? 'rok' : 'lata'}).</p>
             <table class="asset-mini-table w-full">
                 <thead><tr><th>#</th><th>Fundusz</th><th>Ocena kwalifikacji</th><th></th></tr></thead>
-                <tbody>${ranking.map((fund, index) => `<tr class="${fund.kind === 'player' ? 'mine' : ''}"><td>${index + 1}</td><td>${escapeHtml(fund.name)}</td><td>${fund.score.toFixed(1)}</td><td>${index < 3 ? `${uiIcon('medal', 14)} mandat` : ''}</td></tr>`).join('')}</tbody>
+                <tbody>${ranking.map((fund, index) => `<tr class="${fund.kind === 'player' ? 'mine' : ''}"><td>${index + 1}</td><td>${escapeHtml(fund.name)}</td><td>${formatNumberPl(fund.score, 1)}</td><td>${index < 3 ? `${uiIcon('medal', 14)} mandat` : ''}</td></tr>`).join('')}</tbody>
             </table>
             <h4>Ostatni przydział</h4>
             <p class="text-sm">${last ? last.grants.map(g => `${escapeHtml(g.name)}: ${formatZl(g.amount, 0)}`).join(' · ') : 'Jeszcze nie było przydziału.'}</p>`;
@@ -7318,13 +7315,13 @@ function renderCityPpp() {
         <p class="bank-lead">Partnerstwo publiczno-prywatne: fundusz współfinansuje inwestycje miasta. Odsetki co tydzień z budżetu miasta, kapitał w terminie. Ryzyko rośnie przy słabym budżecie i niskim poparciu burmistrza. Limit: ${(PPP_FUND_LIMIT * 100).toFixed(0)}% aktywów (wolne: ${formatZl(getFundPppCapacity(), 0)}).</p>
         <h4>Udziały funduszu</h4>
         <div class="bank-deposits">${playerFund.ppp.map(stake => `
-            <div class="bank-deposit"><div class="bank-deposit-info"><strong>${stake.icon} ${escapeHtml(stake.name)}</strong><span class="text-muted text-sm">${(stake.rate * 100).toFixed(1)}% rocznie · zostało ${stake.weeksLeft} tyg.${stake.unpaid ? ` · ${uiIcon('alert', 14)} zaległe odsetki` : ''}</span></div>
+            <div class="bank-deposit"><div class="bank-deposit-info"><strong>${stake.icon} ${escapeHtml(stake.name)}</strong><span class="text-muted text-sm">${formatNumberPl((stake.rate * 100), 1)}% rocznie · zostało ${stake.weeksLeft} tyg.${stake.unpaid ? ` · ${uiIcon('alert', 14)} zaległe odsetki` : ''}</span></div>
             <div class="bank-deposit-amount">${formatZl(stake.principal)}</div><span></span>
             <div class="bank-deposit-progress"><span style="width:${(100 * (1 - stake.weeksLeft / stake.termWeeks)).toFixed(0)}%"></span></div></div>`).join('') || '<p class="text-muted">Fundusz nie ma udziałów w projektach miejskich.</p>'}</div>
         <h4>Projekty szukające finansowania</h4>
         <div class="bank-grid">${ppp.offers.map(offer => `
             <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${offer.icon}</span><div><h4>${escapeHtml(offer.name)}</h4><span class="bank-card-type">oferta ważna ${offer.weeksLeft} tyg.</span></div></header>
-                <dl class="bank-card-rates"><div><dt>Oprocentowanie</dt><dd>${(offer.rate * 100).toFixed(1)}%</dd></div><div><dt>Okres</dt><dd>${offer.termWeeks} tyg.</dd></div><div><dt>Do zebrania</dt><dd>${formatZl(offer.total - offer.raised, 0)}</dd></div></dl>
+                <dl class="bank-card-rates"><div><dt>Oprocentowanie</dt><dd>${formatNumberPl((offer.rate * 100), 1)}%</dd></div><div><dt>Okres</dt><dd>${offer.termWeeks} tyg.</dd></div><div><dt>Do zebrania</dt><dd>${formatZl(offer.total - offer.raised, 0)}</dd></div></dl>
                 <div class="bank-card-form"><input type="text" inputmode="numeric" id="ppp-amount-${offer.id}" value="${Math.min(offer.total - offer.raised, Math.floor(getFundPppCapacity()))}" aria-label="Kwota udziału">
                 <button onclick="investInPpp('${offer.id}', parseFloat(document.getElementById('ppp-amount-${offer.id}').value)); renderCityPpp();">Współfinansuj</button></div>
             </article>`).join('') || '<p class="text-muted">Brak otwartych projektów — miasto ogłasza nowe co kwartał.</p>'}</div>`;
@@ -7339,13 +7336,13 @@ function renderConstructionFinancing() {
         <p class="bank-lead">Spółki budowlane z budową w toku i niską gotówką proszą fundusz o pożyczkę pomostową. Spłata z odsetkami w terminie; przy braku gotówki jedno przedłużenie o 4 tygodnie, potem częściowa spłata; upadek wykonawcy = odzysk ${(BRIDGE_RECOVERY * 100).toFixed(0)}%. Limit: ${(BRIDGE_FUND_LIMIT * 100).toFixed(0)}% aktywów (wolne: ${formatZl(getFundBridgeCapacity(), 0)}).</p>
         <h4>Pożyczki funduszu</h4>
         <div class="bank-deposits">${loans.map(loan => `
-            <div class="bank-deposit"><div class="bank-deposit-info"><strong>${uiIcon('budownictwo', 14)} ${escapeHtml(loan.name)}</strong><span class="text-muted text-sm">${escapeHtml(loan.project)} · ${(loan.rate * 100).toFixed(1)}% · zostało ${loan.weeksLeft} tyg.${loan.extended ? ' · przedłużona' : ''}</span></div>
+            <div class="bank-deposit"><div class="bank-deposit-info"><strong>${uiIcon('budownictwo', 14)} ${escapeHtml(loan.name)}</strong><span class="text-muted text-sm">${escapeHtml(loan.project)} · ${formatNumberPl((loan.rate * 100), 1)}% · zostało ${loan.weeksLeft} tyg.${loan.extended ? ' · przedłużona' : ''}</span></div>
             <div class="bank-deposit-amount">${formatZl(loan.principal)} <span class="text-up text-sm">+${formatZl(loan.accrued)}</span></div><span></span>
             <div class="bank-deposit-progress"><span style="width:${(100 * (1 - loan.weeksLeft / loan.termWeeks)).toFixed(0)}%"></span></div></div>`).join('') || '<p class="text-muted">Fundusz nie finansuje żadnej budowy.</p>'}</div>
         <h4>Prośby o finansowanie</h4>
         <div class="bank-grid">${bridgeLoanOffers.map(offer => `
             <article class="bank-card bank-type-internet"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('budownictwo', 20)}</span><div><h4>${escapeHtml(offer.name)}</h4><span class="bank-card-type">${escapeHtml(offer.project)}</span></div></header>
-                <dl class="bank-card-rates"><div><dt>Kwota</dt><dd>${formatZl(offer.amount, 0)}</dd></div><div><dt>Oprocentowanie</dt><dd>${(offer.rate * 100).toFixed(1)}%</dd></div><div><dt>Okres</dt><dd>${offer.weeks} tyg.</dd></div></dl>
+                <dl class="bank-card-rates"><div><dt>Kwota</dt><dd>${formatZl(offer.amount, 0)}</dd></div><div><dt>Oprocentowanie</dt><dd>${formatNumberPl((offer.rate * 100), 1)}%</dd></div><div><dt>Okres</dt><dd>${offer.weeks} tyg.</dd></div></dl>
                 <button onclick="fundBridgeLoan('${offer.id}'); renderConstructionFinancing();">Udziel pożyczki</button>
             </article>`).join('') || '<p class="text-muted">Brak próśb — pojawiają się, gdy budowlańcom brakuje gotówki na kontrakty.</p>'}</div>`;
 }
@@ -7617,7 +7614,7 @@ function openTakeoverModal(symbol) {
         <div class="bank-ticker">
             <div class="bank-ticker-item"><span>${process.hostile === false ? 'Przyjazny oferent' : 'Agresor'}</span><strong>${escapeHtml(initiator.name)}</strong></div>
             <div class="bank-ticker-item"><span>Cena oferty (premia ${((offer.premium || 0) * 100).toFixed(0)}%)</span><strong>${formatZl(offer.buyoutPricePerShare)}</strong></div>
-            <div class="bank-ticker-item"><span>Udział funduszu</span><strong>${(pct * 100).toFixed(1)}% · ${formatZl(value, 0)}</strong></div>
+            <div class="bank-ticker-item"><span>Udział funduszu</span><strong>${formatNumberPl((pct * 100), 1)}% · ${formatZl(value, 0)}</strong></div>
         </div>
         <p class="text-sm">${escapeHtml(process.statusMessage || '')}</p>
         ${defense}
@@ -7749,7 +7746,7 @@ function renderGovernance() {
         const gov = ensureGovernance(stock);
         const pct = getFundStakePct(stock);
         return `<button class="gov-company ${stock.symbol === governanceView.symbol ? 'active' : ''}" onclick="openGovernanceModal('${stock.symbol}')">
-            <strong>${escapeHtml(stock.symbol)}</strong> <span class="text-xs">${(pct * 100).toFixed(1)}%</span>
+            <strong>${escapeHtml(stock.symbol)}</strong> <span class="text-xs">${formatNumberPl((pct * 100), 1)}%</span>
             <span class="text-xs text-muted d-block">${gov.pendingAgm ? `${uiIcon('glosowanie', 14)} walne w przyszłym kwartale` : `walne za ${gov.quartersToAgm} kw.`}</span>
         </button>`;
     }).join('') : '<p class="text-muted text-sm">Fundusz nie ma akcji żadnej spółki.</p>';
@@ -7765,7 +7762,7 @@ function renderShareholderBars(stock) {
     return rows.map(h => `<div class="gov-bar ${h.kind === 'player' ? 'is-fund' : ''}">
         <span class="gov-bar-name">${escapeHtml(h.name)}</span>
         <span class="gov-bar-track"><span style="width:${Math.min(100, h.pct * 100).toFixed(1)}%"></span></span>
-        <span class="gov-bar-pct">${h.entity?.isMafia ? `~${Math.max(5, Math.round(h.pct * 20) * 5)}%` : `${(h.pct * 100).toFixed(1)}%`}</span>
+        <span class="gov-bar-pct">${h.entity?.isMafia ? `~${Math.max(5, Math.round(h.pct * 20) * 5)}%` : `${formatNumberPl((h.pct * 100), 1)}%`}</span>
     </div>`).join('');
 }
 
@@ -7796,7 +7793,7 @@ function renderGovernanceDetail(stock) {
 
     return `
         <div class="bank-ticker">
-            <div class="bank-ticker-item"><span>${escapeHtml(stock.name)}</span><strong>${(pct * 100).toFixed(1)}% głosów</strong></div>
+            <div class="bank-ticker-item"><span>${escapeHtml(stock.name)}</span><strong>${formatNumberPl((pct * 100), 1)}% głosów</strong></div>
             <div class="bank-ticker-item"><span>Rada nadzorcza</span><strong>${seats.label}</strong></div>
             <div class="bank-ticker-item"><span>Najbliższe walne</span><strong>${gov.pendingAgm ? 'w przyszłym kwartale' : `za ${gov.quartersToAgm} kw.`}</strong></div>
             <div class="bank-ticker-item"><span>Ostatnia frekwencja</span><strong>${last ? (last.turnout * 100).toFixed(0) + '%' : '—'}</strong></div>
@@ -7829,7 +7826,7 @@ function renderSparkline(values, { width = 160, height = 36 } = {}) {
 }
 
 function renderMacroPanel() {
-    const pct = (value, digits = 1) => `${(value * 100).toFixed(digits)}%`;
+    const pct = (value, digits = 1) => `${formatNumberPl((value * 100), digits)}%`;
     const series = key => macro.history.map(entry => entry[key]);
     const card = (icon, title, value, sub, key) => `
         <article class="bank-card macro-card"><header class="bank-card-head"><span class="bank-card-icon">${dataIcon(icon, 20)}</span><div><h4>${title}</h4><span class="bank-card-type">${sub}</span></div></header>
@@ -7953,10 +7950,10 @@ function openCountryPanel() {
 function renderSocietyClassBar() {
     const segments = SOCIETY_CLASSES.map(cls => {
         const share = society.classes[cls.id] || 0;
-        return `<span class="society-seg" style="width:${(share * 100).toFixed(2)}%;background:${CLASS_COLORS[cls.id]}" title="${escapeHtml(cls.name)}: ${(share * 100).toFixed(1)}%"></span>`;
+        return `<span class="society-seg" style="width:${(share * 100).toFixed(2)}%;background:${CLASS_COLORS[cls.id]}" title="${escapeHtml(cls.name)}: ${formatNumberPl((share * 100), 1)}%"></span>`;
     }).join('');
-    const legend = SOCIETY_CLASSES.map(cls => `<li><span class="society-dot" style="background:${CLASS_COLORS[cls.id]}"></span>${cls.icon} ${escapeHtml(cls.name)} <strong>${((society.classes[cls.id] || 0) * 100).toFixed(1)}%</strong>
-        <span class="text-xs text-muted">konsumpcja ×${getClassWeight(cls).toFixed(2)} · ${escapeHtml(cls.sectors.join(', '))}</span></li>`).join('');
+    const legend = SOCIETY_CLASSES.map(cls => `<li><span class="society-dot" style="background:${CLASS_COLORS[cls.id]}"></span>${cls.icon} ${escapeHtml(cls.name)} <strong>${formatNumberPl(((society.classes[cls.id] || 0) * 100), 1)}%</strong>
+        <span class="text-xs text-muted">konsumpcja ×${formatNumberPl(getClassWeight(cls), 2)} · ${escapeHtml(cls.sectors.join(', '))}</span></li>`).join('');
     return `<div class="society-classbar" role="img" aria-label="Struktura klas">${segments}</div><ul class="list-plain society-legend">${legend}</ul>`;
 }
 
@@ -7967,7 +7964,7 @@ function renderPartyBars(support) {
 
 function renderCountryPanel() {
     ensureSocietyState();
-    const pct = (v, d = 1) => `${(v * 100).toFixed(d)}%`;
+    const pct = (v, d = 1) => `${formatNumberPl((v * 100), d)}%`;
     const series = key => society.history.map(entry => entry[key]);
     const card = (icon, title, value, sub, key) => `
         <article class="bank-card macro-card"><header class="bank-card-head"><span class="bank-card-icon">${dataIcon(icon, 20)}</span><div><h4>${title}</h4><span class="bank-card-type">${sub}</span></div></header>
@@ -7987,15 +7984,15 @@ function renderCountryPanel() {
             <td class="text-xs text-muted">${pending?.law === id ? `${uiIcon('raport', 14)} zapowiedź: → ${escapeHtml(describeLawLevel(id, pending.to))} od przyszłego kwartału` : `zmiany: ${society.lawChanges[id] || 0}`}</td>
             <td>${law.levels.map((_, i) => `<span class="law-pip ${i <= level ? 'on' : ''}"></span>`).join('')}</td></tr>`;
     }).join('');
-    const wages = WORKFORCE_GROUPS.map(g => `<tr><td>${escapeHtml(g.name)}</td><td class="cell-number ${society.wages[g.id] > 1.005 ? 'text-down' : society.wages[g.id] < 0.995 ? 'text-up' : ''}">${society.wages[g.id].toFixed(3)}</td></tr>`).join('');
+    const wages = WORKFORCE_GROUPS.map(g => `<tr><td>${escapeHtml(g.name)}</td><td class="cell-number ${society.wages[g.id] > 1.005 ? 'text-down' : society.wages[g.id] < 0.995 ? 'text-up' : ''}">${formatNumberPl(society.wages[g.id], 3)}</td></tr>`).join('');
     return `
         <p class="bank-lead">Kraj to ludzie: od struktury klas zależy popyt (sektory luksusowe kontra podstawowe), od płac i zadowolenia — koszt pracy w spółkach, od ustaw — budżet państwa i bezrobocie. Liczby płac to indeksy realne (1,00 = poziom startowy, bez inflacji).</p>
         <div class="bank-grid">
-            ${card('👥', 'Populacja', formatPopulation(society.population), `${lastGrowth >= 0 ? '+' : ''}${(lastGrowth * 100).toFixed(2)}% w kwartale`, 'population')}
-            ${card('🛒', 'Indeks popytu', society.demandIndex.toFixed(3), 'start = 1,000 · Σ udział × waga', 'demand')}
+            ${card('👥', 'Populacja', formatPopulation(society.population), `${lastGrowth >= 0 ? '+' : ''}${formatNumberPl((lastGrowth * 100), 2)}% w kwartale`, 'population')}
+            ${card('🛒', 'Indeks popytu', formatNumberPl(society.demandIndex, 3), 'start = 1,000 · Σ udział × waga', 'demand')}
             ${card('🎓', 'Edukacja', `${society.education.toFixed(0)}/100`, `priorytet państwa: ${EDUCATION_LABELS[society.educationPriority]} (cel ${EDUCATION_TARGETS[society.educationPriority]})`, 'education')}
             ${card('✈️', 'Migracja', `${(m.lastPeople || 0) >= 0 ? '+' : ''}${Math.round(m.lastPeople || 0).toLocaleString('pl-PL')}`, `atrakcyjność kraju ${Number(m.attractiveness || 0).toFixed(0)}/100${m.lowQuarters ? ` · ${uiIcon('alert', 14)} ${m.lowQuarters} kw. poniżej 40` : ''}`, 'migration')}
-            ${card('🧠', 'Niedobór specjalistów', society.shortage.toFixed(2), society.shortage > 1 ? 'popyt > podaż: płace specjalistów rosną' : 'podaż wystarcza', 'shortage')}
+            ${card('🧠', 'Niedobór specjalistów', formatNumberPl(society.shortage, 2), society.shortage > 1 ? 'popyt > podaż: płace specjalistów rosną' : 'podaż wystarcza', 'shortage')}
         </div>
         <div class="bank-grid mt-3">
             <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('dom', 20)}</span><div><h4>Struktura społeczna</h4><span class="bank-card-type">6 klas zamożności</span></div></header>
@@ -8046,12 +8043,12 @@ function renderCompanyCardWorkforce(stock) {
     const premium = 1 + (Number(wf.wagePremium) || 0);
     const rows = WORKFORCE_GROUPS.map(g => {
         const wage = (g.id === 'grey' ? getMarketWage('cheap') * GREY_WAGE_FACTOR : getMarketWage(g.id) * premium) * (Number(wf.payMult) || 1);
-        return `<tr class="${g.id === 'grey' && counts.grey > 0 ? 'text-down' : ''}"><td>${escapeHtml(g.name)}</td><td class="cell-number">${counts[g.id].toLocaleString('pl-PL')}</td><td class="cell-number">${wage.toFixed(2)}</td></tr>`;
+        return `<tr class="${g.id === 'grey' && counts.grey > 0 ? 'text-down' : ''}"><td>${escapeHtml(g.name)}</td><td class="cell-number">${counts[g.id].toLocaleString('pl-PL')}</td><td class="cell-number">${formatNumberPl(wage, 2)}</td></tr>`;
     }).join('');
     const satClass = wf.satisfaction >= 70 ? 'text-up' : wf.satisfaction < 35 ? 'text-down' : '';
     const policyButtons = controls ? `<div class="d-flex gap-2 flex-wrap mt-2">${LABOR_POLICY_ORDER.map(id => `<button class="btn-xs ${id === wf.policy ? '' : 'btn-secondary'}" ${locked || id === wf.policy ? 'disabled' : ''} onclick="setLaborPolicy('${stock.symbol}', '${id}'); renderCompanyCard();">${dataIcon(LABOR_POLICIES[id].icon)} ${LABOR_POLICIES[id].name}</button>`).join('')}</div>
         <p class="text-xs text-muted">${locked ? `Blokada: kolejna zmiana za ${wf.policyLockUntil - getWorkforceQuarter()} kw.` : 'Możesz (nie musisz) zmienić politykę. Marża dochodzi do nowej polityki w 2 kwartały, zadowolenie zmienia się od razu (obniżka −15, podwyżka +5). Blokada: 4 kwartały.'}</p>` : '<p class="text-xs text-muted">Politykę ustala prezes według cech. Zmienić ją może większościowy akcjonariusz (> 50%).</p>';
-    const decision = pending && controls ? `<div class="mail-action"><p>${uiIcon('piesc', 14)} ${pending.strike ? 'Trwa strajk' : `Związek żąda +${(pending.raise * 100).toFixed(1)}%`} — decyzja do końca kwartału${pending.choice ? ` (wybrano: <strong>${{ agree: 'zgoda', negotiate: 'negocjacje', refuse: 'odmowa' }[pending.choice]}</strong>)` : ' (bez odpowiedzi zdecyduje prezes)'}.</p>
+    const decision = pending && controls ? `<div class="mail-action"><p>${uiIcon('piesc', 14)} ${pending.strike ? 'Trwa strajk' : `Związek żąda +${formatNumberPl((pending.raise * 100), 1)}%`} — decyzja do końca kwartału${pending.choice ? ` (wybrano: <strong>${{ agree: 'zgoda', negotiate: 'negocjacje', refuse: 'odmowa' }[pending.choice]}</strong>)` : ' (bez odpowiedzi zdecyduje prezes)'}.</p>
         <button onclick="respondUnionDemand('${stock.symbol}', 'agree'); renderCompanyCard();">Zgoda</button> <button class="btn-secondary" onclick="respondUnionDemand('${stock.symbol}', 'negotiate'); renderCompanyCard();">Negocjacje</button> <button class="btn-danger" onclick="respondUnionDemand('${stock.symbol}', 'refuse'); renderCompanyCard();">Odmowa</button></div>` : '';
     const poachTargets = controls ? stocks.filter(s => s !== stock && hasWorkforce(s) && s.ceo && !s.isBankrupt).sort((a, b) => (b.ceo.traits?.length || 0) - (a.ceo.traits?.length || 0)).slice(0, 25) : [];
     const poach = controls ? `<h4 class="mt-3">Podkup prezesa</h4>
@@ -8063,11 +8060,11 @@ function renderCompanyCardWorkforce(stock) {
         <div class="cc-grid">
             <section><h4>Zatrudnienie: ${wf.employees.toLocaleString('pl-PL')} osób</h4>
                 <table class="asset-mini-table w-full"><thead><tr><th>Grupa</th><th class="cell-number">Osób</th><th class="cell-number" title="Płaca względem startowego poziomu rynku (1,00), z polityką i podwyżkami związkowymi">Płaca</th></tr></thead><tbody>${rows}</tbody></table>
-                <p class="text-sm">Koszt pracy: <strong class="${laborPct > sectorPct * 1.05 ? 'text-down' : laborPct < sectorPct * 0.95 ? 'text-up' : ''}">${(laborPct * 100).toFixed(1)}% przychodów</strong> · średnia sektora ${(sectorPct * 100).toFixed(1)}% · indeks kosztu pracy ${index.toFixed(3)}</p>
+                <p class="text-sm">Koszt pracy: <strong class="${laborPct > sectorPct * 1.05 ? 'text-down' : laborPct < sectorPct * 0.95 ? 'text-up' : ''}">${formatNumberPl((laborPct * 100), 1)}% przychodów</strong> · średnia sektora ${formatNumberPl((sectorPct * 100), 1)}% · indeks kosztu pracy ${formatNumberPl(index, 3)}</p>
                 <p class="text-xs text-muted">Marża = marża bazowa + ${(wf.laborShare * 100).toFixed(0)}% × (1 − indeks). Niższy indeks (tańsza praca, wyższa wydajność) podnosi marżę — ale z dźwignią operacyjną działa to w obie strony.</p></section>
             <section><h4>Ludzie i polityka</h4>
                 <p class="m-0">Zadowolenie: <strong class="${satClass}">${wf.satisfaction.toFixed(0)}/100</strong> ${sat}</p>
-                <p class="text-xs text-muted mt-0">cel ${getSatisfactionTarget(stock).toFixed(0)} · wydajność ${(((wf.productivity || 1) + (wf.productivityBonus || 0)) * 100).toFixed(1)}%${wf.rotation ? ` · rotacja ${(wf.rotation * 100).toFixed(1)}%/kw.` : ''}${wf.layoffs ? ` · ${uiIcon('alert', 14)} zwolnienia` : ''}</p>
+                <p class="text-xs text-muted mt-0">cel ${getSatisfactionTarget(stock).toFixed(0)} · wydajność ${formatNumberPl((((wf.productivity || 1) + (wf.productivityBonus || 0)) * 100), 1)}%${wf.rotation ? ` · rotacja ${formatNumberPl((wf.rotation * 100), 1)}%/kw.` : ''}${wf.layoffs ? ` · ${uiIcon('alert', 14)} zwolnienia` : ''}</p>
                 <p class="m-0">Polityka kadrowa: <strong>${dataIcon(policy.icon)} ${policy.name}</strong> <span class="text-xs text-muted">(${{ owner: 'decyzja funduszu', bot: 'decyzja większościowca', ceo: 'decyzja prezesa' }[wf.policySetBy] || 'decyzja prezesa'})</span></p>
                 ${policyButtons}
                 <p class="m-0 mt-2">Związek: <strong>${{ none: 'brak', company: `${uiIcon('piesc', 14)} zakładowy`, sector: `${uiIcon('piesc', 14)} sektorowy` }[status]}</strong>${union?.agreementUntil >= getWorkforceQuarter() ? ` · ${uiIcon('raport', 14)} układ zbiorowy do kw. ${union.agreementUntil}` : ''}${wf.strike ? ` · <strong class="text-down">STRAJK (−${(wf.strike.pct * 100).toFixed(0)}% przychodów, ${wf.strike.quarters}. kw.)</strong>` : ''}</p>
@@ -8109,7 +8106,7 @@ function renderCompanyCardGroup(stock) {
     const level = getSkillLevel('accountant');
     const groupRows = [
         parent ? `<li>↑ matka: ${name(parent)}${Number.isFinite(stock.parentStakePct) ? ` (${(stock.parentStakePct * 100).toFixed(0)}%)` : ''}</li>` : '',
-        ...children.map(c => { const stake = (stock.equityStakes?.[c.symbol] || 0) / Math.max(1, c.totalShares); return `<li>↳ zależna: ${name(c)} — ${(stake * 100).toFixed(0)}%, pakiet ${formatZl(getMarketCapValue(c) * stake, 0)} · transfer zysku ${(getProfitTransferRate(c) * 100).toFixed(0)}%${c.groupLoan ? ` · pożyczka ${formatZl(c.groupLoan.principal, 0)} (${(c.groupLoan.rate * 100).toFixed(1)}%${isOffMarketGroupLoan(c) && level >= 4 ? ' 🚩' : ''})` : ''}${canFundControlAgm(stock) ? renderSubsidiaryControls(c, stake) : ''}</li>`; })
+        ...children.map(c => { const stake = (stock.equityStakes?.[c.symbol] || 0) / Math.max(1, c.totalShares); return `<li>↳ zależna: ${name(c)} — ${(stake * 100).toFixed(0)}%, pakiet ${formatZl(getMarketCapValue(c) * stake, 0)} · transfer zysku ${(getProfitTransferRate(c) * 100).toFixed(0)}%${c.groupLoan ? ` · pożyczka ${formatZl(c.groupLoan.principal, 0)} (${formatNumberPl((c.groupLoan.rate * 100), 1)}%${isOffMarketGroupLoan(c) && level >= 4 ? ' 🚩' : ''})` : ''}${canFundControlAgm(stock) ? renderSubsidiaryControls(c, stake) : ''}</li>`; })
     ].filter(Boolean).join('');
     const coops = getStockCooperations(stock).map(coop => {
         const side = getCoopSide(coop, stock);
