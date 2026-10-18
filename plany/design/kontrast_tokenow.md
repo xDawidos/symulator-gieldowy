@@ -15,6 +15,17 @@ Wygenerowane przez `narzedzia/gen_tokens.py`. AA: tekst ≥ 4,5:1, elementy UI (
 | `color/border/strong` | 4.29 | 4.07 | 3.81 | 4.17 | OK (min 3.0) |
 | `color/border/accent` | 9.53 | 9.04 | 8.46 | 9.27 | OK (min 3.0) |
 | `color/focus` | 14.40 | 13.66 | 12.78 | 14.01 | OK (min 3.0) |
+| `color/phase/accumulation` | 10.45 | 9.91 | 9.27 | 10.17 | OK (min 4.5) |
+| `color/phase/bull` | 10.91 | 10.34 | 9.68 | 10.61 | OK (min 4.5) |
+| `color/phase/euphoria` | 14.92 | 14.15 | 13.24 | 14.51 | OK (min 4.5) |
+| `color/phase/distribution` | 7.95 | 7.54 | 7.05 | 7.73 | OK (min 4.5) |
+| `color/phase/bear` | 7.01 | 6.65 | 6.22 | 6.82 | OK (min 4.5) |
+| `color/phase/capitulation` | 6.63 | 6.28 | 5.88 | 6.44 | OK (min 4.5) |
+| `color/sentiment/extreme-fear` | 7.01 | 6.65 | 6.22 | 6.82 | OK (min 4.5) |
+| `color/sentiment/fear` | 9.54 | 9.04 | 8.46 | 9.28 | OK (min 4.5) |
+| `color/sentiment/neutral` | 6.18 | 5.86 | 5.48 | 6.01 | OK (min 4.5) |
+| `color/sentiment/greed` | 12.93 | 12.26 | 11.47 | 12.57 | OK (min 4.5) |
+| `color/sentiment/extreme-greed` | 10.91 | 10.34 | 9.68 | 10.61 | OK (min 4.5) |
 
 | Para | Kontrast | Wynik |
 |---|---|---|

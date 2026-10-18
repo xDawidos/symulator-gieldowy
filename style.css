@@ -4811,3 +4811,129 @@ body.dark-mode #stock-table thead th, #stock-table thead th { top: calc(var(--si
 .sector-filter-controls select, .sector-filter-controls input[type="checkbox"] { min-height: var(--size-target-min); }
 .sector-filter-controls input[type="checkbox"], .fund-open-subscriptions input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--color-bg-accent); }
 .sector-filter-controls label, .fund-open-subscriptions { min-height: var(--size-target-min); align-items: center; display: inline-flex; gap: var(--space-2); }
+
+/* ===================== 0.15 „HOSSA I BESSA” — komponenty widoku (projekt: plany/design/05b_ui_0.15.md) =====================
+   Gotowe do użycia przez czat kodu (H2b, H6b). Kolor faz i stref zawsze z ikoną/nazwą/liczbą — nigdy sam. */
+
+/* faza rynku (znacznik) */
+.market-phase { display: inline-flex; align-items: center; gap: var(--space-1); font-family: var(--font-family-sans); font-weight: 600; color: var(--phase-color, var(--color-text-primary)); white-space: nowrap; }
+.phase--accumulation { --phase-color: var(--color-phase-accumulation); }
+.phase--bull { --phase-color: var(--color-phase-bull); }
+.phase--euphoria { --phase-color: var(--color-phase-euphoria); }
+.phase--distribution { --phase-color: var(--color-phase-distribution); }
+.phase--bear { --phase-color: var(--color-phase-bear); }
+.phase--capitulation { --phase-color: var(--color-phase-capitulation); }
+
+/* strefa wskaźnika strachu i chciwości (słowo zawsze obok liczby) */
+.sentiment--extreme-fear { --sentiment-color: var(--color-sentiment-extreme-fear); }
+.sentiment--fear { --sentiment-color: var(--color-sentiment-fear); }
+.sentiment--neutral { --sentiment-color: var(--color-sentiment-neutral); }
+.sentiment--greed { --sentiment-color: var(--color-sentiment-greed); }
+.sentiment--extreme-greed { --sentiment-color: var(--color-sentiment-extreme-greed); }
+.sentiment-word { color: var(--sentiment-color, var(--color-text-secondary)); font-weight: 600; }
+
+/* KPI nastroju w górnym pasku (L4; przy L5 klikalny — otwiera okno „Rynek”) */
+.mood-kpi {
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+  padding: 0 var(--space-2); margin: 0 calc(-1 * var(--space-2));
+  background: transparent !important; border: 1px solid transparent !important; border-radius: var(--radius-sm) !important;
+  color: var(--color-text-primary) !important; text-align: left; font: inherit; cursor: default;
+}
+button.mood-kpi { cursor: pointer; }
+button.mood-kpi:hover { background: var(--color-bg-hover) !important; border-color: var(--color-border-default) !important; }
+.mood-kpi-row { display: flex; align-items: baseline; gap: var(--space-2); white-space: nowrap; }
+.mood-kpi .market-phase { font-size: var(--text-body-strong-size); }
+.mood-kpi .market-phase .ic { align-self: center; }
+.mood-value { font-family: var(--font-family-mono); font-size: var(--text-num-strong-size); font-weight: 600; }
+.mood-kpi .sentiment-word { font-size: var(--text-caption-size); }
+.mood-kpi.is-confirming .market-phase { color: var(--color-text-secondary); }
+.mood-confirming { margin-left: var(--space-1); padding: 0 var(--space-1); border: 1px dashed var(--color-border-strong); border-radius: var(--radius-xs); font-size: 11px; font-weight: 600; letter-spacing: var(--text-label-track); text-transform: uppercase; color: var(--color-text-muted); }
+
+/* pasek 5 stref ze znacznikiem (--mood: 0–100) */
+.mood-meter { position: relative; display: block; width: var(--mood-meter-w); height: var(--mood-meter-h); margin-top: 2px;
+  background: linear-gradient(90deg,
+    var(--color-sentiment-extreme-fear) 0 19%, transparent 19% 20%,
+    var(--color-sentiment-fear) 20% 39%, transparent 39% 40%,
+    var(--color-sentiment-neutral) 40% 59%, transparent 59% 60%,
+    var(--color-sentiment-greed) 60% 79%, transparent 79% 80%,
+    var(--color-sentiment-extreme-greed) 80% 100%);
+  border-radius: 2px; opacity: 0.9; }
+.mood-meter > i { position: absolute; top: -3px; left: calc(var(--mood, 50) * 1%); width: 3px; height: calc(var(--mood-meter-h) + 6px); margin-left: -1px; border-radius: 1px; background: var(--color-text-primary); box-shadow: 0 0 0 2px var(--color-bg-surface); }
+/* wersja kompaktowa (mobile): ikona fazy + liczba */
+.mood-kpi--compact .phase-name,
+.mood-kpi--compact .sentiment-word,
+.mood-kpi--compact .mood-meter,
+.mood-kpi--compact .mood-confirming,
+.mood-kpi--compact .topbar-kpi-label { display: none; }
+@media (max-width: 860px) {
+  .mood-kpi .phase-name, .mood-kpi .sentiment-word, .mood-kpi .mood-meter, .mood-kpi .mood-confirming { display: none; }
+}
+
+/* dymek podpowiedzi (Figma: Tooltip) — także dla opisu fazy */
+.tooltip { position: absolute; z-index: 300; width: 260px; padding: var(--space-2) var(--space-3); background: var(--color-bg-raised); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); box-shadow: var(--shadow-popover); color: var(--color-text-secondary); font-size: var(--text-caption-size); line-height: 1.45; }
+.tooltip[hidden] { display: none; }
+.tooltip strong { display: block; margin-bottom: 2px; color: var(--color-text-primary); font-size: var(--text-body-strong-size); }
+
+/* okno „Rynek” (L5) — wzorzec okien Państwo/Kraj */
+.market-window { --bank-gold: var(--color-section-market); }
+.market-grid { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: var(--space-4); align-items: start; }
+.gauge { display: flex; flex-direction: column; align-items: center; gap: var(--space-1); padding: var(--space-3); background: var(--color-bg-raised); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); }
+.gauge svg { width: var(--gauge-size); max-width: 100%; height: auto; display: block; }
+.gauge-value { font-family: var(--font-family-mono); font-size: var(--text-num-xl-size); font-weight: 600; line-height: 1; }
+.gauge .sentiment-word { font-size: var(--text-body-size); }
+.gauge-caption { font-size: var(--text-caption-size); color: var(--color-text-muted); text-align: center; }
+.sentiment-cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-2); }
+.sentiment-card { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: var(--space-2) var(--space-3); background: var(--color-bg-raised); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); }
+.sentiment-card .label { font-size: var(--text-label-size); font-weight: 600; letter-spacing: var(--text-label-track); text-transform: uppercase; color: var(--color-text-muted); }
+.sentiment-card .value { font-family: var(--font-family-mono); font-size: var(--text-num-strong-size); font-weight: 600; }
+.sentiment-card .hint { font-size: var(--text-caption-size); color: var(--color-text-muted); }
+.sparkline { width: 100%; height: var(--sparkline-h); display: block; }
+.sparkline path { fill: none; stroke: var(--sentiment-color, var(--color-text-info)); stroke-width: 1.5; }
+.gig-chart { position: relative; height: 200px; background: var(--color-bg-surface); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); overflow: hidden; }
+.gig-chart svg { width: 100%; height: 100%; display: block; }
+.phase-band { fill: var(--phase-color); opacity: 0.12; }
+.phase-band-label { fill: var(--phase-color); font-family: var(--font-family-sans); font-size: 11px; font-weight: 600; }
+.phase-history { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.phase-history li { display: grid; grid-template-columns: 110px 170px minmax(0, 1fr); gap: var(--space-3); align-items: center; min-height: 36px; border-bottom: 1px solid var(--color-border-subtle); font-size: var(--text-body-sm-size); }
+.phase-history .when { font-family: var(--font-family-mono); color: var(--color-text-muted); }
+.phase-history .retro-label { font-weight: 400; color: var(--color-text-muted); margin-right: var(--space-1); }
+@media (max-width: 860px) {
+  .market-grid { grid-template-columns: 1fr; }
+  .sentiment-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .phase-history li { grid-template-columns: 90px minmax(0, 1fr); }
+  .phase-history li > :last-child { grid-column: 1 / -1; }
+}
+
+/* premia sektora (skaner L5, karta spółki): znak + wartość, „bańka” jako znacznik */
+.sector-premium { display: inline-flex; align-items: center; gap: var(--space-1); font-family: var(--font-family-mono); font-weight: 600; white-space: nowrap; }
+.sector-premium.up { color: var(--color-text-warn); }   /* premia dodatnia = drożej niż zwykle (ostrzeżenie, nie zysk) */
+.sector-premium.down { color: var(--color-text-info); } /* premia ujemna = taniej niż zwykle */
+.sector-premium.flat { color: var(--color-text-secondary); }
+
+/* osiągnięcia (zakładka CV i szkolenia) */
+.achievements { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--achievement-w), 1fr)); gap: var(--space-2); }
+.achievement { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: var(--space-3); align-items: start; padding: var(--space-3); background: var(--color-bg-raised); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); }
+.achievement-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--radius-md); background: var(--color-bg-accent-soft); color: var(--color-text-accent); border: 1px solid var(--color-border-accent); }
+.achievement h5 { margin: 0; font-size: var(--text-body-strong-size); color: var(--color-text-primary); }
+.achievement p { margin: 2px 0 0; font-size: var(--text-caption-size); color: var(--color-text-secondary); }
+.achievement .meta { margin-top: var(--space-1); font-family: var(--font-family-mono); font-size: var(--text-caption-size); color: var(--color-text-muted); }
+.achievement.is-hidden { background: transparent; border-style: dashed; border-color: var(--color-border-default); }
+.achievement.is-hidden .achievement-icon { background: var(--color-bg-raised); color: var(--color-text-muted); border-color: var(--color-border-default); }
+.achievement.is-hidden h5 { color: var(--color-text-muted); letter-spacing: 0.2em; }
+.achievements-summary { display: flex; align-items: center; gap: var(--space-3); margin: var(--space-2) 0; font-size: var(--text-body-sm-size); color: var(--color-text-secondary); }
+.achievements-summary .mini-progress { width: 120px; }
+.notif-item.notif-item--achievement { border-left-color: var(--color-text-accent); }
+.notif-item.notif-item--achievement > .ic { color: var(--color-text-accent); }
+
+/* poziomy umiejętności: drabinka L1–L5 i podgląd odblokowania */
+.level-steps { display: flex; gap: 3px; margin: 2px 0 var(--space-1); }
+.level-steps > i { flex: 1; height: 4px; border-radius: 2px; background: var(--color-border-default); }
+.level-steps > i.is-done { background: var(--color-text-accent); }
+.level-steps > i.is-next { background: transparent; outline: 1px dashed var(--color-border-accent); outline-offset: -1px; }
+.unlock-preview { margin-top: var(--space-1); padding: var(--space-2); border: 1px dashed var(--color-border-default); border-radius: var(--radius-sm); background: var(--color-bg-sunken); }
+.unlock-preview .label { display: block; margin-bottom: var(--space-1); font-size: var(--text-label-size); font-weight: 600; letter-spacing: var(--text-label-track); text-transform: uppercase; color: var(--color-text-muted); }
+
+/* 0.15: przy KPI nastroju w pasku data gry chowa się poniżej 1500 px (zostaje w dymku KPI), żeby pasek się nie zawijał */
+@media (max-width: 1500px) { .topbar:has(.mood-kpi) .topbar-date { display: none; } }
+.bank-ticker-item strong span { font-size: inherit; letter-spacing: 0; text-transform: none; }
+.bank-ticker-item small { font-size: var(--text-caption-size); color: var(--color-text-muted); }

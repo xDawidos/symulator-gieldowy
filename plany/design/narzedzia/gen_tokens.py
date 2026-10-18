@@ -124,7 +124,7 @@ rows = ['# Kontrast tokenów (wygenerowane)', '',
         '|---|' + '---|' * (len(bgs) + 1)]
 fails = 0
 for name, v in T['color'].items():
-    if not (name.startswith('color/text/') or name in ('color/border/strong', 'color/focus', 'color/border/accent')):
+    if not (name.startswith('color/text/') or name.startswith('color/phase/') or name.startswith('color/sentiment/') or name in ('color/border/strong', 'color/focus', 'color/border/accent')):
         continue
     if name in ('color/text/on-accent', 'color/text/on-danger', 'color/text/disabled'):
         continue

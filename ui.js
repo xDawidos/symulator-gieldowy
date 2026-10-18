@@ -135,7 +135,26 @@ const UI_ICON_PATHS = {
     raport: 'M6 3h9l4 4v14H6zM14 3v5h5M9 13h6M9 17h6',
     lider: 'M12 3l3 6 6 .9-4.5 4.3 1 6.3L12 17.5 6.5 20.5l1-6.3L3 9.9 9 9z',
     grupa: 'M3 21V9h7v12M14 21V4h7v17M3 21h18M6 13h1M6 17h1M17 8h1M17 12h1M17 16h1',
-    badania: 'M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3M7.5 15h9'
+    badania: 'M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3M7.5 15h9',
+    // 0.15 „Hossa i bessa” (projekt: plany/design/05b_ui_0.15.md) — fazy rynku
+    'faza-akumulacja': 'M12 21v-9M12 13c0-4.5 3-7 7.5-7 0 4.5-3 7-7.5 7zM12 15c0-3.5-2.5-5.5-6.5-5.5 0 3.5 2.5 5.5 6.5 5.5zM6 21h12',
+    'faza-hossa': 'M3 17l6-6 4 4 8-8M15 7h6v6',
+    'faza-euforia': 'M14 4c4-1 6 1 6 1s2 2 1 6l-6 6-7-7zM9 10l-4 1-2 3 4 1M14 15l-1 4-3 2-1-4M15.5 8.5v.01M4 20c1-3 2-4 4-4',
+    'faza-dystrybucja': 'M3 14c2-4 4-5 6-3s4 3 6 0 4-3 6 1M3 19h18',
+    'faza-bessa': 'M3 7l6 6 4-4 8 8M15 17h6v-6',
+    'faza-kapitulacja': 'M12 3v13M6 10l6 6 6-6M4 21h16',
+    // 0.15 osiągnięcia
+    'osiagniecie-kryzys': 'M3 12a9 9 0 0 1 18 0zM12 12v7a2 2 0 0 0 4 0',
+    'osiagniecie-wygrana': 'M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4',
+    'osiagniecie-krew': 'M12 3c3 4.5 6 8 6 11a6 6 0 0 1-12 0c0-3 3-6.5 6-11z',
+    'osiagniecie-banka': 'M11 20a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM8 11a3 3 0 0 1 3-3M19 5l2-2M20 9h2M16 3V1',
+    'osiagniecie-jednorozec': 'M4 20l4-8 3 2 5-9 1 6 3 1-4 8zM16 5l3-3',
+    'osiagniecie-statek': 'M3 16l2 4h14l2-4zM6 16V9h12v7M12 9V3M12 3l5 3-5 2',
+    'osiagniecie-pulapka': 'M4 8h16l-2 12H6zM9 8V5h6v3M10 13l4 4M14 13l-4 4',
+    'osiagniecie-zimna-krew': 'M12 2v20M4 6l16 12M20 6L4 18M9 3l3 2 3-2M9 21l3-2 3 2',
+    'osiagniecie-hossa': 'M3 17l6-6 4 4 8-8M15 7h6v6M3 21h18',
+    'osiagniecie-cykl': 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM15.5 8.5l-2 5-5 2 2-5z',
+    'osiagniecie-dlugo': 'M3 20h18M5 17l4-5 3 3 4-6 3 2M5 7h3M5 4h6'
 };
 
 const SECTOR_ICON_PATHS = {
