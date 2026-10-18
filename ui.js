@@ -199,7 +199,7 @@ function formatMainSectorLabel(stock) {
     const main = getMainSector(stock);
     if (!main) return '—';
     const sub = getMainSubsector(stock);
-    return `${SECTORS[main]?.icon || ''} ${main}${sub ? ` · ${sub}` : ''}`.trim();
+    return `${main}${sub ? ` · ${sub}` : ''}`.trim(); // 0.14.5: bez emoji (ikonę rysuje widok)
 }
 
 /** T2: mediana podsektora obok mediany sektora (gdy podsektor ma ≥ 3 spółki). */
@@ -538,9 +538,10 @@ function drawLineChart(data, svg, getX, getY) {
     const svgNs = "http://www.w3.org/2000/svg";
     if (data.length < 2) return;
 
-    const colorProfit = '#28a745';
-    const colorLoss = '#dc3545';
-    const colorNeutral = '#6c757d';
+    // 0.14.5: kolory z tokenów (style, bo atrybuty SVG nie przyjmują var())
+    const colorProfit = 'var(--color-chart-up)';
+    const colorLoss = 'var(--color-chart-down)';
+    const colorNeutral = 'var(--color-text-muted)';
 
     for (let i = 1; i < data.length; i++) {
         const prevPrice = data[i - 1];
@@ -561,7 +562,7 @@ function drawLineChart(data, svg, getX, getY) {
             line.setAttribute("y1", y1.toString());
             line.setAttribute("x2", x2.toString());
             line.setAttribute("y2", y2.toString());
-            line.setAttribute("stroke", segmentColor);
+            line.style.stroke = segmentColor;
             line.setAttribute("stroke-width", "2");
             svg.appendChild(line);
         }
@@ -587,18 +588,21 @@ function drawCandlestickChart(history, svg, chartWidth, getX, getY) {
         const yLow = getY(candle.low);
         
         const isBullish = candle.close >= candle.open;
-        const color = isBullish ? '#28a745' : '#dc3545';
+        const color = isBullish ? 'var(--color-chart-up)' : 'var(--color-chart-down)';
 
         const wick = document.createElementNS(svgNs, "line");
         wick.setAttribute("x1", x.toString()); wick.setAttribute("y1", yHigh.toString());
         wick.setAttribute("x2", x.toString()); wick.setAttribute("y2", yLow.toString());
-        wick.setAttribute("stroke", color); wick.setAttribute("stroke-width", "1");
+        wick.style.stroke = color; wick.setAttribute("stroke-width", "1");
         svg.appendChild(wick);
         
         const body = document.createElementNS(svgNs, "rect");
         body.setAttribute("x", (x - candleWidth / 2).toString()); body.setAttribute("y", (isBullish ? yClose : yOpen).toString());
-        body.setAttribute("width", candleWidth.toString()); body.setAttribute("height", Math.abs(yOpen - yClose).toString());
-        body.setAttribute("fill", color);
+        body.setAttribute("width", candleWidth.toString()); body.setAttribute("height", Math.max(1, Math.abs(yOpen - yClose)).toString());
+        // świeca rosnąca pusta w środku, malejąca pełna — kierunek widać nie tylko po kolorze
+        body.style.fill = isBullish ? 'var(--color-bg-surface)' : color;
+        body.style.stroke = color;
+        body.setAttribute("stroke-width", "1");
         svg.appendChild(body);
     });
 }
@@ -737,15 +741,16 @@ function renderChartSVGForStock(stock, svgAreaElement, width, height) {
             gridLine.setAttribute("y1", y.toString());
             gridLine.setAttribute("x2", (padding.left + chartWidth).toString());
             gridLine.setAttribute("y2", y.toString());
-            gridLine.setAttribute("stroke", "#e0e0e0");
+            gridLine.style.stroke = 'var(--color-border-subtle)';
             gridLine.setAttribute("stroke-dasharray", "2,2");
             svg.appendChild(gridLine);
             const textLabel = document.createElementNS(svgNs, "text");
             textLabel.setAttribute("x", (padding.left - 8).toString());
             textLabel.setAttribute("y", (y + 4).toString());
-            textLabel.setAttribute("font-size", "10");
+            textLabel.setAttribute("font-size", "11");
             textLabel.setAttribute("text-anchor", "end");
-            textLabel.textContent = priceVal.toFixed(2);
+            textLabel.setAttribute("class", "chart-axis-label");
+            textLabel.textContent = formatNumberPl(priceVal, 2);
             svg.appendChild(textLabel);
         }
     }
@@ -1477,7 +1482,7 @@ function showPriceHistoryModal(symbol) {
     const candleIntervalSelect = document.getElementById('candle-chart-interval-select');
     const openAlertBtn = document.getElementById('open-alert-modal-btn');
 
-    chartTitle.textContent = `Historia Cen: ${stock.name} (${stock.symbol})`;
+    chartTitle.textContent = `Wykres: ${stock.name} (${stock.symbol})`;
 
     const redrawChart = () => {
         const svgWidth = svgArea.offsetWidth;
@@ -3109,6 +3114,8 @@ function updateChartTypeButtons() {
     lineBtn.classList.add('chart-type-btn');
     candlestickBtn.classList.toggle('active', playerChartSettings.type === 'candlestick');
     lineBtn.classList.toggle('active', playerChartSettings.type !== 'candlestick');
+    candlestickBtn.setAttribute('aria-pressed', String(playerChartSettings.type === 'candlestick'));
+    lineBtn.setAttribute('aria-pressed', String(playerChartSettings.type !== 'candlestick'));
 }
 
 // Motyw: od 0.14.5 gra ma jeden, ciemny motyw (decyzja redesignu). toggleDarkMode zostaje dla zgodności.
@@ -3133,12 +3140,12 @@ function applyInitialTheme() {
 let companyCardView = { symbol: null, tab: 'overview' };
 
 const COMPANY_CARD_TABS = [
-    ['overview', '📋 Przegląd'],
-    ['finance', '📊 Finanse'],
-    ['owners', '👥 Akcjonariat'],
-    ['manage', '🏛️ Zarządzanie'],
-    ['workforce', '👷 Zatrudnienie'],
-    ['group', '🏢 Grupa'] // 0.14 T5: karta koncernu
+    ['overview', 'Przegląd'],
+    ['finance', 'Finanse'],
+    ['owners', 'Akcjonariat'],
+    ['manage', 'Zarządzanie'],
+    ['workforce', 'Zatrudnienie'],
+    ['group', 'Grupa'] // 0.14 T5: karta koncernu
 ];
 
 function openDescriptionModal(symbol, tab = null) {
@@ -3159,7 +3166,7 @@ function setCompanyCardTab(tab) {
 
 function formatRatio(value, eps) {
     if (value === null || value === undefined || !Number.isFinite(value)) return eps < 0 ? 'strata' : '—';
-    return value.toFixed(1);
+    return formatNumberPl(value, 1);
 }
 
 function renderCompanyCard() {
@@ -3182,36 +3189,37 @@ function renderCompanyCard() {
     document.getElementById('company-card-header').innerHTML = `
         <div class="cc-header">
             <div>
-                <h2 class="m-0">${escapeHtml(stock.name)} <span class="text-muted text-sm">${escapeHtml(stock.symbol)}</span></h2>
-                <div class="text-sm text-muted">${escapeHtml(sector)} · ${escapeHtml(exchange)}${stock.isStateOwned ? ' · 🏛️ Skarb Państwa' : ''}${typeof isConcern === 'function' && isConcern(stock) ? ' · 🏢 koncern' : ''}${stock.ceo?.name ? ` · prezes ${escapeHtml(stock.ceo.name)}` : ''}</div>
+                <div class="cc-kicker">${sectorIcon(getMainSector(stock), 14)}${escapeHtml(sector)} · ${escapeHtml(stripEmoji(exchange))}</div>
+                <h2 class="m-0">${escapeHtml(stock.name)} <span class="cc-symbol">${escapeHtml(stock.symbol)}</span></h2>
+                <div class="text-sm text-muted">${stock.isStateOwned ? '<span class="badge badge--neutral">Skarb Państwa</span> ' : ''}${typeof isConcern === 'function' && isConcern(stock) ? '<span class="badge badge--info">koncern</span> ' : ''}${stock.ceo?.name ? `prezes ${escapeHtml(stock.ceo.name)}` : ''}</div>
             </div>
             <div class="cc-price">
                 <strong>${formatZl(stock.price)}</strong>
-                <span class="${week > 0 ? 'text-up' : week < 0 ? 'text-down' : 'text-muted'}">${week >= 0 ? '+' : ''}${(week * 100).toFixed(2)}% tydz.</span>
+                <span class="${week > 0 ? 'text-up' : week < 0 ? 'text-down' : 'text-muted'}">${week > 0 ? '▲' : week < 0 ? '▼' : '■'} ${formatPct(week)} w tygodniu</span>
             </div>
         </div>
         ${renderSegmentBar(stock)}
         ${typeof renderDividendBadges === 'function' ? renderDividendBadges(stock) : ''}
-        ${stock.pendingDividend ? `<p class="text-sm cc-exdiv">✂️ Ogłoszona dywidenda <strong>${stock.pendingDividend.dps.toFixed(2)} PLN/akcję</strong> — dzień odcięcia za ok. ${Math.max(1, Math.round(stock.dividendTimer / BASE_DELAYS.weekly))} tydz. gry. Dywidendę dostaje, kto ma akcje w dniu odcięcia; tego dnia kurs spada o mniej więcej jej wartość.</p>` : ''}`;
+        ${stock.pendingDividend ? `<p class="text-sm cc-exdiv">Ogłoszona dywidenda <strong>${formatZl(stock.pendingDividend.dps)} na akcję</strong> — dzień odcięcia za ok. ${Math.max(1, Math.round(stock.dividendTimer / BASE_DELAYS.weekly))} tydz. gry. Dywidendę dostaje, kto ma akcje w dniu odcięcia; tego dnia kurs spada o mniej więcej jej wartość.</p>` : ''}`;
 
     // N1: porównanie z medianą sektora pod wartością kafelka.
     const med = typeof getSectorMedians === 'function' ? getSectorMedians(getMainSector(stock)) : null;
     const vs = (value, sectorValue, options) => { const c = med && typeof compareWithSector === 'function' ? compareWithSector(value, sectorValue, options) : null; return c ? `<em class="${c.cls}">${c.text}</em>` : ''; };
     const tile = (label, value, hint, cls = '', extra = '') => `<div class="cc-kpi" title="${escapeHtml(hint)}"><span>${label}</span><strong class="${cls}">${value}</strong>${extra}</div>`;
-    const pctFmt = v => `${(v * 100).toFixed(1)}%`;
+    const pctFmt = v => `${formatNumberPl(v * 100, 1)}%`;
     document.getElementById('company-card-kpis').innerHTML = [
         tile('Kapitalizacja', formatZl(getMarketCapValue(stock), 0), 'Kurs × liczba akcji: ile rynek płaci za całą spółkę.'),
         tile('C/Z', formatRatio(f?.peRatio, f?.epsTtm), 'Cena / zysk na akcję z 4 kwartałów. Niżej = taniej względem zysków (porównuj w sektorze).', '', vs(f?.peRatio > 0 ? f.peRatio : NaN, med?.pe)),
-        tile('C/WK', f?.pbRatio ? f.pbRatio.toFixed(2) : '—', 'Cena / wartość księgowa na akcję. Poniżej 1 = rynek wycenia spółkę niżej niż jej majątek netto.', '', vs(f?.pbRatio, med?.pb, { format: v => v.toFixed(2) })),
-        tile('Stopa dywidendy', `${(dividendYield * 100).toFixed(2)}%`, 'Dywidendy z ostatniego roku / kurs.', '', dividendYield > 0 ? vs(dividendYield, med?.dy, { lowerIsCheap: false, format: pctFmt, labels: ['wyższa', 'niższa'] }) : ''),
-        tile('Zadłużenie', debtRatio === null ? '—' : `${(debtRatio * 100).toFixed(0)}%`, 'Zobowiązania / aktywa. Powyżej ~70% spółka jest mocno zadłużona.', debtRatio > 0.7 ? 'text-down' : '', vs(debtRatio, med?.debt, { format: pctFmt, labels: ['niższe', 'wyższe'] })),
-        tile('Kondycja', `${health.toFixed(1)} · ${healthLabel}`, 'Kondycja finansowa od −5 (bankructwo) do +5.', health >= 1 ? 'text-up' : health <= -2 ? 'text-down' : '')
+        tile('C/WK', f?.pbRatio ? formatNumberPl(f.pbRatio, 2) : '—', 'Cena / wartość księgowa na akcję. Poniżej 1 = rynek wycenia spółkę niżej niż jej majątek netto.', '', vs(f?.pbRatio, med?.pb, { format: v => v.toFixed(2) })),
+        tile('Stopa dywidendy', `${formatNumberPl(dividendYield * 100, 2)}%`, 'Dywidendy z ostatniego roku / kurs.', '', dividendYield > 0 ? vs(dividendYield, med?.dy, { lowerIsCheap: false, format: pctFmt, labels: ['wyższa', 'niższa'] }) : ''),
+        tile('Zadłużenie', debtRatio === null ? '—' : `${formatNumberPl(debtRatio * 100, 0)}%`, 'Zobowiązania / aktywa. Powyżej ~70% spółka jest mocno zadłużona.', debtRatio > 0.7 ? 'text-down' : '', vs(debtRatio, med?.debt, { format: pctFmt, labels: ['niższe', 'wyższe'] })),
+        tile('Kondycja', `${formatNumberPl(health, 1)} · ${healthLabel}`, 'Kondycja finansowa od −5 (bankructwo) do +5.', health >= 1 ? 'text-up' : health <= -2 ? 'text-down' : '')
     ].join('') + renderSubsectorMedianLine(stock, med);
 
     document.getElementById('company-card-tabs').innerHTML = COMPANY_CARD_TABS
         .filter(([id]) => id !== 'workforce' || (typeof hasWorkforce === 'function' && hasWorkforce(stock)))
         .filter(([id]) => id !== 'group' || hasGroupCard(stock))
-        .map(([id, label]) => `<button class="${companyCardView.tab === id ? 'active' : ''}" onclick="setCompanyCardTab('${id}')">${label}</button>`).join('');
+        .map(([id, label]) => `<button role="tab" aria-selected="${companyCardView.tab === id}" class="${companyCardView.tab === id ? 'active' : ''}" onclick="setCompanyCardTab('${id}')">${label}</button>`).join('');
 
     if (typeof unlockAcademyEntry === 'function') ['cwk', 'dywidenda', 'zadluzenie'].forEach(id => unlockAcademyEntry(id));
     const body = document.getElementById('company-card-body');
@@ -3682,9 +3690,115 @@ function initializeDraggableModals() {
 
 window.addEventListener('keydown', event => {
     if (event.key === 'Escape') {
+        // 0.14.5: najpierw poczta (nakładka), potem zwykłe okna; scenka startowa się nie zamyka
+        const mail = document.getElementById('mail-overlay');
+        if (mail && !mail.hidden) { closeMailbox(); return; }
+        if (document.getElementById('game-confirm-modal')?.style.display === 'block') { closeGameConfirm(false); return; }
         closeVisibleModals();
     }
 });
+
+// =================================================================================
+// 0.14.5 WSPÓLNA OBSŁUGA OKIEN (02_dostepnosc.md §4): rola dialogu, tytuł, zasłona,
+// fokus do okna i z powrotem, pułapka Tab. Działa dla wszystkich open…Modal() bez ich zmiany —
+// obserwuje style/hidden okien (.modal i nakładek .intro-overlay).
+// =================================================================================
+const modalA11y = { stack: [], observer: null };
+const FOCUSABLE_SELECTOR = 'button:not([disabled]), a[href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
+
+function isDialogElement(el) {
+    return el instanceof HTMLElement && (el.classList.contains('modal') || el.classList.contains('intro-overlay'));
+}
+
+function isDialogOpen(el) {
+    if (el.classList.contains('intro-overlay')) return !el.hidden;
+    return el.style.display !== '' && el.style.display !== 'none';
+}
+
+function onDialogOpened(el) {
+    if (modalA11y.stack.some(entry => entry.el === el)) return;
+    modalA11y.stack.push({ el, returnFocus: document.activeElement });
+    const box = el.classList.contains('intro-overlay') ? (el.firstElementChild || el) : el;
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    const title = box.querySelector('h1, h2, h3');
+    if (title) {
+        if (!title.id) title.id = `${el.id || 'okno'}-tytul`;
+        box.setAttribute('aria-labelledby', title.id);
+    }
+    if (!box.hasAttribute('tabindex')) box.tabIndex = -1;
+    if (!box.contains(document.activeElement)) {
+        try { box.focus({ preventScroll: true }); } catch (e) { /* element niewidoczny */ }
+    }
+    updateModalBackdrop();
+}
+
+function onDialogClosed(el) {
+    const index = modalA11y.stack.findIndex(entry => entry.el === el);
+    if (index < 0) return;
+    const [{ returnFocus }] = modalA11y.stack.splice(index, 1);
+    updateModalBackdrop();
+    if (returnFocus && document.contains(returnFocus) && typeof returnFocus.focus === 'function' && !modalA11y.stack.length) {
+        try { returnFocus.focus({ preventScroll: true }); } catch (e) { /* brak */ }
+    }
+}
+
+function updateModalBackdrop() {
+    const anyModal = modalA11y.stack.some(entry => entry.el.classList.contains('modal'));
+    let backdrop = document.getElementById('modal-backdrop');
+    if (anyModal && !backdrop) {
+        backdrop = document.createElement('div');
+        backdrop.id = 'modal-backdrop';
+        backdrop.className = 'modal-backdrop';
+        document.body.appendChild(backdrop);
+    }
+    if (backdrop) backdrop.hidden = !anyModal;
+    document.body.classList.toggle('has-dialog', modalA11y.stack.length > 0);
+}
+
+function watchDialog(el) {
+    if (!modalA11y.observer || el.dataset.dialogWatched) return;
+    el.dataset.dialogWatched = '1';
+    modalA11y.observer.observe(el, { attributes: true, attributeFilter: ['style', 'hidden'] });
+    if (isDialogOpen(el)) onDialogOpened(el);
+}
+
+function initDialogA11y() {
+    if (typeof MutationObserver === 'undefined' || modalA11y.observer) return;
+    modalA11y.observer = new MutationObserver(records => {
+        for (const record of records) {
+            const el = record.target;
+            if (isDialogOpen(el)) onDialogOpened(el); else onDialogClosed(el);
+        }
+    });
+    document.querySelectorAll('.modal, .intro-overlay').forEach(watchDialog);
+    // okna tworzone później (skaner, potwierdzenie…) — bezpośrednie dzieci body
+    new MutationObserver(records => {
+        for (const record of records) for (const node of record.addedNodes) if (isDialogElement(node)) watchDialog(node);
+    }).observe(document.body, { childList: true });
+    // pułapka fokusu: Tab nie wychodzi z najwyższego okna
+    document.addEventListener('keydown', event => {
+        if (event.key !== 'Tab' || !modalA11y.stack.length) return;
+        const top = modalA11y.stack[modalA11y.stack.length - 1].el;
+        const items = [...top.querySelectorAll(FOCUSABLE_SELECTOR)].filter(node => node.offsetParent !== null);
+        if (!items.length) return;
+        const first = items[0], last = items[items.length - 1];
+        if (event.shiftKey && (document.activeElement === first || !top.contains(document.activeElement))) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && (document.activeElement === last || !top.contains(document.activeElement))) { event.preventDefault(); first.focus(); }
+    });
+    // elementy role="button" (wiersze poczty, karty klientów) — Enter/Spacja jak kliknięcie
+    document.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        const target = event.target;
+        if (!(target instanceof HTMLElement) || target.matches('button, a, input, select, textarea, summary') || target.getAttribute('role') !== 'button') return;
+        event.preventDefault();
+        target.click();
+    });
+}
+if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initDialogA11y);
+    else initDialogA11y();
+}
 
 window.addEventListener('DOMContentLoaded', initializeDraggableModals);
 
@@ -5849,7 +5963,7 @@ function renderCvPanel() {
     const money = document.getElementById('skills-modal-xp');
     if (!list) return;
     if (money) money.textContent = playerWallet.cash.toFixed(2);
-    const tabs = `<div class="cc-tabs"><button class="${cvTab === 'cv' ? 'active' : ''}" onclick="setCvTab('cv')">📄 CV i szkolenia</button><button class="${cvTab === 'academy' ? 'active' : ''}" onclick="setCvTab('academy')">📘 Akademia</button><button class="${cvTab === 'mentor' ? 'active' : ''}" onclick="setCvTab('mentor')">🎓 Mentor</button></div>`;
+    const tabs = `<div class="cc-tabs" role="tablist"><button role="tab" aria-selected="${cvTab === 'cv'}" class="${cvTab === 'cv' ? 'active' : ''}" onclick="setCvTab('cv')">CV i szkolenia</button><button role="tab" aria-selected="${cvTab === 'academy'}" class="${cvTab === 'academy' ? 'active' : ''}" onclick="setCvTab('academy')">Akademia</button><button role="tab" aria-selected="${cvTab === 'mentor'}" class="${cvTab === 'mentor' ? 'active' : ''}" onclick="setCvTab('mentor')">Mentor</button></div>`;
     if (cvTab === 'academy' && typeof renderAcademyPanel === 'function') {
         list.innerHTML = tabs + renderAcademyPanel();
         return;
@@ -6425,7 +6539,7 @@ function renderMailbox() {
             <button class="btn-secondary" onclick="mailAction(markAllMailRead, '${mailView.folder}')">Oznacz wszystkie jako przeczytane</button>
         </div>
         ${messages.length ? messages.slice(0, 80).map(message => `
-            <div class="mail-row ${message.read ? '' : 'unread'} ${message.id === mailView.selectedId ? 'selected' : ''}" onclick="selectMail(${message.id})">
+            <div class="mail-row ${message.read ? '' : 'unread'} ${message.id === mailView.selectedId ? 'selected' : ''}" role="button" tabindex="0" aria-current="${message.id === mailView.selectedId ? 'true' : 'false'}" onclick="selectMail(${message.id})">
                 <button class="mail-star ${message.starred ? 'on' : ''}" onclick="event.stopPropagation(); mailAction(toggleMailStar, ${message.id})" aria-label="Gwiazdka">${message.starred ? '★' : '☆'}</button>
                 <span class="mail-from">${escapeHtml(getMailSenderName(message.sender))}</span>
                 <span class="mail-subject">${message.importance >= 3 ? '❗ ' : ''}${message.isSpam ? '<span class="mail-tag">Reklama</span> ' : ''}${escapeHtml(message.subject)}
@@ -6853,7 +6967,7 @@ function renderJuMarket() {
                 <p>Średni koszt udziału: ${formatZl(client.avgCost)} · zysk na udziale: ${formatPremium(gain)}${client.loyal ? ' · 💙 lojalny' : ''}${client.pendingSellUnits > 0 ? ` · wystawił ${client.pendingSellUnits.toFixed(1)} JU na rynku wtórnym` : ''}</p>
                 <ul class="list-plain text-sm">${(client.history || []).map(item => `<li><span class="text-muted">t.${item.week}</span> ${escapeHtml(item.text)}</li>`).join('') || '<li class="text-muted">Brak historii.</li>'}</ul>
             </div>` : '';
-        return `<div class="ju-client ${juView.clientId === client.id ? 'open' : ''}" onclick="showJuClient(${client.id})">
+        return `<div class="ju-client ${juView.clientId === client.id ? 'open' : ''}" role="button" tabindex="0" aria-expanded="${juView.clientId === client.id}" onclick="showJuClient(${client.id})">
             <span class="ju-client-icon" title="${escapeHtml(def.label)}">${def.icon}</span>
             <span class="ju-client-name">${escapeHtml(client.name)}<small class="text-muted"> ${escapeHtml(def.label)}</small></span>
             <span class="ju-client-units">${formatNumberPl(client.units, 1)} udz. · ${formatZl(client.units * nav, 0)}</span>
