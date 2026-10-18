@@ -46,6 +46,48 @@ function getSectorFilterBaseList() {
     return (stocks || []).filter(stock => !stock.isBankrupt && !stock.isSubsidiaryOf && stock.assetType !== 'Startup');
 }
 
+function toggleSectorGroupMenu(btn, e) {
+    if (e) e.stopPropagation();
+    const menu = btn.nextElementSibling;
+    if (!menu) return;
+    const isExpanded = btn.getAttribute('aria-expanded') === 'true';
+    closeAllSectorGroupMenus();
+    if (!isExpanded) {
+        btn.setAttribute('aria-expanded', 'true');
+        menu.hidden = false;
+        const firstItem = menu.querySelector('button');
+        if (firstItem) firstItem.focus();
+    }
+}
+
+function closeAllSectorGroupMenus() {
+    document.querySelectorAll('.sector-group-dropdown .sector-group-menu').forEach(m => {
+        m.hidden = true;
+        const btn = m.previousElementSibling;
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+    });
+}
+
+if (typeof window !== 'undefined') {
+    window.toggleSectorGroupMenu = toggleSectorGroupMenu;
+    window.closeAllSectorGroupMenus = closeAllSectorGroupMenus;
+    window.addEventListener('click', (e) => {
+        if (!e.target.closest('.sector-group-dropdown')) {
+            closeAllSectorGroupMenus();
+        }
+    });
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            const openMenu = document.querySelector('.sector-group-dropdown .sector-group-menu:not([hidden])');
+            if (openMenu) {
+                const btn = openMenu.previousElementSibling;
+                closeAllSectorGroupMenus();
+                if (btn) btn.focus();
+            }
+        }
+    });
+}
+
 /**
  * Wspólny renderer chipów (lista spółek i skaner). state: { sector, subsector, secondary, type },
  * onChange: nazwa funkcji globalnej przyjmującej obiekt zmian.
@@ -57,8 +99,34 @@ function renderSectorFilterChips(list, state, onChange, options = {}) {
     const groups = SECTOR_GROUPS.map(group => {
         const items = group.sectors.filter(name => sectors[name] > 0 || state.sector === name);
         if (!items.length) return '';
-        const label = group.sectors.length > 1 ? `<span class="sector-group">${escapeHtml(group.name)}:</span>` : ''; // 0.14.5: grupa jako etykieta tekstowa
-        return `${label}${items.map(name => chip(`${sectorIcon(name)}${escapeHtml(name)} <small>${sectors[name] || 0}</small>`, state.sector === name, { sector: name }, `${group.name}: ${name}`)).join('')}`;
+        if (group.sectors.length === 1) {
+            const name = group.sectors[0];
+            return chip(`${sectorIcon(name)}${escapeHtml(name)} <small>${sectors[name] || 0}</small>`, state.sector === name, { sector: name }, `${group.name}: ${name}`);
+        }
+        const isGroupActive = group.sectors.includes(state.sector);
+        const activeSectorName = isGroupActive ? state.sector : null;
+        const groupCount = items.reduce((acc, name) => acc + (sectors[name] || 0), 0);
+        let btnLabel;
+        if (activeSectorName) {
+            btnLabel = `${sectorIcon(activeSectorName)}${escapeHtml(activeSectorName)} <small>${sectors[activeSectorName] || 0}</small>`;
+        } else {
+            btnLabel = `${escapeHtml(group.name)} <small>${groupCount}</small>`;
+        }
+        const menuItems = items.map(name => {
+            const isItemActive = state.sector === name;
+            return `<button type="button" role="menuitem" class="sector-menu-item${isItemActive ? ' active' : ''}" onclick="closeAllSectorGroupMenus(); ${call({ sector: name })}">
+                <span>${sectorIcon(name)}${escapeHtml(name)}</span>
+                <small>${sectors[name] || 0}</small>
+            </button>`;
+        }).join('');
+        return `<div class="sector-group-dropdown">
+            <button type="button" class="sector-chip sector-group-btn${isGroupActive ? ' active' : ''}" aria-haspopup="menu" aria-expanded="false" onclick="toggleSectorGroupMenu(this, event)">
+                ${btnLabel} ${uiIcon('chevron-down', 12)}
+            </button>
+            <div class="sector-group-menu" role="menu" hidden>
+                ${menuItems}
+            </div>
+        </div>`;
     }).join('');
     const subNames = state.sector !== 'all' ? Object.keys(SECTORS[state.sector]?.subsectors || {}).filter(name => subsectors[name] > 0) : [];
     const subRow = subNames.length
@@ -82,7 +150,7 @@ function renderSectorFilters() {
     const signature = chipHtml + extraHtml;
     if (signature === sectorFilterSignature) return;
     sectorFilterSignature = signature;
-    chips.querySelectorAll('.sector-chip:not(.owned-chip), .sector-group').forEach(node => node.remove());
+    chips.querySelectorAll('.sector-chip:not(.owned-chip), .sector-group, .sector-group-dropdown').forEach(node => node.remove());
     chips.insertAdjacentHTML('beforeend', chipHtml);
     if (extra) extra.innerHTML = extraHtml;
     const select = document.getElementById('sector-filter');

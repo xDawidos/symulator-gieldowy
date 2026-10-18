@@ -3062,10 +3062,13 @@ button {
 /* ---------- Chipy filtrów (Figma: Chip) ---------- */
 .sector-chips {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
   align-items: center;
   gap: var(--space-2);
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-2);
+  scrollbar-width: thin;
+  padding-bottom: 4px;
 }
 .sector-chip {
   display: inline-flex;
@@ -3081,6 +3084,8 @@ button {
   font-weight: 400;
   cursor: pointer;
   user-select: none;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 .sector-chip:hover { background: var(--color-bg-hover) !important; border-color: var(--color-border-strong) !important; color: var(--color-text-primary) !important; }
 .sector-chip.active,
@@ -3092,6 +3097,64 @@ button {
 .sector-chip small { margin-left: 0; font-family: var(--font-family-mono); font-size: var(--text-num-sm-size); color: var(--color-text-muted); opacity: 1; font-weight: 400; }
 .sector-chip .ic-sector { color: var(--color-text-muted); }
 .sector-chip.active .ic-sector { color: var(--color-text-accent); }
+.sector-group-dropdown {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+.sector-group-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.sector-group-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  min-width: 190px;
+  background: var(--modal-bg, var(--color-bg-surface));
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--modal-shadow);
+  padding: var(--space-1);
+  gap: 2px;
+}
+.sector-group-menu[hidden] {
+  display: none !important;
+}
+.sector-group-menu .sector-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 0 !important;
+  border-radius: var(--radius-sm) !important;
+  background: transparent !important;
+  color: var(--color-text-secondary) !important;
+  font-size: var(--text-body-sm-size);
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+.sector-group-menu .sector-menu-item:hover,
+.sector-group-menu .sector-menu-item:focus {
+  background: var(--color-bg-hover) !important;
+  color: var(--color-text-primary) !important;
+}
+.sector-group-menu .sector-menu-item.active {
+  background: var(--color-bg-accent-soft) !important;
+  color: var(--color-text-primary) !important;
+  font-weight: 600;
+}
+.sector-group-menu .sector-menu-item small {
+  font-family: var(--font-family-mono);
+  font-size: var(--text-num-sm-size);
+  color: var(--color-text-muted);
+}
 .sector-group {
   display: inline-flex;
   align-items: center;
@@ -3103,21 +3166,30 @@ button {
   color: var(--color-text-muted);
   opacity: 1;
 }
-.sector-filter-extra { margin: 0 0 var(--space-3); }
-.sector-subchips { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-2); }
+.sector-filter-extra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-2);
+}
+.sector-subchips { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: 0; }
 .sector-subchips .sector-chip { min-height: 26px; font-size: var(--text-caption-size); }
 .sector-filter-controls { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: center; color: var(--color-text-secondary); }
 
 /* ---------- Zakładki giełd ---------- */
 .market-level-tabs {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
   gap: 2px;
   margin-bottom: var(--space-3);
   padding: 2px;
   background: var(--color-bg-raised);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-sm);
+  scrollbar-width: thin;
 }
 .market-level-tab {
   display: inline-flex;
@@ -3131,6 +3203,8 @@ button {
   border: 1px solid transparent !important;
   font-size: var(--text-body-sm-size);
   font-weight: 400;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 .market-level-tab:hover { background: var(--color-bg-hover) !important; color: var(--color-text-primary) !important; }
 .market-level-tab.active {
