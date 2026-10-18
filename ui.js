@@ -2898,7 +2898,15 @@ function attachNewsTicker(track = null, viewport = null) {
         if (!el) return null;
         newsTicker.track = el; newsTicker.viewport = el.parentElement;
         const bar = document.getElementById('news-ticker');
-        if (bar) { bar.addEventListener('mouseenter', () => { newsTicker.paused = true; }); bar.addEventListener('mouseleave', () => { newsTicker.paused = false; }); }
+        if (bar) {
+            // 0.14.5: pauza po najechaniu, przy fokusie klawiatury i przyciskiem (WCAG 2.2.2)
+            const sync = () => { newsTicker.paused = Boolean(newsTicker.hover || newsTicker.focusInside || newsTicker.userPaused); };
+            bar.addEventListener('mouseenter', () => { newsTicker.hover = true; sync(); });
+            bar.addEventListener('mouseleave', () => { newsTicker.hover = false; sync(); });
+            bar.addEventListener('focusin', () => { newsTicker.focusInside = true; sync(); });
+            bar.addEventListener('focusout', () => { newsTicker.focusInside = false; sync(); });
+            newsTicker.syncPause = sync;
+        }
     }
     if (!newsTicker.raf && !track && typeof requestAnimationFrame === 'function') {
         const loop = ts => {
@@ -2992,6 +3000,7 @@ function showToast(message, type = 'default', duration = 3000) {
     // Ustaw tekst i odpowiednią klasę stylu
     toastElement.textContent = message;
     toastElement.className = ''; // Resetuj klasy
+    duration = Math.max(duration, 2500 + String(message).length * 50); // 0.14.5: dłuższy tekst = dłużej widoczny
     if (type !== 'default') {
         toastElement.classList.add(`toast-${type}`);
     }
@@ -7619,9 +7628,47 @@ function pushNotification(text, onOpen, isValid = null) {
     const item = document.createElement('div');
     item.className = 'notif-item';
     item.dataset.id = id;
-    item.innerHTML = `<span>${escapeHtml(text)}</span><button class="btn-xs" onclick="openNotification('${id}')">Otwórz</button><button class="notif-close" aria-label="Zamknij" onclick="dismissNotification('${id}')">✕</button>`;
+    item.innerHTML = `${uiIcon('info', 16)}<span>${escapeHtml(stripEmoji(text))}</span><button class="btn-ghost btn-sm" onclick="openNotification('${id}')">Otwórz</button><button class="notif-close" aria-label="Zamknij powiadomienie" onclick="dismissNotification('${id}')">${uiIcon('zamknij', 14)}</button>`;
     bar.prepend(item);
-    while (bar.children.length > 4) dismissNotification(bar.lastElementChild.dataset.id);
+    while (bar.querySelectorAll('.notif-item').length > 4) dismissNotification(bar.querySelector('.notif-item:last-of-type').dataset.id);
+    updateNotificationOverflow();
+}
+
+/** 0.14.5: przycisk pauzy paska wiadomości. */
+function toggleNewsTickerPause() {
+    newsTicker.userPaused = !newsTicker.userPaused;
+    if (typeof newsTicker.syncPause === 'function') newsTicker.syncPause(); else newsTicker.paused = newsTicker.userPaused;
+    const btn = document.getElementById('news-ticker-pause');
+    if (btn) {
+        btn.setAttribute('aria-pressed', String(newsTicker.userPaused));
+        btn.setAttribute('aria-label', newsTicker.userPaused ? 'Wznów pasek wiadomości' : 'Wstrzymaj pasek wiadomości');
+        btn.innerHTML = uiIcon(newsTicker.userPaused ? 'start' : 'pauza', 14);
+    }
+}
+
+/** 0.14.5: widoczne najwyżej 2 powiadomienia, reszta pod przyciskiem „+N”. */
+const NOTIF_VISIBLE = 2;
+function updateNotificationOverflow() {
+    const bar = document.getElementById('notif-bar');
+    if (!bar) return;
+    const items = [...bar.querySelectorAll('.notif-item')];
+    const expanded = bar.classList.contains('expanded');
+    items.forEach((item, index) => item.classList.toggle('is-collapsed', !expanded && index >= NOTIF_VISIBLE));
+    let more = bar.querySelector('.notif-more');
+    const hidden = items.length - NOTIF_VISIBLE;
+    if (hidden > 0) {
+        if (!more) {
+            more = document.createElement('button');
+            more.type = 'button';
+            more.className = 'notif-more btn-ghost btn-sm';
+            more.onclick = () => { bar.classList.toggle('expanded'); updateNotificationOverflow(); };
+            bar.appendChild(more);
+        }
+        more.textContent = expanded ? 'Zwiń powiadomienia' : `+${hidden} ${hidden === 1 ? 'powiadomienie' : hidden < 5 ? 'powiadomienia' : 'powiadomień'}`;
+    } else {
+        more?.remove();
+        bar.classList.remove('expanded');
+    }
 }
 
 function openNotification(id) {
@@ -7634,6 +7681,7 @@ function openNotification(id) {
 function dismissNotification(id) {
     notificationActions.delete(id);
     document.querySelector(`#notif-bar [data-id="${id}"]`)?.remove();
+    updateNotificationOverflow();
 }
 
 // =================================================================================

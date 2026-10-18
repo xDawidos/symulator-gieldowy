@@ -1146,8 +1146,9 @@
     <!-- Pilne wiadomości (0.11.3) -->
     <div id="breaking-news" class="breaking-news" role="alert" hidden></div>
     <div id="news-ticker" class="news-ticker" aria-label="Pasek wiadomości">
-        <button class="news-ticker-btn" onclick="toggleNewsHistory()" title="Historia ostatnich 50 wiadomości"></button>
+        <button class="news-ticker-btn" onclick="toggleNewsHistory()" title="Historia ostatnich 50 wiadomości" aria-label="Historia wiadomości"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h13v14H6a2 2 0 0 1-2-2zM17 9h3v8a2 2 0 0 1-2 2M7 9h7M7 13h7M7 16h4"/></svg></button>
         <div class="news-ticker-viewport"><div id="news-ticker-track" class="news-ticker-track"></div></div>
+        <button class="news-ticker-btn news-ticker-pause" id="news-ticker-pause" onclick="toggleNewsTickerPause()" aria-pressed="false" aria-label="Wstrzymaj pasek wiadomości" title="Wstrzymaj / wznów pasek"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg></button>
     </div>
     <div id="news-history" class="news-history" hidden></div>
 

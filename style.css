@@ -4640,3 +4640,45 @@ body.dark-mode #description-modal .ceo-trait,
   font-size: var(--text-caption-size);
   font-weight: 600;
 }
+
+/* ===================== 0.14.5 PASEK NEWSÓW I POWIADOMIENIA ===================== */
+.news-ticker { height: var(--size-ticker); background: var(--color-bg-sunken); border-bottom: 1px solid var(--color-border-subtle); color: var(--color-text-secondary); font-size: var(--text-caption-size); }
+.news-ticker-btn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 100%; padding: 0; border: 0 !important; border-right: 1px solid var(--color-border-subtle) !important; background: transparent !important; color: var(--color-text-muted) !important; border-radius: 0 !important; cursor: pointer; }
+.news-ticker-btn:hover { background: var(--color-bg-hover) !important; color: var(--color-text-primary) !important; }
+.news-ticker-pause { border-right: 0 !important; border-left: 1px solid var(--color-border-subtle) !important; }
+.news-ticker-pause[aria-pressed="true"] { color: var(--color-text-accent) !important; }
+.news-item.clickable { text-decoration: none; }
+.news-item.clickable:hover { color: var(--color-text-primary); text-decoration: underline; }
+.news-sep { color: var(--color-text-disabled); }
+.news-history { background: var(--color-bg-raised); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); box-shadow: var(--shadow-popover); }
+.news-history li { border-bottom-color: var(--color-border-subtle); }
+
+/* powiadomienia (Figma: Toast) */
+.notif-bar { right: var(--space-4); bottom: var(--space-4); width: min(var(--toast-w), calc(100vw - 32px)); max-width: none; align-items: stretch; }
+body.has-dialog .notif-bar { z-index: 1080; } /* pod zasłoną otwartego okna — nie zasłania decyzji */
+.notif-item { gap: var(--space-3); padding: var(--space-3); background: var(--toast-bg); border: 1px solid var(--color-border-default); border-left: 3px solid var(--color-text-info); border-radius: var(--radius-md); box-shadow: var(--toast-shadow); font-size: var(--text-body-sm-size); color: var(--color-text-primary); }
+.notif-item > .ic { color: var(--color-text-info); flex: none; }
+.notif-item.is-collapsed { display: none; }
+.notif-close { display: inline-flex; align-items: center; justify-content: center; width: var(--size-control-sm); height: var(--size-control-sm); padding: 0 !important; border: 1px solid var(--color-border-default) !important; border-radius: var(--radius-sm) !important; background: transparent !important; color: var(--color-text-secondary) !important; }
+.notif-close:hover { background: var(--color-bg-hover) !important; color: var(--color-text-primary) !important; }
+.notif-more { align-self: flex-end; background: var(--toast-bg) !important; border: 1px solid var(--color-border-default) !important; box-shadow: var(--toast-shadow); }
+
+/* krótki komunikat (showToast) */
+body.dark-mode #toast-notification,
+#toast-notification {
+  top: calc(var(--size-ticker) + var(--size-topbar) + var(--space-2));
+  max-width: min(520px, calc(100vw - 32px));
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--toast-bg) !important;
+  color: var(--color-text-primary) !important;
+  border: 1px solid var(--color-border-default);
+  border-left: 3px solid var(--color-text-info);
+  box-shadow: var(--toast-shadow);
+  font-size: var(--text-body-size);
+  font-weight: 400;
+  text-align: left;
+}
+body.dark-mode #toast-notification.toast-success, #toast-notification.toast-success { background: var(--toast-bg) !important; color: var(--color-text-primary) !important; border-left-color: var(--color-text-up); }
+body.dark-mode #toast-notification.toast-warning, #toast-notification.toast-warning { background: var(--toast-bg) !important; color: var(--color-text-primary) !important; border-left-color: var(--color-text-warn); }
+body.dark-mode #toast-notification.toast-error, #toast-notification.toast-error { background: var(--toast-bg) !important; color: var(--color-text-primary) !important; border-left-color: var(--color-text-down); }
