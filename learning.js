@@ -863,7 +863,7 @@ function renderAcademyPanel() {
         const entry = ACADEMY_ENTRIES[id];
         const open = id in academy.unlocked;
         return `<button class="academy-item ${id === selected ? 'active' : ''}" ${open ? `onclick="selectAcademyEntry('${id}')"` : 'disabled title="Hasło odblokujesz, gdy zetkniesz się z tym pojęciem w grze."'}>
-            ${open ? entry.icon : '🔒'} ${open ? escapeHtml(entry.title) : '???'} ${academy.quizzes[id] ? '<span class="academy-done">✔</span>' : ''}</button>`;
+            ${open ? entry.icon : (typeof uiIcon === 'function' ? uiIcon('klodka', 14) : '🔒')} ${open ? escapeHtml(entry.title) : '???'} ${academy.quizzes[id] ? '<span class="academy-done">✔</span>' : ''}</button>`;
     }).join('');
 
     let detail = '<p class="text-muted">Wybierz hasło.</p>';

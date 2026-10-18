@@ -6277,7 +6277,7 @@ function renderCvPanel() {
     const money = document.getElementById('skills-modal-xp');
     if (!list) return;
     if (money) money.textContent = formatNumberPl(playerWallet.cash, 2);
-    const tabs = `<div class="cc-tabs" role="tablist"><button role="tab" aria-selected="${cvTab === 'cv'}" class="${cvTab === 'cv' ? 'active' : ''}" onclick="setCvTab('cv')">CV i szkolenia</button><button role="tab" aria-selected="${cvTab === 'academy'}" class="${cvTab === 'academy' ? 'active' : ''}" onclick="setCvTab('academy')">Akademia</button><button role="tab" aria-selected="${cvTab === 'mentor'}" class="${cvTab === 'mentor' ? 'active' : ''}" onclick="setCvTab('mentor')">Mentor</button></div>`;
+    const tabs = `<div class="bank-tabs" role="tablist"><button role="tab" aria-selected="${cvTab === 'cv'}" class="bank-tab-btn ${cvTab === 'cv' ? 'active' : ''}" onclick="setCvTab('cv')">CV i szkolenia</button><button role="tab" aria-selected="${cvTab === 'academy'}" class="bank-tab-btn ${cvTab === 'academy' ? 'active' : ''}" onclick="setCvTab('academy')">Akademia</button><button role="tab" aria-selected="${cvTab === 'mentor'}" class="bank-tab-btn ${cvTab === 'mentor' ? 'active' : ''}" onclick="setCvTab('mentor')">Mentor</button></div>`;
     if (cvTab === 'academy' && typeof renderAcademyPanel === 'function') {
         list.innerHTML = tabs + renderAcademyPanel();
         return;

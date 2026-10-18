@@ -1536,9 +1536,10 @@ function renderGreyZone() {
     const select = (id, list, label) => list.length ? `<select id="${id}" aria-label="${label}">${list.map(([value, text]) => `<option value="${value}">${escapeHtml(text)}</option>`).join('')}</select>` : '<span class="text-xs text-muted">brak spółek</span>';
     const service = (id, form, action) => {
         const s = GREY_SERVICES[id];
-        return `<article class="grey-card"><h4>${s.icon} ${s.label}</h4><p class="text-sm text-muted">${s.desc}</p>
+        const icon = typeof uiIcon === 'function' ? uiIcon(id === 'leak' ? 'news' : id === 'debt' ? 'raport' : id === 'underTable' ? 'teczka' : 'budownictwo', 16) : s.icon;
+        return `<article class="grey-card"><h4>${icon} ${escapeHtml(s.label)}</h4><p class="text-sm text-muted">${escapeHtml(s.desc)}</p>
             <p class="text-xs">Koszt od ${formatZl(getGreyServiceCost(id), 0)} z funduszu · ryzyko: ${s.risk >= 25 ? 'wysokie' : 'średnie'}</p>
-            <div class="bank-card-form">${form}<button class="btn-danger" onclick="${action}; renderGreyZone(); if (typeof displayCash === 'function') displayCash();">Zleć</button></div></article>`;
+            <div class="bank-card-form">${form}<button class="btn-secondary" onclick="${action}; renderGreyZone(); if (typeof displayCash === 'function') displayCash();">Zleć</button></div></article>`;
     };
     body.innerHTML = `
         <p class="bank-lead">Usługi „ze szarej strefy” płaci fundusz. Każda zwiększa korupcję i podejrzenia wobec funduszu. Wykrycie: kara z funduszu, spadek zaufania klientów, wpis compliance w CV (ocena zarządu), a przy powtórkach rekwizycja i blokada handlu. ${CONVICTION_STRIKES}. wykrycie = wyrok.</p>

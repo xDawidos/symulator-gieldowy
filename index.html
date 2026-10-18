@@ -144,31 +144,33 @@
                 </h2>
 
                 <p id="startup-fund-limit" class="bank-lead startup-panel-content"></p>
-                <div id="investment-pool-panel" class="panel startup-panel-content"> <h2>Pula start-upów</h2>
-                    <p>Wpłacaj środki do wspólnej puli, która automatycznie inwestuje w obiecujące projekty. Zyski dzielone są proporcjonalnie!</p>
-                    <div class="d-flex justify-around items-center">
+                <div id="investment-pool-panel" class="bank-card startup-panel-content">
+                    <header class="bank-card-head">
                         <div>
-                            <h4>Całkowite środki w puli:</h4>
-                            <h3 id="pool-total-funds">0.00 PLN</h3>
-                            <p>Następna inwestycja za: <span id="pool-timer">60</span>s</p>
-                            <p class="text-sm text-muted" id="pool-status"></p>
+                            <h4>Pula start-upów</h4>
+                            <span class="bank-card-type">Wspólne inwestycje w obiecujące projekty · proporcjonalny podział zysków</span>
                         </div>
+                    </header>
+                    <div class="d-flex justify-between items-center my-3 gap-3 flex-wrap">
                         <div>
-                            <h4>Twoja wpłata:</h4>
-                            <div id="pool-controls-container">
-                                <input class="w-md" type="number" id="pool-contribution-amount" placeholder="Wpłać do puli">
-                                <button onclick="contributeToInvestmentPool('player', document.getElementById('pool-contribution-amount').valueAsNumber)">Wpłać</button>
-                                <button class="ml-2" id="pool-withdraw-btn" onclick="withdrawFromPool(document.getElementById('pool-contribution-amount').valueAsNumber || investmentPool.contributors.player || 0)" title="Wycofuje niezainwestowane środki (kwota z pola albo całość); opłata 2% dla pozostałych uczestników">Wycofaj z puli</button>
-                                <button class="ml-2" id="open-autoinvest-modal-btn">Automat inwestycji</button>
-                                <div class="text-sm text-muted mt-1" id="autoinvest-status"></div>
-                            </div>
+                            <span class="text-sm text-muted">Całkowite środki w puli:</span>
+                            <h3 id="pool-total-funds" class="m-0">0.00 PLN</h3>
+                            <p class="text-xs text-muted m-0">Następna inwestycja za: <span id="pool-timer">60</span>s</p>
+                            <p class="text-xs text-muted m-0" id="pool-status"></p>
+                        </div>
+                        <div class="bank-card-form" id="pool-controls-container">
+                            <input class="w-md" type="number" id="pool-contribution-amount" placeholder="Wpłać do puli">
+                            <button onclick="contributeToInvestmentPool('player', document.getElementById('pool-contribution-amount').valueAsNumber)">Wpłać</button>
+                            <button class="btn-secondary" id="pool-withdraw-btn" onclick="withdrawFromPool(document.getElementById('pool-contribution-amount').valueAsNumber || investmentPool.contributors.player || 0)" title="Wycofuje niezainwestowane środki (kwota z pola albo całość); opłata 2% dla pozostałych uczestników">Wycofaj</button>
+                            <button class="btn-secondary" id="open-autoinvest-modal-btn">Automat</button>
+                            <div class="text-xs text-muted" id="autoinvest-status"></div>
                         </div>
                     </div>
-                    <div class="mt-4" id="pool-contributors-chart">
-                        <h4>Niezainwestowane środki uczestników:</h4>
+                    <div class="mt-3" id="pool-contributors-chart">
+                        <h4 class="text-sm">Niezainwestowane środki uczestników:</h4>
                         <div id="pool-contributors-list">Brak wpłat.</div>
                     </div>
-                    <div class="mt-4" id="pool-details"></div>
+                    <div class="mt-3" id="pool-details"></div>
                 </div>
 
                 <table id="startup-table" class="startup-panel-content"> <thead>
@@ -402,9 +404,15 @@
         </div>
     </div>
 
-    <div id="price-chart-modal" class="modal modal-sm" style="display: none;">
+    <div id="price-chart-modal" class="modal modal-sm bank-window" style="display: none;">
         <button class="close-btn" onclick="closePriceChartModal()" aria-label="Zamknij">&times;</button>
-        <h3 class="mt-0" id="chart-title">Wykres</h3>
+        <header class="bank-hero">
+            <div class="bank-emblem" aria-hidden="true"><svg class="ic" width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16M7 8h-2v8h2M17 4v16M17 6h-2v6h2M12 7v12M12 10h2v5h-2"/></svg></div>
+            <div>
+                <div class="bank-hero-kicker">Historia notowań · świece · wskaźniki</div>
+                <h2 class="bank-hero-title" id="chart-title">Wykres</h2>
+            </div>
+        </header>
         <div class="w-full chart-area mb-2" id="chart-svg-area"></div>
         <div class="d-flex justify-between items-center mb-3">
             <div class="chart-controls-group speed-segmented" role="radiogroup" aria-label="Typ wykresu">
@@ -434,10 +442,15 @@
         </div>
     </div>
 
-    <div class="modal modal-xl" id="skills-modal" style="display: none;">
+    <div class="modal modal-xl bank-window" id="skills-modal" style="display: none;">
         <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
-        <h2 class="mt-0 text-center">CV i szkolenia</h2>
-        <p class="text-center divider-bottom pb-2">Konto prywatne: <span id="skills-modal-xp">0</span> PLN</p>
+        <header class="bank-hero">
+            <div class="bank-emblem" aria-hidden="true"><svg class="ic" width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 9l10-5 10 5-10 5zM6 11v5c3 2 9 2 12 0v-5M22 9v6"/></svg></div>
+            <div>
+                <div class="bank-hero-kicker">Konto prywatne: <span id="skills-modal-xp">0</span> PLN</div>
+                <h2 class="bank-hero-title">CV i Akademia</h2>
+            </div>
+        </header>
         <div id="skills-list"></div>
     </div>
 
@@ -838,9 +851,15 @@
          </div>
     </div>
 
-    <div id="research-modal" class="modal" style="display: none;">
+    <div id="research-modal" class="modal bank-window" style="display: none;">
         <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
-         <h2 id="research-modal-title">Badania i rozwój</h2>
+        <header class="bank-hero">
+            <div class="bank-emblem" aria-hidden="true"><svg class="ic" width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3M7.5 15h9"/></svg></div>
+            <div>
+                <div class="bank-hero-kicker">Innowacje · projekty R&amp;D · patenty</div>
+                <h2 class="bank-hero-title" id="research-modal-title">Badania i rozwój</h2>
+            </div>
+        </header>
          <div class="bank-section">
              <h4>Poziom 1: analiza potencjału</h4>
              <div id="rd-tier1-locked">
@@ -1028,9 +1047,15 @@
 
 
 <!-- Modal Lombardu -->
-<div id="pawnshop-modal" class="modal" style="display: none;">
+<div id="pawnshop-modal" class="modal bank-window" style="display: none;">
     <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
-    <h3 class="mt-0 text-up">Lombard — Lombardex S.A.</h3>
+    <header class="bank-hero">
+        <div class="bank-emblem" aria-hidden="true"><svg class="ic" width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M7 7h7.5a3 3 0 0 1 0 6H9a3 3 0 0 0 0 6h8"/></svg></div>
+        <div>
+            <div class="bank-hero-kicker">Pożyczki pod zastaw akcji</div>
+            <h2 class="bank-hero-title">Lombard — Lombardex S.A.</h2>
+        </div>
+    </header>
     <div class="modal-body" id="pawnshop-body"></div>
 </div>
 
@@ -1065,9 +1090,13 @@
     <!-- Poczta (jak Gmail): korporacja, czasopisma, spam -->
     <div id="mail-overlay" class="intro-overlay" hidden onclick="if (event.target === this) closeMailbox()">
       <div class="mail-window" role="dialog" aria-labelledby="mail-title">
-        <header class="corp-modal-header">
-          <h2 id="mail-title">Poczta</h2>
-          <button class="close-btn" onclick="closeMailbox()" aria-label="Zamknij">&times;</button>
+        <header class="bank-hero">
+          <div class="bank-emblem" aria-hidden="true"><svg class="ic" width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v12H3zM3 7l9 6 9-6"/></svg></div>
+          <div>
+            <div class="bank-hero-kicker">Wiadomości · powiadomienia · rynek</div>
+            <h2 class="bank-hero-title" id="mail-title">Poczta</h2>
+          </div>
+          <button class="close-btn" onclick="closeMailbox()" aria-label="Zamknij" style="margin-left: auto;">&times;</button>
         </header>
         <div class="mail-layout">
           <nav id="mail-folders" class="mail-folders"></nav>
@@ -1125,17 +1154,21 @@
 
     <!-- Korporacja: zarząd, analitycy, współpraca, przejęcia -->
     <div id="corporation-overlay" class="intro-overlay" hidden onclick="if (event.target === this) closeCorporationModal()">
-      <div class="corp-modal" role="dialog" aria-labelledby="corporation-title">
-        <header class="corp-modal-header">
-          <h2 id="corporation-title">Korporacja</h2>
-          <button class="close-btn" onclick="closeCorporationModal()" aria-label="Zamknij">&times;</button>
+      <div class="corp-modal bank-window" role="dialog" aria-labelledby="corporation-title">
+        <header class="bank-hero">
+          <div class="bank-emblem" aria-hidden="true"><svg class="ic" width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5a1 1 0 0 1 1-1h9v17M14 9h5a1 1 0 0 1 1 1v11M8 8h2M8 12h2M8 16h2M3 21h18"/></svg></div>
+          <div>
+            <div class="bank-hero-kicker">Zarząd · menedżerowie · analitycy · cele</div>
+            <h2 class="bank-hero-title" id="corporation-title">Korporacja</h2>
+          </div>
+          <button class="close-btn" onclick="closeCorporationModal()" aria-label="Zamknij" style="margin-left: auto;">&times;</button>
         </header>
-        <nav class="corp-tabs" role="tablist">
-          <button data-tab="firm" onclick="setCorporationTab('firm')">Firma</button>
-          <button data-tab="board" onclick="setCorporationTab('board')">Zarząd</button>
-          <button data-tab="analysts" onclick="setCorporationTab('analysts')">Analitycy</button>
-          <button data-tab="cooperation" onclick="setCorporationTab('cooperation')">Współpraca</button>
-          <button data-tab="takeovers" onclick="setCorporationTab('takeovers')">Przejęcia</button>
+        <nav class="bank-tabs corp-tabs" role="tablist">
+          <button class="bank-tab-btn active" data-tab="firm" onclick="setCorporationTab('firm')">Firma</button>
+          <button class="bank-tab-btn" data-tab="board" onclick="setCorporationTab('board')">Zarząd</button>
+          <button class="bank-tab-btn" data-tab="analysts" onclick="setCorporationTab('analysts')">Analitycy</button>
+          <button class="bank-tab-btn" data-tab="cooperation" onclick="setCorporationTab('cooperation')">Współpraca</button>
+          <button class="bank-tab-btn" data-tab="takeovers" onclick="setCorporationTab('takeovers')">Przejęcia</button>
         </nav>
         <div id="corporation-body" class="corp-body"></div>
       </div>
@@ -1154,9 +1187,15 @@
     <div id="news-history" class="news-history" hidden></div>
 
     <!-- Szara strefa (0.11.1): usługi korupcyjne z funduszu -->
-    <div id="grey-zone-modal" class="modal modal-lg" style="display: none;">
+    <div id="grey-zone-modal" class="modal modal-lg bank-window" style="display: none;">
         <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
-        <h2 class="mt-0">Szara strefa</h2>
+        <header class="bank-hero">
+            <div class="bank-emblem" aria-hidden="true"><svg class="ic" width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/></svg></div>
+            <div>
+                <div class="bank-hero-kicker">Ryzykowne usługi · wpływy · mafia</div>
+                <h2 class="bank-hero-title">Szara strefa</h2>
+            </div>
+        </header>
         <div id="grey-zone-body"></div>
     </div>
 
