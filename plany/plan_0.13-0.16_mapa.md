@@ -36,7 +36,8 @@ Stan na 2026-10-13: etap A (domknięcie 0.13 i 0.13.1) zrobiony na gałęzi work
 | 0.14 | Decyzja 15.3: mniej córek koncernów, więcej rozszerzeń | ✅ `63d40a1`; testy 448/448; 10×200: nowe córki 2,2, wchłonięcia 1,6, usamodzielnienia 1,2, sprzedaże 1,0 ✅; koncerny 4,3 (na koniec 5,1) ✅; kooperacje 11,2 ✅; rozszerzenia 4,0/rok, pivoty 1,2/rok; GIG 21,0 ± 0,9%, marża 28,5%; liczniki błędów 0. ⚠️ spółki z ≥ 2 segmentami nadal 22% (cel 25–45%) — szansa i skuteczność rozszerzeń tego nie zmieniają, przyczyna do diagnozy |
 | 0.14 | Kontrola końcowa (`raporty/kontrola_0.14.md`) | ✅ 10×200 vs przed T1 i vs `8fdbf63`: GIG 20,2 vs 18,2 vs 20,2% (+2,0 pp vs przed T1, na granicy), marża 28,2 vs 26,3 vs 27,5%; niezmienniki, ujemna gotówka, bezpiecznik: 0; zapis 2,16 MB (+1,7% vs `8fdbf63`). 20 lat: wszystko 0, krajowe ≤ 110, łącznie ≤ 146; ⚠️ zapis 3,26 MB. ⚠️ koncerny 2,8–3,4 (granica 3–6), spółki z ≥ 2 segmentami 22% (cel 25–45%), efekt wydzielenia z naturalnych przebiegów +0,5% ± 3,5 (wymuszone +5,0% ± 2,6) |
 | 0.14.3 | Zapis bez limitu Z1–Z5 (`raporty/zapis_0.14.3.md`) | ✅ `7701cda`, `1279222`, `a533506`; testy 457/457. IndexedDB (`current`/`previous`, format `gz`) + kopia `lz16` w `localStorage` przy zamknięciu, wybór najnowszego poprawnego, migracja, eksport/import, panel w ustawieniach. 20 lat: poziom zwykły, bez strat, niezmienniki 0, kompresja 4,9×, gzip 68 ms (+ budowa snapshotu 280 ms ⚠️ cel 300 ms łącznie). ⚠️ `file://` niesprawdzone (panel aplikacji nie uruchamia skryptów z dysku) |
-| 0.15 | Hossa i bessa (H0–H6) | ⬜ plan, nie zaczęte |
+| 0.15 | Hossa i bessa (H0–H6) | 📝 plan po audycie (2026-10-17/18, `raporty/audyt_planu_0.15.md`), czeka na 0.14.5. H0 pomiar (7 hipotez, m.in. GIG równych wag przeważany co tik) → H1 kalibracja (GIG 8–10%, zysk na akcję 8–11%, ewentualnie GIG ważony kapitalizacją; jednorożce 2–3 i gasnące gwiazdy 2–3 na grę; zaufanie/JU funduszu = GIG, R5 CEO, lokaty; punkt kontrolny) → H2 nastrój (6 ukrytych faz z opóźnionym potwierdzeniem, premia na kursie, wskaźnik strachu i chciwości; widok za Analitykiem Indeksowym L4–L5: element KPI zamiast `marketTrend` i okno „Rynek”) → H3 bańki → H4 krach, margin call, bezpieczniki 7/13/20%, bank centralny, KNF → H5 boty, klienci, okno IPO, emisje/skupy/przejęcia, rynki kapitałowe (drugi pomiar JU) → H6 Akademia, Mentor, osiągnięcia (CV), retrospektywa. Zapis v15. UI projektuje czat designu (zlecenie w planie). Kod: ⬜ nie zaczęte |
+| 0.15.1 | Kryzysy (linie zdarzeń: kryzys bankowy, bańka internetowa, szok naftowy, Czarny czwartek, pandemia; osiągnięcia kryzysów) | ⬜ szkic (`plan_0.15.1_kryzysy.md`), pełny plan po 0.15 |
 | 0.16 | Giełda międzynarodowa G0–G8 (dawniej 0.15) | ⬜ szkic, nie zaczęte |
 
 **Etap A zrobiony (A1–A4) razem z 3 decyzjami balansu; 0.14 T1–T3 zrobione.** Zostało: poprawki 0.14.1 i 0.14.2 + 3 części 0.14 (T4–T6) + 7 etapów 0.15 + 9 etapów 0.16.
@@ -98,7 +99,11 @@ Z raportu, „Niesprawdzone” 2–3:
 
 ## Etap C′ — 0.15 „Hossa i bessa” (H0 → H6)
 
-Plan: `plan_0.15_hossa_bessa.md`. Po 0.14 (T4–T6), przed giełdą międzynarodową: rynek ma być zrównoważony (GIG ok. 7–9% rocznie), zanim dojdą waluty i rynki zagraniczne.
+Plan: `plan_0.15_hossa_bessa.md` (po audycie 2026-10-17: `raporty/audyt_planu_0.15.md`). Po 0.14.5 Redesign, przed giełdą międzynarodową: rynek ma być zrównoważony (GIG ok. 8–10% rocznie), zanim dojdą waluty i rynki zagraniczne.
+- **Grunt pod 0.16:** stan nastroju jest per rynek (`marketRegimes`), żeby 0.16 dopisało tylko rynki zagraniczne i zarażanie.
+- **UI:** jeden element KPI w górnym pasku (za Analitykiem Indeksowym L4), okno „Rynek” (L5) i sekcja osiągnięć w CV — projekt od czatu designu, z komponentów systemu 0.14.5.
+- **Następna wersja:** 0.15.1 „Kryzysy” (szkic) korzysta z silnika krachu z H4 (`marketCrash.theme`, szok sektorowy).
+- **Plan 0.16** ma od 2026-10-18 sekcję zgłoszeń: notowanie na kilku giełdach, córki za granicą (nowy limit córek), bot w stylu Grahama, odrębny „Wilk”.
 
 ## Etap C — 0.16 „Giełda międzynarodowa” (G0 → G8, dawniej 0.15)
 
