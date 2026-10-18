@@ -269,15 +269,22 @@ function updateTopbarKPIs() {
         const isPrivate = typeof activeTradingAccount !== 'undefined' && activeTradingAccount === 'private';
         ['cash','cash-portfolio'].forEach(id => {
             const el = document.getElementById(id);
-            if (el) el.textContent = (id === 'cash-portfolio' && isPrivate ? fmt.format(playerWallet?.cash || 0) : v) + ' zł';
+            if (el) el.textContent = (id === 'cash-portfolio' && isPrivate ? fmt.format(playerWallet?.cash || 0) : v) + ' PLN';
         });
     }
     if (typeof playerFund !== 'undefined' && playerFund) {
         const navEl = document.getElementById('topbar-portfolio-value');
-        if (navEl) navEl.textContent = getFundNav().toFixed(4) + ' zł';
+        if (navEl) navEl.textContent = formatNav(getFundNav());
         const walletEl = document.getElementById('topbar-daily-pnl');
-        if (walletEl) walletEl.textContent = fmt.format(playerWallet.cash) + ' zł';
+        if (walletEl) walletEl.textContent = formatZl(playerWallet.cash);
+        const trustEl = document.getElementById('topbar-trust');
+        if (trustEl && Number.isFinite(playerFund.trust)) {
+            const trust = Math.round(playerFund.trust);
+            trustEl.textContent = `${trust}/100`;
+            trustEl.classList.toggle('text-down', trust < 40);
+        }
     }
+    updateTopbarBrand();
     if (typeof currentDay !== 'undefined') {
         const d = document.getElementById('topbar-day');
         if (d) d.textContent = currentDay;
@@ -294,6 +301,22 @@ function updateTopbarKPIs() {
                 (marketTrend.startsWith('bearish') ? ' bear' :
                  marketTrend === 'neutral' ? ' neutral' : '');
         }
+    }
+}
+
+/** 0.14.5: nazwa funduszu w menu i w karcie przeglądarki, data gry na pasku. */
+function updateTopbarBrand() {
+    if (typeof document === 'undefined') return;
+    const fundName = (typeof playerProfile !== 'undefined' && playerProfile?.fundName) || '';
+    const side = document.getElementById('sidebar-fund-name');
+    if (side && fundName && side.textContent !== fundName) side.textContent = fundName;
+    const title = fundName ? `Capital Quest — ${fundName}` : 'Capital Quest';
+    if (document.getElementById('topbar') && document.title !== title) document.title = title;
+    const dateEl = document.getElementById('topbar-date');
+    const quarter = typeof macro !== 'undefined' && macro ? Math.max(0, Number(macro.quarter) || 0) : null;
+    if (dateEl && Number.isFinite(quarter)) {
+        const label = `Rok ${Math.floor(quarter / 4) + 1} · kw. ${(quarter % 4) + 1}`;
+        if (dateEl.textContent !== label) dateEl.textContent = label;
     }
 }
 
@@ -836,7 +859,7 @@ function displayCash() {
     // Gotówka FUNDUSZU (pieniądze klientów); prywatne pieniądze gracza pokazuje displayXP.
     const cashElement = document.getElementById('cash');
     if (cashElement) {
-        cashElement.textContent = playerCash.toFixed(2);
+        cashElement.textContent = formatZl(playerCash);
     }
     if (typeof displayXP === 'function') displayXP();
 }
@@ -5405,17 +5428,42 @@ function updateResearchChoiceTimerUI() {
 // konto prywatne, CV ze szkoleniami i scenka startowa
 // =================================================================================
 
-function formatZl(value, digits = 2) {
+// 0.14.5: jeden format liczb w całej grze (04_teksty.md): „14 040,25 PLN”, „−7,20%”, minus typograficzny.
+const MINUS_SIGN = '\u2212';
+
+function formatNumberPl(value, digits = 2) {
     const number = Number(value);
     if (!Number.isFinite(number)) return '—';
-    return number.toLocaleString('pl-PL', { minimumFractionDigits: digits, maximumFractionDigits: digits }) + ' zł';
+    const text = Math.abs(number).toLocaleString('pl-PL', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    return (number < 0 && /[1-9]/.test(text) ? MINUS_SIGN : '') + text;
 }
 
+/** Kwota w PLN (nazwa formatZl zostaje — używana w całej grze). */
+function formatZl(value, digits = 2) {
+    const text = formatNumberPl(value, digits);
+    return text === '—' ? text : `${text} PLN`;
+}
+
+/** Krótka kwota: 3,5 mln PLN / 1,2 mld PLN; poniżej miliona pełna kwota bez groszy. */
+function formatPLNShort(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return '—';
+    const abs = Math.abs(number);
+    if (abs >= 1e9) return `${formatNumberPl(number / 1e9, 1)} mld PLN`;
+    if (abs >= 1e6) return `${formatNumberPl(number / 1e6, 1)} mln PLN`;
+    return formatZl(number, 0);
+}
+
+/** Zmiana procentowa ze znakiem: +2,10% / −7,20% / 0,00% (value jako ułamek). */
 function formatPct(value, digits = 2) {
     const number = Number(value) * 100;
     if (!Number.isFinite(number)) return '—';
-    return `${number >= 0 ? '+' : ''}${number.toFixed(digits)}%`;
+    const text = formatNumberPl(number, digits);
+    return `${number > 0 && /[1-9]/.test(text) ? '+' : ''}${text}%`;
 }
+
+/** NAV / udział: 4 miejsca po przecinku. */
+function formatNav(value) { return formatZl(value, 4); }
 
 function escapeHtml(text) {
     return String(text).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
@@ -6848,30 +6896,76 @@ function renderCityTicker() {
 
 let gameConfirmAction = null;
 
-function gameConfirm(message, onConfirm) {
+/** Okno potwierdzenia. options: { title, confirmLabel, cancelLabel, danger } (0.14.5: tytuł = pytanie, przycisk = nazwa działania). */
+function gameConfirm(message, onConfirm, options = {}) {
     let modal = document.getElementById('game-confirm-modal');
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'game-confirm-modal';
         modal.className = 'modal modal-sm game-confirm';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('aria-labelledby', 'game-confirm-title');
         modal.innerHTML = `
             <button class="close-btn" onclick="closeGameConfirm(false)" aria-label="Zamknij">&times;</button>
-            <h3 class="mt-0">Potwierdzenie</h3>
+            <h3 class="mt-0" id="game-confirm-title">Potwierdzenie</h3>
             <p id="game-confirm-message"></p>
-            <div class="d-flex gap-2 justify-between">
-                <button class="btn-secondary" onclick="closeGameConfirm(false)">Anuluj</button>
-                <button onclick="closeGameConfirm(true)">Potwierdź</button>
+            <div class="game-confirm-actions">
+                <button class="btn-secondary" id="game-confirm-cancel" onclick="closeGameConfirm(false)">Anuluj</button>
+                <button class="btn-primary" id="game-confirm-ok" onclick="closeGameConfirm(true)">Potwierdź</button>
             </div>`;
         document.body.appendChild(modal);
     }
     gameConfirmAction = onConfirm;
+    document.getElementById('game-confirm-title').textContent = options.title || 'Potwierdzenie';
     document.getElementById('game-confirm-message').textContent = message;
+    document.getElementById('game-confirm-cancel').textContent = options.cancelLabel || 'Anuluj';
+    const ok = document.getElementById('game-confirm-ok');
+    ok.textContent = options.confirmLabel || 'Potwierdź';
+    ok.className = options.danger ? 'btn-danger' : 'btn-primary';
+    gameConfirmReturnFocus = document.activeElement;
     modal.style.display = 'block';
+    document.getElementById('game-confirm-cancel').focus();
+}
+
+let gameConfirmReturnFocus = null;
+
+/** 0.14.5: „Nowa gra…” z menu paska — okno gry zamiast confirm(); kasowanie zapisu jak w resetGame(). */
+function requestNewGame() {
+    gameConfirm('Obecny zapis zostanie usunięty i nie da się go przywrócić. Jeśli chcesz go zachować, najpierw wyeksportuj zapis (menu → Eksportuj zapis).',
+        () => resetSavedGame().finally(() => location.reload()),
+        { title: 'Zacząć nową grę?', confirmLabel: 'Usuń zapis i zacznij', danger: true });
+}
+
+// ----- menu paska górnego (Zapisz grę, Eksportuj zapis, Ustawienia, Nowa gra) -----
+function toggleTopbarMenu(force) {
+    const menu = document.getElementById('topbar-menu');
+    const btn = document.getElementById('topbar-menu-btn');
+    if (!menu || !btn) return;
+    const open = typeof force === 'boolean' ? force : menu.hidden;
+    menu.hidden = !open;
+    btn.setAttribute('aria-expanded', String(open));
+    if (open) menu.querySelector('button')?.focus();
+}
+function closeTopbarMenu() { toggleTopbarMenu(false); }
+if (typeof document !== 'undefined') {
+    document.addEventListener('click', event => {
+        const wrap = document.querySelector('.topbar-menu-wrap');
+        if (wrap && !wrap.contains(event.target)) closeTopbarMenu();
+    });
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && document.getElementById('topbar-menu') && !document.getElementById('topbar-menu').hidden) {
+            closeTopbarMenu();
+            document.getElementById('topbar-menu-btn')?.focus();
+        }
+    });
 }
 
 function closeGameConfirm(confirmed) {
     const modal = document.getElementById('game-confirm-modal');
     if (modal) modal.style.display = 'none';
+    if (gameConfirmReturnFocus && typeof gameConfirmReturnFocus.focus === 'function') gameConfirmReturnFocus.focus();
+    gameConfirmReturnFocus = null;
     const action = gameConfirmAction;
     gameConfirmAction = null;
     if (confirmed && typeof action === 'function') action();

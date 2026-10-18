@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stock Market Trader Game</title>
+    <title>Capital Quest</title>
     <link rel="icon" type="image/svg+xml" href="img/logo/favicon.svg">
     <link rel="stylesheet" href="tokens.css">
     <link rel="stylesheet" href="style.css">
@@ -13,10 +13,10 @@
     <div class="app-shell">
   <aside class="app-sidebar" id="app-sidebar">
     <div class="sidebar-brand">
-      <div class="sidebar-logo">📈</div>
+      <img class="sidebar-logo" src="img/logo/capital-quest-znak.svg" width="36" height="36" alt="">
       <div>
-        <div class="sidebar-title">Stock Market Trader Game</div>
-        <div class="sidebar-subtitle">panel główny</div>
+        <div class="sidebar-title">Capital Quest</div>
+        <div class="sidebar-subtitle" id="sidebar-fund-name">Twój fundusz</div>
       </div>
     </div>
 
@@ -91,41 +91,32 @@
 
   <div class="app-main">
     <header class="topbar" id="topbar">
+  <button class="mobile-nav-toggle icon-btn" type="button" aria-label="Menu gry"
+          onclick="document.body.classList.toggle('sidebar-open')"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
 
-  <!-- Lewa: hamburger + tytuł ekranu + status -->
-  <div class="topbar-left">
-    <button class="mobile-nav-toggle" type="button"
-            onclick="document.body.classList.toggle('sidebar-open')">☰</button>
-    <div class="topbar-screen-title">
-      <h1>Stock Market Trader Game</h1>
-      <div class="topbar-version">wersja 0.12 nauka</div>
-    </div>
-  </div>
-
-  <div class="topbar-sep"></div>
-
-  <!-- KPI środek -->
+  <!-- KPI: gotówka funduszu, NAV / udział, konto prywatne, zaufanie -->
   <div class="topbar-kpi-group">
     <div class="topbar-kpi">
       <span class="topbar-kpi-label">Gotówka funduszu</span>
       <span class="topbar-kpi-val" id="cash">10 000,00 PLN</span>
     </div>
     <div class="topbar-kpi">
-      <span class="topbar-kpi-label">NAV / JU</span>
-      <span class="topbar-kpi-val" id="topbar-portfolio-value">10,00</span>
+      <span class="topbar-kpi-label">NAV / udział</span>
+      <span class="topbar-kpi-val" id="topbar-portfolio-value">10,0000 PLN</span>
     </div>
     <div class="topbar-kpi">
-      <span class="topbar-kpi-label">Moje pieniądze</span>
-      <span class="topbar-kpi-val" id="topbar-daily-pnl">100,00</span>
+      <span class="topbar-kpi-label">Konto prywatne</span>
+      <span class="topbar-kpi-val" id="topbar-daily-pnl">100,00 PLN</span>
+    </div>
+    <div class="topbar-kpi">
+      <span class="topbar-kpi-label">Zaufanie klientów</span>
+      <span class="topbar-kpi-val" id="topbar-trust">—</span>
     </div>
   </div>
 
-  <div class="topbar-sep"></div>
-
-  <!-- Segmented control prędkości -->
-  <div class="d-flex items-center gap-2 shrink-0" id="time-controls">
-    <span class="topbar-kpi-label">Prędkość</span>
-    <div class="speed-segmented">
+  <div class="topbar-controls" id="time-controls">
+    <span class="topbar-date" id="topbar-date"></span>
+    <div class="speed-segmented" role="radiogroup" aria-label="Prędkość gry">
       <button class="speed-btn active" data-speed="1" onclick="setGameSpeed(1)">x1</button>
       <button class="speed-btn" data-speed="2" onclick="setGameSpeed(2)">x2</button>
       <button class="speed-btn" data-speed="5" onclick="setGameSpeed(5)">x5</button>
@@ -134,15 +125,17 @@
       <button class="speed-btn debug-only" data-speed="100" onclick="setGameSpeed(100)" hidden title="Prędkość testowa (bez zapisu prędkości)">x100</button>
       <button class="speed-btn debug-only" data-speed="200" onclick="setGameSpeed(200)" hidden title="Prędkość testowa (bez zapisu prędkości)">x200</button>
     </div>
-  </div>
-
-  <!-- CTA -->
-  <div class="topbar-cta-group">
     <button id="pause-game-btn" class="btn-pause" onclick="togglePauseGame()">Wznów</button>
-    <button class="btn-secondary" onclick="saveGame()">Zapisz</button>
-    <button class="btn-secondary" onclick="exportSaveFile()" title="Pobierz zapis gry jako plik .json (kopia zapasowa, przeniesienie na inny komputer)">💾 Eksport</button>
-    <button class="btn-danger" onclick="resetGame()">Reset</button>
-    <button class="btn-secondary" onclick="openBankModal()">📊 Rynek</button>
+    <div class="topbar-menu-wrap">
+      <button class="icon-btn" id="topbar-menu-btn" type="button" aria-label="Menu: zapis, ustawienia, nowa gra" aria-haspopup="menu" aria-expanded="false" onclick="toggleTopbarMenu()"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+      <div class="topbar-menu" id="topbar-menu" role="menu" hidden>
+        <button role="menuitem" onclick="closeTopbarMenu(); saveGame()">Zapisz grę</button>
+        <button role="menuitem" onclick="closeTopbarMenu(); exportSaveFile()" title="Plik .json: kopia zapasowa albo przeniesienie na inny komputer">Eksportuj zapis (.json)</button>
+        <button role="menuitem" onclick="closeTopbarMenu(); openSettingsModal()">Ustawienia</button>
+        <hr>
+        <button role="menuitem" class="is-danger" onclick="closeTopbarMenu(); requestNewGame()">Nowa gra…</button>
+      </div>
+    </div>
   </div>
 
 </header>
@@ -410,6 +403,7 @@
     <div id="settings-modal" class="modal modal-sm" style="display: none;">
         <div class="d-flex justify-between items-center divider-bottom pb-2">
             <h3 class="m-0">Ustawienia</h3>
+            <span class="text-muted text-sm" id="settings-version">Capital Quest 0.14.5</span>
             <button class="close-btn" onclick="closeSettingsModal()" aria-label="Zamknij">&times;</button>
         </div>
         <div id="save-panel" class="save-panel pt-4"></div>
