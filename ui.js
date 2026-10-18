@@ -256,6 +256,112 @@ const INVESTMENT_ICON_BY_IMAGE = {
     'img/branch.png': 'firma', 'img/box.png': 'magazyn', 'img/globe.png': 'kraj', 'img/billboardicon.png': 'megafon',
     'img/equipment.png': 'ustawienia', 'img/update.png': 'odswiez'
 };
+/** Krok 6: emoji z danych (typy klientów, jakość, polityki kadrowe, cykle sektorów, znaczniki wykresu…) → ikona SVG.
+ *  Klucz bez znaku wariantu U+FE0F. Emoji spoza mapy (treści fabularne, drzewko B+R) zostają jak są. */
+const EMOJI_ICONS = {
+    '💼': 'teczka',
+    '🧍': 'osoba',
+    '🏦': 'bank',
+    '📦': 'paczka',
+    '👔': 'zarzad',
+    '🏛': 'panstwo',
+    '🔁': 'odswiez',
+    '🔄': 'odswiez',
+    '🛒': 'koszyk',
+    '🚀': 'rakieta',
+    '🛡': 'tarcza',
+    '🔒': 'klodka',
+    '📜': 'raport',
+    '📄': 'raport',
+    '⚠': 'alert',
+    '🧾': 'raport',
+    '🏊': 'pula',
+    '🏢': 'firma',
+    '🌐': 'kraj',
+    '✅': 'ok',
+    '❌': 'zamknij',
+    '👑': 'korona',
+    '🔎': 'szukaj',
+    '🔍': 'szukaj',
+    '🧱': 'segment',
+    '🏆': 'ranking',
+    '⏳': 'zegar',
+    '🤝': 'umowa',
+    '📈': 'wzrost',
+    '📉': 'spadek',
+    '💀': 'spadek',
+    '📰': 'news',
+    '🤖': 'bot',
+    '🔬': 'mikroskop',
+    '📊': 'wykres',
+    '🥧': 'akcjonariat',
+    '🗳': 'glosowanie',
+    '🧭': 'kompas',
+    '🧩': 'segment',
+    '🎯': 'cel',
+    '🏷': 'etykieta',
+    '🏗': 'budownictwo',
+    '☕': 'klienci',
+    '🍽': 'klienci',
+    '📥': 'poczta',
+    '⭐': 'gwiazdka',
+    '🚫': 'blokada',
+    '⚙': 'ustawienia',
+    '❗': 'alert',
+    '✂': 'nozyczki',
+    '✋': 'blokada',
+    '🗑': 'kosz',
+    '📣': 'megafon',
+    '💙': 'serce',
+    '⚖': 'waga',
+    '🏭': 'fabryka',
+    '🏅': 'medal',
+    '↩': 'cofnij',
+    '🚪': 'wyjscie',
+    '🔥': 'ogien',
+    '👷': 'pracownik',
+    '👥': 'klienci',
+    '🎓': 'akademia',
+    '✈': 'samolot',
+    '🧠': 'mozg',
+    '🏘': 'dom',
+    '✊': 'piesc',
+    '🦺': 'alert',
+    '🤲': 'lombard',
+    '🕊': 'etykieta',
+    '🧲': 'magnes',
+    '💔': 'blokada',
+    '🚩': 'flaga',
+    '😠': 'alert',
+    '💰': 'lombard',
+    '🚧': 'budownictwo',
+    '📋': 'karta',
+    '🔗': 'lancuch',
+    '🦊': 'lis',
+    '😨': 'strach',
+    '🦁': 'lew',
+    '💎': 'diament',
+    '🪙': 'moneta',
+    '🐋': 'wieloryb',
+    '🌱': 'faza-akumulacja',
+    '⛓': 'lancuch',
+    '⛰': 'szczyt',
+    '🕳': 'dolek',
+    '🧪': 'badania',
+    '☢': 'atom',
+    '⚡': 'Energia',
+    '🥇': 'medal',
+    '🥈': 'medal',
+    '🥉': 'medal'
+};
+function emojiIconName(emoji) {
+    return EMOJI_ICONS[String(emoji ?? '').replace(/\uFE0F/g, '')] || null;
+}
+function dataIcon(emoji, size = 14) {
+    const name = emojiIconName(emoji);
+    return name ? uiIcon(name, size) : escapeHtml(emoji ?? '');
+}
+
 function investmentIcon(inv, size = 18) {
     return uiIcon(INVESTMENT_ICON_BY_ID[inv?.id] || INVESTMENT_ICON_BY_IMAGE[inv?.icon] || 'inwestycje', size, 'inv-icon');
 }
@@ -317,7 +423,7 @@ function renderSubsectorMedianLine(stock, sectorMed) {
 function renderSegmentBar(stock) {
     const segments = [...getStockSegments(stock)].sort((a, b) => b.share - a.share);
     if (segments.length < 2) return '';
-    const parts = segments.map((seg, i) => `<span class="cc-seg${i === 0 ? ' cc-seg-main' : ''}" style="flex:${seg.share}" title="${escapeHtml(`${seg.sector}${seg.subsector ? ` · ${seg.subsector}` : ''}: ${(seg.share * 100).toFixed(0)}% przychodów`)}">${SECTORS[seg.sector]?.icon || ''} ${escapeHtml(seg.sector)} ${(seg.share * 100).toFixed(0)}%</span>`).join('');
+    const parts = segments.map((seg, i) => `<span class="cc-seg${i === 0 ? ' cc-seg-main' : ''}" style="flex:${seg.share}" title="${escapeHtml(`${seg.sector}${seg.subsector ? ` · ${seg.subsector}` : ''}: ${(seg.share * 100).toFixed(0)}% przychodów`)}">${sectorIcon(seg.sector, 12)}${escapeHtml(seg.sector)} ${(seg.share * 100).toFixed(0)}%</span>`).join('');
     const discount = typeof getConglomerateDiscount === 'function' ? getConglomerateDiscount(stock) : 0;
     const synergy = typeof getSynergyMarginAdj === 'function' && getSynergyMarginAdj(stock) > 0;
     const notes = [discount > 0 ? `<span class="text-down" title="Rynek wycenia spółkę z niepowiązanymi segmentami taniej (−4% za segment, najwyżej −10%).">dyskonto konglomeratu −${(discount * 100).toFixed(0)}%</span>` : '',
@@ -780,14 +886,45 @@ function drawChartEvents(stock, svg, historyForMapping, getX, padding, chartHeig
         line.setAttribute("y1", padding.top); line.setAttribute("y2", padding.top + chartHeight);
         line.setAttribute("stroke", "#8b949e"); line.setAttribute("stroke-dasharray", "3,3"); line.setAttribute("stroke-width", "1");
         svg.appendChild(line);
-        const label = document.createElementNS(svgNs, "text");
-        label.setAttribute("x", x); label.setAttribute("y", padding.top + 12);
-        label.setAttribute("font-size", "13"); label.setAttribute("text-anchor", "middle");
-        label.textContent = event.icon;
+        // 0.14.5 krok 6: ikona SVG w kółku zamiast emoji (emoji spoza mapy — jako tekst); dymek także z klawiatury.
+        const iconName = emojiIconName(group.events[0].icon);
+        let label;
+        if (iconName) {
+            label = document.createElementNS(svgNs, "g");
+            label.setAttribute("class", "chart-event");
+            label.setAttribute("transform", `translate(${x} ${padding.top + 12})`);
+            const dot = document.createElementNS(svgNs, "circle");
+            dot.setAttribute("r", "11");
+            const glyph = document.createElementNS(svgNs, "path");
+            glyph.setAttribute("d", UI_ICON_PATHS[iconName] || SECTOR_ICON_PATHS[iconName]);
+            glyph.setAttribute("transform", "translate(-7.2 -7.2) scale(0.6)");
+            label.append(dot, glyph);
+            if (group.events.length > 1) {
+                const count = document.createElementNS(svgNs, "text");
+                count.setAttribute("x", "13"); count.setAttribute("y", "-5");
+                // dawny znak zostaje w tekście (ukryty tspan), widać ikonę i liczbę
+                const key = document.createElementNS(svgNs, "tspan");
+                key.setAttribute("display", "none");
+                key.textContent = group.events[0].icon;
+                count.append(key, `×${group.events.length}`);
+                label.appendChild(count);
+            }
+        } else {
+            label = document.createElementNS(svgNs, "text");
+            label.setAttribute("x", x); label.setAttribute("y", padding.top + 12);
+            label.setAttribute("font-size", "13"); label.setAttribute("text-anchor", "middle");
+            label.textContent = event.icon;
+        }
         label.style.cursor = "help";
+        label.setAttribute("tabindex", "0");
+        label.setAttribute("role", "img");
+        label.setAttribute("aria-label", stripEmoji(event.label));
         if (tooltip) {
-            label.addEventListener('mouseover', e => { tooltip.textContent = event.label; tooltip.style.display = 'block'; tooltip.style.left = `${e.pageX + 15}px`; tooltip.style.top = `${e.pageY + 15}px`; });
+            const show = (px, py) => { tooltip.textContent = stripEmoji(event.label); tooltip.style.display = 'block'; tooltip.style.left = `${px + 15}px`; tooltip.style.top = `${py + 15}px`; };
+            label.addEventListener('mouseover', e => show(e.pageX, e.pageY));
             label.addEventListener('mouseout', () => { tooltip.style.display = 'none'; });
+            label.addEventListener('focus', () => { const r = label.getBoundingClientRect(); show(r.left + window.scrollX, r.top + window.scrollY); });
+            label.addEventListener('blur', () => { tooltip.style.display = 'none'; });
         }
         svg.appendChild(label);
     }
@@ -969,14 +1106,14 @@ function renderOwnershipPieChart(symbol) {
     const aiColors = ['#dc3545', '#ffc107', '#28a745', '#6f42c1', '#fd7e14', '#e83e8c'];
     let aiColorIndex = 0;
     const owners = getShareholders(stock).map(holder => ({
-        name: holder.kind === 'player' ? `💼 ${holder.name}` : holder.kind === 'wallet' ? '🧍 Ty (prywatnie)' : holder.kind === 'bank' ? `🏦 ${holder.name}` : holder.kind === 'etf' ? `📦 ETF ${holder.name}` : holder.kind === 'insiders' ? '👔 Zarząd i pracownicy' : holder.kind === 'state' ? '🏛️ Skarb Państwa' : holder.name,
+        name: holder.kind === 'player' ? `${holder.name}` : holder.kind === 'wallet' ? 'Ty (prywatnie)' : holder.kind === 'bank' ? `${holder.name}` : holder.kind === 'etf' ? `ETF ${holder.name}` : holder.kind === 'insiders' ? 'Zarząd i pracownicy' : holder.kind === 'state' ? 'Skarb Państwa' : holder.name,
         shares: holder.shares,
         color: KIND_COLORS[holder.kind] || aiColors[aiColorIndex++ % aiColors.length]
     }));
     const treasuryShares = Number(stock.treasuryShares) || 0;
-    if (treasuryShares > 0) owners.push({ name: '🔁 Akcje własne spółki', shares: treasuryShares, color: '#ff5733' });
+    if (treasuryShares > 0) owners.push({ name: 'Akcje własne spółki', shares: treasuryShares, color: '#ff5733' });
     const availableShares = getAvailableShares(stock);
-    if (availableShares > 0) owners.push({ name: '🛒 Na rynku (do kupienia)', shares: availableShares, color: '#6c757d' });
+    if (availableShares > 0) owners.push({ name: 'Na rynku (do kupienia)', shares: availableShares, color: '#6c757d' });
     const unlisted = stock.totalShares - owners.reduce((sum, owner) => sum + owner.shares, 0);
     if (unlisted >= 1) owners.push({ name: 'Rozproszeni akcjonariusze', shares: unlisted, color: '#adb5bd' });
 
@@ -1043,7 +1180,7 @@ function renderOwnershipPieChart(symbol) {
     if (stock.isStateOwned && (stock.stateOwnershipPct || 0) > 0) {
         const statePercent = (stock.stateOwnershipPct * 100).toFixed(2);
         const legendItem = document.createElement('div');
-        legendItem.innerHTML = `<hr><p style="font-weight: bold; margin-bottom: 5px; text-align: center;">🏛️ Skarb Państwa kontroluje ${statePercent}% akcji (poza wolnym obrotem)</p>`;
+        legendItem.innerHTML = `<hr><p style="font-weight: bold; margin-bottom: 5px; text-align: center;">${uiIcon('panstwo', 14)} Skarb Państwa kontroluje ${statePercent}% akcji (poza wolnym obrotem)</p>`;
         legend.appendChild(legendItem);
     }
 }
@@ -1675,7 +1812,7 @@ function displayPortfolio() {
         if (holding.assetType === 'Startup') {
             const startup = stocks.find(s => s.symbol === symbol);
             positionsValue += holding.investedAmount;
-            row(`🚀 ${escapeHtml(startup?.name || symbol)}`, 'startup', fmt(holding.investedAmount), holding.isInsured ? '🛡️ ubezp.' : '—');
+            row(`${uiIcon('rakieta', 14)} ${escapeHtml(startup?.name || symbol)}`, 'startup', fmt(holding.investedAmount), holding.isInsured ? `${uiIcon('tarcza', 14)} ubezp.` : '—');
             continue;
         }
         let market, price = 0, name = symbol, pct = '';
@@ -1691,7 +1828,7 @@ function displayPortfolio() {
         const pl = value - holding.avgPrice * holding.shares;
         positionsValue += value;
         totalPL += pl;
-        const locked = holding.lockedShares > 0 ? ` 🔒${holding.lockedShares}` : '';
+        const locked = holding.lockedShares > 0 ? ` ${uiIcon('klodka', 12)}${holding.lockedShares}` : '';
         row(`${escapeHtml(name)} <span class="text-xs text-muted">${escapeHtml(symbol)} · ${holding.shares.toLocaleString('pl-PL')} szt.${locked}</span>`,
             pct || '—', holding.avgPrice.toFixed(2),
             `<span class="${pl > 0 ? 'profit' : pl < 0 ? 'loss' : ''}">${pl >= 0 ? '+' : ''}${fmt(pl)}</span><span class="text-xs text-muted d-block">${fmt(value)}</span>`,
@@ -1704,9 +1841,9 @@ function displayPortfolio() {
         const ppp = playerFund?.ppp || [];
         const projectBonds = typeof getProjectBonds === 'function' && typeof specialProjects === 'object' && specialProjects ? getProjectBonds() : [];
         if (deposits.length || ppp.length || projectBonds.length) section('Lokaty i finansowanie projektów');
-        for (const d of deposits) row(`🏦 Lokata · ${escapeHtml(d.bankName)}`, `${(d.rate * 100).toFixed(1)}%/r`, fmt(d.principal), `<span class="profit">+${fmt(d.accrued)}</span><span class="text-xs text-muted d-block">${d.weeksLeft} tyg.</span>`);
+        for (const d of deposits) row(`${uiIcon('bank', 14)} Lokata · ${escapeHtml(d.bankName)}`, `${(d.rate * 100).toFixed(1)}%/r`, fmt(d.principal), `<span class="profit">+${fmt(d.accrued)}</span><span class="text-xs text-muted d-block">${d.weeksLeft} tyg.</span>`);
         for (const st of ppp) row(`${st.icon || '🏙️'} PPP · ${escapeHtml(st.name)}`, `${(st.rate * 100).toFixed(1)}%/r`, fmt(st.principal), `${st.unpaid > 0 ? '<span class="loss">zaległe odsetki</span>' : '—'}<span class="text-xs text-muted d-block">${st.weeksLeft} tyg.</span>`);
-        for (const b of projectBonds) row(`📜 Obligacje projektu · ${escapeHtml(b.name)}`, `${(PROJECT_BOND_RATE * 100).toFixed(0)}%/r`, fmt(b.principal), `<span class="profit">+${fmt(b.interestPaid || 0)}</span>`);
+        for (const b of projectBonds) row(`${uiIcon('raport', 14)} Obligacje projektu · ${escapeHtml(b.name)}`, `${(PROJECT_BOND_RATE * 100).toFixed(0)}%/r`, fmt(b.principal), `<span class="profit">+${fmt(b.interestPaid || 0)}</span>`);
         positionsValue += deposits.reduce((sum, d) => sum + d.principal + d.accrued, 0) + ppp.reduce((sum, st) => sum + st.principal, 0) + projectBonds.reduce((sum, b) => sum + b.principal, 0);
 
         // Obligacje i bony
@@ -1723,19 +1860,19 @@ function displayPortfolio() {
             }
             for (const g of Object.values(groups)) {
                 positionsValue += g.value;
-                row(`📄 ${escapeHtml(g.name)} <span class="text-xs text-muted">${escapeHtml(g.type)} · ${g.count} szt.</span>`, `${(g.rate * 100).toFixed(1)}%/r`, fmt(g.cost),
-                    `${g.defaulted ? '<span class="loss">⚠️ niewypłacalny</span>' : fmt(g.value)}<span class="text-xs text-muted d-block">zapada za ~${Math.ceil(g.next / 60000)} min gry</span>`);
+                row(`${uiIcon('raport', 14)} ${escapeHtml(g.name)} <span class="text-xs text-muted">${escapeHtml(g.type)} · ${g.count} szt.</span>`, `${(g.rate * 100).toFixed(1)}%/r`, fmt(g.cost),
+                    `${g.defaulted ? `<span class="loss">${uiIcon('alert', 14)} niewypłacalny</span>` : fmt(g.value)}<span class="text-xs text-muted d-block">zapada za ~${Math.ceil(g.next / 60000)} min gry</span>`);
             }
         }
         const tBills = allBonds.filter(b => b.ownerId === 'player' && b.isTBill);
-        if (tBills.length) { section('Bony skarbowe'); row(`🧾 Bony skarbowe · ${tBills.length} szt.`, '—', '—', '—'); }
+        if (tBills.length) { section('Bony skarbowe'); row(`${uiIcon('raport', 14)} Bony skarbowe · ${tBills.length} szt.`, '—', '—', '—'); }
         // 0.14.1 R4: dwie pozycje puli, zgodne z NAV (niezainwestowane nominalnie, wkłady w żyjące startupy po koszcie)
         const poolFree = Number(investmentPool?.contributors?.player) || 0;
         const poolInvested = getPoolInvestedInStartups('player');
         if (poolFree + poolInvested > 0) {
             section('Pula inwestycyjna');
-            if (poolFree > 0) row('🏊 Pula — niezainwestowane', '—', fmt(poolFree), `${fmt(poolFree)}<span class="text-xs text-muted d-block">do wycofania (opłata 2%)</span>`);
-            if (poolInvested > 0) row('🏊 Pula — w startupach', '—', fmt(poolInvested), `${fmt(poolInvested)}<span class="text-xs text-muted d-block">po koszcie, do debiutu lub końca startupu</span>`);
+            if (poolFree > 0) row(`${uiIcon('pula', 14)} Pula — niezainwestowane`, '—', fmt(poolFree), `${fmt(poolFree)}<span class="text-xs text-muted d-block">do wycofania (opłata 2%)</span>`);
+            if (poolInvested > 0) row(`${uiIcon('pula', 14)} Pula — w startupach`, '—', fmt(poolInvested), `${fmt(poolInvested)}<span class="text-xs text-muted d-block">po koszcie, do debiutu lub końca startupu</span>`);
             positionsValue += poolFree + poolInvested;
         }
     }
@@ -1834,7 +1971,7 @@ function getFundRanking() {
     const average = (periods, key) => periods.length ? periods.reduce((sum, p) => sum + p[key], 0) / periods.length : 0;
     const playerPeriods = (playerFund?.periods || []).slice(-FUND_PERIODS_SHOWN);
     const rows = [{
-        name: `💼 ${playerProfile?.fundName || 'Twój fundusz'}`, owner: `${playerProfile?.name || 'Ty'} · ${getPlayerPosition().name}`,
+        icon: 'teczka', name: `${playerProfile?.fundName || 'Twój fundusz'}`, owner: `${playerProfile?.name || 'Ty'} · ${getPlayerPosition().name}`,
         ret: compound(playerPeriods.map(p => p.fundReturn)), vol: average(playerPeriods, 'volatility'),
         trust: playerFund?.trust ?? null, assets: playerFund ? getFundAssets() : 0, mine: true
     }];
@@ -1842,7 +1979,7 @@ function getFundRanking() {
     for (const manager of corporation?.managers || []) {
         const periods = manager.fund.periods.slice(-FUND_PERIODS_SHOWN);
         rows.push({
-            name: `🏢 Fundusz ${manager.name.split(' ')[1] || manager.name}`,
+            icon: 'firma', name: `Fundusz ${manager.name.split(' ')[1] || manager.name}`,
             owner: `${manager.name} · ${CAREER_POSITIONS[getPositionIndex(manager.positionId)].name}`,
             ret: compound(periods.map(p => p.fundReturn)), vol: average(periods, 'volatility'),
             trust: manager.fund.trust, assets: getBotFundAssets(manager.fund)
@@ -1854,13 +1991,13 @@ function getFundRanking() {
     if (guard) {
         const value = (Number(guard.cash) || 0) + Object.entries(guard.portfolio || {}).reduce((sum, [symbol, holding]) => sum + (stocks.find(s => s.symbol === symbol)?.price || 0) * (holding.shares || 0), 0);
         if (!(guard.startValue > 0)) guard.startValue = value;
-        rows.push({ name: `🛡️ ${guard.name}`, owner: 'Fundusz patriotyczny · obronność (wynik od powstania)', ret: guard.startValue > 0 ? value / guard.startValue - 1 : 0, vol: null, trust: null, assets: value });
+        rows.push({ icon: 'tarcza', name: `${guard.name}`, owner: 'Fundusz patriotyczny · obronność (wynik od powstania)', ret: guard.startValue > 0 ? value / guard.startValue - 1 : 0, vol: null, trust: null, assets: value });
     }
 
     for (const fund of getExternalFunds()) {
         const returns = playerPeriods.map(p => p.rivals.find(r => r.symbol === fund.symbol)?.return).filter(Number.isFinite);
         rows.push({
-            name: `🌐 ${getExternalFirmName(fund)}`, owner: fund.managedByCorporation ? 'Przejęty przez korporację' : 'Firma zewnętrzna',
+            icon: 'kraj', name: `${getExternalFirmName(fund)}`, owner: fund.managedByCorporation ? 'Przejęty przez korporację' : 'Firma zewnętrzna',
             ret: compound(returns), vol: null, trust: null, assets: getExternalFundValue(fund) * fund.totalShares
         });
     }
@@ -1879,7 +2016,7 @@ function displayLeaderboard() {
             <tbody>${getFundRanking().map((row, index) => `
                 <tr class="${row.mine ? 'mine' : ''}">
                     <td>${index + 1}</td>
-                    <td>${escapeHtml(row.name)}<br><small class="fund-muted">${escapeHtml(row.owner)}</small></td>
+                    <td>${uiIcon(row.icon, 14)} ${escapeHtml(row.name)}<br><small class="fund-muted">${escapeHtml(row.owner)}</small></td>
                     <td class="${row.ret >= 0 ? 'profit' : 'loss'}">${formatPct(row.ret)}</td>
                     <td>${row.vol === null ? '—' : formatPct(row.vol)}</td>
                     <td>${row.trust === null ? '—' : row.trust.toFixed(0)}</td>
@@ -1915,7 +2052,7 @@ function displayEtfs() {
         row.insertCell().innerHTML = `<strong>${escapeHtml(etf.name)}</strong> (${etf.symbol})<span class="text-xs text-muted d-block">${escapeHtml(describeEtfRules(etf))}</span>`;
         row.insertCell().textContent = etf.price.toFixed(2);
         row.insertCell().textContent = getEtfTopHoldings(etf).map(h => `${h.symbol} ${(h.weight * 100).toFixed(0)}%`).join(', ') || '—';
-        row.insertCell().textContent = `${(etf.yearTarget * 100).toFixed(1)}%${etf.lastResult ? (etf.lastResult.hit ? ' ✅' : ' ❌') : ''}`;
+        row.insertCell().textContent = `${(etf.yearTarget * 100).toFixed(1)}%${etf.lastResult ? (etf.lastResult.hit ? ' ✓' : ' ✗') : ''}`;
 
         const sharesOwned = playerPortfolio[etf.symbol] ? playerPortfolio[etf.symbol].shares : 0;
         row.insertCell().textContent = sharesOwned;
@@ -1969,11 +2106,11 @@ function displayMarketIndexes() {
         indexDiv.className = 'index-item';
 
         const change = index.change;
-        let arrow = '➡️';
+        let arrow = '■';
         let colorClass = '';
 
-        if (change > 0.01) { arrow = '⬆️'; colorClass = 'profit'; }
-        else if (change < -0.01) { arrow = '⬇️'; colorClass = 'loss'; }
+        if (change > 0.01) { arrow = '▲'; colorClass = 'profit'; }
+        else if (change < -0.01) { arrow = '▼'; colorClass = 'loss'; }
 
         indexDiv.innerHTML = `
             <span class="index-name">${index.name} (${index.id})</span>
@@ -2035,7 +2172,7 @@ function renderDepartmentsSection(stock, container) {
         return;
     }
 
-    deptSection.innerHTML = `<h4>🏢 Działy i Inwestycje</h4>`;
+    deptSection.innerHTML = `<h4>Działy i Inwestycje</h4>`;
 
     // --- 1. KARTY DZIAŁÓW ---
     const deptsDiv = document.createElement('div');
@@ -2089,7 +2226,7 @@ function openManagementModal(symbol, defaultTab = 'main') {
         if (el) el.textContent = text;
     };
 
-    safeSetText('management-title', `👑 Panel Zarządzania: ${stock.name}`);
+    safeSetText('management-title', `Panel Zarządzania: ${stock.name}`);
 
     // --- 1. Dywidenda Specjalna ---
     const dividendBtn = document.getElementById('force-dividend-btn');
@@ -2418,7 +2555,7 @@ function openStockDetailsModal(symbol) {
     const insights = document.getElementById('analyst-insights');
     if (insights) {
         const lines = typeof getAnalystInsights === 'function' ? getAnalystInsights(stock) : [];
-        insights.innerHTML = lines.map(line => `<p>🔎 ${escapeHtml(line)}</p>`).join('');
+        insights.innerHTML = lines.map(line => `<p>${uiIcon('szukaj', 14)} ${escapeHtml(line)}</p>`).join('');
     }
 
     modal.style.display = 'block';
@@ -2448,10 +2585,10 @@ function renderDividendTrackerContent() {
         const info = body.insertRow().insertCell();
         info.colSpan = 5;
         info.className = 'text-center text-sm text-muted';
-        info.textContent = '🔒 Szkolenie „Analityk Dywidend” (CV i szkolenia) pokaże ogłoszone wypłaty, czas do dnia odcięcia i szacowaną kwotę.';
+        info.textContent = 'Szkolenie „Analityk Dywidend” (CV i szkolenia) pokaże ogłoszone wypłaty, czas do dnia odcięcia i szacowaną kwotę.';
         payers.forEach(({ s, dy }) => {
             const row = body.insertRow();
-            row.insertCell().textContent = s.isDividendAristocrat ? `👑 ${s.name}` : s.name;
+            row.insertCell().textContent = s.isDividendAristocrat ? `${s.name} ★` : s.name;
             row.insertCell().textContent = getDividendPolicyLabel(s.dividendPolicy);
             row.insertCell().textContent = s.pendingDividend ? 'ogłoszona' : '—';
             row.insertCell().textContent = `ostatnio ${s.lastDividend.dps.toFixed(4)} PLN`;
@@ -2477,7 +2614,7 @@ function renderDividendTrackerContent() {
 
     dividendStocks.forEach(stock => {
         const row = body.insertRow();
-        row.insertCell().textContent = stock.isDividendAristocrat ? `👑 ${stock.name}` : stock.name;
+        row.insertCell().textContent = stock.isDividendAristocrat ? `${stock.name} ★` : stock.name;
         row.insertCell().textContent = stock.assetType === 'REIT' ? 'REIT (co 2 min)' : getDividendPolicyLabel(stock.dividendPolicy);
 
         // ⏳ Czas do wypłaty
@@ -2526,7 +2663,7 @@ function displayStartups(previousInputValues = {}) {
     startupPanel.style.display = FEATURE_FLAGS.startups ? 'block' : 'none';
     if (!FEATURE_FLAGS.startups) return;
     const limitInfo = document.getElementById('startup-fund-limit');
-    if (limitInfo) limitInfo.textContent = `Fundusz w startupach: ${getFundStartupExposure().toFixed(0)} PLN z limitu ${(getFundAssets() * STARTUP_FUND_LIMIT).toFixed(0)} PLN (${(STARTUP_FUND_LIMIT * 100).toFixed(0)}% aktywów).` + (getCrowdingPressure() > 0 ? ` 🧱 Rynek nasycony (${getListedCompanyCount()}/${LISTING_SOFT_CAP} spółek): finansowanie startupów mniejsze o ${((1 - getStartupFundingFactor()) * 100).toFixed(0)}%, cele zbiórek wyższe.` : '');
+    if (limitInfo) limitInfo.textContent = `Fundusz w startupach: ${getFundStartupExposure().toFixed(0)} PLN z limitu ${(getFundAssets() * STARTUP_FUND_LIMIT).toFixed(0)} PLN (${(STARTUP_FUND_LIMIT * 100).toFixed(0)}% aktywów).` + (getCrowdingPressure() > 0 ? ` Rynek nasycony (${getListedCompanyCount()}/${LISTING_SOFT_CAP} spółek): finansowanie startupów mniejsze o ${((1 - getStartupFundingFactor()) * 100).toFixed(0)}%, cele zbiórek wyższe.` : '');
 
     const startups = stocks.filter(s => s.assetType === 'Startup');
     startupTableBody.innerHTML = '';
@@ -2559,9 +2696,9 @@ function displayStartups(previousInputValues = {}) {
         const nameCell = row.insertCell();
         let nameHTML = `${startup.name} (${startup.symbol})`;
         if (startup.isPrivatized) {
-            nameHTML += ` <span title="Projekt sprywatyzowany. Sukces gwarantowany, ale możliwe komplikacje.">🏢</span>`;
+            nameHTML += ` <span title="Projekt sprywatyzowany. Sukces gwarantowany, ale możliwe komplikacje.">${uiIcon('firma', 14)}</span>`;
         }
-        nameHTML += ` <button onclick="openInvestorsModal('${startup.symbol}')" class="ml-2 btn-xs text-sm">🏆 Ranking</button>`;
+        nameHTML += ` <button onclick="openInvestorsModal('${startup.symbol}')" class="ml-2 btn-xs text-sm">${uiIcon('ranking', 14)} Ranking</button>`;
         nameCell.innerHTML = nameHTML;
 
         // Komórka 2: Cel Finansowania
@@ -2597,7 +2734,7 @@ function displayStartups(previousInputValues = {}) {
                 // Przycisk Prywatyzacji (Logika Poziomu 5)
                 if (skillLvl >= 5 && !startup.isPrivatized) {
                     const privatizeButton = document.createElement('button');
-                    privatizeButton.textContent = '🏢 Prywatyzuj';
+                    privatizeButton.textContent = 'Prywatyzuj';
                     privatizeButton.title = 'Wykup projekt na wyłączność. Gwarantuje to sukces, ale wprowadza ryzyko dodatkowych kosztów lub opóźnień.';
                     privatizeButton.classList.add('ml-1');
                     privatizeButton.onclick = () => privatizeStartup(startup.symbol);
@@ -2607,7 +2744,7 @@ function displayStartups(previousInputValues = {}) {
                 // Przycisk Auto-inwestycji (ten, który dodawaliśmy ostatnio)
                 const autoInvestSettings = playerStartupAutoInvest[startup.symbol];
                 const autoInvestButton = document.createElement('button');
-                autoInvestButton.textContent = '🔄';
+                autoInvestButton.innerHTML = uiIcon('odswiez', 14);
                 autoInvestButton.title = 'Ustaw automatyczne inwestowanie';
                 autoInvestButton.classList.add('ml-1');
                 if (autoInvestSettings && autoInvestSettings.isEnabled) {
@@ -2639,7 +2776,7 @@ function displayStartups(previousInputValues = {}) {
 
             case 'awaitingListing': { // P1: gotowy do debiutu, giełda pełna
                 const waited = (typeof macro === 'object' ? macro.quarter : 0) - (startup.awaitingListing?.since || 0);
-                fundingCell.innerHTML = `<strong class="text-warn">⏳ Czeka na miejsce na giełdzie</strong>`;
+                fundingCell.innerHTML = `<strong class="text-warn">${uiIcon('zegar', 14)} Czeka na miejsce na giełdzie</strong>`;
                 progressCell.innerHTML = `<span class="text-sm">${waited}/${AWAITING_LISTING_MAX_QUARTERS} kw. — potem przejęcie przez inwestora</span>`;
                 actionsCell.textContent = `Giełda pełna (${getListedCompanyCount()}/${LISTING_HARD_CAP})`;
                 break;
@@ -2685,7 +2822,7 @@ function displayStartups(previousInputValues = {}) {
                 // Tworzenie przycisku auto-inwestycji (ten kod jest poprawny)
                 const autoInvestSettings = playerStartupAutoInvest[startup.symbol];
                 const autoInvestButton = document.createElement('button');
-                autoInvestButton.textContent = '🔄'; // Użyłem sugerowanej przez Ciebie emotki
+                autoInvestButton.innerHTML = uiIcon('odswiez', 14);
                 autoInvestButton.title = 'Ustaw automatyczne inwestowanie';
                 autoInvestButton.classList.add('ml-1');
                 if (autoInvestSettings && autoInvestSettings.isEnabled) {
@@ -2714,7 +2851,7 @@ function displayStartups(previousInputValues = {}) {
         const holding = playerPortfolio[startup.symbol];
         if ((startup.stage === 'funding' || startup.stage === 'overfunding') && skillLvl >= 4 && holding && !holding.isInsured && !startup.isScamDetected) {
             const insuranceButton = document.createElement('button');
-            insuranceButton.textContent = '🛡️ Ubezpiecz';
+            insuranceButton.textContent = 'Ubezpiecz';
             insuranceButton.title = 'Koszt: 5% Twojej dotychczasowej inwestycji';
             insuranceButton.classList.add('ml-1');
             insuranceButton.onclick = () => buyStartupInsurance(startup.symbol);
@@ -2816,7 +2953,7 @@ function displayInvestmentPool() {
 }
 
 const POOL_STAGE_LABELS = { funding: 'zbiórka', overfunding: 'nadsubskrypcja', development: 'rozwój', awaitingListing: 'czeka na giełdę', financial_complications: 'komplikacje' };
-const POOL_KIND_LABELS = { ipo: '📈 debiut', takeover: '🤝 przejęcie', refund: '📉 upadek', loss: '💀 strata', privatized: '🏢 prywatyzacja' };
+const POOL_KIND_LABELS = { ipo: `${uiIcon('wzrost', 14)} debiut`, takeover: `${uiIcon('umowa', 14)} przejęcie`, refund: `${uiIcon('spadek', 14)} upadek`, loss: `${uiIcon('spadek', 14)} strata`, privatized: `${uiIcon('firma', 14)} prywatyzacja` };
 
 /** Wkład uczestnika przez pulę w dany startup (suma rund). */
 function getPoolStartupShare(startup, id) {
@@ -2851,10 +2988,10 @@ function updateAutoInvestStatus() {
     if (!statusEl) return;
 
     if (playerAutoInvest.isEnabled) {
-        statusEl.innerHTML = `✅ Aktywne: <strong>${playerAutoInvest.amount} PLN</strong> co <strong>${playerAutoInvest.interval / 1000}s</strong>`;
+        statusEl.innerHTML = `${uiIcon('ok', 14)} Aktywne: <strong>${playerAutoInvest.amount} PLN</strong> co <strong>${playerAutoInvest.interval / 1000}s</strong>`;
         statusEl.style.color = 'var(--color-up)';
     } else {
-        statusEl.textContent = '❌ Nieaktywne';
+        statusEl.textContent = 'Nieaktywne';
         statusEl.style.color = 'var(--color-down)';
     }
 }
@@ -3069,7 +3206,7 @@ function renderNewsTicker() {
 function renderNewsHistory() {
     const history = document.getElementById('news-history');
     if (!history) return;
-    history.innerHTML = `<h4 class="my-1">📰 Ostatnie wiadomości (${newsLog.length})</h4><ul class="list-plain text-sm">${newsLog.map(n => `<li${n.symbol ? ` class="clickable" onclick="openDescriptionModal('${n.symbol}')"` : ''}>${escapeHtml(n.text)}</li>`).join('') || '<li class="text-muted">Brak wiadomości.</li>'}</ul>`;
+    history.innerHTML = `<h4 class="my-1">Ostatnie wiadomości (${newsLog.length})</h4><ul class="list-plain text-sm">${newsLog.map(n => `<li${n.symbol ? ` class="clickable" onclick="openDescriptionModal('${n.symbol}')"` : ''}>${escapeHtml(n.text)}</li>`).join('') || '<li class="text-muted">Brak wiadomości.</li>'}</ul>`;
 }
 
 function toggleNewsHistory() {
@@ -3167,7 +3304,7 @@ function openStartupAutoInvestModal(symbol) {
     const settings = playerStartupAutoInvest[symbol];
 
     // Pobierz elementy z modala
-    document.getElementById('startup-autoinvest-title').textContent = `🤖 Auto-inwestowanie: ${startup.name}`;
+    document.getElementById('startup-autoinvest-title').textContent = `Auto-inwestowanie: ${startup.name}`;
     const amountInput = document.getElementById('startup-autoinvest-amount');
     const intervalSlider = document.getElementById('startup-autoinvest-interval');
     const intervalValueSpan = document.getElementById('startup-autoinvest-interval-value');
@@ -3351,16 +3488,16 @@ function renderCompanyCardOverview(stock) {
         return data ? `<span class="ceo-trait" style="--trait-color: ${data.color};" title="${escapeHtml(data.description)}">${escapeHtml(data.name)}</span>` : '';
     }).join('');
     const phase = stock.corporatePhase && getSkillLevel('financialAnalyst') >= 1 ? `<p class="text-sm"><strong>Faza cyklu życia:</strong> ${escapeHtml(stock.corporatePhase)}</p>` : '';
-    const research = stock.research?.isResearching && stock.research.currentTech ? `<p class="text-sm">🔬 W fazie R&D: <strong>${escapeHtml(technologies[stock.research.currentTech]?.name || stock.research.currentTech)}</strong></p>` : '';
+    const research = stock.research?.isResearching && stock.research.currentTech ? `<p class="text-sm">${uiIcon('mikroskop', 14)} W fazie R&D: <strong>${escapeHtml(technologies[stock.research.currentTech]?.name || stock.research.currentTech)}</strong></p>` : '';
     const insights = typeof getAnalystInsights === 'function' ? getAnalystInsights(stock) : [];
     return `
         <div class="cc-grid">
             <section><h4>O spółce</h4><div class="text-sm text-justify">${assembleDescription(stock)}</div>${phase}${research}</section>
             <section>
-                ${stock.ceo?.name ? `<h4>Prezes</h4><p class="m-0"><strong>👔 ${escapeHtml(stock.ceo.name)}</strong></p>
+                ${stock.ceo?.name ? `<h4>Prezes</h4><p class="m-0"><strong>${uiIcon('zarzad', 14)} ${escapeHtml(stock.ceo.name)}</strong></p>
                     <p class="text-xs text-muted mt-0">wiek ${stock.ceo.age ?? '—'}, staż ${Math.floor((stock.ceo.tenure || 0) / 4)} lat</p>
                     <div class="ceo-traits-container">${traits}</div>` : ''}
-                ${insights.length ? `<h4>Analityk</h4>${insights.map(line => `<p class="text-sm">🔎 ${escapeHtml(line)}</p>`).join('')}` : ''}
+                ${insights.length ? `<h4>Analityk</h4>${insights.map(line => `<p class="text-sm">${uiIcon('szukaj', 14)} ${escapeHtml(line)}</p>`).join('')}` : ''}
             </section>
         </div>`;
 }
@@ -3409,7 +3546,7 @@ function renderCompanyCardFinance(stock, f) {
 function renderValuationSection(stock, f) {
     const level = getSkillLevel('financialAnalyst');
     if (level < 1 || typeof getValuationMethods !== 'function') {
-        return '<p class="text-xs text-muted mt-2">🔒 Metody wyceny i konsensus analityków odblokujesz szkoleniem „Analityk Finansowy”.</p>';
+        return `<p class="text-xs text-muted mt-2">${uiIcon('klodka', 14)} Metody wyceny i konsensus analityków odblokujesz szkoleniem „Analityk Finansowy”.</p>`;
     }
     const v = getValuationMethods(stock);
     if (!v) return '';
@@ -3422,7 +3559,7 @@ function renderValuationSection(stock, f) {
         ] : [])
     ];
     const consensus = level >= 3 ? `
-        <p class="text-sm">📊 Konsensus na najbliższy raport: zysk na akcję ≈ <strong>${formatZl(f.expectedEps)}</strong> za kwartał.
+        <p class="text-sm">${uiIcon('wykres', 14)} Konsensus na najbliższy raport: zysk na akcję ≈ <strong>${formatZl(f.expectedEps)}</strong> za kwartał.
         ${Number.isFinite(stock.lastSurprise) ? `Ostatni raport: <span class="${stock.lastSurprise > 0 ? 'text-up' : stock.lastSurprise < 0 ? 'text-down' : ''}">${stock.lastSurprise >= 0 ? '+' : ''}${(stock.lastSurprise * 100).toFixed(0)}% vs konsensus</span> — kurs reaguje na niespodziankę, nie na sam wynik.` : ''}</p>` : '';
     return `<h4 class="mt-3">Wycena (kurs ${formatZl(stock.price)})</h4>
         <table class="asset-mini-table w-full"><tbody>${rows.map(([label, value]) => `<tr><td>${label}</td><td class="cell-number">${value}</td></tr>`).join('')}</tbody></table>
@@ -3442,7 +3579,7 @@ function renderCompanyCardOwners(stock) {
         <p class="text-sm">Fundusz: <strong>${(fundPct * 100).toFixed(2)}%</strong>${wallet ? ` · konto prywatne: <strong>${wallet.toLocaleString('pl-PL')} akcji</strong>` : ''}</p>
         <p class="text-sm">Wolny obrót: <strong>${freeFloat.toLocaleString('pl-PL')}</strong> z ${stock.totalShares.toLocaleString('pl-PL')} akcji = <strong>${available.toLocaleString('pl-PL')}</strong> dostępnych na rynku + <strong>${Math.max(0, freeFloat - available).toLocaleString('pl-PL')}</strong> u inwestorów${where ? ` (${escapeHtml(where)})` : ''}.${available <= 0 ? ' <span class="text-warn">Teraz nie da się kupić — akcje kupisz, gdy ktoś je sprzeda.</span>' : ''}</p>
         <div class="gov-bars">${typeof renderShareholderBars === 'function' ? renderShareholderBars(stock) : ''}</div>
-        <button class="btn-secondary mt-2" onclick="openStockDetailsModal('${stock.symbol}')">🥧 Wykres akcjonariatu</button>`;
+        <button class="btn-secondary mt-2" onclick="openStockDetailsModal('${stock.symbol}')">${uiIcon('akcjonariat', 14)} Wykres akcjonariatu</button>`;
 }
 
 function renderCompanyCardManage(stock) {
@@ -3453,9 +3590,9 @@ function renderCompanyCardManage(stock) {
         <p class="text-sm">Udział funduszu: <strong>${(pct * 100).toFixed(2)}%</strong> · rada nadzorcza: <strong>${escapeHtml(seats.label)}</strong>.
             Od 5% głosujesz na walnych, od 20% masz miejsce w radzie, powyżej 50% kontrolujesz spółkę.</p>
         <div class="d-flex gap-2 flex-wrap">
-            ${governed ? `<button class="btn-secondary" onclick="openGovernanceModal('${stock.symbol}')">🗳️ Walne zgromadzenie</button>` : ''}
-            <button class="btn-secondary" onclick="openCompanyInvestments('${stock.symbol}')">📈 Inwestycje spółki</button>
-            ${pct > 0.5 ? `<button onclick="openManagementModal('${stock.symbol}')">👑 Zarządzaj spółką</button>` : ''}
+            ${governed ? `<button class="btn-secondary" onclick="openGovernanceModal('${stock.symbol}')">${uiIcon('glosowanie', 14)} Walne zgromadzenie</button>` : ''}
+            <button class="btn-secondary" onclick="openCompanyInvestments('${stock.symbol}')">${uiIcon('wzrost', 14)} Inwestycje spółki</button>
+            ${pct > 0.5 ? `<button onclick="openManagementModal('${stock.symbol}')">${uiIcon('korona', 14)} Zarządzaj spółką</button>` : ''}
         </div>
         ${renderStrategyOrders(stock)}`;
 }
@@ -3464,13 +3601,13 @@ function renderCompanyCardManage(stock) {
 function renderStrategyOrders(stock) {
     if (typeof isStrategyCompany !== 'function' || !isStrategyCompany(stock)) return '';
     const strategy = stock.strategy || {};
-    const status = strategy.pivot ? `🔄 trwa zmiana profilu na ${escapeHtml(strategy.pivot.to)} (do kw. ${strategy.pivot.until})`
-        : strategy.process ? `⏳ w toku: ${escapeHtml(describeStrategyProposal({ type: strategy.process.type, target: strategy.process.sector === getMainSector(stock) && strategy.process.type !== 'expand' ? (strategy.process.subsector || strategy.process.niche) : strategy.process.sector }))} (do kw. ${strategy.process.dueQuarter})`
-        : strategy.pendingProposal ? `🧭 propozycja prezesa: ${escapeHtml(describeStrategyProposal(strategy.pendingProposal))} — decyzja w poczcie` : 'brak trwających procesów';
+    const status = strategy.pivot ? `${uiIcon('odswiez', 14)} trwa zmiana profilu na ${escapeHtml(strategy.pivot.to)} (do kw. ${strategy.pivot.until})`
+        : strategy.process ? `${uiIcon('zegar', 14)} w toku: ${escapeHtml(describeStrategyProposal({ type: strategy.process.type, target: strategy.process.sector === getMainSector(stock) && strategy.process.type !== 'expand' ? (strategy.process.subsector || strategy.process.niche) : strategy.process.sector }))} (do kw. ${strategy.process.dueQuarter})`
+        : strategy.pendingProposal ? `${uiIcon('kompas', 14)} propozycja prezesa: ${escapeHtml(describeStrategyProposal(strategy.pendingProposal))} — decyzja w poczcie` : 'brak trwających procesów';
     if (!(typeof canFundControlAgm === 'function' && canFundControlAgm(stock))) return `<p class="text-sm text-muted mt-2">Strategia spółki: ${status}. Zlecać może tylko większościowy akcjonariusz.</p>`;
     const have = new Set(stock.segments.map(seg => seg.sector));
     const sectorOptions = SECTOR_NAMES.filter(name => !have.has(name) && name !== 'Bankowość')
-        .map(name => `<option value="${escapeHtml(name)}">${SECTORS[name].icon} ${escapeHtml(name)}${[...have].some(h => areSectorsRelated(h, name)) ? ' (powiązana)' : ''}</option>`).join('');
+        .map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}${[...have].some(h => areSectorsRelated(h, name)) ? ' (powiązana)' : ''}</option>`).join('');
     const nicheSeg = typeof getNicheCandidate === 'function' ? getNicheCandidate(stock) : null;
     const nicheOptions = nicheSeg ? Object.keys(SECTORS[nicheSeg.sector].niches).filter(n => n !== nicheSeg.niche).map(n => `<option>${escapeHtml(n)}</option>`).join('') : '';
     const sym = stock.symbol;
@@ -3478,10 +3615,10 @@ function renderStrategyOrders(stock) {
         <p class="text-sm">Strategia spółki: ${status}. Zlecenia są opcjonalne — bez nich decyduje prezes.</p>
         <div class="d-flex gap-2 flex-wrap items-center">
             <select id="strategy-expand-${sym}" aria-label="Nowy segment">${sectorOptions}</select>
-            <button class="btn-secondary" onclick="orderStrategy('${sym}', 'expand', document.getElementById('strategy-expand-${sym}').value)">🧩 Rozszerz (10–20% przychodów)</button>
-            <button class="btn-secondary" onclick="orderStrategy('${sym}', 'pivot', document.getElementById('strategy-expand-${sym}').value)">🔄 Pivot w ten sektor</button>
-            <button class="btn-secondary" onclick="orderStrategy('${sym}', 'subsector')">🎯 Wejdź w podsektor</button>
-            ${nicheOptions ? `<select id="strategy-niche-${sym}" aria-label="Specjalizacja">${nicheOptions}</select><button class="btn-secondary" onclick="orderStrategy('${sym}', 'niche', document.getElementById('strategy-niche-${sym}').value)">🏷️ Specjalizacja${nicheSeg.niche ? ' (zmiana)' : ''}</button>` : ''}
+            <button class="btn-secondary" onclick="orderStrategy('${sym}', 'expand', document.getElementById('strategy-expand-${sym}').value)">${uiIcon('segment', 14)} Rozszerz (10–20% przychodów)</button>
+            <button class="btn-secondary" onclick="orderStrategy('${sym}', 'pivot', document.getElementById('strategy-expand-${sym}').value)">${uiIcon('odswiez', 14)} Pivot w ten sektor</button>
+            <button class="btn-secondary" onclick="orderStrategy('${sym}', 'subsector')">${uiIcon('cel', 14)} Wejdź w podsektor</button>
+            ${nicheOptions ? `<select id="strategy-niche-${sym}" aria-label="Specjalizacja">${nicheOptions}</select><button class="btn-secondary" onclick="orderStrategy('${sym}', 'niche', document.getElementById('strategy-niche-${sym}').value)">${uiIcon('etykieta', 14)} Specjalizacja${nicheSeg.niche ? ' (zmiana)' : ''}</button>` : ''}
         </div></div>`;
 }
 
@@ -3575,7 +3712,7 @@ function openResearchModal(symbol) {
 
     const modal = document.getElementById('research-modal');
     modal.dataset.currentSymbol = symbol;
-    document.getElementById('research-modal-title').textContent = `🔬 Panel R&D: ${stock.name}`;
+    document.getElementById('research-modal-title').textContent = `Panel R&D: ${stock.name}`;
 
     const unlocks = stock.researchUnlocks;
     const research = stock.research;
@@ -4116,7 +4253,7 @@ function renderFestivalView(festivalContainer) {
 
     // --- Finalne złożenie widoku (renderowanie do kontenera) ---
     festivalContainer.innerHTML = `
-        <h2 class="mt-0 text-center">🎉 Trwa ${festival.name}! 🎉</h2>
+        <h2 class="mt-0 text-center">Trwa ${festival.name}!</h2>
         <div class="bank-section">
             <p>Koniec za: <strong>${timeLeft}s</strong> | Zainteresowanie wydarzeniem: <strong>${festival.globalInterest.toFixed(1)}</strong></p>
             <p class="text-sm">Atrakcje: ${festival.attractions.join(', ')}</p>
@@ -4886,7 +5023,7 @@ function renderTendersList() {
         card.className = 'construction-live-card';
 
         const title = document.createElement('h4');
-        title.textContent = `🏗️ ${tender.buildingType?.name || 'Inwestycja'}`;
+        title.textContent = `${tender.buildingType?.name || 'Inwestycja'}`;
 
         const status = document.createElement('span');
         status.className = 'construction-live-status';
@@ -5120,7 +5257,7 @@ function renderConstructionProjectsList() {
         card.dataset.projectId = project.id;
 
         const title = document.createElement('h4');
-        title.textContent = `🏗️ ${project.tender?.buildingType?.name || 'Budowa'}`;
+        title.textContent = `${project.tender?.buildingType?.name || 'Budowa'}`;
 
         const status = document.createElement('span');
         status.className = 'construction-live-status';
@@ -5604,7 +5741,7 @@ function renderConstructionResearchList(companies = stocks) {
         card.className = 'construction-live-card';
 
         const heading = document.createElement('h4');
-        heading.textContent = `🔬 ${company.name}`;
+        heading.textContent = `${company.name}`;
 
         const research = company.research;
         const currentTech = technologies[research?.currentTech];
@@ -6090,7 +6227,7 @@ function renderCvPanel() {
 
     const medals = completed.map(id => {
         const medal = getTrainingMedal(getSkillLevel(id));
-        return `<span class="cv-medal cv-medal-${medal.id}" title="${escapeHtml(skills[id].name)} — poziom ${getSkillLevel(id)}">${medal.icon} ${escapeHtml(skills[id].name)}</span>`;
+        return `<span class="cv-medal cv-medal-${medal.id}" title="${escapeHtml(stripEmoji(skills[id].name))} — poziom ${getSkillLevel(id)}">${uiIcon('medal', 14)}<span class="sr-only">${medal.label}: </span>${escapeHtml(stripEmoji(skills[id].name))}</span>`;
     }).join('') || '<span class="fund-muted">Brak ukończonych szkoleń.</span>';
 
     const history = (playerProfile?.cv || []).slice(-8).reverse()
@@ -6106,7 +6243,7 @@ function renderCvPanel() {
         const canBuy = next && reqMet && playerWallet.cash >= cost;
 
         return `<article class="cv-training">
-            <h4>${escapeHtml(skill.name)} ${medal ? `<span class="cv-medal cv-medal-${medal.id}">${medal.icon}</span>` : ''}</h4>
+            <h4>${escapeHtml(stripEmoji(skill.name))} ${medal ? `<span class="cv-medal cv-medal-${medal.id}" title="${medal.label}">${uiIcon('medal', 14)}<span class="sr-only">${medal.label}</span></span>` : ''}</h4>
             <p class="fund-muted">Poziom ${level}/${skill.levels.length}</p>
             ${next ? `<p>${escapeHtml(next.description || '')}</p>` : '<p><strong>Ukończone w pełni.</strong></p>'}
             ${next ? `<button ${canBuy ? '' : 'disabled'} onclick="buyTraining('${id}')">${reqMet ? `Szkolenie: ${cost} PLN` : 'Wymaga wcześniejszego szkolenia'}</button>` : ''}
@@ -6195,7 +6332,7 @@ function renderIntroCountries() {
     container.innerHTML = START_COUNTRIES.map(country => `
         <button type="button" class="intro-country ${country.available ? 'selected' : 'locked'}" ${country.available ? '' : 'disabled'}
             title="${country.available ? 'Dostępny' : `Przepustka: ${country.passCost.toLocaleString('pl-PL')} PLN (wkrótce)`}">
-            ${country.flag} ${country.name}${country.available ? '' : ' 🔒'}
+            ${country.flag} ${country.name}${country.available ? '' : ` ${uiIcon('klodka', 14)}`}
         </button>`).join('');
 }
 
@@ -6240,9 +6377,9 @@ function applyDebugModeUi() {
     const tools = document.getElementById('debug-tools');
     if (tools) tools.hidden = !enabled;
     const button = document.getElementById('debug-toggle-btn');
-    if (button) button.textContent = `🛠️ Tryb debug: ${enabled ? 'włączony' : 'wyłączony'}`;
+    if (button) button.textContent = `Tryb debug: ${enabled ? 'włączony' : 'wyłączony'}`;
     const skipButton = document.getElementById('debug-skip-intro-btn');
-    if (skipButton) skipButton.textContent = `⏭️ Pomijaj scenkę z babcią: ${isIntroSkipEnabled() ? 'tak' : 'nie'}`;
+    if (skipButton) skipButton.textContent = `Pomijaj scenkę z babcią: ${isIntroSkipEnabled() ? 'tak' : 'nie'}`;
     if (!enabled && currentSpeedMultiplier > 5) setGameSpeed(5);
 }
 
@@ -6391,11 +6528,11 @@ function renderCareerPanel() {
             <div class="career-row"><span>Stanowisko</span><strong>${escapeHtml(getPlayerPosition().name)}</strong></div>
             <div class="career-row"><span>Ocena zarządu za</span><span>${BOARD_REVIEW_EVERY_PERIODS - inCycle} okr.${score !== null ? ` (ostatnio ${Math.round(score)}/100)` : ''}</span></div>
             <div class="career-progress" title="Do następnej oceny zarządu"><span style="width:${Math.min(100, reviewProgress * 100).toFixed(0)}%"></span></div>
-            ${corporation.playerWeakReviews > 0 ? `<div class="loss">⚠️ Słabe oceny z rzędu: ${corporation.playerWeakReviews}/2</div>` : ''}
+            ${corporation.playerWeakReviews > 0 ? `<div class="loss">${uiIcon('alert', 14)} Słabe oceny z rzędu: ${corporation.playerWeakReviews}/2</div>` : ''}
             <div class="career-row"><span>Budżet korporacji</span><span>${formatZl(corporation.budget, 0)}</span></div>
             <div class="career-row"><span>Cel: przejęcia</span><span>${takeovers.done}/${takeovers.required}</span></div>
-            ${corporation.victory ? `<div class="profit">👑 Zwycięstwo: ${corporation.victory.type === 'ceo' ? 'CEO' : 'dominacja'}</div>` : ''}
-            <button class="btn-secondary" onclick="openCorporationModal()">🏢 Korporacja</button>
+            ${corporation.victory ? `<div class="profit">${uiIcon('korona', 14)} Zwycięstwo: ${corporation.victory.type === 'ceo' ? 'CEO' : 'dominacja'}</div>` : ''}
+            <button class="btn-secondary" onclick="openCorporationModal()">${uiIcon('firma', 14)} Korporacja</button>
         </div>`;
 }
 
@@ -6413,7 +6550,7 @@ function setCorporationTab(tab) {
     corporationTab = tab;
     document.querySelectorAll('.corp-tabs button').forEach(button => button.classList.toggle('active', button.dataset.tab === tab));
     const title = document.getElementById('corporation-title');
-    if (title) title.textContent = `🏢 ${corporation.name}`;
+    if (title) title.textContent = `${corporation.name}`;
     renderCorporationBody();
 }
 
@@ -6455,8 +6592,8 @@ function renderCorporationBoard() {
                 const supervised = person.manager && corporation.supervisedManagerId === person.manager.id;
                 const canTake = supervise && person.manager && getPositionIndex(person.positionId) < getPositionIndex(playerProfile.positionId);
                 const action = supervised
-                    ? `<button onclick="corporationAction(consolidateSupervisedFund)">🔗 Konsoliduj (głosowanie)</button>`
-                    : canTake ? `<button onclick="corporationAction(superviseManagerFund, '${person.manager.id}')">👔 Nadzoruj</button>` : '';
+                    ? `<button onclick="corporationAction(consolidateSupervisedFund)">${uiIcon('lancuch', 14)} Konsoliduj (głosowanie)</button>`
+                    : canTake ? `<button onclick="corporationAction(superviseManagerFund, '${person.manager.id}')">${uiIcon('zarzad', 14)} Nadzoruj</button>` : '';
                 return `<tr class="${person.mine ? 'mine' : ''}">
                     <td>${escapeHtml(person.name)}${person.mine ? ' (Ty)' : ''}</td>
                     <td>${escapeHtml(positionName(person.positionId))}</td>
@@ -6504,7 +6641,7 @@ function renderCorporationCooperation() {
             return `<article class="corp-card">
                 <h4>${escapeHtml(ai.name)}</h4>
                 <p class="fund-muted">Gotówka: ${formatZl(ai.cash, 0)}</p>
-                <button ${met ? 'disabled' : ''} onclick="corporationAction(meetInvestor, '${ai.id}')">${met ? 'Spotkanie odbyte' : '☕ Spotkanie'}</button>
+                <button ${met ? 'disabled' : ''} onclick="corporationAction(meetInvestor, '${ai.id}')">${met ? 'Spotkanie odbyte' : `${uiIcon('klienci', 14)} Spotkanie`}</button>
             </article>`;
         }).join('')}</div>
         <h4>Prezesi spółek</h4>
@@ -6517,7 +6654,7 @@ function renderCorporationCooperation() {
                     <td>${escapeHtml(stock.ceo?.name || stock.ceo || '—')}</td>
                     <td>${(Number(stock.reputation?.player) || 0).toFixed(0)}</td>
                     <td>${formatZl(stock.cash || 0, 0)}</td>
-                    <td><button ${met ? 'disabled' : ''} onclick="corporationAction(lunchWithCeo, '${stock.symbol}')">🍽️ Lunch</button></td>
+                    <td><button ${met ? 'disabled' : ''} onclick="corporationAction(lunchWithCeo, '${stock.symbol}')">${uiIcon('klienci', 14)} Lunch</button></td>
                 </tr>`;
             }).join('')}</tbody>
         </table>`;
@@ -6528,17 +6665,17 @@ function renderCorporationTakeovers() {
     const progress = getTakeoverProgress();
     return `
         <p class="fund-muted">Fundusze zewnętrzne to firmy zarządzające. Przejęcie proponuje członek zarządu; zarząd głosuje (reputacja, ostatnia ocena), a cena (${(EXTERNAL_FIRM_VALUE_PER_AUM * 100).toFixed(0)}% aktywów) schodzi z budżetu korporacji (${formatZl(corporation.budget, 0)}).
-        Proces ma 7 etapów (postęp co kwartał) i może mieć komplikacje. Cel zwycięstwa: przejąć wskazane 🎯 fundusze (${progress.done}/${progress.required}).</p>
+        Proces ma 7 etapów (postęp co kwartał) i może mieć komplikacje. Cel zwycięstwa: przejąć wskazane ${uiIcon('cel', 14)} fundusze (${progress.done}/${progress.required}).</p>
         <div class="corp-cards">${getExternalFunds().map(stock => {
             const isTarget = corporation.takeoverTargets.includes(stock.symbol);
             const process = stock.mergerProcess?.type === 'fundTakeover' ? stock.mergerProcess : null;
             const price = getExternalFirmValuation(stock);
             let action;
-            if (stock.managedByCorporation) action = '<p class="profit">✅ Przejęty</p>';
+            if (stock.managedByCorporation) action = `<p class="profit">${uiIcon('ok', 14)} Przejęty</p>`;
             else if (process) action = `<p>Etap ${process.stage}/7 · postęp ${process.progress}%</p>`;
-            else action = `<button ${allowed && corporation.budget >= price ? '' : 'disabled'} onclick="corporationAction(proposeFundTakeover, '${stock.symbol}')">🗳️ Wniosek o przejęcie</button>`;
+            else action = `<button ${allowed && corporation.budget >= price ? '' : 'disabled'} onclick="corporationAction(proposeFundTakeover, '${stock.symbol}')">${uiIcon('glosowanie', 14)} Wniosek o przejęcie</button>`;
             return `<article class="corp-card ${isTarget ? 'target' : ''} ${stock.managedByCorporation ? 'done' : ''}">
-                <h4>${isTarget ? '🎯 ' : ''}${escapeHtml(getExternalFirmName(stock))}</h4>
+                <h4>${isTarget ? `${uiIcon('cel', 14)} ` : ''}${escapeHtml(getExternalFirmName(stock))}</h4>
                 <p>Aktywa: ${formatZl(getExternalFundValue(stock) * stock.totalShares, 0)}</p>
                 <p>Cena przejęcia: ${formatZl(price, 0)}</p>
                 ${action}
@@ -6567,8 +6704,8 @@ function showVictoryScreen(victory) {
 let mailView = { folder: 'inbox', selectedId: null, pane: 'mail' }; // pane: mail | subscriptions | media
 
 const MAIL_FOLDER_LABELS = {
-    inbox: '📥 Odebrane', starred: '⭐ Oznaczone', corporation: '🏢 Korporacja',
-    PULS: '📰 Puls Rynku', FLESZ: '📰 Flesz Giełdowy', OBSER: '📰 Obserwator', spam: '🚫 Spam'
+    inbox: `${uiIcon('poczta', 14)} Odebrane`, starred: `${uiIcon('gwiazdka', 14)} Oznaczone`, corporation: `${uiIcon('firma', 14)} Korporacja`,
+    PULS: `${uiIcon('news', 14)} Puls Rynku`, FLESZ: `${uiIcon('news', 14)} Flesz Giełdowy`, OBSER: `${uiIcon('news', 14)} Obserwator`, spam: `${uiIcon('blokada', 14)} Spam`
 };
 
 function openMailbox(folder = mailView.folder) {
@@ -6630,7 +6767,7 @@ function renderMailbox() {
             <span>${MAIL_FOLDER_LABELS[folder]}</span>${unread ? `<b>${unread}</b>` : ''}</button>`;
     }).join('') + `
         <hr>
-        <button class="mail-folder ${mailView.pane === 'subscriptions' ? 'active' : ''}" onclick="setMailPane('subscriptions')">⚙️ Subskrypcje</button>`;
+        <button class="mail-folder ${mailView.pane === 'subscriptions' ? 'active' : ''}" onclick="setMailPane('subscriptions')">${uiIcon('ustawienia', 14)} Subskrypcje</button>`;
 
     const list = document.getElementById('mail-list');
     const preview = document.getElementById('mail-preview');
@@ -6652,7 +6789,7 @@ function renderMailbox() {
             <div class="mail-row ${message.read ? '' : 'unread'} ${message.id === mailView.selectedId ? 'selected' : ''}" role="button" tabindex="0" aria-current="${message.id === mailView.selectedId ? 'true' : 'false'}" onclick="selectMail(${message.id})">
                 <button class="mail-star ${message.starred ? 'on' : ''}" onclick="event.stopPropagation(); mailAction(toggleMailStar, ${message.id})" aria-label="Gwiazdka">${message.starred ? '★' : '☆'}</button>
                 <span class="mail-from">${escapeHtml(getMailSenderName(message.sender))}</span>
-                <span class="mail-subject">${message.importance >= 3 ? '❗ ' : ''}${message.isSpam ? '<span class="mail-tag">Reklama</span> ' : ''}${escapeHtml(message.subject)}
+                <span class="mail-subject">${message.importance >= 3 ? `${uiIcon('alert', 14)} ` : ''}${message.isSpam ? '<span class="mail-tag">Reklama</span> ' : ''}${escapeHtml(message.subject)}
                     <span class="mail-snippet"> — ${escapeHtml(message.body.slice(0, 80))}</span></span>
                 <span class="mail-time">${formatMailTime(message.at)}</span>
             </div>`).join('') : '<p class="fund-muted mail-empty">Brak wiadomości w tym folderze.</p>'}`;
@@ -6671,7 +6808,7 @@ function renderMailPreview(message) {
     } else if (message.action?.type === 'spinoff') { // 0.14 T4: decyzja większościowca o wydzieleniu
         const stock = stocks.find(s => s.symbol === message.action.symbol);
         action = stock && !stock.spinoff && typeof canAnnounceSpinoff === 'function' && canAnnounceSpinoff(stock) && isPlayerSpinoffMajority(stock)
-            ? `<div class="mail-action"><button onclick="mailAction(playerSpinoffDecision, '${stock.symbol}', 'now')">✂️ Zleć zapowiedź teraz</button> <button class="btn-secondary" onclick="mailAction(playerSpinoffDecision, '${stock.symbol}', 'block')">✋ Zablokuj na rok</button><p class="text-xs text-muted">Bez decyzji — decyduje prezes.</p></div>`
+            ? `<div class="mail-action"><button onclick="mailAction(playerSpinoffDecision, '${stock.symbol}', 'now')">${uiIcon('nozyczki', 14)} Zleć zapowiedź teraz</button> <button class="btn-secondary" onclick="mailAction(playerSpinoffDecision, '${stock.symbol}', 'block')">${uiIcon('blokada', 14)} Zablokuj na rok</button><p class="text-xs text-muted">Bez decyzji — decyduje prezes.</p></div>`
             : '<p class="fund-muted">Decyzja nie jest już aktualna.</p>';
     } else if (message.action?.type === 'tender') { // 0.14 T6: wezwanie po sprzedaży pakietu kontrolnego
         const stock = stocks.find(s => s.symbol === message.action.symbol);
@@ -6733,7 +6870,7 @@ function renderMailPreview(message) {
                 ${message.symbol ? `<button onclick="openStockDetailsModal('${message.symbol}')">Pokaż spółkę</button>` : ''}
                 <button onclick="mailAction(toggleMailStar, ${message.id})">${message.starred ? '★ Usuń gwiazdkę' : '☆ Oznacz gwiazdką'}</button>
                 <button onclick="mailAction(markMailRead, ${message.id}, false)">Oznacz jako nieprzeczytane</button>
-                <button onclick="mailView.selectedId = null; mailAction(deleteMail, ${message.id})">🗑️ Usuń</button>
+                <button onclick="mailView.selectedId = null; mailAction(deleteMail, ${message.id})">${uiIcon('kosz', 14)} Usuń</button>
             </div>
         </article>`;
 }
@@ -6947,7 +7084,7 @@ function renderCommercialBanksList() {
 
         return `<article class="bank-card ${getBankTypeClass(bank.type)}">
             <header class="bank-card-head">
-                <span class="bank-card-icon" aria-hidden="true">🏦</span>
+                <span class="bank-card-icon" aria-hidden="true">${uiIcon('bank', 20)}</span>
                 <div><h4>${escapeHtml(bank.name)}</h4><span class="bank-card-type">${escapeHtml(bank.type)}</span></div>
             </header>
             <dl class="bank-card-rates">
@@ -6998,14 +7135,14 @@ function renderJuDecisions() {
     if (box.contains(document.activeElement)) return;
     const campaign = playerFund.campaign;
     box.innerHTML = `
-        <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">💼</span><div><h4>Opłata za zarządzanie</h4><span class="bank-card-type">teraz ${(getPlayerFeeRate() * 100).toFixed(2)}% rocznie · standard ${(MANAGEMENT_FEE_ANNUAL * 100).toFixed(1)}%</span></div></header>
+        <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('teczka', 20)}</span><div><h4>Opłata za zarządzanie</h4><span class="bank-card-type">teraz ${(getPlayerFeeRate() * 100).toFixed(2)}% rocznie · standard ${(MANAGEMENT_FEE_ANNUAL * 100).toFixed(1)}%</span></div></header>
             <p class="text-sm">Niższa opłata przyciąga klientów (zwłaszcza skner), wyższa zasila budżet korporacji i Twój udział, ale klienci wrażliwi na koszty odchodzą. Zmiana raz na kwartał.</p>
             <div class="bank-card-form"><input type="text" inputmode="decimal" id="fee-rate-input" value="${(getPlayerFeeRate() * 100).toFixed(2)}" aria-label="Opłata w % rocznie">
             <button onclick="setPlayerFeeRate(parseFloat(document.getElementById('fee-rate-input').value.replace(',', '.'))); renderJuMarket();">Ustaw (0,5–3%)</button></div></article>
-        <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">📣</span><div><h4>Kampania marketingowa</h4><span class="bank-card-type">koszt ${formatZl(getMarketingCost(), 0)} z budżetu korporacji · ${MARKETING_WEEKS} tyg.</span></div></header>
-            ${campaign?.weeksLeft > 0 ? `<p class="text-sm">Trwa: ${MARKETING_TARGETS[campaign.target].icon} ${MARKETING_TARGETS[campaign.target].label}, zostało ${campaign.weeksLeft} tyg.</p>`
+        <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('megafon', 20)}</span><div><h4>Kampania marketingowa</h4><span class="bank-card-type">koszt ${formatZl(getMarketingCost(), 0)} z budżetu korporacji · ${MARKETING_WEEKS} tyg.</span></div></header>
+            ${campaign?.weeksLeft > 0 ? `<p class="text-sm">Trwa: ${dataIcon(MARKETING_TARGETS[campaign.target].icon)} ${MARKETING_TARGETS[campaign.target].label}, zostało ${campaign.weeksLeft} tyg.</p>`
                 : `<p class="text-sm">Dodatkowi kupujący udziały z wybranej grupy klientów. Nowe wpłaty nadal wymagają zaufania ≥ 50.</p>
-                <div class="bank-card-form">${Object.entries(MARKETING_TARGETS).map(([id, t]) => `<button class="btn-secondary" onclick="startMarketingCampaign('${id}'); renderJuMarket();">${t.icon} ${t.label}</button>`).join('')}</div>`}</article>`;
+                <div class="bank-card-form">${Object.entries(MARKETING_TARGETS).map(([id, t]) => `<button class="btn-secondary" onclick="startMarketingCampaign('${id}'); renderJuMarket();">${dataIcon(t.icon)} ${t.label}</button>`).join('')}</div>`}</article>`;
 }
 
 function renderJuMarket() {
@@ -7040,7 +7177,7 @@ function renderJuMarket() {
             <tbody>${rows.map((row, index) => `
                 <tr class="${row.fund.kind === 'player' ? 'mine' : ''} ${row.fund.id === juMarket.bestFundId ? 'ju-best' : ''}">
                     <td>${index + 1}</td>
-                    <td>${row.fund.kind === 'player' ? '💼' : row.fund.kind === 'bot' ? '🏢' : '🌐'} ${escapeHtml(row.fund.name)}</td>
+                    <td>${row.fund.kind === 'player' ? `${uiIcon('teczka', 14)}` : row.fund.kind === 'bot' ? `${uiIcon('firma', 14)}` : `${uiIcon('kraj', 14)}`} ${escapeHtml(row.fund.name)}</td>
                     <td>${row.fund.nav.toFixed(2)}</td>
                     <td>${formatPremium(row.last.premium)}</td>
                     <td>${formatPremium(row.trend)}</td>
@@ -7061,7 +7198,7 @@ function renderJuMarket() {
         const def = CLIENT_TYPES[key];
         const count = key === 'all' ? playerFund.clients.length : playerFund.clients.filter(client => client.type === key).length;
         if (key !== 'all' && !count) return '';
-        return `<button class="${juView.filter === key ? 'active' : ''}" onclick="setJuClientFilter('${key}')">${key === 'all' ? 'Wszyscy' : `${def.icon} ${def.label}`} (${count})</button>`;
+        return `<button class="${juView.filter === key ? 'active' : ''}" onclick="setJuClientFilter('${key}')">${key === 'all' ? 'Wszyscy' : `${dataIcon(def.icon)} ${def.label}`} (${count})</button>`;
     }).join('');
 
     const nav = getFundNav();
@@ -7074,11 +7211,11 @@ function renderJuMarket() {
         const card = juView.clientId === client.id ? `
             <div class="ju-client-card">
                 <p class="fst-italic">„${escapeHtml(client.motive || '')}”</p>
-                <p>Średni koszt udziału: ${formatZl(client.avgCost)} · zysk na udziale: ${formatPremium(gain)}${client.loyal ? ' · 💙 lojalny' : ''}${client.pendingSellUnits > 0 ? ` · wystawił ${client.pendingSellUnits.toFixed(1)} JU na rynku wtórnym` : ''}</p>
+                <p>Średni koszt udziału: ${formatZl(client.avgCost)} · zysk na udziale: ${formatPremium(gain)}${client.loyal ? ` · ${uiIcon('serce', 14)} lojalny` : ''}${client.pendingSellUnits > 0 ? ` · wystawił ${client.pendingSellUnits.toFixed(1)} JU na rynku wtórnym` : ''}</p>
                 <ul class="list-plain text-sm">${(client.history || []).map(item => `<li><span class="text-muted">t.${item.week}</span> ${escapeHtml(item.text)}</li>`).join('') || '<li class="text-muted">Brak historii.</li>'}</ul>
             </div>` : '';
         return `<div class="ju-client ${juView.clientId === client.id ? 'open' : ''}" role="button" tabindex="0" aria-expanded="${juView.clientId === client.id}" onclick="showJuClient(${client.id})">
-            <span class="ju-client-icon" title="${escapeHtml(def.label)}">${def.icon}</span>
+            <span class="ju-client-icon" title="${escapeHtml(def.label)}">${dataIcon(def.icon, 18)}</span>
             <span class="ju-client-name">${escapeHtml(client.name)}<small class="text-muted"> ${escapeHtml(def.label)}</small></span>
             <span class="ju-client-units">${formatNumberPl(client.units, 1)} udz. · ${formatZl(client.units * nav, 0)}</span>
             <span class="ju-satisfaction" title="Zadowolenie"><span style="width:${(client.satisfaction * 100).toFixed(0)}%"></span></span>
@@ -7123,13 +7260,13 @@ function updateStateModalContent() {
     if (stateTab === 'overview') {
         body.innerHTML = `
             <div class="bank-grid">
-                <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">⚖️</span><div><h4>Urząd antymonopolowy</h4><span class="bank-card-type">poziom ${antitrustOffice.level}/5</span></div></header>
+                <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('waga', 20)}</span><div><h4>Urząd antymonopolowy</h4><span class="bank-card-type">poziom ${antitrustOffice.level}/5</span></div></header>
                     <dl class="bank-card-rates"><div><dt>Szansa analizy</dt><dd>${(antitrustOffice.analysisCapacity * 100).toFixed(0)}%</dd></div><div><dt>Dokładność</dt><dd>${(antitrustOffice.accuracy * 100).toFixed(0)}%</dd></div><div><dt>Monopoliści</dt><dd>${stocks.filter(s => s.isMonopolist).length}</dd></div></dl>
                     <p class="text-sm text-muted">Karze monopolistów i może zablokować skup akcji przez spółkę z Giełdy Diamentowej. Państwo samo inwestuje w rozwój urzędu.</p></article>
-                <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">📊</span><div><h4>Koniunktura</h4><span class="bank-card-type">${escapeHtml(phase.name || '')}</span></div></header>
+                <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('wykres', 20)}</span><div><h4>Koniunktura</h4><span class="bank-card-type">${escapeHtml(phase.name || '')}</span></div></header>
                     <p class="text-sm">${escapeHtml(phase.description || 'Faza cyklu gospodarczego wpływa na wyniki spółek, sektory wrażliwe na cykl i stopy procentowe.')}</p>
                     <p class="text-sm text-muted">Wskaźnik koniunktury: ${Number(economyCycle.index || 0).toFixed(0)}/100 · zmiana PKB w kwartale: ${((economyCycle.gdpGrowth || 0) * 100).toFixed(2)}%.</p></article>
-                <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">🏭</span><div><h4>Spółki Skarbu Państwa</h4><span class="bank-card-type">nacjonalizacje i prywatyzacje</span></div></header>
+                <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('fabryka', 20)}</span><div><h4>Spółki Skarbu Państwa</h4><span class="bank-card-type">nacjonalizacje i prywatyzacje</span></div></header>
                     <ul class="list-plain text-sm">${stocks.filter(s => s.isStateOwned && !s.isBankrupt).slice(0, 8).map(s => `<li>${escapeHtml(s.name)} — ${((s.stateOwnershipPct || 0) * 100).toFixed(0)}%</li>`).join('') || '<li class="text-muted">Brak.</li>'}</ul></article>
             </div>`;
     } else if (stateTab === 'macro') {
@@ -7159,7 +7296,7 @@ function updateStateModalContent() {
             <p class="bank-lead">Raz w roku gry Skarb Państwa powierza mandaty emerytalne (napływ kapitału) 3 najlepszym funduszom: liczy się wynik vs GIG z 4 okresów i zaufanie klientów. Następny przydział: przy rocznym rozliczeniu (wybory za ${city.mayor?.electionYear ?? '—'} ${city.mayor?.electionYear === 1 ? 'rok' : 'lata'}).</p>
             <table class="asset-mini-table w-full">
                 <thead><tr><th>#</th><th>Fundusz</th><th>Ocena kwalifikacji</th><th></th></tr></thead>
-                <tbody>${ranking.map((fund, index) => `<tr class="${fund.kind === 'player' ? 'mine' : ''}"><td>${index + 1}</td><td>${escapeHtml(fund.name)}</td><td>${fund.score.toFixed(1)}</td><td>${index < 3 ? '🏅 mandat' : ''}</td></tr>`).join('')}</tbody>
+                <tbody>${ranking.map((fund, index) => `<tr class="${fund.kind === 'player' ? 'mine' : ''}"><td>${index + 1}</td><td>${escapeHtml(fund.name)}</td><td>${fund.score.toFixed(1)}</td><td>${index < 3 ? `${uiIcon('medal', 14)} mandat` : ''}</td></tr>`).join('')}</tbody>
             </table>
             <h4>Ostatni przydział</h4>
             <p class="text-sm">${last ? last.grants.map(g => `${escapeHtml(g.name)}: ${formatZl(g.amount, 0)}`).join(' · ') : 'Jeszcze nie było przydziału.'}</p>`;
@@ -7179,7 +7316,7 @@ function renderCityPpp() {
         <p class="bank-lead">Partnerstwo publiczno-prywatne: fundusz współfinansuje inwestycje miasta. Odsetki co tydzień z budżetu miasta, kapitał w terminie. Ryzyko rośnie przy słabym budżecie i niskim poparciu burmistrza. Limit: ${(PPP_FUND_LIMIT * 100).toFixed(0)}% aktywów (wolne: ${formatZl(getFundPppCapacity(), 0)}).</p>
         <h4>Udziały funduszu</h4>
         <div class="bank-deposits">${playerFund.ppp.map(stake => `
-            <div class="bank-deposit"><div class="bank-deposit-info"><strong>${stake.icon} ${escapeHtml(stake.name)}</strong><span class="text-muted text-sm">${(stake.rate * 100).toFixed(1)}% rocznie · zostało ${stake.weeksLeft} tyg.${stake.unpaid ? ' · ⚠️ zaległe odsetki' : ''}</span></div>
+            <div class="bank-deposit"><div class="bank-deposit-info"><strong>${stake.icon} ${escapeHtml(stake.name)}</strong><span class="text-muted text-sm">${(stake.rate * 100).toFixed(1)}% rocznie · zostało ${stake.weeksLeft} tyg.${stake.unpaid ? ` · ${uiIcon('alert', 14)} zaległe odsetki` : ''}</span></div>
             <div class="bank-deposit-amount">${formatZl(stake.principal)}</div><span></span>
             <div class="bank-deposit-progress"><span style="width:${(100 * (1 - stake.weeksLeft / stake.termWeeks)).toFixed(0)}%"></span></div></div>`).join('') || '<p class="text-muted">Fundusz nie ma udziałów w projektach miejskich.</p>'}</div>
         <h4>Projekty szukające finansowania</h4>
@@ -7200,12 +7337,12 @@ function renderConstructionFinancing() {
         <p class="bank-lead">Spółki budowlane z budową w toku i niską gotówką proszą fundusz o pożyczkę pomostową. Spłata z odsetkami w terminie; przy braku gotówki jedno przedłużenie o 4 tygodnie, potem częściowa spłata; upadek wykonawcy = odzysk ${(BRIDGE_RECOVERY * 100).toFixed(0)}%. Limit: ${(BRIDGE_FUND_LIMIT * 100).toFixed(0)}% aktywów (wolne: ${formatZl(getFundBridgeCapacity(), 0)}).</p>
         <h4>Pożyczki funduszu</h4>
         <div class="bank-deposits">${loans.map(loan => `
-            <div class="bank-deposit"><div class="bank-deposit-info"><strong>🏗️ ${escapeHtml(loan.name)}</strong><span class="text-muted text-sm">${escapeHtml(loan.project)} · ${(loan.rate * 100).toFixed(1)}% · zostało ${loan.weeksLeft} tyg.${loan.extended ? ' · przedłużona' : ''}</span></div>
+            <div class="bank-deposit"><div class="bank-deposit-info"><strong>${uiIcon('budownictwo', 14)} ${escapeHtml(loan.name)}</strong><span class="text-muted text-sm">${escapeHtml(loan.project)} · ${(loan.rate * 100).toFixed(1)}% · zostało ${loan.weeksLeft} tyg.${loan.extended ? ' · przedłużona' : ''}</span></div>
             <div class="bank-deposit-amount">${formatZl(loan.principal)} <span class="text-up text-sm">+${formatZl(loan.accrued)}</span></div><span></span>
             <div class="bank-deposit-progress"><span style="width:${(100 * (1 - loan.weeksLeft / loan.termWeeks)).toFixed(0)}%"></span></div></div>`).join('') || '<p class="text-muted">Fundusz nie finansuje żadnej budowy.</p>'}</div>
         <h4>Prośby o finansowanie</h4>
         <div class="bank-grid">${bridgeLoanOffers.map(offer => `
-            <article class="bank-card bank-type-internet"><header class="bank-card-head"><span class="bank-card-icon">🏗️</span><div><h4>${escapeHtml(offer.name)}</h4><span class="bank-card-type">${escapeHtml(offer.project)}</span></div></header>
+            <article class="bank-card bank-type-internet"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('budownictwo', 20)}</span><div><h4>${escapeHtml(offer.name)}</h4><span class="bank-card-type">${escapeHtml(offer.project)}</span></div></header>
                 <dl class="bank-card-rates"><div><dt>Kwota</dt><dd>${formatZl(offer.amount, 0)}</dd></div><div><dt>Oprocentowanie</dt><dd>${(offer.rate * 100).toFixed(1)}%</dd></div><div><dt>Okres</dt><dd>${offer.weeks} tyg.</dd></div></dl>
                 <button onclick="fundBridgeLoan('${offer.id}'); renderConstructionFinancing();">Udziel pożyczki</button>
             </article>`).join('') || '<p class="text-muted">Brak próśb — pojawiają się, gdy budowlańcom brakuje gotówki na kontrakty.</p>'}</div>`;
@@ -7379,7 +7516,7 @@ function renderInvestmentPanel(stock, container, canAct) {
         const quality = INVESTMENT_QUALITY[op.quality] || INVESTMENT_QUALITY.ok;
         return `<tr>
             <td>${escapeHtml(op.name)}</td>
-            <td title="Wydajność ${(op.efficiency * 100).toFixed(0)}%">${quality.icon} ${quality.label}</td>
+            <td title="Wydajność ${(op.efficiency * 100).toFixed(0)}%">${dataIcon(quality.icon)} ${quality.label}</td>
             <td>${(op.roi * 100).toFixed(0)}% / rok</td>
             <td class="${op.lastResult >= 0 ? 'profit' : 'loss'}">${formatZl(op.lastResult, 0)}</td>
             <td class="${op.totalResult >= 0 ? 'profit' : 'loss'}">${formatZl(op.totalResult, 0)}</td>
@@ -7408,13 +7545,13 @@ function renderInvestmentPanel(stock, container, canAct) {
     }).join('');
 
     section.innerHTML = `
-        <div class="inv-cash"><span>💰 Gotówka spółki</span><strong>${formatZl(stock.cash, 0)}</strong></div>
-        <h5>🚧 W toku (${countCompanyInvestmentOrders(stock)}/${Math.max(1, devLevel)})</h5>
+        <div class="inv-cash"><span>${uiIcon('lombard', 14)} Gotówka spółki</span><strong>${formatZl(stock.cash, 0)}</strong></div>
+        <h5>W toku (${countCompanyInvestmentOrders(stock)}/${Math.max(1, devLevel)})</h5>
         <ul class="list-plain inv-list">${[...internal, ...building].join('') || '<li class="text-muted">Brak inwestycji w toku.</li>'}</ul>
         ${fundCan ? '<p class="text-xs text-muted">Jako większościowy akcjonariusz fundusz może dopłacić do inwestycji w toku: za nowe akcje (emisja po cenie −5%, także ponad limit) albo za udział w zyskach tej inwestycji (do 60%).</p>' : ''}
-        <h5>⚙️ Działające</h5>
+        <h5>Działające</h5>
         ${operating ? `<table class="asset-mini-table w-full text-xs"><thead><tr><th>Inwestycja</th><th>Jakość</th><th>Oczek. zwrot</th><th>Ost. kwartał</th><th>Łącznie</th><th>Udział funduszu</th></tr></thead><tbody>${operating}</tbody></table>` : '<p class="text-muted text-sm">Brak działających inwestycji.</p>'}
-        <h5>📋 Katalog inwestycji</h5>
+        <h5>Katalog inwestycji</h5>
         <table class="asset-mini-table w-full text-xs"><thead><tr><th>Inwestycja</th><th>Koszt</th><th>Czas</th><th>Oczek. zwrot</th><th></th></tr></thead><tbody>${catalog}</tbody></table>`;
     container.appendChild(section);
 }
@@ -7425,7 +7562,7 @@ function openCompanyInvestments(symbol) {
     const modal = document.getElementById('company-investments-modal');
     const body = document.getElementById('company-investments-body');
     if (!stock || !modal || !body) return;
-    document.getElementById('company-investments-title').textContent = `📈 Inwestycje: ${stock.name} (${stock.symbol})`;
+    document.getElementById('company-investments-title').textContent = `Inwestycje: ${stock.name} (${stock.symbol})`;
     body.innerHTML = '';
     renderInvestmentPanel(stock, body, getFundStakePct(stock) > 0.5);
     modal.style.display = 'block';
@@ -7484,8 +7621,8 @@ function openTakeoverModal(symbol) {
         ${defense}
         ${decided ? `<p class="text-info">${decided}</p>` : `
         <div class="d-flex gap-2 flex-wrap">
-            <button onclick="sellFundSharesToAggressor('${symbol}')">💰 Sprzedaj akcje po cenie oferty</button>
-            <button class="btn-danger" onclick="voteAgainstTakeover('${symbol}')">🗳️ Głosuj przeciw</button>
+            <button onclick="sellFundSharesToAggressor('${symbol}')">${uiIcon('lombard', 14)} Sprzedaj akcje po cenie oferty</button>
+            <button class="btn-danger" onclick="voteAgainstTakeover('${symbol}')">${uiIcon('glosowanie', 14)} Głosuj przeciw</button>
         </div>`}
         ${pct > 0.5 ? `<h4 class="mt-3">Obrona (akcjonariusz większościowy)</h4><div class="defense-grid">${renderDefenseButtons(target)}</div>` : ''}`;
     modal.style.display = 'block';
@@ -7499,7 +7636,7 @@ function openNegotiationModal(symbol, start = false) {
         modal = document.createElement('div');
         modal.id = 'negotiation-modal';
         modal.className = 'modal';
-        modal.innerHTML = '<button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button><h2 class="mt-0">🤝 Negocjacje</h2><div id="negotiation-body"></div>';
+        modal.innerHTML = '<button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button><h2 class="mt-0">Negocjacje</h2><div id="negotiation-body"></div>';
         document.body.appendChild(modal);
     }
     renderNegotiation(symbol);
@@ -7508,7 +7645,7 @@ function openNegotiationModal(symbol, start = false) {
 
 function negotiationAction(symbol, fn, ...args) {
     const result = fn(symbol, ...args);
-    const labels = { accepted: '✅ Agresor przyjął żądanie!', counter: '↩️ Agresor składa kontrofertę.', walkout: '🚪 Agresor zerwał rozmowy i wycofał ofertę.' };
+    const labels = { accepted: 'Agresor przyjął żądanie!', counter: 'Agresor składa kontrofertę.', walkout: 'Agresor zerwał rozmowy i wycofał ofertę.' };
     if (labels[result]) showToast(labels[result], result === 'walkout' ? 'warning' : 'success', 5000);
     renderNegotiation(symbol);
     if (typeof refreshTakeoverViews === 'function') refreshTakeoverViews(symbol);
@@ -7524,7 +7661,7 @@ function renderNegotiation(symbol) {
     const { initiator, process } = pair;
     const offer = process.offerDetails;
     const owner = findMajorityShareholder(initiator);
-    const history = neg.history.map(h => `<li>Runda ${h.round}: ${h.result === 'counterAccepted' ? `przyjęto kontrofertę +${(h.counter * 100).toFixed(0)} pkt` : `żądanie +${(h.demand * 100).toFixed(0)} pkt → ${{ accepted: '✅ przyjęte', counter: `↩️ kontroferta +${(h.counter * 100).toFixed(0)} pkt`, walkout: '🚪 zerwanie' }[h.result]}`}</li>`).join('');
+    const history = neg.history.map(h => `<li>Runda ${h.round}: ${h.result === 'counterAccepted' ? `przyjęto kontrofertę +${(h.counter * 100).toFixed(0)} pkt` : `żądanie +${(h.demand * 100).toFixed(0)} pkt → ${{ accepted: `${uiIcon('ok', 14)} przyjęte`, counter: `${uiIcon('cofnij', 14)} kontroferta +${(h.counter * 100).toFixed(0)} pkt`, walkout: `${uiIcon('wyjscie', 14)} zerwanie` }[h.result]}`}</li>`).join('');
     const demandInput = Number(document.getElementById('neg-demand')?.value) || 15;
     body.innerHTML = `
         <div class="bank-ticker">
@@ -7541,7 +7678,7 @@ function renderNegotiation(symbol) {
                 <button onclick="negotiationAction('${symbol}', negotiationDemand, document.getElementById('neg-demand').value / 100)">Złóż żądanie</button>
             </div>
             ${neg.counter ? `<div class="mail-action"><p>Kontroferta agresora: premia <strong>+${(neg.counter * 100).toFixed(0)} pkt proc.</strong></p>
-                <button onclick="negotiationAction('${symbol}', negotiationAcceptCounter)">✅ Przyjmij kontrofertę</button></div>` : ''}
+                <button onclick="negotiationAction('${symbol}', negotiationAcceptCounter)">${uiIcon('ok', 14)} Przyjmij kontrofertę</button></div>` : ''}
             <button class="btn-secondary mt-2" onclick="negotiationAction('${symbol}', negotiationEnd)">Zakończ negocjacje (oferta bez zmian)</button>`
         : '<p class="text-info">Negocjacje zakończone.</p>'}
         ${history ? `<h4>Przebieg</h4><ul class="list-plain text-sm">${history}</ul>` : ''}`;
@@ -7564,8 +7701,8 @@ function openRescueOfferingModal(symbol) {
         po <strong>${formatZl(offer.price)}</strong> (rynek: ${formatZl(stock.price)}). Pieniądze idą na spłatę zobowiązań.</p>
         <div class="bank-card-form">
             <input type="text" inputmode="numeric" id="rescue-qty" value="${maxAffordable}" aria-label="Liczba akcji">
-            <button onclick="acceptRescueOffer('${symbol}', parseInt(document.getElementById('rescue-qty').value, 10))">✅ Obejmij akcje ${escapeHtml(symbol)}</button>
-            <button class="btn-secondary" onclick="declineRescueOffer('${symbol}')">❌ Odrzuć</button>
+            <button onclick="acceptRescueOffer('${symbol}', parseInt(document.getElementById('rescue-qty').value, 10))">${uiIcon('ok', 14)} Obejmij akcje ${escapeHtml(symbol)}</button>
+            <button class="btn-secondary" onclick="declineRescueOffer('${symbol}')">${uiIcon('zamknij', 14)} Odrzuć</button>
         </div>`;
     modal.style.display = 'block';
 }
@@ -7611,7 +7748,7 @@ function renderGovernance() {
         const pct = getFundStakePct(stock);
         return `<button class="gov-company ${stock.symbol === governanceView.symbol ? 'active' : ''}" onclick="openGovernanceModal('${stock.symbol}')">
             <strong>${escapeHtml(stock.symbol)}</strong> <span class="text-xs">${(pct * 100).toFixed(1)}%</span>
-            <span class="text-xs text-muted d-block">${gov.pendingAgm ? '🗳️ walne w przyszłym kwartale' : `walne za ${gov.quartersToAgm} kw.`}</span>
+            <span class="text-xs text-muted d-block">${gov.pendingAgm ? `${uiIcon('glosowanie', 14)} walne w przyszłym kwartale` : `walne za ${gov.quartersToAgm} kw.`}</span>
         </button>`;
     }).join('') : '<p class="text-muted text-sm">Fundusz nie ma akcji żadnej spółki.</p>';
 
@@ -7645,14 +7782,14 @@ function renderGovernanceDetail(stock) {
                 ${canPropose ? `<select aria-label="Głos funduszu" onchange="setAgmVote('${stock.symbol}', '${item.id}', this.value)">
                     ${[['for', 'Za'], ['against', 'Przeciw'], ['abstain', 'Wstrzymuję się']].map(([value, label]) => `<option value="${value}" ${item.playerVote === value ? 'selected' : ''}>${label}</option>`).join('')}
                 </select>` : '<span class="text-xs text-muted">fundusz: za</span>'}
-                ${item.by === 'player' ? (item.campaign ? '<span class="text-xs text-info">📣 kampania trwa</span>'
-                    : `<button class="btn-xs" onclick="runProxyCampaign('${stock.symbol}', '${item.id}')">📣 Kampania (${formatZl(getCampaignCost(stock), 0)})</button>`) : ''}
+                ${item.by === 'player' ? (item.campaign ? `<span class="text-xs text-info">${uiIcon('megafon', 14)} kampania trwa</span>`
+                    : `<button class="btn-xs" onclick="runProxyCampaign('${stock.symbol}', '${item.id}')">${uiIcon('megafon', 14)} Kampania (${formatZl(getCampaignCost(stock), 0)})</button>`) : ''}
             </div>
         </li>`).join('') : '';
 
     const history = gov.history.map(record => `
         <details class="gov-history"><summary>Walne — frekwencja ${(record.turnout * 100).toFixed(0)}%, przyjęte ${record.results.filter(r => r.passed).length}/${record.results.length}</summary>
-            <ul class="list-plain">${record.results.map(r => `<li>${r.passed ? '✅' : '❌'} ${escapeHtml(r.label)} — za ${(r.for / Math.max(1, r.for + r.against) * 100).toFixed(0)}%${r.effect ? ` · ${escapeHtml(r.effect)}` : ''}</li>`).join('')}</ul>
+            <ul class="list-plain">${record.results.map(r => `<li>${r.passed ? `${uiIcon('ok', 14)}` : `${uiIcon('zamknij', 14)}`} ${escapeHtml(r.label)} — za ${(r.for / Math.max(1, r.for + r.against) * 100).toFixed(0)}%${r.effect ? ` · ${escapeHtml(r.effect)}` : ''}</li>`).join('')}</ul>
         </details>`).join('');
 
     return `
@@ -7693,7 +7830,7 @@ function renderMacroPanel() {
     const pct = (value, digits = 1) => `${(value * 100).toFixed(digits)}%`;
     const series = key => macro.history.map(entry => entry[key]);
     const card = (icon, title, value, sub, key) => `
-        <article class="bank-card macro-card"><header class="bank-card-head"><span class="bank-card-icon">${icon}</span><div><h4>${title}</h4><span class="bank-card-type">${sub}</span></div></header>
+        <article class="bank-card macro-card"><header class="bank-card-head"><span class="bank-card-icon">${dataIcon(icon, 20)}</span><div><h4>${title}</h4><span class="bank-card-type">${sub}</span></div></header>
             <div class="macro-value">${value}</div>${renderSparkline(series(key))}</article>`;
     const decision = macro.lastDecision;
     const election = macro.election;
@@ -7706,14 +7843,14 @@ function renderMacroPanel() {
             ${card('🏛️', 'Stopa referencyjna', pct(centralBank.baseInterestRate, 2), `kredyty ${pct(LOAN_INTEREST_RATE, 2)} · lokaty ${pct(DEPOSIT_INTEREST_RATE, 2)}`, 'rate')}
         </div>
         <div class="bank-grid mt-3">
-            <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">📰</span><div><h4>Posiedzenia Banku Centralnego</h4><span class="bank-card-type">co kwartał · prezes ${escapeHtml(centralBank.ceo?.name || '—')}</span></div></header>
+            <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('news', 20)}</span><div><h4>Posiedzenia Banku Centralnego</h4><span class="bank-card-type">co kwartał · prezes ${escapeHtml(centralBank.ceo?.name || '—')}</span></div></header>
                 <p class="text-sm">Ostatnia decyzja: <strong>${decision ? describeRateChange(decision.change) : '—'}</strong>${decision && Math.abs(decision.surprise) >= 0.001 ? ' <span class="text-warn">(niespodzianka)</span>' : ''}</p>
                 <p class="text-sm">Oczekiwania analityków na następne posiedzenie: <strong>${escapeHtml(macro.expectation?.label || '—')}</strong></p>
                 <p class="text-xs text-muted">Cechy prezesa: ${(centralBank.ceo?.traits || []).map(t => escapeHtml(t.name)).join(', ') || 'brak'}. Rynek reaguje mocniej na niespodziankę niż na decyzję zgodną z oczekiwaniami.</p></article>
-            <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">🗳️</span><div><h4>Polityka</h4><span class="bank-card-type">${escapeHtml(getRulingParty().name)}</span></div></header>
+            <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('glosowanie', 20)}</span><div><h4>Polityka</h4><span class="bank-card-type">${escapeHtml(getRulingParty().name)}</span></div></header>
                 <p class="text-sm">${election.campaign ? '<strong class="text-warn">Trwa kampania wyborcza.</strong>' : `Wybory za ${election.quartersLeft} kw.`}</p>
                 <p class="text-xs text-muted">Prywatyzacje ×${getRulingParty().privatization} · nacjonalizacje ×${getRulingParty().nationalization} · dotacje ×${getRulingParty().subsidies}</p>
-                ${getPoliticalFavor() ? `<p class="text-sm ${getPoliticalFavor() > 0 ? 'text-up' : 'text-down'}">${getPoliticalFavor() > 0 ? '🤝 Władza jest przychylna funduszowi' : '😠 Władza jest nieprzychylna funduszowi'} (${election.favor.quartersLeft} kw.)</p>` : ''}
+                ${getPoliticalFavor() ? `<p class="text-sm ${getPoliticalFavor() > 0 ? 'text-up' : 'text-down'}">${getPoliticalFavor() > 0 ? `${uiIcon('umowa', 14)} Władza jest przychylna funduszowi` : `${uiIcon('alert', 14)} Władza jest nieprzychylna funduszowi`} (${election.favor.quartersLeft} kw.)</p>` : ''}
                 ${election.campaign && playerFund ? `<p class="text-xs text-muted">Darowizna z pieniędzy funduszu (do 2% aktywów): przychylność wygranych, ale podejrzenia KNF i spadek zaufania klientów. Wpłacono: ${formatZl(Object.values(election.donations || {}).reduce((sum, value) => sum + (Number(value) || 0), 0), 0)}.</p>
                 <div class="bank-card-form"><select id="donation-party" aria-label="Partia">${Object.entries(RULING_PARTIES).map(([id, p]) => `<option value="${id}">${escapeHtml(p.name)}</option>`).join('')}</select>
                 <input type="text" inputmode="numeric" id="donation-amount" value="${Math.max(100, Math.round(getFundAssets() * 0.005))}" aria-label="Kwota darowizny">
@@ -7722,7 +7859,7 @@ function renderMacroPanel() {
         <h4>Cykle sektorów</h4>
         <div class="macro-sectors">${sectors.map(([sector, cycle]) => {
             const phase = SECTOR_CYCLE_PHASES[cycle.phase];
-            return `<div class="macro-sector is-${cycle.phase}"><span>${phase.icon} ${escapeHtml(sector)}</span><strong>${phase.name}</strong><span class="text-xs text-muted">${cycle.quartersLeft} kw.</span></div>`;
+            return `<div class="macro-sector is-${cycle.phase}"><span>${dataIcon(phase.icon)} ${escapeHtml(sector)}</span><strong>${phase.name}</strong><span class="text-xs text-muted">${cycle.quartersLeft} kw.</span></div>`;
         }).join('')}</div>`;
 }
 
@@ -7822,7 +7959,7 @@ function renderSocietyClassBar() {
 }
 
 function renderPartyBars(support) {
-    return PARTY_IDS.map(id => `<div class="party-row"><span>${escapeHtml(RULING_PARTIES[id].name)}${macro.election.ruling === id ? ' 👑' : macro.election.coalition?.partner === id ? ' 🤝' : ''}</span>
+    return PARTY_IDS.map(id => `<div class="party-row"><span>${escapeHtml(RULING_PARTIES[id].name)}${macro.election.ruling === id ? ` ${uiIcon('korona', 14)}` : macro.election.coalition?.partner === id ? ` ${uiIcon('umowa', 14)}` : ''}</span>
         <span class="party-bar"><span style="width:${Math.min(100, support[id] || 0).toFixed(1)}%;background:${PARTY_COLORS[id]}"></span></span><strong>${(support[id] || 0).toFixed(0)}%</strong></div>`).join('');
 }
 
@@ -7831,7 +7968,7 @@ function renderCountryPanel() {
     const pct = (v, d = 1) => `${(v * 100).toFixed(d)}%`;
     const series = key => society.history.map(entry => entry[key]);
     const card = (icon, title, value, sub, key) => `
-        <article class="bank-card macro-card"><header class="bank-card-head"><span class="bank-card-icon">${icon}</span><div><h4>${title}</h4><span class="bank-card-type">${sub}</span></div></header>
+        <article class="bank-card macro-card"><header class="bank-card-head"><span class="bank-card-icon">${dataIcon(icon, 20)}</span><div><h4>${title}</h4><span class="bank-card-type">${sub}</span></div></header>
             <div class="macro-value">${value}</div>${key && typeof renderSparkline === 'function' ? renderSparkline(series(key)) : ''}</article>`;
     const m = society.migration;
     const budget = society.budget;
@@ -7845,7 +7982,7 @@ function renderCountryPanel() {
     const laws = Object.entries(SOCIAL_LAWS).map(([id, law]) => {
         const level = society.laws[id];
         return `<tr><td>${law.icon} ${escapeHtml(law.name)}</td><td><strong>${escapeHtml(describeLawLevel(id))}</strong></td>
-            <td class="text-xs text-muted">${pending?.law === id ? `📜 zapowiedź: → ${escapeHtml(describeLawLevel(id, pending.to))} od przyszłego kwartału` : `zmiany: ${society.lawChanges[id] || 0}`}</td>
+            <td class="text-xs text-muted">${pending?.law === id ? `${uiIcon('raport', 14)} zapowiedź: → ${escapeHtml(describeLawLevel(id, pending.to))} od przyszłego kwartału` : `zmiany: ${society.lawChanges[id] || 0}`}</td>
             <td>${law.levels.map((_, i) => `<span class="law-pip ${i <= level ? 'on' : ''}"></span>`).join('')}</td></tr>`;
     }).join('');
     const wages = WORKFORCE_GROUPS.map(g => `<tr><td>${escapeHtml(g.name)}</td><td class="cell-number ${society.wages[g.id] > 1.005 ? 'text-down' : society.wages[g.id] < 0.995 ? 'text-up' : ''}">${society.wages[g.id].toFixed(3)}</td></tr>`).join('');
@@ -7855,24 +7992,24 @@ function renderCountryPanel() {
             ${card('👥', 'Populacja', formatPopulation(society.population), `${lastGrowth >= 0 ? '+' : ''}${(lastGrowth * 100).toFixed(2)}% w kwartale`, 'population')}
             ${card('🛒', 'Indeks popytu', society.demandIndex.toFixed(3), 'start = 1,000 · Σ udział × waga', 'demand')}
             ${card('🎓', 'Edukacja', `${society.education.toFixed(0)}/100`, `priorytet państwa: ${EDUCATION_LABELS[society.educationPriority]} (cel ${EDUCATION_TARGETS[society.educationPriority]})`, 'education')}
-            ${card('✈️', 'Migracja', `${(m.lastPeople || 0) >= 0 ? '+' : ''}${Math.round(m.lastPeople || 0).toLocaleString('pl-PL')}`, `atrakcyjność kraju ${Number(m.attractiveness || 0).toFixed(0)}/100${m.lowQuarters ? ` · ⚠️ ${m.lowQuarters} kw. poniżej 40` : ''}`, 'migration')}
+            ${card('✈️', 'Migracja', `${(m.lastPeople || 0) >= 0 ? '+' : ''}${Math.round(m.lastPeople || 0).toLocaleString('pl-PL')}`, `atrakcyjność kraju ${Number(m.attractiveness || 0).toFixed(0)}/100${m.lowQuarters ? ` · ${uiIcon('alert', 14)} ${m.lowQuarters} kw. poniżej 40` : ''}`, 'migration')}
             ${card('🧠', 'Niedobór specjalistów', society.shortage.toFixed(2), society.shortage > 1 ? 'popyt > podaż: płace specjalistów rosną' : 'podaż wystarcza', 'shortage')}
         </div>
         <div class="bank-grid mt-3">
-            <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">🏘️</span><div><h4>Struktura społeczna</h4><span class="bank-card-type">6 klas zamożności</span></div></header>
+            <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('dom', 20)}</span><div><h4>Struktura społeczna</h4><span class="bank-card-type">6 klas zamożności</span></div></header>
                 ${renderSocietyClassBar()}
                 <p class="text-xs text-muted">Co kwartał część każdej klasy awansuje albo spada o szczebel: wzrost PKB pomaga, bezrobocie i inflacja szkodzą. Płaca minimalna i mieszkania socjalne przesuwają biednych do klasy średniej niższej.</p></article>
-            <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">💼</span><div><h4>Rynek pracy</h4><span class="bank-card-type">bezrobocie ${pct(macro.unemployment)} · indeksy płac realnych</span></div></header>
+            <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('teczka', 20)}</span><div><h4>Rynek pracy</h4><span class="bank-card-type">bezrobocie ${pct(macro.unemployment)} · indeksy płac realnych</span></div></header>
                 <table class="asset-mini-table w-full"><tbody>${wages}</tbody></table>
                 <p class="text-xs text-muted">Krzywa Phillipsa: niskie bezrobocie podnosi płace, wysokie je hamuje. Niedobór specjalistów zależy od edukacji i drenażu mózgów.</p>
-                <p class="text-sm">✊ Związki zakładowe: <strong>${unions}</strong>/${wf.length} spółek · sektorowe: <strong>${sectorUnions.length ? escapeHtml(sectorUnions.join(', ')) : 'brak'}</strong> · strajki teraz: <strong>${striking.length}</strong>${striking.length ? ` (${striking.slice(0, 4).map(s => escapeHtml(s.name)).join(', ')})` : ''}</p></article>
+                <p class="text-sm">${uiIcon('piesc', 14)} Związki zakładowe: <strong>${unions}</strong>/${wf.length} spółek · sektorowe: <strong>${sectorUnions.length ? escapeHtml(sectorUnions.join(', ')) : 'brak'}</strong> · strajki teraz: <strong>${striking.length}</strong>${striking.length ? ` (${striking.slice(0, 4).map(s => escapeHtml(s.name)).join(', ')})` : ''}</p></article>
         </div>
         <div class="bank-grid mt-3">
-            <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">📜</span><div><h4>Ustawy</h4><span class="bank-card-type">rząd zmienia 1 ustawę na rok, zapowiedź kwartał wcześniej</span></div></header>
+            <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('raport', 20)}</span><div><h4>Ustawy</h4><span class="bank-card-type">rząd zmienia 1 ustawę na rok, zapowiedź kwartał wcześniej</span></div></header>
                 <table class="asset-mini-table w-full"><tbody>${laws}</tbody></table>
-                ${pending ? `<p class="text-sm">📣 Rynek już reaguje na zapowiedź — tak działa dyskontowanie: kurs zmienia się przy ogłoszeniu, nie w dniu wejścia ustawy w życie.</p>` : ''}
-                ${society.housingProgram > 0 ? `<p class="text-sm">🏗️ Trwa program mieszkań socjalnych (${society.housingProgram} kw.): przetargi dla budowlanki i deweloperów.</p>` : ''}</article>
-            <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">🏦</span><div><h4>Budżet państwa</h4><span class="bank-card-type">Skarb Państwa ${formatZl(governmentTreasury, 0)}</span></div></header>
+                ${pending ? `<p class="text-sm">${uiIcon('megafon', 14)} Rynek już reaguje na zapowiedź — tak działa dyskontowanie: kurs zmienia się przy ogłoszeniu, nie w dniu wejścia ustawy w życie.</p>` : ''}
+                ${society.housingProgram > 0 ? `<p class="text-sm">${uiIcon('budownictwo', 14)} Trwa program mieszkań socjalnych (${society.housingProgram} kw.): przetargi dla budowlanki i deweloperów.</p>` : ''}</article>
+            <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('bank', 20)}</span><div><h4>Budżet państwa</h4><span class="bank-card-type">Skarb Państwa ${formatZl(governmentTreasury, 0)}</span></div></header>
                 <dl class="bank-card-rates">
                     <div><dt>Saldo kwartału</dt><dd class="${budget.balance < 0 ? 'text-down' : 'text-up'}">${formatZl(budget.balance || 0, 0)}</dd></div>
                     <div><dt>Deficyt od</dt><dd>${budget.deficitQuarters} kw.</dd></div>
@@ -7881,8 +8018,8 @@ function renderCountryPanel() {
                     <div><dt>Ubytek przez szarą strefę</dt><dd class="${budget.greyTaxLoss > 0 ? 'text-down' : ''}">${formatZl(budget.greyTaxLoss || 0, 0)}</dd></div>
                     <div><dt>CIT</dt><dd>${(getCompanyIncomeTaxRate() * 100).toFixed(0)}%</dd></div>
                 </dl>
-                <p class="text-xs text-muted">Deficyt przez 4 kwartały podnosi rentowność obligacji skarbowych o 0,25 pp${budget.bondPremium ? ' (teraz: ✅ premia naliczana)' : ''}. Przez 8 kwartałów — rząd podnosi CIT albo tnie ustawy (zależnie od partii).</p></article>
-            <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">🗳️</span><div><h4>Partie</h4><span class="bank-card-type">${escapeHtml(getRulingParty().name)} · wybory za ${macro.election.quartersLeft} kw.</span></div></header>
+                <p class="text-xs text-muted">Deficyt przez 4 kwartały podnosi rentowność obligacji skarbowych o 0,25 pp${budget.bondPremium ? ` (teraz: ${uiIcon('ok', 14)} premia naliczana)` : ''}. Przez 8 kwartałów — rząd podnosi CIT albo tnie ustawy (zależnie od partii).</p></article>
+            <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('glosowanie', 20)}</span><div><h4>Partie</h4><span class="bank-card-type">${escapeHtml(getRulingParty().name)} · wybory za ${macro.election.quartersLeft} kw.</span></div></header>
                 ${renderPartyBars(support)}
                 <p class="text-xs text-muted">Sondaż: poparcie liczone z klas (biedni wolą Ludowców, zamożni Koalicję Rynkową), plus zmęczenie władzą, koniunktura i szum. Zwycięzca poniżej 40% rządzi w koalicji z drugą partią.</p></article>
         </div>`;
@@ -7910,12 +8047,12 @@ function renderCompanyCardWorkforce(stock) {
         return `<tr class="${g.id === 'grey' && counts.grey > 0 ? 'text-down' : ''}"><td>${escapeHtml(g.name)}</td><td class="cell-number">${counts[g.id].toLocaleString('pl-PL')}</td><td class="cell-number">${wage.toFixed(2)}</td></tr>`;
     }).join('');
     const satClass = wf.satisfaction >= 70 ? 'text-up' : wf.satisfaction < 35 ? 'text-down' : '';
-    const policyButtons = controls ? `<div class="d-flex gap-2 flex-wrap mt-2">${LABOR_POLICY_ORDER.map(id => `<button class="btn-xs ${id === wf.policy ? '' : 'btn-secondary'}" ${locked || id === wf.policy ? 'disabled' : ''} onclick="setLaborPolicy('${stock.symbol}', '${id}'); renderCompanyCard();">${LABOR_POLICIES[id].icon} ${LABOR_POLICIES[id].name}</button>`).join('')}</div>
+    const policyButtons = controls ? `<div class="d-flex gap-2 flex-wrap mt-2">${LABOR_POLICY_ORDER.map(id => `<button class="btn-xs ${id === wf.policy ? '' : 'btn-secondary'}" ${locked || id === wf.policy ? 'disabled' : ''} onclick="setLaborPolicy('${stock.symbol}', '${id}'); renderCompanyCard();">${dataIcon(LABOR_POLICIES[id].icon)} ${LABOR_POLICIES[id].name}</button>`).join('')}</div>
         <p class="text-xs text-muted">${locked ? `Blokada: kolejna zmiana za ${wf.policyLockUntil - getWorkforceQuarter()} kw.` : 'Możesz (nie musisz) zmienić politykę. Marża dochodzi do nowej polityki w 2 kwartały, zadowolenie zmienia się od razu (obniżka −15, podwyżka +5). Blokada: 4 kwartały.'}</p>` : '<p class="text-xs text-muted">Politykę ustala prezes według cech. Zmienić ją może większościowy akcjonariusz (> 50%).</p>';
-    const decision = pending && controls ? `<div class="mail-action"><p>✊ ${pending.strike ? 'Trwa strajk' : `Związek żąda +${(pending.raise * 100).toFixed(1)}%`} — decyzja do końca kwartału${pending.choice ? ` (wybrano: <strong>${{ agree: 'zgoda', negotiate: 'negocjacje', refuse: 'odmowa' }[pending.choice]}</strong>)` : ' (bez odpowiedzi zdecyduje prezes)'}.</p>
+    const decision = pending && controls ? `<div class="mail-action"><p>${uiIcon('piesc', 14)} ${pending.strike ? 'Trwa strajk' : `Związek żąda +${(pending.raise * 100).toFixed(1)}%`} — decyzja do końca kwartału${pending.choice ? ` (wybrano: <strong>${{ agree: 'zgoda', negotiate: 'negocjacje', refuse: 'odmowa' }[pending.choice]}</strong>)` : ' (bez odpowiedzi zdecyduje prezes)'}.</p>
         <button onclick="respondUnionDemand('${stock.symbol}', 'agree'); renderCompanyCard();">Zgoda</button> <button class="btn-secondary" onclick="respondUnionDemand('${stock.symbol}', 'negotiate'); renderCompanyCard();">Negocjacje</button> <button class="btn-danger" onclick="respondUnionDemand('${stock.symbol}', 'refuse'); renderCompanyCard();">Odmowa</button></div>` : '';
     const poachTargets = controls ? stocks.filter(s => s !== stock && hasWorkforce(s) && s.ceo && !s.isBankrupt).sort((a, b) => (b.ceo.traits?.length || 0) - (a.ceo.traits?.length || 0)).slice(0, 25) : [];
-    const poach = controls ? `<h4 class="mt-3">👔 Podkup prezesa</h4>
+    const poach = controls ? `<h4 class="mt-3">Podkup prezesa</h4>
         <p class="text-xs text-muted">Koszt: 1% kapitalizacji spółki, z której odchodzi prezes — płaci ${escapeHtml(stock.name)} ze swojej gotówki. Szansa: 60% − zadowolenie pracowników tamtej spółki / 2. Prezes zabiera swoje cechy. Limit: 1 na rok.</p>
         <div class="bank-card-form"><select id="poach-ceo-source" aria-label="Spółka">${poachTargets.map(s => `<option value="${s.symbol}">${escapeHtml(s.ceo.name)} — ${escapeHtml(s.name)} (${(s.ceo.traits || []).map(t => escapeHtml(t.name)).join(', ') || 'bez cech'})</option>`).join('')}</select>
         <button onclick="playerPoachCeo('${stock.symbol}', document.getElementById('poach-ceo-source').value); renderCompanyCard();">Złóż ofertę</button></div>` : '';
@@ -7928,11 +8065,11 @@ function renderCompanyCardWorkforce(stock) {
                 <p class="text-xs text-muted">Marża = marża bazowa + ${(wf.laborShare * 100).toFixed(0)}% × (1 − indeks). Niższy indeks (tańsza praca, wyższa wydajność) podnosi marżę — ale z dźwignią operacyjną działa to w obie strony.</p></section>
             <section><h4>Ludzie i polityka</h4>
                 <p class="m-0">Zadowolenie: <strong class="${satClass}">${wf.satisfaction.toFixed(0)}/100</strong> ${sat}</p>
-                <p class="text-xs text-muted mt-0">cel ${getSatisfactionTarget(stock).toFixed(0)} · wydajność ${(((wf.productivity || 1) + (wf.productivityBonus || 0)) * 100).toFixed(1)}%${wf.rotation ? ` · rotacja ${(wf.rotation * 100).toFixed(1)}%/kw.` : ''}${wf.layoffs ? ' · ⚠️ zwolnienia' : ''}</p>
-                <p class="m-0">Polityka kadrowa: <strong>${policy.icon} ${policy.name}</strong> <span class="text-xs text-muted">(${{ owner: 'decyzja funduszu', bot: 'decyzja większościowca', ceo: 'decyzja prezesa' }[wf.policySetBy] || 'decyzja prezesa'})</span></p>
+                <p class="text-xs text-muted mt-0">cel ${getSatisfactionTarget(stock).toFixed(0)} · wydajność ${(((wf.productivity || 1) + (wf.productivityBonus || 0)) * 100).toFixed(1)}%${wf.rotation ? ` · rotacja ${(wf.rotation * 100).toFixed(1)}%/kw.` : ''}${wf.layoffs ? ` · ${uiIcon('alert', 14)} zwolnienia` : ''}</p>
+                <p class="m-0">Polityka kadrowa: <strong>${dataIcon(policy.icon)} ${policy.name}</strong> <span class="text-xs text-muted">(${{ owner: 'decyzja funduszu', bot: 'decyzja większościowca', ceo: 'decyzja prezesa' }[wf.policySetBy] || 'decyzja prezesa'})</span></p>
                 ${policyButtons}
-                <p class="m-0 mt-2">Związek: <strong>${{ none: 'brak', company: '✊ zakładowy', sector: '✊ sektorowy' }[status]}</strong>${union?.agreementUntil >= getWorkforceQuarter() ? ` · 📄 układ zbiorowy do kw. ${union.agreementUntil}` : ''}${wf.strike ? ` · <strong class="text-down">STRAJK (−${(wf.strike.pct * 100).toFixed(0)}% przychodów, ${wf.strike.quarters}. kw.)</strong>` : ''}</p>
-                <p class="text-xs text-muted">Ryzyko strajku: ${escapeHtml(getStrikeRisk(stock) || '—')}${wf.greyCaughtQuarter !== null && wf.greyCaughtQuarter !== undefined ? ` · 🦺 kara Inspekcji Pracy w kw. ${wf.greyCaughtQuarter}` : ''}</p>
+                <p class="m-0 mt-2">Związek: <strong>${{ none: 'brak', company: `${uiIcon('piesc', 14)} zakładowy`, sector: `${uiIcon('piesc', 14)} sektorowy` }[status]}</strong>${union?.agreementUntil >= getWorkforceQuarter() ? ` · ${uiIcon('raport', 14)} układ zbiorowy do kw. ${union.agreementUntil}` : ''}${wf.strike ? ` · <strong class="text-down">STRAJK (−${(wf.strike.pct * 100).toFixed(0)}% przychodów, ${wf.strike.quarters}. kw.)</strong>` : ''}</p>
+                <p class="text-xs text-muted">Ryzyko strajku: ${escapeHtml(getStrikeRisk(stock) || '—')}${wf.greyCaughtQuarter !== null && wf.greyCaughtQuarter !== undefined ? ` · ${uiIcon('alert', 14)} kara Inspekcji Pracy w kw. ${wf.greyCaughtQuarter}` : ''}</p>
                 ${decision}
             </section>
         </div>
@@ -7945,11 +8082,11 @@ function renderSubsidiaryControls(child, stake) {
     const transfer = [0.3, 0.4, 0.5, 0.6, 0.7].map(r => `<option value="${r}" ${Math.abs(getProfitTransferRate(child) - r) < 0.001 ? 'selected' : ''}>${r * 100}%</option>`).join('');
     return `<div class="d-flex gap-2 flex-wrap items-center mt-1">
         <label class="text-xs">Transfer zysku <select onchange="playerSubsidiaryAction('${c}', 'transfer', Number(this.value))">${transfer}</select></label>
-        ${child.groupLoan ? '' : `<select id="sub-loan-${c}" aria-label="Oprocentowanie pożyczki"><option value="1">pożyczka rynkowa</option><option value="0.5">pożyczka −50% (nierynkowa)</option><option value="1.5">pożyczka +50% (nierynkowa)</option></select><button class="btn-secondary btn-sm" onclick="playerSubsidiaryAction('${c}', 'loan', Number(document.getElementById('sub-loan-${c}').value))">🤲 Pożycz (do 20% gotówki)</button>`}
-        <button class="btn-secondary btn-sm" onclick="playerSubsidiaryAction('${c}', 'secondary')">🕊️ Oferta wtórna</button>
-        <button class="btn-secondary btn-sm" onclick="playerSubsidiaryAction('${c}', 'spinoff')">✂️ Spin-off reszty</button>
-        ${stake >= SUB_SQUEEZE_THRESHOLD - 1e-9 ? `<button class="btn-secondary btn-sm" onclick="playerSubsidiaryAction('${c}', 'absorb')">🧲 Wchłoń (wykup 10–20% premii)</button>` : ''}
-        <button class="btn-secondary btn-sm" onclick="playerSubsidiaryAction('${c}', 'sell')">💼 Sprzedaj pakiet kontrolny</button>
+        ${child.groupLoan ? '' : `<select id="sub-loan-${c}" aria-label="Oprocentowanie pożyczki"><option value="1">pożyczka rynkowa</option><option value="0.5">pożyczka −50% (nierynkowa)</option><option value="1.5">pożyczka +50% (nierynkowa)</option></select><button class="btn-secondary btn-sm" onclick="playerSubsidiaryAction('${c}', 'loan', Number(document.getElementById('sub-loan-${c}').value))">${uiIcon('lombard', 14)} Pożycz (do 20% gotówki)</button>`}
+        <button class="btn-secondary btn-sm" onclick="playerSubsidiaryAction('${c}', 'secondary')">${uiIcon('etykieta', 14)} Oferta wtórna</button>
+        <button class="btn-secondary btn-sm" onclick="playerSubsidiaryAction('${c}', 'spinoff')">${uiIcon('nozyczki', 14)} Spin-off reszty</button>
+        ${stake >= SUB_SQUEEZE_THRESHOLD - 1e-9 ? `<button class="btn-secondary btn-sm" onclick="playerSubsidiaryAction('${c}', 'absorb')">${uiIcon('magnes', 14)} Wchłoń (wykup 10–20% premii)</button>` : ''}
+        <button class="btn-secondary btn-sm" onclick="playerSubsidiaryAction('${c}', 'sell')">${uiIcon('teczka', 14)} Sprzedaj pakiet kontrolny</button>
     </div>`;
 }
 
@@ -7965,24 +8102,24 @@ function renderCompanyCardGroup(stock) {
     const parent = stock.isSubsidiaryOf ? stocks.find(s => s.symbol === stock.isSubsidiaryOf) : null;
     const children = stocks.filter(s => s.isSubsidiaryOf === sym && !s.isBankrupt);
     const status = isConcern(stock)
-        ? `<p class="text-sm">🏢 <strong>Koncern</strong> od kw. ${stock.concern.since}: ${getStockSegments(stock).length} segmenty, ${children.length} spółek zależnych, czołówka kapitalizacji. Zawiera do ${COOP_MAX_PER_CONCERN} kooperacji.</p>`
-        : `<p class="text-sm text-muted">Koncern 🏢 to spółka z górnych ${Math.round(CONCERN_TOP_SHARE * 100)}% kapitalizacji z ≥ 2 segmentami (w tym niepowiązanym z głównym), ≥ ${CONCERN_MIN_SUBSIDIARIES} spółkami zależnymi albo ≥ 2 segmentami i spółką zależną.</p>`;
+        ? `<p class="text-sm">${uiIcon('firma', 14)} <strong>Koncern</strong> od kw. ${stock.concern.since}: ${getStockSegments(stock).length} segmenty, ${children.length} spółek zależnych, czołówka kapitalizacji. Zawiera do ${COOP_MAX_PER_CONCERN} kooperacji.</p>`
+        : `<p class="text-sm text-muted">Koncern ${uiIcon('firma', 14)} to spółka z górnych ${Math.round(CONCERN_TOP_SHARE * 100)}% kapitalizacji z ≥ 2 segmentami (w tym niepowiązanym z głównym), ≥ ${CONCERN_MIN_SUBSIDIARIES} spółkami zależnymi albo ≥ 2 segmentami i spółką zależną.</p>`;
     const level = getSkillLevel('accountant');
     const groupRows = [
-        parent ? `<li>⬆️ matka: ${name(parent)}${Number.isFinite(stock.parentStakePct) ? ` (${(stock.parentStakePct * 100).toFixed(0)}%)` : ''}</li>` : '',
+        parent ? `<li>↑ matka: ${name(parent)}${Number.isFinite(stock.parentStakePct) ? ` (${(stock.parentStakePct * 100).toFixed(0)}%)` : ''}</li>` : '',
         ...children.map(c => { const stake = (stock.equityStakes?.[c.symbol] || 0) / Math.max(1, c.totalShares); return `<li>↳ zależna: ${name(c)} — ${(stake * 100).toFixed(0)}%, pakiet ${formatZl(getMarketCapValue(c) * stake, 0)} · transfer zysku ${(getProfitTransferRate(c) * 100).toFixed(0)}%${c.groupLoan ? ` · pożyczka ${formatZl(c.groupLoan.principal, 0)} (${(c.groupLoan.rate * 100).toFixed(1)}%${isOffMarketGroupLoan(c) && level >= 4 ? ' 🚩' : ''})` : ''}${canFundControlAgm(stock) ? renderSubsidiaryControls(c, stake) : ''}</li>`; })
     ].filter(Boolean).join('');
     const coops = getStockCooperations(stock).map(coop => {
         const side = getCoopSide(coop, stock);
         const partner = stocks.find(s => s.symbol === side.partner);
         const terms = coop.terms === 'market' ? 'warunki rynkowe' : coop.terms === sym ? '<span class="text-warn">warunki korzystne dla tej spółki</span>' : '<span class="text-down">warunki korzystne dla partnera</span>';
-        const flag = coop.flag && level >= 4 ? ` · <span class="text-down" title="Wspólny właściciel ${escapeHtml(coop.flag.name)}: ${(coop.flag.pctA * 100).toFixed(0)}% w ${coop.a} i ${(coop.flag.pctB * 100).toFixed(0)}% w ${coop.b}.">🚩 podmioty powiązane</span>` : '';
-        const complaint = coop.complaint ? ` · ⚖️ skarga do KNF${coop.complaint.result ? `: ${escapeHtml(coop.complaint.result)}` : ' w toku'}` : '';
+        const flag = coop.flag && level >= 4 ? ` · <span class="text-down" title="Wspólny właściciel ${escapeHtml(coop.flag.name)}: ${(coop.flag.pctA * 100).toFixed(0)}% w ${coop.a} i ${(coop.flag.pctB * 100).toFixed(0)}% w ${coop.b}.">${uiIcon('flaga', 14)} podmioty powiązane</span>` : '';
+        const complaint = coop.complaint ? ` · ${uiIcon('waga', 14)} skarga do KNF${coop.complaint.result ? `: ${escapeHtml(coop.complaint.result)}` : ' w toku'}` : '';
         const actions = [
-            canFundControlAgm(stock) ? `<button class="btn-secondary btn-sm" onclick="playerBreakCooperation('${coop.id}', '${sym}')">💔 Zerwij (kara umowna)</button>` : '',
-            canPlayerFileKnfComplaint(coop, stock) ? `<button class="btn-secondary btn-sm" onclick="playerFileKnfComplaint('${coop.id}', '${sym}')">⚖️ Skarga do KNF</button>` : ''
+            canFundControlAgm(stock) ? `<button class="btn-secondary btn-sm" onclick="playerBreakCooperation('${coop.id}', '${sym}')">${uiIcon('blokada', 14)} Zerwij (kara umowna)</button>` : '',
+            canPlayerFileKnfComplaint(coop, stock) ? `<button class="btn-secondary btn-sm" onclick="playerFileKnfComplaint('${coop.id}', '${sym}')">${uiIcon('waga', 14)} Skarga do KNF</button>` : ''
         ].join(' ');
-        return `<li>🤝 ${name(partner)}: ${escapeHtml(side.ownSeg)} ↔ ${escapeHtml(side.partnerSeg)}, do kw. ${coop.end} · ${terms}${flag}${complaint} ${actions}</li>`;
+        return `<li>${uiIcon('umowa', 14)} ${name(partner)}: ${escapeHtml(side.ownSeg)} ↔ ${escapeHtml(side.partnerSeg)}, do kw. ${coop.end} · ${terms}${flag}${complaint} ${actions}</li>`;
     }).join('');
     const sotp = getSumOfParts(stock);
     const sotpRows = sotp.parts.map(p => `<tr><td>${escapeHtml(p.label)}</td><td class="text-muted text-xs">${escapeHtml(p.method)}</td><td class="cell-number">${formatZl(p.value, 0)}</td></tr>`).join('');
@@ -7991,9 +8128,9 @@ function renderCompanyCardGroup(stock) {
     const form = partners.length ? `<div class="d-flex gap-2 flex-wrap items-center mt-2">
             <select id="coop-partner-${sym}" aria-label="Kooperant">${partners.map(p => `<option value="${p.symbol}">${escapeHtml(p.name)} (${(getPlayerStakePct(p) * 100).toFixed(0)}%)</option>`).join('')}</select>
             <select id="coop-terms-${sym}" aria-label="Warunki"><option value="market">warunki rynkowe</option><option value="${sym}">korzystne dla ${escapeHtml(stock.symbol)}</option><option value="partner">korzystne dla partnera</option></select>
-            <button class="btn-secondary" onclick="(() => { const p = document.getElementById('coop-partner-${sym}').value, t = document.getElementById('coop-terms-${sym}').value; playerProposeCooperation('${sym}', p, t === 'partner' ? p : t); })()">🤝 Zaproponuj kooperację (12 kw.)</button>
+            <button class="btn-secondary" onclick="(() => { const p = document.getElementById('coop-partner-${sym}').value, t = document.getElementById('coop-terms-${sym}').value; playerProposeCooperation('${sym}', p, t === 'partner' ? p : t); })()">${uiIcon('umowa', 14)} Zaproponuj kooperację (12 kw.)</button>
         </div><p class="text-xs text-muted">Umowy między spółkami jednego właściciela przy nierównych udziałach dostają czerwoną flagę; warunki nierynkowe przenoszą ok. 1% przychodów segmentu na kwartał i grożą skargą do KNF.</p>` : '';
-    const tender = stock.tender ? `<p class="text-sm">📣 Wezwanie: ${escapeHtml(stock.tender.buyerName)} kupuje akcje po <strong>${formatZl(stock.tender.price)}</strong> do kw. ${stock.tender.until}.${getPlayerStakePct(stock) > 0 ? ` <button class="btn-secondary btn-sm" onclick="playerTenderDecision('${sym}', 'sell')">Sprzedaj w wezwaniu</button>` : ''}</p>` : '';
+    const tender = stock.tender ? `<p class="text-sm">${uiIcon('megafon', 14)} Wezwanie: ${escapeHtml(stock.tender.buyerName)} kupuje akcje po <strong>${formatZl(stock.tender.price)}</strong> do kw. ${stock.tender.until}.${getPlayerStakePct(stock) > 0 ? ` <button class="btn-secondary btn-sm" onclick="playerTenderDecision('${sym}', 'sell')">Sprzedaj w wezwaniu</button>` : ''}</p>` : '';
     const policy = canFundControlAgm(stock) && children.length ? `<label class="text-sm"><input type="checkbox" ${stock.groupPolicy ? 'checked' : ''} onchange="playerSubsidiaryAction('${children[0].symbol}', 'policy', this.checked)"> Wspólna polityka kadrowa dla grupy</label>` : '';
     if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('grupaKapitalowa');
     return `${status}${tender}${policy}

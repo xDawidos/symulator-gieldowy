@@ -4941,3 +4941,16 @@ button.mood-kpi:hover { background: var(--color-bg-hover) !important; border-col
 /* 0.14.5 krok 6: ikony inwestycji spółek (zamiast kafelków PNG) */
 .inv-name { white-space: nowrap; }
 .inv-icon { margin-right: var(--space-2); vertical-align: -4px; color: var(--color-text-secondary); }
+
+/* 0.14.5 krok 6: znaczniki wydarzeń na wykresie spółki */
+.chart-event circle { fill: var(--color-bg-raised); stroke: var(--color-border-strong); stroke-width: 1; }
+.chart-event path { fill: none; stroke: var(--color-text-primary); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.chart-event text { fill: var(--color-text-secondary); font: 600 10px var(--font-family-mono); }
+.chart-event:hover circle, .chart-event:focus-visible circle { stroke: var(--color-focus); stroke-width: 2; }
+.chart-event:focus { outline: none; }
+/* ikony z mapy emoji w tekście i slotach kart */
+.bank-card-icon .ic, .ju-client-icon .ic { display: block; }
+.cv-medal .ic { vertical-align: -2px; margin-right: 2px; }
+.cv-medal-gold .ic { color: var(--color-text-accent); }
+.cv-medal-silver .ic { color: var(--color-text-secondary); }
+.cv-medal-bronze .ic { color: var(--color-text-warn); }

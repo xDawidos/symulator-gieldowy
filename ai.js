@@ -2516,10 +2516,10 @@ function renderCorporationFirm() {
         return `<div class="firm-level ${playerProfile.positionId === position.id ? 'mine' : ''}"><span class="firm-level-name">${escapeHtml(position.name)}</span><span>${people.join(' · ') || '<span class="text-muted">—</span>'}</span></div>`;
     }).join('');
     const targets = getPlayerTargets().map(t => `
-        <li class="firm-target ${t.done ? 'done' : ''}"><span>${t.done ? '✅' : '🎯'} ${escapeHtml(t.label)}</span><strong>${escapeHtml(t.value)}</strong>
+        <li class="firm-target ${t.done ? 'done' : ''}"><span>${typeof uiIcon === 'function' ? uiIcon(t.done ? 'ok' : 'cel', 14) : ''} ${escapeHtml(t.label)}</span><strong>${escapeHtml(t.value)}</strong>
         <span class="firm-target-bar"><span style="width:${(t.progress * 100).toFixed(0)}%"></span></span></li>`).join('');
     const goals = getCorporateGoalsView().map(t => `
-        <li class="firm-target ${t.done ? 'done' : ''}"><span>${t.done ? '✅' : '🎯'} ${escapeHtml(t.label)}</span><strong>${escapeHtml(t.value)}</strong>
+        <li class="firm-target ${t.done ? 'done' : ''}"><span>${typeof uiIcon === 'function' ? uiIcon(t.done ? 'ok' : 'cel', 14) : ''} ${escapeHtml(t.label)}</span><strong>${escapeHtml(t.value)}</strong>
         <span class="firm-target-bar"><span style="width:${(t.progress * 100).toFixed(0)}%"></span></span></li>`).join('');
     const relations = getRelationPeople().map(person => {
         const value = getRelation(person.id);
@@ -2527,7 +2527,7 @@ function renderCorporationFirm() {
         return `<tr><td>${escapeHtml(person.name)}<span class="text-xs text-muted d-block">${person.kind === 'colleague' ? `kolega · ${escapeHtml(CAREER_POSITIONS[getPositionIndex(person.entity.positionId)].name)}` : person.entity?.isGuard ? 'fundusz patriotyczny · głosuje na walnych, współinwestuje w obronność' : 'inwestor giełdowy'}</span></td>
             <td>${renderRelationBar(value)}</td><td class="${mood.cls}">${mood.icon} ${value.toFixed(0)} · ${mood.label}</td>
             <td><div class="d-flex gap-1"><input type="text" inputmode="numeric" class="w-xs" id="gift-${person.id}" value="200" aria-label="Kwota prezentu">
-                <button class="btn-xs" onclick="corporationAction(giveGiftToBot, '${person.id}', parseFloat(document.getElementById('gift-${person.id}').value))">🎁</button></div></td></tr>`;
+                <button class="btn-xs" onclick="corporationAction(giveGiftToBot, '${person.id}', parseFloat(document.getElementById('gift-${person.id}').value))">Prezent</button></div></td></tr>`;
     }).join('');
     const log = botRelations.log.slice(0, 8).map(entry => `<li><span class="${entry.delta >= 0 ? 'text-up' : 'text-down'}">${entry.delta >= 0 ? '+' : ''}${entry.delta.toFixed(1)}</span> ${escapeHtml(entry.name)} — ${escapeHtml(entry.reason)}</li>`).join('');
 
