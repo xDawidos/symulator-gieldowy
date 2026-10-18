@@ -4804,3 +4804,10 @@ body.dark-mode #stock-table thead th, #stock-table thead th { top: calc(var(--si
   /* pasek górny ma stałą wysokość — przyklejony nagłówek tabeli staje dokładnie pod nim */
   .topbar { height: var(--size-topbar); padding-top: 0; padding-bottom: 0; }
 }
+
+/* 0.14.5: minimalny cel kliknięcia 24 px (WCAG 2.5.8) dla przycisków tekstowych w nagłówkach */
+.exchange-toggle, .panel-toggle { min-height: 32px; }
+.th-sort { min-height: var(--size-target-min); }
+.sector-filter-controls select, .sector-filter-controls input[type="checkbox"] { min-height: var(--size-target-min); }
+.sector-filter-controls input[type="checkbox"], .fund-open-subscriptions input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--color-bg-accent); }
+.sector-filter-controls label, .fund-open-subscriptions { min-height: var(--size-target-min); align-items: center; display: inline-flex; gap: var(--space-2); }
