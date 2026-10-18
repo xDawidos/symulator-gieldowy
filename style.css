@@ -667,7 +667,6 @@ body.dark-mode h4 {
         color: #FFFFFF;
     }
 
-    body.dark-mode .panel,
 body.dark-mode #skills-modal,
 body.dark-mode #bank-modal,
 body.dark-mode #leaderboard-modal,
@@ -4682,3 +4681,126 @@ body.dark-mode #toast-notification,
 body.dark-mode #toast-notification.toast-success, #toast-notification.toast-success { background: var(--toast-bg) !important; color: var(--color-text-primary) !important; border-left-color: var(--color-text-up); }
 body.dark-mode #toast-notification.toast-warning, #toast-notification.toast-warning { background: var(--toast-bg) !important; color: var(--color-text-primary) !important; border-left-color: var(--color-text-warn); }
 body.dark-mode #toast-notification.toast-error, #toast-notification.toast-error { background: var(--toast-bg) !important; color: var(--color-text-primary) !important; border-left-color: var(--color-text-down); }
+
+/* ===================== 0.14.5 UKŁAD: jedno przewijanie strony ===================== */
+/* Rynek przewija się razem ze stroną (pasek górny jest przyklejony); panel funduszu stoi z prawej. */
+@media (min-width: 1281px) {
+  .dashboard-sidebar {
+    position: sticky;
+    top: calc(var(--size-ticker) + var(--size-topbar) + var(--space-4));
+    max-height: calc(100vh - var(--size-ticker) - var(--size-topbar) - var(--space-6));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+body.dark-mode #stock-table thead th, #stock-table thead th { top: calc(var(--size-ticker) + var(--size-topbar)); } /* nagłówek kolumn pod przyklejonym paskiem */
+
+/* ===================== 0.14.5 MOBILE (≤ 860 px) ===================== */
+@media (max-width: 860px) {
+  :root { --btn-height: var(--size-control-lg); --size-control-sm: 36px; --size-control-md: 40px; }
+
+  /* pasek górny: przycisk menu + KPI przewijane w poziomie, sterowanie w drugim rzędzie */
+  .topbar {
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-3);
+    margin: calc(-1 * var(--space-3)) calc(-1 * var(--space-3)) 0;
+    padding: var(--space-2) var(--space-3);
+  }
+  .mobile-nav-toggle { display: inline-flex; flex: none; }
+  .topbar-kpi-group {
+    flex: 1 1 0;
+    min-width: 0;
+    gap: var(--space-4);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .topbar-kpi-group::-webkit-scrollbar { display: none; }
+  .topbar-kpi { flex: none; }
+  .topbar-kpi-val { font-size: var(--text-num-strong-size); }
+  .topbar-controls { width: 100%; margin-left: 0; gap: var(--space-2); }
+  .topbar-date { display: none; }
+  .speed-segmented { flex: 1; }
+  .speed-btn { flex: 1; min-height: 36px; }
+  .btn-pause { flex: 1; }
+
+  /* menu boczne: wysuwana szuflada z zasłoną, bez dolnego paska ikon */
+  .app-sidebar {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    height: 100vh;
+    width: min(280px, 85vw);
+    transform: translateX(-100%);
+    transition: transform var(--motion-base) var(--motion-ease);
+    z-index: 3100;
+    box-shadow: var(--shadow-modal);
+  }
+  body.sidebar-open .app-sidebar { transform: translateX(0); }
+  body.sidebar-open::after { content: ''; position: fixed; inset: 0; z-index: 3050; background: var(--color-bg-overlay); }
+  .sidebar-nav {
+    position: static !important;
+    display: flex !important;
+    flex-direction: column;
+    background: none !important;
+    border: 0 !important;
+    padding: 0 !important;
+    backdrop-filter: none !important;
+  }
+  .sidebar-nav-btn {
+    flex-direction: row !important;
+    justify-content: flex-start !important;
+    min-height: 44px !important;
+    padding: 0 var(--space-3) !important;
+    border-left-width: 0 !important;
+  }
+  .nav-label { font-size: var(--text-body-size) !important; text-align: left !important; }
+  .nav-badge { position: static !important; }
+  .app-main { padding: var(--space-3) !important; padding-bottom: var(--space-6) !important; }
+
+  /* tabela akcji jako karty-wiersze: nazwa | kurs | przyciski, pod spodem meta | zmiana */
+  #stock-table, #stock-table tbody { display: block; }
+  #stock-table thead { display: none; }
+  #stock-table tbody tr { display: block; }
+  #stock-table tbody tr.stock-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: "name price actions" "name change actions";
+    align-items: center;
+    column-gap: var(--space-2);
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--table-line);
+  }
+  #stock-table tbody tr.stock-row td { display: block; height: auto; padding: 0 var(--space-1); border: 0 !important; }
+  #stock-table tbody tr.stock-row td:nth-child(1) { grid-area: name; min-width: 0; }
+  #stock-table tbody tr.stock-row td:nth-child(2) { grid-area: price; }
+  #stock-table tbody tr.stock-row td:nth-child(3) { grid-area: change; }
+  #stock-table tbody tr.stock-row td:nth-child(4),
+  #stock-table tbody tr.stock-row td:nth-child(5) { display: none; }
+  #stock-table tbody tr.stock-row td:nth-child(6) { grid-area: actions; }
+  #stock-table tbody tr:not(.stock-row) td { display: block; height: auto; min-height: 32px; padding: var(--space-2) var(--space-2); }
+  #stock-table .change-pill { min-width: 0; }
+  .stock-row-drawer.open { display: block !important; }
+  .drawer-tools { margin-left: 0; width: 100%; }
+  .info-btn { width: 36px; height: 36px; min-width: 36px; }
+
+  /* filtry: jeden przewijany rząd zamiast kilku */
+  .sector-chips, .market-level-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; padding-bottom: var(--space-1); }
+  .sector-chip, .market-level-tab { flex: none; }
+  .panel-head > .btn-secondary { margin-left: 0; }
+
+  /* okna na pełną szerokość z marginesem */
+  .modal, .bank-window, .modal-lg, .modal-sm { width: calc(100vw - 16px) !important; max-height: calc(100vh - 16px) !important; }
+  .modal { padding: var(--space-4); }
+  .bank-window > *:not(.close-btn):not(.bank-hero):not(.bank-ticker):not(.bank-tabs) { padding-left: var(--space-3); padding-right: var(--space-3); }
+  .bank-hero { padding: var(--space-3) calc(var(--space-3) + 44px) var(--space-3) var(--space-3); }
+  .bank-window .bank-tabs { padding: 0 var(--space-3); overflow-x: auto; flex-wrap: nowrap; }
+  .company-card .cc-header { flex-direction: column; padding-right: 48px; }
+  .company-card .cc-price { align-items: flex-start; }
+  .mail-layout { grid-template-columns: 1fr !important; }
+  .notif-bar { left: var(--space-2); right: var(--space-2); bottom: var(--space-2); width: auto; }
+}
+@media (min-width: 861px) {
+  /* pasek górny ma stałą wysokość — przyklejony nagłówek tabeli staje dokładnie pod nim */
+  .topbar { height: var(--size-topbar); padding-top: 0; padding-bottom: 0; }
+}

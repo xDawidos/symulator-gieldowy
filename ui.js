@@ -7179,6 +7179,19 @@ function requestNewGame() {
         { title: 'Zacząć nową grę?', confirmLabel: 'Usuń zapis i zacznij', danger: true });
 }
 
+// ----- 0.14.5 mobile: szuflada menu zamyka się kliknięciem poza nią, Escape i po wyborze pozycji -----
+if (typeof document !== 'undefined') {
+    document.addEventListener('click', event => {
+        if (!document.body.classList.contains('sidebar-open')) return;
+        const sidebar = document.getElementById('app-sidebar');
+        if (event.target.closest('.mobile-nav-toggle')) return;
+        if (!sidebar?.contains(event.target) || event.target.closest('.sidebar-nav-btn')) document.body.classList.remove('sidebar-open');
+    });
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && document.body.classList.contains('sidebar-open')) document.body.classList.remove('sidebar-open');
+    });
+}
+
 // ----- menu paska górnego (Zapisz grę, Eksportuj zapis, Ustawienia, Nowa gra) -----
 function toggleTopbarMenu(force) {
     const menu = document.getElementById('topbar-menu');
