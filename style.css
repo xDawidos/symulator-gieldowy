@@ -4937,3 +4937,7 @@ button.mood-kpi:hover { background: var(--color-bg-hover) !important; border-col
 @media (max-width: 1500px) { .topbar:has(.mood-kpi) .topbar-date { display: none; } }
 .bank-ticker-item strong span { font-size: inherit; letter-spacing: 0; text-transform: none; }
 .bank-ticker-item small { font-size: var(--text-caption-size); color: var(--color-text-muted); }
+
+/* 0.14.5 krok 6: ikony inwestycji spółek (zamiast kafelków PNG) */
+.inv-name { white-space: nowrap; }
+.inv-icon { margin-right: var(--space-2); vertical-align: -4px; color: var(--color-text-secondary); }

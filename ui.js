@@ -154,7 +154,53 @@ const UI_ICON_PATHS = {
     'osiagniecie-zimna-krew': 'M12 2v20M4 6l16 12M20 6L4 18M9 3l3 2 3-2M9 21l3-2 3 2',
     'osiagniecie-hossa': 'M3 17l6-6 4 4 8-8M15 7h6v6M3 21h18',
     'osiagniecie-cykl': 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM15.5 8.5l-2 5-5 2 2-5z',
-    'osiagniecie-dlugo': 'M3 20h18M5 17l4-5 3 3 4-6 3 2M5 7h3M5 4h6'
+    'osiagniecie-dlugo': 'M3 20h18M5 17l4-5 3 3 4-6 3 2M5 7h3M5 4h6',
+    // 0.14.5 krok 6 — ikony zamiast emoji w interfejsie
+    teczka: 'M3 8h18v12H3zM8 8V5h8v3M3 13h18M11 13v2h2v-2',
+    osoba: 'M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM5 21a7 7 0 0 1 14 0',
+    paczka: 'M12 3l8 4v10l-8 4-8-4V7zM4 7l8 4 8-4M12 11v10',
+    zarzad: 'M9 3h6l-1.5 3h-3zM10.5 6L8 16l4 5 4-5-2.5-10',
+    odswiez: 'M20 11a8 8 0 0 0-14.3-4.3M4 4v4h4M4 13a8 8 0 0 0 14.3 4.3M20 20v-4h-4',
+    koszyk: 'M3 4h2l2.4 11h11L21 7H6.2M9 20h.01M17 20h.01',
+    rakieta: 'M12 2c3 2 5 6 5 10l-2 4H9l-2-4c0-4 2-8 5-10zM12 9a1.5 1.5 0 1 0 0 .01M9 16l-2 4 3-1M15 16l2 4-3-1',
+    ok: 'M4 12l5 5L20 6',
+    bot: 'M5 9h14v10H5zM12 5v4M12 5h.01M9 13h.01M15 13h.01M9 16h6M2 13v3M22 13v3',
+    cel: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 12h.01',
+    etykieta: 'M3 3h8l10 10-8 8L3 11zM7.5 7.5h.01',
+    zegar: 'M6 3h12M6 21h12M7 3c0 5 10 5 10 9s-10 4-10 9M17 3c0 5-10 5-10 9s10 4 10 9',
+    umowa: 'M2 11l4-4 3 1 3-2 3 1 3 3 4-1M6 7l-3 7 6 6 2-2M21 11l-6 6M11 18l-3-3M14 15l-3-3M17 13l-3-3',
+    segment: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM15 15h5v5h-5z',
+    megafon: 'M3 10v4h3l9 5V5L6 10zM18 9a4 4 0 0 1 0 6M7 14l1 6h3l-1-5',
+    serce: 'M12 20s-8-5-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 9c0 6-8 11-8 11z',
+    waga: 'M12 3v18M7 21h10M5 7h14M5 7l-3 7a3 3 0 0 0 6 0zM19 7l-3 7a3 3 0 0 0 6 0z',
+    medal: 'M8 3l2 6M16 3l-2 6M12 21a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM12 13v4',
+    cofnij: 'M9 14l-5-5 5-5M4 9h11a5 5 0 0 1 0 10h-3',
+    wyjscie: 'M14 4H5v16h9M10 12h11M17 8l4 4-4 4',
+    ogien: 'M12 3c1 4 6 6 6 11a6 6 0 0 1-12 0c0-3 2-4 2-6 2 1 3 3 3 3s0-5 1-8z',
+    pracownik: 'M4 15a8 8 0 0 1 16 0zM3 15h18M12 7v4M9 18v3M15 18v3',
+    samolot: 'M21 15l-8-4V5a1 1 0 0 0-2 0v6l-8 4v2l8-2v4l-2 2h6l-2-2v-4l8 2z',
+    mozg: 'M12 5a3 3 0 0 0-5.5 1.5A3 3 0 0 0 4 11a3 3 0 0 0 1 5 3 3 0 0 0 5 3c1 0 2-1 2-2zM12 5a3 3 0 0 1 5.5 1.5A3 3 0 0 1 20 11a3 3 0 0 1-1 5 3 3 0 0 1-5 3c-1 0-2-1-2-2zM12 5v12',
+    piesc: 'M7 11V7a1.5 1.5 0 0 1 3 0v4M10 10V6a1.5 1.5 0 0 1 3 0v4M13 10V7a1.5 1.5 0 0 1 3 0v4M16 11V9a1.5 1.5 0 0 1 3 0v5a7 7 0 0 1-7 7h-1a6 6 0 0 1-6-6v-3l2-1',
+    magnes: 'M5 4h4v8a3 3 0 0 0 6 0V4h4v8a7 7 0 0 1-14 0zM5 8h4M15 8h4',
+    pula: 'M2 15c2 0 2 1.5 4 1.5S8 15 10 15s2 1.5 4 1.5 2-1.5 4-1.5 2 1.5 4 1.5M2 19c2 0 2 1.5 4 1.5S8 19 10 19s2 1.5 4 1.5 2-1.5 4-1.5 2 1.5 4 1.5M8 12V5a2 2 0 0 1 4 0M16 12V5a2 2 0 0 0-4 0M8 8h8',
+    nozyczki: 'M6 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8.5 7.5L20 19M8.5 16.5L20 5',
+    lancuch: 'M10 14a4 4 0 0 1 0-5.7l3-3a4 4 0 0 1 5.7 5.7l-1.5 1.5M14 10a4 4 0 0 1 0 5.7l-3 3a4 4 0 0 1-5.7-5.7l1.5-1.5',
+    szczyt: 'M2 20L9 7l4 7 3-4 6 10zM7.5 10.5L9 12l1.5-1.5',
+    dolek: 'M2 6l7 10 3-3 3 3 7-10M8 20h8',
+    atom: 'M12 12h.01M12 21c2.2 0 4-4 4-9s-1.8-9-4-9-4 4-4 9 1.8 9 4 9zM4.2 16.5c1.1 1.9 5.5 1.4 9.8-1.1s7-6 5.8-7.9-5.5-1.4-9.8 1.1-7 6-5.8 7.9zM4.2 7.5c-1.1 1.9 1.5 5.4 5.8 7.9s8.7 3 9.8 1.1-1.5-5.4-5.8-7.9-8.7-3-9.8-1.1z',
+    // typy klientów
+    lis: 'M4 4l4 5h8l4-5v8l-8 8-8-8zM9 13h.01M15 13h.01M11 16h2',
+    strach: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9 10h.01M15 10h.01M8 16c1-1 2-1 2.7 0s1.6 1 2.6 0 2-1 2.7 0',
+    lew: 'M12 18a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 3v2M12 21v-2M3 13h2M21 13h-2M5.6 6.6L7 8M18.4 6.6L17 8M5.6 19.4L7 18M18.4 19.4L17 18M10 12h.01M14 12h.01M11 15h2',
+    diament: 'M6 4h12l4 5-10 12L2 9zM2 9h20M9 4l3 17M15 4l-3 17',
+    moneta: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10z',
+    wieloryb: 'M3 12c0 4 4 7 9 7 5.5 0 9-3.5 9-8l-3 1c-1.5-3-4-4.5-7.5-4.5C6 7.5 3 9.5 3 12zM17 8l1-4M17 8l4-1M8 12h.01',
+    // inwestycje spółek (zamiast kafelków PNG)
+    kopalnia: 'M5 20L15 8M7 5c5-1.5 10 .5 13 6M3 21h5',
+    serwer: 'M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01M12 7h4M12 17h4',
+    magazyn: 'M3 21V9l9-5 9 5v12M7 21v-8h10v8M7 17h10',
+    wiatrak: 'M12 9l-1 12h2zM12 9V2M12 9l6 4M12 9l-6 4M8 21h8M12 9h.01',
+    slonce: 'M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4'
 };
 
 const SECTOR_ICON_PATHS = {
@@ -177,6 +223,42 @@ const SECTOR_ICON_PATHS = {
     'Obronność': 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z',
     'Usługi': 'M15 4a5 5 0 0 0-4.6 6.9L4 17.3V20h2.7l6.4-6.4A5 5 0 0 0 20 9l-3 3-3-1-1-3 3-3a5 5 0 0 0-1-1z'
 };
+
+// Aliasy: te same rysunki pod nazwą z interfejsu (tarcza = Obronność itd.).
+Object.assign(UI_ICON_PATHS, {
+    tarcza: SECTOR_ICON_PATHS['Obronność'],
+    fabryka: SECTOR_ICON_PATHS['Przemysł'],
+    dom: SECTOR_ICON_PATHS['Nieruchomości'],
+    mikroskop: SECTOR_ICON_PATHS['Badania'],
+    wzrost: UI_ICON_PATHS['faza-hossa'],
+    spadek: UI_ICON_PATHS['faza-bessa'],
+    kompas: UI_ICON_PATHS['osiagniecie-cykl'],
+    statek: UI_ICON_PATHS['osiagniecie-statek']
+});
+
+/** Ikona inwestycji spółki (zamiast kafelków PNG z danych): najpierw według id, potem według dawnego obrazka. */
+const INVESTMENT_ICON_BY_ID = {
+    hospital: 'Medycyna', wind_farm: 'wiatrak', solar_park: 'slonce', energy_plant: 'Energia', fuel_station_network: 'Energia',
+    residential_complex: 'dom', shopping_center: 'koszyk', employee_training: 'akademia', new_branch: 'firma',
+    game_studio: 'Gaming', mobile_game_studio: 'Gaming', esports_arena: 'Gaming', gaming_casino: 'Gaming', casino: 'Gaming',
+    hotel_chain: 'Turystyka', resort: 'Turystyka', ski_resort: 'Turystyka', theme_park: 'Turystyka',
+    tv_studio: 'Media', broadcasting_center: 'Media', cinema_complex: 'Media', streaming_platform: 'Media',
+    cruise_terminal: 'statek', container_port: 'statek', cargo_terminal: 'Transport i logistyka', logistics_hub: 'Transport i logistyka',
+    distribution_center: 'Transport i logistyka', chemical_plant: 'Chemia', refinery: 'Chemia', rnd_lab_chemistry: 'Chemia',
+    food_processing_plant: 'Żywność', dairy_farm: 'Żywność', brewery: 'Żywność', textile_factory: 'Dobra konsumpcyjne',
+    electronics_assembly: 'Technologia', chip_factory: 'Technologia', pharma_factory: 'Medycyna', biotech_lab: 'Medycyna',
+    bank_headquarters: 'bank', vault_building: 'bank', financial_tower: 'bank', trading_floor: 'rynek',
+    legal_services: 'waga', accounting_firm: 'raport', consulting_office: 'teczka', call_center: 'klienci', service_center: 'Usługi',
+    aerospace_research: 'samolot', vr_development_lab: 'Gaming'
+};
+const INVESTMENT_ICON_BY_IMAGE = {
+    'img/fabrykaicon.png': 'fabryka', 'img/mine.png': 'kopalnia', 'img/server.png': 'serwer', 'img/medlab.png': 'badania',
+    'img/branch.png': 'firma', 'img/box.png': 'magazyn', 'img/globe.png': 'kraj', 'img/billboardicon.png': 'megafon',
+    'img/equipment.png': 'ustawienia', 'img/update.png': 'odswiez'
+};
+function investmentIcon(inv, size = 18) {
+    return uiIcon(INVESTMENT_ICON_BY_ID[inv?.id] || INVESTMENT_ICON_BY_IMAGE[inv?.icon] || 'inwestycje', size, 'inv-icon');
+}
 
 /** Kolor rangi giełdy (tokens.css: --exchange-*). */
 const EXCHANGE_TOKEN = { JUNK: 'junk', BRONZE: 'bronze', SILVER: 'silver', GOLD: 'gold', PLATINUM: 'platinum', RUBY: 'ruby', EMERALD: 'emerald', DIAMOND: 'diamond', INTERNET: 'internet' };
@@ -7317,7 +7399,7 @@ function renderInvestmentPanel(stock, container, canAct) {
         else if (limitReached) action = '<span class="text-warn">limit projektów</span>';
         else action = `<button class="btn-xs" onclick="forceCompanyInvestment('${stock.symbol}', '${inv.id}')">${isConstruction ? 'Przetarg' : 'Zleć'}</button>`;
         return `<tr>
-            <td><img src="${inv.icon || 'img/box.png'}" class="icon-24 mr-2 va-middle" onerror="this.style.display='none'">${escapeHtml(inv.name)}</td>
+            <td class="inv-name">${investmentIcon(inv)}${escapeHtml(inv.name)}</td>
             <td>${formatZl(cost, 0)}</td>
             <td>${inv.durationDays} dni</td>
             <td>${(getExpectedAnnualRoi(inv.incomeBonus) * 100).toFixed(0)}% / rok</td>
