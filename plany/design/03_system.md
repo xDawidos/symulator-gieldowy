@@ -74,7 +74,7 @@ Wszystkie pary tekst × tło sprawdzone automatycznie ([kontrast_tokenow.md](kon
 | `--color-focus` | `#FFD98A` | obrys fokusu | 12,8:1 |
 | `--color-chart-fund/index/rivals` | bursztyn / niebieski / fiolet | wykres okresów: fundusz / GIG / rywale | — |
 | `--color-chart-up/down` | zielony / czerwony | świeca rosnąca (pusta) / malejąca (pełna) | — |
-| `--color-section-*` | bank bursztyn, JU morski, Państwo czerwony, Miasto zielony, Budownictwo żółty, Szara strefa fiolet | pasek akcentu i ikona okna sekcji | — |
+| `--color-section-*` | bank bursztyn, Klienci i udziały morski, Państwo czerwony, Miasto zielony, Budownictwo żółty, Szara strefa fiolet | pasek akcentu i ikona okna sekcji | — |
 | `--exchange-*` | junk, bronze, silver, gold, platinum, ruby, emerald, diamond, internet | kwadrat rangi giełdy (dekoracja, nazwa obok) | — |
 
 **Uwaga:** akcent marki (bursztyn) i ostrzeżenie są blisko siebie kolorystycznie — ostrzeżenie odróżnia się zawsze ikoną ⚠, ramką i jaśniejszym odcieniem (`amber/300`).
@@ -127,7 +127,7 @@ Minimum 12 px (wymóg z kroku 2). 14 stylów zamiast dzisiejszych 27 rozmiarów.
 | `Table/Exchange` | Giełda, Opis | `.tbl .row-exchange` | `<button aria-expanded>`; kwadrat `--exchange-*` |
 | `Table/Sector` | Sektor, Liczba | `.tbl .row-sector` | 28 px, tło `sunken`, wersaliki 12 px |
 | `Table/StockRow` | Default / Hover / Subsidiary; Nazwa, Meta, Kurs, Dostępne, Moje | `.tbl .row-stock` | 40 px, nazwa w 1 linii + `title`; zależna z wcięciem „└”; wiersz dostępny z klawiatury |
-| `Modal` | Sekcja: Neutralna / Bank / JU / Państwo / Miasto / Budownictwo / Szara strefa; Tytuł, Nadtytuł, Pasek KPI, Zakładki, Stopka | `.modal .modal--bank…` (`--modal-accent`) | `role="dialog" aria-modal`, fokus do okna i powrót, Escape; szerokości 440/640/820/1100 |
+| `Modal` | Sekcja: Neutralna / Bank / Klienci / Państwo / Miasto / Budownictwo / Szara strefa; Tytuł, Nadtytuł, Pasek KPI, Zakładki, Stopka | `.modal .modal--bank…` (`--modal-accent`) | `role="dialog" aria-modal`, fokus do okna i powrót, Escape; szerokości 440/640/820/1100 |
 
 Kontrola w Figmie: 14 zestawów + 4 pojedyncze komponenty + 30 ikon; **0 wypełnień bez zmiennej**, wszystkie zmienne mają zakres i składnię CSS, 0 zerwanych aliasów.
 
