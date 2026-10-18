@@ -6794,7 +6794,18 @@ function renderMailbox() {
             </div>`).join('') : '<p class="fund-muted mail-empty">Brak wiadomości w tym folderze.</p>'}`;
 
     const selected = mailbox.messages.find(m => m.id === mailView.selectedId);
-    preview.innerHTML = selected ? renderMailPreview(selected) : '<p class="fund-muted mail-empty">Wybierz wiadomość z listy.</p>';
+    const layout = document.querySelector('.mail-layout');
+    if (layout) layout.classList.toggle('has-selection', Boolean(selected));
+    preview.innerHTML = selected ? renderMailPreview(selected) : '<p class="fund-muted mail-empty">Wybierz wiadomość z listy, aby zobaczyć treść.</p>';
+}
+
+function renderMailBody(body) {
+    if (typeof body === 'string' && body.trim().startsWith('• ')) {
+        const raw = body.trim();
+        const items = raw.split(/\s{2,}•\s+|\n•\s+/).map(it => it.replace(/^•\s*/, '').trim()).filter(Boolean);
+        return `<ul class="list-plain mail-digest">${items.map(item => `<li><span class="mail-bullet">•</span> ${escapeHtml(item)}</li>`).join('')}</ul>`;
+    }
+    return `<p>${escapeHtml(body)}</p>`;
 }
 
 function renderMailPreview(message) {
@@ -6863,7 +6874,7 @@ function renderMailPreview(message) {
         <article class="mail-message">
             <h3>${escapeHtml(message.subject)}</h3>
             <p class="fund-muted">Od: ${escapeHtml(getMailSenderName(message.sender))} · ${formatMailTime(message.at)}${message.isSpam ? ' · reklama' : ''}</p>
-            <p>${escapeHtml(message.body)}</p>
+            ${renderMailBody(message.body)}
             ${action}
             <div class="mail-message-actions">
                 ${message.symbol ? `<button onclick="openStockDetailsModal('${message.symbol}')">Pokaż spółkę</button>` : ''}

@@ -3984,9 +3984,11 @@ body.dark-mode .portfolio-kpi-value,
 
 /* Poczta (etap E1) — układ jak Gmail */
 .mail-window { width: min(1100px, 100%); height: min(720px, 92vh); display: flex; flex-direction: column; gap: var(--space-2); border-radius: var(--modal-radius); border: 1px solid var(--color-border-subtle); border-top: 3px solid var(--color-text-info); background: var(--modal-bg); box-shadow: var(--modal-shadow); padding: var(--space-3) var(--space-4); }
-.mail-window .close-btn { position: static; }
-.mail-layout { flex: 1; min-height: 0; display: grid; grid-template-columns: 190px minmax(0, 1.1fr) minmax(0, 1fr); gap: 10px; }
-.mail-folders { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+.mail-layout { flex: 1; min-height: 0; display: grid; grid-template-columns: 190px minmax(0, 1fr) 280px; gap: 10px; }
+.mail-layout.has-selection { grid-template-columns: 190px minmax(0, 1.1fr) minmax(0, 1fr); }
+.mail-digest { display: flex; flex-direction: column; gap: 4px; margin: var(--space-2) 0; }
+.mail-digest li { line-height: 1.45; }
+.mail-bullet { color: var(--color-text-info); margin-right: 4px; }
 .mail-folders hr { width: 100%; border: 0; border-top: 1px solid var(--border-color); margin: 6px 0; }
 .mail-folder { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); min-height: 32px; text-align: left; border: 0 !important; border-radius: var(--radius-sm) !important; padding: 0 var(--space-3); background: transparent !important; color: var(--color-text-secondary) !important; font-size: var(--text-body-sm-size); cursor: pointer; }
 .mail-folder:hover { background: var(--color-bg-hover) !important; color: var(--color-text-primary) !important; }
