@@ -430,6 +430,24 @@ Polski Grzegorz „Bankier” Kacperczyk zostaje bez zmian.
     - lotnisko z biletami kupowanymi przez każdego inwestora osobno, z animacją lotu w chmury;
     - wydarzenia giełdowe łączące rynki.
 
+## Zgłoszenia do rozpisania (z planowania 0.15, 2026-10-18)
+
+Zgłoszenia użytkownika. Przed budową trzeba je wpisać do części G i dopisać decyzje.
+- **Notowanie na kilku giełdach:** spółka może wejść na giełdę zagraniczną pod tą samą nazwą (podwójne notowanie, cena w walucie rynku po kursie kantoru). Najbliżej G1 (waluty) i G2/G3 (rynki). Do ustalenia:
+  - czy to jedna pula akcji z dwoma kursami (arbitraż przez kantor);
+  - jak liczy się do limitów kraju.
+- **Spółki córki na innych giełdach:** matka może założyć córkę notowaną za granicą (rozszerza 0.14 T6). **Zmienić limit córek:** dziś córki koncernu do 3, a córka zostaje w kraju matki (punkt „Spin-offy z 0.14” w G2). Nowy limit np. 3 krajowe + 1 na każdy otwarty rynek; córka zagraniczna liczy się do limitu kraju, w którym jest notowana.
+- **Nowy bot inspirowany Benjaminem Grahamem** (G6 albo boty krajowe):
+  - inwestor wartościowy: margines bezpieczeństwa (kupuje poniżej wartości godziwej o ≥ 30%), niskie C/Z i C/WK, niskie zadłużenie, wieloletnie dywidendy;
+  - cierpliwy, nie goni trendu, kupuje w bessie;
+  - sprzedaje, gdy kurs dojdzie do wartości.
+
+  Robocza nazwa do wymyślenia w stylu gry (np. „Beniamin «Margines» Grahamski”). Uczy „Inteligentnego inwestora” i pułapek wartości (0.15 H1b).
+- **„Wilk” bardziej odrębny:** Jordan „Wilk” Belfort ma dziś osobowość `pro_investor`, taką samą jak inny bot. Proponowana własna osobowość:
+  - agresywne pompowanie małych spółek („pump and dump”: kupno, rozgłaszanie w mediach, sprzedaż na szczycie);
+  - duże obroty i dźwignia;
+  - ryzyko kontroli KNF (powiązanie z ciemną strefą 0.11).
+
 ## Do potwierdzenia
 
 - Spółki państwowe w krajach: lista z tabel G2 (1–4 na kraj).
