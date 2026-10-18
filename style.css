@@ -4954,3 +4954,22 @@ button.mood-kpi:hover { background: var(--color-bg-hover) !important; border-col
 .cv-medal-gold .ic { color: var(--color-text-accent); }
 .cv-medal-silver .ic { color: var(--color-text-secondary); }
 .cv-medal-bronze .ic { color: var(--color-text-warn); }
+
+/* ===================== 0.14.5 krok 6: ruch (tylko gdy użytkownik nie ogranicza animacji) =====================
+   Krótko (120–200 ms) i bez zmiany układu: przezroczystość i właściwość `translate` (składa się z `transform` okien).
+   Przy `prefers-reduced-motion: reduce` nic z tego się nie wykonuje; globalna reguła i tak skraca resztę do 0,01 ms. */
+@keyframes cq-rise { from { opacity: 0; translate: 0 8px; } }
+@keyframes cq-fade { from { opacity: 0; } }
+@keyframes cq-slide-in { from { opacity: 0; translate: 16px 0; } }
+@keyframes cq-achievement { 0% { box-shadow: 0 0 0 0 var(--color-border-accent), var(--toast-shadow); } 100% { box-shadow: 0 0 0 12px transparent, var(--toast-shadow); } }
+@media (prefers-reduced-motion: no-preference) {
+  .modal, .intro-overlay > * { animation: cq-rise var(--motion-base) var(--motion-ease); }
+  .modal-backdrop { animation: cq-fade var(--motion-base) linear; }
+  .notif-item { animation: cq-slide-in var(--motion-base) var(--motion-ease); }
+  .notif-item.notif-item--achievement { animation: cq-slide-in var(--motion-base) var(--motion-ease), cq-achievement 1.2s ease-out var(--motion-base) 1; }
+  .topbar-menu, .tooltip:not([hidden]) { animation: cq-fade var(--motion-fast) linear; }
+  .mood-meter > i { transition: left 600ms var(--motion-ease); }
+  .drawer-toggle-btn .ic, .panel-toggle .ic { transition: transform var(--motion-base) var(--motion-ease); }
+  .chart-event circle { transition: stroke var(--motion-fast) linear; }
+  .level-steps > i { transition: background-color var(--motion-base) linear; }
+}
