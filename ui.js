@@ -1641,7 +1641,7 @@ function displayPortfolio() {
     if (liabilities) {
         const loans = isPrivate ? [] : (playerFund?.pawnLoans || []);
         liabilities.innerHTML = loans.length
-            ? loans.map(loan => `<li>🏦 Lombard: <strong class="loss">${loan.principal.toFixed(2)} zł</strong> [zastaw: ${loan.shares} ${escapeHtml(loan.symbol)}] · ${loan.weeksLeft} tyg.</li>`).join('')
+            ? loans.map(loan => `<li>Lombard: <strong class="loss">${formatZl(loan.principal)}</strong> [zastaw: ${loan.shares} ${escapeHtml(loan.symbol)}] · ${loan.weeksLeft} tyg.</li>`).join('')
             : '<li>Brak zobowiązań.</li>';
     }
 
@@ -1657,10 +1657,10 @@ function displayPortfolio() {
     };
     const cash = isPrivate ? (playerWallet?.cash || 0) : playerCash;
     const total = isPrivate ? cash + positionsValue : (playerFund ? getFundAssets() : playerCash + positionsValue);
-    setKpi('total-portfolio-value', isPrivate ? 'Majątek prywatny' : 'Aktywa funduszu', total.toFixed(2), isPrivate ? 'zł (Twoje pieniądze)' : 'zł (pieniądze klientów)');
-    setKpi('cash-portfolio', isPrivate ? 'Gotówka prywatna' : 'Gotówka funduszu', `${cash.toFixed(2)} zł`, 'zł wolne');
+    setKpi('total-portfolio-value', isPrivate ? 'Majątek prywatny' : 'Aktywa funduszu', formatZl(total), isPrivate ? 'Twoje pieniądze' : 'pieniądze klientów');
+    setKpi('cash-portfolio', isPrivate ? 'Gotówka prywatna' : 'Gotówka funduszu', formatZl(cash), 'wolne środki');
     const plEl = document.getElementById('total-profit-loss');
-    if (plEl) { plEl.textContent = totalPL.toFixed(2); plEl.className = `portfolio-kpi-value ${totalPL > 0 ? 'profit' : totalPL < 0 ? 'loss' : ''}`; }
+    if (plEl) { plEl.textContent = formatZl(totalPL); plEl.className = `portfolio-kpi-value ${totalPL > 0 ? 'profit' : totalPL < 0 ? 'loss' : ''}`; }
 }
 
 function displayEventMessage(message, durationSeconds, percentageInfo = null, category = 'market') {
@@ -2420,7 +2420,7 @@ function displayStartups(previousInputValues = {}) {
     startupPanel.style.display = FEATURE_FLAGS.startups ? 'block' : 'none';
     if (!FEATURE_FLAGS.startups) return;
     const limitInfo = document.getElementById('startup-fund-limit');
-    if (limitInfo) limitInfo.textContent = `Fundusz w startupach: ${getFundStartupExposure().toFixed(0)} zł z limitu ${(getFundAssets() * STARTUP_FUND_LIMIT).toFixed(0)} zł (${(STARTUP_FUND_LIMIT * 100).toFixed(0)}% aktywów).` + (getCrowdingPressure() > 0 ? ` 🧱 Rynek nasycony (${getListedCompanyCount()}/${LISTING_SOFT_CAP} spółek): finansowanie startupów mniejsze o ${((1 - getStartupFundingFactor()) * 100).toFixed(0)}%, cele zbiórek wyższe.` : '');
+    if (limitInfo) limitInfo.textContent = `Fundusz w startupach: ${getFundStartupExposure().toFixed(0)} PLN z limitu ${(getFundAssets() * STARTUP_FUND_LIMIT).toFixed(0)} PLN (${(STARTUP_FUND_LIMIT * 100).toFixed(0)}% aktywów).` + (getCrowdingPressure() > 0 ? ` 🧱 Rynek nasycony (${getListedCompanyCount()}/${LISTING_SOFT_CAP} spółek): finansowanie startupów mniejsze o ${((1 - getStartupFundingFactor()) * 100).toFixed(0)}%, cele zbiórek wyższe.` : '');
 
     const startups = stocks.filter(s => s.assetType === 'Startup');
     startupTableBody.innerHTML = '';
@@ -2639,7 +2639,7 @@ function openInvestorsModal(symbol) {
             const row = tableBody.insertRow();
             row.insertCell().textContent = `#${index + 1}`;
             const mine = name === 'Pula Inwestycyjna' ? getPoolStartupShare(startup, 'player') : 0; // 0.14.1 R4
-            row.insertCell().textContent = mine > 0 ? `${name} (w tym Ty: ${mine.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} zł)` : name;
+            row.insertCell().textContent = mine > 0 ? `${name} (w tym Ty: ${mine.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN)` : name;
             row.insertCell().textContent = `${amount.toLocaleString('pl-PL')} PLN`;
 
             if (name === "Ty (Gracz)") {
@@ -2721,7 +2721,7 @@ function getPoolStartupShare(startup, id) {
 function renderPoolDetails() {
     const el = document.getElementById('pool-details');
     if (!el) return;
-    const fmtZl = value => `${(Number(value) || 0).toLocaleString('pl-PL', { maximumFractionDigits: 0 })} zł`;
+    const fmtZl = value => `${(Number(value) || 0).toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN`;
     const free = Number(investmentPool.contributors?.player) || 0;
     const rows = stocks.filter(s => s.assetType === 'Startup' && (s.poolInvestors || []).length).map(s => {
         const pool = (s.poolInvestors || []).reduce((sum, round) => sum + (Number(round.amount) || 0), 0);
@@ -3192,7 +3192,7 @@ function renderCompanyCard() {
         </div>
         ${renderSegmentBar(stock)}
         ${typeof renderDividendBadges === 'function' ? renderDividendBadges(stock) : ''}
-        ${stock.pendingDividend ? `<p class="text-sm cc-exdiv">✂️ Ogłoszona dywidenda <strong>${stock.pendingDividend.dps.toFixed(2)} zł/akcję</strong> — dzień odcięcia za ok. ${Math.max(1, Math.round(stock.dividendTimer / BASE_DELAYS.weekly))} tydz. gry. Dywidendę dostaje, kto ma akcje w dniu odcięcia; tego dnia kurs spada o mniej więcej jej wartość.</p>` : ''}`;
+        ${stock.pendingDividend ? `<p class="text-sm cc-exdiv">✂️ Ogłoszona dywidenda <strong>${stock.pendingDividend.dps.toFixed(2)} PLN/akcję</strong> — dzień odcięcia za ok. ${Math.max(1, Math.round(stock.dividendTimer / BASE_DELAYS.weekly))} tydz. gry. Dywidendę dostaje, kto ma akcje w dniu odcięcia; tego dnia kurs spada o mniej więcej jej wartość.</p>` : ''}`;
 
     // N1: porównanie z medianą sektora pod wartością kafelka.
     const med = typeof getSectorMedians === 'function' ? getSectorMedians(getMainSector(stock)) : null;
@@ -3280,7 +3280,7 @@ function renderCompanyCardFinance(stock, f) {
                     ${row('Gotówka', money(stock.cash), 'Pieniądze na koncie spółki.')}
                     ${row('Wartość księgowa / akcję', perShare(f.bookValuePerShare), '(Aktywa − zobowiązania) / liczba akcji.')}
                     ${stock.assetType !== 'REIT' ? row('Polityka dywidendy', escapeHtml(getDividendPolicyLabel(stock.dividendPolicy)), 'Jak dużą część zysku spółka wypłaca.') : ''}
-                    ${row('Ostatnia dywidenda', last ? `${last.dps.toFixed(4)} zł (${(last.yield * 100).toFixed(2)}%)` : 'brak', 'Ostatnia wypłata na akcję i stopa w dniu wypłaty.')}
+                    ${row('Ostatnia dywidenda', last ? `${last.dps.toFixed(4)} PLN (${(last.yield * 100).toFixed(2)}%)` : 'brak', 'Ostatnia wypłata na akcję i stopa w dniu wypłaty.')}
                 </tbody></table></section>
         </div>
         ${renderValuationSection(stock, f)}
@@ -3756,7 +3756,7 @@ function updateCityModalContent() {
             statusEl.textContent = "Odblokowane!";
             statusEl.style.color = 'var(--color-up)';
         } else {
-            statusEl.textContent = `Zablokowane (cel: ${CITY_UNLOCK_DONATION.toLocaleString('pl-PL')} zł)`;
+            statusEl.textContent = `Zablokowane (cel: ${CITY_UNLOCK_DONATION.toLocaleString('pl-PL')} PLN)`;
             statusEl.style.color = 'var(--color-down)';
         }
 
@@ -5603,7 +5603,7 @@ function renderFundFlowReasons() {
             .map(([key, value]) => `<li>${names[key] || key}: <strong class="${sign > 0 ? 'text-up' : 'text-down'}">${sign > 0 ? '+' : '−'}${formatZl(value, 0)}</strong></li>`).join('');
         const base = Math.max(1, quarter.startUnits);
         const net = (quarter.inUnits - quarter.outUnits) / base * 100;
-        return `<div class="text-sm"><strong>${label}</strong> (kw. ${quarter.quarter}): napływ ${(quarter.inUnits / base * 100).toFixed(1)}% JU, odpływ ${(quarter.outUnits / base * 100).toFixed(1)}% JU, netto ${net >= 0 ? '+' : ''}${net.toFixed(1)}%
+        return `<div class="text-sm"><strong>${label}</strong> (kw. ${quarter.quarter}): napływ ${formatNumberPl(quarter.inUnits / base * 100, 1)}% udziałów, odpływ ${formatNumberPl(quarter.outUnits / base * 100, 1)}% udziałów, netto ${net >= 0 ? '+' : ''}${net.toFixed(1)}%
             <div class="d-flex gap-2 flex-wrap"><div><em>Odchodzą, bo:</em><ul>${rows(quarter.out, FUND_FLOW_OUT_REASONS, -1) || '<li>nikt nie odszedł</li>'}</ul></div>
             <div><em>Przychodzą:</em><ul>${rows(quarter.in, FUND_FLOW_IN_REASONS, 1) || '<li>brak wpłat</li>'}</ul></div></div></div>`;
     };
@@ -5625,7 +5625,7 @@ function displayFundPanel() {
     renderFundFlowReasons();
 
     const title = document.getElementById('fund-panel-title');
-    if (title) title.textContent = `💼 ${playerProfile?.fundName || 'Mój fundusz'}`;
+    if (title) title.textContent = playerProfile?.fundName || 'Fundusz';
 
     document.getElementById('account-btn-fund')?.classList.toggle('active', activeTradingAccount === 'fund');
     document.getElementById('account-btn-private')?.classList.toggle('active', activeTradingAccount === 'private');
@@ -5653,8 +5653,8 @@ function renderFundSummary() {
 
     container.innerHTML = `
         <div class="fund-kpis">
-            <div><span>NAV / JU</span><strong>${nav.toFixed(4)} zł</strong></div>
-            <div><span>Liczba JU</span><strong>${playerFund.units.toFixed(1)}</strong></div>
+            <div><span>NAV / udział</span><strong>${formatNav(nav)}</strong></div>
+            <div><span>Udziały</span><strong>${formatNumberPl(playerFund.units, 1)}</strong></div>
             <div><span>Klienci</span><strong>${playerFund.clients.length}</strong></div>
             <div><span>Stanowisko</span><strong>${escapeHtml(getPlayerPosition().name)}</strong></div>
         </div>
@@ -5662,11 +5662,11 @@ function renderFundSummary() {
             <span>Zaufanie klientów: <strong>${trust}/100</strong></span>
             <div class="fund-trust-bar"><div class="fund-trust-fill ${trustClass}" style="width:${trust}%"></div></div>
         </div>
-        ${(() => { const reasons = typeof getTrustDropReasons === 'function' ? getTrustDropReasons() : []; return reasons.length ? `<div class="text-xs text-warn">⚠️ Zaufanie spada: ${escapeHtml(reasons[0])}</div>` : ''; })()}
+        ${(() => { const reasons = typeof getTrustDropReasons === 'function' ? getTrustDropReasons() : []; return reasons.length ? `<div class="alert alert--warn" role="status">${uiIcon('alert', 16)}<div><strong>Zaufanie spada</strong><br>${escapeHtml(reasons[0])}</div></div>` : ''; })()}
         <div class="fund-period-line">
             Okres ${current.number}: ${formatPct(periodReturn)} vs GIG ${formatPct(benchmarkReturn)}
             · emisje ${current.emissions}/${MAX_EMISSIONS_PER_PERIOD}
-            · obsunięcie ${(current.maxDrawdown * 100).toFixed(1)}%
+            · obsunięcie ${formatNumberPl(current.maxDrawdown * 100, 1)}%
         </div>
         <div class="fund-period-progress" title="Postęp okresu oceny (15 min gry)">
             <div style="width:${(periodProgress * 100).toFixed(1)}%"></div>
@@ -5680,8 +5680,8 @@ function updateEmissionControls() {
     if (!button || !playerFund) return;
     const reason = getEmissionBlockReason();
     button.disabled = Boolean(reason);
-    button.title = reason || `Najwyżej ${getMaxEmissionUnits()} JU w jednej emisji (5% + 20% × zaufanie obecnych JU).`;
-    if (info) info.textContent = `${reason ? `🔒 ${reason} ` : ''}Emisje w tym okresie: ${playerFund.current.emissions}/${MAX_EMISSIONS_PER_PERIOD} · próg zaufania ${EMISSION_MIN_TRUST}% · maks. ${getMaxEmissionUnits()} JU naraz.`;
+    button.title = reason || `Najwyżej ${getMaxEmissionUnits()} udziałów w jednej emisji (5% + 20% × zaufanie obecnych udziałów).`;
+    if (info) info.textContent = `${reason ? `${reason} ` : ''}Emisje w tym okresie: ${playerFund.current.emissions}/${MAX_EMISSIONS_PER_PERIOD} · próg zaufania ${EMISSION_MIN_TRUST}% · maks. ${getMaxEmissionUnits()} udziałów naraz.`;
 }
 
 /** Wykres słupkowy: 4 ostatnie okresy + bieżący — fundusz vs GIG vs średnia funduszy zewnętrznych. */
@@ -5708,9 +5708,9 @@ function renderFundPeriodsChart() {
     });
 
     const series = [
-        { key: 'fund', label: 'Twój fundusz', color: '#22C55E' },
-        { key: 'benchmark', label: 'GIG', color: '#38BDF8' },
-        { key: 'rivals', label: 'Fundusze zewnętrzne (śr.)', color: '#F59E0B' }
+        { key: 'fund', label: 'Twój fundusz', color: 'var(--color-chart-fund)' },
+        { key: 'benchmark', label: 'GIG', color: 'var(--color-chart-index)' },
+        { key: 'rivals', label: 'Fundusze zewnętrzne (śr.)', color: 'var(--color-chart-rivals)' }
     ];
 
     const width = 320;
@@ -5735,7 +5735,7 @@ function renderFundPeriodsChart() {
             const h = Math.abs(value) / maxAbs * (plotH / 2);
             const x = groupX + seriesIndex * barW;
             const y = value >= 0 ? zeroY - h : zeroY;
-            svg += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${(barW - 1).toFixed(1)}" height="${Math.max(0.5, h).toFixed(1)}" fill="${item.color}" fill-opacity="${row.partial ? 0.55 : 1}"><title>${row.label} — ${item.label}: ${formatPct(value)}</title></rect>`;
+            svg += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${(barW - 1).toFixed(1)}" height="${Math.max(0.5, h).toFixed(1)}" style="fill:${item.color}" fill-opacity="${row.partial ? 0.55 : 1}"><title>${row.label} — ${item.label}: ${formatPct(value)}</title></rect>`;
         });
         svg += `<text x="${(pad.left + index * groupW + groupW / 2).toFixed(1)}" y="${height - 8}" font-size="8" text-anchor="middle" fill="currentColor">${row.label}</text>`;
     });
@@ -5751,13 +5751,13 @@ function renderFundRivalsTable() {
 
     const last = playerFund.periods[playerFund.periods.length - 1];
     if (!last) {
-        container.innerHTML = '<p class="fund-muted">Porównanie z rywalami pojawi się po pierwszym okresie (15 min gry).</p>';
+        container.innerHTML = '<p class="fund-muted">Porównanie z rywalami pojawi się po pierwszym okresie (ok. 15 min gry).</p>';
         return;
     }
 
     const rows = [
-        { name: `💼 ${playerProfile?.fundName || 'Twój fundusz'}`, ret: last.fundReturn, extra: `zmienność ${(last.volatility * 100).toFixed(2)}%, obsunięcie ${(last.maxDrawdown * 100).toFixed(1)}%`, mine: true },
-        { name: '📈 GIG (benchmark)', ret: last.benchmarkReturn, extra: '' },
+        { name: playerProfile?.fundName || 'Twój fundusz', ret: last.fundReturn, extra: `zmienność ${(last.volatility * 100).toFixed(2)}%, obsunięcie ${(last.maxDrawdown * 100).toFixed(1)}%`, mine: true },
+        { name: 'GIG (indeks rynku)', ret: last.benchmarkReturn, extra: '' },
         ...last.rivals.map(rival => ({ name: rival.name, ret: rival.return, extra: '' }))
     ].sort((a, b) => b.ret - a.ret);
 
@@ -5786,7 +5786,7 @@ function renderFundClients() {
                 const def = CLIENT_TYPES[client.type] || CLIENT_TYPES.careful;
                 const sat = Math.round(client.satisfaction * 100);
                 return `<tr>
-                    <td title="${def.label}">${def.icon} ${escapeHtml(client.name)}</td>
+                    <td title="${def.label}">${escapeHtml(client.name)}</td>
                     <td>${formatZl(client.units * nav, 0)}</td>
                     <td class="${sat >= 55 ? 'profit' : sat < 35 ? 'loss' : ''}">${sat}%</td>
                 </tr>`;
@@ -5807,15 +5807,15 @@ function renderPrivatePanel() {
     }).join('') || '<li class="fund-muted">Brak prywatnych akcji.</li>';
 
     container.innerHTML = `
-        <p>Moje pieniądze: <strong>${formatZl(playerWallet.cash)}</strong>
-           · JU własnego funduszu: <strong>${playerWallet.fundUnits.toFixed(2)}</strong> (${formatZl(playerWallet.fundUnits * nav)})</p>
+        <p>Konto prywatne: <strong>${formatZl(playerWallet.cash)}</strong>
+           · udziały własnego funduszu: <strong>${formatNumberPl(playerWallet.fundUnits, 2)}</strong> (${formatZl(playerWallet.fundUnits * nav)})</p>
         <ul class="fund-private-list">${holdings}</ul>
         <div class="fund-emission">
-            <input type="number" id="private-ju-amount" min="1" value="50" aria-label="Kwota lub liczba JU">
-            <button class="btn-secondary" onclick="buyOwnFundUnits(document.getElementById('private-ju-amount').value)">Kup JU za zł</button>
-            <button class="btn-secondary" onclick="sellOwnFundUnits(document.getElementById('private-ju-amount').value)">Umórz JU</button>
+            <input type="number" id="private-ju-amount" min="1" value="50" aria-label="Kwota lub liczba udziałów">
+            <button class="btn-secondary" onclick="buyOwnFundUnits(document.getElementById('private-ju-amount').value)">Kup udziały za PLN</button>
+            <button class="btn-secondary" onclick="sellOwnFundUnits(document.getElementById('private-ju-amount').value)">Umórz udziały</button>
         </div>
-        <p class="fund-muted">Prywatny handel akcjami: przełącz konto na „Prywatne” i kupuj w tabeli rynku.
+        <p class="fund-muted">Prywatny handel akcjami: przełącz konto na „Konto prywatne” i kupuj w tabeli rynku.
            Kupowanie akcji, które fundusz kupił w tym tygodniu, grozi kontrolą compliance.</p>`;
 }
 
@@ -5824,8 +5824,8 @@ function handleFundEmission() {
     const units = Math.floor(Number(input?.value) || 0);
     if (!(units > 0)) return;
     const result = issueFundUnits(units);
-    const blockedText = result.blocked === 'size' ? 'Emisja: limit wielkości przy obecnym zaufaniu to 0 JU.' : result.blocked;
-    showToast(result.issued > 0 ? `Emisja: sprzedano ${result.issued.toFixed(1)} JU (${formatZl(result.raised)})${units > getMaxEmissionUnits() ? ` — limit wielkości ${getMaxEmissionUnits()} JU` : ''}` : blockedText || 'Emisja: brak chętnych', result.issued > 0 ? 'success' : 'warning');
+    const blockedText = result.blocked === 'size' ? 'Emisja: przy obecnym zaufaniu limit wielkości to 0 udziałów.' : result.blocked;
+    showToast(result.issued > 0 ? `Emisja: sprzedano ${formatNumberPl(result.issued, 1)} udziałów (${formatZl(result.raised)})${units > getMaxEmissionUnits() ? ` — limit wielkości ${getMaxEmissionUnits()} udziałów` : ''}` : blockedText || 'Emisja: brak chętnych', result.issued > 0 ? 'success' : 'warning');
     refreshFundViews();
 }
 
@@ -5885,7 +5885,7 @@ function renderCvPanel() {
             <h4>${escapeHtml(skill.name)} ${medal ? `<span class="cv-medal cv-medal-${medal.id}">${medal.icon}</span>` : ''}</h4>
             <p class="fund-muted">Poziom ${level}/${skill.levels.length}</p>
             ${next ? `<p>${escapeHtml(next.description || '')}</p>` : '<p><strong>Ukończone w pełni.</strong></p>'}
-            ${next ? `<button ${canBuy ? '' : 'disabled'} onclick="buyTraining('${id}')">${reqMet ? `Szkolenie: ${cost} zł` : 'Wymaga wcześniejszego szkolenia'}</button>` : ''}
+            ${next ? `<button ${canBuy ? '' : 'disabled'} onclick="buyTraining('${id}')">${reqMet ? `Szkolenie: ${cost} PLN` : 'Wymaga wcześniejszego szkolenia'}</button>` : ''}
         </article>`;
     }).join('');
 
@@ -5970,7 +5970,7 @@ function renderIntroCountries() {
     if (!container) return;
     container.innerHTML = START_COUNTRIES.map(country => `
         <button type="button" class="intro-country ${country.available ? 'selected' : 'locked'}" ${country.available ? '' : 'disabled'}
-            title="${country.available ? 'Dostępny' : `Przepustka: ${country.passCost.toLocaleString('pl-PL')} zł (wkrótce)`}">
+            title="${country.available ? 'Dostępny' : `Przepustka: ${country.passCost.toLocaleString('pl-PL')} PLN (wkrótce)`}">
             ${country.flag} ${country.name}${country.available ? '' : ' 🔒'}
         </button>`).join('');
 }
@@ -6046,14 +6046,14 @@ function toggleDebugMode() {
 
 function debugAddWallet(amount) {
     playerWallet.cash += amount;
-    logEvent(`🛠️ [DEBUG] +${amount} zł do portfela prywatnego.`, 'review');
+    logEvent(`🛠️ [DEBUG] +${amount} PLN do portfela prywatnego.`, 'review');
     refreshFundViews();
 }
 
 /** Dodaje gotówkę funduszowi bez nowych JU (NAV rośnie). */
 function debugAddFund(amount) {
     playerCash += amount;
-    logEvent(`🛠️ [DEBUG] +${amount} zł do gotówki funduszu.`, 'review');
+    logEvent(`🛠️ [DEBUG] +${amount} PLN do gotówki funduszu.`, 'review');
     refreshFundViews();
 }
 
@@ -6272,8 +6272,8 @@ function renderCorporationCooperation() {
         .slice(0, 12);
 
     return `
-        <p class="fund-muted">Spotkanie z inwestorem (${formatZl(MEETING_COST, 0)}, raz na okres): szansa zależy od zaufania, wyniku vs GIG i charakteru inwestora — sukces = zakup JU.
-        Lunch z prezesem (${formatZl(CEO_LUNCH_COST, 0)}) poprawia relacje; przy dobrej opinii spółka z nadwyżką gotówki lokuje część w JU (uwaga na konflikt interesów, gdy fundusz ma &gt;5% jej akcji).</p>
+        <p class="fund-muted">Spotkanie z inwestorem (${formatZl(MEETING_COST, 0)}, raz na okres): szansa zależy od zaufania, wyniku vs GIG i charakteru inwestora — sukces = zakup udziałów.
+        Lunch z prezesem (${formatZl(CEO_LUNCH_COST, 0)}) poprawia relacje; przy dobrej opinii spółka z nadwyżką gotówki lokuje część w udziałach funduszu (uwaga na konflikt interesów, gdy fundusz ma &gt;5% jej akcji).</p>
         <h4>Wielcy inwestorzy</h4>
         <div class="corp-cards">${getBigInvestors().map(ai => {
             const met = corporation.lastMeetings[ai.id] === period;
@@ -6551,7 +6551,7 @@ function renderCityElection() {
     }
     container.innerHTML = `
         <h4>Kampania wyborcza — wybory za ${city.mayor.electionYear} ${city.mayor.electionYear === 1 ? 'rok' : 'lata'}</h4>
-        <p class="fund-muted">Darowizny z portfela prywatnego (${formatZl(playerWallet.cash)}) zwiększają szanse kandydata. Darowizna od ${PLAYER_DONATION_COMPLIANCE_LIMIT} zł zwraca uwagę compliance. Wygrany pamięta wsparcie.</p>
+        <p class="fund-muted">Darowizny z portfela prywatnego (${formatZl(playerWallet.cash)}) zwiększają szanse kandydata. Darowizna od ${PLAYER_DONATION_COMPLIANCE_LIMIT} PLN zwraca uwagę compliance. Wygrany pamięta wsparcie.</p>
         <table class="asset-mini-table">
             <thead><tr><th>Kandydat</th><th>Polityka</th><th>Siła kampanii</th><th>Twoje wsparcie</th><th></th></tr></thead>
             <tbody>${city.election.candidates.map(c => `<tr>
@@ -6780,7 +6780,7 @@ function renderJuDecisions() {
             <button onclick="setPlayerFeeRate(parseFloat(document.getElementById('fee-rate-input').value.replace(',', '.'))); renderJuMarket();">Ustaw (0,5–3%)</button></div></article>
         <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">📣</span><div><h4>Kampania marketingowa</h4><span class="bank-card-type">koszt ${formatZl(getMarketingCost(), 0)} z budżetu korporacji · ${MARKETING_WEEKS} tyg.</span></div></header>
             ${campaign?.weeksLeft > 0 ? `<p class="text-sm">Trwa: ${MARKETING_TARGETS[campaign.target].icon} ${MARKETING_TARGETS[campaign.target].label}, zostało ${campaign.weeksLeft} tyg.</p>`
-                : `<p class="text-sm">Dodatkowi kupujący JU z wybranej grupy klientów. Nowe wpłaty nadal wymagają zaufania ≥ 50.</p>
+                : `<p class="text-sm">Dodatkowi kupujący udziały z wybranej grupy klientów. Nowe wpłaty nadal wymagają zaufania ≥ 50.</p>
                 <div class="bank-card-form">${Object.entries(MARKETING_TARGETS).map(([id, t]) => `<button class="btn-secondary" onclick="startMarketingCampaign('${id}'); renderJuMarket();">${t.icon} ${t.label}</button>`).join('')}</div>`}</article>`;
 }
 
@@ -6796,8 +6796,8 @@ function renderJuMarket() {
     document.getElementById('ju-ticker').innerHTML = [
         ['Klienci funduszu', playerFund.clients.length],
         ['Wpłaty nowych (tydz.)', formatZl(weekFlows, 0)],
-        ['Premia JU funduszu', formatPremium(playerStats?.premium)],
-        ['Wolumen JU (tydz.)', (playerStats?.volume || 0).toFixed(1)],
+        ['Premia do NAV', formatPremium(playerStats?.premium)],
+        ['Obrót udziałami (tydz.)', formatNumberPl(playerStats?.volume || 0, 1)],
         ['Tydzień rynku', juMarket.week],
         ['Najlepiej sprzedaje się', best ? escapeHtml(best.name) : '—']
     ].map(([label, value]) => `<div class="bank-ticker-item"><span>${label}</span><strong>${value}</strong></div>`).join('');
@@ -6812,7 +6812,7 @@ function renderJuMarket() {
     }).sort((a, b) => b.popularity - a.popularity);
     document.getElementById('ju-funds-table').innerHTML = `
         <table class="asset-mini-table ju-table">
-            <thead><tr><th>#</th><th>Fundusz</th><th>NAV</th><th>Cena JU vs NAV</th><th>Trend (4 tyg.)</th><th>Wolumen</th><th>Nowi klienci</th><th>Klienci</th></tr></thead>
+            <thead><tr><th>#</th><th>Fundusz</th><th>NAV</th><th>Cena udziału vs NAV</th><th>Trend (4 tyg.)</th><th>Wolumen</th><th>Nowi klienci</th><th>Klienci</th></tr></thead>
             <tbody>${rows.map((row, index) => `
                 <tr class="${row.fund.kind === 'player' ? 'mine' : ''} ${row.fund.id === juMarket.bestFundId ? 'ju-best' : ''}">
                     <td>${index + 1}</td>
@@ -6850,13 +6850,13 @@ function renderJuMarket() {
         const card = juView.clientId === client.id ? `
             <div class="ju-client-card">
                 <p class="fst-italic">„${escapeHtml(client.motive || '')}”</p>
-                <p>Średni koszt JU: ${client.avgCost.toFixed(2)} zł · zysk na JU: ${formatPremium(gain)}${client.loyal ? ' · 💙 lojalny' : ''}${client.pendingSellUnits > 0 ? ` · wystawił ${client.pendingSellUnits.toFixed(1)} JU na rynku wtórnym` : ''}</p>
+                <p>Średni koszt udziału: ${formatZl(client.avgCost)} · zysk na udziale: ${formatPremium(gain)}${client.loyal ? ' · 💙 lojalny' : ''}${client.pendingSellUnits > 0 ? ` · wystawił ${client.pendingSellUnits.toFixed(1)} JU na rynku wtórnym` : ''}</p>
                 <ul class="list-plain text-sm">${(client.history || []).map(item => `<li><span class="text-muted">t.${item.week}</span> ${escapeHtml(item.text)}</li>`).join('') || '<li class="text-muted">Brak historii.</li>'}</ul>
             </div>` : '';
         return `<div class="ju-client ${juView.clientId === client.id ? 'open' : ''}" onclick="showJuClient(${client.id})">
             <span class="ju-client-icon" title="${escapeHtml(def.label)}">${def.icon}</span>
             <span class="ju-client-name">${escapeHtml(client.name)}<small class="text-muted"> ${escapeHtml(def.label)}</small></span>
-            <span class="ju-client-units">${client.units.toFixed(1)} JU · ${formatZl(client.units * nav, 0)}</span>
+            <span class="ju-client-units">${formatNumberPl(client.units, 1)} udz. · ${formatZl(client.units * nav, 0)}</span>
             <span class="ju-satisfaction" title="Zadowolenie"><span style="width:${(client.satisfaction * 100).toFixed(0)}%"></span></span>
         </div>${card}`;
     }).join('') || '<p class="text-muted">Brak klientów w tej grupie.</p>';
@@ -6922,7 +6922,7 @@ function updateStateModalContent() {
                 <thead><tr><th>Podatek</th><th>Stawka</th><th>Kogo dotyczy</th></tr></thead>
                 <tbody>
                     <tr><td>Dywidendy</td><td>${(TAX_RATES.dividend * 100).toFixed(0)}%</td><td>inwestorzy prywatni i Twoje konto prywatne; <strong>fundusz zwolniony</strong> (dywidenda podnosi NAV)</td></tr>
-                    <tr><td>Zyski kapitałowe</td><td>${(TAX_RATES.capitalGains * 100).toFixed(0)}%</td><td>konto prywatne (z ulgami szkoleń); klienci funduszu płacą przy umorzeniu JU</td></tr>
+                    <tr><td>Zyski kapitałowe</td><td>${(TAX_RATES.capitalGains * 100).toFixed(0)}%</td><td>konto prywatne (z ulgami szkoleń); klienci funduszu płacą przy umorzeniu udziałów</td></tr>
                     <tr><td>CIT spółek</td><td>wg progów</td><td>zysk spółek giełdowych (raport kwartalny)</td></tr>
                     <tr><td>Podatek miejski</td><td>od zysku spółek</td><td>spółki; stawkę zmienia polityka burmistrza (${escapeHtml(MAYOR_POLICIES[city.mayor?.policy]?.label || '—')})</td></tr>
                     <tr><td>Podatek od bogactwa</td><td>progi</td><td>wielcy inwestorzy prywatni (boty); nie dotyczy funduszu</td></tr>
