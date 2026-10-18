@@ -236,7 +236,7 @@ Object.assign(UI_ICON_PATHS, {
     statek: UI_ICON_PATHS['osiagniecie-statek']
 });
 
-/** Ikona inwestycji spółki (zamiast kafelków PNG z danych): najpierw według id, potem według dawnego obrazka. */
+/** Ikona inwestycji spółki według id (krok 6 zastąpił kafelki PNG; krok 7 usunął pole icon z danych). */
 const INVESTMENT_ICON_BY_ID = {
     hospital: 'Medycyna', wind_farm: 'wiatrak', solar_park: 'slonce', energy_plant: 'Energia', fuel_station_network: 'Energia',
     residential_complex: 'dom', shopping_center: 'koszyk', employee_training: 'akademia', new_branch: 'firma',
@@ -249,12 +249,14 @@ const INVESTMENT_ICON_BY_ID = {
     electronics_assembly: 'Technologia', chip_factory: 'Technologia', pharma_factory: 'Medycyna', biotech_lab: 'Medycyna',
     bank_headquarters: 'bank', vault_building: 'bank', financial_tower: 'bank', trading_floor: 'rynek',
     legal_services: 'waga', accounting_firm: 'raport', consulting_office: 'teczka', call_center: 'klienci', service_center: 'Usługi',
-    aerospace_research: 'samolot', vr_development_lab: 'Gaming'
-};
-const INVESTMENT_ICON_BY_IMAGE = {
-    'img/fabrykaicon.png': 'fabryka', 'img/mine.png': 'kopalnia', 'img/server.png': 'serwer', 'img/medlab.png': 'badania',
-    'img/branch.png': 'firma', 'img/box.png': 'magazyn', 'img/globe.png': 'kraj', 'img/billboardicon.png': 'megafon',
-    'img/equipment.png': 'ustawienia', 'img/update.png': 'odswiez'
+    aerospace_research: 'samolot', vr_development_lab: 'Gaming',
+    // dawniej według obrazka PNG (krok 7: pole icon usunięte z danych)
+    marketing_campaign: 'megafon', equipment_upgrade: 'ustawienia', software_update: 'odswiez', foreign_expansion: 'kraj',
+    new_factory: 'fabryka', new_mine: 'kopalnia', server_room: 'serwer', software_development_center: 'serwer',
+    research_lab: 'badania', office_building: 'firma', warehouse: 'magazyn', industrial_park: 'fabryka',
+    skyscraper: 'firma', production_facility: 'fabryka', it_services_center: 'serwer', research_facility: 'badania',
+    innovation_lab: 'badania', testing_center: 'badania', materials_science_lab: 'badania', data_center_finance: 'serwer',
+    fintech_hub: 'serwer', warehouse_automation: 'magazyn'
 };
 /** Krok 6: emoji z danych (typy klientów, jakość, polityki kadrowe, cykle sektorów, znaczniki wykresu…) → ikona SVG.
  *  Klucz bez znaku wariantu U+FE0F. Emoji spoza mapy (treści fabularne, drzewko B+R) zostają jak są. */
@@ -363,7 +365,7 @@ function dataIcon(emoji, size = 14) {
 }
 
 function investmentIcon(inv, size = 18) {
-    return uiIcon(INVESTMENT_ICON_BY_ID[inv?.id] || INVESTMENT_ICON_BY_IMAGE[inv?.icon] || 'inwestycje', size, 'inv-icon');
+    return uiIcon(INVESTMENT_ICON_BY_ID[inv?.id] || 'inwestycje', size, 'inv-icon');
 }
 
 /** Kolor rangi giełdy (tokens.css: --exchange-*). */
