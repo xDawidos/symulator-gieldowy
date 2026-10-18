@@ -56,7 +56,7 @@ def ratio(fg, bg):
 out = ['/* Tokeny redesignu 0.14.5 — kierunek A · Terminal (tylko ciemny motyw).',
        '   WYGENEROWANE z plany/design/tokens.json przez plany/design/narzedzia/gen_tokens.py — nie edytuj ręcznie.',
        '   Te same nazwy co zmienne w Figmie: color/bg/base → --color-bg-base. */',
-       '', ':root {', '  /* Prymitywy (nie używać bezpośrednio w komponentach) */']
+       '', ':root {', '  color-scheme: dark; /* natywne paski przewijania, listy i pola w ciemnym motywie */', '  /* Prymitywy (nie używać bezpośrednio w komponentach) */']
 for k, v in P.items():
     out.append(f'  {css_name(k)}: {css_color(v)};')
 out.append('')

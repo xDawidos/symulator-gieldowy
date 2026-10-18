@@ -3,6 +3,7 @@
    Te same nazwy co zmienne w Figmie: color/bg/base → --color-bg-base. */
 
 :root {
+  color-scheme: dark; /* natywne paski przewijania, listy i pola w ciemnym motywie */
   /* Prymitywy (nie używać bezpośrednio w komponentach) */
   --ink-950: #07090D;
   --ink-900: #0A0D12;
