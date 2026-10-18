@@ -8,14 +8,26 @@ Zasady jak w całym redesignie: tylko warstwa widoku (`index.html`, `style.css`,
 ## Podsumowanie
 | # | Poprawka | Waga | Wielkość | Zrzut |
 |---|---|---|---|---|
-| P1 | Liczby po polsku i drobne błędy widoku (8 punktów) | wysoka | średnia (≈ 130 miejsc z `toFixed`, reszta drobna) | 06, 13, 14, 17, 20, 21, 24 |
-| P2 | `color-scheme: dark` — natywne paski przewijania, listy i pola | wysoka | 1 linia | 17, 20 |
+| ~~P1~~ | ~~Liczby po polsku i drobne błędy widoku (8 punktów)~~ — **zrobione** 2026-10-19 | ~~wysoka~~ | ~~średnia~~ | 06, 13, 14, 17, 20, 21, 24 |
+| ~~P2~~ | ~~`color-scheme: dark` — natywne paski przewijania, listy i pola~~ — **zrobione** 2026-10-19 | ~~wysoka~~ | ~~1 linia~~ | 17, 20 |
 | P3 | Filtry sektorów i giełd w jednym rzędzie | wysoka | średnia | 02, 03 |
 | P4 | Jeden nagłówek i jeden styl zakładek we wszystkich oknach | średnia | średnia | 09, 11, 12, 27–31 |
 | P5 | Poczta: szerszy spis i wydanie zbiorcze jako lista | średnia | mała | 07, 08 |
 | P6 | Usunięcie martwego CSS (177 reguł, 18 KB) z testem stylów | niska (porządek) | mała + test | — |
 
-## P1. Liczby po polsku i drobne błędy widoku
+## ~~P1. Liczby po polsku i drobne błędy widoku~~ — zrobione
+> **Wykonane (2026-10-19):**
+> 1. ✓ 111 wywołań `toFixed(1–4)` w tekstach `ui.js` → `formatNumberPl`; poza tym pomocniki `pct`, `compareWithSector` (`learning.js`), cele w oknie Firmy (`ai.js`), taśma i historia klientów (`player.js`), odznaki dywidend (`companies.js`). Zostaje 9 wystąpień w CSS/SVG/`value=` (celowo). Logi, maile i newsy z logiki mają jeszcze kropkę: to treść, a tam `toFixed` bywa też zaokrąglaniem.
+> 2. ✓ nie dotyczy: „2175 PLN” jest zgodne z polską normą i `Intl` pl-PL (odstęp tysięcy od 5 cyfr).
+> 3. ✓ powtórzona stopa dywidendy ukryta w karcie spółki (`#description-modal .dividend-yield`). W oknie akcjonariatu zostaje, a test „opis w karcie” przechodzi.
+> 4. ✓ wykres: przyczyną było `#chart-svg-area` z `width: 100%` i ramką bez `box-sizing` (+2 px) oraz SVG liczone z `offsetWidth`. Teraz `box-sizing: border-box` i `clientWidth`.
+> 5. ✓ menu gry: ikona ⋯ (`wiecej`).
+> 6. ✓ pasek KPI ≤ 480 px: siatka 2×2.
+> 7. ✓ Miasto: budżet i populacja ukryte (są w pasku KPI), bez „|”, odliczanie „1 min 04 s” (wcześniej „04ss”), „Obecny zarząd”.
+> 8. ✓ pula start-upów: `mini-progress` 4 px, procent z przecinkiem, kwota `formatZl`, nazwa przez `escapeHtml`.
+
+<details><summary>Pierwotny opis</summary>
+
 1. **Przecinek dziesiętny wszędzie w widoku.** Kwoty PLN i chipy zmian używają `formatNumberPl` (przecinek), a wiele okien jeszcze `toFixed` (kropka). Czasem oba zapisy są w jednym kafelku: karta spółki „C/WK 1,84 · sektor 1.48”. Gdzie:
    - `ui.js` ma 128 wywołań `toFixed(1–4)` w tekstach widoku;
    - lokalne pomocniki `const pct = …toFixed…` w liniach ok. 418, 3515, 7016, 7830, 7968;
@@ -30,10 +42,18 @@ Zasady jak w całym redesignie: tylko warstwa widoku (`index.html`, `style.css`,
 7. **Miasto — zakładka Przegląd** (zrzut 12): treść powtarza budżet i populację z paska KPI i używa zapisu „Budżet: … | Populacja: …”. Zostawić tylko to, czego nie ma w pasku (infrastruktura, festyn, zarząd), jako listę `etykieta — wartość`; „1m 04s” → „1 min 04 s”.
 8. **Inkubator / pula** (zrzut 11): pasek „100.0%” na całą szerokość w kolorze info. Zamienić na `mini-progress` z tokenów (4 px, akcent), wartość z przecinkiem.
 
-## P2. `color-scheme: dark`
+## ~~P2. `color-scheme: dark`~~ — zrobione
+> **Wykonane (2026-10-19):** `color-scheme: dark` w `:root` z generatora `gen_tokens.py` (→ `tokens.css`). Natywne paski przewijania, listy `<select>` i pola są ciemne. Pominięte: `scrollbar-color`/`scrollbar-width: thin` (sam `color-scheme` usuwa białe paski).
+
+<details><summary>Pierwotny opis</summary>
+
 Strona nie deklaruje schematu kolorów (`getComputedStyle(html).colorScheme = normal`). Natywne paski przewijania (chipy na 800 px, wykres) są więc białe, a listy `<select>` i pola daty mają jasne menu systemowe.
 - Jak: w `tokens.css` przez generator (`gen_tokens.py`): `:root { color-scheme: dark; }`. Dodatkowo `scrollbar-color: var(--color-border-strong) transparent; scrollbar-width: thin;` dla `.sector-chips`, `.modal` i panelu funduszu.
 - Sprawdzić: zrzuty 17 i 20 bez białych pasków; `<select>` w karcie spółki ma ciemną listę.
+
+</details>
+
+</details>
 
 ## P3. Filtry sektorów i giełd w jednym rzędzie
 Na 1440×900 nad tabelą jest 18 chipów sektorów w 5 rzędach i 11 chipów giełd w 2 rzędach. Tabela zaczyna się ok. 590 px od góry, a bez przewijania widać 4 spółki.
