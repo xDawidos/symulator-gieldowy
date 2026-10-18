@@ -3238,7 +3238,7 @@ function renderCompanyCard() {
 function renderCompanyCardOverview(stock) {
     const traits = (stock.ceo?.traits || []).map(trait => {
         const data = ceoTraits[trait.id];
-        return data ? `<span class="ceo-trait" style="background-color: ${data.color};" title="${escapeHtml(data.description)}">${escapeHtml(data.name)}</span>` : '';
+        return data ? `<span class="ceo-trait" style="--trait-color: ${data.color};" title="${escapeHtml(data.description)}">${escapeHtml(data.name)}</span>` : '';
     }).join('');
     const phase = stock.corporatePhase && getSkillLevel('financialAnalyst') >= 1 ? `<p class="text-sm"><strong>Faza cyklu życia:</strong> ${escapeHtml(stock.corporatePhase)}</p>` : '';
     const research = stock.research?.isResearching && stock.research.currentTech ? `<p class="text-sm">🔬 W fazie R&D: <strong>${escapeHtml(technologies[stock.research.currentTech]?.name || stock.research.currentTech)}</strong></p>` : '';
@@ -3586,7 +3586,7 @@ function openCeoChoiceModal(symbol, candidates, successChance) {
             candidate.traits.forEach(trait => {
                 const traitData = ceoTraits[trait.id];
                 if (traitData) {
-                    traitsHTML += `<span class="ceo-trait m-half" style="background-color: ${traitData.color}" title="${traitData.description}">${traitData.name}</span>`;
+                    traitsHTML += `<span class="ceo-trait m-half" style="--trait-color: ${traitData.color}" title="${traitData.description}">${traitData.name}</span>`;
                 }
             });
         } else {
