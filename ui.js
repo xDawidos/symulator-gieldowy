@@ -53,12 +53,12 @@ function getSectorFilterBaseList() {
 function renderSectorFilterChips(list, state, onChange, options = {}) {
     const { sectors, subsectors } = getSectorFilterCounts(list, state);
     const call = changes => `${onChange}(${escapeHtml(JSON.stringify(changes))})`;
-    const chip = (label, active, changes, title = '') => `<span class="sector-chip${active ? ' active' : ''}" ${title ? `title="${escapeHtml(title)}"` : ''} onclick="${call(changes)}">${label}</span>`;
+    const chip = (label, active, changes, title = '') => `<button type="button" class="sector-chip${active ? ' active' : ''}" aria-pressed="${active ? 'true' : 'false'}" ${title ? `title="${escapeHtml(title)}"` : ''} onclick="${call(changes)}">${label}</button>`;
     const groups = SECTOR_GROUPS.map(group => {
         const items = group.sectors.filter(name => sectors[name] > 0 || state.sector === name);
         if (!items.length) return '';
-        const label = group.sectors.length > 1 ? `<span class="sector-group" title="${escapeHtml(group.name)}">${group.icon}</span>` : ''; // grupa jednosektorowa: wystarczy ikona sektora
-        return `${label}${items.map(name => chip(`${SECTORS[name].icon} ${escapeHtml(name)} <small>${sectors[name] || 0}</small>`, state.sector === name, { sector: name }, `${group.name}: ${name}`)).join('')}`;
+        const label = group.sectors.length > 1 ? `<span class="sector-group">${escapeHtml(group.name)}:</span>` : ''; // 0.14.5: grupa jako etykieta tekstowa
+        return `${label}${items.map(name => chip(`${sectorIcon(name)}${escapeHtml(name)} <small>${sectors[name] || 0}</small>`, state.sector === name, { sector: name }, `${group.name}: ${name}`)).join('')}`;
     }).join('');
     const subNames = state.sector !== 'all' ? Object.keys(SECTORS[state.sector]?.subsectors || {}).filter(name => subsectors[name] > 0) : [];
     const subRow = subNames.length
@@ -87,6 +87,111 @@ function renderSectorFilters() {
     if (extra) extra.innerHTML = extraHtml;
     const select = document.getElementById('sector-filter');
     if (select) select.value = sectorFilterState.sector;
+}
+
+// =================================================================================
+// 0.14.5 IKONY SVG (zamiast emoji w interfejsie) — te same rysunki co w Figmie „02 System”
+// 24×24, kreska 1,8, kolor = currentColor. Bez <title> (tekst niesie etykieta / aria-label).
+// =================================================================================
+const UI_ICON_PATHS = {
+    rynek: 'M4 19V5M4 19h16M8 15l3-4 3 2 5-6',
+    bank: 'M3 10h18M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18M12 3l9 5H3z',
+    panstwo: 'M4 21h16M6 21V11M18 21V11M10 21v-6h4v6M3 11h18L12 4z',
+    miasto: 'M3 21h18M5 21V8l5-3v16M10 21V10h9v11M13 13h3M13 16h3',
+    budownictwo: 'M3 21h18M6 21V9h12v12M4 9l8-6 8 6M10 13h4v8h-4z',
+    firma: 'M4 21V5a1 1 0 0 1 1-1h9v17M14 9h5a1 1 0 0 1 1 1v11M8 8h2M8 12h2M8 16h2M3 21h18',
+    klienci: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21a7 7 0 0 1 14 0M17 11a3 3 0 1 0 0-6M22 21a6 6 0 0 0-4-5.6',
+    lombard: 'M12 3v18M7 7h7.5a3 3 0 0 1 0 6H9a3 3 0 0 0 0 6h8',
+    'szara-strefa': 'M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+    poczta: 'M3 6h18v12H3zM3 7l9 6 9-6',
+    akademia: 'M2 9l10-5 10 5-10 5zM6 11v5c3 2 9 2 12 0v-5M22 9v6',
+    ranking: 'M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4',
+    ustawienia: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1',
+    kraj: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9S14.5 18.4 12 21c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z',
+    pauza: 'M8 5v14M16 5v14',
+    start: 'M7 5l12 7-12 7z',
+    menu: 'M4 7h16M4 12h16M4 17h16',
+    dzwonek: 'M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0',
+    'chevron-down': 'M6 9l6 6 6-6',
+    'chevron-right': 'M9 6l6 6-6 6',
+    karta: 'M4 5h16v14H4zM8 9h8M8 13h8M8 17h5',
+    news: 'M4 5h13v14H6a2 2 0 0 1-2-2zM17 9h3v8a2 2 0 0 1-2 2M7 9h7M7 13h7M7 16h4',
+    alert: 'M12 3l10 18H2zM12 10v5M12 18v.5',
+    info: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 11v6M12 7.5v.5',
+    zamknij: 'M6 6l12 12M18 6L6 18',
+    szukaj: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM21 21l-5-5',
+    wykres: 'M7 4v16M7 8h-2v8h2M17 4v16M17 6h-2v6h2M12 7v12M12 10h2v5h-2',
+    gwiazdka: 'M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z',
+    kosz: 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3',
+    sortuj: 'M8 4v16M4 8l4-4 4 4M16 20V4M12 16l4 4 4-4',
+    zapisz: 'M5 3h11l3 3v15H5zM8 3v6h8V3M8 21v-7h8v7',
+    korona: 'M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5zM5 19h14',
+    flaga: 'M5 21V4M5 4h11l-2 4 2 4H5',
+    klodka: 'M6 11h12v10H6zM9 11V8a3 3 0 0 1 6 0v3',
+    blokada: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM5.6 5.6l12.8 12.8',
+    akcjonariat: 'M12 3a9 9 0 1 0 9 9h-9zM14 3.2V10h6.8A9 9 0 0 0 14 3.2z',
+    glosowanie: 'M4 11h16v10H4zM9 11V4h6v7M10 15h4',
+    inwestycje: 'M3 21h18M5 21v-6h3v6M10.5 21V9h3v12M16 21v-9h3v9M4 9l6-5 4 3 6-4',
+    raport: 'M6 3h9l4 4v14H6zM14 3v5h5M9 13h6M9 17h6',
+    lider: 'M12 3l3 6 6 .9-4.5 4.3 1 6.3L12 17.5 6.5 20.5l1-6.3L3 9.9 9 9z',
+    grupa: 'M3 21V9h7v12M14 21V4h7v17M3 21h18M6 13h1M6 17h1M17 8h1M17 12h1M17 16h1',
+    badania: 'M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3M7.5 15h9'
+};
+
+const SECTOR_ICON_PATHS = {
+    'Bankowość': UI_ICON_PATHS.bank,
+    'Finanse': 'M3 6h18v12H3zM3 10h18M7 15h4',
+    'Żywność': 'M6 11a6 4 0 0 1 12 0v8H6zM6 11a3 3 0 0 1 0-6h12a3 3 0 0 1 0 6',
+    'Dobra konsumpcyjne': 'M5 8h14l-1 12H6zM9 8V6a3 3 0 0 1 6 0v2',
+    'Turystyka': 'M4 8h16v11H4zM9 8V5h6v3M9 12v3M15 12v3',
+    'Media': 'M3 7h18v12H3zM8 3l4 4 4-4',
+    'Gaming': 'M7 9h10a4 4 0 0 1 4 4v1a3 3 0 0 1-5.2 2l-1.3-1.5h-5l-1.3 1.5A3 3 0 0 1 3 14v-1a4 4 0 0 1 4-4zM8 11v4M6 13h4M15.5 12.5v.01M17.5 14.5v.01',
+    'Przemysł': 'M3 21V10l5 3V10l5 3V10l5 3V5h3v16zM7 17h2M12 17h2M17 17h2',
+    'Chemia': UI_ICON_PATHS.badania,
+    'Energia': 'M13 2L4 14h7l-1 8 9-12h-7z',
+    'Budowlany': 'M3 18h18M5 18v-3a7 7 0 0 1 14 0v3M10 8V5h4v3',
+    'Transport i logistyka': 'M2 7h12v9H2zM14 10h4l3 3v3h-7M6 16a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM17 16a2 2 0 1 0 0 4 2 2 0 0 0 0-4z',
+    'Medycyna': 'M9 3h6v6h6v6h-6v6H9v-6H3V9h6z',
+    'Badania': 'M9 3l4 2-3 6-4-2zM11 11l2 4M5 21h14M8 21a7 7 0 0 1 10-9',
+    'Technologia': 'M7 7h10v10H7zM10 10h4v4h-4zM9 3v4M15 3v4M9 17v4M15 17v4M3 9h4M3 15h4M17 9h4M17 15h4',
+    'Nieruchomości': 'M3 11l9-7 9 7M5 10v10h14V10M10 20v-6h4v6',
+    'Obronność': 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z',
+    'Usługi': 'M15 4a5 5 0 0 0-4.6 6.9L4 17.3V20h2.7l6.4-6.4A5 5 0 0 0 20 9l-3 3-3-1-1-3 3-3a5 5 0 0 0-1-1z'
+};
+
+/** Kolor rangi giełdy (tokens.css: --exchange-*). */
+const EXCHANGE_TOKEN = { JUNK: 'junk', BRONZE: 'bronze', SILVER: 'silver', GOLD: 'gold', PLATINUM: 'platinum', RUBY: 'ruby', EMERALD: 'emerald', DIAMOND: 'diamond', INTERNET: 'internet' };
+
+function uiIcon(name, size = 16, extraClass = '') {
+    const path = UI_ICON_PATHS[name] || SECTOR_ICON_PATHS[name];
+    if (!path) return '';
+    return `<svg class="ic${extraClass ? ' ' + extraClass : ''}" width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="${path}"/></svg>`;
+}
+
+/** Ikona jako węzeł DOM (klon z pamięci) — szybciej niż innerHTML w wierszach tabeli odświeżanych co tick. */
+const UI_ICON_NODES = {};
+function uiIconNode(name, size = 16) {
+    const key = name + '@' + size;
+    let node = UI_ICON_NODES[key];
+    if (!node) {
+        const holder = document.createElement('span');
+        holder.innerHTML = uiIcon(name, size);
+        node = UI_ICON_NODES[key] = holder.firstElementChild;
+    }
+    return node ? node.cloneNode(true) : document.createTextNode('');
+}
+
+function sectorIcon(sector, size = 14) {
+    return SECTOR_ICON_PATHS[sector] ? uiIcon(sector, size, 'ic-sector') : '';
+}
+
+function exchangeDot(key) {
+    return `<span class="exchange-dot" style="--dot: var(--exchange-${EXCHANGE_TOKEN[key] || 'junk'})" aria-hidden="true"></span>`;
+}
+
+/** Usuwa emoji z napisów pochodzących z danych (nazwy giełd, faz) — w interfejsie zastępują je ikony. */
+function stripEmoji(text) {
+    return String(text ?? '').replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}\u{20E3}]/gu, '').replace(/\s{2,}/g, ' ').trim();
 }
 
 /** T1b: „🏦 Bankowość · Bank komercyjny” — sektor główny z ikoną i podsektorem. */
@@ -149,7 +254,7 @@ function renderStockDrawer(symbol) {
         <div class="stock-drawer-actions-row">
           <div class="qty-input-wrapper">
             <input type="text" inputmode="numeric" pattern="[0-9]*" id="dqty-${symbol}" value="1" aria-label="Liczba akcji" oninput="this.value=this.value.replace(/[^0-9]/g, ''); updateDrawerImpact('${symbol}')">
-            <span class="chip-max" onclick="setDrawerMax('${symbol}')">MAX</span>
+            <button type="button" class="chip-max" onclick="setDrawerMax('${symbol}')">Maks.</button>
           </div>
         </div>
         <div class="stock-drawer-actions-row">
@@ -157,14 +262,16 @@ function renderStockDrawer(symbol) {
             onclick="buyStock('${symbol}',document.getElementById('dqty-${symbol}').value)">Kup</button>
           <button class="btn-sell"
             onclick="sellStock('${symbol}',document.getElementById('dqty-${symbol}').value)">Sprzedaj</button>
-          <button class="btn-ghost-icon" title="Wykres"
-            onclick="showPriceHistoryModal('${symbol}')">📈</button>
-          <button class="btn-ghost-icon" title="Akcjonariat — kto ma jaki % udziałów"
-            onclick="openCompanyReport('${symbol}')">📊</button>
-          ${isCompanyStock ? `<button class="btn-ghost-icon" title="Walne zgromadzenie — akcjonariat, uchwały, głosowanie (większościowiec)"
-            onclick="openGovernanceModal('${symbol}')">🗳️</button>
-          <button class="btn-ghost-icon" title="Inwestycje spółki"
-            onclick="openCompanyInvestments('${symbol}')">🏗️</button>` : ''}
+          <span class="drawer-tools">
+          <button class="drawer-tool" title="Wykres ceny"
+            onclick="showPriceHistoryModal('${symbol}')">${uiIcon('wykres', 16)}<span>Wykres</span></button>
+          <button class="drawer-tool" title="Akcjonariat — kto ma jaki % akcji"
+            onclick="openCompanyReport('${symbol}')">${uiIcon('akcjonariat', 16)}<span>Akcjonariat</span></button>
+          ${isCompanyStock ? `<button class="drawer-tool" title="Walne zgromadzenie — akcjonariat, uchwały, głosowanie (większościowiec)"
+            onclick="openGovernanceModal('${symbol}')">${uiIcon('glosowanie', 16)}<span>Walne</span></button>
+          <button class="drawer-tool" title="Inwestycje spółki"
+            onclick="openCompanyInvestments('${symbol}')">${uiIcon('inwestycje', 16)}<span>Inwestycje</span></button>` : ''}
+          </span>
         </div>
         <div class="stock-drawer-impact text-xs" id="dimpact-${symbol}"></div>
       </div>
@@ -191,7 +298,7 @@ function updateDrawerImpact(symbol) {
     const quantity = Math.max(0, parseInt(document.getElementById('dqty-' + symbol)?.value, 10) || 0);
     if (!quantity) { box.textContent = ''; return; }
     const e = estimateOrderImpact(stock, quantity);
-    box.innerHTML = `Wartość ~${formatZl(e.value, 0)} · prowizja ~${formatZl(e.commission, 2)} · kurs po zleceniu ~${e.impact >= 0.0005 ? `${(e.impact * 100).toFixed(2)}%` : '0%'} w Twoją niekorzyść`
+    box.innerHTML = `Wartość ~${formatZl(e.value, 0)} · prowizja ~${formatZl(e.commission, 2)} · kurs po zleceniu ~${e.impact >= 0.0005 ? `${formatNumberPl(e.impact * 100)}%` : '0%'} w Twoją niekorzyść`
         + `${e.impact >= 0.01 ? ' <span class="text-warn">— duże zlecenie przy małym obrocie (płynność!)</span>' : ''} · w obrocie ${e.freeFloat.toLocaleString('pl-PL')} akcji`;
     if (e.impact >= 0.01 && typeof unlockAcademyEntry === 'function') unlockAcademyEntry('wplyw');
 }
@@ -215,8 +322,9 @@ function toggleStockDrawer(symbol) {
 
 function setMarketLevel(el, level) {
     currentMarketLevel = level;
-    document.querySelectorAll('.market-level-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.market-level-tab').forEach(t => { t.classList.remove('active'); t.removeAttribute('aria-current'); });
     el.classList.add('active');
+    el.setAttribute('aria-current', 'true');
     if (typeof displayStocks === 'function')
         displayStocks(typeof getCurrentInputValues === 'function' ? getCurrentInputValues() : {});
 }
@@ -258,7 +366,7 @@ function updateMarketKPIs() {
     const tsEl = document.getElementById('mkpi-top-sector');
     const tsSubEl = document.getElementById('mkpi-top-sector-sub');
     if (tsEl) tsEl.textContent = best ? best[0] : '—';
-    if (tsSubEl) tsSubEl.textContent = best ? `średnio ${fmt(best[1])} dziś` : 'brak danych';
+    if (tsSubEl) tsSubEl.textContent = best ? formatPct(best[1] / 100) : '';
 }
 
 // Topbar KPI: gotówka funduszu, NAV/JU, prywatne pieniądze gracza
@@ -869,8 +977,8 @@ function displayCash() {
 const STOCK_TABLE_COLS = 6; // 0.14.1 R6: bez kolumny „Sektor”
 
 function displayStocks(previousInputValues = {}) {
-  const stockTableBody = document.getElementById('stock-table-body');
-  if (!stockTableBody) return;
+  const liveStockTableBody = document.getElementById('stock-table-body');
+  if (!liveStockTableBody) return;
 
   // Panel kupna (drawer) przenosimy między odświeżeniami tabeli zamiast budować go od nowa:
   // wpisana ilość, kursor i kliknięcia w przyciski nie giną co sekundę.
@@ -888,10 +996,13 @@ function displayStocks(previousInputValues = {}) {
   // Nagłówek ceny (strzałki sortowania)
   const priceHeader = document.getElementById('price-header-cell');
   if (priceHeader) {
-    let headerText = 'Cena PLN';
-    if (currentSortState === 'price_asc') headerText += ' ▲';
-    else if (currentSortState === 'price_desc') headerText += ' ▼';
-    priceHeader.textContent = headerText;
+    // 0.14.5: sortowanie jako przycisk w nagłówku (klawiatura) + aria-sort
+    const sortLabel = currentSortState === 'price_asc' ? 'Kurs ▲' : currentSortState === 'price_desc' ? 'Kurs ▼' : 'Kurs';
+    const sortAria = currentSortState === 'price_asc' ? 'ascending' : currentSortState === 'price_desc' ? 'descending' : 'none';
+    const sortBtn = priceHeader.querySelector('.th-sort');
+    if (sortBtn) { if (sortBtn.textContent !== sortLabel) sortBtn.textContent = sortLabel; }
+    else priceHeader.textContent = sortLabel;
+    priceHeader.setAttribute('aria-sort', sortAria);
   }
 
   if (typeof renderSectorFilters === 'function') renderSectorFilters();
@@ -911,7 +1022,9 @@ function displayStocks(previousInputValues = {}) {
   const internetTab = typeof currentMarketLevel !== 'undefined' && currentMarketLevel === 'INTERNET';
   if (typeof isInternetMarketStock === 'function') baseStocksToDisplay = baseStocksToDisplay.filter(stock => isInternetMarketStock(stock) === internetTab);
 
-  stockTableBody.innerHTML = '';
+  // 0.14.5: wiersze budujemy w odpiętym tbody (szybciej niż wstawianie do żywej tabeli),
+  // na końcu przenosimy je jednym ruchem (replaceChildren) — bez odczytów układu, przewinięcie zostaje.
+  const stockTableBody = document.createElement('tbody');
   // Zakładka poziomu rynku (ui-update.js: setMarketLevel) — pokazujemy tylko wybraną giełdę.
   const sortedExchanges = Object.keys(exchanges)
     .filter(key => typeof currentMarketLevel === 'undefined' || currentMarketLevel === 'ALL' || key === currentMarketLevel)
@@ -1001,10 +1114,13 @@ function displayStocks(previousInputValues = {}) {
     if (isSubsidiary) topLine.style.paddingLeft = '25px';
 
     if (!isSubsidiary && (childrenByParent.get(stock.symbol) || []).length > 0) {
-      const toggleBtn = document.createElement('span');
-      toggleBtn.textContent = stock.isSubsidiaryExpanded !== false ? '▼' : '▶'; // 0.14.2 P3: domyślnie rozwinięte
+      const toggleBtn = document.createElement('button');
+      toggleBtn.type = 'button';
+      const expanded = stock.isSubsidiaryExpanded !== false; // 0.14.2 P3: domyślnie rozwinięte
+      toggleBtn.appendChild(uiIconNode(expanded ? 'chevron-down' : 'chevron-right', 14));
+      toggleBtn.setAttribute('aria-expanded', String(expanded));
+      toggleBtn.setAttribute('aria-label', `Spółki zależne ${stock.name}`);
       toggleBtn.classList.add('clickable');
-      toggleBtn.classList.add('mr-1');
       toggleBtn.onclick = e => {
         e.stopPropagation();
         toggleSubsidiaryVisibility(stock.symbol);
@@ -1013,23 +1129,28 @@ function displayStocks(previousInputValues = {}) {
       topLine.appendChild(toggleBtn);
     }
 
-    let markerPrefix = '';
-    if (playerSharePct > 50) markerPrefix += '👑 ';
-    if (stock.assetType === 'ResearchInstitute') markerPrefix += '🧪 ';
-    if (stock.isMonopolist) markerPrefix += '🦁 ';
-    if (typeof isConcern === 'function' && isConcern(stock)) { markerPrefix += '🏢 '; nameCell.title = 'Koncern: czołówka kapitalizacji i grupa (segmenty niepowiązane, ≥ 2 spółki zależne albo ≥ 2 segmenty i spółka zależna)'; } // 0.14 T5
-    if (stock.isStateOwned) {
-      markerPrefix += '🏛️ ';
-      nameCell.title = 'Spółka Skarbu Państwa';
-    }
+    // 0.14.5: znaczniki jako ikony z opisem (zamiast emoji przed nazwą)
+    const markers = [];
+    if (playerSharePct > 50) markers.push(['korona', 'Masz większość akcji — panel zarządzania', 'accent']);
+    if (stock.assetType === 'ResearchInstitute') markers.push(['badania', 'Instytut badawczy', 'info']);
+    if (stock.isMonopolist) markers.push(['lider', 'Monopolista w sektorze', 'warn']);
+    if (typeof isConcern === 'function' && isConcern(stock)) markers.push(['grupa', 'Koncern: czołówka kapitalizacji i grupa (segmenty niepowiązane, ≥ 2 spółki zależne albo ≥ 2 segmenty i spółka zależna)', 'info']); // 0.14 T5
+    if (stock.isStateOwned) markers.push(['panstwo', 'Spółka Skarbu Państwa', 'muted']);
     if (typeof getRedFlags === 'function' && getSkillLevel('accountant') >= 4 && !stock.assetType) {
       const flags = getRedFlags(stock);
-      if (flags.length >= 2) { markerPrefix += '🚩 '; nameCell.title = `Czerwone flagi: ${flags.map(f => f.label).join(', ')}`; }
+      if (flags.length >= 2) markers.push(['flaga', `Czerwone flagi: ${flags.map(f => f.label).join(', ')}`, 'down']);
+    }
+    if (markers.length) {
+      const markerWrap = document.createElement('span');
+      markerWrap.className = 'stock-markers';
+      markerWrap.innerHTML = markers.map(([icon, label, tone]) => `<span class="stock-marker tone-${tone}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}" role="img">${uiIcon(icon, 14)}</span>`).join('');
+      topLine.appendChild(markerWrap);
     }
 
     const nameSpan = document.createElement('span');
     nameSpan.className = 'stock-name';
-    nameSpan.textContent = `${markerPrefix}${stock.name}`;
+    nameSpan.textContent = stock.name;
+    nameSpan.title = stock.name;
     topLine.appendChild(nameSpan);
 
     if (sharesOwned > 0) {
@@ -1040,18 +1161,22 @@ function displayStocks(previousInputValues = {}) {
     }
 
     const infoButton = document.createElement('button');
-    infoButton.textContent = 'i';
+    infoButton.type = 'button';
+    infoButton.appendChild(uiIconNode('karta', 14));
     infoButton.className = 'info-btn';
+    infoButton.setAttribute('aria-label', `Karta spółki ${stock.name}`);
+    infoButton.title = 'Karta spółki';
     infoButton.onclick = () => openDescriptionModal(stock.symbol);
     topLine.appendChild(infoButton);
 
     const metaLine = document.createElement('div');
     metaLine.className = 'stock-meta';
     const marketId = typeof getStockMarket === 'function' ? getStockMarket(stock) : 'GPW';
-    const parentNote = stock.isSubsidiaryOf ? ` • ↳ zależna od ${stock.isSubsidiaryOf}${Number.isFinite(stock.parentStakePct) ? ` (${Math.round(stock.parentStakePct * 100)}%)` : ''} · ${exchanges[stock.exchange]?.name || stock.exchange}` : ''; // 0.14.2 P3
-    const spinNote = (stock.spinoff ? ` • ✂️ zapowiedziane wydzielenie: ${stock.spinoff.sector}` : '') + (stock.spunOffFrom && !stock.isSubsidiaryOf ? ` • ✂️ wydzielona z ${stock.spunOffFrom}` : '') // 0.14 T4
-      + (typeof getStockCooperations === 'function' && getStockCooperations(stock).length ? ` • 🤝 kooperacje: ${getStockCooperations(stock).length}` : ''); // 0.14 T5
-    metaLine.textContent = `${primarySector} • ${stock.symbol}${parentNote}${spinNote}${marketId !== 'GPW' ? ` • członek rynku ${getMarketLabel(marketId)}` : ''}${stock.isDividendAristocrat ? ' • 👑 dywidendowy arystokrata' : ''}`;
+    const parentNote = stock.isSubsidiaryOf ? ` · spółka zależna od ${stock.isSubsidiaryOf}${Number.isFinite(stock.parentStakePct) ? ` (${Math.round(stock.parentStakePct * 100)}%)` : ''} · ${exchanges[stock.exchange]?.name || stock.exchange}` : ''; // 0.14.2 P3
+    const spinNote = (stock.spinoff ? ` · zapowiedziane wydzielenie: ${stock.spinoff.sector}` : '') + (stock.spunOffFrom && !stock.isSubsidiaryOf ? ` · wydzielona z ${stock.spunOffFrom}` : '') // 0.14 T4
+      + (typeof getStockCooperations === 'function' && getStockCooperations(stock).length ? ` · kooperacje: ${getStockCooperations(stock).length}` : ''); // 0.14 T5
+    metaLine.textContent = `${primarySector} · ${stock.symbol}${parentNote}${spinNote}${marketId !== 'GPW' ? ` · członek rynku ${getMarketLabel(marketId)}` : ''}${stock.isDividendAristocrat ? ' · dywidendowy arystokrata' : ''}`;
+
 
     identityWrap.appendChild(topLine);
     identityWrap.appendChild(metaLine);
@@ -1087,31 +1212,15 @@ function displayStocks(previousInputValues = {}) {
     // KOMÓRKA 2: CENA
     const priceCell = row.insertCell();
     priceCell.classList.add('cell-number', 'cell-price');
-    priceCell.innerHTML = `
-      <div class="price-main">
-        ${stock.price.toLocaleString('pl-PL', {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2
-        })} PLN
-      </div>
-    `;
+    priceCell.innerHTML = `<div class="price-main">${formatZl(stock.price)}</div>`;
 
     if (stock.corporatePhase && getSkillLevel('financialAnalyst') >= 1) {
       const phaseBadge = document.createElement('div');
       phaseBadge.classList.add('phase-badge');
-      const phaseColors = {
-        Wzrost: '#28a745',
-        Stabilność: '#6c757d',
-        Spadek: '#dc3545',
-        Reorganizacja: '#ffc107',
-        'Złoty Rok ✨': '#ffd700',
-        'Zejście w Cień 👻': '#6f42c1',
-        'Impuls Innowacji 💡': '#17a2b8'
-      };
-      const col = phaseColors[stock.corporatePhase] || '#6c757d';
-      phaseBadge.style.color = col;
-      phaseBadge.style.border = '1px solid ' + col;
-      phaseBadge.textContent = stock.corporatePhase;
+      // 0.14.5: ton znacznika z palety zamiast kolorów na sztywno
+      const phaseTones = { Wzrost: 'up', Stabilność: 'neutral', Spadek: 'down', Reorganizacja: 'warn', 'Złoty Rok ✨': 'accent', 'Zejście w Cień 👻': 'neutral', 'Impuls Innowacji 💡': 'info' };
+      phaseBadge.classList.add('badge', `badge--${phaseTones[stock.corporatePhase] || 'neutral'}`);
+      phaseBadge.textContent = stripEmoji(stock.corporatePhase);
       phaseBadge.title = getCorporatePhaseTooltip(stock.corporatePhase); // 0.14.2 P8: co to za faza i co daje
       if (typeof isAcademyUnlocked === 'function' && playerProfile && !isAcademyUnlocked('fazySpolki')) unlockAcademyEntry('fazySpolki');
       priceCell.appendChild(phaseBadge);
@@ -1120,24 +1229,15 @@ function displayStocks(previousInputValues = {}) {
     // KOMÓRKA 4: ZMIANA TYGODNIOWA (czas gry)
     const changeCell = row.insertCell();
     changeCell.classList.add('cell-number');
-    changeCell.innerHTML = `
-      <span class="change-pill ${changeClass}">
-        ${changeSign}${changePct.toFixed(2)}%
-      </span>
-    `;
+    const changeArrow = changeClass === 'up' ? '▲' : changeClass === 'down' ? '▼' : '■';
+    changeCell.innerHTML = `<span class="change-pill ${changeClass}"><span aria-hidden="true">${changeArrow}</span> ${formatPct(changePct / 100)}</span>`;
 
     // KOMÓRKA 5: WOLUMEN / dostępne
     const availableCell = row.insertCell();
-    availableCell.innerHTML = `
-      <div class="availability-cell">
-        <div class="availability-value">
-          ${availableShares.toLocaleString('pl-PL')}
-        </div>
-        <div class="mini-progress">
-          <div class="mini-progress-bar" style="width:${availabilityPct}%"></div>
-        </div>
-      </div>
-    `;
+    availableCell.innerHTML = `<div class="availability-cell">
+        <span class="availability-value">${availableShares.toLocaleString('pl-PL')}</span>
+        <span class="mini-progress" aria-hidden="true"><span class="mini-progress-bar" style="width:${availabilityPct}%"></span></span>
+      </div>`;
 
     // KOMÓRKA 6: Moje akcje
     const ownedCell = row.insertCell();
@@ -1156,25 +1256,29 @@ function displayStocks(previousInputValues = {}) {
 
     if (!hasAccess) {
       const lockSpan = document.createElement('span');
-      lockSpan.textContent = '🔒';
-      lockSpan.title = 'Brak dostępu do giełdy';
-      lockSpan.classList.add('text-lg');
+      lockSpan.innerHTML = uiIcon('klodka', 16);
+      lockSpan.title = 'Brak dostępu do tej giełdy — awans otworzy kolejne';
+      lockSpan.setAttribute('role', 'img');
+      lockSpan.setAttribute('aria-label', lockSpan.title);
+      lockSpan.classList.add('row-state');
       actionsCell.appendChild(lockSpan);
     } else if (isLocked || stock.isBeingMerged || stock.canBeTraded === false) {
       const stopSpan = document.createElement('span');
-      stopSpan.textContent = '⛔';
+      stopSpan.innerHTML = uiIcon('blokada', 16);
       stopSpan.title = 'Handel wstrzymany';
-      stopSpan.classList.add('text-lg');
+      stopSpan.setAttribute('role', 'img');
+      stopSpan.setAttribute('aria-label', 'Handel wstrzymany');
+      stopSpan.classList.add('row-state', 'tone-down');
       actionsCell.appendChild(stopSpan);
     } else {
       const drawerBtn = document.createElement('button');
+      drawerBtn.type = 'button';
       drawerBtn.className = 'btn-ghost-icon drawer-toggle-btn';
       drawerBtn.dataset.symbol = stock.symbol;
-      drawerBtn.title = 'Kup / Sprzedaj / Wykres';
-      drawerBtn.innerHTML =
-        sharesOwned > 0
-          ? '<span class="text-up">▼</span>'
-          : '▼';
+      drawerBtn.title = 'Kup, sprzedaj, wykres';
+      drawerBtn.setAttribute('aria-label', `Handel: ${stock.name}`);
+      drawerBtn.setAttribute('aria-expanded', String(openStockDrawerSymbol === stock.symbol));
+      drawerBtn.appendChild(uiIconNode('chevron-down', 16));
       drawerBtn.onclick = e => {
         e.stopPropagation();
         toggleStockDrawer(stock.symbol);
@@ -1194,18 +1298,20 @@ function displayStocks(previousInputValues = {}) {
 
     if (hasAnalystSkill) {
       const reportMap = {
-        excellent: { icon: '💎', label: 'Doskonały' },
-        good: { icon: '📈', label: 'Dobry' },
-        neutral: { icon: '😐', label: 'Neutralny' },
-        bad: { icon: '📉', label: 'Zły' },
-        tragic: { icon: '🔥', label: 'Tragiczny' }
+        excellent: { tone: 'up', label: 'Doskonały' },
+        good: { tone: 'up', label: 'Dobry' },
+        neutral: { tone: 'muted', label: 'Neutralny' },
+        bad: { tone: 'down', label: 'Zły' },
+        tragic: { tone: 'down', label: 'Tragiczny' }
       };
       const rep = reportMap[stock.lastReport];
       if (rep) {
         const repSpan = document.createElement('span');
-        repSpan.textContent = rep.icon;
-        repSpan.title = `Raport: ${rep.label}`;
-        repSpan.classList.add('row-icon');
+        repSpan.innerHTML = uiIcon('raport', 14);
+        repSpan.title = `Ostatni raport: ${rep.label}`;
+        repSpan.setAttribute('role', 'img');
+        repSpan.setAttribute('aria-label', repSpan.title);
+        repSpan.classList.add('row-icon', `tone-${rep.tone}`);
         actionsCell.appendChild(repSpan);
       }
     }
@@ -1215,18 +1321,21 @@ function displayStocks(previousInputValues = {}) {
       : false;
     if (hasDebt && (hasAnalystSkill || playerSharePct > 50)) {
       const debtSpan = document.createElement('span');
-      debtSpan.textContent = '💳';
+      debtSpan.innerHTML = uiIcon('Finanse', 14);
       debtSpan.title = 'Spółka ma zobowiązania';
-      debtSpan.classList.add('row-icon', 'row-icon-sm');
+      debtSpan.setAttribute('role', 'img');
+      debtSpan.setAttribute('aria-label', 'Spółka ma zobowiązania');
+      debtSpan.classList.add('row-icon', 'tone-muted');
       actionsCell.appendChild(debtSpan);
     }
 
     if (playerSharePct > 50) {
       const manageButton = document.createElement('button');
-      manageButton.textContent = '👑';
-      manageButton.title = 'Panel Zarządzania';
-      manageButton.className = 'btn-ghost-icon';
-      manageButton.classList.add('ml-1');
+      manageButton.type = 'button';
+      manageButton.innerHTML = uiIcon('korona', 16);
+      manageButton.title = 'Panel zarządzania';
+      manageButton.setAttribute('aria-label', `Panel zarządzania: ${stock.name}`);
+      manageButton.className = 'btn-ghost-icon tone-accent';
       manageButton.onclick = e => {
         e.stopPropagation();
         openManagementModal(stock.symbol);
@@ -1259,8 +1368,8 @@ function displayStocks(previousInputValues = {}) {
       const headerCell = headerRow.insertCell();
       headerCell.colSpan = STOCK_TABLE_COLS;
       headerCell.innerHTML = `<div class="d-flex justify-between items-center gap-2 flex-wrap">
-          <h4 class="my-1 clickable" style="color:${def.color}" onclick="toggleExchangeVisibility('${key}')">🌐 ${escapeHtml(def.name)} <span class="text-xs text-muted">${escapeHtml(def.short || id)} · prowizja ${((def.commission || 0) * 100).toFixed(2)}% · spółki ${getMarketMembers(id).length}/${INTERNET_MEMBER_LIMIT}${operator.status === 'startup' ? ' · operator w inkubatorze' : ''}</span> <span>${collapsed ? '▶' : '▼'}</span></h4>
-          ${operator.status === 'active' ? (concession ? '<span class="text-up text-sm">🔑 koncesja: handel bez prowizji</span>' : `<button class="btn-xs" onclick="event.stopPropagation(); buyInternetConcession('${id}'); displayStocks(getCurrentInputValues());">🔑 Koncesja (${formatZl(getInternetConcessionCost(id), 0)})</button>`) : ''}
+          <h4 class="my-1 clickable exchange-title" onclick="toggleExchangeVisibility('${key}')">${exchangeDot('INTERNET')}${escapeHtml(stripEmoji(def.name))} <span class="exchange-meta">${escapeHtml(def.short || id)} · prowizja ${formatNumberPl((def.commission || 0) * 100)}% · spółki ${getMarketMembers(id).length}/${INTERNET_MEMBER_LIMIT}${operator.status === 'startup' ? ' · operator w inkubatorze' : ''}</span> ${uiIcon(collapsed ? 'chevron-right' : 'chevron-down', 16, 'exchange-chevron')}</h4>
+          ${operator.status === 'active' ? (concession ? '<span class="text-up text-sm">Koncesja: handel bez prowizji</span>' : `<button class="btn-secondary btn-sm" onclick="event.stopPropagation(); buyInternetConcession('${id}'); displayStocks(getCurrentInputValues());">Kup koncesję · ${formatZl(getInternetConcessionCost(id), 0)}</button>`) : ''}
         </div>`;
       for (const stock of [operatorStock, ...members].filter(Boolean)) {
         const row = renderStockRow(stock, false);
@@ -1275,7 +1384,7 @@ function displayStocks(previousInputValues = {}) {
     marketCell.className = 'exchange-header market-header';
     const cell = marketCell.insertCell();
     cell.colSpan = STOCK_TABLE_COLS;
-    cell.innerHTML = '<h4 class="my-1">🏛️ GPW — Giełda Papierów Wartościowych</h4>';
+    cell.innerHTML = '<h4 class="my-1">GPW — Giełda Papierów Wartościowych</h4>';
   }
 
   // --- Pętla renderująca giełdy ---
@@ -1297,14 +1406,13 @@ function displayStocks(previousInputValues = {}) {
       headerRow.onclick = () => toggleExchangeVisibility(exchangeKey);
       const headerCell = headerRow.insertCell();
       headerCell.colSpan = STOCK_TABLE_COLS;
-      const icon = exchangeCollapseState[exchangeKey] ? '▶' : '▼';
-      headerCell.innerHTML = `<h4 style="color: ${
-        exchange.color
-      }" class="my-1 d-flex justify-between">${
-        exchange.name
-      }<span>${icon}</span></h4>`;
+      const collapsedEx = Boolean(exchangeCollapseState[exchangeKey]);
+      // 0.14.5: kwadrat w kolorze rangi + nazwa bez emoji + liczba spółek; przycisk dla klawiatury
+      headerCell.innerHTML = `<h4 class="my-1 exchange-title"><button type="button" class="exchange-toggle" aria-expanded="${!collapsedEx}" onclick="event.stopPropagation(); toggleExchangeVisibility('${exchangeKey}')">${exchangeDot(exchangeKey)}<span class="exchange-name">${escapeHtml(stripEmoji(exchange.name))}</span><span class="exchange-meta">· ${stocksOnThisExchange.length} ${stocksOnThisExchange.length === 1 ? 'spółka' : stocksOnThisExchange.length % 10 >= 2 && stocksOnThisExchange.length % 10 <= 4 && (stocksOnThisExchange.length % 100 < 12 || stocksOnThisExchange.length % 100 > 14) ? 'spółki' : 'spółek'}</span>${uiIcon(collapsedEx ? 'chevron-right' : 'chevron-down', 16, 'exchange-chevron')}</button></h4>`;
     }
 
+    const sectorCounts = new Map();
+    for (const s of stocksOnThisExchange) { const key = sectorOf.get(s) || null; sectorCounts.set(key, (sectorCounts.get(key) || 0) + 1); }
     let lastSector;
     stocksOnThisExchange.forEach(stock => {
       const sector = sectorOf.get(stock) || null;
@@ -1315,7 +1423,12 @@ function displayStocks(previousInputValues = {}) {
         if (exchangeCollapseState[exchangeKey]) subRow.style.display = 'none';
         const subCell = subRow.insertCell();
         subCell.colSpan = STOCK_TABLE_COLS;
-        subCell.textContent = `─ ${sector ? `${SECTORS[sector]?.icon || ''} ${sector}` : 'Pozostałe'} ─`;
+        // 0.14.5: ikona sektora + nazwa + liczba spółek (test: litery = sama nazwa sektora)
+        const sectorCount = sectorCounts.get(sector) || 0;
+        if (sector && SECTOR_ICON_PATHS[sector]) { const ic = uiIconNode(sector, 14); ic.classList.add('ic-sector'); subCell.appendChild(ic); }
+        const nameEl = document.createElement('span'); nameEl.className = 'sector-name'; nameEl.textContent = sector || 'Pozostałe';
+        const countEl = document.createElement('span'); countEl.className = 'sector-count'; countEl.textContent = sectorCount;
+        subCell.append(nameEl, ' ', countEl);
       }
       const mainRow = renderStockRow(stock, false);
       if (exchangeCollapseState[exchangeKey]) mainRow.style.display = 'none';
@@ -1326,6 +1439,8 @@ function displayStocks(previousInputValues = {}) {
       }
     });
   });
+
+  liveStockTableBody.replaceChildren(...stockTableBody.childNodes);
 
   if (typeof openStockDrawerSymbol !== 'undefined' && openStockDrawerSymbol) {
     const targetRow = document.querySelector(`#stock-table-body tr[data-symbol="${openStockDrawerSymbol}"]`);
@@ -1598,7 +1713,7 @@ function isStockOwnedByPlayer(stock) {
 
 function toggleOwnedFilter(chip) {
     ownedOnlyFilter = !ownedOnlyFilter;
-    if (chip) chip.classList.toggle('active', ownedOnlyFilter);
+    if (chip) { chip.classList.toggle('active', ownedOnlyFilter); chip.setAttribute('aria-pressed', String(ownedOnlyFilter)); }
     displayStocks(getCurrentInputValues());
 }
 
@@ -4343,7 +4458,9 @@ function toggleSubsidiaryVisibility(parentSymbol) {
     if (parentRow) {
         const toggleBtn = parentRow.querySelector('.subsidiary-toggle');
         if (toggleBtn) {
-            toggleBtn.textContent = parentStock.isSubsidiaryExpanded !== false ? '▼ ' : '▶ ';
+            const expanded = parentStock.isSubsidiaryExpanded !== false;
+            toggleBtn.innerHTML = uiIcon(expanded ? 'chevron-down' : 'chevron-right', 14);
+            toggleBtn.setAttribute('aria-expanded', String(expanded));
         }
     }
 }
@@ -5431,10 +5548,12 @@ function updateResearchChoiceTimerUI() {
 // 0.14.5: jeden format liczb w całej grze (04_teksty.md): „14 040,25 PLN”, „−7,20%”, minus typograficzny.
 const MINUS_SIGN = '\u2212';
 
+const NUMBER_FORMATS_PL = {}; // cache Intl.NumberFormat — toLocaleString z opcjami tworzy formatter przy każdym wywołaniu
 function formatNumberPl(value, digits = 2) {
     const number = Number(value);
     if (!Number.isFinite(number)) return '—';
-    const text = Math.abs(number).toLocaleString('pl-PL', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    const format = NUMBER_FORMATS_PL[digits] || (NUMBER_FORMATS_PL[digits] = new Intl.NumberFormat('pl-PL', { minimumFractionDigits: digits, maximumFractionDigits: digits }));
+    const text = format.format(Math.abs(number));
     return (number < 0 && /[1-9]/.test(text) ? MINUS_SIGN : '') + text;
 }
 

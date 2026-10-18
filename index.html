@@ -196,54 +196,48 @@
             
 
 <div id="market" class="panel">
-    <h2 class="d-flex justify-between items-center"><span class="clickable" onclick="toggleSection('market')" title="Zwiń / rozwiń rynek akcji">Rynek Akcji <span id="toggle-icon-market">▼</span></span> <button class="btn-secondary btn-xs" onclick="openScanner()" title="Filtruj spółki po wskaźnikach (szkolenie Analityk Finansowy)">🔎 Skaner spółek</button></h2>
+    <h2 class="panel-head">
+      <button class="panel-toggle" type="button" onclick="toggleSection('market')" aria-controls="market-content" title="Zwiń / rozwiń rynek akcji">Rynek akcji <span id="toggle-icon-market" aria-hidden="true">▼</span></button>
+      <!-- 0.14.5: liczba spółek i najsilniejszy sektor w jednej linii (updateMarketKPIs) -->
+      <span class="market-kpi-row">
+        <span class="market-kpi-card"><span class="mkpi-value" id="mkpi-active">—</span> <span class="mkpi-label">spółek</span></span>
+        <span class="market-kpi-card" id="popular-sector-card"><span class="mkpi-label">najsilniejszy sektor:</span> <span class="mkpi-value" id="mkpi-top-sector">—</span> <span class="mkpi-sub" id="mkpi-top-sector-sub"></span></span>
+      </span>
+      <button class="btn-secondary btn-sm" id="open-scanner-btn" onclick="openScanner()" title="Filtruj spółki po wskaźnikach (szkolenie Analityk finansowy)"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM21 21l-5-5"/></svg> Skaner spółek</button>
+    </h2>
     <div id="market-content"><!-- 0.14.2 P8: zwijany rynek akcji -->
 
-    <!-- 4 mini-karty KPI -->
-    <div class="market-kpi-row">
-      <div class="market-kpi-card">
-        <span class="mkpi-label">Spółki aktywne</span>
-        <span class="mkpi-value" id="mkpi-active">—</span>
-        <span class="mkpi-sub">na rynku dziś</span>
-      </div>
-      <div class="market-kpi-card" id="popular-sector-card">
-        <span class="mkpi-label">Najsilniejszy sektor</span>
-        <span class="mkpi-value" id="mkpi-top-sector">—</span>
-        <span class="mkpi-sub" id="mkpi-top-sector-sub">średnia zmiana dziś</span>
-      </div>
-    </div>
-
-    <!-- Chipsy sektorów -->
-    <div class="sector-chips" id="sector-chips">
-      <span class="sector-chip owned-chip" onclick="toggleOwnedFilter(this)" title="Pokaż tylko spółki, które masz w funduszu lub na koncie prywatnym">⭐ Posiadane</span>
+    <!-- Chipy sektorów -->
+    <div class="sector-chips" id="sector-chips" role="group" aria-label="Filtr sektorów">
+      <button type="button" class="sector-chip owned-chip" aria-pressed="false" onclick="toggleOwnedFilter(this)" title="Pokaż tylko spółki, które masz w funduszu lub na koncie prywatnym"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg> Posiadane</button>
       <!-- 0.14 T1c: chipy sektorów pogrupowane z liczbą spółek (renderSectorFilters) -->
     </div>
     <div class="sector-filter-extra" id="sector-filter-extra"></div>
 
-    <!-- Poziomy rynku jako taby -->
-    <div class="market-level-tabs">
+    <!-- Poziomy rynku jako taby (0.14.5: kwadrat w kolorze rangi zamiast emoji) -->
+    <div class="market-level-tabs" role="group" aria-label="Giełda">
       <button class="market-level-tab active" data-level="ALL"
               onclick="setMarketLevel(this,'ALL')">Wszystkie</button>
       <button class="market-level-tab" data-level="JUNK"
-              onclick="setMarketLevel(this,'JUNK')">♻ Śmieciowa</button>
+              onclick="setMarketLevel(this,'JUNK')"><span class="exchange-dot" style="--dot: var(--exchange-junk)" aria-hidden="true"></span>Śmieciowa</button>
       <button class="market-level-tab" data-level="BRONZE"
-              onclick="setMarketLevel(this,'BRONZE')">🥉 Brązowa</button>
+              onclick="setMarketLevel(this,'BRONZE')"><span class="exchange-dot" style="--dot: var(--exchange-bronze)" aria-hidden="true"></span>Brązowa</button>
       <button class="market-level-tab" data-level="SILVER"
-              onclick="setMarketLevel(this,'SILVER')">🥈 Srebrna</button>
+              onclick="setMarketLevel(this,'SILVER')"><span class="exchange-dot" style="--dot: var(--exchange-silver)" aria-hidden="true"></span>Srebrna</button>
       <button class="market-level-tab" data-level="GOLD"
-              onclick="setMarketLevel(this,'GOLD')">🥇 Złota</button>
+              onclick="setMarketLevel(this,'GOLD')"><span class="exchange-dot" style="--dot: var(--exchange-gold)" aria-hidden="true"></span>Złota</button>
       <button class="market-level-tab" data-level="PLATINUM"
-              onclick="setMarketLevel(this,'PLATINUM')">💎 Platynowa</button>
+              onclick="setMarketLevel(this,'PLATINUM')"><span class="exchange-dot" style="--dot: var(--exchange-platinum)" aria-hidden="true"></span>Platynowa</button>
       <button class="market-level-tab" data-level="RUBY"
-              onclick="setMarketLevel(this,'RUBY')">🔴 Rubinowa</button>
+              onclick="setMarketLevel(this,'RUBY')"><span class="exchange-dot" style="--dot: var(--exchange-ruby)" aria-hidden="true"></span>Rubinowa</button>
       <button class="market-level-tab" data-level="EMERALD"
-              onclick="setMarketLevel(this,'EMERALD')">🟢 Szmaragdowa</button>
+              onclick="setMarketLevel(this,'EMERALD')"><span class="exchange-dot" style="--dot: var(--exchange-emerald)" aria-hidden="true"></span>Szmaragdowa</button>
       <button class="market-level-tab" data-level="DIAMOND"
-              onclick="setMarketLevel(this,'DIAMOND')">💠 Diamentowa</button>
-      <button class="market-level-tab" data-level="INTERNET"
-              onclick="setMarketLevel(this,'INTERNET')" title="Rynki internetowe (XTD, PLU5 i nowe) i ich spółki">🌐 Internet</button>
+              onclick="setMarketLevel(this,'DIAMOND')"><span class="exchange-dot" style="--dot: var(--exchange-diamond)" aria-hidden="true"></span>Diamentowa</button>
+      <button class="market-level-tab" data-level="INTERNET" title="Rynki internetowe (XTD, PLU5 i nowe) i ich spółki"
+              onclick="setMarketLevel(this,'INTERNET')"><span class="exchange-dot" style="--dot: var(--exchange-internet)" aria-hidden="true"></span>Internetowa</button>
       <button class="market-level-tab" id="open-dividend-tracker-btn"
-              onclick="openDividendTrackerModal()" title="Panel Analityka Dywidend">💰 Dywidendy</button>
+              onclick="openDividendTrackerModal()" title="Panel analityka dywidend">Dywidendowe</button>
     </div>
 
     <!-- Ukryty select — zachowany dla kompatybilności z JS -->
@@ -256,13 +250,12 @@
     <table id="stock-table">
       <thead>
         <tr>
-          <th class="w-md">Spółka</th>
-          <th class="clickable w-sm" id="price-header-cell" onclick="togglePriceSort()"
-             >Cena PLN</th>
-          <th title="Zmiana kursu od zamknięcia poprzedniego tygodnia gry">Zmiana tydz.</th>
-          <th>Wolumen / dostępne</th>
-          <th>Moje akcje</th>
-          <th class="w-xs">Akcja</th>
+          <th class="col-name">Spółka</th>
+          <th class="col-price" id="price-header-cell" aria-sort="none"><button type="button" class="th-sort" onclick="togglePriceSort()">Kurs</button></th>
+          <th class="col-change" title="Zmiana kursu od zamknięcia poprzedniego tygodnia gry">Zmiana tydz.</th>
+          <th class="col-avail">Dostępne akcje</th>
+          <th class="col-owned">Moje</th>
+          <th class="col-actions"><span class="sr-only">Działania</span></th>
         </tr>
       </thead>
       <tbody id="stock-table-body"></tbody>
