@@ -14,6 +14,7 @@ Próba 20 przebiegów po 6,5 roku gry (27 kwartałów). Wszystkie stopy roczne p
 | Wariant | Przebiegi | GIG %/rok | GIG Cap10 %/rok | Buy & Hold %/rok | Wzrost EPS (p50) | Zmiana C/Z (P/E) | Marża konc. (mediana) |
 |---|---|---|---|---|---|---|---|
 | **Bazowy (`sim_bazowy`)** | 20 | **20,7 ± 0,7** | 22,5 ± 0,7 | 27,8 ± 2,4 | **17,8 ± 0,7** | −3,3 ± 0,9 | 19,8% → 22,9% (+3,1 pp) |
+| **Bazowy 20 lat (`81 kw.`)** | 20 | **20,9 ± 0,3** | 21,3 ± 0,5 | 33,8 ± 3,7 | **11,9 ± 0,3** | −0,6 ± 0,3 | 20,0% → 17,3% (−2,7 pp) |
 | **Zdarzenia symetryczne (`h1`)** | 20 | **21,1 ± 0,6** | 23,4 ± 0,6 | 30,1 ± 2,2 | 17,5 ± 0,8 | −3,0 ± 0,9 | 19,6% → 22,7% (+3,1 pp) |
 | **Bez inflacji przychodów (`h3`)** | 20 | **20,4 ± 0,9** | 22,7 ± 1,1 | 28,6 ± 2,8 | 17,7 ± 0,6 | −3,3 ± 0,9 | 20,2% → 22,9% (+2,7 pp) |
 | **Inwestycje połowa (`h6`)** | 20 | **20,8 ± 1,1** | 22,6 ± 1,1 | 22,6 ± 1,2 | 18,7 ± 0,5 | −4,3 ± 0,9 | 19,8% → 23,8% (+4,0 pp) |
