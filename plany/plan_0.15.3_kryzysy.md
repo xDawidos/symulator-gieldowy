@@ -1,6 +1,6 @@
-# Plan 0.15.1 „Kryzysy” (szkic, po 0.15 „Hossa i bessa”, przed 0.16)
+# Plan 0.15.3 „Wielkie Kryzysy” (po 0.15.2 „Kochaj i zarabiaj”, przed 0.16)
 
-> **Szkic ze zgłoszenia użytkownika (2026-10-18, planowanie 0.15).** Przed budową potrzebny pełny plan z audytem i decyzjami, jak dla 0.15.
+> **Status:** Zaplanowane po 0.15.2 na podstawie decyzji gracza (Wariant C). Pełny plan scenariuszowy kryzysów rynkowych.
 
 Cel: oprócz ogólnego krachu z 0.15 (H4) rynek przechodzi czasem **linie zdarzeń** wzorowane na prawdziwych kryzysach. Każda ma swoją przyczynę, sektory, które tracą, sektory, które zyskują, i spółki, które upadają. Gracz uczy się, że każdy kryzys jest inny: inna przyczyna, inni przegrani i wygrani, inna reakcja państwa i banku centralnego, inne tempo odbicia.
 

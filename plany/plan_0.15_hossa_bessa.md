@@ -1,4 +1,4 @@
-# Plan 0.15 „Hossa i bessa” (po 0.14.5 Redesign, przed 0.15.1 „Kryzysy” i 0.16 „Giełda międzynarodowa”)
+# Plan 0.15.0 „Hossa i bessa” (po 0.14.5 Redesign, przed 0.15.1 „Sztuka przejęć”, 0.15.2 „Kochaj i zarabiaj”, 0.15.3 „Wielkie Kryzysy” i 0.16 „Giełda międzynarodowa”)
 
 Cel: rynek ma własny nastrój, niezależny od gospodarki. Przechodzi przez hossę i bessę, nadmuchuje bańki i czasem się załamuje. W długim terminie rośnie umiarkowanie, ok. **8–10% rocznie** zamiast dzisiejszych 18–22%. Rynek ma swoich zwycięzców (**jednorożce**) i przegranych (**gasnące gwiazdy**).
 

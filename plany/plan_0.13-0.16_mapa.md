@@ -97,13 +97,20 @@ Z raportu, „Niesprawdzone” 2–3:
 | **0.14.3** | **Zapis bez limitu** (`plan_0.14.3_zapis.md`): IndexedDB jako główny zapis, kompresja lz-string, zapis atomowy i kopia awaryjna przy zamknięciu karty, eksport/import pliku, panel zapisu | po poprawkach z decyzji 15 (0.14), przed 0.15 |
 | **0.14.5** | **Redesign** (osobny czat designu, dokumenty w `plany/design/`): 1 ocena hierarchii i czytelności (design-critique, zrzuty „przed”), 2 dostępność (kontrast, rozmiary celów), 3 system designu (zmienne CSS: paleta, typografia, odstępy, komponenty), 4 teksty (ux-copy), 5 wdrożenie nowego UI (frontend-design), 6 grafika (SVG/CSS/animacje w kodzie + specyfikacja assetów rastrowych dla użytkownika do `img/`), 7 kontrola przed/po | **ZAKOŃCZONE** (2026-10-19): **Krok 1–7 wykonany**. **Krok 7b wykonany w całości**: P1 format liczb po polsku i drobne poprawki widoku, P2 `color-scheme: dark`, P3 filtry sektorów i giełd w jednym rzędzie z menu grup, P4 spójny nagłówek `bank-hero` i styl zakładek `bank-tab-btn` we wszystkich oknach, P5 poczta (układ czytania i wydanie zbiorcze), P6 usunięcie 180 martwych reguł CSS (18 KB). Makiety UI 0.15 i komponenty przygotowane w HTML/Stitch (`plany/design/makiety/`). Testy 457/457. Gotowe do wdrożenia 0.15 „Hossa i bessa”. |
 
-## Etap C′ — 0.15 „Hossa i bessa” (H0 → H6)
+## Etap C′ — Seria 0.15 „Cykle, Relacje i Przejęcia”
 
-Plan: `plan_0.15_hossa_bessa.md` (po audycie 2026-10-17: `raporty/audyt_planu_0.15.md`). Po 0.14.5 Redesign, przed giełdą międzynarodową: rynek ma być zrównoważony (GIG ok. 8–10% rocznie), zanim dojdą waluty i rynki zagraniczne.
-- **Grunt pod 0.16:** stan nastroju jest per rynek (`marketRegimes`), żeby 0.16 dopisało tylko rynki zagraniczne i zarażanie.
-- **UI:** jeden element KPI w górnym pasku (za Analitykiem Indeksowym L4), okno „Rynek” (L5) i sekcja osiągnięć w CV — projekt od czatu designu, z komponentów systemu 0.14.5.
-- **Następna wersja:** 0.15.1 „Kryzysy” (szkic) korzysta z silnika krachu z H4 (`marketCrash.theme`, szok sektorowy).
-- **Plan 0.16** ma od 2026-10-18 sekcję zgłoszeń: notowanie na kilku giełdach, córki za granicą (nowy limit córek), bot w stylu Grahama, odrębny „Wilk”.
+Podział serii 0.15 na wersje zgodnie z decyzją gracza (Wariant C, 2026-10-19):
+
+| Podwersja | Tytuł | Zakres | Plan |
+|---|---|---|---|
+| **0.15.0** | **Hossa i bessa** | Silnik nastrojów rynku (`marketRegimes`), zrównoważenie GIG (8–10%/rok), bańki sektorowe, mechanika bazowego krachu i bezpieczników giełdowych, zachowania botów | `plan_0.15_hossa_bessa.md` |
+| **0.15.1** | **Sztuka przejęć (M&A)** | Darmowe rozmowy wstępne, pipeline etapów przejęcia (LOI, Due Diligence, negocjacje), ryzyko urażenia zarządu ofertą poniżej wartości godziwej (Poison Pill, Biały Rycerz) | `plan_0.15.1_przejecia.md` |
+| **0.15.2** | **Kochaj i zarabiaj (PR & Inwestorzy)** | Okna emisji (tydzień, 1–3 msc), lock-up 0–5 lat, gwarancja zwrotu wkładu z regułą debetu (1 tydzień na wyjście na 0), cele emisji, zegar „Lata w firmie”, pitching z 4 stylami rozmowy, VIP-y, analityk PR/IR z podwyżkami i misjami | `plan_0.15.2_pr_inwestorzy.md` |
+| **0.15.3** | **Wielkie Kryzysy** | 5 linii historycznych (2008 bankowy, 2000 dot-com, 1973 szok naftowy, 1929 czarny czwartek, 2020 pandemia) z asymetrią branżową i interwencjami państwa | `plan_0.15.3_kryzysy.md` |
+
+- **Grunt pod 0.16:** stan nastroju jest per rynek (`marketRegimes`), żeby 0.16 dopisało rynki zagraniczne, surowce, łańcuchy dostaw i zarażanie międzynarodowe.
+- **UI:** KPI nastroju w pasku, kalendarz stażu („Lata w firmie”), okno „Rynek”, panel PR/IR, sekcja osiągnięć w CV z komponentów 0.14.5.
+- **Plan 0.16** ma od 2026-10-18 sekcję zgłoszeń: kontrakty surowcowe (złoto, ropa, uran itd.), transport (morski, lotniczy, lądowy), łańcuchy produkcyjne, cła i WTO.
 
 ## Etap C — 0.16 „Giełda międzynarodowa” (G0 → G8, dawniej 0.15)
 
