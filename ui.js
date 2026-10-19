@@ -1023,9 +1023,26 @@ function drawChartEvents(stock, svg, historyForMapping, getX, padding, chartHeig
         label.setAttribute("tabindex", "0");
         label.setAttribute("role", "img");
         label.setAttribute("aria-label", stripEmoji(event.label));
+        label.setAttribute("title", stripEmoji(event.label));
+        const titleEl = document.createElementNS(svgNs, "title");
+        titleEl.textContent = stripEmoji(event.label);
+        label.appendChild(titleEl);
+
         if (tooltip) {
-            const show = (px, py) => { tooltip.textContent = stripEmoji(event.label); tooltip.style.display = 'block'; tooltip.style.left = `${px + 15}px`; tooltip.style.top = `${py + 15}px`; };
+            const show = (px, py) => {
+                tooltip.textContent = stripEmoji(event.label);
+                tooltip.style.display = 'block';
+                const tipW = tooltip.offsetWidth || 180;
+                const tipH = tooltip.offsetHeight || 30;
+                let xPos = px + 15;
+                let yPos = py + 15;
+                if (xPos + tipW > window.innerWidth - 10) xPos = Math.max(10, px - tipW - 10);
+                if (yPos + tipH > window.innerHeight - 10) yPos = Math.max(10, py - tipH - 10);
+                tooltip.style.left = `${xPos}px`;
+                tooltip.style.top = `${yPos}px`;
+            };
             label.addEventListener('mouseover', e => show(e.pageX, e.pageY));
+            label.addEventListener('mousemove', e => show(e.pageX, e.pageY));
             label.addEventListener('mouseout', () => { tooltip.style.display = 'none'; });
             label.addEventListener('focus', () => { const r = label.getBoundingClientRect(); show(r.left + window.scrollX, r.top + window.scrollY); });
             label.addEventListener('blur', () => { tooltip.style.display = 'none'; });
@@ -1134,19 +1151,28 @@ function renderChartSVGForStock(stock, svgAreaElement, width, height) {
                 marker.setAttribute("stroke", "white");
                 marker.setAttribute("stroke-width", "1.5");
                 marker.style.cursor = "pointer";
+                const txTitle = `Kupiono: ${tx.quantity} szt. po ${formatNumberPl(tx.price, 2)} PLN`;
+                marker.setAttribute("title", txTitle);
+                const titleEl = document.createElementNS(svgNs, "title");
+                titleEl.textContent = txTitle;
+                marker.appendChild(titleEl);
                 svg.appendChild(marker);
 
-                marker.addEventListener('mouseover', (event) => {
-                    tooltip.innerHTML = `Kupiono: ${tx.quantity} szt. po ${formatNumberPl(tx.price, 2)} PLN`;
+                const updateTipPos = (px, py) => {
+                    tooltip.innerHTML = txTitle;
                     tooltip.style.display = 'block';
-                    tooltip.style.left = `${event.pageX + 15}px`;
-                    tooltip.style.top = `${event.pageY + 15}px`;
-                });
+                    const tipW = tooltip.offsetWidth || 180;
+                    const tipH = tooltip.offsetHeight || 30;
+                    let xPos = px + 15;
+                    let yPos = py + 15;
+                    if (xPos + tipW > window.innerWidth - 10) xPos = Math.max(10, px - tipW - 10);
+                    if (yPos + tipH > window.innerHeight - 10) yPos = Math.max(10, py - tipH - 10);
+                    tooltip.style.left = `${xPos}px`;
+                    tooltip.style.top = `${yPos}px`;
+                };
 
-                marker.addEventListener('mousemove', (event) => {
-                    tooltip.style.left = `${event.pageX + 15}px`;
-                    tooltip.style.top = `${event.pageY + 15}px`;
-                });
+                marker.addEventListener('mouseover', (event) => updateTipPos(event.pageX, event.pageY));
+                marker.addEventListener('mousemove', (event) => updateTipPos(event.pageX, event.pageY));
 
                 marker.addEventListener('mouseout', () => {
                     tooltip.style.display = 'none';

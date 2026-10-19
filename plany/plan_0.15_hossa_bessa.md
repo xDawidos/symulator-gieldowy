@@ -311,10 +311,14 @@ UI 0.15 budujemy z komponentów systemu designu 0.14.5 (`plany/design/`). Ten pl
   - w panelu puli startupów jedna linia przyczyny, wpis w poczcie.
 - **Spółki w cyklu rynku:**
   - premia rynku > +15% → szansa emisji ×1,5 (×2 w sektorze bańki);
-  - premia < −15% → skupy akcji ×1,5 i apetyt na przejęcia (`ma.js`) ×1,3.
-- **Rynki kapitałowe:** przychody spółek z podsektorów Rynki kapitałowe i Bank inwestycyjny × (0,8 + 0,45 × wskaźnik / 100), czyli 0,8…1,25.
-- **Drugi pomiar zaufania i JU** (preset `fundusz-gig`, ≥ 20 × 6,5 roku): zaufanie 45–55, JU −3…+3%/rok. Jeśli poza celem — strojenie paniki i mody (nie formuły H1c).
-- **Commit H5a** (boty), **H5b** (klienci), **H5c** (okno IPO, spółki, rynki kapitałowe).
+- **Przejęcia (M&A) w cyklu rynku:**
+  - Rozwinięcie etapów przejęcia w `ma.js` zamiast skoku zero-jedynkowego: darmowe rozmowy wstępne, badanie spółki, negocjacje.
+  - Ryzyko urażenia zarządu i rady spółki przy rażąco zaniżonej propozycji (zerwanie rozmów, wrogość lub uruchomienie obrony).
+- **PR i emisje JU funduszu w cyklu (fundament pod aktualizację „Kochaj i zarabiaj”):**
+  - Okna emisyjne funduszu zamiast ciągłego napływu w tle (otwierane rundy subskrypcji na 1–3 miesiące czasu gry).
+  - Opcje emisyjne: min. okres uczestnictwa (lock-up 0–5 lat) i deklaracja celu sektorowego — zmniejszają panikę w bessie.
+  - Relacje z grupami inwestorów (ostrożni, odważni, VIP) i ich zróżnicowany sentyment.
+- **Commit H5a** (boty), **H5b** (klienci), **H5c** (okno IPO, spółki, rynki kapitałowe, przejęcia M&A).
 
 ## H6. Spięcie z grą: Akademia, Mentor, osiągnięcia, newsy, retrospektywa
 

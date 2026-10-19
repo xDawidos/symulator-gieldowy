@@ -430,9 +430,22 @@ Polski Grzegorz „Bankier” Kacperczyk zostaje bez zmian.
     - lotnisko z biletami kupowanymi przez każdego inwestora osobno, z animacją lotu w chmury;
     - wydarzenia giełdowe łączące rynki.
 
-## Zgłoszenia do rozpisania (z planowania 0.15, 2026-10-18)
+## Zgłoszenia do rozpisania (z planowania 0.15 i 0.16)
 
 Zgłoszenia użytkownika. Przed budową trzeba je wpisać do części G i dopisać decyzje.
+- **Giełda towarowa (Commodities):** rynek kontraktów na surowce (ropa, złoto, srebro, uran, metale przemysłowe, zboże, kawa, bawełna, gaz). Wpływ globalnego handlu państw i popytu spółek przemysłowych/zbrojeniowych na ceny kontraktów.
+- **Transport międzynarodowy i infrastruktura:**
+  - Transport morski (1-2 spółki na państwo, w PL i USA państwowe; przewóz masowy, wolny);
+  - Transport lotniczy (szybki, wysoka marża; spółki POP w USA, DHXL w Niemczech);
+  - Transport lądowy (kolej + ciężarówki);
+  - Nowa infrastruktura publiczna i przetargi: porty morskie, tory, autostrady, lotniska (Chopin Industry Airport, Wałęsa Shipment).
+  - Sektor Logistyka (świadczenie usług spedycyjnych).
+- **Łańcuchy produkcyjne (Supply Chains):** powiązania wydobycie rudy → hutnictwo (metal) → fabryka (samochody, samoloty, statki, pociągi) → spedycja → konsumpcja (potrzeby, zachcianki, dobra luksusowe) i sektor obronny (bezpieczeństwo państwa).
+- **Polityka handlowa, cła i WTO:**
+  - Służba celna w zakładce państwa (poziomy, limity taryf);
+  - Doktryny eksportowe państw (protekcjonizm, wolny handel, merkantylizm, autarkia);
+  - Umowy handlowe, embarga, unie celne;
+  - Światowa Organizacja Handlu (WTO) i runda negocjacji celnych GATTS.
 - **Notowanie na kilku giełdach:** spółka może wejść na giełdę zagraniczną pod tą samą nazwą (podwójne notowanie, cena w walucie rynku po kursie kantoru). Najbliżej G1 (waluty) i G2/G3 (rynki). Do ustalenia:
   - czy to jedna pula akcji z dwoma kursami (arbitraż przez kantor);
   - jak liczy się do limitów kraju.

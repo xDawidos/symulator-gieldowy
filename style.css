@@ -2965,6 +2965,23 @@ body.dark-mode #stock-table thead th.col-avail,
   color: var(--color-text-accent) !important;
 }
 
+#chart-tooltip {
+  position: absolute;
+  z-index: 99999 !important;
+  background: var(--color-bg-surface-elevated, #1e293b) !important;
+  color: var(--color-text-primary, #f8fafc) !important;
+  border: 1px solid var(--color-border-strong, #475569) !important;
+  border-radius: var(--radius-sm, 4px) !important;
+  padding: 6px 10px !important;
+  font-size: var(--text-body-sm-size, 12px) !important;
+  font-family: var(--font-family-base, sans-serif) !important;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4) !important;
+  pointer-events: none !important;
+  white-space: pre-wrap !important;
+  max-width: 320px !important;
+  line-height: 1.4 !important;
+}
+
 body.dark-mode #stock-table tbody tr,
 body.dark-mode #stock-table tbody tr:nth-child(even):not(.exchange-header),
 #stock-table tbody tr:not(.exchange-header) {

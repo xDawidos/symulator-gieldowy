@@ -1,24 +1,115 @@
 # Pomysły na kolejne wersje (do rozpisania)
 
-Notatki z planowania, jeszcze bez planu. Każdy punkt przed budową dostaje własny plan z decyzjami.
+Notatki z planowania, jeszcze bez planu. Każdy punkt przed budową dostaje własny plan z decyzjami lub zostaje włączony do istniejących aktualizacji (0.15, 0.16, kolejne).
 
-## Rynek pracy 2 (po 0.16)
-- **Podkupowanie ludzi:** spółki „wykupują” pracowników innych firm oraz prywatnych inwestorów, żeby u nich pracowali (nawiązanie do pracowników z 0.13).
-- **Odejścia i nowe firmy:** pracownicy mogą odchodzić i zakładać własne firmy, które trafiają do inkubatora jako startupy.
+---
 
-## Odrzucone i odłożone przy planowaniu 0.15 (2026-10-17, `raporty/audyt_planu_0.15.md`)
-- **Opcje i CFD** („Mistrz Opcji”, roadmapa 0.12) — odrzucone w 0.15 (decyzja: bez krótkiej sprzedaży). Osobny system instrumentów; wraca razem z ewentualną krótką sprzedażą.
-- **Zlecenia z limitem i stop-loss** — pasują do krachu (poślizg ceny przy luce i bezpieczniku), ale to osobny system handlu. Kandydat na wersję o handlu.
-- **„List do klientów” w bessie** — zarządzający wysyła komunikat i zmniejsza panikę klientów, ale gdy fundusz potem przegra z GIG, traci więcej zaufania. Dobra lekcja relacji z inwestorami; wymaga nowego przycisku i pętli obietnic.
-- **Państwowy fundusz kupujący w krachu** (`plany.txt` 4.1.2) — odłożone do 0.16 (wiele rynków, zarażanie między krajami).
-- **Scenariusz „Wielki Kryzys”** (start tuż przed krachem; roadmapa 1.0) — jako start nowej gry odłożone. Kryzysy w trakcie gry wchodzą w **0.15.1** jako linie zdarzeń (`plan_0.15.1_kryzysy.md`); tam do decyzji, czy linię można włączyć na start.
-- **Muzyka zależna od hossy i bessy** (roadmapa 1.0) — brak systemu dźwięku.
-- **Zarządzający aktywami z prowizją zależną od hossy i bessy** (roadmapa 0.5, 4.6.3) — brak takiej mechaniki; poza tematem 0.15.
+## 1. M&A i negocjacje przejęć (pasuje do 0.15 H5 oraz rozszerzenia M&A)
+- **Rozwinięcie etapów przejęcia:** Zamiast natychmiastowego zamknięcia transakcji — wieloetapowy proces (badanie due diligence, list intencyjny LOI, zgody korporacyjne/KNF, oferta ostateczna).
+- **Darmowe rozmowy wstępne:** Rozpoczęcie rozmów i wstępne sondowanie intencji zarządu nie powinno kosztować fortuny na start.
+- **Ryzyko urażenia zarządu:** Zbyt niska oferta (lowball) lub agresywny ton może urazić prezesa i radę nadzorczą celu przejęcia, prowadząc do zerwania rozmów, obrony typu poison pill lub trwałego pogorszenia relacji.
 
-## ~~Spółki zależne~~ → przeniesione do planu 0.14 jako T6 (decyzja z 2026-10-12)
-- **Limit spółek:** córki gigantów nie liczą się do limitu aktywnych spółek (wprowadzane w 0.13.1).
-- **Do ustalenia:**
-  - jak córki powstają i rosną;
-  - jak matka nimi zarządza;
-  - kiedy córka może się usamodzielnić, połączyć z matką albo zostać sprzedana;
-  - jak to się łączy ze spin-offami i koncernami z 0.14 (T4, T5).
+---
+
+## 2. Aktualizacja PR-owa: „Kochaj i zarabiaj” (Relacje Inwestorskie & Emisje JU)
+- **Zabezpieczenie przed ciągłą zmianą wartości portfela:**
+  - **Minimalny okres uczestnictwa (lock-up):** Podczas emisji nowych jednostek uczestnictwa (JU) gracz ustala okres blokady kapitału (od 0 do 5 lat).
+  - Dłuższy lock-up przyciąga inwestorów długoterminowych/cierpliwych (Instytucje, Spokojni), a zniechęca spekulantów (Spryciarz, Panikarz).
+- **Gwarancja zwrotu wkładu (opcjonalna):**
+  - Gwarancja, że przy umorzeniu inwestor odzyska minimum nominalną wpłatę (ochrona kapitału).
+  - Silnie przyciąga inwestorów Ostrożnych i Sknerów kosztem ryzyka pokrycia luki przez fundusz przy bessie.
+- **Ustalenie celu emisji:**
+  - Fundusz deklaruje cel inwestycyjny (np. min. 20% kapitału ulokowane w OZE, Technologię lub Nieruchomości; odgórne zobowiązanie korporacyjne).
+  - Niewywiązanie się z celu skutkuje karą do zaufania i odpływem kapitału.
+- **Okna emisyjne zamiast automatu:**
+  - Emisje nie odbywają się w sposób ciągły w tle — gracz otwiera rundę subskrypcyjną na określony czas (np. 1 tydzień, 1 miesiąc, 3 miesiące czasu gry).
+- **Kalendarz czasu gry u góry ekranu:**
+  - Czytelny licznik dat i upływu czasu (okienka dla dni, miesięcy i lat gry).
+- **Segmentacja i inwestorzy VIP:**
+  - Trzy grupy: Inwestorzy Indywidualni, Instytucjonalni oraz VIP.
+  - Inwestorzy VIP: zamożne osobistości, family offices, fundusze państwowe z unikalnymi oczekiwaniami i ogromnymi wpłatami.
+- **Interakcja i pisanie do botów (pitching/PR):**
+  - Animacje wysyłania wiadomości i konwersacji.
+  - Wybór 1 z 4 stylów komunikacji (np. odważny, bezpieczny, uprzejmy, ekonomiczny/konkretny cel, zabawny), dobierany dynamicznie do osobowości inwestora.
+  - Trafiony styl zwiększa sympatię i relacje; odblokowuje opcję „przyjacielską” (gwarancja zakupu JU, lecz zużywa/obniża kapitał relacyjny).
+- **Dział PR / Relacji Inwestorskich (IR) w funduszu:**
+  - Zatrudnienie Analityka PR / Manedżera IR daje wgląd w nastroje grup: np. „Inwestorzy bogaci cię lubią”, „Inwestorzy ostrożni cię kochają”, „Inwestorzy odważni cię nie lubią”.
+  - **Opcja „Daj podwyżkę PR-owcowi”:** odblokowuje misje/zadania od konkretnej grupy inwestorów (np. kup pakiet obligacji skarbowych lub obniż zadłużenie), których spełnienie winduje relacje.
+  - Rozwinięta analityka: wyjaśnia dokładne powody sympatii/antypatii (np. Ostrożni nie lubią za brak lokat/ETF/obligacji i spekulacje).
+  - Wskaźnik zainteresowania i relacji funduszu widoczny na głównym pulpicie.
+
+---
+
+## 3. Giełda towarowa (Commodities) i rynki surowcowe (pasuje do 0.16)
+- **Rynek kontraktów terminowych na surowce (duże ryzyko i zmienność):**
+  - Startowy koszyk: Złoto, Ropa naftowa, Srebro, Uran, Metale przemysłowe (miedź, żelazo), Zboże, Kawa, Bawełna, Gaz ziemny (NatGas).
+- **Globalny handel surowcami:**
+  - Państwa handlują między sobą surowcami, co wyznacza globalne ceny kontraktów.
+- **Sprzężenie ze spółkami przemysłowymi:**
+  - Spółki wydobywcze wytwarzają surowce (np. kopalnia węgla tworzy węgiel, państwowy koncern wydobywa uran).
+  - Spółki przemysłowe skupują surowce jako wsad do produkcji (np. huty skupują rudy, chemia ropę/gaz), wpływając na popyt i marże.
+- **Sektor zbrojeniowy a bezpieczeństwo państwa:**
+  - Sektor zbrojeniowy zużywa metale i elektronikę do produkcji sprzętu wojskowego skupowanego przez rządy.
+  - Zwiększa poziom bezpieczeństwa kraju (mechanika stabilności państwa, redukcja przestępczości / mechanika policji i armii).
+
+---
+
+## 4. Nowe sektory transportu, logistyki i infrastruktury (pasuje do 0.16)
+- **Transport Morski:**
+  - 1–2 spółki na państwo (dla Polski i USA spółki flagowe/państwowe). Przewóz masowy o dużej skali, lecz powolny.
+- **Transport Lotniczy:**
+  - Spółki cargo i pasażerskie (np. POP dla USA, DHXL dla Niemiec). Przewóz ekspresowy, mniejsza ładowność, wysoka marża.
+- **Transport Lądowy:**
+  - Floty ciężarowe oraz kolej towarowa (kolej szybsza i pojemniejsza, lecz zależna od sieci torów; drogi bardziej elastyczne).
+- **Sektor Logistyki jako odrębna gałąź:**
+  - Osobny sektor świadczący usługi spedycyjne i planistyczne dla firm transportowych i produkcyjnych.
+- **Podsektory produkcji środków transportu w Przemyśle:**
+  - Zakłady produkujące samochody, samoloty, statki i tabor kolejowy. Wycena i popyt zależą od koniunktury w danym typie transportu.
+- **Infrastruktura magazynowa:**
+  - Magazyny przetrzymujące surowce i gotowe dobra; inwestycje w powiększanie pojemności hal i terminali przeładunkowych.
+- **Wydobycie i Hutnictwo:**
+  - Dedykowane podsektory dla kopalń surowców i hut przetapiających rudy na metale czyste.
+- **Nowy rodzaj infrastruktury publicznej:**
+  - Drogi, autostrady, porty morskie, sieci kolejowe, lotniska (spółki komercyjne i państwowe, np. Chopin Industry Airport, Wałęsa Shipment).
+  - Rządowe przetargi na rozbudowę hubów komunikacyjnych, podnoszące przepustowość i tempo transportu.
+
+---
+
+## 5. Łańcuchy produkcyjne i konsumpcja
+- **Powiązania łańcucha wartości:**
+  `Wydobycie rudy → Przetop w hucie (metal) → Fabryka maszyn/aut → Spedycja i transport → Dystrybucja i handel → Konsumpcja przez obywateli/państwo`.
+- **Hierarchia dóbr konsumpcyjnych:**
+  - Zaspokajanie potrzeb podstawowych, zachcianek, dóbr luksusowych i dodatków.
+- **Dynamika łańcucha:**
+  - Załamanie jednego ogniwa (np. strajk w kopalni, blokada portu, brak paliwa) wywołuje szok podażowy i skok cen w kolejnych etapach.
+  - Badania i technologie (R&D) pozwalają substytuować surowce (np. kompozyty zamiast stali, automatyzacja zamiast pracy ludzkiej).
+- **Wizualizacja powiązań:**
+  - Graficzna mapa szlaków i statusu połączeń handlowych/transportowych między państwami (np. transport morski aktywny, lotniczy wstrzymany).
+
+---
+
+## 6. Międzynarodowa polityka handlowa, cła i organizacje (0.16)
+- **Dyplomacja handlowa:**
+  - Dwustronne umowy handlowe, embarga, sankcje celne, unie celne i strefy wolnego handlu.
+- **Służba Celna w zakładce Państwa:**
+  - Rozbudowa poziomów służby celnej decydująca o szczelności granic, ściągalności ceł i limitach taryfowych.
+- **Doktryny eksportowo-handlowe państw:**
+  - Zależne od partii rządzącej: Protekcjonizm, Wolny Handel, Merkantylizm, Autarkia / Zakaz eksportu strategicznego.
+- **WTO (Światowa Organizacja Handlu) i runda GATTS:**
+  - Międzynarodowa instytucja koordynująca taryfy; państwa opłacają składki i ratyfikują porozumienia.
+  - Linia zdarzeń wieloletnich rund negocjacyjnych znoszących cła na wybrane grupy towarowe.
+- **Kryzysy geopolityczne i surowcowe:**
+  - Szoki podażowe, kryzysy walutowo-handlowe.
+
+---
+
+## 7. Rynek pracy 2 (po 0.16)
+- **Podkupowanie ludzi:** Spółki podkupują specjalistów i inwestorów prywatnych.
+- **Odejścia i nowe firmy:** Kluczowi pracownicy odchodzą i zakładają innowacyjne startupy trafiające do inkubatora.
+
+---
+
+## 8. Wcześniej odrzucone / odłożone
+- **Opcje i CFD:** powrót dopiero przy ewentualnej mechanice gry na spadki (krótka sprzedaż).
+- **Zlecenia z limitem i stop-loss:** kandydat na dedykowaną aktualizację silnika zleceń giełdowych.
+- **Scenariusz „Wielki Kryzys”:** włączony w ramy linii zdarzeń w wersji 0.15.1 Kryzysy.
