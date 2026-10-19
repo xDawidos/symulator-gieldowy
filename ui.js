@@ -3907,16 +3907,35 @@ function renderCompanyCard() {
     // N1: porównanie z medianą sektora pod wartością kafelka.
     const med = typeof getSectorMedians === 'function' ? getSectorMedians(getMainSector(stock)) : null;
     const vs = (value, sectorValue, options) => { const c = med && typeof compareWithSector === 'function' ? compareWithSector(value, sectorValue, options) : null; return c ? `<em class="${c.cls}">${c.text}</em>` : ''; };
-    const tile = (label, value, hint, cls = '', extra = '') => `<div class="cc-kpi" title="${escapeHtml(hint)}"><span>${label}</span><strong class="${cls}">${value}</strong>${extra}</div>`;
     const pctFmt = v => `${formatNumberPl(v * 100, 1)}%`;
+    const hasIndexLvl5 = typeof getSkillLevel === 'function' && getSkillLevel('indexAnalystLvl1') >= 5;
+    const sectorPremiumTile = () => {
+        if (!hasIndexLvl5) return '';
+        const prem = Number(stock.sectorPremium) || 0;
+        const isBubble = typeof isCompanyInSectorBubble === 'function' && isCompanyInSectorBubble(stock);
+        const cellHtml = typeof formatSectorPremiumCell === 'function' ? formatSectorPremiumCell(prem, isBubble) : `${(prem * 100).toFixed(0)}%`;
+        const peVal = med?.pe ? formatNumberPl(med.pe, 1) : '—';
+        const regime = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+        let med5y = '—';
+        if (regime?.peHistory?.length) {
+            const sortedPe = [...regime.peHistory].sort((a, b) => a - b);
+            med5y = formatNumberPl(sortedPe[Math.floor(sortedPe.length / 2)] || 13.5, 1);
+        } else if (med?.pe) {
+            med5y = formatNumberPl(med.pe, 1);
+        }
+        const bubbleSuffix = isBubble ? ' · bańka' : '';
+        const extra = `<em class="text-muted">C/Z sektora ${peVal} vs mediana 5 lat ${med5y}${bubbleSuffix}</em>`;
+        return `<div class="cc-kpi" title="Premia wyceny sektora względem mediany historycznej"><span>Premia sektora</span><strong>${cellHtml}</strong>${extra}</div>`;
+    };
     document.getElementById('company-card-kpis').innerHTML = [
         tile('Kapitalizacja', formatZl(getMarketCapValue(stock), 0), 'Kurs × liczba akcji: ile rynek płaci za całą spółkę.'),
         tile('C/Z', formatRatio(f?.peRatio, f?.epsTtm), 'Cena / zysk na akcję z 4 kwartałów. Niżej = taniej względem zysków (porównuj w sektorze).', '', vs(f?.peRatio > 0 ? f.peRatio : NaN, med?.pe)),
         tile('C/WK', f?.pbRatio ? formatNumberPl(f.pbRatio, 2) : '—', 'Cena / wartość księgowa na akcję. Poniżej 1 = rynek wycenia spółkę niżej niż jej majątek netto.', '', vs(f?.pbRatio, med?.pb, { format: v => formatNumberPl(v, 2) })),
         tile('Stopa dywidendy', `${formatNumberPl(dividendYield * 100, 2)}%`, 'Dywidendy z ostatniego roku / kurs.', '', dividendYield > 0 ? vs(dividendYield, med?.dy, { lowerIsCheap: false, format: pctFmt, labels: ['wyższa', 'niższa'] }) : ''),
         tile('Zadłużenie', debtRatio === null ? '—' : `${formatNumberPl(debtRatio * 100, 0)}%`, 'Zobowiązania / aktywa. Powyżej ~70% spółka jest mocno zadłużona.', debtRatio > 0.7 ? 'text-down' : '', vs(debtRatio, med?.debt, { format: pctFmt, labels: ['niższe', 'wyższe'] })),
-        tile('Kondycja', `${formatNumberPl(health, 1)} · ${healthLabel}`, 'Kondycja finansowa od −5 (bankructwo) do +5.', health >= 1 ? 'text-up' : health <= -2 ? 'text-down' : '')
-    ].join('') + renderSubsectorMedianLine(stock, med);
+        tile('Kondycja', `${formatNumberPl(health, 1)} · ${healthLabel}`, 'Kondycja finansowa od −5 (bankructwo) do +5.', health >= 1 ? 'text-up' : health <= -2 ? 'text-down' : ''),
+        sectorPremiumTile()
+    ].filter(Boolean).join('') + renderSubsectorMedianLine(stock, med);
 
     document.getElementById('company-card-tabs').innerHTML = COMPANY_CARD_TABS
         .filter(([id]) => id !== 'workforce' || (typeof hasWorkforce === 'function' && hasWorkforce(stock)))

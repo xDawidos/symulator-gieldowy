@@ -6889,6 +6889,10 @@ function finalizeStartup(startup) {
     if (getSkillLevel('startupInvestor') >= 2 && playerPortfolio[symbol]) {
         finalSuccessChance += 0.05;
     }
+    // 0.15 H3: startupy z sektora bańki debiutują 2x częściej
+    if (typeof isCompanyInSectorBubble === 'function' && isCompanyInSectorBubble(startup)) {
+        finalSuccessChance = Math.min(0.95, finalSuccessChance * 2.0);
+    }
     const roll = Math.random();
 
     // KROK 2: Rozbudowana logika sprawdzania wyników

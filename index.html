@@ -414,6 +414,21 @@
                     <button type="button" onclick="debugSetMarketPhase(document.getElementById('debug-market-phase-select').value)">Ustaw (potwierdzona)</button>
                     <button type="button" onclick="debugSetMarketPhase(document.getElementById('debug-market-phase-select').value, false)">Ustaw (potwierdzanie)</button>
                 </div>
+                <div class="debug-bubble-row" style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                    <label for="debug-bubble-cand-select" style="font-size:12px;font-weight:600;">Bańka:</label>
+                    <select id="debug-bubble-cand-select">
+                        <option value="ai">Sztuczna inteligencja</option>
+                        <option value="fintech">Fintech</option>
+                        <option value="biotech">Biotechnologia</option>
+                        <option value="semiconductors">Półprzewodniki</option>
+                        <option value="drones">Drony</option>
+                        <option value="renewables">OZE</option>
+                        <option value="gaming">Gaming</option>
+                        <option value="realestate">Nieruchomości</option>
+                    </select>
+                    <button type="button" onclick="debugTriggerSectorBubble(document.getElementById('debug-bubble-cand-select').value)">Wywołaj bańkę</button>
+                    <button type="button" onclick="debugPopSectorBubble()">Pęknij bańkę</button>
+                </div>
             </div>
         </div>
     </div>

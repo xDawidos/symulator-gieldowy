@@ -220,6 +220,8 @@ function buildSaveSnapshot({ compact = 0 } = {}) {
         paymentTotals,
         economyCycle,
         marketRegimes,
+        sectorBubble: activeSectorBubble,
+        sectorBubbleCooldown: sectorBubbleCooldown,
         macro,
         society,
         etfs: serializeEtfs(),
@@ -688,6 +690,9 @@ function applySaveSnapshot(snapshot) {
     } else {
         initMarketRegimes();
     }
+    activeSectorBubble = snapshot.sectorBubble || null;
+    sectorBubbleCooldown = Number(snapshot.sectorBubbleCooldown) || 0;
+    if (typeof updateAllSectorPremiums === 'function') updateAllSectorPremiums();
     updateMarketTrendFromCycle();
     migrateMarketModel(report);
 
@@ -1390,6 +1395,7 @@ gameTimers.weekly = setGameInterval(() => {
         processDefenseQuarterly(); // zbrojeniówka i fundusz Gwardia (defense.js)
         if (typeof processAccountingQuarterly === 'function') processAccountingQuarterly(); // N3: kreatywna księgowość, audyty (accounting.js)
         if (typeof advanceMarketRegimeQuarterly === 'function') advanceMarketRegimeQuarterly(); // 0.15 H2a: fazy rynku
+        if (typeof advanceSectorBubblesQuarterly === 'function') advanceSectorBubblesQuarterly(); // 0.15 H3: bańki sektorowe
         advanceEconomyCycle(); // nowa faza koniunktury przed raportami
         advanceMacroQuarter(); // inflacja, bezrobocie, cykle sektorów, wybory (macro.js)
         processCityQuarterly(); // festyn raz w roku (city.js)

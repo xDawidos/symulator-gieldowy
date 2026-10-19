@@ -114,6 +114,9 @@ function resetWorld(companies) {
         marketRegimes.home.premium = 0.0;
         marketRegimes.home.premiumTarget = 0.0;
     }
+    if (typeof activeSectorBubble !== 'undefined') activeSectorBubble = null;
+    if (typeof sectorBubbleCooldown !== 'undefined') sectorBubbleCooldown = 0;
+    if (typeof updateAllSectorPremiums === 'function') updateAllSectorPremiums();
     activeTenders = [];
     if (typeof cooperations !== 'undefined') { cooperations = []; cooperationLog = []; } // 0.14 T5
     constructionProjects = [];
@@ -3339,6 +3342,102 @@ group('Testy ogólne 0.11: benchmark GIG i wykup posiadaczy', () => {
         debugSetMarketPhase('euphoria', false);
         assert(curRegime.phase === 'euphoria' && curRegime.shownPhase === null, 'Debug: faza euphoria ustawiona w stanie potwierdzania');
         initMarketRegimes('bull');
+    });
+
+    test('0.15 H3: Bańki sektorowe — start, pompowanie, pęknięcie, ekspozycja segmentowa, startupy, emisje i skaner', () => {
+        // 1. Rejestr kandydatów
+        assert(Array.isArray(SECTOR_BUBBLE_CANDIDATES) && SECTOR_BUBBLE_CANDIDATES.length === 8, '8 kandydatów na bańki');
+        const aiCand = SECTOR_BUBBLE_CANDIDATES.find(c => c.id === 'ai');
+        assert(aiCand && aiCand.name === 'Sztuczna inteligencja', 'Kandydat AI istnieje');
+
+        // 2. Start i wywołanie debug
+        debugTriggerSectorBubble('ai', 0.40);
+        const bubble = getActiveSectorBubble();
+        assert(bubble && bubble.candidateId === 'ai' && Math.abs(bubble.premium - 0.40) < 1e-6, 'Aktywna bańka AI z premią 40%');
+        assert(bubble.phase === 'inflating', 'Bańka w fazie pompowania');
+
+        // 3. Ekspozycja według segmentów (konglomerat vs czysta spółka)
+        const pureAi = {
+            symbol: 'PAI',
+            name: 'Pure AI Inc',
+            sector: ['Technologia'],
+            segments: [{ sector: 'Technologia', subsector: 'Sztuczna inteligencja', share: 1.0 }]
+        };
+        const conglo = {
+            symbol: 'CNG',
+            name: 'Conglomerate SA',
+            sector: ['Żywność', 'Technologia'],
+            segments: [
+                { sector: 'Żywność', subsector: null, share: 0.7 },
+                { sector: 'Technologia', subsector: 'Sztuczna inteligencja', share: 0.3 }
+            ]
+        };
+        const other = {
+            symbol: 'OTH',
+            name: 'Other Corp',
+            sector: ['Energia'],
+            segments: [{ sector: 'Energia', subsector: 'OZE', share: 1.0 }]
+        };
+
+        const origStocks = stocks;
+        try {
+            stocks = [pureAi, conglo, other];
+            updateAllSectorPremiums();
+
+            assertNear(pureAi.sectorPremium, 0.40, 'Czysta spółka AI: pełna premia 40%');
+            assertNear(conglo.sectorPremium, 0.12, 'Konglomerat: proporcjonalna premia 30% * 40% = 12%');
+            assertNear(other.sectorPremium, 0.0, 'Inna branża: brak premii');
+
+            assert(isCompanyInSectorBubble(pureAi), 'pureAi jest w bańce');
+            assert(isCompanyInSectorBubble(conglo), 'conglo jest w bańce');
+            assert(!isCompanyInSectorBubble(other), 'other nie jest w bańce');
+
+            // 4. Formatowanie komórki
+            const cellUp = formatSectorPremiumCell(0.38, true);
+            assert(cellUp.includes('sector-premium up') && cellUp.includes('+38%') && cellUp.includes('badge--warn'), 'Formatowanie komórki z bańką');
+            const cellDown = formatSectorPremiumCell(-0.15, false);
+            assert(cellDown.includes('sector-premium down') && cellDown.includes('-15%'), 'Formatowanie komórki ujemnej');
+            const cellFlat = formatSectorPremiumCell(0.02, false);
+            assert(cellFlat.includes('sector-premium flat') && cellFlat.includes('+2%'), 'Formatowanie komórki neutralnej');
+
+            // 5. Pęknięcie bańki i przejście w recovery
+            debugPopSectorBubble();
+            assert(bubble.phase === 'popping', 'Bańka przeszła w fazę popping');
+            assertNear(bubble.popTarget, -0.20, 'Cel pęknięcia -20%');
+
+            advanceSectorBubblesQuarterly(); // krok 1 w popping
+            assert(bubble.premium < 0.40, 'Premia spada w trakcie popping');
+
+            advanceSectorBubblesQuarterly(); // krok 2 w popping -> koniec popping -> recovery
+            assert(bubble.phase === 'recovering', 'Po zakończeniu popping bańka przechodzi w recovering');
+
+            advanceSectorBubblesQuarterly(); // recovery 1/4
+            advanceSectorBubblesQuarterly(); // recovery 2/4
+            advanceSectorBubblesQuarterly(); // recovery 3/4
+            advanceSectorBubblesQuarterly(); // recovery 4/4 -> koniec bańki
+            assert(getActiveSectorBubble() === null, 'Bańka wygasła po 4 kwartałach recovery');
+            assert(sectorBubbleCooldown === 4, 'Ustawiony cooldown 4 kwartały');
+
+            // 6. Startupy w sektorze bańki
+            debugTriggerSectorBubble('ai', 0.50);
+            const aiStartup = {
+                symbol: 'AIS',
+                name: 'AI Startup',
+                successChance: 0.30,
+                stage: 'ready',
+                segments: [{ sector: 'Technologia', subsector: 'Sztuczna inteligencja', share: 1.0 }]
+            };
+            assert(isCompanyInSectorBubble(aiStartup), 'Startup AI rozpoznany w sektorze bańki');
+
+            // 7. Akademia
+            assert(typeof ACADEMY_ENTRIES.banki_sektorowe === 'object', 'Hasło banki_sektorowe w Akademii');
+            assert(ACADEMY_ENTRIES.banki_sektorowe.quiz.length >= 3, 'Quiz baniek sektorowych ma co najmniej 3 pytania');
+        } finally {
+            stocks = origStocks;
+            activeSectorBubble = null;
+            sectorBubbleCooldown = 0;
+            updateAllSectorPremiums();
+        }
     });
 
     test('bank aktywowany w trakcie gry ma od razu stopy (bez NaN w kredytach botów)', () => {

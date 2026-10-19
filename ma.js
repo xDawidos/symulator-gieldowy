@@ -738,7 +738,24 @@ function aiDecideOnRescueOffer(ai, offer, shares) {
 function triggerRescueOfferingEvent(forcedTarget = null) {
     const candidates = stocks.filter(s => !s.assetType && !s.isBankrupt && !s.mergerProcess && s.balanceSheet
         && s.balanceSheet.liabilities > getMarketCapValue(s) * 0.3);
-    const stock = forcedTarget || (candidates.length ? getRandomElement(candidates) : null);
+    let stock = forcedTarget;
+    if (!stock && candidates.length > 0) {
+        // 0.15 H3: spółki z sektora bańki emitują akcje 2x częściej
+        const weighted = candidates.map(c => ({
+            stock: c,
+            weight: (typeof isCompanyInSectorBubble === 'function' && isCompanyInSectorBubble(c)) ? 2.0 : 1.0
+        }));
+        const totalWeight = weighted.reduce((sum, item) => sum + item.weight, 0);
+        let roll = Math.random() * totalWeight;
+        stock = weighted[0].stock;
+        for (const item of weighted) {
+            roll -= item.weight;
+            if (roll <= 0) {
+                stock = item.stock;
+                break;
+            }
+        }
+    }
     if (!stock) return null;
     const price = stock.price * (1 - getRandomInRange(0.15, 0.25));
     const total = Math.floor(Math.min(stock.balanceSheet.liabilities * 0.5 / price, stock.totalShares * 0.3));

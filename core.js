@@ -2489,6 +2489,298 @@ function updateMarketSentimentWeekly(market = 'home') {
     }
 }
 
+// =================================================================================
+// 0.15 H3: BAŃKI SEKTOROWE (SECTOR BUBBLES)
+// =================================================================================
+
+const SECTOR_BUBBLE_CANDIDATES = [
+    { id: 'ai', name: 'Sztuczna inteligencja', sector: 'Technologia', subsector: 'Sztuczna inteligencja' },
+    { id: 'fintech', name: 'Fintech', sector: 'Finanse', subsector: 'Fintech' },
+    { id: 'biotech', name: 'Biotechnologia', sector: 'Medycyna', subsector: 'Biotechnologia' },
+    { id: 'semiconductors', name: 'Półprzewodniki', sector: 'Technologia', subsector: 'Półprzewodniki' },
+    { id: 'drones', name: 'Drony', sector: 'Obronność', subsector: 'Drony' },
+    { id: 'renewables', name: 'OZE', sector: 'Energia', subsector: 'OZE' },
+    { id: 'gaming', name: 'Gaming', sector: 'Gaming', subsector: null },
+    { id: 'realestate', name: 'Nieruchomości', sector: 'Nieruchomości', subsector: null }
+];
+
+let activeSectorBubble = null;
+let sectorBubbleCooldown = 0;
+
+function getActiveSectorBubble() {
+    return activeSectorBubble;
+}
+
+/** Udział ekspozycji spółki w bańce (0.0 do 1.0) na podstawie jej segmentów. */
+function getCompanyBubbleShare(stock, bubble = activeSectorBubble) {
+    if (!bubble || !stock) return 0;
+    let segments = null;
+    if (Array.isArray(stock.segments) && stock.segments.length > 0) {
+        segments = stock.segments;
+    } else if (typeof getStockSegments === 'function') {
+        segments = getStockSegments(stock);
+    }
+    if (!segments || !segments.length) {
+        // Fallback jeśli brak segmentów
+        const mainSec = typeof getMainSector === 'function' ? getMainSector(stock) : (Array.isArray(stock.sector) ? stock.sector[0] : stock.sector);
+        const mainSub = typeof getMainSubsector === 'function' ? getMainSubsector(stock) : stock.subsector;
+        if (bubble.subsector) {
+            return (mainSec === bubble.sector && mainSub === bubble.subsector) ? 1.0 : 0;
+        } else {
+            return mainSec === bubble.sector ? 1.0 : 0;
+        }
+    }
+
+    let share = 0;
+    for (const seg of segments) {
+        if (bubble.subsector) {
+            if (seg.sector === bubble.sector && seg.subsector === bubble.subsector) {
+                share += (Number(seg.share) || 0);
+            }
+        } else {
+            if (seg.sector === bubble.sector) {
+                share += (Number(seg.share) || 0);
+            }
+        }
+    }
+    return Math.max(0, Math.min(1.0, share));
+}
+
+function isCompanyInSectorBubble(stock, bubble = activeSectorBubble) {
+    return getCompanyBubbleShare(stock, bubble) > 0.001;
+}
+
+/** Aktualizuje pole stock.sectorPremium dla wszystkich spółek według bieżącej bańki. */
+function updateAllSectorPremiums() {
+    if (typeof stocks === 'undefined' || !Array.isArray(stocks)) return;
+    const bubble = activeSectorBubble;
+    stocks.forEach(stock => {
+        if (!stock || stock.assetType === 'Holding') return;
+        if (bubble && bubble.premium !== 0) {
+            const share = getCompanyBubbleShare(stock, bubble);
+            stock.sectorPremium = share * bubble.premium;
+        } else {
+            stock.sectorPremium = 0;
+        }
+    });
+}
+
+/** Oblicza wagę wyboru kandydata na bańkę: waga x2 przy dobrej fazie cyklu, przełomie technologicznym lub jednorożcu. */
+function getSectorBubbleCandidateWeight(cand) {
+    let weight = 1.0;
+    if (typeof macro === 'object' && macro?.sectorCycles && macro.sectorCycles[cand.sector]) {
+        const cycle = macro.sectorCycles[cand.sector];
+        if (cycle.phase === 'boom' || cycle.phase === 'expansion') {
+            weight *= 2.0;
+        }
+    }
+    if (typeof stocks !== 'undefined' && Array.isArray(stocks)) {
+        const hasInnovation = stocks.some(s => isCompanyInSectorBubble(s, cand) && s.corporatePhase === CORPORATE_PHASES?.INNOVATION_PUSH);
+        const hasUnicorn = stocks.some(s => isCompanyInSectorBubble(s, cand) && s.marketStar?.type === 'unicorn');
+        if (hasInnovation || hasUnicorn) {
+            weight *= 2.0;
+        }
+    }
+    return weight;
+}
+
+/** Co kwartał: postęp bańki sektorowej lub losowanie nowej. */
+function advanceSectorBubblesQuarterly() {
+    const regime = getMarketRegime('home');
+    const phaseKey = regime?.phase || 'bull';
+
+    // 1. Jeśli nie ma aktywnej bańki
+    if (!activeSectorBubble) {
+        if (sectorBubbleCooldown > 0) {
+            sectorBubbleCooldown--;
+            return;
+        }
+
+        // Szansa 5%/kw., x2 w Hossie i Euforii, x0 w Bessie i Kapitulacji
+        let phaseMult = 1.0;
+        if (phaseKey === 'bull' || phaseKey === 'euphoria') phaseMult = 2.0;
+        else if (phaseKey === 'bear' || phaseKey === 'capitulation') phaseMult = 0.0;
+
+        const startChance = 0.05 * phaseMult;
+        if (startChance > 0 && Math.random() < startChance) {
+            // Losujemy kandydata z wagami
+            const weightedList = SECTOR_BUBBLE_CANDIDATES.map(c => ({
+                candidate: c,
+                weight: getSectorBubbleCandidateWeight(c)
+            }));
+            const totalWeight = weightedList.reduce((sum, item) => sum + item.weight, 0);
+            let roll = Math.random() * totalWeight;
+            let picked = weightedList[0].candidate;
+            for (const item of weightedList) {
+                roll -= item.weight;
+                if (roll <= 0) {
+                    picked = item.candidate;
+                    break;
+                }
+            }
+
+            activeSectorBubble = {
+                candidateId: picked.id,
+                name: picked.name,
+                sector: picked.sector,
+                subsector: picked.subsector,
+                phase: 'inflating', // 'inflating' | 'popping' | 'recovering'
+                premium: 0.08 + Math.random() * 0.04, // start +8..+12 pp
+                quarters: 1,
+                popDuration: 0,
+                popTarget: 0,
+                popStartPremium: 0,
+                recoveryQuarters: 0
+            };
+            updateAllSectorPremiums();
+        }
+        return;
+    }
+
+    // 2. Jeśli bańka jest aktywna
+    const bubble = activeSectorBubble;
+    bubble.quarters++;
+
+    if (bubble.phase === 'inflating') {
+        const prevPremium = bubble.premium;
+        // Sprawdzenie szansy pęknięcia: 4% + 12% * premia + 3% * kwartały bańki
+        let popChance = 0.04 + 0.12 * bubble.premium + 0.03 * bubble.quarters;
+
+        // Warunki podwojenia szansy:
+        // x2 przy podwyżce stóp >= 50 pb w kwartale, przy krachu (H4) albo gdy mediana wyników sektora jest poniżej oczekiwań
+        let doubleTriggers = false;
+        if (typeof centralBank === 'object' && Number(centralBank?.lastRateChange) >= 0.005) {
+            doubleTriggers = true;
+        }
+        if (typeof isMarketCrashing === 'function' && isMarketCrashing()) {
+            doubleTriggers = true;
+        }
+        // Mediana wyników sektora poniżej oczekiwań
+        if (typeof stocks !== 'undefined' && Array.isArray(stocks)) {
+            const sectorSurprises = stocks
+                .filter(s => isCompanyInSectorBubble(s, bubble) && Number.isFinite(s.lastSurprise))
+                .map(s => s.lastSurprise);
+            if (sectorSurprises.length > 0) {
+                const sorted = [...sectorSurprises].sort((a, b) => a - b);
+                const medSurprise = sorted[Math.floor(sorted.length / 2)];
+                if (medSurprise < -0.05) {
+                    doubleTriggers = true;
+                }
+            }
+        }
+
+        if (doubleTriggers) {
+            popChance *= 2.0;
+        }
+
+        if (Math.random() < popChance) {
+            // Pęknięcie!
+            bubble.phase = 'popping';
+            bubble.popDuration = Math.floor(1 + Math.random() * 3); // 1-3 kwartały
+            bubble.popTarget = -(0.15 + Math.random() * 0.10); // spada do -15..-25%
+            bubble.popStartPremium = bubble.premium;
+            bubble.quartersInPop = 0;
+
+            if (typeof logEvent === 'function') {
+                logEvent(`💥 PĘKNIĘCIE BAŃKI! Euforia w sektorze ${bubble.name} dobiegła końca. Inwestorzy w panice wyprzedają akcje!`, 'market');
+            }
+        } else {
+            // Pompowanie: +5..+12 pp na kw., do +150%
+            const growth = 0.05 + Math.random() * 0.07;
+            bubble.premium = Math.min(1.50, bubble.premium + growth);
+
+            // Wiadomość w pasku newsów przy przekroczeniu +30% po raz pierwszy
+            if (prevPremium <= 0.30 && bubble.premium > 0.30) {
+                if (typeof logEvent === 'function') {
+                    logEvent(`📢 Media: gorączka sektora ${bubble.name}! Inwestorzy płacą rekordowe premie za spółki z branży.`, 'market');
+                }
+            }
+        }
+    }
+
+    if (bubble.phase === 'popping') {
+        bubble.quartersInPop = (bubble.quartersInPop || 0) + 1;
+        const progress = Math.min(1.0, bubble.quartersInPop / Math.max(1, bubble.popDuration));
+        bubble.premium = bubble.popStartPremium + (bubble.popTarget - bubble.popStartPremium) * progress;
+
+        if (progress >= 1.0) {
+            bubble.phase = 'recovering';
+            bubble.recoveryQuarters = 0;
+            bubble.recoveryStartPremium = bubble.premium;
+        }
+    } else if (bubble.phase === 'recovering') {
+        bubble.recoveryQuarters = (bubble.recoveryQuarters || 0) + 1;
+        const progress = Math.min(1.0, bubble.recoveryQuarters / 4.0); // wraca do 0 w ciągu 4 kwartałów
+        bubble.premium = bubble.recoveryStartPremium * (1.0 - progress);
+
+        if (progress >= 1.0) {
+            // Koniec cyklu bańki
+            activeSectorBubble = null;
+            sectorBubbleCooldown = 4; // przerwa 4 kwartały po pęknięciu
+            if (typeof logEvent === 'function') {
+                logEvent(`Uspokojenie nastrojów w sektorze ${bubble.name}: wyceny powróciły do normy fundamentalnej.`, 'market');
+            }
+        }
+    }
+
+    updateAllSectorPremiums();
+}
+
+/** Formatuje komórkę premii sektora do skanera / karty spółki (zgodnie z 05b_ui_0.15.md). */
+function formatSectorPremiumCell(premium, isBubble = false) {
+    if (!Number.isFinite(premium)) return '<span class="text-muted">—</span>';
+    const pct = Math.round(premium * 100);
+    const sign = pct > 0 ? '+' : '';
+    let cls = 'flat';
+    let icon = '■';
+    if (premium >= 0.05) {
+        cls = 'up';
+        icon = '▲';
+    } else if (premium <= -0.05) {
+        cls = 'down';
+        icon = '▼';
+    }
+    const badge = isBubble ? ' <span class="badge badge--warn">bańka</span>' : '';
+    return `<span class="sector-premium ${cls}">${icon} ${sign}${pct}%</span>${badge}`;
+}
+
+/** Debug: ręczne wywołanie bańki sektorowej. */
+function debugTriggerSectorBubble(candId = 'ai', initialPremium = 0.35) {
+    const cand = SECTOR_BUBBLE_CANDIDATES.find(c => c.id === candId) || SECTOR_BUBBLE_CANDIDATES[0];
+    activeSectorBubble = {
+        candidateId: cand.id,
+        name: cand.name,
+        sector: cand.sector,
+        subsector: cand.subsector,
+        phase: 'inflating',
+        premium: initialPremium,
+        quarters: 1,
+        popDuration: 0,
+        popTarget: 0,
+        popStartPremium: 0,
+        recoveryQuarters: 0
+    };
+    sectorBubbleCooldown = 0;
+    updateAllSectorPremiums();
+    if (typeof logEvent === 'function') {
+        logEvent(`🛠️ [DEBUG] Wywołano bańkę sektorową: ${cand.name} (premia +${(initialPremium * 100).toFixed(0)}%).`, 'review');
+    }
+}
+
+/** Debug: natychmiastowe pęknięcie bańki sektorowej. */
+function debugPopSectorBubble() {
+    if (!activeSectorBubble) return;
+    activeSectorBubble.phase = 'popping';
+    activeSectorBubble.popDuration = 2;
+    activeSectorBubble.popTarget = -0.20;
+    activeSectorBubble.popStartPremium = activeSectorBubble.premium;
+    activeSectorBubble.quartersInPop = 0;
+    updateAllSectorPremiums();
+    if (typeof logEvent === 'function') {
+        logEvent(`🛠️ [DEBUG] Wymuszono pęknięcie bańki sektorowej: ${activeSectorBubble.name}.`, 'review');
+    }
+}
+
 /** Mnożnik C/Z dla spółki: faza cyklu (wg bety sektora) i poziom stóp procentowych. */
 function getValuationMultiplier(stock) {
     const profile = getSectorProfile(stock);

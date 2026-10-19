@@ -737,6 +737,22 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Czym charakteryzuje się faza Euforii na giełdzie?', a: ['Wyceny są bardzo wysokie, panuje powszechny optymizm, a ryzyko korekty lub krachu rośnie', 'Wszyscy masowo wyprzedają akcje ze stratą', 'Brak jakichkolwiek transakcji na giełdzie'], c: 0 },
             { q: 'Co mierzy wskaźnik Strachu i Chciwości (0–100)?', a: ['Bieżący nastrój rynku wyliczany m.in. z pędu cen, szerokości rynku i zmienności', 'Jedynie aktualny poziom inflacji w kraju', 'Liczbę nowych spółek debiutujących na giełdzie'], c: 0 }
         ]
+    },
+    banki_sektorowe: {
+        title: 'Bańki sektorowe i premia wyceny', icon: '🫧',
+        text: 'Bańka sektorowa to zjawisko, w którym spółki z modnej branży (np. sztuczna inteligencja, biotechnologia czy gaming) drożeją daleko ponad swoje fundamenty pod wpływem rynkowej gorączki. Premia wyceny sektora może osiągać od kilkunastu do nawet +150% ponad wartość godziwą. Im wyższa premia i dłuższy czas trwania bańki, tym większe prawdopodobieństwo jej gwałtownego pęknięcia (−15…−25% w 1–3 kwartały). Konglomeraty o zdywersyfikowanych przychodach są mniej narażone na pęknięcie bańki niż spółki jednosegmentowe.',
+        example: () => {
+            const bubble = typeof getActiveSectorBubble === 'function' ? getActiveSectorBubble() : null;
+            if (bubble) {
+                return `Aktualna gorączka rynkowa: sektor ${bubble.name} z premią wyceny ${(bubble.premium * 100).toFixed(0)}% (faza: ${bubble.phase}).`;
+            }
+            return 'Obecnie na rynku nie ma aktywnej bańki sektorowej — wyceny branżowe pozostają w normie.';
+        },
+        quiz: [
+            { q: 'Dlaczego inwestowanie w spółki podczas zaawansowanej bańki sektorowej jest ryzykowne?', a: ['Szansa gwałtownego pęknięcia bańki rośnie wraz z wysokością premii i czasem jej trwania', 'Ponieważ spółki w bańce nie mogą wypłacać dywidend', 'Giełda natychmiast zawiesza handel wszystkimi spółkami'], c: 0 },
+            { q: 'Jak dywersyfikacja segmentowa (konglomerat) wpływa na ekspozycję na bańkę?', a: ['Ogranicza wpływ bańki proporcjonalnie do udziału danego segmentu w przychodach spółki', 'Zwiększa ryzyko straty dwukrotnie', 'Nie ma żadnego wpływu na wycenę'], c: 0 },
+            { q: 'Co dzieje się po pęknięciu bańki sektorowej?', a: ['Premia gwałtownie spada poniżej zera (−15…−25%), po czym rynek stopniowo powraca do równowagi', 'Wszystkie spółki z sektora natychmiast bankrutują', 'Premia natychmiast rośnie o kolejne 100%'], c: 0 }
+        ]
     }
 });
 
@@ -1020,9 +1036,10 @@ function runScanner(filters = scannerView.filters, sort = scannerView.sort, dir 
         if (num(filters.healthMin) !== null && !(m.health >= num(filters.healthMin))) continue;
         const work = getScannerWorkforce(stock);
         if (filters.greyOnly && !(work && work.grey > 0.05)) continue;
-        rows.push({ stock, m, med, work, upside: m.fair ? m.fair / stock.price - 1 : null });
+        const sectorPremium = Number(stock.sectorPremium) || 0;
+        rows.push({ stock, m, med, work, upside: m.fair ? m.fair / stock.price - 1 : null, sectorPremium });
     }
-    const key = row => sort === 'name' ? row.stock.name : sort === 'upside' ? row.upside : sort === 'labor' ? row.work?.laborVsSector ?? null : sort === 'satisfaction' ? row.work?.satisfaction ?? null : row.m[sort];
+    const key = row => sort === 'name' ? row.stock.name : sort === 'upside' ? row.upside : sort === 'sectorPremium' ? row.sectorPremium : sort === 'labor' ? row.work?.laborVsSector ?? null : sort === 'satisfaction' ? row.work?.satisfaction ?? null : row.m[sort];
     rows.sort((a, b) => {
         const va = key(a), vb = key(b);
         if (va === null || va === undefined) return 1;
@@ -1138,6 +1155,7 @@ function renderScannerResults() {
     if (!box) return;
     const level = getAnalystLevel();
     const flagsOn = typeof getRedFlags === 'function' && getSkillLevel('accountant') >= 4;
+    const hasIndexLvl5 = typeof getSkillLevel === 'function' && getSkillLevel('indexAnalystLvl1') >= 5;
     const rows = runScanner();
     const pct = v => v === null || v === undefined || !Number.isFinite(v) ? '—' : `${(v * 100).toFixed(1)}%`;
     const fx = v => v === null || v === undefined || !Number.isFinite(v) ? '—' : v.toFixed(1);
@@ -1147,17 +1165,18 @@ function renderScannerResults() {
         <p class="text-sm text-muted">Znaleziono: <strong>${rows.length}</strong>. Kolor: na zielono lepiej niż mediana sektora, na czerwono gorzej. Kliknij spółkę, by otworzyć kartę. Banki pomijamy — ich bilans zawiera depozyty klientów, więc C/WK i zadłużenie liczy się inaczej.</p>
         <div class="scanner-table-wrap"><table class="asset-mini-table w-full scanner-table">
             <thead><tr>
-                ${head('name', 'Spółka', 'Nazwa')}<th title="Podsektor segmentu głównego i specjalizacja-nisza (🏷️); filtr: chipy podsektorów i pole „Specjalizacja”">Podsektor / nisza</th>${head('cap', 'Kapitalizacja', 'Kurs × liczba akcji')}${head('pe', 'C/Z', 'Cena / zysk')}${head('pb', 'C/WK', 'Cena / wartość księgowa')}
+                ${head('name', 'Spółka', 'Nazwa')}<th title="Podsektor segmentu głównego i specjalizacja-nisza (🏷️); filtr: chipy podsektorów i pole „Specjalizacja”">Podsektor / nisza</th>${head('cap', 'Kapitalizacja', 'Kurs × liczba akcji')}${head('pe', 'C/Z', 'Cena / zysk')}${head('pb', 'C/WK', 'Cena / wartość księgowa')}${hasIndexLvl5 ? head('sectorPremium', 'Premia sektora', 'Premia wyceny sektora względem normy fundamentalnej') : ''}
                 ${head('dy', 'Dywid.', 'Stopa dywidendy')}${head('debt', 'Zadłuż.', 'Zobowiązania / aktywa')}
                 ${level >= 2 ? head('roe', 'ROE', 'Zysk / kapitał własny') + head('margin', 'Marża', 'Zysk netto / przychody') + head('growth', 'Zysk r/r', 'Wzrost zysku rok do roku') : ''}
                 ${head('health', 'Kondycja', 'Kondycja finansowa')}${head('labor', 'Praca', 'Koszt pracy w % przychodów (w nawiasie: względem mediany sektora)')}${head('satisfaction', 'Zadow.', 'Zadowolenie pracowników 0–100')}<th title="Związek zawodowy: brak / zakładowy / sektorowy">Związek</th><th title="Ryzyko strajku">Strajk</th>${level >= 3 ? head('upside', 'Potencjał', 'Wartość godziwa / kurs − 1') : ''}${flagsOn ? '<th title="Czerwone flagi (Księgowy poz. 4)">🚩</th>' : ''}
             </tr></thead>
-            <tbody>${rows.slice(0, 120).map(({ stock, m, med, work, upside }) => `<tr class="clickable" onclick="openDescriptionModal('${stock.symbol}')">
+            <tbody>${rows.slice(0, 120).map(({ stock, m, med, work, upside, sectorPremium }) => `<tr class="clickable" onclick="openDescriptionModal('${stock.symbol}')">
                 <td>${escapeHtml(stock.name)} <span class="text-xs text-muted">${escapeHtml(stock.symbol)}</span><span class="text-xs text-muted d-block">${escapeHtml(getStockActivityLabel(stock))}</span></td>
                 <td class="text-xs" title="${escapeHtml(getSubsectorMedians(getMainSector(stock), getMainSubsector(stock)) ? `Mediana C/Z podsektora: ${getSubsectorMedians(getMainSector(stock), getMainSubsector(stock)).pe?.toFixed(1)}` : 'Podsektor (T2)')}">${escapeHtml(getMainSubsector(stock) || '—')}${getStockSegments(stock).find(seg => seg.niche) ? ` · 🏷️ ${escapeHtml(getStockSegments(stock).find(seg => seg.niche).niche)}` : ''}</td>
                 <td class="cell-number">${formatZl(m.cap, 0)}</td>
                 <td class="cell-number ${cls(m.pe, med.pe, true)}">${fx(m.pe)}</td>
                 <td class="cell-number ${cls(m.pb, med.pb, true)}">${m.pb ? m.pb.toFixed(2) : '—'}</td>
+                ${hasIndexLvl5 ? `<td class="cell-number">${typeof formatSectorPremiumCell === 'function' ? formatSectorPremiumCell(sectorPremium, typeof isCompanyInSectorBubble === 'function' && isCompanyInSectorBubble(stock)) : `${(sectorPremium * 100).toFixed(0)}%`}</td>` : ''}
                 <td class="cell-number ${cls(m.dy, med.dy, false)}">${pct(m.dy)}</td>
                 <td class="cell-number ${cls(m.debt, med.debt, true)}">${pct(m.debt)}</td>
                 ${level >= 2 ? `<td class="cell-number ${cls(m.roe, med.roe, false)}">${pct(m.roe)}</td><td class="cell-number ${cls(m.margin, med.margin, false)}">${pct(m.margin)}</td><td class="cell-number ${m.growth > 0 ? 'text-up' : m.growth < 0 ? 'text-down' : ''}">${pct(m.growth)}</td>` : ''}
