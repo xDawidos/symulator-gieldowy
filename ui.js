@@ -1522,6 +1522,10 @@ function displayStocks(previousInputValues = {}) {
       const flags = getRedFlags(stock);
       if (flags.length >= 2) markers.push(['flaga', `Czerwone flagi: ${flags.map(f => f.label).join(', ')}`, 'down']);
     }
+    if (stock.marketStar && typeof getMarketStarTooltip === 'function') {
+      const isUnicorn = stock.marketStar.type === 'unicorn';
+      markers.push([isUnicorn ? 'jednorozec' : 'trend_down', getMarketStarTooltip(stock), isUnicorn ? 'accent' : 'down']);
+    }
     if (markers.length) {
       const markerWrap = document.createElement('span');
       markerWrap.className = 'stock-markers';
@@ -3583,7 +3587,7 @@ function renderCompanyCard() {
             <div>
                 <div class="cc-kicker">${sectorIcon(getMainSector(stock), 14)}${escapeHtml(sector)} · ${escapeHtml(stripEmoji(exchange))}</div>
                 <h2 class="m-0">${escapeHtml(stock.name)} <span class="cc-symbol">${escapeHtml(stock.symbol)}</span></h2>
-                <div class="text-sm text-muted">${stock.isStateOwned ? '<span class="badge badge--neutral">Skarb Państwa</span> ' : ''}${typeof isConcern === 'function' && isConcern(stock) ? '<span class="badge badge--info">koncern</span> ' : ''}${stock.ceo?.name ? `prezes ${escapeHtml(stock.ceo.name)}` : ''}</div>
+                <div class="text-sm text-muted">${stock.isStateOwned ? '<span class="badge badge--neutral">Skarb Państwa</span> ' : ''}${typeof isConcern === 'function' && isConcern(stock) ? '<span class="badge badge--info">koncern</span> ' : ''}${stock.marketStar ? `<span class="badge ${stock.marketStar.type === 'unicorn' ? 'badge--accent' : 'badge--down'}" title="${escapeHtml(typeof getMarketStarTooltip === 'function' ? getMarketStarTooltip(stock) : '')}">${stock.marketStar.type === 'unicorn' ? '🦄 Jednorożec' : '📉 Gasnąca gwiazda'} (${stock.marketStar.quartersLeft} kw.)</span> ` : ''}${stock.ceo?.name ? `prezes ${escapeHtml(stock.ceo.name)}` : ''}</div>
             </div>
             <div class="cc-price">
                 <strong>${formatZl(stock.price)}</strong>

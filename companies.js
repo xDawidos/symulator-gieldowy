@@ -2505,6 +2505,39 @@ const PHASE_GROWTH_ADJUSTMENT = {
     [CORPORATE_PHASES.INNOVATION_PUSH]: 0.005
 };
 
+// 0.15 H1b: Jednorożce (hiper-wzrost z falami realizacji zysków) i Gasnące gwiazdy (schyłek z odbiciami ulgi)
+const MARKET_STAR_TYPES = {
+    UNICORN: 'unicorn',
+    FADING_STAR: 'fading_star'
+};
+
+const MARKET_STAR_CONFIG = {
+    minQuarter: 3, // start po pierwszych 2 kwartałach gry (Q3)
+    minDuration: 6, // 6 kwartałów (1,5 roku)
+    maxDuration: 8, // 8 kwartałów (2 lata)
+    cooldownQuarters: 8, // spółka nie może ponownie dostać statusu przez 2 lata
+    profitTakingDrop: -0.0035, // dryf na tik podczas realizacji zysków (~15-20% korekty)
+    bounceLift: 0.003 // odbicie techniczne (+10-15%)
+};
+
+let marketStarsState = {
+    history: []
+};
+
+function getMarketStarTooltip(stock) {
+    if (!stock?.marketStar) return '';
+    const star = stock.marketStar;
+    if (star.type === MARKET_STAR_TYPES.UNICORN) {
+        const inCorrection = (star.profitTakingTicksLeft || 0) > 0;
+        return `🦄 Jednorożec (pozostało ${star.quartersLeft} kw.): Spółka w fazie hiper-ekspansji rynkowej (wzrost przychodów +5–7%/kw., premia wyceny). ${inCorrection ? '⚠️ Trwa fala realizacji zysków przez fundusze!' : 'Uwaga na okresowe fale realizacji zysków po dynamicznych rajdach.'}`;
+    }
+    if (star.type === MARKET_STAR_TYPES.FADING_STAR) {
+        const inBounce = (star.bounceTicksLeft || 0) > 0;
+        return `📉 Gasnąca gwiazda (pozostało ${star.quartersLeft} kw.): Dawny lider w powolnym schyłku rynkowym (kurczące się przychody i marże). ${inBounce ? '📈 Trwa techniczne odbicie ulgi (dead-cat bounce).' : 'Okresowo możliwe krótkie odbicia ulgi.'}`;
+    }
+    return '';
+}
+
 /** Spółki z pełnym modelem przychodów (bez typów specjalnych i banków). */
 function hasRevenueModel(stock) {
     return Boolean(stock && !stock.assetType && !stock.isBankStock);
@@ -2552,7 +2585,7 @@ const SECTOR_ROE_FOR_PB = 0.10;         // C/WK sektora ≈ C/Z sektora × typow
 const REIT_PREMIUM_MAX = 0.20;          // REIT: NAV ± premia/dyskonto do 20% (z kondycji)
 const LOSS_PB_FACTOR = 0.5;             // spółka ze stratą: max(C/WK × kapitał × 0,5; C/S × przychody × 0,3)
 const LOSS_PS_FACTOR = 0.33;            // spółka ze stratą: podłoga wyceny z przychodów (było 0.3)
-const LOSS_REVERSION_FACTOR = 0.82;     // przy stracie cena wraca do wartości godziwej (było 0.75)
+const LOSS_REVERSION_FACTOR = 0.88;     // przy stracie cena wraca do wartości godziwej (było 0.75, podniesione po kalibracji trendu 0.15)
 
 function hasValuationAnchor(stock) {
     return Boolean(stock && (!stock.assetType || VALUATION_ANCHOR_TYPES.includes(stock.assetType))); // 0.14.2 P1/P9
@@ -2758,8 +2791,19 @@ function computeQuarterResults(stock) {
         + (typeof getMafiaFrontGrowth === 'function' ? getMafiaFrontGrowth(stock) : 0) // spółki-przykrywki rosną z wpływami mafii
         + (typeof getDefenseGrowthBonus === 'function' ? getDefenseGrowthBonus(stock) : 0); // zbrojeniówka: bonus od siły policji
     const societyAdj = (typeof getSocietyGrowthAdj === 'function' ? getSocietyGrowthAdj(stock) : 0) + getSubsectorGrowthAdj(stock) + getNicheGrowthAdj(stock) + getCooperationGrowthAdj(stock); // 0.13: popyt klas, niedobór specjalistów; T2: podsektory; T3: nisze; T5: kooperacje
+    // 0.15 H1b: Wpływ ról rynkowych (Jednorożec 🦄 / Gasnąca gwiazda 📉)
+    let starGrowthAdj = 0;
+    let starMarginAdj = 0;
+    if (stock.marketStar?.type === MARKET_STAR_TYPES.UNICORN) {
+        starGrowthAdj = 0.05 + getRandomInRange(0.005, 0.02); // +5.5% do +7% wzrostu kwartalnie
+        starMarginAdj = 0.02; // +2 pp marży
+    } else if (stock.marketStar?.type === MARKET_STAR_TYPES.FADING_STAR) {
+        starGrowthAdj = -0.035 - getRandomInRange(0.005, 0.015); // -4% do -5% spadku kwartalnie
+        starMarginAdj = -0.025; // -2.5 pp marży
+    }
+
     // 0.15 H1a: health * 0.0005 (było 0.004) zapobiega samonapędzającej się spirali wzrostu przychodów ze zdrowia
-    const growth = profile.growth / 4 * SECTOR_GROWTH_FACTOR + (Number(stock.growthAdj) || 0) + profile.beta * gdp + health * 0.0005 + phaseAdj + sectorAdj + projectAdj + societyAdj + inflation / 4 * INFLATION_PASS_THROUGH + gaussianRandom() * 0.02;
+    const growth = profile.growth / 4 * SECTOR_GROWTH_FACTOR + (Number(stock.growthAdj) || 0) + profile.beta * gdp + health * 0.0005 + phaseAdj + sectorAdj + projectAdj + societyAdj + starGrowthAdj + inflation / 4 * INFLATION_PASS_THROUGH + gaussianRandom() * 0.02;
     // T2 (Fintech): zakaz nowych klientów po kontroli KNF — wzrost przychodów 0 przez 2 kwartały.
     const growthCapped = isKnfGrowthBlocked(stock) ? Math.min(0, growth) : growth;
     fundamentals.revenue = Math.max(1000, fundamentals.revenue * (1 + Math.max(-0.25, Math.min(0.25, growthCapped))));
@@ -2775,7 +2819,7 @@ function computeQuarterResults(stock) {
     const labor = revenue * (typeof getLaborShare === 'function' ? getLaborShare(stock) : 0) * (typeof getLaborCostIndex === 'function' ? getLaborCostIndex(stock) : 1);
     // 0.15 H1a: erozja konkurencyjna nadmiernych marż (stabilizacja trendu EPS do poziomu docelowego)
     // Renta ze zdrowia i strategii podlega erozji konkurencyjnej (powrót do marży profilu sektorowego).
-    const baseMargin = profile.margin * (1 + (Number(stock.marginAdj) || 0)) + health * 0.008 + phaseAdj * 0.5 + profile.beta * gdp * (gdp < 0 ? 3 : 2) - inflationSqueeze - getCrowdingPressure() * 0.02 + getStrategyMarginAdj(stock);
+    const baseMargin = profile.margin * (1 + (Number(stock.marginAdj) || 0)) + health * 0.008 + phaseAdj * 0.5 + profile.beta * gdp * (gdp < 0 ? 3 : 2) - inflationSqueeze - getCrowdingPressure() * 0.02 + getStrategyMarginAdj(stock) + starMarginAdj;
     const excessMargin = Math.max(0, baseMargin - profile.margin);
     const competitiveErosion = excessMargin * 0.35;
     const stabilizedBaseMargin = baseMargin - competitiveErosion;
@@ -3423,11 +3467,156 @@ function processFinancialReports() {
         if (!stock.isBankrupt && stock.fundamentals) updateFundamentalRatios(stock);
     });
     migrateValuationOutliers(); // 0.14.2 P9: rewizja zaraz po nowej wartości godziwej (bez kwartału „okna”)
+    if (typeof processMarketStarsQuarterly === 'function') processMarketStarsQuarterly(); // 0.15 H1b: rotacja sztafety jednorożców i gasnących gwiazd
 
     displayStocks(getCurrentInputValues());
     displayPortfolio();
     console.log("[RAPORTY KWARTALNE] Przetwarzanie zakończone.");
     checkCompanyCounterActions();
+}
+
+function weightedRandomChoice(scoredItems) {
+    if (!scoredItems || scoredItems.length === 0) return null;
+    const totalScore = scoredItems.reduce((sum, item) => sum + item.score, 0);
+    let r = Math.random() * totalScore;
+    for (const item of scoredItems) {
+        r -= item.score;
+        if (r <= 0) return item.stock;
+    }
+    return scoredItems[scoredItems.length - 1].stock;
+}
+
+function selectUnicornCandidate(currentQ) {
+    const eligible = stocks.filter(s => {
+        if (s.assetType || s.isBankStock || s.isBankrupt || s.tradeHalted || s.price <= 1.0) return false;
+        if (s.marketStar) return false;
+        if (s.lastMarketStarQuarter && (currentQ - s.lastMarketStarQuarter) < MARKET_STAR_CONFIG.cooldownQuarters) return false;
+        if ((Number(s.financialHealth) || 0) < 0) return false;
+        if (s.fundamentals && (Number(s.fundamentals.netProfit) || 0) <= 0 && (Number(s.fundamentals.epsTtm) || 0) <= 0) return false; // jednorożcem nie może być spółka trwale generująca stratę (jak mock LOSS)
+        return true;
+    });
+    if (eligible.length === 0) return null;
+
+    const scored = eligible.map(s => {
+        let score = 10;
+        const mainSec = typeof getMainSector === 'function' ? getMainSector(s) : (s.sector?.[0] || '');
+        if (['Technologia', 'Gaming', 'Medycyna', 'Finanse', 'Obronność'].includes(mainSec)) score += 25;
+        const traits = (s.ceo?.traits || []).map(t => t.id);
+        if (traits.includes('wizjoner')) score += 20;
+        if (traits.includes('rekin')) score += 15;
+        if (traits.includes('wyjadacz')) score += 10;
+        if (s.isSubsidiaryOf) score += 10;
+        if ((s.research?.unlockedTechs?.length || 0) > 0) score += 15;
+        return { stock: s, score: Math.max(1, score) };
+    });
+
+    return weightedRandomChoice(scored);
+}
+
+function selectFadingStarCandidate(currentQ) {
+    const eligible = stocks.filter(s => {
+        if (s.assetType || s.isBankStock || s.isBankrupt || s.tradeHalted || s.isStateOwned) return false;
+        if (s.marketStar) return false;
+        if (s.lastMarketStarQuarter && (currentQ - s.lastMarketStarQuarter) < MARKET_STAR_CONFIG.cooldownQuarters) return false;
+        if (s.fundamentals && s.fundamentals.lossAnchor) return false; // spółka z kotwicą straty ma własny dedykowany model
+        return true;
+    });
+    if (eligible.length === 0) return null;
+
+    // Preferencja dla spółek o większej kapitalizacji (ugruntowani liderzy tracący impet)
+    const sortedByCap = [...eligible].sort((a, b) => (b.price * (b.totalShares || 1)) - (a.price * (a.totalShares || 1)));
+    const pool = sortedByCap.slice(0, Math.max(5, Math.floor(sortedByCap.length * 0.6)));
+
+    const scored = pool.map(s => {
+        let score = 10;
+        const mainSec = typeof getMainSector === 'function' ? getMainSector(s) : (s.sector?.[0] || '');
+        if (['Przemysł', 'Chemia', 'Żywność', 'Media', 'Budowlany'].includes(mainSec)) score += 20;
+        const traits = (s.ceo?.traits || []).map(t => t.id);
+        if (traits.includes('biurowy_dron')) score += 20;
+        if (traits.includes('rozrzutny')) score += 15;
+        if (traits.includes('nieudacznik')) score += 25;
+        if (traits.includes('tyran')) score += 10;
+        if ((Number(s.financialHealth) || 0) <= 0) score += 15;
+        return { stock: s, score: Math.max(1, score) };
+    });
+
+    return weightedRandomChoice(scored);
+}
+
+function processMarketStarsQuarterly() {
+    const currentQ = typeof macro === 'object' && macro ? (Number(macro.quarter) || 0) : 0;
+    if (currentQ < MARKET_STAR_CONFIG.minQuarter) return;
+
+    // 1. Aktualizacja trwających ról i wygasanie
+    for (const stock of stocks) {
+        if (!stock.marketStar) continue;
+        stock.marketStar.quartersLeft = (Number(stock.marketStar.quartersLeft) || 1) - 1;
+        if (stock.marketStar.quartersLeft <= 0 || stock.isBankrupt) {
+            const role = stock.marketStar.type;
+            const duration = stock.marketStar.durationQuarters || 6;
+            if (role === MARKET_STAR_TYPES.UNICORN && !stock.isBankrupt) {
+                logEvent(`✨ ${stock.name} (${stock.symbol}) kończy ${duration}-kwartalny cykl hiper-wzrostu jako Jednorożec. Spółka wchodzi w fazę stabilizacji.`, 'market');
+            } else if (role === MARKET_STAR_TYPES.FADING_STAR && !stock.isBankrupt) {
+                logEvent(`📉 ${stock.name} (${stock.symbol}) kończy fazę głębokiego schyłku. Wycena spółki ustabilizowała się na nowym poziomie.`, 'market');
+            }
+            if (typeof marketStarsState === 'object' && marketStarsState) {
+                marketStarsState.history = marketStarsState.history || [];
+                marketStarsState.history.push({
+                    symbol: stock.symbol,
+                    name: stock.name,
+                    type: role,
+                    startQuarter: stock.marketStar.startQuarter,
+                    endQuarter: currentQ
+                });
+            }
+            stock.lastMarketStarQuarter = currentQ;
+            delete stock.marketStar;
+        }
+    }
+
+    // 2. Uzupełnianie sztafety do 1–2 aktywnych każdego typu
+    const activeUnicorns = stocks.filter(s => s.marketStar?.type === MARKET_STAR_TYPES.UNICORN && !s.isBankrupt);
+    const activeFading = stocks.filter(s => s.marketStar?.type === MARKET_STAR_TYPES.FADING_STAR && !s.isBankrupt);
+
+    const targetUnicornCount = (activeUnicorns.length === 0) ? 1 : (activeUnicorns.length === 1 && Math.random() < 0.35) ? 2 : 1;
+    if (activeUnicorns.length < targetUnicornCount) {
+        const candidate = selectUnicornCandidate(currentQ);
+        if (candidate) {
+            const duration = getRandomIntInRange(MARKET_STAR_CONFIG.minDuration, MARKET_STAR_CONFIG.maxDuration);
+            candidate.marketStar = {
+                type: MARKET_STAR_TYPES.UNICORN,
+                startQuarter: currentQ,
+                durationQuarters: duration,
+                quartersLeft: duration,
+                anchorPrice: candidate.price,
+                peakPrice: candidate.price,
+                profitTakingTicksLeft: 0,
+                correctionCooldown: 30,
+                totalCycles: 0
+            };
+            logEvent(`🦄 [Nowy Jednorożec] ${candidate.name} (${candidate.symbol}) wkracza w fazę hiper-ekspansji rynkowej! Kurs i przychody zyskują silne wsparcie.`, 'market');
+        }
+    }
+
+    const targetFadingCount = (activeFading.length === 0) ? 1 : (activeFading.length === 1 && Math.random() < 0.35) ? 2 : 1;
+    if (activeFading.length < targetFadingCount) {
+        const candidate = selectFadingStarCandidate(currentQ);
+        if (candidate) {
+            const duration = getRandomIntInRange(MARKET_STAR_CONFIG.minDuration, MARKET_STAR_CONFIG.maxDuration);
+            candidate.marketStar = {
+                type: MARKET_STAR_TYPES.FADING_STAR,
+                startQuarter: currentQ,
+                durationQuarters: duration,
+                quartersLeft: duration,
+                anchorPrice: candidate.price,
+                troughPrice: candidate.price,
+                bounceTicksLeft: 0,
+                correctionCooldown: 30,
+                totalCycles: 0
+            };
+            logEvent(`📉 [Gasnąca Gwiazda] ${candidate.name} (${candidate.symbol}) traci pozycję rynkową. Spółka wkracza w fazę schyłkową.`, 'market');
+        }
+    }
 }
 
 function processReitDividend(stock) {

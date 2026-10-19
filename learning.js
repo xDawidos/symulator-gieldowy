@@ -706,6 +706,22 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Po co wprowadza się limit wagi (tzw. cap, np. 10%) w indeksie giełdowym?', a: ['Aby jedna ogromna spółka nie zdominowała całego indeksu', 'Żeby zablokować wypłatę dywidend', 'Aby ograniczyć zysk inwestorów do 10%'], c: 0 },
             { q: 'Które indeksy w grze są ważone kapitalizacją?', a: ['GIG (cap 10%), TIG5 oraz SIG20', 'Tylko lokaty i obligacje', 'Żadne — wszystkie są równe'], c: 0 }
         ]
+    },
+    jednorozce: {
+        title: 'Jednorożce i Gasnące Gwiazdy', icon: '🦄',
+        text: 'Na dojrzałym rynku pewne spółki przechodzą 6–8 kwartalne cykle skrajnych emocji inwestorów. Jednorożec (Unicorn) notuje dynamiczny wzrost przychodów (+5–7%), wyższe marże i premię wyceny (+25%), lecz po falach silnych wzrostów inwestorzy okresowo realizują zyski (korekta -15–20%). Z kolei Gasnąca Gwiazda zmaga się ze spadkiem przychodów i marż, a jej wycena cierpi z powodu dyskonta, przeplatanego jedynie krótkimi, technicznymi odbiciami ulgi (dead-cat bounce). Role te rotują na rynku w formie sztafety.',
+        example: () => {
+            const unicorn = typeof stocks !== 'undefined' ? stocks.find(s => s.marketStar?.type === 'unicorn') : null;
+            const fading = typeof stocks !== 'undefined' ? stocks.find(s => s.marketStar?.type === 'fading_star') : null;
+            if (unicorn) return `Obecny jednorożec na rynku: ${unicorn.name} (${unicorn.symbol}) — pozostało ${unicorn.marketStar.quartersLeft} kw. cyklu.`;
+            if (fading) return `Obecna gasnąca gwiazda: ${fading.name} (${fading.symbol}) — pozostało ${fading.marketStar.quartersLeft} kw. cyklu.`;
+            return 'Jednorożce i gasnące gwiazdy wyłaniają się na rynku od 3. kwartału gry.';
+        },
+        quiz: [
+            { q: 'Czym charakteryzuje się Jednorożec rynkowy?', a: ['Hiper-wzrostem przychodów, wyższą marżą i premią wyceny z okresowymi korektami', 'Gwarancją braku jakichkolwiek spadków kursu', 'Brakiem konkurencji i monopolem prawnym'], c: 0 },
+            { q: 'Co to jest techniczne odbicie ulgi (dead-cat bounce) na gasnącej gwieździe?', a: ['Krótkotrwały wzrost kursu wyprzedanej spółki, po którym powraca trend schyłkowy', 'Trwałe uzdrowienie finansów spółki', 'Wypłata rekordowej dywidendy'], c: 0 },
+            { q: 'Jak długo trwa cykl jednorożca lub gasnącej gwiazdy przed przekazaniem sztafety?', a: ['Zazwyczaj 6–8 kwartałów (1.5–2 lata gry)', 'Zawsze dokładnie 1 tydzień', 'Przez całą 20-letnią grę bez zmian'], c: 0 }
+        ]
     }
 });
 
@@ -768,6 +784,7 @@ function checkAcademyTriggers() {
     if (Object.values(playerPortfolio).some(h => h.assetType === 'etf' && h.shares > 0)) unlockAcademyEntry('etf');
     if (getSkillLevel('financialAnalyst') >= 1) unlockAcademyEntry('wycena');
     if (getSkillLevel('indexAnalystLvl1') >= 1) unlockAcademyEntry('indeks_wazony');
+    if (stocks.some(s => s.marketStar)) unlockAcademyEntry('jednorozce');
     if (getSkillLevel('accountant') >= 3) unlockAcademyEntry('przeplywy');
     if (getSkillLevel('accountant') >= 4) unlockAcademyEntry('kreatywna');
     if (stocks.some(s => s.isBankrupt)) unlockAcademyEntry('bankructwo');

@@ -3130,6 +3130,70 @@ group('Testy ogólne 0.11: benchmark GIG i wykup posiadaczy', () => {
         assert(Math.abs(deltaMargin - expectedErodedBoost) < 0.0001, `nadwyżka marży poddana erozji: delta ${deltaMargin.toFixed(4)} vs oczekiwana ${expectedErodedBoost.toFixed(4)}`);
     });
 
+    test('0.15 H1b: sztafeta jednorożców i gasnących gwiazd z falami realizacji zysków', () => {
+        // 1. Brak losowania gwiazd w Q1-Q2 (dopiero od Q3)
+        const c1 = makeCompany('UNI1', { sector: ['Technologia'] });
+        const c2 = makeCompany('FAD1', { sector: ['Przemysł'] });
+        const c3 = makeCompany('UNI2', { sector: ['Gaming'] });
+        const c4 = makeCompany('FAD2', { sector: ['Media'] });
+        const all = [c1, c2, c3, c4];
+        resetWorld(all);
+        all.forEach(c => initializeFundamentals(c, true));
+
+        macro = { quarter: 1, inflation: 0.025 };
+        processMarketStarsQuarterly();
+        assert(!all.some(c => c.marketStar), 'Brak gwiazd w Q1');
+
+        macro.quarter = 2;
+        processMarketStarsQuarterly();
+        assert(!all.some(c => c.marketStar), 'Brak gwiazd w Q2');
+
+        // 2. Wyłonienie gwiazd od Q3
+        macro.quarter = 3;
+        withSeededRandom(42, () => {
+            processMarketStarsQuarterly();
+        });
+        const unicorn = all.find(c => c.marketStar?.type === 'unicorn');
+        const fading = all.find(c => c.marketStar?.type === 'fading_star');
+        assert(unicorn, 'Wyłoniono jednorożca od Q3');
+        assert(fading, 'Wyłoniono gasnącą gwiazdę od Q3');
+        assert(unicorn.marketStar.quartersLeft >= 6 && unicorn.marketStar.quartersLeft <= 8, 'Czas trwania jednorożca 6-8 kwartałów');
+        assert(fading.marketStar.quartersLeft >= 6 && fading.marketStar.quartersLeft <= 8, 'Czas trwania gasnącej gwiazdy 6-8 kwartałów');
+
+        // 3. Wpływ na wycenę i wyniki (mnożnik wyceny 1.25 dla jednorożca, 0.80 dla gasnącej gwiazdy)
+        const multUni = getValuationMultiplier(unicorn);
+        const multFad = getValuationMultiplier(fading);
+        assert(multUni > multFad, `Wycena jednorożca (${multUni.toFixed(2)}) wyższa niż gasnącej gwiazdy (${multFad.toFixed(2)})`);
+
+        // 4. Mechanika fali realizacji zysków na jednorożcu
+        unicorn.marketStar.anchorPrice = 100;
+        unicorn.price = 130; // +30% zysku od kotwicy
+        unicorn.marketStar.correctionCooldown = 0;
+        unicorn.marketStar.profitTakingTicksLeft = 0;
+        // Wymuszenie odpalenia realizacji zysków (szansa 1.5% na tick, po ~250 tickach p > 97%)
+        withSeededRandom(10, () => {
+            for (let t = 0; t < 300; t++) {
+                if (unicorn.price < 130) unicorn.price = 130;
+                updateStockPrices();
+                if (unicorn.marketStar.profitTakingTicksLeft > 0 || unicorn.marketStar.totalCycles > 0) break;
+            }
+        });
+        assert(unicorn.marketStar.profitTakingTicksLeft > 0 || unicorn.marketStar.totalCycles > 0, 'Realizacja zysków została uruchomiona');
+
+        // 5. Rotacja sztafetowa po upływie czasu
+        const initialUniSymbol = unicorn.symbol;
+        unicorn.marketStar.quartersLeft = 1;
+        macro.quarter = 4;
+        processMarketStarsQuarterly();
+        // Wygasł stary jednorożec, ma cooldown i nowy jednorożec wszedł do gry
+        assert(!unicorn.marketStar, 'Stary jednorożec zakończył swój cykl');
+        assert(unicorn.lastMarketStarQuarter === 4, 'Zapisano kwartał zakończenia cyklu');
+
+        // 6. Akademia
+        assert(typeof ACADEMY_ENTRIES.jednorozce === 'object', 'Hasło jednorozce w Akademii');
+        assert(ACADEMY_ENTRIES.jednorozce.quiz.length >= 3, 'Quiz jednorożców ma pytania');
+    });
+
     test('bank aktywowany w trakcie gry ma od razu stopy (bez NaN w kredytach botów)', () => {
         const bank = { id: 'late', name: 'Późny Bank', type: BANK_TYPES.UNIVERSAL, isActive: false, cash: 1e6, baseInterestRateMargin: 0.02, stockPortfolio: {}, loanPortfolio: {}, depositPortfolio: {} };
         commercialBanks.push(bank);

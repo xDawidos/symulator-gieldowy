@@ -2206,7 +2206,8 @@ function getValuationMultiplier(stock) {
     const sectorMult = typeof getSectorValuationFactor === 'function' ? getSectorValuationFactor(stock) : 1; // cykl sektora (macro.js)
     const interest = typeof getAristocratValuationFactor === 'function' ? getAristocratValuationFactor(stock) : 1; // zainteresowanie arystokratą
     const projects = typeof getSpecialProjectValuation === 'function' ? getSpecialProjectValuation(stock) : 1; // projekty specjalne
-    return Math.max(0.4, Math.min(1.8, cycleMult * rateMult * sectorMult * interest * projects));
+    const starMult = stock.marketStar?.type === 'unicorn' ? 1.25 : (stock.marketStar?.type === 'fading_star' ? 0.80 : 1);
+    return Math.max(0.4, Math.min(2.0, cycleMult * rateMult * sectorMult * interest * projects * starMult));
 }
 
 /** Szansa na zdarzenie pozytywne zależnie od fazy (eventy rynkowe). */
@@ -2466,6 +2467,59 @@ function updateStockPrices() {
         // Dryf z fazy spółki, cech CEO i efektów M&A (wcześniej: 0.00005 × odchylenie modyfikatora).
         let drift = 0.00005 * (priceGrowthModifier - 1.0);
         if (stock.isMonopolist) drift *= 1.5;
+
+        // 0.15 H1b: Dynamika rynkowa Jednorożców i Gasnących Gwiazd
+        if (stock.marketStar) {
+            const ms = stock.marketStar;
+            if (ms.correctionCooldown > 0) ms.correctionCooldown--;
+
+            if (ms.type === 'unicorn') {
+                // Stały impet wzrostowy poza falami korekty
+                if (ms.profitTakingTicksLeft > 0) {
+                    ms.profitTakingTicksLeft--;
+                    changePct -= 0.0035; // fala realizacji zysków (-0.35% na tick, ~15-20% w całej fali)
+                    if (ms.profitTakingTicksLeft === 0) {
+                        ms.anchorPrice = price; // reset kotwicy po korekcie
+                        ms.correctionCooldown = 40; // min 40 ticków do kolejnej możliwej korekty
+                    }
+                } else {
+                    changePct += 0.0006; // impet hossy na jednorożcu
+                    if (price > (ms.peakPrice || price)) ms.peakPrice = price;
+                    const gainSinceAnchor = (price - (ms.anchorPrice || price)) / (ms.anchorPrice || price);
+                    // Po silnym wzroście (>= +25% od kotwicy) pojawia się szansa na falę realizacji zysków
+                    if (gainSinceAnchor >= 0.25 && ms.correctionCooldown === 0 && Math.random() < 0.015) {
+                        ms.profitTakingTicksLeft = Math.floor(35 + Math.random() * 20); // 35-55 ticków
+                        ms.totalCycles = (ms.totalCycles || 0) + 1;
+                        if (typeof logEvent === 'function') {
+                            logEvent(`💸 [Realizacja Zysków] Inwestorzy realizują zyski na akcjach jednorożca ${stock.name} (${stock.symbol}) po fali silnych wzrostów.`, 'market');
+                        }
+                    }
+                }
+            } else if (ms.type === 'fading_star') {
+                // Stała presja spadkowa poza technicznymi odbiciami
+                if (ms.bounceTicksLeft > 0) {
+                    ms.bounceTicksLeft--;
+                    changePct += 0.0030; // techniczne odbicie ulgi (dead-cat bounce, +0.30% na tick)
+                    if (ms.bounceTicksLeft === 0) {
+                        ms.anchorPrice = price; // reset kotwicy po odbiciu
+                        ms.correctionCooldown = 40;
+                    }
+                } else {
+                    changePct -= 0.0005; // presja schyłkowa na gasnącej gwieździe
+                    if (price < (ms.troughPrice || price)) ms.troughPrice = price;
+                    const dropSinceAnchor = ((ms.anchorPrice || price) - price) / (ms.anchorPrice || price);
+                    // Po mocnym spadku (>= 20% od kotwicy) szansa na techniczne odbicie ulgi
+                    if (dropSinceAnchor >= 0.20 && ms.correctionCooldown === 0 && Math.random() < 0.015) {
+                        ms.bounceTicksLeft = Math.floor(25 + Math.random() * 20); // 25-45 ticków
+                        ms.totalCycles = (ms.totalCycles || 0) + 1;
+                        if (typeof logEvent === 'function') {
+                            logEvent(`📈 [Odbicie Ulgi] Techniczne odbicie (dead-cat bounce) na wyprzedanych akcjach ${stock.name} (${stock.symbol}).`, 'market');
+                        }
+                    }
+                }
+            }
+        }
+
         changePct += drift;
 
         stock.price = price * (1 + Math.max(-0.2, Math.min(0.2, changePct)));
