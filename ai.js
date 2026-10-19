@@ -645,7 +645,9 @@ function makeAiDecision(ai) {
         case 'reckless':
         case 'yolo_trader':
             const currentLoansValue = (ai.loans || []).reduce((sum, l) => sum + l.amount, 0);
-            const maxLeverageRatio = (ai.personality === 'yolo_trader' ? 0.7 : 0.5); // Yolo bardziej ryzykuje
+            const maxLeverageRatio = typeof getKnfLeverageCap === 'function' 
+                ? getKnfLeverageCap(ai.personality) 
+                : (ai.personality === 'yolo_trader' ? 0.7 : 0.5); // Yolo bardziej ryzykuje
 
             // --- Priorytet spłaty długu (jeśli nadmiar gotówki) ---
             if (cashRatio > 0.6 && currentLoansValue > 0) {

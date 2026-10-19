@@ -3108,6 +3108,42 @@ function checkMarketCrashQuarterly(market = 'home') {
     if (Math.random() < crashChance) {
         triggerMarketCrash();
     }
+
+    // KNF chłodzi euforię: gdy premia rynku > +25% przez >= 2 kw., szansa 50% na obniżenie dopuszczalnej dźwigni botów na 4 kw.
+    checkKnfCoolingEuphoria(regime);
+}
+
+let knfLeverageCoolingQuarters = 0;
+
+function isKnfLeverageCoolingActive() {
+    return knfLeverageCoolingQuarters > 0;
+}
+
+function getKnfLeverageCap(personality) {
+    if (knfLeverageCoolingQuarters > 0) {
+        return personality === 'yolo_trader' ? 0.50 : 0.35;
+    }
+    return personality === 'yolo_trader' ? 0.70 : 0.50;
+}
+
+function checkKnfCoolingEuphoria(regime) {
+    if (!regime) return;
+    if (knfLeverageCoolingQuarters > 0) {
+        knfLeverageCoolingQuarters--;
+        return;
+    }
+    if (regime.premium > 0.25 && regime.quartersInPhase >= 2 && !regime.knfCooledInPhase) {
+        if (Math.random() < 0.50) {
+            regime.knfCooledInPhase = true;
+            knfLeverageCoolingQuarters = 4;
+            if (typeof logEvent === 'function') {
+                logEvent(`🛡️ KNF chłodzi euforię na rynku! Nałożono tymczasowy limit dźwigni finansowej funduszy (max 35–50%) na 4 kwartały.`, 'macro');
+            }
+            if (typeof pushNews === 'function') {
+                pushNews(`🛡️ KNF ogranicza dopuszczalną dźwignię finansową funduszy w reakcji na przegrzanie wycen!`);
+            }
+        }
+    }
 }
 
 /** Reakcja Banku Centralnego po krachu: nadzwyczajne cięcie o 50 pb. */
