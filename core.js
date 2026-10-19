@@ -2557,15 +2557,21 @@ function updateAllSectorPremiums() {
     stocks.forEach(stock => {
         if (!stock || stock.assetType === 'Holding') return;
         if (bubble && bubble.premium !== 0) {
-            const share = getCompanyBubbleShare(stock, bubble);
-            stock.sectorPremium = share * bubble.premium;
+            let totalPrem = 0;
+            const mainShare = getCompanyBubbleShare(stock, bubble);
+            totalPrem += mainShare * bubble.premium;
+            if (bubble.spilloverSector) {
+                const spillShare = getCompanyBubbleShare(stock, bubble.spilloverSector);
+                totalPrem += spillShare * (bubble.premium * 0.5); // rozlany sektor dostaje 50% premii bańki
+            }
+            stock.sectorPremium = totalPrem;
         } else {
             stock.sectorPremium = 0;
         }
     });
 }
 
-/** Oblicza wagę wyboru kandydata na bańkę: waga x2 przy dobrej fazie cyklu, przełomie technologicznym lub jednorożcu. */
+//** Oblicza wagę wyboru kandydata na bańkę: waga x2 przy dobrej fazie cyklu, przełomie technologicznym lub jednorożcu. */
 function getSectorBubbleCandidateWeight(cand) {
     let weight = 1.0;
     if (typeof macro === 'object' && macro?.sectorCycles && macro.sectorCycles[cand.sector]) {
@@ -2584,10 +2590,32 @@ function getSectorBubbleCandidateWeight(cand) {
     return weight;
 }
 
+/** Znajduje sektor powiązany do rozlania się bańki (spillover). */
+function pickSpilloverSector(sourceCandidateId) {
+    const pool = SECTOR_BUBBLE_CANDIDATES.filter(c => c.id !== sourceCandidateId);
+    return pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : null;
+}
+
 /** Co kwartał: postęp bańki sektorowej lub losowanie nowej. */
 function advanceSectorBubblesQuarterly() {
     const regime = getMarketRegime('home');
     const phaseKey = regime?.phase || 'bull';
+
+    // 0. Sprawdzenie Tarczy Antybańkowej (Megaprojekt SMSR Poziom 3)
+    if (typeof isMarketStabilityProjectUnlocked === 'function' && isMarketStabilityProjectUnlocked(3)) {
+        const smsr = typeof getMarketStabilityProject === 'function' ? getMarketStabilityProject() : null;
+        if (smsr && smsr.shieldActive) {
+            if (activeSectorBubble) {
+                if (typeof logEvent === 'function') {
+                    logEvent(`🛡️ [SMSR Lvl 3 - Tarcza]: Algorytmy makroostrożnościowe stłumiły bańkę spekulacyjną w sektorze ${activeSectorBubble.name}. Rynek pozostaje bezpieczny.`, 'market');
+                }
+                activeSectorBubble = null;
+                sectorBubbleCooldown = 4;
+                updateAllSectorPremiums();
+            }
+            return;
+        }
+    }
 
     // 1. Jeśli nie ma aktywnej bańki
     if (!activeSectorBubble) {
@@ -2619,20 +2647,55 @@ function advanceSectorBubblesQuarterly() {
                 }
             }
 
+            // Losowanie typu bańki:
+            // 35% krótki rajd ('rally'), 25% rozwleczona potężna bańka ('extended'), 40% klasyczna ('classic')
+            const typeRoll = Math.random();
+            let bType = 'classic';
+            let startPrem = 0.08 + Math.random() * 0.04;
+            if (typeRoll < 0.35) {
+                bType = 'rally';
+                startPrem = 0.14 + Math.random() * 0.05; // szybki, ekscytujący start
+            } else if (typeRoll < 0.60) {
+                bType = 'extended';
+                startPrem = 0.08 + Math.random() * 0.04; // powolny, systematyczny start
+            }
+
             activeSectorBubble = {
                 candidateId: picked.id,
                 name: picked.name,
                 sector: picked.sector,
                 subsector: picked.subsector,
+                type: bType, // 'rally' | 'extended' | 'classic'
                 phase: 'inflating', // 'inflating' | 'popping' | 'recovering'
-                premium: 0.08 + Math.random() * 0.04, // start +8..+12 pp
+                premium: startPrem,
                 quarters: 1,
                 popDuration: 0,
                 popTarget: 0,
                 popStartPremium: 0,
-                recoveryQuarters: 0
+                recoveryQuarters: 0,
+                spilloverSector: null,
+                spilloverApplied: false
             };
             updateAllSectorPremiums();
+
+            // Powiadomienia SMSR:
+            if (typeof isMarketStabilityProjectUnlocked === 'function') {
+                if (isMarketStabilityProjectUnlocked(2)) {
+                    if (typeof logEvent === 'function') {
+                        logEvent(`🔥 [SMSR Poziom 2 - Radar Live]: Wykryto narodziny bańki spekulacyjnej w sektorze ${picked.name} (typ: ${getBubbleTypeName(bType)}, premia startowa: +${(startPrem * 100).toFixed(0)}%).`, 'market');
+                    }
+                } else if (isMarketStabilityProjectUnlocked(1)) {
+                    const smsr = typeof getMarketStabilityProject === 'function' ? getMarketStabilityProject() : null;
+                    if (smsr) {
+                        const curQ = typeof macro === 'object' && Number.isFinite(macro.quarter) ? macro.quarter : 0;
+                        smsr.delayedWarnings.push({
+                            targetQuarter: curQ + 1, // opóźnienie o 1 kwartał
+                            name: picked.name,
+                            sector: picked.sector
+                        });
+                    }
+                }
+            }
         }
         return;
     }
@@ -2643,56 +2706,112 @@ function advanceSectorBubblesQuarterly() {
 
     if (bubble.phase === 'inflating') {
         const prevPremium = bubble.premium;
-        // Sprawdzenie szansy pęknięcia: 4% + 12% * premia + 3% * kwartały bańki
-        let popChance = 0.04 + 0.12 * bubble.premium + 0.03 * bubble.quarters;
+        const minBubbleLimit = 0.22; // Minimalny limit bańki: dopóki < 22%, nie pęka samoczynnie
 
-        // Warunki podwojenia szansy:
-        // x2 przy podwyżce stóp >= 50 pb w kwartale, przy krachu (H4) albo gdy mediana wyników sektora jest poniżej oczekiwań
-        let doubleTriggers = false;
-        if (typeof centralBank === 'object' && Number(centralBank?.lastRateChange) >= 0.005) {
-            doubleTriggers = true;
-        }
-        if (typeof isMarketCrashing === 'function' && isMarketCrashing()) {
-            doubleTriggers = true;
-        }
-        // Mediana wyników sektora poniżej oczekiwań
-        if (typeof stocks !== 'undefined' && Array.isArray(stocks)) {
-            const sectorSurprises = stocks
-                .filter(s => isCompanyInSectorBubble(s, bubble) && Number.isFinite(s.lastSurprise))
-                .map(s => s.lastSurprise);
-            if (sectorSurprises.length > 0) {
-                const sorted = [...sectorSurprises].sort((a, b) => a - b);
-                const medSurprise = sorted[Math.floor(sorted.length / 2)];
-                if (medSurprise < -0.05) {
-                    doubleTriggers = true;
+        let popChance = 0;
+        if (bubble.premium >= minBubbleLimit) {
+            if (bubble.type === 'rally') {
+                // Krótki rajd: rośnie szybko, wysoka szansa pęknięcia
+                popChance = 0.30 + 0.15 * Math.max(0, bubble.quarters - 2);
+            } else if (bubble.type === 'extended') {
+                // Rozwleczona bańka: trwa dłużej, ale po 4-5 kwartałach ryzyko gwałtownie wzrasta
+                popChance = 0.03 + 0.05 * bubble.premium + 0.025 * Math.max(0, bubble.quarters - 3);
+            } else {
+                // Klasyczna bańka:
+                popChance = 0.06 + 0.12 * bubble.premium + 0.04 * Math.max(0, bubble.quarters - 2);
+            }
+
+            // Czynniki makro podwajające szansę pęknięcia
+            let doubleTriggers = false;
+            if (typeof centralBank === 'object' && Number(centralBank?.lastRateChange) >= 0.005) {
+                doubleTriggers = true;
+            }
+            if (typeof isMarketCrashing === 'function' && isMarketCrashing()) {
+                doubleTriggers = true;
+            }
+            if (typeof stocks !== 'undefined' && Array.isArray(stocks)) {
+                const sectorSurprises = stocks
+                    .filter(s => isCompanyInSectorBubble(s, bubble) && Number.isFinite(s.lastSurprise))
+                    .map(s => s.lastSurprise);
+                if (sectorSurprises.length > 0) {
+                    const sorted = [...sectorSurprises].sort((a, b) => a - b);
+                    const medSurprise = sorted[Math.floor(sorted.length / 2)];
+                    if (medSurprise < -0.05) {
+                        doubleTriggers = true;
+                    }
                 }
             }
+            if (doubleTriggers) popChance *= 2.0;
         }
 
-        if (doubleTriggers) {
-            popChance *= 2.0;
-        }
-
-        if (Math.random() < popChance) {
-            // Pęknięcie!
+        if (bubble.premium >= minBubbleLimit && Math.random() < popChance) {
+            // PĘKNIĘCIE!
             bubble.phase = 'popping';
-            bubble.popDuration = Math.floor(1 + Math.random() * 3); // 1-3 kwartały
-            bubble.popTarget = -(0.15 + Math.random() * 0.10); // spada do -15..-25%
+            if (bubble.type === 'rally') {
+                // Rajd pęka gwałtownie w 1-2 kwartały
+                bubble.popDuration = Math.floor(1 + Math.random() * 2); // 1-2 kw.
+                bubble.popTarget = -(0.16 + Math.random() * 0.08); // spadek -16..-24%
+            } else if (bubble.type === 'extended') {
+                // Rozwleczona bańka pęka potężnie i głęboko
+                bubble.popDuration = Math.floor(2 + Math.random() * 3); // 2-4 kw.
+                const durationPanic = Math.min(0.20, bubble.quarters * 0.018);
+                bubble.popTarget = -(0.24 + Math.random() * 0.10 + durationPanic); // -25..-48%
+            } else {
+                // Klasyczna bańka
+                bubble.popDuration = Math.floor(2 + Math.random() * 2); // 2-3 kw.
+                const durationPanic = Math.min(0.12, bubble.quarters * 0.015);
+                bubble.popTarget = -(0.18 + Math.random() * 0.08 + durationPanic);
+            }
+
             bubble.popStartPremium = bubble.premium;
             bubble.quartersInPop = 0;
 
             if (typeof logEvent === 'function') {
                 logEvent(`💥 PĘKNIĘCIE BAŃKI! Euforia w sektorze ${bubble.name} dobiegła końca. Inwestorzy w panice wyprzedają akcje!`, 'market');
             }
+            if (typeof isMarketStabilityProjectUnlocked === 'function' && isMarketStabilityProjectUnlocked(2)) {
+                if (typeof logEvent === 'function') {
+                    logEvent(`🚨 [SMSR Poziom 2 - Radar]: ALARM! Bańka w sektorze ${bubble.name} pękła! Fala wyprzedaży zmierza do dołka ${(bubble.popTarget * 100).toFixed(0)}%.`, 'market');
+                }
+            }
         } else {
-            // Pompowanie: +5..+12 pp na kw., do +150%
-            const growth = 0.05 + Math.random() * 0.07;
+            // POMPOWANIE:
+            let growth = 0.05 + Math.random() * 0.05;
+            if (bubble.type === 'rally') {
+                growth = 0.10 + Math.random() * 0.08; // dynamiczny wystrzał
+            } else if (bubble.type === 'extended') {
+                growth = 0.05 + Math.random() * 0.06; // stabilny mocny wzrost
+                // Rozlewanie się na inne sektory (spillover) gdy premia > 45%
+                if (bubble.premium > 0.45 && !bubble.spilloverApplied) {
+                    const extraSec = pickSpilloverSector(bubble.candidateId);
+                    if (extraSec) {
+                        bubble.spilloverSector = extraSec;
+                        bubble.spilloverApplied = true;
+                        if (typeof logEvent === 'function') {
+                            logEvent(`🌐 Efekt rozlania! Gorączka z sektora ${bubble.name} przenosi się także na ${extraSec.name}!`, 'market');
+                        }
+                    }
+                }
+            } else {
+                growth = 0.05 + Math.random() * 0.05; // klasyczna
+            }
+
             bubble.premium = Math.min(1.50, bubble.premium + growth);
 
             // Wiadomość w pasku newsów przy przekroczeniu +30% po raz pierwszy
             if (prevPremium <= 0.30 && bubble.premium > 0.30) {
                 if (typeof logEvent === 'function') {
                     logEvent(`📢 Media: gorączka sektora ${bubble.name}! Inwestorzy płacą rekordowe premie za spółki z branży.`, 'market');
+                }
+            }
+
+            // Radar SMSR Poziom 2: ostrzeżenie o przekroczeniu progu krytycznego
+            if (typeof isMarketStabilityProjectUnlocked === 'function' && isMarketStabilityProjectUnlocked(2)) {
+                if (prevPremium < 0.22 && bubble.premium >= 0.22) {
+                    if (typeof logEvent === 'function') {
+                        const rInfo = typeof getBubbleRiskInfo === 'function' ? getBubbleRiskInfo(bubble) : { label: 'Średnie' };
+                        logEvent(`🔥 [SMSR Poziom 2 - Radar]: Sektor ${bubble.name} przekroczył próg krytyczny (+${(bubble.premium * 100).toFixed(0)}%). Ryzyko pęknięcia: ${rInfo.label}.`, 'market');
+                    }
                 }
             }
         }
@@ -2706,11 +2825,21 @@ function advanceSectorBubblesQuarterly() {
         if (progress >= 1.0) {
             bubble.phase = 'recovering';
             bubble.recoveryQuarters = 0;
+            // Recovery: od 3 do 6 kwartałów w zależności od długości bańki i głębokości dołka
+            const depthFactor = Math.abs(bubble.popTarget); // np. 0.20 - 0.50
+            let recQuarters = 3;
+            if (depthFactor > 0.35 || bubble.quarters >= 8) recQuarters = 6;
+            else if (depthFactor > 0.25 || bubble.quarters >= 5) recQuarters = Math.random() < 0.5 ? 4 : 5;
+            else if (bubble.type === 'rally') recQuarters = 3;
+            else recQuarters = Math.floor(3 + Math.random() * 2); // 3-4
+
+            bubble.recoveryTotalQuarters = Math.max(3, Math.min(6, recQuarters));
             bubble.recoveryStartPremium = bubble.premium;
         }
     } else if (bubble.phase === 'recovering') {
         bubble.recoveryQuarters = (bubble.recoveryQuarters || 0) + 1;
-        const progress = Math.min(1.0, bubble.recoveryQuarters / 4.0); // wraca do 0 w ciągu 4 kwartałów
+        const totalRecovery = bubble.recoveryTotalQuarters || 4;
+        const progress = Math.min(1.0, bubble.recoveryQuarters / totalRecovery);
         bubble.premium = bubble.recoveryStartPremium * (1.0 - progress);
 
         if (progress >= 1.0) {
@@ -2740,7 +2869,8 @@ function formatSectorPremiumCell(premium, isBubble = false) {
         cls = 'down';
         icon = '▼';
     }
-    const badge = isBubble ? ' <span class="badge badge--warn">bańka</span>' : '';
+    const hasRadar = typeof isMarketStabilityProjectUnlocked === 'function' && isMarketStabilityProjectUnlocked(2);
+    const badge = isBubble ? (hasRadar ? ' <span class="badge badge--warn">🔥 bańka (SMSR)</span>' : ' <span class="badge badge--warn">bańka</span>') : '';
     return `<span class="sector-premium ${cls}">${icon} ${sign}${pct}%</span>${badge}`;
 }
 

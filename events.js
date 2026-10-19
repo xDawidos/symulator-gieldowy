@@ -201,6 +201,7 @@ function processMailWeekly() {
     sendCompanyAdSpam();
     sendMagazineSpam();
     processTabloidRumors();
+    processBubbleNewsToMail();
 }
 
 function chargeMagazineSubscriptions() {
@@ -296,6 +297,90 @@ function processTabloidRumors() {
             : `Według naszych informatorów prezes ${stock.name} ma poważne problemy. Spółka nie komentuje.`,
         importance: 1, symbol: stock.symbol
     });
+}
+
+/** 0.15 H3: Gazety i media piszą o bańkach (pojawienie się, pompowanie, pęknięcie, stabilizacja, ale też fałszywe alarmy) */
+let lastBubbleMailStatus = null;
+let lastSmsrMailStatus = null;
+function processBubbleNewsToMail() {
+    if (!mailbox || typeof getActiveSectorBubble !== 'function') return;
+    const bubble = getActiveSectorBubble();
+    const statusKey = bubble ? `${bubble.name}_${bubble.phase}_${Math.floor(bubble.premium * 10)}` : 'none';
+
+    // 1. Zdarzenia oparte na faktach (prawdziwy stan bańki)
+    if (bubble) {
+        if (typeof isMarketStabilityProjectUnlocked === 'function' && isMarketStabilityProjectUnlocked(2)) {
+            if (bubble.phase === 'inflating' && lastSmsrMailStatus !== `${bubble.name}_inflating`) {
+                lastSmsrMailStatus = `${bubble.name}_inflating`;
+                const typeName = typeof getBubbleTypeName === 'function' ? getBubbleTypeName(bubble.type) : bubble.type;
+                addMail({
+                    sender: 'KNF',
+                    subject: `[SMSR Lvl 2 - Radar] Potwierdzona bańka spekulacyjna: ${bubble.name}`,
+                    body: `System Monitoringu i Stabilizacji Rynku zidentyfikował w czasie rzeczywistym bańkę spekulacyjną w sektorze ${bubble.name}. Bieżąca premia wyceny wynosi +${(bubble.premium * 100).toFixed(0)}%, a model zaklasyfikował typ zjawiska jako: ${typeName}. Zalecana weryfikacja ekspozycji funduszu.`,
+                    importance: 3
+                });
+            }
+        }
+
+        if (bubble.phase === 'inflating' && bubble.premium >= 0.25 && lastBubbleMailStatus !== `${bubble.name}_inflating`) {
+            lastBubbleMailStatus = `${bubble.name}_inflating`;
+            const isFlesz = Math.random() < 0.4;
+            if (isFlesz) {
+                addMail({
+                    sender: 'FLESZ',
+                    subject: `Gorączka w branży ${bubble.name}! Wszyscy chcą w to wejść!`,
+                    body: `Inwestorzy indywidualni i celebryci masowo rzucają się na akcje z sektora ${bubble.name}. Niektórzy analitycy mówią o rewolucji, inni szeptem ostrzegają przed rosnącą bańką spekulacyjną.`,
+                    importance: 2
+                });
+            } else {
+                addMail({
+                    sender: 'PULS',
+                    subject: `Puls Rynku: Wyceny sektora ${bubble.name} szybują w górę`,
+                    body: `Premia wyceny w branży ${bubble.name} osiąga nie notowane od dawna poziomy (+${(bubble.premium * 100).toFixed(0)}%). Czy to początek trwałej hossy technologicznej, czy zbliża się przegrzanie?`,
+                    importance: 2
+                });
+            }
+        } else if (bubble.phase === 'popping' && lastBubbleMailStatus !== `${bubble.name}_popping`) {
+            lastBubbleMailStatus = `${bubble.name}_popping`;
+            addMail({
+                sender: 'OBSER',
+                subject: `Krach w branży ${bubble.name}! Panika na parkiecie`,
+                body: `Balon pękł. Kursy spółek z sektora ${bubble.name} lecą na łeb na szyję. Fala wyprzedaży zmiata wyceny budowane przez ostatnie kwartały. Eksperci szacują straty inwestorów.`,
+                importance: 2
+            });
+        } else if (bubble.phase === 'recovering' && lastBubbleMailStatus !== `${bubble.name}_recovering`) {
+            lastBubbleMailStatus = `${bubble.name}_recovering`;
+            addMail({
+                sender: 'PULS',
+                subject: `Uspokojenie po burzy: rynek ${bubble.name} wraca do fundamentów`,
+                body: `Po dramatycznych spadkach w sektorze ${bubble.name} kurz powoli opada. Inwestorzy instytucjonalni zaczynają ponownie selekcjonować spółki o solidnych fundamentach.`,
+                importance: 1
+            });
+        }
+    } else {
+        if (lastBubbleMailStatus && lastBubbleMailStatus !== 'none') {
+            lastBubbleMailStatus = 'none';
+        }
+
+        // 2. Szum / fałszywe alarmy (gdy nie ma bańki, prasa może spekulować i mylić się)
+        if (Math.random() < 0.04) {
+            const randomCand = typeof SECTOR_BUBBLE_CANDIDATES !== 'undefined' ? getRandomElement(SECTOR_BUBBLE_CANDIDATES) : null;
+            if (randomCand) {
+                const fakeTemplates = [
+                    { sender: 'FLESZ', sub: `Czy to nowa bańka? Podejrzany rajd w sektorze ${randomCand.name}!`, body: `Pojawiły się plotki o nadciągającym boomie na spółki z branży ${randomCand.name}. Czy warto kupować na oślep? Część doradców mówi: "kupuj zanim odjedzie pociąg!"` },
+                    { sender: 'PULS', sub: `Analitycy podzieleni: czy ${randomCand.name} jest przewartościowana?`, body: `Raporty domów maklerskich są skrajnie rozbieżne. Jedni wieńczą nową erę zysków, inni wieszczą rychłe załamanie. Czas pokaże, kto miał rację.` },
+                    { sender: 'OBSER', sub: `Debata ekonomiczna: Stabilizacja czy fałszywy spokój w branży ${randomCand.name}?`, body: `Komentatorzy dyskutują, czy wskaźniki w branży ${randomCand.name} odzwierciedlają realną wartość spółek, czy rynek po prostu ignoruje ryzyka.` }
+                ];
+                const fake = getRandomElement(fakeTemplates);
+                addMail({
+                    sender: fake.sender,
+                    subject: fake.sub,
+                    body: fake.body,
+                    importance: 1
+                });
+            }
+        }
+    }
 }
 
 // =================================================================================

@@ -887,6 +887,9 @@ function completeProject(project) {
 
 function processSpecialProjectsQuarterly() {
     ensureSpecialProjects();
+    if (typeof processMarketStabilityProjectQuarterly === 'function') {
+        processMarketStabilityProjectQuarterly();
+    }
     const quarter = getProjectQuarter();
 
     for (const project of [...specialProjects.active]) {
@@ -1071,6 +1074,342 @@ function renderProjectBondForm(project) {
         <button class="btn-secondary" onclick="buyProjectBond('${project.id}', parseFloat(document.getElementById('bond-amt-${project.id}').value)); renderCitySpecialProjects();">Kup obligacje (fundusz)</button></div>` : ''}`;
 }
 
+// =================================================================================
+// MEGAPROJEKT: NARODOWY SYSTEM STABILIZACJI RYNKU (SMSR)
+// =================================================================================
+
+const MARKET_STABILITY_LEVEL_TARGETS = [50e6, 150e6, 350e6]; // Lvl 1: 50M, Lvl 2: 150M, Lvl 3: 350M PLN
+const MARKET_STABILITY_STATE_MAX_SHARE = 0.50; // Państwo może sfinansować maksymalnie 50% danego poziomu
+
+let marketStabilityProject = createMarketStabilityProject();
+
+function createMarketStabilityProject() {
+    return {
+        id: 'smsr',
+        name: 'Narodowe Centrum Stabilizacji Rynku (SMSR)',
+        icon: '🛡️',
+        level: 0, // 0 = zbiórka na lvl 1, 1 = wczesne ostrzeganie (opóźnione), 2 = radar live, 3 = tarcza prewencyjna
+        maxLevel: 3,
+        levelCosts: [...MARKET_STABILITY_LEVEL_TARGETS],
+        contributions: {
+            state: 0,
+            otherFunds: 0,
+            player: 0
+        },
+        shieldActive: true,
+        delayedWarnings: []
+    };
+}
+
+function ensureMarketStabilityProject() {
+    if (!marketStabilityProject || typeof marketStabilityProject !== 'object') {
+        marketStabilityProject = createMarketStabilityProject();
+    }
+    if (!Array.isArray(marketStabilityProject.levelCosts)) {
+        marketStabilityProject.levelCosts = [...MARKET_STABILITY_LEVEL_TARGETS];
+    }
+    if (!marketStabilityProject.contributions || typeof marketStabilityProject.contributions !== 'object') {
+        marketStabilityProject.contributions = { state: 0, otherFunds: 0, player: 0 };
+    }
+    if (typeof marketStabilityProject.shieldActive !== 'boolean') {
+        marketStabilityProject.shieldActive = true;
+    }
+    if (!Array.isArray(marketStabilityProject.delayedWarnings)) {
+        marketStabilityProject.delayedWarnings = [];
+    }
+    return marketStabilityProject;
+}
+
+function getMarketStabilityProject() {
+    return ensureMarketStabilityProject();
+}
+
+function isMarketStabilityProjectUnlocked(lvl) {
+    const p = getMarketStabilityProject();
+    return p.level >= lvl;
+}
+
+function toggleMarketStabilityShield() {
+    const p = getMarketStabilityProject();
+    if (p.level < 3) return false;
+    p.shieldActive = !p.shieldActive;
+    if (typeof logEvent === 'function') {
+        logEvent(`🛡️ Tarcza Antybańkowa SMSR została ${p.shieldActive ? 'WŁĄCZONA' : 'WYŁĄCZONA'}.`, 'city');
+    }
+    if (typeof showToast === 'function') {
+        showToast(`Tarcza Antybańkowa: ${p.shieldActive ? 'WŁĄCZONA' : 'WYŁĄCZONA'}`, 'info');
+    }
+    if (typeof renderCitySpecialProjects === 'function') {
+        renderCitySpecialProjects();
+    }
+    return p.shieldActive;
+}
+
+function advanceMarketStabilityLevel() {
+    const p = getMarketStabilityProject();
+    if (p.level >= p.maxLevel) return;
+    p.level++;
+    const titles = [
+        '',
+        'Poziom 1: Wczesne Ostrzeganie (z opóźnieniem)',
+        'Poziom 2: Radar i Identyfikacja w Czasie Rzeczywistym',
+        'Poziom 3: Tarcza Antybańkowa (Prewencja i Stabilizacja Rynku)'
+    ];
+    if (typeof logEvent === 'function') {
+        logEvent(`🏛️🎉 MEGAPROJEKT: Narodowe Centrum Stabilizacji Rynku osiągnęło ${titles[p.level]}!`, 'city');
+    }
+    if (typeof showToast === 'function') {
+        showToast(`🏛️ Awans Megaprojektu SMSR na Poziom ${p.level}!`, 'success');
+    }
+}
+
+function contributeToMarketStabilityProject(amount) {
+    const p = getMarketStabilityProject();
+    if (p.level >= p.maxLevel) {
+        if (typeof showToast === 'function') showToast('Megaprojekt osiągnął już maksymalny (3) poziom.', 'info');
+        return false;
+    }
+    amount = Math.floor(Number(amount));
+    if (!Number.isFinite(amount) || amount <= 0) {
+        if (typeof showToast === 'function') showToast('Wprowadź prawidłową kwotę wpłaty.', 'warning');
+        return false;
+    }
+    if (typeof playerCash === 'undefined' || playerCash < amount) {
+        if (typeof showToast === 'function') showToast('Brak wystarczającej gotówki w funduszu gracza.', 'error');
+        return false;
+    }
+
+    const currentTarget = p.levelCosts[p.level];
+    const totalCollected = p.contributions.state + p.contributions.otherFunds + p.contributions.player;
+    const remaining = Math.max(0, currentTarget - totalCollected);
+    const actualContribution = Math.min(amount, remaining);
+
+    if (actualContribution <= 0) {
+        if (typeof showToast === 'function') showToast('Bieżący poziom jest już w pełni sfinansowany.', 'info');
+        return false;
+    }
+
+    playerCash -= actualContribution;
+    p.contributions.player += actualContribution;
+
+    if (typeof recordPayment === 'function') {
+        recordPayment('player-fund', 'external:smsr', actualContribution, 'Wpłata na Megaprojekt SMSR');
+    }
+    if (typeof logEvent === 'function') {
+        logEvent(`🏛️ Wpłacono ${formatProjectMoney(actualContribution)} z funduszu gracza na Megaprojekt SMSR. Łączny wkład gracza: ${formatProjectMoney(p.contributions.player)}.`, 'city');
+    }
+    if (typeof showToast === 'function') {
+        showToast(`Wpłacono ${formatProjectMoney(actualContribution)} na Megaprojekt SMSR.`, 'success');
+    }
+
+    const newTotal = p.contributions.state + p.contributions.otherFunds + p.contributions.player;
+    if (newTotal >= currentTarget) {
+        advanceMarketStabilityLevel();
+    }
+
+    if (typeof renderCitySpecialProjects === 'function') {
+        renderCitySpecialProjects();
+    }
+    return true;
+}
+
+function processMarketStabilityProjectQuarterly() {
+    const p = getMarketStabilityProject();
+    const quarter = typeof macro === 'object' && Number.isFinite(macro.quarter) ? macro.quarter : 0;
+
+    // 1. Zbiórka kwartalna od państwa i innych funduszy
+    if (p.level < p.maxLevel) {
+        const currentTarget = p.levelCosts[p.level];
+        const stateLimit = currentTarget * MARKET_STABILITY_STATE_MAX_SHARE;
+
+        // Państwo dokłada kwartalnie część (1.5M do 3.0M), nie przekraczając 50% limitu danego poziomu
+        if (p.contributions.state < stateLimit) {
+            const stateRoom = stateLimit - p.contributions.state;
+            const stateTranche = Math.min(stateRoom, 1500000 + Math.random() * 1500000);
+            p.contributions.state += Math.round(stateTranche);
+        }
+
+        // Inne fundusze (zewnętrzne holdingi / AI) wspierają stabilność rynku
+        const totalNow = p.contributions.state + p.contributions.otherFunds + p.contributions.player;
+        const remainingToTarget = currentTarget - totalNow;
+        if (remainingToTarget > 0) {
+            const otherTranche = Math.min(remainingToTarget * 0.35, 400000 + Math.random() * 800000);
+            p.contributions.otherFunds += Math.round(otherTranche);
+        }
+
+        const updatedTotal = p.contributions.state + p.contributions.otherFunds + p.contributions.player;
+        if (updatedTotal >= currentTarget) {
+            advanceMarketStabilityLevel();
+        }
+    }
+
+    // 2. Obsługa opóźnionych ostrzeżeń dla Poziomu 1
+    if (p.delayedWarnings.length > 0) {
+        const due = p.delayedWarnings.filter(w => w.targetQuarter <= quarter);
+        p.delayedWarnings = p.delayedWarnings.filter(w => w.targetQuarter > quarter);
+        for (const warn of due) {
+            if (p.level >= 1) {
+                if (typeof logEvent === 'function') {
+                    logEvent(`⚠️ [SMSR Poziom 1 - Raport Opóźniony]: Agregacja danych z ubiegłego kwartału wskazuje na uformowanie się bańki spekulacyjnej w sektorze ${warn.name}! Wyceny są oderwane od fundamentów.`, 'market');
+                }
+                if (typeof addMail === 'function') {
+                    addMail({
+                        sender: 'KNF',
+                        subject: `⚠️ [SMSR Lvl 1] Raport opóźniony: Ryzyko bańki w sektorze ${warn.name}`,
+                        body: `Narodowe Centrum Stabilizacji Rynku (SMSR) z opóźnieniem analitycznym przekazuje raport: w sektorze ${warn.name} odnotowano napływ kapitału spekulacyjnego. Zgromadzone dane historyczne sugerują wysokie ryzyko przegrzania rynku.`,
+                        importance: 2
+                    });
+                }
+            }
+        }
+    }
+}
+
+function getBubbleTypeName(type) {
+    if (type === 'rally') return 'Krótki rajd (agresywny)';
+    if (type === 'extended') return 'Rozwleczona (mania wieloletnia)';
+    return 'Klasyczna';
+}
+
+function getBubbleRiskInfo(bubble) {
+    if (!bubble || bubble.phase !== 'inflating') {
+        if (bubble?.phase === 'popping') return { label: 'PĘKA! (Krach trwa)', badgeCls: 'badge--down' };
+        if (bubble?.phase === 'recovering') return { label: 'Stabilizacja (Recovery)', badgeCls: 'badge--info' };
+        return { label: 'Brak ryzyka', badgeCls: 'badge--flat' };
+    }
+    if (bubble.premium < 0.22) return { label: 'Minimalne (<22% bezpieczne)', badgeCls: 'badge--flat' };
+    if (bubble.type === 'rally') {
+        if (bubble.premium > 0.40 || bubble.quarters >= 3) return { label: 'Krytyczne (~60-80%)', badgeCls: 'badge--down' };
+        return { label: 'Wysokie (~35%)', badgeCls: 'badge--warn' };
+    }
+    if (bubble.type === 'extended') {
+        if (bubble.premium > 0.70 || bubble.quarters >= 8) return { label: 'Ekstremalne (~50-70%)', badgeCls: 'badge--down' };
+        if (bubble.premium > 0.45) return { label: 'Podwyższone (~25-35%)', badgeCls: 'badge--warn' };
+        return { label: 'Umiarkowane (~10-15%)', badgeCls: 'badge--flat' };
+    }
+    // classic
+    if (bubble.premium > 0.40 || bubble.quarters >= 5) return { label: 'Wysokie (~40-60%)', badgeCls: 'badge--down' };
+    return { label: 'Średnie (~20-30%)', badgeCls: 'badge--warn' };
+}
+
+function renderMarketStabilityProjectCard() {
+    ensureMarketStabilityProject();
+    const p = marketStabilityProject;
+    const currentTarget = p.level < p.maxLevel ? p.levelCosts[p.level] : p.levelCosts[p.maxLevel - 1];
+    const totalCollected = p.contributions.state + p.contributions.otherFunds + p.contributions.player;
+    const progressPct = p.level >= p.maxLevel ? 100 : Math.min(100, Math.round((totalCollected / currentTarget) * 100));
+
+    const statePct = Math.min(100, (p.contributions.state / currentTarget) * 100);
+    const otherPct = Math.min(100, (p.contributions.otherFunds / currentTarget) * 100);
+    const playerPct = Math.min(100, (p.contributions.player / currentTarget) * 100);
+
+    const levelDescriptions = [
+        { lvl: 1, name: 'Wczesne Ostrzeganie (z opóźnieniem)', desc: 'Raporty analityczne z opóźnieniem 1 kwartału ostrzegające przed uformowaną bańką.' },
+        { lvl: 2, name: 'Radar w Czasie Rzeczywistym', desc: 'Precyzyjna identyfikacja sektora bańki, typu, tempa wzrostu premii i ryzyka krachu.' },
+        { lvl: 3, name: 'Tarcza Antybańkowa (Prewencja)', desc: 'Aktywne interwencje makroostrożnościowe gaszące bańki w zarodku i stabilizujące rynek.' }
+    ];
+
+    const perksHtml = levelDescriptions.map(item => {
+        const isUnlocked = p.level >= item.lvl;
+        const icon = isUnlocked ? '✅' : '🔒';
+        const cls = isUnlocked ? 'text-up' : 'text-muted';
+        return `<div class="smsr-perk ${isUnlocked ? 'smsr-perk--active' : ''}" style="padding: 6px 10px; border: 1px solid ${isUnlocked ? 'rgba(16, 185, 129, 0.4)' : '#333'}; border-radius: 4px; background: ${isUnlocked ? 'rgba(16, 185, 129, 0.08)' : 'rgba(0,0,0,0.15)'};">
+            <strong>${icon} Lvl ${item.lvl}: ${item.name}</strong>
+            <p class="text-xs ${cls}" style="margin: 3px 0 0 0;">${item.desc}</p>
+        </div>`;
+    }).join('');
+
+    const bubble = typeof getActiveSectorBubble === 'function' ? getActiveSectorBubble() : null;
+    let liveStatusHtml = '';
+    if (p.level >= 2) {
+        if (bubble && bubble.phase !== 'none') {
+            const riskInfo = getBubbleRiskInfo(bubble);
+            liveStatusHtml = `<div class="bank-section" style="background: rgba(255, 75, 75, 0.12); border-left: 3px solid var(--color-down); padding: 8px 12px; margin-top: 10px; border-radius: 4px;">
+                <strong style="color: var(--color-down);">🔥 RADAR SMSR (Czas Rzeczywisty):</strong>
+                <p class="text-sm" style="margin: 4px 0 0 0;">
+                    Sektor: <strong>${escapeHtml(bubble.name)}</strong> | Typ: <strong>${getBubbleTypeName(bubble.type)}</strong> | Premia: <strong>+${(bubble.premium * 100).toFixed(1)}%</strong> | Faza: <strong>${bubble.phase}</strong><br>
+                    Ryzyko pęknięcia w nast. kwartale: <span class="badge ${riskInfo.badgeCls}">${riskInfo.label}</span>
+                    ${bubble.spilloverSector ? ` · 🌐 Rozlanie na: <strong>${escapeHtml(bubble.spilloverSector.name)}</strong> (+${(bubble.premium * 50).toFixed(1)}%)` : ''}
+                </p>
+            </div>`;
+        } else {
+            liveStatusHtml = `<div class="bank-section" style="background: rgba(75, 200, 100, 0.1); border-left: 3px solid var(--color-up); padding: 6px 12px; margin-top: 10px; border-radius: 4px;">
+                <span class="text-sm" style="color: var(--color-up);">📡 Radar SMSR: Wszystkie sektory stabilne — brak anomalii spekulacyjnych.</span>
+            </div>`;
+        }
+    } else if (p.level === 1) {
+        liveStatusHtml = `<div class="bank-section" style="background: rgba(255, 200, 50, 0.1); border-left: 3px solid #f59e0b; padding: 6px 12px; margin-top: 10px; border-radius: 4px;">
+            <span class="text-sm">⚠️ Tryb Lvl 1: Wczesne Ostrzeganie (raporty generowane z opóźnieniem 1 kwartału).</span>
+        </div>`;
+    }
+
+    const neededFromPlayer = Math.max(0, currentTarget - totalCollected);
+    const playerCashVal = typeof playerCash !== 'undefined' ? playerCash : 0;
+    const canContribute = p.level < p.maxLevel && neededFromPlayer > 0 && playerCashVal > 0;
+
+    const donationForm = canContribute ? `
+        <div class="bank-card-form" style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+            <input type="number" id="smsr-player-amount" value="${Math.min(playerCashVal, Math.min(5000000, neededFromPlayer))}" min="10000" step="100000" style="max-width: 160px;" aria-label="Kwota wpłaty na SMSR">
+            <button class="btn-primary" onclick="contributeToMarketStabilityProject(document.getElementById('smsr-player-amount').value); renderCitySpecialProjects();">Wpłać na megaprojekt</button>
+            <button class="btn-secondary text-xs" onclick="contributeToMarketStabilityProject(1000000); renderCitySpecialProjects();">+1 mln</button>
+            <button class="btn-secondary text-xs" onclick="contributeToMarketStabilityProject(5000000); renderCitySpecialProjects();">+5 mln</button>
+            <button class="btn-secondary text-xs" onclick="contributeToMarketStabilityProject(25000000); renderCitySpecialProjects();">+25 mln</button>
+            <button class="btn-secondary text-xs" onclick="contributeToMarketStabilityProject(${neededFromPlayer}); renderCitySpecialProjects();">Dopłać resztę</button>
+        </div>
+    ` : (p.level >= p.maxLevel ? `<p class="text-sm text-up" style="margin-top: 8px;">🎉 Megaprojekt w pełni ukończony! Wszystkie funkcje tarczy aktywne.</p>` : `<p class="text-xs text-muted" style="margin-top: 8px;">Oczekiwanie na kwartalne dotacje lub zasilenie konta funduszu.</p>`);
+
+    const shieldToggle = p.level >= 3 ? `
+        <div style="margin-top: 10px; padding: 8px 12px; background: var(--bg-surface-elevated, #242428); border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <strong>Tarcza Antybańkowa:</strong>
+                <span class="${p.shieldActive ? 'text-up' : 'text-down'}">${p.shieldActive ? 'AKTYWNA (blokuje bańki i krachy)' : 'WYŁĄCZONA (zezwala na bańki)'}</span>
+            </div>
+            <button class="${p.shieldActive ? 'btn-secondary' : 'btn-primary'}" onclick="toggleMarketStabilityShield();">${p.shieldActive ? 'Wyłącz tarczę' : 'Włącz tarczę'}</button>
+        </div>
+    ` : '';
+
+    return `<article class="bank-card project-card smsr-card" style="border: 2px solid #3b82f6; background: linear-gradient(180deg, rgba(59, 130, 246, 0.08) 0%, rgba(0,0,0,0.2) 100%); margin-bottom: 20px;">
+        <header class="bank-card-head">
+            <span class="bank-card-icon" style="font-size: 2rem;">🛡️</span>
+            <div>
+                <h3 style="margin: 0; color: #60a5fa;">Narodowe Centrum Stabilizacji Rynku (SMSR)</h3>
+                <span class="bank-card-type" style="color: #93c5fd;">Strategiczny megaprojekt państwowo-prywatny · Poziom ${p.level} / ${p.maxLevel}</span>
+            </div>
+        </header>
+
+        <p class="text-sm" style="margin: 8px 0;">
+            Wspólna strategiczna inicjatywa Państwa (KNF/NBP), Funduszu Gracza oraz Innych Funduszy Inwestycyjnych mająca na celu eliminację ryzyka systemowego i przeciwdziałanie bańkom spekulacyjnym.
+            Państwo pokrywa <strong>maksymalnie 50%</strong> budżetu każdego etapu.
+        </p>
+
+        <div class="smsr-perks-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 10px 0;">
+            ${perksHtml}
+        </div>
+
+        ${liveStatusHtml}
+        ${shieldToggle}
+
+        <div style="margin-top: 12px;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 4px;">
+                <span>Budżet etapu: <strong>${formatProjectMoney(totalCollected)}</strong> / ${formatProjectMoney(currentTarget)} (${progressPct}%)</span>
+                <span>Brakuje: <strong>${formatProjectMoney(neededFromPlayer)}</strong></span>
+            </div>
+            <div style="height: 12px; background: #333; border-radius: 6px; overflow: hidden; display: flex;">
+                <div style="width: ${statePct}%; background: #3b82f6;" title="Państwo: ${formatProjectMoney(p.contributions.state)}"></div>
+                <div style="width: ${otherPct}%; background: #a855f7;" title="Inne fundusze: ${formatProjectMoney(p.contributions.otherFunds)}"></div>
+                <div style="width: ${playerPct}%; background: #10b981;" title="Gracz: ${formatProjectMoney(p.contributions.player)}"></div>
+            </div>
+            <div style="display: flex; gap: 15px; font-size: 0.75rem; margin-top: 4px; color: #aaa;">
+                <span>🔵 Państwo: ${formatProjectMoney(p.contributions.state)} (max 50%)</span>
+                <span>🟣 Inne fundusze: ${formatProjectMoney(p.contributions.otherFunds)}</span>
+                <span>🟢 Twój fundusz: ${formatProjectMoney(p.contributions.player)}</span>
+            </div>
+        </div>
+
+        ${donationForm}
+    </article>`;
+}
+
 function renderCitySpecialProjects() {
     const container = document.getElementById('city-content-special');
     if (!container || container.contains(document.activeElement)) return;
@@ -1113,6 +1452,7 @@ function renderCitySpecialProjects() {
     const completed = specialProjects.completed.map(project => `<li>${project.icon} <strong>${escapeHtml(project.name)}</strong>${project.timed ? ' (czasowy)' : ''} — ${project.participants.map(p => `${escapeHtml(p.name)}${p.heldBy ? ` → ${escapeHtml(p.heldBy)}` : ''} ${p.share ? `(${(p.share * 100).toFixed(0)}%)` : ''}`).join(', ')}${project.builder ? `; wykonawca ${escapeHtml(project.builder.name)}` : ''}</li>`).join('');
 
     container.innerHTML = `
+        ${renderMarketStabilityProjectCard()}
         <p class="bank-lead">Megaprojekty (${MEGA_PROJECTS.length}) można zrealizować tylko raz. Konsorcjum: do ${MAX_CONSORTIUM_MEMBERS} spółek + wykonawca budowlany; bonusy (wzrost przychodów, wycena, kondycja) dzielą się wg wkładu i przechodzą na spółkę przejmującą. Projekty czasowe są tańsze, bonus działa do ${MAX_TIMED_BONUS_QUARTERS / 4} lat gry. Spółka Twojego funduszu (> 50%) może dołączyć w fazie zapisów.</p>
         <h4>W realizacji</h4><div class="bank-grid">${active || '<p class="text-muted">Brak projektów w realizacji.</p>'}</div>
         <h4>Projekty czasowe</h4><div class="bank-grid">${offers || '<p class="text-muted">Brak ogłoszonych projektów czasowych.</p>'}</div>

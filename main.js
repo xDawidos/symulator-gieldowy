@@ -228,6 +228,7 @@ function buildSaveSnapshot({ compact = 0 } = {}) {
         botRelations,
         marketOperators,
         specialProjects,
+        marketStabilityProject: typeof getMarketStabilityProject === 'function' ? getMarketStabilityProject() : marketStabilityProject,
         oversight,
         mafia,
         scandals,
@@ -665,6 +666,8 @@ function applySaveSnapshot(snapshot) {
     marketOperators = snapshot.marketOperators && typeof snapshot.marketOperators === 'object' ? snapshot.marketOperators : null; // v10: operatorzy rynków
     specialProjects = snapshot.specialProjects && typeof snapshot.specialProjects === 'object' ? snapshot.specialProjects : createSpecialProjects(); // v10: projekty specjalne
     ensureSpecialProjects();
+    marketStabilityProject = snapshot.marketStabilityProject && typeof snapshot.marketStabilityProject === 'object' ? snapshot.marketStabilityProject : createMarketStabilityProject();
+    ensureMarketStabilityProject();
     oversight = snapshot.oversight && typeof snapshot.oversight === 'object' ? snapshot.oversight : createOversight(); // v11: nadzór
     ensureOversight();
     mafia = snapshot.mafia && typeof snapshot.mafia === 'object' ? snapshot.mafia : createMafia(); // v11: mafia
@@ -1870,6 +1873,7 @@ function createNewWorld() {
     initMarketOperators(); // GPW i przyszli operatorzy rynków (markets.js)
     initDefenseSector(); // spółki zbrojeniowe i fundusz Gwardia (defense.js)
     specialProjects = createSpecialProjects(); // projekty specjalne miasta (projects.js)
+    marketStabilityProject = createMarketStabilityProject();
     ensureAllStockSegments(); // 0.14 T1a: sektory z rejestru i segmenty (przed ETF-ami i zatrudnieniem)
     applyStartSubsectors(); // 0.14 T2: podsektory spółek startowych (tabela)
     startPoolLedgerFromFacts(); // 0.14.1 R0: księga puli inwestycyjnej od startu gry

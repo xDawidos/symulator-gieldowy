@@ -3909,8 +3909,9 @@ function renderCompanyCard() {
     const vs = (value, sectorValue, options) => { const c = med && typeof compareWithSector === 'function' ? compareWithSector(value, sectorValue, options) : null; return c ? `<em class="${c.cls}">${c.text}</em>` : ''; };
     const pctFmt = v => `${formatNumberPl(v * 100, 1)}%`;
     const hasIndexLvl5 = typeof getSkillLevel === 'function' && getSkillLevel('indexAnalystLvl1') >= 5;
+    const hasSmsrRadar = typeof isMarketStabilityProjectUnlocked === 'function' && isMarketStabilityProjectUnlocked(2);
     const sectorPremiumTile = () => {
-        if (!hasIndexLvl5) return '';
+        if (!hasIndexLvl5 && !hasSmsrRadar) return '';
         const prem = Number(stock.sectorPremium) || 0;
         const isBubble = typeof isCompanyInSectorBubble === 'function' && isCompanyInSectorBubble(stock);
         const cellHtml = typeof formatSectorPremiumCell === 'function' ? formatSectorPremiumCell(prem, isBubble) : `${(prem * 100).toFixed(0)}%`;

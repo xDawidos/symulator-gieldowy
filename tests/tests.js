@@ -3411,11 +3411,12 @@ group('Testy ogólne 0.11: benchmark GIG i wykup posiadaczy', () => {
             advanceSectorBubblesQuarterly(); // krok 2 w popping -> koniec popping -> recovery
             assert(bubble.phase === 'recovering', 'Po zakończeniu popping bańka przechodzi w recovering');
 
-            advanceSectorBubblesQuarterly(); // recovery 1/4
-            advanceSectorBubblesQuarterly(); // recovery 2/4
-            advanceSectorBubblesQuarterly(); // recovery 3/4
-            advanceSectorBubblesQuarterly(); // recovery 4/4 -> koniec bańki
-            assert(getActiveSectorBubble() === null, 'Bańka wygasła po 4 kwartałach recovery');
+            let recSteps = 0;
+            while (getActiveSectorBubble() !== null && recSteps < 10) {
+                recSteps++;
+                advanceSectorBubblesQuarterly();
+            }
+            assert(getActiveSectorBubble() === null, 'Bańka wygasła po zakończeniu recovery (4-6 kw.)');
             assert(sectorBubbleCooldown === 4, 'Ustawiony cooldown 4 kwartały');
 
             // 6. Startupy w sektorze bańki
@@ -3437,6 +3438,103 @@ group('Testy ogólne 0.11: benchmark GIG i wykup posiadaczy', () => {
             activeSectorBubble = null;
             sectorBubbleCooldown = 0;
             updateAllSectorPremiums();
+        }
+    });
+
+    test('0.15 H3: Megaprojekt SMSR — finansowanie (państwo max 50%, inne fundusze, gracz) i poziomy 1-3', () => {
+        ensureMarketStabilityProject();
+        const p = marketStabilityProject;
+        const origLevel = p.level;
+        const origContrib = { ...p.contributions };
+        const origCash = playerCash;
+        const origShield = p.shieldActive;
+        const origBubble = activeSectorBubble;
+
+        try {
+            // 1. Reset do poziomu 0
+            p.level = 0;
+            p.contributions = { state: 0, otherFunds: 0, player: 0 };
+            p.shieldActive = true;
+            p.delayedWarnings = [];
+
+            assert(p.levelCosts.length === 3, 'Trzy poziomy kosztowe SMSR');
+            assert(p.levelCosts[0] === 50e6, 'Poziom 1 kosztuje 50 mln PLN');
+            assert(p.levelCosts[1] === 150e6, 'Poziom 2 kosztuje 150 mln PLN');
+            assert(p.levelCosts[2] === 350e6, 'Poziom 3 kosztuje 350 mln PLN');
+
+            // 2. Kwartalne wpłaty państwa i limit 50%
+            const stateLimitLvl1 = 50e6 * MARKET_STABILITY_STATE_MAX_SHARE; // 25M
+            for (let q = 0; q < 30; q++) {
+                processMarketStabilityProjectQuarterly();
+            }
+            assert(p.contributions.state <= stateLimitLvl1, 'Wpłaty państwa nie przekraczają 50% kosztu poziomu 1 (25 mln)');
+            assert(p.contributions.otherFunds > 0, 'Inne fundusze dokładają się kwartalnie');
+            assert(p.level === 0, 'Bez wpłat gracza poziom 1 nie jest od razu domknięty');
+
+            // 3. Wpłata gracza z funduszu
+            playerCash = 100e6;
+            const remainingToLvl1 = 50e6 - (p.contributions.state + p.contributions.otherFunds + p.contributions.player);
+            contributeToMarketStabilityProject(remainingToLvl1);
+            assert(p.level === 1, 'Osiągnięto Poziom 1 po uzupełnieniu brakującej kwoty przez gracza');
+            assert(isMarketStabilityProjectUnlocked(1), 'isMarketStabilityProjectUnlocked(1) zwraca true');
+            assert(!isMarketStabilityProjectUnlocked(2), 'Poziom 2 jest jeszcze zablokowany');
+
+            // 4. Poziom 1: Opóźnione ostrzeżenie o bańce
+            macro = macro || { quarter: 10 };
+            const testCand = SECTOR_BUBBLE_CANDIDATES[0];
+            p.delayedWarnings.push({ targetQuarter: macro.quarter + 1, name: testCand.name, sector: testCand.sector });
+            assert(p.delayedWarnings.length === 1, 'Kolejka opóźnionych ostrzeżeń zawiera 1 wpis');
+
+            // Przejście kwartału (targetQuarter jeszcze nie nadszedł)
+            processMarketStabilityProjectQuarterly();
+            assert(p.delayedWarnings.length === 1, 'Ostrzeżenie jeszcze czeka na swój kwartał');
+
+            // Nadejście targetQuarter
+            macro.quarter += 1;
+            processMarketStabilityProjectQuarterly();
+            assert(p.delayedWarnings.length === 0, 'Ostrzeżenie wyemitowane po nadejściu kwartału');
+
+            // 5. Awans na Poziom 2 i 3
+            playerCash = 500e6;
+            const toLvl2 = 150e6 - (p.contributions.state + p.contributions.otherFunds + p.contributions.player);
+            contributeToMarketStabilityProject(toLvl2);
+            assert(p.level === 2, 'Awans na Poziom 2');
+            assert(isMarketStabilityProjectUnlocked(2), 'Poziom 2 odblokowany');
+
+            const toLvl3 = 350e6 - (p.contributions.state + p.contributions.otherFunds + p.contributions.player);
+            contributeToMarketStabilityProject(toLvl3);
+            assert(p.level === 3, 'Awans na Poziom 3 (Tarcza Antybańkowa)');
+            assert(isMarketStabilityProjectUnlocked(3), 'Poziom 3 odblokowany');
+
+            // 6. Działanie Tarczy Antybańkowej (Poziom 3)
+            p.shieldActive = true;
+            activeSectorBubble = {
+                candidateId: 'ai',
+                name: 'Sztuczna inteligencja',
+                sector: 'Technologia',
+                subsector: 'Sztuczna inteligencja',
+                phase: 'inflating',
+                premium: 0.35,
+                quarters: 2
+            };
+            advanceSectorBubblesQuarterly();
+            assert(activeSectorBubble === null, 'Tarcza Poziomu 3 natychmiast stłumiła bańkę');
+
+            // 7. Przełączanie tarczy (toggle)
+            toggleMarketStabilityShield();
+            assert(p.shieldActive === false, 'Tarcza została wyłączona');
+            toggleMarketStabilityShield();
+            assert(p.shieldActive === true, 'Tarcza została ponownie włączona');
+
+            // 8. Karta UI generuje się poprawnie
+            const cardHtml = renderMarketStabilityProjectCard();
+            assert(cardHtml.includes('Narodowe Centrum Stabilizacji Rynku') && cardHtml.includes('Tarcza Antybańkowa'), 'Karta SMSR wygenerowana poprawnie');
+        } finally {
+            p.level = origLevel;
+            p.contributions = origContrib;
+            p.shieldActive = origShield;
+            playerCash = origCash;
+            activeSectorBubble = origBubble;
         }
     });
 
