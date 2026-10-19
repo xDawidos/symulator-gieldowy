@@ -2911,6 +2911,348 @@ function debugPopSectorBubble() {
     }
 }
 
+// =================================================================================
+// 0.15 H4: KRACH, MARGIN CALL, BEZPIECZNIKI I REAKCJA INSTYTUCJI
+// =================================================================================
+
+let marketCrash = createMarketCrashState();
+let marketHalt = createMarketHaltState();
+
+function createMarketCrashState() {
+    return {
+        active: false,
+        theme: null,              // w 0.15 zawsze null; punkt zaczepienia dla 0.15.1 (kryzysy historyczne)
+        startQuarter: null,
+        durationWeeks: 0,         // 1–4 tygodni gry (60–240 s)
+        weeksElapsed: 0,
+        targetDrop: 0,            // spadek o 25–35 punktów procentowych
+        startPremium: 0,
+        marginCallsExecuted: false
+    };
+}
+
+function createMarketHaltState() {
+    return {
+        active: false,
+        level: 0,                 // 1 (-7% -> 15s), 2 (-13% -> 30s), 3 (-20% -> do końca tygodnia)
+        untilGameMs: 0,
+        haltDurationSec: 0,
+        remainingSec: 0,
+        triggeredThisWeek: { 1: false, 2: false, 3: false },
+        weeklyStartGig: null,
+        lastDropPct: 0
+    };
+}
+
+function isMarketCrashing(market = 'home') {
+    return Boolean(marketCrash?.active);
+}
+
+function isMarketHalted(market = 'home') {
+    if (!marketHalt?.active) return false;
+    const now = Date.now();
+    if (now >= marketHalt.untilGameMs) {
+        marketHalt.active = false;
+        marketHalt.level = 0;
+        marketHalt.remainingSec = 0;
+        if (typeof updateCircuitBreakerUI === 'function') updateCircuitBreakerUI();
+        return false;
+    }
+    return true;
+}
+
+function getMarketHaltRemainingSeconds() {
+    if (!isMarketHalted()) return 0;
+    return Math.max(0, Math.ceil((marketHalt.untilGameMs - Date.now()) / 1000));
+}
+
+/** Uruchamia bezpiecznik giełdowy (circuit breaker). */
+function triggerMarketHalt(level, durationSec, currentDropPct = 0) {
+    marketHalt.active = true;
+    marketHalt.level = level;
+    marketHalt.haltDurationSec = durationSec;
+    marketHalt.remainingSec = durationSec;
+    marketHalt.untilGameMs = Date.now() + durationSec * 1000;
+    marketHalt.triggeredThisWeek[level] = true;
+    marketHalt.lastDropPct = currentDropPct;
+
+    const pctStr = (Math.abs(currentDropPct) * 100).toFixed(1) + '%';
+    const haltMsg = level === 3 
+        ? `🚨 BEZPIECZNIK GIEŁDOWY 3. STOPNIA! Spadek indeksu GIG o -${pctStr}! Handel na parkiecie ZAWIESZONY do końca tygodnia gry!`
+        : `⚠️ BEZPIECZNIK GIEŁDOWY ${level}. STOPNIA! Spadek indeksu GIG o -${pctStr}! Handel na parkiecie wstrzymany na ${durationSec} s.`;
+
+    if (typeof logEvent === 'function') {
+        logEvent(haltMsg, 'market');
+    }
+    if (typeof showToast === 'function') {
+        showToast(haltMsg, 'error');
+    }
+    if (typeof updateCircuitBreakerUI === 'function') {
+        updateCircuitBreakerUI();
+    }
+}
+
+/** Sprawdza progi bezpieczników (-7%, -13%, -20%) na podstawie bieżącej wartości GIG. */
+function checkCircuitBreakers(currentGigVal) {
+    if (!currentGigVal || !marketHalt.weeklyStartGig || marketHalt.weeklyStartGig <= 0) return;
+    if (isMarketHalted()) return;
+
+    const drop = (currentGigVal - marketHalt.weeklyStartGig) / marketHalt.weeklyStartGig;
+
+    if (drop <= -0.20 && !marketHalt.triggeredThisWeek[3]) {
+        triggerMarketHalt(3, 60, drop);
+    } else if (drop <= -0.13 && !marketHalt.triggeredThisWeek[2]) {
+        triggerMarketHalt(2, 30, drop);
+    } else if (drop <= -0.07 && !marketHalt.triggeredThisWeek[1]) {
+        triggerMarketHalt(1, 15, drop);
+    }
+}
+
+/** Uruchamia ogólnorynkowy krach. */
+function triggerMarketCrash(options = {}) {
+    const regime = getMarketRegime('home');
+    marketCrash.active = true;
+    marketCrash.theme = options.theme || null;
+    marketCrash.startQuarter = typeof macro === 'object' && Number.isFinite(macro.quarter) ? macro.quarter : 0;
+    marketCrash.durationWeeks = options.durationWeeks || Math.floor(1 + Math.random() * 4); // 1–4 tygodnie
+    marketCrash.weeksElapsed = 0;
+    marketCrash.targetDrop = options.targetDrop || -(0.25 + Math.random() * 0.10); // -25..-35 pp
+    marketCrash.startPremium = regime ? (regime.premium || 0) : 0;
+    marketCrash.marginCallsExecuted = false;
+
+    if (typeof logEvent === 'function') {
+        logEvent(`💥 KRACH NA GIEŁDZIE! Na parkiecie wybuchła panika! Inwestorzy masowo wyprzedają akcje!`, 'market');
+    }
+    if (typeof showToast === 'function') {
+        showToast(`💥 KRACH NA GIEŁDZIE! Wyceny gwałtownie spadają!`, 'error');
+    }
+
+    // Jeśli trwa bańka sektorowa -> pęka natychmiast!
+    if (activeSectorBubble && activeSectorBubble.phase === 'inflating') {
+        activeSectorBubble.phase = 'popping';
+        activeSectorBubble.popDuration = Math.floor(1 + Math.random() * 2);
+        activeSectorBubble.popTarget = -(0.25 + Math.random() * 0.15);
+        activeSectorBubble.popStartPremium = activeSectorBubble.premium;
+        activeSectorBubble.quartersInPop = 0;
+        updateAllSectorPremiums();
+    }
+
+    // Wykonaj Margin Call w 1. tygodniu krachu (boty + gracz)
+    executeMarginCalls();
+}
+
+/** Tygodniowy postęp krachu: spadek premii rynku liniowo w ciągu 1-4 tygodni. */
+function processMarketCrashWeekly(market = 'home') {
+    if (!marketCrash?.active) return;
+    marketCrash.weeksElapsed++;
+
+    const progress = Math.min(1.0, marketCrash.weeksElapsed / Math.max(1, marketCrash.durationWeeks));
+    const regime = getMarketRegime(market);
+    if (regime) {
+        regime.premium = marketCrash.startPremium + marketCrash.targetDrop * progress;
+        regime.premiumTarget = regime.premium;
+    }
+
+    if (progress >= 1.0) {
+        marketCrash.active = false;
+        if (regime) {
+            const nextPhase = Math.random() < 0.60 ? 'bear' : 'capitulation';
+            const nextDef = MARKET_PHASES[nextPhase] || MARKET_PHASES.bear;
+            regime.phase = nextPhase;
+            regime.quartersInPhase = 1;
+            regime.phaseLength = Math.floor(nextDef.length[0] + Math.random() * (nextDef.length[1] - nextDef.length[0] + 1));
+            regime.premiumTarget = nextDef.premium[0] + Math.random() * (nextDef.premium[1] - nextDef.premium[0]);
+            regime.shownPhase = nextPhase;
+            if (typeof logEvent === 'function') {
+                logEvent(`📉 Po krachu rynek przechodzi w fazę: ${nextDef.name}.`, 'market');
+            }
+        }
+        reactCentralBankToCrash();
+    }
+}
+
+/** Kwartalne sprawdzenie szansy wystąpienia krachu. */
+function checkMarketCrashQuarterly(market = 'home') {
+    const regime = getMarketRegime(market);
+    if (!regime) return;
+    if (regime.phase === 'bear' || regime.phase === 'capitulation') return;
+    if (isMarketCrashing(market)) return;
+
+    let crashChance = 0.012; // 1.2% podstawy
+
+    if (regime.phase === 'euphoria') {
+        crashChance += 0.06; // +6 pp w Euforii
+    }
+
+    if (regime.premium > 0.20) {
+        const excess = regime.premium - 0.20;
+        crashChance += Math.floor(excess / 0.10) * 0.01; // +1 pp za każde 10 pp premii > +20%
+    }
+
+    let avgBotLeverage = 0;
+    if (typeof aiCompetitors !== 'undefined' && Array.isArray(aiCompetitors) && aiCompetitors.length > 0) {
+        let totalDebt = 0;
+        let totalAssets = 0;
+        for (const ai of aiCompetitors) {
+            const debt = (ai.loans || []).reduce((s, l) => s + l.amount, 0);
+            const netWorth = typeof calculateNetWorth === 'function' ? calculateNetWorth(ai) : 0;
+            totalDebt += debt;
+            totalAssets += (debt + netWorth);
+        }
+        avgBotLeverage = totalAssets > 0 ? (totalDebt / totalAssets) : 0;
+    }
+    if (avgBotLeverage > 0.40) {
+        crashChance += 0.01;
+    }
+
+    if (Math.random() < crashChance) {
+        triggerMarketCrash();
+    }
+}
+
+/** Reakcja Banku Centralnego po krachu: nadzwyczajne cięcie o 50 pb. */
+function reactCentralBankToCrash(forceCut = false) {
+    if (typeof centralBank !== 'object' || !centralBank) return;
+    const inflation = typeof macro === 'object' && Number.isFinite(macro.inflation) ? macro.inflation : 0.025;
+    const targetInflation = 0.025;
+    const cutChance = inflation <= (targetInflation + 0.01) ? 0.70 : 0.30;
+    if (forceCut || Math.random() < cutChance) {
+        const oldRate = Number(centralBank.baseInterestRate) || 0.05;
+        const newRate = Math.max(0.005, oldRate - 0.005);
+        centralBank.baseInterestRate = newRate;
+        centralBank.lastRateChange = -0.005;
+        if (typeof logEvent === 'function') {
+            logEvent(`🏛️ Bank Centralny zwołuje nadzwyczajne posiedzenie po krachu! Obniżka stopy bazowej o 50 pb do ${(newRate * 100).toFixed(1)}%!`, 'macro');
+        }
+        if (typeof addMail === 'function') {
+            addMail({
+                sender: 'NBP',
+                subject: 'Nadzwyczajna decyzja Rady Polityki Pieniężnej: cięcie stóp o 50 pb',
+                body: `W odpowiedzi na załamanie rynkowe i spadek płynności na giełdzie, Bank Centralny zdecydował o natychmiastowym obniżeniu stopy referencyjnej o 50 punktów bazowych do poziomu ${(newRate * 100).toFixed(1)}%.`,
+                importance: 2
+            });
+        }
+    }
+}
+
+/** Wykonanie Margin Call w 1. tygodniu krachu: boty i gracz. */
+function executeMarginCalls() {
+    if (marketCrash.marginCallsExecuted) return;
+    marketCrash.marginCallsExecuted = true;
+
+    // 1. Boty: bot z długiem > 50% wartości portfela przymusowo wyprzedaje 20–40% akcji
+    if (typeof aiCompetitors !== 'undefined' && Array.isArray(aiCompetitors)) {
+        for (const ai of aiCompetitors) {
+            if (ai.personality === 'market_maker') continue;
+            const debt = (ai.loans || []).reduce((sum, loan) => sum + loan.amount, 0);
+            const netWorth = typeof calculateNetWorth === 'function' ? calculateNetWorth(ai) : 0;
+            const totalCapital = debt + netWorth;
+            const leverage = totalCapital > 0 ? (debt / totalCapital) : 0;
+
+            if (leverage > 0.50 && ai.portfolio) {
+                const sellFactor = 0.20 + Math.random() * 0.20;
+                let soldAny = false;
+                for (const symbol in ai.portfolio) {
+                    const shares = Number(ai.portfolio[symbol]) || 0;
+                    if (shares > 0) {
+                        const toSell = Math.max(1, Math.floor(shares * sellFactor));
+                        if (typeof aiSellStock === 'function') {
+                            aiSellStock(ai, symbol, toSell);
+                            soldAny = true;
+                        }
+                    }
+                }
+                if (soldAny && typeof logEvent === 'function') {
+                    logEvent(`⚠️ MARGIN CALL: ${ai.name} (dźwignia ${(leverage * 100).toFixed(0)}%) przymusowo wyprzedaje akcje pod wezwanie banku!`, 'market');
+                }
+            }
+        }
+    }
+
+    // 2. Gracz: wezwanie do uzupełnienia depozytu przy długu > 50%
+    checkPlayerMarginCall();
+}
+
+/** Sprawdzenie i egzekucja Margin Call dla funduszu gracza. */
+function checkPlayerMarginCall() {
+    const pawnDebt = (typeof playerFund === 'object' && playerFund?.pawnLoans)
+        ? playerFund.pawnLoans.reduce((sum, loan) => sum + (Number(loan.principal) || 0), 0)
+        : 0;
+    const otherDebt = (typeof playerFund === 'object' && Number(playerFund?.debt)) || 0;
+    const totalDebt = pawnDebt + otherDebt;
+
+    const portfolioVal = typeof getFundPortfolioValue === 'function' ? getFundPortfolioValue() : 0;
+    const totalAssets = portfolioVal + Math.max(0, Number(playerCash) || 0);
+    const leverage = (totalAssets + totalDebt) > 0 ? (totalDebt / (totalAssets + totalDebt)) : 0;
+
+    if (totalDebt > 0 && leverage > 0.50) {
+        const requiredCash = Math.max(0, totalDebt - (totalAssets * 0.40));
+        if (typeof playerCash !== 'undefined' && playerCash >= requiredCash) {
+            playerCash -= requiredCash;
+            if (typeof logEvent === 'function') {
+                logEvent(`⚠️ MARGIN CALL: Broker potrącił ${formatZl(requiredCash, 0)} z gotówki funduszu na uzupełnienie depozytu zabezpieczającego.`, 'market');
+            }
+            if (typeof showToast === 'function') {
+                showToast(`⚠️ Margin Call: Uzupełniono depozyt kwotą ${formatZl(requiredCash, 0)}.`, 'warning');
+            }
+        } else {
+            let liquidatedValue = 0;
+            if (typeof playerPortfolio === 'object' && playerPortfolio) {
+                for (const symbol in playerPortfolio) {
+                    const holding = playerPortfolio[symbol];
+                    const shares = Number(holding?.shares) || 0;
+                    if (shares > 0) {
+                        const toLiquidate = Math.max(1, Math.floor(shares * 0.25));
+                        const stock = typeof stocks !== 'undefined' ? stocks.find(s => s.symbol === symbol) : null;
+                        const price = stock ? stock.price : 1;
+                        holding.shares -= toLiquidate;
+                        if (holding.shares <= 0) delete playerPortfolio[symbol];
+                        liquidatedValue += toLiquidate * price;
+                    }
+                }
+            }
+            if (typeof playerCash !== 'undefined') playerCash += liquidatedValue;
+
+            if (typeof logEvent === 'function') {
+                logEvent(`🚨 MARGIN CALL! Wartość zabezpieczeń funduszu spadła w krachu. Broker przeprowadził przymusową likwidację akcji za ${formatZl(liquidatedValue, 0)}!`, 'market');
+            }
+            if (typeof showToast === 'function') {
+                showToast(`🚨 MARGIN CALL! Przymusowa likwidacja akcji funduszu!`, 'error');
+            }
+            if (typeof addMail === 'function') {
+                addMail({
+                    sender: 'KNF',
+                    subject: '🚨 MARGIN CALL: Przymusowa likwidacja pozycji funduszu',
+                    body: `W związku z krachem na giełdzie i przekroczeniem dopuszczalnego wskaźnika zadłużenia (> 50%), broker przeprowadził przymusową likwidację 25% akcji Twojego portfela w celu zabezpieczenia depozytu. Odzyskane środki (${formatZl(liquidatedValue, 0)}) zasiliły konto funduszu.`,
+                    importance: 3
+                });
+            }
+        }
+    }
+}
+
+/** Punkt zaczepienia dla 0.15.1: szok sektorowy. */
+function applySectorShock(sector, premiumShock, durationQuarters = 2) {
+    if (typeof stocks === 'undefined' || !Array.isArray(stocks)) return;
+    for (const stock of stocks) {
+        if (!stock || stock.assetType === 'Holding') continue;
+        const mainSec = typeof getMainSector === 'function' ? getMainSector(stock) : (Array.isArray(stock.sector) ? stock.sector[0] : stock.sector);
+        if (mainSec === sector || (Array.isArray(stock.sector) && stock.sector.includes(sector))) {
+            stock.sectorPremium = (stock.sectorPremium || 0) + premiumShock;
+        }
+    }
+}
+
+/** Debug: ręczne wywołanie krachu rynkowego. */
+function debugTriggerMarketCrash() {
+    triggerMarketCrash();
+}
+
+/** Debug: ręczne wywołanie bezpiecznika giełdowego. */
+function debugTriggerMarketHalt(level = 1, durationSec = 15) {
+    triggerMarketHalt(level, durationSec, level === 1 ? -0.075 : (level === 2 ? -0.135 : -0.21));
+}
+
 /** Mnożnik C/Z dla spółki: faza cyklu (wg bety sektora) i poziom stóp procentowych. */
 function getValuationMultiplier(stock) {
     const profile = getSectorProfile(stock);
@@ -3064,6 +3406,14 @@ function updateInterestRates() {
 
 // Główna funkcja aktualizująca ceny (Symulacja Rynku)
 function updateStockPrices() {
+    // 0.15 H4: Bezpiecznik giełdowy (Market Circuit Breaker) wstrzymuje aktualizację cen na giełdzie
+    if (typeof isMarketHalted === 'function' && isMarketHalted()) {
+        if (typeof updateCircuitBreakerUI === 'function') {
+            updateCircuitBreakerUI();
+        }
+        return;
+    }
+
     const now = Date.now();
     const marketModifier = 1 + (marketVolatilityIndex - 1) * 0.5;
 
@@ -3458,6 +3808,11 @@ function updateMarketIndexes() {
         }
         gigIndex.lastPrices = Object.fromEntries(members.map(stock => [stock.symbol, stock.price]));
         gigIndex.change = gigIndex.value - oldValue;
+
+        // 0.15 H4: Sprawdź progi bezpieczników giełdowych (-7%, -13%, -20%)
+        if (typeof checkCircuitBreakers === 'function') {
+            checkCircuitBreakers(gigIndex.value);
+        }
     }
 
     // --- Obliczanie TIG5 i SIG20 (na podstawie kapitalizacji rynkowej) ---

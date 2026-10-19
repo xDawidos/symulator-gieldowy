@@ -8685,3 +8685,27 @@ function renderCompanyCardGroup(stock) {
                 <p class="text-xs text-muted">Segmenty wyceniane medianą C/Z sektora (przy stracie: C/S × 0,5), pakiety w zależnych po kursie rynkowym. Uproszczenie: zysk matki zawiera transfer zysku córek.</p></section>
         </div>`;
 }
+
+/** 0.15 H4: Aktualizacja widoczności i odliczania banera bezpiecznika giełdowego (Circuit Breaker) */
+function updateCircuitBreakerUI() {
+    const banner = document.getElementById('circuit-breaker-banner');
+    if (!banner) return;
+
+    if (typeof isMarketHalted === 'function' && isMarketHalted()) {
+        banner.style.display = 'block';
+        const timerEl = document.getElementById('circuit-breaker-timer');
+        const textEl = document.getElementById('circuit-breaker-text');
+        const remaining = typeof getMarketHaltRemainingSeconds === 'function' ? getMarketHaltRemainingSeconds() : 0;
+        const level = typeof marketHalt !== 'undefined' ? (marketHalt.level || 1) : 1;
+        const dropPct = typeof marketHalt !== 'undefined' && marketHalt.triggerDropPct ? Math.abs(marketHalt.triggerDropPct * 100).toFixed(1) : '7.0';
+
+        if (timerEl) {
+            timerEl.textContent = `${remaining}s`;
+        }
+        if (textEl) {
+            textEl.textContent = `BEZPIECZNIK GIEŁDOWY: POZIOM ${level} (-${dropPct}% GIG) — SESJA ZAWIESZONA NA`;
+        }
+    } else {
+        banner.style.display = 'none';
+    }
+}

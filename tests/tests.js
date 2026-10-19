@@ -7430,6 +7430,153 @@ group('0.14.3: zapis bez limitu (IndexedDB, lz16, kopia awaryjna) — osobna baz
     });
 });
 
+group('0.15 H4: Krach rynkowy, bezpieczniki giełdowe i reakcja instytucji', () => {
+    function world() {
+        const a = makeCompany('AAA'), b = makeCompany('BBB');
+        a.name = 'Alfa Testowa'; b.name = 'Beta Testowa';
+        resetWorld([a, b]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        initMarketRegimes();
+        return { a, b };
+    }
+
+    test('H4.1: triggerMarketCrash inicjalizuje krach z czasem trwania i spadkiem premii', () => {
+        world();
+        const regime = getMarketRegime('home');
+        regime.premium = 0.20;
+
+        triggerMarketCrash({ durationWeeks: 3, targetDrop: -0.30 });
+        assert(isMarketCrashing() === true, 'krach jest aktywny');
+        assert(marketCrash.active === true, 'marketCrash.active === true');
+        assert(marketCrash.targetDrop === -0.30, 'targetDrop jest ujemny');
+        assert(marketCrash.startPremium === 0.20, 'startPremium zapamiętane');
+    });
+
+    test('H4.2: processMarketCrashWeekly przeprowadza krach tydzień po tygodniu aż do zakończenia', () => {
+        world();
+        triggerMarketCrash({ durationWeeks: 2, targetDrop: -0.30 });
+        const initialRegime = getMarketRegime('home');
+
+        // Tydzień 1
+        processMarketCrashWeekly();
+        assert(marketCrash.weeksElapsed === 1, 'tydzień 1');
+        assert(marketCrash.marginCallsExecuted === true, 'margin calls wykonane w 1. tygodniu');
+        assert(isMarketCrashing() === true, 'krach wciąż trwa po 1. tygodniu');
+
+        // Tydzień 2 (koniec krachu)
+        processMarketCrashWeekly();
+        assert(marketCrash.weeksElapsed === 2, 'tydzień 2');
+        assert(isMarketCrashing() === false, 'krach zakończony po upływie durationWeeks');
+        assert(initialRegime.phase === 'bear' || initialRegime.phase === 'capitulation', 'faza przeszła w bessę lub kapitulację');
+    });
+
+    test('H4.3: Bezpieczniki giełdowe (Circuit Breakers): progi -7%, -13%, -20%', () => {
+        world();
+        marketHalt = createMarketHaltState();
+        marketHalt.weeklyStartGig = 1000;
+
+        // Spadek -5%: brak haltu
+        checkCircuitBreakers(950);
+        assert(isMarketHalted() === false, 'brak haltu przy -5%');
+
+        // Spadek -8%: Poziom 1 (15s)
+        checkCircuitBreakers(920);
+        assert(isMarketHalted() === true, 'halt aktywny przy -8%');
+        assert(marketHalt.level === 1, 'poziom 1');
+        assert(marketHalt.haltDurationSec === 15, 'czas 15s');
+
+        // Koniec haltu 1
+        marketHalt.untilGameMs = Date.now() - 1000;
+        assert(isMarketHalted() === false, 'halt minął');
+
+        // Spadek -14%: Poziom 2 (30s)
+        checkCircuitBreakers(860);
+        assert(isMarketHalted() === true, 'halt aktywny przy -14%');
+        assert(marketHalt.level === 2, 'poziom 2');
+        assert(marketHalt.haltDurationSec === 30, 'czas 30s');
+
+        // Koniec haltu 2
+        marketHalt.untilGameMs = Date.now() - 1000;
+        assert(isMarketHalted() === false, 'halt minął');
+
+        // Spadek -21%: Poziom 3 (60s)
+        checkCircuitBreakers(790);
+        assert(isMarketHalted() === true, 'halt aktywny przy -21%');
+        assert(marketHalt.level === 3, 'poziom 3');
+        assert(marketHalt.haltDurationSec === 60, 'czas 60s');
+    });
+
+    test('H4.4: Blokada handlu gracza i botów podczas bezpiecznika giełdowego', () => {
+        world();
+        const testStock = stocks[0];
+        const initialShares = playerPortfolio[testStock.symbol]?.shares || 0;
+        playerCash = 100000;
+
+        // Aktywuj halt
+        triggerMarketHalt(1, 15, -0.075);
+        assert(isMarketHalted() === true, 'halt aktywny');
+
+        // Próba zakupu przez gracza
+        buyStock(testStock.symbol, 10);
+        assert((playerPortfolio[testStock.symbol]?.shares || 0) === initialShares, 'zakup gracza zablokowany');
+
+        // Próba sprzedaży przez gracza (jeśli ma akcje)
+        if (initialShares > 0) {
+            sellStock(testStock.symbol, 1);
+            assert(playerPortfolio[testStock.symbol].shares === initialShares, 'sprzedaż gracza zablokowana');
+        }
+
+        // Próba handlu przez bota
+        const bot = aiCompetitors[0];
+        bot.cash = 100000;
+        const botInitialShares = bot.portfolio?.[testStock.symbol]?.shares || 0;
+        const buyRes = aiBuyStock(bot, testStock.symbol, 10);
+        assert(buyRes === false, 'aiBuyStock zwróciło false');
+        assert((bot.portfolio?.[testStock.symbol]?.shares || 0) === botInitialShares, 'zakup bota zablokowany');
+
+        const sellRes = aiSellStock(bot, testStock.symbol, 1);
+        assert(sellRes === false, 'aiSellStock zwróciło false');
+    });
+
+    test('H4.5: Margin Call: wymuszona likwidacja 25% pozycji przy dźwigni > 50%', () => {
+        world();
+        const testStock = stocks[0];
+        testStock.price = 100;
+
+        // Portfel funduszu gracza z długiem > 50% aktywów
+        playerPortfolio[testStock.symbol] = { shares: 1000, avgPrice: 100, assetType: 'stock' };
+        playerCash = 0; // brak gotówki na pokrycie depozytu
+        playerFund.debt = 150000; // dług 150k przy portfelu 100k -> totalCapital = 250k, leverage = 60%
+
+        checkPlayerMarginCall();
+
+        // Likwidacja 25% z 1000 akcji = 250 akcji
+        assert(playerPortfolio[testStock.symbol].shares === 750, 'zlikwidowano dokładnie 25% akcji');
+        assert(playerCash === 25000, 'odzyskane środki trafiły do kasy funduszu');
+    });
+
+    test('H4.6: Reakcja Banku Centralnego po krachu: cięcie stopy bazowej o 50 pb', () => {
+        world();
+        centralBank.baseInterestRate = 0.050; // 5.0%
+        macro.inflation = 0.020; // niska inflacja
+
+        // Wymuś cięcie
+        reactCentralBankToCrash(true);
+        assert(centralBank.lastRateChange === -0.005, 'odnotowano zmianę stóp o -50 pb');
+        assert(Math.abs(centralBank.baseInterestRate - 0.045) < 0.0001, 'obniżka dokładnie o 50 pb (do 4.5%)');
+    });
+
+    test('H4.7: Szok sektorowy applySectorShock modyfikuje sectorPremium spółek', () => {
+        world();
+        const testStock = stocks[0];
+        const sec = getMainSector(testStock);
+        testStock.sectorPremium = 0;
+
+        applySectorShock(sec, -0.15, 2);
+        assert(Math.abs(testStock.sectorPremium - (-0.15)) < 0.0001, 'premia sektorowa obniżona o 15 pp');
+    });
+});
+
 async function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

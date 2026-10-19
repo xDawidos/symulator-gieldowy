@@ -277,6 +277,11 @@ function getNextSkillLevelInfo(skillId) {
 function buyStock(symbol, quantity) {
     quantity = Math.floor(Number(quantity));
     if (!(quantity > 0)) return;
+    // 0.15 H4: Blokada transakcji podczas zadziałania bezpiecznika giełdowego
+    if (typeof isMarketHalted === 'function' && isMarketHalted()) {
+        showToast('Handel wstrzymany — zadziałał bezpiecznik giełdowy!', 'error');
+        return;
+    }
     // Konto prywatne gracza (fund.js); domyślnie handluje fundusz (playerCash/playerPortfolio).
     if (typeof activeTradingAccount !== 'undefined' && activeTradingAccount === 'private') return buyStockPrivate(symbol, quantity);
     
@@ -371,6 +376,11 @@ function buyStock(symbol, quantity) {
 function sellStock(symbol, quantity) {
     quantity = Math.floor(Number(quantity));
     if (!(quantity > 0)) return;
+    // 0.15 H4: Blokada transakcji podczas zadziałania bezpiecznika giełdowego
+    if (typeof isMarketHalted === 'function' && isMarketHalted()) {
+        showToast('Handel wstrzymany — zadziałał bezpiecznik giełdowy!', 'error');
+        return;
+    }
     if (typeof activeTradingAccount !== 'undefined' && activeTradingAccount === 'private') return sellStockPrivate(symbol, quantity);
     const stockToSell = stocks.find(stock => stock.symbol === symbol);
     const holding = playerPortfolio[symbol];
@@ -2275,6 +2285,7 @@ function getMaxBuyQuantity(stock, account = activeTradingAccount) {
 }
 
 function buyStockPrivate(symbol, quantity) {
+    if (typeof isMarketHalted === 'function' && isMarketHalted()) { showToast('Handel wstrzymany — zadziałał bezpiecznik giełdowy!', 'error'); return false; }
     const stock = stocks.find(s => s.symbol === symbol);
     if (!stock || stock.isTradeLocked) { showToast('Handel tą akcją jest niedostępny.', 'warning'); return false; }
     if (!canAccessExchange(stock.exchange)) { showToast('Twoje stanowisko nie daje dostępu do tej giełdy.', 'warning'); return false; }
@@ -2298,6 +2309,7 @@ function buyStockPrivate(symbol, quantity) {
 }
 
 function sellStockPrivate(symbol, quantity) {
+    if (typeof isMarketHalted === 'function' && isMarketHalted()) { alert('Handel wstrzymany — zadziałał bezpiecznik giełdowy!'); return false; }
     const stock = stocks.find(s => s.symbol === symbol);
     const holding = playerWallet.portfolio[symbol];
     if (!stock || !holding || holding.shares < quantity) { alert('Nie masz tylu akcji na koncie prywatnym.'); return false; }

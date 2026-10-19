@@ -220,6 +220,8 @@ function buildSaveSnapshot({ compact = 0 } = {}) {
         paymentTotals,
         economyCycle,
         marketRegimes,
+        marketCrash: typeof marketCrash !== 'undefined' ? marketCrash : null,
+        marketHalt: typeof marketHalt !== 'undefined' ? marketHalt : null,
         sectorBubble: activeSectorBubble,
         sectorBubbleCooldown: sectorBubbleCooldown,
         macro,
@@ -692,6 +694,16 @@ function applySaveSnapshot(snapshot) {
         marketRegimes = snapshot.marketRegimes;
     } else {
         initMarketRegimes();
+    }
+    if (typeof marketCrash !== 'undefined' && snapshot.marketCrash) {
+        marketCrash = snapshot.marketCrash;
+    } else if (typeof createMarketCrashState === 'function') {
+        marketCrash = createMarketCrashState();
+    }
+    if (typeof marketHalt !== 'undefined' && snapshot.marketHalt) {
+        marketHalt = snapshot.marketHalt;
+    } else if (typeof createMarketHaltState === 'function') {
+        marketHalt = createMarketHaltState();
     }
     activeSectorBubble = snapshot.sectorBubble || null;
     sectorBubbleCooldown = Number(snapshot.sectorBubbleCooldown) || 0;
@@ -1327,6 +1339,12 @@ gameTimers.weekly = setGameInterval(() => {
         if (typeof recordWeeklyCloses === 'function') recordWeeklyCloses(); // U2: zmiana tygodniowa w tabeli spółek
         if (typeof updateMarketIndexWeights === 'function') updateMarketIndexWeights(); // 0.15 H1a: przeliczenie wag kapitalizacji indeksów
         if (typeof updateMarketSentimentWeekly === 'function') updateMarketSentimentWeekly(); // 0.15 H2a: wskaźnik Strachu i Chciwości
+        // 0.15 H4: Postęp krachu rynkowego i reset punktu odniesienia bezpiecznika giełdowego
+        if (typeof processMarketCrashWeekly === 'function') processMarketCrashWeekly();
+        if (typeof marketHalt !== 'undefined' && marketHalt && typeof marketIndexes !== 'undefined') {
+            const gig = marketIndexes.find(idx => idx.id === 'GIG');
+            if (gig && gig.value > 0) marketHalt.weeklyStartGig = gig.value;
+        }
         if (typeof checkAcademyTriggers === 'function') checkAcademyTriggers(); // N1: hasła Akademii przy pierwszym kontakcie
         if (typeof checkMentorTasks === 'function') checkMentorTasks(); // N4: zadania mentora i certyfikaty
 
@@ -1399,6 +1417,7 @@ gameTimers.weekly = setGameInterval(() => {
         if (typeof processAccountingQuarterly === 'function') processAccountingQuarterly(); // N3: kreatywna księgowość, audyty (accounting.js)
         if (typeof advanceMarketRegimeQuarterly === 'function') advanceMarketRegimeQuarterly(); // 0.15 H2a: fazy rynku
         if (typeof advanceSectorBubblesQuarterly === 'function') advanceSectorBubblesQuarterly(); // 0.15 H3: bańki sektorowe
+        if (typeof checkMarketCrashQuarterly === 'function') checkMarketCrashQuarterly(); // 0.15 H4: sprawdzanie warunków krachu rynkowego
         advanceEconomyCycle(); // nowa faza koniunktury przed raportami
         advanceMacroQuarter(); // inflacja, bezrobocie, cykle sektorów, wybory (macro.js)
         processCityQuarterly(); // festyn raz w roku (city.js)
@@ -1850,6 +1869,8 @@ function createNewWorld() {
     scandals = createScandals(); // afery (scandals.js)
     updateMarketTrendFromCycle();
     if (typeof initMarketRegimes === 'function') initMarketRegimes();
+    if (typeof createMarketCrashState === 'function') marketCrash = createMarketCrashState();
+    if (typeof createMarketHaltState === 'function') marketHalt = createMarketHaltState();
     stocks.forEach(stock => {
         if (stock.balanceSheet && stock.assetType !== 'Startup') initializeFundamentals(stock, true);
         initializeOwnership(stock);

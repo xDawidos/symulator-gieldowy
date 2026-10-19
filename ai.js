@@ -205,6 +205,7 @@ if (weeklyRate === 0) {
 
 
 function aiBuyStock(ai, symbol, quantity) {
+    if (typeof isMarketHalted === 'function' && isMarketHalted()) return false;
     const stockToBuy = stocks.find(s => s.symbol === symbol);
     // Sprawdź, czy akcja istnieje i czy handel nie jest zablokowany
     if (!stockToBuy || stockToBuy.isTradeLocked) return;
@@ -264,6 +265,7 @@ function aiBuyStock(ai, symbol, quantity) {
 }
 
 function aiSellStock(ai, symbol, quantity) {
+    if (typeof isMarketHalted === 'function' && isMarketHalted()) return false;
     const holding = ai.portfolio[symbol];
 
     // Sprawdź, czy AI ma tę pozycję i czy ilość jest poprawna

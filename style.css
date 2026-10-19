@@ -4757,3 +4757,68 @@ button.mood-kpi:hover { background: var(--color-bg-hover) !important; border-col
 }
 /* 07 P1.4: ramka wliczona w 100% szerokości — bez 2 px poziomego przewijania okna wykresu */
 #chart-svg-area { box-sizing: border-box; }
+
+/* ===================== 0.15 H4: Bezpiecznik Giełdowy (Circuit Breaker Banner) ===================== */
+.circuit-breaker-banner {
+    width: 100%;
+    background: linear-gradient(90deg, #b71c1c, #d32f2f, #b71c1c);
+    color: #ffffff;
+    padding: 10px 16px;
+    box-shadow: 0 4px 15px rgba(211, 47, 47, 0.4);
+    position: sticky;
+    top: 56px;
+    z-index: 99;
+    animation: circuitBreakerPulse 1.8s infinite ease-in-out;
+    border-bottom: 2px solid #ff5252;
+}
+
+@keyframes circuitBreakerPulse {
+    0% {
+        background-color: #b71c1c;
+        box-shadow: 0 0 10px rgba(183, 28, 28, 0.5);
+    }
+    50% {
+        background-color: #d32f2f;
+        box-shadow: 0 0 22px rgba(244, 67, 54, 0.85);
+    }
+    100% {
+        background-color: #b71c1c;
+        box-shadow: 0 0 10px rgba(183, 28, 28, 0.5);
+    }
+}
+
+.circuit-breaker-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.circuit-breaker-icon {
+    font-size: 18px;
+    animation: bounce 1s infinite alternate;
+}
+
+.circuit-breaker-text {
+    flex: 1;
+    text-align: center;
+}
+
+.circuit-breaker-timer {
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 4px;
+    padding: 2px 10px;
+    font-family: monospace;
+    font-size: 16px;
+    font-weight: 800;
+    color: #ffeb3b;
+    min-width: 60px;
+    text-align: center;
+}
