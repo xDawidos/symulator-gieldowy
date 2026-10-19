@@ -2940,6 +2940,30 @@ body.dark-mode #stock-table thead th.col-avail,
   cursor: pointer;
 }
 .th-sort:hover { color: var(--color-text-primary) !important; }
+.th-group-toggle {
+  padding: 1px 6px;
+  margin-left: var(--space-2);
+  border: 1px solid var(--color-border-subtle) !important;
+  border-radius: var(--radius-sm) !important;
+  background: transparent !important;
+  color: var(--color-text-secondary) !important;
+  font-size: var(--text-caption-size);
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+  cursor: pointer;
+  vertical-align: middle;
+}
+.th-group-toggle:hover {
+  background: var(--color-bg-hover) !important;
+  border-color: var(--color-border-strong) !important;
+  color: var(--color-text-primary) !important;
+}
+.th-group-toggle.active {
+  background: var(--color-bg-accent-soft) !important;
+  border-color: var(--color-border-accent) !important;
+  color: var(--color-text-accent) !important;
+}
 
 body.dark-mode #stock-table tbody tr,
 body.dark-mode #stock-table tbody tr:nth-child(even):not(.exchange-header),

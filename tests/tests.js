@@ -5810,6 +5810,19 @@ group('0.14.1 R6: widok spółek — rynek → poziom → sektor, opis działaln
             sectorFilterState = { sector: 'Bankowość', subsector: null, secondary: false, type: 'all' };
             displayStocks();
             assert(![...body.rows].some(r => r.classList.contains('sector-subheader') && r.textContent.includes('Technologia')), 'pusty podnagłówek ukryty przy filtrze');
+
+            // 0.14.5: wyłączenie grupowania według kategorii w tabeli
+            sectorFilterState = { sector: 'all', subsector: null, secondary: false, type: 'all', grouped: false };
+            currentSortState = 'price_asc';
+            displayStocks();
+            const flatAsc = [...body.rows].map(r => r.classList.contains('sector-subheader') ? 'S' : r.dataset.symbol).filter(Boolean);
+            assert(!flatAsc.includes('S'), 'brak podnagłówków sektorów przy wyłączonym grupowaniu');
+            assert(flatAsc.join(',') === 'BKA,TEB,BKB,TEA,SUB', `sortowanie płaskie rosnąco: ${flatAsc}`);
+
+            currentSortState = 'price_desc';
+            displayStocks();
+            const flatDesc = [...body.rows].map(r => r.classList.contains('sector-subheader') ? 'S' : r.dataset.symbol).filter(Boolean);
+            assert(flatDesc.join(',') === 'TEA,SUB,BKB,TEB,BKA', `sortowanie płaskie malejąco: ${flatDesc}`);
         } finally {
             currentSortState = saved.sort; sectorFilterState = saved.filter; currentMarketLevel = saved.level; ownedOnlyFilter = saved.owned;
             table.remove();

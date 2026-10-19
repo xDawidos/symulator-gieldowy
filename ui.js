@@ -1352,6 +1352,15 @@ function displayStocks(previousInputValues = {}) {
     priceHeader.setAttribute('aria-sort', sortAria);
   }
 
+  const groupToggleBtn = document.getElementById('table-group-toggle');
+  if (groupToggleBtn) {
+    const isGrouped = sectorFilterState.grouped !== false;
+    groupToggleBtn.classList.toggle('active', isGrouped);
+    groupToggleBtn.setAttribute('aria-pressed', String(isGrouped));
+    groupToggleBtn.title = isGrouped ? 'Kliknij, aby wyłączyć podział na kategorie (sektory) w tabeli' : 'Kliknij, aby włączyć podział na kategorie (sektory) w tabeli';
+    groupToggleBtn.textContent = isGrouped ? 'wg kategorii' : 'bez grup';
+  }
+
   if (typeof renderSectorFilters === 'function') renderSectorFilters();
 
   // Filtrowanie spółek do wyświetlenia
@@ -1742,10 +1751,17 @@ function displayStocks(previousInputValues = {}) {
     );
 
     // 0.14.1 R6: grupy sektora głównego w kolejności rejestru; sortowanie po cenie wewnątrz grupy.
+    // 0.14.5: możliwość wyłączenia grupowania według kategorii — płaska lista i sortowanie po cenie w całej giełdzie.
+    const isGroupedBySector = sectorFilterState.grouped !== false;
     const sectorOf = new Map(stocksOnThisExchange.map(stock => [stock, getMainSector(stock)]));
     const priceDir = currentSortState === 'price_asc' ? 1 : currentSortState === 'price_desc' ? -1 : 0;
-    stocksOnThisExchange.sort((a, b) =>
-      (getSectorDisplayOrder(sectorOf.get(a)) - getSectorDisplayOrder(sectorOf.get(b))) || (priceDir ? (a.price - b.price) * priceDir : 0));
+
+    if (isGroupedBySector) {
+      stocksOnThisExchange.sort((a, b) =>
+        (getSectorDisplayOrder(sectorOf.get(a)) - getSectorDisplayOrder(sectorOf.get(b))) || (priceDir ? (a.price - b.price) * priceDir : 0));
+    } else if (priceDir) {
+      stocksOnThisExchange.sort((a, b) => (a.price - b.price) * priceDir);
+    }
 
     if (stocksOnThisExchange.length > 0) {
       const headerRow = stockTableBody.insertRow();
@@ -1759,11 +1775,13 @@ function displayStocks(previousInputValues = {}) {
     }
 
     const sectorCounts = new Map();
-    for (const s of stocksOnThisExchange) { const key = sectorOf.get(s) || null; sectorCounts.set(key, (sectorCounts.get(key) || 0) + 1); }
+    if (isGroupedBySector) {
+      for (const s of stocksOnThisExchange) { const key = sectorOf.get(s) || null; sectorCounts.set(key, (sectorCounts.get(key) || 0) + 1); }
+    }
     let lastSector;
     stocksOnThisExchange.forEach(stock => {
       const sector = sectorOf.get(stock) || null;
-      if (sector !== lastSector) {
+      if (isGroupedBySector && sector !== lastSector) {
         lastSector = sector;
         const subRow = stockTableBody.insertRow();
         subRow.className = 'sector-subheader';
