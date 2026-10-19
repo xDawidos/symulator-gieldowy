@@ -3110,6 +3110,26 @@ group('Testy ogólne 0.11: benchmark GIG i wykup posiadaczy', () => {
         assert(ACADEMY_ENTRIES.indeks_wazony.quiz.length >= 3, 'Quiz ma co najmniej 3 pytania');
     });
 
+    test('0.15 H1a: stabilizacja marż operacyjnych i erozja konkurencyjna', () => {
+        const c = makeCompany('ERO');
+        c.exchange = 'GOLD';
+        initializeFundamentals(c, true);
+        c.financialHealth = 0;
+        macro = { inflation: 0.025, quarter: 1 };
+        society = null;
+
+        const qBase = computeQuarterResults(c);
+        assert(qBase.revenue > 0, 'przychody dodatnie');
+
+        // Wysoka kondycja (health = 5): erozja konkurencyjna ścina 35% nadwyżki
+        c.financialHealth = 5;
+        const qHealth = computeQuarterResults(c);
+        const rawHealthBoost = 5 * 0.008; // +4.0 pp
+        const expectedErodedBoost = rawHealthBoost * (1 - 0.35); // +2.6 pp
+        const deltaMargin = qHealth.margin - qBase.margin;
+        assert(Math.abs(deltaMargin - expectedErodedBoost) < 0.0001, `nadwyżka marży poddana erozji: delta ${deltaMargin.toFixed(4)} vs oczekiwana ${expectedErodedBoost.toFixed(4)}`);
+    });
+
     test('bank aktywowany w trakcie gry ma od razu stopy (bez NaN w kredytach botów)', () => {
         const bank = { id: 'late', name: 'Późny Bank', type: BANK_TYPES.UNIVERSAL, isActive: false, cash: 1e6, baseInterestRateMargin: 0.02, stockPortfolio: {}, loanPortfolio: {}, depositPortfolio: {} };
         commercialBanks.push(bank);
@@ -7006,6 +7026,7 @@ async function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;
     let failed = 0;
+    const testErrors = [];
     const originalLogEvent = window.logEvent;
     window.__testLog = [];
 
@@ -7027,6 +7048,8 @@ async function runAllTests() {
                 line.append(t.name);
             } catch (error) {
                 failed++;
+                const errMsg = `${g.name} -> ${t.name}: ${error instanceof AssertionError ? error.message : (error.stack || String(error))}`;
+                testErrors.push(errMsg);
                 line.innerHTML = `<span class="fail">✘</span> `;
                 line.append(t.name);
                 const detail = document.createElement('div');
@@ -7054,7 +7077,7 @@ async function runAllTests() {
     const summary = document.getElementById('summary');
     summary.textContent = `Zaliczone: ${passed}, niezaliczone: ${failed}`;
     summary.className = failed ? 'fail' : 'ok';
-    window.__testSummary = { passed, failed };
+    window.__testSummary = { passed, failed, errors: testErrors };
 }
 
 runAllTests();

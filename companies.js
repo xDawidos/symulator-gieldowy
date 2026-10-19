@@ -2771,7 +2771,14 @@ function computeQuarterResults(stock) {
     // 0.13: marża = marża_0.12 + udział_kosztu_pracy × (1 − indeks); neutralnie (indeks 1,0) bez zmian.
     const laborAdj = typeof getLaborMarginAdj === 'function' ? getLaborMarginAdj(stock) : 0;
     const labor = revenue * (typeof getLaborShare === 'function' ? getLaborShare(stock) : 0) * (typeof getLaborCostIndex === 'function' ? getLaborCostIndex(stock) : 1);
-    const margin = Math.max(-0.4, Math.min(0.6, profile.margin * (1 + (Number(stock.marginAdj) || 0)) + health * 0.015 + phaseAdj * 0.5 + profile.beta * gdp * (gdp < 0 ? 3 : 2) - inflationSqueeze - getCrowdingPressure() * 0.02 + laborAdj + getStrategyMarginAdj(stock))); // T3: synergia, skupienie, nisze, pivot; B5: recesja mocniej tnie marże; zatłoczony rynek = ostrzejsza konkurencja; 0.13: koszt pracy
+    // 0.15 H1a: erozja konkurencyjna nadmiernych marż (stabilizacja trendu EPS do poziomu docelowego)
+    // Renta ze zdrowia i strategii podlega erozji konkurencyjnej (powrót do marży profilu sektorowego).
+    const baseMargin = profile.margin * (1 + (Number(stock.marginAdj) || 0)) + health * 0.008 + phaseAdj * 0.5 + profile.beta * gdp * (gdp < 0 ? 3 : 2) - inflationSqueeze - getCrowdingPressure() * 0.02 + getStrategyMarginAdj(stock);
+    const excessMargin = Math.max(0, baseMargin - profile.margin);
+    const competitiveErosion = excessMargin * 0.35;
+    const stabilizedBaseMargin = baseMargin - competitiveErosion;
+    // 0.13: marża = marża_bazowa + udział_kosztu_pracy × (1 − indeks); neutralnie (indeks 1,0) bez zmian.
+    const margin = Math.max(-0.4, Math.min(0.6, stabilizedBaseMargin + laborAdj));
     const fixedExpenses = Math.max(0, Number(stock.fixedExpenses) || 0);
 
     // Działające inwestycje: kwartalny zysk lub strata (investments.js).
@@ -2794,7 +2801,7 @@ function computeQuarterResults(stock) {
     governmentTreasury += tax;
     if (typeof society === 'object' && society?.budget) society.budget.citQuarter = (Number(society.budget.citQuarter) || 0) + tax;
 
-    return { revenue, ebitda, depreciation, interest, tax, subsidy, netIncome, investmentResult, labor };
+    return { revenue, ebitda, margin, depreciation, interest, tax, subsidy, netIncome, investmentResult, labor };
 }
 
 /** Zapisuje kwartał w historii i przelicza wskaźniki. Zwraca niespodziankę EPS względem oczekiwań. */

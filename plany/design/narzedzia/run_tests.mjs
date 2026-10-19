@@ -79,6 +79,9 @@ server.listen(PORT, async () => {
               if (val) {
                 clearInterval(checkInterval);
                 console.log(`TEST SUMMARY: Passed: ${val.passed}, Failed: ${val.failed}`);
+                if (val.errors && val.errors.length) {
+                  console.error('FAILURES:\n' + val.errors.join('\n'));
+                }
                 ws.close();
                 cleanup();
                 process.exit(val.failed > 0 ? 1 : 0);
