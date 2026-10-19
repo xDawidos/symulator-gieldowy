@@ -2252,6 +2252,7 @@ function displayMarketIndexes() {
     marketIndexes.forEach(index => {
         const indexDiv = document.createElement('div');
         indexDiv.className = 'index-item';
+        if (index.description) indexDiv.title = index.description;
 
         const change = index.change;
         let arrow = '■';

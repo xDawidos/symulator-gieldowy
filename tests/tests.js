@@ -3075,6 +3075,41 @@ group('Testy ogólne 0.11: benchmark GIG i wykup posiadaczy', () => {
         assert(Math.abs(gig.value / before - 1.1) < 1e-9, 'wzrost 10% = +10% indeksu');
     });
 
+    test('0.15 H1a: indeksy ważone kapitalizacją (computeCappedCapWeights, GIG cap 10%, TIG5, SIG20)', () => {
+        // 1. Sprawdzenie algorytmu wag z limitem 10% dla 20 spółek
+        const testCompanies = [];
+        for (let i = 1; i <= 20; i++) {
+            const comp = makeCompany(`C${i}`);
+            comp.price = 100;
+            comp.totalShares = (i === 1) ? 100000 : 100; // C1 to gigant
+            testCompanies.push(comp);
+        }
+        const weights = computeCappedCapWeights(testCompanies, 0.10);
+        assert(Math.abs(weights.C1 - 0.10) < 1e-6, `C1 powinien mieć limit 10%, ma ${weights.C1}`);
+        const sumWeights = Object.values(weights).reduce((a, b) => a + b, 0);
+        assert(Math.abs(sumWeights - 1.0) < 1e-9, `Suma wag musi wynosić 1.0, wynosi ${sumWeights}`);
+
+        // 2. Wpływ giganta na GIG: przy limicie 10%, wzrost giganta o 10% (reszta 0%) podnosi GIG o 1%
+        resetWorld(testCompanies);
+        const gig = marketIndexes.find(i => i.id === 'GIG');
+        gig.value = 100; gig.lastPrices = null;
+        updateMarketIndexes();
+        updateMarketIndexes();
+        const baseGig = gig.value;
+        testCompanies[0].price = 110; // +10%
+        updateMarketIndexes();
+        const gigReturn = (gig.value - baseGig) / baseGig;
+        assert(Math.abs(gigReturn - 0.01) < 1e-4, `GIG powinien wzrosnąć o 1.0% (waga 10% * +10%), wzrósł o ${(gigReturn * 100).toFixed(3)}%`);
+
+        // 3. TIG5 ważony kapitalizacją
+        const tig5 = marketIndexes.find(i => i.id === 'TIG5');
+        assert(tig5 && tig5.value > 0, 'TIG5 ma dodatnią wartość');
+
+        // 4. Hasło w Akademii
+        assert(typeof ACADEMY_ENTRIES.indeks_wazony === 'object', 'Hasło indeks_wazony istnieje');
+        assert(ACADEMY_ENTRIES.indeks_wazony.quiz.length >= 3, 'Quiz ma co najmniej 3 pytania');
+    });
+
     test('bank aktywowany w trakcie gry ma od razu stopy (bez NaN w kredytach botów)', () => {
         const bank = { id: 'late', name: 'Późny Bank', type: BANK_TYPES.UNIVERSAL, isActive: false, cash: 1e6, baseInterestRateMargin: 0.02, stockPortfolio: {}, loanPortfolio: {}, depositPortfolio: {} };
         commercialBanks.push(bank);

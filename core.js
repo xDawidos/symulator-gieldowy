@@ -2267,26 +2267,27 @@ let marketIndexes = [
     {
         id: 'GIG',
         name: 'Główny Indeks Giełdowy',
-        description: 'Śledzi ogólną kondycję całego rynku na podstawie średniej ceny wszystkich akcji.',
+        description: 'Główny indeks rynku akcji — ważony kapitalizacją z limitem 10% na spółkę (łańcuchowy).',
         value: 0,
         change: 0,
-        priceHistory: [] // NOWA WŁAŚCIWOŚĆ
+        weights: {},
+        priceHistory: []
     },
     {
         id: 'TIG5',
         name: 'Topowy Indeks Giełdowy 5',
-        description: 'Śledzi kondycję 5 spółek o największej kapitalizacji rynkowej (tzw. blue chip).',
+        description: 'Śledzi kondycję 5 spółek o największej kapitalizacji rynkowej (ważony kapitalizacją).',
         value: 0,
         change: 0,
-        priceHistory: [] // NOWA WŁAŚCIWOŚĆ
+        priceHistory: []
     },
     {
         id: 'SIG20',
         name: 'Szeroki Indeks Giełdowy 20',
-        description: 'Śledzi kondycję 20 największych spółek na giełdzie.',
+        description: 'Śledzi kondycję 20 największych spółek na giełdzie (ważony kapitalizacją).',
         value: 0,
         change: 0,
-        priceHistory: [] // NOWA WŁAŚCIWOŚĆ
+        priceHistory: []
     }
 ];
 
@@ -2564,57 +2565,143 @@ function updateMarketVolatilityIndex() {
     }
 }
 
+/**
+ * Oblicza wagi kapitalizacyjne spółek z opcjonalnym limitem (np. 10% dla GIG).
+ * Jeśli spółek jest mniej niż 1/capLimit, limit jest odpowiednio podnoszony do 1/N.
+ */
+function computeCappedCapWeights(members, capLimit = 0.10) {
+    if (!Array.isArray(members) || members.length === 0) return {};
+    if (members.length === 1) return { [members[0].symbol]: 1.0 };
+
+    const effectiveCap = capLimit ? Math.max(capLimit, 1 / members.length) : 1.0;
+    const caps = {};
+    let totalCap = 0;
+
+    for (const st of members) {
+        const cap = Math.max(1, (Number(st.price) || 0) * (Number(st.totalShares) || 1));
+        caps[st.symbol] = cap;
+        totalCap += cap;
+    }
+
+    if (totalCap <= 0) {
+        const eqW = 1 / members.length;
+        return Object.fromEntries(members.map(st => [st.symbol, eqW]));
+    }
+
+    const weights = {};
+    for (const st of members) {
+        weights[st.symbol] = caps[st.symbol] / totalCap;
+    }
+
+    if (effectiveCap < 1.0) {
+        for (let iter = 0; iter < 10; iter++) {
+            let excess = 0;
+            let uncappedSum = 0;
+            let anyCapped = false;
+
+            for (const st of members) {
+                const w = weights[st.symbol];
+                if (w > effectiveCap + 1e-7) {
+                    excess += (w - effectiveCap);
+                    weights[st.symbol] = effectiveCap;
+                    anyCapped = true;
+                } else if (w < effectiveCap - 1e-7) {
+                    uncappedSum += w;
+                }
+            }
+
+            if (!anyCapped || excess <= 1e-7 || uncappedSum <= 0) break;
+
+            for (const st of members) {
+                if (weights[st.symbol] < effectiveCap) {
+                    weights[st.symbol] += excess * (weights[st.symbol] / uncappedSum);
+                }
+            }
+        }
+    }
+
+    const sumW = Object.values(weights).reduce((a, b) => a + b, 0);
+    if (sumW > 0) {
+        for (const sym in weights) {
+            weights[sym] /= sumW;
+        }
+    }
+
+    return weights;
+}
+
+function updateMarketIndexWeights() {
+    const gigIndex = marketIndexes.find(idx => idx.id === 'GIG');
+    if (!gigIndex) return;
+    const members = stocks.filter(stock => !stock.assetType && !stock.isBankrupt && !stock.tradeHalted && stock.price > 0);
+    gigIndex.weights = computeCappedCapWeights(members, 0.10);
+}
+
 function updateMarketIndexes() {
     // Zabezpieczenie na wypadek, gdyby nie było żadnych spółek
     if (stocks.length === 0) return;
 
     // --- Obliczanie GIG (Główny Indeks Giełdowy) ---
-    // Indeks łańcuchowy: średnia zmiana cen spółek notowanych w obu chwilach (równe wagi).
-    // Debiuty, bankructwa i drogie nowe spółki nie zmieniają już indeksu skokowo (testy ogólne 0.11).
+    // Indeks łańcuchowy: ważony kapitalizacją z limitem 10% na spółkę (cap 10%).
+    // Debiuty, bankructwa i drogie nowe spółki nie zmieniają indeksu skokowo (testy ogólne 0.11).
     const gigIndex = marketIndexes.find(idx => idx.id === 'GIG');
     if (gigIndex) {
         const oldValue = gigIndex.value;
         const members = stocks.filter(stock => !stock.assetType && !stock.isBankrupt && !stock.tradeHalted && stock.price > 0);
         const last = gigIndex.lastPrices || {};
-        const returns = members.filter(stock => last[stock.symbol] > 0).map(stock => Math.max(-0.2, Math.min(0.2, stock.price / last[stock.symbol] - 1)));
-        if (!(oldValue > 0)) gigIndex.value = members.reduce((sum, stock) => sum + stock.price, 0) / Math.max(1, members.length);
-        else if (returns.length) gigIndex.value = oldValue * (1 + returns.reduce((sum, r) => sum + r, 0) / returns.length);
+        const eligible = members.filter(stock => last[stock.symbol] > 0);
+
+        if (!(oldValue > 0)) {
+            const weights = computeCappedCapWeights(members, 0.10);
+            gigIndex.weights = weights;
+            gigIndex.value = members.reduce((sum, stock) => sum + (weights[stock.symbol] || 0) * stock.price, 0);
+        } else if (eligible.length > 0) {
+            const weights = computeCappedCapWeights(eligible, 0.10);
+            gigIndex.weights = weights;
+            let weightedReturn = 0;
+            for (const stock of eligible) {
+                const r = Math.max(-0.2, Math.min(0.2, stock.price / last[stock.symbol] - 1));
+                weightedReturn += (weights[stock.symbol] || 0) * r;
+            }
+            gigIndex.value = oldValue * (1 + weightedReturn);
+        }
         gigIndex.lastPrices = Object.fromEntries(members.map(stock => [stock.symbol, stock.price]));
         gigIndex.change = gigIndex.value - oldValue;
     }
 
     // --- Obliczanie TIG5 i SIG20 (na podstawie kapitalizacji rynkowej) ---
 
-    // 1. Stwórz tymczasową tablicę spółek z obliczoną kapitalizacją
-    const stocksWithMarketCap = stocks.map(stock => ({
+    // 1. Spółki giełdowe aktywne
+    const activeStocks = stocks.filter(stock => !stock.assetType && !stock.isBankrupt && !stock.tradeHalted && stock.price > 0);
+    const stocksWithMarketCap = activeStocks.map(stock => ({
         ...stock,
-        marketCap: stock.price * stock.totalShares
+        marketCap: stock.price * (stock.totalShares || 1)
     }));
 
     // 2. Posortuj spółki od największej do najmniejszej pod względem kapitalizacji
     stocksWithMarketCap.sort((a, b) => b.marketCap - a.marketCap);
 
-    // 3. Oblicz TIG5 (Topowy Indeks Giełdowy 5)
+    // 3. Oblicz TIG5 (Topowy Indeks Giełdowy 5 - ważony kapitalizacją 5 największych)
     const tig5Index = marketIndexes.find(idx => idx.id === 'TIG5');
     if (tig5Index) {
-        const top5 = stocksWithMarketCap.slice(0, 5); // Weź 5 pierwszych spółek z posortowanej listy
+        const top5 = stocksWithMarketCap.slice(0, 5);
         if (top5.length > 0) {
             const oldValue = tig5Index.value;
-            const totalValue = top5.reduce((sum, stock) => sum + stock.price, 0);
-            const newValue = totalValue / top5.length;
+            const top5Weights = computeCappedCapWeights(top5, 1.0);
+            const newValue = top5.reduce((sum, stock) => sum + (top5Weights[stock.symbol] || 0) * stock.price, 0);
             tig5Index.value = newValue;
             tig5Index.change = newValue - oldValue;
         }
     }
 
-    // 4. Oblicz SIG20 (Szeroki Indeks Giełdowy 20)
+    // 4. Oblicz SIG20 (Szeroki Indeks Giełdowy 20 - ważony kapitalizacją 20 największych)
     const sig20Index = marketIndexes.find(idx => idx.id === 'SIG20');
     if (sig20Index) {
-        const top20 = stocksWithMarketCap.slice(0, 20); // Weź 20 pierwszych spółek
+        const top20 = stocksWithMarketCap.slice(0, 20);
         if (top20.length > 0) {
             const oldValue = sig20Index.value;
-            const totalValue = top20.reduce((sum, stock) => sum + stock.price, 0);
-            const newValue = totalValue / top20.length;
+            const top20Weights = computeCappedCapWeights(top20, 1.0);
+            const newValue = top20.reduce((sum, stock) => sum + (top20Weights[stock.symbol] || 0) * stock.price, 0);
             sig20Index.value = newValue;
             sig20Index.change = newValue - oldValue;
         }

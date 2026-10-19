@@ -691,6 +691,21 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Które spółki najszybciej znikają z nasyconego rynku?', a: ['Słabe i zadłużone', 'Największe', 'Te z dywidendą'], c: 0 },
             { q: 'Czy spółka zależna innej spółki liczy się do limitu krajowych spółek?', a: ['Nie', 'Tak', 'Tylko w kryzysie'], c: 0 }
         ]
+    },
+    indeks_wazony: {
+        title: 'Indeks ważony kapitalizacją', icon: '📊',
+        text: 'W indeksie ważonym kapitalizacją (jak GIG, TIG5 czy WIG20) wpływ spółki na indeks zależy od jej wartości rynkowej (kurs × liczba akcji), a nie samej ceny akcji. Aby zapobiec zdominowaniu indeksu przez jednego giganta, stosuje się limity wag (tzw. cap, w GIG max 10% na spółkę). Dzięki temu indeks odzwierciedla realną wartość całej giełdy, a debiut drogiej pojedynczej akcji nie wykrzywia sztucznie wskaźnika.',
+        example: () => {
+            const gig = typeof marketIndexes !== 'undefined' ? marketIndexes.find(i => i.id === 'GIG') : null;
+            if (!gig || !gig.weights) return 'GIG stosuje limit 10% wagi na pojedynczą spółkę.';
+            const topEntry = Object.entries(gig.weights).sort((a, b) => b[1] - a[1])[0];
+            return topEntry ? `W GIG największa spółka (${topEntry[0]}) ma wagę ${(topEntry[1] * 100).toFixed(1)}% (limit 10%).` : 'W GIG waga żadnej spółki nie przekracza 10%.';
+        },
+        quiz: [
+            { q: 'Od czego zależy waga spółki w indeksie ważonym kapitalizacją?', a: ['Od wartości rynkowej (kurs × liczba akcji)', 'Tylko od samej ceny pojedynczej akcji', 'Od liczby pracowników spółki'], c: 0 },
+            { q: 'Po co wprowadza się limit wagi (tzw. cap, np. 10%) w indeksie giełdowym?', a: ['Aby jedna ogromna spółka nie zdominowała całego indeksu', 'Żeby zablokować wypłatę dywidend', 'Aby ograniczyć zysk inwestorów do 10%'], c: 0 },
+            { q: 'Które indeksy w grze są ważone kapitalizacją?', a: ['GIG (cap 10%), TIG5 oraz SIG20', 'Tylko lokaty i obligacje', 'Żadne — wszystkie są równe'], c: 0 }
+        ]
     }
 });
 
@@ -752,6 +767,7 @@ function checkAcademyTriggers() {
     if ((typeof getFundDeposits === 'function' && getFundDeposits().length) || (playerFund.ppp || []).length) unlockAcademyEntry('lokata');
     if (Object.values(playerPortfolio).some(h => h.assetType === 'etf' && h.shares > 0)) unlockAcademyEntry('etf');
     if (getSkillLevel('financialAnalyst') >= 1) unlockAcademyEntry('wycena');
+    if (getSkillLevel('indexAnalystLvl1') >= 1) unlockAcademyEntry('indeks_wazony');
     if (getSkillLevel('accountant') >= 3) unlockAcademyEntry('przeplywy');
     if (getSkillLevel('accountant') >= 4) unlockAcademyEntry('kreatywna');
     if (stocks.some(s => s.isBankrupt)) unlockAcademyEntry('bankructwo');

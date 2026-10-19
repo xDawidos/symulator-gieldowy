@@ -1311,6 +1311,7 @@ gameTimers.weekly = setGameInterval(() => {
 
 
         if (typeof recordWeeklyCloses === 'function') recordWeeklyCloses(); // U2: zmiana tygodniowa w tabeli spółek
+        if (typeof updateMarketIndexWeights === 'function') updateMarketIndexWeights(); // 0.15 H1a: przeliczenie wag kapitalizacji indeksów
         if (typeof checkAcademyTriggers === 'function') checkAcademyTriggers(); // N1: hasła Akademii przy pierwszym kontakcie
         if (typeof checkMentorTasks === 'function') checkMentorTasks(); // N4: zadania mentora i certyfikaty
 
