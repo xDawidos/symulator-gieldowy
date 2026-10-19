@@ -219,6 +219,7 @@ function buildSaveSnapshot({ compact = 0 } = {}) {
         paymentJournal: limits.journal ? paymentJournal.slice(-limits.journal) : [],
         paymentTotals,
         economyCycle,
+        marketRegimes,
         macro,
         society,
         etfs: serializeEtfs(),
@@ -681,6 +682,11 @@ function applySaveSnapshot(snapshot) {
     } else {
         economyCycle = createEconomyCycle('expansion');
         report.warnings.push('Zapis bez cyklu koniunktury — utworzono nowy (migracja v2).');
+    }
+    if (snapshot.marketRegimes && snapshot.marketRegimes.home) {
+        marketRegimes = snapshot.marketRegimes;
+    } else {
+        initMarketRegimes();
     }
     updateMarketTrendFromCycle();
     migrateMarketModel(report);
@@ -1312,6 +1318,7 @@ gameTimers.weekly = setGameInterval(() => {
 
         if (typeof recordWeeklyCloses === 'function') recordWeeklyCloses(); // U2: zmiana tygodniowa w tabeli spółek
         if (typeof updateMarketIndexWeights === 'function') updateMarketIndexWeights(); // 0.15 H1a: przeliczenie wag kapitalizacji indeksów
+        if (typeof updateMarketSentimentWeekly === 'function') updateMarketSentimentWeekly(); // 0.15 H2a: wskaźnik Strachu i Chciwości
         if (typeof checkAcademyTriggers === 'function') checkAcademyTriggers(); // N1: hasła Akademii przy pierwszym kontakcie
         if (typeof checkMentorTasks === 'function') checkMentorTasks(); // N4: zadania mentora i certyfikaty
 
@@ -1382,6 +1389,7 @@ gameTimers.weekly = setGameInterval(() => {
         processScandalsQuarterly(); // parabanki i wojny PR (scandals.js)
         processDefenseQuarterly(); // zbrojeniówka i fundusz Gwardia (defense.js)
         if (typeof processAccountingQuarterly === 'function') processAccountingQuarterly(); // N3: kreatywna księgowość, audyty (accounting.js)
+        if (typeof advanceMarketRegimeQuarterly === 'function') advanceMarketRegimeQuarterly(); // 0.15 H2a: fazy rynku
         advanceEconomyCycle(); // nowa faza koniunktury przed raportami
         advanceMacroQuarter(); // inflacja, bezrobocie, cykle sektorów, wybory (macro.js)
         processCityQuarterly(); // festyn raz w roku (city.js)
@@ -1832,6 +1840,7 @@ function createNewWorld() {
     mafia = createMafia(); // mafia (mafia.js)
     scandals = createScandals(); // afery (scandals.js)
     updateMarketTrendFromCycle();
+    if (typeof initMarketRegimes === 'function') initMarketRegimes();
     stocks.forEach(stock => {
         if (stock.balanceSheet && stock.assetType !== 'Startup') initializeFundamentals(stock, true);
         initializeOwnership(stock);

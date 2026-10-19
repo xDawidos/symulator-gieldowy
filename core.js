@@ -2196,6 +2196,299 @@ function updateMarketTrendFromCycle() {
     else marketTrend = 'bearish_strong';
 }
 
+// =================================================================================
+// 0.15 H2: FAZY RYNKU, NASTROJE (STRACH I CHCIWOŚĆ) ORAZ PREMIA RYNKOWA
+// =================================================================================
+
+const MARKET_PHASES = {
+    accumulation: { id: 'accumulation', name: 'Akumulacja', icon: 'faza-akumulacja', css: 'phase--accumulation', length: [2, 4], premium: [-0.10, 0.00], mood: 0.0, volMult: 0.9, next: () => 'bull' },
+    bull:         { id: 'bull',         name: 'Hossa',       icon: 'faza-hossa',      css: 'phase--bull',         length: [5, 10], premium: [0.00, 0.15],  mood: 0.3, volMult: 1.0, next: () => Math.random() < 0.40 ? 'euphoria' : 'distribution' },
+    euphoria:     { id: 'euphoria',     name: 'Euforia',     icon: 'faza-euforia',    css: 'phase--euphoria',     length: [1, 3],  premium: [0.20, 0.35],  mood: 0.6, volMult: 1.2, next: () => 'distribution' },
+    distribution: { id: 'distribution', name: 'Dystrybucja', icon: 'faza-dystrybucja',css: 'phase--distribution', length: [1, 2],  premium: [0.10, 0.15],  mood: -0.2,volMult: 1.2, next: () => 'bear' },
+    bear:         { id: 'bear',         name: 'Bessa',       icon: 'faza-bessa',      css: 'phase--bear',         length: [2, 5],  premium: [-0.25, -0.10],mood: -0.5,volMult: 1.4, next: () => Math.random() < 0.50 ? 'capitulation' : 'accumulation' },
+    capitulation: { id: 'capitulation', name: 'Kapitulacja', icon: 'faza-kapitulacja',css: 'phase--capitulation',length: [1, 1],  premium: [-0.35, -0.30],mood: -0.8,volMult: 1.8, next: () => 'accumulation' }
+};
+
+const SENTIMENT_ZONES = [
+    { min: 0, max: 20, key: 'extreme-fear', word: 'skrajny strach' },
+    { min: 20, max: 40, key: 'fear', word: 'strach' },
+    { min: 40, max: 60, key: 'neutral', word: 'neutralnie' },
+    { min: 60, max: 80, key: 'greed', word: 'chciwość' },
+    { min: 80, max: 101, key: 'extreme-greed', word: 'skrajna chciwość' }
+];
+
+function getSentimentZone(value) {
+    const v = Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+    for (const z of SENTIMENT_ZONES) {
+        if (v >= z.min && v < z.max) return z;
+    }
+    return SENTIMENT_ZONES[2];
+}
+
+let marketRegimes = {
+    home: {
+        market: 'home',
+        phase: 'bull',
+        quartersInPhase: 1,
+        phaseLength: 7,
+        premium: 0.0,
+        premiumTarget: 0.0,
+        sentiment: 50,
+        sentimentParts: { momentum: 50, breadth: 50, volatility: 50, valuation: 50, appetite: 50 },
+        sparklines: {
+            momentum: [50],
+            breadth: [50],
+            volatility: [50],
+            valuation: [50],
+            appetite: [50]
+        },
+        gigPeak: 1000,
+        gigTrough: 1000,
+        startGig: 1000,
+        shownPhase: null, // null oznacza stan potwierdzania
+        shownSince: null,
+        history: [] // ≤ 40 kw.
+    }
+};
+
+function getGigIndexValue() {
+    const gig = typeof marketIndexes !== 'undefined' ? marketIndexes.find(i => i.id === 'GIG') : null;
+    return gig ? Number(gig.value) || 1000 : 1000;
+}
+
+function initMarketRegimes(initialPhase = null) {
+    const phaseKey = initialPhase || (
+        typeof economyCycle !== 'undefined' && economyCycle ? (
+            economyCycle.phase === 'expansion' || economyCycle.phase === 'overheating' ? 'bull' :
+            economyCycle.phase === 'recovery' ? 'accumulation' :
+            economyCycle.phase === 'recession' ? 'bear' : 'bull'
+        ) : 'bull'
+    );
+    const def = MARKET_PHASES[phaseKey] || MARKET_PHASES.bull;
+    const len = Math.floor(def.length[0] + (def.length[1] - def.length[0]) / 2);
+    const target = (def.premium[0] + def.premium[1]) / 2;
+    const gigVal = getGigIndexValue();
+
+    marketRegimes.home = {
+        market: 'home',
+        phase: phaseKey,
+        quartersInPhase: 1,
+        phaseLength: len,
+        premium: 0.0,
+        premiumTarget: target,
+        sentiment: 50,
+        sentimentParts: { momentum: 50, breadth: 50, volatility: 50, valuation: 50, appetite: 50 },
+        sparklines: {
+            momentum: [50],
+            breadth: [50],
+            volatility: [50],
+            valuation: [50],
+            appetite: [50]
+        },
+        gigPeak: gigVal,
+        gigTrough: gigVal,
+        startGig: gigVal,
+        shownPhase: null, // null oznacza stan potwierdzania
+        shownSince: null,
+        history: [] // ≤ 40 kw.
+    };
+}
+
+function getMarketRegime(market = 'home') {
+    if (!marketRegimes || !marketRegimes[market]) {
+        initMarketRegimes();
+    }
+    return marketRegimes[market];
+}
+
+function getMarketPhaseInfo(market = 'home') {
+    const regime = getMarketRegime(market);
+    return MARKET_PHASES[regime?.phase] || MARKET_PHASES.bull;
+}
+
+function advanceMarketRegimeQuarterly(market = 'home') {
+    const regime = getMarketRegime(market);
+    if (!regime) return;
+
+    const curDef = MARKET_PHASES[regime.phase] || MARKET_PHASES.bull;
+    const gigVal = getGigIndexValue();
+    const currentQ = typeof macro !== 'undefined' && macro?.quarter ? Number(macro.quarter) : (regime.history.length + 1);
+    const currentYear = typeof macro !== 'undefined' && macro?.year ? Number(macro.year) : (Math.floor((currentQ - 1) / 4) + 1);
+    const qInYear = ((currentQ - 1) % 4) + 1;
+
+    // 1. Sprawdzenie wyprzedzania gospodarki (25% szans na przyspieszenie końca fazy)
+    if (typeof economyCycle !== 'undefined' && economyCycle) {
+        if (economyCycle.phase === 'overheating' && (regime.phase === 'bull' || regime.phase === 'euphoria')) {
+            if (Math.random() < 0.25) regime.quartersInPhase = regime.phaseLength;
+        } else if (economyCycle.phase === 'recession' && (Number(economyCycle.quartersInPhase) || 0) >= 2 && (regime.phase === 'bear' || regime.phase === 'capitulation')) {
+            if (Math.random() < 0.25) regime.quartersInPhase = regime.phaseLength;
+        }
+    }
+
+    // 2. Potwierdzenie fazy (jeśli jeszcze niepotwierdzona):
+    // - Hossa, Euforia, Bessa: po 1 kw. w fazie
+    // - Akumulacja, Dystrybucja: po 2 kw.
+    // - Wcześniej, gdy GIG potwierdzi (>= +20% od dołka dla Hossy/Euforii, <= -20% od szczytu dla Bessy/Kapitulacji)
+    let shouldConfirm = false;
+    if (regime.phase === 'bull' || regime.phase === 'euphoria') {
+        const gain = (gigVal - (regime.gigTrough || gigVal)) / (regime.gigTrough || 1);
+        if (gain >= 0.20 || regime.quartersInPhase >= 1) shouldConfirm = true;
+    } else if (regime.phase === 'bear') {
+        const drop = (gigVal - (regime.gigPeak || gigVal)) / (regime.gigPeak || 1);
+        if (drop <= -0.20 || regime.quartersInPhase >= 1) shouldConfirm = true;
+    } else if (regime.phase === 'capitulation') {
+        const drop = (gigVal - (regime.gigPeak || gigVal)) / (regime.gigPeak || 1);
+        if (drop <= -0.20) shouldConfirm = true;
+    } else if (regime.phase === 'accumulation' || regime.phase === 'distribution') {
+        if (regime.quartersInPhase >= 2) shouldConfirm = true;
+    }
+
+    if (shouldConfirm && regime.shownPhase !== regime.phase) {
+        regime.shownPhase = regime.phase;
+        regime.shownSince = currentQ;
+        if (typeof logEvent === 'function') {
+            logEvent(`[Nastrój Rynku] Potwierdzona faza rynku: ${curDef.name}.`, 'market');
+        }
+    }
+
+    // 3. Sprawdzenie zakończenia bieżącej fazy
+    if (regime.quartersInPhase >= regime.phaseLength) {
+        const isRetro = !regime.shownPhase;
+        const gigChange = (gigVal - (regime.startGig || gigVal)) / (regime.startGig || 1);
+        const gigPctStr = (gigChange >= 0 ? '+' : '') + (gigChange * 100).toFixed(0) + '%';
+
+        let desc = '';
+        if (isRetro) {
+            desc = `dno GIG w kw. ${qInYear} · ${gigPctStr} od szczytu (rozpoznane po fakcie)`;
+        } else {
+            desc = `${regime.quartersInPhase} kw. · GIG ${gigPctStr}`;
+        }
+
+        regime.history.unshift({
+            year: currentYear,
+            quarter: qInYear,
+            totalQuarter: currentQ,
+            phase: regime.phase,
+            confirmed: !isRetro,
+            isRetro: isRetro,
+            gig: gigVal,
+            premium: regime.premium,
+            desc: desc
+        });
+        if (regime.history.length > 40) regime.history.length = 40;
+
+        // Przejście do nowej fazy
+        const nextKey = typeof curDef.next === 'function' ? curDef.next() : curDef.next;
+        const nextDef = MARKET_PHASES[nextKey] || MARKET_PHASES.bull;
+        const newLen = Math.floor(nextDef.length[0] + Math.random() * (nextDef.length[1] - nextDef.length[0] + 1));
+        const newTarget = nextDef.premium[0] + Math.random() * (nextDef.premium[1] - nextDef.premium[0]);
+
+        regime.phase = nextKey;
+        regime.quartersInPhase = 1;
+        regime.phaseLength = newLen;
+        regime.premiumTarget = newTarget;
+        regime.shownPhase = null; // stan potwierdzania
+        regime.startGig = gigVal;
+
+        if (nextKey === 'bull' || nextKey === 'euphoria') {
+            regime.gigTrough = gigVal;
+            regime.gigPeak = gigVal;
+        } else if (nextKey === 'bear' || nextKey === 'capitulation') {
+            regime.gigPeak = gigVal;
+            regime.gigTrough = gigVal;
+        }
+    } else {
+        regime.quartersInPhase++;
+    }
+}
+
+function updateMarketSentimentWeekly(market = 'home') {
+    const regime = getMarketRegime(market);
+    if (!regime) return;
+
+    const gigIndex = typeof marketIndexes !== 'undefined' ? marketIndexes.find(i => i.id === 'GIG') : null;
+    const gigVal = getGigIndexValue();
+
+    if (gigVal > (regime.gigPeak || gigVal)) regime.gigPeak = gigVal;
+    if (gigVal < (regime.gigTrough || gigVal)) regime.gigTrough = gigVal;
+
+    // 1. Pęd (momentum): GIG względem średniej z 4 kw. (16 tygodni)
+    if (gigIndex) {
+        if (!gigIndex.weeklyHistory) gigIndex.weeklyHistory = [];
+        gigIndex.weeklyHistory.push(gigVal);
+        if (gigIndex.weeklyHistory.length > 52) gigIndex.weeklyHistory.shift();
+    }
+    const gigCloses = (gigIndex?.weeklyHistory && gigIndex.weeklyHistory.length) ? gigIndex.weeklyHistory.slice(-16) : [gigVal];
+    const smaGig = gigCloses.reduce((a, b) => a + b, 0) / gigCloses.length;
+    const gigDiff = (gigVal / (smaGig || gigVal) - 1) / 0.15;
+    const momentum = Math.max(0, Math.min(100, Math.round(50 + 50 * Math.max(-1, Math.min(1, gigDiff)))));
+
+    // 2. Szerokość rynku (breadth): % spółek powyżej swojej średniej z 4 kw.
+    const activeStocks = typeof stocks !== 'undefined' ? stocks.filter(s => !s.assetType && !s.isBankrupt && s.price > 0) : [];
+    let aboveCount = 0;
+    for (const s of activeStocks) {
+        const closes = (s.weeklyCloses && s.weeklyCloses.length) ? s.weeklyCloses.slice(-16) : [s.price];
+        const stockSma = closes.reduce((a, b) => a + b, 0) / closes.length;
+        if (s.price >= stockSma) aboveCount++;
+    }
+    const breadth = activeStocks.length > 0 ? Math.round((aboveCount / activeStocks.length) * 100) : 50;
+
+    // 3. Zmienność (volatility): WNR względem mediany (wyższa zmienność → niższy sentyment/strach)
+    if (!regime.wnrHistory) regime.wnrHistory = [];
+    regime.wnrHistory.push(typeof marketVolatilityIndex === 'number' ? marketVolatilityIndex : 1.0);
+    if (regime.wnrHistory.length > 260) regime.wnrHistory.shift();
+    const sortedWnr = [...regime.wnrHistory].sort((a, b) => a - b);
+    const medWnr = sortedWnr[Math.floor(sortedWnr.length / 2)] || 1.0;
+    const vDiff = ((typeof marketVolatilityIndex === 'number' ? marketVolatilityIndex : 1.0) - medWnr) / (medWnr * 0.5 || 0.5);
+    const volatility = Math.max(0, Math.min(100, Math.round(50 - 50 * Math.max(-1, Math.min(1, vDiff)))));
+
+    // 4. Wycena (valuation): C/Z rynku (mediana) względem mediany 5 lat
+    const peList = activeStocks.map(s => Number(s.fundamentals?.peRatio)).filter(v => v > 0 && v < 150).sort((a, b) => a - b);
+    const currentPe = peList.length ? peList[Math.floor(peList.length / 2)] : 13.5;
+    if (!regime.peHistory) regime.peHistory = [];
+    regime.peHistory.push(currentPe);
+    if (regime.peHistory.length > 260) regime.peHistory.shift();
+    const sortedPe = [...regime.peHistory].sort((a, b) => a - b);
+    const medPe = sortedPe[Math.floor(sortedPe.length / 2)] || 13.5;
+    const peDiff = (currentPe - medPe) / (medPe * 0.35 || 4.5);
+    const valuation = Math.max(0, Math.min(100, Math.round(50 + 50 * Math.max(-1, Math.min(1, peDiff)))));
+
+    // 5. Apetyt (appetite): debiuty i dźwignia botów
+    let totalBotLeverage = 0;
+    let botCount = 0;
+    if (typeof aiCompetitors !== 'undefined' && Array.isArray(aiCompetitors)) {
+        for (const ai of aiCompetitors) {
+            const loans = Number(ai.loans) || 0;
+            const assets = (Number(ai.cash) || 0) + (Number(ai.portfolioValue) || 0);
+            if (assets > 0) {
+                totalBotLeverage += loans / assets;
+                botCount++;
+            }
+        }
+    }
+    const avgLeverage = botCount > 0 ? (totalBotLeverage / botCount) : 0.1;
+    if (!regime.leverageHistory) regime.leverageHistory = [];
+    regime.leverageHistory.push(avgLeverage);
+    if (regime.leverageHistory.length > 260) regime.leverageHistory.shift();
+    const sortedLev = [...regime.leverageHistory].sort((a, b) => a - b);
+    const medLev = sortedLev[Math.floor(sortedLev.length / 2)] || 0.1;
+    const levDiff = (avgLeverage - medLev) / (medLev || 0.1);
+    const appetite = Math.max(0, Math.min(100, Math.round(50 + 50 * Math.max(-1, Math.min(1, levDiff)))));
+
+    // Średnia 5 składników + szum ±3 pkt
+    const raw = (momentum + breadth + volatility + valuation + appetite) / 5;
+    const noise = (Math.random() - 0.5) * 6;
+    regime.sentiment = Math.max(0, Math.min(100, Math.round(raw + noise)));
+    regime.sentimentParts = { momentum, breadth, volatility, valuation, appetite };
+
+    // Zapis do sparklines (ostatnie 20 tygodni)
+    for (const key of ['momentum', 'breadth', 'volatility', 'valuation', 'appetite']) {
+        if (!regime.sparklines[key]) regime.sparklines[key] = [];
+        regime.sparklines[key].push(regime.sentimentParts[key]);
+        if (regime.sparklines[key].length > 20) regime.sparklines[key].shift();
+    }
+}
+
 /** Mnożnik C/Z dla spółki: faza cyklu (wg bety sektora) i poziom stóp procentowych. */
 function getValuationMultiplier(stock) {
     const profile = getSectorProfile(stock);
@@ -2212,9 +2505,10 @@ function getValuationMultiplier(stock) {
 
 /** Szansa na zdarzenie pozytywne zależnie od fazy (eventy rynkowe). */
 function getCyclePositiveEventBias() {
-    // Łagodna przewaga: zdarzenia rynkowe są częste (co 45 s gry) i silne (3–8%), więc mocniejsze
-    // przechylenie wypychałoby ceny daleko od wartości godziwej. Recesja ~0.46, ekspansja ~0.53.
-    return 0.5 + getEconomyPhaseInfo().mood * 0.06;
+    // 0.15 H2a: 0,5 + 0,06 × (0,5 × nastrój gospodarki + 0,5 × nastrój fazy rynku)
+    const econMood = getEconomyPhaseInfo()?.mood ?? 0;
+    const marketMood = getMarketPhaseInfo()?.mood ?? 0;
+    return 0.5 + 0.06 * (0.5 * econMood + 0.5 * marketMood);
 }
 
 /** Apetyt spółek na nowe inwestycje (mnożnik szansy). */
@@ -2351,6 +2645,12 @@ function updateStockPrices() {
     const now = Date.now();
     const marketModifier = 1 + (marketVolatilityIndex - 1) * 0.5;
 
+    // 0.15 H2a: ruch premii rynkowej w stronę celu (25% odległości na kwartał, ~0.00096 na tik)
+    const regime = getMarketRegime('home');
+    if (regime && typeof regime.premiumTarget === 'number') {
+        regime.premium += (regime.premiumTarget - regime.premium) * 0.00096;
+    }
+
     stocks.forEach(stock => {
         if (stock.assetType === 'Holding') {
             return; 
@@ -2358,7 +2658,7 @@ function updateStockPrices() {
         if (stock.tradeHalted) return; // notowania zawieszone (afera, scandals.js)
 
         let priceGrowthModifier = 1.0;
-        let volatilityModifier = 1.0;
+        let volatilityModifier = (regime?.volMult || 1.0);
         let isVolatilityCapped = false; 
 
         // Modyfikatory fazy korporacyjnej (bez zmian)
@@ -2455,7 +2755,22 @@ function updateStockPrices() {
                 if (!stock.fundamentals && stock.balanceSheet && hasValuationAnchor(stock)) initializeFundamentals(stock);
                 const fairValue = Number(stock.fundamentals?.fairValue);
                 if (fairValue > 0) {
-                    const gap = Math.max(-0.9, Math.min(3, fairValue / price - 1));
+                    const qualifiesForRegime = hasValuationAnchor(stock) && !stock.marketOperator;
+                    let mNow = 1.0;
+                    if (qualifiesForRegime && regime) {
+                        const beta = Math.max(0.5, Math.min(1.5, getSectorProfile(stock)?.beta || 1.0));
+                        const sectorPremium = Number(stock.sectorPremium) || 0;
+                        mNow = Math.max(0.3, Math.min(2.5, 1 + beta * (regime.premium + sectorPremium)));
+                        if (typeof stock.marketRegimeMultiplier !== 'number' || isNaN(stock.marketRegimeMultiplier)) {
+                            stock.marketRegimeMultiplier = mNow;
+                        }
+                        const mRatio = mNow / stock.marketRegimeMultiplier;
+                        stock.marketRegimeMultiplier = mNow;
+                        changePct += (mRatio - 1);
+                    }
+                    const starMult = (stock.marketStar?.valuationMult || 1);
+                    const targetFairValue = fairValue * starMult * mNow;
+                    const gap = Math.max(-0.9, Math.min(3, targetFairValue / price - 1));
                     changePct += PRICE_MEAN_REVERSION_PER_TICK * gap * (stock.fundamentals.lossAnchor ? LOSS_REVERSION_FACTOR : 1); // 0.14.2 P9: przy stracie wolniej
                 }
 

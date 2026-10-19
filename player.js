@@ -187,7 +187,9 @@ const skills = {
         levels: [
             { level: 1, cost: 150, description: 'Odblokowuje podgląd podstawowych indeksów giełdowych (GIG, TIG5, SIG20) na pulpicie.' },
             { level: 2, cost: 350, description: 'Odblokowuje możliwość handlu jednostkami głównych indeksów giełdowych.', requires: { skillId: 'indexAnalystLvl1', level: 1 } },
-            { level: 3, cost: 550, description: 'Odblokowuje "Wskaźnik Niestabilności Rynku" (WNR).', requires: { skillId: 'indexAnalystLvl1', level: 2 } }
+            { level: 3, cost: 550, description: 'Odblokowuje "Wskaźnik Niestabilności Rynku" (WNR).', requires: { skillId: 'indexAnalystLvl1', level: 2 } },
+            { level: 4, cost: 900, description: 'L4 „Nastroje rynku” — faza rynku i wskaźnik strachu i chciwości na pasku. Fazę potwierdzamy z opóźnieniem.', requires: { skillId: 'indexAnalystLvl1', level: 3 } },
+            { level: 5, cost: 1600, description: 'L5 „Strateg rynku” — pełna analiza rynku: składniki wskaźnika, historia faz, premia sektora.', requires: { skillId: 'indexAnalystLvl1', level: 4 } }
         ]
     },
     'nepotism': {
@@ -2401,6 +2403,10 @@ function buyTraining(skillId) {
     if (typeof updateDividendTrackerButtonVisibility === 'function') updateDividendTrackerButtonVisibility(); // przycisk panelu dywidend
 
     if (typeof renderCvPanel === 'function') renderCvPanel();
+    if (typeof updateMoodKpi === 'function') updateMoodKpi();
+    if (typeof unlockAcademyEntry === 'function' && skillId === 'indexAnalystLvl1' && skill.unlockedLevel >= 4) {
+        unlockAcademyEntry('fazy_rynku');
+    }
     refreshFundViews();
     return true;
 }

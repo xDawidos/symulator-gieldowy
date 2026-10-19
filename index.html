@@ -103,6 +103,7 @@
       <span class="topbar-kpi-label">Zaufanie klientów</span>
       <span class="topbar-kpi-val" id="topbar-trust">—</span>
     </div>
+    <div id="topbar-mood-slot" style="display:contents;"></div>
   </div>
 
   <div class="topbar-controls" id="time-controls">
@@ -400,6 +401,19 @@
                 <button onclick="debugBoardReview()">Ocena zarządu teraz</button>
                 <button onclick="debugCheckInvariants()">Sprawdź spójność świata</button>
                 <button id="debug-skip-intro-btn" onclick="toggleIntroSkip()">Pomijaj scenkę z babcią: nie</button>
+                <div class="debug-phase-row" style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                    <label for="debug-market-phase-select" style="font-size:12px;font-weight:600;">Faza rynku:</label>
+                    <select id="debug-market-phase-select" onchange="debugSetMarketPhase(this.value)">
+                        <option value="accumulation">Akumulacja</option>
+                        <option value="bull">Hossa</option>
+                        <option value="euphoria">Euforia</option>
+                        <option value="distribution">Dystrybucja</option>
+                        <option value="bear">Bessa</option>
+                        <option value="capitulation">Kapitulacja</option>
+                    </select>
+                    <button type="button" onclick="debugSetMarketPhase(document.getElementById('debug-market-phase-select').value)">Ustaw (potwierdzona)</button>
+                    <button type="button" onclick="debugSetMarketPhase(document.getElementById('debug-market-phase-select').value, false)">Ustaw (potwierdzanie)</button>
+                </div>
             </div>
         </div>
     </div>
@@ -1265,6 +1279,22 @@
   </div>
 </div>
     </div>
+</div>
+
+<!-- 0.15 H2b: Dymek opisu nastroju rynku -->
+<div class="tooltip" id="mood-tooltip" role="tooltip" hidden></div>
+
+<!-- 0.15 H2b: Okno „Rynek” (L5 Strateg rynku) -->
+<div id="market-modal" class="modal modal-xl bank-window market-window" style="display: none;">
+    <button class="close-btn" onclick="closeMarketModal()" aria-label="Zamknij">&times;</button>
+    <header class="bank-hero">
+        <div class="bank-emblem" aria-hidden="true"><svg class="ic" width="26" height="26" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-6"/></svg></div>
+        <div>
+            <div class="bank-hero-kicker">Strateg rynku · fazy i nastroje</div>
+            <h2 class="bank-hero-title">Rynek</h2>
+        </div>
+    </header>
+    <div class="bank-tab-content" id="market-modal-body" style="display:flex;flex-direction:column;gap:16px;"></div>
 </div>
 
 <script src="core.js"></script>

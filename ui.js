@@ -708,19 +708,325 @@ function updateTopbarKPIs() {
         const d = document.getElementById('topbar-day');
         if (d) d.textContent = currentDay;
     }
-    if (typeof marketTrend !== 'undefined') {
-        const map = {
-            bullish_strong:'Hossa silna', bullish_moderate:'Hossa umiarkowana',
-            neutral:'Rynek neutralny', bearish_moderate:'Bessa umiarkowana', bearish_strong:'Bessa silna'
-        };
-        const el = document.getElementById('topbar-market-status');
-        if (el) {
-            el.textContent = map[marketTrend] || marketTrend;
-            el.className = 'topbar-market-status' +
-                (marketTrend.startsWith('bearish') ? ' bear' :
-                 marketTrend === 'neutral' ? ' neutral' : '');
+    if (typeof updateMoodKpi === 'function') {
+        updateMoodKpi();
+    }
+}
+
+// ---------------------------------------------------------------------------------
+// 0.15 H2b: KPI NASTROJU RYNKU, OKNO „RYNEK” I DYMEK FAZY
+// ---------------------------------------------------------------------------------
+
+function updateMoodKpi() {
+    if (typeof document === 'undefined') return;
+    const slot = document.getElementById('topbar-mood-slot');
+    if (!slot) return;
+
+    const hasL4 = typeof getSkillLevel === 'function' && getSkillLevel('indexAnalystLvl1') >= 4;
+    if (!hasL4) {
+        slot.innerHTML = '';
+        const tooltip = document.getElementById('mood-tooltip');
+        if (tooltip) tooltip.hidden = true;
+        return;
+    }
+
+    const hasL5 = getSkillLevel('indexAnalystLvl1') >= 5;
+    const regime = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+    if (!regime) return;
+
+    const sentiment = regime.sentiment || 50;
+    const z = typeof getSentimentZone === 'function' ? getSentimentZone(sentiment) : { key: 'neutral', word: 'neutralnie' };
+    const isConfirming = !regime.shownPhase;
+    const pInfo = !isConfirming ? (MARKET_PHASES[regime.shownPhase] || MARKET_PHASES.bull) : null;
+
+    const qAgo = (regime.quartersInPhase && regime.quartersInPhase > 1)
+        ? (regime.quartersInPhase === 2 ? '1 kw. temu' : `${regime.quartersInPhase - 1} kw. temu`)
+        : 'w tym kwartale';
+
+    const phaseMarkup = isConfirming
+        ? `<span class="market-phase">${uiIcon('info', 16)}<span class="phase-name">—</span><span class="mood-confirming">potwierdzanie</span></span>`
+        : `<span class="market-phase ${pInfo.css}">${uiIcon(pInfo.icon, 16)}<span class="phase-name">${escapeHtml(pInfo.name)}</span></span>`;
+
+    const ariaLabel = isConfirming
+        ? `Nastrój rynku: potwierdzanie fazy, ${sentiment} — ${z.word}`
+        : `Nastrój rynku: ${pInfo.name}, ${sentiment} — ${z.word}`;
+
+    const tag = hasL5 ? 'button' : 'div';
+    const tagAttrs = hasL5
+        ? `type="button" aria-haspopup="dialog" title="Otwórz okno „Rynek”" onclick="openMarketModal()"`
+        : `tabindex="0"`;
+
+    slot.innerHTML = `
+        <${tag} class="mood-kpi${isConfirming ? ' is-confirming' : ''}" ${tagAttrs} aria-describedby="mood-tooltip" aria-label="${escapeHtml(ariaLabel)}">
+            <span class="topbar-kpi-label">Nastrój rynku</span>
+            <span class="mood-kpi-row">
+                ${phaseMarkup}
+                <span class="mood-value sentiment--${z.key}">${sentiment}</span>
+                <span class="sentiment-word sentiment--${z.key}">${z.word}</span>
+            </span>
+            <span class="mood-meter" style="--mood:${sentiment}" aria-hidden="true"><i></i></span>
+        </${tag}>
+    `;
+
+    const tooltip = document.getElementById('mood-tooltip');
+    if (tooltip) {
+        if (isConfirming) {
+            tooltip.innerHTML = `<strong>Potwierdzanie</strong>Faza jest w trakcie potwierdzania. Fazy potwierdzamy z opóźnieniem.`;
+        } else {
+            const desc = pInfo.name === 'Akumulacja' ? 'Po spadkach ceny są niskie, a nastroje słabe. Cierpliwi inwestorzy po cichu kupują.' :
+                pInfo.name === 'Hossa' ? 'Rynek rośnie od dłuższego czasu, drożeje coraz więcej spółek. Zwykle najdłuższa faza cyklu.' :
+                pInfo.name === 'Euforia' ? 'Wszyscy kupują, wyceny są wysokie, a ryzyko krachu rośnie. Rzadko trwa długo.' :
+                pInfo.name === 'Dystrybucja' ? 'Szczyt za nami: duzi gracze sprzedają, indeks stoi w miejscu albo się chwieje.' :
+                pInfo.name === 'Bessa' ? 'Ceny spadają o 20% i więcej od szczytu. Strach rośnie, klienci umarzają udziały.' :
+                pInfo.name === 'Kapitulacja' ? 'Panika i wyprzedaż za wszelką cenę — zwykle tuż przed dnem rynku.' : '';
+            tooltip.innerHTML = `<strong>${escapeHtml(pInfo.name)}</strong>${desc}<br><span class="text-muted">Potwierdzona ${qAgo} · fazy potwierdzamy z opóźnieniem.</span>`;
+        }
+
+        const kpiEl = slot.querySelector('.mood-kpi');
+        if (kpiEl) {
+            const showTooltip = () => {
+                const rect = kpiEl.getBoundingClientRect();
+                tooltip.style.left = `${Math.max(10, rect.left)}px`;
+                tooltip.style.top = `${rect.bottom + 6}px`;
+                tooltip.hidden = false;
+            };
+            const hideTooltip = () => {
+                tooltip.hidden = true;
+            };
+
+            kpiEl.onmouseenter = showTooltip;
+            kpiEl.onmouseleave = hideTooltip;
+            kpiEl.onfocus = showTooltip;
+            kpiEl.onblur = hideTooltip;
+            kpiEl.onkeydown = (e) => {
+                if (e.key === 'Escape') hideTooltip();
+            };
         }
     }
+}
+
+function openMarketModal() {
+    if (typeof getSkillLevel === 'function' && getSkillLevel('indexAnalystLvl1') < 5) return;
+    const modal = document.getElementById('market-modal');
+    if (!modal) return;
+    renderMarketModal();
+    modal.style.display = 'block';
+}
+
+function closeMarketModal() {
+    const modal = document.getElementById('market-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+function renderGaugeSvg(value) {
+    const cx = 112, cy = 124, r = 92, w = 18;
+    const parts = [];
+    const colors = ['extreme-fear', 'fear', 'neutral', 'greed', 'extreme-greed'];
+    for (let i = 0; i < colors.length; i++) {
+        const key = colors[i];
+        const a0 = Math.PI * (1 - i / 5) - 0.012;
+        const a1 = Math.PI * (1 - (i + 1) / 5) + 0.012;
+        const x0 = cx + r * Math.cos(a0);
+        const y0 = cy - r * Math.sin(a0);
+        const x1 = cx + r * Math.cos(a1);
+        const y1 = cy - r * Math.sin(a1);
+        parts.push(`<path d="M${x0.toFixed(1)} ${y0.toFixed(1)} A${r} ${r} 0 0 1 ${x1.toFixed(1)} ${y1.toFixed(1)}" style="stroke:var(--color-sentiment-${key});stroke-width:${w};fill:none"/>`);
+    }
+    const labels = [
+        { x: cx - r, y: cy + 24, lbl: '0' },
+        { x: cx, y: cy - r - 16, lbl: '50' },
+        { x: cx + r, y: cy + 24, lbl: '100' }
+    ];
+    for (const l of labels) {
+        parts.push(`<text x="${l.x.toFixed(1)}" y="${l.y.toFixed(1)}" text-anchor="middle" style="fill:var(--color-text-muted);font:11px var(--font-family-mono)">${l.lbl}</text>`);
+    }
+    const a = Math.PI * (1 - Math.max(0, Math.min(100, value)) / 100);
+    const nx = cx + (r - 26) * Math.cos(a);
+    const ny = cy - (r - 26) * Math.sin(a);
+    parts.push(`<line x1="${cx}" y1="${cy}" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}" style="stroke:var(--color-text-primary);stroke-width:3;stroke-linecap:round"/>`);
+    parts.push(`<circle cx="${cx}" cy="${cy}" r="6" style="fill:var(--color-text-primary)"/>`);
+    return `<svg viewBox="0 0 224 152" role="img" aria-label="Wskaźnik strachu i chciwości: ${value}">${parts.join('')}</svg>`;
+}
+
+function renderSparklineSvg(pts, sentimentKey) {
+    if (!pts || !pts.length) pts = [50];
+    const n = pts.length;
+    const lo = Math.min(...pts);
+    const hi = Math.max(...pts);
+    const range = Math.max(1, hi - lo);
+    const d = pts.map((p, i) => {
+        const x = (i * 100 / Math.max(1, n - 1)).toFixed(1);
+        const y = (30 - ((p - lo) / range) * 26).toFixed(1);
+        return `${i === 0 ? 'M' : 'L'}${x} ${y}`;
+    }).join(' ');
+    return `<svg class="sparkline sentiment--${sentimentKey}" viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true"><path d="${d}" style="stroke:var(--color-sentiment-${sentimentKey});fill:none;"/></svg>`;
+}
+
+function renderGigChartSvg(regime) {
+    const W = 1050, H = 200;
+    const gigIndex = typeof marketIndexes !== 'undefined' ? marketIndexes.find(i => i.id === 'GIG') : null;
+    const history = (gigIndex?.priceHistory && gigIndex.priceHistory.length) ? gigIndex.priceHistory : [1000];
+    const minVal = Math.min(...history) * 0.95;
+    const maxVal = Math.max(...history) * 1.05;
+    const valRange = Math.max(1, maxVal - minVal);
+    const n = history.length;
+
+    const out = [];
+    const pastPhases = [...(regime?.history || [])].reverse();
+    if (regime?.phase) {
+        pastPhases.push({ phase: regime.shownPhase || regime.phase, isCurrent: true });
+    }
+    const numBands = Math.max(1, pastPhases.length);
+    const bandW = W / numBands;
+    for (let j = 0; j < pastPhases.length; j++) {
+        const h = pastPhases[j];
+        const pDef = MARKET_PHASES[h.phase] || MARKET_PHASES.bull;
+        const x0 = j * bandW;
+        const x1 = (j + 1) * bandW;
+        out.push(`<g class="${pDef.css}">
+            <rect class="phase-band" x="${x0.toFixed(1)}" y="0" width="${(x1 - x0).toFixed(1)}" height="${H}"/>
+            <line x1="${x0.toFixed(1)}" y1="0" x2="${x0.toFixed(1)}" y2="${H}" style="stroke:var(--phase-color);stroke-opacity:.5"/>
+            <text class="phase-band-label" x="${(x0 + 6).toFixed(1)}" y="${j % 2 === 0 ? 16 : 32}">${escapeHtml(pDef.name)}</text>
+        </g>`);
+    }
+
+    const d = history.map((val, i) => {
+        const x = (i * W / Math.max(1, n - 1)).toFixed(1);
+        const y = (H - 20 - ((val - minVal) / valRange) * (H - 40)).toFixed(1);
+        return `${i === 0 ? 'M' : 'L'}${x} ${y}`;
+    }).join(' ');
+
+    out.push(`<path d="${d}" style="fill:none;stroke:var(--color-chart-index);stroke-width:2"/>`);
+    const qCount = typeof macro !== 'undefined' && macro?.quarter ? Number(macro.quarter) : 1;
+    const years = (qCount / 4).toFixed(1).replace('.0', '');
+    out.push(`<text x="${W - 6}" y="${H - 8}" text-anchor="end" style="fill:var(--color-text-muted);font:11px var(--font-family-mono)">GIG · ${years} lat</text>`);
+
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Wykres GIG z tłem potwierdzonych faz">${out.join('')}</svg>`;
+}
+
+function renderMarketModal() {
+    const body = document.getElementById('market-modal-body');
+    if (!body) return;
+
+    const regime = getMarketRegime('home');
+    if (!regime) return;
+
+    const sentiment = regime.sentiment || 50;
+    const z = typeof getSentimentZone === 'function' ? getSentimentZone(sentiment) : { key: 'neutral', word: 'neutralnie' };
+    const isConfirming = !regime.shownPhase;
+    const pInfo = !isConfirming ? (MARKET_PHASES[regime.shownPhase] || MARKET_PHASES.bull) : null;
+    const qAgo = (regime.quartersInPhase && regime.quartersInPhase > 1)
+        ? (regime.quartersInPhase === 2 ? '1 kw. temu' : `${regime.quartersInPhase - 1} kw. temu`)
+        : 'w tym kwartale';
+
+    const gigVal = typeof getGigIndexValue === 'function' ? getGigIndexValue() : 1000;
+    const currentWeek = typeof macro !== 'undefined' && macro?.week ? Number(macro.week) : 1;
+
+    const activeStocks = typeof stocks !== 'undefined' ? stocks.filter(s => !s.assetType && !s.isBankrupt && s.price > 0) : [];
+    const peList = activeStocks.map(s => Number(s.fundamentals?.peRatio)).filter(v => v > 0 && v < 150).sort((a, b) => a - b);
+    const currentPe = peList.length ? peList[Math.floor(peList.length / 2)] : 13.5;
+    const sortedPe = [...(regime.peHistory || [currentPe])].sort((a, b) => a - b);
+    const medPe = sortedPe[Math.floor(sortedPe.length / 2)] || 13.5;
+    const peDelta = ((currentPe - medPe) / medPe * 100);
+    const peDeltaStr = (peDelta >= 0 ? ' · +' : ' · ') + peDelta.toFixed(0) + '%';
+
+    const baseRate = typeof centralBank !== 'undefined' && centralBank ? Number(centralBank.baseInterestRate) || 0.05 : 0.05;
+    const equityRiskPremium = ((1 / (currentPe || 13.5)) - baseRate) * 100;
+    const erpSign = equityRiskPremium >= 0 ? '+' : '';
+
+    const dd = Math.min(0, (gigVal - (regime.gigPeak || gigVal)) / (regime.gigPeak || 1) * 100);
+
+    const fazaMarkup = isConfirming
+        ? `<span class="market-phase">${uiIcon('info', 16)}<span class="phase-name">—</span><span class="mood-confirming">potwierdzanie</span></span>`
+        : `<span class="market-phase ${pInfo.css}">${uiIcon(pInfo.icon, 16)}<span class="phase-name">${escapeHtml(pInfo.name)}</span></span>`;
+    const fazaPodpis = isConfirming ? 'w trakcie potwierdzania' : `potwierdzona ${qAgo}`;
+
+    const parts = regime.sentimentParts || { momentum: 50, breadth: 50, volatility: 50, valuation: 50, appetite: 50 };
+    const sp = regime.sparklines || {};
+
+    const cardData = [
+        { key: 'momentum', label: 'Pęd', val: parts.momentum, hint: 'GIG vs średnia 4 kw.' },
+        { key: 'breadth', label: 'Szerokość rynku', val: parts.breadth, hint: `${parts.breadth}% spółek nad średnią` },
+        { key: 'volatility', label: 'Zmienność', val: parts.volatility, hint: 'WNR vs mediana 5 lat' },
+        { key: 'valuation', label: 'Wycena', val: parts.valuation, hint: 'C/Z vs mediana 5 lat' },
+        { key: 'appetite', label: 'Apetyt', val: parts.appetite, hint: 'debiuty i dźwignia botów' }
+    ];
+
+    const cardsHtml = cardData.map(c => {
+        const cz = typeof getSentimentZone === 'function' ? getSentimentZone(c.val) : { key: 'neutral', word: 'neutralnie' };
+        const sparkSvg = renderSparklineSvg(sp[c.key] || [c.val], cz.key);
+        return `<div class="sentiment-card sentiment--${cz.key}">
+            <span class="label">${escapeHtml(c.label)}</span>
+            <span class="value">${c.val} <span class="sentiment-word" style="font-family:var(--font-family-sans);font-size:12px">${cz.word}</span></span>
+            ${sparkSvg}
+            <span class="hint">${escapeHtml(c.hint)}</span>
+        </div>`;
+    }).join('');
+
+    const historyItems = (regime.history || []).map(h => {
+        const hDef = MARKET_PHASES[h.phase] || MARKET_PHASES.bull;
+        return `<li>
+            <span class="when">Rok ${h.year} · kw. ${h.quarter}</span>
+            <span>
+                ${h.isRetro ? '<span class="retro-label">za nami:</span>' : ''}
+                <span class="market-phase ${hDef.css}">${uiIcon(hDef.icon, 16)}<span class="phase-name">${escapeHtml(hDef.name)}</span></span>
+            </span>
+            <span class="text-muted">${escapeHtml(h.desc || '')}</span>
+        </li>`;
+    }).join('') || '<li class="text-muted" style="padding:12px 0;">Historia faz zapełnia się wraz z upływem kwartałów gry.</li>';
+
+    body.innerHTML = `
+        <div class="bank-ticker">
+            <div class="bank-ticker-item">
+                <span>Faza</span>
+                <strong>${fazaMarkup}</strong>
+                <small class="text-muted">${fazaPodpis}</small>
+            </div>
+            <div class="bank-ticker-item">
+                <span>Wskaźnik</span>
+                <strong><span class="sentiment-word sentiment--${z.key}">${sentiment} · ${z.word}</span></strong>
+                <small class="text-muted">tydz. ${currentWeek}</small>
+            </div>
+            <div class="bank-ticker-item">
+                <span>C/Z rynku</span>
+                <strong>${formatNumberPl(currentPe, 1)}</strong>
+                <small class="text-muted">mediana 5 lat ${formatNumberPl(medPe, 1)}${peDeltaStr}</small>
+            </div>
+            <div class="bank-ticker-item">
+                <span>Premia za ryzyko akcji</span>
+                <strong>${erpSign}${formatNumberPl(equityRiskPremium, 1)} pp</strong>
+                <small class="text-muted">zysk/cena − lokata</small>
+            </div>
+            <div class="bank-ticker-item">
+                <span>Obsunięcie GIG</span>
+                <strong>${formatNumberPl(dd, 1)}%</strong>
+                <small class="text-muted">od szczytu</small>
+            </div>
+        </div>
+
+        <div class="market-grid">
+            <div class="gauge">
+                ${renderGaugeSvg(sentiment)}
+                <span class="gauge-value">${sentiment}</span>
+                <span class="sentiment-word sentiment--${z.key}">${z.word}</span>
+                <span class="gauge-caption">Indeks strachu i chciwości · średnia 5 składników · nie zna ukrytej fazy</span>
+            </div>
+            <div>
+                <h4 class="bank-section-title">Składniki wskaźnika (20 tygodni)</h4>
+                <div class="sentiment-cards">${cardsHtml}</div>
+            </div>
+        </div>
+
+        <div>
+            <h4 class="bank-section-title">GIG i potwierdzone fazy</h4>
+            <div class="gig-chart">${renderGigChartSvg(regime)}</div>
+        </div>
+
+        <div>
+            <h4 class="bank-section-title">Historia faz</h4>
+            <ul class="phase-history">${historyItems}</ul>
+        </div>
+    `;
 }
 
 /** 0.14.5: nazwa funduszu w menu i w karcie przeglądarki, data gry na pasku. */
@@ -6391,11 +6697,30 @@ function renderCvPanel() {
         const reqMet = !next?.requires || getSkillLevel(next.requires.skillId) >= next.requires.level;
         const canBuy = next && reqMet && playerWallet.cash >= cost;
 
+        const steps = Array.from({ length: skill.levels.length }, (_, i) => {
+            const isDone = i < level;
+            const isNext = i === level;
+            return `<i class="${isDone ? 'is-done' : isNext ? 'is-next' : ''}"></i>`;
+        }).join('');
+
+        let unlockPreview = '';
+        if (id === 'indexAnalystLvl1') {
+            if (level === 3) {
+                unlockPreview = `<div class="unlock-preview"><span class="label">Odblokuje</span><div class="mood-kpi"><span class="topbar-kpi-label">Nastrój rynku</span><span class="mood-kpi-row"><span class="market-phase phase--bull">${uiIcon('faza-hossa', 16)}<span class="phase-name">Hossa</span></span><span class="mood-value sentiment--greed">62</span><span class="sentiment-word sentiment--greed">chciwość</span></span><span class="mood-meter" style="--mood:62" aria-hidden="true"><i></i></span></div></div>`;
+            } else if (level === 4) {
+                unlockPreview = `<div class="unlock-preview"><span class="label">Odblokuje</span><div style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--color-text-secondary)"><span>${uiIcon('rynek', 14)} okno „Rynek” (kliknij nastrój na pasku)</span><span>${uiIcon('szukaj', 14)} kolumna „Premia sektora” w skanerze</span><span>${uiIcon('karta', 14)} premia sektora w karcie spółki</span></div></div>`;
+            }
+        }
+
+        const reqMsg = next?.requires?.level === 4 ? 'Wymaga poziomu 4 „Nastroje rynku”' : 'Wymaga wcześniejszego szkolenia';
+
         return `<article class="cv-training">
             <h4>${escapeHtml(stripEmoji(skill.name))} ${medal ? `<span class="cv-medal cv-medal-${medal.id}" title="${medal.label}">${uiIcon('medal', 14)}<span class="sr-only">${medal.label}</span></span>` : ''}</h4>
             <p class="fund-muted">Poziom ${level}/${skill.levels.length}</p>
+            <div class="level-steps">${steps}</div>
             ${next ? `<p>${escapeHtml(next.description || '')}</p>` : '<p><strong>Ukończone w pełni.</strong></p>'}
-            ${next ? `<button ${canBuy ? '' : 'disabled'} onclick="buyTraining('${id}')">${reqMet ? `Szkolenie: ${cost} PLN` : 'Wymaga wcześniejszego szkolenia'}</button>` : ''}
+            ${unlockPreview}
+            ${next ? `<button ${canBuy ? '' : 'disabled'} onclick="buyTraining('${id}')">${reqMet ? `Szkolenie: ${cost} PLN` : reqMsg}</button>` : ''}
         </article>`;
     }).join('');
 
@@ -6529,6 +6854,11 @@ function applyDebugModeUi() {
     if (button) button.textContent = `Tryb debug: ${enabled ? 'włączony' : 'wyłączony'}`;
     const skipButton = document.getElementById('debug-skip-intro-btn');
     if (skipButton) skipButton.textContent = `Pomijaj scenkę z babcią: ${isIntroSkipEnabled() ? 'tak' : 'nie'}`;
+    const phaseSelect = document.getElementById('debug-market-phase-select');
+    if (phaseSelect && typeof getMarketRegime === 'function') {
+        const regime = getMarketRegime('home');
+        if (regime?.phase) phaseSelect.value = regime.phase;
+    }
     if (!enabled && currentSpeedMultiplier > 5) setGameSpeed(5);
 }
 
@@ -6575,6 +6905,41 @@ function debugEndPeriod() {
 function debugBoardReview() {
     if (typeof runBoardEvaluation === 'function') runBoardEvaluation();
     refreshFundViews();
+}
+
+/** 0.15: Ręczna zmiana fazy rynku w trybie debug. */
+function debugSetMarketPhase(phaseKey, forceConfirm = true) {
+    if (typeof getMarketRegime !== 'function' || typeof MARKET_PHASES === 'undefined') return;
+    const regime = getMarketRegime('home');
+    if (!regime || !MARKET_PHASES[phaseKey]) return;
+    const def = MARKET_PHASES[phaseKey];
+    regime.phase = phaseKey;
+    regime.quartersInPhase = 1;
+    regime.phaseLength = Math.floor(def.length[0] + (def.length[1] - def.length[0]) / 2);
+    regime.premiumTarget = (def.premium[0] + def.premium[1]) / 2;
+    if (forceConfirm) {
+        regime.shownPhase = phaseKey;
+        regime.shownSince = typeof macro !== 'undefined' && macro?.quarter ? Number(macro.quarter) : 1;
+    } else {
+        regime.shownPhase = null;
+    }
+    const gigVal = typeof getGigIndexValue === 'function' ? getGigIndexValue() : 1000;
+    regime.startGig = gigVal;
+    if (phaseKey === 'bull' || phaseKey === 'euphoria') {
+        regime.gigTrough = gigVal;
+        regime.gigPeak = gigVal;
+    } else if (phaseKey === 'bear' || phaseKey === 'capitulation') {
+        regime.gigPeak = gigVal;
+        regime.gigTrough = gigVal;
+    }
+    if (typeof logEvent === 'function') {
+        logEvent(`🛠️ [DEBUG] Ustawiono fazę rynku: ${def.name} (${forceConfirm ? 'potwierdzona' : 'w trakcie potwierdzania'}).`, 'market');
+    }
+    if (typeof updateMoodKpi === 'function') updateMoodKpi();
+    if (typeof renderMarketModal === 'function') {
+        const modal = document.getElementById('market-modal');
+        if (modal && modal.style.display !== 'none') renderMarketModal();
+    }
 }
 
 /**

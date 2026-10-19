@@ -14,7 +14,7 @@
 // =================================================================================
 
 const ACADEMY_QUIZ_REWARD = 60; // PLN do portfela prywatnego za pierwsze zaliczenie quizu
-const ACADEMY_BASE_ENTRIES = ['kapitalizacja', 'cz', 'nav', 'benchmark'];
+const ACADEMY_BASE_ENTRIES = ['kapitalizacja', 'cz', 'nav', 'benchmark', 'fazy_rynku'];
 
 // ---------------------------------------------------------------------------------
 // WSKAŹNIKI SPÓŁKI I MEDIANY SEKTORA (wspólne z kartą spółki i skanerem)
@@ -721,6 +721,21 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Czym charakteryzuje się Jednorożec rynkowy?', a: ['Hiper-wzrostem przychodów, wyższą marżą i premią wyceny z okresowymi korektami', 'Gwarancją braku jakichkolwiek spadków kursu', 'Brakiem konkurencji i monopolem prawnym'], c: 0 },
             { q: 'Co to jest techniczne odbicie ulgi (dead-cat bounce) na gasnącej gwieździe?', a: ['Krótkotrwały wzrost kursu wyprzedanej spółki, po którym powraca trend schyłkowy', 'Trwałe uzdrowienie finansów spółki', 'Wypłata rekordowej dywidendy'], c: 0 },
             { q: 'Jak długo trwa cykl jednorożca lub gasnącej gwiazdy przed przekazaniem sztafety?', a: ['Zazwyczaj 6–8 kwartałów (1.5–2 lata gry)', 'Zawsze dokładnie 1 tydzień', 'Przez całą 20-letnią grę bez zmian'], c: 0 }
+        ]
+    },
+    fazy_rynku: {
+        title: 'Fazy rynku i nastroje inwestorów', icon: '🐂',
+        text: 'Cykl giełdowy składa się z 6 charakterystycznych faz: Akumulacji (po cichu kupują cierpliwi), Hossy (szeroki, długi wzrost), Euforii (wysokie wyceny, szczyt nastrojów), Dystrybucji (duzi gracze wyprzedają akcje), Bessy (spadki cen, strach inwestorów) oraz Kapitulacji (paniczna wyprzedaż tuż przed dnem rynku). Fazy rynku potwierdzane są z opóźnieniem (1–2 kwartały lub po ruchu GIG o 20%), gdzie szczyt lub dno rozpoznaje się dopiero po fakcie. Równolegle wskaźnik Strachu i Chciwości (0–100) mierzy bieżący sentyment na podstawie pędu GIG, szerokości rynku, zmienności WNR, wycen C/Z i apetytu na ryzyko.',
+        example: () => {
+            const regime = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+            if (!regime) return 'Wskaźnik nastrojów rynku wymaga ukończenia szkolenia Analityka Indeksowego.';
+            const phaseName = regime.shownPhase ? (MARKET_PHASES[regime.shownPhase]?.name || regime.shownPhase) : 'w trakcie potwierdzania';
+            return `Aktualny wskaźnik Strachu i Chciwości: ${regime.sentiment}/100. Potwierdzona faza rynku: ${phaseName} (premia rynkowa: ${(regime.premium * 100).toFixed(1)}%).`;
+        },
+        quiz: [
+            { q: 'Dlaczego fazy rynku (hossa, bessa) potwierdzane są w analizie z opóźnieniem?', a: ['Ponieważ punkt zwrotny można pewnie potwierdzić dopiero po trwałej zmianie trendu', 'Z powodu problemów technicznych giełdy', 'Żeby analitycy mieli czas na urlop'], c: 0 },
+            { q: 'Czym charakteryzuje się faza Euforii na giełdzie?', a: ['Wyceny są bardzo wysokie, panuje powszechny optymizm, a ryzyko korekty lub krachu rośnie', 'Wszyscy masowo wyprzedają akcje ze stratą', 'Brak jakichkolwiek transakcji na giełdzie'], c: 0 },
+            { q: 'Co mierzy wskaźnik Strachu i Chciwości (0–100)?', a: ['Bieżący nastrój rynku wyliczany m.in. z pędu cen, szerokości rynku i zmienności', 'Jedynie aktualny poziom inflacji w kraju', 'Liczbę nowych spółek debiutujących na giełdzie'], c: 0 }
         ]
     }
 });

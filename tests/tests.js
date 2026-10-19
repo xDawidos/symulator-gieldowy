@@ -110,6 +110,10 @@ function resetWorld(companies) {
     aiCompetitors.forEach(ai => { ai.portfolio = {}; });
     commercialBanks.forEach(bank => { if (bank.stockPortfolio) bank.stockPortfolio = {}; });
     if (typeof etfs !== 'undefined') etfs.length = 0;
+    if (typeof marketRegimes !== 'undefined' && marketRegimes?.home) {
+        marketRegimes.home.premium = 0.0;
+        marketRegimes.home.premiumTarget = 0.0;
+    }
     activeTenders = [];
     if (typeof cooperations !== 'undefined') { cooperations = []; cooperationLog = []; } // 0.14 T5
     constructionProjects = [];
@@ -778,6 +782,7 @@ group('Rynek: fundamenty, ceny, cykl, dywidendy (etap A)', () => {
     test('w recesji sektor defensywny traci mniej niż cykliczny', () => {
         const food = marketCompany('JEDZ', { sector: ['Żywność'] });
         const build = marketCompany('BUDO', { sector: ['Budowlany'] });
+        food.growthAdj = 0; build.growthAdj = 0;
         resetWorld([food, build]);
         const growth = company => withSeededRandom(5, () => withCycle('recession', -0.012, () => {
             const start = company.fundamentals.revenue;
@@ -3192,6 +3197,148 @@ group('Testy ogólne 0.11: benchmark GIG i wykup posiadaczy', () => {
         // 6. Akademia
         assert(typeof ACADEMY_ENTRIES.jednorozce === 'object', 'Hasło jednorozce w Akademii');
         assert(ACADEMY_ENTRIES.jednorozce.quiz.length >= 3, 'Quiz jednorożców ma pytania');
+    });
+
+    test('0.15 H2: fazy rynku, nastroje (Strach i Chciwość) oraz premia rynkowa', () => {
+        // 1. Definicje 6 faz rynku
+        const phaseKeys = ['accumulation', 'bull', 'euphoria', 'distribution', 'bear', 'capitulation'];
+        for (const pk of phaseKeys) {
+            const def = MARKET_PHASES[pk];
+            assert(def && def.name && def.icon && def.css && Array.isArray(def.length) && Array.isArray(def.premium), `Definicja fazy ${pk}`);
+            assert(typeof def.volMult === 'number' && typeof def.mood === 'number', `Parametry volMult i mood dla ${pk}`);
+        }
+
+        // 2. Inicjalizacja stanu rynku i strefy sentymentu
+        initMarketRegimes('bull');
+        const regime = getMarketRegime('home');
+        assert(regime && regime.phase === 'bull', 'Inicjalizacja fazy bull');
+        assert(regime.shownPhase === null, 'Początkowo faza w stanie potwierdzania');
+
+        assert(getSentimentZone(15).key === 'extreme-fear', 'Strefa skrajnego strachu');
+        assert(getSentimentZone(30).key === 'fear', 'Strefa strachu');
+        assert(getSentimentZone(50).key === 'neutral', 'Strefa neutralna');
+        assert(getSentimentZone(70).key === 'greed', 'Strefa chciwości');
+        assert(getSentimentZone(90).key === 'extreme-greed', 'Strefa skrajnej chciwości');
+
+        // 3. Opóźnione potwierdzanie fazy (delayed confirmation)
+        // Dla hossy po 1 kwartale następuje potwierdzenie
+        advanceMarketRegimeQuarterly('home');
+        assert(regime.shownPhase === 'bull', 'Faza bull potwierdzona po 1 kwartale');
+
+        // Przejście do akumulacji i test potwierdzania po 2 kwartałach
+        regime.phase = 'accumulation';
+        regime.shownPhase = null;
+        regime.quartersInPhase = 1;
+        regime.phaseLength = 4;
+        advanceMarketRegimeQuarterly('home');
+        assert(regime.shownPhase === null, 'Akumulacja niepotwierdzona po 1 kwartale');
+        advanceMarketRegimeQuarterly('home');
+        assert(regime.shownPhase === 'accumulation', 'Akumulacja potwierdzona po 2 kwartałach');
+
+        // Wczesne potwierdzenie przy skoku indeksu GIG >= 20%
+        regime.phase = 'bull';
+        regime.shownPhase = null;
+        regime.quartersInPhase = 1;
+        regime.gigTrough = 1000;
+        const gigIdx = marketIndexes.find(i => i.id === 'GIG');
+        const gigInitial = gigIdx ? gigIdx.value : 1000;
+        if (gigIdx) gigIdx.value = 1250; // +25%
+        advanceMarketRegimeQuarterly('home');
+        assert(regime.shownPhase === 'bull', 'Wczesne potwierdzenie hossy przy wzroście GIG >= 20%');
+
+        // Faza retro (krótka faza zakończona bez potwierdzenia)
+        regime.phase = 'capitulation';
+        regime.shownPhase = null;
+        regime.quartersInPhase = 1;
+        regime.phaseLength = 1;
+        regime.gigPeak = 1250;
+        if (gigIdx) gigIdx.value = 1150; // spadek tylko o 8%, brak potwierdzenia przed końcem
+        advanceMarketRegimeQuarterly('home');
+        assert(regime.history.length > 0, 'Wpis w historii faz rynku');
+        const lastEntry = regime.history[0];
+        assert(lastEntry.isRetro === true && lastEntry.confirmed === false, 'Krótka niepotwierdzona faza zapisana jako retro');
+
+        // 4. Cotygodniowa aktualizacja sentymentu i premia rynkowa
+        updateMarketSentimentWeekly('home');
+        assert(typeof regime.sentiment === 'number' && regime.sentiment >= 0 && regime.sentiment <= 100, 'Sentyment liczbowy 0-100');
+        assert(regime.sentimentParts && typeof regime.sentimentParts.momentum === 'number', 'Składnik momentum');
+        assert(regime.sparklines && Array.isArray(regime.sparklines.momentum), 'Sparkline dla momentum');
+
+        // Wpływ premii na wycenę i ruch cen
+        const originalStocks = stocks;
+
+        try {
+            const testComp = makeCompany('FAZ', { sector: ['Technologia'] });
+            resetWorld([testComp]);
+            regime.premium = 0.0;
+            regime.premiumTarget = 0.20;
+            testComp.price = 100;
+            updateStockPrices();
+            assert(regime.premium > 0, 'Premia rynkowa dąży w kierunku celu');
+
+            // 5. Umiejętność analityka (L4 i L5) oraz elementy UI
+            const slot = document.createElement('div');
+            slot.id = 'topbar-mood-slot';
+            const tooltip = document.createElement('div');
+            tooltip.id = 'mood-tooltip';
+            const modal = document.createElement('div');
+            modal.id = 'market-modal';
+            const modalBody = document.createElement('div');
+            modalBody.id = 'market-modal-body';
+            modal.appendChild(modalBody);
+            document.body.append(slot, tooltip, modal);
+
+            try {
+                // Poziom < 4: brak widgetu
+                skills.indexAnalystLvl1.unlockedLevel = 3;
+                updateMoodKpi();
+                assert(slot.innerHTML.trim() === '', 'Widget nastroju pusty przed L4');
+
+                // Poziom 4: widget nastroju jako <div> (bez L5 nieklikalny do modala)
+                skills.indexAnalystLvl1.unlockedLevel = 4;
+                regime.shownPhase = 'bull';
+                updateMoodKpi();
+                assert(slot.querySelector('.mood-kpi') !== null, 'Widget .mood-kpi wyrenderowany na L4');
+                assert(slot.querySelector('button.mood-kpi') === null, 'Na L4 widget nie jest przyciskiem otwierającym modal');
+
+                // Poziom 5: widget nastroju jako <button>, otwiera modal „Rynek”
+                skills.indexAnalystLvl1.unlockedLevel = 5;
+                updateMoodKpi();
+                assert(slot.querySelector('button.mood-kpi') !== null, 'Na L5 widget jest przyciskiem modalnym');
+
+                openMarketModal();
+                assert(modal.style.display === 'block', 'Modal Rynek otwiera się po openMarketModal()');
+                assert(modal.querySelector('.gauge') !== null, 'W modalu wyrenderowano wskaźnik zegarowy (gauge)');
+                assert(modal.querySelector('.sentiment-cards') !== null, 'W modalu wyrenderowano karty składowych');
+                closeMarketModal();
+                assert(modal.style.display === 'none', 'Modal zamyka się poprawnie');
+            } finally {
+                slot.remove();
+                tooltip.remove();
+                modal.remove();
+                skills.indexAnalystLvl1.unlockedLevel = 0;
+            }
+        } finally {
+            if (gigIdx) gigIdx.value = gigInitial;
+            stocks = originalStocks;
+            initMarketRegimes('bull');
+            regime.premium = 0.0;
+            regime.premiumTarget = 0.0;
+            regime.shownPhase = null;
+            regime.history = [];
+        }
+
+        // 6. Hasło w Akademii
+        assert(typeof ACADEMY_ENTRIES.fazy_rynku === 'object', 'Hasło fazy_rynku w Akademii');
+        assert(ACADEMY_ENTRIES.fazy_rynku.quiz.length >= 3, 'Quiz faz rynku ma co najmniej 3 pytania');
+
+        // 7. Ręczna zmiana fazy rynku w trybie debug
+        debugSetMarketPhase('bear', true);
+        const curRegime = getMarketRegime('home');
+        assert(curRegime.phase === 'bear' && curRegime.shownPhase === 'bear', 'Debug: faza bear ustawiona i potwierdzona');
+        debugSetMarketPhase('euphoria', false);
+        assert(curRegime.phase === 'euphoria' && curRegime.shownPhase === null, 'Debug: faza euphoria ustawiona w stanie potwierdzania');
+        initMarketRegimes('bull');
     });
 
     test('bank aktywowany w trakcie gry ma od razu stopy (bez NaN w kredytach botów)', () => {
