@@ -125,6 +125,32 @@ PRESETS['bez-p9-strata'] = `(function () {
 })();`;
 // bez-p10: bez kredytu przed wydatkiem (koszt jak dawniej, kredyt ratunkowy po fakcie).
 PRESETS['bez-p10'] = `ensureCompanyCash = () => 0;`;
+// 0.15 H0: Hipotezy i warianty
+PRESETS['zdarzenia-symetryczne'] = `getCyclePositiveEventBias = () => 0.5;`;
+PRESETS['bez-inflacji-przychodow'] = `(function () {
+    const orig = computeQuarterResults;
+    computeQuarterResults = function (stock) {
+        const oldInf = macro.inflation;
+        macro.inflation = 0;
+        const res = orig.apply(this, arguments);
+        macro.inflation = oldInf;
+        return res;
+    };
+})();`;
+PRESETS['inwestycje-polowa'] = `(function () {
+    if (typeof processOperatingInvestments === 'function') {
+        const orig = processOperatingInvestments;
+        processOperatingInvestments = function (stock) {
+            return orig.apply(this, arguments) * 0.5;
+        };
+    }
+})();`;
+PRESETS['marza-stala'] = `(function () {
+    const orig = getCrowdingPressure;
+    getCrowdingPressure = function () {
+        return (typeof orig === 'function' ? orig() : 0) * 2 + 1.0;
+    };
+})();`;
 // 0.14.1 R5: gracz aktywny — fundusz jak GIG + nadwyżka window.__alpha na rok (domyślnie 0,03; patch=window.__alpha=0 → fundusz = GIG);
 // stanowisko co 4 kwartały o szczebel wyżej (junior → CEO); wpływy do portfela prywatnego według źródła i stanowiska.
 PRESETS['gracz-aktywny'] = PRESETS['fundusz-gig'] + `(function () {
@@ -161,6 +187,7 @@ PRESETS['gracz-aktywny'] = PRESETS['fundusz-gig'] + `(function () {
         return r;
     };
 })();`;
+PRESETS['ceo'] = PRESETS['gracz-aktywny'] + 'playerProfile.positionId = "ceo";';
 // 0.14 T4 (diagnoza decyzji 13): wymuszone dodatkowe zapowiedzi wydzieleń i stan matki/córki na każdym etapie.
 PRESETS['wydzielenia'] = `(function () {
     const D = window.__spinDiag = { entries: [], errors: [] };
@@ -232,7 +259,60 @@ const STUB = `(function () {
 
 // Pomiar w ramce (działa także bez systemów 0.13 — wersja 0.12).
 const PROBE = `(function () {
-    const s = window.__sim = { mails: 0, mails013: 0, mailBy: {}, invLog: [], trimWarnings: 0, quarters: [], dps: {}, policy: {}, price0: {}, elections: [], pop: [], poor: [], unions: [], strikesStart: 0 };
+    const s = window.__sim = { mails: 0, mails013: 0, mailBy: {}, invLog: [], trimWarnings: 0, quarters: [], dps: {}, policy: {}, price0: {}, elections: [], pop: [], poor: [], unions: [], strikesStart: 0,
+        gigCap10Val: null, gigSurvivorsVal: null, gigLastPrices: null, q1Symbols: null, q1Prices: {}, q1Gig: null, q1Cap10: null, q1Survivors: null, epsStart: {} };
+    if (typeof updateMarketIndexes === 'function') {
+        const origUpdate = updateMarketIndexes;
+        updateMarketIndexes = function () {
+            origUpdate.apply(this, arguments);
+            const gigIndex = marketIndexes.find(idx => idx.id === 'GIG');
+            if (!gigIndex) return;
+            const members = stocks.filter(stock => !stock.assetType && !stock.isBankrupt && !stock.tradeHalted && stock.price > 0);
+            if (s.gigCap10Val === null) {
+                s.gigCap10Val = gigIndex.value || 100;
+                s.gigSurvivorsVal = gigIndex.value || 100;
+                s.gigLastPrices = Object.fromEntries(members.map(stock => [stock.symbol, stock.price]));
+                return;
+            }
+            const eligible = members.filter(stock => (s.gigLastPrices[stock.symbol] || 0) > 0);
+            if (eligible.length) {
+                let totalCap = 0;
+                const caps = {};
+                for (const st of eligible) {
+                    const cap = Math.max(1, st.price * (st.totalShares || 1));
+                    caps[st.symbol] = cap;
+                    totalCap += cap;
+                }
+                const weights = {};
+                let excess = 0, uncappedSum = 0;
+                for (const st of eligible) {
+                    const rawW = caps[st.symbol] / totalCap;
+                    if (rawW > 0.10) { weights[st.symbol] = 0.10; excess += (rawW - 0.10); }
+                    else { weights[st.symbol] = rawW; uncappedSum += rawW; }
+                }
+                if (excess > 0 && uncappedSum > 0) {
+                    for (const st of eligible) {
+                        if (weights[st.symbol] < 0.10) weights[st.symbol] += excess * (weights[st.symbol] / uncappedSum);
+                    }
+                }
+                let rCap10 = 0;
+                for (const st of eligible) {
+                    const r = Math.max(-0.2, Math.min(0.2, st.price / s.gigLastPrices[st.symbol] - 1));
+                    rCap10 += (weights[st.symbol] || 0) * r;
+                }
+                s.gigCap10Val *= (1 + rCap10);
+
+                if (s.q1Symbols) {
+                    const surv = eligible.filter(st => s.q1Symbols.has(st.symbol));
+                    if (surv.length) {
+                        const rSurv = surv.map(st => Math.max(-0.2, Math.min(0.2, st.price / s.gigLastPrices[st.symbol] - 1)));
+                        s.gigSurvivorsVal *= (1 + rSurv.reduce((a, b) => a + b, 0) / rSurv.length);
+                    }
+                }
+            }
+            s.gigLastPrices = Object.fromEntries(members.map(stock => [stock.symbol, stock.price]));
+        };
+    }
     if (typeof addMail === 'function') { const orig = addMail; addMail = function (...a) { s.mails++; const k = String(a[0]?.sender || '?'); s.mailBy[k] = (s.mailBy[k] || 0) + 1; if (/^(👥|✊)/u.test(String(a[0]?.subject || ''))) s.mails013++; return orig.apply(this, a); }; }
     s.bailouts = []; s.flowWarnings = { in: 0, out: 0 }; s.fund = [];
     if (typeof fundMarketOperatorBailout === 'function') {
@@ -318,9 +398,48 @@ const PROBE = `(function () {
             if (money.length) { s.moneyWarnQuarters = (s.moneyWarnQuarters || 0) + 1; for (const w of money) if ((s.moneyWarn = s.moneyWarn || []).length < 10) s.moneyWarn.push('kw. ' + macro.quarter + ': ' + w); }
             s.poolStake = typeof investmentPool === 'object' ? { stake: investmentPool.playerStakes?.player || 0, uninvested: investmentPool.contributors?.player || 0, inStartups: typeof getPoolInvestedInStartups === 'function' ? getPoolInvestedInStartups('player') : null } : null;
         }
+
+        // 0.15 H0: Sondy cieni
+        if (!s.q1Symbols && macro.quarter >= 1) {
+            s.q1Symbols = new Set(stocks.filter(x => !x.assetType && !x.isBankrupt && x.price > 0).map(x => x.symbol));
+            s.q1Prices = Object.fromEntries(Array.from(s.q1Symbols).map(sym => [sym, stocks.find(x => x.symbol === sym)?.price || 1]));
+            s.q1Gig = gig || 100;
+            s.q1Cap10 = s.gigCap10Val || 100;
+            s.q1Survivors = s.gigSurvivorsVal || 100;
+            for (const sym of s.q1Symbols) {
+                const st = stocks.find(x => x.symbol === sym);
+                if (st && st.fundamentals && st.fundamentals.revenue > 0) {
+                    s.epsStart[sym] = Number(st.fundamentals.epsTtm) || 0;
+                }
+            }
+        }
+        let buyHoldVal = null;
+        if (s.q1Symbols && s.q1Symbols.size > 0) {
+            let sumR = 0;
+            for (const sym of s.q1Symbols) {
+                const st = stocks.find(x => x.symbol === sym);
+                const p0 = s.q1Prices[sym] || 1;
+                const pCurr = (st && !st.isBankrupt && st.price > 0) ? st.price : 0;
+                sumR += (pCurr / p0);
+            }
+            buyHoldVal = (sumR / s.q1Symbols.size) * (s.q1Gig || 100);
+        }
+        const fundCos = stocks.filter(x => !x.assetType && !x.isBankrupt && x.fundamentals && x.fundamentals.revenue > 0);
+        const epsList = fundCos.map(x => Number(x.fundamentals.epsTtm) || 0).sort((a, b) => a - b);
+        const peList = fundCos.filter(x => (Number(x.fundamentals.epsTtm) || 0) > 0 && x.price > 0).map(x => x.price / x.fundamentals.epsTtm).sort((a, b) => a - b);
+        const marginList = fundCos.filter(x => x.fundamentals.history?.at(-1)?.revenue > 0).map(x => {
+            const h = x.fundamentals.history.at(-1);
+            return h.ebitda / h.revenue;
+        }).sort((a, b) => a - b);
+        const h0Med = arr => arr.length ? (arr.length % 2 === 1 ? arr[Math.floor(arr.length / 2)] : (arr[arr.length / 2 - 1] + arr[arr.length / 2]) / 2) : null;
+        const h0Pct = (arr, p) => arr.length ? arr[Math.min(arr.length - 1, Math.floor(arr.length * p))] : null;
+
         const soc = typeof society === 'object' && society ? society : null;
         const wfCompanies = companies.filter(c => c.workforce);
         s.quarters.push({ q: macro.quarter, gig, margin: rev ? ebitda / rev : null, marginNoSub: revNoSub ? ebitdaNoSub / revNoSub : null, marginStd: revStd ? ebitdaStd / revStd : null,
+            gigCap10: s.gigCap10Val, buyHold: buyHoldVal, gigSurvivors: s.gigSurvivorsVal,
+            epsMedian: h0Med(epsList), epsP10: h0Pct(epsList, 0.1), epsP90: h0Pct(epsList, 0.9),
+            peMedian: h0Med(peList), marginMedian: h0Med(marginList),
             pop: soc?.population, poor: soc?.classes?.poor,
             unionShare: wfCompanies.length ? wfCompanies.filter(c => c.workforce.union).length / wfCompanies.length : null,
             sectorUnions: soc ? Object.keys(soc.sectorUnions || {}).length : null,
@@ -410,7 +529,54 @@ const PROBE = `(function () {
             noT3.stocks.forEach(x => { delete x.strategy; if (typeof x.seg === 'string') x.seg = x.seg.split(';').map(part => part.split('|').slice(0, 3).join('|')).join(';'); });
             saveSizes = { now, legacy, noT2: JSON.stringify(noT2).length, noT3: JSON.stringify(noT3).length, stocks: stocks.length };
         }
-        return { tsr, moneyWarn: s.moneyWarn || [], moneyWarnQuarters: s.moneyWarnQuarters || 0, poolStake: s.poolStake, wallet: window.__wallet || null, presetErrors: window.__presetErrors || [], sectorIssues, saveSizes, subStart: s.subStart, subEnd: s.subEnd, multiSegEnd: s.multiSeg, mechanics: s.mechanics || null, badPrice: s.badPrice, negCash: s.negCash, mailBy: s.mailBy, bailouts: s.bailouts, flowWarnings: s.flowWarnings, fund: s.fund, panelText: panel ? panel.textContent.split(/\\s+/).join(' ').slice(0, 600) : null, panelError: s.panelError || null, elections: (macro.election?.history || []).filter(e => e.quarter >= s.quarters[0].q),
+
+        // 0.15 H0 summary stats
+        const qFirst = s.quarters.find(x => x.gig > 0) || s.quarters[0];
+        const qLast = s.quarters[s.quarters.length - 1];
+        const yearsTotal = qLast && qFirst && qLast.q > qFirst.q ? (qLast.q - qFirst.q) / 4 : 1;
+        const cagr = (valStart, valEnd) => (valStart > 0 && valEnd > 0) ? Math.pow(valEnd / valStart, 1 / yearsTotal) - 1 : null;
+        const epsGrowths = [];
+        for (const [sym, e0] of Object.entries(s.epsStart)) {
+            if (e0 > 0) {
+                const st = stocks.find(x => x.symbol === sym);
+                const eEnd = Number(st?.fundamentals?.epsTtm) || 0;
+                if (eEnd > 0) epsGrowths.push(Math.pow(eEnd / e0, 1 / yearsTotal) - 1);
+                else if (st?.isBankrupt) epsGrowths.push(-1.0);
+            }
+        }
+        epsGrowths.sort((a, b) => a - b);
+        const h0Med = arr => arr.length ? (arr.length % 2 === 1 ? arr[Math.floor(arr.length / 2)] : (arr[arr.length / 2 - 1] + arr[arr.length / 2]) / 2) : null;
+        const h0Pct = (arr, p) => arr.length ? arr[Math.min(arr.length - 1, Math.floor(arr.length * p))] : null;
+        let trustBreakdown = null;
+        if (typeof playerFund === 'object' && playerFund) {
+            const current = playerFund.current || {};
+            trustBreakdown = {
+                trust: playerFund.trust,
+                unitsChange: (playerFund.units && s.fund[0]?.units) ? Math.pow(playerFund.units / s.fund[0].units, 1 / yearsTotal) - 1 : null,
+                maxDrawdown: current.maxDrawdown,
+                benchmarkDrawdown: current.benchmarkDrawdown
+            };
+        }
+        const h0 = {
+            years: yearsTotal,
+            gigCagr: cagr(qFirst?.gig, qLast?.gig),
+            cap10Cagr: cagr(qFirst?.gigCap10, qLast?.gigCap10),
+            buyHoldCagr: cagr(qFirst?.buyHold, qLast?.buyHold),
+            survivorsCagr: cagr(qFirst?.gigSurvivors, qLast?.gigSurvivors),
+            epsGrowthP10: h0Pct(epsGrowths, 0.1),
+            epsGrowthP50: h0Med(epsGrowths),
+            epsGrowthP90: h0Pct(epsGrowths, 0.9),
+            peMedianStart: qFirst?.peMedian,
+            peMedianEnd: qLast?.peMedian,
+            peCagr: cagr(qFirst?.peMedian, qLast?.peMedian),
+            marginMedStart: qFirst?.marginMedian,
+            marginMedEnd: qLast?.marginMedian,
+            marginWtdStart: qFirst?.margin,
+            marginWtdEnd: qLast?.margin,
+            trustBreakdown
+        };
+
+        return { h0, tsr, moneyWarn: s.moneyWarn || [], moneyWarnQuarters: s.moneyWarnQuarters || 0, poolStake: s.poolStake, wallet: window.__wallet || null, presetErrors: window.__presetErrors || [], sectorIssues, saveSizes, subStart: s.subStart, subEnd: s.subEnd, multiSegEnd: s.multiSeg, mechanics: s.mechanics || null, badPrice: s.badPrice, negCash: s.negCash, mailBy: s.mailBy, bailouts: s.bailouts, flowWarnings: s.flowWarnings, fund: s.fund, panelText: panel ? panel.textContent.split(/\\s+/).join(' ').slice(0, 600) : null, panelError: s.panelError || null, elections: (macro.election?.history || []).filter(e => e.quarter >= s.quarters[0].q),
             lawChanges: soc ? { ...soc.lawChanges } : null, laws: soc ? { ...soc.laws } : null,
             invariants: typeof checkWorldInvariants === 'function' ? checkWorldInvariants().slice(0, 5) : null, invLog: s.invLog, trimWarnings: s.trimWarnings,
             trims: typeof ghostTrimLog !== 'undefined' ? ghostTrimLog.length : null, spinDiag: window.__spinDiag || null };
