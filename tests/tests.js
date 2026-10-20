@@ -8404,6 +8404,20 @@ group('0.15.0.1: Poprawki 0.15 (bezpiecznik, margin call, pieniądze, emisje, kr
         addTable('C5b: krachy na 20 lat (model faz, 300 gier)', ['średnio', '0', '1', '2', '≥ 3', 'średnia premia'], [[mean.toFixed(2), ...dist.map(x => (x * 100).toFixed(0) + '%'), (premSum / premN * 100).toFixed(1) + '%']]);
         assert(mean >= 0.5 && mean <= 2.5, `krachy na 20 lat: ${mean}`);
     });
+
+    test('C6a: obsunięcie względem GIG — fundusz = GIG w bessie prawie bez kary, fundusz gorszy od GIG z pełną', () => {
+        world();
+        const def = CLIENT_TYPES.fearful, client = { satisfaction: 0.5 };
+        const ctx = (dd, bdd) => ({ excess: 0, trust: 50, maxDrawdown: dd, benchmarkDrawdown: bdd, lastRankBad: false, ethicsIssue: null });
+        const old = -Math.max(0, 0.30 - 0.05) * def.volAversion * 0.3; // 0.15: kara za samo obsunięcie 30%
+        const same = getClientSatisfactionDrift(client, def, ctx(0.30, 0.30));
+        assert(Math.abs(same.drawdown + same.bearMarket) <= Math.abs(old) * 0.15, 'fundusz = GIG (−30%): ≤ 15% dawnej kary');
+        assert(same.bearMarket < 0, 'głęboka bessa dalej trochę niepokoi');
+        const worse = getClientSatisfactionDrift(client, def, ctx(0.30, 0.10));
+        assertNear(worse.drawdown, -(0.30 - 0.10 - 0.03) * def.volAversion * 0.3, 'pełny składnik względny', 1e-9);
+        assertEq(worse.bearMarket, 0, 'GIG −10%: bez części absolutnej');
+        assertEq(getDominantOutflowReason(worse, CLIENT_TYPES.careful, 0.5), 'drawdown', 'przyczyna: obsunięcie większe niż GIG');
+    });
 });
 
 async function runAllTests() {

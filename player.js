@@ -3663,7 +3663,7 @@ const SATISFACTION_UNHAPPY = 0.35;
 const FUND_FLOW_WARN_SHARE = 0.10;      // ostrzeżenie: napływ lub odpływ w kwartale > 10% udziałów
 const ORGANIC_INFLOW_BASE = 0.02;       // roczny napływ nowych klientów przy zaufaniu 50 i wyniku = GIG
 const TOPUP_INFLOW_BASE = 0.015;        // roczne dopłaty obecnych klientów przy wyniku = GIG (zależne od wielkości funduszu)
-const FUND_FLOW_OUT_REASONS = { performance: '📉 wynik gorszy od GIG', trust: '🤝 niskie zaufanie', fees: '💸 opłaty', drawdown: '🎢 obsunięcie', noBuyer: '🛒 brak kupca na rynku wtórnym', panic: '😱 panika', ethics: '🌱 etyka spółek', fashion: '🤑 moda na akcje', other: '❔ inne' };
+const FUND_FLOW_OUT_REASONS = { performance: '📉 wynik gorszy od GIG', trust: '🤝 niskie zaufanie', fees: '💸 opłaty', drawdown: '🎢 obsunięcie większe niż GIG', bearMarket: '🎢 głęboka bessa', noBuyer: '🛒 brak kupca na rynku wtórnym', panic: '😱 panika', ethics: '🌱 etyka spółek', fashion: '🤑 moda na akcje', other: '❔ inne' };
 const FUND_FLOW_IN_REASONS = { topup: '➕ dopłaty obecnych klientów', newClients: '🆕 nowi klienci', emission: '📥 Twoja emisja', fashion: '🤑 moda na akcje' };
 
 function createFundFlowQuarter(quarter) {
@@ -3702,6 +3702,8 @@ function noteFundFlow(direction, reason, value, units) {
     }
 }
 
+const DRAWDOWN_ABSOLUTE_SHARE = 0.15; // pokrętło 0,05–0,30: ile spadku samego GIG (ponad 10%) czują klienci
+
 /** Składniki tygodniowej zmiany zadowolenia klienta (do decyzji i do rozbicia przyczyn odejść). */
 function getClientSatisfactionDrift(client, def, ctx) {
     const fee = getPlayerFeeRate();
@@ -3709,7 +3711,9 @@ function getClientSatisfactionDrift(client, def, ctx) {
         reversion: (SATISFACTION_MEAN - client.satisfaction) * SATISFACTION_REVERSION,
         performance: ctx.excess * def.chase * 0.3 - (def.comparesRivals && ctx.lastRankBad ? 0.02 : 0),
         trust: (ctx.trust - 50) / 50 * 0.012,                                   // słabszy składnik zaufania
-        drawdown: -Math.max(0, ctx.maxDrawdown - 0.05) * def.volAversion * 0.3,  // dopiero obsunięcie ponad 5%
+        // 0.15.0.1 C6a: obsunięcie oceniane względem GIG (ponad 3 pp gorsze niż rynek) plus mała część absolutna w głębokiej bessie
+        drawdown: -Math.max(0, ctx.maxDrawdown - (ctx.benchmarkDrawdown || 0) - 0.03) * def.volAversion * 0.3,
+        bearMarket: -DRAWDOWN_ABSOLUTE_SHARE * Math.max(0, (ctx.benchmarkDrawdown || 0) - 0.10) * def.volAversion * 0.3,
         // Opłata standardowa jest neutralna: kara dopiero powyżej MANAGEMENT_FEE_ANNUAL, niższa — mała premia.
         fees: -(def.feeSensitivity || 0) * 0.01 * Math.max(0, fee / MANAGEMENT_FEE_ANNUAL - 1) - (fee - MANAGEMENT_FEE_ANNUAL) * 0.4,
         ethics: def.ethical && ctx.ethicsIssue ? -0.08 : 0
@@ -3721,7 +3725,7 @@ function getClientSatisfactionDrift(client, def, ctx) {
 function getDominantOutflowReason(parts, def, fraction) {
     if (def.panic && fraction >= 1) return 'panic';
     let reason = 'other', worst = 0;
-    for (const key of ['performance', 'trust', 'drawdown', 'fees', 'ethics']) if (parts[key] < worst) { worst = parts[key]; reason = key; }
+    for (const key of ['performance', 'trust', 'drawdown', 'bearMarket', 'fees', 'ethics']) if (parts[key] < worst) { worst = parts[key]; reason = key; }
     if (reason === 'other') { // tydzień bez ujemnego składnika (np. początek okresu): przyczyna z dłuższego horyzontu
         if (getRecentExcessAnnual() < 0) reason = 'performance';
         else if ((playerFund?.trust ?? 50) < 50) reason = 'trust';
@@ -3774,7 +3778,7 @@ function processClientsWeekly() {
     let newMoneyBudget = Math.min(getFundAssets() * MAX_WEEKLY_NEW_MONEY_SHARE, getFundAssets() * getTopupInflowRate(trust) / 52 * getRandomInRange(0.5, 1.5));
 
     const ethicsIssue = typeof getFundEthicsIssue === 'function' ? getFundEthicsIssue() : null;
-    const ctx = { excess, trust, maxDrawdown: current.maxDrawdown, lastRankBad, ethicsIssue };
+    const ctx = { excess, trust, maxDrawdown: current.maxDrawdown, benchmarkDrawdown: current.benchmarkDrawdown, lastRankBad, ethicsIssue };
     for (const client of [...playerFund.clients]) {
         const def = getClientCharacter(client);
         if (def.ethical && ethicsIssue && (!client.ethicsNoted || client.ethicsNoted !== ethicsIssue)) {
