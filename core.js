@@ -1682,9 +1682,9 @@ const COMPANY_INCOME_TAX_RATE = 0.19; // CIT od zysku przed opodatkowaniem (rapo
 // (audyt A4: wcześniej PKB w ekspansji dochodził do 7% r/r — skala przesunięta do napędu koniunktury).
 const ECONOMY_PHASES = {
     recovery:    { name: 'Ożywienie',   gdp: [0.0022, 0.0055], length: [2, 4], peMult: 1.00, mood: 0.2,  next: 'expansion' },
-    expansion:   { name: 'Ekspansja',   gdp: [0.0044, 0.0100], length: [3, 6], peMult: 1.10, mood: 0.5,  next: 'overheating' },
-    overheating: { name: 'Przegrzanie', gdp: [0.0017, 0.0066], length: [1, 3], peMult: 1.20, mood: 0.3,  next: 'recession' },
-    recession:   { name: 'Recesja',     gdp: [-0.0110, -0.0022], length: [2, 4], peMult: 0.85, mood: -0.6, next: 'recovery' }
+    expansion:   { name: 'Ekspansja',   gdp: [0.0044, 0.0100], length: [3, 6], peMult: 1.05, mood: 0.5,  next: 'overheating' },
+    overheating: { name: 'Przegrzanie', gdp: [0.0017, 0.0066], length: [1, 3], peMult: 1.10, mood: 0.3,  next: 'recession' },
+    recession:   { name: 'Recesja',     gdp: [-0.0110, -0.0022], length: [2, 4], peMult: 0.93, mood: -0.6, next: 'recovery' }
 };
 const GDP_DRIVER_SCALE = 1 / 0.55;
 
