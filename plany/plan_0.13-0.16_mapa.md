@@ -4,6 +4,7 @@ Jeden spójny porządek prac na wersje 0.13 → 0.16. Szczegóły są w planach 
 - `plan_0.13_spoleczenstwo.md`;
 - `plan_0.14_struktura_spolek.md`;
 - `plan_0.15_hossa_bessa.md`;
+- `plan_0.15.0.1_poprawki.md`, `plan_0.15.1_przejecia.md`, `plan_0.15.2_pr_inwestorzy.md`, `plan_0.15.3_kryzysy.md` (audyt: `raporty/audyt_planow_0.15.x.md`);
 - `plan_0.16_gielda_miedzynarodowa.md` (dawniej 0.15; przesunięta 2026-10-14);
 - `raporty/weryfikacja_0.13.1.md`.
 
@@ -36,8 +37,11 @@ Stan na 2026-10-13: etap A (domknięcie 0.13 i 0.13.1) zrobiony na gałęzi work
 | 0.14 | Decyzja 15.3: mniej córek koncernów, więcej rozszerzeń | ✅ `63d40a1`; testy 448/448; 10×200: nowe córki 2,2, wchłonięcia 1,6, usamodzielnienia 1,2, sprzedaże 1,0 ✅; koncerny 4,3 (na koniec 5,1) ✅; kooperacje 11,2 ✅; rozszerzenia 4,0/rok, pivoty 1,2/rok; GIG 21,0 ± 0,9%, marża 28,5%; liczniki błędów 0. ⚠️ spółki z ≥ 2 segmentami nadal 22% (cel 25–45%) — szansa i skuteczność rozszerzeń tego nie zmieniają, przyczyna do diagnozy |
 | 0.14 | Kontrola końcowa (`raporty/kontrola_0.14.md`) | ✅ 10×200 vs przed T1 i vs `8fdbf63`: GIG 20,2 vs 18,2 vs 20,2% (+2,0 pp vs przed T1, na granicy), marża 28,2 vs 26,3 vs 27,5%; niezmienniki, ujemna gotówka, bezpiecznik: 0; zapis 2,16 MB (+1,7% vs `8fdbf63`). 20 lat: wszystko 0, krajowe ≤ 110, łącznie ≤ 146; ⚠️ zapis 3,26 MB. ⚠️ koncerny 2,8–3,4 (granica 3–6), spółki z ≥ 2 segmentami 22% (cel 25–45%), efekt wydzielenia z naturalnych przebiegów +0,5% ± 3,5 (wymuszone +5,0% ± 2,6) |
 | 0.14.3 | Zapis bez limitu Z1–Z5 (`raporty/zapis_0.14.3.md`) | ✅ `7701cda`, `1279222`, `a533506`; testy 457/457. IndexedDB (`current`/`previous`, format `gz`) + kopia `lz16` w `localStorage` przy zamknięciu, wybór najnowszego poprawnego, migracja, eksport/import, panel w ustawieniach. 20 lat: poziom zwykły, bez strat, niezmienniki 0, kompresja 4,9×, gzip 68 ms (+ budowa snapshotu 280 ms ⚠️ cel 300 ms łącznie). ⚠️ `file://` niesprawdzone (panel aplikacji nie uruchamia skryptów z dysku) |
-| 0.15 | Hossa i bessa (H0–H6) | 📝 plan po audycie (2026-10-17/18, `raporty/audyt_planu_0.15.md`), czeka na 0.14.5. H0 pomiar (7 hipotez, m.in. GIG równych wag przeważany co tik) → H1 kalibracja (GIG 8–10%, zysk na akcję 8–11%, ewentualnie GIG ważony kapitalizacją; jednorożce 2–3 i gasnące gwiazdy 2–3 na grę; zaufanie/JU funduszu = GIG, R5 CEO, lokaty; punkt kontrolny) → H2 nastrój (6 ukrytych faz z opóźnionym potwierdzeniem, premia na kursie, wskaźnik strachu i chciwości; widok za Analitykiem Indeksowym L4–L5: element KPI zamiast `marketTrend` i okno „Rynek”) → H3 bańki → H4 krach, margin call, bezpieczniki 7/13/20%, bank centralny, KNF → H5 boty, klienci, okno IPO, emisje/skupy/przejęcia, rynki kapitałowe (drugi pomiar JU) → H6 Akademia, Mentor, osiągnięcia (CV), retrospektywa. Zapis v15. UI projektuje czat designu (zlecenie w planie). Kod: ⬜ nie zaczęte |
-| 0.15.1 | Kryzysy (linie zdarzeń: kryzys bankowy, bańka internetowa, szok naftowy, Czarny czwartek, pandemia; osiągnięcia kryzysów) | ⬜ szkic (`plan_0.15.1_kryzysy.md`), pełny plan po 0.15 |
+| 0.15 | Hossa i bessa (H0–H6) | ✅ kod (`zmiany-AI` do `a2fb29d`), zapis v15, testy 492/492. ⚠️ weryfikacja (`raporty/weryfikacja_0.15.md`): błędy B1–B6, brak emisji wg nastroju (H5c), balans (premia, C/Z, fundusz = GIG, zysk na akcję). Pomiar 2026-10-20 (`raporty/audyt_planow_0.15.x.md`): dryf premii i spadek C/Z to skutek B1 (kursy zamrożone przez 52% gry w przebiegach ×200) |
+| 0.15.0.1 | Poprawki 0.15 (C0–C7): bezpiecznik na zegarze gry, margin call i zastaw (B2–B4), B6/B7, emisje i skupy wg nastroju, połowa mnożnika C/Z cyklu, krach po wzrostach, obsunięcie względem GIG i bramka umorzeń 10%/kw. | 📝 plan zatwierdzony 2026-10-20 (`plan_0.15.0.1_poprawki.md`). Kod: ⬜ |
+| 0.15.1 | Sztuka przejęć (M0–M8): arbitraż fuzji, oferty kupna dla większościowca, due diligence i ukryte zobowiązania, odkup pakietów od botów i prezesa, ustawa „Próg wezwania” i drabina KNF, wartość firmy i odpis | 📝 plan zatwierdzony 2026-10-20 (`plan_0.15.1_przejecia.md`). Kod: ⬜ |
+| 0.15.2 | Kochaj i zarabiaj (K0–K9): kalendarz, kampanie emisyjne, lock-up 0–3 lata, łagodna gwarancja kapitału, mandat, grupy inwestorów i analityk IR, VIP | 📝 plan zatwierdzony 2026-10-20 (`plan_0.15.2_pr_inwestorzy.md`). Kod: ⬜ |
+| 0.15.3 | Wielkie Kryzysy (W0–W7): naprawa B5, silnik linii, 5 linii (2008, 2000, 1973, 1929, 2020), reakcje instytucji, scenariusz na start, osiągnięcia | 📝 plan zatwierdzony 2026-10-20 (`plan_0.15.3_kryzysy.md`). Kod: ⬜ |
 | 0.16 | Giełda międzynarodowa G0–G8 (dawniej 0.15) | ⬜ szkic, nie zaczęte |
 
 **Etap A zrobiony (A1–A4) razem z 3 decyzjami balansu; 0.14 T1–T3 zrobione.** Zostało: poprawki 0.14.1 i 0.14.2 + 3 części 0.14 (T4–T6) + 7 etapów 0.15 + 9 etapów 0.16.
@@ -104,12 +108,13 @@ Podział serii 0.15 na wersje zgodnie z decyzją gracza (Wariant C, 2026-10-19):
 | Podwersja | Tytuł | Zakres | Plan |
 |---|---|---|---|
 | **0.15.0** | **Hossa i bessa** | Silnik nastrojów rynku (`marketRegimes`), zrównoważenie GIG (8–10%/rok), bańki sektorowe, mechanika bazowego krachu i bezpieczników giełdowych, zachowania botów | `plan_0.15_hossa_bessa.md` |
-| **0.15.1** | **Sztuka przejęć (M&A)** | Darmowe rozmowy wstępne, pipeline etapów przejęcia (LOI, Due Diligence, negocjacje), ryzyko urażenia zarządu ofertą poniżej wartości godziwej (Poison Pill, Biały Rycerz) | `plan_0.15.1_przejecia.md` |
-| **0.15.2** | **Kochaj i zarabiaj (PR & Inwestorzy)** | Okna emisji (tydzień, 1–3 msc), lock-up 0–5 lat, gwarancja zwrotu wkładu z regułą debetu (1 tydzień na wyjście na 0), cele emisji, zegar „Lata w firmie”, pitching z 4 stylami rozmowy, VIP-y, analityk PR/IR z podwyżkami i misjami | `plan_0.15.2_pr_inwestorzy.md` |
-| **0.15.3** | **Wielkie Kryzysy** | 5 linii historycznych (2008 bankowy, 2000 dot-com, 1973 szok naftowy, 1929 czarny czwartek, 2020 pandemia) z asymetrią branżową i interwencjami państwa | `plan_0.15.3_kryzysy.md` |
+| **0.15.0.1** | **Poprawki 0.15** | Błędy B1–B4, B6, B7; emisje i skupy wg nastroju; połowa mnożnika C/Z cyklu; krach po wzrostach; obsunięcie względem GIG i bramka umorzeń | `plan_0.15.0.1_poprawki.md` |
+| **0.15.1** | **Sztuka przejęć (M&A)** | Arbitraż fuzji; gracz jako większościowiec dostaje oferty i je rozgrywa (rozmowy, kontroferta z ryzykiem urażenia, aukcja, due diligence); odkup pakietów od botów i prezesa; ustawa „Próg wezwania” i drabina KNF; wartość firmy i odpis | `plan_0.15.1_przejecia.md` |
+| **0.15.2** | **Kochaj i zarabiaj (PR i inwestorzy)** | Kalendarz „Rok · kw. · tydz.”, kampanie emisyjne (1 tydz. / 2 tydz. / 1 kw.), lock-up 0–3 lata, łagodna gwarancja kapitału z kredytem płynnościowym, mandat, 3 grupy inwestorów i analityk IR, VIP z argumentami sprawdzanymi danymi | `plan_0.15.2_pr_inwestorzy.md` |
+| **0.15.3** | **Wielkie Kryzysy** | Naprawa szoku sektorowego (B5), 5 linii historycznych z etapami, asymetrią branżową i interwencjami państwa, scenariusz na start gry | `plan_0.15.3_kryzysy.md` |
 
 - **Grunt pod 0.16:** stan nastroju jest per rynek (`marketRegimes`), żeby 0.16 dopisało rynki zagraniczne, surowce, łańcuchy dostaw i zarażanie międzynarodowe.
-- **UI:** KPI nastroju w pasku, kalendarz stażu („Lata w firmie”), okno „Rynek”, panel PR/IR, sekcja osiągnięć w CV z komponentów 0.14.5.
+- **UI:** KPI nastroju w pasku, kalendarz „Rok · kw. · tydz.”, okno „Rynek” (z sekcją „Kryzys”), okno oferty kupna, zakładka „Relacje” w panelu funduszu, sekcja osiągnięć w CV — z komponentów 0.14.5; projekt wyglądu zleca się czatowi designu (zlecenia w planach).
 - **Plan 0.16** ma od 2026-10-18 sekcję zgłoszeń: kontrakty surowcowe (złoto, ropa, uran itd.), transport (morski, lotniczy, lądowy), łańcuchy produkcyjne, cła i WTO.
 
 ## Etap C — 0.16 „Giełda międzynarodowa” (G0 → G8, dawniej 0.15)

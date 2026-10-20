@@ -37,7 +37,7 @@ Zakres (decyzje użytkownika):
 Kolejność: H0 → H1 → H2 → H3 → H4 → H5 → H6. Każda część z testami, przebiegami ×200 (6,5 roku i 20 lat) i commitem (część z kilkoma krokami — commit po każdym kroku).
 - **Punkt kontrolny po H1:** gra jest zbalansowana bez nastroju. Jeśli H2–H6 się przeciągną, H1 może zostać scalone osobno (bez zmiany wersji zapisu).
 - **Audyt planu i droga do niego:** `raporty/audyt_planu_0.15.md`.
-- **Dalej:** linie kryzysów historycznych to **0.15.1** (`plan_0.15.1_kryzysy.md`, szkic).
+- **Dalej:** poprawki **0.15.0.1** (`plan_0.15.0.1_poprawki.md`), potem 0.15.1–0.15.3; linie kryzysów historycznych to **0.15.3** (`plan_0.15.3_kryzysy.md`).
 
 UI 0.15 budujemy z komponentów systemu designu 0.14.5 (`plany/design/`). Ten plan określa treść, miejsce i stany. **Projekt wyglądu nowych elementów zlecamy czatowi designu** (sekcja „Zlecenie dla czatu designu”).
 

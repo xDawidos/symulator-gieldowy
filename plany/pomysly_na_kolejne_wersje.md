@@ -5,6 +5,8 @@ Notatki z planowania, jeszcze bez planu. Każdy punkt przed budową dostaje wła
 ---
 
 ## 1. M&A i negocjacje przejęć (pasuje do 0.15 H5 oraz rozszerzenia M&A)
+> **Stan (2026-10-20):** rozpisane w `plan_0.15.1_przejecia.md` od strony sprzedającego (oferty dla większościowca, odkup pakietów, KNF i próg wezwania). Strona kupującego — punkt 8.
+
 - **Rozwinięcie etapów przejęcia:** Zamiast natychmiastowego zamknięcia transakcji — wieloetapowy proces (badanie due diligence, list intencyjny LOI, zgody korporacyjne/KNF, oferta ostateczna).
 - **Darmowe rozmowy wstępne:** Rozpoczęcie rozmów i wstępne sondowanie intencji zarządu nie powinno kosztować fortuny na start.
 - **Ryzyko urażenia zarządu:** Zbyt niska oferta (lowball) lub agresywny ton może urazić prezesa i radę nadzorczą celu przejęcia, prowadząc do zerwania rozmów, obrony typu poison pill lub trwałego pogorszenia relacji.
@@ -12,6 +14,8 @@ Notatki z planowania, jeszcze bez planu. Każdy punkt przed budową dostaje wła
 ---
 
 ## 2. Aktualizacja PR-owa: „Kochaj i zarabiaj” (Relacje Inwestorskie & Emisje JU)
+> **Stan (2026-10-20):** rozpisane w `plan_0.15.2_pr_inwestorzy.md` (kampanie, lock-up 0–3 lata, łagodna gwarancja, mandat, grupy, IR, VIP). Odrzucone elementy — punkt 8.
+
 - **Zabezpieczenie przed ciągłą zmianą wartości portfela:**
   - **Minimalny okres uczestnictwa (lock-up):** Podczas emisji nowych jednostek uczestnictwa (JU) gracz ustala okres blokady kapitału (od 0 do 5 lat).
   - Dłuższy lock-up przyciąga inwestorów długoterminowych/cierpliwych (Instytucje, Spokojni), a zniechęca spekulantów (Spryciarz, Panikarz).
@@ -112,4 +116,14 @@ Notatki z planowania, jeszcze bez planu. Każdy punkt przed budową dostaje wła
 ## 8. Wcześniej odrzucone / odłożone
 - **Opcje i CFD:** powrót dopiero przy ewentualnej mechanice gry na spadki (krótka sprzedaż).
 - **Zlecenia z limitem i stop-loss:** kandydat na dedykowaną aktualizację silnika zleceń giełdowych.
-- **Scenariusz „Wielki Kryzys”:** włączony w ramy linii zdarzeń w wersji 0.15.1 Kryzysy.
+- **Scenariusz „Wielki Kryzys”:** włączony w ramy linii zdarzeń w wersji 0.15.3 „Wielkie Kryzysy” (scenariusz na start gry — W4).
+
+Odrzucone lub odłożone w planowaniu 0.15.x (2026-10-20, `raporty/audyt_planow_0.15.x.md`):
+- **Przejęcia od strony kupującego** (suwak premii, rozmowy z zarządem celu, badanie celu przy przejęciu z panelu zarządzania spółką): użytkownik wybrał w 0.15.1 stronę sprzedającą. Kandydat na kolejną wersję M&A, gdy gracze częściej kontrolują spółki.
+- **Płatny list intencyjny (LOI) jako osobny krok:** dubluje istniejący etap negocjacji w `ma.js`.
+- **„Spadek relacji z inwestorami w branży” po urażeniu zarządu:** niemierzalne; zamiast tego relacja z konkretnym botem i reputacja w spółce (0.15.1 M4).
+- **„Przysługa przyjacielska” VIP-a** (gwarantowany zakup udziałów za relację): pewny napływ na żądanie omija kalibrację funduszu.
+- **Tony wypowiedzi bez związku z danymi i animacje rozmów z botami:** zastąpione argumentami sprawdzanymi danymi funduszu (0.15.2 K7).
+- **Reguła debetu z upadłością funduszu po tygodniu** (gwarancja kapitału): zastąpiona kredytem płynnościowym bez dymisji (0.15.2 K4).
+- **Lock-up 4–5 lat:** przy grze 6,5-letniej prawie cała gra; w 0.15.2 0–3 lata. Powrót przy dłuższych grach.
+- **Miesiące w kalendarzu:** gra ma 5 tygodni w kwartale; kalendarz „Rok · kw. · tydz.”.

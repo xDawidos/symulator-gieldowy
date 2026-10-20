@@ -135,7 +135,16 @@ Plan: `plan_0.15.0.1_poprawki.md`.
 
 ### 2.5. Decyzja kierownika planowania
 
-**Zatwierdź z przebudową zakresu:** A, B, C, D, E. **Odrzuć:** F (dubluje etap 2), G (niemierzalne). **H** zostaje bez zmian (istniejące wezwania). Plan przepisany na rzeczywiste moduły.
+Propozycja kierownika planowania: A–E dla gracza jako kupującego; odrzucić F (dubluje etap 2) i G (niemierzalne).
+
+**Decyzja użytkownika (zmienia kierunek):**
+- gracz jako większościowiec **dostaje oferty** i je rozgrywa (B, C, D po stronie sprzedającego), a nie kupuje spółek nowym przyciskiem;
+- kontrolę zdobywa **odkupem pakietów** od botów (istniejące relacje) i od prezesa;
+- przekroczenie 50% pakietami: ostrzeżenie KNF → kary → nakaz wezwania albo odsprzedaży;
+- **ustawa „Próg wezwania” 66/75/90/99%** zmieniana przez partie, z limitem zależnym od poziomu KNF;
+- odpis wartości firmy: test co 4 kw., odpis 25–50%.
+
+**Wynik:** **zatwierdzony** plan `plan_0.15.1_przejecia.md` (M0–M8): A arbitraż, oferty dla większościowca (≥ 33%), due diligence kupującego i ukryte zobowiązania, odkup pakietów, KNF i próg wezwania, wartość firmy. Odrzucone: F, G, nowy proces od zera, rozbudowa przejęć z panelu zarządzania (→ `pomysly_na_kolejne_wersje.md`).
 
 ---
 
@@ -187,7 +196,11 @@ Plan: `plan_0.15.0.1_poprawki.md`.
 
 ### 3.5. Decyzja kierownika planowania
 
-**Zatwierdź z przebudową zakresu:** A (bez miesięcy — do decyzji), B, C (0–3 lata), D, E, F, G (argumenty sprawdzane danymi). **Odrzuć:** H (przysługa przyjacielska), I (gwarancja kapitału i reguła debetu) → `pomysly_na_kolejne_wersje.md`. **Warunek:** budowa po 0.15.0.1 i po 0.15.1.
+Propozycja kierownika planowania: A, B, C (0–3 lata), D, E, F, G (argumenty sprawdzane danymi); odrzucić H i I.
+
+**Decyzja użytkownika:** gwarancja kapitału **zostaje w łagodnej wersji** — niedobór pokrywa fundusz (gotówka → wymuszona sprzedaż → kredyt płynnościowy), bez dymisji i upadłości po tygodniu. Plan dodaje zabezpieczenia przed exploitem: udział w zysku 70%, limit 30% udziałów, lock-up ≥ 1 rok. Kalendarz: „Rok · kw. · tydz.”.
+
+**Wynik:** **zatwierdzony** plan `plan_0.15.2_pr_inwestorzy.md` (K0–K9). Odrzucone: H (przysługa przyjacielska), tony bez związku z danymi i animacje rozmów, reguła debetu z upadłością (→ `pomysly_na_kolejne_wersje.md`). **Warunek:** budowa po 0.15.0.1 i po 0.15.1.
 
 ---
 
@@ -226,8 +239,32 @@ Plan: `plan_0.15.0.1_poprawki.md`.
 
 **Zatwierdź** z warunkami: B5 naprawione w 0.15.3 jako pierwsza część, kalibracja premii z liniami, fałszywe alarmy.
 
+**Decyzja użytkownika:** scenariusz na start gry — tak, opcjonalnie.
+
+**Wynik:** **zatwierdzony** plan `plan_0.15.3_kryzysy.md` (W0–W7). Częstość linii obniżona do 1%/kw. po ≥ 12 kw. spokoju + 40% krachów zamienionych w linie (łącznie ok. 1,2 linii na 20 lat), żeby nie wrócił dryf premii. Zarażanie między krajami → 0.16.
+
 ---
 
 ## 5. Kolejne 0.15.x
 
-<!-- KOLEJNE -->
+Ocena: **nie trzeba nowej wersji 0.15.x.** Wszystko, co wypłynęło w audycie, mieści się w 0.15.0.1–0.15.3 albo trafia do pomysłów:
+- **przejęcia od strony kupującego** (suwak premii, rozmowy z zarządem celu przy przejęciu z panelu zarządzania) — do `pomysly_na_kolejne_wersje.md`, bo użytkownik wybrał stronę sprzedającą;
+- **cel GIG w 20 latach** (10,6% po naprawie B1 przy celu 8–10%) — pilnuje 0.15.0.1 C7 (rozwodnienie z C4, ewentualnie `INFLATION_PASS_THROUGH` po decyzji);
+- **ocena zarządu i premia R5 przy nowych przepływach funduszu** — mierzone w kontrolach 0.15.0.1 i 0.15.2.
+
+### Kolejność budowy
+
+| Wersja | Zależy od | Zapis |
+|---|---|---|
+| 0.15.0.1 Poprawki 0.15 | 0.15.0 | v15, pola opcjonalne |
+| 0.15.1 Sztuka przejęć | 0.15.0.1 (kalibracja, margin call, emisje C4) | v15, pola opcjonalne |
+| 0.15.2 Kochaj i zarabiaj | 0.15.0.1 (bramka umorzeń), 0.15.1 | v15, pola opcjonalne |
+| 0.15.3 Wielkie Kryzysy | 0.15.0.1 (krach po wzrostach), B5 w W0 | v15, pola opcjonalne |
+| 0.16 Giełda międzynarodowa | seria 0.15 | v16 |
+
+## 6. Decyzje (podjęte 2026-10-20)
+
+- **0.15.0.1:** zysk na akcję ważony kapitalizacją; obsunięcie względem GIG + bramka umorzeń 10%/kw.; połowa mnożnika C/Z cyklu; krach tylko po wzrostach (Hossa ≥ 4 kw., Euforia, Dystrybucja), dno −35%. Plan zatwierdzony.
+- **0.15.1:** strona sprzedająca, odkup pakietów, ustawa „Próg wezwania” i drabina KNF, odpis wartości firmy co 4 kw. (25–50%). Plan zatwierdzony.
+- **0.15.2:** zakres po audycie + łagodna gwarancja kapitału; kalendarz „Rok · kw. · tydz.”. Plan zatwierdzony.
+- **0.15.3:** scenariusz na start gry. Plan zatwierdzony.
