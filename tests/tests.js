@@ -8336,6 +8336,74 @@ group('0.15.0.1: Poprawki 0.15 (bezpiecznik, margin call, pieniądze, emisje, kr
         assertEq(a.sharesHeld, getTrackedHeldShares(a), 'akcje = posiadacze po skupie');
         assert(newsLog.some(n => /skupuje akcje przy niskiej wycenie/.test(n.text)), 'wpis o skupie');
     });
+
+    function crashCount(phase, quartersInPhase, n = 10000) {
+        const regime = getMarketRegime('home');
+        const orig = triggerMarketCrash;
+        let k = 0;
+        triggerMarketCrash = () => { k++; };
+        try {
+            for (let i = 0; i < n; i++) { regime.phase = phase; regime.quartersInPhase = quartersInPhase; regime.premium = 0.1; checkMarketCrashQuarterly(); }
+        } finally { triggerMarketCrash = orig; }
+        return k / n;
+    }
+
+    test('C5b: brak krachu w Akumulacji, Bessie, Kapitulacji i w kw. 1–3 Hossy; możliwy po wzrostach', () => {
+        world();
+        aiCompetitors.forEach(ai => { ai.loans = []; });
+        for (const phase of ['accumulation', 'bear', 'capitulation']) assertEq(crashCount(phase, 3), 0, `bez krachu: ${phase}`);
+        for (const q of [1, 2, 3]) assertEq(crashCount('bull', q), 0, `bez krachu w ${q}. kw. Hossy`);
+        const bull = crashCount('bull', 4);
+        assert(Math.abs(bull - 0.025) < 0.006, `Hossa ≥ 4 kw.: ${bull}`);
+        assert(crashCount('euphoria', 1) > 0.07, 'Euforia: szansa bazowa + 6 pp');
+        assert(crashCount('distribution', 1) > 0.015, 'Dystrybucja');
+    });
+
+    test('C5b: premia po krachu nie niżej niż −35%', () => {
+        world();
+        const regime = getMarketRegime('home');
+        regime.premium = -0.05;
+        triggerMarketCrash({ durationWeeks: 2, targetDrop: -0.35 });
+        processMarketCrashWeekly();
+        assert(regime.premium >= -0.35, 'w trakcie');
+        processMarketCrashWeekly();
+        assertNear(regime.premium, -0.35, 'dno −35%');
+        regime.premium = 0.30;
+        triggerMarketCrash({ durationWeeks: 1, targetDrop: -0.30 });
+        processMarketCrashWeekly();
+        assertNear(regime.premium, 0.0, 'z euforii spadek o 30 pp');
+    });
+
+    test('C5b: liczba krachów w modelu faz (300 gier × 20 lat)', () => {
+        world();
+        aiCompetitors.forEach(ai => { ai.loans = []; });
+        const quiet = { logEvent, showToast, addMail, pushNews, executeMarginCalls, reactCentralBankToCrash };
+        logEvent = showToast = addMail = pushNews = () => {}; executeMarginCalls = reactCentralBankToCrash = () => {};
+        const counts = [];
+        let premSum = 0, premN = 0;
+        try {
+            for (let g = 0; g < 300; g++) {
+                initMarketRegimes();
+                marketCrash = createMarketCrashState();
+                let crashes = 0;
+                for (let q = 0; q < 80; q++) {
+                    const regime = getMarketRegime('home');
+                    regime.premium += (regime.premiumTarget - regime.premium) * 0.25;
+                    advanceMarketRegimeQuarterly();
+                    const was = isMarketCrashing();
+                    checkMarketCrashQuarterly();
+                    if (!was && isMarketCrashing()) crashes++;
+                    for (let w = 0; w < 5 && isMarketCrashing(); w++) processMarketCrashWeekly();
+                    premSum += getMarketRegime('home').premium; premN++;
+                }
+                counts.push(crashes);
+            }
+        } finally { Object.assign(window, quiet); }
+        const mean = counts.reduce((a, b) => a + b, 0) / counts.length;
+        const dist = [0, 1, 2, 3].map(k => counts.filter(c => (k === 3 ? c >= 3 : c === k)).length / counts.length);
+        addTable('C5b: krachy na 20 lat (model faz, 300 gier)', ['średnio', '0', '1', '2', '≥ 3', 'średnia premia'], [[mean.toFixed(2), ...dist.map(x => (x * 100).toFixed(0) + '%'), (premSum / premN * 100).toFixed(1) + '%']]);
+        assert(mean >= 0.5 && mean <= 2.5, `krachy na 20 lat: ${mean}`);
+    });
 });
 
 async function runAllTests() {

@@ -3141,7 +3141,8 @@ function processMarketCrashWeekly(market = 'home') {
     const progress = Math.min(1.0, marketCrash.weeksElapsed / Math.max(1, marketCrash.durationWeeks));
     const regime = getMarketRegime(market);
     if (regime) {
-        regime.premium = marketCrash.startPremium + marketCrash.targetDrop * progress;
+        const bottom = Math.max(MARKET_CRASH_PREMIUM_FLOOR, marketCrash.startPremium + marketCrash.targetDrop); // nie niżej niż dno Kapitulacji
+        regime.premium = marketCrash.startPremium + (bottom - marketCrash.startPremium) * progress;
         regime.premiumTarget = regime.premium;
     }
 
@@ -3163,14 +3164,22 @@ function processMarketCrashWeekly(market = 'home') {
     }
 }
 
+const MARKET_CRASH_PREMIUM_FLOOR = -0.35;
+const MARKET_CRASH_BASE_CHANCE = 0.025;
+
+/** 0.15.0.1 C5b: krach tylko po wzrostach — w Euforii, Dystrybucji i w Hossie trwającej ≥ 4 kw. */
+function canMarketCrashInPhase(regime) {
+    return regime.phase === 'euphoria' || regime.phase === 'distribution' || (regime.phase === 'bull' && (Number(regime.quartersInPhase) || 0) >= 4);
+}
+
 /** Kwartalne sprawdzenie szansy wystąpienia krachu. */
 function checkMarketCrashQuarterly(market = 'home') {
     const regime = getMarketRegime(market);
     if (!regime) return;
-    if (regime.phase === 'bear' || regime.phase === 'capitulation') return;
     if (isMarketCrashing(market)) return;
+    if (!canMarketCrashInPhase(regime)) { checkKnfCoolingEuphoria(regime); return; }
 
-    let crashChance = 0.012; // 1.2% podstawy
+    let crashChance = MARKET_CRASH_BASE_CHANCE;
 
     if (regime.phase === 'euphoria') {
         crashChance += 0.06; // +6 pp w Euforii
