@@ -446,7 +446,7 @@ const PROBE = `(function () {
             const last = playerFund.flowStats?.last;
             s.fund.push({ q: macro.quarter, units: playerFund.units, nav: typeof getFundNav === 'function' ? getFundNav() : null, trust: playerFund.trust,
                 open: typeof isFundOpenForSubscriptions === 'function' ? isFundOpenForSubscriptions() : null,
-                last: last ? { q: last.quarter, in: last.in, out: last.out, inUnits: last.inUnits, outUnits: last.outUnits, startUnits: last.startUnits } : null });
+                last: last ? { q: last.quarter, in: last.in, out: last.out, inUnits: last.inUnits, outUnits: last.outUnits, startUnits: last.startUnits, gate: last.gateUnitsRedeemed ?? null, gateOn: last.gateTriggered ?? null } : null });
         }
         const gig = marketIndexes.find(i => i.id === 'GIG')?.value;
         const companies = stocks.filter(x => !x.assetType && !x.isBankrupt);
