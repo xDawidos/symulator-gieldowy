@@ -859,9 +859,8 @@ function makeAiDecision(ai) {
                     if (stockToBuy) {
                         const targetShares = Math.max(1, Math.floor(2500 / Math.max(0.01, stockToBuy.price)));
                         const cost = targetShares * stockToBuy.price;
-                        if (ai.cash < cost) {
-                            // Państwowa dopłata dla komendanta
-                            const subsidy = Math.max(1000, Math.ceil(cost - ai.cash) + 500);
+                        const subsidy = ai.cash < cost ? takeFromTreasury(Math.max(1000, Math.ceil(cost - ai.cash) + 500)) : 0; // 0.15.0.1 B6: ze skarbu państwa
+                        if (subsidy > 0) {
                             ai.cash += subsidy;
                             if (typeof logEvent === 'function') {
                                 logEvent(`🚓 Komendant Jakub otrzymał państwową dopłatę (${formatZl(subsidy, 0)}) na zakup akcji defensywnych ${stockToBuy.name}.`, 'state');

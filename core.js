@@ -1643,6 +1643,13 @@ function getConstructionTechnologyBonuses(company) {
 
 // --- Zmienne Globalne Ekonomii ---
 let governmentTreasury = 1000000; // Skarbiec Państwa
+
+/** Dopłata ze skarbu państwa: najwyżej tyle, ile w nim jest (pusty skarb — bez dopłaty). */
+function takeFromTreasury(amount) {
+    const paid = Math.max(0, Math.min(Number(amount) || 0, governmentTreasury));
+    governmentTreasury -= paid;
+    return paid;
+}
 let marketVolatilityIndex = 0; // Wskaźnik zmienności (WNR)
 let exchangeCollapseState = {}; // Stan zwinięcia tabel w UI
 

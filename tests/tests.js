@@ -8238,6 +8238,50 @@ group('0.15.0.1: Poprawki 0.15 (bezpiecznik, margin call, pieniądze, emisje, kr
         assertEq(bot.portfolio.AAA.shares, 100, 'zastawione AAA zostają');
         assert((bot.portfolio.BBB?.shares || 0) < 100, 'zajęte wolne BBB');
     });
+
+    function defensiveWorld() {
+        const w = world();
+        const food = makeCompany('JEDZ', { sector: ['Żywność'], name: 'Żywność Test' });
+        food.companyAge = 20;
+        stocks.push(food);
+        return { ...w, food };
+    }
+
+    test('C3 (B7): Funkcjonariusz dokupuje udziały z dopłatą ze skarbu; pętla obsługuje wszystkich klientów', () => {
+        const { food } = defensiveWorld();
+        playerPortfolio.JEDZ = { shares: 9000, avgPrice: 100, assetType: 'stock' };
+        food.sharesHeld = 9000;
+        playerCash = 500000; playerFund.trust = 80; // fundusz defensywny (≥ 50%) i budżet napływu dla 3 klientów
+        const mk = id => ensureClientProfile({ id, name: id, type: 'officer', units: 100, avgCost: getFundNav(), satisfaction: 0.95 });
+        playerFund.clients = [mk('o1'), mk('o2'), { ...mk('c1'), type: 'careful' }];
+        governmentTreasury = 1_000_000;
+        const cash0 = playerCash;
+        Math.random = () => 0.001;
+        processClientsWeekly(); // dawniej TypeError (przypisanie do const) przerywał pętlę
+        const [o1, o2, c1] = playerFund.clients;
+        assert(o1.units > 100 && o2.units > 100 && c1.units > 100, 'wszyscy klienci dokupili udziały');
+        const officerIn = (o1.units + o2.units - 200) * getFundNav();
+        assertNear(1_000_000 - governmentTreasury, officerIn / 6, 'skarb płaci 20% wpłaty bazowej (1/6 wpłaty z dopłatą)', 1);
+        assert(playerCash > cash0, 'wpłaty trafiły do funduszu');
+    });
+
+    test('C3 (B6): Komendant Jakub dostaje dopłatę tylko ze skarbu państwa', () => {
+        defensiveWorld();
+        oversight.police.level = 5;
+        const jakub = checkPoliceChiefSpawn() || aiCompetitors.find(ai => ai.personality === 'police_chief');
+        Math.random = () => 0.1;
+        jakub.cash = 0; jakub.portfolio = {};
+        governmentTreasury = 0;
+        makeAiDecision(jakub);
+        assertEq(jakub.cash, 0, 'pusty skarb — bez dopłaty');
+        assertEq(governmentTreasury, 0, 'skarb bez zmian');
+        governmentTreasury = 1_000_000;
+        makeAiDecision(jakub);
+        const paid = 1_000_000 - governmentTreasury;
+        assert(paid > 0, 'dopłata pobrana ze skarbu');
+        const held = (jakub.portfolio.JEDZ?.shares || 0) * stocks.find(s => s.symbol === 'JEDZ').price;
+        assert(jakub.cash + held <= paid + 1, 'bot ma najwyżej tyle, ile dał skarb');
+    });
 });
 
 async function runAllTests() {

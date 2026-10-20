@@ -3843,7 +3843,7 @@ function processClientsWeekly() {
 
         // Emeryt / Nowoczesny: sprawdzenie zadowolenia z portfela
         const meetsPreference = fundSatisfiesClientPreference(def.key);
-        if (!meetsPreference && ((def.key === 'retiree' || def.key === 'senior') || def.key === 'modern')) {
+        if (!meetsPreference && (def.key === 'senior' || def.key === 'modern')) {
             client.satisfaction = Math.max(0, client.satisfaction - 0.05);
         }
 
@@ -3874,13 +3874,11 @@ function processClientsWeekly() {
             noteClientHistory(client, `Niezadowolony — umarza ${units.toFixed(1)} udziałów (${paid.toFixed(0)} PLN).`);
         } else if (satisfied && highTrust) {
             // Emeryt kupuje tylko, gdy portfel w większości defensywny; Nowoczesny na odwrót
-            if (!meetsPreference && ((def.key === 'retiree' || def.key === 'senior') || def.key === 'modern')) continue;
+            if (!meetsPreference && (def.key === 'senior' || def.key === 'modern')) continue;
             if (!isFundOpenForSubscriptions() || Math.random() >= def.buyBias * 0.3 || newMoneyBudget <= 0) continue;
-            const value = Math.min(newMoneyBudget, getRandomInRange(def.size[0], def.size[1]) * 0.4);
-            if (client.type === 'officer' || client.character === 'officer') {
-            value = Math.round(value * 1.20); // 20% państwowej dopłaty z programu dla policjantów
-        }
-        const units = subscribeClient(client, value);
+            let value = Math.min(newMoneyBudget, getRandomInRange(def.size[0], def.size[1]) * 0.4);
+            if (def.key === 'officer') value += takeFromTreasury(value * 0.20); // dopłata 20% z programu policyjnego (ze skarbu państwa)
+            const units = subscribeClient(client, value);
             newMoneyBudget -= value;
             noteFundFlow('in', 'topup', value, units);
             noteClientHistory(client, `Dokupuje ${units.toFixed(1)} udziałów za ${value.toFixed(0)} PLN.`);
