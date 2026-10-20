@@ -62,6 +62,8 @@
 
 ### Problemy balansu
 
+> **Korekta (2026-10-20, pomiar w czacie planowania 0.15.x, `plan_0.15.0.1`):** problem 1 (ujemna premia i spadek C/Z) to **skutek błędu B1**. W przebiegach ×200 bezpiecznik liczony zegarem rzeczywistym zamrażał kursy przez ok. 52% gry. Po naprawie B1 premia średnio −0,6% (20 lat: +0,1%), a C/Z zmienia się o −0,2 pp/rok, czyli w celu. Problem 2 (odpływ funduszu = GIG, ok. −21%/rok) zostaje. Doszedł nowy błąd **B7**: nadpisywanie `const value` dla klienta Funkcjonariusz w `processClientsWeekly`; wyjątek przerywa pętlę klientów.
+
 1. **Premia rynku jest średnio ujemna, przez co C/Z rynku spada przez całą grę.**
    - Średnia premia przy wejściu w fazy to ok. −9%.
    - Plan zakłada, że średni cel ważony czasem ≈ 0.
