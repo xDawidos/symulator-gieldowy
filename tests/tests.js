@@ -5359,7 +5359,7 @@ group('0.14 T1a: rejestr sektorów i porządek nazw', () => {
         assert(Object.keys(macro.sectorCycles).length === SECTOR_NAMES.length && macro.sectorCycles['Transport i logistyka'].phase === 'boom', 'cykle po migracji');
 
         const snapshot = JSON.parse(JSON.stringify(buildSaveSnapshot()));
-        assert(snapshot.version === 14 && snapshot.stocks.every(s => typeof s.seg === 'string' && !s.sector && !s.segments), 'v14: tylko seg');
+        assert((snapshot.version === 14 || snapshot.version === 15) && snapshot.stocks.every(s => typeof s.seg === 'string' && !s.sector && !s.segments), 'v14: tylko seg');
         assert(applySaveSnapshot(snapshot).ok, 'wczytanie v14');
         const mix = stocks.find(s => s.symbol === 'MIX');
         assert(mix.segments.length === 2 && mix.sector.join() === 'Budowlany,Przemysł' && isValidSegmentList(mix.segments), JSON.stringify(mix.segments));
@@ -7990,6 +7990,35 @@ group('0.15 H6: Akademia, Mentor, osiągnięcia, newsy i retrospektywa rynkowa',
         assert(dummyList.innerHTML.includes('Osiągnięcia'), 'renderCvPanel zawiera nagłówek Osiągnięcia');
         assert(dummyList.innerHTML.includes('Przeżyj pierwszy kryzys'), 'renderCvPanel zawiera zdobyte osiągnięcie');
         assert(dummyList.innerHTML.includes('??? (Ukryte osiągnięcie)'), 'renderCvPanel zawiera ukryte osiągnięcie');
+    });
+
+    test('H6.7: Zapis gry v15 i migracja v14 -> v15', () => {
+        world();
+        economyCycle = createEconomyCycle('expansion');
+        skills.indexAnalystLvl1.unlockedLevel = 5;
+        playerProfile.achievements = { first_crisis: 1 };
+        activeSectorBubble = { id: 'ai', name: 'Sztuczna inteligencja', phase: 'inflating', premium: 0.40 };
+
+        // 1. Zapis v15 zawiera nowe pola
+        const snapshot = buildSaveSnapshot();
+        assert(snapshot.version === 15, 'wersja zapisu to 15');
+        assert(snapshot.marketRegimes && snapshot.marketRegimes.home, 'zapis zawiera marketRegimes');
+        assert(snapshot.playerProfile.achievements.first_crisis === 1, 'zapis zawiera osiągnięcia');
+
+        // 2. Symulacja wczytania starego zapisu v14 (migracja)
+        const oldSnapshot = JSON.parse(JSON.stringify(snapshot));
+        oldSnapshot.version = 14;
+        delete oldSnapshot.marketRegimes;
+
+        const report = applySaveSnapshot(oldSnapshot);
+        assert(report.ok === true, 'migracja v14 zakończona sukcesem');
+        assert(report.warnings.some(w => w.includes('migracja v15')), 'raport zawiera ostrzeżenie o migracji v15');
+
+        const reg = getMarketRegime('home');
+        assert(reg.phase === 'bull', 'faza zmigrowana z ekspansji to bull (Hossa)');
+        assert(reg.premium === 0, 'premia startowa przy migracji wyzerowana');
+        assert(activeSectorBubble === null, 'brak aktywnej bańki przy migracji');
+        assert(skills.indexAnalystLvl1.unlockedLevel <= 3, 'poziomy L4-L5 Analityka Indeksowego niekupione po migracji');
     });
 });
 

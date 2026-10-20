@@ -28,8 +28,8 @@ const LEGACY_SAVE_KEYS = ['gra_inwestycyjna_dawid_save_v2', 'gra_inwestycyjna_da
 // v8: klienci z charakterami i rynek wtórny JU (migracja typów klientów przy wczytaniu).
 // v13: społeczeństwo i rynek pracy (society, stock.workforce, trzecia partia). Starsze zapisy: kraj od zera,
 // zatrudnienie według giełdy, polityka według cech prezesa, związki tylko w spółkach państwowych (30%).
-const SAVE_FORMAT_VERSION = 14; // 0.14 T1: segmenty spółek, sektory z rejestru
-const SUPPORTED_SAVE_VERSIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
+const SAVE_FORMAT_VERSION = 15; // 0.15: cykl rynku, nastroje, bańki, krach, osiągnięcia
+const SUPPORTED_SAVE_VERSIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 
 let lastSaveReport = null;
 let saveDisabledUntilReload = false;
@@ -707,6 +707,31 @@ function applySaveSnapshot(snapshot) {
     }
     activeSectorBubble = snapshot.sectorBubble || null;
     sectorBubbleCooldown = Number(snapshot.sectorBubbleCooldown) || 0;
+    if ((snapshot.version || 0) < 15) {
+        const phaseKey = (economyCycle?.phase === 'expansion' || economyCycle?.phase === 'overheating') ? 'bull' :
+            economyCycle?.phase === 'recovery' ? 'accumulation' :
+            economyCycle?.phase === 'recession' ? 'bear' : 'bull';
+        if (typeof initMarketRegimes === 'function') initMarketRegimes(phaseKey);
+        const gigVal = typeof getGigIndexValue === 'function' ? getGigIndexValue() : 1000;
+        const reg = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+        if (reg) {
+            reg.premium = 0;
+            reg.shownPhase = phaseKey;
+            reg.gigPeak = gigVal;
+            reg.gigTrough = gigVal;
+        }
+        activeSectorBubble = null;
+        sectorBubbleCooldown = 4;
+        if (playerProfile) playerProfile.achievements = {};
+        if (skills.indexAnalystLvl1) {
+            skills.indexAnalystLvl1.unlockedLevel = Math.min(3, skills.indexAnalystLvl1.unlockedLevel || 0);
+        }
+        report.warnings.push('Cykl rynku, nastroje i osiągnięcia zaktualizowane do wersji 0.15 (migracja v15).');
+    } else {
+        if (typeof snapshot.knfLeverageCoolingQuarters === 'number') {
+            knfLeverageCoolingQuarters = snapshot.knfLeverageCoolingQuarters;
+        }
+    }
     if (typeof updateAllSectorPremiums === 'function') updateAllSectorPremiums();
     updateMarketTrendFromCycle();
     migrateMarketModel(report);
