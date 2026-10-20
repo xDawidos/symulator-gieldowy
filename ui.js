@@ -6822,6 +6822,54 @@ function renderCvPanel() {
         <div class="cv-medals">${medals}</div>
         <h4>Historia zawodowa</h4>
         <ul class="cv-history">${history}</ul>
+        <h4>Osiągnięcia</h4>
+        <div class="cv-achievements" style="display:flex; flex-direction:column; gap:6px; margin-bottom:18px;">
+            ${(() => {
+                const achievements = typeof getPlayerAchievements === 'function' ? getPlayerAchievements() : {};
+                const achList = typeof ACHIEVEMENTS === 'object' ? Object.values(ACHIEVEMENTS) : [];
+                return achList.map(a => {
+                    const unlockedQ = achievements[a.id];
+                    const isUnlocked = unlockedQ !== undefined;
+                    if (isUnlocked) {
+                        return `
+                          <div class="cv-achievement-card unlocked" style="display:flex; align-items:center; gap:10px; padding:8px 12px; border-radius:6px; background:rgba(56,139,253,0.1); border:1px solid rgba(56,139,253,0.3);">
+                            <span style="font-size:20px;">${a.icon}</span>
+                            <div style="flex:1;">
+                              <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <strong style="color:var(--color-text-primary); font-size:12px;">${escapeHtml(a.title)}</strong>
+                                <span style="font-size:10px; color:#388bfd; font-weight:600;">Zdobyte (kw. ${unlockedQ}) · +${a.xp} XP</span>
+                              </div>
+                              <div style="font-size:11px; color:var(--color-text-secondary);">${escapeHtml(a.desc)}</div>
+                            </div>
+                          </div>
+                        `;
+                    } else if (a.hidden) {
+                        return `
+                          <div class="cv-achievement-card locked" style="display:flex; align-items:center; gap:10px; padding:8px 12px; border-radius:6px; background:rgba(255,255,255,0.02); border:1px dashed rgba(255,255,255,0.12); opacity:0.65;">
+                            <span style="font-size:20px;">🔒</span>
+                            <div style="flex:1;">
+                              <strong style="color:var(--color-text-muted); font-size:12px;">??? (Ukryte osiągnięcie)</strong>
+                              <div style="font-size:11px; color:var(--color-text-muted); font-style:italic;">Podpowiedź: ${escapeHtml(a.hint || 'Eksploruj nietypowe sytuacje rynkowe...')}</div>
+                            </div>
+                          </div>
+                        `;
+                    } else {
+                        return `
+                          <div class="cv-achievement-card locked" style="display:flex; align-items:center; gap:10px; padding:8px 12px; border-radius:6px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.08); opacity:0.8;">
+                            <span style="font-size:20px; filter:grayscale(100%);">${a.icon}</span>
+                            <div style="flex:1;">
+                              <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <strong style="color:var(--color-text-secondary); font-size:12px;">${escapeHtml(a.title)}</strong>
+                                <span style="font-size:10px; color:var(--color-text-muted);">Do zdobycia · +${a.xp} XP</span>
+                              </div>
+                              <div style="font-size:11px; color:var(--color-text-muted);">${escapeHtml(a.desc)}</div>
+                            </div>
+                          </div>
+                        `;
+                    }
+                }).join('');
+            })()}
+        </div>
         <h4>Dostępne szkolenia</h4>
         <div class="cv-trainings">${cards}</div>`;
 }

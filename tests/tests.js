@@ -7870,6 +7870,129 @@ group('0.15 Poprawki i Program Policyjny: Windykator, raporty, rynki i Policja',
 });
 
 
+
+group('0.15 H6: Akademia, Mentor, osiągnięcia, newsy i retrospektywa rynkowa', () => {
+    function world() {
+        const a = makeCompany('AAA'), b = makeCompany('BBB');
+        a.name = 'Alfa Testowa'; b.name = 'Beta Testowa';
+        resetWorld([a, b]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        initMarketRegimes();
+        ensureOversight();
+        return { a, b };
+    }
+
+    test('H6.1: Nowe hasła Akademii z 0.15 istnieją i mają poprawne quizy', () => {
+        world();
+        const expectedKeys = [
+            'korekta', 'cykl_rynku_gospodarki', 'strach_chciwosc', 'premia_ryzyko',
+            'krach_bezpieczniki', 'pozyczkodawca', 'dzwignia_margin', 'obsuniecie_kapitalu',
+            'okno_ipo', 'pulapka_wartosci'
+        ];
+        for (const key of expectedKeys) {
+            const entry = ACADEMY_ENTRIES[key];
+            assert(entry, `hasło ${key} istnieje w ACADEMY_ENTRIES`);
+            assert(entry.quiz && entry.quiz.length === 3, `hasło ${key} ma dokładnie 3 pytania quizowe`);
+            assert(typeof entry.example === 'function', `hasło ${key} posiada funkcję example`);
+            const ex = entry.example();
+            assert(typeof ex === 'string', `example ${key} zwraca string`);
+        }
+    });
+
+    test('H6.2: Nowe zadania Mentora (ścieżka ryzyka) przydzielane warunkowo wg isEligible', () => {
+        world();
+        assert(MENTOR_TASKS.buyInFear && MENTOR_TASKS.buyInFear.track === 'risk', 'buyInFear w ścieżce risk');
+        assert(MENTOR_TASKS.exitBubble && MENTOR_TASKS.exitBubble.track === 'risk', 'exitBubble w ścieżce risk');
+        assert(MENTOR_TASKS.surviveBear && MENTOR_TASKS.surviveBear.track === 'risk', 'surviveBear w ścieżce risk');
+
+        // Bez aktywnej bańki exitBubble nie kwalifikuje się
+        activeSectorBubble = null;
+        assert(MENTOR_TASKS.exitBubble.isEligible() === false, 'exitBubble niedostępne bez bańki');
+
+        // Gdy sentyment wysoki (>20), buyInFear nie kwalifikuje się
+        const regime = getMarketRegime('home');
+        regime.sentiment = 75;
+        skills.indexAnalystLvl1.unlockedLevel = 4;
+        assert(MENTOR_TASKS.buyInFear.isEligible() === false, 'buyInFear niedostępne przy sentymencie 75');
+
+        // Gdy sentyment < 20 i L4, kwalifikuje się
+        regime.sentiment = 15;
+        assert(MENTOR_TASKS.buyInFear.isEligible() === true, 'buyInFear dostępne przy sentymencie 15 i L4');
+    });
+
+    test('H6.3: Pasek newsów rejestruje zdarzenia rynkowe i stosuje limit nastroju', () => {
+        world();
+        newsLog = [];
+        lastMoodNewsWeek = -99;
+        assert(canPushMoodNews() === true, 'canPushMoodNews dostępne na start');
+        
+        canPushMoodNews();
+        assert(canPushMoodNews() === false, 'canPushMoodNews limitowane do 1 wiadomości na 2 tygodnie');
+
+        // Krach rynkowy wysyła news poza limitem
+        triggerMarketCrash({ durationWeeks: 2, targetDrop: -0.25 });
+        assert(newsLog.some(n => n.text.includes('KRACH NA GIEŁDZIE')), 'krach dodał wpis do paska newsów');
+
+        // Bezpiecznik giełdowy wysyła news poza limitem
+        triggerMarketHalt(1, 15, -0.08);
+        assert(newsLog.some(n => n.text.includes('BEZPIECZNIK GIEŁDOWY')), 'bezpiecznik dodał wpis do paska newsów');
+    });
+
+    test('H6.4: Retrospektywa rynkowa wysyła mail po zakończeniu Hossy lub Bessy', () => {
+        world();
+        mailbox = createMailbox();
+        const regime = getMarketRegime('home');
+        regime.quartersInPhase = 6;
+        regime.phaseLength = 6;
+        regime.phase = 'bull';
+        regime.startGig = 1000;
+
+        advanceMarketRegimeQuarterly();
+
+        const retroMail = mailbox.messages.find(m => m.subject.includes('Retrospektywa rynkowa'));
+        assert(retroMail, 'mail z retrospektywą rynkową został wysłany');
+        assert(retroMail.body.includes('Wynik indeksu GIG'), 'treść maila zawiera wynik GIG');
+        assert(retroMail.body.includes('Wynik Twojego funduszu'), 'treść maila zawiera wynik funduszu');
+        assert(retroMail.body.includes('Najsilniejszy sektor'), 'treść maila zawiera podsumowanie sektorów');
+    });
+
+    test('H6.5: Rejestr ACHIEVEMENTS, odblokowywanie, przyznawanie XP i wpis do CV', () => {
+        world();
+        assert(typeof ACHIEVEMENTS === 'object', 'rejestr ACHIEVEMENTS istnieje');
+        assert(Object.keys(ACHIEVEMENTS).length >= 11, 'rejestr zawiera co najmniej 11 osiągnięć');
+
+        playerProfile.achievements = {};
+        playerProfile.xp = 0;
+        const initialCvLen = playerProfile.cv.length;
+
+        const ok = unlockAchievement('first_crisis');
+        assert(ok === true, 'unlockAchievement zwraca true przy pierwszym odblokowaniu');
+        assert(playerProfile.achievements.first_crisis !== undefined, 'osiągnięcie zapisane w playerProfile.achievements');
+        assert(playerProfile.xp === 100, 'przyznano 100 XP za osiągnięcie');
+        assert(playerProfile.cv.length > initialCvLen, 'dodano wpis osiągnięcia do CV');
+        assert(playerProfile.cv.some(e => e.text.includes('Przeżyj pierwszy kryzys')), 'CV zawiera nazwę osiągnięcia');
+
+        // Ponowne odblokowanie nic nie zmienia (unikalność)
+        const dup = unlockAchievement('first_crisis');
+        assert(dup === false, 'ponowne odblokowanie tego samego osiągnięcia zwraca false');
+        assert(playerProfile.xp === 100, 'XP nie zostało naliczone podwójnie');
+    });
+
+    test('H6.6: Sekcja osiągnięć w zakładce CV renderuje osiągnięcia zdobyte i ukryte', () => {
+        world();
+        playerProfile.achievements = { first_crisis: 2 };
+        const dummyList = document.createElement('div');
+        dummyList.id = 'skills-list';
+        document.body.appendChild(dummyList);
+
+        renderCvPanel();
+
+        assert(dummyList.innerHTML.includes('Osiągnięcia'), 'renderCvPanel zawiera nagłówek Osiągnięcia');
+        assert(dummyList.innerHTML.includes('Przeżyj pierwszy kryzys'), 'renderCvPanel zawiera zdobyte osiągnięcie');
+        assert(dummyList.innerHTML.includes('??? (Ukryte osiągnięcie)'), 'renderCvPanel zawiera ukryte osiągnięcie');
+    });
+});
+
 async function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

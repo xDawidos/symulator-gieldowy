@@ -723,6 +723,140 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Jak długo trwa cykl jednorożca lub gasnącej gwiazdy przed przekazaniem sztafety?', a: ['Zazwyczaj 6–8 kwartałów (1.5–2 lata gry)', 'Zawsze dokładnie 1 tydzień', 'Przez całą 20-letnią grę bez zmian'], c: 0 }
         ]
     },
+    korekta: {
+        title: 'Korekta rynkowa', icon: '📉',
+        text: 'Korekta to przejściowy spadek indeksu lub kursu o 10–20% od ostatniego lokalnego szczytu w ramach szerszego trendu wzrostowego. Różni się od bessy, która oznacza spadek przekraczający 20% połączony z trwałym pogorszeniem sentymentu. Korekty pozwalają rynkowi ochłonąć po zbyt szybkich wzrostach i często stanowią okazję do dokupienia dobrych spółek po niższych cenach.',
+        example: () => {
+            const regime = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+            const peak = regime?.gigPeak || 1000;
+            const cur = typeof getGigIndexValue === 'function' ? getGigIndexValue() : 1000;
+            return `Lokalny szczyt GIG: ${peak.toFixed(1)} pkt. Bieżące obsunięcie od szczytu: ${(((cur - peak) / peak) * 100).toFixed(1)}%.`;
+        },
+        quiz: [
+            { q: 'Czym różni się korekta od bessy?', a: ['Korekta to spadek o 10–20%, bessa przekracza 20% i trwa dłużej', 'Korekta dotyczy tylko spółek technologicznych', 'W korekcie giełda jest zamknięta'], c: 0 },
+            { q: 'Co często dzieje się po zdrowej korekcie w trendzie wzrostowym?', a: ['Rynek powraca do wzrostów po schłodzeniu wycen', 'Wszystkie spółki natychmiast bankrutują', 'Bank Centralny podwaja podatki'], c: 0 },
+            { q: 'O ile procent zazwyczaj spada indeks podczas klasycznej korekty?', a: ['O 10 do 20% od lokalnego szczytu', 'O 50 do 90%', 'O mniej niż 1%'], c: 0 }
+        ]
+    },
+    cykl_rynku_gospodarki: {
+        title: 'Cykl rynku a cykl gospodarki', icon: '🔄',
+        text: 'Giełda to mechanizm dyskontujący przyszłość — rynek akcji zazwyczaj wyprzedza realną gospodarkę (PKB) o 1 do 2 kwartałów. Hossa często rozpoczyna się w samym dołku recesji, gdy dane gospodarcze są najgorsze, ponieważ inwestorzy wyceniają przyszłe ożywienie. Z kolei szczyt hossy i początek spadków pojawia się w fazie przegrzania gospodarki.',
+        example: () => {
+            const eco = typeof economyCycle === 'object' ? economyCycle?.phase : 'expansion';
+            const reg = typeof getMarketRegime === 'function' ? getMarketRegime('home')?.phase : 'bull';
+            return `Faza gospodarki: ${eco} · Faza giełdy: ${reg}.`;
+        },
+        quiz: [
+            { q: 'Dlaczego giełda rośnie, gdy gospodarka wciąż jest w recesji?', a: ['Inwestorzy dyskontują przyszłe ożywienie gospodarcze z wyprzedzeniem 1–2 kwartałów', 'Ponieważ dane o PKB są bez znaczenia', 'Giełda i gospodarka nie mają ze sobą żadnego związku'], c: 0 },
+            { q: 'Kiedy najczęściej rynek akcji osiąga szczyt przed spadkami?', a: ['W fazie przegrzania gospodarki, gdy optymizm jest powszechny', 'Podczas najgłębszej recesji', 'W momencie spadku stóp procentowych do zera'], c: 0 },
+            { q: 'O ile kwartałów giełda papierów wartościowych zazwyczaj wyprzedza cykl gospodarczy?', a: ['O 1 do 2 kwartałów', 'O 10 lat', 'Giełda reaguje z 3-letnim opóźnieniem'], c: 0 }
+        ]
+    },
+    strach_chciwosc: {
+        title: 'Indeks strachu i chciwości', icon: '🌡️',
+        text: 'Wskaźnik Strachu i Chciwości (0–100) mierzy temperaturę emocji panujących na parkiecie. Składa się z 5 filarów: pędu indeksu GIG (względem średniej z 4 kw.), szerokości rynku (% rosnących spółek), zmienności WNR, mediany wycen C/Z oraz apetytu na ryzyko (dźwignia funduszy i debiuty). Wartości poniżej 20 oznaczają skrajny strach (potencjalne dno wyprzedaży), a powyżej 80 skrajną chciwość (ryzyko korekty lub bańki).',
+        example: () => {
+            const reg = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+            return reg ? `Bieżący wskaźnik sentymentu: ${reg.sentiment}/100. Pęd: ${reg.sentimentParts?.momentum}, Szerokość: ${reg.sentimentParts?.breadth}%, Zmienność: ${reg.sentimentParts?.volatility}.` : 'Wskaźnik nastrojów rynku wymaga ukończenia szkolenia Analityka Indeksowego.';
+        },
+        quiz: [
+            { q: 'Co oznacza odczyt wskaźnika poniżej 20 punktów?', a: ['Skrajny strach inwestorów i potencjalną okazję zakupu (krew na ulicach)', 'Skrajną euforię i konieczność natychmiastowej sprzedaży', 'Brak handlu na giełdzie'], c: 0 },
+            { q: 'Z ilu filarów wyliczany jest wskaźnik sentymentu w grze?', a: ['Z 5 składników: pęd, szerokość rynku, zmienność, C/Z i apetyt na ryzyko', 'Tylko z inflacji i stóp procentowych', 'Z liczby graczy w rankingu'], c: 0 },
+            { q: 'W jakiej strefie wskaźnik sugeruje skrajną chciwość i ryzyko bańki?', a: ['Powyżej 80 punktów', 'Poniżej 10 punktów', 'Dokładnie w punkcie 50'], c: 0 }
+        ]
+    },
+    premia_ryzyko: {
+        title: 'Premia za ryzyko akcji (ERP)', icon: '⚖️',
+        text: 'Inwestowanie w akcje wiąże się ze zmiennością, dlatego inwestorzy wymagają wyższej oczekiwanej stopy zwrotu niż z bezpiecznych obligacji skarbowych czy lokat. Różnica ta to Premia za Ryzyko Akcji (Equity Risk Premium). Gdy stopy procentowe banku centralnego są wysokie, a wyceny akcji drogie, premia za ryzyko kurczy się — kapitał odpływa do bezpiecznych obligacji.',
+        example: () => {
+            const dep = typeof getDepositRate === 'function' ? (getDepositRate() * 100).toFixed(2) : '3.00';
+            return `Oprocentowanie bezpiecznej lokaty: ${dep}%. Inwestorzy na akcjach oczekują premii za ryzyko ponad tę stopę.`;
+        },
+        quiz: [
+            { q: 'Czym jest premia za ryzyko akcji?', a: ['Dodatkowym zyskiem oczekiwanym z akcji ponad stopę wolną od ryzyka', 'Karą nakładaną przez KNF na fundusze', 'Opłatą maklerską przy zakupie akcji'], c: 0 },
+            { q: 'Co dzieje się, gdy bezpieczne obligacje oferują bardzo wysokie oprocentowanie?', a: ['Akcje stają się mniej atrakcyjne, kapitał może odpływać z giełdy', 'Wyceny akcji rosną do nieskończoności', 'Wszystkie spółki przestają publikować raporty'], c: 0 },
+            { q: 'Co stanowi podstawę stopy wolnej od ryzyka w gospodarce gry?', a: ['Obligacje skarbowe i lokaty bankowe', 'Najbardziej ryzykowne startupy', 'Kredyty lombardowe'], c: 0 }
+        ]
+    },
+    krach_bezpieczniki: {
+        title: 'Krach giełdowy i bezpieczniki', icon: '🚨',
+        text: 'Krach to gwałtowne załamanie notowań — spadek indeksu o ponad 20% w ciągu zaledwie 1–4 tygodni, wywołany nagłą paniką, realizacją zleceń stop-loss i przymusowymi wezwaniami do uzupełnienia depozytu (margin call). Aby zapobiec załamaniu infrastruktury, giełda stosuje automatyczne bezpieczniki (circuit breakers): przy spadku GIG o -7% handel staje na 15 s, przy -13% na 30 s, a przy -20% handel zostaje zawieszony do końca tygodnia.',
+        example: () => {
+            const isCrash = typeof isMarketCrashing === 'function' && isMarketCrashing();
+            const isHalt = typeof isMarketHalted === 'function' && isMarketHalted();
+            return isCrash ? '🚨 Na rynku trwa KRACH!' : isHalt ? '⚠️ Handel jest wstrzymany przez bezpiecznik!' : 'Bezpieczniki giełdowe czuwają nad stabilnością parkietu (progi -7%, -13%, -20%).';
+        },
+        quiz: [
+            { q: 'Jakie są progi zadziałania bezpieczników giełdowych w grze?', a: ['-7% (15s), -13% (30s) oraz -20% (do końca tygodnia)', '-1%, -2% i -3%', '-50% i zamknięcie giełdy na rok'], c: 0 },
+            { q: 'Co dzieje się podczas zawieszenia handlu przez bezpiecznik?', a: ['Wszystkie zlecenia zakupu i sprzedaży są zablokowane', 'Spółki natychmiast bankrutują', 'Gracz traci wszystkie pieniądze'], c: 0 },
+            { q: 'Ile trwa wstrzymanie handlu przy bezpieczniku 1. stopnia (-7%)?', a: ['15 sekund', 'Cały miesiąc', '24 godziny'], c: 0 }
+        ]
+    },
+    pozyczkodawca: {
+        title: 'Pożyczkodawca ostatniej instancji', icon: '🏛️',
+        text: 'W sytuacji paniki rynkowej i kryzysu płynności komercyjne instytucje finansowe boją się pożyczać sobie nawzajem pieniądze. Rolę pożyczkodawcy ostatniej instancji pełni Bank Centralny. W odpowiedzi na krach może obniżyć stopy procentowe (np. cięcie o 50 pb) oraz zasilić rynek płynnością, zapobiegając lawinie bankructw.',
+        example: () => {
+            const rate = typeof centralBank === 'object' && centralBank ? (centralBank.baseInterestRate * 100).toFixed(2) : '4.50';
+            return `Aktualna stopa referencyjna Banku Centralnego: ${rate}%.`;
+        },
+        quiz: [
+            { q: 'Kto pełni rolę pożyczkodawcy ostatniej instancji w gospodarce?', a: ['Bank Centralny', 'Lombardy miejskie', 'Prywatni inwestorzy zagraniczni'], c: 0 },
+            { q: 'Jak Bank Centralny zwykle reaguje na wybuch paniki i krachu?', a: ['Ścina stopy procentowe i dostarcza płynność', 'Podnosi stopy procentowe do 100%', 'Likwiduje giełdę papierów wartościowych'], c: 0 },
+            { q: 'Jaki jest główny cel działania pożyczkodawcy ostatniej instancji?', a: ['Zapobieżenie zapaści płynnościowej i fali bankructw w sektorze finansowym', 'Maksymalizacja zysków komercyjnych banków', 'Sfinansowanie festynu miejskiego'], c: 0 }
+        ]
+    },
+    dzwignia_margin: {
+        title: 'Dźwignia i Margin Call', icon: '⚡',
+        text: 'Dźwignia finansowa polega na inwestowaniu za pożyczone pieniądze (np. kredyty bankowe). W czasie hossy mnoży zyski, lecz w czasie spadków potęguje straty. Gdy wartość portfela zabezpieczającego pożyczkę spadnie poniżej wymaganego progu, następuje Margin Call — wezwanie do natychmiastowej spłaty długu lub przymusowa wyprzedaż akcji po dowolnej cenie.',
+        example: () => {
+            return 'Podczas krachu fundusze o dźwigni powyżej 50% podlegają wymuszonej wyprzedaży 20–40% akcji.';
+        },
+        quiz: [
+            { q: 'Co to jest Margin Call?', a: ['Wezwanie do uzupełnienia depozytu lub przymusowa sprzedaż akcji przy spadku wycen', 'Powiadomienie o wypłacie rekordowej dywidendy', 'Propozycja awansu w korporacji'], c: 0 },
+            { q: 'Dlaczego nadmierna dźwignia finansowa jest niebezpieczna dla całego rynku?', a: ['Wymuszona wyprzedaż akcji pod margin call pogłębia spadki cen innych spółek', 'Ponieważ obniża inflację w kraju', 'Bo uniemożliwia kupno obligacji'], c: 0 },
+            { q: 'Co dzieje się, gdy inwestor na dźwigni nie uzupełni środków po wezwaniu margin call?', a: ['Broker lub bank przymusowo wyprzedaje akcje z portfela', 'Kredyt zostaje natychmiast umorzony za darmo', 'Inwestor otrzymuje darmowe jednostki uczestnictwa'], c: 0 }
+        ]
+    },
+    obsuniecie_kapitalu: {
+        title: 'Obsunięcie kapitału (Drawdown)', icon: '📉',
+        text: 'Maksymalne obsunięcie kapitału (Max Drawdown) to największy procentowy spadek wartości funduszu lub indeksu od historycznego szczytu do kolejnego dołka przed ustanowieniem nowego rekordu. Jest to jedna z najważniejszych miar ryzyka — klienci funduszu panikują i wycofują kapitał, gdy obsunięcie przekracza ich próg tolerancji.',
+        example: () => {
+            const dd = (typeof playerFund !== 'undefined' && playerFund?.current?.maxDrawdown) ? (playerFund.current.maxDrawdown * 100).toFixed(1) : '0.0';
+            return `Maksymalne obsunięcie funduszu w bieżącym okresie: ${dd}%.`;
+        },
+        quiz: [
+            { q: 'Co mierzy wskaźnik Max Drawdown?', a: ['Największy spadek wyceny od szczytu do dołka w danym okresie', 'Średni zysk z dywidend w skali roku', 'Liczbę transakcji przeprowadzonych przez zarządcę'], c: 0 },
+            { q: 'Dlaczego duże obsunięcie kapitału zagraża funduszowi?', a: ['Klienci tracą zaufanie i składają zlecenia umorzenia jednostek', 'KNF automatycznie przejmuje spółki z portfela', 'Fundusz musi podwoić liczbę akcji'], c: 0 },
+            { q: 'Od jakiego punktu odniesienia mierzy się drawdown portfela?', a: ['Od najwyższego dotychczasowego szczytu (peak)', 'Od ceny zakupu pierwszej spółki', 'Od zera'], c: 0 }
+        ]
+    },
+    okno_ipo: {
+        title: 'Okno IPO', icon: '🚪',
+        text: 'Okno IPO to korzystny okres na rynku (zwykle faza Hossy lub Euforii), w którym wysoki optymizm inwestorów i nadmiar kapitału pozwalają młodym spółkom i startupom debiutować na giełdzie przy bardzo wysokich wycenach (mnożnik 1.2–1.8x). Podczas bessy okno IPO zatrzaskuje się — debiuty są przekładane, a wyceny spadają.',
+        example: () => {
+            const reg = typeof getMarketRegime === 'function' ? getMarketRegime('home')?.phase : 'bull';
+            const mult = (reg === 'euphoria' ? '1.4–1.8x (szeroko otwarte)' : reg === 'bear' ? '0.6–0.8x (zamknięte)' : '1.0x (normalne)');
+            return `Bieżący stan okna debiutów IPO: ${mult}.`;
+        },
+        quiz: [
+            { q: 'Kiedy okno debiutów (IPO) jest najbardziej otwarte?', a: ['W fazie hossy i euforii przy wysokim sentymencie i napływach kapitału', 'W trakcie najgłębszego krachu', 'Gdy Bank Centralny podnosi podatki'], c: 0 },
+            { q: 'Co dzieje się ze startupami planującymi wejście na giełdę podczas bessy?', a: ['Często odkładają debiut w czasie, czekając na lepszą koniunkturę', 'Debiutują natychmiast z potrójną wyceną', 'Przekazują majątek burmistrzowi miasta'], c: 0 },
+            { q: 'Jaki mnożnik wyceny mogą osiągać debiuty w fazie euforii?', a: ['Nawet 1.4 do 1.8x normalnej wyceny godziwej', 'Zawsze dokładnie 0.1x', 'Wycena debiutu jest zawsze ujemna'], c: 0 }
+        ]
+    },
+    pulapka_wartosci: {
+        title: 'Pułapka wartości (Value Trap)', icon: '🕳️',
+        text: 'Pułapka wartości to sytuacja, w której spółka wydaje się niezwykle tania według tradycyjnych wskaźników (bardzo niskie C/Z lub C/WK poniżej 1), lecz w rzeczywistości jej model biznesowy chyli się ku upadkowi, przychody kurczą się, a rynkowa pozycja gaśnie (np. Gasnąca Gwiazda). Kupowanie takich spółek wyłącznie z powodu „niskiej ceny” często prowadzi do wieloletnich strat.',
+        example: () => {
+            const fading = typeof stocks !== 'undefined' ? stocks.find(s => s.marketStar?.type === 'fading_star') : null;
+            return fading ? `Obecna gasnąca gwiazda na parkiecie: ${fading.name} (${fading.symbol}) — C/Z: ${fading.fundamentals?.peRatio?.toFixed(1) || 'N/A'}.` : 'Uważaj na spółki ze spadającymi przychodami, nawet jeśli ich C/Z wydaje się atrakcyjne.';
+        },
+        quiz: [
+            { q: 'Czym jest pułapka wartości?', a: ['Pozornie tanią spółką, której biznes trwale słabnie i przynosi straty', 'Zablokowaniem konta maklerskiego przez giełdę', 'Opłatą za wycenę portfela'], c: 0 },
+            { q: 'Dlaczego niskie C/Z nie zawsze oznacza bezpieczną okazję?', a: ['Ponieważ zyski spółki mogą wkrótce drastycznie spaść lub zamienić się w stratę', 'Bo wskaźnik C/Z liczy się tylko dla banków', 'Niskie C/Z jest zawsze gwarancją zysku'], c: 0 },
+            { q: 'Który typ spółek z aktualizacji 0.15 jest klasycznym przykładem pułapki wartości?', a: ['Gasnąca gwiazda (fading star)', 'Jednorożec (unicorn)', 'Nowy startup technologiczny'], c: 0 }
+        ]
+    },
     fazy_rynku: {
         title: 'Fazy rynku i nastroje inwestorów', icon: '🐂',
         text: 'Cykl giełdowy składa się z 6 charakterystycznych faz: Akumulacji (po cichu kupują cierpliwi), Hossy (szeroki, długi wzrost), Euforii (wysokie wyceny, szczyt nastrojów), Dystrybucji (duzi gracze wyprzedają akcje), Bessy (spadki cen, strach inwestorów) oraz Kapitulacji (paniczna wyprzedaż tuż przed dnem rynku). Fazy rynku potwierdzane są z opóźnieniem (1–2 kwartały lub po ruchu GIG o 20%), gdzie szczyt lub dno rozpoznaje się dopiero po fakcie. Równolegle wskaźnik Strachu i Chciwości (0–100) mierzy bieżący sentyment na podstawie pędu GIG, szerokości rynku, zmienności WNR, wycen C/Z i apetytu na ryzyko.',
@@ -816,6 +950,21 @@ function checkAcademyTriggers() {
     if (getSkillLevel('financialAnalyst') >= 1) unlockAcademyEntry('wycena');
     if (getSkillLevel('indexAnalystLvl1') >= 1) unlockAcademyEntry('indeks_wazony');
     if (stocks.some(s => s.marketStar)) unlockAcademyEntry('jednorozce');
+    if (getSkillLevel('indexAnalystLvl1') >= 3) {
+        unlockAcademyEntry('cykl_rynku_gospodarki');
+        unlockAcademyEntry('korekta');
+    }
+    if (getSkillLevel('indexAnalystLvl1') >= 4) {
+        unlockAcademyEntry('strach_chciwosc');
+        unlockAcademyEntry('premia_ryzyko');
+    }
+    if (typeof isMarketCrashing === 'function' && (isMarketCrashing() || isMarketHalted())) {
+        unlockAcademyEntry('krach_bezpieczniki');
+        unlockAcademyEntry('pozyczkodawca');
+    }
+    if (stocks.some(s => s.marketStar?.type === 'fading_star')) {
+        unlockAcademyEntry('pulapka_wartosci');
+    }
     if (getSkillLevel('accountant') >= 3) unlockAcademyEntry('przeplywy');
     if (getSkillLevel('accountant') >= 4) unlockAcademyEntry('kreatywna');
     if (stocks.some(s => s.isBankrupt)) unlockAcademyEntry('bankructwo');
@@ -1234,6 +1383,88 @@ function quizzesPassed(ids) {
 
 /** check(task) → true (zaliczone) | false; progress(task) → tekst postępu. */
 const MENTOR_TASKS = {
+    buyInFear: {
+        track: 'risk', title: 'Kup w skrajnym strachu',
+        text: 'Gdy wskaźnik Strachu i Chciwości spadnie poniżej 20 pkt, zainwestuj co najmniej 5% aktywów funduszu w spółkę i utrzymaj tę pozycję przez 4 kwartały.',
+        lesson: 'strach_chciwosc',
+        isEligible: () => {
+            const lvl = typeof getSkillLevel === 'function' ? getSkillLevel('indexAnalystLvl1') : 0;
+            const reg = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+            return lvl >= 4 && (reg?.sentiment ?? 50) < 20;
+        },
+        init: task => { task.data = { symbol: null, startQ: null }; },
+        check: task => {
+            const assets = Math.max(1, typeof getFundAssets === 'function' ? getFundAssets() : 1);
+            const held = typeof heldStocks === 'function' ? heldStocks() : [];
+            const qualifying = held.find(s => {
+                const val = (playerPortfolio[s.symbol]?.shares || 0) * s.price;
+                return val / assets >= 0.05;
+            });
+            if (!qualifying) { task.data = { symbol: null, startQ: null }; return false; }
+            const curQ = typeof mentorQuarter === 'function' ? mentorQuarter() : 0;
+            if (task.data.symbol !== qualifying.symbol) {
+                task.data = { symbol: qualifying.symbol, startQ: curQ };
+            }
+            return (curQ - (task.data.startQ || curQ)) >= 4;
+        },
+        progress: task => task.data?.symbol ? `${task.data.symbol}: ${Math.max(0, (mentorQuarter() - (task.data.startQ || mentorQuarter())))}/4 kw.` : 'kup spółkę za ≥5% aktywów'
+    },
+    exitBubble: {
+        track: 'risk', title: 'Wyjdź z bańki',
+        text: 'W trakcie trwania bańki sektorowej sprzedaj co najmniej 50% pozycji w spółce z pompowanego sektora, zanim bańka pęknie.',
+        lesson: 'banki_sektorowe',
+        isEligible: () => {
+            const bubble = typeof getActiveSectorBubble === 'function' ? getActiveSectorBubble() : null;
+            if (!bubble || bubble.phase !== 'inflating') return false;
+            const held = typeof heldStocks === 'function' ? heldStocks() : [];
+            return held.some(s => typeof getCompanyBubbleShare === 'function' && getCompanyBubbleShare(s, bubble) > 0.3);
+        },
+        init: task => {
+            const bubble = typeof getActiveSectorBubble === 'function' ? getActiveSectorBubble() : null;
+            const held = typeof heldStocks === 'function' ? heldStocks() : [];
+            const pick = held.find(s => typeof getCompanyBubbleShare === 'function' && getCompanyBubbleShare(s, bubble) > 0.3);
+            task.data = { symbol: pick?.symbol || null, initialShares: pick ? (playerPortfolio[pick.symbol]?.shares || 0) : 0 };
+        },
+        check: task => {
+            if (!task.data?.symbol) return false;
+            const currentShares = playerPortfolio[task.data.symbol]?.shares || 0;
+            const bubble = typeof getActiveSectorBubble === 'function' ? getActiveSectorBubble() : null;
+            if (bubble && bubble.phase === 'inflating' && currentShares <= task.data.initialShares * 0.50 && task.data.initialShares > 0) {
+                return true;
+            }
+            return false;
+        },
+        progress: task => task.data?.symbol ? `${task.data.symbol}: sprzedaj ≥50% z ${task.data.initialShares} akcji` : 'czekaj na bańkę sektorową'
+    },
+    surviveBear: {
+        track: 'risk', title: 'Przetrwaj bessę',
+        text: 'Przetrwaj fazę Bessy (trwającą co najmniej 1 kwartał) z maksymalnym obsunięciem funduszu mniejszym niż spadek indeksu GIG.',
+        lesson: 'fazy_rynku',
+        isEligible: () => {
+            const reg = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+            return reg && reg.phase === 'bear' && reg.quartersInPhase >= 1;
+        },
+        init: task => {
+            const gig = typeof getGigIndexValue === 'function' ? getGigIndexValue() : 1000;
+            const nav = (typeof playerFund !== 'undefined' && playerFund?.currentNav) ? playerFund.currentNav : 100;
+            task.data = { startGig: gig, startNav: nav, minGig: gig, minNav: nav, startQ: mentorQuarter() };
+        },
+        check: task => {
+            const gig = typeof getGigIndexValue === 'function' ? getGigIndexValue() : 1000;
+            const nav = (typeof playerFund !== 'undefined' && playerFund?.currentNav) ? playerFund.currentNav : 100;
+            if (gig < (task.data.minGig || gig)) task.data.minGig = gig;
+            if (nav < (task.data.minNav || nav)) task.data.minNav = nav;
+            const reg = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+            // Zaliczenie, gdy faza bessy się kończy lub trwała >= 2 kwartały i drawdown funduszu < drawdown GIG
+            if (reg && (reg.phase !== 'bear' || (mentorQuarter() - (task.data.startQ || mentorQuarter())) >= 2)) {
+                const gigDd = ((task.data.minGig || gig) - (task.data.startGig || gig)) / (task.data.startGig || 1);
+                const navDd = ((task.data.minNav || nav) - (task.data.startNav || nav)) / (task.data.startNav || 1);
+                return navDd > gigDd; // mniejsze obsunięcie (np. -10% > -25%)
+            }
+            return false;
+        },
+        progress: task => `Bessa w toku: chroń kapitał funduszu`
+    },
     cheapPe: {
         track: 'analyst', title: 'Tania względem sektora',
         text: 'Kup spółkę z C/Z poniżej mediany jej sektora i dodatnim zyskiem. Trzymaj ją 2 kwartały.',
@@ -1459,4 +1690,166 @@ function renderMentorPanel() {
         <h4>Aktywne zadania</h4>
         <ul class="list-plain mentor-tasks">${active || '<li class="text-muted">Wszystkie zadania wykonane — gratulacje!</li>'}</ul>
         ${done ? `<h4>Wykonane</h4><ul class="list-plain text-sm">${done}</ul>` : ''}`;
+}
+
+
+// =================================================================================
+// 0.15 H6b: REJESTR OSIĄGNIĘĆ (ACHIEVEMENTS)
+// =================================================================================
+
+const ACHIEVEMENTS = {
+    first_crisis: {
+        id: 'first_crisis', icon: '🌧️', title: 'Przeżyj pierwszy kryzys',
+        desc: 'Przejdź przez pierwszą Bessę albo krach rynkowy z zaufaniem inwestorów ≥ 30 i bez utraty stanowiska.',
+        xp: 100, hidden: false,
+        check: () => {
+            const reg = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+            if (!reg || !reg.history || reg.history.length === 0) return false;
+            const hadCrisis = reg.history.some(h => h.phase === 'bear' || h.phase === 'capitulation');
+            return hadCrisis && (playerFund?.trust || 0) >= 30;
+        }
+    },
+    beat_crisis: {
+        id: 'beat_crisis', icon: '🏆', title: 'Wygraj z kryzysem',
+        desc: 'W fazie Bessy lub w ciągu 2 kwartałów od krachu osiągnij wynik funduszu lepszy od indeksu GIG o co najmniej 5 punktów procentowych.',
+        xp: 150, hidden: false,
+        check: () => {
+            const periods = playerFund?.periods || [];
+            if (!periods.length) return false;
+            const last = periods[periods.length - 1];
+            const reg = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+            const isBearOrPostCrash = reg?.phase === 'bear' || reg?.phase === 'capitulation' || reg?.history.slice(0, 2).some(h => h.phase === 'bear');
+            return isBearOrPostCrash && (last.fundReturn - last.benchmarkReturn) >= 0.05;
+        }
+    },
+    blood_on_streets: {
+        id: 'blood_on_streets', icon: '🩸', title: 'Krew na ulicach',
+        desc: 'Kup akcje za co najmniej 5% aktywów funduszu przy wskaźniku strachu < 20 i osiągnij +30% zysku na tej pozycji po 4 kwartałach.',
+        xp: 200, hidden: false,
+        check: () => {
+            const tracker = playerProfile?._bloodOnStreetsTracker;
+            if (!tracker || !tracker.symbol) return false;
+            const stock = stocks.find(s => s.symbol === tracker.symbol);
+            if (!stock) return false;
+            const curQ = typeof mentorQuarter === 'function' ? mentorQuarter() : 0;
+            if (curQ - tracker.boughtQ >= 4) {
+                const gain = (stock.price - tracker.boughtPrice) / tracker.boughtPrice;
+                return gain >= 0.30;
+            }
+            return false;
+        }
+    },
+    escape_bubble: {
+        id: 'escape_bubble', icon: '🫧', title: 'Ucieczka z bańki',
+        desc: 'Przy pęknięciu bańki sektorowej posiadaj o co najmniej 50% mniej akcji jej sektora niż 2 kwartały wcześniej.',
+        xp: 150, hidden: false,
+        check: () => Boolean(playerProfile?._escapedBubbleAchievement)
+    },
+    unicorn_hunter: {
+        id: 'unicorn_hunter', icon: '🦄', title: 'Łowca jednorożców',
+        desc: 'Kup jednorożca, zanim jego kurs urośnie 2-krotnie od startu wzrostu, i utrzymaj go aż do 5-krotnego wzrostu.',
+        xp: 200, hidden: false,
+        check: () => {
+            const tracker = playerProfile?._unicornTracker;
+            if (!tracker) return false;
+            const stock = stocks.find(s => s.symbol === tracker.symbol);
+            if (!stock) return false;
+            return stock.price >= tracker.startPrice * 5;
+        }
+    },
+    abandon_fading_star: {
+        id: 'abandon_fading_star', icon: '🚢', title: 'Zejście z tonącego statku',
+        desc: 'Sprzedaj gasnącą gwiazdę (stanowiącą wcześniej co najmniej 5% aktywów) przed spadkiem kursu o 50% od startu gaśnięcia.',
+        xp: 100, hidden: false,
+        check: () => Boolean(playerProfile?._abandonedFadingStar)
+    },
+    value_trap: {
+        id: 'value_trap', icon: '🕳️', title: 'Pułapka wartości',
+        desc: 'Trzymaj gasnącą gwiazdę (stanowiącą co najmniej 5% aktywów) aż do jej spadku do giełdy Brązowej.',
+        xp: 50, hidden: true, hint: 'Gdy niska wycena zamiast okazji okazuje się biletem w jedną stronę...',
+        check: () => {
+            const held = typeof heldStocks === 'function' ? heldStocks() : [];
+            return held.some(s => s.marketStar?.type === 'fading_star' && (s.exchange === 'BRONZE' || s.exchange === 'JUNK'));
+        }
+    },
+    cold_blood: {
+        id: 'cold_blood', icon: '🧊', title: 'Zimna krew',
+        desc: 'W tygodniu z bezpiecznikiem giełdowym nie sprzedawaj akcji w panice i wyjdź na plus 2 kwartały później.',
+        xp: 120, hidden: false,
+        check: () => Boolean(playerProfile?._coldBloodAchieved)
+    },
+    first_bull_market: {
+        id: 'first_bull_market', icon: '🐂', title: 'Pierwsza hossa',
+        desc: 'Przejdź całą fazę Hossy z łącznym wynikiem funduszu wyższym lub równym indeksowi GIG.',
+        xp: 150, hidden: false,
+        check: () => Boolean(playerProfile?._firstBullMarketAchieved)
+    },
+    full_market_cycle: {
+        id: 'full_market_cycle', icon: '🧭', title: 'Pełny cykl',
+        desc: 'Przeżyj wszystkie 6 faz rynku (Akumulacja, Hossa, Euforia, Dystrybucja, Bessa, Kapitulacja).',
+        xp: 200, hidden: false,
+        check: () => {
+            const reg = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+            if (!reg || !reg.history) return false;
+            const seen = new Set(reg.history.map(h => h.phase));
+            if (reg.phase) seen.add(reg.phase);
+            return ['accumulation', 'bull', 'euphoria', 'distribution', 'bear', 'capitulation'].every(p => seen.has(p));
+        }
+    },
+    longer_than_market: {
+        id: 'longer_than_market', icon: '📈', title: 'Dłużej niż rynek',
+        desc: '20 lat zarządzania funduszem (80 kwartałów) z wynikiem funduszu wyższym lub równym indeksowi GIG.',
+        xp: 250, hidden: false,
+        check: () => {
+            const periods = playerFund?.periods || [];
+            if (periods.length < 20) return false;
+            const totalFund = periods.reduce((sum, p) => sum + (p.fundReturn || 0), 0);
+            const totalGig = periods.reduce((sum, p) => sum + (p.benchmarkReturn || 0), 0);
+            return totalFund >= totalGig;
+        }
+    }
+};
+
+function getPlayerAchievements() {
+    if (!playerProfile) return {};
+    if (!playerProfile.achievements) playerProfile.achievements = {};
+    return playerProfile.achievements;
+}
+
+function unlockAchievement(id) {
+    if (!playerProfile) return false;
+    const achievements = getPlayerAchievements();
+    if (achievements[id]) return false; // już zdobyte
+    const def = ACHIEVEMENTS[id];
+    if (!def) return false;
+
+    const curQ = typeof mentorQuarter === 'function' ? mentorQuarter() : 0;
+    achievements[id] = curQ;
+    playerProfile.xp = (playerProfile.xp || 0) + (def.xp || 100);
+    playerProfile.cv.push({ type: 'achievement', text: `${def.icon} Osiągnięcie: ${def.title} (+${def.xp} XP)` });
+
+    if (typeof pushNotification === 'function') {
+        pushNotification(`🏆 Osiągnięcie: ${def.title} (+${def.xp} XP)`, () => {
+            if (typeof openCareerModal === 'function') openCareerModal();
+        });
+    }
+    if (typeof logEvent === 'function') {
+        logEvent(`🏆 Zdobyto osiągnięcie: ${def.title} (+${def.xp} XP)`, 'review');
+    }
+    return true;
+}
+
+function checkAchievements() {
+    if (!playerProfile) return;
+    const achievements = getPlayerAchievements();
+    for (const [id, def] of Object.entries(ACHIEVEMENTS)) {
+        if (achievements[id]) continue;
+        try {
+            if (typeof def.check === 'function' && def.check()) {
+                unlockAchievement(id);
+            }
+        } catch (e) {
+            // błąd sprawdzania nie przerywa pętli
+        }
+    }
 }

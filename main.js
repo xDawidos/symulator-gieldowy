@@ -1346,7 +1346,8 @@ gameTimers.weekly = setGameInterval(() => {
             if (gig && gig.value > 0) marketHalt.weeklyStartGig = gig.value;
         }
         if (typeof checkAcademyTriggers === 'function') checkAcademyTriggers(); // N1: hasła Akademii przy pierwszym kontakcie
-        if (typeof checkMentorTasks === 'function') checkMentorTasks(); // N4: zadania mentora i certyfikaty
+        if (typeof checkMentorTasks === 'function') checkMentorTasks();
+        if (typeof checkAchievements === 'function') checkAchievements(); // N4: zadania mentora i certyfikaty
 
         // Fundusz gracza: opłata za zarządzanie, zaufanie, decyzje klientów
         processFundWeekly();

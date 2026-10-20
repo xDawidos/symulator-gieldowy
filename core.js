@@ -2349,10 +2349,16 @@ function advanceMarketRegimeQuarterly(market = 'home') {
         if (typeof logEvent === 'function') {
             logEvent(`[Nastrój Rynku] Potwierdzona faza rynku: ${curDef.name}.`, 'market');
         }
+        if (typeof getSkillLevel === 'function' && getSkillLevel('indexAnalystLvl1') >= 4 && typeof pushNews === 'function' && canPushMoodNews()) {
+            pushNews(`📊 Zmiana potwierdzonej fazy rynku: ${curDef.name}`);
+        }
     }
 
     // 3. Sprawdzenie zakończenia bieżącej fazy
     if (regime.quartersInPhase >= regime.phaseLength) {
+        if (regime.phase === 'bull' || regime.phase === 'bear') {
+            sendMarketPhaseRetrospective(regime.phase, regime);
+        }
         const isRetro = !regime.shownPhase;
         const gigChange = (gigVal - (regime.startGig || gigVal)) / (regime.startGig || 1);
         const gigPctStr = (gigChange >= 0 ? '+' : '') + (gigChange * 100).toFixed(0) + '%';
@@ -2399,6 +2405,63 @@ function advanceMarketRegimeQuarterly(market = 'home') {
         }
     } else {
         regime.quartersInPhase++;
+    }
+}
+
+
+let lastMoodNewsWeek = -99;
+
+function canPushMoodNews() {
+    const curWeek = typeof macro === 'object' && Number.isFinite(macro.quarter) 
+        ? macro.quarter * 4 + (macro.weekInQuarter || 0)
+        : 0;
+    if (curWeek - lastMoodNewsWeek >= 2) {
+        lastMoodNewsWeek = curWeek;
+        return true;
+    }
+    return false;
+}
+
+function sendMarketPhaseRetrospective(endedPhase, regime) {
+    const gigVal = getGigIndexValue();
+    const startGig = regime.startGig || gigVal;
+    const gigChange = (gigVal - startGig) / (startGig || 1);
+    const gigPct = (gigChange >= 0 ? '+' : '') + (gigChange * 100).toFixed(1) + '%';
+
+    const periods = (typeof playerFund !== 'undefined' && playerFund?.periods) ? playerFund.periods : [];
+    const fundChangeVal = periods.length ? (periods[periods.length - 1].fundReturn || 0) : 0;
+    const fundPct = (fundChangeVal >= 0 ? '+' : '') + (fundChangeVal * 100).toFixed(1) + '%';
+    const fundDd = (((typeof playerFund !== 'undefined' && playerFund?.current?.maxDrawdown) || 0) * 100).toFixed(1) + '%';
+    const gigDd = Math.abs((((regime.gigTrough || gigVal) - (regime.gigPeak || gigVal)) / (regime.gigPeak || 1)) * 100).toFixed(1) + '%';
+
+    let bestSector = 'Technologia';
+    let worstSector = 'Finanse';
+    if (typeof macro === 'object' && macro?.sectorCycles) {
+        const sorted = Object.entries(macro.sectorCycles).sort((a, b) => (b[1].phase === 'expansion' ? 1 : 0) - (a[1].phase === 'expansion' ? 1 : 0));
+        if (sorted.length > 0) {
+            bestSector = sorted[0][0];
+            worstSector = sorted[sorted.length - 1][0];
+        }
+    }
+
+    const phaseName = endedPhase === 'bull' ? 'Hossy' : 'Bessy';
+    if (typeof addMail === 'function') {
+        addMail({
+            sender: 'Dział Analiz Rynkowych',
+            subject: `Retrospektywa rynkowa: Zakończenie fazy ${phaseName}`,
+            body: `Zakończyła się faza ${phaseName}, która trwała ${regime.quartersInPhase} kwartałów na parkiecie.\n\n` +
+                  `Podsumowanie okresu:\n` +
+                  `• Wynik indeksu GIG: ${gigPct} (maks. obsunięcie fazy: ${gigDd})\n` +
+                  `• Wynik Twojego funduszu: ${fundPct} (maks. obsunięcie: ${fundDd})\n` +
+                  `• Najsilniejszy sektor: ${bestSector}\n` +
+                  `• Najsłabszy sektor: ${worstSector}\n\n` +
+                  `Lekcja inwestycyjna: Sprawdź w Akademii hasło „Fazy rynku i nastroje inwestorów” oraz „Korekta rynkowa”, aby lepiej przygotować portfel na kolejną fazę cyklu.`,
+            importance: 2
+        });
+    }
+
+    if (endedPhase === 'bull' && fundChangeVal >= gigChange) {
+        if (typeof playerProfile === 'object' && playerProfile) playerProfile._firstBullMarketAchieved = true;
     }
 }
 
@@ -2678,6 +2741,9 @@ function advanceSectorBubblesQuarterly() {
             };
             updateAllSectorPremiums();
 
+            if (typeof pushNews === 'function' && canPushMoodNews()) {
+                pushNews(`🫧 Nowa bańka spekulacyjna w branży ${picked.name}!`);
+            }
             // Powiadomienia SMSR:
             if (typeof isMarketStabilityProjectUnlocked === 'function') {
                 if (isMarketStabilityProjectUnlocked(2)) {
@@ -3159,6 +3225,9 @@ function reactCentralBankToCrash(forceCut = false) {
         centralBank.lastRateChange = -0.005;
         if (typeof logEvent === 'function') {
             logEvent(`🏛️ Bank Centralny zwołuje nadzwyczajne posiedzenie po krachu! Obniżka stopy bazowej o 50 pb do ${(newRate * 100).toFixed(1)}%!`, 'macro');
+        }
+        if (typeof pushNews === 'function') {
+            pushNews('🏛️ Bank Centralny obniża stopy procentowe o 50 pb w odpowiedzi na krach!');
         }
         if (typeof addMail === 'function') {
             addMail({
