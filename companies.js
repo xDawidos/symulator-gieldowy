@@ -6895,6 +6895,15 @@ function finalizeStartup(startup) {
     }
     const roll = Math.random();
 
+    // 0.15 H5 Okno IPO: przy wskaźniku strachu < 25 startup z 60% szansą przekłada debiut o <= 2 kw.
+    const regime = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+    const sentimentVal = regime?.sentiment ?? 50;
+    if (sentimentVal < 25 && Math.random() < 0.60 && !startup.operatorStartup) {
+        logEvent(`❄️ [Okno IPO] Ze względu na mroźny sentyment giełdowy (Strach: ${sentimentVal}), ${startup.name} odkłada debiut na lepsze czasy.`, 'market');
+        parkStartupForListing(startup, getRandomInRange(1.2, 2.5));
+        return;
+    }
+
     // KROK 2: Rozbudowana logika sprawdzania wyników
     if (roll > finalSuccessChance) {
         // --- GAŁĄŹ PORAŻKI ---
@@ -9011,7 +9020,14 @@ function handleSuccessfulIPO(startup, successMultiplier) {
     const totalClaims = claims.reduce((sum, claim) => sum + claim.amount, 0);
     const base = Math.max(totalClaims, startup.fundingGoal + (startup.ipoPriceBonus || 0));
     const ipoPrice = getRandomInRange(25, 50);
-    const totalShares = Math.max(1000, Math.floor(base * successMultiplier / ipoPrice));
+
+    // 0.15 H5 Okno IPO: mnożnik wyceny x (1 + premia rynku + premia sektora) w granicach 0.6–1.8
+    const regime = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+    const marketPrem = regime?.premium ?? 0;
+    const sectorPrem = startup.sectorPremium || 0;
+    const cycleValuationMultiplier = Math.max(0.6, Math.min(1.8, 1 + marketPrem + sectorPrem));
+
+    const totalShares = Math.max(1000, Math.floor(base * successMultiplier * cycleValuationMultiplier / ipoPrice));
     const investorShares = Math.floor(totalShares * STARTUP_INVESTORS_SHARE * (startup.operatorStartup ? 1 : getStartupTermsFactor())); // D2: gorsze warunki na nasyconym rynku
     let sharesHeld = 0;
 

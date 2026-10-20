@@ -1520,7 +1520,10 @@ const CLIENT_TYPES = {
     institution: { key: 'institution', label: 'Instytucja', icon: '🏛️', patience: 0.5,  volAversion: 0.8, chase: 1.0, loyalty: 0.3, size: [2000, 6000], buyBias: 0.5, secondaryBias: 0.5, feeSensitivity: 0.5, trustNeed: 0,   panic: false, comparesRivals: true },
     investor:    { key: 'investor',    label: 'Inwestor',   icon: '🐋', patience: 0.6,  volAversion: 0.6, chase: 1.2, loyalty: 0.4, size: [2000, 10000], buyBias: 0.7, secondaryBias: 0.8, feeSensitivity: 0.4, trustNeed: 0,  panic: false, comparesRivals: true },
     // 0.13: odchodzi, gdy spółki z udziałem funduszu > 10% mają niezadowoloną załogę albo szarą strefę (litera S w ESG).
-    ethical:     { key: 'ethical',     label: 'Etyczny',    icon: '🌱', patience: 0.6,  volAversion: 0.8, chase: 0.6, loyalty: 0.5, size: [500, 2500],  buyBias: 0.6, secondaryBias: 0.6, feeSensitivity: 0.3, trustNeed: 0,   panic: false, ethical: true }
+    ethical:     { key: 'ethical',     label: 'Etyczny',    icon: '🌱', patience: 0.6,  volAversion: 0.8, chase: 0.6, loyalty: 0.5, size: [500, 2500],  buyBias: 0.6, secondaryBias: 0.6, feeSensitivity: 0.3, trustNeed: 0,   panic: false, ethical: true },
+    // 0.15 H5: Nowe typy klientów
+    senior:      { key: 'senior',      label: 'Emeryt',     icon: '👴', patience: 0.8,  volAversion: 2.0, chase: 0.2, loyalty: 0.6, size: [200, 1000],  buyBias: 0.8, secondaryBias: 0.5, feeSensitivity: 0.4, trustNeed: 5,   panic: false, preference: 'defensive' },
+    modern:      { key: 'modern',      label: 'Nowoczesny', icon: '🚀', patience: 0.4,  volAversion: 0.5, chase: 1.5, loyalty: 0.2, size: [400, 2000],  buyBias: 1.0, secondaryBias: 1.1, feeSensitivity: 0.2, trustNeed: 0,   panic: false, preference: 'growth' }
 };
 
 const CLIENT_FIRST_NAMES = ['Anna', 'Piotr', 'Maria', 'Tomasz', 'Ewa', 'Jan', 'Kasia', 'Marek', 'Zofia', 'Adam', 'Halina', 'Krzysztof', 'Agata', 'Paweł', 'Irena'];
@@ -1577,6 +1580,75 @@ function getFundPortfolioValue() {
     let value = 0;
     for (const symbol in playerPortfolio) value += getHoldingMarketValue(symbol, playerPortfolio[symbol]);
     return value;
+}
+
+// 0.15 H5: Klasyfikacja sektorów defensywnych i nowoczesnych dla klientów (Emeryt / Nowoczesny)
+const DEFENSIVE_SECTORS = ['Żywność', 'Medycyna', 'Obronność', 'Energia', 'Usługi'];
+const MODERN_SECTORS = ['Technologia', 'Gaming'];
+const MODERN_SUBSECTORS = ['Biotechnologia', 'Fintech', 'Drony', 'OZE', 'Półprzewodniki', 'Sztuczna inteligencja', 'Robotyka'];
+
+function isStockDefensive(stock) {
+    if (!stock) return false;
+    const sec = Array.isArray(stock.sector) ? stock.sector[0] : stock.sector;
+    if (DEFENSIVE_SECTORS.includes(sec)) return true;
+    if (stock.subsector && DEFENSIVE_SECTORS.includes(stock.subsector)) return true;
+    if (Array.isArray(stock.tags) && stock.tags.some(t => DEFENSIVE_SECTORS.includes(t))) return true;
+    if (Array.isArray(stock.segments)) {
+        return stock.segments.some(seg => DEFENSIVE_SECTORS.includes(seg.sector));
+    }
+    return false;
+}
+
+function isStockModern(stock) {
+    if (!stock) return false;
+    const sec = Array.isArray(stock.sector) ? stock.sector[0] : stock.sector;
+    if (MODERN_SECTORS.includes(sec)) return true;
+    if (stock.subsector && MODERN_SUBSECTORS.includes(stock.subsector)) return true;
+    if (Array.isArray(stock.tags) && stock.tags.some(t => MODERN_SECTORS.includes(t) || MODERN_SUBSECTORS.includes(t))) return true;
+    if (Array.isArray(stock.segments)) {
+        return stock.segments.some(seg => MODERN_SECTORS.includes(seg.sector) || MODERN_SUBSECTORS.includes(seg.subsector));
+    }
+    return false;
+}
+
+function getFundPortfolioDefensiveShare() {
+    const total = getFundPortfolioValue();
+    if (total <= 0) return 0;
+    let defVal = 0;
+    for (const symbol in playerPortfolio) {
+        const holding = playerPortfolio[symbol];
+        if (holding?.assetType === 'Startup') continue;
+        const stock = stocks.find(s => s.symbol === symbol);
+        if (stock && isStockDefensive(stock)) {
+            defVal += getHoldingMarketValue(symbol, holding);
+        }
+    }
+    return defVal / total;
+}
+
+function getFundPortfolioModernShare() {
+    const total = getFundPortfolioValue();
+    if (total <= 0) return 0;
+    let modVal = 0;
+    for (const symbol in playerPortfolio) {
+        const holding = playerPortfolio[symbol];
+        if (holding?.assetType === 'Startup') continue;
+        const stock = stocks.find(s => s.symbol === symbol);
+        if (stock && isStockModern(stock)) {
+            modVal += getHoldingMarketValue(symbol, holding);
+        }
+    }
+    return modVal / total;
+}
+
+function fundSatisfiesClientPreference(type) {
+    if ((type === 'retiree' || type === 'senior')) {
+        return getFundPortfolioDefensiveShare() >= 0.50;
+    }
+    if (type === 'modern') {
+        return getFundPortfolioModernShare() >= 0.50;
+    }
+    return true;
 }
 
 function getFundAssets() {
@@ -3467,7 +3539,7 @@ function checkVictory() {
 // kupują fikcyjni uczestnicy z zewnątrz (nowi klienci) i klienci innych funduszy szukający okazji.
 // Gracz tylko obserwuje — nie handluje na tym rynku.
 
-const CLIENT_CHARACTER_KEYS = ['sly', 'careful', 'fearful', 'brave', 'rich', 'miser'];
+const CLIENT_CHARACTER_KEYS = ['sly', 'careful', 'fearful', 'brave', 'rich', 'miser', 'senior', 'modern'];
 
 // Migracja starych typów (etap B) na charaktery.
 const LEGACY_CLIENT_TYPES = { retiree: 'careful', saver: 'miser', speculator: 'sly', loyal: 'brave' };
@@ -3488,7 +3560,9 @@ const CLIENT_MOTIVES = {
     miser: ['Liczy każdą złotówkę opłat.', 'Kupuje tylko z rabatem.', 'Opłata za zarządzanie to dla niego zdrada.'],
     institution: ['Mandat inwestycyjny zarządu.', 'Długoterminowa lokata instytucji.'],
     investor: ['Wielki inwestor szukający alfy.', 'Testuje nowego zarządcę.'],
-    ethical: ['Nie chce zarabiać na krzywdzie ludzi.', 'Sprawdza, jak spółki traktują pracowników.', 'Inwestuje zgodnie z ESG.']
+    ethical: ['Nie chce zarabiać na krzywdzie ludzi.', 'Sprawdza, jak spółki traktują pracowników.', 'Inwestuje zgodnie z ESG.'],
+    senior: ['Odkłada na spokojną jesień życia.', 'Szuka stabilności w spółkach defensywnych.', 'Zależy mu na bezpieczeństwie kapitału.'],
+    modern: ['Stawia na innowacje i spółki przyszłości.', 'Interesują go tylko nowe technologie i trendy.', 'Chce płynąć na fali nowoczesnej gospodarki.']
 };
 const CLIENT_NAMES = ['Anna', 'Piotr', 'Maria', 'Tomasz', 'Ewa', 'Jan', 'Kasia', 'Marek', 'Zofia', 'Adam', 'Halina', 'Krzysztof', 'Agata', 'Paweł', 'Irena',
     'Bartek', 'Ola', 'Kamil', 'Jadwiga', 'Stefan', 'Iga', 'Mateusz', 'Bożena', 'Rafał', 'Wanda', 'Szymon', 'Natalia', 'Edward', 'Kinga', 'Leon'];
@@ -3513,7 +3587,7 @@ function getClientCharacter(client) {
 }
 
 function randomCharacter(trust = 50) {
-    const weights = { sly: 1.2, careful: 1.4, fearful: 1, brave: 0.8 + trust / 100, rich: 0.3 + trust / 200, miser: 1, ethical: 0.6 };
+    const weights = { sly: 1.2, careful: 1.4, fearful: 1, brave: 0.8 + trust / 100, rich: 0.3 + trust / 200, miser: 1, ethical: 0.6, senior: 0.8, modern: 0.9 };
     const total = Object.values(weights).reduce((sum, w) => sum + w, 0);
     let roll = Math.random() * total;
     for (const [key, weight] of Object.entries(weights)) {
@@ -3577,8 +3651,8 @@ const SATISFACTION_UNHAPPY = 0.35;
 const FUND_FLOW_WARN_SHARE = 0.10;      // ostrzeżenie: napływ lub odpływ w kwartale > 10% udziałów
 const ORGANIC_INFLOW_BASE = 0.02;       // roczny napływ nowych klientów przy zaufaniu 50 i wyniku = GIG
 const TOPUP_INFLOW_BASE = 0.015;        // roczne dopłaty obecnych klientów przy wyniku = GIG (zależne od wielkości funduszu)
-const FUND_FLOW_OUT_REASONS = { performance: '📉 wynik gorszy od GIG', trust: '🤝 niskie zaufanie', fees: '💸 opłaty', drawdown: '🎢 obsunięcie', noBuyer: '🛒 brak kupca na rynku wtórnym', panic: '😱 panika', ethics: '🌱 etyka spółek', other: '❔ inne' };
-const FUND_FLOW_IN_REASONS = { topup: '➕ dopłaty obecnych klientów', newClients: '🆕 nowi klienci', emission: '📥 Twoja emisja' };
+const FUND_FLOW_OUT_REASONS = { performance: '📉 wynik gorszy od GIG', trust: '🤝 niskie zaufanie', fees: '💸 opłaty', drawdown: '🎢 obsunięcie', noBuyer: '🛒 brak kupca na rynku wtórnym', panic: '😱 panika', ethics: '🌱 etyka spółek', fashion: '🤑 moda na akcje', other: '❔ inne' };
+const FUND_FLOW_IN_REASONS = { topup: '➕ dopłaty obecnych klientów', newClients: '🆕 nowi klienci', emission: '📥 Twoja emisja', fashion: '🤑 moda na akcje' };
 
 function createFundFlowQuarter(quarter) {
     return { quarter, startUnits: playerFund?.units || 0, in: {}, out: {}, inUnits: 0, outUnits: 0, warned: false };
@@ -3727,17 +3801,69 @@ function processClientsWeekly() {
         const satisfied = client.satisfaction >= 0.6;
         const highTrust = trust >= getTrustThreshold(def);
 
+        // 0.15 H5: Cykliczne warunki paniki i preferencji sektorowych
+        const regime = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+        const sentimentVal = regime?.sentiment ?? 50;
+        const gigVal = typeof getGigIndexValue === 'function' ? getGigIndexValue() : 1000;
+        const gigPeak = regime?.gigPeak || gigVal;
+        const gigDrawdownFromPeak = gigPeak > 0 ? (gigVal - gigPeak) / gigPeak : 0;
+        const isBearOrCapitulation = regime?.phase === 'bear' || regime?.phase === 'capitulation';
+        const isExtremeFearDrop = gigDrawdownFromPeak <= -0.10 && sentimentVal < 25;
+
+        // 😨 Strachliwy: szansa paniki x2 w bessie/kapitulacji lub przy spadku GIG <= -10% i sentymencie < 25
+        let panicMultiplier = 1;
+        if (def.key === 'fearful' && (isBearOrCapitulation || isExtremeFearDrop)) {
+            panicMultiplier = 2;
+        }
+
+        // 🦊 Spryciarz: odchodzi po 1 kwartale z wynikiem funduszu <= -5%
+        const periodReturn = getPeriodReturn(current.startNav, nav);
+        if (def.key === 'sly' && current.elapsedMs >= FUND_PERIOD_MS / 3 && periodReturn <= -0.05) {
+            if (redemptionBudget > 0 && client.units > 0) {
+                const units = Math.min(redemptionBudget, client.units);
+                const paid = redeemClientUnits(client, units);
+                redemptionBudget -= units;
+                noteFundFlow('out', 'performance', paid, units);
+                noteClientHistory(client, `Spryciarz ucieka przed stratami (wynik kwartału ${(periodReturn * 100).toFixed(1)}%) — umarza ${units.toFixed(1)} udziałów.`);
+                continue;
+            }
+        }
+
+        // Emeryt / Nowoczesny: sprawdzenie zadowolenia z portfela
+        const meetsPreference = fundSatisfiesClientPreference(def.key);
+        if (!meetsPreference && ((def.key === 'retiree' || def.key === 'senior') || def.key === 'modern')) {
+            client.satisfaction = Math.max(0, client.satisfaction - 0.05);
+        }
+
         if (unhappy) {
             if (client.loyal && Math.random() < 0.9) continue;
-            if (Math.random() >= (1 - def.patience) * 0.8 || redemptionBudget <= 0) continue;
-            const fraction = client.satisfaction < 0.15 || def.panic ? 1 : getRandomInRange(0.25, 0.6);
-            const units = Math.min(redemptionBudget, Math.max(1, client.units * fraction));
+            if (Math.random() >= (1 - def.patience) * 0.8 * panicMultiplier || redemptionBudget <= 0) continue;
+
+            const isPanic = def.panic || (def.key === 'fearful' && panicMultiplier > 1);
+            const fraction = client.satisfaction < 0.15 || isPanic ? 1 : getRandomInRange(0.25, 0.6);
+            let units = Math.min(redemptionBudget, Math.max(1, client.units * fraction));
+
+            // 0.15 H5 limit: odpływ z przyczyny paniki <= 8% JU na kwartał
+            const flowQuarter = getFundFlowStats()?.current;
+            if (isPanic && flowQuarter) {
+                const startUnits = Math.max(1, flowQuarter.startUnits || playerFund.units);
+                const panicCapUnits = Math.max(1, startUnits * 0.08);
+                const currentPanicUnits = flowQuarter.panicUnitsRedeemed || 0;
+                const allowedPanicUnits = Math.max(0, panicCapUnits - currentPanicUnits);
+                units = Math.min(units, allowedPanicUnits);
+                if (units <= 0) continue; // limit paniki na ten kwartał wyczerpany
+                flowQuarter.panicUnitsRedeemed = currentPanicUnits + units;
+            }
+
             const paid = redeemClientUnits(client, units);
             redemptionBudget -= units;
-            noteFundFlow('out', getDominantOutflowReason(parts, def, fraction), paid, units);
+            const outflowReason = isPanic ? 'panic' : getDominantOutflowReason(parts, def, fraction);
+            noteFundFlow('out', outflowReason, paid, units);
             noteClientHistory(client, `Niezadowolony — umarza ${units.toFixed(1)} udziałów (${paid.toFixed(0)} PLN).`);
         } else if (satisfied && highTrust) {
-            if (!isFundOpenForSubscriptions() || Math.random() >= def.buyBias * 0.3 || newMoneyBudget <= 0) continue; // 0.13.1 (B5): nowe udziały tylko przy otwartej emisji
+            // Emeryt kupuje tylko, gdy portfel w większości defensywny; Nowoczesny na odwrót
+            if (!meetsPreference && ((def.key === 'retiree' || def.key === 'senior') || def.key === 'modern')) continue;
+            if (!isFundOpenForSubscriptions() || Math.random() >= def.buyBias * 0.3 || newMoneyBudget <= 0) continue;
             const value = Math.min(newMoneyBudget, getRandomInRange(def.size[0], def.size[1]) * 0.4);
             const units = subscribeClient(client, value);
             newMoneyBudget -= value;
@@ -3745,12 +3871,12 @@ function processClientsWeekly() {
             noteClientHistory(client, `Dokupuje ${units.toFixed(1)} udziałów za ${value.toFixed(0)} PLN.`);
             pushTape('topup', `${def.icon} ${client.name} dokupuje ${units.toFixed(1)} udziałów funduszu ${playerProfile.fundName} (${formatPlnShort(value)}).`);
         } else if (satisfied && !highTrust) {
-            if (Math.random() >= def.secondaryBias * 0.15) continue; // B5: niskie zaufanie słabiej wypycha zadowolonych
+            if (Math.random() >= def.secondaryBias * 0.15) continue;
             client.pendingSellUnits = client.units * getRandomInRange(0.2, def.key === 'sly' ? 0.6 : 0.45);
             client.pendingSellWeeks = 0;
             noteClientHistory(client, `Zadowolony z wyników, ale nie ufa funduszowi — wystawia ${client.pendingSellUnits.toFixed(1)} udziałów na rynku wtórnym.`);
         } else if (def.key === 'sly' && (juMarket.stats.player?.history[0]?.premium || 0) > 0.03 && Math.random() < 0.3) {
-            client.pendingSellUnits = client.units * getRandomInRange(0.2, 0.5); // realizacja premii
+            client.pendingSellUnits = client.units * getRandomInRange(0.2, 0.5);
             client.pendingSellWeeks = 0;
             noteClientHistory(client, 'Premia na rynku wtórnym — wystawia część udziałów, by zrealizować zysk.');
         }
@@ -3795,10 +3921,25 @@ function generateOutsideBuyers(fund, scale = 1) {
     const expected = Math.max(0, (fund.trust - 35) / 18 + fund.ret * 20);
     const count = Math.min(8, Math.floor(expected + Math.random()));
     const buyers = [];
+    const regime = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+    const sentimentVal = regime?.sentiment ?? 50;
+
     for (let i = 0; i < count; i++) {
-        const key = randomCharacter(fund.trust);
+        let key = randomCharacter(fund.trust);
+        // 🦊 Spryciarz: napływ x1.5 przy wskaźniku > 75 (szansa na dodatkowego spryciarza)
+        if (sentimentVal > 75 && Math.random() < 0.35) {
+            key = 'sly';
+        }
+        // Emeryt kupuje tylko przy >=50% defensywnych, Nowoczesny przy >=50% nowoczesnych
+        if (fund.kind === 'player' && !fundSatisfiesClientPreference(key)) {
+            continue;
+        }
         const def = CLIENT_TYPES[key];
-        buyers.push({ name: randomClientPersonName(), key, def, value: getRandomInRange(def.size[0], def.size[1]) * scale });
+        let buyerScale = scale;
+        if (key === 'sly' && sentimentVal > 75) {
+            buyerScale *= 1.5;
+        }
+        buyers.push({ name: randomClientPersonName(), key, def, value: getRandomInRange(def.size[0], def.size[1]) * buyerScale });
     }
     return buyers;
 }
@@ -3820,8 +3961,12 @@ function runPlayerJuMarket(fund) {
     const price = nav * (1 + premium);
     let volume = 0, newClients = 0, inflow = 0;
 
-    // Sknera kupuje tylko z dyskontem.
-    buyers = buyers.filter(buyer => buyer.key !== 'miser' || premium <= -0.02);
+    // Sknera kupuje tylko z dyskontem; Emeryt i Nowoczesny wg preferencji portfela.
+    buyers = buyers.filter(buyer => {
+        if (buyer.key === 'miser' && premium > -0.02) return false;
+        if (!fundSatisfiesClientPreference(buyer.key)) return false;
+        return true;
+    });
 
     for (const seller of sellers) {
         while (seller.pendingSellUnits > 0.01 && buyers.length) {
@@ -3869,7 +4014,8 @@ function runPlayerJuMarket(fund) {
             pushTape('new', `🆕 Nowy klient: ${buyer.def.icon} ${client.name} (${buyer.def.label}) wpłaca ${formatPlnShort(value)} do funduszu ${fund.name}.`);
         }
         const units = subscribeClient(client, value);
-        noteFundFlow('in', 'newClients', value, units);
+        const inflowReason = (typeof getMarketRegime === 'function' && getMarketRegime('home')?.sentiment > 75) ? 'fashion' : 'newClients';
+        noteFundFlow('in', inflowReason, value, units);
         noteClientHistory(client, `Wpłaca ${value.toFixed(0)} PLN (${units.toFixed(1)} udziałów po NAV).`);
         inflow += value;
         budget -= value;
@@ -3884,8 +4030,8 @@ function runPlayerJuMarket(fund) {
 
 const MARKETING_TARGETS = {
     premium: { label: 'Zamożni klienci', icon: '💎', keys: ['rich', 'investor'] },
-    safe:    { label: 'Ostrożni oszczędzający', icon: '🛡️', keys: ['careful', 'fearful', 'miser'] },
-    dynamic: { label: 'Dynamiczni inwestorzy', icon: '🦁', keys: ['brave', 'sly'] }
+    safe:    { label: 'Ostrożni oszczędzający', icon: '🛡️', keys: ['careful', 'fearful', 'miser', 'senior'] },
+    dynamic: { label: 'Dynamiczni inwestorzy', icon: '🦁', keys: ['brave', 'sly', 'modern'] }
 };
 const MARKETING_WEEKS = 8;
 

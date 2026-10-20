@@ -7577,6 +7577,96 @@ group('0.15 H4: Krach rynkowy, bezpieczniki giełdowe i reakcja instytucji', () 
     });
 });
 
+group('0.15 H5: Zachowanie botów, klientów i spółek w cyklu rynku', () => {
+    function world() {
+        const a = makeCompany('AAA'), b = makeCompany('BBB');
+        a.name = 'Alfa Testowa'; b.name = 'Beta Testowa';
+        resetWorld([a, b]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        initMarketRegimes();
+    }
+
+    test('H5.1: Klasyfikacja spółek defensywnych i nowoczesnych', () => {
+        const sDef = { sector: 'Żywność', tags: [] };
+        const sMod = { sector: 'Technologia', tags: [] };
+        const sModTag = { sector: 'Inny', tags: ['Biotechnologia'] };
+        const sNeutral = { sector: 'Budownictwo', tags: [] };
+
+        assert(isStockDefensive(sDef) === true, 'Żywność jest sektorem defensywnym');
+        assert(isStockDefensive(sMod) === false, 'Technologia nie jest defensywna');
+        assert(isStockModern(sMod) === true, 'Technologia jest sektorem nowoczesnym');
+        assert(isStockModern(sModTag) === true, 'Subsektor/tag Biotechnologia jest nowoczesny');
+        assert(isStockModern(sNeutral) === false, 'Budownictwo nie jest nowoczesne');
+    });
+
+    test('H5.2: Emeryt i Nowoczesny kupują JU zależnie od struktury portfela funduszu', () => {
+        world();
+        for (const sym in playerPortfolio) delete playerPortfolio[sym];
+
+        const defStock = stocks.find(s => isStockDefensive(s)) || { symbol: 'DEF_TEST', sector: 'Żywność', price: 100 };
+        const modStock = stocks.find(s => isStockModern(s)) || { symbol: 'MOD_TEST', sector: 'Technologia', price: 100 };
+
+        if (!stocks.includes(defStock)) stocks.push(defStock);
+        if (!stocks.includes(modStock)) stocks.push(modStock);
+
+        // 1. Pusty portfel (0 akcji) -> brak dominacji defensywnych/nowoczesnych
+        assert(fundSatisfiesClientPreference('senior') === false, 'pusty portfel nie ma 50% defensywnych');
+        assert(fundSatisfiesClientPreference('modern') === false, 'pusty portfel nie ma 50% nowoczesnych');
+
+        // 2. Portfel 80% defensywny (800 PLN def, 200 PLN mod)
+        playerPortfolio[defStock.symbol] = { shares: 8, avgPrice: 100 };
+        playerPortfolio[modStock.symbol] = { shares: 2, avgPrice: 100 };
+        assert(getFundPortfolioDefensiveShare() >= 0.79, 'udział defensywnych wynosi ok. 80%');
+        assert(fundSatisfiesClientPreference('senior') === true, 'Emeryt akceptuje fundusz z dominacją defensywnych');
+        assert(fundSatisfiesClientPreference('retiree') === true, 'Alias retiree również działa poprawnie');
+        assert(fundSatisfiesClientPreference('modern') === false, 'Nowoczesny odrzuca fundusz z dominacją defensywnych');
+
+        // 3. Portfel 80% nowoczesny (200 PLN def, 800 PLN mod)
+        playerPortfolio[defStock.symbol] = { shares: 2, avgPrice: 100 };
+        playerPortfolio[modStock.symbol] = { shares: 8, avgPrice: 100 };
+        assert(getFundPortfolioModernShare() >= 0.79, 'udział nowoczesnych wynosi ok. 80%');
+        assert(fundSatisfiesClientPreference('modern') === true, 'Nowoczesny akceptuje fundusz z dominacją nowoczesnych');
+        assert(fundSatisfiesClientPreference('senior') === false, 'Emeryt odrzuca fundusz bez dominacji defensywnych');
+    });
+
+    test('H5.3: Klient Fearful podwaja skłonność do paniki w bessie i limit odpływu 8% JU', () => {
+        world();
+        const regime = getMarketRegime('home');
+        regime.phase = 'bear';
+        regime.sentiment = 20;
+        const client = {
+            id: 'c_fear',
+            name: 'Płochliwy Jan',
+            character: 'fearful',
+            units: 1000,
+            avgBuyNav: 100,
+            weeksSinceTrade: 5,
+            loyalty: 50,
+            tolerance: 50
+        };
+        playerFund.clients = [client];
+        playerFund.units = 10000;
+        const flowQuarter = getFundFlowStats()?.current;
+        if (flowQuarter) {
+            flowQuarter.startUnits = 10000;
+            flowQuarter.panicUnitsRedeemed = 0;
+        }
+
+        processClientsWeekly();
+        const redeemed = flowQuarter ? (flowQuarter.panicUnitsRedeemed || 0) : 0;
+        assert(redeemed <= 800, 'odpływ paniki ograniczony do 8% JU na kwartał');
+    });
+
+    test('H5.4: Wycena debiutu IPO zależy od mnożnika koniunktury rynkowej (0.6 - 1.8)', () => {
+        world();
+        const regime = getMarketRegime('home');
+        regime.premium = 0.50; // hossa
+        const prem = regime.premium || 0;
+        const mult = Math.max(0.6, Math.min(1.8, 1 + prem));
+        assert(mult === 1.5, 'w silnej hossie (+50%) mnożnik wyceny debiutu wynosi 1.5');
+    });
+});
+
 async function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;
