@@ -2032,7 +2032,8 @@ function renderMarketsPanel() {
         op.members = stocks.filter(s => getStockMarket(s) === op.id && !s.isBankrupt && s.assetType !== 'Startup').length;
     }
 
-    const cards = Object.values(marketOperators).map(operator => {
+    const activeOperators = Object.values(marketOperators).filter(operator => operator.status === 'active');
+    const cards = activeOperators.map(operator => {
         const def = getMarketDef(operator.id) || { name: operator.id, commission: 0, color: '#888' };
         const stock = operator.symbol ? stocks.find(s => s.symbol === operator.symbol) : null;
         const startup = operator.startupSymbol ? stocks.find(s => s.symbol === operator.startupSymbol && s.assetType === 'Startup') : null;
