@@ -922,16 +922,16 @@ function buildAgmAgenda(stock) {
     return items;
 }
 
-/** 0.15.0.1 C4: wycena akcji spółki na tle rynku — drogie (premia rynku > +15% albo kurs ≥ 1,3 × wartości godziwej) lub tanie. */
+/** 0.15.0.1 C4: wycena akcji spółki na tle rynku — drogie (premia rynku > +10% albo kurs ≥ 1,3 × wartości godziwej) lub tanie. */
 function getShareValuationMood(stock) {
     const premium = typeof getMarketRegime === 'function' ? Number(getMarketRegime('home')?.premium) || 0 : 0;
     const fair = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(stock) : null;
     const ratio = fair > 0 ? stock.price / fair : 1;
-    return { expensive: premium > 0.15 || ratio >= 1.3, cheap: premium < -0.15 || ratio <= 0.75 };
+    return { expensive: premium > 0.10 || ratio >= 1.3, cheap: premium < -0.15 || ratio <= 0.75 };
 }
 
 /**
- * Uchwała kapitałowa zarządu (najwyżej jedna na walne): emisja przy braku gotówki albo drogich akcjach
+ * Uchwała kapitałowa zarządu (najwyżej jedna na walne): emisja przy braku gotówki (rzadziej, gdy akcje tanie) albo drogich akcjach
  * (×2 w sektorze bańki), skup przy nadmiarze gotówki (gdy akcje nie są drogie) albo tanich akcjach.
  */
 function getCapitalAgmProposal(stock) {
@@ -939,7 +939,7 @@ function getCapitalAgmProposal(stock) {
     const { expensive, cheap } = getShareValuationMood(stock);
     const issue = reason => ({ id: 'issue', kind: 'board', type: 'issue', reason, label: reason === 'expensive' ? 'Emisja 10% nowych akcji przy wysokiej wycenie' : 'Emisja 10% nowych akcji' });
     const buyback = reason => ({ id: 'buyback', kind: 'board', type: 'buyback', reason, label: reason === 'cheap' ? 'Program skupu akcji własnych przy niskiej wycenie' : 'Program skupu akcji własnych' });
-    if (stock.cash < cap * 0.03 && Math.random() < 0.5) return issue('cash');
+    if (stock.cash < cap * 0.03 && Math.random() < (cheap ? 0.2 : 0.5)) return issue('cash'); // przy tanich akcjach zarząd woli kredyt niż emisję
     if (expensive && Math.random() < (typeof isCompanyInSectorBubble === 'function' && isCompanyInSectorBubble(stock) ? 0.6 : 0.3)) return issue('expensive');
     if (stock.cash > cap * 0.15 && !expensive && Math.random() < 0.5) return buyback('cash');
     if (cheap && stock.cash > cap * 0.05 && Math.random() < 0.4) return buyback('cheap');

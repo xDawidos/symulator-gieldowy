@@ -8320,6 +8320,13 @@ group('0.15.0.1: Poprawki 0.15 (bezpiecznik, margin call, pieniądze, emisje, kr
         assertEq(capitalShare(a, 'issue', 2000), 0, 'bez emisji przy tanich akcjach i zapasie gotówki');
         getMarketRegime('home').premium = 0;
         assertEq(capitalShare(a, 'buyback', 2000) + capitalShare(a, 'issue', 2000), 0, 'neutralna wycena — bez uchwały kapitałowej');
+        getMarketRegime('home').premium = 0.12;
+        assert(Math.abs(capitalShare(a, 'issue') - 0.30) <= 0.02, 'górna część Hossy (premia > +10%) to już drogie akcje');
+        a.cash = getMarketCapValue(a) * 0.01; // brak gotówki
+        getMarketRegime('home').premium = 0;
+        assert(Math.abs(capitalShare(a, 'issue') - 0.50) <= 0.02, 'brak gotówki: emisja 50%');
+        getMarketRegime('home').premium = -0.20;
+        assert(Math.abs(capitalShare(a, 'issue') - 0.20) <= 0.02, 'brak gotówki przy tanich akcjach: emisja 20% (zarząd woli kredyt)');
         // Szansa emisji ratunkowej w cyklu zdarzeń jest stała (bez mnożnika premii); wybór spółki bez wagi bańki.
         assert(!/premium/.test(triggerMainMarketEventCycle.toString()) && !/Bubble/.test(triggerRescueOfferingEvent.toString()), 'emisja ratunkowa bez nastroju rynku');
     });
