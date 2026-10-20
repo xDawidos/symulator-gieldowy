@@ -7809,6 +7809,23 @@ group('0.15 Poprawki i Program Policyjny: Windykator, raporty, rynki i Policja',
         }
         assert(depositVal === 1200, 'państwowa dopłata 20% podnosi wkład do 1200 PLN');
     });
+
+    test('P5: renderCompanyCard renderuje kafelki KPI (funkcja tile) bez błędów ReferenceError', () => {
+        world();
+        companyCardView.symbol = 'AAA';
+        const ids = ['company-card-header', 'company-card-kpis', 'company-card-tabs', 'company-card-body'];
+        ids.forEach(id => {
+            if (!document.getElementById(id)) {
+                const el = document.createElement('div');
+                el.id = id;
+                document.body.appendChild(el);
+            }
+        });
+        renderCompanyCard();
+        const kpis = document.getElementById('company-card-kpis');
+        assert(kpis && kpis.innerHTML.includes('Kapitalizacja'), 'kafelki KPI zawierają Kapitalizację');
+        assert(kpis.innerHTML.includes('C/Z'), 'kafelki KPI zawierają C/Z');
+    });
 });
 
 

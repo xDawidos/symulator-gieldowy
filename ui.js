@@ -3907,6 +3907,7 @@ function renderCompanyCard() {
     // N1: porównanie z medianą sektora pod wartością kafelka.
     const med = typeof getSectorMedians === 'function' ? getSectorMedians(getMainSector(stock)) : null;
     const vs = (value, sectorValue, options) => { const c = med && typeof compareWithSector === 'function' ? compareWithSector(value, sectorValue, options) : null; return c ? `<em class="${c.cls}">${c.text}</em>` : ''; };
+    const tile = (label, value, hint, cls = '', extra = '') => `<div class="cc-kpi" title="${escapeHtml(hint)}"><span>${label}</span><strong class="${cls}">${value}</strong>${extra}</div>`;
     const pctFmt = v => `${formatNumberPl(v * 100, 1)}%`;
     const hasIndexLvl5 = typeof getSkillLevel === 'function' && getSkillLevel('indexAnalystLvl1') >= 5;
     const hasSmsrRadar = typeof isMarketStabilityProjectUnlocked === 'function' && isMarketStabilityProjectUnlocked(2);
