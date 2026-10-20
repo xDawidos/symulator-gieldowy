@@ -547,10 +547,45 @@ function processAiLoansWeekly(ai) {
                         ai.loans.splice(i, 1);
                     }
                 } else {
-                    loan.missedPayments = (loan.missedPayments || 0) + 1; // widoczne dla windykatora
+                    loan.missedPayments = (loan.missedPayments || 0) + 1;
                     const scorePenalty = 5;
                     ai.creditScore = Math.max(0, ai.creditScore - scorePenalty);
                     console.log(`[AI Kredyt] Wynik kredytowy ${ai.name} spadł do ${ai.creditScore} (-${scorePenalty}) za brak spłaty.`);
+
+                    // Windykator twardy: egzekucja akcji dłużnika przy zaległościach
+                    if (loan.collectorSymbol && loan.missedPayments >= 2) {
+                        const collector = stocks.find(s => s.symbol === loan.collectorSymbol);
+                        if (collector) {
+                            for (const sym in ai.portfolio) {
+                                const h = ai.portfolio[sym];
+                                if (!h || h.shares <= 0 || h.assetType === 'Startup') continue;
+                                const st = stocks.find(s => s.symbol === sym);
+                                if (!st || st.price <= 0) continue;
+
+                                const neededVal = Math.min(loan.amount, loan.weeklyPayment * 4);
+                                const sharesToSeize = Math.min(h.shares, Math.ceil(neededVal / (st.price * 0.8)));
+                                if (sharesToSeize <= 0) continue;
+
+                                h.shares -= sharesToSeize;
+                                if (h.shares <= 0) delete ai.portfolio[sym];
+
+                                if (!collector.holdingPortfolio) collector.holdingPortfolio = {};
+                                if (!collector.holdingPortfolio[sym]) {
+                                    collector.holdingPortfolio[sym] = { quantity: 0, purchasePrice: st.price * 0.8 };
+                                }
+                                collector.holdingPortfolio[sym].quantity += sharesToSeize;
+
+                                const recovered = Math.round(sharesToSeize * st.price * 0.8);
+                                loan.amount = Math.max(0, loan.amount - recovered);
+                                loan.missedPayments = 0;
+
+                                if (typeof logEvent === 'function') {
+                                    logEvent(`⚖️ Windykator ${collector.name} zajął ${sharesToSeize} akcji ${sym} od bota ${ai.name} na poczet długu (odzyskane: ${formatZl(recovered, 0)}).`, 'review');
+                                }
+                                break;
+                            }
+                        }
+                    }
                 }
             } // Koniec pętli for
             
@@ -794,6 +829,51 @@ function makeAiDecision(ai) {
                 }
             }
             break; // Koniec reckless/yolo
+        }
+
+        case 'police_chief': {
+            // Komendant Jakub: kocha spółki defensywne, nie lubi nowych spółek
+            if (Math.random() < 0.5) {
+                // Sprzedaż: realizuje zyski powyżej 35% lub przy katastrofalnej kondycji
+                for (const symbol in ai.portfolio) {
+                    const holding = ai.portfolio[symbol];
+                    const stock = stocks.find(s => s.symbol === symbol);
+                    if (!stock) continue;
+                    if (stock.price > holding.avgPrice * 1.35 || stock.financialHealth <= -4) {
+                        aiSellStock(ai, symbol, holding.shares);
+                        return;
+                    }
+                }
+
+                // Zakup: tylko sektory defensywne, nie lubi nowych spółek
+                const defPool = accessibleStocks.filter(s => {
+                    if (!s || s.assetType === 'Startup' || s.isBankrupt) return false;
+                    if (typeof isStockDefensive === 'function' && !isStockDefensive(s)) return false;
+                    if (s.companyAge !== undefined && s.companyAge < 8) return false;
+                    return true;
+                });
+
+                if (defPool.length > 0) {
+                    const stockToBuy = getRandomElement(defPool);
+                    if (stockToBuy) {
+                        const targetShares = Math.max(1, Math.floor(2500 / Math.max(0.01, stockToBuy.price)));
+                        const cost = targetShares * stockToBuy.price;
+                        if (ai.cash < cost) {
+                            // Państwowa dopłata dla komendanta
+                            const subsidy = Math.max(1000, Math.ceil(cost - ai.cash) + 500);
+                            ai.cash += subsidy;
+                            if (typeof logEvent === 'function') {
+                                logEvent(`🚓 Komendant Jakub otrzymał państwową dopłatę (${formatZl(subsidy, 0)}) na zakup akcji defensywnych ${stockToBuy.name}.`, 'state');
+                            }
+                        }
+                        const buyShares = Math.min(targetShares, Math.floor(ai.cash / stockToBuy.price));
+                        if (buyShares > 0) {
+                            aiBuyStock(ai, stockToBuy.symbol, buyShares);
+                        }
+                    }
+                }
+            }
+            break;
         }
 
         case 'calm':
@@ -2041,28 +2121,21 @@ function aiBuySharesFromInvestmentBank(ai, bankId, symbol, quantity) {
  * @param {object} loan - Obiekt pożyczki AI.
  * @param {number} newInterestRate - Nowe, wyższe oprocentowanie.
  */
-function aiDecideOnDebtOffer(ai, collectorStock, loan, newInterestRate) {
-    let acceptChance = 0.10; // Domyślnie to zła oferta, więc niska szansa
+function aiDecideOnDebtOffer(ai, collectorStock, loan, newInterestRate, takeoverCost = null) {
+    let acceptChance = 0.30; // Zwiększona akceptacja restrukturyzacji
 
-    // Jeśli AI jest zdesperowane (niski credit score lub pominięte raty), chętniej przyjmie
-    if (ai.creditScore < 50 || (loan.missedPayments && loan.missedPayments >= 2)) {
-        acceptChance = 0.90; // 90% szans, bo potrzebuje resetu
+    if (ai.creditScore < 50 || (loan.missedPayments && loan.missedPayments >= 1)) {
+        acceptChance = 0.95; // 95% szans przy problemach ze spłatą
     }
 
-    // Osobowość też ma znaczenie
     if (ai.personality === 'reckless' || ai.personality === 'yolo_trader') {
-        acceptChance += 0.20; // Bardziej skłonni do ryzykownych decyzji
-    }
-    if (ai.personality === 'calm' || ai.personality === 'pro_investor' || ai.personality === 'banker') {
-        acceptChance -= 0.05; // Mniej skłonni
+        acceptChance += 0.10;
     }
 
     if (Math.random() < acceptChance) {
-        // AI Akceptuje
         console.log(`[AI Decyzja] ${ai.name} akceptuje ofertę przejęcia długu przez ${collectorStock.name}.`);
-        executeDebtTransfer(collectorStock, ai, loan, newInterestRate);
+        executeDebtTransfer(collectorStock, ai, loan, newInterestRate, takeoverCost);
     } else {
-        // AI Odrzuca
         console.log(`[AI Decyzja] ${ai.name} odrzuca ofertę przejęcia długu.`);
     }
 }
@@ -2638,4 +2711,34 @@ function renderCorporationFirm() {
         <p class="fund-muted">Wymuszanie dywidend, zrzucanie pakietów i ataki na spółki botów psują relacje; prezenty (portfel prywatny, raz na kwartał), wspieranie ich spółek (zakup pakietu, datek) i odkupienie pakietu — poprawiają. Wrodzy boty szydzą, skupują akcje Twoich spółek i próbują je przejąć; przyjaźni dają rady i pakiety z rabatem.</p>
         <table class="asset-mini-table w-full"><thead><tr><th>Osoba</th><th>Relacja</th><th></th><th>Prezent (PLN)</th></tr></thead><tbody>${relations}</tbody></table>
         <h4>Ostatnie zmiany</h4><ul class="list-plain text-sm">${log || '<li class="text-muted">Brak zmian.</li>'}</ul>`;
+}
+
+
+// 0.15: Spawnowanie bota Komendant Jakub przy maksymalnym poziomie policji (poziom 5)
+function checkPoliceChiefSpawn() {
+    if (typeof oversight !== 'object' || !oversight?.police) return null;
+    if (oversight.police.level >= 5) {
+        let jakub = aiCompetitors.find(ai => ai.id === 'komendant_jakub');
+        if (!jakub) {
+            jakub = {
+                id: 'komendant_jakub',
+                name: 'Komendant Jakub',
+                cash: 5000,
+                portfolio: {},
+                personality: 'police_chief',
+                accessLevel: 1,
+                hasTBillAccess: false,
+                tBills: [],
+                skillPoints: 0,
+                unlockedSkills: {},
+                creditScore: 100
+            };
+            aiCompetitors.push(jakub);
+            if (typeof logEvent === 'function') {
+                logEvent('🚓 Program policyjny: Komendant Jakub dołącza do inwestorów giełdowych (kapitał 5 000 PLN, spółki defensywne).', 'state');
+            }
+        }
+        return jakub;
+    }
+    return null;
 }

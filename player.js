@@ -1523,7 +1523,8 @@ const CLIENT_TYPES = {
     ethical:     { key: 'ethical',     label: 'Etyczny',    icon: '🌱', patience: 0.6,  volAversion: 0.8, chase: 0.6, loyalty: 0.5, size: [500, 2500],  buyBias: 0.6, secondaryBias: 0.6, feeSensitivity: 0.3, trustNeed: 0,   panic: false, ethical: true },
     // 0.15 H5: Nowe typy klientów
     senior:      { key: 'senior',      label: 'Emeryt',     icon: '👴', patience: 0.8,  volAversion: 2.0, chase: 0.2, loyalty: 0.6, size: [200, 1000],  buyBias: 0.8, secondaryBias: 0.5, feeSensitivity: 0.4, trustNeed: 5,   panic: false, preference: 'defensive' },
-    modern:      { key: 'modern',      label: 'Nowoczesny', icon: '🚀', patience: 0.4,  volAversion: 0.5, chase: 1.5, loyalty: 0.2, size: [400, 2000],  buyBias: 1.0, secondaryBias: 1.1, feeSensitivity: 0.2, trustNeed: 0,   panic: false, preference: 'growth' }
+    modern:      { key: 'modern',      label: 'Nowoczesny', icon: '🚀', patience: 0.4,  volAversion: 0.5, chase: 1.5, loyalty: 0.2, size: [400, 2000],  buyBias: 1.0, secondaryBias: 1.1, feeSensitivity: 0.2, trustNeed: 0,   panic: false, preference: 'growth' },
+    officer:     { key: 'officer',     label: 'Funkcjonariusz', icon: '👮', patience: 0.85, volAversion: 1.2, chase: 0.3, loyalty: 0.75, size: [500, 2500],  buyBias: 0.9, secondaryBias: 0.5, feeSensitivity: 0.3, trustNeed: 5,   panic: false, preference: 'defensive', isPoliceProgram: true }
 };
 
 const CLIENT_FIRST_NAMES = ['Anna', 'Piotr', 'Maria', 'Tomasz', 'Ewa', 'Jan', 'Kasia', 'Marek', 'Zofia', 'Adam', 'Halina', 'Krzysztof', 'Agata', 'Paweł', 'Irena'];
@@ -1642,7 +1643,7 @@ function getFundPortfolioModernShare() {
 }
 
 function fundSatisfiesClientPreference(type) {
-    if ((type === 'retiree' || type === 'senior')) {
+    if (type === 'retiree' || type === 'senior' || type === 'officer') {
         return getFundPortfolioDefensiveShare() >= 0.50;
     }
     if (type === 'modern') {
@@ -3562,7 +3563,8 @@ const CLIENT_MOTIVES = {
     investor: ['Wielki inwestor szukający alfy.', 'Testuje nowego zarządcę.'],
     ethical: ['Nie chce zarabiać na krzywdzie ludzi.', 'Sprawdza, jak spółki traktują pracowników.', 'Inwestuje zgodnie z ESG.'],
     senior: ['Odkłada na spokojną jesień życia.', 'Szuka stabilności w spółkach defensywnych.', 'Zależy mu na bezpieczeństwie kapitału.'],
-    modern: ['Stawia na innowacje i spółki przyszłości.', 'Interesują go tylko nowe technologie i trendy.', 'Chce płynąć na fali nowoczesnej gospodarki.']
+    modern: ['Stawia na innowacje i spółki przyszłości.', 'Interesują go tylko nowe technologie i trendy.', 'Chce płynąć na fali nowoczesnej gospodarki.'],
+    officer: ['Korzysta z programu emerytalnego policji z państwową dopłatą 20%.', 'Inwestuje w bezpieczne spółki defensywne.', 'Nie ulega panice na spadkach, realizuje zyski z opóźnieniem.']
 };
 const CLIENT_NAMES = ['Anna', 'Piotr', 'Maria', 'Tomasz', 'Ewa', 'Jan', 'Kasia', 'Marek', 'Zofia', 'Adam', 'Halina', 'Krzysztof', 'Agata', 'Paweł', 'Irena',
     'Bartek', 'Ola', 'Kamil', 'Jadwiga', 'Stefan', 'Iga', 'Mateusz', 'Bożena', 'Rafał', 'Wanda', 'Szymon', 'Natalia', 'Edward', 'Kinga', 'Leon'];
@@ -3587,7 +3589,8 @@ function getClientCharacter(client) {
 }
 
 function randomCharacter(trust = 50) {
-    const weights = { sly: 1.2, careful: 1.4, fearful: 1, brave: 0.8 + trust / 100, rich: 0.3 + trust / 200, miser: 1, ethical: 0.6, senior: 0.8, modern: 0.9 };
+    const isPoliceProgram = typeof oversight === 'object' && (oversight?.police?.level >= 5);
+    const weights = { sly: 1.2, careful: 1.4, fearful: 1, brave: 0.8 + trust / 100, rich: 0.3 + trust / 200, miser: 1, ethical: 0.6, senior: 0.8, modern: 0.9, officer: isPoliceProgram ? 0.9 : 0 };
     const total = Object.values(weights).reduce((sum, w) => sum + w, 0);
     let roll = Math.random() * total;
     for (const [key, weight] of Object.entries(weights)) {
@@ -3865,7 +3868,10 @@ function processClientsWeekly() {
             if (!meetsPreference && ((def.key === 'retiree' || def.key === 'senior') || def.key === 'modern')) continue;
             if (!isFundOpenForSubscriptions() || Math.random() >= def.buyBias * 0.3 || newMoneyBudget <= 0) continue;
             const value = Math.min(newMoneyBudget, getRandomInRange(def.size[0], def.size[1]) * 0.4);
-            const units = subscribeClient(client, value);
+            if (client.type === 'officer' || client.character === 'officer') {
+            value = Math.round(value * 1.20); // 20% państwowej dopłaty z programu dla policjantów
+        }
+        const units = subscribeClient(client, value);
             newMoneyBudget -= value;
             noteFundFlow('in', 'topup', value, units);
             noteClientHistory(client, `Dokupuje ${units.toFixed(1)} udziałów za ${value.toFixed(0)} PLN.`);
@@ -4030,7 +4036,7 @@ function runPlayerJuMarket(fund) {
 
 const MARKETING_TARGETS = {
     premium: { label: 'Zamożni klienci', icon: '💎', keys: ['rich', 'investor'] },
-    safe:    { label: 'Ostrożni oszczędzający', icon: '🛡️', keys: ['careful', 'fearful', 'miser', 'senior'] },
+    safe:    { label: 'Ostrożni oszczędzający', icon: '🛡️', keys: ['careful', 'fearful', 'miser', 'senior', 'officer'] },
     dynamic: { label: 'Dynamiczni inwestorzy', icon: '🦁', keys: ['brave', 'sly', 'modern'] }
 };
 const MARKETING_WEEKS = 8;

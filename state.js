@@ -1535,6 +1535,7 @@ function fundInstitution(institution, amount) {
     while (institution.level < INSTITUTION_LEVEL_COSTS.length && institution.budget >= INSTITUTION_LEVEL_COSTS[institution.level]) {
         institution.budget -= INSTITUTION_LEVEL_COSTS[institution.level];
         institution.level++;
+        if (typeof checkPoliceChiefSpawn === 'function') checkPoliceChiefSpawn();
         return true;
     }
     return false;
@@ -1837,7 +1838,7 @@ function renderOversightPanel() {
         </div>
         <div class="oversight-gauge"><span style="width:${oversight.corruption}%"></span></div>
         <div class="bank-grid mt-3">
-            ${card('police', 'Policja', '🚓', 'Ściga korupcję i mafię: co kwartał zbija wpływy mafii, zatrzymuje jej ludzi w zarządach spółek, rekwiruje akcje zdobyte z pomocą „przyjaciół” i ściga fundusze, które z nimi współpracują. Przy wysokiej korupcji sama staje się skorumpowana i działa gorzej.')}
+            ${card('police', 'Policja', '🚓', 'Ściga korupcję i mafię: co kwartał zbija wpływy mafii, zatrzymuje jej ludzi w zarządach spółek, rekwiruje akcje zdobyte z pomocą „przyjaciół” i ściga fundusze, które z nimi współpracują. Przy wysokiej korupcji sama staje się skorumpowana i działa gorzej.' + (oversight.police.level >= 5 ? ' 🌟 <strong>Program dla policjantów (poz. 5)</strong>: funkcjonariusze kupują JU funduszy defensywnych z dopłatą 20%, zwiększają obrót mniejszościowy, a na rynku inwestuje Komendant Jakub.' : ''))}
             ${card('knf', 'Komisja Nadzoru Finansowego', '🏦', 'Kontroluje fundusze — im większy fundusz, tym częściej. Czysta kontrola podnosi zaufanie klientów.')}
             ${renderMafiaStateCard()}
         </div>

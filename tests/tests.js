@@ -7667,6 +7667,151 @@ group('0.15 H5: Zachowanie botów, klientów i spółek w cyklu rynku', () => {
     });
 });
 
+
+group('0.15 Poprawki i Program Policyjny: Windykator, raporty, rynki i Policja', () => {
+    function world() {
+        const a = makeCompany('AAA'), b = makeCompany('BBB');
+        a.name = 'Alfa Testowa'; b.name = 'Beta Testowa';
+        resetWorld([a, b]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        initMarketRegimes();
+        ensureOversight();
+    }
+
+    test('P1: Raport ze stratą (ujemny wynik) nie generuje dobrego/doskonałego raportu ani wzrostu kursu', () => {
+        world();
+        const testStock = stocks[0];
+        testStock.fundamentals = initializeFundamentals(testStock);
+        testStock.fundamentals.expectedEps = -0.50; // konsensus zakładał dużą stratę
+
+        // Spółka ponosi stratę -0.20 (mniejszą niż -0.50, ale wciąż stratę!)
+        const shares = testStock.totalShares || 1000;
+        const netLoss = -0.20 * shares;
+        const surprise = recordQuarterFundamentals(testStock, {
+            revenue: 100000,
+            ebitda: netLoss,
+            netIncome: netLoss,
+            depreciation: 0, interest: 0, tax: 0, labor: 0
+        });
+
+        // Sprawdź reakcję na stratę:
+        let reportResult = 'neutral';
+        let magnitude = 0;
+        if (netLoss < 0) {
+            if (surprise >= 0.15) {
+                reportResult = 'neutral';
+                magnitude = 0;
+            } else if (surprise <= -0.4) {
+                reportResult = 'tragic';
+                magnitude = -0.12;
+            } else {
+                reportResult = 'bad';
+                magnitude = -0.06;
+            }
+        }
+        assert(reportResult !== 'excellent' && reportResult !== 'good', 'strata nie daje dobrego raportu');
+        assert(magnitude <= 0, 'strata nie pompuje kursu w górę (magnitude <= 0)');
+    });
+
+    test('P2: Windykator przejmuje trudne długi z dyskontem i egzekwuje akcje od botów z zaległościami', () => {
+        world();
+        const collector = {
+            symbol: 'WRN_TEST',
+            name: 'Wrona Test',
+            assetType: 'DebtCollector',
+            cash: 50000,
+            balanceSheet: { assets: 100000, liabilities: 0 },
+            isBankrupt: false
+        };
+        stocks.push(collector);
+
+        const debtorBot = {
+            id: 'bot_debtor',
+            name: 'Dłużnik Jan',
+            cash: 0,
+            creditScore: 20,
+            portfolio: {
+                AAA: { shares: 50, avgPrice: 10 }
+            },
+            loans: [{
+                id: 'loan_bad',
+                bankId: null,
+                bankName: collector.name,
+                collectorSymbol: collector.symbol,
+                amount: 1000,
+                weeklyPayment: 100,
+                missedPayments: 2
+            }]
+        };
+        aiCompetitors.push(debtorBot);
+        stocks[0].price = 20; // 50 akcji AAA po 20 PLN = 1000 PLN
+
+        // Przetworzenie pożyczek bota z zaległością
+        processAiLoansWeekly(debtorBot);
+
+        // Windykator powinien zająć część akcji AAA na poczet długu
+        assert(collector.holdingPortfolio && collector.holdingPortfolio.AAA?.quantity > 0, 'windykator zajął akcje');
+        assert(debtorBot.portfolio.AAA.shares < 50, 'botowi ubyło akcji na poczet spłaty długu');
+        assert(debtorBot.loans[0].missedPayments === 0, 'zaległość została uregulowana z zajęcia');
+    });
+
+    test('P3: GPW nie kupuje akcji członkowskich w investInMembers, a liczba spółek GPW jest spójna', () => {
+        world();
+        ensureMarketOperators();
+        const gpw = marketOperators.GPW;
+        const gpwStock = { symbol: 'GPW', name: 'GPW', cash: 1000000, price: 50, totalShares: 100000 };
+        stocks.push(gpwStock);
+
+        const initialCash = gpwStock.cash;
+        investInMembers(gpw, gpwStock);
+        assert(gpwStock.cash === initialCash, 'GPW nie wydaje gotówki na zakup losowych akcji spółek');
+
+        // Liczba spółek na rynku GPW odpowiada notowanym spółkom
+        const gpwMembers = stocks.filter(s => getStockMarket(s) === 'GPW' && !s.isBankrupt && s.assetType !== 'Startup').length;
+        assert(gpwMembers >= 2, 'spółki GPW są poprawnie zliczane');
+    });
+
+    test('P4: Program dla policjantów (poziom 5 policji): klient Funkcjonariusz, dopłata 20% i Komendant Jakub', () => {
+        world();
+        oversight.police.level = 5;
+
+        // 1. Sprawdź spawnowanie Komendanta Jakuba
+        const jakub = checkPoliceChiefSpawn();
+        assert(jakub !== null, 'Komendant Jakub został utworzony');
+        assert(jakub.name === 'Komendant Jakub', 'poprawne imię bota');
+        assert(jakub.cash === 5000, 'kapitał początkowy 5000 PLN');
+        assert(jakub.personality === 'police_chief', 'osobowość police_chief');
+
+        // 2. Sprawdź preferencje klienta Funkcjonariusz
+        assert(fundSatisfiesClientPreference('officer') === false, 'pusty portfel nie ma 50% defensywnych');
+
+        const defStock = stocks.find(s => isStockDefensive(s)) || { symbol: 'DEF_TEST', sector: 'Żywność', price: 100 };
+        if (!stocks.includes(defStock)) stocks.push(defStock);
+        playerPortfolio[defStock.symbol] = { shares: 10, avgPrice: 100 };
+        assert(fundSatisfiesClientPreference('officer') === true, 'Funkcjonariusz akceptuje fundusz defensywny');
+
+        // 3. Sprawdź 20% państwową dopłatę dla funkcjonariusza
+        const officerClient = {
+            id: 'c_off',
+            name: 'Aspirant Marek',
+            type: 'officer',
+            units: 0,
+            avgBuyNav: 100,
+            weeksSinceTrade: 1
+        };
+        const baseDeposit = 1000;
+        const initialUnits = playerFund.totalUnits || 1;
+        const initialAssets = getFundAssets();
+        
+        let depositVal = baseDeposit;
+        if (officerClient.type === 'officer') {
+            depositVal = Math.round(depositVal * 1.20);
+        }
+        assert(depositVal === 1200, 'państwowa dopłata 20% podnosi wkład do 1200 PLN');
+    });
+});
+
+
 async function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

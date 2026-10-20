@@ -1913,7 +1913,7 @@ function processMarketsQuarterly() {
     if (quarter >= 8 && liveInternet < MAX_INTERNET_MARKETS && hasFreeTotalListingSlot() && Math.random() < NEW_INTERNET_MARKET_CHANCE) spawnInternetMarket(); // P1: łączny sufit
     for (const operator of Object.values(marketOperators)) {
         const def = getMarketDef(operator.id);
-        operator.members = stocks.filter(s => getStockMarket(s) === operator.id && s.marketOperator !== operator.id && !s.assetType).length;
+        operator.members = stocks.filter(s => getStockMarket(s) === operator.id && !s.isBankrupt && s.assetType !== 'Startup').length;
 
         if (operator.status === 'dormant' && quarter >= 4 && Math.random() < OPERATOR_SPAWN_CHANCE) {
             spawnOperatorStartup(operator);
@@ -1950,6 +1950,7 @@ function collectListingFees(operator, operatorStock) {
 
 /** Operator inwestuje część gotówki w spółki swojego rynku (pakiety liczone w obrocie). */
 function investInMembers(operator, operatorStock) {
+    if (operator.id === 'GPW') return; // GPW jako rynek publiczny nie kupuje losowych akcji spółek
     const members = stocks.filter(s => getStockMarket(s) === operator.id && s !== operatorStock && !s.assetType && !s.isBankrupt);
     if (!members.length || operatorStock.cash <= 0) return;
     const target = getRandomElement(members);
@@ -2021,23 +2022,50 @@ function moveListing(symbol, marketId) {
 // WIDOK: zakładka „Rynki” w oknie Państwa
 // =================================================================================
 
+let selectedMarketPreview = null;
+
 function renderMarketsPanel() {
     ensureMarketOperators();
-    const statusLabel = { active: '🟢 aktywny', startup: '🧪 startup w inkubatorze', dormant: '⏳ jeszcze nie istnieje', closed: '🔒 zamknięty', inactive: '⏸️ nieaktywny — wkrótce' };
+    const statusLabel = { active: '🟢 aktywny', startup: '🧪 startup w inkubatorze', dormant: '⏳ uśpiony / powstający', closed: '🔒 zamknięty', inactive: '⏸️ rynek zagraniczny' };
+    
+    for (const op of Object.values(marketOperators)) {
+        op.members = stocks.filter(s => getStockMarket(s) === op.id && !s.isBankrupt && s.assetType !== 'Startup').length;
+    }
+
+    const cards = Object.values(marketOperators).map(operator => {
+        const def = getMarketDef(operator.id) || { name: operator.id, commission: 0, color: '#888' };
+        const stock = operator.symbol ? stocks.find(s => s.symbol === operator.symbol) : null;
+        const startup = operator.startupSymbol ? stocks.find(s => s.symbol === operator.startupSymbol && s.assetType === 'Startup') : null;
+        const memberList = stocks.filter(s => getStockMarket(s) === operator.id && !s.isBankrupt && s.assetType !== 'Startup');
+        const isSelected = selectedMarketPreview === operator.id;
+
+        return `<article class="bank-card market-card" style="border-top: 3px solid ${def.color}">
+            <header class="bank-card-head"><span class="bank-card-icon">🏛️</span><div><h4>${escapeHtml(def.name)} (${escapeHtml(def.short || operator.id)})</h4><span class="bank-card-type">${statusLabel[operator.status] || operator.status}</span></div></header>
+            <dl class="bank-card-rates">
+                <div><dt>Prowizja</dt><dd>${(def.commission * 100).toFixed(2)}%</dd></div>
+                <div><dt>Spółki</dt><dd>${operator.members}</dd></div>
+                <div><dt>Kurs operatora</dt><dd>${stock ? formatZl(stock.price) : (operator.status === 'active' ? 'GPW (rynek gł.)' : '—')}</dd></div>
+            </dl>
+            ${startup ? `<p class="text-sm">Finansowanie startupu: ${formatZl(startup.currentFunding, 0)} / ${formatZl(startup.fundingGoal, 0)} · sponsorzy: ${operator.sponsors.length}</p>` : ''}
+            ${operator.commissionsTotal > 0 ? `<p class="text-xs text-muted">Prowizje łącznie: ${formatZl(operator.commissionsTotal, 0)}</p>` : ''}
+            <div class="mt-2">
+                <button class="btn-secondary btn-sm" onclick="toggleMarketStocksList('${operator.id}')">
+                    ${isSelected ? 'Ukryj listę spółek' : `Pokaż spółki (${memberList.length})`}
+                </button>
+            </div>
+            ${isSelected ? `
+                <div class="market-members-preview mt-2" style="max-height: 180px; overflow-y: auto; background: rgba(0,0,0,0.1); padding: 8px; border-radius: 4px; font-size: 11px;">
+                    ${memberList.length ? memberList.map(s => `<span class="badge" style="display:inline-block; margin:2px;" title="${escapeHtml(s.name)}">${escapeHtml(s.symbol)} (${formatZl(s.price)})</span>`).join(' ') : '<span class="text-muted">Brak notowanych spółek na tym rynku.</span>'}
+                </div>
+            ` : ''}
+        </article>`;
+    }).join('');
+
     return `<p class="bank-lead">Operatorzy rynków pobierają prowizję od każdej transakcji na swoim rynku (płaci też fundusz) i opłatę za notowanie, inwestują w spółki członkowskie i podpisują umowy na wyłączność. Zamknięcie operatora zdejmuje jego spółki z notowań — posiadacze są rozliczani po ostatniej cenie.</p>
-        <div class="bank-grid">${Object.values(marketOperators).filter(operator => operator.status === 'active').map(operator => { // tylko rynki notowane na giełdzie
-            const def = getMarketDef(operator.id) || { name: operator.id, commission: 0, color: '#888' };
-            const stock = operator.symbol ? stocks.find(s => s.symbol === operator.symbol) : null;
-            const startup = operator.startupSymbol ? stocks.find(s => s.symbol === operator.startupSymbol && s.assetType === 'Startup') : null;
-            return `<article class="bank-card market-card" style="border-top: 3px solid ${def.color}">
-                <header class="bank-card-head"><span class="bank-card-icon">🏛️</span><div><h4>${escapeHtml(def.name)}</h4><span class="bank-card-type">${statusLabel[operator.status] || operator.status}</span></div></header>
-                <dl class="bank-card-rates">
-                    <div><dt>Prowizja</dt><dd>${(def.commission * 100).toFixed(2)}%</dd></div>
-                    <div><dt>Spółki</dt><dd>${operator.members}</dd></div>
-                    <div><dt>Kurs operatora</dt><dd>${stock ? formatZl(stock.price) : '—'}</dd></div>
-                </dl>
-                ${startup ? `<p class="text-sm">Finansowanie startupu: ${formatZl(startup.currentFunding, 0)} / ${formatZl(startup.fundingGoal, 0)} · sponsorzy: ${operator.sponsors.length}</p>` : ''}
-                ${operator.commissionsTotal > 0 ? `<p class="text-xs text-muted">Prowizje łącznie: ${formatZl(operator.commissionsTotal, 0)}</p>` : ''}
-            </article>`;
-        }).join('')}</div>`;
+        <div class="bank-grid">${cards}</div>`;
+}
+
+function toggleMarketStocksList(marketId) {
+    selectedMarketPreview = selectedMarketPreview === marketId ? null : marketId;
+    if (typeof updateStateModalContent === 'function') updateStateModalContent();
 }

@@ -3401,23 +3401,41 @@ function processFinancialReports() {
         stock.lastSurprise = surprise; // N2: wynik vs konsensus (karta spółki)
         stock.surpriseHistory = [...(stock.surpriseHistory || []), surprise].slice(-4); // N3: czerwona flaga „zawsze tuż nad konsensusem”
 
-        if (surprise >= 0.5) {
-            reportResult = 'excellent';
-            eventMessage = `📈 DOSKONAŁY RAPORT! ${stock.name} (${stock.symbol}): zysk znacznie powyżej oczekiwań.`;
-        } else if (surprise >= 0.15) {
-            reportResult = 'good';
-            eventMessage = `📈 DOBRY RAPORT: Wyniki ${stock.name} (${stock.symbol}) powyżej oczekiwań.`;
-        } else if (surprise <= -0.5) {
-            reportResult = 'tragic';
-            eventMessage = `📉 TRAGICZNY RAPORT! ${stock.name} (${stock.symbol}) mocno rozczarowuje wynikami.`;
-            if (typeof onAcademyEvent === 'function') onAcademyEvent('tragicReport', stock);
-        } else if (surprise <= -0.15) {
-            reportResult = 'bad';
-            eventMessage = `📉 SŁABY RAPORT: ${stock.name} (${stock.symbol}) notuje wyniki poniżej prognoz.`;
-        }
+        if (publishedEarnings < 0) {
+            // Spółka poniosła stratę w kwartale — brak sztucznego pompowania kursu
+            if (surprise >= 0.15) {
+                reportResult = 'neutral';
+                magnitude = 0;
+                eventMessage = `📊 RAPORT: ${stock.name} (${stock.symbol}) notuje stratę netto (${formatZl(publishedEarnings, 0)}), nieco mniejszą niż pesymistyczny konsensus.`;
+            } else if (surprise <= -0.4) {
+                reportResult = 'tragic';
+                magnitude = -0.12;
+                eventMessage = `📉 TRAGICZNY RAPORT! ${stock.name} (${stock.symbol}) notuje głęboką stratę (${formatZl(publishedEarnings, 0)}).`;
+                if (typeof onAcademyEvent === 'function') onAcademyEvent('tragicReport', stock);
+            } else {
+                reportResult = 'bad';
+                magnitude = -0.06;
+                eventMessage = `📉 SŁABY RAPORT: ${stock.name} (${stock.symbol}) przynosi stratę netto (${formatZl(publishedEarnings, 0)}).`;
+            }
+        } else {
+            if (surprise >= 0.5) {
+                reportResult = 'excellent';
+                eventMessage = `📈 DOSKONAŁY RAPORT! ${stock.name} (${stock.symbol}): zysk znacznie powyżej oczekiwań.`;
+            } else if (surprise >= 0.15) {
+                reportResult = 'good';
+                eventMessage = `📈 DOBRY RAPORT: Wyniki ${stock.name} (${stock.symbol}) powyżej oczekiwań.`;
+            } else if (surprise <= -0.5) {
+                reportResult = 'tragic';
+                eventMessage = `📉 TRAGICZNY RAPORT! ${stock.name} (${stock.symbol}) mocno rozczarowuje wynikami.`;
+                if (typeof onAcademyEvent === 'function') onAcademyEvent('tragicReport', stock);
+            } else if (surprise <= -0.15) {
+                reportResult = 'bad';
+                eventMessage = `📉 SŁABY RAPORT: ${stock.name} (${stock.symbol}) notuje wyniki poniżej prognoz.`;
+            }
 
-        if (reportResult !== 'neutral') {
-            magnitude = Math.max(-0.12, Math.min(0.12, surprise * 0.12));
+            if (reportResult !== 'neutral') {
+                magnitude = Math.max(-0.12, Math.min(0.12, surprise * 0.12));
+            }
         }
 
         stock.lastReport = reportResult;
@@ -5060,7 +5078,7 @@ function checkAntitrust(stock1, stock2) {
 // operacje bankowe
 
 function runDebtCollectorAI() {
-    const collectors = stocks.filter(s => s.assetType === 'DebtCollector' && !s.isBankrupt && s.cash > 20000); // Musi mieć gotówkę
+    const collectors = stocks.filter(s => s.assetType === 'DebtCollector' && !s.isBankrupt && s.cash > 10000); // Musi mieć gotówkę
     if (collectors.length === 0) return;
 
     // Zbierz wszystkie potencjalne długi (tylko bankowe z problemami)
@@ -5079,35 +5097,34 @@ function runDebtCollectorAI() {
 
     if (potentialDebts.length === 0) return; // Brak długów do przejęcia
 
-    // Każdy windykator próbuje złożyć jedną ofertę
+    // Każdy windykator próbuje złożyć ofertę
     collectors.forEach(collector => {
-        // Niska szansa na działanie w każdym cyklu
-        if (Math.random() < 0.1) { 
+        if (Math.random() < 0.40) { 
             const targetDebtInfo = getRandomElement(potentialDebts);
             const loan = targetDebtInfo.loan;
 
-            // Sprawdź, czy oferta nie była niedawno składana
             const now = Date.now();
             if (loan.offerCooldown && now < loan.offerCooldown) {
-                return; // Pomiń, ten dług jest na cooldownie
+                return;
             }
 
-            // Sprawdź, czy windykatora stać
-            if (collector.cash >= loan.amount) {
-                createDebtTakeoverOffer(collector, targetDebtInfo.entity, loan);
+            // Windykator kupuje trudny dług z dyskontem 60% (płaci bankowi 40% wartości)
+            const takeoverCost = Math.round(loan.amount * 0.40);
+            if (collector.cash >= takeoverCost) {
+                createDebtTakeoverOffer(collector, targetDebtInfo.entity, loan, takeoverCost);
             }
         }
     });
 }
 
-function createDebtTakeoverOffer(collectorStock, targetEntity, loan) {
+function createDebtTakeoverOffer(collectorStock, targetEntity, loan, takeoverCost = null) {
     const newInterestRate = loan.interestRate * 1.5; // Przykładowo: 50% wyższe oprocentowanie
     const offerCooldownTime = BASE_DELAYS.quarterly / currentSpeedMultiplier; // Cooldown na kwartał
 
     loan.offerCooldown = Date.now() + offerCooldownTime; // Ustaw cooldown, aby nie spamować
 
     if (targetEntity === 'player') return; // gracz nie ma prywatnych kredytów (fundusz: finance.js)
-    aiDecideOnDebtOffer(targetEntity, collectorStock, loan, newInterestRate);
+    aiDecideOnDebtOffer(targetEntity, collectorStock, loan, newInterestRate, takeoverCost);
 }
 
 function runPawnShopAI() {
@@ -7078,9 +7095,10 @@ function executePawnLoan(targetEntity, pawnShop, targetStock, quantity, loanAmou
     }
 }
 
-function executeDebtTransfer(collectorStock, targetEntity, loan, newInterestRate) {
-    // 1. Collector (WRONA) płaci bankowi
-    collectorStock.cash -= loan.amount;
+function executeDebtTransfer(collectorStock, targetEntity, loan, newInterestRate, takeoverCost = null) {
+    const paymentToBank = takeoverCost ? Math.min(collectorStock.cash, takeoverCost) : Math.round(loan.amount * 0.40);
+    // 1. Collector (WRONA) płaci bankowi zdyskontowaną cenę
+    collectorStock.cash -= paymentToBank;
     collectorStock.balanceSheet.assets += loan.amount; // Dług staje się aktywem windykatora
 
     // 2. Bank otrzymuje pieniądze i zamyka kredyt
