@@ -563,7 +563,8 @@ function processAiLoansWeekly(ai) {
                                 if (!st || st.price <= 0) continue;
 
                                 const neededVal = Math.min(loan.amount, loan.weeklyPayment * 4);
-                                const sharesToSeize = Math.min(h.shares, Math.ceil(neededVal / (st.price * 0.8)));
+                                const free = h.shares - (h.lockedShares || 0); // 0.15.0.1 B4: akcje w zastawie zostają
+                                const sharesToSeize = Math.min(free, Math.ceil(neededVal / (st.price * 0.8)));
                                 if (sharesToSeize <= 0) continue;
 
                                 h.shares -= sharesToSeize;

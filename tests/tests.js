@@ -7542,21 +7542,18 @@ group('0.15 H4: Krach rynkowy, bezpieczniki giełdowe i reakcja instytucji', () 
         assert(sellRes === false, 'aiSellStock zwróciło false');
     });
 
-    test('H4.5: Margin Call: wymuszona likwidacja 25% pozycji przy dźwigni > 50%', () => {
+    test('H4.5: Margin Call: przy dźwigni > 50% fundusz spłaca pożyczki lombardowe', () => {
         world();
         const testStock = stocks[0];
         testStock.price = 100;
-
-        // Portfel funduszu gracza z długiem > 50% aktywów
+        const pawn = makeCompany('LOMB', { cash: 1_000_000 }); pawn.assetType = 'PawnShop'; stocks.push(pawn);
         playerPortfolio[testStock.symbol] = { shares: 1000, avgPrice: 100, assetType: 'stock' };
-        playerCash = 0; // brak gotówki na pokrycie depozytu
-        playerFund.debt = 150000; // dług 150k przy portfelu 100k -> totalCapital = 250k, leverage = 60%
-
-        checkPlayerMarginCall();
-
-        // Likwidacja 25% z 1000 akcji = 250 akcji
-        assert(playerPortfolio[testStock.symbol].shares === 750, 'zlikwidowano dokładnie 25% akcji');
-        assert(playerCash === 25000, 'odzyskane środki trafiły do kasy funduszu');
+        testStock.sharesHeld = 1000;
+        playerCash = 200000;
+        playerFund.pawnLoans = [{ id: 'p1', symbol: testStock.symbol, shares: 0, principal: 400000, weeksLeft: 10, missed: 0 }];
+        const res = checkPlayerMarginCall();
+        assert(res && res.repaid > 0, 'spłata pożyczki');
+        assertNear(getPawnOutstanding(getFundAccount()), 400000 - res.repaid, 'dług spadł o spłatę');
     });
 
     test('H4.6: Reakcja Banku Centralnego po krachu: cięcie stopy bazowej o 50 pb', () => {
@@ -8183,6 +8180,63 @@ group('0.15.0.1: Poprawki 0.15 (bezpiecznik, margin call, pieniądze, emisje, kr
         playerFund.clockMs += 5000;
         applySaveSnapshot(JSON.parse(JSON.stringify(buildSaveSnapshot())));
         assertEq(getMarketHaltRemainingSeconds(), 10, 'wstrzymanie zegara gry przetrwa zapis');
+    });
+
+    function c2World() {
+        const w = world();
+        const pawn = makeCompany('LOMB', { cash: 1_000_000, name: 'Lombard Test' }); pawn.assetType = 'PawnShop';
+        const collector = makeCompany('WRON', { cash: 1_000_000, name: 'Windykator Test' }); collector.assetType = 'DebtCollector';
+        stocks.push(pawn, collector);
+        for (const s of stocks) { s.insiderShares = 0; s.sharesHeld = 0; }
+        aiCompetitors.forEach(ai => { ai.loans = []; });
+        return { ...w, pawn, collector };
+    }
+
+    test('C2 (B2): bot z dźwignią > 50% sprzedaje 20–40% wolnych akcji; akcje = posiadacze, bez NaN', () => {
+        const { a, b } = c2World();
+        const bot = aiCompetitors.find(ai => ai.personality !== 'market_maker');
+        bot.cash = 0;
+        bot.portfolio = { AAA: { shares: 1000, avgPrice: 100, lockedShares: 200 }, BBB: { shares: 500, avgPrice: 100 } };
+        a.sharesHeld = 1000; b.sharesHeld = 500;
+        bot.loans = [{ amount: 400000, weeklyPayment: 1000, interestRate: 0.1 }];
+        executeMarginCalls();
+        const soldA = 1000 - bot.portfolio.AAA.shares, soldB = 500 - bot.portfolio.BBB.shares;
+        assert(soldA >= 0.2 * 800 - 1 && soldA <= 0.4 * 800, `sprzedaż AAA 20–40% wolnych: ${soldA}`);
+        assert(soldB >= 0.2 * 500 - 1 && soldB <= 0.4 * 500, `sprzedaż BBB 20–40%: ${soldB}`);
+        assert(bot.portfolio.AAA.shares >= 200, 'akcje w zastawie nietknięte');
+        for (const s of [a, b]) assertEq(s.sharesHeld, getTrackedHeldShares(s), `akcje = posiadacze ${s.symbol}`);
+        assert(Object.values(bot.portfolio).every(h => Number.isFinite(h.shares) && Number.isFinite(h.avgPrice)), 'bez NaN w pozycjach');
+    });
+
+    test('C2 (B3): margin call gracza spłaca dług bez znikania pieniędzy; zastaw nietknięty; akcje = posiadacze', () => {
+        const { a, pawn } = c2World();
+        a.price = 100;
+        playerPortfolio.AAA = { shares: 1000, avgPrice: 100, assetType: 'stock', lockedShares: 600 };
+        a.sharesHeld = 1000;
+        playerCash = 10000;
+        playerFund.pawnLoans = [{ id: 'p1', symbol: 'AAA', shares: 600, principal: 150000, weeksLeft: 10, missed: 0 }];
+        const debt0 = getPawnOutstanding(getFundAccount()), cash0 = playerCash, pawnCash0 = pawn.cash;
+        const res = checkPlayerMarginCall();
+        const proceeds = res.sold.reduce((s, x) => s + x.proceeds, 0);
+        const debt1 = getPawnOutstanding(getFundAccount());
+        assert(res.sold.length === 1 && res.sold[0].quantity === 400, 'sprzedane tylko wolne akcje (400)');
+        assertNear(debt0 - debt1, res.repaid, 'dług spadł dokładnie o spłatę');
+        assertNear(cash0 + proceeds - res.repaid, playerCash, 'gotówka + sprzedaż − spłata = 0 (bez znikania)');
+        assertNear(pawn.cash - pawnCash0, res.repaid, 'lombard dostał spłatę');
+        assertEq(playerPortfolio.AAA.shares, 600, 'akcje w zastawie zostały');
+        assert(playerPortfolio.AAA.lockedShares < 600 && playerPortfolio.AAA.lockedShares === playerFund.pawnLoans[0].shares, 'spłata zwalnia część zastawu');
+        assertEq(a.sharesHeld, getTrackedHeldShares(a), 'akcje = posiadacze');
+    });
+
+    test('C2 (B4): windykator nie zajmuje akcji w zastawie', () => {
+        const { a, b } = c2World();
+        const bot = aiCompetitors.find(ai => ai.personality !== 'market_maker');
+        bot.cash = 0;
+        bot.portfolio = { AAA: { shares: 100, avgPrice: 100, lockedShares: 100 }, BBB: { shares: 100, avgPrice: 100 } };
+        bot.loans = [{ amount: 10000, weeklyPayment: 1000, interestRate: 0.1, collectorSymbol: 'WRON', missedPayments: 1 }];
+        processAiLoansWeekly(bot);
+        assertEq(bot.portfolio.AAA.shares, 100, 'zastawione AAA zostają');
+        assert((bot.portfolio.BBB?.shares || 0) < 100, 'zajęte wolne BBB');
     });
 });
 

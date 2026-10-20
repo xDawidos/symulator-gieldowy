@@ -2121,8 +2121,15 @@ function setFundOpenSubscriptions(open) {
 }
 
 /** Wymuszona sprzedaż: największe pozycje, z dodatkową stratą na cenie i spadkiem zaufania. */
-function forceLiquidation(amountNeeded) {
+const FORCED_SALE_REASONS = {
+    redemption: 'wymuszona sprzedaż: klienci umarzają udziały, a w funduszu brakuje gotówki (trzymaj zapas gotówki)',
+    margin: 'margin call: sprzedaż pod spłatę pożyczki lombardowej'
+};
+
+/** Przymusowa sprzedaż wolnych akcji funduszu; zwraca listę sprzedanych pozycji. */
+function forceLiquidation(amountNeeded, reason = 'redemption') {
     let needed = amountNeeded;
+    const sold = [];
     const positions = Object.entries(playerPortfolio)
         .filter(([, holding]) => holding.assetType === 'stock' || !holding.assetType)
         .map(([symbol, holding]) => ({ symbol, holding, stock: stocks.find(s => s.symbol === symbol) }))
@@ -2145,10 +2152,12 @@ function forceLiquidation(amountNeeded) {
         needed -= proceeds;
 
         playerFund.current.forcedSales++;
-        notePlayerPositionLoss(symbol, quantity, 'wymuszona sprzedaż: klienci umarzają udziały, a w funduszu brakuje gotówki (trzymaj zapas gotówki)', proceeds);
+        notePlayerPositionLoss(symbol, quantity, FORCED_SALE_REASONS[reason] || FORCED_SALE_REASONS.redemption, proceeds);
+        sold.push({ symbol, quantity, proceeds });
     }
 
     if (playerFund.current.forcedSales > 0) playerFund.trust = Math.max(0, playerFund.trust - 2);
+    return sold;
 }
 
 // =================================================================================

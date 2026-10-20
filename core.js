@@ -3276,15 +3276,15 @@ function executeMarginCalls() {
             if (leverage > 0.50 && ai.portfolio) {
                 const sellFactor = 0.20 + Math.random() * 0.20;
                 let soldAny = false;
-                for (const symbol in ai.portfolio) {
-                    const shares = Number(ai.portfolio[symbol]) || 0;
-                    if (shares > 0) {
-                        const toSell = Math.max(1, Math.floor(shares * sellFactor));
-                        if (typeof aiSellStock === 'function') {
-                            aiSellStock(ai, symbol, toSell);
-                            soldAny = true;
-                        }
-                    }
+                for (const symbol of Object.keys(ai.portfolio)) { // 0.15.0.1 B2: pozycja bota to { shares, lockedShares }
+                    const holding = ai.portfolio[symbol];
+                    const stock = stocks.find(s => s.symbol === symbol);
+                    if (!holding || holding.assetType === 'Startup' || !stock || stock.assetType === 'Startup' || !(stock.price > 0)) continue;
+                    const toSell = Math.floor(((Number(holding.shares) || 0) - (Number(holding.lockedShares) || 0)) * sellFactor);
+                    if (toSell <= 0) continue;
+                    const before = holding.shares;
+                    aiSellStock(ai, symbol, toSell);
+                    if ((ai.portfolio[symbol]?.shares || 0) < before) soldAny = true;
                 }
                 if (soldAny && typeof logEvent === 'function') {
                     logEvent(`⚠️ MARGIN CALL: ${ai.name} (dźwignia ${(leverage * 100).toFixed(0)}%) przymusowo wyprzedaje akcje pod wezwanie banku!`, 'market');
@@ -3297,62 +3297,55 @@ function executeMarginCalls() {
     checkPlayerMarginCall();
 }
 
-/** Sprawdzenie i egzekucja Margin Call dla funduszu gracza. */
+/**
+ * Margin call funduszu gracza (0.15.0.1 B3): dług = pożyczki lombardowe. Przy dźwigni > 50% fundusz spłaca
+ * pożyczki od najstarszej do kwoty „dług − 40% aktywów”; brakującą gotówkę daje przymusowa sprzedaż wolnych akcji.
+ * Zwraca { required, repaid, sold } albo null.
+ */
 function checkPlayerMarginCall() {
-    const pawnDebt = (typeof playerFund === 'object' && playerFund?.pawnLoans)
-        ? playerFund.pawnLoans.reduce((sum, loan) => sum + (Number(loan.principal) || 0), 0)
-        : 0;
-    const otherDebt = (typeof playerFund === 'object' && Number(playerFund?.debt)) || 0;
-    const totalDebt = pawnDebt + otherDebt;
+    if (typeof playerFund !== 'object' || !playerFund || typeof getFundAccount !== 'function') return null;
+    const account = getFundAccount();
+    const debt = getPawnOutstanding(account);
+    if (!(debt > 0)) return null;
+    const totalAssets = getFundPortfolioValue() + Math.max(0, Number(playerCash) || 0);
+    const leverage = debt / (totalAssets + debt);
+    if (leverage <= 0.50) return null;
 
-    const portfolioVal = typeof getFundPortfolioValue === 'function' ? getFundPortfolioValue() : 0;
-    const totalAssets = portfolioVal + Math.max(0, Number(playerCash) || 0);
-    const leverage = (totalAssets + totalDebt) > 0 ? (totalDebt / (totalAssets + totalDebt)) : 0;
-
-    if (totalDebt > 0 && leverage > 0.50) {
-        const requiredCash = Math.max(0, totalDebt - (totalAssets * 0.40));
-        if (typeof playerCash !== 'undefined' && playerCash >= requiredCash) {
-            playerCash -= requiredCash;
-            if (typeof logEvent === 'function') {
-                logEvent(`⚠️ MARGIN CALL: Broker potrącił ${formatZl(requiredCash, 0)} z gotówki funduszu na uzupełnienie depozytu zabezpieczającego.`, 'market');
-            }
-            if (typeof showToast === 'function') {
-                showToast(`⚠️ Margin Call: Uzupełniono depozyt kwotą ${formatZl(requiredCash, 0)}.`, 'warning');
-            }
-        } else {
-            let liquidatedValue = 0;
-            if (typeof playerPortfolio === 'object' && playerPortfolio) {
-                for (const symbol in playerPortfolio) {
-                    const holding = playerPortfolio[symbol];
-                    const shares = Number(holding?.shares) || 0;
-                    if (shares > 0) {
-                        const toLiquidate = Math.max(1, Math.floor(shares * 0.25));
-                        const stock = typeof stocks !== 'undefined' ? stocks.find(s => s.symbol === symbol) : null;
-                        const price = stock ? stock.price : 1;
-                        holding.shares -= toLiquidate;
-                        if (holding.shares <= 0) delete playerPortfolio[symbol];
-                        liquidatedValue += toLiquidate * price;
-                    }
-                }
-            }
-            if (typeof playerCash !== 'undefined') playerCash += liquidatedValue;
-
-            if (typeof logEvent === 'function') {
-                logEvent(`🚨 MARGIN CALL! Wartość zabezpieczeń funduszu spadła w krachu. Broker przeprowadził przymusową likwidację akcji za ${formatZl(liquidatedValue, 0)}!`, 'market');
-            }
-            if (typeof showToast === 'function') {
-                showToast(`🚨 MARGIN CALL! Przymusowa likwidacja akcji funduszu!`, 'error');
-            }
-            if (typeof addMail === 'function') {
-                addMail({
-                    sender: 'KNF',
-                    subject: '🚨 MARGIN CALL: Przymusowa likwidacja pozycji funduszu',
-                    body: `W związku z krachem na giełdzie i przekroczeniem dopuszczalnego wskaźnika zadłużenia (> 50%), broker przeprowadził przymusową likwidację 25% akcji Twojego portfela w celu zabezpieczenia depozytu. Odzyskane środki (${formatZl(liquidatedValue, 0)}) zasiliły konto funduszu.`,
-                    importance: 3
-                });
-            }
+    const required = Math.max(0, debt - totalAssets * 0.40);
+    const sold = playerCash < required ? (forceLiquidation(required - playerCash, 'margin') || []) : [];
+    const pawnShop = typeof getPawnShop === 'function' ? getPawnShop() : null;
+    let repaid = 0;
+    for (const loan of [...account.loans]) { // od najstarszej
+        const pay = Math.min(loan.principal, required - repaid, Math.max(0, playerCash));
+        if (!(pay > 0)) break;
+        if (pay >= loan.principal) repayPawnLoan(account, loan.id);
+        else { // spłata części: zastaw zwalniany proporcjonalnie
+            const freed = Math.floor(loan.shares * pay / loan.principal);
+            playerCash -= pay;
+            if (pawnShop) adjustCompanyCash(pawnShop, pay);
+            loan.principal -= pay;
+            loan.shares -= freed;
+            const holding = playerPortfolio[loan.symbol];
+            if (holding) holding.lockedShares = Math.max(0, (holding.lockedShares || 0) - freed);
         }
+        repaid += pay;
     }
+    const debtAfter = getPawnOutstanding(account);
+    const assetsAfter = getFundPortfolioValue() + Math.max(0, playerCash);
+    const leverageAfter = debtAfter > 0 ? debtAfter / (assetsAfter + debtAfter) : 0;
+    const soldText = sold.length ? ` Sprzedane pozycje: ${sold.map(s => `${s.symbol} ${s.quantity} szt.`).join(', ')}.` : '';
+    const text = `Margin call: fundusz spłacił ${formatZl(repaid, 0)} pożyczek lombardowych (dźwignia ${(leverage * 100).toFixed(0)}% → ${(leverageAfter * 100).toFixed(0)}%).${soldText}`;
+    if (typeof logEvent === 'function') logEvent(`🚨 ${text}`, 'market');
+    if (typeof showToast === 'function') showToast(`🚨 ${text}`, 'error');
+    if (typeof addMail === 'function') {
+        addMail({
+            sender: 'KNF',
+            subject: '🚨 Margin call: spłata pożyczek lombardowych funduszu',
+            body: `${text} Zastaw spłaconych pożyczek wrócił do funduszu. Dług lombardowy po spłacie: ${formatZl(debtAfter, 0)}.`,
+            importance: 3
+        });
+    }
+    return { required, repaid, sold };
 }
 
 /** Punkt zaczepienia dla 0.15.1: szok sektorowy. */
