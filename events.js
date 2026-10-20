@@ -702,13 +702,7 @@ function triggerMainMarketEventCycle() {
         return;
     }
 
-    // 0.15 H5: premia rynku > +15% -> szansa emisji x1.5 (x2 w sektorze bańki)
-    let offeringChance = 0.04;
-    const regime = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
-    if (regime && regime.premium > 0.15) {
-        offeringChance *= 1.5;
-    }
-    if (Math.random() < offeringChance) { // Emisja ratunkowa
+    if (Math.random() < 0.04) { // Emisja ratunkowa (0.15.0.1 C4: bez zależności od nastroju — emisje w cyklu idą przez walne)
         triggerRescueOfferingEvent();
         return;
     }

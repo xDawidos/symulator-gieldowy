@@ -740,21 +740,7 @@ function triggerRescueOfferingEvent(forcedTarget = null) {
         && s.balanceSheet.liabilities > getMarketCapValue(s) * 0.3);
     let stock = forcedTarget;
     if (!stock && candidates.length > 0) {
-        // 0.15 H3: spółki z sektora bańki emitują akcje 2x częściej
-        const weighted = candidates.map(c => ({
-            stock: c,
-            weight: (typeof isCompanyInSectorBubble === 'function' && isCompanyInSectorBubble(c)) ? 2.0 : 1.0
-        }));
-        const totalWeight = weighted.reduce((sum, item) => sum + item.weight, 0);
-        let roll = Math.random() * totalWeight;
-        stock = weighted[0].stock;
-        for (const item of weighted) {
-            roll -= item.weight;
-            if (roll <= 0) {
-                stock = item.stock;
-                break;
-            }
-        }
+        stock = getRandomElement(candidates); // 0.15.0.1 C4: ratunek zadłużonych, bez wagi bańki (emisje w cyklu idą przez walne)
     }
     if (!stock) return null;
     const price = stock.price * (1 - getRandomInRange(0.15, 0.25));
@@ -925,8 +911,8 @@ function buildAgmAgenda(stock) {
     const proposedPolicy = keepTotal ? 'Total' : order[Math.max(0, Math.min(order.length - 1, current + step))];
     items.push({ id: 'dividend', kind: 'board', type: 'dividend', policy: proposedPolicy, label: `Polityka dywidendy: ${DIVIDEND_POLICIES[proposedPolicy].label}` });
     items.push({ id: 'discharge', kind: 'board', type: 'discharge', label: `Absolutorium dla prezesa ${stock.ceo?.name || ''}`.trim() });
-    if (stock.cash > getMarketCapValue(stock) * 0.15 && Math.random() < 0.5) items.push({ id: 'buyback', kind: 'board', type: 'buyback', label: 'Program skupu akcji własnych' });
-    else if (stock.cash < getMarketCapValue(stock) * 0.03 && Math.random() < 0.5) items.push({ id: 'issue', kind: 'board', type: 'issue', label: 'Emisja 10% nowych akcji' });
+    const capital = getCapitalAgmProposal(stock);
+    if (capital) items.push(capital);
 
     for (const proposal of gov.proposals) {
         items.push({ id: `p-${proposal.type}`, kind: 'activist', type: proposal.type, by: 'player', label: `Wniosek funduszu: ${ACTIVIST_PROPOSALS[proposal.type].label}` });
@@ -934,6 +920,37 @@ function buildAgmAgenda(stock) {
     gov.proposals = [];
     for (const item of items) item.playerVote = 'for'; // domyślnie „za wnioskiem”
     return items;
+}
+
+/** 0.15.0.1 C4: wycena akcji spółki na tle rynku — drogie (premia rynku > +15% albo kurs ≥ 1,3 × wartości godziwej) lub tanie. */
+function getShareValuationMood(stock) {
+    const premium = typeof getMarketRegime === 'function' ? Number(getMarketRegime('home')?.premium) || 0 : 0;
+    const fair = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(stock) : null;
+    const ratio = fair > 0 ? stock.price / fair : 1;
+    return { expensive: premium > 0.15 || ratio >= 1.3, cheap: premium < -0.15 || ratio <= 0.75 };
+}
+
+/**
+ * Uchwała kapitałowa zarządu (najwyżej jedna na walne): emisja przy braku gotówki albo drogich akcjach
+ * (×2 w sektorze bańki), skup przy nadmiarze gotówki (gdy akcje nie są drogie) albo tanich akcjach.
+ */
+function getCapitalAgmProposal(stock) {
+    const cap = getMarketCapValue(stock);
+    const { expensive, cheap } = getShareValuationMood(stock);
+    const issue = reason => ({ id: 'issue', kind: 'board', type: 'issue', reason, label: reason === 'expensive' ? 'Emisja 10% nowych akcji przy wysokiej wycenie' : 'Emisja 10% nowych akcji' });
+    const buyback = reason => ({ id: 'buyback', kind: 'board', type: 'buyback', reason, label: reason === 'cheap' ? 'Program skupu akcji własnych przy niskiej wycenie' : 'Program skupu akcji własnych' });
+    if (stock.cash < cap * 0.03 && Math.random() < 0.5) return issue('cash');
+    if (expensive && Math.random() < (typeof isCompanyInSectorBubble === 'function' && isCompanyInSectorBubble(stock) ? 0.6 : 0.3)) return issue('expensive');
+    if (stock.cash > cap * 0.15 && !expensive && Math.random() < 0.5) return buyback('cash');
+    if (cheap && stock.cash > cap * 0.05 && Math.random() < 0.4) return buyback('cheap');
+    return null;
+}
+
+/** Emisja przy wysokiej / skup przy niskiej wycenie w spółce z portfela: wpis w pasku newsów i hasło Akademii. */
+function noteCapitalCycleResolution(stock, item) {
+    if (!['expensive', 'cheap'].includes(item.reason) || !((playerPortfolio?.[stock.symbol]?.shares || 0) > 0)) return;
+    if (typeof pushNews === 'function') pushNews(item.type === 'issue' ? `${stock.name} emituje 10% akcji przy wysokiej wycenie` : `${stock.name} skupuje akcje przy niskiej wycenie`, stock.symbol);
+    if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('emisje_skupy');
 }
 
 function createPendingAgm(stock) {
@@ -1067,8 +1084,10 @@ function applyAgmResolution(stock, item) {
             replaceCeo(stock);
             return `nowy prezes: ${stock.ceo?.name || '—'}`;
         case 'buyback':
+            noteCapitalCycleResolution(stock, item);
             return runBuyback(stock);
         case 'issue':
+            noteCapitalCycleResolution(stock, item);
             return runAgmIssue(stock);
         case 'sellCompany': {
             const premium = 0.25;

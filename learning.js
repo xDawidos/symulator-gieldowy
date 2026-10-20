@@ -792,6 +792,19 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Ile trwa wstrzymanie handlu przy bezpieczniku 1. stopnia (-7%)?', a: ['15 sekund', 'Cały miesiąc', '24 godziny'], c: 0 }
         ]
     },
+    emisje_skupy: {
+        title: 'Emisje i skupy w cyklu rynku', icon: '🔁',
+        text: 'Zarząd sam wybiera moment emisji i skupu akcji. Gdy rynek płaci za akcje dużo (hossa, wysoka wycena), spółka chętnie sprzedaje nowe akcje — dostaje dużo gotówki za mały kawałek firmy, ale dotychczasowi akcjonariusze mają mniejszy udział w zysku (rozwodnienie). Gdy akcje są tanie (bessa, panika), spółka z zapasem gotówki skupuje własne akcje — zostaje ich mniej, więc każda daje większy udział w zysku.',
+        example: () => {
+            const premium = typeof getMarketRegime === 'function' ? Number(getMarketRegime('home')?.premium) || 0 : 0;
+            return `Premia rynku: ${premium >= 0 ? '+' : ''}${(premium * 100).toFixed(0)}% — ${premium > 0.15 ? 'zarządy częściej proponują emisje' : premium < -0.15 ? 'zarządy z gotówką częściej proponują skup akcji' : 'wyceny są umiarkowane'}.`;
+        },
+        quiz: [
+            { q: 'Kiedy emisja nowych akcji jest najkorzystniejsza dla spółki?', a: ['Gdy akcje są drogie', 'Gdy akcje są tanie', 'Zawsze tak samo'], c: 0 },
+            { q: 'Co emisja 10% nowych akcji robi z udziałem dotychczasowego akcjonariusza w zysku?', a: ['Zmniejsza go (rozwodnienie)', 'Zwiększa go', 'Nie zmienia'], c: 0 },
+            { q: 'Spółka skupuje 10% własnych akcji. Twój udział w zysku na akcję…', a: ['rośnie', 'maleje', 'nie zmienia się'], c: 0 }
+        ]
+    },
     pozyczkodawca: {
         title: 'Pożyczkodawca ostatniej instancji', icon: '🏛️',
         text: 'W sytuacji paniki rynkowej i kryzysu płynności komercyjne instytucje finansowe boją się pożyczać sobie nawzajem pieniądze. Rolę pożyczkodawcy ostatniej instancji pełni Bank Centralny. W odpowiedzi na krach może obniżyć stopy procentowe (np. cięcie o 50 pb) oraz zasilić rynek płynnością, zapobiegając lawinie bankructw.',

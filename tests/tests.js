@@ -8282,6 +8282,60 @@ group('0.15.0.1: Poprawki 0.15 (bezpiecznik, margin call, pieniądze, emisje, kr
         const held = (jakub.portfolio.JEDZ?.shares || 0) * stocks.find(s => s.symbol === 'JEDZ').price;
         assert(jakub.cash + held <= paid + 1, 'bot ma najwyżej tyle, ile dał skarb');
     });
+
+    // Wartość godziwa = kurs (kurs / wartość = 1), więc o „drogo/tanio” decyduje premia rynku.
+    function capitalShare(stock, type, n = 10000) {
+        const orig = getDisplayedFairValue;
+        getDisplayedFairValue = s => s.price;
+        let k = 0;
+        try { for (let i = 0; i < n; i++) if (getCapitalAgmProposal(stock)?.type === type) k++; }
+        finally { getDisplayedFairValue = orig; }
+        return k / n;
+    }
+
+    test('C4: drogie akcje → emisja w porządku obrad z szansą 30% (60% w sektorze bańki)', () => {
+        const { a } = world();
+        a.cash = getMarketCapValue(a) * 0.10; // ani brak, ani nadmiar gotówki
+        getMarketRegime('home').premium = 0.20;
+        const p = capitalShare(a, 'issue');
+        assert(Math.abs(p - 0.30) <= 0.02, `emisja ${p}`);
+        const orig = isCompanyInSectorBubble;
+        isCompanyInSectorBubble = () => true;
+        try { const pb = capitalShare(a, 'issue'); assert(Math.abs(pb - 0.60) <= 0.02, `emisja w bańce ${pb}`); }
+        finally { isCompanyInSectorBubble = orig; }
+        assertEq(capitalShare(a, 'buyback', 2000), 0, 'bez skupu przy drogich akcjach');
+    });
+
+    test('C4: tanie akcje → skup z szansą 40%; emisja ratunkowa nie zależy od premii rynku', () => {
+        const { a } = world();
+        a.cash = getMarketCapValue(a) * 0.10;
+        getMarketRegime('home').premium = -0.20;
+        const p = capitalShare(a, 'buyback');
+        assert(Math.abs(p - 0.40) <= 0.02, `skup ${p}`);
+        assertEq(capitalShare(a, 'issue', 2000), 0, 'bez emisji przy tanich akcjach i zapasie gotówki');
+        getMarketRegime('home').premium = 0;
+        assertEq(capitalShare(a, 'buyback', 2000) + capitalShare(a, 'issue', 2000), 0, 'neutralna wycena — bez uchwały kapitałowej');
+        // Szansa emisji ratunkowej w cyklu zdarzeń jest stała (bez mnożnika premii); wybór spółki bez wagi bańki.
+        assert(!/premium/.test(triggerMainMarketEventCycle.toString()) && !/Bubble/.test(triggerRescueOfferingEvent.toString()), 'emisja ratunkowa bez nastroju rynku');
+    });
+
+    test('C4: akcje = posiadacze po emisji i skupie z walnego; news i hasło Akademii dla spółki z portfela', () => {
+        const { a } = world();
+        playerPortfolio.AAA = { shares: 2000, avgPrice: 100, assetType: 'stock' };
+        a.sharesHeld = 2000;
+        a.cash = 500000;
+        const total0 = a.totalShares;
+        applyAgmResolution(a, { type: 'issue', reason: 'expensive' });
+        assertEq(a.totalShares, total0 + Math.floor(total0 * 0.1), 'emisja 10%');
+        assertEq(a.sharesHeld, getTrackedHeldShares(a), 'akcje = posiadacze po emisji');
+        assert(newsLog.some(n => /emituje 10% akcji przy wysokiej wycenie/.test(n.text)), 'wpis w pasku newsów');
+        assert(isAcademyUnlocked('emisje_skupy'), 'hasło Akademii');
+        const total1 = a.totalShares;
+        applyAgmResolution(a, { type: 'buyback', reason: 'cheap' });
+        assert(a.totalShares < total1, 'skup zmniejsza liczbę akcji');
+        assertEq(a.sharesHeld, getTrackedHeldShares(a), 'akcje = posiadacze po skupie');
+        assert(newsLog.some(n => /skupuje akcje przy niskiej wycenie/.test(n.text)), 'wpis o skupie');
+    });
 });
 
 async function runAllTests() {
