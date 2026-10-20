@@ -3014,22 +3014,41 @@ function isMarketCrashing(market = 'home') {
     return Boolean(marketCrash?.active);
 }
 
+// 0.15.0.1 C1: wstrzymanie liczone zegarem gry (getGameClockMs) — pauza i prędkość nie zmieniają liczby tików.
 function isMarketHalted(market = 'home') {
     if (!marketHalt?.active) return false;
-    const now = Date.now();
-    if (now >= marketHalt.untilGameMs) {
-        marketHalt.active = false;
-        marketHalt.level = 0;
-        marketHalt.remainingSec = 0;
-        if (typeof updateCircuitBreakerUI === 'function') updateCircuitBreakerUI();
+    if (getGameClockMs() > marketHalt.untilGameMs) { // „>”: 15 s wstrzymania = 15 tików (tik sprawdza przed przesunięciem zegara)
+        endMarketHalt();
         return false;
     }
     return true;
 }
 
+function endMarketHalt() {
+    marketHalt.active = false;
+    marketHalt.level = 0;
+    marketHalt.remainingSec = 0;
+    if (typeof updateCircuitBreakerUI === 'function') updateCircuitBreakerUI();
+}
+
+/** Sekundy gry do końca wstrzymania; Infinity dla 3. stopnia (do końca tygodnia gry). */
 function getMarketHaltRemainingSeconds() {
     if (!isMarketHalted()) return 0;
-    return Math.max(0, Math.ceil((marketHalt.untilGameMs - Date.now()) / 1000));
+    return Math.max(0, Math.ceil((marketHalt.untilGameMs - getGameClockMs()) / 1000));
+}
+
+/** Pętla tygodniowa (main.js): koniec wstrzymania 3. stopnia i nowy tydzień progów. */
+function resetMarketHaltWeekly(gigValue) {
+    if (marketHalt.active && marketHalt.level === 3) endMarketHalt();
+    marketHalt.triggeredThisWeek = { 1: false, 2: false, 3: false };
+    if (gigValue > 0) marketHalt.weeklyStartGig = gigValue;
+}
+
+/** Wczytanie zapisu: 3. stopień zapisany jako null (JSON nie zna Infinity), stary znacznik z Date.now() znika. */
+function normalizeMarketHaltAfterLoad() {
+    if (!marketHalt.active) return;
+    if (marketHalt.untilGameMs === null && marketHalt.level === 3) marketHalt.untilGameMs = Infinity;
+    else if (!Number.isFinite(marketHalt.untilGameMs) || marketHalt.untilGameMs > getGameClockMs() + 60000) endMarketHalt();
 }
 
 /** Uruchamia bezpiecznik giełdowy (circuit breaker). */
@@ -3038,7 +3057,7 @@ function triggerMarketHalt(level, durationSec, currentDropPct = 0) {
     marketHalt.level = level;
     marketHalt.haltDurationSec = durationSec;
     marketHalt.remainingSec = durationSec;
-    marketHalt.untilGameMs = Date.now() + durationSec * 1000;
+    marketHalt.untilGameMs = level === 3 ? Infinity : getGameClockMs() + durationSec * 1000;
     marketHalt.triggeredThisWeek[level] = true;
     marketHalt.lastDropPct = currentDropPct;
 

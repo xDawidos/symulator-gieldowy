@@ -36,6 +36,10 @@ function assertNear(a, b, message, eps = 0.01) {
     assert(near(a, b, eps), `${message}: ${a} ≠ ${b}`);
 }
 
+function assertEq(a, b, message) {
+    assert(a === b, `${message}: ${a} ≠ ${b}`);
+}
+
 function mulberry32(seed) {
     let a = seed >>> 0;
     return function () {
@@ -7486,7 +7490,7 @@ group('0.15 H4: Krach rynkowy, bezpieczniki giełdowe i reakcja instytucji', () 
         assert(marketHalt.haltDurationSec === 15, 'czas 15s');
 
         // Koniec haltu 1
-        marketHalt.untilGameMs = Date.now() - 1000;
+        marketHalt.untilGameMs = getGameClockMs() - 1000;
         assert(isMarketHalted() === false, 'halt minął');
 
         // Spadek -14%: Poziom 2 (30s)
@@ -7496,14 +7500,14 @@ group('0.15 H4: Krach rynkowy, bezpieczniki giełdowe i reakcja instytucji', () 
         assert(marketHalt.haltDurationSec === 30, 'czas 30s');
 
         // Koniec haltu 2
-        marketHalt.untilGameMs = Date.now() - 1000;
+        marketHalt.untilGameMs = getGameClockMs() - 1000;
         assert(isMarketHalted() === false, 'halt minął');
 
         // Spadek -21%: Poziom 3 (60s)
         checkCircuitBreakers(790);
         assert(isMarketHalted() === true, 'halt aktywny przy -21%');
         assert(marketHalt.level === 3, 'poziom 3');
-        assert(marketHalt.haltDurationSec === 60, 'czas 60s');
+        assert(marketHalt.untilGameMs === Infinity, '3. stopień do końca tygodnia gry');
     });
 
     test('H4.4: Blokada handlu gracza i botów podczas bezpiecznika giełdowego', () => {
@@ -8102,6 +8106,83 @@ group('Portfel: donut podziału sektorowego (#sector-donut-area)', () => {
         stocks.splice(stocks.indexOf(s1), 1);
         stocks.splice(stocks.indexOf(s2), 1);
         stocks.splice(stocks.indexOf(s3), 1);
+    });
+});
+
+group('0.15.0.1: Poprawki 0.15 (bezpiecznik, margin call, pieniądze, emisje, krach, odpływ)', () => {
+    function world() {
+        const a = makeCompany('AAA'), b = makeCompany('BBB');
+        a.name = 'Alfa Testowa'; b.name = 'Beta Testowa';
+        resetWorld([a, b]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        initMarketRegimes();
+        marketHalt = createMarketHaltState();
+        marketCrash = createMarketCrashState();
+        return { a, b };
+    }
+    // Bezpiecznik zadziałał w updateMarketIndexes; reszta tego tiku przesuwa zegar (updateFund). Kolejne tiki:
+    // sprawdzenie wstrzymania (jak updateStockPrices), potem zegar +1 s.
+    function countHaltedTicks(maxTicks = 500) {
+        let n = 0;
+        playerFund.clockMs += 1000;
+        for (let i = 0; i < maxTicks; i++) { if (isMarketHalted()) n++; playerFund.clockMs += 1000; }
+        return n;
+    }
+
+    test('C1: 15 s wstrzymania = 15 tików przy ×1, ×50 i ×200', () => {
+        world();
+        const savedSpeed = currentSpeedMultiplier;
+        for (const speed of [1, 50, 200]) {
+            currentSpeedMultiplier = speed;
+            marketHalt = createMarketHaltState();
+            triggerMarketHalt(1, 15, -0.08);
+            assertEq(countHaltedTicks(), 15, `tiki wstrzymania przy ×${speed}`);
+            triggerMarketHalt(2, 30, -0.14);
+            assertEq(countHaltedTicks(), 30, `2. stopień przy ×${speed}`);
+        }
+        currentSpeedMultiplier = savedSpeed;
+    });
+
+    test('C1: pauza (zegar gry stoi) nie skraca wstrzymania', () => {
+        world();
+        triggerMarketHalt(1, 15, -0.08);
+        const until = marketHalt.untilGameMs;
+        isGamePaused = true;
+        updateFund(1000); // w pauzie zegar funduszu nie rusza
+        isGamePaused = false;
+        assertEq(marketHalt.untilGameMs - getGameClockMs(), 15000, 'pozostało 15 s gry');
+        assert(until === marketHalt.untilGameMs && getMarketHaltRemainingSeconds() === 15, 'odliczanie 15 s');
+    });
+
+    test('C1: 3. stopień trwa do końca tygodnia gry i kończy go pętla tygodniowa; nowy tydzień zeruje progi', () => {
+        world();
+        marketHalt.weeklyStartGig = 1000;
+        checkCircuitBreakers(790);
+        assertEq(marketHalt.level, 3, 'poziom 3');
+        assertEq(countHaltedTicks(120), 120, 'wstrzymanie trwa dowolnie długo w tygodniu');
+        resetMarketHaltWeekly(800);
+        assert(!isMarketHalted(), 'pętla tygodniowa kończy wstrzymanie');
+        assertEq(marketHalt.weeklyStartGig, 800, 'nowy punkt odniesienia');
+        checkCircuitBreakers(740);
+        assertEq(marketHalt.level, 1, 'w nowym tygodniu 1. stopień znów możliwy');
+    });
+
+    test('C1: zapis z wstrzymaniem z Date.now() wczytuje się bez wstrzymania; 3. stopień przetrwa zapis', () => {
+        world();
+        playerFund.clockMs = 5 * 60000;
+        triggerMarketHalt(1, 15, -0.08);
+        marketHalt.untilGameMs = Date.now() + 15000; // stary znacznik zegara rzeczywistego
+        const snap = JSON.parse(JSON.stringify(buildSaveSnapshot()));
+        const report = applySaveSnapshot(snap);
+        assert(report.ok, 'wczytanie bez błędów');
+        assert(!isMarketHalted(), 'stary znacznik usunięty');
+        triggerMarketHalt(3, 60, -0.21);
+        applySaveSnapshot(JSON.parse(JSON.stringify(buildSaveSnapshot())));
+        assert(isMarketHalted() && marketHalt.untilGameMs === Infinity, '3. stopień po wczytaniu');
+        triggerMarketHalt(1, 15, -0.08);
+        playerFund.clockMs += 5000;
+        applySaveSnapshot(JSON.parse(JSON.stringify(buildSaveSnapshot())));
+        assertEq(getMarketHaltRemainingSeconds(), 10, 'wstrzymanie zegara gry przetrwa zapis');
     });
 });
 

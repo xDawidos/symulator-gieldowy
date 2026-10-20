@@ -702,6 +702,7 @@ function applySaveSnapshot(snapshot) {
     }
     if (typeof marketHalt !== 'undefined' && snapshot.marketHalt) {
         marketHalt = snapshot.marketHalt;
+        normalizeMarketHaltAfterLoad();
     } else if (typeof createMarketHaltState === 'function') {
         marketHalt = createMarketHaltState();
     }
@@ -1366,10 +1367,7 @@ gameTimers.weekly = setGameInterval(() => {
         if (typeof updateMarketSentimentWeekly === 'function') updateMarketSentimentWeekly(); // 0.15 H2a: wskaźnik Strachu i Chciwości
         // 0.15 H4: Postęp krachu rynkowego i reset punktu odniesienia bezpiecznika giełdowego
         if (typeof processMarketCrashWeekly === 'function') processMarketCrashWeekly();
-        if (typeof marketHalt !== 'undefined' && marketHalt && typeof marketIndexes !== 'undefined') {
-            const gig = marketIndexes.find(idx => idx.id === 'GIG');
-            if (gig && gig.value > 0) marketHalt.weeklyStartGig = gig.value;
-        }
+        if (typeof resetMarketHaltWeekly === 'function') resetMarketHaltWeekly(marketIndexes.find(idx => idx.id === 'GIG')?.value);
         if (typeof checkAcademyTriggers === 'function') checkAcademyTriggers(); // N1: hasła Akademii przy pierwszym kontakcie
         if (typeof checkMentorTasks === 'function') checkMentorTasks();
         if (typeof checkAchievements === 'function') checkAchievements(); // N4: zadania mentora i certyfikaty

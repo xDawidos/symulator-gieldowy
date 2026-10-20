@@ -8958,10 +8958,10 @@ function updateCircuitBreakerUI() {
         const textEl = document.getElementById('circuit-breaker-text');
         const remaining = typeof getMarketHaltRemainingSeconds === 'function' ? getMarketHaltRemainingSeconds() : 0;
         const level = typeof marketHalt !== 'undefined' ? (marketHalt.level || 1) : 1;
-        const dropPct = typeof marketHalt !== 'undefined' && marketHalt.triggerDropPct ? Math.abs(marketHalt.triggerDropPct * 100).toFixed(1) : '7.0';
+        const dropPct = typeof marketHalt !== 'undefined' && marketHalt.lastDropPct ? Math.abs(marketHalt.lastDropPct * 100).toFixed(1) : '7.0';
 
         if (timerEl) {
-            timerEl.textContent = `${remaining}s`;
+            timerEl.textContent = Number.isFinite(remaining) ? `${remaining}s` : 'do końca tygodnia';
         }
         if (textEl) {
             textEl.textContent = `BEZPIECZNIK GIEŁDOWY: POZIOM ${level} (-${dropPct}% GIG) — SESJA ZAWIESZONA NA`;
