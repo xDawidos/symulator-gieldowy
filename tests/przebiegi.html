@@ -344,6 +344,78 @@ const PROBE = `(function () {
             Object.defineProperty(c, '__cashTraced', { value: true, enumerable: false });
         }
     };
+    // 0.15.0.1 C0: nastrój (premia ważona czasem na tikach), bezpieczniki, emisje i skupy według fazy rynku.
+    const P = s.p0151 = { ticks: 0, frozen: 0, premSum: 0, premTicks: 0, halts: [], issue: {}, buyback: {}, mood: [], valuation: [], earnIdx: 1, sharesIdx: 1, lastEarn: null, lastShares: null, gate: [] };
+    const phaseNow = () => (typeof getMarketRegime === 'function' ? getMarketRegime('home')?.phase : null) || '?';
+    if (typeof updateStockPrices === 'function') {
+        const orig = updateStockPrices;
+        updateStockPrices = function () {
+            P.ticks++;
+            if (typeof isMarketHalted === 'function' && isMarketHalted()) P.frozen++;
+            const r = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+            if (r && Number.isFinite(r.premium)) { P.premSum += r.premium; P.premTicks++; }
+            return orig.apply(this, arguments);
+        };
+    }
+    if (typeof triggerMarketHalt === 'function') {
+        const orig = triggerMarketHalt;
+        triggerMarketHalt = function (level) { P.halts.push({ q: macro.quarter, level, crash: typeof isMarketCrashing === 'function' && isMarketCrashing() }); return orig.apply(this, arguments); };
+    }
+    P.crashes = [];
+    if (typeof triggerMarketCrash === 'function') {
+        const orig = triggerMarketCrash;
+        triggerMarketCrash = function () { const r0 = getMarketRegime('home'); P.crashes.push({ q: macro.quarter, phase: r0?.phase, prem: r0 ? +(+r0.premium).toFixed(3) : null }); return orig.apply(this, arguments); };
+    }
+    if (typeof applyAgmResolution === 'function') {
+        const orig = applyAgmResolution;
+        applyAgmResolution = function (stock, item) {
+            if (item && (item.type === 'issue' || item.type === 'buyback')) { const b = P[item.type], ph = phaseNow(); b[ph] = (b[ph] || 0) + 1; }
+            return orig.apply(this, arguments);
+        };
+    }
+    P.sampleQuarter = function () {
+        const r = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+        P.mood.push({ q: macro.quarter, phase: r?.phase || null, prem: r ? +(+r.premium).toFixed(4) : null, target: r ? +(+r.premiumTarget).toFixed(4) : null,
+            crash: typeof isMarketCrashing === 'function' ? isMarketCrashing() : null, econ: typeof economyCycle === 'object' ? economyCycle?.phase : null });
+        const members = stocks.filter(x => !x.assetType && !x.isBankrupt && !x.tradeHalted && x.price > 0);
+        const med = a => { if (!a.length) return null; a.sort((x, y) => x - y); return a.length % 2 ? a[(a.length - 1) / 2] : (a[a.length / 2 - 1] + a[a.length / 2]) / 2; };
+        const pf = [], fe = [], vm = [];
+        for (const x of members) {
+            const f = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(x) : null;
+            const eps = Number(x.fundamentals?.epsTtm) || 0;
+            if (f > 0) pf.push(x.price / f);
+            if (f > 0 && eps > 0) fe.push(f / eps);
+            if (typeof getValuationMultiplier === 'function') { try { vm.push(getValuationMultiplier(x)); } catch (e) {} }
+        }
+        P.valuation.push({ q: macro.quarter, priceFair: med(pf), fairEps: med(fe), valMult: med(vm), rate: typeof centralBank === 'object' ? centralBank.baseInterestRate : null });
+        // Łańcuchowe indeksy: zysk rynku (epsTtm × akcje, spółki z zyskiem w obu kwartałach) i liczba akcji tych samych spółek.
+        const earn = {}, shares = {};
+        for (const x of members) { shares[x.symbol] = Number(x.totalShares) || 0; const e = (Number(x.fundamentals?.epsTtm) || 0) * shares[x.symbol]; if (e > 0) earn[x.symbol] = e; }
+        if (P.lastEarn) {
+            let a = 0, b = 0; for (const k in earn) if (P.lastEarn[k] > 0) { a += earn[k]; b += P.lastEarn[k]; }
+            if (a > 0 && b > 0) P.earnIdx *= a / b;
+            let c = 0, d = 0; for (const k in shares) if (P.lastShares[k] > 0) { c += shares[k]; d += P.lastShares[k]; }
+            if (c > 0 && d > 0) P.sharesIdx *= c / d;
+        }
+        P.lastEarn = earn; P.lastShares = shares;
+        if (typeof playerFund === 'object' && playerFund?.gateStats) P.gate.push({ q: macro.quarter, ...playerFund.gateStats });
+    };
+    P.finish = function (years) {
+        const y = Math.max(0.25, years);
+        const halts = { total: P.halts.length, inCrash: P.halts.filter(h => h.crash).length, byLevel: {} };
+        for (const h of P.halts) halts.byLevel[h.level] = (halts.byLevel[h.level] || 0) + 1;
+        halts.outsideCrash = halts.total - halts.inCrash;
+        halts.frozenShare = P.ticks ? P.frozen / P.ticks : 0;
+        const pf = P.valuation.map(v => v.priceFair).filter(v => v > 0);
+        return {
+            mood: { avgPremium: P.premTicks ? P.premSum / P.premTicks : null, crashes: P.crashes, quarters: P.mood },
+            halts,
+            valuation: { priceFairIn: pf.length ? pf.filter(v => v >= 0.75 && v <= 1.30).length / pf.length : null, quarters: P.valuation },
+            earningsIndexCagr: Math.pow(P.earnIdx, 1 / y) - 1,
+            issuance: { issue: P.issue, buyback: P.buyback, sharesCagr: Math.pow(P.sharesIdx, 1 / y) - 1 },
+            gate: P.gate
+        };
+    };
     s.badPrice = [];
     s.subStart = null;
     s.sample = function () {
@@ -360,6 +432,7 @@ const PROBE = `(function () {
             s.multiSeg = ordinary.length ? ordinary.filter(c => getStockSegments(c).length >= 2).length / ordinary.length : 0; // T3: spółki z ≥ 2 segmentami
         }
         s.traceCash();
+        P.sampleQuarter();
         // Pierwsze nieskończone / nieprawidłowe ceny: zrzut stanu spółki (diagnoza).
         for (const c of stocks) {
             if (Number.isFinite(c.price) || s.badPrice.some(b => b.symbol === c.symbol) || s.badPrice.length >= 5) continue;
@@ -576,7 +649,8 @@ const PROBE = `(function () {
             trustBreakdown
         };
 
-        return { h0, tsr, moneyWarn: s.moneyWarn || [], moneyWarnQuarters: s.moneyWarnQuarters || 0, poolStake: s.poolStake, wallet: window.__wallet || null, presetErrors: window.__presetErrors || [], sectorIssues, saveSizes, subStart: s.subStart, subEnd: s.subEnd, multiSegEnd: s.multiSeg, mechanics: s.mechanics || null, badPrice: s.badPrice, negCash: s.negCash, mailBy: s.mailBy, bailouts: s.bailouts, flowWarnings: s.flowWarnings, fund: s.fund, panelText: panel ? panel.textContent.split(/\\s+/).join(' ').slice(0, 600) : null, panelError: s.panelError || null, elections: (macro.election?.history || []).filter(e => e.quarter >= s.quarters[0].q),
+        const p0151 = P.finish(yearsTotal);
+        return { ...p0151, h0, tsr, moneyWarn: s.moneyWarn || [], moneyWarnQuarters: s.moneyWarnQuarters || 0, poolStake: s.poolStake, wallet: window.__wallet || null, presetErrors: window.__presetErrors || [], sectorIssues, saveSizes, subStart: s.subStart, subEnd: s.subEnd, multiSegEnd: s.multiSeg, mechanics: s.mechanics || null, badPrice: s.badPrice, negCash: s.negCash, mailBy: s.mailBy, bailouts: s.bailouts, flowWarnings: s.flowWarnings, fund: s.fund, panelText: panel ? panel.textContent.split(/\\s+/).join(' ').slice(0, 600) : null, panelError: s.panelError || null, elections: (macro.election?.history || []).filter(e => e.quarter >= s.quarters[0].q),
             lawChanges: soc ? { ...soc.lawChanges } : null, laws: soc ? { ...soc.laws } : null,
             invariants: typeof checkWorldInvariants === 'function' ? checkWorldInvariants().slice(0, 5) : null, invLog: s.invLog, trimWarnings: s.trimWarnings,
             trims: typeof ghostTrimLog !== 'undefined' ? ghostTrimLog.length : null, spinDiag: window.__spinDiag || null };
