@@ -7832,6 +7832,15 @@ group('0.15 Poprawki i Program Policyjny: Windykator, raporty, rynki i Policja',
         ensureMarketOperators();
         marketOperators.XTD.status = 'active';
 
+        let body = document.getElementById('stock-table-body');
+        if (!body) {
+            const table = document.createElement('table');
+            body = document.createElement('tbody');
+            body.id = 'stock-table-body';
+            table.appendChild(body);
+            document.body.appendChild(table);
+        }
+
         setSelectedMarket('XTD');
         assert(selectedMarketOperator === 'XTD', 'rynek XTD został wybrany');
 
@@ -7841,6 +7850,22 @@ group('0.15 Poprawki i Program Policyjny: Windykator, raporty, rynki i Policja',
         // Sprawdź czy przycisk Internetowa nie istnieje w DOM
         const internetBtn = document.querySelector('button[data-level="INTERNET"]');
         assert(!internetBtn, 'przycisk Internetowa usunięty z zakładek poziomów giełdy');
+
+        // Sprawdź nagłówek rynku oraz wysuwany drawer
+        const headerTitle = document.querySelector('.market-header-title');
+        assert(headerTitle && headerTitle.textContent.includes('GPW — GIEŁDA PAPIERÓW WARTOŚCIOWYCH'), 'nagłówek wyświetla GPW — GIEŁDA PAPIERÓW WARTOŚCIOWYCH');
+
+        const drawer = document.getElementById('market-selector-drawer');
+        assert(drawer, 'istnieje rozsuwany drawer wyboru giełdy');
+        assert(!drawer.classList.contains('is-open'), 'drawer jest domyślnie zwinięty');
+
+        toggleMarketSelector();
+        assert(isMarketSelectorOpen === true, 'drawer otwarty po kliknięciu');
+        assert(drawer.classList.contains('is-open'), 'klasa is-open dodana do drawera');
+
+        selectMarketAndClose('XTD');
+        assert(selectedMarketOperator === 'XTD', 'wybrano rynek XTD');
+        assert(isMarketSelectorOpen === false, 'drawer zamknięty po wyborze rynku');
     });
 });
 

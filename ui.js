@@ -2077,24 +2077,45 @@ function displayStocks(previousInputValues = {}) {
     }
   }
 
-  // --- Wybór aktywnej giełdy w nagłówku rynku zamiast osobnej zakładki Internetowa ---
+  // --- Wybór aktywnej giełdy w nagłówku rynku (rozwijany drawer z animacją) ---
   if (baseStocksToDisplay.some(stock => sortedExchanges.includes(stock.exchange)) || activeMarkets.length > 0) {
     const marketCell = stockTableBody.insertRow();
     marketCell.className = 'exchange-header market-header';
     const cell = marketCell.insertCell();
     cell.colSpan = STOCK_TABLE_COLS;
     
-    const marketButtons = activeMarkets.map(m => {
+    const currDef = (typeof getMarketDef === 'function' ? getMarketDef(selectedMarketOperator) : null) || { name: selectedMarketOperator, short: selectedMarketOperator };
+    const currTitle = selectedMarketOperator === 'GPW'
+        ? 'GPW — GIEŁDA PAPIERÓW WARTOŚCIOWYCH'
+        : `${escapeHtml(currDef.short || selectedMarketOperator)} — ${escapeHtml((currDef.name || selectedMarketOperator).toUpperCase())}`;
+
+    const marketCards = activeMarkets.map(m => {
         const def = (typeof getMarketDef === 'function' ? getMarketDef(m.id) : null) || { name: m.id, short: m.id };
-        const isActive = selectedMarketOperator === m.id;
+        const isSelected = selectedMarketOperator === m.id;
         const count = stocks.filter(s => getStockMarket(s) === m.id && !s.isBankrupt && s.assetType !== 'Startup').length;
-        return `<button type="button" class="btn-market-tab ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); setSelectedMarket('${m.id}')" style="background:${isActive ? 'var(--color-accent, #388bfd)' : 'rgba(255,255,255,0.06)'}; color:${isActive ? '#fff' : 'inherit'}; border:1px solid ${isActive ? 'transparent' : 'var(--table-line, rgba(255,255,255,0.15))'}; border-radius:4px; padding:2px 10px; font-size:11px; font-weight:${isActive ? '700' : '500'}; cursor:pointer; margin-right:6px;">
-            🏛️ ${escapeHtml(def.name)} (${escapeHtml(def.short || m.id)}) · ${count}
-        </button>`;
+        const commission = (def.commission || 0) * 100;
+        const concession = m.id !== 'GPW' && typeof hasInternetConcession === 'function' && hasInternetConcession(m.id);
+        const concessionCost = m.id !== 'GPW' && typeof getInternetConcessionCost === 'function' ? getInternetConcessionCost(m.id) : 0;
+
+        return `
+          <div class="market-selector-card ${isSelected ? 'is-selected' : ''}" onclick="selectMarketAndClose('${m.id}', event)">
+            <div class="market-selector-card-top">
+              <span class="market-selector-card-title">🏛️ ${escapeHtml(def.name)} (${escapeHtml(def.short || m.id)})</span>
+              <span class="market-selector-card-badge">${count} spółek</span>
+            </div>
+            <div class="market-selector-card-meta">
+              <span>Prowizja: ${commission.toFixed(2)}%</span>
+              ${m.id !== 'GPW' ? (concession 
+                  ? '<span class="text-up font-bold">✅ Koncesja aktywna</span>' 
+                  : `<button type="button" class="btn-secondary btn-xs" onclick="event.stopPropagation(); buyInternetConcession('${m.id}'); displayStocks(getCurrentInputValues());">Kup koncesję (${formatZl(concessionCost, 0)})</button>`
+              ) : '<span class="text-muted">Główny parkiet giełdowy</span>'}
+            </div>
+          </div>
+        `;
     }).join('');
 
-    const concessionInfo = selectedMarketOperator !== 'GPW' ? `
-        <div class="d-flex items-center gap-2 text-xs">
+    const sideInfo = selectedMarketOperator !== 'GPW' ? `
+        <div class="market-header-side-info" onclick="event.stopPropagation()">
             <span>Prowizja: ${((getMarketDef(selectedMarketOperator)?.commission || 0) * 100).toFixed(2)}%</span>
             ${(typeof hasInternetConcession === 'function' && hasInternetConcession(selectedMarketOperator))
                 ? '<span class="text-up font-bold">✅ Koncesja aktywna</span>'
@@ -2103,12 +2124,20 @@ function displayStocks(previousInputValues = {}) {
     ` : '';
 
     cell.innerHTML = `
-        <div class="d-flex justify-between items-center gap-2 flex-wrap" style="width:100%; min-height:26px; padding:2px 4px;">
-            <div class="d-flex items-center gap-2 flex-wrap">
-                <span class="text-xs text-muted font-bold" style="letter-spacing:0.05em; text-transform:uppercase;">Aktywna giełda:</span>
-                ${marketButtons}
+        <div class="market-header-bar" onclick="toggleMarketSelector(event)" title="Kliknij, aby wybrać aktywną giełdę">
+            <h4 class="market-header-title">
+                ${currTitle}
+                <span class="market-header-chevron ${isMarketSelectorOpen ? 'is-open' : ''}">▼</span>
+            </h4>
+            ${sideInfo}
+        </div>
+        <div class="market-selector-drawer ${isMarketSelectorOpen ? 'is-open' : ''}" id="market-selector-drawer">
+            <div class="market-selector-inner">
+                <div class="market-selector-label">Wybierz aktywny rynek giełdowy:</div>
+                <div class="market-selector-grid">
+                    ${marketCards}
+                </div>
             </div>
-            ${concessionInfo}
         </div>
     `;
   }
@@ -8746,6 +8775,37 @@ function updateCircuitBreakerUI() {
 }
 
 let selectedMarketOperator = 'GPW';
+let isMarketSelectorOpen = false;
+
+function toggleMarketSelector(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    isMarketSelectorOpen = !isMarketSelectorOpen;
+    const drawer = document.getElementById('market-selector-drawer');
+    const chevron = document.querySelector('.market-header-chevron');
+    if (drawer) {
+        if (isMarketSelectorOpen) {
+            drawer.classList.add('is-open');
+        } else {
+            drawer.classList.remove('is-open');
+        }
+    }
+    if (chevron) {
+        if (isMarketSelectorOpen) chevron.classList.add('is-open');
+        else chevron.classList.remove('is-open');
+    }
+}
+
+function selectMarketAndClose(marketId, event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    isMarketSelectorOpen = false;
+    setSelectedMarket(marketId);
+}
 
 function setSelectedMarket(marketId) {
     selectedMarketOperator = marketId;
