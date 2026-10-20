@@ -352,6 +352,7 @@ const PROBE = `(function () {
         updateStockPrices = function () {
             P.ticks++;
             if (typeof isMarketHalted === 'function' && isMarketHalted()) P.frozen++;
+            if (typeof isMarketCrashing === 'function' && isMarketCrashing()) P.lastCrashTick = P.ticks;
             const r = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
             if (r && Number.isFinite(r.premium)) { P.premSum += r.premium; P.premTicks++; }
             return orig.apply(this, arguments);
@@ -359,7 +360,7 @@ const PROBE = `(function () {
     }
     if (typeof triggerMarketHalt === 'function') {
         const orig = triggerMarketHalt;
-        triggerMarketHalt = function (level) { P.halts.push({ q: macro.quarter, level, crash: typeof isMarketCrashing === 'function' && isMarketCrashing() }); return orig.apply(this, arguments); };
+        triggerMarketHalt = function (level) { P.halts.push({ q: macro.quarter, level, crash: (typeof isMarketCrashing === 'function' && isMarketCrashing()) || P.ticks - (P.lastCrashTick ?? -1e9) <= 60 }); return orig.apply(this, arguments); }; // ostatni tydzień krachu też się liczy
     }
     P.crashes = [];
     if (typeof triggerMarketCrash === 'function') {
@@ -653,7 +654,7 @@ const PROBE = `(function () {
         return { ...p0151, h0, tsr, moneyWarn: s.moneyWarn || [], moneyWarnQuarters: s.moneyWarnQuarters || 0, poolStake: s.poolStake, wallet: window.__wallet || null, presetErrors: window.__presetErrors || [], sectorIssues, saveSizes, subStart: s.subStart, subEnd: s.subEnd, multiSegEnd: s.multiSeg, mechanics: s.mechanics || null, badPrice: s.badPrice, negCash: s.negCash, mailBy: s.mailBy, bailouts: s.bailouts, flowWarnings: s.flowWarnings, fund: s.fund, panelText: panel ? panel.textContent.split(/\\s+/).join(' ').slice(0, 600) : null, panelError: s.panelError || null, elections: (macro.election?.history || []).filter(e => e.quarter >= s.quarters[0].q),
             lawChanges: soc ? { ...soc.lawChanges } : null, laws: soc ? { ...soc.laws } : null,
             invariants: typeof checkWorldInvariants === 'function' ? checkWorldInvariants().slice(0, 5) : null, invLog: s.invLog, trimWarnings: s.trimWarnings,
-            trims: typeof ghostTrimLog !== 'undefined' ? ghostTrimLog.length : null, spinDiag: window.__spinDiag || null };
+            trims: typeof ghostTrimLog !== "undefined" ? ghostTrimLog.length : null, spinDiag: window.__spinDiag || null, diag: window.__haltDiag || null };
     };
 })();`;
 

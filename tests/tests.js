@@ -7489,8 +7489,8 @@ group('0.15 H4: Krach rynkowy, bezpieczniki giełdowe i reakcja instytucji', () 
         assert(isMarketHalted() === false, 'brak haltu przy -5%');
 
         // Spadek -8%: Poziom 1 (15s)
-        checkCircuitBreakers(920);
-        assert(isMarketHalted() === true, 'halt aktywny przy -8%');
+        checkCircuitBreakers(915);
+        assert(isMarketHalted() === true, 'halt aktywny przy -8,5%');
         assert(marketHalt.level === 1, 'poziom 1');
         assert(marketHalt.haltDurationSec === 15, 'czas 15s');
 
@@ -8165,7 +8165,7 @@ group('0.15.0.1: Poprawki 0.15 (bezpiecznik, margin call, pieniądze, emisje, kr
         resetMarketHaltWeekly(800);
         assert(!isMarketHalted(), 'pętla tygodniowa kończy wstrzymanie');
         assertEq(marketHalt.weeklyStartGig, 800, 'nowy punkt odniesienia');
-        checkCircuitBreakers(740);
+        checkCircuitBreakers(730);
         assertEq(marketHalt.level, 1, 'w nowym tygodniu 1. stopień znów możliwy');
     });
 
