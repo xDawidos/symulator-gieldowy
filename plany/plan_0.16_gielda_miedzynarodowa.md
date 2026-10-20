@@ -461,6 +461,9 @@ Zgłoszenia użytkownika. Przed budową trzeba je wpisać do części G i dopisa
   - duże obroty i dźwignia;
   - ryzyko kontroli KNF (powiązanie z ciemną strefą 0.11).
 
+- **Zarażanie kryzysów między krajami** (z planowania 0.15.3, 2026-10-20): linie kryzysów z 0.15.3 (`crisisLine`, szoki sektorowe `sectorShocks`) przechodzą na otwarte rynki zagraniczne z opóźnieniem 0–2 kw. i siłą zależną od powiązań (handel, waluta, sektor); kryzys może też zacząć się za granicą i dojść do kraju startowego. Stan nastroju jest już per rynek (`marketRegimes`).
+- **Wezwania i próg wezwania za granicą** (z 0.15.1 M5): każdy kraj ma własny próg wezwania i własny nadzór (odpowiednik KNF); transakcje pakietowe na rynkach zagranicznych podlegają ich drabinie.
+
 ## Do potwierdzenia
 
 - Spółki państwowe w krajach: lista z tabel G2 (1–4 na kraj).
