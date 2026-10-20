@@ -927,7 +927,8 @@ function getShareValuationMood(stock) {
     const premium = typeof getMarketRegime === 'function' ? Number(getMarketRegime('home')?.premium) || 0 : 0;
     const fair = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(stock) : null;
     const ratio = fair > 0 ? stock.price / fair : 1;
-    return { expensive: premium > 0.10 || ratio >= 1.3, cheap: premium < -0.15 || ratio <= 0.75 };
+    // Pojedyncza przewartościowana spółka emituje tylko poza bessą (premia ≥ −10%) — w bessie okno emisji jest zamknięte.
+    return { expensive: premium > 0.10 || (ratio >= 1.3 && premium >= -0.10), cheap: premium < -0.15 || ratio <= 0.75 };
 }
 
 /**
@@ -941,7 +942,7 @@ function getCapitalAgmProposal(stock) {
     const buyback = reason => ({ id: 'buyback', kind: 'board', type: 'buyback', reason, label: reason === 'cheap' ? 'Program skupu akcji własnych przy niskiej wycenie' : 'Program skupu akcji własnych' });
     if (stock.cash < cap * 0.03 && Math.random() < (cheap ? 0.2 : 0.5)) return issue('cash'); // przy tanich akcjach zarząd woli kredyt niż emisję
     if (expensive && Math.random() < (typeof isCompanyInSectorBubble === 'function' && isCompanyInSectorBubble(stock) ? 0.6 : 0.3)) return issue('expensive');
-    if (stock.cash > cap * 0.15 && !expensive && Math.random() < 0.5) return buyback('cash');
+    if (stock.cash > cap * 0.15 && !expensive && Math.random() < 0.3) return buyback('cash'); // 0.15.0.1: 50% → 30% (rozwodnienie rynku ≈ 0 przy 50%)
     if (cheap && stock.cash > cap * 0.05 && Math.random() < 0.4) return buyback('cheap');
     return null;
 }
