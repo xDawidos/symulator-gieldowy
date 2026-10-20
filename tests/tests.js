@@ -7826,6 +7826,22 @@ group('0.15 Poprawki i Program Policyjny: Windykator, raporty, rynki i Policja',
         assert(kpis && kpis.innerHTML.includes('Kapitalizacja'), 'kafelki KPI zawierają Kapitalizację');
         assert(kpis.innerHTML.includes('C/Z'), 'kafelki KPI zawierają C/Z');
     });
+
+    test('P6: Wybór aktywnej giełdy w nagłówku tabeli zamiast przycisku Internetowa', () => {
+        world();
+        ensureMarketOperators();
+        marketOperators.XTD.status = 'active';
+
+        setSelectedMarket('XTD');
+        assert(selectedMarketOperator === 'XTD', 'rynek XTD został wybrany');
+
+        setSelectedMarket('GPW');
+        assert(selectedMarketOperator === 'GPW', 'rynek GPW został wybrany');
+
+        // Sprawdź czy przycisk Internetowa nie istnieje w DOM
+        const internetBtn = document.querySelector('button[data-level="INTERNET"]');
+        assert(!internetBtn, 'przycisk Internetowa usunięty z zakładek poziomów giełdy');
+    });
 });
 
 

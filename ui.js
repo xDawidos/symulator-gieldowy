@@ -1706,9 +1706,16 @@ function displayStocks(previousInputValues = {}) {
   let baseStocksToDisplay = stocks.filter(stock => stockMatchesSectorFilter(stock, sectorFilterState));
 
   if (ownedOnlyFilter) baseStocksToDisplay = baseStocksToDisplay.filter(isStockOwnedByPlayer);
-  // D1: spółki rynków internetowych tylko w zakładce „Internet”.
-  const internetTab = typeof currentMarketLevel !== 'undefined' && currentMarketLevel === 'INTERNET';
-  if (typeof isInternetMarketStock === 'function') baseStocksToDisplay = baseStocksToDisplay.filter(stock => isInternetMarketStock(stock) === internetTab);
+  // Wybór aktywnego rynku (GPW / alternatywne rynki)
+  if (typeof selectedMarketOperator === 'undefined' || !selectedMarketOperator) selectedMarketOperator = 'GPW';
+  const activeMarkets = (typeof marketOperators === 'object' && marketOperators)
+      ? Object.values(marketOperators).filter(op => op.status === 'active')
+      : [{ id: 'GPW' }];
+  if (!activeMarkets.some(m => m.id === selectedMarketOperator)) {
+      selectedMarketOperator = 'GPW';
+  }
+  baseStocksToDisplay = baseStocksToDisplay.filter(stock => getStockMarket(stock) === selectedMarketOperator);
+  const internetTab = false;
 
   // 0.14.5: wiersze budujemy w odpiętym tbody (szybciej niż wstawianie do żywej tabeli),
   // na końcu przenosimy je jednym ruchem (replaceChildren) — bez odczytów układu, przewinięcie zostaje.
@@ -2070,13 +2077,40 @@ function displayStocks(previousInputValues = {}) {
     }
   }
 
-  // --- 0.14.1 R6: nagłówek rynku GPW (rynki internetowe mają własne nagłówki w zakładce „Internet”) ---
-  if (!internetTab && baseStocksToDisplay.some(stock => sortedExchanges.includes(stock.exchange))) {
+  // --- Wybór aktywnej giełdy w nagłówku rynku zamiast osobnej zakładki Internetowa ---
+  if (baseStocksToDisplay.some(stock => sortedExchanges.includes(stock.exchange)) || activeMarkets.length > 0) {
     const marketCell = stockTableBody.insertRow();
     marketCell.className = 'exchange-header market-header';
     const cell = marketCell.insertCell();
     cell.colSpan = STOCK_TABLE_COLS;
-    cell.innerHTML = '<h4 class="my-1">GPW — Giełda Papierów Wartościowych</h4>';
+    
+    const marketButtons = activeMarkets.map(m => {
+        const def = (typeof getMarketDef === 'function' ? getMarketDef(m.id) : null) || { name: m.id, short: m.id };
+        const isActive = selectedMarketOperator === m.id;
+        const count = stocks.filter(s => getStockMarket(s) === m.id && !s.isBankrupt && s.assetType !== 'Startup').length;
+        return `<button type="button" class="btn-market-tab ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); setSelectedMarket('${m.id}')" style="background:${isActive ? 'var(--color-accent, #388bfd)' : 'rgba(255,255,255,0.06)'}; color:${isActive ? '#fff' : 'inherit'}; border:1px solid ${isActive ? 'transparent' : 'var(--table-line, rgba(255,255,255,0.15))'}; border-radius:4px; padding:2px 10px; font-size:11px; font-weight:${isActive ? '700' : '500'}; cursor:pointer; margin-right:6px;">
+            🏛️ ${escapeHtml(def.name)} (${escapeHtml(def.short || m.id)}) · ${count}
+        </button>`;
+    }).join('');
+
+    const concessionInfo = selectedMarketOperator !== 'GPW' ? `
+        <div class="d-flex items-center gap-2 text-xs">
+            <span>Prowizja: ${((getMarketDef(selectedMarketOperator)?.commission || 0) * 100).toFixed(2)}%</span>
+            ${(typeof hasInternetConcession === 'function' && hasInternetConcession(selectedMarketOperator))
+                ? '<span class="text-up font-bold">✅ Koncesja aktywna</span>'
+                : `<button class="btn-secondary btn-xs" onclick="event.stopPropagation(); buyInternetConcession('${selectedMarketOperator}'); displayStocks(getCurrentInputValues());">Kup koncesję (${formatZl(getInternetConcessionCost(selectedMarketOperator), 0)})</button>`}
+        </div>
+    ` : '';
+
+    cell.innerHTML = `
+        <div class="d-flex justify-between items-center gap-2 flex-wrap" style="width:100%; min-height:26px; padding:2px 4px;">
+            <div class="d-flex items-center gap-2 flex-wrap">
+                <span class="text-xs text-muted font-bold" style="letter-spacing:0.05em; text-transform:uppercase;">Aktywna giełda:</span>
+                ${marketButtons}
+            </div>
+            ${concessionInfo}
+        </div>
+    `;
   }
 
   // --- Pętla renderująca giełdy ---
@@ -8708,5 +8742,14 @@ function updateCircuitBreakerUI() {
         }
     } else {
         banner.style.display = 'none';
+    }
+}
+
+let selectedMarketOperator = 'GPW';
+
+function setSelectedMarket(marketId) {
+    selectedMarketOperator = marketId;
+    if (typeof displayStocks === 'function') {
+        displayStocks(typeof getCurrentInputValues === 'function' ? getCurrentInputValues() : {});
     }
 }
