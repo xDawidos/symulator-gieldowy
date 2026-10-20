@@ -142,6 +142,122 @@
         align-items: center;
         gap: 6px;
       }
+
+      /* Donut sektorów portfela */
+      .sector-donut-card {
+        padding: 12px 14px;
+        border: 1px solid var(--border-soft, rgba(255, 255, 255, 0.08));
+        border-radius: var(--radius-lg, 10px);
+        background: var(--bg-card, rgba(15, 23, 42, 0.45));
+        margin-bottom: 14px;
+      }
+      .sector-donut-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 10px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid var(--border-soft, rgba(255, 255, 255, 0.06));
+      }
+      .sector-donut-title {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-weight: 600;
+        color: var(--text-muted, #8b949e);
+      }
+      .sector-donut-count {
+        font-size: 11px;
+        color: var(--text-muted, #8b949e);
+      }
+      .sector-donut-body {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .sector-donut-chart-wrap {
+        flex-shrink: 0;
+        width: 86px;
+        height: 86px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+      }
+      .sector-donut-svg {
+        width: 86px;
+        height: 86px;
+      }
+      .sector-donut-center-num {
+        font-size: 17px;
+        font-weight: 700;
+        fill: var(--text-main, #f0f6fc);
+      }
+      .sector-donut-center-sub {
+        font-size: 8px;
+        font-weight: 600;
+        fill: var(--text-muted, #8b949e);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .sector-donut-legend {
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        min-width: 0;
+        max-height: 130px;
+        overflow-y: auto;
+        padding-right: 4px;
+      }
+      .sector-donut-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        font-size: 11.5px;
+        line-height: 1.25;
+      }
+      .sector-donut-item-left {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+        overflow: hidden;
+      }
+      .sector-donut-swatch {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+      .sector-donut-icon {
+        display: inline-flex;
+        align-items: center;
+        flex-shrink: 0;
+        color: var(--text-muted, #8b949e);
+      }
+      .sector-donut-name {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: var(--text-main, #e6edf3);
+      }
+      .sector-donut-item-right {
+        display: flex;
+        align-items: baseline;
+        gap: 5px;
+        flex-shrink: 0;
+        font-variant-numeric: tabular-nums;
+      }
+      .sector-donut-pct {
+        font-weight: 600;
+        color: var(--text-main, #f0f6fc);
+      }
+      .sector-donut-val {
+        font-size: 10px;
+        color: var(--text-muted, #8b949e);
+      }
     </style>
 </head>
 <body>

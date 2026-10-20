@@ -2425,6 +2425,155 @@ function displayPortfolio() {
     setKpi('cash-portfolio', isPrivate ? 'Gotówka prywatna' : 'Gotówka funduszu', formatZl(cash), 'wolne środki');
     const plEl = document.getElementById('total-profit-loss');
     if (plEl) { plEl.textContent = formatZl(totalPL); plEl.className = `portfolio-kpi-value ${totalPL > 0 ? 'profit' : totalPL < 0 ? 'loss' : ''}`; }
+    updateSectorDonut(portfolio);
+}
+
+function updateSectorDonut(portfolio) {
+    const donutArea = document.getElementById('sector-donut-area');
+    if (!donutArea) return;
+
+    if (!portfolio || typeof portfolio !== 'object') {
+        donutArea.className = 'sector-donut-placeholder';
+        donutArea.innerHTML = 'Podział sektorowy pojawi się po zakupie pierwszych akcji.';
+        return;
+    }
+
+    const equity = Object.entries(portfolio).filter(([, h]) => h && (h.assetType === 'Startup' ? h.investedAmount > 0 : h.shares > 0));
+
+    // Oblicz wartość per sektor
+    const sectorValues = {};
+    let totalValue = 0;
+
+    for (const [symbol, holding] of equity) {
+        let sector = 'Inne';
+        let val = 0;
+        if (holding.assetType === 'Startup') {
+            const startup = typeof stocks !== 'undefined' ? stocks.find(s => s.symbol === symbol) : null;
+            val = Number(holding.investedAmount) || 0;
+            sector = (startup && typeof getMainSector === 'function' ? getMainSector(startup) : null) || 'Technologia';
+        } else if (holding.assetType === 'etf') {
+            const etf = typeof etfs !== 'undefined' ? etfs.find(e => e.symbol === symbol) : null;
+            val = (Number(etf?.price) || 0) * (holding.shares || 0);
+            sector = etf?.sector || 'ETF';
+        } else if (holding.assetType === 'index') {
+            const idx = typeof marketIndexes !== 'undefined' ? marketIndexes.find(i => i.id === symbol) : null;
+            val = (Number(idx?.value) || 0) * (holding.shares || 0);
+            sector = 'Indeksy';
+        } else {
+            const stock = typeof stocks !== 'undefined' ? stocks.find(s => s.symbol === symbol) : null;
+            val = (Number(stock?.price) || 0) * (holding.shares || 0);
+            sector = (stock && typeof getMainSector === 'function' ? getMainSector(stock) : null) ||
+                     (stock && Array.isArray(stock.sector) ? stock.sector[0] : stock?.sector) ||
+                     'Inne';
+        }
+        if (val > 0) {
+            sectorValues[sector] = (sectorValues[sector] || 0) + val;
+            totalValue += val;
+        }
+    }
+
+    if (totalValue <= 0 || Object.keys(sectorValues).length === 0) {
+        donutArea.className = 'sector-donut-placeholder';
+        donutArea.innerHTML = 'Podział sektorowy pojawi się po zakupie pierwszych akcji.';
+        return;
+    }
+
+    // Sortuj sektory malejąco według wartości
+    const sortedSectors = Object.entries(sectorValues)
+        .map(([sector, val]) => ({
+            sector,
+            val,
+            pct: (val / totalValue) * 100
+        }))
+        .sort((a, b) => b.val - a.val);
+
+    const SECTOR_PALETTE = {
+        'Bankowość': '#388bfd',
+        'Finanse': '#58a6ff',
+        'Technologia': '#a371f7',
+        'Gaming': '#ec4899',
+        'Badania': '#8b5cf6',
+        'Medycyna': '#06b6d4',
+        'Energia': '#e3b341',
+        'Budowlany': '#f97316',
+        'Nieruchomości': '#d97706',
+        'Przemysł': '#94a3b8',
+        'Chemia': '#14b8a6',
+        'Transport i logistyka': '#0ea5e9',
+        'Żywność': '#10b981',
+        'Dobra konsumpcyjne': '#84cc16',
+        'Turystyka': '#10b981',
+        'Media': '#f43f5e',
+        'Obronność': '#64748b',
+        'Usługi': '#6366f1',
+        'ETF': '#8b5cf6',
+        'Indeksy': '#0284c7',
+        'Inne': '#6b7280'
+    };
+    const FALLBACK_COLORS = ['#388bfd', '#10b981', '#a371f7', '#f59e0b', '#ec4899', '#06b6d4', '#e3b341', '#f97316', '#14b8a6', '#6366f1'];
+
+    const radius = 38;
+    const circumference = 2 * Math.PI * radius;
+    let cumulativeAngle = 0;
+
+    let circlesSvg = '';
+    if (sortedSectors.length === 1) {
+        const item = sortedSectors[0];
+        item.color = SECTOR_PALETTE[item.sector] || FALLBACK_COLORS[0];
+        circlesSvg = `<circle cx="50" cy="50" r="${radius}" fill="transparent" stroke="${item.color}" stroke-width="12"></circle>`;
+    } else {
+        sortedSectors.forEach((item, idx) => {
+            const color = SECTOR_PALETTE[item.sector] || FALLBACK_COLORS[idx % FALLBACK_COLORS.length];
+            item.color = color;
+            const dash = (item.pct / 100) * circumference;
+            const rot = cumulativeAngle - 90;
+            circlesSvg += `<circle cx="50" cy="50" r="${radius}" fill="transparent" stroke="${color}" stroke-width="12" stroke-dasharray="${dash.toFixed(2)} ${circumference.toFixed(2)}" transform="rotate(${rot.toFixed(2)} 50 50)"></circle>`;
+            cumulativeAngle += (item.pct / 100) * 360;
+        });
+    }
+
+    const sectorCount = sortedSectors.length;
+    const sectorCountLabel = sectorCount === 1 ? 'sektor' : (sectorCount >= 2 && sectorCount <= 4 ? 'sektory' : 'sektorów');
+
+    const legendHtml = sortedSectors.map(item => {
+        const icon = typeof sectorIcon === 'function' ? sectorIcon(item.sector, 13) : '';
+        const pctFormatted = typeof formatNumberPl === 'function' ? formatNumberPl(item.pct, 1) : item.pct.toFixed(1);
+        const valFormatted = typeof formatZl === 'function' ? formatZl(item.val, 0) : `${item.val.toFixed(0)} zł`;
+        const nameEsc = typeof escapeHtml === 'function' ? escapeHtml(item.sector) : item.sector;
+        return `
+            <div class="sector-donut-item" title="${nameEsc}: ${valFormatted} (${pctFormatted}%)">
+                <div class="sector-donut-item-left">
+                    <span class="sector-donut-swatch" style="background-color: ${item.color};"></span>
+                    ${icon ? `<span class="sector-donut-icon">${icon}</span>` : ''}
+                    <span class="sector-donut-name">${nameEsc}</span>
+                </div>
+                <div class="sector-donut-item-right">
+                    <span class="sector-donut-pct">${pctFormatted}%</span>
+                    <span class="sector-donut-val">${valFormatted}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    donutArea.className = 'sector-donut-card';
+    donutArea.innerHTML = `
+        <div class="sector-donut-header">
+            <span class="sector-donut-title">Podział sektorowy</span>
+            <span class="sector-donut-count text-xs text-muted">${sectorCount} ${sectorCountLabel}</span>
+        </div>
+        <div class="sector-donut-body">
+            <div class="sector-donut-chart-wrap">
+                <svg class="sector-donut-svg" viewBox="0 0 100 100">
+                    ${circlesSvg}
+                    <text x="50" y="47" text-anchor="middle" class="sector-donut-center-num">${sectorCount}</text>
+                    <text x="50" y="61" text-anchor="middle" class="sector-donut-center-sub">${sectorCountLabel}</text>
+                </svg>
+            </div>
+            <div class="sector-donut-legend">
+                ${legendHtml}
+            </div>
+        </div>
+    `;
 }
 
 function displayEventMessage(message, durationSeconds, percentageInfo = null, category = 'market') {

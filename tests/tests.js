@@ -8022,6 +8022,89 @@ group('0.15 H6: Akademia, Mentor, osiągnięcia, newsy i retrospektywa rynkowa',
     });
 });
 
+
+group('Portfel: donut podziału sektorowego (#sector-donut-area)', () => {
+    test('Pusty portfel wyświetla komunikat zastępczy', () => {
+        let donut = document.getElementById('sector-donut-area');
+        if (!donut) {
+            donut = document.createElement('div');
+            donut.id = 'sector-donut-area';
+            document.body.appendChild(donut);
+        }
+        updateSectorDonut({});
+        assert(donut.className.includes('sector-donut-placeholder'), 'klasa to sector-donut-placeholder');
+        assert(donut.textContent.includes('Podział sektorowy pojawi się po zakupie pierwszych akcji'), 'poprawny tekst zachęty');
+    });
+
+    test('Portfel z jedną spółką renderuje donut i 100% udziału sektora', () => {
+        let donut = document.getElementById('sector-donut-area');
+        if (!donut) {
+            donut = document.createElement('div');
+            donut.id = 'sector-donut-area';
+            document.body.appendChild(donut);
+        }
+        const bankStock = makeCompany('BNK1', { name: 'Bank Testowy', sector: ['Bankowość'] });
+        bankStock.price = 100;
+        stocks.push(bankStock);
+
+        const testPortfolio = {
+            'BNK1': { shares: 50, avgPrice: 80, assetType: 'stock' }
+        };
+
+        updateSectorDonut(testPortfolio);
+        assert(donut.className.includes('sector-donut-card'), 'klasa to sector-donut-card');
+        assert(donut.querySelector('.sector-donut-svg') !== null, 'zawiera wykres SVG');
+        assert(donut.querySelector('.sector-donut-center-num').textContent === '1', '1 sektor w centrum');
+        assert(donut.innerHTML.includes('Bankowość'), 'zawiera nazwę sektora Bankowość');
+        assert(donut.innerHTML.includes('100,0%') || donut.innerHTML.includes('100.0%') || donut.innerHTML.includes('100%'), 'udział 100%');
+
+        // Sprzątanie
+        stocks.splice(stocks.indexOf(bankStock), 1);
+    });
+
+    test('Portfel z wieloma sektorami sortuje malejąco i sumuje udziały', () => {
+        let donut = document.getElementById('sector-donut-area');
+        if (!donut) {
+            donut = document.createElement('div');
+            donut.id = 'sector-donut-area';
+            document.body.appendChild(donut);
+        }
+        const s1 = makeCompany('S_TECH', { name: 'Tech Spółka', sector: ['Technologia'] });
+        s1.price = 200; // 50 * 200 = 10 000 zł (50%)
+        const s2 = makeCompany('S_MED', { name: 'Med Spółka', sector: ['Medycyna'] });
+        s2.price = 100; // 30 * 100 = 3 000 zł (15%)
+        const s3 = makeCompany('S_ENG', { name: 'Energia Spółka', sector: ['Energia'] });
+        s3.price = 70; // 100 * 70 = 7 000 zł (35%)
+        stocks.push(s1, s2, s3);
+
+        const testPortfolio = {
+            'S_TECH': { shares: 50, avgPrice: 150 },
+            'S_MED': { shares: 30, avgPrice: 90 },
+            'S_ENG': { shares: 100, avgPrice: 60 }
+        };
+
+        updateSectorDonut(testPortfolio);
+        assert(donut.className.includes('sector-donut-card'), 'klasa to sector-donut-card');
+        assert(donut.querySelector('.sector-donut-center-num').textContent === '3', '3 sektory w centrum');
+
+        const items = donut.querySelectorAll('.sector-donut-item');
+        assert(items.length === 3, 'dokładnie 3 pozycje w legendzie');
+        // Kolejność malejąco: Tech (10k), Energia (7k), Medycyna (3k)
+        assert(items[0].textContent.includes('Technologia'), 'pierwsza pozycja to Technologia (największy udział)');
+        assert(items[1].textContent.includes('Energia'), 'druga pozycja to Energia');
+        assert(items[2].textContent.includes('Medycyna'), 'trzecia pozycja to Medycyna');
+
+        // Po wyzerowaniu portfela wraca placeholder
+        updateSectorDonut({});
+        assert(donut.className.includes('sector-donut-placeholder'), 'po wyzerowaniu powrót do placeholdera');
+
+        // Sprzątanie
+        stocks.splice(stocks.indexOf(s1), 1);
+        stocks.splice(stocks.indexOf(s2), 1);
+        stocks.splice(stocks.indexOf(s3), 1);
+    });
+});
+
 async function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;
