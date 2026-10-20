@@ -946,6 +946,17 @@ function getCapitalAgmProposal(stock) {
     return null;
 }
 
+/** Walne kwartał po porządku obrad: czy powód uchwały kapitałowej nadal obowiązuje (inaczej zarząd ją wycofuje). */
+function isCapitalAgmItemValid(stock, item) {
+    if (!['issue', 'buyback'].includes(item.type) || !item.reason || item.by) return true;
+    const cap = getMarketCapValue(stock);
+    const { expensive, cheap } = getShareValuationMood(stock);
+    if (item.reason === 'expensive') return expensive;
+    if (item.reason === 'cheap') return cheap && stock.cash > cap * 0.05;
+    if (item.type === 'issue') return stock.cash < cap * 0.03 && !cheap; // przy tanich akcjach zarząd woli kredyt
+    return stock.cash > cap * 0.15 && !expensive;
+}
+
 /** Emisja przy wysokiej / skup przy niskiej wycenie w spółce z portfela: wpis w pasku newsów i hasło Akademii. */
 function noteCapitalCycleResolution(stock, item) {
     if (!['expensive', 'cheap'].includes(item.reason) || !((playerPortfolio?.[stock.symbol]?.shares || 0) > 0)) return;
@@ -1023,6 +1034,12 @@ function holdAgm(stock) {
     const agm = gov.pendingAgm;
     gov.pendingAgm = null;
     if (!agm?.items?.length) return null;
+    const withdrawn = agm.items.filter(item => !isCapitalAgmItemValid(stock, item));
+    if (withdrawn.length) {
+        agm.items = agm.items.filter(item => !withdrawn.includes(item));
+        logEvent(`🗳️ Zarząd ${stock.name} wycofuje z porządku obrad: ${withdrawn.map(item => item.label).join('; ')} — zmieniła się wycena albo sytuacja spółki.`, 'company');
+        if (!agm.items.length) return null;
+    }
 
     const holders = getShareholders(stock);
     const listed = holders.reduce((sum, holder) => sum + holder.shares, 0);

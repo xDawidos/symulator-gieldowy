@@ -8331,6 +8331,25 @@ group('0.15.0.1: Poprawki 0.15 (bezpiecznik, margin call, pieniądze, emisje, kr
         assert(!/premium/.test(triggerMainMarketEventCycle.toString()) && !/Bubble/.test(triggerRescueOfferingEvent.toString()), 'emisja ratunkowa bez nastroju rynku');
     });
 
+    test('C4: walne kwartał później — zarząd wycofuje emisję, gdy akcje przestały być drogie', () => {
+        const { a } = world();
+        a.cash = getMarketCapValue(a) * 0.10;
+        const orig = getDisplayedFairValue;
+        getDisplayedFairValue = s => s.price;
+        try {
+            getMarketRegime('home').premium = 0.20;
+            const gov = ensureGovernance(a);
+            gov.pendingAgm = { items: [{ id: 'issue', kind: 'board', type: 'issue', reason: 'expensive', label: 'Emisja 10% nowych akcji przy wysokiej wycenie', playerVote: 'for' }] };
+            assert(isCapitalAgmItemValid(a, gov.pendingAgm.items[0]), 'drogie akcje — uchwała ważna');
+            getMarketRegime('home').premium = -0.20; // Dystrybucja → Bessa przed walnym
+            const total0 = a.totalShares;
+            const record = holdAgm(a);
+            assert(!record || !record.results.some(r => r.type === 'issue'), 'emisja wycofana przed głosowaniem');
+            assertEq(a.totalShares, total0, 'bez nowych akcji');
+            assert(!isCapitalAgmItemValid(a, { type: 'issue', reason: 'cash' }) || a.cash < getMarketCapValue(a) * 0.03, 'emisja z braku gotówki tylko przy braku gotówki');
+        } finally { getDisplayedFairValue = orig; }
+    });
+
     test('C4: akcje = posiadacze po emisji i skupie z walnego; news i hasło Akademii dla spółki z portfela', () => {
         const { a } = world();
         playerPortfolio.AAA = { shares: 2000, avgPrice: 100, assetType: 'stock' };
