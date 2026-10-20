@@ -2124,14 +2124,14 @@ function displayStocks(previousInputValues = {}) {
     ` : '';
 
     cell.innerHTML = `
-        <div class="market-header-bar" onclick="toggleMarketSelector(event)" title="Kliknij, aby wybrać aktywną giełdę">
+        <div class="market-header-bar" onclick="toggleMarketSelector(event)" title="Kliknij, aby rozwinąć / zwinąć wybór aktywnej giełdy">
             <h4 class="market-header-title">
                 ${currTitle}
-                <span class="market-header-chevron ${isMarketSelectorOpen ? 'is-open' : ''}">▼</span>
+                <span class="market-header-chevron">${isMarketSelectorOpen ? '▲' : '▼'}</span>
             </h4>
             ${sideInfo}
         </div>
-        <div class="market-selector-drawer ${isMarketSelectorOpen ? 'is-open' : ''}" id="market-selector-drawer">
+        <div class="market-selector-drawer ${isMarketSelectorOpen ? 'is-open' : ''}" id="market-selector-drawer" style="display: ${isMarketSelectorOpen ? 'block' : 'none'};">
             <div class="market-selector-inner">
                 <div class="market-selector-label">Wybierz aktywny rynek giełdowy:</div>
                 <div class="market-selector-grid">
@@ -8786,6 +8786,7 @@ function toggleMarketSelector(event) {
     const drawer = document.getElementById('market-selector-drawer');
     const chevron = document.querySelector('.market-header-chevron');
     if (drawer) {
+        drawer.style.display = isMarketSelectorOpen ? 'block' : 'none';
         if (isMarketSelectorOpen) {
             drawer.classList.add('is-open');
         } else {
@@ -8793,8 +8794,7 @@ function toggleMarketSelector(event) {
         }
     }
     if (chevron) {
-        if (isMarketSelectorOpen) chevron.classList.add('is-open');
-        else chevron.classList.remove('is-open');
+        chevron.textContent = isMarketSelectorOpen ? '▲' : '▼';
     }
 }
 

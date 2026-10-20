@@ -6,7 +6,143 @@
     <title>Capital Quest</title>
     <link rel="icon" type="image/svg+xml" href="img/logo/favicon.svg">
     <link rel="stylesheet" href="tokens.css">
-    <link rel="stylesheet" href="style.css">
+        <link rel="stylesheet" href="style.css?v=15.2">
+    <style id="market-selector-css">
+      #stock-table tr.market-header td {
+        padding: 0 !important;
+        background: var(--table-head-bg, #161b22) !important;
+        border-bottom: 1px solid var(--table-line, rgba(255,255,255,0.1)) !important;
+        position: relative;
+      }
+      .market-header-bar {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        min-height: 32px;
+        padding: 4px 16px;
+        cursor: pointer;
+        user-select: none;
+        background: var(--table-head-bg, #161b22);
+        transition: background-color 0.15s ease;
+      }
+      .market-header-bar:hover {
+        background: rgba(255, 255, 255, 0.05);
+      }
+      .market-header-title {
+        margin: 0 !important;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--color-text-muted, #8b949e) !important;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .market-header-chevron {
+        display: inline-block;
+        font-size: 9px;
+        color: var(--color-text-muted, #8b949e);
+        transition: transform 0.2s ease;
+      }
+      .market-header-side-info {
+        position: absolute;
+        right: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 11px;
+      }
+      .market-selector-drawer {
+        display: none;
+        background: #11151c;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        border-bottom: 2px solid rgba(56, 139, 253, 0.4);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+        animation: marketSlideDown 0.22s ease-out;
+      }
+      .market-selector-drawer.is-open {
+        display: block;
+      }
+      @keyframes marketSlideDown {
+        from { opacity: 0; transform: translateY(-6px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .market-selector-inner {
+        padding: 12px 18px 14px;
+      }
+      .market-selector-label {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #8b949e;
+        margin-bottom: 10px;
+        text-align: left;
+      }
+      .market-selector-grid {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .market-selector-card {
+        flex: 1 1 220px;
+        max-width: 340px;
+        padding: 10px 14px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.04);
+        cursor: pointer;
+        transition: all 0.18s ease;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        text-align: left;
+      }
+      .market-selector-card:hover {
+        border-color: #388bfd;
+        background: rgba(56, 139, 253, 0.1);
+        transform: translateY(-1px);
+      }
+      .market-selector-card.is-selected {
+        border-color: #388bfd;
+        background: rgba(56, 139, 253, 0.18);
+        box-shadow: 0 0 0 1px #388bfd;
+      }
+      .market-selector-card-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .market-selector-card-title {
+        font-size: 12px;
+        font-weight: 700;
+        color: #e6edf3;
+      }
+      .market-selector-card-badge {
+        font-size: 10px;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.08);
+        color: #8b949e;
+      }
+      .market-selector-card.is-selected .market-selector-card-badge {
+        background: #388bfd;
+        color: #fff;
+      }
+      .market-selector-card-meta {
+        font-size: 11px;
+        color: #8b949e;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 6px;
+      }
+    </style>
 </head>
 <body>
 
