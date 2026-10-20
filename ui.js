@@ -6656,7 +6656,11 @@ function renderFundFlowReasons() {
             <div class="d-flex gap-2 flex-wrap"><div><em>Odchodzą, bo:</em><ul>${rows(quarter.out, FUND_FLOW_OUT_REASONS, -1) || '<li>nikt nie odszedł</li>'}</ul></div>
             <div><em>Przychodzą:</em><ul>${rows(quarter.in, FUND_FLOW_IN_REASONS, 1) || '<li>brak wpłat</li>'}</ul></div></div></div>`;
     };
+    const gate = stats.current;
+    const gateUsed = (gate.gateUnitsRedeemed || 0) / Math.max(1, gate.startUnits) * 100;
+    const queued = typeof getQueuedRedemptionUnits === 'function' ? getQueuedRedemptionUnits() : 0;
     box.innerHTML = quarterTable(stats.last, 'Ostatni kwartał') + quarterTable(stats.current, 'Bieżący kwartał')
+        + `<p class="text-sm">Bramka umorzeń: wykorzystano ${formatNumberPl(gateUsed, 1)}% z ${formatNumberPl(REDEMPTION_GATE_SHARE * 100, 0)}%, w kolejce ${formatNumberPl(queued, 1)} udziałów.</p>`
         + `<p class="text-xs text-muted">Napływ nowych klientów (emisja ${isFundOpenForSubscriptions() ? 'otwarta' : 'zamknięta'}): ok. ${formatNumberPl((isFundOpenForSubscriptions() ? getOrganicInflowRate() * 100 : 0), 1)}% aktywów rocznie — zależy od zaufania, reputacji i wyniku vs GIG.</p>`;
 }
 

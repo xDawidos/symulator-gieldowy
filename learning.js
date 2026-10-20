@@ -805,6 +805,19 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Spółka skupuje 10% własnych akcji. Twój udział w zysku na akcję…', a: ['rośnie', 'maleje', 'nie zmienia się'], c: 0 }
         ]
     },
+    bramka_umorzen: {
+        title: 'Bramka umorzeń', icon: '⏳',
+        text: 'Fundusz może czasowo ograniczyć wypłaty, gdy klienci chcą naraz umorzyć dużą część udziałów — tak robią fundusze nieruchomości i fundusze zamknięte. W grze w kwartale można umorzyć najwyżej 10% udziałów z jego początku (w tym panika najwyżej 5%). Reszta zleceń czeka w kolejce i idzie pierwsza w następnym kwartale, chyba że klient odzyska zadowolenie i zrezygnuje. Bramka chroni pozostałych klientów przed wyprzedażą akcji po złych cenach, ale klienci to widzą — zaufanie spada.',
+        example: () => {
+            const queued = typeof getQueuedRedemptionUnits === 'function' ? getQueuedRedemptionUnits() : 0;
+            return queued > 0 ? `W kolejce umorzeń czeka ${formatNumberPl(queued, 1)} udziałów.` : 'Kolejka umorzeń jest pusta.';
+        },
+        quiz: [
+            { q: 'Ile udziałów można umorzyć w jednym kwartale, zanim zadziała bramka?', a: ['10% udziałów z początku kwartału', '50% udziałów', 'Bez limitu'], c: 0 },
+            { q: 'Co dzieje się ze zleceniem umorzenia ponad limit?', a: ['Czeka w kolejce i idzie pierwsze w następnym kwartale', 'Przepada', 'Jest realizowane od razu po niższej cenie'], c: 0 },
+            { q: 'Jaki koszt ponosi fundusz, uruchamiając bramkę?', a: ['Spada zaufanie klientów', 'Płaci karę do KNF', 'Traci licencję'], c: 0 }
+        ]
+    },
     pozyczkodawca: {
         title: 'Pożyczkodawca ostatniej instancji', icon: '🏛️',
         text: 'W sytuacji paniki rynkowej i kryzysu płynności komercyjne instytucje finansowe boją się pożyczać sobie nawzajem pieniądze. Rolę pożyczkodawcy ostatniej instancji pełni Bank Centralny. W odpowiedzi na krach może obniżyć stopy procentowe (np. cięcie o 50 pb) oraz zasilić rynek płynnością, zapobiegając lawinie bankructw.',

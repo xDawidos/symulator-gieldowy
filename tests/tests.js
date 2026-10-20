@@ -799,9 +799,14 @@ group('Rynek: fundamenty, ceny, cykl, dywidendy (etap A)', () => {
         const foodGrowth = growth(food);
         const buildGrowth = growth(build);
         assert(foodGrowth > buildGrowth, `Żywność ${(foodGrowth * 100).toFixed(1)}% vs Budowlany ${(buildGrowth * 100).toFixed(1)}%`);
-        const multFood = withCycle('recession', -0.012, () => getValuationMultiplier(food));
-        const multBuild = withCycle('recession', -0.012, () => getValuationMultiplier(build));
-        assert(multFood > multBuild, 'niższa wycena cyklicznych w recesji');
+        // Cykl sektorów (stan z poprzednich testów) wyłączony: po 0.15.0.1 C5a różnica faz jest o połowę mniejsza.
+        const sectorFactor = getSectorValuationFactor;
+        getSectorValuationFactor = () => 1;
+        try {
+            const multFood = withCycle('recession', -0.012, () => getValuationMultiplier(food));
+            const multBuild = withCycle('recession', -0.012, () => getValuationMultiplier(build));
+            assert(multFood > multBuild, 'niższa wycena cyklicznych w recesji');
+        } finally { getSectorValuationFactor = sectorFactor; }
     });
 
     test('dywidenda: z gotówki spółki, cena spada o dywidendę na akcję, 0% nic nie wypłaca', () => {
@@ -8417,6 +8422,75 @@ group('0.15.0.1: Poprawki 0.15 (bezpiecznik, margin call, pieniądze, emisje, kr
         assertNear(worse.drawdown, -(0.30 - 0.10 - 0.03) * def.volAversion * 0.3, 'pełny składnik względny', 1e-9);
         assertEq(worse.bearMarket, 0, 'GIG −10%: bez części absolutnej');
         assertEq(getDominantOutflowReason(worse, CLIENT_TYPES.careful, 0.5), 'drawdown', 'przyczyna: obsunięcie większe niż GIG');
+    });
+
+    // Fundusz z 10 niezadowolonymi klientami po 100 udziałów (1000 udziałów, gotówka na wypłaty).
+    function gateWorld(type = 'careful') {
+        world();
+        playerPortfolio = {};
+        playerCash = 1_000_000;
+        playerFund.clients = Array.from({ length: 10 }, (_, i) => ensureClientProfile({ id: `g${i}`, name: `Klient ${i}`, type, units: 100, avgCost: 1000, satisfaction: 0 }));
+        playerFund.units = 1000;
+        playerFund.flowStats = null; // nowy kwartał przepływów: start 1000 udziałów
+        playerFund.trust = 50;
+        Object.assign(playerFund.current, { startNav: getFundNav(), startBenchmark: getBenchmarkValue(), maxDrawdown: 0, benchmarkDrawdown: 0 }); // wynik = GIG
+        gateWorld.seeded = Math.random;
+        Math.random = () => 0; // każdy niezadowolony umarza całość
+        return playerFund.clients;
+    }
+    const weekOfClients = () => { for (const c of playerFund.clients) if (c.satisfaction < 0.3) c.satisfaction = 0; processClientsWeekly(); };
+
+    test('C6b: umorzenia w kwartale ≤ 10% udziałów z początku kwartału; nadwyżka w kolejce; bramka raz (zaufanie −2)', () => {
+        gateWorld();
+        for (let w = 0; w < 5; w++) weekOfClients();
+        const q = getFundFlowStats().current;
+        assert(q.outUnits <= 100 + 1e-6, `odpływ ${q.outUnits} ≤ 100`);
+        assertNear(q.gateUnitsRedeemed, 100, 'limit wykorzystany');
+        assert(q.gateTriggered, 'bramka uruchomiona');
+        assertNear(getQueuedRedemptionUnits(), 9 * 50, 'reszta w kolejce (tygodniowy limit 15%: po 50 udziałów)');
+        assertEq(playerFund.trust, 48, 'zaufanie −2 raz na kwartał');
+        assertEq(playerFund.clients.length, 9, 'pierwszy klient wyszedł, reszta czeka');
+        assert(isAcademyUnlocked('bramka_umorzen'), 'hasło Akademii');
+    });
+
+    test('C6b: kolejka idzie pierwsza w następnym kwartale; klient z odzyskanym zadowoleniem rezygnuje', () => {
+        gateWorld();
+        weekOfClients();
+        const happy = playerFund.clients.find(c => c.id === 'g9');
+        macro.quarter++;
+        happy.satisfaction = 0.9;
+        weekOfClients();
+        const q = getFundFlowStats().current;
+        assertEq(q.startUnits, 900, 'nowy kwartał od 900 udziałów');
+        assertNear(q.outUnits, 90, 'z kolejki 10% z 900');
+        assert(q.out.gate > 0, 'przyczyna: kolejka umorzeń');
+        assertNear(playerFund.clients.find(c => c.id === 'g1').units, 50, 'pierwszy w kolejce umorzył całe zlecenie (50)');
+        assertNear(playerFund.clients.find(c => c.id === 'g2').units, 60, 'drugi do limitu (40)');
+        assertEq(happy.queuedRedemption, 0, 'zadowolony zrezygnował z kolejki');
+        assertEq(happy.units, 100, 'i zostaje w funduszu');
+    });
+
+    test('C6b: panika ≤ 5% na kwartał; rynek wtórny poza bramką', () => {
+        gateWorld('fearful');
+        for (let w = 0; w < 5; w++) weekOfClients();
+        const q = getFundFlowStats().current;
+        assert((q.out.panic || 0) > 0 && q.panicUnitsRedeemed <= 50 + 1e-6, `panika ${q.panicUnitsRedeemed} ≤ 5%`);
+        assert(!/passRedemptionGate/.test(runPlayerJuMarket.toString()), 'sprzedaż na rynku wtórnym bez bramki');
+    });
+
+    test('C6b: zapis i wczytanie z kolejką umorzeń, wstrzymaniem i krachem', () => {
+        gateWorld();
+        weekOfClients();
+        Math.random = gateWorld.seeded; // wczytanie zapisu losuje (stała 0 zapętla losowanie)
+        playerFund.clockMs = 60000;
+        triggerMarketHalt(1, 15, -0.08);
+        triggerMarketCrash({ durationWeeks: 3, targetDrop: -0.3 });
+        const queued = getQueuedRedemptionUnits();
+        const report = applySaveSnapshot(JSON.parse(JSON.stringify(buildSaveSnapshot())));
+        assert(report.ok, 'wczytanie bez błędów');
+        assertNear(getQueuedRedemptionUnits(), queued, 'kolejka po wczytaniu');
+        assert(getFundFlowStats().current.gateTriggered, 'stan bramki po wczytaniu');
+        assert(isMarketHalted() && isMarketCrashing(), 'wstrzymanie i krach po wczytaniu');
     });
 });
 
