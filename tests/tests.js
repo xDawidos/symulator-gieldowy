@@ -8298,16 +8298,16 @@ group('0.15.0.1: Poprawki 0.15 (bezpiecznik, margin call, pieniądze, emisje, kr
         return k / n;
     }
 
-    test('C4: drogie akcje → emisja w porządku obrad z szansą 37% (74% w sektorze bańki)', () => {
+    test('C4: drogie akcje → emisja w porządku obrad z szansą 40% (80% w sektorze bańki)', () => {
         const { a } = world();
         getMarketRegime('home').phase = 'bull';
         a.cash = getMarketCapValue(a) * 0.10; // ani brak, ani nadmiar gotówki
         getMarketRegime('home').premium = 0.20;
         const p = capitalShare(a, 'issue');
-        assert(Math.abs(p - 0.37) <= 0.02, `emisja ${p}`);
+        assert(Math.abs(p - 0.40) <= 0.02, `emisja ${p}`);
         const orig = isCompanyInSectorBubble;
         isCompanyInSectorBubble = () => true;
-        try { const pb = capitalShare(a, 'issue'); assert(Math.abs(pb - 0.74) <= 0.02, `emisja w bańce ${pb}`); }
+        try { const pb = capitalShare(a, 'issue'); assert(Math.abs(pb - 0.80) <= 0.02, `emisja w bańce ${pb}`); }
         finally { isCompanyInSectorBubble = orig; }
         assertEq(capitalShare(a, 'buyback', 2000), 0, 'bez skupu przy drogich akcjach');
         getMarketRegime('home').phase = 'bear';
@@ -8326,7 +8326,7 @@ group('0.15.0.1: Poprawki 0.15 (bezpiecznik, margin call, pieniądze, emisje, kr
         getMarketRegime('home').premium = 0;
         assertEq(capitalShare(a, 'buyback', 2000) + capitalShare(a, 'issue', 2000), 0, 'neutralna wycena — bez uchwały kapitałowej');
         getMarketRegime('home').premium = 0.12;
-        assert(Math.abs(capitalShare(a, 'issue') - 0.37) <= 0.02, 'górna część Hossy (premia > +10%) to już drogie akcje');
+        assert(Math.abs(capitalShare(a, 'issue') - 0.40) <= 0.02, 'górna część Hossy (premia > +10%) to już drogie akcje');
         a.cash = getMarketCapValue(a) * 0.01; // brak gotówki
         getMarketRegime('home').premium = 0;
         assert(Math.abs(capitalShare(a, 'issue') - 0.50) <= 0.02, 'brak gotówki: emisja 50%');

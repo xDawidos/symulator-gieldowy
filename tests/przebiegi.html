@@ -388,6 +388,8 @@ const PROBE = `(function () {
             if (f > 0 && eps > 0) fe.push(f / eps);
             if (typeof getValuationMultiplier === 'function') { try { vm.push(getValuationMultiplier(x)); } catch (e) {} }
         }
+        const phases = {}; for (const x of members) phases[x.corporatePhase || '?'] = (phases[x.corporatePhase || '?'] || 0) + 1;
+        (P.phases = P.phases || []).push({ q: macro.quarter, n: members.length, ...phases });
         P.valuation.push({ q: macro.quarter, priceFair: med(pf), fairEps: med(fe), valMult: med(vm), rate: typeof centralBank === 'object' ? centralBank.baseInterestRate : null });
         // Łańcuchowe indeksy: zysk rynku (epsTtm × akcje, spółki z zyskiem w obu kwartałach) i liczba akcji tych samych spółek.
         const earn = {}, shares = {};
@@ -414,7 +416,8 @@ const PROBE = `(function () {
             valuation: { priceFairIn: pf.length ? pf.filter(v => v >= 0.75 && v <= 1.30).length / pf.length : null, quarters: P.valuation },
             earningsIndexCagr: Math.pow(P.earnIdx, 1 / y) - 1,
             issuance: { issue: P.issue, buyback: P.buyback, sharesCagr: Math.pow(P.sharesIdx, 1 / y) - 1 },
-            gate: P.gate
+            gate: P.gate,
+            corporatePhases: P.phases || []
         };
     };
     s.badPrice = [];
