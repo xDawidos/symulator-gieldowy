@@ -91,3 +91,18 @@ W `c7long` w kwartałach, w których krach jest możliwy (Hossa ≥ 4 kw., Eufor
    - odliczanie chłodzenia KNF działa też w kwartałach bez ryzyka krachu;
    - „Komendant Jakub” bez dopłaty przy pustym skarbie.
 7. **Nie sprawdzone osobno:** czas kroku i przyrost zapisu względem 0.15 (pomiary w 3 kartach równolegle; nowe pola zapisu to `queuedRedemption` klienta i 3 pola kwartału przepływów — rząd bajtów); widok panelu bramki w przeglądarce (tekst renderowany w przebiegach bez błędu, bez zrzutu).
+
+## Po C7: decyzje użytkownika i pomiar (2026-10-21)
+
+| Decyzja | Commit | Wynik (10 + 10 × 6,5 roku, 4–5 × 20 lat, ×200) |
+|---|---|---|
+| Bezpiecznik 1. stopnia −10% | `c01b553` | poza krachem 1,0 / 3,2 / 1,5 na 20 lat (było 8–9); tiki zamrożone 0,4–0,6% ✅ |
+| Krach 3%/kw. | `c01b553` | 1,0–1,6 na 20 lat, w grach 20-letnich krach w każdej grze ✅ |
+| Emisja przy drogich akcjach 37% → 40% | `c01b553`, `01bf512` | emisje tylko we wzrostach ✅; rozwodnienie +0,3 / −0,1 / −0,5%/rok ❌ |
+| Skup z nadmiaru gotówki 25% | `9ce625c` | rozwodnienie +0,4 / −0,2 / −0,1%/rok ❌ (otwarte) |
+| Zysk na akcję: przyjęte ok. 4% w 20 latach; łagodniejszy Spadek (−1,5 pp, wyjście 30%) | `9ce625c` | mediana spółek 6,6–6,8% (6,5 roku), 4,2% (20 lat) ✅ wg decyzji |
+| Faza dla każdej spółki (błąd: ok. połowa spółek bez fazy) | `9ce625c` | spółki bez fazy 70% → 3–4% (to banki) ✅ |
+
+- **Sondy:** bankruci znikają z listy spółek, więc dawna miara „bankrut = −100%” nic nie liczyła; sonda ma teraz rozbicie (strata na końcu, mediana ocalałych) i wzrost wg sektora.
+- **Sektory (mediana zysku na akcję / kursu na rok, 20 lat):** najlepsze Finanse 17,5 / 17%, Technologia 7,7 / 7,5%, Usługi 8,1 / 6,3%, Obronność 7,1 / 8,0%; najsłabsze Przemysł −0,4 / 0,4%, Budowlany −0,2 / 4,3%, Turystyka −1,5 / 1,3%, Energia 2,0 / 6,8%, Chemia 2,2 / 6,0%.
+- **Otwarte:** rozwodnienie rynku ≈ 0%/rok (cel +0,5…+2%).
