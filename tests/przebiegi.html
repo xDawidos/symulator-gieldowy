@@ -232,6 +232,10 @@ PRESETS['wiekszosciowiec'] = `(function () {
         window.__majority.push(s.symbol);
     }
     window.__offerPolicy = { acceptPremium: 0.30, counterAtTop: true };
+    // Przebieg bez gracza: okna decyzji (wezwanie, komplikacje) nie zatrzymują gry; komplikacja → „kontynuuj mimo wszystko”.
+    if (typeof togglePauseGame === 'function') { const tp = togglePauseGame; togglePauseGame = function () { return isGamePaused ? tp.apply(this, arguments) : undefined; }; }
+    if (typeof openComplicationModal === 'function') openComplicationModal = (stock) => applyComplicationOption(stock.symbol, 'expensive');
+    if (typeof openTakeoverModal === 'function') openTakeoverModal = () => {};
     // Polityka sondy dla ofert (M2): ≥ 30% premii — przyjmij; inaczej rozmowy i jedna kontroferta na górnej granicy przedziału, potem przyjmij.
     const L = window.__offerLog = [];
     if (typeof processBuyoutOffersQuarterly === 'function') {
