@@ -15,7 +15,7 @@ Czego to uczy:
 
 Decyzja użytkownika: gracz jako większościowiec **dostaje oferty** i je rozgrywa; kontrolę zdobywa **odkupem pakietów** od botów (istniejące relacje) i od prezesa, a nie przez nowy przycisk „kup spółkę”. Istniejące przejęcie z panelu zarządzania spółką (`openManagementModal`) zostaje bez zmian.
 
-Kolejność: M0 → M1 → M2 → M3 → M4 → M5 → M6 → M7 → M8. **Commit po każdej części** (część z kilkoma krokami — commit po każdym kroku).
+Kolejność: M0 → M1 → M2 → **M10** → M3 → M4 → M5 → M6 → **M9** → M7 → M8 (M9 i M10 dopisane 2026-10-21 na prośbę użytkownika; mapa M10 zaraz po M2, bo pomaga śledzić kolejne części). **Commit po każdej części** (część z kilkoma krokami — commit po każdym kroku).
 
 UI z komponentów 0.14.5. **Projekt wyglądu nowych elementów zlecamy czatowi designu** (sekcja „Zlecenie dla czatu designu”).
 
@@ -227,6 +227,43 @@ Decyzja użytkownika: przekroczenie 50% przez odkup pakietów poza rynkiem uruch
 - **Pasek newsów:** ogłoszenie i zerwanie przejęcia, odpis ≥ 50%, zmiana progu wezwania (dla wszystkich); oferta dla gracza i ostrzeżenia KNF — poczta.
 - **Commit M7.**
 
+## M9. Drabina pakietów spółka → spółka (dopisane 2026-10-21, decyzja użytkownika)
+
+Spółki kupują pakiety innych spółek stopniowo, a progi zmieniają zachowanie celu. Budowa na istniejących mechanizmach: `equityStakes`, córki T6 (`isSubsidiaryOf`, `parentStakePct`, transfer zysku), kooperacje T5, wchłonięcie z przymusowym wykupem, odkup pakietów z M4, wezwanie i KNF z M5, wartość firmy z M6.
+
+**Kto może kupować (ranga giełdy):**
+- spółki z giełd **Platynowej i wyższych** (poziom ≥ 4): pakiety w spółkach z niższych rang; kooperacje (25%) także z tą samą rangą;
+- spółki **Złote** (poziom 3) z ograniczeniem: tylko szczególnie dobre albo bogate (kondycja ≥ 3 **albo** gotówka ≥ 25% kapitalizacji) — pakiety w spółkach z niższych rang i kooperacje (25%) ze spółkami Złotymi;
+- spółka zawsze może zostać kupiona przez spółkę z wyższej rangi (Złote też);
+- bez spółek Skarbu Państwa po stronie kupującej (wyjątek: nacjonalizacja przy 99%) i bez spółek zależnych.
+
+**Progi** (udział kupującego w celu):
+
+| Próg | Nazwa | Skutek |
+|---|---|---|
+| 25%+ | powiązanie | kooperacja (T5) z kupującym; głos kupującego na walnym celu |
+| 50%+ | związanie | cel staje się córką (`isSubsidiaryOf`, transfer zysku T6); nowy prezes od kupującego z cechą **„Marionetka &lt;nazwa kupującego&gt;”** (np. „Marionetka Cortex”) — na walnym głosuje jak matka |
+| 75%+ | przejęcie kontroli | zmiana nazwy nawiązująca do matki (np. „Cortex Drobex”), synergie kosztowe (marża +1 pp), polityka dywidendy pod matkę |
+| 99% (90% przy wchłonięciu) | zdjęcie z giełdy | wchłonięcie / prywatyzacja (istniejący przymusowy wykup); przy spółce Skarbu Państwa — nacjonalizacja |
+
+**Długofalowe przejęcie (podkupowanie):** zamiast jednego wezwania kupujący przez kilka kwartałów dokupuje akcje na rynku (wpływ na cenę jak zakupy botów) i odkupuje pakiety od posiadaczy (cena rezerwowa z M4); limit tempa 3–8 pp udziału na kwartał. Przekroczenie progu ustawy „Próg wezwania” (M5) bez wezwania — nakaz wezwania jak dla funduszu.
+
+**Cecha prezesa „Mistrz marionetek”** (nowa, rzadka): spółka z takim prezesem częściej rozpoczyna podkupowanie (×2) i szybciej dokupuje (górna granica tempa); spółki z „Marionetką” w zarządzie nie bronią się przed matką.
+
+**Tempo w grze:** najwyżej kilka rozpoczętych podkupowań na rok w całej grze (cel do pomiaru: 2–5 na rok); liczba córek i koncernów pilnowana (cele T5/T6).
+
+- **Zapis:** `stock.stakeCampaign` (kupujący, cel udziału, tempo), progi osiągnięte, cecha prezesa; pola opcjonalne.
+- **Testy:** progi 25/50/75/99 i ich skutki; „Marionetka &lt;nazwa&gt;” głosuje jak matka; zmiana nazwy przy 75%; zasady rang (Złota tylko przy kondycji ≥ 3 albo gotówce ≥ 25% kap., kupowanie tylko niższych rang, kooperacje w tej samej randze); podkupowanie w limicie tempa; akcje = posiadacze; „Mistrz marionetek” ×2.
+- **Commit M9** (kroki: progi i skutki; podkupowanie i rangi; cecha prezesa).
+
+## M10. Mapa rodowa spółek (tylko tryb deweloperski)
+
+- **Dziennik zdarzeń rodowych** (zapisywany, ograniczony rozmiarem): założenie córki, wydzielenie (spin-off, carve-out), usamodzielnienie, sprzedaż pakietu kontrolnego, przejęcie, fuzja, wchłonięcie, progi M9, zmiana nazwy, bankructwo — z kwartałem i udziałem.
+- **Widok:** w panelu deweloperskim drzewo jak drzewo genealogiczne (wcięta lista, bez grafiki): spółka → córki → ich córki; przy każdej spółce historia (np. „Cortex → córka A (usamodzielniona kw. 14) → córka A1”); spółki wchłonięte i zbankrutowane też widoczne.
+- Bez wpływu na grę; niewidoczne poza trybem deweloperskim.
+- **Testy:** zdarzenia trafiają do dziennika; drzewo odtwarza łańcuch matka → córka → wnuczka po usamodzielnieniu; zapis i wczytanie dziennika.
+- **Commit M10.**
+
 ## M8. Kontrola końcowa
 
 Pomiar z „Jak sprawdzimy”, raport `raporty/kontrola_0.15.1.md`, wiersz w mapie. **Commit M8.**
@@ -241,6 +278,8 @@ Pomiar z „Jak sprawdzimy”, raport `raporty/kontrola_0.15.1.md`, wiersz w map
 4. **Ustawa „Próg wezwania”** w oknie „Państwo” z limitem KNF.
 5. **Wiersze bilansu** „Wartość firmy” i wyniku „Odpis wartości firmy”.
 6. Wymogi 0.14.5: kolor nigdy jedynym nośnikiem, animacje tylko bez `prefers-reduced-motion`, **bez nowych okien modalnych poza oknem oferty** (wzorzec istniejącego okna przejęcia).
+
+Kontrola końcowa (M8) obejmuje też M9 i M10: podkupowania na rok, córki i koncerny w celach T5/T6, spójność rejestru akcji.
 
 ## Zapis gry i testy
 
