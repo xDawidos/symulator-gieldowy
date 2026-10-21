@@ -924,11 +924,13 @@ function buildAgmAgenda(stock) {
 
 /** 0.15.0.1 C4: wycena akcji spółki na tle rynku — drogie (premia rynku > +10% albo kurs ≥ 1,3 × wartości godziwej) lub tanie. */
 function getShareValuationMood(stock) {
-    const premium = typeof getMarketRegime === 'function' ? Number(getMarketRegime('home')?.premium) || 0 : 0;
+    const regime = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+    const premium = Number(regime?.premium) || 0;
+    const bearish = regime?.phase === 'bear' || regime?.phase === 'capitulation'; // okno emisji zamknięte
     const fair = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(stock) : null;
     const ratio = fair > 0 ? stock.price / fair : 1;
-    // Pojedyncza przewartościowana spółka emituje tylko poza bessą (premia ≥ −10%) — w bessie okno emisji jest zamknięte.
-    return { expensive: premium > 0.10 || (ratio >= 1.3 && premium >= -0.10), cheap: premium < -0.15 || ratio <= 0.75 };
+    // W Bessie i Kapitulacji okno emisji jest zamknięte (premia goni cel z opóźnieniem, więc sama premia nie wystarcza).
+    return { expensive: !bearish && (premium > 0.10 || ratio >= 1.3), cheap: premium < -0.15 || ratio <= 0.75, bearish };
 }
 
 /**
@@ -937,10 +939,10 @@ function getShareValuationMood(stock) {
  */
 function getCapitalAgmProposal(stock) {
     const cap = getMarketCapValue(stock);
-    const { expensive, cheap } = getShareValuationMood(stock);
+    const { expensive, cheap, bearish } = getShareValuationMood(stock);
     const issue = reason => ({ id: 'issue', kind: 'board', type: 'issue', reason, label: reason === 'expensive' ? 'Emisja 10% nowych akcji przy wysokiej wycenie' : 'Emisja 10% nowych akcji' });
     const buyback = reason => ({ id: 'buyback', kind: 'board', type: 'buyback', reason, label: reason === 'cheap' ? 'Program skupu akcji własnych przy niskiej wycenie' : 'Program skupu akcji własnych' });
-    if (stock.cash < cap * 0.03 && Math.random() < (cheap ? 0.2 : 0.5)) return issue('cash'); // przy tanich akcjach zarząd woli kredyt niż emisję
+    if (stock.cash < cap * 0.03 && Math.random() < (cheap || bearish ? 0.2 : 0.5)) return issue('cash'); // przy tanich akcjach zarząd woli kredyt niż emisję
     if (expensive && Math.random() < (typeof isCompanyInSectorBubble === 'function' && isCompanyInSectorBubble(stock) ? 0.6 : 0.3)) return issue('expensive');
     if (stock.cash > cap * 0.15 && !expensive && Math.random() < 0.3) return buyback('cash'); // 0.15.0.1: 50% → 30% (rozwodnienie rynku ≈ 0 przy 50%)
     if (cheap && stock.cash > cap * 0.05 && Math.random() < 0.4) return buyback('cheap');
@@ -951,10 +953,10 @@ function getCapitalAgmProposal(stock) {
 function isCapitalAgmItemValid(stock, item) {
     if (!['issue', 'buyback'].includes(item.type) || !item.reason || item.by) return true;
     const cap = getMarketCapValue(stock);
-    const { expensive, cheap } = getShareValuationMood(stock);
+    const { expensive, cheap, bearish } = getShareValuationMood(stock);
     if (item.reason === 'expensive') return expensive;
     if (item.reason === 'cheap') return cheap && stock.cash > cap * 0.05;
-    if (item.type === 'issue') return stock.cash < cap * 0.03 && !cheap; // przy tanich akcjach zarząd woli kredyt
+    if (item.type === 'issue') return stock.cash < cap * 0.03 && !cheap && !bearish; // przy tanich akcjach / w bessie zarząd woli kredyt
     return stock.cash > cap * 0.15 && !expensive;
 }
 

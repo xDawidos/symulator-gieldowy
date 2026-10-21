@@ -8300,6 +8300,7 @@ group('0.15.0.1: Poprawki 0.15 (bezpiecznik, margin call, pieniądze, emisje, kr
 
     test('C4: drogie akcje → emisja w porządku obrad z szansą 30% (60% w sektorze bańki)', () => {
         const { a } = world();
+        getMarketRegime('home').phase = 'bull';
         a.cash = getMarketCapValue(a) * 0.10; // ani brak, ani nadmiar gotówki
         getMarketRegime('home').premium = 0.20;
         const p = capitalShare(a, 'issue');
@@ -8309,10 +8310,14 @@ group('0.15.0.1: Poprawki 0.15 (bezpiecznik, margin call, pieniądze, emisje, kr
         try { const pb = capitalShare(a, 'issue'); assert(Math.abs(pb - 0.60) <= 0.02, `emisja w bańce ${pb}`); }
         finally { isCompanyInSectorBubble = orig; }
         assertEq(capitalShare(a, 'buyback', 2000), 0, 'bez skupu przy drogich akcjach');
+        getMarketRegime('home').phase = 'bear';
+        assertEq(capitalShare(a, 'issue', 2000), 0, 'w Bessie okno emisji zamknięte');
+        getMarketRegime('home').phase = 'bull';
     });
 
     test('C4: tanie akcje → skup z szansą 40%; emisja ratunkowa nie zależy od premii rynku', () => {
         const { a } = world();
+        getMarketRegime('home').phase = 'bull';
         a.cash = getMarketCapValue(a) * 0.10;
         getMarketRegime('home').premium = -0.20;
         const p = capitalShare(a, 'buyback');
@@ -8333,6 +8338,7 @@ group('0.15.0.1: Poprawki 0.15 (bezpiecznik, margin call, pieniądze, emisje, kr
 
     test('C4: walne kwartał później — zarząd wycofuje emisję, gdy akcje przestały być drogie', () => {
         const { a } = world();
+        getMarketRegime('home').phase = 'bull';
         a.cash = getMarketCapValue(a) * 0.10;
         const orig = getDisplayedFairValue;
         getDisplayedFairValue = s => s.price;
