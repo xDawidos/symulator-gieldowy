@@ -1430,6 +1430,7 @@ gameTimers.weekly = setGameInterval(() => {
         if (typeof processBuyoutOffersQuarterly === 'function') processBuyoutOffersQuarterly(); // 0.15.1 M2: oferty kupna dla większościowców
         if (typeof processTenderOversightQuarterly === 'function') processTenderOversightQuarterly(); // 0.15.1 M5: KNF i próg wezwania
         if (typeof processGoodwillImpairmentQuarterly === 'function') processGoodwillImpairmentQuarterly(); // 0.15.1 M6: test utraty wartości
+        if (typeof processStakeCampaignsQuarterly === 'function') processStakeCampaignsQuarterly(); // 0.15.1 M9: pakiety spółka → spółka
         processEtfsQuarterly(); // rebalancing, cele roczne, nowe i zamykane ETF-y (etf.js)
         processRelationsQuarterly(); // relacje z botami: wrogowie i przyjaciele (relations.js)
         processMarketsQuarterly(); // operatorzy rynków i maklerzy (markets.js)

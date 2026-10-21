@@ -1296,6 +1296,7 @@ function onTakeoverStarted(initiator, target, options = {}) {
 
     const owner = findMajorityShareholder(target);
     if (options.friendly || owner?.kind === 'player' || owner?.kind === 'ai') return; // gracz w oknie, bot w swojej turze
+    if (isPuppetOf(target, initiator.symbol)) return; // 0.15.1 M9: marionetka nie broni się przed matką
     if (Math.random() < 0.3) {
         const loyalCeo = target.ceo?.traits?.some(t => t.id === 'oddany');
         activateDefenseMechanism(target.symbol, chooseDefenseForPersonality(loyalCeo ? 'reckless' : 'pro_investor', target, 'company'), 'company');
@@ -1785,6 +1786,9 @@ function getVoteForProbability(holder, item, stock) {
         const relation = getRelation(holder.entity.id);
         if (relation <= RELATION_HOSTILE) return item.kind === 'board' ? 0.1 : 0.02;
         if (relation >= RELATION_FRIENDLY && item.kind === 'activist') return 0.85;
+    }
+    if (holder.kind === 'company' && stock.isSubsidiaryOf === holder.entity?.symbol && isPuppetOf(stock, holder.entity.symbol)) {
+        return item.kind === 'board' ? 1 : (item.by === holder.entity.symbol ? 1 : 0); // 0.15.1 M9: matka z marionetką forsuje walne
     }
     if (item.kind === 'board') {
         if (holder.kind === 'insiders') return 1;

@@ -8927,6 +8927,61 @@ group('0.15.1: Sztuka przejęć (arbitraż, oferty, due diligence, pakiety, wezw
         assert(a2.acquisitions?.[0]?.left === 37_500 && a2.balanceSheet.goodwill === 37_500, 'zapis i wczytanie wartości firmy');
     });
 
+    function stakeWorld() {
+        const w = world();
+        const { a, b, c } = w;
+        a.exchange = 'PLATINUM'; a.cash = 50_000_000; a.name = 'Cortex Group';
+        for (const s of [b, c]) { s.exchange = 'BRONZE'; s.insiderShares = 0; s.sharesHeld = 0; }
+        aiCompetitors.forEach(ai => { ai.portfolio = {}; });
+        genealogyLog = [];
+        return w;
+    }
+
+    test('M9: rangi — Platynowa kupuje niższe; Złota tylko przy kondycji ≥ 3 albo gotówce ≥ 25% kap.; ta sama ranga tylko kooperacja', () => {
+        const { a, b, c } = stakeWorld();
+        assert(canRunStakeCampaign(a), 'Platynowa');
+        b.exchange = 'GOLD'; b.financialHealth = 1; b.cash = getMarketCapValue(b) * 0.1;
+        assert(!canRunStakeCampaign(b), 'Złota przeciętna — nie');
+        b.financialHealth = 3; assert(canRunStakeCampaign(b), 'Złota w świetnej kondycji');
+        b.financialHealth = 1; b.cash = getMarketCapValue(b) * 0.3; assert(canRunStakeCampaign(b), 'Złota bogata');
+        c.exchange = 'PLATINUM'; assert(!canBeStakeTarget(b, c), 'Złota nie kupuje wyższej rangi');
+        assert(canBeStakeTarget(c, b), 'Złotą może kupić silniejsza');
+        b.exchange = 'PLATINUM'; c.exchange = 'PLATINUM';
+        let goals = new Set();
+        for (let i = 0; i < 200; i++) { b.stakeCampaign = null; c.stakeCampaign = null; const orig = STAKE_CAMPAIGN_CHANCE; processStakeCampaignsQuarterly(); for (const s of [b, c]) if (s.stakeCampaign) goals.add(s.stakeCampaign.goal); }
+        for (const g of goals) assertEq(g, 0.25, 'ta sama ranga: tylko 25%');
+    });
+
+    test('M9: drabina 25 / 50 / próg ustawy / 99% — kooperacja, córka z prezesem „Marionetka <matka>”, nakaz wezwania, zmiana nazwy, wchłonięcie; akcje = posiadacze', () => {
+        const { a, b } = stakeWorld();
+        society.laws.tenderThreshold = 0; // kontrola od 66%
+        b.stakeCampaign = { buyer: 'AAA', goal: 0.99, pace: 0.2, start: getSubQuarter(), reached: [], tender: false, maxPrice: b.price };
+        advanceStakeCampaign(b);
+        assert(getStakePct(a, b) <= 0.2 + 1e-9, `tempo ≤ 20 pp: ${getStakePct(a, b)}`);
+        assertEq(b.sharesHeld, getTrackedHeldShares(b), 'akcje = posiadacze');
+        advanceStakeCampaign(b);
+        assert(b.stakeCampaign.reached.includes('coop') && genealogyLog.some(e => /powiązanie/.test(e.note || '')), 'próg 25%: powiązanie');
+        advanceStakeCampaign(b); // > 50%
+        assertEq(b.isSubsidiaryOf, 'AAA', 'próg 50%: córka');
+        assert(b.ceo.traits.some(t => t.id === 'marionetka' && t.name === 'Marionetka Cortex Group'), 'prezes „Marionetka Cortex Group”');
+        assert(b.stakeCampaign.tender, 'ustawa: nakaz wezwania do progu');
+        assertEq(getVoteForProbability({ kind: 'company', entity: a }, { kind: 'board' }, b), 1, 'matka głosuje za zarządem-marionetką');
+        assertEq(getVoteForProbability({ kind: 'company', entity: a }, { kind: 'activist', by: 'player' }, b), 0, 'matka przeciw wnioskom innych');
+        advanceStakeCampaign(b); // wezwanie do 66%
+        assert(getStakePct(a, b) >= 0.66 - 1e-6, `po wezwaniu ${getStakePct(a, b)}`);
+        assert(b.name.startsWith('Cortex '), `zmiana nazwy: ${b.name}`);
+        for (let i = 0; i < 6 && !b.isBankrupt; i++) advanceStakeCampaign(b);
+        assert(b.delisted === 'absorbed', 'próg 99%: wchłonięcie i zdjęcie z giełdy');
+    });
+
+    test('M9: „Mistrz marionetek” zaczyna podkupowanie ×2 częściej', () => {
+        const { a } = stakeWorld();
+        a.ceo = { name: 'X', traits: [] };
+        assertNear(getStakeCampaignChance(a), 0.03, 'podstawa 3%/kw.', 1e-9);
+        a.ceo.traits = [{ id: 'mistrz_marionetek', name: 'Mistrz marionetek' }];
+        assertNear(getStakeCampaignChance(a), 0.06, 'Mistrz marionetek ×2', 1e-9);
+    });
+
     test('M1: fuzja (wymiana akcji) bez skoku do ceny gotówkowej; etap 5 bez ×1,1', () => {
         const { a, b } = world();
         const pre = b.price;

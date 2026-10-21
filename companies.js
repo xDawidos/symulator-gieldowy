@@ -702,6 +702,18 @@ const ceoTraits = {
         color: "#f44336",
         description: "Ciągnie się za nim zła sława. Zwiększa szansę na negatywne, specyficzne dla firmy zdarzenie o 10%."
     },
+    mistrz_marionetek: { // 0.15.1 M9
+        name: "Mistrz marionetek",
+        rarity: "rare",
+        color: "#9c27b0",
+        description: "Lubi kontrolować inne spółki: częściej zaczyna podkupywać akcje i dokupuje szybciej."
+    },
+    marionetka: { // 0.15.1 M9: nadawana przy przejęciu kontroli (nazwa: „Marionetka <spółka-matka>”)
+        name: "Marionetka",
+        rarity: "hidden",
+        color: "#9e9e9e",
+        description: "Prezes z nadania spółki-matki: na walnym głosuje tak, jak chce matka, i nie broni spółki przed nią."
+    },
     oddany: {
         name: "Oddany",
         rarity: "rare",
@@ -12398,6 +12410,175 @@ function absorbSubsidiary(child, parent = getParentOf(child), premium = null) {
     if (typeof addChartEvent === 'function') addChartEvent(parent, '🧲', `Wchłonięcie ${child.name}`);
     logEvent(`🧲 ${parent.name} wchłania ${child.name} — przymusowy wykup reszty akcji po ${formatZl(price)} (premia), spółka znika z giełdy.`, 'market');
     return { price, paid };
+}
+
+// =================================================================================
+// 0.15.1 M9: DRABINA PAKIETÓW SPÓŁKA → SPÓŁKA (25 / 50 / próg ustawy / 99%) i podkupowanie
+// =================================================================================
+
+const STAKE_CAMPAIGN_CHANCE = 0.03;          // na kwartał dla uprawnionej spółki (×2 „Mistrz marionetek”)
+const STAKE_PACE = [0.03, 0.08];             // tempo dokupowania: 3–8 pp udziału na kwartał
+const STAKE_COOP_PCT = 0.25;
+const KNF_CONCERN_SECTOR_SHARE = 0.30;
+const KNF_CONCERN_GIG_SHARE = 0.10;
+
+function getExchangeLevel(stock) { return Number(exchanges[stock?.exchange]?.level) || 0; }
+
+/** Kto może kupować pakiety: Platynowa i wyżej; Złota tylko szczególnie dobra (kondycja ≥ 3) albo bogata (gotówka ≥ 25% kap.). */
+function canRunStakeCampaign(stock) {
+    if (!stock || stock.assetType || stock.isBankStock || stock.isStateOwned || stock.isSubsidiaryOf || stock.isBankrupt || stock.mergerProcess) return false;
+    if ((Number(stock.knfStakeBlockUntil) || -1) > getSubQuarter()) return false;
+    const level = getExchangeLevel(stock);
+    if (level >= 4) return true;
+    return level === 3 && ((Number(stock.financialHealth) || 0) >= 3 || stock.cash >= getMarketCapValue(stock) * 0.25);
+}
+
+/** Cel: niższa ranga (kooperacja 25% także ta sama ranga); bez spółek zależnych, państwowych i w procesie M&A. */
+function canBeStakeTarget(buyer, target) {
+    if (!target || target === buyer || target.assetType || target.isBankStock || target.isStateOwned || target.isSubsidiaryOf || target.isBankrupt || target.mergerProcess || target.stakeCampaign) return false;
+    return getExchangeLevel(target) <= getExchangeLevel(buyer);
+}
+
+function getStakePct(buyer, target) {
+    return (Number(buyer.equityStakes?.[target.symbol]) || 0) / Math.max(1, target.totalShares);
+}
+
+/** Progi drabiny: 25% stałe; kontrola od progu ustawy „Próg wezwania” (66 / 75 / 90%); 99% — zdjęcie z giełdy. */
+function getStakeLadder() {
+    const control = Math.min(0.90, typeof getTenderThreshold === 'function' ? getTenderThreshold() : 0.66);
+    return { coop: STAKE_COOP_PCT, bind: 0.5, control, delist: 0.99 };
+}
+
+function isPuppetMaster(stock) { return Boolean(stock?.ceo?.traits?.some(t => t.id === 'mistrz_marionetek')); }
+function getStakeCampaignChance(buyer) { return STAKE_CAMPAIGN_CHANCE * (isPuppetMaster(buyer) ? 2 : 1); }
+
+/** Co kwartał: nowe podkupowania, dokupowanie, progi, kontrola KNF koncernów. */
+function processStakeCampaignsQuarterly() {
+    const quarter = getSubQuarter();
+    checkKnfConcernPower();
+    for (const buyer of stocks.filter(canRunStakeCampaign)) {
+        if (stocks.some(s => s.stakeCampaign?.buyer === buyer.symbol)) continue;
+        if (Math.random() >= getStakeCampaignChance(buyer)) continue;
+        const targets = stocks.filter(t => canBeStakeTarget(buyer, t) && buyer.cash >= getMarketCapValue(t) * 0.1);
+        if (!targets.length) continue;
+        const related = targets.filter(t => typeof sharesSegment === 'function' && sharesSegment(buyer, t));
+        const target = getRandomElement(related.length && Math.random() < 0.7 ? related : targets);
+        const ladder = getStakeLadder();
+        const sameRank = getExchangeLevel(target) === getExchangeLevel(buyer);
+        const roll = Math.random();
+        const goal = sameRank ? ladder.coop : roll < 0.35 ? ladder.coop : roll < 0.7 ? 0.51 : roll < 0.9 ? ladder.control : ladder.delist;
+        target.stakeCampaign = { buyer: buyer.symbol, goal, pace: isPuppetMaster(buyer) ? STAKE_PACE[1] : getRandomInRange(...STAKE_PACE), start: quarter, reached: [], tender: false, maxPrice: target.price };
+        noteGenealogy('stake', buyer, target, { pct: getStakePct(buyer, target), note: `rozpoczyna podkupowanie (cel ${Math.round(goal * 100)}%)` });
+        logEvent(`🧩 ${buyer.name} zaczyna podkupywać akcje ${target.name} (cel ${Math.round(goal * 100)}%).`, 'market');
+    }
+    for (const target of stocks.filter(s => s.stakeCampaign && !s.isBankrupt)) advanceStakeCampaign(target);
+}
+
+/** Kwartał podkupowania: rynek (z wpływem na cenę), potem pakiety botów po cenie rezerwowej; nakaz wezwania po 50%. */
+function advanceStakeCampaign(target) {
+    const c = target.stakeCampaign;
+    const buyer = stocks.find(s => s.symbol === c.buyer);
+    if (!buyer || buyer.isBankrupt || target.isSubsidiaryOf && target.isSubsidiaryOf !== buyer.symbol) { target.stakeCampaign = null; return; }
+    const pct = getStakePct(buyer, target);
+    if (pct >= c.goal - 1e-6) { target.stakeCampaign = null; return; }
+    const step = c.tender ? Math.max(0, Math.min(c.goal, c.tenderTo || c.goal) - pct) : Math.min(c.pace, c.goal - pct); // nakaz wezwania: od razu do progu ustawy
+    let need = Math.floor(step * target.totalShares);
+    let spent = 0, bought = 0;
+    const budget = Math.max(0, buyer.cash * 0.8);
+    // 1. rynek
+    const market = Math.min(need, getAvailableShares(target), Math.floor(budget / Math.max(0.01, target.price)));
+    if (market > 0) {
+        const price = target.price;
+        spent += market * price; bought += market; need -= market;
+        target.sharesHeld = (Number(target.sharesHeld) || 0) + market;
+        if (typeof applyTradeImpact === 'function') applyTradeImpact(target, market, 1);
+        c.maxPrice = Math.max(c.maxPrice, price);
+    }
+    // 2. pakiety botów (cena rezerwowa z M4; nakaz wezwania — po najwyższej cenie)
+    for (const holder of getShareholders(target)) {
+        if (need <= 0 || !['ai', 'botFund'].includes(holder.kind)) continue;
+        const h = typeof getBlockHolder === 'function' ? getBlockHolder(target, holder.id) : null;
+        if (!h) continue;
+        const reserve = getBlockReservePrice(target, h);
+        const price = c.tender ? Math.max(c.maxPrice, reserve) : reserve;
+        const n = Math.min(need, Math.floor(h.shares), Math.floor((budget - spent) / Math.max(0.01, price)));
+        if (!(n > 0)) continue;
+        const pos = h.kind === 'ai' ? h.entity.portfolio[target.symbol] : h.entity.fund.portfolio[target.symbol];
+        pos.shares -= n;
+        if (pos.shares <= 0.001) { if (h.kind === 'ai') delete h.entity.portfolio[target.symbol]; else delete h.entity.fund.portfolio[target.symbol]; }
+        if (h.kind === 'ai') h.entity.cash += n * price; else h.entity.fund.cash += n * price;
+        spent += n * price; bought += n; need -= n;
+        c.maxPrice = Math.max(c.maxPrice, price);
+    }
+    if (!(bought > 0)) { if (getSubQuarter() - c.start > 12) target.stakeCampaign = null; return; } // brak podaży — po 3 latach rezygnuje
+    adjustCompanyCash(buyer, -spent); // gotówka → pakiet (aktywa bez zmian)
+    buyer.equityStakes = buyer.equityStakes || {};
+    buyer.equityStakes[target.symbol] = (Number(buyer.equityStakes[target.symbol]) || 0) + bought;
+    c.tender = false;
+    applyStakeThresholds(buyer, target);
+    if (getStakePct(buyer, target) >= c.goal - 1e-6 && target.stakeCampaign === c) target.stakeCampaign = null;
+}
+
+/** Skutki progów (raz każdy). */
+function applyStakeThresholds(buyer, target) {
+    const c = target.stakeCampaign || { reached: [] };
+    const pct = getStakePct(buyer, target);
+    const ladder = getStakeLadder();
+    const reach = (key, fn) => { if (!c.reached.includes(key)) { c.reached.push(key); fn(); } };
+    if (pct >= ladder.coop) reach('coop', () => {
+        if (typeof canCooperate === 'function' && canCooperate(buyer, target)) startCooperation(buyer, target, 'stake');
+        noteGenealogy('stake', buyer, target, { pct, note: 'powiązanie (25%+)' });
+        logEvent(`🔗 ${buyer.name} ma ${Math.round(pct * 100)}% ${target.name} — powiązanie i kooperacja.`, 'company');
+    });
+    if (pct > ladder.bind) reach('bind', () => {
+        makeSubsidiary(buyer, target);
+        target.parentStakePct = pct;
+        target.profitTransfer = getRandomInRange(0.4, 0.6);
+        installPuppetCeo(target, buyer);
+        if (typeof syncSubsidiaryLinks === 'function') syncSubsidiaryLinks();
+        if (ladder.control > pct) { c.tender = true; c.tenderTo = ladder.control; c.goal = Math.max(c.goal, ladder.control); } // ustawa: przekroczenie 50% → nakaz wezwania do progu
+        logEvent(`🪢 ${buyer.name} przejmuje kontrolę nad ${target.name} (${Math.round(pct * 100)}%) — nowy prezes z nadania matki.`, 'company');
+    });
+    if (pct >= ladder.control) reach('control', () => {
+        if (!target.originalName) target.originalName = target.name;
+        const prefix = buyer.name.split(' ')[0];
+        if (!target.name.startsWith(prefix)) { target.name = `${prefix} ${target.originalName}`; noteGenealogy('rename', buyer, target, { note: target.name }); }
+        target.marginAdj = (Number(target.marginAdj) || 0) + 0.01 / Math.max(0.05, getSectorProfile(target).margin); // wspólne zakupy: +1 pp marży
+        if (typeof setCompanyDividendPolicy === 'function') setCompanyDividendPolicy(target, 'Aggressive');
+        logEvent(`🏷️ ${target.originalName} zmienia nazwę na ${target.name} — ${buyer.name} ma ${Math.round(pct * 100)}%.`, 'company');
+    });
+    if (pct >= ladder.delist - 1e-6) reach('delist', () => {
+        if (typeof absorbSubsidiary === 'function') absorbSubsidiary(target, buyer, 0.05);
+    });
+}
+
+/** Prezes-marionetka: cecha „Marionetka <nazwa matki>” — głosuje jak matka, nie broni się przed nią. */
+function installPuppetCeo(target, parent) {
+    generateCEO(target, true);
+    target.ceo.traits = [...(target.ceo.traits || []).filter(t => t.id !== 'marionetka'), { id: 'marionetka', name: `Marionetka ${parent.name}`, rarity: 'hidden', of: parent.symbol }];
+}
+
+function isPuppetOf(stock, parentSymbol) {
+    return Boolean(stock?.ceo?.traits?.some(t => t.id === 'marionetka' && t.of === parentSymbol));
+}
+
+/** KNF: koncern (z córkami) > 30% kapitalizacji sektora albo > 10% rynku → blokada podkupowań na 4 kw. (szansa = skuteczność). */
+function checkKnfConcernPower() {
+    if (typeof oversight !== 'object' || typeof getInstitutionEffectiveness !== 'function') return;
+    const eff = getInstitutionEffectiveness(oversight.knf);
+    const listed = stocks.filter(s => !s.assetType && !s.isBankrupt);
+    const market = listed.reduce((sum, s) => sum + getMarketCapValue(s), 0);
+    for (const parent of listed.filter(s => !s.isSubsidiaryOf && stocks.some(c => c.isSubsidiaryOf === s.symbol))) {
+        const group = [parent, ...listed.filter(c => c.isSubsidiaryOf === parent.symbol)];
+        const groupCap = group.reduce((sum, s) => sum + getMarketCapValue(s), 0);
+        const sector = getMainSector(parent);
+        const sectorCap = listed.filter(s => getMainSector(s) === sector).reduce((sum, s) => sum + getMarketCapValue(s), 0);
+        if (!(groupCap > sectorCap * KNF_CONCERN_SECTOR_SHARE || groupCap > market * KNF_CONCERN_GIG_SHARE)) continue;
+        if ((Number(parent.knfStakeBlockUntil) || -1) > getSubQuarter() || Math.random() >= eff) continue;
+        parent.knfStakeBlockUntil = getSubQuarter() + 4;
+        for (const t of stocks.filter(s => s.stakeCampaign?.buyer === parent.symbol)) t.stakeCampaign = null;
+        logEvent(`🛡️ KNF ogranicza koncern ${parent.name}: za duży udział w rynku — wstrzymane podkupowania na 4 kw.`, 'state');
+    }
 }
 
 function mergeChildFundamentals(parent, child) {
