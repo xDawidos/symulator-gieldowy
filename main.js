@@ -224,6 +224,7 @@ function buildSaveSnapshot({ compact = 0 } = {}) {
         marketHalt: typeof marketHalt !== 'undefined' ? marketHalt : null,
         buyoutState: typeof buyoutState !== 'undefined' ? buyoutState : null, // 0.15.1 M2
         genealogyLog: typeof genealogyLog !== 'undefined' ? genealogyLog : [], // 0.15.1 M10
+        blockDealState: typeof blockDealState !== 'undefined' ? blockDealState : null, // 0.15.1 M4
         sectorBubble: activeSectorBubble,
         sectorBubbleCooldown: sectorBubbleCooldown,
         macro,
@@ -702,6 +703,7 @@ function applySaveSnapshot(snapshot) {
     } else if (typeof createMarketCrashState === 'function') {
         marketCrash = createMarketCrashState();
     }
+    if (typeof blockDealState !== 'undefined') blockDealState = snapshot.blockDealState?.talks ? snapshot.blockDealState : createBlockDealState(); // 0.15.1 M4
     if (typeof genealogyLog !== 'undefined') genealogyLog = Array.isArray(snapshot.genealogyLog) ? snapshot.genealogyLog : []; // 0.15.1 M10
     if (typeof buyoutState !== 'undefined') buyoutState = snapshot.buyoutState?.offers ? snapshot.buyoutState : createBuyoutState(); // 0.15.1 M2
     if (typeof marketHalt !== 'undefined' && snapshot.marketHalt) {

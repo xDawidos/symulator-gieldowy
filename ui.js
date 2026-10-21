@@ -8671,7 +8671,7 @@ function renderShareholderBars(stock) {
         <span class="gov-bar-name">${escapeHtml(h.name)}</span>
         <span class="gov-bar-track"><span style="width:${Math.min(100, h.pct * 100).toFixed(1)}%"></span></span>
         <span class="gov-bar-pct">${h.entity?.isMafia ? `~${Math.max(5, Math.round(h.pct * 20) * 5)}%` : `${formatNumberPl((h.pct * 100), 1)}%`}</span>
-    </div>`).join('');
+    </div>${typeof renderBlockBuyForm === 'function' && playerFund && getBlockHolder(stock, h.id) ? renderBlockBuyForm(stock, getBlockHolder(stock, h.id)) : ''}`).join('');
 }
 
 function renderGovernanceDetail(stock) {

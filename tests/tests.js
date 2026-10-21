@@ -8750,6 +8750,54 @@ group('0.15.1: Sztuka przejęć (arbitraż, oferty, due diligence, pakiety, wezw
         assert(ddAcceptCut('BBB') && a.mergerProcess.offerDetails.buyoutPricePerShare === agreed && !a.mergerProcess.ddPending, 'przyjęta obniżona cena');
     });
 
+    test('M4: odkup pakietu od bota — zgoda ≥ ceny rezerwowej, kontroferta 85–100%, urażenie < 85%, raz na kwartał', () => {
+        const { b } = world();
+        blockDealState = createBlockDealState();
+        playerCash = 5_000_000;
+        const bot = aiCompetitors.find(ai => ai.personality !== 'market_maker' && !ai.isMafia);
+        const personality0 = bot.personality;
+        bot.personality = 'whale'; // rezerwa +15%: 80% rezerwy mieści się w zakresie formularza (kurs −10%…+50%)
+        bot.portfolio = { BBB: { shares: 2000, avgPrice: 100 } }; b.sharesHeld = 2000;
+        botRelations.values = {};
+        const holder = () => getBlockHolder(b, bot.id);
+        const reserve = withFair(() => getBlockReservePrice(b, holder()));
+        const price0 = b.price;
+        assertEq(withFair(() => proposeBlockBuy('BBB', bot.id, 500, reserve * 0.9)), 'counter', '85–100% → kontroferta');
+        assertEq(withFair(() => proposeBlockBuy('BBB', bot.id, 500, reserve * 1.01)), null, 'druga propozycja w kwartale zablokowana');
+        macro.quarter++;
+        const cash0 = playerCash;
+        assertEq(withFair(() => proposeBlockBuy('BBB', bot.id, 500, reserve * 1.01)), 'accepted', '≥ rezerwowej → zgoda');
+        assertEq(playerPortfolio.BBB.shares, 500, 'akcje u funduszu');
+        assertEq(bot.portfolio.BBB.shares, 1500, 'bot oddał pakiet');
+        assertNear(cash0 - playerCash, 500 * reserve * 1.01, 'gotówka funduszu − zapłata');
+        assertEq(b.price, price0, 'bez wpływu na kurs');
+        assertEq(b.sharesHeld, getTrackedHeldShares(b), 'akcje = posiadacze');
+        macro.quarter++;
+        const rel0 = getRelation(bot.id);
+        assertEq(withFair(() => proposeBlockBuy('BBB', bot.id, 500, reserve * 0.8)), 'insulted', '< 85% → urażenie');
+        assertEq(getRelation(bot.id) - rel0, -10, 'relacja −10');
+        macro.quarter++;
+        assertEq(withFair(() => proposeBlockBuy('BBB', bot.id, 500, reserve * 2)), null, 'blokada rozmów na 2 kw.');
+        bot.personality = personality0;
+    });
+
+    test('M4: odkup od zarządu — cena rezerwowa +20%, akcje wchodzą do obrotu; rozmowa daje przedział ±10%', () => {
+        const { b } = world();
+        blockDealState = createBlockDealState();
+        playerCash = 5_000_000;
+        b.insiderShares = 3000;
+        const holder = getBlockHolder(b, 'insiders');
+        const reserve = withFair(() => getBlockReservePrice(b, holder));
+        assertNear(reserve, b.price * (1.20 - (b.reputation.player || 0) / 1000), 'prezes: max(kurs, wartość) × 1,20 − reputacja/1000', 1e-6);
+        const talk = withFair(() => talkBlockHolder('BBB', 'insiders'));
+        assert(talk.range.low <= reserve && reserve <= talk.range.high, 'przedział zawiera cenę rezerwową');
+        Math.random = () => 0.99; // prezes zostaje
+        assertEq(withFair(() => proposeBlockBuy('BBB', 'insiders', 1000, reserve)), 'accepted', 'zgoda zarządu');
+        assertEq(b.insiderShares, 2000, 'pakiet zarządu −1000');
+        assertEq(b.sharesHeld, getTrackedHeldShares(b), 'akcje = posiadacze (sharesHeld += n)');
+        assertEq(blockDealState.log.length, 1, 'transakcja w dzienniku pakietów (dla KNF)');
+    });
+
     test('M1: fuzja (wymiana akcji) bez skoku do ceny gotówkowej; etap 5 bez ×1,1', () => {
         const { a, b } = world();
         const pre = b.price;

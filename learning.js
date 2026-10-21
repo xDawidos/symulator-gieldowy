@@ -792,6 +792,26 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Ile trwa wstrzymanie handlu przy bezpieczniku 1. stopnia (-10%)?', a: ['15 sekund', 'Cały miesiąc', '24 godziny'], c: 0 }
         ]
     },
+    transakcja_pakietowa: {
+        title: 'Transakcja pakietowa', icon: '📦',
+        text: 'Duży pakiet akcji rzadko kupuje się na sesji — kurs by poszybował. Kupujący negocjuje z posiadaczem poza rynkiem: liczbę akcji i cenę. Sprzedający ma cenę rezerwową (zwykle powyżej kursu i wartości godziwej) — zależy od jego charakteru i relacji z kupującym. Zbyt niska oferta urazi i zamknie rozmowy na jakiś czas.',
+        example: () => 'Propozycję odkupu złożysz w liście akcjonariuszy spółki.',
+        quiz: [
+            { q: 'Dlaczego duże pakiety kupuje się poza sesją?', a: ['Żeby nie wywindować kursu', 'Bo na sesji nie ma akcji', 'Bo tak każe KNF'], c: 0 },
+            { q: 'Co podnosi cenę rezerwową sprzedającego?', a: ['Niska relacja z kupującym i charakter „wieloryba”', 'Hojna dywidenda', 'Bessa'], c: 0 },
+            { q: 'Co grozi przy ofercie dużo poniżej oczekiwań?', a: ['Urażenie i blokada rozmów', 'Kara KNF', 'Nic'], c: 0 }
+        ]
+    },
+    pakiet_kontrolny: {
+        title: 'Pakiet kontrolny', icon: '🏛️',
+        text: 'Kto ma ponad 50% głosów, kontroluje walne: wybiera zarząd, politykę dywidendy i decyzje o przejęciach. Pakiet kontrolny jest wart więcej niż suma pojedynczych akcji — za kontrolę płaci się premię. Przejęcie kontroli poza rynkiem podlega przepisom o wezwaniu (ochrona mniejszościowych).',
+        example: () => 'Fundusz z > 50% akcji spółki dostaje oferty kupna i rozgrywa walne.',
+        quiz: [
+            { q: 'Ile głosów daje kontrolę nad walnym?', a: ['Ponad 50%', '10%', '25%'], c: 0 },
+            { q: 'Dlaczego za pakiet kontrolny płaci się premię?', a: ['Bo daje kontrolę nad spółką', 'Bo ma niższe ryzyko', 'Bo nie płaci się podatku'], c: 0 },
+            { q: 'Co chroni akcjonariuszy mniejszościowych przy zmianie kontroli?', a: ['Obowiązek wezwania', 'Bank centralny', 'Dywidenda'], c: 0 }
+        ]
+    },
     due_diligence: {
         title: 'Due diligence (badanie spółki)', icon: '🔎',
         text: 'Zanim kupujący zapłaci, bada księgi celu: umowy, długi, zgodność wyników z gotówką. Gdy znajdzie oszustwo księgowe, obniża cenę albo zrywa transakcję; ukryte zobowiązania odejmuje od ceny. Sprzedający może przyjąć obniżkę, negocjować albo zerwać rozmowy.',

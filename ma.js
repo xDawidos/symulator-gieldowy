@@ -348,6 +348,183 @@ function startBuyoutDeal(offer, price) {
 }
 
 // =================================================================================
+// 0.15.1 M4: ODKUP PAKIETÓW OD AKCJONARIUSZY I OD PREZESA (poza rynkiem)
+// =================================================================================
+
+const BLOCK_PERSONALITY_BASE = { calm: 0.05, dividend_chaser: 0.08, pro_investor: 0.10, whale: 0.15, reckless: 0, yolo_trader: 0 };
+const BLOCK_PRICE_RANGE = [-0.10, 0.50];
+let blockDealState = createBlockDealState();
+function createBlockDealState() { return { talks: {}, log: [] }; }
+function getBlockKey(symbol, holderId) { return `${symbol}|${holderId}`; }
+
+/** Posiadacze, od których fundusz może odkupić pakiet: bot-inwestor, fundusz kolegi, zarząd. */
+function getBlockHolder(stock, holderId) {
+    const holder = getShareholders(stock).find(h => h.id === holderId && ['ai', 'botFund', 'insiders'].includes(h.kind));
+    if (!holder || (holder.kind === 'ai' && (holder.entity?.isMafia || holder.entity?.personality === 'market_maker'))) return null;
+    if (holder.kind === 'ai') holder.shares = Math.max(0, holder.shares - (holder.entity.portfolio[stock.symbol]?.lockedShares || 0));
+    return holder;
+}
+
+function getBlockRelation(holder, stock) {
+    if (holder.kind === 'insiders') return Number(stock.reputation?.player) || 0;
+    return typeof getRelation === 'function' ? getRelation(holder.id) : 0;
+}
+
+/** Ukryta cena rezerwowa za akcję. */
+function getBlockReservePrice(stock, holder) {
+    const fair = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(stock) : null;
+    const base = Math.max(stock.price, fair > 0 ? fair : stock.price);
+    const relation = getBlockRelation(holder, stock);
+    let markup;
+    if (holder.kind === 'insiders') {
+        const loyal = stock.ceo?.traits?.some(t => t.id === 'oddany') || stock.ceo?.isFounder;
+        markup = 0.20 + (loyal ? 0.10 : 0);
+    } else if (holder.kind === 'botFund') markup = 0.08;
+    else {
+        markup = BLOCK_PERSONALITY_BASE[holder.entity?.personality] ?? 0.08;
+        if (markup === 0 && getMarketRegime('home')?.phase === 'euphoria') markup = 0.10;
+    }
+    let price = base * (1 + markup - relation / 1000);
+    if (holder.kind !== 'insiders' && relation >= 70) price *= 0.95; // sojusznik
+    return price;
+}
+
+function getBlockTalk(symbol, holderId) {
+    const key = getBlockKey(symbol, holderId);
+    return blockDealState.talks[key] || (blockDealState.talks[key] = { proposedQuarter: null, talkedQuarter: null, blockedUntil: null, range: null, mood: null, counter: null });
+}
+
+function getBlockMood(holder, stock) {
+    const relation = getBlockRelation(holder, stock);
+    if (holder.kind !== 'insiders' && relation <= RELATION_HOSTILE) return 'wrogi — nie sprzeda';
+    if (relation >= 40) return 'życzliwy';
+    if (relation <= -10) return 'chłodny';
+    return 'neutralny';
+}
+
+/** Rozmowa (bezpłatna, raz na kwartał): przedział ceny rezerwowej ±10% i nastawienie. */
+function talkBlockHolder(symbol, holderId) {
+    const stock = stocks.find(s => s.symbol === symbol);
+    const holder = stock && getBlockHolder(stock, holderId);
+    if (!holder) return null;
+    const talk = getBlockTalk(symbol, holderId);
+    const quarter = getBuyoutQuarter();
+    if (talk.blockedUntil > quarter || talk.talkedQuarter === quarter) return null;
+    const reserve = getBlockReservePrice(stock, holder);
+    const shift = getRandomInRange(-0.05, 0.05);
+    talk.talkedQuarter = quarter;
+    talk.range = { low: reserve * (0.9 + shift), high: reserve * (1.1 + shift) };
+    talk.mood = getBlockMood(holder, stock);
+    return talk;
+}
+
+/** Propozycja odkupu: 'accepted' | 'counter' | 'insulted' | 'refused' | null. */
+function proposeBlockBuy(symbol, holderId, shares, price) {
+    const stock = stocks.find(s => s.symbol === symbol);
+    const holder = stock && getBlockHolder(stock, holderId);
+    shares = Math.floor(Number(shares)); price = Number(price);
+    if (!holder || !(shares > 0) || !(price > 0)) return null;
+    const talk = getBlockTalk(symbol, holderId);
+    const quarter = getBuyoutQuarter();
+    if (talk.blockedUntil > quarter) { showToast('Ten akcjonariusz nie chce teraz rozmawiać.', 'warning'); return null; }
+    if (talk.proposedQuarter === quarter) { showToast('Propozycję temu akcjonariuszowi możesz złożyć raz na kwartał.', 'warning'); return null; }
+    price = Math.max(stock.price * (1 + BLOCK_PRICE_RANGE[0]), Math.min(stock.price * (1 + BLOCK_PRICE_RANGE[1]), price));
+    shares = Math.min(shares, Math.floor(holder.shares));
+    if (playerCash < shares * price) { showToast('Za mało gotówki funduszu na ten pakiet.', 'error'); return null; }
+    talk.proposedQuarter = quarter;
+    talk.counter = null;
+    if (holder.kind === 'ai' && getRelation(holder.id) <= RELATION_HOSTILE) return 'refused';
+    const reserve = getBlockReservePrice(stock, holder);
+    if (price >= reserve) {
+        executeBlockBuy(stock, holder, shares, price);
+        if (price >= reserve * 1.1 && holder.kind !== 'insiders') changeRelation(holder.id, 3, `hojna cena za pakiet ${symbol}`);
+        return 'accepted';
+    }
+    if (price >= reserve * 0.85) { talk.counter = { shares, price: (price + reserve) / 2 }; return 'counter'; }
+    if (holder.kind === 'insiders') changeReputation('player', symbol, -10);
+    else changeRelation(holder.id, -10, `zaniżona oferta za pakiet ${symbol}`);
+    talk.blockedUntil = quarter + 2;
+    return 'insulted';
+}
+
+function acceptBlockCounter(symbol, holderId) {
+    const stock = stocks.find(s => s.symbol === symbol);
+    const holder = stock && getBlockHolder(stock, holderId);
+    const talk = blockDealState.talks[getBlockKey(symbol, holderId)];
+    if (!holder || !talk?.counter) return false;
+    const { shares, price } = talk.counter;
+    talk.counter = null;
+    if (playerCash < shares * price) { showToast('Za mało gotówki funduszu.', 'error'); return false; }
+    executeBlockBuy(stock, holder, Math.min(shares, Math.floor(holder.shares)), price);
+    return true;
+}
+
+/** Transfer poza rynkiem: bez wpływu na kurs; zarząd: akcje wchodzą do obrotu (sharesHeld += n). */
+function executeBlockBuy(stock, holder, shares, price) {
+    const cost = shares * price;
+    const symbol = stock.symbol;
+    playerCash -= cost;
+    if (holder.kind === 'ai') {
+        const pos = holder.entity.portfolio[symbol];
+        pos.shares -= shares; if (pos.shares <= 0.001) delete holder.entity.portfolio[symbol];
+        holder.entity.cash += cost;
+        recordPayment('player-fund', `external:${holder.id}`, cost, `Pakiet ${symbol} od ${holder.name}`);
+    } else if (holder.kind === 'botFund') {
+        const pos = holder.entity.fund.portfolio[symbol];
+        pos.shares -= shares; if (pos.shares <= 0.001) delete holder.entity.fund.portfolio[symbol];
+        holder.entity.fund.cash += cost;
+        recordPayment('player-fund', `external:${holder.id}`, cost, `Pakiet ${symbol} od ${holder.name}`);
+    } else {
+        const before = Number(stock.insiderShares) || 0;
+        stock.insiderShares = before - shares;
+        stock.sharesHeld = (Number(stock.sharesHeld) || 0) + shares;
+        recordPayment('player-fund', 'external:zarzad', cost, `Wypłata dla zarządu ${symbol}`);
+        if (shares > before / 2 && stock.ceo && Math.random() < 0.3) {
+            logEvent(`👔 Prezes ${stock.ceo.name} sprzedał większość udziałów i odchodzi z ${stock.name}.`, 'company');
+            if (typeof replaceCeo === 'function') replaceCeo(stock);
+        }
+    }
+    const holding = playerPortfolio[symbol] = playerPortfolio[symbol] || { shares: 0, avgPrice: price, assetType: 'stock' };
+    holding.avgPrice = (holding.avgPrice * holding.shares + cost) / (holding.shares + shares);
+    holding.shares += shares;
+    blockDealState.log.push({ q: getBuyoutQuarter(), symbol, shares, price, from: holder.kind });
+    blockDealState.log = blockDealState.log.filter(e => getBuyoutQuarter() - e.q <= 8);
+    logEvent(`🤝 Fundusz odkupuje pakiet ${shares.toLocaleString('pl-PL')} akcji ${stock.name} od ${holder.name} po ${formatZl(price)} (poza rynkiem).`, 'review');
+    if (typeof unlockAcademyEntry === 'function') { unlockAcademyEntry('transakcja_pakietowa'); if (getFundStakePct(stock) > 0.5) unlockAcademyEntry('pakiet_kontrolny'); }
+    if (typeof onBlockBuyCompleted === 'function') onBlockBuyCompleted(stock); // M5: KNF i próg wezwania
+    if (typeof displayCash === 'function') displayCash();
+}
+
+/** Formularz w liście akcjonariuszy (rozwijany, bez okna modalnego). */
+function renderBlockBuyForm(stock, holder) {
+    const talk = blockDealState.talks[getBlockKey(stock.symbol, holder.id)];
+    const quarter = getBuyoutQuarter();
+    const blocked = talk?.blockedUntil > quarter;
+    const range = talk?.talkedQuarter === quarter ? talk.range : null;
+    const id = `blk-${stock.symbol}-${String(holder.id).replace(/[^a-zA-Z0-9]/g, '')}`;
+    const min = stock.price * (1 + BLOCK_PRICE_RANGE[0]), max = stock.price * (1 + BLOCK_PRICE_RANGE[1]);
+    const label = v => !range ? '' : v < range.low ? 'poniżej oczekiwań' : v <= range.high ? 'w przedziale oczekiwań' : 'powyżej oczekiwań';
+    if (blocked) return `<p class="text-xs text-muted">Rozmowy zablokowane do kw. ${talk.blockedUntil} (urażony niską ofertą).</p>`;
+    return `<details class="block-buy"><summary class="text-xs">Zaproponuj odkup</summary>
+        <div class="bank-card-form">
+            ${range ? `<span class="text-xs">Nastawienie: <strong>${escapeHtml(talk.mood)}</strong>; oczekuje ok. ${formatZl(range.low)}–${formatZl(range.high)} za akcję.</span>` : `<button class="btn-xs btn-secondary" onclick="blockAction('${stock.symbol}', '${holder.id}', talkBlockHolder)">Rozmowa (bez kosztu, raz na kwartał)</button>`}
+            <label class="text-xs">Akcji: <input type="number" id="${id}-n" class="w-xs" min="1" max="${Math.floor(holder.shares)}" value="${Math.floor(holder.shares)}"></label>
+            <label class="text-xs">Cena: <input type="range" id="${id}-p" min="${min.toFixed(2)}" max="${max.toFixed(2)}" step="0.01" value="${(range ? range.high : stock.price * 1.15).toFixed(2)}" oninput="document.getElementById('${id}-v').textContent = formatZl(this.value) + (${range ? 'true' : 'false'} ? ' · ' + (this.value < ${range?.low || 0} ? 'poniżej oczekiwań' : this.value <= ${range?.high || 0} ? 'w przedziale oczekiwań' : 'powyżej oczekiwań') : '')"></label>
+            <span class="text-xs" id="${id}-v">${formatZl(range ? range.high : stock.price * 1.15)}${range ? ` · ${label(range.high)}` : ''}</span>
+            <button class="btn-xs" onclick="blockAction('${stock.symbol}', '${holder.id}', proposeBlockBuy, document.getElementById('${id}-n').value, document.getElementById('${id}-p').value)">Złóż propozycję</button>
+            ${talk?.counter ? `<span class="text-xs">Kontroferta: ${talk.counter.shares.toLocaleString('pl-PL')} akcji po ${formatZl(talk.counter.price)}</span><button class="btn-xs" onclick="blockAction('${stock.symbol}', '${holder.id}', acceptBlockCounter)">Przyjmij kontrofertę</button>` : ''}
+        </div></details>`;
+}
+
+function blockAction(symbol, holderId, fn, ...args) {
+    const result = fn(symbol, holderId, ...args);
+    const labels = { accepted: 'Zgoda — pakiet przechodzi do funduszu.', counter: 'Akcjonariusz proponuje cenę pośrodku.', insulted: 'Akcjonariusz urażony — rozmowy zablokowane na 2 kw.', refused: 'Akcjonariusz wrogi — odmawia.' };
+    if (labels[result]) showToast(labels[result], result === 'accepted' ? 'success' : 'warning', 5000);
+    if (typeof renderCompanyCard === 'function' && companyCardView?.symbol === symbol) renderCompanyCard();
+    if (typeof refreshGovernanceView === 'function') refreshGovernanceView(symbol);
+}
+
+// =================================================================================
 // 0.15.1 M3: BADANIE KUPUJĄCEGO (due diligence)
 // =================================================================================
 
