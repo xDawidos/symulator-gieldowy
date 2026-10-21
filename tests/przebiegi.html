@@ -218,6 +218,21 @@ PRESETS['wydzielenia'] = `(function () {
         return origQ.apply(this, arguments);
     };
 })();`;
+// 0.15.1 M0: fundusz z > 50% akcji 2 spółek o średniej kapitalizacji (z modelem zysku) — oferty kupna dla większościowca.
+// Polityka ofert (od M2): przyjmuje ≥ 30% premii; wcześniej jedna kontroferta na górnej granicy przedziału z rozmów.
+PRESETS['wiekszosciowiec'] = `(function () {
+    const cands = stocks.filter(s => !s.assetType && !s.isBankStock && !s.isBankrupt && !s.isSubsidiaryOf && !s.marketOperator && !s.isStateOwned
+        && Number(s.fundamentals?.epsTtm) > 0 && getAvailableShares(s) > s.totalShares * 0.55).sort((a, b) => getMarketCapValue(a) - getMarketCapValue(b));
+    const mid = Math.floor(cands.length / 2);
+    window.__majority = [];
+    for (const s of cands.slice(mid, mid + 2)) {
+        const n = Math.floor(s.totalShares * 0.52);
+        const h = playerPortfolio[s.symbol] = playerPortfolio[s.symbol] || { shares: 0, avgPrice: s.price, assetType: 'stock' };
+        h.shares += n; s.sharesHeld += n;
+        window.__majority.push(s.symbol);
+    }
+    window.__offerPolicy = { acceptPremium: 0.30, counterAtTop: true };
+})();`;
 const PATCH = (PRESETS[params.get('preset')] || '') + (params.get('patch') || ''); // kod wykonywany w ramce po starcie gry
 const SAVE_KEY = 'gra_inwestycyjna_dawid_save_v4';
 const RESULT_KEY = `__sim_${LABEL}`;
@@ -352,6 +367,7 @@ const PROBE = `(function () {
         updateStockPrices = function () {
             P.ticks++;
             if (typeof isMarketHalted === 'function' && isMarketHalted()) P.frozen++;
+            if (s.ma) s.ma.tick();
             if (typeof isMarketCrashing === 'function' && isMarketCrashing()) P.lastCrashTick = P.ticks;
             const r = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
             if (r && Number.isFinite(r.premium)) { P.premSum += r.premium; P.premTicks++; }
@@ -420,6 +436,75 @@ const PROBE = `(function () {
             corporatePhases: P.phases || []
         };
     };
+    // 0.15.1 M0: przejęcia (start, zerwanie, rozliczenie), kurs celu, udziały funduszu, sonda „arbitraz”.
+    const M = s.ma = { deals: [], byKey: {}, stakes: [], fundTakeovers: 0, lastPrices: {} };
+    const keyOf = (a, b) => a + '>' + b;
+    if (typeof initiateMergerProcess === 'function') {
+        const orig = initiateMergerProcess;
+        initiateMergerProcess = function (initiator, target, type, financing, premium) {
+            const pre = target ? target.price : null;
+            const ok = orig.apply(this, arguments);
+            if (ok && initiator && target) {
+                const d = { q: macro.quarter, tick: P.ticks, init: initiator.symbol, target: target.symbol, type, financing: financing || 'cash', premium: premium ?? 0.25,
+                    offer: target.mergerProcess?.offerDetails?.buyoutPricePerShare || null, preQ: M.lastPrices[target.symbol] || null, preDeal: pre, atAnnounce: target.price,
+                    fundPct: target.totalShares > 0 ? (playerPortfolio[target.symbol]?.shares || 0) / target.totalShares : 0, path: [], end: null,
+                    gig0: null, buy: null, initPre: initiator.price, initAfter: initiator.price };
+                M.deals.push(d); M.byKey[keyOf(d.init, d.target)] = d;
+                if (d.fundPct >= 0.2) M.fundTakeovers++;
+            }
+            return ok;
+        };
+    }
+    const gigNow = () => Number(marketIndexes.find(i => i.id === 'GIG')?.value) || 0;
+    const findDeal = sym => M.deals.find(d => !d.end && (d.init === sym || d.target === sym));
+    if (typeof cancelMerger === 'function') {
+        const orig = cancelMerger;
+        cancelMerger = function (stock, reason) {
+            const d = stock && findDeal(stock.symbol);
+            const r = orig.apply(this, arguments);
+            if (d) { const t = stocks.find(x => x.symbol === d.target); d.end = { kind: 'cancel', q: macro.quarter, reason: String(reason || ''), price: t?.price ?? null, gig: gigNow() }; }
+            return r;
+        };
+    }
+    if (typeof resolveMerger === 'function') {
+        const orig = resolveMerger;
+        resolveMerger = function (s1, s2, process) {
+            const d = M.deals.find(x => !x.end && ((x.init === s1?.symbol && x.target === s2?.symbol) || (x.init === s2?.symbol && x.target === s1?.symbol)));
+            const t = d && stocks.find(x => x.symbol === d.target);
+            const priceBefore = t?.price ?? null;
+            const r = orig.apply(this, arguments);
+            if (d) d.end = { kind: 'resolve', q: macro.quarter, price: priceBefore, paid: process?.offerDetails?.buyoutPricePerShare || null, gig: gigNow() };
+            return r;
+        };
+    }
+    M.tick = function () { // dzień po ogłoszeniu (12 tików): wirtualny zakup celu
+        for (const d of M.deals) {
+            if (d.buy !== null || d.end || P.ticks - d.tick < 12) continue;
+            const t = stocks.find(x => x.symbol === d.target), i = stocks.find(x => x.symbol === d.init);
+            d.buy = t?.price ?? null; d.gig0 = gigNow(); d.initAfter = i?.price ?? null;
+        }
+    };
+    M.sampleQuarter = function () {
+        for (const d of M.deals) if (!d.end) { const t = stocks.find(x => x.symbol === d.target); if (t) d.path.push(+t.price.toFixed(2)); }
+        M.lastPrices = Object.fromEntries(stocks.map(x => [x.symbol, x.price]));
+        let s33 = 0, s50 = 0;
+        for (const [sym, h] of Object.entries(playerPortfolio || {})) { const st = stocks.find(x => x.symbol === sym); if (!st || !(st.totalShares > 0)) continue; const pct = (h.shares || 0) / st.totalShares; if (pct >= 0.33) s33++; if (pct > 0.5) s50++; }
+        M.stakes.push({ q: macro.quarter, s33, s50, majority: (window.__majority || []).map(sym => { const st = stocks.find(x => x.symbol === sym); return st ? { sym, pct: +((playerPortfolio[sym]?.shares || 0) / st.totalShares).toFixed(3), merger: !!st.mergerProcess } : { sym, gone: true }; }) });
+    };
+    M.finish = function () {
+        const deals = M.deals;
+        const arb = deals.filter(d => d.end && d.buy > 0).map(d => {
+            const exit = d.end.kind === 'resolve' && d.end.paid ? d.end.paid : d.end.price;
+            const r = exit / d.buy - 1, g = d.gig0 > 0 && d.end.gig > 0 ? d.end.gig / d.gig0 - 1 : 0;
+            return { r: +r.toFixed(4), excess: +(r - g).toFixed(4), kind: d.end.kind };
+        });
+        return { started: deals.length, resolved: deals.filter(d => d.end?.kind === 'resolve').length, cancelled: deals.filter(d => d.end?.kind === 'cancel').length, open: deals.filter(d => !d.end).length,
+            cancelReasons: deals.filter(d => d.end?.kind === 'cancel').map(d => d.end.reason.slice(0, 60)), fundTakeovers: M.fundTakeovers,
+            premiums: deals.map(d => d.premium), announceJump: deals.filter(d => d.preDeal > 0).map(d => +(d.atAnnounce / d.preDeal - 1).toFixed(4)),
+            spreadAfterDay: deals.filter(d => d.offer > 0 && d.buy > 0).map(d => +(1 - d.buy / d.offer).toFixed(4)),
+            initiatorMove: deals.filter(d => d.initPre > 0 && d.initAfter > 0).map(d => +(d.initAfter / d.initPre - 1).toFixed(4)),
+            arb, stakes: M.stakes, deals: deals.slice(0, 40) };
+    };
     s.badPrice = [];
     s.subStart = null;
     s.sample = function () {
@@ -437,6 +522,7 @@ const PROBE = `(function () {
         }
         s.traceCash();
         P.sampleQuarter();
+        if (s.ma) s.ma.sampleQuarter();
         // Pierwsze nieskończone / nieprawidłowe ceny: zrzut stanu spółki (diagnoza).
         for (const c of stocks) {
             if (Number.isFinite(c.price) || s.badPrice.some(b => b.symbol === c.symbol) || s.badPrice.length >= 5) continue;
@@ -669,7 +755,7 @@ const PROBE = `(function () {
         };
 
         const p0151 = P.finish(yearsTotal);
-        return { ...p0151, h0, tsr, moneyWarn: s.moneyWarn || [], moneyWarnQuarters: s.moneyWarnQuarters || 0, poolStake: s.poolStake, wallet: window.__wallet || null, presetErrors: window.__presetErrors || [], sectorIssues, saveSizes, subStart: s.subStart, subEnd: s.subEnd, multiSegEnd: s.multiSeg, mechanics: s.mechanics || null, badPrice: s.badPrice, negCash: s.negCash, mailBy: s.mailBy, bailouts: s.bailouts, flowWarnings: s.flowWarnings, fund: s.fund, panelText: panel ? panel.textContent.split(/\\s+/).join(' ').slice(0, 600) : null, panelError: s.panelError || null, elections: (macro.election?.history || []).filter(e => e.quarter >= s.quarters[0].q),
+        return { ...p0151, ma: s.ma ? s.ma.finish() : null, h0, tsr, moneyWarn: s.moneyWarn || [], moneyWarnQuarters: s.moneyWarnQuarters || 0, poolStake: s.poolStake, wallet: window.__wallet || null, presetErrors: window.__presetErrors || [], sectorIssues, saveSizes, subStart: s.subStart, subEnd: s.subEnd, multiSegEnd: s.multiSeg, mechanics: s.mechanics || null, badPrice: s.badPrice, negCash: s.negCash, mailBy: s.mailBy, bailouts: s.bailouts, flowWarnings: s.flowWarnings, fund: s.fund, panelText: panel ? panel.textContent.split(/\\s+/).join(' ').slice(0, 600) : null, panelError: s.panelError || null, elections: (macro.election?.history || []).filter(e => e.quarter >= s.quarters[0].q),
             lawChanges: soc ? { ...soc.lawChanges } : null, laws: soc ? { ...soc.laws } : null,
             invariants: typeof checkWorldInvariants === 'function' ? checkWorldInvariants().slice(0, 5) : null, invLog: s.invLog, trimWarnings: s.trimWarnings,
             trims: typeof ghostTrimLog !== "undefined" ? ghostTrimLog.length : null, spinDiag: window.__spinDiag || null, diag: window.__haltDiag || null };
