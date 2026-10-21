@@ -8819,6 +8819,75 @@ group('0.15.1: Sztuka przejęć (arbitraż, oferty, due diligence, pakiety, wezw
         oversight.knf.level = 0;
     });
 
+    // Fundusz kupuje pakiet od zarządu i przekracza 50%; KNF ze skutecznością `eff`.
+    function knfWorld(eff = 1) {
+        const w = world();
+        const { b } = w;
+        blockDealState = createBlockDealState();
+        const rec = getRecord('player'); rec.tenderCases = []; rec.tenderStrikes = 0;
+        playerCash = 5_000_000;
+        playerPortfolio.BBB = { shares: 4500, avgPrice: 100, assetType: 'stock' }; b.sharesHeld = 4500; b.insiderShares = 1000;
+        const origEff = getInstitutionEffectiveness;
+        getInstitutionEffectiveness = () => eff;
+        knfWorld.restore = () => { getInstitutionEffectiveness = origEff; };
+        return w;
+    }
+    const crossByBlock = (b) => { b.knfTenderCase = false; if ((playerPortfolio.BBB?.shares || 0) > 5000) { playerPortfolio.BBB.shares = 4500; b.sharesHeld = getTrackedHeldShares(b); } b.insiderShares = Math.max(b.insiderShares, 1000); Math.random = () => 0.99; executeBlockBuy(b, getBlockHolder(b, 'insiders'), 1000, 110); };
+
+    test('M5: drabina KNF 1 → 2 → 3 (ostrzeżenie, kara 2%, nakaz wezwania do progu po najwyższej cenie); zakupy sesyjne poza drabiną', () => {
+        const { b } = knfWorld(1);
+        try {
+            playerPortfolio.BBB.shares = 6000; b.sharesHeld = 6000; // przekroczenie zakupami sesyjnymi — bez sprawy
+            processTenderOversightQuarterly();
+            assertEq(getRecord('player').tenderStrikes, 0, 'zakupy sesyjne poza drabiną');
+            playerPortfolio.BBB.shares = 4500; b.sharesHeld = 4500;
+            crossByBlock(b); processTenderOversightQuarterly();
+            assertEq(getRecord('player').tenderStrikes, 1, '1. przypadek: ostrzeżenie');
+            crossByBlock(b);
+            const cash0 = playerCash, trust0 = playerFund.trust;
+            processTenderOversightQuarterly();
+            assertEq(getRecord('player').tenderStrikes, 2, '2. przypadek');
+            const value = getRecentBlockBuys('BBB').reduce((s, e) => s + e.shares * e.price, 0);
+            assertNear(cash0 - playerCash, Math.round(value * 0.02), 'kara 2% wartości pakietów z 2 kw.');
+            assertEq(trust0 - playerFund.trust, 3, 'zaufanie −3');
+            society.laws.tenderThreshold = 0; // 66%
+            crossByBlock(b);
+            const bot = aiCompetitors.find(ai => ai.personality === 'calm') || aiCompetitors.find(ai => ai.personality !== 'market_maker' && !ai.isMafia);
+            bot.portfolio = { BBB: { shares: 500, avgPrice: 90 } }; b.sharesHeld = getTrackedHeldShares(b);
+            processTenderOversightQuarterly();
+            assertEq(getRecord('player').tenderStrikes, 3, '3. przypadek: nakaz wezwania');
+            assert(getFundStakePct(b) > 0.55 && getFundStakePct(b) <= 0.66 + 1e-9, `wezwanie do progu: ${getFundStakePct(b)}`);
+            assertEq(b.sharesHeld, getTrackedHeldShares(b), 'akcje = posiadacze po wezwaniu');
+        } finally { knfWorld.restore(); }
+    });
+
+    test('M5: KNF wykrywa z szansą = skuteczność; brak gotówki przy KNF ≥ 3 → nakaz odsprzedaży do 50% w 2 kw.', () => {
+        const { b } = knfWorld(0.4);
+        try {
+            let detected = 0;
+            for (let i = 0; i < 2000; i++) {
+                const rec = getRecord('player'); rec.tenderCases = [{ symbol: 'BBB', quarter: 0 }]; rec.tenderStrikes = 5; // dalekie przypadki: wezwanie
+                const orig = applyKnfTenderStep; applyKnfTenderStep = () => 'x';
+                processTenderOversightQuarterly();
+                applyKnfTenderStep = orig;
+                if (!getRecord('player').tenderCases.length) detected++;
+            }
+            assert(Math.abs(detected / 2000 - 0.4) < 0.03, `wykrycia ${detected / 2000}`);
+            getInstitutionEffectiveness = () => 1;
+            oversight.knf.level = 3;
+            playerCash = 10;
+            const rec = getRecord('player'); rec.tenderCases = []; rec.tenderStrikes = 2;
+            crossByBlock(b); playerCash = 10;
+            processTenderOversightQuarterly();
+            assert(b.knfResaleOrder, 'nakaz odsprzedaży');
+            macro.quarter += 2;
+            processTenderOversightQuarterly();
+            assert(getFundStakePct(b) <= 0.5 + 1e-9 && !b.knfResaleOrder, `zejście do 50%: ${getFundStakePct(b)}`);
+            assertEq(b.sharesHeld, getTrackedHeldShares(b), 'akcje = posiadacze');
+            oversight.knf.level = 0;
+        } finally { knfWorld.restore(); }
+    });
+
     test('M1: fuzja (wymiana akcji) bez skoku do ceny gotówkowej; etap 5 bez ×1,1', () => {
         const { a, b } = world();
         const pre = b.price;

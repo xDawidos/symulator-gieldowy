@@ -348,6 +348,142 @@ function startBuyoutDeal(offer, price) {
 }
 
 // =================================================================================
+// 0.15.1 M5: KNF — PRZEKROCZENIE 50% TRANSAKCJAMI PAKIETOWYMI (drabina, wezwanie, odsprzedaż)
+// =================================================================================
+
+const KNF_TENDER_FINE = 0.02;
+const KNF_RESALE_QUARTERS = 2;
+
+function getTenderRecord() {
+    const rec = getRecord('player');
+    if (!Array.isArray(rec.tenderCases)) rec.tenderCases = [];
+    rec.tenderStrikes = Number(rec.tenderStrikes) || 0;
+    return rec;
+}
+
+function getRecentBlockBuys(symbol, quarters = 2) {
+    const now = getBuyoutQuarter();
+    return blockDealState.log.filter(e => e.symbol === symbol && now - e.q <= quarters);
+}
+
+/** Po transakcji pakietowej: przekroczenie 50% z udziałem pakietów z ostatnich 2 kw. → sprawa dla KNF (raz na przekroczenie). */
+function onBlockBuyCompleted(stock) {
+    if (getFundStakePct(stock) <= 0.5 || stock.knfTenderCase || !getRecentBlockBuys(stock.symbol).length) return false;
+    stock.knfTenderCase = true;
+    getTenderRecord().tenderCases.push({ symbol: stock.symbol, quarter: getBuyoutQuarter() });
+    return true;
+}
+
+/** Co kwartał: KNF wykrywa sprawy z szansą = skuteczność; drabina 1 → 2 → 3+; nakazy odsprzedaży. */
+function processTenderOversightQuarterly() {
+    const rec = getTenderRecord();
+    const eff = typeof getInstitutionEffectiveness === 'function' ? getInstitutionEffectiveness(oversight.knf) : 0.3;
+    for (const stock of stocks) if (stock.knfTenderCase && getFundStakePct(stock) <= 0.5) stock.knfTenderCase = false;
+    for (const c of [...rec.tenderCases]) {
+        const stock = stocks.find(s => s.symbol === c.symbol);
+        if (!stock || stock.isBankrupt) { rec.tenderCases.splice(rec.tenderCases.indexOf(c), 1); continue; }
+        if (Math.random() >= eff) continue; // niewykryte — sprawdzane dalej
+        rec.tenderCases.splice(rec.tenderCases.indexOf(c), 1);
+        rec.tenderStrikes++;
+        applyKnfTenderStep(stock, rec.tenderStrikes);
+    }
+    for (const stock of stocks.filter(s => s.knfResaleOrder)) {
+        if (getBuyoutQuarter() < stock.knfResaleOrder.until) continue;
+        const excess = Math.floor((playerPortfolio[stock.symbol]?.shares || 0) - stock.totalShares * 0.5);
+        if (excess > 0) sellFundSharesForced(stock, excess, 'nakaz KNF: odsprzedaż nadwyżki ponad 50%');
+        stock.knfResaleOrder = null;
+    }
+}
+
+function applyKnfTenderStep(stock, strike) {
+    const threshold = getTenderThreshold();
+    if (strike === 1) {
+        addMail({ sender: 'KNF', subject: `⚠️ KNF: przekroczenie 50% w ${stock.name} bez wezwania`, body: `Fundusz przekroczył 50% głosów w ${stock.name}, kupując pakiety poza rynkiem. Przy kolejnym takim przypadku KNF nałoży karę, a potem nakaże wezwanie na akcje pozostałych akcjonariuszy do progu ${Math.round(threshold * 100)}% (ustawa „Próg wezwania”). To ochrona akcjonariuszy mniejszościowych: przy zmianie kontroli też mogą sprzedać po uczciwej cenie.`, importance: 3, symbol: stock.symbol });
+        if (typeof unlockAcademyEntry === 'function') { unlockAcademyEntry('ochrona_mniejszosciowych'); unlockAcademyEntry('prog_wezwania'); }
+        return 'warning';
+    }
+    if (strike === 2) {
+        const value = getRecentBlockBuys(stock.symbol).reduce((s, e) => s + e.shares * e.price, 0);
+        const fine = Math.round(value * KNF_TENDER_FINE);
+        playerCash -= fine;
+        governmentTreasury += fine;
+        recordPayment('player-fund', 'external:skarb-panstwa', fine, `Kara KNF: przekroczenie 50% w ${stock.symbol}`);
+        playerFund.trust = Math.max(0, playerFund.trust - 3);
+        addMail({ sender: 'KNF', subject: `💸 KNF: kara za przekroczenie 50% w ${stock.name}`, body: `Drugie przekroczenie progu kontroli transakcjami pakietowymi: kara ${formatZl(fine, 0)} (2% wartości pakietów z ostatnich 2 kw.). Klienci funduszu tracą zaufanie (−3). Kolejny raz — nakaz wezwania.`, importance: 3, symbol: stock.symbol });
+        return 'fine';
+    }
+    return runKnfTenderOrder(stock, threshold);
+}
+
+/** Nakaz wezwania do progu po cenie ≥ najwyższej zapłaconej w ostatnich 2 kw.; brak gotówki przy KNF ≥ 3 → nakaz odsprzedaży. */
+function runKnfTenderOrder(stock, threshold = getTenderThreshold()) {
+    const symbol = stock.symbol;
+    const paid = getRecentBlockBuys(symbol).map(e => e.price);
+    const price = Math.max(stock.price, ...paid);
+    let need = Math.max(0, Math.floor(stock.totalShares * threshold - (playerPortfolio[symbol]?.shares || 0)));
+    const sellers = [];
+    for (const holder of getShareholders(stock)) {
+        if (!['ai', 'botFund'].includes(holder.kind) || need <= 0) continue;
+        const h = getBlockHolder(stock, holder.id);
+        if (h && getBlockReservePrice(stock, h) <= price) { const n = Math.min(need, Math.floor(h.shares)); if (n > 0) { sellers.push({ holder: h, n }); need -= n; } }
+    }
+    const retail = Math.min(need, Math.floor(getAvailableShares(stock) * getRandomInRange(0.6, 0.9)));
+    const total = sellers.reduce((s, x) => s + x.n, 0) + retail;
+    const cost = total * price;
+    if (playerCash < cost) {
+        if ((Number(oversight.knf?.level) || 0) >= 3) {
+            stock.knfResaleOrder = { until: getBuyoutQuarter() + KNF_RESALE_QUARTERS };
+            addMail({ sender: 'KNF', subject: `⛔ KNF: nakaz odsprzedaży akcji ${stock.name}`, body: `Fundusz nie ma gotówki na wezwanie (${formatZl(cost, 0)}). KNF nakazuje zejść do 50% głosów w ${KNF_RESALE_QUARTERS} kw. — inaczej nadwyżka zostanie sprzedana na rynku.`, importance: 3, symbol });
+            return 'resale';
+        }
+        const scale = Math.max(0, playerCash / Math.max(1, cost));
+        for (const s of sellers) s.n = Math.floor(s.n * scale);
+        return finishKnfTender(stock, sellers, Math.floor(retail * scale), price);
+    }
+    return finishKnfTender(stock, sellers, retail, price);
+}
+
+function finishKnfTender(stock, sellers, retail, price) {
+    const symbol = stock.symbol;
+    let bought = 0;
+    for (const { holder, n } of sellers) {
+        if (!(n > 0)) continue;
+        const pos = holder.kind === 'ai' ? holder.entity.portfolio[symbol] : holder.entity.fund.portfolio[symbol];
+        pos.shares -= n;
+        if (pos.shares <= 0.001) { if (holder.kind === 'ai') delete holder.entity.portfolio[symbol]; else delete holder.entity.fund.portfolio[symbol]; }
+        if (holder.kind === 'ai') holder.entity.cash += n * price; else holder.entity.fund.cash += n * price;
+        bought += n;
+    }
+    if (retail > 0) { stock.sharesHeld = (Number(stock.sharesHeld) || 0) + retail; bought += retail; }
+    const cost = bought * price;
+    playerCash -= cost;
+    recordPayment('player-fund', 'external:akcjonariusze', cost, `Wezwanie (nakaz KNF) ${symbol}`);
+    const holding = playerPortfolio[symbol] = playerPortfolio[symbol] || { shares: 0, avgPrice: price, assetType: 'stock' };
+    holding.avgPrice = (holding.avgPrice * holding.shares + cost) / Math.max(1, holding.shares + bought);
+    holding.shares += bought;
+    addMail({ sender: 'KNF', subject: `📣 Nakaz wezwania: ${stock.name}`, body: `Na nakaz KNF fundusz ogłosił wezwanie po ${formatZl(price)} (najwyższa cena z transakcji pakietowych). Akcjonariusze sprzedali ${bought.toLocaleString('pl-PL')} akcji za ${formatZl(cost, 0)}; fundusz ma teraz ${(getFundStakePct(stock) * 100).toFixed(1)}%.`, importance: 3, symbol });
+    logEvent(`📣 Nakaz KNF: wezwanie funduszu na akcje ${stock.name} po ${formatZl(price)} — kupiono ${bought.toLocaleString('pl-PL')} akcji.`, 'review');
+    return 'tender';
+}
+
+/** Sprzedaż na rynku z wpływem na cenę (nakaz KNF). */
+function sellFundSharesForced(stock, quantity, reason) {
+    const holding = playerPortfolio[stock.symbol];
+    const free = (holding?.shares || 0) - (holding?.lockedShares || 0);
+    const n = Math.min(Math.floor(quantity), Math.floor(free));
+    if (!(n > 0)) return 0;
+    const proceeds = n * stock.price * 0.99;
+    playerCash += proceeds;
+    holding.shares -= n;
+    stock.sharesHeld -= n;
+    if (typeof applyTradeImpact === 'function') applyTradeImpact(stock, n, -1);
+    if (holding.shares <= 0) delete playerPortfolio[stock.symbol];
+    if (typeof notePlayerPositionLoss === 'function') notePlayerPositionLoss(stock.symbol, n, reason, proceeds);
+    logEvent(`⛔ ${reason}: fundusz sprzedaje ${n.toLocaleString('pl-PL')} akcji ${stock.name}.`, 'review');
+    return n;
+}
+
+// =================================================================================
 // 0.15.1 M4: ODKUP PAKIETÓW OD AKCJONARIUSZY I OD PREZESA (poza rynkiem)
 // =================================================================================
 

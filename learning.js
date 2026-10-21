@@ -792,6 +792,26 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Ile trwa wstrzymanie handlu przy bezpieczniku 1. stopnia (-10%)?', a: ['15 sekund', 'Cały miesiąc', '24 godziny'], c: 0 }
         ]
     },
+    ochrona_mniejszosciowych: {
+        title: 'Ochrona akcjonariuszy mniejszościowych', icon: '🛡️',
+        text: 'Kto przejmuje kontrolę nad spółką, musi dać pozostałym akcjonariuszom szansę wyjścia po uczciwej cenie — ogłasza wezwanie (ofertę kupna ich akcji). Bez tego większościowiec mógłby kupić pakiet kontrolny tanio od kilku osób, a reszta zostałaby z akcjami spółki, na którą nie ma wpływu. Pilnuje tego KNF: ostrzega, karze, a w końcu nakazuje wezwanie albo sprzedaż nadwyżki.',
+        example: () => `Dziś próg wezwania to ${Math.round(getTenderThreshold() * 100)}%.`,
+        quiz: [
+            { q: 'Po co jest obowiązek wezwania?', a: ['Żeby mniejszościowi mogli wyjść po uczciwej cenie', 'Żeby podnieść podatki', 'Żeby spółka wypłaciła dywidendę'], c: 0 },
+            { q: 'Kto pilnuje obowiązku wezwania?', a: ['KNF', 'Bank centralny', 'Urząd skarbowy'], c: 0 },
+            { q: 'Po jakiej cenie trzeba ogłosić nakazane wezwanie?', a: ['Co najmniej najwyższej zapłaconej za pakiety', 'Po dowolnej', 'Po cenie nominalnej'], c: 0 }
+        ]
+    },
+    prog_wezwania: {
+        title: 'Próg wezwania i polityka', icon: '📣',
+        text: 'Ustawa „Próg wezwania” mówi, do jakiego udziału trzeba ogłosić wezwanie po przejęciu kontroli (66, 75, 90 albo 99%). Wyższy próg to silniejsza ochrona mniejszościowych i droższa kontrola. Partie zmieniają go w swoich programach (Ludowcy i Blok Państwowy w górę, Koalicja Rynkowa w dół), ale wyższe progi wymagają silnej KNF.',
+        example: () => `Próg teraz: ${Math.round(getTenderThreshold() * 100)}%; limit KNF: ${describeLawLevel('tenderThreshold', getTenderThresholdKnfCap())}.`,
+        quiz: [
+            { q: 'Co oznacza wyższy próg wezwania?', a: ['Droższą kontrolę i silniejszą ochronę mniejszościowych', 'Tańszą kontrolę', 'Brak wezwań'], c: 0 },
+            { q: 'Które partie podnoszą próg wezwania?', a: ['Ludowcy i Blok Państwowy', 'Koalicja Rynkowa', 'Żadna'], c: 0 },
+            { q: 'Co ogranicza najwyższy możliwy próg?', a: ['Siła KNF', 'Kurs GIG', 'Stopy procentowe'], c: 0 }
+        ]
+    },
     transakcja_pakietowa: {
         title: 'Transakcja pakietowa', icon: '📦',
         text: 'Duży pakiet akcji rzadko kupuje się na sesji — kurs by poszybował. Kupujący negocjuje z posiadaczem poza rynkiem: liczbę akcji i cenę. Sprzedający ma cenę rezerwową (zwykle powyżej kursu i wartości godziwej) — zależy od jego charakteru i relacji z kupującym. Zbyt niska oferta urazi i zamknie rozmowy na jakiś czas.',
