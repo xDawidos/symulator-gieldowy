@@ -1930,6 +1930,39 @@ const ACHIEVEMENTS = {
         xp: 100, hidden: false,
         check: () => Boolean(playerProfile?._abandonedFadingStar)
     },
+    // 0.15.1 M7: przejęcia i pakiety
+    sold_with_premium: {
+        id: 'sold_with_premium', icon: '🤝', title: 'Sprzedane z premią',
+        desc: 'Sprzedaj kontrolowaną spółkę (> 50%) z premią co najmniej 40% nad kursem sprzed oferty.',
+        xp: 150, hidden: false, check: () => Boolean(playerProfile?._soldWithPremium)
+    },
+    auctioneer: {
+        id: 'auctioneer', icon: '🔨', title: 'Aukcjoner',
+        desc: 'Doprowadź do dwóch ofert kupna i sprzedaj o co najmniej 10% drożej niż w pierwszej ofercie.',
+        xp: 150, hidden: false, check: () => Boolean(playerProfile?._auctioneer)
+    },
+    clean_books: {
+        id: 'clean_books', icon: '📒', title: 'Czyste księgi',
+        desc: 'Zleć audyt przed sprzedażą, a potem doprowadź transakcję do końca bez zerwania.',
+        xp: 100, hidden: false, check: () => Boolean(playerProfile?._cleanBooks)
+    },
+    arbitrageur: {
+        id: 'arbitrageur', icon: '🎯', title: 'Arbitrażysta',
+        desc: 'Zarób na 3 pozycjach w celach przejęć kupionych po ogłoszeniu (rozliczonych po cenie oferty).',
+        xp: 150, hidden: false, check: () => (Number(playerProfile?._arbWins) || 0) >= 3
+    },
+    block_by_block: {
+        id: 'block_by_block', icon: '🧩', title: 'Pakiet po pakiecie',
+        desc: 'Zdobądź ponad 50% spółki, w tym co najmniej 20 pp z transakcji pakietowych.',
+        xp: 150, hidden: false,
+        check: () => typeof blockDealState === 'object' && stocks.some(s => getFundStakePct(s) > 0.5
+            && blockDealState.log.filter(e => e.symbol === s.symbol).reduce((sum, e) => sum + e.shares, 0) / s.totalShares >= 0.2)
+    },
+    winners_curse: {
+        id: 'winners_curse', icon: '🏚️', title: 'Klątwa zwycięzcy',
+        desc: 'Miej co najmniej 5% aktywów funduszu w spółce, która odpisze co najmniej połowę wartości firmy po przejęciu.',
+        xp: 100, hidden: true, check: () => Boolean(playerProfile?._winnersCurse)
+    },
     value_trap: {
         id: 'value_trap', icon: '🕳️', title: 'Pułapka wartości',
         desc: 'Trzymaj gasnącą gwiazdę (stanowiącą co najmniej 5% aktywów) aż do jej spadku do giełdy Brązowej.',

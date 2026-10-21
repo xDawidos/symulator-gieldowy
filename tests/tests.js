@@ -8982,6 +8982,23 @@ group('0.15.1: Sztuka przejęć (arbitraż, oferty, due diligence, pakiety, wezw
         assertNear(getStakeCampaignChance(a), 0.06, 'Mistrz marionetek ×2', 1e-9);
     });
 
+    test('M7: osiągnięcia — sprzedane z premią, aukcjoner, czyste księgi, arbitrażysta, pakiet po pakiecie', () => {
+        const { b } = world();
+        playerProfile._soldWithPremium = playerProfile._auctioneer = playerProfile._cleanBooks = false; playerProfile._arbWins = 0;
+        playerPortfolio.BBB = { shares: 6000, avgPrice: 100, assetType: 'stock' };
+        noteTakeoverAchievements({ arb: { preDealPrice: 100 }, offerMeta: { fundSeller: true, auction: true, initialPrice: 120, preSaleAudit: true } }, b, 145);
+        assert(playerProfile._soldWithPremium && playerProfile._auctioneer && playerProfile._cleanBooks, 'premia ≥ 40%, aukcja +10%, audyt');
+        assert(ACHIEVEMENTS.sold_with_premium.check() && ACHIEVEMENTS.auctioneer.check() && ACHIEVEMENTS.clean_books.check(), 'warunki osiągnięć');
+        playerPortfolio.BBB = { shares: 100, avgPrice: 112 };
+        for (let i = 0; i < 3; i++) noteTakeoverAchievements({ arb: { preDealPrice: 100 } }, b, 118);
+        assert(ACHIEVEMENTS.arbitrageur.check(), 'arbitrażysta: 3 zyskowne pozycje kupione po ogłoszeniu');
+        blockDealState = createBlockDealState();
+        blockDealState.log.push({ q: 0, symbol: 'BBB', shares: 2500, price: 100 });
+        playerPortfolio.BBB = { shares: 5200, avgPrice: 100 };
+        assert(ACHIEVEMENTS.block_by_block.check(), 'pakiet po pakiecie: > 50%, w tym ≥ 20 pp z pakietów');
+        assert(ACHIEVEMENTS.winners_curse.hidden, 'klątwa zwycięzcy ukryta');
+    });
+
     test('M1: fuzja (wymiana akcji) bez skoku do ceny gotówkowej; etap 5 bez ×1,1', () => {
         const { a, b } = world();
         const pre = b.price;

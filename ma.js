@@ -309,6 +309,7 @@ function startBuyoutDeal(offer, price) {
         bidder.mergerProcess.offerDetails.totalCost = price * target.totalShares;
         bidder.mergerProcess.offerDetails.premium = price / offer.preOfferPrice - 1;
         bidder.mergerProcess.offerMax = offer.maxPrice; // M3: negocjacje po badaniu
+        bidder.mergerProcess.offerMeta = { fundSeller: offer.holder === 'player', auction: Boolean(offer.auction?.second), initialPrice: offer.initialPrice, preSaleAudit: hasPreSaleAudit(target) }; // M7
         if (bidder.mergerProcess.arb) target.price = price * (1 - bidder.mergerProcess.arb.spread);
         syncPartnerProcess(bidder, target);
         logEvent(`🤝 Uzgodniono sprzedaż ${target.name} spółce ${bidder.name} po ${formatZl(price)} za akcję (premia ${Math.round((price / offer.preOfferPrice - 1) * 100)}%). Rozliczenie za 3 kw.`, 'market');
@@ -837,6 +838,20 @@ function onMergerArbitrageCancelled(stock) {
     const anchor = getMergerArbAnchor(target);
     if (anchor > 0 && process.type === 'przejęcie') target.price *= process.arb.preDealPrice / anchor * (1 + getRandomInRange(-0.05, 0.05));
     if (typeof pushNews === 'function') pushNews(`Zerwane przejęcie: ${target.name} — kurs wraca w okolice ceny sprzed oferty`, target.symbol);
+}
+
+/** 0.15.1 M7: flagi osiągnięć przy rozliczeniu przejęcia (fundusz jeszcze ma akcje celu). */
+function noteTakeoverAchievements(process, target, price) {
+    if (!playerProfile) return;
+    const holding = playerPortfolio[target.symbol];
+    const meta = process.offerMeta;
+    if (meta?.fundSeller && (holding?.shares || 0) > target.totalShares * 0.5) {
+        if (price >= (process.arb?.preDealPrice || target.price) * 1.4) playerProfile._soldWithPremium = true;
+        if (meta.auction && price >= meta.initialPrice * 1.1) playerProfile._auctioneer = true;
+        if (meta.preSaleAudit) playerProfile._cleanBooks = true;
+    }
+    const pre = process.arb?.preDealPrice;
+    if (holding?.shares > 0 && pre > 0 && holding.avgPrice > pre * 1.02 && price > holding.avgPrice) playerProfile._arbWins = (Number(playerProfile._arbWins) || 0) + 1;
 }
 
 /** Linia w karcie spółki-celu. */

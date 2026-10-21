@@ -3731,6 +3731,7 @@ function resolveMerger(stock1, stock2, process) {
 
             // 3. Wypłata dla akcjonariuszy spółki-celu (bez zmian)
             const pricePerShare = process.offerDetails.buyoutPricePerShare;
+            if (typeof noteTakeoverAchievements === 'function') noteTakeoverAchievements(process, target, pricePerShare); // 0.15.1 M7
             // Gracz
             if (playerPortfolio[target.symbol]) {
                 const holding = playerPortfolio[target.symbol];
@@ -9616,6 +9617,7 @@ function impairGoodwill(stock, acq, amount, share) {
         if (typeof unlockAcademyEntry === 'function') { unlockAcademyEntry('test_utraty_wartosci'); unlockAcademyEntry('klatwa_zwyciezcy'); }
     }
     if (share >= 0.5 && typeof pushNews === 'function') pushNews(`${stock.name} odpisuje połowę wartości firmy po przejęciu ${acq.name}`, stock.symbol);
+    if (share >= 0.5 && playerProfile && (playerPortfolio[stock.symbol]?.shares || 0) * stock.price >= getFundAssets() * 0.05) playerProfile._winnersCurse = true; // M7
     return amount;
 }
 
