@@ -8999,6 +8999,13 @@ group('0.15.1: Sztuka przejęć (arbitraż, oferty, due diligence, pakiety, wezw
         assert(ACHIEVEMENTS.winners_curse.hidden, 'klątwa zwycięzcy ukryta');
     });
 
+    test('M8: córka z pustą kopią działów matki nie przerywa logiki spółek (naprawa działów)', () => {
+        const { a, b } = world();
+        a.departments = {}; // kopia działów matki, która ich jeszcze nie miała
+        runCorporateLogic();
+        assert(a.departments.economy && a.departments.research && a.departments.development, 'działy odtworzone');
+    });
+
     test('M1: fuzja (wymiana akcji) bez skoku do ceny gotówkowej; etap 5 bez ×1,1', () => {
         const { a, b } = world();
         const pre = b.price;

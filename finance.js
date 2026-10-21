@@ -714,6 +714,7 @@ function payBondCoupons() {
         payBondOwner(bond.ownerId, coupon);
         const issuer = bond.issuerSymbol && stocks.find(s => s.symbol === bond.issuerSymbol);
         if (issuer) {
+            ensureCompanyCash(issuer, coupon, `Kredyt: kupon obligacji ${issuer.symbol}`); // brak gotówki pokrywa kredyt (jak inne wydatki spółki)
             adjustCompanyCash(issuer, -coupon);
             adjustBalanceSheet(issuer, { assets: -coupon, retainedEarnings: -coupon });
         }
@@ -740,6 +741,7 @@ function checkBondMaturities(deltaGameMs = 5000) {
         payBondOwner(bond.ownerId, payout);
         const issuer = bond.issuerSymbol && stocks.find(s => s.symbol === bond.issuerSymbol);
         if (issuer && !bond.defaulted) {
+            ensureCompanyCash(issuer, payout, `Kredyt: wykup obligacji ${issuer.symbol}`);
             adjustCompanyCash(issuer, -payout);
             adjustBalanceSheet(issuer, { assets: -payout, liabilities: -payout });
         }

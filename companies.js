@@ -7407,7 +7407,7 @@ function runCorporateLogic() {
         if (stock.assetType || stock.isBankrupt || stock.isBankStock) return;
 
         // Autonaprawa działów
-        if (!stock.departments) initializeDepartments(stock);
+        if (!stock.departments?.economy || !stock.departments.research || !stock.departments.development) initializeDepartments(stock); // córki dostają kopię działów matki — pustą, gdy matka ich jeszcze nie miała
         if (!stock.departments) return;
         if (!Array.isArray(stock.activeInvestments)) stock.activeInvestments = [];
 
@@ -7842,7 +7842,7 @@ function assignBankToCompany(stock) {
 
 function optimizeBankChoice(stock) {
     // Działa tylko dla Działu Ekonomii Lvl 2+
-    if (!stock.departments || stock.departments.economy.level < 2) return;
+    if (!stock.departments?.economy || stock.departments.economy.level < 2) return;
     
     // Wykonuj rzadko (np. 5% szans na tydzień), żeby firmy nie skakały ciągle
     if (Math.random() > 0.05) return;
