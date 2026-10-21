@@ -232,6 +232,30 @@ PRESETS['wiekszosciowiec'] = `(function () {
         window.__majority.push(s.symbol);
     }
     window.__offerPolicy = { acceptPremium: 0.30, counterAtTop: true };
+    // Polityka sondy dla ofert (M2): ≥ 30% premii — przyjmij; inaczej rozmowy i jedna kontroferta na górnej granicy przedziału, potem przyjmij.
+    const L = window.__offerLog = [];
+    if (typeof processBuyoutOffersQuarterly === 'function') {
+        const orig = processBuyoutOffersQuarterly;
+        processBuyoutOffersQuarterly = function () {
+            const r = orig.apply(this, arguments);
+            try {
+                for (const [sym, o] of Object.entries(buyoutState.offers)) {
+                    if (o.holder !== 'player' || o.__policy) continue;
+                    o.__policy = true;
+                    const entry = { q: macro.quarter, sym, whole: o.wholeCompany, initial: +(o.price / o.preOfferPrice - 1).toFixed(3), max: +(o.maxPrice / o.preOfferPrice - 1).toFixed(3), stance: o.stance };
+                    if (o.price / o.preOfferPrice - 1 < window.__offerPolicy.acceptPremium) {
+                        const talk = talkBuyoutOffer(sym);
+                        entry.counter = counterBuyoutOffer(sym, talk.high);
+                    }
+                    const still = buyoutState.offers[sym];
+                    entry.final = still ? +(still.price / still.preOfferPrice - 1).toFixed(3) : (entry.counter === 'accepted' ? 'counter' : null);
+                    if (still) entry.accepted = acceptBuyoutOffer(sym);
+                    L.push(entry);
+                }
+            } catch (e) { (window.__presetErrors = window.__presetErrors || []).push(String(e)); }
+            return r;
+        };
+    }
 })();`;
 const PATCH = (PRESETS[params.get('preset')] || '') + (params.get('patch') || ''); // kod wykonywany w ramce po starcie gry
 const SAVE_KEY = 'gra_inwestycyjna_dawid_save_v4';
@@ -758,7 +782,7 @@ const PROBE = `(function () {
         return { ...p0151, ma: s.ma ? s.ma.finish() : null, h0, tsr, moneyWarn: s.moneyWarn || [], moneyWarnQuarters: s.moneyWarnQuarters || 0, poolStake: s.poolStake, wallet: window.__wallet || null, presetErrors: window.__presetErrors || [], sectorIssues, saveSizes, subStart: s.subStart, subEnd: s.subEnd, multiSegEnd: s.multiSeg, mechanics: s.mechanics || null, badPrice: s.badPrice, negCash: s.negCash, mailBy: s.mailBy, bailouts: s.bailouts, flowWarnings: s.flowWarnings, fund: s.fund, panelText: panel ? panel.textContent.split(/\\s+/).join(' ').slice(0, 600) : null, panelError: s.panelError || null, elections: (macro.election?.history || []).filter(e => e.quarter >= s.quarters[0].q),
             lawChanges: soc ? { ...soc.lawChanges } : null, laws: soc ? { ...soc.laws } : null,
             invariants: typeof checkWorldInvariants === 'function' ? checkWorldInvariants().slice(0, 5) : null, invLog: s.invLog, trimWarnings: s.trimWarnings,
-            trims: typeof ghostTrimLog !== "undefined" ? ghostTrimLog.length : null, spinDiag: window.__spinDiag || null, diag: window.__haltDiag || null };
+            trims: typeof ghostTrimLog !== "undefined" ? ghostTrimLog.length : null, spinDiag: window.__spinDiag || null, diag: window.__haltDiag || null, offers: window.__offerLog || null };
     };
 })();`;
 

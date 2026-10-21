@@ -792,6 +792,26 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Ile trwa wstrzymanie handlu przy bezpieczniku 1. stopnia (-10%)?', a: ['15 sekund', 'Cały miesiąc', '24 godziny'], c: 0 }
         ]
     },
+    cena_maksymalna: {
+        title: 'Cena maksymalna i synergie', icon: '🎯',
+        text: 'Kupujący ma w głowie cenę maksymalną — ile może zapłacić, żeby przejęcie się opłaciło. Zależy od wartości spółki i synergii (wspólne zakupy, klienci, koszty). Pierwsza oferta jest zwykle dużo niższa. Rozmowa zdradza przedział tej ceny; kontroferta w przedziale zwykle przechodzi, a żądanie dużo powyżej grozi urażeniem i zerwaniem rozmów.',
+        example: () => 'Oferty kupna dostaje fundusz z co najmniej 33% akcji spółki.',
+        quiz: [
+            { q: 'Od czego zależy cena maksymalna kupującego?', a: ['Od wartości spółki i synergii', 'Tylko od kursu z wczoraj', 'Od liczby akcjonariuszy'], c: 0 },
+            { q: 'Co grozi przy żądaniu dużo ponad cenę maksymalną?', a: ['Urażenie i wycofanie oferty', 'Automatyczna zgoda', 'Kara KNF'], c: 0 },
+            { q: 'Pierwsza oferta kupującego jest zwykle…', a: ['niższa niż jego cena maksymalna', 'równa cenie maksymalnej', 'wyższa niż cena maksymalna'], c: 0 }
+        ]
+    },
+    aukcja_sprzedazy: {
+        title: 'Konkurencyjny proces sprzedaży', icon: '🔨',
+        text: 'Sprzedający może zaprosić kolejnych chętnych (przez doradcę). Gdy jest dwóch kupujących, przebijają się nawzajem — cena rośnie, ale tylko do niższej z ich cen maksymalnych. Pierwszy oferent może się obrazić i wycofać. Doradca kosztuje, a drugiego chętnego może nie znaleźć.',
+        example: () => 'Aukcję uruchomisz w oknie oferty kupna.',
+        quiz: [
+            { q: 'Do jakiej ceny rosną oferty w aukcji dwóch kupujących?', a: ['Do niższej z ich cen maksymalnych', 'Bez ograniczeń', 'Do ceny z pierwszej oferty'], c: 0 },
+            { q: 'Jakie jest ryzyko zaproszenia drugiego oferenta?', a: ['Koszt doradcy i urażenie pierwszego oferenta', 'Utrata akcji', 'Zawieszenie handlu'], c: 0 },
+            { q: 'Kto szuka drugiego kupującego?', a: ['Doradca sprzedającego', 'KNF', 'Bank centralny'], c: 0 }
+        ]
+    },
     premia_przejecia: {
         title: 'Premia za przejęcie', icon: '🤝',
         text: 'Kupujący całą spółkę płaci więcej niż kurs giełdowy — to premia za przejęcie (zwykle 20–40%). Płaci za kontrolę: może połączyć firmy, obciąć koszty, wykorzystać synergie. Kurs celu po ogłoszeniu skacze w okolice ceny oferty, a kurs kupującego często spada — rynek boi się, że przepłacił.',

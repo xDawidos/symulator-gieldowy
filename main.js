@@ -222,6 +222,7 @@ function buildSaveSnapshot({ compact = 0 } = {}) {
         marketRegimes,
         marketCrash: typeof marketCrash !== 'undefined' ? marketCrash : null,
         marketHalt: typeof marketHalt !== 'undefined' ? marketHalt : null,
+        buyoutState: typeof buyoutState !== 'undefined' ? buyoutState : null, // 0.15.1 M2
         sectorBubble: activeSectorBubble,
         sectorBubbleCooldown: sectorBubbleCooldown,
         macro,
@@ -700,6 +701,7 @@ function applySaveSnapshot(snapshot) {
     } else if (typeof createMarketCrashState === 'function') {
         marketCrash = createMarketCrashState();
     }
+    if (typeof buyoutState !== 'undefined') buyoutState = snapshot.buyoutState?.offers ? snapshot.buyoutState : createBuyoutState(); // 0.15.1 M2
     if (typeof marketHalt !== 'undefined' && snapshot.marketHalt) {
         marketHalt = snapshot.marketHalt;
         normalizeMarketHaltAfterLoad();
@@ -1421,6 +1423,7 @@ gameTimers.weekly = setGameInterval(() => {
         payBondCoupons(); // kupony kwartalne (finance.js)
         processPublicInvestmentFunding(); // BC → spółki państwowe, miasto → spółki miejskie (investments.js)
         processGovernanceQuarter(); // walne zgromadzenia (governance.js)
+        if (typeof processBuyoutOffersQuarterly === 'function') processBuyoutOffersQuarterly(); // 0.15.1 M2: oferty kupna dla większościowców
         processEtfsQuarterly(); // rebalancing, cele roczne, nowe i zamykane ETF-y (etf.js)
         processRelationsQuarterly(); // relacje z botami: wrogowie i przyjaciele (relations.js)
         processMarketsQuarterly(); // operatorzy rynków i maklerzy (markets.js)

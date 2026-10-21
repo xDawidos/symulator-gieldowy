@@ -8569,7 +8569,7 @@ group('0.15.1: Sztuka przejęć (arbitraż, oferty, due diligence, pakiety, wezw
         assert(b.mergerProcess.arb.spread < s1, `spread ${s1} → ${b.mergerProcess.arb.spread}`);
         const anchor = getMergerArbAnchor(b);
         b.price = anchor * 0.8;
-        for (let i = 0; i < 600; i++) updateStockPrices();
+        for (let i = 0; i < 2000; i++) updateStockPrices(); // powrót 0,03% różnicy na tik
         assert(b.price > anchor * 0.8 && Math.abs(b.price / anchor - 1) < 0.15, `kurs wraca do ${anchor}: ${b.price}`);
     });
 
@@ -8581,6 +8581,88 @@ group('0.15.1: Sztuka przejęć (arbitraż, oferty, due diligence, pakiety, wezw
         cancelMerger(a, 'test'); cancelMerger(b, 'test');
         assert(Math.abs(b.price / 100 - 1) <= 0.05 + 1e-9, `po zerwaniu ${b.price}`);
         assert(!b.mergerProcess && !a.mergerProcess, 'proces wyczyszczony');
+    });
+
+    // Fundusz z pakietem w BBB; AAA (bogata, ten sam sektor) jest oferentem.
+    function offerWorld(fundPct = 0.40) {
+        const w = world();
+        const { b } = w;
+        playerPortfolio.BBB = { shares: Math.floor(b.totalShares * fundPct), avgPrice: 100, assetType: 'stock' };
+        b.sharesHeld = playerPortfolio.BBB.shares;
+        buyoutState = createBuyoutState();
+        playerCash = 1_000_000;
+        return w;
+    }
+    const withFair = (fn) => { const orig = getDisplayedFairValue; getDisplayedFairValue = s => s.price; try { return fn(); } finally { getDisplayedFairValue = orig; } };
+
+    test('M2: szansa oferty wg tabeli (6% + tania 4 pp + Hossa 3 pp − Bessa 3 pp) i częstość w 10 000 kwartałów', () => {
+        const { b } = offerWorld();
+        const regime = getMarketRegime('home');
+        regime.phase = 'accumulation';
+        assertNear(withFair(() => getBuyoutOfferChance(b)), 0.06, 'podstawa', 1e-9);
+        regime.phase = 'bull';
+        assertNear(withFair(() => getBuyoutOfferChance(b)), 0.09, 'Hossa', 1e-9);
+        regime.phase = 'bear';
+        const orig = getDisplayedFairValue; getDisplayedFairValue = s => s.price / 0.8;
+        try { assertNear(getBuyoutOfferChance(b), 0.07, 'tania w Bessie', 1e-9); } finally { getDisplayedFairValue = orig; }
+        regime.phase = 'accumulation';
+        let n = 0;
+        withFair(() => { for (let i = 0; i < 10000; i++) { buyoutState = createBuyoutState(); processBuyoutOffersQuarterly(); if (buyoutState.offers.BBB) n++; } });
+        assert(Math.abs(n / 10000 - 0.06) <= 0.01, `oferty ${n / 10000}`);
+    });
+
+    test('M2: rozmowy — przedział ±10% zawiera cenę maks.; kontroferta ≤ maks. przyjęta; pakiet przechodzi poza rynkiem', () => {
+        const { a, b } = offerWorld();
+        let o;
+        for (let i = 0; i < 50 && !o; i++) o = withFair(() => createBuyoutOffer(b, getBuyoutHolder(b)));
+        assert(o && !o.wholeCompany && o.bidder.symbol === 'AAA', 'oferta za pakiet od AAA');
+        for (let i = 0; i < 200; i++) { const x = { ...o, talked: null, history: [] }; buyoutState.offers.BBB = x; const r = talkBuyoutOffer('BBB'); assert(r.low <= x.maxPrice && x.maxPrice <= r.high, 'przedział zawiera cenę maks.'); }
+        buyoutState.offers.BBB = { ...o, talked: null, history: [] };
+        const cash0 = playerCash, shares0 = playerPortfolio.BBB.shares, aCash0 = a.cash;
+        const price = (o.price + o.maxPrice) / 2;
+        assertEq(counterBuyoutOffer('BBB', price), 'accepted', 'kontroferta ≤ maks.');
+        assert(!playerPortfolio.BBB, 'pakiet funduszu sprzedany');
+        assertNear(playerCash - cash0, shares0 * price, 'zapłata dla funduszu');
+        assertNear(aCash0 - a.cash, shares0 * price, 'kupujący zapłacił');
+        assertEq(a.equityStakes.BBB, shares0, 'pakiet u kupującego');
+        assertEq(b.sharesHeld, getTrackedHeldShares(b), 'akcje = posiadacze');
+    });
+
+    test('M2: żądanie > 115% ceny maks. — urażenie wg nastawienia; 100–115% — „ostatnie słowo”', () => {
+        const { b } = offerWorld();
+        let o; for (let i = 0; i < 50 && !o; i++) o = withFair(() => createBuyoutOffer(b, getBuyoutHolder(b)));
+        for (const [stance, p] of [['flexible', 0.6], ['opportunist', 0.8], ['determined', 0.3]]) {
+            let insulted = 0;
+            for (let i = 0; i < 4000; i++) { buyoutState = createBuyoutState(); buyoutState.offers.BBB = { ...o, stance, history: [], lastWord: false, round: 1 }; if (counterBuyoutOffer('BBB', o.maxPrice * 1.3) === 'insulted') insulted++; }
+            assert(Math.abs(insulted / 4000 - p) < 0.03, `${stance}: ${insulted / 4000}`);
+        }
+        buyoutState.offers.BBB = { ...o, history: [], lastWord: false, round: 1 };
+        assertEq(counterBuyoutOffer('BBB', o.maxPrice * 1.1), 'lastWord', '„ostatnie słowo”');
+        assertNear(buyoutState.offers.BBB.price, o.maxPrice, 'cena = maks.');
+    });
+
+    test('M2: aukcja nie przekracza niższej z cen maks.; cała spółka — mniejszościowi dostają tę samą cenę', () => {
+        const { a, b } = offerWorld(0.60);
+        const bot = aiCompetitors.find(ai => ai.personality !== 'market_maker');
+        bot.portfolio = { BBB: { shares: 1000, avgPrice: 100 } }; b.sharesHeld += 1000;
+        let o; for (let i = 0; i < 50 && !o; i++) o = withFair(() => createBuyoutOffer(b, getBuyoutHolder(b)));
+        assert(o.wholeCompany, 'cała spółka przy > 50%');
+        for (let i = 0; i < 300; i++) {
+            buyoutState = createBuyoutState(); buyoutState.offers.BBB = { ...o, history: [], auction: null };
+            const before = playerCash; withFair(() => inviteSecondBidder('BBB')); playerCash = before;
+            const x = buyoutState.offers.BBB;
+            if (x.auction?.second) assert(x.auction.second.price <= o.maxPrice + 1e-6, 'aukcja ≤ cena maks. pierwszego');
+        }
+        buyoutState = createBuyoutState(); buyoutState.offers.BBB = { ...o, history: [] };
+        const price = o.price, botCash0 = bot.cash, cash0 = playerCash, fundShares = playerPortfolio.BBB.shares;
+        Math.random = () => 0.99; // bez komplikacji w procesie
+        assert(acceptBuyoutOffer('BBB'), 'transakcja uzgodniona');
+        assertEq(a.mergerProcess.kind, 'offer', 'proces oferty');
+        assertNear(b.price, price * (1 - a.mergerProcess.arb.spread), 'kurs celu = cena − spread');
+        for (let q = 0; q < 3 && a.mergerProcess; q++) advanceMergerProcess(a);
+        assert(!a.mergerProcess, 'rozliczone po 3 kw.');
+        assertNear(bot.cash - botCash0, 1000 * price, 'bot (mniejszościowy) po tej samej cenie');
+        assertNear(playerCash - cash0, fundShares * price, 'fundusz po cenie uzgodnionej');
     });
 
     test('M1: fuzja (wymiana akcji) bez skoku do ceny gotówkowej; etap 5 bez ×1,1', () => {

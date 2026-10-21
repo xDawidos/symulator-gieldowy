@@ -7634,6 +7634,10 @@ function renderMailPreview(message) {
             : '<p class="fund-muted">Oferta pakietu wygasła.</p>';
     } else if (message.action?.type === 'agm') {
         action = `<div class="mail-action"><button onclick="openGovernanceModal('${message.action.symbol}')">Otwórz walne zgromadzenie</button></div>`;
+    } else if (message.action?.type === 'buyoutOffer') { // 0.15.1 M2
+        action = buyoutState.offers[message.action.symbol]
+            ? `<div class="mail-action"><button onclick="openBuyoutOfferModal('${message.action.symbol}')">Otwórz ofertę</button></div>`
+            : '<p class="fund-muted">Ta oferta nie jest już aktualna.</p>';
     } else if (message.action?.type === 'takeover') {
         action = `<div class="mail-action"><button onclick="openTakeoverModal('${message.action.symbol}')">Otwórz decyzję w sprawie przejęcia</button></div>`;
     } else if (message.action?.type === 'rescue') {
@@ -8437,6 +8441,89 @@ function openTakeoverModal(symbol) {
         </div>`}
         ${pct > 0.5 ? `<h4 class="mt-3">Obrona (akcjonariusz większościowy)</h4><div class="defense-grid">${renderDefenseButtons(target)}</div>` : ''}`;
     modal.style.display = 'block';
+}
+
+/** 0.15.1 M2: okno oferty kupna dla większościowca (wzorzec okna przejęcia; gra nie pauzuje). */
+function openBuyoutOfferModal(symbol) {
+    let modal = document.getElementById('buyout-offer-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'buyout-offer-modal';
+        modal.className = 'modal modal-lg';
+        modal.setAttribute('role', 'dialog');
+        modal.innerHTML = '<button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button><h2 class="mt-0" id="buyout-offer-title">Oferta kupna</h2><div id="buyout-offer-body"></div>';
+        document.body.appendChild(modal);
+    }
+    renderBuyoutOffer(symbol);
+    modal.style.display = 'block';
+}
+
+function buyoutAction(symbol, fn, ...args) {
+    const result = fn(symbol, ...args);
+    const labels = { accepted: 'Oferent przyjął Twoją cenę — transakcja uzgodniona.', middle: 'Oferent proponuje cenę pośrodku.', lastWord: 'Oferent podnosi cenę i mówi: „ostatnie słowo”.', insulted: 'Oferent urażony — wycofał ofertę.', second: 'Doradca znalazł drugiego oferenta — cena rośnie.', none: 'Doradca nie znalazł drugiego oferenta.' };
+    if (labels[result]) showToast(labels[result], result === 'insulted' || result === 'none' ? 'warning' : 'success', 5000);
+    renderBuyoutOffer(symbol);
+    if (typeof displayCash === 'function') displayCash();
+}
+
+/** Ocena kontroferty słowem (po rozmowach wstępnych). */
+function getBuyoutVerdict(offer, v) {
+    const t = offer?.talked;
+    if (!t) return 'bez rozmów wstępnych nie znasz ceny maksymalnej oferenta';
+    return v < t.low ? 'poniżej przedziału — oferent przyjmie' : v <= t.high ? 'w przedziale — oferent może przyjąć albo zaproponować środek' : v <= t.high * 1.15 ? 'powyżej przedziału — oferent poda „ostatnie słowo”' : 'daleko powyżej — ryzyko urażenia';
+}
+
+function renderBuyoutOffer(symbol) {
+    const body = document.getElementById('buyout-offer-body');
+    if (!body) return;
+    const offer = buyoutState.offers[symbol];
+    const stock = stocks.find(s => s.symbol === symbol);
+    const title = document.getElementById('buyout-offer-title');
+    if (title) title.textContent = `Oferta kupna: ${stock?.name || symbol} (${symbol})`;
+    if (!offer || !stock) {
+        const deal = stock?.mergerProcess?.kind === 'offer';
+        body.innerHTML = `<p class="text-muted">${deal ? `Transakcja uzgodniona — rozliczenie w toku (etap ${stock.mergerProcess.stage}/7).` : 'Ta oferta nie jest już aktualna.'}</p>`;
+        return;
+    }
+    const pct = getFundStakePct(stock);
+    const premium = offer.price / offer.preOfferPrice - 1;
+    const left = Math.max(0, BUYOUT_OFFER_VALID_QUARTERS - (getBuyoutQuarter() - offer.quarter));
+    const fair = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(stock) : null;
+    const t = offer.talked;
+    const span = t ? Math.max(t.high * 1.1, offer.price * 1.05) : 1;
+    const pos = v => `${Math.max(0, Math.min(100, v / span * 100)).toFixed(1)}%`;
+    const counterInput = Number(document.getElementById('buyout-counter')?.value) || (t ? t.high : offer.price * 1.1);
+    const verdict = v => getBuyoutVerdict(offer, v);
+    const roundsLeft = offer.round <= BUYOUT_OFFER_MAX_ROUNDS;
+    body.innerHTML = `
+        <div class="bank-ticker">
+            <div class="bank-ticker-item"><span>Oferent</span><strong>${escapeHtml(offer.bidder.name)}${offer.bidder.related ? ' · pokrewny sektor' : ''}</strong></div>
+            <div class="bank-ticker-item"><span>Przedmiot</span><strong>${offer.wholeCompany ? 'cała spółka' : `pakiet ${offer.shares.toLocaleString('pl-PL')} akcji`}</strong></div>
+            <div class="bank-ticker-item"><span>Cena · premia</span><strong>${formatZl(offer.price)} · ${formatPct(premium, 0)}</strong></div>
+            <div class="bank-ticker-item"><span>Fundusz · ważna</span><strong>${formatNumberPl(pct * 100, 1)}% · ${left} kw.</strong></div>
+        </div>
+        <p class="text-sm">Kurs przed ofertą ${formatZl(offer.preOfferPrice)}${fair > 0 ? ` · wartość godziwa ${formatZl(fair)}` : ''}${offer.initialPrice !== offer.price ? ` · oferta wstępna ${formatZl(offer.initialPrice)}` : ''}. ${offer.wholeCompany ? 'Mniejszościowi akcjonariusze dostaną tę samą cenę; rozliczenie w 3 kw.' : 'Pakiet przechodzi do kupującego od razu.'} Gra nie jest wstrzymana.</p>
+        <h4>Rozmowy wstępne</h4>
+        ${t ? `<p class="text-sm"><span class="badge badge--neutral">nastawienie: ${BUYOUT_STANCES[offer.stance].label}</span> Oferent zapłaci najwyżej <strong>${formatZl(t.low)}–${formatZl(t.high)}</strong> za akcję.</p>
+            <div class="offer-range" aria-hidden="true"><div class="zone" style="left:${pos(t.low)};width:calc(${pos(t.high)} - ${pos(t.low)})"></div><div class="mark" style="left:${pos(offer.price)}"></div></div>
+            <p class="text-xs text-muted">Pasek: obecna oferta (kreska) i przedział ceny maksymalnej (pole).</p>`
+            : `<button class="btn-secondary" onclick="buyoutAction('${symbol}', talkBuyoutOffer)">Rozmowy wstępne (bez kosztu, raz)</button>`}
+        <h4>Twój ruch</h4>
+        ${roundsLeft ? `<div class="bank-card-form">
+            <label class="text-sm">Kontroferta: <input type="number" id="buyout-counter" class="w-xs" step="0.01" value="${counterInput.toFixed(2)}" oninput="document.getElementById('buyout-verdict').textContent = getBuyoutVerdict(buyoutState.offers['${symbol}'], Number(this.value))"> PLN za akcję</label>
+            <span class="text-sm" id="buyout-verdict">${escapeHtml(verdict(counterInput))}</span>
+            <button onclick="buyoutAction('${symbol}', counterBuyoutOffer, document.getElementById('buyout-counter').value)">Złóż kontrofertę (runda ${offer.round}/${BUYOUT_OFFER_MAX_ROUNDS})</button>
+        </div>` : '<p class="text-sm text-muted">Rundy negocjacji wyczerpane — przyjmij albo odrzuć.</p>'}
+        <div class="d-flex gap-2 flex-wrap mt-2">
+            ${offer.auction ? '' : `<button class="btn-secondary" onclick="buyoutAction('${symbol}', inviteSecondBidder)">Zaproś drugiego oferenta — ${formatZl(offer.price * offer.shares * BUYOUT_AUCTION_FEE, 0)} (doradca)</button>`}
+        </div>
+        <div class="d-flex gap-2 flex-wrap mt-2">
+            <button onclick="buyoutAction('${symbol}', acceptBuyoutOffer)">${uiIcon('ok', 14)} Przyjmij ${formatZl(offer.price)}</button>
+            <button class="btn-danger" onclick="buyoutAction('${symbol}', rejectBuyoutOffer)">Odrzuć (przerwa ${BUYOUT_OFFER_COOLDOWN} kw.)</button>
+        </div>
+        ${offer.lastWord ? `<div class="alert alert--warn mt-3" role="status">${uiIcon('alert', 16)}<div><strong>Ostatnie słowo</strong><br>Oferent podniósł cenę do ${formatZl(offer.price)} i nie da więcej. Wyższe żądanie może go urazić.</div></div>` : ''}
+        <h4>Przebieg</h4>
+        <ul class="list-plain text-sm">${offer.history.map(h => `<li>Runda ${h.round}: ${escapeHtml(h.text)}</li>`).join('')}</ul>`;
 }
 
 /** U1: osobne okno negocjacji (rundy, żądanie premii, kontroferta agresora). */

@@ -67,6 +67,286 @@ function getFundStakePct(stock) {
 
 /** Kopia stanu procesu u partnera (cel widzi to samo, ale nie prowadzi procesu). */
 // =================================================================================
+// 0.15.1 M2: OFERTY KUPNA DLA WIĘKSZOŚCIOWCA (fundusz albo bot z ≥ 33% akcji)
+// =================================================================================
+
+const BUYOUT_OFFER_MIN_STAKE = 0.33;
+const BUYOUT_OFFER_MAX_ACTIVE = 2;
+const BUYOUT_OFFER_VALID_QUARTERS = 2;
+const BUYOUT_OFFER_COOLDOWN = 4;
+const BUYOUT_OFFER_MAX_ROUNDS = 3;
+const BUYOUT_AUCTION_FEE = 0.005;
+const BUYOUT_STANCES = {
+    determined: { label: 'zdeterminowany', maxMult: 1.10, insult: 0.30 },
+    flexible: { label: 'elastyczny', maxMult: 1.00, insult: 0.60 },
+    opportunist: { label: 'oportunista', maxMult: 0.90, insult: 0.80 }
+};
+
+let buyoutState = createBuyoutState();
+function createBuyoutState() { return { offers: {}, cooldown: {} }; }
+function getBuyoutQuarter() { return typeof macro === 'object' ? Number(macro.quarter) || 0 : 0; }
+
+/** Szansa oferty na kwartał: 6% + tania spółka 4 pp + Hossa/Euforia/bańka 3 pp − Bessa/Kapitulacja 3 pp. */
+function getBuyoutOfferChance(stock) {
+    let chance = 0.06;
+    const fair = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(stock) : null;
+    if (fair > 0 && stock.price / fair < 0.9) chance += 0.04;
+    const phase = typeof getMarketRegime === 'function' ? getMarketRegime('home')?.phase : null;
+    if (phase === 'bull' || phase === 'euphoria' || (typeof isCompanyInSectorBubble === 'function' && isCompanyInSectorBubble(stock))) chance += 0.03;
+    if (phase === 'bear' || phase === 'capitulation') chance -= 0.03;
+    return Math.max(0, chance);
+}
+
+/** Większościowiec spółki (≥ 33%): fundusz gracza albo bot; null, gdy nikt. */
+function getBuyoutHolder(stock) {
+    const fundPct = getFundStakePct(stock);
+    if (fundPct >= BUYOUT_OFFER_MIN_STAKE) return { kind: 'player', pct: fundPct, shares: playerPortfolio[stock.symbol].shares };
+    for (const ai of aiCompetitors) {
+        const shares = ai.portfolio?.[stock.symbol]?.shares || 0;
+        if (shares / stock.totalShares >= BUYOUT_OFFER_MIN_STAKE) return { kind: 'ai', ai, pct: shares / stock.totalShares, shares };
+    }
+    return null;
+}
+
+function sharesSegment(a, b) {
+    const sa = new Set(getStockSegments(a).map(s => s.sector));
+    return getStockSegments(b).some(s => sa.has(s.sector));
+}
+
+/** Oferent: spółka z tego samego / pokrewnego sektora z gotówką albo zdolnością LBO; przy pakiecie także bot-inwestor. */
+function pickBuyoutBidder(target, wholeCompany, cost) {
+    const companies = stocks.filter(s => s !== target && !s.assetType && !s.isBankrupt && !s.mergerProcess && !s.isSubsidiaryOf && !s.isStateOwned && !s.isBankStock
+        && (s.cash >= cost || (wholeCompany && validateLbo(s, target, cost).ok)));
+    const related = companies.filter(s => sharesSegment(s, target));
+    const pool = related.length && Math.random() < 0.8 ? related : companies;
+    if (pool.length) { const bidder = getRandomElement(pool); return { kind: 'company', symbol: bidder.symbol, name: bidder.name, related: sharesSegment(bidder, target), financing: bidder.cash >= cost ? 'cash' : 'lbo' }; }
+    if (wholeCompany) return null;
+    const bots = aiCompetitors.filter(ai => ['whale', 'pro_investor'].includes(ai.personality) && ai.cash >= cost);
+    if (!bots.length) return null;
+    const ai = getRandomElement(bots);
+    return { kind: 'ai', id: ai.id, name: ai.name, related: false, financing: 'cash' };
+}
+
+function getBuyoutBidderCash(offer) {
+    if (offer.bidder.kind === 'ai') return aiCompetitors.find(ai => ai.id === offer.bidder.id)?.cash || 0;
+    return stocks.find(s => s.symbol === offer.bidder.symbol)?.cash || 0;
+}
+
+/** Tworzy ofertę (ukryta cena maksymalna i nastawienie oferenta). */
+function createBuyoutOffer(target, holder) {
+    const wholeCompany = holder.kind === 'player' ? holder.pct > 0.5 : holder.pct > 0.5;
+    const shares = wholeCompany ? target.totalShares : holder.shares;
+    const premium = getRandomInRange(0.10, 0.30) + (Number(target.financialHealth) || 0) * 0.01;
+    const price = target.price * (1 + Math.max(0.10, Math.min(0.30, premium)));
+    const bidder = pickBuyoutBidder(target, wholeCompany, price * shares);
+    if (!bidder) return null;
+    const stanceKey = getRandomElement(Object.keys(BUYOUT_STANCES));
+    const synergy = bidder.related ? getRandomInRange(1.20, 1.40) : getRandomInRange(1.10, 1.30);
+    const fair = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(target) : null;
+    let maxPrice = Math.max(target.price * 1.15, (fair > 0 ? fair : target.price) * synergy) * (1 + getRandomInRange(0, 0.15)) * BUYOUT_STANCES[stanceKey].maxMult;
+    const bidderCash = bidder.financing === 'lbo' ? Infinity : (bidder.kind === 'ai' ? aiCompetitors.find(ai => ai.id === bidder.id).cash : stocks.find(s => s.symbol === bidder.symbol).cash);
+    maxPrice = Math.max(price, Math.min(maxPrice, bidderCash / shares));
+    return {
+        symbol: target.symbol, holder: holder.kind === 'player' ? 'player' : holder.ai.id, wholeCompany, shares,
+        bidder, stance: stanceKey, maxPrice, price, initialPrice: price, preOfferPrice: target.price,
+        quarter: getBuyoutQuarter(), round: 1, talked: null, lastWord: false, auction: null, history: [{ round: 1, text: `oferta wstępna ${formatZl(price)} (premia ${Math.round((price / target.price - 1) * 100)}%)` }]
+    };
+}
+
+/** Co kwartał: wygasanie ofert, nowe oferty dla funduszu i botów (boty decydują od razu). */
+function processBuyoutOffersQuarterly() {
+    const quarter = getBuyoutQuarter();
+    for (const [symbol, offer] of Object.entries(buyoutState.offers)) {
+        const target = stocks.find(s => s.symbol === symbol);
+        if (!target || target.isBankrupt || quarter - offer.quarter >= BUYOUT_OFFER_VALID_QUARTERS) {
+            delete buyoutState.offers[symbol];
+            buyoutState.cooldown[symbol] = quarter + BUYOUT_OFFER_COOLDOWN;
+            if (target && offer.holder === 'player') logEvent(`⌛ Oferta kupna ${target.name} od ${offer.bidder.name} wygasła.`, 'review');
+        }
+    }
+    for (const stock of stocks) {
+        if (Object.keys(buyoutState.offers).length >= BUYOUT_OFFER_MAX_ACTIVE) break;
+        if (stock.assetType || stock.isBankrupt || stock.mergerProcess || stock.isSubsidiaryOf || stock.isStateOwned || buyoutState.offers[stock.symbol]) continue;
+        if ((buyoutState.cooldown[stock.symbol] || 0) > quarter) continue;
+        const holder = getBuyoutHolder(stock);
+        if (!holder || Math.random() >= getBuyoutOfferChance(stock)) continue;
+        const offer = createBuyoutOffer(stock, holder);
+        if (!offer) continue;
+        if (holder.kind === 'ai') { decideBotBuyoutOffer(offer, holder.ai); continue; }
+        buyoutState.offers[stock.symbol] = offer;
+        addMail({
+            sender: CORPORATION_SENDER,
+            subject: `🤝 Oferta kupna: ${offer.bidder.name} chce kupić ${offer.wholeCompany ? stock.name : `pakiet funduszu w ${stock.name}`}`,
+            body: `${offer.bidder.name} oferuje ${formatZl(offer.price)} za akcję (premia ${Math.round((offer.price / stock.price - 1) * 100)}%) za ${offer.wholeCompany ? 'całą spółkę — mniejszościowi dostaną tę samą cenę' : `pakiet ${offer.shares.toLocaleString('pl-PL')} akcji funduszu`}. Oferta ważna ${BUYOUT_OFFER_VALID_QUARTERS} kw. Możesz rozmawiać, negocjować, zaprosić drugiego oferenta albo przyjąć.`,
+            importance: 2, symbol: stock.symbol, action: { type: 'buyoutOffer', symbol: stock.symbol }
+        });
+        if (typeof pushNews === 'function') pushNews(`${offer.bidder.name} składa ofertę kupna ${stock.name}`, stock.symbol);
+        if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('cena_maksymalna');
+    }
+}
+
+/** Bot-większościowiec: spokojni przyjmują ≥ 25% premii, ryzykanci żądają +10 pp (do ceny maks.), reszta jak spokojni. */
+function decideBotBuyoutOffer(offer, ai) {
+    const target = stocks.find(s => s.symbol === offer.symbol);
+    const need = ['reckless', 'yolo_trader'].includes(ai.personality) ? 0.35 : 0.25;
+    const wanted = offer.preOfferPrice * (1 + need);
+    if (offer.price >= wanted) return startBuyoutDeal(offer, offer.price);
+    if (wanted <= offer.maxPrice) return startBuyoutDeal(offer, wanted);
+    buyoutState.cooldown[offer.symbol] = getBuyoutQuarter() + BUYOUT_OFFER_COOLDOWN;
+    logEvent(`🤝 ${ai.name} odrzuca ofertę ${offer.bidder.name} za ${target?.name || offer.symbol}.`, 'market');
+    return false;
+}
+
+/** Rozmowy wstępne: nastawienie i przedział ceny maksymalnej ±10% (raz na ofertę). */
+function talkBuyoutOffer(symbol) {
+    const offer = buyoutState.offers[symbol];
+    if (!offer || offer.talked) return null;
+    const shift = getRandomInRange(-0.05, 0.05);
+    offer.talked = { low: offer.maxPrice * (0.9 + shift), high: offer.maxPrice * (1.1 + shift) };
+    offer.history.push({ round: offer.round, text: `rozmowy wstępne: nastawienie „${BUYOUT_STANCES[offer.stance].label}”, cena maks. ${formatZl(offer.talked.low)}–${formatZl(offer.talked.high)}` });
+    return offer.talked;
+}
+
+/** Kontroferta gracza (cena za akcję): 'accepted' | 'middle' | 'lastWord' | 'insulted' | null. */
+function counterBuyoutOffer(symbol, price) {
+    const offer = buyoutState.offers[symbol];
+    price = Number(price);
+    if (!offer || !(price > 0) || offer.round > BUYOUT_OFFER_MAX_ROUNDS) return null;
+    offer.round++;
+    let result;
+    if (price <= offer.maxPrice) {
+        if (offer.talked && price >= offer.talked.low + (offer.talked.high - offer.talked.low) * 0.9 && !offer.lastWord) { // górne 10% przedziału
+            offer.price = Math.max(offer.price, (offer.price + price) / 2);
+            result = 'middle';
+        } else {
+            offer.price = Math.max(offer.price, price);
+            result = 'accepted';
+        }
+    } else if (price <= offer.maxPrice * 1.15 && !offer.lastWord) {
+        offer.price = offer.maxPrice; offer.lastWord = true; result = 'lastWord';
+    } else if (Math.random() < BUYOUT_STANCES[offer.stance].insult) {
+        result = 'insulted';
+    } else {
+        offer.price = offer.maxPrice; offer.lastWord = true; result = 'lastWord';
+    }
+    const labels = { accepted: 'oferent przyjmuje', middle: `oferent proponuje środek: ${formatZl(offer.price)}`, lastWord: `oferent podnosi do ${formatZl(offer.price)} — „ostatnie słowo”`, insulted: 'oferent urażony — zrywa rozmowy' };
+    offer.history.push({ round: offer.round - 1, text: `kontroferta ${formatZl(price)} → ${labels[result]}` });
+    if (result === 'accepted') startBuyoutDeal(offer, offer.price);
+    if (result === 'insulted') insultBuyoutBidder(offer);
+    return result;
+}
+
+function insultBuyoutBidder(offer) {
+    const target = stocks.find(s => s.symbol === offer.symbol);
+    delete buyoutState.offers[offer.symbol];
+    buyoutState.cooldown[offer.symbol] = getBuyoutQuarter() + BUYOUT_OFFER_COOLDOWN;
+    logEvent(`😤 ${offer.bidder.name} urażony żądaniem — wycofuje ofertę za ${target?.name}.`, 'review');
+    const bidder = offer.bidder.kind === 'company' ? stocks.find(s => s.symbol === offer.bidder.symbol) : null;
+    if (target && bidder && getFundStakePct(target) < 0.66 && Math.random() < 0.3 && !target.mergerProcess && !bidder.mergerProcess) {
+        logEvent(`⚔️ ${bidder.name} ogłasza wrogie wezwanie na ${target.name}!`, 'market');
+        initiateMergerProcess(bidder, target, 'przejęcie', bidder.cash >= target.price * 1.2 * target.totalShares ? 'cash' : 'lbo', 0.2);
+    }
+}
+
+/** Aukcja: doradca 0,5% wartości; 50% szans na drugą ofertę; podbicia 3–8% do niższej z cen maksymalnych. */
+function inviteSecondBidder(symbol) {
+    const offer = buyoutState.offers[symbol];
+    const target = stocks.find(s => s.symbol === symbol);
+    if (!offer || offer.auction || !target) return null;
+    const fee = offer.price * offer.shares * BUYOUT_AUCTION_FEE;
+    if (playerCash < fee) { showToast('Za mało gotówki funduszu na doradcę.', 'error'); return null; }
+    playerCash -= fee;
+    recordPayment('player-fund', 'external:doradcy_ma', fee, `Doradca: aukcja ${symbol}`);
+    offer.auction = { fee, second: null };
+    if (Math.random() >= 0.5) { offer.history.push({ round: offer.round, text: 'doradca nie znalazł drugiego oferenta' }); return 'none'; }
+    const second = createBuyoutOffer(target, getBuyoutHolder(target));
+    if (!second || second.bidder.name === offer.bidder.name) { offer.history.push({ round: offer.round, text: 'doradca nie znalazł drugiego oferenta' }); return 'none'; }
+    const cap = Math.min(offer.maxPrice, second.maxPrice);
+    let price = Math.max(offer.price, second.price);
+    const rounds = Math.random() < 0.5 ? 1 : 2;
+    for (let i = 0; i < rounds; i++) price = Math.min(cap, price * (1 + getRandomInRange(0.03, 0.08)));
+    offer.auction.second = { name: second.bidder.name, price };
+    if (Math.random() < 0.2 && second.maxPrice >= price) { // pierwszy oferent urażony — zostaje drugi
+        offer.bidder = second.bidder; offer.maxPrice = second.maxPrice; offer.stance = second.stance; offer.talked = null;
+        offer.history.push({ round: offer.round, text: `aukcja: pierwszy oferent wycofał się urażony, ${second.bidder.name} płaci ${formatZl(price)}` });
+    } else offer.history.push({ round: offer.round, text: `aukcja z ${second.bidder.name}: cena rośnie do ${formatZl(price)}` });
+    offer.price = Math.max(offer.price, price);
+    if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('aukcja_sprzedazy');
+    return 'second';
+}
+
+function acceptBuyoutOffer(symbol) {
+    const offer = buyoutState.offers[symbol];
+    return offer ? startBuyoutDeal(offer, offer.price) : false;
+}
+
+function rejectBuyoutOffer(symbol) {
+    const offer = buyoutState.offers[symbol];
+    if (!offer) return false;
+    delete buyoutState.offers[symbol];
+    buyoutState.cooldown[symbol] = getBuyoutQuarter() + BUYOUT_OFFER_COOLDOWN;
+    logEvent(`🤝 Fundusz odrzuca ofertę ${offer.bidder.name} za ${symbol}.`, 'review');
+    return true;
+}
+
+/**
+ * Transakcja uzgodniona: cała spółka — wezwanie po uzgodnionej cenie, 3 kw. do rozliczenia (z arbitrażem M1);
+ * pakiet 33–50% — transfer poza rynkiem od razu.
+ */
+function startBuyoutDeal(offer, price) {
+    const target = stocks.find(s => s.symbol === offer.symbol);
+    delete buyoutState.offers[offer.symbol];
+    buyoutState.cooldown[offer.symbol] = getBuyoutQuarter() + BUYOUT_OFFER_COOLDOWN;
+    if (!target) return false;
+    if (offer.wholeCompany) {
+        const bidder = stocks.find(s => s.symbol === offer.bidder.symbol);
+        if (!bidder || bidder.mergerProcess || target.mergerProcess) return false;
+        const ok = initiateMergerProcess(bidder, target, 'przejęcie', offer.bidder.financing, price / target.price - 1, { friendly: true, offer: true });
+        if (!ok) return false;
+        bidder.mergerProcess.stage = 4; // badanie, zgody, rozliczenie: 3 kw.
+        bidder.mergerProcess.kind = 'offer';
+        bidder.mergerProcess.offerDetails.buyoutPricePerShare = price;
+        bidder.mergerProcess.offerDetails.totalCost = price * target.totalShares;
+        bidder.mergerProcess.offerDetails.premium = price / offer.preOfferPrice - 1;
+        if (bidder.mergerProcess.arb) target.price = price * (1 - bidder.mergerProcess.arb.spread);
+        syncPartnerProcess(bidder, target);
+        logEvent(`🤝 Uzgodniono sprzedaż ${target.name} spółce ${bidder.name} po ${formatZl(price)} za akcję (premia ${Math.round((price / offer.preOfferPrice - 1) * 100)}%). Rozliczenie za 3 kw.`, 'market');
+        return true;
+    }
+    // Pakiet: kupujący przejmuje akcje sprzedającego (fundusz albo bot) poza rynkiem.
+    const sellerIsPlayer = offer.holder === 'player';
+    const seller = sellerIsPlayer ? null : aiCompetitors.find(ai => ai.id === offer.holder);
+    const held = sellerIsPlayer ? (playerPortfolio[target.symbol]?.shares || 0) - (playerPortfolio[target.symbol]?.lockedShares || 0) : (seller?.portfolio?.[target.symbol]?.shares || 0) - (seller?.portfolio?.[target.symbol]?.lockedShares || 0);
+    const shares = Math.min(offer.shares, Math.max(0, Math.floor(held)));
+    const cost = shares * price;
+    if (!(shares > 0) || getBuyoutBidderCash(offer) < cost) return false;
+    if (offer.bidder.kind === 'ai') {
+        const buyer = aiCompetitors.find(ai => ai.id === offer.bidder.id);
+        buyer.cash -= cost;
+        const pos = buyer.portfolio[target.symbol] = buyer.portfolio[target.symbol] || { shares: 0, avgPrice: price };
+        pos.avgPrice = (pos.avgPrice * pos.shares + cost) / (pos.shares + shares); pos.shares += shares;
+    } else {
+        const buyer = stocks.find(s => s.symbol === offer.bidder.symbol);
+        adjustCompanyCash(buyer, -cost); // gotówka → pakiet (aktywa bez zmian)
+        buyer.equityStakes = buyer.equityStakes || {};
+        buyer.equityStakes[target.symbol] = (buyer.equityStakes[target.symbol] || 0) + shares;
+    }
+    if (sellerIsPlayer) {
+        const holding = playerPortfolio[target.symbol];
+        holding.shares -= shares;
+        if (holding.shares <= 0) delete playerPortfolio[target.symbol];
+        playerCash += cost;
+        recordPayment(`external:${offer.bidder.kind === 'ai' ? offer.bidder.id : offer.bidder.symbol}`, 'player-fund', cost, `Sprzedaż pakietu ${target.symbol}`);
+    } else {
+        const pos = seller.portfolio[target.symbol];
+        pos.shares -= shares; if (pos.shares <= 0) delete seller.portfolio[target.symbol];
+        seller.cash += cost;
+    }
+    logEvent(`🤝 ${sellerIsPlayer ? 'Fundusz sprzedaje' : `${seller.name} sprzedaje`} pakiet ${shares.toLocaleString('pl-PL')} akcji ${target.name} dla ${offer.bidder.name} po ${formatZl(price)} (premia ${Math.round((price / offer.preOfferPrice - 1) * 100)}%).`, 'market');
+    return true;
+}
+
+// =================================================================================
 // 0.15.1 M1: ARBITRAŻ FUZJI — kurs celu = cena oferty × (1 − spread)
 // =================================================================================
 
@@ -580,6 +860,7 @@ function onTakeoverStarted(initiator, target, options = {}) {
     const process = initiator.mergerProcess;
     process.hostile = !options.friendly;
     syncTakeover(initiator, target);
+    if (options.offer) return; // 0.15.1 M2: transakcja uzgodniona z większościowcem — bez okna decyzji i bez obrony
     if (typeof addChartEvent === 'function') addChartEvent(target, '🤝', `${options.friendly ? 'Oferta przejęcia' : 'Wrogie przejęcie'}: ${initiator.name}`);
     if (typeof onTakeoverStartedRelations === 'function') onTakeoverStartedRelations(initiator, target);
     if (getFundStakePct(target) >= 0.2 && playerFund) notifyFundOfTakeover(initiator, target);
