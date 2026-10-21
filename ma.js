@@ -146,7 +146,8 @@ function createBuyoutOffer(target, holder) {
     const fair = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(target) : null;
     let maxPrice = Math.max(target.price * 1.15, (fair > 0 ? fair : target.price) * synergy) * (1 + getRandomInRange(0, 0.15)) * BUYOUT_STANCES[stanceKey].maxMult;
     const bidderCash = bidder.financing === 'lbo' ? Infinity : (bidder.kind === 'ai' ? aiCompetitors.find(ai => ai.id === bidder.id).cash : stocks.find(s => s.symbol === bidder.symbol).cash);
-    maxPrice = Math.max(price, Math.min(maxPrice, target.price * BUYOUT_MAX_PREMIUM_CAP, bidderCash / shares)); // limit: wartość godziwa tanich spółek bywa 2× ponad kurs
+    const roomAboveOffer = price + target.price * getRandomInRange(0.05, 0.20) * BUYOUT_STANCES[stanceKey].maxMult; // pomiar M8: bez tego +31 pp ponad ofertę
+    maxPrice = Math.max(price, Math.min(maxPrice, roomAboveOffer, target.price * BUYOUT_MAX_PREMIUM_CAP, bidderCash / shares)); // limit: wartość godziwa tanich spółek bywa 2× ponad kurs
     return {
         symbol: target.symbol, holder: holder.kind === 'player' ? 'player' : holder.ai.id, wholeCompany, shares,
         bidder, stance: stanceKey, maxPrice, price, initialPrice: price, preOfferPrice: target.price,
@@ -773,11 +774,11 @@ function ddCancel(symbol) {
 
 const MERGER_SPREAD_MAX = 0.15;
 
-/** Spread ryzyka transakcji: podstawa 3%, wrogie / obrona +4 pp, LBO +3 pp, antymonopol +4 pp, +1 pp za każdy etap do końca. */
+/** Spread ryzyka transakcji: podstawa 3%, wrogie / obrona +4 pp, LBO +3 pp, antymonopol +4 pp, +0,5 pp za każdy etap do końca. */
 function getMergerSpread(initiator, target, process) {
     const stagesLeft = Math.max(0, 7 - (Number(process.stage) || 1));
     if (process.type === 'fuzja') return Math.min(0.08, 0.03 + stagesLeft / 6 * 0.05); // wymiana akcji: 3–8%
-    let spread = 0.03 + stagesLeft * 0.01;
+    let spread = 0.03 + stagesLeft * 0.005; // pomiar M8: 1 pp za etap dawało medianę 13% (cel 4–10%)
     if (process.hostile || process.defenseActive) spread += 0.04;
     if (process.financing === 'lbo') spread += 0.03;
     if (isMergerAntitrustRisky(initiator, target)) spread += 0.04;
