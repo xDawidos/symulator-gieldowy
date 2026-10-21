@@ -792,6 +792,36 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Ile trwa wstrzymanie handlu przy bezpieczniku 1. stopnia (-10%)?', a: ['15 sekund', 'Cały miesiąc', '24 godziny'], c: 0 }
         ]
     },
+    wartosc_firmy: {
+        title: 'Wartość firmy (goodwill)', icon: '🏷️',
+        text: 'Gdy spółka kupuje inną drożej niż jej aktywa netto (aktywa minus długi), różnica trafia do bilansu jako wartość firmy — zapłata za markę, klientów, zespół i spodziewane synergie. To aktywo, którego nie da się sprzedać osobno. Jeśli przejęta część zarabia gorzej niż w planie, wartość firmy trzeba odpisać.',
+        example: () => { const s = stocks.find(x => x.balanceSheet?.goodwill > 0); return s ? `${s.name}: wartość firmy ${formatZl(s.balanceSheet.goodwill, 0)}.` : 'Żadna spółka nie ma teraz wartości firmy w bilansie.'; },
+        quiz: [
+            { q: 'Cena przejęcia 100 mln, aktywa netto celu 70 mln. Ile wynosi wartość firmy?', a: ['30 mln', '170 mln', '70 mln'], c: 0 },
+            { q: 'Za co płaci kupujący w wartości firmy?', a: ['Za markę, klientów, zespół i synergie', 'Za gotówkę celu', 'Za podatki'], c: 0 },
+            { q: 'Czy wartość firmy da się sprzedać osobno?', a: ['Nie', 'Tak, na giełdzie', 'Tak, bankowi'], c: 0 }
+        ]
+    },
+    test_utraty_wartosci: {
+        title: 'Test utraty wartości', icon: '🧪',
+        text: 'Co roku spółka sprawdza, czy przejęta część zarabia tyle, ile zakładano przy zakupie. Gdy zysk jest dużo niższy (w grze: < 70% planu), część wartości firmy trzeba odpisać. Odpis to koszt w wyniku — zysk netto i zysk na akcję spadają — ale gotówka zostaje w spółce.',
+        example: () => { const s = stocks.find(x => x.lastImpairment); return s ? `${s.name}: odpis ${formatZl(s.lastImpairment.amount, 0)} (kw. ${s.lastImpairment.quarter}).` : 'Nie było jeszcze odpisów.'; },
+        quiz: [
+            { q: 'Czy odpis wartości firmy zabiera spółce gotówkę?', a: ['Nie — to koszt bez wydatku', 'Tak, całą kwotę', 'Tak, połowę'], c: 0 },
+            { q: 'Kiedy trzeba odpisać wartość firmy?', a: ['Gdy przejęta część zarabia dużo mniej niż w planie', 'Co kwartał zawsze', 'Gdy kurs rośnie'], c: 0 },
+            { q: 'Co odpis robi z zyskiem na akcję w danym kwartale?', a: ['Obniża go', 'Podnosi go', 'Nie zmienia'], c: 0 }
+        ]
+    },
+    klatwa_zwyciezcy: {
+        title: 'Klątwa zwycięzcy', icon: '🏚️',
+        text: 'Kto wygrywa licytację o spółkę, często przepłaca — zapłacił więcej niż wszyscy inni uważali za rozsądne. Skutek przychodzi później: odpis wartości firmy, gorsze wyniki, spadek kursu kupującego. Dlatego rynek często karze kupującego już w dniu ogłoszenia przejęcia z wysoką premią.',
+        example: () => 'Patrz kurs kupującego przy ogłoszeniu przejęcia z wysoką premią.',
+        quiz: [
+            { q: 'Na czym polega klątwa zwycięzcy?', a: ['Wygrywający licytację przepłaca', 'Zwycięzca nie płaci podatku', 'Przegrany traci akcje'], c: 0 },
+            { q: 'Jak klątwa zwycięzcy objawia się w bilansie?', a: ['Odpisem wartości firmy', 'Wzrostem gotówki', 'Spadkiem zobowiązań'], c: 0 },
+            { q: 'Jak rynek reaguje na przejęcie z bardzo wysoką premią?', a: ['Często obniża kurs kupującego', 'Zawsze go podnosi', 'Nie reaguje'], c: 0 }
+        ]
+    },
     ochrona_mniejszosciowych: {
         title: 'Ochrona akcjonariuszy mniejszościowych', icon: '🛡️',
         text: 'Kto przejmuje kontrolę nad spółką, musi dać pozostałym akcjonariuszom szansę wyjścia po uczciwej cenie — ogłasza wezwanie (ofertę kupna ich akcji). Bez tego większościowiec mógłby kupić pakiet kontrolny tanio od kilku osób, a reszta zostałaby z akcjami spółki, na którą nie ma wpływu. Pilnuje tego KNF: ostrzega, karze, a w końcu nakazuje wezwanie albo sprzedaż nadwyżki.',

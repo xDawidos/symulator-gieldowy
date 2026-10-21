@@ -8888,6 +8888,45 @@ group('0.15.1: Sztuka przejęć (arbitraż, oferty, due diligence, pakiety, wezw
         } finally { knfWorld.restore(); }
     });
 
+    const bsGap = s => s.balanceSheet.assets - s.balanceSheet.liabilities - s.balanceSheet.shareCapital - s.balanceSheet.retainedEarnings;
+
+    test('M6: przejęcie — wartość firmy = cena − aktywa netto, bilans spójny, kapitał − koszty procesu, przychody celu u kupującego', () => {
+        const { a, b } = world();
+        b.balanceSheet = { assets: 600_000, liabilities: 200_000, shareCapital: 100_000, retainedEarnings: 300_000 };
+        const gapA = bsGap(a), equityA = a.balanceSheet.assets - a.balanceSheet.liabilities;
+        initiateMergerProcess(a, b, 'przejęcie', 'cash', 0.25, { friendly: true });
+        const process = a.mergerProcess;
+        process.costs = 10_000;
+        const price = process.offerDetails.totalCost;
+        const revA = Number(a.fundamentals?.revenue) || 0, revB = Number(b.fundamentals?.revenue) || 0;
+        resolveMerger(a, b, process);
+        assertNear(a.balanceSheet.goodwill, price - 400_000, 'wartość firmy = P − AN');
+        assertNear(bsGap(a), gapA, 'bilans spójny (aktywa − zobowiązania − kapitał)', 1e-6);
+        assertNear(a.balanceSheet.assets - a.balanceSheet.liabilities, equityA - 10_000, 'kapitał własny − koszty procesu');
+        assert(a.acquisitions?.length === 1 && a.acquisitions[0].goodwill === a.balanceSheet.goodwill, 'plan przejęcia zapisany');
+        if (revB > 0) assertNear(a.fundamentals.revenue, revA + revB, 'przychody celu u kupującego');
+    });
+
+    test('M6: test co 4 kw. — < 70% planu odpis 25%, < 40% odpis 50%; bez ruchu gotówki; zapis i wczytanie', () => {
+        const { a } = world();
+        const setEbit = v => { a.fundamentals = a.fundamentals || initializeFundamentals(a); a.fundamentals.history = [1, 2, 3, 4].map(() => ({ ebitda: v / 4, depreciation: 0, revenue: 1000, netIncome: 0 })); };
+        a.balanceSheet.goodwill = 100_000; a.balanceSheet.assets += 100_000; a.balanceSheet.retainedEarnings += 100_000;
+        a.acquisitions = [{ symbol: 'XX', name: 'Iks', quarter: macro.quarter - 4, goodwill: 100_000, left: 100_000, planEbit: 1000, revenueShare: 1 }];
+        const cash0 = a.cash, gap0 = bsGap(a);
+        setEbit(600); processGoodwillImpairmentQuarterly();
+        assertNear(a.balanceSheet.goodwill, 75_000, 'odpis 25%');
+        assertEq(a.cash, cash0, 'bez ruchu gotówki');
+        assertNear(bsGap(a), gap0, 'bilans spójny po odpisie', 1e-6);
+        assertNear(a.periodLedger.pending.otherIncome, -25_000, 'odpis w wyniku kwartału');
+        macro.quarter += 4; setEbit(300); processGoodwillImpairmentQuarterly();
+        assertNear(a.balanceSheet.goodwill, 37_500, 'odpis 50% pozostałej');
+        macro.quarter += 4; setEbit(900); processGoodwillImpairmentQuarterly();
+        assertNear(a.balanceSheet.goodwill, 37_500, '≥ 70% planu: bez odpisu');
+        applySaveSnapshot(JSON.parse(JSON.stringify(buildSaveSnapshot())));
+        const a2 = stocks.find(s => s.symbol === 'AAA');
+        assert(a2.acquisitions?.[0]?.left === 37_500 && a2.balanceSheet.goodwill === 37_500, 'zapis i wczytanie wartości firmy');
+    });
+
     test('M1: fuzja (wymiana akcji) bez skoku do ceny gotówkowej; etap 5 bez ×1,1', () => {
         const { a, b } = world();
         const pre = b.price;

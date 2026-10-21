@@ -3685,6 +3685,7 @@ function resolveMerger(stock1, stock2, process) {
                     return;
                 }
                 initiator.cash -= totalCost;
+                if (initiator.balanceSheet) initiator.balanceSheet.assets -= totalCost; // 0.15.1 M6: zapłata to wydatek gotówki
                 logEvent(`💸 ${initiator.name} wydaje łącznie ${totalCost.toFixed(0)} PLN (z gotówki) na przejęcie ${target.name}.`, 'company');
             
             } else if (process.financing === 'lbo') {
@@ -3750,12 +3751,11 @@ function resolveMerger(stock1, stock2, process) {
                 if (owner.equityStakes?.[target.symbol]) delete owner.equityStakes[target.symbol];
             }
 
-            // 4. Przeniesienie Aktywów i Pasywów (bez zmian)
+            // 4. Przeniesienie aktywów i pasywów (0.15.1 M6): wartość firmy = cena − aktywa netto celu;
+            // kapitał przejmującego maleje tylko o koszty procesu (zysk zatrzymany celu nie jest dopisywany).
             if (initiator.balanceSheet && target.balanceSheet) {
-                initiator.balanceSheet.assets += target.balanceSheet.assets;
-                initiator.balanceSheet.liabilities += target.balanceSheet.liabilities;
-                initiator.balanceSheet.retainedEarnings += target.balanceSheet.retainedEarnings;
-                initiator.cash += target.cash; 
+                bookAcquisition(initiator, target, process.offerDetails.totalCost, process.costs || 0);
+                initiator.cash += target.cash;
             }
 
             // 5. Obsługa CEO (Złoty Spadochron) (bez zmian)
@@ -9535,6 +9535,78 @@ function recordAccountingQuarter(stock, quarterModel, realEarnings, fake) {
 // CO KWARTAŁ: nowe oszustwa, zmiany audytora, korekty, audyty
 // ---------------------------------------------------------------------------------
 
+// =================================================================================
+// 0.15.1 M6: WARTOŚĆ FIRMY (GOODWILL) I TEST UTRATY WARTOŚCI
+// =================================================================================
+
+/** EBIT z ostatnich 4 kw. (EBITDA − amortyzacja). */
+function getEbitTtm(stock) {
+    const history = (stock?.fundamentals?.history || []).slice(-4);
+    return history.reduce((sum, q) => sum + (Number(q.ebitda) || 0) - (Number(q.depreciation) || 0), 0);
+}
+
+/**
+ * Księgowanie przejęcia: aktywa + aktywa celu + wartość firmy, zobowiązania + zobowiązania celu (zapłata gotówką albo
+ * dług LBO zaksięgowany wcześniej), kapitał − koszty procesu (+ zysk z okazyjnego nabycia, gdy cena < aktywa netto).
+ * Przychody i segmenty celu przechodzą do przejmującego. Zwraca wartość firmy.
+ */
+function bookAcquisition(initiator, target, price, costs = 0) {
+    const tb = target.balanceSheet || {};
+    const netAssets = (Number(tb.assets) || 0) - (Number(tb.liabilities) || 0);
+    const goodwill = Math.max(0, price - netAssets);
+    const bargain = Math.max(0, netAssets - price);
+    const ib = initiator.balanceSheet;
+    const targetEbit = getEbitTtm(target), initiatorRevenue = Number(initiator.fundamentals?.revenueTtm) || 0, targetRevenue = Number(target.fundamentals?.revenueTtm) || 0;
+    ib.assets += (Number(tb.assets) || 0) + goodwill;
+    ib.liabilities += Number(tb.liabilities) || 0;
+    ib.retainedEarnings += bargain - costs;
+    ib.goodwill = (Number(ib.goodwill) || 0) + goodwill;
+    if (bargain > 0) postPeriodEntry(initiator, `bargain_${target.symbol}`, { otherIncome: bargain }); // zysk z okazyjnego nabycia w wyniku kwartału
+    if (typeof mergeChildFundamentals === 'function') mergeChildFundamentals(initiator, target);
+    if (typeof mergeChildSegment === 'function') mergeChildSegment(initiator, target);
+    if (goodwill > 0) {
+        initiator.acquisitions = [...(initiator.acquisitions || []), {
+            symbol: target.symbol, name: target.name, quarter: typeof macro === 'object' ? macro.quarter : 0, goodwill, left: goodwill,
+            planEbit: targetEbit, revenueShare: initiatorRevenue + targetRevenue > 0 ? targetRevenue / (initiatorRevenue + targetRevenue) : 0
+        }].slice(-12);
+    }
+    return goodwill;
+}
+
+/** Co 4 kw. po przejęciu: zysk przejętej części < 70% planu → odpis 25% pozostałej wartości firmy, < 40% → 50%. */
+function processGoodwillImpairmentQuarterly() {
+    const quarter = typeof macro === 'object' ? macro.quarter : 0;
+    for (const stock of stocks) {
+        if (!stock.acquisitions?.length || stock.isBankrupt) continue;
+        for (const acq of stock.acquisitions) {
+            if (!(acq.left > 0) || quarter <= acq.quarter || (quarter - acq.quarter) % 4 !== 0 || !(acq.planEbit > 0)) continue;
+            const actual = getEbitTtm(stock) * acq.revenueShare;
+            const ratio = actual / acq.planEbit;
+            const share = ratio < 0.4 ? 0.5 : ratio < 0.7 ? 0.25 : 0;
+            if (share > 0) impairGoodwill(stock, acq, acq.left * share, share);
+        }
+    }
+}
+
+/** Odpis: koszt w wyniku kwartału bez ruchu gotówki (zysk netto i EPS spadają). */
+function impairGoodwill(stock, acq, amount, share) {
+    amount = Math.min(amount, Number(stock.balanceSheet?.goodwill) || 0, acq.left);
+    if (!(amount > 0)) return 0;
+    acq.left -= amount;
+    stock.balanceSheet.goodwill -= amount;
+    adjustBalanceSheet(stock, { assets: -amount, retainedEarnings: -amount });
+    postPeriodEntry(stock, `impairment_${acq.symbol}_${typeof macro === 'object' ? macro.quarter : 0}`, { otherIncome: -amount });
+    stock.lastImpairment = { quarter: typeof macro === 'object' ? macro.quarter : 0, amount, from: acq.name };
+    const text = `📉 ${stock.name} odpisuje ${formatZl(amount, 0)} wartości firmy po przejęciu ${acq.name} (przejęta część zarabia mniej niż w planie).`;
+    logEvent(text, 'company');
+    if ((playerPortfolio[stock.symbol]?.shares || 0) > 0 && typeof addMail === 'function') {
+        addMail({ sender: CORPORATION_SENDER, subject: `📉 Odpis wartości firmy: ${stock.name}`, body: `${text} Odpis obniża zysk netto i zysk na akcję w tym kwartale, ale nie zabiera gotówki.`, importance: 2, symbol: stock.symbol });
+        if (typeof unlockAcademyEntry === 'function') { unlockAcademyEntry('test_utraty_wartosci'); unlockAcademyEntry('klatwa_zwyciezcy'); }
+    }
+    if (share >= 0.5 && typeof pushNews === 'function') pushNews(`${stock.name} odpisuje połowę wartości firmy po przejęciu ${acq.name}`, stock.symbol);
+    return amount;
+}
+
 // 0.15.1 M3: ukryte zobowiązania (poręczenia, pozwy, kary) — 12% spółek z modelem zysku, 5–20% długu.
 const HIDDEN_LIABILITY_CHANCE = 0.12;
 const HIDDEN_LIABILITY_SPONTANEOUS = 0.02;
@@ -9750,7 +9822,8 @@ function renderAccountingSection(stock) {
                 <div><strong>Pasywa ${money(assets)}</strong><div class="acc-bars">${bar(Math.max(0, equity), assets, 'equity')}${bar(liabilities, assets, 'debt')}</div>
                     <span class="text-xs">🟦 kapitał własny ${money(equity)} · 🟥 zobowiązania ${money(liabilities)}</span></div>
             </div>
-            <p class="text-sm">Dług netto (zobowiązania − gotówka): <strong>${money(liabilities - cash)}</strong>. Bilans zawsze się równa: aktywa = kapitał własny + zobowiązania.</p>`;
+            <p class="text-sm">Dług netto (zobowiązania − gotówka): <strong>${money(liabilities - cash)}</strong>. Bilans zawsze się równa: aktywa = kapitał własny + zobowiązania.</p>
+            ${stock.balanceSheet?.goodwill > 0 || stock.lastImpairment ? `<p class="text-sm">Wartość firmy (w aktywach, z przejęć): <strong>${money(stock.balanceSheet?.goodwill || 0)}</strong>${stock.lastImpairment ? ` · odpis wartości firmy: <strong>${money(-stock.lastImpairment.amount)}</strong> (kw. ${stock.lastImpairment.quarter}, po przejęciu ${escapeHtml(stock.lastImpairment.from)}) — w wyniku jako „pozostałe”` : ''}</p>` : ''}`;
     } else html += locked(2, 'Bilans');
 
     // 3. Przepływy pieniężne
