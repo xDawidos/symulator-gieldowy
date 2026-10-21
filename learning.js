@@ -780,16 +780,16 @@ Object.assign(ACADEMY_ENTRIES, {
     },
     krach_bezpieczniki: {
         title: 'Krach giełdowy i bezpieczniki', icon: '🚨',
-        text: 'Krach to gwałtowne załamanie notowań — spadek indeksu o ponad 20% w ciągu zaledwie 1–4 tygodni, wywołany nagłą paniką, realizacją zleceń stop-loss i przymusowymi wezwaniami do uzupełnienia depozytu (margin call). Aby zapobiec załamaniu infrastruktury, giełda stosuje automatyczne bezpieczniki (circuit breakers): przy spadku GIG o -8% handel staje na 15 s gry, przy -13% na 30 s, a przy -20% handel zostaje zawieszony do końca tygodnia.',
+        text: 'Krach to gwałtowne załamanie notowań — spadek indeksu o ponad 20% w ciągu zaledwie 1–4 tygodni, wywołany nagłą paniką, realizacją zleceń stop-loss i przymusowymi wezwaniami do uzupełnienia depozytu (margin call). Aby zapobiec załamaniu infrastruktury, giełda stosuje automatyczne bezpieczniki (circuit breakers): przy spadku GIG o -10% handel staje na 15 s gry, przy -13% na 30 s, a przy -20% handel zostaje zawieszony do końca tygodnia.',
         example: () => {
             const isCrash = typeof isMarketCrashing === 'function' && isMarketCrashing();
             const isHalt = typeof isMarketHalted === 'function' && isMarketHalted();
-            return isCrash ? '🚨 Na rynku trwa KRACH!' : isHalt ? '⚠️ Handel jest wstrzymany przez bezpiecznik!' : 'Bezpieczniki giełdowe czuwają nad stabilnością parkietu (progi -8%, -13%, -20%).';
+            return isCrash ? '🚨 Na rynku trwa KRACH!' : isHalt ? '⚠️ Handel jest wstrzymany przez bezpiecznik!' : 'Bezpieczniki giełdowe czuwają nad stabilnością parkietu (progi -10%, -13%, -20%).';
         },
         quiz: [
-            { q: 'Jakie są progi zadziałania bezpieczników giełdowych w grze?', a: ['-8% (15s), -13% (30s) oraz -20% (do końca tygodnia)', '-1%, -2% i -3%', '-50% i zamknięcie giełdy na rok'], c: 0 },
+            { q: 'Jakie są progi zadziałania bezpieczników giełdowych w grze?', a: ['-10% (15s), -13% (30s) oraz -20% (do końca tygodnia)', '-1%, -2% i -3%', '-50% i zamknięcie giełdy na rok'], c: 0 },
             { q: 'Co dzieje się podczas zawieszenia handlu przez bezpiecznik?', a: ['Wszystkie zlecenia zakupu i sprzedaży są zablokowane', 'Spółki natychmiast bankrutują', 'Gracz traci wszystkie pieniądze'], c: 0 },
-            { q: 'Ile trwa wstrzymanie handlu przy bezpieczniku 1. stopnia (-8%)?', a: ['15 sekund', 'Cały miesiąc', '24 godziny'], c: 0 }
+            { q: 'Ile trwa wstrzymanie handlu przy bezpieczniku 1. stopnia (-10%)?', a: ['15 sekund', 'Cały miesiąc', '24 godziny'], c: 0 }
         ]
     },
     emisje_skupy: {

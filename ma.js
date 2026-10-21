@@ -943,7 +943,7 @@ function getCapitalAgmProposal(stock) {
     const issue = reason => ({ id: 'issue', kind: 'board', type: 'issue', reason, label: reason === 'expensive' ? 'Emisja 10% nowych akcji przy wysokiej wycenie' : 'Emisja 10% nowych akcji' });
     const buyback = reason => ({ id: 'buyback', kind: 'board', type: 'buyback', reason, label: reason === 'cheap' ? 'Program skupu akcji własnych przy niskiej wycenie' : 'Program skupu akcji własnych' });
     if (stock.cash < cap * 0.03 && Math.random() < (cheap || bearish ? 0.2 : 0.5)) return issue('cash'); // przy tanich akcjach zarząd woli kredyt niż emisję
-    if (expensive && Math.random() < (typeof isCompanyInSectorBubble === 'function' && isCompanyInSectorBubble(stock) ? 0.6 : 0.3)) return issue('expensive');
+    if (expensive && Math.random() < (typeof isCompanyInSectorBubble === 'function' && isCompanyInSectorBubble(stock) ? 0.74 : 0.37)) return issue('expensive'); // decyzja użytkownika: 30% → 37% (rozwodnienie ≈ 0)
     if (stock.cash > cap * 0.15 && !expensive && Math.random() < 0.3) return buyback('cash'); // 0.15.0.1: 50% → 30% (rozwodnienie rynku ≈ 0 przy 50%)
     if (cheap && stock.cash > cap * 0.05 && Math.random() < 0.4) return buyback('cheap');
     return null;

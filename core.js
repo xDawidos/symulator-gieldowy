@@ -3007,7 +3007,7 @@ function createMarketCrashState() {
 function createMarketHaltState() {
     return {
         active: false,
-        level: 0,                 // 1 (-8% -> 15s), 2 (-13% -> 30s), 3 (-20% -> do końca tygodnia)
+        level: 0,                 // 1 (-10% -> 15s), 2 (-13% -> 30s), 3 (-20% -> do końca tygodnia)
         untilGameMs: 0,
         haltDurationSec: 0,
         remainingSec: 0,
@@ -3084,7 +3084,7 @@ function triggerMarketHalt(level, durationSec, currentDropPct = 0) {
     }
 }
 
-/** Sprawdza progi bezpieczników (-8%, -13%, -20%) na podstawie bieżącej wartości GIG. */
+/** Sprawdza progi bezpieczników (-10%, -13%, -20%) na podstawie bieżącej wartości GIG. */
 function checkCircuitBreakers(currentGigVal) {
     if (!currentGigVal || !marketHalt.weeklyStartGig || marketHalt.weeklyStartGig <= 0) return;
     if (isMarketHalted()) return;
@@ -3095,7 +3095,7 @@ function checkCircuitBreakers(currentGigVal) {
         triggerMarketHalt(3, 60, drop);
     } else if (drop <= -0.13 && !marketHalt.triggeredThisWeek[2]) {
         triggerMarketHalt(2, 30, drop);
-    } else if (drop <= -0.08 && !marketHalt.triggeredThisWeek[1]) { // 0.15.0.1 C1 (pokrętło): −7% → −8%
+    } else if (drop <= -0.10 && !marketHalt.triggeredThisWeek[1]) { // 0.15.0.1: −7% → −10% (decyzja użytkownika)
         triggerMarketHalt(1, 15, drop);
     }
 }
@@ -3165,7 +3165,7 @@ function processMarketCrashWeekly(market = 'home') {
 }
 
 const MARKET_CRASH_PREMIUM_FLOOR = -0.35;
-const MARKET_CRASH_BASE_CHANCE = 0.025;
+const MARKET_CRASH_BASE_CHANCE = 0.03; // decyzja użytkownika po C7 (2,5% dawało 0,76 krachu na 20 lat)
 
 /** 0.15.0.1 C5b: krach tylko po wzrostach — w Euforii, Dystrybucji i w Hossie trwającej ≥ 4 kw. */
 function canMarketCrashInPhase(regime) {
@@ -3942,7 +3942,7 @@ function updateMarketIndexes() {
         gigIndex.lastPrices = Object.fromEntries(members.map(stock => [stock.symbol, stock.price]));
         gigIndex.change = gigIndex.value - oldValue;
 
-        // 0.15 H4: Sprawdź progi bezpieczników giełdowych (-8%, -13%, -20%)
+        // 0.15 H4: Sprawdź progi bezpieczników giełdowych (-10%, -13%, -20%)
         if (typeof checkCircuitBreakers === 'function') {
             checkCircuitBreakers(gigIndex.value);
         }

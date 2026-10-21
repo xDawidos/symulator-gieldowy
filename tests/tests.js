@@ -7488,9 +7488,9 @@ group('0.15 H4: Krach rynkowy, bezpieczniki giełdowe i reakcja instytucji', () 
         checkCircuitBreakers(950);
         assert(isMarketHalted() === false, 'brak haltu przy -5%');
 
-        // Spadek -8%: Poziom 1 (15s)
-        checkCircuitBreakers(915);
-        assert(isMarketHalted() === true, 'halt aktywny przy -8,5%');
+        // Spadek -10,5%: Poziom 1 (15s)
+        checkCircuitBreakers(895);
+        assert(isMarketHalted() === true, 'halt aktywny przy -10,5%');
         assert(marketHalt.level === 1, 'poziom 1');
         assert(marketHalt.haltDurationSec === 15, 'czas 15s');
 
@@ -8165,7 +8165,7 @@ group('0.15.0.1: Poprawki 0.15 (bezpiecznik, margin call, pieniądze, emisje, kr
         resetMarketHaltWeekly(800);
         assert(!isMarketHalted(), 'pętla tygodniowa kończy wstrzymanie');
         assertEq(marketHalt.weeklyStartGig, 800, 'nowy punkt odniesienia');
-        checkCircuitBreakers(730);
+        checkCircuitBreakers(715);
         assertEq(marketHalt.level, 1, 'w nowym tygodniu 1. stopień znów możliwy');
     });
 
@@ -8298,16 +8298,16 @@ group('0.15.0.1: Poprawki 0.15 (bezpiecznik, margin call, pieniądze, emisje, kr
         return k / n;
     }
 
-    test('C4: drogie akcje → emisja w porządku obrad z szansą 30% (60% w sektorze bańki)', () => {
+    test('C4: drogie akcje → emisja w porządku obrad z szansą 37% (74% w sektorze bańki)', () => {
         const { a } = world();
         getMarketRegime('home').phase = 'bull';
         a.cash = getMarketCapValue(a) * 0.10; // ani brak, ani nadmiar gotówki
         getMarketRegime('home').premium = 0.20;
         const p = capitalShare(a, 'issue');
-        assert(Math.abs(p - 0.30) <= 0.02, `emisja ${p}`);
+        assert(Math.abs(p - 0.37) <= 0.02, `emisja ${p}`);
         const orig = isCompanyInSectorBubble;
         isCompanyInSectorBubble = () => true;
-        try { const pb = capitalShare(a, 'issue'); assert(Math.abs(pb - 0.60) <= 0.02, `emisja w bańce ${pb}`); }
+        try { const pb = capitalShare(a, 'issue'); assert(Math.abs(pb - 0.74) <= 0.02, `emisja w bańce ${pb}`); }
         finally { isCompanyInSectorBubble = orig; }
         assertEq(capitalShare(a, 'buyback', 2000), 0, 'bez skupu przy drogich akcjach');
         getMarketRegime('home').phase = 'bear';
@@ -8326,7 +8326,7 @@ group('0.15.0.1: Poprawki 0.15 (bezpiecznik, margin call, pieniądze, emisje, kr
         getMarketRegime('home').premium = 0;
         assertEq(capitalShare(a, 'buyback', 2000) + capitalShare(a, 'issue', 2000), 0, 'neutralna wycena — bez uchwały kapitałowej');
         getMarketRegime('home').premium = 0.12;
-        assert(Math.abs(capitalShare(a, 'issue') - 0.30) <= 0.02, 'górna część Hossy (premia > +10%) to już drogie akcje');
+        assert(Math.abs(capitalShare(a, 'issue') - 0.37) <= 0.02, 'górna część Hossy (premia > +10%) to już drogie akcje');
         a.cash = getMarketCapValue(a) * 0.01; // brak gotówki
         getMarketRegime('home').premium = 0;
         assert(Math.abs(capitalShare(a, 'issue') - 0.50) <= 0.02, 'brak gotówki: emisja 50%');
@@ -8391,7 +8391,7 @@ group('0.15.0.1: Poprawki 0.15 (bezpiecznik, margin call, pieniądze, emisje, kr
         for (const phase of ['accumulation', 'bear', 'capitulation']) assertEq(crashCount(phase, 3), 0, `bez krachu: ${phase}`);
         for (const q of [1, 2, 3]) assertEq(crashCount('bull', q), 0, `bez krachu w ${q}. kw. Hossy`);
         const bull = crashCount('bull', 4);
-        assert(Math.abs(bull - 0.025) < 0.006, `Hossa ≥ 4 kw.: ${bull}`);
+        assert(Math.abs(bull - 0.03) < 0.006, `Hossa ≥ 4 kw.: ${bull}`);
         assert(crashCount('euphoria', 1) > 0.07, 'Euforia: szansa bazowa + 6 pp');
         assert(crashCount('distribution', 1) > 0.015, 'Dystrybucja');
     });

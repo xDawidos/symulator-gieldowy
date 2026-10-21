@@ -8962,7 +8962,7 @@ function updateCircuitBreakerUI() {
         const textEl = document.getElementById('circuit-breaker-text');
         const remaining = typeof getMarketHaltRemainingSeconds === 'function' ? getMarketHaltRemainingSeconds() : 0;
         const level = typeof marketHalt !== 'undefined' ? (marketHalt.level || 1) : 1;
-        const dropPct = typeof marketHalt !== 'undefined' && marketHalt.lastDropPct ? Math.abs(marketHalt.lastDropPct * 100).toFixed(1) : '8.0';
+        const dropPct = typeof marketHalt !== 'undefined' && marketHalt.lastDropPct ? Math.abs(marketHalt.lastDropPct * 100).toFixed(1) : '10.0';
 
         if (timerEl) {
             timerEl.textContent = Number.isFinite(remaining) ? `${remaining}s` : 'do końca tygodnia';
