@@ -76,6 +76,7 @@ const BUYOUT_OFFER_VALID_QUARTERS = 2;
 const BUYOUT_OFFER_COOLDOWN = 4;
 const BUYOUT_OFFER_MAX_ROUNDS = 3;
 const BUYOUT_AUCTION_FEE = 0.005;
+const BUYOUT_MAX_PREMIUM_CAP = 1.60; // cena maksymalna oferenta ≤ kurs × 1,6 (pomiar: premie do +158%)
 const BUYOUT_STANCES = {
     determined: { label: 'zdeterminowany', maxMult: 1.10, insult: 0.30 },
     flexible: { label: 'elastyczny', maxMult: 1.00, insult: 0.60 },
@@ -145,7 +146,7 @@ function createBuyoutOffer(target, holder) {
     const fair = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(target) : null;
     let maxPrice = Math.max(target.price * 1.15, (fair > 0 ? fair : target.price) * synergy) * (1 + getRandomInRange(0, 0.15)) * BUYOUT_STANCES[stanceKey].maxMult;
     const bidderCash = bidder.financing === 'lbo' ? Infinity : (bidder.kind === 'ai' ? aiCompetitors.find(ai => ai.id === bidder.id).cash : stocks.find(s => s.symbol === bidder.symbol).cash);
-    maxPrice = Math.max(price, Math.min(maxPrice, bidderCash / shares));
+    maxPrice = Math.max(price, Math.min(maxPrice, target.price * BUYOUT_MAX_PREMIUM_CAP, bidderCash / shares)); // limit: wartość godziwa tanich spółek bywa 2× ponad kurs
     return {
         symbol: target.symbol, holder: holder.kind === 'player' ? 'player' : holder.ai.id, wholeCompany, shares,
         bidder, stance: stanceKey, maxPrice, price, initialPrice: price, preOfferPrice: target.price,
