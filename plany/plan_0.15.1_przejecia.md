@@ -246,11 +246,19 @@ Spółki kupują pakiety innych spółek stopniowo, a progi zmieniają zachowani
 | 75%+ | przejęcie kontroli | zmiana nazwy nawiązująca do matki (np. „Cortex Drobex”), synergie kosztowe (marża +1 pp), polityka dywidendy pod matkę |
 | 99% (90% przy wchłonięciu) | zdjęcie z giełdy | wchłonięcie / prywatyzacja (istniejący przymusowy wykup); przy spółce Skarbu Państwa — nacjonalizacja |
 
+**Progi a ustawa i KNF (decyzja użytkownika 2026-10-21):**
+- próg **25% (powiązanie) jest stały**;
+- progi wyższe idą za ustawą „Próg wezwania” (M5) i limitem KNF: **związanie** od 50%, **przejęcie kontroli** od progu ustawy (66 / 75 / 90%), **zdjęcie z giełdy** od 99% (przy progu ustawy 99% — tylko wchłonięcie z przymusowym wykupem); im silniejsza KNF, tym wyżej są progi;
+- ustawa dotyczy też spółek: przekroczenie progu bez wezwania = **nakaz wezwania** (jak dla funduszu, bez kar finansowych za 1. raz);
+- **KNF kontroluje koncerny:** gdy koncern (z córkami) ma > 30% kapitalizacji sektora albo > 10% kapitalizacji GIG, KNF (szansa = skuteczność) nakazuje sprzedaż części pakietu (zejście do progu związania) albo blokuje nowe podkupowania na 4 kw.; pokrętło, gdy koncerny są za mocne.
+
 **Długofalowe przejęcie (podkupowanie):** zamiast jednego wezwania kupujący przez kilka kwartałów dokupuje akcje na rynku (wpływ na cenę jak zakupy botów) i odkupuje pakiety od posiadaczy (cena rezerwowa z M4); limit tempa 3–8 pp udziału na kwartał. Przekroczenie progu ustawy „Próg wezwania” (M5) bez wezwania — nakaz wezwania jak dla funduszu.
 
 **Cecha prezesa „Mistrz marionetek”** (nowa, rzadka): spółka z takim prezesem częściej rozpoczyna podkupowanie (×2) i szybciej dokupuje (górna granica tempa); spółki z „Marionetką” w zarządzie nie bronią się przed matką.
 
-**Tempo w grze:** najwyżej kilka rozpoczętych podkupowań na rok w całej grze (cel do pomiaru: 2–5 na rok); liczba córek i koncernów pilnowana (cele T5/T6).
+**Tempo w grze:** najwyżej kilka rozpoczętych podkupowań na rok w całej grze (cel do pomiaru: 2–5 na rok).
+
+**Pomiar M9 (zgoda użytkownika):** liczba córek i koncernów (cele T5/T6; za mocne koncerny osłabia KNF), GIG ±0,5 pp względem M8 bez M9, spójność rejestru akcji (akcje = posiadacze, 0 naruszeń), gotówka spółek wypływająca do akcjonariuszy (suma zakupów pakietów na rok).
 
 - **Zapis:** `stock.stakeCampaign` (kupujący, cel udziału, tempo), progi osiągnięte, cecha prezesa; pola opcjonalne.
 - **Testy:** progi 25/50/75/99 i ich skutki; „Marionetka &lt;nazwa&gt;” głosuje jak matka; zmiana nazwy przy 75%; zasady rang (Złota tylko przy kondycji ≥ 3 albo gotówce ≥ 25% kap., kupowanie tylko niższych rang, kooperacje w tej samej randze); podkupowanie w limicie tempa; akcje = posiadacze; „Mistrz marionetek” ×2.
