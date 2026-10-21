@@ -8665,6 +8665,23 @@ group('0.15.1: Sztuka przejęć (arbitraż, oferty, due diligence, pakiety, wezw
         assertNear(playerCash - cash0, fundShares * price, 'fundusz po cenie uzgodnionej');
     });
 
+    test('M10: dziennik rodowy — matka → córka → wnuczka po usamodzielnieniu; zapis i wczytanie', () => {
+        const { a, b, c } = world();
+        genealogyLog = [];
+        makeSubsidiary(a, b);
+        releaseSubsidiary(b, a, 'oferta wtórna');
+        makeSubsidiary(b, c);
+        assertEq(genealogyLog.map(e => e.kind).join(','), 'subsidiary,independent,subsidiary', 'zdarzenia w dzienniku');
+        const lines = buildGenealogyTree().split('\n');
+        const ia = lines.findIndex(l => l.startsWith('Alfa Testowa (AAA)'));
+        const ib = lines.findIndex(l => /^\s+└ Beta Testowa \(BBB\)/.test(l));
+        const ic = lines.findIndex(l => /^\s{8}└ Gamma Testowa \(CCC\)/.test(l));
+        assert(ia >= 0 && ib > ia && ic > ib, `drzewo:\n${lines.join('\n')}`);
+        assert(lines.some(l => /usamodzielnienie/.test(l)), 'historia usamodzielnienia');
+        applySaveSnapshot(JSON.parse(JSON.stringify(buildSaveSnapshot())));
+        assertEq(genealogyLog.length, 3, 'dziennik po wczytaniu');
+    });
+
     test('M1: fuzja (wymiana akcji) bez skoku do ceny gotówkowej; etap 5 bez ×1,1', () => {
         const { a, b } = world();
         const pre = b.price;

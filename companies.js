@@ -3377,6 +3377,7 @@ function processFinancialReports() {
 
              if (bankruptcyChance > 0 && Math.random() < bankruptcyChance) {
                  if (typeof mafiaRescueFromBankruptcy === 'function' && mafiaRescueFromBankruptcy(stock)) continue; // „inwestor” w ostatniej chwili (mafia.js)
+                 noteGenealogy('bankrupt', null, stock);
                  logEvent(`🔥 BANKRUCTWO! Spółka ${stock.name} (${stock.symbol}) ogłasza upadłość!`, 'review');
                  if (typeof onAcademyEvent === 'function') onAcademyEvent('bankruptcy', stock); // przed usunięciem akcji gracza
                  if (typeof onCooperationPartnerShock === 'function') onCooperationPartnerShock(stock, COOP_BANKRUPTCY_SHOCK, 'bankructwo'); // T5: kooperanci tracą kontrahenta
@@ -3769,6 +3770,7 @@ function resolveMerger(stock1, stock2, process) {
             // 6. Aktualizacja spółki-matki (bez zmian)
             initiator.financialHealth = Math.max(-5, Math.min(5, ((initiator.financialHealth + target.financialHealth) / 2) + 0.5));
             (initiator.absorbedCompanies = initiator.absorbedCompanies || []).push({ symbol: target.symbol, name: target.name, date: Date.now() }); // 0.14.2 P3: wchłonięta, nie córka
+            noteGenealogy('takeover', initiator, target, { note: `${formatZl(process.offerDetails.buyoutPricePerShare)} za akcję` });
 
             successMessage = `✅ Przejęcie zakończone! ${initiator.name} wchłonął ${target.name}.`;
             break;
@@ -3830,6 +3832,7 @@ function resolveMerger(stock1, stock2, process) {
                 initiator.ceo = target.ceo;
             } 
 
+            noteGenealogy('merger', initiator, target);
             successMessage = `✅ Fuzja zakończona! Powstaje ${initiator.name}.`;
             break;
 
@@ -6321,6 +6324,60 @@ function updateCeoTenureAndAge() {
     });
 }
 
+// =================================================================================
+// 0.15.1 M10: DZIENNIK RODOWY SPÓŁEK (mapa przejęć, córek i usamodzielnień — tryb deweloperski)
+// =================================================================================
+
+const GENEALOGY_LIMIT = 600;
+let genealogyLog = [];
+const GENEALOGY_KINDS = {
+    subsidiary: 'zakłada córkę', spinoff: 'wydziela (spin-off)', carveout: 'wydziela córkę (carve-out)', independent: 'usamodzielnienie',
+    controlSold: 'sprzedaż pakietu kontrolnego', absorbed: 'wchłonięcie', takeover: 'przejęcie', merger: 'fuzja', bankrupt: 'bankructwo',
+    stake: 'pakiet', rename: 'zmiana nazwy'
+};
+
+/** Zdarzenie rodowe: rodzic (albo kupujący) → dziecko, z kwartałem i opcjonalnym udziałem. */
+function noteGenealogy(kind, parent, child, extra = {}) {
+    const name = s => (typeof s === 'string' ? stocks.find(x => x.symbol === s)?.name : s?.name) || null;
+    const sym = s => (typeof s === 'string' ? s : s?.symbol) || null;
+    genealogyLog.push({ q: typeof macro === 'object' ? macro.quarter : 0, kind, parent: sym(parent), parentName: name(parent), child: sym(child), childName: name(child), ...extra });
+    if (genealogyLog.length > GENEALOGY_LIMIT) genealogyLog.splice(0, genealogyLog.length - GENEALOGY_LIMIT);
+}
+
+/** Drzewo rodowe jako wcięta lista tekstu (korzenie: spółki, które nigdy nie były dzieckiem w dzienniku). */
+function buildGenealogyTree() {
+    const edgeKinds = new Set(['subsidiary', 'spinoff', 'carveout', 'controlSold', 'absorbed', 'takeover', 'merger', 'stake']);
+    const children = {}, names = {}, isChild = new Set(), notes = {};
+    for (const e of genealogyLog) {
+        if (e.parent) names[e.parent] = e.parentName || names[e.parent];
+        if (e.child) names[e.child] = e.childName || names[e.child];
+        if (e.child) (notes[e.child] = notes[e.child] || []).push(`kw. ${e.q}: ${GENEALOGY_KINDS[e.kind] || e.kind}${e.parent && !edgeKinds.has(e.kind) ? ` (${e.parent})` : ''}${e.pct ? ` ${Math.round(e.pct * 100)}%` : ''}${e.note ? ` — ${e.note}` : ''}`);
+        if (!edgeKinds.has(e.kind) || !e.parent || !e.child) continue;
+        (children[e.parent] = children[e.parent] || []);
+        if (!children[e.parent].some(c => c.child === e.child)) children[e.parent].push({ child: e.child, kind: e.kind, q: e.q });
+        isChild.add(e.child);
+    }
+    const status = sym => { const s = stocks.find(x => x.symbol === sym); return !s ? 'poza grą' : s.delisted === 'absorbed' ? 'wchłonięta' : s.isBankrupt ? 'upadła' : s.isSubsidiaryOf ? `córka ${s.isSubsidiaryOf}` : 'samodzielna'; };
+    const lines = [];
+    const walk = (sym, depth, via, seen) => {
+        lines.push(`${'    '.repeat(depth)}${depth ? '└ ' : ''}${names[sym] || sym} (${sym}) [${status(sym)}]${via ? ` ← ${GENEALOGY_KINDS[via.kind]} kw. ${via.q}` : ''}`);
+        for (const n of (notes[sym] || []).slice(-4)) lines.push(`${'    '.repeat(depth + 1)}· ${n}`);
+        if (seen.has(sym)) return;
+        seen.add(sym);
+        for (const c of children[sym] || []) walk(c.child, depth + 1, c, seen);
+    };
+    const roots = Object.keys(children).filter(sym => !isChild.has(sym)).sort((a, b) => (children[b]?.length || 0) - (children[a]?.length || 0));
+    for (const root of roots) walk(root, 0, null, new Set());
+    const orphans = Object.keys(notes).filter(sym => !children[sym] && !isChild.has(sym));
+    if (orphans.length) { lines.push('', 'Inne zdarzenia:'); for (const sym of orphans) { lines.push(`${names[sym] || sym} (${sym}) [${status(sym)}]`); for (const n of notes[sym].slice(-3)) lines.push(`    · ${n}`); } }
+    return lines.length ? lines.join('\n') : 'Dziennik rodowy jest pusty — jeszcze nie było przejęć, córek ani wydzieleń.';
+}
+
+function renderGenealogyDebug() {
+    const box = document.getElementById('debug-genealogy');
+    if (box) box.textContent = buildGenealogyTree();
+}
+
 function makeSubsidiary(parentStock, childStock) {
     if (!parentStock || !childStock || childStock.isSubsidiaryOf) {
         console.warn(`[makeSubsidiary] Błąd: Nie można utworzyć zależności dla ${parentStock?.symbol} -> ${childStock?.symbol}`);
@@ -6329,6 +6386,7 @@ function makeSubsidiary(parentStock, childStock) {
 
     // Ustaw flagę zależności
     childStock.isSubsidiaryOf = parentStock.symbol;
+    noteGenealogy('subsidiary', parentStock, childStock);
 
     // Dodaj do listy spółek zależnych rodzica (jeśli lista nie istnieje, stwórz ją)
     if (!parentStock.subsidiaries) {
@@ -11493,6 +11551,7 @@ function executeSpinoff(parent, options = {}) {
         if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('spinoff', `${parent.name}: dostajesz ${held.toLocaleString('pl-PL')} akcji ${child.name}`);
         if (typeof addMail === 'function') addMail({ sender: 'PULS', subject: `✂️ Akcje ${child.name} z wydzielenia ${parent.name}`, body: `Dostajesz ${held.toLocaleString('pl-PL')} akcji ${child.name} (${symbol}) jako dywidendę rzeczową. Kurs ${parent.name} spadł o wartość wydzielonej części — wartość Twojej pozycji się nie zmienia.`, importance: 2, symbol });
     }
+    noteGenealogy(carve ? 'carveout' : 'spinoff', parent, child, carve ? { pct: keep } : {});
     return child;
 }
 
@@ -12174,6 +12233,7 @@ function settleGroupLoanOnExit(child, parent) {
 
 function releaseSubsidiary(child, parent, how) {
     settleGroupLoanOnExit(child, parent);
+    noteGenealogy('independent', parent, child, { note: how });
     child.isSubsidiaryOf = null;
     child.parentStakePct = null;
     child.profitTransfer = null;
@@ -12214,6 +12274,7 @@ function absorbSubsidiary(child, parent = getParentOf(child), premium = null) {
     if (parent.workforce && child.workforce) parent.workforce.employees = (Number(parent.workforce.employees) || 0) + (Number(child.workforce.employees) || 0);
     parent.absorbedCompanies = [...(parent.absorbedCompanies || []), { symbol: child.symbol, name: child.name, quarter: getSubQuarter() }].slice(-10);
     child.absorbedBy = parent.symbol;
+    noteGenealogy('absorbed', parent, child);
     removeStockFromGame(child.symbol);
     child.isBankrupt = true; child.delisted = 'absorbed';
     syncSubsidiaryLinks();
@@ -12277,6 +12338,8 @@ function sellControllingStake(child, parent = getParentOf(child), buyer = null, 
     adjustCompanyCash(parent, cost);
     recordPayment(buyer.kind === 'company' ? buyer.entity : `external:${buyer.id}`, parent, cost, `Pakiet kontrolny ${child.symbol}`);
     giveHolderShares(buyer, child, stake, price);
+    noteGenealogy('controlSold', parent, child, { pct: stake / child.totalShares, note: `kupuje ${buyer.name}` });
+    if (buyer.kind === 'company') noteGenealogy('stake', buyer.entity, child, { pct: stake / child.totalShares, note: `pakiet kontrolny od ${parent.symbol}` });
     settleGroupLoanOnExit(child, parent);
     child.isSubsidiaryOf = null; child.parentStakePct = null;
     if (buyer.kind === 'company') { child.isSubsidiaryOf = buyer.entity.symbol; child.parentStakePct = stake / child.totalShares; child.profitTransfer = getRandomInRange(0.4, 0.6); }

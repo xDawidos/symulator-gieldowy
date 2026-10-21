@@ -669,6 +669,11 @@
                     <button type="button" onclick="debugSetMarketPhase(document.getElementById('debug-market-phase-select').value)">Ustaw (potwierdzona)</button>
                     <button type="button" onclick="debugSetMarketPhase(document.getElementById('debug-market-phase-select').value, false)">Ustaw (potwierdzanie)</button>
                 </div>
+                <details class="debug-genealogy" style="margin-top:6px;" ontoggle="if (this.open) renderGenealogyDebug()">
+                    <summary style="font-size:12px;font-weight:600;cursor:pointer;">Mapa rodowa spółek (przejęcia, córki, usamodzielnienia)</summary>
+                    <button type="button" onclick="renderGenealogyDebug()">Odśwież</button>
+                    <pre id="debug-genealogy" style="font-size:11px;max-height:360px;overflow:auto;white-space:pre;"></pre>
+                </details>
                 <div class="debug-bubble-row" style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
                     <label for="debug-bubble-cand-select" style="font-size:12px;font-weight:600;">Bańka:</label>
                     <select id="debug-bubble-cand-select">
