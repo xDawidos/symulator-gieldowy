@@ -8703,6 +8703,53 @@ group('0.15.1: Sztuka przejęć (arbitraż, oferty, due diligence, pakiety, wezw
         assertEq(b.hiddenLiabilities, 0, 'ujawnione raz');
     });
 
+    test('M3: badanie kupującego — oszustwo wykryte w 70% (połowa zerwań), audyt przed sprzedażą: obniżka o połowę i bez zerwania', () => {
+        const { a, b } = world();
+        const run = (preSale) => {
+            let found = 0, cancel = 0, cuts = [];
+            for (let i = 0; i < 4000; i++) {
+                b.fraud = { start: 0, correctAt: 99, total: 0 }; b.price = 100; b.hiddenLiabilities = 0; b.ceo = null;
+                b.audit = preSale ? { done: true, doneQuarter: getAccountingQuarter() } : null;
+                const r = runBuyerDueDiligence(a, b, { type: 'przejęcie', offerDetails: { buyoutPricePerShare: 120 } });
+                if (r.found.length) { found++; if (r.cancel) cancel++; else cuts.push(r.cut); }
+            }
+            return { found: found / 4000, cancel: cancel / Math.max(1, found), cut: cuts.reduce((x, y) => x + y, 0) / Math.max(1, cuts.length) };
+        };
+        const plain = run(false);
+        assert(Math.abs(plain.found - 0.70) < 0.03 && Math.abs(plain.cancel - 0.5) < 0.04, `bez audytu: ${JSON.stringify(plain)}`);
+        assert(Math.abs(plain.cut - 0.225) < 0.01, `obniżka 15–30%: ${plain.cut}`);
+        const audited = run(true);
+        assertEq(audited.cancel, 0, 'po audycie bez zerwania');
+        assert(Math.abs(audited.cut - plain.cut / 2) < 0.01, `obniżka o połowę: ${audited.cut}`);
+    });
+
+    test('M3: ukryte zobowiązania wykryte w 60% — obniżka o wartość na akcję; decyzja funduszu: negocjacje raz, przyjęcie, zerwanie', () => {
+        const { a, b } = world();
+        let found = 0;
+        for (let i = 0; i < 4000; i++) {
+            b.fraud = null; b.hiddenLiabilities = 100_000; b.audit = null; b.balanceSheet.liabilities = 0;
+            const r = runBuyerDueDiligence(a, b, { type: 'przejęcie', offerDetails: { buyoutPricePerShare: 120 } });
+            if (r.found.length) { found++; assertNear(r.cut, 100_000 / b.totalShares / 120, 'obniżka = wartość na akcję / cena', 1e-9); assertEq(b.balanceSheet.liabilities, 100_000, 'ujawnione w bilansie'); }
+        }
+        assert(Math.abs(found / 4000 - 0.6) < 0.03, `wykrycie ${found / 4000}`);
+        // pełna ścieżka oferty: fundusz > 50%, ukryte zobowiązania wykryte, negocjacje i przyjęcie
+        playerPortfolio.BBB = { shares: 6000, avgPrice: 100, assetType: 'stock' }; b.sharesHeld = 6000; b.price = 100; b.hiddenLiabilities = 200_000; b.fraud = null;
+        buyoutState = createBuyoutState();
+        let o; for (let i = 0; i < 50 && !o; i++) o = withFair(() => createBuyoutOffer(b, getBuyoutHolder(b)));
+        buyoutState.offers.BBB = o;
+        assert(acceptBuyoutOffer('BBB'), 'transakcja uzgodniona');
+        Math.random = () => 0.01; // badanie wykrywa
+        advanceMergerProcess(a);
+        Math.random = () => 0.99;
+        const pending = a.mergerProcess.ddPending;
+        assert(pending && pending.newPrice < pending.oldPrice, 'obniżka czeka na decyzję funduszu');
+        const r = ddNegotiate('BBB');
+        assert(r === 'raised' || r === 'refused', 'jedna runda negocjacji');
+        assertEq(ddNegotiate('BBB'), false, 'drugiej rundy nie ma');
+        const agreed = a.mergerProcess.ddPending.newPrice;
+        assert(ddAcceptCut('BBB') && a.mergerProcess.offerDetails.buyoutPricePerShare === agreed && !a.mergerProcess.ddPending, 'przyjęta obniżona cena');
+    });
+
     test('M1: fuzja (wymiana akcji) bez skoku do ceny gotówkowej; etap 5 bez ×1,1', () => {
         const { a, b } = world();
         const pre = b.price;

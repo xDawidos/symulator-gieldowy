@@ -308,6 +308,7 @@ function startBuyoutDeal(offer, price) {
         bidder.mergerProcess.offerDetails.buyoutPricePerShare = price;
         bidder.mergerProcess.offerDetails.totalCost = price * target.totalShares;
         bidder.mergerProcess.offerDetails.premium = price / offer.preOfferPrice - 1;
+        bidder.mergerProcess.offerMax = offer.maxPrice; // M3: negocjacje po badaniu
         if (bidder.mergerProcess.arb) target.price = price * (1 - bidder.mergerProcess.arb.spread);
         syncPartnerProcess(bidder, target);
         logEvent(`🤝 Uzgodniono sprzedaż ${target.name} spółce ${bidder.name} po ${formatZl(price)} za akcję (premia ${Math.round((price / offer.preOfferPrice - 1) * 100)}%). Rozliczenie za 3 kw.`, 'market');
@@ -343,6 +344,111 @@ function startBuyoutDeal(offer, price) {
         seller.cash += cost;
     }
     logEvent(`🤝 ${sellerIsPlayer ? 'Fundusz sprzedaje' : `${seller.name} sprzedaje`} pakiet ${shares.toLocaleString('pl-PL')} akcji ${target.name} dla ${offer.bidder.name} po ${formatZl(price)} (premia ${Math.round((price / offer.preOfferPrice - 1) * 100)}%).`, 'market');
+    return true;
+}
+
+// =================================================================================
+// 0.15.1 M3: BADANIE KUPUJĄCEGO (due diligence)
+// =================================================================================
+
+const DD_FRAUD_FIND = 0.70;
+const DD_HIDDEN_FIND = 0.60;
+
+/** Audyt przed sprzedażą: zakończony audyt celu z ostatnich 4 kw. */
+function hasPreSaleAudit(target) {
+    const audit = target?.audit;
+    const quarter = typeof getAccountingQuarter === 'function' ? getAccountingQuarter() : 0;
+    return Boolean(audit?.done && quarter - (Number(audit.doneQuarter) || -99) <= 4);
+}
+
+/**
+ * Badanie kupującego: oszustwo (70%) → 50% obniżka 15–30%, 50% zerwanie i ujawnienie; ukryte zobowiązania (60%) →
+ * obniżka o ich wartość na akcję. Audyt przed sprzedażą: obniżka o połowę mniejsza, bez zerwania.
+ * Zwraca { cut (ułamek ceny), cancel, found[] }.
+ */
+function runBuyerDueDiligence(initiator, target, process) {
+    process.dd = { quarter: getBuyoutQuarter() };
+    const preSale = hasPreSaleAudit(target);
+    const price = Number(process.offerDetails?.buyoutPricePerShare) || target.price;
+    const result = { cut: 0, cancel: false, found: [], preSale };
+    if (target.fraud && Math.random() < DD_FRAUD_FIND) {
+        result.found.push('oszustwo księgowe');
+        if (!preSale && Math.random() < 0.5) result.cancel = true;
+        else result.cut += getRandomInRange(0.15, 0.30) * (preSale ? 0.5 : 1);
+    }
+    if (target.hiddenLiabilities > 0 && Math.random() < DD_HIDDEN_FIND) {
+        result.found.push('ukryte zobowiązania');
+        result.cut += target.hiddenLiabilities / target.totalShares / price * (preSale ? 0.5 : 1);
+        revealHiddenLiabilities(target, `badanie ${initiator.name}`);
+    }
+    result.cut = Math.min(0.6, result.cut);
+    process.dd.result = result;
+    if (result.cancel) {
+        if (typeof revealFraud === 'function') revealFraud(target, `badanie ${initiator.name}`);
+        cancelMerger(initiator, 'Badanie spółki wykryło oszustwo księgowe.');
+        if (target.mergerProcess) cancelMerger(target, 'Badanie spółki wykryło oszustwo księgowe.');
+        return result;
+    }
+    if (result.cut > 0) {
+        const newPrice = price * (1 - result.cut);
+        if (process.kind === 'offer' && getFundStakePct(target) > 0.5) {
+            process.ddPending = { oldPrice: price, newPrice, found: result.found, quarter: getBuyoutQuarter(), negotiated: false };
+            addMail({
+                sender: CORPORATION_SENDER,
+                subject: `🔎 Badanie ${target.name}: ${initiator.name} obniża cenę`,
+                body: `Badanie spółki wykryło: ${result.found.join(', ')}. ${initiator.name} proponuje ${formatZl(newPrice)} za akcję zamiast ${formatZl(price)}${preSale ? ' (audyt przed sprzedażą zmniejszył obniżkę o połowę)' : ''}. Możesz przyjąć, negocjować raz albo zerwać transakcję bez kary. Bez decyzji w ciągu kwartału obniżka zostaje przyjęta.`,
+                importance: 3, symbol: target.symbol, action: { type: 'ddResult', symbol: target.symbol }
+            });
+        } else setMergerPrice(initiator, target, newPrice);
+        logEvent(`🔎 ${initiator.name} po badaniu ${target.name} (${result.found.join(', ')}) obniża cenę do ${formatZl(newPrice)}.`, 'market');
+    }
+    if (typeof unlockAcademyEntry === 'function' && (getFundStakePct(target) > 0 || getFundStakePct(initiator) > 0)) unlockAcademyEntry('due_diligence');
+    return result;
+}
+
+function setMergerPrice(initiator, target, price) {
+    const process = initiator.mergerProcess;
+    if (!process) return;
+    process.offerDetails.buyoutPricePerShare = price;
+    process.offerDetails.totalCost = price * target.totalShares;
+    process.ddPending = null;
+    syncPartnerProcess(initiator, target);
+}
+
+function getDdPair(symbol) {
+    const target = stocks.find(s => s.symbol === symbol);
+    const initiator = target?.mergerProcess && stocks.find(s => s.symbol === target.mergerProcess.initiatorSymbol);
+    const pending = initiator?.mergerProcess?.ddPending;
+    return pending ? { target, initiator, pending } : null;
+}
+
+function ddAcceptCut(symbol) {
+    const pair = getDdPair(symbol);
+    if (!pair) return false;
+    setMergerPrice(pair.initiator, pair.target, pair.pending.newPrice);
+    logEvent(`🔎 Fundusz przyjmuje obniżoną cenę ${formatZl(pair.pending.newPrice)} za ${pair.target.name}.`, 'review');
+    return true;
+}
+
+/** Jedna runda: oferent przyjmuje połowę różnicy, jeśli mieści się w jego cenie maksymalnej. */
+function ddNegotiate(symbol) {
+    const pair = getDdPair(symbol);
+    if (!pair || pair.pending.negotiated) return false;
+    pair.pending.negotiated = true;
+    const middle = (pair.pending.oldPrice + pair.pending.newPrice) / 2;
+    const max = Number(pair.initiator.mergerProcess.offerMax) || pair.pending.newPrice;
+    const ok = middle <= max * (1 - (pair.initiator.mergerProcess.dd?.result?.cut || 0)); // cena maks. po wykrytych problemach
+    if (ok) pair.pending.newPrice = middle;
+    logEvent(ok ? `🔎 ${pair.initiator.name} zgadza się na ${formatZl(middle)} za akcję ${pair.target.name}.` : `🔎 ${pair.initiator.name} nie podnosi ceny ${pair.target.name}.`, 'review');
+    return ok ? 'raised' : 'refused';
+}
+
+function ddCancel(symbol) {
+    const pair = getDdPair(symbol);
+    if (!pair) return false;
+    pair.initiator.mergerProcess.ddPending = null;
+    cancelMerger(pair.initiator, 'Fundusz zerwał transakcję po badaniu spółki.');
+    if (pair.target.mergerProcess) cancelMerger(pair.target, 'Fundusz zerwał transakcję po badaniu spółki.');
     return true;
 }
 
@@ -453,6 +559,16 @@ function advanceMergerProcess(stock) {
     if (process.decisionRequired) {
         resolvePendingComplication(stock, partner);
         return;
+    }
+
+    // 0.15.1 M3: badanie kupującego — oferta uzgodniona w 1. kwartale, przejęcia botów od etapu 2.
+    if (process.type === 'przejęcie' && !process.dd && (process.kind === 'offer' || process.stage >= 2)) {
+        const dd = runBuyerDueDiligence(stock, partner, process);
+        if (dd.cancel || !stock.mergerProcess) return;
+    }
+    if (process.ddPending) { // czeka na decyzję funduszu; po kwartale obniżka przyjęta
+        if (getBuyoutQuarter() - process.ddPending.quarter < 1) return;
+        setMergerPrice(stock, partner, process.ddPending.newPrice);
     }
 
     let speed = MA_STAGE_PROGRESS;

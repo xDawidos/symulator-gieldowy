@@ -7634,6 +7634,11 @@ function renderMailPreview(message) {
             : '<p class="fund-muted">Oferta pakietu wygasła.</p>';
     } else if (message.action?.type === 'agm') {
         action = `<div class="mail-action"><button onclick="openGovernanceModal('${message.action.symbol}')">Otwórz walne zgromadzenie</button></div>`;
+    } else if (message.action?.type === 'ddResult') { // 0.15.1 M3: decyzja po badaniu kupującego
+        const pair = getDdPair(message.action.symbol);
+        action = pair
+            ? `<div class="mail-action"><p>Nowa cena: <strong>${formatZl(pair.pending.newPrice)}</strong> (było ${formatZl(pair.pending.oldPrice)})</p><button onclick="mailAction(ddAcceptCut, '${message.action.symbol}')">Przyjmij</button> ${pair.pending.negotiated ? '' : `<button class="btn-secondary" onclick="mailAction(ddNegotiate, '${message.action.symbol}')">Negocjuj (raz)</button>`} <button class="btn-danger" onclick="mailAction(ddCancel, '${message.action.symbol}')">Zerwij bez kary</button></div>`
+            : '<p class="fund-muted">Decyzja nie jest już aktualna.</p>';
     } else if (message.action?.type === 'buyoutOffer') { // 0.15.1 M2
         action = buyoutState.offers[message.action.symbol]
             ? `<div class="mail-action"><button onclick="openBuyoutOfferModal('${message.action.symbol}')">Otwórz ofertę</button></div>`
@@ -8516,6 +8521,10 @@ function renderBuyoutOffer(symbol) {
         </div>` : '<p class="text-sm text-muted">Rundy negocjacji wyczerpane — przyjmij albo odrzuć.</p>'}
         <div class="d-flex gap-2 flex-wrap mt-2">
             ${offer.auction ? '' : `<button class="btn-secondary" onclick="buyoutAction('${symbol}', inviteSecondBidder)">Zaproś drugiego oferenta — ${formatZl(offer.price * offer.shares * BUYOUT_AUCTION_FEE, 0)} (doradca)</button>`}
+            ${stock.audit && !stock.audit.done ? '<span class="text-sm">Audyt przed sprzedażą w toku — wynik w przyszłym kwartale.</span>'
+                : hasPreSaleAudit(stock) ? '<span class="badge badge--neutral">audyt przed sprzedażą: zrobiony</span>'
+                : getSkillLevel('accountant') >= ACCOUNTANT_REQUIRED.audit ? `<button class="btn-secondary" onclick="buyoutAction('${symbol}', s => orderAudit(s) && (unlockAcademyEntry('audyt_przed_sprzedaza'), true))">Zleć audyt przed sprzedażą — ${formatZl(getAuditCost(stock), 0)}</button>`
+                : '<span class="text-xs text-muted">Audyt przed sprzedażą: szkolenie „Księgowy”, poziom 5.</span>'}
         </div>
         <div class="d-flex gap-2 flex-wrap mt-2">
             <button onclick="buyoutAction('${symbol}', acceptBuyoutOffer)">${uiIcon('ok', 14)} Przyjmij ${formatZl(offer.price)}</button>

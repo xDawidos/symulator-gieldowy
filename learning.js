@@ -792,6 +792,26 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Ile trwa wstrzymanie handlu przy bezpieczniku 1. stopnia (-10%)?', a: ['15 sekund', 'Cały miesiąc', '24 godziny'], c: 0 }
         ]
     },
+    due_diligence: {
+        title: 'Due diligence (badanie spółki)', icon: '🔎',
+        text: 'Zanim kupujący zapłaci, bada księgi celu: umowy, długi, zgodność wyników z gotówką. Gdy znajdzie oszustwo księgowe, obniża cenę albo zrywa transakcję; ukryte zobowiązania odejmuje od ceny. Sprzedający może przyjąć obniżkę, negocjować albo zerwać rozmowy.',
+        example: () => 'Badanie trwa przez pierwszy kwartał uzgodnionej transakcji.',
+        quiz: [
+            { q: 'Co robi kupujący, gdy w badaniu znajdzie ukryte zobowiązania?', a: ['Obniża cenę o ich wartość', 'Podnosi cenę', 'Nic'], c: 0 },
+            { q: 'Po co kupujący bada spółkę przed zapłatą?', a: ['Żeby nie przepłacić za ukryte problemy', 'Żeby uniknąć podatku', 'Żeby zmienić nazwę spółki'], c: 0 },
+            { q: 'Oszustwo księgowe wykryte w badaniu może…', a: ['obniżyć cenę albo zerwać transakcję', 'przyspieszyć rozliczenie', 'podnieść premię'], c: 0 }
+        ]
+    },
+    audyt_przed_sprzedaza: {
+        title: 'Audyt przed sprzedażą', icon: '📒',
+        text: 'Sprzedający może sam zlecić audyt, zanim przyjmie ofertę. Problemy ujawnione wcześniej nie są niespodzianką dla kupującego — obniżka ceny jest o połowę mniejsza, a transakcja nie zostanie zerwana. „Kupujący wie, z czym idzie”.',
+        example: () => 'Audyt zlecisz w oknie oferty kupna (szkolenie „Księgowy”, poziom 5).',
+        quiz: [
+            { q: 'Jak audyt przed sprzedażą zmienia obniżkę ceny po badaniu kupującego?', a: ['Obniżka jest o połowę mniejsza', 'Obniżka jest dwa razy większa', 'Nie ma znaczenia'], c: 0 },
+            { q: 'Czy po audycie przed sprzedażą kupujący zerwie transakcję z powodu wykrytego oszustwa?', a: ['Nie — wie, z czym idzie', 'Zawsze', 'Tylko w hossie'], c: 0 },
+            { q: 'Kto płaci za audyt przed sprzedażą?', a: ['Sprzedający', 'Kupujący', 'KNF'], c: 0 }
+        ]
+    },
     ukryte_zobowiazania: {
         title: 'Ukryte zobowiązania', icon: '📑',
         text: 'Nie każdy dług widać w bilansie. Poręczenia za cudze kredyty, przegrane pozwy czy kary to zobowiązania, które mogą „wyskoczyć” nagle. Ujawnia je audyt, badanie kupującego albo sąd. Wtedy dług w bilansie rośnie, a kurs spada o ich wartość na akcję. Ryzyko jest większe przy prezesie skłonnym do korupcji i przy słabej kondycji spółki.',
