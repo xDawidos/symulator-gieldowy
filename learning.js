@@ -792,6 +792,16 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Ile trwa wstrzymanie handlu przy bezpieczniku 1. stopnia (-10%)?', a: ['15 sekund', 'Cały miesiąc', '24 godziny'], c: 0 }
         ]
     },
+    ukryte_zobowiazania: {
+        title: 'Ukryte zobowiązania', icon: '📑',
+        text: 'Nie każdy dług widać w bilansie. Poręczenia za cudze kredyty, przegrane pozwy czy kary to zobowiązania, które mogą „wyskoczyć” nagle. Ujawnia je audyt, badanie kupującego albo sąd. Wtedy dług w bilansie rośnie, a kurs spada o ich wartość na akcję. Ryzyko jest większe przy prezesie skłonnym do korupcji i przy słabej kondycji spółki.',
+        example: () => { const s = stocks.find(x => x.hiddenRevealed); return s ? `${s.name}: ujawnione ${formatZl(s.hiddenRevealed.value, 0)} (wykrył: ${s.hiddenRevealed.by}).` : 'Jeszcze nikt nie ujawnił ukrytych zobowiązań.'; },
+        quiz: [
+            { q: 'Co dzieje się z kursem po ujawnieniu ukrytych zobowiązań?', a: ['Spada o ich wartość na akcję', 'Rośnie', 'Nie zmienia się'], c: 0 },
+            { q: 'Kto najczęściej ujawnia ukryte zobowiązania?', a: ['Audytor i kupujący w badaniu spółki', 'Bank centralny', 'Akcjonariusze mniejszościowi'], c: 0 },
+            { q: 'Kiedy ryzyko ukrytych zobowiązań jest większe?', a: ['Przy skorumpowanym prezesie i słabej kondycji', 'Przy wysokiej dywidendzie', 'W hossie'], c: 0 }
+        ]
+    },
     cena_maksymalna: {
         title: 'Cena maksymalna i synergie', icon: '🎯',
         text: 'Kupujący ma w głowie cenę maksymalną — ile może zapłacić, żeby przejęcie się opłaciło. Zależy od wartości spółki i synergii (wspólne zakupy, klienci, koszty). Pierwsza oferta jest zwykle dużo niższa. Rozmowa zdradza przedział tej ceny; kontroferta w przedziale zwykle przechodzi, a żądanie dużo powyżej grozi urażeniem i zerwaniem rozmów.',

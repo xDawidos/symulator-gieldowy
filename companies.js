@@ -9535,9 +9535,48 @@ function recordAccountingQuarter(stock, quarterModel, realEarnings, fake) {
 // CO KWARTAŁ: nowe oszustwa, zmiany audytora, korekty, audyty
 // ---------------------------------------------------------------------------------
 
+// 0.15.1 M3: ukryte zobowiązania (poręczenia, pozwy, kary) — 12% spółek z modelem zysku, 5–20% długu.
+const HIDDEN_LIABILITY_CHANCE = 0.12;
+const HIDDEN_LIABILITY_SPONTANEOUS = 0.02;
+const HIDDEN_LIABILITY_AUDIT_FIND = 0.70;
+
+/** Losowanie raz na spółkę (start gry, debiut, stary zapis). */
+function rollHiddenLiabilities(stock) {
+    stock.hiddenChecked = true;
+    if (stock.assetType || stock.isBankStock) return 0;
+    let chance = HIDDEN_LIABILITY_CHANCE;
+    if (stock.ceo?.traits?.some(t => ['skorumpowany', 'sklonny_do_korupcji', 'chciwy'].includes(t.id))) chance *= 2;
+    if ((Number(stock.financialHealth) || 0) < 0) chance *= 1.5;
+    const debt = Number(stock.balanceSheet?.liabilities) || 0;
+    if (debt > 0 && Math.random() < chance) stock.hiddenLiabilities = Math.round(debt * getRandomInRange(0.05, 0.20));
+    return stock.hiddenLiabilities || 0;
+}
+
+/** Ujawnienie: zobowiązania bilansowe += wartość, kurs w dół o wartość na akcję, mail dla funduszu z akcjami. */
+function revealHiddenLiabilities(stock, by) {
+    const value = Number(stock.hiddenLiabilities) || 0;
+    if (!(value > 0)) return 0;
+    stock.hiddenLiabilities = 0;
+    adjustBalanceSheet(stock, { liabilities: value, retainedEarnings: -value });
+    const drop = Math.min(0.6, value / Math.max(1, getMarketCapValue(stock)));
+    if (drop > 0) applyPriceEffect(stock.symbol, -drop, 'negative', 'company');
+    stock.hiddenRevealed = { quarter: getAccountingQuarter(), value, by };
+    const text = `📑 ${stock.name}: ujawniono ukryte zobowiązania (${formatZl(value, 0)}; wykrył: ${by}) — dług rośnie, kurs −${(drop * 100).toFixed(0)}%.`;
+    logEvent(text, 'company');
+    if ((playerPortfolio[stock.symbol]?.shares || 0) > 0 && typeof addMail === 'function') {
+        addMail({ sender: CORPORATION_SENDER, subject: `📑 Ukryte zobowiązania: ${stock.name}`, body: `${text} To poręczenia, pozwy albo kary, których nie było w bilansie.`, importance: 3, symbol: stock.symbol });
+        if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('ukryte_zobowiazania');
+    }
+    return value;
+}
+
 function processAccountingQuarterly() {
     const quarter = getAccountingQuarter();
     const listed = stocks.filter(s => !s.assetType && !s.isBankrupt);
+    for (const stock of listed) { // 0.15.1 M3
+        if (!stock.hiddenChecked) rollHiddenLiabilities(stock);
+        else if (stock.hiddenLiabilities > 0 && Math.random() < HIDDEN_LIABILITY_SPONTANEOUS) revealHiddenLiabilities(stock, 'sprawa sądowa');
+    }
     let active = listed.filter(s => s.fraud).length;
     const knf = typeof getInstitutionEffectiveness === 'function' && typeof oversight === 'object' ? getInstitutionEffectiveness(oversight.knf) : 0.3;
 
@@ -9661,9 +9700,12 @@ function finishAudit(stock) {
     audit.missed = Boolean(fraud) && Math.random() < AUDIT_MISS_CHANCE;
     audit.clean = !fraud || audit.missed;
     audit.inflation = fraud && !audit.missed ? fraud.total : 0;
-    const body = audit.clean
+    const hidden = stock.hiddenLiabilities > 0 && Math.random() < HIDDEN_LIABILITY_AUDIT_FIND ? revealHiddenLiabilities(stock, 'audyt') : 0; // 0.15.1 M3
+    audit.hiddenFound = hidden;
+    const body = (audit.clean
         ? `Audyt ${stock.name}: sprawozdania rzetelne, bez istotnych zastrzeżeń.`
-        : `Audyt ${stock.name}: zysk zawyżony o ok. ${formatZl(audit.inflation, 0)} (fikcyjne należności). Korekta wyników jest kwestią czasu.`;
+        : `Audyt ${stock.name}: zysk zawyżony o ok. ${formatZl(audit.inflation, 0)} (fikcyjne należności). Korekta wyników jest kwestią czasu.`)
+        + (hidden ? ` Audytor ujawnił ukryte zobowiązania: ${formatZl(hidden, 0)}.` : '');
     if (typeof addMail === 'function') addMail({ sender: CORPORATION_SENDER, subject: audit.clean ? `🔍 Audyt ${stock.symbol}: czysto` : `🔍 Audyt ${stock.symbol}: NIEPRAWIDŁOWOŚCI`, body, importance: audit.clean ? 2 : 3, symbol: stock.symbol });
 }
 

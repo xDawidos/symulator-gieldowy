@@ -8682,6 +8682,27 @@ group('0.15.1: Sztuka przejęć (arbitraż, oferty, due diligence, pakiety, wezw
         assertEq(genealogyLog.length, 3, 'dziennik po wczytaniu');
     });
 
+    test('M3: ukryte zobowiązania u 12% spółek (×2 przy skorumpowanym prezesie); ujawnienie: dług +, kurs − wartość na akcję', () => {
+        world();
+        let n = 0, nCorrupt = 0;
+        for (let i = 0; i < 5000; i++) {
+            const s = makeCompany('H' + i, { liabilities: 1_000_000 }); s.financialHealth = 1;
+            if (rollHiddenLiabilities(s) > 0) { n++; assert(s.hiddenLiabilities >= 50_000 - 1 && s.hiddenLiabilities <= 200_000 + 1, '5–20% długu'); }
+            const c = makeCompany('K' + i, { liabilities: 1_000_000 }); c.financialHealth = 1; c.ceo = { traits: [{ id: 'skorumpowany' }] };
+            if (rollHiddenLiabilities(c) > 0) nCorrupt++;
+        }
+        assert(Math.abs(n / 5000 - 0.12) <= 0.02, `udział ${n / 5000}`);
+        assert(Math.abs(nCorrupt / 5000 - 0.24) <= 0.025, `skorumpowany ${nCorrupt / 5000}`);
+        const { b } = world();
+        b.balanceSheet.liabilities = 500_000; b.hiddenLiabilities = 100_000;
+        const liab0 = b.balanceSheet.liabilities, eq0 = b.balanceSheet.assets - b.balanceSheet.liabilities, price0 = b.price;
+        revealHiddenLiabilities(b, 'test');
+        assertEq(b.balanceSheet.liabilities, liab0 + 100_000, 'zobowiązania + wartość');
+        assertNear(b.balanceSheet.assets - b.balanceSheet.liabilities, eq0 - 100_000, 'kapitał − wartość');
+        assertNear(price0 - b.price, 100_000 / b.totalShares, 'kurs − wartość na akcję', 0.5);
+        assertEq(b.hiddenLiabilities, 0, 'ujawnione raz');
+    });
+
     test('M1: fuzja (wymiana akcji) bez skoku do ceny gotówkowej; etap 5 bez ×1,1', () => {
         const { a, b } = world();
         const pre = b.price;
