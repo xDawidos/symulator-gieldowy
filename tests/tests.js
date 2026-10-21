@@ -8798,6 +8798,27 @@ group('0.15.1: Sztuka przejęć (arbitraż, oferty, due diligence, pakiety, wezw
         assertEq(blockDealState.log.length, 1, 'transakcja w dzienniku pakietów (dla KNF)');
     });
 
+    test('M5: ustawa „Próg wezwania” — start 66%, partie nie przeforsują progu ponad limit KNF; zapis i stary zapis', () => {
+        world();
+        ensureSocietyState();
+        society.laws.tenderThreshold = 0;
+        assertEq(getTenderThreshold(), 0.66, 'start 66%');
+        oversight.knf.level = 1;
+        for (let i = 0; i < 300; i++) { const c = pickLawChange('people'); assert(!(c && c[0] === 'tenderThreshold'), 'KNF 0–1: bez podniesienia progu'); }
+        oversight.knf.level = 4;
+        let up = 0; for (let i = 0; i < 300; i++) { const c = pickLawChange('people'); if (c && c[0] === 'tenderThreshold') up++; }
+        assert(up > 0, 'KNF 4: Ludowcy mogą podnieść próg');
+        society.laws.tenderThreshold = 3;
+        assertEq(getTenderThreshold(), 0.99, '99%');
+        const snap = JSON.parse(JSON.stringify(buildSaveSnapshot()));
+        applySaveSnapshot(snap);
+        assertEq(society.laws.tenderThreshold, 3, 'po wczytaniu');
+        delete snap.society.laws.tenderThreshold;
+        applySaveSnapshot(snap);
+        assertEq(society.laws.tenderThreshold, 0, 'stary zapis: 66%');
+        oversight.knf.level = 0;
+    });
+
     test('M1: fuzja (wymiana akcji) bez skoku do ceny gotówkowej; etap 5 bez ×1,1', () => {
         const { a, b } = world();
         const pre = b.price;

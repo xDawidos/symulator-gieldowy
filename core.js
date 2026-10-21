@@ -5042,8 +5042,22 @@ const SOCIAL_LAWS = {
     minWage:  { name: 'Płaca minimalna',      icon: '💵', levels: ['brak', 'niska', 'średnia', 'wysoka'], start: 1 },
     benefits: { name: 'Zasiłki',              icon: '🤲', levels: ['brak', 'niskie', 'średnie', 'wysokie'], start: 1 },
     housing:  { name: 'Mieszkania socjalne',  icon: '🏘️', levels: ['brak', 'program', 'duży program'], start: 1 },
-    rights:   { name: 'Prawa pracownicze',    icon: '⚖️', levels: ['liberalne', 'standardowe', 'ochronne'], start: 1 }
+    rights:   { name: 'Prawa pracownicze',    icon: '⚖️', levels: ['liberalne', 'standardowe', 'ochronne'], start: 1 },
+    // 0.15.1 M5: do jakiego udziału trzeba ogłosić wezwanie po przekroczeniu 50% transakcjami pakietowymi
+    tenderThreshold: { name: 'Próg wezwania', icon: '📣', levels: ['66%', '75%', '90%', '99%'], start: 0 }
 };
+const TENDER_THRESHOLD_VALUES = [0.66, 0.75, 0.90, 0.99];
+
+/** Próg wezwania z ustawy (udział). */
+function getTenderThreshold() {
+    return TENDER_THRESHOLD_VALUES[Number(society?.laws?.tenderThreshold) || 0] ?? 0.66;
+}
+
+/** Najwyższy poziom progu wezwania, na jaki pozwala KNF: 0–1 → 66%, 2 → 75%, 3 → 90%, 4–5 → 99%. */
+function getTenderThresholdKnfCap() {
+    const level = Number(typeof oversight === 'object' ? oversight?.knf?.level : 0) || 0;
+    return level <= 1 ? 0 : level === 2 ? 1 : level === 3 ? 2 : 3;
+}
 const MIN_WAGE_STEP = 0.04;          // płace pracowników i taniej siły +4% na poziom
 const HOUSING_PROGRAM_QUARTERS = 8;
 const RIGHTS_SATISFACTION = [0, 5, 10];
@@ -5051,9 +5065,9 @@ const RIGHTS_UNION_MULT = [0.7, 1, 1.5];
 
 // Programy partii: kierunek zmian ustaw i priorytet edukacji.
 const PARTY_PROGRAMS = {
-    market: { moves: [['minWage', -1], ['benefits', -1], ['housing', -1], ['rights', -1]], education: 'high', deficit: 'cut' },
-    state:  { moves: [['rights', 1], ['housing', 1]], education: 'high', deficit: 'cit' },
-    people: { moves: [['minWage', 1], ['benefits', 1], ['housing', 1]], education: 'medium', deficit: 'cit' }
+    market: { moves: [['minWage', -1], ['benefits', -1], ['housing', -1], ['rights', -1], ['tenderThreshold', -1]], education: 'high', deficit: 'cut' },
+    state:  { moves: [['rights', 1], ['housing', 1], ['tenderThreshold', 1]], education: 'high', deficit: 'cit' },
+    people: { moves: [['minWage', 1], ['benefits', 1], ['housing', 1], ['tenderThreshold', 1]], education: 'medium', deficit: 'cit' }
 };
 // Preferencje wyborcze klas: [Ludowcy, Blok Państwowy, Koalicja Rynkowa].
 const CLASS_VOTE = { poor: [50, 35, 15], lowerMid: [35, 35, 30], mid: [20, 35, 45], upperMid: [10, 30, 60], rich: [5, 20, 75], veryRich: [5, 15, 80] };
@@ -5463,6 +5477,7 @@ function pickLawChange(partyId = getLawMakingParty()) {
     const program = PARTY_PROGRAMS[partyId] || PARTY_PROGRAMS.market;
     const options = program.moves.filter(([law, delta]) => {
         const level = Number(society.laws[law]) || 0;
+        if (law === 'tenderThreshold' && level + delta > getTenderThresholdKnfCap()) return false; // partia nie przeforsuje progu ponad limit KNF
         return level + delta >= 0 && level + delta < SOCIAL_LAWS[law].levels.length;
     });
     return options.length ? getRandomElement(options) : null;
