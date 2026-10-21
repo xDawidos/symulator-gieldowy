@@ -8356,6 +8356,16 @@ group('0.15.0.1: Poprawki 0.15 (bezpiecznik, margin call, pieniądze, emisje, kr
         } finally { getDisplayedFairValue = orig; }
     });
 
+    test('Po C7: każda zwykła spółka ma fazę (także z bilansem w definicji, z IPO i ze starego zapisu)', () => {
+        const { a, b } = world();
+        delete a.corporatePhase; a.companyAge = undefined; a.financialHealth = 2; a.exchange = 'BRONZE';
+        delete b.corporatePhase; b.companyAge = 40; b.financialHealth = -3;
+        updateCorporatePhase(a); updateCorporatePhase(b);
+        assert(Object.values(CORPORATE_PHASES).includes(a.corporatePhase) && Number.isFinite(a.companyAge), `faza i wiek nadane: ${a.corporatePhase}, ${a.companyAge}`);
+        assert(Object.values(CORPORATE_PHASES).includes(b.corporatePhase), `słaba spółka: ${b.corporatePhase}`);
+        assertEq(PHASE_GROWTH_ADJUSTMENT[CORPORATE_PHASES.DECLINE], -0.015, 'Spadek: −1,5 pp na kwartał');
+    });
+
     test('C4: akcje = posiadacze po emisji i skupie z walnego; news i hasło Akademii dla spółki z portfela', () => {
         const { a } = world();
         playerPortfolio.AAA = { shares: 2000, avgPrice: 100, assetType: 'stock' };

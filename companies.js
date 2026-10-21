@@ -1051,7 +1051,7 @@ const CORPORATE_PHASES = {
 const CORPORATE_PHASE_INFO = {
     'Wzrost': { duration: 'do pogorszenia kondycji albo ok. 5 lat', text: 'Spółka rośnie: przychody +1,5 pp na kwartał ponad normę, kurs dostaje lekki wiatr w plecy, zmienność trochę wyższa.' },
     'Stabilność': { duration: 'bez limitu', text: 'Dojrzała spółka: przychody bez premii fazy, niższa zmienność kursu.' },
-    'Spadek': { duration: 'do poprawy kondycji (szansa na reorganizację)', text: 'Przychody −2 pp na kwartał, kurs pod presją, większa zmienność, badania wolniej (−30%).' },
+    'Spadek': { duration: 'do poprawy kondycji (szansa na reorganizację)', text: 'Przychody −1,5 pp na kwartał, kurs pod presją, większa zmienność, badania wolniej (−30%).' },
     'Reorganizacja': { duration: 'do kondycji ≥ 2 (stabilność) albo < −3 (spadek)', text: 'Plan naprawczy: przychody lekko w dół (−0,5 pp), najwyższa zmienność wśród faz zwykłych.' },
     'Złoty Rok ✨': { duration: '4 kwartały', text: 'Rzadki okres prosperity: przychody +3 pp na kwartał, kurs rośnie szybciej, zmienność niższa.' },
     'Zejście w Cień 👻': { duration: '3–6 kwartałów', text: 'Rzadki głęboki kryzys: przychody −4 pp na kwartał, silna presja na kurs, wysoka zmienność, badania wolniej.' },
@@ -2382,6 +2382,19 @@ function createBankStockObject(bank, exchangeLevel = 'SILVER') {
     return newBankStock;
 }
 
+/**
+ * Faza i wiek spółki na start (0.15.0.1: także spółki z bilansem w definicji, z IPO, córki i stare zapisy —
+ * wcześniej ok. połowa zwykłych spółek nie miała fazy i nigdy jej nie zmieniała).
+ */
+function assignInitialCorporatePhase(stock) {
+    if (!Number.isFinite(stock.companyAge)) stock.companyAge = getRandomIntInRange(1, 5) + (exchanges[stock.exchange]?.level ?? 0) * 8;
+    const health = Number(stock.financialHealth) || 0;
+    if (stock.companyAge < 12 && health >= 1) stock.corporatePhase = CORPORATE_PHASES.GROWTH;
+    else if (health <= -2) stock.corporatePhase = CORPORATE_PHASES.DECLINE;
+    else stock.corporatePhase = CORPORATE_PHASES.STABILITY;
+    stock.phaseTimer = 0;
+}
+
 function initializeBalanceSheetForStock(stock) {
 
 
@@ -2433,17 +2446,8 @@ function initializeBalanceSheetForStock(stock) {
     stock.quarterlyEarnings = 0;
     stock.cash = assets * getRandomInRange(0.01, 0.05);
 
-    const exchangeLevel = exchanges[stock.exchange]?.level ?? 0;
-    stock.companyAge = getRandomIntInRange(1, 5) + exchangeLevel * 8;
-
-    if (stock.companyAge < 12 && stock.financialHealth >= 1) {
-        stock.corporatePhase = CORPORATE_PHASES.GROWTH;
-    } else if (stock.financialHealth <= -2) {
-        stock.corporatePhase = CORPORATE_PHASES.DECLINE;
-    } else {
-        stock.corporatePhase = CORPORATE_PHASES.STABILITY;
-    }
-    stock.phaseTimer = 0;
+    stock.companyAge = null;
+    assignInitialCorporatePhase(stock);
     
     if (stock.bankAccountId) {
         const bank = commercialBanks.find(b => b.id === stock.bankAccountId);
@@ -2498,7 +2502,7 @@ const FUNDAMENTALS_HISTORY_QUARTERS = 8;
 const PHASE_GROWTH_ADJUSTMENT = {
     [CORPORATE_PHASES.GROWTH]: 0.015,
     [CORPORATE_PHASES.STABILITY]: 0,
-    [CORPORATE_PHASES.DECLINE]: -0.02,
+    [CORPORATE_PHASES.DECLINE]: -0.015, // 0.15.0.1: było −0,02 (najsłabsze spółki nieco łagodniej)
     [CORPORATE_PHASES.REORGANIZATION]: -0.005,
     [CORPORATE_PHASES.GOLDEN_YEAR]: 0.03,
     [CORPORATE_PHASES.SHADOW_DESCENT]: -0.04,
@@ -4625,6 +4629,7 @@ function updateHoldingCompanies() {
     function updateCorporatePhase(stock) {
     // Pomiń typy specjalne i bankrutów
     if (stock.assetType || stock.isBankStock || stock.isBankrupt) return;
+    if (!stock.corporatePhase) assignInitialCorporatePhase(stock);
 
     stock.companyAge++; // Firma starzeje się o kwartał
 
@@ -4694,7 +4699,7 @@ function updateHoldingCompanies() {
             case CORPORATE_PHASES.DECLINE:
                 if (health <= -5) { // Bardzo źle - ryzyko bankructwa (obsługiwane w processFinancialReports)
                     // Pozostaje w Decline, ale może wejść w Reorganizację po evencie ratunkowym
-                } else if (health >= 0 && Math.random() < 0.2) { // Lekka poprawa - szansa na Reorganizację
+                } else if (health >= 0 && Math.random() < 0.3) { // Lekka poprawa - szansa na Reorganizację (0.15.0.1: było 20%)
                     nextPhase = CORPORATE_PHASES.REORGANIZATION;
                     transitionReason = "próby restrukturyzacji";
                 }
