@@ -786,7 +786,12 @@ const PROBE = `(function () {
         return { ...p0151, ma: s.ma ? s.ma.finish() : null, h0, tsr, moneyWarn: s.moneyWarn || [], moneyWarnQuarters: s.moneyWarnQuarters || 0, poolStake: s.poolStake, wallet: window.__wallet || null, presetErrors: window.__presetErrors || [], sectorIssues, saveSizes, subStart: s.subStart, subEnd: s.subEnd, multiSegEnd: s.multiSeg, mechanics: s.mechanics || null, badPrice: s.badPrice, negCash: s.negCash, mailBy: s.mailBy, bailouts: s.bailouts, flowWarnings: s.flowWarnings, fund: s.fund, panelText: panel ? panel.textContent.split(/\\s+/).join(' ').slice(0, 600) : null, panelError: s.panelError || null, elections: (macro.election?.history || []).filter(e => e.quarter >= s.quarters[0].q),
             lawChanges: soc ? { ...soc.lawChanges } : null, laws: soc ? { ...soc.laws } : null,
             invariants: typeof checkWorldInvariants === 'function' ? checkWorldInvariants().slice(0, 5) : null, invLog: s.invLog, trimWarnings: s.trimWarnings,
-            trims: typeof ghostTrimLog !== "undefined" ? ghostTrimLog.length : null, spinDiag: window.__spinDiag || null, diag: window.__haltDiag || null, offers: window.__offerLog || null };
+            trims: typeof ghostTrimLog !== "undefined" ? ghostTrimLog.length : null, spinDiag: window.__spinDiag || null, diag: window.__haltDiag || null, offers: window.__offerLog || null,
+            genealogy: typeof genealogyLog !== 'undefined' ? (() => { const k = {}; for (const e of genealogyLog) k[e.kind] = (k[e.kind] || 0) + 1; return { kinds: k, campaigns: genealogyLog.filter(e => e.kind === 'stake' && /rozpoczyna/.test(e.note || '')).length, renames: genealogyLog.filter(e => e.kind === 'rename').length }; })() : null,
+            hiddenLiab: stocks.filter(x => !x.assetType && !x.isBankrupt).reduce((o, x) => { o.n++; if (x.hiddenLiabilities > 0) o.open++; if (x.hiddenRevealed) o.revealed++; return o; }, { n: 0, open: 0, revealed: 0 }),
+            goodwill: stocks.reduce((o, x) => { if (x.acquisitions?.length) { o.acq += x.acquisitions.length; o.impaired += x.acquisitions.filter(a => a.left < a.goodwill).length; } return o; }, { acq: 0, impaired: 0 }),
+            bsGap: stocks.filter(x => !x.assetType && !x.isBankrupt && !x.isBankStock && x.balanceSheet).filter(x => { const b = x.balanceSheet; const gap = b.assets - b.liabilities - (Number(b.shareCapital) || 0) - (Number(b.retainedEarnings) || 0); return Math.abs(gap) > Math.max(1, Math.abs(b.assets) * 0.001); }).length,
+            law: typeof society === 'object' ? { tender: society.laws?.tenderThreshold, changes: society.lawChanges?.tenderThreshold || 0 } : null };
     };
 })();`;
 
