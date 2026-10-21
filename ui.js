@@ -4113,6 +4113,7 @@ function renderCompanyCard() {
             </div>
         </div>
         ${renderSegmentBar(stock)}
+        ${typeof renderMergerArbLine === 'function' ? renderMergerArbLine(stock) : ''}
         ${typeof renderDividendBadges === 'function' ? renderDividendBadges(stock) : ''}
         ${stock.pendingDividend ? `<p class="text-sm cc-exdiv">Ogłoszona dywidenda <strong>${formatZl(stock.pendingDividend.dps)} na akcję</strong> — dzień odcięcia za ok. ${Math.max(1, Math.round(stock.dividendTimer / BASE_DELAYS.weekly))} tydz. gry. Dywidendę dostaje, kto ma akcje w dniu odcięcia; tego dnia kurs spada o mniej więcej jej wartość.</p>` : ''}`;
 

@@ -2100,8 +2100,9 @@ group('Obrony i wrogie przejęcia (etap G2)', () => {
         fundHolds(b, 6000);
         playerCash = 1_000_000;
         withRandom(0.99, () => initiateMergerProcess(a, b, 'przejęcie', 'cash', 0.3));
+        const pillCost = Math.round(getMarketCapValue(b) * 0.05); // 0.15.1 M1: kapitalizacja celu po ogłoszeniu (kurs ≈ oferta − spread)
         assert(activateDefenseMechanism('BBB', 'poisonPill', 'player'), 'aktywna');
-        assert(playerCash === 1_000_000 - 50_000 && a.mergerProcess.defenseActive === 'poisonPill' && b.mergerProcess.defenseActive === 'poisonPill', 'koszt i stan');
+        assert(playerCash === 1_000_000 - pillCost && a.mergerProcess.defenseActive === 'poisonPill' && b.mergerProcess.defenseActive === 'poisonPill', 'koszt i stan');
         assert(!activateDefenseMechanism('BBB', 'negotiate', 'player'), 'druga obrona zablokowana');
     });
 
@@ -8533,6 +8534,64 @@ group('0.15.0.1: Poprawki 0.15 (bezpiecznik, margin call, pieniądze, emisje, kr
         assertNear(getQueuedRedemptionUnits(), queued, 'kolejka po wczytaniu');
         assert(getFundFlowStats().current.gateTriggered, 'stan bramki po wczytaniu');
         assert(isMarketHalted() && isMarketCrashing(), 'wstrzymanie i krach po wczytaniu');
+    });
+});
+
+group('0.15.1: Sztuka przejęć (arbitraż, oferty, due diligence, pakiety, wezwanie, wartość firmy)', () => {
+    function world() {
+        const a = makeCompany('AAA', { cash: 5_000_000 }), b = makeCompany('BBB'), c = makeCompany('CCC', { sector: ['Żywność'] });
+        marketHalt = createMarketHaltState(); marketCrash = createMarketCrashState();
+        a.name = 'Alfa Testowa'; b.name = 'Beta Testowa'; c.name = 'Gamma Testowa';
+        resetWorld([a, b, c]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        initMarketRegimes();
+        return { a, b, c };
+    }
+
+    test('M1: kurs celu po ogłoszeniu = oferta × (1 − spread); inicjator −1% za 10 pp premii ponad 20%', () => {
+        const { a, b } = world();
+        const initPre = a.price;
+        assert(initiateMergerProcess(a, b, 'przejęcie', 'cash', 0.50, { friendly: true }), 'start');
+        const p = b.mergerProcess;
+        assertNear(p.arb.preDealPrice, 100, 'cena sprzed ogłoszenia');
+        assertNear(b.price, p.offerDetails.buyoutPricePerShare * (1 - p.arb.spread), 'kurs celu = oferta × (1 − spread)', 0.005);
+        assert(p.arb.spread >= 0.03 && p.arb.spread <= 0.15, `spread ${p.arb.spread}`);
+        assertNear(a.price / initPre, 0.97, 'premia 50% → inicjator −3%', 1e-6);
+    });
+
+    test('M1: spread maleje z etapem; cel wraca do kotwicy arbitrażu', () => {
+        const { a, b } = world();
+        initiateMergerProcess(a, b, 'przejęcie', 'cash', 0.25, { friendly: true });
+        const s1 = a.mergerProcess.arb.spread;
+        a.mergerProcess.stage = 5;
+        updateMergerSpread(a, b, a.mergerProcess);
+        syncPartnerProcess(a, b);
+        assert(b.mergerProcess.arb.spread < s1, `spread ${s1} → ${b.mergerProcess.arb.spread}`);
+        const anchor = getMergerArbAnchor(b);
+        b.price = anchor * 0.8;
+        for (let i = 0; i < 600; i++) updateStockPrices();
+        assert(b.price > anchor * 0.8 && Math.abs(b.price / anchor - 1) < 0.15, `kurs wraca do ${anchor}: ${b.price}`);
+    });
+
+    test('M1: zerwanie — kurs celu w ±5% ceny sprzed ogłoszenia; inicjator z premią 120% najwyżej −8%', () => {
+        const { a, b } = world();
+        const initPre = a.price;
+        initiateMergerProcess(a, b, 'przejęcie', 'cash', 1.2, { friendly: true });
+        assertNear(a.price / initPre, 0.92, 'limit −8%', 1e-6);
+        cancelMerger(a, 'test'); cancelMerger(b, 'test');
+        assert(Math.abs(b.price / 100 - 1) <= 0.05 + 1e-9, `po zerwaniu ${b.price}`);
+        assert(!b.mergerProcess && !a.mergerProcess, 'proces wyczyszczony');
+    });
+
+    test('M1: fuzja (wymiana akcji) bez skoku do ceny gotówkowej; etap 5 bez ×1,1', () => {
+        const { a, b } = world();
+        const pre = b.price;
+        initiateMergerProcess(a, b, 'fuzja', 'stockSwap');
+        assertEq(b.price, pre, 'bez skoku kursu celu');
+        assert(b.mergerProcess.arb.spread >= 0.03 && b.mergerProcess.arb.spread <= 0.08, 'spread fuzji 3–8%');
+        a.mergerProcess.stage = 5; const before = b.price;
+        runMergerStage(a, b, a.mergerProcess);
+        assertEq(b.price, before, 'etap 5 nie podnosi kursu');
     });
 });
 

@@ -3742,6 +3742,10 @@ function updateStockPrices() {
 
         changePct += drift;
 
+        // 0.15.1 M1: cel przejęcia wraca do ceny oferty minus spread (zwykłe tempo), szum o połowę mniejszy.
+        const dealAnchor = stock.mergerProcess && typeof getMergerArbAnchor === 'function' ? getMergerArbAnchor(stock) : null;
+        if (dealAnchor > 0) changePct = noise * 0.5 + PRICE_MEAN_REVERSION_PER_TICK * Math.max(-0.9, Math.min(3, dealAnchor / price - 1));
+
         stock.price = price * (1 + Math.max(-0.2, Math.min(0.2, changePct)));
         if (stock.price <= 0.01) {
             stock.price = 0.01;

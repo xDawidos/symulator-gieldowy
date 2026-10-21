@@ -66,6 +66,88 @@ function getFundStakePct(stock) {
 // =================================================================================
 
 /** Kopia stanu procesu u partnera (cel widzi to samo, ale nie prowadzi procesu). */
+// =================================================================================
+// 0.15.1 M1: ARBITRAŻ FUZJI — kurs celu = cena oferty × (1 − spread)
+// =================================================================================
+
+const MERGER_SPREAD_MAX = 0.15;
+
+/** Spread ryzyka transakcji: podstawa 3%, wrogie / obrona +4 pp, LBO +3 pp, antymonopol +4 pp, +1 pp za każdy etap do końca. */
+function getMergerSpread(initiator, target, process) {
+    const stagesLeft = Math.max(0, 7 - (Number(process.stage) || 1));
+    if (process.type === 'fuzja') return Math.min(0.08, 0.03 + stagesLeft / 6 * 0.05); // wymiana akcji: 3–8%
+    let spread = 0.03 + stagesLeft * 0.01;
+    if (process.hostile || process.defenseActive) spread += 0.04;
+    if (process.financing === 'lbo') spread += 0.03;
+    if (isMergerAntitrustRisky(initiator, target)) spread += 0.04;
+    return Math.min(MERGER_SPREAD_MAX, spread);
+}
+
+/** Ryzyko antymonopolowe: inicjator i cel mają razem > 25% kapitalizacji sektora celu. */
+function isMergerAntitrustRisky(initiator, target) {
+    const sector = getMainSector(target);
+    const sectorCap = stocks.filter(s => !s.assetType && !s.isBankrupt && getMainSector(s) === sector).reduce((sum, s) => sum + getMarketCapValue(s), 0);
+    const joint = getMarketCapValue(target) + (getMainSector(initiator) === sector ? getMarketCapValue(initiator) : 0);
+    return sectorCap > 0 && joint / sectorCap > 0.25;
+}
+
+/** Kurs, do którego wraca cel w trakcie procesu (null: zwykły powrót do wartości godziwej). */
+function getMergerArbAnchor(stock) {
+    const process = stock?.mergerProcess;
+    if (!process?.arb || process.initiatorSymbol === stock.symbol) return null;
+    if (process.type === 'fuzja') {
+        const initiator = stocks.find(s => s.symbol === process.initiatorSymbol);
+        return initiator ? initiator.price * process.arb.parity * (1 - process.arb.spread) : null;
+    }
+    const offer = Number(process.offerDetails?.buyoutPricePerShare) || 0;
+    return offer > 0 ? offer * (1 - process.arb.spread) : null;
+}
+
+/** Ogłoszenie przejęcia (gotówka, LBO) albo fuzji: skok kursu celu do ceny oferty minus spread, reakcja inicjatora. */
+function announceMergerArbitrage(initiator, target) {
+    const process = initiator.mergerProcess;
+    if (!process || !['przejęcie', 'fuzja'].includes(process.type)) return;
+    const premium = Number(process.offerDetails?.premium) || 0;
+    process.arb = { preDealPrice: target.price, parity: initiator.price > 0 ? target.price / initiator.price : 0, spread: 0 };
+    process.arb.spread = getMergerSpread(initiator, target, process);
+    if (process.type === 'przejęcie') {
+        const anchor = getMergerArbAnchor({ ...target, mergerProcess: process });
+        if (anchor > 0) target.price = anchor;
+        initiator.price *= 1 - Math.min(0.08, Math.max(0, (premium - 0.20) / 0.10 * 0.01)); // −1% za każde 10 pp premii ponad 20%
+    }
+    if (process.financing === 'stockSwap' || process.type === 'fuzja') initiator.price *= 0.97; // rozwodnienie
+    syncPartnerProcess(initiator, target);
+    if (typeof pushNews === 'function') pushNews(process.type === 'fuzja'
+        ? `${initiator.name} ogłasza fuzję z ${target.name} (wymiana akcji)`
+        : `${initiator.name} ogłasza ${process.hostile ? 'wrogie ' : ''}wezwanie na ${target.name}: ${formatZl(process.offerDetails.buyoutPricePerShare)} za akcję (premia ${Math.round(premium * 100)}%)`, target.symbol);
+    if (typeof unlockAcademyEntry === 'function' && ((playerPortfolio?.[target.symbol]?.shares || 0) > 0 || (playerPortfolio?.[initiator.symbol]?.shares || 0) > 0)) unlockAcademyEntry('premia_przejecia');
+}
+
+/** Co kwartał (inicjator): spread maleje z etapem. */
+function updateMergerSpread(initiator, target, process) {
+    if (process.arb) process.arb.spread = getMergerSpread(initiator, target, process);
+}
+
+/** Zerwanie: kurs celu wraca w okolice ceny sprzed ogłoszenia (±5%). Wołane przed wyczyszczeniem procesu. */
+function onMergerArbitrageCancelled(stock) {
+    const process = stock?.mergerProcess;
+    if (!process?.arb || process.arb.cancelled) return;
+    process.arb.cancelled = true;
+    const target = process.initiatorSymbol === stock.symbol ? stocks.find(s => s.symbol === process.partnerSymbol) : stock;
+    if (!target) return;
+    const anchor = getMergerArbAnchor(target);
+    if (anchor > 0 && process.type === 'przejęcie') target.price *= process.arb.preDealPrice / anchor * (1 + getRandomInRange(-0.05, 0.05));
+    if (typeof pushNews === 'function') pushNews(`Zerwane przejęcie: ${target.name} — kurs wraca w okolice ceny sprzed oferty`, target.symbol);
+}
+
+/** Linia w karcie spółki-celu. */
+function renderMergerArbLine(stock) {
+    const process = stock?.mergerProcess;
+    if (!process?.arb || process.initiatorSymbol === stock.symbol) return '';
+    const offer = process.type === 'fuzja' ? null : process.offerDetails?.buyoutPricePerShare;
+    return `<p class="text-sm cc-arb">W trakcie ${process.type === 'fuzja' ? 'fuzji' : 'przejęcia'} przez ${escapeHtml(process.initiatorSymbol)}: ${offer ? `oferta ${formatZl(offer)} · ` : ''}kurs ${formatZl(stock.price)} · spread ${formatNumberPl(process.arb.spread * 100, 1)}% · etap ${process.stage}/7</p>`;
+}
+
 function syncPartnerProcess(stock, partner) {
     if (!partner?.mergerProcess || !stock.mergerProcess) return;
     Object.assign(partner.mergerProcess, stock.mergerProcess, { partnerSymbol: stock.symbol });
@@ -132,6 +214,7 @@ function advanceMergerProcess(stock) {
         process.complications = 0;
         if (!runMergerStage(stock, partner, process)) return;
     }
+    updateMergerSpread(stock, partner, process);
     syncPartnerProcess(stock, partner);
     if (typeof displayStocks === 'function') displayStocks(getCurrentInputValues());
 }
@@ -181,8 +264,7 @@ function runMergerStage(stock, partner, process) {
             process.statusMessage = 'Etap 5: integracja operacyjna…';
             stock.mergerPartnerVisible = true;
             partner.mergerPartnerVisible = true;
-            partner.isBeingMerged = true;
-            partner.price *= 1.1;
+            partner.isBeingMerged = true; // 0.15.1 M1: bez skoku kursu — cel idzie za ceną oferty minus spread
             return true;
         case 6:
             process.statusMessage = 'Etap 6: finalizacja umowy i transfery…';

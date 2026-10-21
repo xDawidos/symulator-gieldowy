@@ -792,6 +792,26 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Ile trwa wstrzymanie handlu przy bezpieczniku 1. stopnia (-10%)?', a: ['15 sekund', 'Cały miesiąc', '24 godziny'], c: 0 }
         ]
     },
+    premia_przejecia: {
+        title: 'Premia za przejęcie', icon: '🤝',
+        text: 'Kupujący całą spółkę płaci więcej niż kurs giełdowy — to premia za przejęcie (zwykle 20–40%). Płaci za kontrolę: może połączyć firmy, obciąć koszty, wykorzystać synergie. Kurs celu po ogłoszeniu skacze w okolice ceny oferty, a kurs kupującego często spada — rynek boi się, że przepłacił.',
+        example: () => { const s = stocks.find(x => x.mergerProcess?.arb && x.mergerProcess.initiatorSymbol !== x.symbol && x.mergerProcess.type === 'przejęcie'); return s ? `${s.name}: oferta ${formatZl(s.mergerProcess.offerDetails.buyoutPricePerShare)} za akcję, premia ${Math.round((s.mergerProcess.offerDetails.premium || 0) * 100)}%.` : 'Teraz nikt nie przejmuje spółki na giełdzie.'; },
+        quiz: [
+            { q: 'Kurs 100 PLN, oferta 130 PLN za akcję. Ile wynosi premia?', a: ['30%', '130%', '23%'], c: 0 },
+            { q: 'Dlaczego kurs kupującego często spada po ogłoszeniu przejęcia?', a: ['Rynek boi się, że kupujący przepłacił', 'Bo kupujący dostaje gotówkę', 'Bo cel bankrutuje'], c: 0 },
+            { q: 'Za co kupujący płaci premię?', a: ['Za kontrolę i spodziewane synergie', 'Za prowizję maklera', 'Za podatek od transakcji'], c: 0 }
+        ]
+    },
+    arbitraz_fuzji: {
+        title: 'Arbitraż fuzji', icon: '⚖️',
+        text: 'Po ogłoszeniu przejęcia kurs celu nie dochodzi do pełnej ceny oferty — zostaje różnica (spread). To cena ryzyka: transakcja może się nie udać (urząd antymonopolowy, obrona zarządu, brak finansowania). Kto kupi akcje celu, zarobi spread, jeśli transakcja dojdzie do skutku, ale straci, gdy zostanie zerwana — wtedy kurs wraca w okolice ceny sprzed oferty. Spread maleje, gdy transakcja się zbliża.',
+        example: () => { const s = stocks.find(x => x.mergerProcess?.arb && x.mergerProcess.initiatorSymbol !== x.symbol); return s ? `${s.name}: spread ${formatNumberPl(s.mergerProcess.arb.spread * 100, 1)}%, etap ${s.mergerProcess.stage}/7.` : 'Spread zobaczysz w karcie spółki, gdy trwa przejęcie.'; },
+        quiz: [
+            { q: 'Oferta 100 PLN, kurs celu 94 PLN. Ile wynosi spread?', a: ['6%', '94%', '106%'], c: 0 },
+            { q: 'Co się dzieje z kursem celu po zerwaniu przejęcia?', a: ['Wraca w okolice ceny sprzed oferty', 'Rośnie do ceny oferty', 'Spółka znika z giełdy'], c: 0 },
+            { q: 'Kiedy spread jest największy?', a: ['Na początku procesu i przy wrogim przejęciu', 'Dzień przed rozliczeniem', 'Gdy nikt nie przejmuje spółki'], c: 0 }
+        ]
+    },
     emisje_skupy: {
         title: 'Emisje i skupy w cyklu rynku', icon: '🔁',
         text: 'Zarząd sam wybiera moment emisji i skupu akcji. Gdy rynek płaci za akcje dużo (hossa, wysoka wycena), spółka chętnie sprzedaje nowe akcje — dostaje dużo gotówki za mały kawałek firmy, ale dotychczasowi akcjonariusze mają mniejszy udział w zysku (rozwodnienie). Gdy akcje są tanie (bessa, panika), spółka z zapasem gotówki skupuje własne akcje — zostaje ich mniej, więc każda daje większy udział w zysku.',
@@ -969,6 +989,7 @@ function checkAcademyTriggers() {
     if (held.some(s => s.lastReport && s.lastReport !== 'brak')) unlockAcademyEntry('raport');
     if (held.some(s => s.lastDividend)) unlockAcademyEntry('dywidenda');
     if (held.some(s => s.mergerProcess)) unlockAcademyEntry('fuzje');
+    if (held.some(s => s.mergerProcess?.arb && s.mergerProcess.initiatorSymbol !== s.symbol)) { unlockAcademyEntry('arbitraz_fuzji'); unlockAcademyEntry('premia_przejecia'); } // 0.15.1 M1
     if (held.some(s => s.governance?.pendingAgm)) unlockAcademyEntry('walne');
     if (allBonds.some(b => b.ownerId === 'player')) unlockAcademyEntry('obligacje');
     if ((typeof getFundDeposits === 'function' && getFundDeposits().length) || (playerFund.ppp || []).length) unlockAcademyEntry('lokata');

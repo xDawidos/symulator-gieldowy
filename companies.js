@@ -3863,6 +3863,7 @@ function cancelMerger(stock, reason) {
     const partnerSymbol = stock.mergerProcess.partnerSymbol;
     const partnerStock = stocks.find(s => s.symbol === partnerSymbol);
 
+    if (typeof onMergerArbitrageCancelled === 'function') onMergerArbitrageCancelled(stock); // 0.15.1 M1: kurs celu wraca
     logEvent(`❌ Proces M&A między ${stock.symbol} a ${partnerSymbol} został anulowany. Powód: ${reason}`, 'review');
     showToast(`Fuzja/Przejęcie ${stock.symbol}-${partnerSymbol} anulowane!`, 'error');
 
@@ -4979,6 +4980,7 @@ function initiateMergerProcess(initiatorStock, targetStock, type, financing = 'c
 
     // Obrony, decyzja funduszu (≥ 20%), zarząd (ma.js)
     if (type === 'przejęcie') onTakeoverStarted(initiatorStock, targetStock, options);
+    if (typeof announceMergerArbitrage === 'function') announceMergerArbitrage(initiatorStock, targetStock); // 0.15.1 M1
 
     displayStocks(getCurrentInputValues());
     return true;
