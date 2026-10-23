@@ -2849,7 +2849,7 @@ function computeQuarterResults(stock) {
     const depreciation = baseRevenue * profile.da;
     const interest = Math.max(0, Number(stock.balanceSheet?.liabilities) || 0) * getLoanRate() / 4;
     const ebt = ebitda - depreciation - interest;
-    const tax = ebt > 0 ? ebt * (typeof getCompanyIncomeTaxRate === 'function' ? getCompanyIncomeTaxRate() : COMPANY_INCOME_TAX_RATE) : 0;
+    const tax = ebt > 0 ? ebt * (typeof getCompanyIncomeTaxRate === 'function' ? getCompanyIncomeTaxRate(stock) : COMPANY_INCOME_TAX_RATE) : 0;
     let netIncome = ebt - tax;
 
     // Spółki państwowe: Skarb Państwa pokrywa 70% straty (dotacja).
@@ -5082,7 +5082,7 @@ function checkAntitrust(stock1, stock2) {
     }
 
     // 3. Określ próg blokady (np. 40% udziału w rynku)
-    const blockThreshold = 0.40;
+    const blockThreshold = typeof getAntitrustLevel === 'function' ? getAntitrustLevel().block : 0.40; // ustawa antymonopolowa
     const shouldBlock = potentialMarketShare >= blockThreshold;
 
     // 4. Losuj decyzję urzędu (uwzględniając jego dokładność)
@@ -12431,7 +12431,7 @@ function absorbSubsidiary(child, parent = getParentOf(child), premium = null) {
 const STAKE_CAMPAIGN_CHANCE = 0.035;         // na kwartał dla uprawnionej spółki (×2 „Mistrz marionetek”); decyzja użytkownika: 3% → 3,5%
 const STAKE_PACE = [0.03, 0.08];             // tempo dokupowania: 3–8 pp udziału na kwartał
 const STAKE_COOP_PCT = 0.25;
-const KNF_CONCERN_SECTOR_SHARE = 0.25; // decyzja użytkownika: 30% → 25% (cel 5–8 koncernów)
+const KNF_CONCERN_SECTOR_SHARE = 0.25; // standardowa ustawa antymonopolowa (łagodna 30%, surowa 20%); cel 5–8 koncernów
 const KNF_CONCERN_GIG_SHARE = 0.10;
 
 function getExchangeLevel(stock) { return Number(exchanges[stock?.exchange]?.level) || 0; }
@@ -12585,11 +12585,17 @@ function checkKnfConcernPower() {
         const groupCap = group.reduce((sum, s) => sum + getMarketCapValue(s), 0);
         const sector = getMainSector(parent);
         const sectorCap = listed.filter(s => getMainSector(s) === sector).reduce((sum, s) => sum + getMarketCapValue(s), 0);
-        if (!(groupCap > sectorCap * KNF_CONCERN_SECTOR_SHARE || groupCap > market * KNF_CONCERN_GIG_SHARE)) continue;
+        const sectorLimit = typeof getAntitrustLevel === 'function' ? getAntitrustLevel().concern : KNF_CONCERN_SECTOR_SHARE;
+        if (!(groupCap > sectorCap * sectorLimit || groupCap > market * KNF_CONCERN_GIG_SHARE)) continue;
         if ((Number(parent.knfStakeBlockUntil) || -1) > getSubQuarter() || Math.random() >= eff) continue;
         parent.knfStakeBlockUntil = getSubQuarter() + 4;
         for (const t of stocks.filter(s => s.stakeCampaign?.buyer === parent.symbol)) t.stakeCampaign = null;
         logEvent(`🛡️ KNF ogranicza koncern ${parent.name}: za duży udział w rynku — wstrzymane podkupowania na 4 kw.`, 'state');
+        // Surowa ustawa antymonopolowa: nakaz sprzedaży pakietu kontrolnego największej córki (rozbicie koncernu).
+        if (Number(society?.laws?.antitrust) === 2 && Math.random() < 0.5) {
+            const child = listed.filter(c => c.isSubsidiaryOf === parent.symbol).sort((x, y) => getMarketCapValue(y) - getMarketCapValue(x))[0];
+            if (child && typeof sellControllingStake === 'function' && sellControllingStake(child, parent)) logEvent(`⚖️ Ustawa antymonopolowa: ${parent.name} musi sprzedać kontrolę nad ${child.name} — rozbicie koncernu.`, 'state');
+        }
     }
 }
 

@@ -792,6 +792,16 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Ile trwa wstrzymanie handlu przy bezpieczniku 1. stopnia (-10%)?', a: ['15 sekund', 'Cały miesiąc', '24 godziny'], c: 0 }
         ]
     },
+    partie_gospodarka: {
+        title: 'Progi CIT i ustawa antymonopolowa', icon: '⚖️',
+        text: 'Partie zmieniają warunki gry dla spółek. Progi CIT obniżają podatek małym firmom i podnoszą dużym — wspierają konkurencję, ale zmniejszają zyski koncernów. Ustawa antymonopolowa określa, kiedy urząd zablokuje fuzję i kiedy KNF ograniczy koncern; przy surowej ustawie koncern może musieć sprzedać kontrolę nad córką. Socjaldemokraci zaostrzają oba prawa, Koalicja Rynkowa je łagodzi.',
+        example: () => `Teraz: progi CIT „${describeLawLevel('corpTaxBrackets', society?.laws?.corpTaxBrackets ?? 0)}”, ustawa antymonopolowa „${describeLawLevel('antitrust', society?.laws?.antitrust ?? 1)}”.`,
+        quiz: [
+            { q: 'Komu pomagają progi CIT?', a: ['Małym spółkom', 'Największym koncernom', 'Bankom centralnym'], c: 0 },
+            { q: 'Co może się stać koncernowi przy surowej ustawie antymonopolowej?', a: ['Nakaz sprzedaży kontroli nad córką', 'Zwolnienie z podatku', 'Dotacja'], c: 0 },
+            { q: 'Która partia zaostrza prawo antymonopolowe?', a: ['Socjaldemokraci', 'Koalicja Rynkowa', 'Żadna'], c: 0 }
+        ]
+    },
     wartosc_firmy: {
         title: 'Wartość firmy (goodwill)', icon: '🏷️',
         text: 'Gdy spółka kupuje inną drożej niż jej aktywa netto (aktywa minus długi), różnica trafia do bilansu jako wartość firmy — zapłata za markę, klientów, zespół i spodziewane synergie. To aktywo, którego nie da się sprzedać osobno. Jeśli przejęta część zarabia gorzej niż w planie, wartość firmy trzeba odpisać.',

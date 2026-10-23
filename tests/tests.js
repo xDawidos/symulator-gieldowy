@@ -9012,6 +9012,34 @@ group('0.15.1: Sztuka przejęć (arbitraż, oferty, due diligence, pakiety, wezw
         assertNear(gap(b), 0, 'bilans spójny', 1e-6);
     });
 
+    test('Socjaldemokraci: 4. partia, głosy biednych, program — progi CIT i ustawa antymonopolowa', () => {
+        world();
+        assert(RULING_PARTIES.social && PARTY_IDS.includes('social') && PARTY_COLORS.social, 'partia, lista, kolor');
+        for (const [cls, row] of Object.entries(CLASS_VOTE)) assert(row.length === 4 && row.reduce((s, v) => s + v, 0) === 100, `${cls}: 4 partie, suma 100`);
+        assert(CLASS_VOTE.poor[3] > CLASS_VOTE.rich[3] && CLASS_VOTE.poor[3] > CLASS_VOTE.poor[2], 'biedni głosują na Socjaldemokratów');
+        const support = computePartySupport(false);
+        assertNear(PARTY_IDS.reduce((s, id) => s + support[id], 0), 100, 'poparcie sumuje się do 100', 1e-6);
+        for (let i = 0; i < 100; i++) { const c = pickLawChange('social'); assert(!c || ['corpTaxBrackets', 'antitrust', 'benefits', 'tenderThreshold'].includes(c[0]), `program: ${c && c[0]}`); }
+        assert(PARTY_PROGRAMS.market.moves.some(([law, d]) => law === 'antitrust' && d < 0), 'Koalicja Rynkowa łagodzi ustawę antymonopolową');
+    });
+
+    test('Progi CIT: małe spółki płacą mniej, duże więcej; ustawa antymonopolowa zmienia progi KNF i blokady', () => {
+        const { a, b, c } = world();
+        a.price = 1000; b.price = 100; c.price = 10;
+        const base = getCompanyIncomeTaxRate();
+        society.laws.corpTaxBrackets = 0; corpTaxSizeCache.quarter = null;
+        assertNear(getCompanyIncomeTaxRate(c), base, 'liniowy: bez zmian', 1e-9);
+        society.laws.corpTaxBrackets = 2; corpTaxSizeCache.quarter = null;
+        assertNear(getCompanyIncomeTaxRate(c), base - 0.06, 'progresywny: mała −6 pp', 1e-9);
+        assertNear(getCompanyIncomeTaxRate(a), base + 0.05, 'progresywny: duża +5 pp', 1e-9);
+        assertNear(getCompanyIncomeTaxRate(b), base, 'średnia bez zmian', 1e-9);
+        society.laws.corpTaxBrackets = 0;
+        society.laws.antitrust = 1; assertEq(getAntitrustLevel().concern, 0.25, 'standardowa: 25%');
+        society.laws.antitrust = 2; assertEq(getAntitrustLevel().concern, 0.20, 'surowa: 20%'); assertEq(getAntitrustLevel().block, 0.30, 'surowa: blokada 30%');
+        society.laws.antitrust = 0; assertEq(getAntitrustLevel().block, 0.50, 'łagodna: blokada 50%');
+        society.laws.antitrust = 1;
+    });
+
     test('Decyzje 2026-10-23: długość przejęcia 3–7 kw. wg wielkości celu; nacjonalizacja — skarb spłaca bank', () => {
         const { a, b, c } = world();
         a.price = 1000; b.price = 100; c.price = 10;

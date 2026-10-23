@@ -4550,7 +4550,9 @@ const SECTOR_CYCLE_PHASES = {
 const RULING_PARTIES = {
     market: { name: 'Koalicja Rynkowa', privatization: 1.6, nationalization: 0.5, subsidies: 0.7, stateMood: -0.02 },
     state:  { name: 'Blok Państwowy',   privatization: 0.4, nationalization: 1.6, subsidies: 1.5, stateMood: 0.03 },
-    people: { name: 'Ludowcy',          privatization: 0.8, nationalization: 1.0, subsidies: 1.3, stateMood: 0.01 } // 0.13: płaca minimalna, zasiłki, mieszkania
+    people: { name: 'Ludowcy',          privatization: 0.8, nationalization: 1.0, subsidies: 1.3, stateMood: 0.01 }, // 0.13: płaca minimalna, zasiłki, mieszkania
+    // 0.15.1: lubią nacjonalizacje, nie lubią koncernów (ustawa antymonopolowa), wspierają małe firmy (progi CIT)
+    social: { name: 'Socjaldemokraci',  privatization: 0.5, nationalization: 1.4, subsidies: 1.2, stateMood: 0.015 }
 };
 
 let macro = createMacroState();
@@ -4565,7 +4567,7 @@ function createMacroState() {
         expectation: { change: 0, label: 'bez zmian' },
         lastDecision: null,
         sectorCycles: createSectorCycles(),
-        election: { quartersLeft: getRandomIntInRange(6, 12), ruling: Math.random() < 0.5 ? 'market' : 'state', campaign: false, donations: { market: 0, state: 0, people: 0 }, favor: null, coalition: null, support: null },
+        election: { quartersLeft: getRandomIntInRange(6, 12), ruling: Math.random() < 0.5 ? 'market' : 'state', campaign: false, donations: { market: 0, state: 0, people: 0, social: 0 }, favor: null, coalition: null, support: null },
         recentEvents: [],
         shocks: { inflation: 0 }
     };
@@ -4597,7 +4599,7 @@ function ensureMacroState() {
     macro = { ...fresh, ...(macro || {}) };
     macro.sectorCycles = normalizeSectorCycles(macro.sectorCycles, fresh.sectorCycles);
     macro.election = { ...fresh.election, ...(macro.election || {}) };
-    macro.election.donations = { market: 0, state: 0, people: 0, ...(macro.election.donations || {}) };
+    macro.election.donations = { market: 0, state: 0, people: 0, social: 0, ...(macro.election.donations || {}) };
     macro.shocks = { ...fresh.shocks, ...(macro.shocks || {}) };
     if (!Array.isArray(macro.history)) macro.history = [];
     if (!Array.isArray(macro.recentEvents)) macro.recentEvents = [];
@@ -4809,7 +4811,7 @@ function supportElectionCampaign(partyId, amount) {
     amount = Math.floor(Number(amount));
     if (!RULING_PARTIES[partyId] || !playerFund) return false;
     if (!election.campaign) { showToast('Darowizny przyjmowane są tylko w trakcie kampanii.', 'warning'); return false; }
-    election.donations = { market: 0, state: 0, people: 0, ...(election.donations || {}) };
+    election.donations = { market: 0, state: 0, people: 0, social: 0, ...(election.donations || {}) };
     const assets = getFundAssets();
     const given = Object.values(election.donations).reduce((sum, value) => sum + (Number(value) || 0), 0);
     if (!(amount >= 100)) { showToast('Minimalna darowizna: 100 PLN.', 'warning'); return false; }
@@ -4827,7 +4829,7 @@ function supportElectionCampaign(partyId, amount) {
 
 function settlePoliticalFavor() {
     const election = macro.election;
-    const d = { market: 0, state: 0, people: 0, ...(election.donations || {}) };
+    const d = { market: 0, state: 0, people: 0, social: 0, ...(election.donations || {}) };
     const total = Object.values(d).reduce((sum, value) => sum + (Number(value) || 0), 0);
     if (total > 0) {
         const backed = Object.keys(d).sort((a, b) => d[b] - d[a])[0];
@@ -4837,7 +4839,7 @@ function settlePoliticalFavor() {
             body: won ? 'Nowa władza pamięta o wsparciu: łagodniejsze kontrole KNF i więcej kontraktów MON dla spółek funduszu przez 2 lata gry.'
                 : 'Wygrani pamiętają, kogo wspierał fundusz: KNF przygląda się uważniej, kontrakty MON omijają spółki funduszu przez 2 lata gry.', importance: 2 });
     }
-    election.donations = { market: 0, state: 0, people: 0 };
+    election.donations = { market: 0, state: 0, people: 0, social: 0 };
 }
 
 /** 0.13: wybory z poparciem liczonym z klas (3 partie), koalicja przy zwycięzcy < 40%. */
@@ -5044,8 +5046,31 @@ const SOCIAL_LAWS = {
     housing:  { name: 'Mieszkania socjalne',  icon: '🏘️', levels: ['brak', 'program', 'duży program'], start: 1 },
     rights:   { name: 'Prawa pracownicze',    icon: '⚖️', levels: ['liberalne', 'standardowe', 'ochronne'], start: 1 },
     // 0.15.1 M5: do jakiego udziału trzeba ogłosić wezwanie po przekroczeniu 50% transakcjami pakietowymi
-    tenderThreshold: { name: 'Próg wezwania', icon: '📣', levels: ['66%', '75%', '90%', '99%'], start: 0 }
+    tenderThreshold: { name: 'Próg wezwania', icon: '📣', levels: ['66%', '75%', '90%', '99%'], start: 0 },
+    // 0.15.1 (Socjaldemokraci): CIT zależny od wielkości spółki; kontrola koncentracji rynku
+    corpTaxBrackets: { name: 'Progi CIT', icon: '🧾', levels: ['liniowy', 'dwa progi', 'progresywny'], start: 0 },
+    antitrust: { name: 'Ustawa antymonopolowa', icon: '⚖️', levels: ['łagodna', 'standardowa', 'surowa'], start: 1 }
 };
+// Progi CIT: [mała spółka (dolne 50% kapitalizacji), duża (górne 10%)] — zmiana stawki w pp.
+const CORP_TAX_BRACKETS = [[0, 0], [-0.04, 0.02], [-0.06, 0.05]];
+// Ustawa antymonopolowa: próg KNF dla koncernu (udział w sektorze) i próg blokady fuzji przez urząd.
+const ANTITRUST_LEVELS = [{ concern: 0.30, block: 0.50 }, { concern: 0.25, block: 0.40 }, { concern: 0.20, block: 0.30 }];
+function getAntitrustLevel() { return ANTITRUST_LEVELS[Number(society?.laws?.antitrust ?? 1)] || ANTITRUST_LEVELS[1]; }
+
+let corpTaxSizeCache = { quarter: null, small: 0, large: Infinity };
+/** Zmiana stawki CIT dla spółki wg ustawy „Progi CIT” (mała ulga, duża dopłata). */
+function getCorpTaxSizeAdj(stock) {
+    const level = Number(society?.laws?.corpTaxBrackets) || 0;
+    if (!level || !stock) return 0;
+    const quarter = typeof macro === 'object' ? macro.quarter : 0;
+    if (corpTaxSizeCache.quarter !== quarter) {
+        const caps = stocks.filter(s => !s.assetType && !s.isBankrupt).map(getMarketCap).sort((a, b) => a - b);
+        corpTaxSizeCache = { quarter, small: caps[Math.floor(caps.length * 0.5)] || 0, large: caps[Math.floor(caps.length * 0.9)] || Infinity };
+    }
+    const cap = getMarketCap(stock);
+    const [small, large] = CORP_TAX_BRACKETS[level];
+    return cap < corpTaxSizeCache.small ? small : cap >= corpTaxSizeCache.large ? large : 0;
+}
 const TENDER_THRESHOLD_VALUES = [0.66, 0.75, 0.90, 0.99];
 
 /** Próg wezwania z ustawy (udział). */
@@ -5065,13 +5090,14 @@ const RIGHTS_UNION_MULT = [0.7, 1, 1.5];
 
 // Programy partii: kierunek zmian ustaw i priorytet edukacji.
 const PARTY_PROGRAMS = {
-    market: { moves: [['minWage', -1], ['benefits', -1], ['housing', -1], ['rights', -1], ['tenderThreshold', -1]], education: 'high', deficit: 'cut' },
+    market: { moves: [['minWage', -1], ['benefits', -1], ['housing', -1], ['rights', -1], ['tenderThreshold', -1], ['corpTaxBrackets', -1], ['antitrust', -1]], education: 'high', deficit: 'cut' },
+    social: { moves: [['corpTaxBrackets', 1], ['antitrust', 1], ['benefits', 1], ['tenderThreshold', 1]], education: 'high', deficit: 'cit' },
     state:  { moves: [['rights', 1], ['housing', 1], ['tenderThreshold', 1]], education: 'high', deficit: 'cit' },
     people: { moves: [['minWage', 1], ['benefits', 1], ['housing', 1], ['tenderThreshold', 1]], education: 'medium', deficit: 'cit' }
 };
 // Preferencje wyborcze klas: [Ludowcy, Blok Państwowy, Koalicja Rynkowa].
-const CLASS_VOTE = { poor: [50, 35, 15], lowerMid: [35, 35, 30], mid: [20, 35, 45], upperMid: [10, 30, 60], rich: [5, 20, 75], veryRich: [5, 15, 80] };
-const PARTY_IDS = ['people', 'state', 'market'];
+const CLASS_VOTE = { poor: [35, 25, 10, 30], lowerMid: [30, 30, 25, 15], mid: [18, 32, 42, 8], upperMid: [10, 28, 57, 5], rich: [5, 20, 72, 3], veryRich: [5, 15, 78, 2] };
+const PARTY_IDS = ['people', 'state', 'market', 'social'];
 const COALITION_THRESHOLD = 0.40;
 const ELECTION_FATIGUE = 5;          // pp na każdą kadencję u władzy
 const ELECTION_BAD_TIMES = 10;       // pp przy złej koniunkturze
@@ -5554,8 +5580,8 @@ function commissionSocialHousing() {
 }
 
 /** CIT spółek: 19% + ewentualna podwyżka po długim deficycie. */
-function getCompanyIncomeTaxRate() {
-    return COMPANY_INCOME_TAX_RATE + (typeof society === 'object' && society ? Number(society.budget?.citAdd) || 0 : 0);
+function getCompanyIncomeTaxRate(stock = null) {
+    return Math.max(0, COMPANY_INCOME_TAX_RATE + (typeof society === 'object' && society ? Number(society.budget?.citAdd) || 0 : 0) + getCorpTaxSizeAdj(stock));
 }
 
 /** Premia w rentowności obligacji skarbowych przy utrzymującym się deficycie. */
@@ -5644,7 +5670,7 @@ function advanceSocialPolicy() {
 
 /** Poparcie bazowe z klas (w %, suma 100). */
 function getClassBasedSupport() {
-    const support = { people: 0, state: 0, market: 0 };
+    const support = Object.fromEntries(PARTY_IDS.map(id => [id, 0]));
     for (const cls of SOCIETY_CLASSES) {
         const share = Number(society?.classes?.[cls.id]) || 0;
         const prefs = CLASS_VOTE[cls.id];
@@ -5666,7 +5692,9 @@ function computePartySupport(withNoise = true) {
     if (support[ruling] !== undefined) {
         support[ruling] -= penalty;
         const others = PARTY_IDS.filter(id => id !== ruling);
-        others.forEach(id => { support[id] += penalty * (ruling === 'people' ? 0.5 : id === 'people' ? PROTEST_TO_PEOPLE : 1 - PROTEST_TO_PEOPLE); });
+        // Głosy protestu: głównie partie lewicowe (Ludowcy, Socjaldemokraci), reszta po równo.
+        const protest = others.filter(id => id === 'people' || id === 'social'), rest = others.filter(id => !protest.includes(id));
+        others.forEach(id => { support[id] += penalty * (protest.includes(id) ? (rest.length ? PROTEST_TO_PEOPLE : 1) / protest.length : (1 - PROTEST_TO_PEOPLE) / rest.length); });
     }
     const donations = election.donations || {};
     const assets = Math.max(1, typeof getFundAssets === 'function' && playerFund ? getFundAssets() : 1);
