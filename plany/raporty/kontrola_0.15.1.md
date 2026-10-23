@@ -74,3 +74,20 @@
    - spread 0,5 pp za etap (plan: 1 pp) i cena maksymalna oferenta ≤ oferta + 5–20 pp (plan: bez limitu) — strojenie wg pomiaru;
    - przejęcie przenosi przychody, historię wyników i segmenty celu do kupującego (naprawa — wcześniej przejęty biznes znikał).
 9. **Nie sprawdzone:** przyrost zapisu w liczbach (zapis 2,13–2,20 mln znaków w grach 6,5-letnich, jak w 0.15.0.1, bez osobnego porównania); okno oferty, formularz odkupu i ustawa w oknie „Państwo” sprawdzone renderowaniem w testach, bez klikania w pełnej grze.
+
+## Uzupełnienie (2026-10-23): przyczyna rozjazdów bilansu i przeklikanie okien
+
+**Rozjazdy bilansu** — przebieg diagnostyczny (3 × 10 lat) ze śledzeniem każdego zapisu do pól bilansu:
+- jedyna przyczyna: `triggerNationalizationEvent` — państwo przejmuje dług spółki (zobowiązania = 0), a kapitał się nie zmienia (KFX, PIX); błąd sprzed 0.15.1, nie ma związku z przejęciami;
+- naprawa `87e0ef9`: przejęcie długu księgowane jako dokapitalizowanie (kapitał zakładowy + dług); test.
+
+**Przeklikanie w pełnej grze** (kopia kodu na osobnym porcie, ekran 1280 × 900): poczta → mail z ofertą → „Otwórz ofertę” → rozmowy wstępne → kontroferta → aukcja → przyjęcie; karta spółki (linia arbitrażu); zakładka „Akcjonariat” → „Zaproponuj odkup” od zarządu (rozmowa, propozycja 500 akcji); mail z wynikiem badania kupującego → „Negocjuj (raz)” → „Przyjmij”; stary mail z nieaktualną ofertą; okno „Państwo” → „Kraj” (ustawa „Próg wezwania” z limitem KNF); ustawienia → mapa rodowa (po rozliczeniu przejęcia: Linapol → Alicante Housing).
+
+Wszystkie ścieżki działają (rozliczenie: fundusz dostał 5 658 akcji × 35,34 PLN po obniżce z badania; wartość firmy u kupującego; rejestr akcji spójny). Znalezione i naprawione (`50b2328`):
+1. **okna otwierane z poczty były zasłonięte pocztą** (oferta, a także istniejące: wezwanie, emisja ratunkowa, walne) — poczta zamyka się, gdy otwiera się okno;
+2. przedział z rozmów wstępnych schodził poniżej obecnej oferty — teraz nie;
+3. „ostatnie słowo” bez podwyżki mówiło „oferent podniósł cenę do” tej samej kwoty — teraz „nie podnosi ceny”;
+4. negocjacja po badaniu nie pokazywała wyniku — komunikat;
+5. formularz odkupu zwijał się po każdej akcji — zostaje rozwinięty.
+
+Testy: 539/539.
