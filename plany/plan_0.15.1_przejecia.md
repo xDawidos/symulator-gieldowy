@@ -335,6 +335,8 @@ Przebiegi ×200: **20 gier × 6,5 roku bez presetu, 20 × 6,5 roku z `wiekszosci
 
 ## Decyzje (podjęte)
 
+2026-10-23 (druga runda): długość przejęcia wg wielkości celu — 3 kw. dla najmniejszych, do 7 kw. dla największych (3 + 4 × p², p = miejsce w rankingu kapitalizacji); przejęcia z panelu też wg wielkości. Podkupowania 3,5%/kw.; skup tanich akcji 30%; przy nacjonalizacji Skarb Państwa spłaca dług spółki jej bankowi. Nowa partia **Socjaldemokraci** (głosy biednych klas; lubią nacjonalizacje, nie lubią koncernów, wspierają małe firmy) i dwie ustawy: **Progi CIT** (liniowy / dwa progi / progresywny: małe spółki −4/−6 pp, duże +2/+5 pp) i **Ustawa antymonopolowa** (łagodna / standardowa / surowa: próg KNF dla koncernu 30/25/20% sektora, blokada fuzji 50/40/30%; przy surowej KNF może nakazać sprzedaż kontroli nad największą córką — propozycja od kodu).
+
 2026-10-23 (po kontroli M8): przejęcia botów i spółek trwają 4 kw. (start od etapu 3; arbitraż −6…−12% vs GIG przy 7 kw.); przejęcia z panelu funduszu — 7 etapów. KNF ogranicza koncerny od 25% kapitalizacji sektora; cel 5–8 koncernów.
 
 

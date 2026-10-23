@@ -91,3 +91,25 @@ Wszystkie ścieżki działają (rozliczenie: fundusz dostał 5 658 akcji × 35,3
 5. formularz odkupu zwijał się po każdej akcji — zostaje rozwinięty.
 
 Testy: 539/539.
+
+## Uzupełnienie 2 (2026-10-23): decyzje użytkownika — pomiar k1 → k2
+
+k1 = `de57b02` (przejęcia botów 4 kw., KNF 25%); k2 = `6df4a48` (długość przejęcia 3–7 kw. wg wielkości, podkupowania 3,5%, skup 30%, spłata długu przy nacjonalizacji, Socjaldemokraci, progi CIT, ustawa antymonopolowa). 10 gier × 6,5 roku bez preseta, 10 × „większościowiec”, 5 (k2: 4) × 20 lat.
+
+| Miara | k1 zwykłe | k2 zwykłe | k1 większ. | k2 większ. | k1 20 lat | k2 20 lat |
+|---|---|---|---|---|---|---|
+| Arbitraż vs GIG | +0,9% | +0,7% | −8,4% | −4,9% | +1,7% | −11,7% |
+| Podkupowania / grę | 7,6 | 8,4 | 7,4 | 7,1 | 26,4 | 30,5 |
+| Przejęcia / grę | 4,7 | 5,1 | 5,1 | 6,2 | 21,8 | 19,3 |
+| Udział córek na koniec | 30% | 30% | 29% | 29% | 34% | 38% |
+| GIG CAGR | 9,9% | 11,2% | 13,5% | 9,4% | 11,7% | 12,5% |
+| Liczba akcji CAGR | +0,06% | −0,06% | +0,15% | +0,09% | −0,23% | +0,21% |
+| ms / kwartał | 2253 | 2543 | 2634 | 2574 | 3647 | 3537 |
+
+Wyjątki, niezmienniki, ujemna gotówka, bezpiecznik cen, ostrzeżenia pieniędzy, rozjazd bilansu: 0 we wszystkich grach; zapis OK.
+
+Wnioski:
+- rozwodnienie ≈ 0 (skup 30%) ✅; podkupowania ok. 1,3–1,5 na rok (cel 2–5) — nadal poniżej celu;
+- arbitraż: lepiej u większościowca, w grach 20-letnich gorzej (duże cele trwają do 7 kw.; mała próba 4 gier, rozrzut duży);
+- **Socjaldemokraci nie wygrali ani nie współrządzili w żadnych z 50 wyborów**: poparcie bazowe z klas ok. 13,5% (Rynkowa 37%, Państwowy 28%, Ludowcy 22%), koalicję tworzy druga partia — progi CIT nie zmieniły się ani razu, ustawę antymonopolową łagodziła tylko Koalicja Rynkowa (do „łagodnej” w 7 z 24 gier). Do decyzji użytkownika;
+- liczba koncernów nie jest mierzona sondą (brak w `przebiegi.html`).
