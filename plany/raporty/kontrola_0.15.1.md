@@ -113,3 +113,7 @@ Wnioski:
 - arbitraż: lepiej u większościowca, w grach 20-letnich gorzej (duże cele trwają do 7 kw.; mała próba 4 gier, rozrzut duży);
 - **Socjaldemokraci nie wygrali ani nie współrządzili w żadnych z 50 wyborów**: poparcie bazowe z klas ok. 13,5% (Rynkowa 37%, Państwowy 28%, Ludowcy 22%), koalicję tworzy druga partia — progi CIT nie zmieniły się ani razu, ustawę antymonopolową łagodziła tylko Koalicja Rynkowa (do „łagodnej” w 16 z 24 gier). Do decyzji użytkownika;
 - liczba koncernów nie jest mierzona sondą (brak w `przebiegi.html`).
+
+### k3 (`fc57b96`): Socjaldemokraci jako koalicjant rosnący w kryzysie
+
+10 gier × 6,5 roku + 5 × 20 lat (45 wyborów): Socjaldemokraci współrządzili po 18 wyborach (koalicje: z nimi 18, z Ludowcami 13, z Blokiem Państwowym 14), raz wygrali sami (kryzys). Progi CIT „dwa progi” na koniec 3 z 5 gier 20-letnich (0 z 10 krótkich); ustawa antymonopolowa: „surowa” nie wystąpiła na koniec żadnej gry, „łagodna” w 3 z 15. Arbitraż vs GIG −3,9% (krótkie) i −3,6% (20 lat); podkupowania 6,4 / grę (krótkie), 35,8 / grę (20 lat ≈ 1,8 / rok). GIG CAGR 12,7% / 10,2%; wyjątki, niezmienniki, ujemna gotówka, bezpiecznik cen, ostrzeżenia pieniędzy 0; zapis OK; 2391 ms / kw. (k2: 2543).
