@@ -204,7 +204,7 @@ function talkBuyoutOffer(symbol) {
     const offer = buyoutState.offers[symbol];
     if (!offer || offer.talked) return null;
     const shift = getRandomInRange(-0.05, 0.05);
-    offer.talked = { low: offer.maxPrice * (0.9 + shift), high: offer.maxPrice * (1.1 + shift) };
+    offer.talked = { low: Math.max(offer.price, offer.maxPrice * (0.9 + shift)), high: Math.max(offer.price, offer.maxPrice * (1.1 + shift)) }; // nie poniżej obecnej oferty
     offer.history.push({ round: offer.round, text: `rozmowy wstępne: nastawienie „${BUYOUT_STANCES[offer.stance].label}”, cena maks. ${formatZl(offer.talked.low)}–${formatZl(offer.talked.high)}` });
     return offer.talked;
 }
@@ -225,13 +225,13 @@ function counterBuyoutOffer(symbol, price) {
             result = 'accepted';
         }
     } else if (price <= offer.maxPrice * 1.15 && !offer.lastWord) {
-        offer.price = offer.maxPrice; offer.lastWord = true; result = 'lastWord';
+        offer.raised = offer.maxPrice > offer.price + 0.005; offer.price = offer.maxPrice; offer.lastWord = true; result = 'lastWord';
     } else if (Math.random() < BUYOUT_STANCES[offer.stance].insult) {
         result = 'insulted';
     } else {
-        offer.price = offer.maxPrice; offer.lastWord = true; result = 'lastWord';
+        offer.raised = offer.maxPrice > offer.price + 0.005; offer.price = offer.maxPrice; offer.lastWord = true; result = 'lastWord';
     }
-    const labels = { accepted: 'oferent przyjmuje', middle: `oferent proponuje środek: ${formatZl(offer.price)}`, lastWord: `oferent podnosi do ${formatZl(offer.price)} — „ostatnie słowo”`, insulted: 'oferent urażony — zrywa rozmowy' };
+    const labels = { accepted: 'oferent przyjmuje', middle: `oferent proponuje środek: ${formatZl(offer.price)}`, lastWord: offer.raised ? `oferent podnosi do ${formatZl(offer.price)} — „ostatnie słowo”` : `oferent nie podnosi ceny (${formatZl(offer.price)}) — „ostatnie słowo”`, insulted: 'oferent urażony — zrywa rozmowy' };
     offer.history.push({ round: offer.round - 1, text: `kontroferta ${formatZl(price)} → ${labels[result]}` });
     if (result === 'accepted') startBuyoutDeal(offer, offer.price);
     if (result === 'insulted') insultBuyoutBidder(offer);
@@ -641,10 +641,11 @@ function renderBlockBuyForm(stock, holder) {
     const blocked = talk?.blockedUntil > quarter;
     const range = talk?.talkedQuarter === quarter ? talk.range : null;
     const id = `blk-${stock.symbol}-${String(holder.id).replace(/[^a-zA-Z0-9]/g, '')}`;
+    const open = blockDealState.uiOpen === getBlockKey(stock.symbol, holder.id) ? ' open' : ''; // po akcji formularz zostaje rozwinięty
     const min = stock.price * (1 + BLOCK_PRICE_RANGE[0]), max = stock.price * (1 + BLOCK_PRICE_RANGE[1]);
     const label = v => !range ? '' : v < range.low ? 'poniżej oczekiwań' : v <= range.high ? 'w przedziale oczekiwań' : 'powyżej oczekiwań';
     if (blocked) return `<p class="text-xs text-muted">Rozmowy zablokowane do kw. ${talk.blockedUntil} (urażony niską ofertą).</p>`;
-    return `<details class="block-buy"><summary class="text-xs">Zaproponuj odkup</summary>
+    return `<details class="block-buy"${open}><summary class="text-xs">Zaproponuj odkup</summary>
         <div class="bank-card-form">
             ${range ? `<span class="text-xs">Nastawienie: <strong>${escapeHtml(talk.mood)}</strong>; oczekuje ok. ${formatZl(range.low)}–${formatZl(range.high)} za akcję.</span>` : `<button class="btn-xs btn-secondary" onclick="blockAction('${stock.symbol}', '${holder.id}', talkBlockHolder)">Rozmowa (bez kosztu, raz na kwartał)</button>`}
             <label class="text-xs">Akcji: <input type="number" id="${id}-n" class="w-xs" min="1" max="${Math.floor(holder.shares)}" value="${Math.floor(holder.shares)}"></label>
@@ -656,6 +657,7 @@ function renderBlockBuyForm(stock, holder) {
 }
 
 function blockAction(symbol, holderId, fn, ...args) {
+    blockDealState.uiOpen = getBlockKey(symbol, holderId);
     const result = fn(symbol, holderId, ...args);
     const labels = { accepted: 'Zgoda — pakiet przechodzi do funduszu.', counter: 'Akcjonariusz proponuje cenę pośrodku.', insulted: 'Akcjonariusz urażony — rozmowy zablokowane na 2 kw.', refused: 'Akcjonariusz wrogi — odmawia.' };
     if (labels[result]) showToast(labels[result], result === 'accepted' ? 'success' : 'warning', 5000);
@@ -755,7 +757,9 @@ function ddNegotiate(symbol) {
     const max = Number(pair.initiator.mergerProcess.offerMax) || pair.pending.newPrice;
     const ok = middle <= max * (1 - (pair.initiator.mergerProcess.dd?.result?.cut || 0)); // cena maks. po wykrytych problemach
     if (ok) pair.pending.newPrice = middle;
-    logEvent(ok ? `🔎 ${pair.initiator.name} zgadza się na ${formatZl(middle)} za akcję ${pair.target.name}.` : `🔎 ${pair.initiator.name} nie podnosi ceny ${pair.target.name}.`, 'review');
+    const text = ok ? `${pair.initiator.name} zgadza się na ${formatZl(middle)} za akcję ${pair.target.name}.` : `${pair.initiator.name} nie podnosi ceny ${pair.target.name} — zostaje ${formatZl(pair.pending.newPrice)}.`;
+    logEvent(`🔎 ${text}`, 'review');
+    if (typeof showToast === 'function') showToast(text, ok ? 'success' : 'warning', 5000);
     return ok ? 'raised' : 'refused';
 }
 

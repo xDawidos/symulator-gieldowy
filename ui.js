@@ -4653,6 +4653,9 @@ function isDialogOpen(el) {
 
 function onDialogOpened(el) {
     if (modalA11y.stack.some(entry => entry.el === el)) return;
+    // Okno otwarte z poczty (oferta, wezwanie, emisja, walne) — poczta (z-index 3000) zasłaniałaby je.
+    const mail = document.getElementById('mail-overlay');
+    if (el.classList.contains('modal') && mail && !mail.hidden && el !== mail) closeMailbox();
     modalA11y.stack.push({ el, returnFocus: document.activeElement });
     const box = el.classList.contains('intro-overlay') ? (el.firstElementChild || el) : el;
     box.setAttribute('role', 'dialog');
@@ -8530,7 +8533,7 @@ function renderBuyoutOffer(symbol) {
             <button onclick="buyoutAction('${symbol}', acceptBuyoutOffer)">${uiIcon('ok', 14)} Przyjmij ${formatZl(offer.price)}</button>
             <button class="btn-danger" onclick="buyoutAction('${symbol}', rejectBuyoutOffer)">Odrzuć (przerwa ${BUYOUT_OFFER_COOLDOWN} kw.)</button>
         </div>
-        ${offer.lastWord ? `<div class="alert alert--warn mt-3" role="status">${uiIcon('alert', 16)}<div><strong>Ostatnie słowo</strong><br>Oferent podniósł cenę do ${formatZl(offer.price)} i nie da więcej. Wyższe żądanie może go urazić.</div></div>` : ''}
+        ${offer.lastWord ? `<div class="alert alert--warn mt-3" role="status">${uiIcon('alert', 16)}<div><strong>Ostatnie słowo</strong><br>${offer.raised ? `Oferent podniósł cenę do ${formatZl(offer.price)} i nie da więcej.` : `Oferent nie podnosi ceny — ${formatZl(offer.price)} to jego ostatnie słowo.`} Wyższe żądanie może go urazić.</div></div>` : ''}
         <h4>Przebieg</h4>
         <ul class="list-plain text-sm">${offer.history.map(h => `<li>Runda ${h.round}: ${escapeHtml(h.text)}</li>`).join('')}</ul>`;
 }
