@@ -1871,7 +1871,7 @@ group('Fuzje i przejęcia — naprawa modelu (etap G1)', () => {
         return { a, b };
     }
 
-    test('przejęcie bota kończy się w 4 kwartałach (0.15.1: start od etapu 3), a proces prowadzi tylko inicjator', () => {
+    test('przejęcie kończy się w 3–7 kwartałach wg wielkości celu (0.15.1), a proces prowadzi tylko inicjator', () => {
         const { a, b } = worldG1();
         assert(initiateMergerProcess(a, b, 'przejęcie', 'cash', 0.25), 'start');
         const random = Math.random;
@@ -1886,7 +1886,7 @@ group('Fuzje i przejęcia — naprawa modelu (etap G1)', () => {
         }
         checkAntitrust = original;
         Math.random = random;
-        assert(!a.mergerProcess && quarters >= 4 && quarters <= 5, `kwartały: ${quarters}`);
+        assert(!a.mergerProcess && quarters >= 3 && quarters <= 8, `kwartały: ${quarters}`);
     });
 
     test('komplikacja to dane: przeżywa zapis, decyzja gracza działa po wczytaniu', () => {
@@ -8316,13 +8316,13 @@ group('0.15.0.1: Poprawki 0.15 (bezpiecznik, margin call, pieniądze, emisje, kr
         getMarketRegime('home').phase = 'bull';
     });
 
-    test('C4: tanie akcje → skup z szansą 40%; emisja ratunkowa nie zależy od premii rynku', () => {
+    test('C4: tanie akcje → skup z szansą 30%; emisja ratunkowa nie zależy od premii rynku', () => {
         const { a } = world();
         getMarketRegime('home').phase = 'bull';
         a.cash = getMarketCapValue(a) * 0.10;
         getMarketRegime('home').premium = -0.20;
         const p = capitalShare(a, 'buyback');
-        assert(Math.abs(p - 0.40) <= 0.02, `skup ${p}`);
+        assert(Math.abs(p - 0.30) <= 0.02, `skup ${p}`);
         assertEq(capitalShare(a, 'issue', 2000), 0, 'bez emisji przy tanich akcjach i zapasie gotówki');
         getMarketRegime('home').premium = 0;
         assertEq(capitalShare(a, 'buyback', 2000) + capitalShare(a, 'issue', 2000), 0, 'neutralna wycena — bez uchwały kapitałowej');
@@ -8977,9 +8977,9 @@ group('0.15.1: Sztuka przejęć (arbitraż, oferty, due diligence, pakiety, wezw
     test('M9: „Mistrz marionetek” zaczyna podkupowanie ×2 częściej', () => {
         const { a } = stakeWorld();
         a.ceo = { name: 'X', traits: [] };
-        assertNear(getStakeCampaignChance(a), 0.03, 'podstawa 3%/kw.', 1e-9);
+        assertNear(getStakeCampaignChance(a), 0.035, 'podstawa 3,5%/kw.', 1e-9);
         a.ceo.traits = [{ id: 'mistrz_marionetek', name: 'Mistrz marionetek' }];
-        assertNear(getStakeCampaignChance(a), 0.06, 'Mistrz marionetek ×2', 1e-9);
+        assertNear(getStakeCampaignChance(a), 0.07, 'Mistrz marionetek ×2', 1e-9);
     });
 
     test('M7: osiągnięcia — sprzedane z premią, aukcjoner, czyste księgi, arbitrażysta, pakiet po pakiecie', () => {
@@ -9003,13 +9003,33 @@ group('0.15.1: Sztuka przejęć (arbitraż, oferty, due diligence, pakiety, wezw
         const { b } = world();
         b.balanceSheet = { assets: 1_000_000, liabilities: 900_000, shareCapital: 50_000, retainedEarnings: 50_000 };
         b.financialHealth = -4; b.price = 10;
-        centralBank.funds = 1e9;
+        centralBank.funds = 1e9; governmentTreasury = 1e7;
         const gap = s => s.balanceSheet.assets - s.balanceSheet.liabilities - s.balanceSheet.shareCapital - s.balanceSheet.retainedEarnings;
         Math.random = () => 0.01;
         triggerNationalizationEvent();
         assert(b.isStateOwned, 'znacjonalizowana');
         assertEq(b.balanceSheet.liabilities, 0, 'dług przejęty');
         assertNear(gap(b), 0, 'bilans spójny', 1e-6);
+    });
+
+    test('Decyzje 2026-10-23: długość przejęcia 3–7 kw. wg wielkości celu; nacjonalizacja — skarb spłaca bank', () => {
+        const { a, b, c } = world();
+        a.price = 1000; b.price = 100; c.price = 10;
+        assertEq(getTakeoverQuarters(c), 3, 'najmniejsza: 3 kw.');
+        assertEq(getTakeoverQuarters(a), 7, 'największa: 7 kw.');
+        assert(getTakeoverQuarters(b) >= 3 && getTakeoverQuarters(b) <= 5, 'środkowa');
+        b.balanceSheet = { assets: 1_000_000, liabilities: 900_000, shareCapital: 50_000, retainedEarnings: 50_000 };
+        b.financialHealth = -4;
+        const bank = { id: 'bankN', name: 'Bank N', isActive: true, cash: 0, loanPortfolio: {}, type: BANK_TYPES.UNIVERSAL };
+        commercialBanks.length = 0; commercialBanks.push(bank); b.bankAccountId = 'bankN';
+        for (const s of [a, c]) s.balanceSheet.liabilities = 0;
+        governmentTreasury = 10_000_000; centralBank.funds = 1e9;
+        Math.random = () => 0.01;
+        triggerNationalizationEvent();
+        assert(b.isStateOwned, 'znacjonalizowana');
+        assertEq(bank.cash, 900_000, 'bank dostał spłatę długu');
+        assertEq(governmentTreasury, 9_100_000, 'ze skarbu państwa');
+        assertEq(b.balanceSheet.liabilities, 0, 'dług spłacony');
     });
 
     test('M8: córka z pustą kopią działów matki nie przerywa logiki spółek (naprawa działów)', () => {

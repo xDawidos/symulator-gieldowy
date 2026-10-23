@@ -4926,6 +4926,14 @@ function forceDividend(symbol) {
  * @param {string} financing - Metoda finansowania ('cash', 'stockSwap', 'lbo').
  * @param {number} [offerPremium=0.25] - Premia oferowana ponad cenę rynkową (tylko dla 'przejęcie').
  */
+/** Kwartały przejęcia wg miejsca celu w rankingu kapitalizacji: 3 + 4 × p² (mediana 4 kw., największe 7 kw.). */
+function getTakeoverQuarters(target) {
+    const caps = stocks.filter(s => !s.assetType && !s.isBankrupt).map(getMarketCapValue).sort((a, b) => a - b);
+    const cap = getMarketCapValue(target);
+    const p = caps.length > 1 ? caps.filter(c => c < cap).length / (caps.length - 1) : 0.5;
+    return Math.max(3, Math.min(7, 3 + Math.round(4 * p * p)));
+}
+
 function initiateMergerProcess(initiatorStock, targetStock, type, financing = 'cash', offerPremium = 0.25, options = {}) {
     // Walidacje
     if (!initiatorStock || !targetStock || initiatorStock === targetStock) {
@@ -4967,17 +4975,17 @@ function initiateMergerProcess(initiatorStock, targetStock, type, financing = 'c
 
     console.log(`[M&A Init] Rozpoczęto proces: ${initiatorStock.symbol} -> ${targetStock.symbol} (Typ: ${type})`);
 
-    // 0.15.1 (decyzja użytkownika): przejęcia botów i spółek trwają 4 kw. (start od etapu 3); fundusz z panelu — 7 etapów.
-    const playerLed = findMajorityShareholder(initiatorStock)?.kind === 'player';
+    // 0.15.1 (decyzja użytkownika): długość przejęcia wg wielkości celu — najmniejsze 3 kw., największe 7 kw.
+    const startStage = type === 'przejęcie' ? 7 - getTakeoverQuarters(targetStock) : 1;
     const processData = {
         type: type,
-        stage: type === 'przejęcie' && !playerLed ? 3 : 1,
+        stage: startStage,
         progress: 0,
         partnerSymbol: targetStock.symbol,
         initiatorSymbol: initiatorStock.symbol,
         complications: 0,
         costs: 0,
-        statusMessage: type === 'przejęcie' && !playerLed ? `Etap 3: strategia i finansowanie (${type})…` : `Etap 1: Wstępne rozmowy (${type})...`,
+        statusMessage: `Etap ${Math.max(1, startStage)}: ${startStage <= 1 ? 'wstępne rozmowy' : 'rozmowy i finansowanie'} (${type})…`,
         decisionRequired: null,
         defenseActive: null,
         financing: financing,
@@ -12420,7 +12428,7 @@ function absorbSubsidiary(child, parent = getParentOf(child), premium = null) {
 // 0.15.1 M9: DRABINA PAKIETÓW SPÓŁKA → SPÓŁKA (25 / 50 / próg ustawy / 99%) i podkupowanie
 // =================================================================================
 
-const STAKE_CAMPAIGN_CHANCE = 0.03;          // na kwartał dla uprawnionej spółki (×2 „Mistrz marionetek”)
+const STAKE_CAMPAIGN_CHANCE = 0.035;         // na kwartał dla uprawnionej spółki (×2 „Mistrz marionetek”); decyzja użytkownika: 3% → 3,5%
 const STAKE_PACE = [0.03, 0.08];             // tempo dokupowania: 3–8 pp udziału na kwartał
 const STAKE_COOP_PCT = 0.25;
 const KNF_CONCERN_SECTOR_SHARE = 0.25; // decyzja użytkownika: 30% → 25% (cel 5–8 koncernów)

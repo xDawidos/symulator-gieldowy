@@ -816,10 +816,15 @@ function triggerNationalizationEvent() {
     target.isStateOwned = true;
     target.stateOwnershipPct = getRandomInRange(0.75, 0.90);
     target.eventResistance = 0.6;
-    // Państwo przejmuje dług spółki: to dokapitalizowanie przez nowego właściciela (kapitał zakładowy rośnie o tyle, o ile
-    // spadają zobowiązania) — wcześniej bilans się rozjeżdżał (diagnoza 0.15.1).
-    target.balanceSheet.shareCapital = (Number(target.balanceSheet.shareCapital) || 0) + (Number(target.balanceSheet.liabilities) || 0);
-    target.balanceSheet.liabilities = 0;
+    // Skarb Państwa spłaca dług spółki jej bankowi (decyzja użytkownika); to dokapitalizowanie przez nowego właściciela
+    // (kapitał zakładowy rośnie o spłaconą kwotę). Bez pieniędzy w skarbie reszta długu zostaje w spółce.
+    const debt = Math.max(0, Number(target.balanceSheet.liabilities) || 0);
+    const repaid = typeof takeFromTreasury === 'function' ? takeFromTreasury(debt) : 0;
+    const lender = typeof getCompanyBank === 'function' ? getCompanyBank(target) : null;
+    if (lender) lender.cash = (Number(lender.cash) || 0) + repaid;
+    if (repaid > 0) recordPayment('external:skarb-panstwa', lender ? lender.id : 'external:wierzyciele', repaid, `Spłata długu ${target.symbol} po nacjonalizacji`);
+    target.balanceSheet.shareCapital = (Number(target.balanceSheet.shareCapital) || 0) + repaid;
+    target.balanceSheet.liabilities = debt - repaid;
     target.financialHealth = 1;
     target.sharesHeld = 0; // inwestorzy wykupieni; pakiet państwa jest poza wolnym obrotem
     return;
