@@ -250,7 +250,7 @@ Spółki kupują pakiety innych spółek stopniowo, a progi zmieniają zachowani
 - próg **25% (powiązanie) jest stały**;
 - progi wyższe idą za ustawą „Próg wezwania” (M5) i limitem KNF: **związanie** od 50%, **przejęcie kontroli** od progu ustawy (66 / 75 / 90%), **zdjęcie z giełdy** od 99% (przy progu ustawy 99% — tylko wchłonięcie z przymusowym wykupem); im silniejsza KNF, tym wyżej są progi;
 - ustawa dotyczy też spółek: przekroczenie progu bez wezwania = **nakaz wezwania** (jak dla funduszu, bez kar finansowych za 1. raz);
-- **KNF kontroluje koncerny:** gdy koncern (z córkami) ma > 30% kapitalizacji sektora albo > 10% kapitalizacji GIG, KNF (szansa = skuteczność) nakazuje sprzedaż części pakietu (zejście do progu związania) albo blokuje nowe podkupowania na 4 kw.; pokrętło, gdy koncerny są za mocne.
+- **KNF kontroluje koncerny:** gdy koncern (z córkami) ma > 25% (decyzja 2026-10-23; było 30%) kapitalizacji sektora albo > 10% kapitalizacji GIG, KNF (szansa = skuteczność) nakazuje sprzedaż części pakietu (zejście do progu związania) albo blokuje nowe podkupowania na 4 kw.; pokrętło, gdy koncerny są za mocne.
 
 **Długofalowe przejęcie (podkupowanie):** zamiast jednego wezwania kupujący przez kilka kwartałów dokupuje akcje na rynku (wpływ na cenę jak zakupy botów) i odkupuje pakiety od posiadaczy (cena rezerwowa z M4); limit tempa 3–8 pp udziału na kwartał. Przekroczenie progu ustawy „Próg wezwania” (M5) bez wezwania — nakaz wezwania jak dla funduszu.
 
@@ -258,7 +258,7 @@ Spółki kupują pakiety innych spółek stopniowo, a progi zmieniają zachowani
 
 **Tempo w grze:** najwyżej kilka rozpoczętych podkupowań na rok w całej grze (cel do pomiaru: 2–5 na rok).
 
-**Pomiar M9 (zgoda użytkownika):** liczba córek i koncernów (cele T5/T6; za mocne koncerny osłabia KNF), GIG ±0,5 pp względem M8 bez M9, spójność rejestru akcji (akcje = posiadacze, 0 naruszeń), gotówka spółek wypływająca do akcjonariuszy (suma zakupów pakietów na rok).
+**Pomiar M9 (zgoda użytkownika):** liczba córek i koncernów (koncerny **5–8** — decyzja 2026-10-23; córki wg T6; za mocne koncerny osłabia KNF), GIG ±0,5 pp względem M8 bez M9, spójność rejestru akcji (akcje = posiadacze, 0 naruszeń), gotówka spółek wypływająca do akcjonariuszy (suma zakupów pakietów na rok).
 
 - **Zapis:** `stock.stakeCampaign` (kupujący, cel udziału, tempo), progi osiągnięte, cecha prezesa; pola opcjonalne.
 - **Testy:** progi 25/50/75/99 i ich skutki; „Marionetka &lt;nazwa&gt;” głosuje jak matka; zmiana nazwy przy 75%; zasady rang (Złota tylko przy kondycji ≥ 3 albo gotówce ≥ 25% kap., kupowanie tylko niższych rang, kooperacje w tej samej randze); podkupowanie w limicie tempa; akcje = posiadacze; „Mistrz marionetek” ×2.
@@ -334,6 +334,9 @@ Przebiegi ×200: **20 gier × 6,5 roku bez presetu, 20 × 6,5 roku z `wiekszosci
 - **Ustawa bez znaczenia, gdy gracz nie kupuje pakietów.** Akceptowalne: ustawa jest tłem dla osób, które grają w kontrolę spółek.
 
 ## Decyzje (podjęte)
+
+2026-10-23 (po kontroli M8): przejęcia botów i spółek trwają 4 kw. (start od etapu 3; arbitraż −6…−12% vs GIG przy 7 kw.); przejęcia z panelu funduszu — 7 etapów. KNF ogranicza koncerny od 25% kapitalizacji sektora; cel 5–8 koncernów.
+
 
 2026-10-20 (planowanie 0.15.x, `raporty/audyt_planow_0.15.x.md`):
 1. **Gracz po stronie sprzedającej:** większościowiec (≥ 33%) dostaje oferty i je rozgrywa (rozmowy, kontroferta z ryzykiem urażenia, aukcja, badanie kupującego). Istniejące przejęcie z panelu zarządzania zostaje bez zmian.

@@ -1871,7 +1871,7 @@ group('Fuzje i przejęcia — naprawa modelu (etap G1)', () => {
         return { a, b };
     }
 
-    test('przejęcie kończy się w 7–9 kwartałach, a proces prowadzi tylko inicjator', () => {
+    test('przejęcie bota kończy się w 4 kwartałach (0.15.1: start od etapu 3), a proces prowadzi tylko inicjator', () => {
         const { a, b } = worldG1();
         assert(initiateMergerProcess(a, b, 'przejęcie', 'cash', 0.25), 'start');
         const random = Math.random;
@@ -1886,7 +1886,7 @@ group('Fuzje i przejęcia — naprawa modelu (etap G1)', () => {
         }
         checkAntitrust = original;
         Math.random = random;
-        assert(!a.mergerProcess && quarters >= 6 && quarters <= 9, `kwartały: ${quarters}`);
+        assert(!a.mergerProcess && quarters >= 4 && quarters <= 5, `kwartały: ${quarters}`);
     });
 
     test('komplikacja to dane: przeżywa zapis, decyzja gracza działa po wczytaniu', () => {

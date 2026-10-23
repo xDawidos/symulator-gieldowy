@@ -4967,15 +4967,17 @@ function initiateMergerProcess(initiatorStock, targetStock, type, financing = 'c
 
     console.log(`[M&A Init] Rozpoczęto proces: ${initiatorStock.symbol} -> ${targetStock.symbol} (Typ: ${type})`);
 
+    // 0.15.1 (decyzja użytkownika): przejęcia botów i spółek trwają 4 kw. (start od etapu 3); fundusz z panelu — 7 etapów.
+    const playerLed = findMajorityShareholder(initiatorStock)?.kind === 'player';
     const processData = {
         type: type,
-        stage: 1,
+        stage: type === 'przejęcie' && !playerLed ? 3 : 1,
         progress: 0,
         partnerSymbol: targetStock.symbol,
         initiatorSymbol: initiatorStock.symbol,
         complications: 0,
         costs: 0,
-        statusMessage: `Etap 1: Wstępne rozmowy (${type})...`,
+        statusMessage: type === 'przejęcie' && !playerLed ? `Etap 3: strategia i finansowanie (${type})…` : `Etap 1: Wstępne rozmowy (${type})...`,
         decisionRequired: null,
         defenseActive: null,
         financing: financing,
@@ -12421,7 +12423,7 @@ function absorbSubsidiary(child, parent = getParentOf(child), premium = null) {
 const STAKE_CAMPAIGN_CHANCE = 0.03;          // na kwartał dla uprawnionej spółki (×2 „Mistrz marionetek”)
 const STAKE_PACE = [0.03, 0.08];             // tempo dokupowania: 3–8 pp udziału na kwartał
 const STAKE_COOP_PCT = 0.25;
-const KNF_CONCERN_SECTOR_SHARE = 0.30;
+const KNF_CONCERN_SECTOR_SHARE = 0.25; // decyzja użytkownika: 30% → 25% (cel 5–8 koncernów)
 const KNF_CONCERN_GIG_SHARE = 0.10;
 
 function getExchangeLevel(stock) { return Number(exchanges[stock?.exchange]?.level) || 0; }
