@@ -111,5 +111,5 @@ Wyjątki, niezmienniki, ujemna gotówka, bezpiecznik cen, ostrzeżenia pieniędz
 Wnioski:
 - rozwodnienie ≈ 0 (skup 30%) ✅; podkupowania ok. 1,3–1,5 na rok (cel 2–5) — nadal poniżej celu;
 - arbitraż: lepiej u większościowca, w grach 20-letnich gorzej (duże cele trwają do 7 kw.; mała próba 4 gier, rozrzut duży);
-- **Socjaldemokraci nie wygrali ani nie współrządzili w żadnych z 50 wyborów**: poparcie bazowe z klas ok. 13,5% (Rynkowa 37%, Państwowy 28%, Ludowcy 22%), koalicję tworzy druga partia — progi CIT nie zmieniły się ani razu, ustawę antymonopolową łagodziła tylko Koalicja Rynkowa (do „łagodnej” w 7 z 24 gier). Do decyzji użytkownika;
+- **Socjaldemokraci nie wygrali ani nie współrządzili w żadnych z 50 wyborów**: poparcie bazowe z klas ok. 13,5% (Rynkowa 37%, Państwowy 28%, Ludowcy 22%), koalicję tworzy druga partia — progi CIT nie zmieniły się ani razu, ustawę antymonopolową łagodziła tylko Koalicja Rynkowa (do „łagodnej” w 16 z 24 gier). Do decyzji użytkownika;
 - liczba koncernów nie jest mierzona sondą (brak w `przebiegi.html`).
