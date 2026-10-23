@@ -8999,6 +8999,19 @@ group('0.15.1: Sztuka przejęć (arbitraż, oferty, due diligence, pakiety, wezw
         assert(ACHIEVEMENTS.winners_curse.hidden, 'klątwa zwycięzcy ukryta');
     });
 
+    test('Nacjonalizacja: przejęcie długu przez państwo nie rozjeżdża bilansu', () => {
+        const { b } = world();
+        b.balanceSheet = { assets: 1_000_000, liabilities: 900_000, shareCapital: 50_000, retainedEarnings: 50_000 };
+        b.financialHealth = -4; b.price = 10;
+        centralBank.funds = 1e9;
+        const gap = s => s.balanceSheet.assets - s.balanceSheet.liabilities - s.balanceSheet.shareCapital - s.balanceSheet.retainedEarnings;
+        Math.random = () => 0.01;
+        triggerNationalizationEvent();
+        assert(b.isStateOwned, 'znacjonalizowana');
+        assertEq(b.balanceSheet.liabilities, 0, 'dług przejęty');
+        assertNear(gap(b), 0, 'bilans spójny', 1e-6);
+    });
+
     test('M8: córka z pustą kopią działów matki nie przerywa logiki spółek (naprawa działów)', () => {
         const { a, b } = world();
         a.departments = {}; // kopia działów matki, która ich jeszcze nie miała

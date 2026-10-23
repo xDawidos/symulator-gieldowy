@@ -816,6 +816,9 @@ function triggerNationalizationEvent() {
     target.isStateOwned = true;
     target.stateOwnershipPct = getRandomInRange(0.75, 0.90);
     target.eventResistance = 0.6;
+    // Państwo przejmuje dług spółki: to dokapitalizowanie przez nowego właściciela (kapitał zakładowy rośnie o tyle, o ile
+    // spadają zobowiązania) — wcześniej bilans się rozjeżdżał (diagnoza 0.15.1).
+    target.balanceSheet.shareCapital = (Number(target.balanceSheet.shareCapital) || 0) + (Number(target.balanceSheet.liabilities) || 0);
     target.balanceSheet.liabilities = 0;
     target.financialHealth = 1;
     target.sharesHeld = 0; // inwestorzy wykupieni; pakiet państwa jest poza wolnym obrotem
