@@ -5099,6 +5099,9 @@ const PARTY_PROGRAMS = {
 const CLASS_VOTE = { poor: [35, 25, 10, 30], lowerMid: [30, 30, 25, 15], mid: [18, 32, 42, 8], upperMid: [10, 28, 57, 5], rich: [5, 20, 72, 3], veryRich: [5, 15, 78, 2] };
 const PARTY_IDS = ['people', 'state', 'market', 'social'];
 const COALITION_THRESHOLD = 0.40;
+// Socjaldemokraci (decyzja użytkownika): sami nie wygrywają — są koalicjantem lewicy i rosną w kryzysie.
+const SOCIAL_COALITION_MIN = 10;     // % poparcia, od którego Ludowcy / Blok Państwowy wolą ich jako koalicjanta
+const SOCIAL_CRISIS_BONUS = 6;       // pp przy złej koniunkturze
 const ELECTION_FATIGUE = 5;          // pp na każdą kadencję u władzy
 const ELECTION_BAD_TIMES = 10;       // pp przy złej koniunkturze
 const PROTEST_TO_PEOPLE = 0.75;      // część odpływu od rządzących, która trafia do Ludowców
@@ -5495,8 +5498,15 @@ function describeLawLevel(lawId, level = society.laws[lawId]) {
 }
 
 /** Partia, która zmienia ustawy (w koalicji — silniejsza). */
-function getLawMakingParty() {
-    return macro?.election?.ruling || 'market';
+/** Partia, która zmienia ustawy; z `withPartner` koalicjant forsuje swoją ustawę z szansą = jego udział w koalicji. */
+function getLawMakingParty(withPartner = false) {
+    const election = macro?.election;
+    const coalition = election?.coalition;
+    if (withPartner && coalition?.partner) {
+        const wMain = Number(coalition.weights?.[election.ruling]) || 1, wPartner = Number(coalition.weights?.[coalition.partner]) || 1;
+        if (Math.random() < wPartner / (wMain + wPartner)) return coalition.partner;
+    }
+    return election?.ruling || 'market';
 }
 
 function pickLawChange(partyId = getLawMakingParty()) {
@@ -5658,8 +5668,9 @@ function advanceSocialPolicy() {
     society.lawTimer--;
     if (society.lawTimer <= 0) {
         society.lawTimer = 4;
-        const change = !society.pendingLaw && Math.random() < 0.85 ? pickLawChange() : null;
-        if (change) announceLawChange(change[0], change[1]);
+        const party = getLawMakingParty(true);
+        const change = !society.pendingLaw && Math.random() < 0.85 ? pickLawChange(party) : null;
+        if (change) announceLawChange(change[0], change[1], party);
     }
     updateBudgetBalance();
 }
@@ -5696,6 +5707,7 @@ function computePartySupport(withNoise = true) {
         const protest = others.filter(id => id === 'people' || id === 'social'), rest = others.filter(id => !protest.includes(id));
         others.forEach(id => { support[id] += penalty * (protest.includes(id) ? (rest.length ? PROTEST_TO_PEOPLE : 1) / protest.length : (1 - PROTEST_TO_PEOPLE) / rest.length); });
     }
+    if (badTimes && ruling !== 'social') support.social += SOCIAL_CRISIS_BONUS;
     const donations = election.donations || {};
     const assets = Math.max(1, typeof getFundAssets === 'function' && playerFund ? getFundAssets() : 1);
     PARTY_IDS.forEach(id => { support[id] += Math.min(10, (Number(donations[id]) || 0) / assets * 500); });
@@ -5710,7 +5722,9 @@ function computePartySupport(withNoise = true) {
 function resolveElection(support) {
     const ranked = [...PARTY_IDS].sort((a, b) => support[b] - support[a]);
     const winner = ranked[0];
-    const coalition = support[winner] < COALITION_THRESHOLD * 100 ? { partner: ranked[1], weights: { [winner]: support[winner], [ranked[1]]: support[ranked[1]] } } : null;
+    // Ludowcy i Blok Państwowy wolą Socjaldemokratów jako koalicjanta, jeśli ci mają choć 10%.
+    const partner = (winner === 'people' || winner === 'state') && support.social >= SOCIAL_COALITION_MIN ? 'social' : ranked[1];
+    const coalition = support[winner] < COALITION_THRESHOLD * 100 ? { partner, weights: { [winner]: support[winner], [partner]: support[partner] } } : null;
     return { winner, coalition, support };
 }
 

@@ -9023,6 +9023,24 @@ group('0.15.1: Sztuka przejęć (arbitraż, oferty, due diligence, pakiety, wezw
         assert(PARTY_PROGRAMS.market.moves.some(([law, d]) => law === 'antitrust' && d < 0), 'Koalicja Rynkowa łagodzi ustawę antymonopolową');
     });
 
+    test('Socjaldemokraci: koalicjant Ludowców / Bloku Państwowego, rosną w kryzysie, jako koalicjant zmieniają ustawy', () => {
+        world();
+        const r = resolveElection({ state: 35, market: 30, people: 23, social: 12 });
+        assertEq(r.coalition?.partner, 'social', 'Blok Państwowy bierze Socjaldemokratów');
+        assertEq(resolveElection({ market: 35, state: 30, people: 23, social: 12 }).coalition?.partner, 'state', 'Koalicja Rynkowa — nie');
+        assertEq(resolveElection({ state: 35, market: 30, people: 27, social: 8 }).coalition?.partner, 'market', 'poniżej 10% — druga partia');
+        macro.election.ruling = 'market'; macro.election.terms = 1;
+        economyCycle.phase = 'expansion'; macro.inflation = 0.02; macro.unemployment = 0.05;
+        const calm = computePartySupport(false).social;
+        economyCycle.phase = 'recession';
+        const crisis = computePartySupport(false).social;
+        assert(crisis > calm + 3, `kryzys: ${calm.toFixed(1)}% → ${crisis.toFixed(1)}%`);
+        macro.election.ruling = 'state'; macro.election.coalition = { partner: 'social', weights: { state: 30, social: 20 } };
+        withSeededRandom(7, () => { let n = 0; for (let i = 0; i < 1000; i++) if (getLawMakingParty(true) === 'social') n++; assert(n > 320 && n < 480, `koalicjant ~40%: ${n}`); });
+        assertEq(getLawMakingParty(), 'state', 'bez flagi — rządzący');
+        macro.election.coalition = null; economyCycle.phase = 'expansion';
+    });
+
     test('Progi CIT: małe spółki płacą mniej, duże więcej; ustawa antymonopolowa zmienia progi KNF i blokady', () => {
         const { a, b, c } = world();
         a.price = 1000; b.price = 100; c.price = 10;
