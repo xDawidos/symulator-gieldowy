@@ -1040,8 +1040,11 @@ function updateTopbarBrand() {
     const dateEl = document.getElementById('topbar-date');
     const quarter = typeof macro !== 'undefined' && macro ? Math.max(0, Number(macro.quarter) || 0) : null;
     if (dateEl && Number.isFinite(quarter)) {
-        const label = `Rok ${Math.floor(quarter / 4) + 1} · kw. ${(quarter % 4) + 1}`;
+        // 0.15.2 K1: „Rok 3 · kw. 2 · tydz. 4” (na telefonie „R3 · K2 · T4”)
+        const label = typeof formatGameDate === 'function' ? formatGameDate(getGameCalendar(), window.innerWidth < 600) : `Rok ${Math.floor(quarter / 4) + 1} · kw. ${(quarter % 4) + 1}`;
         if (dateEl.textContent !== label) dateEl.textContent = label;
+        const started = typeof playerProfile !== 'undefined' && playerProfile?.startedAt ? new Date(playerProfile.startedAt).toLocaleDateString('pl-PL') : '';
+        dateEl.title = `Rok · kwartał (5 tygodni) · tydzień${started ? ` · gra rozpoczęta ${started}` : ''}`;
     }
 }
 
@@ -7667,6 +7670,12 @@ function renderMailPreview(message) {
             ? `<div class="mail-action">${pending.choice ? `<p>Wybrano: <strong>${pending.choice === 'approve' ? 'zatwierdzenie' : 'blokada'}</strong> — możesz zmienić do końca kwartału.</p>` : ''}<button onclick="mailAction(respondStrategyProposal, '${stock.symbol}', 'approve')">Zatwierdź</button> <button class="btn-danger" onclick="mailAction(respondStrategyProposal, '${stock.symbol}', 'block')">Zablokuj</button></div>`
             : '<p class="fund-muted">Decyzja została już podjęta.</p>';
     }
+    if (message.action?.type === 'vip') { // 0.15.2 K7: rozmowa z inwestorem VIP (3 argumenty sprawdzane danymi funduszu)
+        const offer = playerFund?.vip?.offers.find(o => o.id === message.action.vipId && o.expiresQ > currentQuarter());
+        action = offer
+            ? `<div class="mail-action"><p>Wybierz argument — gra sprawdzi go na danych funduszu:</p>${Object.entries(VIP_ARGUMENTS).map(([k, a]) => `<button class="btn-secondary" title="${escapeHtml(a.hint)}" onclick="mailAction(pitchVip, ${offer.id}, '${k}')">${a.label}</button>`).join(' ')}<p class="text-xs text-muted">${Object.values(VIP_ARGUMENTS).map(a => `${a.label}: ${a.hint}`).join(' · ')}</p></div>`
+            : '<p class="fund-muted">Oferta VIP została już rozstrzygnięta albo wygasła.</p>';
+    }
     if (message.action?.type === 'pppRestructure') {
         const stake = (playerFund?.ppp || []).find(item => item.id === message.action.stakeId);
         action = stake?.restructure === 'pending'
@@ -7965,7 +7974,8 @@ function renderJuDecisions() {
         <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('megafon', 20)}</span><div><h4>Kampania marketingowa</h4><span class="bank-card-type">koszt ${formatZl(getMarketingCost(), 0)} z budżetu korporacji · ${MARKETING_WEEKS} tyg.</span></div></header>
             ${campaign?.weeksLeft > 0 ? `<p class="text-sm">Trwa: ${dataIcon(MARKETING_TARGETS[campaign.target].icon)} ${MARKETING_TARGETS[campaign.target].label}, zostało ${campaign.weeksLeft} tyg.</p>`
                 : `<p class="text-sm">Dodatkowi kupujący udziały z wybranej grupy klientów. Nowe wpłaty nadal wymagają zaufania ≥ 50.</p>
-                <div class="bank-card-form">${Object.entries(MARKETING_TARGETS).map(([id, t]) => `<button class="btn-secondary" onclick="startMarketingCampaign('${id}'); renderJuMarket();">${dataIcon(t.icon)} ${t.label}</button>`).join('')}</div>`}</article>`;
+                <div class="bank-card-form">${Object.entries(MARKETING_TARGETS).map(([id, t]) => `<button class="btn-secondary" onclick="startMarketingCampaign('${id}'); renderJuMarket();">${dataIcon(t.icon)} ${t.label}</button>`).join('')}</div>`}</article>
+        ${typeof renderCampaignCards === 'function' ? renderCampaignCards() : ''}`;
 }
 
 function renderJuMarket() {

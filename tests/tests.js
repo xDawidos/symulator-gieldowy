@@ -9097,6 +9097,355 @@ group('0.15.1: Sztuka przejęć (arbitraż, oferty, due diligence, pakiety, wezw
     });
 });
 
+group('0.15.2: Kochaj i zarabiaj (kalendarz, kampanie, lock-up, gwarancja, mandat, IR, VIP)', () => {
+    function world(clients = 10) {
+        const a = makeCompany('AAA'), b = makeCompany('BBB');
+        resetWorld([a, b]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        initMarketRegimes();
+        playerPortfolio = {};
+        playerCash = 10000;
+        playerFund.clients = Array.from({ length: clients }, (_, i) => ensureClientProfile({ id: `k${i}`, name: `Klient ${i}`, type: 'careful', units: 100, avgCost: 10, satisfaction: 0.7 }));
+        playerFund.units = clients * 100;
+        playerFund.trust = 60;
+        delete playerFund.subscription;
+        Object.assign(playerFund.current, { emissions: 0, startNav: getFundNav(), startBenchmark: getBenchmarkValue(), maxDrawdown: 0, benchmarkDrawdown: 0 });
+        return { a, b };
+    }
+    const fundCash = nav => { playerCash = nav * playerFund.units; return nav; }; // gotówka = NAV × udziały
+
+    test('K1: kalendarz „Rok · kw. · tydz.”, skrót mobilny, tydzień zeruje się z kwartałem', () => {
+        world();
+        macro.quarter = 9;
+        playerFund.calQuarter = 9; playerFund.calWeek = 1;
+        assertEq(formatGameDate(), 'Rok 3 · kw. 2 · tydz. 1', 'pełny format');
+        assertEq(formatGameDate(getGameCalendar(), true), 'R3 · K2 · T1', 'skrót');
+        for (let i = 0; i < 6; i++) advanceFundCalendar();
+        assertEq(getGameCalendar().week, WEEKS_PER_QUARTER, 'tydzień ≤ 5');
+        macro.quarter = 10; advanceFundCalendar();
+        assertEq(formatGameDate(), 'Rok 3 · kw. 3 · tydz. 1', 'nowy kwartał od tygodnia 1');
+        assertEq(formatQuarterDate(0), 'Rok 1 · kw. 1', 'termin kwartalny');
+    });
+
+    test('K2: koszt kampanii = 0,2% celu na start + 0,5% zebranej kwoty', () => {
+        world();
+        const cash0 = playerCash;
+        const result = startSubscriptionCampaign({ duration: 'quarter', targetPct: 0.1 });
+        assert(result.ok, result.reason);
+        const sub = playerFund.subscription;
+        const startCost = sub.startNav * sub.targetUnits * CAMPAIGN_COST_TARGET;
+        assertNear(cash0 - playerCash, startCost, 'koszt na start', 1e-6);
+        for (let w = 0; w < 5 && playerFund.subscription; w++) processSubscriptionWeekly();
+        const entry = playerFund.campaignHistory[0];
+        assert(entry.raisedValue > 0, 'kampania zebrała kapitał');
+        assertNear(entry.cost, startCost + entry.raisedValue * CAMPAIGN_COST_RAISED, 'koszt łączny', 1e-6);
+    });
+
+    test('K2: zasięg wg czasu — 1 tydzień < 2 tygodnie < 1 kwartał (średnio)', () => {
+        const mean = {};
+        for (const duration of ['week', 'twoWeeks', 'quarter']) {
+            let sum = 0;
+            for (let seed = 1; seed <= 25; seed++) {
+                world(30); playerFund.trust = 100;
+                playerFund.units *= 20; playerCash *= 20; // fundusz 20× większy od popytu klientów — kampania ograniczona zasięgiem, nie celem
+                withSeededRandom(seed, () => {
+                    startSubscriptionCampaign({ duration, targetPct: 0.25 });
+                    for (let w = 0; w < 5 && playerFund.subscription; w++) processSubscriptionWeekly();
+                });
+                sum += playerFund.campaignHistory[0].raisedValue;
+            }
+            mean[duration] = sum / 25;
+        }
+        assert(mean.week < mean.twoWeeks && mean.twoWeeks < mean.quarter, `zasięg ${JSON.stringify(mean)}`);
+    });
+
+    test('K2: najwyżej 2 kampanie na okres oceny; kampania blokuje drugą; cel ≤ 5% + 20% × zaufanie', () => {
+        world();
+        assert(startSubscriptionCampaign({ duration: 'week', targetPct: 0.05 }).ok, 'pierwsza');
+        assert(!startSubscriptionCampaign({ duration: 'week', targetPct: 0.05 }).ok, 'druga naraz');
+        finishSubscription();
+        assert(startSubscriptionCampaign({ duration: 'week', targetPct: 0.05 }).ok, 'druga po zakończeniu pierwszej');
+        finishSubscription();
+        const third = startSubscriptionCampaign({ duration: 'week', targetPct: 0.05 });
+        assert(!third.ok && /Limit/.test(third.reason), 'trzecia w okresie zablokowana');
+        world(); playerFund.trust = 50;
+        assertNear(getCampaignMaxTargetPct(), 0.15, 'górna granica celu przy zaufaniu 50');
+    });
+
+    test('K2: bez kampanii tydzień funduszu nie rusza udziałów ani gotówki', () => {
+        world();
+        const units = playerFund.units, cash = playerCash;
+        processCampaignsWeekly();
+        assertEq(playerFund.units, units, 'udziały'); assertEq(playerCash, cash, 'gotówka');
+        assert(!playerFund.subscription, 'brak kampanii');
+    });
+
+    test('K3: mnożniki lock-upu wg typu klienta', () => {
+        assertNear(getLockDemandMultiplier('institution', 2), 1.3, 'cierpliwy ×(1+0,15L)');
+        assertNear(getLockDemandMultiplier('sly', 2), 0.4, 'niecierpliwy ×(1−0,3L)');
+        assertNear(getLockDemandMultiplier('sly', 4), 0, 'niecierpliwy nie spada poniżej 0');
+        assertNear(getLockDemandMultiplier('brave', 2), 0.8, 'pozostali ×(1−0,1L)');
+    });
+
+    test('K3: umorzenie omija udziały w lock-upie; po lock-upie transza znika', () => {
+        world(); fundCash(10);
+        const client = playerFund.clients[0];
+        addTranche(client, 60, 10, { lockYears: 2 });
+        assertEq(getRedeemableUnits(client), 40, 'do umorzenia 40 z 100');
+        redeemClientUnits(client, 100);
+        assertNear(client.units, 60, 'zostało zablokowane 60');
+        assertEq(getRedeemableUnits(client), 0, 'nic więcej do umorzenia');
+        assertEq(redeemClientUnits(client, 50), 0, 'kolejne umorzenie = 0');
+        macro.quarter += 8; normalizeClientTranches(client);
+        assertEq(client.tranches.length, 0, 'po lock-upie zwykła transza znika');
+        assertEq(getRedeemableUnits(client), client.units, 'wszystko do umorzenia');
+    });
+
+    test('K3: sprzedaż zablokowanych udziałów zmniejsza transzę; stary klient = wszystko wolne (migracja)', () => {
+        world();
+        const old = playerFund.clients[1];
+        assertEq(getRedeemableUnits(old), 100, 'stary klient bez transz = wszystko wolne');
+        const client = playerFund.clients[0];
+        addTranche(client, 80, 10, { lockYears: 1 });
+        client.units -= 50; normalizeClientTranches(client);
+        assertEq(client.tranches[0].units, 50, 'transza przycięta do udziałów klienta');
+    });
+
+    test('K3: niezadowolony klient w lock-upie wystawia udziały na rynku wtórnym i obniża zaufanie (≤ −2 na tydzień)', () => {
+        world();
+        for (const c of playerFund.clients) { c.satisfaction = 0.05; addTranche(c, 100, 10, { lockYears: 2 }); }
+        const trust = playerFund.trust, seeded = Math.random;
+        Math.random = () => 0;
+        try { for (const c of playerFund.clients) handleLockedUnhappyClient(c, CLIENT_TYPES.careful); } finally { Math.random = seeded; }
+        assert(playerFund.clients.every(c => c.pendingSellUnits === 100), 'oferta całości na rynku wtórnym');
+        assertNear(trust - playerFund.trust, 2, 'zaufanie −2 (limit na tydzień)');
+    });
+
+    test('K4: gwarancja — dopłata dokładnie do ceny wejścia, gdy NAV < cena wejścia', () => {
+        world();
+        const client = playerFund.clients[0];
+        addTranche(client, 100, 12, { lockYears: 1, guarantee: true });
+        fundCash(9); // NAV = 9, cena wejścia 12 → dopłata 3 × 100
+        const cash0 = playerCash, units0 = playerFund.units;
+        macro.quarter += 4;
+        settleGuaranteedTranche(client, client.tranches[0]);
+        assertNear(cash0 - playerCash, 300, 'dopłata (12 − 9) × 100', 1e-6);
+        assertEq(playerFund.units, units0, 'udziały bez zmian');
+        assertEq(playerFund.guaranteeStats.topups, 1, 'licznik dopłat');
+    });
+
+    test('K4: gwarancja — udział w zysku 70% (30% zysku zostaje w funduszu)', () => {
+        world();
+        const client = playerFund.clients[0];
+        addTranche(client, 100, 10, { lockYears: 1, guarantee: true });
+        fundCash(15);
+        const units0 = playerFund.units;
+        macro.quarter += 4;
+        settleGuaranteedTranche(client, client.tranches[0]);
+        assertNear(units0 - playerFund.units, 0.3 * (15 - 10) * 100 / 15, 'umorzone udziały = 30% zysku / NAV', 1e-6);
+    });
+
+    test('K4: gwarancja wymaga lock-upu ≥ 1 rok i limitu 30% udziałów', () => {
+        world();
+        assert(!startSubscriptionCampaign({ duration: 'week', targetPct: 0.1, lockYears: 0, guarantee: true }).ok, 'bez lock-upu');
+        playerFund.clients[0].units = 300; playerFund.units = 1200;
+        addTranche(playerFund.clients[0], 300, 10, { lockYears: 1, guarantee: true });
+        const blocked = startSubscriptionCampaign({ duration: 'week', targetPct: 0.1, lockYears: 1, guarantee: true });
+        assert(!blocked.ok && /30%/.test(blocked.reason), `limit 30%: ${blocked.reason}`);
+    });
+
+    test('K4: kolejność gotówka → kredyt płynnościowy w granicy 20% aktywów; zaufanie −5; bez upadłości', () => {
+        world();
+        playerCash = 100000; playerFund.units = 10000; // aktywa 100 000 → limit kredytu 20 000
+        const trust = playerFund.trust;
+        assertEq(drawLiquidityLoan(500), 500, 'kredyt w granicach limitu');
+        assertEq(getLiquidityLoanPrincipal(), 500, 'kapitał kredytu');
+        assertNear(trust - playerFund.trust, 5, 'zaufanie −5 przy uruchomieniu', 1e-6);
+        assertNear(drawLiquidityLoan(1e9), 20000 - 500, 'kredyt do limitu 20% aktywów', 1e-6);
+        playerCash = 0; playerFund.units = 10; playerFund.liquidityLoan.principal = 0;
+        assertEq(drawLiquidityLoan(100), 0, 'przy zerowych aktywach limit = 0');
+    });
+
+    test('K4: niedobór gotówki przy rozliczeniu gwarancji pokrywa kredyt; brak limitu → klient dostaje mniej, zaufanie −15', () => {
+        world();
+        const client = playerFund.clients[0];
+        addTranche(client, 100, 20, { lockYears: 1, guarantee: true });
+        playerCash = 9000; // NAV 9, dopłata 11 × 100 = 1100; gotówka starcza
+        macro.quarter += 4;
+        settleGuaranteedTranche(client, client.tranches[0]);
+        assertNear(playerCash, 7900, 'wypłata z gotówki', 1e-6);
+        // brak gotówki i limitu: aktywa = 0,01 zł
+        const c2 = playerFund.clients[1];
+        addTranche(c2, 100, 20, { lockYears: 1, guarantee: true });
+        playerCash = 0.01; playerFund.units = 1000; const trust = playerFund.trust;
+        settleGuaranteedTranche(c2, c2.tranches[0]);
+        assertEq(playerFund.guaranteeStats.shortfalls, 1, 'gwarancja niepełna');
+        assertNear(trust - playerFund.trust, 15, 'zaufanie −15', 1e-6);
+        assert(playerFund.trust >= 0 && playerFund.clients.length > 0, 'fundusz nie upada');
+    });
+
+    test('K4: NAV pomniejszony o kredyt płynnościowy; spłata ok. 10% kapitału na tydzień, gdy gotówka > 5% aktywów', () => {
+        world(); fundCash(10);
+        const navBefore = getFundNav();
+        playerFund.liquidityLoan = { principal: 1000, drawn: 1000, since: 0 };
+        assertNear(navBefore - getFundNav(), 1000 / playerFund.units, 'NAV − kredyt / udziały', 1e-6);
+        const cash0 = playerCash;
+        processLiquidityLoanWeekly();
+        assert(playerFund.liquidityLoan.principal < 1000 && playerFund.liquidityLoan.principal >= 900 - 1e-6, 'spłata ok. 10% kapitału');
+        assert(playerCash < cash0, 'gotówka zmalała o odsetki i spłatę');
+    });
+
+    test('K4: zobowiązanie z gwarancji w raporcie = Σ max(0, cena wejścia − NAV) × udziały', () => {
+        world(); fundCash(8);
+        addTranche(playerFund.clients[0], 100, 12, { lockYears: 1, guarantee: true });
+        addTranche(playerFund.clients[1], 50, 7, { lockYears: 1, guarantee: true });
+        assertNear(getGuaranteeLiability(), 400, 'tylko transza poniżej ceny wejścia', 1e-6);
+    });
+
+    test('K5: warunki mandatów na portfelach testowych', () => {
+        const { a } = world();
+        a.sector = 'Żywność';
+        a.price = 10;
+        playerPortfolio = { AAA: { shares: 100, assetType: 'stock' } };
+        playerCash = 0;
+        assertNear(measureMandate(getMandateDef('defensive')), 1, 'portfel w całości defensywny');
+        assert(measureMandate(getMandateDef('growth')) < 0.4, 'nie wzrostowy');
+        const group = SECTORS['Żywność'].group;
+        assertNear(measureMandate(getMandateDef(`sector:${group}`)), 1, 'cały portfel w grupie sektorów');
+        assertEq(measureMandate(getMandateDef('safe')), 0, 'brak obligacji i lokat');
+        assertEq(getMandateDef('sector:nie_ma'), null, 'nieznana grupa sektorów');
+    });
+
+    test('K5: naruszenie przez 2 kolejne kwartały → mandat złamany (zaufanie −10 raz), udziały w lock-upie do umorzenia', () => {
+        world(); fundCash(10);
+        const client = playerFund.clients[0];
+        addTranche(client, 100, 10, { lockYears: 2, mandate: 'safe' });
+        assertEq(getRedeemableUnits(client), 0, 'zablokowane');
+        const trust = playerFund.trust;
+        for (let quarter = 0; quarter < 2; quarter++) { sampleMandatesWeekly(); evaluateMandatesQuarterly(); }
+        assert(isMandateBreached('safe'), 'mandat złamany');
+        assertEq(trust - playerFund.trust, 10, 'zaufanie −10');
+        sampleMandatesWeekly(); evaluateMandatesQuarterly();
+        assertEq(trust - playerFund.trust, 10, 'tylko raz');
+        assertEq(getRedeemableUnits(client), 100, 'klient może umorzyć także udziały z lock-upu');
+        const seeded = Math.random; Math.random = () => 0;
+        try { processMandateBreachExits(); } finally { Math.random = seeded; }
+        assert(getFundFlowStats().current.out.mandate > 0, 'przyczyna odpływu: złamany mandat');
+    });
+
+    test('K5: zmiana mandatu kosztuje 5 zaufania i przepisuje transze', () => {
+        world(); fundCash(10);
+        const client = playerFund.clients[0];
+        addTranche(client, 100, 10, { lockYears: 1, mandate: 'dividend' });
+        const trust = playerFund.trust;
+        assert(changeMandate('dividend', 'defensive'), 'zmiana mandatu');
+        assertEq(trust - playerFund.trust, 5, 'zaufanie −5');
+        assertEq(client.tranches[0].mandateId, 'defensive', 'transza z nowym mandatem');
+    });
+
+    test('K6: typy → grupy; nastrój ważony udziałami; koszt analityka IR wg poziomu', () => {
+        world();
+        assertEq(getInvestorGroupOf({ type: 'investor' }), 'institution', 'Inwestor');
+        assertEq(getInvestorGroupOf({ type: 'rich' }), 'wealthy', 'Bogaty');
+        assertEq(getInvestorGroupOf({ type: 'careful', vip: true }), 'wealthy', 'VIP');
+        assertEq(getInvestorGroupOf({ type: 'miser' }), 'retail', 'Sknera');
+        playerFund.clients = [
+            ensureClientProfile({ id: 'a', name: 'A', type: 'careful', units: 300, avgCost: 10, satisfaction: 1.0 }),
+            ensureClientProfile({ id: 'b', name: 'B', type: 'brave', units: 100, avgCost: 10, satisfaction: 0.0 })
+        ];
+        assertNear(getGroupMood('retail').value, (0.5 * 300 - 0.5 * 100) / 400 * 100, 'średnia ważona udziałami');
+        assertEq(getMoodWord(25), 'lubią cię', 'słowo'); assertEq(getMoodWord(null), 'brak klientów', 'brak klientów');
+        playerCash = 2_000_000; playerPortfolio = {};
+        assertNear(getIrQuarterCost(1), 1000, 'L1: 0,05% aktywów (≥ 200)');
+        assertNear(getIrQuarterCost(3), 3000, 'L3: 0,15% aktywów');
+        playerCash = 100; assertEq(getIrQuarterCost(1), 200, 'minimum 200 zł');
+    });
+
+    test('K6: koszt IR pobierany co kwartał; misje L2 powstają i nagradzają zadowolenie +0,10 i zaufanie +2', () => {
+        world(); fundCash(10);
+        setIrLevel(2);
+        const cash0 = playerCash;
+        processIrQuarterly();
+        assert(playerCash < cash0, 'koszt analityka');
+        assert(playerFund.ir.missions.retail, 'misja dla grupy detalicznej');
+        playerFund.ir.missions.retail.dueQ = currentQuarter();
+        Object.assign(playerFund.current, { maxDrawdown: 0, benchmarkDrawdown: 0 });
+        const sat = playerFund.clients[0].satisfaction, trust = playerFund.trust;
+        processIrQuarterly();
+        assertNear(playerFund.clients[0].satisfaction, sat + 0.10, 'zadowolenie +0,10', 1e-6);
+        assertNear(playerFund.trust, trust + 2, 'zaufanie +2', 1e-6);
+        assertEq(playerFund.ir.done, 1, 'misja wykonana');
+    });
+
+    test('K6: przyczyny L3 zgodne ze składnikami zadowolenia', () => {
+        world();
+        Object.assign(playerFund.current, { maxDrawdown: 0.30, benchmarkDrawdown: 0.05 });
+        const causes = getGroupCauses('retail');
+        assert(causes.includes(DRIFT_WORDS.drawdown), `obsunięcie wśród przyczyn: ${causes.join(', ')}`);
+        assert(causes.length <= 2, 'najwyżej 2 przyczyny');
+    });
+
+    test('K7: szansa sukcesu VIP = 25% + 35% (profil) + 30% (dane) + zaufanie/10 pp (10 000 losowań ±2 pp)', () => {
+        world();
+        playerFund.trust = 50;
+        const offer = { id: 1, profile: 'family', name: 'Test', expiresQ: 99 };
+        playerFund.periods = [{ fundReturn: 0.05, benchmarkReturn: 0.02, maxDrawdown: 0.1, benchmarkDrawdown: 0.1 }];
+        assertNear(getVipSuccessChance(offer, 'numbers'), 0.25 + 0.35 + 0.30 + 0.05, 'pasuje i dane potwierdzają', 1e-9);
+        assertNear(getVipSuccessChance(offer, 'vision'), 0.25 + 0.05, 'nie pasuje, dane nie potwierdzają', 1e-9);
+        playerFund.periods = [{ fundReturn: -0.05, benchmarkReturn: 0.02, maxDrawdown: 0.1, benchmarkDrawdown: 0.1 }];
+        assertNear(getVipSuccessChance(offer, 'numbers'), 0.25 + 0.35 + 0.05, 'pasuje, ale dane nie potwierdzają', 1e-9);
+        let hits = 0;
+        withSeededRandom(7, () => { for (let i = 0; i < 10000; i++) if (Math.random() < getVipSuccessChance(offer, 'numbers')) hits++; });
+        assert(Math.abs(hits / 10000 - 0.65) <= 0.02, `częstość ${hits / 10000}`);
+    });
+
+    test('K7: sukces VIP — wpłata 5–15% aktywów z lock-upem 1–2 lata; porażka — przerwa 4 kwartały', () => {
+        world(); fundCash(10);
+        playerFund.vip = { offers: [{ id: 1, profile: 'rentier', name: 'Rentier Test', expiresQ: 99 }, { id: 2, profile: 'baron', name: 'Baron Test', expiresQ: 99 }], yearOffers: { year: 0, n: 2 }, pauseUntilQ: -1, won: 0, lost: 0, nextId: 3 };
+        const assets = getFundAssets(), seeded = Math.random;
+        Math.random = () => 0; // sukces
+        let result; try { result = pitchVip(1, 'safety'); } finally { Math.random = seeded; }
+        assert(result.success, 'sukces');
+        const vipClient = playerFund.clients.find(c => c.vip);
+        assert(vipClient && result.value >= assets * 0.05 - 1 && result.value <= assets * 0.15 + 1, 'wpłata 5–15% aktywów');
+        const lock = vipClient.tranches[0].lockedUntilQ - currentQuarter();
+        assert(lock === 4 || lock === 8, `lock-up 1–2 lata (${lock} kw.)`);
+        Math.random = () => 0.999; // porażka
+        try { result = pitchVip(2, 'numbers'); } finally { Math.random = seeded; }
+        assert(!result.success && playerFund.vip.pauseUntilQ === currentQuarter() + 4, 'przerwa 4 kwartały');
+    });
+
+    test('K7: VIP wychodzi przed końcem lock-upu, gdy fundusz jest słabszy od GIG o > 10 pp w roku', () => {
+        world(); fundCash(10);
+        const vip = ensureClientProfile({ id: 'v', name: 'VIP', type: 'rich', units: 100, avgCost: 10, satisfaction: 0.7, vip: true });
+        playerFund.clients.push(vip); playerFund.units += 100;
+        addTranche(vip, 100, 10, { lockYears: 2 }); vip.tranches[0].vipExit = true;
+        playerFund.periods = [{ fundReturn: -0.10, benchmarkReturn: 0.02 }, { fundReturn: 0, benchmarkReturn: 0.02 }];
+        processVipExitsWeekly();
+        assertEq(getRedeemableUnits(vip), 100, 'wcześniejsze wyjście VIP-a');
+    });
+
+    test('K8: hasła Akademii i osiągnięcia 0.15.2 zarejestrowane', () => {
+        for (const id of ['runda_subskrypcji', 'lockup_fundusze_zamkniete', 'gwarancja_kapitalu', 'opcja_put', 'mandat_dryf_stylu', 'relacje_inwestorskie', 'dopasowanie_oferty', 'dyplomata_grup']) assert(ACADEMY_ENTRIES[id]?.quiz?.length === 3, `hasło ${id}`);
+        for (const id of ['vip_trust', 'guarantee_clean', 'diplomat', 'promise_kept', 'full_subscription']) assert(ACHIEVEMENTS[id], `osiągnięcie ${id}`);
+    });
+
+    test('Zapis: transze, kredyt, IR i VIP przechodzą przez zapis i wczytanie', () => {
+        world(); fundCash(10);
+        addTranche(playerFund.clients[0], 50, 10, { lockYears: 2, guarantee: true, mandate: 'safe' });
+        playerFund.liquidityLoan = { principal: 123, drawn: 123, since: 0 };
+        setIrLevel(2);
+        playerFund.vip = { offers: [], yearOffers: { year: 0, n: 1 }, pauseUntilQ: 5, won: 1, lost: 0, nextId: 2 };
+        const seeded = Math.random;
+        const report = applySaveSnapshot(JSON.parse(JSON.stringify(buildSaveSnapshot())));
+        Math.random = seeded;
+        assert(report.ok, 'wczytanie');
+        const t = playerFund.clients[0].tranches[0];
+        assert(t && t.guaranteed && t.mandateId === 'safe' && t.units === 50, 'transza');
+        assertEq(playerFund.liquidityLoan.principal, 123, 'kredyt'); assertEq(getIrLevel(), 2, 'IR'); assertEq(playerFund.vip.won, 1, 'VIP');
+    });
+});
+
 async function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

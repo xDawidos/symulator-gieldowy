@@ -1669,7 +1669,7 @@ function getFundPoolValue() {
 
 function getFundNav() {
     if (!playerFund || !(playerFund.units > 0)) return 0;
-    return getFundAssets() / playerFund.units;
+    return Math.max(0, getFundAssets() - (Number(playerFund.liquidityLoan?.principal) || 0)) / playerFund.units; // 0.15.2: kredyt płynnościowy jest zobowiązaniem
 }
 
 function getBenchmarkValue() {
@@ -2004,6 +2004,7 @@ function processFundWeekly() {
     playerFund.navHistory.push({ clockMs: playerFund.clockMs, nav: getFundNav() });
     if (playerFund.navHistory.length > 80) playerFund.navHistory.shift();
 
+    if (typeof processCampaignsWeekly === 'function') processCampaignsWeekly(); // 0.15.2: kalendarz, kampanie, transze, mandaty (campaigns.js)
     if (typeof processClientsWeekly === 'function') processClientsWeekly(); // charaktery klientów (clients.js)
     maybeTriggerForcedEmission();
     if (typeof runJuMarketWeekly === 'function') runJuMarketWeekly(); // rynek wtórny JU (clients.js)
@@ -2061,8 +2062,10 @@ function chargeManagementFee() {
 /** Umorzenie JU klienta po NAV. Przy braku gotówki fundusz sprzedaje pozycje. */
 function redeemClientUnits(client, units) {
     if (!(units > 0) || client.units <= 0) return 0;
-    units = Math.min(units, client.units);
-    if (client.units - units < 0.5) units = client.units; // bez resztek: klient odchodzi z całością (JU klientów = udziałów funduszu)
+    const redeemable = typeof getRedeemableUnits === 'function' ? getRedeemableUnits(client) : client.units; // 0.15.2: udziały w lock-upie nie są umarzane
+    units = Math.min(units, redeemable);
+    if (!(units > 0)) return 0;
+    if (client.units - units < 0.5 && redeemable >= client.units) units = client.units; // bez resztek: klient odchodzi z całością (JU klientów = udziałów funduszu)
 
     const nav = getFundNav();
     const value = units * nav;
@@ -2074,6 +2077,7 @@ function redeemClientUnits(client, units) {
     playerCash -= paid;
     playerFund.units -= paidUnits;
     client.units -= paidUnits;
+    if (typeof normalizeClientTranches === 'function') normalizeClientTranches(client);
     playerFund.current.outflow += paid;
     recordPayment('player-fund', 'external:klienci', paid, 'Umorzenie udziałów');
 
@@ -3665,8 +3669,8 @@ const SATISFACTION_UNHAPPY = 0.35;
 const FUND_FLOW_WARN_SHARE = 0.10;      // ostrzeżenie: napływ lub odpływ w kwartale > 10% udziałów
 const ORGANIC_INFLOW_BASE = 0.02;       // roczny napływ nowych klientów przy zaufaniu 50 i wyniku = GIG
 const TOPUP_INFLOW_BASE = 0.015;        // roczne dopłaty obecnych klientów przy wyniku = GIG (zależne od wielkości funduszu)
-const FUND_FLOW_OUT_REASONS = { performance: '📉 wynik gorszy od GIG', trust: '🤝 niskie zaufanie', fees: '💸 opłaty', drawdown: '🎢 obsunięcie większe niż GIG', bearMarket: '🎢 głęboka bessa', gate: '⏳ kolejka umorzeń (bramka)', noBuyer: '🛒 brak kupca na rynku wtórnym', panic: '😱 panika', ethics: '🌱 etyka spółek', fashion: '🤑 moda na akcje', other: '❔ inne' };
-const FUND_FLOW_IN_REASONS = { topup: '➕ dopłaty obecnych klientów', newClients: '🆕 nowi klienci', emission: '📥 Twoja emisja', fashion: '🤑 moda na akcje' };
+const FUND_FLOW_OUT_REASONS = { mandate: '📜 złamany mandat', performance: '📉 wynik gorszy od GIG', trust: '🤝 niskie zaufanie', fees: '💸 opłaty', drawdown: '🎢 obsunięcie większe niż GIG', bearMarket: '🎢 głęboka bessa', gate: '⏳ kolejka umorzeń (bramka)', noBuyer: '🛒 brak kupca na rynku wtórnym', panic: '😱 panika', ethics: '🌱 etyka spółek', fashion: '🤑 moda na akcje', other: '❔ inne' };
+const FUND_FLOW_IN_REASONS = { campaign: '📣 kampania emisyjna', topup: '➕ dopłaty obecnych klientów', newClients: '🆕 nowi klienci', emission: '📥 Twoja emisja', fashion: '🤑 moda na akcje' };
 
 function createFundFlowQuarter(quarter) {
     return { quarter, startUnits: playerFund?.units || 0, in: {}, out: {}, inUnits: 0, outUnits: 0, warned: false };
@@ -3873,7 +3877,7 @@ function processClientsWeekly() {
                     client.pendingSellUnits = 0;
                     client.pendingSellWeeks = 0;
                 } else if (redemptionBudget > 0) {
-                    const units = passRedemptionGate(client, Math.min(client.pendingSellUnits, redemptionBudget, client.units));
+                    const units = passRedemptionGate(client, Math.min(client.pendingSellUnits, redemptionBudget, getRedeemableUnits(client)));
                     const paid = redeemClientUnits(client, units);
                     redemptionBudget -= units;
                     client.pendingSellUnits = 0;
@@ -3906,8 +3910,8 @@ function processClientsWeekly() {
         // 🦊 Spryciarz: odchodzi po 1 kwartale z wynikiem funduszu <= -5%
         const periodReturn = fundPeriodReturn;
         if (def.key === 'sly' && current.elapsedMs >= FUND_PERIOD_MS / 3 && periodReturn <= -0.05) {
-            if (redemptionBudget > 0 && client.units > 0) {
-                const units = passRedemptionGate(client, Math.min(redemptionBudget, client.units));
+            if (redemptionBudget > 0 && getRedeemableUnits(client) > 0) {
+                const units = passRedemptionGate(client, Math.min(redemptionBudget, getRedeemableUnits(client)));
                 if (!(units > 0)) continue;
                 const paid = redeemClientUnits(client, units);
                 redemptionBudget -= units;
@@ -3925,11 +3929,12 @@ function processClientsWeekly() {
 
         if (unhappy) {
             if (client.loyal && Math.random() < 0.9) continue;
+            if (getRedeemableUnits(client) < 0.5) { handleLockedUnhappyClient(client, def); continue; } // 0.15.2: udziały w lock-upie
             if (Math.random() >= (1 - def.patience) * 0.8 * panicMultiplier || redemptionBudget <= 0) continue;
 
             const isPanic = def.panic || (def.key === 'fearful' && panicMultiplier > 1);
             const fraction = client.satisfaction < 0.15 || isPanic ? 1 : getRandomInRange(0.25, 0.6);
-            let units = Math.min(redemptionBudget, Math.max(1, client.units * fraction));
+            let units = Math.min(redemptionBudget, Math.max(1, getRedeemableUnits(client) * fraction), getRedeemableUnits(client));
 
             // Limit paniki: ≤ 5% udziałów na kwartał (0.15.0.1 C6b; wcześniej 8%)
             if (isPanic) {
@@ -4084,6 +4089,7 @@ function runPlayerJuMarket(fund) {
             if (buyer.value < price) buyers.shift();
         }
         if (seller.pendingSellUnits <= 0.01) { seller.pendingSellUnits = 0; seller.pendingSellWeeks = 0; }
+        if (typeof normalizeClientTranches === 'function') normalizeClientTranches(seller);
         if (seller.units < 0.5) redeemClientUnits(seller, seller.units); // resztka umorzona, klient odchodzi
     }
 
