@@ -2825,7 +2825,7 @@ function computeQuarterResults(stock) {
     fundamentals.revenue = Math.max(1000, fundamentals.revenue * (1 + Math.max(-0.25, Math.min(0.25, growthCapped))));
 
     // 0.13: strajk, epidemia, klęska — przychody tylko tego kwartału (baza przychodów bez zmian).
-    const quarterFactor = (typeof getStrikeRevenueFactor === 'function' ? getStrikeRevenueFactor(stock) : 1) * (typeof getSocietyRevenueFactor === 'function' ? getSocietyRevenueFactor(stock) : 1) * consumeNicheRevenueFactor(stock) * getCooperationShockFactor(stock); // T3: sezon TV/Rozrywka; T5: strajk kooperanta (połowa szoku)
+    const quarterFactor = (typeof getStrikeRevenueFactor === 'function' ? getStrikeRevenueFactor(stock) : 1) * (typeof getSocietyRevenueFactor === 'function' ? getSocietyRevenueFactor(stock) : 1) * consumeNicheRevenueFactor(stock) * getCooperationShockFactor(stock) * (typeof getCrisisRevenueFactor === 'function' ? getCrisisRevenueFactor(stock) : 1); // T3: sezon TV/Rozrywka; T5: strajk kooperanta (połowa szoku)
     const baseRevenue = fundamentals.revenue;
     const revenue = baseRevenue * quarterFactor;
     const lostRevenue = baseRevenue - revenue; // dźwignia operacyjna: 40% kosztów jest sztywnych w krótkim terminie

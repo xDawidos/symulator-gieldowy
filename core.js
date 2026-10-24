@@ -2170,6 +2170,10 @@ function getEconomyPhaseInfo() {
 function advanceEconomyCycle() {
     const cycle = economyCycle;
     cycle.quartersInPhase++;
+    if (typeof crisisForcesRecession === 'function' && crisisForcesRecession()) { // 0.15.3 W2: linie kryzysu wymuszają Recesję
+        if (cycle.phase !== 'recession') { cycle.phase = 'recession'; cycle.quartersInPhase = 0; cycle.phaseLength = getRandomIntInRange(...ECONOMY_PHASES.recession.length); }
+        else cycle.quartersInPhase = Math.min(cycle.quartersInPhase, cycle.phaseLength - 1);
+    }
 
     if (cycle.quartersInPhase >= cycle.phaseLength) {
         const previous = cycle.phase;
@@ -2637,6 +2641,9 @@ function updateAllSectorPremiums() {
             stock.sectorPremium = totalPrem;
         } else {
             stock.sectorPremium = 0;
+        }
+        if (typeof getSectorShockPremium === 'function') { // 0.15.3 W0: aktywne szoki sektorowe, łącznie −60%…+150%
+            stock.sectorPremium = Math.max(SECTOR_PREMIUM_MIN, Math.min(SECTOR_PREMIUM_MAX, stock.sectorPremium + getSectorShockPremium(stock)));
         }
     });
 }
@@ -3111,6 +3118,7 @@ function triggerMarketCrash(options = {}) {
     marketCrash.targetDrop = options.targetDrop || -(0.25 + Math.random() * 0.10); // -25..-35 pp
     marketCrash.startPremium = regime ? (regime.premium || 0) : 0;
     marketCrash.marginCallsExecuted = false;
+    marketCrash.floor = Number.isFinite(options.floor) ? options.floor : null; // 0.15.3: Czarny czwartek schodzi poniżej dna −35%
 
     if (typeof logEvent === 'function') {
         logEvent(`💥 KRACH NA GIEŁDZIE! Na parkiecie wybuchła panika! Inwestorzy masowo wyprzedają akcje!`, 'market');
@@ -3141,7 +3149,7 @@ function processMarketCrashWeekly(market = 'home') {
     const progress = Math.min(1.0, marketCrash.weeksElapsed / Math.max(1, marketCrash.durationWeeks));
     const regime = getMarketRegime(market);
     if (regime) {
-        const bottom = Math.max(MARKET_CRASH_PREMIUM_FLOOR, marketCrash.startPremium + marketCrash.targetDrop); // nie niżej niż dno Kapitulacji
+        const bottom = Math.max(Number.isFinite(marketCrash.floor) ? marketCrash.floor : MARKET_CRASH_PREMIUM_FLOOR, marketCrash.startPremium + marketCrash.targetDrop); // nie niżej niż dno Kapitulacji
         regime.premium = marketCrash.startPremium + (bottom - marketCrash.startPremium) * progress;
         regime.premiumTarget = regime.premium;
     }
@@ -3160,7 +3168,7 @@ function processMarketCrashWeekly(market = 'home') {
                 logEvent(`📉 Po krachu rynek przechodzi w fazę: ${nextDef.name}.`, 'market');
             }
         }
-        reactCentralBankToCrash();
+        if (!marketCrash.theme) reactCentralBankToCrash(); // linie kryzysu mają własną reakcję banku centralnego (0.15.3 W3)
     }
 }
 
@@ -3177,6 +3185,7 @@ function checkMarketCrashQuarterly(market = 'home') {
     const regime = getMarketRegime(market);
     if (!regime) return;
     if (isMarketCrashing(market)) return;
+    if (typeof isCrisisActive === 'function' && isCrisisActive()) return; // w linii kryzysu nie losujemy krachu
     if (!canMarketCrashInPhase(regime)) { checkKnfCoolingEuphoria(regime); return; }
 
     let crashChance = MARKET_CRASH_BASE_CHANCE;
@@ -3207,7 +3216,7 @@ function checkMarketCrashQuarterly(market = 'home') {
     }
 
     if (Math.random() < crashChance) {
-        triggerMarketCrash();
+        if (!(typeof maybeReplaceCrashWithCrisisLine === 'function' && maybeReplaceCrashWithCrisisLine())) triggerMarketCrash(); // 0.15.3: 40% krachów to linie kryzysu
     }
 
     // KNF chłodzi euforię: gdy premia rynku > +25% przez >= 2 kw., szansa 50% na obniżenie dopuszczalnej dźwigni botów na 4 kw.
@@ -3364,17 +3373,7 @@ function checkPlayerMarginCall() {
     return { required, repaid, sold };
 }
 
-/** Punkt zaczepienia dla 0.15.1: szok sektorowy. */
-function applySectorShock(sector, premiumShock, durationQuarters = 2) {
-    if (typeof stocks === 'undefined' || !Array.isArray(stocks)) return;
-    for (const stock of stocks) {
-        if (!stock || stock.assetType === 'Holding') continue;
-        const mainSec = typeof getMainSector === 'function' ? getMainSector(stock) : (Array.isArray(stock.sector) ? stock.sector[0] : stock.sector);
-        if (mainSec === sector || (Array.isArray(stock.sector) && stock.sector.includes(sector))) {
-            stock.sectorPremium = (stock.sectorPremium || 0) + premiumShock;
-        }
-    }
-}
+// 0.15.3 W0 (naprawa B5): szok sektorowy (applySectorShock) jest stanem z czasem trwania w crises.js i sumuje się z bańką w updateAllSectorPremiums.
 
 /** Debug: ręczne wywołanie krachu rynkowego. */
 function debugTriggerMarketCrash() {
@@ -4723,6 +4722,8 @@ function runCentralBankMeeting() {
     ensureMacroState();
     const traits = getBcTraits();
     let change = getPlannedRateChange(getTaylorRate());
+    const crisisChange = typeof getCrisisRateChange === 'function' ? getCrisisRateChange() : null; // 0.15.3 W3: stopy wg linii kryzysu
+    if (crisisChange !== null) change = crisisChange;
     let surpriseNote = '';
     if (traits.includes('Partyjniak') && Math.random() < 0.25) {
         change = roundRateStep(getRandomInRange(-BC_MAX_STEP, BC_MAX_STEP));

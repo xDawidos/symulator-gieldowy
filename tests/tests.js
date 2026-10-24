@@ -119,6 +119,7 @@ function resetWorld(companies) {
         marketRegimes.home.premiumTarget = 0.0;
     }
     if (typeof activeSectorBubble !== 'undefined') activeSectorBubble = null;
+    if (typeof resetCrises === 'function') resetCrises(); // 0.15.3
     if (typeof sectorBubbleCooldown !== 'undefined') sectorBubbleCooldown = 0;
     if (typeof updateAllSectorPremiums === 'function') updateAllSectorPremiums();
     activeTenders = [];
@@ -8112,8 +8113,10 @@ group('Portfel: donut podziału sektorowego (#sector-donut-area)', () => {
     });
 });
 
+const REAL_REPLACE_CRASH_WITH_LINE = typeof maybeReplaceCrashWithCrisisLine === 'function' ? maybeReplaceCrashWithCrisisLine : null; // 0.15.3: testy krachów liczą krachy bez linii kryzysu
 group('0.15.0.1: Poprawki 0.15 (bezpiecznik, margin call, pieniądze, emisje, krach, odpływ)', () => {
     function world() {
+        if (REAL_REPLACE_CRASH_WITH_LINE) maybeReplaceCrashWithCrisisLine = () => false;
         const a = makeCompany('AAA'), b = makeCompany('BBB');
         a.name = 'Alfa Testowa'; b.name = 'Beta Testowa';
         resetWorld([a, b]);
@@ -9443,6 +9446,314 @@ group('0.15.2: Kochaj i zarabiaj (kalendarz, kampanie, lock-up, gwarancja, manda
         const t = playerFund.clients[0].tranches[0];
         assert(t && t.guaranteed && t.mandateId === 'safe' && t.units === 50, 'transza');
         assertEq(playerFund.liquidityLoan.principal, 123, 'kredyt'); assertEq(getIrLevel(), 2, 'IR'); assertEq(playerFund.vip.won, 1, 'VIP');
+    });
+});
+
+group('0.15.3: Wielkie Kryzysy (szoki sektorowe, silnik linii, 5 linii, reakcje instytucji, scenariusz)', () => {
+    function world(extra = []) {
+        const a = makeCompany('AAA', { sector: ['Technologia'] }), b = makeCompany('BBB', { sector: ['Turystyka'] });
+        resetWorld([a, b, ...extra]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        initMarketRegimes();
+        marketCrash = createMarketCrashState();
+        marketHalt = createMarketHaltState();
+        macro.quarter = 20;
+        mailbox = createMailbox();
+        maybeReplaceCrashWithCrisisLine = REAL_REPLACE_CRASH_WITH_LINE;
+        commercialBanks.forEach(bank => { bank.stockPortfolio = bank.stockPortfolio || {}; });
+        return { a, b };
+    }
+    const tick = (n = 1) => { for (let i = 0; i < n; i++) { macro.quarter++; processCrisesQuarterly(); processCrisesWeekly(); } };
+
+    test('W0: szok narasta, trwa zadany czas i wygasa do zera', () => {
+        const { a } = world();
+        playerFund.calWeek = 1;
+        const shock = addSectorShock('Technologia', -0.40, { rampQ: 2, holdQ: 2, fadeQ: 2, startQ: 20 });
+        assertNear(getSectorShockValue(shock, 20), 0, 'start 0');
+        assertNear(getSectorShockValue(shock, 21), -0.20, 'połowa narastania');
+        assertNear(getSectorShockValue(shock, 22), -0.40, 'cel');
+        assertNear(getSectorShockValue(shock, 23.9), -0.40, 'trwanie');
+        assertNear(getSectorShockValue(shock, 25), -0.20, 'połowa wygasania');
+        assertEq(getSectorShockValue(shock, 26), 0, 'wygasł');
+        assert(isSectorShockExpired(shock, 26), 'oznaczony jako wygasły');
+        macro.quarter = 26; pruneSectorShocks();
+        assertEq(sectorShocks.length, 0, 'wygasły szok usunięty');
+        updateAllSectorPremiums();
+        assertEq(a.sectorPremium, 0, 'premia wróciła do zera');
+    });
+
+    test('W0: szok nie jest nadpisywany przez kolejną aktualizację premii (naprawa B5)', () => {
+        const { a } = world();
+        addSectorShock('Technologia', -0.30, { holdQ: 3, startQ: crisisTime() });
+        assertNear(a.sectorPremium, -0.30, 'od razu po utworzeniu');
+        updateAllSectorPremiums(); updateAllSectorPremiums();
+        assertNear(a.sectorPremium, -0.30, 'po kolejnych aktualizacjach');
+    });
+
+    test('W0: szok sumuje się z bańką; łączny limit −60%…+150%', () => {
+        const { a } = world();
+        activeSectorBubble = { sector: 'Technologia', subsector: null, premium: 0.30, phase: 'inflating' };
+        addSectorShock('Technologia', -0.20, { holdQ: 3, startQ: crisisTime() });
+        assertNear(a.sectorPremium, 0.10, 'bańka + szok');
+        addSectorShock('Technologia', -0.90, { holdQ: 3, startQ: crisisTime() });
+        assertEq(a.sectorPremium, SECTOR_PREMIUM_MIN, 'dolny limit');
+        activeSectorBubble = null; sectorShocks = [];
+        addSectorShock('Technologia', 2.0, { holdQ: 3, startQ: crisisTime() });
+        assertEq(a.sectorPremium, SECTOR_PREMIUM_MAX, 'górny limit');
+    });
+
+    test('W0: szok działa według udziału segmentu (konglomerat mniej wystawiony)', () => {
+        const { a } = world();
+        a.segments = [{ sector: 'Technologia', subsector: null, share: 0.3 }, { sector: 'Żywność', subsector: null, share: 0.7 }];
+        addSectorShock('Technologia', -0.40, { holdQ: 3, startQ: crisisTime() });
+        assertNear(a.sectorPremium, -0.12, 'udział 30% × −40%');
+    });
+
+    test('W0: szoki i linia przeżywają zapis i wczytanie', () => {
+        world();
+        addSectorShock('Turystyka', -0.25, { holdQ: 3, startQ: crisisTime(), lineId: 'x', revenue: -0.1 });
+        startCrisisLine('oil', { forced: true });
+        const seeded = Math.random;
+        const report = applySaveSnapshot(JSON.parse(JSON.stringify(buildSaveSnapshot())));
+        Math.random = seeded;
+        assert(report.ok, 'wczytanie');
+        assert(sectorShocks.some(s => s.sector === 'Turystyka' && s.target === -0.25), 'szoki po wczytaniu');
+        assertEq(crisisLine?.id, 'oil', 'linia po wczytaniu');
+        assert(crisisState.used.includes('oil'), 'lista użytych linii');
+    });
+
+    test('W0: spadek przychodów sektora w linii proporcjonalny do postępu szoku', () => {
+        const { a } = world();
+        addSectorShock('Technologia', -0.40, { rampQ: 2, holdQ: 2, fadeQ: 2, startQ: crisisTime(), revenue: -0.20 });
+        assertEq(getCrisisRevenueFactor(a), 1, 'na starcie bez efektu');
+        sectorShocks[0].startQ = crisisTime() - 2;
+        assertNear(getCrisisRevenueFactor(a), 0.80, 'pełny przychód linii na szczycie');
+    });
+
+    test('W1: linia przechodzi wszystkie etapy po kolei i wraca do stanu bez linii', () => {
+        world();
+        startCrisisLine('pandemic', { forced: true });
+        const seen = [crisisLine.stage];
+        for (let i = 0; i < 40 && crisisLine; i++) { tick(); if (crisisLine && seen[seen.length - 1] !== crisisLine.stage) seen.push(crisisLine.stage); }
+        assertEq(seen.join('>'), CRISIS_STAGES.join('>'), 'kolejność etapów');
+        assertEq(crisisLine, null, 'linia zakończona');
+        assertEq(crisisState.history.length, 1, 'retrospektywa zapisana');
+    });
+
+    test('W1: częstość nowej linii ≈ 1%/kw. po ≥ 12 kw. spokoju (10 000 losowań ±0,4 pp)', () => {
+        world();
+        let starts = 0;
+        withSeededRandom(99, () => {
+            for (let i = 0; i < 10000; i++) {
+                crisisState.used = []; crisisState.lastEventQ = macro.quarter - 20; marketCrash.startQuarter = null;
+                getMarketRegime('home').phase = 'euphoria'; getMarketRegime('home').premium = 0.3;
+                processCrisesQuarterly();
+                if (crisisLine) { starts++; crisisLine = null; sectorShocks = []; }
+            }
+        });
+        assert(Math.abs(starts / 10000 - CRISIS_BASE_CHANCE) <= 0.004, `częstość ${starts / 10000}`);
+    });
+
+    test('W1: bez linii przed upływem 12 kw. od krachu lub poprzedniej linii', () => {
+        world();
+        let starts = 0;
+        withSeededRandom(5, () => { for (let i = 0; i < 2000; i++) { crisisState.lastEventQ = macro.quarter - 5; processCrisesQuarterly(); if (crisisLine) { starts++; crisisLine = null; } } });
+        assertEq(starts, 0, 'żadna linia w okresie spokoju');
+    });
+
+    test('W1: linia zastępuje krach w 40% przypadków (bez Zapowiedzi)', () => {
+        world();
+        const seeded = Math.random;
+        try {
+            Math.random = () => 0.1;
+            assert(maybeReplaceCrashWithCrisisLine(), 'losowanie < 40% — linia');
+            assertEq(crisisLine.stage, 'burst', 'od razu Wybuch');
+            crisisLine = null; sectorShocks = []; crisisState.used = [];
+            Math.random = () => 0.9;
+            assert(!maybeReplaceCrashWithCrisisLine(), 'losowanie ≥ 40% — zwykły krach');
+        } finally { Math.random = seeded; }
+    });
+
+    test('W1: linie bez powtórzeń, dopóki są niewykorzystane', () => {
+        world();
+        getMarketRegime('home').phase = 'euphoria'; getMarketRegime('home').premium = 0.3;
+        const picked = [];
+        for (let i = 0; i < 5; i++) {
+            const eligible = getEligibleCrisisLines();
+            assert(eligible.every(id => !picked.includes(id)), 'nie powtarza użytej linii');
+            const id = eligible[0]; picked.push(id); crisisState.used.push(id);
+        }
+        assertEq(new Set(picked).size, 5, 'pięć różnych linii');
+        assertEq(getEligibleCrisisLines().length, 0, 'wszystkie wykorzystane');
+    });
+
+    test('W1: ranking upadków po dźwigni, kondycji i wystawieniu; bez spółek Skarbu Państwa', () => {
+        const heavy = makeCompany('HVY', { sector: ['Turystyka'], liabilities: 4_500_000 }), light = makeCompany('LGT', { sector: ['Turystyka'], liabilities: 100_000 });
+        const state = makeCompany('STA', { sector: ['Turystyka'], liabilities: 4_800_000 }); state.isStateOwned = true;
+        world([heavy, light, state]);
+        const ranked = rankCrisisVictims('pandemic').map(r => r.stock.symbol);
+        assertEq(ranked[0], 'HVY', 'największa dźwignia pierwsza');
+        assert(!ranked.includes('STA'), 'spółka państwowa pominięta');
+        assert(ranked.indexOf('HVY') < ranked.indexOf('LGT'), 'dźwignia wyżej niż mała dźwignia');
+    });
+
+    test('W1: upadłości — 1–3 kandydatów, sygnał w kondycji, upadek przez usunięcie z gry', () => {
+        const stocksExtra = Array.from({ length: 6 }, (_, i) => makeCompany(`T${i}`, { sector: ['Turystyka'], liabilities: 1_000_000 * (i + 1) }));
+        world(stocksExtra);
+        startCrisisLine('pandemic', { forced: true, skipSpark: true });
+        assert(crisisLine.victims.length >= 1 && crisisLine.victims.length <= CRISIS_MAX_VICTIMS, `kandydaci ${crisisLine.victims.length}`);
+        const first = stocks.find(s => s.symbol === crisisLine.victims[0]);
+        assert(first.financialHealth <= -3.5, 'sygnał w kondycji spółki');
+        const seeded = Math.random; Math.random = () => 0;
+        try { executeCrisisBankruptcies(crisisLine, CRISIS_LINES.pandemic, 3); } finally { Math.random = seeded; }
+        assert(crisisLine.bankrupted.length >= 1, 'upadłość zapisana w linii');
+        assert(!stocks.some(s => s.symbol === crisisLine.bankrupted[0]), 'spółka usunięta z gry');
+    });
+
+    test('W2: pięć linii ma dane (tracą, zyskują, reakcja) i wszystkie przechodzą etapy w scenariuszu', () => {
+        for (const id of CRISIS_LINE_ORDER) {
+            const stocksExtra = Array.from({ length: 4 }, (_, i) => makeCompany(`Z${i}`, { sector: ['Turystyka'], liabilities: 1_000_000 }));
+            world(stocksExtra);
+            const def = CRISIS_LINES[id];
+            assert(def.lose.length >= 4 && def.news.burst && def.rate && def.victims, `dane linii ${id}`);
+            startCrisisLine(id, { forced: true });
+            let guard = 0;
+            while (crisisLine && guard++ < 60) tick();
+            assertEq(crisisLine, null, `linia ${id} zakończona`);
+            assertEq(crisisState.history[0].id, id, 'retrospektywa linii');
+            sectorShocks = [];
+        }
+    });
+
+    test('W2: Wybuch tworzy szoki tracących i zyskujących sektorów oraz krach z tematem', () => {
+        world();
+        startCrisisLine('banking', { forced: true, skipSpark: true });
+        const lose = sectorShocks.filter(s => s.lineId === 'banking' && s.target < 0).map(s => s.sector);
+        assert(lose.includes('Bankowość') && lose.includes('Nieruchomości'), 'banki i nieruchomości tracą');
+        assert(sectorShocks.some(s => s.sector === 'Żywność' && s.target > 0), 'żywność zyskuje');
+        assertEq(marketCrash.theme, 'banking', 'krach z tematem linii');
+        assert(marketCrash.targetDrop <= -0.20 && marketCrash.targetDrop >= -0.30, 'spadek premii rynku 20–30 pp');
+    });
+
+    test('W2: Czarny czwartek schodzi poniżej dna −35% (floor −60%)', () => {
+        world();
+        getMarketRegime('home').premium = 0.3;
+        startCrisisLine('black', { forced: true, skipSpark: true });
+        assertEq(marketCrash.floor, -0.60, 'dno krachu z linii');
+        for (let i = 0; i < 6; i++) processMarketCrashWeekly();
+        const bottom = getMarketRegime('home').premium;
+        assert(bottom < MARKET_CRASH_PREMIUM_FLOOR, `premia ${bottom} poniżej −35%`);
+        assert(bottom >= -0.60 - 1e-9 && bottom <= -0.40 + 1e-9, 'dno premii rynku −40…−60%');
+    });
+
+    test('W2: linie wymuszają Recesję; szok naftowy dodaje inflację (+2…+4 pp)', () => {
+        world();
+        const before = macro.shocks.inflation;
+        startCrisisLine('oil', { forced: true, skipSpark: true });
+        const added = macro.shocks.inflation - before;
+        assert(added >= 0.02 - 1e-9 && added <= 0.04 + 1e-9, `inflacja +${added}`);
+        economyCycle.phase = 'expansion'; economyCycle.quartersInPhase = 0; economyCycle.phaseLength = 8;
+        advanceEconomyCycle();
+        assertEq(economyCycle.phase, 'recession', 'gospodarka w recesji');
+    });
+
+    test('W2: pożar sygnału — Zapowiedź uruchamia mały szok makro tego samego typu', () => {
+        world();
+        const before = macro.shocks.inflation;
+        startCrisisLine('oil', { forced: true });
+        assertEq(crisisLine.stage, 'spark', 'etap Zapowiedź');
+        assert(macro.shocks.inflation > before, 'szok naftowy (inflacja)');
+        assertEq(crisisState.signals, 1, 'licznik sygnałów');
+    });
+
+    test('W3: kierunek stóp wg linii — cięcia (bankowa, internetowa, pandemia), podwyżki (naftowa), zwłoka potem cięcia (1929)', () => {
+        const run = id => {
+            world();
+            centralBank.baseInterestRate = 0.05;
+            startCrisisLine(id, { forced: true, skipSpark: true });
+            startCrisisReactions(crisisLine, CRISIS_LINES[id]);
+            const changes = [];
+            for (let i = 0; i < 4; i++) { const c = getCrisisRateChange(); if (c !== null) { changes.push(c); centralBank.baseInterestRate += c; } }
+            return changes;
+        };
+        assert(run('banking').every(c => c < 0) && run('banking').length === 2, 'bankowa: 2 cięcia');
+        assert(run('dotcom').every(c => c < 0), 'internetowa: cięcia');
+        assert(run('oil').every(c => c > 0), 'naftowa: podwyżki mimo recesji');
+        const black = run('black');
+        assert(black[0] === 0 && black[1] === 0 && black[2] < 0, `1929: dwie kwartały zwłoki, potem cięcia: ${black.join(',')}`);
+        const pandemic = run('pandemic');
+        assert(pandemic[0] < 0 && centralBank.baseInterestRate >= 0.005, 'pandemia: cięcie nie niżej niż 0,5%');
+    });
+
+    test('W3: ratunek banku z budżetu państwa zamiast upadku, gdy skarb pozwala', () => {
+        const bank = makeCompany('BNK', { sector: ['Bankowość'], liabilities: 5_200_000 }); bank.isBankStock = true;
+        world([bank]);
+        startCrisisLine('banking', { forced: true, skipSpark: true });
+        const cost = Math.max(0, bank.balanceSheet.liabilities - bank.balanceSheet.assets) + getMarketCapValue(bank) * 0.10;
+        governmentTreasury = cost * 3;
+        const treasury0 = governmentTreasury, cash0 = bank.cash;
+        assert(tryRescueBank(bank, CRISIS_LINES.banking), 'ratunek');
+        assertNear(treasury0 - governmentTreasury, cost, 'skarb zapłacił koszt', 1e-6);
+        assertNear(bank.cash - cash0, cost, 'bank dostał gotówkę (pieniądze nie znikają)', 1e-6);
+        governmentTreasury = 0;
+        assert(!tryRescueBank(bank, CRISIS_LINES.banking), 'bez środków w skarbie bank nie jest ratowany');
+    });
+
+    test('W3: dotacje dla sektorów tracących idą ze skarbu do spółek', () => {
+        const { b } = world();
+        governmentTreasury = 1_000_000;
+        const cash0 = b.cash, treasury0 = governmentTreasury;
+        const paid = crisisSubsidy(['Turystyka'], 0.03, 'Test');
+        assert(paid > 0, 'wypłacono dotacje');
+        assertNear(b.cash - cash0, treasury0 - governmentTreasury, 'kwota ze skarbu = kwota u spółki', 1e-6);
+    });
+
+    test('W4: scenariusz na start — wybrana linia startuje w 2.–4. roku i zapisuje się w CV', () => {
+        world();
+        assert(setCrisisScenario('banking'), 'ustawiony');
+        assert(crisisState.scenarioStartQ >= 5 && crisisState.scenarioStartQ <= 16, `kwartał ${crisisState.scenarioStartQ}`);
+        assert(playerProfile.cv.some(item => /Kryzys bankowy/.test(item.text)), 'wpis w CV');
+        macro.quarter = crisisState.scenarioStartQ - 1;
+        tick();
+        assertEq(crisisLine?.id, 'banking', 'linia wystartowała Zapowiedzią');
+        assertEq(crisisLine.stage, 'spark', 'od Zapowiedzi');
+        assertEq(crisisState.scenario, null, 'scenariusz zużyty');
+        assert(!setCrisisScenario(''), 'puste = losowo');
+    });
+
+    test('W5: sekcja „Kryzys” i wiersz „Wystawienie na kryzys”', () => {
+        const { b } = world();
+        assert(/nie trwa/.test(renderCrisisSection()), 'bez linii: normalny cykl');
+        startCrisisLine('pandemic', { forced: true, skipSpark: true });
+        const html = renderCrisisSection();
+        assert(/Pandemia/.test(html) && /Wybuch/.test(html) && /Turystyka/.test(html), 'etap i sektory w sekcji');
+        assertEq(getCrisisExposureLabel(b), 'wysoki', 'turystyka w pandemii: wysokie wystawienie');
+        assertEq(getCrisisExposureLabel(stocks[0]), 'niski', 'technologia w pandemii: niskie wystawienie');
+    });
+
+    test('W5: nagłówki w pasku newsów na każdym etapie i mail z retrospektywą', () => {
+        world();
+        const before = mailbox.messages.length;
+        startCrisisLine('oil', { forced: true });
+        for (let i = 0; i < 40 && crisisLine; i++) tick();
+        assert(mailbox.messages.some(m => /Retrospektywa: Szok naftowy/.test(m.subject)), 'mail z retrospektywą');
+        assert(mailbox.messages.length > before, 'nowe maile');
+    });
+
+    test('W6: hasła Akademii (5 linii + 3 ogólne) i 6 osiągnięć zarejestrowane; hasło linii po jej końcu', () => {
+        for (const id of ['kryzys_banking', 'kryzys_dotcom', 'kryzys_oil', 'kryzys_black', 'kryzys_pandemic', 'stagflacja', 'ksztalty_odbicia', 'ratowanie_bankow']) assert(ACADEMY_ENTRIES[id]?.quiz?.length === 3, `hasło ${id}`);
+        for (const id of ['crisis_banking', 'crisis_dotcom', 'crisis_oil', 'crisis_black', 'crisis_pandemic', 'crisis_collector']) assert(ACHIEVEMENTS[id], `osiągnięcie ${id}`);
+        world();
+        startCrisisLine('pandemic', { forced: true });
+        for (let i = 0; i < 40 && crisisLine; i++) tick();
+        assert(isAcademyUnlocked('kryzys_pandemic'), 'hasło odblokowane po linii');
+    });
+
+    test('W6: Kolekcjoner kryzysów po przeżyciu wszystkich 5 linii', () => {
+        world();
+        for (const id of CRISIS_LINE_ORDER) crisisState.history.push({ id, fundChange: 0, gigChange: 0, trust: 50, techShare: 0 });
+        checkCrisisAchievements(crisisState.history[4], { id: 'pandemic', positionStart: playerProfile.positionId });
+        assert(getPlayerAchievements().crisis_collector !== undefined, 'osiągnięcie zdobyte');
     });
 });
 

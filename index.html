@@ -1369,6 +1369,7 @@
           <label>Twoje imię<input id="intro-name" maxlength="30" required value="Dawid"></label>
           <label>Nazwa korporacji<input id="intro-corporation" maxlength="40" required value="Wawelska Grupa Inwestycyjna"></label>
           <label>Nazwa funduszu<input id="intro-fund" maxlength="40" required value="Fundusz Pierwszy Krok"></label>
+          <label>Kryzys w grze<select id="intro-crisis"><option value="">Losowo (domyślnie)</option><option value="banking">Kryzys bankowy</option><option value="dotcom">Bańka internetowa</option><option value="oil">Szok naftowy</option><option value="black">Czarny czwartek</option><option value="pandemic">Pandemia</option></select></label>
           <div class="intro-country-label">Kraj startowy</div>
           <div id="intro-countries" class="intro-countries"></div>
           <button type="submit" class="btn-pause">Zaczynam pracę</button>
@@ -1582,6 +1583,7 @@
 <script src="learning.js"></script>
 <script src="events.js"></script>
 <script src="campaigns.js"></script>
+<script src="crises.js"></script>
 <script src="ui.js"></script>
 <script src="lib/lz-string.min.js"></script>
 <script src="save_store.js"></script>

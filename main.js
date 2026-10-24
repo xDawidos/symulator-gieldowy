@@ -222,6 +222,7 @@ function buildSaveSnapshot({ compact = 0 } = {}) {
         marketRegimes,
         marketCrash: typeof marketCrash !== 'undefined' ? marketCrash : null,
         marketHalt: typeof marketHalt !== 'undefined' ? marketHalt : null,
+        crises: typeof crisisSnapshot === 'function' ? crisisSnapshot() : null, // 0.15.3
         buyoutState: typeof buyoutState !== 'undefined' ? buyoutState : null, // 0.15.1 M2
         genealogyLog: typeof genealogyLog !== 'undefined' ? genealogyLog : [], // 0.15.1 M10
         blockDealState: typeof blockDealState !== 'undefined' ? blockDealState : null, // 0.15.1 M4
@@ -712,6 +713,7 @@ function applySaveSnapshot(snapshot) {
     } else if (typeof createMarketHaltState === 'function') {
         marketHalt = createMarketHaltState();
     }
+    if (typeof applyCrisisSnapshot === 'function') applyCrisisSnapshot(snapshot.crises); // 0.15.3: brak pola = brak linii (migracja)
     activeSectorBubble = snapshot.sectorBubble || null;
     sectorBubbleCooldown = Number(snapshot.sectorBubbleCooldown) || 0;
     if ((snapshot.version || 0) < 15) {
@@ -1373,6 +1375,7 @@ gameTimers.weekly = setGameInterval(() => {
         if (typeof updateMarketSentimentWeekly === 'function') updateMarketSentimentWeekly(); // 0.15 H2a: wskaźnik Strachu i Chciwości
         // 0.15 H4: Postęp krachu rynkowego i reset punktu odniesienia bezpiecznika giełdowego
         if (typeof processMarketCrashWeekly === 'function') processMarketCrashWeekly();
+        if (typeof processCrisesWeekly === 'function') processCrisesWeekly(); // 0.15.3: płynna zmiana premii szoków sektorowych
         if (typeof resetMarketHaltWeekly === 'function') resetMarketHaltWeekly(marketIndexes.find(idx => idx.id === 'GIG')?.value);
         if (typeof checkAcademyTriggers === 'function') checkAcademyTriggers(); // N1: hasła Akademii przy pierwszym kontakcie
         if (typeof checkMentorTasks === 'function') checkMentorTasks();
@@ -1451,6 +1454,7 @@ gameTimers.weekly = setGameInterval(() => {
         if (typeof processAccountingQuarterly === 'function') processAccountingQuarterly(); // N3: kreatywna księgowość, audyty (accounting.js)
         if (typeof advanceMarketRegimeQuarterly === 'function') advanceMarketRegimeQuarterly(); // 0.15 H2a: fazy rynku
         if (typeof advanceSectorBubblesQuarterly === 'function') advanceSectorBubblesQuarterly(); // 0.15 H3: bańki sektorowe
+        if (typeof processCrisesQuarterly === 'function') processCrisesQuarterly(); // 0.15.3: etapy linii kryzysu, nowa linia, scenariusz startowy
         if (typeof checkMarketCrashQuarterly === 'function') checkMarketCrashQuarterly(); // 0.15 H4: sprawdzanie warunków krachu rynkowego
         advanceEconomyCycle(); // nowa faza koniunktury przed raportami
         advanceMacroQuarter(); // inflacja, bezrobocie, cykle sektorów, wybory (macro.js)
@@ -1905,6 +1909,7 @@ function createNewWorld() {
     if (typeof initMarketRegimes === 'function') initMarketRegimes();
     if (typeof createMarketCrashState === 'function') marketCrash = createMarketCrashState();
     if (typeof createMarketHaltState === 'function') marketHalt = createMarketHaltState();
+    if (typeof resetCrises === 'function') resetCrises(); // 0.15.3
     stocks.forEach(stock => {
         if (stock.balanceSheet && stock.assetType !== 'Startup') initializeFundamentals(stock, true);
         initializeOwnership(stock);

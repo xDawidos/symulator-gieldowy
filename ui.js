@@ -1022,6 +1022,8 @@ function renderMarketModal() {
             <div class="gig-chart">${renderGigChartSvg(regime)}</div>
         </div>
 
+        ${typeof renderCrisisSection === 'function' ? renderCrisisSection() : ''}
+
         <div>
             <h4 class="bank-section-title">Historia faz</h4>
             <ul class="phase-history">${historyItems}</ul>
@@ -4152,7 +4154,8 @@ function renderCompanyCard() {
         tile('Stopa dywidendy', `${formatNumberPl(dividendYield * 100, 2)}%`, 'Dywidendy z ostatniego roku / kurs.', '', dividendYield > 0 ? vs(dividendYield, med?.dy, { lowerIsCheap: false, format: pctFmt, labels: ['wyższa', 'niższa'] }) : ''),
         tile('Zadłużenie', debtRatio === null ? '—' : `${formatNumberPl(debtRatio * 100, 0)}%`, 'Zobowiązania / aktywa. Powyżej ~70% spółka jest mocno zadłużona.', debtRatio > 0.7 ? 'text-down' : '', vs(debtRatio, med?.debt, { format: pctFmt, labels: ['niższe', 'wyższe'] })),
         tile('Kondycja', `${formatNumberPl(health, 1)} · ${healthLabel}`, 'Kondycja finansowa od −5 (bankructwo) do +5.', health >= 1 ? 'text-up' : health <= -2 ? 'text-down' : ''),
-        sectorPremiumTile()
+        sectorPremiumTile(),
+        typeof isCrisisActive === 'function' && isCrisisActive() ? tile('Wystawienie na kryzys', getCrisisExposureLabel(stock), `Udział segmentów spółki w sektorach tracących w linii „${CRISIS_LINES[crisisLine.id].name}”.`, getCrisisExposure(stock) >= 0.6 ? 'text-down' : '') : ''
     ].filter(Boolean).join('') + renderSubsectorMedianLine(stock, med);
 
     document.getElementById('company-card-tabs').innerHTML = COMPANY_CARD_TABS
@@ -7112,6 +7115,7 @@ function completeIntroScene(event) {
     playerProfile.country = 'PL';
     playerProfile.cv = [{ type: 'start', text: `Zatrudnienie w ${playerProfile.corporation} jako Młodszy zarządca funduszu „${playerProfile.fundName}”.` }];
 
+    if (typeof setCrisisScenario === 'function') setCrisisScenario(value('intro-crisis')); // 0.15.3 W4: scenariusz startowy (po zapisie CV)
     document.getElementById('intro-overlay').hidden = true;
     if (typeof syncCeoTitle === 'function') syncCeoTitle(); // nazwa korporacji z formularza
     logEvent(`💼 Witaj, ${playerProfile.name}! Zarządzasz funduszem „${playerProfile.fundName}” w ${playerProfile.corporation}. Wznów grę, aby zacząć.`, 'review');

@@ -153,6 +153,27 @@ PRESETS['marza-stala'] = `(function () {
 })();`;
 // 0.14.1 R5: gracz aktywny — fundusz jak GIG + nadwyżka window.__alpha na rok (domyślnie 0,03; patch=window.__alpha=0 → fundusz = GIG);
 // stanowisko co 4 kwartały o szczebel wyżej (junior → CEO); wpływy do portfela prywatnego według źródła i stanowiska.
+// 0.15.2 K0: co 4 kwartały kampania 1 kw. na 15% NAV; na zmianę bez lock-upu / lock-up 2 lata / lock-up 2 lata + gwarancja / mandat defensywny.
+PRESETS['kampanie'] = PRESETS['fundusz-gig'] + `(function () {
+    window.__campStarted = []; window.__campBlocked = {};
+    const variants = [{ lockYears: 0 }, { lockYears: 2 }, { lockYears: 2, guarantee: true }, { lockYears: 0, mandate: 'defensive' }];
+    const orig = advanceMacroQuarter;
+    advanceMacroQuarter = function () {
+        try {
+            if (macro.quarter % 4 === 3) {
+                const v = variants[(macro.quarter >> 2) % variants.length];
+                const r = startSubscriptionCampaign({ duration: 'quarter', targetPct: 0.15, ...v });
+                if (r.ok) window.__campStarted.push(JSON.stringify(v)); else window.__campBlocked[r.reason] = (window.__campBlocked[r.reason] || 0) + 1;
+            }
+        } catch (e) { (window.__presetErrors = window.__presetErrors || []).push(String(e)); }
+        return orig.apply(this, arguments);
+    };
+    window.__campResult = () => ({ started: window.__campStarted, blocked: window.__campBlocked, totals: playerFund.campaignTotals || null,
+        history: (playerFund.campaignHistory || []).map(h => ({ fill: Math.round(h.fill * 100), lock: h.lockYears, g: !!h.guarantee, m: h.mandate, cost: Math.round(h.cost), raised: Math.round(h.raisedValue) })),
+        guarantee: playerFund.guaranteeStats || null, loan: playerFund.liquidityLoan || null, mandate: playerFund.mandateStats || null,
+        mandateState: playerFund.mandateState || null, ir: playerFund.ir || null, vip: playerFund.vip ? { won: playerFund.vip.won, lost: playerFund.vip.lost } : null,
+        locked: typeof getLockedFundUnits === 'function' ? Math.round(getLockedFundUnits()) : null, units: Math.round(playerFund.units), trust: Math.round(playerFund.trust) });
+})();`;
 PRESETS['gracz-aktywny'] = PRESETS['fundusz-gig'] + `(function () {
     const w = window.__wallet = { byPos: {}, quartersAt: {}, excess: [] };
     const origPay = recordPayment;
@@ -783,7 +804,7 @@ const PROBE = `(function () {
         };
 
         const p0151 = P.finish(yearsTotal);
-        return { ...p0151, ma: s.ma ? s.ma.finish() : null, h0, tsr, moneyWarn: s.moneyWarn || [], moneyWarnQuarters: s.moneyWarnQuarters || 0, poolStake: s.poolStake, wallet: window.__wallet || null, presetErrors: window.__presetErrors || [], sectorIssues, saveSizes, subStart: s.subStart, subEnd: s.subEnd, multiSegEnd: s.multiSeg, mechanics: s.mechanics || null, badPrice: s.badPrice, negCash: s.negCash, mailBy: s.mailBy, bailouts: s.bailouts, flowWarnings: s.flowWarnings, fund: s.fund, panelText: panel ? panel.textContent.split(/\\s+/).join(' ').slice(0, 600) : null, panelError: s.panelError || null, elections: (macro.election?.history || []).filter(e => e.quarter >= s.quarters[0].q),
+        return { ...p0151, ma: s.ma ? s.ma.finish() : null, h0, tsr, moneyWarn: s.moneyWarn || [], moneyWarnQuarters: s.moneyWarnQuarters || 0, poolStake: s.poolStake, wallet: window.__wallet || null, presetErrors: window.__presetErrors || [], camp: window.__campResult ? window.__campResult() : null, sectorIssues, saveSizes, subStart: s.subStart, subEnd: s.subEnd, multiSegEnd: s.multiSeg, mechanics: s.mechanics || null, badPrice: s.badPrice, negCash: s.negCash, mailBy: s.mailBy, bailouts: s.bailouts, flowWarnings: s.flowWarnings, fund: s.fund, panelText: panel ? panel.textContent.split(/\\s+/).join(' ').slice(0, 600) : null, panelError: s.panelError || null, elections: (macro.election?.history || []).filter(e => e.quarter >= s.quarters[0].q),
             lawChanges: soc ? { ...soc.lawChanges } : null, laws: soc ? { ...soc.laws } : null,
             invariants: typeof checkWorldInvariants === 'function' ? checkWorldInvariants().slice(0, 5) : null, invLog: s.invLog, trimWarnings: s.trimWarnings,
             trims: typeof ghostTrimLog !== "undefined" ? ghostTrimLog.length : null, spinDiag: window.__spinDiag || null, diag: window.__haltDiag || null, offers: window.__offerLog || null,
