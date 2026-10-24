@@ -20,7 +20,7 @@ Kolejność: G0 → G1 → … → G22 (podwersje po kolei). **Commit po każdej
 
 UI z komponentów 0.14.5. **Projekt wyglądu zlecamy czatowi designu** (zlecenia na końcu).
 
-**Zależność:** po 0.15.3 (stan nastroju jest per rynek: `marketRegimes`; silnik linii kryzysu `crisisLine` i `sectorShocks[]` z `crises.js`). Korzysta z segmentów (0.14 T1), podsektorów (T2), nisz (T3), spin-offów (T4), spółek zależnych (T6), pracowników (0.13), progu wezwania i KNF (0.15.1) oraz kampanii i mandatów (0.15.2).
+**Zależność:** po 0.15.3 i po 0.15.4–0.15.6 (poprawki z gry, Budownictwo i banki, Giełdy wejścia — baza G0 mierzona dopiero po nich) (stan nastroju jest per rynek: `marketRegimes`; silnik linii kryzysu `crisisLine` i `sectorShocks[]` z `crises.js`). Korzysta z segmentów (0.14 T1), podsektorów (T2), nisz (T3), spin-offów (T4), spółek zależnych (T6), pracowników (0.13), progu wezwania i KNF (0.15.1) oraz kampanii i mandatów (0.15.2).
 
 **Odrzucone lub odłożone z szkicu** (szczegóły w `raporty/audyt_planow_0.16.x.md`):
 - giełda towarowa, transport, łańcuchy produkcyjne → **0.17** i **0.18**; cła, WTO, embarga → **0.19**;

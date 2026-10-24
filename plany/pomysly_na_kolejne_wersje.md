@@ -148,7 +148,7 @@ Odrzucone lub odłożone w planowaniu 0.16.x (2026-10-25, `raporty/audyt_planow_
 
 Surowe zgłoszenia użytkownika, pogrupowane. Przydział do wersji to **propozycja**, do decyzji przed planowaniem; przed naprawą każdy błąd trzeba najpierw odtworzyć w kodzie.
 
-### 9.1. Błędy i rzeczy do sprawdzenia → propozycja: **0.15.4 „Poprawki z gry 3”** (przed 0.16.1)
+### 9.1. Błędy i rzeczy do sprawdzenia → **0.15.4 „Poprawki z gry 3”** (`plan_0.15.4_poprawki_z_gry_3.md`, przed 0.16.1; przetargi i podwykonawcy → 0.15.5)
 
 | # | Zgłoszenie | Uwaga |
 |---|---|---|
@@ -169,7 +169,7 @@ Surowe zgłoszenia użytkownika, pogrupowane. Przydział do wersji to **propozyc
 | 15 | Nazwa „miasto Gdańsk” → „miasto”; nie wszystkie spółki miejskie wchodzą na giełdę | nazwa i reguła debiutu spółek miejskich |
 | 16 | Państwo nie ma na co wydawać pieniędzy: mniej zarabiać albo nowe urzędy i programy socjalne | balans skarbu |
 
-### 9.2. Nowe mechaniki (propozycje wersji)
+### 9.2. Nowe mechaniki — przydział zatwierdzony 2026-10-25: Budownictwo i banki → 0.15.5, Giełdy wejścia (NewHorizons, antymonopol, media-córka) → 0.15.6, Energia i środowisko → 0.17.2, Polityka 2 → 0.19.1; mapa spółek i narzędzia deweloperskie → 0.15.4 / zlecenie designu
 
 | Pomysł | Propozycja |
 |---|---|

@@ -1,4 +1,4 @@
-# Plan 0.17 „Surowce i transport” (szkic zakresu, po 0.16 „Giełda międzynarodowa”; przed 0.18 „Łańcuchy produkcyjne”)
+# Plan 0.17 „Surowce i transport” (szkic zakresu, po 0.16 „Giełda międzynarodowa”; po nim 0.17.1 „Wielkie testy rozgrywki i balans”, 0.17.2 „Energia i środowisko”, potem 0.18 „Łańcuchy produkcyjne”)
 
 Cel: gra dostaje ceny surowców, giełdę towarową i transport. Surowce są wsadem i produktem spółek; transport wpływa na koszty i czas dostaw. To **warstwa pod 0.18** (łańcuchy produkcyjne) — bez niej łańcuch nie ma czego przenosić.
 
