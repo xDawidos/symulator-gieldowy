@@ -44,7 +44,9 @@ Notatki z planowania, jeszcze bez planu. Każdy punkt przed budową dostaje wła
 
 ---
 
-## 3. Giełda towarowa (Commodities) i rynki surowcowe (pasuje do 0.16)
+> **Stan (2026-10-25), punkty 3–7:** zaplanowane w `raporty/audyt_planow_0.16.x.md`: punkty 3 i 4 → **0.17 Surowce i transport** (`plan_0.17_surowce_transport.md`); punkt 5 → **0.18 Łańcuchy produkcyjne** (pełny graf, dwustopniowo); punkt 6 → **0.19 Handel światowy** (szkic w mapie); punkt 7 → **0.21 Rynek pracy 2**. Podwójne notowanie, córki zagraniczne i przejęcia od strony kupującego → **0.20 Globalne korporacje**.
+
+## 3. Giełda towarowa (Commodities) i rynki surowcowe (→ 0.17)
 - **Rynek kontraktów terminowych na surowce (duże ryzyko i zmienność):**
   - Startowy koszyk: Złoto, Ropa naftowa, Srebro, Uran, Metale przemysłowe (miedź, żelazo), Zboże, Kawa, Bawełna, Gaz ziemny (NatGas).
 - **Globalny handel surowcami:**
@@ -107,7 +109,7 @@ Notatki z planowania, jeszcze bez planu. Każdy punkt przed budową dostaje wła
 
 ---
 
-## 7. Rynek pracy 2 (po 0.16)
+## 7. Rynek pracy 2 (→ 0.21, po serii 0.16–0.20)
 - **Podkupowanie ludzi:** Spółki podkupują specjalistów i inwestorów prywatnych.
 - **Odejścia i nowe firmy:** Kluczowi pracownicy odchodzą i zakładają innowacyjne startupy trafiające do inkubatora.
 
@@ -127,3 +129,15 @@ Odrzucone lub odłożone w planowaniu 0.15.x (2026-10-20, `raporty/audyt_planow_
 - **Reguła debetu z upadłością funduszu po tygodniu** (gwarancja kapitału): zastąpiona kredytem płynnościowym bez dymisji (0.15.2 K4).
 - **Lock-up 4–5 lat:** przy grze 6,5-letniej prawie cała gra; w 0.15.2 0–3 lata. Powrót przy dłuższych grach.
 - **Miesiące w kalendarzu:** gra ma 5 tygodni w kwartale; kalendarz „Rok · kw. · tydz.”.
+
+Odrzucone lub odłożone w planowaniu 0.16.x (2026-10-25, `raporty/audyt_planow_0.16.x.md`):
+- **Pełne podwójne notowanie** (jedna pula akcji, dwa kursy, arbitraż przez kantor): w 0.16 tylko kwity GDR jako instrument pochodny (float 1:1); podwójne notowanie → 0.20.
+- **Córki zagraniczne** i zmiana limitu córek (3 krajowe + 1 na otwarty rynek): → 0.20, po otwarciu rynków.
+- **Przejęcia od strony kupującego:** przesunięte z „kolejnej wersji M&A” na 0.20.
+- **Pełny graf łańcucha w jednej wersji:** rozbity na 0.18.1 (pilotaż 3 łańcuchów, bramka) i 0.18.2 (reszta); wersja lekka (tylko koszt wsadu) odrzucona przez użytkownika.
+- **Hierarchia dóbr konsumpcyjnych, magazyny, substytucja R&D, mapa szlaków:** w 0.18.2 (nie w 0.17).
+- **Złoto w skarbcu Waschmabanku** jako możliwość inwestycyjna: zostaje informacją na karcie spółki (decyzja 0.16).
+- **Krótka sprzedaż akcji, CFD, opcje:** nadal odłożone; **wyjątek:** pozycje krótkie w parach walutowych forexu (0.16.4 G21).
+- **Wspólna waluta „euro” jako osobna mechanika unii walutowej:** nie wchodzi; EUR to zwykła waluta, wspólnota europejska daje tylko bota (0.16.3 G12).
+- **Własny bank centralny, partie i budżet krajów zagranicznych:** odrzucone; kraj ma stały profil i prostą stopę (0.16.2 G5).
+- **Piąta „linia kryzysu” per kraj:** odrzucone; zarażanie przez jeden budżet linii światowych (0.16.2 G9).
