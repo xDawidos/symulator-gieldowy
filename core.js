@@ -4949,6 +4949,7 @@ function triggerMacroShockEvent() {
     const wantPositive = Math.random() < getCyclePositiveEventBias();
     const event = pickMacroEvent(MACRO_SHOCK_EVENTS.filter(e => (e.type === 'positive') === wantPositive));
     if (!event) return null;
+    if (typeof noteMacroShockForCrises === 'function') noteMacroShockForCrises(event); // 0.15.3: fałszywe alarmy (sygnały bez linii)
     if (event.inflation) macro.shocks.inflation += event.inflation;
     for (const stock of stocks) {
         if (stock.assetType || stock.isBankrupt) continue;

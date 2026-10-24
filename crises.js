@@ -16,7 +16,7 @@ let crisisState = createCrisisState();
 let nextSectorShockId = 1;
 
 function createCrisisState() {
-    return { used: [], history: [], scenario: null, scenarioStartQ: null, lastEventQ: -99, signals: 0, spurious: 0, rate: null, recession: 0 };
+    return { used: [], history: [], scenario: null, scenarioStartQ: null, lastEventQ: 0, watch: null, signals: 0, spurious: 0, rate: null, recession: 0 };
 }
 
 function resetCrises() {
@@ -146,7 +146,7 @@ const CRISIS_LINES = {
             { sector: 'Media', premium: -0.25 }, { sector: 'Finanse', subsector: 'Fintech', premium: -0.50 }
         ],
         gain: [{ sector: 'Energia', premium: 0.05 }, { sector: 'Żywność', premium: 0.05 }, { sector: 'Dobra konsumpcyjne', premium: 0.05 }],
-        crash: { drop: [-0.12, -0.18], weeks: 3 }, recession: false, inflation: 0,
+        crash: { drop: [-0.16, -0.24], weeks: 3 }, recession: false, inflation: 0,
         rate: { kind: 'cut', total: [-0.005, -0.01], quarters: 2 }, state: null,
         victims: { sectors: ['Technologia', 'Gaming', 'Media'], subsectors: [['Finanse', 'Fintech']], banks: false },
         news: { burst: 'Indeks spółek technologicznych traci w tydzień kilkanaście procent. Inwestorzy wycofują się z firm bez zysków.', spread: 'Pękająca bańka zaraża Gaming i Media; startupom brakuje gotówki, a fundusze venture zamykają kurek.', intervention: 'Bank centralny obniża stopy, by złagodzić wyprzedaż akcji.', bottom: 'Technologia znalazła dno: przeżyją spółki z zyskami i gotówką.', recovery: 'Rynek wraca do wartości; technologia odbija wolniej niż reszta.' },
@@ -174,7 +174,7 @@ const CRISIS_LINES = {
             { sector: 'Budowlany', premium: -0.20, revenue: -0.10 }, { sector: 'Nieruchomości', premium: -0.20, revenue: -0.08 }
         ],
         gain: [],
-        crash: { bottom: [-0.40, -0.60], weeks: 4, floor: -0.60 }, recession: true, inflation: 0,
+        crash: { bottom: [-0.40, -0.60], weeks: 4, floor: -0.60 }, premiumCap: -0.25, recession: true, inflation: 0,
         rate: { kind: 'cut', total: [-0.015, -0.025], quarters: 3, delay: 2 }, state: 'publicWorks',
         victims: { sectors: ['Bankowość', 'Finanse', 'Przemysł', 'Budowlany'], banks: true, extra: 1 },
         news: { burst: 'Czarny czwartek na giełdzie: indeks traci w kilka dni więcej niż przez ostatnie lata. Inwestorzy sprzedają wszystko.', spread: 'Panika po krachu wycofuje depozyty z banków; spółki tracą zamówienia, a kredyt wysycha.', intervention: 'Bank centralny zwlekał z reakcją — dopiero teraz tnie stopy. Rząd ogłasza program robót publicznych.', bottom: 'Gospodarka jest na dnie. Giełda wciąż nie dowierza, że zaczyna się odbicie.', recovery: 'Powolne odbicie: na odbudowę po krachu potrzeba lat, nie kwartałów.' },
@@ -268,6 +268,8 @@ function enterCrisisStage(stage) {
             break;
         }
         case 'burst': {
+            line.burstQ = crisisQuarter();
+            crisisState.watch = { level: getGigIndexValue(), burstQ: crisisQuarter(), below: false, lineId: line.id };
             line.techShare = typeof getFundSectorGroupShare === 'function' ? getFundSectorGroupShare('tech') : 0;
             line.gigStart = getGigIndexValue();
             line.fundStart = playerFund ? getFundNav() : 0;
@@ -292,6 +294,10 @@ function enterCrisisStage(stage) {
             break;
         case 'bottom':
             executeCrisisBankruptcies(line, def, 1);
+            if (!line.bankrupted.length && !line.rescued.length) { // plan: 1–3 upadki na linię
+                const worst = rankCrisisVictims(line.id)[0]?.stock;
+                if (worst) { if (worst.isBankStock && def.state === 'bankRescue' && tryRescueBank(worst, def)) line.rescued.push(worst.symbol); else { bankruptStockInCrisis(worst); line.bankrupted.push(worst.symbol); } }
+            }
             break;
         case 'recovery':
             break;
@@ -412,6 +418,16 @@ function fireMacroShockById(id, asSignal) {
     return event;
 }
 
+/** Zwykły szok makro tego samego typu co iskra linii = sygnał bez linii (fałszywy alarm); licznik do pomiaru. */
+function noteMacroShockForCrises(event) {
+    if (['oil', 'pandemic', 'housing', 'techboom'].includes(event.id)) crisisState.spurious++;
+}
+
+/** Podsumowanie do przebiegów symulacyjnych (tests/przebiegi.html). */
+function crisisSummary() {
+    return { history: crisisState.history, used: crisisState.used, signals: crisisState.signals, spurious: crisisState.spurious, active: crisisLine ? { id: crisisLine.id, stage: crisisLine.stage } : null, shocks: sectorShocks.length };
+}
+
 // --- reakcje banku centralnego i państwa (W3) ---
 
 function startCrisisReactions(line, def) {
@@ -489,8 +505,25 @@ function stageLength(line, stage) {
 /** Co tydzień: aktualizacja premii (płynna zmiana szoków), sprzątanie wygasłych, minimum GIG i funduszu w linii. */
 function processCrisesWeekly() {
     if (sectorShocks.length) { pruneSectorShocks(); updateAllSectorPremiums(); }
+    const watch = crisisState.watch;
+    if (watch) { // czas do odzyskania poziomu GIG sprzed Wybuchu
+        const gig = getGigIndexValue();
+        if (gig < watch.level * 0.95) watch.below = true;
+        if (watch.below && gig >= watch.level) {
+            const quarters = crisisQuarter() - watch.burstQ;
+            const entry = crisisState.history.find(h => h.id === watch.lineId && h.burstQ === watch.burstQ);
+            if (entry) entry.quartersToRecover = quarters; else if (crisisLine) crisisLine.recoverQ = quarters;
+            crisisState.watch = null;
+        } else if (crisisQuarter() - watch.burstQ > 60) crisisState.watch = null;
+    }
     if (crisisLine) {
         sectorBubbleCooldown = Math.max(sectorBubbleCooldown, 2); // w linii nie startuje nowa bańka
+        const cap = CRISIS_LINES[crisisLine.id].premiumCap;
+        const regime = getMarketRegime('home');
+        if (cap && regime && ['intervention', 'bottom', 'recovery'].includes(crisisLine.stage) && !marketCrash.active) { // kształt L: wolny powrót premii rynku
+            const progress = crisisLine.stage === 'recovery' ? Math.min(1, (crisisLine.qInStage + 0.5) / crisisLine.lens.recovery) : 0;
+            regime.premiumTarget = Math.min(regime.premiumTarget, cap * (1 - progress));
+        }
         crisisLine.gigMin = Math.min(crisisLine.gigMin, getGigIndexValue());
         if (playerFund) crisisLine.fundMin = Math.min(crisisLine.fundMin, getFundNav());
     }
@@ -537,7 +570,7 @@ function finishCrisisLine() {
     const gigDrop = line.gigStart > 0 ? line.gigMin / line.gigStart - 1 : 0;
     const gigChange = line.gigStart > 0 ? gigNow / line.gigStart - 1 : 0;
     const fundChange = line.fundStart > 0 ? fundNow / line.fundStart - 1 : 0;
-    const result = { id: line.id, startQ: line.startQuarter, endQ: crisisQuarter(), gigDrop, gigChange, fundChange, bankrupted: [...line.bankrupted], rescued: [...line.rescued], techShare: line.techShare, trust: playerFund?.trust ?? 0, forced: line.forced, quartersToRecover: null };
+    const result = { id: line.id, startQ: line.startQuarter, endQ: crisisQuarter(), burstQ: line.burstQ, gigDrop, gigChange, fundChange, bankrupted: [...line.bankrupted], rescued: [...line.rescued], techShare: line.techShare, trust: playerFund?.trust ?? 0, forced: line.forced, quartersToRecover: line.recoverQ ?? null };
     crisisState.history.push(result);
     crisisState.lastEventQ = crisisQuarter();
     if (typeof addMail === 'function') {
