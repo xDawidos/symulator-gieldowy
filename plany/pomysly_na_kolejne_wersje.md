@@ -141,3 +141,42 @@ Odrzucone lub odłożone w planowaniu 0.16.x (2026-10-25, `raporty/audyt_planow_
 - **Wspólna waluta „euro” jako osobna mechanika unii walutowej:** nie wchodzi; EUR to zwykła waluta, wspólnota europejska daje tylko bota (0.16.3 G12).
 - **Własny bank centralny, partie i budżet krajów zagranicznych:** odrzucone; kraj ma stały profil i prostą stopę (0.16.2 G5).
 - **Piąta „linia kryzysu” per kraj:** odrzucone; zarażanie przez jeden budżet linii światowych (0.16.2 G9).
+
+---
+
+## 9. Zgłoszenia z gry (2026-10-25) — do sprawdzenia i dodania
+
+Surowe zgłoszenia użytkownika, pogrupowane. Przydział do wersji to **propozycja**, do decyzji przed planowaniem; przed naprawą każdy błąd trzeba najpierw odtworzyć w kodzie.
+
+### 9.1. Błędy i rzeczy do sprawdzenia → propozycja: **0.15.4 „Poprawki z gry 3”** (przed 0.16.1)
+
+| # | Zgłoszenie | Uwaga |
+|---|---|---|
+| 1 | Sortowanie pokazuje 10 spółek turystycznych, a na liście jest 7 | licznik vs filtr (podsektory? spółki zależne?) |
+| 2 | W zakładkach „wszystkie”, śmieciowa, brązowa itd. przycisk dywidendy zamraża i ściemnia ekran | brak błędów w konsoli; sprawdzić nakładkę modalną |
+| 3 | Dywidenda poniżej 1 grosza na akcję nie powinna być dostępna (EcoLube 0,0077 zł) | próg minimalnej dywidendy |
+| 4 | Wykres liniowy słaby: przy prędkości powyżej 1 s pokazuje prostą linię | próbkowanie historii przy ×50…×200 |
+| 5 | Przy zaznaczonych grupach kategorii nie da się przejść do zakładek (np. Przemysł i surowce) | konsola bez błędów; filtr T1c |
+| 6 | Okienko historii notowań przycina liczby | szerokość, format liczb |
+| 7 | Przy wysokim kursie zmiana tygodniowa zasłania kurs | układ karty; **plus** podział akcji (split) i skup/konsolidacja akcji (reverse split), żeby kurs nie był 4 mln zł ani 15 gr |
+| 8 | Liczba spółek na giełdzie przekracza luźny limit (nawet 180 przy limicie 110–120) | gra ma sama zaostrzać politykę wejść i wymuszać wychodzenie; sprawdzić, skąd 180 (spółki zależne, wydzielenia, miejskie, startupy?) |
+| 9 | Budimix przejmuje wszystkie przetargi; 62/66 projektów podwykonawcy w jednej firmie; Biuro Obsługi Rachunkowej jako jedyne robi megaprojekty; Orzeł Telekom w prawie każdym megaprojekcie | dostrojenie przetargów (konkurencja, limity udziału, rotacja) |
+| 10 | W 3 grach Orzeł Telekom stawał się najmocniejszą spółką | diagnoza przyczyny; inne spółki też powinny móc zdobyć to miano |
+| 11 | Konfiturex Tech (wydzielona) ma segmenty technologia, nieruchomości, gaming, a jest w grupie Technologia/Półprzewodniki | spółki nie powinny móc tak ekspandować; poprawić etykietę sektora głównego |
+| 12 | Lombard jest pusty; Wrona (pożyczki konsumenckie) słabo działa | dostrojenie |
+| 13 | Podwykonawcy niewykorzystani (działa tylko specjalność industrial) | patrz 9.2 |
+| 14 | „Czym są warunki rynkowe i jak firmy z tego korzystają” | wyjaśnienie w UI / Akademii; sprawdzić, czy mechanika działa |
+| 15 | Nazwa „miasto Gdańsk” → „miasto”; nie wszystkie spółki miejskie wchodzą na giełdę | nazwa i reguła debiutu spółek miejskich |
+| 16 | Państwo nie ma na co wydawać pieniędzy: mniej zarabiać albo nowe urzędy i programy socjalne | balans skarbu |
+
+### 9.2. Nowe mechaniki (propozycje wersji)
+
+| Pomysł | Propozycja |
+|---|---|
+| **Rynek budowlany i podwykonawcy:** więcej podwykonawców do wyboru, realna konkurencja, spółki budowlane przejmują i wchłaniają podwykonawców jak spółki zależne; osobna aktualizacja dla banków i budownictwa i „funkcja specjalna” dla kolejnego typu spółek | wersja **„Budownictwo i banki”** po 0.15.4 (przed albo po 0.16.1 — do decyzji) |
+| **Giełdy wejścia i nadzór:** większe wymagania wejścia na GPW; **NewHorizons** (działa jako spółka państwowa, niższe wymagania, większe ryzyko, spółki innowacyjne i wczesne, **nie wszystkie boty i fundusze mogą w niej inwestować**); startupy z dwoma progami (główny parkiet w kategoriach brąz–platyna albo niższy próg NewConnect); przejście z NewConnect na główny parkiet lub do firm prywatnych; spółki miejskie startują na NewHorizons; **urząd antymonopolowy** (przeciw koncentracji, np. 62/66 projektów w jednej firmie); limit liczby spółek jako polityka | wersja **„Giełdy wejścia”** (wiąże się z punktem 8 w 9.1) |
+| **Media-córka jako gazeta:** spółka zależna w kategorii Media wysyła graczowi maile, działa jak gazeta przychylna matce (lekko kłamie), może kłamać o przeciwnikach | do „Giełd wejścia” albo osobnej małej części |
+| **Mapa spółek jako drzewo genealogiczne** z liniami (czytelniejsza) | zlecenie dla czatu designu |
+| **Narzędzia deweloperskie:** wykres powstających spółek; wykres średniej ceny za spółkę z sortowaniem na branże | `tests/przebiegi.html` / debug, zrobić razem z 0.15.4 |
+| **Polityka 2:** eventy dla spółek z innych państw (prezydent idiota, zamknięcie granicy, ucieczka ludzi, dofinansowania); nowe i zmieniające się partie (populistyczna, liberalna, zieloni, centrum, socjaldemokracja, libertariańska, anarchistyczna, komunistyczna, technokraci); 6 partii w kraju, 4 w innych; **6 indywidualnych eventów na typ partii**; sponsoring +5% za każdy; więcej polityk i sposobów wzmacniania/osłabiania spółek; lobbing za sektorami (np. podatek cukrowy); **Nepotyzm poziomy 2–4:** zasugerowanie spółce państwowej sprzedaży akcji funduszowi gracza, poufne informacje o ruchach rządu (6. zmysł na spółkach państwowych nie działa), sugerowanie inwestycji | **sprawdzić, co z tego już jest w 0.11/0.13** (partie, populacja, ustawy, sponsoring); reszta jako wersja po 0.16 |
+| **Energia i środowisko:** podsektory energetyki OZE, atom, węglowa z mechaniką (partia wybiera typ energii → delikatny bonus do stabilności i zarobków); energia jako surowiec dla produkcji; budowa elektrowni zwiększa produkcję; handel energią między państwami; **Urząd Energii i Ekologii** (poziomy, kontrola rozwoju i zużycia, kary); **zanieczyszczenia** (Przemysł, Chemia, Energia) wpływają na poziom życia i przyrost populacji; opłaty i limity emisji; OZE finansowane przez państwo (nowy wydatek, który odblokowuje atom jako spółkę państwową od poziomu platynowego, bez NewHorizons); superprojekty OZE/atom, nowy podwykonawca od energetyki, prywatyzacja; **opinia publiczna** jako wskaźnik dla sektorów B2C; inwestycje ekologiczne i R&D | wersja **„Energia i środowisko”**, najlepiej po 0.17 (surowce, handel energią) |

@@ -164,6 +164,8 @@ Ustalenia spójności (wpisane do planu 0.16):
 
 Otwarte sprawy kontroli 0.15.2 i 0.15.3 trafiły do **0.16.1 G0**: dryf udziałów, bessa z lock-upem, misje IR, VIP, kalibracja mandatów, niezmierzone elementy linii kryzysu, odstępstwa 0.15.3. Ikony linii kryzysu jako SVG — zlecenie dla czatu designu (0.16.1).
 
+**Zgłoszenia z gry z 2026-10-25** (16 błędów i próśb o sprawdzenie, plus pomysły: giełdy wejścia z NewHorizons i urzędem antymonopolowym, budownictwo i banki, Polityka 2, Energia i środowisko) są w `pomysly_na_kolejne_wersje.md`, sekcja 9. Propozycja: **0.15.4 „Poprawki z gry 3”** przed 0.16.1 (do decyzji użytkownika).
+
 ## Decyzje (podjęte 2026-10-12)
 
 1. Limit spółek krajowych jest luźny, ok. 110; 111–115 jest w porządku.
