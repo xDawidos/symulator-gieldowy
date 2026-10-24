@@ -124,7 +124,7 @@ const CRISIS_MAX_VICTIMS = 3;
 
 const CRISIS_LINES = {
     banking: {
-        id: 'banking', name: 'Kryzys bankowy', icon: '🏦', year: 2008, recoveryQ: [6, 10], shape: 'U',
+        id: 'banking', name: 'Kryzys bankowy', icon: '🏦', svg: 'kryzys-bank', year: 2008, recoveryQ: [6, 10], shape: 'U',
         spark: { macro: 'housing', news: 'Analitycy ostrzegają: kredyty hipoteczne rosną szybciej niż zarobki, a banki oddają je coraz słabszym klientom.' },
         lose: [
             { sector: 'Bankowość', premium: -0.35, revenue: -0.12 }, { sector: 'Finanse', premium: -0.40, revenue: -0.15 },
@@ -139,7 +139,7 @@ const CRISIS_LINES = {
         eligible: regime => ['bull', 'euphoria', 'distribution'].includes(regime.phase)
     },
     dotcom: {
-        id: 'dotcom', name: 'Bańka internetowa', icon: '💻', year: 2000, recoveryQ: [8, 12], shape: 'U',
+        id: 'dotcom', name: 'Bańka internetowa', icon: '💻', svg: 'kryzys-internet', year: 2000, recoveryQ: [8, 12], shape: 'U',
         spark: { macro: 'techboom', news: 'Spółki technologiczne wyceniane są na wielokrotności przychodów, których jeszcze nie mają. Ostrożni analitycy mówią o bańce.' },
         lose: [
             { sector: 'Technologia', premium: -0.45, revenue: -0.10 }, { sector: 'Technologia', subsector: 'Sztuczna inteligencja', premium: -0.10 },
@@ -154,7 +154,7 @@ const CRISIS_LINES = {
         eligible: regime => ['bull', 'euphoria', 'distribution'].includes(regime.phase) && (activeSectorBubble ? ['Technologia', 'Gaming', 'Finanse'].includes(activeSectorBubble.sector) : regime.premium > 0.1)
     },
     oil: {
-        id: 'oil', name: 'Szok naftowy', icon: '🛢️', year: 1973, recoveryQ: [4, 8], shape: 'U',
+        id: 'oil', name: 'Szok naftowy', icon: '🛢️', svg: 'kryzys-ropa', year: 1973, recoveryQ: [4, 8], shape: 'U',
         spark: { macro: 'oil', news: 'Napięcie na Bliskim Wschodzie: ropa drożeje, a odbiorcy paliw szykują się na wyższe rachunki.' },
         lose: [
             { sector: 'Transport i logistyka', premium: -0.30, revenue: -0.10 }, { sector: 'Transport i logistyka', subsector: 'Lotnictwo', premium: -0.15, revenue: -0.08 },
@@ -168,7 +168,7 @@ const CRISIS_LINES = {
         eligible: regime => !['bear', 'capitulation'].includes(regime.phase)
     },
     black: {
-        id: 'black', name: 'Czarny czwartek', icon: '🖤', year: 1929, recoveryQ: [10, 16], shape: 'L',
+        id: 'black', name: 'Czarny czwartek', icon: '🖤', svg: 'kryzys-czwartek', year: 1929, recoveryQ: [10, 16], shape: 'L',
         spark: { macro: null, news: 'Komisja nadzoru ostrzega: dźwignia funduszy i pożyczki na zakup akcji sięgają rekordów, a wyceny odleciały od zysków.' },
         lose: [
             { sector: 'Bankowość', premium: -0.30, revenue: -0.10 }, { sector: 'Finanse', premium: -0.25, revenue: -0.10 }, { sector: 'Przemysł', premium: -0.20, revenue: -0.10 },
@@ -182,7 +182,7 @@ const CRISIS_LINES = {
         eligible: regime => regime.phase === 'euphoria' && regime.premium > 0.25
     },
     pandemic: {
-        id: 'pandemic', name: 'Pandemia', icon: '🦠', year: 2020, recoveryQ: [2, 4], shape: 'V',
+        id: 'pandemic', name: 'Pandemia', icon: '🦠', svg: 'kryzys-pandemia', year: 2020, recoveryQ: [2, 4], shape: 'V',
         spark: { macro: 'pandemic', news: 'Nowy wirus w wielu krajach naraz: epidemiolodzy ostrzegają przed szybkim rozprzestrzenianiem.' },
         lose: [
             { sector: 'Turystyka', premium: -0.50, revenue: -0.30 }, { sector: 'Usługi', premium: -0.25, revenue: -0.20 },

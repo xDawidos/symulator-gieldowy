@@ -357,7 +357,12 @@ Object.assign(UI_ICON_PATHS, {
     wzrost: UI_ICON_PATHS['faza-hossa'],
     spadek: UI_ICON_PATHS['faza-bessa'],
     kompas: UI_ICON_PATHS['osiagniecie-cykl'],
-    statek: UI_ICON_PATHS['osiagniecie-statek']
+    statek: UI_ICON_PATHS['osiagniecie-statek'],
+    'kryzys-bank': 'M3 9l9-5 9 5M5 9v7M9 9v7M15 9v7M19 9v7M3 20h18',
+    'kryzys-internet': 'M3 5h18v11H3zM9 20h6M12 16v4M6 8l3 3 3-2 5 4M17 13h-3M17 13v-3',
+    'kryzys-ropa': 'M12 3c4 5 6 8 6 11a6 6 0 0 1-12 0c0-3 2-6 6-11zM9 15a3 3 0 0 0 3 3',
+    'kryzys-czwartek': 'M3 4v16h18M6 7l4 4 3-2 6 8M19 17h-4M19 17v-4',
+    'kryzys-pandemia': 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v4M12 18v4M2 12h4M18 12h4M5 5l3 3M16 16l3 3M19 5l-3 3M8 16l-3 3'
 });
 
 /** Ikona inwestycji spółki według id (krok 6 zastąpił kafelki PNG; krok 7 usunął pole icon z danych). */
