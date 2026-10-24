@@ -494,7 +494,7 @@ Object.assign(ACADEMY_ENTRIES, {
     },
     fazySpolki: {
         title: 'Fazy rozwoju spółki', icon: '🔄',
-        text: 'Każda spółka jest w jakiejś fazie cyklu życia. Fazy zwykłe: Wzrost (przychody +1,5 pp na kwartał), Stabilność (bez premii, mniejsza zmienność), Spadek (−2 pp, kurs pod presją, badania wolniej), Reorganizacja (−0,5 pp, najwyższa zmienność; kończy się stabilnością przy kondycji ≥ 2 albo spadkiem przy < −3). Fazy rzadkie i czasowe: Złoty Rok ✨ (4 kwartały, +3 pp, kurs szybciej w górę), Impuls Innowacji 💡 (4–8 kwartałów, badania o 50% szybsze, +0,5 pp), Zejście w Cień 👻 (3–6 kwartałów, −4 pp, silna presja i zmienność). Po fazie czasowej spółka wraca do poprzedniej. Faza zmienia przychody, więc zysk i wartość godziwą — kurs idzie za nimi z opóźnieniem.',
+        text: 'Każda spółka jest w jakiejś fazie cyklu życia. Fazy zwykłe: Wzrost (przychody +1,5 pp na kwartał), Stabilność (bez premii, mniejsza zmienność), Spadek (−1,5 pp, kurs pod presją, badania wolniej), Reorganizacja (−0,5 pp, najwyższa zmienność; kończy się stabilnością przy kondycji ≥ 2 albo spadkiem przy < −3). Fazy rzadkie i czasowe: Złoty Rok ✨ (4 kwartały, +3 pp, kurs szybciej w górę), Impuls Innowacji 💡 (4–8 kwartałów, badania o 50% szybsze, +0,5 pp), Zejście w Cień 👻 (3–6 kwartałów, −4 pp, silna presja i zmienność). Po fazie czasowej spółka wraca do poprzedniej. Faza zmienia przychody, więc zysk i wartość godziwą — kurs idzie za nimi z opóźnieniem.',
         example: () => { const s = stocks.find(x => !x.isBankrupt && !x.assetType && [CORPORATE_PHASES.GOLDEN_YEAR, CORPORATE_PHASES.INNOVATION_PUSH, CORPORATE_PHASES.SHADOW_DESCENT].includes(x.corporatePhase)) || stocks.find(x => !x.isBankrupt && !x.assetType && x.corporatePhase); return s ? `${s.name}: ${getCorporatePhaseTooltip(s.corporatePhase)}` : 'Znacznik fazy widać w tabeli rynku przy cenie (szkolenie Analityk Finansowy).'; },
         quiz: [
             { q: 'Która faza przyspiesza badania spółki o 50%?', a: ['Impuls Innowacji', 'Złoty Rok', 'Stabilność'], c: 0 },
@@ -780,16 +780,192 @@ Object.assign(ACADEMY_ENTRIES, {
     },
     krach_bezpieczniki: {
         title: 'Krach giełdowy i bezpieczniki', icon: '🚨',
-        text: 'Krach to gwałtowne załamanie notowań — spadek indeksu o ponad 20% w ciągu zaledwie 1–4 tygodni, wywołany nagłą paniką, realizacją zleceń stop-loss i przymusowymi wezwaniami do uzupełnienia depozytu (margin call). Aby zapobiec załamaniu infrastruktury, giełda stosuje automatyczne bezpieczniki (circuit breakers): przy spadku GIG o -7% handel staje na 15 s, przy -13% na 30 s, a przy -20% handel zostaje zawieszony do końca tygodnia.',
+        text: 'Krach to gwałtowne załamanie notowań — spadek indeksu o ponad 20% w ciągu zaledwie 1–4 tygodni, wywołany nagłą paniką, realizacją zleceń stop-loss i przymusowymi wezwaniami do uzupełnienia depozytu (margin call). Aby zapobiec załamaniu infrastruktury, giełda stosuje automatyczne bezpieczniki (circuit breakers): przy spadku GIG o -10% handel staje na 15 s gry, przy -13% na 30 s, a przy -20% handel zostaje zawieszony do końca tygodnia.',
         example: () => {
             const isCrash = typeof isMarketCrashing === 'function' && isMarketCrashing();
             const isHalt = typeof isMarketHalted === 'function' && isMarketHalted();
-            return isCrash ? '🚨 Na rynku trwa KRACH!' : isHalt ? '⚠️ Handel jest wstrzymany przez bezpiecznik!' : 'Bezpieczniki giełdowe czuwają nad stabilnością parkietu (progi -7%, -13%, -20%).';
+            return isCrash ? '🚨 Na rynku trwa KRACH!' : isHalt ? '⚠️ Handel jest wstrzymany przez bezpiecznik!' : 'Bezpieczniki giełdowe czuwają nad stabilnością parkietu (progi -10%, -13%, -20%).';
         },
         quiz: [
-            { q: 'Jakie są progi zadziałania bezpieczników giełdowych w grze?', a: ['-7% (15s), -13% (30s) oraz -20% (do końca tygodnia)', '-1%, -2% i -3%', '-50% i zamknięcie giełdy na rok'], c: 0 },
+            { q: 'Jakie są progi zadziałania bezpieczników giełdowych w grze?', a: ['-10% (15s), -13% (30s) oraz -20% (do końca tygodnia)', '-1%, -2% i -3%', '-50% i zamknięcie giełdy na rok'], c: 0 },
             { q: 'Co dzieje się podczas zawieszenia handlu przez bezpiecznik?', a: ['Wszystkie zlecenia zakupu i sprzedaży są zablokowane', 'Spółki natychmiast bankrutują', 'Gracz traci wszystkie pieniądze'], c: 0 },
-            { q: 'Ile trwa wstrzymanie handlu przy bezpieczniku 1. stopnia (-7%)?', a: ['15 sekund', 'Cały miesiąc', '24 godziny'], c: 0 }
+            { q: 'Ile trwa wstrzymanie handlu przy bezpieczniku 1. stopnia (-10%)?', a: ['15 sekund', 'Cały miesiąc', '24 godziny'], c: 0 }
+        ]
+    },
+    partie_gospodarka: {
+        title: 'Progi CIT i ustawa antymonopolowa', icon: '⚖️',
+        text: 'Partie zmieniają warunki gry dla spółek. Progi CIT obniżają podatek małym firmom i podnoszą dużym — wspierają konkurencję, ale zmniejszają zyski koncernów. Ustawa antymonopolowa określa, kiedy urząd zablokuje fuzję i kiedy KNF ograniczy koncern; przy surowej ustawie koncern może musieć sprzedać kontrolę nad córką. Socjaldemokraci zaostrzają oba prawa, Koalicja Rynkowa je łagodzi.',
+        example: () => `Teraz: progi CIT „${describeLawLevel('corpTaxBrackets', society?.laws?.corpTaxBrackets ?? 0)}”, ustawa antymonopolowa „${describeLawLevel('antitrust', society?.laws?.antitrust ?? 1)}”.`,
+        quiz: [
+            { q: 'Komu pomagają progi CIT?', a: ['Małym spółkom', 'Największym koncernom', 'Bankom centralnym'], c: 0 },
+            { q: 'Co może się stać koncernowi przy surowej ustawie antymonopolowej?', a: ['Nakaz sprzedaży kontroli nad córką', 'Zwolnienie z podatku', 'Dotacja'], c: 0 },
+            { q: 'Która partia zaostrza prawo antymonopolowe?', a: ['Socjaldemokraci', 'Koalicja Rynkowa', 'Żadna'], c: 0 }
+        ]
+    },
+    wartosc_firmy: {
+        title: 'Wartość firmy (goodwill)', icon: '🏷️',
+        text: 'Gdy spółka kupuje inną drożej niż jej aktywa netto (aktywa minus długi), różnica trafia do bilansu jako wartość firmy — zapłata za markę, klientów, zespół i spodziewane synergie. To aktywo, którego nie da się sprzedać osobno. Jeśli przejęta część zarabia gorzej niż w planie, wartość firmy trzeba odpisać.',
+        example: () => { const s = stocks.find(x => x.balanceSheet?.goodwill > 0); return s ? `${s.name}: wartość firmy ${formatZl(s.balanceSheet.goodwill, 0)}.` : 'Żadna spółka nie ma teraz wartości firmy w bilansie.'; },
+        quiz: [
+            { q: 'Cena przejęcia 100 mln, aktywa netto celu 70 mln. Ile wynosi wartość firmy?', a: ['30 mln', '170 mln', '70 mln'], c: 0 },
+            { q: 'Za co płaci kupujący w wartości firmy?', a: ['Za markę, klientów, zespół i synergie', 'Za gotówkę celu', 'Za podatki'], c: 0 },
+            { q: 'Czy wartość firmy da się sprzedać osobno?', a: ['Nie', 'Tak, na giełdzie', 'Tak, bankowi'], c: 0 }
+        ]
+    },
+    test_utraty_wartosci: {
+        title: 'Test utraty wartości', icon: '🧪',
+        text: 'Co roku spółka sprawdza, czy przejęta część zarabia tyle, ile zakładano przy zakupie. Gdy zysk jest dużo niższy (w grze: < 70% planu), część wartości firmy trzeba odpisać. Odpis to koszt w wyniku — zysk netto i zysk na akcję spadają — ale gotówka zostaje w spółce.',
+        example: () => { const s = stocks.find(x => x.lastImpairment); return s ? `${s.name}: odpis ${formatZl(s.lastImpairment.amount, 0)} (kw. ${s.lastImpairment.quarter}).` : 'Nie było jeszcze odpisów.'; },
+        quiz: [
+            { q: 'Czy odpis wartości firmy zabiera spółce gotówkę?', a: ['Nie — to koszt bez wydatku', 'Tak, całą kwotę', 'Tak, połowę'], c: 0 },
+            { q: 'Kiedy trzeba odpisać wartość firmy?', a: ['Gdy przejęta część zarabia dużo mniej niż w planie', 'Co kwartał zawsze', 'Gdy kurs rośnie'], c: 0 },
+            { q: 'Co odpis robi z zyskiem na akcję w danym kwartale?', a: ['Obniża go', 'Podnosi go', 'Nie zmienia'], c: 0 }
+        ]
+    },
+    klatwa_zwyciezcy: {
+        title: 'Klątwa zwycięzcy', icon: '🏚️',
+        text: 'Kto wygrywa licytację o spółkę, często przepłaca — zapłacił więcej niż wszyscy inni uważali za rozsądne. Skutek przychodzi później: odpis wartości firmy, gorsze wyniki, spadek kursu kupującego. Dlatego rynek często karze kupującego już w dniu ogłoszenia przejęcia z wysoką premią.',
+        example: () => 'Patrz kurs kupującego przy ogłoszeniu przejęcia z wysoką premią.',
+        quiz: [
+            { q: 'Na czym polega klątwa zwycięzcy?', a: ['Wygrywający licytację przepłaca', 'Zwycięzca nie płaci podatku', 'Przegrany traci akcje'], c: 0 },
+            { q: 'Jak klątwa zwycięzcy objawia się w bilansie?', a: ['Odpisem wartości firmy', 'Wzrostem gotówki', 'Spadkiem zobowiązań'], c: 0 },
+            { q: 'Jak rynek reaguje na przejęcie z bardzo wysoką premią?', a: ['Często obniża kurs kupującego', 'Zawsze go podnosi', 'Nie reaguje'], c: 0 }
+        ]
+    },
+    ochrona_mniejszosciowych: {
+        title: 'Ochrona akcjonariuszy mniejszościowych', icon: '🛡️',
+        text: 'Kto przejmuje kontrolę nad spółką, musi dać pozostałym akcjonariuszom szansę wyjścia po uczciwej cenie — ogłasza wezwanie (ofertę kupna ich akcji). Bez tego większościowiec mógłby kupić pakiet kontrolny tanio od kilku osób, a reszta zostałaby z akcjami spółki, na którą nie ma wpływu. Pilnuje tego KNF: ostrzega, karze, a w końcu nakazuje wezwanie albo sprzedaż nadwyżki.',
+        example: () => `Dziś próg wezwania to ${Math.round(getTenderThreshold() * 100)}%.`,
+        quiz: [
+            { q: 'Po co jest obowiązek wezwania?', a: ['Żeby mniejszościowi mogli wyjść po uczciwej cenie', 'Żeby podnieść podatki', 'Żeby spółka wypłaciła dywidendę'], c: 0 },
+            { q: 'Kto pilnuje obowiązku wezwania?', a: ['KNF', 'Bank centralny', 'Urząd skarbowy'], c: 0 },
+            { q: 'Po jakiej cenie trzeba ogłosić nakazane wezwanie?', a: ['Co najmniej najwyższej zapłaconej za pakiety', 'Po dowolnej', 'Po cenie nominalnej'], c: 0 }
+        ]
+    },
+    prog_wezwania: {
+        title: 'Próg wezwania i polityka', icon: '📣',
+        text: 'Ustawa „Próg wezwania” mówi, do jakiego udziału trzeba ogłosić wezwanie po przejęciu kontroli (66, 75, 90 albo 99%). Wyższy próg to silniejsza ochrona mniejszościowych i droższa kontrola. Partie zmieniają go w swoich programach (Ludowcy i Blok Państwowy w górę, Koalicja Rynkowa w dół), ale wyższe progi wymagają silnej KNF.',
+        example: () => `Próg teraz: ${Math.round(getTenderThreshold() * 100)}%; limit KNF: ${describeLawLevel('tenderThreshold', getTenderThresholdKnfCap())}.`,
+        quiz: [
+            { q: 'Co oznacza wyższy próg wezwania?', a: ['Droższą kontrolę i silniejszą ochronę mniejszościowych', 'Tańszą kontrolę', 'Brak wezwań'], c: 0 },
+            { q: 'Które partie podnoszą próg wezwania?', a: ['Ludowcy i Blok Państwowy', 'Koalicja Rynkowa', 'Żadna'], c: 0 },
+            { q: 'Co ogranicza najwyższy możliwy próg?', a: ['Siła KNF', 'Kurs GIG', 'Stopy procentowe'], c: 0 }
+        ]
+    },
+    transakcja_pakietowa: {
+        title: 'Transakcja pakietowa', icon: '📦',
+        text: 'Duży pakiet akcji rzadko kupuje się na sesji — kurs by poszybował. Kupujący negocjuje z posiadaczem poza rynkiem: liczbę akcji i cenę. Sprzedający ma cenę rezerwową (zwykle powyżej kursu i wartości godziwej) — zależy od jego charakteru i relacji z kupującym. Zbyt niska oferta urazi i zamknie rozmowy na jakiś czas.',
+        example: () => 'Propozycję odkupu złożysz w liście akcjonariuszy spółki.',
+        quiz: [
+            { q: 'Dlaczego duże pakiety kupuje się poza sesją?', a: ['Żeby nie wywindować kursu', 'Bo na sesji nie ma akcji', 'Bo tak każe KNF'], c: 0 },
+            { q: 'Co podnosi cenę rezerwową sprzedającego?', a: ['Niska relacja z kupującym i charakter „wieloryba”', 'Hojna dywidenda', 'Bessa'], c: 0 },
+            { q: 'Co grozi przy ofercie dużo poniżej oczekiwań?', a: ['Urażenie i blokada rozmów', 'Kara KNF', 'Nic'], c: 0 }
+        ]
+    },
+    pakiet_kontrolny: {
+        title: 'Pakiet kontrolny', icon: '🏛️',
+        text: 'Kto ma ponad 50% głosów, kontroluje walne: wybiera zarząd, politykę dywidendy i decyzje o przejęciach. Pakiet kontrolny jest wart więcej niż suma pojedynczych akcji — za kontrolę płaci się premię. Przejęcie kontroli poza rynkiem podlega przepisom o wezwaniu (ochrona mniejszościowych).',
+        example: () => 'Fundusz z > 50% akcji spółki dostaje oferty kupna i rozgrywa walne.',
+        quiz: [
+            { q: 'Ile głosów daje kontrolę nad walnym?', a: ['Ponad 50%', '10%', '25%'], c: 0 },
+            { q: 'Dlaczego za pakiet kontrolny płaci się premię?', a: ['Bo daje kontrolę nad spółką', 'Bo ma niższe ryzyko', 'Bo nie płaci się podatku'], c: 0 },
+            { q: 'Co chroni akcjonariuszy mniejszościowych przy zmianie kontroli?', a: ['Obowiązek wezwania', 'Bank centralny', 'Dywidenda'], c: 0 }
+        ]
+    },
+    due_diligence: {
+        title: 'Due diligence (badanie spółki)', icon: '🔎',
+        text: 'Zanim kupujący zapłaci, bada księgi celu: umowy, długi, zgodność wyników z gotówką. Gdy znajdzie oszustwo księgowe, obniża cenę albo zrywa transakcję; ukryte zobowiązania odejmuje od ceny. Sprzedający może przyjąć obniżkę, negocjować albo zerwać rozmowy.',
+        example: () => 'Badanie trwa przez pierwszy kwartał uzgodnionej transakcji.',
+        quiz: [
+            { q: 'Co robi kupujący, gdy w badaniu znajdzie ukryte zobowiązania?', a: ['Obniża cenę o ich wartość', 'Podnosi cenę', 'Nic'], c: 0 },
+            { q: 'Po co kupujący bada spółkę przed zapłatą?', a: ['Żeby nie przepłacić za ukryte problemy', 'Żeby uniknąć podatku', 'Żeby zmienić nazwę spółki'], c: 0 },
+            { q: 'Oszustwo księgowe wykryte w badaniu może…', a: ['obniżyć cenę albo zerwać transakcję', 'przyspieszyć rozliczenie', 'podnieść premię'], c: 0 }
+        ]
+    },
+    audyt_przed_sprzedaza: {
+        title: 'Audyt przed sprzedażą', icon: '📒',
+        text: 'Sprzedający może sam zlecić audyt, zanim przyjmie ofertę. Problemy ujawnione wcześniej nie są niespodzianką dla kupującego — obniżka ceny jest o połowę mniejsza, a transakcja nie zostanie zerwana. „Kupujący wie, z czym idzie”.',
+        example: () => 'Audyt zlecisz w oknie oferty kupna (szkolenie „Księgowy”, poziom 5).',
+        quiz: [
+            { q: 'Jak audyt przed sprzedażą zmienia obniżkę ceny po badaniu kupującego?', a: ['Obniżka jest o połowę mniejsza', 'Obniżka jest dwa razy większa', 'Nie ma znaczenia'], c: 0 },
+            { q: 'Czy po audycie przed sprzedażą kupujący zerwie transakcję z powodu wykrytego oszustwa?', a: ['Nie — wie, z czym idzie', 'Zawsze', 'Tylko w hossie'], c: 0 },
+            { q: 'Kto płaci za audyt przed sprzedażą?', a: ['Sprzedający', 'Kupujący', 'KNF'], c: 0 }
+        ]
+    },
+    ukryte_zobowiazania: {
+        title: 'Ukryte zobowiązania', icon: '📑',
+        text: 'Nie każdy dług widać w bilansie. Poręczenia za cudze kredyty, przegrane pozwy czy kary to zobowiązania, które mogą „wyskoczyć” nagle. Ujawnia je audyt, badanie kupującego albo sąd. Wtedy dług w bilansie rośnie, a kurs spada o ich wartość na akcję. Ryzyko jest większe przy prezesie skłonnym do korupcji i przy słabej kondycji spółki.',
+        example: () => { const s = stocks.find(x => x.hiddenRevealed); return s ? `${s.name}: ujawnione ${formatZl(s.hiddenRevealed.value, 0)} (wykrył: ${s.hiddenRevealed.by}).` : 'Jeszcze nikt nie ujawnił ukrytych zobowiązań.'; },
+        quiz: [
+            { q: 'Co dzieje się z kursem po ujawnieniu ukrytych zobowiązań?', a: ['Spada o ich wartość na akcję', 'Rośnie', 'Nie zmienia się'], c: 0 },
+            { q: 'Kto najczęściej ujawnia ukryte zobowiązania?', a: ['Audytor i kupujący w badaniu spółki', 'Bank centralny', 'Akcjonariusze mniejszościowi'], c: 0 },
+            { q: 'Kiedy ryzyko ukrytych zobowiązań jest większe?', a: ['Przy skorumpowanym prezesie i słabej kondycji', 'Przy wysokiej dywidendzie', 'W hossie'], c: 0 }
+        ]
+    },
+    cena_maksymalna: {
+        title: 'Cena maksymalna i synergie', icon: '🎯',
+        text: 'Kupujący ma w głowie cenę maksymalną — ile może zapłacić, żeby przejęcie się opłaciło. Zależy od wartości spółki i synergii (wspólne zakupy, klienci, koszty). Pierwsza oferta jest zwykle dużo niższa. Rozmowa zdradza przedział tej ceny; kontroferta w przedziale zwykle przechodzi, a żądanie dużo powyżej grozi urażeniem i zerwaniem rozmów.',
+        example: () => 'Oferty kupna dostaje fundusz z co najmniej 33% akcji spółki.',
+        quiz: [
+            { q: 'Od czego zależy cena maksymalna kupującego?', a: ['Od wartości spółki i synergii', 'Tylko od kursu z wczoraj', 'Od liczby akcjonariuszy'], c: 0 },
+            { q: 'Co grozi przy żądaniu dużo ponad cenę maksymalną?', a: ['Urażenie i wycofanie oferty', 'Automatyczna zgoda', 'Kara KNF'], c: 0 },
+            { q: 'Pierwsza oferta kupującego jest zwykle…', a: ['niższa niż jego cena maksymalna', 'równa cenie maksymalnej', 'wyższa niż cena maksymalna'], c: 0 }
+        ]
+    },
+    aukcja_sprzedazy: {
+        title: 'Konkurencyjny proces sprzedaży', icon: '🔨',
+        text: 'Sprzedający może zaprosić kolejnych chętnych (przez doradcę). Gdy jest dwóch kupujących, przebijają się nawzajem — cena rośnie, ale tylko do niższej z ich cen maksymalnych. Pierwszy oferent może się obrazić i wycofać. Doradca kosztuje, a drugiego chętnego może nie znaleźć.',
+        example: () => 'Aukcję uruchomisz w oknie oferty kupna.',
+        quiz: [
+            { q: 'Do jakiej ceny rosną oferty w aukcji dwóch kupujących?', a: ['Do niższej z ich cen maksymalnych', 'Bez ograniczeń', 'Do ceny z pierwszej oferty'], c: 0 },
+            { q: 'Jakie jest ryzyko zaproszenia drugiego oferenta?', a: ['Koszt doradcy i urażenie pierwszego oferenta', 'Utrata akcji', 'Zawieszenie handlu'], c: 0 },
+            { q: 'Kto szuka drugiego kupującego?', a: ['Doradca sprzedającego', 'KNF', 'Bank centralny'], c: 0 }
+        ]
+    },
+    premia_przejecia: {
+        title: 'Premia za przejęcie', icon: '🤝',
+        text: 'Kupujący całą spółkę płaci więcej niż kurs giełdowy — to premia za przejęcie (zwykle 20–40%). Płaci za kontrolę: może połączyć firmy, obciąć koszty, wykorzystać synergie. Kurs celu po ogłoszeniu skacze w okolice ceny oferty, a kurs kupującego często spada — rynek boi się, że przepłacił.',
+        example: () => { const s = stocks.find(x => x.mergerProcess?.arb && x.mergerProcess.initiatorSymbol !== x.symbol && x.mergerProcess.type === 'przejęcie'); return s ? `${s.name}: oferta ${formatZl(s.mergerProcess.offerDetails.buyoutPricePerShare)} za akcję, premia ${Math.round((s.mergerProcess.offerDetails.premium || 0) * 100)}%.` : 'Teraz nikt nie przejmuje spółki na giełdzie.'; },
+        quiz: [
+            { q: 'Kurs 100 PLN, oferta 130 PLN za akcję. Ile wynosi premia?', a: ['30%', '130%', '23%'], c: 0 },
+            { q: 'Dlaczego kurs kupującego często spada po ogłoszeniu przejęcia?', a: ['Rynek boi się, że kupujący przepłacił', 'Bo kupujący dostaje gotówkę', 'Bo cel bankrutuje'], c: 0 },
+            { q: 'Za co kupujący płaci premię?', a: ['Za kontrolę i spodziewane synergie', 'Za prowizję maklera', 'Za podatek od transakcji'], c: 0 }
+        ]
+    },
+    arbitraz_fuzji: {
+        title: 'Arbitraż fuzji', icon: '⚖️',
+        text: 'Po ogłoszeniu przejęcia kurs celu nie dochodzi do pełnej ceny oferty — zostaje różnica (spread). To cena ryzyka: transakcja może się nie udać (urząd antymonopolowy, obrona zarządu, brak finansowania). Kto kupi akcje celu, zarobi spread, jeśli transakcja dojdzie do skutku, ale straci, gdy zostanie zerwana — wtedy kurs wraca w okolice ceny sprzed oferty. Spread maleje, gdy transakcja się zbliża.',
+        example: () => { const s = stocks.find(x => x.mergerProcess?.arb && x.mergerProcess.initiatorSymbol !== x.symbol); return s ? `${s.name}: spread ${formatNumberPl(s.mergerProcess.arb.spread * 100, 1)}%, etap ${s.mergerProcess.stage}/7.` : 'Spread zobaczysz w karcie spółki, gdy trwa przejęcie.'; },
+        quiz: [
+            { q: 'Oferta 100 PLN, kurs celu 94 PLN. Ile wynosi spread?', a: ['6%', '94%', '106%'], c: 0 },
+            { q: 'Co się dzieje z kursem celu po zerwaniu przejęcia?', a: ['Wraca w okolice ceny sprzed oferty', 'Rośnie do ceny oferty', 'Spółka znika z giełdy'], c: 0 },
+            { q: 'Kiedy spread jest największy?', a: ['Na początku procesu i przy wrogim przejęciu', 'Dzień przed rozliczeniem', 'Gdy nikt nie przejmuje spółki'], c: 0 }
+        ]
+    },
+    emisje_skupy: {
+        title: 'Emisje i skupy w cyklu rynku', icon: '🔁',
+        text: 'Zarząd sam wybiera moment emisji i skupu akcji. Gdy rynek płaci za akcje dużo (hossa, wysoka wycena), spółka chętnie sprzedaje nowe akcje — dostaje dużo gotówki za mały kawałek firmy, ale dotychczasowi akcjonariusze mają mniejszy udział w zysku (rozwodnienie). Gdy akcje są tanie (bessa, panika), spółka z zapasem gotówki skupuje własne akcje — zostaje ich mniej, więc każda daje większy udział w zysku.',
+        example: () => {
+            const premium = typeof getMarketRegime === 'function' ? Number(getMarketRegime('home')?.premium) || 0 : 0;
+            return `Premia rynku: ${premium >= 0 ? '+' : ''}${(premium * 100).toFixed(0)}% — ${premium > 0.10 ? 'zarządy częściej proponują emisje' : premium < -0.15 ? 'zarządy z gotówką częściej proponują skup akcji' : 'wyceny są umiarkowane'}.`;
+        },
+        quiz: [
+            { q: 'Kiedy emisja nowych akcji jest najkorzystniejsza dla spółki?', a: ['Gdy akcje są drogie', 'Gdy akcje są tanie', 'Zawsze tak samo'], c: 0 },
+            { q: 'Co emisja 10% nowych akcji robi z udziałem dotychczasowego akcjonariusza w zysku?', a: ['Zmniejsza go (rozwodnienie)', 'Zwiększa go', 'Nie zmienia'], c: 0 },
+            { q: 'Spółka skupuje 10% własnych akcji. Twój udział w zysku na akcję…', a: ['rośnie', 'maleje', 'nie zmienia się'], c: 0 }
+        ]
+    },
+    bramka_umorzen: {
+        title: 'Bramka umorzeń', icon: '⏳',
+        text: 'Fundusz może czasowo ograniczyć wypłaty, gdy klienci chcą naraz umorzyć dużą część udziałów — tak robią fundusze nieruchomości i fundusze zamknięte. W grze w kwartale można umorzyć najwyżej 10% udziałów z jego początku (w tym panika najwyżej 5%). Reszta zleceń czeka w kolejce i idzie pierwsza w następnym kwartale, chyba że klient odzyska zadowolenie i zrezygnuje. Bramka chroni pozostałych klientów przed wyprzedażą akcji po złych cenach, ale klienci to widzą — zaufanie spada.',
+        example: () => {
+            const queued = typeof getQueuedRedemptionUnits === 'function' ? getQueuedRedemptionUnits() : 0;
+            return queued > 0 ? `W kolejce umorzeń czeka ${formatNumberPl(queued, 1)} udziałów.` : 'Kolejka umorzeń jest pusta.';
+        },
+        quiz: [
+            { q: 'Ile udziałów można umorzyć w jednym kwartale, zanim zadziała bramka?', a: ['10% udziałów z początku kwartału', '50% udziałów', 'Bez limitu'], c: 0 },
+            { q: 'Co dzieje się ze zleceniem umorzenia ponad limit?', a: ['Czeka w kolejce i idzie pierwsze w następnym kwartale', 'Przepada', 'Jest realizowane od razu po niższej cenie'], c: 0 },
+            { q: 'Jaki koszt ponosi fundusz, uruchamiając bramkę?', a: ['Spada zaufanie klientów', 'Płaci karę do KNF', 'Traci licencję'], c: 0 }
         ]
     },
     pozyczkodawca: {
@@ -943,6 +1119,7 @@ function checkAcademyTriggers() {
     if (held.some(s => s.lastReport && s.lastReport !== 'brak')) unlockAcademyEntry('raport');
     if (held.some(s => s.lastDividend)) unlockAcademyEntry('dywidenda');
     if (held.some(s => s.mergerProcess)) unlockAcademyEntry('fuzje');
+    if (held.some(s => s.mergerProcess?.arb && s.mergerProcess.initiatorSymbol !== s.symbol)) { unlockAcademyEntry('arbitraz_fuzji'); unlockAcademyEntry('premia_przejecia'); } // 0.15.1 M1
     if (held.some(s => s.governance?.pendingAgm)) unlockAcademyEntry('walne');
     if (allBonds.some(b => b.ownerId === 'player')) unlockAcademyEntry('obligacje');
     if ((typeof getFundDeposits === 'function' && getFundDeposits().length) || (playerFund.ppp || []).length) unlockAcademyEntry('lokata');
@@ -1762,6 +1939,39 @@ const ACHIEVEMENTS = {
         desc: 'Sprzedaj gasnącą gwiazdę (stanowiącą wcześniej co najmniej 5% aktywów) przed spadkiem kursu o 50% od startu gaśnięcia.',
         xp: 100, hidden: false,
         check: () => Boolean(playerProfile?._abandonedFadingStar)
+    },
+    // 0.15.1 M7: przejęcia i pakiety
+    sold_with_premium: {
+        id: 'sold_with_premium', icon: '🤝', title: 'Sprzedane z premią',
+        desc: 'Sprzedaj kontrolowaną spółkę (> 50%) z premią co najmniej 40% nad kursem sprzed oferty.',
+        xp: 150, hidden: false, check: () => Boolean(playerProfile?._soldWithPremium)
+    },
+    auctioneer: {
+        id: 'auctioneer', icon: '🔨', title: 'Aukcjoner',
+        desc: 'Doprowadź do dwóch ofert kupna i sprzedaj o co najmniej 10% drożej niż w pierwszej ofercie.',
+        xp: 150, hidden: false, check: () => Boolean(playerProfile?._auctioneer)
+    },
+    clean_books: {
+        id: 'clean_books', icon: '📒', title: 'Czyste księgi',
+        desc: 'Zleć audyt przed sprzedażą, a potem doprowadź transakcję do końca bez zerwania.',
+        xp: 100, hidden: false, check: () => Boolean(playerProfile?._cleanBooks)
+    },
+    arbitrageur: {
+        id: 'arbitrageur', icon: '🎯', title: 'Arbitrażysta',
+        desc: 'Zarób na 3 pozycjach w celach przejęć kupionych po ogłoszeniu (rozliczonych po cenie oferty).',
+        xp: 150, hidden: false, check: () => (Number(playerProfile?._arbWins) || 0) >= 3
+    },
+    block_by_block: {
+        id: 'block_by_block', icon: '🧩', title: 'Pakiet po pakiecie',
+        desc: 'Zdobądź ponad 50% spółki, w tym co najmniej 20 pp z transakcji pakietowych.',
+        xp: 150, hidden: false,
+        check: () => typeof blockDealState === 'object' && stocks.some(s => getFundStakePct(s) > 0.5
+            && blockDealState.log.filter(e => e.symbol === s.symbol).reduce((sum, e) => sum + e.shares, 0) / s.totalShares >= 0.2)
+    },
+    winners_curse: {
+        id: 'winners_curse', icon: '🏚️', title: 'Klątwa zwycięzcy',
+        desc: 'Miej co najmniej 5% aktywów funduszu w spółce, która odpisze co najmniej połowę wartości firmy po przejęciu.',
+        xp: 100, hidden: true, check: () => Boolean(playerProfile?._winnersCurse)
     },
     value_trap: {
         id: 'value_trap', icon: '🕳️', title: 'Pułapka wartości',

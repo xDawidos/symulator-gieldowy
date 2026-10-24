@@ -1022,6 +1022,8 @@ function renderMarketModal() {
             <div class="gig-chart">${renderGigChartSvg(regime)}</div>
         </div>
 
+        ${typeof renderCrisisSection === 'function' ? renderCrisisSection() : ''}
+
         <div>
             <h4 class="bank-section-title">Historia faz</h4>
             <ul class="phase-history">${historyItems}</ul>
@@ -1040,8 +1042,11 @@ function updateTopbarBrand() {
     const dateEl = document.getElementById('topbar-date');
     const quarter = typeof macro !== 'undefined' && macro ? Math.max(0, Number(macro.quarter) || 0) : null;
     if (dateEl && Number.isFinite(quarter)) {
-        const label = `Rok ${Math.floor(quarter / 4) + 1} · kw. ${(quarter % 4) + 1}`;
+        // 0.15.2 K1: „Rok 3 · kw. 2 · tydz. 4” (na telefonie „R3 · K2 · T4”)
+        const label = typeof formatGameDate === 'function' ? formatGameDate(getGameCalendar(), window.innerWidth < 600) : `Rok ${Math.floor(quarter / 4) + 1} · kw. ${(quarter % 4) + 1}`;
         if (dateEl.textContent !== label) dateEl.textContent = label;
+        const started = typeof playerProfile !== 'undefined' && playerProfile?.startedAt ? new Date(playerProfile.startedAt).toLocaleDateString('pl-PL') : '';
+        dateEl.title = `Rok · kwartał (5 tygodni) · tydzień${started ? ` · gra rozpoczęta ${started}` : ''}`;
     }
 }
 
@@ -4113,6 +4118,7 @@ function renderCompanyCard() {
             </div>
         </div>
         ${renderSegmentBar(stock)}
+        ${typeof renderMergerArbLine === 'function' ? renderMergerArbLine(stock) : ''}
         ${typeof renderDividendBadges === 'function' ? renderDividendBadges(stock) : ''}
         ${stock.pendingDividend ? `<p class="text-sm cc-exdiv">Ogłoszona dywidenda <strong>${formatZl(stock.pendingDividend.dps)} na akcję</strong> — dzień odcięcia za ok. ${Math.max(1, Math.round(stock.dividendTimer / BASE_DELAYS.weekly))} tydz. gry. Dywidendę dostaje, kto ma akcje w dniu odcięcia; tego dnia kurs spada o mniej więcej jej wartość.</p>` : ''}`;
 
@@ -4148,7 +4154,8 @@ function renderCompanyCard() {
         tile('Stopa dywidendy', `${formatNumberPl(dividendYield * 100, 2)}%`, 'Dywidendy z ostatniego roku / kurs.', '', dividendYield > 0 ? vs(dividendYield, med?.dy, { lowerIsCheap: false, format: pctFmt, labels: ['wyższa', 'niższa'] }) : ''),
         tile('Zadłużenie', debtRatio === null ? '—' : `${formatNumberPl(debtRatio * 100, 0)}%`, 'Zobowiązania / aktywa. Powyżej ~70% spółka jest mocno zadłużona.', debtRatio > 0.7 ? 'text-down' : '', vs(debtRatio, med?.debt, { format: pctFmt, labels: ['niższe', 'wyższe'] })),
         tile('Kondycja', `${formatNumberPl(health, 1)} · ${healthLabel}`, 'Kondycja finansowa od −5 (bankructwo) do +5.', health >= 1 ? 'text-up' : health <= -2 ? 'text-down' : ''),
-        sectorPremiumTile()
+        sectorPremiumTile(),
+        typeof isCrisisActive === 'function' && isCrisisActive() ? tile('Wystawienie na kryzys', getCrisisExposureLabel(stock), `Udział segmentów spółki w sektorach tracących w linii „${CRISIS_LINES[crisisLine.id].name}”.`, getCrisisExposure(stock) >= 0.6 ? 'text-down' : '') : ''
     ].filter(Boolean).join('') + renderSubsectorMedianLine(stock, med);
 
     document.getElementById('company-card-tabs').innerHTML = COMPANY_CARD_TABS
@@ -4652,6 +4659,9 @@ function isDialogOpen(el) {
 
 function onDialogOpened(el) {
     if (modalA11y.stack.some(entry => entry.el === el)) return;
+    // Okno otwarte z poczty (oferta, wezwanie, emisja, walne) — poczta (z-index 3000) zasłaniałaby je.
+    const mail = document.getElementById('mail-overlay');
+    if (el.classList.contains('modal') && mail && !mail.hidden && el !== mail) closeMailbox();
     modalA11y.stack.push({ el, returnFocus: document.activeElement });
     const box = el.classList.contains('intro-overlay') ? (el.firstElementChild || el) : el;
     box.setAttribute('role', 'dialog');
@@ -6656,7 +6666,11 @@ function renderFundFlowReasons() {
             <div class="d-flex gap-2 flex-wrap"><div><em>Odchodzą, bo:</em><ul>${rows(quarter.out, FUND_FLOW_OUT_REASONS, -1) || '<li>nikt nie odszedł</li>'}</ul></div>
             <div><em>Przychodzą:</em><ul>${rows(quarter.in, FUND_FLOW_IN_REASONS, 1) || '<li>brak wpłat</li>'}</ul></div></div></div>`;
     };
+    const gate = stats.current;
+    const gateUsed = (gate.gateUnitsRedeemed || 0) / Math.max(1, gate.startUnits) * 100;
+    const queued = typeof getQueuedRedemptionUnits === 'function' ? getQueuedRedemptionUnits() : 0;
     box.innerHTML = quarterTable(stats.last, 'Ostatni kwartał') + quarterTable(stats.current, 'Bieżący kwartał')
+        + `<p class="text-sm">Bramka umorzeń: wykorzystano ${formatNumberPl(gateUsed, 1)}% z ${formatNumberPl(REDEMPTION_GATE_SHARE * 100, 0)}%, w kolejce ${formatNumberPl(queued, 1)} udziałów.</p>`
         + `<p class="text-xs text-muted">Napływ nowych klientów (emisja ${isFundOpenForSubscriptions() ? 'otwarta' : 'zamknięta'}): ok. ${formatNumberPl((isFundOpenForSubscriptions() ? getOrganicInflowRate() * 100 : 0), 1)}% aktywów rocznie — zależy od zaufania, reputacji i wyniku vs GIG.</p>`;
 }
 
@@ -7101,6 +7115,7 @@ function completeIntroScene(event) {
     playerProfile.country = 'PL';
     playerProfile.cv = [{ type: 'start', text: `Zatrudnienie w ${playerProfile.corporation} jako Młodszy zarządca funduszu „${playerProfile.fundName}”.` }];
 
+    if (typeof setCrisisScenario === 'function') setCrisisScenario(value('intro-crisis')); // 0.15.3 W4: scenariusz startowy (po zapisie CV)
     document.getElementById('intro-overlay').hidden = true;
     if (typeof syncCeoTitle === 'function') syncCeoTitle(); // nazwa korporacji z formularza
     logEvent(`💼 Witaj, ${playerProfile.name}! Zarządzasz funduszem „${playerProfile.fundName}” w ${playerProfile.corporation}. Wznów grę, aby zacząć.`, 'review');
@@ -7629,6 +7644,15 @@ function renderMailPreview(message) {
             : '<p class="fund-muted">Oferta pakietu wygasła.</p>';
     } else if (message.action?.type === 'agm') {
         action = `<div class="mail-action"><button onclick="openGovernanceModal('${message.action.symbol}')">Otwórz walne zgromadzenie</button></div>`;
+    } else if (message.action?.type === 'ddResult') { // 0.15.1 M3: decyzja po badaniu kupującego
+        const pair = getDdPair(message.action.symbol);
+        action = pair
+            ? `<div class="mail-action"><p>Nowa cena: <strong>${formatZl(pair.pending.newPrice)}</strong> (było ${formatZl(pair.pending.oldPrice)})</p><button onclick="mailAction(ddAcceptCut, '${message.action.symbol}')">Przyjmij</button> ${pair.pending.negotiated ? '' : `<button class="btn-secondary" onclick="mailAction(ddNegotiate, '${message.action.symbol}')">Negocjuj (raz)</button>`} <button class="btn-danger" onclick="mailAction(ddCancel, '${message.action.symbol}')">Zerwij bez kary</button></div>`
+            : '<p class="fund-muted">Decyzja nie jest już aktualna.</p>';
+    } else if (message.action?.type === 'buyoutOffer') { // 0.15.1 M2
+        action = buyoutState.offers[message.action.symbol]
+            ? `<div class="mail-action"><button onclick="openBuyoutOfferModal('${message.action.symbol}')">Otwórz ofertę</button></div>`
+            : '<p class="fund-muted">Ta oferta nie jest już aktualna.</p>';
     } else if (message.action?.type === 'takeover') {
         action = `<div class="mail-action"><button onclick="openTakeoverModal('${message.action.symbol}')">Otwórz decyzję w sprawie przejęcia</button></div>`;
     } else if (message.action?.type === 'rescue') {
@@ -7649,6 +7673,12 @@ function renderMailPreview(message) {
         action = pending
             ? `<div class="mail-action">${pending.choice ? `<p>Wybrano: <strong>${pending.choice === 'approve' ? 'zatwierdzenie' : 'blokada'}</strong> — możesz zmienić do końca kwartału.</p>` : ''}<button onclick="mailAction(respondStrategyProposal, '${stock.symbol}', 'approve')">Zatwierdź</button> <button class="btn-danger" onclick="mailAction(respondStrategyProposal, '${stock.symbol}', 'block')">Zablokuj</button></div>`
             : '<p class="fund-muted">Decyzja została już podjęta.</p>';
+    }
+    if (message.action?.type === 'vip') { // 0.15.2 K7: rozmowa z inwestorem VIP (3 argumenty sprawdzane danymi funduszu)
+        const offer = playerFund?.vip?.offers.find(o => o.id === message.action.vipId && o.expiresQ > currentQuarter());
+        action = offer
+            ? `<div class="mail-action"><p>Wybierz argument — gra sprawdzi go na danych funduszu:</p>${Object.entries(VIP_ARGUMENTS).map(([k, a]) => `<button class="btn-secondary" title="${escapeHtml(a.hint)}" onclick="mailAction(pitchVip, ${offer.id}, '${k}')">${a.label}</button>`).join(' ')}<p class="text-xs text-muted">${Object.values(VIP_ARGUMENTS).map(a => `${a.label}: ${a.hint}`).join(' · ')}</p></div>`
+            : '<p class="fund-muted">Oferta VIP została już rozstrzygnięta albo wygasła.</p>';
     }
     if (message.action?.type === 'pppRestructure') {
         const stake = (playerFund?.ppp || []).find(item => item.id === message.action.stakeId);
@@ -7948,7 +7978,8 @@ function renderJuDecisions() {
         <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('megafon', 20)}</span><div><h4>Kampania marketingowa</h4><span class="bank-card-type">koszt ${formatZl(getMarketingCost(), 0)} z budżetu korporacji · ${MARKETING_WEEKS} tyg.</span></div></header>
             ${campaign?.weeksLeft > 0 ? `<p class="text-sm">Trwa: ${dataIcon(MARKETING_TARGETS[campaign.target].icon)} ${MARKETING_TARGETS[campaign.target].label}, zostało ${campaign.weeksLeft} tyg.</p>`
                 : `<p class="text-sm">Dodatkowi kupujący udziały z wybranej grupy klientów. Nowe wpłaty nadal wymagają zaufania ≥ 50.</p>
-                <div class="bank-card-form">${Object.entries(MARKETING_TARGETS).map(([id, t]) => `<button class="btn-secondary" onclick="startMarketingCampaign('${id}'); renderJuMarket();">${dataIcon(t.icon)} ${t.label}</button>`).join('')}</div>`}</article>`;
+                <div class="bank-card-form">${Object.entries(MARKETING_TARGETS).map(([id, t]) => `<button class="btn-secondary" onclick="startMarketingCampaign('${id}'); renderJuMarket();">${dataIcon(t.icon)} ${t.label}</button>`).join('')}</div>`}</article>
+        ${typeof renderCampaignCards === 'function' ? renderCampaignCards() : ''}`;
 }
 
 function renderJuMarket() {
@@ -8434,6 +8465,93 @@ function openTakeoverModal(symbol) {
     modal.style.display = 'block';
 }
 
+/** 0.15.1 M2: okno oferty kupna dla większościowca (wzorzec okna przejęcia; gra nie pauzuje). */
+function openBuyoutOfferModal(symbol) {
+    let modal = document.getElementById('buyout-offer-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'buyout-offer-modal';
+        modal.className = 'modal modal-lg';
+        modal.setAttribute('role', 'dialog');
+        modal.innerHTML = '<button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button><h2 class="mt-0" id="buyout-offer-title">Oferta kupna</h2><div id="buyout-offer-body"></div>';
+        document.body.appendChild(modal);
+    }
+    renderBuyoutOffer(symbol);
+    modal.style.display = 'block';
+}
+
+function buyoutAction(symbol, fn, ...args) {
+    const result = fn(symbol, ...args);
+    const labels = { accepted: 'Oferent przyjął Twoją cenę — transakcja uzgodniona.', middle: 'Oferent proponuje cenę pośrodku.', lastWord: 'Oferent podnosi cenę i mówi: „ostatnie słowo”.', insulted: 'Oferent urażony — wycofał ofertę.', second: 'Doradca znalazł drugiego oferenta — cena rośnie.', none: 'Doradca nie znalazł drugiego oferenta.' };
+    if (labels[result]) showToast(labels[result], result === 'insulted' || result === 'none' ? 'warning' : 'success', 5000);
+    renderBuyoutOffer(symbol);
+    if (typeof displayCash === 'function') displayCash();
+}
+
+/** Ocena kontroferty słowem (po rozmowach wstępnych). */
+function getBuyoutVerdict(offer, v) {
+    const t = offer?.talked;
+    if (!t) return 'bez rozmów wstępnych nie znasz ceny maksymalnej oferenta';
+    return v < t.low ? 'poniżej przedziału — oferent przyjmie' : v <= t.high ? 'w przedziale — oferent może przyjąć albo zaproponować środek' : v <= t.high * 1.15 ? 'powyżej przedziału — oferent poda „ostatnie słowo”' : 'daleko powyżej — ryzyko urażenia';
+}
+
+function renderBuyoutOffer(symbol) {
+    const body = document.getElementById('buyout-offer-body');
+    if (!body) return;
+    const offer = buyoutState.offers[symbol];
+    const stock = stocks.find(s => s.symbol === symbol);
+    const title = document.getElementById('buyout-offer-title');
+    if (title) title.textContent = `Oferta kupna: ${stock?.name || symbol} (${symbol})`;
+    if (!offer || !stock) {
+        const deal = stock?.mergerProcess?.kind === 'offer';
+        body.innerHTML = `<p class="text-muted">${deal ? `Transakcja uzgodniona — rozliczenie w toku (etap ${stock.mergerProcess.stage}/7).` : 'Ta oferta nie jest już aktualna.'}</p>`;
+        return;
+    }
+    const pct = getFundStakePct(stock);
+    const premium = offer.price / offer.preOfferPrice - 1;
+    const left = Math.max(0, BUYOUT_OFFER_VALID_QUARTERS - (getBuyoutQuarter() - offer.quarter));
+    const fair = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(stock) : null;
+    const t = offer.talked;
+    const span = t ? Math.max(t.high * 1.1, offer.price * 1.05) : 1;
+    const pos = v => `${Math.max(0, Math.min(100, v / span * 100)).toFixed(1)}%`;
+    const counterInput = Number(document.getElementById('buyout-counter')?.value) || (t ? t.high : offer.price * 1.1);
+    const verdict = v => getBuyoutVerdict(offer, v);
+    const roundsLeft = offer.round <= BUYOUT_OFFER_MAX_ROUNDS;
+    body.innerHTML = `
+        <div class="bank-ticker">
+            <div class="bank-ticker-item"><span>Oferent</span><strong>${escapeHtml(offer.bidder.name)}${offer.bidder.related ? ' · pokrewny sektor' : ''}</strong></div>
+            <div class="bank-ticker-item"><span>Przedmiot</span><strong>${offer.wholeCompany ? 'cała spółka' : `pakiet ${offer.shares.toLocaleString('pl-PL')} akcji`}</strong></div>
+            <div class="bank-ticker-item"><span>Cena · premia</span><strong>${formatZl(offer.price)} · ${formatPct(premium, 0)}</strong></div>
+            <div class="bank-ticker-item"><span>Fundusz · ważna</span><strong>${formatNumberPl(pct * 100, 1)}% · ${left} kw.</strong></div>
+        </div>
+        <p class="text-sm">Kurs przed ofertą ${formatZl(offer.preOfferPrice)}${fair > 0 ? ` · wartość godziwa ${formatZl(fair)}` : ''}${offer.initialPrice !== offer.price ? ` · oferta wstępna ${formatZl(offer.initialPrice)}` : ''}. ${offer.wholeCompany ? 'Mniejszościowi akcjonariusze dostaną tę samą cenę; rozliczenie w 3 kw.' : 'Pakiet przechodzi do kupującego od razu.'} Gra nie jest wstrzymana.</p>
+        <h4>Rozmowy wstępne</h4>
+        ${t ? `<p class="text-sm"><span class="badge badge--neutral">nastawienie: ${BUYOUT_STANCES[offer.stance].label}</span> Oferent zapłaci najwyżej <strong>${formatZl(t.low)}–${formatZl(t.high)}</strong> za akcję.</p>
+            <div class="offer-range" aria-hidden="true"><div class="zone" style="left:${pos(t.low)};width:calc(${pos(t.high)} - ${pos(t.low)})"></div><div class="mark" style="left:${pos(offer.price)}"></div></div>
+            <p class="text-xs text-muted">Pasek: obecna oferta (kreska) i przedział ceny maksymalnej (pole).</p>`
+            : `<button class="btn-secondary" onclick="buyoutAction('${symbol}', talkBuyoutOffer)">Rozmowy wstępne (bez kosztu, raz)</button>`}
+        <h4>Twój ruch</h4>
+        ${roundsLeft ? `<div class="bank-card-form">
+            <label class="text-sm">Kontroferta: <input type="number" id="buyout-counter" class="w-xs" step="0.01" value="${counterInput.toFixed(2)}" oninput="document.getElementById('buyout-verdict').textContent = getBuyoutVerdict(buyoutState.offers['${symbol}'], Number(this.value))"> PLN za akcję</label>
+            <span class="text-sm" id="buyout-verdict">${escapeHtml(verdict(counterInput))}</span>
+            <button onclick="buyoutAction('${symbol}', counterBuyoutOffer, document.getElementById('buyout-counter').value)">Złóż kontrofertę (runda ${offer.round}/${BUYOUT_OFFER_MAX_ROUNDS})</button>
+        </div>` : '<p class="text-sm text-muted">Rundy negocjacji wyczerpane — przyjmij albo odrzuć.</p>'}
+        <div class="d-flex gap-2 flex-wrap mt-2">
+            ${offer.auction ? '' : `<button class="btn-secondary" onclick="buyoutAction('${symbol}', inviteSecondBidder)">Zaproś drugiego oferenta — ${formatZl(offer.price * offer.shares * BUYOUT_AUCTION_FEE, 0)} (doradca)</button>`}
+            ${stock.audit && !stock.audit.done ? '<span class="text-sm">Audyt przed sprzedażą w toku — wynik w przyszłym kwartale.</span>'
+                : hasPreSaleAudit(stock) ? '<span class="badge badge--neutral">audyt przed sprzedażą: zrobiony</span>'
+                : getSkillLevel('accountant') >= ACCOUNTANT_REQUIRED.audit ? `<button class="btn-secondary" onclick="buyoutAction('${symbol}', s => orderAudit(s) && (unlockAcademyEntry('audyt_przed_sprzedaza'), true))">Zleć audyt przed sprzedażą — ${formatZl(getAuditCost(stock), 0)}</button>`
+                : '<span class="text-xs text-muted">Audyt przed sprzedażą: szkolenie „Księgowy”, poziom 5.</span>'}
+        </div>
+        <div class="d-flex gap-2 flex-wrap mt-2">
+            <button onclick="buyoutAction('${symbol}', acceptBuyoutOffer)">${uiIcon('ok', 14)} Przyjmij ${formatZl(offer.price)}</button>
+            <button class="btn-danger" onclick="buyoutAction('${symbol}', rejectBuyoutOffer)">Odrzuć (przerwa ${BUYOUT_OFFER_COOLDOWN} kw.)</button>
+        </div>
+        ${offer.lastWord ? `<div class="alert alert--warn mt-3" role="status">${uiIcon('alert', 16)}<div><strong>Ostatnie słowo</strong><br>${offer.raised ? `Oferent podniósł cenę do ${formatZl(offer.price)} i nie da więcej.` : `Oferent nie podnosi ceny — ${formatZl(offer.price)} to jego ostatnie słowo.`} Wyższe żądanie może go urazić.</div></div>` : ''}
+        <h4>Przebieg</h4>
+        <ul class="list-plain text-sm">${offer.history.map(h => `<li>Runda ${h.round}: ${escapeHtml(h.text)}</li>`).join('')}</ul>`;
+}
+
 /** U1: osobne okno negocjacji (rundy, żądanie premii, kontroferta agresora). */
 function openNegotiationModal(symbol, start = false) {
     if (start && !startPlayerNegotiation(symbol)) return;
@@ -8570,7 +8688,7 @@ function renderShareholderBars(stock) {
         <span class="gov-bar-name">${escapeHtml(h.name)}</span>
         <span class="gov-bar-track"><span style="width:${Math.min(100, h.pct * 100).toFixed(1)}%"></span></span>
         <span class="gov-bar-pct">${h.entity?.isMafia ? `~${Math.max(5, Math.round(h.pct * 20) * 5)}%` : `${formatNumberPl((h.pct * 100), 1)}%`}</span>
-    </div>`).join('');
+    </div>${typeof renderBlockBuyForm === 'function' && playerFund && getBlockHolder(stock, h.id) ? renderBlockBuyForm(stock, getBlockHolder(stock, h.id)) : ''}`).join('');
 }
 
 function renderGovernanceDetail(stock) {
@@ -8746,7 +8864,7 @@ function dismissNotification(id) {
 // =================================================================================
 
 const CLASS_COLORS = { poor: '#c2410c', lowerMid: '#d97706', mid: '#16a34a', upperMid: '#0891b2', rich: '#2563eb', veryRich: '#7c3aed' };
-const PARTY_COLORS = { people: '#65a30d', state: '#dc2626', market: '#2563eb' };
+const PARTY_COLORS = { people: '#65a30d', state: '#dc2626', market: '#2563eb', social: '#db2777' };
 
 function openCountryPanel() {
     stateTab = 'country';
@@ -8788,7 +8906,7 @@ function renderCountryPanel() {
     const laws = Object.entries(SOCIAL_LAWS).map(([id, law]) => {
         const level = society.laws[id];
         return `<tr><td>${law.icon} ${escapeHtml(law.name)}</td><td><strong>${escapeHtml(describeLawLevel(id))}</strong></td>
-            <td class="text-xs text-muted">${pending?.law === id ? `${uiIcon('raport', 14)} zapowiedź: → ${escapeHtml(describeLawLevel(id, pending.to))} od przyszłego kwartału` : `zmiany: ${society.lawChanges[id] || 0}`}</td>
+            <td class="text-xs text-muted">${pending?.law === id ? `${uiIcon('raport', 14)} zapowiedź: → ${escapeHtml(describeLawLevel(id, pending.to))} od przyszłego kwartału` : `zmiany: ${society.lawChanges[id] || 0}`}${id === 'tenderThreshold' ? ` · limit KNF (poziom ${oversight?.knf?.level || 0}): ${escapeHtml(describeLawLevel(id, getTenderThresholdKnfCap()))}` : ''}</td>
             <td>${law.levels.map((_, i) => `<span class="law-pip ${i <= level ? 'on' : ''}"></span>`).join('')}</td></tr>`;
     }).join('');
     const wages = WORKFORCE_GROUPS.map(g => `<tr><td>${escapeHtml(g.name)}</td><td class="cell-number ${society.wages[g.id] > 1.005 ? 'text-down' : society.wages[g.id] < 0.995 ? 'text-up' : ''}">${formatNumberPl(society.wages[g.id], 3)}</td></tr>`).join('');
@@ -8822,7 +8940,7 @@ function renderCountryPanel() {
                     <div><dt>Zasiłki</dt><dd>${formatZl(budget.socialSpending || 0, 0)}</dd></div>
                     <div><dt>Podatki od pracy</dt><dd>${formatZl(budget.laborTaxes || 0, 0)}</dd></div>
                     <div><dt>Ubytek przez szarą strefę</dt><dd class="${budget.greyTaxLoss > 0 ? 'text-down' : ''}">${formatZl(budget.greyTaxLoss || 0, 0)}</dd></div>
-                    <div><dt>CIT</dt><dd>${(getCompanyIncomeTaxRate() * 100).toFixed(0)}%</dd></div>
+                    <div><dt>CIT</dt><dd>${(getCompanyIncomeTaxRate() * 100).toFixed(0)}%${Number(society.laws.corpTaxBrackets) ? ` (małe ${((getCompanyIncomeTaxRate() + CORP_TAX_BRACKETS[society.laws.corpTaxBrackets][0]) * 100).toFixed(0)}%, duże ${((getCompanyIncomeTaxRate() + CORP_TAX_BRACKETS[society.laws.corpTaxBrackets][1]) * 100).toFixed(0)}%)` : ''}</dd></div>
                 </dl>
                 <p class="text-xs text-muted">Deficyt przez 4 kwartały podnosi rentowność obligacji skarbowych o 0,25 pp${budget.bondPremium ? ` (teraz: ${uiIcon('ok', 14)} premia naliczana)` : ''}. Przez 8 kwartałów — rząd podnosi CIT albo tnie ustawy (zależnie od partii).</p></article>
             <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('glosowanie', 20)}</span><div><h4>Partie</h4><span class="bank-card-type">${escapeHtml(getRulingParty().name)} · wybory za ${macro.election.quartersLeft} kw.</span></div></header>
@@ -8958,10 +9076,10 @@ function updateCircuitBreakerUI() {
         const textEl = document.getElementById('circuit-breaker-text');
         const remaining = typeof getMarketHaltRemainingSeconds === 'function' ? getMarketHaltRemainingSeconds() : 0;
         const level = typeof marketHalt !== 'undefined' ? (marketHalt.level || 1) : 1;
-        const dropPct = typeof marketHalt !== 'undefined' && marketHalt.triggerDropPct ? Math.abs(marketHalt.triggerDropPct * 100).toFixed(1) : '7.0';
+        const dropPct = typeof marketHalt !== 'undefined' && marketHalt.lastDropPct ? Math.abs(marketHalt.lastDropPct * 100).toFixed(1) : '10.0';
 
         if (timerEl) {
-            timerEl.textContent = `${remaining}s`;
+            timerEl.textContent = Number.isFinite(remaining) ? `${remaining}s` : 'do końca tygodnia';
         }
         if (textEl) {
             textEl.textContent = `BEZPIECZNIK GIEŁDOWY: POZIOM ${level} (-${dropPct}% GIG) — SESJA ZAWIESZONA NA`;

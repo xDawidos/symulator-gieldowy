@@ -1643,6 +1643,13 @@ function getConstructionTechnologyBonuses(company) {
 
 // --- Zmienne Globalne Ekonomii ---
 let governmentTreasury = 1000000; // Skarbiec Państwa
+
+/** Dopłata ze skarbu państwa: najwyżej tyle, ile w nim jest (pusty skarb — bez dopłaty). */
+function takeFromTreasury(amount) {
+    const paid = Math.max(0, Math.min(Number(amount) || 0, governmentTreasury));
+    governmentTreasury -= paid;
+    return paid;
+}
 let marketVolatilityIndex = 0; // Wskaźnik zmienności (WNR)
 let exchangeCollapseState = {}; // Stan zwinięcia tabel w UI
 
@@ -1675,9 +1682,9 @@ const COMPANY_INCOME_TAX_RATE = 0.19; // CIT od zysku przed opodatkowaniem (rapo
 // (audyt A4: wcześniej PKB w ekspansji dochodził do 7% r/r — skala przesunięta do napędu koniunktury).
 const ECONOMY_PHASES = {
     recovery:    { name: 'Ożywienie',   gdp: [0.0022, 0.0055], length: [2, 4], peMult: 1.00, mood: 0.2,  next: 'expansion' },
-    expansion:   { name: 'Ekspansja',   gdp: [0.0044, 0.0100], length: [3, 6], peMult: 1.10, mood: 0.5,  next: 'overheating' },
-    overheating: { name: 'Przegrzanie', gdp: [0.0017, 0.0066], length: [1, 3], peMult: 1.20, mood: 0.3,  next: 'recession' },
-    recession:   { name: 'Recesja',     gdp: [-0.0110, -0.0022], length: [2, 4], peMult: 0.85, mood: -0.6, next: 'recovery' }
+    expansion:   { name: 'Ekspansja',   gdp: [0.0044, 0.0100], length: [3, 6], peMult: 1.05, mood: 0.5,  next: 'overheating' },
+    overheating: { name: 'Przegrzanie', gdp: [0.0017, 0.0066], length: [1, 3], peMult: 1.10, mood: 0.3,  next: 'recession' },
+    recession:   { name: 'Recesja',     gdp: [-0.0110, -0.0022], length: [2, 4], peMult: 0.93, mood: -0.6, next: 'recovery' }
 };
 const GDP_DRIVER_SCALE = 1 / 0.55;
 
@@ -2163,6 +2170,10 @@ function getEconomyPhaseInfo() {
 function advanceEconomyCycle() {
     const cycle = economyCycle;
     cycle.quartersInPhase++;
+    if (typeof crisisForcesRecession === 'function' && crisisForcesRecession()) { // 0.15.3 W2: linie kryzysu wymuszają Recesję
+        if (cycle.phase !== 'recession') { cycle.phase = 'recession'; cycle.quartersInPhase = 0; cycle.phaseLength = getRandomIntInRange(...ECONOMY_PHASES.recession.length); }
+        else cycle.quartersInPhase = Math.min(cycle.quartersInPhase, cycle.phaseLength - 1);
+    }
 
     if (cycle.quartersInPhase >= cycle.phaseLength) {
         const previous = cycle.phase;
@@ -2631,6 +2642,9 @@ function updateAllSectorPremiums() {
         } else {
             stock.sectorPremium = 0;
         }
+        if (typeof getSectorShockPremium === 'function') { // 0.15.3 W0: aktywne szoki sektorowe, łącznie −60%…+150%
+            stock.sectorPremium = Math.max(SECTOR_PREMIUM_MIN, Math.min(SECTOR_PREMIUM_MAX, stock.sectorPremium + getSectorShockPremium(stock)));
+        }
     });
 }
 
@@ -3000,7 +3014,7 @@ function createMarketCrashState() {
 function createMarketHaltState() {
     return {
         active: false,
-        level: 0,                 // 1 (-7% -> 15s), 2 (-13% -> 30s), 3 (-20% -> do końca tygodnia)
+        level: 0,                 // 1 (-10% -> 15s), 2 (-13% -> 30s), 3 (-20% -> do końca tygodnia)
         untilGameMs: 0,
         haltDurationSec: 0,
         remainingSec: 0,
@@ -3014,22 +3028,41 @@ function isMarketCrashing(market = 'home') {
     return Boolean(marketCrash?.active);
 }
 
+// 0.15.0.1 C1: wstrzymanie liczone zegarem gry (getGameClockMs) — pauza i prędkość nie zmieniają liczby tików.
 function isMarketHalted(market = 'home') {
     if (!marketHalt?.active) return false;
-    const now = Date.now();
-    if (now >= marketHalt.untilGameMs) {
-        marketHalt.active = false;
-        marketHalt.level = 0;
-        marketHalt.remainingSec = 0;
-        if (typeof updateCircuitBreakerUI === 'function') updateCircuitBreakerUI();
+    if (getGameClockMs() > marketHalt.untilGameMs) { // „>”: 15 s wstrzymania = 15 tików (tik sprawdza przed przesunięciem zegara)
+        endMarketHalt();
         return false;
     }
     return true;
 }
 
+function endMarketHalt() {
+    marketHalt.active = false;
+    marketHalt.level = 0;
+    marketHalt.remainingSec = 0;
+    if (typeof updateCircuitBreakerUI === 'function') updateCircuitBreakerUI();
+}
+
+/** Sekundy gry do końca wstrzymania; Infinity dla 3. stopnia (do końca tygodnia gry). */
 function getMarketHaltRemainingSeconds() {
     if (!isMarketHalted()) return 0;
-    return Math.max(0, Math.ceil((marketHalt.untilGameMs - Date.now()) / 1000));
+    return Math.max(0, Math.ceil((marketHalt.untilGameMs - getGameClockMs()) / 1000));
+}
+
+/** Pętla tygodniowa (main.js): koniec wstrzymania 3. stopnia i nowy tydzień progów. */
+function resetMarketHaltWeekly(gigValue) {
+    if (marketHalt.active && marketHalt.level === 3) endMarketHalt();
+    marketHalt.triggeredThisWeek = { 1: false, 2: false, 3: false };
+    if (gigValue > 0) marketHalt.weeklyStartGig = gigValue;
+}
+
+/** Wczytanie zapisu: 3. stopień zapisany jako null (JSON nie zna Infinity), stary znacznik z Date.now() znika. */
+function normalizeMarketHaltAfterLoad() {
+    if (!marketHalt.active) return;
+    if (marketHalt.untilGameMs === null && marketHalt.level === 3) marketHalt.untilGameMs = Infinity;
+    else if (!Number.isFinite(marketHalt.untilGameMs) || marketHalt.untilGameMs > getGameClockMs() + 60000) endMarketHalt();
 }
 
 /** Uruchamia bezpiecznik giełdowy (circuit breaker). */
@@ -3038,7 +3071,7 @@ function triggerMarketHalt(level, durationSec, currentDropPct = 0) {
     marketHalt.level = level;
     marketHalt.haltDurationSec = durationSec;
     marketHalt.remainingSec = durationSec;
-    marketHalt.untilGameMs = Date.now() + durationSec * 1000;
+    marketHalt.untilGameMs = level === 3 ? Infinity : getGameClockMs() + durationSec * 1000;
     marketHalt.triggeredThisWeek[level] = true;
     marketHalt.lastDropPct = currentDropPct;
 
@@ -3058,7 +3091,7 @@ function triggerMarketHalt(level, durationSec, currentDropPct = 0) {
     }
 }
 
-/** Sprawdza progi bezpieczników (-7%, -13%, -20%) na podstawie bieżącej wartości GIG. */
+/** Sprawdza progi bezpieczników (-10%, -13%, -20%) na podstawie bieżącej wartości GIG. */
 function checkCircuitBreakers(currentGigVal) {
     if (!currentGigVal || !marketHalt.weeklyStartGig || marketHalt.weeklyStartGig <= 0) return;
     if (isMarketHalted()) return;
@@ -3069,7 +3102,7 @@ function checkCircuitBreakers(currentGigVal) {
         triggerMarketHalt(3, 60, drop);
     } else if (drop <= -0.13 && !marketHalt.triggeredThisWeek[2]) {
         triggerMarketHalt(2, 30, drop);
-    } else if (drop <= -0.07 && !marketHalt.triggeredThisWeek[1]) {
+    } else if (drop <= -0.10 && !marketHalt.triggeredThisWeek[1]) { // 0.15.0.1: −7% → −10% (decyzja użytkownika)
         triggerMarketHalt(1, 15, drop);
     }
 }
@@ -3085,6 +3118,7 @@ function triggerMarketCrash(options = {}) {
     marketCrash.targetDrop = options.targetDrop || -(0.25 + Math.random() * 0.10); // -25..-35 pp
     marketCrash.startPremium = regime ? (regime.premium || 0) : 0;
     marketCrash.marginCallsExecuted = false;
+    marketCrash.floor = Number.isFinite(options.floor) ? options.floor : null; // 0.15.3: Czarny czwartek schodzi poniżej dna −35%
 
     if (typeof logEvent === 'function') {
         logEvent(`💥 KRACH NA GIEŁDZIE! Na parkiecie wybuchła panika! Inwestorzy masowo wyprzedają akcje!`, 'market');
@@ -3115,7 +3149,8 @@ function processMarketCrashWeekly(market = 'home') {
     const progress = Math.min(1.0, marketCrash.weeksElapsed / Math.max(1, marketCrash.durationWeeks));
     const regime = getMarketRegime(market);
     if (regime) {
-        regime.premium = marketCrash.startPremium + marketCrash.targetDrop * progress;
+        const bottom = Math.max(Number.isFinite(marketCrash.floor) ? marketCrash.floor : MARKET_CRASH_PREMIUM_FLOOR, marketCrash.startPremium + marketCrash.targetDrop); // nie niżej niż dno Kapitulacji
+        regime.premium = marketCrash.startPremium + (bottom - marketCrash.startPremium) * progress;
         regime.premiumTarget = regime.premium;
     }
 
@@ -3133,18 +3168,27 @@ function processMarketCrashWeekly(market = 'home') {
                 logEvent(`📉 Po krachu rynek przechodzi w fazę: ${nextDef.name}.`, 'market');
             }
         }
-        reactCentralBankToCrash();
+        if (!marketCrash.theme) reactCentralBankToCrash(); // linie kryzysu mają własną reakcję banku centralnego (0.15.3 W3)
     }
+}
+
+const MARKET_CRASH_PREMIUM_FLOOR = -0.35;
+const MARKET_CRASH_BASE_CHANCE = 0.03; // decyzja użytkownika po C7 (2,5% dawało 0,76 krachu na 20 lat)
+
+/** 0.15.0.1 C5b: krach tylko po wzrostach — w Euforii, Dystrybucji i w Hossie trwającej ≥ 4 kw. */
+function canMarketCrashInPhase(regime) {
+    return regime.phase === 'euphoria' || regime.phase === 'distribution' || (regime.phase === 'bull' && (Number(regime.quartersInPhase) || 0) >= 4);
 }
 
 /** Kwartalne sprawdzenie szansy wystąpienia krachu. */
 function checkMarketCrashQuarterly(market = 'home') {
     const regime = getMarketRegime(market);
     if (!regime) return;
-    if (regime.phase === 'bear' || regime.phase === 'capitulation') return;
     if (isMarketCrashing(market)) return;
+    if (typeof isCrisisActive === 'function' && isCrisisActive()) return; // w linii kryzysu nie losujemy krachu
+    if (!canMarketCrashInPhase(regime)) { checkKnfCoolingEuphoria(regime); return; }
 
-    let crashChance = 0.012; // 1.2% podstawy
+    let crashChance = MARKET_CRASH_BASE_CHANCE;
 
     if (regime.phase === 'euphoria') {
         crashChance += 0.06; // +6 pp w Euforii
@@ -3172,7 +3216,7 @@ function checkMarketCrashQuarterly(market = 'home') {
     }
 
     if (Math.random() < crashChance) {
-        triggerMarketCrash();
+        if (!(typeof maybeReplaceCrashWithCrisisLine === 'function' && maybeReplaceCrashWithCrisisLine())) triggerMarketCrash(); // 0.15.3: 40% krachów to linie kryzysu
     }
 
     // KNF chłodzi euforię: gdy premia rynku > +25% przez >= 2 kw., szansa 50% na obniżenie dopuszczalnej dźwigni botów na 4 kw.
@@ -3257,15 +3301,15 @@ function executeMarginCalls() {
             if (leverage > 0.50 && ai.portfolio) {
                 const sellFactor = 0.20 + Math.random() * 0.20;
                 let soldAny = false;
-                for (const symbol in ai.portfolio) {
-                    const shares = Number(ai.portfolio[symbol]) || 0;
-                    if (shares > 0) {
-                        const toSell = Math.max(1, Math.floor(shares * sellFactor));
-                        if (typeof aiSellStock === 'function') {
-                            aiSellStock(ai, symbol, toSell);
-                            soldAny = true;
-                        }
-                    }
+                for (const symbol of Object.keys(ai.portfolio)) { // 0.15.0.1 B2: pozycja bota to { shares, lockedShares }
+                    const holding = ai.portfolio[symbol];
+                    const stock = stocks.find(s => s.symbol === symbol);
+                    if (!holding || holding.assetType === 'Startup' || !stock || stock.assetType === 'Startup' || !(stock.price > 0)) continue;
+                    const toSell = Math.floor(((Number(holding.shares) || 0) - (Number(holding.lockedShares) || 0)) * sellFactor);
+                    if (toSell <= 0) continue;
+                    const before = holding.shares;
+                    aiSellStock(ai, symbol, toSell);
+                    if ((ai.portfolio[symbol]?.shares || 0) < before) soldAny = true;
                 }
                 if (soldAny && typeof logEvent === 'function') {
                     logEvent(`⚠️ MARGIN CALL: ${ai.name} (dźwignia ${(leverage * 100).toFixed(0)}%) przymusowo wyprzedaje akcje pod wezwanie banku!`, 'market');
@@ -3278,75 +3322,58 @@ function executeMarginCalls() {
     checkPlayerMarginCall();
 }
 
-/** Sprawdzenie i egzekucja Margin Call dla funduszu gracza. */
+/**
+ * Margin call funduszu gracza (0.15.0.1 B3): dług = pożyczki lombardowe. Przy dźwigni > 50% fundusz spłaca
+ * pożyczki od najstarszej do kwoty „dług − 40% aktywów”; brakującą gotówkę daje przymusowa sprzedaż wolnych akcji.
+ * Zwraca { required, repaid, sold } albo null.
+ */
 function checkPlayerMarginCall() {
-    const pawnDebt = (typeof playerFund === 'object' && playerFund?.pawnLoans)
-        ? playerFund.pawnLoans.reduce((sum, loan) => sum + (Number(loan.principal) || 0), 0)
-        : 0;
-    const otherDebt = (typeof playerFund === 'object' && Number(playerFund?.debt)) || 0;
-    const totalDebt = pawnDebt + otherDebt;
+    if (typeof playerFund !== 'object' || !playerFund || typeof getFundAccount !== 'function') return null;
+    const account = getFundAccount();
+    const debt = getPawnOutstanding(account);
+    if (!(debt > 0)) return null;
+    const totalAssets = getFundPortfolioValue() + Math.max(0, Number(playerCash) || 0);
+    const leverage = debt / (totalAssets + debt);
+    if (leverage <= 0.50) return null;
 
-    const portfolioVal = typeof getFundPortfolioValue === 'function' ? getFundPortfolioValue() : 0;
-    const totalAssets = portfolioVal + Math.max(0, Number(playerCash) || 0);
-    const leverage = (totalAssets + totalDebt) > 0 ? (totalDebt / (totalAssets + totalDebt)) : 0;
-
-    if (totalDebt > 0 && leverage > 0.50) {
-        const requiredCash = Math.max(0, totalDebt - (totalAssets * 0.40));
-        if (typeof playerCash !== 'undefined' && playerCash >= requiredCash) {
-            playerCash -= requiredCash;
-            if (typeof logEvent === 'function') {
-                logEvent(`⚠️ MARGIN CALL: Broker potrącił ${formatZl(requiredCash, 0)} z gotówki funduszu na uzupełnienie depozytu zabezpieczającego.`, 'market');
-            }
-            if (typeof showToast === 'function') {
-                showToast(`⚠️ Margin Call: Uzupełniono depozyt kwotą ${formatZl(requiredCash, 0)}.`, 'warning');
-            }
-        } else {
-            let liquidatedValue = 0;
-            if (typeof playerPortfolio === 'object' && playerPortfolio) {
-                for (const symbol in playerPortfolio) {
-                    const holding = playerPortfolio[symbol];
-                    const shares = Number(holding?.shares) || 0;
-                    if (shares > 0) {
-                        const toLiquidate = Math.max(1, Math.floor(shares * 0.25));
-                        const stock = typeof stocks !== 'undefined' ? stocks.find(s => s.symbol === symbol) : null;
-                        const price = stock ? stock.price : 1;
-                        holding.shares -= toLiquidate;
-                        if (holding.shares <= 0) delete playerPortfolio[symbol];
-                        liquidatedValue += toLiquidate * price;
-                    }
-                }
-            }
-            if (typeof playerCash !== 'undefined') playerCash += liquidatedValue;
-
-            if (typeof logEvent === 'function') {
-                logEvent(`🚨 MARGIN CALL! Wartość zabezpieczeń funduszu spadła w krachu. Broker przeprowadził przymusową likwidację akcji za ${formatZl(liquidatedValue, 0)}!`, 'market');
-            }
-            if (typeof showToast === 'function') {
-                showToast(`🚨 MARGIN CALL! Przymusowa likwidacja akcji funduszu!`, 'error');
-            }
-            if (typeof addMail === 'function') {
-                addMail({
-                    sender: 'KNF',
-                    subject: '🚨 MARGIN CALL: Przymusowa likwidacja pozycji funduszu',
-                    body: `W związku z krachem na giełdzie i przekroczeniem dopuszczalnego wskaźnika zadłużenia (> 50%), broker przeprowadził przymusową likwidację 25% akcji Twojego portfela w celu zabezpieczenia depozytu. Odzyskane środki (${formatZl(liquidatedValue, 0)}) zasiliły konto funduszu.`,
-                    importance: 3
-                });
-            }
+    const required = Math.max(0, debt - totalAssets * 0.40);
+    const sold = playerCash < required ? (forceLiquidation(required - playerCash, 'margin') || []) : [];
+    const pawnShop = typeof getPawnShop === 'function' ? getPawnShop() : null;
+    let repaid = 0;
+    for (const loan of [...account.loans]) { // od najstarszej
+        const pay = Math.min(loan.principal, required - repaid, Math.max(0, playerCash));
+        if (!(pay > 0)) break;
+        if (pay >= loan.principal) repayPawnLoan(account, loan.id);
+        else { // spłata części: zastaw zwalniany proporcjonalnie
+            const freed = Math.floor(loan.shares * pay / loan.principal);
+            playerCash -= pay;
+            if (pawnShop) adjustCompanyCash(pawnShop, pay);
+            loan.principal -= pay;
+            loan.shares -= freed;
+            const holding = playerPortfolio[loan.symbol];
+            if (holding) holding.lockedShares = Math.max(0, (holding.lockedShares || 0) - freed);
         }
+        repaid += pay;
     }
+    const debtAfter = getPawnOutstanding(account);
+    const assetsAfter = getFundPortfolioValue() + Math.max(0, playerCash);
+    const leverageAfter = debtAfter > 0 ? debtAfter / (assetsAfter + debtAfter) : 0;
+    const soldText = sold.length ? ` Sprzedane pozycje: ${sold.map(s => `${s.symbol} ${s.quantity} szt.`).join(', ')}.` : '';
+    const text = `Margin call: fundusz spłacił ${formatZl(repaid, 0)} pożyczek lombardowych (dźwignia ${(leverage * 100).toFixed(0)}% → ${(leverageAfter * 100).toFixed(0)}%).${soldText}`;
+    if (typeof logEvent === 'function') logEvent(`🚨 ${text}`, 'market');
+    if (typeof showToast === 'function') showToast(`🚨 ${text}`, 'error');
+    if (typeof addMail === 'function') {
+        addMail({
+            sender: 'KNF',
+            subject: '🚨 Margin call: spłata pożyczek lombardowych funduszu',
+            body: `${text} Zastaw spłaconych pożyczek wrócił do funduszu. Dług lombardowy po spłacie: ${formatZl(debtAfter, 0)}.`,
+            importance: 3
+        });
+    }
+    return { required, repaid, sold };
 }
 
-/** Punkt zaczepienia dla 0.15.1: szok sektorowy. */
-function applySectorShock(sector, premiumShock, durationQuarters = 2) {
-    if (typeof stocks === 'undefined' || !Array.isArray(stocks)) return;
-    for (const stock of stocks) {
-        if (!stock || stock.assetType === 'Holding') continue;
-        const mainSec = typeof getMainSector === 'function' ? getMainSector(stock) : (Array.isArray(stock.sector) ? stock.sector[0] : stock.sector);
-        if (mainSec === sector || (Array.isArray(stock.sector) && stock.sector.includes(sector))) {
-            stock.sectorPremium = (stock.sectorPremium || 0) + premiumShock;
-        }
-    }
-}
+// 0.15.3 W0 (naprawa B5): szok sektorowy (applySectorShock) jest stanem z czasem trwania w crises.js i sumuje się z bańką w updateAllSectorPremiums.
 
 /** Debug: ręczne wywołanie krachu rynkowego. */
 function debugTriggerMarketCrash() {
@@ -3714,6 +3741,10 @@ function updateStockPrices() {
 
         changePct += drift;
 
+        // 0.15.1 M1: cel przejęcia wraca do ceny oferty minus spread (zwykłe tempo), szum o połowę mniejszy.
+        const dealAnchor = stock.mergerProcess && typeof getMergerArbAnchor === 'function' ? getMergerArbAnchor(stock) : null;
+        if (dealAnchor > 0) changePct = noise * 0.5 + PRICE_MEAN_REVERSION_PER_TICK * Math.max(-0.9, Math.min(3, dealAnchor / price - 1));
+
         stock.price = price * (1 + Math.max(-0.2, Math.min(0.2, changePct)));
         if (stock.price <= 0.01) {
             stock.price = 0.01;
@@ -3914,7 +3945,7 @@ function updateMarketIndexes() {
         gigIndex.lastPrices = Object.fromEntries(members.map(stock => [stock.symbol, stock.price]));
         gigIndex.change = gigIndex.value - oldValue;
 
-        // 0.15 H4: Sprawdź progi bezpieczników giełdowych (-7%, -13%, -20%)
+        // 0.15 H4: Sprawdź progi bezpieczników giełdowych (-10%, -13%, -20%)
         if (typeof checkCircuitBreakers === 'function') {
             checkCircuitBreakers(gigIndex.value);
         }
@@ -4518,7 +4549,9 @@ const SECTOR_CYCLE_PHASES = {
 const RULING_PARTIES = {
     market: { name: 'Koalicja Rynkowa', privatization: 1.6, nationalization: 0.5, subsidies: 0.7, stateMood: -0.02 },
     state:  { name: 'Blok Państwowy',   privatization: 0.4, nationalization: 1.6, subsidies: 1.5, stateMood: 0.03 },
-    people: { name: 'Ludowcy',          privatization: 0.8, nationalization: 1.0, subsidies: 1.3, stateMood: 0.01 } // 0.13: płaca minimalna, zasiłki, mieszkania
+    people: { name: 'Ludowcy',          privatization: 0.8, nationalization: 1.0, subsidies: 1.3, stateMood: 0.01 }, // 0.13: płaca minimalna, zasiłki, mieszkania
+    // 0.15.1: lubią nacjonalizacje, nie lubią koncernów (ustawa antymonopolowa), wspierają małe firmy (progi CIT)
+    social: { name: 'Socjaldemokraci',  privatization: 0.5, nationalization: 1.4, subsidies: 1.2, stateMood: 0.015 }
 };
 
 let macro = createMacroState();
@@ -4533,7 +4566,7 @@ function createMacroState() {
         expectation: { change: 0, label: 'bez zmian' },
         lastDecision: null,
         sectorCycles: createSectorCycles(),
-        election: { quartersLeft: getRandomIntInRange(6, 12), ruling: Math.random() < 0.5 ? 'market' : 'state', campaign: false, donations: { market: 0, state: 0, people: 0 }, favor: null, coalition: null, support: null },
+        election: { quartersLeft: getRandomIntInRange(6, 12), ruling: Math.random() < 0.5 ? 'market' : 'state', campaign: false, donations: { market: 0, state: 0, people: 0, social: 0 }, favor: null, coalition: null, support: null },
         recentEvents: [],
         shocks: { inflation: 0 }
     };
@@ -4565,7 +4598,7 @@ function ensureMacroState() {
     macro = { ...fresh, ...(macro || {}) };
     macro.sectorCycles = normalizeSectorCycles(macro.sectorCycles, fresh.sectorCycles);
     macro.election = { ...fresh.election, ...(macro.election || {}) };
-    macro.election.donations = { market: 0, state: 0, people: 0, ...(macro.election.donations || {}) };
+    macro.election.donations = { market: 0, state: 0, people: 0, social: 0, ...(macro.election.donations || {}) };
     macro.shocks = { ...fresh.shocks, ...(macro.shocks || {}) };
     if (!Array.isArray(macro.history)) macro.history = [];
     if (!Array.isArray(macro.recentEvents)) macro.recentEvents = [];
@@ -4689,6 +4722,8 @@ function runCentralBankMeeting() {
     ensureMacroState();
     const traits = getBcTraits();
     let change = getPlannedRateChange(getTaylorRate());
+    const crisisChange = typeof getCrisisRateChange === 'function' ? getCrisisRateChange() : null; // 0.15.3 W3: stopy wg linii kryzysu
+    if (crisisChange !== null) change = crisisChange;
     let surpriseNote = '';
     if (traits.includes('Partyjniak') && Math.random() < 0.25) {
         change = roundRateStep(getRandomInRange(-BC_MAX_STEP, BC_MAX_STEP));
@@ -4777,7 +4812,7 @@ function supportElectionCampaign(partyId, amount) {
     amount = Math.floor(Number(amount));
     if (!RULING_PARTIES[partyId] || !playerFund) return false;
     if (!election.campaign) { showToast('Darowizny przyjmowane są tylko w trakcie kampanii.', 'warning'); return false; }
-    election.donations = { market: 0, state: 0, people: 0, ...(election.donations || {}) };
+    election.donations = { market: 0, state: 0, people: 0, social: 0, ...(election.donations || {}) };
     const assets = getFundAssets();
     const given = Object.values(election.donations).reduce((sum, value) => sum + (Number(value) || 0), 0);
     if (!(amount >= 100)) { showToast('Minimalna darowizna: 100 PLN.', 'warning'); return false; }
@@ -4795,7 +4830,7 @@ function supportElectionCampaign(partyId, amount) {
 
 function settlePoliticalFavor() {
     const election = macro.election;
-    const d = { market: 0, state: 0, people: 0, ...(election.donations || {}) };
+    const d = { market: 0, state: 0, people: 0, social: 0, ...(election.donations || {}) };
     const total = Object.values(d).reduce((sum, value) => sum + (Number(value) || 0), 0);
     if (total > 0) {
         const backed = Object.keys(d).sort((a, b) => d[b] - d[a])[0];
@@ -4805,7 +4840,7 @@ function settlePoliticalFavor() {
             body: won ? 'Nowa władza pamięta o wsparciu: łagodniejsze kontrole KNF i więcej kontraktów MON dla spółek funduszu przez 2 lata gry.'
                 : 'Wygrani pamiętają, kogo wspierał fundusz: KNF przygląda się uważniej, kontrakty MON omijają spółki funduszu przez 2 lata gry.', importance: 2 });
     }
-    election.donations = { market: 0, state: 0, people: 0 };
+    election.donations = { market: 0, state: 0, people: 0, social: 0 };
 }
 
 /** 0.13: wybory z poparciem liczonym z klas (3 partie), koalicja przy zwycięzcy < 40%. */
@@ -4914,6 +4949,7 @@ function triggerMacroShockEvent() {
     const wantPositive = Math.random() < getCyclePositiveEventBias();
     const event = pickMacroEvent(MACRO_SHOCK_EVENTS.filter(e => (e.type === 'positive') === wantPositive));
     if (!event) return null;
+    if (typeof noteMacroShockForCrises === 'function') noteMacroShockForCrises(event); // 0.15.3: fałszywe alarmy (sygnały bez linii)
     if (event.inflation) macro.shocks.inflation += event.inflation;
     for (const stock of stocks) {
         if (stock.assetType || stock.isBankrupt) continue;
@@ -5010,8 +5046,45 @@ const SOCIAL_LAWS = {
     minWage:  { name: 'Płaca minimalna',      icon: '💵', levels: ['brak', 'niska', 'średnia', 'wysoka'], start: 1 },
     benefits: { name: 'Zasiłki',              icon: '🤲', levels: ['brak', 'niskie', 'średnie', 'wysokie'], start: 1 },
     housing:  { name: 'Mieszkania socjalne',  icon: '🏘️', levels: ['brak', 'program', 'duży program'], start: 1 },
-    rights:   { name: 'Prawa pracownicze',    icon: '⚖️', levels: ['liberalne', 'standardowe', 'ochronne'], start: 1 }
+    rights:   { name: 'Prawa pracownicze',    icon: '⚖️', levels: ['liberalne', 'standardowe', 'ochronne'], start: 1 },
+    // 0.15.1 M5: do jakiego udziału trzeba ogłosić wezwanie po przekroczeniu 50% transakcjami pakietowymi
+    tenderThreshold: { name: 'Próg wezwania', icon: '📣', levels: ['66%', '75%', '90%', '99%'], start: 0 },
+    // 0.15.1 (Socjaldemokraci): CIT zależny od wielkości spółki; kontrola koncentracji rynku
+    corpTaxBrackets: { name: 'Progi CIT', icon: '🧾', levels: ['liniowy', 'dwa progi', 'progresywny'], start: 0 },
+    antitrust: { name: 'Ustawa antymonopolowa', icon: '⚖️', levels: ['łagodna', 'standardowa', 'surowa'], start: 1 }
 };
+// Progi CIT: [mała spółka (dolne 50% kapitalizacji), duża (górne 10%)] — zmiana stawki w pp.
+const CORP_TAX_BRACKETS = [[0, 0], [-0.04, 0.02], [-0.06, 0.05]];
+// Ustawa antymonopolowa: próg KNF dla koncernu (udział w sektorze) i próg blokady fuzji przez urząd.
+const ANTITRUST_LEVELS = [{ concern: 0.30, block: 0.50 }, { concern: 0.25, block: 0.40 }, { concern: 0.20, block: 0.30 }];
+function getAntitrustLevel() { return ANTITRUST_LEVELS[Number(society?.laws?.antitrust ?? 1)] || ANTITRUST_LEVELS[1]; }
+
+let corpTaxSizeCache = { quarter: null, small: 0, large: Infinity };
+/** Zmiana stawki CIT dla spółki wg ustawy „Progi CIT” (mała ulga, duża dopłata). */
+function getCorpTaxSizeAdj(stock) {
+    const level = Number(society?.laws?.corpTaxBrackets) || 0;
+    if (!level || !stock) return 0;
+    const quarter = typeof macro === 'object' ? macro.quarter : 0;
+    if (corpTaxSizeCache.quarter !== quarter) {
+        const caps = stocks.filter(s => !s.assetType && !s.isBankrupt).map(getMarketCap).sort((a, b) => a - b);
+        corpTaxSizeCache = { quarter, small: caps[Math.floor(caps.length * 0.5)] || 0, large: caps[Math.floor(caps.length * 0.9)] || Infinity };
+    }
+    const cap = getMarketCap(stock);
+    const [small, large] = CORP_TAX_BRACKETS[level];
+    return cap < corpTaxSizeCache.small ? small : cap >= corpTaxSizeCache.large ? large : 0;
+}
+const TENDER_THRESHOLD_VALUES = [0.66, 0.75, 0.90, 0.99];
+
+/** Próg wezwania z ustawy (udział). */
+function getTenderThreshold() {
+    return TENDER_THRESHOLD_VALUES[Number(society?.laws?.tenderThreshold) || 0] ?? 0.66;
+}
+
+/** Najwyższy poziom progu wezwania, na jaki pozwala KNF: 0–1 → 66%, 2 → 75%, 3 → 90%, 4–5 → 99%. */
+function getTenderThresholdKnfCap() {
+    const level = Number(typeof oversight === 'object' ? oversight?.knf?.level : 0) || 0;
+    return level <= 1 ? 0 : level === 2 ? 1 : level === 3 ? 2 : 3;
+}
 const MIN_WAGE_STEP = 0.04;          // płace pracowników i taniej siły +4% na poziom
 const HOUSING_PROGRAM_QUARTERS = 8;
 const RIGHTS_SATISFACTION = [0, 5, 10];
@@ -5019,14 +5092,18 @@ const RIGHTS_UNION_MULT = [0.7, 1, 1.5];
 
 // Programy partii: kierunek zmian ustaw i priorytet edukacji.
 const PARTY_PROGRAMS = {
-    market: { moves: [['minWage', -1], ['benefits', -1], ['housing', -1], ['rights', -1]], education: 'high', deficit: 'cut' },
-    state:  { moves: [['rights', 1], ['housing', 1]], education: 'high', deficit: 'cit' },
-    people: { moves: [['minWage', 1], ['benefits', 1], ['housing', 1]], education: 'medium', deficit: 'cit' }
+    market: { moves: [['minWage', -1], ['benefits', -1], ['housing', -1], ['rights', -1], ['tenderThreshold', -1], ['corpTaxBrackets', -1], ['antitrust', -1]], education: 'high', deficit: 'cut' },
+    social: { moves: [['corpTaxBrackets', 1], ['antitrust', 1], ['benefits', 1], ['tenderThreshold', 1]], education: 'high', deficit: 'cit' },
+    state:  { moves: [['rights', 1], ['housing', 1], ['tenderThreshold', 1]], education: 'high', deficit: 'cit' },
+    people: { moves: [['minWage', 1], ['benefits', 1], ['housing', 1], ['tenderThreshold', 1]], education: 'medium', deficit: 'cit' }
 };
 // Preferencje wyborcze klas: [Ludowcy, Blok Państwowy, Koalicja Rynkowa].
-const CLASS_VOTE = { poor: [50, 35, 15], lowerMid: [35, 35, 30], mid: [20, 35, 45], upperMid: [10, 30, 60], rich: [5, 20, 75], veryRich: [5, 15, 80] };
-const PARTY_IDS = ['people', 'state', 'market'];
+const CLASS_VOTE = { poor: [35, 25, 10, 30], lowerMid: [30, 30, 25, 15], mid: [18, 32, 42, 8], upperMid: [10, 28, 57, 5], rich: [5, 20, 72, 3], veryRich: [5, 15, 78, 2] };
+const PARTY_IDS = ['people', 'state', 'market', 'social'];
 const COALITION_THRESHOLD = 0.40;
+// Socjaldemokraci (decyzja użytkownika): sami nie wygrywają — są koalicjantem lewicy i rosną w kryzysie.
+const SOCIAL_COALITION_MIN = 10;     // % poparcia, od którego Ludowcy / Blok Państwowy wolą ich jako koalicjanta
+const SOCIAL_CRISIS_BONUS = 6;       // pp przy złej koniunkturze
 const ELECTION_FATIGUE = 5;          // pp na każdą kadencję u władzy
 const ELECTION_BAD_TIMES = 10;       // pp przy złej koniunkturze
 const PROTEST_TO_PEOPLE = 0.75;      // część odpływu od rządzących, która trafia do Ludowców
@@ -5423,14 +5500,22 @@ function describeLawLevel(lawId, level = society.laws[lawId]) {
 }
 
 /** Partia, która zmienia ustawy (w koalicji — silniejsza). */
-function getLawMakingParty() {
-    return macro?.election?.ruling || 'market';
+/** Partia, która zmienia ustawy; z `withPartner` koalicjant forsuje swoją ustawę z szansą = jego udział w koalicji. */
+function getLawMakingParty(withPartner = false) {
+    const election = macro?.election;
+    const coalition = election?.coalition;
+    if (withPartner && coalition?.partner) {
+        const wMain = Number(coalition.weights?.[election.ruling]) || 1, wPartner = Number(coalition.weights?.[coalition.partner]) || 1;
+        if (Math.random() < wPartner / (wMain + wPartner)) return coalition.partner;
+    }
+    return election?.ruling || 'market';
 }
 
 function pickLawChange(partyId = getLawMakingParty()) {
     const program = PARTY_PROGRAMS[partyId] || PARTY_PROGRAMS.market;
     const options = program.moves.filter(([law, delta]) => {
         const level = Number(society.laws[law]) || 0;
+        if (law === 'tenderThreshold' && level + delta > getTenderThresholdKnfCap()) return false; // partia nie przeforsuje progu ponad limit KNF
         return level + delta >= 0 && level + delta < SOCIAL_LAWS[law].levels.length;
     });
     return options.length ? getRandomElement(options) : null;
@@ -5507,8 +5592,8 @@ function commissionSocialHousing() {
 }
 
 /** CIT spółek: 19% + ewentualna podwyżka po długim deficycie. */
-function getCompanyIncomeTaxRate() {
-    return COMPANY_INCOME_TAX_RATE + (typeof society === 'object' && society ? Number(society.budget?.citAdd) || 0 : 0);
+function getCompanyIncomeTaxRate(stock = null) {
+    return Math.max(0, COMPANY_INCOME_TAX_RATE + (typeof society === 'object' && society ? Number(society.budget?.citAdd) || 0 : 0) + getCorpTaxSizeAdj(stock));
 }
 
 /** Premia w rentowności obligacji skarbowych przy utrzymującym się deficycie. */
@@ -5585,8 +5670,9 @@ function advanceSocialPolicy() {
     society.lawTimer--;
     if (society.lawTimer <= 0) {
         society.lawTimer = 4;
-        const change = !society.pendingLaw && Math.random() < 0.85 ? pickLawChange() : null;
-        if (change) announceLawChange(change[0], change[1]);
+        const party = getLawMakingParty(true);
+        const change = !society.pendingLaw && Math.random() < 0.85 ? pickLawChange(party) : null;
+        if (change) announceLawChange(change[0], change[1], party);
     }
     updateBudgetBalance();
 }
@@ -5597,7 +5683,7 @@ function advanceSocialPolicy() {
 
 /** Poparcie bazowe z klas (w %, suma 100). */
 function getClassBasedSupport() {
-    const support = { people: 0, state: 0, market: 0 };
+    const support = Object.fromEntries(PARTY_IDS.map(id => [id, 0]));
     for (const cls of SOCIETY_CLASSES) {
         const share = Number(society?.classes?.[cls.id]) || 0;
         const prefs = CLASS_VOTE[cls.id];
@@ -5619,8 +5705,11 @@ function computePartySupport(withNoise = true) {
     if (support[ruling] !== undefined) {
         support[ruling] -= penalty;
         const others = PARTY_IDS.filter(id => id !== ruling);
-        others.forEach(id => { support[id] += penalty * (ruling === 'people' ? 0.5 : id === 'people' ? PROTEST_TO_PEOPLE : 1 - PROTEST_TO_PEOPLE); });
+        // Głosy protestu: głównie partie lewicowe (Ludowcy, Socjaldemokraci), reszta po równo.
+        const protest = others.filter(id => id === 'people' || id === 'social'), rest = others.filter(id => !protest.includes(id));
+        others.forEach(id => { support[id] += penalty * (protest.includes(id) ? (rest.length ? PROTEST_TO_PEOPLE : 1) / protest.length : (1 - PROTEST_TO_PEOPLE) / rest.length); });
     }
+    if (badTimes && ruling !== 'social') support.social += SOCIAL_CRISIS_BONUS;
     const donations = election.donations || {};
     const assets = Math.max(1, typeof getFundAssets === 'function' && playerFund ? getFundAssets() : 1);
     PARTY_IDS.forEach(id => { support[id] += Math.min(10, (Number(donations[id]) || 0) / assets * 500); });
@@ -5635,7 +5724,9 @@ function computePartySupport(withNoise = true) {
 function resolveElection(support) {
     const ranked = [...PARTY_IDS].sort((a, b) => support[b] - support[a]);
     const winner = ranked[0];
-    const coalition = support[winner] < COALITION_THRESHOLD * 100 ? { partner: ranked[1], weights: { [winner]: support[winner], [ranked[1]]: support[ranked[1]] } } : null;
+    // Ludowcy i Blok Państwowy wolą Socjaldemokratów jako koalicjanta, jeśli ci mają choć 10%.
+    const partner = (winner === 'people' || winner === 'state') && support.social >= SOCIAL_COALITION_MIN ? 'social' : ranked[1];
+    const coalition = support[winner] < COALITION_THRESHOLD * 100 ? { partner, weights: { [winner]: support[winner], [partner]: support[partner] } } : null;
     return { winner, coalition, support };
 }
 

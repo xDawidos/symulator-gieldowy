@@ -669,6 +669,11 @@
                     <button type="button" onclick="debugSetMarketPhase(document.getElementById('debug-market-phase-select').value)">Ustaw (potwierdzona)</button>
                     <button type="button" onclick="debugSetMarketPhase(document.getElementById('debug-market-phase-select').value, false)">Ustaw (potwierdzanie)</button>
                 </div>
+                <details class="debug-genealogy" style="margin-top:6px;" ontoggle="if (this.open) renderGenealogyDebug()">
+                    <summary style="font-size:12px;font-weight:600;cursor:pointer;">Mapa rodowa spółek (przejęcia, córki, usamodzielnienia)</summary>
+                    <button type="button" onclick="renderGenealogyDebug()">Odśwież</button>
+                    <pre id="debug-genealogy" style="font-size:11px;max-height:360px;overflow:auto;white-space:pre;"></pre>
+                </details>
                 <div class="debug-bubble-row" style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
                     <label for="debug-bubble-cand-select" style="font-size:12px;font-weight:600;">Bańka:</label>
                     <select id="debug-bubble-cand-select">
@@ -1364,6 +1369,7 @@
           <label>Twoje imię<input id="intro-name" maxlength="30" required value="Dawid"></label>
           <label>Nazwa korporacji<input id="intro-corporation" maxlength="40" required value="Wawelska Grupa Inwestycyjna"></label>
           <label>Nazwa funduszu<input id="intro-fund" maxlength="40" required value="Fundusz Pierwszy Krok"></label>
+          <label>Kryzys w grze<select id="intro-crisis"><option value="">Losowo (domyślnie)</option><option value="banking">Kryzys bankowy</option><option value="dotcom">Bańka internetowa</option><option value="oil">Szok naftowy</option><option value="black">Czarny czwartek</option><option value="pandemic">Pandemia</option></select></label>
           <div class="intro-country-label">Kraj startowy</div>
           <div id="intro-countries" class="intro-countries"></div>
           <button type="submit" class="btn-pause">Zaczynam pracę</button>
@@ -1576,6 +1582,8 @@
 <script src="ma.js"></script>
 <script src="learning.js"></script>
 <script src="events.js"></script>
+<script src="campaigns.js"></script>
+<script src="crises.js"></script>
 <script src="ui.js"></script>
 <script src="lib/lz-string.min.js"></script>
 <script src="save_store.js"></script>

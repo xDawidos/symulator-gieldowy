@@ -702,6 +702,18 @@ const ceoTraits = {
         color: "#f44336",
         description: "Ciągnie się za nim zła sława. Zwiększa szansę na negatywne, specyficzne dla firmy zdarzenie o 10%."
     },
+    mistrz_marionetek: { // 0.15.1 M9
+        name: "Mistrz marionetek",
+        rarity: "rare",
+        color: "#9c27b0",
+        description: "Lubi kontrolować inne spółki: częściej zaczyna podkupywać akcje i dokupuje szybciej."
+    },
+    marionetka: { // 0.15.1 M9: nadawana przy przejęciu kontroli (nazwa: „Marionetka <spółka-matka>”)
+        name: "Marionetka",
+        rarity: "hidden",
+        color: "#9e9e9e",
+        description: "Prezes z nadania spółki-matki: na walnym głosuje tak, jak chce matka, i nie broni spółki przed nią."
+    },
     oddany: {
         name: "Oddany",
         rarity: "rare",
@@ -1051,7 +1063,7 @@ const CORPORATE_PHASES = {
 const CORPORATE_PHASE_INFO = {
     'Wzrost': { duration: 'do pogorszenia kondycji albo ok. 5 lat', text: 'Spółka rośnie: przychody +1,5 pp na kwartał ponad normę, kurs dostaje lekki wiatr w plecy, zmienność trochę wyższa.' },
     'Stabilność': { duration: 'bez limitu', text: 'Dojrzała spółka: przychody bez premii fazy, niższa zmienność kursu.' },
-    'Spadek': { duration: 'do poprawy kondycji (szansa na reorganizację)', text: 'Przychody −2 pp na kwartał, kurs pod presją, większa zmienność, badania wolniej (−30%).' },
+    'Spadek': { duration: 'do poprawy kondycji (szansa na reorganizację)', text: 'Przychody −1,5 pp na kwartał, kurs pod presją, większa zmienność, badania wolniej (−30%).' },
     'Reorganizacja': { duration: 'do kondycji ≥ 2 (stabilność) albo < −3 (spadek)', text: 'Plan naprawczy: przychody lekko w dół (−0,5 pp), najwyższa zmienność wśród faz zwykłych.' },
     'Złoty Rok ✨': { duration: '4 kwartały', text: 'Rzadki okres prosperity: przychody +3 pp na kwartał, kurs rośnie szybciej, zmienność niższa.' },
     'Zejście w Cień 👻': { duration: '3–6 kwartałów', text: 'Rzadki głęboki kryzys: przychody −4 pp na kwartał, silna presja na kurs, wysoka zmienność, badania wolniej.' },
@@ -2382,6 +2394,19 @@ function createBankStockObject(bank, exchangeLevel = 'SILVER') {
     return newBankStock;
 }
 
+/**
+ * Faza i wiek spółki na start (0.15.0.1: także spółki z bilansem w definicji, z IPO, córki i stare zapisy —
+ * wcześniej ok. połowa zwykłych spółek nie miała fazy i nigdy jej nie zmieniała).
+ */
+function assignInitialCorporatePhase(stock) {
+    if (!Number.isFinite(stock.companyAge)) stock.companyAge = getRandomIntInRange(1, 5) + (exchanges[stock.exchange]?.level ?? 0) * 8;
+    const health = Number(stock.financialHealth) || 0;
+    if (stock.companyAge < 12 && health >= 1) stock.corporatePhase = CORPORATE_PHASES.GROWTH;
+    else if (health <= -2) stock.corporatePhase = CORPORATE_PHASES.DECLINE;
+    else stock.corporatePhase = CORPORATE_PHASES.STABILITY;
+    stock.phaseTimer = 0;
+}
+
 function initializeBalanceSheetForStock(stock) {
 
 
@@ -2433,17 +2458,8 @@ function initializeBalanceSheetForStock(stock) {
     stock.quarterlyEarnings = 0;
     stock.cash = assets * getRandomInRange(0.01, 0.05);
 
-    const exchangeLevel = exchanges[stock.exchange]?.level ?? 0;
-    stock.companyAge = getRandomIntInRange(1, 5) + exchangeLevel * 8;
-
-    if (stock.companyAge < 12 && stock.financialHealth >= 1) {
-        stock.corporatePhase = CORPORATE_PHASES.GROWTH;
-    } else if (stock.financialHealth <= -2) {
-        stock.corporatePhase = CORPORATE_PHASES.DECLINE;
-    } else {
-        stock.corporatePhase = CORPORATE_PHASES.STABILITY;
-    }
-    stock.phaseTimer = 0;
+    stock.companyAge = null;
+    assignInitialCorporatePhase(stock);
     
     if (stock.bankAccountId) {
         const bank = commercialBanks.find(b => b.id === stock.bankAccountId);
@@ -2498,7 +2514,7 @@ const FUNDAMENTALS_HISTORY_QUARTERS = 8;
 const PHASE_GROWTH_ADJUSTMENT = {
     [CORPORATE_PHASES.GROWTH]: 0.015,
     [CORPORATE_PHASES.STABILITY]: 0,
-    [CORPORATE_PHASES.DECLINE]: -0.02,
+    [CORPORATE_PHASES.DECLINE]: -0.015, // 0.15.0.1: było −0,02 (najsłabsze spółki nieco łagodniej)
     [CORPORATE_PHASES.REORGANIZATION]: -0.005,
     [CORPORATE_PHASES.GOLDEN_YEAR]: 0.03,
     [CORPORATE_PHASES.SHADOW_DESCENT]: -0.04,
@@ -2809,7 +2825,7 @@ function computeQuarterResults(stock) {
     fundamentals.revenue = Math.max(1000, fundamentals.revenue * (1 + Math.max(-0.25, Math.min(0.25, growthCapped))));
 
     // 0.13: strajk, epidemia, klęska — przychody tylko tego kwartału (baza przychodów bez zmian).
-    const quarterFactor = (typeof getStrikeRevenueFactor === 'function' ? getStrikeRevenueFactor(stock) : 1) * (typeof getSocietyRevenueFactor === 'function' ? getSocietyRevenueFactor(stock) : 1) * consumeNicheRevenueFactor(stock) * getCooperationShockFactor(stock); // T3: sezon TV/Rozrywka; T5: strajk kooperanta (połowa szoku)
+    const quarterFactor = (typeof getStrikeRevenueFactor === 'function' ? getStrikeRevenueFactor(stock) : 1) * (typeof getSocietyRevenueFactor === 'function' ? getSocietyRevenueFactor(stock) : 1) * consumeNicheRevenueFactor(stock) * getCooperationShockFactor(stock) * (typeof getCrisisRevenueFactor === 'function' ? getCrisisRevenueFactor(stock) : 1); // T3: sezon TV/Rozrywka; T5: strajk kooperanta (połowa szoku)
     const baseRevenue = fundamentals.revenue;
     const revenue = baseRevenue * quarterFactor;
     const lostRevenue = baseRevenue - revenue; // dźwignia operacyjna: 40% kosztów jest sztywnych w krótkim terminie
@@ -2833,7 +2849,7 @@ function computeQuarterResults(stock) {
     const depreciation = baseRevenue * profile.da;
     const interest = Math.max(0, Number(stock.balanceSheet?.liabilities) || 0) * getLoanRate() / 4;
     const ebt = ebitda - depreciation - interest;
-    const tax = ebt > 0 ? ebt * (typeof getCompanyIncomeTaxRate === 'function' ? getCompanyIncomeTaxRate() : COMPANY_INCOME_TAX_RATE) : 0;
+    const tax = ebt > 0 ? ebt * (typeof getCompanyIncomeTaxRate === 'function' ? getCompanyIncomeTaxRate(stock) : COMPANY_INCOME_TAX_RATE) : 0;
     let netIncome = ebt - tax;
 
     // Spółki państwowe: Skarb Państwa pokrywa 70% straty (dotacja).
@@ -3373,6 +3389,7 @@ function processFinancialReports() {
 
              if (bankruptcyChance > 0 && Math.random() < bankruptcyChance) {
                  if (typeof mafiaRescueFromBankruptcy === 'function' && mafiaRescueFromBankruptcy(stock)) continue; // „inwestor” w ostatniej chwili (mafia.js)
+                 noteGenealogy('bankrupt', null, stock);
                  logEvent(`🔥 BANKRUCTWO! Spółka ${stock.name} (${stock.symbol}) ogłasza upadłość!`, 'review');
                  if (typeof onAcademyEvent === 'function') onAcademyEvent('bankruptcy', stock); // przed usunięciem akcji gracza
                  if (typeof onCooperationPartnerShock === 'function') onCooperationPartnerShock(stock, COOP_BANKRUPTCY_SHOCK, 'bankructwo'); // T5: kooperanci tracą kontrahenta
@@ -3680,6 +3697,7 @@ function resolveMerger(stock1, stock2, process) {
                     return;
                 }
                 initiator.cash -= totalCost;
+                if (initiator.balanceSheet) initiator.balanceSheet.assets -= totalCost; // 0.15.1 M6: zapłata to wydatek gotówki
                 logEvent(`💸 ${initiator.name} wydaje łącznie ${totalCost.toFixed(0)} PLN (z gotówki) na przejęcie ${target.name}.`, 'company');
             
             } else if (process.financing === 'lbo') {
@@ -3713,6 +3731,7 @@ function resolveMerger(stock1, stock2, process) {
 
             // 3. Wypłata dla akcjonariuszy spółki-celu (bez zmian)
             const pricePerShare = process.offerDetails.buyoutPricePerShare;
+            if (typeof noteTakeoverAchievements === 'function') noteTakeoverAchievements(process, target, pricePerShare); // 0.15.1 M7
             // Gracz
             if (playerPortfolio[target.symbol]) {
                 const holding = playerPortfolio[target.symbol];
@@ -3745,12 +3764,11 @@ function resolveMerger(stock1, stock2, process) {
                 if (owner.equityStakes?.[target.symbol]) delete owner.equityStakes[target.symbol];
             }
 
-            // 4. Przeniesienie Aktywów i Pasywów (bez zmian)
+            // 4. Przeniesienie aktywów i pasywów (0.15.1 M6): wartość firmy = cena − aktywa netto celu;
+            // kapitał przejmującego maleje tylko o koszty procesu (zysk zatrzymany celu nie jest dopisywany).
             if (initiator.balanceSheet && target.balanceSheet) {
-                initiator.balanceSheet.assets += target.balanceSheet.assets;
-                initiator.balanceSheet.liabilities += target.balanceSheet.liabilities;
-                initiator.balanceSheet.retainedEarnings += target.balanceSheet.retainedEarnings;
-                initiator.cash += target.cash; 
+                bookAcquisition(initiator, target, process.offerDetails.totalCost, process.costs || 0);
+                initiator.cash += target.cash;
             }
 
             // 5. Obsługa CEO (Złoty Spadochron) (bez zmian)
@@ -3765,6 +3783,7 @@ function resolveMerger(stock1, stock2, process) {
             // 6. Aktualizacja spółki-matki (bez zmian)
             initiator.financialHealth = Math.max(-5, Math.min(5, ((initiator.financialHealth + target.financialHealth) / 2) + 0.5));
             (initiator.absorbedCompanies = initiator.absorbedCompanies || []).push({ symbol: target.symbol, name: target.name, date: Date.now() }); // 0.14.2 P3: wchłonięta, nie córka
+            noteGenealogy('takeover', initiator, target, { note: `${formatZl(process.offerDetails.buyoutPricePerShare)} za akcję` });
 
             successMessage = `✅ Przejęcie zakończone! ${initiator.name} wchłonął ${target.name}.`;
             break;
@@ -3826,6 +3845,7 @@ function resolveMerger(stock1, stock2, process) {
                 initiator.ceo = target.ceo;
             } 
 
+            noteGenealogy('merger', initiator, target);
             successMessage = `✅ Fuzja zakończona! Powstaje ${initiator.name}.`;
             break;
 
@@ -3859,6 +3879,7 @@ function cancelMerger(stock, reason) {
     const partnerSymbol = stock.mergerProcess.partnerSymbol;
     const partnerStock = stocks.find(s => s.symbol === partnerSymbol);
 
+    if (typeof onMergerArbitrageCancelled === 'function') onMergerArbitrageCancelled(stock); // 0.15.1 M1: kurs celu wraca
     logEvent(`❌ Proces M&A między ${stock.symbol} a ${partnerSymbol} został anulowany. Powód: ${reason}`, 'review');
     showToast(`Fuzja/Przejęcie ${stock.symbol}-${partnerSymbol} anulowane!`, 'error');
 
@@ -4625,6 +4646,7 @@ function updateHoldingCompanies() {
     function updateCorporatePhase(stock) {
     // Pomiń typy specjalne i bankrutów
     if (stock.assetType || stock.isBankStock || stock.isBankrupt) return;
+    if (!stock.corporatePhase) assignInitialCorporatePhase(stock);
 
     stock.companyAge++; // Firma starzeje się o kwartał
 
@@ -4694,7 +4716,7 @@ function updateHoldingCompanies() {
             case CORPORATE_PHASES.DECLINE:
                 if (health <= -5) { // Bardzo źle - ryzyko bankructwa (obsługiwane w processFinancialReports)
                     // Pozostaje w Decline, ale może wejść w Reorganizację po evencie ratunkowym
-                } else if (health >= 0 && Math.random() < 0.2) { // Lekka poprawa - szansa na Reorganizację
+                } else if (health >= 0 && Math.random() < 0.3) { // Lekka poprawa - szansa na Reorganizację (0.15.0.1: było 20%)
                     nextPhase = CORPORATE_PHASES.REORGANIZATION;
                     transitionReason = "próby restrukturyzacji";
                 }
@@ -4904,6 +4926,14 @@ function forceDividend(symbol) {
  * @param {string} financing - Metoda finansowania ('cash', 'stockSwap', 'lbo').
  * @param {number} [offerPremium=0.25] - Premia oferowana ponad cenę rynkową (tylko dla 'przejęcie').
  */
+/** Kwartały przejęcia wg miejsca celu w rankingu kapitalizacji: 3 + 4 × p² (mediana 4 kw., największe 7 kw.). */
+function getTakeoverQuarters(target) {
+    const caps = stocks.filter(s => !s.assetType && !s.isBankrupt).map(getMarketCapValue).sort((a, b) => a - b);
+    const cap = getMarketCapValue(target);
+    const p = caps.length > 1 ? caps.filter(c => c < cap).length / (caps.length - 1) : 0.5;
+    return Math.max(3, Math.min(7, 3 + Math.round(4 * p * p)));
+}
+
 function initiateMergerProcess(initiatorStock, targetStock, type, financing = 'cash', offerPremium = 0.25, options = {}) {
     // Walidacje
     if (!initiatorStock || !targetStock || initiatorStock === targetStock) {
@@ -4945,15 +4975,17 @@ function initiateMergerProcess(initiatorStock, targetStock, type, financing = 'c
 
     console.log(`[M&A Init] Rozpoczęto proces: ${initiatorStock.symbol} -> ${targetStock.symbol} (Typ: ${type})`);
 
+    // 0.15.1 (decyzja użytkownika): długość przejęcia wg wielkości celu — najmniejsze 3 kw., największe 7 kw.
+    const startStage = type === 'przejęcie' ? 7 - getTakeoverQuarters(targetStock) : 1;
     const processData = {
         type: type,
-        stage: 1,
+        stage: startStage,
         progress: 0,
         partnerSymbol: targetStock.symbol,
         initiatorSymbol: initiatorStock.symbol,
         complications: 0,
         costs: 0,
-        statusMessage: `Etap 1: Wstępne rozmowy (${type})...`,
+        statusMessage: `Etap ${Math.max(1, startStage)}: ${startStage <= 1 ? 'wstępne rozmowy' : 'rozmowy i finansowanie'} (${type})…`,
         decisionRequired: null,
         defenseActive: null,
         financing: financing,
@@ -4974,6 +5006,7 @@ function initiateMergerProcess(initiatorStock, targetStock, type, financing = 'c
 
     // Obrony, decyzja funduszu (≥ 20%), zarząd (ma.js)
     if (type === 'przejęcie') onTakeoverStarted(initiatorStock, targetStock, options);
+    if (typeof announceMergerArbitrage === 'function') announceMergerArbitrage(initiatorStock, targetStock); // 0.15.1 M1
 
     displayStocks(getCurrentInputValues());
     return true;
@@ -5049,7 +5082,7 @@ function checkAntitrust(stock1, stock2) {
     }
 
     // 3. Określ próg blokady (np. 40% udziału w rynku)
-    const blockThreshold = 0.40;
+    const blockThreshold = typeof getAntitrustLevel === 'function' ? getAntitrustLevel().block : 0.40; // ustawa antymonopolowa
     const shouldBlock = potentialMarketShare >= blockThreshold;
 
     // 4. Losuj decyzję urzędu (uwzględniając jego dokładność)
@@ -6314,6 +6347,60 @@ function updateCeoTenureAndAge() {
     });
 }
 
+// =================================================================================
+// 0.15.1 M10: DZIENNIK RODOWY SPÓŁEK (mapa przejęć, córek i usamodzielnień — tryb deweloperski)
+// =================================================================================
+
+const GENEALOGY_LIMIT = 600;
+let genealogyLog = [];
+const GENEALOGY_KINDS = {
+    subsidiary: 'zakłada córkę', spinoff: 'wydziela (spin-off)', carveout: 'wydziela córkę (carve-out)', independent: 'usamodzielnienie',
+    controlSold: 'sprzedaż pakietu kontrolnego', absorbed: 'wchłonięcie', takeover: 'przejęcie', merger: 'fuzja', bankrupt: 'bankructwo',
+    stake: 'pakiet', rename: 'zmiana nazwy'
+};
+
+/** Zdarzenie rodowe: rodzic (albo kupujący) → dziecko, z kwartałem i opcjonalnym udziałem. */
+function noteGenealogy(kind, parent, child, extra = {}) {
+    const name = s => (typeof s === 'string' ? stocks.find(x => x.symbol === s)?.name : s?.name) || null;
+    const sym = s => (typeof s === 'string' ? s : s?.symbol) || null;
+    genealogyLog.push({ q: typeof macro === 'object' ? macro.quarter : 0, kind, parent: sym(parent), parentName: name(parent), child: sym(child), childName: name(child), ...extra });
+    if (genealogyLog.length > GENEALOGY_LIMIT) genealogyLog.splice(0, genealogyLog.length - GENEALOGY_LIMIT);
+}
+
+/** Drzewo rodowe jako wcięta lista tekstu (korzenie: spółki, które nigdy nie były dzieckiem w dzienniku). */
+function buildGenealogyTree() {
+    const edgeKinds = new Set(['subsidiary', 'spinoff', 'carveout', 'controlSold', 'absorbed', 'takeover', 'merger', 'stake']);
+    const children = {}, names = {}, isChild = new Set(), notes = {};
+    for (const e of genealogyLog) {
+        if (e.parent) names[e.parent] = e.parentName || names[e.parent];
+        if (e.child) names[e.child] = e.childName || names[e.child];
+        if (e.child) (notes[e.child] = notes[e.child] || []).push(`kw. ${e.q}: ${GENEALOGY_KINDS[e.kind] || e.kind}${e.parent && !edgeKinds.has(e.kind) ? ` (${e.parent})` : ''}${e.pct ? ` ${Math.round(e.pct * 100)}%` : ''}${e.note ? ` — ${e.note}` : ''}`);
+        if (!edgeKinds.has(e.kind) || !e.parent || !e.child) continue;
+        (children[e.parent] = children[e.parent] || []);
+        if (!children[e.parent].some(c => c.child === e.child)) children[e.parent].push({ child: e.child, kind: e.kind, q: e.q });
+        isChild.add(e.child);
+    }
+    const status = sym => { const s = stocks.find(x => x.symbol === sym); return !s ? 'poza grą' : s.delisted === 'absorbed' ? 'wchłonięta' : s.isBankrupt ? 'upadła' : s.isSubsidiaryOf ? `córka ${s.isSubsidiaryOf}` : 'samodzielna'; };
+    const lines = [];
+    const walk = (sym, depth, via, seen) => {
+        lines.push(`${'    '.repeat(depth)}${depth ? '└ ' : ''}${names[sym] || sym} (${sym}) [${status(sym)}]${via ? ` ← ${GENEALOGY_KINDS[via.kind]} kw. ${via.q}` : ''}`);
+        for (const n of (notes[sym] || []).slice(-4)) lines.push(`${'    '.repeat(depth + 1)}· ${n}`);
+        if (seen.has(sym)) return;
+        seen.add(sym);
+        for (const c of children[sym] || []) walk(c.child, depth + 1, c, seen);
+    };
+    const roots = Object.keys(children).filter(sym => !isChild.has(sym)).sort((a, b) => (children[b]?.length || 0) - (children[a]?.length || 0));
+    for (const root of roots) walk(root, 0, null, new Set());
+    const orphans = Object.keys(notes).filter(sym => !children[sym] && !isChild.has(sym));
+    if (orphans.length) { lines.push('', 'Inne zdarzenia:'); for (const sym of orphans) { lines.push(`${names[sym] || sym} (${sym}) [${status(sym)}]`); for (const n of notes[sym].slice(-3)) lines.push(`    · ${n}`); } }
+    return lines.length ? lines.join('\n') : 'Dziennik rodowy jest pusty — jeszcze nie było przejęć, córek ani wydzieleń.';
+}
+
+function renderGenealogyDebug() {
+    const box = document.getElementById('debug-genealogy');
+    if (box) box.textContent = buildGenealogyTree();
+}
+
 function makeSubsidiary(parentStock, childStock) {
     if (!parentStock || !childStock || childStock.isSubsidiaryOf) {
         console.warn(`[makeSubsidiary] Błąd: Nie można utworzyć zależności dla ${parentStock?.symbol} -> ${childStock?.symbol}`);
@@ -6322,6 +6409,7 @@ function makeSubsidiary(parentStock, childStock) {
 
     // Ustaw flagę zależności
     childStock.isSubsidiaryOf = parentStock.symbol;
+    noteGenealogy('subsidiary', parentStock, childStock);
 
     // Dodaj do listy spółek zależnych rodzica (jeśli lista nie istnieje, stwórz ją)
     if (!parentStock.subsidiaries) {
@@ -7329,7 +7417,7 @@ function runCorporateLogic() {
         if (stock.assetType || stock.isBankrupt || stock.isBankStock) return;
 
         // Autonaprawa działów
-        if (!stock.departments) initializeDepartments(stock);
+        if (!stock.departments?.economy || !stock.departments.research || !stock.departments.development) initializeDepartments(stock); // córki dostają kopię działów matki — pustą, gdy matka ich jeszcze nie miała
         if (!stock.departments) return;
         if (!Array.isArray(stock.activeInvestments)) stock.activeInvestments = [];
 
@@ -7764,7 +7852,7 @@ function assignBankToCompany(stock) {
 
 function optimizeBankChoice(stock) {
     // Działa tylko dla Działu Ekonomii Lvl 2+
-    if (!stock.departments || stock.departments.economy.level < 2) return;
+    if (!stock.departments?.economy || stock.departments.economy.level < 2) return;
     
     // Wykonuj rzadko (np. 5% szans na tydzień), żeby firmy nie skakały ciągle
     if (Math.random() > 0.05) return;
@@ -9470,9 +9558,121 @@ function recordAccountingQuarter(stock, quarterModel, realEarnings, fake) {
 // CO KWARTAŁ: nowe oszustwa, zmiany audytora, korekty, audyty
 // ---------------------------------------------------------------------------------
 
+// =================================================================================
+// 0.15.1 M6: WARTOŚĆ FIRMY (GOODWILL) I TEST UTRATY WARTOŚCI
+// =================================================================================
+
+/** EBIT z ostatnich 4 kw. (EBITDA − amortyzacja). */
+function getEbitTtm(stock) {
+    const history = (stock?.fundamentals?.history || []).slice(-4);
+    return history.reduce((sum, q) => sum + (Number(q.ebitda) || 0) - (Number(q.depreciation) || 0), 0);
+}
+
+/**
+ * Księgowanie przejęcia: aktywa + aktywa celu + wartość firmy, zobowiązania + zobowiązania celu (zapłata gotówką albo
+ * dług LBO zaksięgowany wcześniej), kapitał − koszty procesu (+ zysk z okazyjnego nabycia, gdy cena < aktywa netto).
+ * Przychody i segmenty celu przechodzą do przejmującego. Zwraca wartość firmy.
+ */
+function bookAcquisition(initiator, target, price, costs = 0) {
+    const tb = target.balanceSheet || {};
+    const netAssets = (Number(tb.assets) || 0) - (Number(tb.liabilities) || 0);
+    const goodwill = Math.max(0, price - netAssets);
+    const bargain = Math.max(0, netAssets - price);
+    const ib = initiator.balanceSheet;
+    const targetEbit = getEbitTtm(target), initiatorRevenue = Number(initiator.fundamentals?.revenueTtm) || 0, targetRevenue = Number(target.fundamentals?.revenueTtm) || 0;
+    ib.assets += (Number(tb.assets) || 0) + goodwill;
+    ib.liabilities += Number(tb.liabilities) || 0;
+    ib.retainedEarnings += bargain - costs;
+    ib.goodwill = (Number(ib.goodwill) || 0) + goodwill;
+    if (bargain > 0) postPeriodEntry(initiator, `bargain_${target.symbol}`, { otherIncome: bargain }); // zysk z okazyjnego nabycia w wyniku kwartału
+    if (typeof mergeChildFundamentals === 'function') mergeChildFundamentals(initiator, target);
+    if (typeof mergeChildSegment === 'function') mergeChildSegment(initiator, target);
+    if (goodwill > 0) {
+        initiator.acquisitions = [...(initiator.acquisitions || []), {
+            symbol: target.symbol, name: target.name, quarter: typeof macro === 'object' ? macro.quarter : 0, goodwill, left: goodwill,
+            planEbit: targetEbit, revenueShare: initiatorRevenue + targetRevenue > 0 ? targetRevenue / (initiatorRevenue + targetRevenue) : 0
+        }].slice(-12);
+    }
+    return goodwill;
+}
+
+/** Co 4 kw. po przejęciu: zysk przejętej części < 70% planu → odpis 25% pozostałej wartości firmy, < 40% → 50%. */
+function processGoodwillImpairmentQuarterly() {
+    const quarter = typeof macro === 'object' ? macro.quarter : 0;
+    for (const stock of stocks) {
+        if (!stock.acquisitions?.length || stock.isBankrupt) continue;
+        for (const acq of stock.acquisitions) {
+            if (!(acq.left > 0) || quarter <= acq.quarter || (quarter - acq.quarter) % 4 !== 0 || !(acq.planEbit > 0)) continue;
+            const actual = getEbitTtm(stock) * acq.revenueShare;
+            const ratio = actual / acq.planEbit;
+            const share = ratio < 0.4 ? 0.5 : ratio < 0.7 ? 0.25 : 0;
+            if (share > 0) impairGoodwill(stock, acq, acq.left * share, share);
+        }
+    }
+}
+
+/** Odpis: koszt w wyniku kwartału bez ruchu gotówki (zysk netto i EPS spadają). */
+function impairGoodwill(stock, acq, amount, share) {
+    amount = Math.min(amount, Number(stock.balanceSheet?.goodwill) || 0, acq.left);
+    if (!(amount > 0)) return 0;
+    acq.left -= amount;
+    stock.balanceSheet.goodwill -= amount;
+    adjustBalanceSheet(stock, { assets: -amount, retainedEarnings: -amount });
+    postPeriodEntry(stock, `impairment_${acq.symbol}_${typeof macro === 'object' ? macro.quarter : 0}`, { otherIncome: -amount });
+    stock.lastImpairment = { quarter: typeof macro === 'object' ? macro.quarter : 0, amount, from: acq.name };
+    const text = `📉 ${stock.name} odpisuje ${formatZl(amount, 0)} wartości firmy po przejęciu ${acq.name} (przejęta część zarabia mniej niż w planie).`;
+    logEvent(text, 'company');
+    if ((playerPortfolio[stock.symbol]?.shares || 0) > 0 && typeof addMail === 'function') {
+        addMail({ sender: CORPORATION_SENDER, subject: `📉 Odpis wartości firmy: ${stock.name}`, body: `${text} Odpis obniża zysk netto i zysk na akcję w tym kwartale, ale nie zabiera gotówki.`, importance: 2, symbol: stock.symbol });
+        if (typeof unlockAcademyEntry === 'function') { unlockAcademyEntry('test_utraty_wartosci'); unlockAcademyEntry('klatwa_zwyciezcy'); }
+    }
+    if (share >= 0.5 && typeof pushNews === 'function') pushNews(`${stock.name} odpisuje połowę wartości firmy po przejęciu ${acq.name}`, stock.symbol);
+    if (share >= 0.5 && playerProfile && (playerPortfolio[stock.symbol]?.shares || 0) * stock.price >= getFundAssets() * 0.05) playerProfile._winnersCurse = true; // M7
+    return amount;
+}
+
+// 0.15.1 M3: ukryte zobowiązania (poręczenia, pozwy, kary) — 12% spółek z modelem zysku, 5–20% długu.
+const HIDDEN_LIABILITY_CHANCE = 0.12;
+const HIDDEN_LIABILITY_SPONTANEOUS = 0.02;
+const HIDDEN_LIABILITY_AUDIT_FIND = 0.70;
+
+/** Losowanie raz na spółkę (start gry, debiut, stary zapis). */
+function rollHiddenLiabilities(stock) {
+    stock.hiddenChecked = true;
+    if (stock.assetType || stock.isBankStock) return 0;
+    let chance = HIDDEN_LIABILITY_CHANCE;
+    if (stock.ceo?.traits?.some(t => ['skorumpowany', 'sklonny_do_korupcji', 'chciwy'].includes(t.id))) chance *= 2;
+    if ((Number(stock.financialHealth) || 0) < 0) chance *= 1.5;
+    const debt = Number(stock.balanceSheet?.liabilities) || 0;
+    if (debt > 0 && Math.random() < chance) stock.hiddenLiabilities = Math.round(debt * getRandomInRange(0.05, 0.20));
+    return stock.hiddenLiabilities || 0;
+}
+
+/** Ujawnienie: zobowiązania bilansowe += wartość, kurs w dół o wartość na akcję, mail dla funduszu z akcjami. */
+function revealHiddenLiabilities(stock, by) {
+    const value = Number(stock.hiddenLiabilities) || 0;
+    if (!(value > 0)) return 0;
+    stock.hiddenLiabilities = 0;
+    adjustBalanceSheet(stock, { liabilities: value, retainedEarnings: -value });
+    const drop = Math.min(0.6, value / Math.max(1, getMarketCapValue(stock)));
+    if (drop > 0) applyPriceEffect(stock.symbol, -drop, 'negative', 'company');
+    stock.hiddenRevealed = { quarter: getAccountingQuarter(), value, by };
+    const text = `📑 ${stock.name}: ujawniono ukryte zobowiązania (${formatZl(value, 0)}; wykrył: ${by}) — dług rośnie, kurs −${(drop * 100).toFixed(0)}%.`;
+    logEvent(text, 'company');
+    if ((playerPortfolio[stock.symbol]?.shares || 0) > 0 && typeof addMail === 'function') {
+        addMail({ sender: CORPORATION_SENDER, subject: `📑 Ukryte zobowiązania: ${stock.name}`, body: `${text} To poręczenia, pozwy albo kary, których nie było w bilansie.`, importance: 3, symbol: stock.symbol });
+        if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('ukryte_zobowiazania');
+    }
+    return value;
+}
+
 function processAccountingQuarterly() {
     const quarter = getAccountingQuarter();
     const listed = stocks.filter(s => !s.assetType && !s.isBankrupt);
+    for (const stock of listed) { // 0.15.1 M3
+        if (!stock.hiddenChecked) rollHiddenLiabilities(stock);
+        else if (stock.hiddenLiabilities > 0 && Math.random() < HIDDEN_LIABILITY_SPONTANEOUS) revealHiddenLiabilities(stock, 'sprawa sądowa');
+    }
     let active = listed.filter(s => s.fraud).length;
     const knf = typeof getInstitutionEffectiveness === 'function' && typeof oversight === 'object' ? getInstitutionEffectiveness(oversight.knf) : 0.3;
 
@@ -9596,9 +9796,12 @@ function finishAudit(stock) {
     audit.missed = Boolean(fraud) && Math.random() < AUDIT_MISS_CHANCE;
     audit.clean = !fraud || audit.missed;
     audit.inflation = fraud && !audit.missed ? fraud.total : 0;
-    const body = audit.clean
+    const hidden = stock.hiddenLiabilities > 0 && Math.random() < HIDDEN_LIABILITY_AUDIT_FIND ? revealHiddenLiabilities(stock, 'audyt') : 0; // 0.15.1 M3
+    audit.hiddenFound = hidden;
+    const body = (audit.clean
         ? `Audyt ${stock.name}: sprawozdania rzetelne, bez istotnych zastrzeżeń.`
-        : `Audyt ${stock.name}: zysk zawyżony o ok. ${formatZl(audit.inflation, 0)} (fikcyjne należności). Korekta wyników jest kwestią czasu.`;
+        : `Audyt ${stock.name}: zysk zawyżony o ok. ${formatZl(audit.inflation, 0)} (fikcyjne należności). Korekta wyników jest kwestią czasu.`)
+        + (hidden ? ` Audytor ujawnił ukryte zobowiązania: ${formatZl(hidden, 0)}.` : '');
     if (typeof addMail === 'function') addMail({ sender: CORPORATION_SENDER, subject: audit.clean ? `🔍 Audyt ${stock.symbol}: czysto` : `🔍 Audyt ${stock.symbol}: NIEPRAWIDŁOWOŚCI`, body, importance: audit.clean ? 2 : 3, symbol: stock.symbol });
 }
 
@@ -9643,7 +9846,8 @@ function renderAccountingSection(stock) {
                 <div><strong>Pasywa ${money(assets)}</strong><div class="acc-bars">${bar(Math.max(0, equity), assets, 'equity')}${bar(liabilities, assets, 'debt')}</div>
                     <span class="text-xs">🟦 kapitał własny ${money(equity)} · 🟥 zobowiązania ${money(liabilities)}</span></div>
             </div>
-            <p class="text-sm">Dług netto (zobowiązania − gotówka): <strong>${money(liabilities - cash)}</strong>. Bilans zawsze się równa: aktywa = kapitał własny + zobowiązania.</p>`;
+            <p class="text-sm">Dług netto (zobowiązania − gotówka): <strong>${money(liabilities - cash)}</strong>. Bilans zawsze się równa: aktywa = kapitał własny + zobowiązania.</p>
+            ${stock.balanceSheet?.goodwill > 0 || stock.lastImpairment ? `<p class="text-sm">Wartość firmy (w aktywach, z przejęć): <strong>${money(stock.balanceSheet?.goodwill || 0)}</strong>${stock.lastImpairment ? ` · odpis wartości firmy: <strong>${money(-stock.lastImpairment.amount)}</strong> (kw. ${stock.lastImpairment.quarter}, po przejęciu ${escapeHtml(stock.lastImpairment.from)}) — w wyniku jako „pozostałe”` : ''}</p>` : ''}`;
     } else html += locked(2, 'Bilans');
 
     // 3. Przepływy pieniężne
@@ -11486,6 +11690,7 @@ function executeSpinoff(parent, options = {}) {
         if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('spinoff', `${parent.name}: dostajesz ${held.toLocaleString('pl-PL')} akcji ${child.name}`);
         if (typeof addMail === 'function') addMail({ sender: 'PULS', subject: `✂️ Akcje ${child.name} z wydzielenia ${parent.name}`, body: `Dostajesz ${held.toLocaleString('pl-PL')} akcji ${child.name} (${symbol}) jako dywidendę rzeczową. Kurs ${parent.name} spadł o wartość wydzielonej części — wartość Twojej pozycji się nie zmienia.`, importance: 2, symbol });
     }
+    noteGenealogy(carve ? 'carveout' : 'spinoff', parent, child, carve ? { pct: keep } : {});
     return child;
 }
 
@@ -12167,6 +12372,7 @@ function settleGroupLoanOnExit(child, parent) {
 
 function releaseSubsidiary(child, parent, how) {
     settleGroupLoanOnExit(child, parent);
+    noteGenealogy('independent', parent, child, { note: how });
     child.isSubsidiaryOf = null;
     child.parentStakePct = null;
     child.profitTransfer = null;
@@ -12207,6 +12413,7 @@ function absorbSubsidiary(child, parent = getParentOf(child), premium = null) {
     if (parent.workforce && child.workforce) parent.workforce.employees = (Number(parent.workforce.employees) || 0) + (Number(child.workforce.employees) || 0);
     parent.absorbedCompanies = [...(parent.absorbedCompanies || []), { symbol: child.symbol, name: child.name, quarter: getSubQuarter() }].slice(-10);
     child.absorbedBy = parent.symbol;
+    noteGenealogy('absorbed', parent, child);
     removeStockFromGame(child.symbol);
     child.isBankrupt = true; child.delisted = 'absorbed';
     syncSubsidiaryLinks();
@@ -12215,6 +12422,181 @@ function absorbSubsidiary(child, parent = getParentOf(child), premium = null) {
     if (typeof addChartEvent === 'function') addChartEvent(parent, '🧲', `Wchłonięcie ${child.name}`);
     logEvent(`🧲 ${parent.name} wchłania ${child.name} — przymusowy wykup reszty akcji po ${formatZl(price)} (premia), spółka znika z giełdy.`, 'market');
     return { price, paid };
+}
+
+// =================================================================================
+// 0.15.1 M9: DRABINA PAKIETÓW SPÓŁKA → SPÓŁKA (25 / 50 / próg ustawy / 99%) i podkupowanie
+// =================================================================================
+
+const STAKE_CAMPAIGN_CHANCE = 0.035;         // na kwartał dla uprawnionej spółki (×2 „Mistrz marionetek”); decyzja użytkownika: 3% → 3,5%
+const STAKE_PACE = [0.03, 0.08];             // tempo dokupowania: 3–8 pp udziału na kwartał
+const STAKE_COOP_PCT = 0.25;
+const KNF_CONCERN_SECTOR_SHARE = 0.25; // standardowa ustawa antymonopolowa (łagodna 30%, surowa 20%); cel 5–8 koncernów
+const KNF_CONCERN_GIG_SHARE = 0.10;
+
+function getExchangeLevel(stock) { return Number(exchanges[stock?.exchange]?.level) || 0; }
+
+/** Kto może kupować pakiety: Platynowa i wyżej; Złota tylko szczególnie dobra (kondycja ≥ 3) albo bogata (gotówka ≥ 25% kap.). */
+function canRunStakeCampaign(stock) {
+    if (!stock || stock.assetType || stock.isBankStock || stock.isStateOwned || stock.isSubsidiaryOf || stock.isBankrupt || stock.mergerProcess) return false;
+    if ((Number(stock.knfStakeBlockUntil) || -1) > getSubQuarter()) return false;
+    const level = getExchangeLevel(stock);
+    if (level >= 4) return true;
+    return level === 3 && ((Number(stock.financialHealth) || 0) >= 3 || stock.cash >= getMarketCapValue(stock) * 0.25);
+}
+
+/** Cel: niższa ranga (kooperacja 25% także ta sama ranga); bez spółek zależnych, państwowych i w procesie M&A. */
+function canBeStakeTarget(buyer, target) {
+    if (!target || target === buyer || target.assetType || target.isBankStock || target.isStateOwned || target.isSubsidiaryOf || target.isBankrupt || target.mergerProcess || target.stakeCampaign) return false;
+    return getExchangeLevel(target) <= getExchangeLevel(buyer);
+}
+
+function getStakePct(buyer, target) {
+    return (Number(buyer.equityStakes?.[target.symbol]) || 0) / Math.max(1, target.totalShares);
+}
+
+/** Progi drabiny: 25% stałe; kontrola od progu ustawy „Próg wezwania” (66 / 75 / 90%); 99% — zdjęcie z giełdy. */
+function getStakeLadder() {
+    const control = Math.min(0.90, typeof getTenderThreshold === 'function' ? getTenderThreshold() : 0.66);
+    return { coop: STAKE_COOP_PCT, bind: 0.5, control, delist: 0.99 };
+}
+
+function isPuppetMaster(stock) { return Boolean(stock?.ceo?.traits?.some(t => t.id === 'mistrz_marionetek')); }
+function getStakeCampaignChance(buyer) { return STAKE_CAMPAIGN_CHANCE * (isPuppetMaster(buyer) ? 2 : 1); }
+
+/** Co kwartał: nowe podkupowania, dokupowanie, progi, kontrola KNF koncernów. */
+function processStakeCampaignsQuarterly() {
+    const quarter = getSubQuarter();
+    checkKnfConcernPower();
+    for (const buyer of stocks.filter(canRunStakeCampaign)) {
+        if (stocks.some(s => s.stakeCampaign?.buyer === buyer.symbol)) continue;
+        if (Math.random() >= getStakeCampaignChance(buyer)) continue;
+        const targets = stocks.filter(t => canBeStakeTarget(buyer, t) && buyer.cash >= getMarketCapValue(t) * 0.1);
+        if (!targets.length) continue;
+        const related = targets.filter(t => typeof sharesSegment === 'function' && sharesSegment(buyer, t));
+        const target = getRandomElement(related.length && Math.random() < 0.7 ? related : targets);
+        const ladder = getStakeLadder();
+        const sameRank = getExchangeLevel(target) === getExchangeLevel(buyer);
+        const roll = Math.random();
+        const goal = sameRank ? ladder.coop : roll < 0.35 ? ladder.coop : roll < 0.7 ? 0.51 : roll < 0.9 ? ladder.control : ladder.delist;
+        target.stakeCampaign = { buyer: buyer.symbol, goal, pace: isPuppetMaster(buyer) ? STAKE_PACE[1] : getRandomInRange(...STAKE_PACE), start: quarter, reached: [], tender: false, maxPrice: target.price };
+        noteGenealogy('stake', buyer, target, { pct: getStakePct(buyer, target), note: `rozpoczyna podkupowanie (cel ${Math.round(goal * 100)}%)` });
+        logEvent(`🧩 ${buyer.name} zaczyna podkupywać akcje ${target.name} (cel ${Math.round(goal * 100)}%).`, 'market');
+    }
+    for (const target of stocks.filter(s => s.stakeCampaign && !s.isBankrupt)) advanceStakeCampaign(target);
+}
+
+/** Kwartał podkupowania: rynek (z wpływem na cenę), potem pakiety botów po cenie rezerwowej; nakaz wezwania po 50%. */
+function advanceStakeCampaign(target) {
+    const c = target.stakeCampaign;
+    const buyer = stocks.find(s => s.symbol === c.buyer);
+    if (!buyer || buyer.isBankrupt || target.isSubsidiaryOf && target.isSubsidiaryOf !== buyer.symbol) { target.stakeCampaign = null; return; }
+    const pct = getStakePct(buyer, target);
+    if (pct >= c.goal - 1e-6) { target.stakeCampaign = null; return; }
+    const step = c.tender ? Math.max(0, Math.min(c.goal, c.tenderTo || c.goal) - pct) : Math.min(c.pace, c.goal - pct); // nakaz wezwania: od razu do progu ustawy
+    let need = Math.floor(step * target.totalShares);
+    let spent = 0, bought = 0;
+    const budget = Math.max(0, buyer.cash * 0.8);
+    // 1. rynek
+    const market = Math.min(need, getAvailableShares(target), Math.floor(budget / Math.max(0.01, target.price)));
+    if (market > 0) {
+        const price = target.price;
+        spent += market * price; bought += market; need -= market;
+        target.sharesHeld = (Number(target.sharesHeld) || 0) + market;
+        if (typeof applyTradeImpact === 'function') applyTradeImpact(target, market, 1);
+        c.maxPrice = Math.max(c.maxPrice, price);
+    }
+    // 2. pakiety botów (cena rezerwowa z M4; nakaz wezwania — po najwyższej cenie)
+    for (const holder of getShareholders(target)) {
+        if (need <= 0 || !['ai', 'botFund'].includes(holder.kind)) continue;
+        const h = typeof getBlockHolder === 'function' ? getBlockHolder(target, holder.id) : null;
+        if (!h) continue;
+        const reserve = getBlockReservePrice(target, h);
+        const price = c.tender ? Math.max(c.maxPrice, reserve) : reserve;
+        const n = Math.min(need, Math.floor(h.shares), Math.floor((budget - spent) / Math.max(0.01, price)));
+        if (!(n > 0)) continue;
+        const pos = h.kind === 'ai' ? h.entity.portfolio[target.symbol] : h.entity.fund.portfolio[target.symbol];
+        pos.shares -= n;
+        if (pos.shares <= 0.001) { if (h.kind === 'ai') delete h.entity.portfolio[target.symbol]; else delete h.entity.fund.portfolio[target.symbol]; }
+        if (h.kind === 'ai') h.entity.cash += n * price; else h.entity.fund.cash += n * price;
+        spent += n * price; bought += n; need -= n;
+        c.maxPrice = Math.max(c.maxPrice, price);
+    }
+    if (!(bought > 0)) { if (getSubQuarter() - c.start > 12) target.stakeCampaign = null; return; } // brak podaży — po 3 latach rezygnuje
+    adjustCompanyCash(buyer, -spent); // gotówka → pakiet (aktywa bez zmian)
+    buyer.equityStakes = buyer.equityStakes || {};
+    buyer.equityStakes[target.symbol] = (Number(buyer.equityStakes[target.symbol]) || 0) + bought;
+    c.tender = false;
+    applyStakeThresholds(buyer, target);
+    if (getStakePct(buyer, target) >= c.goal - 1e-6 && target.stakeCampaign === c) target.stakeCampaign = null;
+}
+
+/** Skutki progów (raz każdy). */
+function applyStakeThresholds(buyer, target) {
+    const c = target.stakeCampaign || { reached: [] };
+    const pct = getStakePct(buyer, target);
+    const ladder = getStakeLadder();
+    const reach = (key, fn) => { if (!c.reached.includes(key)) { c.reached.push(key); fn(); } };
+    if (pct >= ladder.coop) reach('coop', () => {
+        if (typeof canCooperate === 'function' && canCooperate(buyer, target)) startCooperation(buyer, target, 'stake');
+        noteGenealogy('stake', buyer, target, { pct, note: 'powiązanie (25%+)' });
+        logEvent(`🔗 ${buyer.name} ma ${Math.round(pct * 100)}% ${target.name} — powiązanie i kooperacja.`, 'company');
+    });
+    if (pct > ladder.bind) reach('bind', () => {
+        makeSubsidiary(buyer, target);
+        target.parentStakePct = pct;
+        target.profitTransfer = getRandomInRange(0.4, 0.6);
+        installPuppetCeo(target, buyer);
+        if (typeof syncSubsidiaryLinks === 'function') syncSubsidiaryLinks();
+        if (ladder.control > pct) { c.tender = true; c.tenderTo = ladder.control; c.goal = Math.max(c.goal, ladder.control); } // ustawa: przekroczenie 50% → nakaz wezwania do progu
+        logEvent(`🪢 ${buyer.name} przejmuje kontrolę nad ${target.name} (${Math.round(pct * 100)}%) — nowy prezes z nadania matki.`, 'company');
+    });
+    if (pct >= ladder.control) reach('control', () => {
+        if (!target.originalName) target.originalName = target.name;
+        const prefix = buyer.name.split(' ')[0];
+        if (!target.name.startsWith(prefix)) { target.name = `${prefix} ${target.originalName}`; noteGenealogy('rename', buyer, target, { note: target.name }); }
+        target.marginAdj = (Number(target.marginAdj) || 0) + 0.01 / Math.max(0.05, getSectorProfile(target).margin); // wspólne zakupy: +1 pp marży
+        if (typeof setCompanyDividendPolicy === 'function') setCompanyDividendPolicy(target, 'Aggressive');
+        logEvent(`🏷️ ${target.originalName} zmienia nazwę na ${target.name} — ${buyer.name} ma ${Math.round(pct * 100)}%.`, 'company');
+    });
+    if (pct >= ladder.delist - 1e-6) reach('delist', () => {
+        if (typeof absorbSubsidiary === 'function') absorbSubsidiary(target, buyer, 0.05);
+    });
+}
+
+/** Prezes-marionetka: cecha „Marionetka <nazwa matki>” — głosuje jak matka, nie broni się przed nią. */
+function installPuppetCeo(target, parent) {
+    generateCEO(target, true);
+    target.ceo.traits = [...(target.ceo.traits || []).filter(t => t.id !== 'marionetka'), { id: 'marionetka', name: `Marionetka ${parent.name}`, rarity: 'hidden', of: parent.symbol }];
+}
+
+function isPuppetOf(stock, parentSymbol) {
+    return Boolean(stock?.ceo?.traits?.some(t => t.id === 'marionetka' && t.of === parentSymbol));
+}
+
+/** KNF: koncern (z córkami) > 30% kapitalizacji sektora albo > 10% rynku → blokada podkupowań na 4 kw. (szansa = skuteczność). */
+function checkKnfConcernPower() {
+    if (typeof oversight !== 'object' || typeof getInstitutionEffectiveness !== 'function') return;
+    const eff = getInstitutionEffectiveness(oversight.knf);
+    const listed = stocks.filter(s => !s.assetType && !s.isBankrupt);
+    const market = listed.reduce((sum, s) => sum + getMarketCapValue(s), 0);
+    for (const parent of listed.filter(s => !s.isSubsidiaryOf && stocks.some(c => c.isSubsidiaryOf === s.symbol))) {
+        const group = [parent, ...listed.filter(c => c.isSubsidiaryOf === parent.symbol)];
+        const groupCap = group.reduce((sum, s) => sum + getMarketCapValue(s), 0);
+        const sector = getMainSector(parent);
+        const sectorCap = listed.filter(s => getMainSector(s) === sector).reduce((sum, s) => sum + getMarketCapValue(s), 0);
+        const sectorLimit = typeof getAntitrustLevel === 'function' ? getAntitrustLevel().concern : KNF_CONCERN_SECTOR_SHARE;
+        if (!(groupCap > sectorCap * sectorLimit || groupCap > market * KNF_CONCERN_GIG_SHARE)) continue;
+        if ((Number(parent.knfStakeBlockUntil) || -1) > getSubQuarter() || Math.random() >= eff) continue;
+        parent.knfStakeBlockUntil = getSubQuarter() + 4;
+        for (const t of stocks.filter(s => s.stakeCampaign?.buyer === parent.symbol)) t.stakeCampaign = null;
+        logEvent(`🛡️ KNF ogranicza koncern ${parent.name}: za duży udział w rynku — wstrzymane podkupowania na 4 kw.`, 'state');
+        // Surowa ustawa antymonopolowa: nakaz sprzedaży pakietu kontrolnego największej córki (rozbicie koncernu).
+        if (Number(society?.laws?.antitrust) === 2 && Math.random() < 0.5) {
+            const child = listed.filter(c => c.isSubsidiaryOf === parent.symbol).sort((x, y) => getMarketCapValue(y) - getMarketCapValue(x))[0];
+            if (child && typeof sellControllingStake === 'function' && sellControllingStake(child, parent)) logEvent(`⚖️ Ustawa antymonopolowa: ${parent.name} musi sprzedać kontrolę nad ${child.name} — rozbicie koncernu.`, 'state');
+        }
+    }
 }
 
 function mergeChildFundamentals(parent, child) {
@@ -12270,6 +12652,8 @@ function sellControllingStake(child, parent = getParentOf(child), buyer = null, 
     adjustCompanyCash(parent, cost);
     recordPayment(buyer.kind === 'company' ? buyer.entity : `external:${buyer.id}`, parent, cost, `Pakiet kontrolny ${child.symbol}`);
     giveHolderShares(buyer, child, stake, price);
+    noteGenealogy('controlSold', parent, child, { pct: stake / child.totalShares, note: `kupuje ${buyer.name}` });
+    if (buyer.kind === 'company') noteGenealogy('stake', buyer.entity, child, { pct: stake / child.totalShares, note: `pakiet kontrolny od ${parent.symbol}` });
     settleGroupLoanOnExit(child, parent);
     child.isSubsidiaryOf = null; child.parentStakePct = null;
     if (buyer.kind === 'company') { child.isSubsidiaryOf = buyer.entity.symbol; child.parentStakePct = stake / child.totalShares; child.profitTransfer = getRandomInRange(0.4, 0.6); }

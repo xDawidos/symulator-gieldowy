@@ -563,7 +563,8 @@ function processAiLoansWeekly(ai) {
                                 if (!st || st.price <= 0) continue;
 
                                 const neededVal = Math.min(loan.amount, loan.weeklyPayment * 4);
-                                const sharesToSeize = Math.min(h.shares, Math.ceil(neededVal / (st.price * 0.8)));
+                                const free = h.shares - (h.lockedShares || 0); // 0.15.0.1 B4: akcje w zastawie zostają
+                                const sharesToSeize = Math.min(free, Math.ceil(neededVal / (st.price * 0.8)));
                                 if (sharesToSeize <= 0) continue;
 
                                 h.shares -= sharesToSeize;
@@ -858,9 +859,8 @@ function makeAiDecision(ai) {
                     if (stockToBuy) {
                         const targetShares = Math.max(1, Math.floor(2500 / Math.max(0.01, stockToBuy.price)));
                         const cost = targetShares * stockToBuy.price;
-                        if (ai.cash < cost) {
-                            // Państwowa dopłata dla komendanta
-                            const subsidy = Math.max(1000, Math.ceil(cost - ai.cash) + 500);
+                        const subsidy = ai.cash < cost ? takeFromTreasury(Math.max(1000, Math.ceil(cost - ai.cash) + 500)) : 0; // 0.15.0.1 B6: ze skarbu państwa
+                        if (subsidy > 0) {
                             ai.cash += subsidy;
                             if (typeof logEvent === 'function') {
                                 logEvent(`🚓 Komendant Jakub otrzymał państwową dopłatę (${formatZl(subsidy, 0)}) na zakup akcji defensywnych ${stockToBuy.name}.`, 'state');

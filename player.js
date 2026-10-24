@@ -1482,6 +1482,8 @@ const FUND_WEEKS_PER_YEAR = 20;                        // rok gry = 4 kwartały 
 const CLIENT_GAINS_TAX = 0.19;                         // podatek klienta od zysku przy umorzeniu
 const MAX_EMISSIONS_PER_PERIOD = 2;
 const MAX_WEEKLY_REDEMPTION_SHARE = 0.15;              // odpływ w tygodniu maks. 15% udziałów
+const REDEMPTION_GATE_SHARE = 0.10;                    // 0.15.0.1 C6b: bramka umorzeń — 10% udziałów z początku kwartału
+const PANIC_REDEMPTION_SHARE = 0.05;                   // w tym panika najwyżej 5% na kwartał
 const TRAINING_COST_FACTOR = 0.25;                     // dawne XP → złotówki
 const PRIVATE_GAINS_TAX = 0.19;
 
@@ -1667,7 +1669,7 @@ function getFundPoolValue() {
 
 function getFundNav() {
     if (!playerFund || !(playerFund.units > 0)) return 0;
-    return getFundAssets() / playerFund.units;
+    return Math.max(0, getFundAssets() - (Number(playerFund.liquidityLoan?.principal) || 0)) / playerFund.units; // 0.15.2: kredyt płynnościowy jest zobowiązaniem
 }
 
 function getBenchmarkValue() {
@@ -2002,6 +2004,7 @@ function processFundWeekly() {
     playerFund.navHistory.push({ clockMs: playerFund.clockMs, nav: getFundNav() });
     if (playerFund.navHistory.length > 80) playerFund.navHistory.shift();
 
+    if (typeof processCampaignsWeekly === 'function') processCampaignsWeekly(); // 0.15.2: kalendarz, kampanie, transze, mandaty (campaigns.js)
     if (typeof processClientsWeekly === 'function') processClientsWeekly(); // charaktery klientów (clients.js)
     maybeTriggerForcedEmission();
     if (typeof runJuMarketWeekly === 'function') runJuMarketWeekly(); // rynek wtórny JU (clients.js)
@@ -2059,8 +2062,10 @@ function chargeManagementFee() {
 /** Umorzenie JU klienta po NAV. Przy braku gotówki fundusz sprzedaje pozycje. */
 function redeemClientUnits(client, units) {
     if (!(units > 0) || client.units <= 0) return 0;
-    units = Math.min(units, client.units);
-    if (client.units - units < 0.5) units = client.units; // bez resztek: klient odchodzi z całością (JU klientów = udziałów funduszu)
+    const redeemable = typeof getRedeemableUnits === 'function' ? getRedeemableUnits(client) : client.units; // 0.15.2: udziały w lock-upie nie są umarzane
+    units = Math.min(units, redeemable);
+    if (!(units > 0)) return 0;
+    if (client.units - units < 0.5 && redeemable >= client.units) units = client.units; // bez resztek: klient odchodzi z całością (JU klientów = udziałów funduszu)
 
     const nav = getFundNav();
     const value = units * nav;
@@ -2072,6 +2077,7 @@ function redeemClientUnits(client, units) {
     playerCash -= paid;
     playerFund.units -= paidUnits;
     client.units -= paidUnits;
+    if (typeof normalizeClientTranches === 'function') normalizeClientTranches(client);
     playerFund.current.outflow += paid;
     recordPayment('player-fund', 'external:klienci', paid, 'Umorzenie udziałów');
 
@@ -2121,8 +2127,15 @@ function setFundOpenSubscriptions(open) {
 }
 
 /** Wymuszona sprzedaż: największe pozycje, z dodatkową stratą na cenie i spadkiem zaufania. */
-function forceLiquidation(amountNeeded) {
+const FORCED_SALE_REASONS = {
+    redemption: 'wymuszona sprzedaż: klienci umarzają udziały, a w funduszu brakuje gotówki (trzymaj zapas gotówki)',
+    margin: 'margin call: sprzedaż pod spłatę pożyczki lombardowej'
+};
+
+/** Przymusowa sprzedaż wolnych akcji funduszu; zwraca listę sprzedanych pozycji. */
+function forceLiquidation(amountNeeded, reason = 'redemption') {
     let needed = amountNeeded;
+    const sold = [];
     const positions = Object.entries(playerPortfolio)
         .filter(([, holding]) => holding.assetType === 'stock' || !holding.assetType)
         .map(([symbol, holding]) => ({ symbol, holding, stock: stocks.find(s => s.symbol === symbol) }))
@@ -2145,10 +2158,12 @@ function forceLiquidation(amountNeeded) {
         needed -= proceeds;
 
         playerFund.current.forcedSales++;
-        notePlayerPositionLoss(symbol, quantity, 'wymuszona sprzedaż: klienci umarzają udziały, a w funduszu brakuje gotówki (trzymaj zapas gotówki)', proceeds);
+        notePlayerPositionLoss(symbol, quantity, FORCED_SALE_REASONS[reason] || FORCED_SALE_REASONS.redemption, proceeds);
+        sold.push({ symbol, quantity, proceeds });
     }
 
     if (playerFund.current.forcedSales > 0) playerFund.trust = Math.max(0, playerFund.trust - 2);
+    return sold;
 }
 
 // =================================================================================
@@ -3654,8 +3669,8 @@ const SATISFACTION_UNHAPPY = 0.35;
 const FUND_FLOW_WARN_SHARE = 0.10;      // ostrzeżenie: napływ lub odpływ w kwartale > 10% udziałów
 const ORGANIC_INFLOW_BASE = 0.02;       // roczny napływ nowych klientów przy zaufaniu 50 i wyniku = GIG
 const TOPUP_INFLOW_BASE = 0.015;        // roczne dopłaty obecnych klientów przy wyniku = GIG (zależne od wielkości funduszu)
-const FUND_FLOW_OUT_REASONS = { performance: '📉 wynik gorszy od GIG', trust: '🤝 niskie zaufanie', fees: '💸 opłaty', drawdown: '🎢 obsunięcie', noBuyer: '🛒 brak kupca na rynku wtórnym', panic: '😱 panika', ethics: '🌱 etyka spółek', fashion: '🤑 moda na akcje', other: '❔ inne' };
-const FUND_FLOW_IN_REASONS = { topup: '➕ dopłaty obecnych klientów', newClients: '🆕 nowi klienci', emission: '📥 Twoja emisja', fashion: '🤑 moda na akcje' };
+const FUND_FLOW_OUT_REASONS = { mandate: '📜 złamany mandat', performance: '📉 wynik gorszy od GIG', trust: '🤝 niskie zaufanie', fees: '💸 opłaty', drawdown: '🎢 obsunięcie większe niż GIG', bearMarket: '🎢 głęboka bessa', gate: '⏳ kolejka umorzeń (bramka)', noBuyer: '🛒 brak kupca na rynku wtórnym', panic: '😱 panika', ethics: '🌱 etyka spółek', fashion: '🤑 moda na akcje', other: '❔ inne' };
+const FUND_FLOW_IN_REASONS = { campaign: '📣 kampania emisyjna', topup: '➕ dopłaty obecnych klientów', newClients: '🆕 nowi klienci', emission: '📥 Twoja emisja', fashion: '🤑 moda na akcje' };
 
 function createFundFlowQuarter(quarter) {
     return { quarter, startUnits: playerFund?.units || 0, in: {}, out: {}, inUnits: 0, outUnits: 0, warned: false };
@@ -3693,6 +3708,65 @@ function noteFundFlow(direction, reason, value, units) {
     }
 }
 
+const DRAWDOWN_ABSOLUTE_SHARE = 0.15; // pokrętło 0,05–0,30: ile spadku samego GIG (ponad 10%) czują klienci
+
+/**
+ * 0.15.0.1 C6b: bramka umorzeń. Zwraca, ile z `units` klient może umorzyć w tym kwartale (wszystkie umorzenia
+ * na rynku pierwotnym razem ≤ 10% udziałów z początku kwartału); nadwyżka trafia do kolejki klienta.
+ */
+function passRedemptionGate(client, units) {
+    const quarter = getFundFlowStats()?.current;
+    if (!quarter || !(units > 0)) return 0;
+    const limit = REDEMPTION_GATE_SHARE * Math.max(1, quarter.startUnits || playerFund.units);
+    const allowed = Math.max(0, Math.min(units, limit - (quarter.gateUnitsRedeemed || 0)));
+    quarter.gateUnitsRedeemed = (quarter.gateUnitsRedeemed || 0) + allowed;
+    const queued = Math.min(units, client.units) - allowed;
+    if (queued > 0.01) {
+        client.queuedRedemption = (Number(client.queuedRedemption) || 0) + queued;
+        noteClientHistory(client, `Bramka umorzeń: ${queued.toFixed(1)} udziałów czeka w kolejce na następny kwartał.`);
+        if (!quarter.gateTriggered) announceRedemptionGate(quarter);
+    }
+    return allowed;
+}
+
+function getQueuedRedemptionUnits() {
+    return (playerFund?.clients || []).reduce((sum, client) => sum + (Number(client.queuedRedemption) || 0), 0);
+}
+
+/** Raz na kwartał: mail, pasek newsów, zaufanie −2 i hasło Akademii. */
+function announceRedemptionGate(quarter) {
+    quarter.gateTriggered = true;
+    playerFund.trust = Math.max(0, playerFund.trust - 2);
+    const text = `Fundusz uruchomił bramkę umorzeń: ${formatNumberPl(getQueuedRedemptionUnits(), 1)} udziałów w kolejce`;
+    logEvent(`⏳ ${text}.`, 'review');
+    if (typeof pushNews === 'function') pushNews(text);
+    if (typeof addMail === 'function') addMail({
+        sender: 'Dział obsługi klienta',
+        subject: 'Bramka umorzeń uruchomiona',
+        body: `${text}. W tym kwartale umorzenia sięgnęły ${(REDEMPTION_GATE_SHARE * 100).toFixed(0)}% udziałów z jego początku. Pozostałe zlecenia zostaną zrealizowane jako pierwsze w następnym kwartale (klient może zrezygnować, gdy odzyska zadowolenie). Klienci widzą ograniczenie wypłat — zaufanie −2.`,
+        importance: 2
+    });
+    if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('bramka_umorzen');
+}
+
+/** Początek kwartału: umorzenia z kolejki idą pierwsze i liczą się do nowego limitu. */
+function processRedemptionQueue(budget) {
+    let used = 0;
+    for (const client of [...playerFund.clients]) {
+        const queued = Math.min(Number(client.queuedRedemption) || 0, client.units);
+        if (!(queued > 0)) continue;
+        client.queuedRedemption = 0;
+        const units = passRedemptionGate(client, Math.min(queued, Math.max(0, budget - used))); // nadwyżka wraca do kolejki
+        if (queued > budget - used) client.queuedRedemption += Math.max(0, queued - Math.max(0, budget - used)); // ponad limit tygodnia
+        if (!(units > 0)) continue;
+        const paid = redeemClientUnits(client, units);
+        used += units;
+        noteFundFlow('out', 'gate', paid, units);
+        noteClientHistory(client, `Umorzenie z kolejki: ${units.toFixed(1)} udziałów (${paid.toFixed(0)} PLN).`);
+    }
+    return used;
+}
+
 /** Składniki tygodniowej zmiany zadowolenia klienta (do decyzji i do rozbicia przyczyn odejść). */
 function getClientSatisfactionDrift(client, def, ctx) {
     const fee = getPlayerFeeRate();
@@ -3700,7 +3774,9 @@ function getClientSatisfactionDrift(client, def, ctx) {
         reversion: (SATISFACTION_MEAN - client.satisfaction) * SATISFACTION_REVERSION,
         performance: ctx.excess * def.chase * 0.3 - (def.comparesRivals && ctx.lastRankBad ? 0.02 : 0),
         trust: (ctx.trust - 50) / 50 * 0.012,                                   // słabszy składnik zaufania
-        drawdown: -Math.max(0, ctx.maxDrawdown - 0.05) * def.volAversion * 0.3,  // dopiero obsunięcie ponad 5%
+        // 0.15.0.1 C6a: obsunięcie oceniane względem GIG (ponad 3 pp gorsze niż rynek) plus mała część absolutna w głębokiej bessie
+        drawdown: -Math.max(0, ctx.maxDrawdown - (ctx.benchmarkDrawdown || 0) - 0.03) * def.volAversion * 0.3,
+        bearMarket: -DRAWDOWN_ABSOLUTE_SHARE * Math.max(0, (ctx.benchmarkDrawdown || 0) - 0.10) * def.volAversion * 0.3,
         // Opłata standardowa jest neutralna: kara dopiero powyżej MANAGEMENT_FEE_ANNUAL, niższa — mała premia.
         fees: -(def.feeSensitivity || 0) * 0.01 * Math.max(0, fee / MANAGEMENT_FEE_ANNUAL - 1) - (fee - MANAGEMENT_FEE_ANNUAL) * 0.4,
         ethics: def.ethical && ctx.ethicsIssue ? -0.08 : 0
@@ -3712,7 +3788,7 @@ function getClientSatisfactionDrift(client, def, ctx) {
 function getDominantOutflowReason(parts, def, fraction) {
     if (def.panic && fraction >= 1) return 'panic';
     let reason = 'other', worst = 0;
-    for (const key of ['performance', 'trust', 'drawdown', 'fees', 'ethics']) if (parts[key] < worst) { worst = parts[key]; reason = key; }
+    for (const key of ['performance', 'trust', 'drawdown', 'bearMarket', 'fees', 'ethics']) if (parts[key] < worst) { worst = parts[key]; reason = key; }
     if (reason === 'other') { // tydzień bez ujemnego składnika (np. początek okresu): przyczyna z dłuższego horyzontu
         if (getRecentExcessAnnual() < 0) reason = 'performance';
         else if ((playerFund?.trust ?? 50) < 50) reason = 'trust';
@@ -3761,11 +3837,14 @@ function processClientsWeekly() {
     const lastRankBad = lastPeriod && lastPeriod.rankOf > 1 && lastPeriod.rank === lastPeriod.rankOf;
     const trust = playerFund.trust;
     let redemptionBudget = Math.floor(playerFund.units * MAX_WEEKLY_REDEMPTION_SHARE);
+    const flowQuarter = getFundFlowStats().current;
+    if (!flowQuarter.queueDone) { flowQuarter.queueDone = true; redemptionBudget -= processRedemptionQueue(redemptionBudget); }
+    const fundPeriodReturn = getPeriodReturn(current.startNav, nav);
     // B5: dopłaty jako roczna stopa od aktywów (mały fundusz nie rośnie o setki procent od kilku stałych kwot).
     let newMoneyBudget = Math.min(getFundAssets() * MAX_WEEKLY_NEW_MONEY_SHARE, getFundAssets() * getTopupInflowRate(trust) / 52 * getRandomInRange(0.5, 1.5));
 
     const ethicsIssue = typeof getFundEthicsIssue === 'function' ? getFundEthicsIssue() : null;
-    const ctx = { excess, trust, maxDrawdown: current.maxDrawdown, lastRankBad, ethicsIssue };
+    const ctx = { excess, trust, maxDrawdown: current.maxDrawdown, benchmarkDrawdown: current.benchmarkDrawdown, lastRankBad, ethicsIssue };
     for (const client of [...playerFund.clients]) {
         const def = getClientCharacter(client);
         if (def.ethical && ethicsIssue && (!client.ethicsNoted || client.ethicsNoted !== ethicsIssue)) {
@@ -3780,6 +3859,15 @@ function processClientsWeekly() {
         client.satisfaction = Math.max(0, Math.min(1, client.satisfaction + drift));
         const unhappy = client.satisfaction < SATISFACTION_UNHAPPY;
 
+        // Klient w kolejce bramki czeka na następny kwartał; rezygnuje, gdy odzyska zadowolenie.
+        if (client.queuedRedemption > 0) {
+            if (!unhappy && (def.key !== 'sly' || fundPeriodReturn > -0.05)) {
+                noteClientHistory(client, `Rezygnuje z kolejki umorzeń (${client.queuedRedemption.toFixed(1)} udziałów) — znów jest zadowolony.`);
+                client.queuedRedemption = 0;
+            }
+            continue;
+        }
+
         // Oferta czeka na kupca zbyt długo: zadowolony (i neutralny) klient ją WYCOFUJE, niezadowolony umarza.
         if (client.pendingSellUnits > 0) {
             client.pendingSellWeeks++;
@@ -3789,7 +3877,7 @@ function processClientsWeekly() {
                     client.pendingSellUnits = 0;
                     client.pendingSellWeeks = 0;
                 } else if (redemptionBudget > 0) {
-                    const units = Math.min(client.pendingSellUnits, redemptionBudget, client.units);
+                    const units = passRedemptionGate(client, Math.min(client.pendingSellUnits, redemptionBudget, getRedeemableUnits(client)));
                     const paid = redeemClientUnits(client, units);
                     redemptionBudget -= units;
                     client.pendingSellUnits = 0;
@@ -3820,10 +3908,11 @@ function processClientsWeekly() {
         }
 
         // 🦊 Spryciarz: odchodzi po 1 kwartale z wynikiem funduszu <= -5%
-        const periodReturn = getPeriodReturn(current.startNav, nav);
+        const periodReturn = fundPeriodReturn;
         if (def.key === 'sly' && current.elapsedMs >= FUND_PERIOD_MS / 3 && periodReturn <= -0.05) {
-            if (redemptionBudget > 0 && client.units > 0) {
-                const units = Math.min(redemptionBudget, client.units);
+            if (redemptionBudget > 0 && getRedeemableUnits(client) > 0) {
+                const units = passRedemptionGate(client, Math.min(redemptionBudget, getRedeemableUnits(client)));
+                if (!(units > 0)) continue;
                 const paid = redeemClientUnits(client, units);
                 redemptionBudget -= units;
                 noteFundFlow('out', 'performance', paid, units);
@@ -3834,29 +3923,29 @@ function processClientsWeekly() {
 
         // Emeryt / Nowoczesny: sprawdzenie zadowolenia z portfela
         const meetsPreference = fundSatisfiesClientPreference(def.key);
-        if (!meetsPreference && ((def.key === 'retiree' || def.key === 'senior') || def.key === 'modern')) {
+        if (!meetsPreference && (def.key === 'senior' || def.key === 'modern')) {
             client.satisfaction = Math.max(0, client.satisfaction - 0.05);
         }
 
         if (unhappy) {
             if (client.loyal && Math.random() < 0.9) continue;
+            if (getRedeemableUnits(client) < 0.5) { handleLockedUnhappyClient(client, def); continue; } // 0.15.2: udziały w lock-upie
             if (Math.random() >= (1 - def.patience) * 0.8 * panicMultiplier || redemptionBudget <= 0) continue;
 
             const isPanic = def.panic || (def.key === 'fearful' && panicMultiplier > 1);
             const fraction = client.satisfaction < 0.15 || isPanic ? 1 : getRandomInRange(0.25, 0.6);
-            let units = Math.min(redemptionBudget, Math.max(1, client.units * fraction));
+            let units = Math.min(redemptionBudget, Math.max(1, getRedeemableUnits(client) * fraction), getRedeemableUnits(client));
 
-            // 0.15 H5 limit: odpływ z przyczyny paniki <= 8% JU na kwartał
-            const flowQuarter = getFundFlowStats()?.current;
-            if (isPanic && flowQuarter) {
+            // Limit paniki: ≤ 5% udziałów na kwartał (0.15.0.1 C6b; wcześniej 8%)
+            if (isPanic) {
                 const startUnits = Math.max(1, flowQuarter.startUnits || playerFund.units);
-                const panicCapUnits = Math.max(1, startUnits * 0.08);
-                const currentPanicUnits = flowQuarter.panicUnitsRedeemed || 0;
-                const allowedPanicUnits = Math.max(0, panicCapUnits - currentPanicUnits);
+                const allowedPanicUnits = Math.max(0, startUnits * PANIC_REDEMPTION_SHARE - (flowQuarter.panicUnitsRedeemed || 0));
                 units = Math.min(units, allowedPanicUnits);
                 if (units <= 0) continue; // limit paniki na ten kwartał wyczerpany
-                flowQuarter.panicUnitsRedeemed = currentPanicUnits + units;
             }
+            units = passRedemptionGate(client, units);
+            if (!(units > 0)) continue; // bramka: umorzenie czeka w kolejce
+            if (isPanic) flowQuarter.panicUnitsRedeemed = (flowQuarter.panicUnitsRedeemed || 0) + units;
 
             const paid = redeemClientUnits(client, units);
             redemptionBudget -= units;
@@ -3865,13 +3954,11 @@ function processClientsWeekly() {
             noteClientHistory(client, `Niezadowolony — umarza ${units.toFixed(1)} udziałów (${paid.toFixed(0)} PLN).`);
         } else if (satisfied && highTrust) {
             // Emeryt kupuje tylko, gdy portfel w większości defensywny; Nowoczesny na odwrót
-            if (!meetsPreference && ((def.key === 'retiree' || def.key === 'senior') || def.key === 'modern')) continue;
+            if (!meetsPreference && (def.key === 'senior' || def.key === 'modern')) continue;
             if (!isFundOpenForSubscriptions() || Math.random() >= def.buyBias * 0.3 || newMoneyBudget <= 0) continue;
-            const value = Math.min(newMoneyBudget, getRandomInRange(def.size[0], def.size[1]) * 0.4);
-            if (client.type === 'officer' || client.character === 'officer') {
-            value = Math.round(value * 1.20); // 20% państwowej dopłaty z programu dla policjantów
-        }
-        const units = subscribeClient(client, value);
+            let value = Math.min(newMoneyBudget, getRandomInRange(def.size[0], def.size[1]) * 0.4);
+            if (def.key === 'officer') value += takeFromTreasury(value * 0.20); // dopłata 20% z programu policyjnego (ze skarbu państwa)
+            const units = subscribeClient(client, value);
             newMoneyBudget -= value;
             noteFundFlow('in', 'topup', value, units);
             noteClientHistory(client, `Dokupuje ${units.toFixed(1)} udziałów za ${value.toFixed(0)} PLN.`);
@@ -4002,6 +4089,7 @@ function runPlayerJuMarket(fund) {
             if (buyer.value < price) buyers.shift();
         }
         if (seller.pendingSellUnits <= 0.01) { seller.pendingSellUnits = 0; seller.pendingSellWeeks = 0; }
+        if (typeof normalizeClientTranches === 'function') normalizeClientTranches(seller);
         if (seller.units < 0.5) redeemClientUnits(seller, seller.units); // resztka umorzona, klient odchodzi
     }
 

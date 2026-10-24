@@ -36,6 +36,10 @@ function assertNear(a, b, message, eps = 0.01) {
     assert(near(a, b, eps), `${message}: ${a} ≠ ${b}`);
 }
 
+function assertEq(a, b, message) {
+    assert(a === b, `${message}: ${a} ≠ ${b}`);
+}
+
 function mulberry32(seed) {
     let a = seed >>> 0;
     return function () {
@@ -115,6 +119,7 @@ function resetWorld(companies) {
         marketRegimes.home.premiumTarget = 0.0;
     }
     if (typeof activeSectorBubble !== 'undefined') activeSectorBubble = null;
+    if (typeof resetCrises === 'function') resetCrises(); // 0.15.3
     if (typeof sectorBubbleCooldown !== 'undefined') sectorBubbleCooldown = 0;
     if (typeof updateAllSectorPremiums === 'function') updateAllSectorPremiums();
     activeTenders = [];
@@ -795,9 +800,14 @@ group('Rynek: fundamenty, ceny, cykl, dywidendy (etap A)', () => {
         const foodGrowth = growth(food);
         const buildGrowth = growth(build);
         assert(foodGrowth > buildGrowth, `Żywność ${(foodGrowth * 100).toFixed(1)}% vs Budowlany ${(buildGrowth * 100).toFixed(1)}%`);
-        const multFood = withCycle('recession', -0.012, () => getValuationMultiplier(food));
-        const multBuild = withCycle('recession', -0.012, () => getValuationMultiplier(build));
-        assert(multFood > multBuild, 'niższa wycena cyklicznych w recesji');
+        // Cykl sektorów (stan z poprzednich testów) wyłączony: po 0.15.0.1 C5a różnica faz jest o połowę mniejsza.
+        const sectorFactor = getSectorValuationFactor;
+        getSectorValuationFactor = () => 1;
+        try {
+            const multFood = withCycle('recession', -0.012, () => getValuationMultiplier(food));
+            const multBuild = withCycle('recession', -0.012, () => getValuationMultiplier(build));
+            assert(multFood > multBuild, 'niższa wycena cyklicznych w recesji');
+        } finally { getSectorValuationFactor = sectorFactor; }
     });
 
     test('dywidenda: z gotówki spółki, cena spada o dywidendę na akcję, 0% nic nie wypłaca', () => {
@@ -1862,7 +1872,7 @@ group('Fuzje i przejęcia — naprawa modelu (etap G1)', () => {
         return { a, b };
     }
 
-    test('przejęcie kończy się w 7–9 kwartałach, a proces prowadzi tylko inicjator', () => {
+    test('przejęcie kończy się w 3–7 kwartałach wg wielkości celu (0.15.1), a proces prowadzi tylko inicjator', () => {
         const { a, b } = worldG1();
         assert(initiateMergerProcess(a, b, 'przejęcie', 'cash', 0.25), 'start');
         const random = Math.random;
@@ -1877,7 +1887,7 @@ group('Fuzje i przejęcia — naprawa modelu (etap G1)', () => {
         }
         checkAntitrust = original;
         Math.random = random;
-        assert(!a.mergerProcess && quarters >= 6 && quarters <= 9, `kwartały: ${quarters}`);
+        assert(!a.mergerProcess && quarters >= 3 && quarters <= 8, `kwartały: ${quarters}`);
     });
 
     test('komplikacja to dane: przeżywa zapis, decyzja gracza działa po wczytaniu', () => {
@@ -2091,8 +2101,9 @@ group('Obrony i wrogie przejęcia (etap G2)', () => {
         fundHolds(b, 6000);
         playerCash = 1_000_000;
         withRandom(0.99, () => initiateMergerProcess(a, b, 'przejęcie', 'cash', 0.3));
+        const pillCost = Math.round(getMarketCapValue(b) * 0.05); // 0.15.1 M1: kapitalizacja celu po ogłoszeniu (kurs ≈ oferta − spread)
         assert(activateDefenseMechanism('BBB', 'poisonPill', 'player'), 'aktywna');
-        assert(playerCash === 1_000_000 - 50_000 && a.mergerProcess.defenseActive === 'poisonPill' && b.mergerProcess.defenseActive === 'poisonPill', 'koszt i stan');
+        assert(playerCash === 1_000_000 - pillCost && a.mergerProcess.defenseActive === 'poisonPill' && b.mergerProcess.defenseActive === 'poisonPill', 'koszt i stan');
         assert(!activateDefenseMechanism('BBB', 'negotiate', 'player'), 'druga obrona zablokowana');
     });
 
@@ -7479,14 +7490,14 @@ group('0.15 H4: Krach rynkowy, bezpieczniki giełdowe i reakcja instytucji', () 
         checkCircuitBreakers(950);
         assert(isMarketHalted() === false, 'brak haltu przy -5%');
 
-        // Spadek -8%: Poziom 1 (15s)
-        checkCircuitBreakers(920);
-        assert(isMarketHalted() === true, 'halt aktywny przy -8%');
+        // Spadek -10,5%: Poziom 1 (15s)
+        checkCircuitBreakers(895);
+        assert(isMarketHalted() === true, 'halt aktywny przy -10,5%');
         assert(marketHalt.level === 1, 'poziom 1');
         assert(marketHalt.haltDurationSec === 15, 'czas 15s');
 
         // Koniec haltu 1
-        marketHalt.untilGameMs = Date.now() - 1000;
+        marketHalt.untilGameMs = getGameClockMs() - 1000;
         assert(isMarketHalted() === false, 'halt minął');
 
         // Spadek -14%: Poziom 2 (30s)
@@ -7496,14 +7507,14 @@ group('0.15 H4: Krach rynkowy, bezpieczniki giełdowe i reakcja instytucji', () 
         assert(marketHalt.haltDurationSec === 30, 'czas 30s');
 
         // Koniec haltu 2
-        marketHalt.untilGameMs = Date.now() - 1000;
+        marketHalt.untilGameMs = getGameClockMs() - 1000;
         assert(isMarketHalted() === false, 'halt minął');
 
         // Spadek -21%: Poziom 3 (60s)
         checkCircuitBreakers(790);
         assert(isMarketHalted() === true, 'halt aktywny przy -21%');
         assert(marketHalt.level === 3, 'poziom 3');
-        assert(marketHalt.haltDurationSec === 60, 'czas 60s');
+        assert(marketHalt.untilGameMs === Infinity, '3. stopień do końca tygodnia gry');
     });
 
     test('H4.4: Blokada handlu gracza i botów podczas bezpiecznika giełdowego', () => {
@@ -7538,21 +7549,18 @@ group('0.15 H4: Krach rynkowy, bezpieczniki giełdowe i reakcja instytucji', () 
         assert(sellRes === false, 'aiSellStock zwróciło false');
     });
 
-    test('H4.5: Margin Call: wymuszona likwidacja 25% pozycji przy dźwigni > 50%', () => {
+    test('H4.5: Margin Call: przy dźwigni > 50% fundusz spłaca pożyczki lombardowe', () => {
         world();
         const testStock = stocks[0];
         testStock.price = 100;
-
-        // Portfel funduszu gracza z długiem > 50% aktywów
+        const pawn = makeCompany('LOMB', { cash: 1_000_000 }); pawn.assetType = 'PawnShop'; stocks.push(pawn);
         playerPortfolio[testStock.symbol] = { shares: 1000, avgPrice: 100, assetType: 'stock' };
-        playerCash = 0; // brak gotówki na pokrycie depozytu
-        playerFund.debt = 150000; // dług 150k przy portfelu 100k -> totalCapital = 250k, leverage = 60%
-
-        checkPlayerMarginCall();
-
-        // Likwidacja 25% z 1000 akcji = 250 akcji
-        assert(playerPortfolio[testStock.symbol].shares === 750, 'zlikwidowano dokładnie 25% akcji');
-        assert(playerCash === 25000, 'odzyskane środki trafiły do kasy funduszu');
+        testStock.sharesHeld = 1000;
+        playerCash = 200000;
+        playerFund.pawnLoans = [{ id: 'p1', symbol: testStock.symbol, shares: 0, principal: 400000, weeksLeft: 10, missed: 0 }];
+        const res = checkPlayerMarginCall();
+        assert(res && res.repaid > 0, 'spłata pożyczki');
+        assertNear(getPawnOutstanding(getFundAccount()), 400000 - res.repaid, 'dług spadł o spłatę');
     });
 
     test('H4.6: Reakcja Banku Centralnego po krachu: cięcie stopy bazowej o 50 pb', () => {
@@ -8102,6 +8110,1650 @@ group('Portfel: donut podziału sektorowego (#sector-donut-area)', () => {
         stocks.splice(stocks.indexOf(s1), 1);
         stocks.splice(stocks.indexOf(s2), 1);
         stocks.splice(stocks.indexOf(s3), 1);
+    });
+});
+
+const REAL_REPLACE_CRASH_WITH_LINE = typeof maybeReplaceCrashWithCrisisLine === 'function' ? maybeReplaceCrashWithCrisisLine : null; // 0.15.3: testy krachów liczą krachy bez linii kryzysu
+group('0.15.0.1: Poprawki 0.15 (bezpiecznik, margin call, pieniądze, emisje, krach, odpływ)', () => {
+    function world() {
+        if (REAL_REPLACE_CRASH_WITH_LINE) maybeReplaceCrashWithCrisisLine = () => false;
+        const a = makeCompany('AAA'), b = makeCompany('BBB');
+        a.name = 'Alfa Testowa'; b.name = 'Beta Testowa';
+        resetWorld([a, b]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        initMarketRegimes();
+        marketHalt = createMarketHaltState();
+        marketCrash = createMarketCrashState();
+        return { a, b };
+    }
+    // Bezpiecznik zadziałał w updateMarketIndexes; reszta tego tiku przesuwa zegar (updateFund). Kolejne tiki:
+    // sprawdzenie wstrzymania (jak updateStockPrices), potem zegar +1 s.
+    function countHaltedTicks(maxTicks = 500) {
+        let n = 0;
+        playerFund.clockMs += 1000;
+        for (let i = 0; i < maxTicks; i++) { if (isMarketHalted()) n++; playerFund.clockMs += 1000; }
+        return n;
+    }
+
+    test('C1: 15 s wstrzymania = 15 tików przy ×1, ×50 i ×200', () => {
+        world();
+        const savedSpeed = currentSpeedMultiplier;
+        for (const speed of [1, 50, 200]) {
+            currentSpeedMultiplier = speed;
+            marketHalt = createMarketHaltState();
+            triggerMarketHalt(1, 15, -0.08);
+            assertEq(countHaltedTicks(), 15, `tiki wstrzymania przy ×${speed}`);
+            triggerMarketHalt(2, 30, -0.14);
+            assertEq(countHaltedTicks(), 30, `2. stopień przy ×${speed}`);
+        }
+        currentSpeedMultiplier = savedSpeed;
+    });
+
+    test('C1: pauza (zegar gry stoi) nie skraca wstrzymania', () => {
+        world();
+        triggerMarketHalt(1, 15, -0.08);
+        const until = marketHalt.untilGameMs;
+        isGamePaused = true;
+        updateFund(1000); // w pauzie zegar funduszu nie rusza
+        isGamePaused = false;
+        assertEq(marketHalt.untilGameMs - getGameClockMs(), 15000, 'pozostało 15 s gry');
+        assert(until === marketHalt.untilGameMs && getMarketHaltRemainingSeconds() === 15, 'odliczanie 15 s');
+    });
+
+    test('C1: 3. stopień trwa do końca tygodnia gry i kończy go pętla tygodniowa; nowy tydzień zeruje progi', () => {
+        world();
+        marketHalt.weeklyStartGig = 1000;
+        checkCircuitBreakers(790);
+        assertEq(marketHalt.level, 3, 'poziom 3');
+        assertEq(countHaltedTicks(120), 120, 'wstrzymanie trwa dowolnie długo w tygodniu');
+        resetMarketHaltWeekly(800);
+        assert(!isMarketHalted(), 'pętla tygodniowa kończy wstrzymanie');
+        assertEq(marketHalt.weeklyStartGig, 800, 'nowy punkt odniesienia');
+        checkCircuitBreakers(715);
+        assertEq(marketHalt.level, 1, 'w nowym tygodniu 1. stopień znów możliwy');
+    });
+
+    test('C1: zapis z wstrzymaniem z Date.now() wczytuje się bez wstrzymania; 3. stopień przetrwa zapis', () => {
+        world();
+        playerFund.clockMs = 5 * 60000;
+        triggerMarketHalt(1, 15, -0.08);
+        marketHalt.untilGameMs = Date.now() + 15000; // stary znacznik zegara rzeczywistego
+        const snap = JSON.parse(JSON.stringify(buildSaveSnapshot()));
+        const report = applySaveSnapshot(snap);
+        assert(report.ok, 'wczytanie bez błędów');
+        assert(!isMarketHalted(), 'stary znacznik usunięty');
+        triggerMarketHalt(3, 60, -0.21);
+        applySaveSnapshot(JSON.parse(JSON.stringify(buildSaveSnapshot())));
+        assert(isMarketHalted() && marketHalt.untilGameMs === Infinity, '3. stopień po wczytaniu');
+        triggerMarketHalt(1, 15, -0.08);
+        playerFund.clockMs += 5000;
+        applySaveSnapshot(JSON.parse(JSON.stringify(buildSaveSnapshot())));
+        assertEq(getMarketHaltRemainingSeconds(), 10, 'wstrzymanie zegara gry przetrwa zapis');
+    });
+
+    function c2World() {
+        const w = world();
+        const pawn = makeCompany('LOMB', { cash: 1_000_000, name: 'Lombard Test' }); pawn.assetType = 'PawnShop';
+        const collector = makeCompany('WRON', { cash: 1_000_000, name: 'Windykator Test' }); collector.assetType = 'DebtCollector';
+        stocks.push(pawn, collector);
+        for (const s of stocks) { s.insiderShares = 0; s.sharesHeld = 0; }
+        aiCompetitors.forEach(ai => { ai.loans = []; });
+        return { ...w, pawn, collector };
+    }
+
+    test('C2 (B2): bot z dźwignią > 50% sprzedaje 20–40% wolnych akcji; akcje = posiadacze, bez NaN', () => {
+        const { a, b } = c2World();
+        const bot = aiCompetitors.find(ai => ai.personality !== 'market_maker');
+        bot.cash = 0;
+        bot.portfolio = { AAA: { shares: 1000, avgPrice: 100, lockedShares: 200 }, BBB: { shares: 500, avgPrice: 100 } };
+        a.sharesHeld = 1000; b.sharesHeld = 500;
+        bot.loans = [{ amount: 400000, weeklyPayment: 1000, interestRate: 0.1 }];
+        executeMarginCalls();
+        const soldA = 1000 - bot.portfolio.AAA.shares, soldB = 500 - bot.portfolio.BBB.shares;
+        assert(soldA >= 0.2 * 800 - 1 && soldA <= 0.4 * 800, `sprzedaż AAA 20–40% wolnych: ${soldA}`);
+        assert(soldB >= 0.2 * 500 - 1 && soldB <= 0.4 * 500, `sprzedaż BBB 20–40%: ${soldB}`);
+        assert(bot.portfolio.AAA.shares >= 200, 'akcje w zastawie nietknięte');
+        for (const s of [a, b]) assertEq(s.sharesHeld, getTrackedHeldShares(s), `akcje = posiadacze ${s.symbol}`);
+        assert(Object.values(bot.portfolio).every(h => Number.isFinite(h.shares) && Number.isFinite(h.avgPrice)), 'bez NaN w pozycjach');
+    });
+
+    test('C2 (B3): margin call gracza spłaca dług bez znikania pieniędzy; zastaw nietknięty; akcje = posiadacze', () => {
+        const { a, pawn } = c2World();
+        a.price = 100;
+        playerPortfolio.AAA = { shares: 1000, avgPrice: 100, assetType: 'stock', lockedShares: 600 };
+        a.sharesHeld = 1000;
+        playerCash = 10000;
+        playerFund.pawnLoans = [{ id: 'p1', symbol: 'AAA', shares: 600, principal: 150000, weeksLeft: 10, missed: 0 }];
+        const debt0 = getPawnOutstanding(getFundAccount()), cash0 = playerCash, pawnCash0 = pawn.cash;
+        const res = checkPlayerMarginCall();
+        const proceeds = res.sold.reduce((s, x) => s + x.proceeds, 0);
+        const debt1 = getPawnOutstanding(getFundAccount());
+        assert(res.sold.length === 1 && res.sold[0].quantity === 400, 'sprzedane tylko wolne akcje (400)');
+        assertNear(debt0 - debt1, res.repaid, 'dług spadł dokładnie o spłatę');
+        assertNear(cash0 + proceeds - res.repaid, playerCash, 'gotówka + sprzedaż − spłata = 0 (bez znikania)');
+        assertNear(pawn.cash - pawnCash0, res.repaid, 'lombard dostał spłatę');
+        assertEq(playerPortfolio.AAA.shares, 600, 'akcje w zastawie zostały');
+        assert(playerPortfolio.AAA.lockedShares < 600 && playerPortfolio.AAA.lockedShares === playerFund.pawnLoans[0].shares, 'spłata zwalnia część zastawu');
+        assertEq(a.sharesHeld, getTrackedHeldShares(a), 'akcje = posiadacze');
+    });
+
+    test('C2 (B4): windykator nie zajmuje akcji w zastawie', () => {
+        const { a, b } = c2World();
+        const bot = aiCompetitors.find(ai => ai.personality !== 'market_maker');
+        bot.cash = 0;
+        bot.portfolio = { AAA: { shares: 100, avgPrice: 100, lockedShares: 100 }, BBB: { shares: 100, avgPrice: 100 } };
+        bot.loans = [{ amount: 10000, weeklyPayment: 1000, interestRate: 0.1, collectorSymbol: 'WRON', missedPayments: 1 }];
+        processAiLoansWeekly(bot);
+        assertEq(bot.portfolio.AAA.shares, 100, 'zastawione AAA zostają');
+        assert((bot.portfolio.BBB?.shares || 0) < 100, 'zajęte wolne BBB');
+    });
+
+    function defensiveWorld() {
+        const w = world();
+        const food = makeCompany('JEDZ', { sector: ['Żywność'], name: 'Żywność Test' });
+        food.companyAge = 20;
+        stocks.push(food);
+        return { ...w, food };
+    }
+
+    test('C3 (B7): Funkcjonariusz dokupuje udziały z dopłatą ze skarbu; pętla obsługuje wszystkich klientów', () => {
+        const { food } = defensiveWorld();
+        playerPortfolio.JEDZ = { shares: 9000, avgPrice: 100, assetType: 'stock' };
+        food.sharesHeld = 9000;
+        playerCash = 500000; playerFund.trust = 80; // fundusz defensywny (≥ 50%) i budżet napływu dla 3 klientów
+        const mk = id => ensureClientProfile({ id, name: id, type: 'officer', units: 100, avgCost: getFundNav(), satisfaction: 0.95 });
+        playerFund.clients = [mk('o1'), mk('o2'), { ...mk('c1'), type: 'careful' }];
+        governmentTreasury = 1_000_000;
+        const cash0 = playerCash;
+        Math.random = () => 0.001;
+        processClientsWeekly(); // dawniej TypeError (przypisanie do const) przerywał pętlę
+        const [o1, o2, c1] = playerFund.clients;
+        assert(o1.units > 100 && o2.units > 100 && c1.units > 100, 'wszyscy klienci dokupili udziały');
+        const officerIn = (o1.units + o2.units - 200) * getFundNav();
+        assertNear(1_000_000 - governmentTreasury, officerIn / 6, 'skarb płaci 20% wpłaty bazowej (1/6 wpłaty z dopłatą)', 1);
+        assert(playerCash > cash0, 'wpłaty trafiły do funduszu');
+    });
+
+    test('C3 (B6): Komendant Jakub dostaje dopłatę tylko ze skarbu państwa', () => {
+        defensiveWorld();
+        oversight.police.level = 5;
+        const jakub = checkPoliceChiefSpawn() || aiCompetitors.find(ai => ai.personality === 'police_chief');
+        Math.random = () => 0.1;
+        jakub.cash = 0; jakub.portfolio = {};
+        governmentTreasury = 0;
+        makeAiDecision(jakub);
+        assertEq(jakub.cash, 0, 'pusty skarb — bez dopłaty');
+        assertEq(governmentTreasury, 0, 'skarb bez zmian');
+        governmentTreasury = 1_000_000;
+        makeAiDecision(jakub);
+        const paid = 1_000_000 - governmentTreasury;
+        assert(paid > 0, 'dopłata pobrana ze skarbu');
+        const held = (jakub.portfolio.JEDZ?.shares || 0) * stocks.find(s => s.symbol === 'JEDZ').price;
+        assert(jakub.cash + held <= paid + 1, 'bot ma najwyżej tyle, ile dał skarb');
+    });
+
+    // Wartość godziwa = kurs (kurs / wartość = 1), więc o „drogo/tanio” decyduje premia rynku.
+    function capitalShare(stock, type, n = 10000) {
+        const orig = getDisplayedFairValue;
+        getDisplayedFairValue = s => s.price;
+        let k = 0;
+        try { for (let i = 0; i < n; i++) if (getCapitalAgmProposal(stock)?.type === type) k++; }
+        finally { getDisplayedFairValue = orig; }
+        return k / n;
+    }
+
+    test('C4: drogie akcje → emisja w porządku obrad z szansą 40% (80% w sektorze bańki)', () => {
+        const { a } = world();
+        getMarketRegime('home').phase = 'bull';
+        a.cash = getMarketCapValue(a) * 0.10; // ani brak, ani nadmiar gotówki
+        getMarketRegime('home').premium = 0.20;
+        const p = capitalShare(a, 'issue');
+        assert(Math.abs(p - 0.40) <= 0.02, `emisja ${p}`);
+        const orig = isCompanyInSectorBubble;
+        isCompanyInSectorBubble = () => true;
+        try { const pb = capitalShare(a, 'issue'); assert(Math.abs(pb - 0.80) <= 0.02, `emisja w bańce ${pb}`); }
+        finally { isCompanyInSectorBubble = orig; }
+        assertEq(capitalShare(a, 'buyback', 2000), 0, 'bez skupu przy drogich akcjach');
+        getMarketRegime('home').phase = 'bear';
+        assertEq(capitalShare(a, 'issue', 2000), 0, 'w Bessie okno emisji zamknięte');
+        getMarketRegime('home').phase = 'bull';
+    });
+
+    test('C4: tanie akcje → skup z szansą 30%; emisja ratunkowa nie zależy od premii rynku', () => {
+        const { a } = world();
+        getMarketRegime('home').phase = 'bull';
+        a.cash = getMarketCapValue(a) * 0.10;
+        getMarketRegime('home').premium = -0.20;
+        const p = capitalShare(a, 'buyback');
+        assert(Math.abs(p - 0.30) <= 0.02, `skup ${p}`);
+        assertEq(capitalShare(a, 'issue', 2000), 0, 'bez emisji przy tanich akcjach i zapasie gotówki');
+        getMarketRegime('home').premium = 0;
+        assertEq(capitalShare(a, 'buyback', 2000) + capitalShare(a, 'issue', 2000), 0, 'neutralna wycena — bez uchwały kapitałowej');
+        getMarketRegime('home').premium = 0.12;
+        assert(Math.abs(capitalShare(a, 'issue') - 0.40) <= 0.02, 'górna część Hossy (premia > +10%) to już drogie akcje');
+        a.cash = getMarketCapValue(a) * 0.01; // brak gotówki
+        getMarketRegime('home').premium = 0;
+        assert(Math.abs(capitalShare(a, 'issue') - 0.50) <= 0.02, 'brak gotówki: emisja 50%');
+        getMarketRegime('home').premium = -0.20;
+        assert(Math.abs(capitalShare(a, 'issue') - 0.20) <= 0.02, 'brak gotówki przy tanich akcjach: emisja 20% (zarząd woli kredyt)');
+        // Szansa emisji ratunkowej w cyklu zdarzeń jest stała (bez mnożnika premii); wybór spółki bez wagi bańki.
+        assert(!/premium/.test(triggerMainMarketEventCycle.toString()) && !/Bubble/.test(triggerRescueOfferingEvent.toString()), 'emisja ratunkowa bez nastroju rynku');
+    });
+
+    test('C4: walne kwartał później — zarząd wycofuje emisję, gdy akcje przestały być drogie', () => {
+        const { a } = world();
+        getMarketRegime('home').phase = 'bull';
+        a.cash = getMarketCapValue(a) * 0.10;
+        const orig = getDisplayedFairValue;
+        getDisplayedFairValue = s => s.price;
+        try {
+            getMarketRegime('home').premium = 0.20;
+            const gov = ensureGovernance(a);
+            gov.pendingAgm = { items: [{ id: 'issue', kind: 'board', type: 'issue', reason: 'expensive', label: 'Emisja 10% nowych akcji przy wysokiej wycenie', playerVote: 'for' }] };
+            assert(isCapitalAgmItemValid(a, gov.pendingAgm.items[0]), 'drogie akcje — uchwała ważna');
+            getMarketRegime('home').premium = -0.20; // Dystrybucja → Bessa przed walnym
+            const total0 = a.totalShares;
+            const record = holdAgm(a);
+            assert(!record || !record.results.some(r => r.type === 'issue'), 'emisja wycofana przed głosowaniem');
+            assertEq(a.totalShares, total0, 'bez nowych akcji');
+            assert(!isCapitalAgmItemValid(a, { type: 'issue', reason: 'cash' }) || a.cash < getMarketCapValue(a) * 0.03, 'emisja z braku gotówki tylko przy braku gotówki');
+        } finally { getDisplayedFairValue = orig; }
+    });
+
+    test('Po C7: każda zwykła spółka ma fazę (także z bilansem w definicji, z IPO i ze starego zapisu)', () => {
+        const { a, b } = world();
+        delete a.corporatePhase; a.companyAge = undefined; a.financialHealth = 2; a.exchange = 'BRONZE';
+        delete b.corporatePhase; b.companyAge = 40; b.financialHealth = -3;
+        updateCorporatePhase(a); updateCorporatePhase(b);
+        assert(Object.values(CORPORATE_PHASES).includes(a.corporatePhase) && Number.isFinite(a.companyAge), `faza i wiek nadane: ${a.corporatePhase}, ${a.companyAge}`);
+        assert(Object.values(CORPORATE_PHASES).includes(b.corporatePhase), `słaba spółka: ${b.corporatePhase}`);
+        assertEq(PHASE_GROWTH_ADJUSTMENT[CORPORATE_PHASES.DECLINE], -0.015, 'Spadek: −1,5 pp na kwartał');
+    });
+
+    test('C4: akcje = posiadacze po emisji i skupie z walnego; news i hasło Akademii dla spółki z portfela', () => {
+        const { a } = world();
+        playerPortfolio.AAA = { shares: 2000, avgPrice: 100, assetType: 'stock' };
+        a.sharesHeld = 2000;
+        a.cash = 500000;
+        const total0 = a.totalShares;
+        applyAgmResolution(a, { type: 'issue', reason: 'expensive' });
+        assertEq(a.totalShares, total0 + Math.floor(total0 * 0.1), 'emisja 10%');
+        assertEq(a.sharesHeld, getTrackedHeldShares(a), 'akcje = posiadacze po emisji');
+        assert(newsLog.some(n => /emituje 10% akcji przy wysokiej wycenie/.test(n.text)), 'wpis w pasku newsów');
+        assert(isAcademyUnlocked('emisje_skupy'), 'hasło Akademii');
+        const total1 = a.totalShares;
+        applyAgmResolution(a, { type: 'buyback', reason: 'cheap' });
+        assert(a.totalShares < total1, 'skup zmniejsza liczbę akcji');
+        assertEq(a.sharesHeld, getTrackedHeldShares(a), 'akcje = posiadacze po skupie');
+        assert(newsLog.some(n => /skupuje akcje przy niskiej wycenie/.test(n.text)), 'wpis o skupie');
+    });
+
+    function crashCount(phase, quartersInPhase, n = 10000) {
+        const regime = getMarketRegime('home');
+        const orig = triggerMarketCrash;
+        let k = 0;
+        triggerMarketCrash = () => { k++; };
+        try {
+            for (let i = 0; i < n; i++) { regime.phase = phase; regime.quartersInPhase = quartersInPhase; regime.premium = 0.1; checkMarketCrashQuarterly(); }
+        } finally { triggerMarketCrash = orig; }
+        return k / n;
+    }
+
+    test('C5b: brak krachu w Akumulacji, Bessie, Kapitulacji i w kw. 1–3 Hossy; możliwy po wzrostach', () => {
+        world();
+        aiCompetitors.forEach(ai => { ai.loans = []; });
+        for (const phase of ['accumulation', 'bear', 'capitulation']) assertEq(crashCount(phase, 3), 0, `bez krachu: ${phase}`);
+        for (const q of [1, 2, 3]) assertEq(crashCount('bull', q), 0, `bez krachu w ${q}. kw. Hossy`);
+        const bull = crashCount('bull', 4);
+        assert(Math.abs(bull - 0.03) < 0.006, `Hossa ≥ 4 kw.: ${bull}`);
+        assert(crashCount('euphoria', 1) > 0.07, 'Euforia: szansa bazowa + 6 pp');
+        assert(crashCount('distribution', 1) > 0.015, 'Dystrybucja');
+    });
+
+    test('C5b: premia po krachu nie niżej niż −35%', () => {
+        world();
+        const regime = getMarketRegime('home');
+        regime.premium = -0.05;
+        triggerMarketCrash({ durationWeeks: 2, targetDrop: -0.35 });
+        processMarketCrashWeekly();
+        assert(regime.premium >= -0.35, 'w trakcie');
+        processMarketCrashWeekly();
+        assertNear(regime.premium, -0.35, 'dno −35%');
+        regime.premium = 0.30;
+        triggerMarketCrash({ durationWeeks: 1, targetDrop: -0.30 });
+        processMarketCrashWeekly();
+        assertNear(regime.premium, 0.0, 'z euforii spadek o 30 pp');
+    });
+
+    test('C5b: liczba krachów w modelu faz (300 gier × 20 lat)', () => {
+        world();
+        aiCompetitors.forEach(ai => { ai.loans = []; });
+        const quiet = { logEvent, showToast, addMail, pushNews, executeMarginCalls, reactCentralBankToCrash };
+        logEvent = showToast = addMail = pushNews = () => {}; executeMarginCalls = reactCentralBankToCrash = () => {};
+        const counts = [];
+        let premSum = 0, premN = 0;
+        try {
+            for (let g = 0; g < 300; g++) {
+                initMarketRegimes();
+                marketCrash = createMarketCrashState();
+                let crashes = 0;
+                for (let q = 0; q < 80; q++) {
+                    const regime = getMarketRegime('home');
+                    regime.premium += (regime.premiumTarget - regime.premium) * 0.25;
+                    advanceMarketRegimeQuarterly();
+                    const was = isMarketCrashing();
+                    checkMarketCrashQuarterly();
+                    if (!was && isMarketCrashing()) crashes++;
+                    for (let w = 0; w < 5 && isMarketCrashing(); w++) processMarketCrashWeekly();
+                    premSum += getMarketRegime('home').premium; premN++;
+                }
+                counts.push(crashes);
+            }
+        } finally { Object.assign(window, quiet); }
+        const mean = counts.reduce((a, b) => a + b, 0) / counts.length;
+        const dist = [0, 1, 2, 3].map(k => counts.filter(c => (k === 3 ? c >= 3 : c === k)).length / counts.length);
+        addTable('C5b: krachy na 20 lat (model faz, 300 gier)', ['średnio', '0', '1', '2', '≥ 3', 'średnia premia'], [[mean.toFixed(2), ...dist.map(x => (x * 100).toFixed(0) + '%'), (premSum / premN * 100).toFixed(1) + '%']]);
+        assert(mean >= 0.5 && mean <= 2.5, `krachy na 20 lat: ${mean}`);
+    });
+
+    test('C6a: obsunięcie względem GIG — fundusz = GIG w bessie prawie bez kary, fundusz gorszy od GIG z pełną', () => {
+        world();
+        const def = CLIENT_TYPES.fearful, client = { satisfaction: 0.5 };
+        const ctx = (dd, bdd) => ({ excess: 0, trust: 50, maxDrawdown: dd, benchmarkDrawdown: bdd, lastRankBad: false, ethicsIssue: null });
+        const old = -Math.max(0, 0.30 - 0.05) * def.volAversion * 0.3; // 0.15: kara za samo obsunięcie 30%
+        const same = getClientSatisfactionDrift(client, def, ctx(0.30, 0.30));
+        assert(Math.abs(same.drawdown + same.bearMarket) <= Math.abs(old) * 0.15, 'fundusz = GIG (−30%): ≤ 15% dawnej kary');
+        assert(same.bearMarket < 0, 'głęboka bessa dalej trochę niepokoi');
+        const worse = getClientSatisfactionDrift(client, def, ctx(0.30, 0.10));
+        assertNear(worse.drawdown, -(0.30 - 0.10 - 0.03) * def.volAversion * 0.3, 'pełny składnik względny', 1e-9);
+        assertEq(worse.bearMarket, 0, 'GIG −10%: bez części absolutnej');
+        assertEq(getDominantOutflowReason(worse, CLIENT_TYPES.careful, 0.5), 'drawdown', 'przyczyna: obsunięcie większe niż GIG');
+    });
+
+    // Fundusz z 10 niezadowolonymi klientami po 100 udziałów (1000 udziałów, gotówka na wypłaty).
+    function gateWorld(type = 'careful') {
+        world();
+        playerPortfolio = {};
+        playerCash = 1_000_000;
+        playerFund.clients = Array.from({ length: 10 }, (_, i) => ensureClientProfile({ id: `g${i}`, name: `Klient ${i}`, type, units: 100, avgCost: 1000, satisfaction: 0 }));
+        playerFund.units = 1000;
+        playerFund.flowStats = null; // nowy kwartał przepływów: start 1000 udziałów
+        playerFund.trust = 50;
+        Object.assign(playerFund.current, { startNav: getFundNav(), startBenchmark: getBenchmarkValue(), maxDrawdown: 0, benchmarkDrawdown: 0 }); // wynik = GIG
+        gateWorld.seeded = Math.random;
+        Math.random = () => 0; // każdy niezadowolony umarza całość
+        return playerFund.clients;
+    }
+    const weekOfClients = () => { for (const c of playerFund.clients) if (c.satisfaction < 0.3) c.satisfaction = 0; processClientsWeekly(); };
+
+    test('C6b: umorzenia w kwartale ≤ 10% udziałów z początku kwartału; nadwyżka w kolejce; bramka raz (zaufanie −2)', () => {
+        gateWorld();
+        for (let w = 0; w < 5; w++) weekOfClients();
+        const q = getFundFlowStats().current;
+        assert(q.outUnits <= 100 + 1e-6, `odpływ ${q.outUnits} ≤ 100`);
+        assertNear(q.gateUnitsRedeemed, 100, 'limit wykorzystany');
+        assert(q.gateTriggered, 'bramka uruchomiona');
+        assertNear(getQueuedRedemptionUnits(), 9 * 50, 'reszta w kolejce (tygodniowy limit 15%: po 50 udziałów)');
+        assertEq(playerFund.trust, 48, 'zaufanie −2 raz na kwartał');
+        assertEq(playerFund.clients.length, 9, 'pierwszy klient wyszedł, reszta czeka');
+        assert(isAcademyUnlocked('bramka_umorzen'), 'hasło Akademii');
+    });
+
+    test('C6b: kolejka idzie pierwsza w następnym kwartale; klient z odzyskanym zadowoleniem rezygnuje', () => {
+        gateWorld();
+        weekOfClients();
+        const happy = playerFund.clients.find(c => c.id === 'g9');
+        macro.quarter++;
+        happy.satisfaction = 0.9;
+        weekOfClients();
+        const q = getFundFlowStats().current;
+        assertEq(q.startUnits, 900, 'nowy kwartał od 900 udziałów');
+        assertNear(q.outUnits, 90, 'z kolejki 10% z 900');
+        assert(q.out.gate > 0, 'przyczyna: kolejka umorzeń');
+        assertNear(playerFund.clients.find(c => c.id === 'g1').units, 50, 'pierwszy w kolejce umorzył całe zlecenie (50)');
+        assertNear(playerFund.clients.find(c => c.id === 'g2').units, 60, 'drugi do limitu (40)');
+        assertEq(happy.queuedRedemption, 0, 'zadowolony zrezygnował z kolejki');
+        assertEq(happy.units, 100, 'i zostaje w funduszu');
+    });
+
+    test('C6b: panika ≤ 5% na kwartał; rynek wtórny poza bramką', () => {
+        gateWorld('fearful');
+        for (let w = 0; w < 5; w++) weekOfClients();
+        const q = getFundFlowStats().current;
+        assert((q.out.panic || 0) > 0 && q.panicUnitsRedeemed <= 50 + 1e-6, `panika ${q.panicUnitsRedeemed} ≤ 5%`);
+        assert(!/passRedemptionGate/.test(runPlayerJuMarket.toString()), 'sprzedaż na rynku wtórnym bez bramki');
+    });
+
+    test('C6b: zapis i wczytanie z kolejką umorzeń, wstrzymaniem i krachem', () => {
+        gateWorld();
+        weekOfClients();
+        Math.random = gateWorld.seeded; // wczytanie zapisu losuje (stała 0 zapętla losowanie)
+        playerFund.clockMs = 60000;
+        triggerMarketHalt(1, 15, -0.08);
+        triggerMarketCrash({ durationWeeks: 3, targetDrop: -0.3 });
+        const queued = getQueuedRedemptionUnits();
+        const report = applySaveSnapshot(JSON.parse(JSON.stringify(buildSaveSnapshot())));
+        assert(report.ok, 'wczytanie bez błędów');
+        assertNear(getQueuedRedemptionUnits(), queued, 'kolejka po wczytaniu');
+        assert(getFundFlowStats().current.gateTriggered, 'stan bramki po wczytaniu');
+        assert(isMarketHalted() && isMarketCrashing(), 'wstrzymanie i krach po wczytaniu');
+    });
+});
+
+group('0.15.1: Sztuka przejęć (arbitraż, oferty, due diligence, pakiety, wezwanie, wartość firmy)', () => {
+    function world() {
+        const a = makeCompany('AAA', { cash: 5_000_000 }), b = makeCompany('BBB'), c = makeCompany('CCC', { sector: ['Żywność'] });
+        marketHalt = createMarketHaltState(); marketCrash = createMarketCrashState();
+        a.name = 'Alfa Testowa'; b.name = 'Beta Testowa'; c.name = 'Gamma Testowa';
+        resetWorld([a, b, c]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        initMarketRegimes();
+        return { a, b, c };
+    }
+
+    test('M1: kurs celu po ogłoszeniu = oferta × (1 − spread); inicjator −1% za 10 pp premii ponad 20%', () => {
+        const { a, b } = world();
+        const initPre = a.price;
+        assert(initiateMergerProcess(a, b, 'przejęcie', 'cash', 0.50, { friendly: true }), 'start');
+        const p = b.mergerProcess;
+        assertNear(p.arb.preDealPrice, 100, 'cena sprzed ogłoszenia');
+        assertNear(b.price, p.offerDetails.buyoutPricePerShare * (1 - p.arb.spread), 'kurs celu = oferta × (1 − spread)', 0.005);
+        assert(p.arb.spread >= 0.03 && p.arb.spread <= 0.15, `spread ${p.arb.spread}`);
+        assertNear(a.price / initPre, 0.97, 'premia 50% → inicjator −3%', 1e-6);
+    });
+
+    test('M1: spread maleje z etapem; cel wraca do kotwicy arbitrażu', () => {
+        const { a, b } = world();
+        initiateMergerProcess(a, b, 'przejęcie', 'cash', 0.25, { friendly: true });
+        const s1 = a.mergerProcess.arb.spread;
+        a.mergerProcess.stage = 5;
+        updateMergerSpread(a, b, a.mergerProcess);
+        syncPartnerProcess(a, b);
+        assert(b.mergerProcess.arb.spread < s1, `spread ${s1} → ${b.mergerProcess.arb.spread}`);
+        const anchor = getMergerArbAnchor(b);
+        b.price = anchor * 0.8;
+        for (let i = 0; i < 2000; i++) updateStockPrices(); // powrót 0,03% różnicy na tik
+        assert(b.price > anchor * 0.8 && Math.abs(b.price / anchor - 1) < 0.15, `kurs wraca do ${anchor}: ${b.price}`);
+    });
+
+    test('M1: zerwanie — kurs celu w ±5% ceny sprzed ogłoszenia; inicjator z premią 120% najwyżej −8%', () => {
+        const { a, b } = world();
+        const initPre = a.price;
+        initiateMergerProcess(a, b, 'przejęcie', 'cash', 1.2, { friendly: true });
+        assertNear(a.price / initPre, 0.92, 'limit −8%', 1e-6);
+        cancelMerger(a, 'test'); cancelMerger(b, 'test');
+        assert(Math.abs(b.price / 100 - 1) <= 0.05 + 1e-9, `po zerwaniu ${b.price}`);
+        assert(!b.mergerProcess && !a.mergerProcess, 'proces wyczyszczony');
+    });
+
+    // Fundusz z pakietem w BBB; AAA (bogata, ten sam sektor) jest oferentem.
+    function offerWorld(fundPct = 0.40) {
+        const w = world();
+        const { b } = w;
+        playerPortfolio.BBB = { shares: Math.floor(b.totalShares * fundPct), avgPrice: 100, assetType: 'stock' };
+        b.sharesHeld = playerPortfolio.BBB.shares;
+        buyoutState = createBuyoutState();
+        playerCash = 1_000_000;
+        return w;
+    }
+    const withFair = (fn) => { const orig = getDisplayedFairValue; getDisplayedFairValue = s => s.price; try { return fn(); } finally { getDisplayedFairValue = orig; } };
+
+    test('M2: szansa oferty wg tabeli (6% + tania 4 pp + Hossa 3 pp − Bessa 3 pp) i częstość w 10 000 kwartałów', () => {
+        const { b } = offerWorld();
+        const regime = getMarketRegime('home');
+        regime.phase = 'accumulation';
+        assertNear(withFair(() => getBuyoutOfferChance(b)), 0.06, 'podstawa', 1e-9);
+        regime.phase = 'bull';
+        assertNear(withFair(() => getBuyoutOfferChance(b)), 0.09, 'Hossa', 1e-9);
+        regime.phase = 'bear';
+        const orig = getDisplayedFairValue; getDisplayedFairValue = s => s.price / 0.8;
+        try { assertNear(getBuyoutOfferChance(b), 0.07, 'tania w Bessie', 1e-9); } finally { getDisplayedFairValue = orig; }
+        regime.phase = 'accumulation';
+        let n = 0;
+        withFair(() => { for (let i = 0; i < 10000; i++) { buyoutState = createBuyoutState(); processBuyoutOffersQuarterly(); if (buyoutState.offers.BBB) n++; } });
+        assert(Math.abs(n / 10000 - 0.06) <= 0.01, `oferty ${n / 10000}`);
+    });
+
+    test('M2: rozmowy — przedział ±10% zawiera cenę maks.; kontroferta ≤ maks. przyjęta; pakiet przechodzi poza rynkiem', () => {
+        const { a, b } = offerWorld();
+        let o;
+        for (let i = 0; i < 50 && !o; i++) o = withFair(() => createBuyoutOffer(b, getBuyoutHolder(b)));
+        assert(o && !o.wholeCompany && o.bidder.symbol === 'AAA', 'oferta za pakiet od AAA');
+        for (let i = 0; i < 200; i++) { const x = { ...o, talked: null, history: [] }; buyoutState.offers.BBB = x; const r = talkBuyoutOffer('BBB'); assert(r.low <= x.maxPrice && x.maxPrice <= r.high, 'przedział zawiera cenę maks.'); }
+        buyoutState.offers.BBB = { ...o, talked: null, history: [] };
+        const cash0 = playerCash, shares0 = playerPortfolio.BBB.shares, aCash0 = a.cash;
+        const price = (o.price + o.maxPrice) / 2;
+        assertEq(counterBuyoutOffer('BBB', price), 'accepted', 'kontroferta ≤ maks.');
+        assert(!playerPortfolio.BBB, 'pakiet funduszu sprzedany');
+        assertNear(playerCash - cash0, shares0 * price, 'zapłata dla funduszu');
+        assertNear(aCash0 - a.cash, shares0 * price, 'kupujący zapłacił');
+        assertEq(a.equityStakes.BBB, shares0, 'pakiet u kupującego');
+        assertEq(b.sharesHeld, getTrackedHeldShares(b), 'akcje = posiadacze');
+    });
+
+    test('M2: żądanie > 115% ceny maks. — urażenie wg nastawienia; 100–115% — „ostatnie słowo”', () => {
+        const { b } = offerWorld();
+        let o; for (let i = 0; i < 50 && !o; i++) o = withFair(() => createBuyoutOffer(b, getBuyoutHolder(b)));
+        for (const [stance, p] of [['flexible', 0.6], ['opportunist', 0.8], ['determined', 0.3]]) {
+            let insulted = 0;
+            for (let i = 0; i < 4000; i++) { buyoutState = createBuyoutState(); buyoutState.offers.BBB = { ...o, stance, history: [], lastWord: false, round: 1 }; if (counterBuyoutOffer('BBB', o.maxPrice * 1.3) === 'insulted') insulted++; }
+            assert(Math.abs(insulted / 4000 - p) < 0.03, `${stance}: ${insulted / 4000}`);
+        }
+        buyoutState.offers.BBB = { ...o, history: [], lastWord: false, round: 1 };
+        assertEq(counterBuyoutOffer('BBB', o.maxPrice * 1.1), 'lastWord', '„ostatnie słowo”');
+        assertNear(buyoutState.offers.BBB.price, o.maxPrice, 'cena = maks.');
+    });
+
+    test('M2: aukcja nie przekracza niższej z cen maks.; cała spółka — mniejszościowi dostają tę samą cenę', () => {
+        const { a, b } = offerWorld(0.60);
+        const bot = aiCompetitors.find(ai => ai.personality !== 'market_maker');
+        bot.portfolio = { BBB: { shares: 1000, avgPrice: 100 } }; b.sharesHeld += 1000;
+        let o; for (let i = 0; i < 50 && !o; i++) o = withFair(() => createBuyoutOffer(b, getBuyoutHolder(b)));
+        assert(o.wholeCompany, 'cała spółka przy > 50%');
+        for (let i = 0; i < 300; i++) {
+            buyoutState = createBuyoutState(); buyoutState.offers.BBB = { ...o, history: [], auction: null };
+            const before = playerCash; withFair(() => inviteSecondBidder('BBB')); playerCash = before;
+            const x = buyoutState.offers.BBB;
+            if (x.auction?.second) assert(x.auction.second.price <= o.maxPrice + 1e-6, 'aukcja ≤ cena maks. pierwszego');
+        }
+        buyoutState = createBuyoutState(); buyoutState.offers.BBB = { ...o, history: [] };
+        const price = o.price, botCash0 = bot.cash, cash0 = playerCash, fundShares = playerPortfolio.BBB.shares;
+        Math.random = () => 0.99; // bez komplikacji w procesie
+        assert(acceptBuyoutOffer('BBB'), 'transakcja uzgodniona');
+        assertEq(a.mergerProcess.kind, 'offer', 'proces oferty');
+        assertNear(b.price, price * (1 - a.mergerProcess.arb.spread), 'kurs celu = cena − spread');
+        for (let q = 0; q < 3 && a.mergerProcess; q++) advanceMergerProcess(a);
+        assert(!a.mergerProcess, 'rozliczone po 3 kw.');
+        assertNear(bot.cash - botCash0, 1000 * price, 'bot (mniejszościowy) po tej samej cenie');
+        assertNear(playerCash - cash0, fundShares * price, 'fundusz po cenie uzgodnionej');
+    });
+
+    test('M10: dziennik rodowy — matka → córka → wnuczka po usamodzielnieniu; zapis i wczytanie', () => {
+        const { a, b, c } = world();
+        genealogyLog = [];
+        makeSubsidiary(a, b);
+        releaseSubsidiary(b, a, 'oferta wtórna');
+        makeSubsidiary(b, c);
+        assertEq(genealogyLog.map(e => e.kind).join(','), 'subsidiary,independent,subsidiary', 'zdarzenia w dzienniku');
+        const lines = buildGenealogyTree().split('\n');
+        const ia = lines.findIndex(l => l.startsWith('Alfa Testowa (AAA)'));
+        const ib = lines.findIndex(l => /^\s+└ Beta Testowa \(BBB\)/.test(l));
+        const ic = lines.findIndex(l => /^\s{8}└ Gamma Testowa \(CCC\)/.test(l));
+        assert(ia >= 0 && ib > ia && ic > ib, `drzewo:\n${lines.join('\n')}`);
+        assert(lines.some(l => /usamodzielnienie/.test(l)), 'historia usamodzielnienia');
+        applySaveSnapshot(JSON.parse(JSON.stringify(buildSaveSnapshot())));
+        assertEq(genealogyLog.length, 3, 'dziennik po wczytaniu');
+    });
+
+    test('M3: ukryte zobowiązania u 12% spółek (×2 przy skorumpowanym prezesie); ujawnienie: dług +, kurs − wartość na akcję', () => {
+        world();
+        let n = 0, nCorrupt = 0;
+        for (let i = 0; i < 5000; i++) {
+            const s = makeCompany('H' + i, { liabilities: 1_000_000 }); s.financialHealth = 1;
+            if (rollHiddenLiabilities(s) > 0) { n++; assert(s.hiddenLiabilities >= 50_000 - 1 && s.hiddenLiabilities <= 200_000 + 1, '5–20% długu'); }
+            const c = makeCompany('K' + i, { liabilities: 1_000_000 }); c.financialHealth = 1; c.ceo = { traits: [{ id: 'skorumpowany' }] };
+            if (rollHiddenLiabilities(c) > 0) nCorrupt++;
+        }
+        assert(Math.abs(n / 5000 - 0.12) <= 0.02, `udział ${n / 5000}`);
+        assert(Math.abs(nCorrupt / 5000 - 0.24) <= 0.025, `skorumpowany ${nCorrupt / 5000}`);
+        const { b } = world();
+        b.balanceSheet.liabilities = 500_000; b.hiddenLiabilities = 100_000;
+        const liab0 = b.balanceSheet.liabilities, eq0 = b.balanceSheet.assets - b.balanceSheet.liabilities, price0 = b.price;
+        revealHiddenLiabilities(b, 'test');
+        assertEq(b.balanceSheet.liabilities, liab0 + 100_000, 'zobowiązania + wartość');
+        assertNear(b.balanceSheet.assets - b.balanceSheet.liabilities, eq0 - 100_000, 'kapitał − wartość');
+        assertNear(price0 - b.price, 100_000 / b.totalShares, 'kurs − wartość na akcję', 0.5);
+        assertEq(b.hiddenLiabilities, 0, 'ujawnione raz');
+    });
+
+    test('M3: badanie kupującego — oszustwo wykryte w 70% (połowa zerwań), audyt przed sprzedażą: obniżka o połowę i bez zerwania', () => {
+        const { a, b } = world();
+        const run = (preSale) => {
+            let found = 0, cancel = 0, cuts = [];
+            for (let i = 0; i < 4000; i++) {
+                b.fraud = { start: 0, correctAt: 99, total: 0 }; b.price = 100; b.hiddenLiabilities = 0; b.ceo = null;
+                b.audit = preSale ? { done: true, doneQuarter: getAccountingQuarter() } : null;
+                const r = runBuyerDueDiligence(a, b, { type: 'przejęcie', offerDetails: { buyoutPricePerShare: 120 } });
+                if (r.found.length) { found++; if (r.cancel) cancel++; else cuts.push(r.cut); }
+            }
+            return { found: found / 4000, cancel: cancel / Math.max(1, found), cut: cuts.reduce((x, y) => x + y, 0) / Math.max(1, cuts.length) };
+        };
+        const plain = run(false);
+        assert(Math.abs(plain.found - 0.70) < 0.03 && Math.abs(plain.cancel - 0.5) < 0.04, `bez audytu: ${JSON.stringify(plain)}`);
+        assert(Math.abs(plain.cut - 0.225) < 0.01, `obniżka 15–30%: ${plain.cut}`);
+        const audited = run(true);
+        assertEq(audited.cancel, 0, 'po audycie bez zerwania');
+        assert(Math.abs(audited.cut - plain.cut / 2) < 0.01, `obniżka o połowę: ${audited.cut}`);
+    });
+
+    test('M3: ukryte zobowiązania wykryte w 60% — obniżka o wartość na akcję; decyzja funduszu: negocjacje raz, przyjęcie, zerwanie', () => {
+        const { a, b } = world();
+        let found = 0;
+        for (let i = 0; i < 4000; i++) {
+            b.fraud = null; b.hiddenLiabilities = 100_000; b.audit = null; b.balanceSheet.liabilities = 0;
+            const r = runBuyerDueDiligence(a, b, { type: 'przejęcie', offerDetails: { buyoutPricePerShare: 120 } });
+            if (r.found.length) { found++; assertNear(r.cut, 100_000 / b.totalShares / 120, 'obniżka = wartość na akcję / cena', 1e-9); assertEq(b.balanceSheet.liabilities, 100_000, 'ujawnione w bilansie'); }
+        }
+        assert(Math.abs(found / 4000 - 0.6) < 0.03, `wykrycie ${found / 4000}`);
+        // pełna ścieżka oferty: fundusz > 50%, ukryte zobowiązania wykryte, negocjacje i przyjęcie
+        playerPortfolio.BBB = { shares: 6000, avgPrice: 100, assetType: 'stock' }; b.sharesHeld = 6000; b.price = 100; b.hiddenLiabilities = 200_000; b.fraud = null;
+        buyoutState = createBuyoutState();
+        let o; for (let i = 0; i < 50 && !o; i++) o = withFair(() => createBuyoutOffer(b, getBuyoutHolder(b)));
+        buyoutState.offers.BBB = o;
+        assert(acceptBuyoutOffer('BBB'), 'transakcja uzgodniona');
+        Math.random = () => 0.01; // badanie wykrywa
+        advanceMergerProcess(a);
+        Math.random = () => 0.99;
+        const pending = a.mergerProcess.ddPending;
+        assert(pending && pending.newPrice < pending.oldPrice, 'obniżka czeka na decyzję funduszu');
+        const r = ddNegotiate('BBB');
+        assert(r === 'raised' || r === 'refused', 'jedna runda negocjacji');
+        assertEq(ddNegotiate('BBB'), false, 'drugiej rundy nie ma');
+        const agreed = a.mergerProcess.ddPending.newPrice;
+        assert(ddAcceptCut('BBB') && a.mergerProcess.offerDetails.buyoutPricePerShare === agreed && !a.mergerProcess.ddPending, 'przyjęta obniżona cena');
+    });
+
+    test('M4: odkup pakietu od bota — zgoda ≥ ceny rezerwowej, kontroferta 85–100%, urażenie < 85%, raz na kwartał', () => {
+        const { b } = world();
+        blockDealState = createBlockDealState();
+        playerCash = 5_000_000;
+        const bot = aiCompetitors.find(ai => ai.personality !== 'market_maker' && !ai.isMafia);
+        const personality0 = bot.personality;
+        bot.personality = 'whale'; // rezerwa +15%: 80% rezerwy mieści się w zakresie formularza (kurs −10%…+50%)
+        bot.portfolio = { BBB: { shares: 2000, avgPrice: 100 } }; b.sharesHeld = 2000;
+        botRelations.values = {};
+        const holder = () => getBlockHolder(b, bot.id);
+        const reserve = withFair(() => getBlockReservePrice(b, holder()));
+        const price0 = b.price;
+        assertEq(withFair(() => proposeBlockBuy('BBB', bot.id, 500, reserve * 0.9)), 'counter', '85–100% → kontroferta');
+        assertEq(withFair(() => proposeBlockBuy('BBB', bot.id, 500, reserve * 1.01)), null, 'druga propozycja w kwartale zablokowana');
+        macro.quarter++;
+        const cash0 = playerCash;
+        assertEq(withFair(() => proposeBlockBuy('BBB', bot.id, 500, reserve * 1.01)), 'accepted', '≥ rezerwowej → zgoda');
+        assertEq(playerPortfolio.BBB.shares, 500, 'akcje u funduszu');
+        assertEq(bot.portfolio.BBB.shares, 1500, 'bot oddał pakiet');
+        assertNear(cash0 - playerCash, 500 * reserve * 1.01, 'gotówka funduszu − zapłata');
+        assertEq(b.price, price0, 'bez wpływu na kurs');
+        assertEq(b.sharesHeld, getTrackedHeldShares(b), 'akcje = posiadacze');
+        macro.quarter++;
+        const rel0 = getRelation(bot.id);
+        assertEq(withFair(() => proposeBlockBuy('BBB', bot.id, 500, reserve * 0.8)), 'insulted', '< 85% → urażenie');
+        assertEq(getRelation(bot.id) - rel0, -10, 'relacja −10');
+        macro.quarter++;
+        assertEq(withFair(() => proposeBlockBuy('BBB', bot.id, 500, reserve * 2)), null, 'blokada rozmów na 2 kw.');
+        bot.personality = personality0;
+    });
+
+    test('M4: odkup od zarządu — cena rezerwowa +20%, akcje wchodzą do obrotu; rozmowa daje przedział ±10%', () => {
+        const { b } = world();
+        blockDealState = createBlockDealState();
+        playerCash = 5_000_000;
+        b.insiderShares = 3000;
+        const holder = getBlockHolder(b, 'insiders');
+        const reserve = withFair(() => getBlockReservePrice(b, holder));
+        assertNear(reserve, b.price * (1.20 - (b.reputation.player || 0) / 1000), 'prezes: max(kurs, wartość) × 1,20 − reputacja/1000', 1e-6);
+        const talk = withFair(() => talkBlockHolder('BBB', 'insiders'));
+        assert(talk.range.low <= reserve && reserve <= talk.range.high, 'przedział zawiera cenę rezerwową');
+        Math.random = () => 0.99; // prezes zostaje
+        assertEq(withFair(() => proposeBlockBuy('BBB', 'insiders', 1000, reserve)), 'accepted', 'zgoda zarządu');
+        assertEq(b.insiderShares, 2000, 'pakiet zarządu −1000');
+        assertEq(b.sharesHeld, getTrackedHeldShares(b), 'akcje = posiadacze (sharesHeld += n)');
+        assertEq(blockDealState.log.length, 1, 'transakcja w dzienniku pakietów (dla KNF)');
+    });
+
+    test('M5: ustawa „Próg wezwania” — start 66%, partie nie przeforsują progu ponad limit KNF; zapis i stary zapis', () => {
+        world();
+        ensureSocietyState();
+        society.laws.tenderThreshold = 0;
+        assertEq(getTenderThreshold(), 0.66, 'start 66%');
+        oversight.knf.level = 1;
+        for (let i = 0; i < 300; i++) { const c = pickLawChange('people'); assert(!(c && c[0] === 'tenderThreshold'), 'KNF 0–1: bez podniesienia progu'); }
+        oversight.knf.level = 4;
+        let up = 0; for (let i = 0; i < 300; i++) { const c = pickLawChange('people'); if (c && c[0] === 'tenderThreshold') up++; }
+        assert(up > 0, 'KNF 4: Ludowcy mogą podnieść próg');
+        society.laws.tenderThreshold = 3;
+        assertEq(getTenderThreshold(), 0.99, '99%');
+        const snap = JSON.parse(JSON.stringify(buildSaveSnapshot()));
+        applySaveSnapshot(snap);
+        assertEq(society.laws.tenderThreshold, 3, 'po wczytaniu');
+        delete snap.society.laws.tenderThreshold;
+        applySaveSnapshot(snap);
+        assertEq(society.laws.tenderThreshold, 0, 'stary zapis: 66%');
+        oversight.knf.level = 0;
+    });
+
+    // Fundusz kupuje pakiet od zarządu i przekracza 50%; KNF ze skutecznością `eff`.
+    function knfWorld(eff = 1) {
+        const w = world();
+        const { b } = w;
+        blockDealState = createBlockDealState();
+        const rec = getRecord('player'); rec.tenderCases = []; rec.tenderStrikes = 0;
+        playerCash = 5_000_000;
+        playerPortfolio.BBB = { shares: 4500, avgPrice: 100, assetType: 'stock' }; b.sharesHeld = 4500; b.insiderShares = 1000;
+        const origEff = getInstitutionEffectiveness;
+        getInstitutionEffectiveness = () => eff;
+        knfWorld.restore = () => { getInstitutionEffectiveness = origEff; };
+        return w;
+    }
+    const crossByBlock = (b) => { b.knfTenderCase = false; if ((playerPortfolio.BBB?.shares || 0) > 5000) { playerPortfolio.BBB.shares = 4500; b.sharesHeld = getTrackedHeldShares(b); } b.insiderShares = Math.max(b.insiderShares, 1000); Math.random = () => 0.99; executeBlockBuy(b, getBlockHolder(b, 'insiders'), 1000, 110); };
+
+    test('M5: drabina KNF 1 → 2 → 3 (ostrzeżenie, kara 2%, nakaz wezwania do progu po najwyższej cenie); zakupy sesyjne poza drabiną', () => {
+        const { b } = knfWorld(1);
+        try {
+            playerPortfolio.BBB.shares = 6000; b.sharesHeld = 6000; // przekroczenie zakupami sesyjnymi — bez sprawy
+            processTenderOversightQuarterly();
+            assertEq(getRecord('player').tenderStrikes, 0, 'zakupy sesyjne poza drabiną');
+            playerPortfolio.BBB.shares = 4500; b.sharesHeld = 4500;
+            crossByBlock(b); processTenderOversightQuarterly();
+            assertEq(getRecord('player').tenderStrikes, 1, '1. przypadek: ostrzeżenie');
+            crossByBlock(b);
+            const cash0 = playerCash, trust0 = playerFund.trust;
+            processTenderOversightQuarterly();
+            assertEq(getRecord('player').tenderStrikes, 2, '2. przypadek');
+            const value = getRecentBlockBuys('BBB').reduce((s, e) => s + e.shares * e.price, 0);
+            assertNear(cash0 - playerCash, Math.round(value * 0.02), 'kara 2% wartości pakietów z 2 kw.');
+            assertEq(trust0 - playerFund.trust, 3, 'zaufanie −3');
+            society.laws.tenderThreshold = 0; // 66%
+            crossByBlock(b);
+            const bot = aiCompetitors.find(ai => ai.personality === 'calm') || aiCompetitors.find(ai => ai.personality !== 'market_maker' && !ai.isMafia);
+            bot.portfolio = { BBB: { shares: 500, avgPrice: 90 } }; b.sharesHeld = getTrackedHeldShares(b);
+            processTenderOversightQuarterly();
+            assertEq(getRecord('player').tenderStrikes, 3, '3. przypadek: nakaz wezwania');
+            assert(getFundStakePct(b) > 0.55 && getFundStakePct(b) <= 0.66 + 1e-9, `wezwanie do progu: ${getFundStakePct(b)}`);
+            assertEq(b.sharesHeld, getTrackedHeldShares(b), 'akcje = posiadacze po wezwaniu');
+        } finally { knfWorld.restore(); }
+    });
+
+    test('M5: KNF wykrywa z szansą = skuteczność; brak gotówki przy KNF ≥ 3 → nakaz odsprzedaży do 50% w 2 kw.', () => {
+        const { b } = knfWorld(0.4);
+        try {
+            let detected = 0;
+            for (let i = 0; i < 2000; i++) {
+                const rec = getRecord('player'); rec.tenderCases = [{ symbol: 'BBB', quarter: 0 }]; rec.tenderStrikes = 5; // dalekie przypadki: wezwanie
+                const orig = applyKnfTenderStep; applyKnfTenderStep = () => 'x';
+                processTenderOversightQuarterly();
+                applyKnfTenderStep = orig;
+                if (!getRecord('player').tenderCases.length) detected++;
+            }
+            assert(Math.abs(detected / 2000 - 0.4) < 0.03, `wykrycia ${detected / 2000}`);
+            getInstitutionEffectiveness = () => 1;
+            oversight.knf.level = 3;
+            playerCash = 10;
+            const rec = getRecord('player'); rec.tenderCases = []; rec.tenderStrikes = 2;
+            crossByBlock(b); playerCash = 10;
+            processTenderOversightQuarterly();
+            assert(b.knfResaleOrder, 'nakaz odsprzedaży');
+            macro.quarter += 2;
+            processTenderOversightQuarterly();
+            assert(getFundStakePct(b) <= 0.5 + 1e-9 && !b.knfResaleOrder, `zejście do 50%: ${getFundStakePct(b)}`);
+            assertEq(b.sharesHeld, getTrackedHeldShares(b), 'akcje = posiadacze');
+            oversight.knf.level = 0;
+        } finally { knfWorld.restore(); }
+    });
+
+    const bsGap = s => s.balanceSheet.assets - s.balanceSheet.liabilities - s.balanceSheet.shareCapital - s.balanceSheet.retainedEarnings;
+
+    test('M6: przejęcie — wartość firmy = cena − aktywa netto, bilans spójny, kapitał − koszty procesu, przychody celu u kupującego', () => {
+        const { a, b } = world();
+        b.balanceSheet = { assets: 600_000, liabilities: 200_000, shareCapital: 100_000, retainedEarnings: 300_000 };
+        const gapA = bsGap(a), equityA = a.balanceSheet.assets - a.balanceSheet.liabilities;
+        initiateMergerProcess(a, b, 'przejęcie', 'cash', 0.25, { friendly: true });
+        const process = a.mergerProcess;
+        process.costs = 10_000;
+        const price = process.offerDetails.totalCost;
+        const revA = Number(a.fundamentals?.revenue) || 0, revB = Number(b.fundamentals?.revenue) || 0;
+        resolveMerger(a, b, process);
+        assertNear(a.balanceSheet.goodwill, price - 400_000, 'wartość firmy = P − AN');
+        assertNear(bsGap(a), gapA, 'bilans spójny (aktywa − zobowiązania − kapitał)', 1e-6);
+        assertNear(a.balanceSheet.assets - a.balanceSheet.liabilities, equityA - 10_000, 'kapitał własny − koszty procesu');
+        assert(a.acquisitions?.length === 1 && a.acquisitions[0].goodwill === a.balanceSheet.goodwill, 'plan przejęcia zapisany');
+        if (revB > 0) assertNear(a.fundamentals.revenue, revA + revB, 'przychody celu u kupującego');
+    });
+
+    test('M6: test co 4 kw. — < 70% planu odpis 25%, < 40% odpis 50%; bez ruchu gotówki; zapis i wczytanie', () => {
+        const { a } = world();
+        const setEbit = v => { a.fundamentals = a.fundamentals || initializeFundamentals(a); a.fundamentals.history = [1, 2, 3, 4].map(() => ({ ebitda: v / 4, depreciation: 0, revenue: 1000, netIncome: 0 })); };
+        a.balanceSheet.goodwill = 100_000; a.balanceSheet.assets += 100_000; a.balanceSheet.retainedEarnings += 100_000;
+        a.acquisitions = [{ symbol: 'XX', name: 'Iks', quarter: macro.quarter - 4, goodwill: 100_000, left: 100_000, planEbit: 1000, revenueShare: 1 }];
+        const cash0 = a.cash, gap0 = bsGap(a);
+        setEbit(600); processGoodwillImpairmentQuarterly();
+        assertNear(a.balanceSheet.goodwill, 75_000, 'odpis 25%');
+        assertEq(a.cash, cash0, 'bez ruchu gotówki');
+        assertNear(bsGap(a), gap0, 'bilans spójny po odpisie', 1e-6);
+        assertNear(a.periodLedger.pending.otherIncome, -25_000, 'odpis w wyniku kwartału');
+        macro.quarter += 4; setEbit(300); processGoodwillImpairmentQuarterly();
+        assertNear(a.balanceSheet.goodwill, 37_500, 'odpis 50% pozostałej');
+        macro.quarter += 4; setEbit(900); processGoodwillImpairmentQuarterly();
+        assertNear(a.balanceSheet.goodwill, 37_500, '≥ 70% planu: bez odpisu');
+        applySaveSnapshot(JSON.parse(JSON.stringify(buildSaveSnapshot())));
+        const a2 = stocks.find(s => s.symbol === 'AAA');
+        assert(a2.acquisitions?.[0]?.left === 37_500 && a2.balanceSheet.goodwill === 37_500, 'zapis i wczytanie wartości firmy');
+    });
+
+    function stakeWorld() {
+        const w = world();
+        const { a, b, c } = w;
+        a.exchange = 'PLATINUM'; a.cash = 50_000_000; a.name = 'Cortex Group';
+        for (const s of [b, c]) { s.exchange = 'BRONZE'; s.insiderShares = 0; s.sharesHeld = 0; }
+        aiCompetitors.forEach(ai => { ai.portfolio = {}; });
+        genealogyLog = [];
+        return w;
+    }
+
+    test('M9: rangi — Platynowa kupuje niższe; Złota tylko przy kondycji ≥ 3 albo gotówce ≥ 25% kap.; ta sama ranga tylko kooperacja', () => {
+        const { a, b, c } = stakeWorld();
+        assert(canRunStakeCampaign(a), 'Platynowa');
+        b.exchange = 'GOLD'; b.financialHealth = 1; b.cash = getMarketCapValue(b) * 0.1;
+        assert(!canRunStakeCampaign(b), 'Złota przeciętna — nie');
+        b.financialHealth = 3; assert(canRunStakeCampaign(b), 'Złota w świetnej kondycji');
+        b.financialHealth = 1; b.cash = getMarketCapValue(b) * 0.3; assert(canRunStakeCampaign(b), 'Złota bogata');
+        c.exchange = 'PLATINUM'; assert(!canBeStakeTarget(b, c), 'Złota nie kupuje wyższej rangi');
+        assert(canBeStakeTarget(c, b), 'Złotą może kupić silniejsza');
+        b.exchange = 'PLATINUM'; c.exchange = 'PLATINUM';
+        let goals = new Set();
+        for (let i = 0; i < 200; i++) { b.stakeCampaign = null; c.stakeCampaign = null; const orig = STAKE_CAMPAIGN_CHANCE; processStakeCampaignsQuarterly(); for (const s of [b, c]) if (s.stakeCampaign) goals.add(s.stakeCampaign.goal); }
+        for (const g of goals) assertEq(g, 0.25, 'ta sama ranga: tylko 25%');
+    });
+
+    test('M9: drabina 25 / 50 / próg ustawy / 99% — kooperacja, córka z prezesem „Marionetka <matka>”, nakaz wezwania, zmiana nazwy, wchłonięcie; akcje = posiadacze', () => {
+        const { a, b } = stakeWorld();
+        society.laws.tenderThreshold = 0; // kontrola od 66%
+        b.stakeCampaign = { buyer: 'AAA', goal: 0.99, pace: 0.2, start: getSubQuarter(), reached: [], tender: false, maxPrice: b.price };
+        advanceStakeCampaign(b);
+        assert(getStakePct(a, b) <= 0.2 + 1e-9, `tempo ≤ 20 pp: ${getStakePct(a, b)}`);
+        assertEq(b.sharesHeld, getTrackedHeldShares(b), 'akcje = posiadacze');
+        advanceStakeCampaign(b);
+        assert(b.stakeCampaign.reached.includes('coop') && genealogyLog.some(e => /powiązanie/.test(e.note || '')), 'próg 25%: powiązanie');
+        advanceStakeCampaign(b); // > 50%
+        assertEq(b.isSubsidiaryOf, 'AAA', 'próg 50%: córka');
+        assert(b.ceo.traits.some(t => t.id === 'marionetka' && t.name === 'Marionetka Cortex Group'), 'prezes „Marionetka Cortex Group”');
+        assert(b.stakeCampaign.tender, 'ustawa: nakaz wezwania do progu');
+        assertEq(getVoteForProbability({ kind: 'company', entity: a }, { kind: 'board' }, b), 1, 'matka głosuje za zarządem-marionetką');
+        assertEq(getVoteForProbability({ kind: 'company', entity: a }, { kind: 'activist', by: 'player' }, b), 0, 'matka przeciw wnioskom innych');
+        advanceStakeCampaign(b); // wezwanie do 66%
+        assert(getStakePct(a, b) >= 0.66 - 1e-6, `po wezwaniu ${getStakePct(a, b)}`);
+        assert(b.name.startsWith('Cortex '), `zmiana nazwy: ${b.name}`);
+        for (let i = 0; i < 6 && !b.isBankrupt; i++) advanceStakeCampaign(b);
+        assert(b.delisted === 'absorbed', 'próg 99%: wchłonięcie i zdjęcie z giełdy');
+    });
+
+    test('M9: „Mistrz marionetek” zaczyna podkupowanie ×2 częściej', () => {
+        const { a } = stakeWorld();
+        a.ceo = { name: 'X', traits: [] };
+        assertNear(getStakeCampaignChance(a), 0.035, 'podstawa 3,5%/kw.', 1e-9);
+        a.ceo.traits = [{ id: 'mistrz_marionetek', name: 'Mistrz marionetek' }];
+        assertNear(getStakeCampaignChance(a), 0.07, 'Mistrz marionetek ×2', 1e-9);
+    });
+
+    test('M7: osiągnięcia — sprzedane z premią, aukcjoner, czyste księgi, arbitrażysta, pakiet po pakiecie', () => {
+        const { b } = world();
+        playerProfile._soldWithPremium = playerProfile._auctioneer = playerProfile._cleanBooks = false; playerProfile._arbWins = 0;
+        playerPortfolio.BBB = { shares: 6000, avgPrice: 100, assetType: 'stock' };
+        noteTakeoverAchievements({ arb: { preDealPrice: 100 }, offerMeta: { fundSeller: true, auction: true, initialPrice: 120, preSaleAudit: true } }, b, 145);
+        assert(playerProfile._soldWithPremium && playerProfile._auctioneer && playerProfile._cleanBooks, 'premia ≥ 40%, aukcja +10%, audyt');
+        assert(ACHIEVEMENTS.sold_with_premium.check() && ACHIEVEMENTS.auctioneer.check() && ACHIEVEMENTS.clean_books.check(), 'warunki osiągnięć');
+        playerPortfolio.BBB = { shares: 100, avgPrice: 112 };
+        for (let i = 0; i < 3; i++) noteTakeoverAchievements({ arb: { preDealPrice: 100 } }, b, 118);
+        assert(ACHIEVEMENTS.arbitrageur.check(), 'arbitrażysta: 3 zyskowne pozycje kupione po ogłoszeniu');
+        blockDealState = createBlockDealState();
+        blockDealState.log.push({ q: 0, symbol: 'BBB', shares: 2500, price: 100 });
+        playerPortfolio.BBB = { shares: 5200, avgPrice: 100 };
+        assert(ACHIEVEMENTS.block_by_block.check(), 'pakiet po pakiecie: > 50%, w tym ≥ 20 pp z pakietów');
+        assert(ACHIEVEMENTS.winners_curse.hidden, 'klątwa zwycięzcy ukryta');
+    });
+
+    test('Nacjonalizacja: przejęcie długu przez państwo nie rozjeżdża bilansu', () => {
+        const { b } = world();
+        b.balanceSheet = { assets: 1_000_000, liabilities: 900_000, shareCapital: 50_000, retainedEarnings: 50_000 };
+        b.financialHealth = -4; b.price = 10;
+        centralBank.funds = 1e9; governmentTreasury = 1e7;
+        const gap = s => s.balanceSheet.assets - s.balanceSheet.liabilities - s.balanceSheet.shareCapital - s.balanceSheet.retainedEarnings;
+        Math.random = () => 0.01;
+        triggerNationalizationEvent();
+        assert(b.isStateOwned, 'znacjonalizowana');
+        assertEq(b.balanceSheet.liabilities, 0, 'dług przejęty');
+        assertNear(gap(b), 0, 'bilans spójny', 1e-6);
+    });
+
+    test('Socjaldemokraci: 4. partia, głosy biednych, program — progi CIT i ustawa antymonopolowa', () => {
+        world();
+        assert(RULING_PARTIES.social && PARTY_IDS.includes('social') && PARTY_COLORS.social, 'partia, lista, kolor');
+        for (const [cls, row] of Object.entries(CLASS_VOTE)) assert(row.length === 4 && row.reduce((s, v) => s + v, 0) === 100, `${cls}: 4 partie, suma 100`);
+        assert(CLASS_VOTE.poor[3] > CLASS_VOTE.rich[3] && CLASS_VOTE.poor[3] > CLASS_VOTE.poor[2], 'biedni głosują na Socjaldemokratów');
+        const support = computePartySupport(false);
+        assertNear(PARTY_IDS.reduce((s, id) => s + support[id], 0), 100, 'poparcie sumuje się do 100', 1e-6);
+        for (let i = 0; i < 100; i++) { const c = pickLawChange('social'); assert(!c || ['corpTaxBrackets', 'antitrust', 'benefits', 'tenderThreshold'].includes(c[0]), `program: ${c && c[0]}`); }
+        assert(PARTY_PROGRAMS.market.moves.some(([law, d]) => law === 'antitrust' && d < 0), 'Koalicja Rynkowa łagodzi ustawę antymonopolową');
+    });
+
+    test('Socjaldemokraci: koalicjant Ludowców / Bloku Państwowego, rosną w kryzysie, jako koalicjant zmieniają ustawy', () => {
+        world();
+        const r = resolveElection({ state: 35, market: 30, people: 23, social: 12 });
+        assertEq(r.coalition?.partner, 'social', 'Blok Państwowy bierze Socjaldemokratów');
+        assertEq(resolveElection({ market: 35, state: 30, people: 23, social: 12 }).coalition?.partner, 'state', 'Koalicja Rynkowa — nie');
+        assertEq(resolveElection({ state: 35, market: 30, people: 27, social: 8 }).coalition?.partner, 'market', 'poniżej 10% — druga partia');
+        macro.election.ruling = 'market'; macro.election.terms = 1;
+        economyCycle.phase = 'expansion'; macro.inflation = 0.02; macro.unemployment = 0.05;
+        const calm = computePartySupport(false).social;
+        economyCycle.phase = 'recession';
+        const crisis = computePartySupport(false).social;
+        assert(crisis > calm + 3, `kryzys: ${calm.toFixed(1)}% → ${crisis.toFixed(1)}%`);
+        macro.election.ruling = 'state'; macro.election.coalition = { partner: 'social', weights: { state: 30, social: 20 } };
+        withSeededRandom(7, () => { let n = 0; for (let i = 0; i < 1000; i++) if (getLawMakingParty(true) === 'social') n++; assert(n > 320 && n < 480, `koalicjant ~40%: ${n}`); });
+        assertEq(getLawMakingParty(), 'state', 'bez flagi — rządzący');
+        macro.election.coalition = null; economyCycle.phase = 'expansion';
+    });
+
+    test('Progi CIT: małe spółki płacą mniej, duże więcej; ustawa antymonopolowa zmienia progi KNF i blokady', () => {
+        const { a, b, c } = world();
+        a.price = 1000; b.price = 100; c.price = 10;
+        const base = getCompanyIncomeTaxRate();
+        society.laws.corpTaxBrackets = 0; corpTaxSizeCache.quarter = null;
+        assertNear(getCompanyIncomeTaxRate(c), base, 'liniowy: bez zmian', 1e-9);
+        society.laws.corpTaxBrackets = 2; corpTaxSizeCache.quarter = null;
+        assertNear(getCompanyIncomeTaxRate(c), base - 0.06, 'progresywny: mała −6 pp', 1e-9);
+        assertNear(getCompanyIncomeTaxRate(a), base + 0.05, 'progresywny: duża +5 pp', 1e-9);
+        assertNear(getCompanyIncomeTaxRate(b), base, 'średnia bez zmian', 1e-9);
+        society.laws.corpTaxBrackets = 0;
+        society.laws.antitrust = 1; assertEq(getAntitrustLevel().concern, 0.25, 'standardowa: 25%');
+        society.laws.antitrust = 2; assertEq(getAntitrustLevel().concern, 0.20, 'surowa: 20%'); assertEq(getAntitrustLevel().block, 0.30, 'surowa: blokada 30%');
+        society.laws.antitrust = 0; assertEq(getAntitrustLevel().block, 0.50, 'łagodna: blokada 50%');
+        society.laws.antitrust = 1;
+    });
+
+    test('Decyzje 2026-10-23: długość przejęcia 3–7 kw. wg wielkości celu; nacjonalizacja — skarb spłaca bank', () => {
+        const { a, b, c } = world();
+        a.price = 1000; b.price = 100; c.price = 10;
+        assertEq(getTakeoverQuarters(c), 3, 'najmniejsza: 3 kw.');
+        assertEq(getTakeoverQuarters(a), 7, 'największa: 7 kw.');
+        assert(getTakeoverQuarters(b) >= 3 && getTakeoverQuarters(b) <= 5, 'środkowa');
+        b.balanceSheet = { assets: 1_000_000, liabilities: 900_000, shareCapital: 50_000, retainedEarnings: 50_000 };
+        b.financialHealth = -4;
+        const bank = { id: 'bankN', name: 'Bank N', isActive: true, cash: 0, loanPortfolio: {}, type: BANK_TYPES.UNIVERSAL };
+        commercialBanks.length = 0; commercialBanks.push(bank); b.bankAccountId = 'bankN';
+        for (const s of [a, c]) s.balanceSheet.liabilities = 0;
+        governmentTreasury = 10_000_000; centralBank.funds = 1e9;
+        Math.random = () => 0.01;
+        triggerNationalizationEvent();
+        assert(b.isStateOwned, 'znacjonalizowana');
+        assertEq(bank.cash, 900_000, 'bank dostał spłatę długu');
+        assertEq(governmentTreasury, 9_100_000, 'ze skarbu państwa');
+        assertEq(b.balanceSheet.liabilities, 0, 'dług spłacony');
+    });
+
+    test('M8: córka z pustą kopią działów matki nie przerywa logiki spółek (naprawa działów)', () => {
+        const { a, b } = world();
+        a.departments = {}; // kopia działów matki, która ich jeszcze nie miała
+        runCorporateLogic();
+        assert(a.departments.economy && a.departments.research && a.departments.development, 'działy odtworzone');
+    });
+
+    test('M1: fuzja (wymiana akcji) bez skoku do ceny gotówkowej; etap 5 bez ×1,1', () => {
+        const { a, b } = world();
+        const pre = b.price;
+        initiateMergerProcess(a, b, 'fuzja', 'stockSwap');
+        assertEq(b.price, pre, 'bez skoku kursu celu');
+        assert(b.mergerProcess.arb.spread >= 0.03 && b.mergerProcess.arb.spread <= 0.08, 'spread fuzji 3–8%');
+        a.mergerProcess.stage = 5; const before = b.price;
+        runMergerStage(a, b, a.mergerProcess);
+        assertEq(b.price, before, 'etap 5 nie podnosi kursu');
+    });
+});
+
+group('0.15.2: Kochaj i zarabiaj (kalendarz, kampanie, lock-up, gwarancja, mandat, IR, VIP)', () => {
+    function world(clients = 10) {
+        const a = makeCompany('AAA'), b = makeCompany('BBB');
+        resetWorld([a, b]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        initMarketRegimes();
+        playerPortfolio = {};
+        playerCash = 10000;
+        playerFund.clients = Array.from({ length: clients }, (_, i) => ensureClientProfile({ id: `k${i}`, name: `Klient ${i}`, type: 'careful', units: 100, avgCost: 10, satisfaction: 0.7 }));
+        playerFund.units = clients * 100;
+        playerFund.trust = 60;
+        delete playerFund.subscription;
+        Object.assign(playerFund.current, { emissions: 0, startNav: getFundNav(), startBenchmark: getBenchmarkValue(), maxDrawdown: 0, benchmarkDrawdown: 0 });
+        return { a, b };
+    }
+    const fundCash = nav => { playerCash = nav * playerFund.units; return nav; }; // gotówka = NAV × udziały
+
+    test('K1: kalendarz „Rok · kw. · tydz.”, skrót mobilny, tydzień zeruje się z kwartałem', () => {
+        world();
+        macro.quarter = 9;
+        playerFund.calQuarter = 9; playerFund.calWeek = 1;
+        assertEq(formatGameDate(), 'Rok 3 · kw. 2 · tydz. 1', 'pełny format');
+        assertEq(formatGameDate(getGameCalendar(), true), 'R3 · K2 · T1', 'skrót');
+        for (let i = 0; i < 6; i++) advanceFundCalendar();
+        assertEq(getGameCalendar().week, WEEKS_PER_QUARTER, 'tydzień ≤ 5');
+        macro.quarter = 10; advanceFundCalendar();
+        assertEq(formatGameDate(), 'Rok 3 · kw. 3 · tydz. 1', 'nowy kwartał od tygodnia 1');
+        assertEq(formatQuarterDate(0), 'Rok 1 · kw. 1', 'termin kwartalny');
+    });
+
+    test('K2: koszt kampanii = 0,2% celu na start + 0,5% zebranej kwoty', () => {
+        world();
+        const cash0 = playerCash;
+        const result = startSubscriptionCampaign({ duration: 'quarter', targetPct: 0.1 });
+        assert(result.ok, result.reason);
+        const sub = playerFund.subscription;
+        const startCost = sub.startNav * sub.targetUnits * CAMPAIGN_COST_TARGET;
+        assertNear(cash0 - playerCash, startCost, 'koszt na start', 1e-6);
+        for (let w = 0; w < 5 && playerFund.subscription; w++) processSubscriptionWeekly();
+        const entry = playerFund.campaignHistory[0];
+        assert(entry.raisedValue > 0, 'kampania zebrała kapitał');
+        assertNear(entry.cost, startCost + entry.raisedValue * CAMPAIGN_COST_RAISED, 'koszt łączny', 1e-6);
+    });
+
+    test('K2: zasięg wg czasu — 1 tydzień < 2 tygodnie < 1 kwartał (średnio)', () => {
+        const mean = {};
+        for (const duration of ['week', 'twoWeeks', 'quarter']) {
+            let sum = 0;
+            for (let seed = 1; seed <= 25; seed++) {
+                world(30); playerFund.trust = 100;
+                playerFund.units *= 20; playerCash *= 20; // fundusz 20× większy od popytu klientów — kampania ograniczona zasięgiem, nie celem
+                withSeededRandom(seed, () => {
+                    startSubscriptionCampaign({ duration, targetPct: 0.25 });
+                    for (let w = 0; w < 5 && playerFund.subscription; w++) processSubscriptionWeekly();
+                });
+                sum += playerFund.campaignHistory[0].raisedValue;
+            }
+            mean[duration] = sum / 25;
+        }
+        assert(mean.week < mean.twoWeeks && mean.twoWeeks < mean.quarter, `zasięg ${JSON.stringify(mean)}`);
+    });
+
+    test('K2: najwyżej 2 kampanie na okres oceny; kampania blokuje drugą; cel ≤ 5% + 20% × zaufanie', () => {
+        world();
+        assert(startSubscriptionCampaign({ duration: 'week', targetPct: 0.05 }).ok, 'pierwsza');
+        assert(!startSubscriptionCampaign({ duration: 'week', targetPct: 0.05 }).ok, 'druga naraz');
+        finishSubscription();
+        assert(startSubscriptionCampaign({ duration: 'week', targetPct: 0.05 }).ok, 'druga po zakończeniu pierwszej');
+        finishSubscription();
+        const third = startSubscriptionCampaign({ duration: 'week', targetPct: 0.05 });
+        assert(!third.ok && /Limit/.test(third.reason), 'trzecia w okresie zablokowana');
+        world(); playerFund.trust = 50;
+        assertNear(getCampaignMaxTargetPct(), 0.15, 'górna granica celu przy zaufaniu 50');
+    });
+
+    test('K2: bez kampanii tydzień funduszu nie rusza udziałów ani gotówki', () => {
+        world();
+        const units = playerFund.units, cash = playerCash;
+        processCampaignsWeekly();
+        assertEq(playerFund.units, units, 'udziały'); assertEq(playerCash, cash, 'gotówka');
+        assert(!playerFund.subscription, 'brak kampanii');
+    });
+
+    test('K3: mnożniki lock-upu wg typu klienta', () => {
+        assertNear(getLockDemandMultiplier('institution', 2), 1.3, 'cierpliwy ×(1+0,15L)');
+        assertNear(getLockDemandMultiplier('sly', 2), 0.4, 'niecierpliwy ×(1−0,3L)');
+        assertNear(getLockDemandMultiplier('sly', 4), 0, 'niecierpliwy nie spada poniżej 0');
+        assertNear(getLockDemandMultiplier('brave', 2), 0.8, 'pozostali ×(1−0,1L)');
+    });
+
+    test('K3: umorzenie omija udziały w lock-upie; po lock-upie transza znika', () => {
+        world(); fundCash(10);
+        const client = playerFund.clients[0];
+        addTranche(client, 60, 10, { lockYears: 2 });
+        assertEq(getRedeemableUnits(client), 40, 'do umorzenia 40 z 100');
+        redeemClientUnits(client, 100);
+        assertNear(client.units, 60, 'zostało zablokowane 60');
+        assertEq(getRedeemableUnits(client), 0, 'nic więcej do umorzenia');
+        assertEq(redeemClientUnits(client, 50), 0, 'kolejne umorzenie = 0');
+        macro.quarter += 8; normalizeClientTranches(client);
+        assertEq(client.tranches.length, 0, 'po lock-upie zwykła transza znika');
+        assertEq(getRedeemableUnits(client), client.units, 'wszystko do umorzenia');
+    });
+
+    test('K3: sprzedaż zablokowanych udziałów zmniejsza transzę; stary klient = wszystko wolne (migracja)', () => {
+        world();
+        const old = playerFund.clients[1];
+        assertEq(getRedeemableUnits(old), 100, 'stary klient bez transz = wszystko wolne');
+        const client = playerFund.clients[0];
+        addTranche(client, 80, 10, { lockYears: 1 });
+        client.units -= 50; normalizeClientTranches(client);
+        assertEq(client.tranches[0].units, 50, 'transza przycięta do udziałów klienta');
+    });
+
+    test('K3: niezadowolony klient w lock-upie wystawia udziały na rynku wtórnym i obniża zaufanie (≤ −2 na tydzień)', () => {
+        world();
+        for (const c of playerFund.clients) { c.satisfaction = 0.05; addTranche(c, 100, 10, { lockYears: 2 }); }
+        const trust = playerFund.trust, seeded = Math.random;
+        Math.random = () => 0;
+        try { for (const c of playerFund.clients) handleLockedUnhappyClient(c, CLIENT_TYPES.careful); } finally { Math.random = seeded; }
+        assert(playerFund.clients.every(c => c.pendingSellUnits === 100), 'oferta całości na rynku wtórnym');
+        assertNear(trust - playerFund.trust, 2, 'zaufanie −2 (limit na tydzień)');
+    });
+
+    test('K4: gwarancja — dopłata dokładnie do ceny wejścia, gdy NAV < cena wejścia', () => {
+        world();
+        const client = playerFund.clients[0];
+        addTranche(client, 100, 12, { lockYears: 1, guarantee: true });
+        fundCash(9); // NAV = 9, cena wejścia 12 → dopłata 3 × 100
+        const cash0 = playerCash, units0 = playerFund.units;
+        macro.quarter += 4;
+        settleGuaranteedTranche(client, client.tranches[0]);
+        assertNear(cash0 - playerCash, 300, 'dopłata (12 − 9) × 100', 1e-6);
+        assertEq(playerFund.units, units0, 'udziały bez zmian');
+        assertEq(playerFund.guaranteeStats.topups, 1, 'licznik dopłat');
+    });
+
+    test('K4: gwarancja — udział w zysku 70% (30% zysku zostaje w funduszu)', () => {
+        world();
+        const client = playerFund.clients[0];
+        addTranche(client, 100, 10, { lockYears: 1, guarantee: true });
+        fundCash(15);
+        const units0 = playerFund.units;
+        macro.quarter += 4;
+        settleGuaranteedTranche(client, client.tranches[0]);
+        assertNear(units0 - playerFund.units, 0.3 * (15 - 10) * 100 / 15, 'umorzone udziały = 30% zysku / NAV', 1e-6);
+    });
+
+    test('K4: gwarancja wymaga lock-upu ≥ 1 rok i limitu 30% udziałów', () => {
+        world();
+        assert(!startSubscriptionCampaign({ duration: 'week', targetPct: 0.1, lockYears: 0, guarantee: true }).ok, 'bez lock-upu');
+        playerFund.clients[0].units = 300; playerFund.units = 1200;
+        addTranche(playerFund.clients[0], 300, 10, { lockYears: 1, guarantee: true });
+        const blocked = startSubscriptionCampaign({ duration: 'week', targetPct: 0.1, lockYears: 1, guarantee: true });
+        assert(!blocked.ok && /30%/.test(blocked.reason), `limit 30%: ${blocked.reason}`);
+    });
+
+    test('K4: kolejność gotówka → kredyt płynnościowy w granicy 20% aktywów; zaufanie −5; bez upadłości', () => {
+        world();
+        playerCash = 100000; playerFund.units = 10000; // aktywa 100 000 → limit kredytu 20 000
+        const trust = playerFund.trust;
+        assertEq(drawLiquidityLoan(500), 500, 'kredyt w granicach limitu');
+        assertEq(getLiquidityLoanPrincipal(), 500, 'kapitał kredytu');
+        assertNear(trust - playerFund.trust, 5, 'zaufanie −5 przy uruchomieniu', 1e-6);
+        assertNear(drawLiquidityLoan(1e9), 20000 - 500, 'kredyt do limitu 20% aktywów', 1e-6);
+        playerCash = 0; playerFund.units = 10; playerFund.liquidityLoan.principal = 0;
+        assertEq(drawLiquidityLoan(100), 0, 'przy zerowych aktywach limit = 0');
+    });
+
+    test('K4: niedobór gotówki przy rozliczeniu gwarancji pokrywa kredyt; brak limitu → klient dostaje mniej, zaufanie −15', () => {
+        world();
+        const client = playerFund.clients[0];
+        addTranche(client, 100, 20, { lockYears: 1, guarantee: true });
+        playerCash = 9000; // NAV 9, dopłata 11 × 100 = 1100; gotówka starcza
+        macro.quarter += 4;
+        settleGuaranteedTranche(client, client.tranches[0]);
+        assertNear(playerCash, 7900, 'wypłata z gotówki', 1e-6);
+        // brak gotówki i limitu: aktywa = 0,01 zł
+        const c2 = playerFund.clients[1];
+        addTranche(c2, 100, 20, { lockYears: 1, guarantee: true });
+        playerCash = 0.01; playerFund.units = 1000; const trust = playerFund.trust;
+        settleGuaranteedTranche(c2, c2.tranches[0]);
+        assertEq(playerFund.guaranteeStats.shortfalls, 1, 'gwarancja niepełna');
+        assertNear(trust - playerFund.trust, 15, 'zaufanie −15', 1e-6);
+        assert(playerFund.trust >= 0 && playerFund.clients.length > 0, 'fundusz nie upada');
+    });
+
+    test('K4: NAV pomniejszony o kredyt płynnościowy; spłata ok. 10% kapitału na tydzień, gdy gotówka > 5% aktywów', () => {
+        world(); fundCash(10);
+        const navBefore = getFundNav();
+        playerFund.liquidityLoan = { principal: 1000, drawn: 1000, since: 0 };
+        assertNear(navBefore - getFundNav(), 1000 / playerFund.units, 'NAV − kredyt / udziały', 1e-6);
+        const cash0 = playerCash;
+        processLiquidityLoanWeekly();
+        assert(playerFund.liquidityLoan.principal < 1000 && playerFund.liquidityLoan.principal >= 900 - 1e-6, 'spłata ok. 10% kapitału');
+        assert(playerCash < cash0, 'gotówka zmalała o odsetki i spłatę');
+    });
+
+    test('K4: zobowiązanie z gwarancji w raporcie = Σ max(0, cena wejścia − NAV) × udziały', () => {
+        world(); fundCash(8);
+        addTranche(playerFund.clients[0], 100, 12, { lockYears: 1, guarantee: true });
+        addTranche(playerFund.clients[1], 50, 7, { lockYears: 1, guarantee: true });
+        assertNear(getGuaranteeLiability(), 400, 'tylko transza poniżej ceny wejścia', 1e-6);
+    });
+
+    test('K5: warunki mandatów na portfelach testowych', () => {
+        const { a } = world();
+        a.sector = 'Żywność';
+        a.price = 10;
+        playerPortfolio = { AAA: { shares: 100, assetType: 'stock' } };
+        playerCash = 0;
+        assertNear(measureMandate(getMandateDef('defensive')), 1, 'portfel w całości defensywny');
+        assert(measureMandate(getMandateDef('growth')) < 0.4, 'nie wzrostowy');
+        const group = SECTORS['Żywność'].group;
+        assertNear(measureMandate(getMandateDef(`sector:${group}`)), 1, 'cały portfel w grupie sektorów');
+        assertEq(measureMandate(getMandateDef('safe')), 0, 'brak obligacji i lokat');
+        assertEq(getMandateDef('sector:nie_ma'), null, 'nieznana grupa sektorów');
+    });
+
+    test('K5: naruszenie przez 2 kolejne kwartały → mandat złamany (zaufanie −10 raz), udziały w lock-upie do umorzenia', () => {
+        world(); fundCash(10);
+        const client = playerFund.clients[0];
+        addTranche(client, 100, 10, { lockYears: 2, mandate: 'safe' });
+        assertEq(getRedeemableUnits(client), 0, 'zablokowane');
+        const trust = playerFund.trust;
+        for (let quarter = 0; quarter < 2; quarter++) { sampleMandatesWeekly(); evaluateMandatesQuarterly(); }
+        assert(isMandateBreached('safe'), 'mandat złamany');
+        assertEq(trust - playerFund.trust, 10, 'zaufanie −10');
+        sampleMandatesWeekly(); evaluateMandatesQuarterly();
+        assertEq(trust - playerFund.trust, 10, 'tylko raz');
+        assertEq(getRedeemableUnits(client), 100, 'klient może umorzyć także udziały z lock-upu');
+        const seeded = Math.random; Math.random = () => 0;
+        try { processMandateBreachExits(); } finally { Math.random = seeded; }
+        assert(getFundFlowStats().current.out.mandate > 0, 'przyczyna odpływu: złamany mandat');
+    });
+
+    test('K5: zmiana mandatu kosztuje 5 zaufania i przepisuje transze', () => {
+        world(); fundCash(10);
+        const client = playerFund.clients[0];
+        addTranche(client, 100, 10, { lockYears: 1, mandate: 'dividend' });
+        const trust = playerFund.trust;
+        assert(changeMandate('dividend', 'defensive'), 'zmiana mandatu');
+        assertEq(trust - playerFund.trust, 5, 'zaufanie −5');
+        assertEq(client.tranches[0].mandateId, 'defensive', 'transza z nowym mandatem');
+    });
+
+    test('K6: typy → grupy; nastrój ważony udziałami; koszt analityka IR wg poziomu', () => {
+        world();
+        assertEq(getInvestorGroupOf({ type: 'investor' }), 'institution', 'Inwestor');
+        assertEq(getInvestorGroupOf({ type: 'rich' }), 'wealthy', 'Bogaty');
+        assertEq(getInvestorGroupOf({ type: 'careful', vip: true }), 'wealthy', 'VIP');
+        assertEq(getInvestorGroupOf({ type: 'miser' }), 'retail', 'Sknera');
+        playerFund.clients = [
+            ensureClientProfile({ id: 'a', name: 'A', type: 'careful', units: 300, avgCost: 10, satisfaction: 1.0 }),
+            ensureClientProfile({ id: 'b', name: 'B', type: 'brave', units: 100, avgCost: 10, satisfaction: 0.0 })
+        ];
+        assertNear(getGroupMood('retail').value, (0.5 * 300 - 0.5 * 100) / 400 * 100, 'średnia ważona udziałami');
+        assertEq(getMoodWord(25), 'lubią cię', 'słowo'); assertEq(getMoodWord(null), 'brak klientów', 'brak klientów');
+        playerCash = 2_000_000; playerPortfolio = {};
+        assertNear(getIrQuarterCost(1), 1000, 'L1: 0,05% aktywów (≥ 200)');
+        assertNear(getIrQuarterCost(3), 3000, 'L3: 0,15% aktywów');
+        playerCash = 100; assertEq(getIrQuarterCost(1), 200, 'minimum 200 zł');
+    });
+
+    test('K6: koszt IR pobierany co kwartał; misje L2 powstają i nagradzają zadowolenie +0,10 i zaufanie +2', () => {
+        world(); fundCash(10);
+        setIrLevel(2);
+        const cash0 = playerCash;
+        processIrQuarterly();
+        assert(playerCash < cash0, 'koszt analityka');
+        assert(playerFund.ir.missions.retail, 'misja dla grupy detalicznej');
+        playerFund.ir.missions.retail.dueQ = currentQuarter();
+        Object.assign(playerFund.current, { maxDrawdown: 0, benchmarkDrawdown: 0 });
+        const sat = playerFund.clients[0].satisfaction, trust = playerFund.trust;
+        processIrQuarterly();
+        assertNear(playerFund.clients[0].satisfaction, sat + 0.10, 'zadowolenie +0,10', 1e-6);
+        assertNear(playerFund.trust, trust + 2, 'zaufanie +2', 1e-6);
+        assertEq(playerFund.ir.done, 1, 'misja wykonana');
+    });
+
+    test('K6: przyczyny L3 zgodne ze składnikami zadowolenia', () => {
+        world();
+        Object.assign(playerFund.current, { maxDrawdown: 0.30, benchmarkDrawdown: 0.05 });
+        const causes = getGroupCauses('retail');
+        assert(causes.includes(DRIFT_WORDS.drawdown), `obsunięcie wśród przyczyn: ${causes.join(', ')}`);
+        assert(causes.length <= 2, 'najwyżej 2 przyczyny');
+    });
+
+    test('K7: szansa sukcesu VIP = 25% + 35% (profil) + 30% (dane) + zaufanie/10 pp (10 000 losowań ±2 pp)', () => {
+        world();
+        playerFund.trust = 50;
+        const offer = { id: 1, profile: 'family', name: 'Test', expiresQ: 99 };
+        playerFund.periods = [{ fundReturn: 0.05, benchmarkReturn: 0.02, maxDrawdown: 0.1, benchmarkDrawdown: 0.1 }];
+        assertNear(getVipSuccessChance(offer, 'numbers'), 0.25 + 0.35 + 0.30 + 0.05, 'pasuje i dane potwierdzają', 1e-9);
+        assertNear(getVipSuccessChance(offer, 'vision'), 0.25 + 0.05, 'nie pasuje, dane nie potwierdzają', 1e-9);
+        playerFund.periods = [{ fundReturn: -0.05, benchmarkReturn: 0.02, maxDrawdown: 0.1, benchmarkDrawdown: 0.1 }];
+        assertNear(getVipSuccessChance(offer, 'numbers'), 0.25 + 0.35 + 0.05, 'pasuje, ale dane nie potwierdzają', 1e-9);
+        let hits = 0;
+        withSeededRandom(7, () => { for (let i = 0; i < 10000; i++) if (Math.random() < getVipSuccessChance(offer, 'numbers')) hits++; });
+        assert(Math.abs(hits / 10000 - 0.65) <= 0.02, `częstość ${hits / 10000}`);
+    });
+
+    test('K7: sukces VIP — wpłata 5–15% aktywów z lock-upem 1–2 lata; porażka — przerwa 4 kwartały', () => {
+        world(); fundCash(10);
+        playerFund.vip = { offers: [{ id: 1, profile: 'rentier', name: 'Rentier Test', expiresQ: 99 }, { id: 2, profile: 'baron', name: 'Baron Test', expiresQ: 99 }], yearOffers: { year: 0, n: 2 }, pauseUntilQ: -1, won: 0, lost: 0, nextId: 3 };
+        const assets = getFundAssets(), seeded = Math.random;
+        Math.random = () => 0; // sukces
+        let result; try { result = pitchVip(1, 'safety'); } finally { Math.random = seeded; }
+        assert(result.success, 'sukces');
+        const vipClient = playerFund.clients.find(c => c.vip);
+        assert(vipClient && result.value >= assets * 0.05 - 1 && result.value <= assets * 0.15 + 1, 'wpłata 5–15% aktywów');
+        const lock = vipClient.tranches[0].lockedUntilQ - currentQuarter();
+        assert(lock === 4 || lock === 8, `lock-up 1–2 lata (${lock} kw.)`);
+        Math.random = () => 0.999; // porażka
+        try { result = pitchVip(2, 'numbers'); } finally { Math.random = seeded; }
+        assert(!result.success && playerFund.vip.pauseUntilQ === currentQuarter() + 4, 'przerwa 4 kwartały');
+    });
+
+    test('K7: VIP wychodzi przed końcem lock-upu, gdy fundusz jest słabszy od GIG o > 10 pp w roku', () => {
+        world(); fundCash(10);
+        const vip = ensureClientProfile({ id: 'v', name: 'VIP', type: 'rich', units: 100, avgCost: 10, satisfaction: 0.7, vip: true });
+        playerFund.clients.push(vip); playerFund.units += 100;
+        addTranche(vip, 100, 10, { lockYears: 2 }); vip.tranches[0].vipExit = true;
+        playerFund.periods = [{ fundReturn: -0.10, benchmarkReturn: 0.02 }, { fundReturn: 0, benchmarkReturn: 0.02 }];
+        processVipExitsWeekly();
+        assertEq(getRedeemableUnits(vip), 100, 'wcześniejsze wyjście VIP-a');
+    });
+
+    test('K8: hasła Akademii i osiągnięcia 0.15.2 zarejestrowane', () => {
+        for (const id of ['runda_subskrypcji', 'lockup_fundusze_zamkniete', 'gwarancja_kapitalu', 'opcja_put', 'mandat_dryf_stylu', 'relacje_inwestorskie', 'dopasowanie_oferty', 'dyplomata_grup']) assert(ACADEMY_ENTRIES[id]?.quiz?.length === 3, `hasło ${id}`);
+        for (const id of ['vip_trust', 'guarantee_clean', 'diplomat', 'promise_kept', 'full_subscription']) assert(ACHIEVEMENTS[id], `osiągnięcie ${id}`);
+    });
+
+    test('Zapis: transze, kredyt, IR i VIP przechodzą przez zapis i wczytanie', () => {
+        world(); fundCash(10);
+        addTranche(playerFund.clients[0], 50, 10, { lockYears: 2, guarantee: true, mandate: 'safe' });
+        playerFund.liquidityLoan = { principal: 123, drawn: 123, since: 0 };
+        setIrLevel(2);
+        playerFund.vip = { offers: [], yearOffers: { year: 0, n: 1 }, pauseUntilQ: 5, won: 1, lost: 0, nextId: 2 };
+        const seeded = Math.random;
+        const report = applySaveSnapshot(JSON.parse(JSON.stringify(buildSaveSnapshot())));
+        Math.random = seeded;
+        assert(report.ok, 'wczytanie');
+        const t = playerFund.clients[0].tranches[0];
+        assert(t && t.guaranteed && t.mandateId === 'safe' && t.units === 50, 'transza');
+        assertEq(playerFund.liquidityLoan.principal, 123, 'kredyt'); assertEq(getIrLevel(), 2, 'IR'); assertEq(playerFund.vip.won, 1, 'VIP');
+    });
+});
+
+group('0.15.3: Wielkie Kryzysy (szoki sektorowe, silnik linii, 5 linii, reakcje instytucji, scenariusz)', () => {
+    function world(extra = []) {
+        const a = makeCompany('AAA', { sector: ['Technologia'] }), b = makeCompany('BBB', { sector: ['Turystyka'] });
+        resetWorld([a, b, ...extra]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        initMarketRegimes();
+        marketCrash = createMarketCrashState();
+        marketHalt = createMarketHaltState();
+        macro.quarter = 20;
+        mailbox = createMailbox();
+        maybeReplaceCrashWithCrisisLine = REAL_REPLACE_CRASH_WITH_LINE;
+        commercialBanks.forEach(bank => { bank.stockPortfolio = bank.stockPortfolio || {}; });
+        return { a, b };
+    }
+    const tick = (n = 1) => { for (let i = 0; i < n; i++) { macro.quarter++; processCrisesQuarterly(); processCrisesWeekly(); } };
+
+    test('W0: szok narasta, trwa zadany czas i wygasa do zera', () => {
+        const { a } = world();
+        playerFund.calWeek = 1;
+        const shock = addSectorShock('Technologia', -0.40, { rampQ: 2, holdQ: 2, fadeQ: 2, startQ: 20 });
+        assertNear(getSectorShockValue(shock, 20), 0, 'start 0');
+        assertNear(getSectorShockValue(shock, 21), -0.20, 'połowa narastania');
+        assertNear(getSectorShockValue(shock, 22), -0.40, 'cel');
+        assertNear(getSectorShockValue(shock, 23.9), -0.40, 'trwanie');
+        assertNear(getSectorShockValue(shock, 25), -0.20, 'połowa wygasania');
+        assertEq(getSectorShockValue(shock, 26), 0, 'wygasł');
+        assert(isSectorShockExpired(shock, 26), 'oznaczony jako wygasły');
+        macro.quarter = 26; pruneSectorShocks();
+        assertEq(sectorShocks.length, 0, 'wygasły szok usunięty');
+        updateAllSectorPremiums();
+        assertEq(a.sectorPremium, 0, 'premia wróciła do zera');
+    });
+
+    test('W0: szok nie jest nadpisywany przez kolejną aktualizację premii (naprawa B5)', () => {
+        const { a } = world();
+        addSectorShock('Technologia', -0.30, { holdQ: 3, startQ: crisisTime() });
+        assertNear(a.sectorPremium, -0.30, 'od razu po utworzeniu');
+        updateAllSectorPremiums(); updateAllSectorPremiums();
+        assertNear(a.sectorPremium, -0.30, 'po kolejnych aktualizacjach');
+    });
+
+    test('W0: szok sumuje się z bańką; łączny limit −60%…+150%', () => {
+        const { a } = world();
+        activeSectorBubble = { sector: 'Technologia', subsector: null, premium: 0.30, phase: 'inflating' };
+        addSectorShock('Technologia', -0.20, { holdQ: 3, startQ: crisisTime() });
+        assertNear(a.sectorPremium, 0.10, 'bańka + szok');
+        addSectorShock('Technologia', -0.90, { holdQ: 3, startQ: crisisTime() });
+        assertEq(a.sectorPremium, SECTOR_PREMIUM_MIN, 'dolny limit');
+        activeSectorBubble = null; sectorShocks = [];
+        addSectorShock('Technologia', 2.0, { holdQ: 3, startQ: crisisTime() });
+        assertEq(a.sectorPremium, SECTOR_PREMIUM_MAX, 'górny limit');
+    });
+
+    test('W0: szok działa według udziału segmentu (konglomerat mniej wystawiony)', () => {
+        const { a } = world();
+        a.segments = [{ sector: 'Technologia', subsector: null, share: 0.3 }, { sector: 'Żywność', subsector: null, share: 0.7 }];
+        addSectorShock('Technologia', -0.40, { holdQ: 3, startQ: crisisTime() });
+        assertNear(a.sectorPremium, -0.12, 'udział 30% × −40%');
+    });
+
+    test('W0: szoki i linia przeżywają zapis i wczytanie', () => {
+        world();
+        addSectorShock('Turystyka', -0.25, { holdQ: 3, startQ: crisisTime(), lineId: 'x', revenue: -0.1 });
+        startCrisisLine('oil', { forced: true });
+        const seeded = Math.random;
+        const report = applySaveSnapshot(JSON.parse(JSON.stringify(buildSaveSnapshot())));
+        Math.random = seeded;
+        assert(report.ok, 'wczytanie');
+        assert(sectorShocks.some(s => s.sector === 'Turystyka' && s.target === -0.25), 'szoki po wczytaniu');
+        assertEq(crisisLine?.id, 'oil', 'linia po wczytaniu');
+        assert(crisisState.used.includes('oil'), 'lista użytych linii');
+    });
+
+    test('W0: spadek przychodów sektora w linii proporcjonalny do postępu szoku', () => {
+        const { a } = world();
+        addSectorShock('Technologia', -0.40, { rampQ: 2, holdQ: 2, fadeQ: 2, startQ: crisisTime(), revenue: -0.20 });
+        assertEq(getCrisisRevenueFactor(a), 1, 'na starcie bez efektu');
+        sectorShocks[0].startQ = crisisTime() - 2;
+        assertNear(getCrisisRevenueFactor(a), 0.80, 'pełny przychód linii na szczycie');
+    });
+
+    test('W1: linia przechodzi wszystkie etapy po kolei i wraca do stanu bez linii', () => {
+        world();
+        startCrisisLine('pandemic', { forced: true });
+        const seen = [crisisLine.stage];
+        for (let i = 0; i < 40 && crisisLine; i++) { tick(); if (crisisLine && seen[seen.length - 1] !== crisisLine.stage) seen.push(crisisLine.stage); }
+        assertEq(seen.join('>'), CRISIS_STAGES.join('>'), 'kolejność etapów');
+        assertEq(crisisLine, null, 'linia zakończona');
+        assertEq(crisisState.history.length, 1, 'retrospektywa zapisana');
+    });
+
+    test('W1: częstość nowej linii ≈ 1%/kw. po ≥ 12 kw. spokoju (10 000 losowań ±0,4 pp)', () => {
+        world();
+        let starts = 0;
+        withSeededRandom(99, () => {
+            for (let i = 0; i < 10000; i++) {
+                crisisState.used = []; crisisState.lastEventQ = macro.quarter - 20; marketCrash.startQuarter = null;
+                getMarketRegime('home').phase = 'euphoria'; getMarketRegime('home').premium = 0.3;
+                processCrisesQuarterly();
+                if (crisisLine) { starts++; crisisLine = null; sectorShocks = []; }
+            }
+        });
+        assert(Math.abs(starts / 10000 - CRISIS_BASE_CHANCE) <= 0.004, `częstość ${starts / 10000}`);
+    });
+
+    test('W1: bez linii przed upływem 12 kw. od krachu lub poprzedniej linii', () => {
+        world();
+        let starts = 0;
+        withSeededRandom(5, () => { for (let i = 0; i < 2000; i++) { crisisState.lastEventQ = macro.quarter - 5; processCrisesQuarterly(); if (crisisLine) { starts++; crisisLine = null; } } });
+        assertEq(starts, 0, 'żadna linia w okresie spokoju');
+    });
+
+    test('W1: linia zastępuje krach w 40% przypadków (bez Zapowiedzi)', () => {
+        world();
+        const seeded = Math.random;
+        try {
+            Math.random = () => 0.1;
+            assert(maybeReplaceCrashWithCrisisLine(), 'losowanie < 40% — linia');
+            assertEq(crisisLine.stage, 'burst', 'od razu Wybuch');
+            crisisLine = null; sectorShocks = []; crisisState.used = [];
+            Math.random = () => 0.9;
+            assert(!maybeReplaceCrashWithCrisisLine(), 'losowanie ≥ 40% — zwykły krach');
+        } finally { Math.random = seeded; }
+    });
+
+    test('W1: linie bez powtórzeń, dopóki są niewykorzystane', () => {
+        world();
+        getMarketRegime('home').phase = 'euphoria'; getMarketRegime('home').premium = 0.3;
+        const picked = [];
+        for (let i = 0; i < 5; i++) {
+            const eligible = getEligibleCrisisLines();
+            assert(eligible.every(id => !picked.includes(id)), 'nie powtarza użytej linii');
+            const id = eligible[0]; picked.push(id); crisisState.used.push(id);
+        }
+        assertEq(new Set(picked).size, 5, 'pięć różnych linii');
+        assertEq(getEligibleCrisisLines().length, 0, 'wszystkie wykorzystane');
+    });
+
+    test('W1: ranking upadków po dźwigni, kondycji i wystawieniu; bez spółek Skarbu Państwa', () => {
+        const heavy = makeCompany('HVY', { sector: ['Turystyka'], liabilities: 4_500_000 }), light = makeCompany('LGT', { sector: ['Turystyka'], liabilities: 100_000 });
+        const state = makeCompany('STA', { sector: ['Turystyka'], liabilities: 4_800_000 }); state.isStateOwned = true;
+        world([heavy, light, state]);
+        const ranked = rankCrisisVictims('pandemic').map(r => r.stock.symbol);
+        assertEq(ranked[0], 'HVY', 'największa dźwignia pierwsza');
+        assert(!ranked.includes('STA'), 'spółka państwowa pominięta');
+        assert(ranked.indexOf('HVY') < ranked.indexOf('LGT'), 'dźwignia wyżej niż mała dźwignia');
+    });
+
+    test('W1: upadłości — 1–3 kandydatów, sygnał w kondycji, upadek przez usunięcie z gry', () => {
+        const stocksExtra = Array.from({ length: 6 }, (_, i) => makeCompany(`T${i}`, { sector: ['Turystyka'], liabilities: 1_000_000 * (i + 1) }));
+        world(stocksExtra);
+        startCrisisLine('pandemic', { forced: true, skipSpark: true });
+        assert(crisisLine.victims.length >= 1 && crisisLine.victims.length <= CRISIS_MAX_VICTIMS, `kandydaci ${crisisLine.victims.length}`);
+        const first = stocks.find(s => s.symbol === crisisLine.victims[0]);
+        assert(first.financialHealth <= -3.5, 'sygnał w kondycji spółki');
+        const seeded = Math.random; Math.random = () => 0;
+        try { executeCrisisBankruptcies(crisisLine, CRISIS_LINES.pandemic, 3); } finally { Math.random = seeded; }
+        assert(crisisLine.bankrupted.length >= 1, 'upadłość zapisana w linii');
+        assert(!stocks.some(s => s.symbol === crisisLine.bankrupted[0]), 'spółka usunięta z gry');
+    });
+
+    test('W2: pięć linii ma dane (tracą, zyskują, reakcja) i wszystkie przechodzą etapy w scenariuszu', () => {
+        for (const id of CRISIS_LINE_ORDER) {
+            const stocksExtra = Array.from({ length: 4 }, (_, i) => makeCompany(`Z${i}`, { sector: ['Turystyka'], liabilities: 1_000_000 }));
+            world(stocksExtra);
+            const def = CRISIS_LINES[id];
+            assert(def.lose.length >= 4 && def.news.burst && def.rate && def.victims, `dane linii ${id}`);
+            startCrisisLine(id, { forced: true });
+            let guard = 0;
+            while (crisisLine && guard++ < 60) tick();
+            assertEq(crisisLine, null, `linia ${id} zakończona`);
+            assertEq(crisisState.history[0].id, id, 'retrospektywa linii');
+            sectorShocks = [];
+        }
+    });
+
+    test('W2: Wybuch tworzy szoki tracących i zyskujących sektorów oraz krach z tematem', () => {
+        world();
+        startCrisisLine('banking', { forced: true, skipSpark: true });
+        const lose = sectorShocks.filter(s => s.lineId === 'banking' && s.target < 0).map(s => s.sector);
+        assert(lose.includes('Bankowość') && lose.includes('Nieruchomości'), 'banki i nieruchomości tracą');
+        assert(sectorShocks.some(s => s.sector === 'Żywność' && s.target > 0), 'żywność zyskuje');
+        assertEq(marketCrash.theme, 'banking', 'krach z tematem linii');
+        assert(marketCrash.targetDrop <= -0.20 && marketCrash.targetDrop >= -0.30, 'spadek premii rynku 20–30 pp');
+    });
+
+    test('W2: Czarny czwartek schodzi poniżej dna −35% (floor −60%)', () => {
+        world();
+        getMarketRegime('home').premium = 0.3;
+        startCrisisLine('black', { forced: true, skipSpark: true });
+        assertEq(marketCrash.floor, -0.60, 'dno krachu z linii');
+        for (let i = 0; i < 6; i++) processMarketCrashWeekly();
+        const bottom = getMarketRegime('home').premium;
+        assert(bottom < MARKET_CRASH_PREMIUM_FLOOR, `premia ${bottom} poniżej −35%`);
+        assert(bottom >= -0.60 - 1e-9 && bottom <= -0.40 + 1e-9, 'dno premii rynku −40…−60%');
+    });
+
+    test('W2: linie wymuszają Recesję; szok naftowy dodaje inflację (+2…+4 pp)', () => {
+        world();
+        const before = macro.shocks.inflation;
+        startCrisisLine('oil', { forced: true, skipSpark: true });
+        const added = macro.shocks.inflation - before;
+        assert(added >= 0.02 - 1e-9 && added <= 0.04 + 1e-9, `inflacja +${added}`);
+        economyCycle.phase = 'expansion'; economyCycle.quartersInPhase = 0; economyCycle.phaseLength = 8;
+        advanceEconomyCycle();
+        assertEq(economyCycle.phase, 'recession', 'gospodarka w recesji');
+    });
+
+    test('W2: pożar sygnału — Zapowiedź uruchamia mały szok makro tego samego typu', () => {
+        world();
+        const before = macro.shocks.inflation;
+        startCrisisLine('oil', { forced: true });
+        assertEq(crisisLine.stage, 'spark', 'etap Zapowiedź');
+        assert(macro.shocks.inflation > before, 'szok naftowy (inflacja)');
+        assertEq(crisisState.signals, 1, 'licznik sygnałów');
+    });
+
+    test('W3: kierunek stóp wg linii — cięcia (bankowa, internetowa, pandemia), podwyżki (naftowa), zwłoka potem cięcia (1929)', () => {
+        const run = id => {
+            world();
+            centralBank.baseInterestRate = 0.05;
+            startCrisisLine(id, { forced: true, skipSpark: true });
+            startCrisisReactions(crisisLine, CRISIS_LINES[id]);
+            const changes = [];
+            for (let i = 0; i < 4; i++) { const c = getCrisisRateChange(); if (c !== null) { changes.push(c); centralBank.baseInterestRate += c; } }
+            return changes;
+        };
+        assert(run('banking').every(c => c < 0) && run('banking').length === 2, 'bankowa: 2 cięcia');
+        assert(run('dotcom').every(c => c < 0), 'internetowa: cięcia');
+        assert(run('oil').every(c => c > 0), 'naftowa: podwyżki mimo recesji');
+        const black = run('black');
+        assert(black[0] === 0 && black[1] === 0 && black[2] < 0, `1929: dwie kwartały zwłoki, potem cięcia: ${black.join(',')}`);
+        const pandemic = run('pandemic');
+        assert(pandemic[0] < 0 && centralBank.baseInterestRate >= 0.005, 'pandemia: cięcie nie niżej niż 0,5%');
+    });
+
+    test('W3: ratunek banku z budżetu państwa zamiast upadku, gdy skarb pozwala', () => {
+        const bank = makeCompany('BNK', { sector: ['Bankowość'], liabilities: 5_200_000 }); bank.isBankStock = true;
+        world([bank]);
+        startCrisisLine('banking', { forced: true, skipSpark: true });
+        const cost = Math.max(0, bank.balanceSheet.liabilities - bank.balanceSheet.assets) + getMarketCapValue(bank) * 0.10;
+        governmentTreasury = cost * 3;
+        const treasury0 = governmentTreasury, cash0 = bank.cash;
+        assert(tryRescueBank(bank, CRISIS_LINES.banking), 'ratunek');
+        assertNear(treasury0 - governmentTreasury, cost, 'skarb zapłacił koszt', 1e-6);
+        assertNear(bank.cash - cash0, cost, 'bank dostał gotówkę (pieniądze nie znikają)', 1e-6);
+        governmentTreasury = 0;
+        assert(!tryRescueBank(bank, CRISIS_LINES.banking), 'bez środków w skarbie bank nie jest ratowany');
+    });
+
+    test('W3: dotacje dla sektorów tracących idą ze skarbu do spółek', () => {
+        const { b } = world();
+        governmentTreasury = 1_000_000;
+        const cash0 = b.cash, treasury0 = governmentTreasury;
+        const paid = crisisSubsidy(['Turystyka'], 0.03, 'Test');
+        assert(paid > 0, 'wypłacono dotacje');
+        assertNear(b.cash - cash0, treasury0 - governmentTreasury, 'kwota ze skarbu = kwota u spółki', 1e-6);
+    });
+
+    test('W4: scenariusz na start — wybrana linia startuje w 2.–4. roku i zapisuje się w CV', () => {
+        world();
+        assert(setCrisisScenario('banking'), 'ustawiony');
+        assert(crisisState.scenarioStartQ >= 5 && crisisState.scenarioStartQ <= 16, `kwartał ${crisisState.scenarioStartQ}`);
+        assert(playerProfile.cv.some(item => /Kryzys bankowy/.test(item.text)), 'wpis w CV');
+        macro.quarter = crisisState.scenarioStartQ - 1;
+        tick();
+        assertEq(crisisLine?.id, 'banking', 'linia wystartowała Zapowiedzią');
+        assertEq(crisisLine.stage, 'spark', 'od Zapowiedzi');
+        assertEq(crisisState.scenario, null, 'scenariusz zużyty');
+        assert(!setCrisisScenario(''), 'puste = losowo');
+    });
+
+    test('W5: sekcja „Kryzys” i wiersz „Wystawienie na kryzys”', () => {
+        const { b } = world();
+        assert(/nie trwa/.test(renderCrisisSection()), 'bez linii: normalny cykl');
+        startCrisisLine('pandemic', { forced: true, skipSpark: true });
+        const html = renderCrisisSection();
+        assert(/Pandemia/.test(html) && /Wybuch/.test(html) && /Turystyka/.test(html), 'etap i sektory w sekcji');
+        assertEq(getCrisisExposureLabel(b), 'wysoki', 'turystyka w pandemii: wysokie wystawienie');
+        assertEq(getCrisisExposureLabel(stocks[0]), 'niski', 'technologia w pandemii: niskie wystawienie');
+    });
+
+    test('W5: nagłówki w pasku newsów na każdym etapie i mail z retrospektywą', () => {
+        world();
+        const before = mailbox.messages.length;
+        startCrisisLine('oil', { forced: true });
+        for (let i = 0; i < 40 && crisisLine; i++) tick();
+        assert(mailbox.messages.some(m => /Retrospektywa: Szok naftowy/.test(m.subject)), 'mail z retrospektywą');
+        assert(mailbox.messages.length > before, 'nowe maile');
+    });
+
+    test('W6: hasła Akademii (5 linii + 3 ogólne) i 6 osiągnięć zarejestrowane; hasło linii po jej końcu', () => {
+        for (const id of ['kryzys_banking', 'kryzys_dotcom', 'kryzys_oil', 'kryzys_black', 'kryzys_pandemic', 'stagflacja', 'ksztalty_odbicia', 'ratowanie_bankow']) assert(ACADEMY_ENTRIES[id]?.quiz?.length === 3, `hasło ${id}`);
+        for (const id of ['crisis_banking', 'crisis_dotcom', 'crisis_oil', 'crisis_black', 'crisis_pandemic', 'crisis_collector']) assert(ACHIEVEMENTS[id], `osiągnięcie ${id}`);
+        world();
+        startCrisisLine('pandemic', { forced: true });
+        for (let i = 0; i < 40 && crisisLine; i++) tick();
+        assert(isAcademyUnlocked('kryzys_pandemic'), 'hasło odblokowane po linii');
+    });
+
+    test('W6: Kolekcjoner kryzysów po przeżyciu wszystkich 5 linii', () => {
+        world();
+        for (const id of CRISIS_LINE_ORDER) crisisState.history.push({ id, fundChange: 0, gigChange: 0, trust: 50, techShare: 0 });
+        checkCrisisAchievements(crisisState.history[4], { id: 'pandemic', positionStart: playerProfile.positionId });
+        assert(getPlayerAchievements().crisis_collector !== undefined, 'osiągnięcie zdobyte');
     });
 });
 

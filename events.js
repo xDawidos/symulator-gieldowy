@@ -702,13 +702,7 @@ function triggerMainMarketEventCycle() {
         return;
     }
 
-    // 0.15 H5: premia rynku > +15% -> szansa emisji x1.5 (x2 w sektorze bańki)
-    let offeringChance = 0.04;
-    const regime = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
-    if (regime && regime.premium > 0.15) {
-        offeringChance *= 1.5;
-    }
-    if (Math.random() < offeringChance) { // Emisja ratunkowa
+    if (Math.random() < 0.04) { // Emisja ratunkowa (0.15.0.1 C4: bez zależności od nastroju — emisje w cyklu idą przez walne)
         triggerRescueOfferingEvent();
         return;
     }
@@ -822,7 +816,15 @@ function triggerNationalizationEvent() {
     target.isStateOwned = true;
     target.stateOwnershipPct = getRandomInRange(0.75, 0.90);
     target.eventResistance = 0.6;
-    target.balanceSheet.liabilities = 0;
+    // Skarb Państwa spłaca dług spółki jej bankowi (decyzja użytkownika); to dokapitalizowanie przez nowego właściciela
+    // (kapitał zakładowy rośnie o spłaconą kwotę). Bez pieniędzy w skarbie reszta długu zostaje w spółce.
+    const debt = Math.max(0, Number(target.balanceSheet.liabilities) || 0);
+    const repaid = typeof takeFromTreasury === 'function' ? takeFromTreasury(debt) : 0;
+    const lender = typeof getCompanyBank === 'function' ? getCompanyBank(target) : null;
+    if (lender) lender.cash = (Number(lender.cash) || 0) + repaid;
+    if (repaid > 0) recordPayment('external:skarb-panstwa', lender ? lender.id : 'external:wierzyciele', repaid, `Spłata długu ${target.symbol} po nacjonalizacji`);
+    target.balanceSheet.shareCapital = (Number(target.balanceSheet.shareCapital) || 0) + repaid;
+    target.balanceSheet.liabilities = debt - repaid;
     target.financialHealth = 1;
     target.sharesHeld = 0; // inwestorzy wykupieni; pakiet państwa jest poza wolnym obrotem
     return;
