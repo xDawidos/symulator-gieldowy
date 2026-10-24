@@ -42,7 +42,13 @@ Stan na 2026-10-13: etap A (domknięcie 0.13 i 0.13.1) zrobiony na gałęzi work
 | 0.15.1 | Sztuka przejęć (M0–M10): arbitraż fuzji, oferty kupna dla większościowca, due diligence i ukryte zobowiązania, odkup pakietów od botów i prezesa, ustawa „Próg wezwania” i drabina KNF, wartość firmy i odpis, drabina pakietów spółka → spółka (M9), mapa rodowa (M10) | ✅ kod `07b688e`…`9209c0a` (gałąź `claude/funny-villani-16217c`, do scalenia po 0.15.0.1), testy 538/538 (25 nowych). Kontrola `raporty/kontrola_0.15.1.md` (20 + 20 × 6,5 roku, 5 × 20 lat, 10 × wydzielenia; runda 2 po strojeniu): spread ok. 10%, premia przyjętej oferty 30%, kontroferta +12 pp, odpisy w 14–28% przejęć, próg wezwania zmieniony w 5/5 gier 20-letnich, przejęcia botów 4,9 na grę (bazowo 5,4), czas kroku +1%, wyjątki / niezmienniki / ujemna gotówka 0 ✅. Naprawione: pusta kopia działów u córki (wyjątek w logice spółek), kupon obligacji bez gotówki, przejęty biznes znikał z gospodarki. ⚠️ arbitraż −6…−12% vs GIG (cel +1…+4%; proces trwa ok. 7 kw.), koncerny w 20 latach 8–10 (cel 3–6), podkupowania 1,1–1,5/rok (cel 2–5) — do decyzji użytkownika |
 | 0.15.2 | Kochaj i zarabiaj (K0–K9): kalendarz, kampanie emisyjne, lock-up 0–3 lata, łagodna gwarancja kapitału, mandat, grupy inwestorów i analityk IR, VIP | ✅ kod `75011c5` (`campaigns.js`), testy 596/596 (z 0.15.3; 31 nowych). Kontrola `raporty/kontrola_0.15.2.md`: kampanie zbierają śr. 79% celu, dopłaty z gwarancji 361 zł/gra, kredyt płynnościowy 0 z 4 gier, wyjątki i niezmienniki 0, zapis OK. ⚠️ niezmierzone w przebiegach: bessa z lock-upem, misje IR, VIP, kalibracja mandatów (preset trzyma fundusz w indeksie); ⚠️ odziedziczone: w grach 20-letnich `fundusz-gig` liczba udziałów rośnie o setki %, tak samo na 0.15.1 |
 | 0.15.3 | Wielkie Kryzysy (W0–W7): naprawa B5, silnik linii, 5 linii (2008, 2000, 1973, 1929, 2020), reakcje instytucji, scenariusz na start, osiągnięcia | ✅ kod `24d73c6` + strojenie (`crises.js`), testy 596/596 (26 nowych). Kontrola `raporty/kontrola_0.15.3.md`: 1,3 linii na 20 lat, 3 z 8 gier 6,5-letnich z linią, spadki GIG w celu dla 4 z 5 linii (bańka internetowa i szok naftowy na granicach), pandemia odbija w 5–6 kw., Czarny czwartek 9–15 kw., wyjątki i niezmienniki 0. ⚠️ niezmierzone: upadki wg dźwigni, wyniki sektorów zyskujących, stopy w przebiegach; ikony linii to emoji (SVG do wykonania przez czat designu) |
-| 0.16 | Giełda międzynarodowa G0–G8 (dawniej 0.15) | ⬜ szkic, nie zaczęte |
+| 0.16.1 | Waluty i kantor G0–G4: pomiar bazowy i domknięcie 0.15 (dryf udziałów, mandaty, niezmierzone), porządki spółek, waluty/kantor/`toPln`, GDR i „Gigant”, zapis v16 | ⬜ plan zatwierdzony 2026-10-25 (`plan_0.16_gielda_miedzynarodowa.md`), nie zaczęte |
+| 0.16.2 | Pierwsze rynki G5–G10: platforma, DE/US/CZ, lotnisko i bilety, boty, zarażanie kryzysów | ⬜ plan zatwierdzony |
+| 0.16.3 | Europa i połączone giełdy G11–G17: SE/CH/FR, wariant B, wspólnota europejska, spółki specjalne, prezesi, boty (Graham, Wilk), nadzór | ⬜ plan zatwierdzony |
+| 0.16.4 | Azja i forex G18–G22: JP/CN/IN/TW, PanDa Bank, boty azjatyckie, forex i `marginEngine`, kontrola końcowa | ⬜ plan zatwierdzony |
+| 0.17 | Surowce i transport S0–S7 (`plan_0.17_surowce_transport.md`) | ⬜ szkic zakresu |
+| 0.18 | Łańcuchy produkcyjne: 0.18.1 pilotaż (3 łańcuchy, bramka), 0.18.2 pełny graf (`plan_0.18_lancuchy_produkcyjne.md`) | ⬜ szkic zakresu |
+| 0.19–0.21 | Handel światowy; Globalne korporacje; Rynek pracy 2 (szkice w sekcji „Po 0.16”) | ⬜ kierunek |
 
 **Etap A zrobiony (A1–A4) razem z 3 decyzjami balansu; 0.14 T1–T3 zrobione.** Zostało: poprawki 0.14.1 i 0.14.2 + 3 części 0.14 (T4–T6) + 7 etapów 0.15 + 9 etapów 0.16.
 
@@ -117,9 +123,16 @@ Podział serii 0.15 na wersje zgodnie z decyzją gracza (Wariant C, 2026-10-19):
 - **UI:** KPI nastroju w pasku, kalendarz „Rok · kw. · tydz.”, okno „Rynek” (z sekcją „Kryzys”), okno oferty kupna, zakładka „Relacje” w panelu funduszu, sekcja osiągnięć w CV — z komponentów 0.14.5; projekt wyglądu zleca się czatowi designu (zlecenia w planach).
 - **Plan 0.16** ma od 2026-10-18 sekcję zgłoszeń: kontrakty surowcowe (złoto, ropa, uran itd.), transport (morski, lotniczy, lądowy), łańcuchy produkcyjne, cła i WTO.
 
-## Etap C — 0.16 „Giełda międzynarodowa” (G0 → G8, dawniej 0.15)
+## Etap C — 0.16 „Giełda międzynarodowa” (G0 → G22, cztery podwersje; plan z 2026-10-25)
 
-G0 porządki spółek → G1 waluty i kantor → G2 rynki i spółki zagraniczne → G3 otwieranie regionów → G4 sektory i spółki specjalne → G5 cechy prezesów → G6 boty zagraniczne → G7 forex → G8 interfejs, zapis, testy.
+| Podwersja | Części | Kolejność |
+|---|---|---|
+| 0.16.1 Waluty i kantor | G0 pomiar bazowy i domknięcie 0.15 → G1 porządki spółek → G2 waluty, kantor, `toPln` → G3 GDR i „Gigant” → G4 interfejs, zapis v16, kontrola | pierwsza |
+| 0.16.2 Pierwsze rynki | G5 platforma rynku → G6 DE/US/CZ → G7 lotnisko i bilety → G8 boty → G9 zarażanie → G10 kontrola | po 0.16.1 |
+| 0.16.3 Europa i połączone giełdy | G11 SE/CH/FR → G12 połączenia giełd → G13 spółki specjalne i prezesi → G14 boty (Graham, Wilk) → G15 nadzór → G16–G17 UI i kontrola | po 0.16.2 |
+| 0.16.4 Azja i forex | G18 JP/TW/CN/IN → G19 spółki specjalne i PanDa Bank → G20 boty → G21 forex i `marginEngine` → G22 kontrola końcowa 0.16 | po 0.16.3 |
+
+Szkic G0–G8 został przepisany: ten sam zakres w częściach G0–G22 (dane krajów w załącznikach planu), z dopiskiem zarażania kryzysów, GDR, Grahama i Wilka, nadzoru za granicą i domknięcia otwartych spraw 0.15.2 i 0.15.3 (G0). Zapis v16 od 0.16.1.
 
 Ustalenia spójności (wpisane do planu 0.16):
 - **Limity:** spółki zagraniczne mają osobny limit na kraj (1,5 × liczba startowa) i nie liczą się do krajowych ok. 110 ani do łącznych 150.
@@ -139,9 +152,17 @@ Ustalenia spójności (wpisane do planu 0.16):
 - **Obserwacja:** koszty fuzji w `ma.js` (`initiator.cash -= process.costs`) bez sprawdzenia gotówki to możliwe źródło jednorazowej ujemnej gotówki (PROL). ✅ Zamknięte w 0.14.2 P10 (`06d4c42`: kredyt przed kosztami fuzji).
 - **GIG i marża po 0.14.2 → 0.15 H0** (decyzja 2026-10-15: bez korekty, obserwacja): GIG 19,4 vs 17,3%/rok, marża 26,5 vs 24,4% (20 vs 10 przebiegów ×200). Atrybucja (`raporty/kontrola_0.14.2.md`): bez P9 GIG 17,4% (−2 pp, ok. 1,4σ), ale ani kotwica banków, ani spółek ze stratą osobno tego nie robi; marża bez winnej części (każda < 1 pp). W 0.15 H0 powtórzyć na większej próbie (≥ 20 przebiegów na wariant), zanim zaczniemy strojenie rynku.
 
-## Po 0.16
+## Po 0.16 (kierunek z 2026-10-25, audyt `raporty/audyt_planow_0.16.x.md`)
 
-- „Rynek pracy 2” z `pomysly_na_kolejne_wersje.md`: pracownicy zakładają firmy, które trafiają do inkubatora, oraz podkupowanie prywatnych inwestorów. Podkupowanie specjalistów i prezesów już istnieje (0.13 S3), więc RP2 je rozszerza, a nie powtarza.
+| Wersja | Tytuł | Zakres | Zależy od | Wielkość | Główne ryzyka |
+|---|---|---|---|---|---|
+| **0.17** | Surowce i transport (`plan_0.17_surowce_transport.md`) | giełda towarowa (9 surowców, kontrakty z depozytem), koszty wsadu w sektorach, podsektory transportu (morski, lotniczy, lądowy), indeks frachtu, porty i lotniska przez przetargi, PPP z interwencji 0.15.3 | 0.16.4 (`marginEngine`, kraje, USD) | L | przesunięcie marż (kalibracja „średnio zero”), dźwignia gracza |
+| **0.18** | Łańcuchy produkcyjne (`plan_0.18_lancuchy_produkcyjne.md`) | **pełny graf ogniw** w dwóch krokach: 0.18.1 pilotaż 3 łańcuchów z bramką, 0.18.2 reszta, zapasy, konsumpcja, substytucja, mapa szlaków; szok podażowy jako 6. linia kryzysu | 0.17 | XL | zmiana balansu wszystkich sektorów, czas kroku, złożoność |
+| **0.19** | Handel światowy | cła na krawędziach grafu, służba celna w zakładce państwa, doktryny handlowe (zależne od partii w kraju startowym, stałe za granicą), umowy, embarga, unie celne, WTO i runda negocjacji | 0.18 | L | wpływ ceł na marże i kryzysy; zbieżność z ustawami 0.13 |
+| **0.20** | Globalne korporacje | **podwójne notowanie** (jedna pula, dwa kursy, arbitraż), **córki zagraniczne** (nowy limit córek: 3 krajowe + 1 na otwarty rynek), przejęcia od strony kupującego (suwak premii, rozmowy, badanie celu), zagraniczne M&A spółek gracza | 0.16.x, 0.19 | L | niezmiennik akcji w obrocie, limity krajów |
+| **0.21** | Rynek pracy 2 | pracownicy zakładają firmy → inkubator; podkupowanie prywatnych inwestorów; rozszerza podkupowanie specjalistów i prezesów z 0.13 S3 | 0.13 | M | balans pracowników i marż; drenaż kadr |
+
+Otwarte sprawy kontroli 0.15.2 i 0.15.3 trafiły do **0.16.1 G0**: dryf udziałów, bessa z lock-upem, misje IR, VIP, kalibracja mandatów, niezmierzone elementy linii kryzysu, odstępstwa 0.15.3. Ikony linii kryzysu jako SVG — zlecenie dla czatu designu (0.16.1).
 
 ## Decyzje (podjęte 2026-10-12)
 
@@ -153,3 +174,4 @@ Ustalenia spójności (wpisane do planu 0.16):
 6. Pojęcia: podsektor ma profil wyceny, a specjalizacja to nisza z jednym modyfikatorem.
 7. Porządek kategorii i filtrów to 0.14 T1a/T1c: dwa sektory finansowe z podsektorami, „Transport i logistyka”, filtr domyślnie po sektorze głównym z przełącznikiem.
 8. **Hossa i bessa** (2026-10-14): osobna wersja 0.15, przed giełdą międzynarodową, która przechodzi na 0.16. Zakres: nastrój rynku i fazy, bańki i krachy, boty zależne od nastroju (bez krótkiej sprzedaży).
+9. **Planowanie 0.16.x** (2026-10-25): 4 podwersje; pierwsze kraje DE, US, CZ; dryf udziałów — diagnoza i pułap napływu (G0); GDR jako instrument pochodny (podwójne notowanie w 0.20); Graham i Wilk w 0.16.3; zapis: część ograniczeń od razu, potem test; **pełny graf łańcuchów** (0.18, dwustopniowo); kolejność 0.17 Surowce → 0.18 Łańcuchy → 0.19 Handel → 0.20 Korporacje → 0.21 Rynek pracy 2.
