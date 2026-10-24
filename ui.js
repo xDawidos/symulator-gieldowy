@@ -1087,6 +1087,7 @@ function updateTopbarBrand() {
         // 0.15.2 K1: „Rok 3 · kw. 2 · tydz. 4” (na telefonie „R3 · K2 · T4”)
         const label = typeof formatGameDate === 'function' ? formatGameDate(getGameCalendar(), window.innerWidth < 600) : `Rok ${Math.floor(quarter / 4) + 1} · kw. ${(quarter % 4) + 1}`;
         if (dateEl.textContent !== label) dateEl.textContent = label;
+        dateEl.setAttribute('aria-label', typeof formatGameDate === 'function' ? formatGameDate(getGameCalendar()) : label);
         const started = typeof playerProfile !== 'undefined' && playerProfile?.startedAt ? new Date(playerProfile.startedAt).toLocaleDateString('pl-PL') : '';
         dateEl.title = `Rok · kwartał (5 tygodni) · tydzień${started ? ` · gra rozpoczęta ${started}` : ''}`;
     }
@@ -4295,7 +4296,7 @@ function renderCompanyCard() {
         tile('Zadłużenie', debtRatio === null ? '—' : `${formatNumberPl(debtRatio * 100, 0)}%`, 'Zobowiązania / aktywa. Powyżej ~70% spółka jest mocno zadłużona.', debtRatio > 0.7 ? 'text-down' : '', vs(debtRatio, med?.debt, { format: pctFmt, labels: ['niższe', 'wyższe'] })),
         tile('Kondycja', `${formatNumberPl(health, 1)} · ${healthLabel}`, 'Kondycja finansowa od −5 (bankructwo) do +5.', health >= 1 ? 'text-up' : health <= -2 ? 'text-down' : ''),
         sectorPremiumTile(),
-        typeof isCrisisActive === 'function' && isCrisisActive() ? tile('Wystawienie na kryzys', getCrisisExposureLabel(stock), `Udział segmentów spółki w sektorach tracących w linii „${CRISIS_LINES[crisisLine.id].name}”.`, getCrisisExposure(stock) >= 0.6 ? 'text-down' : '') : ''
+        typeof isCrisisActive === 'function' && isCrisisActive() ? tile('Wystawienie na kryzys', (label => `${uiIcon({ wysoki: 'alert', 'średni': 'info', niski: 'ok' }[label], 14)} ${label}`)(getCrisisExposureLabel(stock)), `Udział segmentów spółki w sektorach tracących w linii „${CRISIS_LINES[crisisLine.id].name}”.`, getCrisisExposure(stock) >= 0.6 ? 'text-down' : '') : ''
     ].filter(Boolean).join('') + renderSubsectorMedianLine(stock, med);
 
     document.getElementById('company-card-tabs').innerHTML = COMPANY_CARD_TABS
