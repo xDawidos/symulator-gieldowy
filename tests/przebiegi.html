@@ -838,6 +838,10 @@ const PROBE_0154 = `(function () {
         return initial && initial.has(x.symbol) ? 'poczatkowa' : 'debiut';
     };
     const med = a => { if (!a.length) return null; const b = a.slice().sort((x, y) => x - y); return b.length % 2 ? b[(b.length - 1) / 2] : (b[b.length / 2 - 1] + b[b.length / 2]) / 2; };
+    if (typeof recordDividendPayment === 'function') { // dywidendy: wypłaty ogółem i poniżej progu minimalnej dywidendy (0.15.4 P3)
+        const orig = recordDividendPayment; Q.div = { n: 0, below: 0 };
+        recordDividendPayment = function (stock, dps) { Q.div.n++; if (typeof getMinDividendPerShare === 'function' && dps < getMinDividendPerShare(stock) - 1e-9) Q.div.below++; return orig.apply(this, arguments); };
+    }
     for (const name of ['pawnShares', 'createPawnLoanOffer', 'executePawnLoan', 'createDebtTakeoverOffer', 'executeDebtTransfer', 'collectPawnDebt', 'maybeBotPawn', 'runPawnShopAI', 'runDebtCollectorAI']) {
         const o = window[name];
         if (typeof o === 'function') window[name] = function () { Q.calls[name] = (Q.calls[name] || 0) + 1; return o.apply(this, arguments); };
@@ -893,16 +897,18 @@ const PROBE_0154 = `(function () {
         for (const m of (corporation && corporation.managers) || []) if (m.fund && m.fund.pawnLoans) { fundLoans += m.fund.pawnLoans.length; for (const l of m.fund.pawnLoans) principal += l.principal; }
         const need = aiCompetitors.filter(a => { const nw = calculateNetWorth(a); return (a.loans && a.loans.some(l => (l.missedPayments || 0) > 0)) || a.cash / nw < 0.03; }).length;
         const missed = aiCompetitors.reduce((n, a) => n + (a.loans ? a.loans.filter(l => l.bankId && (l.missedPayments || 0) > 0).length : 0), 0);
-        const aiPawn = aiCompetitors.reduce((n, a) => n + (a.loans ? a.loans.filter(l => l.pawnShopId || l.type === 'pawn' || l.isPawn).length : 0), 0);
+        const aiPawn = aiCompetitors.reduce((n, a) => n + (a.loans ? a.loans.filter(l => l.isPawnLoan).length : 0), 0);
         Q.lomb.push({ q: macro.quarter, pawnCash: pawn ? Math.round(pawn.cash) : null, pawnPrice: pawn ? +pawn.price.toFixed(2) : null, fundLoans, principal: Math.round(principal), aiNeedy: need, aiBadLoans: missed, aiPawnLoans: aiPawn,
             colCash: col ? Math.round(col.cash) : null, colPrice: col ? +col.price.toFixed(2) : null, colHoldings: col && col.holdingPortfolio ? Object.keys(col.holdingPortfolio).length : 0, bots: aiCompetitors.length,
+            pawnRetail: pawn && pawn.retailLoans ? pawn.retailLoans.length : 0, colRetail: col && col.retailLoans ? col.retailLoans.length : 0,
+            colRetailBook: col && col.retailLoans ? Math.round(col.retailLoans.reduce((a, l) => a + l.principal, 0)) : 0, progSpend: typeof society === 'object' && society && society.budget ? Math.round(society.budget.programSpending || 0) : null,
             gov: Math.round(governmentTreasury), pop: typeof society === 'object' && society ? society.population : null });
     };
     Q.finish = function () {
         const cnt = Q.counts, last = cnt[cnt.length - 1] || {}, over = n => cnt.filter(c => c.domestic > n).length;
         const rank = Q.ort.filter(o => o.rank), top3 = rank.filter(o => o.rank <= 3).length;
         const sl = typeof splitLog !== 'undefined' ? splitLog : [];
-        return { splits: { n: sl.length, split: sl.filter(e => e.kind === 'split').length, reverse: sl.filter(e => e.kind === 'reverse').length, fractionCash: Math.round(sl.reduce((a, e) => a + e.fractionCash, 0)), ratios: sl.slice(0, 12).map(e => (e.kind === 'split' ? '' : '1:') + e.ratio + (e.kind === 'split' ? ':1' : '')) },
+        return { div: Q.div || null, delists: typeof delistLog !== 'undefined' ? delistLog.length : null, splits: { n: sl.length, split: sl.filter(e => e.kind === 'split').length, reverse: sl.filter(e => e.kind === 'reverse').length, fractionCash: Math.round(sl.reduce((a, e) => a + e.fractionCash, 0)), ratios: sl.slice(0, 12).map(e => (e.kind === 'split' ? '' : '1:') + e.ratio + (e.kind === 'split' ? ':1' : '')) },
             counts: cnt, born: Q.born, gone: Q.gone, sectors: Q.sectors, px: Q.px, ort: Q.ort, seg: Q.seg, lomb: Q.lomb, calls: Q.calls,
             summary: { domesticMax: Math.max(...cnt.map(c => c.domestic)), domesticLast: last.domestic, quartersOver115: over(115), quartersOver125: over(125), uiMax: Math.max(...cnt.map(c => c.ui)),
                 ortTop3: rank.length ? top3 / rank.length : null, ortRankLast: rank.length ? rank[rank.length - 1].rank : null, ortGone: Q.ort.some(o => !o.rank),
