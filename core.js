@@ -3385,6 +3385,43 @@ function debugTriggerMarketHalt(level = 1, durationSec = 15) {
     triggerMarketHalt(level, durationSec, level === 1 ? -0.075 : (level === 2 ? -0.135 : -0.21));
 }
 
+// 0.15.4 P6: limit dominacji. Jedna spółka (Orzeł Telekom, Cortex, Biurowce Obsługi Rachunkowej) potrafiła mieć 20–33% kapitalizacji
+// rynku i niemal stale zasiadała w górnej trójce. Udział w kapitalizacji ponad próg obniża mnożnik wyceny (nasycenie rynku, regulatorzy,
+// ryzyko koncentracji) — pozostałe spółki mogą wejść na czoło. Rynek poniżej 40 spółek zwykłych (testy, wczesne światy) bez kary.
+const DOMINANCE_FREE_SHARE = 0.10;
+const DOMINANCE_PENALTY_SLOPE = 1.5;
+const DOMINANCE_MAX_PENALTY = 0.35;
+const DOMINANCE_MIN_COMPANIES = 40;
+let dominanceCache = { quarter: null, count: -1, shares: new Map() };
+
+/** Udział spółki w kapitalizacji zwykłych spółek (odświeżany raz na kwartał); 0 poza zwykłymi spółkami. */
+function getCapitalizationShare(stock) {
+    const quarter = typeof macro === 'object' && macro ? macro.quarter : 0;
+    if (dominanceCache.quarter !== quarter || dominanceCache.count !== stocks.length) {
+        const ordinary = stocks.filter(s => !s.isBankrupt && !s.assetType && !s.isBankStock && !s.marketOperator && Number(s.price) > 0);
+        const total = ordinary.reduce((sum, s) => sum + s.price * s.totalShares, 0);
+        dominanceCache = { quarter, count: stocks.length, shares: new Map(ordinary.length >= DOMINANCE_MIN_COMPANIES && total > 0 ? ordinary.map(s => [s.symbol, s.price * s.totalShares / total]) : []) };
+    }
+    return dominanceCache.shares.get(stock.symbol) || 0;
+}
+
+// Przyczyna dominacji z diagnozy P6: duża spółka technologiczna wielokrotnie losowana na Jednorożca (+5,5…7% przychodów na kwartał przez 6–8 kwartałów)
+// rosła szybciej od rynku bez żadnego hamulca. Hamulec: udział w kapitalizacji ponad próg obniża kwartalny wzrost przychodów (prawo wielkich liczb),
+// a spółka z udziałem > 12% nie może zostać Jednorożcem.
+const DOMINANCE_GROWTH_DRAG = 0.15;      // −0,15 pp wzrostu na kwartał za każdy 1 pp udziału ponad próg
+const DOMINANCE_UNICORN_MAX_SHARE = 0.12;
+
+/** Hamulec wzrostu kwartalnego za dominację (ułamek wzrostu przychodów). */
+function getDominanceGrowthDrag(stock) {
+    return Math.max(0, getCapitalizationShare(stock) - DOMINANCE_FREE_SHARE) * DOMINANCE_GROWTH_DRAG;
+}
+
+/** Mnożnik wyceny za dominację: 1 do 10% kapitalizacji rynku, potem −1,5% za każdy punkt procentowy (najwyżej −35%). */
+function getDominanceFactor(stock) {
+    const over = getCapitalizationShare(stock) - DOMINANCE_FREE_SHARE;
+    return over > 0 ? 1 - Math.min(DOMINANCE_MAX_PENALTY, over * 100 * DOMINANCE_PENALTY_SLOPE / 100) : 1;
+}
+
 /** Mnożnik C/Z dla spółki: faza cyklu (wg bety sektora) i poziom stóp procentowych. */
 function getValuationMultiplier(stock) {
     const profile = getSectorProfile(stock);
@@ -3396,7 +3433,7 @@ function getValuationMultiplier(stock) {
     const interest = typeof getAristocratValuationFactor === 'function' ? getAristocratValuationFactor(stock) : 1; // zainteresowanie arystokratą
     const projects = typeof getSpecialProjectValuation === 'function' ? getSpecialProjectValuation(stock) : 1; // projekty specjalne
     const starMult = stock.marketStar?.type === 'unicorn' ? 1.25 : (stock.marketStar?.type === 'fading_star' ? 0.80 : 1);
-    return Math.max(0.4, Math.min(2.0, cycleMult * rateMult * sectorMult * interest * projects * starMult));
+    return Math.max(0.4, Math.min(2.0, cycleMult * rateMult * sectorMult * interest * projects * starMult * getDominanceFactor(stock)));
 }
 
 /** Szansa na zdarzenie pozytywne zależnie od fazy (eventy rynkowe). */
@@ -3423,7 +3460,25 @@ let WEALTH_TAX_INTERVAL; // = BASE_DELAYS.quarterly * 4;
 let nextWealthTaxTime = 0; 
 
 
-const CANDLE_INTERVAL = 15 * 1000; 
+const CANDLE_INTERVAL = 15 * 1000; // świeca = 15 tików gry (zegar wykresów, niezależny od prędkości)
+
+// 0.15.4 P2: oś czasu wykresów (punkty linii, świece, znaczniki zdarzeń i transakcji) to zegar gry: +1 tik (BASE_DELAYS.stockUpdate)
+// na aktualizację cen, niezależnie od prędkości i czasu rzeczywistego. Przy ×50…×200 zegar rzeczywisty dawał 2–3 punkty na okres
+// (prosta linia), a „15-sekundowa” świeca obejmowała kilka kwartałów. Start od Date.now(): stare zapisy (czas rzeczywisty) zostają w przeszłości.
+let gameChartClock = Date.now();
+
+/** Po wczytaniu zapisu zegar wykresów nie może cofnąć się za najnowszy zapisany punkt (gra mogła iść ×200). */
+function syncGameChartClock() {
+    let latest = 0;
+    for (const stock of typeof stocks !== 'undefined' ? stocks : []) {
+        const lineLast = stock.lineHistory?.[stock.lineHistory.length - 1]?.time;
+        for (const t of [lineLast, stock.currentCandle?.time, stock.chartEvents?.[stock.chartEvents.length - 1]?.time, stock.playerTransactions?.[stock.playerTransactions.length - 1]?.time]) {
+            if (Number.isFinite(t) && t > latest) latest = t;
+        }
+    }
+    gameChartClock = Math.max(gameChartClock, Date.now(), latest + BASE_DELAYS.stockUpdate);
+    return gameChartClock;
+}
 
 // Parametry ruchu cen (na tik = 1 s gry):
 // szum ~0,2% × zmienność; powrót do wartości godziwej z półokresem ok. 1 godziny gry;
@@ -3547,6 +3602,8 @@ function updateStockPrices() {
     }
 
     const now = Date.now();
+    gameChartClock += BASE_DELAYS.stockUpdate; // 0.15.4 P2
+    const chartNow = gameChartClock;
     const marketModifier = 1 + (marketVolatilityIndex - 1) * 0.5;
 
     // 0.15 H2a: ruch premii rynkowej w stronę celu (25% odległości na kwartał, ~0.00096 na tik)
@@ -3623,7 +3680,7 @@ function updateStockPrices() {
             stock.candlestickHistory = [];
             stock.lineHistory = [];
             const initialPrice = stock.price > 0 ? stock.price : 0.01;
-            stock.currentCandle = { time: now, open: initialPrice, high: initialPrice, low: initialPrice, close: initialPrice };
+            stock.currentCandle = { time: chartNow, open: initialPrice, high: initialPrice, low: initialPrice, close: initialPrice };
         }
 
         // --- Ruch ceny jako zmiana PROCENTOWA ---
@@ -3780,7 +3837,7 @@ function updateStockPrices() {
             historyLimitLine = 25 * 60;
         }
 
-        stock.lineHistory.push({ time: now, price: stock.price });
+        stock.lineHistory.push({ time: chartNow, price: stock.price });
         if (stock.lineHistory.length > historyLimitLine) {
             stock.lineHistory.shift(); 
         }
@@ -3791,15 +3848,15 @@ function updateStockPrices() {
             if (stock.price > candle.high) candle.high = stock.price;
             if (stock.price < candle.low) candle.low = stock.price;
 
-            if (now - candle.time >= CANDLE_INTERVAL) {
+            if (chartNow - candle.time >= CANDLE_INTERVAL) {
                 stock.candlestickHistory.push(candle);
                 if (stock.candlestickHistory.length > historyLimitCandles) {
                     stock.candlestickHistory.shift(); 
                 }
-                stock.currentCandle = { time: now, open: stock.price, high: stock.price, low: stock.price, close: stock.price };
+                stock.currentCandle = { time: chartNow, open: stock.price, high: stock.price, low: stock.price, close: stock.price };
             }
         } else {
-             stock.currentCandle = { time: now, open: stock.price, high: stock.price, low: stock.price, close: stock.price };
+             stock.currentCandle = { time: chartNow, open: stock.price, high: stock.price, low: stock.price, close: stock.price };
         }
     }); // Koniec stocks.forEach
 
@@ -3963,30 +4020,24 @@ function updateMarketIndexes() {
     // 2. Posortuj spółki od największej do najmniejszej pod względem kapitalizacji
     stocksWithMarketCap.sort((a, b) => b.marketCap - a.marketCap);
 
-    // 3. Oblicz TIG5 (Topowy Indeks Giełdowy 5 - ważony kapitalizacją 5 największych)
-    const tig5Index = marketIndexes.find(idx => idx.id === 'TIG5');
-    if (tig5Index) {
-        const top5 = stocksWithMarketCap.slice(0, 5);
-        if (top5.length > 0) {
-            const oldValue = tig5Index.value;
-            const top5Weights = computeCappedCapWeights(top5, 1.0);
-            const newValue = top5.reduce((sum, stock) => sum + (top5Weights[stock.symbol] || 0) * stock.price, 0);
-            tig5Index.value = newValue;
-            tig5Index.change = newValue - oldValue;
+    // 3–4. TIG5 (5 największych) i SIG20 (20 największych), ważone kapitalizacją. 0.15.4 P4: indeksy łańcuchowe jak GIG — zmiana liczby
+    // akcji (split, konsolidacja) ani zmiana składu czołówki nie robi skoku; start jak dawniej: średnia cen ważona kapitalizacją.
+    for (const [id, size] of [['TIG5', 5], ['SIG20', 20]]) {
+        const index = marketIndexes.find(idx => idx.id === id);
+        const top = stocksWithMarketCap.slice(0, size);
+        if (!index || top.length === 0) continue;
+        const oldValue = index.value, last = index.lastPrices || {};
+        const weights = computeCappedCapWeights(top, 1.0);
+        const eligible = top.filter(stock => last[stock.symbol] > 0);
+        if (!(oldValue > 0) || eligible.length === 0) {
+            index.value = top.reduce((sum, stock) => sum + (weights[stock.symbol] || 0) * stock.price, 0);
+        } else {
+            const total = eligible.reduce((sum, stock) => sum + (weights[stock.symbol] || 0), 0) || 1;
+            const weightedReturn = eligible.reduce((sum, stock) => sum + (weights[stock.symbol] || 0) / total * Math.max(-0.2, Math.min(0.2, stock.price / last[stock.symbol] - 1)), 0);
+            index.value = oldValue * (1 + weightedReturn);
         }
-    }
-
-    // 4. Oblicz SIG20 (Szeroki Indeks Giełdowy 20 - ważony kapitalizacją 20 największych)
-    const sig20Index = marketIndexes.find(idx => idx.id === 'SIG20');
-    if (sig20Index) {
-        const top20 = stocksWithMarketCap.slice(0, 20);
-        if (top20.length > 0) {
-            const oldValue = sig20Index.value;
-            const top20Weights = computeCappedCapWeights(top20, 1.0);
-            const newValue = top20.reduce((sum, stock) => sum + (top20Weights[stock.symbol] || 0) * stock.price, 0);
-            sig20Index.value = newValue;
-            sig20Index.change = newValue - oldValue;
-        }
+        index.lastPrices = Object.fromEntries(top.map(stock => [stock.symbol, stock.price]));
+        index.change = index.value - oldValue;
     }
 
     // Zapisz historię wartości indeksów (do wskaźnika koniunktury)
@@ -5306,7 +5357,7 @@ function processDemographicEvents() {
 
 /** Edukacja dryfuje ±1 na kwartał w stronę celu wynikającego z priorytetu państwa. */
 function advanceEducation() {
-    const target = EDUCATION_TARGETS[society.educationPriority] ?? EDUCATION_TARGETS.medium;
+    const target = Math.min(100, (EDUCATION_TARGETS[society.educationPriority] ?? EDUCATION_TARGETS.medium) + (Number(society.educationBonus) || 0)); // 0.15.4 P7: program Oświata
     const gap = target - society.education;
     society.education = clampValue(society.education + clampValue(gap, -1, 1) * (Math.abs(gap) < 1 ? 1 : getRandomInRange(0.5, 1)), 0, 100);
 }
@@ -5660,9 +5711,45 @@ function updateBudgetBalance() {
     }
 }
 
+// 0.15.4 P7: programy socjalne jako wydatki skarbu. Wcześniej regularne wydatki państwa były tylko „na papierze” (publicServices nie
+// schodziły ze skarbu), więc Skarb Państwa rósł o ok. 330 mln zł rocznie do miliardów bez żadnego zastosowania. Teraz skarb finansuje
+// 3 małe programy z nadwyżki ponad rezerwę (10% nadwyżki na kwartał, najwyżej kwartalna baza podatkowa); skutki skalują się
+// z poziomem finansowania (pełne od połowy bazy podatkowej, więcej zmniejsza tylko skarb). Programy nie wchodzą do salda budżetu (deficyt, premia obligacji, CIT) — są finansowane z zapasu skarbu.
+const SOCIAL_PROGRAM_RESERVE = 50_000_000;
+const SOCIAL_PROGRAM_RATE = 0.10;
+const SOCIAL_PROGRAM_CAP = 1.0;            // × kwartalna baza podatkowa (limit wydatku)
+const SOCIAL_PROGRAM_FULL = 0.5;           // × kwartalna baza podatkowa: finansowanie dające pełne skutki
+const SOCIAL_PROGRAMS = [
+    { id: 'families', name: 'Wsparcie rodzin', share: 0.40, text: 'część klasy biednej awansuje do średniej niższej (−0,05 pp biednych na kwartał przy pełnym finansowaniu)' },
+    { id: 'schools', name: 'Oświata', share: 0.30, text: 'rośnie cel edukacji (do +8 punktów), więcej specjalistów na rynku pracy' },
+    { id: 'health', name: 'Ochrona zdrowia', share: 0.30, text: 'szybszy wzrost populacji (+0,02% na kwartał przy pełnym finansowaniu)' }
+];
+
+/** Co kwartał: wydatki na programy socjalne ze skarbu i ich skutki (intensywność 0…1 = finansowanie / limit). */
+function settleSocialPrograms() {
+    const budget = society.budget;
+    const base = Math.max(0, Number(budget.taxBase) || 0);
+    budget.programSpending = 0; budget.programs = {};
+    const cap = base * SOCIAL_PROGRAM_CAP;
+    const spend = Math.min(Math.max(0, governmentTreasury - SOCIAL_PROGRAM_RESERVE) * SOCIAL_PROGRAM_RATE, cap);
+    const intensity = base > 0 ? Math.min(1, Math.max(0, spend) / (base * SOCIAL_PROGRAM_FULL)) : 0;
+    if (spend > 0) {
+        governmentTreasury -= spend;
+        budget.programSpending = spend;
+        for (const program of SOCIAL_PROGRAMS) budget.programs[program.id] = spend * program.share;
+    }
+    const classes = society.classes;
+    const shift = Math.min(classes.poor || 0, 0.0005 * intensity);
+    classes.poor -= shift; classes.lowerMid = (classes.lowerMid || 0) + shift;          // wsparcie rodzin
+    society.educationBonus = Math.min(8, (Number(society.educationBonus) || 0) * 0.95 + 0.4 * intensity); // oświata: cel edukacji rośnie, bez finansowania zanika
+    society.population = Math.round(society.population * (1 + 0.0002 * intensity));       // ochrona zdrowia
+    return spend;
+}
+
 function advanceSocialPolicy() {
     applyPendingLaw();
     settleSocialBudget();
+    settleSocialPrograms();
     if (society.housingProgram > 0) {
         society.housingProgram--;
         if (Math.random() < 0.5 * Math.max(1, Number(society.laws.housing) || 0)) commissionSocialHousing();

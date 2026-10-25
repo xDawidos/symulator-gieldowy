@@ -482,6 +482,112 @@ function collectPawnDebt(account, loan) {
     return seizedValue;
 }
 
+// 0.15.4 P7: klienci indywidualni lombardu — popyt z populacji (klasa biedna, recesja), pożyczki pod zastaw rzeczy. Wcześniej lombard
+// miał tylko okazjonalnych klientów (fundusze agresywnych botów, boty w tarapatach): w 20 latach 12–14 pożyczek, panel zawsze pusty.
+const PAWN_CLIENT_ARRIVAL = 0.9;           // nowych klientów na tydzień gry przy bazowym popycie (≈ 11 aktywnych pożyczek przy 12-tygodniowym terminie)
+const PAWN_CLIENT_LOAN = [300, 2500];      // kapitał pożyczki (zł, przy poziomie cen 1,0)
+const PAWN_CLIENT_DEFAULT = 0.12;          // bazowa szansa, że klient nie wykupi zastawu (rośnie z popytem z biedniejszych klas)
+const PAWN_CLIENT_RECOVERY = 0.9;          // odzysk kapitału ze sprzedaży niewykupionego zastawu
+const PAWN_CLIENT_MAX_BOOK = 0.5;          // portfel pożyczek klientów ≤ 50% gotówki lombardu
+
+/** Popyt na pożyczki detaliczne: udział klasy biednej względem startu × mnożnik recesji (0,4…2,5). */
+function getRetailLendingDemand() {
+    const poor = (Number(society?.classes?.poor) || 0.22) / 0.22;
+    const slump = typeof economyCycle === 'object' && economyCycle?.phase === 'recession' ? 1.4 : 1;
+    return Math.max(0.4, Math.min(2.5, poor * slump));
+}
+
+/** Liczba zdarzeń w tygodniu dla średniej `rate`: część całkowita plus losowa reszta. */
+function drawWeeklyArrivals(rate) {
+    return Math.floor(rate) + (Math.random() < rate - Math.floor(rate) ? 1 : 0);
+}
+
+/** Co tydzień: rozliczenie pożyczek klientów lombardu i nowi klienci (wołane z pętli tygodniowej). */
+function processPawnClientsWeekly() {
+    const shop = getPawnShop();
+    if (!shop) return null;
+    if (!Array.isArray(shop.retailLoans)) shop.retailLoans = [];
+    const stats = shop.retailStats || (shop.retailStats = { issued: 0, repaid: 0, forfeited: 0, interest: 0, loss: 0 });
+    for (const loan of [...shop.retailLoans]) {
+        loan.weeksLeft--;
+        if (loan.weeksLeft > 0) continue;
+        shop.retailLoans.splice(shop.retailLoans.indexOf(loan), 1);
+        if (loan.forfeit) {
+            const back = loan.principal * PAWN_CLIENT_RECOVERY, loss = loan.principal - back;
+            adjustCompanyCash(shop, back);
+            recordPayment('external:klienci-lombardu', shop, back, 'Sprzedaż niewykupionego zastawu (klient lombardu)');
+            adjustBalanceSheet(shop, { assets: -loss, retainedEarnings: -loss });
+            stats.forfeited++; stats.loss += loss;
+        } else {
+            const interest = loan.principal * PAWN_ANNUAL_RATE * PAWN_WEEKS / FUND_WEEKS_PER_YEAR;
+            adjustCompanyCash(shop, loan.principal + interest);
+            recordPayment('external:klienci-lombardu', shop, loan.principal + interest, 'Spłata pożyczki lombardowej (klient)');
+            adjustBalanceSheet(shop, { assets: interest, retainedEarnings: interest });
+            stats.repaid++; stats.interest += interest;
+        }
+    }
+    const demand = getRetailLendingDemand();
+    const priceLevel = Math.max(0.5, Number(society?.priceLevel) || 1);
+    for (let i = drawWeeklyArrivals(PAWN_CLIENT_ARRIVAL * demand); i > 0; i--) {
+        const principal = Math.round(getRandomInRange(...PAWN_CLIENT_LOAN) * priceLevel);
+        const book = shop.retailLoans.reduce((sum, loan) => sum + loan.principal, 0);
+        if (shop.cash < principal * 2 || book + principal > Math.max(0, shop.cash) * PAWN_CLIENT_MAX_BOOK) break;
+        adjustCompanyCash(shop, -principal);
+        recordPayment(shop, 'external:klienci-lombardu', principal, 'Pożyczka lombardowa dla klienta (zastaw rzeczy)');
+        shop.retailLoans.push({ id: nextSimulationId('pawnc'), principal, weeksLeft: PAWN_WEEKS, forfeit: Math.random() < Math.min(0.4, PAWN_CLIENT_DEFAULT * demand) });
+        stats.issued++;
+    }
+    return { active: shop.retailLoans.length, book: shop.retailLoans.reduce((sum, loan) => sum + loan.principal, 0) };
+}
+
+// 0.15.4 P7: klienci Wrony — pożyczki konsumenckie (sektor Finanse / Pożyczki konsumenckie). Wcześniej Wrona żyła tylko z długów
+// bankowych botów i trzymała 5 mln zł gotówki bez obrotu.
+const CONSUMER_LOAN_ARRIVAL = 0.7;         // nowych klientów na tydzień gry przy bazowym popycie
+const CONSUMER_LOAN = [500, 6000];         // kapitał pożyczki (zł, przy poziomie cen 1,0)
+const CONSUMER_LOAN_WEEKS = 12;
+const CONSUMER_LOAN_APR = 0.45;            // oprocentowanie w skali roku gry (FUND_WEEKS_PER_YEAR tygodni)
+const CONSUMER_LOAN_DEFAULT = 0.18;        // bazowa szansa niespłacenia (rośnie z popytem z biedniejszych klas)
+const CONSUMER_LOAN_RECOVERY = 0.45;       // odzysk kapitału z windykacji niespłaconej pożyczki
+const CONSUMER_LOAN_MAX_BOOK = 0.5;        // portfel pożyczek ≤ 50% gotówki Wrony
+
+/** Co tydzień: spłaty i windykacja pożyczek konsumenckich Wrony oraz nowi klienci. */
+function processConsumerLoansWeekly() {
+    const collector = getDebtCollector();
+    if (!collector) return null;
+    if (!Array.isArray(collector.retailLoans)) collector.retailLoans = [];
+    const stats = collector.retailStats || (collector.retailStats = { issued: 0, repaid: 0, collected: 0, interest: 0, loss: 0 });
+    for (const loan of [...collector.retailLoans]) {
+        loan.weeksLeft--;
+        if (loan.weeksLeft > 0) continue;
+        collector.retailLoans.splice(collector.retailLoans.indexOf(loan), 1);
+        if (loan.forfeit) {
+            const back = loan.principal * CONSUMER_LOAN_RECOVERY, loss = loan.principal - back;
+            adjustCompanyCash(collector, back);
+            recordPayment('external:klienci-wrony', collector, back, 'Windykacja niespłaconej pożyczki konsumenckiej');
+            adjustBalanceSheet(collector, { assets: -loss, retainedEarnings: -loss });
+            stats.collected++; stats.loss += loss;
+        } else {
+            const interest = loan.principal * CONSUMER_LOAN_APR * CONSUMER_LOAN_WEEKS / FUND_WEEKS_PER_YEAR;
+            adjustCompanyCash(collector, loan.principal + interest);
+            recordPayment('external:klienci-wrony', collector, loan.principal + interest, 'Spłata pożyczki konsumenckiej (klient Wrony)');
+            adjustBalanceSheet(collector, { assets: interest, retainedEarnings: interest });
+            stats.repaid++; stats.interest += interest;
+        }
+    }
+    const demand = getRetailLendingDemand();
+    const priceLevel = Math.max(0.5, Number(society?.priceLevel) || 1);
+    for (let i = drawWeeklyArrivals(CONSUMER_LOAN_ARRIVAL * demand); i > 0; i--) {
+        const principal = Math.round(getRandomInRange(...CONSUMER_LOAN) * priceLevel);
+        const book = collector.retailLoans.reduce((sum, loan) => sum + loan.principal, 0);
+        if (collector.cash < principal * 2 || book + principal > Math.max(0, collector.cash) * CONSUMER_LOAN_MAX_BOOK) break;
+        adjustCompanyCash(collector, -principal);
+        recordPayment(collector, 'external:klienci-wrony', principal, 'Pożyczka konsumencka dla klienta Wrony');
+        collector.retailLoans.push({ id: nextSimulationId('consl'), principal, weeksLeft: CONSUMER_LOAN_WEEKS, forfeit: Math.random() < Math.min(0.45, CONSUMER_LOAN_DEFAULT * demand) });
+        stats.issued++;
+    }
+    return { active: collector.retailLoans.length, book: collector.retailLoans.reduce((sum, loan) => sum + loan.principal, 0) };
+}
+
 function notifyDebtAction(account, text) {
     if (account.isPlayer) {
         playerFund.trust = Math.max(0, playerFund.trust - 5);

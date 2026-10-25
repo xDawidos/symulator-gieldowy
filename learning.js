@@ -462,6 +462,26 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Co może zrobić akcjonariusz mniejszościowy?', a: ['złożyć skargę do KNF', 'zablokować umowę sam', 'nic'], c: 0 }
         ]
     },
+    splitReverseSplit: {
+        title: 'Split i reverse split', icon: '🔀',
+        text: 'Split to podział akcji: spółka wymienia każdą akcję na kilka (np. 5:1), a kurs spada tyle razy, ile akcji przybywa. Kapitalizacja i wartość Twojej pozycji zostają bez zmian — to jak rozmiana banknotu na drobne. Spółki dzielą akcje, gdy kurs jest bardzo wysoki, bo tanie akcje łatwiej kupować. Reverse split (konsolidacja, np. 1:10) robi odwrotnie: wiele akcji zamienia się w jedną, a kurs rośnie — stosują go spółki z kursem poniżej 1 zł, żeby nie wyglądać na „grosze” i uniknąć zawieszenia handlu. Ułamki akcji, których nie da się wymienić, spółka wypłaca gotówką. Sam podział nie czyni spółki ani lepszą, ani gorszą (reverse split bywa sygnałem kłopotów). W grze: split od 1000 zł, konsolidacja poniżej 1 zł; wykresy i dywidendy na akcję są przeliczane wstecz.',
+        example: () => { const e = splitLog[splitLog.length - 1]; return e ? `${e.name}: ${e.kind === 'split' ? 'split' : 'konsolidacja'} ${formatSplitRatio(e.kind === 'split' ? e.ratio : 1 / e.ratio)} w kw. ${e.quarter} — kurs ${e.priceBefore.toFixed(2)} → ${e.priceAfter.toFixed(2)} zł.` : 'Przykład: akcja za 1200 zł po splicie 3:1 kosztuje 400 zł, a Ty masz 3 razy więcej akcji.'; },
+        quiz: [
+            { q: 'Masz 10 akcji po 1200 zł. Spółka robi split 3:1. Ile masz akcji i po ile?', a: ['30 akcji po 400 zł', '10 akcji po 400 zł', '30 akcji po 1200 zł'], c: 0 },
+            { q: 'Jak split zmienia wartość Twojej pozycji?', a: ['nie zmienia jej', 'zwiększa ją', 'zmniejsza ją'], c: 0 },
+            { q: 'Konsolidacja 1:10: masz 25 akcji po 0,40 zł. Co dostaniesz?', a: ['2 akcje po 4 zł i gotówkę za pół akcji', '250 akcji po 0,04 zł', '25 akcji po 4 zł'], c: 0 }
+        ]
+    },
+    warunkiRynkowe: {
+        title: 'Warunki rynkowe w kooperacji', icon: '🤝',
+        text: 'Kooperacja to umowa dostawca–odbiorca między dwiema spółkami. „Warunki rynkowe” znaczą, że rozliczają się po cenach, jakie zaproponowałby niezależny kontrahent: obie spółki dostają z umowy wzrost przychodów (+0,3 pp na kwartał) i marży (+0,5 pp) proporcjonalnie do udziału powiązanego segmentu, a ryzyko kontrahenta (strajk, bankructwo partnera) ciąży na obu. Zarządy spółek zawsze zawierają umowy na warunkach rynkowych. Warunki korzystne dla jednej strony przenoszą ok. 1% przychodów segmentu na kwartał z jednej spółki do drugiej — to tunelowanie, które obciąża akcjonariuszy mniejszościowych, dostaje czerwoną flagę „podmioty powiązane” i może skończyć się skargą do KNF, zwrotem korzyści i grzywną.',
+        example: () => { const c = cooperations.find(x => x.terms === 'market'); return c ? `Kooperacja ${c.a} i ${c.b}: warunki rynkowe — obie spółki zyskują, nikt nie jest poszkodowany.` : 'Przykład: spółka A kupuje usługi spółki B po cenach, jakie zapłaciłby obcy klient — to warunki rynkowe.'; },
+        quiz: [
+            { q: 'Co znaczą „warunki rynkowe” w kooperacji?', a: ['rozliczenie po cenach, jakie zapłaciłby niezależny kontrahent', 'umowa korzystna tylko dla jednej strony', 'umowa bez ceny'], c: 0 },
+            { q: 'Kto może w grze ustawić warunki korzystne dla jednej spółki?', a: ['tylko gracz — zarządy spółek zawsze zawierają umowy rynkowe', 'każdy prezes', 'KNF'], c: 0 },
+            { q: 'Co grozi za warunki nierynkowe wykryte przez KNF?', a: ['zwrot korzyści i grzywna', 'nic', 'wykluczenie z giełdy'], c: 0 }
+        ]
+    },
     premiaKontrola: {
         title: 'Premia za kontrolę', icon: '💼',
         text: 'Pakiet kontrolny (ponad 50% głosów) jest wart więcej niż ta sama liczba akcji kupowana pojedynczo: daje władzę nad zarządem, dywidendą, transferem zysku i strategią. Dlatego kupujący płaci premię za kontrolę — w grze 15–30% ponad kurs. Matka może sprzedać pakiet córki innemu inwestorowi (koncernowi albo botowi); zysk z premii trafia do matki.',

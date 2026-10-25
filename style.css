@@ -334,7 +334,7 @@ tr.locked-row {
     border-radius: var(--radius-md);
     box-shadow: 0 4px 8px rgba(0,0,0,0.2);
     padding: 20px;
-    z-index: 1009;
+    /* 0.15.4 P1: bez własnego z-index — dawne 1009 (reguła ID) wygrywało z .modal (1100) i chowało okno pod zasłoną (1090) */
     display: flex;
     flex-direction: column;
 }
@@ -2776,10 +2776,10 @@ button {
   gap: var(--space-1);
 }
 .sector-group-menu {
-  position: absolute;
-  top: calc(100% + 4px);
+  position: fixed; /* 0.15.4 P1: położenie ustawia toggleSectorGroupMenu; absolutne menu ucinał overflow-x rzędu chipów */
+  top: 0;
   left: 0;
-  z-index: 100;
+  z-index: 1000;
   display: flex;
   flex-direction: column;
   min-width: 190px;
@@ -2902,7 +2902,7 @@ body.dark-mode #stock-table,
 }
 #stock-table th, #stock-table td { box-sizing: border-box; }
 #stock-table .col-name { width: auto; }
-#stock-table .col-price { width: 108px; }
+#stock-table .col-price { width: 148px; } /* 0.15.4 P1: „17 418,77 PLN” (mono, nowrap) wystawało pod pigułkę zmiany przy 108 px */
 #stock-table .col-change { width: 108px; }
 #stock-table .col-avail { width: 140px; }
 #stock-table .col-owned { width: 64px; }

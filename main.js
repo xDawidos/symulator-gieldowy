@@ -760,6 +760,7 @@ function applySaveSnapshot(snapshot) {
     try { reconciled = reconcileSharesHeld(); } finally { ghostTrimSource = 'game'; } // audyt A1: akcje w obrocie = suma posiadaczy
     if (reconciled) report.warnings.push(`Uzgodniono akcje w obrocie w ${reconciled} spółkach (audyt A1).`);
 
+    syncGameChartClock(); // 0.15.4 P2: zegar osi wykresów nie cofa się za zapisane punkty
     report.ok = true;
     return report;
 }
@@ -1361,6 +1362,8 @@ gameTimers.weekly = setGameInterval(() => {
         if (typeof runPawnShopAI === 'function') {
             runPawnShopAI(); //
         }
+        if (typeof processPawnClientsWeekly === 'function') processPawnClientsWeekly(); // 0.15.4 P7: klienci indywidualni lombardu
+        if (typeof processConsumerLoansWeekly === 'function') processConsumerLoansWeekly(); // 0.15.4 P7: pożyczki konsumenckie Wrony
 
         if (typeof runCorporateLogic === 'function') {
         runCorporateLogic(); // Obsługa działów i inwestycji
@@ -1446,6 +1449,7 @@ gameTimers.weekly = setGameInterval(() => {
         processSubsidiariesQuarterly(); // 0.14 T6: spółki zależne (pożyczki, usamodzielnienie, wchłonięcie, sprzedaż pakietu)
         processSubsectorMechanicsQuarterly(); // 0.14 T2: badania kliniczne, bloki jądrowe, kontrole KNF (subsectors.js)
         processSpecialProjectsQuarterly(); // konsorcja i projekty specjalne (projects.js)
+        if (typeof processSplitsQuarterly === 'function') processSplitsQuarterly(); // 0.15.4 P4: split i konsolidacja akcji (splits.js)
         reconcileSharesHeld(); // audyt A1: akcje w obrocie = suma posiadaczy
         processOversightQuarterly(); // korupcja, policja, KNF (oversight.js)
         processMafiaQuarterly(); // mafia, Bruno Gato, porachunki (mafia.js)
@@ -1460,6 +1464,7 @@ gameTimers.weekly = setGameInterval(() => {
         advanceMacroQuarter(); // inflacja, bezrobocie, cykle sektorów, wybory (macro.js)
         processCityQuarterly(); // festyn raz w roku (city.js)
         applyCrowdingPressureToWeak(); // D2: nasycony rynek — słabe spółki tanieją szybciej
+        if (typeof enforceListingLimitQuarterly === 'function') enforceListingLimitQuarterly(); // 0.15.4 P5: powyżej 115 spółek krajowych wymuszone wycofanie najsłabszych
         processAwaitingListings(); // P1: startupy czekające na wolne miejsce na giełdzie
         processWorkforceQuarter(); // 0.13: zatrudnienie, zadowolenie, związki i strajki przed raportami (workforce.js)
         processFinancialReports(); // zawiera koszty R&D, wynik kontraktów, pozycje okresu i dywidendy
@@ -1910,6 +1915,7 @@ function createNewWorld() {
     if (typeof createMarketCrashState === 'function') marketCrash = createMarketCrashState();
     if (typeof createMarketHaltState === 'function') marketHalt = createMarketHaltState();
     if (typeof resetCrises === 'function') resetCrises(); // 0.15.3
+    if (typeof randomizeStartingGiants === 'function') randomizeStartingGiants(); // 0.15.4 P6: losowa kolejność wielkości gigantów na starcie
     stocks.forEach(stock => {
         if (stock.balanceSheet && stock.assetType !== 'Startup') initializeFundamentals(stock, true);
         initializeOwnership(stock);

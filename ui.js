@@ -41,9 +41,23 @@ function setSectorChip(el, sector) {
     setSectorFilter({ sector });
 }
 
-/** Spółki widoczne w filtrze listy (bez spółek zależnych i upadłych). */
+/**
+ * 0.15.4 P1: spółki, które tabela może pokazać przed filtrem sektora i typu: wybrany rynek, zakładka poziomu giełdy
+ * i „Posiadane”; córki stojące pod widoczną matką liczą się razem z nią. To jedno źródło liczb dla chipów sektorów,
+ * podnagłówków i nagłówka rynku (wcześniej chipy liczyły wszystkie rynki i poziomy, a lista tylko wybrany).
+ */
+function getListBaseStocks() {
+    const market = typeof selectedMarketOperator === 'undefined' || !selectedMarketOperator ? 'GPW' : selectedMarketOperator;
+    const level = typeof currentMarketLevel === 'undefined' ? 'ALL' : currentMarketLevel;
+    const inView = (stocks || []).filter(stock => getStockMarket(stock) === market && (!ownedOnlyFilter || isStockOwnedByPlayer(stock))
+        && exchanges[stock.exchange] && (level === 'ALL' || stock.exchange === level));
+    const shownParents = new Set(inView.filter(stock => !stock.isSubsidiaryOf).map(stock => stock.symbol));
+    return inView.filter(stock => !stock.isSubsidiaryOf || !shownParents.has(stock.isSubsidiaryOf));
+}
+
+/** Zgodność: lista bazowa filtra sektorów (dawniej bez córek, upadłych i startupów — teraz wg tabeli). */
 function getSectorFilterBaseList() {
-    return (stocks || []).filter(stock => !stock.isBankrupt && !stock.isSubsidiaryOf && stock.assetType !== 'Startup');
+    return getListBaseStocks();
 }
 
 /** 0.14.5: przełącznik grupowania sektorów według kategorii (rozwijane listy vs płaski ciąg chipów). */
@@ -62,6 +76,11 @@ function toggleSectorGroupMenu(btn, e) {
     if (!isExpanded) {
         btn.setAttribute('aria-expanded', 'true');
         menu.hidden = false;
+        // 0.15.4 P1: menu przy przycisku, poza przewijanym rzędem chipów (overflow-x przycinał absolutne menu do 32 px wysokości)
+        const rect = btn.getBoundingClientRect();
+        menu.style.position = 'fixed';
+        menu.style.top = `${Math.round(rect.bottom + 4)}px`;
+        menu.style.left = `${Math.max(8, Math.min(Math.round(rect.left), window.innerWidth - menu.offsetWidth - 8))}px`;
         const firstItem = menu.querySelector('button');
         if (firstItem) firstItem.focus();
     }
@@ -84,6 +103,8 @@ if (typeof window !== 'undefined') {
             closeAllSectorGroupMenus();
         }
     });
+    window.addEventListener('scroll', () => closeAllSectorGroupMenus(), true); // menu jest przypięte do okna, nie do przewijanej listy
+    window.addEventListener('resize', () => closeAllSectorGroupMenus());
     window.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             const openMenu = document.querySelector('.sector-group-dropdown .sector-group-menu:not([hidden])');
@@ -263,6 +284,7 @@ const UI_ICON_PATHS = {
     paczka: 'M12 3l8 4v10l-8 4-8-4V7zM4 7l8 4 8-4M12 11v10',
     zarzad: 'M9 3h6l-1.5 3h-3zM10.5 6L8 16l4 5 4-5-2.5-10',
     odswiez: 'M20 11a8 8 0 0 0-14.3-4.3M4 4v4h4M4 13a8 8 0 0 0 14.3 4.3M20 20v-4h-4',
+    podzial: 'M3 12h6l5-6h6M17 3l3 3-3 3M9 12l5 6h6M17 15l3 3-3 3', // 0.15.4 P4c: split / konsolidacja akcji
     koszyk: 'M3 4h2l2.4 11h11L21 7H6.2M9 20h.01M17 20h.01',
     rakieta: 'M12 2c3 2 5 6 5 10l-2 4H9l-2-4c0-4 2-8 5-10zM12 9a1.5 1.5 0 1 0 0 .01M9 16l-2 4 3-1M15 16l2 4-3-1',
     ok: 'M4 12l5 5L20 6',
@@ -434,6 +456,7 @@ const EMOJI_ICONS = {
     '🤲': 'lombard',
     '🕊': 'etykieta',
     '🧲': 'magnes',
+    '🔀': 'podzial',
     '💔': 'blokada',
     '🚩': 'flaga',
     '😠': 'alert',
@@ -644,8 +667,7 @@ function setMarketLevel(el, level) {
 function updateMarketKPIs() {
     if (typeof stocks === 'undefined') return;
     const active = stocks.filter(s => !s.isBankrupt && s.price > 0);
-    const el = document.getElementById('mkpi-active');
-    if (el) el.textContent = active.length;
+    // liczbę spółek w nagłówku ustawia displayStocks (0.15.4 P1: tyle, ile wierszy pokazuje lista)
     const getPct = s => s.previousPrice
         ? ((s.price - s.previousPrice) / s.previousPrice * 100) : 0;
     const sorted = [...active].sort((a, b) => getPct(b) - getPct(a));
@@ -1275,7 +1297,7 @@ function calculateNiceYAxisRange(minPrice, maxPrice) {
 function addChartEvent(stock, icon, label) {
     if (!stock) return;
     if (!Array.isArray(stock.chartEvents)) stock.chartEvents = [];
-    stock.chartEvents.push({ time: Date.now(), icon, label });
+    stock.chartEvents.push({ time: gameChartClock, icon, label }); // 0.15.4 P2: zegar gry
     if (stock.chartEvents.length > 20) stock.chartEvents.shift();
 }
 
@@ -1371,7 +1393,7 @@ function renderChartSVGForStock(stock, svgAreaElement, width, height) {
     svg.style.display = "block";
 
     const padding = { top: 10, bottom: 20, left: 45, right: 10 };
-    const chartWidth = width - padding.left - padding.right;
+    let chartWidth = width - padding.left - padding.right;
     const chartHeight = height - padding.top - padding.bottom;
 
     let dataToDraw, minPrice, maxPrice, historyForMapping;
@@ -1398,6 +1420,10 @@ function renderChartSVGForStock(stock, svgAreaElement, width, height) {
     }
 
     const yAxis = calculateNiceYAxisRange(minPrice, maxPrice);
+    // 0.15.4 P1: lewy margines z najdłuższej etykiety osi (stałe 45 px ucinało liczby typu „13 000,00”)
+    const labelChars = Math.max(...[yAxis.min, yAxis.max].map(v => formatNumberPl(v, 2).length));
+    padding.left = Math.max(padding.left, Math.ceil(labelChars * 6.8) + 14);
+    chartWidth = width - padding.left - padding.right;
     const getX = (index, historyLength) => padding.left + (index / Math.max(1, historyLength - 1)) * (chartWidth - 20) + 10;
     const getY = (price) => padding.top + chartHeight - ((price - yAxis.min) / Math.max(0.1, yAxis.max - yAxis.min)) * chartHeight;
 
@@ -1836,6 +1862,8 @@ function displayStocks(previousInputValues = {}) {
     if (stock.isMonopolist) markers.push(['lider', 'Monopolista w sektorze', 'warn']);
     if (typeof isConcern === 'function' && isConcern(stock)) markers.push(['grupa', 'Koncern: czołówka kapitalizacji i grupa (segmenty niepowiązane, ≥ 2 spółki zależne albo ≥ 2 segmenty i spółka zależna)', 'info']); // 0.14 T5
     if (stock.isStateOwned) markers.push(['panstwo', 'Spółka Skarbu Państwa', 'muted']);
+    const recentSplit = typeof getRecentShareCountChange === 'function' ? getRecentShareCountChange(stock) : null;
+    if (recentSplit) markers.push(['podzial', recentSplit, 'info']); // 0.15.4 P4c: znacznik ikoną z opisem słowami
     if (typeof getRedFlags === 'function' && getSkillLevel('accountant') >= 4 && !stock.assetType) {
       const flags = getRedFlags(stock);
       if (flags.length >= 2) markers.push(['flaga', `Czerwone flagi: ${flags.map(f => f.label).join(', ')}`, 'down']);
@@ -2210,6 +2238,8 @@ function displayStocks(previousInputValues = {}) {
   });
 
   liveStockTableBody.replaceChildren(...stockTableBody.childNodes);
+  const shownCount = document.getElementById('mkpi-active');
+  if (shownCount) shownCount.textContent = liveStockTableBody.querySelectorAll('tr.stock-row').length; // 0.15.4 P1: licznik = wiersze listy
 
   if (typeof openStockDrawerSymbol !== 'undefined' && openStockDrawerSymbol) {
     const targetRow = document.querySelector(`#stock-table-body tr[data-symbol="${openStockDrawerSymbol}"]`);
@@ -2913,6 +2943,10 @@ function openManagementModal(symbol, defaultTab = 'main') {
             dividendBtn.disabled = true;
             const remainingTime = Math.ceil((stock.dividendCooldownUntil - Date.now()) / 1000);
             cooldownInfo.textContent = `Następna dywidenda dostępna za: ${remainingTime} s.`;
+        } else if (isDividendTooSmall(stock, getForcedDividendAmount(stock) / Math.max(1, stock.totalShares))) {
+            // 0.15.4 P3: słowa, nie kolor — dlaczego przycisk jest nieaktywny
+            dividendBtn.disabled = true;
+            cooldownInfo.textContent = `Dywidenda zbyt mała: poniżej ${formatZl(getMinDividendPerShare(stock))} na akcję (0,01 zł albo 0,1% kursu) — spółka nie ma na nią gotówki.`;
         } else {
             dividendBtn.disabled = false;
             cooldownInfo.textContent = '';
@@ -4183,11 +4217,12 @@ function renderCompanyCardOverview(stock) {
         return data ? `<span class="ceo-trait" style="--trait-color: ${data.color};" title="${escapeHtml(data.description)}">${escapeHtml(data.name)}</span>` : '';
     }).join('');
     const phase = stock.corporatePhase && getSkillLevel('financialAnalyst') >= 1 ? `<p class="text-sm"><strong>Faza cyklu życia:</strong> ${escapeHtml(stock.corporatePhase)}</p>` : '';
-    const research = stock.research?.isResearching && stock.research.currentTech ? `<p class="text-sm">${uiIcon('mikroskop', 14)} W fazie R&D: <strong>${escapeHtml(technologies[stock.research.currentTech]?.name || stock.research.currentTech)}</strong></p>` : '';
+    const splitInfo = typeof describeShareCountHistory === 'function' ? describeShareCountHistory(stock) : '';
+    const research = stock.research?.isResearching && stock.research.currentTech ?`<p class="text-sm">${uiIcon('mikroskop', 14)} W fazie R&D: <strong>${escapeHtml(technologies[stock.research.currentTech]?.name || stock.research.currentTech)}</strong></p>` : '';
     const insights = typeof getAnalystInsights === 'function' ? getAnalystInsights(stock) : [];
     return `
         <div class="cc-grid">
-            <section><h4>O spółce</h4><div class="text-sm text-justify">${assembleDescription(stock)}</div>${phase}${research}</section>
+            <section><h4>O spółce</h4><div class="text-sm text-justify">${assembleDescription(stock)}</div>${phase}${splitInfo}${research}</section>
             <section>
                 ${stock.ceo?.name ? `<h4>Prezes</h4><p class="m-0"><strong>${uiIcon('zarzad', 14)} ${escapeHtml(stock.ceo.name)}</strong></p>
                     <p class="text-xs text-muted mt-0">wiek ${stock.ceo.age ?? '—'}, staż ${Math.floor((stock.ceo.tenure || 0) / 4)} lat</p>
@@ -4920,12 +4955,12 @@ function renderFestivalView(festivalContainer) {
     const sortedParticipants = [...festival.participants].sort((a, b) => b.interest - a.interest);
     sortedParticipants.forEach((p, index) => {
         // Logika nazw uczestników
-        const ownerName = p.ownerId === 'player' ? 'Ty' : (p.ownerId === 'city' ? 'Miasto Gdańsk' : (aiCompetitors.find(a => a.id === p.ownerId)?.name || p.ownerName || stocks.find(s => s.symbol === p.ownerId)?.name || p.ownerId));
+        const ownerName = p.ownerId === 'player' ? 'Ty' : (p.ownerId === 'city' ? 'Miasto' : (aiCompetitors.find(a => a.id === p.ownerId)?.name || p.ownerName || stocks.find(s => s.symbol === p.ownerId)?.name || p.ownerId));
         let targetName = '';
         switch (p.promotionTarget.type) {
             case 'self': targetName = 'Własny wizerunek'; break;
             case 'company': targetName = p.promotionTarget.id; break;
-            case 'city': targetName = 'Miasto Gdańsk'; break;
+            case 'city': targetName = 'Miasto'; break;
             case 'bank_promo': targetName = p.ownerName; break; // Dla banków
         }
         participantsTableHTML += `<tr style="${p.ownerId === 'player' ? 'font-weight: bold; background-color: var(--bg-elevated-2);' : ''}">
@@ -5073,7 +5108,7 @@ function showFestivalResultsModal(participants, festivalName) {
         if (p.ownerId === 'player') {
             ownerName = 'Ty (Gracz)';
         } else if (p.ownerId === 'city') {
-            ownerName = 'Miasto Gdańsk';
+            ownerName = 'Miasto';
         } else {
             // Spróbuj znaleźć bota AI
             const ai = aiCompetitors.find(a => a.id === p.ownerId);
@@ -7792,6 +7827,16 @@ function renderPawnPanel() {
 }
 
 /** Okno lombardu: warunki, zastawy funduszu gracza i zapas przejętych akcji. */
+/** 0.15.4 P7: portfel pożyczek klientów indywidualnych lombardu (liczby i słowami, bez koloru). */
+function renderPawnClientsSummary(shop) {
+    const loans = shop?.retailLoans || [];
+    const stats = shop?.retailStats || {};
+    const book = loans.reduce((sum, loan) => sum + loan.principal, 0);
+    if (!loans.length && !stats.issued) return '<p class="fund-muted">Na razie brak klientów indywidualnych.</p>';
+    return `<p>Aktywne pożyczki pod zastaw rzeczy: <strong>${loans.length}</strong> · saldo ${formatZl(book, 0)} · udzielono łącznie ${stats.issued || 0}, wykupiono ${stats.repaid || 0}, niewykupionych zastawów ${stats.forfeited || 0}.</p>
+        <p class="fund-muted">Klientów przybywa z udziałem biedniejszych klas i w recesji; lombard zarabia na odsetkach (${(PAWN_ANNUAL_RATE * 100).toFixed(0)}% rocznie), a przy niewykupionym zastawie odzyskuje ${(PAWN_CLIENT_RECOVERY * 100).toFixed(0)}% kapitału.</p>`;
+}
+
 function openPawnShopPanel() {
     const modal = document.getElementById('pawnshop-modal');
     const body = document.getElementById('pawnshop-body');
@@ -7805,6 +7850,8 @@ function openPawnShopPanel() {
         <p class="fund-muted">Pożyczki pod zastaw akcji dla funduszy: ${(PAWN_LOAN_TO_VALUE * 100).toFixed(0)}% wartości, ${(PAWN_ANNUAL_RATE * 100).toFixed(0)}% rocznie, ${PAWN_WEEKS} tygodni, do ${(PAWN_MAX_SHARE_OF_ASSETS * 100).toFixed(0)}% aktywów funduszu. Zastaw ustawisz w panelu funduszu (sekcja „Lombard”).</p>
         <h4>Zastawy Twojego funduszu</h4>
         <ul>${(playerFund?.pawnLoans || []).map(loan => `<li>${loan.shares} × ${escapeHtml(loan.symbol)}: ${formatZl(loan.principal)} · ${loan.weeksLeft} tyg.${loan.missed ? ` · zaległość ${loan.missed}` : ''}</li>`).join('') || '<li class="fund-muted">Brak.</li>'}</ul>
+        <h4>Klienci lombardu (rynek)</h4>
+        ${renderPawnClientsSummary(pawnShop)}
         <h4>Akcje przejęte przez lombard</h4>
         <ul>${holdings(pawnShop) || '<li class="fund-muted">Brak.</li>'}</ul>`
         : '<p class="loss">Lombard nie jest dostępny.</p>';
@@ -7812,6 +7859,16 @@ function openPawnShopPanel() {
 }
 
 /** Okno windykatora: zasady i akcje zajęte dłużnikom (fundusze, boty). */
+/** 0.15.4 P7: portfel pożyczek konsumenckich Wrony (liczby i słowami, bez koloru). */
+function renderConsumerLoansSummary(collector) {
+    const loans = collector?.retailLoans || [];
+    const stats = collector?.retailStats || {};
+    const book = loans.reduce((sum, loan) => sum + loan.principal, 0);
+    if (!loans.length && !stats.issued) return '<p class="fund-muted">Na razie brak klientów indywidualnych.</p>';
+    return `<p>Aktywne pożyczki: <strong>${loans.length}</strong> · saldo ${formatZl(book, 0)} · udzielono łącznie ${stats.issued || 0}, spłacono ${stats.repaid || 0}, windykowano niespłaconych ${stats.collected || 0}.</p>
+        <p class="fund-muted">Oprocentowanie ${(CONSUMER_LOAN_APR * 100).toFixed(0)}% w skali roku gry, termin ${CONSUMER_LOAN_WEEKS} tygodni; z niespłaconej pożyczki Wrona odzyskuje ${(CONSUMER_LOAN_RECOVERY * 100).toFixed(0)}% kapitału. Klientów przybywa z udziałem biedniejszych klas i w recesji.</p>`;
+}
+
 function openDebtCollectorPanel() {
     const modal = document.getElementById('debtcollector-modal');
     const body = document.getElementById('debtcollector-body');
@@ -7825,6 +7882,8 @@ function openDebtCollectorPanel() {
         <p><strong>${escapeHtml(collector.name)}</strong> (${escapeHtml(collector.symbol)}) · gotówka ${formatZl(collector.cash, 0)}</p>
         <p class="fund-muted">Windykator przejmuje zaległe długi (kredyty botów z zaległościami, niespłacone zastawy funduszy po ${COLLECTOR_AFTER_MISSED} nieopłaconych odsetkach) i zajmuje akcje dłużników z dyskontem ${(100 - COLLECTOR_DISCOUNT * 100).toFixed(0)}%.</p>
         <p>Kredyty botów z zaległościami: <strong>${botDebts}</strong></p>
+        <h4>Pożyczki konsumenckie Wrony</h4>
+        ${renderConsumerLoansSummary(collector)}
         <h4>Zajęte akcje</h4>
         <ul>${seized || '<li class="fund-muted">Brak.</li>'}</ul>`
         : '<p class="loss">Windykator nie jest dostępny.</p>';
@@ -8938,10 +8997,12 @@ function renderCountryPanel() {
                     <div><dt>Saldo kwartału</dt><dd class="${budget.balance < 0 ? 'text-down' : 'text-up'}">${formatZl(budget.balance || 0, 0)}</dd></div>
                     <div><dt>Deficyt od</dt><dd>${budget.deficitQuarters} kw.</dd></div>
                     <div><dt>Zasiłki</dt><dd>${formatZl(budget.socialSpending || 0, 0)}</dd></div>
+                    <div><dt>Programy socjalne ze skarbu</dt><dd>${formatZl(budget.programSpending || 0, 0)}</dd></div>
                     <div><dt>Podatki od pracy</dt><dd>${formatZl(budget.laborTaxes || 0, 0)}</dd></div>
                     <div><dt>Ubytek przez szarą strefę</dt><dd class="${budget.greyTaxLoss > 0 ? 'text-down' : ''}">${formatZl(budget.greyTaxLoss || 0, 0)}</dd></div>
                     <div><dt>CIT</dt><dd>${(getCompanyIncomeTaxRate() * 100).toFixed(0)}%${Number(society.laws.corpTaxBrackets) ? ` (małe ${((getCompanyIncomeTaxRate() + CORP_TAX_BRACKETS[society.laws.corpTaxBrackets][0]) * 100).toFixed(0)}%, duże ${((getCompanyIncomeTaxRate() + CORP_TAX_BRACKETS[society.laws.corpTaxBrackets][1]) * 100).toFixed(0)}%)` : ''}</dd></div>
                 </dl>
+                <p class="text-xs text-muted">Programy socjalne (${SOCIAL_PROGRAMS.map(p => `${escapeHtml(p.name)} ${formatZl((budget.programs || {})[p.id] || 0, 0)}`).join(' · ')}) skarb finansuje z nadwyżki ponad rezerwę — poza saldem budżetu: ${SOCIAL_PROGRAMS.map(p => `${escapeHtml(p.name)}: ${escapeHtml(p.text)}`).join('; ')}.</p>
                 <p class="text-xs text-muted">Deficyt przez 4 kwartały podnosi rentowność obligacji skarbowych o 0,25 pp${budget.bondPremium ? ` (teraz: ${uiIcon('ok', 14)} premia naliczana)` : ''}. Przez 8 kwartałów — rząd podnosi CIT albo tnie ustawy (zależnie od partii).</p></article>
             <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('glosowanie', 20)}</span><div><h4>Partie</h4><span class="bank-card-type">${escapeHtml(getRulingParty().name)} · wybory za ${macro.election.quartersLeft} kw.</span></div></header>
                 ${renderPartyBars(support)}
@@ -9036,7 +9097,7 @@ function renderCompanyCardGroup(stock) {
     const coops = getStockCooperations(stock).map(coop => {
         const side = getCoopSide(coop, stock);
         const partner = stocks.find(s => s.symbol === side.partner);
-        const terms = coop.terms === 'market' ? 'warunki rynkowe' : coop.terms === sym ? '<span class="text-warn">warunki korzystne dla tej spółki</span>' : '<span class="text-down">warunki korzystne dla partnera</span>';
+        const terms = coop.terms === 'market' ? '<span title="Rozliczenie po cenach rynkowych: żadna ze stron nie zyskuje kosztem drugiej.">warunki rynkowe</span>' : coop.terms === sym ? '<span class="text-warn">warunki korzystne dla tej spółki</span>' : '<span class="text-down">warunki korzystne dla partnera</span>';
         const flag = coop.flag && level >= 4 ? ` · <span class="text-down" title="Wspólny właściciel ${escapeHtml(coop.flag.name)}: ${(coop.flag.pctA * 100).toFixed(0)}% w ${coop.a} i ${(coop.flag.pctB * 100).toFixed(0)}% w ${coop.b}.">${uiIcon('flaga', 14)} podmioty powiązane</span>` : '';
         const complaint = coop.complaint ? ` · ${uiIcon('waga', 14)} skarga do KNF${coop.complaint.result ? `: ${escapeHtml(coop.complaint.result)}` : ' w toku'}` : '';
         const actions = [
@@ -9051,15 +9112,16 @@ function renderCompanyCardGroup(stock) {
     const partners = getPlayerCooperationPartners(stock);
     const form = partners.length ? `<div class="d-flex gap-2 flex-wrap items-center mt-2">
             <select id="coop-partner-${sym}" aria-label="Kooperant">${partners.map(p => `<option value="${p.symbol}">${escapeHtml(p.name)} (${(getPlayerStakePct(p) * 100).toFixed(0)}%)</option>`).join('')}</select>
-            <select id="coop-terms-${sym}" aria-label="Warunki"><option value="market">warunki rynkowe</option><option value="${sym}">korzystne dla ${escapeHtml(stock.symbol)}</option><option value="partner">korzystne dla partnera</option></select>
+            <select id="coop-terms-${sym}" aria-label="Warunki" title="Warunki rynkowe = rozliczenie po cenach rynkowych, nikt nie zyskuje kosztem drugiej strony"><option value="market">warunki rynkowe</option><option value="${sym}">korzystne dla ${escapeHtml(stock.symbol)}</option><option value="partner">korzystne dla partnera</option></select>
             <button class="btn-secondary" onclick="(() => { const p = document.getElementById('coop-partner-${sym}').value, t = document.getElementById('coop-terms-${sym}').value; playerProposeCooperation('${sym}', p, t === 'partner' ? p : t); })()">${uiIcon('umowa', 14)} Zaproponuj kooperację (12 kw.)</button>
         </div><p class="text-xs text-muted">Umowy między spółkami jednego właściciela przy nierównych udziałach dostają czerwoną flagę; warunki nierynkowe przenoszą ok. 1% przychodów segmentu na kwartał i grożą skargą do KNF.</p>` : '';
-    const tender = stock.tender ? `<p class="text-sm">${uiIcon('megafon', 14)} Wezwanie: ${escapeHtml(stock.tender.buyerName)} kupuje akcje po <strong>${formatZl(stock.tender.price)}</strong> do kw. ${stock.tender.until}.${getPlayerStakePct(stock) > 0 ? ` <button class="btn-secondary btn-sm" onclick="playerTenderDecision('${sym}', 'sell')">Sprzedaj w wezwaniu</button>` : ''}</p>` : '';
+    const termsHelp = coops ? `<p class="text-xs text-muted"><strong>Co to znaczy „warunki rynkowe”?</strong> Spółki rozliczają się po cenach rynkowych: obie dostają z kooperacji wzrost przychodów i marży, nikt nie jest poszkodowany. Zarządy spółek zawsze zawierają umowy na warunkach rynkowych; warunki korzystne dla jednej strony (tunelowanie) może ustawić tylko gracz — kosztem akcjonariuszy drugiej spółki i z ryzykiem skargi do KNF.</p>` : '';
+    const tender =stock.tender ? `<p class="text-sm">${uiIcon('megafon', 14)} Wezwanie: ${escapeHtml(stock.tender.buyerName)} kupuje akcje po <strong>${formatZl(stock.tender.price)}</strong> do kw. ${stock.tender.until}.${getPlayerStakePct(stock) > 0 ? ` <button class="btn-secondary btn-sm" onclick="playerTenderDecision('${sym}', 'sell')">Sprzedaj w wezwaniu</button>` : ''}</p>` : '';
     const policy = canFundControlAgm(stock) && children.length ? `<label class="text-sm"><input type="checkbox" ${stock.groupPolicy ? 'checked' : ''} onchange="playerSubsidiaryAction('${children[0].symbol}', 'policy', this.checked)"> Wspólna polityka kadrowa dla grupy</label>` : '';
-    if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('grupaKapitalowa');
+    if (typeof unlockAcademyEntry === 'function') { unlockAcademyEntry('grupaKapitalowa'); if (coops) unlockAcademyEntry('warunkiRynkowe'); }
     return `${status}${tender}${policy}
         <div class="cc-grid">
-            <section><h4>Mapa grupy</h4><ul class="text-sm">${groupRows || '<li class="text-muted">brak spółek zależnych i matki</li>'}${coops || '<li class="text-muted">brak kooperacji</li>'}</ul>${form}</section>
+            <section><h4>Mapa grupy</h4><ul class="text-sm">${groupRows || '<li class="text-muted">brak spółek zależnych i matki</li>'}${coops || '<li class="text-muted">brak kooperacji</li>'}</ul>${termsHelp}${form}</section>
             <section><h4>Suma części (SOTP)</h4><table class="asset-mini-table w-full"><tbody>${sotpRows}</tbody></table>${premium}
                 <p class="text-xs text-muted">Segmenty wyceniane medianą C/Z sektora (przy stracie: C/S × 0,5), pakiety w zależnych po kursie rynkowym. Uproszczenie: zysk matki zawiera transfer zysku córek.</p></section>
         </div>`;

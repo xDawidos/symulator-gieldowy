@@ -2678,6 +2678,22 @@ const LISTING_PRESSURE_RANGE = LISTING_HARD_CAP - LISTING_SOFT_CAP;   // hamulec
 const LISTING_TOTAL_CAP = 150;       // P1: zwykłe spółki łącznie (krajowe, zależne, rynków internetowych); bez stałych podmiotów i startupów
 const AWAITING_LISTING_MAX_QUARTERS = 8; // startup bez miejsca na giełdzie czeka najwyżej 2 lata, potem zostaje przejęty
 
+/**
+ * 0.15.4 P6: losowa wielkość startowa gigantów (kapitalizacja ≥ 1 mld zł: ORT, BOR, KUP, NRB, BEW, CTX, UNP, HOR). Kolejność ich wielkości
+ * na starcie była stała i po latach niemal zawsze decydowała o górnej trójce (Orzeł Telekom: 17–19% rynku od pierwszego kwartału).
+ * Kurs przed kalibracją fundamentów mnożymy przez losowy czynnik 0,6–1,6 (log-normalny, σ = 0,3) — nowa gra, przed initializeFundamentals.
+ */
+function randomizeStartingGiants(list = stocks) {
+    const changed = [];
+    for (const stock of list) {
+        if (stock.assetType || stock.isBankStock || stock.marketOperator || !(stock.price * stock.totalShares >= 1e9)) continue;
+        const factor = Math.max(0.6, Math.min(1.6, Math.exp(gaussianRandom() * 0.3)));
+        stock.price *= factor;
+        changed.push([stock.symbol, factor]);
+    }
+    return changed;
+}
+
 /** Spółka liczona do limitu spółek krajowych. */
 function isCountedListedCompany(stock) {
     return Boolean(stock && !stock.assetType && !stock.isBankrupt && !stock.isSubsidiaryOf
@@ -2742,6 +2758,69 @@ function processAwaitingListings() {
             removeStartup(startup, 1, payout);
         }
     }
+}
+
+// 0.15.4 P5: polityka zaostrzania, gdy rynek krajowy jest zatłoczony. Luźne ok. 110 (111–115 w porządku) zostaje; powyżej:
+// nowe debiuty już stoją (sufit 110), pełne wydzielenia przechodzą w carve-out (SPINOFF_DOMESTIC_LIMIT = 110), córki są wchłaniane szybciej,
+// a powyżej 115 spółek krajowych państwo wymusza wycofanie najsłabszych z wykupem po kursie +10% (cel: nigdy > 125 dłużej niż 4 kw.).
+const LISTING_DELIST_AT = 115;
+const LISTING_DELIST_MAX_PER_QUARTER = 2;
+const LISTING_DELIST_PREMIUM = 0.10;
+const LISTING_DELIST_RANGE = 10;       // 115…125: pełna presja wchłonięć córek
+
+/** Presja zaostrzania 0…1: od 110 spółek krajowych (do 125) oraz od 135 spółek łącznie (do 150). */
+function getListingStrictness() {
+    const domestic = (getListedCompanyCount() - LISTING_HARD_CAP) / (LISTING_DELIST_AT + LISTING_DELIST_RANGE - LISTING_HARD_CAP);
+    const total = (getTotalCompanyCount() - (LISTING_TOTAL_CAP - 15)) / 15;
+    return Math.max(0, Math.min(1, Math.max(domestic, total)));
+}
+
+/** Spółka, którą państwo może wycofać z giełdy: zwykła, słaba, bez fuzji/wezwania/córek, bez większościowego pakietu gracza. */
+function isDelistCandidate(stock) {
+    if (!isCountedListedCompany(stock) || stock.isStateOwned || stock.isBankStock || stock.marketOperator || stock.mafiaFront) return false;
+    if (stock.mergerProcess || stock.tender || stock.spinoff || stock.stakeCampaign || (stock.subsidiaries?.length || 0) > 0) return false;
+    if (stocks.some(other => other.isSubsidiaryOf === stock.symbol)) return false;
+    if ((playerPortfolio?.[stock.symbol]?.shares || 0) > stock.totalShares * 0.5) return false;
+    return (Number(stock.financialHealth) || 0) <= 1;
+}
+
+/** Kandydaci do wycofania, od najsłabszego: kondycja, potem kapitalizacja. */
+function getDelistCandidates() {
+    return stocks.filter(isDelistCandidate).sort((a, b) => ((Number(a.financialHealth) || 0) - (Number(b.financialHealth) || 0)) || (getMarketCapValue(a) - getMarketCapValue(b)));
+}
+
+/** Wycofanie z wykupem: posiadacze dostają gotówkę po kursie +10%, płaci spółka, resztę skarb państwa. Zwraca wypłaconą kwotę (null = odmowa: skarb nie wystarcza). */
+function delistWithBuyout(stock) {
+    const offer = stock.price * (1 + LISTING_DELIST_PREMIUM);
+    const cost = getTrackedHeldShares(stock) * offer;
+    const fromCompany = Math.min(cost, Math.max(0, Number(stock.cash) || 0));
+    const fromTreasury = cost - fromCompany;
+    if (fromTreasury > Math.max(0, governmentTreasury)) return null;
+    const heldByPlayer = (playerPortfolio?.[stock.symbol]?.shares || 0) > 0 || (playerWallet?.portfolio?.[stock.symbol]?.shares || 0) > 0;
+    if (fromCompany > 0) { adjustCompanyCash(stock, -fromCompany); recordPayment(stock, 'external:akcjonariusze', fromCompany, 'Wykup akcji przy wycofaniu z giełdy'); }
+    governmentTreasury -= fromTreasury;
+    const paid = buyOutAllHolders(stock, offer);
+    removeStockFromGame(stock.symbol);
+    purgeSymbolHolders(stock.symbol);
+    for (const ai of aiCompetitors) for (const loan of ai.loans || []) if (loan.collateral?.symbol === stock.symbol) loan.collateral = null; // zastaw rozliczony wykupem
+    for (const bank of commercialBanks) for (const loans of Object.values(bank.loanPortfolio || {})) if (Array.isArray(loans)) for (const loan of loans) if (loan.collateral?.symbol === stock.symbol) loan.collateral = null;
+    const text = `🚪 ${stock.name} (${stock.symbol}) znika z giełdy: rynek jest zatłoczony (${getListedCompanyCount()} spółek krajowych), a spółka należy do najsłabszych. Akcjonariusze dostają wykup po kursie +${Math.round(LISTING_DELIST_PREMIUM * 100)}% (${formatZl(offer)} za akcję).`;
+    logEvent(text, 'market');
+    if (typeof pushNews === 'function') pushNews(text, null);
+    if (heldByPlayer && typeof addMail === 'function') addMail({ sender: 'PULS', subject: `🚪 ${stock.name}: wycofanie z giełdy`, body: `${text}\n\nTwoje akcje rozliczono po cenie wykupu, gotówka trafiła na konto.`, importance: 2 });
+    if (typeof delistLog !== 'undefined') { delistLog.push({ symbol: stock.symbol, quarter: typeof macro === 'object' ? macro.quarter : 0, paid, fromTreasury }); if (delistLog.length > 60) delistLog.shift(); }
+    return paid;
+}
+let delistLog = [];
+
+/** Co kwartał: powyżej LISTING_DELIST_AT spółek krajowych wycofuje najsłabsze (najwyżej 2 na kwartał). */
+function enforceListingLimitQuarterly() {
+    let removed = 0;
+    for (const stock of getDelistCandidates()) {
+        if (removed >= LISTING_DELIST_MAX_PER_QUARTER || getListedCompanyCount() <= LISTING_DELIST_AT) break;
+        try { if (delistWithBuyout(stock) !== null) removed++; } catch (error) { console.error(`[wycofanie] ${stock.symbol}:`, error); } // błąd jednej spółki nie zatrzymuje pętli kwartalnej
+    }
+    return removed;
 }
 
 /** D2: finansowanie startupów na nasyconym rynku — mniejsze wpłaty (do −50%) … */
@@ -2819,7 +2898,7 @@ function computeQuarterResults(stock) {
     }
 
     // 0.15 H1a: health * 0.0005 (było 0.004) zapobiega samonapędzającej się spirali wzrostu przychodów ze zdrowia
-    const growth = profile.growth / 4 * SECTOR_GROWTH_FACTOR + (Number(stock.growthAdj) || 0) + profile.beta * gdp + health * 0.0005 + phaseAdj + sectorAdj + projectAdj + societyAdj + starGrowthAdj + inflation / 4 * INFLATION_PASS_THROUGH + gaussianRandom() * 0.02;
+    const growth = profile.growth / 4 * SECTOR_GROWTH_FACTOR - getDominanceGrowthDrag(stock) + (Number(stock.growthAdj) || 0) + profile.beta * gdp + health * 0.0005 + phaseAdj + sectorAdj + projectAdj + societyAdj + starGrowthAdj + inflation / 4 * INFLATION_PASS_THROUGH + gaussianRandom() * 0.02;
     // T2 (Fintech): zakaz nowych klientów po kontroli KNF — wzrost przychodów 0 przez 2 kwartały.
     const growthCapped = isKnfGrowthBlocked(stock) ? Math.min(0, growth) : growth;
     fundamentals.revenue = Math.max(1000, fundamentals.revenue * (1 + Math.max(-0.25, Math.min(0.25, growthCapped))));
@@ -3087,6 +3166,23 @@ function reviewDividendPolicy(stock) {
     }
 }
 
+// 0.15.4 P3: minimalna dywidenda — większa z dwóch: 0,01 zł na akcję albo 0,1% kursu; poniżej spółka nie wypłaca (EcoLube płacił 0,0077 zł).
+const MIN_DIVIDEND_PER_SHARE = 0.01;
+const MIN_DIVIDEND_PRICE_PCT = 0.001;
+
+function getMinDividendPerShare(stock) {
+    return Math.max(MIN_DIVIDEND_PER_SHARE, (Number(stock?.price) || 0) * MIN_DIVIDEND_PRICE_PCT);
+}
+
+function isDividendTooSmall(stock, dividendPerShare) {
+    return !(Number(dividendPerShare) >= getMinDividendPerShare(stock) - 1e-9);
+}
+
+/** Dywidenda specjalna na żądanie: do 4% kapitalizacji, z 80% gotówki spółki. */
+function getForcedDividendAmount(stock) {
+    return Math.min((stock.price * stock.totalShares) * 0.04, Math.max(0, Number(stock.cash) || 0) * 0.8);
+}
+
 /** Ogłoszenie dywidendy po raporcie (wypłata po dividendTimer). */
 function declareQuarterDividend(stock, reportedNetIncome) {
     if (stock.assetType === 'REIT') return;
@@ -3109,6 +3205,8 @@ function declareQuarterDividend(stock, reportedNetIncome) {
     const total = Math.min(reportedNetIncome * ratio, available);
     const shares = Math.max(1, Number(stock.totalShares) || 1);
     if (total <= 0) return;
+    stock.dividendTooSmall = isDividendTooSmall(stock, total / shares); // opcjonalne pole zapisu: ostatnia dywidenda pominięta jako zbyt mała
+    if (stock.dividendTooSmall) return;
 
     stock.pendingDividend = { total, dps: total / shares, declaredAt: Date.now() };
     stock.estimatedDividend = total / shares;
@@ -3120,7 +3218,7 @@ function payCompanyDividend(stock, dividendPerShare, purpose = 'Dywidenda') {
     const shares = Math.max(1, Number(stock.totalShares) || 1);
     const maxTotal = Math.max(0, Number(stock.cash) || 0);
     const total = Math.min(dividendPerShare * shares, maxTotal);
-    if (!(total > 0)) return 0;
+    if (!(total > 0) || isDividendTooSmall(stock, total / shares)) return 0; // 0.15.4 P3: brak wypłat poniżej progu
 
     const dps = total / shares;
     adjustCompanyCash(stock, -total);
@@ -3525,6 +3623,7 @@ function selectUnicornCandidate(currentQ) {
     const eligible = stocks.filter(s => {
         if (s.assetType || s.isBankStock || s.isBankrupt || s.tradeHalted || s.price <= 1.0) return false;
         if (s.marketStar) return false;
+        if (getCapitalizationShare(s) > DOMINANCE_UNICORN_MAX_SHARE) return false; // 0.15.4 P6: gigant nie zostaje Jednorożcem
         if (s.lastMarketStarQuarter && (currentQ - s.lastMarketStarQuarter) < MARKET_STAR_CONFIG.cooldownQuarters) return false;
         if ((Number(s.financialHealth) || 0) < 0) return false;
         if (s.fundamentals && (Number(s.fundamentals.netProfit) || 0) <= 0 && (Number(s.fundamentals.epsTtm) || 0) <= 0) return false; // jednorożcem nie może być spółka trwale generująca stratę (jak mock LOSS)
@@ -4556,8 +4655,11 @@ function initializeCityCompanies() {
         { name: "Wodociągi Miejskie", type: 'Usługi', budget: 60000 }
     ];
 
-    municipalNames.forEach(comp => {
+    // 0.15.4 P7: na giełdę może wejść tylko część spółek miejskich (3–5 z 8, czyli 38–63%); pozostałe zostają w rękach miasta na zawsze
+    const listing = new Set([...municipalNames.keys()].sort(() => Math.random() - 0.5).slice(0, getRandomIntInRange(3, 5)));
+    municipalNames.forEach((comp, index) => {
         municipalCompanies.push({
+            willList: listing.has(index),
             id: `mun_${comp.name.substring(0, 3).toUpperCase()}`,
             name: comp.name,
             type: comp.type,
@@ -4616,7 +4718,7 @@ function updateHoldingCompanies() {
         }
 
         // Logika aktualizacji wykresów (pozostaje bez zmian)
-        const now = Date.now();
+        const now = gameChartClock; // 0.15.4 P2: oś czasu wykresów = zegar gry
         if (!holding.currentCandle || !holding.candlestickHistory) {
             holding.candlestickHistory = [];
             holding.lineHistory = [];
@@ -4874,9 +4976,9 @@ function executeForcedDividend(stock) {
         return false; // Nie można jeszcze wymusić dywidendy
     }
 
-    // Specjalna dywidenda: do 4% kapitalizacji, ale tylko z gotówki spółki.
-    const dividendTotalAmount = Math.min((stock.price * stock.totalShares) * 0.04, Math.max(0, Number(stock.cash) || 0) * 0.8);
-    if (!(dividendTotalAmount > 0)) return false;
+    // Specjalna dywidenda: do 4% kapitalizacji, ale tylko z gotówki spółki; nie poniżej progu minimalnej dywidendy.
+    const dividendTotalAmount = getForcedDividendAmount(stock);
+    if (!(dividendTotalAmount > 0) || isDividendTooSmall(stock, dividendTotalAmount / stock.totalShares)) return false;
 
     payCompanyDividend(stock, dividendTotalAmount / stock.totalShares, 'Dywidenda specjalna');
 
@@ -6513,7 +6615,7 @@ function runMunicipalCompanyLogic() {
         return;
     }
 
-    const targetCompany = getRandomElement(municipalCompanies);
+    const targetCompany = getRandomElement(municipalCompanies.filter(company => company.willList !== false)); // starsze zapisy bez znacznika: wszystkie mogą wejść
     if (!targetCompany) return;
 
     // Spółka wchodzi na giełdę
@@ -11001,6 +11103,24 @@ function shiftSegmentShare(stock, sector, delta) {
     return moved;
 }
 
+// 0.15.4 P6: limit różnorodności — segmenty spółki mogą należeć do najwyżej 2 niepowiązanych klastrów sektorów
+// (klaster = sektory połączone parami RELATED_SECTOR_PAIRS). Konglomerat Technologia + Nieruchomości + Gaming (3 klastry) jest niemożliwy.
+const MAX_UNRELATED_CLUSTERS = 2;
+
+/** Liczba niepowiązanych klastrów w liście sektorów (połączone składowe grafu powiązań). */
+function countSectorClusters(sectors) {
+    const list = [...new Set(sectors)];
+    const parent = new Map(list.map(sector => [sector, sector]));
+    const find = sector => { while (parent.get(sector) !== sector) sector = parent.get(sector); return sector; };
+    for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) if (areSectorsRelated(list[i], list[j])) parent.set(find(list[i]), find(list[j]));
+    return new Set(list.map(find)).size;
+}
+
+/** Czy dodanie sektora do segmentów spółki przekroczyłoby limit różnorodności. */
+function wouldExceedDiversity(stock, sector) {
+    return countSectorClusters([...stock.segments.map(seg => seg.sector), sector]) > MAX_UNRELATED_CLUSTERS;
+}
+
 function canStartExpansion(stock) {
     const strategy = stock.strategy;
     return isStrategyCompany(stock) && !(strategy?.process) && !(strategy?.pivot) && stock.segments.length < MAX_SEGMENTS
@@ -11012,14 +11132,14 @@ function canStartExpansion(stock) {
 function pickExpansionSector(stock) {
     const have = new Set(stock.segments.map(seg => seg.sector));
     const main = getMainSector(stock);
-    const free = SECTOR_NAMES.filter(name => !have.has(name) && name !== 'Bankowość');
+    const free = SECTOR_NAMES.filter(name => !have.has(name) && name !== 'Bankowość' && !wouldExceedDiversity(stock, name));
     const related = free.filter(name => have.size && [...have].some(sector => areSectorsRelated(sector, name)));
     if (related.length && Math.random() < 0.8) return getRandomElement(related);
     return free.length ? getRandomElement(free) : null;
 }
 
 function startExpansion(stock, sector, quarter = getStrategyQuarter(), by = 'ceo') {
-    if (!sector || stock.segments.some(seg => seg.sector === sector)) return null;
+    if (!sector || stock.segments.some(seg => seg.sector === sector) || wouldExceedDiversity(stock, sector)) return null;
     const cost = Math.round(getAnnualRevenue(stock) * getRandomInRange(...EXPANSION_COST));
     payStrategyCost(stock, cost, 'external:rozszerzenie', `Rozszerzenie o segment ${sector}`); // gotówka → budowa nowego segmentu (aktywa bez zmian do rozliczenia)
     const related = stock.segments.some(seg => areSectorsRelated(seg.sector, sector));
@@ -11036,7 +11156,7 @@ function resolveExpansion(stock, roll = Math.random(), quarter = getStrategyQuar
     if (!process || process.type !== 'expand') return null;
     stock.strategy.process = null;
     const chance = process.related ? EXPANSION_SUCCESS.related : EXPANSION_SUCCESS.unrelated;
-    if (roll < chance && stock.segments.length < MAX_SEGMENTS && !stock.segments.some(seg => seg.sector === process.sector)) {
+    if (roll < chance && stock.segments.length < MAX_SEGMENTS && !stock.segments.some(seg => seg.sector === process.sector) && !wouldExceedDiversity(stock, process.sector)) {
         addStockSegment(stock, process.sector, EXPANSION_START_SHARE);
         stock.strategy.growth = { sector: process.sector, target: getRandomInRange(...EXPANSION_TARGET_SHARE), step: getRandomInRange(...EXPANSION_STEP) };
         noteStrategyStat('expansionsDone');
@@ -11297,7 +11417,8 @@ function getCeoPivotChance(stock) {
 function pickPivotSector(stock) {
     const main = getMainSector(stock);
     const have = new Set(stock.segments.map(seg => seg.sector));
-    const pool = stock.segments.length >= MAX_SEGMENTS ? [...have].filter(name => name !== main) : SECTOR_NAMES.filter(name => name !== main && name !== 'Bankowość');
+    const pool = stock.segments.length >= MAX_SEGMENTS ? [...have].filter(name => name !== main) : SECTOR_NAMES.filter(name => name !== main && name !== 'Bankowość' && (have.has(name) || !wouldExceedDiversity(stock, name)));
+    if (!pool.length) return null;
     const related = pool.filter(name => areSectorsRelated(main, name));
     return related.length && Math.random() < 0.5 ? getRandomElement(related) : getRandomElement(pool);
 }
@@ -11305,7 +11426,7 @@ function pickPivotSector(stock) {
 function startPivot(stock, toSector = null, quarter = getStrategyQuarter(), by = 'ceo') {
     const from = getMainSector(stock);
     const to = toSector && toSector !== from ? toSector : pickPivotSector(stock);
-    if (!to || to === from || (!stock.segments.some(seg => seg.sector === to) && stock.segments.length >= MAX_SEGMENTS)) return null;
+    if (!to || to === from || (!stock.segments.some(seg => seg.sector === to) && (stock.segments.length >= MAX_SEGMENTS || wouldExceedDiversity(stock, to)))) return null;
     const cost = Math.round(getAnnualRevenue(stock) * PIVOT_COST);
     payStrategyCost(stock, cost, 'external:pivot', `Zmiana profilu na ${to}`);
     adjustBalanceSheet(stock, { assets: -cost, retainedEarnings: -cost });
@@ -11466,7 +11587,7 @@ const SPINOFF_FAKE_RUMOR_CHANCE = SPINOFF_QUARTER_CHANCE * 0.4 / 0.6; // 60% plo
 const SPINOFF_ANNOUNCE_JUMP = [0.03, 0.08];
 const SPINOFF_CARVE_CHANCE = 0.25;
 const SPINOFF_CARVE_KEEP = [0.51, 0.80];
-const SPINOFF_DOMESTIC_LIMIT = 115;       // decyzja 4: spin-off do 115 spółek krajowych, powyżej tylko carve-out
+const SPINOFF_DOMESTIC_LIMIT = 110;       // 0.15.4 P5: pełny spin-off tylko poniżej 110 spółek krajowych (było 115), powyżej tylko carve-out (córka)
 const SPINOFF_LOG_LIMIT = 20;
 const SPINOFF_PLAYER_BLOCK_QUARTERS = 4;
 let spinoffLog = [];                       // { parent, child, quarter, carve, keep, valueBefore, gigBefore, ratio2q, gig2q }
@@ -12619,7 +12740,7 @@ function mergeChildSegment(parent, child) {
     const share = Math.min(0.6, cr / pr); // revenue matki zawiera już przychody córki
     const sector = getMainSector(child);
     const existing = parent.segments.find(seg => seg.sector === sector);
-    if (existing || parent.segments.length >= 3 || !sector || share < 0.05) { // segment < 5% przychodów dopisany do głównego
+    if (existing || parent.segments.length >= 3 || !sector || share < 0.05 || wouldExceedDiversity(parent, sector)) { // segment < 5% przychodów (albo ponad limit różnorodności) dopisany do głównego
         parent.segments.forEach(seg => { seg.share *= 1 - share; });
         (existing || [...parent.segments].sort((a, b) => b.share - a.share)[0]).share += share;
         refreshSectorsFromSegments(parent);
@@ -12778,8 +12899,9 @@ function processSubsidiariesQuarterly(quarter = getSubQuarter()) {
         if (crisis && !child.groupLoan && !playerRuns) grantGroupLoan(parent, child);
         if (playerRuns) continue;
         const stake = getParentStake(child, parent);
-        if (stake >= SUB_SQUEEZE_THRESHOLD - 1e-9) { if (Math.random() < SUB_SQUEEZE_CHANCE) absorbSubsidiary(child, parent); continue; }
-        if (stake >= SUB_CREEP_MIN && Math.random() < SUB_CREEP_CHANCE) creepSubsidiaryStake(child, parent);
+        const strictness = 1 + 2 * getListingStrictness(); // 0.15.4 P5: zatłoczony rynek — córki wchłaniane do 3 razy chętniej
+        if (stake >= SUB_SQUEEZE_THRESHOLD - 1e-9) { if (Math.random() < SUB_SQUEEZE_CHANCE * strictness) absorbSubsidiary(child, parent); continue; }
+        if (stake >= SUB_CREEP_MIN && Math.random() < SUB_CREEP_CHANCE * strictness) creepSubsidiaryStake(child, parent);
         const roll = Math.random();
         if (roll < SUB_INDEPENDENCE_CHANCE) { if (Math.random() < 0.5) subsidiarySecondaryOffering(child, parent); else subsidiarySpinoffRemainder(child, parent); }
         else if (roll < SUB_INDEPENDENCE_CHANCE + SUB_SALE_CHANCE) sellControllingStake(child, parent);
