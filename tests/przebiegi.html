@@ -922,6 +922,100 @@ const PROBE_0154 = `(function () {
     const origFinish = s.finish; s.finish = function () { const r = origFinish.apply(this, arguments); r.p0154 = Q.finish(); return r; };
 })();`;
 
+// 0.15.5 B0: sondy przetargów, podwykonawców, megaprojektów, banków i REIT-ów. Dopina się do __sim.sample() i __sim.finish(); wynik w polu p0155.
+// (Bez znaków odwrotnego apostrofu i dolara z nawiasem klamrowym.)
+const PROBE_0155 = `(function () {
+    const s = window.__sim, T = s.p0155 = { awards: [], cancels: {}, tendersCreated: 0, subs: [], mega: [], megaOffers: 0, builders: [], banks: [], reits: [], reitDiv: {}, idx: {}, idxLast: {}, specAtStart: null };
+    const qNow = () => (typeof macro === 'object' ? macro.quarter : 0);
+    const r3 = v => +(+v).toFixed(3);
+    if (typeof createTender === 'function') { const o = createTender; createTender = function () { const r = o.apply(this, arguments); if (r) T.tendersCreated++; return r; }; }
+    if (typeof cancelTender === 'function') { const o = cancelTender; cancelTender = function (tender, reason) { const k = String(reason).slice(0, 40); T.cancels[k] = (T.cancels[k] || 0) + 1; return o.apply(this, arguments); }; }
+    if (typeof startConstructionProject === 'function') {
+        const o = startConstructionProject;
+        startConstructionProject = function (tender, bid) {
+            const bids = (tender.bids || []).map(b => ({ s: b.bidder.symbol, sc: r3(calculateBidScore(b, tender)), p: r3(b.price / tender.budget), t: r3(b.time / (tender.buildingType.durationDays || 1)), e: Math.round(b.bidder.constructionStats ? b.bidder.constructionStats.experience : 0), rep: Math.round(b.bidder.constructionReputation == null ? 50 : b.bidder.constructionReputation) })).sort((a, b) => b.sc - a.sc);
+            const r = o.apply(this, arguments);
+            if (r) T.awards.push({ q: qNow(), w: bid.bidder.symbol, n: bids.length, top: bids.slice(0, 3), kind: tender.buildingType.id, client: tender.clientCompany.symbol, price: Math.round(bid.price), budget: Math.round(tender.budget) });
+            return r;
+        };
+    }
+    if (typeof hireSubcontractorForProject === 'function') {
+        const o = hireSubcontractorForProject;
+        hireSubcontractorForProject = function (project) { const r = o.apply(this, arguments); if (r && project.subcontractor) T.subs.push({ q: qNow(), id: project.subcontractor.id, name: project.subcontractor.name, builder: project.builder.symbol, kind: project.tender.buildingType.id, fee: Math.round(project.subcontractor.fee) }); return r; };
+    }
+    if (typeof createProject === 'function') { const o = createProject; createProject = function () { T.megaOffers++; return o.apply(this, arguments); }; }
+    if (typeof startProjectBuild === 'function') {
+        const o = startProjectBuild;
+        startProjectBuild = function (project) { const r = o.apply(this, arguments); if (r) T.mega.push({ q: qNow(), id: project.templateId, timed: !!project.timed, builder: project.builder ? project.builder.symbol : null, members: project.participants.map(p => [p.symbol, Math.round(p.amount)]), sectors: project.sectors, cost: project.cost }); return r; };
+    }
+    if (typeof payDividendToShareholders === 'function') {
+        const o = payDividendToShareholders;
+        payDividendToShareholders = function (stock, dps) { if (stock.assetType === 'REIT') { const k = stock.symbol; T.reitDiv[k] = T.reitDiv[k] || { n: 0, sum: 0 }; T.reitDiv[k].n++; T.reitDiv[k].sum += dps * stock.totalShares; } return o.apply(this, arguments); };
+    }
+    if (typeof applyShareCountChange === 'function') { const o = applyShareCountChange; applyShareCountChange = function (stock, factor) { const r = o.apply(this, arguments); if (r) for (const k of Object.keys(T.idxLast)) if (T.idxLast[k][stock.symbol] > 0) T.idxLast[k][stock.symbol] /= factor; return r; }; }
+    const chain = (key, pred) => { // indeks łańcuchowy wg kapitalizacji z poprzedniego kwartału
+        const members = stocks.filter(x => !x.assetType && !x.isBankrupt && x.price > 0 && pred(x));
+        const last = T.idxLast[key] || (T.idxLast[key] = {});
+        let w = 0, acc = 0;
+        for (const x of members) { const pl = last[x.symbol]; if (pl > 0) { const cap = pl * (x.totalShares || 1); w += cap; acc += cap * (x.price / pl - 1); } }
+        const v = T.idx[key] || { v: 100, n: [] };
+        if (w > 0) v.v *= 1 + acc / w;
+        v.n.push(members.length);
+        T.idx[key] = v;
+        T.idxLast[key] = Object.fromEntries(members.map(x => [x.symbol, x.price]));
+    };
+    const isBuild = x => Array.isArray(x.sector) && x.sector.includes('Budowlany');
+    T.sample = function () {
+        const q = qNow();
+        if (!T.specAtStart && typeof specialists !== 'undefined') T.specAtStart = specialists.map(x => [x.id, x.specialty]);
+        chain('budowlany', isBuild);
+        chain('bankowosc', x => Array.isArray(x.sector) && x.sector.includes('Bankowość'));
+        chain('nieruchomosci', x => Array.isArray(x.sector) && x.sector.includes('Nieruchomości'));
+        const builders = stocks.filter(x => isBuild(x) && !x.assetType).map(x => ({ s: x.symbol, bk: !!x.isBankrupt, exp: x.constructionStats ? Math.round(x.constructionStats.experience) : null, max: x.constructionStats ? x.constructionStats.maxProjects : null, cur: x.constructionStats ? x.constructionStats.currentProjects : null, won: x.constructionStats ? x.constructionStats.wonTenders : null, hp: r3(x.financialHealth || 0), cash: Math.round(x.cash || 0), px: r3(x.price), missed: x.loanMissedPayments || 0, lev: x.balanceSheet && x.balanceSheet.assets > 0 ? r3(x.balanceSheet.liabilities / x.balanceSheet.assets) : null }));
+        T.builders.push({ q, b: builders, openTenders: activeTenders.filter(t => t.status === 'open').length, projects: constructionProjects.filter(p => !p.settled).length });
+        const baseRate = Number(centralBank && centralBank.baseInterestRate) || 0;
+        const buildSyms = new Set(builders.map(b => b.s));
+        T.banks.push({ q, base: r3(baseRate), depRate: typeof getDepositRate === 'function' ? r3(getDepositRate()) : null, banks: commercialBanks.filter(b => b.isActive).map(b => {
+            const loans = Object.values(b.loanPortfolio || {}).reduce((a, v) => a + (+v || 0), 0), dep = Object.values(b.depositBook || {}).reduce((a, v) => a + (+v || 0), 0);
+            const lb = Object.entries(b.loanPortfolio || {}).reduce((a, e) => a + (buildSyms.has(e[0]) ? +e[1] : 0), 0);
+            const ll = b.lastLedger || {};
+            return { id: b.id, type: b.type, cash: Math.round(b.cash), loans: Math.round(loans), dep: Math.round(dep), loansBuild: Math.round(lb), inc: Math.round(ll.interestIncome || 0), exp: Math.round(ll.interestExpense || 0), wo: Math.round(ll.writeOffs || 0), res: Math.round(ll.result || 0), loanRate: typeof getCompanyLoanRate === 'function' ? r3(getCompanyLoanRate(b)) : null };
+        }), bankStocks: stocks.filter(x => x.isBankStock).map(x => ({ s: x.symbol, px: r3(x.price), bk: !!x.isBankrupt })),
+            debtors: stocks.filter(x => !x.assetType && !x.isBankrupt && x.balanceSheet && x.balanceSheet.assets > 0 && x.balanceSheet.liabilities / x.balanceSheet.assets > 0.5).length,
+            missedBuild: builders.filter(b => b.missed > 0).length, missedAll: stocks.filter(x => !x.assetType && !x.isBankrupt && (x.loanMissedPayments || 0) > 0).length });
+        T.reits.push({ q, r: stocks.filter(x => x.assetType === 'REIT').map(x => ({ s: x.symbol, bk: !!x.isBankrupt, px: r3(x.price), cap: Math.round(x.price * (x.totalShares || 0)), assets: Math.round(x.balanceSheet ? x.balanceSheet.assets : 0), liab: Math.round(x.balanceSheet ? x.balanceSheet.liabilities : 0), earn: Math.round(x.quarterlyEarnings || 0), dps: r3(x.dividendPerShare || 0), health: r3(x.financialHealth || 0), cash: Math.round(x.cash || 0) })) });
+    };
+    T.finish = function () {
+        const aw = T.awards, n = aw.length, by = {};
+        for (const a of aw) by[a.w] = (by[a.w] || 0) + 1;
+        const hhi = n ? Math.round(Object.values(by).reduce((a, v) => a + Math.pow(v / n * 100, 2), 0)) : null;
+        const top = Object.entries(by).sort((a, b) => b[1] - a[1]);
+        const wins10 = Object.values(by).filter(v => v >= n * 0.1).length;
+        let maxWin = 0, maxWinWho = null; // najwyższy udział jednej spółki w oknie 8 kwartałów (okna z >= 8 przetargami)
+        const qs = [...new Set(aw.map(a => a.q))];
+        for (const q of qs) { const w = aw.filter(a => a.q > q - 8 && a.q <= q); if (w.length < 8) continue; const c = {}; for (const a of w) c[a.w] = (c[a.w] || 0) + 1; const e = Object.entries(c).sort((a, b) => b[1] - a[1])[0]; if (e[1] / w.length > maxWin) { maxWin = e[1] / w.length; maxWinWho = e[0]; } }
+        const bidsAvg = n ? aw.reduce((a, x) => a + x.n, 0) / n : null;
+        const subs = {}, subSpec = {};
+        for (const x of T.subs) { subs[x.id] = (subs[x.id] || 0) + 1; subSpec[x.name] = (subSpec[x.name] || 0) + 1; }
+        const subN = T.subs.length, subTop = Object.entries(subs).sort((a, b) => b[1] - a[1]);
+        const megaBuilders = {}, megaMembers = {};
+        for (const m of T.mega) { megaBuilders[m.builder] = (megaBuilders[m.builder] || 0) + 1; for (const [sy] of m.members) megaMembers[sy] = (megaMembers[sy] || 0) + 1; }
+        const megaOnly = T.mega.filter(m => !m.timed);
+        const lastB = T.builders[T.builders.length - 1] || { b: [] };
+        const dp = T.reitDiv, years = Math.max(1, T.reits.length / 4);
+        const lastR = (T.reits[T.reits.length - 1] || { r: [] }).r;
+        const yieldAvg = lastR.map(r => { const d = dp[r.s]; const caps = T.reits.map(t => (t.r.find(z => z.s === r.s) || { cap: 0 }).cap).filter(c => c > 0); const mc = caps.length ? caps.reduce((a, v) => a + v, 0) / caps.length : 0; return { s: r.s, yield: d && mc ? r3(d.sum / years / mc) : null, n: d ? d.n : 0 }; });
+        return { tenders: { created: T.tendersCreated, awarded: n, cancels: T.cancels, bidsAvg: bidsAvg == null ? null : r3(bidsAvg), hhi, topShare: n ? r3(top[0][1] / n) : null, top: top.slice(0, 6), winners: top.length, wins10, maxWindowShare: r3(maxWin), maxWindowWho: maxWinWho },
+            subs: { n: subN, topShare: subN ? r3(subTop[0][1] / subN) : null, byName: subSpec, hires: subN, projectsTotal: n, specialists: typeof specialists !== 'undefined' ? specialists.length : null },
+            mega: { started: T.mega.length, offers: T.megaOffers, megaOnly: megaOnly.length, builders: megaBuilders, members: megaMembers, distinctBuilders: Object.keys(megaBuilders).length, ortShare: megaOnly.length ? r3(megaOnly.filter(m => m.members.some(x => x[0] === 'ORT')).length / megaOnly.length) : null, list: T.mega.slice(0, 12) },
+            builders: lastB.b, idx: Object.fromEntries(Object.entries(T.idx).map(([k, v]) => [k, { v: r3(v.v), nLast: v.n[v.n.length - 1] }])),
+            reits: { last: lastR, yieldAvg, div: dp }, awardsSample: aw.slice(0, 15), awardsAll: aw.map(a => [a.q, a.w, a.n, a.kind]),
+            builderSeries: T.builders.filter((x, i) => i % 4 === 0), banks: T.banks.filter((x, i) => i % 4 === 0), banksLast: T.banks[T.banks.length - 1], specAtStart: T.specAtStart, reitSeries: T.reits.filter((x, i) => i % 4 === 0) };
+    };
+    const origSample = s.sample; s.sample = function () { origSample.apply(this, arguments); T.sample(); };
+    const origFinish = s.finish; s.finish = function () { const r = origFinish.apply(this, arguments); r.p0155 = T.finish(); return r; };
+})();`;
+
 const yieldNow = () => new Promise(resolve => { const ch = new MessageChannel(); ch.port1.onmessage = () => resolve(); ch.port2.postMessage(0); });
 
 // 0.15.4 P0: widok narzędzi deweloperskich — wykres liczby spółek w czasie (wg źródła), średni kurs wg branży (sortowanie po nagłówku),
@@ -984,6 +1078,7 @@ async function oneRun(index) {
     if (PATCH) w.eval(PATCH);
     w.eval(PROBE);
     w.eval(PROBE_0154);
+    w.eval(PROBE_0155);
     const quarterMs = 300000 / SPEED;
     const startQ = w.eval('macro.quarter');
     w.eval('__sim.sample()');
