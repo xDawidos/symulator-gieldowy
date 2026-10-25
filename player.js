@@ -316,6 +316,8 @@ function buyStock(symbol, quantity) {
     // 0.13.1 (B2): koszt z prowizją operatora rynku liczony przed transakcją — zakup nigdy nie daje ujemnej gotówki.
     const quote = getBuyQuote(stockToBuy, quantity, 'fund');
     const totalCost = quote.cost;
+    const privateLimit = typeof checkPrivateMarketLimit === 'function' ? checkPrivateMarketLimit(stockToBuy, stockToBuy.price * quantity) : null; // 0.15.6 E3
+    if (privateLimit) { showToast(privateLimit, 'warning'); return; }
     if (playerCash < quote.total) {
         showToast(`Nie masz wystarczająco gotówki: ${formatZl(quote.total)} z prowizją, maksymalnie ${getMaxBuyQuantity(stockToBuy, 'fund')} akcji.`);
         return;

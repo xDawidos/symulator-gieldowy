@@ -51,7 +51,8 @@ function getEntryMarketCount(marketId) {
 }
 
 function hasEntryMarketSlot(marketId) {
-    return getEntryMarketCount(marketId) < (marketId === 'NH' ? NH_CAPACITY : Infinity) && hasFreeTotalListingSlot();
+    const capacity = marketId === 'NH' ? NH_CAPACITY : marketId === 'PRV' ? Math.max(3, Math.floor(PRV_SHARE_CAP * getTotalCompanyCount())) : Infinity;
+    return getEntryMarketCount(marketId) < capacity && hasFreeTotalListingSlot();
 }
 
 /** Przeniesienie spółki na inny rynek (NH / PRV / GPW) z komunikatem; zwraca true, gdy przeniesiona. */
@@ -159,8 +160,81 @@ function processNewHorizonsQuarterly() {
     return supported;
 }
 
+// --- E3: ścieżka startupu i giełda prywatna ---
+// Debiut: kapitalizacja ≥ wymóg GPW → GPW (gdy brak miejsca: czeka w inkubatorze); ≥ wymóg NH → NH; poniżej → giełda prywatna.
+// NH → po NH_PROMOTE_MIN_AGE kw.: awans na GPW (spełnia wymogi), a słabe spółki: giełda prywatna albo firma prywatna (wykup).
+// Giełda prywatna: szansa startu oszustwa ×5 względem GPW (kwartalnie), wykrycie później (4–10 kw.), mocniejszy spadek po ujawnieniu,
+// upadek ×1,5 (ENTRY_MARKET_RULES), pojemność ≤ 10% spółek, gracz najwyżej 20% wartości funduszu.
+const LISTING_RULES = { debutRouting: true };   // testy starsze od 0.15.6 wyłączają w resetWorld (debiut zawsze na GPW)
+const PRV_SHARE_CAP = 0.10;
+const PRV_FRAUD_FACTOR = 5;
+const PRV_DETECTION_RANGE = [4, 10];
+const PRV_REVEAL_PENALTY = 0.15;
+const PRV_PLAYER_LIMIT = 0.20;
+const NH_PROMOTE_MIN_AGE = 8;           // kwartały na NH przed awansem / rozwidleniem
+const NH_PROMOTE_CHANCE = 0.35;         // co kwartał dla spółki spełniającej wymogi GPW
+const NH_FORK_CHANCE = 0.25;            // co kwartał dla słabej spółki NH
+const NH_FORK_PRIVATE_SHARE = 0.4;      // z rozwidlenia: firma prywatna (wykup); reszta — giełda prywatna
+
+function isDebutRoutingActive() {
+    return LISTING_RULES.debutRouting;
+}
+
+/** Rynek debiutu startupu o danej kapitalizacji; null = czeka w inkubatorze (brak miejsca). */
+function chooseDebutMarket(cap) {
+    if (cap >= getListingRequirements('GPW').cap) return hasFreeListingSlot() ? 'GPW' : null;
+    if (cap >= getListingRequirements('NH').cap) return hasEntryMarketSlot('NH') ? 'NH' : null;
+    return hasEntryMarketSlot('PRV') ? 'PRV' : null;
+}
+
+function getMarketFraudFactor(stock) {
+    return getStockMarket(stock) === 'PRV' ? PRV_FRAUD_FACTOR : 1;
+}
+
+function getFraudDetectionRange(stock) {
+    return getStockMarket(stock) === 'PRV' ? PRV_DETECTION_RANGE : [3, 7];
+}
+
+function getMarketRevealPenalty(stock) {
+    return getStockMarket(stock) === 'PRV' ? PRV_REVEAL_PENALTY : 0;
+}
+
+/** Limit gracza na giełdzie prywatnej: tekst odmowy albo null. */
+function checkPrivateMarketLimit(stock, value) {
+    if (getStockMarket(stock) !== 'PRV') return null;
+    const held = Object.entries(playerPortfolio || {}).reduce((sum, [symbol, holding]) => {
+        const other = stocks.find(s => s.symbol === symbol);
+        return sum + (other && getStockMarket(other) === 'PRV' ? (holding.shares || 0) * other.price : 0);
+    }, 0);
+    const nav = typeof getFundAssets === 'function' ? getFundAssets() : 0; // aktywa funduszu (nie NAV na jednostkę)
+    if (!(nav > 0) || held + value <= nav * PRV_PLAYER_LIMIT) return null;
+    return `Giełda prywatna: wysokie ryzyko oszustwa i słaby nadzór — fundusz może tam trzymać najwyżej ${PRV_PLAYER_LIMIT * 100}% wartości (${formatZl(nav * PRV_PLAYER_LIMIT, 0)}).`;
+}
+
+/** E3: co kwartał — spółki NH po 8 kw.: awans na GPW albo (słabe) giełda prywatna / firma prywatna. */
+function processNhPathQuarterly() {
+    const quarter = typeof macro === 'object' ? macro.quarter : 0;
+    const result = { promoted: 0, toPrivateMarket: 0, wentPrivate: 0 };
+    for (const stock of stocks.slice()) {
+        if (getStockMarket(stock) !== 'NH' || !hasListingMoveGuards(stock, true)) continue;
+        if (stock.marketSinceQ === undefined) stock.marketSinceQ = quarter;
+        if (quarter - stock.marketSinceQ < NH_PROMOTE_MIN_AGE) continue;
+        if (meetsListingRequirements(stock, 'GPW').ok) {
+            if (hasFreeListingSlot() && Math.random() < NH_PROMOTE_CHANCE && moveStockToMarket(stock, 'GPW', 'awans na główny parkiet: spełnia wymogi GPW', 0.03)) result.promoted++;
+            continue;
+        }
+        const weak = getMarketCapValue(stock) < getListingRequirements('NH').cap * LISTING_RETAIN_FACTOR || (Number(stock.financialHealth) || 0) <= 0;
+        if (!weak || Math.random() >= NH_FORK_CHANCE) continue;
+        if (Math.random() >= NH_FORK_PRIVATE_SHARE && hasEntryMarketSlot('PRV')) {
+            if (moveStockToMarket(stock, 'PRV', 'słaba spółka szuka łagodniejszych wymogów (większe ryzyko oszustwa)', -0.03)) result.toPrivateMarket++;
+        } else if (delistWithBuyout(stock, 'wychodzi z giełdy i zostaje firmą prywatną') !== null) result.wentPrivate++;
+    }
+    return result;
+}
+
 /** Jeden kwartalny punkt wejścia modułu (main.js). */
 function processListingsQuarterly() {
     processListingMaintenanceQuarterly();
+    processNhPathQuarterly();
     processNewHorizonsQuarterly();
 }

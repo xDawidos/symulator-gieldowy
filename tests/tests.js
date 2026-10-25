@@ -127,6 +127,7 @@ function resetWorld(companies) {
     subcontractLog = []; subcontractorDeals = []; // 0.15.5 B2
     SUBCONTRACTOR_RULES.startHireChance = 0; // testy starsze od 0.15.5: podwykonawca tylko na żądanie
     SUBCONTRACTOR_RULES.acquireChance = 0;
+    if (typeof LISTING_RULES === 'object') LISTING_RULES.debutRouting = false; // 0.15.6: testy starsze — debiut zawsze na GPW (bez wymogów wejścia)
     if (typeof cooperations !== 'undefined') { cooperations = []; cooperationLog = []; } // 0.14 T5
     constructionProjects = [];
     paymentJournal = [];
@@ -11295,6 +11296,114 @@ group('0.15.6 E2: NewHorizons (ryzyko, ograniczenia inwestorów, płynność)', 
         } finally { logEvent = orig; }
         assert(list.slice(5).every((s, i) => s.price === prices[i + 5]), 'GPW bez przełomów');
         assert(stocks.every(s => !(s.cash < 0)) && checkWorldInvariants().length === 0, 'niezmienniki');
+    });
+});
+
+group('0.15.6 E3: ścieżka startupu, awans z NewHorizons, giełda prywatna', () => {
+    const debut = (worldCount, fundingGoal, mult = 1) => {
+        world156(worldCount, 1_000_000);
+        const startup = generateNewStartup();
+        startup.fundingGoal = fundingGoal; startup.currentFunding = fundingGoal;
+        stocks.push(startup); startup.stage = 'finalized';
+        LISTING_RULES.debutRouting = true;
+        try { handleSuccessfulIPO(startup, mult); } finally { LISTING_RULES.debutRouting = false; }
+        return startup;
+    };
+
+    test('E3: debiut startupu wg kapitalizacji — duży na GPW, średni na NH, mały na giełdę prywatną', () => {
+        const big = debut(5, 3_000_000);
+        assert(!big.assetType && getStockMarket(big) === 'GPW', 'duży debiutuje na GPW');
+        const mid = debut(5, 40_000);
+        assert(!mid.assetType && getStockMarket(mid) === 'NH' && mid.marketSinceQ !== undefined, `średni na NH (${getStockMarket(mid)}, kap. ${getMarketCapValue(mid)})`);
+        assertEq(getListedCompanyCount(), 5, 'NH nie zajmuje miejsc na GPW');
+        world156(5); // minimalny debiut to 1000 akcji po 25–50 zł, więc giełda prywatna to głównie ścieżka z NH; wybór rynku dla bardzo małej kapitalizacji:
+        assertEq(chooseDebutMarket(10_000), 'PRV', 'poniżej wymogu NH → giełda prywatna');
+        const saved = hasEntryMarketSlot; hasEntryMarketSlot = () => false;
+        try { assertEq(chooseDebutMarket(10_000), null, 'giełda prywatna pełna → czeka'); } finally { hasEntryMarketSlot = saved; }
+    });
+
+    test('E3: kwalifikujący się na GPW czeka w inkubatorze, gdy GPW pełny; NH pełny blokuje debiut na NH', () => {
+        const full = debut(LISTING_HARD_CAP, 3_000_000);
+        assert(full.assetType === 'Startup' && full.stage === 'awaitingListing', 'GPW pełny: czeka');
+        world156(5);
+        const saved = hasEntryMarketSlot; hasEntryMarketSlot = id => id !== 'NH';
+        try {
+            const startup = generateNewStartup(); startup.fundingGoal = startup.currentFunding = 40_000; stocks.push(startup);
+            LISTING_RULES.debutRouting = true; handleSuccessfulIPO(startup, 1); LISTING_RULES.debutRouting = false;
+            assertEq(startup.stage, 'awaitingListing', 'NH pełny: czeka w inkubatorze');
+        } finally { hasEntryMarketSlot = saved; LISTING_RULES.debutRouting = false; }
+    });
+
+    test('E3: awans z NH na GPW po 8 kw. i spełnieniu wymogów; wcześniej i bez wymogów — nie', () => {
+        const list = world156(6, 1_000_000);
+        const young = list[0], old = list[1], poor = list[2];
+        for (const s of [young, old, poor]) { s.market = 'NH'; s.quarterlyEarnings = 20_000; s.financialHealth = 2; }
+        young.marketSinceQ = macro.quarter - 3; old.marketSinceQ = macro.quarter - 9; poor.marketSinceQ = macro.quarter - 9; poor.price = 3; // 30 tys. < 80 tys.
+        let promoted = 0;
+        for (let i = 0; i < 40; i++) promoted += processNhPathQuarterly().promoted;
+        assertEq(getStockMarket(old), 'GPW', 'dojrzała i spełniająca wymogi awansuje (z czasem)');
+        assertEq(getStockMarket(young), 'NH', 'za młoda');
+        assertEq(getStockMarket(poor), 'NH', 'bez wymogów kapitałowych zostaje');
+        assertEq(promoted, 1, 'jeden awans');
+        assertEq(getListedCompanyCount(), 4, 'awansowana wraca do spółek krajowych (3 pozostałe GPW + 1)');
+    });
+
+    test('E3: słaba spółka NH po 8 kw. — giełda prywatna albo firma prywatna (wykup), bez ujemnej gotówki i duchów', () => {
+        const list = world156(24, 1_000_000);
+        const weak = list.slice(0, 20);
+        weak.forEach((s, i) => { s.market = 'NH'; s.marketSinceQ = macro.quarter - 10; s.financialHealth = -1; s.price = 1; s.sharesHeld = 100; aiCompetitors[0].portfolio[s.symbol] = { shares: 100, avgPrice: 1 }; });
+        let toPrv = 0, wentPrivate = 0;
+        for (let q = 0; q < 60; q++) { const r = processNhPathQuarterly(); toPrv += r.toPrivateMarket; wentPrivate += r.wentPrivate; }
+        assert(toPrv >= 1 && wentPrivate >= 1, `oba kierunki zdarzają się (PRV ${toPrv}, prywatne ${wentPrivate})`);
+        assert(getEntryMarketCount('PRV') <= Math.max(3, Math.floor(PRV_SHARE_CAP * 24)), 'pojemność giełdy prywatnej ≤ 10% spółek (min. 3)');
+        for (const s of weak) if (!stocks.includes(s)) assert(!aiCompetitors[0].portfolio[s.symbol], `bez ducha posiadacza ${s.symbol}`);
+        assert(stocks.every(s => !(s.cash < 0)) && governmentTreasury >= 0 && checkWorldInvariants().length === 0, 'gotówka, skarb i niezmienniki');
+    });
+
+    test('E3: oszustwa na giełdzie prywatnej ok. 5× częstsze niż na GPW, wykrycie później', () => {
+        const list = world156(60, 1_000_000);
+        list.forEach(s => { s.fundamentals = s.fundamentals || {}; });
+        list.slice(30).forEach(s => { s.market = 'PRV'; });
+        assertEq(getMarketFraudFactor(list[0]), 1, 'GPW ×1'); assertEq(getMarketFraudFactor(list[40]), 5, 'PRV ×5');
+        assert(getFraudDetectionRange(list[40])[1] > getFraudDetectionRange(list[0])[1], 'wykrycie PRV później');
+        let gpw = 0, prv = 0;
+        for (let q = 0; q < 400; q++) {
+            list.forEach(s => { s.fraud = null; });
+            // na kwartał: dokładnie ta sama pętla co w grze, ale bez limitu 5% (liczymy starty)
+            const saved = FRAUD_MAX_SHARE;
+            processAccountingQuarterly();
+            list.forEach((s, i) => { if (s.fraud) { if (i < 30) gpw++; else prv++; } });
+        }
+        assert(gpw >= 5 && prv >= 3 * gpw, `PRV wyraźnie częściej (GPW ${gpw}, PRV ${prv})`);
+    });
+
+    test('E3: ujawnienie oszustwa na PRV mocniej obniża kurs; wykrycie przez audytora w czasie jak dla spółki GPW', () => {
+        const [a, b] = world156(2, 1_000_000); b.market = 'PRV';
+        for (const s of [a, b]) { s.fraud = { start: 0, correctAt: 1, total: 0 }; s.price = 100; }
+        revealFraud(a, 'audytor'); revealFraud(b, 'audytor');
+        assert(b.price < a.price, `kurs PRV niższy po ujawnieniu (${b.price} vs ${a.price})`);
+        assertEq(a.fraud, null, 'ujawnione'); assertEq(b.fraud, null, 'ujawnione');
+    });
+
+    test('E3: gracz może mieć na giełdzie prywatnej najwyżej 20% wartości funduszu', () => {
+        const [a, b] = world156(2, 1_000_000); b.market = 'PRV'; playerCash = 100_000;
+        const nav = getFundAssets();
+        assert(nav > 0, 'fundusz ma wartość');
+        assertEq(checkPrivateMarketLimit(a, nav), null, 'GPW bez limitu');
+        assertEq(checkPrivateMarketLimit(b, nav * 0.1), null, '10% w limicie');
+        assert(/20%/.test(checkPrivateMarketLimit(b, nav * 0.3) || ''), '30% ponad limitem — komunikat z limitem');
+        playerPortfolio[b.symbol] = { shares: Math.floor(nav * 0.15 / b.price), avgPrice: b.price, assetType: 'stock' };
+        const nav2 = getFundAssets();
+        assert(checkPrivateMarketLimit(b, nav2 * 0.1) !== null, 'istniejąca pozycja wlicza się do limitu');
+    });
+
+    test('E3: migracja — istniejące spółki bez pola rynku zostają na GPW; zapis zachowuje rynek i znacznik wieku', () => {
+        const list = world156(3, 1_000_000); list[0].market = 'NH'; list[0].marketSinceQ = 7;
+        const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+        const old = raw.stocks.find(s => s.symbol === list[1].symbol), nh = raw.stocks.find(s => s.symbol === list[0].symbol);
+        assert(old.market === undefined, 'starsza spółka bez pola rynku (GPW)');
+        assert(nh.market === 'NH' && nh.marketSinceQ === 7, 'NH z wiekiem w zapisie');
+        assertEq(getStockMarket(old), 'GPW', 'domyślnie GPW');
     });
 });
 
