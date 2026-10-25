@@ -1915,6 +1915,7 @@ function createNewWorld() {
     if (typeof createMarketCrashState === 'function') marketCrash = createMarketCrashState();
     if (typeof createMarketHaltState === 'function') marketHalt = createMarketHaltState();
     if (typeof resetCrises === 'function') resetCrises(); // 0.15.3
+    if (typeof randomizeStartingGiants === 'function') randomizeStartingGiants(); // 0.15.4 P6: losowa kolejność wielkości gigantów na starcie
     stocks.forEach(stock => {
         if (stock.balanceSheet && stock.assetType !== 'Startup') initializeFundamentals(stock, true);
         initializeOwnership(stock);

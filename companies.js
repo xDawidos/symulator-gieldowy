@@ -2678,6 +2678,22 @@ const LISTING_PRESSURE_RANGE = LISTING_HARD_CAP - LISTING_SOFT_CAP;   // hamulec
 const LISTING_TOTAL_CAP = 150;       // P1: zwykłe spółki łącznie (krajowe, zależne, rynków internetowych); bez stałych podmiotów i startupów
 const AWAITING_LISTING_MAX_QUARTERS = 8; // startup bez miejsca na giełdzie czeka najwyżej 2 lata, potem zostaje przejęty
 
+/**
+ * 0.15.4 P6: losowa wielkość startowa gigantów (kapitalizacja ≥ 1 mld zł: ORT, BOR, KUP, NRB, BEW, CTX, UNP, HOR). Kolejność ich wielkości
+ * na starcie była stała i po latach niemal zawsze decydowała o górnej trójce (Orzeł Telekom: 17–19% rynku od pierwszego kwartału).
+ * Kurs przed kalibracją fundamentów mnożymy przez losowy czynnik 0,6–1,6 (log-normalny, σ = 0,3) — nowa gra, przed initializeFundamentals.
+ */
+function randomizeStartingGiants(list = stocks) {
+    const changed = [];
+    for (const stock of list) {
+        if (stock.assetType || stock.isBankStock || stock.marketOperator || !(stock.price * stock.totalShares >= 1e9)) continue;
+        const factor = Math.max(0.6, Math.min(1.6, Math.exp(gaussianRandom() * 0.3)));
+        stock.price *= factor;
+        changed.push([stock.symbol, factor]);
+    }
+    return changed;
+}
+
 /** Spółka liczona do limitu spółek krajowych. */
 function isCountedListedCompany(stock) {
     return Boolean(stock && !stock.assetType && !stock.isBankrupt && !stock.isSubsidiaryOf

@@ -10270,6 +10270,20 @@ group('0.15.4: Poprawki z gry 3 (licznik, okna, wykres, dywidenda, split, limit 
         assertEq(b.balance, 7, 'saldo budżetu (deficyt, premia obligacji, CIT) nietknięte przez programy');
     });
 
+    test('P6: losowa wielkość startowa gigantów — tylko spółki ≥ 1 mld zł, czynnik 0,6–1,6, kolejność wielkości się zmienia', () => {
+        const mkG = (symbol, price, shares) => Object.assign(mk(symbol, { price }), { totalShares: shares });
+        const orders = new Set();
+        for (let round = 0; round < 25; round++) {
+            const list = [mkG('G1', 3600, 1_000_000), mkG('G2', 3000, 1_000_000), mkG('G3', 2300, 1_000_000), mkG('SM', 50, 100_000)];
+            const before = list.map(s => s.price);
+            const changed = randomizeStartingGiants(list);
+            assertEq(changed.length, 3, 'zmienieni tylko giganci'); assertEq(list[3].price, 50, 'mała spółka bez zmian');
+            list.slice(0, 3).forEach((s, i) => { const f = s.price / before[i]; assert(f >= 0.6 - 1e-9 && f <= 1.6 + 1e-9, `czynnik ${f}`); });
+            orders.add(list.slice(0, 3).map(s => s.symbol + ':' + Math.round(s.price)).sort((a, b) => Number(b.split(':')[1]) - Number(a.split(':')[1])).map(x => x.split(':')[0]).join(''));
+        }
+        assert(orders.size >= 3, `kolejność gigantów różna w różnych grach (${[...orders].join(',')})`);
+    });
+
     test('P6: wchłonięcie córki z trzeciego klastra nie dodaje segmentu; sektor główny i etykieta liczone z segmentów po każdej zmianie', () => {
         const parent = diversified(['Przemysł', 'Finanse'], [0.6, 0.4]); parent.fundamentals = { revenue: 1_000_000 };
         const child = mk('KID', { sector: ['Medycyna'] }); child.fundamentals = { revenue: 300_000 }; child.segments = [{ sector: 'Medycyna', subsector: null, share: 1 }];
