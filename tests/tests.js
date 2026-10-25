@@ -11230,6 +11230,74 @@ group('0.15.6 E1: wymogi wejścia na GPW, zejście na NewHorizons', () => {
     });
 });
 
+group('0.15.6 E2: NewHorizons (ryzyko, ograniczenia inwestorów, płynność)', () => {
+    test('E2: zmienność ×1,45 i szansa upadku ×2,5 tylko na NH; GPW bez zmian', () => {
+        const [a, b] = world156(2);
+        b.market = 'NH';
+        assertEq(getMarketVolatilityFactor(a), 1, 'GPW: zmienność bez zmian');
+        assertEq(getMarketVolatilityFactor(b), 1.45, 'NH: zmienność ×1,45');
+        assertEq(getMarketFailureFactor(a), 1, 'GPW: upadek bez zmian');
+        assertEq(getMarketFailureFactor(b), 2.5, 'NH: upadek ×2,5');
+        assert(ENTRY_MARKET_RULES.NH.volatility >= 1.3 && ENTRY_MARKET_RULES.NH.volatility <= 1.6 && ENTRY_MARKET_RULES.NH.failure >= 2 && ENTRY_MARKET_RULES.NH.failure <= 3, 'widełki planu');
+    });
+
+    test('E2: ostrożne boty i fundusze nie inwestują w NH, spekulanci tak; gracz wg stanowiska', () => {
+        const [a, b] = world156(2); b.market = 'NH';
+        for (const p of ['calm', 'banker', 'dividend_chaser']) assert(!canBotInvestIn({ personality: p }, b), `${p} nie wchodzi na NH`);
+        for (const p of ['yolo_trader', 'reckless', 'whale', 'pro_investor', 'market_maker']) assert(canBotInvestIn({ personality: p }, b), `${p} może na NH`);
+        assert(canBotInvestIn({ personality: 'calm' }, a), 'GPW bez ograniczeń');
+        assert(!canManagerInvestIn({ personality: 'cautious' }, b) && !canManagerInvestIn({ personality: 'dividend' }, b), 'fundusze bezpieczne nie');
+        assert(canManagerInvestIn({ personality: 'aggressive' }, b) && canManagerInvestIn({ personality: 'cautious' }, a), 'agresywny tak; GPW bez ograniczeń');
+        const level = playerAccessLevel;
+        try {
+            playerAccessLevel = 1; assert(!canAccessExchange('BRONZE', b) && canAccessExchange('BRONZE', a), 'gracz bez stanowiska: NH zablokowany, GPW nie');
+            playerAccessLevel = 2; assert(canAccessExchange('BRONZE', b), 'po awansie: NH otwarty');
+        } finally { playerAccessLevel = level; }
+    });
+
+    test('E2: boty z zablokowaną osobowością nie kupują akcji NH (filtr w pętli kupna), pozostałe mogą', () => {
+        const list = world156(1); const nh = list[0]; nh.market = 'NH'; nh.financialHealth = 3; nh.dividendPolicy = 'Balanced';
+        const calm = aiCompetitors.find(ai => ai.personality === 'calm'), spec = aiCompetitors.find(ai => ai.personality === 'yolo_trader');
+        assert(calm && spec, 'boty testowe istnieją');
+        const levels = [calm.accessLevel, spec.accessLevel]; calm.accessLevel = spec.accessLevel = 5;
+        try {
+            const accessible = ai => stocks.filter(s => !s.assetType && !s.isBankrupt && (exchanges[s.exchange]?.level ?? 9) <= ai.accessLevel && canBotInvestIn(ai, s));
+            assertEq(accessible(calm).length, 0, 'spokojny bot nie widzi NH');
+            assertEq(accessible(spec).length, 1, 'spekulant widzi NH');
+        } finally { calm.accessLevel = levels[0]; spec.accessLevel = levels[1]; }
+    });
+
+    test('E2: market maker państwa podnosi obrót do minimum (limit spółek, tylko przy dodatnim skarbie)', () => {
+        const list = world156(20, 1_000_000);
+        list.forEach(s => { s.market = 'NH'; s.lastTurnover = 0; s.financialHealth = 0; });
+        const treasury = governmentTreasury; governmentTreasury = 1e6;
+        try {
+            assertEq(processNewHorizonsQuarterly(), NH_MM_MAX_STOCKS, 'najwyżej tyle spółek na kwartał');
+            const supported = list.filter(s => s.lastTurnover > 0);
+            assertEq(supported.length, NH_MM_MAX_STOCKS, 'wspierane spółki');
+            assertNear(supported[0].lastTurnover, getMarketCapValue(supported[0]) * NH_MM_TURNOVER, 'obrót = 0,3% kapitalizacji');
+            list.forEach(s => { s.lastTurnover = 0; });
+            governmentTreasury = 0;
+            assertEq(processNewHorizonsQuarterly(), 0, 'pusty skarb: brak wsparcia');
+        } finally { governmentTreasury = treasury; }
+    });
+
+    test('E2: przełom na NH tylko dla zdrowych spółek; GPW bez przełomów; niezmienniki i brak ujemnej gotówki', () => {
+        const list = world156(10, 1_000_000);
+        list.slice(0, 5).forEach(s => { s.market = 'NH'; s.financialHealth = 2; });
+        list.slice(5).forEach(s => { s.financialHealth = 2; });
+        const logs = []; const orig = logEvent; logEvent = (t, ...r) => { logs.push(String(t)); return orig(t, ...r); };
+        const prices = list.map(s => s.price);
+        try {
+            let n = 0;
+            for (let q = 0; q < 40; q++) { processNewHorizonsQuarterly(); n += logs.filter(t => t.includes('przełom')).length; logs.length = 0; }
+            assert(n >= 1 && n <= 15, `przełomy zdarzają się rzadko (${n} w 40 kw. × 5 spółek)`);
+        } finally { logEvent = orig; }
+        assert(list.slice(5).every((s, i) => s.price === prices[i + 5]), 'GPW bez przełomów');
+        assert(stocks.every(s => !(s.cash < 0)) && checkWorldInvariants().length === 0, 'niezmienniki');
+    });
+});
+
 async function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

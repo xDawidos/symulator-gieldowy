@@ -382,7 +382,7 @@ function runAiMarian(ai) {
             const hasAccess = exchange.level <= ai.accessLevel;
             const isDividendStock = s.dividendPolicy && s.dividendPolicy !== 'None' && s.dividendPolicy !== 'Growth';
             const isReit = s.assetType === 'REIT';
-            return hasAccess && (isDividendStock || isReit);
+            return hasAccess && (isDividendStock || isReit) && canBotInvestIn(ai, s);
         });
         
         if (dividendStocks.length > 0) {
@@ -418,7 +418,7 @@ function runAiMarian(ai) {
             const hasAccess = exchange.level <= ai.accessLevel;
             const isGoodHealth = s.financialHealth >= 1;
             const isDividendStock = (s.dividendPolicy && s.dividendPolicy !== 'None' && s.dividendPolicy !== 'Growth') || s.assetType === 'REIT';
-            return hasAccess && isGoodHealth && !isDividendStock; // Szukamy zdrowych firm, które NIE są celem jego głównej strategii
+            return hasAccess && isGoodHealth && !isDividendStock && canBotInvestIn(ai, s); // Szukamy zdrowych firm, które NIE są celem jego głównej strategii
         });
 
         if (profitStocks.length > 0) {
@@ -673,7 +673,7 @@ function makeAiDecision(ai) {
         if (s.assetType || s.isBankrupt) return false;
         const exchange = exchanges[s.exchange];
         // Sprawdź dostęp do giełdy i czy spółka nie jest zablokowana
-        return exchange && exchange.level <= ai.accessLevel && !s.isTradeLocked;
+        return exchange && exchange.level <= ai.accessLevel && !s.isTradeLocked && canBotInvestIn(ai, s);
     });
     // Bankier może działać (np. zarządzać depozytami/kredytami) nawet bez dostępnych akcji
     if (accessibleStocks.length === 0 && ai.personality !== 'banker') return;

@@ -99,7 +99,68 @@ function processListingMaintenanceQuarterly() {
     return moved;
 }
 
+// --- E2: NewHorizons (państwowy operator) — ryzyko, ograniczenia inwestorów, płynność ---
+// Zmienność ×1,45 i szansa upadku ×2,5 (środek widełek planu 1,3–1,6 i 2–3), ale co kwartał szansa „przełomu” (większy potencjał wzrostu).
+// Ograniczenia: boty wg osobowości, zarządcy botów wg stylu, gracz wg stanowiska (playerAccessLevel). PRV: reguły tej samej tabeli (E3).
+const ENTRY_MARKET_RULES = {
+    NH:  { volatility: 1.45, failure: 2.5, playerAccess: 2, blockedBots: ['calm', 'banker', 'dividend_chaser'], blockedManagers: ['cautious', 'dividend'] },
+    PRV: { volatility: 1.2, failure: 1.5, playerAccess: 3, allowedBots: ['yolo_trader', 'reckless'], allowedManagers: ['aggressive', 'momentum'] }
+};
+const NH_BREAKTHROUGH_CHANCE = 0.04;    // co kwartał, dla spółki w dobrej kondycji
+const NH_BREAKTHROUGH_RANGE = [0.15, 0.40];
+const NH_MM_TURNOVER = 0.003;           // minimalny obrót kwartalny = 0,3% kapitalizacji (popyt zastępczy państwa)
+const NH_MM_MAX_STOCKS = 15;            // ile spółek na kwartał państwo wspiera
+
+function getMarketVolatilityFactor(stock) {
+    return ENTRY_MARKET_RULES[getStockMarket(stock)]?.volatility || 1;
+}
+
+function getMarketFailureFactor(stock) {
+    return ENTRY_MARKET_RULES[getStockMarket(stock)]?.failure || 1;
+}
+
+function isPersonalityAllowed(rules, kind, personality) {
+    const allowed = rules[`allowed${kind}`], blocked = rules[`blocked${kind}`];
+    if (allowed) return allowed.includes(personality);
+    return !(blocked || []).includes(personality);
+}
+
+/** Czy bot (osobowość ai.personality) może kupować akcje tej spółki. */
+function canBotInvestIn(ai, stock) {
+    const rules = ENTRY_MARKET_RULES[getStockMarket(stock)];
+    return !rules || isPersonalityAllowed(rules, 'Bots', ai?.personality);
+}
+
+/** Czy zarządca bota (manager.personality: aggressive, cautious, …) może kupować akcje tej spółki. */
+function canManagerInvestIn(manager, stock) {
+    const rules = ENTRY_MARKET_RULES[getStockMarket(stock)];
+    return !rules || isPersonalityAllowed(rules, 'Managers', manager?.personality);
+}
+
+/** Czy gracz ma stanowisko dające dostęp do rynku spółki (NH od poziomu 2, giełda prywatna od 3). */
+function canPlayerTradeMarket(stock) {
+    const rules = ENTRY_MARKET_RULES[getStockMarket(stock)];
+    return !rules || playerAccessLevel >= rules.playerAccess;
+}
+
+/** E2: co kwartał na NH — „przełomy” zdrowych spółek i minimalny obrót (market maker państwa: popyt zastępczy w limicie spółek i tylko przy dodatnim skarbie). */
+function processNewHorizonsQuarterly() {
+    let supported = 0;
+    for (const stock of stocks) {
+        if (getStockMarket(stock) !== 'NH' || stock.isBankrupt || stock.assetType) continue;
+        if ((Number(stock.financialHealth) || 0) >= 1 && Math.random() < NH_BREAKTHROUGH_CHANCE) {
+            const gain = getRandomInRange(...NH_BREAKTHROUGH_RANGE);
+            applyPriceEffect(stock.symbol, gain, 'positive', 'company');
+            logEvent(`🚀 ${stock.name} (${stock.symbol}) na NewHorizons notuje przełom: kurs +${(gain * 100).toFixed(0)}%.`, 'market');
+        }
+        const floor = getMarketCapValue(stock) * NH_MM_TURNOVER;
+        if (governmentTreasury > 0 && supported < NH_MM_MAX_STOCKS && (Number(stock.lastTurnover) || 0) < floor) { stock.lastTurnover = floor; supported++; }
+    }
+    return supported;
+}
+
 /** Jeden kwartalny punkt wejścia modułu (main.js). */
 function processListingsQuarterly() {
     processListingMaintenanceQuarterly();
+    processNewHorizonsQuarterly();
 }
