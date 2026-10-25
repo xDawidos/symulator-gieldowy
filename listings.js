@@ -112,12 +112,17 @@ const NH_BREAKTHROUGH_RANGE = [0.15, 0.40];
 const NH_MM_TURNOVER = 0.003;           // minimalny obrót kwartalny = 0,3% kapitalizacji (popyt zastępczy państwa)
 const NH_MM_MAX_STOCKS = 15;            // ile spółek na kwartał państwo wspiera
 
+/** Reguły rynku wejścia dla spółki; spółki miejskie (stabilne, nie bankrutują) są z nich wyłączone — notowane na NH, ale bez jego ryzyka i ograniczeń inwestorów. */
+function getEntryRules(stock) {
+    return stock?.assetType === 'Municipal' ? null : ENTRY_MARKET_RULES[getStockMarket(stock)] || null;
+}
+
 function getMarketVolatilityFactor(stock) {
-    return ENTRY_MARKET_RULES[getStockMarket(stock)]?.volatility || 1;
+    return getEntryRules(stock)?.volatility || 1;
 }
 
 function getMarketFailureFactor(stock) {
-    return ENTRY_MARKET_RULES[getStockMarket(stock)]?.failure || 1;
+    return getEntryRules(stock)?.failure || 1;
 }
 
 function isPersonalityAllowed(rules, kind, personality) {
@@ -128,19 +133,19 @@ function isPersonalityAllowed(rules, kind, personality) {
 
 /** Czy bot (osobowość ai.personality) może kupować akcje tej spółki. */
 function canBotInvestIn(ai, stock) {
-    const rules = ENTRY_MARKET_RULES[getStockMarket(stock)];
+    const rules = getEntryRules(stock);
     return !rules || isPersonalityAllowed(rules, 'Bots', ai?.personality);
 }
 
 /** Czy zarządca bota (manager.personality: aggressive, cautious, …) może kupować akcje tej spółki. */
 function canManagerInvestIn(manager, stock) {
-    const rules = ENTRY_MARKET_RULES[getStockMarket(stock)];
+    const rules = getEntryRules(stock);
     return !rules || isPersonalityAllowed(rules, 'Managers', manager?.personality);
 }
 
 /** Czy gracz ma stanowisko dające dostęp do rynku spółki (NH od poziomu 2, giełda prywatna od 3). */
 function canPlayerTradeMarket(stock) {
-    const rules = ENTRY_MARKET_RULES[getStockMarket(stock)];
+    const rules = getEntryRules(stock);
     return !rules || playerAccessLevel >= rules.playerAccess;
 }
 
@@ -232,9 +237,23 @@ function processNhPathQuarterly() {
     return result;
 }
 
+/** E4: spółki miejskie na NH awansują na GPW po 8 kw., gdy spełniają wymogi (wolny obrót ≥ 30% wymaga sprzedaży pakietu przez miasto, więc zdarza się rzadko). */
+function processMunicipalPromotionQuarterly() {
+    const quarter = typeof macro === 'object' ? macro.quarter : 0;
+    let promoted = 0;
+    for (const stock of stocks.slice()) {
+        if (stock.assetType !== 'Municipal' || stock.isBankrupt || getStockMarket(stock) !== 'NH') continue;
+        if (stock.marketSinceQ === undefined) stock.marketSinceQ = quarter;
+        if (quarter - stock.marketSinceQ < NH_PROMOTE_MIN_AGE || !meetsListingRequirements(stock, 'GPW').ok) continue;
+        if (Math.random() < NH_PROMOTE_CHANCE && moveStockToMarket(stock, 'GPW', 'spółka miejska awansuje na główny parkiet', 0.03)) promoted++;
+    }
+    return promoted;
+}
+
 /** Jeden kwartalny punkt wejścia modułu (main.js). */
 function processListingsQuarterly() {
     processListingMaintenanceQuarterly();
+    processMunicipalPromotionQuarterly();
     processNhPathQuarterly();
     processNewHorizonsQuarterly();
 }

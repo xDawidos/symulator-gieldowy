@@ -11407,6 +11407,46 @@ group('0.15.6 E3: ścieżka startupu, awans z NewHorizons, giełda prywatna', ()
     });
 });
 
+group('0.15.6 E4: spółki miejskie na NewHorizons', () => {
+    const listCity = () => {
+        world156(3, 1_000_000);
+        stocks = stocks.filter(s => !s.isMunicipal);
+        initializeCityCompanies();
+        const random = Math.random;
+        Math.random = () => 0.01; // szczęśliwy rok: debiutują wszystkie chętne
+        try { for (let year = 0; year < 12; year++) runMunicipalCompanyLogic(); } finally { Math.random = random; }
+        return stocks.filter(s => s.isMunicipal);
+    };
+
+    test('E4: spółki miejskie debiutują na NewHorizons (3–5 z 8 chętnych), poza limitem GPW, ze znacznikiem wieku', () => {
+        const city = listCity();
+        assert(city.length >= 3 && city.length <= 5, `debiutuje 3–5 spółek miejskich (${city.length})`);
+        assert(city.every(s => getStockMarket(s) === 'NH' && s.marketSinceQ !== undefined && s.assetType === 'Municipal'), 'wszystkie na NH');
+        assertEq(getListedCompanyCount(), 3, 'spółki miejskie nie zwiększają liczby spółek krajowych');
+    });
+
+    test('E4: miejskie bez ryzyka NH (zmienność, upadek) i bez ograniczeń inwestorów — zwykłe spółki NH nadal je mają', () => {
+        const [city] = listCity();
+        assertEq(getMarketVolatilityFactor(city), 1, 'bez dopłaty do zmienności'); assertEq(getMarketFailureFactor(city), 1, 'bez zwiększonej szansy upadku');
+        assert(canBotInvestIn({ personality: 'calm' }, city) && canManagerInvestIn({ personality: 'dividend' }, city), 'spokojne boty i fundusze dywidendowe mogą');
+        const ordinary = stocks.find(s => !s.isMunicipal); ordinary.market = 'NH';
+        assert(!canBotInvestIn({ personality: 'calm' }, ordinary) && getMarketVolatilityFactor(ordinary) > 1, 'zwykła spółka NH — jak dotąd');
+    });
+
+    test('E4: awans spółki miejskiej na GPW po 8 kw. i spełnieniu wymogów (wolny obrót); wcześniej i z pakietem miasta 90% — nie', () => {
+        const city = listCity(); const [young, ready, blocked] = city;
+        for (const s of city) { s.price = 50; s.quarterlyEarnings = 10_000; s.totalShares = 10_000; }
+        young.marketSinceQ = macro.quarter - 2; young.stateOwnershipPct = 0.2;
+        ready.marketSinceQ = macro.quarter - 9; ready.stateOwnershipPct = 0.2;
+        blocked.marketSinceQ = macro.quarter - 9; blocked.stateOwnershipPct = 0.9;
+        let promoted = 0;
+        for (let i = 0; i < 40; i++) promoted += processMunicipalPromotionQuarterly();
+        assertEq(getStockMarket(ready), 'GPW', 'dojrzała z wolnym obrotem awansuje'); assertEq(promoted, 1, 'jeden awans');
+        assertEq(getStockMarket(young), 'NH', 'za młoda'); assertEq(getStockMarket(blocked), 'NH', 'pakiet miasta 90% — wolny obrót za mały');
+        assert(ready.assetType === 'Municipal' && ready.isStateOwned, 'zostaje miejska');
+    });
+});
+
 async function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

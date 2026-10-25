@@ -6657,7 +6657,8 @@ function runMunicipalCompanyLogic() {
         volatilityFactor: getRandomInRange(0.2, 0.5), // Bardzo stabilne
         symbol: targetCompany.id,
         isMunicipal: true, // spółka miejska — miasto może dofinansowywać jej inwestycje
-        exchange: 'BRONZE', 
+        exchange: 'BRONZE', market: 'NH', marketSinceQ: typeof macro === 'object' ? macro.quarter : 0, // 0.15.6 E4: spółki miejskie debiutują na NewHorizons
+
         totalShares: totalShares,
         maxShares: totalShares * 2,
         sharesHeld: 0, insiderShares: 0, // pakiet miasta (stateOwnershipPct) jest poza wolnym obrotem — nie liczy się do sharesHeld
