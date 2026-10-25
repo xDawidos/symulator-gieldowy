@@ -18,12 +18,12 @@ const SUBCONTRACTOR_RULES = {
     auctionMin: 3, auctionMax: 5,
     maxShare: 0.5, shareMinHires: 3, shareWindowQuarters: 8,   // jeden podwykonawca ≤ 50% zleceń generalnego w oknie 8 kw.
     startupChance: 0.05, failChance: 0.012, idleQuarters: 12,
-    crossSpecialtyPenalty: 25, loadPenalty: 80, offerNoise: 12, reputationDrift: 0.04,                                 // punkty kary za podwykonawcę spoza potrzebnej specjalności
+    crossSpecialtyPenalty: 25, loadPenalty: 80, specialtyLoadPenalty: 120, marketWindowQuarters: 20, offerNoise: 12, reputationDrift: 0.04,                                 // punkty kary za podwykonawcę spoza potrzebnej specjalności
     startHireChance: 0.30,                                     // generalny wykonawca AI zatrudnia podwykonawcę już przy starcie budowy
     groupMaxShare: 0.40,                                       // jedna grupa ≤ 40% podwykonawców specjalności
     groupPriceTolerance: 0.15,                                 // zlecenie od grupy nie omija aukcji, gdy cena grupy > rynkowa + 15%
     groupPreference: 12,                                       // premia punktowa dla podwykonawcy z grupy zleceniodawcy (pierwszeństwo)
-    acquireChance: 0.05, acquireCooldownQuarters: 12, acquireMultiple: [6, 10], acquireMinProfit: 30000,
+    acquireChance: 0.03, acquireCooldownQuarters: 12, acquireMultiple: [6, 10], acquireMinProfit: 30000,
     transferShare: [0.3, 0.7], absorbAfterQuarters: 8, absorbChance: 0.10, inHouseBonusMax: 0.10
 };
 
@@ -187,10 +187,18 @@ function isOverSubcontractorShareLimit(builder, spec) {
     return total >= SUBCONTRACTOR_RULES.shareMinHires && (own + 1) / (total + 1) > SUBCONTRACTOR_RULES.maxShare;
 }
 
-/** Udział firmy we wszystkich zleceniach rynku w oknie 8 kw. (od 4 zleceń) — im większy, tym mniej wolnych mocy i słabsza oferta. */
+/** Udział firmy we wszystkich zleceniach rynku w oknie 20 kw. (od 3 zleceń) — im większy, tym mniej wolnych mocy i słabsza oferta. */
 function getSubcontractorMarketShare(spec) {
-    const from = getSubcontractorQuarter() - SUBCONTRACTOR_RULES.shareWindowQuarters;
+    const from = getSubcontractorQuarter() - SUBCONTRACTOR_RULES.marketWindowQuarters;
     const recent = subcontractLog.filter(entry => entry.q > from);
+    if (recent.length < 3) return 0;
+    return recent.filter(entry => entry.spec === spec.id).length / recent.length;
+}
+
+/** Udział firmy w zleceniach jej specjalności w oknie 20 kw. (od 3 zleceń specjalności). */
+function getSubcontractorSpecialtyShare(spec) {
+    const from = getSubcontractorQuarter() - SUBCONTRACTOR_RULES.marketWindowQuarters;
+    const recent = subcontractLog.filter(entry => entry.q > from && entry.specialty === spec.specialty);
     if (recent.length < 3) return 0;
     return recent.filter(entry => entry.spec === spec.id).length / recent.length;
 }
@@ -199,7 +207,8 @@ function getSubcontractorScore(spec, needs) {
     const priceScore = Math.max(0, Math.min(100, 100 * (1.4 - spec.priceFactor) / 0.7));
     const cross = needs.includes(spec.specialty) ? 0 : SUBCONTRACTOR_RULES.crossSpecialtyPenalty;
     // Przeciążenie: udział w zleceniach rynku powyżej 15% obniża ocenę (rynek nie zamyka się wokół jednej firmy).
-    const load = SUBCONTRACTOR_RULES.loadPenalty * Math.max(0, getSubcontractorMarketShare(spec) - 0.15);
+    const load = SUBCONTRACTOR_RULES.loadPenalty * Math.max(0, getSubcontractorMarketShare(spec) - 0.15)
+        + SUBCONTRACTOR_RULES.specialtyLoadPenalty * Math.max(0, getSubcontractorSpecialtyShare(spec) - 0.34);
     const noise = (Math.random() - 0.5) * SUBCONTRACTOR_RULES.offerNoise;   // oferty różnią się z aukcji na aukcję
     return 0.40 * priceScore + 0.35 * spec.quality + 0.25 * spec.reputation - cross - load + noise;
 }
@@ -241,7 +250,7 @@ function runSubcontractorAuction(project) {
 
 function noteSubcontractorHire(project, spec) {
     const quarter = getSubcontractorQuarter();
-    const from = quarter - SUBCONTRACTOR_RULES.shareWindowQuarters;
+    const from = quarter - Math.max(SUBCONTRACTOR_RULES.shareWindowQuarters, SUBCONTRACTOR_RULES.marketWindowQuarters);
     subcontractLog = subcontractLog.filter(entry => entry.q > from);
     subcontractLog.push({ q: quarter, builder: getEntityKey(project.builder), spec: spec.id, specialty: spec.specialty });
     spec.lastContractQ = quarter;

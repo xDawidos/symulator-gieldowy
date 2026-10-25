@@ -5954,7 +5954,7 @@ function renderConstructionSubcontractorsList() {
             <div class="construction-stat-card"><span class="construction-stat-label">Podwykonawcy</span><strong>${specialists.length}</strong></div>
             <div class="construction-stat-card"><span class="construction-stat-label">Zajęci przy budowach</span><strong>${busyCount}</strong></div>
             <div class="construction-stat-card"><span class="construction-stat-label">W grupach wykonawców</span><strong>${grouped}</strong></div>
-            <div class="construction-stat-card"><span class="construction-stat-label">Największy udział w rynku (8 kw.)</span><strong>${formatNumberPl(topShare * 100, 0)}%</strong></div>`;
+            <div class="construction-stat-card"><span class="construction-stat-label">Największy udział w rynku (20 kw.)</span><strong>${formatNumberPl(topShare * 100, 0)}%</strong></div>`;
     }
 
     if (specialists.length === 0) {
@@ -6010,7 +6010,7 @@ function renderConstructionSubcontractorsList() {
             createConstructionInfoRow('Jakość / reputacja', `${formatNumberPl(Number(spec.quality) || 0, 0)} / ${formatNumberPl(Number(spec.reputation) || 0, 0)} (0–100)`),
             createConstructionInfoRow('Bonus tempa', `+${formatNumberPl((spec.bonus * 100), 1)}%`),
             createConstructionInfoRow('Kontrakty', spec.contractsCompleted),
-            createConstructionInfoRow('Udział w zleceniach rynku (8 kw.)', `${formatNumberPl(marketShare * 100, 0)}%`),
+            createConstructionInfoRow('Udział w zleceniach rynku (20 kw.)', `${formatNumberPl(marketShare * 100, 0)}%`),
             createConstructionInfoRow('Należy do grupy', group ? `${group.name} (transfer ${formatNumberPl((Number(spec.transferShare) || 0) * 100, 0)}% zysku)` : 'niezależny'),
             createConstructionInfoRow('Gotówka', formatConstructionMoney(spec.cash)),
             createConstructionInfoRow('Obecna budowa', project ? `${project.tender.buildingType.name} (${project.builder.name})` : '—')
