@@ -27,6 +27,7 @@ D. **Tylko hamulce:** zaostrzyć hamulec wzrostu (0,15 → 0,25 pp/pp) i próg 1
 - Przypisanie giełd elitarnych (Rubin/Szmaragd/Diament wg rankingu): mniejsze giganty mogą zmienić tempo awansów gracza — sprawdzić progi dostępu.
 - Testy zakładają stałe symbole (`ORT`, `NRB`, `BEW` w `initialStocks`): zmieniać ceny i akcje, nie symbole.
 
-## Decyzje do podjęcia
-1. Wariant (A/B/C/D) — rekomendacja: C po pomiarze G0.
-2. Czy zmiana dotyczy tylko nowych gier (tak, zalecane).
+## Decyzje (podjęte)
+1. **Wariant C** (giganci × 0,6, drugi szczebel × 2,5, losowa kolejność jak w 0.15.4); pomiar G0 potwierdza współczynniki.
+2. **Tylko nowe gry:** stare zapisy bez zmian, zapis v15 bez migracji.
+3. **Cel awaryjny:** jeśli po G0–G2 cel „≤ 40% gier” jest nieosiągalny, przyjąć „żaden gigant w górnej 3 w > 50% gier”, zapisać to w kontroli i zamknąć.
