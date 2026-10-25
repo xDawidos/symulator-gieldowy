@@ -11081,16 +11081,15 @@ group('0.15.5: Budownictwo i banki (przetargi, podwykonawcy, przejęcia pionowe,
     });
 
 
-    test('B2: firma z dużym udziałem w zleceniach swojej specjalności (okno 20 kw.) dostaje niższą ocenę w aukcji', () => {
+    test('B2: firma z dużym udziałem w zleceniach swojej specjalności (wygasający licznik zleceń) dostaje niższą ocenę w aukcji', () => {
         const builder = registryWorld();
         const [a, b, c] = getSubcontractorsBySpecialty('roads');
         for (const s of [a, b, c]) { s.quality = 60; s.priceFactor = 1; s.reputation = 50; }
         const q0 = macro.quarter; macro.quarter = 500;
         const needs = ['roads'];
         const base = [a, b, c].map(s => getSubcontractorScore(s, needs));
-        subcontractLog = [];
-        for (let i = 0; i < 7; i++) subcontractLog.push({ q: 495, builder: 'X' + i, spec: a.id, specialty: 'roads' });
-        for (let i = 0; i < 3; i++) subcontractLog.push({ q: 495, builder: 'Y' + i, spec: b.id, specialty: 'roads' });
+        for (const s of specialists) s.hires = 0;
+        a.hires = 7; b.hires = 3;
         assertNear(getSubcontractorSpecialtyShare(a), 0.7, 'udział w specjalności', 1e-9);
         assertNear(getSubcontractorSpecialtyShare(c), 0, 'brak zleceń', 1e-9);
         SUBCONTRACTOR_RULES.offerNoise = 0;
@@ -11098,6 +11097,8 @@ group('0.15.5: Budownictwo i banki (przetargi, podwykonawcy, przejęcia pionowe,
             const scores = [a, b, c].map(s => getSubcontractorScore(s, needs));
             assert(scores[0] < scores[2] - 20, 'lider specjalności traci na aukcji: ' + scores.map(Math.round).join('/'));
             assert(scores[2] > scores[1], 'bez zleceń wygrywa z firmą o 30% udziału');
+            for (let i = 0; i < 200; i++) processSubcontractorsQuarterly();
+            assert(specialists.every(s => (s.hires || 0) < 0.5), 'licznik zleceń wygasa z czasem');
         } finally { SUBCONTRACTOR_RULES.offerNoise = 12; macro.quarter = q0; subcontractLog = []; }
         assert(base.every(Number.isFinite), 'oceny wyjściowe');
     });

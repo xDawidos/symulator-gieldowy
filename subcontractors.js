@@ -18,7 +18,7 @@ const SUBCONTRACTOR_RULES = {
     auctionMin: 3, auctionMax: 5,
     maxShare: 0.5, shareMinHires: 3, shareWindowQuarters: 8,   // jeden podwykonawca ≤ 50% zleceń generalnego w oknie 8 kw.
     startupChance: 0.05, failChance: 0.012, idleQuarters: 12,
-    crossSpecialtyPenalty: 25, loadPenalty: 80, specialtyLoadPenalty: 120, marketWindowQuarters: 20, offerNoise: 12, reputationDrift: 0.04,                                 // punkty kary za podwykonawcę spoza potrzebnej specjalności
+    crossSpecialtyPenalty: 25, loadPenalty: 80, specialtyLoadPenalty: 120, hiresDecay: 0.97, offerNoise: 12, reputationDrift: 0.04,                                 // punkty kary za podwykonawcę spoza potrzebnej specjalności
     startHireChance: 0.30,                                     // generalny wykonawca AI zatrudnia podwykonawcę już przy starcie budowy
     groupMaxShare: 0.40,                                       // jedna grupa ≤ 40% podwykonawców specjalności
     groupPriceTolerance: 0.15,                                 // zlecenie od grupy nie omija aukcji, gdy cena grupy > rynkowa + 15%
@@ -66,7 +66,7 @@ function getSubcontractorQuarter() {
 
 // Zapis w wersji skróconej (B6): wiersze liczb zamiast obiektów, krótkie id, wartości zaokrąglone; rzeczy wyliczalne (bonus
 // podwykonawców powstałych w grze) pomijane. Dawny zapis (zwykła tablica obiektów) wczytuje się bez zmian.
-const SUBCONTRACTOR_SAVE_FIELDS = ['id', 'name', 'specialty', 'quality', 'priceFactor', 'reputation', 'bonus', 'cash', 'contractsCompleted', 'founded', 'lastContractQ', 'groupSymbol', 'groupSince', 'transferShare', 'busyProjectId', 'profits', 'profitQ'];
+const SUBCONTRACTOR_SAVE_FIELDS = ['id', 'name', 'specialty', 'quality', 'priceFactor', 'reputation', 'bonus', 'cash', 'contractsCompleted', 'founded', 'lastContractQ', 'groupSymbol', 'groupSince', 'transferShare', 'busyProjectId', 'profits', 'profitQ', 'hires'];
 
 function serializeSubcontractors() {
     const round = (value, digits = 0) => (Number.isFinite(value) ? Math.round(value * 10 ** digits) / 10 ** digits : value);
@@ -78,6 +78,7 @@ function serializeSubcontractors() {
             if (key === 'specialty') return Math.max(0, keys.indexOf(normalizeSubcontractorSpecialty(value)));
             if (key === 'priceFactor' || key === 'transferShare') return round(value, 2);
             if (key === 'bonus') return round(value, 3);
+            if (key === 'hires') return round(value, 1);
             if (key === 'profits') return (value || []).map(item => round(item));
             if (typeof value === 'number') return round(value);
             return value === undefined ? null : value;
@@ -187,20 +188,19 @@ function isOverSubcontractorShareLimit(builder, spec) {
     return total >= SUBCONTRACTOR_RULES.shareMinHires && (own + 1) / (total + 1) > SUBCONTRACTOR_RULES.maxShare;
 }
 
-/** Udział firmy we wszystkich zleceniach rynku w oknie 20 kw. (od 3 zleceń) — im większy, tym mniej wolnych mocy i słabsza oferta. */
+/**
+ * Udział firmy we wszystkich zleceniach rynku — z licznika `hires`, który co kwartał maleje (×0,97, półokres ≈ 6 lat gry).
+ * Przy kilkudziesięciu zleceniach w całej grze krótkie okno nic nie mówi, więc udział liczymy z wygasającego licznika.
+ */
 function getSubcontractorMarketShare(spec) {
-    const from = getSubcontractorQuarter() - SUBCONTRACTOR_RULES.marketWindowQuarters;
-    const recent = subcontractLog.filter(entry => entry.q > from);
-    if (recent.length < 3) return 0;
-    return recent.filter(entry => entry.spec === spec.id).length / recent.length;
+    const total = specialists.reduce((sum, item) => sum + (Number(item.hires) || 0), 0);
+    return total >= 3 ? (Number(spec.hires) || 0) / total : 0;
 }
 
-/** Udział firmy w zleceniach jej specjalności w oknie 20 kw. (od 3 zleceń specjalności). */
+/** Udział firmy w zleceniach jej specjalności (z wygasającego licznika `hires`, od 2 zleceń w specjalności). */
 function getSubcontractorSpecialtyShare(spec) {
-    const from = getSubcontractorQuarter() - SUBCONTRACTOR_RULES.marketWindowQuarters;
-    const recent = subcontractLog.filter(entry => entry.q > from && entry.specialty === spec.specialty);
-    if (recent.length < 3) return 0;
-    return recent.filter(entry => entry.spec === spec.id).length / recent.length;
+    const total = specialists.filter(item => item.specialty === spec.specialty).reduce((sum, item) => sum + (Number(item.hires) || 0), 0);
+    return total >= 2 ? (Number(spec.hires) || 0) / total : 0;
 }
 
 function getSubcontractorScore(spec, needs) {
@@ -250,10 +250,11 @@ function runSubcontractorAuction(project) {
 
 function noteSubcontractorHire(project, spec) {
     const quarter = getSubcontractorQuarter();
-    const from = quarter - Math.max(SUBCONTRACTOR_RULES.shareWindowQuarters, SUBCONTRACTOR_RULES.marketWindowQuarters);
+    const from = quarter - SUBCONTRACTOR_RULES.shareWindowQuarters;
     subcontractLog = subcontractLog.filter(entry => entry.q > from);
     subcontractLog.push({ q: quarter, builder: getEntityKey(project.builder), spec: spec.id, specialty: spec.specialty });
     spec.lastContractQ = quarter;
+    spec.hires = (Number(spec.hires) || 0) + 1;
 }
 
 /** Generalny wykonawca AI zatrudnia podwykonawcę już przy starcie budowy (część projektów), bo ma na to gotówkę. */
@@ -390,6 +391,7 @@ function processSubcontractorsQuarterly() {
 
     for (const spec of [...specialists]) {
         spec.reputation += (50 - spec.reputation) * rules.reputationDrift; // reputacja wraca ku średniej (bez wiecznego zwycięzcy)
+        if (spec.hires) spec.hires = spec.hires * rules.hiresDecay < 0.05 ? 0 : spec.hires * rules.hiresDecay;
         const profit = Number(spec.profitQ) || 0;
         spec.profits.push(profit);
         if (spec.profits.length > 4) spec.profits.shift();
