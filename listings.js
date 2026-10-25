@@ -62,6 +62,8 @@ function moveStockToMarket(stock, marketId, reason, priceEffect = 0) {
     if (marketId === 'GPW') delete stock.market; else stock.market = marketId;
     stock.marketSinceQ = typeof macro === 'object' ? macro.quarter : 0;
     delete stock.belowReqQ;
+    if (marketId === 'NH' && typeof unlockAcademyEntry === 'function' && isStockOwnedByPlayer(stock)) unlockAcademyEntry('rynekGlownyAlternatywny', `${stock.name}: zmiana rynku`);
+    if (marketId === 'PRV' && typeof unlockAcademyEntry === 'function' && isStockOwnedByPlayer(stock)) unlockAcademyEntry('gieldaPrywatna', `${stock.name}: giełda prywatna`);
     if (priceEffect) applyPriceEffect(stock.symbol, priceEffect, priceEffect > 0 ? 'positive' : 'negative', 'company');
     const text = `🔀 ${stock.name} (${stock.symbol}) przechodzi z ${getMarketLabel(from)} na ${getMarketLabel(marketId)}${reason ? ` — ${reason}` : ''}.`;
     logEvent(text, 'market');
@@ -207,6 +209,7 @@ function getMarketRevealPenalty(stock) {
 /** Limit gracza na giełdzie prywatnej: tekst odmowy albo null. */
 function checkPrivateMarketLimit(stock, value) {
     if (getStockMarket(stock) !== 'PRV') return null;
+    if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('gieldaPrywatna');
     const held = Object.entries(playerPortfolio || {}).reduce((sum, [symbol, holding]) => {
         const other = stocks.find(s => s.symbol === symbol);
         return sum + (other && getStockMarket(other) === 'PRV' ? (holding.shares || 0) * other.price : 0);
@@ -313,6 +316,7 @@ function noteAntitrust(stock, kind, amount, text) {
     logEvent(text, 'state');
     if (typeof pushNews === 'function') pushNews(text, stock.symbol);
     const held = (playerPortfolio?.[stock.symbol]?.shares || 0) > 0 || (playerWallet?.portfolio?.[stock.symbol]?.shares || 0) > 0;
+    if (held && typeof unlockAcademyEntry === 'function') unlockAcademyEntry('antymonopol', `${stock.name}: interwencja urzędu`);
     if (held && typeof addMail === 'function') addMail({ sender: 'PULS', subject: `⚖️ ${stock.name}: interwencja Urzędu Antymonopolowego`, body: text, importance: 2, symbol: stock.symbol });
 }
 
@@ -451,6 +455,54 @@ function processMediaDaughtersQuarterly() {
         if (sent < MEDIA_MAILS_PER_QUARTER && Math.random() < MEDIA_MAIL_CHANCE && sendMediaMail(daughter, parent)) sent++;
     }
     return { sent, exposed };
+}
+
+// --- E7: widoki (komponenty 0.14.5: bank-card, bank-grid, list-plain; ryzyko zawsze słowem, nie samym kolorem; bez nowych okien) ---
+const ENTRY_MARKET_NOTES = {
+    NH: 'Rynek wejścia (państwowy operator) — ryzyko podwyższone',
+    PRV: 'Rynek wejścia — ryzyko oszustwa bardzo wysokie, słaby nadzór'
+};
+
+function getEntryMarketNote(id) {
+    return ENTRY_MARKET_NOTES[id] || 'Rynek wejścia';
+}
+
+/** Krótki znacznik rynku spółki (plakietka i linijka meta): ryzyko słowem. */
+function getMarketBadgeText(stock) {
+    const id = getStockMarket(stock);
+    if (id === 'NH') return stock.assetType === 'Municipal' ? 'rynek NH' : 'rynek NH · ryzyko podwyższone';
+    if (id === 'PRV') return 'giełda prywatna · ryzyko oszustwa';
+    return `członek rynku ${getMarketLabel(id)}`;
+}
+
+const ANTITRUST_KIND_LABELS = { fine: 'kara', split: 'nakaz podziału', ban: 'zakaz przejęć' };
+
+/** Fragment karty urzędu antymonopolowego (Państwo → Przegląd): progi bieżącego poziomu i ostatnie interwencje. */
+function renderAntitrustInterventions() {
+    const tier = getAntitrustTier();
+    const pct = v => `${Math.round(v * 100)}%`;
+    const thresholds = tier
+        ? `Progi interwencji (poziom ${Math.min(3, antitrustOffice.level)}): udział w sektorze ${pct(tier.sector)} po wzroście o ${pct(ANTITRUST_GROWTH)}, w przetargach ${pct(tier.tender)}, w kapitalizacji ${pct(tier.cap)}. Najpierw kara (${pct(tier.fine)} rocznych przychodów), po ${ANTITRUST_ORDER_AFTER} kw. nakaz podziału albo zakaz przejęć.`
+        : 'Urząd na poziomie 0 nie interweniuje — rozwija go państwo wydatkami.';
+    const rows = antitrustLog.slice(-5).reverse().map(e => `<li>kw. ${e.quarter}: ${escapeHtml(e.symbol)} — ${ANTITRUST_KIND_LABELS[e.kind] || e.kind}${e.amount > 0 ? ` (${formatZl(e.amount, 0)})` : ""}</li>`).join('');
+    const noRows = '<li class="text-muted">Brak interwencji.</li>';
+    return `<p class="text-sm text-muted">${thresholds}</p><ul class="list-plain text-sm">${rows || noRows}</ul>`;
+}
+
+/** Zakładka „Rynki”: ścieżka spółki, wymogi wejścia i ryzyko każdego rynku (karty bank-card). */
+function renderListingPathPanel() {
+    const gpw = getListingRequirements('GPW'), nh = getListingRequirements('NH'), prv = getListingRequirements('PRV');
+    const money = v => formatZl(v, 0), pct = v => `${Math.round(v * 100)}%`;
+    const card = (icon, title, type, rows, note) => `<article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon(icon, 20)}</span><div><h4>${escapeHtml(title)}</h4><span class="bank-card-type">${escapeHtml(type)}</span></div></header>
+        <dl class="bank-card-rates">${rows.map(([k, v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`).join("")}</dl><p class="text-sm">${escapeHtml(note)}</p></article>`;
+    const profit = (req, exempt) => req.profit ? (exempt ? 'zysk (bez wymogu dla spółek innowacyjnych)' : 'dodatni zysk') : 'brak wymogu';
+    return `<h4 class="mt-3">Ścieżka spółki i wymogi wejścia</h4>
+        <ol class="list-plain text-sm"><li>Start-up w inkubatorze (pula) → debiut: kapitalizacja co najmniej ${money(gpw.cap)} → <strong>główny parkiet GPW</strong>; mniej, ale co najmniej ${money(nh.cap)} → <strong>NewHorizons</strong>.</li>
+        <li>Z NewHorizons po ${NH_PROMOTE_MIN_AGE} kw.: awans na GPW (spełnia wymogi), a słaba spółka — <strong>giełda prywatna</strong> albo wyjście z giełdy jako firma prywatna.</li>
+        <li>GPW: spółka poniżej ${pct(LISTING_RETAIN_FACTOR)} wymogu kapitalizacji przez ${LISTING_BELOW_QUARTERS} kw. schodzi na NewHorizons zamiast upadać.</li></ol>
+        <div class="bank-grid">${card("rynek", "GPW", "główny parkiet", [["Kapitalizacja", "≥ " + money(gpw.cap)], ["Wolny obrót", "≥ " + pct(gpw.freeFloat)], ["Zysk", profit(gpw)], ["Mnożnik wymogów", "×" + gpw.mult.toFixed(2)]], "Wymogi rosną, gdy rynek jest zatłoczony: ×1,0 do 100 spółek krajowych, ×1,5 przy 125. Ryzyko: standardowe.")}
+        ${card("rakieta", "NewHorizons", "rynek wejścia, państwowy operator", [["Kapitalizacja", "≥ " + money(nh.cap)], ["Wolny obrót", "≥ " + pct(nh.freeFloat)], ["Zysk", profit(nh, true)], ["Spółek", String(getEntryMarketCount("NH")) + "/" + NH_CAPACITY]], "Ryzyko podwyższone: zmienność ×" + ENTRY_MARKET_RULES.NH.volatility + ", upadki ×" + ENTRY_MARKET_RULES.NH.failure + ", ale zdarzają się przełomy. Nie inwestują tu ostrożne boty i fundusze; płynność podtrzymuje państwo.")}
+        ${card("alert", "Giełda prywatna", "rynek wejścia, ryzyko oszustwa bardzo wysokie", [["Kapitalizacja", "≥ " + money(prv.cap)], ["Wolny obrót", "≥ " + pct(prv.freeFloat)], ["Zysk", profit(prv)], ["Spółek", String(getEntryMarketCount("PRV"))]], "Oszustwa ok. " + PRV_FRAUD_FACTOR + "× częstsze niż na GPW, wykrywane później (" + PRV_DETECTION_RANGE.join("–") + " kw.). Fundusz może tu trzymać najwyżej " + Math.round(PRV_PLAYER_LIMIT * 100) + "% wartości.")}</div>`;
 }
 
 /** Jeden kwartalny punkt wejścia modułu (main.js). */

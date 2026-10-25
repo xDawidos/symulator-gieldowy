@@ -11657,6 +11657,66 @@ group('0.15.6 E6: media-córka jako gazeta matki', () => {
     });
 });
 
+group('0.15.6 E7: interfejs i Akademia', () => {
+    test('E7: panel Rynki — ścieżka spółki, wymogi i ryzyko słowem (NH, giełda prywatna), bez przycisku koncesji dla rynków wejścia', () => {
+        const list = world156(3); list[0].market = 'NH'; list[1].market = 'PRV';
+        ensureMarketOperators();
+        const html = renderMarketsPanel();
+        for (const word of ['Ścieżka spółki i wymogi wejścia', 'NewHorizons', 'Giełda prywatna', 'ryzyko oszustwa', 'Ryzyko podwyższone', 'najwyżej 20%']) assert(html.includes(word), `panel zawiera „${word}”`);
+        assert(!/Kup koncesję/.test(html), 'rynki wejścia bez koncesji');
+        assert(html.includes('bez operatora'), 'rynki wejścia nie udają operatora z kursem');
+    });
+
+    test('E7: znacznik rynku spółki — ryzyko słowem, nie samym kolorem; spółki miejskie bez ostrzeżenia', () => {
+        const [a, b, c] = world156(3); a.market = 'NH'; b.market = 'PRV'; c.market = 'NH'; c.assetType = 'Municipal';
+        assertEq(getMarketBadgeText(a), 'rynek NH · ryzyko podwyższone', 'NH'); assertEq(getMarketBadgeText(c), 'rynek NH', 'miejska na NH');
+        assert(/ryzyko oszustwa/.test(getMarketBadgeText(b)), 'giełda prywatna: ryzyko oszustwa słowem');
+        assert(renderDividendBadges(a).includes('ryzyko podwyższone') && renderDividendBadges(b).includes('ryzyko oszustwa'), 'plakietka przy spółce niesie ryzyko słowem');
+    });
+
+    test('E7: tabela spółek z wybranym rynkiem NH i PRV renderuje się bez błędów; nagłówek rynku opisuje rynek wejścia zamiast koncesji', () => {
+        const list = world156(4); list[0].market = 'NH'; list[1].market = 'PRV';
+        ensureMarketOperators();
+        let body = document.getElementById('stock-table-body');
+        if (!body) { const table = document.createElement('table'); body = document.createElement('tbody'); body.id = 'stock-table-body'; table.appendChild(body); document.body.appendChild(table); }
+        const saved = { market: selectedMarketOperator, level: currentMarketLevel, owned: ownedOnlyFilter };
+        try {
+            for (const id of ['NH', 'PRV']) {
+                selectedMarketOperator = id; currentMarketLevel = 'ALL'; ownedOnlyFilter = false;
+                displayStocks();
+                assert(body.querySelectorAll('tr.stock-row').length === 1, `${id}: jedna spółka w tabeli`);
+                assert(body.textContent.includes('Rynek wejścia') && !body.textContent.includes('Kup koncesję'), `${id}: opis rynku wejścia, bez koncesji`);
+            }
+        } finally { selectedMarketOperator = saved.market; currentMarketLevel = saved.level; ownedOnlyFilter = saved.owned; body.replaceChildren(); }
+    });
+
+    test('E7: karta urzędu antymonopolowego pokazuje progi poziomu i ostatnie interwencje', () => {
+        const saved = antitrustOffice.level, log = antitrustLog;
+        try {
+            antitrustOffice.level = 2; antitrustLog = [{ quarter: 5, symbol: 'AAA', kind: 'fine', amount: 1000 }, { quarter: 9, symbol: 'BBB', kind: 'split', amount: 5000 }];
+            const html = renderAntitrustInterventions();
+            assert(html.includes('poziom 2') && html.includes('60%') && html.includes('kw. 9: BBB — nakaz podziału') && html.includes('kw. 5: AAA — kara'), 'progi i interwencje (najnowsza pierwsza)');
+            antitrustOffice.level = 0; antitrustLog = [];
+            assert(renderAntitrustInterventions().includes('nie interweniuje') && renderAntitrustInterventions().includes('Brak interwencji'), 'poziom 0 i pusty dziennik');
+        } finally { antitrustOffice.level = saved; antitrustLog = log; }
+    });
+
+    test('E7: Akademia — trzy nowe hasła z quizem (3 pytania) i działającym przykładem; odblokowują się przy zdarzeniach', () => {
+        for (const id of ['rynekGlownyAlternatywny', 'gieldaPrywatna', 'antymonopol']) {
+            const e = ACADEMY_ENTRIES[id];
+            assert(e && e.title && e.text.length > 100 && e.quiz.length === 3 && e.quiz.every(q => q.a.length === 3 && q.c === 0), `${id}: hasło i quiz`);
+            world156(2); assert(typeof e.example() === 'string' && e.example().length > 10, `${id}: przykład`);
+            assert(typeof e.icon === 'string' && e.icon.includes('<svg'), `${id}: ikona SVG, nie emoji`);
+        }
+        const [a] = world156(2); playerPortfolio[a.symbol] = { shares: 10, avgPrice: a.price, assetType: 'stock' };
+        const academy = getAcademy();
+        moveStockToMarket(a, 'NH', 'test');
+        assert('rynekGlownyAlternatywny' in academy.unlocked, 'zmiana rynku posiadanej spółki odblokowuje hasło');
+        moveStockToMarket(a, 'PRV', 'test');
+        assert('gieldaPrywatna' in academy.unlocked, 'giełda prywatna odblokowuje hasło');
+    });
+});
+
 async function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

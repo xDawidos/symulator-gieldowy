@@ -2249,7 +2249,7 @@ function renderMarketsPanel() {
             <dl class="bank-card-rates">
                 <div><dt>Prowizja</dt><dd>${(def.commission * 100).toFixed(2)}%</dd></div>
                 <div><dt>Spółki</dt><dd>${operator.members}</dd></div>
-                <div><dt>Kurs operatora</dt><dd>${stock ? formatZl(stock.price) : (operator.status === 'active' ? 'GPW (rynek gł.)' : '—')}</dd></div>
+                <div><dt>Kurs operatora</dt><dd>${stock ? formatZl(stock.price) : (def.entry ? 'bez operatora' : operator.status === 'active' ? 'GPW (rynek gł.)' : '—')}</dd></div>
             </dl>
             ${startup ? `<p class="text-sm">Finansowanie startupu: ${formatZl(startup.currentFunding, 0)} / ${formatZl(startup.fundingGoal, 0)} · sponsorzy: ${operator.sponsors.length}</p>` : ''}
             ${operator.commissionsTotal > 0 ? `<p class="text-xs text-muted">Prowizje łącznie: ${formatZl(operator.commissionsTotal, 0)}</p>` : ''}
@@ -2267,7 +2267,7 @@ function renderMarketsPanel() {
     }).join('');
 
     return `<p class="bank-lead">Operatorzy rynków pobierają prowizję od każdej transakcji na swoim rynku (płaci też fundusz) i opłatę za notowanie, inwestują w spółki członkowskie i podpisują umowy na wyłączność. Zamknięcie operatora zdejmuje jego spółki z notowań — posiadacze są rozliczani po ostatniej cenie.</p>
-        <div class="bank-grid">${cards}</div>`;
+        <div class="bank-grid">${cards}</div>${typeof renderListingPathPanel === 'function' ? renderListingPathPanel() : ''}`;
 }
 
 function toggleMarketStocksList(marketId) {
