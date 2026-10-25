@@ -8997,10 +8997,12 @@ function renderCountryPanel() {
                     <div><dt>Saldo kwartału</dt><dd class="${budget.balance < 0 ? 'text-down' : 'text-up'}">${formatZl(budget.balance || 0, 0)}</dd></div>
                     <div><dt>Deficyt od</dt><dd>${budget.deficitQuarters} kw.</dd></div>
                     <div><dt>Zasiłki</dt><dd>${formatZl(budget.socialSpending || 0, 0)}</dd></div>
+                    <div><dt>Programy socjalne ze skarbu</dt><dd>${formatZl(budget.programSpending || 0, 0)}</dd></div>
                     <div><dt>Podatki od pracy</dt><dd>${formatZl(budget.laborTaxes || 0, 0)}</dd></div>
                     <div><dt>Ubytek przez szarą strefę</dt><dd class="${budget.greyTaxLoss > 0 ? 'text-down' : ''}">${formatZl(budget.greyTaxLoss || 0, 0)}</dd></div>
                     <div><dt>CIT</dt><dd>${(getCompanyIncomeTaxRate() * 100).toFixed(0)}%${Number(society.laws.corpTaxBrackets) ? ` (małe ${((getCompanyIncomeTaxRate() + CORP_TAX_BRACKETS[society.laws.corpTaxBrackets][0]) * 100).toFixed(0)}%, duże ${((getCompanyIncomeTaxRate() + CORP_TAX_BRACKETS[society.laws.corpTaxBrackets][1]) * 100).toFixed(0)}%)` : ''}</dd></div>
                 </dl>
+                <p class="text-xs text-muted">Programy socjalne (${SOCIAL_PROGRAMS.map(p => `${escapeHtml(p.name)} ${formatZl((budget.programs || {})[p.id] || 0, 0)}`).join(' · ')}) skarb finansuje z nadwyżki ponad rezerwę — poza saldem budżetu: ${SOCIAL_PROGRAMS.map(p => `${escapeHtml(p.name)}: ${escapeHtml(p.text)}`).join('; ')}.</p>
                 <p class="text-xs text-muted">Deficyt przez 4 kwartały podnosi rentowność obligacji skarbowych o 0,25 pp${budget.bondPremium ? ` (teraz: ${uiIcon('ok', 14)} premia naliczana)` : ''}. Przez 8 kwartałów — rząd podnosi CIT albo tnie ustawy (zależnie od partii).</p></article>
             <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('glosowanie', 20)}</span><div><h4>Partie</h4><span class="bank-card-type">${escapeHtml(getRulingParty().name)} · wybory za ${macro.election.quartersLeft} kw.</span></div></header>
                 ${renderPartyBars(support)}

@@ -10225,6 +10225,28 @@ group('0.15.4: Poprawki z gry 3 (licznik, okna, wykres, dywidenda, split, limit 
         for (const file of ['../ui.js', '../index.html', '../events.js']) assert(!(await (await fetch(file, { cache: 'no-store' })).text()).includes('Miasto Gdańsk'), `${file}: właściciel miejski nazywa się „Miasto”`);
     });
 
+    test('P7: programy socjalne — skarb wydaje 10% nadwyżki ponad rezerwę (≤ baza podatkowa), skutki rosną z finansowaniem, bez zmiany salda budżetu', () => {
+        resetWorld([mk('AAA')]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        const b = society.budget; b.taxBase = 100_000_000; b.balance = 5; b.deficitQuarters = 0;
+        governmentTreasury = 10_000_000; const poor0 = society.classes.poor, pop0 = society.population;
+        assertEq(settleSocialPrograms(), 0, 'skarb poniżej rezerwy — brak wydatków'); assertEq(governmentTreasury, 10_000_000, 'skarb bez zmian'); assertEq(society.classes.poor, poor0, 'brak skutków bez finansowania');
+        governmentTreasury = 5_000_000_000;
+        const spent = settleSocialPrograms();
+        assertEq(spent, 100_000_000, 'wydatek ograniczony do kwartalnej bazy podatkowej'); assertEq(governmentTreasury, 4_900_000_000, 'skarb pomniejszony o wydatek');
+        assertNear(Object.values(b.programs).reduce((a, c) => a + c, 0), spent, 'podział na programy');
+        assertNear(society.classes.poor, poor0 - 0.0005, 'wsparcie rodzin zmniejsza udział biednych', 1e-9); assertNear(Object.values(society.classes).reduce((a, c) => a + c, 0), 1, 'suma klas 1', 1e-9);
+        assertNear(society.educationBonus, 0.4, 'oświata podnosi cel edukacji'); assert(society.population > pop0, 'ochrona zdrowia: wzrost populacji');
+        for (let i = 0; i < 400; i++) society.educationBonus = Math.min(8, society.educationBonus * 0.95 + 0.4);
+        assertNear(society.educationBonus, 8, 'premia edukacji ograniczona do +8', 1e-6);
+        society.education = 50; society.educationPriority = 'medium'; advanceEducation();
+        assert(society.education > 50 && society.education <= 51, 'edukacja zmierza do celu 60 + premia');
+        // równowaga: wpływy 40 mln na kwartał nie pozwalają skarbowi rosnąć bez końca, gdy programy są pełne
+        governmentTreasury = 5_000_000_000; b.balance = 7;
+        for (let q = 0; q < 300; q++) { governmentTreasury += 40_000_000; settleSocialPrograms(); }
+        assert(governmentTreasury < 800_000_000, `skarb wraca w pobliże równowagi (${Math.round(governmentTreasury / 1e6)} mln)`);
+        assertEq(b.balance, 7, 'saldo budżetu (deficyt, premia obligacji, CIT) nietknięte przez programy');
+    });
+
     test('P6: wchłonięcie córki z trzeciego klastra nie dodaje segmentu; sektor główny i etykieta liczone z segmentów po każdej zmianie', () => {
         const parent = diversified(['Przemysł', 'Finanse'], [0.6, 0.4]); parent.fundamentals = { revenue: 1_000_000 };
         const child = mk('KID', { sector: ['Medycyna'] }); child.fundamentals = { revenue: 300_000 }; child.segments = [{ sector: 'Medycyna', subsector: null, share: 1 }];

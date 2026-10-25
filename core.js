@@ -5352,7 +5352,7 @@ function processDemographicEvents() {
 
 /** Edukacja dryfuje ±1 na kwartał w stronę celu wynikającego z priorytetu państwa. */
 function advanceEducation() {
-    const target = EDUCATION_TARGETS[society.educationPriority] ?? EDUCATION_TARGETS.medium;
+    const target = Math.min(100, (EDUCATION_TARGETS[society.educationPriority] ?? EDUCATION_TARGETS.medium) + (Number(society.educationBonus) || 0)); // 0.15.4 P7: program Oświata
     const gap = target - society.education;
     society.education = clampValue(society.education + clampValue(gap, -1, 1) * (Math.abs(gap) < 1 ? 1 : getRandomInRange(0.5, 1)), 0, 100);
 }
@@ -5706,9 +5706,45 @@ function updateBudgetBalance() {
     }
 }
 
+// 0.15.4 P7: programy socjalne jako wydatki skarbu. Wcześniej regularne wydatki państwa były tylko „na papierze” (publicServices nie
+// schodziły ze skarbu), więc Skarb Państwa rósł o ok. 330 mln zł rocznie do miliardów bez żadnego zastosowania. Teraz skarb finansuje
+// 3 małe programy z nadwyżki ponad rezerwę (10% nadwyżki na kwartał, najwyżej kwartalna baza podatkowa); skutki skalują się
+// z poziomem finansowania (pełne od połowy bazy podatkowej, więcej zmniejsza tylko skarb). Programy nie wchodzą do salda budżetu (deficyt, premia obligacji, CIT) — są finansowane z zapasu skarbu.
+const SOCIAL_PROGRAM_RESERVE = 50_000_000;
+const SOCIAL_PROGRAM_RATE = 0.10;
+const SOCIAL_PROGRAM_CAP = 1.0;            // × kwartalna baza podatkowa (limit wydatku)
+const SOCIAL_PROGRAM_FULL = 0.5;           // × kwartalna baza podatkowa: finansowanie dające pełne skutki
+const SOCIAL_PROGRAMS = [
+    { id: 'families', name: 'Wsparcie rodzin', share: 0.40, text: 'część klasy biednej awansuje do średniej niższej (−0,05 pp biednych na kwartał przy pełnym finansowaniu)' },
+    { id: 'schools', name: 'Oświata', share: 0.30, text: 'rośnie cel edukacji (do +8 punktów), więcej specjalistów na rynku pracy' },
+    { id: 'health', name: 'Ochrona zdrowia', share: 0.30, text: 'szybszy wzrost populacji (+0,02% na kwartał przy pełnym finansowaniu)' }
+];
+
+/** Co kwartał: wydatki na programy socjalne ze skarbu i ich skutki (intensywność 0…1 = finansowanie / limit). */
+function settleSocialPrograms() {
+    const budget = society.budget;
+    const base = Math.max(0, Number(budget.taxBase) || 0);
+    budget.programSpending = 0; budget.programs = {};
+    const cap = base * SOCIAL_PROGRAM_CAP;
+    const spend = Math.min(Math.max(0, governmentTreasury - SOCIAL_PROGRAM_RESERVE) * SOCIAL_PROGRAM_RATE, cap);
+    const intensity = base > 0 ? Math.min(1, Math.max(0, spend) / (base * SOCIAL_PROGRAM_FULL)) : 0;
+    if (spend > 0) {
+        governmentTreasury -= spend;
+        budget.programSpending = spend;
+        for (const program of SOCIAL_PROGRAMS) budget.programs[program.id] = spend * program.share;
+    }
+    const classes = society.classes;
+    const shift = Math.min(classes.poor || 0, 0.0005 * intensity);
+    classes.poor -= shift; classes.lowerMid = (classes.lowerMid || 0) + shift;          // wsparcie rodzin
+    society.educationBonus = Math.min(8, (Number(society.educationBonus) || 0) * 0.95 + 0.4 * intensity); // oświata: cel edukacji rośnie, bez finansowania zanika
+    society.population = Math.round(society.population * (1 + 0.0002 * intensity));       // ochrona zdrowia
+    return spend;
+}
+
 function advanceSocialPolicy() {
     applyPendingLaw();
     settleSocialBudget();
+    settleSocialPrograms();
     if (society.housingProgram > 0) {
         society.housingProgram--;
         if (Math.random() < 0.5 * Math.max(1, Number(society.laws.housing) || 0)) commissionSocialHousing();
