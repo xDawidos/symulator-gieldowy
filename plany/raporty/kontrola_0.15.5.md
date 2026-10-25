@@ -84,3 +84,8 @@ Patrz `git log 1ccc082..HEAD`: B0 (sondy, raport), B1 (kryteria i limit, megapro
 7. **Zlecenie dla czatu designu** (makiety okna przetargu, widoku podwykonawców i karty REIT w Figmie): nie wykonane.
 8. **Zachowanie botów wobec wyższych cen REIT-ów** i wpływ na fundusze botów: niezmierzone.
 9. **Dostrojenie z pomiarów, nie z planu:** (a) szansa przejęć 5% → 3% → 4,5%/kw., (b) udział podwykonawcy w rynku: okno 8 kw. → 20 kw. → wygasający licznik, (c) wypłata REIT-u po raporcie zamiast na timerze (timer pozwalał wydać kasę na budowę przed wypłatą); kolejne strojenie wymaga ≥ 30 gier na wariant.
+
+## Decyzje po przeglądzie (2026-10-25)
+- Pkt 1: cel zmieniony na „największa firma ≤ 50% w specjalnościach z ≥ 8 zleceniami”; pkt 2: cel „≤ 40% poza przypadkami z fallbackiem” + licznik fallbacków (do zrobienia w 0.16.1 G0).
+- Pkt 3, 4, 8: bez zmian w grze, pomiar w 0.16.1 G0 (≥ 30 gier na wariant). Pkt 6: pomiar zapisu ×1 w przeglądarce — otwarty.
+- Pkt 5 i 7: projekt wyglądu w [05c_ui_0.15.5.md](../design/05c_ui_0.15.5.md) (ranking ofert, powód fallbacku, ekspozycja banku, pasek LTV, udział podwykonawcy); CSS w `style.css`, markup do podłączenia przez czat kodu.

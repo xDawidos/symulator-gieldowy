@@ -1,0 +1,57 @@
+<!doctype html><html lang="pl"><head><meta charset="utf-8"><title>Makieta UI 0.15.5 — przetargi, podwykonawcy, REIT</title>
+<link rel="stylesheet" href="../../../tokens.css"><link rel="stylesheet" href="../../../style.css">
+<style>
+body { padding: 24px !important; }
+.demo { background: var(--color-bg-base); padding: 24px; margin: 0 0 32px; border: 1px solid var(--color-border-subtle); border-radius: 6px; }
+.demo-title { margin: 0 0 4px; font-size: 20px; }
+.demo .construction-info-row { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; font-size: 13px; }
+.demo-sub { margin: 0 0 16px; color: var(--color-text-muted); font-size: 13px; max-width: 720px; }
+</style></head><body class="dark-mode">
+<section class="demo"><h2 class="demo-title">1. Ranking ofert w oknie przetargu</h2><p class="demo-sub">Lista numerowana: miejsce, słowo, ocena /100, pasek, cena, czas i cztery oceny cząstkowe. Wykonawca ponad limitem dostaje znacznik z kłódką i zdaniem, nie sam kolor.</p><div style="width:720px"><div class="construction-tender-card">
+  <div class="construction-info-row"><span>Kryteria oceny</span><strong>Cena 40% · Jakość 25% · Zdolność 20% · Reputacja 15%</strong></div>
+  <details open><summary>Oferty wykonawców (4)</summary><ol class="bid-rank"><li class="bid-rank-row is-over">
+      <span class="bid-rank-pos" aria-label="Miejsce 1">1.</span>
+      <div class="bid-rank-main"><strong>Orzeł Telekom</strong><span class="text-muted">Najlepsza oferta · 80.1 / 100</span>
+        <span class="limit-meter " style="--v:80.1" role="img" aria-label="Ocena 80.1 na 100"><i></i></span>
+        <div class="bid-rank-facts"><span>12 100 000 PLN</span><span>310 dni budowy</span></div>
+        <div class="bid-crits"><span class="bid-crit"><small>Cena</small><b>88</b></span><span class="bid-crit"><small>Jakość</small><b>74</b></span><span class="bid-crit"><small>Zdolność</small><b>78</b></span><span class="bid-crit"><small>Reputacja</small><b>70</b></span></div><p class="limit-flag"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 11h12v10H6zM9 11V8a3 3 0 0 1 6 0v3"/></svg> <span>Ponad limitem 40% wygranych w oknie 8 kw. — wygra tylko wtedy, gdy nikt inny nie może przyjąć zlecenia.</span></p></div></li><li class="bid-rank-row">
+      <span class="bid-rank-pos" aria-label="Miejsce 2">2.</span>
+      <div class="bid-rank-main"><strong>Orzeł Budownictwo</strong><span class="text-muted">Miejsce 2 z 4 · 78.4 / 100</span>
+        <span class="limit-meter " style="--v:78.4" role="img" aria-label="Ocena 78.4 na 100"><i></i></span>
+        <div class="bid-rank-facts"><span>12 400 000 PLN</span><span>320 dni budowy</span></div>
+        <div class="bid-crits"><span class="bid-crit"><small>Cena</small><b>82</b></span><span class="bid-crit"><small>Jakość</small><b>71</b></span><span class="bid-crit"><small>Zdolność</small><b>80</b></span><span class="bid-crit"><small>Reputacja</small><b>74</b></span></div></div></li><li class="bid-rank-row">
+      <span class="bid-rank-pos" aria-label="Miejsce 3">3.</span>
+      <div class="bid-rank-main"><strong>Nordbud S.A.</strong><span class="text-muted">Miejsce 3 z 4 · 71.0 / 100</span>
+        <span class="limit-meter " style="--v:71.0" role="img" aria-label="Ocena 71.0 na 100"><i></i></span>
+        <div class="bid-rank-facts"><span>12 900 000 PLN</span><span>300 dni budowy</span></div>
+        <div class="bid-crits"><span class="bid-crit"><small>Cena</small><b>74</b></span><span class="bid-crit"><small>Jakość</small><b>76</b></span><span class="bid-crit"><small>Zdolność</small><b>60</b></span><span class="bid-crit"><small>Reputacja</small><b>69</b></span></div></div></li><li class="bid-rank-row">
+      <span class="bid-rank-pos" aria-label="Miejsce 4">4.</span>
+      <div class="bid-rank-main"><strong>Kamień i Stal</strong><span class="text-muted">Najsłabsza oferta · 64.2 / 100</span>
+        <span class="limit-meter " style="--v:64.2" role="img" aria-label="Ocena 64.2 na 100"><i></i></span>
+        <div class="bid-rank-facts"><span>13 200 000 PLN</span><span>340 dni budowy</span></div>
+        <div class="bid-crits"><span class="bid-crit"><small>Cena</small><b>66</b></span><span class="bid-crit"><small>Jakość</small><b>58</b></span><span class="bid-crit"><small>Zdolność</small><b>71</b></span><span class="bid-crit"><small>Reputacja</small><b>55</b></span></div></div></li></ol></details></div></div></section><section class="demo"><h2 class="demo-title">1b. Przetarg bez innego oferenta</h2><p class="demo-sub">Powód poluzowania limitu jest widoczny w nagłówku przetargu.</p><div style="width:720px"><p class="notice-inline"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 11v6M12 7.5v.5"/></svg> <span>Brak innego oferenta — limit udziału poluzowany. Zlecenie przyjmie wykonawca ponad limitem.</span></p></div></section><section class="demo"><h2 class="demo-title">2. Podwykonawcy — grupy specjalności</h2><p class="demo-sub">Karta z udziałem w zleceniach rynku liczbą i paskiem z kreską progu 50%.</p><div style="width:720px"><h4 class="subcontractor-specialty">Fundamenty (4)</h4>
+<div class="subcontractor-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+<article class="subcontractor-card specialist-card"><div class="card-topline"><h4>Pale Nord</h4><span class="status-badge available">Dostępny</span></div>
+      <div class="construction-info-row"><span>Stawka (cena)</span><strong>104% stawki bazowej</strong></div><div class="construction-info-row"><span>Jakość / reputacja</span><strong>62 / 58 (0–100)</strong></div>
+      <div class="construction-info-row"><span>Udział w zleceniach rynku</span><strong>18%</strong></div><span class="limit-meter " style="--v:18;--limit:50" role="img" aria-label="Udział 18% przy progu 50%"><i></i><b></b></span>
+      <div class="construction-info-row"><span>Należy do grupy</span><strong>niezależny</strong></div></article><article class="subcontractor-card specialist-card"><div class="card-topline"><h4>Geotech Wschód</h4><span class="status-badge busy">Zajęty</span></div>
+      <div class="construction-info-row"><span>Stawka (cena)</span><strong>104% stawki bazowej</strong></div><div class="construction-info-row"><span>Jakość / reputacja</span><strong>55 / 49 (0–100)</strong></div>
+      <div class="construction-info-row"><span>Udział w zleceniach rynku</span><strong>46%</strong></div><span class="limit-meter " style="--v:46;--limit:50" role="img" aria-label="Udział 46% przy progu 50%"><i></i><b></b></span>
+      <div class="construction-info-row"><span>Należy do grupy</span><strong>Orzeł Budownictwo (transfer 40% zysku)</strong></div></article>
+<article class="subcontractor-card specialist-card"><div class="card-topline"><h4>Fundament Plus</h4><span class="status-badge available">Dostępny</span></div>
+      <div class="construction-info-row"><span>Stawka (cena)</span><strong>104% stawki bazowej</strong></div><div class="construction-info-row"><span>Jakość / reputacja</span><strong>70 / 66 (0–100)</strong></div>
+      <div class="construction-info-row"><span>Udział w zleceniach rynku</span><strong>31%</strong></div><span class="limit-meter " style="--v:31;--limit:50" role="img" aria-label="Udział 31% przy progu 50%"><i></i><b></b></span>
+      <div class="construction-info-row"><span>Należy do grupy</span><strong>niezależny</strong></div></article><article class="subcontractor-card specialist-card"><div class="card-topline"><h4>Grunt i Spółka</h4><span class="status-badge available">Dostępny</span></div>
+      <div class="construction-info-row"><span>Stawka (cena)</span><strong>104% stawki bazowej</strong></div><div class="construction-info-row"><span>Jakość / reputacja</span><strong>48 / 41 (0–100)</strong></div>
+      <div class="construction-info-row"><span>Udział w zleceniach rynku</span><strong>9%</strong></div><span class="limit-meter " style="--v:9;--limit:50" role="img" aria-label="Udział 9% przy progu 50%"><i></i><b></b></span>
+      <div class="construction-info-row"><span>Należy do grupy</span><strong>niezależny</strong></div></article></div>
+<p class="text-xs text-muted" style="margin-top:8px">Pasek: kreska = próg 50% zleceń specjalności. Wartość zawsze też liczbą.</p></div></section><section class="demo"><h2 class="demo-title">3. Karta REIT</h2><p class="demo-sub">Tabela jak dotąd, plus pasek LTV ze znacznikami: budowa do 35%, limit 60%. Słowo przy liczbie zostaje.</p><div style="width:720px"><section class="cc-section"><h4><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18M6 21V9h12v12M4 9l8-6 8 6M10 13h4v8h-4z"/></svg> Portfel nieruchomości (REIT)</h4>
+<table class="asset-mini-table w-full"><tbody>
+<tr><td>Rodzaj portfela <span class="text-muted">ⓘ</span></td><td class="cell-number">Biura</td></tr><tr><td>Wartość portfela <span class="text-muted">ⓘ</span></td><td class="cell-number">412 300 000 PLN</td></tr><tr><td>Obłożenie <span class="text-muted">ⓘ</span></td><td class="cell-number">93,4%</td></tr><tr><td>Stopa najmu <span class="text-muted">ⓘ</span></td><td class="cell-number">6,2% rocznie</td></tr>
+<tr><td>Dźwignia (LTV) <span class="text-muted">ⓘ</span></td><td class="cell-number">36,1% — wysoka (limit 60%)</td></tr>
+<tr class="meter-row"><td colspan="2"><span class="limit-meter is-warn" style="--v:36.1;--limit:60" role="img" aria-label="LTV 36,1% przy limicie 60%"><i></i><b></b></span><span class="meter-scale"><small>0%</small><small>budowa do 35%</small><small>limit 60%</small></span></td></tr>
+<tr><td>Zysk z ostatniego kwartału <span class="text-muted">ⓘ</span></td><td class="cell-number">5 100 000 PLN</td></tr><tr><td>Wypłata (obowiązkowa ≥ 80% zysku) <span class="text-muted">ⓘ</span></td><td class="cell-number">88% zysku · ostatnio 4 488 000 PLN</td></tr><tr><td>Stopa dywidendy (rocznie) <span class="text-muted">ⓘ</span></td><td class="cell-number">5,4%</td></tr><tr><td>Premia / dyskonto do NAV <span class="text-muted">ⓘ</span></td><td class="cell-number">▼ 3,2%</td></tr>
+</tbody></table></section></div></section><section class="demo"><h2 class="demo-title">4. Bank — ekspozycja i odmowa kredytu</h2><p class="demo-sub">Zajęcie limitu koncentracji widoczne zanim bank odmówi.</p><div style="width:720px"><div class="bank-exposure"><div class="construction-info-row"><span>Ekspozycja na największego dłużnika</span><strong>6,2% kapitału banku (limit 10%)</strong></div>
+<span class="limit-meter " style="--v:62;--limit:100" role="img" aria-label="Ekspozycja 6,2% kapitału przy limicie 10%"><i></i><b></b></span>
+<p class="notice-inline is-warn"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 11v6M12 7.5v.5"/></svg> <span>Bank odmówił kredytu: ekspozycja na Nordbud S.A. przekroczyłaby 10% kapitału banku.</span></p></div></div></section>
+</body></html>

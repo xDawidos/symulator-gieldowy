@@ -5087,3 +5087,24 @@ button.mood-kpi:hover { background: var(--color-bg-hover) !important; border-col
     min-width: 60px;
     text-align: center;
 }
+
+/* ===== 0.15.5 RANKING I LIMITY (plany/design/05c_ui_0.15.5.md) ===== */
+.limit-meter { position: relative; display: block; width: 100%; max-width: 280px; height: 6px; margin: 6px 0; border-radius: 3px; background: var(--color-bg-sunken); }
+.limit-meter > i { position: absolute; inset: 0 auto 0 0; width: calc(var(--v, 0) * 1%); max-width: 100%; border-radius: 3px; background: var(--color-text-accent); }
+.limit-meter.is-warn > i { background: var(--color-text-warn); }
+.limit-meter > b { position: absolute; top: -3px; left: calc(var(--limit, 100) * 1%); width: 2px; height: 12px; margin-left: -1px; border-radius: 1px; background: var(--color-text-primary); }
+.meter-scale { display: flex; justify-content: space-between; max-width: 280px; }
+.meter-scale small { font-size: 11px; color: var(--color-text-muted); }
+.bid-rank { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.bid-rank-row { display: flex; gap: 12px; padding: 10px 12px; border: 1px solid var(--color-border-subtle); border-radius: 6px; background: var(--color-bg-surface); }
+.bid-rank-row.is-over { border-color: var(--color-border-warn); }
+.bid-rank-pos { min-width: 24px; font-family: var(--font-family-mono); font-weight: 700; color: var(--color-text-secondary); }
+.bid-rank-main { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.bid-rank-facts { display: flex; gap: 16px; font-size: 13px; color: var(--color-text-secondary); }
+.bid-crits { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 4px; }
+.bid-crit { display: inline-flex; gap: 6px; align-items: baseline; font-size: 12px; }
+.bid-crit small { color: var(--color-text-muted); }
+.limit-flag, .notice-inline { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0 0; padding: 6px 10px; font-size: 12px; border-radius: 4px; background: var(--color-bg-warn-soft); color: var(--color-text-warn); }
+.notice-inline:not(.is-warn) { background: var(--color-bg-info-soft); color: var(--color-text-info); }
+.limit-flag .ic, .notice-inline .ic { flex: none; margin-top: 1px; }
+@media (max-width: 640px) { .bid-rank-row { padding: 8px; gap: 8px; } .bid-rank-facts { flex-direction: column; gap: 0; } }
