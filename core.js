@@ -1023,6 +1023,7 @@ function drawConstructionCredit(builder, amount, project) {
     const liabilities = Number(sheet.liabilities) || 0;
 
     if ((liabilities + value) / assets > CONSTRUCTION_RULES.maxBuilderLeverage) return false;
+    if (typeof canBankExtendCredit === 'function' && !canBankExtendCredit(builder, value)) return false; // 0.15.5 B4: limit koncentracji
 
     const bank = getCompanyBank(builder);
     if (bank) bank.cash = (Number(bank.cash) || 0) - value; // bank udziela kredytu ze swoich środków
@@ -1030,6 +1031,7 @@ function drawConstructionCredit(builder, amount, project) {
     adjustCompanyCash(builder, value);
     adjustBalanceSheet(builder, { assets: value, liabilities: value });
     builder.constructionCredit = (Number(builder.constructionCredit) || 0) + value;
+    if (typeof noteBankExposure === 'function') noteBankExposure(builder, value); // 0.15.5 B4
     recordPayment(bank ? bank.id : 'external:bank_credit', builder, value, 'Kredyt obrotowy na budowę', project?.id);
 
     return true;
@@ -1048,6 +1050,7 @@ function repayConstructionCredit(builder) {
 
     adjustBalanceSheet(builder, { assets: -repayment, liabilities: -repayment });
     builder.constructionCredit = credit - repayment;
+    if (typeof noteBankExposure === 'function') noteBankExposure(builder, -repayment); // 0.15.5 B4
     recordPayment(builder, bank ? bank.id : 'external:bank_credit', repayment, 'Spłata kredytu obrotowego');
 
     return repayment;

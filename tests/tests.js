@@ -10644,6 +10644,85 @@ group('0.15.5: Budownictwo i banki (przetargi, podwykonawcy, przejęcia pionowe,
         assertEq(getTotalCompanyCount(), count0, 'liczba spółek giełdowych bez zmian');
     });
 
+
+    // --- B4: banki ---
+    const bankWorld = (cash = 1_000_000) => {
+        const dev = mkB('DEV', { cash: 100_000 }), other = makeCompany('OTH', { sector: ['Usługi'], cash: 100_000 }), client = makeCompany('KLI', { cash: 100_000 });
+        [dev, other, client].forEach(c => { c.balanceSheet.assets = 50_000_000; c.balanceSheet.liabilities = 1_000_000; });
+        resetWorld([dev, other, client]);
+        const bank = { id: 'bankT', name: 'Bank Testowy', isActive: true, type: BANK_TYPES.UNIVERSAL, cash, initialCapital: cash, loanPortfolio: {}, depositBook: {}, baseInterestRateMargin: 0.01, reservesBC: 0 };
+        const saved = commercialBanks.splice(0, commercialBanks.length, bank);
+        [dev, other, client].forEach(c => { c.bankAccountId = bank.id; });
+        return { dev, other, client, bank, restore: () => { commercialBanks.splice(0, commercialBanks.length, ...saved); } };
+    };
+
+    test('B4: limit koncentracji — jeden dłużnik najwyżej 10% kapitału banku (dobrowolne finansowanie), spłata zwalnia limit', () => {
+        const { dev, bank, restore } = bankWorld(1_000_000);
+        try {
+            assertEq(getBankCapital(bank), 1_000_000, 'kapitał banku');
+            assert(canFinanceAmount(dev, 150_000 + dev.cash) === false, 'ponad 100 tys. odmowa');
+            assert(canFinanceAmount(dev, 80_000), 'w gotówce spółki — bez kredytu');
+            assert(financeInvestment(dev, dev.cash + 90_000), 'kredyt 90 tys. w limicie');
+            assertEq(bank.exposure.DEV, 90_000, 'ekspozycja zapisana');
+            assert(!canFinanceAmount(dev, dev.cash + 20_000), 'kolejne 20 tys. ponad limit (90 + 20 > 100)');
+            repayCompanyDebt(dev, 50_000);
+            assertEq(bank.exposure.DEV, 40_000, 'spłata zmniejsza ekspozycję');
+            assert(canFinanceAmount(dev, dev.cash + 20_000), 'po spłacie znów można');
+            // kredyt ratunkowy na ujemną gotówkę nie podlega limitowi
+            dev.cash = -500_000;
+            assert(coverNegativeCash(dev, 0) > 500_000, 'kredyt ratunkowy');
+            assert(dev.cash >= 0, 'gotówka nieujemna');
+        } finally { restore(); }
+    });
+
+    test('B4: kredyt obrotowy wykonawcy liczy się do ekspozycji i podlega limitowi', () => {
+        const { dev, bank, restore } = bankWorld(1_000_000);
+        try {
+            const project = { id: 'p' };
+            assert(drawConstructionCredit(dev, 60_000, project), 'kredyt w limicie');
+            assertEq(bank.exposure.DEV, 60_000, 'ekspozycja kredytu obrotowego');
+            assert(!drawConstructionCredit(dev, 60_000, project), 'drugi ponad limit 10%');
+            dev.cash = 1_000_000;
+            repayConstructionCredit(dev);
+            assertEq(bank.exposure.DEV || 0, 0, 'spłata kredytu obrotowego zeruje ekspozycję');
+        } finally { restore(); }
+    });
+
+    test('B4: marża odsetkowa mieści się w widełkach względem stopy bazowej (kredyt +4…+9 pp, lokata firmowa poniżej stopy bazowej)', () => {
+        const { bank, restore } = bankWorld();
+        const rate0 = centralBank.baseInterestRate;
+        try {
+            for (const base of [0.01, 0.03, 0.05, 0.08, 0.12]) {
+                centralBank.baseInterestRate = base; updateInterestRates();
+                const m = getBankMargins(bank);
+                assert(m.loanOverBase >= 0.04 && m.loanOverBase <= 0.09, 'marża kredytu przy stopie ' + base + ': ' + m.loanOverBase);
+                assert(m.deposit < m.base + 0.02 && m.deposit >= 0, 'lokata firmowa przy stopie ' + base + ': ' + m.deposit);
+                assert(m.spread >= 0.03 && m.spread <= 0.13, 'rozpiętość przy stopie ' + base + ': ' + m.spread);
+            }
+        } finally { centralBank.baseInterestRate = rate0; updateInterestRates(); restore(); }
+    });
+
+    test('B4: kryzys bankowy — odpisy od ekspozycji na deweloperów, gotówka spółek nietknięta, ewidencja czyszczona po upadku', () => {
+        const { dev, other, client, bank, restore } = bankWorld(50_000_000);
+
+        try {
+            financeInvestment(dev, dev.cash + 2_000_000); financeInvestment(other, other.cash + 1_000_000);
+            const ledger = getBankLedger(bank);
+            ledger.writeOffs = 0;
+            processBankRiskQuarterly();
+            assertEq(ledger.writeOffs, 0, 'bez kryzysu brak odpisów');
+            startCrisisLine('banking', { forced: true, skipSpark: true });
+            crisisLine.stage = 'spread';
+            const cash = [dev, other, client].map(c => c.cash);
+            processBankRiskQuarterly();
+            assertNear(ledger.writeOffs, 2_000_000 * BANK_CRISIS_PROVISION, 'odpis tylko od ekspozycji na dewelopera', 1e-6);
+            assertEq([dev, other, client].map(c => c.cash).join(), cash.join(), 'gotówka spółek nietknięta');
+            assert([dev, other, client].every(c => c.cash >= 0), 'brak ujemnej gotówki');
+            other.isBankrupt = true; processBankRiskQuarterly();
+            assert(!('OTH' in bank.exposure), 'upadły dłużnik znika z ewidencji');
+        } finally { resetCrises(); restore(); }
+    });
+
     test('B1: okno wygranych jest zapisywane (pole opcjonalne)', () => {
         constructionAwardLog = [{ q: 7, sym: 'AAA' }, { q: 8, sym: 'BBB' }];
         const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));

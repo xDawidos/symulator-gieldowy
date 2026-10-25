@@ -1457,6 +1457,7 @@ gameTimers.weekly = setGameInterval(() => {
         processSubsectorMechanicsQuarterly(); // 0.14 T2: badania kliniczne, bloki jądrowe, kontrole KNF (subsectors.js)
         processSpecialProjectsQuarterly(); // konsorcja i projekty specjalne (projects.js)
         if (typeof processSubcontractorsQuarterly === 'function') processSubcontractorsQuarterly(); // 0.15.5 B2–B3: podwykonawcy (subcontractors.js)
+        if (typeof processBankRiskQuarterly === 'function') processBankRiskQuarterly(); // 0.15.5 B4: ekspozycje banków, odpisy w kryzysie bankowym (finance.js)
         if (typeof processSplitsQuarterly === 'function') processSplitsQuarterly(); // 0.15.4 P4: split i konsolidacja akcji (splits.js)
         reconcileSharesHeld(); // audyt A1: akcje w obrocie = suma posiadaczy
         processOversightQuarterly(); // korupcja, policja, KNF (oversight.js)

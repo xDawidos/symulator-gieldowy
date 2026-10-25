@@ -7583,6 +7583,7 @@ function canFinanceAmount(stock, amount) {
 
     const shortfall = value - cash;
     const assets = Math.max(1, Number(sheet.assets) || 0);
+    if (typeof canBankExtendCredit === 'function' && !canBankExtendCredit(stock, shortfall)) return false; // 0.15.5 B4: limit koncentracji
     return ((Number(sheet.liabilities) || 0) + shortfall) / (assets + shortfall) < 0.7;
 }
 
@@ -7614,6 +7615,7 @@ function borrowForCompany(stock, amount, purpose = 'Kredyt') {
     adjustCompanyCash(stock, value);
     adjustBalanceSheet(stock, { assets: value, liabilities: value });
     recordPayment(bank ? bank.id : 'external:bank_credit', stock, value, purpose);
+    if (typeof noteBankExposure === 'function') noteBankExposure(stock, value); // 0.15.5 B4
 
     return value;
 }
@@ -7649,6 +7651,7 @@ function repayCompanyDebt(stock, amount) {
 
     adjustBalanceSheet(stock, { assets: -value, liabilities: -value });
     recordPayment(stock, bank ? bank.id : 'external:bank_credit', value, 'Spłata długu');
+    if (typeof noteBankExposure === 'function') noteBankExposure(stock, -value); // 0.15.5 B4
 
     return value;
 }
