@@ -9920,6 +9920,90 @@ group('0.15.4: Poprawki z gry 3 (licznik, okna, wykres, dywidenda, split, limit 
         assert(isAcademyUnlocked('warunkiRynkowe'), 'hasło odblokowane po obejrzeniu kooperacji');
         cooperations = [];
     });
+
+    // --- P4: split i konsolidacja akcji ---
+    function splitWorld(price = 2400) {
+        const a = Object.assign(mk('SPL', { price, totalShares: 10_000, cash: 5_000_000 }), { insiderShares: 3000, cityShares: 200 });
+        const owner = mk('OWN', { price: 50, cash: 1_000_000 }); owner.equityStakes = { SPL: 500 };
+        const hold = Object.assign(mk('HLD', { price: 50 }), { assetType: 'Holding', holdingPortfolio: { SPL: { quantity: 10, purchasePrice: 2000 } }, totalShares: 1000 });
+        resetWorld([a, owner, hold]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        playerPortfolio.SPL = { shares: 100, avgPrice: 2000, lockedShares: 20, assetType: 'stock' };
+        playerWallet.portfolio.SPL = { shares: 50, avgPrice: 2100, assetType: 'stock' };
+        aiCompetitors[0].portfolio.SPL = { shares: 301, avgPrice: 1800 };
+        aiCompetitors[0].loans = [{ id: 'l1', amount: 1000, collateral: { symbol: 'SPL', quantity: 100 } }];
+        const fund = corporation.managers[0].fund; fund.portfolio.SPL = { shares: 40, avgPrice: 1900 };
+        commercialBanks[0].stockPortfolio = { SPL: { shares: 70, avgPrice: 2200 } };
+        etfs.push({ symbol: 'TEF', name: 'Test ETF', holdings: { SPL: 25 }, cash: 0 });
+        playerFund.pawnLoans = [{ id: 'p1', symbol: 'SPL', shares: 20, principal: 1000, weeksLeft: 5, missed: 0 }];
+        a.lineHistory = [{ time: 1, price: 2300 }, { time: 2, price: 2400 }];
+        a.candlestickHistory = [{ time: 1, open: 2300, high: 2500, low: 2200, close: 2400 }];
+        a.currentCandle = { time: 2, open: 2400, high: 2450, low: 2390, close: 2400 };
+        a.weeklyCloses = [2300, 2400]; a.priceAlerts = { buy: 2000, sell: 3000 };
+        a.playerTransactions = [{ type: 'buy', time: 1, price: 2300, quantity: 10 }];
+        a.fundamentals = { fairValue: 2500, epsTtm: 120, expectedEps: 30, lastEps: 29, salesPerShare: 900, bookValuePerShare: 1000, history: [{ eps: 30, revenue: 1 }] };
+        a.dividendHistory = [{ dps: 12, yield: 0.005 }]; a.pendingDividend = { dps: 12, total: 120_000 }; a.lastDividend = { dps: 12, total: 120_000, yield: 0.005 };
+        a.estimatedDividend = 12; a.lastDeclaredDps = 12;
+        a.sharesHeld = getTrackedHeldShares(a);
+        return { a, owner, hold, fund };
+    }
+    const wealth = a => (playerPortfolio.SPL?.shares || 0) * a.price + (playerWallet.portfolio.SPL?.shares || 0) * a.price;
+
+    test('P4a: split 5:1 — akcje u wszystkich posiadaczy ×5, kurs ÷5, wartość pozycji i NAV bez zmian, niezmienniki 0', () => {
+        const { a, owner, hold, fund } = splitWorld();
+        const nav0 = getFundNav(), value0 = wealth(a), cap0 = a.price * a.totalShares, problems0 = checkWorldInvariants().join('|');
+        const entry = applyShareCountChange(a, 5);
+        assert(entry && entry.kind === 'split' && entry.ratio === 5, 'wpis splitu');
+        assertEq(a.price, 480, 'kurs ÷5');
+        assertEq(a.totalShares, 50_000, 'akcje ×5');
+        assertNear(a.price * a.totalShares, cap0, 'kapitalizacja bez zmian', 1e-9);
+        assertEq(playerPortfolio.SPL.shares, 500, 'fundusz'); assertEq(playerPortfolio.SPL.avgPrice, 400, 'średnia cena zakupu ÷5'); assertEq(playerPortfolio.SPL.lockedShares, 100, 'zastaw ×5');
+        assertEq(playerWallet.portfolio.SPL.shares, 250, 'konto prywatne');
+        assertEq(aiCompetitors[0].portfolio.SPL.shares, 1505, 'bot'); assertEq(fund.portfolio.SPL.shares, 200, 'fundusz kolegi'); assertEq(commercialBanks[0].stockPortfolio.SPL.shares, 350, 'bank');
+        assertEq(owner.equityStakes.SPL, 2500, 'pakiet spółki'); assertEq(hold.holdingPortfolio.SPL.quantity, 50, 'holding'); assertEq(hold.holdingPortfolio.SPL.purchasePrice, 400, 'koszt holdingu ÷5');
+        assertEq(etfs[0].holdings.SPL, 125, 'ETF');
+        assertEq(a.insiderShares, 15_000, 'insiderzy'); assertEq(a.cityShares, 1000, 'miasto');
+        assertEq(playerFund.pawnLoans[0].shares, 100, 'zastaw funduszu (pożyczka lombardowa)'); assertEq(aiCompetitors[0].loans[0].collateral.quantity, 500, 'zabezpieczenie kredytu bota');
+        assertNear(wealth(a), value0, 'wartość pozycji gracza', 1e-9);
+        assertNear(getFundNav(), nav0, 'NAV funduszu', 1e-9);
+        assertEq(a.sharesHeld, getTrackedHeldShares(a), 'akcje w obrocie = suma posiadaczy');
+        assertEq(checkWorldInvariants().join('|'), problems0, 'niezmienniki bez zmian');
+        // historia i wskaźniki na akcję (korekta wstecz — wykres bez skoku)
+        assertEq(a.lineHistory[0].price, 460, 'historia linii'); assertEq(a.candlestickHistory[0].high, 500, 'świece'); assertEq(a.currentCandle.close, 480, 'świeca bieżąca'); assertEq(a.weeklyCloses[1], 480, 'zamknięcia tygodniowe');
+        assertEq(a.priceAlerts.buy, 400, 'alert kupna'); assertEq(a.priceAlerts.sell, 600, 'alert sprzedaży'); assertEq(a.playerTransactions[0].price, 460, 'transakcje: cena'); assertEq(a.playerTransactions[0].quantity, 50, 'transakcje: ilość');
+        assertEq(a.fundamentals.fairValue, 500, 'wartość godziwa'); assertEq(a.fundamentals.epsTtm, 24, 'EPS'); assertEq(a.fundamentals.history[0].eps, 6, 'EPS w historii');
+        assertEq(a.dividendHistory[0].dps, 2.4, 'historia dywidend'); assertEq(a.pendingDividend.dps, 2.4, 'ogłoszona dywidenda na akcję'); assertEq(a.pendingDividend.total, 120_000, 'suma dywidendy bez zmian'); assertEq(a.lastDeclaredDps, 2.4, 'ostatnia ogłoszona');
+        assertEq(a.splitHistory.at(-1).f, 5, 'czynnik skali w historii spółki');
+    });
+
+    test('P4a: propozycja zmiany akcji — próg 1000 zł, krotność tak, by kurs po splicie ≤ 700 zł; kwartalny proces z szansą 20%, bez fuzji i z przerwą', () => {
+        assertEq(getSplitProposal(999), null, 'poniżej progu');
+        assertEq(JSON.stringify(getSplitProposal(1000)), '{"kind":"split","ratio":2}', '1000 zł → 2:1');
+        assertEq(getSplitProposal(1500).ratio, 3, '1500 zł → 3:1'); assertEq(getSplitProposal(2400).ratio, 5, '2400 zł → 5:1'); assertEq(getSplitProposal(4_000_000).ratio, 1000, '4 mln zł → 1000:1');
+        const { a } = splitWorld(1500);
+        const random = Math.random;
+        try {
+            Math.random = () => 0.9; assertEq(processSplitsQuarterly().length, 0, 'bez losu 20% nic się nie dzieje'); assertEq(a.price, 1500, 'kurs bez zmian');
+            a.mergerProcess = { stage: 1 }; Math.random = () => 0.1; assertEq(processSplitsQuarterly().length, 0, 'spółka w fuzji nie dzieli akcji'); delete a.mergerProcess;
+            macro.quarter = 10;
+            const done = processSplitsQuarterly();
+            assertEq(done.length, 1, 'split przy 20%'); assertEq(a.price, 500, '1500 zł → 3:1 = 500 zł'); assertEq(a.lastSplitQuarter, 10, 'kwartał splitu');
+            a.price = 1500; assertEq(processSplitsQuarterly().length, 0, 'przerwa po splicie');
+            macro.quarter = 10 + SPLIT_COOLDOWN_QUARTERS; assertEq(processSplitsQuarterly().length, 1, 'po przerwie możliwy kolejny');
+        } finally { Math.random = random; }
+    });
+
+    test('P4a: zapis i wczytanie po splicie — pakiety, historia i niezmienniki bez zmian', () => {
+        const { a } = splitWorld(2400);
+        applyShareCountChange(a, 5);
+        const nav = getFundNav(), problems = checkWorldInvariants().join('|');
+        const report = applySaveSnapshot(JSON.parse(JSON.stringify(buildSaveSnapshot())));
+        assert(report.ok, report.errors.join(' '));
+        const b = stocks.find(s => s.symbol === 'SPL');
+        assertEq(b.price, 480, 'kurs po wczytaniu'); assertEq(b.totalShares, 50_000, 'akcje po wczytaniu'); assertEq(b.splitHistory.at(-1).f, 5, 'znacznik splitu w zapisie');
+        assertEq(playerPortfolio.SPL.shares, 500, 'pakiet funduszu po wczytaniu'); assertNear(getFundNav(), nav, 'NAV po wczytaniu', 1e-9);
+        assertEq(checkWorldInvariants().join('|'), problems, 'niezmienniki po wczytaniu');
+    });
 });
 
 async function runAllTests() {

@@ -1447,6 +1447,7 @@ gameTimers.weekly = setGameInterval(() => {
         processSubsidiariesQuarterly(); // 0.14 T6: spółki zależne (pożyczki, usamodzielnienie, wchłonięcie, sprzedaż pakietu)
         processSubsectorMechanicsQuarterly(); // 0.14 T2: badania kliniczne, bloki jądrowe, kontrole KNF (subsectors.js)
         processSpecialProjectsQuarterly(); // konsorcja i projekty specjalne (projects.js)
+        if (typeof processSplitsQuarterly === 'function') processSplitsQuarterly(); // 0.15.4 P4: split i konsolidacja akcji (splits.js)
         reconcileSharesHeld(); // audyt A1: akcje w obrocie = suma posiadaczy
         processOversightQuarterly(); // korupcja, policja, KNF (oversight.js)
         processMafiaQuarterly(); // mafia, Bruno Gato, porachunki (mafia.js)
