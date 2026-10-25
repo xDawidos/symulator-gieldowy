@@ -215,6 +215,7 @@ function buildSaveSnapshot({ compact = 0 } = {}) {
         centralBank: serializeWithStockRefs(centralBank),
         specialists: serializeWithStockRefs(specialists),
         constructionAwardLog, // 0.15.5 B1: okno wygranych przetargów (pole opcjonalne)
+        subcontractLog, subcontractorDeals, subcontractorAcquisitionCount, // 0.15.5 B2–B3: okno zleceń podwykonawców, przejęcia pionowe (pola opcjonalne)
         activeTenders: activeTenders.filter(tender => ['open', 'closed', 'awarded'].includes(tender.status)).map(serializeTenderForSave), // zakończone przetargi nie trafiają do zapisu
         constructionProjects: constructionProjects.filter(project => !project.settled).map(serializeProjectForSave),
         paymentJournal: limits.journal ? paymentJournal.slice(-limits.journal) : [],
@@ -581,6 +582,10 @@ function applySaveSnapshot(snapshot) {
     if (snapshot.city) city = resolveOther(snapshot.city);
     if (snapshot.centralBank) centralBank = resolveOther(snapshot.centralBank);
     if (Array.isArray(snapshot.specialists)) specialists = resolveOther(snapshot.specialists);
+    subcontractLog = Array.isArray(snapshot.subcontractLog) ? snapshot.subcontractLog.filter(e => e && Number.isFinite(e.q) && typeof e.spec === 'string') : []; // 0.15.5 B2
+    subcontractorDeals = Array.isArray(snapshot.subcontractorDeals) ? snapshot.subcontractorDeals : [];
+    subcontractorAcquisitionCount = Number(snapshot.subcontractorAcquisitionCount) || 0;
+    ensureSubcontractorRegistry(); // 0.15.5 B2: rejestr 12 specjalności budowany z istniejących danych (zapisy starsze mają 7 podwykonawców)
     constructionAwardLog = Array.isArray(snapshot.constructionAwardLog) ? snapshot.constructionAwardLog.filter(e => e && typeof e.sym === 'string' && Number.isFinite(e.q)) : []; // 0.15.5 B1
 
     if (isFiniteNumber(snapshot.playerCash)) playerCash = snapshot.playerCash;
@@ -1451,6 +1456,7 @@ gameTimers.weekly = setGameInterval(() => {
         processSubsidiariesQuarterly(); // 0.14 T6: spółki zależne (pożyczki, usamodzielnienie, wchłonięcie, sprzedaż pakietu)
         processSubsectorMechanicsQuarterly(); // 0.14 T2: badania kliniczne, bloki jądrowe, kontrole KNF (subsectors.js)
         processSpecialProjectsQuarterly(); // konsorcja i projekty specjalne (projects.js)
+        if (typeof processSubcontractorsQuarterly === 'function') processSubcontractorsQuarterly(); // 0.15.5 B2–B3: podwykonawcy (subcontractors.js)
         if (typeof processSplitsQuarterly === 'function') processSplitsQuarterly(); // 0.15.4 P4: split i konsolidacja akcji (splits.js)
         reconcileSharesHeld(); // audyt A1: akcje w obrocie = suma posiadaczy
         processOversightQuarterly(); // korupcja, policja, KNF (oversight.js)
@@ -1708,6 +1714,7 @@ function createNewWorld() {
     generateCentralBankGovernor();
     initializeConstructionCompanies();
     initializeAllConstructionStats(); // Inicjalizuje maxProjects i currentProjects dla spółek budowlanych
+    ensureSubcontractorRegistry(); // 0.15.5 B2: rejestr podwykonawców (12 specjalności, min. 3 w każdej)
     
     let activatedBankIds = []; // Tablica do śledzenia ID aktywowanych banków
     let activatedBanksCount = 0; // Licznik aktywowanych banków

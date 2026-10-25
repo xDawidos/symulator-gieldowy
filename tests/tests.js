@@ -124,6 +124,8 @@ function resetWorld(companies) {
     if (typeof updateAllSectorPremiums === 'function') updateAllSectorPremiums();
     activeTenders = [];
     constructionAwardLog = []; // 0.15.5 B1
+    subcontractLog = []; subcontractorDeals = []; // 0.15.5 B2
+    SUBCONTRACTOR_RULES.startHireChance = 0; // testy starsze od 0.15.5: podwykonawca tylko na żądanie
     if (typeof cooperations !== 'undefined') { cooperations = []; cooperationLog = []; } // 0.14 T5
     constructionProjects = [];
     paymentJournal = [];
@@ -10421,6 +10423,125 @@ group('0.15.5: Budownictwo i banki (przetargi, podwykonawcy, przejęcia pionowe,
         }
         assert(Object.keys(wins).length >= 5, 'udział rozkłada się na wiele spółek: ' + JSON.stringify(wins));
         assert(Math.max(...Object.values(wins)) <= 12 * 0.8, 'żadna spółka nie jest w prawie każdym konsorcjum: ' + JSON.stringify(wins));
+    });
+
+
+    // --- B2: podwykonawcy ---
+    const registryWorld = (extra = []) => {
+        const builder = mkB('GEN', { cash: 50_000_000, experience: 30 });
+        resetWorld([builder, makeCompany('KLI', { cash: 5_000_000 }), ...extra]);
+        specialists = [
+            { id: 'spec1', name: 'Voltomax Systemy', specialty: 'technology', bonus: 0.1, contractsCompleted: 0, level: 1, cash: 101000 },
+            { id: 'spec4', name: 'Inżynierowie Strukturalni', specialty: 'industrial', bonus: 0.15, contractsCompleted: 0, level: 1, cash: 150000 }
+        ];
+        ensureSubcontractorRegistry();
+        return builder;
+    };
+    const fakeProject = (builder, buildingId) => ({ id: nextSimulationId('project'), settled: false, builder, tender: { buildingType: { id: buildingId, name: buildingId }, clientCompany: null },
+        estimatedCost: 1_000_000, costsPaid: 0, events: [], elapsedGameMs: 0, speedMultiplier: 1, subcontractor: null });
+
+    test('B2: rejestr — 12 specjalności po 3–8 firm, dawni podwykonawcy zachowani i przypisani do nowych specjalności', () => {
+        registryWorld();
+        assertEq(Object.keys(SUBCONTRACTOR_SPECIALTIES).length, 12, '12 specjalności');
+        for (const specialty of Object.keys(SUBCONTRACTOR_SPECIALTIES)) {
+            const n = getSubcontractorsBySpecialty(specialty).length;
+            assert(n >= 3 && n <= 8, specialty + ': ' + n);
+        }
+        assertEq(specialists.find(s => s.id === 'spec1').specialty, 'it_cabling', 'technology → okablowanie IT');
+        assertEq(specialists.find(s => s.id === 'spec4').specialty, 'industrial', 'industrial bez zmian');
+        assert(specialists.every(s => s.priceFactor > 0 && s.quality >= 0 && s.reputation >= 0 && Array.isArray(s.profits)), 'pola modelu');
+        assert(specialists.every(s => stocks.every(st => st.symbol !== s.id)), 'podwykonawcy nie są spółkami giełdowymi');
+    });
+
+    test('B2: potrzebne specjalności wynikają z rodzaju budowy', () => {
+        assertEq(getRequiredSubcontractorSpecialties({ id: 'wind_farm' })[0], 'energy', 'farma wiatrowa');
+        assertEq(getRequiredSubcontractorSpecialties({ id: 'server_room' })[0], 'it_cabling', 'serwerownia');
+        assertEq(getRequiredSubcontractorSpecialties({ id: 'warehouse' })[0], 'roofs', 'magazyn');
+        assertEq(getRequiredSubcontractorSpecialties({ id: 'cokolwiek' })[0], 'foundations', 'domyślnie');
+    });
+
+    test('B2: aukcja — 3–5 ofert, zwycięzca z potrzebnej specjalności, wybór wg ceny, jakości i reputacji', () => {
+        const builder = registryWorld();
+        for (let i = 0; i < 20; i++) {
+            const auction = runSubcontractorAuction(fakeProject(builder, 'wind_farm'));
+            assert(auction.candidates.length >= 3 && auction.candidates.length <= 5, 'liczba ofert ' + auction.candidates.length);
+            assert(getRequiredSubcontractorSpecialties({ id: 'wind_farm' }).includes(auction.winner.specialty), 'specjalność zwycięzcy ' + auction.winner.specialty);
+            assertEq(auction.winner, auction.candidates[0].spec, 'zwycięzca = najlepsza ocena');
+        }
+        // taniej i lepiej wygrywa
+        const good = createSubcontractor('energy', { quality: 90 }), bad = createSubcontractor('energy', { quality: 20 });
+        good.priceFactor = 0.9; good.reputation = 80; bad.priceFactor = 1.3; bad.reputation = 20;
+        specialists = specialists.filter(s => !['energy', 'electrical'].includes(s.specialty) || s === good || s === bad);
+        const wins = { good: 0, bad: 0 };
+        for (let i = 0; i < 20; i++) { const w = runSubcontractorAuction(fakeProject(builder, 'wind_farm')).winner; if (w === good) wins.good++; if (w === bad) wins.bad++; }
+        assertEq(wins.good, 20, 'najlepsza oferta zawsze wygrywa'); assertEq(wins.bad, 0, 'najgorsza nie wygrywa');
+    });
+
+    test('B2: koszt podwykonawcy zależy od jego ceny, a zlecenie trafia do dziennika okna 8 kw.', () => {
+        const builder = registryWorld();
+        const cheap = createSubcontractor('foundations', { quality: 50 }), dear = createSubcontractor('foundations', { quality: 50 });
+        cheap.priceFactor = 0.8; dear.priceFactor = 1.3;
+        const p1 = fakeProject(builder, 'cokolwiek'), p2 = fakeProject(builder, 'cokolwiek');
+        assert(hireSubcontractorForProject(p1, cheap.id) && hireSubcontractorForProject(p2, dear.id), 'zatrudnienie');
+        assertNear(p2.subcontractor.fee / p1.subcontractor.fee, 1.3 / 0.8, 'cena proporcjonalna do stawki', 1e-6);
+        assertEq(subcontractLog.length, 2, 'dziennik zleceń');
+        assert(cheap.profitQ > 0, 'zysk kwartalny podwykonawcy');
+        assert(hireSubcontractorForProject(fakeProject(builder, 'cokolwiek')), 'zatrudnienie bez wskazania (aukcja)');
+    });
+
+    test('B2: jeden podwykonawca ≤ 50% zleceń generalnego wykonawcy w oknie 8 kw. (gdy są inni)', () => {
+        const builder = registryWorld();
+        const star = createSubcontractor('industrial', { quality: 95 });
+        star.priceFactor = 0.8; star.reputation = 95;
+        const counts = {};
+        for (let i = 0; i < 40; i++) {
+            const project = fakeProject(builder, 'factory');
+            assert(hireSubcontractorForProject(project), 'zatrudnienie ' + i);
+            counts[project.subcontractor.id] = (counts[project.subcontractor.id] || 0) + 1;
+            releaseSubcontractor(project, true);
+            builder.cash = 50_000_000;
+        }
+        const top = Math.max(...Object.values(counts));
+        assert(top / 40 <= 0.55, 'udział lidera ' + (top / 40) + ' ' + JSON.stringify(counts));
+        assert(Object.keys(counts).length >= 4, 'różni podwykonawcy: ' + Object.keys(counts).length);
+        // gdy jest tylko jeden kandydat, limit nie blokuje zlecenia
+        specialists = [star]; subcontractLog = [];
+        for (let i = 0; i < 6; i++) { const p = fakeProject(builder, 'factory'); assert(hireSubcontractorForProject(p), 'jedyny kandydat ' + i); releaseSubcontractor(p, true); }
+    });
+
+    test('B2: powstawanie i upadek firm — liczba na specjalność zostaje w 3–8, są i nowe, i upadłe', () => {
+        registryWorld();
+        const names0 = new Set(specialists.map(s => s.id));
+        const q0 = macro.quarter;
+        let born = 0, gone = 0, prev = new Set(names0);
+        withSeededRandom(77, () => {
+            for (let q = 0; q < 160; q++) {
+                macro.quarter = 1000 + q;
+                processSubcontractorsQuarterly();
+                const now = new Set(specialists.map(s => s.id));
+                for (const id of now) if (!prev.has(id)) born++;
+                for (const id of prev) if (!now.has(id)) gone++;
+                prev = now;
+                for (const specialty of Object.keys(SUBCONTRACTOR_SPECIALTIES)) {
+                    const n = getSubcontractorsBySpecialty(specialty).length;
+                    assert(n >= 3 && n <= 8, 'kw. ' + q + ' ' + specialty + ': ' + n);
+                }
+            }
+        });
+        macro.quarter = q0;
+        assert(born > 20, 'powstały nowe firmy: ' + born);
+        assert(gone > 5, 'upadły stare firmy: ' + gone);
+    });
+
+    test('B2: zlecenie przy starcie budowy — generalny wykonawca AI zatrudnia podwykonawcę z szansą startHireChance', () => {
+        const { client, builder } = standardWorld({ builderCash: 5_000_000 });
+        specialists = [{ id: 'specA', name: 'A', specialty: 'general', bonus: 0.1, contractsCompleted: 0, level: 1, cash: 1000 }];
+        SUBCONTRACTOR_RULES.startHireChance = 1;
+        try {
+            const { project } = awardContract(client);
+            assert(project.subcontractor && project.subcontractor.id === 'specA', 'podwykonawca przy starcie');
+            assert(project.speedMultiplier > getBuilderSpeedMultiplier(builder) - 1e-9, 'tempo z podwykonawcą');
+        } finally { SUBCONTRACTOR_RULES.startHireChance = 0; }
     });
 
     test('B1: okno wygranych jest zapisywane (pole opcjonalne)', () => {

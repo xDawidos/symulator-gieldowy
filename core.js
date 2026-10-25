@@ -303,7 +303,7 @@ let constructionProjects = [];
 let constructionConsortia = [];
 // 0.15.5 B1: wygrane przetargi z ostatnich 8 kwartałów ({ q, sym }) — podstawa limitu udziału jednego wykonawcy.
 let constructionAwardLog = [];
-const TENDER_SHARE_LIMIT = { windowQuarters: 8, share: 0.40, minAwards: 5 };
+const TENDER_SHARE_LIMIT = { windowQuarters: 8, share: 0.40, minAwards: 4 };
 
 const CONSTRUCTION_RULES = {
     dayMs: BASE_DELAYS.weekly / 7,          // 1 dzień budowy = 1/7 tygodnia gry
@@ -724,7 +724,7 @@ function getTenderAwardShare(builder) {
     return { own, total, share: total ? own / total : 0 };
 }
 
-/** Czy kolejna wygrana dałaby wykonawcy udział powyżej limitu (40%) w oknie 8 kwartałów (od 5 rozstrzygnięć w oknie). */
+/** Czy kolejna wygrana dałaby wykonawcy udział powyżej limitu (40%) w oknie 8 kwartałów (od 4 rozstrzygnięć w oknie). */
 function isOverTenderShareLimit(builder) {
     const { own, total } = getTenderAwardShare(builder);
     return total >= TENDER_SHARE_LIMIT.minAwards && (own + 1) / (total + 1) > TENDER_SHARE_LIMIT.share;
@@ -902,7 +902,7 @@ function estimateBuilderCost(builder, buildingSpec) {
 function getBuilderSpeedMultiplier(builder) {
     const experience = Math.max(0, Number(builder?.constructionStats?.experience) || 0);
     const bonuses = getConstructionTechnologyBonuses(builder);
-    return 1 + Math.min(0.15, experience * 0.0025) + bonuses.speedBonus;
+    return 1 + Math.min(0.15, experience * 0.0025) + bonuses.speedBonus + (Number(builder?.constructionStats?.inHouseBonus) || 0);
 }
 
 /**
@@ -1154,6 +1154,8 @@ function startConstructionProject(tender, winningBid) {
         'construction'
     );
 
+    if (typeof maybeHireSubcontractorAtStart === 'function') maybeHireSubcontractorAtStart(project);
+
     return true;
 }
 
@@ -1163,6 +1165,7 @@ function releaseSubcontractor(project, completed) {
     const spec = specialists.find(item => item.id === project.subcontractor.id);
     if (spec) {
         spec.busyProjectId = null;
+        if (typeof noteSubcontractorResult === 'function') noteSubcontractorResult(spec, completed);
         if (completed) {
             spec.contractsCompleted = (Number(spec.contractsCompleted) || 0) + 1;
             spec.level = 1 + Math.floor(spec.contractsCompleted / 5);
@@ -1173,15 +1176,17 @@ function releaseSubcontractor(project, completed) {
 function hireSubcontractorForProject(project, specId = null) {
     if (!project || project.settled || project.subcontractor || typeof specialists === 'undefined') return false;
 
+    // 0.15.5 B2: bez wskazania podwykonawcy generalny wykonawca prowadzi aukcję (3–5 ofert) zamiast brać najlepszego z listy.
     const free = specialists.filter(spec => !spec.busyProjectId);
+    const auction = !specId && typeof runSubcontractorAuction === 'function' ? runSubcontractorAuction(project) : null;
     const spec = specId
         ? free.find(item => item.id === specId)
-        : free.sort((a, b) => b.bonus - a.bonus)[0];
+        : (auction ? auction.winner : (typeof runSubcontractorAuction === 'function' ? null : free.sort((a, b) => b.bonus - a.bonus)[0]));
 
     if (!spec) return false;
 
     const remainingCost = Math.max(0, project.estimatedCost - project.costsPaid);
-    const fee = Math.max(1000, remainingCost * CONSTRUCTION_RULES.subcontractorFeeRate);
+    const fee = Math.max(1000, remainingCost * CONSTRUCTION_RULES.subcontractorFeeRate * (Number(spec.priceFactor) || 1));
 
     if ((Number(project.builder.cash) || 0) < fee * 1.5) return false;
 
@@ -1194,6 +1199,8 @@ function hireSubcontractorForProject(project, specId = null) {
     project.speedMultiplier += Number(spec.bonus) || 0;
     project.subcontractor = { id: spec.id, name: spec.name, fee, bonus: Number(spec.bonus) || 0 };
     spec.busyProjectId = project.id;
+    spec.profitQ = (Number(spec.profitQ) || 0) + fee * 0.35;
+    if (typeof noteSubcontractorHire === 'function') noteSubcontractorHire(project, spec);
 
     project.events.push({ type: 'subcontractor', description: `Zatrudniono podwykonawcę ${spec.name}`, gameTimeMs: project.elapsedGameMs });
     logEvent(`${project.builder.name} zatrudnia podwykonawcę ${spec.name} przy ${project.tender.buildingType.name} (${fee.toFixed(0)} PLN).`, 'construction');
