@@ -8,6 +8,9 @@
 const SPLIT_PRICE = 1000;              // od tego kursu spółka może ogłosić split
 const REVERSE_SPLIT_PRICE = 1;         // poniżej tego kursu — konsolidację
 const SPLIT_CHANCE = 0.20;             // na kwartał po przekroczeniu progu
+const SPLIT_URGENT_CHANCE = 0.50;      // gdy kurs dobił do 3000 zł albo spadł poniżej 0,50 zł (cel: 99% spółek w 1–3000 zł)
+const SPLIT_URGENT_ABOVE = 3000;
+const REVERSE_URGENT_BELOW = 0.5;
 const SPLIT_RATIOS = [2, 3, 5, 10, 20, 50, 100, 200, 500, 1000];
 const REVERSE_RATIOS = [2, 3, 5, 10, 20, 50, 100];
 const SPLIT_TARGET_MAX_PRICE = 700;    // po splicie kurs nie powinien przekraczać tej wartości
@@ -17,6 +20,11 @@ const SPLIT_COOLDOWN_QUARTERS = 8;
 const SPLIT_SETTINGS = { split: true, reverse: true };
 const SPLIT_LOG_LIMIT = 60;
 let splitLog = [];                     // { symbol, name, quarter, kind, ratio, priceBefore, priceAfter, fractionCash }
+
+/** Szansa na kwartał: 20% po przekroczeniu progu, 50% przy kursie ≥ 3000 zł albo < 0,50 zł. */
+function getSplitChance(price) {
+    return Number(price) >= SPLIT_URGENT_ABOVE || Number(price) < REVERSE_URGENT_BELOW ? SPLIT_URGENT_CHANCE : SPLIT_CHANCE;
+}
 
 function getSplitQuarter() {
     return typeof macro === 'object' && macro ? Number(macro.quarter) || 0 : 0;
@@ -224,7 +232,7 @@ function processSplitsQuarterly() {
     const done = [];
     for (const stock of [...stocks]) {
         const proposal = getSplitProposal(stock.price);
-        if (!proposal || !canChangeShareCount(stock) || Math.random() >= SPLIT_CHANCE) continue;
+        if (!proposal || !canChangeShareCount(stock) || Math.random() >= getSplitChance(stock.price)) continue;
         try {
             const entry = executeSplit(stock, proposal);
             if (entry) done.push(entry);

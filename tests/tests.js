@@ -9977,6 +9977,7 @@ group('0.15.4: Poprawki z gry 3 (licznik, okna, wykres, dywidenda, split, limit 
     });
 
     test('P4a: propozycja zmiany akcji — próg 1000 zł, krotność tak, by kurs po splicie ≤ 700 zł; kwartalny proces z szansą 20%, bez fuzji i z przerwą', () => {
+        assertEq(getSplitChance(1500), SPLIT_CHANCE, '20% po przekroczeniu progu'); assertEq(getSplitChance(3200), SPLIT_URGENT_CHANCE, '50% od 3000 zł'); assertEq(getSplitChance(0.4), SPLIT_URGENT_CHANCE, '50% poniżej 0,50 zł'); assertEq(getSplitChance(0.8), SPLIT_CHANCE, '20% przy 0,50–1 zł');
         assertEq(getSplitProposal(999), null, 'poniżej progu');
         assertEq(JSON.stringify(getSplitProposal(1000)), '{"kind":"split","ratio":2}', '1000 zł → 2:1');
         assertEq(getSplitProposal(1500).ratio, 3, '1500 zł → 3:1'); assertEq(getSplitProposal(2400).ratio, 5, '2400 zł → 5:1'); assertEq(getSplitProposal(4_000_000).ratio, 1000, '4 mln zł → 1000:1');
