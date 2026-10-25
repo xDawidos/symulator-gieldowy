@@ -11717,6 +11717,67 @@ group('0.15.6 E7: interfejs i Akademia', () => {
     });
 });
 
+group('0.15.6 E8: zapis i niezmienniki po 20 latach', () => {
+    test('E8: pola 0.15.6 (rynek, wiek rynku, baza udziału, urząd, dziennik) dodają < 0,3% do zapisu', () => {
+        const list = world156(100, 1_000_000);
+        list.slice(0, 20).forEach(s => { s.market = 'NH'; s.marketSinceQ = 12; });
+        list.slice(20, 25).forEach(s => { s.market = 'PRV'; s.marketSinceQ = 30; });
+        list.forEach(s => { s.sectorBase = { q: 8, v: 0.123 }; });
+        antitrustOffice.level = 3; antitrustLog = Array.from({ length: 5 }, (_, i) => ({ quarter: i, symbol: 'AAA' + i, kind: 'fine', amount: 123456 }));
+        try {
+            const full = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+            const size = JSON.stringify(full).length;
+            const lean = JSON.parse(JSON.stringify(full));
+            for (const s of lean.stocks) { delete s.market; delete s.marketSinceQ; delete s.sectorBase; delete s.belowReqQ; delete s.antitrust; delete s.mediaCred; }
+            delete lean.antitrustOffice; delete lean.antitrustLog;
+            const extra = size - JSON.stringify(lean).length;
+            // spółki testowe są ≈ 20× mniejsze niż w grze (zapis gry po 6,5 roku ≈ 2,3 mln znaków z ~100 spółkami): budżet 0,3% = 6900 znaków
+            assert(extra <= 0.003 * 2_300_000, `przyrost zapisu ${extra} znaków (${(extra / 2_300_000 * 100).toFixed(3)}% typowego zapisu gry)`);
+        } finally { antitrustOffice.level = 0; antitrustLog = []; }
+    });
+
+    test('E8: zapis i wczytanie w trakcie interwencji urzędu (obserwacja, kara, zakaz przejęć) i na rynkach NH/PRV zachowują stan', () => {
+        const list = world156(6, 1_000_000);
+        list[0].market = 'NH'; list[0].marketSinceQ = 4; list[1].market = 'PRV'; list[1].marketSinceQ = 6; list[1].fraud = { start: 2, correctAt: 9, total: 500 };
+        list[2].antitrust = { watch: 3, stage: 1, clean: 0, fineQ: 5 }; list[2].antitrustBanUntilQ = macro.quarter + 10; list[2].sectorBase = { q: 3, v: 0.4 };
+        antitrustOffice.level = 2; antitrustLog = [{ quarter: 5, symbol: list[2].symbol, kind: 'fine', amount: 99 }];
+        const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+        antitrustOffice.level = 0; antitrustLog = [];
+        const report = applySaveSnapshot(raw);
+        assert(report.ok, `wczytanie: ${(report.errors || []).join('; ')}`);
+        const back = sym => stocks.find(s => s.symbol === sym);
+        assertEq(getStockMarket(back(list[0].symbol)), 'NH', 'NH po wczytaniu'); assertEq(back(list[0].symbol).marketSinceQ, 4, 'wiek rynku');
+        assertEq(getStockMarket(back(list[1].symbol)), 'PRV', 'PRV po wczytaniu'); assertEq(back(list[1].symbol).fraud.correctAt, 9, 'ukryte oszustwo zachowane');
+        const t = back(list[2].symbol);
+        assertEq(t.antitrust.stage, 1, 'etap interwencji'); assertEq(t.sectorBase.v, 0.4, 'baza udziału'); assert(isUnderAntitrustBan(t), 'zakaz przejęć trwa');
+        assertEq(antitrustOffice.level, 2, 'poziom urzędu'); assertEq(antitrustLog.length, 1, 'dziennik interwencji');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki po wczytaniu');
+        antitrustOffice.level = 0; antitrustLog = [];
+    });
+
+    test('E8: starszy zapis bez pól 0.15.6 wczytuje się — spółki na GPW, urząd na poziomie bieżącym, dziennik pusty', () => {
+        world156(4, 1_000_000);
+        const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+        delete raw.antitrustLog; delete raw.antitrustOffice; raw.stocks.forEach(s => { delete s.market; delete s.marketSinceQ; delete s.sectorBase; });
+        antitrustLog = [{ quarter: 1, symbol: 'X', kind: 'fine', amount: 1 }];
+        const report = applySaveSnapshot(raw);
+        assert(report.ok, 'wczytanie starszego zapisu'); assertEq(antitrustLog.length, 0, 'dziennik pusty');
+        assert(stocks.every(s => getStockMarket(s) === 'GPW'), 'wszystkie spółki na GPW (migracja)');
+    });
+
+    test('E8: 40 kwartałów symulacji na rynkach NH/PRV z urzędem na poziomie 3 — bez wyjątków, ujemnej gotówki i duchów posiadaczy', () => {
+        const list = world156(40, 800_000);
+        list.forEach((s, i) => { s.fundamentals = s.fundamentals || {}; if (i % 5 === 0) s.market = 'NH'; if (i % 13 === 0) s.market = 'PRV'; s.marketSinceQ = macro.quarter - (i % 12); });
+        antitrustOffice.level = 3;
+        try {
+            for (let q = 0; q < 40; q++) { macro.quarter++; processListingsQuarterly(); }
+        } finally { antitrustOffice.level = 0; antitrustLog = []; }
+        assert(stocks.every(s => !(s.cash < 0)) && governmentTreasury >= 0, 'gotówka i skarb');
+        const problems = checkWorldInvariants().filter(p => /akcje w obrocie|sharesHeld|duch/i.test(p));
+        assertEq(problems.length, 0, problems.join('; '));
+    });
+});
+
 async function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;
