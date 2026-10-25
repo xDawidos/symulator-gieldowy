@@ -10063,6 +10063,49 @@ group('0.15.4: Poprawki z gry 3 (licznik, okna, wykres, dywidenda, split, limit 
         const entry3 = ACADEMY_ENTRIES.splitReverseSplit;
         assert(entry3 && entry3.quiz.length === 3 && entry3.quiz.every(q => q.a.length === 3 && q.c === 0), 'hasło z 3 pytaniami');
     });
+
+    // --- P5: limit liczby spółek ---
+    function crowdedWorld(count) {
+        const list = Array.from({ length: count }, (_, i) => Object.assign(mk(`C${i}`, { price: 10, cash: 200_000 }), { financialHealth: (i % 7) - 3 + i / 1000, sector: ['Usługi'] }));
+        resetWorld(list);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        return list;
+    }
+
+    test('P5: powyżej 115 spółek krajowych państwo wycofuje najsłabsze z wykupem +10% — bez ujemnej gotówki i bez duchów posiadaczy', () => {
+        const list = crowdedWorld(118);
+        const weakest = [...list].sort((a, b) => a.financialHealth - b.financialHealth).slice(0, 3).map(s => s.symbol);
+        const [w1, w2, w3] = weakest.map(sym => stocks.find(s => s.symbol === sym));
+        for (const s of [w1, w2, w3]) { s.sharesHeld = 0; }
+        playerPortfolio[w1.symbol] = { shares: 100, avgPrice: 9, assetType: 'stock' }; w1.sharesHeld = 100;
+        aiCompetitors[0].portfolio[w2.symbol] = { shares: 50, avgPrice: 9 }; w2.sharesHeld = 50;
+        const cash0 = playerCash, treasury0 = governmentTreasury, problems0 = checkWorldInvariants().join('|');
+        assertEq(getListedCompanyCount(), 118, 'start: 118 spółek krajowych');
+        assertEq(enforceListingLimitQuarterly(), 2, 'najwyżej 2 wycofania na kwartał');
+        assertEq(getListedCompanyCount(), 116, 'po pierwszym kwartale 116');
+        assert(!stocks.includes(w1) && !stocks.includes(w2) && stocks.includes(w3), 'zniknęły dwie najsłabsze (trzecia jeszcze zostaje)');
+        assertNear(playerCash - cash0, 100 * 10 * 1.1, 'gracz dostaje wykup po kursie +10%');
+        for (const sym of [w1.symbol, w2.symbol]) {
+            assert(!playerPortfolio[sym] && !aiCompetitors[0].portfolio[sym] && !stocks.some(s => s.equityStakes?.[sym] || s.holdingPortfolio?.[sym]), `bez duchów posiadaczy ${sym}`);
+        }
+        assert(stocks.every(s => !(Number(s.cash) < 0)), 'żadna spółka nie ma ujemnej gotówki');
+        assert(governmentTreasury >= 0 && governmentTreasury <= treasury0, 'skarb nie na minusie');
+        assertEq(checkWorldInvariants().join('|'), problems0, 'niezmienniki bez zmian');
+        assertEq(enforceListingLimitQuarterly(), 1, 'drugi kwartał: jedna do 115'); assertEq(getListedCompanyCount(), 115, 'limit 115');
+        assertEq(enforceListingLimitQuarterly(), 0, 'przy 115 nic się nie dzieje');
+    });
+
+    test('P5: presja zaostrzania rośnie od 110 do 125 spółek krajowych; pełne wydzielenia tylko poniżej 110; skarb za mały — brak wycofania', () => {
+        assertEq(SPINOFF_DOMESTIC_LIMIT, 110, 'pełny spin-off poniżej 110');
+        crowdedWorld(110); assertEq(getListingStrictness(), 0, '110 spółek: luźno');
+        crowdedWorld(117); assert(getListingStrictness() > 0.4 && getListingStrictness() < 0.6, `117 spółek: umiarkowanie (${getListingStrictness()})`);
+        crowdedWorld(125); assertEq(getListingStrictness(), 1, '125 spółek: pełna presja');
+        const list = crowdedWorld(116);
+        const weakest = [...list].sort((a, b) => a.financialHealth - b.financialHealth)[0];
+        weakest.cash = 0; weakest.sharesHeld = 1000; aiCompetitors[0].portfolio[weakest.symbol] = { shares: 1000, avgPrice: 9 };
+        const treasury = governmentTreasury; governmentTreasury = 100;
+        try { assertEq(delistWithBuyout(weakest), null, 'skarb nie pokrywa wykupu'); assert(stocks.includes(weakest), 'spółka zostaje na giełdzie'); } finally { governmentTreasury = treasury; }
+    });
 });
 
 async function runAllTests() {

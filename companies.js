@@ -2744,6 +2744,69 @@ function processAwaitingListings() {
     }
 }
 
+// 0.15.4 P5: polityka zaostrzania, gdy rynek krajowy jest zatłoczony. Luźne ok. 110 (111–115 w porządku) zostaje; powyżej:
+// nowe debiuty już stoją (sufit 110), pełne wydzielenia przechodzą w carve-out (SPINOFF_DOMESTIC_LIMIT = 110), córki są wchłaniane szybciej,
+// a powyżej 115 spółek krajowych państwo wymusza wycofanie najsłabszych z wykupem po kursie +10% (cel: nigdy > 125 dłużej niż 4 kw.).
+const LISTING_DELIST_AT = 115;
+const LISTING_DELIST_MAX_PER_QUARTER = 2;
+const LISTING_DELIST_PREMIUM = 0.10;
+const LISTING_DELIST_RANGE = 10;       // 115…125: pełna presja wchłonięć córek
+
+/** Presja zaostrzania 0…1: od 110 spółek krajowych (do 125) oraz od 135 spółek łącznie (do 150). */
+function getListingStrictness() {
+    const domestic = (getListedCompanyCount() - LISTING_HARD_CAP) / (LISTING_DELIST_AT + LISTING_DELIST_RANGE - LISTING_HARD_CAP);
+    const total = (getTotalCompanyCount() - (LISTING_TOTAL_CAP - 15)) / 15;
+    return Math.max(0, Math.min(1, Math.max(domestic, total)));
+}
+
+/** Spółka, którą państwo może wycofać z giełdy: zwykła, słaba, bez fuzji/wezwania/córek, bez większościowego pakietu gracza. */
+function isDelistCandidate(stock) {
+    if (!isCountedListedCompany(stock) || stock.isStateOwned || stock.isBankStock || stock.marketOperator || stock.mafiaFront) return false;
+    if (stock.mergerProcess || stock.tender || stock.spinoff || stock.stakeCampaign || (stock.subsidiaries?.length || 0) > 0) return false;
+    if (stocks.some(other => other.isSubsidiaryOf === stock.symbol)) return false;
+    if ((playerPortfolio?.[stock.symbol]?.shares || 0) > stock.totalShares * 0.5) return false;
+    return (Number(stock.financialHealth) || 0) <= 1;
+}
+
+/** Kandydaci do wycofania, od najsłabszego: kondycja, potem kapitalizacja. */
+function getDelistCandidates() {
+    return stocks.filter(isDelistCandidate).sort((a, b) => ((Number(a.financialHealth) || 0) - (Number(b.financialHealth) || 0)) || (getMarketCapValue(a) - getMarketCapValue(b)));
+}
+
+/** Wycofanie z wykupem: posiadacze dostają gotówkę po kursie +10%, płaci spółka, resztę skarb państwa. Zwraca wypłaconą kwotę (null = odmowa: skarb nie wystarcza). */
+function delistWithBuyout(stock) {
+    const offer = stock.price * (1 + LISTING_DELIST_PREMIUM);
+    const cost = getTrackedHeldShares(stock) * offer;
+    const fromCompany = Math.min(cost, Math.max(0, Number(stock.cash) || 0));
+    const fromTreasury = cost - fromCompany;
+    if (fromTreasury > Math.max(0, governmentTreasury)) return null;
+    const heldByPlayer = (playerPortfolio?.[stock.symbol]?.shares || 0) > 0 || (playerWallet?.portfolio?.[stock.symbol]?.shares || 0) > 0;
+    if (fromCompany > 0) { adjustCompanyCash(stock, -fromCompany); recordPayment(stock, 'external:akcjonariusze', fromCompany, 'Wykup akcji przy wycofaniu z giełdy'); }
+    governmentTreasury -= fromTreasury;
+    const paid = buyOutAllHolders(stock, offer);
+    removeStockFromGame(stock.symbol);
+    purgeSymbolHolders(stock.symbol);
+    for (const ai of aiCompetitors) for (const loan of ai.loans || []) if (loan.collateral?.symbol === stock.symbol) loan.collateral = null; // zastaw rozliczony wykupem
+    for (const bank of commercialBanks) for (const loans of Object.values(bank.loanPortfolio || {})) for (const loan of loans) if (loan.collateral?.symbol === stock.symbol) loan.collateral = null;
+    const text = `🚪 ${stock.name} (${stock.symbol}) znika z giełdy: rynek jest zatłoczony (${getListedCompanyCount()} spółek krajowych), a spółka należy do najsłabszych. Akcjonariusze dostają wykup po kursie +${Math.round(LISTING_DELIST_PREMIUM * 100)}% (${formatZl(offer)} za akcję).`;
+    logEvent(text, 'market');
+    if (typeof pushNews === 'function') pushNews(text, null);
+    if (heldByPlayer && typeof addMail === 'function') addMail({ sender: 'PULS', subject: `🚪 ${stock.name}: wycofanie z giełdy`, body: `${text}\n\nTwoje akcje rozliczono po cenie wykupu, gotówka trafiła na konto.`, importance: 2 });
+    if (typeof delistLog !== 'undefined') { delistLog.push({ symbol: stock.symbol, quarter: typeof macro === 'object' ? macro.quarter : 0, paid, fromTreasury }); if (delistLog.length > 60) delistLog.shift(); }
+    return paid;
+}
+let delistLog = [];
+
+/** Co kwartał: powyżej LISTING_DELIST_AT spółek krajowych wycofuje najsłabsze (najwyżej 2 na kwartał). */
+function enforceListingLimitQuarterly() {
+    let removed = 0;
+    for (const stock of getDelistCandidates()) {
+        if (removed >= LISTING_DELIST_MAX_PER_QUARTER || getListedCompanyCount() <= LISTING_DELIST_AT) break;
+        if (delistWithBuyout(stock) !== null) removed++;
+    }
+    return removed;
+}
+
 /** D2: finansowanie startupów na nasyconym rynku — mniejsze wpłaty (do −50%) … */
 function getStartupFundingFactor() {
     return 1 - 0.5 * getCrowdingPressure();
@@ -11485,7 +11548,7 @@ const SPINOFF_FAKE_RUMOR_CHANCE = SPINOFF_QUARTER_CHANCE * 0.4 / 0.6; // 60% plo
 const SPINOFF_ANNOUNCE_JUMP = [0.03, 0.08];
 const SPINOFF_CARVE_CHANCE = 0.25;
 const SPINOFF_CARVE_KEEP = [0.51, 0.80];
-const SPINOFF_DOMESTIC_LIMIT = 115;       // decyzja 4: spin-off do 115 spółek krajowych, powyżej tylko carve-out
+const SPINOFF_DOMESTIC_LIMIT = 110;       // 0.15.4 P5: pełny spin-off tylko poniżej 110 spółek krajowych (było 115), powyżej tylko carve-out (córka)
 const SPINOFF_LOG_LIMIT = 20;
 const SPINOFF_PLAYER_BLOCK_QUARTERS = 4;
 let spinoffLog = [];                       // { parent, child, quarter, carve, keep, valueBefore, gigBefore, ratio2q, gig2q }
@@ -12797,8 +12860,9 @@ function processSubsidiariesQuarterly(quarter = getSubQuarter()) {
         if (crisis && !child.groupLoan && !playerRuns) grantGroupLoan(parent, child);
         if (playerRuns) continue;
         const stake = getParentStake(child, parent);
-        if (stake >= SUB_SQUEEZE_THRESHOLD - 1e-9) { if (Math.random() < SUB_SQUEEZE_CHANCE) absorbSubsidiary(child, parent); continue; }
-        if (stake >= SUB_CREEP_MIN && Math.random() < SUB_CREEP_CHANCE) creepSubsidiaryStake(child, parent);
+        const strictness = 1 + 2 * getListingStrictness(); // 0.15.4 P5: zatłoczony rynek — córki wchłaniane do 3 razy chętniej
+        if (stake >= SUB_SQUEEZE_THRESHOLD - 1e-9) { if (Math.random() < SUB_SQUEEZE_CHANCE * strictness) absorbSubsidiary(child, parent); continue; }
+        if (stake >= SUB_CREEP_MIN && Math.random() < SUB_CREEP_CHANCE * strictness) creepSubsidiaryStake(child, parent);
         const roll = Math.random();
         if (roll < SUB_INDEPENDENCE_CHANCE) { if (Math.random() < 0.5) subsidiarySecondaryOffering(child, parent); else subsidiarySpinoffRemainder(child, parent); }
         else if (roll < SUB_INDEPENDENCE_CHANCE + SUB_SALE_CHANCE) sellControllingStake(child, parent);

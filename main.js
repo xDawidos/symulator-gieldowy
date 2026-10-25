@@ -1462,6 +1462,7 @@ gameTimers.weekly = setGameInterval(() => {
         advanceMacroQuarter(); // inflacja, bezrobocie, cykle sektorów, wybory (macro.js)
         processCityQuarterly(); // festyn raz w roku (city.js)
         applyCrowdingPressureToWeak(); // D2: nasycony rynek — słabe spółki tanieją szybciej
+        if (typeof enforceListingLimitQuarterly === 'function') enforceListingLimitQuarterly(); // 0.15.4 P5: powyżej 115 spółek krajowych wymuszone wycofanie najsłabszych
         processAwaitingListings(); // P1: startupy czekające na wolne miejsce na giełdzie
         processWorkforceQuarter(); // 0.13: zatrudnienie, zadowolenie, związki i strajki przed raportami (workforce.js)
         processFinancialReports(); // zawiera koszty R&D, wynik kontraktów, pozycje okresu i dywidendy
