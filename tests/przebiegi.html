@@ -895,7 +895,8 @@ const PROBE_0154 = `(function () {
         const missed = aiCompetitors.reduce((n, a) => n + (a.loans ? a.loans.filter(l => l.bankId && (l.missedPayments || 0) > 0).length : 0), 0);
         const aiPawn = aiCompetitors.reduce((n, a) => n + (a.loans ? a.loans.filter(l => l.pawnShopId || l.type === 'pawn' || l.isPawn).length : 0), 0);
         Q.lomb.push({ q: macro.quarter, pawnCash: pawn ? Math.round(pawn.cash) : null, pawnPrice: pawn ? +pawn.price.toFixed(2) : null, fundLoans, principal: Math.round(principal), aiNeedy: need, aiBadLoans: missed, aiPawnLoans: aiPawn,
-            colCash: col ? Math.round(col.cash) : null, colPrice: col ? +col.price.toFixed(2) : null, colHoldings: col && col.holdingPortfolio ? Object.keys(col.holdingPortfolio).length : 0, bots: aiCompetitors.length });
+            colCash: col ? Math.round(col.cash) : null, colPrice: col ? +col.price.toFixed(2) : null, colHoldings: col && col.holdingPortfolio ? Object.keys(col.holdingPortfolio).length : 0, bots: aiCompetitors.length,
+            gov: Math.round(governmentTreasury), pop: typeof society === 'object' && society ? society.population : null });
     };
     Q.finish = function () {
         const cnt = Q.counts, last = cnt[cnt.length - 1] || {}, over = n => cnt.filter(c => c.domestic > n).length;
