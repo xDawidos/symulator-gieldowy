@@ -3423,6 +3423,8 @@ function processFinancialReports() {
         const preBorrowed = !stock.assetType && operatingCashResult + nonCashCosts < 0 ? ensureCompanyCash(stock, -(operatingCashResult + nonCashCosts), 'Kredyt na płynność po stracie') : 0;
         adjustCompanyCash(stock, operatingCashResult + nonCashCosts);
         adjustBalanceSheet(stock, { assets: operatingCashResult, retainedEarnings: operatingCashResult });
+        // 0.15.5 B5: REIT wypłaca ≥ 80% zysku od razu po raporcie — zanim gotówka trafi na budowę czy spłatę długu.
+        if (stock.assetType === 'REIT' && stock.reit && typeof processReitDividend === 'function') processReitDividend(stock);
 
         // Fundamenty kwartału (EPS z wyniku raportowanego: z R&D i kontraktami).
         const accounting = typeof recordAccountingQuarter === 'function' && quarterModel ? recordAccountingQuarter(stock, quarterModel, reportedQuarterlyEarnings, fakeEarnings) : null;

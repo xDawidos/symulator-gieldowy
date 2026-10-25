@@ -146,7 +146,7 @@ function computeReitQuarter(stock) {
     return profit;
 }
 
-/** Wypłata dywidendy REIT-u z kasy spółki (zamiast dawnej wypłaty z niczego): raz na kwartał. */
+/** Wypłata dywidendy REIT-u z kasy spółki (zamiast dawnej wypłaty z niczego): raz na kwartał, od razu po raporcie (wołane z raportu). */
 function processReitDividend(stock) {
     const reit = ensureReitModel(stock);
     if (!reit || !(reit.dividendDue > 0)) return 0;

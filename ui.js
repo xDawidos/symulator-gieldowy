@@ -3325,7 +3325,7 @@ function renderDividendTrackerContent() {
     dividendStocks.forEach(stock => {
         const row = body.insertRow();
         row.insertCell().textContent = stock.isDividendAristocrat ? `${stock.name} ★` : stock.name;
-        row.insertCell().textContent = stock.assetType === 'REIT' ? 'REIT (co 2 min)' : getDividendPolicyLabel(stock.dividendPolicy);
+        row.insertCell().textContent = stock.assetType === 'REIT' ? 'REIT (co kwartał, ≥ 80% zysku)' : getDividendPolicyLabel(stock.dividendPolicy);
 
         // ⏳ Czas do wypłaty
         const timeLeftCell = row.insertCell();

@@ -11043,6 +11043,25 @@ group('0.15.5: Budownictwo i banki (przetargi, podwykonawcy, przejęcia pionowe,
         assert(!(Array.isArray(client.sector) && client.sector.includes('Budowlany')) && !client.constructionStats, 'zamawiający spoza branży nie dostaje statystyk');
     });
 
+
+    test('B5: raport kwartalny REIT-u wypłaca ≥ 80% zysku od razu (przed spłatą długu i budową), a kasa i LTV zostają w normie', () => {
+        const reit = mkReit('RTR');
+        resetWorld([reit]);
+        withMacro(0.04, () => {
+            ensureReitModel(reit);
+            for (let q = 0; q < 6; q++) {
+                const cash0 = reit.cash;
+                processFinancialReports();
+                const profit = reit.reit.lastProfit, paid = reit.reit.lastPaid;
+                assert(profit > 0 && paid >= profit * 0.8 - 1, 'kw. ' + q + ': wypłacono ' + Math.round(paid) + ' z zysku ' + Math.round(profit));
+                assert(paid <= profit * 0.95 + 1, 'wypłata ≤ 95% zysku');
+                assert(reit.cash <= cash0 + profit - paid + 1 && reit.cash >= 0, 'kasa nie przekracza poprzedniej + zysk − wypłata (resztę zabiera spłata długu i opłaty)');
+                processReitsQuarterly();
+                assert(reit.cash >= 0 && getReitLtv(reit) <= REIT_RULES.ltvMax, 'kasa i LTV w normie');
+            }
+        });
+    });
+
     test('B1: okno wygranych jest zapisywane (pole opcjonalne)', () => {
         constructionAwardLog = [{ q: 7, sym: 'AAA' }, { q: 8, sym: 'BBB' }];
         const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
