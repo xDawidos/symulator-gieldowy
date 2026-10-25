@@ -284,6 +284,7 @@ const UI_ICON_PATHS = {
     paczka: 'M12 3l8 4v10l-8 4-8-4V7zM4 7l8 4 8-4M12 11v10',
     zarzad: 'M9 3h6l-1.5 3h-3zM10.5 6L8 16l4 5 4-5-2.5-10',
     odswiez: 'M20 11a8 8 0 0 0-14.3-4.3M4 4v4h4M4 13a8 8 0 0 0 14.3 4.3M20 20v-4h-4',
+    podzial: 'M3 12h6l5-6h6M17 3l3 3-3 3M9 12l5 6h6M17 15l3 3-3 3', // 0.15.4 P4c: split / konsolidacja akcji
     koszyk: 'M3 4h2l2.4 11h11L21 7H6.2M9 20h.01M17 20h.01',
     rakieta: 'M12 2c3 2 5 6 5 10l-2 4H9l-2-4c0-4 2-8 5-10zM12 9a1.5 1.5 0 1 0 0 .01M9 16l-2 4 3-1M15 16l2 4-3-1',
     ok: 'M4 12l5 5L20 6',
@@ -455,6 +456,7 @@ const EMOJI_ICONS = {
     '🤲': 'lombard',
     '🕊': 'etykieta',
     '🧲': 'magnes',
+    '🔀': 'podzial',
     '💔': 'blokada',
     '🚩': 'flaga',
     '😠': 'alert',
@@ -1860,6 +1862,8 @@ function displayStocks(previousInputValues = {}) {
     if (stock.isMonopolist) markers.push(['lider', 'Monopolista w sektorze', 'warn']);
     if (typeof isConcern === 'function' && isConcern(stock)) markers.push(['grupa', 'Koncern: czołówka kapitalizacji i grupa (segmenty niepowiązane, ≥ 2 spółki zależne albo ≥ 2 segmenty i spółka zależna)', 'info']); // 0.14 T5
     if (stock.isStateOwned) markers.push(['panstwo', 'Spółka Skarbu Państwa', 'muted']);
+    const recentSplit = typeof getRecentShareCountChange === 'function' ? getRecentShareCountChange(stock) : null;
+    if (recentSplit) markers.push(['podzial', recentSplit, 'info']); // 0.15.4 P4c: znacznik ikoną z opisem słowami
     if (typeof getRedFlags === 'function' && getSkillLevel('accountant') >= 4 && !stock.assetType) {
       const flags = getRedFlags(stock);
       if (flags.length >= 2) markers.push(['flaga', `Czerwone flagi: ${flags.map(f => f.label).join(', ')}`, 'down']);
@@ -4213,11 +4217,12 @@ function renderCompanyCardOverview(stock) {
         return data ? `<span class="ceo-trait" style="--trait-color: ${data.color};" title="${escapeHtml(data.description)}">${escapeHtml(data.name)}</span>` : '';
     }).join('');
     const phase = stock.corporatePhase && getSkillLevel('financialAnalyst') >= 1 ? `<p class="text-sm"><strong>Faza cyklu życia:</strong> ${escapeHtml(stock.corporatePhase)}</p>` : '';
-    const research = stock.research?.isResearching && stock.research.currentTech ? `<p class="text-sm">${uiIcon('mikroskop', 14)} W fazie R&D: <strong>${escapeHtml(technologies[stock.research.currentTech]?.name || stock.research.currentTech)}</strong></p>` : '';
+    const splitInfo = typeof describeShareCountHistory === 'function' ? describeShareCountHistory(stock) : '';
+    const research = stock.research?.isResearching && stock.research.currentTech ?`<p class="text-sm">${uiIcon('mikroskop', 14)} W fazie R&D: <strong>${escapeHtml(technologies[stock.research.currentTech]?.name || stock.research.currentTech)}</strong></p>` : '';
     const insights = typeof getAnalystInsights === 'function' ? getAnalystInsights(stock) : [];
     return `
         <div class="cc-grid">
-            <section><h4>O spółce</h4><div class="text-sm text-justify">${assembleDescription(stock)}</div>${phase}${research}</section>
+            <section><h4>O spółce</h4><div class="text-sm text-justify">${assembleDescription(stock)}</div>${phase}${splitInfo}${research}</section>
             <section>
                 ${stock.ceo?.name ? `<h4>Prezes</h4><p class="m-0"><strong>${uiIcon('zarzad', 14)} ${escapeHtml(stock.ceo.name)}</strong></p>
                     <p class="text-xs text-muted mt-0">wiek ${stock.ceo.age ?? '—'}, staż ${Math.floor((stock.ceo.tenure || 0) / 4)} lat</p>

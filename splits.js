@@ -173,10 +173,49 @@ function applyShareCountChange(stock, factor, { quarter = getSplitQuarter(), kin
     return entry;
 }
 
+/** „5:1” albo „1:10” z czynnika zmiany liczby akcji. */
+function formatSplitRatio(factor) {
+    return factor >= 1 ? `${Math.round(factor)}:1` : `1:${Math.round(1 / factor)}`;
+}
+
+/** Zmiana liczby akcji z ostatnich 8 kwartałów (opis do znacznika w tabeli) albo null. */
+function getRecentShareCountChange(stock) {
+    const last = stock?.splitHistory?.[stock.splitHistory.length - 1];
+    if (!last || getSplitQuarter() - last.q > 8) return null;
+    return `${last.f >= 1 ? 'Split' : 'Konsolidacja akcji'} ${formatSplitRatio(last.f)} w kw. ${last.q} — liczba akcji i kurs zmienione, wartość posiadanych akcji bez zmian`;
+}
+
+/** Zdanie do karty spółki: wszystkie zmiany liczby akcji (z zapisu spółki). */
+function describeShareCountHistory(stock) {
+    const list = stock?.splitHistory;
+    if (!list?.length) return '';
+    return `<p class="text-sm"><strong>Podział akcji:</strong> ${list.map(h => `${h.f >= 1 ? 'split' : 'konsolidacja'} ${formatSplitRatio(h.f)} w kw. ${h.q}`).join(', ')} — wykres, wskaźniki i dywidendy na akcję przeliczone wstecz, wartość posiadanych akcji bez zmian.</p>`;
+}
+
+/** Powiadomienia o zmianie liczby akcji: dziennik, pasek newsów, znacznik na wykresie, poczta, dymek i hasło Akademii dla posiadacza. */
+function announceShareCountChange(stock, entry) {
+    if (!entry) return;
+    const split = entry.kind === 'split', ratio = formatSplitRatio(split ? entry.ratio : 1 / entry.ratio);
+    const price = p => `${p < 10 ? p.toFixed(2) : Math.round(p).toLocaleString('pl-PL')} zł`;
+    const text = split
+        ? `🔀 ${stock.name} (${stock.symbol}) dzieli akcje ${ratio}: kurs ${price(entry.priceBefore)} → ${price(entry.priceAfter)}, akcji ${entry.ratio} razy więcej. Wartość posiadanych akcji bez zmian.`
+        : `🔀 ${stock.name} (${stock.symbol}) skupia akcje ${ratio} (konsolidacja): kurs ${price(entry.priceBefore)} → ${price(entry.priceAfter)}, akcji ${Math.round(entry.ratio)} razy mniej. Ułamki akcji spółka wypłaca gotówką; wartość posiadanych akcji bez zmian.`;
+    logEvent(text, 'company');
+    if (typeof pushNews === 'function') pushNews(text, stock.symbol);
+    if (typeof addChartEvent === 'function') addChartEvent(stock, '🔀', split ? `Split ${ratio}: kurs ÷${entry.ratio}` : `Konsolidacja ${ratio}: kurs ×${Math.round(entry.ratio)}`);
+    const held = (playerPortfolio?.[stock.symbol]?.shares || 0) > 0 || (playerWallet?.portfolio?.[stock.symbol]?.shares || 0) > 0;
+    if (!held) return;
+    if (typeof addMail === 'function') addMail({ sender: 'PULS', subject: `🔀 ${stock.name}: ${split ? 'split' : 'konsolidacja akcji'} ${ratio}`, body: `${text}\n\nTwoje pakiety i zlecenia (alerty cenowe, zastaw) przeliczono automatycznie.`, importance: 2, symbol: stock.symbol });
+    if (typeof showToast === 'function') showToast(`${stock.name}: ${split ? 'split' : 'konsolidacja akcji'} ${ratio}. Wartość Twoich akcji bez zmian.`, 'default');
+    if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('splitReverseSplit', `${stock.name}: ${split ? 'split' : 'konsolidacja'} ${ratio}`);
+}
+
 /** Podział i konsolidacja w jednej nazwie: ratio 5 → split 5:1; ratio 5 z kind 'reverse' → konsolidacja 1:5. */
 function executeSplit(stock, proposal) {
     if (!proposal) return null;
-    return applyShareCountChange(stock, proposal.kind === 'split' ? proposal.ratio : 1 / proposal.ratio, { kind: proposal.kind });
+    const entry = applyShareCountChange(stock, proposal.kind === 'split' ? proposal.ratio : 1 / proposal.ratio, { kind: proposal.kind });
+    announceShareCountChange(stock, entry);
+    return entry;
 }
 
 /** Co kwartał: spółki z kursem poza przedziałem 1–1000 zł mają 20% szans na zmianę liczby akcji. */

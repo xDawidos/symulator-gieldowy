@@ -10043,6 +10043,26 @@ group('0.15.4: Poprawki z gry 3 (licznik, okna, wykres, dywidenda, split, limit 
             SPLIT_SETTINGS.reverse = true; assertEq(processSplitsQuarterly().length, 1, 'konsolidacja przy 20%'); assertEq(a.price, 4, '0,40 zł → 4 zł');
         } finally { Math.random = random; Object.assign(SPLIT_SETTINGS, saved); }
     });
+
+    test('P4c: komunikaty o splicie — dziennik, pasek newsów, znacznik na wykresie, poczta i hasło Akademii; znacznik i wiersz w karcie spółki', () => {
+        const { a } = splitWorld(2400);
+        mailbox = createMailbox(); macro.quarter = 12;
+        const mails0 = mailbox.messages.length;
+        const entry = executeSplit(a, getSplitProposal(a.price));
+        assert(entry && a.price === 480, 'split 5:1 wykonany');
+        assert(newsLog.slice(0, 5).some(n => n.text.includes('dzieli akcje 5:1') && n.symbol === 'SPL'), 'wpis w pasku newsów');
+        assert(a.chartEvents.some(e => e.icon === '🔀' && e.label.includes('Split 5:1')), 'znacznik splitu na wykresie');
+        assert(mailbox.messages.length > mails0, 'poczta dla posiadacza');
+        assert(isAcademyUnlocked('splitReverseSplit'), 'hasło Akademii odblokowane');
+        assertEq(emojiIconName('🔀'), 'podzial', 'ikona SVG zamiast emoji'); assert(UI_ICON_PATHS.podzial, 'rysunek ikony');
+        assert(getRecentShareCountChange(a).startsWith('Split 5:1 w kw. 12'), 'opis znacznika w tabeli (słowa, nie kolor)');
+        macro.quarter = 40; assertEq(getRecentShareCountChange(a), null, 'znacznik znika po 8 kwartałach');
+        assert(describeShareCountHistory(a).includes('split 5:1 w kw. 12'), 'wiersz w karcie spółki');
+        const entry2 = executeSplit(Object.assign(a, { price: 0.4, lastSplitQuarter: -99 }), getSplitProposal(0.4));
+        assert(entry2 && entry2.kind === 'reverse' && newsLog.slice(0, 5).some(n => n.text.includes('skupia akcje 1:10')), 'komunikat konsolidacji');
+        const entry3 = ACADEMY_ENTRIES.splitReverseSplit;
+        assert(entry3 && entry3.quiz.length === 3 && entry3.quiz.every(q => q.a.length === 3 && q.c === 0), 'hasło z 3 pytaniami');
+    });
 });
 
 async function runAllTests() {
