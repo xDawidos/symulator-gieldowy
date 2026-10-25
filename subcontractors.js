@@ -23,7 +23,7 @@ const SUBCONTRACTOR_RULES = {
     groupMaxShare: 0.40,                                       // jedna grupa ≤ 40% podwykonawców specjalności
     groupPriceTolerance: 0.15,                                 // zlecenie od grupy nie omija aukcji, gdy cena grupy > rynkowa + 15%
     groupPreference: 12,                                       // premia punktowa dla podwykonawcy z grupy zleceniodawcy (pierwszeństwo)
-    acquireChance: 0.03, acquireCooldownQuarters: 12, acquireMultiple: [6, 10], acquireMinProfit: 30000,
+    acquireChance: 0.045, acquireCooldownQuarters: 12, acquireMultiple: [6, 10], acquireMinProfit: 30000,
     transferShare: [0.3, 0.7], absorbAfterQuarters: 8, absorbChance: 0.10, inHouseBonusMax: 0.10
 };
 
