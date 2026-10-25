@@ -61,3 +61,11 @@
 ## Lista commitów (od `af66955`)
 
 Patrz `git log af66955..HEAD` (P0: narzędzia, sonda skarbu, raport; P1: błędy 1, 2, 5, 6, 7a — po jednym commicie; P2; P3; P4a, P4b, P4c oraz poprawki: pętla kwartalna, indeksy łańcuchowe, strojenie 50%; P5; P6 i poprawki: dominacja ORT, losowe giganty; P7a–d; P8).
+
+## Pominięte i problemy
+
+1. **GIG po 20 latach +2,4 pp** (13,8% wobec 11,45%): przyczyny nie ustalono (splity i wzmocnione wchłanianie córek ≈ 1,2 pp każde); pominięte strojenie, do 0.16.1 G0 (≥ 30 gier na wariant).
+2. **Orzeł Telekom w górnej 3 w 60% gier** (cel ≤ 30%): przyczyny naprawione, cel nierealny przy ośmiu gigantach na start; wybrano nie zmieniać startu gigantów — decyzja do użytkownika.
+3. **P5 „rosną wymagania debiutu”:** pominięte (istniejące hamulce zostają); wycofania nie były potrzebne.
+4. **Czas kroku i zapis gracza przy ×1:** niezmierzone (obciążenie maszyny, brak pomiaru ×1).
+5. **Zlecenie dla czatu designu** (okno historii notowań, okno ogłoszenia splitu, mapa spółek jako drzewo) nie wykonane — poza zakresem.
