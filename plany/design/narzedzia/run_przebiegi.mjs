@@ -18,7 +18,8 @@ const quarters = args.quarters || '27'; // 6.5 years = 27 quarters (1 start + 26
 const speed = args.speed || '200';
 const label = args.label || (preset ? `sim_${preset}` : 'sim_base');
 
-const PORT = 8766;
+const PORT = Number(process.env.SIM_PORT) || 8766;
+const CDP = Number(process.env.SIM_CDP) || 9223;
 const MIME_TYPES = {
   '.html': 'text/html',
   '.js': 'text/javascript',
@@ -38,7 +39,7 @@ const server = http.createServer((req, res) => {
       return;
     }
     const ext = path.extname(filePath);
-    res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] || 'application/octet-stream' });
+    res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] || 'application/octet-stream', 'Cache-Control': 'no-store' });
     res.end(data);
   });
 });
@@ -51,7 +52,8 @@ server.listen(PORT, async () => {
   const edge = spawn(edgePath, [
     '--headless=new',
     '--disable-gpu',
-    '--remote-debugging-port=9223',
+    '--user-data-dir=' + path.join(process.env.TEMP || '.', 'edge-run-' + process.pid),
+    '--remote-debugging-port=' + CDP,
     url
   ]);
 
@@ -71,7 +73,7 @@ server.listen(PORT, async () => {
   for (let attempt = 0; attempt < 30; attempt++) {
     await new Promise(r => setTimeout(r, 500));
     try {
-      const res = await fetch('http://localhost:9223/json');
+      const res = await fetch('http://localhost:' + CDP + '/json');
       const tabs = await res.json();
       const tab = tabs.find(t => t.url && t.url.includes('przebiegi.html'));
       if (tab && tab.webSocketDebuggerUrl) {
