@@ -2683,8 +2683,9 @@ const AWAITING_LISTING_MAX_QUARTERS = 8; // startup bez miejsca na giełdzie cze
  * na starcie była stała i po latach niemal zawsze decydowała o górnej trójce (Orzeł Telekom: 17–19% rynku od pierwszego kwartału).
  * Kurs przed kalibracją fundamentów mnożymy przez losowy czynnik 0,6–1,6 (log-normalny, σ = 0,3) — nowa gra, przed initializeFundamentals.
  */
-// 0.15.4b (wariant C): giganci × 0,6, drugi szczebel (10 największych poniżej 1 mld zł) × 2,5. Pomiary: parametr `giants=g,s` w przebiegach (window.__GIANTS).
-const STARTING_GIANTS = { giantMult: 0.6, secondMult: 2.5, secondCount: 10 };
+// 0.15.4b: mnożniki startowe gigantów i drugiego szczebla (10 największych poniżej 1 mld zł). Pomiar G0/G2 (raporty/pomiar_giganci_0.15.4b.md): wariant C (0,6 / 2,5)
+// i mocniejszy (0,35 / 6) NIE zmniejszyły dominacji ORT, więc domyślnie 1 / 1 (bez zmiany). Parametr `giants=g,s` w przebiegach (window.__GIANTS) zostaje do dalszych pomiarów.
+const STARTING_GIANTS = { giantMult: 1, secondMult: 1, secondCount: 10 };
 function getStartingGiantsSettings() {
     const raw = typeof window !== 'undefined' && window.__GIANTS ? String(window.__GIANTS).split(',').map(Number) : null;
     return raw && raw.length === 2 && raw.every(Number.isFinite) ? { ...STARTING_GIANTS, giantMult: raw[0], secondMult: raw[1] } : STARTING_GIANTS;

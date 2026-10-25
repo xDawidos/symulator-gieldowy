@@ -31,3 +31,6 @@ D. **Tylko hamulce:** zaostrzyć hamulec wzrostu (0,15 → 0,25 pp/pp) i próg 1
 1. **Wariant C** (giganci × 0,6, drugi szczebel × 2,5, losowa kolejność jak w 0.15.4); pomiar G0 potwierdza współczynniki.
 2. **Tylko nowe gry:** stare zapisy bez zmian, zapis v15 bez migracji.
 3. **Cel awaryjny:** jeśli po G0–G2 cel „≤ 40% gier” jest nieosiągalny, przyjąć „żaden gigant w górnej 3 w > 50% gier”, zapisać to w kontroli i zamknąć.
+
+## Status (2026-10-25)
+G0–G2 wykonane, G3 pominięte: wariant C i mocniejszy (×0,35 / ×6) nie zmniejszyły dominacji ORT (92% / 78% gier w górnej 3, wobec 60%); szczegóły `raporty/pomiar_giganci_0.15.4b.md`. Domyślne mnożniki 1 / 1; dalsza diagnoza per spółka w 0.16.1 G0.
