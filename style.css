@@ -334,7 +334,7 @@ tr.locked-row {
     border-radius: var(--radius-md);
     box-shadow: 0 4px 8px rgba(0,0,0,0.2);
     padding: 20px;
-    z-index: 1009;
+    /* 0.15.4 P1: bez własnego z-index — dawne 1009 (reguła ID) wygrywało z .modal (1100) i chowało okno pod zasłoną (1090) */
     display: flex;
     flex-direction: column;
 }

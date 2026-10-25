@@ -9791,6 +9791,28 @@ group('0.15.4: Poprawki z gry 3 (licznik, okna, wykres, dywidenda, split, limit 
             assertEq(body.querySelectorAll('tr.stock-row').length, 0, 'tabela pusta przy „Posiadane” bez akcji');
         });
     });
+
+    test('P1: okno „Dywidendowe” otwiera się i zamyka z każdej zakładki rynku; żadne okno nie leży pod zasłoną (z-index)', async () => {
+        resetWorld([mk('TA')]);
+        const modal = document.createElement('div'); modal.id = 'dividend-tracker-modal'; modal.className = 'modal'; modal.style.display = 'none';
+        modal.innerHTML = '<button class="close-btn" onclick="closeModalFrom(this)">x</button><table><tbody id="dividend-tracker-body"></tbody></table>';
+        const tab = document.createElement('button'); tab.className = 'market-level-tab';
+        document.body.append(modal, tab);
+        const savedLevel = currentMarketLevel;
+        try {
+            for (const level of ['ALL', 'JUNK', 'BRONZE']) {
+                setMarketLevel(tab, level);
+                openDividendTrackerModal();
+                assertEq(modal.style.display, 'flex', `okno otwarte z zakładki ${level}`);
+                closeModalFrom(modal.querySelector('.close-btn'));
+                assertEq(modal.style.display, 'none', `okno zamknięte z zakładki ${level}`);
+            }
+        } finally { currentMarketLevel = savedLevel; modal.remove(); tab.remove(); }
+        // Zasłona ma z-index 1090, okna .modal 1100: reguła ID z mniejszym z-index chowałaby okno pod zasłoną (ekran ciemny, okno nieklikalne).
+        const css = await (await fetch('../style.css', { cache: 'no-store' })).text();
+        const low = [...css.matchAll(/(#[\w-]+-modal)[^{}]*\{[^}]*?z-index:\s*(\d+)/g)].filter(m => Number(m[2]) < 1100).map(m => `${m[1]}:${m[2]}`);
+        assertEq(low.join(','), '', 'okna (#…-modal) bez z-index poniżej zasłony');
+    });
 });
 
 async function runAllTests() {
