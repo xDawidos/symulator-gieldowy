@@ -760,6 +760,7 @@ function applySaveSnapshot(snapshot) {
     try { reconciled = reconcileSharesHeld(); } finally { ghostTrimSource = 'game'; } // audyt A1: akcje w obrocie = suma posiadaczy
     if (reconciled) report.warnings.push(`Uzgodniono akcje w obrocie w ${reconciled} spółkach (audyt A1).`);
 
+    syncGameChartClock(); // 0.15.4 P2: zegar osi wykresów nie cofa się za zapisane punkty
     report.ok = true;
     return report;
 }

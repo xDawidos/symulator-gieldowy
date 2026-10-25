@@ -334,7 +334,7 @@ function buyStock(symbol, quantity) {
     if (!stockToBuy.playerTransactions) stockToBuy.playerTransactions = [];
     stockToBuy.playerTransactions.push({
         type: 'buy',
-        time: Date.now(),
+        time: gameChartClock, // 0.15.4 P2: oś czasu wykresów = zegar gry
         price: stockToBuy.price,
         quantity: quantity
     });

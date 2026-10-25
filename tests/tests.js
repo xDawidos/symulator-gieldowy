@@ -9853,6 +9853,37 @@ group('0.15.4: Poprawki z gry 3 (licznik, okna, wykres, dywidenda, split, limit 
         probe.textContent = formatZl(123456.78); document.body.appendChild(probe);
         try { assert(width >= probe.offsetWidth + 2 * 12, `kolumna kursu ${width}px, potrzeba ≥ ${probe.offsetWidth + 24}px`); } finally { probe.remove(); }
     });
+
+    test('P2: wykres liniowy i świece na zegarze gry — punkt co tik niezależnie od czasu rzeczywistego (×50…×200)', () => {
+        const a = mk('TA', { price: 100 });
+        resetWorld([a]); a.lineHistory = []; a.candlestickHistory = []; a.currentCandle = null;
+        marketHalt = createMarketHaltState();
+        // 900 tików wykonanych „natychmiast” (prędkość ×200 i więcej): czas rzeczywisty nie może wpływać na oś wykresu
+        for (let i = 0; i < 900; i++) updateStockPrices();
+        const h = a.lineHistory;
+        assertEq(h.length, 900, 'punkt na każdy tik');
+        assertEq(h[899].time - h[0].time, 899 * BASE_DELAYS.stockUpdate, 'oś = zegar gry (1 s gry na tik)');
+        for (const interval of [1000, 5000, 10000, 60000, 120000]) {
+            const points = filterLineData(h, interval);
+            assert(points.length >= Math.floor(900 * 1000 / interval) - 1, `okres ${interval} ms gry: ${points.length} punktów`);
+            assert(new Set(points).size > Math.min(points.length - 1, 5), `okres ${interval}: linia nie jest prosta`);
+        }
+        assertEq(a.candlestickHistory.length, Math.min(60, Math.floor(900 * 1000 / CANDLE_INTERVAL) - 1), 'świeca = 15 tików gry (limit historii 60)');
+    });
+
+    test('P2: zegar wykresów nie cofa się po wczytaniu zapisu z punktami „z przyszłości” (gra szła ×200)', () => {
+        const a = mk('TA', { price: 100 });
+        resetWorld([a]);
+        const future = Date.now() + 50_000_000;
+        a.lineHistory = [{ time: future - 1000, price: 99 }, { time: future, price: 100 }];
+        syncGameChartClock();
+        assert(gameChartClock > future, 'zegar za najnowszym punktem');
+        a.currentCandle = null; marketHalt = createMarketHaltState();
+        updateStockPrices();
+        assert(a.lineHistory[a.lineHistory.length - 1].time > future, 'nowy punkt po zapisanych');
+        addChartEvent(a, '📈', 'test');
+        assertEq(a.chartEvents[a.chartEvents.length - 1].time, gameChartClock, 'znacznik zdarzenia na zegarze gry');
+    });
 });
 
 async function runAllTests() {

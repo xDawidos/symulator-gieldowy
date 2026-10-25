@@ -1295,7 +1295,7 @@ function calculateNiceYAxisRange(minPrice, maxPrice) {
 function addChartEvent(stock, icon, label) {
     if (!stock) return;
     if (!Array.isArray(stock.chartEvents)) stock.chartEvents = [];
-    stock.chartEvents.push({ time: Date.now(), icon, label });
+    stock.chartEvents.push({ time: gameChartClock, icon, label }); // 0.15.4 P2: zegar gry
     if (stock.chartEvents.length > 20) stock.chartEvents.shift();
 }
 

@@ -4616,7 +4616,7 @@ function updateHoldingCompanies() {
         }
 
         // Logika aktualizacji wykresów (pozostaje bez zmian)
-        const now = Date.now();
+        const now = gameChartClock; // 0.15.4 P2: oś czasu wykresów = zegar gry
         if (!holding.currentCandle || !holding.candlestickHistory) {
             holding.candlestickHistory = [];
             holding.lineHistory = [];

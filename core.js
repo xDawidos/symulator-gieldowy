@@ -3423,7 +3423,25 @@ let WEALTH_TAX_INTERVAL; // = BASE_DELAYS.quarterly * 4;
 let nextWealthTaxTime = 0; 
 
 
-const CANDLE_INTERVAL = 15 * 1000; 
+const CANDLE_INTERVAL = 15 * 1000; // świeca = 15 tików gry (zegar wykresów, niezależny od prędkości)
+
+// 0.15.4 P2: oś czasu wykresów (punkty linii, świece, znaczniki zdarzeń i transakcji) to zegar gry: +1 tik (BASE_DELAYS.stockUpdate)
+// na aktualizację cen, niezależnie od prędkości i czasu rzeczywistego. Przy ×50…×200 zegar rzeczywisty dawał 2–3 punkty na okres
+// (prosta linia), a „15-sekundowa” świeca obejmowała kilka kwartałów. Start od Date.now(): stare zapisy (czas rzeczywisty) zostają w przeszłości.
+let gameChartClock = Date.now();
+
+/** Po wczytaniu zapisu zegar wykresów nie może cofnąć się za najnowszy zapisany punkt (gra mogła iść ×200). */
+function syncGameChartClock() {
+    let latest = 0;
+    for (const stock of typeof stocks !== 'undefined' ? stocks : []) {
+        const lineLast = stock.lineHistory?.[stock.lineHistory.length - 1]?.time;
+        for (const t of [lineLast, stock.currentCandle?.time, stock.chartEvents?.[stock.chartEvents.length - 1]?.time, stock.playerTransactions?.[stock.playerTransactions.length - 1]?.time]) {
+            if (Number.isFinite(t) && t > latest) latest = t;
+        }
+    }
+    gameChartClock = Math.max(gameChartClock, Date.now(), latest + BASE_DELAYS.stockUpdate);
+    return gameChartClock;
+}
 
 // Parametry ruchu cen (na tik = 1 s gry):
 // szum ~0,2% × zmienność; powrót do wartości godziwej z półokresem ok. 1 godziny gry;
@@ -3547,6 +3565,8 @@ function updateStockPrices() {
     }
 
     const now = Date.now();
+    gameChartClock += BASE_DELAYS.stockUpdate; // 0.15.4 P2
+    const chartNow = gameChartClock;
     const marketModifier = 1 + (marketVolatilityIndex - 1) * 0.5;
 
     // 0.15 H2a: ruch premii rynkowej w stronę celu (25% odległości na kwartał, ~0.00096 na tik)
@@ -3623,7 +3643,7 @@ function updateStockPrices() {
             stock.candlestickHistory = [];
             stock.lineHistory = [];
             const initialPrice = stock.price > 0 ? stock.price : 0.01;
-            stock.currentCandle = { time: now, open: initialPrice, high: initialPrice, low: initialPrice, close: initialPrice };
+            stock.currentCandle = { time: chartNow, open: initialPrice, high: initialPrice, low: initialPrice, close: initialPrice };
         }
 
         // --- Ruch ceny jako zmiana PROCENTOWA ---
@@ -3780,7 +3800,7 @@ function updateStockPrices() {
             historyLimitLine = 25 * 60;
         }
 
-        stock.lineHistory.push({ time: now, price: stock.price });
+        stock.lineHistory.push({ time: chartNow, price: stock.price });
         if (stock.lineHistory.length > historyLimitLine) {
             stock.lineHistory.shift(); 
         }
@@ -3791,15 +3811,15 @@ function updateStockPrices() {
             if (stock.price > candle.high) candle.high = stock.price;
             if (stock.price < candle.low) candle.low = stock.price;
 
-            if (now - candle.time >= CANDLE_INTERVAL) {
+            if (chartNow - candle.time >= CANDLE_INTERVAL) {
                 stock.candlestickHistory.push(candle);
                 if (stock.candlestickHistory.length > historyLimitCandles) {
                     stock.candlestickHistory.shift(); 
                 }
-                stock.currentCandle = { time: now, open: stock.price, high: stock.price, low: stock.price, close: stock.price };
+                stock.currentCandle = { time: chartNow, open: stock.price, high: stock.price, low: stock.price, close: stock.price };
             }
         } else {
-             stock.currentCandle = { time: now, open: stock.price, high: stock.price, low: stock.price, close: stock.price };
+             stock.currentCandle = { time: chartNow, open: stock.price, high: stock.price, low: stock.price, close: stock.price };
         }
     }); // Koniec stocks.forEach
 
