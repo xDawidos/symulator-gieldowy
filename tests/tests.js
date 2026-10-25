@@ -10723,6 +10723,175 @@ group('0.15.5: Budownictwo i banki (przetargi, podwykonawcy, przejęcia pionowe,
         } finally { resetCrises(); restore(); }
     });
 
+
+    // --- B5: REIT-y ---
+    const mkReit = (symbol = 'RT1', o = {}) => {
+        const c = makeCompany(symbol, { sector: ['Nieruchomości'], cash: 0, fixedAssets: 0 });
+        Object.assign(c, { assetType: 'REIT', price: 100, totalShares: 100000, exchange: 'GOLD', financialHealth: 2, insiderShares: 0 }, o);
+        c.balanceSheet = { assets: 0, liabilities: 0, shareCapital: 0, retainedEarnings: 0 }; c.cash = 0;
+        return c;
+    };
+    const withMacro = (base, fn) => {
+        const saved = { rate: centralBank.baseInterestRate, infl: macro.inflation, phase: economyCycle.phase };
+        centralBank.baseInterestRate = base; macro.inflation = 0.03; economyCycle.phase = 'recovery';
+        try { return fn(); } finally { centralBank.baseInterestRate = saved.rate; macro.inflation = saved.infl; economyCycle.phase = saved.phase; resetCrises(); }
+    };
+
+    test('B5: portfel REIT-u — start z dźwignią 35%, aktywa = wartość portfela, kapitał = kapitalizacja', () => {
+        const reit = mkReit();
+        resetWorld([reit]);
+        ensureReitModel(reit);
+        assertNear(getReitLtv(reit), 0.35, 'LTV startowe', 1e-6);
+        assertNear(equity(reit), 10_000_000, 'kapitał własny = kapitalizacja', 1);
+        assertNear(reit.balanceSheet.assets, reit.reit.portfolioValue, 'aktywa = portfel (bez gotówki)', 1);
+        assert(reit.reit.occupancy > 0.9 && reit.reit.payoutRatio >= REIT_RULES.payoutMin, 'obłożenie i polityka wypłaty');
+    });
+
+    test('B5: przychód z najmu = wartość × stopa × obłożenie; zysk po kosztach i odsetkach (stopa bazowa + marża)', () => {
+        const reit = mkReit();
+        resetWorld([reit]);
+        withMacro(0.04, () => {
+            ensureReitModel(reit);
+            const r = reit.reit;
+            r.occupancy = 0.9; r.lastBase = 0.04; r.rentYield = 0.08;
+            const value = r.portfolioValue, debt = getReitDebt(reit);
+            const occ = r.occupancy;
+            const profit = computeReitQuarter(reit);
+            // obłożenie dąży do docelowego (0,92), wartość portfela zmienia się o rewaluację
+            assertNear(r.lastRent, r.portfolioValue * 0.08 / 4 * r.occupancy, 'najem', 1e-6);
+            assertNear(r.lastCosts, r.portfolioValue * REIT_RULES.maintenanceRate / 4, 'koszty utrzymania', 1e-6);
+            assertNear(r.lastInterest, debt * (0.04 + REIT_RULES.rateMargin) / 4, 'odsetki od długu', 1e-6);
+            assertNear(profit, r.lastRent - r.lastCosts - r.lastInterest, 'zysk', 1e-6);
+            assert(r.occupancy > occ && r.occupancy <= 0.92 + 1e-9, 'obłożenie rośnie ku docelowemu');
+            assert(value > 0 && profit > 0, 'zysk dodatni');
+        });
+    });
+
+    test('B5: obowiązkowa wypłata ≥ 80% zysku z kasy spółki (raz na kwartał), kasa nie schodzi poniżej zera', () => {
+        const reit = mkReit();
+        resetWorld([reit]);
+        withMacro(0.04, () => {
+            ensureReitModel(reit);
+            const profit = computeReitQuarter(reit);
+            adjustCompanyCash(reit, profit); adjustBalanceSheet(reit, { assets: profit, retainedEarnings: profit });
+            const cash0 = reit.cash;
+            assert(reit.reit.dividendDue >= profit * 0.8 - 1e-6 && reit.reit.dividendDue <= profit * 0.95 + 1e-6, 'dywidenda do wypłaty 80–95% zysku');
+            const paid = processReitDividend(reit);
+            assert(paid >= profit * 0.8 - 1, 'wypłacono ≥ 80% zysku: ' + paid + ' z ' + profit);
+            assertNear(cash0 - reit.cash, paid, 'wypłata pomniejsza kasę spółki', 1e-6);
+            assert(reit.cash >= 0, 'kasa nieujemna');
+            assertNear(reit.dividendPerShare * reit.totalShares, paid, 'dywidenda na akcję', 1e-6);
+            assertEq(processReitDividend(reit), 0, 'druga wypłata w tym samym kwartale = 0');
+        });
+    });
+
+    test('B5: stopa dywidendy 3–8% rocznie przy stabilnej gospodarce (40 kwartałów)', () => {
+        const reit = mkReit();
+        resetWorld([reit]);
+        withMacro(0.04, () => {
+            ensureReitModel(reit);
+            let paidSum = 0;
+            for (let q = 0; q < 40; q++) {
+                const profit = computeReitQuarter(reit);
+                adjustCompanyCash(reit, profit); adjustBalanceSheet(reit, { assets: profit, retainedEarnings: profit });
+                paidSum += processReitDividend(reit);
+                enforceReitLtv(reit);
+                const excess = Math.max(0, reit.cash - reit.reit.portfolioValue * REIT_RULES.cashReserveShare);
+                if (excess > 0) repayCompanyDebt(reit, excess * 0.5);
+                assert(reit.cash >= 0, 'kasa nieujemna w kw. ' + q);
+                assert(getReitLtv(reit) <= REIT_RULES.ltvMax + 1e-9, 'LTV ≤ 60% w kw. ' + q + ': ' + getReitLtv(reit));
+            }
+            const price = getReitFairValue(reit);
+            const yieldYear = (paidSum / 10) / reit.totalShares / price;
+            assert(yieldYear >= 0.03 && yieldYear <= 0.08, 'stopa dywidendy ' + (yieldYear * 100).toFixed(2) + '%');
+        });
+    });
+
+    test('B5: LTV powyżej 60% wymusza sprzedaż części portfela i spłatę długu; kapitał spada tylko o zniżkę', () => {
+        const reit = mkReit();
+        resetWorld([reit]);
+        ensureReitModel(reit);
+        const r = reit.reit;
+        r.portfolioValue *= 0.5; reit.balanceSheet.assets -= r.portfolioValue; // spadek wartości portfela: LTV ≈ 0,7
+        reit.balanceSheet.retainedEarnings -= r.portfolioValue;
+        assert(getReitLtv(reit) > REIT_RULES.ltvMax, 'LTV przed: ' + getReitLtv(reit));
+        const equity0 = equity(reit);
+        const sales = enforceReitLtv(reit);
+        assert(sales >= 1 && getReitLtv(reit) <= REIT_RULES.ltvMax + 1e-9, 'LTV po: ' + getReitLtv(reit));
+        assert(equity(reit) < equity0 && equity(reit) > equity0 * 0.85, 'kapitał spada o zniżkę ze sprzedaży');
+        assert(reit.cash >= 0, 'kasa nieujemna');
+    });
+
+    test('B5: wrażliwość na stopy — premia do NAV i wycena portfela spadają przy wyższych stopach (silniej niż 1 pp = 1%)', () => {
+        const reit = mkReit();
+        resetWorld([reit]);
+        ensureReitModel(reit);
+        const low = withMacro(0.03, () => getReitPremium(reit)), high = withMacro(0.08, () => getReitPremium(reit));
+        assert(low - high >= 0.12, 'premia przy 3% vs 8%: ' + low + ' / ' + high);
+        withMacro(0.03, () => {
+            reit.reit.lastBase = 0.03;
+            const v0 = reit.reit.portfolioValue;
+            centralBank.baseInterestRate = 0.05; // skok stóp o 2 pp
+            computeReitQuarter(reit);
+            assert(reit.reit.portfolioValue < v0 * 0.96, 'wartość portfela po skoku stóp o 2 pp: ' + (reit.reit.portfolioValue / v0));
+        });
+    });
+
+    test('B5: obłożenie zależy od gospodarki — Recesja i pandemia uderzają w biura, hotele i handel, magazyny zyskują', () => {
+        const mk2 = (type) => { const c = mkReit('R' + type); c.reit = null; REIT_PROFILES['R' + type] = type; resetWorld([c]); ensureReitModel(c); return c; };
+        const office = mk2('office'), warehouse = mk2('warehouse'), hotel = mk2('hospitality');
+        const run = (phase, pandemic) => {
+            economyCycle.phase = phase;
+            if (pandemic) { startCrisisLine('pandemic', { forced: true, skipSpark: true }); crisisLine.stage = 'spread'; } else resetCrises();
+            return [office, warehouse, hotel].map(c => getReitTargetOccupancy(c));
+        };
+        const phase0 = economyCycle.phase;
+        try {
+            const base = run('recovery', false), recession = run('recession', false), pandemic = run('recovery', true);
+            assert(recession[0] < base[0] && recession[2] < base[2], 'recesja: biura i hotele niżej');
+            assert(recession[1] >= base[1] - 1e-9, 'recesja: magazyny bez spadku');
+            assert(pandemic[0] <= base[0] - 0.10 && pandemic[2] <= base[2] - 0.18, 'pandemia: biura −10 pp, hotele −18 pp');
+            assert(pandemic[1] > base[1], 'pandemia: magazyny zyskują');
+        } finally { economyCycle.phase = phase0; resetCrises(); delete REIT_PROFILES.Roffice; delete REIT_PROFILES.Rwarehouse; delete REIT_PROFILES.Rhospitality; }
+    });
+
+    test('B5: REIT zamawia budowę u generalnego wykonawcy; ukończony obiekt zwiększa portfel, kapitał bez zmian', () => {
+        const reit = mkReit('RTB');
+        reit.cash = 0;
+        const builder = mkB('BUD', { cash: 3_000_000, experience: 30 });
+        resetWorld([reit, builder]);
+        ensureReitModel(reit);
+        reit.reit.type = 'warehouse';
+        const savedBuild = REIT_TYPES.warehouse.build; REIT_TYPES.warehouse.build = ['warehouse'];
+        const equity0 = equity(reit), value0 = reit.reit.portfolioValue;
+        let tenderId = null;
+        try { tenderId = orderReitBuilding(reit); } finally { REIT_TYPES.warehouse.build = savedBuild; }
+        assert(tenderId, 'przetarg ogłoszony');
+        const tender = activeTenders.find(t => t.id === tenderId);
+        assertEq(getEntityKey(tender.clientCompany), 'RTB', 'zamawiający = REIT');
+        assertEq(orderReitBuilding(reit), null, 'drugie zamówienie przy otwartym przetargu zablokowane');
+        runUntil(() => tender.status !== 'open' && tender.status !== 'closed', 800);
+        assertEq(tender.status, 'awarded', 'wykonawca wygrał: ' + tender.status + ' ' + (tender.cancelReason || ''));
+        const project = constructionProjects.find(p => p.tender === tender);
+        project.delayChance = 0;
+        runUntil(() => project.settled, 40000);
+        assertEq(project.status, 'completed', 'ukończony');
+        assert(reit.reit.portfolioValue > value0, 'portfel większy o obiekt');
+        assertEq(reit.reit.buildings, 1, 'licznik obiektów');
+        assertNear(equity(reit), equity0, 'kapitał REIT-u bez zmian (depozyt → nieruchomość)', Math.abs(equity0) * 0.01);
+        assert(getReitLtv(reit) <= REIT_RULES.ltvMax, 'LTV po budowie: ' + getReitLtv(reit));
+    });
+
+    test('B5: stan REIT-u trafia do zapisu (pole opcjonalne stock.reit) i przeżywa JSON', () => {
+        const reit = mkReit('RTS');
+        resetWorld([reit]);
+        ensureReitModel(reit);
+        reit.reit.buildings = 2;
+        const snap = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+        const saved = snap.stocks.find(s => s.symbol === 'RTS');
+        assert(saved && saved.reit && saved.reit.buildings === 2 && saved.reit.portfolioValue > 0, 'REIT w zapisie');
+    });
+
     test('B1: okno wygranych jest zapisywane (pole opcjonalne)', () => {
         constructionAwardLog = [{ q: 7, sym: 'AAA' }, { q: 8, sym: 'BBB' }];
         const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));

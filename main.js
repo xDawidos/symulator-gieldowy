@@ -586,6 +586,7 @@ function applySaveSnapshot(snapshot) {
     subcontractorDeals = Array.isArray(snapshot.subcontractorDeals) ? snapshot.subcontractorDeals : [];
     subcontractorAcquisitionCount = Number(snapshot.subcontractorAcquisitionCount) || 0;
     ensureSubcontractorRegistry(); // 0.15.5 B2: rejestr 12 specjalności budowany z istniejących danych (zapisy starsze mają 7 podwykonawców)
+    ensureAllReitModels(); // 0.15.5 B5: REIT-y ze starszego zapisu dostają portfel z bilansu
     constructionAwardLog = Array.isArray(snapshot.constructionAwardLog) ? snapshot.constructionAwardLog.filter(e => e && typeof e.sym === 'string' && Number.isFinite(e.q)) : []; // 0.15.5 B1
 
     if (isFiniteNumber(snapshot.playerCash)) playerCash = snapshot.playerCash;
@@ -1457,6 +1458,7 @@ gameTimers.weekly = setGameInterval(() => {
         processSubsectorMechanicsQuarterly(); // 0.14 T2: badania kliniczne, bloki jądrowe, kontrole KNF (subsectors.js)
         processSpecialProjectsQuarterly(); // konsorcja i projekty specjalne (projects.js)
         if (typeof processSubcontractorsQuarterly === 'function') processSubcontractorsQuarterly(); // 0.15.5 B2–B3: podwykonawcy (subcontractors.js)
+        if (typeof processReitsQuarterly === 'function') processReitsQuarterly(); // 0.15.5 B5: dźwignia REIT-ów, rezerwa gotówki, zlecenia budowy (reits.js)
         if (typeof processBankRiskQuarterly === 'function') processBankRiskQuarterly(); // 0.15.5 B4: ekspozycje banków, odpisy w kryzysie bankowym (finance.js)
         if (typeof processSplitsQuarterly === 'function') processSplitsQuarterly(); // 0.15.4 P4: split i konsolidacja akcji (splits.js)
         reconcileSharesHeld(); // audyt A1: akcje w obrocie = suma posiadaczy
@@ -1926,6 +1928,7 @@ function createNewWorld() {
     if (typeof createMarketHaltState === 'function') marketHalt = createMarketHaltState();
     if (typeof resetCrises === 'function') resetCrises(); // 0.15.3
     if (typeof randomizeStartingGiants === 'function') randomizeStartingGiants(); // 0.15.4 P6: losowa kolejność wielkości gigantów na starcie
+    ensureAllReitModels(); // 0.15.5 B5: portfele nieruchomości REIT-ów po utworzeniu bilansów (nowa gra: dźwignia startowa 35%)
     stocks.forEach(stock => {
         if (stock.balanceSheet && stock.assetType !== 'Startup') initializeFundamentals(stock, true);
         initializeOwnership(stock);

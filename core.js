@@ -1499,6 +1499,7 @@ function completeConstructionProject(project) {
         purchasePrice,
         marketValue: Number(project.tender.buildingType.estimatedMarketValue) || purchasePrice
     });
+    if (typeof onReitBuildingCompleted === 'function') onReitBuildingCompleted(client, project, purchasePrice); // 0.15.5 B5: obiekt zwiększa portfel REIT-u
 
     if (Number(project.tender.buildingType.healthBonus) > 0) {
         client.financialHealth = Math.min(5, (Number(client.financialHealth) || 0) + Number(project.tender.buildingType.healthBonus) * 0.5);

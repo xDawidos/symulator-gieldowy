@@ -2581,7 +2581,8 @@ function getAssetBasedFairValue(stock) {
     }
     if (stock.assetType === 'REIT') {
         const nav = Math.max(0, (Number(stock.balanceSheet?.assets) || 0) - liabilities) / shares;
-        const income = (Number(stock.dividendPerShare) || 0) * (4 * BASE_DELAYS.quarterly / 120000) / 0.07; // dywidenda co 2 min gry (10× w roku) / 7%
+        const paymentsPerYear = stock.reit ? 4 : 4 * BASE_DELAYS.quarterly / 120000; // 0.15.5 B5: REIT płaci raz na kwartał (dawniej co 2 min gry)
+        const income = (Number(stock.dividendPerShare) || 0) * paymentsPerYear / 0.07; // roczna dywidenda / 7%
         return Math.max(nav, income) || null;
     }
     const equity = (Number(stock.balanceSheet?.assets) || 0) - liabilities;
@@ -3015,8 +3016,9 @@ function updateFundamentalRatios(stock) {
             // 0.14.2 P9: bank — C/WK sektora Bankowość × kapitał własny (depozyty są poza bilansem spółki-banku).
             fundamentals.fairValue = bvps > 0 ? getSectorPb(profile) * bvps * healthPremium : null;
         } else if (stock.assetType === 'REIT') {
-            // 0.14.2 P9: REIT — NAV nieruchomości ± premia/dyskonto do 20% z kondycji.
-            fundamentals.fairValue = bvps > 0 ? bvps * (1 + Math.max(-REIT_PREMIUM_MAX, Math.min(REIT_PREMIUM_MAX, (Number(stock.financialHealth) || 0) * 0.04))) : null;
+            // 0.14.2 P9: REIT — NAV nieruchomości ± premia/dyskonto z kondycji; 0.15.5 B5: premia zależy też od stóp, cyklu i fazy rynku (reits.js).
+            fundamentals.fairValue = stock.reit && typeof getReitFairValue === 'function' ? getReitFairValue(stock)
+                : (bvps > 0 ? bvps * (1 + Math.max(-REIT_PREMIUM_MAX, Math.min(REIT_PREMIUM_MAX, (Number(stock.financialHealth) || 0) * 0.04))) : null);
         } else if (FINANCE_SERVICE_TYPES.includes(stock.assetType)) {
             // 0.14.2 P9: biuro rachunkowe, windykator, lombard — C/Z sektora Finanse z własnego zysku, podłoga C/WK 0,5.
             const financePe = SECTORS['Finanse']?.profile?.pe || 13;
@@ -3240,7 +3242,7 @@ function updateDividendTimers(deltaTime) {
             stock.dividendTimer -= deltaTime;
             if (stock.dividendTimer <= 0) {
                 processReitDividend(stock);
-                stock.dividendTimer = 2 * 60 * 1000;
+                stock.dividendTimer = stock.reit ? BASE_DELAYS.quarterly : 2 * 60 * 1000; // 0.15.5 B5: wypłata raz na kwartał po raporcie
             }
             return;
         }
@@ -3291,12 +3293,16 @@ function processFinancialReports() {
         
         // --- Logika obliczania Zysku/Straty (główna) ---
         if (stock.assetType === 'REIT') {
-            // 🏡 REITy
-            const assetBase = stock.balanceSheet.assets > 0 ? stock.balanceSheet.assets : marketCap * 0.8;
-            if (stock.balanceSheet.assets === 0) stock.balanceSheet.assets = assetBase;
-            const rentalIncome = assetBase * 0.02; // 2%
-            const maintenanceCosts = assetBase * 0.005; // 0.5%
-            quarterlyEarnings = (rentalIncome - maintenanceCosts) * (1 + (stock.financialHealth / 50));
+            // 🏡 REITy (0.15.5 B5: portfel nieruchomości, najem × obłożenie, odsetki od długu, wypłata ≥ 80% — reits.js)
+            if (typeof computeReitQuarter === 'function') {
+                quarterlyEarnings = computeReitQuarter(stock);
+            } else {
+                const assetBase = stock.balanceSheet.assets > 0 ? stock.balanceSheet.assets : marketCap * 0.8;
+                if (stock.balanceSheet.assets === 0) stock.balanceSheet.assets = assetBase;
+                const rentalIncome = assetBase * 0.02; // 2%
+                const maintenanceCosts = assetBase * 0.005; // 0.5%
+                quarterlyEarnings = (rentalIncome - maintenanceCosts) * (1 + (stock.financialHealth / 50));
+            }
 
         } else if (stock.assetType === 'Holding') {
             // 🏢 Holdingi
