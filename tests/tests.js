@@ -9757,6 +9757,42 @@ group('0.15.3: Wielkie Kryzysy (szoki sektorowe, silnik linii, 5 linii, reakcje 
     });
 });
 
+group('0.15.4: Poprawki z gry 3 (licznik, okna, wykres, dywidenda, split, limit spółek)', () => {
+    const mk = (symbol, o = {}) => Object.assign(makeCompany(symbol, { sector: ['Turystyka'] }), { price: 10, exchange: 'BRONZE' }, o);
+    const withTable = fn => {
+        let body = document.getElementById('stock-table-body'); // starsze testy zostawiają tabelę w dokumencie — używamy jej
+        if (!body) { const table = document.createElement('table'); body = document.createElement('tbody'); body.id = 'stock-table-body'; table.appendChild(body); document.body.appendChild(table); }
+        const kpi = document.getElementById('mkpi-active') || Object.assign(document.body.appendChild(document.createElement('span')), { id: 'mkpi-active' });
+        const saved = { market: selectedMarketOperator, level: currentMarketLevel, owned: ownedOnlyFilter, filter: sectorFilterState };
+        try { return fn(body, kpi); } finally {
+            selectedMarketOperator = saved.market; currentMarketLevel = saved.level; ownedOnlyFilter = saved.owned; sectorFilterState = saved.filter;
+            body.replaceChildren();
+        }
+    };
+
+    test('P1: licznik sektora i nagłówka = wiersze tabeli (rynek, poziom giełdy, córki)', () => {
+        const a = mk('TA'), b = mk('TB', { exchange: 'SILVER' }), c = mk('TC', { market: 'XTD' }), child = mk('TD', { isSubsidiaryOf: 'TA' });
+        a.subsidiaries = ['TD'];
+        resetWorld([a, b, c, child]);
+        withTable((body, kpi) => {
+            selectedMarketOperator = 'GPW'; currentMarketLevel = 'ALL'; ownedOnlyFilter = false;
+            sectorFilterState = { ...DEFAULT_SECTOR_FILTER, sector: 'Turystyka' };
+            const topRows = () => [...body.rows].filter(r => r.classList.contains('stock-row') && !stocks.find(s => s.symbol === r.dataset.symbol)?.isSubsidiaryOf).length;
+            const chip = () => getSectorFilterCounts(getListBaseStocks(), sectorFilterState).sectors.Turystyka || 0;
+            displayStocks();
+            assertEq(chip(), 2, 'chip: spółka z innego rynku (TC) nie liczy się, córka stoi pod matką');
+            assertEq(topRows(), chip(), 'wiersze główne = chip');
+            assertEq(Number(kpi.textContent), body.querySelectorAll('tr.stock-row').length, 'nagłówek = wszystkie wiersze (z córką)');
+            currentMarketLevel = 'SILVER'; displayStocks();
+            assertEq(chip(), 1, 'chip po zmianie zakładki poziomu');
+            assertEq(topRows(), 1, 'wiersze po zmianie zakładki');
+            currentMarketLevel = 'ALL'; ownedOnlyFilter = true; displayStocks();
+            assertEq(chip(), 0, 'chip przy „Posiadane” bez akcji');
+            assertEq(body.querySelectorAll('tr.stock-row').length, 0, 'tabela pusta przy „Posiadane” bez akcji');
+        });
+    });
+});
+
 async function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

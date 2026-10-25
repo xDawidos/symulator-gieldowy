@@ -41,9 +41,23 @@ function setSectorChip(el, sector) {
     setSectorFilter({ sector });
 }
 
-/** Spółki widoczne w filtrze listy (bez spółek zależnych i upadłych). */
+/**
+ * 0.15.4 P1: spółki, które tabela może pokazać przed filtrem sektora i typu: wybrany rynek, zakładka poziomu giełdy
+ * i „Posiadane”; córki stojące pod widoczną matką liczą się razem z nią. To jedno źródło liczb dla chipów sektorów,
+ * podnagłówków i nagłówka rynku (wcześniej chipy liczyły wszystkie rynki i poziomy, a lista tylko wybrany).
+ */
+function getListBaseStocks() {
+    const market = typeof selectedMarketOperator === 'undefined' || !selectedMarketOperator ? 'GPW' : selectedMarketOperator;
+    const level = typeof currentMarketLevel === 'undefined' ? 'ALL' : currentMarketLevel;
+    const inView = (stocks || []).filter(stock => getStockMarket(stock) === market && (!ownedOnlyFilter || isStockOwnedByPlayer(stock))
+        && exchanges[stock.exchange] && (level === 'ALL' || stock.exchange === level));
+    const shownParents = new Set(inView.filter(stock => !stock.isSubsidiaryOf).map(stock => stock.symbol));
+    return inView.filter(stock => !stock.isSubsidiaryOf || !shownParents.has(stock.isSubsidiaryOf));
+}
+
+/** Zgodność: lista bazowa filtra sektorów (dawniej bez córek, upadłych i startupów — teraz wg tabeli). */
 function getSectorFilterBaseList() {
-    return (stocks || []).filter(stock => !stock.isBankrupt && !stock.isSubsidiaryOf && stock.assetType !== 'Startup');
+    return getListBaseStocks();
 }
 
 /** 0.14.5: przełącznik grupowania sektorów według kategorii (rozwijane listy vs płaski ciąg chipów). */
@@ -644,8 +658,7 @@ function setMarketLevel(el, level) {
 function updateMarketKPIs() {
     if (typeof stocks === 'undefined') return;
     const active = stocks.filter(s => !s.isBankrupt && s.price > 0);
-    const el = document.getElementById('mkpi-active');
-    if (el) el.textContent = active.length;
+    // liczbę spółek w nagłówku ustawia displayStocks (0.15.4 P1: tyle, ile wierszy pokazuje lista)
     const getPct = s => s.previousPrice
         ? ((s.price - s.previousPrice) / s.previousPrice * 100) : 0;
     const sorted = [...active].sort((a, b) => getPct(b) - getPct(a));
@@ -2210,6 +2223,8 @@ function displayStocks(previousInputValues = {}) {
   });
 
   liveStockTableBody.replaceChildren(...stockTableBody.childNodes);
+  const shownCount = document.getElementById('mkpi-active');
+  if (shownCount) shownCount.textContent = liveStockTableBody.querySelectorAll('tr.stock-row').length; // 0.15.4 P1: licznik = wiersze listy
 
   if (typeof openStockDrawerSymbol !== 'undefined' && openStockDrawerSymbol) {
     const targetRow = document.querySelector(`#stock-table-body tr[data-symbol="${openStockDrawerSymbol}"]`);
