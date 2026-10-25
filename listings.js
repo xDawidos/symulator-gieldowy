@@ -4,7 +4,7 @@
 // Stan spółki (pola opcjonalne, zapis v15): market, marketSinceQ, belowReqQ. Progi z diagnozy plany/raporty/diagnoza_0.15.6.md.
 
 const LISTING_REQUIREMENTS = {
-    GPW: { cap: 80000, freeFloat: 0.30, profit: true },
+    GPW: { cap: 100000, freeFloat: 0.30, profit: true },
     NH:  { cap: 24000, freeFloat: 0.20, profit: true, innovativeExempt: true },
     PRV: { cap: 5000,  freeFloat: 0.10, profit: false }
 };
@@ -180,7 +180,7 @@ const PRV_REVEAL_PENALTY = 0.15;
 const PRV_PLAYER_LIMIT = 0.20;
 const NH_PROMOTE_MIN_AGE = 8;           // kwartały na NH przed awansem / rozwidleniem
 const NH_PROMOTE_CHANCE = 0.35;         // co kwartał dla spółki spełniającej wymogi GPW
-const NH_FORK_CHANCE = 0.25;            // co kwartał dla słabej spółki NH
+const NH_FORK_CHANCE = 0.15;            // co kwartał dla słabej spółki NH
 const NH_FORK_PRIVATE_SHARE = 0.4;      // z rozwidlenia: firma prywatna (wykup); reszta — giełda prywatna
 
 function isDebutRoutingActive() {
