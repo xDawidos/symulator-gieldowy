@@ -10277,8 +10277,8 @@ group('0.15.4: Poprawki z gry 3 (licznik, okna, wykres, dywidenda, split, limit 
             const list = [mkG('G1', 3600, 1_000_000), mkG('G2', 3000, 1_000_000), mkG('G3', 2300, 1_000_000), mkG('SM', 50, 100_000)];
             const before = list.map(s => s.price);
             const changed = randomizeStartingGiants(list);
-            assertEq(changed.length, 3, 'zmienieni tylko giganci'); assertEq(list[3].price, 50, 'mała spółka bez zmian');
-            list.slice(0, 3).forEach((s, i) => { const f = s.price / before[i]; assert(f >= 0.6 - 1e-9 && f <= 1.6 + 1e-9, `czynnik ${f}`); });
+            assertEq(changed.length, 4, 'giganci i drugi szczebel zmienieni'); assertEq(list[3].price, 50 * STARTING_GIANTS.secondMult, 'drugi szczebel × mnożnik');
+            list.slice(0, 3).forEach((s, i) => { const f = s.price / before[i] / STARTING_GIANTS.giantMult; assert(f >= 0.6 - 1e-9 && f <= 1.6 + 1e-9, `czynnik ${f}`); });
             orders.add(list.slice(0, 3).map(s => s.symbol + ':' + Math.round(s.price)).sort((a, b) => Number(b.split(':')[1]) - Number(a.split(':')[1])).map(x => x.split(':')[0]).join(''));
         }
         assert(orders.size >= 3, `kolejność gigantów różna w różnych grach (${[...orders].join(',')})`);
