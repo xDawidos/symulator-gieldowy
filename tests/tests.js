@@ -11030,6 +11030,19 @@ group('0.15.5: Budownictwo i banki (przetargi, podwykonawcy, przejęcia pionowe,
         }
     });
 
+
+    test('B1: spółka budowlana założona po starcie gry (bez constructionStats) dostaje statystyki i składa oferty', () => {
+        const veteran = mkB('VET', { experience: 30 }), newcomer = mkB('NEW'), client = makeCompany('KLI', { cash: 5_000_000 });
+        delete newcomer.constructionStats; // jak spółka z debiutu lub wydzielenia
+        resetWorld([client, veteran, newcomer]);
+        const id = requestConstructionTender(client, { id: 'warehouse' }, null);
+        const tender = activeTenders.find(t => t.id === id);
+        tick(120);
+        assert(newcomer.constructionStats && Number.isFinite(newcomer.constructionStats.experience), 'statystyki zainicjowane');
+        assert(tender.bids.some(bid => getEntityKey(bid.bidder) === 'NEW'), 'nowa spółka składa ofertę');
+        assert(!(Array.isArray(client.sector) && client.sector.includes('Budowlany')) && !client.constructionStats, 'zamawiający spoza branży nie dostaje statystyk');
+    });
+
     test('B1: okno wygranych jest zapisywane (pole opcjonalne)', () => {
         constructionAwardLog = [{ q: 7, sym: 'AAA' }, { q: 8, sym: 'BBB' }];
         const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));

@@ -944,12 +944,13 @@ function getBuilderSpeedMultiplier(builder) {
  * i spełnia wymagania projektu.
  */
 function generateAIBids() {
-    const builders = stocks.filter(company =>
-        !company.isBankrupt &&
-        !company.isPlayer &&
-        company.constructionStats &&
-        canCompanyBid(company)
-    );
+    // 0.15.5 B0/B1: spółki budowlane, które powstały po starcie gry (debiuty, wydzielenia), nie miały constructionStats
+    // i nigdy nie składały ofert — rynek przetargów tworzyło tylko 7 pierwotnych wykonawców. Teraz też je inicjalizujemy.
+    const builders = stocks.filter(company => {
+        if (company.isBankrupt || company.isPlayer) return false;
+        if (!company.constructionStats && !company.assetType && isConstructionCompany(company)) initConstructionStats(company);
+        return company.constructionStats && canCompanyBid(company);
+    });
 
     if (builders.length === 0) return;
 
