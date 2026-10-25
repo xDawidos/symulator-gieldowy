@@ -1391,7 +1391,7 @@ function renderChartSVGForStock(stock, svgAreaElement, width, height) {
     svg.style.display = "block";
 
     const padding = { top: 10, bottom: 20, left: 45, right: 10 };
-    const chartWidth = width - padding.left - padding.right;
+    let chartWidth = width - padding.left - padding.right;
     const chartHeight = height - padding.top - padding.bottom;
 
     let dataToDraw, minPrice, maxPrice, historyForMapping;
@@ -1418,6 +1418,10 @@ function renderChartSVGForStock(stock, svgAreaElement, width, height) {
     }
 
     const yAxis = calculateNiceYAxisRange(minPrice, maxPrice);
+    // 0.15.4 P1: lewy margines z najdłuższej etykiety osi (stałe 45 px ucinało liczby typu „13 000,00”)
+    const labelChars = Math.max(...[yAxis.min, yAxis.max].map(v => formatNumberPl(v, 2).length));
+    padding.left = Math.max(padding.left, Math.ceil(labelChars * 6.8) + 14);
+    chartWidth = width - padding.left - padding.right;
     const getX = (index, historyLength) => padding.left + (index / Math.max(1, historyLength - 1)) * (chartWidth - 20) + 10;
     const getY = (price) => padding.top + chartHeight - ((price - yAxis.min) / Math.max(0.1, yAxis.max - yAxis.min)) * chartHeight;
 

@@ -9830,6 +9830,21 @@ group('0.15.4: Poprawki z gry 3 (licznik, okna, wykres, dywidenda, split, limit 
             assert(m2.hidden && b2.getAttribute('aria-expanded') === 'false', 'zmiana rozmiaru okna zamyka menu (położenie przestaje być aktualne)');
         } finally { row.remove(); }
     });
+
+    test('P1: wykres — lewy margines mieści najdłuższą etykietę osi (wysokie kursy nie są przycinane)', () => {
+        const stock = mk('TA', { price: 4_000_000 });
+        stock.lineHistory = [4_000_000, 4_300_000, 4_100_000, 4_650_000].map((price, i) => ({ time: 1000 + i * 1000, price }));
+        const area = document.createElement('div'); area.style.cssText = 'width:420px;height:200px'; document.body.appendChild(area);
+        const saved = { ...playerChartSettings };
+        try {
+            playerChartSettings.type = 'line'; playerChartSettings.lineInterval = 1000;
+            renderChartSVGForStock(stock, area, 420, 200);
+            const labels = [...area.querySelectorAll('text.chart-axis-label')];
+            assert(labels.length >= 2, 'etykiety osi Y narysowane');
+            const cut = labels.filter(t => t.getBBox().x < 0).map(t => t.textContent);
+            assertEq(cut.join('|'), '', 'etykiety wystające poza lewą krawędź wykresu');
+        } finally { Object.assign(playerChartSettings, saved); area.remove(); }
+    });
 });
 
 async function runAllTests() {
