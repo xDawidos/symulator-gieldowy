@@ -10106,6 +10106,60 @@ group('0.15.4: Poprawki z gry 3 (licznik, okna, wykres, dywidenda, split, limit 
         const treasury = governmentTreasury; governmentTreasury = 100;
         try { assertEq(delistWithBuyout(weakest), null, 'skarb nie pokrywa wykupu'); assert(stocks.includes(weakest), 'spółka zostaje na giełdzie'); } finally { governmentTreasury = treasury; }
     });
+
+    // --- P6: limit różnorodności i etykieta sektora głównego ---
+    const diversified = (sectors, shares) => {
+        const s = mk('DIV', { sector: [sectors[0]] }); s.segments = sectors.map((sector, i) => ({ sector, subsector: null, share: shares[i] })); s.sector = sectors.slice();
+        s.fundamentals = { revenue: 1_000_000 }; resetWorld([s]);
+        return s;
+    };
+
+    test('P6: klastry sektorów — powiązane sektory liczą się razem; limit 2 niepowiązanych klastrów w segmentach spółki', () => {
+        assertEq(countSectorClusters(['Technologia', 'Gaming', 'Nieruchomości']), 2, 'Technologia i Gaming to jeden klaster');
+        assertEq(countSectorClusters(['Przemysł', 'Finanse', 'Medycyna']), 3, 'trzy niepowiązane sektory');
+        assertEq(countSectorClusters(['Żywność', 'Dobra konsumpcyjne', 'Media']), 1, 'łańcuch powiązań = jeden klaster');
+        const s = diversified(['Przemysł', 'Finanse'], [0.6, 0.4]);
+        assert(wouldExceedDiversity(s, 'Medycyna'), 'trzeci niepowiązany klaster ponad limit');
+        assert(!wouldExceedDiversity(s, 'Obronność'), 'Obronność powiązana z Przemysłem');
+        assertEq(startExpansion(s, 'Medycyna'), null, 'rozszerzenie ponad limit odrzucone');
+        for (let i = 0; i < 300; i++) { const picked = pickExpansionSector(s); assert(picked === null || !wouldExceedDiversity(s, picked), `losowany sektor ${picked} mieści się w limicie`); }
+        const t = diversified(['Technologia', 'Gaming'], [0.7, 0.3]); t.strategy = { process: { type: 'expand', sector: 'Nieruchomości', related: false, cost: 1 }, growth: null, pivot: null };
+        assertEq(resolveExpansion(t, 0, 1), 'success', 'drugi klaster (Nieruchomości) dozwolony');
+        assert(t.segments.some(seg => seg.sector === 'Nieruchomości'), 'segment dopisany');
+        for (let i = 0; i < 300; i++) { const picked = pickPivotSector(t); assert(picked === null || !wouldExceedDiversity(t, picked), `pivot do ${picked} w limicie`); }
+    });
+
+    test('P6: limit dominacji — udział w kapitalizacji ponad 10% obniża mnożnik wyceny (najwyżej −35%); mały rynek bez kary', () => {
+        const small = [mk('S1'), mk('S2')]; resetWorld(small); macro.quarter = 31;
+        assertEq(getDominanceFactor(small[0]), 1, 'poniżej 40 spółek zwykłych bez kary');
+        const list = Array.from({ length: 45 }, (_, i) => Object.assign(mk(`D${i}`, { price: 10 }), { totalShares: 10_000 })); // po 100 000 zł
+        list[0].price = 4000;                                                                                              // 40 000 000 zł ≈ 90% rynku
+        resetWorld(list); macro.quarter = 32;
+        assertNear(getCapitalizationShare(list[0]), 40_000_000 / (40_000_000 + 44 * 100_000), 'udział lidera', 1e-9);
+        assertEq(getDominanceFactor(list[0]), 1 - DOMINANCE_MAX_PENALTY, 'kara ograniczona do −35%');
+        assertEq(getDominanceFactor(list[1]), 1, 'mała spółka bez kary');
+        list[0].price = 70;                                                                                               // 700 000 zł ≈ 13,7% rynku
+        macro.quarter = 33;
+        const share = getCapitalizationShare(list[0]);
+        assertNear(getDominanceFactor(list[0]), 1 - (share - DOMINANCE_FREE_SHARE) * DOMINANCE_PENALTY_SLOPE, 'kara proporcjonalna 1,5% za punkt', 1e-9);
+        assert(getDominanceFactor(list[0]) < 1 && getDominanceFactor(list[0]) > 1 - DOMINANCE_MAX_PENALTY, 'kara pośrednia');
+        const m0 = getValuationMultiplier(list[1]); assert(getValuationMultiplier(list[0]) < m0, 'lider wyceniany ostrożniej niż mała spółka z tym samym sektorem');
+    });
+
+    test('P6: wchłonięcie córki z trzeciego klastra nie dodaje segmentu; sektor główny i etykieta liczone z segmentów po każdej zmianie', () => {
+        const parent = diversified(['Przemysł', 'Finanse'], [0.6, 0.4]); parent.fundamentals = { revenue: 1_000_000 };
+        const child = mk('KID', { sector: ['Medycyna'] }); child.fundamentals = { revenue: 300_000 }; child.segments = [{ sector: 'Medycyna', subsector: null, share: 1 }];
+        mergeChildSegment(parent, child);
+        assertEq(parent.segments.length, 2, 'nadal 2 segmenty (Medycyna dopisana do głównego)');
+        assertEq(countSectorClusters(parent.segments.map(seg => seg.sector)), 2, 'limit zachowany');
+        // sektor główny to największy segment po zmianie udziałów (nie pierwszy element listy)
+        const tech = diversified(['Technologia', 'Nieruchomości'], [0.6, 0.4]);
+        assertEq(getMainSector(tech), 'Technologia', 'główny: Technologia');
+        shiftSegmentShare(tech, 'Nieruchomości', 0.3);
+        assertEq(getMainSector(tech), 'Nieruchomości', 'po przesunięciu udziału główny: Nieruchomości');
+        assertEq(tech.sector[0], 'Nieruchomości', 'etykieta sektorów zaczyna od głównego');
+        assert(getStockActivityLabel(tech).startsWith('Nieruchomości'), 'opis działalności zaczyna od największego segmentu');
+    });
 });
 
 async function runAllTests() {

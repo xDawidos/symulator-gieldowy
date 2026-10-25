@@ -3385,6 +3385,32 @@ function debugTriggerMarketHalt(level = 1, durationSec = 15) {
     triggerMarketHalt(level, durationSec, level === 1 ? -0.075 : (level === 2 ? -0.135 : -0.21));
 }
 
+// 0.15.4 P6: limit dominacji. Jedna spółka (Orzeł Telekom, Cortex, Biurowce Obsługi Rachunkowej) potrafiła mieć 20–33% kapitalizacji
+// rynku i niemal stale zasiadała w górnej trójce. Udział w kapitalizacji ponad próg obniża mnożnik wyceny (nasycenie rynku, regulatorzy,
+// ryzyko koncentracji) — pozostałe spółki mogą wejść na czoło. Rynek poniżej 40 spółek zwykłych (testy, wczesne światy) bez kary.
+const DOMINANCE_FREE_SHARE = 0.10;
+const DOMINANCE_PENALTY_SLOPE = 1.5;
+const DOMINANCE_MAX_PENALTY = 0.35;
+const DOMINANCE_MIN_COMPANIES = 40;
+let dominanceCache = { quarter: null, count: -1, shares: new Map() };
+
+/** Udział spółki w kapitalizacji zwykłych spółek (odświeżany raz na kwartał); 0 poza zwykłymi spółkami. */
+function getCapitalizationShare(stock) {
+    const quarter = typeof macro === 'object' && macro ? macro.quarter : 0;
+    if (dominanceCache.quarter !== quarter || dominanceCache.count !== stocks.length) {
+        const ordinary = stocks.filter(s => !s.isBankrupt && !s.assetType && !s.isBankStock && !s.marketOperator && Number(s.price) > 0);
+        const total = ordinary.reduce((sum, s) => sum + s.price * s.totalShares, 0);
+        dominanceCache = { quarter, count: stocks.length, shares: new Map(ordinary.length >= DOMINANCE_MIN_COMPANIES && total > 0 ? ordinary.map(s => [s.symbol, s.price * s.totalShares / total]) : []) };
+    }
+    return dominanceCache.shares.get(stock.symbol) || 0;
+}
+
+/** Mnożnik wyceny za dominację: 1 do 10% kapitalizacji rynku, potem −1,5% za każdy punkt procentowy (najwyżej −35%). */
+function getDominanceFactor(stock) {
+    const over = getCapitalizationShare(stock) - DOMINANCE_FREE_SHARE;
+    return over > 0 ? 1 - Math.min(DOMINANCE_MAX_PENALTY, over * 100 * DOMINANCE_PENALTY_SLOPE / 100) : 1;
+}
+
 /** Mnożnik C/Z dla spółki: faza cyklu (wg bety sektora) i poziom stóp procentowych. */
 function getValuationMultiplier(stock) {
     const profile = getSectorProfile(stock);
@@ -3396,7 +3422,7 @@ function getValuationMultiplier(stock) {
     const interest = typeof getAristocratValuationFactor === 'function' ? getAristocratValuationFactor(stock) : 1; // zainteresowanie arystokratą
     const projects = typeof getSpecialProjectValuation === 'function' ? getSpecialProjectValuation(stock) : 1; // projekty specjalne
     const starMult = stock.marketStar?.type === 'unicorn' ? 1.25 : (stock.marketStar?.type === 'fading_star' ? 0.80 : 1);
-    return Math.max(0.4, Math.min(2.0, cycleMult * rateMult * sectorMult * interest * projects * starMult));
+    return Math.max(0.4, Math.min(2.0, cycleMult * rateMult * sectorMult * interest * projects * starMult * getDominanceFactor(stock)));
 }
 
 /** Szansa na zdarzenie pozytywne zależnie od fazy (eventy rynkowe). */

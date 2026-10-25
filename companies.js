@@ -11083,6 +11083,24 @@ function shiftSegmentShare(stock, sector, delta) {
     return moved;
 }
 
+// 0.15.4 P6: limit różnorodności — segmenty spółki mogą należeć do najwyżej 2 niepowiązanych klastrów sektorów
+// (klaster = sektory połączone parami RELATED_SECTOR_PAIRS). Konglomerat Technologia + Nieruchomości + Gaming (3 klastry) jest niemożliwy.
+const MAX_UNRELATED_CLUSTERS = 2;
+
+/** Liczba niepowiązanych klastrów w liście sektorów (połączone składowe grafu powiązań). */
+function countSectorClusters(sectors) {
+    const list = [...new Set(sectors)];
+    const parent = new Map(list.map(sector => [sector, sector]));
+    const find = sector => { while (parent.get(sector) !== sector) sector = parent.get(sector); return sector; };
+    for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) if (areSectorsRelated(list[i], list[j])) parent.set(find(list[i]), find(list[j]));
+    return new Set(list.map(find)).size;
+}
+
+/** Czy dodanie sektora do segmentów spółki przekroczyłoby limit różnorodności. */
+function wouldExceedDiversity(stock, sector) {
+    return countSectorClusters([...stock.segments.map(seg => seg.sector), sector]) > MAX_UNRELATED_CLUSTERS;
+}
+
 function canStartExpansion(stock) {
     const strategy = stock.strategy;
     return isStrategyCompany(stock) && !(strategy?.process) && !(strategy?.pivot) && stock.segments.length < MAX_SEGMENTS
@@ -11094,14 +11112,14 @@ function canStartExpansion(stock) {
 function pickExpansionSector(stock) {
     const have = new Set(stock.segments.map(seg => seg.sector));
     const main = getMainSector(stock);
-    const free = SECTOR_NAMES.filter(name => !have.has(name) && name !== 'Bankowość');
+    const free = SECTOR_NAMES.filter(name => !have.has(name) && name !== 'Bankowość' && !wouldExceedDiversity(stock, name));
     const related = free.filter(name => have.size && [...have].some(sector => areSectorsRelated(sector, name)));
     if (related.length && Math.random() < 0.8) return getRandomElement(related);
     return free.length ? getRandomElement(free) : null;
 }
 
 function startExpansion(stock, sector, quarter = getStrategyQuarter(), by = 'ceo') {
-    if (!sector || stock.segments.some(seg => seg.sector === sector)) return null;
+    if (!sector || stock.segments.some(seg => seg.sector === sector) || wouldExceedDiversity(stock, sector)) return null;
     const cost = Math.round(getAnnualRevenue(stock) * getRandomInRange(...EXPANSION_COST));
     payStrategyCost(stock, cost, 'external:rozszerzenie', `Rozszerzenie o segment ${sector}`); // gotówka → budowa nowego segmentu (aktywa bez zmian do rozliczenia)
     const related = stock.segments.some(seg => areSectorsRelated(seg.sector, sector));
@@ -11118,7 +11136,7 @@ function resolveExpansion(stock, roll = Math.random(), quarter = getStrategyQuar
     if (!process || process.type !== 'expand') return null;
     stock.strategy.process = null;
     const chance = process.related ? EXPANSION_SUCCESS.related : EXPANSION_SUCCESS.unrelated;
-    if (roll < chance && stock.segments.length < MAX_SEGMENTS && !stock.segments.some(seg => seg.sector === process.sector)) {
+    if (roll < chance && stock.segments.length < MAX_SEGMENTS && !stock.segments.some(seg => seg.sector === process.sector) && !wouldExceedDiversity(stock, process.sector)) {
         addStockSegment(stock, process.sector, EXPANSION_START_SHARE);
         stock.strategy.growth = { sector: process.sector, target: getRandomInRange(...EXPANSION_TARGET_SHARE), step: getRandomInRange(...EXPANSION_STEP) };
         noteStrategyStat('expansionsDone');
@@ -11379,7 +11397,8 @@ function getCeoPivotChance(stock) {
 function pickPivotSector(stock) {
     const main = getMainSector(stock);
     const have = new Set(stock.segments.map(seg => seg.sector));
-    const pool = stock.segments.length >= MAX_SEGMENTS ? [...have].filter(name => name !== main) : SECTOR_NAMES.filter(name => name !== main && name !== 'Bankowość');
+    const pool = stock.segments.length >= MAX_SEGMENTS ? [...have].filter(name => name !== main) : SECTOR_NAMES.filter(name => name !== main && name !== 'Bankowość' && (have.has(name) || !wouldExceedDiversity(stock, name)));
+    if (!pool.length) return null;
     const related = pool.filter(name => areSectorsRelated(main, name));
     return related.length && Math.random() < 0.5 ? getRandomElement(related) : getRandomElement(pool);
 }
@@ -11387,7 +11406,7 @@ function pickPivotSector(stock) {
 function startPivot(stock, toSector = null, quarter = getStrategyQuarter(), by = 'ceo') {
     const from = getMainSector(stock);
     const to = toSector && toSector !== from ? toSector : pickPivotSector(stock);
-    if (!to || to === from || (!stock.segments.some(seg => seg.sector === to) && stock.segments.length >= MAX_SEGMENTS)) return null;
+    if (!to || to === from || (!stock.segments.some(seg => seg.sector === to) && (stock.segments.length >= MAX_SEGMENTS || wouldExceedDiversity(stock, to)))) return null;
     const cost = Math.round(getAnnualRevenue(stock) * PIVOT_COST);
     payStrategyCost(stock, cost, 'external:pivot', `Zmiana profilu na ${to}`);
     adjustBalanceSheet(stock, { assets: -cost, retainedEarnings: -cost });
@@ -12701,7 +12720,7 @@ function mergeChildSegment(parent, child) {
     const share = Math.min(0.6, cr / pr); // revenue matki zawiera już przychody córki
     const sector = getMainSector(child);
     const existing = parent.segments.find(seg => seg.sector === sector);
-    if (existing || parent.segments.length >= 3 || !sector || share < 0.05) { // segment < 5% przychodów dopisany do głównego
+    if (existing || parent.segments.length >= 3 || !sector || share < 0.05 || wouldExceedDiversity(parent, sector)) { // segment < 5% przychodów (albo ponad limit różnorodności) dopisany do głównego
         parent.segments.forEach(seg => { seg.share *= 1 - share; });
         (existing || [...parent.segments].sort((a, b) => b.share - a.share)[0]).share += share;
         refreshSectorsFromSegments(parent);
