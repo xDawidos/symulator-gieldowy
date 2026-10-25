@@ -9934,7 +9934,7 @@ group('0.15.4: Poprawki z gry 3 (licznik, okna, wykres, dywidenda, split, limit 
         aiCompetitors[0].loans = [{ id: 'l1', amount: 1000, collateral: { symbol: 'SPL', quantity: 100 } }];
         const fund = corporation.managers[0].fund; fund.portfolio.SPL = { shares: 40, avgPrice: 1900 };
         commercialBanks[0].stockPortfolio = { SPL: { shares: 70, avgPrice: 2200 } };
-        etfs.push({ symbol: 'TEF', name: 'Test ETF', holdings: { SPL: 25 }, cash: 0 });
+        etfs.push({ symbol: 'TEF', name: 'Test ETF', holdings: { SPL: 25 }, cash: 0, units: 100, price: 1, priceHistory: [] });
         playerFund.pawnLoans = [{ id: 'p1', symbol: 'SPL', shares: 20, principal: 1000, weeksLeft: 5, missed: 0 }];
         a.lineHistory = [{ time: 1, price: 2300 }, { time: 2, price: 2400 }];
         a.candlestickHistory = [{ time: 1, open: 2300, high: 2500, low: 2200, close: 2400 }];
@@ -10003,6 +10003,45 @@ group('0.15.4: Poprawki z gry 3 (licznik, okna, wykres, dywidenda, split, limit 
         assertEq(b.price, 480, 'kurs po wczytaniu'); assertEq(b.totalShares, 50_000, 'akcje po wczytaniu'); assertEq(b.splitHistory.at(-1).f, 5, 'znacznik splitu w zapisie');
         assertEq(playerPortfolio.SPL.shares, 500, 'pakiet funduszu po wczytaniu'); assertNear(getFundNav(), nav, 'NAV po wczytaniu', 1e-9);
         assertEq(checkWorldInvariants().join('|'), problems, 'niezmienniki po wczytaniu');
+    });
+
+    test('P4b: konsolidacja 1:10 — akcje ÷10, kurs ×10, ułamki akcji wypłacone gotówką z kasy spółki, wartość pozycji i NAV bez zmian', () => {
+        const { a, owner } = splitWorld(0.4);
+        a.isTradeLocked = true; a.belowOneTicks = 500;
+        playerPortfolio.SPL.shares = 107; playerPortfolio.SPL.lockedShares = 25; // 10,7 akcji po konsolidacji → 10 + 0,7 w gotówce
+        playerWallet.portfolio.SPL.shares = 3;                                  // 0,3 akcji → pakiet znika, wypłata gotówką
+        aiCompetitors[0].portfolio.SPL.shares = 305;
+        a.sharesHeld = getTrackedHeldShares(a);
+        const nav0 = getFundNav(), walletCash0 = playerWallet.cash, companyCash0 = a.cash, problems0 = checkWorldInvariants().join('|'), cap0 = a.price * a.totalShares;
+        const entry = applyShareCountChange(a, 1 / 10);
+        assert(entry && entry.kind === 'reverse' && Math.abs(entry.ratio - 10) < 1e-9, 'wpis konsolidacji 1:10');
+        assertEq(a.price, 4, 'kurs ×10'); assertEq(a.totalShares, 1000, 'akcje ÷10'); assertNear(a.price * a.totalShares, cap0, 'kapitalizacja bez zmian', 1e-9);
+        assertEq(playerPortfolio.SPL.shares, 10, 'fundusz: ułamek odcięty'); assertEq(playerPortfolio.SPL.lockedShares, 2, 'zastaw ÷10 w dół');
+        assert(!playerWallet.portfolio.SPL, 'pakiet poniżej jednej akcji znika');
+        assertNear(playerWallet.cash - walletCash0, 0.3 * 4, 'gotówka za 0,3 akcji po nowym kursie');
+        assertEq(aiCompetitors[0].portfolio.SPL.shares, 30, 'bot');
+        assertEq(owner.equityStakes.SPL, 50, 'pakiet spółki');
+        assertNear(getFundNav(), nav0, 'NAV funduszu (ułamek wypłacony gotówką)', 1e-9);
+        assert(companyCash0 - a.cash > 0 && near(companyCash0 - a.cash, entry.fractionCash), 'wypłatę za ułamki ponosi spółka');
+        assertEq(a.sharesHeld, getTrackedHeldShares(a), 'akcje w obrocie = suma posiadaczy');
+        assertEq(checkWorldInvariants().join('|'), problems0, 'niezmienniki bez zmian');
+        assertEq(a.fundamentals.fairValue, 25000, 'wartość godziwa ×10');
+        // kurs wrócił powyżej 1,5 zł, więc kolejny tik zdejmuje blokadę handlu poniżej 1 zł
+        marketHalt = createMarketHaltState(); updateStockPrices();
+        assert(!a.isTradeLocked, 'blokada handlu zdjęta po konsolidacji');
+    });
+
+    test('P4b: propozycja konsolidacji — próg 1 zł, krotność tak, by kurs wyniósł ≥ 3 zł; wyłączony przełącznik nie zmienia reszty', () => {
+        assertEq(getSplitProposal(1), null, 'dokładnie 1 zł — bez zmian');
+        assertEq(JSON.stringify(getSplitProposal(0.4)), '{"kind":"reverse","ratio":10}', '0,40 zł → 1:10');
+        assertEq(getSplitProposal(0.99).ratio, 5, '0,99 zł → 1:5'); assertEq(getSplitProposal(0.01).ratio, 100, '0,01 zł → 1:100');
+        const { a } = splitWorld(0.4); a.price = 0.4;
+        const random = Math.random, saved = { ...SPLIT_SETTINGS };
+        try {
+            Math.random = () => 0.1;
+            SPLIT_SETTINGS.reverse = false; assertEq(processSplitsQuarterly().length, 0, 'przełącznik wyłączony'); assertEq(a.price, 0.4, 'kurs bez zmian');
+            SPLIT_SETTINGS.reverse = true; assertEq(processSplitsQuarterly().length, 1, 'konsolidacja przy 20%'); assertEq(a.price, 4, '0,40 zł → 4 zł');
+        } finally { Math.random = random; Object.assign(SPLIT_SETTINGS, saved); }
     });
 });
 

@@ -14,7 +14,7 @@ const SPLIT_TARGET_MAX_PRICE = 700;    // po splicie kurs nie powinien przekracz
 const REVERSE_TARGET_MIN_PRICE = 3;    // po konsolidacji kurs powinien wynieść co najmniej tyle
 const SPLIT_COOLDOWN_QUARTERS = 8;
 // Przełączniki (debug / pomiary): wyłączenie rodzaju zmiany nie zmienia reszty gry.
-const SPLIT_SETTINGS = { split: true, reverse: false };
+const SPLIT_SETTINGS = { split: true, reverse: true };
 const SPLIT_LOG_LIMIT = 60;
 let splitLog = [];                     // { symbol, name, quarter, kind, ratio, priceBefore, priceAfter, fractionCash }
 
