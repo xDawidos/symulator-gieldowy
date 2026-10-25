@@ -11062,6 +11062,24 @@ group('0.15.5: Budownictwo i banki (przetargi, podwykonawcy, przejęcia pionowe,
         });
     });
 
+
+    test('B1: kara za opóźnienie przy przeciążonym wykonawcy — bilans pieniędzy zgodny, gotówka żadnej strony nie jest ujemna', () => {
+        const { client, builder } = standardWorld({ builderCash: 900_000 });
+        for (let i = 0; i < 3; i++) constructionProjects.push({ id: 'o' + i, settled: false, escrowBalance: 0, builder, tender: { clientCompany: client, buildingType: { id: 'z' + i } } });
+        builder.constructionStats.maxProjects = 5;
+        const money0 = moneyInModel(), j0 = externalMark();
+        const { project } = awardContract(client);
+        constructionProjects = constructionProjects.filter(p => p.id.startsWith('o') === false);
+        project.deadlineMs = project.workRequiredMs * 0.25; // termin nierealny: opóźnienie i kara umowna
+        project.delayChance = 0;
+        runUntil(() => project.settled, 60000);
+        assertEq(project.status, 'completed', 'ukończona mimo opóźnienia');
+        assert(project.settlement.penalty > 0, 'kara umowna naliczona: ' + project.settlement.penalty);
+        assert(client.cash >= 0 && builder.cash >= 0, 'gotówka nieujemna: ' + client.cash + ' / ' + builder.cash);
+        assertNear(moneyInModel() - money0, externalNetFlow(j0), 'bilans pieniędzy');
+        assert(builder.constructionReputation < 50, 'opóźnienie obniża reputację: ' + builder.constructionReputation);
+    });
+
     test('B1: okno wygranych jest zapisywane (pole opcjonalne)', () => {
         constructionAwardLog = [{ q: 7, sym: 'AAA' }, { q: 8, sym: 'BBB' }];
         const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
