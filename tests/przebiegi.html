@@ -19,6 +19,7 @@
         nie zależy od dławienia timerów przeglądarki. Zapis gry w ramce jest wyłączony (ramka nie czyta, nie zapisuje i nie kasuje zapisu gracza). Wyniki: <code>localStorage["__sim_&lt;label&gt;"]</code>.</p>
     <div id="status">Start…</div>
     <iframe id="frame"></iframe>
+    <div id="p0154-view" hidden></div>
 <script>
 'use strict';
 const params = new URLSearchParams(location.search);
@@ -818,7 +819,138 @@ const PROBE = `(function () {
     };
 })();`;
 
+// 0.15.4 P0: sondy diagnostyczne — liczba spółek wg źródła w czasie, kursy wg branży, Orzeł Telekom, segmenty, lombard i Wrona.
+// Dopina się do __sim.sample() i __sim.finish(); wynik w polu p0154 każdego przebiegu. (Bez znaków odwrotnego apostrofu i dolara z nawiasem.)
+const PROBE_0154 = `(function () {
+    const s = window.__sim, Q = s.p0154 = { counts: [], born: [], gone: [], sectors: [], px: [], ort: [], seg: [], lomb: [], calls: {}, sources0: null };
+    const inet = x => typeof isInternetMarketStock === 'function' && isInternetMarketStock(x);
+    let initial = null, prevSrc = null;
+    const srcOf = x => {
+        if (x.assetType === 'Startup') return 'startup';
+        if (x.isSubsidiaryOf) return x.spunOffFrom ? 'carve-out' : 'zalezna';
+        if (x.isMunicipal) return 'miejska';
+        if (x.assetType) return 'stala';
+        if (x.isBankStock) return 'bank';
+        if (x.marketOperator) return 'operator';
+        if (inet(x)) return 'internet';
+        if (x.spunOffFrom) return 'wydzielenie';
+        if (x.mafiaFront) return 'przykrywka';
+        return initial && initial.has(x.symbol) ? 'poczatkowa' : 'debiut';
+    };
+    const med = a => { if (!a.length) return null; const b = a.slice().sort((x, y) => x - y); return b.length % 2 ? b[(b.length - 1) / 2] : (b[b.length / 2 - 1] + b[b.length / 2]) / 2; };
+    for (const name of ['pawnShares', 'createPawnLoanOffer', 'executePawnLoan', 'createDebtTakeoverOffer', 'executeDebtTransfer', 'collectPawnDebt', 'maybeBotPawn', 'runPawnShopAI', 'runDebtCollectorAI']) {
+        const o = window[name];
+        if (typeof o === 'function') window[name] = function () { Q.calls[name] = (Q.calls[name] || 0) + 1; return o.apply(this, arguments); };
+    }
+    Q.sample = function () {
+        const alive = stocks.filter(x => !x.isBankrupt);
+        if (!initial) initial = new Set(alive.map(x => x.symbol));
+        const src = new Map(alive.map(x => [x.symbol, srcOf(x)]));
+        const by = {}; for (const v of src.values()) by[v] = (by[v] || 0) + 1;
+        Q.counts.push({ q: macro.quarter, domestic: getListedCompanyCount(), total: getTotalCompanyCount(), ui: alive.filter(x => x.price > 0).length, all: stocks.length, by });
+        if (prevSrc) {
+            const born = {}, gone = {};
+            for (const [sym, k] of src) if (!prevSrc.has(sym)) born[k] = (born[k] || 0) + 1;
+            for (const [sym, k] of prevSrc) if (!src.has(sym)) gone[k] = (gone[k] || 0) + 1;
+            Q.born.push({ q: macro.quarter, ...born }); Q.gone.push({ q: macro.quarter, ...gone });
+        }
+        prevSrc = src;
+        // kurs: rozkład i skrajności (bez ETF-ów)
+        const priced = alive.filter(x => x.price > 0 && x.assetType !== 'etf');
+        let lo = priced[0], hi = priced[0];
+        for (const x of priced) { if (x.price < lo.price) lo = x; if (x.price > hi.price) hi = x; }
+        Q.px.push({ q: macro.quarter, n: priced.length, lt1: priced.filter(x => x.price < 1).length, gt1000: priced.filter(x => x.price > 1000).length, gt3000: priced.filter(x => x.price > 3000).length,
+            min: lo ? [lo.symbol, +lo.price.toFixed(4)] : null, max: hi ? [hi.symbol, Math.round(hi.price)] : null });
+        // średni kurs wg branży (sektor główny) — co 4 kwartały
+        if (Q.counts.length % 4 === 1) {
+            const sec = {};
+            for (const x of alive.filter(isOrdinaryCompany)) { const k = (typeof getMainSector === 'function' ? getMainSector(x) : null) || '?'; (sec[k] = sec[k] || []).push(x.price); }
+            Q.sectors.push({ q: macro.quarter, by: Object.fromEntries(Object.entries(sec).map(([k, v]) => [k, { n: v.length, mean: v.reduce((a, b) => a + b, 0) / v.length, med: med(v) }])) });
+        }
+        // Orzeł Telekom: miejsce w kapitalizacji wśród zwykłych spółek
+        const ord = alive.filter(isOrdinaryCompany).map(x => ({ x, cap: getMarketCapValue(x) })).sort((a, b) => b.cap - a.cap);
+        const total = ord.reduce((a, b) => a + b.cap, 0), i = ord.findIndex(e => e.x.symbol === 'ORT'), o = i >= 0 ? ord[i].x : null;
+        Q.ort.push({ q: macro.quarter, rank: i >= 0 ? i + 1 : null, share: i >= 0 && total ? +(ord[i].cap / total).toFixed(4) : null, price: o ? Math.round(o.price) : null, health: o ? o.financialHealth : null,
+            segs: o ? (getStockSegments(o) || []).map(g => g.sector + ':' + (+g.share).toFixed(2)).join(',') : null, concern: o && typeof isConcern === 'function' ? isConcern(o) : null,
+            top3: ord.slice(0, 3).map(e => e.x.symbol), n: ord.length });
+        // segmenty: histogram i spółki z segmentami w niepowiązanych sektorach (klastry wg RELATED_SECTOR_PAIRS)
+        const hist = { 1: 0, 2: 0, 3: 0, '4+': 0 }, bad = [];
+        for (const x of alive.filter(c => !c.assetType && !c.isBankStock && !c.marketOperator)) {
+            const segs = getStockSegments(x) || [], sectors = [...new Set(segs.map(g => g.sector))];
+            hist[segs.length >= 4 ? '4+' : segs.length || 1]++;
+            const cluster = new Map(sectors.map(k => [k, k]));
+            const find = k => { while (cluster.get(k) !== k) k = cluster.get(k); return k; };
+            for (const a of sectors) for (const b of sectors) if (a < b && typeof areSectorsRelated === 'function' && areSectorsRelated(a, b)) cluster.set(find(a), find(b));
+            const k = new Set(sectors.map(find)).size;
+            if (k >= 3) bad.push(x.symbol + ':' + getStockActivityLabel(x).slice(0, 80) + ' | główny: ' + getMainSector(x) + ' | etykieta: ' + (x.sector || []).join('+'));
+        }
+        Q.seg.push({ q: macro.quarter, hist, indep3: bad.length, examples: bad.slice(0, 3),
+            // sektor główny (z segmentów) kontra pierwszy element listy sector (etykieta)
+            labelMismatch: alive.filter(c => !c.assetType && c.segments && c.sector && getMainSector(c) !== c.sector[0]).length });
+        // lombard i Wrona
+        const pawn = typeof getPawnShop === 'function' ? getPawnShop() : null, col = typeof getDebtCollector === 'function' ? getDebtCollector() : null;
+        let fundLoans = playerFund && playerFund.pawnLoans ? playerFund.pawnLoans.length : 0, principal = 0;
+        for (const m of (corporation && corporation.managers) || []) if (m.fund && m.fund.pawnLoans) { fundLoans += m.fund.pawnLoans.length; for (const l of m.fund.pawnLoans) principal += l.principal; }
+        const need = aiCompetitors.filter(a => { const nw = calculateNetWorth(a); return (a.loans && a.loans.some(l => (l.missedPayments || 0) > 0)) || a.cash / nw < 0.03; }).length;
+        const missed = aiCompetitors.reduce((n, a) => n + (a.loans ? a.loans.filter(l => l.bankId && (l.missedPayments || 0) > 0).length : 0), 0);
+        const aiPawn = aiCompetitors.reduce((n, a) => n + (a.loans ? a.loans.filter(l => l.pawnShopId || l.type === 'pawn' || l.isPawn).length : 0), 0);
+        Q.lomb.push({ q: macro.quarter, pawnCash: pawn ? Math.round(pawn.cash) : null, pawnPrice: pawn ? +pawn.price.toFixed(2) : null, fundLoans, principal: Math.round(principal), aiNeedy: need, aiBadLoans: missed, aiPawnLoans: aiPawn,
+            colCash: col ? Math.round(col.cash) : null, colPrice: col ? +col.price.toFixed(2) : null, colHoldings: col && col.holdingPortfolio ? Object.keys(col.holdingPortfolio).length : 0, bots: aiCompetitors.length });
+    };
+    Q.finish = function () {
+        const cnt = Q.counts, last = cnt[cnt.length - 1] || {}, over = n => cnt.filter(c => c.domestic > n).length;
+        const rank = Q.ort.filter(o => o.rank), top3 = rank.filter(o => o.rank <= 3).length;
+        return { counts: cnt, born: Q.born, gone: Q.gone, sectors: Q.sectors, px: Q.px, ort: Q.ort, seg: Q.seg, lomb: Q.lomb, calls: Q.calls,
+            summary: { domesticMax: Math.max(...cnt.map(c => c.domestic)), domesticLast: last.domestic, quartersOver115: over(115), quartersOver125: over(125), uiMax: Math.max(...cnt.map(c => c.ui)),
+                ortTop3: rank.length ? top3 / rank.length : null, ortRankLast: rank.length ? rank[rank.length - 1].rank : null, ortGone: Q.ort.some(o => !o.rank),
+                indep3Max: Math.max(0, ...Q.seg.map(g => g.indep3)), pxLt1Max: Math.max(0, ...Q.px.map(p => p.lt1)), pxGt3000Max: Math.max(0, ...Q.px.map(p => p.gt3000)) } };
+    };
+    const origSample = s.sample; s.sample = function () { origSample.apply(this, arguments); Q.sample(); };
+    const origFinish = s.finish; s.finish = function () { const r = origFinish.apply(this, arguments); r.p0154 = Q.finish(); return r; };
+})();`;
+
 const yieldNow = () => new Promise(resolve => { const ch = new MessageChannel(); ch.port1.onmessage = () => resolve(); ch.port2.postMessage(0); });
+
+// 0.15.4 P0: widok narzędzi deweloperskich — wykres liczby spółek w czasie (wg źródła), średni kurs wg branży (sortowanie po nagłówku),
+// licznik spółek wg źródła. Dane: p0154 z sondy PROBE_0154; przełącznik wybiera przebieg.
+function renderP0154(results) {
+    const ok = results.map((r, i) => ({ r, i })).filter(e => e.r.p0154);
+    if (!ok.length) return;
+    const box = document.getElementById('p0154-view');
+    const SERIES = [['domestic', 'krajowe (limit)'], ['zalezne', 'zależne'], ['miejska', 'miejskie'], ['startup', 'startupy'], ['wydzielenie', 'wydzielone'], ['ui', 'wszystkie na liście']];
+    const val = (c, k) => k === 'domestic' || k === 'ui' ? c[k] : k === 'zalezne' ? (c.by.zalezna || 0) + (c.by['carve-out'] || 0) : (c.by[k] || 0);
+    let sortKey = 'mean', sortDir = -1;
+    const draw = idx => {
+        const p = results[idx].p0154, W = 720, H = 220, pad = 36, n = p.counts.length;
+        const max = Math.max(1, ...p.counts.map(c => Math.max(...SERIES.map(([k]) => val(c, k)))));
+        const x = i => pad + (W - 2 * pad) * (n > 1 ? i / (n - 1) : 0), y = v => H - pad - (H - 2 * pad) * v / max;
+        const dashes = ['', '6 3', '2 3', '8 2 2 2', '4 4', '1 2'];
+        const lines = SERIES.map(([k, label], si) => '<polyline fill="none" stroke="currentColor" stroke-width="' + (k === 'domestic' ? 2.5 : 1.5) + '" stroke-dasharray="' + dashes[si] + '" opacity="' + (0.45 + 0.1 * si) + '" points="' + p.counts.map((c, i) => x(i).toFixed(1) + ',' + y(val(c, k)).toFixed(1)).join(' ') + '"><title>' + label + '</title></polyline>').join('');
+        const legend = SERIES.map(([k, label], si) => '<span style="margin-right:12px"><svg width="28" height="8"><line x1="0" y1="4" x2="28" y2="4" stroke="currentColor" stroke-width="2" stroke-dasharray="' + dashes[si] + '"/></svg> ' + label + '</span>').join('');
+        const last = p.counts[n - 1];
+        const born = {}, gone = {};
+        for (const b of p.born) for (const [k, v] of Object.entries(b)) if (k !== 'q') born[k] = (born[k] || 0) + v;
+        for (const g of p.gone) for (const [k, v] of Object.entries(g)) if (k !== 'q') gone[k] = (gone[k] || 0) + v;
+        const srcRows = Object.keys({ ...last.by, ...born, ...gone }).sort().map(k => '<tr><td>' + k + '</td><td>' + (last.by[k] || 0) + '</td><td>' + (born[k] || 0) + '</td><td>' + (gone[k] || 0) + '</td></tr>').join('');
+        const sec = p.sectors[p.sectors.length - 1] || { by: {} };
+        const rows = Object.entries(sec.by).map(([k, v]) => ({ k, ...v })).sort((a, b) => (typeof a[sortKey] === 'string' ? a[sortKey].localeCompare(b[sortKey]) : a[sortKey] - b[sortKey]) * sortDir);
+        const th = (key, label) => '<th style="cursor:pointer" data-sort="' + key + '">' + label + (sortKey === key ? (sortDir > 0 ? ' ▲' : ' ▼') : '') + '</th>';
+        box.querySelector('.p-body').innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" style="max-width:' + W + 'px;color:inherit" role="img" aria-label="Liczba spółek w czasie">' +
+            '<line x1="' + pad + '" y1="' + (H - pad) + '" x2="' + (W - pad) + '" y2="' + (H - pad) + '" stroke="currentColor" opacity=".4"/><line x1="' + pad + '" y1="' + pad + '" x2="' + pad + '" y2="' + (H - pad) + '" stroke="currentColor" opacity=".4"/>' +
+            '<text x="4" y="' + (pad + 4) + '" font-size="11" fill="currentColor">' + max + '</text><text x="4" y="' + (H - pad) + '" font-size="11" fill="currentColor">0</text>' +
+            '<text x="' + pad + '" y="' + (H - 12) + '" font-size="11" fill="currentColor">kw. ' + p.counts[0].q + '</text><text x="' + (W - pad - 40) + '" y="' + (H - 12) + '" font-size="11" fill="currentColor">kw. ' + last.q + '</text>' +
+            '<line x1="' + pad + '" y1="' + y(110) + '" x2="' + (W - pad) + '" y2="' + y(110) + '" stroke="currentColor" stroke-dasharray="1 4" opacity=".6"/><text x="' + (W - pad - 70) + '" y="' + (y(110) - 3) + '" font-size="10" fill="currentColor">limit 110</text>' + lines + '</svg>' +
+            '<div style="font-size:12px;margin:4px 0">' + legend + '</div>' +
+            '<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start"><div><b>Spółki wg źródła</b><table><tr><th>źródło</th><th>na końcu</th><th>powstało</th><th>zniknęło</th></tr>' + srcRows + '</table></div>' +
+            '<div><b>Średni kurs wg branży (sektor główny, kw. ' + sec.q + ')</b><table id="p-sec"><tr>' + th('k', 'branża') + th('n', 'spółek') + th('mean', 'średni kurs') + th('med', 'mediana') + '</tr>' +
+            rows.map(r => '<tr><td>' + r.k + '</td><td>' + r.n + '</td><td>' + r.mean.toFixed(2) + '</td><td>' + r.med.toFixed(2) + '</td></tr>').join('') + '</table></div></div>';
+        box.querySelectorAll('#p-sec th').forEach(h => { h.onclick = () => { const key = h.dataset.sort; sortDir = key === sortKey ? -sortDir : -1; sortKey = key; draw(idx); }; });
+    };
+    box.hidden = false;
+    box.innerHTML = '<h2 style="font-size:16px">Narzędzia deweloperskie 0.15.4 (P0)</h2><label>Przebieg: <select>' + ok.map(e => '<option value="' + e.i + '">' + (e.i + 1) + '</option>').join('') + '</select></label><div class="p-body"></div>';
+    box.querySelector('select').onchange = ev => draw(Number(ev.target.value));
+    draw(ok[0].i);
+}
 
 async function loadFrame() {
     const html = await (await fetch(TARGET, { cache: 'no-store' })).text();
@@ -838,6 +970,7 @@ async function oneRun(index) {
     w.eval(`isGamePaused = false; setGameSpeed(${SPEED}); if (gameTimers.autoSave) clearInterval(gameTimers.autoSave);`);
     if (PATCH) w.eval(PATCH);
     w.eval(PROBE);
+    w.eval(PROBE_0154);
     const quarterMs = 300000 / SPEED;
     const startQ = w.eval('macro.quarter');
     w.eval('__sim.sample()');
@@ -870,6 +1003,7 @@ async function oneRun(index) {
     }
     frame.srcdoc = '';
     statusEl.textContent = `${LABEL}: gotowe (${results.length} przebiegów).`;
+    try { renderP0154(results); } catch (e) { statusEl.textContent += ' Widok P0 nie powstał: ' + e; }
     window.__done = true;
 })();
 </script>
