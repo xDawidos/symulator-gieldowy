@@ -901,7 +901,9 @@ const PROBE_0154 = `(function () {
     Q.finish = function () {
         const cnt = Q.counts, last = cnt[cnt.length - 1] || {}, over = n => cnt.filter(c => c.domestic > n).length;
         const rank = Q.ort.filter(o => o.rank), top3 = rank.filter(o => o.rank <= 3).length;
-        return { counts: cnt, born: Q.born, gone: Q.gone, sectors: Q.sectors, px: Q.px, ort: Q.ort, seg: Q.seg, lomb: Q.lomb, calls: Q.calls,
+        const sl = typeof splitLog !== 'undefined' ? splitLog : [];
+        return { splits: { n: sl.length, split: sl.filter(e => e.kind === 'split').length, reverse: sl.filter(e => e.kind === 'reverse').length, fractionCash: Math.round(sl.reduce((a, e) => a + e.fractionCash, 0)), ratios: sl.slice(0, 12).map(e => (e.kind === 'split' ? '' : '1:') + e.ratio + (e.kind === 'split' ? ':1' : '')) },
+            counts: cnt, born: Q.born, gone: Q.gone, sectors: Q.sectors, px: Q.px, ort: Q.ort, seg: Q.seg, lomb: Q.lomb, calls: Q.calls,
             summary: { domesticMax: Math.max(...cnt.map(c => c.domestic)), domesticLast: last.domestic, quartersOver115: over(115), quartersOver125: over(125), uiMax: Math.max(...cnt.map(c => c.ui)),
                 ortTop3: rank.length ? top3 / rank.length : null, ortRankLast: rank.length ? rank[rank.length - 1].rank : null, ortGone: Q.ort.some(o => !o.rank),
                 indep3Max: Math.max(0, ...Q.seg.map(g => g.indep3)), pxLt1Max: Math.max(0, ...Q.px.map(p => p.lt1)), pxGt3000Max: Math.max(0, ...Q.px.map(p => p.gt3000)) } };
