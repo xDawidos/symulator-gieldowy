@@ -10005,6 +10005,18 @@ group('0.15.4: Poprawki z gry 3 (licznik, okna, wykres, dywidenda, split, limit 
         assertEq(checkWorldInvariants().join('|'), problems, 'niezmienniki po wczytaniu');
     });
 
+    test('P4a: portfel kredytów banku może zawierać liczby (LBO) i listy z zabezpieczeniem — split nie przerywa pętli kwartalnej, zabezpieczenie ×5', () => {
+        const { a } = splitWorld(2400);
+        commercialBanks[0].loanPortfolio = { LBO1: 5000, botX: [{ id: 'm1', collateral: { symbol: 'SPL', quantity: 40 } }, { id: 'm2', collateral: null }] };
+        commercialBanks[0].resaleOffer = { symbol: 'SPL', shares: 10, price: 2400 };
+        assert(applyShareCountChange(a, 5), 'split wykonany mimo liczbowego wpisu w portfelu kredytów');
+        assertEq(commercialBanks[0].loanPortfolio.botX[0].collateral.quantity, 200, 'zabezpieczenie hipoteczne ×5'); assertEq(commercialBanks[0].loanPortfolio.LBO1, 5000, 'wpis liczbowy bez zmian');
+        assertEq(commercialBanks[0].resaleOffer.shares, 50, 'oferta odsprzedaży ×5'); assertEq(commercialBanks[0].resaleOffer.price, 480, 'oferta odsprzedaży: kurs ÷5');
+        a.price = 2400; a.lastSplitQuarter = -99; commercialBanks[0].loanPortfolio.LBO2 = 1;
+        const random = Math.random; Math.random = () => 0.1;
+        try { assertEq(processSplitsQuarterly().length, 1, 'pętla kwartalna dzieli akcje bez wyjątku'); } finally { Math.random = random; }
+    });
+
     test('P4b: konsolidacja 1:10 — akcje ÷10, kurs ×10, ułamki akcji wypłacone gotówką z kasy spółki, wartość pozycji i NAV bez zmian', () => {
         const { a, owner } = splitWorld(0.4);
         a.isTradeLocked = true; a.belowOneTicks = 500;

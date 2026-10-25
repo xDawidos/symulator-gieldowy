@@ -89,7 +89,7 @@ function applyShareCountChange(stock, factor, { quarter = getSplitQuarter(), kin
     for (const bank of commercialBanks) {
         rescalePortfolio(bank.stockPortfolio, cash => { bank.cash += cash; });
         if (bank.resaleOffer?.symbol === symbol) { bank.resaleOffer.shares = floorShares(bank.resaleOffer.shares * factor); bank.resaleOffer.price /= divisor; }
-        for (const loans of Object.values(bank.loanPortfolio || {})) for (const loan of loans) if (loan.collateral?.symbol === symbol) loan.collateral.quantity = floorShares(loan.collateral.quantity * factor);
+        for (const loans of Object.values(bank.loanPortfolio || {})) if (Array.isArray(loans)) for (const loan of loans) if (loan.collateral?.symbol === symbol) loan.collateral.quantity = floorShares(loan.collateral.quantity * factor); // wartości liczbowe (LBO) pomijamy
     }
     for (const owner of stocks) {
         if (owner === stock) continue;
@@ -224,8 +224,10 @@ function processSplitsQuarterly() {
     for (const stock of [...stocks]) {
         const proposal = getSplitProposal(stock.price);
         if (!proposal || !canChangeShareCount(stock) || Math.random() >= SPLIT_CHANCE) continue;
-        const entry = executeSplit(stock, proposal);
-        if (entry) done.push(entry);
+        try {
+            const entry = executeSplit(stock, proposal);
+            if (entry) done.push(entry);
+        } catch (error) { console.error(`[split] ${stock.symbol}:`, error); } // błąd jednej spółki nie może zatrzymać pętli kwartalnej
     }
     return done;
 }

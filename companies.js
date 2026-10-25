@@ -2787,7 +2787,7 @@ function delistWithBuyout(stock) {
     removeStockFromGame(stock.symbol);
     purgeSymbolHolders(stock.symbol);
     for (const ai of aiCompetitors) for (const loan of ai.loans || []) if (loan.collateral?.symbol === stock.symbol) loan.collateral = null; // zastaw rozliczony wykupem
-    for (const bank of commercialBanks) for (const loans of Object.values(bank.loanPortfolio || {})) for (const loan of loans) if (loan.collateral?.symbol === stock.symbol) loan.collateral = null;
+    for (const bank of commercialBanks) for (const loans of Object.values(bank.loanPortfolio || {})) if (Array.isArray(loans)) for (const loan of loans) if (loan.collateral?.symbol === stock.symbol) loan.collateral = null;
     const text = `🚪 ${stock.name} (${stock.symbol}) znika z giełdy: rynek jest zatłoczony (${getListedCompanyCount()} spółek krajowych), a spółka należy do najsłabszych. Akcjonariusze dostają wykup po kursie +${Math.round(LISTING_DELIST_PREMIUM * 100)}% (${formatZl(offer)} za akcję).`;
     logEvent(text, 'market');
     if (typeof pushNews === 'function') pushNews(text, null);
@@ -2802,7 +2802,7 @@ function enforceListingLimitQuarterly() {
     let removed = 0;
     for (const stock of getDelistCandidates()) {
         if (removed >= LISTING_DELIST_MAX_PER_QUARTER || getListedCompanyCount() <= LISTING_DELIST_AT) break;
-        if (delistWithBuyout(stock) !== null) removed++;
+        try { if (delistWithBuyout(stock) !== null) removed++; } catch (error) { console.error(`[wycofanie] ${stock.symbol}:`, error); } // błąd jednej spółki nie zatrzymuje pętli kwartalnej
     }
     return removed;
 }
