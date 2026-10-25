@@ -28,7 +28,7 @@
 | Licznik w nagłówku | = lista | 142–181 (wszystkie instrumenty) | = wiersze tabeli (test) | ✅ |
 | Kurs w 1–3000 zł | 99% | 89% (6,5 r.), 86% (20 l.); kurs maks. 12,9 tys. / 297 tys. zł | 98–99% na końcu i średnio w czasie; kurs maks. 5,6 tys. / 9,8 tys. zł | ✅ (granica 99%: 98% w części serii) |
 | Wartość pozycji po splicie | bez zmian | — | testy jednostkowe (NAV, pakiety, ETF, zastaw, zapis) | ✅ |
-| Niezmienniki, ujemna gotówka, wyjątki JS | 0 | 0 / 0 / 0 | 0 / 0 / 0 (≈ 44 gry); wczesna wersja splitu przerywała pętlę kwartalną wyjątkiem — wyłapał to pierwszy przebieg, naprawione i objęte testem | ✅ |
+| Niezmienniki, ujemna gotówka, wyjątki JS | 0 | 0 / 0 / 0 | 0 / 0 / 0 (26 gier serii końcowych); wczesna wersja splitu przerywała pętlę kwartalną wyjątkiem — wyłapał to pierwszy przebieg, naprawione i objęte testem | ✅ |
 | Dywidenda poniżej progu | 0 wypłat | — | 0 z ≈ 8 tys. (6,5 r.) i ≈ 50 tys. (20 l.) wypłat | ✅ |
 | Orzeł Telekom w górnej 3 na końcu | ≤ 30% gier 20-letnich; żadna spółka > 30% | ORT 8/11 (73%), BOR 7/11, BEW 6/11; udział ORT na końcu 19% | **ORT 6/10 (60%), BOR 4/10, BEW 4/10**; udział ORT na końcu 14%; 6,5 roku: ORT 6/8 (baza 13/16) | ❌ nie osiągnięto (poprawa umiarkowana) |
 | Spółki z segmentami w ≥ 3 niepowiązanych klastrach | 0 | 7/11 gier (1–4 spółki) | 0/10 gier | ✅ |
