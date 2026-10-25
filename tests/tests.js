@@ -10146,6 +10146,35 @@ group('0.15.4: Poprawki z gry 3 (licznik, okna, wykres, dywidenda, split, limit 
         const m0 = getValuationMultiplier(list[1]); assert(getValuationMultiplier(list[0]) < m0, 'lider wyceniany ostrożniej niż mała spółka z tym samym sektorem');
     });
 
+    // --- P7: lombard ---
+    function pawnWorld() {
+        const shop = Object.assign(makeCompany('LOMB', { cash: 500_000 }), { assetType: 'PawnShop', price: 50, totalShares: 10_000 });
+        resetWorld([shop]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        society.priceLevel = 1; society.classes.poor = 0.22; economyCycle.phase = 'expansion';
+        return shop;
+    }
+
+    test('P7: klienci lombardu — średnio co najmniej 5 aktywnych pożyczek, pieniądze się zgadzają, gotówka nie spada poniżej zera', () => {
+        const shop = pawnWorld();
+        const cash0 = shop.cash, mark = externalMark(), active = [];
+        for (let week = 0; week < 100; week++) { const info = processPawnClientsWeekly(); if (week >= 12) active.push(info.active); assert(shop.cash >= 0, `gotówka lombardu ≥ 0 w tygodniu ${week}`); }
+        const avg = active.reduce((a, b) => a + b, 0) / active.length;
+        assert(avg >= 5, `średnio ${avg.toFixed(1)} aktywnych pożyczek klientów (cel ≥ 5)`);
+        assertNear(shop.cash - cash0, externalNetFlow(mark), 'zmiana gotówki lombardu = przepływy przez granicę modelu (wypłaty, spłaty, odsetki)', 1e-6);
+        assert(shop.retailStats.issued > 50 && shop.retailStats.repaid > 0 && shop.retailStats.forfeited >= 0, 'statystyki klientów');
+        assert(shop.retailStats.interest > 0, 'lombard zarabia na odsetkach');
+        assert(renderPawnClientsSummary(shop).includes('Aktywne pożyczki pod zastaw rzeczy'), 'panel lombardu pokazuje portfel klientów');
+    });
+
+    test('P7: popyt na lombard rośnie z udziałem klasy biednej i w recesji; brak lombardu — brak błędu', () => {
+        const shop = pawnWorld();
+        const base = getRetailLendingDemand();
+        society.classes.poor = 0.33; assert(getRetailLendingDemand() > base * 1.4, 'więcej biednych — większy popyt');
+        society.classes.poor = 0.22; economyCycle.phase = 'recession'; assert(getRetailLendingDemand() > base * 1.3, 'recesja zwiększa popyt');
+        economyCycle.phase = 'expansion'; shop.isBankrupt = true;
+        assertEq(processPawnClientsWeekly(), null, 'bez lombardu nic się nie dzieje');
+    });
+
     test('P6: wchłonięcie córki z trzeciego klastra nie dodaje segmentu; sektor główny i etykieta liczone z segmentów po każdej zmianie', () => {
         const parent = diversified(['Przemysł', 'Finanse'], [0.6, 0.4]); parent.fundamentals = { revenue: 1_000_000 };
         const child = mk('KID', { sector: ['Medycyna'] }); child.fundamentals = { revenue: 300_000 }; child.segments = [{ sector: 'Medycyna', subsector: null, share: 1 }];

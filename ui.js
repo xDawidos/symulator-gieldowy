@@ -7827,6 +7827,16 @@ function renderPawnPanel() {
 }
 
 /** Okno lombardu: warunki, zastawy funduszu gracza i zapas przejętych akcji. */
+/** 0.15.4 P7: portfel pożyczek klientów indywidualnych lombardu (liczby i słowami, bez koloru). */
+function renderPawnClientsSummary(shop) {
+    const loans = shop?.retailLoans || [];
+    const stats = shop?.retailStats || {};
+    const book = loans.reduce((sum, loan) => sum + loan.principal, 0);
+    if (!loans.length && !stats.issued) return '<p class="fund-muted">Na razie brak klientów indywidualnych.</p>';
+    return `<p>Aktywne pożyczki pod zastaw rzeczy: <strong>${loans.length}</strong> · saldo ${formatZl(book, 0)} · udzielono łącznie ${stats.issued || 0}, wykupiono ${stats.repaid || 0}, niewykupionych zastawów ${stats.forfeited || 0}.</p>
+        <p class="fund-muted">Klientów przybywa z udziałem biedniejszych klas i w recesji; lombard zarabia na odsetkach (${(PAWN_ANNUAL_RATE * 100).toFixed(0)}% rocznie), a przy niewykupionym zastawie odzyskuje ${(PAWN_CLIENT_RECOVERY * 100).toFixed(0)}% kapitału.</p>`;
+}
+
 function openPawnShopPanel() {
     const modal = document.getElementById('pawnshop-modal');
     const body = document.getElementById('pawnshop-body');
@@ -7840,6 +7850,8 @@ function openPawnShopPanel() {
         <p class="fund-muted">Pożyczki pod zastaw akcji dla funduszy: ${(PAWN_LOAN_TO_VALUE * 100).toFixed(0)}% wartości, ${(PAWN_ANNUAL_RATE * 100).toFixed(0)}% rocznie, ${PAWN_WEEKS} tygodni, do ${(PAWN_MAX_SHARE_OF_ASSETS * 100).toFixed(0)}% aktywów funduszu. Zastaw ustawisz w panelu funduszu (sekcja „Lombard”).</p>
         <h4>Zastawy Twojego funduszu</h4>
         <ul>${(playerFund?.pawnLoans || []).map(loan => `<li>${loan.shares} × ${escapeHtml(loan.symbol)}: ${formatZl(loan.principal)} · ${loan.weeksLeft} tyg.${loan.missed ? ` · zaległość ${loan.missed}` : ''}</li>`).join('') || '<li class="fund-muted">Brak.</li>'}</ul>
+        <h4>Klienci lombardu (rynek)</h4>
+        ${renderPawnClientsSummary(pawnShop)}
         <h4>Akcje przejęte przez lombard</h4>
         <ul>${holdings(pawnShop) || '<li class="fund-muted">Brak.</li>'}</ul>`
         : '<p class="loss">Lombard nie jest dostępny.</p>';

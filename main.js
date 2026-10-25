@@ -1362,6 +1362,7 @@ gameTimers.weekly = setGameInterval(() => {
         if (typeof runPawnShopAI === 'function') {
             runPawnShopAI(); //
         }
+        if (typeof processPawnClientsWeekly === 'function') processPawnClientsWeekly(); // 0.15.4 P7: klienci indywidualni lombardu
 
         if (typeof runCorporateLogic === 'function') {
         runCorporateLogic(); // Obsługa działów i inwestycji
