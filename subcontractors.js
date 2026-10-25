@@ -18,7 +18,7 @@ const SUBCONTRACTOR_RULES = {
     auctionMin: 3, auctionMax: 5,
     maxShare: 0.5, shareMinHires: 3, shareWindowQuarters: 8,   // jeden podwykonawca ≤ 50% zleceń generalnego w oknie 8 kw.
     startupChance: 0.05, failChance: 0.012, idleQuarters: 12,
-    crossSpecialtyPenalty: 25,                                 // punkty kary za podwykonawcę spoza potrzebnej specjalności
+    crossSpecialtyPenalty: 25, loadPenalty: 80,                                 // punkty kary za podwykonawcę spoza potrzebnej specjalności
     startHireChance: 0.30,                                     // generalny wykonawca AI zatrudnia podwykonawcę już przy starcie budowy
     groupMaxShare: 0.40,                                       // jedna grupa ≤ 40% podwykonawców specjalności
     groupPriceTolerance: 0.15,                                 // zlecenie od grupy nie omija aukcji, gdy cena grupy > rynkowa + 15%
@@ -144,10 +144,20 @@ function isOverSubcontractorShareLimit(builder, spec) {
     return total >= SUBCONTRACTOR_RULES.shareMinHires && (own + 1) / (total + 1) > SUBCONTRACTOR_RULES.maxShare;
 }
 
+/** Udział firmy we wszystkich zleceniach rynku w oknie 8 kw. (od 4 zleceń) — im większy, tym mniej wolnych mocy i słabsza oferta. */
+function getSubcontractorMarketShare(spec) {
+    const from = getSubcontractorQuarter() - SUBCONTRACTOR_RULES.shareWindowQuarters;
+    const recent = subcontractLog.filter(entry => entry.q > from);
+    if (recent.length < 4) return 0;
+    return recent.filter(entry => entry.spec === spec.id).length / recent.length;
+}
+
 function getSubcontractorScore(spec, needs) {
     const priceScore = Math.max(0, Math.min(100, 100 * (1.4 - spec.priceFactor) / 0.7));
     const cross = needs.includes(spec.specialty) ? 0 : SUBCONTRACTOR_RULES.crossSpecialtyPenalty;
-    return 0.40 * priceScore + 0.35 * spec.quality + 0.25 * spec.reputation - cross;
+    // Przeciążenie: udział w zleceniach rynku powyżej 15% obniża ocenę (rynek nie zamyka się wokół jednej firmy).
+    const load = SUBCONTRACTOR_RULES.loadPenalty * Math.max(0, getSubcontractorMarketShare(spec) - 0.15);
+    return 0.40 * priceScore + 0.35 * spec.quality + 0.25 * spec.reputation - cross - load;
 }
 
 /**
@@ -219,6 +229,15 @@ function getSubcontractorGroupCount(specialty, groupSymbol) {
 function canGroupAcquireSpecialty(groupSymbol, specialty) {
     const { group, total } = getSubcontractorGroupCount(specialty, groupSymbol);
     return (group + 1) / total <= SUBCONTRACTOR_RULES.groupMaxShare;
+}
+
+/** Czy po usunięciu firmy żadna grupa nie przekroczy 40% podwykonawców jej specjalności (upadek i wchłonięcie nie łamią limitu). */
+function canRemoveSubcontractor(spec) {
+    const list = getSubcontractorsBySpecialty(spec.specialty).filter(item => item !== spec);
+    if (list.length < SUBCONTRACTOR_RULES.minPerSpecialty) return false;
+    const groups = {};
+    for (const item of list) if (item.groupSymbol) groups[item.groupSymbol] = (groups[item.groupSymbol] || 0) + 1;
+    return Object.values(groups).every(count => count / list.length <= SUBCONTRACTOR_RULES.groupMaxShare + 1e-9);
 }
 
 function getSubcontractorPrice(spec) {
@@ -326,13 +345,13 @@ function processSubcontractorsQuarterly() {
         const parent = stocks.find(stock => getEntityKey(stock) === spec.groupSymbol);
         if (!parent || parent.isBankrupt) { releaseSubcontractorFromGroup(spec, 'matka upadła'); continue; }
         transferSubcontractorProfit(spec, parent, profit);
-        if (!spec.busyProjectId && quarter - (Number(spec.groupSince) || quarter) >= rules.absorbAfterQuarters && Math.random() < rules.absorbChance) absorbSubcontractor(spec, parent);
+        if (!spec.busyProjectId && quarter - (Number(spec.groupSince) || quarter) >= rules.absorbAfterQuarters && Math.random() < rules.absorbChance && canRemoveSubcontractor(spec)) absorbSubcontractor(spec, parent);
     }
 
     // Upadek: firmy bez zleceń od 3 lat albo ze złą reputacją; w specjalności zostaje co najmniej minimum.
     for (const spec of [...specialists]) {
         if (spec.busyProjectId || spec.groupSymbol) continue;
-        if (getSubcontractorsBySpecialty(spec.specialty).length <= rules.minPerSpecialty) continue;
+        if (!canRemoveSubcontractor(spec)) continue;
         const idle = quarter - (Number(spec.lastContractQ) || 0) >= rules.idleQuarters;
         const chance = rules.failChance * (idle ? 3 : 1) * (spec.reputation < 30 ? 2 : 1);
         if (Math.random() < chance) {

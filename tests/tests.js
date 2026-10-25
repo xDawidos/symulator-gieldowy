@@ -126,6 +126,7 @@ function resetWorld(companies) {
     constructionAwardLog = []; // 0.15.5 B1
     subcontractLog = []; subcontractorDeals = []; // 0.15.5 B2
     SUBCONTRACTOR_RULES.startHireChance = 0; // testy starsze od 0.15.5: podwykonawca tylko na żądanie
+    SUBCONTRACTOR_RULES.acquireChance = 0;
     if (typeof cooperations !== 'undefined') { cooperations = []; cooperationLog = []; } // 0.14 T5
     constructionProjects = [];
     paymentJournal = [];
@@ -10542,6 +10543,105 @@ group('0.15.5: Budownictwo i banki (przetargi, podwykonawcy, przejęcia pionowe,
             assert(project.subcontractor && project.subcontractor.id === 'specA', 'podwykonawca przy starcie');
             assert(project.speedMultiplier > getBuilderSpeedMultiplier(builder) - 1e-9, 'tempo z podwykonawcą');
         } finally { SUBCONTRACTOR_RULES.startHireChance = 0; }
+    });
+
+
+    // --- B3: przejęcia pionowe podwykonawców ---
+    const groupSpec = (specialty, o = {}) => Object.assign(createSubcontractor(specialty, { quality: 50 }), { cash: 100_000, profits: [50_000, 50_000, 50_000, 50_000] }, o);
+
+    test('B3: przejęcie podwykonawcy — cena 6–10 × roczny zysk, spółka zależna prywatna, bez nowej spółki giełdowej', () => {
+        const builder = registryWorld();
+        const listed0 = stocks.length, count0 = getTotalCompanyCount();
+        const spec = groupSpec('roads');
+        const cash0 = builder.cash, assets0 = builder.balanceSheet.assets, equity0 = equity(builder);
+        assert(acquireSubcontractor(builder, spec), 'przejęcie');
+        const price = cash0 - builder.cash;
+        assert(price >= 6 * 200_000 - 1 && price <= 10 * 200_000 + 1, 'cena ' + price);
+        assertEq(spec.groupSymbol, 'GEN', 'grupa');
+        assert(spec.transferShare >= 0.3 && spec.transferShare <= 0.7, 'transfer zysku 30–70%');
+        assertNear(builder.balanceSheet.assets, assets0, 'aktywa bez zmian (gotówka → udziały)'); assertNear(equity(builder), equity0, 'kapitał bez zmian');
+        assertEq(stocks.length, listed0, 'liczba spółek bez zmian'); assertEq(getTotalCompanyCount(), count0, 'limit spółek giełdowych bez zmian');
+        assert(!acquireSubcontractor(builder, spec), 'drugi raz tego samego nie przejmie');
+        assertEq(subcontractorDeals.length, 1, 'dziennik przejęć');
+    });
+
+    test('B3: grupa kontroluje najwyżej 40% podwykonawców specjalności', () => {
+        const builder = registryWorld();
+        const list = getSubcontractorsBySpecialty('roads');
+        assertEq(list.length, 3, 'start: 3 firmy');
+        assert(acquireSubcontractor(builder, list[0], 100_000), '1 z 3 (33%) wolno');
+        assert(!canGroupAcquireSpecialty('GEN', 'roads'), '2 z 3 (67%) nie');
+        assert(!acquireSubcontractor(builder, list[1], 100_000), 'blokada');
+        assert(canGroupAcquireSpecialty('INNA', 'roads'), 'inna grupa liczona osobno');
+        for (let i = 0; i < 5; i++) createSubcontractor('roads'); // 8 firm: 1 z 8 = 12,5%, 3 z 8 = 37,5% < 40%
+        assert(acquireSubcontractor(builder, specialists.find(s => s.specialty === 'roads' && !s.groupSymbol), 100_000), 'drugie przy 8 firmach');
+        assert(acquireSubcontractor(builder, specialists.find(s => s.specialty === 'roads' && !s.groupSymbol), 100_000), 'trzecie przy 8 firmach');
+        assert(!canGroupAcquireSpecialty('GEN', 'roads'), '4 z 8 (50%) nie');
+    });
+
+    test('B3: pierwszeństwo podwykonawcy z grupy tylko przy cenie ≤ rynkowa + 15% — inaczej aukcja jest uczciwa', () => {
+        const builder = registryWorld();
+        for (const s of specialists.filter(x => ['roads', 'bridges'].includes(x.specialty))) { s.quality = 60; s.priceFactor = 1.0; s.reputation = 50; }
+        const own = groupSpec('roads'); own.groupSymbol = 'GEN'; own.quality = 52; own.reputation = 50; // trochę słabszy od rynku
+        own.priceFactor = 1.05;
+        let ownWins = 0;
+        for (let i = 0; i < 30; i++) if (runSubcontractorAuction(fakeProject(builder, 'container_port')).winner === own) ownWins++;
+        assert(ownWins >= 28, 'w cenie rynkowej (+5%) firma z grupy wygrywa dzięki pierwszeństwu: ' + ownWins);
+        own.priceFactor = 1.4; // > rynkowa + 15%: bez premii, drogi i słaby
+        ownWins = 0;
+        for (let i = 0; i < 30; i++) if (runSubcontractorAuction(fakeProject(builder, 'container_port')).winner === own) ownWins++;
+        assertEq(ownWins, 0, 'zbyt droga firma z grupy nie omija aukcji');
+    });
+
+    test('B3: transfer zysku do matki (30–70%) nie tworzy pieniędzy; usamodzielnienie po upadku matki; wchłonięcie z kasą', () => {
+        const builder = registryWorld();
+        const spec = groupSpec('roads', { cash: 200_000 });
+        assert(acquireSubcontractor(builder, spec, 100_000), 'przejęcie');
+        spec.transferShare = 0.5; spec.profitQ = 80_000;
+        const before = builder.cash + spec.cash;
+        const eq0 = equity(builder);
+        processSubcontractorsQuarterly();
+        assertNear(builder.cash + spec.cash, before, 'suma gotówki matki i podwykonawcy zachowana', 1e-6);
+        assertNear(builder.cash - (before - spec.cash), 0, 'wyliczenie', 1e-6);
+        assertNear(equity(builder) - eq0, 40_000, 'zysk matki = 50% zysku kwartalnego', 1e-6);
+        // wchłonięcie
+        spec.groupSince = getSubcontractorQuarter() - 20;
+        const cashSpec = spec.cash, cashParent = builder.cash, speed0 = getBuilderSpeedMultiplier(builder);
+        withSeededRandom(1, () => { const orig = Math.random; Math.random = () => 0; try { processSubcontractorsQuarterly(); } finally { Math.random = orig; } });
+        assert(!specialists.includes(spec), 'podwykonawca wchłonięty');
+        assertNear(builder.cash - cashParent, cashSpec, 'kasa podwykonawcy trafia do matki', 1);
+        assert(getBuilderSpeedMultiplier(builder) > speed0, 'stały bonus tempa');
+        // usamodzielnienie
+        const spec2 = groupSpec('survey'); assert(acquireSubcontractor(builder, spec2, 100_000), 'drugie przejęcie');
+        builder.isBankrupt = true;
+        processSubcontractorsQuarterly();
+        assertEq(spec2.groupSymbol, null, 'usamodzielnienie po upadku matki');
+    });
+
+    test('B3: przejęcia AI w długiej grze — kilka, nie więcej niż limit 40% w żadnej specjalności, liczba spółek giełdowych bez zmian', () => {
+        const builders = [mkB('GA', { cash: 80_000_000 }), mkB('GB', { cash: 80_000_000 }), mkB('GC', { cash: 80_000_000 })];
+        resetWorld([...builders, makeCompany('KLI', { cash: 5_000_000 })]);
+        specialists = []; ensureSubcontractorRegistry();
+        const count0 = getTotalCompanyCount(), q0 = macro.quarter;
+        let deals = 0;
+        withSeededRandom(2024, () => {
+            for (let q = 0; q < 80; q++) {
+                macro.quarter = 2000 + q;
+                for (const b of builders) b.cash = 80_000_000;
+                SUBCONTRACTOR_RULES.acquireChance = 0.25;
+                try { processSubcontractorsQuarterly(); } finally { SUBCONTRACTOR_RULES.acquireChance = 0; }
+                for (const specialty of Object.keys(SUBCONTRACTOR_SPECIALTIES)) {
+                    for (const b of builders) {
+                        const { group, total } = getSubcontractorGroupCount(specialty, b.symbol);
+                        assert(total >= 3 && group / total <= SUBCONTRACTOR_RULES.groupMaxShare + 1e-9, q + ' ' + specialty + ' ' + b.symbol + ': ' + group + '/' + total);
+                    }
+                }
+            }
+            deals = subcontractorAcquisitionCount;
+        });
+        macro.quarter = q0;
+        assert(deals >= 1, 'zdarzają się przejęcia: ' + deals);
+        assertEq(getTotalCompanyCount(), count0, 'liczba spółek giełdowych bez zmian');
     });
 
     test('B1: okno wygranych jest zapisywane (pole opcjonalne)', () => {
