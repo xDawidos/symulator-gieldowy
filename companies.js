@@ -2581,7 +2581,8 @@ function getAssetBasedFairValue(stock) {
     }
     if (stock.assetType === 'REIT') {
         const nav = Math.max(0, (Number(stock.balanceSheet?.assets) || 0) - liabilities) / shares;
-        const income = (Number(stock.dividendPerShare) || 0) * (4 * BASE_DELAYS.quarterly / 120000) / 0.07; // dywidenda co 2 min gry (10× w roku) / 7%
+        const paymentsPerYear = stock.reit ? 4 : 4 * BASE_DELAYS.quarterly / 120000; // 0.15.5 B5: REIT płaci raz na kwartał (dawniej co 2 min gry)
+        const income = (Number(stock.dividendPerShare) || 0) * paymentsPerYear / 0.07; // roczna dywidenda / 7%
         return Math.max(nav, income) || null;
     }
     const equity = (Number(stock.balanceSheet?.assets) || 0) - liabilities;
@@ -3027,8 +3028,9 @@ function updateFundamentalRatios(stock) {
             // 0.14.2 P9: bank — C/WK sektora Bankowość × kapitał własny (depozyty są poza bilansem spółki-banku).
             fundamentals.fairValue = bvps > 0 ? getSectorPb(profile) * bvps * healthPremium : null;
         } else if (stock.assetType === 'REIT') {
-            // 0.14.2 P9: REIT — NAV nieruchomości ± premia/dyskonto do 20% z kondycji.
-            fundamentals.fairValue = bvps > 0 ? bvps * (1 + Math.max(-REIT_PREMIUM_MAX, Math.min(REIT_PREMIUM_MAX, (Number(stock.financialHealth) || 0) * 0.04))) : null;
+            // 0.14.2 P9: REIT — NAV nieruchomości ± premia/dyskonto z kondycji; 0.15.5 B5: premia zależy też od stóp, cyklu i fazy rynku (reits.js).
+            fundamentals.fairValue = stock.reit && typeof getReitFairValue === 'function' ? getReitFairValue(stock)
+                : (bvps > 0 ? bvps * (1 + Math.max(-REIT_PREMIUM_MAX, Math.min(REIT_PREMIUM_MAX, (Number(stock.financialHealth) || 0) * 0.04))) : null);
         } else if (FINANCE_SERVICE_TYPES.includes(stock.assetType)) {
             // 0.14.2 P9: biuro rachunkowe, windykator, lombard — C/Z sektora Finanse z własnego zysku, podłoga C/WK 0,5.
             const financePe = SECTORS['Finanse']?.profile?.pe || 13;
@@ -3252,7 +3254,7 @@ function updateDividendTimers(deltaTime) {
             stock.dividendTimer -= deltaTime;
             if (stock.dividendTimer <= 0) {
                 processReitDividend(stock);
-                stock.dividendTimer = 2 * 60 * 1000;
+                stock.dividendTimer = stock.reit ? BASE_DELAYS.quarterly : 2 * 60 * 1000; // 0.15.5 B5: wypłata raz na kwartał po raporcie
             }
             return;
         }
@@ -3303,12 +3305,16 @@ function processFinancialReports() {
         
         // --- Logika obliczania Zysku/Straty (główna) ---
         if (stock.assetType === 'REIT') {
-            // 🏡 REITy
-            const assetBase = stock.balanceSheet.assets > 0 ? stock.balanceSheet.assets : marketCap * 0.8;
-            if (stock.balanceSheet.assets === 0) stock.balanceSheet.assets = assetBase;
-            const rentalIncome = assetBase * 0.02; // 2%
-            const maintenanceCosts = assetBase * 0.005; // 0.5%
-            quarterlyEarnings = (rentalIncome - maintenanceCosts) * (1 + (stock.financialHealth / 50));
+            // 🏡 REITy (0.15.5 B5: portfel nieruchomości, najem × obłożenie, odsetki od długu, wypłata ≥ 80% — reits.js)
+            if (typeof computeReitQuarter === 'function') {
+                quarterlyEarnings = computeReitQuarter(stock);
+            } else {
+                const assetBase = stock.balanceSheet.assets > 0 ? stock.balanceSheet.assets : marketCap * 0.8;
+                if (stock.balanceSheet.assets === 0) stock.balanceSheet.assets = assetBase;
+                const rentalIncome = assetBase * 0.02; // 2%
+                const maintenanceCosts = assetBase * 0.005; // 0.5%
+                quarterlyEarnings = (rentalIncome - maintenanceCosts) * (1 + (stock.financialHealth / 50));
+            }
 
         } else if (stock.assetType === 'Holding') {
             // 🏢 Holdingi
@@ -3429,6 +3435,8 @@ function processFinancialReports() {
         const preBorrowed = !stock.assetType && operatingCashResult + nonCashCosts < 0 ? ensureCompanyCash(stock, -(operatingCashResult + nonCashCosts), 'Kredyt na płynność po stracie') : 0;
         adjustCompanyCash(stock, operatingCashResult + nonCashCosts);
         adjustBalanceSheet(stock, { assets: operatingCashResult, retainedEarnings: operatingCashResult });
+        // 0.15.5 B5: REIT wypłaca ≥ 80% zysku od razu po raporcie — zanim gotówka trafi na budowę czy spłatę długu.
+        if (stock.assetType === 'REIT' && stock.reit && typeof processReitDividend === 'function') processReitDividend(stock);
 
         // Fundamenty kwartału (EPS z wyniku raportowanego: z R&D i kontraktami).
         const accounting = typeof recordAccountingQuarter === 'function' && quarterModel ? recordAccountingQuarter(stock, quarterModel, reportedQuarterlyEarnings, fakeEarnings) : null;
@@ -7595,6 +7603,7 @@ function canFinanceAmount(stock, amount) {
 
     const shortfall = value - cash;
     const assets = Math.max(1, Number(sheet.assets) || 0);
+    if (typeof canBankExtendCredit === 'function' && !canBankExtendCredit(stock, shortfall)) return false; // 0.15.5 B4: limit koncentracji
     return ((Number(sheet.liabilities) || 0) + shortfall) / (assets + shortfall) < 0.7;
 }
 
@@ -7626,6 +7635,7 @@ function borrowForCompany(stock, amount, purpose = 'Kredyt') {
     adjustCompanyCash(stock, value);
     adjustBalanceSheet(stock, { assets: value, liabilities: value });
     recordPayment(bank ? bank.id : 'external:bank_credit', stock, value, purpose);
+    if (typeof noteBankExposure === 'function') noteBankExposure(stock, value); // 0.15.5 B4
 
     return value;
 }
@@ -7661,6 +7671,7 @@ function repayCompanyDebt(stock, amount) {
 
     adjustBalanceSheet(stock, { assets: -value, liabilities: -value });
     recordPayment(stock, bank ? bank.id : 'external:bank_credit', value, 'Spłata długu');
+    if (typeof noteBankExposure === 'function') noteBankExposure(stock, -value); // 0.15.5 B4
 
     return value;
 }
@@ -9961,6 +9972,7 @@ function renderAccountingSection(stock) {
                     <span class="text-xs">🟦 kapitał własny ${money(equity)} · 🟥 zobowiązania ${money(liabilities)}</span></div>
             </div>
             <p class="text-sm">Dług netto (zobowiązania − gotówka): <strong>${money(liabilities - cash)}</strong>. Bilans zawsze się równa: aktywa = kapitał własny + zobowiązania.</p>
+            ${typeof renderBankExposureLine === 'function' ? renderBankExposureLine(stock) : ''}
             ${stock.balanceSheet?.goodwill > 0 || stock.lastImpairment ? `<p class="text-sm">Wartość firmy (w aktywach, z przejęć): <strong>${money(stock.balanceSheet?.goodwill || 0)}</strong>${stock.lastImpairment ? ` · odpis wartości firmy: <strong>${money(-stock.lastImpairment.amount)}</strong> (kw. ${stock.lastImpairment.quarter}, po przejęciu ${escapeHtml(stock.lastImpairment.from)}) — w wyniku jako „pozostałe”` : ''}</p>` : ''}`;
     } else html += locked(2, 'Bilans');
 

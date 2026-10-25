@@ -123,6 +123,10 @@ function resetWorld(companies) {
     if (typeof sectorBubbleCooldown !== 'undefined') sectorBubbleCooldown = 0;
     if (typeof updateAllSectorPremiums === 'function') updateAllSectorPremiums();
     activeTenders = [];
+    constructionAwardLog = []; // 0.15.5 B1
+    subcontractLog = []; subcontractorDeals = []; // 0.15.5 B2
+    SUBCONTRACTOR_RULES.startHireChance = 0; // testy starsze od 0.15.5: podwykonawca tylko na żądanie
+    SUBCONTRACTOR_RULES.acquireChance = 0;
     if (typeof cooperations !== 'undefined') { cooperations = []; cooperationLog = []; } // 0.14 T5
     constructionProjects = [];
     paymentJournal = [];
@@ -10297,6 +10301,819 @@ group('0.15.4: Poprawki z gry 3 (licznik, okna, wykres, dywidenda, split, limit 
         assertEq(getMainSector(tech), 'Nieruchomości', 'po przesunięciu udziału główny: Nieruchomości');
         assertEq(tech.sector[0], 'Nieruchomości', 'etykieta sektorów zaczyna od głównego');
         assert(getStockActivityLabel(tech).startsWith('Nieruchomości'), 'opis działalności zaczyna od największego segmentu');
+    });
+});
+
+group('0.15.5: Budownictwo i banki (przetargi, podwykonawcy, przejęcia pionowe, banki, REIT-y)', () => {
+    const mkB = (symbol, o = {}) => makeCompany(symbol, Object.assign({ sector: ['Budowlany'], cash: 2_000_000 }, o));
+    const award = (tender) => { tender.evaluatedBy = stocks.map(getEntityKey); runUntil(() => tender.status !== 'open' && tender.status !== 'closed', 400); };
+
+    test('B1: wagi kryteriów 40/25/20/15 i opisy dla interfejsu', () => {
+        const w = normalizeTenderWeights({});
+        assertNear(w.price, 0.40, 'cena'); assertNear(w.quality, 0.25, 'jakość'); assertNear(w.capacity, 0.20, 'zdolność'); assertNear(w.reputation, 0.15, 'reputacja');
+        assert(Object.keys(w).every(k => TENDER_CRITERIA_LABELS[k]), 'każde kryterium ma opis');
+        const old = normalizeTenderWeights({ time: 0.9, experience: 0.9 });
+        assertNear(old.price, 0.40, 'dawne klucze ignorowane (domyślne wagi)');
+    });
+
+    test('B1: zdolność wykonawcza maleje z obłożeniem i obniża ocenę oferty przy równych cenach', () => {
+        const free = mkB('FRE', { experience: 30 }), busy = mkB('BSY', { experience: 30 }), client = makeCompany('KLI', { cash: 3_000_000 });
+        resetWorld([client, free, busy]);
+        assertEq(getBuilderCapacityScore(free), 100, 'wolny wykonawca ma pełne moce');
+        constructionProjects.push({ id: 'p1', settled: false, builder: busy, tender: { clientCompany: client, buildingType: { id: 'x' } } });
+        constructionProjects.push({ id: 'p2', settled: false, builder: busy, tender: { clientCompany: client, buildingType: { id: 'y' } } });
+        assert(getBuilderCapacityScore(busy) < getBuilderCapacityScore(free), 'obłożony ma mniej mocy');
+        const tenderId = requestConstructionTender(client, { id: 'warehouse' }, null);
+        const tender = activeTenders.find(t => t.id === tenderId);
+        assert(bidOnTender(tenderId, free, 470000, 20) && bidOnTender(tenderId, busy, 470000, 20), 'oferty');
+        const [a, b] = tender.bids;
+        assert(calculateBidScore(a, tender) > calculateBidScore(b, tender), 'wolny wykonawca wygrywa ranking przy równej ofercie');
+        constructionProjects = [];
+    });
+
+    test('B1: reputacja rośnie po terminowym odbiorze, maleje po zerwaniu z winy wykonawcy, mieści się w 0–100', () => {
+        const { client, builder } = standardWorld();
+        builder.constructionReputation = 50;
+        const { project } = awardContract(client);
+        project.delayChance = 0;
+        runUntil(() => project.settled, 6000);
+        assert(project.status === 'completed', 'ukończona');
+        assert(builder.constructionReputation > 50, 'reputacja po odbiorze ' + builder.constructionReputation);
+        adjustConstructionReputation(builder, -500); assertEq(builder.constructionReputation, 0, 'dół');
+        adjustConstructionReputation(builder, 500); assertEq(builder.constructionReputation, 100, 'góra');
+        const second = awardContract(client, 'warehouse');
+        builder.constructionReputation = 50;
+        cancelConstructionProject(second.project, 'test', 'contractor');
+        assertEq(builder.constructionReputation, 42, 'zerwanie z winy wykonawcy −8');
+    });
+
+    test('B1: wygrana przy dużym obłożeniu wydłuża czas i zwiększa ryzyko opóźnień (przeciążenie mocy)', () => {
+        const free = withSeededRandom(5, () => { const { client } = standardWorld({ experience: 45 }); return awardContract(client).project; });
+        const loaded = withSeededRandom(5, () => {
+            const { client, builder } = standardWorld({ experience: 45 });
+            for (let i = 0; i < 3; i++) constructionProjects.push({ id: 'b' + i, settled: false, builder, tender: { clientCompany: client, buildingType: { id: 'z' + i } } });
+            builder.constructionStats.maxProjects = 5;
+            return awardContract(client).project;
+        });
+        assertEq(free.loadAtStart, 0, 'start bez obłożenia');
+        assert(loaded.loadAtStart >= 0.6, 'obłożenie przy starcie ' + loaded.loadAtStart);
+        assert(loaded.delayChance > free.delayChance, 'większe ryzyko opóźnień');
+        assert(loaded.performanceFactor < free.performanceFactor, 'wolniejsza praca');
+        constructionProjects = [];
+    });
+
+    test('B1: limit 40% wygranych w oknie 8 kw. — lider oddaje zlecenie, a gdy nikt inny nie może, przetarg dochodzi do skutku', () => {
+        const lead = mkB('LED', { experience: 40 }), other = mkB('OTH', { experience: 10 }), client = makeCompany('KLI', { cash: 5_000_000 });
+        resetWorld([client, lead, other]);
+        const q0 = macro.quarter;
+        macro.quarter = 100;
+        for (let i = 0; i < 5; i++) constructionAwardLog.push({ q: 100, sym: 'LED' });
+        assert(isOverTenderShareLimit(lead), 'lider ponad limitem');
+        assert(!isOverTenderShareLimit(other), 'inni poniżej');
+        const t1Id = requestConstructionTender(client, { id: 'warehouse' }, null);
+        const t1 = activeTenders.find(t => t.id === t1Id);
+        assert(bidOnTender(t1Id, lead, 400000, 12) && bidOnTender(t1Id, other, 470000, 30), 'oferty');
+        assert(calculateBidScore(t1.bids[0], t1) > calculateBidScore(t1.bids[1], t1), 'lider ma lepszą ocenę');
+        award(t1);
+        assertEq(t1.status, 'awarded', 'przyznany'); assertEq(getEntityKey(t1.winner.bidder), 'OTH', 'wygrał wykonawca poniżej limitu');
+        // tylko lider składa ofertę: poluzowany limit zamiast anulowania
+        constructionProjects = []; activeTenders = [];
+        const t2Id = requestConstructionTender(client, { id: 'warehouse' }, null);
+        const t2 = activeTenders.find(t => t.id === t2Id);
+        assert(bidOnTender(t2Id, lead, 450000, 15), 'oferta lidera');
+        award(t2);
+        assertEq(getEntityKey(t2.winner.bidder), 'LED', 'lider wygrywa, gdy nie ma innych ofert');
+        macro.quarter = 120; pruneAwardLog();
+        assertEq(constructionAwardLog.length, 0, 'okno 8 kw. wygasa');
+        macro.quarter = q0;
+    });
+
+
+    test('B1: megaprojekt — wykonawca ze specjalnością sektora, w konsorcjum tylko spółki z pasującego sektora (gdy jest ≥ 2)', () => {
+        const energy = mkB('BEN', { cash: 20_000_000 }), tele = mkB('BTE', { cash: 90_000_000 });
+        energy.constructionSpecialties = ['Energia', 'Przemysł']; tele.constructionSpecialties = ['Technologia', 'Usługi'];
+        const e1 = makeCompany('EN1', { sector: ['Energia'], cash: 30_000_000 }), e2 = makeCompany('EN2', { sector: ['Energia'], cash: 40_000_000 });
+        const big = makeCompany('ORT', { sector: ['Technologia'], cash: 500_000_000 });
+        resetWorld([energy, tele, e1, e2, big]);
+        specialProjects = createSpecialProjects();
+        const nuclear = MEGA_PROJECTS.find(p => p.id === 'nuclear');
+        for (let i = 0; i < 20; i++) {
+            assertEq(findBuilder(nuclear).symbol, 'BEN', 'wykonawca z właściwą specjalnością (mimo mniejszej gotówki)');
+            const cands = findConsortiumCandidates(nuclear).map(s => s.symbol);
+            assert(!cands.includes('ORT') && cands.length === 2, 'tylko spółki energetyczne: ' + cands.join(','));
+        }
+        resetWorld([tele, big]); // brak dopasowania: którykolwiek wykonawca i uczestnik
+        assertEq(findBuilder(nuclear).symbol, 'BTE', 'fallback bez dopasowania');
+        assertEq(findConsortiumCandidates(nuclear).length, 1, 'fallback konsorcjum');
+    });
+
+    test('B1: konsorcjum megaprojektu ma ≥ 2 uczestników, żaden nie finansuje więcej niż 60%, a udział jednej spółki jest hamowany', () => {
+        const list = [mkB('BEN', { cash: 50_000_000 })];
+        list[0].constructionSpecialties = ['Energia'];
+        for (let i = 0; i < 6; i++) list.push(makeCompany('EN' + i, { sector: ['Energia'], cash: 60_000_000 + i * 1_000_000 }));
+        resetWorld(list);
+        specialProjects = createSpecialProjects();
+        const wins = {};
+        for (let round = 0; round < 12; round++) {
+            const project = createProject(MEGA_PROJECTS.find(p => p.id === 'offshore'));
+            assert(project.participants.length >= 2, 'min. 2 uczestników: ' + project.participants.length);
+            for (const m of project.participants) assert(m.amount <= project.cost * MAX_MEMBER_SHARE + 1, 'wkład > 60%');
+            for (const m of project.participants) wins[m.symbol] = (wins[m.symbol] || 0) + 1;
+            specialProjects.completed.unshift(Object.assign(project, { status: 'completed' }));
+            specialProjects.active = specialProjects.active.filter(p => p !== project);
+        }
+        assert(Object.keys(wins).length >= 5, 'udział rozkłada się na wiele spółek: ' + JSON.stringify(wins));
+        assert(Math.max(...Object.values(wins)) <= 12 * 0.8, 'żadna spółka nie jest w prawie każdym konsorcjum: ' + JSON.stringify(wins));
+    });
+
+
+    // --- B2: podwykonawcy ---
+    const registryWorld = (extra = []) => {
+        const builder = mkB('GEN', { cash: 50_000_000, experience: 30 });
+        resetWorld([builder, makeCompany('KLI', { cash: 5_000_000 }), ...extra]);
+        specialists = [
+            { id: 'spec1', name: 'Voltomax Systemy', specialty: 'technology', bonus: 0.1, contractsCompleted: 0, level: 1, cash: 101000 },
+            { id: 'spec4', name: 'Inżynierowie Strukturalni', specialty: 'industrial', bonus: 0.15, contractsCompleted: 0, level: 1, cash: 150000 }
+        ];
+        ensureSubcontractorRegistry();
+        return builder;
+    };
+    const fakeProject = (builder, buildingId) => ({ id: nextSimulationId('project'), settled: false, builder, tender: { buildingType: { id: buildingId, name: buildingId }, clientCompany: null },
+        estimatedCost: 1_000_000, costsPaid: 0, events: [], elapsedGameMs: 0, speedMultiplier: 1, subcontractor: null });
+
+    test('B2: rejestr — 12 specjalności po 3–8 firm, dawni podwykonawcy zachowani i przypisani do nowych specjalności', () => {
+        registryWorld();
+        assertEq(Object.keys(SUBCONTRACTOR_SPECIALTIES).length, 12, '12 specjalności');
+        for (const specialty of Object.keys(SUBCONTRACTOR_SPECIALTIES)) {
+            const n = getSubcontractorsBySpecialty(specialty).length;
+            assert(n >= 3 && n <= 8, specialty + ': ' + n);
+        }
+        assertEq(specialists.find(s => s.id === 'spec1').specialty, 'it_cabling', 'technology → okablowanie IT');
+        assertEq(specialists.find(s => s.id === 'spec4').specialty, 'industrial', 'industrial bez zmian');
+        assert(specialists.every(s => s.priceFactor > 0 && s.quality >= 0 && s.reputation >= 0 && Array.isArray(s.profits)), 'pola modelu');
+        assert(specialists.every(s => stocks.every(st => st.symbol !== s.id)), 'podwykonawcy nie są spółkami giełdowymi');
+    });
+
+    test('B2: potrzebne specjalności wynikają z rodzaju budowy', () => {
+        assertEq(getRequiredSubcontractorSpecialties({ id: 'wind_farm' })[0], 'energy', 'farma wiatrowa');
+        assertEq(getRequiredSubcontractorSpecialties({ id: 'server_room' })[0], 'it_cabling', 'serwerownia');
+        assertEq(getRequiredSubcontractorSpecialties({ id: 'warehouse' })[0], 'roofs', 'magazyn');
+        assertEq(getRequiredSubcontractorSpecialties({ id: 'cokolwiek' })[0], 'foundations', 'domyślnie');
+    });
+
+    test('B2: aukcja — 3–5 ofert, zwycięzca z potrzebnej specjalności, wybór wg ceny, jakości i reputacji', () => {
+        const builder = registryWorld();
+        for (let i = 0; i < 20; i++) {
+            const auction = runSubcontractorAuction(fakeProject(builder, 'wind_farm'));
+            assert(auction.candidates.length >= 3 && auction.candidates.length <= 5, 'liczba ofert ' + auction.candidates.length);
+            assert(getRequiredSubcontractorSpecialties({ id: 'wind_farm' }).includes(auction.winner.specialty), 'specjalność zwycięzcy ' + auction.winner.specialty);
+            assertEq(auction.winner, auction.candidates[0].spec, 'zwycięzca = najlepsza ocena');
+        }
+        // taniej i lepiej wygrywa
+        const good = createSubcontractor('energy', { quality: 90 }), bad = createSubcontractor('energy', { quality: 20 });
+        good.priceFactor = 0.9; good.reputation = 80; bad.priceFactor = 1.3; bad.reputation = 20;
+        specialists = specialists.filter(s => !['energy', 'electrical'].includes(s.specialty) || s === good || s === bad);
+        const wins = { good: 0, bad: 0 };
+        for (let i = 0; i < 20; i++) { const w = runSubcontractorAuction(fakeProject(builder, 'wind_farm')).winner; if (w === good) wins.good++; if (w === bad) wins.bad++; }
+        assertEq(wins.good, 20, 'najlepsza oferta zawsze wygrywa'); assertEq(wins.bad, 0, 'najgorsza nie wygrywa');
+    });
+
+    test('B2: koszt podwykonawcy zależy od jego ceny, a zlecenie trafia do dziennika okna 8 kw.', () => {
+        const builder = registryWorld();
+        const cheap = createSubcontractor('foundations', { quality: 50 }), dear = createSubcontractor('foundations', { quality: 50 });
+        cheap.priceFactor = 0.8; dear.priceFactor = 1.3;
+        const p1 = fakeProject(builder, 'cokolwiek'), p2 = fakeProject(builder, 'cokolwiek');
+        assert(hireSubcontractorForProject(p1, cheap.id) && hireSubcontractorForProject(p2, dear.id), 'zatrudnienie');
+        assertNear(p2.subcontractor.fee / p1.subcontractor.fee, 1.3 / 0.8, 'cena proporcjonalna do stawki', 1e-6);
+        assertEq(subcontractLog.length, 2, 'dziennik zleceń');
+        assert(cheap.profitQ > 0, 'zysk kwartalny podwykonawcy');
+        assert(hireSubcontractorForProject(fakeProject(builder, 'cokolwiek')), 'zatrudnienie bez wskazania (aukcja)');
+    });
+
+    test('B2: jeden podwykonawca ≤ 50% zleceń generalnego wykonawcy w oknie 8 kw. (gdy są inni)', () => {
+        const builder = registryWorld();
+        const star = createSubcontractor('industrial', { quality: 95 });
+        star.priceFactor = 0.8; star.reputation = 95;
+        const counts = {};
+        for (let i = 0; i < 40; i++) {
+            const project = fakeProject(builder, 'factory');
+            assert(hireSubcontractorForProject(project), 'zatrudnienie ' + i);
+            counts[project.subcontractor.id] = (counts[project.subcontractor.id] || 0) + 1;
+            releaseSubcontractor(project, true);
+            builder.cash = 50_000_000;
+        }
+        const top = Math.max(...Object.values(counts));
+        assert(top / 40 <= 0.55, 'udział lidera ' + (top / 40) + ' ' + JSON.stringify(counts));
+        assert(Object.keys(counts).length >= 4, 'różni podwykonawcy: ' + Object.keys(counts).length);
+        // gdy jest tylko jeden kandydat, limit nie blokuje zlecenia
+        specialists = [star]; subcontractLog = [];
+        for (let i = 0; i < 6; i++) { const p = fakeProject(builder, 'factory'); assert(hireSubcontractorForProject(p), 'jedyny kandydat ' + i); releaseSubcontractor(p, true); }
+    });
+
+    test('B2: powstawanie i upadek firm — liczba na specjalność zostaje w 3–8, są i nowe, i upadłe', () => {
+        registryWorld();
+        const names0 = new Set(specialists.map(s => s.id));
+        const q0 = macro.quarter;
+        let born = 0, gone = 0, prev = new Set(names0);
+        withSeededRandom(77, () => {
+            for (let q = 0; q < 160; q++) {
+                macro.quarter = 1000 + q;
+                processSubcontractorsQuarterly();
+                const now = new Set(specialists.map(s => s.id));
+                for (const id of now) if (!prev.has(id)) born++;
+                for (const id of prev) if (!now.has(id)) gone++;
+                prev = now;
+                for (const specialty of Object.keys(SUBCONTRACTOR_SPECIALTIES)) {
+                    const n = getSubcontractorsBySpecialty(specialty).length;
+                    assert(n >= 3 && n <= 8, 'kw. ' + q + ' ' + specialty + ': ' + n);
+                }
+            }
+        });
+        macro.quarter = q0;
+        assert(born > 20, 'powstały nowe firmy: ' + born);
+        assert(gone > 5, 'upadły stare firmy: ' + gone);
+    });
+
+    test('B2: zlecenie przy starcie budowy — generalny wykonawca AI zatrudnia podwykonawcę z szansą startHireChance', () => {
+        const { client, builder } = standardWorld({ builderCash: 5_000_000 });
+        specialists = [{ id: 'specA', name: 'A', specialty: 'general', bonus: 0.1, contractsCompleted: 0, level: 1, cash: 1000 }];
+        SUBCONTRACTOR_RULES.startHireChance = 1;
+        try {
+            const { project } = awardContract(client);
+            assert(project.subcontractor && project.subcontractor.id === 'specA', 'podwykonawca przy starcie');
+            assert(project.speedMultiplier > getBuilderSpeedMultiplier(builder) - 1e-9, 'tempo z podwykonawcą');
+        } finally { SUBCONTRACTOR_RULES.startHireChance = 0; }
+    });
+
+
+    // --- B3: przejęcia pionowe podwykonawców ---
+    const groupSpec = (specialty, o = {}) => Object.assign(createSubcontractor(specialty, { quality: 50 }), { cash: 100_000, profits: [50_000, 50_000, 50_000, 50_000] }, o);
+
+    test('B3: przejęcie podwykonawcy — cena 6–10 × roczny zysk, spółka zależna prywatna, bez nowej spółki giełdowej', () => {
+        const builder = registryWorld();
+        const listed0 = stocks.length, count0 = getTotalCompanyCount();
+        const spec = groupSpec('roads');
+        const cash0 = builder.cash, assets0 = builder.balanceSheet.assets, equity0 = equity(builder);
+        assert(acquireSubcontractor(builder, spec), 'przejęcie');
+        const price = cash0 - builder.cash;
+        assert(price >= 6 * 200_000 - 1 && price <= 10 * 200_000 + 1, 'cena ' + price);
+        assertEq(spec.groupSymbol, 'GEN', 'grupa');
+        assert(spec.transferShare >= 0.3 && spec.transferShare <= 0.7, 'transfer zysku 30–70%');
+        assertNear(builder.balanceSheet.assets, assets0, 'aktywa bez zmian (gotówka → udziały)'); assertNear(equity(builder), equity0, 'kapitał bez zmian');
+        assertEq(stocks.length, listed0, 'liczba spółek bez zmian'); assertEq(getTotalCompanyCount(), count0, 'limit spółek giełdowych bez zmian');
+        assert(!acquireSubcontractor(builder, spec), 'drugi raz tego samego nie przejmie');
+        assertEq(subcontractorDeals.length, 1, 'dziennik przejęć');
+    });
+
+    test('B3: grupa kontroluje najwyżej 40% podwykonawców specjalności', () => {
+        const builder = registryWorld();
+        const list = getSubcontractorsBySpecialty('roads');
+        assertEq(list.length, 3, 'start: 3 firmy');
+        assert(acquireSubcontractor(builder, list[0], 100_000), '1 z 3 (33%) wolno');
+        assert(!canGroupAcquireSpecialty('GEN', 'roads'), '2 z 3 (67%) nie');
+        assert(!acquireSubcontractor(builder, list[1], 100_000), 'blokada');
+        assert(canGroupAcquireSpecialty('INNA', 'roads'), 'inna grupa liczona osobno');
+        for (let i = 0; i < 5; i++) createSubcontractor('roads'); // 8 firm: 1 z 8 = 12,5%, 3 z 8 = 37,5% < 40%
+        assert(acquireSubcontractor(builder, specialists.find(s => s.specialty === 'roads' && !s.groupSymbol), 100_000), 'drugie przy 8 firmach');
+        assert(acquireSubcontractor(builder, specialists.find(s => s.specialty === 'roads' && !s.groupSymbol), 100_000), 'trzecie przy 8 firmach');
+        assert(!canGroupAcquireSpecialty('GEN', 'roads'), '4 z 8 (50%) nie');
+    });
+
+    test('B3: pierwszeństwo podwykonawcy z grupy tylko przy cenie ≤ rynkowa + 15% — inaczej aukcja jest uczciwa', () => {
+        const builder = registryWorld();
+        for (const s of specialists.filter(x => ['roads', 'bridges'].includes(x.specialty))) { s.quality = 60; s.priceFactor = 1.0; s.reputation = 50; }
+        const own = groupSpec('roads'); own.groupSymbol = 'GEN'; own.quality = 60; own.reputation = 50; // taka sama jakość jak rynek
+        own.priceFactor = 1.1; // +10% do ceny rynkowej, w granicy tolerancji 15%
+        let ownWins = 0;
+        for (let i = 0; i < 30; i++) if (runSubcontractorAuction(fakeProject(builder, 'container_port')).winner === own) ownWins++;
+        assert(ownWins >= 18, 'w granicy +15% do ceny rynkowej firma z grupy zwykle wygrywa dzięki pierwszeństwu (z szumem ofert): ' + ownWins);
+        own.priceFactor = 1.4; // > rynkowa + 15%: bez premii, drogi i słaby
+        ownWins = 0;
+        for (let i = 0; i < 30; i++) if (runSubcontractorAuction(fakeProject(builder, 'container_port')).winner === own) ownWins++;
+        assertEq(ownWins, 0, 'zbyt droga firma z grupy nie omija aukcji');
+    });
+
+    test('B3: transfer zysku do matki (30–70%) nie tworzy pieniędzy; usamodzielnienie po upadku matki; wchłonięcie z kasą', () => {
+        const builder = registryWorld();
+        const spec = groupSpec('roads', { cash: 200_000 });
+        assert(acquireSubcontractor(builder, spec, 100_000), 'przejęcie');
+        spec.transferShare = 0.5; spec.profitQ = 80_000;
+        const before = builder.cash + spec.cash;
+        const eq0 = equity(builder);
+        processSubcontractorsQuarterly();
+        assertNear(builder.cash + spec.cash, before, 'suma gotówki matki i podwykonawcy zachowana', 1e-6);
+        assertNear(builder.cash - (before - spec.cash), 0, 'wyliczenie', 1e-6);
+        assertNear(equity(builder) - eq0, 40_000, 'zysk matki = 50% zysku kwartalnego', 1e-6);
+        // wchłonięcie
+        spec.groupSince = getSubcontractorQuarter() - 20;
+        const cashSpec = spec.cash, cashParent = builder.cash, speed0 = getBuilderSpeedMultiplier(builder);
+        withSeededRandom(1, () => { const orig = Math.random; Math.random = () => 0; try { processSubcontractorsQuarterly(); } finally { Math.random = orig; } });
+        assert(!specialists.includes(spec), 'podwykonawca wchłonięty');
+        assertNear(builder.cash - cashParent, cashSpec, 'kasa podwykonawcy trafia do matki', 1);
+        assert(getBuilderSpeedMultiplier(builder) > speed0, 'stały bonus tempa');
+        // usamodzielnienie
+        const spec2 = groupSpec('survey'); assert(acquireSubcontractor(builder, spec2, 100_000), 'drugie przejęcie');
+        builder.isBankrupt = true;
+        processSubcontractorsQuarterly();
+        assertEq(spec2.groupSymbol, null, 'usamodzielnienie po upadku matki');
+    });
+
+    test('B3: przejęcia AI w długiej grze — kilka, nie więcej niż limit 40% w żadnej specjalności, liczba spółek giełdowych bez zmian', () => {
+        const builders = [mkB('GA', { cash: 80_000_000 }), mkB('GB', { cash: 80_000_000 }), mkB('GC', { cash: 80_000_000 })];
+        resetWorld([...builders, makeCompany('KLI', { cash: 5_000_000 })]);
+        specialists = []; ensureSubcontractorRegistry();
+        const count0 = getTotalCompanyCount(), q0 = macro.quarter;
+        let deals = 0;
+        withSeededRandom(2024, () => {
+            for (let q = 0; q < 80; q++) {
+                macro.quarter = 2000 + q;
+                for (const b of builders) b.cash = 80_000_000;
+                SUBCONTRACTOR_RULES.acquireChance = 0.25;
+                try { processSubcontractorsQuarterly(); } finally { SUBCONTRACTOR_RULES.acquireChance = 0; }
+                for (const specialty of Object.keys(SUBCONTRACTOR_SPECIALTIES)) {
+                    for (const b of builders) {
+                        const { group, total } = getSubcontractorGroupCount(specialty, b.symbol);
+                        assert(total >= 3 && group / total <= SUBCONTRACTOR_RULES.groupMaxShare + 1e-9, q + ' ' + specialty + ' ' + b.symbol + ': ' + group + '/' + total);
+                    }
+                }
+            }
+            deals = subcontractorAcquisitionCount;
+        });
+        macro.quarter = q0;
+        assert(deals >= 1, 'zdarzają się przejęcia: ' + deals);
+        assertEq(getTotalCompanyCount(), count0, 'liczba spółek giełdowych bez zmian');
+    });
+
+
+    // --- B4: banki ---
+    const bankWorld = (cash = 1_000_000) => {
+        const dev = mkB('DEV', { cash: 100_000 }), other = makeCompany('OTH', { sector: ['Usługi'], cash: 100_000 }), client = makeCompany('KLI', { cash: 100_000 });
+        [dev, other, client].forEach(c => { c.balanceSheet.assets = 50_000_000; c.balanceSheet.liabilities = 1_000_000; });
+        resetWorld([dev, other, client]);
+        const bank = { id: 'bankT', name: 'Bank Testowy', isActive: true, type: BANK_TYPES.UNIVERSAL, cash, initialCapital: cash, loanPortfolio: {}, depositBook: {}, baseInterestRateMargin: 0.01, reservesBC: 0 };
+        const saved = commercialBanks.splice(0, commercialBanks.length, bank);
+        [dev, other, client].forEach(c => { c.bankAccountId = bank.id; });
+        return { dev, other, client, bank, restore: () => { commercialBanks.splice(0, commercialBanks.length, ...saved); } };
+    };
+
+    test('B4: limit koncentracji — jeden dłużnik najwyżej 10% kapitału banku (dobrowolne finansowanie), spłata zwalnia limit', () => {
+        const { dev, bank, restore } = bankWorld(1_000_000);
+        try {
+            assertEq(getBankCapital(bank), 1_000_000, 'kapitał banku');
+            assert(canFinanceAmount(dev, 150_000 + dev.cash) === false, 'ponad 100 tys. odmowa');
+            assert(canFinanceAmount(dev, 80_000), 'w gotówce spółki — bez kredytu');
+            assert(financeInvestment(dev, dev.cash + 90_000), 'kredyt 90 tys. w limicie');
+            assertEq(bank.exposure.DEV, 90_000, 'ekspozycja zapisana');
+            assert(!canFinanceAmount(dev, dev.cash + 20_000), 'kolejne 20 tys. ponad limit (90 + 20 > 100)');
+            repayCompanyDebt(dev, 50_000);
+            assertEq(bank.exposure.DEV, 40_000, 'spłata zmniejsza ekspozycję');
+            assert(canFinanceAmount(dev, dev.cash + 20_000), 'po spłacie znów można');
+            // kredyt ratunkowy na ujemną gotówkę nie podlega limitowi
+            dev.cash = -500_000;
+            assert(coverNegativeCash(dev, 0) > 500_000, 'kredyt ratunkowy');
+            assert(dev.cash >= 0, 'gotówka nieujemna');
+        } finally { restore(); }
+    });
+
+    test('B4: kredyt obrotowy wykonawcy liczy się do ekspozycji i podlega limitowi', () => {
+        const { dev, bank, restore } = bankWorld(1_000_000);
+        try {
+            const project = { id: 'p' };
+            assert(drawConstructionCredit(dev, 60_000, project), 'kredyt w limicie');
+            assertEq(bank.exposure.DEV, 60_000, 'ekspozycja kredytu obrotowego');
+            assert(!drawConstructionCredit(dev, 60_000, project), 'drugi ponad limit 10%');
+            dev.cash = 1_000_000;
+            repayConstructionCredit(dev);
+            assertEq(bank.exposure.DEV || 0, 0, 'spłata kredytu obrotowego zeruje ekspozycję');
+        } finally { restore(); }
+    });
+
+    test('B4: marża odsetkowa mieści się w widełkach względem stopy bazowej (kredyt +4…+9 pp, lokata firmowa poniżej stopy bazowej)', () => {
+        const { bank, restore } = bankWorld();
+        const rate0 = centralBank.baseInterestRate;
+        try {
+            for (const base of [0.01, 0.03, 0.05, 0.08, 0.12]) {
+                centralBank.baseInterestRate = base; updateInterestRates();
+                const m = getBankMargins(bank);
+                assert(m.loanOverBase >= 0.04 && m.loanOverBase <= 0.09, 'marża kredytu przy stopie ' + base + ': ' + m.loanOverBase);
+                assert(m.deposit < m.base + 0.02 && m.deposit >= 0, 'lokata firmowa przy stopie ' + base + ': ' + m.deposit);
+                assert(m.spread >= 0.03 && m.spread <= 0.13, 'rozpiętość przy stopie ' + base + ': ' + m.spread);
+            }
+        } finally { centralBank.baseInterestRate = rate0; updateInterestRates(); restore(); }
+    });
+
+    test('B4: kryzys bankowy — odpisy od ekspozycji na deweloperów, gotówka spółek nietknięta, ewidencja czyszczona po upadku', () => {
+        const { dev, other, client, bank, restore } = bankWorld(50_000_000);
+
+        try {
+            financeInvestment(dev, dev.cash + 2_000_000); financeInvestment(other, other.cash + 1_000_000);
+            const ledger = getBankLedger(bank);
+            ledger.writeOffs = 0;
+            processBankRiskQuarterly();
+            assertEq(ledger.writeOffs, 0, 'bez kryzysu brak odpisów');
+            startCrisisLine('banking', { forced: true, skipSpark: true });
+            crisisLine.stage = 'spread';
+            const cash = [dev, other, client].map(c => c.cash);
+            processBankRiskQuarterly();
+            assertNear(ledger.writeOffs, 2_000_000 * BANK_CRISIS_PROVISION, 'odpis tylko od ekspozycji na dewelopera', 1e-6);
+            assertEq([dev, other, client].map(c => c.cash).join(), cash.join(), 'gotówka spółek nietknięta');
+            assert([dev, other, client].every(c => c.cash >= 0), 'brak ujemnej gotówki');
+            other.isBankrupt = true; processBankRiskQuarterly();
+            assert(!('OTH' in bank.exposure), 'upadły dłużnik znika z ewidencji');
+        } finally { resetCrises(); restore(); }
+    });
+
+
+    // --- B5: REIT-y ---
+    const mkReit = (symbol = 'RT1', o = {}) => {
+        const c = makeCompany(symbol, { sector: ['Nieruchomości'], cash: 0, fixedAssets: 0 });
+        Object.assign(c, { assetType: 'REIT', price: 100, totalShares: 100000, exchange: 'GOLD', financialHealth: 2, insiderShares: 0 }, o);
+        c.balanceSheet = { assets: 0, liabilities: 0, shareCapital: 0, retainedEarnings: 0 }; c.cash = 0;
+        return c;
+    };
+    const withMacro = (base, fn) => {
+        const saved = { rate: centralBank.baseInterestRate, infl: macro.inflation, phase: economyCycle.phase };
+        centralBank.baseInterestRate = base; macro.inflation = 0.03; economyCycle.phase = 'recovery';
+        try { return fn(); } finally { centralBank.baseInterestRate = saved.rate; macro.inflation = saved.infl; economyCycle.phase = saved.phase; resetCrises(); }
+    };
+
+    test('B5: portfel REIT-u — start z dźwignią 35%, aktywa = wartość portfela, kapitał = kapitalizacja', () => {
+        const reit = mkReit();
+        resetWorld([reit]);
+        ensureReitModel(reit);
+        assertNear(getReitLtv(reit), 0.35, 'LTV startowe', 1e-6);
+        assertNear(equity(reit), 10_000_000, 'kapitał własny = kapitalizacja', 1);
+        assertNear(reit.balanceSheet.assets, reit.reit.portfolioValue, 'aktywa = portfel (bez gotówki)', 1);
+        assert(reit.reit.occupancy > 0.9 && reit.reit.payoutRatio >= REIT_RULES.payoutMin, 'obłożenie i polityka wypłaty');
+    });
+
+    test('B5: przychód z najmu = wartość × stopa × obłożenie; zysk po kosztach i odsetkach (stopa bazowa + marża)', () => {
+        const reit = mkReit();
+        resetWorld([reit]);
+        withMacro(0.04, () => {
+            ensureReitModel(reit);
+            const r = reit.reit;
+            r.occupancy = 0.9; r.lastBase = 0.04; r.rentYield = 0.08;
+            const value = r.portfolioValue, debt = getReitDebt(reit);
+            const occ = r.occupancy;
+            const profit = computeReitQuarter(reit);
+            // obłożenie dąży do docelowego (0,92), wartość portfela zmienia się o rewaluację
+            assertNear(r.lastRent, r.portfolioValue * 0.08 / 4 * r.occupancy, 'najem', 1e-6);
+            assertNear(r.lastCosts, r.portfolioValue * REIT_RULES.maintenanceRate / 4, 'koszty utrzymania', 1e-6);
+            assertNear(r.lastInterest, debt * (0.04 + REIT_RULES.rateMargin) / 4, 'odsetki od długu', 1e-6);
+            assertNear(profit, r.lastRent - r.lastCosts - r.lastInterest, 'zysk', 1e-6);
+            assert(r.occupancy > occ && r.occupancy <= 0.92 + 1e-9, 'obłożenie rośnie ku docelowemu');
+            assert(value > 0 && profit > 0, 'zysk dodatni');
+        });
+    });
+
+    test('B5: obowiązkowa wypłata ≥ 80% zysku z kasy spółki (raz na kwartał), kasa nie schodzi poniżej zera', () => {
+        const reit = mkReit();
+        resetWorld([reit]);
+        withMacro(0.04, () => {
+            ensureReitModel(reit);
+            const profit = computeReitQuarter(reit);
+            adjustCompanyCash(reit, profit); adjustBalanceSheet(reit, { assets: profit, retainedEarnings: profit });
+            const cash0 = reit.cash;
+            assert(reit.reit.dividendDue >= profit * 0.8 - 1e-6 && reit.reit.dividendDue <= profit * 0.95 + 1e-6, 'dywidenda do wypłaty 80–95% zysku');
+            const paid = processReitDividend(reit);
+            assert(paid >= profit * 0.8 - 1, 'wypłacono ≥ 80% zysku: ' + paid + ' z ' + profit);
+            assertNear(cash0 - reit.cash, paid, 'wypłata pomniejsza kasę spółki', 1e-6);
+            assert(reit.cash >= 0, 'kasa nieujemna');
+            assertNear(reit.dividendPerShare * reit.totalShares, paid, 'dywidenda na akcję', 1e-6);
+            assertEq(processReitDividend(reit), 0, 'druga wypłata w tym samym kwartale = 0');
+        });
+    });
+
+    test('B5: stopa dywidendy 3–8% rocznie przy stabilnej gospodarce (40 kwartałów)', () => {
+        const reit = mkReit();
+        resetWorld([reit]);
+        withMacro(0.04, () => {
+            ensureReitModel(reit);
+            let paidSum = 0;
+            for (let q = 0; q < 40; q++) {
+                const profit = computeReitQuarter(reit);
+                adjustCompanyCash(reit, profit); adjustBalanceSheet(reit, { assets: profit, retainedEarnings: profit });
+                paidSum += processReitDividend(reit);
+                enforceReitLtv(reit);
+                const excess = Math.max(0, reit.cash - reit.reit.portfolioValue * REIT_RULES.cashReserveShare);
+                if (excess > 0) repayCompanyDebt(reit, excess * 0.5);
+                assert(reit.cash >= 0, 'kasa nieujemna w kw. ' + q);
+                assert(getReitLtv(reit) <= REIT_RULES.ltvMax + 1e-9, 'LTV ≤ 60% w kw. ' + q + ': ' + getReitLtv(reit));
+            }
+            const price = getReitFairValue(reit);
+            const yieldYear = (paidSum / 10) / reit.totalShares / price;
+            assert(yieldYear >= 0.03 && yieldYear <= 0.08, 'stopa dywidendy ' + (yieldYear * 100).toFixed(2) + '%');
+        });
+    });
+
+    test('B5: LTV powyżej 60% wymusza sprzedaż części portfela i spłatę długu; kapitał spada tylko o zniżkę', () => {
+        const reit = mkReit();
+        resetWorld([reit]);
+        ensureReitModel(reit);
+        const r = reit.reit;
+        r.portfolioValue *= 0.5; reit.balanceSheet.assets -= r.portfolioValue; // spadek wartości portfela: LTV ≈ 0,7
+        reit.balanceSheet.retainedEarnings -= r.portfolioValue;
+        assert(getReitLtv(reit) > REIT_RULES.ltvMax, 'LTV przed: ' + getReitLtv(reit));
+        const equity0 = equity(reit);
+        const sales = enforceReitLtv(reit);
+        assert(sales >= 1 && getReitLtv(reit) <= REIT_RULES.ltvMax + 1e-9, 'LTV po: ' + getReitLtv(reit));
+        assert(equity(reit) < equity0 && equity(reit) > equity0 * 0.85, 'kapitał spada o zniżkę ze sprzedaży');
+        assert(reit.cash >= 0, 'kasa nieujemna');
+    });
+
+    test('B5: wrażliwość na stopy — premia do NAV i wycena portfela spadają przy wyższych stopach (silniej niż 1 pp = 1%)', () => {
+        const reit = mkReit();
+        resetWorld([reit]);
+        ensureReitModel(reit);
+        const low = withMacro(0.03, () => getReitPremium(reit)), high = withMacro(0.08, () => getReitPremium(reit));
+        assert(low - high >= 0.12, 'premia przy 3% vs 8%: ' + low + ' / ' + high);
+        withMacro(0.03, () => {
+            reit.reit.lastBase = 0.03;
+            const v0 = reit.reit.portfolioValue;
+            centralBank.baseInterestRate = 0.05; // skok stóp o 2 pp
+            computeReitQuarter(reit);
+            assert(reit.reit.portfolioValue < v0 * 0.96, 'wartość portfela po skoku stóp o 2 pp: ' + (reit.reit.portfolioValue / v0));
+        });
+    });
+
+    test('B5: obłożenie zależy od gospodarki — Recesja i pandemia uderzają w biura, hotele i handel, magazyny zyskują', () => {
+        const mk2 = (type) => { const c = mkReit('R' + type); c.reit = null; REIT_PROFILES['R' + type] = type; resetWorld([c]); ensureReitModel(c); return c; };
+        const office = mk2('office'), warehouse = mk2('warehouse'), hotel = mk2('hospitality');
+        const run = (phase, pandemic) => {
+            economyCycle.phase = phase;
+            if (pandemic) { startCrisisLine('pandemic', { forced: true, skipSpark: true }); crisisLine.stage = 'spread'; } else resetCrises();
+            return [office, warehouse, hotel].map(c => getReitTargetOccupancy(c));
+        };
+        const phase0 = economyCycle.phase;
+        try {
+            const base = run('recovery', false), recession = run('recession', false), pandemic = run('recovery', true);
+            assert(recession[0] < base[0] && recession[2] < base[2], 'recesja: biura i hotele niżej');
+            assert(recession[1] >= base[1] - 1e-9, 'recesja: magazyny bez spadku');
+            assert(pandemic[0] <= base[0] - 0.10 && pandemic[2] <= base[2] - 0.18, 'pandemia: biura −10 pp, hotele −18 pp');
+            assert(pandemic[1] > base[1], 'pandemia: magazyny zyskują');
+        } finally { economyCycle.phase = phase0; resetCrises(); delete REIT_PROFILES.Roffice; delete REIT_PROFILES.Rwarehouse; delete REIT_PROFILES.Rhospitality; }
+    });
+
+    test('B5: REIT zamawia budowę u generalnego wykonawcy; ukończony obiekt zwiększa portfel, kapitał bez zmian', () => {
+        const reit = mkReit('RTB');
+        reit.cash = 0;
+        const builder = mkB('BUD', { cash: 3_000_000, experience: 30 });
+        resetWorld([reit, builder]);
+        ensureReitModel(reit);
+        reit.reit.type = 'warehouse';
+        const savedBuild = REIT_TYPES.warehouse.build; REIT_TYPES.warehouse.build = ['warehouse'];
+        const equity0 = equity(reit), value0 = reit.reit.portfolioValue;
+        let tenderId = null;
+        try { tenderId = orderReitBuilding(reit); } finally { REIT_TYPES.warehouse.build = savedBuild; }
+        assert(tenderId, 'przetarg ogłoszony');
+        const tender = activeTenders.find(t => t.id === tenderId);
+        assertEq(getEntityKey(tender.clientCompany), 'RTB', 'zamawiający = REIT');
+        assertEq(orderReitBuilding(reit), null, 'drugie zamówienie przy otwartym przetargu zablokowane');
+        runUntil(() => tender.status !== 'open' && tender.status !== 'closed', 800);
+        assertEq(tender.status, 'awarded', 'wykonawca wygrał: ' + tender.status + ' ' + (tender.cancelReason || ''));
+        const project = constructionProjects.find(p => p.tender === tender);
+        project.delayChance = 0;
+        runUntil(() => project.settled, 40000);
+        assertEq(project.status, 'completed', 'ukończony');
+        assert(reit.reit.portfolioValue > value0, 'portfel większy o obiekt');
+        assertEq(reit.reit.buildings, 1, 'licznik obiektów');
+        assertNear(equity(reit), equity0, 'kapitał REIT-u bez zmian (depozyt → nieruchomość)', Math.abs(equity0) * 0.01);
+        assert(getReitLtv(reit) <= REIT_RULES.ltvMax, 'LTV po budowie: ' + getReitLtv(reit));
+    });
+
+    test('B5: stan REIT-u trafia do zapisu (pole opcjonalne stock.reit) i przeżywa JSON', () => {
+        const reit = mkReit('RTS');
+        resetWorld([reit]);
+        ensureReitModel(reit);
+        reit.reit.buildings = 2;
+        const snap = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+        const saved = snap.stocks.find(s => s.symbol === 'RTS');
+        assert(saved && saved.reit && saved.reit.buildings === 2 && saved.reit.portfolioValue > 0, 'REIT w zapisie');
+    });
+
+
+    // --- B6: spójność z limitami i zapisem ---
+    test('B6: zapis skrócony podwykonawców — pełny obieg (pola modelu, grupa, zajętość) i wyraźnie mniejszy niż zwykły JSON', () => {
+        const builder = registryWorld();
+        const spec = groupSpec('roads'); assert(acquireSubcontractor(builder, spec, 100_000), 'przejęcie');
+        const busy = specialists.find(s => s.specialty === 'survey'); busy.busyProjectId = 'proj_x'; busy.contractsCompleted = 7;
+        const plain = JSON.stringify(specialists);
+        const compact = JSON.stringify(serializeSubcontractors());
+        assert(compact.length < plain.length * 0.6, 'skrócony ' + compact.length + ' B vs zwykły ' + plain.length + ' B');
+        const back = deserializeSubcontractors(JSON.parse(compact));
+        assertEq(back.length, specialists.length, 'liczba podwykonawców');
+        for (const original of specialists) {
+            const copy = back.find(item => item.id === original.id);
+            assert(copy, 'brak ' + original.id);
+            for (const key of ['name', 'specialty', 'quality', 'reputation', 'groupSymbol', 'busyProjectId', 'contractsCompleted']) assertEq(copy[key] ?? null, original[key] ?? null, key + ' ' + original.id);
+            assertNear(copy.priceFactor, original.priceFactor, 'cena ' + original.id, 0.006); assertNear(copy.bonus, original.bonus, 'bonus ' + original.id, 0.0006);
+            assertNear(copy.cash, original.cash, 'kasa ' + original.id, 0.6);
+        }
+        assertEq(deserializeSubcontractors([{ id: 'spec1' }]).length, 1, 'dawny zapis (tablica) wczytuje się bez zmian');
+        assert(new Set(specialists.map(s => s.id)).size === specialists.length, 'unikalne id');
+        const id = createSubcontractor('roofs').id; assert(/^sub\d+$/.test(id), 'krótkie id ' + id);
+    });
+
+    test('B6: zapis i wczytanie w trakcie przetargu i z aktywnym podwykonawcą — rejestr, dzienniki i grupy zachowane', () => {
+        const { client, builder } = standardWorld({ builderCash: 8_000_000 });
+        ensureSubcontractorRegistry();
+        SUBCONTRACTOR_RULES.startHireChance = 1;
+        let project;
+        try { project = awardContract(client).project; } finally { SUBCONTRACTOR_RULES.startHireChance = 0; }
+        assert(project.subcontractor, 'podwykonawca przy starcie');
+        const spec = specialists.find(s => s.id === project.subcontractor.id);
+        spec.groupSymbol = 'BUD'; spec.transferShare = 0.4;
+        constructionAwardLog = [{ q: 5, sym: 'BUD' }];
+        const snap = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+        assert(snap.subcontractLog.length >= 1 && snap.constructionAwardLog.length === 1, 'dzienniki w zapisie');
+        assert(snap.specialists.rows && snap.specialists.rows.length === specialists.length, 'rejestr w wersji skróconej');
+        const restored = deserializeSubcontractors(snap.specialists);
+        const copy = restored.find(s => s.id === spec.id);
+        assertEq(copy.groupSymbol, 'BUD', 'grupa'); assertEq(copy.busyProjectId, project.id, 'zajętość przy budowie');
+        assert(snap.constructionProjects.some(p => p.id === project.id && p.subcontractor && p.subcontractor.id === spec.id), 'projekt wskazuje podwykonawcę');
+    });
+
+    test('B6: przejęcia pionowe nie tworzą duchów posiadaczy ani spółek: niezmienniki świata po serii przejęć, upadków i wchłonięć', () => {
+        const builders = [mkB('GA', { cash: 60_000_000 }), mkB('GB', { cash: 60_000_000 })];
+        resetWorld([...builders, makeCompany('KLI', { cash: 1_000_000 })]);
+        specialists = []; ensureSubcontractorRegistry();
+        const q0 = macro.quarter, n0 = stocks.length, held0 = stocks.map(s => s.sharesHeld).join();
+        withSeededRandom(31, () => {
+            for (let q = 0; q < 60; q++) {
+                macro.quarter = 3000 + q;
+                for (const b of builders) b.cash = 60_000_000;
+                SUBCONTRACTOR_RULES.acquireChance = 0.3;
+                try { processSubcontractorsQuarterly(); } finally { SUBCONTRACTOR_RULES.acquireChance = 0; }
+            }
+        });
+        macro.quarter = q0;
+        assert(subcontractorAcquisitionCount >= 1, 'były przejęcia');
+        assertEq(stocks.length, n0, 'liczba spółek bez zmian');
+        assertEq(stocks.map(s => s.sharesHeld).join(), held0, 'akcje w obrocie bez zmian (brak duchów posiadaczy)');
+        assert(checkWorldInvariants().length === 0, 'niezmienniki: ' + checkWorldInvariants().join('; '));
+        for (const b of builders) assert(b.cash >= 0, 'kasa nieujemna');
+    });
+
+
+    // --- B7: interfejs i Akademia ---
+    const emojiRe = /\p{Extended_Pictographic}/u;
+    const withEl = (id, tag, fn) => {
+        const existing = document.getElementById(id);
+        const el = existing || Object.assign(document.createElement(tag), { id });
+        if (!existing) document.body.appendChild(el);
+        try { return fn(el); } finally { if (!existing) el.remove(); }
+    };
+
+    test('B7: ranking ofert — miejsce słowem i liczbą, oceny cząstkowe z wagami, znacznik limitu udziału', () => {
+        const a = mkB('AAA', { experience: 40 }), b = mkB('BBB', { experience: 10 }), c = mkB('CCC', { experience: 20 }), client = makeCompany('KLI', { cash: 5_000_000 });
+        resetWorld([client, a, b, c]);
+        const id = requestConstructionTender(client, { id: 'warehouse' }, null);
+        const tender = activeTenders.find(t => t.id === id);
+        bidOnTender(id, a, 400000, 12); bidOnTender(id, b, 470000, 30); bidOnTender(id, c, 450000, 20);
+        const ranking = getTenderRanking(tender);
+        assertEq(ranking.map(r => r.rank).join(), '1,2,3', 'miejsca');
+        assertEq(ranking[0].label, 'Najlepsza oferta', 'etykieta lidera'); assertEq(ranking[2].label, 'Najsłabsza oferta', 'etykieta ostatniego'); assertEq(ranking[1].label, 'Miejsce 2 z 3', 'środek');
+        assert(ranking[0].score >= ranking[1].score && ranking[1].score >= ranking[2].score, 'malejące oceny');
+        assertEq(ranking[0].criteria.map(k => k.key).join(), 'price,quality,capacity,reputation', 'kryteria o dodatniej wadze');
+        assertNear(ranking[0].criteria.reduce((s, k) => s + k.weight, 0), 1, 'wagi sumują się do 100%', 1e-9);
+        assertEq(getBidRankLabel(1, 1), 'Jedyna oferta', 'jedna oferta');
+        const q0 = macro.quarter; macro.quarter = 50;
+        for (let i = 0; i < 5; i++) constructionAwardLog.push({ q: 50, sym: ranking[0].bid.bidder.symbol });
+        assert(getTenderRanking(tender)[0].overLimit, 'lider ponad limitem oznaczony');
+        macro.quarter = q0;
+    });
+
+    test('B7: okno przetargu pokazuje miejsce, oceny cząstkowe i kryteria; widok podwykonawców — specjalności, stawki, grupy; bez emoji', () => {
+        const a = mkB('AAA', { experience: 40 }), b = mkB('BBB', { experience: 10 }), client = makeCompany('KLI', { cash: 5_000_000 });
+        resetWorld([client, a, b]);
+        const id = requestConstructionTender(client, { id: 'warehouse' }, null);
+        bidOnTender(id, a, 400000, 12); bidOnTender(id, b, 470000, 30);
+        withEl('tenders-list', 'div', el => {
+            renderTendersList();
+            const text = el.textContent;
+            assert(text.includes('Najlepsza oferta') && text.includes('Najsłabsza oferta'), 'miejsce słowem: ' + text.slice(0, 200));
+            const rows = el.querySelectorAll('.bid-rank-row');
+            assertEq(rows.length, 2, 'dwa wiersze rankingu');
+            assert(rows[0].querySelector('.bid-rank-pos').textContent === '1.' && rows[0].querySelectorAll('.bid-crit').length === 4, 'numer miejsca i cztery oceny cząstkowe');
+            assert(rows[0].querySelector('.limit-meter') && !rows[0].classList.contains('is-over'), 'pasek oceny, bez znacznika limitu');
+            const over = document.createElement('ol');
+            over.innerHTML = renderBidRankRow({ ...getTenderRanking(activeTenders.find(t => t.id === id))[0], overLimit: true });
+            assert(over.querySelector('.is-over .limit-flag') && over.textContent.includes('Ponad limitem 40%'), 'znacznik ponad limitem');
+            assert(text.includes('Kryteria oceny') && text.includes('Cena 40%'), 'wagi kryteriów');
+            assert(!emojiRe.test(text), 'bez emoji w oknie przetargu');
+        });
+        const builder = registryWorld();
+        const spec = groupSpec('roads'); acquireSubcontractor(builder, spec, 100_000);
+        withEl('subcontractors-list', 'div', list => withEl('subcontractors-summary', 'div', summary => {
+            renderConstructionSubcontractorsList();
+            assert(list.querySelectorAll('.subcontractor-specialty').length === 12, 'nagłówek każdej z 12 specjalności');
+            assert(list.textContent.includes('Stawka (cena)') && list.textContent.includes('Udział w zleceniach rynku'), 'cena i udział');
+            assert(list.textContent.includes('Należy do grupy') && list.textContent.includes(builder.name), 'grupa wykonawcy');
+            assert(summary.textContent.includes('W grupach wykonawców') && summary.textContent.includes('Największy udział'), 'podsumowanie');
+            assert(!emojiRe.test(list.textContent + summary.textContent), 'bez emoji w widoku podwykonawców');
+        }));
+    });
+
+    test('B7: karta REIT — portfel, obłożenie, LTV ze słowem, wypłata ≥ 80%, stopa dywidendy; bez emoji, ikona SVG', () => {
+        const reit = mkReit('RTU');
+        resetWorld([reit]);
+        ensureReitModel(reit);
+        const html = renderReitCard(reit);
+        for (const part of ['Wartość portfela', 'Obłożenie', 'Dźwignia (LTV)', 'Wypłata (obowiązkowa ≥ 80% zysku)', 'Stopa dywidendy', 'Premia / dyskonto do NAV']) assert(html.includes(part), 'brak: ' + part);
+        assert(/(niska|umiarkowana|wysoka|ponad limitem)/.test(html), 'LTV opisane słowem');
+        assert(html.includes('<svg') && !emojiRe.test(html.replace(/<svg[\s\S]*?<\/svg>/g, '')), 'ikona SVG, bez emoji');
+    });
+
+    test('B7: hasła Akademii (przetarg, koncentracja, REIT, ryzyko kredytowe) mają quiz, przykład i ikonę SVG', () => {
+        for (const id of ['przetargKryteria', 'koncentracjaRynku', 'reitNieruchomosci', 'ryzykoKredytowe']) {
+            const entry = ACADEMY_ENTRIES[id];
+            assert(entry && entry.title && entry.text.length > 200, 'hasło ' + id);
+            assertEq(entry.quiz.length, 3, 'quiz ' + id);
+            assert(entry.quiz.every(q => q.a.length === 3 && q.c >= 0 && q.c < 3), 'odpowiedzi ' + id);
+            assert(entry.icon.includes('<svg') && !emojiRe.test(entry.icon.replace(/<svg[\s\S]*?<\/svg>/g, '')), 'ikona SVG ' + id);
+            assert(typeof entry.example() === 'string' && entry.example().length > 20, 'przykład ' + id);
+        }
+    });
+
+
+    test('B1: spółka budowlana założona po starcie gry (bez constructionStats) dostaje statystyki i składa oferty', () => {
+        const veteran = mkB('VET', { experience: 30 }), newcomer = mkB('NEW'), client = makeCompany('KLI', { cash: 5_000_000 });
+        delete newcomer.constructionStats; // jak spółka z debiutu lub wydzielenia
+        resetWorld([client, veteran, newcomer]);
+        const id = requestConstructionTender(client, { id: 'warehouse' }, null);
+        const tender = activeTenders.find(t => t.id === id);
+        tick(120);
+        assert(newcomer.constructionStats && Number.isFinite(newcomer.constructionStats.experience), 'statystyki zainicjowane');
+        assert(tender.bids.some(bid => getEntityKey(bid.bidder) === 'NEW'), 'nowa spółka składa ofertę');
+        assert(!(Array.isArray(client.sector) && client.sector.includes('Budowlany')) && !client.constructionStats, 'zamawiający spoza branży nie dostaje statystyk');
+    });
+
+
+    test('B5: raport kwartalny REIT-u wypłaca ≥ 80% zysku od razu (przed spłatą długu i budową), a kasa i LTV zostają w normie', () => {
+        const reit = mkReit('RTR');
+        resetWorld([reit]);
+        withMacro(0.04, () => {
+            ensureReitModel(reit);
+            for (let q = 0; q < 6; q++) {
+                const cash0 = reit.cash;
+                processFinancialReports();
+                const profit = reit.reit.lastProfit, paid = reit.reit.lastPaid;
+                assert(profit > 0 && paid >= profit * 0.8 - 1, 'kw. ' + q + ': wypłacono ' + Math.round(paid) + ' z zysku ' + Math.round(profit));
+                assert(paid <= profit * 0.95 + 1, 'wypłata ≤ 95% zysku');
+                assert(reit.cash <= cash0 + profit - paid + 1 && reit.cash >= 0, 'kasa nie przekracza poprzedniej + zysk − wypłata (resztę zabiera spłata długu i opłaty)');
+                processReitsQuarterly();
+                assert(reit.cash >= 0 && getReitLtv(reit) <= REIT_RULES.ltvMax, 'kasa i LTV w normie');
+            }
+        });
+    });
+
+
+    test('B1: kara za opóźnienie przy przeciążonym wykonawcy — bilans pieniędzy zgodny, gotówka żadnej strony nie jest ujemna', () => {
+        const { client, builder } = standardWorld({ builderCash: 900_000 });
+        for (let i = 0; i < 3; i++) constructionProjects.push({ id: 'o' + i, settled: false, escrowBalance: 0, builder, tender: { clientCompany: client, buildingType: { id: 'z' + i } } });
+        builder.constructionStats.maxProjects = 5;
+        const money0 = moneyInModel(), j0 = externalMark();
+        const { project } = awardContract(client);
+        constructionProjects = constructionProjects.filter(p => p.id.startsWith('o') === false);
+        project.deadlineMs = project.workRequiredMs * 0.25; // termin nierealny: opóźnienie i kara umowna
+        project.delayChance = 0;
+        runUntil(() => project.settled, 60000);
+        assertEq(project.status, 'completed', 'ukończona mimo opóźnienia');
+        assert(project.settlement.penalty > 0, 'kara umowna naliczona: ' + project.settlement.penalty);
+        assert(client.cash >= 0 && builder.cash >= 0, 'gotówka nieujemna: ' + client.cash + ' / ' + builder.cash);
+        assertNear(moneyInModel() - money0, externalNetFlow(j0), 'bilans pieniędzy');
+        assert(builder.constructionReputation < 50, 'opóźnienie obniża reputację: ' + builder.constructionReputation);
+    });
+
+
+    test('B2: firma z dużym udziałem w zleceniach swojej specjalności (wygasający licznik zleceń) dostaje niższą ocenę w aukcji', () => {
+        const builder = registryWorld();
+        const [a, b, c] = getSubcontractorsBySpecialty('roads');
+        for (const s of [a, b, c]) { s.quality = 60; s.priceFactor = 1; s.reputation = 50; }
+        const q0 = macro.quarter; macro.quarter = 500;
+        const needs = ['roads'];
+        const base = [a, b, c].map(s => getSubcontractorScore(s, needs));
+        for (const s of specialists) s.hires = 0;
+        a.hires = 7; b.hires = 3;
+        assertNear(getSubcontractorSpecialtyShare(a), 0.7, 'udział w specjalności', 1e-9);
+        assertNear(getSubcontractorSpecialtyShare(c), 0, 'brak zleceń', 1e-9);
+        SUBCONTRACTOR_RULES.offerNoise = 0;
+        try {
+            const scores = [a, b, c].map(s => getSubcontractorScore(s, needs));
+            assert(scores[0] < scores[2] - 20, 'lider specjalności traci na aukcji: ' + scores.map(Math.round).join('/'));
+            assert(scores[2] > scores[1], 'bez zleceń wygrywa z firmą o 30% udziału');
+            for (let i = 0; i < 200; i++) processSubcontractorsQuarterly();
+            assert(specialists.every(s => (s.hires || 0) < 0.5), 'licznik zleceń wygasa z czasem');
+        } finally { SUBCONTRACTOR_RULES.offerNoise = 12; macro.quarter = q0; subcontractLog = []; }
+        assert(base.every(Number.isFinite), 'oceny wyjściowe');
+    });
+
+    test('B1: okno wygranych jest zapisywane (pole opcjonalne)', () => {
+        constructionAwardLog = [{ q: 7, sym: 'AAA' }, { q: 8, sym: 'BBB' }];
+        const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+        assert(Array.isArray(raw.constructionAwardLog) && raw.constructionAwardLog.length === 2, 'w zapisie');
+        constructionAwardLog = [];
     });
 });
 

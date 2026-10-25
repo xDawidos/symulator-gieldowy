@@ -301,6 +301,9 @@ let activeTenders = [];
 let constructionProjects = [];
 // Konsorcja są tymczasowo wyłączone (brak modelu podziału kosztów i odpowiedzialności).
 let constructionConsortia = [];
+// 0.15.5 B1: wygrane przetargi z ostatnich 8 kwartałów ({ q, sym }) — podstawa limitu udziału jednego wykonawcy.
+let constructionAwardLog = [];
+const TENDER_SHARE_LIMIT = { windowQuarters: 8, share: 0.40, minAwards: 4 };
 
 const CONSTRUCTION_RULES = {
     dayMs: BASE_DELAYS.weekly / 7,          // 1 dzień budowy = 1/7 tygodnia gry
@@ -368,8 +371,16 @@ function initConstructionStats(company) {
 
     stats.wonTenders = Number(stats.wonTenders) || 0;
     stats.completedProjects = Number(stats.completedProjects) || 0;
+    if (!Number.isFinite(Number(company.constructionReputation))) company.constructionReputation = 50;
     updateConstructionCapacity(company);
     stats.currentProjects = getActiveProjectsForBuilder(company).length;
+}
+
+/** Reputacja wykonawcy (0–100, start 50): wpływa na ocenę ofert w przetargach. */
+function adjustConstructionReputation(builder, delta) {
+    if (!builder) return;
+    const current = Number.isFinite(Number(builder.constructionReputation)) ? Number(builder.constructionReputation) : 50;
+    builder.constructionReputation = Math.max(0, Math.min(100, current + delta));
 }
 
 function initializeAllConstructionStats() {
@@ -440,13 +451,19 @@ function meetsConstructionRequirements(company, buildingSpec) {
 // PRZETARGI
 // ============================================
 
+// 0.15.5 B1: cena 40%, jakość (czas oferty i doświadczenie) 25%, zdolność wykonawcza (wolne moce) 20%, reputacja 15%.
+// Dawne klucze (time, experience, prestige) są ignorowane — przetarg z dawnego zapisu dostaje wagi domyślne.
 const DEFAULT_TENDER_WEIGHTS = {
     price: 0.40,
-    time: 0.30,
-    experience: 0.20,
-    prestige: 0.05,
-    exchangeLevel: 0.03,
-    isStateOwned: 0.02
+    quality: 0.25,
+    capacity: 0.20,
+    reputation: 0.15,
+    exchangeLevel: 0,
+    isStateOwned: 0
+};
+const TENDER_CRITERIA_LABELS = {
+    price: 'Cena', quality: 'Jakość', capacity: 'Zdolność wykonawcza', reputation: 'Reputacja',
+    exchangeLevel: 'Poziom giełdy', isStateOwned: 'Podmiot publiczny'
 };
 
 function normalizeTenderWeights(criteriaWeights = {}) {
@@ -461,11 +478,11 @@ function normalizeTenderWeights(criteriaWeights = {}) {
 /** Losowe wagi kryteriów zamawiającego AI (różni zamawiający cenią różne rzeczy). */
 function randomTenderWeights(client) {
     return normalizeTenderWeights({
-        price: getRandomInRange(0.35, 0.65),
-        time: getRandomInRange(0.15, 0.35),
-        experience: getRandomInRange(0.05, 0.20),
-        prestige: getRandomInRange(0.02, 0.08),
-        exchangeLevel: getRandomInRange(0.01, 0.04),
+        price: getRandomInRange(0.30, 0.50),
+        quality: getRandomInRange(0.15, 0.35),
+        capacity: getRandomInRange(0.12, 0.28),
+        reputation: getRandomInRange(0.08, 0.22),
+        exchangeLevel: getRandomInRange(0.0, 0.03),
         isStateOwned: client?.isStateOwned ? 0.05 : 0.01
     });
 }
@@ -624,8 +641,17 @@ function bidOnTender(tenderId, bidderCompany, bidPrice, bidTime) {
     return true;
 }
 
-function calculateBidScore(bid, tender) {
-    if (!bid?.bidder || !tender?.buildingType) return 0;
+/** Wolne moce wykonawcy (0–100): aktywne budowy i połowa ofert w toku zmniejszają zdolność wykonawczą. */
+function getBuilderCapacityScore(builder, tender = null) {
+    const max = Math.max(1, Number(builder?.constructionStats?.maxProjects) || 1);
+    const active = getActiveProjectsForBuilder(builder).length;
+    const otherBids = getOpenBidsForBuilder(builder).filter(item => !tender || item.id !== tender.id).length;
+    return Math.max(0, Math.min(100, 100 * (max - active - otherBids * 0.5) / max));
+}
+
+/** Oceny cząstkowe oferty (0–100) wg kryteriów przetargu; null dla oferty nieprawidłowej. */
+function getBidCriteriaScores(bid, tender) {
+    if (!bid?.bidder || !tender?.buildingType) return null;
 
     const price = Number(bid.price);
     const time = Number(bid.time);
@@ -635,10 +661,35 @@ function calculateBidScore(bid, tender) {
     if (
         !(price > 0) || !(time > 0) || !(budget > 0) || !(baseDuration > 0) || price > budget
     ) {
-        return 0;
+        return null;
     }
 
     const clamp = value => Math.max(0, Math.min(100, value));
+    const experience = Math.max(0, Number(bid.bidder.constructionStats?.experience) || 0);
+    const exchangeLevels = { JUNK: 1, BRONZE: 2, SILVER: 3, GOLD: 4, PLATINUM: 5 };
+
+    const clientPublic = Boolean(tender.clientCompany?.isStateOwned || tender.clientCompany?.assetType === 'Municipal');
+    const bidderPublic = Boolean(bid.bidder.isStateOwned || bid.bidder.assetType === 'Municipal');
+
+    // Oferta czasu porównywana z katalogowym czasem budowy (1.5x katalogu = 0 pkt).
+    const timeScore = clamp(100 * (1.5 - time / baseDuration) / 1.5);
+    // Malejące korzyści z doświadczenia: 10 pkt ≈ 22, 40 pkt ≈ 63, 80 pkt ≈ 86.
+    const experienceScore = clamp(100 * (1 - Math.exp(-experience / 40)));
+
+    return {
+        price: clamp(100 * (1 - price / budget)),
+        quality: 0.6 * timeScore + 0.4 * experienceScore,
+        capacity: getBuilderCapacityScore(bid.bidder, tender),
+        reputation: clamp(Number(bid.bidder.constructionReputation ?? 50) || 50),
+        exchangeLevel: (exchangeLevels[bid.bidder.exchange] || 1) * 20,
+        isStateOwned: clientPublic && bidderPublic ? 100 : 0
+    };
+}
+
+function calculateBidScore(bid, tender) {
+    const scores = getBidCriteriaScores(bid, tender);
+    if (!scores) return 0;
+
     const weights = normalizeTenderWeights(tender.criteriaWeights);
     let totalWeight = Object.values(weights).reduce((sum, value) => sum + value, 0);
 
@@ -647,26 +698,68 @@ function calculateBidScore(bid, tender) {
         totalWeight = 1;
     }
 
-    const experience = Math.max(0, Number(bid.bidder.constructionStats?.experience) || 0);
-    const reputation = clamp(Number(bid.bidder.constructionReputation ?? 50) || 50);
-    const exchangeLevels = { JUNK: 1, BRONZE: 2, SILVER: 3, GOLD: 4, PLATINUM: 5 };
-
-    const clientPublic = Boolean(tender.clientCompany?.isStateOwned || tender.clientCompany?.assetType === 'Municipal');
-    const bidderPublic = Boolean(bid.bidder.isStateOwned || bid.bidder.assetType === 'Municipal');
-
-    const scores = {
-        price: clamp(100 * (1 - price / budget)),
-        // Oferta czasu porównywana z katalogowym czasem budowy (1.5x katalogu = 0 pkt).
-        time: clamp(100 * (1.5 - time / baseDuration) / 1.5),
-        // Malejące korzyści z doświadczenia: 10 pkt ≈ 22, 40 pkt ≈ 63, 80 pkt ≈ 86.
-        experience: clamp(100 * (1 - Math.exp(-experience / 40))),
-        prestige: reputation,
-        exchangeLevel: (exchangeLevels[bid.bidder.exchange] || 1) * 20,
-        isStateOwned: clientPublic && bidderPublic ? 100 : 0
-    };
-
     const score = Object.keys(weights).reduce((sum, key) => sum + scores[key] * weights[key], 0) / totalWeight;
-    return clamp(score);
+    return Math.max(0, Math.min(100, score));
+}
+
+function getAwardQuarter() {
+    return typeof macro === 'object' && macro && Number.isFinite(macro.quarter) ? macro.quarter : 0;
+}
+
+function pruneAwardLog() {
+    const from = getAwardQuarter() - TENDER_SHARE_LIMIT.windowQuarters;
+    constructionAwardLog = constructionAwardLog.filter(entry => entry.q > from);
+}
+
+function noteTenderAward(builder) {
+    pruneAwardLog();
+    constructionAwardLog.push({ q: getAwardQuarter(), sym: getEntityKey(builder) });
+}
+
+/** Udział wykonawcy w wygranych przetargach z okna 8 kwartałów. */
+function getTenderAwardShare(builder) {
+    pruneAwardLog();
+    const total = constructionAwardLog.length;
+    const own = constructionAwardLog.filter(entry => entry.sym === getEntityKey(builder)).length;
+    return { own, total, share: total ? own / total : 0 };
+}
+
+/** Czy kolejna wygrana dałaby wykonawcy udział powyżej limitu (40%) w oknie 8 kwartałów (od 4 rozstrzygnięć w oknie). */
+function isOverTenderShareLimit(builder) {
+    const { own, total } = getTenderAwardShare(builder);
+    return total >= TENDER_SHARE_LIMIT.minAwards && (own + 1) / (total + 1) > TENDER_SHARE_LIMIT.share;
+}
+
+const BID_CRITERIA_ORDER = ['price', 'quality', 'capacity', 'reputation', 'exchangeLevel', 'isStateOwned'];
+
+function getBidRankLabel(rank, total) {
+    if (total <= 1) return 'Jedyna oferta';
+    if (rank === 1) return 'Najlepsza oferta';
+    if (rank === total) return 'Najsłabsza oferta';
+    return 'Miejsce ' + rank + ' z ' + total;
+}
+
+/**
+ * Ranking ofert przetargu dla interfejsu: ocena łączna, miejsce słowem, oceny cząstkowe z wagami kryteriów
+ * i informacja, czy wykonawca przekracza limit udziału w wygranych (40% w oknie 8 kw.).
+ */
+function getTenderRanking(tender) {
+    const weights = normalizeTenderWeights(tender?.criteriaWeights);
+    const total = Object.values(weights).reduce((sum, value) => sum + value, 0) || 1;
+    const rows = (tender?.bids || []).map(bid => {
+        const scores = getBidCriteriaScores(bid, tender);
+        return {
+            bid,
+            score: calculateBidScore(bid, tender),
+            valid: Boolean(scores),
+            criteria: BID_CRITERIA_ORDER.filter(key => weights[key] > 0.0001).map(key => ({
+                key, label: TENDER_CRITERIA_LABELS[key], score: scores ? scores[key] : 0, weight: weights[key] / total
+            })),
+            overLimit: typeof isOverTenderShareLimit === 'function' && isOverTenderShareLimit(bid.bidder)
+        };
+    }).sort((a, b) => b.score - a.score);
+    rows.forEach((row, index) => { row.rank = index + 1; row.label = getBidRankLabel(index + 1, rows.length); });
+    return rows;
 }
 
 function closeExpiredTenders() {
@@ -717,7 +810,7 @@ function awardTender(tenderId) {
     }
 
     const clientKey = getEntityKey(client);
-    const ranked = (Array.isArray(tender.bids) ? tender.bids : [])
+    const rankedAll = (Array.isArray(tender.bids) ? tender.bids : [])
         .filter(bid =>
             bid?.bidder &&
             getEntityKey(bid.bidder) !== clientKey &&
@@ -733,9 +826,15 @@ function awardTender(tenderId) {
             return (Number(a.submittedGameMs) || 0) - (Number(b.submittedGameMs) || 0);
         });
 
-    if (ranked.length === 0) {
+    if (rankedAll.length === 0) {
         return cancelTender(tender, 'Brak poprawnych ofert.');
     }
+
+    // 0.15.5 B1: wykonawca, który przekroczyłby limit udziału w oknie 8 kw., wygrywa dopiero wtedy,
+    // gdy nikt inny nie może przyjąć zlecenia (przetarg z poluzowanym limitem zamiast anulowania).
+    const withinLimit = rankedAll.filter(bid => !isOverTenderShareLimit(bid.bidder));
+    const ranked = [...withinLimit, ...rankedAll.filter(bid => !withinLimit.includes(bid))];
+    if (withinLimit.length < rankedAll.length && typeof unlockAcademyEntry === 'function') unlockAcademyEntry('koncentracjaRynku');
 
     // Jeśli najlepszy wykonawca zajął w międzyczasie ostatnie wolne miejsce,
     // zamawiający przechodzi do kolejnej oferty w rankingu.
@@ -765,6 +864,7 @@ function awardTender(tenderId) {
 
         const stats = bid.bidder.constructionStats;
         stats.wonTenders = (Number(stats.wonTenders) || 0) + 1;
+        noteTenderAward(bid.bidder);
 
         logEvent(
             `${bid.bidder.name} wygrywa przetarg na ${tender.buildingType.name} za ` +
@@ -835,7 +935,7 @@ function estimateBuilderCost(builder, buildingSpec) {
 function getBuilderSpeedMultiplier(builder) {
     const experience = Math.max(0, Number(builder?.constructionStats?.experience) || 0);
     const bonuses = getConstructionTechnologyBonuses(builder);
-    return 1 + Math.min(0.15, experience * 0.0025) + bonuses.speedBonus;
+    return 1 + Math.min(0.15, experience * 0.0025) + bonuses.speedBonus + (Number(builder?.constructionStats?.inHouseBonus) || 0);
 }
 
 /**
@@ -844,12 +944,13 @@ function getBuilderSpeedMultiplier(builder) {
  * i spełnia wymagania projektu.
  */
 function generateAIBids() {
-    const builders = stocks.filter(company =>
-        !company.isBankrupt &&
-        !company.isPlayer &&
-        company.constructionStats &&
-        canCompanyBid(company)
-    );
+    // 0.15.5 B0/B1: spółki budowlane, które powstały po starcie gry (debiuty, wydzielenia), nie miały constructionStats
+    // i nigdy nie składały ofert — rynek przetargów tworzyło tylko 7 pierwotnych wykonawców. Teraz też je inicjalizujemy.
+    const builders = stocks.filter(company => {
+        if (company.isBankrupt || company.isPlayer) return false;
+        if (!company.constructionStats && !company.assetType && isConstructionCompany(company)) initConstructionStats(company);
+        return company.constructionStats && canCompanyBid(company);
+    });
 
     if (builders.length === 0) return;
 
@@ -956,6 +1057,7 @@ function drawConstructionCredit(builder, amount, project) {
     const liabilities = Number(sheet.liabilities) || 0;
 
     if ((liabilities + value) / assets > CONSTRUCTION_RULES.maxBuilderLeverage) return false;
+    if (typeof canBankExtendCredit === 'function' && !canBankExtendCredit(builder, value)) return false; // 0.15.5 B4: limit koncentracji
 
     const bank = getCompanyBank(builder);
     if (bank) bank.cash = (Number(bank.cash) || 0) - value; // bank udziela kredytu ze swoich środków
@@ -963,6 +1065,7 @@ function drawConstructionCredit(builder, amount, project) {
     adjustCompanyCash(builder, value);
     adjustBalanceSheet(builder, { assets: value, liabilities: value });
     builder.constructionCredit = (Number(builder.constructionCredit) || 0) + value;
+    if (typeof noteBankExposure === 'function') noteBankExposure(builder, value); // 0.15.5 B4
     recordPayment(bank ? bank.id : 'external:bank_credit', builder, value, 'Kredyt obrotowy na budowę', project?.id);
 
     return true;
@@ -981,6 +1084,7 @@ function repayConstructionCredit(builder) {
 
     adjustBalanceSheet(builder, { assets: -repayment, liabilities: -repayment });
     builder.constructionCredit = credit - repayment;
+    if (typeof noteBankExposure === 'function') noteBankExposure(builder, -repayment); // 0.15.5 B4
     recordPayment(builder, bank ? bank.id : 'external:bank_credit', repayment, 'Spłata kredytu obrotowego');
 
     return repayment;
@@ -1015,7 +1119,9 @@ function startConstructionProject(tender, winningBid) {
 
     // Doświadczenie zawęża rozrzut wykonania, ale nie gwarantuje sukcesu.
     const spread = Math.max(0.06, 0.15 - experience * 0.001);
-    const performanceFactor = getRandomInRange(1 - spread, 1 + spread * 0.6);
+    // 0.15.5 B1: im bardziej obłożony wykonawca (aktywne budowy / moce), tym wolniej i z większym ryzykiem opóźnień.
+    const loadBefore = getActiveProjectsForBuilder(builder).length / Math.max(1, Number(builder.constructionStats.maxProjects) || 1);
+    const performanceFactor = getRandomInRange(1 - spread, 1 + spread * 0.6) * (1 - 0.10 * loadBefore);
 
     const project = {
         id: nextSimulationId('project'),
@@ -1031,7 +1137,8 @@ function startConstructionProject(tender, winningBid) {
         technologyBonuses: { ...technologyBonuses },
         speedMultiplier: getBuilderSpeedMultiplier(builder),
         performanceFactor,
-        delayChance: Math.max(0.01, (0.06 - experience * 0.0005) * (1 - technologyBonuses.delayReduction)),
+        delayChance: Math.max(0.01, (0.06 - experience * 0.0005) * (1 - technologyBonuses.delayReduction)) * (1 + loadBefore),
+        loadAtStart: Math.round(loadBefore * 100) / 100,
         elapsedGameMs: 0,
         eventAccumulatorMs: 0,
         pauseRemainingMs: 0,
@@ -1084,6 +1191,8 @@ function startConstructionProject(tender, winningBid) {
         'construction'
     );
 
+    if (typeof maybeHireSubcontractorAtStart === 'function') maybeHireSubcontractorAtStart(project);
+
     return true;
 }
 
@@ -1093,6 +1202,7 @@ function releaseSubcontractor(project, completed) {
     const spec = specialists.find(item => item.id === project.subcontractor.id);
     if (spec) {
         spec.busyProjectId = null;
+        if (typeof noteSubcontractorResult === 'function') noteSubcontractorResult(spec, completed);
         if (completed) {
             spec.contractsCompleted = (Number(spec.contractsCompleted) || 0) + 1;
             spec.level = 1 + Math.floor(spec.contractsCompleted / 5);
@@ -1103,15 +1213,17 @@ function releaseSubcontractor(project, completed) {
 function hireSubcontractorForProject(project, specId = null) {
     if (!project || project.settled || project.subcontractor || typeof specialists === 'undefined') return false;
 
+    // 0.15.5 B2: bez wskazania podwykonawcy generalny wykonawca prowadzi aukcję (3–5 ofert) zamiast brać najlepszego z listy.
     const free = specialists.filter(spec => !spec.busyProjectId);
+    const auction = !specId && typeof runSubcontractorAuction === 'function' ? runSubcontractorAuction(project) : null;
     const spec = specId
         ? free.find(item => item.id === specId)
-        : free.sort((a, b) => b.bonus - a.bonus)[0];
+        : (auction ? auction.winner : (typeof runSubcontractorAuction === 'function' ? null : free.sort((a, b) => b.bonus - a.bonus)[0]));
 
     if (!spec) return false;
 
     const remainingCost = Math.max(0, project.estimatedCost - project.costsPaid);
-    const fee = Math.max(1000, remainingCost * CONSTRUCTION_RULES.subcontractorFeeRate);
+    const fee = Math.max(1000, remainingCost * CONSTRUCTION_RULES.subcontractorFeeRate * (Number(spec.priceFactor) || 1));
 
     if ((Number(project.builder.cash) || 0) < fee * 1.5) return false;
 
@@ -1124,6 +1236,8 @@ function hireSubcontractorForProject(project, specId = null) {
     project.speedMultiplier += Number(spec.bonus) || 0;
     project.subcontractor = { id: spec.id, name: spec.name, fee, bonus: Number(spec.bonus) || 0 };
     spec.busyProjectId = project.id;
+    spec.profitQ = (Number(spec.profitQ) || 0) + fee * 0.35;
+    if (typeof noteSubcontractorHire === 'function') noteSubcontractorHire(project, spec);
 
     project.events.push({ type: 'subcontractor', description: `Zatrudniono podwykonawcę ${spec.name}`, gameTimeMs: project.elapsedGameMs });
     logEvent(`${project.builder.name} zatrudnia podwykonawcę ${spec.name} przy ${project.tender.buildingType.name} (${fee.toFixed(0)} PLN).`, 'construction');
@@ -1419,6 +1533,7 @@ function completeConstructionProject(project) {
         purchasePrice,
         marketValue: Number(project.tender.buildingType.estimatedMarketValue) || purchasePrice
     });
+    if (typeof onReitBuildingCompleted === 'function') onReitBuildingCompleted(client, project, purchasePrice); // 0.15.5 B5: obiekt zwiększa portfel REIT-u
 
     if (Number(project.tender.buildingType.healthBonus) > 0) {
         client.financialHealth = Math.min(5, (Number(client.financialHealth) || 0) + Number(project.tender.buildingType.healthBonus) * 0.5);
@@ -1431,6 +1546,8 @@ function completeConstructionProject(project) {
     stats.experience = (Number(stats.experience) || 0) + 1;
     stats.completedProjects = (Number(stats.completedProjects) || 0) + 1;
     updateConstructionCapacity(builder);
+    // Reputacja: terminowy odbiór ją buduje (premia — mocniej), opóźnienie z karą obniża.
+    adjustConstructionReputation(builder, penalty > 0 ? -3 : (bonus > 0 ? 3 : 2));
 
     releaseSubcontractor(project, true);
     finishBuilderContract(project, revenue);
@@ -1550,6 +1667,8 @@ function cancelConstructionProject(project, reason = 'Anulowanie', faultParty = 
         penalty: penaltyCollected, escrowRefund, revenue, costs: project.costsPaid
     };
     project.profit = revenue - penaltyCollected - project.costsPaid;
+
+    if (faultParty === 'contractor') adjustConstructionReputation(builder, -8);
 
     releaseSubcontractor(project, false);
     finishBuilderContract(project, revenue, penaltyCollected);

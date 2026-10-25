@@ -145,6 +145,89 @@ function processCompanyBanking() {
     }
 }
 
+// =================================================================================
+// RYZYKO KREDYTOWE I KONCENTRACJA (0.15.5 B4)
+// Bank nie kredytuje jednego dłużnika ponad 10% swojego kapitału (dobrowolne finansowanie: inwestycje, kredyt obrotowy
+// na budowę); kredyt ratunkowy na pokrycie ujemnej gotówki nie podlega limitowi (niezmiennik: gotówka spółki ≥ 0).
+// Ekspozycje (bank.exposure[symbol]) rosną z kredytem spółki i maleją ze spłatą; w kryzysie bankowym bank tworzy odpisy
+// proporcjonalne do ekspozycji na Budowlany i Nieruchomości (deweloperzy), co obniża jego wynik.
+// =================================================================================
+
+const BANK_CONCENTRATION_LIMIT = 0.10;     // jeden dłużnik ≤ 10% kapitału banku
+const BANK_CRISIS_PROVISION = 0.01;        // kwartalny odpis od ekspozycji na deweloperów w kryzysie bankowym
+const BANK_DEVELOPER_SECTORS = ['Budowlany', 'Nieruchomości'];
+
+/** Kapitał banku (gotówka ponad depozyty klientów); nie mniejszy niż kapitał założycielski. */
+function getBankCapital(bank) {
+    return Math.max(Number(bank?.initialCapital) || 0, (Number(bank?.cash) || 0) - getBankDepositsTotal(bank || {}));
+}
+
+/** Zadłużenie spółki w jej banku z ewidencji kredytów (nie więcej niż zobowiązania w bilansie). */
+function getBankExposure(bank, company) {
+    const tracked = Number(bank?.exposure?.[getEntityKey(company)]) || 0;
+    return Math.min(tracked, Math.max(0, Number(company?.balanceSheet?.liabilities) || 0));
+}
+
+function noteBankExposure(company, delta) {
+    const bank = getCompanyBank(company);
+    const amount = Number(delta);
+    if (!bank || !Number.isFinite(amount) || amount === 0) return;
+    if (!bank.exposure) bank.exposure = {};
+    const key = getEntityKey(company);
+    const next = Math.max(0, (Number(bank.exposure[key]) || 0) + amount);
+    if (next > 1) bank.exposure[key] = Math.round(next); else delete bank.exposure[key];
+}
+
+/** Czy bank spółki może jej udzielić kolejnych `amount` kredytu bez przekroczenia limitu koncentracji (brak banku — bez limitu). */
+function canBankExtendCredit(company, amount) {
+    const bank = getCompanyBank(company);
+    if (!bank) return true;
+    const allowed = getBankExposure(bank, company) + Math.max(0, Number(amount) || 0) <= BANK_CONCENTRATION_LIMIT * getBankCapital(bank);
+    if (!allowed && typeof unlockAcademyEntry === 'function') unlockAcademyEntry('ryzykoKredytowe');
+    return allowed;
+}
+
+function isDeveloperCompany(company) {
+    return Array.isArray(company?.sector) && company.sector.some(sector => BANK_DEVELOPER_SECTORS.includes(sector));
+}
+
+/** Ekspozycja banku na deweloperów (spółki Budowlany i Nieruchomości) oraz udział w ewidencji kredytów. */
+function getBankDeveloperExposure(bank) {
+    let developer = 0, total = 0;
+    for (const [symbol, value] of Object.entries(bank?.exposure || {})) {
+        const company = stocks.find(stock => stock.symbol === symbol);
+        if (!company || company.isBankrupt) continue;
+        const amount = Math.min(Number(value) || 0, Math.max(0, Number(company.balanceSheet?.liabilities) || 0));
+        total += amount;
+        if (isDeveloperCompany(company)) developer += amount;
+    }
+    return { developer, total, share: total > 0 ? developer / total : 0 };
+}
+
+/** Marże odsetkowe względem stopy bazowej: kredyt dla spółki i lokata firmowa (do pomiaru i testów). */
+function getBankMargins(bank) {
+    const base = Number(centralBank?.baseInterestRate) || 0;
+    const loan = getCompanyLoanRate(bank);
+    const deposit = getDepositRate() * CORPORATE_DEPOSIT_RATE_SHARE;
+    return { base, loan, deposit, loanOverBase: loan - base, spread: loan - deposit };
+}
+
+/** Co kwartał: czyści ekspozycje upadłych/spłaconych dłużników; w kryzysie bankowym odpisy od ekspozycji na deweloperów. */
+function processBankRiskQuarterly() {
+    const crisis = typeof crisisLine !== 'undefined' && crisisLine && crisisLine.id === 'banking' && ['burst', 'spread', 'intervention', 'bottom'].includes(crisisLine.stage);
+    for (const bank of commercialBanks) {
+        if (!bank.exposure) continue;
+        for (const symbol of Object.keys(bank.exposure)) {
+            const company = stocks.find(stock => stock.symbol === symbol);
+            if (!company || company.isBankrupt || !((Number(company.balanceSheet?.liabilities) || 0) > 1)) delete bank.exposure[symbol];
+        }
+        if (crisis && bank.isActive) {
+            const { developer } = getBankDeveloperExposure(bank);
+            if (developer > 0) { getBankLedger(bank).writeOffs += developer * BANK_CRISIS_PROVISION; if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('ryzykoKredytowe'); }
+        }
+    }
+}
+
 /** Wynik kwartalny banku: odsetki i opłaty − odsetki od depozytów − odpisy − koszty. Zeruje księgę. */
 function getBankQuarterlyEarnings(stock) {
     const bank = getBankForStock(stock);

@@ -213,7 +213,9 @@ function buildSaveSnapshot({ compact = 0 } = {}) {
         aiCompetitors: serializeWithStockRefs(aiCompetitors),
         city: serializeWithStockRefs(city),
         centralBank: serializeWithStockRefs(centralBank),
-        specialists: serializeWithStockRefs(specialists),
+        specialists: typeof serializeSubcontractors === 'function' ? serializeSubcontractors() : serializeWithStockRefs(specialists), // 0.15.5 B6: wersja skrócona
+        constructionAwardLog, // 0.15.5 B1: okno wygranych przetargów (pole opcjonalne)
+        subcontractLog, subcontractorDeals, subcontractorAcquisitionCount, // 0.15.5 B2–B3: okno zleceń podwykonawców, przejęcia pionowe (pola opcjonalne)
         activeTenders: activeTenders.filter(tender => ['open', 'closed', 'awarded'].includes(tender.status)).map(serializeTenderForSave), // zakończone przetargi nie trafiają do zapisu
         constructionProjects: constructionProjects.filter(project => !project.settled).map(serializeProjectForSave),
         paymentJournal: limits.journal ? paymentJournal.slice(-limits.journal) : [],
@@ -579,7 +581,14 @@ function applySaveSnapshot(snapshot) {
     if (Array.isArray(snapshot.aiCompetitors)) aiCompetitors.splice(0, aiCompetitors.length, ...resolveOther(snapshot.aiCompetitors));
     if (snapshot.city) city = resolveOther(snapshot.city);
     if (snapshot.centralBank) centralBank = resolveOther(snapshot.centralBank);
-    if (Array.isArray(snapshot.specialists)) specialists = resolveOther(snapshot.specialists);
+    const savedSpecialists = typeof deserializeSubcontractors === 'function' ? deserializeSubcontractors(snapshot.specialists) : snapshot.specialists;
+    if (Array.isArray(savedSpecialists)) specialists = resolveOther(savedSpecialists);
+    subcontractLog = Array.isArray(snapshot.subcontractLog) ? snapshot.subcontractLog.filter(e => e && Number.isFinite(e.q) && typeof e.spec === 'string') : []; // 0.15.5 B2
+    subcontractorDeals = Array.isArray(snapshot.subcontractorDeals) ? snapshot.subcontractorDeals : [];
+    subcontractorAcquisitionCount = Number(snapshot.subcontractorAcquisitionCount) || 0;
+    ensureSubcontractorRegistry(); // 0.15.5 B2: rejestr 12 specjalności budowany z istniejących danych (zapisy starsze mają 7 podwykonawców)
+    ensureAllReitModels(); // 0.15.5 B5: REIT-y ze starszego zapisu dostają portfel z bilansu
+    constructionAwardLog = Array.isArray(snapshot.constructionAwardLog) ? snapshot.constructionAwardLog.filter(e => e && typeof e.sym === 'string' && Number.isFinite(e.q)) : []; // 0.15.5 B1
 
     if (isFiniteNumber(snapshot.playerCash)) playerCash = snapshot.playerCash;
     else report.warnings.push('Nieprawidłowa gotówka funduszu — pozostawiono wartość startową.');
@@ -1449,6 +1458,9 @@ gameTimers.weekly = setGameInterval(() => {
         processSubsidiariesQuarterly(); // 0.14 T6: spółki zależne (pożyczki, usamodzielnienie, wchłonięcie, sprzedaż pakietu)
         processSubsectorMechanicsQuarterly(); // 0.14 T2: badania kliniczne, bloki jądrowe, kontrole KNF (subsectors.js)
         processSpecialProjectsQuarterly(); // konsorcja i projekty specjalne (projects.js)
+        if (typeof processSubcontractorsQuarterly === 'function') processSubcontractorsQuarterly(); // 0.15.5 B2–B3: podwykonawcy (subcontractors.js)
+        if (typeof processReitsQuarterly === 'function') processReitsQuarterly(); // 0.15.5 B5: dźwignia REIT-ów, rezerwa gotówki, zlecenia budowy (reits.js)
+        if (typeof processBankRiskQuarterly === 'function') processBankRiskQuarterly(); // 0.15.5 B4: ekspozycje banków, odpisy w kryzysie bankowym (finance.js)
         if (typeof processSplitsQuarterly === 'function') processSplitsQuarterly(); // 0.15.4 P4: split i konsolidacja akcji (splits.js)
         reconcileSharesHeld(); // audyt A1: akcje w obrocie = suma posiadaczy
         processOversightQuarterly(); // korupcja, policja, KNF (oversight.js)
@@ -1706,6 +1718,7 @@ function createNewWorld() {
     generateCentralBankGovernor();
     initializeConstructionCompanies();
     initializeAllConstructionStats(); // Inicjalizuje maxProjects i currentProjects dla spółek budowlanych
+    ensureSubcontractorRegistry(); // 0.15.5 B2: rejestr podwykonawców (12 specjalności, min. 3 w każdej)
     
     let activatedBankIds = []; // Tablica do śledzenia ID aktywowanych banków
     let activatedBanksCount = 0; // Licznik aktywowanych banków
@@ -1916,6 +1929,7 @@ function createNewWorld() {
     if (typeof createMarketHaltState === 'function') marketHalt = createMarketHaltState();
     if (typeof resetCrises === 'function') resetCrises(); // 0.15.3
     if (typeof randomizeStartingGiants === 'function') randomizeStartingGiants(); // 0.15.4 P6: losowa kolejność wielkości gigantów na starcie
+    ensureAllReitModels(); // 0.15.5 B5: portfele nieruchomości REIT-ów po utworzeniu bilansów (nowa gra: dźwignia startowa 35%)
     stocks.forEach(stock => {
         if (stock.balanceSheet && stock.assetType !== 'Startup') initializeFundamentals(stock, true);
         initializeOwnership(stock);

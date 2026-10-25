@@ -2083,3 +2083,48 @@ function checkAchievements() {
         }
     }
 }
+
+// 0.15.5 B7: hasła Akademii o przetargach, koncentracji rynku, REIT-ach i ryzyku kredytowym (ikony SVG zamiast emoji).
+const academyIcon = name => (typeof uiIcon === 'function' ? uiIcon(name, 18) : '');
+Object.assign(ACADEMY_ENTRIES, {
+    przetargKryteria: {
+        title: 'Przetarg i kryteria', get icon() { return academyIcon('budownictwo'); },
+        text: 'Spółka, która chce coś zbudować, ogłasza przetarg, a wykonawcy składają oferty. Zamawiający nie wybiera najtańszej, tylko ocenia ofertę wielokryterialnie: cena (ok. 40%), jakość — czas budowy i doświadczenie (25%), zdolność wykonawcza, czyli ile wolnych mocy ma wykonawca (20%), i reputacja z poprzednich budów (15%). Wykonawca z pełnym portfelem zleceń dostaje niższą ocenę za zdolność, a wygrana ponad możliwości kończy się opóźnieniami i karami umownymi.',
+        example: () => { const t = activeTenders.find(x => (x.bids || []).length > 1); if (!t) return 'Przykład: dwie oferty na magazyn — tańsza od wykonawcy z pełnym kalendarzem i droższa od wolnego wykonawcy; wygrywa ta z lepszą oceną łączną.'; const r = getTenderRanking(t)[0]; return `Przetarg na ${t.buildingType.name}: prowadzi ${r.bid.bidder.name} (${formatNumberPl(r.score, 1)} / 100) — ${r.criteria.map(c => c.label + ' ' + formatNumberPl(c.score, 0)).join(', ')}.`; },
+        quiz: [
+            { q: 'Czy w przetargu zawsze wygrywa najtańsza oferta?', a: ['nie — liczy się też jakość, zdolność wykonawcza i reputacja', 'tak, zawsze', 'wygrywa najdroższa'], c: 0 },
+            { q: 'Co obniża ocenę zdolności wykonawczej?', a: ['pełny kalendarz aktywnych budów', 'niska cena', 'nowa nazwa spółki'], c: 0 },
+            { q: 'Co grozi wykonawcy, który wygrał więcej zleceń, niż uniesie?', a: ['opóźnienia i kary umowne', 'premia od zamawiającego', 'nic'], c: 0 }
+        ]
+    },
+    koncentracjaRynku: {
+        title: 'Koncentracja rynku', get icon() { return academyIcon('waga'); },
+        text: 'Gdy jedna firma wygrywa niemal wszystkie zlecenia, rynek traci konkurencję: ceny rosną, a słabsi wykonawcy znikają. Dlatego w grze obowiązuje limit — jeden wykonawca nie wygra więcej niż 40% przetargów w oknie 8 kwartałów (ostatni wygrywa tylko wtedy, gdy nikt inny nie może przyjąć zlecenia), a jedna firma podwykonawcza nie obsłuży więcej niż połowy zleceń generalnego wykonawcy. Miarą koncentracji jest wskaźnik HHI (suma kwadratów udziałów w %): poniżej 1500 rynek jest konkurencyjny, powyżej 2500 — silnie skoncentrowany. Przejęcie podwykonawców przez wykonawcę (integracja pionowa) może zamknąć rynek, więc jedna grupa nie kontroluje więcej niż 40% firm danej specjalności.',
+        example: () => { const a = constructionAwardLog; if (!a.length) return 'Przykład: czterech wykonawców po 25% wygranych to HHI = 2500; jeden z 70% udziałem to HHI ≈ 5000.'; const by = {}; a.forEach(e => { by[e.sym] = (by[e.sym] || 0) + 1; }); const hhi = Math.round(Object.values(by).reduce((s, v) => s + Math.pow(v / a.length * 100, 2), 0)); return `W ostatnich 8 kwartałach rozstrzygnięto ${a.length} przetargów; HHI = ${hhi}.`; },
+        quiz: [
+            { q: 'Dlaczego jednej firmie nie wolno wygrywać prawie wszystkich zleceń?', a: ['bo znika konkurencja i rosną ceny', 'bo to nudne', 'bo zamawiający tego nie lubi'], c: 0 },
+            { q: 'Czterech wykonawców ma po 25% rynku. Ile wynosi HHI?', a: ['2500', '100', '10 000'], c: 0 },
+            { q: 'Czym grozi przejęcie wszystkich podwykonawców jednej specjalności przez jedną grupę?', a: ['zamknięciem rynku dla konkurentów', 'tańszymi budowami dla wszystkich', 'niczym'], c: 0 }
+        ]
+    },
+    reitNieruchomosci: {
+        title: 'REIT — fundusz nieruchomości', get icon() { return academyIcon('magazyn'); },
+        text: 'REIT to spółka, która posiada i wynajmuje nieruchomości (biura, magazyny, hotele, szpitale). Jej przychód to wartość portfela × stopa najmu × obłożenie, minus koszty utrzymania i odsetki od długu. W zamian za przywileje podatkowe REIT musi wypłacać co najmniej 80% zysku jako dywidendę, więc dywidenda jest stała i przewidywalna (w grze 3–8% rocznie). REIT jest zadłużony — miarą jest LTV, czyli dług do wartości portfela (w grze nie więcej niż 60%) — dlatego jest bardzo wrażliwy na stopy procentowe: wyższe stopy podnoszą odsetki i obniżają wartość nieruchomości i premię do wartości aktywów netto (NAV). W recesji i pandemii spada obłożenie biur, handlu i hoteli, a magazyny bywają odporne.',
+        example: () => { const r = stocks.find(x => x.assetType === 'REIT' && x.reit && !x.isBankrupt); return r ? `${r.name}: portfel ${formatZl(r.reit.portfolioValue, 0)}, obłożenie ${formatNumberPl(r.reit.occupancy * 100, 0)}%, LTV ${formatNumberPl(getReitLtv(r) * 100, 0)}%, stopa dywidendy ok. ${formatNumberPl(getReitDividendYield(r) * 100, 1)}%.` : 'Przykład: portfel za 100 mln zł, obłożenie 92%, stopa najmu 7,5% — przychód z najmu ok. 6,9 mln zł rocznie.'; },
+        quiz: [
+            { q: 'Jaką część zysku REIT musi wypłacić jako dywidendę?', a: ['co najmniej 80%', 'najwyżej 10%', 'nic — to jego wybór'], c: 0 },
+            { q: 'Co się dzieje z REIT-em, gdy stopy procentowe rosną?', a: ['rosną odsetki, a wycena spada', 'zyskuje na wartości', 'nic'], c: 0 },
+            { q: 'Co mierzy wskaźnik LTV?', a: ['dług do wartości portfela nieruchomości', 'obłożenie biur', 'stopę dywidendy'], c: 0 }
+        ]
+    },
+    ryzykoKredytowe: {
+        title: 'Ryzyko kredytowe', get icon() { return academyIcon('bank'); },
+        text: 'Bank zarabia na różnicy między oprocentowaniem kredytów a depozytów (marża odsetkowa), ale ryzykuje, że dłużnik nie spłaci. Dlatego bank nie pożycza jednemu dłużnikowi więcej niż 10% swojego kapitału (limit koncentracji) i tworzy odpisy na złe kredyty. Szczególnie ryzykowni są deweloperzy i wykonawcy budowlani: ich zyski zależą od cyklu, a zabezpieczeniem są nieruchomości, które w kryzysie tanieją. W kryzysie bankowym banki z dużą ekspozycją na budownictwo i nieruchomości tworzą odpisy, tracą zysk i kurs, a firmy nie dostają nowych kredytów.',
+        example: () => { const b = commercialBanks.find(x => x.isActive && x.exposure && Object.keys(x.exposure).length); if (!b) return 'Przykład: bank z kapitałem 100 mln zł pożyczy jednemu deweloperowi najwyżej 10 mln zł.'; const e = getBankDeveloperExposure(b); return `${b.name}: kredyty dla spółek ${formatZl(e.total, 0)}, w tym dla deweloperów (Budowlany, Nieruchomości) ${formatZl(e.developer, 0)}; limit na jednego dłużnika ${formatZl(getBankCapital(b) * BANK_CONCENTRATION_LIMIT, 0)}.`; },
+        quiz: [
+            { q: 'Dlaczego bank ogranicza kredyty dla jednego dłużnika do 10% kapitału?', a: ['by upadłość jednego klienta nie zniszczyła banku', 'bo tak chce klient', 'by płacić niższe podatki'], c: 0 },
+            { q: 'Z czego bank zarabia na kredytach i depozytach?', a: ['z marży odsetkowej', 'z opłat za logowanie', 'z dywidend klientów'], c: 0 },
+            { q: 'Co robi bank w kryzysie bankowym z kredytami dla deweloperów?', a: ['tworzy odpisy na złe kredyty', 'podnosi limity', 'umarza je wszystkie'], c: 0 }
+        ]
+    }
+});

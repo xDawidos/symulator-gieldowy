@@ -770,18 +770,48 @@ function transferSpecialBonuses(from, to) {
 // KONSORCJA
 // =================================================================================
 
-function findBuilder(project) {
-    const share = project.cost * BUILDER_SHARE;
-    return stocks.filter(s => !s.assetType && !s.isBankrupt && s.sector?.includes('Budowlany') && s.cash >= share)
-        .sort((a, b) => b.cash - a.cash)[0] || null;
+// 0.15.5 B1: specjalność wykonawcy = sektory, w których realizuje megaprojekty (własne sektory poza Budowlanym + losowe z puli projektów).
+const MEGA_RECENT_PROJECTS = 10;           // okno „ostatnich” projektów dla rozkładu udziału w konsorcjach
+
+function getBuilderSpecialties(stock) {
+    if (!Array.isArray(stock.constructionSpecialties) || !stock.constructionSpecialties.length) {
+        const pool = [...new Set([...MEGA_PROJECTS, ...TIMED_PROJECT_TEMPLATES].flatMap(p => p.sectors.map(name => canonicalSectorName(name))))];
+        const own = (stock.sector || []).filter(sec => sec !== 'Budowlany');
+        const extra = pool.filter(sec => !own.includes(sec)).sort(() => Math.random() - 0.5).slice(0, Math.max(2, 3 - own.length));
+        stock.constructionSpecialties = [...own, ...extra].slice(0, 4);
+    }
+    return stock.constructionSpecialties;
 }
 
-/** Kandydaci do konsorcjum: spółki z pasujących sektorów (albo duże), z gotówką na wkład. */
+function isSectorMatch(sectors, project) {
+    return (sectors || []).some(sec => project.sectors.some(name => canonicalSectorName(name) === sec));
+}
+
+/** Ile razy spółka była w konsorcjum wśród ostatnich projektów (hamulec dominacji jednej spółki). */
+function getMegaParticipationCount(symbol) {
+    const recent = [...specialProjects.active, ...specialProjects.completed.slice(0, MEGA_RECENT_PROJECTS)];
+    return recent.filter(p => (p.participants || []).some(m => m.symbol === symbol || m.heldBy === symbol)).length;
+}
+
+/** Wykonawca z właściwą specjalnością (gdy żaden nie pasuje — którykolwiek), losowany z wagą pierwiastka z gotówki. */
+function findBuilder(project) {
+    const share = project.cost * BUILDER_SHARE;
+    const pool = stocks.filter(s => !s.assetType && !s.isBankrupt && s.sector?.includes('Budowlany') && s.cash >= share);
+    const matching = pool.filter(s => isSectorMatch(getBuilderSpecialties(s), project));
+    const list = matching.length ? matching : pool;
+    return list.map(s => ({ stock: s, score: Math.sqrt(Math.max(1, s.cash)) * (0.6 + Math.random() * 0.8) / (1 + getMegaParticipationCount(s.symbol)) }))
+        .sort((a, b) => b.score - a.score)[0]?.stock || null;
+}
+
+/** Kandydaci do konsorcjum: spółki z pasującym sektorem (spoza dopasowanych tylko gdy brakuje uczestników), z gotówką na wkład. */
 function findConsortiumCandidates(project, exclude = []) {
     const minContribution = project.cost * 0.1;
-    return stocks.filter(s => !s.assetType && !s.isBankrupt && !s.mergerProcess && !exclude.includes(s.symbol) && s.cash >= minContribution && !s.sector?.includes('Budowlany'))
-        .map(s => ({ stock: s, score: (s.sector?.some(sec => project.sectors.some(name => canonicalSectorName(name) === sec)) ? 2 : 1) * s.cash }))
-        .sort((a, b) => b.score - a.score).map(c => c.stock);
+    const ranked = stocks.filter(s => !s.assetType && !s.isBankrupt && !s.mergerProcess && !exclude.includes(s.symbol) && s.cash >= minContribution && !s.sector?.includes('Budowlany'))
+        .map(s => ({ stock: s, match: isSectorMatch((typeof getStockSegments === 'function' ? getStockSegments(s) : []).map(seg => seg.sector).concat(s.sector || []), project), score: 0 }));
+    for (const c of ranked) c.score = (c.match ? 4 : 1) * Math.sqrt(c.stock.cash) * (0.6 + Math.random() * 0.8) / (1 + getMegaParticipationCount(c.stock.symbol));
+    ranked.sort((a, b) => b.score - a.score);
+    const matching = ranked.filter(c => c.match);
+    return (matching.length >= 2 ? matching : ranked).map(c => c.stock);
 }
 
 /** Nowy projekt w fazie zapisów (konsorcjum AI + miejsce dla spółki funduszu). */
@@ -1430,8 +1460,8 @@ function renderCitySpecialProjects() {
             <header class="bank-card-head"><span class="bank-card-icon">${project.icon}</span><div><h4>${escapeHtml(project.name)}</h4>
                 <span class="bank-card-type">${project.timed ? `czasowy · termin za ${Math.max(0, project.deadline - quarter)} kw.` : 'megaprojekt'} · ${project.status === 'signup' ? 'zapisy do konsorcjum' : 'w budowie'}</span></div></header>
             ${project.status === 'building' ? renderProjectStages(project) : ''}
-            <p class="text-sm">Koszt ${formatProjectMoney(project.cost)} · zebrano ${formatProjectMoney(funding)} · wykonawca: ${escapeHtml(project.builder?.name || '—')}</p>
-            <p class="text-xs text-muted">Konsorcjum (${project.participants.length}/${MAX_CONSORTIUM_MEMBERS}): ${project.participants.map(p => `${p.player ? '⭐ ' : ''}${escapeHtml(p.name)}`).join(', ') || '—'}</p>
+            <p class="text-sm">Koszt ${formatProjectMoney(project.cost)} · zebrano ${formatProjectMoney(funding)} · wykonawca: ${escapeHtml(project.builder?.name || '—')}${project.builder ? ` (specjalność: ${escapeHtml((getBuilderSpecialties(stocks.find(s => s.symbol === project.builder.symbol) || {}) || []).join(', ') || '—')})` : ''}</p>
+            <p class="text-xs text-muted">Konsorcjum (${project.participants.length}/${MAX_CONSORTIUM_MEMBERS}; każdy uczestnik ≤ ${Math.round(MAX_MEMBER_SHARE * 100)}% kosztu): ${project.participants.map(p => `${p.player ? '⭐ ' : ''}${escapeHtml(p.name)} ${Math.round(p.amount / Math.max(1, project.cost) * 100)}%`).join(', ') || '—'}</p>
             ${join}
             ${renderProjectBondForm(project)}
         </article>`;
