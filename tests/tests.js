@@ -10385,6 +10385,44 @@ group('0.15.5: Budownictwo i banki (przetargi, podwykonawcy, przejęcia pionowe,
         macro.quarter = q0;
     });
 
+
+    test('B1: megaprojekt — wykonawca ze specjalnością sektora, w konsorcjum tylko spółki z pasującego sektora (gdy jest ≥ 2)', () => {
+        const energy = mkB('BEN', { cash: 20_000_000 }), tele = mkB('BTE', { cash: 90_000_000 });
+        energy.constructionSpecialties = ['Energia', 'Przemysł']; tele.constructionSpecialties = ['Technologia', 'Usługi'];
+        const e1 = makeCompany('EN1', { sector: ['Energia'], cash: 30_000_000 }), e2 = makeCompany('EN2', { sector: ['Energia'], cash: 40_000_000 });
+        const big = makeCompany('ORT', { sector: ['Technologia'], cash: 500_000_000 });
+        resetWorld([energy, tele, e1, e2, big]);
+        specialProjects = createSpecialProjects();
+        const nuclear = MEGA_PROJECTS.find(p => p.id === 'nuclear');
+        for (let i = 0; i < 20; i++) {
+            assertEq(findBuilder(nuclear).symbol, 'BEN', 'wykonawca z właściwą specjalnością (mimo mniejszej gotówki)');
+            const cands = findConsortiumCandidates(nuclear).map(s => s.symbol);
+            assert(!cands.includes('ORT') && cands.length === 2, 'tylko spółki energetyczne: ' + cands.join(','));
+        }
+        resetWorld([tele, big]); // brak dopasowania: którykolwiek wykonawca i uczestnik
+        assertEq(findBuilder(nuclear).symbol, 'BTE', 'fallback bez dopasowania');
+        assertEq(findConsortiumCandidates(nuclear).length, 1, 'fallback konsorcjum');
+    });
+
+    test('B1: konsorcjum megaprojektu ma ≥ 2 uczestników, żaden nie finansuje więcej niż 60%, a udział jednej spółki jest hamowany', () => {
+        const list = [mkB('BEN', { cash: 50_000_000 })];
+        list[0].constructionSpecialties = ['Energia'];
+        for (let i = 0; i < 6; i++) list.push(makeCompany('EN' + i, { sector: ['Energia'], cash: 60_000_000 + i * 1_000_000 }));
+        resetWorld(list);
+        specialProjects = createSpecialProjects();
+        const wins = {};
+        for (let round = 0; round < 12; round++) {
+            const project = createProject(MEGA_PROJECTS.find(p => p.id === 'offshore'));
+            assert(project.participants.length >= 2, 'min. 2 uczestników: ' + project.participants.length);
+            for (const m of project.participants) assert(m.amount <= project.cost * MAX_MEMBER_SHARE + 1, 'wkład > 60%');
+            for (const m of project.participants) wins[m.symbol] = (wins[m.symbol] || 0) + 1;
+            specialProjects.completed.unshift(Object.assign(project, { status: 'completed' }));
+            specialProjects.active = specialProjects.active.filter(p => p !== project);
+        }
+        assert(Object.keys(wins).length >= 5, 'udział rozkłada się na wiele spółek: ' + JSON.stringify(wins));
+        assert(Math.max(...Object.values(wins)) <= 12 * 0.8, 'żadna spółka nie jest w prawie każdym konsorcjum: ' + JSON.stringify(wins));
+    });
+
     test('B1: okno wygranych jest zapisywane (pole opcjonalne)', () => {
         constructionAwardLog = [{ q: 7, sym: 'AAA' }, { q: 8, sym: 'BBB' }];
         const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
