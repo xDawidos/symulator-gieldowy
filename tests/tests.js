@@ -123,6 +123,7 @@ function resetWorld(companies) {
     if (typeof sectorBubbleCooldown !== 'undefined') sectorBubbleCooldown = 0;
     if (typeof updateAllSectorPremiums === 'function') updateAllSectorPremiums();
     activeTenders = [];
+    constructionAwardLog = []; // 0.15.5 B1
     if (typeof cooperations !== 'undefined') { cooperations = []; cooperationLog = []; } // 0.14 T5
     constructionProjects = [];
     paymentJournal = [];
@@ -10297,6 +10298,98 @@ group('0.15.4: Poprawki z gry 3 (licznik, okna, wykres, dywidenda, split, limit 
         assertEq(getMainSector(tech), 'Nieruchomości', 'po przesunięciu udziału główny: Nieruchomości');
         assertEq(tech.sector[0], 'Nieruchomości', 'etykieta sektorów zaczyna od głównego');
         assert(getStockActivityLabel(tech).startsWith('Nieruchomości'), 'opis działalności zaczyna od największego segmentu');
+    });
+});
+
+group('0.15.5: Budownictwo i banki (przetargi, podwykonawcy, przejęcia pionowe, banki, REIT-y)', () => {
+    const mkB = (symbol, o = {}) => makeCompany(symbol, Object.assign({ sector: ['Budowlany'], cash: 2_000_000 }, o));
+    const award = (tender) => { tender.evaluatedBy = stocks.map(getEntityKey); runUntil(() => tender.status !== 'open' && tender.status !== 'closed', 400); };
+
+    test('B1: wagi kryteriów 40/25/20/15 i opisy dla interfejsu', () => {
+        const w = normalizeTenderWeights({});
+        assertNear(w.price, 0.40, 'cena'); assertNear(w.quality, 0.25, 'jakość'); assertNear(w.capacity, 0.20, 'zdolność'); assertNear(w.reputation, 0.15, 'reputacja');
+        assert(Object.keys(w).every(k => TENDER_CRITERIA_LABELS[k]), 'każde kryterium ma opis');
+        const old = normalizeTenderWeights({ time: 0.9, experience: 0.9 });
+        assertNear(old.price, 0.40, 'dawne klucze ignorowane (domyślne wagi)');
+    });
+
+    test('B1: zdolność wykonawcza maleje z obłożeniem i obniża ocenę oferty przy równych cenach', () => {
+        const free = mkB('FRE', { experience: 30 }), busy = mkB('BSY', { experience: 30 }), client = makeCompany('KLI', { cash: 3_000_000 });
+        resetWorld([client, free, busy]);
+        assertEq(getBuilderCapacityScore(free), 100, 'wolny wykonawca ma pełne moce');
+        constructionProjects.push({ id: 'p1', settled: false, builder: busy, tender: { clientCompany: client, buildingType: { id: 'x' } } });
+        constructionProjects.push({ id: 'p2', settled: false, builder: busy, tender: { clientCompany: client, buildingType: { id: 'y' } } });
+        assert(getBuilderCapacityScore(busy) < getBuilderCapacityScore(free), 'obłożony ma mniej mocy');
+        const tenderId = requestConstructionTender(client, { id: 'warehouse' }, null);
+        const tender = activeTenders.find(t => t.id === tenderId);
+        assert(bidOnTender(tenderId, free, 470000, 20) && bidOnTender(tenderId, busy, 470000, 20), 'oferty');
+        const [a, b] = tender.bids;
+        assert(calculateBidScore(a, tender) > calculateBidScore(b, tender), 'wolny wykonawca wygrywa ranking przy równej ofercie');
+        constructionProjects = [];
+    });
+
+    test('B1: reputacja rośnie po terminowym odbiorze, maleje po zerwaniu z winy wykonawcy, mieści się w 0–100', () => {
+        const { client, builder } = standardWorld();
+        builder.constructionReputation = 50;
+        const { project } = awardContract(client);
+        project.delayChance = 0;
+        runUntil(() => project.settled, 6000);
+        assert(project.status === 'completed', 'ukończona');
+        assert(builder.constructionReputation > 50, 'reputacja po odbiorze ' + builder.constructionReputation);
+        adjustConstructionReputation(builder, -500); assertEq(builder.constructionReputation, 0, 'dół');
+        adjustConstructionReputation(builder, 500); assertEq(builder.constructionReputation, 100, 'góra');
+        const second = awardContract(client, 'warehouse');
+        builder.constructionReputation = 50;
+        cancelConstructionProject(second.project, 'test', 'contractor');
+        assertEq(builder.constructionReputation, 42, 'zerwanie z winy wykonawcy −8');
+    });
+
+    test('B1: wygrana przy dużym obłożeniu wydłuża czas i zwiększa ryzyko opóźnień (przeciążenie mocy)', () => {
+        const free = withSeededRandom(5, () => { const { client } = standardWorld({ experience: 45 }); return awardContract(client).project; });
+        const loaded = withSeededRandom(5, () => {
+            const { client, builder } = standardWorld({ experience: 45 });
+            for (let i = 0; i < 3; i++) constructionProjects.push({ id: 'b' + i, settled: false, builder, tender: { clientCompany: client, buildingType: { id: 'z' + i } } });
+            builder.constructionStats.maxProjects = 5;
+            return awardContract(client).project;
+        });
+        assertEq(free.loadAtStart, 0, 'start bez obłożenia');
+        assert(loaded.loadAtStart >= 0.6, 'obłożenie przy starcie ' + loaded.loadAtStart);
+        assert(loaded.delayChance > free.delayChance, 'większe ryzyko opóźnień');
+        assert(loaded.performanceFactor < free.performanceFactor, 'wolniejsza praca');
+        constructionProjects = [];
+    });
+
+    test('B1: limit 40% wygranych w oknie 8 kw. — lider oddaje zlecenie, a gdy nikt inny nie może, przetarg dochodzi do skutku', () => {
+        const lead = mkB('LED', { experience: 40 }), other = mkB('OTH', { experience: 10 }), client = makeCompany('KLI', { cash: 5_000_000 });
+        resetWorld([client, lead, other]);
+        const q0 = macro.quarter;
+        macro.quarter = 100;
+        for (let i = 0; i < 5; i++) constructionAwardLog.push({ q: 100, sym: 'LED' });
+        assert(isOverTenderShareLimit(lead), 'lider ponad limitem');
+        assert(!isOverTenderShareLimit(other), 'inni poniżej');
+        const t1Id = requestConstructionTender(client, { id: 'warehouse' }, null);
+        const t1 = activeTenders.find(t => t.id === t1Id);
+        assert(bidOnTender(t1Id, lead, 400000, 12) && bidOnTender(t1Id, other, 470000, 30), 'oferty');
+        assert(calculateBidScore(t1.bids[0], t1) > calculateBidScore(t1.bids[1], t1), 'lider ma lepszą ocenę');
+        award(t1);
+        assertEq(t1.status, 'awarded', 'przyznany'); assertEq(getEntityKey(t1.winner.bidder), 'OTH', 'wygrał wykonawca poniżej limitu');
+        // tylko lider składa ofertę: poluzowany limit zamiast anulowania
+        constructionProjects = []; activeTenders = [];
+        const t2Id = requestConstructionTender(client, { id: 'warehouse' }, null);
+        const t2 = activeTenders.find(t => t.id === t2Id);
+        assert(bidOnTender(t2Id, lead, 450000, 15), 'oferta lidera');
+        award(t2);
+        assertEq(getEntityKey(t2.winner.bidder), 'LED', 'lider wygrywa, gdy nie ma innych ofert');
+        macro.quarter = 120; pruneAwardLog();
+        assertEq(constructionAwardLog.length, 0, 'okno 8 kw. wygasa');
+        macro.quarter = q0;
+    });
+
+    test('B1: okno wygranych jest zapisywane (pole opcjonalne)', () => {
+        constructionAwardLog = [{ q: 7, sym: 'AAA' }, { q: 8, sym: 'BBB' }];
+        const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+        assert(Array.isArray(raw.constructionAwardLog) && raw.constructionAwardLog.length === 2, 'w zapisie');
+        constructionAwardLog = [];
     });
 });
 

@@ -214,6 +214,7 @@ function buildSaveSnapshot({ compact = 0 } = {}) {
         city: serializeWithStockRefs(city),
         centralBank: serializeWithStockRefs(centralBank),
         specialists: serializeWithStockRefs(specialists),
+        constructionAwardLog, // 0.15.5 B1: okno wygranych przetargów (pole opcjonalne)
         activeTenders: activeTenders.filter(tender => ['open', 'closed', 'awarded'].includes(tender.status)).map(serializeTenderForSave), // zakończone przetargi nie trafiają do zapisu
         constructionProjects: constructionProjects.filter(project => !project.settled).map(serializeProjectForSave),
         paymentJournal: limits.journal ? paymentJournal.slice(-limits.journal) : [],
@@ -580,6 +581,7 @@ function applySaveSnapshot(snapshot) {
     if (snapshot.city) city = resolveOther(snapshot.city);
     if (snapshot.centralBank) centralBank = resolveOther(snapshot.centralBank);
     if (Array.isArray(snapshot.specialists)) specialists = resolveOther(snapshot.specialists);
+    constructionAwardLog = Array.isArray(snapshot.constructionAwardLog) ? snapshot.constructionAwardLog.filter(e => e && typeof e.sym === 'string' && Number.isFinite(e.q)) : []; // 0.15.5 B1
 
     if (isFiniteNumber(snapshot.playerCash)) playerCash = snapshot.playerCash;
     else report.warnings.push('Nieprawidłowa gotówka funduszu — pozostawiono wartość startową.');
