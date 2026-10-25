@@ -1460,8 +1460,8 @@ function renderCitySpecialProjects() {
             <header class="bank-card-head"><span class="bank-card-icon">${project.icon}</span><div><h4>${escapeHtml(project.name)}</h4>
                 <span class="bank-card-type">${project.timed ? `czasowy · termin za ${Math.max(0, project.deadline - quarter)} kw.` : 'megaprojekt'} · ${project.status === 'signup' ? 'zapisy do konsorcjum' : 'w budowie'}</span></div></header>
             ${project.status === 'building' ? renderProjectStages(project) : ''}
-            <p class="text-sm">Koszt ${formatProjectMoney(project.cost)} · zebrano ${formatProjectMoney(funding)} · wykonawca: ${escapeHtml(project.builder?.name || '—')}</p>
-            <p class="text-xs text-muted">Konsorcjum (${project.participants.length}/${MAX_CONSORTIUM_MEMBERS}): ${project.participants.map(p => `${p.player ? '⭐ ' : ''}${escapeHtml(p.name)}`).join(', ') || '—'}</p>
+            <p class="text-sm">Koszt ${formatProjectMoney(project.cost)} · zebrano ${formatProjectMoney(funding)} · wykonawca: ${escapeHtml(project.builder?.name || '—')}${project.builder ? ` (specjalność: ${escapeHtml((getBuilderSpecialties(stocks.find(s => s.symbol === project.builder.symbol) || {}) || []).join(', ') || '—')})` : ''}</p>
+            <p class="text-xs text-muted">Konsorcjum (${project.participants.length}/${MAX_CONSORTIUM_MEMBERS}; każdy uczestnik ≤ ${Math.round(MAX_MEMBER_SHARE * 100)}% kosztu): ${project.participants.map(p => `${p.player ? '⭐ ' : ''}${escapeHtml(p.name)} ${Math.round(p.amount / Math.max(1, project.cost) * 100)}%`).join(', ') || '—'}</p>
             ${join}
             ${renderProjectBondForm(project)}
         </article>`;

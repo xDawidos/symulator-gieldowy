@@ -182,7 +182,9 @@ function noteBankExposure(company, delta) {
 function canBankExtendCredit(company, amount) {
     const bank = getCompanyBank(company);
     if (!bank) return true;
-    return getBankExposure(bank, company) + Math.max(0, Number(amount) || 0) <= BANK_CONCENTRATION_LIMIT * getBankCapital(bank);
+    const allowed = getBankExposure(bank, company) + Math.max(0, Number(amount) || 0) <= BANK_CONCENTRATION_LIMIT * getBankCapital(bank);
+    if (!allowed && typeof unlockAcademyEntry === 'function') unlockAcademyEntry('ryzykoKredytowe');
+    return allowed;
 }
 
 function isDeveloperCompany(company) {
@@ -221,7 +223,7 @@ function processBankRiskQuarterly() {
         }
         if (crisis && bank.isActive) {
             const { developer } = getBankDeveloperExposure(bank);
-            if (developer > 0) getBankLedger(bank).writeOffs += developer * BANK_CRISIS_PROVISION;
+            if (developer > 0) { getBankLedger(bank).writeOffs += developer * BANK_CRISIS_PROVISION; if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('ryzykoKredytowe'); }
         }
     }
 }

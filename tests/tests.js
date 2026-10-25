@@ -10955,6 +10955,81 @@ group('0.15.5: Budownictwo i banki (przetargi, podwykonawcy, przejęcia pionowe,
         for (const b of builders) assert(b.cash >= 0, 'kasa nieujemna');
     });
 
+
+    // --- B7: interfejs i Akademia ---
+    const emojiRe = /\p{Extended_Pictographic}/u;
+    const withEl = (id, tag, fn) => {
+        const existing = document.getElementById(id);
+        const el = existing || Object.assign(document.createElement(tag), { id });
+        if (!existing) document.body.appendChild(el);
+        try { return fn(el); } finally { if (!existing) el.remove(); }
+    };
+
+    test('B7: ranking ofert — miejsce słowem i liczbą, oceny cząstkowe z wagami, znacznik limitu udziału', () => {
+        const a = mkB('AAA', { experience: 40 }), b = mkB('BBB', { experience: 10 }), c = mkB('CCC', { experience: 20 }), client = makeCompany('KLI', { cash: 5_000_000 });
+        resetWorld([client, a, b, c]);
+        const id = requestConstructionTender(client, { id: 'warehouse' }, null);
+        const tender = activeTenders.find(t => t.id === id);
+        bidOnTender(id, a, 400000, 12); bidOnTender(id, b, 470000, 30); bidOnTender(id, c, 450000, 20);
+        const ranking = getTenderRanking(tender);
+        assertEq(ranking.map(r => r.rank).join(), '1,2,3', 'miejsca');
+        assertEq(ranking[0].label, 'Najlepsza oferta', 'etykieta lidera'); assertEq(ranking[2].label, 'Najsłabsza oferta', 'etykieta ostatniego'); assertEq(ranking[1].label, 'Miejsce 2 z 3', 'środek');
+        assert(ranking[0].score >= ranking[1].score && ranking[1].score >= ranking[2].score, 'malejące oceny');
+        assertEq(ranking[0].criteria.map(k => k.key).join(), 'price,quality,capacity,reputation', 'kryteria o dodatniej wadze');
+        assertNear(ranking[0].criteria.reduce((s, k) => s + k.weight, 0), 1, 'wagi sumują się do 100%', 1e-9);
+        assertEq(getBidRankLabel(1, 1), 'Jedyna oferta', 'jedna oferta');
+        const q0 = macro.quarter; macro.quarter = 50;
+        for (let i = 0; i < 5; i++) constructionAwardLog.push({ q: 50, sym: ranking[0].bid.bidder.symbol });
+        assert(getTenderRanking(tender)[0].overLimit, 'lider ponad limitem oznaczony');
+        macro.quarter = q0;
+    });
+
+    test('B7: okno przetargu pokazuje miejsce, oceny cząstkowe i kryteria; widok podwykonawców — specjalności, stawki, grupy; bez emoji', () => {
+        const a = mkB('AAA', { experience: 40 }), b = mkB('BBB', { experience: 10 }), client = makeCompany('KLI', { cash: 5_000_000 });
+        resetWorld([client, a, b]);
+        const id = requestConstructionTender(client, { id: 'warehouse' }, null);
+        bidOnTender(id, a, 400000, 12); bidOnTender(id, b, 470000, 30);
+        withEl('tenders-list', 'div', el => {
+            renderTendersList();
+            const text = el.textContent;
+            assert(text.includes('Miejsce w rankingu') && text.includes('Najlepsza oferta') && text.includes('Najsłabsza oferta'), 'miejsce słowem: ' + text.slice(0, 200));
+            assert(/Cena \d+ · Jakość \d+ · Zdolność wykonawcza \d+ · Reputacja \d+/.test(text), 'oceny cząstkowe');
+            assert(text.includes('Kryteria oceny') && text.includes('Cena 40%'), 'wagi kryteriów');
+            assert(!emojiRe.test(text), 'bez emoji w oknie przetargu');
+        });
+        const builder = registryWorld();
+        const spec = groupSpec('roads'); acquireSubcontractor(builder, spec, 100_000);
+        withEl('subcontractors-list', 'div', list => withEl('subcontractors-summary', 'div', summary => {
+            renderConstructionSubcontractorsList();
+            assert(list.querySelectorAll('.subcontractor-specialty').length === 12, 'nagłówek każdej z 12 specjalności');
+            assert(list.textContent.includes('Stawka (cena)') && list.textContent.includes('Udział w zleceniach rynku'), 'cena i udział');
+            assert(list.textContent.includes('Należy do grupy') && list.textContent.includes(builder.name), 'grupa wykonawcy');
+            assert(summary.textContent.includes('W grupach wykonawców') && summary.textContent.includes('Największy udział'), 'podsumowanie');
+            assert(!emojiRe.test(list.textContent + summary.textContent), 'bez emoji w widoku podwykonawców');
+        }));
+    });
+
+    test('B7: karta REIT — portfel, obłożenie, LTV ze słowem, wypłata ≥ 80%, stopa dywidendy; bez emoji, ikona SVG', () => {
+        const reit = mkReit('RTU');
+        resetWorld([reit]);
+        ensureReitModel(reit);
+        const html = renderReitCard(reit);
+        for (const part of ['Wartość portfela', 'Obłożenie', 'Dźwignia (LTV)', 'Wypłata (obowiązkowa ≥ 80% zysku)', 'Stopa dywidendy', 'Premia / dyskonto do NAV']) assert(html.includes(part), 'brak: ' + part);
+        assert(/(niska|umiarkowana|wysoka|ponad limitem)/.test(html), 'LTV opisane słowem');
+        assert(html.includes('<svg') && !emojiRe.test(html.replace(/<svg[\s\S]*?<\/svg>/g, '')), 'ikona SVG, bez emoji');
+    });
+
+    test('B7: hasła Akademii (przetarg, koncentracja, REIT, ryzyko kredytowe) mają quiz, przykład i ikonę SVG', () => {
+        for (const id of ['przetargKryteria', 'koncentracjaRynku', 'reitNieruchomosci', 'ryzykoKredytowe']) {
+            const entry = ACADEMY_ENTRIES[id];
+            assert(entry && entry.title && entry.text.length > 200, 'hasło ' + id);
+            assertEq(entry.quiz.length, 3, 'quiz ' + id);
+            assert(entry.quiz.every(q => q.a.length === 3 && q.c >= 0 && q.c < 3), 'odpowiedzi ' + id);
+            assert(entry.icon.includes('<svg') && !emojiRe.test(entry.icon.replace(/<svg[\s\S]*?<\/svg>/g, '')), 'ikona SVG ' + id);
+            assert(typeof entry.example() === 'string' && entry.example().length > 20, 'przykład ' + id);
+        }
+    });
+
     test('B1: okno wygranych jest zapisywane (pole opcjonalne)', () => {
         constructionAwardLog = [{ q: 7, sym: 'AAA' }, { q: 8, sym: 'BBB' }];
         const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));

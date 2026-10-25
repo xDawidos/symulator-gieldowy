@@ -730,6 +730,38 @@ function isOverTenderShareLimit(builder) {
     return total >= TENDER_SHARE_LIMIT.minAwards && (own + 1) / (total + 1) > TENDER_SHARE_LIMIT.share;
 }
 
+const BID_CRITERIA_ORDER = ['price', 'quality', 'capacity', 'reputation', 'exchangeLevel', 'isStateOwned'];
+
+function getBidRankLabel(rank, total) {
+    if (total <= 1) return 'Jedyna oferta';
+    if (rank === 1) return 'Najlepsza oferta';
+    if (rank === total) return 'Najsłabsza oferta';
+    return 'Miejsce ' + rank + ' z ' + total;
+}
+
+/**
+ * Ranking ofert przetargu dla interfejsu: ocena łączna, miejsce słowem, oceny cząstkowe z wagami kryteriów
+ * i informacja, czy wykonawca przekracza limit udziału w wygranych (40% w oknie 8 kw.).
+ */
+function getTenderRanking(tender) {
+    const weights = normalizeTenderWeights(tender?.criteriaWeights);
+    const total = Object.values(weights).reduce((sum, value) => sum + value, 0) || 1;
+    const rows = (tender?.bids || []).map(bid => {
+        const scores = getBidCriteriaScores(bid, tender);
+        return {
+            bid,
+            score: calculateBidScore(bid, tender),
+            valid: Boolean(scores),
+            criteria: BID_CRITERIA_ORDER.filter(key => weights[key] > 0.0001).map(key => ({
+                key, label: TENDER_CRITERIA_LABELS[key], score: scores ? scores[key] : 0, weight: weights[key] / total
+            })),
+            overLimit: typeof isOverTenderShareLimit === 'function' && isOverTenderShareLimit(bid.bidder)
+        };
+    }).sort((a, b) => b.score - a.score);
+    rows.forEach((row, index) => { row.rank = index + 1; row.label = getBidRankLabel(index + 1, rows.length); });
+    return rows;
+}
+
 function closeExpiredTenders() {
     if (isGamePaused) return;
 
@@ -802,6 +834,7 @@ function awardTender(tenderId) {
     // gdy nikt inny nie może przyjąć zlecenia (przetarg z poluzowanym limitem zamiast anulowania).
     const withinLimit = rankedAll.filter(bid => !isOverTenderShareLimit(bid.bidder));
     const ranked = [...withinLimit, ...rankedAll.filter(bid => !withinLimit.includes(bid))];
+    if (withinLimit.length < rankedAll.length && typeof unlockAcademyEntry === 'function') unlockAcademyEntry('koncentracjaRynku');
 
     // Jeśli najlepszy wykonawca zajął w międzyczasie ostatnie wolne miejsce,
     // zamawiający przechodzi do kolejnej oferty w rankingu.

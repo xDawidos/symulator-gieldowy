@@ -4268,8 +4268,33 @@ function renderCompanyCardFinance(stock, f) {
                     ${row('Ostatnia dywidenda', last ? `${formatNumberPl(last.dps, 4)} PLN (${formatNumberPl((last.yield * 100), 2)}%)` : 'brak', 'Ostatnia wypłata na akcję i stopa w dniu wypłaty.')}
                 </tbody></table></section>
         </div>
+        ${stock.assetType === 'REIT' && stock.reit ? renderReitCard(stock) : ''}
         ${renderValuationSection(stock, f)}
         ${typeof renderAccountingSection === 'function' ? renderAccountingSection(stock) : ''}`;
+}
+
+/** 0.15.5 B5/B7: karta REIT-u — portfel, obłożenie, LTV, wypłata i stopa dywidendy (liczby z opisem, nie sam kolor). */
+function renderReitCard(stock) {
+    const reit = stock.reit;
+    const money = value => Number.isFinite(value) ? formatZl(value, 0) : '—';
+    const type = typeof getReitType === 'function' ? getReitType(stock) : { label: '—' };
+    const ltv = getReitLtv(stock), premium = getReitPremium(stock);
+    const ltvWord = ltv > REIT_RULES.ltvMax ? 'ponad limitem' : ltv > REIT_RULES.ltvBuild ? 'wysoka' : ltv > 0.3 ? 'umiarkowana' : 'niska';
+    const row = (label, value, hint) => `<tr><td title="${escapeHtml(hint)}">${label} <span class="text-muted">ⓘ</span></td><td class="cell-number">${value}</td></tr>`;
+    if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('reitNieruchomosci');
+    return `<section class="cc-section"><h4>${uiIcon('budownictwo', 16)} Portfel nieruchomości (REIT)</h4>
+        <table class="asset-mini-table w-full"><tbody>
+            ${row('Rodzaj portfela', escapeHtml(type.label), 'Biura, handel, magazyny, hotele i szpitale inaczej reagują na recesję i pandemię.')}
+            ${row('Wartość portfela', money(reit.portfolioValue), 'Szacunkowa wartość rynkowa nieruchomości; zmienia się ze stopami i inflacją.')}
+            ${row('Obłożenie', `${formatNumberPl(reit.occupancy * 100, 1)}%`, 'Odsetek wynajętej powierzchni; spada w recesji (biura, handel, hotele).')}
+            ${row('Stopa najmu', `${formatNumberPl(reit.rentYield * 100, 1)}% rocznie`, 'Przychód z najmu = wartość × stopa najmu × obłożenie.')}
+            ${row('Dźwignia (LTV)', `${formatNumberPl(ltv * 100, 1)}% — ${ltvWord} (limit ${formatNumberPl(REIT_RULES.ltvMax * 100, 0)}%)`, 'Dług do wartości portfela; powyżej limitu REIT sprzedaje część nieruchomości.')}
+            ${row('Zysk z ostatniego kwartału', money(reit.lastProfit), 'Najem − koszty utrzymania − odsetki (stopa bazowa + 2 pp).')}
+            ${row('Wypłata (obowiązkowa ≥ 80% zysku)', `${formatNumberPl(reit.payoutRatio * 100, 0)}% zysku · ostatnio ${money(reit.lastPaid)}`, 'REIT wypłaca większość zysku jako dywidendę, raz na kwartał.')}
+            ${row('Stopa dywidendy (rocznie)', `${formatNumberPl(getReitDividendYield(stock) * 100, 1)}%`, 'Ostatnia dywidenda × 4 / kurs.')}
+            ${row('Premia / dyskonto do NAV', `${premium >= 0 ? '▲' : '▼'} ${formatNumberPl(Math.abs(premium) * 100, 1)}%`, 'Zależy od stóp procentowych (wrażliwość 3×), cyklu i fazy rynku.')}
+            ${row('Nowe obiekty (budowa u wykonawców)', `${reit.buildings}`, 'REIT zamawia budynki w przetargach; ukończone zwiększają portfel.')}
+        </tbody></table></section>`;
 }
 
 /** N2: metody wyceny (Analityk Finansowy 1–2) i konsensus (poziom 3). */
@@ -5737,6 +5762,7 @@ function renderTendersList() {
     const visibleTenders = activeTenders.filter(
         tender => ['open', 'closed', 'awarded'].includes(tender.status)
     );
+    if (visibleTenders.length && typeof unlockAcademyEntry === 'function') unlockAcademyEntry('przetargKryteria');
 
     if (visibleTenders.length === 0) {
         const empty = document.createElement('p');
@@ -5795,10 +5821,15 @@ function renderTendersList() {
             );
         }
 
-        const bids = [...(tender.bids || [])].sort(
-            (a, b) => calculateBidScore(b, tender) -
-                calculateBidScore(a, tender)
-        );
+        const ranking = getTenderRanking(tender);
+        const bids = ranking.map(row => row.bid);
+        const weightRow = ranking[0] ? ranking[0].criteria : [];
+        if (weightRow.length) {
+            card.appendChild(createConstructionInfoRow(
+                'Kryteria oceny',
+                weightRow.map(item => item.label + ' ' + formatNumberPl(item.weight * 100, 0) + '%').join(' · ')
+            ));
+        }
 
         const details = document.createElement('details');
         details.dataset.tenderId = tender.id;
@@ -5814,14 +5845,20 @@ function renderTendersList() {
             details.appendChild(empty);
         }
 
-        for (const bid of bids) {
+        for (const row of ranking) {
+            const bid = row.bid;
             const offer = document.createElement('div');
             offer.className = 'construction-live-offer';
 
+            // Miejsce słowem i liczbą (kolor nie jest jedynym nośnikiem informacji).
             offer.append(
                 createConstructionInfoRow(
                     'Spółka',
                     bid.bidder?.name || 'Brak danych'
+                ),
+                createConstructionInfoRow(
+                    'Miejsce w rankingu',
+                    `${row.rank}. — ${row.label} (${formatNumberPl(row.score, 1)} / 100)`
                 ),
                 createConstructionInfoRow(
                     'Cena',
@@ -5832,10 +5869,13 @@ function renderTendersList() {
                     `${bid.time} dni budowy`
                 ),
                 createConstructionInfoRow(
-                    'Ocena oferty',
-                    `${formatNumberPl(calculateBidScore(bid, tender), 1)} / 100`
+                    'Oceny cząstkowe',
+                    row.criteria.map(item => `${item.label} ${formatNumberPl(item.score, 0)}`).join(' · ')
                 )
             );
+            if (row.overLimit) {
+                offer.appendChild(createConstructionInfoRow('Limit udziału', 'Wykonawca ponad limitem 40% wygranych w oknie 8 kw. — wygra tylko wtedy, gdy nikt inny nie może przyjąć zlecenia.'));
+            }
 
             details.appendChild(offer);
         }
@@ -5905,11 +5945,16 @@ function renderConstructionSubcontractorsList() {
     if (!container) return;
 
     const busyCount = specialists.filter(spec => spec.busyProjectId).length;
+    const grouped = specialists.filter(spec => spec.groupSymbol).length;
+    const shares = typeof getSubcontractorMarketShare === 'function' ? specialists.map(spec => getSubcontractorMarketShare(spec)) : [0];
+    const topShare = Math.max(0, ...shares);
 
     if (summary) {
         summary.innerHTML = `
-            <div class="construction-stat-card"><span class="construction-stat-label">Specjaliści</span><strong>${specialists.length}</strong></div>
-            <div class="construction-stat-card"><span class="construction-stat-label">Zajęci przy budowach</span><strong>${busyCount}</strong></div>`;
+            <div class="construction-stat-card"><span class="construction-stat-label">Podwykonawcy</span><strong>${specialists.length}</strong></div>
+            <div class="construction-stat-card"><span class="construction-stat-label">Zajęci przy budowach</span><strong>${busyCount}</strong></div>
+            <div class="construction-stat-card"><span class="construction-stat-label">W grupach wykonawców</span><strong>${grouped}</strong></div>
+            <div class="construction-stat-card"><span class="construction-stat-label">Największy udział w rynku (8 kw.)</span><strong>${formatNumberPl(topShare * 100, 0)}%</strong></div>`;
     }
 
     if (specialists.length === 0) {
@@ -5920,15 +5965,29 @@ function renderConstructionSubcontractorsList() {
     const fragment = document.createDocumentFragment();
     const intro = document.createElement('p');
     intro.className = 'construction-empty';
-    intro.textContent = 'Wykonawcy zatrudniają podwykonawców, gdy budowa grozi opóźnieniem. ' +
-        `Wynagrodzenie (${(CONSTRUCTION_RULES.subcontractorFeeRate * 100).toFixed(0)}% pozostałych kosztów) jest kosztem kontraktu; ` +
-        'moce podwykonawcy zwalniają się po odbiorze lub anulowaniu budowy.';
+    intro.textContent = 'Generalny wykonawca prosi o oferty 3–5 podwykonawców (aukcja) i wybiera wg ceny, jakości i reputacji; ' +
+        'jedna firma nie obsłuży więcej niż połowy jego zleceń w oknie 8 kwartałów. ' +
+        `Wynagrodzenie (${(CONSTRUCTION_RULES.subcontractorFeeRate * 100).toFixed(0)}% pozostałych kosztów × stawka firmy) jest kosztem kontraktu; ` +
+        'moce podwykonawcy zwalniają się po odbiorze lub anulowaniu budowy. Firmy są prywatne i nienotowane; wykonawca może przejąć podwykonawcę jako spółkę zależną (do 40% firm specjalności).';
     fragment.appendChild(intro);
 
     const grid = document.createElement('div');
     grid.className = 'subcontractor-grid specialist-grid';
 
-    for (const spec of specialists) {
+    const specialtyKeys = typeof SUBCONTRACTOR_SPECIALTIES === 'object' ? Object.keys(SUBCONTRACTOR_SPECIALTIES) : [];
+    const ordered = [...specialists].sort((a, b) => specialtyKeys.indexOf(a.specialty) - specialtyKeys.indexOf(b.specialty) || String(a.name).localeCompare(String(b.name), 'pl'));
+    let lastSpecialty = null;
+
+    for (const spec of ordered) {
+        if (spec.specialty !== lastSpecialty) {
+            lastSpecialty = spec.specialty;
+            const count = specialists.filter(item => item.specialty === spec.specialty).length;
+            const heading = document.createElement('h4');
+            heading.className = 'subcontractor-specialty';
+            heading.style.gridColumn = '1 / -1';
+            heading.textContent = `${typeof SUBCONTRACTOR_SPECIALTIES === 'object' ? (SUBCONTRACTOR_SPECIALTIES[spec.specialty] || spec.specialty) : spec.specialty} (${count})`;
+            grid.appendChild(heading);
+        }
         const project = spec.busyProjectId ? constructionProjects.find(item => item.id === spec.busyProjectId) : null;
         const card = document.createElement('article');
         card.className = 'subcontractor-card specialist-card';
@@ -5943,11 +6002,16 @@ function renderConstructionSubcontractorsList() {
         top.append(name, badge);
         card.appendChild(top);
 
+        const group = spec.groupSymbol ? stocks.find(item => item.symbol === spec.groupSymbol) : null;
+        const marketShare = typeof getSubcontractorMarketShare === 'function' ? getSubcontractorMarketShare(spec) : 0;
         card.append(
-            createConstructionInfoRow('Poziom', spec.level),
-            createConstructionInfoRow('Specjalność', spec.specialty),
+            createConstructionInfoRow('Specjalność', typeof SUBCONTRACTOR_SPECIALTIES === 'object' ? (SUBCONTRACTOR_SPECIALTIES[spec.specialty] || spec.specialty) : spec.specialty),
+            createConstructionInfoRow('Stawka (cena)', `${formatNumberPl((Number(spec.priceFactor) || 1) * 100, 0)}% stawki bazowej`),
+            createConstructionInfoRow('Jakość / reputacja', `${formatNumberPl(Number(spec.quality) || 0, 0)} / ${formatNumberPl(Number(spec.reputation) || 0, 0)} (0–100)`),
             createConstructionInfoRow('Bonus tempa', `+${formatNumberPl((spec.bonus * 100), 1)}%`),
             createConstructionInfoRow('Kontrakty', spec.contractsCompleted),
+            createConstructionInfoRow('Udział w zleceniach rynku (8 kw.)', `${formatNumberPl(marketShare * 100, 0)}%`),
+            createConstructionInfoRow('Należy do grupy', group ? `${group.name} (transfer ${formatNumberPl((Number(spec.transferShare) || 0) * 100, 0)}% zysku)` : 'niezależny'),
             createConstructionInfoRow('Gotówka', formatConstructionMoney(spec.cash)),
             createConstructionInfoRow('Obecna budowa', project ? `${project.tender.buildingType.name} (${project.builder.name})` : '—')
         );
