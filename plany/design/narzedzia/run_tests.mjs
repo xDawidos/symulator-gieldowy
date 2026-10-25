@@ -1,7 +1,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 const PORT = Number(process.env.SIM_PORT) || 8765;
 const CDP = Number(process.env.SIM_CDP) || 9222;
@@ -44,7 +44,7 @@ server.listen(PORT, async () => {
   const cleanup = () => {
     if (!finished) {
       finished = true;
-      try { edge.kill(); } catch (e) {}
+      try { spawnSync('powershell', ['-NoProfile', '-Command', `Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" | Where-Object { $_.CommandLine -like '*edge-run-${process.pid}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }`]); } catch (e) {} // zabija całe drzewo Edge z tego przebiegu
       server.close();
     }
   };

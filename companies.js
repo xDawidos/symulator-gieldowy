@@ -2710,7 +2710,8 @@ function randomizeStartingGiants(list = stocks) {
 /** Spółka liczona do limitu spółek krajowych. */
 function isCountedListedCompany(stock) {
     return Boolean(stock && !stock.assetType && !stock.isBankrupt && !stock.isSubsidiaryOf
-        && !(typeof isInternetMarketStock === 'function' && isInternetMarketStock(stock)));
+        && !(typeof isInternetMarketStock === 'function' && isInternetMarketStock(stock))
+        && !(typeof isEntryMarketStock === 'function' && isEntryMarketStock(stock)));
 }
 
 function getListedCompanyCount() {
@@ -2790,11 +2791,15 @@ function getListingStrictness() {
 
 /** Spółka, którą państwo może wycofać z giełdy: zwykła, słaba, bez fuzji/wezwania/córek, bez większościowego pakietu gracza. */
 function isDelistCandidate(stock) {
+    return hasListingMoveGuards(stock) && (Number(stock.financialHealth) || 0) <= 1;
+}
+
+/** 0.15.6 E1: spółka, której państwo może zmienić rynek albo wycofać z giełdy (nie państwowa, bank, operator; bez fuzji i córek; bez większościowego pakietu gracza). */
+function hasListingMoveGuards(stock) {
     if (!isCountedListedCompany(stock) || stock.isStateOwned || stock.isBankStock || stock.marketOperator || stock.mafiaFront) return false;
     if (stock.mergerProcess || stock.tender || stock.spinoff || stock.stakeCampaign || (stock.subsidiaries?.length || 0) > 0) return false;
     if (stocks.some(other => other.isSubsidiaryOf === stock.symbol)) return false;
-    if ((playerPortfolio?.[stock.symbol]?.shares || 0) > stock.totalShares * 0.5) return false;
-    return (Number(stock.financialHealth) || 0) <= 1;
+    return (playerPortfolio?.[stock.symbol]?.shares || 0) <= stock.totalShares * 0.5;
 }
 
 /** Kandydaci do wycofania, od najsłabszego: kondycja, potem kapitalizacja. */

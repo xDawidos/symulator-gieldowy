@@ -1729,7 +1729,10 @@ const MARKET_OPERATOR_DEFS = {
     GPW:      { name: 'Giełda Papierów Wartościowych', short: 'GPW', commission: 0.003, color: '#1f6feb', main: true },
     XTD:      { name: 'XTD Markets', short: 'XTD', commission: 0.002, color: '#8957e5' },
     PLU5:     { name: 'PLU5 Exchange', short: 'PLU5', commission: 0.0015, color: '#d29922' },
-    EURONEXT: { name: 'Euronext', short: 'Euronext', commission: 0.0025, color: '#3fb950', dormantForever: true }
+    EURONEXT: { name: 'Euronext', short: 'Euronext', commission: 0.0025, color: '#3fb950', dormantForever: true },
+    // 0.15.6: rynki wejścia bez spółki-operatora (listings.js): NewHorizons (państwowy operator, młode i ryzykowne spółki) i giełda prywatna
+    NH:       { name: 'NewHorizons', short: 'NH', commission: 0, color: '#2dd4bf', entry: true },
+    PRV:      { name: 'Giełda prywatna', short: 'PRV', commission: 0, color: '#94a3b8', entry: true }
 };
 const OPERATOR_STARTUP_GOAL = [300000, 600000];  // bardzo drogie startupy
 const OPERATOR_STARTUP_SLOWDOWN = 0.25;         // rozwój 4× wolniej niż zwykły startup
@@ -1747,7 +1750,7 @@ let marketOperators = null;
 function createMarketOperators() {
     const operators = {};
     for (const [id, def] of Object.entries(MARKET_OPERATOR_DEFS)) {
-        operators[id] = { id, status: def.main ? 'active' : def.dormantForever ? 'inactive' : 'dormant', symbol: null, startupSymbol: null, sponsors: [], members: 0, commissionsTotal: 0 };
+        operators[id] = { id, status: def.main || def.entry ? 'active' : def.dormantForever ? 'inactive' : 'dormant', symbol: null, startupSymbol: null, sponsors: [], members: 0, commissionsTotal: 0 };
     }
     return operators;
 }
@@ -1784,7 +1787,16 @@ function getMarketDef(id) {
 
 function isInternetMarket(id) {
     const def = getMarketDef(id);
-    return Boolean(def && !def.main && !def.dormantForever);
+    return Boolean(def && !def.main && !def.dormantForever && !def.entry);
+}
+
+/** 0.15.6: rynek wejścia (NH, giełda prywatna) — bez operatora, poza limitem spółek krajowych. */
+function isEntryMarket(id) {
+    return Boolean(getMarketDef(id)?.entry);
+}
+
+function isEntryMarketStock(stock) {
+    return Boolean(stock && !stock.isBankrupt && isEntryMarket(getStockMarket(stock)));
 }
 
 /** Spółka notowana na rynku internetowym (członek albo sam operator) — osobna zakładka i osobny limit. */
@@ -2105,6 +2117,7 @@ function processMarketsQuarterly() {
     for (const operator of Object.values(marketOperators)) {
         const def = getMarketDef(operator.id);
         operator.members = stocks.filter(s => getStockMarket(s) === operator.id && !s.isBankrupt && s.assetType !== 'Startup').length;
+        if (def.entry) continue; // 0.15.6: rynki wejścia nie mają operatora (cykl życia, opłaty, wyłączność)
 
         if (operator.status === 'dormant' && quarter >= 4 && Math.random() < OPERATOR_SPAWN_CHANCE) {
             spawnOperatorStartup(operator);

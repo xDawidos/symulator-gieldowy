@@ -11117,6 +11117,119 @@ group('0.15.5: Budownictwo i banki (przetargi, podwykonawcy, przejęcia pionowe,
     });
 });
 
+// ================================================================================
+// 0.15.6 „Giełdy wejścia” — wspólne pomocniki grup E1–E6
+// ================================================================================
+
+const mk156 = (symbol, o = {}) => Object.assign(makeCompany(symbol, { sector: ['Usługi'], cash: 200_000 }), { price: 10, totalShares: 10000, exchange: 'BRONZE' }, o);
+/** Świat z `count` zwykłymi spółkami GPW o kapitalizacji `cap` (cena × akcje) i kontem gracza. */
+function world156(count, cap = 1_000_000) {
+    const list = Array.from({ length: count }, (_, i) => mk156(`W${i}`, { price: cap / 10000, financialHealth: 2 + (i % 3) }));
+    resetWorld(list);
+    startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+    return list;
+}
+
+group('0.15.6 E1: wymogi wejścia na GPW, zejście na NewHorizons', () => {
+    test('E1: rynki NH i PRV są aktywne, bez operatora, nie są rynkami internetowymi i nie liczą się do spółek krajowych', () => {
+        const list = world156(5);
+        ensureMarketOperators();
+        for (const id of ['NH', 'PRV']) {
+            assertEq(marketOperators[id].status, 'active', `${id} aktywny`);
+            assert(!isInternetMarket(id) && isEntryMarket(id), `${id}: rynek wejścia, nie internetowy`);
+        }
+        list[0].market = 'NH'; list[1].market = 'PRV';
+        assertEq(getListedCompanyCount(), 3, 'NH i PRV poza limitem spółek krajowych');
+        assertEq(getTotalCompanyCount(), 5, 'ale w łącznym sufitcie');
+        processMarketsQuarterly();
+        assertEq(marketOperators.NH.status, 'active', 'kwartał nie zamyka rynku bez operatora');
+    });
+
+    test('E1: mnożnik wymogów GPW 1,0 do 100 spółek krajowych, liniowo do 1,5 przy ≥ 125', () => {
+        const saved = getListedCompanyCount;
+        try {
+            for (const [n, m] of [[40, 1], [100, 1], [112.5, 1.25], [125, 1.5], [160, 1.5]]) {
+                getListedCompanyCount = () => n;
+                assertNear(getListingRequirementMultiplier(), m, `mnożnik przy ${n}`, 1e-9);
+            }
+            getListedCompanyCount = () => 125;
+            const req = getListingRequirements('GPW'), base = LISTING_REQUIREMENTS.GPW;
+            assertNear(req.cap, base.cap * 1.5, 'kapitalizacja ×1,5');
+            assertNear(req.freeFloat, Math.min(0.5, base.freeFloat * 1.5), 'wolny obrót ×1,5');
+            assertEq(getListingRequirements('NH').cap, LISTING_REQUIREMENTS.NH.cap, 'NH bez mnożnika');
+        } finally { getListedCompanyCount = saved; }
+    });
+
+    test('E1: spełnianie wymogów — kapitalizacja, wolny obrót, zysk (innowacyjne zwolnione na NH), debiut bez zysku', () => {
+        world156(2);
+        const s = mk156('REQ', { price: 5, totalShares: 10000, quarterlyEarnings: 5000, sector: ['Usługi'] });
+        s.insiderShares = 0;
+        assert(!meetsListingRequirements(s, 'GPW').ok && meetsListingRequirements(s, 'GPW').failed.includes('cap'), 'za mała kapitalizacja na GPW');
+        s.price = 12; // 120 tys. ≥ 80 tys.
+        assert(meetsListingRequirements(s, 'GPW').ok, 'GPW spełnione');
+        s.quarterlyEarnings = -100;
+        assert(meetsListingRequirements(s, 'GPW').failed.includes('profit'), 'strata: zysk niespełniony');
+        assert(meetsListingRequirements(s, 'GPW', { debut: true }).ok, 'debiut: zysk nie jest wymagany');
+        assert(meetsListingRequirements(s, 'NH').failed.includes('profit'), 'NH: strata zwykłej spółki');
+        s.sector = ['Technologia'];
+        assert(meetsListingRequirements(s, 'NH').ok, 'NH: innowacyjna bez wymogu zysku');
+        s.insiderShares = 9000;
+        assert(meetsListingRequirements(s, 'NH').failed.includes('freeFloat'), 'wolny obrót poniżej progu');
+    });
+
+    test('E1: poniżej progu utrzymania 4 kwartały → NewHorizons zamiast upadku (bez ujemnej gotówki i duchów)', () => {
+        const list = world156(6, 1_000_000);
+        const weak = list[0]; weak.price = 2; // 20 tys. < 50% × 80 tys.
+        aiCompetitors[0].portfolio[weak.symbol] = { shares: 500, avgPrice: 2 }; weak.sharesHeld = 500;
+        const inv0 = checkWorldInvariants().join('|');
+        for (let q = 1; q <= 3; q++) { processListingMaintenanceQuarterly(); assertEq(getStockMarket(weak), 'GPW', `kwartał ${q}: jeszcze GPW`); assertEq(weak.belowReqQ, q, 'licznik'); }
+        assertEq(getListedCompanyCount(), 6, 'przed zejściem 6 spółek krajowych');
+        assertEq(processListingMaintenanceQuarterly(), 1, 'czwarty kwartał: zejście');
+        assertEq(getStockMarket(weak), 'NH', 'spółka na NH');
+        assert(stocks.includes(weak) && aiCompetitors[0].portfolio[weak.symbol]?.shares === 500, 'spółka i posiadacze zostają');
+        assertEq(getListedCompanyCount(), 5, 'NH nie liczy się do spółek krajowych');
+        assert(weak.belowReqQ === undefined && weak.marketSinceQ !== undefined, 'licznik zerowany, znacznik rynku');
+        assert(stocks.every(s => !(Number(s.cash) < 0)), 'brak ujemnej gotówki');
+        assertEq(checkWorldInvariants().join('|'), inv0, 'niezmienniki bez zmian');
+    });
+
+    test('E1: kapitalizacja wraca powyżej progu — licznik się zeruje; wykluczone: państwowe i z córkami', () => {
+        const list = world156(6, 1_000_000);
+        const [a, b, c] = list; a.price = 2; b.price = 2; b.isStateOwned = true; c.price = 2; c.subsidiaries = ['X'];
+        processListingMaintenanceQuarterly(); processListingMaintenanceQuarterly();
+        assertEq(a.belowReqQ, 2, 'zwykła spółka liczy kwartały');
+        assert(b.belowReqQ === undefined && c.belowReqQ === undefined, 'państwowa i z córką nie podlegają zejściu');
+        a.price = 50; processListingMaintenanceQuarterly();
+        assert(a.belowReqQ === undefined, 'powyżej progu: licznik zerowany');
+    });
+
+    test('E1: NH pełny → wykup po cenie rynkowej (jak wycofanie), posiadacze rozliczeni, skarb nie na minusie', () => {
+        const list = world156(5, 1_000_000);
+        const weak = list[0]; weak.price = 2; weak.sharesHeld = 400; aiCompetitors[0].portfolio[weak.symbol] = { shares: 400, avgPrice: 2 };
+        const savedSlot = hasEntryMarketSlot; hasEntryMarketSlot = () => false;
+        const cash0 = aiCompetitors[0].cash, treasury0 = governmentTreasury;
+        try {
+            weak.belowReqQ = LISTING_BELOW_QUARTERS - 1;
+            assertEq(processListingMaintenanceQuarterly(), 1, 'jedna spółka zeszła');
+        } finally { hasEntryMarketSlot = savedSlot; }
+        assert(!stocks.includes(weak), 'spółka wycofana');
+        assert(!aiCompetitors[0].portfolio[weak.symbol], 'bez ducha posiadacza');
+        assert(aiCompetitors[0].cash > cash0, 'bot dostał gotówkę z wykupu');
+        assert(governmentTreasury >= 0 && governmentTreasury <= treasury0 && stocks.every(s => !(s.cash < 0)), 'skarb i gotówka spółek nieujemne');
+    });
+
+    test('E1: najwyżej 2 zejścia na kwartał, od najsłabszej; zapis zachowuje rynek i licznik', () => {
+        const list = world156(8, 1_000_000);
+        list.slice(0, 4).forEach((s, i) => { s.price = 1 + i * 0.5; s.belowReqQ = LISTING_BELOW_QUARTERS; });
+        assertEq(processListingMaintenanceQuarterly(), LISTING_DEMOTE_PER_QUARTER, 'limit zejść na kwartał');
+        assertEq(getStockMarket(list[0]), 'NH', 'najsłabsza pierwsza'); assertEq(getStockMarket(list[1]), 'NH', 'druga najsłabsza');
+        assertEq(getStockMarket(list[2]), 'GPW', 'trzecia czeka');
+        const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+        const saved = raw.stocks.find(s => s.symbol === list[0].symbol), waiting = raw.stocks.find(s => s.symbol === list[2].symbol);
+        assertEq(saved.market, 'NH', 'rynek w zapisie'); assert(waiting.belowReqQ >= LISTING_BELOW_QUARTERS, 'licznik w zapisie');
+    });
+});
+
 async function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;
