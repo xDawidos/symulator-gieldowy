@@ -33,7 +33,7 @@ Kolejność: S0 → S1 → … → S7. **Commit po każdej części.** UI z komp
 | **S3** | **Giełda towarowa:** kontrakty terminowe (zapadalność 1–4 kw.; **na czas testów dostępne od razu, pod koniec 0.17 zamknięte za umiejętnością „Mistrz Opcji”** — decyzja 2026-10-25), depozyt i margin call (`marginEngine`), boty spekulacyjne i hedgujące (spółki zabezpieczają wsad) | limit dźwigni funduszu wspólny z forexem |
 | **S4** | **Transport:** podsektory w Transporcie i logistyce (Morski, Lotniczy-cargo, Lądowy: kolej i ciężarówki); spółki (1–2 na kraj; flagowe państwowe w PL i USA: np. morska, POP, DHXL); **indeks frachtu** (cena + czas dostawy wg rodzaju) | bez nowego sektora, tylko podsektory |
 | **S5** | **Infrastruktura publiczna:** porty morskie, tory, autostrady, lotniska (np. Chopin Industry Airport, Wałęsa Shipment) przez przetargi `city.js`; przepustowość podnosi tempo transportu; **zamówienia PPP** dopisane do interwencji państwa 0.15.3 | domyka odstępstwo 6 z 0.15.3 |
-| **S6** | **Zbrojenia a surowce:** obronność zużywa metale i elektronikę; poziom bezpieczeństwa państwa | opcjonalnie, jeśli S2 spełni kalibrację |
+| **S6** | **Zbrojenia a surowce:** obronność zużywa metale i elektronikę (zamówienia rządowe); poziom bezpieczeństwa państwa | decyzja 2026-10-25: wchodzi do 0.17; po S2 |
 | **S7** | **Zamknięcie kontraktów za umiejętnością „Mistrz Opcji”**; interfejs, Akademia (np. „Kontrakt terminowy”, „Contango”, „Fracht”), zapis, kontrola, raport `raporty/kontrola_0.17.md` | |
 
 ## Jak sprawdzimy (orientacyjnie)
@@ -58,10 +58,7 @@ Kolejność: S0 → S1 → … → S7. **Commit po każdej części.** UI z komp
 
 1. **6 surowców na start** (złoto, ropa, gaz, metale przemysłowe, zboże, uran).
 2. **Kontrakty od razu na czas testów**, a przed zamknięciem 0.17 zamykamy je za umiejętnością „Mistrz Opcji” (zadanie w S7).
-
-## Decyzje jeszcze otwarte
-
-1. Czy zbrojenia i bezpieczeństwo państwa (S6) wchodzą już tu, czy zostają na 0.19?
+3. **S6 Zbrojenia a surowce i bezpieczeństwo państwa wchodzi do 0.17** (nie jest już opcjonalne): obronność kupuje metale i elektronikę, zamówienia rządowe, poziom bezpieczeństwa państwa; kalibracja „średnio zero” z S2 nadal warunkiem wejścia.
 
 ## Zlecenie dla czatu designu (przed S3)
 

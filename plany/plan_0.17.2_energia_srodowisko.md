@@ -29,17 +29,14 @@ Czego uczy:
 ## Główne ryzyka
 
 - **Zmiana marż Energii i Przemysłu** (koszt energii i emisji) → kalibracja „średnio zero”, jak w 0.17.
-- **Zbyt wiele nowych wskaźników** (zanieczyszczenie, opinia, populacja) → minimalny zestaw w UI.
+- **Zbyt wiele nowych wskaźników** (zanieczyszczenie, opinia, populacja) → minimalny zestaw w UI; opinia bez KPI w pasku (decyzja).
 - **Polityka** (partie wybierają typ energii) wymaga stanu partii z 0.13; za granicą stały profil.
 
 ## Decyzje (podjęte 2026-10-25)
 
 1. **Zanieczyszczenia mają mały wpływ na poziom życia i przyrost populacji** (ułamek pp rocznie); opinia publiczna jako modyfikator.
 2. **Handel energią między państwami w prostej formie już w 0.17.2** (cena i przepływ); cła i embarga na energię dopiero w 0.19.
-
-## Decyzje jeszcze otwarte
-
-1. Czy opinia publiczna (N6) jest osobnym KPI w pasku, czy tylko modyfikatorem?
+3. **Opinia publiczna jako modyfikator bez osobnego KPI w pasku**; widoczna w oknie „Rynek” i karcie kraju.
 
 ## Zlecenie dla czatu designu (przed N8)
 

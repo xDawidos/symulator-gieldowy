@@ -52,10 +52,7 @@ Kolejność: E0 → E1 → … → E7. **Commit po każdej części.** UI z komp
 
 1. **NewHorizons: państwowy operator**, ścieżka startupu: **główny parkiet → (jeśli się nie uda) niższy próg NewHorizons → awans na główny parkiet albo firma prywatna albo wejście na giełdę prywatną** (E3).
 2. **Giełda prywatna:** łagodniejsze wymogi wejścia, ale większa szansa, że spółka okaże się oszustwem (E3).
-
-## Decyzje jeszcze otwarte
-
-1. Czy E6 (media-córka jako gazeta) wchodzi teraz, czy do osobnej małej wersji? (propozycja: opcjonalnie na końcu 0.15.6)
+3. **Media-córka jako gazeta (E6): opcjonalnie na końcu 0.15.6**, jeśli wersja nie jest za duża (maile oznaczone źródłem, możliwe zdemaskowanie i kara).
 
 ## Zlecenie dla czatu designu (przed E7)
 

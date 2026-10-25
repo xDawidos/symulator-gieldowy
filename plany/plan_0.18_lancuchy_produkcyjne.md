@@ -66,10 +66,7 @@ Czego uczy:
 
 1. **Pilotaż 0.18.1:** metal i motoryzacja, ropa i paliwa, zboże i żywność (6 surowców z 0.17 wystarcza).
 2. **Szok podażowy jako 6. linia kryzysu z własnymi etapami** jak w 0.15.3, wspólny budżet częstości linii.
-
-## Decyzje jeszcze otwarte
-
-1. Czy hierarchia dóbr konsumpcyjnych (L8) zostaje w 0.18.2, czy idzie do osobnej wersji?
+3. **Hierarchia dóbr konsumpcyjnych (L8) zostaje w 0.18.2** (końcowe ogniwo grafu).
 
 ## Zlecenie dla czatu designu (przed L4 i L10)
 
