@@ -369,8 +369,93 @@ function processAntitrustQuarterly() {
     return done;
 }
 
+// --- E6: spółka zależna w Mediach jako gazeta matki ---
+// Gazeta wysyła graczowi maile o matce (przychylnie, czasem podkolorowane) i o jej konkurentach (czasem nieprawdziwe zarzuty).
+// Każdy mail ma oznaczone źródło i wiarygodność gazety. Kłamstwa wychodzą na jaw (częściej przy skutecznym KNF): kara dla gazety,
+// kurs matki w dół, wiarygodność gazety maleje (kłamstwo = czarny PR z 0.7, tu bez udziału gracza).
+const MEDIA_MAIL_CHANCE = 0.4;          // kwartalna szansa maila od danej gazety
+const MEDIA_MAILS_PER_QUARTER = 2;      // limit maili od wszystkich gazet na kwartał (bez zalewu skrzynki)
+const MEDIA_PARENT_SHARE = 0.65;        // reszta maili dotyczy konkurentów matki
+const MEDIA_PARENT_LIE_CHANCE = 0.35;
+const MEDIA_RIVAL_LIE_CHANCE = 0.5;
+const MEDIA_EXPOSE_CHANCE = 0.15;       // szansa na kwartał × (1 + skuteczność KNF)
+const MEDIA_CRED_START = 0.8;
+const MEDIA_CRED_LOSS = 0.2;
+const MEDIA_CRED_MIN = 0.1;
+const MEDIA_FINE_RATE = 0.02;           // kara dla gazety: 2% kapitalizacji, najwyżej 30% gotówki
+
+function isMediaDaughter(stock) {
+    return Boolean(stock && stock.isSubsidiaryOf && !stock.isBankrupt && !stock.assetType && (stock.sector || []).includes('Media'));
+}
+
+function getMediaCredibility(stock) {
+    return Number.isFinite(stock?.mediaCred) ? stock.mediaCred : MEDIA_CRED_START;
+}
+
+/** Zdemaskowanie kłamstwa gazety: kara, spadek kursu matki, utrata wiarygodności. */
+function exposeMediaLie(daughter, parent) {
+    const lie = daughter.mediaLie;
+    daughter.mediaLie = null;
+    const fine = Math.min(getMarketCapValue(daughter) * MEDIA_FINE_RATE, Math.max(0, Number(daughter.cash) || 0) * 0.3);
+    if (fine > 0) {
+        adjustCompanyCash(daughter, -fine);
+        adjustBalanceSheet(daughter, { assets: -fine, retainedEarnings: -fine });
+        governmentTreasury += fine;
+        recordPayment(daughter, 'external:skarb-panstwa', fine, 'Kara za wprowadzające w błąd publikacje');
+    }
+    daughter.mediaCred = Math.max(MEDIA_CRED_MIN, getMediaCredibility(daughter) - MEDIA_CRED_LOSS);
+    applyPriceEffect(parent.symbol, -0.03, 'negative', 'company');
+    const rival = lie?.rival && stocks.find(s => s.symbol === lie.rival);
+    if (rival) applyPriceEffect(rival.symbol, 0.01, 'positive', 'company'); // sprostowanie
+    const text = `📰 ZDEMASKOWANO: gazeta ${daughter.name} (spółka zależna ${parent.name}) publikowała nieprawdziwe informacje${rival ? ` o ${rival.name}` : ""}. Kara ${formatZl(fine, 0)}, wiarygodność gazety spada do ${(daughter.mediaCred * 100).toFixed(0)}%, kurs ${parent.name} −3%.`;
+    logEvent(text, 'company');
+    if (typeof addMail === 'function') addMail({ sender: 'PULS', subject: `📰 Zdemaskowano gazetę ${daughter.name}`, body: text, importance: 2, symbol: parent.symbol });
+    return fine;
+}
+
+/** Mail gazety z oznaczeniem źródła; zwraca opis (do testów) albo null. */
+function sendMediaMail(daughter, parent) {
+    const cred = getMediaCredibility(daughter);
+    const rivals = stocks.filter(s => s !== parent && s !== daughter && !s.assetType && !s.isBankrupt && !s.isSubsidiaryOf && getMainSector(s) && getMainSector(s) === getMainSector(parent));
+    const aboutRival = rivals.length > 0 && Math.random() >= MEDIA_PARENT_SHARE;
+    const rival = aboutRival ? getRandomElement(rivals) : null;
+    const lie = Math.random() < (aboutRival ? MEDIA_RIVAL_LIE_CHANCE : MEDIA_PARENT_LIE_CHANCE);
+    const earnings = Number(parent.quarterlyEarnings) || 0;
+    let subject, claim;
+    if (rival) {
+        subject = `📰 ${daughter.name}: ${rival.name} — ${lie ? "alarm" : "komentarz"}`;
+        claim = lie ? `Według naszych informacji ${rival.name} (${rival.symbol}) ma poważne kłopoty z płynnością, a zarząd ukrywa przed inwestorami problemy z umowami.`
+            : `${rival.name} (${rival.symbol}) notuje kurs ${formatZl(rival.price)}; analitycy nie widzą nowych ryzyk.`;
+    } else {
+        subject = `📰 ${daughter.name}: wyniki ${parent.name}`;
+        claim = lie ? `${parent.name} (${parent.symbol}) wchodzi w okres dynamicznego wzrostu — zysk kwartalny ${formatZl(Math.abs(earnings) * 1.35 + 1000, 0)}, wyraźnie ponad oczekiwaniami rynku.`
+            : `${parent.name} (${parent.symbol}) zamknęła kwartał z wynikiem ${formatZl(earnings, 0)}; kurs ${formatZl(parent.price)}.`;
+    }
+    const body = `Źródło: gazeta ${daughter.name}, spółka zależna ${parent.name} — redakcja może być przychylna właścicielowi. Wiarygodność źródła: ${(cred * 100).toFixed(0)}%.\n\n${claim}`;
+    if (typeof addMail === 'function') addMail({ sender: daughter.name, subject, body, importance: 1, symbol: (rival || parent).symbol });
+    if (lie) {
+        daughter.mediaLie = { quarter: typeof macro === 'object' ? macro.quarter : 0, rival: rival?.symbol || null };
+        if (rival) applyPriceEffect(rival.symbol, -0.01 * cred, 'negative', 'company'); // nieprawdziwy zarzut lekko obniża kurs konkurenta
+    }
+    return { daughter: daughter.symbol, about: rival ? rival.symbol : parent.symbol, lie };
+}
+
+/** E6: co kwartał — wiarygodne gazety wysyłają maile; wcześniejsze kłamstwa mogą zostać zdemaskowane. */
+function processMediaDaughtersQuarterly() {
+    const knf = typeof getInstitutionEffectiveness === 'function' && typeof oversight === 'object' ? getInstitutionEffectiveness(oversight.knf) : 0.3;
+    let sent = 0, exposed = 0;
+    for (const daughter of stocks.filter(isMediaDaughter)) {
+        const parent = stocks.find(s => s.symbol === daughter.isSubsidiaryOf && !s.isBankrupt);
+        if (!parent) continue;
+        if (daughter.mediaLie && Math.random() < MEDIA_EXPOSE_CHANCE * (1 + knf)) { exposeMediaLie(daughter, parent); exposed++; continue; }
+        if (sent < MEDIA_MAILS_PER_QUARTER && Math.random() < MEDIA_MAIL_CHANCE && sendMediaMail(daughter, parent)) sent++;
+    }
+    return { sent, exposed };
+}
+
 /** Jeden kwartalny punkt wejścia modułu (main.js). */
 function processListingsQuarterly() {
+    processMediaDaughtersQuarterly();
     processAntitrustQuarterly();
     processListingMaintenanceQuarterly();
     processMunicipalPromotionQuarterly();

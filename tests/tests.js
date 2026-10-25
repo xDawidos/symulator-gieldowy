@@ -11578,6 +11578,85 @@ group('0.15.6 E5: urząd antymonopolowy zależny od poziomu', () => {
     });
 });
 
+group('0.15.6 E6: media-córka jako gazeta matki', () => {
+    function mediaWorld() {
+        const parent = mk156('MAT', { price: 50, sector: ['Przemysł'], quarterlyEarnings: 120_000 });
+        const rival = mk156('RYW', { price: 40, sector: ['Przemysł'] });
+        const paper = mk156('GAZ', { price: 20, sector: ['Media'], cash: 400_000 }); paper.isSubsidiaryOf = 'MAT'; parent.subsidiaries = ['GAZ'];
+        const other = mk156('INN', { price: 20, sector: ['Usługi'] });
+        resetWorld([parent, rival, paper, other]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        return { parent, rival, paper, other };
+    }
+    const captureMails = fn => {
+        const mails = []; const orig = addMail;
+        addMail = m => { mails.push(m); return orig(m); };
+        try { fn(); } finally { addMail = orig; }
+        return mails;
+    };
+
+    test('E6: gazeta (spółka zależna z sektora Media) wysyła maile z oznaczonym źródłem i wiarygodnością; najwyżej 2 na kwartał; inne spółki nie', () => {
+        const { paper, other } = mediaWorld();
+        assert(isMediaDaughter(paper) && !isMediaDaughter(other), 'tylko spółka zależna z Mediów');
+        let perQuarter = 0;
+        const mails = captureMails(() => { for (let q = 0; q < 60; q++) { const before = Math.max(0, 0); perQuarter = Math.max(perQuarter, processMediaDaughtersQuarterly().sent + before); } });
+        const fromPaper = mails.filter(m => m.sender === paper.name);
+        assert(fromPaper.length >= 5, `gazeta pisze (${fromPaper.length} maili w 60 kw.)`);
+        assert(fromPaper.every(m => m.body.startsWith('Źródło: gazeta GAZ') || m.body.startsWith(`Źródło: gazeta ${paper.name}`)) && fromPaper.every(m => /Wiarygodność źródła: \d+%/.test(m.body)), 'oznaczenie źródła i wiarygodność w każdym mailu');
+        assert(perQuarter <= MEDIA_MAILS_PER_QUARTER, 'limit maili na kwartał');
+        assert(fromPaper.some(m => m.symbol === 'RYW') && fromPaper.some(m => m.symbol === 'MAT'), 'maile o matce i o jej konkurencie');
+    });
+
+    test('E6: przychylność — kłamliwy mail o matce zawyża wynik, o konkurencie zawiera nieprawdziwy zarzut i lekko obniża jego kurs', () => {
+        const { parent, rival, paper } = mediaWorld();
+        const random = Math.random;
+        try {
+            Math.random = () => 0.1; // o matce (0,1 < 0,65), kłamstwo (0,1 < 0,35)
+            const mails = captureMails(() => sendMediaMail(paper, parent));
+            assert(mails[0].body.includes('wyraźnie ponad oczekiwaniami') && mails[0].body.includes('zysk kwartalny'), 'zawyżony wynik matki');
+            assert(paper.mediaLie && paper.mediaLie.rival === null, 'kłamstwo zapamiętane do ewentualnego zdemaskowania');
+            paper.mediaLie = null;
+            Math.random = () => 0.9; // o konkurencie (0,9 ≥ 0,65), bez kłamstwa (0,9 ≥ 0,5)
+            const honest = captureMails(() => sendMediaMail(paper, parent));
+            assert(honest[0].symbol === 'RYW' && !paper.mediaLie, 'uczciwy komentarz o konkurencie');
+            const price0 = rival.price, seq = [0.9, 0, 0.3]; let i = 0; // o konkurencie, wybór konkurenta, kłamstwo (0,3 < 0,5)
+            Math.random = () => seq[Math.min(i++, seq.length - 1)];
+            captureMails(() => sendMediaMail(paper, parent));
+            assert(paper.mediaLie?.rival === 'RYW', 'nieprawdziwy zarzut zapisany'); assert(rival.price < price0, 'kurs konkurenta lekko w dół');
+        } finally { Math.random = random; }
+    });
+
+    test('E6: zdemaskowanie — kara dla gazety (bez ujemnej gotówki), kurs matki −3%, wiarygodność gazety maleje, ale nie poniżej minimum', () => {
+        const { parent, rival, paper } = mediaWorld();
+        const treasury0 = governmentTreasury, price0 = parent.price, cap = getMarketCapValue(paper);
+        assertEq(getMediaCredibility(paper), MEDIA_CRED_START, 'start 80%');
+        paper.mediaLie = { quarter: 0, rival: 'RYW' };
+        const fine = exposeMediaLie(paper, parent);
+        assert(fine > 0 && fine <= cap * MEDIA_FINE_RATE + 1e-6 && paper.cash >= 0, 'kara w limicie, gotówka nieujemna');
+        assertNear(governmentTreasury - treasury0, fine, 'kara do skarbu');
+        assert(parent.price < price0, 'kurs matki w dół'); assertNear(getMediaCredibility(paper), MEDIA_CRED_START - MEDIA_CRED_LOSS, 'wiarygodność −20 pp', 1e-9);
+        assertEq(paper.mediaLie, null, 'kłamstwo rozliczone');
+        for (let k = 0; k < 10; k++) { paper.mediaLie = { quarter: 0, rival: null }; exposeMediaLie(paper, parent); }
+        assertEq(getMediaCredibility(paper), MEDIA_CRED_MIN, 'minimalna wiarygodność');
+    });
+
+    test('E6: kłamstwa wychodzą na jaw w kolejnych kwartałach; zapis zachowuje wiarygodność gazety', () => {
+        const { paper } = mediaWorld();
+        const random = Math.random;
+        try {
+            Math.random = () => 0.1; // zawsze szczęśliwy los dla kłamcy: mail z kłamstwem…
+            captureMails(() => processMediaDaughtersQuarterly());
+            assert(paper.mediaLie, 'kłamstwo opublikowane');
+            Math.random = () => 0.01; // …a potem zdemaskowanie (szansa 0,15 × (1 + KNF) > 0,01)
+            processMediaDaughtersQuarterly();
+            assertEq(paper.mediaLie, null, 'zdemaskowane');
+        } finally { Math.random = random; }
+        assertNear(getMediaCredibility(paper), MEDIA_CRED_START - MEDIA_CRED_LOSS, 'wiarygodność spadła');
+        const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+        assertNear(raw.stocks.find(s => s.symbol === 'GAZ').mediaCred, MEDIA_CRED_START - MEDIA_CRED_LOSS, 'wiarygodność w zapisie', 1e-9);
+    });
+});
+
 async function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;
