@@ -4955,12 +4955,12 @@ function renderFestivalView(festivalContainer) {
     const sortedParticipants = [...festival.participants].sort((a, b) => b.interest - a.interest);
     sortedParticipants.forEach((p, index) => {
         // Logika nazw uczestników
-        const ownerName = p.ownerId === 'player' ? 'Ty' : (p.ownerId === 'city' ? 'Miasto Gdańsk' : (aiCompetitors.find(a => a.id === p.ownerId)?.name || p.ownerName || stocks.find(s => s.symbol === p.ownerId)?.name || p.ownerId));
+        const ownerName = p.ownerId === 'player' ? 'Ty' : (p.ownerId === 'city' ? 'Miasto' : (aiCompetitors.find(a => a.id === p.ownerId)?.name || p.ownerName || stocks.find(s => s.symbol === p.ownerId)?.name || p.ownerId));
         let targetName = '';
         switch (p.promotionTarget.type) {
             case 'self': targetName = 'Własny wizerunek'; break;
             case 'company': targetName = p.promotionTarget.id; break;
-            case 'city': targetName = 'Miasto Gdańsk'; break;
+            case 'city': targetName = 'Miasto'; break;
             case 'bank_promo': targetName = p.ownerName; break; // Dla banków
         }
         participantsTableHTML += `<tr style="${p.ownerId === 'player' ? 'font-weight: bold; background-color: var(--bg-elevated-2);' : ''}">
@@ -5108,7 +5108,7 @@ function showFestivalResultsModal(participants, festivalName) {
         if (p.ownerId === 'player') {
             ownerName = 'Ty (Gracz)';
         } else if (p.ownerId === 'city') {
-            ownerName = 'Miasto Gdańsk';
+            ownerName = 'Miasto';
         } else {
             // Spróbuj znaleźć bota AI
             const ai = aiCompetitors.find(a => a.id === p.ownerId);

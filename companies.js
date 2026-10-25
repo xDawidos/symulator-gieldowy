@@ -4638,8 +4638,11 @@ function initializeCityCompanies() {
         { name: "Wodociągi Miejskie", type: 'Usługi', budget: 60000 }
     ];
 
-    municipalNames.forEach(comp => {
+    // 0.15.4 P7: na giełdę może wejść tylko część spółek miejskich (3–5 z 8, czyli 38–63%); pozostałe zostają w rękach miasta na zawsze
+    const listing = new Set([...municipalNames.keys()].sort(() => Math.random() - 0.5).slice(0, getRandomIntInRange(3, 5)));
+    municipalNames.forEach((comp, index) => {
         municipalCompanies.push({
+            willList: listing.has(index),
             id: `mun_${comp.name.substring(0, 3).toUpperCase()}`,
             name: comp.name,
             type: comp.type,
@@ -6595,7 +6598,7 @@ function runMunicipalCompanyLogic() {
         return;
     }
 
-    const targetCompany = getRandomElement(municipalCompanies);
+    const targetCompany = getRandomElement(municipalCompanies.filter(company => company.willList !== false)); // starsze zapisy bez znacznika: wszystkie mogą wejść
     if (!targetCompany) return;
 
     // Spółka wchodzi na giełdę

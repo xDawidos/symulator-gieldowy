@@ -1049,7 +1049,7 @@ function triggerSingleFestivalEvent(chosenEvent, playerParticipant) {
         const stock = stocks.find(s => s.symbol === target.id);
         if (stock) targetName = stock.name;
     } else if (target.type === 'city') {
-        targetName = 'Miasto Gdańsk';
+        targetName = 'Miasto';
     }
 
     // Jeśli to event bankowy, znajdź nazwę banku dla wiadomości

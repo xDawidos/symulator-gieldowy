@@ -10205,6 +10205,26 @@ group('0.15.4: Poprawki z gry 3 (licznik, okna, wykres, dywidenda, split, limit 
         assert(equity(wrona) < equity1 + 1, 'strata z niespłaconej pożyczki w kapitale własnym');
     });
 
+    test('P7: spółki miejskie — na giełdę wchodzi tylko 3–5 z 8 (reszta zostaje miejska); nazwa właściciela to „Miasto”, nie „Miasto Gdańsk”', async () => {
+        resetWorld([mk('AAA')]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        const random = Math.random;
+        try {
+            for (let round = 0; round < 12; round++) {
+                initializeCityCompanies();
+                const willList = municipalCompanies.filter(c => c.willList).length;
+                assert(municipalCompanies.length === 8 && willList >= 3 && willList <= 5, `chętnych do debiutu ${willList} z ${municipalCompanies.length}`);
+                stocks = stocks.filter(s => !s.isMunicipal);
+                Math.random = () => 0.01; // zawsze „szczęśliwy” rok: debiutują wszystkie chętne, niechętne nigdy
+                for (let year = 0; year < 12; year++) runMunicipalCompanyLogic();
+                Math.random = random;
+                assertEq(stocks.filter(s => s.isMunicipal).length, willList, 'na giełdzie tylko chętne spółki miejskie');
+                assertEq(municipalCompanies.length, 8 - willList, 'reszta zostaje miejska');
+                assert(municipalCompanies.every(c => !c.willList), 'w puli miejskiej zostały tylko niechętne');
+            }
+        } finally { Math.random = random; }
+        for (const file of ['../ui.js', '../index.html', '../events.js']) assert(!(await (await fetch(file, { cache: 'no-store' })).text()).includes('Miasto Gdańsk'), `${file}: właściciel miejski nazywa się „Miasto”`);
+    });
+
     test('P6: wchłonięcie córki z trzeciego klastra nie dodaje segmentu; sektor główny i etykieta liczone z segmentów po każdej zmianie', () => {
         const parent = diversified(['Przemysł', 'Finanse'], [0.6, 0.4]); parent.fundamentals = { revenue: 1_000_000 };
         const child = mk('KID', { sector: ['Medycyna'] }); child.fundamentals = { revenue: 300_000 }; child.segments = [{ sector: 'Medycyna', subsector: null, share: 1 }];
