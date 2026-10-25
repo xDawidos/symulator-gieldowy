@@ -3087,6 +3087,23 @@ function reviewDividendPolicy(stock) {
     }
 }
 
+// 0.15.4 P3: minimalna dywidenda — większa z dwóch: 0,01 zł na akcję albo 0,1% kursu; poniżej spółka nie wypłaca (EcoLube płacił 0,0077 zł).
+const MIN_DIVIDEND_PER_SHARE = 0.01;
+const MIN_DIVIDEND_PRICE_PCT = 0.001;
+
+function getMinDividendPerShare(stock) {
+    return Math.max(MIN_DIVIDEND_PER_SHARE, (Number(stock?.price) || 0) * MIN_DIVIDEND_PRICE_PCT);
+}
+
+function isDividendTooSmall(stock, dividendPerShare) {
+    return !(Number(dividendPerShare) >= getMinDividendPerShare(stock) - 1e-9);
+}
+
+/** Dywidenda specjalna na żądanie: do 4% kapitalizacji, z 80% gotówki spółki. */
+function getForcedDividendAmount(stock) {
+    return Math.min((stock.price * stock.totalShares) * 0.04, Math.max(0, Number(stock.cash) || 0) * 0.8);
+}
+
 /** Ogłoszenie dywidendy po raporcie (wypłata po dividendTimer). */
 function declareQuarterDividend(stock, reportedNetIncome) {
     if (stock.assetType === 'REIT') return;
@@ -3109,6 +3126,8 @@ function declareQuarterDividend(stock, reportedNetIncome) {
     const total = Math.min(reportedNetIncome * ratio, available);
     const shares = Math.max(1, Number(stock.totalShares) || 1);
     if (total <= 0) return;
+    stock.dividendTooSmall = isDividendTooSmall(stock, total / shares); // opcjonalne pole zapisu: ostatnia dywidenda pominięta jako zbyt mała
+    if (stock.dividendTooSmall) return;
 
     stock.pendingDividend = { total, dps: total / shares, declaredAt: Date.now() };
     stock.estimatedDividend = total / shares;
@@ -3120,7 +3139,7 @@ function payCompanyDividend(stock, dividendPerShare, purpose = 'Dywidenda') {
     const shares = Math.max(1, Number(stock.totalShares) || 1);
     const maxTotal = Math.max(0, Number(stock.cash) || 0);
     const total = Math.min(dividendPerShare * shares, maxTotal);
-    if (!(total > 0)) return 0;
+    if (!(total > 0) || isDividendTooSmall(stock, total / shares)) return 0; // 0.15.4 P3: brak wypłat poniżej progu
 
     const dps = total / shares;
     adjustCompanyCash(stock, -total);
@@ -4874,9 +4893,9 @@ function executeForcedDividend(stock) {
         return false; // Nie można jeszcze wymusić dywidendy
     }
 
-    // Specjalna dywidenda: do 4% kapitalizacji, ale tylko z gotówki spółki.
-    const dividendTotalAmount = Math.min((stock.price * stock.totalShares) * 0.04, Math.max(0, Number(stock.cash) || 0) * 0.8);
-    if (!(dividendTotalAmount > 0)) return false;
+    // Specjalna dywidenda: do 4% kapitalizacji, ale tylko z gotówki spółki; nie poniżej progu minimalnej dywidendy.
+    const dividendTotalAmount = getForcedDividendAmount(stock);
+    if (!(dividendTotalAmount > 0) || isDividendTooSmall(stock, dividendTotalAmount / stock.totalShares)) return false;
 
     payCompanyDividend(stock, dividendTotalAmount / stock.totalShares, 'Dywidenda specjalna');
 

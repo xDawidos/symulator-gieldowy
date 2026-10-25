@@ -9884,6 +9884,42 @@ group('0.15.4: Poprawki z gry 3 (licznik, okna, wykres, dywidenda, split, limit 
         addChartEvent(a, '📈', 'test');
         assertEq(a.chartEvents[a.chartEvents.length - 1].time, gameChartClock, 'znacznik zdarzenia na zegarze gry');
     });
+
+    test('P3: minimalna dywidenda = większa z 0,01 zł i 0,1% kursu; poniżej progu brak ogłoszenia, wypłaty i wymuszenia', () => {
+        const mkDiv = (symbol, price, shares) => Object.assign(mk(symbol, { price, totalShares: shares }), { cash: 5_000_000 });
+        assertEq(getMinDividendPerShare({ price: 5 }), 0.01, 'tanie akcje: 0,01 zł');
+        assertEq(getMinDividendPerShare({ price: 300 }), 0.3, 'drogie akcje: 0,1% kursu');
+        const a = mkDiv('TA', 100, 10000); resetWorld([a]);
+        setCompanyDividendPolicy(a, 'Total');
+        declareQuarterDividend(a, 500);            // 0,05 zł na akcję < 0,10 zł
+        assert(!a.pendingDividend && a.dividendTooSmall === true, 'dywidenda 0,05 zł przy kursie 100 zł pominięta');
+        declareQuarterDividend(a, 5000);           // 0,50 zł
+        assert(a.pendingDividend && a.dividendTooSmall === false, 'dywidenda 0,50 zł ogłoszona');
+        const cash0 = a.cash;
+        assertEq(payCompanyDividend(a, 0.07), 0, 'wypłata poniżej progu zablokowana także przy wypłacie');
+        assertEq(a.cash, cash0, 'gotówka bez zmian');
+        const eco = mkDiv('ECO', 2.5, 1_000_000);  // próg 0,01 zł
+        eco.cash = 7_700 / 0.8;                    // dywidenda specjalna 0,0077 zł na akcję (jak EcoLube w zgłoszeniu)
+        resetWorld([eco]); eco.dividendCooldownUntil = 0;
+        assert(isDividendTooSmall(eco, getForcedDividendAmount(eco) / eco.totalShares), '0,0077 zł na akcję = zbyt mała');
+        assertEq(executeForcedDividend(eco), false, 'wymuszenie odrzucone');
+        eco.cash = 5_000_000;
+        assertEq(executeForcedDividend(eco), true, 'duża gotówka: dywidenda specjalna możliwa');
+    });
+
+    test('P3: karta grupy wyjaśnia „warunki rynkowe”, hasło Akademii „Warunki rynkowe w kooperacji” ma quiz', () => {
+        const entry = ACADEMY_ENTRIES.warunkiRynkowe;
+        assert(entry && entry.quiz.length === 3 && entry.quiz.every(q => q.a.length === 3 && q.c === 0), 'hasło z 3 pytaniami');
+        const a = mk('TA'), b = mk('TB');
+        resetWorld([a, b]);
+        cooperations = [{ id: 'c1', a: 'TA', b: 'TB', segA: 'Turystyka', segB: 'Turystyka', start: 0, end: 99, by: 'ceo', terms: 'market', tunneled: 0, flag: null, complaint: null }];
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        const html = renderCompanyCardGroup(a);
+        assert(html.includes('Co to znaczy „warunki rynkowe”'), 'dopisek „co to znaczy”');
+        assert(html.includes('warunki rynkowe'), 'etykieta warunków');
+        assert(isAcademyUnlocked('warunkiRynkowe'), 'hasło odblokowane po obejrzeniu kooperacji');
+        cooperations = [];
+    });
 });
 
 async function runAllTests() {

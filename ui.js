@@ -2939,6 +2939,10 @@ function openManagementModal(symbol, defaultTab = 'main') {
             dividendBtn.disabled = true;
             const remainingTime = Math.ceil((stock.dividendCooldownUntil - Date.now()) / 1000);
             cooldownInfo.textContent = `Następna dywidenda dostępna za: ${remainingTime} s.`;
+        } else if (isDividendTooSmall(stock, getForcedDividendAmount(stock) / Math.max(1, stock.totalShares))) {
+            // 0.15.4 P3: słowa, nie kolor — dlaczego przycisk jest nieaktywny
+            dividendBtn.disabled = true;
+            cooldownInfo.textContent = `Dywidenda zbyt mała: poniżej ${formatZl(getMinDividendPerShare(stock))} na akcję (0,01 zł albo 0,1% kursu) — spółka nie ma na nią gotówki.`;
         } else {
             dividendBtn.disabled = false;
             cooldownInfo.textContent = '';
@@ -9062,7 +9066,7 @@ function renderCompanyCardGroup(stock) {
     const coops = getStockCooperations(stock).map(coop => {
         const side = getCoopSide(coop, stock);
         const partner = stocks.find(s => s.symbol === side.partner);
-        const terms = coop.terms === 'market' ? 'warunki rynkowe' : coop.terms === sym ? '<span class="text-warn">warunki korzystne dla tej spółki</span>' : '<span class="text-down">warunki korzystne dla partnera</span>';
+        const terms = coop.terms === 'market' ? '<span title="Rozliczenie po cenach rynkowych: żadna ze stron nie zyskuje kosztem drugiej.">warunki rynkowe</span>' : coop.terms === sym ? '<span class="text-warn">warunki korzystne dla tej spółki</span>' : '<span class="text-down">warunki korzystne dla partnera</span>';
         const flag = coop.flag && level >= 4 ? ` · <span class="text-down" title="Wspólny właściciel ${escapeHtml(coop.flag.name)}: ${(coop.flag.pctA * 100).toFixed(0)}% w ${coop.a} i ${(coop.flag.pctB * 100).toFixed(0)}% w ${coop.b}.">${uiIcon('flaga', 14)} podmioty powiązane</span>` : '';
         const complaint = coop.complaint ? ` · ${uiIcon('waga', 14)} skarga do KNF${coop.complaint.result ? `: ${escapeHtml(coop.complaint.result)}` : ' w toku'}` : '';
         const actions = [
@@ -9077,15 +9081,16 @@ function renderCompanyCardGroup(stock) {
     const partners = getPlayerCooperationPartners(stock);
     const form = partners.length ? `<div class="d-flex gap-2 flex-wrap items-center mt-2">
             <select id="coop-partner-${sym}" aria-label="Kooperant">${partners.map(p => `<option value="${p.symbol}">${escapeHtml(p.name)} (${(getPlayerStakePct(p) * 100).toFixed(0)}%)</option>`).join('')}</select>
-            <select id="coop-terms-${sym}" aria-label="Warunki"><option value="market">warunki rynkowe</option><option value="${sym}">korzystne dla ${escapeHtml(stock.symbol)}</option><option value="partner">korzystne dla partnera</option></select>
+            <select id="coop-terms-${sym}" aria-label="Warunki" title="Warunki rynkowe = rozliczenie po cenach rynkowych, nikt nie zyskuje kosztem drugiej strony"><option value="market">warunki rynkowe</option><option value="${sym}">korzystne dla ${escapeHtml(stock.symbol)}</option><option value="partner">korzystne dla partnera</option></select>
             <button class="btn-secondary" onclick="(() => { const p = document.getElementById('coop-partner-${sym}').value, t = document.getElementById('coop-terms-${sym}').value; playerProposeCooperation('${sym}', p, t === 'partner' ? p : t); })()">${uiIcon('umowa', 14)} Zaproponuj kooperację (12 kw.)</button>
         </div><p class="text-xs text-muted">Umowy między spółkami jednego właściciela przy nierównych udziałach dostają czerwoną flagę; warunki nierynkowe przenoszą ok. 1% przychodów segmentu na kwartał i grożą skargą do KNF.</p>` : '';
-    const tender = stock.tender ? `<p class="text-sm">${uiIcon('megafon', 14)} Wezwanie: ${escapeHtml(stock.tender.buyerName)} kupuje akcje po <strong>${formatZl(stock.tender.price)}</strong> do kw. ${stock.tender.until}.${getPlayerStakePct(stock) > 0 ? ` <button class="btn-secondary btn-sm" onclick="playerTenderDecision('${sym}', 'sell')">Sprzedaj w wezwaniu</button>` : ''}</p>` : '';
+    const termsHelp = coops ? `<p class="text-xs text-muted"><strong>Co to znaczy „warunki rynkowe”?</strong> Spółki rozliczają się po cenach rynkowych: obie dostają z kooperacji wzrost przychodów i marży, nikt nie jest poszkodowany. Zarządy spółek zawsze zawierają umowy na warunkach rynkowych; warunki korzystne dla jednej strony (tunelowanie) może ustawić tylko gracz — kosztem akcjonariuszy drugiej spółki i z ryzykiem skargi do KNF.</p>` : '';
+    const tender =stock.tender ? `<p class="text-sm">${uiIcon('megafon', 14)} Wezwanie: ${escapeHtml(stock.tender.buyerName)} kupuje akcje po <strong>${formatZl(stock.tender.price)}</strong> do kw. ${stock.tender.until}.${getPlayerStakePct(stock) > 0 ? ` <button class="btn-secondary btn-sm" onclick="playerTenderDecision('${sym}', 'sell')">Sprzedaj w wezwaniu</button>` : ''}</p>` : '';
     const policy = canFundControlAgm(stock) && children.length ? `<label class="text-sm"><input type="checkbox" ${stock.groupPolicy ? 'checked' : ''} onchange="playerSubsidiaryAction('${children[0].symbol}', 'policy', this.checked)"> Wspólna polityka kadrowa dla grupy</label>` : '';
-    if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('grupaKapitalowa');
+    if (typeof unlockAcademyEntry === 'function') { unlockAcademyEntry('grupaKapitalowa'); if (coops) unlockAcademyEntry('warunkiRynkowe'); }
     return `${status}${tender}${policy}
         <div class="cc-grid">
-            <section><h4>Mapa grupy</h4><ul class="text-sm">${groupRows || '<li class="text-muted">brak spółek zależnych i matki</li>'}${coops || '<li class="text-muted">brak kooperacji</li>'}</ul>${form}</section>
+            <section><h4>Mapa grupy</h4><ul class="text-sm">${groupRows || '<li class="text-muted">brak spółek zależnych i matki</li>'}${coops || '<li class="text-muted">brak kooperacji</li>'}</ul>${termsHelp}${form}</section>
             <section><h4>Suma części (SOTP)</h4><table class="asset-mini-table w-full"><tbody>${sotpRows}</tbody></table>${premium}
                 <p class="text-xs text-muted">Segmenty wyceniane medianą C/Z sektora (przy stracie: C/S × 0,5), pakiety w zależnych po kursie rynkowym. Uproszczenie: zysk matki zawiera transfer zysku córek.</p></section>
         </div>`;

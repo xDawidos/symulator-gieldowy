@@ -462,6 +462,16 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Co może zrobić akcjonariusz mniejszościowy?', a: ['złożyć skargę do KNF', 'zablokować umowę sam', 'nic'], c: 0 }
         ]
     },
+    warunkiRynkowe: {
+        title: 'Warunki rynkowe w kooperacji', icon: '🤝',
+        text: 'Kooperacja to umowa dostawca–odbiorca między dwiema spółkami. „Warunki rynkowe” znaczą, że rozliczają się po cenach, jakie zaproponowałby niezależny kontrahent: obie spółki dostają z umowy wzrost przychodów (+0,3 pp na kwartał) i marży (+0,5 pp) proporcjonalnie do udziału powiązanego segmentu, a ryzyko kontrahenta (strajk, bankructwo partnera) ciąży na obu. Zarządy spółek zawsze zawierają umowy na warunkach rynkowych. Warunki korzystne dla jednej strony przenoszą ok. 1% przychodów segmentu na kwartał z jednej spółki do drugiej — to tunelowanie, które obciąża akcjonariuszy mniejszościowych, dostaje czerwoną flagę „podmioty powiązane” i może skończyć się skargą do KNF, zwrotem korzyści i grzywną.',
+        example: () => { const c = cooperations.find(x => x.terms === 'market'); return c ? `Kooperacja ${c.a} i ${c.b}: warunki rynkowe — obie spółki zyskują, nikt nie jest poszkodowany.` : 'Przykład: spółka A kupuje usługi spółki B po cenach, jakie zapłaciłby obcy klient — to warunki rynkowe.'; },
+        quiz: [
+            { q: 'Co znaczą „warunki rynkowe” w kooperacji?', a: ['rozliczenie po cenach, jakie zapłaciłby niezależny kontrahent', 'umowa korzystna tylko dla jednej strony', 'umowa bez ceny'], c: 0 },
+            { q: 'Kto może w grze ustawić warunki korzystne dla jednej spółki?', a: ['tylko gracz — zarządy spółek zawsze zawierają umowy rynkowe', 'każdy prezes', 'KNF'], c: 0 },
+            { q: 'Co grozi za warunki nierynkowe wykryte przez KNF?', a: ['zwrot korzyści i grzywna', 'nic', 'wykluczenie z giełdy'], c: 0 }
+        ]
+    },
     premiaKontrola: {
         title: 'Premia za kontrolę', icon: '💼',
         text: 'Pakiet kontrolny (ponad 50% głosów) jest wart więcej niż ta sama liczba akcji kupowana pojedynczo: daje władzę nad zarządem, dywidendą, transferem zysku i strategią. Dlatego kupujący płaci premię za kontrolę — w grze 15–30% ponad kurs. Matka może sprzedać pakiet córki innemu inwestorowi (koncernowi albo botowi); zysk z premii trafia do matki.',
