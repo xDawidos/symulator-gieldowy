@@ -10175,6 +10175,10 @@ group('0.15.4: Poprawki z gry 3 (licznik, okna, wykres, dywidenda, split, limit 
         assertNear(getDominanceFactor(list[0]), 1 - (share - DOMINANCE_FREE_SHARE) * DOMINANCE_PENALTY_SLOPE, 'kara proporcjonalna 1,5% za punkt', 1e-9);
         assert(getDominanceFactor(list[0]) < 1 && getDominanceFactor(list[0]) > 1 - DOMINANCE_MAX_PENALTY, 'kara pośrednia');
         const m0 = getValuationMultiplier(list[1]); assert(getValuationMultiplier(list[0]) < m0, 'lider wyceniany ostrożniej niż mała spółka z tym samym sektorem');
+        // hamulec wzrostu i wykluczenie z losowania Jednorożca (przyczyna dominacji z diagnozy)
+        assertNear(getDominanceGrowthDrag(list[0]), (share - DOMINANCE_FREE_SHARE) * DOMINANCE_GROWTH_DRAG, 'hamulec wzrostu proporcjonalny do udziału ponad 10%', 1e-9);
+        assertEq(getDominanceGrowthDrag(list[1]), 0, 'mała spółka bez hamulca');
+        for (let i = 0; i < 60; i++) assert(selectUnicornCandidate(40)?.symbol !== list[0].symbol, 'spółka z udziałem > 12% nie zostaje Jednorożcem');
     });
 
     // --- P7: lombard ---

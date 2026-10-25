@@ -3405,6 +3405,17 @@ function getCapitalizationShare(stock) {
     return dominanceCache.shares.get(stock.symbol) || 0;
 }
 
+// Przyczyna dominacji z diagnozy P6: duża spółka technologiczna wielokrotnie losowana na Jednorożca (+5,5…7% przychodów na kwartał przez 6–8 kwartałów)
+// rosła szybciej od rynku bez żadnego hamulca. Hamulec: udział w kapitalizacji ponad próg obniża kwartalny wzrost przychodów (prawo wielkich liczb),
+// a spółka z udziałem > 12% nie może zostać Jednorożcem.
+const DOMINANCE_GROWTH_DRAG = 0.15;      // −0,15 pp wzrostu na kwartał za każdy 1 pp udziału ponad próg
+const DOMINANCE_UNICORN_MAX_SHARE = 0.12;
+
+/** Hamulec wzrostu kwartalnego za dominację (ułamek wzrostu przychodów). */
+function getDominanceGrowthDrag(stock) {
+    return Math.max(0, getCapitalizationShare(stock) - DOMINANCE_FREE_SHARE) * DOMINANCE_GROWTH_DRAG;
+}
+
 /** Mnożnik wyceny za dominację: 1 do 10% kapitalizacji rynku, potem −1,5% za każdy punkt procentowy (najwyżej −35%). */
 function getDominanceFactor(stock) {
     const over = getCapitalizationShare(stock) - DOMINANCE_FREE_SHARE;

@@ -2882,7 +2882,7 @@ function computeQuarterResults(stock) {
     }
 
     // 0.15 H1a: health * 0.0005 (było 0.004) zapobiega samonapędzającej się spirali wzrostu przychodów ze zdrowia
-    const growth = profile.growth / 4 * SECTOR_GROWTH_FACTOR + (Number(stock.growthAdj) || 0) + profile.beta * gdp + health * 0.0005 + phaseAdj + sectorAdj + projectAdj + societyAdj + starGrowthAdj + inflation / 4 * INFLATION_PASS_THROUGH + gaussianRandom() * 0.02;
+    const growth = profile.growth / 4 * SECTOR_GROWTH_FACTOR - getDominanceGrowthDrag(stock) + (Number(stock.growthAdj) || 0) + profile.beta * gdp + health * 0.0005 + phaseAdj + sectorAdj + projectAdj + societyAdj + starGrowthAdj + inflation / 4 * INFLATION_PASS_THROUGH + gaussianRandom() * 0.02;
     // T2 (Fintech): zakaz nowych klientów po kontroli KNF — wzrost przychodów 0 przez 2 kwartały.
     const growthCapped = isKnfGrowthBlocked(stock) ? Math.min(0, growth) : growth;
     fundamentals.revenue = Math.max(1000, fundamentals.revenue * (1 + Math.max(-0.25, Math.min(0.25, growthCapped))));
@@ -3607,6 +3607,7 @@ function selectUnicornCandidate(currentQ) {
     const eligible = stocks.filter(s => {
         if (s.assetType || s.isBankStock || s.isBankrupt || s.tradeHalted || s.price <= 1.0) return false;
         if (s.marketStar) return false;
+        if (getCapitalizationShare(s) > DOMINANCE_UNICORN_MAX_SHARE) return false; // 0.15.4 P6: gigant nie zostaje Jednorożcem
         if (s.lastMarketStarQuarter && (currentQ - s.lastMarketStarQuarter) < MARKET_STAR_CONFIG.cooldownQuarters) return false;
         if ((Number(s.financialHealth) || 0) < 0) return false;
         if (s.fundamentals && (Number(s.fundamentals.netProfit) || 0) <= 0 && (Number(s.fundamentals.epsTtm) || 0) <= 0) return false; // jednorożcem nie może być spółka trwale generująca stratę (jak mock LOSS)
