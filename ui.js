@@ -4289,6 +4289,7 @@ function renderReitCard(stock) {
             ${row('Obłożenie', `${formatNumberPl(reit.occupancy * 100, 1)}%`, 'Odsetek wynajętej powierzchni; spada w recesji (biura, handel, hotele).')}
             ${row('Stopa najmu', `${formatNumberPl(reit.rentYield * 100, 1)}% rocznie`, 'Przychód z najmu = wartość × stopa najmu × obłożenie.')}
             ${row('Dźwignia (LTV)', `${formatNumberPl(ltv * 100, 1)}% — ${ltvWord} (limit ${formatNumberPl(REIT_RULES.ltvMax * 100, 0)}%)`, 'Dług do wartości portfela; powyżej limitu REIT sprzedaje część nieruchomości.')}
+            <tr class="meter-row"><td colspan="2">${renderLimitMeter(ltv * 100, REIT_RULES.ltvMax * 100, `LTV ${formatNumberPl(ltv * 100, 1)}% przy limicie ${formatNumberPl(REIT_RULES.ltvMax * 100, 0)}%`, ltv > REIT_RULES.ltvBuild)}<span class="meter-scale"><small>0%</small><small>budowa do ${formatNumberPl(REIT_RULES.ltvBuild * 100, 0)}%</small><small>limit ${formatNumberPl(REIT_RULES.ltvMax * 100, 0)}%</small></span></td></tr>
             ${row('Zysk z ostatniego kwartału', money(reit.lastProfit), 'Najem − koszty utrzymania − odsetki (stopa bazowa + 2 pp).')}
             ${row('Wypłata (obowiązkowa ≥ 80% zysku)', `${formatNumberPl(reit.payoutRatio * 100, 0)}% zysku · ostatnio ${money(reit.lastPaid)}`, 'REIT wypłaca większość zysku jako dywidendę, raz na kwartał.')}
             ${row('Stopa dywidendy (rocznie)', `${formatNumberPl(getReitDividendYield(stock) * 100, 1)}%`, 'Ostatnia dywidenda × 4 / kurs.')}
@@ -5845,39 +5846,18 @@ function renderTendersList() {
             details.appendChild(empty);
         }
 
-        for (const row of ranking) {
-            const bid = row.bid;
-            const offer = document.createElement('div');
-            offer.className = 'construction-live-offer';
-
-            // Miejsce słowem i liczbą (kolor nie jest jedynym nośnikiem informacji).
-            offer.append(
-                createConstructionInfoRow(
-                    'Spółka',
-                    bid.bidder?.name || 'Brak danych'
-                ),
-                createConstructionInfoRow(
-                    'Miejsce w rankingu',
-                    `${row.rank}. — ${row.label} (${formatNumberPl(row.score, 1)} / 100)`
-                ),
-                createConstructionInfoRow(
-                    'Cena',
-                    formatConstructionMoney(bid.price)
-                ),
-                createConstructionInfoRow(
-                    'Deklarowany czas',
-                    `${bid.time} dni budowy`
-                ),
-                createConstructionInfoRow(
-                    'Oceny cząstkowe',
-                    row.criteria.map(item => `${item.label} ${formatNumberPl(item.score, 0)}`).join(' · ')
-                )
-            );
-            if (row.overLimit) {
-                offer.appendChild(createConstructionInfoRow('Limit udziału', 'Wykonawca ponad limitem 40% wygranych w oknie 8 kw. — wygra tylko wtedy, gdy nikt inny nie może przyjąć zlecenia.'));
-            }
-
-            details.appendChild(offer);
+        if (ranking.length) {
+            const list = document.createElement('ol');
+            list.className = 'bid-rank';
+            list.innerHTML = ranking.map(row => renderBidRankRow(row)).join('');
+            details.appendChild(list);
+        }
+        const winnerRow = tender.winner ? ranking.find(row => row.bid.bidder === tender.winner.bidder) : null;
+        if (winnerRow?.overLimit) {
+            const note = document.createElement('p');
+            note.className = 'notice-inline';
+            note.innerHTML = `${uiIcon('info', 14)} <span>Brak innego oferenta — limit udziału poluzowany. Zlecenie przyjął wykonawca ponad limitem.</span>`;
+            details.appendChild(note);
         }
 
         card.appendChild(details);
@@ -5885,6 +5865,39 @@ function renderTendersList() {
     }
 
     container.replaceChildren(fragment);
+}
+
+/** 0.15.5: pasek z kreską progu (`--v` i `--limit` w procentach); wartość zawsze podawana też tekstem obok. */
+function renderLimitMeter(percent, limit, label, warn) {
+    const clamp = value => Math.max(0, Math.min(100, Number(value) || 0));
+    const limitPart = Number.isFinite(limit) ? `;--limit:${clamp(limit)}` : '';
+    return `<span class="limit-meter${warn ? ' is-warn' : ''}" style="--v:${clamp(percent)}${limitPart}" role="img" aria-label="${escapeHtml(label)}"><i></i>${Number.isFinite(limit) ? '<b></b>' : ''}</span>`;
+}
+
+/** 0.15.5: wiersz rankingu ofert (miejsce słowem i liczbą, cztery oceny cząstkowe, znacznik limitu udziału). */
+function renderBidRankRow(row) {
+    const bid = row.bid;
+    const crits = row.criteria.map(item => `<span class="bid-crit"><small>${escapeHtml(item.label)}</small><b>${formatNumberPl(item.score, 0)}</b></span>`).join('');
+    const flag = row.overLimit
+        ? `<p class="limit-flag">${uiIcon('klodka', 14)} <span>Ponad limitem 40% wygranych w oknie 8 kw. — wygra tylko wtedy, gdy nikt inny nie może przyjąć zlecenia.</span></p>` : '';
+    return `<li class="bid-rank-row${row.overLimit ? ' is-over' : ''}">
+        <span class="bid-rank-pos" aria-label="Miejsce ${row.rank}">${row.rank}.</span>
+        <div class="bid-rank-main"><strong>${escapeHtml(bid.bidder?.name || 'Brak danych')}</strong>
+            <span class="text-muted">${escapeHtml(row.label)} · ${formatNumberPl(row.score, 1)} / 100</span>
+            ${renderLimitMeter(row.score, null, `Ocena ${formatNumberPl(row.score, 1)} na 100`)}
+            <div class="bid-rank-facts"><span>${formatConstructionMoney(bid.price)}</span><span>${bid.time} dni budowy</span></div>
+            <div class="bid-crits">${crits}</div>${flag}</div></li>`;
+}
+
+/** 0.15.5: ekspozycja banku spółki wobec limitu koncentracji (10% kapitału banku). */
+function renderBankExposureLine(stock) {
+    const bank = typeof getCompanyBank === 'function' ? getCompanyBank(stock) : null;
+    if (!bank || typeof getBankExposure !== 'function') return '';
+    const exposure = getBankExposure(bank, stock), capital = getBankCapital(bank);
+    if (!(exposure > 0) || !(capital > 0)) return '';
+    const share = exposure / capital * 100;
+    return `<p class="text-sm">Zadłużenie w banku ${escapeHtml(bank.name)}: <strong>${formatNumberPl(share, 1)}% kapitału banku (limit ${formatNumberPl(BANK_CONCENTRATION_LIMIT * 100, 0)}%)</strong></p>
+        ${renderLimitMeter(share / (BANK_CONCENTRATION_LIMIT * 100) * 100, 100, `Ekspozycja ${formatNumberPl(share, 1)}% kapitału przy limicie ${formatNumberPl(BANK_CONCENTRATION_LIMIT * 100, 0)}%`, share > BANK_CONCENTRATION_LIMIT * 80)}`;
 }
 
 function renderConstructionCompaniesList() {
@@ -6010,11 +6023,14 @@ function renderConstructionSubcontractorsList() {
             createConstructionInfoRow('Jakość / reputacja', `${formatNumberPl(Number(spec.quality) || 0, 0)} / ${formatNumberPl(Number(spec.reputation) || 0, 0)} (0–100)`),
             createConstructionInfoRow('Bonus tempa', `+${formatNumberPl((spec.bonus * 100), 1)}%`),
             createConstructionInfoRow('Kontrakty', spec.contractsCompleted),
-            createConstructionInfoRow('Udział w zleceniach rynku (ostatnie lata)', `${formatNumberPl(marketShare * 100, 0)}%`),
+            createConstructionInfoRow('Udział w zleceniach rynku (ostatnie lata)', `${formatNumberPl(marketShare * 100, 0)}% (próg 50%)`),
             createConstructionInfoRow('Należy do grupy', group ? `${group.name} (transfer ${formatNumberPl((Number(spec.transferShare) || 0) * 100, 0)}% zysku)` : 'niezależny'),
             createConstructionInfoRow('Gotówka', formatConstructionMoney(spec.cash)),
             createConstructionInfoRow('Obecna budowa', project ? `${project.tender.buildingType.name} (${project.builder.name})` : '—')
         );
+        const shareMeter = document.createElement('div');
+        shareMeter.innerHTML = renderLimitMeter(marketShare * 100, 50, `Udział ${formatNumberPl(marketShare * 100, 0)}% przy progu 50%`, marketShare > 0.5);
+        card.insertBefore(shareMeter.firstElementChild, card.children[card.children.length - 3] || null);
 
 
         grid.appendChild(card);

@@ -81,7 +81,7 @@ reit = f'''<section class="cc-section"><h4>{ic("budownictwo", 16)} Portfel nieru
 <table class="asset-mini-table w-full"><tbody>
 {reit_row("Rodzaj portfela", "Biura")}{reit_row("Wartość portfela", "412 300 000 PLN")}{reit_row("Obłożenie", "93,4%")}{reit_row("Stopa najmu", "6,2% rocznie")}
 <tr><td>Dźwignia (LTV) <span class="text-muted">ⓘ</span></td><td class="cell-number">36,1% — wysoka (limit 60%)</td></tr>
-<tr class="meter-row"><td colspan="2">{meter(36.1, 60, "is-warn", "LTV 36,1% przy limicie 60%")}<span class="meter-scale"><small>0%</small><small>budowa do 35%</small><small>limit 60%</small></span></td></tr>
+<tr class="meter-row"><td colspan="2">{meter(36.1, 60, "", "LTV 36,1% przy limicie 60%")}<span class="meter-scale"><small>0%</small><small>budowa do 50%</small><small>limit 60%</small></span></td></tr>
 {reit_row("Zysk z ostatniego kwartału", "5 100 000 PLN")}{reit_row("Wypłata (obowiązkowa ≥ 80% zysku)", "88% zysku · ostatnio 4 488 000 PLN")}{reit_row("Stopa dywidendy (rocznie)", "5,4%")}{reit_row("Premia / dyskonto do NAV", "▼ 3,2%")}
 </tbody></table></section>'''
 
@@ -94,7 +94,7 @@ out = [
     section('1. Ranking ofert w oknie przetargu', 'Lista numerowana: miejsce, słowo, ocena /100, pasek, cena, czas i cztery oceny cząstkowe. Wykonawca ponad limitem dostaje znacznik z kłódką i zdaniem, nie sam kolor.', tender),
     section('1b. Przetarg bez innego oferenta', 'Powód poluzowania limitu jest widoczny w nagłówku przetargu.', fallback),
     section('2. Podwykonawcy — grupy specjalności', 'Karta z udziałem w zleceniach rynku liczbą i paskiem z kreską progu 50%.', subs, width=720),
-    section('3. Karta REIT', 'Tabela jak dotąd, plus pasek LTV ze znacznikami: budowa do 35%, limit 60%. Słowo przy liczbie zostaje.', reit),
+    section('3. Karta REIT', 'Tabela jak dotąd, plus pasek LTV ze znacznikami: budowa do 50%, limit 60%. Słowo przy liczbie zostaje.', reit),
     section('4. Bank — ekspozycja i odmowa kredytu', 'Zajęcie limitu koncentracji widoczne zanim bank odmówi.', bank),
 ]
 

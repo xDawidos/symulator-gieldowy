@@ -10992,8 +10992,14 @@ group('0.15.5: Budownictwo i banki (przetargi, podwykonawcy, przejęcia pionowe,
         withEl('tenders-list', 'div', el => {
             renderTendersList();
             const text = el.textContent;
-            assert(text.includes('Miejsce w rankingu') && text.includes('Najlepsza oferta') && text.includes('Najsłabsza oferta'), 'miejsce słowem: ' + text.slice(0, 200));
-            assert(/Cena \d+ · Jakość \d+ · Zdolność wykonawcza \d+ · Reputacja \d+/.test(text), 'oceny cząstkowe');
+            assert(text.includes('Najlepsza oferta') && text.includes('Najsłabsza oferta'), 'miejsce słowem: ' + text.slice(0, 200));
+            const rows = el.querySelectorAll('.bid-rank-row');
+            assertEq(rows.length, 2, 'dwa wiersze rankingu');
+            assert(rows[0].querySelector('.bid-rank-pos').textContent === '1.' && rows[0].querySelectorAll('.bid-crit').length === 4, 'numer miejsca i cztery oceny cząstkowe');
+            assert(rows[0].querySelector('.limit-meter') && !rows[0].classList.contains('is-over'), 'pasek oceny, bez znacznika limitu');
+            const over = document.createElement('ol');
+            over.innerHTML = renderBidRankRow({ ...getTenderRanking(activeTenders.find(t => t.id === id))[0], overLimit: true });
+            assert(over.querySelector('.is-over .limit-flag') && over.textContent.includes('Ponad limitem 40%'), 'znacznik ponad limitem');
             assert(text.includes('Kryteria oceny') && text.includes('Cena 40%'), 'wagi kryteriów');
             assert(!emojiRe.test(text), 'bez emoji w oknie przetargu');
         });

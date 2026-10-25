@@ -9960,6 +9960,7 @@ function renderAccountingSection(stock) {
                     <span class="text-xs">🟦 kapitał własny ${money(equity)} · 🟥 zobowiązania ${money(liabilities)}</span></div>
             </div>
             <p class="text-sm">Dług netto (zobowiązania − gotówka): <strong>${money(liabilities - cash)}</strong>. Bilans zawsze się równa: aktywa = kapitał własny + zobowiązania.</p>
+            ${typeof renderBankExposureLine === 'function' ? renderBankExposureLine(stock) : ''}
             ${stock.balanceSheet?.goodwill > 0 || stock.lastImpairment ? `<p class="text-sm">Wartość firmy (w aktywach, z przejęć): <strong>${money(stock.balanceSheet?.goodwill || 0)}</strong>${stock.lastImpairment ? ` · odpis wartości firmy: <strong>${money(-stock.lastImpairment.amount)}</strong> (kw. ${stock.lastImpairment.quarter}, po przejęciu ${escapeHtml(stock.lastImpairment.from)}) — w wyniku jako „pozostałe”` : ''}</p>` : ''}`;
     } else html += locked(2, 'Bilans');
 
