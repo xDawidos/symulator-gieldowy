@@ -18,7 +18,7 @@ const SUBCONTRACTOR_RULES = {
     auctionMin: 3, auctionMax: 5,
     maxShare: 0.5, shareMinHires: 3, shareWindowQuarters: 8,   // jeden podwykonawca ≤ 50% zleceń generalnego w oknie 8 kw.
     startupChance: 0.05, failChance: 0.012, idleQuarters: 12,
-    crossSpecialtyPenalty: 25, loadPenalty: 80,                                 // punkty kary za podwykonawcę spoza potrzebnej specjalności
+    crossSpecialtyPenalty: 25, loadPenalty: 80, offerNoise: 12, reputationDrift: 0.04,                                 // punkty kary za podwykonawcę spoza potrzebnej specjalności
     startHireChance: 0.30,                                     // generalny wykonawca AI zatrudnia podwykonawcę już przy starcie budowy
     groupMaxShare: 0.40,                                       // jedna grupa ≤ 40% podwykonawców specjalności
     groupPriceTolerance: 0.15,                                 // zlecenie od grupy nie omija aukcji, gdy cena grupy > rynkowa + 15%
@@ -64,6 +64,39 @@ function getSubcontractorQuarter() {
     return typeof macro === 'object' && macro && Number.isFinite(macro.quarter) ? macro.quarter : 0;
 }
 
+// Zapis w wersji skróconej (B6): wiersze liczb zamiast obiektów, krótkie id, wartości zaokrąglone; rzeczy wyliczalne (bonus
+// podwykonawców powstałych w grze) pomijane. Dawny zapis (zwykła tablica obiektów) wczytuje się bez zmian.
+const SUBCONTRACTOR_SAVE_FIELDS = ['id', 'name', 'specialty', 'quality', 'priceFactor', 'reputation', 'bonus', 'cash', 'contractsCompleted', 'founded', 'lastContractQ', 'groupSymbol', 'groupSince', 'transferShare', 'busyProjectId', 'profits', 'profitQ'];
+
+function serializeSubcontractors() {
+    const round = (value, digits = 0) => (Number.isFinite(value) ? Math.round(value * 10 ** digits) / 10 ** digits : value);
+    const keys = Object.keys(SUBCONTRACTOR_SPECIALTIES);
+    return {
+        v: 1, f: SUBCONTRACTOR_SAVE_FIELDS,
+        rows: specialists.map(spec => SUBCONTRACTOR_SAVE_FIELDS.map(key => {
+            const value = spec[key];
+            if (key === 'specialty') return Math.max(0, keys.indexOf(normalizeSubcontractorSpecialty(value)));
+            if (key === 'priceFactor' || key === 'transferShare') return round(value, 2);
+            if (key === 'bonus') return round(value, 3);
+            if (key === 'profits') return (value || []).map(item => round(item));
+            if (typeof value === 'number') return round(value);
+            return value === undefined ? null : value;
+        }))
+    };
+}
+
+function deserializeSubcontractors(saved) {
+    if (Array.isArray(saved)) return saved;
+    if (!saved || !Array.isArray(saved.rows) || !Array.isArray(saved.f)) return null;
+    const keys = Object.keys(SUBCONTRACTOR_SPECIALTIES);
+    return saved.rows.map(row => {
+        const spec = {};
+        saved.f.forEach((key, index) => { if (row[index] !== null && row[index] !== undefined) spec[key] = key === 'specialty' ? keys[row[index]] || 'foundations' : row[index]; });
+        spec.level = 1 + Math.floor((Number(spec.contractsCompleted) || 0) / 5);
+        return spec;
+    });
+}
+
 function normalizeSubcontractorSpecialty(value) {
     if (SUBCONTRACTOR_SPECIALTIES[value]) return value;
     return SUBCONTRACTOR_LEGACY[value] || 'foundations';
@@ -73,7 +106,8 @@ function normalizeSubcontractorSpecialty(value) {
 function normalizeSubcontractor(spec) {
     spec.specialty = normalizeSubcontractorSpecialty(spec.specialty);
     if (!Number.isFinite(Number(spec.bonus))) spec.bonus = 0.08;
-    if (!Number.isFinite(Number(spec.quality))) spec.quality = Math.max(10, Math.min(95, Math.round(((Number(spec.bonus) - 0.04) / 0.12) * 100)));
+    // Dawni podwykonawcy (bonus 0,04–0,15) dostają jakość 40–70 — nie są z góry lepsi od firm powstających w grze (25–90).
+    if (!Number.isFinite(Number(spec.quality))) spec.quality = Math.max(40, Math.min(70, Math.round(40 + ((Number(spec.bonus) - 0.04) / 0.11) * 30)));
     if (!Number.isFinite(Number(spec.priceFactor))) spec.priceFactor = 1;
     if (!Number.isFinite(Number(spec.reputation))) spec.reputation = 50;
     if (!Array.isArray(spec.profits)) spec.profits = [0, 0, 0, 0];
@@ -83,6 +117,15 @@ function normalizeSubcontractor(spec) {
     if (spec.groupSymbol === undefined) spec.groupSymbol = null;
     return spec;
 }
+
+/** Krótkie id (sub1, sub2…) kolejne względem istniejących — mały zapis i czytelne odwołania. */
+function nextSubcontractorId() {
+    let max = 0;
+    for (const spec of specialists) { const match = /^sub(\d+)$/.exec(spec.id); if (match) max = Math.max(max, Number(match[1])); }
+    subcontractorSeq = Math.max(max, subcontractorSeq) + 1;
+    return 'sub' + subcontractorSeq;
+}
+let subcontractorSeq = 0;
 
 function pickSubcontractorName(specialty) {
     const taken = new Set((typeof specialists !== 'undefined' ? specialists : []).map(spec => spec.name));
@@ -97,7 +140,7 @@ function pickSubcontractorName(specialty) {
 function createSubcontractor(specialty, options = {}) {
     const quality = options.quality ?? getRandomIntInRange(25, 90);
     const spec = {
-        id: nextSimulationId('spec'),
+        id: nextSubcontractorId(),
         name: options.name || pickSubcontractorName(specialty),
         specialty,
         quality,
@@ -148,7 +191,7 @@ function isOverSubcontractorShareLimit(builder, spec) {
 function getSubcontractorMarketShare(spec) {
     const from = getSubcontractorQuarter() - SUBCONTRACTOR_RULES.shareWindowQuarters;
     const recent = subcontractLog.filter(entry => entry.q > from);
-    if (recent.length < 4) return 0;
+    if (recent.length < 3) return 0;
     return recent.filter(entry => entry.spec === spec.id).length / recent.length;
 }
 
@@ -157,7 +200,8 @@ function getSubcontractorScore(spec, needs) {
     const cross = needs.includes(spec.specialty) ? 0 : SUBCONTRACTOR_RULES.crossSpecialtyPenalty;
     // Przeciążenie: udział w zleceniach rynku powyżej 15% obniża ocenę (rynek nie zamyka się wokół jednej firmy).
     const load = SUBCONTRACTOR_RULES.loadPenalty * Math.max(0, getSubcontractorMarketShare(spec) - 0.15);
-    return 0.40 * priceScore + 0.35 * spec.quality + 0.25 * spec.reputation - cross - load;
+    const noise = (Math.random() - 0.5) * SUBCONTRACTOR_RULES.offerNoise;   // oferty różnią się z aukcji na aukcję
+    return 0.40 * priceScore + 0.35 * spec.quality + 0.25 * spec.reputation - cross - load + noise;
 }
 
 /**
@@ -336,6 +380,7 @@ function processSubcontractorsQuarterly() {
     const rules = SUBCONTRACTOR_RULES;
 
     for (const spec of [...specialists]) {
+        spec.reputation += (50 - spec.reputation) * rules.reputationDrift; // reputacja wraca ku średniej (bez wiecznego zwycięzcy)
         const profit = Number(spec.profitQ) || 0;
         spec.profits.push(profit);
         if (spec.profits.length > 4) spec.profits.shift();

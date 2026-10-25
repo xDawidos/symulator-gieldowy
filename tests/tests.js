@@ -10582,11 +10582,11 @@ group('0.15.5: Budownictwo i banki (przetargi, podwykonawcy, przejęcia pionowe,
     test('B3: pierwszeństwo podwykonawcy z grupy tylko przy cenie ≤ rynkowa + 15% — inaczej aukcja jest uczciwa', () => {
         const builder = registryWorld();
         for (const s of specialists.filter(x => ['roads', 'bridges'].includes(x.specialty))) { s.quality = 60; s.priceFactor = 1.0; s.reputation = 50; }
-        const own = groupSpec('roads'); own.groupSymbol = 'GEN'; own.quality = 52; own.reputation = 50; // trochę słabszy od rynku
-        own.priceFactor = 1.05;
+        const own = groupSpec('roads'); own.groupSymbol = 'GEN'; own.quality = 60; own.reputation = 50; // taka sama jakość jak rynek
+        own.priceFactor = 1.1; // +10% do ceny rynkowej, w granicy tolerancji 15%
         let ownWins = 0;
         for (let i = 0; i < 30; i++) if (runSubcontractorAuction(fakeProject(builder, 'container_port')).winner === own) ownWins++;
-        assert(ownWins >= 28, 'w cenie rynkowej (+5%) firma z grupy wygrywa dzięki pierwszeństwu: ' + ownWins);
+        assert(ownWins >= 18, 'w granicy +15% do ceny rynkowej firma z grupy zwykle wygrywa dzięki pierwszeństwu (z szumem ofert): ' + ownWins);
         own.priceFactor = 1.4; // > rynkowa + 15%: bez premii, drogi i słaby
         ownWins = 0;
         for (let i = 0; i < 30; i++) if (runSubcontractorAuction(fakeProject(builder, 'container_port')).winner === own) ownWins++;
@@ -10890,6 +10890,69 @@ group('0.15.5: Budownictwo i banki (przetargi, podwykonawcy, przejęcia pionowe,
         const snap = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
         const saved = snap.stocks.find(s => s.symbol === 'RTS');
         assert(saved && saved.reit && saved.reit.buildings === 2 && saved.reit.portfolioValue > 0, 'REIT w zapisie');
+    });
+
+
+    // --- B6: spójność z limitami i zapisem ---
+    test('B6: zapis skrócony podwykonawców — pełny obieg (pola modelu, grupa, zajętość) i wyraźnie mniejszy niż zwykły JSON', () => {
+        const builder = registryWorld();
+        const spec = groupSpec('roads'); assert(acquireSubcontractor(builder, spec, 100_000), 'przejęcie');
+        const busy = specialists.find(s => s.specialty === 'survey'); busy.busyProjectId = 'proj_x'; busy.contractsCompleted = 7;
+        const plain = JSON.stringify(specialists);
+        const compact = JSON.stringify(serializeSubcontractors());
+        assert(compact.length < plain.length * 0.6, 'skrócony ' + compact.length + ' B vs zwykły ' + plain.length + ' B');
+        const back = deserializeSubcontractors(JSON.parse(compact));
+        assertEq(back.length, specialists.length, 'liczba podwykonawców');
+        for (const original of specialists) {
+            const copy = back.find(item => item.id === original.id);
+            assert(copy, 'brak ' + original.id);
+            for (const key of ['name', 'specialty', 'quality', 'reputation', 'groupSymbol', 'busyProjectId', 'contractsCompleted']) assertEq(copy[key] ?? null, original[key] ?? null, key + ' ' + original.id);
+            assertNear(copy.priceFactor, original.priceFactor, 'cena ' + original.id, 0.006); assertNear(copy.bonus, original.bonus, 'bonus ' + original.id, 0.0006);
+            assertNear(copy.cash, original.cash, 'kasa ' + original.id, 0.6);
+        }
+        assertEq(deserializeSubcontractors([{ id: 'spec1' }]).length, 1, 'dawny zapis (tablica) wczytuje się bez zmian');
+        assert(new Set(specialists.map(s => s.id)).size === specialists.length, 'unikalne id');
+        const id = createSubcontractor('roofs').id; assert(/^sub\d+$/.test(id), 'krótkie id ' + id);
+    });
+
+    test('B6: zapis i wczytanie w trakcie przetargu i z aktywnym podwykonawcą — rejestr, dzienniki i grupy zachowane', () => {
+        const { client, builder } = standardWorld({ builderCash: 8_000_000 });
+        ensureSubcontractorRegistry();
+        SUBCONTRACTOR_RULES.startHireChance = 1;
+        let project;
+        try { project = awardContract(client).project; } finally { SUBCONTRACTOR_RULES.startHireChance = 0; }
+        assert(project.subcontractor, 'podwykonawca przy starcie');
+        const spec = specialists.find(s => s.id === project.subcontractor.id);
+        spec.groupSymbol = 'BUD'; spec.transferShare = 0.4;
+        constructionAwardLog = [{ q: 5, sym: 'BUD' }];
+        const snap = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+        assert(snap.subcontractLog.length >= 1 && snap.constructionAwardLog.length === 1, 'dzienniki w zapisie');
+        assert(snap.specialists.rows && snap.specialists.rows.length === specialists.length, 'rejestr w wersji skróconej');
+        const restored = deserializeSubcontractors(snap.specialists);
+        const copy = restored.find(s => s.id === spec.id);
+        assertEq(copy.groupSymbol, 'BUD', 'grupa'); assertEq(copy.busyProjectId, project.id, 'zajętość przy budowie');
+        assert(snap.constructionProjects.some(p => p.id === project.id && p.subcontractor && p.subcontractor.id === spec.id), 'projekt wskazuje podwykonawcę');
+    });
+
+    test('B6: przejęcia pionowe nie tworzą duchów posiadaczy ani spółek: niezmienniki świata po serii przejęć, upadków i wchłonięć', () => {
+        const builders = [mkB('GA', { cash: 60_000_000 }), mkB('GB', { cash: 60_000_000 })];
+        resetWorld([...builders, makeCompany('KLI', { cash: 1_000_000 })]);
+        specialists = []; ensureSubcontractorRegistry();
+        const q0 = macro.quarter, n0 = stocks.length, held0 = stocks.map(s => s.sharesHeld).join();
+        withSeededRandom(31, () => {
+            for (let q = 0; q < 60; q++) {
+                macro.quarter = 3000 + q;
+                for (const b of builders) b.cash = 60_000_000;
+                SUBCONTRACTOR_RULES.acquireChance = 0.3;
+                try { processSubcontractorsQuarterly(); } finally { SUBCONTRACTOR_RULES.acquireChance = 0; }
+            }
+        });
+        macro.quarter = q0;
+        assert(subcontractorAcquisitionCount >= 1, 'były przejęcia');
+        assertEq(stocks.length, n0, 'liczba spółek bez zmian');
+        assertEq(stocks.map(s => s.sharesHeld).join(), held0, 'akcje w obrocie bez zmian (brak duchów posiadaczy)');
+        assert(checkWorldInvariants().length === 0, 'niezmienniki: ' + checkWorldInvariants().join('; '));
+        for (const b of builders) assert(b.cash >= 0, 'kasa nieujemna');
     });
 
     test('B1: okno wygranych jest zapisywane (pole opcjonalne)', () => {

@@ -213,7 +213,7 @@ function buildSaveSnapshot({ compact = 0 } = {}) {
         aiCompetitors: serializeWithStockRefs(aiCompetitors),
         city: serializeWithStockRefs(city),
         centralBank: serializeWithStockRefs(centralBank),
-        specialists: serializeWithStockRefs(specialists),
+        specialists: typeof serializeSubcontractors === 'function' ? serializeSubcontractors() : serializeWithStockRefs(specialists), // 0.15.5 B6: wersja skrócona
         constructionAwardLog, // 0.15.5 B1: okno wygranych przetargów (pole opcjonalne)
         subcontractLog, subcontractorDeals, subcontractorAcquisitionCount, // 0.15.5 B2–B3: okno zleceń podwykonawców, przejęcia pionowe (pola opcjonalne)
         activeTenders: activeTenders.filter(tender => ['open', 'closed', 'awarded'].includes(tender.status)).map(serializeTenderForSave), // zakończone przetargi nie trafiają do zapisu
@@ -581,7 +581,8 @@ function applySaveSnapshot(snapshot) {
     if (Array.isArray(snapshot.aiCompetitors)) aiCompetitors.splice(0, aiCompetitors.length, ...resolveOther(snapshot.aiCompetitors));
     if (snapshot.city) city = resolveOther(snapshot.city);
     if (snapshot.centralBank) centralBank = resolveOther(snapshot.centralBank);
-    if (Array.isArray(snapshot.specialists)) specialists = resolveOther(snapshot.specialists);
+    const savedSpecialists = typeof deserializeSubcontractors === 'function' ? deserializeSubcontractors(snapshot.specialists) : snapshot.specialists;
+    if (Array.isArray(savedSpecialists)) specialists = resolveOther(savedSpecialists);
     subcontractLog = Array.isArray(snapshot.subcontractLog) ? snapshot.subcontractLog.filter(e => e && Number.isFinite(e.q) && typeof e.spec === 'string') : []; // 0.15.5 B2
     subcontractorDeals = Array.isArray(snapshot.subcontractorDeals) ? snapshot.subcontractorDeals : [];
     subcontractorAcquisitionCount = Number(snapshot.subcontractorAcquisitionCount) || 0;
