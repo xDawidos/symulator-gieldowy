@@ -24,6 +24,14 @@
 | 15 | „Miasto Gdańsk”, wszystkie miejskie na giełdzie | ✅ kod | Nazwa „Miasto Gdańsk” jest na stałe w `index.html`, `ui.js`, `events.js`. `runMunicipalCompanyLogic`: 20% szans rocznie na IPO losowej spółki z puli 8 → w długiej grze wszystkie wchodzą na giełdę (w 20 latach: 3 debiuty, 3 wyjścia). | `index.html`, `ui.js`, `events.js`, `companies.js` | P7: „Miasto”, część spółek zostaje miejska |
 | 16 | Państwo bez wydatków | ✅ przebiegi | `governmentTreasury`: 1 mln zł → 334 mln po roku → 2,26 mld po 6,5 roku (+ ~330 mln/rok); wydatki to tylko policja/KNF (0,2%/kw.), interwencje kryzysowe, dotacje 1% powyżej 10 mln. | `state.js`, `core.js` | P7: programy socjalne jako wydatki skarbu |
 
+## Uzupełnienie po P6: przyczyna dominacji Orła Telekom (przebiegi 20-letnie)
+
+W 8 grach bazowych (0.15.3) ORT kończył w górnej trójce 5 razy, udział w kapitalizacji sięgał 24–33% (BOR, KUP, NRB, BEW: 4–5 z 8). Dwie przyczyny:
+1. **Stała kolejność wielkości gigantów na starcie** (ORT 3,6 mld zł, BOR 3,0, KUP 2,3, NRB 2,0, BEW 1,9, CTX 1,85, UNP 1,5, HOR 1,1 mld; reszta rynku ≤ 100 mln zł): osiem gigantów obsadza górną trójkę niemal zawsze, a kolejność z pierwszego kwartału się utrzymuje.
+2. **Brak hamulca wzrostu dla największej spółki:** wzrost przychodów jest taki sam dla wszystkich (PKB, inflacja, cykl sektora, faza), a spółka technologiczna z badaniami i prezesem „wizjonerem” ma największą wagę w losowaniu **Jednorożca** (+5,5…7% przychodów na kwartał przez 6–8 kwartałów, powtarzalnie po 8 kw. przerwy). W jednym przebiegu udział ORT rósł z 16% do 58% w 30 kwartałów.
+
+Kroki naprawy (P6): losowa wielkość startowa gigantów, hamulec wzrostu od 10% kapitalizacji, brak Jednorożca dla spółki z udziałem > 12%, kara wyceny za dominację.
+
 ## Uwagi do wykonania
 
 1. **Licznik 180 nie jest naruszeniem limitu krajowego** (110 działa), tylko nagłówkiem sumującym wszystko. Prawdziwy problem to sufit łączny 150 osiągany stale i brak limitu dla rynków internetowych (do 29 członków). P5 zaostrza politykę (krajowe) i wprowadza spójną definicję licznika.
