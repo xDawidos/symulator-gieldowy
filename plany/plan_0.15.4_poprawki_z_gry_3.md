@@ -50,12 +50,12 @@ Kolejność: P0 → P1 → … → P8. **Commit po każdej części.** UI z komp
 
 ## P3. Minimalna dywidenda i wyjaśnienie warunków rynkowych
 
-- **Dywidenda minimalna:** poniżej progu (propozycja 0,01 zł na akcję lub 0,1% kursu) spółka nie wypłaca; przycisk nieaktywny z podpisem „dywidenda zbyt mała”.
+- **Dywidenda minimalna:** poniżej progu (decyzja: **większa z dwóch wartości — 0,01 zł na akcję albo 0,1% kursu**) spółka nie wypłaca; przycisk nieaktywny z podpisem „dywidenda zbyt mała”.
 - **Warunki rynkowe:** sprawdzić, jak liczą się w kodzie i jak spółki z nich korzystają; wynik w raporcie. W UI dopisek słowem „co to znaczy” oraz hasło Akademii. **Commit P3.**
 
 ## P4. Podział i skup akcji (split, reverse split)
 
-- **Split** (np. 2:1, 5:1, 10:1) spółka ogłasza, gdy kurs jest bardzo wysoki; **konsolidacja** (reverse split, np. 1:5, 1:10), gdy kurs jest bardzo niski. Progi i szansa do strojenia (propozycja: split od 1000 zł, konsolidacja poniżej 1 zł; szansa 20%/kw. po przekroczeniu progu).
+- **Split** (np. 2:1, 5:1, 10:1) spółka ogłasza, gdy kurs jest bardzo wysoki; **konsolidacja** (reverse split, np. 1:5, 1:10), gdy kurs jest bardzo niski. Progi (decyzja): split od 1000 zł, konsolidacja poniżej 1 zł; szansa 20%/kw. po przekroczeniu progu (do strojenia).
 - **Niezmienniki:** liczba akcji u wszystkich posiadaczy (gracz, boty, fundusze, ETF, spółki zależne), zlecenia, kampanie, gwarancje, zastaw, historia cen i świec (korekta wstecz, wykres bez skoku); wartość pozycji bez zmian.
 - **Niezmiennik „akcje w obrocie = suma posiadaczy”** sprawdzany po każdym splicie.
 - Dla gracza: powiadomienie, wpis w pasku newsów, hasło Akademii („Split i reverse split”).
@@ -70,13 +70,13 @@ Kolejność: P0 → P1 → … → P8. **Commit po każdej części.** UI z komp
 ## P6. Orzeł Telekom i Konfiturex Tech
 
 - **Orzeł Telekom:** diagnoza (przetargi, kooperacje, koncern, premia sektora); naprawa przyczyny w tej części, jeśli leży poza przetargami (przetargi → 0.15.5). Cel: spółka z górnych 3 w kapitalizacji w ≤ 30% gier 20-letnich (żadna spółka nie dominuje w > 30%).
-- **Ekspansja i etykieta:** limit różnorodności (spółka ma najwyżej N segmentów w niepowiązanych sektorach — propozycja 3; kolejna ekspansja wymaga powiązania lub dyskonta konglomeratu), **sektor główny przeliczany po zmianie segmentów** (Konfiturex Tech nie może być w grupie Technologia, jeśli większość przychodu to nieruchomości). **Commit P6.**
+- **Ekspansja i etykieta:** limit różnorodności (spółka ma najwyżej **3** segmenty w niepowiązanych sektorach — decyzja; kolejna ekspansja wymaga powiązania lub dyskonta konglomeratu), **sektor główny przeliczany po zmianie segmentów** (Konfiturex Tech nie może być w grupie Technologia, jeśli większość przychodu to nieruchomości). **Commit P6.**
 
 ## P7. Lombard, Wrona, miejskie spółki, wydatki państwa
 
 - **Lombard i Wrona:** pomiar popytu; strojenie napływu klientów i oprocentowania, żeby zakładka nie była pusta (cel: średnio ≥ 5 aktywnych pozycji lombardu, Wrona z portfelem > 0 w ≥ 80% gier).
 - **Spółki miejskie:** nazwa „miasto” zamiast „miasto Gdańsk”; nie wszystkie wchodzą na giełdę (część zostaje miejska; cel: 30–60% na giełdzie; szczegóły rozstrzyga 0.15.6, w którym startują na NewHorizons).
-- **Wydatki państwa:** pomiar skarbu; strojenie (niższe wpływy albo nowe wydatki). **Decyzja użytkownika:** nowe urzędy i programy socjalne w tej wersji, czy osobno (propozycja: strojenie tutaj, urzędy w Polityce 2 — 0.19.1). **Commit P7** (krok na element).
+- **Wydatki państwa:** pomiar skarbu; strojenie wpływów oraz **nowe programy socjalne jako wydatki skarbu** (decyzja 2026-10-25; małe programy, np. zasiłki, oświata, zdrowie; wpływ na zadowolenie klas z 0.13 i populację, bez nowych urzędów — te w 0.19.1). **Commit P7** (krok na element).
 
 ## P8. Kontrola końcowa
 
@@ -119,12 +119,12 @@ Przebiegi ×200: 20 gier × 6,5 roku bez presetu, 20 × 6,5 roku z `fundusz-gig`
 - **Naprawa „niewidocznych” błędów UI** bez odtworzenia: P0 jest warunkiem.
 - **Za dużo naraz** → podział na kroki i commity; P7 można przesunąć do 0.15.5.
 
-## Decyzje do podjęcia
+## Decyzje (podjęte 2026-10-25)
 
-1. Progi splitu i konsolidacji (propozycja 1000 zł / 1 zł).
-2. Próg minimalnej dywidendy (propozycja 0,01 zł lub 0,1% kursu).
-3. Limit różnorodności segmentów (propozycja 3 niepowiązane).
-4. Wydatki państwa: strojenie teraz, nowe urzędy w 0.19.1.
+1. **Split od 1000 zł, konsolidacja poniżej 1 zł** (szansa 20%/kw. po przekroczeniu progu).
+2. **Minimalna dywidenda: większa z dwóch wartości — 0,01 zł na akcję albo 0,1% kursu.**
+3. **Limit różnorodności: najwyżej 3 niepowiązane sektory** w segmentach spółki.
+4. **Wydatki państwa: nowe programy socjalne już w 0.15.4** (P7); nowe urzędy zostają w 0.19.1.
 
 ## Prompt dla czatu implementującego P0
 

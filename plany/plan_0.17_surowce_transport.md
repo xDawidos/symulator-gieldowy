@@ -28,13 +28,13 @@ Kolejność: S0 → S1 → … → S7. **Commit po każdej części.** UI z komp
 | Część | Zakres | Uwagi |
 |---|---|---|
 | **S0** | Pomiar po 0.16 (zapis, czas kroku, GIG, marże; baza 0.17); doprecyzowanie danych | raport `raporty/baza_0.17.md` |
-| **S1** | **Rejestr surowców** (złoto, ropa, srebro, uran, miedź i metale przemysłowe, zboże, kawa, bawełna, gaz): cena w USD, proces powracający do średniej + sezon + wpływ nastroju i linii, wpływ globalnego popytu przemysłu i zbrojeń | cena „kwartalna” w uproszczeniu; bez dziennej mikrostruktury |
+| **S1** | **Rejestr surowców** (**6 na start:** złoto, ropa, gaz, metale przemysłowe, zboże, uran; srebro, kawa i bawełna dochodzą w 0.18 razem z łańcuchami): cena w USD, proces powracający do średniej + sezon + wpływ nastroju i linii, wpływ globalnego popytu przemysłu i zbrojeń | cena „kwartalna” w uproszczeniu; bez dziennej mikrostruktury |
 | **S2** | **Spółki i koszty:** spółki wydobywcze (przychód ∝ cena surowca), przemysł i chemia (koszt wsadu = udział kosztu × zmiana ceny), **średnia odchyłek marż = 0** (zasada 0.13: marżę wyznacza profil sektora) | kalibracja „średnio zero” jest warunkiem wejścia |
-| **S3** | **Giełda towarowa:** kontrakty terminowe (zapadalność 1–4 kw.), depozyt i margin call (`marginEngine`), boty spekulacyjne i hedgujące (spółki zabezpieczają wsad) | limit dźwigni funduszu wspólny z forexem |
+| **S3** | **Giełda towarowa:** kontrakty terminowe (zapadalność 1–4 kw.; **na czas testów dostępne od razu, pod koniec 0.17 zamknięte za umiejętnością „Mistrz Opcji”** — decyzja 2026-10-25), depozyt i margin call (`marginEngine`), boty spekulacyjne i hedgujące (spółki zabezpieczają wsad) | limit dźwigni funduszu wspólny z forexem |
 | **S4** | **Transport:** podsektory w Transporcie i logistyce (Morski, Lotniczy-cargo, Lądowy: kolej i ciężarówki); spółki (1–2 na kraj; flagowe państwowe w PL i USA: np. morska, POP, DHXL); **indeks frachtu** (cena + czas dostawy wg rodzaju) | bez nowego sektora, tylko podsektory |
 | **S5** | **Infrastruktura publiczna:** porty morskie, tory, autostrady, lotniska (np. Chopin Industry Airport, Wałęsa Shipment) przez przetargi `city.js`; przepustowość podnosi tempo transportu; **zamówienia PPP** dopisane do interwencji państwa 0.15.3 | domyka odstępstwo 6 z 0.15.3 |
 | **S6** | **Zbrojenia a surowce:** obronność zużywa metale i elektronikę; poziom bezpieczeństwa państwa | opcjonalnie, jeśli S2 spełni kalibrację |
-| **S7** | Interfejs, Akademia (np. „Kontrakt terminowy”, „Contango”, „Fracht”), zapis, kontrola, raport `raporty/kontrola_0.17.md` | |
+| **S7** | **Zamknięcie kontraktów za umiejętnością „Mistrz Opcji”**; interfejs, Akademia (np. „Kontrakt terminowy”, „Contango”, „Fracht”), zapis, kontrola, raport `raporty/kontrola_0.17.md` | |
 
 ## Jak sprawdzimy (orientacyjnie)
 
@@ -54,11 +54,14 @@ Kolejność: S0 → S1 → … → S7. **Commit po każdej części.** UI z komp
 - **Zbyt wiele surowców = szum**: zaczynamy od 9; w razie potrzeby 6.
 - **Zależność od forexu** (silnik depozytu): jeśli 0.16.4 się opóźni, S3 przesuwamy na koniec.
 
-## Decyzje do podjęcia przed S1
+## Decyzje (podjęte 2026-10-25)
 
-1. Liczba surowców (9 z listy czy 6 na start)?
-2. Czy kontrakty są dostępne od razu, czy po odblokowaniu umiejętności („Mistrz Opcji” z roadmapy)?
-3. Czy zbrojenia i bezpieczeństwo państwa (S6) wchodzą już tu, czy zostają na 0.19?
+1. **6 surowców na start** (złoto, ropa, gaz, metale przemysłowe, zboże, uran).
+2. **Kontrakty od razu na czas testów**, a przed zamknięciem 0.17 zamykamy je za umiejętnością „Mistrz Opcji” (zadanie w S7).
+
+## Decyzje jeszcze otwarte
+
+1. Czy zbrojenia i bezpieczeństwo państwa (S6) wchodzą już tu, czy zostają na 0.19?
 
 ## Zlecenie dla czatu designu (przed S3)
 

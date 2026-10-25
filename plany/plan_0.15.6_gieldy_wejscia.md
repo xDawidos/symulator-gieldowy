@@ -23,7 +23,7 @@ Kolejność: E0 → E1 → … → E7. **Commit po każdej części.** UI z komp
 | **E0** | Pomiar: wymagania debiutu, liczba spółek na rynkach, źródła spółek (z 0.15.4), kto może inwestować w NewHorizons |
 | **E1** | **Wymagania wejścia na GPW** (kapitalizacja, zysk, wiek, wolny obrót), rosnące, gdy liczba spółek > 110; ścieżka „zawróć” (delisting do NewHorizons zamiast upadku) |
 | **E2** | **NewHorizons:** niższe wymagania, większe ryzyko i zmienność, więcej spółek innowacyjnych i wczesnych; działa jako spółka państwowa (operator); **spółki atomowe tam nie wchodzą** (zasada dla 0.17.2); nie wszystkie boty i fundusze mogą w niej inwestować (reguły osobowości i mandatów) |
-| **E3** | **Ścieżka startupów:** dwa progi finansowania (próg na główny parkiet z kategoriami brąz–platyna oraz niższy próg NewHorizons); jeśli się nie uda — niższy próg; przejście z NewHorizons na główny parkiet albo do firm prywatnych |
+| **E3** | **Ścieżka startupów:** dwa progi finansowania (próg na główny parkiet z kategoriami brąz–platyna oraz niższy próg NewHorizons); jeśli się nie uda — niższy próg; przejście z NewHorizons na główny parkiet albo do firm prywatnych; **wejście na giełdę prywatną** (bez ostrych wymogów, ale większa szansa na oszustwo: ukryte problemy, zaniżona jakość raportów, ryzyko upadku i straty inwestorów); nie wszystkie boty i fundusze mogą w niej inwestować |
 | **E4** | **Spółki miejskie** startują na NewHorizons (reguła z 0.15.4 P7: część zostaje miejska) |
 | **E5** | **Urząd antymonopolowy:** poziomy; przeciwdziała koncentracji (np. 62 z 66 projektów w jednej firmie), kary i nakaz podziału; wzajemne ustalenia z przetargami (0.15.5) |
 | **E6** | **Media-córka jako gazeta** (opcjonalnie): spółka zależna w Mediach wysyła graczowi maile, lekko przychylna matce, może kłamać o przeciwnikach; ryzyko zdemaskowania i kary (spójne z „czarnym PR” z 0.7) |
@@ -48,11 +48,14 @@ Kolejność: E0 → E1 → … → E7. **Commit po każdej części.** UI z komp
 - **Media-córka** wprowadza fałszywe informacje → oznaczenie źródła w mailu, możliwość zdemaskowania.
 - **Rozmiar wersji** → E6 opcjonalne, do przesunięcia.
 
-## Decyzje do podjęcia
+## Decyzje (podjęte 2026-10-25)
 
-1. Czy NewHorizons jest operatorem państwowym (jak w zgłoszeniu), czy prywatnym?
-2. Czy startup ma jedną ścieżkę (główny parkiet albo NewHorizons), czy obie naraz?
-3. Czy E6 (media-córka) wchodzi teraz, czy do osobnej małej wersji?
+1. **NewHorizons: państwowy operator**, ścieżka startupu: **główny parkiet → (jeśli się nie uda) niższy próg NewHorizons → awans na główny parkiet albo firma prywatna albo wejście na giełdę prywatną** (E3).
+2. **Giełda prywatna:** łagodniejsze wymogi wejścia, ale większa szansa, że spółka okaże się oszustwem (E3).
+
+## Decyzje jeszcze otwarte
+
+1. Czy E6 (media-córka jako gazeta) wchodzi teraz, czy do osobnej małej wersji? (propozycja: opcjonalnie na końcu 0.15.6)
 
 ## Zlecenie dla czatu designu (przed E7)
 

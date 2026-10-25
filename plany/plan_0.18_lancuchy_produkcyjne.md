@@ -62,11 +62,14 @@ Czego uczy:
 - **Złożoność dla gracza** → w interfejsie tylko status i wystawienie; szczegóły w karcie łańcucha.
 - **Zbyt duża wersja** → podział 0.18.1/0.18.2 i bramka.
 
-## Decyzje do podjęcia przed L1
+## Decyzje (podjęte 2026-10-25)
 
-1. Które 3 łańcuchy w pilotażu (propozycja: metal i motoryzacja, ropa i paliwa, zboże i żywność)?
-2. Czy szok podażowy ma własne etapy (jak linie kryzysu), czy tylko szok sektorowy z czasem?
-3. Czy hierarchia dóbr konsumpcyjnych (L8) zostaje w 0.18.2, czy idzie do osobnej wersji?
+1. **Pilotaż 0.18.1:** metal i motoryzacja, ropa i paliwa, zboże i żywność (6 surowców z 0.17 wystarcza).
+2. **Szok podażowy jako 6. linia kryzysu z własnymi etapami** jak w 0.15.3, wspólny budżet częstości linii.
+
+## Decyzje jeszcze otwarte
+
+1. Czy hierarchia dóbr konsumpcyjnych (L8) zostaje w 0.18.2, czy idzie do osobnej wersji?
 
 ## Zlecenie dla czatu designu (przed L4 i L10)
 

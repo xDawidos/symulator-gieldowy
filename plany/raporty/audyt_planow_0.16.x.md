@@ -21,7 +21,7 @@ Planowanie wersji 0.16 „Giełda międzynarodowa” (4 podwersje) oraz 0.17–0
 | 7 | Zarażanie kryzysów między krajami | decyzja 0.15.3 | M |
 | 8 | Próg wezwania i nadzór za granicą | zgłoszenie z 0.15.1 M5 | S |
 | 9 | Porządki w spółkach polskich (G0 szkicu) | szkic | S |
-| 10 | Giełda towarowa (9 surowców) | zgłoszenia | L |
+| 10 | Giełda towarowa (9 surowców; na start 6 — decyzja 2026-10-25) | zgłoszenia | L |
 | 11 | Transport morski, lotniczy, lądowy; porty i lotniska; Logistyka | zgłoszenia | L |
 | 12 | Łańcuchy produkcyjne (wydobycie → huta → fabryka → spedycja → konsumpcja) | zgłoszenia | XL |
 | 13 | Cła, WTO, doktryny handlowe, embarga, unie celne | zgłoszenia | L |

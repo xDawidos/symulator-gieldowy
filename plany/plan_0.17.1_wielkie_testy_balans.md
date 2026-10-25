@@ -75,10 +75,11 @@ Kolejność: T0 → T1 → … → T7. **Commit po każdej części.** Zmiany w 
 - **Strojenie jednego elementu psuje inny** → mini-pomiar po każdej zmianie, wspólna baza.
 - **Czas na serie** (50 × 6,5 roku, 20 × 20 lat) → uruchamianie w tle, wyniki do pliku.
 
-## Decyzje do podjęcia
+## Decyzje (podjęte 2026-10-25)
 
-1. Czy wersja zamyka się dopiero, gdy wszystkie miary są w celu, czy po liście strojeń zaakceptowanej przez użytkownika?
-2. Czy gra ręczna jest obowiązkowa przed 0.17.2 (propozycja: tak)?
+1. **Wersja zamyka się po liście strojeń zaakceptowanej przez użytkownika;** mniejsze odchylenia mogą przejść do 0.17.2.
+2. **Gra ręczna jest obowiązkowa** przed 0.17.2 (0 błędów blokujących w 7 scenariuszach).
+3. Do T7 należy sprawdzenie, że kontrakty towarowe są zamknięte za umiejętnością „Mistrz Opcji” (decyzja 0.17).
 
 ## Zlecenie dla czatu designu
 

@@ -32,11 +32,14 @@ Czego uczy:
 - **Zbyt wiele nowych wskaźników** (zanieczyszczenie, opinia, populacja) → minimalny zestaw w UI.
 - **Polityka** (partie wybierają typ energii) wymaga stanu partii z 0.13; za granicą stały profil.
 
-## Decyzje do podjęcia przed N1
+## Decyzje (podjęte 2026-10-25)
 
-1. Czy poziom życia i przyrost populacji z zanieczyszczeń wchodzą (zmiana modelu 0.13), czy tylko opinia publiczna?
-2. Czy handel energią między państwami wchodzi tu, czy w 0.19 (Handel światowy)?
-3. Czy opinia publiczna (N6) jest osobnym KPI w pasku, czy tylko modyfikatorem?
+1. **Zanieczyszczenia mają mały wpływ na poziom życia i przyrost populacji** (ułamek pp rocznie); opinia publiczna jako modyfikator.
+2. **Handel energią między państwami w prostej formie już w 0.17.2** (cena i przepływ); cła i embarga na energię dopiero w 0.19.
+
+## Decyzje jeszcze otwarte
+
+1. Czy opinia publiczna (N6) jest osobnym KPI w pasku, czy tylko modyfikatorem?
 
 ## Zlecenie dla czatu designu (przed N8)
 
