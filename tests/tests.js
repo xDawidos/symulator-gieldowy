@@ -10187,6 +10187,24 @@ group('0.15.4: Poprawki z gry 3 (licznik, okna, wykres, dywidenda, split, limit 
         assertEq(processPawnClientsWeekly(), null, 'bez lombardu nic się nie dzieje');
     });
 
+    test('P7: pożyczki konsumenckie Wrony — portfel > 0 po kilku tygodniach, pieniądze się zgadzają, windykacja odzyskuje 45% kapitału', () => {
+        const wrona = Object.assign(makeCompany('WRN', { cash: 5_000_000 }), { assetType: 'DebtCollector', price: 60, totalShares: 90_000 });
+        resetWorld([wrona]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        society.priceLevel = 1; society.classes.poor = 0.22; economyCycle.phase = 'expansion';
+        const cash0 = wrona.cash, mark = externalMark(), active = [];
+        for (let week = 0; week < 100; week++) { const info = processConsumerLoansWeekly(); if (week >= 12) active.push(info.active); assert(wrona.cash >= 0, `gotówka Wrony ≥ 0 w tygodniu ${week}`); }
+        assert(wrona.retailLoans.length > 0, 'portfel pożyczek konsumenckich > 0');
+        assert(active.reduce((a, b) => a + b, 0) / active.length >= 5, 'średnio ≥ 5 aktywnych pożyczek');
+        assertNear(wrona.cash - cash0, externalNetFlow(mark), 'zmiana gotówki Wrony = przepływy przez granicę modelu', 1e-6);
+        assert(wrona.retailStats.interest > 0 && wrona.retailStats.collected >= 0, 'odsetki i windykacja w statystykach');
+        assert(renderConsumerLoansSummary(wrona).includes('Aktywne pożyczki'), 'panel Windykatora pokazuje portfel');
+        // niespłacona pożyczka: odzysk 45%, strata odpisana w bilansie
+        wrona.retailLoans = [{ id: 'x', principal: 1000, weeksLeft: 1, forfeit: true }];
+        const equity1 = equity(wrona); processConsumerLoansWeekly();
+        assertEq(paymentJournal.filter(e => e.purpose.startsWith('Windykacja')).at(-1)?.amount, 450, 'windykacja odzyskuje 45% kapitału (450 z 1000)'); assert(wrona.retailStats.collected >= 1, 'windykacja w statystykach');
+        assert(equity(wrona) < equity1 + 1, 'strata z niespłaconej pożyczki w kapitale własnym');
+    });
+
     test('P6: wchłonięcie córki z trzeciego klastra nie dodaje segmentu; sektor główny i etykieta liczone z segmentów po każdej zmianie', () => {
         const parent = diversified(['Przemysł', 'Finanse'], [0.6, 0.4]); parent.fundamentals = { revenue: 1_000_000 };
         const child = mk('KID', { sector: ['Medycyna'] }); child.fundamentals = { revenue: 300_000 }; child.segments = [{ sector: 'Medycyna', subsector: null, share: 1 }];

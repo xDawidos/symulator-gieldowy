@@ -1363,6 +1363,7 @@ gameTimers.weekly = setGameInterval(() => {
             runPawnShopAI(); //
         }
         if (typeof processPawnClientsWeekly === 'function') processPawnClientsWeekly(); // 0.15.4 P7: klienci indywidualni lombardu
+        if (typeof processConsumerLoansWeekly === 'function') processConsumerLoansWeekly(); // 0.15.4 P7: pożyczki konsumenckie Wrony
 
         if (typeof runCorporateLogic === 'function') {
         runCorporateLogic(); // Obsługa działów i inwestycji

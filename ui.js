@@ -7859,6 +7859,16 @@ function openPawnShopPanel() {
 }
 
 /** Okno windykatora: zasady i akcje zajęte dłużnikom (fundusze, boty). */
+/** 0.15.4 P7: portfel pożyczek konsumenckich Wrony (liczby i słowami, bez koloru). */
+function renderConsumerLoansSummary(collector) {
+    const loans = collector?.retailLoans || [];
+    const stats = collector?.retailStats || {};
+    const book = loans.reduce((sum, loan) => sum + loan.principal, 0);
+    if (!loans.length && !stats.issued) return '<p class="fund-muted">Na razie brak klientów indywidualnych.</p>';
+    return `<p>Aktywne pożyczki: <strong>${loans.length}</strong> · saldo ${formatZl(book, 0)} · udzielono łącznie ${stats.issued || 0}, spłacono ${stats.repaid || 0}, windykowano niespłaconych ${stats.collected || 0}.</p>
+        <p class="fund-muted">Oprocentowanie ${(CONSUMER_LOAN_APR * 100).toFixed(0)}% w skali roku gry, termin ${CONSUMER_LOAN_WEEKS} tygodni; z niespłaconej pożyczki Wrona odzyskuje ${(CONSUMER_LOAN_RECOVERY * 100).toFixed(0)}% kapitału. Klientów przybywa z udziałem biedniejszych klas i w recesji.</p>`;
+}
+
 function openDebtCollectorPanel() {
     const modal = document.getElementById('debtcollector-modal');
     const body = document.getElementById('debtcollector-body');
@@ -7872,6 +7882,8 @@ function openDebtCollectorPanel() {
         <p><strong>${escapeHtml(collector.name)}</strong> (${escapeHtml(collector.symbol)}) · gotówka ${formatZl(collector.cash, 0)}</p>
         <p class="fund-muted">Windykator przejmuje zaległe długi (kredyty botów z zaległościami, niespłacone zastawy funduszy po ${COLLECTOR_AFTER_MISSED} nieopłaconych odsetkach) i zajmuje akcje dłużników z dyskontem ${(100 - COLLECTOR_DISCOUNT * 100).toFixed(0)}%.</p>
         <p>Kredyty botów z zaległościami: <strong>${botDebts}</strong></p>
+        <h4>Pożyczki konsumenckie Wrony</h4>
+        ${renderConsumerLoansSummary(collector)}
         <h4>Zajęte akcje</h4>
         <ul>${seized || '<li class="fund-muted">Brak.</li>'}</ul>`
         : '<p class="loss">Windykator nie jest dostępny.</p>';

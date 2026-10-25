@@ -540,6 +540,54 @@ function processPawnClientsWeekly() {
     return { active: shop.retailLoans.length, book: shop.retailLoans.reduce((sum, loan) => sum + loan.principal, 0) };
 }
 
+// 0.15.4 P7: klienci Wrony — pożyczki konsumenckie (sektor Finanse / Pożyczki konsumenckie). Wcześniej Wrona żyła tylko z długów
+// bankowych botów i trzymała 5 mln zł gotówki bez obrotu.
+const CONSUMER_LOAN_ARRIVAL = 0.7;         // nowych klientów na tydzień gry przy bazowym popycie
+const CONSUMER_LOAN = [500, 6000];         // kapitał pożyczki (zł, przy poziomie cen 1,0)
+const CONSUMER_LOAN_WEEKS = 12;
+const CONSUMER_LOAN_APR = 0.45;            // oprocentowanie w skali roku gry (FUND_WEEKS_PER_YEAR tygodni)
+const CONSUMER_LOAN_DEFAULT = 0.18;        // bazowa szansa niespłacenia (rośnie z popytem z biedniejszych klas)
+const CONSUMER_LOAN_RECOVERY = 0.45;       // odzysk kapitału z windykacji niespłaconej pożyczki
+const CONSUMER_LOAN_MAX_BOOK = 0.5;        // portfel pożyczek ≤ 50% gotówki Wrony
+
+/** Co tydzień: spłaty i windykacja pożyczek konsumenckich Wrony oraz nowi klienci. */
+function processConsumerLoansWeekly() {
+    const collector = getDebtCollector();
+    if (!collector) return null;
+    if (!Array.isArray(collector.retailLoans)) collector.retailLoans = [];
+    const stats = collector.retailStats || (collector.retailStats = { issued: 0, repaid: 0, collected: 0, interest: 0, loss: 0 });
+    for (const loan of [...collector.retailLoans]) {
+        loan.weeksLeft--;
+        if (loan.weeksLeft > 0) continue;
+        collector.retailLoans.splice(collector.retailLoans.indexOf(loan), 1);
+        if (loan.forfeit) {
+            const back = loan.principal * CONSUMER_LOAN_RECOVERY, loss = loan.principal - back;
+            adjustCompanyCash(collector, back);
+            recordPayment('external:klienci-wrony', collector, back, 'Windykacja niespłaconej pożyczki konsumenckiej');
+            adjustBalanceSheet(collector, { assets: -loss, retainedEarnings: -loss });
+            stats.collected++; stats.loss += loss;
+        } else {
+            const interest = loan.principal * CONSUMER_LOAN_APR * CONSUMER_LOAN_WEEKS / FUND_WEEKS_PER_YEAR;
+            adjustCompanyCash(collector, loan.principal + interest);
+            recordPayment('external:klienci-wrony', collector, loan.principal + interest, 'Spłata pożyczki konsumenckiej (klient Wrony)');
+            adjustBalanceSheet(collector, { assets: interest, retainedEarnings: interest });
+            stats.repaid++; stats.interest += interest;
+        }
+    }
+    const demand = getRetailLendingDemand();
+    const priceLevel = Math.max(0.5, Number(society?.priceLevel) || 1);
+    for (let i = drawWeeklyArrivals(CONSUMER_LOAN_ARRIVAL * demand); i > 0; i--) {
+        const principal = Math.round(getRandomInRange(...CONSUMER_LOAN) * priceLevel);
+        const book = collector.retailLoans.reduce((sum, loan) => sum + loan.principal, 0);
+        if (collector.cash < principal * 2 || book + principal > Math.max(0, collector.cash) * CONSUMER_LOAN_MAX_BOOK) break;
+        adjustCompanyCash(collector, -principal);
+        recordPayment(collector, 'external:klienci-wrony', principal, 'Pożyczka konsumencka dla klienta Wrony');
+        collector.retailLoans.push({ id: nextSimulationId('consl'), principal, weeksLeft: CONSUMER_LOAN_WEEKS, forfeit: Math.random() < Math.min(0.45, CONSUMER_LOAN_DEFAULT * demand) });
+        stats.issued++;
+    }
+    return { active: collector.retailLoans.length, book: collector.retailLoans.reduce((sum, loan) => sum + loan.principal, 0) };
+}
+
 function notifyDebtAction(account, text) {
     if (account.isPlayer) {
         playerFund.trust = Math.max(0, playerFund.trust - 5);
