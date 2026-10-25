@@ -2902,7 +2902,7 @@ body.dark-mode #stock-table,
 }
 #stock-table th, #stock-table td { box-sizing: border-box; }
 #stock-table .col-name { width: auto; }
-#stock-table .col-price { width: 108px; }
+#stock-table .col-price { width: 148px; } /* 0.15.4 P1: „17 418,77 PLN” (mono, nowrap) wystawało pod pigułkę zmiany przy 108 px */
 #stock-table .col-change { width: 108px; }
 #stock-table .col-avail { width: 140px; }
 #stock-table .col-owned { width: 64px; }

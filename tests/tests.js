@@ -9845,6 +9845,14 @@ group('0.15.4: Poprawki z gry 3 (licznik, okna, wykres, dywidenda, split, limit 
             assertEq(cut.join('|'), '', 'etykiety wystające poza lewą krawędź wykresu');
         } finally { Object.assign(playerChartSettings, saved); area.remove(); }
     });
+
+    test('P1: kolumna kursu mieści kurs sześciocyfrowy z walutą obok pigułki zmiany tygodniowej', async () => {
+        const css = await (await fetch('../style.css', { cache: 'no-store' })).text();
+        const width = Number(css.match(/#stock-table \.col-price\s*\{\s*width:\s*(\d+)px/)?.[1]);
+        const probe = document.createElement('span'); probe.className = 'price-main'; probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;font-family:ui-monospace,monospace;font-size:14px;font-weight:600';
+        probe.textContent = formatZl(123456.78); document.body.appendChild(probe);
+        try { assert(width >= probe.offsetWidth + 2 * 12, `kolumna kursu ${width}px, potrzeba ≥ ${probe.offsetWidth + 24}px`); } finally { probe.remove(); }
+    });
 });
 
 async function runAllTests() {
