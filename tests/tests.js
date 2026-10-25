@@ -10017,6 +10017,24 @@ group('0.15.4: Poprawki z gry 3 (licznik, okna, wykres, dywidenda, split, limit 
         try { assertEq(processSplitsQuarterly().length, 1, 'pętla kwartalna dzieli akcje bez wyjątku'); } finally { Math.random = random; }
     });
 
+    test('P4a: indeksy łańcuchowe (GIG, TIG5, SIG20) nie robią skoku przy splicie i konsolidacji, a nadal reagują na zwykły ruch kursu', () => {
+        const list = Array.from({ length: 30 }, (_, i) => Object.assign(mk(`I${i}`, { price: 100 + i, totalShares: 1000 * (30 - i) }), { sector: ['Usługi'] }));
+        resetWorld(list);
+        const idx = id => marketIndexes.find(i => i.id === id);
+        for (const id of ['GIG', 'TIG5', 'SIG20']) { idx(id).value = 0; idx(id).lastPrices = null; }
+        updateMarketIndexes(); updateMarketIndexes();
+        const base = { gig: idx('GIG').value, tig: idx('TIG5').value, sig: idx('SIG20').value };
+        assert(base.gig > 0 && base.tig > 0 && base.sig > 0, 'indeksy mają wartość');
+        applyShareCountChange(list[0], 5);                      // największa spółka: split 5:1 (kurs ÷5)
+        updateMarketIndexes();
+        assertNear(idx('GIG').value, base.gig, 'GIG bez skoku po splicie', 1e-9); assertNear(idx('TIG5').value, base.tig, 'TIG5 bez skoku', 1e-9); assertNear(idx('SIG20').value, base.sig, 'SIG20 bez skoku', 1e-9);
+        applyShareCountChange(list[1], 1 / 4);                  // konsolidacja 1:4 (kurs ×4)
+        updateMarketIndexes();
+        assertNear(idx('GIG').value, base.gig, 'GIG bez skoku po konsolidacji', 1e-9);
+        list[2].price *= 1.1; updateMarketIndexes();
+        assert(idx('GIG').value > base.gig * 1.0001 && idx('TIG5').value > base.tig, 'zwykły wzrost kursu podnosi indeksy');
+    });
+
     test('P4b: konsolidacja 1:10 — akcje ÷10, kurs ×10, ułamki akcji wypłacone gotówką z kasy spółki, wartość pozycji i NAV bez zmian', () => {
         const { a, owner } = splitWorld(0.4);
         a.isTradeLocked = true; a.belowOneTicks = 500;

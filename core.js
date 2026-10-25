@@ -4009,30 +4009,24 @@ function updateMarketIndexes() {
     // 2. Posortuj spółki od największej do najmniejszej pod względem kapitalizacji
     stocksWithMarketCap.sort((a, b) => b.marketCap - a.marketCap);
 
-    // 3. Oblicz TIG5 (Topowy Indeks Giełdowy 5 - ważony kapitalizacją 5 największych)
-    const tig5Index = marketIndexes.find(idx => idx.id === 'TIG5');
-    if (tig5Index) {
-        const top5 = stocksWithMarketCap.slice(0, 5);
-        if (top5.length > 0) {
-            const oldValue = tig5Index.value;
-            const top5Weights = computeCappedCapWeights(top5, 1.0);
-            const newValue = top5.reduce((sum, stock) => sum + (top5Weights[stock.symbol] || 0) * stock.price, 0);
-            tig5Index.value = newValue;
-            tig5Index.change = newValue - oldValue;
+    // 3–4. TIG5 (5 największych) i SIG20 (20 największych), ważone kapitalizacją. 0.15.4 P4: indeksy łańcuchowe jak GIG — zmiana liczby
+    // akcji (split, konsolidacja) ani zmiana składu czołówki nie robi skoku; start jak dawniej: średnia cen ważona kapitalizacją.
+    for (const [id, size] of [['TIG5', 5], ['SIG20', 20]]) {
+        const index = marketIndexes.find(idx => idx.id === id);
+        const top = stocksWithMarketCap.slice(0, size);
+        if (!index || top.length === 0) continue;
+        const oldValue = index.value, last = index.lastPrices || {};
+        const weights = computeCappedCapWeights(top, 1.0);
+        const eligible = top.filter(stock => last[stock.symbol] > 0);
+        if (!(oldValue > 0) || eligible.length === 0) {
+            index.value = top.reduce((sum, stock) => sum + (weights[stock.symbol] || 0) * stock.price, 0);
+        } else {
+            const total = eligible.reduce((sum, stock) => sum + (weights[stock.symbol] || 0), 0) || 1;
+            const weightedReturn = eligible.reduce((sum, stock) => sum + (weights[stock.symbol] || 0) / total * Math.max(-0.2, Math.min(0.2, stock.price / last[stock.symbol] - 1)), 0);
+            index.value = oldValue * (1 + weightedReturn);
         }
-    }
-
-    // 4. Oblicz SIG20 (Szeroki Indeks Giełdowy 20 - ważony kapitalizacją 20 największych)
-    const sig20Index = marketIndexes.find(idx => idx.id === 'SIG20');
-    if (sig20Index) {
-        const top20 = stocksWithMarketCap.slice(0, 20);
-        if (top20.length > 0) {
-            const oldValue = sig20Index.value;
-            const top20Weights = computeCappedCapWeights(top20, 1.0);
-            const newValue = top20.reduce((sum, stock) => sum + (top20Weights[stock.symbol] || 0) * stock.price, 0);
-            sig20Index.value = newValue;
-            sig20Index.change = newValue - oldValue;
-        }
+        index.lastPrices = Object.fromEntries(top.map(stock => [stock.symbol, stock.price]));
+        index.change = index.value - oldValue;
     }
 
     // Zapisz historię wartości indeksów (do wskaźnika koniunktury)

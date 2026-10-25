@@ -914,6 +914,10 @@ const PROBE_0154 = `(function () {
                 ortTop3: rank.length ? top3 / rank.length : null, ortRankLast: rank.length ? rank[rank.length - 1].rank : null, ortGone: Q.ort.some(o => !o.rank),
                 indep3Max: Math.max(0, ...Q.seg.map(g => g.indep3)), pxLt1Max: Math.max(0, ...Q.px.map(p => p.lt1)), pxGt3000Max: Math.max(0, ...Q.px.map(p => p.gt3000)) } };
     };
+    if (typeof applyShareCountChange === 'function') { // zwrot GIG z sondy bez skoku przy splicie (jak indeks w grze)
+        const orig = applyShareCountChange;
+        applyShareCountChange = function (stock, factor) { const r = orig.apply(this, arguments); if (r && s.gigLastPrices && s.gigLastPrices[stock.symbol] > 0) s.gigLastPrices[stock.symbol] /= factor; return r; };
+    }
     const origSample = s.sample; s.sample = function () { origSample.apply(this, arguments); Q.sample(); };
     const origFinish = s.finish; s.finish = function () { const r = origFinish.apply(this, arguments); r.p0154 = Q.finish(); return r; };
 })();`;

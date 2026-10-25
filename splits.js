@@ -127,6 +127,7 @@ function applyShareCountChange(stock, factor, { quarter = getSplitQuarter(), kin
 
     // 3. Wartości na akcję: kurs, historia cen i świec (korekta wstecz — wykres bez skoku), alerty, transakcje gracza
     stock.price = priceAfter;
+    for (const index of typeof marketIndexes !== 'undefined' ? marketIndexes : []) if (index.lastPrices?.[symbol] > 0) index.lastPrices[symbol] /= divisor; // indeksy łańcuchowe: zwrot spółki bez skoku
     scalePerShareList(stock.lineHistory, divisor, ['price']);
     scalePerShareList(stock.candlestickHistory, divisor, ['open', 'high', 'low', 'close']);
     if (stock.currentCandle) scalePerShareList([stock.currentCandle], divisor, ['open', 'high', 'low', 'close']);
