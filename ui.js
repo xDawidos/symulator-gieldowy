@@ -76,6 +76,11 @@ function toggleSectorGroupMenu(btn, e) {
     if (!isExpanded) {
         btn.setAttribute('aria-expanded', 'true');
         menu.hidden = false;
+        // 0.15.4 P1: menu przy przycisku, poza przewijanym rzędem chipów (overflow-x przycinał absolutne menu do 32 px wysokości)
+        const rect = btn.getBoundingClientRect();
+        menu.style.position = 'fixed';
+        menu.style.top = `${Math.round(rect.bottom + 4)}px`;
+        menu.style.left = `${Math.max(8, Math.min(Math.round(rect.left), window.innerWidth - menu.offsetWidth - 8))}px`;
         const firstItem = menu.querySelector('button');
         if (firstItem) firstItem.focus();
     }
@@ -98,6 +103,8 @@ if (typeof window !== 'undefined') {
             closeAllSectorGroupMenus();
         }
     });
+    window.addEventListener('scroll', () => closeAllSectorGroupMenus(), true); // menu jest przypięte do okna, nie do przewijanej listy
+    window.addEventListener('resize', () => closeAllSectorGroupMenus());
     window.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             const openMenu = document.querySelector('.sector-group-dropdown .sector-group-menu:not([hidden])');

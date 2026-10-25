@@ -9813,6 +9813,23 @@ group('0.15.4: Poprawki z gry 3 (licznik, okna, wykres, dywidenda, split, limit 
         const low = [...css.matchAll(/(#[\w-]+-modal)[^{}]*\{[^}]*?z-index:\s*(\d+)/g)].filter(m => Number(m[2]) < 1100).map(m => `${m[1]}:${m[2]}`);
         assertEq(low.join(','), '', 'okna (#…-modal) bez z-index poniżej zasłony');
     });
+
+    test('P1: menu grupy kategorii jest przypięte do okna (fixed) przy przycisku — nie ginie w przewijanym rzędzie chipów', () => {
+        const row = document.createElement('div'); row.style.cssText = 'overflow-x:auto;display:flex;height:32px;width:300px;position:relative';
+        row.innerHTML = '<div class="sector-group-dropdown"><button type="button" aria-expanded="false">Grupa</button><div class="sector-group-menu" hidden><button>A</button></div></div>'
+            + '<div class="sector-group-dropdown"><button type="button" aria-expanded="false">Druga</button><div class="sector-group-menu" hidden><button>B</button></div></div>';
+        document.body.appendChild(row);
+        try {
+            const [b1, b2] = row.querySelectorAll('.sector-group-dropdown > button'), [m1, m2] = row.querySelectorAll('.sector-group-menu');
+            toggleSectorGroupMenu(b1, null);
+            assert(!m1.hidden && m1.style.position === 'fixed', 'menu otwarte i przypięte do okna');
+            assert(parseFloat(m1.style.top) >= b1.getBoundingClientRect().bottom, 'menu pod przyciskiem');
+            toggleSectorGroupMenu(b2, null);
+            assert(m1.hidden && !m2.hidden, 'otwarcie drugiego zamyka pierwsze');
+            window.dispatchEvent(new Event('resize'));
+            assert(m2.hidden && b2.getAttribute('aria-expanded') === 'false', 'zmiana rozmiaru okna zamyka menu (położenie przestaje być aktualne)');
+        } finally { row.remove(); }
+    });
 });
 
 async function runAllTests() {
