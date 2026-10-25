@@ -321,6 +321,7 @@ const STUB = `(function () {
         t = end;
     } };
     window.alert = () => {}; window.confirm = () => true;
+    window.__GIANTS = ${JSON.stringify(params.get('giants') || '')}; // 0.15.4b: parametr giants=g,s (mnożniki startowe)
     window.__SIM_NO_SAVE__ = true; // 0.14.3: gra w ramce nie czyta i nie zapisuje IndexedDB (start od razu)
 })();`;
 
