@@ -5180,6 +5180,10 @@ function triggerMergerMiniEvent(stock1, stock2, process) {
 }
 
 function checkAntitrust(stock1, stock2) {
+    if (typeof isUnderAntitrustBan === 'function' && (isUnderAntitrustBan(stock1) || isUnderAntitrustBan(stock2))) { // 0.15.6 E5: zakaz przejęć po interwencji urzędu
+        logEvent(`⚖️ Urząd Antymonopolowy odmawia zgody na połączenie ${stock1.name} i ${stock2.name}: spółka objęta zakazem przejęć.`, 'state');
+        return true;
+    }
     // 1. Sprawdź, czy urząd w ogóle analizuje tę sprawę
     if (Math.random() > antitrustOffice.analysisCapacity) {
         console.log(`[Antymonopol] Urząd nie zainteresował się fuzją ${stock1.symbol} i ${stock2.symbol}.`);
@@ -5210,7 +5214,7 @@ function checkAntitrust(stock1, stock2) {
     }
 
     // 3. Określ próg blokady (np. 40% udziału w rynku)
-    const blockThreshold = typeof getAntitrustLevel === 'function' ? getAntitrustLevel().block : 0.40; // ustawa antymonopolowa
+    const blockThreshold = typeof getMergerBlockThreshold === 'function' ? getMergerBlockThreshold() : typeof getAntitrustLevel === 'function' ? getAntitrustLevel().block : 0.40; // ustawa antymonopolowa × poziom urzędu (0.15.6 E5)
     const shouldBlock = potentialMarketShare >= blockThreshold;
 
     // 4. Losuj decyzję urzędu (uwzględniając jego dokładność)

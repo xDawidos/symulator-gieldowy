@@ -250,8 +250,128 @@ function processMunicipalPromotionQuarterly() {
     return promoted;
 }
 
+// --- E5: urząd antymonopolowy zależny od poziomu (antitrustOffice.level 0–5, rozwijany wydatkami państwa) ---
+// Wskaźniki spółki: udział w przychodach sektora głównego (HHI wg kapitalizacji nie nadaje się — jedna spółka ma ≈ 99% kapitalizacji sektora, diagnoza E0),
+// udział w przetargach (okno 8 kw. z 0.15.5) i w kapitalizacji rynku. Interwencje tylko w skrajnych przypadkach, najwyżej jedna na kwartał:
+// (udział w sektorze liczy się dopiero od 5 spółek i po wzroście o ≥ 15 pp: giganci mają dominację od początku gry)
+// 2 kwartały ponad progiem → kara (2–5% rocznych przychodów, nie więcej niż połowa gotówki) → po 4 kw. nadal ponad progiem: nakaz podziału
+// (wymuszone wydzielenie segmentu, wartość dla posiadaczy zachowana) albo, gdy podziału nie da się zrobić, zakaz przejęć na 12 kw.
+const ANTITRUST_TIERS = [
+    null,                                                           // poziom 0: urząd nie interweniuje
+    { sector: 0.70, tender: 0.65, cap: 0.45, fine: 0.02 },
+    { sector: 0.60, tender: 0.55, cap: 0.38, fine: 0.035 },
+    { sector: 0.50, tender: 0.50, cap: 0.32, fine: 0.05 }
+];
+const ANTITRUST_MERGER_FACTOR = [1, 0.95, 0.90, 0.85, 0.80, 0.75];   // mnożnik progu blokady fuzji z ustawy antymonopolowej wg poziomu urzędu
+const ANTITRUST_MIN_PEERS = 5;          // udział w sektorze liczy się od 5 spółek (w małym sektorze lider ma z natury większość)
+const ANTITRUST_GROWTH = 0.15;           // udział w sektorze liczy się, gdy wzrósł o ≥ 15 pp w stosunku do stanu sprzed ANTITRUST_BASE_QUARTERS (giganci mają dominację od startu gry — to nie nadużycie)
+const ANTITRUST_BASE_QUARTERS = 8;
+const ANTITRUST_WATCH_QUARTERS = 2;
+const ANTITRUST_ORDER_AFTER = 4;
+const ANTITRUST_BAN_QUARTERS = 12;
+const ANTITRUST_CLEAN_RESET = 8;
+let antitrustLog = [];
+
+function getAntitrustTier() {
+    return ANTITRUST_TIERS[Math.min(3, Math.max(0, Number(antitrustOffice?.level) || 0))];
+}
+
+/** Próg blokady fuzji: próg z ustawy antymonopolowej × mnożnik poziomu urzędu (poziom 0 = dotychczasowy). */
+function getMergerBlockThreshold() {
+    const law = typeof getAntitrustLevel === 'function' ? getAntitrustLevel().block : 0.40;
+    return law * (ANTITRUST_MERGER_FACTOR[Math.min(5, Math.max(0, Number(antitrustOffice?.level) || 0))] ?? 1);
+}
+
+function isUnderAntitrustBan(stock) {
+    return (Number(stock?.antitrustBanUntilQ) || 0) > (typeof macro === 'object' ? macro.quarter : 0);
+}
+
+/** Wskaźniki koncentracji zwykłych spółek: udział w przychodach sektora głównego, w kapitalizacji i w przetargach. */
+function getConcentrationMetrics() {
+    const ordinary = stocks.filter(s => !s.assetType && !s.isBankrupt && !s.isSubsidiaryOf && !s.marketOperator && !s.isStateOwned);
+    const revenueOf = s => Math.max(0, Number(s.fundamentals?.revenueTtm) || Number(s.fundamentals?.revenue) || 0);
+    const sectorOf = s => getMainSector(s) || (s.sector || [])[0];
+    const sectorTotals = {}, sectorCounts = {}, capTotal = ordinary.reduce((sum, s) => sum + getMarketCapValue(s), 0);
+    for (const s of ordinary) { const sector = sectorOf(s); sectorTotals[sector] = (sectorTotals[sector] || 0) + revenueOf(s); sectorCounts[sector] = (sectorCounts[sector] || 0) + 1; }
+    const awards = {}; let awardTotal = 0;
+    for (const entry of constructionAwardLog || []) { awards[entry.sym] = (awards[entry.sym] || 0) + 1; awardTotal++; }
+    const metrics = new Map();
+    for (const s of ordinary) {
+        const sector = sectorOf(s);
+        metrics.set(s.symbol, {
+            sector: sectorCounts[sector] >= ANTITRUST_MIN_PEERS && sectorTotals[sector] > 0 ? revenueOf(s) / sectorTotals[sector] : 0,
+            cap: capTotal > 0 ? getMarketCapValue(s) / capTotal : 0,
+            tender: awardTotal >= 8 ? (awards[typeof getEntityKey === 'function' ? getEntityKey(s) : s.symbol] || 0) / awardTotal : 0
+        });
+    }
+    return metrics;
+}
+
+function noteAntitrust(stock, kind, amount, text) {
+    antitrustLog.push({ quarter: typeof macro === 'object' ? macro.quarter : 0, symbol: stock.symbol, kind, amount: Math.round(amount || 0) });
+    if (antitrustLog.length > 60) antitrustLog.shift();
+    logEvent(text, 'state');
+    if (typeof pushNews === 'function') pushNews(text, stock.symbol);
+    const held = (playerPortfolio?.[stock.symbol]?.shares || 0) > 0 || (playerWallet?.portfolio?.[stock.symbol]?.shares || 0) > 0;
+    if (held && typeof addMail === 'function') addMail({ sender: 'PULS', subject: `⚖️ ${stock.name}: interwencja Urzędu Antymonopolowego`, body: text, importance: 2, symbol: stock.symbol });
+}
+
+function antitrustFine(stock, tier) {
+    const annual = Math.max(0, Number(stock.fundamentals?.revenueTtm) || Number(stock.fundamentals?.revenue) || 0);
+    const fine = Math.min(annual * tier.fine, Math.max(0, Number(stock.cash) || 0) * 0.5);
+    if (fine > 0) {
+        adjustCompanyCash(stock, -fine);
+        adjustBalanceSheet(stock, { assets: -fine, retainedEarnings: -fine });
+        governmentTreasury += fine;
+        recordPayment(stock, 'external:skarb-panstwa', fine, 'Kara antymonopolowa');
+        applyPriceEffect(stock.symbol, -0.03, 'negative', 'company');
+    }
+    noteAntitrust(stock, 'fine', fine, `⚖️ Urząd Antymonopolowy karze ${stock.name} (${stock.symbol}) za dominację na rynku: ${formatZl(fine, 0)} (${(tier.fine * 100).toFixed(1)}% rocznych przychodów).`);
+    return fine;
+}
+
+/** Nakaz podziału: wymuszone wydzielenie segmentu (wartość dla posiadaczy zachowana); gdy się nie da — zakaz przejęć. */
+function antitrustOrder(stock) {
+    const segment = typeof getSpinoffCandidateSegment === 'function' ? getSpinoffCandidateSegment(stock) : null;
+    if (segment && !stock.spinoff) {
+        stock.spinoff = { stage: 'announced', sector: segment.sector, subsector: segment.subsector || null, by: 'antitrust', announcedQuarter: typeof getSpinoffQuarter === 'function' ? getSpinoffQuarter() : 0, valueBefore: getMarketCapValue(stock), gigBefore: typeof getGigValue === 'function' ? getGigValue() : 0 };
+        const child = executeSpinoff(stock, { carve: false });
+        if (child) { noteAntitrust(stock, 'split', getMarketCapValue(child), `⚖️ Urząd Antymonopolowy nakazuje podział ${stock.name}: działalność ${segment.sector} wydziela się do nowej spółki ${child.name} (${child.symbol}). Akcjonariusze dostają jej akcje.`); return 'split'; }
+        stock.spinoff = null;
+    }
+    stock.antitrustBanUntilQ = (typeof macro === 'object' ? macro.quarter : 0) + ANTITRUST_BAN_QUARTERS;
+    noteAntitrust(stock, 'ban', 0, `⚖️ Urząd Antymonopolowy zakazuje ${stock.name} (${stock.symbol}) przejęć na ${ANTITRUST_BAN_QUARTERS} kw. — spółki nie da się podzielić.`);
+    return 'ban';
+}
+
+/** E5: co kwartał — spółki ponad progiem poziomu urzędu; najwyżej jedna interwencja na kwartał. Zwraca opis interwencji albo null. */
+function processAntitrustQuarterly() {
+    const tier = getAntitrustTier();
+    if (!tier) return null;
+    const quarter = typeof macro === 'object' ? macro.quarter : 0;
+    const metrics = getConcentrationMetrics();
+    let done = null;
+    for (const stock of stocks.slice()) {
+        const m = metrics.get(stock.symbol);
+        if (!m) continue;
+        const base = stock.sectorBase;
+        const grew = m.sector - (base ? base.v : m.sector) >= ANTITRUST_GROWTH;
+        const over = (m.sector >= tier.sector && grew) || m.tender >= tier.tender || m.cap >= tier.cap;
+        let rec = stock.antitrust;
+        if (!rec && m.sector > 0 && (!base || quarter - base.q >= ANTITRUST_BASE_QUARTERS)) stock.sectorBase = { q: quarter, v: Math.round(m.sector * 1000) / 1000 };
+        if (!over) { if (rec && ++rec.clean >= ANTITRUST_CLEAN_RESET) delete stock.antitrust; continue; }
+        if (!rec) rec = stock.antitrust = { watch: 0, stage: 0, clean: 0 };
+        rec.clean = 0; rec.watch++;
+        if (done) continue;
+        if (rec.stage === 0 && rec.watch >= ANTITRUST_WATCH_QUARTERS) { antitrustFine(stock, tier); rec.stage = 1; rec.fineQ = quarter; done = { symbol: stock.symbol, kind: 'fine' }; }
+        else if (rec.stage === 1 && quarter - rec.fineQ >= ANTITRUST_ORDER_AFTER) { done = { symbol: stock.symbol, kind: antitrustOrder(stock) }; rec.stage = 2; rec.orderQ = quarter; }
+    }
+    return done;
+}
+
 /** Jeden kwartalny punkt wejścia modułu (main.js). */
 function processListingsQuarterly() {
+    processAntitrustQuarterly();
     processListingMaintenanceQuarterly();
     processMunicipalPromotionQuarterly();
     processNhPathQuarterly();

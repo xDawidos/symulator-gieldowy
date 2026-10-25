@@ -1035,11 +1035,14 @@ const PROBE_0155 = `(function () {
 
 // 0.15.6 E0: sondy rynków i wejść na giełdę (rynek spółki, kapitalizacja/zysk/wiek/wolny obrót, debiuty startupów, HHI sektorów, oszustwa, wycofania, NH/PRV po E2-E3). Wynik: pole p0156.
 const PROBE_0156 = `(function () {
-    const s = window.__sim, T = s.p0156 = { counts: [], dist: [], hhi: [], ipo: [], startupFail: 0, startupOk: 0, parked: 0, delist: [], fraudSeen: {}, reveals: [], firstSeen: {}, promo: [], moves: [], antitrust: [] };
+    const s = window.__sim, T = s.p0156 = { conc: [], counts: [], dist: [], hhi: [], ipo: [], startupFail: 0, startupOk: 0, parked: 0, delist: [], fraudSeen: {}, reveals: [], firstSeen: {}, promo: [], moves: [], antitrust: [] };
     const qNow = () => (typeof macro === 'object' ? macro.quarter : 0);
     const r3 = v => +(+v).toFixed(3);
     const pct = (arr, p) => { if (!arr.length) return null; const a = arr.slice().sort((x, y) => x - y); return a[Math.min(a.length - 1, Math.floor(p * a.length))]; };
     const mkt = x => (typeof getStockMarket === 'function' ? getStockMarket(x) : 'GPW');
+    T.bankrupt = {}; T.moveCount = {};
+    if (typeof noteGenealogy === 'function') { const o = noteGenealogy; noteGenealogy = function (kind, a, st) { if (kind === 'bankrupt' && st) { const m = mkt(st); T.bankrupt[m] = (T.bankrupt[m] || 0) + 1; } return o.apply(this, arguments); }; }
+    if (typeof moveStockToMarket === 'function') { const o = moveStockToMarket; moveStockToMarket = function (st, to) { const k = mkt(st) + '>' + to; const r = o.apply(this, arguments); if (r) T.moveCount[k] = (T.moveCount[k] || 0) + 1; return r; }; }
     if (typeof handleSuccessfulIPO === 'function') { const o = handleSuccessfulIPO; handleSuccessfulIPO = function (st, mult) { const r = o.apply(this, arguments); if (!st.assetType) { T.startupOk++; T.ipo.push({ q: qNow(), s: st.symbol, mult: r3(mult), market: mkt(st), cap: Math.round(st.price * st.totalShares) }); } return r; }; }
     if (typeof removeStartup === 'function') { const o = removeStartup; removeStartup = function (st) { if (!st.operatorStartup) T.startupFail++; return o.apply(this, arguments); }; }
     if (typeof parkStartupForListing === 'function') { const o = parkStartupForListing; parkStartupForListing = function () { T.parked++; return o.apply(this, arguments); }; }
@@ -1060,6 +1063,7 @@ const PROBE_0156 = `(function () {
         const hh = Object.entries(secs).map(([k, v]) => { const sum = v.reduce((a, b) => a + b, 0); return { k, n: v.length, hhi: Math.round(v.reduce((a, c) => a + Math.pow(c / sum * 100, 2), 0)), share: r3(sum / totalCap) }; });
         T.hhi.push({ q, max: hh.reduce((a, b) => (b.n >= 3 && b.hhi > a.hhi ? b : a), { hhi: 0 }), top: hh.sort((a, b) => b.hhi - a.hhi).slice(0, 3) });
         for (const x of live) if (x.fraud && !T.fraudSeen[x.symbol]) T.fraudSeen[x.symbol] = { q, market: mkt(x) };
+        if (typeof getConcentrationMetrics === 'function') { const vals = [...getConcentrationMetrics().values()]; const top = k => vals.map(v => v[k]).sort((a, b) => b - a).slice(0, 3).map(r3); T.conc.push({ q, sector: top('sector'), cap: top('cap'), tender: top('tender') }); }
     };
     T.finish = function () {
         const last = T.counts[T.counts.length - 1] || {}, years = Math.max(1, T.counts.length / 4);
@@ -1068,7 +1072,7 @@ const PROBE_0156 = `(function () {
         return { last, counts: T.counts.filter((x, i) => i % 4 === 0), domMax: Math.max(...T.counts.map(c => c.domestic || 0)), totMax: Math.max(...T.counts.map(c => c.total || 0)), dist: T.dist.filter((x, i) => i % 4 === 0).concat(T.dist.slice(-1)),
             startups: { ok: T.startupOk, fail: T.startupFail, rate: startupsSeen ? r3(T.startupOk / startupsSeen) : null, parked: T.parked, ipoMarkets: T.ipo.reduce((a, i) => (a[i.market] = (a[i.market] || 0) + 1, a), {}), ipoCapMed: pct(T.ipo.map(i => i.cap), 0.5), ipoSample: T.ipo.slice(0, 8) },
             delist: { n: T.delist.length, sample: T.delist.slice(0, 6) }, fraud: { started: Object.keys(T.fraudSeen).length, byMarket: Object.values(T.fraudSeen).reduce((a, f) => (a[f.market] = (a[f.market] || 0) + 1, a), {}), reveals: T.reveals.length, revealBy: T.reveals.reduce((a, r) => (a[r.by] = (a[r.by] || 0) + 1, a), {}), sinceMed: pct(T.reveals.map(r => r.since).filter(v => v != null), 0.5) },
-            hhi: { median: pct(hhis, 0.5), max: Math.max(0, ...hhis), last: T.hhi[T.hhi.length - 1], series: T.hhi.filter((x, i) => i % 8 === 0) }, promo: T.promo, moves: T.moves, antitrust: T.antitrust, years };
+            hhi: { median: pct(hhis, 0.5), max: Math.max(0, ...hhis), last: T.hhi[T.hhi.length - 1], series: T.hhi.filter((x, i) => i % 8 === 0) }, promo: T.promo, moves: T.moveCount, antitrust: { log: typeof antitrustLog !== 'undefined' ? antitrustLog.slice() : [], level: typeof antitrustOffice === 'object' ? antitrustOffice.level : null }, bankrupt: T.bankrupt, conc: T.conc.filter((x, i) => i % 3 === 0), years };
     };
     const origSample = s.sample; s.sample = function () { origSample.apply(this, arguments); T.sample(); };
     const origFinish = s.finish; s.finish = function () { const r = origFinish.apply(this, arguments); r.p0156 = T.finish(); return r; };

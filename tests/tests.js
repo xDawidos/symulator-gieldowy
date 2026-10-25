@@ -11447,6 +11447,137 @@ group('0.15.6 E4: spółki miejskie na NewHorizons', () => {
     });
 });
 
+group('0.15.6 E5: urząd antymonopolowy zależny od poziomu', () => {
+    /** Dominująca spółka MAT (2 segmenty, jak w testach spin-offu) i mały konkurent w jej sektorze głównym. */
+    function monopolyWorld(level, { split = true } = {}) {
+        const a = makeCompany('MAT', { cash: 3_000_000, fixedAssets: 5_000_000, liabilities: 1_000_000 });
+        a.segments = split ? [{ sector: 'Technologia', subsector: null, share: 0.6 }, { sector: 'Energia', subsector: null, share: 0.4 }] : [{ sector: 'Technologia', subsector: null, share: 1 }];
+        a.sector = getSectorsFromSegments(a.segments);
+        a.exchange = 'GOLD'; a.financialHealth = 2; a.price = 100; a.ceo = { name: 'Prezes', traits: [] }; a.insiderShares = 400;
+        const b = makeCompany('SML', { cash: 500_000, sector: ['Technologia'] }); b.price = 5;
+        const fillers = Array.from({ length: 4 }, (_, i) => Object.assign(makeCompany('TF' + i, { cash: 100_000, sector: ['Technologia'] }), { price: 3 })); // sektor ma ≥ 5 spółek
+        resetWorld([a, b, ...fillers]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        initializeFundamentals(a, true); initializeFundamentals(b, true);
+        a.fundamentals.revenue = a.fundamentals.revenueTtm = 10_000_000; b.fundamentals.revenue = b.fundamentals.revenueTtm = 1_000_000;
+        for (const f of fillers) { initializeFundamentals(f, true); f.fundamentals.revenue = f.fundamentals.revenueTtm = 0; }
+        a.sectorBase = { q: macro.quarter - ANTITRUST_BASE_QUARTERS, v: 0.4 }; // udział wzrósł z 40% do 91%
+        antitrustOffice.level = level;
+        playerPortfolio.MAT = { shares: 1000, avgPrice: 80, assetType: 'stock' };
+        a.sharesHeld = getTrackedHeldShares(a);
+        antitrustLog = [];
+        return { a, b };
+    }
+    const levelBefore = () => antitrustOffice.level;
+
+    test('E5: progi interwencji maleją z poziomem urzędu (1–3); poziom 0 nie interweniuje; próg fuzji = ustawa × mnożnik poziomu', () => {
+        const saved = levelBefore();
+        try {
+            for (const key of ['sector', 'tender', 'cap']) assert(ANTITRUST_TIERS[1][key] > ANTITRUST_TIERS[2][key] && ANTITRUST_TIERS[2][key] > ANTITRUST_TIERS[3][key], `${key}: progi maleją`);
+            assert(ANTITRUST_TIERS[1].fine >= 0.02 && ANTITRUST_TIERS[3].fine <= 0.05, 'kara 2–5% rocznych przychodów');
+            antitrustOffice.level = 0; assertEq(getAntitrustTier(), null, 'poziom 0: brak interwencji');
+            assertEq(getMergerBlockThreshold(), getAntitrustLevel().block, 'poziom 0: dotychczasowy próg fuzji');
+            antitrustOffice.level = 3; assertNear(getMergerBlockThreshold(), getAntitrustLevel().block * 0.85, 'poziom 3: próg fuzji niższy', 1e-9);
+        } finally { antitrustOffice.level = saved; }
+    });
+
+    test('E5: poziom 0 — monopolista (91% przychodów sektora) bez interwencji; poziom 3 — kara dopiero po 2 kw. ponad progiem', () => {
+        const saved = levelBefore();
+        try {
+            const { a } = monopolyWorld(0);
+            for (let q = 0; q < 6; q++) assertEq(processAntitrustQuarterly(), null, 'poziom 0: nic');
+            antitrustOffice.level = 3; delete a.antitrust;
+            const cash0 = a.cash, treasury0 = governmentTreasury;
+            assertEq(processAntitrustQuarterly(), null, 'pierwszy kwartał ponad progiem: obserwacja');
+            const result = processAntitrustQuarterly();
+            assertEq(result?.kind, 'fine', 'drugi kwartał: kara');
+            const fine = cash0 - a.cash;
+            assertNear(fine, 10_000_000 * 0.05, 'kara 5% rocznych przychodów (poziom 3)', 1);
+            assertNear(governmentTreasury - treasury0, fine, 'kara trafia do skarbu');
+            assert(a.cash >= 0 && stocks.every(s => !(s.cash < 0)), 'brak ujemnej gotówki');
+            assertEq(antitrustLog.at(-1).kind, 'fine', 'wpis w dzienniku');
+            assertEq(processAntitrustQuarterly(), null, 'po karze: czas na poprawę (bez kolejnej kary)');
+        } finally { antitrustOffice.level = saved; }
+    });
+
+    test('E5: kara nie przekracza połowy gotówki; spółka poniżej progu nie jest karana, a obserwacja wygasa po 8 czystych kwartałach', () => {
+        const saved = levelBefore();
+        try {
+            const { a } = monopolyWorld(3);
+            a.cash = 100_000; const cash0 = a.cash;
+            processAntitrustQuarterly(); processAntitrustQuarterly();
+            assert(cash0 - a.cash <= cash0 * 0.5 + 1e-6 && a.cash > 0, `kara ≤ 50% gotówki (${cash0 - a.cash})`);
+            const b = stocks.find(s => s.symbol === 'SML'); b.fundamentals.revenue = b.fundamentals.revenueTtm = 9_000_000; // udział MAT spada do 52,6% — nadal ponad progiem 50%
+            a.fundamentals.revenue = a.fundamentals.revenueTtm = 6_000_000; // 40%: poniżej progu
+            for (let i = 0; i < 6; i++) stocks.push(Object.assign(makeCompany('FIL' + i, { sector: ['Chemia'] }), { price: 100 })); // udział w kapitalizacji też poniżej progu
+            for (let q = 0; q < ANTITRUST_CLEAN_RESET; q++) processAntitrustQuarterly();
+            assert(a.antitrust === undefined, 'obserwacja wygasła');
+        } finally { antitrustOffice.level = saved; }
+    });
+
+    test('E5: nakaz podziału po 4 kw. od kary — segment wydziela się, wartość dla posiadaczy zachowana, bez duchów i ujemnej gotówki', () => {
+        const saved = levelBefore();
+        try {
+            const { a } = monopolyWorld(3);
+            processAntitrustQuarterly(); processAntitrustQuarterly();
+            macro.quarter += ANTITRUST_ORDER_AFTER;
+            const before = getMarketCapValue(a), held = playerPortfolio.MAT.shares;
+            const result = processAntitrustQuarterly();
+            assertEq(result?.kind, 'split', 'nakaz podziału');
+            const child = stocks.find(s => s.symbol !== 'MAT' && s.symbol !== 'SML' && !s.symbol.startsWith('TF'));
+            assert(child && playerPortfolio[child.symbol]?.shares === held, 'posiadacz dostaje akcje wydzielonej spółki');
+            assert(Math.abs(getMarketCapValue(a) + getMarketCapValue(child) - before) < 1e-6, 'wartość matka + córka = wartość przed podziałem');
+            assertEq(antitrustLog.at(-1).kind, 'split', 'wpis w dzienniku');
+            assert(stocks.every(s => !(s.cash < 0)), 'gotówka'); assertEq(checkWorldInvariants().filter(p => /akcje w obrocie|sharesHeld/.test(p)).length, 0, 'akcje w obrocie');
+        } finally { antitrustOffice.level = saved; }
+    });
+
+    test('E5: spółki, której nie da się podzielić, urząd zakazuje przejęć na 12 kw.; zakaz blokuje fuzję i wygasa', () => {
+        const saved = levelBefore();
+        try {
+            const { a, b } = monopolyWorld(3, { split: false });
+            processAntitrustQuarterly(); processAntitrustQuarterly();
+            macro.quarter += ANTITRUST_ORDER_AFTER;
+            assertEq(processAntitrustQuarterly()?.kind, 'ban', 'zakaz przejęć');
+            assert(isUnderAntitrustBan(a), 'zakaz aktywny');
+            assert(checkAntitrust(a, b) === true, 'fuzja zablokowana (bez losowania)');
+            macro.quarter += ANTITRUST_BAN_QUARTERS;
+            assert(!isUnderAntitrustBan(a), 'zakaz wygasł');
+        } finally { antitrustOffice.level = saved; }
+    });
+
+    test('E5: najwyżej jedna interwencja na kwartał; udział w przetargach liczy się jako wskaźnik', () => {
+        const saved = levelBefore();
+        try {
+            const { a } = monopolyWorld(3);
+            const c = makeCompany('MAT2', { cash: 2_000_000, sector: ['Chemia'] }), d = makeCompany('SM2', { cash: 500_000, sector: ['Chemia'] });
+            c.price = 100; d.price = 5; stocks.push(c, d);
+            initializeFundamentals(c, true); initializeFundamentals(d, true);
+            c.fundamentals.revenue = c.fundamentals.revenueTtm = 10_000_000; d.fundamentals.revenue = d.fundamentals.revenueTtm = 1_000_000;
+            processAntitrustQuarterly();
+            assertEq(stocks.filter(s => s.antitrust?.stage).length, 0, 'obserwacja bez kar');
+            processAntitrustQuarterly();
+            assertEq(stocks.filter(s => s.antitrust?.stage === 1).length, 1, 'jedna kara na kwartał mimo dwóch monopolistów');
+            // wskaźnik przetargów
+            const e = makeCompany('BUDX', { sector: ['Budowlany'] }); const f = makeCompany('BUDY', { sector: ['Budowlany'] });
+            stocks.push(e, f);
+            constructionAwardLog = Array.from({ length: 10 }, (_, i) => ({ q: macro.quarter, sym: i < 9 ? getEntityKey(e) : getEntityKey(f) }));
+            const m = getConcentrationMetrics();
+            assertNear(m.get('BUDX').tender, 0.9, 'udział w przetargach 90%');
+        } finally { antitrustOffice.level = saved; constructionAwardLog = []; }
+    });
+
+    test('E5: poziom urzędu i dziennik interwencji są w zapisie (pola opcjonalne); stan wczytuje się z zapisu', () => {
+        const saved = levelBefore(), log = antitrustLog;
+        try {
+            world156(2);
+            antitrustOffice.level = 2; antitrustLog = [{ quarter: 3, symbol: 'MAT', kind: 'fine', amount: 123 }];
+            const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+            assertEq(raw.antitrustOffice.level, 2, 'poziom w zapisie'); assertEq(raw.antitrustLog[0].amount, 123, 'dziennik w zapisie');
+        } finally { antitrustOffice.level = saved; antitrustLog = log; }
+    });
+});
+
 async function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;
