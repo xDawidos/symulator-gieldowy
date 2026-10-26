@@ -211,6 +211,50 @@ PRESETS['gracz-aktywny'] = PRESETS['fundusz-gig'] + `(function () {
         return r;
     };
 })();`;
+// 0.16.1 G0a: gracz naprawdę kupujący akcje (defensywne, wzrostowe, dywidendowe) i robiący kampanie z mandatami w Hossie i Bessie.
+// Co tydzień ok. 60% aktywów w akcjach (reszta: wirtualna pozycja indeksowa z fundusz-gig); mandaty w kolejności defensywny, wzrostowy, dywidendowy, sektorowy.
+PRESETS['gracz-akcje'] = PRESETS['kampanie'] + `(function () {
+    const mandates = ['defensive', 'growth', 'dividend', 'sector:tech'];
+    const prev = window.__campResult;
+    const st = window.__akcje = { buys: 0, failed: 0, mandateStarts: [], regime: {} };
+    const pick = (test) => stocks.filter(s => !s.assetType && !s.isBankrupt && !s.isStateOwned && s.price > 0 && test(s) && getAvailableShares(s) > 100).sort((a, b) => b.price * b.sharesHeld - a.price * a.sharesHeld);
+    const origWeekly = processClientsWeekly;
+    processClientsWeekly = function () {
+        try {
+            const assets = getFundAssets();
+            const target = assets * 0.6;
+            let stockValue = 0;
+            for (const sym in playerPortfolio) { const h = playerPortfolio[sym]; if (h && !h.assetType) stockValue += getHoldingMarketValue(sym, h); }
+            let need = Math.min(target - stockValue, playerCash - assets * 0.03);
+            if (need <= assets * 0.01 && window.__idx) { const g = Number(marketIndexes.find(i => i.id === 'GIG')?.value) || 0; const spare = Math.min(window.__idx.units * g * 0.05, assets * 0.03); if (g > 0 && spare > 0 && playerCash < assets * 0.05) { window.__idx.units -= spare / g; playerCash += spare; } }
+            if (need > assets * 0.01) {
+                const kinds = [s => isStockDefensive(s), s => isStockModern(s), s => (Number(s.lastDividend?.yield) || 0) > 0.008, s => getStockSectorGroup(s) === 'tech'];
+                const list = pick(kinds[(macro.quarter >> 2) % kinds.length]).slice(0, 12); // typ akcji zgodny z mandatem kampanii bieżącego roku
+                const s = list[Math.floor(Math.random() * list.length)];
+                if (s) {
+                    const qty = Math.floor(Math.min(need, assets * 0.05) / s.price);
+                    const before = playerCash;
+                    if (qty > 0) { buyStock(s.symbol, qty); if (playerCash < before) st.buys++; else st.failed++; }
+                }
+            }
+        } catch (e) { (window.__presetErrors = window.__presetErrors || []).push('akcje: ' + e); }
+        return origWeekly.apply(this, arguments);
+    };
+    const origQ = advanceMacroQuarter;
+    advanceMacroQuarter = function () {
+        try {
+            if (macro.quarter % 4 === 1) {
+                const m = mandates[(macro.quarter >> 2) % mandates.length];
+                const r = startSubscriptionCampaign({ duration: 'quarter', targetPct: 0.1, lockYears: 1, mandate: m });
+                const regime = typeof getMarketRegime === 'function' ? (getMarketRegime('home')?.phase || '?') : '?';
+                st.mandateStarts.push({ q: macro.quarter, m, ok: !!r.ok, reason: r.reason || null, regime });
+            }
+        } catch (e) { (window.__presetErrors = window.__presetErrors || []).push('mandat: ' + e); }
+        return origQ.apply(this, arguments);
+    };
+    const origResult = window.__campResult;
+    window.__campResult = () => ({ ...origResult(), akcje: st, mandateDetail: playerFund.mandateState || null });
+})();`;
 PRESETS['ceo'] = PRESETS['gracz-aktywny'] + 'playerProfile.positionId = "ceo";';
 // 0.14 T4 (diagnoza decyzji 13): wymuszone dodatkowe zapowiedzi wydzieleń i stan matki/córki na każdym etapie.
 PRESETS['wydzielenia'] = `(function () {
