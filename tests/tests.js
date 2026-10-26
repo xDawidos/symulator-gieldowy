@@ -11232,13 +11232,13 @@ group('0.15.6 E1: wymogi wejścia na GPW, zejście na NewHorizons', () => {
 });
 
 group('0.15.6 E2: NewHorizons (ryzyko, ograniczenia inwestorów, płynność)', () => {
-    test('E2: zmienność ×1,45 i szansa upadku ×2,5 tylko na NH; GPW bez zmian', () => {
+    test('E2: zmienność ×1,45 i szansa upadku ×3 tylko na NH; GPW bez zmian', () => {
         const [a, b] = world156(2);
         b.market = 'NH';
         assertEq(getMarketVolatilityFactor(a), 1, 'GPW: zmienność bez zmian');
         assertEq(getMarketVolatilityFactor(b), 1.45, 'NH: zmienność ×1,45');
         assertEq(getMarketFailureFactor(a), 1, 'GPW: upadek bez zmian');
-        assertEq(getMarketFailureFactor(b), 2.5, 'NH: upadek ×2,5');
+        assertEq(getMarketFailureFactor(b), 3, 'NH: upadek ×3');
         assert(ENTRY_MARKET_RULES.NH.volatility >= 1.3 && ENTRY_MARKET_RULES.NH.volatility <= 1.6 && ENTRY_MARKET_RULES.NH.failure >= 2 && ENTRY_MARKET_RULES.NH.failure <= 3, 'widełki planu');
     });
 
@@ -11695,7 +11695,7 @@ group('0.15.6 E7: interfejs i Akademia', () => {
         try {
             antitrustOffice.level = 2; antitrustLog = [{ quarter: 5, symbol: 'AAA', kind: 'fine', amount: 1000 }, { quarter: 9, symbol: 'BBB', kind: 'split', amount: 5000 }];
             const html = renderAntitrustInterventions();
-            assert(html.includes('poziom 2') && html.includes('60%') && html.includes('kw. 9: BBB — nakaz podziału') && html.includes('kw. 5: AAA — kara'), 'progi i interwencje (najnowsza pierwsza)');
+            assert(html.includes('poziom 2') && html.includes('80%') && html.includes('kw. 9: BBB — nakaz podziału') && html.includes('kw. 5: AAA — kara'), 'progi i interwencje (najnowsza pierwsza)');
             antitrustOffice.level = 0; antitrustLog = [];
             assert(renderAntitrustInterventions().includes('nie interweniuje') && renderAntitrustInterventions().includes('Brak interwencji'), 'poziom 0 i pusty dziennik');
         } finally { antitrustOffice.level = saved; antitrustLog = log; }
@@ -11763,6 +11763,20 @@ group('0.15.6 E8: zapis i niezmienniki po 20 latach', () => {
         const report = applySaveSnapshot(raw);
         assert(report.ok, 'wczytanie starszego zapisu'); assertEq(antitrustLog.length, 0, 'dziennik pusty');
         assert(stocks.every(s => getStockMarket(s) === 'GPW'), 'wszystkie spółki na GPW (migracja)');
+    });
+
+    test('E8: pożyczka lombardowa bota po wycofaniu spółki z wykupem (zastaw rozliczony) nie wywraca pętli kredytów — spłata z gotówki, bez duchów', () => {
+        const list = world156(5, 1_000_000);
+        const [weak] = list; weak.price = 2; weak.sharesHeld = 300;
+        const ai = aiCompetitors[0], shop = list[1];
+        ai.cash = 10_000; ai.portfolio[weak.symbol] = { shares: 300, avgPrice: 2, lockedShares: 300 };
+        ai.loans = [{ id: 'pawn1', isPawnLoan: true, amount: 600, bankName: 'Lombard', collectorSymbol: shop.symbol, maturityDate: Date.now() - 1000, collateral: { symbol: weak.symbol, quantity: 300 } }];
+        const shopCash = shop.cash;
+        assert(delistWithBuyout(weak) !== null, 'wykup');
+        assertEq(ai.loans[0].collateral, null, 'zastaw rozliczony wykupem');
+        processAiLoansWeekly(ai); // wcześniej: TypeError na loan.collateral.quantity
+        assertEq(ai.loans.length, 0, 'pożyczka rozliczona'); assertNear(shop.cash - shopCash, 600, 'lombard dostał spłatę z gotówki bota');
+        assert(!ai.portfolio[weak.symbol] && ai.cash >= 0, 'bez ducha posiadacza, gotówka nieujemna');
     });
 
     test('E8: 40 kwartałów symulacji na rynkach NH/PRV z urzędem na poziomie 3 — bez wyjątków, ujemnej gotówki i duchów posiadaczy', () => {

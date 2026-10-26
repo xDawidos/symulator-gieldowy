@@ -447,7 +447,14 @@ function processAiLoansWeekly(ai) {
             const loan = ai.loans[i];
             if (loan.isPawnLoan && now >= loan.maturityDate) {
                 const pawnShop = stocks.find(s => s.symbol === loan.collectorSymbol);
-                
+                if (!loan.collateral) { // zastaw rozliczony wykupem przy wycofaniu spółki (delistWithBuyout): spłata z gotówki, reszta umorzona
+                    const paid = Math.min(loan.amount, Math.max(0, ai.cash));
+                    ai.cash -= paid;
+                    if (pawnShop) pawnShop.cash += paid;
+                    ai.loans.splice(i, 1);
+                    continue;
+                }
+
                 if (ai.cash >= loan.amount) {
                     // AI ma pieniądze - spłaca
                     ai.cash -= loan.amount;

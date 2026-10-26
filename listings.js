@@ -12,7 +12,7 @@ const LISTING_INNOVATIVE_SECTORS = ['Technologia', 'Medycyna', 'Badania', 'Gamin
 const LISTING_MULT_FROM = 100;          // spółek krajowych: do tylu mnożnik wymogów GPW = 1,0
 const LISTING_MULT_TO = 125;            // …a od tylu = LISTING_MULT_MAX (liniowo pomiędzy)
 const LISTING_MULT_MAX = 1.5;
-const LISTING_RETAIN_FACTOR = 0.5;      // utrzymanie na GPW: kapitalizacja ≥ 50% wymogu wejścia (z mnożnikiem)
+const LISTING_RETAIN_FACTOR = 0.3;      // utrzymanie na GPW: kapitalizacja ≥ 30% wymogu wejścia (z mnożnikiem)
 const LISTING_BELOW_QUARTERS = 4;       // tyle kwartałów poniżej wymogu przed zejściem na NH
 const LISTING_DEMOTE_PER_QUARTER = 2;   // najwyżej tyle zejść na kwartał (bez nagłego odpływu z GPW)
 const LISTING_DEMOTE_PRICE_EFFECT = -0.05;
@@ -103,10 +103,10 @@ function processListingMaintenanceQuarterly() {
 }
 
 // --- E2: NewHorizons (państwowy operator) — ryzyko, ograniczenia inwestorów, płynność ---
-// Zmienność ×1,45 i szansa upadku ×2,5 (środek widełek planu 1,3–1,6 i 2–3), ale co kwartał szansa „przełomu” (większy potencjał wzrostu).
+// Zmienność ×1,45 (środek widełek planu 1,3–1,6) i szansa upadku ×3 (góra widełek 2–3: spółki NH i tak są selekcją słabszych, a pomiar 20 lat dał ≈ 1,7× upadków GPW z bazy przy ×2,5), ale co kwartał szansa „przełomu” (większy potencjał wzrostu).
 // Ograniczenia: boty wg osobowości, zarządcy botów wg stylu, gracz wg stanowiska (playerAccessLevel). PRV: reguły tej samej tabeli (E3).
 const ENTRY_MARKET_RULES = {
-    NH:  { volatility: 1.45, failure: 2.5, playerAccess: 2, blockedBots: ['calm', 'banker', 'dividend_chaser'], blockedManagers: ['cautious', 'dividend'] },
+    NH:  { volatility: 1.45, failure: 3, playerAccess: 2, blockedBots: ['calm', 'banker', 'dividend_chaser'], blockedManagers: ['cautious', 'dividend'] },
     PRV: { volatility: 1.2, failure: 1.5, playerAccess: 3, allowedBots: ['yolo_trader', 'reckless'], allowedManagers: ['aggressive', 'momentum'] }
 };
 const NH_BREAKTHROUGH_CHANCE = 0.04;    // co kwartał, dla spółki w dobrej kondycji
@@ -256,18 +256,18 @@ function processMunicipalPromotionQuarterly() {
 // --- E5: urząd antymonopolowy zależny od poziomu (antitrustOffice.level 0–5, rozwijany wydatkami państwa) ---
 // Wskaźniki spółki: udział w przychodach sektora głównego (HHI wg kapitalizacji nie nadaje się — jedna spółka ma ≈ 99% kapitalizacji sektora, diagnoza E0),
 // udział w przetargach (okno 8 kw. z 0.15.5) i w kapitalizacji rynku. Interwencje tylko w skrajnych przypadkach, najwyżej jedna na kwartał:
-// (udział w sektorze liczy się dopiero od 5 spółek i po wzroście o ≥ 15 pp: giganci mają dominację od początku gry)
+// (udział w sektorze liczy się dopiero od 5 spółek i po wzroście o ≥ 25 pp: giganci mają dominację od początku gry)
 // 2 kwartały ponad progiem → kara (2–5% rocznych przychodów, nie więcej niż połowa gotówki) → po 4 kw. nadal ponad progiem: nakaz podziału
 // (wymuszone wydzielenie segmentu, wartość dla posiadaczy zachowana) albo, gdy podziału nie da się zrobić, zakaz przejęć na 12 kw.
 const ANTITRUST_TIERS = [
     null,                                                           // poziom 0: urząd nie interweniuje
-    { sector: 0.70, tender: 0.65, cap: 0.45, fine: 0.02 },
-    { sector: 0.60, tender: 0.55, cap: 0.38, fine: 0.035 },
-    { sector: 0.50, tender: 0.50, cap: 0.32, fine: 0.05 }
+    { sector: 0.85, tender: 0.65, cap: 0.50, fine: 0.02 },
+    { sector: 0.80, tender: 0.55, cap: 0.45, fine: 0.035 },
+    { sector: 0.75, tender: 0.50, cap: 0.40, fine: 0.05 }
 ];
 const ANTITRUST_MERGER_FACTOR = [1, 0.95, 0.90, 0.85, 0.80, 0.75];   // mnożnik progu blokady fuzji z ustawy antymonopolowej wg poziomu urzędu
 const ANTITRUST_MIN_PEERS = 5;          // udział w sektorze liczy się od 5 spółek (w małym sektorze lider ma z natury większość)
-const ANTITRUST_GROWTH = 0.15;           // udział w sektorze liczy się, gdy wzrósł o ≥ 15 pp w stosunku do stanu sprzed ANTITRUST_BASE_QUARTERS (giganci mają dominację od startu gry — to nie nadużycie)
+const ANTITRUST_GROWTH = 0.25;           // udział w sektorze liczy się, gdy wzrósł o ≥ 25 pp w stosunku do stanu sprzed ANTITRUST_BASE_QUARTERS (giganci mają dominację od startu gry — to nie nadużycie)
 const ANTITRUST_BASE_QUARTERS = 8;
 const ANTITRUST_WATCH_QUARTERS = 2;
 const ANTITRUST_ORDER_AFTER = 4;
