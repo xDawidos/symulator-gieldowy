@@ -2003,14 +2003,13 @@ const SUBSECTOR_START_ASSIGNMENTS = {
     VTG: ['Medycyna', 'Biotechnologia'],           // VitaGen
     PUR: ['Energia', 'Energetyka jądrowa'],        // Państwowy Uran
     TRN: ['Energia', 'Energetyka jądrowa'],        // Tauron (państwowy) — decyzja 12: państwowy program jądrowy
-    BEW: ['Energia', 'OZE'],                       // Bałtycka Energia Wiatrowa
+    BEW: ['Energia', 'OZE'],                       // Bałtycka Energia
     ENG: ['Energia', 'OZE'],                       // Energa
     CTX: ['Technologia', 'Sztuczna inteligencja'], // Cortex Neural
     WiS: ['Technologia', 'Półprzewodniki'],        // Wolf & Stein Tech.
     NRB: ['Przemysł', 'Robotyka'],                 // Nova Robotics
     LIN: ['Nieruchomości', 'Magazyny'],            // Linapol
-    WZM: ['Żywność', 'Rolnictwo'],                 // Wieczne Ziemniaki
-    KOB: ['Żywność', 'Rolnictwo'],                 // KolenBreg
+    WZM: ['Żywność', 'Rolnictwo'],                 // Miejskie Ziemniaki
     GROM: ['Obronność', 'Drony'],                  // Grom Systems
     WIP: ['Finanse', 'Fintech'],                   // WinPost — płatności (segmenty: Fintech 60%, Technologia 40%)
     CRO: ['Finanse', 'Fintech']                    // Cyber-Ochrona — cyberbezpieczeństwo płatności (Fintech 50%, Usługi 50%)

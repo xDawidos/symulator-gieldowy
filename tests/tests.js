@@ -11792,6 +11792,20 @@ group('0.15.6 E8: zapis i niezmienniki po 20 latach', () => {
     });
 });
 
+group('0.16.1', () => {
+    test('G1: usunięte spółki nie istnieją w nowej grze, nowe nazwy i Gaming są na liście startowej', () => {
+        const names = initialStocks.map(s => s.name);
+        for (const gone of ['KolenBreg', 'Firma Tłusta Pucha', 'Luksusowe Spinacze', 'Boazeria Organiczna', 'DarAwansu', 'Six Hand']) assert(!names.includes(gone), `${gone} powinna zniknąć`);
+        assert(names.some(n => n.startsWith('Miejskie Ziemniaki')), 'Miejskie Ziemniaki'); assert(names.includes('Bałtycka Energia'), 'Bałtycka Energia');
+        assert(!names.some(n => n.startsWith('Wieczne Ziemniaki')) && !names.includes('Bałtycka Energia Wiatrowa'), 'stare nazwy zniknęły');
+        const baz = initialStocks.find(s => s.symbol === 'BAZ');
+        assertEq(baz.name, 'Bank Rolno-Spożywczy', 'nazwa banku'); assertEq(baz.sector.join(), 'Bankowość', 'Bank Rolno-Spożywczy to bank');
+        for (const sym of ['DPB', 'WPY']) { const g = initialStocks.find(s => s.symbol === sym); assert(g && g.sector.join() === 'Gaming', `${sym}: Gaming`); assertEq(getCompanyOrigin(g), 'PL', `${sym}: spółka PL`); }
+        assertEq(getCompanyOrigin(initialStocks.find(s => s.symbol === 'CTX')), 'UNI', 'Cortex Neural jest uniwersalny');
+        assertEq(new Set(initialStocks.map(s => s.symbol)).size, initialStocks.length, 'symbole bez duplikatów');
+    });
+});
+
 async function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;
