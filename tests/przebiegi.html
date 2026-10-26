@@ -217,7 +217,7 @@ PRESETS['gracz-akcje'] = PRESETS['kampanie'] + `(function () {
     const mandates = ['defensive', 'growth', 'dividend', 'sector:tech'];
     const prev = window.__campResult;
     const st = window.__akcje = { buys: 0, failed: 0, mandateStarts: [], regime: {} };
-    const pick = (test) => stocks.filter(s => !s.assetType && !s.isBankrupt && !s.isStateOwned && s.price > 0 && test(s) && getAvailableShares(s) > 100).sort((a, b) => b.price * b.sharesHeld - a.price * a.sharesHeld);
+    const pick = (test) => stocks.filter(s => !s.assetType && !s.isBankrupt && !s.isStateOwned && s.price > 0 && test(s) && getAvailableShares(s) > 100 && (playerPortfolio[s.symbol]?.shares || 0) < s.totalShares * 0.15) // bez progów wezwania.sort((a, b) => b.price * b.sharesHeld - a.price * a.sharesHeld);
     const origWeekly = processClientsWeekly;
     processClientsWeekly = function () {
         try {
@@ -236,6 +236,11 @@ PRESETS['gracz-akcje'] = PRESETS['kampanie'] + `(function () {
                     const before = playerCash;
                     if (qty > 0) { buyStock(s.symbol, qty); if (playerCash < before) st.buys++; else st.failed++; }
                 }
+            }
+            st.week = (st.week || 0) + 1;
+            if (st.week % 4 === 0) {
+                const m = mandates[(macro.quarter >> 2) % mandates.length], def = getMandateDef(m);
+                (st.measures = st.measures || []).push({ q: macro.quarter, m, v: Math.round(measureMandate(def) * 1000) / 1000, th: def.threshold, stockShare: Math.round(stockValue / Math.max(1, assets) * 100) / 100 });
             }
         } catch (e) { (window.__presetErrors = window.__presetErrors || []).push('akcje: ' + e); }
         return origWeekly.apply(this, arguments);
@@ -788,6 +793,12 @@ const PROBE = `(function () {
             const noT3 = JSON.parse(JSON.stringify(snap));
             noT3.stocks.forEach(x => { delete x.strategy; if (typeof x.seg === 'string') x.seg = x.seg.split(';').map(part => part.split('|').slice(0, 3).join('|')).join(';'); });
             saveSizes = { now, legacy, noT2: JSON.stringify(noT2).length, noT3: JSON.stringify(noT3).length, stocks: stocks.length };
+            // 0.16.1 G0a: bajty zapisu wg sekcji i pól spółki, czas budowy/serializacji zapisu (ms).
+            const bySection = {}; for (const k of Object.keys(snap)) bySection[k] = JSON.stringify(snap[k] ?? null).length;
+            const stockFields = {}; for (const x of snap.stocks) for (const k of Object.keys(x)) stockFields[k] = (stockFields[k] || 0) + JSON.stringify(x[k] ?? null).length;
+            const topFields = Object.entries(stockFields).sort((a, b) => b[1] - a[1]).slice(0, 12);
+            const tSave0 = performance.now(); const raw2 = JSON.stringify(buildSaveSnapshot({ compact: 0 })); const saveMs = performance.now() - tSave0;
+            saveSizes.bySection = Object.entries(bySection).sort((a, b) => b[1] - a[1]).slice(0, 14); saveSizes.topStockFields = topFields; saveSizes.perStock = Math.round((bySection.stocks || 0) / Math.max(1, stocks.length)); saveSizes.saveMs = Math.round(saveMs); saveSizes.json = raw2.length;
         }
 
         // 0.15 H0 summary stats
@@ -1180,7 +1191,7 @@ async function oneRun(index) {
     localStorage.setItem('gra_inwestycyjna_debug_mode', '1');
     localStorage.setItem('gra_inwestycyjna_skip_intro', '1');
     const w = await loadFrame();
-    w.eval(`isGamePaused = false; setGameSpeed(${SPEED}); if (gameTimers.autoSave) clearInterval(gameTimers.autoSave);`);
+    w.eval(`if (typeof showGiantEventWindow === 'function') showGiantEventWindow = () => {}; /* 0.16.1: okno wydarzenia z pauzą zatrzymałoby przebieg bez gracza */ isGamePaused = false; setGameSpeed(${SPEED}); if (gameTimers.autoSave) clearInterval(gameTimers.autoSave);`);
     if (PATCH) w.eval(PATCH);
     w.eval(PROBE);
     w.eval(PROBE_0154);
