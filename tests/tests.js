@@ -12061,6 +12061,46 @@ group('0.16.1', () => {
         const raw = Math.max(0, Math.min(0.5, ORGANIC_INFLOW_BASE + getRecentExcessAnnual() * 1.2 + getPlayerReputationFactor() * 0.03));
         assertNear(withCap, getFundCapacityFactor() * raw, 'stopa organiczna = mnożnik × stopa bazowa', 1e-12);
     });
+
+    // --- G4: interfejs, Akademia ---
+    test('G4: widoki kantora i zakładki Obce renderują się (kursy, wykres z widełkami, spread słowem i liczbą, kwity po filtrze)', () => {
+        initFxState(); resetGdrState();
+        fundWithCash(1_000_000);
+        for (let i = 0; i < 10; i++) stepFxRates();
+        const rates = renderRatesTab();
+        for (const code of FOREIGN_CURRENCIES) assert(rates.includes(`<strong>${code}</strong>`), `wiersz ${code}`);
+        assert(rates.includes('<polyline') && rates.includes('dół widełek'), 'wykres z widełkami'); assert(!/[\u{1F300}-\u{1FAFF}]/u.test(rates), 'bez emoji');
+        const holder = document.createElement('div'); holder.innerHTML = `<input id="kantor-amount" value="100000"><p id="kantor-quote"></p>`; document.body.appendChild(holder);
+        try { updateKantorQuote(); assert(/Spread kantoru 1,5%/.test(document.getElementById('kantor-quote').textContent), 'spread słowem i liczbą'); } finally { holder.remove(); }
+        assert(renderForeignTab().includes('Żaden zagraniczny gigant'), 'pusta zakładka przed wydarzeniem');
+        createForeignIssuer('VWA'); createForeignIssuer('GLS');
+        let tab = renderForeignTab();
+        assert(tab.includes('VWA.GDR') && tab.includes('GLS.GDR'), 'oba kwity');
+        obceFilter.country = 'US';
+        try { tab = renderForeignTab(); assert(tab.includes('GLS.GDR') && !tab.includes('VWA.GDR'), 'filtr po kraju'); } finally { obceFilter = { country: '', currency: '' }; }
+        assertEq(getCompanyCountryNote({ symbol: 'CTX', name: 'Cortex' }), 'Polska · PLN', 'karta spółki: kraj · waluta');
+        initFxState(); resetGdrState();
+    });
+
+    test('G4: hasła Akademii (Ryzyko walutowe, Spread, ADR/GDR) mają tekst, przykład i quiz z 3 pytaniami', () => {
+        for (const id of ['ryzykoWalutowe', 'spread', 'adrGdr']) {
+            const e = ACADEMY_ENTRIES[id];
+            assert(e && e.title && e.text.length > 100, `${id}: tekst`); assertEq(e.quiz.length, 3, `${id}: quiz`);
+            assert(typeof e.example() === 'string', `${id}: przykład`); assert(e.quiz.every(q => q.a[q.c]), `${id}: poprawne odpowiedzi wskazują istniejącą opcję`);
+        }
+    });
+
+    test('G4: przyrost zapisu v16 (kursy, historia, kwity, zdarzenia) poniżej 3% typowego zapisu gry', () => {
+        initFxState(); resetGdrState();
+        fundWithCash(1_000_000);
+        for (let i = 0; i < 120; i++) { stepFxRates(); }
+        createForeignIssuer('GLS'); createForeignIssuer('VWA'); createForeignIssuer('KWS');
+        for (let i = 0; i < 60; i++) stepForeignIssuers();
+        kantorBuyCurrency('EUR', 100_000); buyGdr('GLS', 100);
+        const extra = JSON.stringify(getCurrencySnapshot()).length + JSON.stringify(getGdrSnapshot()).length;
+        assert(extra <= 0.03 * 2_300_000, `przyrost zapisu ${extra} znaków (${(extra / 2_300_000 * 100).toFixed(2)}% typowego zapisu)`);
+        initFxState(); resetGdrState();
+    });
 });
 
 async function runAllTests() {

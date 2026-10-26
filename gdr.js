@@ -188,6 +188,7 @@ function processGiantEventQuarterly(force = null) {
     giantEventLog.push({ q, kind: result.kind, giant: result.giant, symbol: result.symbol || null });
     if (giantEventLog.length > 20) giantEventLog.shift();
     pendingGiantEvent = result;
+    if (result.kind === 'gdr' && typeof unlockAcademyEntry === 'function') unlockAcademyEntry('adrGdr');
     if (typeof showGiantEventWindow === 'function') showGiantEventWindow(result); // okno z pauzą (ui.js); bez interfejsu zostaje dziennik
     return result;
 }

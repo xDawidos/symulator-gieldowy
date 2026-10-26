@@ -157,6 +157,7 @@ function kantorBuyCurrency(code, amountPln) {
     playerCash -= amountPln;
     addCurrencyCash('player', code, foreign);
     if (spreadCost > 0 && typeof recordPayment === 'function') recordPayment('player-fund', 'external:kantor', spreadCost, 'Kantor: spread');
+    if (typeof unlockAcademyEntry === 'function') { unlockAcademyEntry('ryzykoWalutowe'); unlockAcademyEntry('spread'); }
     kantorLog.push({ w: fxWeek, side: 'buy', code, pln: Math.round(amountPln), foreign: Math.round(foreign * 100) / 100, rate: Math.round(quote.rate * 1e5) / 1e5 });
     if (kantorLog.length > 20) kantorLog.shift();
     return { ok: true, foreign, spreadCost, rate: quote.rate };

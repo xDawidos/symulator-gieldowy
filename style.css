@@ -5108,3 +5108,12 @@ button.mood-kpi:hover { background: var(--color-bg-hover) !important; border-col
 .notice-inline:not(.is-warn) { background: var(--color-bg-info-soft); color: var(--color-text-info); }
 .limit-flag .ic, .notice-inline .ic { flex: none; margin-top: 1px; }
 @media (max-width: 640px) { .bid-rank-row { padding: 8px; gap: 8px; } .bid-rank-facts { flex-direction: column; gap: 0; } }
+
+/* 0.16.1 G4: kantor i kwity depozytowe */
+.fx-chart { display: block; color: var(--text-muted); max-height: 180px; }
+.kantor-form { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+.kantor-form input { width: 10em; }
+.btn-row { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; margin-top: var(--space-3); }
+.text-right { text-align: right; }
+#kantor-modal tr.row-selected { background: var(--bg-elevated-2); outline: 1px solid var(--accent-info); }
+#kantor-modal tbody tr[onclick] { cursor: pointer; }
