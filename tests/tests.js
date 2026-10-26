@@ -11935,6 +11935,122 @@ group('0.16.1', () => {
         assertEq(checkWorldInvariants().length, 0, 'niezmienniki po wczytaniu v15');
         initFxState();
     });
+
+    // --- G3: kwity depozytowe (GDR) i „Gigant wkracza na scenę” ---
+    test('G3a: cena kwitu = cena obca × kurs, kupno i sprzedaż w granicach spreadu depozytowego ±1%, kwity wchodzą do NAV', () => {
+        initFxState(); resetGdrState();
+        fundWithCash(10_000_000);
+        const issuer = createForeignIssuer('GLS');
+        fxRates.USD = 4.2;
+        const ref = issuer.price * 4.2;
+        assertNear(getGdrMid(issuer), ref, 'środek = cena obca × kurs', 1e-9);
+        assert(Math.abs(getGdrQuote(issuer, 'buy') / ref - 1) <= 0.01 && Math.abs(getGdrQuote(issuer, 'sell') / ref - 1) <= 0.01, 'kupno i sprzedaż w granicach ±1%');
+        const assets0 = getFundAssets(), cash0 = playerCash;
+        const buy = buyGdr('GLS', 1000);
+        assert(buy.ok, 'kupno kwitów');
+        assertNear(cash0 - playerCash, 1000 * ref * 1.005, 'koszt = 1000 × cena × (1 + 0,5%)', 1e-6);
+        assertNear(getFundAssets() - assets0, -1000 * ref * 0.005, 'NAV traci tylko spread depozytowy', 1e-6);
+        fxRates.USD = 4.62; // +10%
+        assertNear(getFundGdrValue(), 1000 * issuer.price * 4.62, 'kwity wyceniane po nowym kursie', 1e-6);
+        issuer.price *= 1.1;
+        assertNear(getFundGdrValue(), 1000 * issuer.price * 4.62, 'i po nowej cenie obcej', 1e-6);
+        assertEq(getGdrFree(issuer), issuer.float - 1000, 'pula kwitów: reszta w rynku');
+        assert(!buyGdr('GLS', issuer.float).ok, 'nie kupimy więcej niż jest w obrocie');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki z GDR');
+        const sell = sellGdr('GLS', 1000);
+        assert(sell.ok && getGdrHeld(issuer) === 0 && getGdrFree(issuer) === issuer.float, 'sprzedaż zwraca kwity do puli');
+        assert(!sellGdr('GLS', 1).ok, 'nie sprzedamy czego nie mamy');
+        initFxState(); resetGdrState();
+    });
+
+    test('G3a: ceny obcych emitentów zostają dodatnie, a przymusowa płynność sprzedaje kwity po obcej gotówce', () => {
+        initFxState(); resetGdrState();
+        fundWithCash(2_000_000);
+        const issuer = createForeignIssuer('PER');
+        for (let i = 0; i < 2000; i++) stepForeignIssuers();
+        assert(issuer.price > 0 && Number.isFinite(issuer.price), 'cena dodatnia po 2000 tygodni'); assert(issuer.history.length <= GDR_RULES.historyWeeks, 'historia ograniczona');
+        issuer.price = 210;
+        const bought = buyGdr('PER', Math.floor(1_000_000 / getGdrQuote(issuer, 'buy')));
+        assert(bought.ok, `kupno kwitów: ${bought.reason} (cena ${issuer.price})`);
+        const cash0 = playerCash;
+        forceLiquidation(cash0 + 300_000);
+        assert(playerCash - cash0 >= 299_000 || playerCash >= cash0 + 290_000, `kwity sprzedane na płynność: ${playerCash - cash0}`);
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki po płynności');
+        initFxState(); resetGdrState();
+    });
+
+    test('G3: wydarzenie „Gigant wkracza na scenę” — 2–4 w 6,5 roku, nigdy częściej niż co 4 kwartały, GDR 60–80%', () => {
+        const savedPick = pickForeignTakeoverTarget, savedExec = executeForeignTakeover;
+        pickForeignTakeoverTarget = () => ({ symbol: 'X' });
+        executeForeignTakeover = (stock, giant) => ({ symbol: 'X', name: 'X', offer: 1, premium: 0.3, paid: 0, heldByPlayer: false });
+        const savedQ = macro.quarter;
+        try {
+            let total = 0, gdr = 0, runs = 150, minGap = 99;
+            for (let run = 0; run < runs; run++) {
+                resetGdrState();
+                let last = -99, perYear = {};
+                for (let q = 1; q <= 26; q++) {
+                    macro.quarter = q;
+                    const r = processGiantEventQuarterly();
+                    if (r) { total++; if (r.kind === 'gdr') gdr++; minGap = Math.min(minGap, q - last); last = q; perYear[Math.ceil(q / 4)] = (perYear[Math.ceil(q / 4)] || 0) + 1; }
+                }
+                assert(Object.values(perYear).every(n => n <= 2), 'najwyżej 2 zdarzenia w roku kalendarzowym gry (cooldown 4 kwartały)');
+            }
+            const perGame = total / runs, share = gdr / Math.max(1, total);
+            assert(minGap >= GDR_RULES.eventCooldownQuarters, `odstęp między zdarzeniami ≥ 4 kw. (min ${minGap})`);
+            assert(perGame >= 2 && perGame <= 4, `zdarzeń w 6,5 roku: ${perGame.toFixed(2)}`);
+            assert(share >= 0.6 && share <= 0.8, `udział GDR ${(share * 100).toFixed(0)}%`);
+        } finally { pickForeignTakeoverTarget = savedPick; executeForeignTakeover = savedExec; macro.quarter = savedQ; resetGdrState(); }
+    }, 4242);
+
+    test('G3b: zagraniczne przejęcie — akcjonariusze dostają gotówkę z premią, spółka znika, brak ujemnej gotówki i pieniędzy znikąd', () => {
+        initFxState(); resetGdrState();
+        const list = Array.from({ length: 12 }, (_, i) => mk156(`T${i}`, { price: 50 + i, financialHealth: 2 }));
+        resetWorld(list);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        playerCash = 1_000_000;
+        const target = pickForeignTakeoverTarget();
+        assert(target, 'jest cel przejęcia');
+        const sym = target.symbol;
+        const qty = Math.floor(target.totalShares * 0.1);
+        playerCash -= 0; playerPortfolio[sym] = { shares: qty, avgPrice: target.price, assetType: 'stock' }; target.sharesHeld += qty;
+        const cash0 = playerCash, journal0 = paymentJournal.length;
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki przed');
+        const result = processGiantEventQuarterly('takeover');
+        assert(result && result.kind === 'takeover', 'przejęcie wykonane');
+        const gone = !stocks.some(s => s.symbol === result.symbol);
+        assert(gone, 'spółka zniknęła z giełdy');
+        if (result.symbol === sym) {
+            const expected = qty * result.offer;
+            assertNear(playerCash - cash0, expected, 'gracz dostał gotówkę po cenie z premią', 1e-3);
+            assert(result.premium >= 0.25 && result.premium <= 0.45, 'premia 25–45%');
+        }
+        assert(paymentJournal.slice(journal0).some(e => e.purpose.startsWith('Przejęcie przez zagranicznego')), 'wpływ z zewnątrz w księdze płatności');
+        assert(playerCash >= 0 && aiCompetitors.every(ai => ai.cash >= 0), 'brak ujemnej gotówki');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki po przejęciu');
+        resetGdrState();
+    });
+
+    test('G3: zapis i wczytanie zachowują kwity, ceny obcych emitentów i stan zdarzeń; zapis v15 wczytuje się bez kwitów', () => {
+        initFxState(); resetGdrState();
+        fundWithCash(5_000_000);
+        const issuer = createForeignIssuer('VWA');
+        for (let i = 0; i < 20; i++) stepForeignIssuers();
+        buyGdr('VWA', 500);
+        giantEventState.lastQ = 7; giantEventState.count = 2; giantEventState.gdr = 1; giantEventState.takeover = 1;
+        const price = issuer.price, assets = getFundAssets();
+        const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+        resetGdrState(); initFxState();
+        assert(applySaveSnapshot(raw).ok, 'wczytanie');
+        const back = foreignIssuers.VWA;
+        assert(back, 'emitent odtworzony'); assertNear(back.price, price, 'cena', 1e-9); assertEq(getGdrHeld(back), 500, 'kwity gracza');
+        assertEq(giantEventState.lastQ, 7, 'ostatnie zdarzenie'); assertEq(giantEventState.takeover, 1, 'licznik przejęć'); assertEq(back.history.length, 21, 'historia ceny');
+        assertNear(getFundAssets(), assets, 'majątek po wczytaniu', 1e-3);
+        const old = JSON.parse(JSON.stringify(raw)); old.version = 15; delete old.gdr; delete old.currencies;
+        assert(applySaveSnapshot(old).ok, 'v15 się wczytuje'); assertEq(Object.keys(foreignIssuers).length, 0, 'v15: brak kwitów');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+        resetGdrState(); initFxState();
+    });
 });
 
 async function runAllTests() {

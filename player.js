@@ -1661,7 +1661,7 @@ function getFundAssets() {
     const ppp = typeof getFundPppValue === 'function' ? getFundPppValue() : 0;                 // projekty miejskie (city.js)
     const bridge = typeof getFundBridgeLoansValue === 'function' ? getFundBridgeLoansValue() : 0; // pożyczki pomostowe (finance.js)
     const projectBonds = typeof getFundProjectBondsValue === 'function' ? getFundProjectBondsValue() : 0; // obligacje projektowe (projects.js)
-    return Math.max(0, Number(playerCash) || 0) + getFundPortfolioValue() + getFundBondsValue() + deposits + ppp + bridge + projectBonds + getFundPoolValue() + (typeof getForeignCashPln === 'function' ? getForeignCashPln('player') : 0); // 0.16.1 G2b: gotówka w walutach po kursie
+    return Math.max(0, Number(playerCash) || 0) + getFundPortfolioValue() + getFundBondsValue() + deposits + ppp + bridge + projectBonds + getFundPoolValue() + (typeof getForeignCashPln === 'function' ? getForeignCashPln('player') : 0) + (typeof getFundGdrValue === 'function' ? getFundGdrValue() : 0); // 0.16.1 G2b/G3: gotówka w walutach po kursie i kwity GDR
 }
 
 /** 0.14.1 R2 (błąd B): pula w NAV — niezainwestowana część gracza (nominalnie) + jego wkłady przez pulę w żyjące startupy (po koszcie). */
@@ -1754,6 +1754,7 @@ function startNewCareer(profile = {}) {
 
     playerCash = FUND_START_CASH;
     if (typeof initFxState === 'function') initFxState(); // 0.16.1: nowe kursy i pusta gotówka walutowa
+    if (typeof resetGdrState === 'function') resetGdrState();
     for (const symbol of Object.keys(playerPortfolio)) delete playerPortfolio[symbol];
     playerWallet = createPlayerWallet(GRANDMA_POCKET_MONEY);
     activeTradingAccount = 'fund';
@@ -1997,6 +1998,7 @@ function processFundWeekly() {
 
     chargeManagementFee();
     if (typeof stepFxRates === 'function') stepFxRates(); // 0.16.1 G2a: kursy walut co tydzień gry
+    if (typeof stepForeignIssuers === 'function') stepForeignIssuers(); // 0.16.1 G3: ceny obcych gigantów (GDR)
 
     // Zaufanie zmienia się stopniowo (25% drogi do celu na tydzień).
     const target = computeTrustTarget();
@@ -2139,7 +2141,7 @@ const FORCED_SALE_REASONS = {
 /** Przymusowa sprzedaż wolnych akcji funduszu; zwraca listę sprzedanych pozycji. */
 function forceLiquidation(amountNeeded, reason = 'redemption') {
     let needed = amountNeeded;
-    if (needed > 0 && typeof liquidateForeignCash === 'function') needed -= liquidateForeignCash(needed); // 0.16.1: najpierw obca gotówka
+    if (needed > 0 && typeof liquidateForeignCash === 'function') { needed -= liquidateForeignCash(needed); if (needed > 0 && typeof liquidateGdr === 'function') needed -= liquidateGdr(needed); } // 0.16.1: najpierw obca gotówka, potem kwity GDR
     const sold = [];
     const positions = Object.entries(playerPortfolio)
         .filter(([, holding]) => holding.assetType === 'stock' || !holding.assetType)

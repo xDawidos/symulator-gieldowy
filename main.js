@@ -216,6 +216,7 @@ function buildSaveSnapshot({ compact = 0 } = {}) {
         centralBank: serializeWithStockRefs(centralBank),
         specialists: typeof serializeSubcontractors === 'function' ? serializeSubcontractors() : serializeWithStockRefs(specialists), // 0.15.5 B6: wersja skrócona
         constructionAwardLog, // 0.15.5 B1: okno wygranych przetargów (pole opcjonalne)
+        gdr: typeof getGdrSnapshot === 'function' ? getGdrSnapshot() : undefined, // 0.16.1 G3: kwity depozytowe i zdarzenia
         currencies: typeof getCurrencySnapshot === 'function' ? getCurrencySnapshot() : undefined, // 0.16.1 G2: kursy, gotówka w walutach (v16)
         antitrustOffice, antitrustLog, // 0.15.6 E5: poziom urzędu antymonopolowego i interwencje (pola opcjonalne)
         subcontractLog, subcontractorDeals, subcontractorAcquisitionCount, // 0.15.5 B2–B3: okno zleceń podwykonawców, przejęcia pionowe (pola opcjonalne)
@@ -592,6 +593,7 @@ function applySaveSnapshot(snapshot) {
     ensureSubcontractorRegistry(); // 0.15.5 B2: rejestr 12 specjalności budowany z istniejących danych (zapisy starsze mają 7 podwykonawców)
     ensureAllReitModels(); // 0.15.5 B5: REIT-y ze starszego zapisu dostają portfel z bilansu
     if (snapshot.version < 16) report.warnings.push('Dodano waluty i kantor (migracja v16): kursy startowe, brak walut i kwitów depozytowych.');
+    if (typeof applyGdrSnapshot === 'function') applyGdrSnapshot(snapshot.gdr);
     if (typeof applyCurrencySnapshot === 'function') applyCurrencySnapshot(snapshot.currencies); // 0.16.1 G2: v15 → kursy startowe, bez walut
     if (snapshot.antitrustOffice && typeof snapshot.antitrustOffice === 'object') Object.assign(antitrustOffice, snapshot.antitrustOffice); // 0.15.6 E5: poziom urzędu (dawniej nie zapisywany)
     antitrustLog = Array.isArray(snapshot.antitrustLog) ? snapshot.antitrustLog.filter(e => e && typeof e.symbol === 'string') : [];
@@ -1483,6 +1485,7 @@ gameTimers.weekly = setGameInterval(() => {
         advanceMacroQuarter(); // inflacja, bezrobocie, cykle sektorów, wybory (macro.js)
         processCityQuarterly(); // festyn raz w roku (city.js)
         applyCrowdingPressureToWeak(); // D2: nasycony rynek — słabe spółki tanieją szybciej
+        if (typeof processGiantEventQuarterly === 'function') processGiantEventQuarterly(); // 0.16.1 G3: „Gigant wkracza na scenę” (gdr.js)
         if (typeof processListingsQuarterly === 'function') processListingsQuarterly(); // 0.15.6: wymogi utrzymania, rynki NH i prywatny (listings.js)
         if (typeof enforceListingLimitQuarterly === 'function') enforceListingLimitQuarterly(); // 0.15.4 P5: powyżej 115 spółek krajowych wymuszone wycofanie najsłabszych
         processAwaitingListings(); // P1: startupy czekające na wolne miejsce na giełdzie
