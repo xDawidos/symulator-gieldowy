@@ -2276,9 +2276,10 @@ function issueFundUnits(requestedUnits, options = {}) {
     return { issued: raised / nav, raised, newClients: newClients.length };
 }
 
-/** Zdarzenie: duży klient chce wejść — emisja wymuszona (liczy się do limitu emisji). */
+/** Zdarzenie: duży klient chce wejść — emisja wymuszona (liczy się do limitu emisji).
+ * 0.16.1 G0b: szansa maleje z pojemnością strategii (getFundCapacityFactor) — pomiar g0b: to ≈ 70% napływu w 20 latach przy fundusz-gig. */
 function maybeTriggerForcedEmission() {
-    if (Math.random() > 0.03 || playerFund.trust < 40 || playerFund.current.emissions >= MAX_EMISSIONS_PER_PERIOD) return; // P12: limit 2 emisji na okres
+    if (Math.random() > 0.03 * getFundCapacityFactor() || playerFund.trust < 40 || playerFund.current.emissions >= MAX_EMISSIONS_PER_PERIOD) return; // P12: limit 2 emisji na okres
     const nav = getFundNav();
     const value = getFundAssets() * getRandomInRange(0.1, 0.3);
     const client = addFundClient('institution', 0, nav);
