@@ -52,6 +52,7 @@ server.listen(PORT, async () => {
   const edge = spawn(edgePath, [
     '--headless=new',
     '--disable-gpu',
+    '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows',
     '--user-data-dir=' + path.join(process.env.TEMP || '.', 'edge-run-' + process.pid),
     '--remote-debugging-port=' + CDP,
     url
@@ -92,6 +93,8 @@ server.listen(PORT, async () => {
   ws.onopen = () => {
     let msgId = 1;
     const interval = setInterval(() => {
+      // Edge zamraża ukryte karty po kilku minutach (przebieg staje w miejscu) — co sekundę ustawiamy kartę jako aktywną.
+      ws.send(JSON.stringify({ id: ++msgId, method: 'Page.setWebLifecycleState', params: { state: 'active' } }));
       ws.send(JSON.stringify({
         id: ++msgId,
         method: 'Runtime.evaluate',

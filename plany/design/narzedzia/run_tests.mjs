@@ -34,6 +34,7 @@ server.listen(PORT, async () => {
   const edge = spawn(edgePath, [
     '--headless=new',
     '--disable-gpu',
+    '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows',
     '--user-data-dir=' + path.join(process.env.TEMP || '.', 'edge-run-' + process.pid),
     '--remote-debugging-port=' + CDP,
     `http://localhost:${PORT}/tests/tests.html`
