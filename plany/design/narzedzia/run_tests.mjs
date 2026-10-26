@@ -1,9 +1,10 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
-const PORT = 8765;
+const PORT = Number(process.env.SIM_PORT) || 8765;
+const CDP = Number(process.env.SIM_CDP) || 9222;
 const MIME_TYPES = {
   '.html': 'text/html',
   '.js': 'text/javascript',
@@ -23,7 +24,7 @@ const server = http.createServer((req, res) => {
       return;
     }
     const ext = path.extname(filePath);
-    res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] || 'application/octet-stream' });
+    res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] || 'application/octet-stream', 'Cache-Control': 'no-store' });
     res.end(data);
   });
 });
@@ -33,7 +34,9 @@ server.listen(PORT, async () => {
   const edge = spawn(edgePath, [
     '--headless=new',
     '--disable-gpu',
-    '--remote-debugging-port=9222',
+    '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows',
+    '--user-data-dir=' + path.join(process.env.TEMP || '.', 'edge-run-' + process.pid),
+    '--remote-debugging-port=' + CDP,
     `http://localhost:${PORT}/tests/tests.html`
   ]);
 
@@ -42,7 +45,7 @@ server.listen(PORT, async () => {
   const cleanup = () => {
     if (!finished) {
       finished = true;
-      try { edge.kill(); } catch (e) {}
+      try { spawnSync('powershell', ['-NoProfile', '-Command', `Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" | Where-Object { $_.CommandLine -like '*edge-run-${process.pid}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }`]); } catch (e) {} // zabija całe drzewo Edge z tego przebiegu
       server.close();
     }
   };
@@ -54,7 +57,7 @@ server.listen(PORT, async () => {
   for (let attempt = 0; attempt < 30; attempt++) {
     await new Promise(r => setTimeout(r, 500));
     try {
-      const res = await fetch('http://localhost:9222/json');
+      const res = await fetch('http://localhost:' + CDP + '/json');
       const tabs = await res.json();
       const tab = tabs.find(t => t.url && t.url.includes('tests.html'));
       if (tab && tab.webSocketDebuggerUrl) {

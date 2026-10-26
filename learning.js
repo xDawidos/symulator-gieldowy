@@ -2128,3 +2128,37 @@ Object.assign(ACADEMY_ENTRIES, {
         ]
     }
 });
+
+// 0.15.6 E7: hasła Akademii o rynkach wejścia i urzędzie antymonopolowym.
+Object.assign(ACADEMY_ENTRIES, {
+    rynekGlownyAlternatywny: {
+        title: 'Rynek główny i alternatywny', get icon() { return academyIcon('rynek'); },
+        text: 'Główny parkiet (GPW) stawia spółkom wymagania: minimalną kapitalizację, dodatni zysk, odpowiedni wolny obrót. Gdy rynek jest zatłoczony, wymogi rosną. Rynek alternatywny (w grze NewHorizons, prowadzony przez państwo) ma wymogi niższe: przyjmuje młode i innowacyjne spółki, które nie spełniają norm GPW. Za to są tu większe wahania kursu i częstsze upadki, a część ostrożnych inwestorów (i funduszy) w ogóle tu nie wchodzi. Spółka, która urośnie i spełni wymogi GPW, awansuje na główny parkiet; spółka, która spadnie poniżej progu utrzymania, schodzi na rynek alternatywny zamiast upaść.',
+        example: () => { const nh = stocks.filter(s => getStockMarket(s) === 'NH' && !s.assetType && !s.isBankrupt); return nh.length ? `Na NewHorizons notowanych jest ${nh.length} spółek, m.in. ${nh.slice(0, 3).map(s => s.name).join(", ")}. Wymóg kapitalizacji GPW: ${formatZl(getListingRequirements("GPW").cap, 0)}, NewHorizons: ${formatZl(getListingRequirements("NH").cap, 0)}.` : `Wymóg kapitalizacji GPW: ${formatZl(getListingRequirements("GPW").cap, 0)}, NewHorizons: ${formatZl(getListingRequirements("NH").cap, 0)}.`; },
+        quiz: [
+            { q: 'Co się dzieje ze spółką z GPW, której kapitalizacja długo jest poniżej progu utrzymania?', a: ['schodzi na rynek alternatywny zamiast upaść', 'natychmiast bankrutuje', 'dostaje dotację'], c: 0 },
+            { q: 'Czym rynek alternatywny różni się od głównego?', a: ['niższe wymogi, ale większe ryzyko i wahania', 'wyższe wymogi i mniejsze ryzyko', 'niczym'], c: 0 },
+            { q: 'Dlaczego wymogi GPW rosną, gdy spółek jest dużo?', a: ['by ograniczyć zatłoczenie i wpuszczać tylko mocniejsze spółki', 'bo rośnie prowizja', 'bez powodu'], c: 0 }
+        ]
+    },
+    gieldaPrywatna: {
+        title: 'Giełda prywatna i ryzyko oszustwa', get icon() { return academyIcon('alert'); },
+        text: 'Giełda prywatna ma najłagodniejsze wymogi i najsłabszy nadzór. Dlatego przyciąga spółki, które nie dostałyby się gdzie indziej — także takie, które ukrywają problemy. W grze oszustwa księgowe zdarzają się tam ok. 5 razy częściej niż na GPW i są wykrywane później, a ujawnienie boli mocniej: odpis, spadek kursu i zmiana zarządu. Zasada ostrożności: mała pozycja, dywersyfikacja, audyt przed większym zakupem. Fundusz może mieć na giełdzie prywatnej najwyżej 20% swojej wartości.',
+        example: () => { const p = stocks.filter(s => getStockMarket(s) === 'PRV' && !s.isBankrupt); return p.length ? `Na giełdzie prywatnej notowanych jest ${p.length} spółek; trwających oszustw: ${p.filter(s => s.fraud).length} (widoczne dopiero po audycie lub ujawnieniu).` : 'Na giełdzie prywatnej nie ma jeszcze żadnej spółki — trafiają tu słabe spółki z NewHorizons.'; },
+        quiz: [
+            { q: 'Jak często oszustwa zdarzają się na giełdzie prywatnej względem GPW?', a: ['ok. 5 razy częściej', 'tak samo często', 'rzadziej'], c: 0 },
+            { q: 'Jak ograniczyć ryzyko na giełdzie prywatnej?', a: ['mała pozycja, dywersyfikacja i audyt', 'jedna duża pozycja', 'kupować na kredyt'], c: 0 },
+            { q: 'Co grozi spółce po ujawnieniu oszustwa?', a: ['odpis, spadek kursu i zmiana zarządu', 'premia od nadzoru', 'nic'], c: 0 }
+        ]
+    },
+    antymonopol: {
+        title: 'Urząd antymonopolowy', get icon() { return academyIcon('waga'); },
+        text: 'Urząd antymonopolowy pilnuje, by żadna firma nie zdominowała rynku. Patrzy na udział spółki w przychodach sektora (gdy szybko rośnie), w przetargach i w kapitalizacji całego rynku. Im wyższy poziom urzędu (rozwijany wydatkami państwa), tym niższe progi interwencji. Najpierw jest kara (kilka procent rocznych przychodów), potem nakaz podziału (wydzielenie segmentu: akcjonariusze dostają akcje nowej spółki, więc wartość się nie traci) albo zakaz przejęć. Urząd może też zablokować fuzję, która dałaby zbyt duży udział w rynku.',
+        example: () => { const e = antitrustLog.at(-1); return e ? `Ostatnia interwencja: ${e.symbol} — ${ANTITRUST_KIND_LABELS[e.kind] || e.kind} (kwartał ${e.quarter}).` : `Poziom urzędu: ${antitrustOffice.level}; ${getAntitrustTier() ? "urząd interweniuje w skrajnych przypadkach" : "na poziomie 0 urząd nie interweniuje"}.`; },
+        quiz: [
+            { q: 'Co jest pierwszą sankcją urzędu antymonopolowego wobec dominującej spółki?', a: ['kara finansowa', 'natychmiastowy podział', 'wycofanie z giełdy'], c: 0 },
+            { q: 'Czy nakaz podziału odbiera akcjonariuszom wartość?', a: ['nie — dostają akcje wydzielonej spółki', 'tak, całą', 'tak, połowę'], c: 0 },
+            { q: 'Co robi wyższy poziom urzędu?', a: ['obniża progi interwencji', 'podnosi progi', 'znosi kary'], c: 0 }
+        ]
+    }
+});

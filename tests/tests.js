@@ -127,6 +127,7 @@ function resetWorld(companies) {
     subcontractLog = []; subcontractorDeals = []; // 0.15.5 B2
     SUBCONTRACTOR_RULES.startHireChance = 0; // testy starsze od 0.15.5: podwykonawca tylko na żądanie
     SUBCONTRACTOR_RULES.acquireChance = 0;
+    if (typeof LISTING_RULES === 'object') LISTING_RULES.debutRouting = false; // 0.15.6: testy starsze — debiut zawsze na GPW (bez wymogów wejścia)
     if (typeof cooperations !== 'undefined') { cooperations = []; cooperationLog = []; } // 0.14 T5
     constructionProjects = [];
     paymentJournal = [];
@@ -11114,6 +11115,680 @@ group('0.15.5: Budownictwo i banki (przetargi, podwykonawcy, przejęcia pionowe,
         const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
         assert(Array.isArray(raw.constructionAwardLog) && raw.constructionAwardLog.length === 2, 'w zapisie');
         constructionAwardLog = [];
+    });
+});
+
+// ================================================================================
+// 0.15.6 „Giełdy wejścia” — wspólne pomocniki grup E1–E6
+// ================================================================================
+
+const mk156 = (symbol, o = {}) => Object.assign(makeCompany(symbol, { sector: ['Usługi'], cash: 200_000 }), { price: 10, totalShares: 10000, exchange: 'BRONZE' }, o);
+/** Świat z `count` zwykłymi spółkami GPW o kapitalizacji `cap` (cena × akcje) i kontem gracza. */
+function world156(count, cap = 1_000_000) {
+    const list = Array.from({ length: count }, (_, i) => mk156(`W${i}`, { price: cap / 10000, financialHealth: 2 + (i % 3) }));
+    resetWorld(list);
+    startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+    return list;
+}
+
+group('0.15.6 E1: wymogi wejścia na GPW, zejście na NewHorizons', () => {
+    test('E1: rynki NH i PRV są aktywne, bez operatora, nie są rynkami internetowymi i nie liczą się do spółek krajowych', () => {
+        const list = world156(5);
+        ensureMarketOperators();
+        for (const id of ['NH', 'PRV']) {
+            assertEq(marketOperators[id].status, 'active', `${id} aktywny`);
+            assert(!isInternetMarket(id) && isEntryMarket(id), `${id}: rynek wejścia, nie internetowy`);
+        }
+        list[0].market = 'NH'; list[1].market = 'PRV';
+        assertEq(getListedCompanyCount(), 3, 'NH i PRV poza limitem spółek krajowych');
+        assertEq(getTotalCompanyCount(), 5, 'ale w łącznym sufitcie');
+        processMarketsQuarterly();
+        assertEq(marketOperators.NH.status, 'active', 'kwartał nie zamyka rynku bez operatora');
+    });
+
+    test('E1: mnożnik wymogów GPW 1,0 do 100 spółek krajowych, liniowo do 1,5 przy ≥ 125', () => {
+        const saved = getListedCompanyCount;
+        try {
+            for (const [n, m] of [[40, 1], [100, 1], [112.5, 1.25], [125, 1.5], [160, 1.5]]) {
+                getListedCompanyCount = () => n;
+                assertNear(getListingRequirementMultiplier(), m, `mnożnik przy ${n}`, 1e-9);
+            }
+            getListedCompanyCount = () => 125;
+            const req = getListingRequirements('GPW'), base = LISTING_REQUIREMENTS.GPW;
+            assertNear(req.cap, base.cap * 1.5, 'kapitalizacja ×1,5');
+            assertNear(req.freeFloat, Math.min(0.5, base.freeFloat * 1.5), 'wolny obrót ×1,5');
+            assertEq(getListingRequirements('NH').cap, LISTING_REQUIREMENTS.NH.cap, 'NH bez mnożnika');
+        } finally { getListedCompanyCount = saved; }
+    });
+
+    test('E1: spełnianie wymogów — kapitalizacja, wolny obrót, zysk (innowacyjne zwolnione na NH), debiut bez zysku', () => {
+        world156(2);
+        const s = mk156('REQ', { price: 5, totalShares: 10000, quarterlyEarnings: 5000, sector: ['Usługi'] });
+        s.insiderShares = 0;
+        assert(!meetsListingRequirements(s, 'GPW').ok && meetsListingRequirements(s, 'GPW').failed.includes('cap'), 'za mała kapitalizacja na GPW');
+        s.price = 12; // 120 tys. ≥ 80 tys.
+        assert(meetsListingRequirements(s, 'GPW').ok, 'GPW spełnione');
+        s.quarterlyEarnings = -100;
+        assert(meetsListingRequirements(s, 'GPW').failed.includes('profit'), 'strata: zysk niespełniony');
+        assert(meetsListingRequirements(s, 'GPW', { debut: true }).ok, 'debiut: zysk nie jest wymagany');
+        assert(meetsListingRequirements(s, 'NH').failed.includes('profit'), 'NH: strata zwykłej spółki');
+        s.sector = ['Technologia'];
+        assert(meetsListingRequirements(s, 'NH').ok, 'NH: innowacyjna bez wymogu zysku');
+        s.insiderShares = 9000;
+        assert(meetsListingRequirements(s, 'NH').failed.includes('freeFloat'), 'wolny obrót poniżej progu');
+    });
+
+    test('E1: poniżej progu utrzymania 4 kwartały → NewHorizons zamiast upadku (bez ujemnej gotówki i duchów)', () => {
+        const list = world156(6, 1_000_000);
+        const weak = list[0]; weak.price = 2; // 20 tys. < 50% × 80 tys.
+        aiCompetitors[0].portfolio[weak.symbol] = { shares: 500, avgPrice: 2 }; weak.sharesHeld = 500;
+        const inv0 = checkWorldInvariants().join('|');
+        for (let q = 1; q <= 3; q++) { processListingMaintenanceQuarterly(); assertEq(getStockMarket(weak), 'GPW', `kwartał ${q}: jeszcze GPW`); assertEq(weak.belowReqQ, q, 'licznik'); }
+        assertEq(getListedCompanyCount(), 6, 'przed zejściem 6 spółek krajowych');
+        assertEq(processListingMaintenanceQuarterly(), 1, 'czwarty kwartał: zejście');
+        assertEq(getStockMarket(weak), 'NH', 'spółka na NH');
+        assert(stocks.includes(weak) && aiCompetitors[0].portfolio[weak.symbol]?.shares === 500, 'spółka i posiadacze zostają');
+        assertEq(getListedCompanyCount(), 5, 'NH nie liczy się do spółek krajowych');
+        assert(weak.belowReqQ === undefined && weak.marketSinceQ !== undefined, 'licznik zerowany, znacznik rynku');
+        assert(stocks.every(s => !(Number(s.cash) < 0)), 'brak ujemnej gotówki');
+        assertEq(checkWorldInvariants().join('|'), inv0, 'niezmienniki bez zmian');
+    });
+
+    test('E1: kapitalizacja wraca powyżej progu — licznik się zeruje; wykluczone: państwowe i z córkami', () => {
+        const list = world156(6, 1_000_000);
+        const [a, b, c] = list; a.price = 2; b.price = 2; b.isStateOwned = true; c.price = 2; c.subsidiaries = ['X'];
+        processListingMaintenanceQuarterly(); processListingMaintenanceQuarterly();
+        assertEq(a.belowReqQ, 2, 'zwykła spółka liczy kwartały');
+        assert(b.belowReqQ === undefined && c.belowReqQ === undefined, 'państwowa i z córką nie podlegają zejściu');
+        a.price = 50; processListingMaintenanceQuarterly();
+        assert(a.belowReqQ === undefined, 'powyżej progu: licznik zerowany');
+    });
+
+    test('E1: NH pełny → wykup po cenie rynkowej (jak wycofanie), posiadacze rozliczeni, skarb nie na minusie', () => {
+        const list = world156(5, 1_000_000);
+        const weak = list[0]; weak.price = 2; weak.sharesHeld = 400; aiCompetitors[0].portfolio[weak.symbol] = { shares: 400, avgPrice: 2 };
+        const savedSlot = hasEntryMarketSlot; hasEntryMarketSlot = () => false;
+        const cash0 = aiCompetitors[0].cash, treasury0 = governmentTreasury;
+        try {
+            weak.belowReqQ = LISTING_BELOW_QUARTERS - 1;
+            assertEq(processListingMaintenanceQuarterly(), 1, 'jedna spółka zeszła');
+        } finally { hasEntryMarketSlot = savedSlot; }
+        assert(!stocks.includes(weak), 'spółka wycofana');
+        assert(!aiCompetitors[0].portfolio[weak.symbol], 'bez ducha posiadacza');
+        assert(aiCompetitors[0].cash > cash0, 'bot dostał gotówkę z wykupu');
+        assert(governmentTreasury >= 0 && governmentTreasury <= treasury0 && stocks.every(s => !(s.cash < 0)), 'skarb i gotówka spółek nieujemne');
+    });
+
+    test('E1: najwyżej 2 zejścia na kwartał, od najsłabszej; zapis zachowuje rynek i licznik', () => {
+        const list = world156(8, 1_000_000);
+        list.slice(0, 4).forEach((s, i) => { s.price = 1 + i * 0.5; s.belowReqQ = LISTING_BELOW_QUARTERS; });
+        assertEq(processListingMaintenanceQuarterly(), LISTING_DEMOTE_PER_QUARTER, 'limit zejść na kwartał');
+        assertEq(getStockMarket(list[0]), 'NH', 'najsłabsza pierwsza'); assertEq(getStockMarket(list[1]), 'NH', 'druga najsłabsza');
+        assertEq(getStockMarket(list[2]), 'GPW', 'trzecia czeka');
+        const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+        const saved = raw.stocks.find(s => s.symbol === list[0].symbol), waiting = raw.stocks.find(s => s.symbol === list[2].symbol);
+        assertEq(saved.market, 'NH', 'rynek w zapisie'); assert(waiting.belowReqQ >= LISTING_BELOW_QUARTERS, 'licznik w zapisie');
+    });
+});
+
+group('0.15.6 E2: NewHorizons (ryzyko, ograniczenia inwestorów, płynność)', () => {
+    test('E2: zmienność ×1,45 i szansa upadku ×3 tylko na NH; GPW bez zmian', () => {
+        const [a, b] = world156(2);
+        b.market = 'NH';
+        assertEq(getMarketVolatilityFactor(a), 1, 'GPW: zmienność bez zmian');
+        assertEq(getMarketVolatilityFactor(b), 1.45, 'NH: zmienność ×1,45');
+        assertEq(getMarketFailureFactor(a), 1, 'GPW: upadek bez zmian');
+        assertEq(getMarketFailureFactor(b), 3, 'NH: upadek ×3');
+        assert(ENTRY_MARKET_RULES.NH.volatility >= 1.3 && ENTRY_MARKET_RULES.NH.volatility <= 1.6 && ENTRY_MARKET_RULES.NH.failure >= 2 && ENTRY_MARKET_RULES.NH.failure <= 3, 'widełki planu');
+    });
+
+    test('E2: ostrożne boty i fundusze nie inwestują w NH, spekulanci tak; gracz wg stanowiska', () => {
+        const [a, b] = world156(2); b.market = 'NH';
+        for (const p of ['calm', 'banker', 'dividend_chaser']) assert(!canBotInvestIn({ personality: p }, b), `${p} nie wchodzi na NH`);
+        for (const p of ['yolo_trader', 'reckless', 'whale', 'pro_investor', 'market_maker']) assert(canBotInvestIn({ personality: p }, b), `${p} może na NH`);
+        assert(canBotInvestIn({ personality: 'calm' }, a), 'GPW bez ograniczeń');
+        assert(!canManagerInvestIn({ personality: 'cautious' }, b) && !canManagerInvestIn({ personality: 'dividend' }, b), 'fundusze bezpieczne nie');
+        assert(canManagerInvestIn({ personality: 'aggressive' }, b) && canManagerInvestIn({ personality: 'cautious' }, a), 'agresywny tak; GPW bez ograniczeń');
+        const level = playerAccessLevel;
+        try {
+            playerAccessLevel = 1; assert(!canAccessExchange('BRONZE', b) && canAccessExchange('BRONZE', a), 'gracz bez stanowiska: NH zablokowany, GPW nie');
+            playerAccessLevel = 2; assert(canAccessExchange('BRONZE', b), 'po awansie: NH otwarty');
+        } finally { playerAccessLevel = level; }
+    });
+
+    test('E2: boty z zablokowaną osobowością nie kupują akcji NH (filtr w pętli kupna), pozostałe mogą', () => {
+        const list = world156(1); const nh = list[0]; nh.market = 'NH'; nh.financialHealth = 3; nh.dividendPolicy = 'Balanced';
+        const calm = aiCompetitors.find(ai => ai.personality === 'calm'), spec = aiCompetitors.find(ai => ai.personality === 'yolo_trader');
+        assert(calm && spec, 'boty testowe istnieją');
+        const levels = [calm.accessLevel, spec.accessLevel]; calm.accessLevel = spec.accessLevel = 5;
+        try {
+            const accessible = ai => stocks.filter(s => !s.assetType && !s.isBankrupt && (exchanges[s.exchange]?.level ?? 9) <= ai.accessLevel && canBotInvestIn(ai, s));
+            assertEq(accessible(calm).length, 0, 'spokojny bot nie widzi NH');
+            assertEq(accessible(spec).length, 1, 'spekulant widzi NH');
+        } finally { calm.accessLevel = levels[0]; spec.accessLevel = levels[1]; }
+    });
+
+    test('E2: market maker państwa podnosi obrót do minimum (limit spółek, tylko przy dodatnim skarbie)', () => {
+        const list = world156(20, 1_000_000);
+        list.forEach(s => { s.market = 'NH'; s.lastTurnover = 0; s.financialHealth = 0; });
+        const treasury = governmentTreasury; governmentTreasury = 1e6;
+        try {
+            assertEq(processNewHorizonsQuarterly(), NH_MM_MAX_STOCKS, 'najwyżej tyle spółek na kwartał');
+            const supported = list.filter(s => s.lastTurnover > 0);
+            assertEq(supported.length, NH_MM_MAX_STOCKS, 'wspierane spółki');
+            assertNear(supported[0].lastTurnover, getMarketCapValue(supported[0]) * NH_MM_TURNOVER, 'obrót = 0,3% kapitalizacji');
+            list.forEach(s => { s.lastTurnover = 0; });
+            governmentTreasury = 0;
+            assertEq(processNewHorizonsQuarterly(), 0, 'pusty skarb: brak wsparcia');
+        } finally { governmentTreasury = treasury; }
+    });
+
+    test('E2: przełom na NH tylko dla zdrowych spółek; GPW bez przełomów; niezmienniki i brak ujemnej gotówki', () => {
+        const list = world156(10, 1_000_000);
+        list.slice(0, 5).forEach(s => { s.market = 'NH'; s.financialHealth = 2; });
+        list.slice(5).forEach(s => { s.financialHealth = 2; });
+        const logs = []; const orig = logEvent; logEvent = (t, ...r) => { logs.push(String(t)); return orig(t, ...r); };
+        const prices = list.map(s => s.price);
+        try {
+            let n = 0;
+            for (let q = 0; q < 40; q++) { processNewHorizonsQuarterly(); n += logs.filter(t => t.includes('przełom')).length; logs.length = 0; }
+            assert(n >= 1 && n <= 15, `przełomy zdarzają się rzadko (${n} w 40 kw. × 5 spółek)`);
+        } finally { logEvent = orig; }
+        assert(list.slice(5).every((s, i) => s.price === prices[i + 5]), 'GPW bez przełomów');
+        assert(stocks.every(s => !(s.cash < 0)) && checkWorldInvariants().length === 0, 'niezmienniki');
+    });
+});
+
+group('0.15.6 E3: ścieżka startupu, awans z NewHorizons, giełda prywatna', () => {
+    const debut = (worldCount, fundingGoal, mult = 1) => {
+        world156(worldCount, 1_000_000);
+        const startup = generateNewStartup();
+        startup.fundingGoal = fundingGoal; startup.currentFunding = fundingGoal;
+        stocks.push(startup); startup.stage = 'finalized';
+        LISTING_RULES.debutRouting = true;
+        try { handleSuccessfulIPO(startup, mult); } finally { LISTING_RULES.debutRouting = false; }
+        return startup;
+    };
+
+    test('E3: debiut startupu wg kapitalizacji — duży na GPW, średni na NH, mały na giełdę prywatną', () => {
+        const big = debut(5, 3_000_000);
+        assert(!big.assetType && getStockMarket(big) === 'GPW', 'duży debiutuje na GPW');
+        const mid = debut(5, 40_000);
+        assert(!mid.assetType && getStockMarket(mid) === 'NH' && mid.marketSinceQ !== undefined, `średni na NH (${getStockMarket(mid)}, kap. ${getMarketCapValue(mid)})`);
+        assertEq(getListedCompanyCount(), 5, 'NH nie zajmuje miejsc na GPW');
+        world156(5); // minimalny debiut to 1000 akcji po 25–50 zł, więc giełda prywatna to głównie ścieżka z NH; wybór rynku dla bardzo małej kapitalizacji:
+        assertEq(chooseDebutMarket(10_000), 'PRV', 'poniżej wymogu NH → giełda prywatna');
+        const saved = hasEntryMarketSlot; hasEntryMarketSlot = () => false;
+        try { assertEq(chooseDebutMarket(10_000), null, 'giełda prywatna pełna → czeka'); } finally { hasEntryMarketSlot = saved; }
+    });
+
+    test('E3: kwalifikujący się na GPW czeka w inkubatorze, gdy GPW pełny; NH pełny blokuje debiut na NH', () => {
+        const full = debut(LISTING_HARD_CAP, 3_000_000);
+        assert(full.assetType === 'Startup' && full.stage === 'awaitingListing', 'GPW pełny: czeka');
+        world156(5);
+        const saved = hasEntryMarketSlot; hasEntryMarketSlot = id => id !== 'NH';
+        try {
+            const startup = generateNewStartup(); startup.fundingGoal = startup.currentFunding = 40_000; stocks.push(startup);
+            LISTING_RULES.debutRouting = true; handleSuccessfulIPO(startup, 1); LISTING_RULES.debutRouting = false;
+            assertEq(startup.stage, 'awaitingListing', 'NH pełny: czeka w inkubatorze');
+        } finally { hasEntryMarketSlot = saved; LISTING_RULES.debutRouting = false; }
+    });
+
+    test('E3: awans z NH na GPW po 8 kw. i spełnieniu wymogów; wcześniej i bez wymogów — nie', () => {
+        const list = world156(6, 1_000_000);
+        const young = list[0], old = list[1], poor = list[2];
+        for (const s of [young, old, poor]) { s.market = 'NH'; s.quarterlyEarnings = 20_000; s.financialHealth = 2; }
+        young.marketSinceQ = macro.quarter - 3; old.marketSinceQ = macro.quarter - 9; poor.marketSinceQ = macro.quarter - 9; poor.price = 3; // 30 tys. < 80 tys.
+        let promoted = 0;
+        for (let i = 0; i < 40; i++) promoted += processNhPathQuarterly().promoted;
+        assertEq(getStockMarket(old), 'GPW', 'dojrzała i spełniająca wymogi awansuje (z czasem)');
+        assertEq(getStockMarket(young), 'NH', 'za młoda');
+        assertEq(getStockMarket(poor), 'NH', 'bez wymogów kapitałowych zostaje');
+        assertEq(promoted, 1, 'jeden awans');
+        assertEq(getListedCompanyCount(), 4, 'awansowana wraca do spółek krajowych (3 pozostałe GPW + 1)');
+    });
+
+    test('E3: słaba spółka NH po 8 kw. — giełda prywatna albo firma prywatna (wykup), bez ujemnej gotówki i duchów', () => {
+        const list = world156(24, 1_000_000);
+        const weak = list.slice(0, 20);
+        weak.forEach((s, i) => { s.market = 'NH'; s.marketSinceQ = macro.quarter - 10; s.financialHealth = -1; s.price = 1; s.sharesHeld = 100; aiCompetitors[0].portfolio[s.symbol] = { shares: 100, avgPrice: 1 }; });
+        let toPrv = 0, wentPrivate = 0;
+        for (let q = 0; q < 60; q++) { const r = processNhPathQuarterly(); toPrv += r.toPrivateMarket; wentPrivate += r.wentPrivate; }
+        assert(toPrv >= 1 && wentPrivate >= 1, `oba kierunki zdarzają się (PRV ${toPrv}, prywatne ${wentPrivate})`);
+        assert(getEntryMarketCount('PRV') <= Math.max(3, Math.floor(PRV_SHARE_CAP * 24)), 'pojemność giełdy prywatnej ≤ 10% spółek (min. 3)');
+        for (const s of weak) if (!stocks.includes(s)) assert(!aiCompetitors[0].portfolio[s.symbol], `bez ducha posiadacza ${s.symbol}`);
+        assert(stocks.every(s => !(s.cash < 0)) && governmentTreasury >= 0 && checkWorldInvariants().length === 0, 'gotówka, skarb i niezmienniki');
+    });
+
+    test('E3: oszustwa na giełdzie prywatnej ok. 5× częstsze niż na GPW, wykrycie później', () => {
+        const list = world156(60, 1_000_000);
+        list.forEach(s => { s.fundamentals = s.fundamentals || {}; });
+        list.slice(30).forEach(s => { s.market = 'PRV'; });
+        assertEq(getMarketFraudFactor(list[0]), 1, 'GPW ×1'); assertEq(getMarketFraudFactor(list[40]), 5, 'PRV ×5');
+        assert(getFraudDetectionRange(list[40])[1] > getFraudDetectionRange(list[0])[1], 'wykrycie PRV później');
+        let gpw = 0, prv = 0;
+        for (let q = 0; q < 400; q++) {
+            list.forEach(s => { s.fraud = null; });
+            // na kwartał: dokładnie ta sama pętla co w grze, ale bez limitu 5% (liczymy starty)
+            const saved = FRAUD_MAX_SHARE;
+            processAccountingQuarterly();
+            list.forEach((s, i) => { if (s.fraud) { if (i < 30) gpw++; else prv++; } });
+        }
+        assert(gpw >= 5 && prv >= 3 * gpw, `PRV wyraźnie częściej (GPW ${gpw}, PRV ${prv})`);
+    });
+
+    test('E3: ujawnienie oszustwa na PRV mocniej obniża kurs; wykrycie przez audytora w czasie jak dla spółki GPW', () => {
+        const [a, b] = world156(2, 1_000_000); b.market = 'PRV';
+        for (const s of [a, b]) { s.fraud = { start: 0, correctAt: 1, total: 0 }; s.price = 100; }
+        revealFraud(a, 'audytor'); revealFraud(b, 'audytor');
+        assert(b.price < a.price, `kurs PRV niższy po ujawnieniu (${b.price} vs ${a.price})`);
+        assertEq(a.fraud, null, 'ujawnione'); assertEq(b.fraud, null, 'ujawnione');
+    });
+
+    test('E3: gracz może mieć na giełdzie prywatnej najwyżej 20% wartości funduszu', () => {
+        const [a, b] = world156(2, 1_000_000); b.market = 'PRV'; playerCash = 100_000;
+        const nav = getFundAssets();
+        assert(nav > 0, 'fundusz ma wartość');
+        assertEq(checkPrivateMarketLimit(a, nav), null, 'GPW bez limitu');
+        assertEq(checkPrivateMarketLimit(b, nav * 0.1), null, '10% w limicie');
+        assert(/20%/.test(checkPrivateMarketLimit(b, nav * 0.3) || ''), '30% ponad limitem — komunikat z limitem');
+        playerPortfolio[b.symbol] = { shares: Math.floor(nav * 0.15 / b.price), avgPrice: b.price, assetType: 'stock' };
+        const nav2 = getFundAssets();
+        assert(checkPrivateMarketLimit(b, nav2 * 0.1) !== null, 'istniejąca pozycja wlicza się do limitu');
+    });
+
+    test('E3: migracja — istniejące spółki bez pola rynku zostają na GPW; zapis zachowuje rynek i znacznik wieku', () => {
+        const list = world156(3, 1_000_000); list[0].market = 'NH'; list[0].marketSinceQ = 7;
+        const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+        const old = raw.stocks.find(s => s.symbol === list[1].symbol), nh = raw.stocks.find(s => s.symbol === list[0].symbol);
+        assert(old.market === undefined, 'starsza spółka bez pola rynku (GPW)');
+        assert(nh.market === 'NH' && nh.marketSinceQ === 7, 'NH z wiekiem w zapisie');
+        assertEq(getStockMarket(old), 'GPW', 'domyślnie GPW');
+    });
+});
+
+group('0.15.6 E4: spółki miejskie na NewHorizons', () => {
+    const listCity = () => {
+        world156(3, 1_000_000);
+        stocks = stocks.filter(s => !s.isMunicipal);
+        initializeCityCompanies();
+        const random = Math.random;
+        Math.random = () => 0.01; // szczęśliwy rok: debiutują wszystkie chętne
+        try { for (let year = 0; year < 12; year++) runMunicipalCompanyLogic(); } finally { Math.random = random; }
+        return stocks.filter(s => s.isMunicipal);
+    };
+
+    test('E4: spółki miejskie debiutują na NewHorizons (3–5 z 8 chętnych), poza limitem GPW, ze znacznikiem wieku', () => {
+        const city = listCity();
+        assert(city.length >= 3 && city.length <= 5, `debiutuje 3–5 spółek miejskich (${city.length})`);
+        assert(city.every(s => getStockMarket(s) === 'NH' && s.marketSinceQ !== undefined && s.assetType === 'Municipal'), 'wszystkie na NH');
+        assertEq(getListedCompanyCount(), 3, 'spółki miejskie nie zwiększają liczby spółek krajowych');
+    });
+
+    test('E4: miejskie bez ryzyka NH (zmienność, upadek) i bez ograniczeń inwestorów — zwykłe spółki NH nadal je mają', () => {
+        const [city] = listCity();
+        assertEq(getMarketVolatilityFactor(city), 1, 'bez dopłaty do zmienności'); assertEq(getMarketFailureFactor(city), 1, 'bez zwiększonej szansy upadku');
+        assert(canBotInvestIn({ personality: 'calm' }, city) && canManagerInvestIn({ personality: 'dividend' }, city), 'spokojne boty i fundusze dywidendowe mogą');
+        const ordinary = stocks.find(s => !s.isMunicipal); ordinary.market = 'NH';
+        assert(!canBotInvestIn({ personality: 'calm' }, ordinary) && getMarketVolatilityFactor(ordinary) > 1, 'zwykła spółka NH — jak dotąd');
+    });
+
+    test('E4: awans spółki miejskiej na GPW po 8 kw. i spełnieniu wymogów (wolny obrót); wcześniej i z pakietem miasta 90% — nie', () => {
+        const city = listCity(); const [young, ready, blocked] = city;
+        for (const s of city) { s.price = 50; s.quarterlyEarnings = 10_000; s.totalShares = 10_000; }
+        young.marketSinceQ = macro.quarter - 2; young.stateOwnershipPct = 0.2;
+        ready.marketSinceQ = macro.quarter - 9; ready.stateOwnershipPct = 0.2;
+        blocked.marketSinceQ = macro.quarter - 9; blocked.stateOwnershipPct = 0.9;
+        let promoted = 0;
+        for (let i = 0; i < 40; i++) promoted += processMunicipalPromotionQuarterly();
+        assertEq(getStockMarket(ready), 'GPW', 'dojrzała z wolnym obrotem awansuje'); assertEq(promoted, 1, 'jeden awans');
+        assertEq(getStockMarket(young), 'NH', 'za młoda'); assertEq(getStockMarket(blocked), 'NH', 'pakiet miasta 90% — wolny obrót za mały');
+        assert(ready.assetType === 'Municipal' && ready.isStateOwned, 'zostaje miejska');
+    });
+});
+
+group('0.15.6 E5: urząd antymonopolowy zależny od poziomu', () => {
+    /** Dominująca spółka MAT (2 segmenty, jak w testach spin-offu) i mały konkurent w jej sektorze głównym. */
+    function monopolyWorld(level, { split = true } = {}) {
+        const a = makeCompany('MAT', { cash: 3_000_000, fixedAssets: 5_000_000, liabilities: 1_000_000 });
+        a.segments = split ? [{ sector: 'Technologia', subsector: null, share: 0.6 }, { sector: 'Energia', subsector: null, share: 0.4 }] : [{ sector: 'Technologia', subsector: null, share: 1 }];
+        a.sector = getSectorsFromSegments(a.segments);
+        a.exchange = 'GOLD'; a.financialHealth = 2; a.price = 100; a.ceo = { name: 'Prezes', traits: [] }; a.insiderShares = 400;
+        const b = makeCompany('SML', { cash: 500_000, sector: ['Technologia'] }); b.price = 5;
+        const fillers = Array.from({ length: 4 }, (_, i) => Object.assign(makeCompany('TF' + i, { cash: 100_000, sector: ['Technologia'] }), { price: 3 })); // sektor ma ≥ 5 spółek
+        resetWorld([a, b, ...fillers]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        initializeFundamentals(a, true); initializeFundamentals(b, true);
+        a.fundamentals.revenue = a.fundamentals.revenueTtm = 10_000_000; b.fundamentals.revenue = b.fundamentals.revenueTtm = 1_000_000;
+        for (const f of fillers) { initializeFundamentals(f, true); f.fundamentals.revenue = f.fundamentals.revenueTtm = 0; }
+        a.sectorBase = { q: macro.quarter - ANTITRUST_BASE_QUARTERS, v: 0.4 }; // udział wzrósł z 40% do 91%
+        antitrustOffice.level = level;
+        playerPortfolio.MAT = { shares: 1000, avgPrice: 80, assetType: 'stock' };
+        a.sharesHeld = getTrackedHeldShares(a);
+        antitrustLog = [];
+        return { a, b };
+    }
+    const levelBefore = () => antitrustOffice.level;
+
+    test('E5: progi interwencji maleją z poziomem urzędu (1–3); poziom 0 nie interweniuje; próg fuzji = ustawa × mnożnik poziomu', () => {
+        const saved = levelBefore();
+        try {
+            for (const key of ['sector', 'tender', 'cap']) assert(ANTITRUST_TIERS[1][key] > ANTITRUST_TIERS[2][key] && ANTITRUST_TIERS[2][key] > ANTITRUST_TIERS[3][key], `${key}: progi maleją`);
+            assert(ANTITRUST_TIERS[1].fine >= 0.02 && ANTITRUST_TIERS[3].fine <= 0.05, 'kara 2–5% rocznych przychodów');
+            antitrustOffice.level = 0; assertEq(getAntitrustTier(), null, 'poziom 0: brak interwencji');
+            assertEq(getMergerBlockThreshold(), getAntitrustLevel().block, 'poziom 0: dotychczasowy próg fuzji');
+            antitrustOffice.level = 3; assertNear(getMergerBlockThreshold(), getAntitrustLevel().block * 0.85, 'poziom 3: próg fuzji niższy', 1e-9);
+        } finally { antitrustOffice.level = saved; }
+    });
+
+    test('E5: poziom 0 — monopolista (91% przychodów sektora) bez interwencji; poziom 3 — kara dopiero po 2 kw. ponad progiem', () => {
+        const saved = levelBefore();
+        try {
+            const { a } = monopolyWorld(0);
+            for (let q = 0; q < 6; q++) assertEq(processAntitrustQuarterly(), null, 'poziom 0: nic');
+            antitrustOffice.level = 3; delete a.antitrust;
+            const cash0 = a.cash, treasury0 = governmentTreasury;
+            assertEq(processAntitrustQuarterly(), null, 'pierwszy kwartał ponad progiem: obserwacja');
+            const result = processAntitrustQuarterly();
+            assertEq(result?.kind, 'fine', 'drugi kwartał: kara');
+            const fine = cash0 - a.cash;
+            assertNear(fine, 10_000_000 * 0.05, 'kara 5% rocznych przychodów (poziom 3)', 1);
+            assertNear(governmentTreasury - treasury0, fine, 'kara trafia do skarbu');
+            assert(a.cash >= 0 && stocks.every(s => !(s.cash < 0)), 'brak ujemnej gotówki');
+            assertEq(antitrustLog.at(-1).kind, 'fine', 'wpis w dzienniku');
+            assertEq(processAntitrustQuarterly(), null, 'po karze: czas na poprawę (bez kolejnej kary)');
+        } finally { antitrustOffice.level = saved; }
+    });
+
+    test('E5: kara nie przekracza połowy gotówki; spółka poniżej progu nie jest karana, a obserwacja wygasa po 8 czystych kwartałach', () => {
+        const saved = levelBefore();
+        try {
+            const { a } = monopolyWorld(3);
+            a.cash = 100_000; const cash0 = a.cash;
+            processAntitrustQuarterly(); processAntitrustQuarterly();
+            assert(cash0 - a.cash <= cash0 * 0.5 + 1e-6 && a.cash > 0, `kara ≤ 50% gotówki (${cash0 - a.cash})`);
+            const b = stocks.find(s => s.symbol === 'SML'); b.fundamentals.revenue = b.fundamentals.revenueTtm = 9_000_000; // udział MAT spada do 52,6% — nadal ponad progiem 50%
+            a.fundamentals.revenue = a.fundamentals.revenueTtm = 6_000_000; // 40%: poniżej progu
+            for (let i = 0; i < 6; i++) stocks.push(Object.assign(makeCompany('FIL' + i, { sector: ['Chemia'] }), { price: 100 })); // udział w kapitalizacji też poniżej progu
+            for (let q = 0; q < ANTITRUST_CLEAN_RESET; q++) processAntitrustQuarterly();
+            assert(a.antitrust === undefined, 'obserwacja wygasła');
+        } finally { antitrustOffice.level = saved; }
+    });
+
+    test('E5: nakaz podziału po 4 kw. od kary — segment wydziela się, wartość dla posiadaczy zachowana, bez duchów i ujemnej gotówki', () => {
+        const saved = levelBefore();
+        try {
+            const { a } = monopolyWorld(3);
+            processAntitrustQuarterly(); processAntitrustQuarterly();
+            macro.quarter += ANTITRUST_ORDER_AFTER;
+            const before = getMarketCapValue(a), held = playerPortfolio.MAT.shares;
+            const result = processAntitrustQuarterly();
+            assertEq(result?.kind, 'split', 'nakaz podziału');
+            const child = stocks.find(s => s.symbol !== 'MAT' && s.symbol !== 'SML' && !s.symbol.startsWith('TF'));
+            assert(child && playerPortfolio[child.symbol]?.shares === held, 'posiadacz dostaje akcje wydzielonej spółki');
+            assert(Math.abs(getMarketCapValue(a) + getMarketCapValue(child) - before) < 1e-6, 'wartość matka + córka = wartość przed podziałem');
+            assertEq(antitrustLog.at(-1).kind, 'split', 'wpis w dzienniku');
+            assert(stocks.every(s => !(s.cash < 0)), 'gotówka'); assertEq(checkWorldInvariants().filter(p => /akcje w obrocie|sharesHeld/.test(p)).length, 0, 'akcje w obrocie');
+        } finally { antitrustOffice.level = saved; }
+    });
+
+    test('E5: spółki, której nie da się podzielić, urząd zakazuje przejęć na 12 kw.; zakaz blokuje fuzję i wygasa', () => {
+        const saved = levelBefore();
+        try {
+            const { a, b } = monopolyWorld(3, { split: false });
+            processAntitrustQuarterly(); processAntitrustQuarterly();
+            macro.quarter += ANTITRUST_ORDER_AFTER;
+            assertEq(processAntitrustQuarterly()?.kind, 'ban', 'zakaz przejęć');
+            assert(isUnderAntitrustBan(a), 'zakaz aktywny');
+            assert(checkAntitrust(a, b) === true, 'fuzja zablokowana (bez losowania)');
+            macro.quarter += ANTITRUST_BAN_QUARTERS;
+            assert(!isUnderAntitrustBan(a), 'zakaz wygasł');
+        } finally { antitrustOffice.level = saved; }
+    });
+
+    test('E5: najwyżej jedna interwencja na kwartał; udział w przetargach liczy się jako wskaźnik', () => {
+        const saved = levelBefore();
+        try {
+            const { a } = monopolyWorld(3);
+            const c = makeCompany('MAT2', { cash: 2_000_000, sector: ['Chemia'] }), d = makeCompany('SM2', { cash: 500_000, sector: ['Chemia'] });
+            c.price = 100; d.price = 5; stocks.push(c, d);
+            initializeFundamentals(c, true); initializeFundamentals(d, true);
+            c.fundamentals.revenue = c.fundamentals.revenueTtm = 10_000_000; d.fundamentals.revenue = d.fundamentals.revenueTtm = 1_000_000;
+            processAntitrustQuarterly();
+            assertEq(stocks.filter(s => s.antitrust?.stage).length, 0, 'obserwacja bez kar');
+            processAntitrustQuarterly();
+            assertEq(stocks.filter(s => s.antitrust?.stage === 1).length, 1, 'jedna kara na kwartał mimo dwóch monopolistów');
+            // wskaźnik przetargów
+            const e = makeCompany('BUDX', { sector: ['Budowlany'] }); const f = makeCompany('BUDY', { sector: ['Budowlany'] });
+            stocks.push(e, f);
+            constructionAwardLog = Array.from({ length: 10 }, (_, i) => ({ q: macro.quarter, sym: i < 9 ? getEntityKey(e) : getEntityKey(f) }));
+            const m = getConcentrationMetrics();
+            assertNear(m.get('BUDX').tender, 0.9, 'udział w przetargach 90%');
+        } finally { antitrustOffice.level = saved; constructionAwardLog = []; }
+    });
+
+    test('E5: poziom urzędu i dziennik interwencji są w zapisie (pola opcjonalne); stan wczytuje się z zapisu', () => {
+        const saved = levelBefore(), log = antitrustLog;
+        try {
+            world156(2);
+            antitrustOffice.level = 2; antitrustLog = [{ quarter: 3, symbol: 'MAT', kind: 'fine', amount: 123 }];
+            const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+            assertEq(raw.antitrustOffice.level, 2, 'poziom w zapisie'); assertEq(raw.antitrustLog[0].amount, 123, 'dziennik w zapisie');
+        } finally { antitrustOffice.level = saved; antitrustLog = log; }
+    });
+});
+
+group('0.15.6 E6: media-córka jako gazeta matki', () => {
+    function mediaWorld() {
+        const parent = mk156('MAT', { price: 50, sector: ['Przemysł'], quarterlyEarnings: 120_000 });
+        const rival = mk156('RYW', { price: 40, sector: ['Przemysł'] });
+        const paper = mk156('GAZ', { price: 20, sector: ['Media'], cash: 400_000 }); paper.isSubsidiaryOf = 'MAT'; parent.subsidiaries = ['GAZ'];
+        const other = mk156('INN', { price: 20, sector: ['Usługi'] });
+        resetWorld([parent, rival, paper, other]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        return { parent, rival, paper, other };
+    }
+    const captureMails = fn => {
+        const mails = []; const orig = addMail;
+        addMail = m => { mails.push(m); return orig(m); };
+        try { fn(); } finally { addMail = orig; }
+        return mails;
+    };
+
+    test('E6: gazeta (spółka zależna z sektora Media) wysyła maile z oznaczonym źródłem i wiarygodnością; najwyżej 2 na kwartał; inne spółki nie', () => {
+        const { paper, other } = mediaWorld();
+        assert(isMediaDaughter(paper) && !isMediaDaughter(other), 'tylko spółka zależna z Mediów');
+        let perQuarter = 0;
+        const mails = captureMails(() => { for (let q = 0; q < 60; q++) { const before = Math.max(0, 0); perQuarter = Math.max(perQuarter, processMediaDaughtersQuarterly().sent + before); } });
+        const fromPaper = mails.filter(m => m.sender === paper.name);
+        assert(fromPaper.length >= 5, `gazeta pisze (${fromPaper.length} maili w 60 kw.)`);
+        assert(fromPaper.every(m => m.body.startsWith('Źródło: gazeta GAZ') || m.body.startsWith(`Źródło: gazeta ${paper.name}`)) && fromPaper.every(m => /Wiarygodność źródła: \d+%/.test(m.body)), 'oznaczenie źródła i wiarygodność w każdym mailu');
+        assert(perQuarter <= MEDIA_MAILS_PER_QUARTER, 'limit maili na kwartał');
+        assert(fromPaper.some(m => m.symbol === 'RYW') && fromPaper.some(m => m.symbol === 'MAT'), 'maile o matce i o jej konkurencie');
+    });
+
+    test('E6: przychylność — kłamliwy mail o matce zawyża wynik, o konkurencie zawiera nieprawdziwy zarzut i lekko obniża jego kurs', () => {
+        const { parent, rival, paper } = mediaWorld();
+        const random = Math.random;
+        try {
+            Math.random = () => 0.1; // o matce (0,1 < 0,65), kłamstwo (0,1 < 0,35)
+            const mails = captureMails(() => sendMediaMail(paper, parent));
+            assert(mails[0].body.includes('wyraźnie ponad oczekiwaniami') && mails[0].body.includes('zysk kwartalny'), 'zawyżony wynik matki');
+            assert(paper.mediaLie && paper.mediaLie.rival === null, 'kłamstwo zapamiętane do ewentualnego zdemaskowania');
+            paper.mediaLie = null;
+            Math.random = () => 0.9; // o konkurencie (0,9 ≥ 0,65), bez kłamstwa (0,9 ≥ 0,5)
+            const honest = captureMails(() => sendMediaMail(paper, parent));
+            assert(honest[0].symbol === 'RYW' && !paper.mediaLie, 'uczciwy komentarz o konkurencie');
+            const price0 = rival.price, seq = [0.9, 0, 0.3]; let i = 0; // o konkurencie, wybór konkurenta, kłamstwo (0,3 < 0,5)
+            Math.random = () => seq[Math.min(i++, seq.length - 1)];
+            captureMails(() => sendMediaMail(paper, parent));
+            assert(paper.mediaLie?.rival === 'RYW', 'nieprawdziwy zarzut zapisany'); assert(rival.price < price0, 'kurs konkurenta lekko w dół');
+        } finally { Math.random = random; }
+    });
+
+    test('E6: zdemaskowanie — kara dla gazety (bez ujemnej gotówki), kurs matki −3%, wiarygodność gazety maleje, ale nie poniżej minimum', () => {
+        const { parent, rival, paper } = mediaWorld();
+        const treasury0 = governmentTreasury, price0 = parent.price, cap = getMarketCapValue(paper);
+        assertEq(getMediaCredibility(paper), MEDIA_CRED_START, 'start 80%');
+        paper.mediaLie = { quarter: 0, rival: 'RYW' };
+        const fine = exposeMediaLie(paper, parent);
+        assert(fine > 0 && fine <= cap * MEDIA_FINE_RATE + 1e-6 && paper.cash >= 0, 'kara w limicie, gotówka nieujemna');
+        assertNear(governmentTreasury - treasury0, fine, 'kara do skarbu');
+        assert(parent.price < price0, 'kurs matki w dół'); assertNear(getMediaCredibility(paper), MEDIA_CRED_START - MEDIA_CRED_LOSS, 'wiarygodność −20 pp', 1e-9);
+        assertEq(paper.mediaLie, null, 'kłamstwo rozliczone');
+        for (let k = 0; k < 10; k++) { paper.mediaLie = { quarter: 0, rival: null }; exposeMediaLie(paper, parent); }
+        assertEq(getMediaCredibility(paper), MEDIA_CRED_MIN, 'minimalna wiarygodność');
+    });
+
+    test('E6: kłamstwa wychodzą na jaw w kolejnych kwartałach; zapis zachowuje wiarygodność gazety', () => {
+        const { paper } = mediaWorld();
+        const random = Math.random;
+        try {
+            Math.random = () => 0.1; // zawsze szczęśliwy los dla kłamcy: mail z kłamstwem…
+            captureMails(() => processMediaDaughtersQuarterly());
+            assert(paper.mediaLie, 'kłamstwo opublikowane');
+            Math.random = () => 0.01; // …a potem zdemaskowanie (szansa 0,15 × (1 + KNF) > 0,01)
+            processMediaDaughtersQuarterly();
+            assertEq(paper.mediaLie, null, 'zdemaskowane');
+        } finally { Math.random = random; }
+        assertNear(getMediaCredibility(paper), MEDIA_CRED_START - MEDIA_CRED_LOSS, 'wiarygodność spadła');
+        const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+        assertNear(raw.stocks.find(s => s.symbol === 'GAZ').mediaCred, MEDIA_CRED_START - MEDIA_CRED_LOSS, 'wiarygodność w zapisie', 1e-9);
+    });
+});
+
+group('0.15.6 E7: interfejs i Akademia', () => {
+    test('E7: panel Rynki — ścieżka spółki, wymogi i ryzyko słowem (NH, giełda prywatna), bez przycisku koncesji dla rynków wejścia', () => {
+        const list = world156(3); list[0].market = 'NH'; list[1].market = 'PRV';
+        ensureMarketOperators();
+        const html = renderMarketsPanel();
+        for (const word of ['Ścieżka spółki i wymogi wejścia', 'NewHorizons', 'Giełda prywatna', 'ryzyko oszustwa', 'Ryzyko podwyższone', 'najwyżej 20%']) assert(html.includes(word), `panel zawiera „${word}”`);
+        assert(!/Kup koncesję/.test(html), 'rynki wejścia bez koncesji');
+        assert(html.includes('bez operatora'), 'rynki wejścia nie udają operatora z kursem');
+    });
+
+    test('E7: znacznik rynku spółki — ryzyko słowem, nie samym kolorem; spółki miejskie bez ostrzeżenia', () => {
+        const [a, b, c] = world156(3); a.market = 'NH'; b.market = 'PRV'; c.market = 'NH'; c.assetType = 'Municipal';
+        assertEq(getMarketBadgeText(a), 'rynek NH · ryzyko podwyższone', 'NH'); assertEq(getMarketBadgeText(c), 'rynek NH', 'miejska na NH');
+        assert(/ryzyko oszustwa/.test(getMarketBadgeText(b)), 'giełda prywatna: ryzyko oszustwa słowem');
+        assert(renderDividendBadges(a).includes('ryzyko podwyższone') && renderDividendBadges(b).includes('ryzyko oszustwa'), 'plakietka przy spółce niesie ryzyko słowem');
+    });
+
+    test('E7: tabela spółek z wybranym rynkiem NH i PRV renderuje się bez błędów; nagłówek rynku opisuje rynek wejścia zamiast koncesji', () => {
+        const list = world156(4); list[0].market = 'NH'; list[1].market = 'PRV';
+        ensureMarketOperators();
+        let body = document.getElementById('stock-table-body');
+        if (!body) { const table = document.createElement('table'); body = document.createElement('tbody'); body.id = 'stock-table-body'; table.appendChild(body); document.body.appendChild(table); }
+        const saved = { market: selectedMarketOperator, level: currentMarketLevel, owned: ownedOnlyFilter };
+        try {
+            for (const id of ['NH', 'PRV']) {
+                selectedMarketOperator = id; currentMarketLevel = 'ALL'; ownedOnlyFilter = false;
+                displayStocks();
+                assert(body.querySelectorAll('tr.stock-row').length === 1, `${id}: jedna spółka w tabeli`);
+                assert(body.textContent.includes('Rynek wejścia') && !body.textContent.includes('Kup koncesję'), `${id}: opis rynku wejścia, bez koncesji`);
+            }
+        } finally { selectedMarketOperator = saved.market; currentMarketLevel = saved.level; ownedOnlyFilter = saved.owned; body.replaceChildren(); }
+    });
+
+    test('E7: karta urzędu antymonopolowego pokazuje progi poziomu i ostatnie interwencje', () => {
+        const saved = antitrustOffice.level, log = antitrustLog;
+        try {
+            antitrustOffice.level = 2; antitrustLog = [{ quarter: 5, symbol: 'AAA', kind: 'fine', amount: 1000 }, { quarter: 9, symbol: 'BBB', kind: 'split', amount: 5000 }];
+            const html = renderAntitrustInterventions();
+            assert(html.includes('poziom 2') && html.includes('80%') && html.includes('kw. 9: BBB — nakaz podziału') && html.includes('kw. 5: AAA — kara'), 'progi i interwencje (najnowsza pierwsza)');
+            antitrustOffice.level = 0; antitrustLog = [];
+            assert(renderAntitrustInterventions().includes('nie interweniuje') && renderAntitrustInterventions().includes('Brak interwencji'), 'poziom 0 i pusty dziennik');
+        } finally { antitrustOffice.level = saved; antitrustLog = log; }
+    });
+
+    test('E7: Akademia — trzy nowe hasła z quizem (3 pytania) i działającym przykładem; odblokowują się przy zdarzeniach', () => {
+        for (const id of ['rynekGlownyAlternatywny', 'gieldaPrywatna', 'antymonopol']) {
+            const e = ACADEMY_ENTRIES[id];
+            assert(e && e.title && e.text.length > 100 && e.quiz.length === 3 && e.quiz.every(q => q.a.length === 3 && q.c === 0), `${id}: hasło i quiz`);
+            world156(2); assert(typeof e.example() === 'string' && e.example().length > 10, `${id}: przykład`);
+            assert(typeof e.icon === 'string' && e.icon.includes('<svg'), `${id}: ikona SVG, nie emoji`);
+        }
+        const [a] = world156(2); playerPortfolio[a.symbol] = { shares: 10, avgPrice: a.price, assetType: 'stock' };
+        const academy = getAcademy();
+        moveStockToMarket(a, 'NH', 'test');
+        assert('rynekGlownyAlternatywny' in academy.unlocked, 'zmiana rynku posiadanej spółki odblokowuje hasło');
+        moveStockToMarket(a, 'PRV', 'test');
+        assert('gieldaPrywatna' in academy.unlocked, 'giełda prywatna odblokowuje hasło');
+    });
+});
+
+group('0.15.6 E8: zapis i niezmienniki po 20 latach', () => {
+    test('E8: pola 0.15.6 (rynek, wiek rynku, baza udziału, urząd, dziennik) dodają < 0,3% do zapisu', () => {
+        const list = world156(100, 1_000_000);
+        list.slice(0, 20).forEach(s => { s.market = 'NH'; s.marketSinceQ = 12; });
+        list.slice(20, 25).forEach(s => { s.market = 'PRV'; s.marketSinceQ = 30; });
+        list.forEach(s => { s.sectorBase = { q: 8, v: 0.123 }; });
+        antitrustOffice.level = 3; antitrustLog = Array.from({ length: 5 }, (_, i) => ({ quarter: i, symbol: 'AAA' + i, kind: 'fine', amount: 123456 }));
+        try {
+            const full = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+            const size = JSON.stringify(full).length;
+            const lean = JSON.parse(JSON.stringify(full));
+            for (const s of lean.stocks) { delete s.market; delete s.marketSinceQ; delete s.sectorBase; delete s.belowReqQ; delete s.antitrust; delete s.mediaCred; }
+            delete lean.antitrustOffice; delete lean.antitrustLog;
+            const extra = size - JSON.stringify(lean).length;
+            // spółki testowe są ≈ 20× mniejsze niż w grze (zapis gry po 6,5 roku ≈ 2,3 mln znaków z ~100 spółkami): budżet 0,3% = 6900 znaków
+            assert(extra <= 0.003 * 2_300_000, `przyrost zapisu ${extra} znaków (${(extra / 2_300_000 * 100).toFixed(3)}% typowego zapisu gry)`);
+        } finally { antitrustOffice.level = 0; antitrustLog = []; }
+    });
+
+    test('E8: zapis i wczytanie w trakcie interwencji urzędu (obserwacja, kara, zakaz przejęć) i na rynkach NH/PRV zachowują stan', () => {
+        const list = world156(6, 1_000_000);
+        list[0].market = 'NH'; list[0].marketSinceQ = 4; list[1].market = 'PRV'; list[1].marketSinceQ = 6; list[1].fraud = { start: 2, correctAt: 9, total: 500 };
+        list[2].antitrust = { watch: 3, stage: 1, clean: 0, fineQ: 5 }; list[2].antitrustBanUntilQ = macro.quarter + 10; list[2].sectorBase = { q: 3, v: 0.4 };
+        antitrustOffice.level = 2; antitrustLog = [{ quarter: 5, symbol: list[2].symbol, kind: 'fine', amount: 99 }];
+        const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+        antitrustOffice.level = 0; antitrustLog = [];
+        const report = applySaveSnapshot(raw);
+        assert(report.ok, `wczytanie: ${(report.errors || []).join('; ')}`);
+        const back = sym => stocks.find(s => s.symbol === sym);
+        assertEq(getStockMarket(back(list[0].symbol)), 'NH', 'NH po wczytaniu'); assertEq(back(list[0].symbol).marketSinceQ, 4, 'wiek rynku');
+        assertEq(getStockMarket(back(list[1].symbol)), 'PRV', 'PRV po wczytaniu'); assertEq(back(list[1].symbol).fraud.correctAt, 9, 'ukryte oszustwo zachowane');
+        const t = back(list[2].symbol);
+        assertEq(t.antitrust.stage, 1, 'etap interwencji'); assertEq(t.sectorBase.v, 0.4, 'baza udziału'); assert(isUnderAntitrustBan(t), 'zakaz przejęć trwa');
+        assertEq(antitrustOffice.level, 2, 'poziom urzędu'); assertEq(antitrustLog.length, 1, 'dziennik interwencji');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki po wczytaniu');
+        antitrustOffice.level = 0; antitrustLog = [];
+    });
+
+    test('E8: starszy zapis bez pól 0.15.6 wczytuje się — spółki na GPW, urząd na poziomie bieżącym, dziennik pusty', () => {
+        world156(4, 1_000_000);
+        const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+        delete raw.antitrustLog; delete raw.antitrustOffice; raw.stocks.forEach(s => { delete s.market; delete s.marketSinceQ; delete s.sectorBase; });
+        antitrustLog = [{ quarter: 1, symbol: 'X', kind: 'fine', amount: 1 }];
+        const report = applySaveSnapshot(raw);
+        assert(report.ok, 'wczytanie starszego zapisu'); assertEq(antitrustLog.length, 0, 'dziennik pusty');
+        assert(stocks.every(s => getStockMarket(s) === 'GPW'), 'wszystkie spółki na GPW (migracja)');
+    });
+
+    test('E8: pożyczka lombardowa bota po wycofaniu spółki z wykupem (zastaw rozliczony) nie wywraca pętli kredytów — spłata z gotówki, bez duchów', () => {
+        const list = world156(5, 1_000_000);
+        const [weak] = list; weak.price = 2; weak.sharesHeld = 300;
+        const ai = aiCompetitors[0], shop = list[1];
+        ai.cash = 10_000; ai.portfolio[weak.symbol] = { shares: 300, avgPrice: 2, lockedShares: 300 };
+        ai.loans = [{ id: 'pawn1', isPawnLoan: true, amount: 600, bankName: 'Lombard', collectorSymbol: shop.symbol, maturityDate: Date.now() - 1000, collateral: { symbol: weak.symbol, quantity: 300 } }];
+        const shopCash = shop.cash;
+        assert(delistWithBuyout(weak) !== null, 'wykup');
+        assertEq(ai.loans[0].collateral, null, 'zastaw rozliczony wykupem');
+        processAiLoansWeekly(ai); // wcześniej: TypeError na loan.collateral.quantity
+        assertEq(ai.loans.length, 0, 'pożyczka rozliczona'); assertNear(shop.cash - shopCash, 600, 'lombard dostał spłatę z gotówki bota');
+        assert(!ai.portfolio[weak.symbol] && ai.cash >= 0, 'bez ducha posiadacza, gotówka nieujemna');
+    });
+
+    test('E8: 40 kwartałów symulacji na rynkach NH/PRV z urzędem na poziomie 3 — bez wyjątków, ujemnej gotówki i duchów posiadaczy', () => {
+        const list = world156(40, 800_000);
+        list.forEach((s, i) => { s.fundamentals = s.fundamentals || {}; if (i % 5 === 0) s.market = 'NH'; if (i % 13 === 0) s.market = 'PRV'; s.marketSinceQ = macro.quarter - (i % 12); });
+        antitrustOffice.level = 3;
+        try {
+            for (let q = 0; q < 40; q++) { macro.quarter++; processListingsQuarterly(); }
+        } finally { antitrustOffice.level = 0; antitrustLog = []; }
+        assert(stocks.every(s => !(s.cash < 0)) && governmentTreasury >= 0, 'gotówka i skarb');
+        const problems = checkWorldInvariants().filter(p => /akcje w obrocie|sharesHeld|duch/i.test(p));
+        assertEq(problems.length, 0, problems.join('; '));
     });
 });
 

@@ -382,7 +382,7 @@ function runAiMarian(ai) {
             const hasAccess = exchange.level <= ai.accessLevel;
             const isDividendStock = s.dividendPolicy && s.dividendPolicy !== 'None' && s.dividendPolicy !== 'Growth';
             const isReit = s.assetType === 'REIT';
-            return hasAccess && (isDividendStock || isReit);
+            return hasAccess && (isDividendStock || isReit) && canBotInvestIn(ai, s);
         });
         
         if (dividendStocks.length > 0) {
@@ -418,7 +418,7 @@ function runAiMarian(ai) {
             const hasAccess = exchange.level <= ai.accessLevel;
             const isGoodHealth = s.financialHealth >= 1;
             const isDividendStock = (s.dividendPolicy && s.dividendPolicy !== 'None' && s.dividendPolicy !== 'Growth') || s.assetType === 'REIT';
-            return hasAccess && isGoodHealth && !isDividendStock; // Szukamy zdrowych firm, które NIE są celem jego głównej strategii
+            return hasAccess && isGoodHealth && !isDividendStock && canBotInvestIn(ai, s); // Szukamy zdrowych firm, które NIE są celem jego głównej strategii
         });
 
         if (profitStocks.length > 0) {
@@ -447,7 +447,14 @@ function processAiLoansWeekly(ai) {
             const loan = ai.loans[i];
             if (loan.isPawnLoan && now >= loan.maturityDate) {
                 const pawnShop = stocks.find(s => s.symbol === loan.collectorSymbol);
-                
+                if (!loan.collateral) { // zastaw rozliczony wykupem przy wycofaniu spółki (delistWithBuyout): spłata z gotówki, reszta umorzona
+                    const paid = Math.min(loan.amount, Math.max(0, ai.cash));
+                    ai.cash -= paid;
+                    if (pawnShop) pawnShop.cash += paid;
+                    ai.loans.splice(i, 1);
+                    continue;
+                }
+
                 if (ai.cash >= loan.amount) {
                     // AI ma pieniądze - spłaca
                     ai.cash -= loan.amount;
@@ -673,7 +680,7 @@ function makeAiDecision(ai) {
         if (s.assetType || s.isBankrupt) return false;
         const exchange = exchanges[s.exchange];
         // Sprawdź dostęp do giełdy i czy spółka nie jest zablokowana
-        return exchange && exchange.level <= ai.accessLevel && !s.isTradeLocked;
+        return exchange && exchange.level <= ai.accessLevel && !s.isTradeLocked && canBotInvestIn(ai, s);
     });
     // Bankier może działać (np. zarządzać depozytami/kredytami) nawet bez dostępnych akcji
     if (accessibleStocks.length === 0 && ai.personality !== 'banker') return;

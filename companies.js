@@ -2710,7 +2710,8 @@ function randomizeStartingGiants(list = stocks) {
 /** Spółka liczona do limitu spółek krajowych. */
 function isCountedListedCompany(stock) {
     return Boolean(stock && !stock.assetType && !stock.isBankrupt && !stock.isSubsidiaryOf
-        && !(typeof isInternetMarketStock === 'function' && isInternetMarketStock(stock)));
+        && !(typeof isInternetMarketStock === 'function' && isInternetMarketStock(stock))
+        && !(typeof isEntryMarketStock === 'function' && isEntryMarketStock(stock)));
 }
 
 function getListedCompanyCount() {
@@ -2790,11 +2791,16 @@ function getListingStrictness() {
 
 /** Spółka, którą państwo może wycofać z giełdy: zwykła, słaba, bez fuzji/wezwania/córek, bez większościowego pakietu gracza. */
 function isDelistCandidate(stock) {
-    if (!isCountedListedCompany(stock) || stock.isStateOwned || stock.isBankStock || stock.marketOperator || stock.mafiaFront) return false;
+    return hasListingMoveGuards(stock) && (Number(stock.financialHealth) || 0) <= 1;
+}
+
+/** 0.15.6 E1: spółka, której państwo może zmienić rynek albo wycofać z giełdy (nie państwowa, bank, operator; bez fuzji i córek; bez większościowego pakietu gracza). */
+function hasListingMoveGuards(stock, anyMarket = false) {
+    const listed = anyMarket ? Boolean(stock && !stock.assetType && !stock.isBankrupt && !stock.isSubsidiaryOf) : isCountedListedCompany(stock);
+    if (!listed || stock.isStateOwned || stock.isBankStock || stock.marketOperator || stock.mafiaFront) return false;
     if (stock.mergerProcess || stock.tender || stock.spinoff || stock.stakeCampaign || (stock.subsidiaries?.length || 0) > 0) return false;
     if (stocks.some(other => other.isSubsidiaryOf === stock.symbol)) return false;
-    if ((playerPortfolio?.[stock.symbol]?.shares || 0) > stock.totalShares * 0.5) return false;
-    return (Number(stock.financialHealth) || 0) <= 1;
+    return (playerPortfolio?.[stock.symbol]?.shares || 0) <= stock.totalShares * 0.5;
 }
 
 /** Kandydaci do wycofania, od najsłabszego: kondycja, potem kapitalizacja. */
@@ -2803,7 +2809,7 @@ function getDelistCandidates() {
 }
 
 /** Wycofanie z wykupem: posiadacze dostają gotówkę po kursie +10%, płaci spółka, resztę skarb państwa. Zwraca wypłaconą kwotę (null = odmowa: skarb nie wystarcza). */
-function delistWithBuyout(stock) {
+function delistWithBuyout(stock, reason = null) {
     const offer = stock.price * (1 + LISTING_DELIST_PREMIUM);
     const cost = getTrackedHeldShares(stock) * offer;
     const fromCompany = Math.min(cost, Math.max(0, Number(stock.cash) || 0));
@@ -2817,7 +2823,7 @@ function delistWithBuyout(stock) {
     purgeSymbolHolders(stock.symbol);
     for (const ai of aiCompetitors) for (const loan of ai.loans || []) if (loan.collateral?.symbol === stock.symbol) loan.collateral = null; // zastaw rozliczony wykupem
     for (const bank of commercialBanks) for (const loans of Object.values(bank.loanPortfolio || {})) if (Array.isArray(loans)) for (const loan of loans) if (loan.collateral?.symbol === stock.symbol) loan.collateral = null;
-    const text = `🚪 ${stock.name} (${stock.symbol}) znika z giełdy: rynek jest zatłoczony (${getListedCompanyCount()} spółek krajowych), a spółka należy do najsłabszych. Akcjonariusze dostają wykup po kursie +${Math.round(LISTING_DELIST_PREMIUM * 100)}% (${formatZl(offer)} za akcję).`;
+    const text = `🚪 ${stock.name} (${stock.symbol}) ${reason || `znika z giełdy: rynek jest zatłoczony (${getListedCompanyCount()} spółek krajowych), a spółka należy do najsłabszych`}. Akcjonariusze dostają wykup po kursie +${Math.round(LISTING_DELIST_PREMIUM * 100)}% (${formatZl(offer)} za akcję).`;
     logEvent(text, 'market');
     if (typeof pushNews === 'function') pushNews(text, null);
     if (heldByPlayer && typeof addMail === 'function') addMail({ sender: 'PULS', subject: `🚪 ${stock.name}: wycofanie z giełdy`, body: `${text}\n\nTwoje akcje rozliczono po cenie wykupu, gotówka trafiła na konto.`, importance: 2 });
@@ -3485,7 +3491,7 @@ function processFinancialReports() {
         // Logika bankructwa (bez zmian)
         const equity = stock.balanceSheet.assets - stock.balanceSheet.liabilities;
         if ((equity <= 0 || stock.financialHealth <= -5 || isCullCandidate(stock)) && !stock.isBankrupt) {
-             let bankruptcyChance = 0.30;
+             let bankruptcyChance = 0.30 * (typeof getMarketFailureFactor === 'function' ? getMarketFailureFactor(stock) : 1); // 0.15.6: NH i giełda prywatna — większa szansa upadku
              if (typeof isProtectedMarketOperator === 'function' && isProtectedMarketOperator(stock)) {
                  // D1 (decyzja 2): ratunek operatora rynku internetowego finansują spółki członkowskie z własnej gotówki,
                  // proporcjonalnie do kapitalizacji. Pełny ratunek = brak upadku; niepełny — mniejsza ochrona i słabsza kondycja.
@@ -5174,6 +5180,10 @@ function triggerMergerMiniEvent(stock1, stock2, process) {
 }
 
 function checkAntitrust(stock1, stock2) {
+    if (typeof isUnderAntitrustBan === 'function' && (isUnderAntitrustBan(stock1) || isUnderAntitrustBan(stock2))) { // 0.15.6 E5: zakaz przejęć po interwencji urzędu
+        logEvent(`⚖️ Urząd Antymonopolowy odmawia zgody na połączenie ${stock1.name} i ${stock2.name}: spółka objęta zakazem przejęć.`, 'state');
+        return true;
+    }
     // 1. Sprawdź, czy urząd w ogóle analizuje tę sprawę
     if (Math.random() > antitrustOffice.analysisCapacity) {
         console.log(`[Antymonopol] Urząd nie zainteresował się fuzją ${stock1.symbol} i ${stock2.symbol}.`);
@@ -5204,7 +5214,7 @@ function checkAntitrust(stock1, stock2) {
     }
 
     // 3. Określ próg blokady (np. 40% udziału w rynku)
-    const blockThreshold = typeof getAntitrustLevel === 'function' ? getAntitrustLevel().block : 0.40; // ustawa antymonopolowa
+    const blockThreshold = typeof getMergerBlockThreshold === 'function' ? getMergerBlockThreshold() : typeof getAntitrustLevel === 'function' ? getAntitrustLevel().block : 0.40; // ustawa antymonopolowa × poziom urzędu (0.15.6 E5)
     const shouldBlock = potentialMarketShare >= blockThreshold;
 
     // 4. Losuj decyzję urzędu (uwzględniając jego dokładność)
@@ -6651,7 +6661,8 @@ function runMunicipalCompanyLogic() {
         volatilityFactor: getRandomInRange(0.2, 0.5), // Bardzo stabilne
         symbol: targetCompany.id,
         isMunicipal: true, // spółka miejska — miasto może dofinansowywać jej inwestycje
-        exchange: 'BRONZE', 
+        exchange: 'BRONZE', market: 'NH', marketSinceQ: typeof macro === 'object' ? macro.quarter : 0, // 0.15.6 E4: spółki miejskie debiutują na NewHorizons
+
         totalShares: totalShares,
         maxShares: totalShares * 2,
         sharesHeld: 0, insiderShares: 0, // pakiet miasta (stateOwnershipPct) jest poza wolnym obrotem — nie liczy się do sharesHeld
@@ -8805,7 +8816,7 @@ function renderDividendBadges(stock) {
     const badge = stock.isDividendAristocrat
         ? `<span class="badge-aristocrat" title="Stabilność +${ARISTOCRAT_BONUS.stability}, przyrost +${ARISTOCRAT_BONUS.growth}, zainteresowanie +${ARISTOCRAT_BONUS.interest}">👑 Dywidendowy arystokrata</span>` : '';
     const history = (stock.dividendHistory || []).slice(0, 6).map(entry => formatNumberPl(entry.dps, 2)).join(' · ');
-    const market = typeof getStockMarket === 'function' && getStockMarket(stock) !== 'GPW' ? `<span class="badge-market">członek rynku ${escapeHtml(getMarketLabel(getStockMarket(stock)))}</span>` : '';
+    const market = typeof getStockMarket === 'function' && getStockMarket(stock) !== 'GPW' ? `<span class="badge-market">${escapeHtml(getMarketBadgeText(stock))}</span>` : '';
     const projects = (typeof getActiveSpecialBonuses === 'function' ? getActiveSpecialBonuses(stock) : []).map(bonus => `<span class="badge-market" title="Wzrost przychodów +${(bonus.growth * 100).toFixed(1)} pkt proc./kw., wycena +${(bonus.valuation * 100).toFixed(1)}%">${bonus.icon || '🏗️'} ${escapeHtml(bonus.name)}</span>`).join('');
     return `<p class="dividend-badges">${badge}${market}${projects}
         <span class="text-sm dividend-yield">Stopa dywidendy: <strong>${yieldPct}%</strong></span>
@@ -9244,7 +9255,8 @@ function collectStartupClaims(startup) {
 }
 
 function handleSuccessfulIPO(startup, successMultiplier) {
-    if (!startup.operatorStartup && !hasFreeListingSlot()) { parkStartupForListing(startup, successMultiplier); return; } // P1: twardy sufit
+    const routing = typeof isDebutRoutingActive === 'function' && isDebutRoutingActive(); // 0.15.6 E3: wymogi wejścia i wybór rynku debiutu
+    if (!startup.operatorStartup && !(routing ? hasFreeTotalListingSlot() : hasFreeListingSlot())) { parkStartupForListing(startup, successMultiplier); return; } // P1: twardy sufit
     const symbol = startup.symbol;
     const claims = collectStartupClaims(startup);
     purgeSymbolHolders(symbol); // P3: symbol mógł należeć do usuniętej spółki — bez cudzych „duchów” w nowej
@@ -9259,6 +9271,8 @@ function handleSuccessfulIPO(startup, successMultiplier) {
     const cycleValuationMultiplier = Math.max(0.6, Math.min(1.8, 1 + marketPrem + sectorPrem));
 
     const totalShares = Math.max(1000, Math.floor(base * successMultiplier * cycleValuationMultiplier / ipoPrice));
+    const debutMarket = routing && !startup.operatorStartup ? chooseDebutMarket(ipoPrice * totalShares, startup) : 'GPW';
+    if (!debutMarket) { parkStartupForListing(startup, successMultiplier); return; } // kwalifikuje się na GPW, ale brak miejsca (albo NH i giełda prywatna pełne)
     const investorShares = Math.floor(totalShares * STARTUP_INVESTORS_SHARE * (startup.operatorStartup ? 1 : getStartupTermsFactor())); // D2: gorsze warunki na nasyconym rynku
     let sharesHeld = 0;
 
@@ -9301,6 +9315,8 @@ function handleSuccessfulIPO(startup, successMultiplier) {
 
     startup.assetType = undefined;
     startup.exchange = 'BRONZE';
+    if (debutMarket !== 'GPW') startup.market = debutMarket;
+    startup.marketSinceQ = typeof macro === 'object' ? macro.quarter : 0;
     startup.price = ipoPrice;
     startup.totalShares = totalShares;
     startup.maxShares = totalShares;
@@ -9322,7 +9338,7 @@ function handleSuccessfulIPO(startup, successMultiplier) {
     if (!startup.reputation) startup.reputation = { player: 0 };
 
     const fundValue = (playerPortfolio[symbol]?.shares || 0) * ipoPrice;
-    logEvent(`🔔 IPO: ${startup.name} debiutuje po ${ipoPrice.toFixed(2)} zł (${totalShares.toLocaleString('pl-PL')} akcji).${fundClaim > 0 ? ` Fundusz: ${fundClaim.toFixed(0)} zł → ${fundValue.toFixed(0)} zł.` : ''}`, 'review');
+    logEvent(`🔔 IPO: ${startup.name} debiutuje${debutMarket !== 'GPW' ? ` na ${getMarketLabel(debutMarket)}` : ''} po ${ipoPrice.toFixed(2)} zł (${totalShares.toLocaleString('pl-PL')} akcji).${fundClaim > 0 ? ` Fundusz: ${fundClaim.toFixed(0)} zł → ${fundValue.toFixed(0)} zł.` : ''}`, 'review');
     if (startup.operatorStartup && typeof activateMarketOperator === 'function') activateMarketOperator(startup); // nowy rynek (markets.js)
     if (fundClaim > 0) playerProfile?.cv.push({ type: 'milestone', text: `Startup ${startup.name}: debiut na giełdzie (${fundClaim.toFixed(0)} → ${fundValue.toFixed(0)} PLN).` });
 }
@@ -9798,7 +9814,9 @@ function processAccountingQuarterly() {
         if (!stock.hiddenChecked) rollHiddenLiabilities(stock);
         else if (stock.hiddenLiabilities > 0 && Math.random() < HIDDEN_LIABILITY_SPONTANEOUS) revealHiddenLiabilities(stock, 'sprawa sądowa');
     }
-    let active = listed.filter(s => s.fraud).length;
+    const isRisky = s => typeof getMarketFraudFactor === 'function' && getMarketFraudFactor(s) > 1; // 0.15.6 E3: giełda prywatna ma własny limit oszustw (wspólny 5% blokowałby jej ×5)
+    let active = listed.filter(s => s.fraud && !isRisky(s)).length, activeRisky = listed.filter(s => s.fraud && isRisky(s)).length;
+    const riskyCount = listed.filter(isRisky).length;
     const knf = typeof getInstitutionEffectiveness === 'function' && typeof oversight === 'object' ? getInstitutionEffectiveness(oversight.knf) : 0.3;
 
     for (const stock of listed) {
@@ -9810,11 +9828,12 @@ function processAccountingQuarterly() {
             if (early || quarter >= stock.fraud.correctAt) revealFraud(stock, early ? 'KNF' : 'audytor');
             continue;
         }
-        if (!isFraudEligible(stock) || active >= Math.max(1, Math.floor(listed.length * FRAUD_MAX_SHARE))) continue;
-        let chance = FRAUD_START_CHANCE;
+        const risky = isRisky(stock);
+        if (!isFraudEligible(stock) || (risky ? activeRisky >= Math.max(1, Math.floor(riskyCount * 0.8)) : active >= Math.max(1, Math.floor(listed.length * FRAUD_MAX_SHARE)))) continue;
+        let chance = FRAUD_START_CHANCE * (typeof getMarketFraudFactor === 'function' ? getMarketFraudFactor(stock) : 1); // 0.15.6 E3: giełda prywatna ×5
         if ((Number(stock.financialHealth) || 0) < 0) chance *= 2;
         if (stock.ceo?.traits?.some(t => ['skorumpowany', 'sklonny_do_korupcji', 'chciwy'].includes(t.id))) chance *= 3;
-        if (Math.random() < chance) { stock.fraud = { start: quarter, correctAt: quarter + getRandomIntInRange(3, 7), total: 0 }; active++; }
+        if (Math.random() < chance) { stock.fraud = { start: quarter, correctAt: quarter + getRandomIntInRange(...(typeof getFraudDetectionRange === 'function' ? getFraudDetectionRange(stock) : [3, 7])), total: 0 }; if (risky) activeRisky++; else active++; }
     }
 
     // Zlecone audyty: wynik po kwartale.
@@ -9828,7 +9847,7 @@ function revealFraud(stock, by) {
     if (!fraud) return;
     const writeOff = Math.min(fraud.total, Math.max(0, Number(stock.balanceSheet?.assets) || 0));
     if (writeOff > 0) adjustBalanceSheet(stock, { assets: -writeOff, retainedEarnings: -writeOff });
-    const drop = 0.2 + Math.min(0.2, writeOff / Math.max(1, getMarketCapValue(stock)));
+    const drop = 0.2 + Math.min(0.2, writeOff / Math.max(1, getMarketCapValue(stock))) + (typeof getMarketRevealPenalty === 'function' ? getMarketRevealPenalty(stock) : 0);
     applyPriceEffect(stock.symbol, -drop, 'negative', 'company');
     if (typeof onCooperationPartnerShock === 'function') onCooperationPartnerShock(stock, drop, 'korekta wyników'); // T5: ryzyko kontrahenta
     stock.financialHealth = Math.max(-5, (Number(stock.financialHealth) || 0) - 1.5);

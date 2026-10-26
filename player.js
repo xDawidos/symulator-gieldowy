@@ -295,8 +295,8 @@ function buyStock(symbol, quantity) {
         return;
     }
     if (typeof isTradingBlocked === 'function' && isTradingBlocked('player')) { showToast('Blokada handlu nałożona przez organy ścigania.', 'error'); return; }
-    if (!canAccessExchange(stockToBuy.exchange)) {
-        showToast(`Twoje stanowisko nie daje dostępu do giełdy ${exchanges[stockToBuy.exchange]?.name || stockToBuy.exchange}. Awans otworzy kolejne giełdy.`, 'warning');
+    if (!canAccessExchange(stockToBuy.exchange, stockToBuy)) {
+        showToast(`Twoje stanowisko nie daje dostępu do ${typeof isEntryMarketStock === 'function' && isEntryMarketStock(stockToBuy) ? `rynku ${getMarketLabel(getStockMarket(stockToBuy))}` : `giełdy ${exchanges[stockToBuy.exchange]?.name || stockToBuy.exchange}`}. Awans otworzy kolejne giełdy.`, 'warning');
         return;
     }
     if (stockToBuy.isTradeLocked) {
@@ -316,6 +316,8 @@ function buyStock(symbol, quantity) {
     // 0.13.1 (B2): koszt z prowizją operatora rynku liczony przed transakcją — zakup nigdy nie daje ujemnej gotówki.
     const quote = getBuyQuote(stockToBuy, quantity, 'fund');
     const totalCost = quote.cost;
+    const privateLimit = typeof checkPrivateMarketLimit === 'function' ? checkPrivateMarketLimit(stockToBuy, stockToBuy.price * quantity) : null; // 0.15.6 E3
+    if (privateLimit) { showToast(privateLimit, 'warning'); return; }
     if (playerCash < quote.total) {
         showToast(`Nie masz wystarczająco gotówki: ${formatZl(quote.total)} z prowizją, maksymalnie ${getMaxBuyQuantity(stockToBuy, 'fund')} akcji.`);
         return;
@@ -1564,9 +1566,9 @@ function syncExchangeAccessWithPosition() {
     playerAccessLevel = getPlayerPosition().exchangeAccessLevel;
 }
 
-function canAccessExchange(exchangeKey) {
+function canAccessExchange(exchangeKey, stock = null) {
     const level = exchanges[exchangeKey]?.level ?? 99;
-    return level <= playerAccessLevel;
+    return level <= playerAccessLevel && (!stock || canPlayerTradeMarket(stock)); // 0.15.6: rynki NH i prywatny wymagają stanowiska
 }
 
 // =================================================================================
@@ -2376,7 +2378,7 @@ function buyStockPrivate(symbol, quantity) {
     if (typeof isMarketHalted === 'function' && isMarketHalted()) { showToast('Handel wstrzymany — zadziałał bezpiecznik giełdowy!', 'error'); return false; }
     const stock = stocks.find(s => s.symbol === symbol);
     if (!stock || stock.isTradeLocked) { showToast('Handel tą akcją jest niedostępny.', 'warning'); return false; }
-    if (!canAccessExchange(stock.exchange)) { showToast('Twoje stanowisko nie daje dostępu do tej giełdy.', 'warning'); return false; }
+    if (!canAccessExchange(stock.exchange, stock)) { showToast('Twoje stanowisko nie daje dostępu do tej giełdy.', 'warning'); return false; }
     if (quantity > getAvailableShares(stock)) { showToast(`Za mało akcji na rynku (dostępne: ${getAvailableShares(stock)}).`, 'warning'); return false; }
 
     const cost = stock.price * quantity;
@@ -2713,7 +2715,7 @@ function runManagerTrading(manager) {
     const accessLevel = CAREER_POSITIONS[getPositionIndex(manager.positionId)].exchangeAccessLevel;
     const candidates = stocks.filter(stock =>
         !stock.assetType && !stock.isBankStock && !stock.isBankrupt &&
-        (exchanges[stock.exchange]?.level ?? 9) <= accessLevel
+        (exchanges[stock.exchange]?.level ?? 9) <= accessLevel && canManagerInvestIn(manager, stock)
     );
 
     // Sprzedaż: pozycje, które przestały pasować do strategii.

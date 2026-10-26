@@ -1907,7 +1907,7 @@ function displayStocks(previousInputValues = {}) {
     const parentNote = stock.isSubsidiaryOf ? ` · spółka zależna od ${stock.isSubsidiaryOf}${Number.isFinite(stock.parentStakePct) ? ` (${Math.round(stock.parentStakePct * 100)}%)` : ''} · ${exchanges[stock.exchange]?.name || stock.exchange}` : ''; // 0.14.2 P3
     const spinNote = (stock.spinoff ? ` · zapowiedziane wydzielenie: ${stock.spinoff.sector}` : '') + (stock.spunOffFrom && !stock.isSubsidiaryOf ? ` · wydzielona z ${stock.spunOffFrom}` : '') // 0.14 T4
       + (typeof getStockCooperations === 'function' && getStockCooperations(stock).length ? ` · kooperacje: ${getStockCooperations(stock).length}` : ''); // 0.14 T5
-    metaLine.textContent = `${primarySector} · ${stock.symbol}${parentNote}${spinNote}${marketId !== 'GPW' ? ` · członek rynku ${getMarketLabel(marketId)}` : ''}${stock.isDividendAristocrat ? ' · dywidendowy arystokrata' : ''}`;
+    metaLine.textContent = `${primarySector} · ${stock.symbol}${parentNote}${spinNote}${marketId !== 'GPW' ? ` · ${getMarketBadgeText(stock)}` : ''}${stock.isDividendAristocrat ? ' · dywidendowy arystokrata' : ''}`;
 
 
     identityWrap.appendChild(topLine);
@@ -2138,7 +2138,7 @@ function displayStocks(previousInputValues = {}) {
             </div>
             <div class="market-selector-card-meta">
               <span>Prowizja: ${commission.toFixed(2)}%</span>
-              ${m.id !== 'GPW' ? (concession 
+              ${isEntryMarket(m.id) ? `<span class="text-muted">${escapeHtml(getEntryMarketNote(m.id))}</span>` : m.id !== 'GPW' ? (concession 
                   ? '<span class="text-up font-bold">✅ Koncesja aktywna</span>' 
                   : `<button type="button" class="btn-secondary btn-xs" onclick="event.stopPropagation(); buyInternetConcession('${m.id}'); displayStocks(getCurrentInputValues());">Kup koncesję (${formatZl(concessionCost, 0)})</button>`
               ) : '<span class="text-muted">Główny parkiet giełdowy</span>'}
@@ -2147,7 +2147,7 @@ function displayStocks(previousInputValues = {}) {
         `;
     }).join('');
 
-    const sideInfo = selectedMarketOperator !== 'GPW' ? `
+    const sideInfo = selectedMarketOperator !== 'GPW' && isEntryMarket(selectedMarketOperator) ? `<div class="market-header-side-info" onclick="event.stopPropagation()"><span>${escapeHtml(getEntryMarketNote(selectedMarketOperator))}</span></div>` : selectedMarketOperator !== 'GPW' ? `
         <div class="market-header-side-info" onclick="event.stopPropagation()">
             <span>Prowizja: ${((getMarketDef(selectedMarketOperator)?.commission || 0) * 100).toFixed(2)}%</span>
             ${(typeof hasInternetConcession === 'function' && hasInternetConcession(selectedMarketOperator))
@@ -8238,7 +8238,7 @@ function updateStateModalContent() {
             <div class="bank-grid">
                 <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('waga', 20)}</span><div><h4>Urząd antymonopolowy</h4><span class="bank-card-type">poziom ${antitrustOffice.level}/5</span></div></header>
                     <dl class="bank-card-rates"><div><dt>Szansa analizy</dt><dd>${(antitrustOffice.analysisCapacity * 100).toFixed(0)}%</dd></div><div><dt>Dokładność</dt><dd>${(antitrustOffice.accuracy * 100).toFixed(0)}%</dd></div><div><dt>Monopoliści</dt><dd>${stocks.filter(s => s.isMonopolist).length}</dd></div></dl>
-                    <p class="text-sm text-muted">Karze monopolistów i może zablokować skup akcji przez spółkę z Giełdy Diamentowej. Państwo samo inwestuje w rozwój urzędu.</p></article>
+                    <p class="text-sm text-muted">Karze monopolistów i może zablokować skup akcji przez spółkę z Giełdy Diamentowej. Państwo samo inwestuje w rozwój urzędu.</p>${typeof renderAntitrustInterventions === 'function' ? renderAntitrustInterventions() : ''}</article>
                 <article class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('wykres', 20)}</span><div><h4>Koniunktura</h4><span class="bank-card-type">${escapeHtml(phase.name || '')}</span></div></header>
                     <p class="text-sm">${escapeHtml(phase.description || 'Faza cyklu gospodarczego wpływa na wyniki spółek, sektory wrażliwe na cykl i stopy procentowe.')}</p>
                     <p class="text-sm text-muted">Wskaźnik koniunktury: ${Number(economyCycle.index || 0).toFixed(0)}/100 · zmiana PKB w kwartale: ${formatNumberPl(((economyCycle.gdpGrowth || 0) * 100), 2)}%.</p></article>
