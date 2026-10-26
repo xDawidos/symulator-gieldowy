@@ -3812,16 +3812,29 @@ function getRecentExcessAnnual() {
     return playerFund?.periods?.length ? (last + partial) / 2 : partial;
 }
 
+/**
+ * 0.16.1 G0b: pojemność strategii. Napływ organiczny i dopłaty maleją z wielkością funduszu (duży fundusz trudniej powiększać o te same
+ * ułamki aktywów): mnożnik 1 do FUND_CAPACITY_REF, potem (ref/aktywa)^wykładnik, nie mniej niż FUND_CAPACITY_FLOOR.
+ * Pomiar (g0_diag20, fundusz-gig, 20 lat): bez pułapu udziały rosły średnio +3%/rok, ale 6,2% i −2% w skrajnych grach.
+ */
+const FUND_CAPACITY_REF = 60_000;
+const FUND_CAPACITY_EXPONENT = 0.6;
+const FUND_CAPACITY_FLOOR = 0.2;
+function getFundCapacityFactor(assets = getFundAssets()) {
+    if (!(assets > FUND_CAPACITY_REF)) return 1;
+    return Math.max(FUND_CAPACITY_FLOOR, Math.pow(FUND_CAPACITY_REF / assets, FUND_CAPACITY_EXPONENT));
+}
+
 /** Roczna stopa napływu nowych klientów (przy otwartej emisji): zaufanie, reputacja, wynik vs GIG. */
 function getOrganicInflowRate(trust = playerFund?.trust ?? 50) {
     const reputation = getPlayerReputationFactor();
     const trustGate = Math.max(0, Math.min(1, (trust - 25) / 25)); // 0.14.2 P12: 0 poniżej 25, liniowo do 50, potem bez zmian
-    return trustGate * Math.max(0, Math.min(0.5, ORGANIC_INFLOW_BASE + (trust - 50) / 50 * 0.04 + getRecentExcessAnnual() * 1.2 + reputation * 0.03));
+    return getFundCapacityFactor() * trustGate * Math.max(0, Math.min(0.5, ORGANIC_INFLOW_BASE + (trust - 50) / 50 * 0.04 + getRecentExcessAnnual() * 1.2 + reputation * 0.03));
 }
 
 /** Roczna stopa dopłat obecnych klientów (zadowoleni z zaufaniem): rośnie z wynikiem vs GIG. */
 function getTopupInflowRate(trust = playerFund?.trust ?? 50) {
-    return Math.max(0, Math.min(0.3, TOPUP_INFLOW_BASE + (trust - 50) / 50 * 0.03 + getRecentExcessAnnual() * 1.0));
+    return getFundCapacityFactor() * Math.max(0, Math.min(0.3, TOPUP_INFLOW_BASE + (trust - 50) / 50 * 0.03 + getRecentExcessAnnual() * 1.0));
 }
 
 /** Średnia reputacja gracza w spółkach (−1…1). */

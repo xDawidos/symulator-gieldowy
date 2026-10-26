@@ -12051,6 +12051,16 @@ group('0.16.1', () => {
         assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
         resetGdrState(); initFxState();
     });
+
+    test('G0b: pułap napływu malejący z wielkością funduszu — mnożnik 1 dla małego, malejący i nie mniejszy niż 0,2 dla dużego', () => {
+        assertEq(getFundCapacityFactor(10_000), 1, 'mały fundusz bez zmian'); assertEq(getFundCapacityFactor(FUND_CAPACITY_REF), 1, 'do progu bez zmian');
+        const a = getFundCapacityFactor(120_000), b = getFundCapacityFactor(600_000), c = getFundCapacityFactor(5e9);
+        assert(a < 1 && b < a, `malejący: ${a} > ${b}`); assertEq(c, FUND_CAPACITY_FLOOR, 'podłoga');
+        fundWithCash(2_000_000);
+        const withCap = getOrganicInflowRate(50);
+        const raw = Math.max(0, Math.min(0.5, ORGANIC_INFLOW_BASE + getRecentExcessAnnual() * 1.2 + getPlayerReputationFactor() * 0.03));
+        assertNear(withCap, getFundCapacityFactor() * raw, 'stopa organiczna = mnożnik × stopa bazowa', 1e-12);
+    });
 });
 
 async function runAllTests() {
