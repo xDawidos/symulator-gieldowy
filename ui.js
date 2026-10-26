@@ -7399,6 +7399,7 @@ function checkWorldInvariants() {
         finite(getBotFundNav(manager.fund), `NAV ${manager.name}`);
         checkPortfolio(manager.fund.portfolio, manager.name);
     }
+    if (typeof checkCurrencyInvariants === 'function') problems.push(...checkCurrencyInvariants()); // 0.16.1 G2
     for (const bond of allBonds) finite(bond.faceValue, `obligacja ${bond.id}`);
     if (corporation) finite(corporation.budget, 'budżet korporacji');
     // A3: przycięcia „duchów posiadaczy” to ostrzeżenia, nie naruszenia — mogą maskować prawdziwy rozjazd.

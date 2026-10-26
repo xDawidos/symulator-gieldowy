@@ -5375,7 +5375,7 @@ group('0.14 T1a: rejestr sektorów i porządek nazw', () => {
         assert(Object.keys(macro.sectorCycles).length === SECTOR_NAMES.length && macro.sectorCycles['Transport i logistyka'].phase === 'boom', 'cykle po migracji');
 
         const snapshot = JSON.parse(JSON.stringify(buildSaveSnapshot()));
-        assert((snapshot.version === 14 || snapshot.version === 15) && snapshot.stocks.every(s => typeof s.seg === 'string' && !s.sector && !s.segments), 'v14: tylko seg');
+        assert((snapshot.version >= 14) && snapshot.stocks.every(s => typeof s.seg === 'string' && !s.sector && !s.segments), 'v14: tylko seg');
         assert(applySaveSnapshot(snapshot).ok, 'wczytanie v14');
         const mix = stocks.find(s => s.symbol === 'MIX');
         assert(mix.segments.length === 2 && mix.sector.join() === 'Budowlany,Przemysł' && isValidSegmentList(mix.segments), JSON.stringify(mix.segments));
@@ -8014,7 +8014,7 @@ group('0.15 H6: Akademia, Mentor, osiągnięcia, newsy i retrospektywa rynkowa',
 
         // 1. Zapis v15 zawiera nowe pola
         const snapshot = buildSaveSnapshot();
-        assert(snapshot.version === 15, 'wersja zapisu to 15');
+        assert(snapshot.version === SAVE_FORMAT_VERSION, 'wersja zapisu to bieżąca (v16)');
         assert(snapshot.marketRegimes && snapshot.marketRegimes.home, 'zapis zawiera marketRegimes');
         assert(snapshot.playerProfile.achievements.first_crisis === 1, 'zapis zawiera osiągnięcia');
 
@@ -11803,6 +11803,137 @@ group('0.16.1', () => {
         for (const sym of ['DPB', 'WPY']) { const g = initialStocks.find(s => s.symbol === sym); assert(g && g.sector.join() === 'Gaming', `${sym}: Gaming`); assertEq(getCompanyOrigin(g), 'PL', `${sym}: spółka PL`); }
         assertEq(getCompanyOrigin(initialStocks.find(s => s.symbol === 'CTX')), 'UNI', 'Cortex Neural jest uniwersalny');
         assertEq(new Set(initialStocks.map(s => s.symbol)).size, initialStocks.length, 'symbole bez duplikatów');
+    });
+
+    // --- G2: waluty i kantor ---
+    const fundWithCash = (cash = 5_000_000) => {
+        resetWorld([mk156('GA', { price: 100 })]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        playerCash = cash;
+        return cash;
+    };
+
+    test('G2a: kursy walut mieszczą się w widełkach przez 10 000 tygodni (także w kryzysie)', () => {
+        initFxState();
+        for (let i = 0; i < 10_000; i++) {
+            stepFxRates();
+            for (const code of FOREIGN_CURRENCIES) {
+                const r = fxRates[code], d = CURRENCIES[code];
+                assert(r >= d.min - 1e-12 && r <= d.max + 1e-12, `${code} poza widełkami: ${r} (tydzień ${i})`);
+            }
+        }
+        assertEq(checkCurrencyInvariants().length, 0, 'niezmienniki walut');
+        const longest = Math.max(...FOREIGN_CURRENCIES.map(c => fxHistory[c].length));
+        assert(longest <= FX_RULES.historyWeeks, 'historia kursów ograniczona');
+        const savedLine = crisisLine; crisisLine = { id: 'banking', stage: 'x' };
+        try {
+            initFxState();
+            for (let i = 0; i < 52; i++) stepFxRates();
+            assert(fxRates.CHF / CURRENCIES.CHF.start > fxRates.INR / CURRENCIES.INR.start, 'w kryzysie frank umacnia się względem rupii');
+            for (let i = 0; i < 2000; i++) stepFxRates();
+            assertEq(checkCurrencyInvariants().length, 0, 'kursy w widełkach także w długim kryzysie');
+        } finally { crisisLine = savedLine; initFxState(); }
+    });
+
+    test('G2b: przy samym PLN wycena jest identyczna (toPln i NAV bez zmian), obca gotówka wchodzi do NAV po kursie', () => {
+        initFxState();
+        assertEq(toPln(123.45, 'PLN'), 123.45, 'toPln dla PLN to ta sama liczba'); assertEq(fromPln(77, 'PLN'), 77, 'fromPln dla PLN');
+        fundWithCash(1_000_000);
+        const assets0 = getFundAssets(), nav0 = getFundNav();
+        playerCashByCurrency = {};
+        assertEq(getFundAssets(), assets0, 'pusta gotówka walutowa nie zmienia majątku'); assertEq(getFundNav(), nav0, 'ani NAV');
+        playerCashByCurrency = { EUR: 1000 };
+        fxRates.EUR = 4.5;
+        assertNear(getFundAssets() - assets0, 4500, 'majątek +1000 EUR × 4,5', 1e-6);
+        fxRates.EUR = 4.95;
+        assertNear(getFundAssets() - assets0, 4950, 'zmiana kursu zmienia majątek o ekspozycję × zmianę', 1e-6);
+        const bot = { id: 'b', cash: 1000, portfolio: {}, cashByCurrency: { USD: 100 } };
+        fxRates.USD = 4;
+        assertNear(calculateNetWorth(bot), 1400, 'majątek bota obejmuje gotówkę w USD', 1e-6);
+        initFxState();
+    });
+
+    test('G2b: NAV z gotówką w euro zmienia się tylko o efekt walutowy (±0,1 pp)', () => {
+        initFxState();
+        fundWithCash(2_000_000);
+        assert(kantorBuyCurrency('EUR', 1_000_000).ok, 'kupno EUR');
+        const nav0 = getFundNav(), exposure = toPln(playerCashByCurrency.EUR, 'EUR') / getFundAssets();
+        fxRates.EUR *= 1.08;
+        assertNear(getFundNav() / nav0 - 1, exposure * 0.08, 'zmiana NAV = ekspozycja × zmiana kursu', 0.001);
+        initFxState();
+    });
+
+    test('G2d: spread kantoru 1–2%, malejący z kwotą; pętla kupno+sprzedaż kosztuje spread i trafia do księgi opłat', () => {
+        initFxState();
+        assertEq(getKantorSpread(10_000), 0.02, '2% dla małej kwoty'); assertEq(getKantorSpread(300_000), 0.015, '1,5%'); assertEq(getKantorSpread(5_000_000), 0.01, '1% dla dużej');
+        fundWithCash(10_000_000);
+        const journal0 = paymentJournal.length, cash0 = playerCash;
+        assert(kantorBuyCurrency('USD', 100_000).ok, 'kupno USD');
+        assertNear(playerCash, cash0 - 100_000, 'złote zeszły', 1e-6);
+        assert(kantorSellCurrency('USD', playerCashByCurrency.USD).ok, 'sprzedaż USD');
+        const lost = cash0 - playerCash;
+        assert(lost > 100_000 * 0.012 && lost < 100_000 * 0.02 + 1, `koszt pętli ≈ spread: ${lost}`);
+        assertEq(Object.keys(playerCashByCurrency).length, 0, 'waluta wyzerowana');
+        const fees = paymentJournal.slice(journal0).filter(e => e.purpose.startsWith('Kantor')).reduce((s, e) => s + e.amount, 0);
+        assertNear(fees, lost, 'cała strata trafiła do księgi jako opłata kantoru', 1e-6);
+        assert(!kantorBuyCurrency('USD', playerCash + 1).ok, 'nie kupimy za więcej niż mamy złotych');
+        assert(!kantorSellCurrency('USD', 1).ok, 'nie sprzedamy czego nie mamy');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki po kantorze');
+        initFxState();
+    });
+
+    test('G2d: przymusowa płynność najpierw sprzedaje obcą gotówkę', () => {
+        initFxState();
+        fundWithCash(1_000_000);
+        kantorBuyCurrency('EUR', 900_000);
+        const cashBefore = playerCash;
+        forceLiquidation(500_000);
+        assert(playerCash >= cashBefore + 499_000, `gotówka z waluty: ${playerCash - cashBefore}`);
+        assert(getCurrencyCash('player', 'EUR') > 0, 'zostało jeszcze euro');
+        initFxState();
+    });
+
+    test('G2d: spekulacja „kup w dolnych 20% widełek, sprzedaj w górnych 20%” daje najwyżej lokata + 4 pp rocznie', () => {
+        const deposit = 0.03, weeks = 52 * 20, results = [];
+        for (const code of ['EUR', 'USD', 'CHF', 'CZK', 'JPY']) {
+            for (let run = 0; run < 6; run++) {
+                initFxState();
+                const d = CURRENCIES[code], lo = d.min + 0.2 * (d.max - d.min), hi = d.max - 0.2 * (d.max - d.min);
+                let pln = 1, foreign = 0;
+                for (let w = 0; w < weeks; w++) {
+                    stepFxRates();
+                    if (pln > 0) pln *= 1 + deposit / 52;
+                    const rate = fxRates[code];
+                    if (pln > 0 && rate <= lo) { const q = getKantorQuote(code, pln, 'buy'); foreign = pln / q.rate; pln = 0; }
+                    else if (foreign > 0 && rate >= hi) { const q = getKantorQuote(code, foreign * rate, 'sell'); pln = foreign * q.rate; foreign = 0; }
+                }
+                results.push(Math.pow(pln + foreign * fxRates[code], 1 / 20) - 1);
+            }
+        }
+        const mean = results.reduce((a, b) => a + b, 0) / results.length;
+        assert(mean <= deposit + 0.04, `średni zwrot ${(mean * 100).toFixed(2)}% rocznie przy lokacie ${(deposit * 100).toFixed(0)}% (limit +4 pp)`);
+        initFxState();
+    }, 777);
+
+    test('G2c: zapis i wczytanie zachowują kursy i gotówkę w walutach; zapis v15 wczytuje się z kursami startowymi i bez walut', () => {
+        initFxState();
+        fundWithCash(2_000_000);
+        for (let i = 0; i < 30; i++) stepFxRates();
+        kantorBuyCurrency('CHF', 500_000);
+        const rateChf = fxRates.CHF, held = playerCashByCurrency.CHF, assets = getFundAssets();
+        const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+        assertEq(raw.version, 16, 'zapis v16');
+        initFxState();
+        const report = applySaveSnapshot(raw);
+        assert(report.ok, `wczytanie: ${(report.errors || []).join('; ')}`);
+        assertNear(fxRates.CHF, rateChf, 'kurs CHF po wczytaniu', 1e-9); assertNear(playerCashByCurrency.CHF, held, 'gotówka CHF po wczytaniu', 1e-6);
+        assertNear(getFundAssets(), assets, 'majątek po wczytaniu', 1e-3); assertEq(fxHistory.CHF.length, 31, 'historia kursu');
+        const old = JSON.parse(JSON.stringify(raw)); old.version = 15; delete old.currencies;
+        const r15 = applySaveSnapshot(old);
+        assert(r15.ok, 'v15 się wczytuje'); assert(r15.warnings.some(w => w.includes('migracja v16')), 'ostrzeżenie o migracji');
+        assertEq(Object.keys(playerCashByCurrency).length, 0, 'v15: brak walut'); assertEq(fxRates.CHF, CURRENCIES.CHF.start, 'v15: kursy startowe');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki po wczytaniu v15');
+        initFxState();
     });
 });
 

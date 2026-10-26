@@ -4182,6 +4182,7 @@ function calculateNetWorth(entity) {
     }
     value += allBonds.filter(bond => bond.ownerId === entity.id).reduce((sum, bond) => sum + (typeof getBondValue === 'function' ? getBondValue(bond) : (bond.faceValue || 1000)), 0);
     value += (entity.tBills || []).length * 1000;
+    if (typeof getForeignCashPln === 'function') value += getForeignCashPln(entity); // 0.16.1 G2b
     return value;
 }
 
