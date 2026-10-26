@@ -4,7 +4,7 @@
 // Stan spółki (pola opcjonalne, zapis v15): market, marketSinceQ, belowReqQ. Progi z diagnozy plany/raporty/diagnoza_0.15.6.md.
 
 const LISTING_REQUIREMENTS = {
-    GPW: { cap: 100000, freeFloat: 0.30, profit: true },
+    GPW: { cap: 90000, freeFloat: 0.30, profit: true },
     NH:  { cap: 24000, freeFloat: 0.20, profit: true, innovativeExempt: true },
     PRV: { cap: 5000,  freeFloat: 0.10, profit: false }
 };

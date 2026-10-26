@@ -73,3 +73,8 @@
 6. **Niezmierzone:** czas kroku przy ×1 (obciążenie maszyny i zamrożenia Edge psują średnie); rozmiar zapisu gracza przy ×1 w przeglądarce (oszacowanie bezpośrednie 0,19%); zachowanie botów wobec płynności NH (poza minimalnym obrotem państwa); częstość maili gazet (zob. odstępstwo 8); rozkład czasu do wykrycia oszustwa na PRV (tylko z konstrukcji).
 7. **Pojedynczy przypadek ujemnej gotówki** w grze 20-letniej (`startStrike` w workforce, −0,x zł) — kod spoza 0.15.6, niezmieniany.
 8. **Zlecenie dla czatu designu** (widok rynków i oś ścieżki spółki, karta wymagań, oznaczenie ryzyka, mapa spółek jako drzewo) — nie wykonane osobno; wygląd z gotowych komponentów.
+
+## Decyzja użytkownika po kontroli (2026-10-26)
+
+- Próg kapitalizacji GPW obniżony ze 100 tys. do **90 tys. zł** (`listings.js`), żeby zbliżyć liczbę spółek krajowych do celu 100–115 (było 88); pomiar po zmianie niewykonany.
+- Odchylenia oszustw PRV (≈4× wobec 5×), upadków NH (1,7× wobec 2–3×) i interwencji urzędu zaakceptowane do ewentualnej zmiany celów w 0.17.1.
