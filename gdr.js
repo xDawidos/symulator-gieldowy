@@ -84,6 +84,7 @@ function buyGdr(giantId, quantity) {
     const issuer = foreignIssuers[giantId];
     quantity = Math.floor(Number(quantity));
     if (!issuer) return { ok: false, reason: 'Ten kwit nie jest notowany.' };
+    if (issuer.kind === 'share') return { ok: false, reason: 'Kraj tej spółki dołączył do giełdy: akcje kupuje się przez rynek kraju (bilet).' };
     if (!(quantity > 0)) return { ok: false, reason: 'Podaj liczbę kwitów.' };
     if (typeof playerFund !== 'object' || !playerFund) return { ok: false, reason: 'Kwity kupuje fundusz.' };
     if (typeof isMarketHalted === 'function' && isMarketHalted()) return { ok: false, reason: 'Handel wstrzymany — zadziałał bezpiecznik giełdowy.' };
@@ -114,13 +115,21 @@ function sellGdr(giantId, quantity) {
 }
 
 /** Przymusowa płynność: po obcej gotówce sprzedajemy kwity (od największej pozycji). Zwraca zdobyte złote. */
+/** Przymusowa sprzedaż akcji zagranicznych: sprzedaż w walucie kraju i od razu wymiana w kantorze. */
+function sellShareForPln(issuer, qty) {
+    const r = sellForeignShares(issuer.id, qty);
+    if (!r.ok) return r;
+    const k = kantorSellCurrency(issuer.currency, r.proceeds);
+    return k.ok ? { ok: true, proceeds: k.pln } : k;
+}
+
 function liquidateGdr(amountPln) {
     let raised = 0;
     const positions = Object.values(foreignIssuers).filter(i => getGdrHeld(i) > 0).sort((a, b) => getGdrHeld(b) * getGdrMid(b) - getGdrHeld(a) * getGdrMid(a));
     for (const issuer of positions) {
         if (raised >= amountPln) break;
         const qty = Math.min(getGdrHeld(issuer), Math.ceil((amountPln - raised) / getGdrQuote(issuer, 'sell')));
-        const result = sellGdr(issuer.id, qty);
+        const result = issuer.kind === 'share' ? sellShareForPln(issuer, qty) : sellGdr(issuer.id, qty);
         if (result.ok) raised += result.proceeds;
     }
     return raised;

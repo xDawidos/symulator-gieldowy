@@ -6182,6 +6182,7 @@ function switchCityTab(tabName) {
         btn.classList.remove('active');
     });
     document.getElementById(`tab-btn-city-${tabName}`).classList.add('active');
+    if (tabName === 'airport' && typeof renderAirportWindow === 'function') renderAirportWindow(); // 0.16.2 G7: bilety do rynków zagranicznych
 }
 
 // ============================================

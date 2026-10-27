@@ -12361,6 +12361,124 @@ group('0.16.2', () => {
         const custom = REAL_COUNTRIES().flatMap(id => COUNTRY_DEFS[id].companies.filter(c => c.special));
         assert(custom.every(c => ['defense', 'premiere', 'summer', 'volatile', 'season'].includes(c.special)), 'tylko znane modyfikatory');
     });
+
+    // --- G7: lotnisko i bilety ---
+    const withTickets = fn => withZZ(() => {
+        startFund(10_000_000); airportState.forced = false;
+        START_COUNTRIES.push({ id: 'ZZ', name: 'Zetland', flag: '', available: false, passCost: 40000 });
+        try { return fn(); } finally { START_COUNTRIES.pop(); resetTicketsState(); }
+    });
+
+    test('G7: lotnisko zleca miasto jako megaprojekt (wykonawca budowlany); po ukończeniu stoi, drugi raz zlecić nie można', () => withTickets(() => {
+        assert(!isAirportBuilt(), 'na starcie brak lotniska');
+        ensureSpecialProjects(); specialProjects.active.length = 0; specialProjects.completed = specialProjects.completed.filter(p => p.templateId !== 'airport');
+        const r = orderAirport();
+        assert(r.ok && isAirportInProgress(), `zlecenie: ${r.reason}`); assert(!orderAirport().ok, 'drugie zlecenie odrzucone');
+        const project = specialProjects.active.find(p => p.templateId === 'airport');
+        completeProject(project);
+        assert(isAirportBuilt() && !isAirportInProgress(), 'lotnisko stoi po ukończeniu megaprojektu');
+        specialProjects.completed = specialProjects.completed.filter(p => p.templateId !== 'airport');
+    }));
+
+    test('G7: bilet gracza — od 1000 zł (5% przepustki), tylko po wybudowaniu lotniska, z gotówki funduszu; pierwszy bilet otwiera giełdę kraju i daje bonus Turystyce', () => withTickets(() => {
+        assertEq(getTicketPrice('CZ'), 1000, 'najtańszy bilet 1000 zł'); assertEq(getTicketPrice('ZZ'), 2000, '5% przepustki'); assertEq(getTicketPrice('DE'), 2500, 'Niemcy 2500');
+        assert(!buyTicket('ZZ').ok, 'bez lotniska brak biletu');
+        airportState.forced = true;
+        const cash = playerCash, shocks = sectorShocks.length;
+        const r = buyTicket('ZZ');
+        assert(r.ok && r.opened, `bilet: ${r.reason}`); assertNear(playerCash, cash - 2000, 'gotówka funduszu pomniejszona o cenę biletu', 1e-6);
+        assert(hasTicket('player', 'ZZ') && isCountryJoined('ZZ'), 'bilet i otwarty kraj');
+        assert(sectorShocks.length > shocks && sectorShocks.some(s => s.sector === 'Turystyka' && s.target > 0), 'bonus dla Turystyki');
+        assert(!buyTicket('ZZ').ok, 'drugi bilet na ten sam rynek odrzucony');
+        playerCash = 100; airportState.forced = true; foreignTickets = {};
+        assert(!buyTicket('ZZ').ok, 'za mało gotówki'); assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+
+    test('G7: bilet bota płaci bot z własnej gotówki, a każdy inwestor ma bilet osobno', () => withTickets(() => {
+        airportState.forced = true;
+        const bot = { id: 'bot_t', name: 'Bot Testowy', cash: 50_000, portfolio: {}, personality: 'whale' };
+        const r = buyTicket('ZZ', bot);
+        assert(r.ok, r.reason); assertEq(bot.cash, 48_000, 'bot zapłacił z własnej gotówki'); assert(hasTicket('bot_t', 'ZZ') && !hasTicket('player', 'ZZ'), 'bilet tylko bota');
+        assert(!canTradeCountry('player', 'ZZ') && canTradeCountry('bot_t', 'ZZ'), 'dostęp osobno');
+        assert(!buyTicket('ZZ', { id: 'biedny', cash: 10 }).ok, 'bot bez gotówki nie kupi');
+    }));
+
+    test('G7: bez biletu nie kupisz akcji kraju; z biletem prowizja 0,6%, waluta własna idzie przed kantorem, NAV spada tylko o koszty', () => withTickets(() => {
+        airportState.forced = true; joinCountry('ZZ');
+        const id = 'ZB1', price = foreignIssuers[id].price;
+        assert(!buyForeignShares(id, 100).ok && /bilet/i.test(buyForeignShares(id, 100).reason), 'brak biletu = brak dostępu');
+        buyTicket('ZZ');
+        fxRates.EUR = 4.4;
+        const nav0 = getFundAssets(), cash0 = playerCash;
+        const r = buyForeignShares(id, 1000);
+        assert(r.ok, r.reason);
+        const mid = 1000 * price * 4.4;
+        assertNear(r.commissionPln, mid * 0.006, 'prowizja 0,6% wartości', 1e-6);
+        assertNear(cash0 - playerCash, r.cost, 'koszt z gotówki', 1e-6); assert(r.cost > mid * 1.006 - 1e-6, 'kupno przez kantor kosztuje więcej niż środek + prowizja');
+        assertNear(nav0 - getFundAssets(), r.commissionPln + r.spreadCost, 'NAV traci tylko prowizję i spread', 0.01);
+        // waluta własna przed kantorem
+        playerCashByCurrency.EUR = 10_000; const cash1 = playerCash;
+        const r2 = buyForeignShares(id, 100);
+        assert(r2.ok && r2.spreadCost === 0, 'cała kwota z gotówki EUR, bez spreadu kantoru'); assertNear(cash1 - playerCash, r2.commissionPln, 'z gotówki PLN tylko prowizja', 1e-6);
+        assertNear(playerCashByCurrency.EUR, 10_000 - 100 * price, 'gotówka EUR zmniejszona', 1e-6);
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+
+    test('G7: sprzedaż akcji zagranicznych zwraca walutę kraju minus prowizja; nie można kupić więcej niż wolny obrót ani akcji pakietu państwa', () => withTickets(() => {
+        airportState.forced = true; joinCountry('ZZ'); buyTicket('ZZ');
+        const zb = foreignIssuers.ZB1, zd = foreignIssuers.ZD1;
+        assert(buyForeignShares('ZB1', 500).ok, 'kupno');
+        const eur0 = getCurrencyCash('player', 'EUR'), r = sellForeignShares('ZB1', 200);
+        assert(r.ok, r.reason); assertNear(r.proceeds, 200 * zb.price * (1 - 0.006), 'wpływ po prowizji', 1e-6);
+        assertNear(getCurrencyCash('player', 'EUR') - eur0, r.proceeds, 'w gotówce walutowej', 1e-6); assertEq(zb.holders.player, 300, 'zostało 300');
+        assert(!sellForeignShares('ZB1', 301).ok, 'nie sprzedasz więcej niż masz');
+        playerCash = 1e12;
+        assert(!buyForeignShares('ZD1', zd.float + 1).ok, 'powyżej wolnego obrotu (pakiet państwa nie jest do kupienia)');
+        assertEq(getGdrFree(zd), zd.float - 0, 'pakiet państwa poza floatem');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+
+    test('G7: boty po ukończeniu lotniska kupują bilety i otwierają kolejne kraje (z odstępem), a miasto samo zleca lotnisko', () => withTickets(() => {
+        ensureSpecialProjects(); specialProjects.active.length = 0; specialProjects.completed = specialProjects.completed.filter(p => p.templateId !== 'airport');
+        const q0 = macro.quarter, rnd = Math.random;
+        try {
+            macro.quarter = 20; Math.random = () => 0.01;
+            processAirportQuarterly();
+            assert(isAirportInProgress(), 'miasto samo zleciło lotnisko');
+            airportState.forced = true; specialProjects.active.length = 0;
+            for (const ai of aiCompetitors) ai.cash = Math.max(ai.cash, 500_000);
+            const before = getJoinedCountries().length;
+            processAirportQuarterly();
+            assertEq(getJoinedCountries().length, before + 1, 'bot kupił bilet i otworzył kraj');
+            const again = getJoinedCountries().length; processAirportQuarterly();
+            assertEq(getJoinedCountries().length, again, 'odstęp między otwarciami krajów');
+        } finally { Math.random = rnd; macro.quarter = q0; airportState.forced = false; }
+    }));
+
+    test('G7: bilety i lotnisko zapisują się i wracają po wczytaniu; zapis bez biletów jest poprawny', () => withTickets(() => {
+        airportState.forced = true; buyTicket('ZZ');
+        const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+        assert(raw.countries.tickets.t.player.includes('ZZ'), 'bilet w zapisie');
+        resetGdrState(); resetTicketsState();
+        COUNTRY_DEFS.ZZ = ZZ();
+        assert(applySaveSnapshot(raw).ok, 'wczytanie'); assert(hasTicket('player', 'ZZ') && airportState.forced, 'bilet i lotnisko wróciły');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki po wczytaniu');
+    }));
+
+    test('G7: okno lotniska jest osobną warstwą wyświetlania — rysuje do dowolnego kontenera z flagami SVG, cenami i przyciskami; haczyk animacji respektuje ruch zredukowany', () => withTickets(() => {
+        const host = document.createElement('div'); host.id = 'airport-test-host'; document.body.appendChild(host);
+        try {
+            renderAirportWindow('airport-test-host');
+            assert(host.innerHTML.includes('Zleć budowę lotniska') && host.innerHTML.includes('Zetland') && host.innerHTML.includes('aria-label="Flaga:'), 'stan, wiersz kraju, flaga');
+            assert(host.querySelectorAll('button[disabled]').length >= 1, 'bilety zablokowane bez lotniska');
+            airportState.forced = true; renderAirportWindow('airport-test-host');
+            assert(host.innerHTML.includes('Kup bilet za') && !/[\u{1F300}-\u{1FAFF}]/u.test(host.innerHTML), 'przyciski zakupu, bez emoji');
+            let flights = 0; const listener = () => flights++; document.addEventListener('ticket-flight', listener);
+            buyTicket('ZZ'); document.removeEventListener('ticket-flight', listener);
+            const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            assertEq(flights, reduced ? 0 : 1, 'zdarzenie animacji lotu tylko bez ruchu zredukowanego');
+        } finally { host.remove(); }
+    }));
     // --- koniec grupy 0.16.2 ---
 });
 

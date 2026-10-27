@@ -324,3 +324,145 @@ function applyCountriesSnapshot(snapshot) {
     if (snapshot.feed && typeof snapshot.feed === 'object') homeFeed = { last: Number(snapshot.feed.last) || null, sd: Number(snapshot.feed.sd) || 0.02 };
     if (typeof applyTicketsSnapshot === 'function') applyTicketsSnapshot(snapshot.tickets);
 }
+
+
+// =================================================================================
+// 0.16.2 G7: LOTNISKO I BILETY
+// Warstwa danych (bez DOM): lotnisko, bilety, dostęp do rynku, handel akcjami zagranicznymi. Wyświetlanie jest osobno (countries_ui.js:
+// `renderAirportWindow`), żeby w 0.16.5 przenieść je na stronę „Ferie i wakacje” w Internecie bez zmian w logice.
+// Lotnisko to megaprojekt „Port lotniczy” (state.js): miasto ogłasza go przez istniejący mechanizm, a wykonawcą jest spółka budowlana.
+// Bilet = licencja na rynek kraju, każdy inwestor osobno (gracz z gotówki funduszu, boty z własnej gotówki). Kupno spółek kraju przez
+// kantor z prowizją 0,6% (zamiast 0,25% na rynku krajowym). Pierwszy bilet do kraju niedołączonego otwiera jego giełdę.
+// =================================================================================
+
+const TICKET_RULES = {
+    rate: 0.05,              // cena biletu = 5% przepustki kraju (START_COUNTRIES.passCost), nie mniej niż 1000 zł
+    min: 1000,
+    tourismBonus: 0.015,     // premia Turystyki za sprzedany bilet (malejąca w 2 kw.)
+    botChance: 0.10,         // na kwartał i kraj: bot kupuje bilet (po ukończeniu lotniska)
+    autoOrderChance: 0.12,   // na kwartał: miasto samo zleca lotnisko (od kwartału autoOrderFromQ)
+    autoOrderFromQ: 8,
+    joinCooldownQ: 2         // odstęp między otwarciami krajów
+};
+
+let foreignTickets = {};     // posiadacz ('player' | id bota) → [kraje]
+let airportState = { orderedQ: null, forced: false, lastJoinQ: -99 };
+
+function resetTicketsState() { foreignTickets = {}; airportState = { orderedQ: null, forced: false, lastJoinQ: -99 }; }
+function hasTicketData() { return Object.keys(foreignTickets).length > 0 || airportState.orderedQ !== null || airportState.forced; }
+function getTicketsSnapshot() { return { t: foreignTickets, a: airportState }; }
+function applyTicketsSnapshot(snapshot) {
+    resetTicketsState();
+    if (!snapshot || typeof snapshot !== 'object') return;
+    for (const [holder, list] of Object.entries(snapshot.t || {})) if (Array.isArray(list)) foreignTickets[holder] = list.filter(c => COUNTRY_DEFS[c]);
+    const a = snapshot.a || {};
+    airportState = { orderedQ: a.orderedQ ?? null, forced: Boolean(a.forced), lastJoinQ: Number(a.lastJoinQ) || -99 };
+}
+
+function isAirportBuilt() {
+    return airportState.forced || (typeof specialProjects === 'object' && Boolean(specialProjects?.completed?.some(p => !p.timed && p.templateId === 'airport')));
+}
+function isAirportInProgress() { return typeof specialProjects === 'object' && Boolean(specialProjects?.active?.some(p => !p.timed && p.templateId === 'airport')); }
+
+/** Miasto zleca budowę lotniska (megaprojekt z wykonawcą budowlanym). Zwraca { ok, reason }. */
+function orderAirport() {
+    if (isAirportBuilt()) return { ok: false, reason: 'Lotnisko już stoi.' };
+    if (isAirportInProgress()) return { ok: false, reason: 'Lotnisko jest w budowie.' };
+    if (typeof ensureSpecialProjects === 'function') ensureSpecialProjects();
+    if (specialProjects.active.length >= MAX_ACTIVE_PROJECTS) return { ok: false, reason: 'Miasto prowadzi już maksymalną liczbę megaprojektów.' };
+    const def = MEGA_PROJECTS.find(p => p.id === 'airport');
+    if (!def || isMegaProjectTaken('airport')) return { ok: false, reason: 'Lotnisko nie jest dostępne.' };
+    createProject(def);
+    airportState.orderedQ = macro.quarter;
+    return { ok: true };
+}
+
+function getTicketPrice(country) {
+    const pass = START_COUNTRIES.find(c => c.id === country)?.passCost || 0;
+    return Math.max(TICKET_RULES.min, Math.round(pass * TICKET_RULES.rate / 100) * 100);
+}
+function hasTicket(holder, country) { return Boolean(foreignTickets[holder]?.includes(country)); }
+function getCountryCommission(country) { return COUNTRY_DEFS[country]?.operator?.commission ?? COUNTRY_RULES.commission; }
+/** Dostęp do zakupu spółek kraju: kraj dołączył i inwestor ma bilet. */
+function canTradeCountry(holder, country) { return isCountryJoined(country) && hasTicket(holder, country); }
+
+/** Bilet dla gracza (holder 'player', gotówka funduszu) albo bota (obiekt z `cash`). Pierwszy bilet do nowego kraju otwiera jego giełdę. */
+function buyTicket(country, holder = 'player') {
+    const def = COUNTRY_DEFS[country], isPlayer = holder === 'player';
+    const id = isPlayer ? 'player' : holder?.id;
+    if (!def) return { ok: false, reason: 'Nieznany kraj.' };
+    if (!isAirportBuilt()) return { ok: false, reason: 'Bilety sprzedaje dopiero lotnisko — miasto musi je wybudować.' };
+    if (hasTicket(id, country)) return { ok: false, reason: 'Masz już bilet na ten rynek.' };
+    const price = getTicketPrice(country);
+    if (isPlayer) {
+        if (typeof playerFund !== 'object' || !playerFund) return { ok: false, reason: 'Bilet kupuje fundusz.' };
+        if (price > playerCash + 1e-9) return { ok: false, reason: `Za mało gotówki funduszu (bilet ${formatNumberPl(price, 0)} zł).` };
+        playerCash -= price;
+        recordPayment('player-fund', 'external:linie-lotnicze', price, `Bilet: rynek ${def.name}`);
+    } else {
+        if (!holder || !(holder.cash >= price)) return { ok: false, reason: 'Za mało gotówki inwestora.' };
+        holder.cash -= price;
+        recordPayment(holder, 'external:linie-lotnicze', price, `Bilet: rynek ${def.name}`);
+    }
+    (foreignTickets[id] = foreignTickets[id] || []).push(country);
+    const opened = !isCountryJoined(country);
+    if (opened) { joinCountry(country, id); airportState.lastJoinQ = macro.quarter; }
+    if (typeof applySectorShock === 'function') applySectorShock('Turystyka', TICKET_RULES.tourismBonus, 2, { fadeQ: 2 });
+    if (isPlayer && typeof onTicketPurchased === 'function') onTicketPurchased(country, opened); // haczyk animacji lotu (countries_ui.js)
+    return { ok: true, price, opened };
+}
+
+/** Co kwartał: miasto samo zleca lotnisko; po jego ukończeniu boty kupują bilety i otwierają kolejne kraje. */
+function processAirportQuarterly() {
+    const q = macro.quarter;
+    if (!isAirportBuilt() && !isAirportInProgress() && q >= TICKET_RULES.autoOrderFromQ && Math.random() < TICKET_RULES.autoOrderChance) orderAirport();
+    if (!isAirportBuilt() || q - airportState.lastJoinQ < TICKET_RULES.joinCooldownQ) return;
+    const closed = Object.keys(COUNTRY_DEFS).filter(id => !isCountryJoined(id));
+    if (!closed.length || Math.random() >= TICKET_RULES.botChance * closed.length) return;
+    const country = getRandomElement(closed), price = getTicketPrice(country);
+    const buyers = aiCompetitors.filter(ai => !ai.isMafia && !ai.isGuard && !ai.isForeignBot && ai.personality !== 'market_maker' && ai.cash >= price * 8);
+    if (buyers.length) buyTicket(country, getRandomElement(buyers));
+}
+
+// --- Handel akcjami zagranicznymi (gracz) ---
+
+function buyForeignShares(issuerId, quantity) {
+    const issuer = foreignIssuers[issuerId];
+    quantity = Math.floor(Number(quantity));
+    if (!issuer || issuer.kind !== 'share') return { ok: false, reason: 'Ta spółka nie jest notowana na rynku zagranicznym.' };
+    if (!(quantity > 0)) return { ok: false, reason: 'Podaj liczbę akcji.' };
+    if (typeof playerFund !== 'object' || !playerFund) return { ok: false, reason: 'Akcje kupuje fundusz.' };
+    const def = COUNTRY_DEFS[issuer.country];
+    if (!canTradeCountry('player', issuer.country)) return { ok: false, reason: `Brak biletu na rynek: ${def?.name || issuer.country}. Bilet kupisz na lotnisku.` };
+    if (typeof isMarketHalted === 'function' && isMarketHalted()) return { ok: false, reason: 'Handel wstrzymany — zadziałał bezpiecznik giełdowy.' };
+    if (quantity > getGdrFree(issuer)) return { ok: false, reason: 'Nie ma tylu akcji w wolnym obrocie.' };
+    const cur = issuer.currency, valueLocal = quantity * issuer.price, midPln = toPln(valueLocal, cur);
+    const commissionPln = midPln * getCountryCommission(issuer.country);
+    const have = getCurrencyCash('player', cur), useLocal = Math.min(have, valueLocal), restLocal = valueLocal - useLocal;
+    let restPln = 0, spreadCost = 0;
+    if (restLocal > 1e-9) { const q = getKantorQuote(cur, toPln(restLocal, cur), 'buy'); restPln = restLocal * q.rate; spreadCost = restPln - restLocal * q.mid; }
+    const total = restPln + commissionPln;
+    if (total > playerCash + 1e-9) return { ok: false, reason: 'Za mało gotówki funduszu.' };
+    playerCash -= total;
+    if (useLocal > 0) { playerCashByCurrency[cur] = have - useLocal; if (playerCashByCurrency[cur] < 1e-9) delete playerCashByCurrency[cur]; }
+    issuer.holders.player = getGdrHeld(issuer) + quantity;
+    if (spreadCost > 0) recordPayment('player-fund', 'external:kantor', spreadCost, 'Kantor: spread przy zakupie akcji zagranicznych');
+    if (commissionPln > 0) recordPayment('player-fund', `external:${def.operator.id}`, commissionPln, `Prowizja: ${def.operator.name}`);
+    return { ok: true, cost: total, commissionPln, spreadCost };
+}
+
+/** Sprzedaż: wpływ w walucie spółki (minus prowizja); złotówki zdobędziesz w kantorze. */
+function sellForeignShares(issuerId, quantity) {
+    const issuer = foreignIssuers[issuerId];
+    quantity = Math.floor(Number(quantity));
+    if (!issuer || issuer.kind !== 'share' || !(quantity > 0)) return { ok: false, reason: 'Podaj liczbę akcji.' };
+    if (typeof isMarketHalted === 'function' && isMarketHalted()) return { ok: false, reason: 'Handel wstrzymany — zadziałał bezpiecznik giełdowy.' };
+    const held = getGdrHeld(issuer);
+    if (quantity > held) return { ok: false, reason: 'Za mało akcji.' };
+    const def = COUNTRY_DEFS[issuer.country], gross = quantity * issuer.price, fee = gross * getCountryCommission(issuer.country);
+    issuer.holders.player = held - quantity;
+    if (issuer.holders.player <= 0) delete issuer.holders.player;
+    addCurrencyCash('player', issuer.currency, gross - fee);
+    recordPayment('player-fund', `external:${def.operator.id}`, toPln(fee, issuer.currency), `Prowizja: ${def.operator.name}`);
+    return { ok: true, proceeds: gross - fee, currency: issuer.currency };
+}
