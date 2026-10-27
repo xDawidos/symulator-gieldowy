@@ -1674,6 +1674,26 @@ function getFundNav() {
     return Math.max(0, getFundAssets() - (Number(playerFund.liquidityLoan?.principal) || 0)) / playerFund.units; // 0.15.2: kredyt płynnościowy jest zobowiązaniem
 }
 
+/** 0.16.1: SIG20 — punkt odniesienia klientów instytucjonalnych (czołówka rynku zamiast całego rynku). */
+function getSig20Value() {
+    return Number(marketIndexes.find(index => index.id === 'SIG20')?.value) || 0;
+}
+
+/**
+ * 0.16.1: punkt odniesienia klienta zależy od typu. 'abs' — patrzy tylko, czy ma zysk w ostatnim czasie (emeryt, ostrożni, oszczędni),
+ * 'sig20' — porównuje z czołówką rynku (instytucje, inwestorzy, bogaci), 'gig' — z całym rynkiem (reszta).
+ */
+const CLIENT_BENCHMARK = { senior: 'abs', careful: 'abs', fearful: 'abs', miser: 'abs', officer: 'abs', institution: 'sig20', investor: 'sig20', rich: 'sig20' };
+const CLIENT_ABS_HURDLE = 0.015; // „ma zysk”: wynik okresu ponad ok. 1,5% (inflacja i lokata w skali okresu)
+
+/** Nadwyżka wyniku funduszu nad punktem odniesienia danego typu klienta (do `performance` w zadowoleniu). */
+function getClientExcess(def, ctx) {
+    const bench = CLIENT_BENCHMARK[def.key] || 'gig';
+    if (bench === 'abs' && Number.isFinite(ctx.recentReturn)) return ctx.recentReturn - CLIENT_ABS_HURDLE;
+    if (bench === 'sig20' && Number.isFinite(ctx.excessSig)) return ctx.excessSig;
+    return ctx.excess;
+}
+
 function getBenchmarkValue() {
     return Number(marketIndexes.find(index => index.id === 'GIG')?.value) || 0;
 }
@@ -1806,6 +1826,7 @@ function beginFundPeriod() {
         elapsedMs: 0,
         startNav: nav,
         startBenchmark: getBenchmarkValue(),
+        startSig20: getSig20Value(),
         startRivals: Object.fromEntries(getExternalFunds().map(fund => [fund.symbol, getExternalFundValue(fund)])),
         peakNav: nav,
         maxDrawdown: 0,
@@ -1954,6 +1975,15 @@ const TRUST_TARGET_FLOOR = 15;      // 0.13.1 (B12): dolny próg celu zaufania
 const TRUST_GAIN_BONUS_MAX = 10;    // dodatni wynik okresu (+150 pkt × zwrot, do +10)
 const TRUST_CALM_BONUS = 5;         // okres bez wymuszonej sprzedaży i z obsunięciem < 5%
 
+/** 0.16.1: premia do zaufania za wyprzedzanie innych funduszy w ostatnim okresie: 0 przy miejscu w dolnej połowie, do +TRUST_RANK_BONUS_MAX za pierwsze miejsce. */
+const TRUST_RANK_BONUS_MAX = 8;
+function getRankTrustBonus() {
+    const last = playerFund?.periods?.[playerFund.periods.length - 1];
+    if (!last || !(last.rankOf > 1) || !(last.rank >= 1)) return 0;
+    const share = (last.rankOf - last.rank) / (last.rankOf - 1); // 1 = pierwsze miejsce, 0 = ostatnie
+    return Math.max(0, share - 0.5) * 2 * TRUST_RANK_BONUS_MAX;
+}
+
 function computeTrustTarget() {
     const periods = playerFund.periods.slice(-FUND_PERIODS_SHOWN);
     const current = playerFund.current;
@@ -1988,6 +2018,7 @@ function computeTrustTarget() {
     // 0.13.1 (B12): droga powrotu — zysk w bieżącym okresie (nawet poniżej GIG) i spokojny czas odbudowują zaufanie,
     // a cel nigdy nie spada poniżej progu, z którego da się wyjść dobrymi wynikami.
     score += Math.min(TRUST_GAIN_BONUS_MAX, Math.max(0, partial.fundReturn) * 150);
+    score += getRankTrustBonus();
     if (current.forcedSales === 0 && current.maxDrawdown < 0.05) score += TRUST_CALM_BONUS * partial.weight;
 
     return Math.max(TRUST_TARGET_FLOOR, Math.min(100, score));
@@ -3785,7 +3816,7 @@ function getClientSatisfactionDrift(client, def, ctx) {
     const fee = getPlayerFeeRate();
     const parts = {
         reversion: (SATISFACTION_MEAN - client.satisfaction) * SATISFACTION_REVERSION,
-        performance: ctx.excess * def.chase * 0.3 - (def.comparesRivals && ctx.lastRankBad ? 0.02 : 0),
+        performance: getClientExcess(def, ctx) * def.chase * 0.3 - (def.comparesRivals && ctx.lastRankBad ? 0.02 : 0),
         trust: (ctx.trust - 50) / 50 * 0.012,                                   // słabszy składnik zaufania
         // 0.15.0.1 C6a: obsunięcie oceniane względem GIG (ponad 3 pp gorsze niż rynek) plus mała część absolutna w głębokiej bessie
         drawdown: -Math.max(0, ctx.maxDrawdown - (ctx.benchmarkDrawdown || 0) - 0.03) * def.volAversion * 0.3,
@@ -3870,7 +3901,10 @@ function processClientsWeekly() {
     let newMoneyBudget = Math.min(getFundAssets() * MAX_WEEKLY_NEW_MONEY_SHARE, getFundAssets() * getTopupInflowRate(trust) / 52 * getRandomInRange(0.5, 1.5));
 
     const ethicsIssue = typeof getFundEthicsIssue === 'function' ? getFundEthicsIssue() : null;
-    const ctx = { excess, trust, maxDrawdown: current.maxDrawdown, benchmarkDrawdown: current.benchmarkDrawdown, lastRankBad, ethicsIssue };
+    const sigNow = getSig20Value();
+    const excessSig = current.startSig20 > 0 && sigNow > 0 ? getPeriodReturn(current.startNav, nav) - getPeriodReturn(current.startSig20, sigNow) : null;
+    const recentReturn = lastPeriod ? (lastPeriod.fundReturn + getPeriodReturn(current.startNav, nav)) / 2 : getPeriodReturn(current.startNav, nav); // zysk w ostatnim czasie: ostatni okres i bieżący
+    const ctx = { excess, excessSig, recentReturn, trust, maxDrawdown: current.maxDrawdown, benchmarkDrawdown: current.benchmarkDrawdown, lastRankBad, ethicsIssue };
     for (const client of [...playerFund.clients]) {
         const def = getClientCharacter(client);
         if (def.ethical && ethicsIssue && (!client.ethicsNoted || client.ethicsNoted !== ethicsIssue)) {

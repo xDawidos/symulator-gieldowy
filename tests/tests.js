@@ -12153,6 +12153,28 @@ group('0.16.1', () => {
             assertEq(marketIndexes.map(i => i.id).join(), 'GIG,SIG20', 'nowa gra: znów tylko GIG i SIG20');
         } finally { reset(); }
     }, 99);
+
+    test('G6: premia do zaufania za wyprzedzanie funduszy — 0 w dolnej połowie, +8 za pierwsze miejsce, rośnie z miejscem i podnosi cel zaufania', () => {
+        fundWithCash(1_000_000);
+        const set = (rank, rankOf) => { playerFund.periods = [{ ...(playerFund.periods[0] || {}), fundReturn: 0, benchmarkReturn: 0, volatility: 0, maxDrawdown: 0, benchmarkVolatility: 0, benchmarkDrawdown: 0, rank, rankOf }]; };
+        set(1, 5); assertNear(getRankTrustBonus(), TRUST_RANK_BONUS_MAX, 'pierwsze miejsce', 1e-9);
+        set(2, 5); assertNear(getRankTrustBonus(), TRUST_RANK_BONUS_MAX * 0.5, 'drugie z pięciu', 1e-9);
+        set(3, 5); assertEq(getRankTrustBonus(), 0, 'środek stawki bez premii'); set(5, 5); assertEq(getRankTrustBonus(), 0, 'ostatnie miejsce bez premii (kara jest gdzie indziej)');
+        set(1, 1); assertEq(getRankTrustBonus(), 0, 'sam w rankingu — bez premii');
+        set(3, 5); const base = computeTrustTarget(); set(1, 5);
+        assertNear(computeTrustTarget() - base, TRUST_RANK_BONUS_MAX, 'cel zaufania wyższy o premię', 1e-6);
+    });
+
+    test('G6: punkt odniesienia zależy od typu klienta — emeryt patrzy na zysk w ostatnim czasie, instytucja na SIG20, reszta na GIG', () => {
+        const ctx = { excess: -0.05, excessSig: 0.03, recentReturn: 0.06 };
+        assertNear(getClientExcess(CLIENT_TYPES.senior, ctx), 0.06 - CLIENT_ABS_HURDLE, 'emeryt: zysk absolutny, GIG go nie obchodzi', 1e-12);
+        assertNear(getClientExcess(CLIENT_TYPES.institution, ctx), 0.03, 'instytucja: SIG20', 1e-12);
+        assertNear(getClientExcess(CLIENT_TYPES.brave, ctx), -0.05, 'odważny: GIG', 1e-12);
+        const loss = { excess: 0.05, excessSig: 0.05, recentReturn: -0.02 };
+        assert(getClientExcess(CLIENT_TYPES.senior, loss) < 0, 'emeryt ze stratą jest niezadowolony mimo lepszego wyniku niż GIG');
+        assertNear(getClientExcess(CLIENT_TYPES.institution, { excess: 0.02 }), 0.02, 'bez SIG20 spada do GIG', 1e-12);
+        assert(Object.keys(CLIENT_BENCHMARK).every(k => CLIENT_TYPES[k]), 'wszystkie typy w mapie istnieją');
+    });
 });
 
 async function runAllTests() {
