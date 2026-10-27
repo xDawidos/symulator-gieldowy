@@ -52,6 +52,7 @@ Stan na 2026-10-13: etap A (domknięcie 0.13 i 0.13.1) zrobiony na gałęzi work
 | 0.17 | Surowce i transport S0–S7 (`plan_0.17_surowce_transport.md`) | ⬜ szkic zakresu |
 | 0.17.1 | Wielkie testy rozgrywki i balans T0–T7 (`plan_0.17.1_wielkie_testy_balans.md`): serie ×200, presety graczy, gra ręczna | ⬜ plan zatwierdzony |
 | 0.17.2 | Energia i środowisko (`plan_0.17.2_energia_srodowisko.md`) | ⬜ szkic zakresu |
+| 0.17.3 | Rozmowy (`plan_0.17.3_rozmowy.md`): minigra wyboru z prezesami i inwestorami wg charakteru i relacji, boty kupują jednostki po cenie różnej od NAV (zmiana relacji) | ⬜ szkic zakresu (zgłoszenie 2026-10-27) |
 | 0.18 | Łańcuchy produkcyjne: 0.18.1 pilotaż (3 łańcuchy, bramka), 0.18.2 pełny graf (`plan_0.18_lancuchy_produkcyjne.md`) | ⬜ szkic zakresu |
 | 0.19–0.21 | Handel światowy; Globalne korporacje; Rynek pracy 2 (szkice w sekcji „Po 0.16”); **0.19.1 Polityka 2** (`plan_0.19.1_polityka_2.md`) | ⬜ kierunek |
 
