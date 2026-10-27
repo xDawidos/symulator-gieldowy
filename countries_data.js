@@ -57,3 +57,20 @@ COUNTRY_DEFS.US = {
     ]
 };
 
+
+COUNTRY_DEFS.CZ = {
+    id: 'CZ', name: 'Czechy', currency: 'CZK', region: 'EU', rho: 0.7, rateMean: 0.04,
+    operator: { id: 'PX', name: 'Burza Praha (PX)', commission: 0.006 },
+    labour: { wages: 0.9, rights: 'standard', unionMult: 0.8, shadow: 2, note: 'standard' },
+    companies: [
+        { id: 'PIV', name: 'Pivovar Bohemia', sector: 'Alkohole', subsector: 'Piwowarstwo i napoje', kind: 'normal', price: 520, special: 'summer', desc: 'Ulubiona spółka Kozela; upały w lecie podbijają sprzedaż.' },
+        { id: 'OVP', name: 'Ovce Pivo', sector: 'Alkohole', subsector: 'Piwowarstwo i napoje', kind: 'normal', price: 310 },
+        { id: 'SKA', name: 'Škodar Auto', sector: 'Motoryzacja', kind: 'normal', price: 880 },
+        { id: 'CEP', name: 'ČEP Energie', sector: 'Energia', kind: 'normal', price: 650 },
+        { id: 'KND', name: 'Knedlík a.s.', sector: 'Żywność', kind: 'normal', price: 240 },
+        { id: 'BSK', name: 'Bohemia Sklo', sector: 'Dobra konsumpcyjne', kind: 'normal', price: 410, desc: 'Szkło i kryształy.' },
+        { id: 'PRB', name: 'Praha Bank', sector: 'Bankowość', subsector: 'Bank komercyjny', kind: 'normal', price: 780 },
+        { id: 'KRG', name: 'Krecik Group', sector: 'Media', niche: 'TV', kind: 'normal', price: 150 },
+        { id: 'CKO', name: 'České Koleje', sector: 'Usługi', kind: 'state', price: 120, desc: 'Państwowa kolej.' }
+    ]
+};
