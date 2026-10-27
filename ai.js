@@ -205,6 +205,7 @@ if (weeklyRate === 0) {
 
 
 function aiBuyStock(ai, symbol, quantity) {
+    if (typeof isMarketHalted === 'function' && isMarketHalted()) return false;
     const stockToBuy = stocks.find(s => s.symbol === symbol);
     // Sprawdź, czy akcja istnieje i czy handel nie jest zablokowany
     if (!stockToBuy || stockToBuy.isTradeLocked) return;
@@ -264,6 +265,7 @@ function aiBuyStock(ai, symbol, quantity) {
 }
 
 function aiSellStock(ai, symbol, quantity) {
+    if (typeof isMarketHalted === 'function' && isMarketHalted()) return false;
     const holding = ai.portfolio[symbol];
 
     // Sprawdź, czy AI ma tę pozycję i czy ilość jest poprawna
@@ -380,11 +382,22 @@ function runAiMarian(ai) {
             const hasAccess = exchange.level <= ai.accessLevel;
             const isDividendStock = s.dividendPolicy && s.dividendPolicy !== 'None' && s.dividendPolicy !== 'Growth';
             const isReit = s.assetType === 'REIT';
-            return hasAccess && (isDividendStock || isReit);
+            return hasAccess && (isDividendStock || isReit) && canBotInvestIn(ai, s);
         });
         
         if (dividendStocks.length > 0) {
-            dividendStocks.sort((a, b) => a.dividendTimer - b.dividendTimer);
+            const marianRegime = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+            const isBearOrCapitulation = marianRegime?.phase === 'bear' || marianRegime?.phase === 'capitulation';
+            if (isBearOrCapitulation) {
+                // 0.15 H5: W bessie dokupują spółki o najwyższej stopie dywidendy
+                dividendStocks.sort((a, b) => {
+                    const yieldA = (a.lastDividend || a.dividendAmount || 0) / Math.max(1, a.price);
+                    const yieldB = (b.lastDividend || b.dividendAmount || 0) / Math.max(1, b.price);
+                    return yieldB - yieldA;
+                });
+            } else {
+                dividendStocks.sort((a, b) => a.dividendTimer - b.dividendTimer);
+            }
             const targetStock = dividendStocks[0];
 
             if (targetStock && targetStock.dividendTimer < 100000 && !ai.portfolio[targetStock.symbol]) {
@@ -405,7 +418,7 @@ function runAiMarian(ai) {
             const hasAccess = exchange.level <= ai.accessLevel;
             const isGoodHealth = s.financialHealth >= 1;
             const isDividendStock = (s.dividendPolicy && s.dividendPolicy !== 'None' && s.dividendPolicy !== 'Growth') || s.assetType === 'REIT';
-            return hasAccess && isGoodHealth && !isDividendStock; // Szukamy zdrowych firm, które NIE są celem jego głównej strategii
+            return hasAccess && isGoodHealth && !isDividendStock && canBotInvestIn(ai, s); // Szukamy zdrowych firm, które NIE są celem jego głównej strategii
         });
 
         if (profitStocks.length > 0) {
@@ -434,7 +447,14 @@ function processAiLoansWeekly(ai) {
             const loan = ai.loans[i];
             if (loan.isPawnLoan && now >= loan.maturityDate) {
                 const pawnShop = stocks.find(s => s.symbol === loan.collectorSymbol);
-                
+                if (!loan.collateral) { // zastaw rozliczony wykupem przy wycofaniu spółki (delistWithBuyout): spłata z gotówki, reszta umorzona
+                    const paid = Math.min(loan.amount, Math.max(0, ai.cash));
+                    ai.cash -= paid;
+                    if (pawnShop) pawnShop.cash += paid;
+                    ai.loans.splice(i, 1);
+                    continue;
+                }
+
                 if (ai.cash >= loan.amount) {
                     // AI ma pieniądze - spłaca
                     ai.cash -= loan.amount;
@@ -534,10 +554,46 @@ function processAiLoansWeekly(ai) {
                         ai.loans.splice(i, 1);
                     }
                 } else {
-                    loan.missedPayments = (loan.missedPayments || 0) + 1; // widoczne dla windykatora
+                    loan.missedPayments = (loan.missedPayments || 0) + 1;
                     const scorePenalty = 5;
                     ai.creditScore = Math.max(0, ai.creditScore - scorePenalty);
                     console.log(`[AI Kredyt] Wynik kredytowy ${ai.name} spadł do ${ai.creditScore} (-${scorePenalty}) za brak spłaty.`);
+
+                    // Windykator twardy: egzekucja akcji dłużnika przy zaległościach
+                    if (loan.collectorSymbol && loan.missedPayments >= 2) {
+                        const collector = stocks.find(s => s.symbol === loan.collectorSymbol);
+                        if (collector) {
+                            for (const sym in ai.portfolio) {
+                                const h = ai.portfolio[sym];
+                                if (!h || h.shares <= 0 || h.assetType === 'Startup') continue;
+                                const st = stocks.find(s => s.symbol === sym);
+                                if (!st || st.price <= 0) continue;
+
+                                const neededVal = Math.min(loan.amount, loan.weeklyPayment * 4);
+                                const free = h.shares - (h.lockedShares || 0); // 0.15.0.1 B4: akcje w zastawie zostają
+                                const sharesToSeize = Math.min(free, Math.ceil(neededVal / (st.price * 0.8)));
+                                if (sharesToSeize <= 0) continue;
+
+                                h.shares -= sharesToSeize;
+                                if (h.shares <= 0) delete ai.portfolio[sym];
+
+                                if (!collector.holdingPortfolio) collector.holdingPortfolio = {};
+                                if (!collector.holdingPortfolio[sym]) {
+                                    collector.holdingPortfolio[sym] = { quantity: 0, purchasePrice: st.price * 0.8 };
+                                }
+                                collector.holdingPortfolio[sym].quantity += sharesToSeize;
+
+                                const recovered = Math.round(sharesToSeize * st.price * 0.8);
+                                loan.amount = Math.max(0, loan.amount - recovered);
+                                loan.missedPayments = 0;
+
+                                if (typeof logEvent === 'function') {
+                                    logEvent(`⚖️ Windykator ${collector.name} zajął ${sharesToSeize} akcji ${sym} od bota ${ai.name} na poczet długu (odzyskane: ${formatZl(recovered, 0)}).`, 'review');
+                                }
+                                break;
+                            }
+                        }
+                    }
                 }
             } // Koniec pętli for
             
@@ -624,7 +680,7 @@ function makeAiDecision(ai) {
         if (s.assetType || s.isBankrupt) return false;
         const exchange = exchanges[s.exchange];
         // Sprawdź dostęp do giełdy i czy spółka nie jest zablokowana
-        return exchange && exchange.level <= ai.accessLevel && !s.isTradeLocked;
+        return exchange && exchange.level <= ai.accessLevel && !s.isTradeLocked && canBotInvestIn(ai, s);
     });
     // Bankier może działać (np. zarządzać depozytami/kredytami) nawet bez dostępnych akcji
     if (accessibleStocks.length === 0 && ai.personality !== 'banker') return;
@@ -641,9 +697,31 @@ function makeAiDecision(ai) {
     // Główna logika inwestycyjna zależna od osobowości
     switch (ai.personality) {
         case 'reckless':
-        case 'yolo_trader':
+        case 'yolo_trader': {
+            const regime = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+            const isBullOrEuphoria = regime?.phase === 'bull' || regime?.phase === 'euphoria';
+            const isBearOrCrash = regime?.phase === 'bear' || regime?.phase === 'capitulation' || (typeof marketCrashState !== 'undefined' && marketCrashState?.active);
+
+            // 0.15 H5: W bessie/kapitulacji/krachu spekulanci uciekają z rynku — sprzedaż 30–50% pozycji
+            if (isBearOrCrash && portfolioSize > 0 && Math.random() < 0.6) {
+                for (const symbol in ai.portfolio) {
+                    const holding = ai.portfolio[symbol];
+                    if (holding?.assetType === 'Startup') continue;
+                    const sharesToDump = Math.max(1, Math.floor(holding.shares * getRandomInRange(0.30, 0.50)));
+                    aiSellStock(ai, symbol, sharesToDump);
+                }
+                return;
+            }
+
             const currentLoansValue = (ai.loans || []).reduce((sum, l) => sum + l.amount, 0);
-            const maxLeverageRatio = (ai.personality === 'yolo_trader' ? 0.7 : 0.5); // Yolo bardziej ryzykuje
+            let baseLeverageCap = typeof getKnfLeverageCap === 'function' 
+                ? getKnfLeverageCap(ai.personality) 
+                : (ai.personality === 'yolo_trader' ? 0.7 : 0.5); // Yolo bardziej ryzykuje
+            // 0.15 H5: W hossie/euforii biorą więcej kredytu (lewar +25%)
+            if (isBullOrEuphoria) {
+                baseLeverageCap = Math.min(0.90, baseLeverageCap * 1.25);
+            }
+            const maxLeverageRatio = baseLeverageCap;
 
             // --- Priorytet spłaty długu (jeśli nadmiar gotówki) ---
             if (cashRatio > 0.6 && currentLoansValue > 0) {
@@ -662,7 +740,23 @@ function makeAiDecision(ai) {
             if (Math.random() < 0.5) { // Szansa na akcję giełdową
                 // Próba zakupu ryzykownych akcji
                 if (Math.random() < 0.7 || portfolioSize === 0) {
-                    const stockToBuy = getRandomElement(accessibleStocks.filter(s => s.volatilityFactor > 1.5 && s.financialHealth >= -1));
+                    let stockToBuy = null;
+                    if (isBullOrEuphoria) {
+                        // 0.15 H5: kupują spółki z największym wzrostem z 4 tygodni (ranking weekly)
+                        const ranked = accessibleStocks.map(s => {
+                            const closes = s.weeklyCloses || [];
+                            const ref = closes[closes.length - 4] || closes[0] || s.price;
+                            const chg = ref > 0 ? (s.price / ref - 1) : 0;
+                            return { stock: s, chg };
+                        }).sort((a, b) => b.chg - a.chg);
+                        if (ranked.length > 0) {
+                            const topCandidates = ranked.slice(0, Math.min(3, ranked.length)).map(r => r.stock);
+                            stockToBuy = getRandomElement(topCandidates);
+                        }
+                    }
+                    if (!stockToBuy) {
+                        stockToBuy = getRandomElement(accessibleStocks.filter(s => s.volatilityFactor > 1.5 && s.financialHealth >= -1));
+                    }
                     if (stockToBuy) {
                         const desiredInvestment = ai.cash * getRandomInRange(0.4, 0.8);
                         const desiredQuantity = Math.floor(desiredInvestment / stockToBuy.price);
@@ -743,6 +837,51 @@ function makeAiDecision(ai) {
                 }
             }
             break; // Koniec reckless/yolo
+        }
+
+        case 'police_chief': {
+            // Komendant Jakub: kocha spółki defensywne, nie lubi nowych spółek
+            if (Math.random() < 0.5) {
+                // Sprzedaż: realizuje zyski powyżej 35% lub przy katastrofalnej kondycji
+                for (const symbol in ai.portfolio) {
+                    const holding = ai.portfolio[symbol];
+                    const stock = stocks.find(s => s.symbol === symbol);
+                    if (!stock) continue;
+                    if (stock.price > holding.avgPrice * 1.35 || stock.financialHealth <= -4) {
+                        aiSellStock(ai, symbol, holding.shares);
+                        return;
+                    }
+                }
+
+                // Zakup: tylko sektory defensywne, nie lubi nowych spółek
+                const defPool = accessibleStocks.filter(s => {
+                    if (!s || s.assetType === 'Startup' || s.isBankrupt) return false;
+                    if (typeof isStockDefensive === 'function' && !isStockDefensive(s)) return false;
+                    if (s.companyAge !== undefined && s.companyAge < 8) return false;
+                    return true;
+                });
+
+                if (defPool.length > 0) {
+                    const stockToBuy = getRandomElement(defPool);
+                    if (stockToBuy) {
+                        const targetShares = Math.max(1, Math.floor(2500 / Math.max(0.01, stockToBuy.price)));
+                        const cost = targetShares * stockToBuy.price;
+                        const subsidy = ai.cash < cost ? takeFromTreasury(Math.max(1000, Math.ceil(cost - ai.cash) + 500)) : 0; // 0.15.0.1 B6: ze skarbu państwa
+                        if (subsidy > 0) {
+                            ai.cash += subsidy;
+                            if (typeof logEvent === 'function') {
+                                logEvent(`🚓 Komendant Jakub otrzymał państwową dopłatę (${formatZl(subsidy, 0)}) na zakup akcji defensywnych ${stockToBuy.name}.`, 'state');
+                            }
+                        }
+                        const buyShares = Math.min(targetShares, Math.floor(ai.cash / stockToBuy.price));
+                        if (buyShares > 0) {
+                            aiBuyStock(ai, stockToBuy.symbol, buyShares);
+                        }
+                    }
+                }
+            }
+            break;
+        }
 
         case 'calm':
         case 'dividend_chaser':
@@ -750,6 +889,21 @@ function makeAiDecision(ai) {
                 runAiMarian(ai); // Marian ma swoją logikę
             } else { // Logika dla 'calm'
                 if (Math.random() < 0.25) {
+                    const calmRegime = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+                    const calmPremium = calmRegime?.premium ?? 0;
+                    const calmSentiment = calmRegime?.sentiment ?? 50;
+
+                    // 0.15 H5: calm redukuje pozycje przy premii rynku > +20%
+                    if (calmPremium > 0.20) {
+                        for (const symbol in ai.portfolio) {
+                            const holding = ai.portfolio[symbol];
+                            if (holding.assetType === 'Startup') continue;
+                            const toSell = Math.max(1, Math.floor(holding.shares * 0.3));
+                            aiSellStock(ai, symbol, toSell);
+                            return;
+                        }
+                    }
+
                     for (const symbol in ai.portfolio) {
                         const holding = ai.portfolio[symbol];
                         if (holding.assetType === 'Startup') continue;
@@ -759,7 +913,12 @@ function makeAiDecision(ai) {
                             return;
                         }
                     }
-                    const stockToBuy = getRandomElement(accessibleStocks.filter(s => s.volatilityFactor < 1.2 && s.financialHealth >= 0));
+                    // 0.15 H5: calm kupuje chętniej przy wskaźniku strachu < 25
+                    let calmPool = accessibleStocks.filter(s => s.volatilityFactor < 1.2 && s.financialHealth >= 0);
+                    if (calmSentiment < 25) {
+                        calmPool = accessibleStocks.filter(s => s.financialHealth >= 1);
+                    }
+                    const stockToBuy = getRandomElement(calmPool);
                     if (stockToBuy) {
                         const investmentFraction = 0.1;
                         const quantity = Math.floor((aiNetWorth * investmentFraction) / stockToBuy.price);
@@ -786,12 +945,26 @@ function makeAiDecision(ai) {
         case 'whale':
         case 'pro_investor':
             if (Math.random() < (ai.personality === 'pro_investor' ? 0.7 : 0.4)) {
+                const proRegime = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+                const proPremium = proRegime?.premium ?? 0;
+                const proSentiment = proRegime?.sentiment ?? 50;
+
+                // 0.15 H5: pro_investor redukuje pozycje przy premii rynku > +20%
+                if (ai.personality === 'pro_investor' && proPremium > 0.20 && Math.random() < 0.5) {
+                    for (const symbol in ai.portfolio) {
+                        const holding = ai.portfolio[symbol];
+                        if (holding.assetType === 'Startup') continue;
+                        const toSell = Math.max(1, Math.floor(holding.shares * 0.35));
+                        aiSellStock(ai, symbol, toSell);
+                        return;
+                    }
+                }
+
                 // Sprzedaż
                 for (const symbol in ai.portfolio) {
                     const holding = ai.portfolio[symbol];
                     if (holding.assetType === 'Startup') continue;
                     const stock = stocks.find(s => s.symbol === symbol);
-                    // Dodaj sprawdzenie, czy stock istnieje
                     if (!stock) continue; 
                     const profitTarget = ai.personality === 'pro_investor' ? 1.25 : 1.35;
                     const healthThreshold = ai.personality === 'pro_investor' ? -1 : 0;
@@ -824,9 +997,11 @@ function makeAiDecision(ai) {
                     }
                 }
 
-                // Zakup najlepszych akcji (jeśli mało pozycji)
-                if (portfolioSize < (ai.personality === 'pro_investor' ? 3 : 5)) {
-                    const healthMin = ai.personality === 'pro_investor' ? 1 : 2;
+                // Zakup najlepszych akcji
+                const isAccumulation = proRegime?.phase === 'accumulation';
+                const allowsBuy = (portfolioSize < (ai.personality === 'pro_investor' ? 3 : 5)) || (ai.personality === 'whale' && isAccumulation) || (ai.personality === 'pro_investor' && proSentiment < 25);
+                if (allowsBuy) {
+                    const healthMin = ai.personality === 'pro_investor' ? 1 : (isAccumulation ? 0 : 2);
                     const bestBuys = accessibleStocks.filter(s => s.financialHealth >= healthMin).sort((a, b) => b.financialHealth - a.financialHealth);
                     if (bestBuys.length > 0) {
                         const stockToBuy = bestBuys[0];
@@ -835,7 +1010,9 @@ function makeAiDecision(ai) {
                              const loanAmount = neededCash * (ai.personality === 'pro_investor' ? 0.3 : 0.5);
                              aiTakeLoan(ai, loanAmount);
                         }
-                        const quantity = Math.floor((ai.cash * (ai.personality === 'pro_investor' ? 0.33 : 0.4)) / stockToBuy.price);
+                        // 0.15 H5: whale kupuje duże pakiety w Akumulacji
+                        const buyFraction = (ai.personality === 'whale' && isAccumulation) ? 0.60 : (ai.personality === 'pro_investor' ? 0.33 : 0.4);
+                        const quantity = Math.floor((ai.cash * buyFraction) / stockToBuy.price);
                         if (quantity > 0) {
                             aiBuyStock(ai, stockToBuy.symbol, quantity);
                         }
@@ -885,7 +1062,7 @@ function makeAiDecision(ai) {
             const banker = ai;
             const bankerNetWorth = aiNetWorth;
             const bankerPortfolioSize = portfolioSize;
-            const financeSectors = ['Finanse', 'Bankowość Komercyjna'];
+            const financeSectors = ['Finanse', 'Bankowość'];
 
             // 1. Sprzedaż
             let soldSomethingBanker = false;
@@ -1621,82 +1798,193 @@ function aiChooseCommercialBank(serviceType, ai) {
     return availableBanks[0]; // Zwróć najlepszy
 }
 
+// =================================================================================
+// 0.14.2 P5: BANK INWESTYCYJNY — „PAKIET DO ODSPRZEDAŻY”, POPULARNE SPÓŁKI, PORTFEL SKONCENTROWANY
+// =================================================================================
+const IB_MAX_POSITIONS = 12;
+const IB_MIN_POSITION = 0.01;          // minimalna pozycja: 1% akcji spółki
+const IB_DUST_POSITION = 0.005;        // pozycje < 0,5% bank sprzedaje
+const IB_BLOCK_HOLDER = [0.40, 0.50];  // posiadacz blisko kontroli
+const IB_BLOCK_TARGET = [0.10, 0.15];  // pakiet banku
+const IB_RESALE_PREMIUM = [0.10, 0.20];
+const IB_RESALE_CHANCE = 0.10;         // na turę: bot/spółka „chce przekroczyć 50%” i odkupuje pakiet
+const IB_POPULAR_TOP = 5;
+const IB_OFFER_QUARTERS = 2;           // oferta dla gracza ważna 2 kwartały
+const IB_IGNORED_HOLDERS = ['insiders', 'state', 'city', 'etf', 'bank', 'wallet'];
+
+function ensureInvestmentBankState(bank) {
+    if (!bank.stockPortfolio) bank.stockPortfolio = {};
+    if (!bank.resaleBlocks) bank.resaleBlocks = {};      // symbol → { holderId, kind }
+    if (!bank.resaleStats) bank.resaleStats = { blocks: 0, resold: 0, tender: 0 };
+    return bank;
+}
+
+/** Posiadacz z 40–50% akcji (kandydat do odkupienia pakietu) albo null. */
+function findNearControlHolder(stock, bank) {
+    const top = getShareholders(stock).find(h => !IB_IGNORED_HOLDERS.includes(h.kind) && h.id !== bank.id);
+    return top && top.pct >= IB_BLOCK_HOLDER[0] && top.pct <= IB_BLOCK_HOLDER[1] ? top : null;
+}
+
+/** Spółki najpopularniejsze w ostatnim kwartale (obrót). */
+function getPopularStocks(limit = IB_POPULAR_TOP) {
+    return stocks.filter(s => !s.assetType && !s.isBankrupt && !s.isTradeLocked && (Number(s.lastTurnover) || 0) > 0)
+        .sort((a, b) => (b.lastTurnover || 0) - (a.lastTurnover || 0)).slice(0, limit);
+}
+
+function ibSell(bank, stock, quantity) {
+    const holding = bank.stockPortfolio[stock.symbol];
+    quantity = Math.min(Math.floor(quantity), holding?.shares || 0);
+    if (!(quantity > 0)) return 0;
+    const proceeds = stock.price * quantity;
+    bank.cash += proceeds;
+    if (typeof chargeMarketCommission === 'function') chargeMarketCommission(stock, proceeds, bank);
+    holding.shares -= quantity;
+    stock.sharesHeld -= quantity; // akcje wracają na rynek
+    if (holding.shares <= 0) { delete bank.stockPortfolio[stock.symbol]; delete bank.resaleBlocks[stock.symbol]; }
+    return quantity;
+}
+
+function ibBuy(bank, stock, quantity, tag) {
+    quantity = Math.min(Math.floor(quantity), getAvailableShares(stock), Math.floor(bank.cash / Math.max(0.01, stock.price)));
+    if (!(quantity > 0)) return 0;
+    const cost = quantity * stock.price;
+    bank.cash -= cost;
+    const existing = bank.stockPortfolio[stock.symbol];
+    bank.stockPortfolio[stock.symbol] = existing
+        ? { ...existing, shares: existing.shares + quantity, avgPrice: (existing.avgPrice * existing.shares + cost) / (existing.shares + quantity) }
+        : { shares: quantity, avgPrice: stock.price, tag };
+    stock.sharesHeld += quantity;
+    if (typeof chargeMarketCommission === 'function') chargeMarketCommission(stock, cost, bank);
+    return quantity;
+}
+
+/** Przeniesienie pakietu z banku do kupującego (bot, fundusz bota, spółka, gracz) po cenie z premią. */
+function transferBankBlock(bank, stock, holder, shares, price) {
+    const cost = shares * price;
+    const take = () => { const h = bank.stockPortfolio[stock.symbol]; h.shares -= shares; if (h.shares <= 0) { delete bank.stockPortfolio[stock.symbol]; delete bank.resaleBlocks[stock.symbol]; } bank.cash += cost; };
+    if (holder.kind === 'ai') {
+        const ai = holder.entity; if (!ai || ai.cash < cost) return false;
+        ai.cash -= cost; const h = ai.portfolio[stock.symbol] || (ai.portfolio[stock.symbol] = { shares: 0, avgPrice: price });
+        h.avgPrice = (h.avgPrice * h.shares + cost) / (h.shares + shares); h.shares += shares;
+    } else if (holder.kind === 'botFund') {
+        const fund = holder.entity?.fund; if (!fund || fund.cash < cost) return false;
+        fund.cash -= cost; const h = fund.portfolio[stock.symbol] || (fund.portfolio[stock.symbol] = { shares: 0, avgPrice: price });
+        h.avgPrice = (h.avgPrice * h.shares + cost) / (h.shares + shares); h.shares += shares;
+    } else if (holder.kind === 'company') {
+        const owner = holder.entity; if (!owner || (Number(owner.cash) || 0) < cost) return false;
+        adjustCompanyCash(owner, -cost);
+        owner.equityStakes = owner.equityStakes || {}; owner.equityStakes[stock.symbol] = (owner.equityStakes[stock.symbol] || 0) + shares;
+    } else if (holder.kind === 'player') {
+        if (playerCash < cost) return false;
+        playerCash -= cost;
+        const h = playerPortfolio[stock.symbol] || (playerPortfolio[stock.symbol] = { shares: 0, avgPrice: price, assetType: 'stock' });
+        h.avgPrice = (h.avgPrice * h.shares + cost) / (h.shares + shares); h.shares += shares;
+        recordPayment('player-fund', `external:${bank.id}`, cost, `Pakiet ${stock.symbol} od ${bank.name}`);
+    } else return false;
+    take();
+    return true;
+}
+
+/** Gracz przyjmuje ofertę pakietu od banku inwestycyjnego (mail). */
+function acceptBankBlockOffer(bankId) {
+    const bank = commercialBanks.find(b => b.id === bankId);
+    const offer = bank?.resaleOffer;
+    const stock = offer && stocks.find(s => s.symbol === offer.symbol);
+    const held = stock && bank.stockPortfolio[stock.symbol]?.shares || 0;
+    if (!stock || held < offer.shares) { showToast('Oferta pakietu wygasła.', 'default'); if (bank) bank.resaleOffer = null; return false; }
+    if (playerCash < offer.shares * offer.price) { showToast('Za mało gotówki funduszu.', 'error'); return false; }
+    if (!transferBankBlock(bank, stock, { kind: 'player' }, offer.shares, offer.price)) return false;
+    bank.resaleOffer = null;
+    bank.resaleStats.resold++;
+    logEvent(`🏦 Fundusz odkupuje od ${bank.name} pakiet ${offer.shares.toLocaleString('pl-PL')} akcji ${stock.name} po ${formatZl(offer.price)} (premia za kontrolę).`, 'review');
+    if (typeof refreshFundViews === 'function') refreshFundViews();
+    return true;
+}
+
 function runInvestmentBankAI(bank) {
     if (!bank.isActive || bank.type !== BANK_TYPES.INVESTMENT) return;
+    ensureInvestmentBankState(bank);
+    const quarter = typeof macro === 'object' ? macro.quarter : 0;
 
-    const portfolioSize = Object.keys(bank.stockPortfolio).length;
-    const cashReserveRatio = 0.1; // Bank trzyma 10% kapitału jako gotówkę
-    const targetPortfolioValue = bank.cash / (1 - cashReserveRatio) * (1 - cashReserveRatio); // Docelowa wartość akcji w portfelu
+    // 1. Porządek: bankruci znikają, pozycje < 0,5% akcji idą na rynek.
+    for (const symbol of Object.keys(bank.stockPortfolio)) {
+        const stock = stocks.find(s => s.symbol === symbol);
+        if (!stock || stock.isBankrupt) { delete bank.stockPortfolio[symbol]; delete bank.resaleBlocks[symbol]; continue; }
+        if (bank.stockPortfolio[symbol].shares / Math.max(1, stock.totalShares) < IB_DUST_POSITION && !stock.isTradeLocked) { ibSell(bank, stock, bank.stockPortfolio[symbol].shares); return; }
+    }
+    // Ponad 12 pozycji (np. akcje z debiutu startupu, w który bank wpłacił) — sprzedaj najmniejszą (poza pakietem do odsprzedaży).
+    if (Object.keys(bank.stockPortfolio).length > IB_MAX_POSITIONS) {
+        const smallest = Object.entries(bank.stockPortfolio).filter(([symbol]) => !bank.resaleBlocks[symbol])
+            .map(([symbol, h]) => ({ stock: stocks.find(s => s.symbol === symbol), h }))
+            .filter(x => x.stock && !x.stock.isTradeLocked)
+            .sort((a, b) => a.h.shares * a.stock.price - b.h.shares * b.stock.price)[0];
+        if (smallest) { ibSell(bank, smallest.stock, smallest.h.shares); return; }
+    }
 
-    // --- 1. Sprzedaż Akcji ---
-    if (Math.random() < 0.3) { // 30% szans na próbę sprzedaży
-        for (const symbol in bank.stockPortfolio) {
-            const holding = bank.stockPortfolio[symbol];
-            const stock = stocks.find(s => s.symbol === symbol);
-            if (!stock || stock.isBankrupt) {
-                delete bank.stockPortfolio[symbol]; // Usuń zbankrutowane
-                continue;
+    // 2. Pakiety do odsprzedaży: wezwanie → pakiet dla wzywającego; posiadacz 40–50% → odkupienie z premią.
+    for (const [symbol, block] of Object.entries(bank.resaleBlocks)) {
+        const stock = stocks.find(s => s.symbol === symbol);
+        const holding = bank.stockPortfolio[symbol];
+        if (!stock || !holding) { delete bank.resaleBlocks[symbol]; continue; }
+        const pair = typeof getTakeoverAgainst === 'function' ? getTakeoverAgainst(stock) : null;
+        const tenderPrice = pair?.process?.offerDetails?.buyoutPricePerShare;
+        if (pair && tenderPrice > 0 && (Number(pair.initiator.cash) || 0) >= holding.shares * tenderPrice) {
+            const shares = holding.shares;
+            transferBankBlock(bank, stock, { kind: 'company', entity: pair.initiator }, shares, tenderPrice);
+            bank.resaleStats.tender++;
+            logEvent(`🏦 ${bank.name} sprzedaje w wezwaniu pakiet ${shares.toLocaleString('pl-PL')} akcji ${stock.name} spółce ${pair.initiator.name}.`, 'market');
+            return;
+        }
+        const holder = getShareholders(stock).find(h => h.id === block.holderId);
+        if (!holder || holder.pct > 0.5 || holder.pct < IB_BLOCK_HOLDER[0] - 0.05) { delete bank.resaleBlocks[symbol]; continue; } // posiadacz zmienił plany — zwykła pozycja
+        const price = stock.price * (1 + getRandomInRange(...IB_RESALE_PREMIUM));
+        if (holder.kind === 'player') {
+            if (!bank.resaleOffer || quarter > bank.resaleOffer.expiresQuarter) {
+                bank.resaleOffer = { symbol, shares: holding.shares, price, expiresQuarter: quarter + IB_OFFER_QUARTERS };
+                if (typeof addMail === 'function') addMail({
+                    sender: bank.name, subject: `🏦 Pakiet ${stock.name} do odkupienia`,
+                    body: `${bank.name} ma ${holding.shares.toLocaleString('pl-PL')} akcji ${stock.name} (${(holding.shares / stock.totalShares * 100).toFixed(1)}%). Z Twoimi ${(holder.pct * 100).toFixed(1)}% to kontrola nad spółką. Cena ${formatZl(price)} za akcję (premia za kontrolę ${((price / stock.price - 1) * 100).toFixed(0)}%). Oferta ważna ${IB_OFFER_QUARTERS} kw.`,
+                    importance: 2, symbol, action: { type: 'bankBlock', bankId: bank.id, symbol }
+                });
             }
-
-            const profitMargin = stock.price / holding.avgPrice;
-            const shouldSell = (profitMargin > 1.30 || // Sprzedaj z >30% zyskiem
-                                profitMargin < 0.85 || // Ogranicz stratę przy <15% spadku
-                                stock.financialHealth < -1); // Sprzedaj słabe spółki
-
-            if (shouldSell) {
-                const quantityToSell = Math.floor(holding.shares * getRandomInRange(0.3, 0.7)); // Sprzedaj część
-                if (quantityToSell > 0) {
-                    const proceeds = stock.price * quantityToSell;
-                    bank.cash += proceeds;
-                    if (typeof chargeMarketCommission === 'function') chargeMarketCommission(stock, proceeds, bank);
-                    holding.shares -= quantityToSell;
-                    stock.sharesHeld -= quantityToSell; // Akcje wracają na rynek
-                    if (holding.shares <= 0) {
-                        delete bank.stockPortfolio[symbol];
-                    }
-                    console.log(`[AI Bank Inw.] ${bank.name} sprzedał ${quantityToSell} akcji ${symbol}.`);
-                    return; // Tylko jedna transakcja na turę
-                }
-            }
+        } else if (Math.random() < IB_RESALE_CHANCE && transferBankBlock(bank, stock, holder, holding.shares, price)) {
+            bank.resaleStats.resold++;
+            logEvent(`🏦 ${holder.name} odkupuje od ${bank.name} pakiet akcji ${stock.name} z premią ${((price / stock.price - 1) * 100).toFixed(0)}% i przekracza 50%.`, 'market');
+            return;
         }
     }
 
-    // --- 2. Zakup Akcji ---
-    if (Math.random() < 0.4 && bank.cash > bank.initialCapital * cashReserveRatio * 1.2) { // 40% szans i ma nadwyżkę gotówki
-        const potentialTargets = stocks.filter(s =>
-            !s.assetType && // Nie kupuje specjalnych typów
-            !s.isBankrupt &&
-            s.financialHealth >= 1 && // Tylko zdrowe spółki
-            exchanges[s.exchange].level >= 1 && // Unika śmieciowych
-            !bank.stockPortfolio[s.symbol] // Nie kupuje tego, co już ma (uproszczenie)
-        );
+    // 3. Popularne spółki: sprzedaż, gdy wypadły z czołówki obrotu.
+    const popular = getPopularStocks();
+    for (const [symbol, holding] of Object.entries(bank.stockPortfolio)) {
+        if (holding.tag !== 'popular' || popular.some(s => s.symbol === symbol)) continue;
+        const stock = stocks.find(s => s.symbol === symbol);
+        if (stock && !stock.isTradeLocked && Math.random() < 0.3) { ibSell(bank, stock, holding.shares); return; }
+    }
 
-        if (potentialTargets.length > 0) {
-            potentialTargets.sort((a, b) => (b.financialHealth / b.volatilityFactor) - (a.financialHealth / a.volatilityFactor)); // Prosty wskaźnik atrakcyjności
-            const targetStock = potentialTargets[0];
-            const investmentAmount = bank.cash * getRandomInRange(0.1, 0.25); // Inwestuje 10-25% gotówki
-            const quantity = Math.min(Math.floor(investmentAmount / targetStock.price), getAvailableShares(targetStock)); // najwyżej wolne akcje
-            const cost = quantity * targetStock.price;
-
-            if (quantity > 0 && cost <= bank.cash) {
-                // Sprawdź limit 30% dla innych banków
-                const targetIsBank = commercialBanks.some(b => b.id === `bank_${targetStock.symbol}`); // Placeholder - sprawdzimy jak banki wejdą na giełdę
-                if (targetIsBank) {
-                     // TODO: Dodać logikę sprawdzania limitu 30% (w Etapie 3.5)
-                     console.log(`[AI Bank Inw.] ${bank.name} rozważa zakup banku ${targetStock.symbol}, ale limit nie jest jeszcze sprawdzany.`);
-                }
-
-                bank.cash -= cost;
-                const existing = bank.stockPortfolio[targetStock.symbol]; // dokupienie, nie nadpisanie pakietu
-                bank.stockPortfolio[targetStock.symbol] = existing
-                    ? { shares: existing.shares + quantity, avgPrice: (existing.avgPrice * existing.shares + cost) / (existing.shares + quantity) }
-                    : { shares: quantity, avgPrice: targetStock.price };
-                targetStock.sharesHeld += quantity;
-                if (typeof chargeMarketCommission === 'function') chargeMarketCommission(targetStock, cost, bank);
-                console.log(`[AI Bank Inw.] ${bank.name} kupił ${quantity} akcji ${targetStock.symbol}.`);
-                return; // Tylko jedna transakcja
-            }
+    // 4. Zakupy (najwyżej 12 pozycji, min. 1% akcji, tylko wolny obrót).
+    const positions = Object.keys(bank.stockPortfolio).length;
+    if (positions >= IB_MAX_POSITIONS || bank.cash <= (bank.initialCapital || 0) * 0.12) return;
+    const eligible = s => !s.assetType && !s.isBankrupt && !s.isTradeLocked && !s.isBankStock && exchanges[s.exchange]?.level >= 1;
+    for (const stock of stocks) {
+        if (!eligible(stock) || bank.stockPortfolio[stock.symbol]) continue;
+        const holder = findNearControlHolder(stock, bank);
+        if (!holder) continue;
+        const target = Math.floor(stock.totalShares * getRandomInRange(...IB_BLOCK_TARGET));
+        if (Math.min(target, getAvailableShares(stock)) < stock.totalShares * IB_MIN_POSITION) continue;
+        const bought = ibBuy(bank, stock, Math.min(target, Math.floor(bank.cash * 0.5 / stock.price)), 'block');
+        if (bought >= stock.totalShares * IB_MIN_POSITION) {
+            bank.resaleBlocks[stock.symbol] = { holderId: holder.id, kind: holder.kind, since: quarter };
+            bank.resaleStats.blocks++;
+            logEvent(`🏦 ${bank.name} skupuje ${bought.toLocaleString('pl-PL')} akcji ${stock.name} (${(bought / stock.totalShares * 100).toFixed(1)}%) — pakiet do odsprzedaży dla posiadacza ${(holder.pct * 100).toFixed(0)}%.`, 'market');
+            return;
         }
+    }
+    for (const stock of popular) {
+        if (!eligible(stock) || bank.stockPortfolio[stock.symbol]) continue;
+        const quantity = Math.min(Math.floor(bank.cash * getRandomInRange(0.15, 0.25) / stock.price), Math.floor(stock.totalShares * 0.05));
+        if (Math.min(quantity, getAvailableShares(stock)) < stock.totalShares * IB_MIN_POSITION) continue;
+        if (ibBuy(bank, stock, quantity, 'popular') > 0) return;
     }
 }
 
@@ -1840,28 +2128,21 @@ function aiBuySharesFromInvestmentBank(ai, bankId, symbol, quantity) {
  * @param {object} loan - Obiekt pożyczki AI.
  * @param {number} newInterestRate - Nowe, wyższe oprocentowanie.
  */
-function aiDecideOnDebtOffer(ai, collectorStock, loan, newInterestRate) {
-    let acceptChance = 0.10; // Domyślnie to zła oferta, więc niska szansa
+function aiDecideOnDebtOffer(ai, collectorStock, loan, newInterestRate, takeoverCost = null) {
+    let acceptChance = 0.30; // Zwiększona akceptacja restrukturyzacji
 
-    // Jeśli AI jest zdesperowane (niski credit score lub pominięte raty), chętniej przyjmie
-    if (ai.creditScore < 50 || (loan.missedPayments && loan.missedPayments >= 2)) {
-        acceptChance = 0.90; // 90% szans, bo potrzebuje resetu
+    if (ai.creditScore < 50 || (loan.missedPayments && loan.missedPayments >= 1)) {
+        acceptChance = 0.95; // 95% szans przy problemach ze spłatą
     }
 
-    // Osobowość też ma znaczenie
     if (ai.personality === 'reckless' || ai.personality === 'yolo_trader') {
-        acceptChance += 0.20; // Bardziej skłonni do ryzykownych decyzji
-    }
-    if (ai.personality === 'calm' || ai.personality === 'pro_investor' || ai.personality === 'banker') {
-        acceptChance -= 0.05; // Mniej skłonni
+        acceptChance += 0.10;
     }
 
     if (Math.random() < acceptChance) {
-        // AI Akceptuje
         console.log(`[AI Decyzja] ${ai.name} akceptuje ofertę przejęcia długu przez ${collectorStock.name}.`);
-        executeDebtTransfer(collectorStock, ai, loan, newInterestRate);
+        executeDebtTransfer(collectorStock, ai, loan, newInterestRate, takeoverCost);
     } else {
-        // AI Odrzuca
         console.log(`[AI Decyzja] ${ai.name} odrzuca ofertę przejęcia długu.`);
     }
 }
@@ -2004,7 +2285,7 @@ function aiUseMediaInfluence(ai) {
                 // Jeśli AI kontroluje spółkę, atakuje rywala z sektora
                 const controlled = stocks.find(s => s.symbol === controlledStock);
                 targetStock = getRandomElement(stocks.filter(s => 
-                    !s.assetType && !s.isBankrupt && s.sector.includes(controlled.sector[0]) && s.symbol !== controlledStock
+                    !s.assetType && !s.isBankrupt && s.sector.includes(getMainSector(controlled)) && s.symbol !== controlledStock
                 ));
             } else {
                 // Jeśli AI nie kontroluje niczego, atakuje losową spółkę
@@ -2059,7 +2340,7 @@ const RELATION_HOSTILE = -40;
 const RELATION_FRIENDLY = 40;
 const RELATION_DECAY = 0.05;            // co kwartał 5% drogi do zera
 const RELATION_LOG_LIMIT = 30;
-const GIFT_RELATION_PER_100 = 1;        // +1 pkt za 100 zł prezentu
+const GIFT_RELATION_PER_100 = 1;        // +1 pkt za 100 PLN prezentu
 const GIFT_MAX_GAIN = 15;
 const BOT_BLOCK_DISCOUNT = 0.05;
 
@@ -2174,14 +2455,14 @@ function giveGiftToBot(id, amount) {
     const person = findRelationPerson(id);
     amount = Math.floor(Number(amount));
     if (!person) return false;
-    if (!(amount >= 100)) { showToast('Prezent: minimum 100 zł.', 'warning'); return false; }
+    if (!(amount >= 100)) { showToast('Prezent: minimum 100 PLN.', 'warning'); return false; }
     if (playerWallet.cash < amount) { showToast('Za mało pieniędzy w portfelu prywatnym.', 'error'); return false; }
     const quarter = typeof macro === 'object' ? macro.quarter : 0;
     if (botRelations.lastGift[id] === quarter) { showToast(`${person.name} dostał już prezent w tym kwartale.`, 'warning'); return false; }
     // B1: charaktery i malejący efekt — przyjaźni nie da się po prostu kupić.
     const personality = person.entity.personality;
     if (personality === 'calm') { showToast(`${person.name} grzecznie odmawia przyjęcia prezentu.`, 'default'); return false; }
-    if (['whale', 'pro_investor'].includes(personality) && amount < 1000) { showToast(`${person.name} nie zauważa tak drobnych gestów (minimum 1000 zł).`, 'default'); return false; }
+    if (['whale', 'pro_investor'].includes(personality) && amount < 1000) { showToast(`${person.name} nie zauważa tak drobnych gestów (minimum 1000 PLN).`, 'default'); return false; }
     playerWallet.cash -= amount;
     if (person.kind === 'investor') person.entity.cash += amount;
     else person.entity.fund.cash += amount;
@@ -2328,7 +2609,7 @@ function offerBotBlock(ai) {
     botRelations.blockOffer = { aiId: ai.id, symbol: pick.stock.symbol, shares, price };
     addMail({
         sender: `bot:${ai.id}`, subject: `🤝 ${ai.name}: pakiet ${pick.stock.symbol} dla Ciebie`,
-        body: `Mogę odstąpić Twojemu funduszowi ${shares.toLocaleString('pl-PL')} akcji ${pick.stock.name} po ${price.toFixed(2)} zł (${(BOT_BLOCK_DISCOUNT * 100).toFixed(0)}% poniżej rynku). Oferta ważna do końca kwartału.`,
+        body: `Mogę odstąpić Twojemu funduszowi ${shares.toLocaleString('pl-PL')} akcji ${pick.stock.name} po ${price.toFixed(2)} PLN (${(BOT_BLOCK_DISCOUNT * 100).toFixed(0)}% poniżej rynku). Oferta ważna do końca kwartału.`,
         importance: 2, symbol: pick.stock.symbol, action: { type: 'botBlock', symbol: pick.stock.symbol }
     });
     return botRelations.blockOffer;
@@ -2378,8 +2659,8 @@ function getPlayerTargets() {
     const takeovers = getTakeoverProgress();
     const hurdle = Math.max(getDepositRate(), macro?.inflation || 0) * (playerFund.current.elapsedMs / (BASE_DELAYS.quarterly * 4));
     return [
-        { label: 'Pobij GIG w tym okresie', value: `${((fundReturn - benchmark) * 100).toFixed(1)} pkt proc.`, progress: Math.max(0, Math.min(1, 0.5 + (fundReturn - benchmark) * 10)), done: fundReturn > benchmark },
-        { label: 'Wynik powyżej lokaty i inflacji', value: `${(fundReturn * 100).toFixed(1)}% vs ${(hurdle * 100).toFixed(1)}%`, progress: hurdle > 0 ? Math.max(0, Math.min(1, fundReturn / hurdle)) : 1, done: fundReturn >= hurdle },
+        { label: 'Pobij GIG w tym okresie', value: `${formatNumberPl(((fundReturn - benchmark) * 100), 1)} pkt proc.`, progress: Math.max(0, Math.min(1, 0.5 + (fundReturn - benchmark) * 10)), done: fundReturn > benchmark },
+        { label: 'Wynik powyżej lokaty i inflacji', value: `${formatNumberPl((fundReturn * 100), 1)}% vs ${formatNumberPl((hurdle * 100), 1)}%`, progress: hurdle > 0 ? Math.max(0, Math.min(1, fundReturn / hurdle)) : 1, done: fundReturn >= hurdle },
         { label: 'Zaufanie klientów ≥ 60', value: `${playerFund.trust.toFixed(0)}/100`, progress: Math.min(1, playerFund.trust / 60), done: playerFund.trust >= 60 },
         { label: `Ocena zarządu ≥ ${PROMOTION_SCORE} (awans)`, value: corporation.lastPlayerScore !== null ? `${Math.round(corporation.lastPlayerScore)}/100` : 'brak oceny', progress: Math.min(1, (corporation.lastPlayerScore || 0) / PROMOTION_SCORE), done: (corporation.lastPlayerScore || 0) >= PROMOTION_SCORE },
         { label: 'Przejęcia firm zarządzających', value: `${takeovers.done}/${takeovers.required}`, progress: takeovers.done / Math.max(1, takeovers.required), done: takeovers.done >= takeovers.required }
@@ -2405,10 +2686,10 @@ function renderCorporationFirm() {
         return `<div class="firm-level ${playerProfile.positionId === position.id ? 'mine' : ''}"><span class="firm-level-name">${escapeHtml(position.name)}</span><span>${people.join(' · ') || '<span class="text-muted">—</span>'}</span></div>`;
     }).join('');
     const targets = getPlayerTargets().map(t => `
-        <li class="firm-target ${t.done ? 'done' : ''}"><span>${t.done ? '✅' : '🎯'} ${escapeHtml(t.label)}</span><strong>${escapeHtml(t.value)}</strong>
+        <li class="firm-target ${t.done ? 'done' : ''}"><span>${typeof uiIcon === 'function' ? uiIcon(t.done ? 'ok' : 'cel', 14) : ''} ${escapeHtml(t.label)}</span><strong>${escapeHtml(t.value)}</strong>
         <span class="firm-target-bar"><span style="width:${(t.progress * 100).toFixed(0)}%"></span></span></li>`).join('');
     const goals = getCorporateGoalsView().map(t => `
-        <li class="firm-target ${t.done ? 'done' : ''}"><span>${t.done ? '✅' : '🎯'} ${escapeHtml(t.label)}</span><strong>${escapeHtml(t.value)}</strong>
+        <li class="firm-target ${t.done ? 'done' : ''}"><span>${typeof uiIcon === 'function' ? uiIcon(t.done ? 'ok' : 'cel', 14) : ''} ${escapeHtml(t.label)}</span><strong>${escapeHtml(t.value)}</strong>
         <span class="firm-target-bar"><span style="width:${(t.progress * 100).toFixed(0)}%"></span></span></li>`).join('');
     const relations = getRelationPeople().map(person => {
         const value = getRelation(person.id);
@@ -2416,7 +2697,7 @@ function renderCorporationFirm() {
         return `<tr><td>${escapeHtml(person.name)}<span class="text-xs text-muted d-block">${person.kind === 'colleague' ? `kolega · ${escapeHtml(CAREER_POSITIONS[getPositionIndex(person.entity.positionId)].name)}` : person.entity?.isGuard ? 'fundusz patriotyczny · głosuje na walnych, współinwestuje w obronność' : 'inwestor giełdowy'}</span></td>
             <td>${renderRelationBar(value)}</td><td class="${mood.cls}">${mood.icon} ${value.toFixed(0)} · ${mood.label}</td>
             <td><div class="d-flex gap-1"><input type="text" inputmode="numeric" class="w-xs" id="gift-${person.id}" value="200" aria-label="Kwota prezentu">
-                <button class="btn-xs" onclick="corporationAction(giveGiftToBot, '${person.id}', parseFloat(document.getElementById('gift-${person.id}').value))">🎁</button></div></td></tr>`;
+                <button class="btn-xs" onclick="corporationAction(giveGiftToBot, '${person.id}', parseFloat(document.getElementById('gift-${person.id}').value))">Prezent</button></div></td></tr>`;
     }).join('');
     const log = botRelations.log.slice(0, 8).map(entry => `<li><span class="${entry.delta >= 0 ? 'text-up' : 'text-down'}">${entry.delta >= 0 ? '+' : ''}${entry.delta.toFixed(1)}</span> ${escapeHtml(entry.name)} — ${escapeHtml(entry.reason)}</li>`).join('');
 
@@ -2435,6 +2716,36 @@ function renderCorporationFirm() {
         </div>
         <h4>Relacje (−100…100)</h4>
         <p class="fund-muted">Wymuszanie dywidend, zrzucanie pakietów i ataki na spółki botów psują relacje; prezenty (portfel prywatny, raz na kwartał), wspieranie ich spółek (zakup pakietu, datek) i odkupienie pakietu — poprawiają. Wrodzy boty szydzą, skupują akcje Twoich spółek i próbują je przejąć; przyjaźni dają rady i pakiety z rabatem.</p>
-        <table class="asset-mini-table w-full"><thead><tr><th>Osoba</th><th>Relacja</th><th></th><th>Prezent (zł)</th></tr></thead><tbody>${relations}</tbody></table>
+        <table class="asset-mini-table w-full"><thead><tr><th>Osoba</th><th>Relacja</th><th></th><th>Prezent (PLN)</th></tr></thead><tbody>${relations}</tbody></table>
         <h4>Ostatnie zmiany</h4><ul class="list-plain text-sm">${log || '<li class="text-muted">Brak zmian.</li>'}</ul>`;
+}
+
+
+// 0.15: Spawnowanie bota Komendant Jakub przy maksymalnym poziomie policji (poziom 5)
+function checkPoliceChiefSpawn() {
+    if (typeof oversight !== 'object' || !oversight?.police) return null;
+    if (oversight.police.level >= 5) {
+        let jakub = aiCompetitors.find(ai => ai.id === 'komendant_jakub');
+        if (!jakub) {
+            jakub = {
+                id: 'komendant_jakub',
+                name: 'Komendant Jakub',
+                cash: 5000,
+                portfolio: {},
+                personality: 'police_chief',
+                accessLevel: 1,
+                hasTBillAccess: false,
+                tBills: [],
+                skillPoints: 0,
+                unlockedSkills: {},
+                creditScore: 100
+            };
+            aiCompetitors.push(jakub);
+            if (typeof logEvent === 'function') {
+                logEvent('🚓 Program policyjny: Komendant Jakub dołącza do inwestorów giełdowych (kapitał 5 000 PLN, spółki defensywne).', 'state');
+            }
+        }
+        return jakub;
+    }
+    return null;
 }

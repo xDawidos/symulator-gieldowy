@@ -24,7 +24,7 @@ const MAGAZINES = {
     FLESZ: { label: 'Flesz Giełdowy', premiumWeekly: 10, profile: 'Prezesi, skandale i plotki (nie zawsze prawdziwe)' },
     OBSER: { label: 'Obserwator Finansowy', premiumWeekly: 20, profile: 'Gospodarka, państwo, banki i miasto' }
 };
-const FREE_READER_AD_REVENUE = 5;   // zł tygodniowo dla czasopisma za darmowego czytelnika
+const FREE_READER_AD_REVENUE = 5;   // PLN tygodniowo dla czasopisma za darmowego czytelnika
 const COMPANY_AD_COST = 200;        // tyle płaci spółka za mail sponsorowany
 
 // Słowa kluczowe profili (sprawdzane w kolejności: korporacja, OBSER, FLESZ, reszta → PULS).
@@ -201,6 +201,7 @@ function processMailWeekly() {
     sendCompanyAdSpam();
     sendMagazineSpam();
     processTabloidRumors();
+    processBubbleNewsToMail();
 }
 
 function chargeMagazineSubscriptions() {
@@ -216,7 +217,7 @@ function chargeMagazineSubscriptions() {
                 recordPayment('player-wallet', stock, def.premiumWeekly, `Prenumerata premium: ${def.label}`);
             } else {
                 mailbox.subscriptions[symbol] = 'free';
-                addMail({ sender: symbol, subject: 'Prenumerata premium wygasła — brak środków', body: `Nie udało się pobrać ${def.premiumWeekly} zł z Twojego konta. Wracasz do wersji darmowej.`, importance: 2 });
+                addMail({ sender: symbol, subject: 'Prenumerata premium wygasła — brak środków', body: `Nie udało się pobrać ${def.premiumWeekly} PLN z Twojego konta. Wracasz do wersji darmowej.`, importance: 2 });
             }
         } else {
             // Darmowy czytelnik = przychód od reklamodawców (z zewnątrz modelu).
@@ -255,7 +256,7 @@ function sendMagazineSpam() {
         addMail({
             sender: symbol,
             subject: getRandomElement([`Przejdź na ${def.label} Premium — pierwszy tydzień taniej!`, `Nie przegap ważnych wiadomości — ${def.label} Premium`, `Ankieta czytelników ${def.label} (zajmie tylko 45 minut)`]),
-            body: `Wersja premium to tylko ważne wiadomości i zero spamu za ${def.premiumWeekly} zł tygodniowo. Zarządzaj prenumeratą w zakładce „Subskrypcje”.`,
+            body: `Wersja premium to tylko ważne wiadomości i zero spamu za ${def.premiumWeekly} PLN tygodniowo. Zarządzaj prenumeratą w zakładce „Subskrypcje”.`,
             importance: 0, isSpam: true, spamKind: 'magazine'
         });
     }
@@ -298,6 +299,90 @@ function processTabloidRumors() {
     });
 }
 
+/** 0.15 H3: Gazety i media piszą o bańkach (pojawienie się, pompowanie, pęknięcie, stabilizacja, ale też fałszywe alarmy) */
+let lastBubbleMailStatus = null;
+let lastSmsrMailStatus = null;
+function processBubbleNewsToMail() {
+    if (!mailbox || typeof getActiveSectorBubble !== 'function') return;
+    const bubble = getActiveSectorBubble();
+    const statusKey = bubble ? `${bubble.name}_${bubble.phase}_${Math.floor(bubble.premium * 10)}` : 'none';
+
+    // 1. Zdarzenia oparte na faktach (prawdziwy stan bańki)
+    if (bubble) {
+        if (typeof isMarketStabilityProjectUnlocked === 'function' && isMarketStabilityProjectUnlocked(2)) {
+            if (bubble.phase === 'inflating' && lastSmsrMailStatus !== `${bubble.name}_inflating`) {
+                lastSmsrMailStatus = `${bubble.name}_inflating`;
+                const typeName = typeof getBubbleTypeName === 'function' ? getBubbleTypeName(bubble.type) : bubble.type;
+                addMail({
+                    sender: 'KNF',
+                    subject: `[SMSR Lvl 2 - Radar] Potwierdzona bańka spekulacyjna: ${bubble.name}`,
+                    body: `System Monitoringu i Stabilizacji Rynku zidentyfikował w czasie rzeczywistym bańkę spekulacyjną w sektorze ${bubble.name}. Bieżąca premia wyceny wynosi +${(bubble.premium * 100).toFixed(0)}%, a model zaklasyfikował typ zjawiska jako: ${typeName}. Zalecana weryfikacja ekspozycji funduszu.`,
+                    importance: 3
+                });
+            }
+        }
+
+        if (bubble.phase === 'inflating' && bubble.premium >= 0.25 && lastBubbleMailStatus !== `${bubble.name}_inflating`) {
+            lastBubbleMailStatus = `${bubble.name}_inflating`;
+            const isFlesz = Math.random() < 0.4;
+            if (isFlesz) {
+                addMail({
+                    sender: 'FLESZ',
+                    subject: `Gorączka w branży ${bubble.name}! Wszyscy chcą w to wejść!`,
+                    body: `Inwestorzy indywidualni i celebryci masowo rzucają się na akcje z sektora ${bubble.name}. Niektórzy analitycy mówią o rewolucji, inni szeptem ostrzegają przed rosnącą bańką spekulacyjną.`,
+                    importance: 2
+                });
+            } else {
+                addMail({
+                    sender: 'PULS',
+                    subject: `Puls Rynku: Wyceny sektora ${bubble.name} szybują w górę`,
+                    body: `Premia wyceny w branży ${bubble.name} osiąga nie notowane od dawna poziomy (+${(bubble.premium * 100).toFixed(0)}%). Czy to początek trwałej hossy technologicznej, czy zbliża się przegrzanie?`,
+                    importance: 2
+                });
+            }
+        } else if (bubble.phase === 'popping' && lastBubbleMailStatus !== `${bubble.name}_popping`) {
+            lastBubbleMailStatus = `${bubble.name}_popping`;
+            addMail({
+                sender: 'OBSER',
+                subject: `Krach w branży ${bubble.name}! Panika na parkiecie`,
+                body: `Balon pękł. Kursy spółek z sektora ${bubble.name} lecą na łeb na szyję. Fala wyprzedaży zmiata wyceny budowane przez ostatnie kwartały. Eksperci szacują straty inwestorów.`,
+                importance: 2
+            });
+        } else if (bubble.phase === 'recovering' && lastBubbleMailStatus !== `${bubble.name}_recovering`) {
+            lastBubbleMailStatus = `${bubble.name}_recovering`;
+            addMail({
+                sender: 'PULS',
+                subject: `Uspokojenie po burzy: rynek ${bubble.name} wraca do fundamentów`,
+                body: `Po dramatycznych spadkach w sektorze ${bubble.name} kurz powoli opada. Inwestorzy instytucjonalni zaczynają ponownie selekcjonować spółki o solidnych fundamentach.`,
+                importance: 1
+            });
+        }
+    } else {
+        if (lastBubbleMailStatus && lastBubbleMailStatus !== 'none') {
+            lastBubbleMailStatus = 'none';
+        }
+
+        // 2. Szum / fałszywe alarmy (gdy nie ma bańki, prasa może spekulować i mylić się)
+        if (Math.random() < 0.04) {
+            const randomCand = typeof SECTOR_BUBBLE_CANDIDATES !== 'undefined' ? getRandomElement(SECTOR_BUBBLE_CANDIDATES) : null;
+            if (randomCand) {
+                const fakeTemplates = [
+                    { sender: 'FLESZ', sub: `Czy to nowa bańka? Podejrzany rajd w sektorze ${randomCand.name}!`, body: `Pojawiły się plotki o nadciągającym boomie na spółki z branży ${randomCand.name}. Czy warto kupować na oślep? Część doradców mówi: "kupuj zanim odjedzie pociąg!"` },
+                    { sender: 'PULS', sub: `Analitycy podzieleni: czy ${randomCand.name} jest przewartościowana?`, body: `Raporty domów maklerskich są skrajnie rozbieżne. Jedni wieńczą nową erę zysków, inni wieszczą rychłe załamanie. Czas pokaże, kto miał rację.` },
+                    { sender: 'OBSER', sub: `Debata ekonomiczna: Stabilizacja czy fałszywy spokój w branży ${randomCand.name}?`, body: `Komentatorzy dyskutują, czy wskaźniki w branży ${randomCand.name} odzwierciedlają realną wartość spółek, czy rynek po prostu ignoruje ryzyka.` }
+                ];
+                const fake = getRandomElement(fakeTemplates);
+                addMail({
+                    sender: fake.sender,
+                    subject: fake.sub,
+                    body: fake.body,
+                    importance: 1
+                });
+            }
+        }
+    }
+}
+
 // =================================================================================
 // AKCJE GRACZA
 // =================================================================================
@@ -305,7 +390,7 @@ function processTabloidRumors() {
 function setMagazineSubscription(symbol, level) {
     if (!MAGAZINES[symbol] || ![null, 'free', 'premium'].includes(level)) return false;
     if (level === 'premium' && playerWallet.cash < MAGAZINES[symbol].premiumWeekly) {
-        showToast(`Premium kosztuje ${MAGAZINES[symbol].premiumWeekly} zł tygodniowo — za mało środków.`, 'error');
+        showToast(`Premium kosztuje ${MAGAZINES[symbol].premiumWeekly} PLN tygodniowo — za mało środków.`, 'error');
         return false;
     }
     mailbox.subscriptions[symbol] = level;
@@ -362,7 +447,9 @@ function logEvent(message, category = 'market') { // Domyślna kategoria to 'mar
         eventLog.pop();
     }
     if (typeof routeEventToMail === 'function') routeEventToMail(message, category); // skrzynka mailowa (mail.js)
+    if (typeof pushNews === 'function' && NEWS_CATEGORIES.includes(category) && !/^\[/.test(String(message))) pushNews(message); // 0.14.2 P7: pasek newsów
 }
+const NEWS_CATEGORIES = ['market', 'company', 'state', 'city', 'construction', 'success', 'warning'];
 
 
 
@@ -467,6 +554,9 @@ const sectorEventsPrompts = [
     { id: 'sec_neg_8', message: () => `Nowa ustawa "Prawo do Bycia Offline" drastycznie zmniejsza popyt na smartfony i inne gadżety. 📵 Sektor 'Technologia' przeżywa kryzys egzystencjalny.`, type: 'negative', targetSectors: ['Technologia'] },
     { id: 'sec_neg_9', message: () => `Wszystkie bankomaty z sektora 'Bankowość' w wyniku błędu zaczynają mówić zagadkami. 🤖❓ Wypłacenie pieniędzy staje się grą miejską, co zniechęca klientów.`, type: 'negative', targetSectors: ['Bankowość'] },
     { id: 'sec_neg_10', message: () => `Kryzys na rynku napojów. Okazuje się, że ludzie odkryli wodę z kranu. 💧 Sektor 'Dobra konsumpcyjne' w panice.`, type: 'negative', targetSectors: ['Dobra konsumpcyjne'] },
+    // 0.14 (decyzja 11): równowaga zdarzeń sektora Bankowość po porządku nazw (T1a)
+    { id: 'sec_neg_11', message: () => `Rząd wprowadza podatek bankowy od aktywów. 🏦💸 Zyski banków spadną, a sektor 'Bankowość' traci na giełdzie.`, type: 'negative', targetSectors: ['Bankowość'] },
+    { id: 'sec_neg_12', message: () => `Masowe pozwy kredytobiorców: sądy unieważniają tysiące umów kredytowych. ⚖️ Banki tworzą rezerwy, a sektor 'Bankowość' tanieje.`, type: 'negative', targetSectors: ['Bankowość'] },
 ];
 
 const stateCompanyEventsPrompts = [
@@ -612,7 +702,7 @@ function triggerMainMarketEventCycle() {
         return;
     }
 
-     if (Math.random() < 0.04) { // Emisja ratunkowa
+    if (Math.random() < 0.04) { // Emisja ratunkowa (0.15.0.1 C4: bez zależności od nastroju — emisje w cyklu idą przez walne)
         triggerRescueOfferingEvent();
         return;
     }
@@ -628,7 +718,7 @@ function triggerMainMarketEventCycle() {
 
     // Eventy bankowe
     if (Math.random() < 0.04) {
-        const activeBankStocks = stocks.filter(s => s.sector.includes('Bankowość Komercyjna') && !s.isBankrupt);
+        const activeBankStocks = stocks.filter(s => s.isBankStock && !s.isBankrupt) // T1a: wszystkie banki;
         if (activeBankStocks.length > 0) {
             const targetBankStock = getRandomElement(activeBankStocks);
             const eventData = getRandomElement(bankingSectorEventsPrompts);
@@ -726,7 +816,15 @@ function triggerNationalizationEvent() {
     target.isStateOwned = true;
     target.stateOwnershipPct = getRandomInRange(0.75, 0.90);
     target.eventResistance = 0.6;
-    target.balanceSheet.liabilities = 0;
+    // Skarb Państwa spłaca dług spółki jej bankowi (decyzja użytkownika); to dokapitalizowanie przez nowego właściciela
+    // (kapitał zakładowy rośnie o spłaconą kwotę). Bez pieniędzy w skarbie reszta długu zostaje w spółce.
+    const debt = Math.max(0, Number(target.balanceSheet.liabilities) || 0);
+    const repaid = typeof takeFromTreasury === 'function' ? takeFromTreasury(debt) : 0;
+    const lender = typeof getCompanyBank === 'function' ? getCompanyBank(target) : null;
+    if (lender) lender.cash = (Number(lender.cash) || 0) + repaid;
+    if (repaid > 0) recordPayment('external:skarb-panstwa', lender ? lender.id : 'external:wierzyciele', repaid, `Spłata długu ${target.symbol} po nacjonalizacji`);
+    target.balanceSheet.shareCapital = (Number(target.balanceSheet.shareCapital) || 0) + repaid;
+    target.balanceSheet.liabilities = debt - repaid;
     target.financialHealth = 1;
     target.sharesHeld = 0; // inwestorzy wykupieni; pakiet państwa jest poza wolnym obrotem
     return;
@@ -892,7 +990,10 @@ const festivalPlayerEvents = [
                     applyPriceEffect(stock.symbol, 0.05, 'positive', 'review');
                 }
             }
-            playerWallet.cash += 5000; // nagroda trafia do portfela prywatnego, nie do funduszu
+            // 0.14.1 R5: nagroda skalowana do pozycji gracza — 2% aktywów funduszu (200–5000 zł), do portfela prywatnego.
+            const reward = Math.round(Math.min(5000, Math.max(200, (playerFund ? getFundAssets() : 0) * 0.02)));
+            playerWallet.cash += reward;
+            recordPayment('external:korporacja', 'player-wallet', reward, 'Nagroda: inwestor VC na festynie');
             displayCash();
         }
     },
@@ -948,7 +1049,7 @@ function triggerSingleFestivalEvent(chosenEvent, playerParticipant) {
         const stock = stocks.find(s => s.symbol === target.id);
         if (stock) targetName = stock.name;
     } else if (target.type === 'city') {
-        targetName = 'Miasto Gdańsk';
+        targetName = 'Miasto';
     }
 
     // Jeśli to event bankowy, znajdź nazwę banku dla wiadomości
@@ -1220,7 +1321,7 @@ function resolveBankIPO(decision) {
         totalShares: offer.ipoTotalShares,
         maxShares: offer.ipoTotalShares * 2,
         sharesHeld: playerBoughtShares,
-        sector: ['Bankowość Komercyjna', 'Finanse'],
+        sector: ['Bankowość'], // T1a: podsektor z typu banku
         financialHealth: 2,
         balanceSheet: {
             assets: bankToIPO.cash + offer.ipoTotalShares * offer.ipoSharePrice * 0.2,

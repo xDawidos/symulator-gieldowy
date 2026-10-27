@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Testy H3: Bańki sektorowe</title>
+    <script>window.__GAME_TEST_MODE__ = true;</script>
+</head>
+<body>
+    <div id="output"></div>
+    <div id="toast-notification" hidden></div>
+
+    <script src="../core.js"></script>
+    <script src="../companies.js"></script>
+    <script src="../ai.js"></script>
+    <script src="../player.js"></script>
+    <script src="../finance.js"></script>
+    <script src="../state.js"></script>
+    <script src="../ma.js"></script>
+    <script src="../learning.js"></script>
+    <script src="../events.js"></script>
+    <script src="../ui.js"></script>
+    <script src="../lib/lz-string.min.js"></script>
+    <script src="../save_store.js"></script>
+    <script src="../main.js"></script>
+
+    <script>
+    async function runSimulations() {
+        console.log("=== STARTING 10 NATURAL BUBBLE SIMULATIONS (ZWIĘKSZONA PANIKA, DŁUŻSZY SPADEK, RECOVERY 4-6 KW.) ===");
+
+        function advanceQuarter() {
+            if (typeof advanceMarketRegimeQuarterly === 'function') advanceMarketRegimeQuarterly();
+            if (typeof advanceSectorBubblesQuarterly === 'function') advanceSectorBubblesQuarterly();
+            if (typeof advanceEconomyCycle === 'function') advanceEconomyCycle();
+            if (typeof advanceMacroQuarter === 'function') advanceMacroQuarter();
+            
+            for (let t = 0; t < 10; t++) {
+                updateStockPrices();
+            }
+        }
+
+        // --- 30 Naturalnych obserwacji (bez sztucznego wywoływania) ---
+        const results = [];
+
+        for (let i = 1; i <= 30; i++) {
+            startNewCareer({ name: `Gracz ${i}`, corporation: 'Korpo', fundName: `Fundusz ${i}` });
+            if (typeof applyStartSubsectors === 'function') applyStartSubsectors();
+            activeSectorBubble = null;
+            sectorBubbleCooldown = 0;
+
+            let quartersToSpawn = 0;
+            while (!getActiveSectorBubble() && quartersToSpawn < 200) {
+                quartersToSpawn++;
+                advanceQuarter();
+            }
+
+            const spawnedBubble = getActiveSectorBubble();
+            if (!spawnedBubble) {
+                console.log(`TEST ${i}: Nie pojawiła się bańka w ciągu 200 kwartałów.`);
+                continue;
+            }
+
+            const bubbleName = spawnedBubble.name;
+            const bubbleCandidate = spawnedBubble.candidateId;
+            const bubbleType = spawnedBubble.type || 'classic';
+            let bubbleLifeQuarters = 0;
+            let peakPrem = spawnedBubble.premium;
+            let lowestPoppingPrem = 0;
+            let inflatingQuarters = 0;
+            let poppingQuarters = 0;
+            let recoveringQuarters = 0;
+            let hadSpillover = false;
+
+            while (getActiveSectorBubble() !== null && bubbleLifeQuarters < 60) {
+                const b = getActiveSectorBubble();
+                if (b.phase === 'inflating') inflatingQuarters++;
+                else if (b.phase === 'popping') poppingQuarters++;
+                else if (b.phase === 'recovering') recoveringQuarters++;
+
+                if (b.premium > peakPrem) peakPrem = b.premium;
+                if (b.premium < lowestPoppingPrem) lowestPoppingPrem = b.premium;
+                if (b.spilloverApplied) hadSpillover = true;
+
+                bubbleLifeQuarters++;
+                advanceQuarter();
+            }
+
+            const diff = peakPrem - lowestPoppingPrem; // rozpiętość szczyt - dołek (np. +60% do -35% = 95 pp)
+            results.push({
+                run: i,
+                name: bubbleName,
+                candidate: bubbleCandidate,
+                type: bubbleType,
+                quartersToSpawn,
+                inflatingQuarters,
+                poppingQuarters,
+                recoveringQuarters,
+                totalQuarters: bubbleLifeQuarters,
+                peakPrem,
+                lowestPoppingPrem,
+                diff,
+                hadSpillover
+            });
+
+            console.log(`TEST ${i.toString().padStart(2, ' ')} [${bubbleType.toUpperCase()}]: ${bubbleName} | Szczyt: +${(peakPrem * 100).toFixed(1)}% | Dołek: ${(lowestPoppingPrem * 100).toFixed(1)}% | Rozpiętość: ${(diff * 100).toFixed(1)} pp | Cykl: ${bubbleLifeQuarters} kw. (inf:${inflatingQuarters}, pop:${poppingQuarters}, rec:${recoveringQuarters})${hadSpillover ? ' [SPILLOVER]' : ''}`);
+        }
+
+        // --- STATYSTYKI ZBIORCZE ---
+        console.log("\n==================================================");
+        console.log("=== PODSUMOWANIE STATYSTYCZNE 30 OBSERWACJI ===");
+
+        function median(arr) {
+            const sorted = [...arr].sort((a, b) => a - b);
+            const mid = Math.floor(sorted.length / 2);
+            return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+        }
+
+        const peaks = results.map(r => r.peakPrem * 100);
+        const troughs = results.map(r => r.lowestPoppingPrem * 100);
+        const diffs = results.map(r => r.diff * 100);
+        const totalQuarters = results.map(r => r.totalQuarters);
+
+        const avgPeak = peaks.reduce((a, b) => a + b, 0) / peaks.length;
+        const medPeak = median(peaks);
+
+        const avgTrough = troughs.reduce((a, b) => a + b, 0) / troughs.length;
+        const medTrough = median(troughs);
+
+        const avgDiff = diffs.reduce((a, b) => a + b, 0) / diffs.length;
+        const medDiff = median(diffs);
+        const minDiff = Math.min(...diffs);
+        const maxDiff = Math.max(...diffs);
+
+        const avgDuration = totalQuarters.reduce((a, b) => a + b, 0) / totalQuarters.length;
+        const medDuration = median(totalQuarters);
+        const maxDuration = Math.max(...totalQuarters);
+        const minDuration = Math.min(...totalQuarters);
+
+        const longestEvent = results.find(r => r.totalQuarters === maxDuration);
+        const maxDiffEvent = results.find(r => Math.abs(r.diff * 100 - maxDiff) < 1e-4);
+        const minDiffEvent = results.find(r => Math.abs(r.diff * 100 - minDiff) < 1e-4);
+
+        console.log(`Liczba ukończonych cykli: ${results.length}`);
+        console.log(`\n1. SZCZYTOWA PREMIA BAŃKI:`);
+        console.log(`   - Średnia: +${avgPeak.toFixed(1)}%`);
+        console.log(`   - Mediana: +${medPeak.toFixed(1)}%`);
+        console.log(`   - Min: +${Math.min(...peaks).toFixed(1)}% | Max: +${Math.max(...peaks).toFixed(1)}%`);
+
+        console.log(`\n2. DOŁEK PANIKI (PO PĘKNIĘCIU):`);
+        console.log(`   - Średnia: ${avgTrough.toFixed(1)}%`);
+        console.log(`   - Mediana: ${medTrough.toFixed(1)}%`);
+        console.log(`   - Min dołek (najgłębszy): ${Math.min(...troughs).toFixed(1)}% | Max dołek (najłagodniejszy): ${Math.max(...troughs).toFixed(1)}%`);
+
+        console.log(`\n3. RÓŻNICA (SZCZYT vs DOŁEK):`);
+        console.log(`   - Średnia różnica: ${avgDiff.toFixed(1)} pp`);
+        console.log(`   - Mediana różnicy: ${medDiff.toFixed(1)} pp`);
+        console.log(`   - Najmniejsza różnica: ${minDiff.toFixed(1)} pp (${minDiffEvent.name}, typ: ${minDiffEvent.type})`);
+        console.log(`   - Największa różnica: ${maxDiff.toFixed(1)} pp (${maxDiffEvent.name}, typ: ${maxDiffEvent.type})`);
+
+        console.log(`\n4. DŁUGOŚĆ CAŁEGO EVENTU (OD STARTU DO POWROTU DO 0):`);
+        console.log(`   - Średnia długość: ${avgDuration.toFixed(1)} kwartałów (${(avgDuration / 4).toFixed(1)} lat)`);
+        console.log(`   - Mediana długości: ${medDuration.toFixed(1)} kwartałów (${(medDuration / 4).toFixed(1)} lat)`);
+        console.log(`   - Najkrótszy event: ${minDuration} kwartałów (${(minDuration / 4).toFixed(1)} lat)`);
+        console.log(`   - NAJDŁUŻSZY CAŁY EVENT: ${maxDuration} kwartałów (${(maxDuration / 4).toFixed(1)} lat) -> ${longestEvent.name} [typ: ${longestEvent.type.toUpperCase()}]`);
+
+        console.log("\n__ALL_TESTS_DONE__");
+    }
+
+    window.addEventListener('DOMContentLoaded', runSimulations);
+    </script>
+</body>
+</html>

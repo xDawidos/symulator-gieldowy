@@ -1,0 +1,7 @@
+<svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Capital Quest">
+<path d="M34 0H6C2.68629 0 0 2.68629 0 6V34C0 37.3137 2.68629 40 6 40H34C37.3137 40 40 37.3137 40 34V6C40 2.68629 37.3137 0 34 0Z" fill="#F5A524"/>
+<path d="M14.5 25.3C19.2497 25.3 23.1 20.6438 23.1 14.9C23.1 9.15624 19.2497 4.5 14.5 4.5C9.75035 4.5 5.9 9.15624 5.9 14.9C5.9 20.6438 9.75035 25.3 14.5 25.3Z" stroke="#1A1204" stroke-width="3.3"/>
+<path d="M10.9 25.6L14.1 20.8L24.4 35.2L30.9 13.6" stroke="#F5A524" stroke-width="7.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M10.9 25.6L14.1 20.8L24.4 35.2L30.9 13.6" stroke="#1A1204" stroke-width="3.3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M27.6 15.6L30.9 13.6L32.9 16.9" stroke="#1A1204" stroke-width="3.3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

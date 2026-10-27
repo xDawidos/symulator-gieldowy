@@ -1,0 +1,408 @@
+<!doctype html><html lang="pl"><head><meta charset="utf-8"><title>Kierunki redesignu</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600&family=Manrope:wght@400;600;700&family=Fraunces:wght@600&family=Sora:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#777;font-family:Inter,system-ui,sans-serif}
+.variant{width:1440px;height:900px;position:relative;overflow:hidden;background:var(--bg);color:var(--tx);font-family:var(--fb);font-size:14px;margin:0 0 40px}
+.ic{flex:none}
+.ticker{height:28px;display:flex;align-items:center;gap:14px;padding:0 14px;background:var(--panel2);border-bottom:1px solid var(--line);font-size:12px;color:var(--tx2);white-space:nowrap;overflow:hidden}
+.ticker .sep{color:var(--mut)} .tk-pause{margin-left:auto;color:var(--mut)}
+.shell{display:flex;height:872px}
+.side{width:220px;flex:none;background:var(--panel);border-right:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;gap:2px;position:relative}
+.brand{display:flex;gap:10px;align-items:center;padding:4px 6px 14px}
+.logo{width:34px;height:34px;border-radius:var(--r-sm);background:var(--acc);color:var(--on-acc);display:flex;align-items:center;justify-content:center;font-weight:700;font-family:var(--fd);font-size:14px}
+.brand-t{font-family:var(--fd);font-weight:700;font-size:15px}.brand-s{font-size:12px;color:var(--mut)}
+.nav-grp{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);padding:12px 8px 4px}
+.nav-it{display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:var(--r-sm);color:var(--tx2);font-size:13.5px}
+.nav-it.on{background:var(--acc-soft);color:var(--tx);box-shadow:inset 3px 0 0 var(--acc)}
+.badge{margin-left:auto;background:var(--acc);color:var(--on-acc);font-size:11px;font-weight:700;border-radius:999px;padding:1px 7px}
+.variant-tag{position:absolute;bottom:14px;left:12px;right:12px;font-size:11px;color:var(--mut);border:1px dashed var(--line2);border-radius:var(--r-sm);padding:8px}
+.variant-tag b{color:var(--acc);font-size:12px}
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.top{height:64px;display:flex;align-items:center;gap:16px;padding:0 20px;border-bottom:1px solid var(--line);background:var(--panel)}
+.kpis{display:flex;gap:28px}
+.kpi{display:flex;flex-direction:column;gap:2px}
+.kl{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut)}
+.kv{font-family:var(--fn);font-weight:600;font-size:17px;font-variant-numeric:tabular-nums}
+.kv em{font-style:normal;font-size:12px;margin-left:6px}
+.ctl{margin-left:auto;display:flex;align-items:center;gap:10px}
+.date{font-size:12px;color:var(--tx2);margin-right:4px}
+.seg{display:flex;background:var(--panel2);border:1px solid var(--line2);border-radius:var(--r-sm);padding:2px}
+.seg span{padding:5px 11px;font-size:12.5px;color:var(--tx2);border-radius:calc(var(--r-sm) - 2px);font-family:var(--fn)}
+.seg span.on{background:var(--acc-soft);color:var(--tx);box-shadow:inset 0 0 0 1px var(--acc)}
+.btn{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px;border-radius:var(--r-sm);font:600 13px var(--fb);border:1px solid transparent;cursor:pointer}
+.btn.primary{background:var(--acc);color:var(--on-acc)}
+.btn.sec{background:var(--panel2);color:var(--tx);border-color:var(--line2)}
+.btn.ghost{background:transparent;color:var(--tx);border-color:var(--line2)}
+.btn.sm{height:28px;padding:0 10px;font-size:12px}
+.ib{width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;border-radius:var(--r-sm);background:transparent;border:1px solid var(--line2);color:var(--tx2);position:relative}
+.ib.big{width:36px;height:36px}
+.ib .dot{position:absolute;top:6px;right:7px;width:7px;height:7px;border-radius:50%;background:var(--down)}
+.cols{flex:1;display:flex;gap:16px;padding:16px 20px;min-height:0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--sh)}
+.market{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.card-h{display:flex;align-items:center;gap:10px;padding:14px 16px 10px}
+.card-h h2{font-family:var(--fd);font-size:var(--h2);font-weight:var(--h2w);letter-spacing:var(--h2ls)}
+.muted{color:var(--mut);font-size:12.5px}.sp{flex:1}
+.chips{display:flex;flex-wrap:wrap;gap:6px;padding:0 16px 12px;border-bottom:1px solid var(--line)}
+.chip{height:28px;display:inline-flex;align-items:center;padding:0 11px;border-radius:var(--r-chip);border:1px solid var(--line2);font-size:12.5px;color:var(--tx2)}
+.chip.on{border-color:var(--acc);color:var(--tx);background:var(--acc-soft)}
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);font-weight:600;text-align:right;padding:9px 12px;background:var(--panel2);border-bottom:1px solid var(--line)}
+.tbl th.l,.tbl td.l{text-align:left}
+.tbl td{color:var(--tx);padding:0 12px;height:var(--row);border-bottom:1px solid var(--line);text-align:right;vertical-align:middle}
+.tbl .num{font-family:var(--fn);font-variant-numeric:tabular-nums}
+.tbl .strong{font-weight:600;color:var(--tx)}
+.tbl .zero{color:var(--mut)}
+.nm{color:var(--tx);display:flex;align-items:center;gap:6px;font-weight:600;white-space:nowrap;overflow:hidden;max-width:300px}
+.nmt{overflow:hidden;text-overflow:ellipsis}
+.meta{font-size:12px;color:var(--mut);margin-top:1px}
+.row.sub td.l{padding-left:30px}.sub-mark{color:var(--mut)}
+.pill{display:inline-block;font-size:12.5px;font-weight:600;padding:3px 8px;border-radius:var(--r-chip);font-family:var(--fn);min-width:78px;text-align:right}
+.pill.up{color:var(--up);background:var(--up-soft)}.pill.down{color:var(--down);background:var(--down-soft)}.pill.flat{color:var(--tx2);background:var(--panel2)}
+.up{color:var(--up)}.down{color:var(--down)}
+.vol{display:flex;align-items:center;gap:8px}.vol .num{color:var(--tx2);width:44px;text-align:right;font-size:13px}
+.bar{width:70px;height:5px;border-radius:3px;background:var(--line);overflow:hidden}.bar i{display:block;height:100%;background:var(--info)}
+.act{white-space:nowrap}.act .ib{margin-left:4px}
+.ex td{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);text-align:left;height:30px;background:var(--panel2)}
+.lvl td{text-align:left;font-family:var(--fd);font-weight:600;font-size:14px;height:38px;color:var(--tx)}
+.lvl-dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:9px;vertical-align:-1px}
+.lvl-junk .lvl-dot{background:#8B8F7A}.lvl-bronze .lvl-dot{background:#C08451}
+.lvl .cnt{color:var(--mut);font-family:var(--fb);font-weight:400;font-size:12px;margin-left:8px}
+.lvl .chev{float:right;color:var(--mut)}
+.sec td{text-align:left;font-size:11.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--tx2);height:28px;padding-left:16px;background:var(--sec-bg)}
+.sec .cnt{color:var(--mut);font-weight:400;margin-left:4px}
+.fund{width:360px;flex:none;padding-bottom:14px;display:flex;flex-direction:column;gap:12px;overflow:hidden}
+.fund>*:not(.card-h){margin:0 16px}
+.tag{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:999px;margin-left:auto}
+.tag.live{color:var(--up);background:var(--up-soft)}
+.tabs{display:flex;background:var(--panel2);border-radius:var(--r-sm);padding:3px;border:1px solid var(--line)}
+.tabs span{flex:1;text-align:center;padding:6px;font-size:13px;color:var(--tx2);border-radius:calc(var(--r-sm) - 2px)}
+.tabs .on{background:var(--panel);color:var(--tx);box-shadow:0 0 0 1px var(--line2)}
+.mini{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mini div{background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-md);padding:9px 11px;display:flex;flex-direction:column;gap:3px}
+.mini b{font-family:var(--fn);font-size:15px}
+.warn{display:flex;gap:10px;padding:10px 12px;border-radius:var(--r-md);background:var(--warn-soft);border:1px solid var(--warn-line);color:var(--tx);font-size:12.5px;line-height:1.45}
+.warn .ic{color:var(--warn);margin-top:2px}.warn b{color:var(--warn)}
+.chart{background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-md);padding:12px}
+.bars{display:flex;align-items:flex-end;justify-content:space-around;height:96px;border-bottom:1px solid var(--line2)}
+.b{width:56px;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:4px;position:relative}
+.b i{display:block;width:100%;border-radius:4px 4px 0 0}.b span{font-size:11.5px;font-family:var(--fn);color:var(--tx2);position:absolute;top:0}
+.b.g i{background:var(--down)}.b.x i{background:var(--info)}.b.r i{background:var(--warn)}
+.legend{display:flex;gap:12px;margin-top:8px;font-size:11.5px;color:var(--tx2)}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px}
+.legend .g{background:var(--down)}.legend .x{background:var(--info)}.legend .r{background:var(--warn)}
+.row2{display:flex;gap:8px}
+.row2 input{flex:1;height:34px;border-radius:var(--r-sm);border:1px solid var(--line-strong);background:var(--bg);color:var(--tx);padding:0 10px;font:14px var(--fn)}
+.acc{color:var(--tx);display:flex;justify-content:space-between;align-items:center;height:40px;padding:0 4px;border-top:1px solid var(--line);font-weight:600;font-size:13.5px}
+.acc .chev{color:var(--mut)}
+.toast{position:absolute;right:20px;bottom:20px;width:340px;display:flex;gap:10px;align-items:center;padding:12px 14px;background:var(--panel2);border:1px solid var(--line2);border-left:3px solid var(--info);border-radius:var(--r-md);box-shadow:var(--sh2);font-size:12.5px;color:var(--tx2)}
+.toast b{color:var(--tx)}.toast .ic{color:var(--info)}.toast .btn{margin-left:auto}
+
+.v-terminal{--bg:#0A0D12;--panel:#10141B;--panel2:#161B24;--line:#1F2631;--line2:#2B3442;--line-strong:#6B778A;--tx:#E8ECF2;--tx2:#B4BDCB;--mut:#8792A3;
+  --acc:#F5A524;--on-acc:#1A1204;--acc-soft:rgba(245,165,36,.12);--info:#5AB0FF;--up:#3DDC84;--up-soft:rgba(61,220,132,.12);--down:#FF6B6B;--down-soft:rgba(255,107,107,.12);
+  --warn:#F5A524;--warn-soft:rgba(245,165,36,.08);--warn-line:rgba(245,165,36,.35);--sec-bg:#0D1117;
+  --fb:'IBM Plex Sans',sans-serif;--fd:'IBM Plex Sans',sans-serif;--fn:'IBM Plex Mono',monospace;--h2:15px;--h2w:600;--h2ls:.02em;
+  --r-sm:3px;--r-md:4px;--r-lg:4px;--r-chip:3px;--row:40px;--sh:none;--sh2:0 8px 24px rgba(0,0,0,.5);}
+.v-gabinet{--bg:#0B1322;--panel:#111C30;--panel2:#16233B;--line:#22314D;--line2:#2E3F5F;--line-strong:#7C8AA5;--tx:#F4EFE4;--tx2:#C9C3B6;--mut:#9AA4B8;
+  --acc:#D4AF5A;--on-acc:#1B1404;--acc-soft:rgba(212,175,90,.13);--info:#7FB2F0;--up:#5BD69A;--up-soft:rgba(91,214,154,.12);--down:#F48A8A;--down-soft:rgba(244,138,138,.12);
+  --warn:#E7B45A;--warn-soft:rgba(231,180,90,.08);--warn-line:rgba(231,180,90,.35);--sec-bg:#0F192B;
+  --fb:'Manrope',sans-serif;--fd:'Fraunces',serif;--fn:'Manrope',sans-serif;--h2:20px;--h2w:600;--h2ls:0;
+  --r-sm:8px;--r-md:10px;--r-lg:14px;--r-chip:999px;--row:46px;--sh:0 1px 0 rgba(255,255,255,.03),0 10px 30px rgba(0,0,0,.25);--sh2:0 12px 32px rgba(0,0,0,.45);}
+.v-fintech{--bg:#0B1220;--panel:#111827;--panel2:#1A2333;--line:#232E40;--line2:#2F3B50;--line-strong:#7A869B;--tx:#F8FAFC;--tx2:#CBD5E1;--mut:#94A3B8;
+  --acc:#22C55E;--on-acc:#04130A;--acc-soft:rgba(34,197,94,.13);--info:#38BDF8;--up:#22C55E;--up-soft:rgba(34,197,94,.13);--down:#F87171;--down-soft:rgba(248,113,113,.13);
+  --warn:#F59E0B;--warn-soft:rgba(245,158,11,.08);--warn-line:rgba(245,158,11,.35);--sec-bg:#0E1626;
+  --fb:'Inter',sans-serif;--fd:'Sora',sans-serif;--fn:'Inter',sans-serif;--h2:18px;--h2w:700;--h2ls:-.01em;
+  --r-sm:8px;--r-md:12px;--r-lg:16px;--r-chip:999px;--row:46px;--sh:0 8px 24px rgba(0,0,0,.28);--sh2:0 12px 28px rgba(0,0,0,.4);}
+.v-terminal .card-h h2,.v-terminal .lvl td{text-transform:uppercase}
+</style></head><body>
+
+<section class="variant v-terminal">
+ <div class="ticker"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h13v14H6a2 2 0 0 1-2-2zM17 9h3v8a2 2 0 0 1-2 2M7 9h7M7 13h7M7 16h4"/></svg><span class="tk">Bank Gildia Handlowa rozpoczyna inwestycję „Wdrożenie platformy FinTech” za 150 000 zł</span><span class="sep">•</span><span class="tk"><b class="down">▼ 7,2%</b> EcoLube: wyciek w zakładzie w Policach</span><span class="sep">•</span><span class="tk">Skarb Państwa uwalnia na rynek pakiet 1% akcji Gierekludu</span><span class="tk-pause"><svg class="ic" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5v14M16 5v14"/></svg></span></div>
+ <div class="shell">
+  <aside class="side">
+   <div class="brand"><div class="logo">GI</div><div><div class="brand-t">Gra inwestycyjna</div><div class="brand-s">Fundusz Pierwszy Krok</div></div></div>
+   <div class="nav-grp">Świat</div><div class="nav-it on"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-6"/></svg><span>Rynek</span></div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h18M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18M12 3l9 5H3z"/></svg><span>Bank</span></div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21h16M6 21V11M18 21V11M10 21v-6h4v6M3 11h18L12 4z"/></svg><span>Państwo</span></div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V8l5-3v16M10 21V10h9v11M13 13h3M13 16h3"/></svg><span>Miasto</span></div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M6 21V9h12v12M4 9l8-6 8 6M10 13h4v8h-4z"/></svg><span>Budownictwo</span></div><div class="nav-grp">Moja firma</div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V5a1 1 0 0 1 1-1h9v17M14 9h5a1 1 0 0 1 1 1v11M8 8h2M8 12h2M8 16h2M3 21h18"/></svg><span>Firma</span></div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21a7 7 0 0 1 14 0M17 11a3 3 0 1 0 0-6M22 21a6 6 0 0 0-4-5.6"/></svg><span>Klienci i rynek JU</span></div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M7 7h7.5a3 3 0 0 1 0 6H9a3 3 0 0 0 0 6h8"/></svg><span>Lombard</span></div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/></svg><span>Szara strefa</span></div><div class="nav-grp">Ja</div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18v12H3zM3 7l9 6 9-6"/></svg><span>Poczta</span><span class="badge">45</span></div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9l10-5 10 5-10 5zM6 11v5c3 2 9 2 12 0v-5M22 9v6"/></svg><span>CV i Akademia</span></div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4"/></svg><span>Ranking</span></div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 12l2-1-1-3-2 .2-1.3-1.3L17 5l-3-1-1 2h-2L10 4 7 5l.3 2-1.3 1.3L4 8.2 3 11l2 1v0l-2 1 1 3 2-.2 1.3 1.3L7 19l3 1 1-2h2l1 2 3-1-.3-2 1.3-1.3 2 .3 1-3z"/></svg><span>Ustawienia</span></div>
+   <div class="variant-tag"><b>A · Terminal</b><br>gęsto, mono w liczbach, bursztyn, ostre rogi</div>
+  </aside>
+  <main class="main">
+   <header class="top">
+    <div class="kpis">
+     <div class="kpi"><span class="kl">Gotówka funduszu</span><span class="kv">14 040,25 zł</span></div>
+     <div class="kpi"><span class="kl">NAV / JU</span><span class="kv">9,9481 zł <em class="down">▼ 0,52%</em></span></div>
+     <div class="kpi"><span class="kl">Moje pieniądze</span><span class="kv">109,40 zł</span></div>
+     <div class="kpi"><span class="kl">Zaufanie klientów</span><span class="kv">42/100</span></div>
+    </div>
+    <div class="ctl">
+     <span class="date">Tydzień 12 · rok 1</span>
+     <div class="seg"><span>x1</span><span>x2</span><span class="on">x5</span></div>
+     <button class="btn primary"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5v14M16 5v14"/></svg> Pauza</button>
+     <button class="ib big"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0"/></svg><span class="dot"></span></button>
+     <button class="ib big"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    </div>
+   </header>
+   <div class="cols">
+    <section class="card market">
+     <div class="card-h"><h2>Rynek akcji</h2><span class="muted">96 spółek · najsilniejszy sektor: Chemia +0,0%</span><div class="sp"></div><button class="btn ghost">Skaner spółek</button></div>
+     <div class="chips"><span class="chip on">Wszystkie</span><span class="chip">Posiadane</span><span class="chip">Finanse</span><span class="chip">Konsumpcja</span><span class="chip">Przemysł i surowce</span><span class="chip">Zdrowie i nauka</span><span class="chip">Technologia</span><span class="chip">Nieruchomości</span><span class="chip">Obronność</span><span class="chip">Usługi</span></div>
+     <table class="tbl"><thead><tr><th class="l">Spółka</th><th>Kurs</th><th>Zmiana tydz.</th><th class="l">Dostępne akcje</th><th>Moje</th><th></th></tr></thead><tbody>
+<tr class="ex"><td colspan="6">GPW — Giełda Papierów Wartościowych</td></tr>
+<tr class="lvl lvl-junk"><td colspan="6"><span class="lvl-dot"></span>Giełda Śmieciowa<span class="cnt">· zwiń</span><span class="chev"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></td></tr>
+<tr class="sec"><td colspan="6">Żywność <span class="cnt">3</span></td></tr>
+<tr class="row "><td class="l"><div class="nm"><span class="nmt">Konfiturex</span></div><div class="meta">KFX · Żywność</div></td>
+<td class="num strong">1,82 zł</td><td class="num"><span class="pill down">▼ −0,59%</span></td>
+<td class="l"><div class="vol"><span class="num">741</span><span class="bar"><i style="width:67%"></i></span></div></td>
+<td class="num zero">0</td><td class="act"><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5"/></svg></button><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button></td></tr>
+<tr class="row "><td class="l"><div class="nm"><span class="nmt">Wieczne Ziemniaki Sp. z o.o.</span></div><div class="meta">WZM · Żywność (rolnictwo)</div></td>
+<td class="num strong">1,50 zł</td><td class="num"><span class="pill up">▲ +2,10%</span></td>
+<td class="l"><div class="vol"><span class="num">725</span><span class="bar"><i style="width:61%"></i></span></div></td>
+<td class="num zero">0</td><td class="act"><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5"/></svg></button><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button></td></tr>
+<tr class="row "><td class="l"><div class="nm"><span class="nmt">Super Makarony</span></div><div class="meta">SUM · Żywność</div></td>
+<td class="num strong">18,00 zł</td><td class="num"><span class="pill flat">■ 0,00%</span></td>
+<td class="l"><div class="vol"><span class="num">781</span><span class="bar"><i style="width:70%"></i></span></div></td>
+<td class="num zero">0</td><td class="act"><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5"/></svg></button><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button></td></tr>
+<tr class="sec"><td colspan="6">Dobra konsumpcyjne <span class="cnt">1</span></td></tr>
+<tr class="row "><td class="l"><div class="nm"><span class="nmt">Six Hand</span></div><div class="meta">SIX · Dobra konsumpcyjne</div></td>
+<td class="num strong">0,80 zł</td><td class="num"><span class="pill up">▲ +3,21%</span></td>
+<td class="l"><div class="vol"><span class="num">869</span><span class="bar"><i style="width:78%"></i></span></div></td>
+<td class="num">120</td><td class="act"><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5"/></svg></button><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button></td></tr>
+<tr class="sec"><td colspan="6">Chemia <span class="cnt">1</span></td></tr>
+<tr class="row "><td class="l"><div class="nm"><span class="nmt">EcoLube</span></div><div class="meta">ECL · Chemia</div></td>
+<td class="num strong">4,12 zł</td><td class="num"><span class="pill down">▼ −7,20%</span></td>
+<td class="l"><div class="vol"><span class="num">512</span><span class="bar"><i style="width:44%"></i></span></div></td>
+<td class="num zero">0</td><td class="act"><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5"/></svg></button><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button></td></tr>
+<tr class="lvl lvl-bronze"><td colspan="6"><span class="lvl-dot"></span>Giełda Brązowa<span class="cnt">· zwiń</span><span class="chev"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></td></tr>
+<tr class="sec"><td colspan="6">Energia <span class="cnt">2</span></td></tr>
+<tr class="row "><td class="l"><div class="nm"><span class="nmt">Polski Uran</span></div><div class="meta">PUR · Energia</div></td>
+<td class="num strong">33,80 zł</td><td class="num"><span class="pill up">▲ +0,42%</span></td>
+<td class="l"><div class="vol"><span class="num">2 140</span><span class="bar"><i style="width:52%"></i></span></div></td>
+<td class="num">35</td><td class="act"><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5"/></svg></button><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button></td></tr>
+<tr class="row sub"><td class="l"><div class="nm"><span class='sub-mark'>└</span><span class="nmt">Uran Serwis</span></div><div class="meta">URS · spółka zależna PUR</div></td>
+<td class="num strong">6,10 zł</td><td class="num"><span class="pill down">▼ −1,12%</span></td>
+<td class="l"><div class="vol"><span class="num">930</span><span class="bar"><i style="width:40%"></i></span></div></td>
+<td class="num zero">0</td><td class="act"><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5"/></svg></button><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button></td></tr>
+<tr class="sec"><td colspan="6">Bankowość <span class="cnt">1</span></td></tr>
+<tr class="row "><td class="l"><div class="nm"><span class="nmt">Bank Gildia Handlowa</span></div><div class="meta">BGH · Bankowość</div></td>
+<td class="num strong">52,40 zł</td><td class="num"><span class="pill up">▲ +1,05%</span></td>
+<td class="l"><div class="vol"><span class="num">4 410</span><span class="bar"><i style="width:81%"></i></span></div></td>
+<td class="num zero">0</td><td class="act"><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5"/></svg></button><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button></td></tr>
+</tbody></table>
+    </section>
+    <aside class="card fund">
+     <div class="card-h"><h2>Mój fundusz</h2><span class="tag live">na żywo</span></div>
+     <div class="tabs"><span class="on">Fundusz</span><span>Konto prywatne</span></div>
+     <div class="mini">
+      <div><span class="kl">NAV / JU</span><b>9,9481 zł</b></div>
+      <div><span class="kl">Liczba JU</span><b>1 411,3</b></div>
+      <div><span class="kl">Klienci</span><b>27</b></div>
+      <div><span class="kl">Stanowisko</span><b>Młodszy zarządca</b></div>
+     </div>
+     <div class="warn"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 18H2zM12 10v5M12 18v.5"/></svg><div><b>Zaufanie spada</b><br>Wynik −0,5% przegrywa z GIG (0,0%). Klienci pytają, za co płacą opłatę.</div></div>
+     <div class="kl">Wyniki: 4 ostatnie okresy</div>
+     <div class="chart">
+      <div class="bars"><div class="b g"><i style="height:38%"></i><span>−0,5%</span></div><div class="b x"><i style="height:6%"></i><span>0,0%</span></div><div class="b r"><i style="height:62%"></i><span>+1,4%</span></div></div>
+      <div class="legend"><span><i class="g"></i>Twój fundusz</span><span><i class="x"></i>GIG</span><span><i class="r"></i>Rywale (śr.)</span></div>
+     </div>
+     <div class="row2"><input value="100"><button class="btn sec">Emisja JU</button></div>
+     <div class="acc">Klienci funduszu <span class="chev"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></div>
+     <div class="acc">Lombard (zastaw akcji) <span class="chev"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></div>
+    </aside>
+   </div>
+  </main>
+ </div>
+ <div class="toast"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9l10-5 10 5-10 5zM6 11v5c3 2 9 2 12 0v-5M22 9v6"/></svg><div><b>Nowe hasło w Akademii</b><br>„Wycena: wartość godziwa”</div><button class="btn ghost sm">Otwórz</button></div>
+</section>
+
+<section class="variant v-gabinet">
+ <div class="ticker"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h13v14H6a2 2 0 0 1-2-2zM17 9h3v8a2 2 0 0 1-2 2M7 9h7M7 13h7M7 16h4"/></svg><span class="tk">Bank Gildia Handlowa rozpoczyna inwestycję „Wdrożenie platformy FinTech” za 150 000 zł</span><span class="sep">•</span><span class="tk"><b class="down">▼ 7,2%</b> EcoLube: wyciek w zakładzie w Policach</span><span class="sep">•</span><span class="tk">Skarb Państwa uwalnia na rynek pakiet 1% akcji Gierekludu</span><span class="tk-pause"><svg class="ic" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5v14M16 5v14"/></svg></span></div>
+ <div class="shell">
+  <aside class="side">
+   <div class="brand"><div class="logo">GI</div><div><div class="brand-t">Gra inwestycyjna</div><div class="brand-s">Fundusz Pierwszy Krok</div></div></div>
+   <div class="nav-grp">Świat</div><div class="nav-it on"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-6"/></svg><span>Rynek</span></div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h18M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18M12 3l9 5H3z"/></svg><span>Bank</span></div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21h16M6 21V11M18 21V11M10 21v-6h4v6M3 11h18L12 4z"/></svg><span>Państwo</span></div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V8l5-3v16M10 21V10h9v11M13 13h3M13 16h3"/></svg><span>Miasto</span></div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M6 21V9h12v12M4 9l8-6 8 6M10 13h4v8h-4z"/></svg><span>Budownictwo</span></div><div class="nav-grp">Moja firma</div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V5a1 1 0 0 1 1-1h9v17M14 9h5a1 1 0 0 1 1 1v11M8 8h2M8 12h2M8 16h2M3 21h18"/></svg><span>Firma</span></div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21a7 7 0 0 1 14 0M17 11a3 3 0 1 0 0-6M22 21a6 6 0 0 0-4-5.6"/></svg><span>Klienci i rynek JU</span></div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M7 7h7.5a3 3 0 0 1 0 6H9a3 3 0 0 0 0 6h8"/></svg><span>Lombard</span></div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/></svg><span>Szara strefa</span></div><div class="nav-grp">Ja</div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18v12H3zM3 7l9 6 9-6"/></svg><span>Poczta</span><span class="badge">45</span></div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9l10-5 10 5-10 5zM6 11v5c3 2 9 2 12 0v-5M22 9v6"/></svg><span>CV i Akademia</span></div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4"/></svg><span>Ranking</span></div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 12l2-1-1-3-2 .2-1.3-1.3L17 5l-3-1-1 2h-2L10 4 7 5l.3 2-1.3 1.3L4 8.2 3 11l2 1v0l-2 1 1 3 2-.2 1.3 1.3L7 19l3 1 1-2h2l1 2 3-1-.3-2 1.3-1.3 2 .3 1-3z"/></svg><span>Ustawienia</span></div>
+   <div class="variant-tag"><b>B · Gabinet</b><br>granat i złoto, szeryf w nagłówkach, spokojnie</div>
+  </aside>
+  <main class="main">
+   <header class="top">
+    <div class="kpis">
+     <div class="kpi"><span class="kl">Gotówka funduszu</span><span class="kv">14 040,25 zł</span></div>
+     <div class="kpi"><span class="kl">NAV / JU</span><span class="kv">9,9481 zł <em class="down">▼ 0,52%</em></span></div>
+     <div class="kpi"><span class="kl">Moje pieniądze</span><span class="kv">109,40 zł</span></div>
+     <div class="kpi"><span class="kl">Zaufanie klientów</span><span class="kv">42/100</span></div>
+    </div>
+    <div class="ctl">
+     <span class="date">Tydzień 12 · rok 1</span>
+     <div class="seg"><span>x1</span><span>x2</span><span class="on">x5</span></div>
+     <button class="btn primary"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5v14M16 5v14"/></svg> Pauza</button>
+     <button class="ib big"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0"/></svg><span class="dot"></span></button>
+     <button class="ib big"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    </div>
+   </header>
+   <div class="cols">
+    <section class="card market">
+     <div class="card-h"><h2>Rynek akcji</h2><span class="muted">96 spółek · najsilniejszy sektor: Chemia +0,0%</span><div class="sp"></div><button class="btn ghost">Skaner spółek</button></div>
+     <div class="chips"><span class="chip on">Wszystkie</span><span class="chip">Posiadane</span><span class="chip">Finanse</span><span class="chip">Konsumpcja</span><span class="chip">Przemysł i surowce</span><span class="chip">Zdrowie i nauka</span><span class="chip">Technologia</span><span class="chip">Nieruchomości</span><span class="chip">Obronność</span><span class="chip">Usługi</span></div>
+     <table class="tbl"><thead><tr><th class="l">Spółka</th><th>Kurs</th><th>Zmiana tydz.</th><th class="l">Dostępne akcje</th><th>Moje</th><th></th></tr></thead><tbody>
+<tr class="ex"><td colspan="6">GPW — Giełda Papierów Wartościowych</td></tr>
+<tr class="lvl lvl-junk"><td colspan="6"><span class="lvl-dot"></span>Giełda Śmieciowa<span class="cnt">· zwiń</span><span class="chev"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></td></tr>
+<tr class="sec"><td colspan="6">Żywność <span class="cnt">3</span></td></tr>
+<tr class="row "><td class="l"><div class="nm"><span class="nmt">Konfiturex</span></div><div class="meta">KFX · Żywność</div></td>
+<td class="num strong">1,82 zł</td><td class="num"><span class="pill down">▼ −0,59%</span></td>
+<td class="l"><div class="vol"><span class="num">741</span><span class="bar"><i style="width:67%"></i></span></div></td>
+<td class="num zero">0</td><td class="act"><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5"/></svg></button><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button></td></tr>
+<tr class="row "><td class="l"><div class="nm"><span class="nmt">Wieczne Ziemniaki Sp. z o.o.</span></div><div class="meta">WZM · Żywność (rolnictwo)</div></td>
+<td class="num strong">1,50 zł</td><td class="num"><span class="pill up">▲ +2,10%</span></td>
+<td class="l"><div class="vol"><span class="num">725</span><span class="bar"><i style="width:61%"></i></span></div></td>
+<td class="num zero">0</td><td class="act"><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5"/></svg></button><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button></td></tr>
+<tr class="row "><td class="l"><div class="nm"><span class="nmt">Super Makarony</span></div><div class="meta">SUM · Żywność</div></td>
+<td class="num strong">18,00 zł</td><td class="num"><span class="pill flat">■ 0,00%</span></td>
+<td class="l"><div class="vol"><span class="num">781</span><span class="bar"><i style="width:70%"></i></span></div></td>
+<td class="num zero">0</td><td class="act"><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5"/></svg></button><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button></td></tr>
+<tr class="sec"><td colspan="6">Dobra konsumpcyjne <span class="cnt">1</span></td></tr>
+<tr class="row "><td class="l"><div class="nm"><span class="nmt">Six Hand</span></div><div class="meta">SIX · Dobra konsumpcyjne</div></td>
+<td class="num strong">0,80 zł</td><td class="num"><span class="pill up">▲ +3,21%</span></td>
+<td class="l"><div class="vol"><span class="num">869</span><span class="bar"><i style="width:78%"></i></span></div></td>
+<td class="num">120</td><td class="act"><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5"/></svg></button><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button></td></tr>
+<tr class="sec"><td colspan="6">Chemia <span class="cnt">1</span></td></tr>
+<tr class="row "><td class="l"><div class="nm"><span class="nmt">EcoLube</span></div><div class="meta">ECL · Chemia</div></td>
+<td class="num strong">4,12 zł</td><td class="num"><span class="pill down">▼ −7,20%</span></td>
+<td class="l"><div class="vol"><span class="num">512</span><span class="bar"><i style="width:44%"></i></span></div></td>
+<td class="num zero">0</td><td class="act"><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5"/></svg></button><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button></td></tr>
+<tr class="lvl lvl-bronze"><td colspan="6"><span class="lvl-dot"></span>Giełda Brązowa<span class="cnt">· zwiń</span><span class="chev"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></td></tr>
+<tr class="sec"><td colspan="6">Energia <span class="cnt">2</span></td></tr>
+<tr class="row "><td class="l"><div class="nm"><span class="nmt">Polski Uran</span></div><div class="meta">PUR · Energia</div></td>
+<td class="num strong">33,80 zł</td><td class="num"><span class="pill up">▲ +0,42%</span></td>
+<td class="l"><div class="vol"><span class="num">2 140</span><span class="bar"><i style="width:52%"></i></span></div></td>
+<td class="num">35</td><td class="act"><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5"/></svg></button><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button></td></tr>
+<tr class="row sub"><td class="l"><div class="nm"><span class='sub-mark'>└</span><span class="nmt">Uran Serwis</span></div><div class="meta">URS · spółka zależna PUR</div></td>
+<td class="num strong">6,10 zł</td><td class="num"><span class="pill down">▼ −1,12%</span></td>
+<td class="l"><div class="vol"><span class="num">930</span><span class="bar"><i style="width:40%"></i></span></div></td>
+<td class="num zero">0</td><td class="act"><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5"/></svg></button><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button></td></tr>
+<tr class="sec"><td colspan="6">Bankowość <span class="cnt">1</span></td></tr>
+<tr class="row "><td class="l"><div class="nm"><span class="nmt">Bank Gildia Handlowa</span></div><div class="meta">BGH · Bankowość</div></td>
+<td class="num strong">52,40 zł</td><td class="num"><span class="pill up">▲ +1,05%</span></td>
+<td class="l"><div class="vol"><span class="num">4 410</span><span class="bar"><i style="width:81%"></i></span></div></td>
+<td class="num zero">0</td><td class="act"><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5"/></svg></button><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button></td></tr>
+</tbody></table>
+    </section>
+    <aside class="card fund">
+     <div class="card-h"><h2>Mój fundusz</h2><span class="tag live">na żywo</span></div>
+     <div class="tabs"><span class="on">Fundusz</span><span>Konto prywatne</span></div>
+     <div class="mini">
+      <div><span class="kl">NAV / JU</span><b>9,9481 zł</b></div>
+      <div><span class="kl">Liczba JU</span><b>1 411,3</b></div>
+      <div><span class="kl">Klienci</span><b>27</b></div>
+      <div><span class="kl">Stanowisko</span><b>Młodszy zarządca</b></div>
+     </div>
+     <div class="warn"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 18H2zM12 10v5M12 18v.5"/></svg><div><b>Zaufanie spada</b><br>Wynik −0,5% przegrywa z GIG (0,0%). Klienci pytają, za co płacą opłatę.</div></div>
+     <div class="kl">Wyniki: 4 ostatnie okresy</div>
+     <div class="chart">
+      <div class="bars"><div class="b g"><i style="height:38%"></i><span>−0,5%</span></div><div class="b x"><i style="height:6%"></i><span>0,0%</span></div><div class="b r"><i style="height:62%"></i><span>+1,4%</span></div></div>
+      <div class="legend"><span><i class="g"></i>Twój fundusz</span><span><i class="x"></i>GIG</span><span><i class="r"></i>Rywale (śr.)</span></div>
+     </div>
+     <div class="row2"><input value="100"><button class="btn sec">Emisja JU</button></div>
+     <div class="acc">Klienci funduszu <span class="chev"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></div>
+     <div class="acc">Lombard (zastaw akcji) <span class="chev"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></div>
+    </aside>
+   </div>
+  </main>
+ </div>
+ <div class="toast"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9l10-5 10 5-10 5zM6 11v5c3 2 9 2 12 0v-5M22 9v6"/></svg><div><b>Nowe hasło w Akademii</b><br>„Wycena: wartość godziwa”</div><button class="btn ghost sm">Otwórz</button></div>
+</section>
+
+<section class="variant v-fintech">
+ <div class="ticker"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h13v14H6a2 2 0 0 1-2-2zM17 9h3v8a2 2 0 0 1-2 2M7 9h7M7 13h7M7 16h4"/></svg><span class="tk">Bank Gildia Handlowa rozpoczyna inwestycję „Wdrożenie platformy FinTech” za 150 000 zł</span><span class="sep">•</span><span class="tk"><b class="down">▼ 7,2%</b> EcoLube: wyciek w zakładzie w Policach</span><span class="sep">•</span><span class="tk">Skarb Państwa uwalnia na rynek pakiet 1% akcji Gierekludu</span><span class="tk-pause"><svg class="ic" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5v14M16 5v14"/></svg></span></div>
+ <div class="shell">
+  <aside class="side">
+   <div class="brand"><div class="logo">GI</div><div><div class="brand-t">Gra inwestycyjna</div><div class="brand-s">Fundusz Pierwszy Krok</div></div></div>
+   <div class="nav-grp">Świat</div><div class="nav-it on"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-6"/></svg><span>Rynek</span></div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h18M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18M12 3l9 5H3z"/></svg><span>Bank</span></div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21h16M6 21V11M18 21V11M10 21v-6h4v6M3 11h18L12 4z"/></svg><span>Państwo</span></div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V8l5-3v16M10 21V10h9v11M13 13h3M13 16h3"/></svg><span>Miasto</span></div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M6 21V9h12v12M4 9l8-6 8 6M10 13h4v8h-4z"/></svg><span>Budownictwo</span></div><div class="nav-grp">Moja firma</div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V5a1 1 0 0 1 1-1h9v17M14 9h5a1 1 0 0 1 1 1v11M8 8h2M8 12h2M8 16h2M3 21h18"/></svg><span>Firma</span></div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21a7 7 0 0 1 14 0M17 11a3 3 0 1 0 0-6M22 21a6 6 0 0 0-4-5.6"/></svg><span>Klienci i rynek JU</span></div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M7 7h7.5a3 3 0 0 1 0 6H9a3 3 0 0 0 0 6h8"/></svg><span>Lombard</span></div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/></svg><span>Szara strefa</span></div><div class="nav-grp">Ja</div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18v12H3zM3 7l9 6 9-6"/></svg><span>Poczta</span><span class="badge">45</span></div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9l10-5 10 5-10 5zM6 11v5c3 2 9 2 12 0v-5M22 9v6"/></svg><span>CV i Akademia</span></div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4"/></svg><span>Ranking</span></div><div class="nav-it"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 12l2-1-1-3-2 .2-1.3-1.3L17 5l-3-1-1 2h-2L10 4 7 5l.3 2-1.3 1.3L4 8.2 3 11l2 1v0l-2 1 1 3 2-.2 1.3 1.3L7 19l3 1 1-2h2l1 2 3-1-.3-2 1.3-1.3 2 .3 1-3z"/></svg><span>Ustawienia</span></div>
+   <div class="variant-tag"><b>C · Fintech</b><br>ewolucja obecnego: łupek, zieleń, Sora + Inter</div>
+  </aside>
+  <main class="main">
+   <header class="top">
+    <div class="kpis">
+     <div class="kpi"><span class="kl">Gotówka funduszu</span><span class="kv">14 040,25 zł</span></div>
+     <div class="kpi"><span class="kl">NAV / JU</span><span class="kv">9,9481 zł <em class="down">▼ 0,52%</em></span></div>
+     <div class="kpi"><span class="kl">Moje pieniądze</span><span class="kv">109,40 zł</span></div>
+     <div class="kpi"><span class="kl">Zaufanie klientów</span><span class="kv">42/100</span></div>
+    </div>
+    <div class="ctl">
+     <span class="date">Tydzień 12 · rok 1</span>
+     <div class="seg"><span>x1</span><span>x2</span><span class="on">x5</span></div>
+     <button class="btn primary"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5v14M16 5v14"/></svg> Pauza</button>
+     <button class="ib big"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0"/></svg><span class="dot"></span></button>
+     <button class="ib big"><svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    </div>
+   </header>
+   <div class="cols">
+    <section class="card market">
+     <div class="card-h"><h2>Rynek akcji</h2><span class="muted">96 spółek · najsilniejszy sektor: Chemia +0,0%</span><div class="sp"></div><button class="btn ghost">Skaner spółek</button></div>
+     <div class="chips"><span class="chip on">Wszystkie</span><span class="chip">Posiadane</span><span class="chip">Finanse</span><span class="chip">Konsumpcja</span><span class="chip">Przemysł i surowce</span><span class="chip">Zdrowie i nauka</span><span class="chip">Technologia</span><span class="chip">Nieruchomości</span><span class="chip">Obronność</span><span class="chip">Usługi</span></div>
+     <table class="tbl"><thead><tr><th class="l">Spółka</th><th>Kurs</th><th>Zmiana tydz.</th><th class="l">Dostępne akcje</th><th>Moje</th><th></th></tr></thead><tbody>
+<tr class="ex"><td colspan="6">GPW — Giełda Papierów Wartościowych</td></tr>
+<tr class="lvl lvl-junk"><td colspan="6"><span class="lvl-dot"></span>Giełda Śmieciowa<span class="cnt">· zwiń</span><span class="chev"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></td></tr>
+<tr class="sec"><td colspan="6">Żywność <span class="cnt">3</span></td></tr>
+<tr class="row "><td class="l"><div class="nm"><span class="nmt">Konfiturex</span></div><div class="meta">KFX · Żywność</div></td>
+<td class="num strong">1,82 zł</td><td class="num"><span class="pill down">▼ −0,59%</span></td>
+<td class="l"><div class="vol"><span class="num">741</span><span class="bar"><i style="width:67%"></i></span></div></td>
+<td class="num zero">0</td><td class="act"><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5"/></svg></button><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button></td></tr>
+<tr class="row "><td class="l"><div class="nm"><span class="nmt">Wieczne Ziemniaki Sp. z o.o.</span></div><div class="meta">WZM · Żywność (rolnictwo)</div></td>
+<td class="num strong">1,50 zł</td><td class="num"><span class="pill up">▲ +2,10%</span></td>
+<td class="l"><div class="vol"><span class="num">725</span><span class="bar"><i style="width:61%"></i></span></div></td>
+<td class="num zero">0</td><td class="act"><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5"/></svg></button><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button></td></tr>
+<tr class="row "><td class="l"><div class="nm"><span class="nmt">Super Makarony</span></div><div class="meta">SUM · Żywność</div></td>
+<td class="num strong">18,00 zł</td><td class="num"><span class="pill flat">■ 0,00%</span></td>
+<td class="l"><div class="vol"><span class="num">781</span><span class="bar"><i style="width:70%"></i></span></div></td>
+<td class="num zero">0</td><td class="act"><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5"/></svg></button><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button></td></tr>
+<tr class="sec"><td colspan="6">Dobra konsumpcyjne <span class="cnt">1</span></td></tr>
+<tr class="row "><td class="l"><div class="nm"><span class="nmt">Six Hand</span></div><div class="meta">SIX · Dobra konsumpcyjne</div></td>
+<td class="num strong">0,80 zł</td><td class="num"><span class="pill up">▲ +3,21%</span></td>
+<td class="l"><div class="vol"><span class="num">869</span><span class="bar"><i style="width:78%"></i></span></div></td>
+<td class="num">120</td><td class="act"><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5"/></svg></button><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button></td></tr>
+<tr class="sec"><td colspan="6">Chemia <span class="cnt">1</span></td></tr>
+<tr class="row "><td class="l"><div class="nm"><span class="nmt">EcoLube</span></div><div class="meta">ECL · Chemia</div></td>
+<td class="num strong">4,12 zł</td><td class="num"><span class="pill down">▼ −7,20%</span></td>
+<td class="l"><div class="vol"><span class="num">512</span><span class="bar"><i style="width:44%"></i></span></div></td>
+<td class="num zero">0</td><td class="act"><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5"/></svg></button><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button></td></tr>
+<tr class="lvl lvl-bronze"><td colspan="6"><span class="lvl-dot"></span>Giełda Brązowa<span class="cnt">· zwiń</span><span class="chev"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></td></tr>
+<tr class="sec"><td colspan="6">Energia <span class="cnt">2</span></td></tr>
+<tr class="row "><td class="l"><div class="nm"><span class="nmt">Polski Uran</span></div><div class="meta">PUR · Energia</div></td>
+<td class="num strong">33,80 zł</td><td class="num"><span class="pill up">▲ +0,42%</span></td>
+<td class="l"><div class="vol"><span class="num">2 140</span><span class="bar"><i style="width:52%"></i></span></div></td>
+<td class="num">35</td><td class="act"><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5"/></svg></button><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button></td></tr>
+<tr class="row sub"><td class="l"><div class="nm"><span class='sub-mark'>└</span><span class="nmt">Uran Serwis</span></div><div class="meta">URS · spółka zależna PUR</div></td>
+<td class="num strong">6,10 zł</td><td class="num"><span class="pill down">▼ −1,12%</span></td>
+<td class="l"><div class="vol"><span class="num">930</span><span class="bar"><i style="width:40%"></i></span></div></td>
+<td class="num zero">0</td><td class="act"><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5"/></svg></button><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button></td></tr>
+<tr class="sec"><td colspan="6">Bankowość <span class="cnt">1</span></td></tr>
+<tr class="row "><td class="l"><div class="nm"><span class="nmt">Bank Gildia Handlowa</span></div><div class="meta">BGH · Bankowość</div></td>
+<td class="num strong">52,40 zł</td><td class="num"><span class="pill up">▲ +1,05%</span></td>
+<td class="l"><div class="vol"><span class="num">4 410</span><span class="bar"><i style="width:81%"></i></span></div></td>
+<td class="num zero">0</td><td class="act"><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5"/></svg></button><button class="ib"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button></td></tr>
+</tbody></table>
+    </section>
+    <aside class="card fund">
+     <div class="card-h"><h2>Mój fundusz</h2><span class="tag live">na żywo</span></div>
+     <div class="tabs"><span class="on">Fundusz</span><span>Konto prywatne</span></div>
+     <div class="mini">
+      <div><span class="kl">NAV / JU</span><b>9,9481 zł</b></div>
+      <div><span class="kl">Liczba JU</span><b>1 411,3</b></div>
+      <div><span class="kl">Klienci</span><b>27</b></div>
+      <div><span class="kl">Stanowisko</span><b>Młodszy zarządca</b></div>
+     </div>
+     <div class="warn"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 18H2zM12 10v5M12 18v.5"/></svg><div><b>Zaufanie spada</b><br>Wynik −0,5% przegrywa z GIG (0,0%). Klienci pytają, za co płacą opłatę.</div></div>
+     <div class="kl">Wyniki: 4 ostatnie okresy</div>
+     <div class="chart">
+      <div class="bars"><div class="b g"><i style="height:38%"></i><span>−0,5%</span></div><div class="b x"><i style="height:6%"></i><span>0,0%</span></div><div class="b r"><i style="height:62%"></i><span>+1,4%</span></div></div>
+      <div class="legend"><span><i class="g"></i>Twój fundusz</span><span><i class="x"></i>GIG</span><span><i class="r"></i>Rywale (śr.)</span></div>
+     </div>
+     <div class="row2"><input value="100"><button class="btn sec">Emisja JU</button></div>
+     <div class="acc">Klienci funduszu <span class="chev"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></div>
+     <div class="acc">Lombard (zastaw akcji) <span class="chev"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></div>
+    </aside>
+   </div>
+  </main>
+ </div>
+ <div class="toast"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9l10-5 10 5-10 5zM6 11v5c3 2 9 2 12 0v-5M22 9v6"/></svg><div><b>Nowe hasło w Akademii</b><br>„Wycena: wartość godziwa”</div><button class="btn ghost sm">Otwórz</button></div>
+</section>
+</body></html>

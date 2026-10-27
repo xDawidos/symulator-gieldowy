@@ -13,8 +13,8 @@
 // Stan w playerProfile.academy: { unlocked: { id: kwartał }, quizzes: { id: true } }.
 // =================================================================================
 
-const ACADEMY_QUIZ_REWARD = 60; // zł do portfela prywatnego za pierwsze zaliczenie quizu
-const ACADEMY_BASE_ENTRIES = ['kapitalizacja', 'cz', 'nav', 'benchmark'];
+const ACADEMY_QUIZ_REWARD = 60; // PLN do portfela prywatnego za pierwsze zaliczenie quizu
+const ACADEMY_BASE_ENTRIES = ['kapitalizacja', 'cz', 'nav', 'benchmark', 'fazy_rynku'];
 
 // ---------------------------------------------------------------------------------
 // WSKAŹNIKI SPÓŁKI I MEDIANY SEKTORA (wspólne z kartą spółki i skanerem)
@@ -63,9 +63,12 @@ function getSectorMedians(sector) {
     if (now - sectorMedianCache.at > 2000) {
         const groups = {};
         for (const stock of stocks) {
-            if (stock.assetType || stock.isBankrupt || !stock.sector?.[0]) continue;
+            if (stock.assetType || stock.isBankrupt || !getMainSector(stock)) continue;
             const m = getCompanyMetrics(stock);
-            if (m) (groups[stock.sector[0]] = groups[stock.sector[0]] || []).push(m);
+            if (!m) continue;
+            (groups[getMainSector(stock)] = groups[getMainSector(stock)] || []).push(m);
+            const sub = getMainSubsector(stock); // T2: mediana podsektora (klucz „sektor|podsektor”)
+            if (sub) (groups[`${getMainSector(stock)}|${sub}`] = groups[`${getMainSector(stock)}|${sub}`] || []).push(m);
         }
         const data = {};
         for (const [name, list] of Object.entries(groups)) {
@@ -77,8 +80,16 @@ function getSectorMedians(sector) {
     return sectorMedianCache.data[sector] || null;
 }
 
+/** T2: mediany podsektora — tylko przy co najmniej 3 spółkach (inaczej null). */
+function getSubsectorMedians(sector, subsector) {
+    if (!subsector) return null;
+    getSectorMedians(sector); // odświeża pamięć podręczną
+    const data = sectorMedianCache.data[`${sector}|${subsector}`];
+    return data && data.count >= 3 ? data : null;
+}
+
 /** Opis wskaźnika względem sektora: { text, cls } albo null. lowerIsCheap: niższa wartość = „taniej/lepiej”. */
-function compareWithSector(value, sectorValue, { lowerIsCheap = true, format = v => v.toFixed(1), labels = ['tania', 'droga'] } = {}) {
+function compareWithSector(value, sectorValue, { lowerIsCheap = true, format = v => formatNumberPl(v, 1), labels = ['tania', 'droga'] } = {}) {
     if (!Number.isFinite(value) || !Number.isFinite(sectorValue) || sectorValue === 0) return null;
     const ratio = value / sectorValue;
     let verdict = 'jak sektor', cls = 'text-muted';
@@ -104,10 +115,10 @@ function bestBy(list, fn) {
 const ACADEMY_ENTRIES = {
     kapitalizacja: {
         title: 'Kapitalizacja', icon: '🏢',
-        text: 'Kapitalizacja to kurs akcji pomnożony przez liczbę akcji — tyle rynek płaci dziś za całą spółkę. Sam kurs nic nie mówi o wielkości firmy: akcja za 5 zł może należeć do większej spółki niż akcja za 500 zł.',
+        text: 'Kapitalizacja to kurs akcji pomnożony przez liczbę akcji — tyle rynek płaci dziś za całą spółkę. Sam kurs nic nie mówi o wielkości firmy: akcja za 5 PLN może należeć do większej spółki niż akcja za 500 PLN.',
         example: () => { const s = bestBy(pickListed(), x => getMarketCapValue(x)); return s ? `Największa spółka w grze: ${s.name} — kapitalizacja ${formatZl(getMarketCapValue(s), 0)} przy kursie ${formatZl(s.price)}.` : ''; },
         quiz: [
-            { q: 'Spółka ma 1 000 000 akcji po 20 zł. Jaka jest jej kapitalizacja?', a: ['20 mln zł', '1 mln zł', '20 tys. zł'], c: 0 },
+            { q: 'Spółka ma 1 000 000 akcji po 20 PLN. Jaka jest jej kapitalizacja?', a: ['20 mln PLN', '1 mln PLN', '20 tys. PLN'], c: 0 },
             { q: 'Która spółka jest większa?', a: ['Nie da się ocenić po samym kursie', 'Ta z wyższym kursem akcji', 'Ta z niższym kursem akcji'], c: 0 },
             { q: 'Kurs akcji rośnie o 10%, liczba akcji bez zmian. Kapitalizacja…', a: ['rośnie o 10%', 'się nie zmienia', 'spada o 10%'], c: 0 }
         ]
@@ -117,11 +128,11 @@ const ACADEMY_ENTRIES = {
         text: 'C/Z to kurs podzielony przez zysk na akcję z ostatnich 4 kwartałów. Mówi, ile lat zysku „płacisz” kupując akcję. Niskie C/Z bywa okazją, ale też sygnałem problemów — zawsze porównuj ze spółkami z tego samego sektora.',
         example: () => {
             const s = bestBy(pickListed(x => x.fundamentals.peRatio > 0), x => getMarketCapValue(x));
-            const med = s && getSectorMedians(s.sector[0]);
-            return s && med?.pe ? `${s.name}: C/Z ${s.fundamentals.peRatio.toFixed(1)}, mediana sektora ${s.sector[0]}: ${med.pe.toFixed(1)}.` : '';
+            const med = s && getSectorMedians(getMainSector(s));
+            return s && med?.pe ? `${s.name}: C/Z ${s.fundamentals.peRatio.toFixed(1)}, mediana sektora ${getMainSector(s)}: ${med.pe.toFixed(1)}.` : '';
         },
         quiz: [
-            { q: 'Kurs 50 zł, zysk na akcję 5 zł. Ile wynosi C/Z?', a: ['10', '5', '250'], c: 0 },
+            { q: 'Kurs 50 PLN, zysk na akcję 5 PLN. Ile wynosi C/Z?', a: ['10', '5', '250'], c: 0 },
             { q: 'Spółka A ma C/Z 8, a mediana jej sektora to 14. Co to sugeruje?', a: ['Jest tania względem sektora — warto sprawdzić dlaczego', 'Na pewno zbankrutuje', 'Jest droga względem sektora'], c: 0 },
             { q: 'Spółka ma stratę. Jakie ma C/Z?', a: ['Nie da się go sensownie policzyć', 'Bardzo niskie, więc jest tania', 'Równe zero'], c: 0 }
         ]
@@ -131,7 +142,7 @@ const ACADEMY_ENTRIES = {
         text: 'EPS to zysk netto podzielony przez liczbę akcji. Gdy spółka emituje nowe akcje, ten sam zysk dzieli się na więcej części — EPS spada (rozwodnienie). Rynek patrzy na tempo wzrostu EPS.',
         example: () => { const s = bestBy(pickListed(), x => x.fundamentals.epsTtm); return s ? `${s.name}: zysk na akcję z 4 kwartałów ${formatZl(s.fundamentals.epsTtm)}.` : ''; },
         quiz: [
-            { q: 'Zysk netto 2 mln zł, 1 mln akcji. EPS = ?', a: ['2 zł', '0,5 zł', '2 mln zł'], c: 0 },
+            { q: 'Zysk netto 2 mln PLN, 1 mln akcji. EPS = ?', a: ['2 PLN', '0,5 PLN', '2 mln PLN'], c: 0 },
             { q: 'Spółka podwaja liczbę akcji, zysk bez zmian. EPS…', a: ['spada o połowę', 'rośnie dwukrotnie', 'się nie zmienia'], c: 0 },
             { q: 'Co oznacza „rozwodnienie” akcjonariuszy?', a: ['Mniejszy udział i zysk na akcję po emisji nowych akcji', 'Wypłatę dywidendy', 'Spadek zadłużenia'], c: 0 }
         ]
@@ -141,7 +152,7 @@ const ACADEMY_ENTRIES = {
         text: 'Wartość księgowa to majątek spółki minus jej długi (kapitał własny). C/WK = kurs / wartość księgowa na akcję. Poniżej 1 rynek wycenia spółkę taniej niż jej majątek netto — często dlatego, że majątek przynosi mało zysku.',
         example: () => { const s = pickListed(x => x.fundamentals.pbRatio > 0).sort((a, b) => a.fundamentals.pbRatio - b.fundamentals.pbRatio)[0]; return s ? `Najniższe C/WK: ${s.name} — ${s.fundamentals.pbRatio.toFixed(2)}.` : ''; },
         quiz: [
-            { q: 'Majątek 10 mln zł, długi 4 mln zł. Wartość księgowa to…', a: ['6 mln zł', '14 mln zł', '10 mln zł'], c: 0 },
+            { q: 'Majątek 10 mln PLN, długi 4 mln PLN. Wartość księgowa to…', a: ['6 mln PLN', '14 mln PLN', '10 mln PLN'], c: 0 },
             { q: 'C/WK = 0,7 oznacza, że…', a: ['rynek wycenia spółkę poniżej jej majątku netto', 'spółka ma 70% zadłużenia', 'spółka wypłaca 70% zysku'], c: 0 },
             { q: 'Dlaczego niskie C/WK nie zawsze jest okazją?', a: ['Majątek może przynosić słabe zyski albo być przeszacowany', 'Bo C/WK nie ma znaczenia', 'Bo takie spółki nie płacą podatków'], c: 0 }
         ]
@@ -151,7 +162,7 @@ const ACADEMY_ENTRIES = {
         text: 'Dywidenda to część zysku wypłacana akcjonariuszom. Stopa dywidendy = dywidendy z roku / kurs. Bardzo wysoka stopa bywa pułapką: jeśli spółka wypłaca więcej, niż zarabia, dywidenda zostanie obcięta.',
         example: () => { const s = bestBy(pickListed(), x => getTrailingDividendYield(x)); return s && getTrailingDividendYield(s) > 0 ? `Najwyższa stopa dywidendy: ${s.name} — ${(getTrailingDividendYield(s) * 100).toFixed(2)}%.` : 'Na razie żadna spółka nie wypłaciła dywidendy w tym roku.'; },
         quiz: [
-            { q: 'Kurs 40 zł, dywidendy z roku 2 zł. Stopa dywidendy = ?', a: ['5%', '2%', '20%'], c: 0 },
+            { q: 'Kurs 40 PLN, dywidendy z roku 2 PLN. Stopa dywidendy = ?', a: ['5%', '2%', '20%'], c: 0 },
             { q: 'Kiedy wysoka stopa dywidendy jest sygnałem ostrzegawczym?', a: ['Gdy spółka wypłaca więcej, niż zarabia', 'Zawsze jest dobra', 'Gdy spółka ma mało długów'], c: 0 },
             { q: 'Co dzieje się z kursem w dniu odcięcia dywidendy?', a: ['Spada mniej więcej o wartość dywidendy', 'Rośnie o wartość dywidendy', 'Nic się nie zmienia'], c: 0 }
         ]
@@ -161,7 +172,7 @@ const ACADEMY_ENTRIES = {
         text: 'Zadłużenie (zobowiązania / aktywa) pokazuje, jaka część majątku jest finansowana długiem. Dług zwiększa zyski w dobrych czasach, ale w recesji odsetki zjadają wynik. Powyżej ~70% spółka jest wrażliwa na kryzys i wzrost stóp.',
         example: () => { const s = bestBy(pickListed(x => x.balanceSheet?.assets > 0), x => x.balanceSheet.liabilities / x.balanceSheet.assets); return s ? `Najbardziej zadłużona: ${s.name} — ${(s.balanceSheet.liabilities / s.balanceSheet.assets * 100).toFixed(0)}% aktywów.` : ''; },
         quiz: [
-            { q: 'Aktywa 100 mln zł, zobowiązania 80 mln zł. Zadłużenie = ?', a: ['80%', '20%', '125%'], c: 0 },
+            { q: 'Aktywa 100 mln PLN, zobowiązania 80 mln PLN. Zadłużenie = ?', a: ['80%', '20%', '125%'], c: 0 },
             { q: 'Bank Centralny podnosi stopy. Która spółka ucierpi najbardziej?', a: ['Mocno zadłużona', 'Bez długów z dużą gotówką', 'Każda tak samo'], c: 0 },
             { q: 'Dlaczego dług bywa korzystny?', a: ['Pozwala rosnąć szybciej, gdy zysk z inwestycji przewyższa odsetki', 'Bo obniża ryzyko', 'Bo nie trzeba go spłacać'], c: 0 }
         ]
@@ -171,7 +182,7 @@ const ACADEMY_ENTRIES = {
         text: 'Marża netto = zysk netto / przychody. Pokazuje, ile z każdej złotówki sprzedaży zostaje jako zysk. Sektory różnią się marżami (technologia zwykle wyższe niż handel), więc porównuj spółki w obrębie sektora.',
         example: () => { const s = bestBy(pickListed(x => x.fundamentals.revenueTtm > 0), x => x.fundamentals.netIncomeTtm / x.fundamentals.revenueTtm); return s ? `Najwyższa marża netto: ${s.name} — ${(s.fundamentals.netIncomeTtm / s.fundamentals.revenueTtm * 100).toFixed(1)}%.` : ''; },
         quiz: [
-            { q: 'Przychody 10 mln zł, zysk netto 1 mln zł. Marża netto = ?', a: ['10%', '1%', '90%'], c: 0 },
+            { q: 'Przychody 10 mln PLN, zysk netto 1 mln PLN. Marża netto = ?', a: ['10%', '1%', '90%'], c: 0 },
             { q: 'Wysoka inflacja kosztów zwykle…', a: ['obniża marże', 'podnosi marże', 'nie ma wpływu na marże'], c: 0 },
             { q: 'Dlaczego porównujemy marże w obrębie sektora?', a: ['Sektory mają naturalnie różne marże', 'Bo marża zależy od kursu akcji', 'Bo poza sektorem marży nie ma'], c: 0 }
         ]
@@ -181,7 +192,7 @@ const ACADEMY_ENTRIES = {
         text: 'ROE = zysk netto / kapitał własny. Mówi, ile zysku spółka wypracowuje z pieniędzy akcjonariuszy. Wysokie ROE przy niskim zadłużeniu to znak dobrego biznesu; wysokie ROE „napompowane” długiem jest ryzykowne.',
         example: () => { const s = bestBy(pickListed(), x => getCompanyMetrics(x)?.roe); const m = s && getCompanyMetrics(s); return m?.roe ? `Najwyższe ROE: ${s.name} — ${(m.roe * 100).toFixed(1)}%.` : ''; },
         quiz: [
-            { q: 'Zysk 3 mln zł, kapitał własny 20 mln zł. ROE = ?', a: ['15%', '6,7%', '23%'], c: 0 },
+            { q: 'Zysk 3 mln PLN, kapitał własny 20 mln PLN. ROE = ?', a: ['15%', '6,7%', '23%'], c: 0 },
             { q: 'Dwie spółki mają ROE 20%. Która jest bezpieczniejsza?', a: ['Ta z mniejszym zadłużeniem', 'Ta z większym zadłużeniem', 'Są tak samo bezpieczne'], c: 0 },
             { q: 'Co mierzy ROE?', a: ['Zysk z kapitału akcjonariuszy', 'Wzrost kursu akcji', 'Wielkość sprzedaży'], c: 0 }
         ]
@@ -193,7 +204,7 @@ const ACADEMY_ENTRIES = {
         quiz: [
             { q: 'Czy spółka z zyskiem może zbankrutować?', a: ['Tak, jeśli zabraknie jej gotówki na spłatę długów', 'Nie, zysk chroni przed bankructwem', 'Tylko w recesji'], c: 0 },
             { q: 'Co poprawia płynność?', a: ['Więcej gotówki względem bieżących zobowiązań', 'Wyższy kurs akcji', 'Większa liczba akcji'], c: 0 },
-            { q: 'Spółka ma 1 mln zł gotówki i 10 mln zł zobowiązań do spłaty w tym roku. To…', a: ['sygnał ryzyka płynności', 'bardzo bezpieczna sytuacja', 'nie ma znaczenia'], c: 0 }
+            { q: 'Spółka ma 1 mln PLN gotówki i 10 mln PLN zobowiązań do spłaty w tym roku. To…', a: ['sygnał ryzyka płynności', 'bardzo bezpieczna sytuacja', 'nie ma znaczenia'], c: 0 }
         ]
     },
     raport: {
@@ -211,17 +222,17 @@ const ACADEMY_ENTRIES = {
         text: 'Wartość godziwa to szacunek, ile spółka „powinna” kosztować. Metody: porównawcza (C/Z i C/WK sektora), dywidendowa (model Gordona) i inne. Różne metody dają różne wyniki — dlatego wycena to przedział, nie jedna liczba. Kurs w długim terminie dąży do wartości.',
         example: () => { const s = bestBy(pickListed(x => x.fundamentals.fairValue > 0), x => x.fundamentals.fairValue / x.price); return s ? `Największy potencjał wg modelu: ${s.name} — wartość ${formatZl(s.fundamentals.fairValue)} przy kursie ${formatZl(s.price)}.` : ''; },
         quiz: [
-            { q: 'Wartość godziwa 120 zł, kurs 80 zł. Spółka jest…', a: ['niedowartościowana', 'przewartościowana', 'wyceniona idealnie'], c: 0 },
+            { q: 'Wartość godziwa 120 PLN, kurs 80 PLN. Spółka jest…', a: ['niedowartościowana', 'przewartościowana', 'wyceniona idealnie'], c: 0 },
             { q: 'Dlaczego warto liczyć wycenę kilkoma metodami?', a: ['Każda ma założenia — przedział jest bardziej wiarygodny', 'Bo jedna metoda zawsze jest błędna', 'Bo tak wymaga KNF'], c: 0 },
             { q: 'Model Gordona (dywidendowy) nie zadziała dla spółki, która…', a: ['nie wypłaca dywidend', 'ma niskie C/Z', 'ma dużo gotówki'], c: 0 }
         ]
     },
     nav: {
         title: 'NAV i jednostki funduszu', icon: '💼',
-        text: 'NAV (wartość aktywów netto) na jednostkę to wartość funduszu podzielona przez liczbę jednostek (JU). Klienci kupują i umarzają JU po NAV. Wynik funduszu mierzy się zmianą NAV, nie wielkością aktywów — napływ klientów nie jest zyskiem.',
-        example: () => playerFund ? `Twój fundusz: NAV ${getFundNav().toFixed(4)} zł na jednostkę, aktywa ${formatZl(getFundAssets(), 0)}.` : '',
+        text: 'NAV (wartość aktywów netto) na udział to wartość funduszu podzielona przez liczbę udziałów. Klienci kupują i umarzają udziały po NAV. Wynik funduszu mierzy się zmianą NAV, nie wielkością aktywów — napływ klientów nie jest zyskiem.',
+        example: () => playerFund ? `Twój fundusz: NAV ${getFundNav().toFixed(4)} PLN na jednostkę, aktywa ${formatZl(getFundAssets(), 0)}.` : '',
         quiz: [
-            { q: 'Klienci wpłacają do funduszu 1 mln zł. NAV na jednostkę…', a: ['się nie zmienia — przybywa jednostek', 'rośnie o 1 mln zł', 'spada'], c: 0 },
+            { q: 'Klienci wpłacają do funduszu 1 mln PLN. NAV na jednostkę…', a: ['się nie zmienia — przybywa jednostek', 'rośnie o 1 mln PLN', 'spada'], c: 0 },
             { q: 'Czym mierzy się wynik zarządzającego?', a: ['Zmianą NAV na jednostkę', 'Wielkością aktywów', 'Liczbą klientów'], c: 0 },
             { q: 'Akcje w portfelu tanieją o 10%, gotówka bez zmian. NAV…', a: ['spada', 'rośnie', 'się nie zmienia'], c: 0 }
         ]
@@ -263,7 +274,7 @@ const ACADEMY_ENTRIES = {
         quiz: [
             { q: 'Dlaczego obligacja ryzykownej firmy płaci więcej niż skarbowa?', a: ['To premia za ryzyko niewypłacalności', 'Bo firmy są bogatsze od państwa', 'Bo ma krótszy termin'], c: 0 },
             { q: 'Emitent ogłasza niewypłacalność. Co tracisz?', a: ['Kolejne kupony i często część nominału', 'Nic — obligacje są gwarantowane', 'Tylko ostatni kupon'], c: 0 },
-            { q: 'Obligacja 1000 zł z kuponem 6% rocznie płaci rocznie…', a: ['60 zł', '6 zł', '600 zł'], c: 0 }
+            { q: 'Obligacja 1000 PLN z kuponem 6% rocznie płaci rocznie…', a: ['60 PLN', '6 PLN', '600 PLN'], c: 0 }
         ]
     },
     lokata: {
@@ -311,7 +322,7 @@ const ACADEMY_ENTRIES = {
         text: 'Zysk w rachunku wyników to nie to samo co gotówka. Przepływy z działalności pokazują, ile pieniędzy faktycznie wpłynęło. Zdrowa spółka zamienia większość zysku w gotówkę; jeśli zysk rośnie, a gotówka nie — sprzedaż może być „na papierze” (należności, których nikt nie zapłaci).',
         example: () => { const s = pickListed(x => (x.fundamentals.history || []).some(q => Number.isFinite(q.ocf)))[0]; const q = s?.fundamentals.history.slice(-1)[0]; return q && Number.isFinite(q.ocf) ? `${s.name}: ostatni kwartał zysk ${formatZl(q.netIncome, 0)}, gotówka z działalności ${formatZl(q.ocf, 0)}.` : ''; },
         quiz: [
-            { q: 'Spółka ma 10 mln zł zysku, ale 1 mln zł gotówki z działalności. To…', a: ['sygnał ostrzegawczy — zysk mało „gotówkowy”', 'świetny wynik', 'bez znaczenia'], c: 0 },
+            { q: 'Spółka ma 10 mln PLN zysku, ale 1 mln PLN gotówki z działalności. To…', a: ['sygnał ostrzegawczy — zysk mało „gotówkowy”', 'świetny wynik', 'bez znaczenia'], c: 0 },
             { q: 'Dlaczego amortyzację dodaje się do zysku przy liczeniu gotówki?', a: ['To koszt bez wydatku pieniędzy w tym okresie', 'Bo to przychód', 'Bo tak każe podatek'], c: 0 },
             { q: 'Rosnące należności przy stałej sprzedaży oznaczają, że…', a: ['klienci płacą coraz później (albo sprzedaż jest fikcyjna)', 'spółka ma więcej gotówki', 'spada zadłużenie'], c: 0 }
         ]
@@ -353,7 +364,7 @@ const ACADEMY_ENTRIES = {
         quiz: [
             { q: 'Kto dostaje pieniądze jako ostatni przy bankructwie?', a: ['Akcjonariusze', 'Banki-wierzyciele', 'Pracownicy'], c: 0 },
             { q: 'Który zestaw sygnałów najbardziej wskazuje ryzyko bankructwa?', a: ['Straty, rosnący dług, mało gotówki', 'Wysoka dywidenda i brak długu', 'Rosnące przychody i zysk'], c: 0 },
-            { q: 'Czy niski kurs akcji oznacza, że spółka jest tania?', a: ['Niekoniecznie — może być bliska bankructwa', 'Tak, zawsze', 'Tak, jeśli kurs < 1 zł'], c: 0 }
+            { q: 'Czy niski kurs akcji oznacza, że spółka jest tania?', a: ['Niekoniecznie — może być bliska bankructwa', 'Tak, zawsze', 'Tak, jeśli kurs < 1 PLN'], c: 0 }
         ]
     }
 };
@@ -389,6 +400,186 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Społeczeństwo ubożeje. Który sektor ucierpi najmniej?', a: ['Żywność', 'Turystyka', 'Nieruchomości'], c: 0 },
             { q: 'Elastyczność dochodowa większa od 1 oznacza…', a: ['dobro luksusowe — popyt rośnie szybciej niż dochody', 'dobro podstawowe', 'brak reakcji na dochody'], c: 0 },
             { q: 'Dlaczego spółki spożywcze nazywa się defensywnymi?', a: ['Ludzie jedzą także w kryzysie', 'Mają zawsze wysoką dywidendę', 'Państwo gwarantuje ich zyski'], c: 0 }
+        ]
+    },
+    ryzykoBinarne: {
+        title: 'Ryzyko binarne (biotechnologia)', icon: '🧪',
+        text: 'Wynik badania klinicznego jest zero-jedynkowy: lek przechodzi fazę albo nie. Kurs biotechu potrafi wtedy wzrosnąć o połowę albo spaść o połowę w jeden dzień. Wyniku nie da się przewidzieć z wykresu — zarządzający dzieli więc ryzyko: mała pozycja w kilku biotechach zamiast jednej dużej.',
+        example: () => { const s = stocks.find(x => x.clinicalTrial && !x.isBankrupt); return s ? `${s.name}: lek ${s.clinicalTrial.drug} w fazie ${CLINICAL_PHASES[s.clinicalTrial.phase].name}, wynik ok. kwartału ${s.clinicalTrial.dueQuarter}. Szanse faz: I 60%, II 45%, III 60%.` : 'Szanse faz badań: I 60%, II 45%, III 60% — łącznie lek przechodzi wszystkie fazy w ok. 16% przypadków.'; },
+        quiz: [
+            { q: 'Lek przechodzi fazy z szansą 60%, 45% i 60%. Jaka jest szansa przejścia wszystkich trzech?', a: ['ok. 16%', 'ok. 55%', 'ok. 45%'], c: 0 },
+            { q: 'Jak ograniczyć ryzyko binarne w portfelu?', a: ['kilka małych pozycji w różnych biotechach', 'jedna duża pozycja przed wynikiem', 'kupić tuż przed ogłoszeniem'], c: 0 },
+            { q: 'Czy wynik badania da się odczytać z wykresu przed ogłoszeniem?', a: ['nie — jest losowany w chwili ogłoszenia', 'tak, z wolumenu', 'tak, z poprzedniej fazy'], c: 0 }
+        ]
+    },
+    spinoff: {
+        title: 'Spin-off i dywidenda rzeczowa', icon: '✂️',
+        text: 'Spin-off to wydzielenie części spółki do nowej, osobno notowanej firmy. Akcjonariusze nie płacą: każdy dostaje akcje córki proporcjonalnie do akcji matki (dywidenda rzeczowa). W dniu wydzielenia kurs matki spada mniej więcej o wartość wydzielonej części, więc wartość pozycji się nie zmienia. Rynek zwykle nagradza zapowiedź (znika dyskonto konglomeratu), ale robi to od razu — po ogłoszeniu nie ma darmowego zysku. W wariancie carve-out matka zachowuje większość akcji córki (51–80%), a córka zostaje spółką zależną.',
+        example: () => { const e = spinoffLog[0]; const c = e && stocks.find(s => s.symbol === e.child); return c ? `${c.name} (${c.symbol}) wydzielona z ${e.parent}${e.carve ? ` — carve-out, matka ma ${(e.keep * 100).toFixed(0)}%` : ''}.` : 'Spółka z dwoma niepowiązanymi segmentami (np. Technologia i Energia) może wydzielić mniejszy segment, jeśli ma ≥ 30% przychodów.'; },
+        quiz: [
+            { q: 'Ile płaci akcjonariusz za akcje spółki wydzielonej w spin-offie?', a: ['nic — dostaje je proporcjonalnie do akcji matki', 'cenę rynkową', 'połowę ceny rynkowej'], c: 0 },
+            { q: 'Co dzieje się z kursem matki w dniu wydzielenia?', a: ['spada o wartość wydzielonej części', 'rośnie o wartość córki', 'nie zmienia się'], c: 0 },
+            { q: 'Kiedy rynek wycenia korzyść ze spin-offu?', a: ['od razu przy zapowiedzi', 'dopiero rok po wydzieleniu', 'nigdy'], c: 0 }
+        ]
+    },
+    sotp: {
+        title: 'Wycena sumy części (SOTP)', icon: '🧮',
+        text: 'Sum-of-the-parts: wartość spółki z kilkoma segmentami liczy się jako sumę wartości każdego segmentu, wycenionego mnożnikami jego własnego sektora. Konglomerat z niepowiązanymi segmentami często kosztuje mniej niż suma części (dyskonto konglomeratu, w grze do −10%). Wydzielenie segmentu usuwa to dyskonto — dlatego zapowiedź spin-offu podnosi kurs, a po wydzieleniu matka + córka są warte tyle co przed, plus efekt zapowiedzi.',
+        example: () => { const s = stocks.find(x => !x.isBankrupt && !x.assetType && getStockSegments(x).length >= 2 && getConglomerateDiscount(x) > 0); return s ? `${s.name}: segmenty ${getStockSegments(s).map(g => `${g.sector} ${(g.share * 100).toFixed(0)}%`).join(', ')}, dyskonto konglomeratu ${(getConglomerateDiscount(s) * 100).toFixed(0)}%.` : 'Dyskonto konglomeratu: −4% za każdy segment niepowiązany z głównym, najwyżej −10%.'; },
+        quiz: [
+            { q: 'Czym jest wycena SOTP?', a: ['sumą wartości segmentów wycenianych osobno', 'wyceną z jednego C/Z całej spółki', 'ceną z ostatniej transakcji'], c: 0 },
+            { q: 'Co usuwa dyskonto konglomeratu?', a: ['wydzielenie niepowiązanego segmentu', 'emisja akcji', 'skup akcji'], c: 0 },
+            { q: 'Ile wynosi dyskonto konglomeratu w grze najwyżej?', a: ['10%', '50%', '0%'], c: 0 }
+        ]
+    },
+    grupaKapitalowa: {
+        title: 'Grupa kapitałowa i holding', icon: '🏢',
+        text: 'Grupa kapitałowa to spółka matka razem ze spółkami zależnymi, w których ma ponad 50% głosów. Holding sam niczego nie produkuje — zarządza pakietami akcji. W grze koncern 🏢 to spółka z czołówki kapitalizacji (górne 15%), która ma co najmniej 2 segmenty działalności, w tym jeden niepowiązany z głównym, albo 2 spółki zależne, albo 2 segmenty i spółkę zależną. Wartość grupy liczy się sumą części: każdy segment wyceniony mnożnikiem swojego sektora plus rynkowa wartość pakietów w zależnych. Gdy kurs jest niżej niż suma części, mówimy o dyskoncie holdingowym; gdy wyżej — o premii.',
+        example: () => { const s = stocks.find(x => typeof isConcern === 'function' && isConcern(x)); if (!s) return 'Koncern: górne 15% kapitalizacji oraz segmenty niepowiązane, ≥ 2 spółki zależne albo ≥ 2 segmenty i spółka zależna.'; const p = getSumOfParts(s); return `${s.name}: kapitalizacja ${formatZl(p.cap, 0)}, suma części ${formatZl(p.total, 0)}${p.premium !== null ? ` (${p.premium >= 0 ? 'premia' : 'dyskonto'} ${(Math.abs(p.premium) * 100).toFixed(0)}%)` : ''}.`; },
+        quiz: [
+            { q: 'Kiedy spółka jest zależna od matki?', a: ['gdy matka ma ponad 50% głosów', 'gdy matka ma 5% akcji', 'gdy działają w tym samym sektorze'], c: 0 },
+            { q: 'Kurs koncernu jest niższy od sumy części. To…', a: ['dyskonto holdingowe', 'premia holdingowa', 'dywidenda rzeczowa'], c: 0 },
+            { q: 'Jak wycenia się pakiet akcji w spółce zależnej w sumie części?', a: ['wartością rynkową pakietu', 'ceną zakupu sprzed lat', 'nie wlicza się go'], c: 0 }
+        ]
+    },
+    ryzykoKontrahenta: {
+        title: 'Ryzyko kontrahenta', icon: '⛓️',
+        text: 'Kooperacja to umowa dostawca–odbiorca między spółkami z branż powiązanych (np. Chemia i Przemysł). Daje obu stronom korzyść: w grze +0,3 pp wzrostu przychodów na kwartał i +0,5 pp marży, liczone tylko od segmentu, którego dotyczy umowa. Ma też koszt ukryty: los spółki zależy od partnera. Strajk, bankructwo albo korekta wyników kooperanta przenosi połowę szoku na drugą stronę. Zerwanie umowy przed terminem kosztuje karę umowną. Dlatego analityk patrzy nie tylko na spółkę, ale też na jej głównych kontrahentów.',
+        example: () => { const c = cooperations[0]; if (!c) return 'Koncern zawiera najwyżej 3 kooperacje, każdą na 8–16 kwartałów.'; const a = stocks.find(s => s.symbol === c.a), b = stocks.find(s => s.symbol === c.b); return `${a?.name || c.a} (${c.segA}) i ${b?.name || c.b} (${c.segB}): kooperacja do kw. ${c.end}.`; },
+        quiz: [
+            { q: 'Kooperant ogłasza strajk. Co dzieje się z drugą stroną umowy?', a: ['traci część przychodów segmentu objętego umową', 'nic — umowa chroni przed wszystkim', 'zyskuje, bo przejmuje klientów'], c: 0 },
+            { q: 'Od czego liczona jest premia z kooperacji w grze?', a: ['od udziału segmentu, którego dotyczy umowa', 'od całych przychodów spółki', 'od kapitalizacji'], c: 0 },
+            { q: 'Co płaci strona zrywająca umowę przed terminem?', a: ['karę umowną drugiej stronie', 'podatek od kooperacji', 'nic'], c: 0 }
+        ]
+    },
+    podmiotyPowiazane: {
+        title: 'Transakcje z podmiotami powiązanymi', icon: '🚩',
+        text: 'Gdy jeden właściciel kontroluje dwie spółki, ale ma w nich różne udziały (np. 80% i 20%), opłaca mu się przerzucać zysk tam, gdzie ma więcej — przez ceny w umowach między spółkami. To tunelowanie: akcjonariusze mniejszościowi spółki poszkodowanej tracą. W grze taka kooperacja dostaje czerwoną flagę „transakcje z podmiotami powiązanymi” (Księgowy, poziom 4). Pakiet mniejszościowy może złożyć skargę do KNF; jeśli warunki były nierynkowe i KNF to wykaże, beneficjent zwraca korzyść z grzywną, a umowa wraca do cen rynkowych.',
+        example: () => { const c = cooperations.find(x => x.flag); if (!c) return 'Przykład: właściciel ma 80% spółki A i 20% spółki B — umowa A–B to transakcja z podmiotem powiązanym.'; return `${c.flag.name}: ${(c.flag.pctA * 100).toFixed(0)}% w ${c.a} i ${(c.flag.pctB * 100).toFixed(0)}% w ${c.b} — kooperacja z czerwoną flagą.`; },
+        quiz: [
+            { q: 'Właściciel ma 80% spółki A i 20% spółki B. Gdzie opłaca mu się „przenieść” zysk?', a: ['do spółki A', 'do spółki B', 'nigdzie — to bez różnicy'], c: 0 },
+            { q: 'Kto traci na tunelowaniu?', a: ['akcjonariusze mniejszościowi spółki poszkodowanej', 'tylko państwo', 'nikt'], c: 0 },
+            { q: 'Co może zrobić akcjonariusz mniejszościowy?', a: ['złożyć skargę do KNF', 'zablokować umowę sam', 'nic'], c: 0 }
+        ]
+    },
+    splitReverseSplit: {
+        title: 'Split i reverse split', icon: '🔀',
+        text: 'Split to podział akcji: spółka wymienia każdą akcję na kilka (np. 5:1), a kurs spada tyle razy, ile akcji przybywa. Kapitalizacja i wartość Twojej pozycji zostają bez zmian — to jak rozmiana banknotu na drobne. Spółki dzielą akcje, gdy kurs jest bardzo wysoki, bo tanie akcje łatwiej kupować. Reverse split (konsolidacja, np. 1:10) robi odwrotnie: wiele akcji zamienia się w jedną, a kurs rośnie — stosują go spółki z kursem poniżej 1 zł, żeby nie wyglądać na „grosze” i uniknąć zawieszenia handlu. Ułamki akcji, których nie da się wymienić, spółka wypłaca gotówką. Sam podział nie czyni spółki ani lepszą, ani gorszą (reverse split bywa sygnałem kłopotów). W grze: split od 1000 zł, konsolidacja poniżej 1 zł; wykresy i dywidendy na akcję są przeliczane wstecz.',
+        example: () => { const e = splitLog[splitLog.length - 1]; return e ? `${e.name}: ${e.kind === 'split' ? 'split' : 'konsolidacja'} ${formatSplitRatio(e.kind === 'split' ? e.ratio : 1 / e.ratio)} w kw. ${e.quarter} — kurs ${e.priceBefore.toFixed(2)} → ${e.priceAfter.toFixed(2)} zł.` : 'Przykład: akcja za 1200 zł po splicie 3:1 kosztuje 400 zł, a Ty masz 3 razy więcej akcji.'; },
+        quiz: [
+            { q: 'Masz 10 akcji po 1200 zł. Spółka robi split 3:1. Ile masz akcji i po ile?', a: ['30 akcji po 400 zł', '10 akcji po 400 zł', '30 akcji po 1200 zł'], c: 0 },
+            { q: 'Jak split zmienia wartość Twojej pozycji?', a: ['nie zmienia jej', 'zwiększa ją', 'zmniejsza ją'], c: 0 },
+            { q: 'Konsolidacja 1:10: masz 25 akcji po 0,40 zł. Co dostaniesz?', a: ['2 akcje po 4 zł i gotówkę za pół akcji', '250 akcji po 0,04 zł', '25 akcji po 4 zł'], c: 0 }
+        ]
+    },
+    warunkiRynkowe: {
+        title: 'Warunki rynkowe w kooperacji', icon: '🤝',
+        text: 'Kooperacja to umowa dostawca–odbiorca między dwiema spółkami. „Warunki rynkowe” znaczą, że rozliczają się po cenach, jakie zaproponowałby niezależny kontrahent: obie spółki dostają z umowy wzrost przychodów (+0,3 pp na kwartał) i marży (+0,5 pp) proporcjonalnie do udziału powiązanego segmentu, a ryzyko kontrahenta (strajk, bankructwo partnera) ciąży na obu. Zarządy spółek zawsze zawierają umowy na warunkach rynkowych. Warunki korzystne dla jednej strony przenoszą ok. 1% przychodów segmentu na kwartał z jednej spółki do drugiej — to tunelowanie, które obciąża akcjonariuszy mniejszościowych, dostaje czerwoną flagę „podmioty powiązane” i może skończyć się skargą do KNF, zwrotem korzyści i grzywną.',
+        example: () => { const c = cooperations.find(x => x.terms === 'market'); return c ? `Kooperacja ${c.a} i ${c.b}: warunki rynkowe — obie spółki zyskują, nikt nie jest poszkodowany.` : 'Przykład: spółka A kupuje usługi spółki B po cenach, jakie zapłaciłby obcy klient — to warunki rynkowe.'; },
+        quiz: [
+            { q: 'Co znaczą „warunki rynkowe” w kooperacji?', a: ['rozliczenie po cenach, jakie zapłaciłby niezależny kontrahent', 'umowa korzystna tylko dla jednej strony', 'umowa bez ceny'], c: 0 },
+            { q: 'Kto może w grze ustawić warunki korzystne dla jednej spółki?', a: ['tylko gracz — zarządy spółek zawsze zawierają umowy rynkowe', 'każdy prezes', 'KNF'], c: 0 },
+            { q: 'Co grozi za warunki nierynkowe wykryte przez KNF?', a: ['zwrot korzyści i grzywna', 'nic', 'wykluczenie z giełdy'], c: 0 }
+        ]
+    },
+    premiaKontrola: {
+        title: 'Premia za kontrolę', icon: '💼',
+        text: 'Pakiet kontrolny (ponad 50% głosów) jest wart więcej niż ta sama liczba akcji kupowana pojedynczo: daje władzę nad zarządem, dywidendą, transferem zysku i strategią. Dlatego kupujący płaci premię za kontrolę — w grze 15–30% ponad kurs. Matka może sprzedać pakiet córki innemu inwestorowi (koncernowi albo botowi); zysk z premii trafia do matki.',
+        example: () => { const s = stocks.find(x => x.tender); return s ? `${s.tender.buyerName} kupił pakiet kontrolny ${s.name} po ${formatZl(s.tender.price)}.` : 'Kurs 100 PLN, premia za kontrolę 20% → pakiet kontrolny sprzedany po 120 PLN za akcję.'; },
+        quiz: [
+            { q: 'Dlaczego za pakiet kontrolny płaci się więcej niż kurs?', a: ['daje władzę nad spółką', 'bo akcje są rzadkie', 'z powodu podatku'], c: 0 },
+            { q: 'Ile wynosi premia za kontrolę w grze?', a: ['15–30%', '0%', '100%'], c: 0 },
+            { q: 'Kto dostaje premię przy sprzedaży pakietu córki?', a: ['spółka matka', 'akcjonariusze mniejszościowi córki', 'giełda'], c: 0 }
+        ]
+    },
+    wezwanie: {
+        title: 'Wezwanie i ochrona mniejszości', icon: '📣',
+        text: 'Kto przejmuje kontrolę nad spółką (ponad 50%), musi ogłosić wezwanie: zaproponować wszystkim pozostałym akcjonariuszom odkupienie akcji po tej samej cenie, jaką zapłacił za pakiet kontrolny. Dzięki temu premia za kontrolę nie trafia tylko do jednego sprzedającego, a mniejszościowi mogą wyjść, jeśli nie ufają nowemu właścicielowi. Można też zostać — wtedy dalej jest się akcjonariuszem mniejszościowym.',
+        example: () => { const s = stocks.find(x => x.tender); return s ? `${s.name}: wezwanie ${s.tender.buyerName} po ${formatZl(s.tender.price)} do kw. ${s.tender.until}.` : 'Nowy właściciel zapłacił 120 PLN za akcję pakietu — w wezwaniu każdy może sprzedać po 120 PLN.'; },
+        quiz: [
+            { q: 'Po jakiej cenie jest wezwanie po zakupie pakietu kontrolnego?', a: ['po tej samej co za pakiet', 'po kursie z dnia wezwania', 'po wartości księgowej'], c: 0 },
+            { q: 'Czy akcjonariusz musi sprzedać w wezwaniu?', a: ['nie — może zostać', 'tak, zawsze', 'tylko fundusze'], c: 0 },
+            { q: 'Kogo chroni wezwanie?', a: ['akcjonariuszy mniejszościowych', 'tylko kupującego', 'zarząd'], c: 0 }
+        ]
+    },
+    squeezeOut: {
+        title: 'Przymusowy wykup (squeeze-out)', icon: '🧲',
+        text: 'Gdy matka ma co najmniej 90% akcji córki, może przymusowo wykupić resztę — mniejszościowi muszą sprzedać. W grze cena wykupu zawiera premię 10–20% ponad kurs. Potem spółki się łączą: segment córki wraca do matki, córka znika z giełdy i zwalnia miejsce w limicie spółek. Pakiet mniejszościowy zamienia się w gotówkę.',
+        example: () => { const s = stocks.find(x => (x.absorbedCompanies || []).some(a => a && a.quarter !== undefined)); const a = s && s.absorbedCompanies.filter(x => x.quarter !== undefined).at(-1); return a ? `${s.name} wchłonęła ${a.name} (kw. ${a.quarter}).` : 'Matka z 92% córki wykupuje pozostałe 8% po kursie + 15% i łączy spółki.'; },
+        quiz: [
+            { q: 'Od jakiego udziału matka może przymusowo wykupić resztę akcji w grze?', a: ['90%', '50%', '75%'], c: 0 },
+            { q: 'Co dostaje akcjonariusz mniejszościowy przy squeeze-oucie?', a: ['gotówkę po cenie wykupu', 'akcje matki', 'nic'], c: 0 },
+            { q: 'Co dzieje się z córką po wchłonięciu?', a: ['znika z giełdy, segment wraca do matki', 'zostaje notowana', 'bankrutuje'], c: 0 }
+        ]
+    },
+    fazySpolki: {
+        title: 'Fazy rozwoju spółki', icon: '🔄',
+        text: 'Każda spółka jest w jakiejś fazie cyklu życia. Fazy zwykłe: Wzrost (przychody +1,5 pp na kwartał), Stabilność (bez premii, mniejsza zmienność), Spadek (−1,5 pp, kurs pod presją, badania wolniej), Reorganizacja (−0,5 pp, najwyższa zmienność; kończy się stabilnością przy kondycji ≥ 2 albo spadkiem przy < −3). Fazy rzadkie i czasowe: Złoty Rok ✨ (4 kwartały, +3 pp, kurs szybciej w górę), Impuls Innowacji 💡 (4–8 kwartałów, badania o 50% szybsze, +0,5 pp), Zejście w Cień 👻 (3–6 kwartałów, −4 pp, silna presja i zmienność). Po fazie czasowej spółka wraca do poprzedniej. Faza zmienia przychody, więc zysk i wartość godziwą — kurs idzie za nimi z opóźnieniem.',
+        example: () => { const s = stocks.find(x => !x.isBankrupt && !x.assetType && [CORPORATE_PHASES.GOLDEN_YEAR, CORPORATE_PHASES.INNOVATION_PUSH, CORPORATE_PHASES.SHADOW_DESCENT].includes(x.corporatePhase)) || stocks.find(x => !x.isBankrupt && !x.assetType && x.corporatePhase); return s ? `${s.name}: ${getCorporatePhaseTooltip(s.corporatePhase)}` : 'Znacznik fazy widać w tabeli rynku przy cenie (szkolenie Analityk Finansowy).'; },
+        quiz: [
+            { q: 'Która faza przyspiesza badania spółki o 50%?', a: ['Impuls Innowacji', 'Złoty Rok', 'Stabilność'], c: 0 },
+            { q: 'Ile trwa Złoty Rok?', a: ['4 kwartały', 'bez limitu', '1 kwartał'], c: 0 },
+            { q: 'Co dzieje się po zakończeniu fazy czasowej (np. Zejścia w Cień)?', a: ['spółka wraca do poprzedniej fazy', 'spółka bankrutuje', 'faza trwa do końca gry'], c: 0 }
+        ]
+    },
+    dlugiHoryzont: {
+        title: 'Długi horyzont inwestycji (atom)', icon: '☢️',
+        text: 'Blok jądrowy buduje się latami: przez cały ten czas spółka wydaje gotówkę, a przychodu z inwestycji nie ma. Na końcu decyduje regulator — może opóźnić start. Potem blok daje stabilny przychód przez dekady. Taka inwestycja obniża dziś zyski i wolne przepływy, a jej wartość zależy od cierpliwości kapitału i od polityki (kontrakty z państwem).',
+        example: () => { const s = stocks.find(x => x.nuclearBlock && !x.isBankrupt); return s ? `${s.name}: blok jądrowy — etap ${s.nuclearBlock.stage === 'operating' ? 'działa' : s.nuclearBlock.stage === 'approval' ? 'czeka na regulatora' : 'budowa'}, wydano ${formatZl(s.nuclearBlock.spent, 0)} z ${formatZl(s.nuclearBlock.cost, 0)}.` : 'Budowa bloku trwa 8–16 kwartałów, a regulator może dołożyć 2–4 kwartały opóźnienia.'; },
+        quiz: [
+            { q: 'Co dzieje się z wolnymi przepływami pieniężnymi w trakcie budowy bloku?', a: ['są niższe — gotówka idzie w budowę', 'rosną od pierwszego kwartału', 'nie zmieniają się'], c: 0 },
+            { q: 'Kto może opóźnić uruchomienie bloku?', a: ['regulator', 'akcjonariusze mniejszościowi', 'bank centralny'], c: 0 },
+            { q: 'Od czego zależą kontrakty z państwem dla elektrowni?', a: ['od partii rządzącej', 'od kursu akcji', 'od liczby akcjonariuszy'], c: 0 }
+        ]
+    },
+    regulacja: {
+        title: 'Regulacja (fintech)', icon: '🏛️',
+        text: 'Fintech działa na licencji nadzoru finansowego (KNF). Kontrola może przyjść w każdej chwili; firma w słabej kondycji ryzykuje karę albo zakaz przyjmowania nowych klientów, co zatrzymuje wzrost — główny argument za wysoką wyceną fintechu. Ryzyko regulacyjne nie widać w wynikach, dopóki nie nastąpi.',
+        example: () => { const s = stocks.find(x => !x.isBankrupt && getSubsectorMechanicShare(x, 'knf') > 0); return s ? `${s.name} (fintech): kondycja ${(Number(s.financialHealth) || 0).toFixed(1)}${isKnfGrowthBlocked(s) ? ' — trwa zakaz nowych klientów' : ''}. Kontrola KNF: ok. 10% szans w roku.` : 'Kontrola KNF: ok. 10% szans w roku; przy słabej kondycji kara albo zakaz nowych klientów na 2 kwartały.'; },
+        quiz: [
+            { q: 'Co grozi fintechowi w słabej kondycji przy kontroli KNF?', a: ['kara albo zakaz nowych klientów', 'nic, kontrola dotyczy tylko banków', 'automatyczna dywidenda'], c: 0 },
+            { q: 'Dlaczego zakaz nowych klientów mocno uderza w kurs fintechu?', a: ['wycena opiera się na szybkim wzroście', 'fintech traci wszystkie aktywa', 'kurs zależy tylko od dywidendy'], c: 0 },
+            { q: 'Kiedy ryzyko regulacyjne widać w wynikach spółki?', a: ['dopiero gdy się zmaterializuje', 'zawsze w każdym raporcie', 'nigdy'], c: 0 }
+        ]
+    },
+    dywersyfikacja: {
+        title: 'Dywersyfikacja a specjalizacja', icon: '⚖️',
+        text: 'Spółka może rosnąć wszerz (nowe segmenty: mniejsze ryzyko jednej branży, ale rozproszona uwaga) albo w głąb (podsektor, nisza: wyższa marża dzięki skupieniu, ale większa zależność od jednego rynku). W grze segment z podsektorem, który daje co najmniej 70% przychodów, ma premię „skupienia” +1,5 pp marży.',
+        example: () => { const s = stocks.find(x => !x.isBankrupt && !x.assetType && typeof getFocusMarginAdj === 'function' && getFocusMarginAdj(x) > 0); return s ? `${s.name}: skupiona na ${getMainSubsector(s)} — premia +1,5 pp marży.` : 'Premia skupienia: +1,5 pp marży przy ≥ 70% przychodów z segmentu z podsektorem.'; },
+        quiz: [
+            { q: 'Co daje spółce specjalizacja (skupienie)?', a: ['wyższą marżę, ale większą zależność od jednego rynku', 'zawsze niższe ryzyko', 'automatycznie wyższą dywidendę'], c: 0 },
+            { q: 'Co daje dywersyfikacja segmentów?', a: ['mniejsze ryzyko jednej branży', 'zawsze wyższą wycenę', 'brak kosztów'], c: 0 },
+            { q: 'Kiedy w grze działa premia skupienia?', a: ['segment z podsektorem daje ≥ 70% przychodów', 'spółka ma 3 segmenty', 'spółka nie ma podsektora'], c: 0 }
+        ]
+    },
+    synergia: {
+        title: 'Synergia', icon: '🔗',
+        text: 'Synergia to korzyść z połączenia działalności, które do siebie pasują: wspólni klienci, technologia albo łańcuch dostaw (np. chemia i przemysł, budownictwo i nieruchomości). W grze segmenty z branż powiązanych dają +1 pp marży, a rozszerzenie w branżę powiązaną udaje się w 85% przypadków (niepowiązaną — w 65%).',
+        example: () => { const s = stocks.find(x => !x.isBankrupt && !x.assetType && typeof getSynergyMarginAdj === 'function' && getSynergyMarginAdj(x) > 0); return s ? `${s.name}: ${getStockSegments(s).map(seg => seg.sector).join(' + ')} — synergia +1 pp marży.` : 'Przykłady branż powiązanych: Technologia–Gaming, Chemia–Przemysł, Energia–Przemysł, Medycyna–Badania.'; },
+        quiz: [
+            { q: 'Które rozszerzenie ma większą szansę powodzenia?', a: ['w branżę powiązaną (85%)', 'w dowolną branżę (zawsze 85%)', 'w branżę niepowiązaną'], c: 0 },
+            { q: 'Ile daje synergia w grze?', a: ['+1 pp marży', '+10% kursu od razu', 'nic'], c: 0 },
+            { q: 'Które segmenty są powiązane?', a: ['Budowlany i Nieruchomości', 'Gaming i Rolnictwo', 'Bankowość i Turystyka'], c: 0 }
+        ]
+    },
+    konglomerat: {
+        title: 'Dyskonto konglomeratu', icon: '🏚️',
+        text: 'Inwestorzy płacą mniej za spółkę z wieloma niepowiązanymi biznesami: trudniej ją ocenić, a zarząd może przenosić pieniądze między segmentami nieefektywnie. W grze wycena docelowa spada o 4% za każdy niepowiązany segment ponad pierwszy (najwyżej −10%). Rozbicie konglomeratu (np. wydzielenie spółki) często tę wartość odblokowuje.',
+        example: () => { const s = stocks.find(x => !x.isBankrupt && !x.assetType && typeof getConglomerateDiscount === 'function' && getConglomerateDiscount(x) > 0); return s ? `${s.name}: dyskonto konglomeratu −${(getConglomerateDiscount(s) * 100).toFixed(0)}% (${getStockSegments(s).map(seg => seg.sector).join(', ')}).` : 'Dyskonto: −4% za każdy niepowiązany segment ponad pierwszy, najwyżej −10%.'; },
+        quiz: [
+            { q: 'Dlaczego konglomeraty bywają wyceniane taniej?', a: ['trudniej je ocenić i zarządzać kapitałem', 'mają zawsze mniejsze zyski', 'nie płacą podatków'], c: 0 },
+            { q: 'Spółka ma segment główny Chemia i dwa niepowiązane. Dyskonto w grze?', a: ['−8%', '−4%', '−20%'], c: 0 },
+            { q: 'Czy segment powiązany zwiększa dyskonto?', a: ['nie', 'tak, o 4%', 'tak, o 10%'], c: 0 }
+        ]
+    },
+    segmenty: {
+        title: 'Segmenty działalności', icon: '🧩',
+        text: 'Duża spółka rzadko robi jedną rzecz. Segmenty to części działalności, np. bank z ubezpieczeniami albo przemysł z energetyką. Wycenę i ryzyko spółki liczy się jako średnią segmentów ważoną ich udziałem w przychodach. Segment główny (największy udział) decyduje, z jakim sektorem porównujemy spółkę.',
+        example: () => { const s = bestBy(stocks.filter(x => !x.assetType && !x.isBankrupt && getStockSegments(x).length > 1), x => getStockSegments(x).length); return s ? `${s.name}: ${getStockSegments(s).map(seg => `${seg.sector} ${(seg.share * 100).toFixed(0)}%`).join(', ')} — sektor główny ${getMainSector(s)}.` : ''; },
+        quiz: [
+            { q: 'Spółka ma 70% przychodów z energetyki i 30% z chemii. Jej sektor główny to…', a: ['Energia', 'Chemia', 'oba po równo'], c: 0 },
+            { q: 'Profil ryzyka spółki z kilkoma segmentami to…', a: ['średnia segmentów ważona udziałami', 'profil najmniejszego segmentu', 'zawsze profil rynku'], c: 0 },
+            { q: 'Z czyją medianą C/Z porównuje się spółkę wielosegmentową?', a: ['sektora głównego', 'każdego segmentu osobno', 'całego rynku'], c: 0 }
         ]
     },
     kosztPracy: {
@@ -520,6 +711,378 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Które spółki najszybciej znikają z nasyconego rynku?', a: ['Słabe i zadłużone', 'Największe', 'Te z dywidendą'], c: 0 },
             { q: 'Czy spółka zależna innej spółki liczy się do limitu krajowych spółek?', a: ['Nie', 'Tak', 'Tylko w kryzysie'], c: 0 }
         ]
+    },
+    indeks_wazony: {
+        title: 'Indeks ważony kapitalizacją', icon: '📊',
+        text: 'W indeksie ważonym kapitalizacją (jak GIG, SIG20, SIG40 czy BSIG80) wpływ spółki na indeks zależy od jej wartości rynkowej (kurs × liczba akcji), a nie samej ceny akcji. Aby zapobiec zdominowaniu indeksu przez jednego giganta, stosuje się limity wag (tzw. cap, w GIG max 10% na spółkę). Dzięki temu indeks odzwierciedla realną wartość całej giełdy, a debiut drogiej pojedynczej akcji nie wykrzywia sztucznie wskaźnika.',
+        example: () => {
+            const gig = typeof marketIndexes !== 'undefined' ? marketIndexes.find(i => i.id === 'GIG') : null;
+            if (!gig || !gig.weights) return 'GIG stosuje limit 10% wagi na pojedynczą spółkę.';
+            const topEntry = Object.entries(gig.weights).sort((a, b) => b[1] - a[1])[0];
+            return topEntry ? `W GIG największa spółka (${topEntry[0]}) ma wagę ${(topEntry[1] * 100).toFixed(1)}% (limit 10%).` : 'W GIG waga żadnej spółki nie przekracza 10%.';
+        },
+        quiz: [
+            { q: 'Od czego zależy waga spółki w indeksie ważonym kapitalizacją?', a: ['Od wartości rynkowej (kurs × liczba akcji)', 'Tylko od samej ceny pojedynczej akcji', 'Od liczby pracowników spółki'], c: 0 },
+            { q: 'Po co wprowadza się limit wagi (tzw. cap, np. 10%) w indeksie giełdowym?', a: ['Aby jedna ogromna spółka nie zdominowała całego indeksu', 'Żeby zablokować wypłatę dywidend', 'Aby ograniczyć zysk inwestorów do 10%'], c: 0 },
+            { q: 'Które indeksy w grze są ważone kapitalizacją?', a: ['GIG (cap 10%), SIG20, SIG40 i BSIG80', 'Tylko lokaty i obligacje', 'Żadne — wszystkie są równe'], c: 0 }
+        ]
+    },
+    jednorozce: {
+        title: 'Jednorożce i Gasnące Gwiazdy', icon: '🦄',
+        text: 'Na dojrzałym rynku pewne spółki przechodzą 6–8 kwartalne cykle skrajnych emocji inwestorów. Jednorożec (Unicorn) notuje dynamiczny wzrost przychodów (+5–7%), wyższe marże i premię wyceny (+25%), lecz po falach silnych wzrostów inwestorzy okresowo realizują zyski (korekta -15–20%). Z kolei Gasnąca Gwiazda zmaga się ze spadkiem przychodów i marż, a jej wycena cierpi z powodu dyskonta, przeplatanego jedynie krótkimi, technicznymi odbiciami ulgi (dead-cat bounce). Role te rotują na rynku w formie sztafety.',
+        example: () => {
+            const unicorn = typeof stocks !== 'undefined' ? stocks.find(s => s.marketStar?.type === 'unicorn') : null;
+            const fading = typeof stocks !== 'undefined' ? stocks.find(s => s.marketStar?.type === 'fading_star') : null;
+            if (unicorn) return `Obecny jednorożec na rynku: ${unicorn.name} (${unicorn.symbol}) — pozostało ${unicorn.marketStar.quartersLeft} kw. cyklu.`;
+            if (fading) return `Obecna gasnąca gwiazda: ${fading.name} (${fading.symbol}) — pozostało ${fading.marketStar.quartersLeft} kw. cyklu.`;
+            return 'Jednorożce i gasnące gwiazdy wyłaniają się na rynku od 3. kwartału gry.';
+        },
+        quiz: [
+            { q: 'Czym charakteryzuje się Jednorożec rynkowy?', a: ['Hiper-wzrostem przychodów, wyższą marżą i premią wyceny z okresowymi korektami', 'Gwarancją braku jakichkolwiek spadków kursu', 'Brakiem konkurencji i monopolem prawnym'], c: 0 },
+            { q: 'Co to jest techniczne odbicie ulgi (dead-cat bounce) na gasnącej gwieździe?', a: ['Krótkotrwały wzrost kursu wyprzedanej spółki, po którym powraca trend schyłkowy', 'Trwałe uzdrowienie finansów spółki', 'Wypłata rekordowej dywidendy'], c: 0 },
+            { q: 'Jak długo trwa cykl jednorożca lub gasnącej gwiazdy przed przekazaniem sztafety?', a: ['Zazwyczaj 6–8 kwartałów (1.5–2 lata gry)', 'Zawsze dokładnie 1 tydzień', 'Przez całą 20-letnią grę bez zmian'], c: 0 }
+        ]
+    },
+    korekta: {
+        title: 'Korekta rynkowa', icon: '📉',
+        text: 'Korekta to przejściowy spadek indeksu lub kursu o 10–20% od ostatniego lokalnego szczytu w ramach szerszego trendu wzrostowego. Różni się od bessy, która oznacza spadek przekraczający 20% połączony z trwałym pogorszeniem sentymentu. Korekty pozwalają rynkowi ochłonąć po zbyt szybkich wzrostach i często stanowią okazję do dokupienia dobrych spółek po niższych cenach.',
+        example: () => {
+            const regime = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+            const peak = regime?.gigPeak || 1000;
+            const cur = typeof getGigIndexValue === 'function' ? getGigIndexValue() : 1000;
+            return `Lokalny szczyt GIG: ${peak.toFixed(1)} pkt. Bieżące obsunięcie od szczytu: ${(((cur - peak) / peak) * 100).toFixed(1)}%.`;
+        },
+        quiz: [
+            { q: 'Czym różni się korekta od bessy?', a: ['Korekta to spadek o 10–20%, bessa przekracza 20% i trwa dłużej', 'Korekta dotyczy tylko spółek technologicznych', 'W korekcie giełda jest zamknięta'], c: 0 },
+            { q: 'Co często dzieje się po zdrowej korekcie w trendzie wzrostowym?', a: ['Rynek powraca do wzrostów po schłodzeniu wycen', 'Wszystkie spółki natychmiast bankrutują', 'Bank Centralny podwaja podatki'], c: 0 },
+            { q: 'O ile procent zazwyczaj spada indeks podczas klasycznej korekty?', a: ['O 10 do 20% od lokalnego szczytu', 'O 50 do 90%', 'O mniej niż 1%'], c: 0 }
+        ]
+    },
+    cykl_rynku_gospodarki: {
+        title: 'Cykl rynku a cykl gospodarki', icon: '🔄',
+        text: 'Giełda to mechanizm dyskontujący przyszłość — rynek akcji zazwyczaj wyprzedza realną gospodarkę (PKB) o 1 do 2 kwartałów. Hossa często rozpoczyna się w samym dołku recesji, gdy dane gospodarcze są najgorsze, ponieważ inwestorzy wyceniają przyszłe ożywienie. Z kolei szczyt hossy i początek spadków pojawia się w fazie przegrzania gospodarki.',
+        example: () => {
+            const eco = typeof economyCycle === 'object' ? economyCycle?.phase : 'expansion';
+            const reg = typeof getMarketRegime === 'function' ? getMarketRegime('home')?.phase : 'bull';
+            return `Faza gospodarki: ${eco} · Faza giełdy: ${reg}.`;
+        },
+        quiz: [
+            { q: 'Dlaczego giełda rośnie, gdy gospodarka wciąż jest w recesji?', a: ['Inwestorzy dyskontują przyszłe ożywienie gospodarcze z wyprzedzeniem 1–2 kwartałów', 'Ponieważ dane o PKB są bez znaczenia', 'Giełda i gospodarka nie mają ze sobą żadnego związku'], c: 0 },
+            { q: 'Kiedy najczęściej rynek akcji osiąga szczyt przed spadkami?', a: ['W fazie przegrzania gospodarki, gdy optymizm jest powszechny', 'Podczas najgłębszej recesji', 'W momencie spadku stóp procentowych do zera'], c: 0 },
+            { q: 'O ile kwartałów giełda papierów wartościowych zazwyczaj wyprzedza cykl gospodarczy?', a: ['O 1 do 2 kwartałów', 'O 10 lat', 'Giełda reaguje z 3-letnim opóźnieniem'], c: 0 }
+        ]
+    },
+    strach_chciwosc: {
+        title: 'Indeks strachu i chciwości', icon: '🌡️',
+        text: 'Wskaźnik Strachu i Chciwości (0–100) mierzy temperaturę emocji panujących na parkiecie. Składa się z 5 filarów: pędu indeksu GIG (względem średniej z 4 kw.), szerokości rynku (% rosnących spółek), zmienności WNR, mediany wycen C/Z oraz apetytu na ryzyko (dźwignia funduszy i debiuty). Wartości poniżej 20 oznaczają skrajny strach (potencjalne dno wyprzedaży), a powyżej 80 skrajną chciwość (ryzyko korekty lub bańki).',
+        example: () => {
+            const reg = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+            return reg ? `Bieżący wskaźnik sentymentu: ${reg.sentiment}/100. Pęd: ${reg.sentimentParts?.momentum}, Szerokość: ${reg.sentimentParts?.breadth}%, Zmienność: ${reg.sentimentParts?.volatility}.` : 'Wskaźnik nastrojów rynku wymaga ukończenia szkolenia Analityka Indeksowego.';
+        },
+        quiz: [
+            { q: 'Co oznacza odczyt wskaźnika poniżej 20 punktów?', a: ['Skrajny strach inwestorów i potencjalną okazję zakupu (krew na ulicach)', 'Skrajną euforię i konieczność natychmiastowej sprzedaży', 'Brak handlu na giełdzie'], c: 0 },
+            { q: 'Z ilu filarów wyliczany jest wskaźnik sentymentu w grze?', a: ['Z 5 składników: pęd, szerokość rynku, zmienność, C/Z i apetyt na ryzyko', 'Tylko z inflacji i stóp procentowych', 'Z liczby graczy w rankingu'], c: 0 },
+            { q: 'W jakiej strefie wskaźnik sugeruje skrajną chciwość i ryzyko bańki?', a: ['Powyżej 80 punktów', 'Poniżej 10 punktów', 'Dokładnie w punkcie 50'], c: 0 }
+        ]
+    },
+    premia_ryzyko: {
+        title: 'Premia za ryzyko akcji (ERP)', icon: '⚖️',
+        text: 'Inwestowanie w akcje wiąże się ze zmiennością, dlatego inwestorzy wymagają wyższej oczekiwanej stopy zwrotu niż z bezpiecznych obligacji skarbowych czy lokat. Różnica ta to Premia za Ryzyko Akcji (Equity Risk Premium). Gdy stopy procentowe banku centralnego są wysokie, a wyceny akcji drogie, premia za ryzyko kurczy się — kapitał odpływa do bezpiecznych obligacji.',
+        example: () => {
+            const dep = typeof getDepositRate === 'function' ? (getDepositRate() * 100).toFixed(2) : '3.00';
+            return `Oprocentowanie bezpiecznej lokaty: ${dep}%. Inwestorzy na akcjach oczekują premii za ryzyko ponad tę stopę.`;
+        },
+        quiz: [
+            { q: 'Czym jest premia za ryzyko akcji?', a: ['Dodatkowym zyskiem oczekiwanym z akcji ponad stopę wolną od ryzyka', 'Karą nakładaną przez KNF na fundusze', 'Opłatą maklerską przy zakupie akcji'], c: 0 },
+            { q: 'Co dzieje się, gdy bezpieczne obligacje oferują bardzo wysokie oprocentowanie?', a: ['Akcje stają się mniej atrakcyjne, kapitał może odpływać z giełdy', 'Wyceny akcji rosną do nieskończoności', 'Wszystkie spółki przestają publikować raporty'], c: 0 },
+            { q: 'Co stanowi podstawę stopy wolnej od ryzyka w gospodarce gry?', a: ['Obligacje skarbowe i lokaty bankowe', 'Najbardziej ryzykowne startupy', 'Kredyty lombardowe'], c: 0 }
+        ]
+    },
+    krach_bezpieczniki: {
+        title: 'Krach giełdowy i bezpieczniki', icon: '🚨',
+        text: 'Krach to gwałtowne załamanie notowań — spadek indeksu o ponad 20% w ciągu zaledwie 1–4 tygodni, wywołany nagłą paniką, realizacją zleceń stop-loss i przymusowymi wezwaniami do uzupełnienia depozytu (margin call). Aby zapobiec załamaniu infrastruktury, giełda stosuje automatyczne bezpieczniki (circuit breakers): przy spadku GIG o -10% handel staje na 15 s gry, przy -13% na 30 s, a przy -20% handel zostaje zawieszony do końca tygodnia.',
+        example: () => {
+            const isCrash = typeof isMarketCrashing === 'function' && isMarketCrashing();
+            const isHalt = typeof isMarketHalted === 'function' && isMarketHalted();
+            return isCrash ? '🚨 Na rynku trwa KRACH!' : isHalt ? '⚠️ Handel jest wstrzymany przez bezpiecznik!' : 'Bezpieczniki giełdowe czuwają nad stabilnością parkietu (progi -10%, -13%, -20%).';
+        },
+        quiz: [
+            { q: 'Jakie są progi zadziałania bezpieczników giełdowych w grze?', a: ['-10% (15s), -13% (30s) oraz -20% (do końca tygodnia)', '-1%, -2% i -3%', '-50% i zamknięcie giełdy na rok'], c: 0 },
+            { q: 'Co dzieje się podczas zawieszenia handlu przez bezpiecznik?', a: ['Wszystkie zlecenia zakupu i sprzedaży są zablokowane', 'Spółki natychmiast bankrutują', 'Gracz traci wszystkie pieniądze'], c: 0 },
+            { q: 'Ile trwa wstrzymanie handlu przy bezpieczniku 1. stopnia (-10%)?', a: ['15 sekund', 'Cały miesiąc', '24 godziny'], c: 0 }
+        ]
+    },
+    partie_gospodarka: {
+        title: 'Progi CIT i ustawa antymonopolowa', icon: '⚖️',
+        text: 'Partie zmieniają warunki gry dla spółek. Progi CIT obniżają podatek małym firmom i podnoszą dużym — wspierają konkurencję, ale zmniejszają zyski koncernów. Ustawa antymonopolowa określa, kiedy urząd zablokuje fuzję i kiedy KNF ograniczy koncern; przy surowej ustawie koncern może musieć sprzedać kontrolę nad córką. Socjaldemokraci zaostrzają oba prawa, Koalicja Rynkowa je łagodzi.',
+        example: () => `Teraz: progi CIT „${describeLawLevel('corpTaxBrackets', society?.laws?.corpTaxBrackets ?? 0)}”, ustawa antymonopolowa „${describeLawLevel('antitrust', society?.laws?.antitrust ?? 1)}”.`,
+        quiz: [
+            { q: 'Komu pomagają progi CIT?', a: ['Małym spółkom', 'Największym koncernom', 'Bankom centralnym'], c: 0 },
+            { q: 'Co może się stać koncernowi przy surowej ustawie antymonopolowej?', a: ['Nakaz sprzedaży kontroli nad córką', 'Zwolnienie z podatku', 'Dotacja'], c: 0 },
+            { q: 'Która partia zaostrza prawo antymonopolowe?', a: ['Socjaldemokraci', 'Koalicja Rynkowa', 'Żadna'], c: 0 }
+        ]
+    },
+    wartosc_firmy: {
+        title: 'Wartość firmy (goodwill)', icon: '🏷️',
+        text: 'Gdy spółka kupuje inną drożej niż jej aktywa netto (aktywa minus długi), różnica trafia do bilansu jako wartość firmy — zapłata za markę, klientów, zespół i spodziewane synergie. To aktywo, którego nie da się sprzedać osobno. Jeśli przejęta część zarabia gorzej niż w planie, wartość firmy trzeba odpisać.',
+        example: () => { const s = stocks.find(x => x.balanceSheet?.goodwill > 0); return s ? `${s.name}: wartość firmy ${formatZl(s.balanceSheet.goodwill, 0)}.` : 'Żadna spółka nie ma teraz wartości firmy w bilansie.'; },
+        quiz: [
+            { q: 'Cena przejęcia 100 mln, aktywa netto celu 70 mln. Ile wynosi wartość firmy?', a: ['30 mln', '170 mln', '70 mln'], c: 0 },
+            { q: 'Za co płaci kupujący w wartości firmy?', a: ['Za markę, klientów, zespół i synergie', 'Za gotówkę celu', 'Za podatki'], c: 0 },
+            { q: 'Czy wartość firmy da się sprzedać osobno?', a: ['Nie', 'Tak, na giełdzie', 'Tak, bankowi'], c: 0 }
+        ]
+    },
+    test_utraty_wartosci: {
+        title: 'Test utraty wartości', icon: '🧪',
+        text: 'Co roku spółka sprawdza, czy przejęta część zarabia tyle, ile zakładano przy zakupie. Gdy zysk jest dużo niższy (w grze: < 70% planu), część wartości firmy trzeba odpisać. Odpis to koszt w wyniku — zysk netto i zysk na akcję spadają — ale gotówka zostaje w spółce.',
+        example: () => { const s = stocks.find(x => x.lastImpairment); return s ? `${s.name}: odpis ${formatZl(s.lastImpairment.amount, 0)} (kw. ${s.lastImpairment.quarter}).` : 'Nie było jeszcze odpisów.'; },
+        quiz: [
+            { q: 'Czy odpis wartości firmy zabiera spółce gotówkę?', a: ['Nie — to koszt bez wydatku', 'Tak, całą kwotę', 'Tak, połowę'], c: 0 },
+            { q: 'Kiedy trzeba odpisać wartość firmy?', a: ['Gdy przejęta część zarabia dużo mniej niż w planie', 'Co kwartał zawsze', 'Gdy kurs rośnie'], c: 0 },
+            { q: 'Co odpis robi z zyskiem na akcję w danym kwartale?', a: ['Obniża go', 'Podnosi go', 'Nie zmienia'], c: 0 }
+        ]
+    },
+    klatwa_zwyciezcy: {
+        title: 'Klątwa zwycięzcy', icon: '🏚️',
+        text: 'Kto wygrywa licytację o spółkę, często przepłaca — zapłacił więcej niż wszyscy inni uważali za rozsądne. Skutek przychodzi później: odpis wartości firmy, gorsze wyniki, spadek kursu kupującego. Dlatego rynek często karze kupującego już w dniu ogłoszenia przejęcia z wysoką premią.',
+        example: () => 'Patrz kurs kupującego przy ogłoszeniu przejęcia z wysoką premią.',
+        quiz: [
+            { q: 'Na czym polega klątwa zwycięzcy?', a: ['Wygrywający licytację przepłaca', 'Zwycięzca nie płaci podatku', 'Przegrany traci akcje'], c: 0 },
+            { q: 'Jak klątwa zwycięzcy objawia się w bilansie?', a: ['Odpisem wartości firmy', 'Wzrostem gotówki', 'Spadkiem zobowiązań'], c: 0 },
+            { q: 'Jak rynek reaguje na przejęcie z bardzo wysoką premią?', a: ['Często obniża kurs kupującego', 'Zawsze go podnosi', 'Nie reaguje'], c: 0 }
+        ]
+    },
+    ochrona_mniejszosciowych: {
+        title: 'Ochrona akcjonariuszy mniejszościowych', icon: '🛡️',
+        text: 'Kto przejmuje kontrolę nad spółką, musi dać pozostałym akcjonariuszom szansę wyjścia po uczciwej cenie — ogłasza wezwanie (ofertę kupna ich akcji). Bez tego większościowiec mógłby kupić pakiet kontrolny tanio od kilku osób, a reszta zostałaby z akcjami spółki, na którą nie ma wpływu. Pilnuje tego KNF: ostrzega, karze, a w końcu nakazuje wezwanie albo sprzedaż nadwyżki.',
+        example: () => `Dziś próg wezwania to ${Math.round(getTenderThreshold() * 100)}%.`,
+        quiz: [
+            { q: 'Po co jest obowiązek wezwania?', a: ['Żeby mniejszościowi mogli wyjść po uczciwej cenie', 'Żeby podnieść podatki', 'Żeby spółka wypłaciła dywidendę'], c: 0 },
+            { q: 'Kto pilnuje obowiązku wezwania?', a: ['KNF', 'Bank centralny', 'Urząd skarbowy'], c: 0 },
+            { q: 'Po jakiej cenie trzeba ogłosić nakazane wezwanie?', a: ['Co najmniej najwyższej zapłaconej za pakiety', 'Po dowolnej', 'Po cenie nominalnej'], c: 0 }
+        ]
+    },
+    prog_wezwania: {
+        title: 'Próg wezwania i polityka', icon: '📣',
+        text: 'Ustawa „Próg wezwania” mówi, do jakiego udziału trzeba ogłosić wezwanie po przejęciu kontroli (66, 75, 90 albo 99%). Wyższy próg to silniejsza ochrona mniejszościowych i droższa kontrola. Partie zmieniają go w swoich programach (Ludowcy i Blok Państwowy w górę, Koalicja Rynkowa w dół), ale wyższe progi wymagają silnej KNF.',
+        example: () => `Próg teraz: ${Math.round(getTenderThreshold() * 100)}%; limit KNF: ${describeLawLevel('tenderThreshold', getTenderThresholdKnfCap())}.`,
+        quiz: [
+            { q: 'Co oznacza wyższy próg wezwania?', a: ['Droższą kontrolę i silniejszą ochronę mniejszościowych', 'Tańszą kontrolę', 'Brak wezwań'], c: 0 },
+            { q: 'Które partie podnoszą próg wezwania?', a: ['Ludowcy i Blok Państwowy', 'Koalicja Rynkowa', 'Żadna'], c: 0 },
+            { q: 'Co ogranicza najwyższy możliwy próg?', a: ['Siła KNF', 'Kurs GIG', 'Stopy procentowe'], c: 0 }
+        ]
+    },
+    transakcja_pakietowa: {
+        title: 'Transakcja pakietowa', icon: '📦',
+        text: 'Duży pakiet akcji rzadko kupuje się na sesji — kurs by poszybował. Kupujący negocjuje z posiadaczem poza rynkiem: liczbę akcji i cenę. Sprzedający ma cenę rezerwową (zwykle powyżej kursu i wartości godziwej) — zależy od jego charakteru i relacji z kupującym. Zbyt niska oferta urazi i zamknie rozmowy na jakiś czas.',
+        example: () => 'Propozycję odkupu złożysz w liście akcjonariuszy spółki.',
+        quiz: [
+            { q: 'Dlaczego duże pakiety kupuje się poza sesją?', a: ['Żeby nie wywindować kursu', 'Bo na sesji nie ma akcji', 'Bo tak każe KNF'], c: 0 },
+            { q: 'Co podnosi cenę rezerwową sprzedającego?', a: ['Niska relacja z kupującym i charakter „wieloryba”', 'Hojna dywidenda', 'Bessa'], c: 0 },
+            { q: 'Co grozi przy ofercie dużo poniżej oczekiwań?', a: ['Urażenie i blokada rozmów', 'Kara KNF', 'Nic'], c: 0 }
+        ]
+    },
+    pakiet_kontrolny: {
+        title: 'Pakiet kontrolny', icon: '🏛️',
+        text: 'Kto ma ponad 50% głosów, kontroluje walne: wybiera zarząd, politykę dywidendy i decyzje o przejęciach. Pakiet kontrolny jest wart więcej niż suma pojedynczych akcji — za kontrolę płaci się premię. Przejęcie kontroli poza rynkiem podlega przepisom o wezwaniu (ochrona mniejszościowych).',
+        example: () => 'Fundusz z > 50% akcji spółki dostaje oferty kupna i rozgrywa walne.',
+        quiz: [
+            { q: 'Ile głosów daje kontrolę nad walnym?', a: ['Ponad 50%', '10%', '25%'], c: 0 },
+            { q: 'Dlaczego za pakiet kontrolny płaci się premię?', a: ['Bo daje kontrolę nad spółką', 'Bo ma niższe ryzyko', 'Bo nie płaci się podatku'], c: 0 },
+            { q: 'Co chroni akcjonariuszy mniejszościowych przy zmianie kontroli?', a: ['Obowiązek wezwania', 'Bank centralny', 'Dywidenda'], c: 0 }
+        ]
+    },
+    due_diligence: {
+        title: 'Due diligence (badanie spółki)', icon: '🔎',
+        text: 'Zanim kupujący zapłaci, bada księgi celu: umowy, długi, zgodność wyników z gotówką. Gdy znajdzie oszustwo księgowe, obniża cenę albo zrywa transakcję; ukryte zobowiązania odejmuje od ceny. Sprzedający może przyjąć obniżkę, negocjować albo zerwać rozmowy.',
+        example: () => 'Badanie trwa przez pierwszy kwartał uzgodnionej transakcji.',
+        quiz: [
+            { q: 'Co robi kupujący, gdy w badaniu znajdzie ukryte zobowiązania?', a: ['Obniża cenę o ich wartość', 'Podnosi cenę', 'Nic'], c: 0 },
+            { q: 'Po co kupujący bada spółkę przed zapłatą?', a: ['Żeby nie przepłacić za ukryte problemy', 'Żeby uniknąć podatku', 'Żeby zmienić nazwę spółki'], c: 0 },
+            { q: 'Oszustwo księgowe wykryte w badaniu może…', a: ['obniżyć cenę albo zerwać transakcję', 'przyspieszyć rozliczenie', 'podnieść premię'], c: 0 }
+        ]
+    },
+    audyt_przed_sprzedaza: {
+        title: 'Audyt przed sprzedażą', icon: '📒',
+        text: 'Sprzedający może sam zlecić audyt, zanim przyjmie ofertę. Problemy ujawnione wcześniej nie są niespodzianką dla kupującego — obniżka ceny jest o połowę mniejsza, a transakcja nie zostanie zerwana. „Kupujący wie, z czym idzie”.',
+        example: () => 'Audyt zlecisz w oknie oferty kupna (szkolenie „Księgowy”, poziom 5).',
+        quiz: [
+            { q: 'Jak audyt przed sprzedażą zmienia obniżkę ceny po badaniu kupującego?', a: ['Obniżka jest o połowę mniejsza', 'Obniżka jest dwa razy większa', 'Nie ma znaczenia'], c: 0 },
+            { q: 'Czy po audycie przed sprzedażą kupujący zerwie transakcję z powodu wykrytego oszustwa?', a: ['Nie — wie, z czym idzie', 'Zawsze', 'Tylko w hossie'], c: 0 },
+            { q: 'Kto płaci za audyt przed sprzedażą?', a: ['Sprzedający', 'Kupujący', 'KNF'], c: 0 }
+        ]
+    },
+    ukryte_zobowiazania: {
+        title: 'Ukryte zobowiązania', icon: '📑',
+        text: 'Nie każdy dług widać w bilansie. Poręczenia za cudze kredyty, przegrane pozwy czy kary to zobowiązania, które mogą „wyskoczyć” nagle. Ujawnia je audyt, badanie kupującego albo sąd. Wtedy dług w bilansie rośnie, a kurs spada o ich wartość na akcję. Ryzyko jest większe przy prezesie skłonnym do korupcji i przy słabej kondycji spółki.',
+        example: () => { const s = stocks.find(x => x.hiddenRevealed); return s ? `${s.name}: ujawnione ${formatZl(s.hiddenRevealed.value, 0)} (wykrył: ${s.hiddenRevealed.by}).` : 'Jeszcze nikt nie ujawnił ukrytych zobowiązań.'; },
+        quiz: [
+            { q: 'Co dzieje się z kursem po ujawnieniu ukrytych zobowiązań?', a: ['Spada o ich wartość na akcję', 'Rośnie', 'Nie zmienia się'], c: 0 },
+            { q: 'Kto najczęściej ujawnia ukryte zobowiązania?', a: ['Audytor i kupujący w badaniu spółki', 'Bank centralny', 'Akcjonariusze mniejszościowi'], c: 0 },
+            { q: 'Kiedy ryzyko ukrytych zobowiązań jest większe?', a: ['Przy skorumpowanym prezesie i słabej kondycji', 'Przy wysokiej dywidendzie', 'W hossie'], c: 0 }
+        ]
+    },
+    cena_maksymalna: {
+        title: 'Cena maksymalna i synergie', icon: '🎯',
+        text: 'Kupujący ma w głowie cenę maksymalną — ile może zapłacić, żeby przejęcie się opłaciło. Zależy od wartości spółki i synergii (wspólne zakupy, klienci, koszty). Pierwsza oferta jest zwykle dużo niższa. Rozmowa zdradza przedział tej ceny; kontroferta w przedziale zwykle przechodzi, a żądanie dużo powyżej grozi urażeniem i zerwaniem rozmów.',
+        example: () => 'Oferty kupna dostaje fundusz z co najmniej 33% akcji spółki.',
+        quiz: [
+            { q: 'Od czego zależy cena maksymalna kupującego?', a: ['Od wartości spółki i synergii', 'Tylko od kursu z wczoraj', 'Od liczby akcjonariuszy'], c: 0 },
+            { q: 'Co grozi przy żądaniu dużo ponad cenę maksymalną?', a: ['Urażenie i wycofanie oferty', 'Automatyczna zgoda', 'Kara KNF'], c: 0 },
+            { q: 'Pierwsza oferta kupującego jest zwykle…', a: ['niższa niż jego cena maksymalna', 'równa cenie maksymalnej', 'wyższa niż cena maksymalna'], c: 0 }
+        ]
+    },
+    aukcja_sprzedazy: {
+        title: 'Konkurencyjny proces sprzedaży', icon: '🔨',
+        text: 'Sprzedający może zaprosić kolejnych chętnych (przez doradcę). Gdy jest dwóch kupujących, przebijają się nawzajem — cena rośnie, ale tylko do niższej z ich cen maksymalnych. Pierwszy oferent może się obrazić i wycofać. Doradca kosztuje, a drugiego chętnego może nie znaleźć.',
+        example: () => 'Aukcję uruchomisz w oknie oferty kupna.',
+        quiz: [
+            { q: 'Do jakiej ceny rosną oferty w aukcji dwóch kupujących?', a: ['Do niższej z ich cen maksymalnych', 'Bez ograniczeń', 'Do ceny z pierwszej oferty'], c: 0 },
+            { q: 'Jakie jest ryzyko zaproszenia drugiego oferenta?', a: ['Koszt doradcy i urażenie pierwszego oferenta', 'Utrata akcji', 'Zawieszenie handlu'], c: 0 },
+            { q: 'Kto szuka drugiego kupującego?', a: ['Doradca sprzedającego', 'KNF', 'Bank centralny'], c: 0 }
+        ]
+    },
+    premia_przejecia: {
+        title: 'Premia za przejęcie', icon: '🤝',
+        text: 'Kupujący całą spółkę płaci więcej niż kurs giełdowy — to premia za przejęcie (zwykle 20–40%). Płaci za kontrolę: może połączyć firmy, obciąć koszty, wykorzystać synergie. Kurs celu po ogłoszeniu skacze w okolice ceny oferty, a kurs kupującego często spada — rynek boi się, że przepłacił.',
+        example: () => { const s = stocks.find(x => x.mergerProcess?.arb && x.mergerProcess.initiatorSymbol !== x.symbol && x.mergerProcess.type === 'przejęcie'); return s ? `${s.name}: oferta ${formatZl(s.mergerProcess.offerDetails.buyoutPricePerShare)} za akcję, premia ${Math.round((s.mergerProcess.offerDetails.premium || 0) * 100)}%.` : 'Teraz nikt nie przejmuje spółki na giełdzie.'; },
+        quiz: [
+            { q: 'Kurs 100 PLN, oferta 130 PLN za akcję. Ile wynosi premia?', a: ['30%', '130%', '23%'], c: 0 },
+            { q: 'Dlaczego kurs kupującego często spada po ogłoszeniu przejęcia?', a: ['Rynek boi się, że kupujący przepłacił', 'Bo kupujący dostaje gotówkę', 'Bo cel bankrutuje'], c: 0 },
+            { q: 'Za co kupujący płaci premię?', a: ['Za kontrolę i spodziewane synergie', 'Za prowizję maklera', 'Za podatek od transakcji'], c: 0 }
+        ]
+    },
+    arbitraz_fuzji: {
+        title: 'Arbitraż fuzji', icon: '⚖️',
+        text: 'Po ogłoszeniu przejęcia kurs celu nie dochodzi do pełnej ceny oferty — zostaje różnica (spread). To cena ryzyka: transakcja może się nie udać (urząd antymonopolowy, obrona zarządu, brak finansowania). Kto kupi akcje celu, zarobi spread, jeśli transakcja dojdzie do skutku, ale straci, gdy zostanie zerwana — wtedy kurs wraca w okolice ceny sprzed oferty. Spread maleje, gdy transakcja się zbliża.',
+        example: () => { const s = stocks.find(x => x.mergerProcess?.arb && x.mergerProcess.initiatorSymbol !== x.symbol); return s ? `${s.name}: spread ${formatNumberPl(s.mergerProcess.arb.spread * 100, 1)}%, etap ${s.mergerProcess.stage}/7.` : 'Spread zobaczysz w karcie spółki, gdy trwa przejęcie.'; },
+        quiz: [
+            { q: 'Oferta 100 PLN, kurs celu 94 PLN. Ile wynosi spread?', a: ['6%', '94%', '106%'], c: 0 },
+            { q: 'Co się dzieje z kursem celu po zerwaniu przejęcia?', a: ['Wraca w okolice ceny sprzed oferty', 'Rośnie do ceny oferty', 'Spółka znika z giełdy'], c: 0 },
+            { q: 'Kiedy spread jest największy?', a: ['Na początku procesu i przy wrogim przejęciu', 'Dzień przed rozliczeniem', 'Gdy nikt nie przejmuje spółki'], c: 0 }
+        ]
+    },
+    emisje_skupy: {
+        title: 'Emisje i skupy w cyklu rynku', icon: '🔁',
+        text: 'Zarząd sam wybiera moment emisji i skupu akcji. Gdy rynek płaci za akcje dużo (hossa, wysoka wycena), spółka chętnie sprzedaje nowe akcje — dostaje dużo gotówki za mały kawałek firmy, ale dotychczasowi akcjonariusze mają mniejszy udział w zysku (rozwodnienie). Gdy akcje są tanie (bessa, panika), spółka z zapasem gotówki skupuje własne akcje — zostaje ich mniej, więc każda daje większy udział w zysku.',
+        example: () => {
+            const premium = typeof getMarketRegime === 'function' ? Number(getMarketRegime('home')?.premium) || 0 : 0;
+            return `Premia rynku: ${premium >= 0 ? '+' : ''}${(premium * 100).toFixed(0)}% — ${premium > 0.10 ? 'zarządy częściej proponują emisje' : premium < -0.15 ? 'zarządy z gotówką częściej proponują skup akcji' : 'wyceny są umiarkowane'}.`;
+        },
+        quiz: [
+            { q: 'Kiedy emisja nowych akcji jest najkorzystniejsza dla spółki?', a: ['Gdy akcje są drogie', 'Gdy akcje są tanie', 'Zawsze tak samo'], c: 0 },
+            { q: 'Co emisja 10% nowych akcji robi z udziałem dotychczasowego akcjonariusza w zysku?', a: ['Zmniejsza go (rozwodnienie)', 'Zwiększa go', 'Nie zmienia'], c: 0 },
+            { q: 'Spółka skupuje 10% własnych akcji. Twój udział w zysku na akcję…', a: ['rośnie', 'maleje', 'nie zmienia się'], c: 0 }
+        ]
+    },
+    bramka_umorzen: {
+        title: 'Bramka umorzeń', icon: '⏳',
+        text: 'Fundusz może czasowo ograniczyć wypłaty, gdy klienci chcą naraz umorzyć dużą część udziałów — tak robią fundusze nieruchomości i fundusze zamknięte. W grze w kwartale można umorzyć najwyżej 10% udziałów z jego początku (w tym panika najwyżej 5%). Reszta zleceń czeka w kolejce i idzie pierwsza w następnym kwartale, chyba że klient odzyska zadowolenie i zrezygnuje. Bramka chroni pozostałych klientów przed wyprzedażą akcji po złych cenach, ale klienci to widzą — zaufanie spada.',
+        example: () => {
+            const queued = typeof getQueuedRedemptionUnits === 'function' ? getQueuedRedemptionUnits() : 0;
+            return queued > 0 ? `W kolejce umorzeń czeka ${formatNumberPl(queued, 1)} udziałów.` : 'Kolejka umorzeń jest pusta.';
+        },
+        quiz: [
+            { q: 'Ile udziałów można umorzyć w jednym kwartale, zanim zadziała bramka?', a: ['10% udziałów z początku kwartału', '50% udziałów', 'Bez limitu'], c: 0 },
+            { q: 'Co dzieje się ze zleceniem umorzenia ponad limit?', a: ['Czeka w kolejce i idzie pierwsze w następnym kwartale', 'Przepada', 'Jest realizowane od razu po niższej cenie'], c: 0 },
+            { q: 'Jaki koszt ponosi fundusz, uruchamiając bramkę?', a: ['Spada zaufanie klientów', 'Płaci karę do KNF', 'Traci licencję'], c: 0 }
+        ]
+    },
+    pozyczkodawca: {
+        title: 'Pożyczkodawca ostatniej instancji', icon: '🏛️',
+        text: 'W sytuacji paniki rynkowej i kryzysu płynności komercyjne instytucje finansowe boją się pożyczać sobie nawzajem pieniądze. Rolę pożyczkodawcy ostatniej instancji pełni Bank Centralny. W odpowiedzi na krach może obniżyć stopy procentowe (np. cięcie o 50 pb) oraz zasilić rynek płynnością, zapobiegając lawinie bankructw.',
+        example: () => {
+            const rate = typeof centralBank === 'object' && centralBank ? (centralBank.baseInterestRate * 100).toFixed(2) : '4.50';
+            return `Aktualna stopa referencyjna Banku Centralnego: ${rate}%.`;
+        },
+        quiz: [
+            { q: 'Kto pełni rolę pożyczkodawcy ostatniej instancji w gospodarce?', a: ['Bank Centralny', 'Lombardy miejskie', 'Prywatni inwestorzy zagraniczni'], c: 0 },
+            { q: 'Jak Bank Centralny zwykle reaguje na wybuch paniki i krachu?', a: ['Ścina stopy procentowe i dostarcza płynność', 'Podnosi stopy procentowe do 100%', 'Likwiduje giełdę papierów wartościowych'], c: 0 },
+            { q: 'Jaki jest główny cel działania pożyczkodawcy ostatniej instancji?', a: ['Zapobieżenie zapaści płynnościowej i fali bankructw w sektorze finansowym', 'Maksymalizacja zysków komercyjnych banków', 'Sfinansowanie festynu miejskiego'], c: 0 }
+        ]
+    },
+    dzwignia_margin: {
+        title: 'Dźwignia i Margin Call', icon: '⚡',
+        text: 'Dźwignia finansowa polega na inwestowaniu za pożyczone pieniądze (np. kredyty bankowe). W czasie hossy mnoży zyski, lecz w czasie spadków potęguje straty. Gdy wartość portfela zabezpieczającego pożyczkę spadnie poniżej wymaganego progu, następuje Margin Call — wezwanie do natychmiastowej spłaty długu lub przymusowa wyprzedaż akcji po dowolnej cenie.',
+        example: () => {
+            return 'Podczas krachu fundusze o dźwigni powyżej 50% podlegają wymuszonej wyprzedaży 20–40% akcji.';
+        },
+        quiz: [
+            { q: 'Co to jest Margin Call?', a: ['Wezwanie do uzupełnienia depozytu lub przymusowa sprzedaż akcji przy spadku wycen', 'Powiadomienie o wypłacie rekordowej dywidendy', 'Propozycja awansu w korporacji'], c: 0 },
+            { q: 'Dlaczego nadmierna dźwignia finansowa jest niebezpieczna dla całego rynku?', a: ['Wymuszona wyprzedaż akcji pod margin call pogłębia spadki cen innych spółek', 'Ponieważ obniża inflację w kraju', 'Bo uniemożliwia kupno obligacji'], c: 0 },
+            { q: 'Co dzieje się, gdy inwestor na dźwigni nie uzupełni środków po wezwaniu margin call?', a: ['Broker lub bank przymusowo wyprzedaje akcje z portfela', 'Kredyt zostaje natychmiast umorzony za darmo', 'Inwestor otrzymuje darmowe jednostki uczestnictwa'], c: 0 }
+        ]
+    },
+    obsuniecie_kapitalu: {
+        title: 'Obsunięcie kapitału (Drawdown)', icon: '📉',
+        text: 'Maksymalne obsunięcie kapitału (Max Drawdown) to największy procentowy spadek wartości funduszu lub indeksu od historycznego szczytu do kolejnego dołka przed ustanowieniem nowego rekordu. Jest to jedna z najważniejszych miar ryzyka — klienci funduszu panikują i wycofują kapitał, gdy obsunięcie przekracza ich próg tolerancji.',
+        example: () => {
+            const dd = (typeof playerFund !== 'undefined' && playerFund?.current?.maxDrawdown) ? (playerFund.current.maxDrawdown * 100).toFixed(1) : '0.0';
+            return `Maksymalne obsunięcie funduszu w bieżącym okresie: ${dd}%.`;
+        },
+        quiz: [
+            { q: 'Co mierzy wskaźnik Max Drawdown?', a: ['Największy spadek wyceny od szczytu do dołka w danym okresie', 'Średni zysk z dywidend w skali roku', 'Liczbę transakcji przeprowadzonych przez zarządcę'], c: 0 },
+            { q: 'Dlaczego duże obsunięcie kapitału zagraża funduszowi?', a: ['Klienci tracą zaufanie i składają zlecenia umorzenia jednostek', 'KNF automatycznie przejmuje spółki z portfela', 'Fundusz musi podwoić liczbę akcji'], c: 0 },
+            { q: 'Od jakiego punktu odniesienia mierzy się drawdown portfela?', a: ['Od najwyższego dotychczasowego szczytu (peak)', 'Od ceny zakupu pierwszej spółki', 'Od zera'], c: 0 }
+        ]
+    },
+    okno_ipo: {
+        title: 'Okno IPO', icon: '🚪',
+        text: 'Okno IPO to korzystny okres na rynku (zwykle faza Hossy lub Euforii), w którym wysoki optymizm inwestorów i nadmiar kapitału pozwalają młodym spółkom i startupom debiutować na giełdzie przy bardzo wysokich wycenach (mnożnik 1.2–1.8x). Podczas bessy okno IPO zatrzaskuje się — debiuty są przekładane, a wyceny spadają.',
+        example: () => {
+            const reg = typeof getMarketRegime === 'function' ? getMarketRegime('home')?.phase : 'bull';
+            const mult = (reg === 'euphoria' ? '1.4–1.8x (szeroko otwarte)' : reg === 'bear' ? '0.6–0.8x (zamknięte)' : '1.0x (normalne)');
+            return `Bieżący stan okna debiutów IPO: ${mult}.`;
+        },
+        quiz: [
+            { q: 'Kiedy okno debiutów (IPO) jest najbardziej otwarte?', a: ['W fazie hossy i euforii przy wysokim sentymencie i napływach kapitału', 'W trakcie najgłębszego krachu', 'Gdy Bank Centralny podnosi podatki'], c: 0 },
+            { q: 'Co dzieje się ze startupami planującymi wejście na giełdę podczas bessy?', a: ['Często odkładają debiut w czasie, czekając na lepszą koniunkturę', 'Debiutują natychmiast z potrójną wyceną', 'Przekazują majątek burmistrzowi miasta'], c: 0 },
+            { q: 'Jaki mnożnik wyceny mogą osiągać debiuty w fazie euforii?', a: ['Nawet 1.4 do 1.8x normalnej wyceny godziwej', 'Zawsze dokładnie 0.1x', 'Wycena debiutu jest zawsze ujemna'], c: 0 }
+        ]
+    },
+    pulapka_wartosci: {
+        title: 'Pułapka wartości (Value Trap)', icon: '🕳️',
+        text: 'Pułapka wartości to sytuacja, w której spółka wydaje się niezwykle tania według tradycyjnych wskaźników (bardzo niskie C/Z lub C/WK poniżej 1), lecz w rzeczywistości jej model biznesowy chyli się ku upadkowi, przychody kurczą się, a rynkowa pozycja gaśnie (np. Gasnąca Gwiazda). Kupowanie takich spółek wyłącznie z powodu „niskiej ceny” często prowadzi do wieloletnich strat.',
+        example: () => {
+            const fading = typeof stocks !== 'undefined' ? stocks.find(s => s.marketStar?.type === 'fading_star') : null;
+            return fading ? `Obecna gasnąca gwiazda na parkiecie: ${fading.name} (${fading.symbol}) — C/Z: ${fading.fundamentals?.peRatio?.toFixed(1) || 'N/A'}.` : 'Uważaj na spółki ze spadającymi przychodami, nawet jeśli ich C/Z wydaje się atrakcyjne.';
+        },
+        quiz: [
+            { q: 'Czym jest pułapka wartości?', a: ['Pozornie tanią spółką, której biznes trwale słabnie i przynosi straty', 'Zablokowaniem konta maklerskiego przez giełdę', 'Opłatą za wycenę portfela'], c: 0 },
+            { q: 'Dlaczego niskie C/Z nie zawsze oznacza bezpieczną okazję?', a: ['Ponieważ zyski spółki mogą wkrótce drastycznie spaść lub zamienić się w stratę', 'Bo wskaźnik C/Z liczy się tylko dla banków', 'Niskie C/Z jest zawsze gwarancją zysku'], c: 0 },
+            { q: 'Który typ spółek z aktualizacji 0.15 jest klasycznym przykładem pułapki wartości?', a: ['Gasnąca gwiazda (fading star)', 'Jednorożec (unicorn)', 'Nowy startup technologiczny'], c: 0 }
+        ]
+    },
+    fazy_rynku: {
+        title: 'Fazy rynku i nastroje inwestorów', icon: '🐂',
+        text: 'Cykl giełdowy składa się z 6 charakterystycznych faz: Akumulacji (po cichu kupują cierpliwi), Hossy (szeroki, długi wzrost), Euforii (wysokie wyceny, szczyt nastrojów), Dystrybucji (duzi gracze wyprzedają akcje), Bessy (spadki cen, strach inwestorów) oraz Kapitulacji (paniczna wyprzedaż tuż przed dnem rynku). Fazy rynku potwierdzane są z opóźnieniem (1–2 kwartały lub po ruchu GIG o 20%), gdzie szczyt lub dno rozpoznaje się dopiero po fakcie. Równolegle wskaźnik Strachu i Chciwości (0–100) mierzy bieżący sentyment na podstawie pędu GIG, szerokości rynku, zmienności WNR, wycen C/Z i apetytu na ryzyko.',
+        example: () => {
+            const regime = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+            if (!regime) return 'Wskaźnik nastrojów rynku wymaga ukończenia szkolenia Analityka Indeksowego.';
+            const phaseName = regime.shownPhase ? (MARKET_PHASES[regime.shownPhase]?.name || regime.shownPhase) : 'w trakcie potwierdzania';
+            return `Aktualny wskaźnik Strachu i Chciwości: ${regime.sentiment}/100. Potwierdzona faza rynku: ${phaseName} (premia rynkowa: ${(regime.premium * 100).toFixed(1)}%).`;
+        },
+        quiz: [
+            { q: 'Dlaczego fazy rynku (hossa, bessa) potwierdzane są w analizie z opóźnieniem?', a: ['Ponieważ punkt zwrotny można pewnie potwierdzić dopiero po trwałej zmianie trendu', 'Z powodu problemów technicznych giełdy', 'Żeby analitycy mieli czas na urlop'], c: 0 },
+            { q: 'Czym charakteryzuje się faza Euforii na giełdzie?', a: ['Wyceny są bardzo wysokie, panuje powszechny optymizm, a ryzyko korekty lub krachu rośnie', 'Wszyscy masowo wyprzedają akcje ze stratą', 'Brak jakichkolwiek transakcji na giełdzie'], c: 0 },
+            { q: 'Co mierzy wskaźnik Strachu i Chciwości (0–100)?', a: ['Bieżący nastrój rynku wyliczany m.in. z pędu cen, szerokości rynku i zmienności', 'Jedynie aktualny poziom inflacji w kraju', 'Liczbę nowych spółek debiutujących na giełdzie'], c: 0 }
+        ]
+    },
+    banki_sektorowe: {
+        title: 'Bańki sektorowe i premia wyceny', icon: '🫧',
+        text: 'Bańka sektorowa to zjawisko, w którym spółki z modnej branży (np. sztuczna inteligencja, biotechnologia czy gaming) drożeją daleko ponad swoje fundamenty pod wpływem rynkowej gorączki. Premia wyceny sektora może osiągać od kilkunastu do nawet +150% ponad wartość godziwą. Im wyższa premia i dłuższy czas trwania bańki, tym większe prawdopodobieństwo jej gwałtownego pęknięcia (−15…−25% w 1–3 kwartały). Konglomeraty o zdywersyfikowanych przychodach są mniej narażone na pęknięcie bańki niż spółki jednosegmentowe.',
+        example: () => {
+            const bubble = typeof getActiveSectorBubble === 'function' ? getActiveSectorBubble() : null;
+            if (bubble) {
+                return `Aktualna gorączka rynkowa: sektor ${bubble.name} z premią wyceny ${(bubble.premium * 100).toFixed(0)}% (faza: ${bubble.phase}).`;
+            }
+            return 'Obecnie na rynku nie ma aktywnej bańki sektorowej — wyceny branżowe pozostają w normie.';
+        },
+        quiz: [
+            { q: 'Dlaczego inwestowanie w spółki podczas zaawansowanej bańki sektorowej jest ryzykowne?', a: ['Szansa gwałtownego pęknięcia bańki rośnie wraz z wysokością premii i czasem jej trwania', 'Ponieważ spółki w bańce nie mogą wypłacać dywidend', 'Giełda natychmiast zawiesza handel wszystkimi spółkami'], c: 0 },
+            { q: 'Jak dywersyfikacja segmentowa (konglomerat) wpływa na ekspozycję na bańkę?', a: ['Ogranicza wpływ bańki proporcjonalnie do udziału danego segmentu w przychodach spółki', 'Zwiększa ryzyko straty dwukrotnie', 'Nie ma żadnego wpływu na wycenę'], c: 0 },
+            { q: 'Co dzieje się po pęknięciu bańki sektorowej?', a: ['Premia gwałtownie spada poniżej zera (−15…−25%), po czym rynek stopniowo powraca do równowagi', 'Wszystkie spółki z sektora natychmiast bankrutują', 'Premia natychmiast rośnie o kolejne 100%'], c: 0 }
+        ]
     }
 });
 
@@ -576,11 +1139,29 @@ function checkAcademyTriggers() {
     if (held.some(s => s.lastReport && s.lastReport !== 'brak')) unlockAcademyEntry('raport');
     if (held.some(s => s.lastDividend)) unlockAcademyEntry('dywidenda');
     if (held.some(s => s.mergerProcess)) unlockAcademyEntry('fuzje');
+    if (held.some(s => s.mergerProcess?.arb && s.mergerProcess.initiatorSymbol !== s.symbol)) { unlockAcademyEntry('arbitraz_fuzji'); unlockAcademyEntry('premia_przejecia'); } // 0.15.1 M1
     if (held.some(s => s.governance?.pendingAgm)) unlockAcademyEntry('walne');
     if (allBonds.some(b => b.ownerId === 'player')) unlockAcademyEntry('obligacje');
     if ((typeof getFundDeposits === 'function' && getFundDeposits().length) || (playerFund.ppp || []).length) unlockAcademyEntry('lokata');
     if (Object.values(playerPortfolio).some(h => h.assetType === 'etf' && h.shares > 0)) unlockAcademyEntry('etf');
     if (getSkillLevel('financialAnalyst') >= 1) unlockAcademyEntry('wycena');
+    if (getSkillLevel('indexAnalystLvl1') >= 1) unlockAcademyEntry('indeks_wazony');
+    if (stocks.some(s => s.marketStar)) unlockAcademyEntry('jednorozce');
+    if (getSkillLevel('indexAnalystLvl1') >= 3) {
+        unlockAcademyEntry('cykl_rynku_gospodarki');
+        unlockAcademyEntry('korekta');
+    }
+    if (getSkillLevel('indexAnalystLvl1') >= 4) {
+        unlockAcademyEntry('strach_chciwosc');
+        unlockAcademyEntry('premia_ryzyko');
+    }
+    if (typeof isMarketCrashing === 'function' && (isMarketCrashing() || isMarketHalted())) {
+        unlockAcademyEntry('krach_bezpieczniki');
+        unlockAcademyEntry('pozyczkodawca');
+    }
+    if (stocks.some(s => s.marketStar?.type === 'fading_star')) {
+        unlockAcademyEntry('pulapka_wartosci');
+    }
     if (getSkillLevel('accountant') >= 3) unlockAcademyEntry('przeplywy');
     if (getSkillLevel('accountant') >= 4) unlockAcademyEntry('kreatywna');
     if (stocks.some(s => s.isBankrupt)) unlockAcademyEntry('bankructwo');
@@ -589,7 +1170,17 @@ function checkAcademyTriggers() {
     if (held.some(s => s.workforce?.union || (typeof getSectorUnion === 'function' && getSectorUnion(s)))) unlockAcademyEntry('zwiazek');
     if (held.some(s => s.workforce?.strike)) { unlockAcademyEntry('strajk'); unlockAcademyEntry('dzwignia'); }
     if (held.some(s => typeof getGreyShare === 'function' && getGreyShare(s) > 0.05) && getSkillLevel('accountant') >= 4) unlockAcademyEntry('szaraStrefa');
-    if (held.some(s => ['Turystyka', 'Gaming', 'Żywność'].includes(s.sector?.[0]))) unlockAcademyEntry('elastycznosc');
+    if (held.some(s => ['Turystyka', 'Gaming', 'Żywność'].includes(getMainSector(s)))) unlockAcademyEntry('elastycznosc');
+    if (held.some(s => getStockSegments(s).length > 1)) unlockAcademyEntry('segmenty'); // 0.14 T1b
+    if (held.some(s => typeof getConglomerateDiscount === 'function' && getConglomerateDiscount(s) > 0)) unlockAcademyEntry('konglomerat'); // 0.14 T3
+    if (held.some(s => typeof getSynergyMarginAdj === 'function' && getSynergyMarginAdj(s) > 0)) unlockAcademyEntry('synergia');
+    if (held.some(s => s.strategy?.process || s.strategy?.pivot || (typeof getFocusMarginAdj === 'function' && getFocusMarginAdj(s) > 0))) unlockAcademyEntry('dywersyfikacja');
+    if (typeof isConcern === 'function') { // 0.14 T5
+        if (held.some(s => isConcern(s) || getSubsidiaryCount(s) > 0)) unlockAcademyEntry('grupaKapitalowa');
+        if (held.some(s => getStockCooperations(s).length)) unlockAcademyEntry('ryzykoKontrahenta');
+        if (getSkillLevel('accountant') >= 4 && held.some(s => getStockCooperations(s).some(c => c.flag))) unlockAcademyEntry('podmiotyPowiazane');
+        if (held.some(s => s.tender)) { unlockAcademyEntry('wezwanie'); unlockAcademyEntry('premiaKontrola'); } // 0.14 T6
+    }
     if (typeof society === 'object' && society) {
         if (Math.abs((macro?.unemployment || NATURAL_UNEMPLOYMENT) - NATURAL_UNEMPLOYMENT) > 0.015) unlockAcademyEntry('phillips');
         if (society.shortage > 1.05) unlockAcademyEntry('niedobor');
@@ -667,7 +1258,7 @@ function academyQuizSubmit(id) {
     if (answers.some(a => a === undefined)) { showToast('Odpowiedz na wszystkie pytania.', 'warning'); return; }
     academyView.result = submitAcademyQuiz(id, answers);
     academyView.answers = answers;
-    if (academyView.result?.reward) showToast(`🎓 Quiz zaliczony! +${academyView.result.reward} zł do portfela.`, 'success');
+    if (academyView.result?.reward) showToast(`🎓 Quiz zaliczony! +${academyView.result.reward} PLN do portfela.`, 'success');
     renderCvPanel();
 }
 
@@ -682,7 +1273,7 @@ function renderAcademyPanel() {
         const entry = ACADEMY_ENTRIES[id];
         const open = id in academy.unlocked;
         return `<button class="academy-item ${id === selected ? 'active' : ''}" ${open ? `onclick="selectAcademyEntry('${id}')"` : 'disabled title="Hasło odblokujesz, gdy zetkniesz się z tym pojęciem w grze."'}>
-            ${open ? entry.icon : '🔒'} ${open ? escapeHtml(entry.title) : '???'} ${academy.quizzes[id] ? '<span class="academy-done">✔</span>' : ''}</button>`;
+            ${open ? entry.icon : (typeof uiIcon === 'function' ? uiIcon('klodka', 14) : '🔒')} ${open ? escapeHtml(entry.title) : '???'} ${academy.quizzes[id] ? '<span class="academy-done">✔</span>' : ''}</button>`;
     }).join('');
 
     let detail = '<p class="text-muted">Wybierz hasło.</p>';
@@ -702,7 +1293,7 @@ function renderAcademyPanel() {
             <h3 class="mt-0">${entry.icon} ${escapeHtml(entry.title)}</h3>
             <p>${escapeHtml(entry.text)}</p>
             ${example ? `<p class="academy-example">🎮 <strong>W Twojej grze:</strong> ${escapeHtml(example)}</p>` : ''}
-            <h4>Quiz ${academy.quizzes[selected] ? '— zaliczony ✔' : `— za zaliczenie ${ACADEMY_QUIZ_REWARD} zł`}</h4>
+            <h4>Quiz ${academy.quizzes[selected] ? '— zaliczony ✔' : `— za zaliczenie ${ACADEMY_QUIZ_REWARD} PLN`}</h4>
             ${quiz}
             ${result ? `<p class="${result.passed ? 'text-up' : 'text-down'}">${result.passed ? '✅ Wszystko dobrze!' : `Poprawne: ${result.correct}/${result.total} — spróbuj jeszcze raz.`}</p>` : ''}
             <button onclick="academyQuizSubmit('${selected}')">Sprawdź odpowiedzi</button>`;
@@ -735,7 +1326,7 @@ const SCANNER_PRESETS = {
     safe:     { label: '🛡️ Bezpieczne', filters: { debtMax: 40, healthMin: 2 } }
 };
 
-const SCANNER_DEFAULT_FILTERS = { sector: 'all', peBelowSector: false, pbMax: '', dyMin: '', debtMax: '', growthMin: '', healthMin: '', accessibleOnly: true, greyOnly: false };
+const SCANNER_DEFAULT_FILTERS = { sector: 'all', subsector: null, secondary: false, type: 'all', grouped: true, niche: '', peBelowSector: false, pbMax: '', dyMin: '', debtMax: '', growthMin: '', healthMin: '', accessibleOnly: true, greyOnly: false };
 
 let scannerView = { filters: { ...SCANNER_DEFAULT_FILTERS }, sort: 'cap', dir: -1 };
 
@@ -752,7 +1343,7 @@ function getValuationMethods(stock) {
     const m = getCompanyMetrics(stock);
     const f = stock.fundamentals;
     if (!m || !f) return null;
-    const med = getSectorMedians(stock.sector?.[0]) || {};
+    const med = getSectorMedians(getMainSector(stock)) || {};
     const pe = m.eps > 0 && med.pe ? m.eps * med.pe : null;
     const book = f.bookValuePerShare > 0 && med.pb ? f.bookValuePerShare * med.pb : null;
     // Model Gordona: D1 / (r − g); r = stopa bazowa + 5 pkt premii za ryzyko akcji, g ≤ r − 2 pkt.
@@ -777,11 +1368,12 @@ function runScanner(filters = scannerView.filters, sort = scannerView.sort, dir 
     const rows = [];
     for (const stock of stocks) {
         if (stock.assetType || stock.isBankrupt) continue;
-        if (filters.sector !== 'all' && !stock.sector?.includes(filters.sector)) continue;
+        if (!stockMatchesSectorFilter(stock, { sector: filters.sector || 'all', subsector: filters.subsector || null, secondary: Boolean(filters.secondary) })) continue; // T1c
+        if (filters.niche && !getStockSegments(stock).some(seg => seg.niche === filters.niche)) continue; // T3: filtr specjalizacji
         if (filters.accessibleOnly && !canAccessExchange(stock.exchange)) continue;
         const m = getCompanyMetrics(stock);
         if (!m) continue;
-        const med = getSectorMedians(stock.sector?.[0]) || {};
+        const med = getSectorMedians(getMainSector(stock)) || {};
         if (filters.peBelowSector && !(m.pe && med.pe && m.pe < med.pe)) continue;
         if (num(filters.pbMax) !== null && !(m.pb && m.pb <= num(filters.pbMax))) continue;
         if (num(filters.dyMin) !== null && !(m.dy * 100 >= num(filters.dyMin))) continue;
@@ -790,9 +1382,10 @@ function runScanner(filters = scannerView.filters, sort = scannerView.sort, dir 
         if (num(filters.healthMin) !== null && !(m.health >= num(filters.healthMin))) continue;
         const work = getScannerWorkforce(stock);
         if (filters.greyOnly && !(work && work.grey > 0.05)) continue;
-        rows.push({ stock, m, med, work, upside: m.fair ? m.fair / stock.price - 1 : null });
+        const sectorPremium = Number(stock.sectorPremium) || 0;
+        rows.push({ stock, m, med, work, upside: m.fair ? m.fair / stock.price - 1 : null, sectorPremium });
     }
-    const key = row => sort === 'name' ? row.stock.name : sort === 'upside' ? row.upside : sort === 'labor' ? row.work?.laborVsSector ?? null : sort === 'satisfaction' ? row.work?.satisfaction ?? null : row.m[sort];
+    const key = row => sort === 'name' ? row.stock.name : sort === 'upside' ? row.upside : sort === 'sectorPremium' ? row.sectorPremium : sort === 'labor' ? row.work?.laborVsSector ?? null : sort === 'satisfaction' ? row.work?.satisfaction ?? null : row.m[sort];
     rows.sort((a, b) => {
         const va = key(a), vb = key(b);
         if (va === null || va === undefined) return 1;
@@ -810,12 +1403,12 @@ function getScannerWorkforce(stock) {
     if (scannerLaborSectorCache.at !== quarter || !scannerLaborSectorCache.data.__n || scannerLaborSectorCache.data.__n !== stocks.length) {
         const data = { __n: stocks.length };
         const groups = {};
-        for (const s of stocks) if (s.workforce && !s.isBankrupt) (groups[s.sector?.[0]] = groups[s.sector?.[0]] || []).push(s.workforce.laborShare * getLaborCostIndex(s));
+        for (const s of stocks) if (s.workforce && !s.isBankrupt) (groups[getMainSector(s)] = groups[getMainSector(s)] || []).push(s.workforce.laborShare * getLaborCostIndex(s));
         for (const [sector, list] of Object.entries(groups)) data[sector] = median(list);
         scannerLaborSectorCache = { at: quarter, data };
     }
     const labor = stock.workforce.laborShare * getLaborCostIndex(stock);
-    const sector = scannerLaborSectorCache.data[stock.sector?.[0]] || labor;
+    const sector = scannerLaborSectorCache.data[getMainSector(stock)] || labor;
     return { labor, laborVsSector: sector > 0 ? labor / sector - 1 : 0, satisfaction: stock.workforce.satisfaction, union: getUnionStatus(stock), risk: getStrikeRisk(stock), grey: getGreyShare(stock) };
 }
 
@@ -862,6 +1455,15 @@ function saveScannerPreset() {
     renderScannerFilters();
 }
 
+/** T1c: zmiana filtra sektora w skanerze (ten sam renderer co lista spółek). */
+function setScannerSectorFilter(changes) {
+    const f = scannerView.filters;
+    Object.assign(f, changes);
+    if ('sector' in changes) f.subsector = null;
+    renderScannerFilters();
+    renderScannerResults();
+}
+
 function setScannerSort(key) {
     if (scannerView.sort === key) scannerView.dir *= -1;
     else { scannerView.sort = key; scannerView.dir = key === 'name' || key === 'pe' || key === 'pb' || key === 'debt' ? 1 : -1; }
@@ -872,14 +1474,16 @@ function renderScannerFilters() {
     const box = document.getElementById('scanner-filters');
     if (!box) return;
     const f = scannerView.filters;
-    const sectors = [...new Set(stocks.filter(s => !s.assetType && !s.isBankrupt).map(s => s.sector?.[0]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pl'));
+    // T1c: ten sam filtr sektora co na liście spółek (chipy z liczbą spółek, podsektory, segmenty poboczne).
+    const sectorChips = renderSectorFilterChips(stocks.filter(s => !s.assetType && !s.isBankrupt), { sector: f.sector || 'all', subsector: f.subsector || null, secondary: Boolean(f.secondary), type: 'all', grouped: f.grouped !== false }, 'setScannerSectorFilter', { hideType: true });
     const input = (key, label, placeholder, title) => `<label class="text-sm" title="${escapeHtml(title)}">${label} <input type="text" inputmode="decimal" class="w-xs" value="${escapeHtml(f[key] ?? '')}" placeholder="${placeholder}" oninput="setScannerFilter('${key}', this.value)"></label>`;
     const own = (playerProfile?.scannerPresets || []).map(p => `<button class="btn-xs btn-secondary" onclick="applyScannerPreset('${escapeHtml(p.name).replace(/'/g, '&#39;')}')">⭐ ${escapeHtml(p.name)}</button>`).join('');
     box.innerHTML = `
         <div class="d-flex gap-2 flex-wrap mb-2">${Object.entries(SCANNER_PRESETS).map(([id, p]) => `<button class="btn-xs btn-secondary" onclick="applyScannerPreset('${id}')">${p.label}</button>`).join('')}${own}
             <button class="btn-xs" onclick="scannerView.filters = { ...SCANNER_DEFAULT_FILTERS }; renderScannerFilters(); renderScannerResults();">Wyczyść</button></div>
+        <div class="sector-chips scanner-sector-chips">${sectorChips.chips}</div>${sectorChips.extra}
         <div class="scanner-filters">
-            <label class="text-sm">Sektor <select onchange="setScannerFilter('sector', this.value)"><option value="all">wszystkie</option>${sectors.map(s => `<option ${f.sector === s ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('')}</select></label>
+            <label class="text-sm">Specjalizacja <select onchange="setScannerFilter('niche', this.value)"><option value="">wszystkie</option>${SECTOR_NAMES.flatMap(name => Object.keys(SECTORS[name].niches || {})).map(n => `<option ${f.niche === n ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}</select></label>
             <label class="text-sm" title="C/Z niższe od mediany sektora"><input type="checkbox" ${f.peBelowSector ? 'checked' : ''} onchange="setScannerFilter('peBelowSector', this.checked)"> C/Z poniżej sektora</label>
             ${input('pbMax', 'C/WK ≤', 'np. 1', 'Kurs / wartość księgowa na akcję')}
             ${input('dyMin', 'Dywidenda ≥', '%', 'Stopa dywidendy z ostatniego roku, w %')}
@@ -897,6 +1501,7 @@ function renderScannerResults() {
     if (!box) return;
     const level = getAnalystLevel();
     const flagsOn = typeof getRedFlags === 'function' && getSkillLevel('accountant') >= 4;
+    const hasIndexLvl5 = typeof getSkillLevel === 'function' && getSkillLevel('indexAnalystLvl1') >= 5;
     const rows = runScanner();
     const pct = v => v === null || v === undefined || !Number.isFinite(v) ? '—' : `${(v * 100).toFixed(1)}%`;
     const fx = v => v === null || v === undefined || !Number.isFinite(v) ? '—' : v.toFixed(1);
@@ -906,16 +1511,18 @@ function renderScannerResults() {
         <p class="text-sm text-muted">Znaleziono: <strong>${rows.length}</strong>. Kolor: na zielono lepiej niż mediana sektora, na czerwono gorzej. Kliknij spółkę, by otworzyć kartę. Banki pomijamy — ich bilans zawiera depozyty klientów, więc C/WK i zadłużenie liczy się inaczej.</p>
         <div class="scanner-table-wrap"><table class="asset-mini-table w-full scanner-table">
             <thead><tr>
-                ${head('name', 'Spółka', 'Nazwa')}${head('cap', 'Kapitalizacja', 'Kurs × liczba akcji')}${head('pe', 'C/Z', 'Cena / zysk')}${head('pb', 'C/WK', 'Cena / wartość księgowa')}
+                ${head('name', 'Spółka', 'Nazwa')}<th title="Podsektor segmentu głównego i specjalizacja-nisza (🏷️); filtr: chipy podsektorów i pole „Specjalizacja”">Podsektor / nisza</th>${head('cap', 'Kapitalizacja', 'Kurs × liczba akcji')}${head('pe', 'C/Z', 'Cena / zysk')}${head('pb', 'C/WK', 'Cena / wartość księgowa')}${hasIndexLvl5 ? head('sectorPremium', 'Premia sektora', 'Premia wyceny sektora względem normy fundamentalnej') : ''}
                 ${head('dy', 'Dywid.', 'Stopa dywidendy')}${head('debt', 'Zadłuż.', 'Zobowiązania / aktywa')}
                 ${level >= 2 ? head('roe', 'ROE', 'Zysk / kapitał własny') + head('margin', 'Marża', 'Zysk netto / przychody') + head('growth', 'Zysk r/r', 'Wzrost zysku rok do roku') : ''}
                 ${head('health', 'Kondycja', 'Kondycja finansowa')}${head('labor', 'Praca', 'Koszt pracy w % przychodów (w nawiasie: względem mediany sektora)')}${head('satisfaction', 'Zadow.', 'Zadowolenie pracowników 0–100')}<th title="Związek zawodowy: brak / zakładowy / sektorowy">Związek</th><th title="Ryzyko strajku">Strajk</th>${level >= 3 ? head('upside', 'Potencjał', 'Wartość godziwa / kurs − 1') : ''}${flagsOn ? '<th title="Czerwone flagi (Księgowy poz. 4)">🚩</th>' : ''}
             </tr></thead>
-            <tbody>${rows.slice(0, 120).map(({ stock, m, med, work, upside }) => `<tr class="clickable" onclick="openDescriptionModal('${stock.symbol}')">
-                <td>${escapeHtml(stock.name)} <span class="text-xs text-muted">${escapeHtml(stock.symbol)} · ${escapeHtml(stock.sector?.[0] || '')}</span></td>
+            <tbody>${rows.slice(0, 120).map(({ stock, m, med, work, upside, sectorPremium }) => `<tr class="clickable" onclick="openDescriptionModal('${stock.symbol}')">
+                <td>${escapeHtml(stock.name)} <span class="text-xs text-muted">${escapeHtml(stock.symbol)}</span><span class="text-xs text-muted d-block">${escapeHtml(getStockActivityLabel(stock))}</span></td>
+                <td class="text-xs" title="${escapeHtml(getSubsectorMedians(getMainSector(stock), getMainSubsector(stock)) ? `Mediana C/Z podsektora: ${getSubsectorMedians(getMainSector(stock), getMainSubsector(stock)).pe?.toFixed(1)}` : 'Podsektor (T2)')}">${escapeHtml(getMainSubsector(stock) || '—')}${getStockSegments(stock).find(seg => seg.niche) ? ` · 🏷️ ${escapeHtml(getStockSegments(stock).find(seg => seg.niche).niche)}` : ''}</td>
                 <td class="cell-number">${formatZl(m.cap, 0)}</td>
                 <td class="cell-number ${cls(m.pe, med.pe, true)}">${fx(m.pe)}</td>
                 <td class="cell-number ${cls(m.pb, med.pb, true)}">${m.pb ? m.pb.toFixed(2) : '—'}</td>
+                ${hasIndexLvl5 ? `<td class="cell-number">${typeof formatSectorPremiumCell === 'function' ? formatSectorPremiumCell(sectorPremium, typeof isCompanyInSectorBubble === 'function' && isCompanyInSectorBubble(stock)) : `${(sectorPremium * 100).toFixed(0)}%`}</td>` : ''}
                 <td class="cell-number ${cls(m.dy, med.dy, false)}">${pct(m.dy)}</td>
                 <td class="cell-number ${cls(m.debt, med.debt, true)}">${pct(m.debt)}</td>
                 ${level >= 2 ? `<td class="cell-number ${cls(m.roe, med.roe, false)}">${pct(m.roe)}</td><td class="cell-number ${cls(m.margin, med.margin, false)}">${pct(m.margin)}</td><td class="cell-number ${m.growth > 0 ? 'text-up' : m.growth < 0 ? 'text-down' : ''}">${pct(m.growth)}</td>` : ''}
@@ -950,7 +1557,7 @@ function renderScannerWorkforceCells(work) {
 
 const MENTOR_NAME = 'Halina Wróblewska';
 const MENTOR_ACTIVE_TASKS = 3;
-const MENTOR_REWARD = 150; // zł do portfela prywatnego za zadanie
+const MENTOR_REWARD = 150; // PLN do portfela prywatnego za zadanie
 
 const MENTOR_TRACKS = {
     analyst: { label: 'Certyfikat Analityka', icon: '📐', required: 3, position: 'projectLead' },
@@ -973,12 +1580,94 @@ function quizzesPassed(ids) {
 
 /** check(task) → true (zaliczone) | false; progress(task) → tekst postępu. */
 const MENTOR_TASKS = {
+    buyInFear: {
+        track: 'risk', title: 'Kup w skrajnym strachu',
+        text: 'Gdy wskaźnik Strachu i Chciwości spadnie poniżej 20 pkt, zainwestuj co najmniej 5% aktywów funduszu w spółkę i utrzymaj tę pozycję przez 4 kwartały.',
+        lesson: 'strach_chciwosc',
+        isEligible: () => {
+            const lvl = typeof getSkillLevel === 'function' ? getSkillLevel('indexAnalystLvl1') : 0;
+            const reg = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+            return lvl >= 4 && (reg?.sentiment ?? 50) < 20;
+        },
+        init: task => { task.data = { symbol: null, startQ: null }; },
+        check: task => {
+            const assets = Math.max(1, typeof getFundAssets === 'function' ? getFundAssets() : 1);
+            const held = typeof heldStocks === 'function' ? heldStocks() : [];
+            const qualifying = held.find(s => {
+                const val = (playerPortfolio[s.symbol]?.shares || 0) * s.price;
+                return val / assets >= 0.05;
+            });
+            if (!qualifying) { task.data = { symbol: null, startQ: null }; return false; }
+            const curQ = typeof mentorQuarter === 'function' ? mentorQuarter() : 0;
+            if (task.data.symbol !== qualifying.symbol) {
+                task.data = { symbol: qualifying.symbol, startQ: curQ };
+            }
+            return (curQ - (task.data.startQ || curQ)) >= 4;
+        },
+        progress: task => task.data?.symbol ? `${task.data.symbol}: ${Math.max(0, (mentorQuarter() - (task.data.startQ || mentorQuarter())))}/4 kw.` : 'kup spółkę za ≥5% aktywów'
+    },
+    exitBubble: {
+        track: 'risk', title: 'Wyjdź z bańki',
+        text: 'W trakcie trwania bańki sektorowej sprzedaj co najmniej 50% pozycji w spółce z pompowanego sektora, zanim bańka pęknie.',
+        lesson: 'banki_sektorowe',
+        isEligible: () => {
+            const bubble = typeof getActiveSectorBubble === 'function' ? getActiveSectorBubble() : null;
+            if (!bubble || bubble.phase !== 'inflating') return false;
+            const held = typeof heldStocks === 'function' ? heldStocks() : [];
+            return held.some(s => typeof getCompanyBubbleShare === 'function' && getCompanyBubbleShare(s, bubble) > 0.3);
+        },
+        init: task => {
+            const bubble = typeof getActiveSectorBubble === 'function' ? getActiveSectorBubble() : null;
+            const held = typeof heldStocks === 'function' ? heldStocks() : [];
+            const pick = held.find(s => typeof getCompanyBubbleShare === 'function' && getCompanyBubbleShare(s, bubble) > 0.3);
+            task.data = { symbol: pick?.symbol || null, initialShares: pick ? (playerPortfolio[pick.symbol]?.shares || 0) : 0 };
+        },
+        check: task => {
+            if (!task.data?.symbol) return false;
+            const currentShares = playerPortfolio[task.data.symbol]?.shares || 0;
+            const bubble = typeof getActiveSectorBubble === 'function' ? getActiveSectorBubble() : null;
+            if (bubble && bubble.phase === 'inflating' && currentShares <= task.data.initialShares * 0.50 && task.data.initialShares > 0) {
+                return true;
+            }
+            return false;
+        },
+        progress: task => task.data?.symbol ? `${task.data.symbol}: sprzedaj ≥50% z ${task.data.initialShares} akcji` : 'czekaj na bańkę sektorową'
+    },
+    surviveBear: {
+        track: 'risk', title: 'Przetrwaj bessę',
+        text: 'Przetrwaj fazę Bessy (trwającą co najmniej 1 kwartał) z maksymalnym obsunięciem funduszu mniejszym niż spadek indeksu GIG.',
+        lesson: 'fazy_rynku',
+        isEligible: () => {
+            const reg = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+            return reg && reg.phase === 'bear' && reg.quartersInPhase >= 1;
+        },
+        init: task => {
+            const gig = typeof getGigIndexValue === 'function' ? getGigIndexValue() : 1000;
+            const nav = (typeof playerFund !== 'undefined' && playerFund?.currentNav) ? playerFund.currentNav : 100;
+            task.data = { startGig: gig, startNav: nav, minGig: gig, minNav: nav, startQ: mentorQuarter() };
+        },
+        check: task => {
+            const gig = typeof getGigIndexValue === 'function' ? getGigIndexValue() : 1000;
+            const nav = (typeof playerFund !== 'undefined' && playerFund?.currentNav) ? playerFund.currentNav : 100;
+            if (gig < (task.data.minGig || gig)) task.data.minGig = gig;
+            if (nav < (task.data.minNav || nav)) task.data.minNav = nav;
+            const reg = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+            // Zaliczenie, gdy faza bessy się kończy lub trwała >= 2 kwartały i drawdown funduszu < drawdown GIG
+            if (reg && (reg.phase !== 'bear' || (mentorQuarter() - (task.data.startQ || mentorQuarter())) >= 2)) {
+                const gigDd = ((task.data.minGig || gig) - (task.data.startGig || gig)) / (task.data.startGig || 1);
+                const navDd = ((task.data.minNav || nav) - (task.data.startNav || nav)) / (task.data.startNav || 1);
+                return navDd > gigDd; // mniejsze obsunięcie (np. -10% > -25%)
+            }
+            return false;
+        },
+        progress: task => `Bessa w toku: chroń kapitał funduszu`
+    },
     cheapPe: {
         track: 'analyst', title: 'Tania względem sektora',
         text: 'Kup spółkę z C/Z poniżej mediany jej sektora i dodatnim zyskiem. Trzymaj ją 2 kwartały.',
         lesson: 'cz',
         check: task => {
-            const pick = heldStocks().find(s => { const m = getCompanyMetrics(s); const med = getSectorMedians(s.sector?.[0]); return m?.pe && med?.pe && m.pe < med.pe && m.eps > 0; });
+            const pick = heldStocks().find(s => { const m = getCompanyMetrics(s); const med = getSectorMedians(getMainSector(s)); return m?.pe && med?.pe && m.pe < med.pe && m.eps > 0; });
             if (!pick) { task.data = {}; return false; }
             if (task.data.symbol !== pick.symbol) task.data = { symbol: pick.symbol, from: mentorQuarter() };
             return mentorQuarter() - task.data.from >= 2;
@@ -1010,8 +1699,8 @@ const MENTOR_TASKS = {
         track: 'risk', title: 'Pięć koszyków',
         text: 'Zbuduj portfel z co najmniej 5 sektorów, w którym żadna spółka nie przekracza 30% aktywów.',
         lesson: 'dywersyfikacja',
-        check: () => { const held = heldStocks(); const sectors = new Set(held.map(s => s.sector?.[0])); const assets = Math.max(1, getFundAssets()); return sectors.size >= 5 && held.every(s => playerPortfolio[s.symbol].shares * s.price / assets <= 0.3); },
-        progress: () => `${new Set(heldStocks().map(s => s.sector?.[0])).size}/5 sektorów`
+        check: () => { const held = heldStocks(); const sectors = new Set(held.map(s => getMainSector(s))); const assets = Math.max(1, getFundAssets()); return sectors.size >= 5 && held.every(s => playerPortfolio[s.symbol].shares * s.price / assets <= 0.3); },
+        progress: () => `${new Set(heldStocks().map(s => getMainSector(s))).size}/5 sektorów`
     },
     safeAssets: {
         track: 'risk', title: 'Bezpieczna część portfela',
@@ -1053,7 +1742,7 @@ const MENTOR_TASKS = {
         track: 'analyst', title: 'Szczęśliwa załoga, gruba marża',
         text: 'Kup spółkę z zadowoleniem pracowników > 70 i marżą powyżej mediany jej sektora (skaner: kolumny Zadow. i Marża).',
         lesson: 'kosztPracy',
-        check: () => heldStocks().some(s => { const m = getCompanyMetrics(s); const med = getSectorMedians(s.sector?.[0]); return (s.workforce?.satisfaction || 0) > 70 && m?.margin !== null && med?.margin !== undefined && m.margin > med.margin; }),
+        check: () => heldStocks().some(s => { const m = getCompanyMetrics(s); const med = getSectorMedians(getMainSector(s)); return (s.workforce?.satisfaction || 0) > 70 && m?.margin !== null && med?.margin !== undefined && m.margin > med.margin; }),
         progress: () => 'kup spółkę z zadowoleniem > 70 i marżą ponad sektor'
     },
     lawAnnouncement: {
@@ -1135,7 +1824,7 @@ function checkMentorTasks() {
         playerWallet.cash += MENTOR_REWARD;
         recordPayment('external:korporacja', 'player-wallet', MENTOR_REWARD, `Zadanie mentora: ${def.title}`);
         if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry(def.lesson);
-        if (typeof pushNotification === 'function') pushNotification(`🎓 ${MENTOR_NAME}: zadanie „${def.title}” zaliczone (+${MENTOR_REWARD} zł)`, () => openMentor());
+        if (typeof pushNotification === 'function') pushNotification(`🎓 ${MENTOR_NAME}: zadanie „${def.title}” zaliczone (+${MENTOR_REWARD} PLN)`, () => openMentor());
     }
     // Certyfikaty: ścieżka z wymaganą liczbą zadań.
     for (const [id, track] of Object.entries(MENTOR_TRACKS)) {
@@ -1188,7 +1877,7 @@ function renderMentorPanel() {
         let progress = '';
         try { progress = def.progress(task); } catch (e) { progress = ''; }
         return `<li class="mentor-task"><div><strong>${MENTOR_TRACKS[def.track].icon} ${escapeHtml(def.title)}</strong>
-            <p class="text-sm m-0">${escapeHtml(def.text)}</p><span class="text-xs text-muted">${escapeHtml(progress)} · nagroda ${MENTOR_REWARD} zł</span></div>
+            <p class="text-sm m-0">${escapeHtml(def.text)}</p><span class="text-xs text-muted">${escapeHtml(progress)} · nagroda ${MENTOR_REWARD} PLN</span></div>
             <button class="btn-xs btn-secondary" onclick="openAcademy('${def.lesson}')">📘 Hasło</button></li>`;
     }).join('');
     const done = Object.keys(mentor.done).map(id => MENTOR_TASKS[id]).filter(Boolean).map(def => `<li>✅ ${escapeHtml(def.title)}</li>`).join('');
@@ -1199,3 +1888,277 @@ function renderMentorPanel() {
         <ul class="list-plain mentor-tasks">${active || '<li class="text-muted">Wszystkie zadania wykonane — gratulacje!</li>'}</ul>
         ${done ? `<h4>Wykonane</h4><ul class="list-plain text-sm">${done}</ul>` : ''}`;
 }
+
+
+// =================================================================================
+// 0.15 H6b: REJESTR OSIĄGNIĘĆ (ACHIEVEMENTS)
+// =================================================================================
+
+const ACHIEVEMENTS = {
+    first_crisis: {
+        id: 'first_crisis', icon: '🌧️', title: 'Przeżyj pierwszy kryzys',
+        desc: 'Przejdź przez pierwszą Bessę albo krach rynkowy z zaufaniem inwestorów ≥ 30 i bez utraty stanowiska.',
+        xp: 100, hidden: false,
+        check: () => {
+            const reg = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+            if (!reg || !reg.history || reg.history.length === 0) return false;
+            const hadCrisis = reg.history.some(h => h.phase === 'bear' || h.phase === 'capitulation');
+            return hadCrisis && (playerFund?.trust || 0) >= 30;
+        }
+    },
+    beat_crisis: {
+        id: 'beat_crisis', icon: '🏆', title: 'Wygraj z kryzysem',
+        desc: 'W fazie Bessy lub w ciągu 2 kwartałów od krachu osiągnij wynik funduszu lepszy od indeksu GIG o co najmniej 5 punktów procentowych.',
+        xp: 150, hidden: false,
+        check: () => {
+            const periods = playerFund?.periods || [];
+            if (!periods.length) return false;
+            const last = periods[periods.length - 1];
+            const reg = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+            const isBearOrPostCrash = reg?.phase === 'bear' || reg?.phase === 'capitulation' || reg?.history.slice(0, 2).some(h => h.phase === 'bear');
+            return isBearOrPostCrash && (last.fundReturn - last.benchmarkReturn) >= 0.05;
+        }
+    },
+    blood_on_streets: {
+        id: 'blood_on_streets', icon: '🩸', title: 'Krew na ulicach',
+        desc: 'Kup akcje za co najmniej 5% aktywów funduszu przy wskaźniku strachu < 20 i osiągnij +30% zysku na tej pozycji po 4 kwartałach.',
+        xp: 200, hidden: false,
+        check: () => {
+            const tracker = playerProfile?._bloodOnStreetsTracker;
+            if (!tracker || !tracker.symbol) return false;
+            const stock = stocks.find(s => s.symbol === tracker.symbol);
+            if (!stock) return false;
+            const curQ = typeof mentorQuarter === 'function' ? mentorQuarter() : 0;
+            if (curQ - tracker.boughtQ >= 4) {
+                const gain = (stock.price - tracker.boughtPrice) / tracker.boughtPrice;
+                return gain >= 0.30;
+            }
+            return false;
+        }
+    },
+    escape_bubble: {
+        id: 'escape_bubble', icon: '🫧', title: 'Ucieczka z bańki',
+        desc: 'Przy pęknięciu bańki sektorowej posiadaj o co najmniej 50% mniej akcji jej sektora niż 2 kwartały wcześniej.',
+        xp: 150, hidden: false,
+        check: () => Boolean(playerProfile?._escapedBubbleAchievement)
+    },
+    unicorn_hunter: {
+        id: 'unicorn_hunter', icon: '🦄', title: 'Łowca jednorożców',
+        desc: 'Kup jednorożca, zanim jego kurs urośnie 2-krotnie od startu wzrostu, i utrzymaj go aż do 5-krotnego wzrostu.',
+        xp: 200, hidden: false,
+        check: () => {
+            const tracker = playerProfile?._unicornTracker;
+            if (!tracker) return false;
+            const stock = stocks.find(s => s.symbol === tracker.symbol);
+            if (!stock) return false;
+            return stock.price >= tracker.startPrice * 5;
+        }
+    },
+    abandon_fading_star: {
+        id: 'abandon_fading_star', icon: '🚢', title: 'Zejście z tonącego statku',
+        desc: 'Sprzedaj gasnącą gwiazdę (stanowiącą wcześniej co najmniej 5% aktywów) przed spadkiem kursu o 50% od startu gaśnięcia.',
+        xp: 100, hidden: false,
+        check: () => Boolean(playerProfile?._abandonedFadingStar)
+    },
+    // 0.15.1 M7: przejęcia i pakiety
+    sold_with_premium: {
+        id: 'sold_with_premium', icon: '🤝', title: 'Sprzedane z premią',
+        desc: 'Sprzedaj kontrolowaną spółkę (> 50%) z premią co najmniej 40% nad kursem sprzed oferty.',
+        xp: 150, hidden: false, check: () => Boolean(playerProfile?._soldWithPremium)
+    },
+    auctioneer: {
+        id: 'auctioneer', icon: '🔨', title: 'Aukcjoner',
+        desc: 'Doprowadź do dwóch ofert kupna i sprzedaj o co najmniej 10% drożej niż w pierwszej ofercie.',
+        xp: 150, hidden: false, check: () => Boolean(playerProfile?._auctioneer)
+    },
+    clean_books: {
+        id: 'clean_books', icon: '📒', title: 'Czyste księgi',
+        desc: 'Zleć audyt przed sprzedażą, a potem doprowadź transakcję do końca bez zerwania.',
+        xp: 100, hidden: false, check: () => Boolean(playerProfile?._cleanBooks)
+    },
+    arbitrageur: {
+        id: 'arbitrageur', icon: '🎯', title: 'Arbitrażysta',
+        desc: 'Zarób na 3 pozycjach w celach przejęć kupionych po ogłoszeniu (rozliczonych po cenie oferty).',
+        xp: 150, hidden: false, check: () => (Number(playerProfile?._arbWins) || 0) >= 3
+    },
+    block_by_block: {
+        id: 'block_by_block', icon: '🧩', title: 'Pakiet po pakiecie',
+        desc: 'Zdobądź ponad 50% spółki, w tym co najmniej 20 pp z transakcji pakietowych.',
+        xp: 150, hidden: false,
+        check: () => typeof blockDealState === 'object' && stocks.some(s => getFundStakePct(s) > 0.5
+            && blockDealState.log.filter(e => e.symbol === s.symbol).reduce((sum, e) => sum + e.shares, 0) / s.totalShares >= 0.2)
+    },
+    winners_curse: {
+        id: 'winners_curse', icon: '🏚️', title: 'Klątwa zwycięzcy',
+        desc: 'Miej co najmniej 5% aktywów funduszu w spółce, która odpisze co najmniej połowę wartości firmy po przejęciu.',
+        xp: 100, hidden: true, check: () => Boolean(playerProfile?._winnersCurse)
+    },
+    value_trap: {
+        id: 'value_trap', icon: '🕳️', title: 'Pułapka wartości',
+        desc: 'Trzymaj gasnącą gwiazdę (stanowiącą co najmniej 5% aktywów) aż do jej spadku do giełdy Brązowej.',
+        xp: 50, hidden: true, hint: 'Gdy niska wycena zamiast okazji okazuje się biletem w jedną stronę...',
+        check: () => {
+            const held = typeof heldStocks === 'function' ? heldStocks() : [];
+            return held.some(s => s.marketStar?.type === 'fading_star' && (s.exchange === 'BRONZE' || s.exchange === 'JUNK'));
+        }
+    },
+    cold_blood: {
+        id: 'cold_blood', icon: '🧊', title: 'Zimna krew',
+        desc: 'W tygodniu z bezpiecznikiem giełdowym nie sprzedawaj akcji w panice i wyjdź na plus 2 kwartały później.',
+        xp: 120, hidden: false,
+        check: () => Boolean(playerProfile?._coldBloodAchieved)
+    },
+    first_bull_market: {
+        id: 'first_bull_market', icon: '🐂', title: 'Pierwsza hossa',
+        desc: 'Przejdź całą fazę Hossy z łącznym wynikiem funduszu wyższym lub równym indeksowi GIG.',
+        xp: 150, hidden: false,
+        check: () => Boolean(playerProfile?._firstBullMarketAchieved)
+    },
+    full_market_cycle: {
+        id: 'full_market_cycle', icon: '🧭', title: 'Pełny cykl',
+        desc: 'Przeżyj wszystkie 6 faz rynku (Akumulacja, Hossa, Euforia, Dystrybucja, Bessa, Kapitulacja).',
+        xp: 200, hidden: false,
+        check: () => {
+            const reg = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+            if (!reg || !reg.history) return false;
+            const seen = new Set(reg.history.map(h => h.phase));
+            if (reg.phase) seen.add(reg.phase);
+            return ['accumulation', 'bull', 'euphoria', 'distribution', 'bear', 'capitulation'].every(p => seen.has(p));
+        }
+    },
+    longer_than_market: {
+        id: 'longer_than_market', icon: '📈', title: 'Dłużej niż rynek',
+        desc: '20 lat zarządzania funduszem (80 kwartałów) z wynikiem funduszu wyższym lub równym indeksowi GIG.',
+        xp: 250, hidden: false,
+        check: () => {
+            const periods = playerFund?.periods || [];
+            if (periods.length < 20) return false;
+            const totalFund = periods.reduce((sum, p) => sum + (p.fundReturn || 0), 0);
+            const totalGig = periods.reduce((sum, p) => sum + (p.benchmarkReturn || 0), 0);
+            return totalFund >= totalGig;
+        }
+    }
+};
+
+function getPlayerAchievements() {
+    if (!playerProfile) return {};
+    if (!playerProfile.achievements) playerProfile.achievements = {};
+    return playerProfile.achievements;
+}
+
+function unlockAchievement(id) {
+    if (!playerProfile) return false;
+    const achievements = getPlayerAchievements();
+    if (achievements[id]) return false; // już zdobyte
+    const def = ACHIEVEMENTS[id];
+    if (!def) return false;
+
+    const curQ = typeof mentorQuarter === 'function' ? mentorQuarter() : 0;
+    achievements[id] = curQ;
+    playerProfile.xp = (playerProfile.xp || 0) + (def.xp || 100);
+    playerProfile.cv.push({ type: 'achievement', text: `${def.icon} Osiągnięcie: ${def.title} (+${def.xp} XP)` });
+
+    if (typeof pushNotification === 'function') {
+        pushNotification(`🏆 Osiągnięcie: ${def.title} (+${def.xp} XP)`, () => {
+            if (typeof openCareerModal === 'function') openCareerModal();
+        });
+    }
+    if (typeof logEvent === 'function') {
+        logEvent(`🏆 Zdobyto osiągnięcie: ${def.title} (+${def.xp} XP)`, 'review');
+    }
+    return true;
+}
+
+function checkAchievements() {
+    if (!playerProfile) return;
+    const achievements = getPlayerAchievements();
+    for (const [id, def] of Object.entries(ACHIEVEMENTS)) {
+        if (achievements[id]) continue;
+        try {
+            if (typeof def.check === 'function' && def.check()) {
+                unlockAchievement(id);
+            }
+        } catch (e) {
+            // błąd sprawdzania nie przerywa pętli
+        }
+    }
+}
+
+// 0.15.5 B7: hasła Akademii o przetargach, koncentracji rynku, REIT-ach i ryzyku kredytowym (ikony SVG zamiast emoji).
+const academyIcon = name => (typeof uiIcon === 'function' ? uiIcon(name, 18) : '');
+Object.assign(ACADEMY_ENTRIES, {
+    przetargKryteria: {
+        title: 'Przetarg i kryteria', get icon() { return academyIcon('budownictwo'); },
+        text: 'Spółka, która chce coś zbudować, ogłasza przetarg, a wykonawcy składają oferty. Zamawiający nie wybiera najtańszej, tylko ocenia ofertę wielokryterialnie: cena (ok. 40%), jakość — czas budowy i doświadczenie (25%), zdolność wykonawcza, czyli ile wolnych mocy ma wykonawca (20%), i reputacja z poprzednich budów (15%). Wykonawca z pełnym portfelem zleceń dostaje niższą ocenę za zdolność, a wygrana ponad możliwości kończy się opóźnieniami i karami umownymi.',
+        example: () => { const t = activeTenders.find(x => (x.bids || []).length > 1); if (!t) return 'Przykład: dwie oferty na magazyn — tańsza od wykonawcy z pełnym kalendarzem i droższa od wolnego wykonawcy; wygrywa ta z lepszą oceną łączną.'; const r = getTenderRanking(t)[0]; return `Przetarg na ${t.buildingType.name}: prowadzi ${r.bid.bidder.name} (${formatNumberPl(r.score, 1)} / 100) — ${r.criteria.map(c => c.label + ' ' + formatNumberPl(c.score, 0)).join(', ')}.`; },
+        quiz: [
+            { q: 'Czy w przetargu zawsze wygrywa najtańsza oferta?', a: ['nie — liczy się też jakość, zdolność wykonawcza i reputacja', 'tak, zawsze', 'wygrywa najdroższa'], c: 0 },
+            { q: 'Co obniża ocenę zdolności wykonawczej?', a: ['pełny kalendarz aktywnych budów', 'niska cena', 'nowa nazwa spółki'], c: 0 },
+            { q: 'Co grozi wykonawcy, który wygrał więcej zleceń, niż uniesie?', a: ['opóźnienia i kary umowne', 'premia od zamawiającego', 'nic'], c: 0 }
+        ]
+    },
+    koncentracjaRynku: {
+        title: 'Koncentracja rynku', get icon() { return academyIcon('waga'); },
+        text: 'Gdy jedna firma wygrywa niemal wszystkie zlecenia, rynek traci konkurencję: ceny rosną, a słabsi wykonawcy znikają. Dlatego w grze obowiązuje limit — jeden wykonawca nie wygra więcej niż 40% przetargów w oknie 8 kwartałów (ostatni wygrywa tylko wtedy, gdy nikt inny nie może przyjąć zlecenia), a jedna firma podwykonawcza nie obsłuży więcej niż połowy zleceń generalnego wykonawcy. Miarą koncentracji jest wskaźnik HHI (suma kwadratów udziałów w %): poniżej 1500 rynek jest konkurencyjny, powyżej 2500 — silnie skoncentrowany. Przejęcie podwykonawców przez wykonawcę (integracja pionowa) może zamknąć rynek, więc jedna grupa nie kontroluje więcej niż 40% firm danej specjalności.',
+        example: () => { const a = constructionAwardLog; if (!a.length) return 'Przykład: czterech wykonawców po 25% wygranych to HHI = 2500; jeden z 70% udziałem to HHI ≈ 5000.'; const by = {}; a.forEach(e => { by[e.sym] = (by[e.sym] || 0) + 1; }); const hhi = Math.round(Object.values(by).reduce((s, v) => s + Math.pow(v / a.length * 100, 2), 0)); return `W ostatnich 8 kwartałach rozstrzygnięto ${a.length} przetargów; HHI = ${hhi}.`; },
+        quiz: [
+            { q: 'Dlaczego jednej firmie nie wolno wygrywać prawie wszystkich zleceń?', a: ['bo znika konkurencja i rosną ceny', 'bo to nudne', 'bo zamawiający tego nie lubi'], c: 0 },
+            { q: 'Czterech wykonawców ma po 25% rynku. Ile wynosi HHI?', a: ['2500', '100', '10 000'], c: 0 },
+            { q: 'Czym grozi przejęcie wszystkich podwykonawców jednej specjalności przez jedną grupę?', a: ['zamknięciem rynku dla konkurentów', 'tańszymi budowami dla wszystkich', 'niczym'], c: 0 }
+        ]
+    },
+    reitNieruchomosci: {
+        title: 'REIT — fundusz nieruchomości', get icon() { return academyIcon('magazyn'); },
+        text: 'REIT to spółka, która posiada i wynajmuje nieruchomości (biura, magazyny, hotele, szpitale). Jej przychód to wartość portfela × stopa najmu × obłożenie, minus koszty utrzymania i odsetki od długu. W zamian za przywileje podatkowe REIT musi wypłacać co najmniej 80% zysku jako dywidendę, więc dywidenda jest stała i przewidywalna (w grze 3–8% rocznie). REIT jest zadłużony — miarą jest LTV, czyli dług do wartości portfela (w grze nie więcej niż 60%) — dlatego jest bardzo wrażliwy na stopy procentowe: wyższe stopy podnoszą odsetki i obniżają wartość nieruchomości i premię do wartości aktywów netto (NAV). W recesji i pandemii spada obłożenie biur, handlu i hoteli, a magazyny bywają odporne.',
+        example: () => { const r = stocks.find(x => x.assetType === 'REIT' && x.reit && !x.isBankrupt); return r ? `${r.name}: portfel ${formatZl(r.reit.portfolioValue, 0)}, obłożenie ${formatNumberPl(r.reit.occupancy * 100, 0)}%, LTV ${formatNumberPl(getReitLtv(r) * 100, 0)}%, stopa dywidendy ok. ${formatNumberPl(getReitDividendYield(r) * 100, 1)}%.` : 'Przykład: portfel za 100 mln zł, obłożenie 92%, stopa najmu 7,5% — przychód z najmu ok. 6,9 mln zł rocznie.'; },
+        quiz: [
+            { q: 'Jaką część zysku REIT musi wypłacić jako dywidendę?', a: ['co najmniej 80%', 'najwyżej 10%', 'nic — to jego wybór'], c: 0 },
+            { q: 'Co się dzieje z REIT-em, gdy stopy procentowe rosną?', a: ['rosną odsetki, a wycena spada', 'zyskuje na wartości', 'nic'], c: 0 },
+            { q: 'Co mierzy wskaźnik LTV?', a: ['dług do wartości portfela nieruchomości', 'obłożenie biur', 'stopę dywidendy'], c: 0 }
+        ]
+    },
+    ryzykoKredytowe: {
+        title: 'Ryzyko kredytowe', get icon() { return academyIcon('bank'); },
+        text: 'Bank zarabia na różnicy między oprocentowaniem kredytów a depozytów (marża odsetkowa), ale ryzykuje, że dłużnik nie spłaci. Dlatego bank nie pożycza jednemu dłużnikowi więcej niż 10% swojego kapitału (limit koncentracji) i tworzy odpisy na złe kredyty. Szczególnie ryzykowni są deweloperzy i wykonawcy budowlani: ich zyski zależą od cyklu, a zabezpieczeniem są nieruchomości, które w kryzysie tanieją. W kryzysie bankowym banki z dużą ekspozycją na budownictwo i nieruchomości tworzą odpisy, tracą zysk i kurs, a firmy nie dostają nowych kredytów.',
+        example: () => { const b = commercialBanks.find(x => x.isActive && x.exposure && Object.keys(x.exposure).length); if (!b) return 'Przykład: bank z kapitałem 100 mln zł pożyczy jednemu deweloperowi najwyżej 10 mln zł.'; const e = getBankDeveloperExposure(b); return `${b.name}: kredyty dla spółek ${formatZl(e.total, 0)}, w tym dla deweloperów (Budowlany, Nieruchomości) ${formatZl(e.developer, 0)}; limit na jednego dłużnika ${formatZl(getBankCapital(b) * BANK_CONCENTRATION_LIMIT, 0)}.`; },
+        quiz: [
+            { q: 'Dlaczego bank ogranicza kredyty dla jednego dłużnika do 10% kapitału?', a: ['by upadłość jednego klienta nie zniszczyła banku', 'bo tak chce klient', 'by płacić niższe podatki'], c: 0 },
+            { q: 'Z czego bank zarabia na kredytach i depozytach?', a: ['z marży odsetkowej', 'z opłat za logowanie', 'z dywidend klientów'], c: 0 },
+            { q: 'Co robi bank w kryzysie bankowym z kredytami dla deweloperów?', a: ['tworzy odpisy na złe kredyty', 'podnosi limity', 'umarza je wszystkie'], c: 0 }
+        ]
+    }
+});
+
+// 0.15.6 E7: hasła Akademii o rynkach wejścia i urzędzie antymonopolowym.
+Object.assign(ACADEMY_ENTRIES, {
+    rynekGlownyAlternatywny: {
+        title: 'Rynek główny i alternatywny', get icon() { return academyIcon('rynek'); },
+        text: 'Główny parkiet (GPW) stawia spółkom wymagania: minimalną kapitalizację, dodatni zysk, odpowiedni wolny obrót. Gdy rynek jest zatłoczony, wymogi rosną. Rynek alternatywny (w grze NewHorizons, prowadzony przez państwo) ma wymogi niższe: przyjmuje młode i innowacyjne spółki, które nie spełniają norm GPW. Za to są tu większe wahania kursu i częstsze upadki, a część ostrożnych inwestorów (i funduszy) w ogóle tu nie wchodzi. Spółka, która urośnie i spełni wymogi GPW, awansuje na główny parkiet; spółka, która spadnie poniżej progu utrzymania, schodzi na rynek alternatywny zamiast upaść.',
+        example: () => { const nh = stocks.filter(s => getStockMarket(s) === 'NH' && !s.assetType && !s.isBankrupt); return nh.length ? `Na NewHorizons notowanych jest ${nh.length} spółek, m.in. ${nh.slice(0, 3).map(s => s.name).join(", ")}. Wymóg kapitalizacji GPW: ${formatZl(getListingRequirements("GPW").cap, 0)}, NewHorizons: ${formatZl(getListingRequirements("NH").cap, 0)}.` : `Wymóg kapitalizacji GPW: ${formatZl(getListingRequirements("GPW").cap, 0)}, NewHorizons: ${formatZl(getListingRequirements("NH").cap, 0)}.`; },
+        quiz: [
+            { q: 'Co się dzieje ze spółką z GPW, której kapitalizacja długo jest poniżej progu utrzymania?', a: ['schodzi na rynek alternatywny zamiast upaść', 'natychmiast bankrutuje', 'dostaje dotację'], c: 0 },
+            { q: 'Czym rynek alternatywny różni się od głównego?', a: ['niższe wymogi, ale większe ryzyko i wahania', 'wyższe wymogi i mniejsze ryzyko', 'niczym'], c: 0 },
+            { q: 'Dlaczego wymogi GPW rosną, gdy spółek jest dużo?', a: ['by ograniczyć zatłoczenie i wpuszczać tylko mocniejsze spółki', 'bo rośnie prowizja', 'bez powodu'], c: 0 }
+        ]
+    },
+    gieldaPrywatna: {
+        title: 'Giełda prywatna i ryzyko oszustwa', get icon() { return academyIcon('alert'); },
+        text: 'Giełda prywatna ma najłagodniejsze wymogi i najsłabszy nadzór. Dlatego przyciąga spółki, które nie dostałyby się gdzie indziej — także takie, które ukrywają problemy. W grze oszustwa księgowe zdarzają się tam ok. 5 razy częściej niż na GPW i są wykrywane później, a ujawnienie boli mocniej: odpis, spadek kursu i zmiana zarządu. Zasada ostrożności: mała pozycja, dywersyfikacja, audyt przed większym zakupem. Fundusz może mieć na giełdzie prywatnej najwyżej 20% swojej wartości.',
+        example: () => { const p = stocks.filter(s => getStockMarket(s) === 'PRV' && !s.isBankrupt); return p.length ? `Na giełdzie prywatnej notowanych jest ${p.length} spółek; trwających oszustw: ${p.filter(s => s.fraud).length} (widoczne dopiero po audycie lub ujawnieniu).` : 'Na giełdzie prywatnej nie ma jeszcze żadnej spółki — trafiają tu słabe spółki z NewHorizons.'; },
+        quiz: [
+            { q: 'Jak często oszustwa zdarzają się na giełdzie prywatnej względem GPW?', a: ['ok. 5 razy częściej', 'tak samo często', 'rzadziej'], c: 0 },
+            { q: 'Jak ograniczyć ryzyko na giełdzie prywatnej?', a: ['mała pozycja, dywersyfikacja i audyt', 'jedna duża pozycja', 'kupować na kredyt'], c: 0 },
+            { q: 'Co grozi spółce po ujawnieniu oszustwa?', a: ['odpis, spadek kursu i zmiana zarządu', 'premia od nadzoru', 'nic'], c: 0 }
+        ]
+    },
+    antymonopol: {
+        title: 'Urząd antymonopolowy', get icon() { return academyIcon('waga'); },
+        text: 'Urząd antymonopolowy pilnuje, by żadna firma nie zdominowała rynku. Patrzy na udział spółki w przychodach sektora (gdy szybko rośnie), w przetargach i w kapitalizacji całego rynku. Im wyższy poziom urzędu (rozwijany wydatkami państwa), tym niższe progi interwencji. Najpierw jest kara (kilka procent rocznych przychodów), potem nakaz podziału (wydzielenie segmentu: akcjonariusze dostają akcje nowej spółki, więc wartość się nie traci) albo zakaz przejęć. Urząd może też zablokować fuzję, która dałaby zbyt duży udział w rynku.',
+        example: () => { const e = antitrustLog.at(-1); return e ? `Ostatnia interwencja: ${e.symbol} — ${ANTITRUST_KIND_LABELS[e.kind] || e.kind} (kwartał ${e.quarter}).` : `Poziom urzędu: ${antitrustOffice.level}; ${getAntitrustTier() ? "urząd interweniuje w skrajnych przypadkach" : "na poziomie 0 urząd nie interweniuje"}.`; },
+        quiz: [
+            { q: 'Co jest pierwszą sankcją urzędu antymonopolowego wobec dominującej spółki?', a: ['kara finansowa', 'natychmiastowy podział', 'wycofanie z giełdy'], c: 0 },
+            { q: 'Czy nakaz podziału odbiera akcjonariuszom wartość?', a: ['nie — dostają akcje wydzielonej spółki', 'tak, całą', 'tak, połowę'], c: 0 },
+            { q: 'Co robi wyższy poziom urzędu?', a: ['obniża progi interwencji', 'podnosi progi', 'znosi kary'], c: 0 }
+        ]
+    }
+});

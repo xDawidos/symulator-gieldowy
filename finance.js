@@ -111,7 +111,7 @@ function processCompanyBanking() {
                 stock.balanceSheet.assets += loanAmount;
                 bank.loanPortfolio[symbol] = (bank.loanPortfolio[symbol] || 0) + loanAmount;
                 bank.cash -= loanAmount;
-                logEvent(`🏦 Kredyt korporacyjny: ${stock.name} zaciąga ${loanAmount.toFixed(0)} zł w ${bank.name}.`, 'market');
+                logEvent(`🏦 Kredyt korporacyjny: ${stock.name} zaciąga ${loanAmount.toFixed(0)} PLN w ${bank.name}.`, 'market');
             }
         }
 
@@ -138,9 +138,92 @@ function processCompanyBanking() {
                     ledger.writeOffs += writeOff;
                     adjustBalanceSheet(stock, { liabilities: -writeOff, retainedEarnings: writeOff });
                     stock.loanMissedPayments = 0;
-                    logEvent(`🏦 ${bank.name} odpisuje ${writeOff.toFixed(0)} zł kredytu ${stock.name} — restrukturyzacja długu.`, 'market');
+                    logEvent(`🏦 ${bank.name} odpisuje ${writeOff.toFixed(0)} PLN kredytu ${stock.name} — restrukturyzacja długu.`, 'market');
                 }
             }
+        }
+    }
+}
+
+// =================================================================================
+// RYZYKO KREDYTOWE I KONCENTRACJA (0.15.5 B4)
+// Bank nie kredytuje jednego dłużnika ponad 10% swojego kapitału (dobrowolne finansowanie: inwestycje, kredyt obrotowy
+// na budowę); kredyt ratunkowy na pokrycie ujemnej gotówki nie podlega limitowi (niezmiennik: gotówka spółki ≥ 0).
+// Ekspozycje (bank.exposure[symbol]) rosną z kredytem spółki i maleją ze spłatą; w kryzysie bankowym bank tworzy odpisy
+// proporcjonalne do ekspozycji na Budowlany i Nieruchomości (deweloperzy), co obniża jego wynik.
+// =================================================================================
+
+const BANK_CONCENTRATION_LIMIT = 0.10;     // jeden dłużnik ≤ 10% kapitału banku
+const BANK_CRISIS_PROVISION = 0.01;        // kwartalny odpis od ekspozycji na deweloperów w kryzysie bankowym
+const BANK_DEVELOPER_SECTORS = ['Budowlany', 'Nieruchomości'];
+
+/** Kapitał banku (gotówka ponad depozyty klientów); nie mniejszy niż kapitał założycielski. */
+function getBankCapital(bank) {
+    return Math.max(Number(bank?.initialCapital) || 0, (Number(bank?.cash) || 0) - getBankDepositsTotal(bank || {}));
+}
+
+/** Zadłużenie spółki w jej banku z ewidencji kredytów (nie więcej niż zobowiązania w bilansie). */
+function getBankExposure(bank, company) {
+    const tracked = Number(bank?.exposure?.[getEntityKey(company)]) || 0;
+    return Math.min(tracked, Math.max(0, Number(company?.balanceSheet?.liabilities) || 0));
+}
+
+function noteBankExposure(company, delta) {
+    const bank = getCompanyBank(company);
+    const amount = Number(delta);
+    if (!bank || !Number.isFinite(amount) || amount === 0) return;
+    if (!bank.exposure) bank.exposure = {};
+    const key = getEntityKey(company);
+    const next = Math.max(0, (Number(bank.exposure[key]) || 0) + amount);
+    if (next > 1) bank.exposure[key] = Math.round(next); else delete bank.exposure[key];
+}
+
+/** Czy bank spółki może jej udzielić kolejnych `amount` kredytu bez przekroczenia limitu koncentracji (brak banku — bez limitu). */
+function canBankExtendCredit(company, amount) {
+    const bank = getCompanyBank(company);
+    if (!bank) return true;
+    const allowed = getBankExposure(bank, company) + Math.max(0, Number(amount) || 0) <= BANK_CONCENTRATION_LIMIT * getBankCapital(bank);
+    if (!allowed && typeof unlockAcademyEntry === 'function') unlockAcademyEntry('ryzykoKredytowe');
+    return allowed;
+}
+
+function isDeveloperCompany(company) {
+    return Array.isArray(company?.sector) && company.sector.some(sector => BANK_DEVELOPER_SECTORS.includes(sector));
+}
+
+/** Ekspozycja banku na deweloperów (spółki Budowlany i Nieruchomości) oraz udział w ewidencji kredytów. */
+function getBankDeveloperExposure(bank) {
+    let developer = 0, total = 0;
+    for (const [symbol, value] of Object.entries(bank?.exposure || {})) {
+        const company = stocks.find(stock => stock.symbol === symbol);
+        if (!company || company.isBankrupt) continue;
+        const amount = Math.min(Number(value) || 0, Math.max(0, Number(company.balanceSheet?.liabilities) || 0));
+        total += amount;
+        if (isDeveloperCompany(company)) developer += amount;
+    }
+    return { developer, total, share: total > 0 ? developer / total : 0 };
+}
+
+/** Marże odsetkowe względem stopy bazowej: kredyt dla spółki i lokata firmowa (do pomiaru i testów). */
+function getBankMargins(bank) {
+    const base = Number(centralBank?.baseInterestRate) || 0;
+    const loan = getCompanyLoanRate(bank);
+    const deposit = getDepositRate() * CORPORATE_DEPOSIT_RATE_SHARE;
+    return { base, loan, deposit, loanOverBase: loan - base, spread: loan - deposit };
+}
+
+/** Co kwartał: czyści ekspozycje upadłych/spłaconych dłużników; w kryzysie bankowym odpisy od ekspozycji na deweloperów. */
+function processBankRiskQuarterly() {
+    const crisis = typeof crisisLine !== 'undefined' && crisisLine && crisisLine.id === 'banking' && ['burst', 'spread', 'intervention', 'bottom'].includes(crisisLine.stage);
+    for (const bank of commercialBanks) {
+        if (!bank.exposure) continue;
+        for (const symbol of Object.keys(bank.exposure)) {
+            const company = stocks.find(stock => stock.symbol === symbol);
+            if (!company || company.isBankrupt || !((Number(company.balanceSheet?.liabilities) || 0) > 1)) delete bank.exposure[symbol];
+        }
+        if (crisis && bank.isActive) {
+            const { developer } = getBankDeveloperExposure(bank);
+            if (developer > 0) { getBankLedger(bank).writeOffs += developer * BANK_CRISIS_PROVISION; if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('ryzykoKredytowe'); }
         }
     }
 }
@@ -216,7 +299,7 @@ function openFundDeposit(bankId, amount, weeks) {
     const bank = commercialBanks.find(item => item.id === bankId);
     amount = Math.floor(Number(amount) * 100) / 100;
     if (!canBankTakeFundDeposits(bank)) { showToast('Ten bank nie przyjmuje lokat funduszy.', 'error'); return null; }
-    if (!(amount >= FUND_DEPOSIT_MIN)) { showToast(`Minimalna lokata: ${FUND_DEPOSIT_MIN} zł.`, 'error'); return null; }
+    if (!(amount >= FUND_DEPOSIT_MIN)) { showToast(`Minimalna lokata: ${FUND_DEPOSIT_MIN} PLN.`, 'error'); return null; }
     if (amount > playerCash) { showToast('Za mało wolnej gotówki funduszu.', 'error'); return null; }
 
     const deposit = {
@@ -233,7 +316,7 @@ function openFundDeposit(bankId, amount, weeks) {
     bank.cash += amount;
     getFundDeposits().push(deposit);
     recordPayment('player-fund', bank, amount, `Lokata ${weeks} tyg.`);
-    logEvent(`🏦 Fundusz zakłada lokatę w ${bank.name}: ${amount.toFixed(2)} zł na ${weeks} tyg. (${(deposit.rate * 100).toFixed(2)}% rocznie).`, 'review');
+    logEvent(`🏦 Fundusz zakłada lokatę w ${bank.name}: ${amount.toFixed(2)} PLN na ${weeks} tyg. (${(deposit.rate * 100).toFixed(2)}% rocznie).`, 'review');
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return deposit;
 }
@@ -260,7 +343,7 @@ function breakFundDeposit(depositId) {
     const deposit = getFundDeposits().find(item => item.id === depositId);
     if (!deposit) return false;
     const payout = settleFundDeposit(deposit, true);
-    logEvent(`🏦 Fundusz zrywa lokatę w ${deposit.bankName}: wypłata ${payout.toFixed(2)} zł (utrata odsetek i kara ${(FUND_DEPOSIT_BREAK_PENALTY * 100).toFixed(0)}%).`, 'review');
+    logEvent(`🏦 Fundusz zrywa lokatę w ${deposit.bankName}: wypłata ${payout.toFixed(2)} PLN (utrata odsetek i kara ${(FUND_DEPOSIT_BREAK_PENALTY * 100).toFixed(0)}%).`, 'review');
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return true;
 }
@@ -282,7 +365,7 @@ function processFundDepositsWeekly() {
         deposit.weeksLeft--;
         if (deposit.weeksLeft <= 0) {
             const payout = settleFundDeposit(deposit);
-            logEvent(`🏦 Lokata w ${deposit.bankName} zapada: fundusz otrzymuje ${payout.toFixed(2)} zł (odsetki ${deposit.accrued.toFixed(2)} zł).`, 'review');
+            logEvent(`🏦 Lokata w ${deposit.bankName} zapada: fundusz otrzymuje ${payout.toFixed(2)} PLN (odsetki ${deposit.accrued.toFixed(2)} PLN).`, 'review');
         }
     }
 }
@@ -374,7 +457,7 @@ function pawnShares(account, symbol, quantity) {
     if (account.isPlayer) {
         playerFund.trust = Math.max(0, playerFund.trust - PAWN_TRUST_PENALTY);
         playerWallet.complianceRisk = (playerWallet.complianceRisk || 0) + 1;
-        logEvent(`🏦 Fundusz zastawia ${quantity} akcji ${stock.name} w lombardzie ${pawnShop.name}: ${principal.toFixed(2)} zł na ${PAWN_WEEKS} tygodni. Klienci patrzą na to nieufnie.`, 'review');
+        logEvent(`🏦 Fundusz zastawia ${quantity} akcji ${stock.name} w lombardzie ${pawnShop.name}: ${principal.toFixed(2)} PLN na ${PAWN_WEEKS} tygodni. Klienci patrzą na to nieufnie.`, 'review');
     }
     return loan;
 }
@@ -397,7 +480,7 @@ function repayPawnLoan(account, loanId) {
     account.cash -= loan.principal;
     if (pawnShop) adjustCompanyCash(pawnShop, loan.principal);
     releasePawnCollateral(account, loan);
-    if (account.isPlayer) logEvent(`🏦 Fundusz spłaca pożyczkę lombardową (${loan.principal.toFixed(2)} zł) i odzyskuje ${loan.shares} akcji ${loan.symbol}.`, 'review');
+    if (account.isPlayer) logEvent(`🏦 Fundusz spłaca pożyczkę lombardową (${loan.principal.toFixed(2)} PLN) i odzyskuje ${loan.shares} akcji ${loan.symbol}.`, 'review');
     return true;
 }
 
@@ -478,8 +561,114 @@ function collectPawnDebt(account, loan) {
     adjustCompanyCash(collector, -payout);
     if (pawnShop) adjustCompanyCash(pawnShop, payout);
 
-    notifyDebtAction(account, `⚖️ Windykator ${collector.name} zajmuje akcje ${account.name} o wartości ${seizedValue.toFixed(0)} zł za niespłaconą pożyczkę lombardową.`);
+    notifyDebtAction(account, `⚖️ Windykator ${collector.name} zajmuje akcje ${account.name} o wartości ${seizedValue.toFixed(0)} PLN za niespłaconą pożyczkę lombardową.`);
     return seizedValue;
+}
+
+// 0.15.4 P7: klienci indywidualni lombardu — popyt z populacji (klasa biedna, recesja), pożyczki pod zastaw rzeczy. Wcześniej lombard
+// miał tylko okazjonalnych klientów (fundusze agresywnych botów, boty w tarapatach): w 20 latach 12–14 pożyczek, panel zawsze pusty.
+const PAWN_CLIENT_ARRIVAL = 0.9;           // nowych klientów na tydzień gry przy bazowym popycie (≈ 11 aktywnych pożyczek przy 12-tygodniowym terminie)
+const PAWN_CLIENT_LOAN = [300, 2500];      // kapitał pożyczki (zł, przy poziomie cen 1,0)
+const PAWN_CLIENT_DEFAULT = 0.12;          // bazowa szansa, że klient nie wykupi zastawu (rośnie z popytem z biedniejszych klas)
+const PAWN_CLIENT_RECOVERY = 0.9;          // odzysk kapitału ze sprzedaży niewykupionego zastawu
+const PAWN_CLIENT_MAX_BOOK = 0.5;          // portfel pożyczek klientów ≤ 50% gotówki lombardu
+
+/** Popyt na pożyczki detaliczne: udział klasy biednej względem startu × mnożnik recesji (0,4…2,5). */
+function getRetailLendingDemand() {
+    const poor = (Number(society?.classes?.poor) || 0.22) / 0.22;
+    const slump = typeof economyCycle === 'object' && economyCycle?.phase === 'recession' ? 1.4 : 1;
+    return Math.max(0.4, Math.min(2.5, poor * slump));
+}
+
+/** Liczba zdarzeń w tygodniu dla średniej `rate`: część całkowita plus losowa reszta. */
+function drawWeeklyArrivals(rate) {
+    return Math.floor(rate) + (Math.random() < rate - Math.floor(rate) ? 1 : 0);
+}
+
+/** Co tydzień: rozliczenie pożyczek klientów lombardu i nowi klienci (wołane z pętli tygodniowej). */
+function processPawnClientsWeekly() {
+    const shop = getPawnShop();
+    if (!shop) return null;
+    if (!Array.isArray(shop.retailLoans)) shop.retailLoans = [];
+    const stats = shop.retailStats || (shop.retailStats = { issued: 0, repaid: 0, forfeited: 0, interest: 0, loss: 0 });
+    for (const loan of [...shop.retailLoans]) {
+        loan.weeksLeft--;
+        if (loan.weeksLeft > 0) continue;
+        shop.retailLoans.splice(shop.retailLoans.indexOf(loan), 1);
+        if (loan.forfeit) {
+            const back = loan.principal * PAWN_CLIENT_RECOVERY, loss = loan.principal - back;
+            adjustCompanyCash(shop, back);
+            recordPayment('external:klienci-lombardu', shop, back, 'Sprzedaż niewykupionego zastawu (klient lombardu)');
+            adjustBalanceSheet(shop, { assets: -loss, retainedEarnings: -loss });
+            stats.forfeited++; stats.loss += loss;
+        } else {
+            const interest = loan.principal * PAWN_ANNUAL_RATE * PAWN_WEEKS / FUND_WEEKS_PER_YEAR;
+            adjustCompanyCash(shop, loan.principal + interest);
+            recordPayment('external:klienci-lombardu', shop, loan.principal + interest, 'Spłata pożyczki lombardowej (klient)');
+            adjustBalanceSheet(shop, { assets: interest, retainedEarnings: interest });
+            stats.repaid++; stats.interest += interest;
+        }
+    }
+    const demand = getRetailLendingDemand();
+    const priceLevel = Math.max(0.5, Number(society?.priceLevel) || 1);
+    for (let i = drawWeeklyArrivals(PAWN_CLIENT_ARRIVAL * demand); i > 0; i--) {
+        const principal = Math.round(getRandomInRange(...PAWN_CLIENT_LOAN) * priceLevel);
+        const book = shop.retailLoans.reduce((sum, loan) => sum + loan.principal, 0);
+        if (shop.cash < principal * 2 || book + principal > Math.max(0, shop.cash) * PAWN_CLIENT_MAX_BOOK) break;
+        adjustCompanyCash(shop, -principal);
+        recordPayment(shop, 'external:klienci-lombardu', principal, 'Pożyczka lombardowa dla klienta (zastaw rzeczy)');
+        shop.retailLoans.push({ id: nextSimulationId('pawnc'), principal, weeksLeft: PAWN_WEEKS, forfeit: Math.random() < Math.min(0.4, PAWN_CLIENT_DEFAULT * demand) });
+        stats.issued++;
+    }
+    return { active: shop.retailLoans.length, book: shop.retailLoans.reduce((sum, loan) => sum + loan.principal, 0) };
+}
+
+// 0.15.4 P7: klienci Wrony — pożyczki konsumenckie (sektor Finanse / Pożyczki konsumenckie). Wcześniej Wrona żyła tylko z długów
+// bankowych botów i trzymała 5 mln zł gotówki bez obrotu.
+const CONSUMER_LOAN_ARRIVAL = 0.7;         // nowych klientów na tydzień gry przy bazowym popycie
+const CONSUMER_LOAN = [500, 6000];         // kapitał pożyczki (zł, przy poziomie cen 1,0)
+const CONSUMER_LOAN_WEEKS = 12;
+const CONSUMER_LOAN_APR = 0.45;            // oprocentowanie w skali roku gry (FUND_WEEKS_PER_YEAR tygodni)
+const CONSUMER_LOAN_DEFAULT = 0.18;        // bazowa szansa niespłacenia (rośnie z popytem z biedniejszych klas)
+const CONSUMER_LOAN_RECOVERY = 0.45;       // odzysk kapitału z windykacji niespłaconej pożyczki
+const CONSUMER_LOAN_MAX_BOOK = 0.5;        // portfel pożyczek ≤ 50% gotówki Wrony
+
+/** Co tydzień: spłaty i windykacja pożyczek konsumenckich Wrony oraz nowi klienci. */
+function processConsumerLoansWeekly() {
+    const collector = getDebtCollector();
+    if (!collector) return null;
+    if (!Array.isArray(collector.retailLoans)) collector.retailLoans = [];
+    const stats = collector.retailStats || (collector.retailStats = { issued: 0, repaid: 0, collected: 0, interest: 0, loss: 0 });
+    for (const loan of [...collector.retailLoans]) {
+        loan.weeksLeft--;
+        if (loan.weeksLeft > 0) continue;
+        collector.retailLoans.splice(collector.retailLoans.indexOf(loan), 1);
+        if (loan.forfeit) {
+            const back = loan.principal * CONSUMER_LOAN_RECOVERY, loss = loan.principal - back;
+            adjustCompanyCash(collector, back);
+            recordPayment('external:klienci-wrony', collector, back, 'Windykacja niespłaconej pożyczki konsumenckiej');
+            adjustBalanceSheet(collector, { assets: -loss, retainedEarnings: -loss });
+            stats.collected++; stats.loss += loss;
+        } else {
+            const interest = loan.principal * CONSUMER_LOAN_APR * CONSUMER_LOAN_WEEKS / FUND_WEEKS_PER_YEAR;
+            adjustCompanyCash(collector, loan.principal + interest);
+            recordPayment('external:klienci-wrony', collector, loan.principal + interest, 'Spłata pożyczki konsumenckiej (klient Wrony)');
+            adjustBalanceSheet(collector, { assets: interest, retainedEarnings: interest });
+            stats.repaid++; stats.interest += interest;
+        }
+    }
+    const demand = getRetailLendingDemand();
+    const priceLevel = Math.max(0.5, Number(society?.priceLevel) || 1);
+    for (let i = drawWeeklyArrivals(CONSUMER_LOAN_ARRIVAL * demand); i > 0; i--) {
+        const principal = Math.round(getRandomInRange(...CONSUMER_LOAN) * priceLevel);
+        const book = collector.retailLoans.reduce((sum, loan) => sum + loan.principal, 0);
+        if (collector.cash < principal * 2 || book + principal > Math.max(0, collector.cash) * CONSUMER_LOAN_MAX_BOOK) break;
+        adjustCompanyCash(collector, -principal);
+        recordPayment(collector, 'external:klienci-wrony', principal, 'Pożyczka konsumencka dla klienta Wrony');
+        collector.retailLoans.push({ id: nextSimulationId('consl'), principal, weeksLeft: CONSUMER_LOAN_WEEKS, forfeit: Math.random() < Math.min(0.45, CONSUMER_LOAN_DEFAULT * demand) });
+        stats.issued++;
+    }
+    return { active: collector.retailLoans.length, book: collector.retailLoans.reduce((sum, loan) => sum + loan.principal, 0) };
 }
 
 function notifyDebtAction(account, text) {
@@ -714,6 +903,7 @@ function payBondCoupons() {
         payBondOwner(bond.ownerId, coupon);
         const issuer = bond.issuerSymbol && stocks.find(s => s.symbol === bond.issuerSymbol);
         if (issuer) {
+            ensureCompanyCash(issuer, coupon, `Kredyt: kupon obligacji ${issuer.symbol}`); // brak gotówki pokrywa kredyt (jak inne wydatki spółki)
             adjustCompanyCash(issuer, -coupon);
             adjustBalanceSheet(issuer, { assets: -coupon, retainedEarnings: -coupon });
         }
@@ -740,13 +930,14 @@ function checkBondMaturities(deltaGameMs = 5000) {
         payBondOwner(bond.ownerId, payout);
         const issuer = bond.issuerSymbol && stocks.find(s => s.symbol === bond.issuerSymbol);
         if (issuer && !bond.defaulted) {
+            ensureCompanyCash(issuer, payout, `Kredyt: wykup obligacji ${issuer.symbol}`);
             adjustCompanyCash(issuer, -payout);
             adjustBalanceSheet(issuer, { assets: -payout, liabilities: -payout });
         }
         if (bond.ownerId === 'player') {
             logEvent(bond.defaulted
-                ? `💥 Obligacja ${bond.issuerName} zapada po niewypłacalności — odzysk ${payout.toFixed(2)} zł.`
-                : `💰 Obligacja ${bond.issuerName} zapada: fundusz otrzymuje nominał ${payout.toFixed(2)} zł.`, 'review');
+                ? `💥 Obligacja ${bond.issuerName} zapada po niewypłacalności — odzysk ${payout.toFixed(2)} PLN.`
+                : `💰 Obligacja ${bond.issuerName} zapada: fundusz otrzymuje nominał ${payout.toFixed(2)} PLN.`, 'review');
         }
         allBonds.splice(i, 1);
     }
@@ -800,7 +991,7 @@ function assignEliteExchanges() {
         stock.exchange = next;
         applyEliteBonuses(stock);
         applyPriceEffect(stock.symbol, up ? 0.03 : -0.03, up ? 'positive' : 'negative', 'review');
-        logEvent(`${up ? '📈 AWANS' : '📉 SPADEK'}: ${stock.name} ${up ? 'wchodzi na' : 'spada na'} ${exchanges[next].name} (kapitalizacja ${(getMarketCap(stock) / 1e6).toFixed(1)} mln zł).`, 'market');
+        logEvent(`${up ? '📈 AWANS' : '📉 SPADEK'}: ${stock.name} ${up ? 'wchodzi na' : 'spada na'} ${exchanges[next].name} (kapitalizacja ${(getMarketCap(stock) / 1e6).toFixed(1)} mln PLN).`, 'market');
         changes.push([stock.symbol, next]);
     }
     return changes;
@@ -815,9 +1006,44 @@ function applyEliteBonuses(stock) {
     stock.eventResistance = Math.min(0.9, stock.baseEventResistance + (def ? def.resistance : 0));
 }
 
-/** Nowa spółka zależna: kapitał od matki, te same badania, polityki i sektor; IPO na niższej giełdzie. */
-function foundSubsidiary(parent) {
-    if (typeof hasFreeListingSlot === 'function' && !hasFreeListingSlot()) return null; // P1: twardy sufit spółek krajowych
+// 0.14.2 P3: córka dostaje własny, jeden segment i własną nazwę.
+const SUBSIDIARY_EXTRA_WORDS = ['Nova', 'Plus', 'Labs', 'Serwis', 'Invest'];
+
+/** Segment córki: 50% segment poboczny matki (jeśli jest); dalej 80% branża powiązana z sektorem głównym, 20% sektor matki. */
+function pickSubsidiarySegment(parent) {
+    const segments = [...getStockSegments(parent)].sort((a, b) => b.share - a.share);
+    const main = segments[0] || { sector: getMainSector(parent) || 'Usługi', subsector: null };
+    const secondary = segments.slice(1);
+    if (secondary.length && Math.random() < 0.5) {
+        const seg = getRandomElement(secondary);
+        return { sector: seg.sector, subsector: seg.subsector || null, share: 1 };
+    }
+    const related = SECTOR_NAMES.filter(name => name !== main.sector && name !== 'Bankowość' && typeof areSectorsRelated === 'function' && areSectorsRelated(main.sector, name));
+    if (related.length && Math.random() < 0.8) return { sector: getRandomElement(related), subsector: null, share: 1 };
+    const otherSubs = Object.keys(SECTORS[main.sector]?.subsectors || {}).filter(name => name !== main.subsector && !name.startsWith('Bank '));
+    return { sector: main.sector, subsector: otherSubs.length && Math.random() < 0.5 ? getRandomElement(otherSubs) : (main.subsector || null), share: 1 };
+}
+
+/** Nazwa córki: „Matka Słowo”, „Pierwszy-człon Słowo”, zlepek („Cortenergy”), a w sektorze matki także „Matka Nova”. Bez powtórzeń. */
+function pickSubsidiaryName(parent, sector) {
+    const words = SECTOR_NAME_WORDS[sector] || ['Group'];
+    const first = String(parent.name).split(/[\s-]+/)[0] || parent.name;
+    const candidates = [];
+    for (const word of words) {
+        candidates.push(`${parent.name} ${word}`, `${first} ${word}`, `${first.slice(0, Math.min(5, Math.max(3, first.length - 2)))}${word.toLowerCase()}`, `${first.slice(0, 4)}${word.toLowerCase()}`);
+    }
+    if (sector === getMainSector(parent)) for (const extra of SUBSIDIARY_EXTRA_WORDS) candidates.push(`${parent.name} ${extra}`, `${first} ${extra}`);
+    const taken = new Set(stocks.map(s => String(s.name).toLowerCase()));
+    const free = [...new Set(candidates)].filter(name => !taken.has(name.toLowerCase()));
+    if (free.length) return getRandomElement(free);
+    let n = 2;
+    while (taken.has(`${first} ${words[0]} ${n}`.toLowerCase())) n++;
+    return `${first} ${words[0]} ${n}`;
+}
+
+/** Nowa spółka zależna: kapitał od matki, te same badania i polityki; własny segment i nazwa (0.14.2 P3); IPO na niższej giełdzie. */
+function foundSubsidiary(parent, options = {}) {
+    if (options.ignoreDomesticCap ? !hasFreeTotalListingSlot() : (typeof hasFreeListingSlot === 'function' && !hasFreeListingSlot())) return null; // P1: twardy sufit (T6: córka koncernu liczy się tylko do łącznego)
     const capital = Math.max(100000, Math.min(parent.cash * 0.1, getMarketCap(parent) * 0.05));
     if (parent.cash < capital) return null;
 
@@ -828,11 +1054,12 @@ function foundSubsidiary(parent) {
 
     const totalShares = 10000;
     const price = Math.round(capital / totalShares * 1.5 * 100) / 100;
-    const exchangeKey = Object.keys(exchanges).find(key => !isEliteExchange(key) && exchanges[key].minPrice <= price && price < exchanges[key].maxPrice) || 'SILVER';
-    const parentStake = 0.6;
+    const exchangeKey = options.exchange && exchanges[options.exchange] ? options.exchange : Object.keys(exchanges).find(key => !isEliteExchange(key) && exchanges[key].minPrice <= price && price < exchanges[key].maxPrice) || 'SILVER';
+    const parentStake = options.stake || 0.6; // T6: córka koncernu 70–80% (20–30% w ofercie publicznej)
 
+    const segment = pickSubsidiarySegment(parent);
     const child = {
-        name: `${parent.name} ${getRandomElement(['Nova', 'Plus', 'Labs', 'Serwis', 'Invest'])}`,
+        name: pickSubsidiaryName(parent, segment.sector),
         symbol,
         price,
         totalShares,
@@ -840,8 +1067,9 @@ function foundSubsidiary(parent) {
         sharesHeld: Math.floor(totalShares * parentStake),
         insiderShares: 0,
         exchange: exchangeKey,
-        sector: [...(parent.sector || [])],
-        specializationSectors: [...(parent.specializationSectors || parent.sector || [])],
+        sector: [segment.sector],
+        segments: [segment], // 0.14.2 P3: jeden własny segment (profil, cykl i pracownicy z niego, nie z matki)
+        specializationSectors: [segment.sector],
         financialHealth: 1,
         volatilityFactor: Number(parent.baseVolatilityFactor || parent.volatilityFactor) || 1,
         cash: capital,
@@ -872,7 +1100,7 @@ function foundSubsidiary(parent) {
     if (typeof initializeFundamentals === 'function') initializeFundamentals(child, true);
     if (typeof initializeDescriptionParts === 'function') initializeDescriptionParts(child);
 
-    logEvent(`🆕 IPO: ${parent.name} zakłada spółkę zależną ${child.name} (${symbol}) na ${exchanges[exchangeKey].name} — 40% akcji w ofercie publicznej.`, 'market');
+    logEvent(`🆕 IPO: ${parent.name} zakłada spółkę zależną ${child.name} (${symbol}) na ${exchanges[exchangeKey].name} — ${Math.round((1 - parentStake) * 100)}% akcji w ofercie publicznej.`, 'market');
     return child;
 }
 
@@ -911,7 +1139,7 @@ function runDiamondStrategy() {
         const fine = Math.round(Math.max(0, diamond.cash) * 0.01);
         adjustCompanyCash(diamond, -fine);
         governmentTreasury += fine;
-        logEvent(`⚖️ Urząd antymonopolowy blokuje skup akcji ${target.name} przez ${diamond.name} i nakłada karę ${fine.toLocaleString('pl-PL')} zł.`, 'state');
+        logEvent(`⚖️ Urząd antymonopolowy blokuje skup akcji ${target.name} przez ${diamond.name} i nakłada karę ${fine.toLocaleString('pl-PL')} PLN.`, 'state');
         return null;
     }
 
@@ -948,31 +1176,24 @@ function processEliteExchangesQuarterly() {
         }
     }
     runDiamondStrategy();
-    processSubsidiaryIndependence();
+    syncSubsidiaryLinks(); // 0.14.2 P3: lista córek z faktów (upadłe i uwolnione znikają z listy)
 }
 
-/** Spółka zależna może się uwolnić, gdy matka sprzeda udziały (mniej niż 50%). */
-function processSubsidiaryIndependence() {
-    for (const child of stocks.filter(s => s.isSubsidiaryOf && Number.isFinite(s.parentStakePct))) {
-        const parent = stocks.find(s => s.symbol === child.isSubsidiaryOf);
-        if (!parent || parent.isBankrupt) { child.isSubsidiaryOf = null; continue; }
-        if (!hasFreeListingSlot()) continue; // P1: uwolniona zależna liczy się do limitu — przy pełnej giełdzie matka nie sprzedaje
-        if (Math.random() > 0.03 || getMarketCap(child) < getMarketCap(parent) * 0.3) continue;
-
-        const sold = child.parentStakePct * 0.5;
-        const proceeds = getMarketCap(child) * sold;
-        adjustCompanyCash(parent, proceeds);
-        const soldShares = Math.min(Math.floor(child.totalShares * sold), parent.equityStakes?.[child.symbol] ?? Infinity);
-        if (parent.equityStakes?.[child.symbol]) parent.equityStakes[child.symbol] -= soldShares;
-        child.sharesHeld = Math.max(0, child.sharesHeld - soldShares); // akcje wracają na rynek
-        child.parentStakePct -= sold;
-        if (child.parentStakePct < 0.5) {
-            child.isSubsidiaryOf = null;
-            parent.subsidiaries = (parent.subsidiaries || []).filter(symbol => symbol !== child.symbol);
-            logEvent(`🕊️ ${child.name} uwalnia się spod kontroli ${parent.name} — matka sprzedaje część udziałów.`, 'market');
-        }
+/** 0.14.2 P3: lista córek z faktów (isSubsidiaryOf); wpisy-obiekty z fuzji/przejęć (wchłonięte spółki) → absorbedCompanies. */
+function syncSubsidiaryLinks() {
+    let fixed = 0;
+    for (const stock of stocks) {
+        const legacy = (stock.subsidiaries || []).filter(item => item && typeof item === 'object');
+        if (legacy.length) stock.absorbedCompanies = [...(stock.absorbedCompanies || []), ...legacy];
+        const children = stocks.filter(child => child.isSubsidiaryOf === stock.symbol && !child.isBankrupt).map(child => child.symbol);
+        const before = JSON.stringify(stock.subsidiaries || []);
+        if (children.length) stock.subsidiaries = children; else delete stock.subsidiaries;
+        if (before !== JSON.stringify(stock.subsidiaries || [])) fixed++;
     }
+    return fixed;
 }
+
+// 0.14 T6: usamodzielnienie spółek zależnych — processSubsidiariesQuarterly (companies.js: oferta wtórna albo spin-off reszty).
 
 // =================================================================================
 // FINANSOWANIE POMOSTOWE BUDÓW (etap F3)
@@ -1022,7 +1243,7 @@ function generateBridgeLoanOffers() {
         weeksLeft: 3
     };
     bridgeLoanOffers.push(offer);
-    logEvent(`🏗️ ${company.name} szuka finansowania pomostowego na „${offer.project}”: ${offer.amount.toLocaleString('pl-PL')} zł, ${(offer.rate * 100).toFixed(1)}% rocznie.`, 'construction');
+    logEvent(`🏗️ ${company.name} szuka finansowania pomostowego na „${offer.project}”: ${offer.amount.toLocaleString('pl-PL')} PLN, ${(offer.rate * 100).toFixed(1)}% rocznie.`, 'construction');
     return offer;
 }
 
@@ -1040,7 +1261,7 @@ function fundBridgeLoan(offerId) {
     const loan = { id: offer.id, symbol: company.symbol, name: company.name, project: offer.project, principal: offer.amount, rate: offer.rate, accrued: 0, weeksLeft: offer.weeks, termWeeks: offer.weeks, extended: false };
     getFundBridgeLoans().push(loan);
     bridgeLoanOffers = bridgeLoanOffers.filter(item => item !== offer);
-    logEvent(`🏗️ Fundusz udziela ${company.name} pożyczki pomostowej ${offer.amount.toLocaleString('pl-PL')} zł (${(offer.rate * 100).toFixed(1)}%, ${offer.weeks} tyg.).`, 'review');
+    logEvent(`🏗️ Fundusz udziela ${company.name} pożyczki pomostowej ${offer.amount.toLocaleString('pl-PL')} PLN (${(offer.rate * 100).toFixed(1)}%, ${offer.weeks} tyg.).`, 'review');
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return loan;
 }
@@ -1058,7 +1279,7 @@ function processBridgeLoansWeekly() {
         const company = stocks.find(s => s.symbol === loan.symbol);
         if (!company || company.isBankrupt) {
             const recovery = loan.principal * BRIDGE_RECOVERY;
-            closeBridgeLoan(loan, recovery, `💥 ${loan.name} upada — fundusz odzyskuje ${recovery.toFixed(0)} z ${loan.principal.toFixed(0)} zł pożyczki pomostowej.`);
+            closeBridgeLoan(loan, recovery, `💥 ${loan.name} upada — fundusz odzyskuje ${recovery.toFixed(0)} z ${loan.principal.toFixed(0)} PLN pożyczki pomostowej.`);
             continue;
         }
         loan.accrued += loan.principal * loan.rate / FUND_WEEKS_PER_YEAR;
@@ -1069,7 +1290,7 @@ function processBridgeLoansWeekly() {
         if (company.cash >= due) {
             adjustCompanyCash(company, -due);
             adjustBalanceSheet(company, { assets: -due, liabilities: -loan.principal, retainedEarnings: -loan.accrued });
-            closeBridgeLoan(loan, due, `🏗️ ${company.name} spłaca pożyczkę pomostową: ${due.toFixed(0)} zł (odsetki ${loan.accrued.toFixed(0)} zł).`);
+            closeBridgeLoan(loan, due, `🏗️ ${company.name} spłaca pożyczkę pomostową: ${due.toFixed(0)} PLN (odsetki ${loan.accrued.toFixed(0)} PLN).`);
         } else if (!loan.extended) {
             loan.extended = true;
             loan.weeksLeft = 4;
@@ -1078,7 +1299,7 @@ function processBridgeLoansWeekly() {
             const paid = Math.max(0, company.cash * 0.5);
             adjustCompanyCash(company, -paid);
             adjustBalanceSheet(company, { assets: -paid, liabilities: -Math.min(paid, loan.principal) });
-            closeBridgeLoan(loan, paid, `💥 ${company.name} spłaca tylko ${paid.toFixed(0)} z ${due.toFixed(0)} zł pożyczki pomostowej.`);
+            closeBridgeLoan(loan, paid, `💥 ${company.name} spłaca tylko ${paid.toFixed(0)} z ${due.toFixed(0)} PLN pożyczki pomostowej.`);
         }
     }
 }
@@ -1106,13 +1327,13 @@ const ETF_WEIGHTINGS = { cap: 'wg kapitalizacji', equal: 'równe wagi', value: '
 
 const ETF_TEMPLATES = [
     { key: 'Technologia', label: 'Tech', rules: { sectors: ['Technologia', 'Gaming', 'Badania'] } },
-    { key: 'Bankowość', label: 'Banki', rules: { sectors: ['Bankowość', 'Bankowość Komercyjna', 'Finanse'] } },
+    { key: 'Bankowość', label: 'Banki', rules: { sectors: ['Bankowość', 'Finanse'] } },
     { key: 'Przemysł', label: 'Przemysł', rules: { sectors: ['Przemysł', 'Chemia'] } },
     { key: 'Energia', label: 'Energia', rules: { sectors: ['Energia'] } },
     { key: 'Nieruchomości', label: 'Nieruchomości', rules: { sectors: ['Nieruchomości', 'Budowlany'] } },
     { key: 'Medycyna', label: 'Zdrowie', rules: { sectors: ['Medycyna'] } },
     { key: 'Konsument', label: 'Konsument', rules: { sectors: ['Dobra konsumpcyjne', 'Żywność', 'Turystyka'] } },
-    { key: 'Usługi', label: 'Usługi', rules: { sectors: ['Usługi', 'Logistyka', 'Transport', 'Media'] } },
+    { key: 'Usługi', label: 'Usługi', rules: { sectors: ['Usługi', 'Transport i logistyka', 'Media'] } },
     { key: 'Dywidendowy', label: 'Dywidendowy', rules: { dividendOnly: true } },
     { key: 'Arystokraci', label: 'Arystokratów', rules: { aristocratsOnly: true } },
     { key: 'Złoty', label: 'Blue Chip', rules: { minExchangeLevel: 3 } },
@@ -1206,7 +1427,7 @@ function isEtfEligible(etf, stock) {
     const fair = Number(stock.fundamentals?.fairValue);
     if (fair > 0 && (stock.price > fair * 4 || stock.price < fair / 4)) return false;
     if (r.assetType ? stock.assetType !== r.assetType : Boolean(stock.assetType)) return false;
-    if (r.sectors?.length && !stock.sector?.some(sector => r.sectors.includes(sector))) return false;
+    if (r.sectors?.length && !stock.sector?.some(sector => r.sectors.some(name => canonicalSectorName(name) === sector))) return false; // T1a: reguły ze starych zapisów
     if (r.dividendOnly && !(stock.assetType === 'REIT' || (stock.dividendHistory || []).length > 0 || stock.dividendPolicy && stock.dividendPolicy !== 'Growth')) return false;
     if (r.aristocratsOnly && !stock.isDividendAristocrat) return false;
     if (r.stateOnly && !stock.isStateOwned) return false;
@@ -1460,7 +1681,7 @@ function sellEtf(symbol, quantity) {
     playerCash += proceeds;
     holding.shares -= quantity;
     if (holding.shares <= 0) delete playerPortfolio[symbol];
-    logEvent(`Fundusz umarza ${quantity} jedn. ${etf.name} (wynik ${profit >= 0 ? '+' : ''}${profit.toFixed(2)} zł).`, 'review');
+    logEvent(`Fundusz umarza ${quantity} jedn. ${etf.name} (wynik ${profit >= 0 ? '+' : ''}${profit.toFixed(2)} PLN).`, 'review');
     displayCash();
     displayPortfolio();
     if (typeof checkPlayerTierUpgrade === 'function') checkPlayerTierUpgrade();
@@ -1508,7 +1729,10 @@ const MARKET_OPERATOR_DEFS = {
     GPW:      { name: 'Giełda Papierów Wartościowych', short: 'GPW', commission: 0.003, color: '#1f6feb', main: true },
     XTD:      { name: 'XTD Markets', short: 'XTD', commission: 0.002, color: '#8957e5' },
     PLU5:     { name: 'PLU5 Exchange', short: 'PLU5', commission: 0.0015, color: '#d29922' },
-    EURONEXT: { name: 'Euronext', short: 'Euronext', commission: 0.0025, color: '#3fb950', dormantForever: true }
+    EURONEXT: { name: 'Euronext', short: 'Euronext', commission: 0.0025, color: '#3fb950', dormantForever: true },
+    // 0.15.6: rynki wejścia bez spółki-operatora (listings.js): NewHorizons (państwowy operator, młode i ryzykowne spółki) i giełda prywatna
+    NH:       { name: 'NewHorizons', short: 'NH', commission: 0, color: '#2dd4bf', entry: true },
+    PRV:      { name: 'Giełda prywatna', short: 'PRV', commission: 0, color: '#94a3b8', entry: true }
 };
 const OPERATOR_STARTUP_GOAL = [300000, 600000];  // bardzo drogie startupy
 const OPERATOR_STARTUP_SLOWDOWN = 0.25;         // rozwój 4× wolniej niż zwykły startup
@@ -1526,7 +1750,7 @@ let marketOperators = null;
 function createMarketOperators() {
     const operators = {};
     for (const [id, def] of Object.entries(MARKET_OPERATOR_DEFS)) {
-        operators[id] = { id, status: def.main ? 'active' : def.dormantForever ? 'inactive' : 'dormant', symbol: null, startupSymbol: null, sponsors: [], members: 0, commissionsTotal: 0 };
+        operators[id] = { id, status: def.main || def.entry ? 'active' : def.dormantForever ? 'inactive' : 'dormant', symbol: null, startupSymbol: null, sponsors: [], members: 0, commissionsTotal: 0 };
     }
     return operators;
 }
@@ -1563,7 +1787,16 @@ function getMarketDef(id) {
 
 function isInternetMarket(id) {
     const def = getMarketDef(id);
-    return Boolean(def && !def.main && !def.dormantForever);
+    return Boolean(def && !def.main && !def.dormantForever && !def.entry);
+}
+
+/** 0.15.6: rynek wejścia (NH, giełda prywatna) — bez operatora, poza limitem spółek krajowych. */
+function isEntryMarket(id) {
+    return Boolean(getMarketDef(id)?.entry);
+}
+
+function isEntryMarketStock(stock) {
+    return Boolean(stock && !stock.isBankrupt && isEntryMarket(getStockMarket(stock)));
 }
 
 /** Spółka notowana na rynku internetowym (członek albo sam operator) — osobna zakładka i osobny limit. */
@@ -1710,6 +1943,8 @@ function createListedCompany({ name, symbol, sector, price, totalShares, exchang
         reputation: { player: 0 }
     };
     delete stock.assetType;
+    ensureStockSegments(stock); // T1a: sektor z rejestru i segmenty od razu
+    assignRandomSubsector(stock); // T2: podsektor nowej spółki według szansy
     ['fundingGoal', 'currentFunding', 'developmentProgress', 'successChance', 'stage', 'isScam', 'isWhiteCrow', 'investors', 'ipoPriceBonus', 'overfundingEndTime'].forEach(key => delete stock[key]);
     const equity = price * totalShares;
     stock.balanceSheet = { assets: equity * 1.2, liabilities: equity * 0.2, shareCapital: equity * 0.3, retainedEarnings: equity * 0.7 };
@@ -1727,12 +1962,9 @@ function createListedCompany({ name, symbol, sector, price, totalShares, exchang
 
 function spawnMarketMember(operatorId, reason) {
     if (isInternetMarket(operatorId) ? !(hasInternetMemberSlot(operatorId) && hasFreeTotalListingSlot()) : !hasFreeListingSlot()) return null; // D1: limit spółek na rynek; P1: sufit krajowy i łączny
-    const sectors = Object.keys(SECTOR_PROFILES).filter(s => !['Bankowość', 'Bankowość Komercyjna'].includes(s));
+    const sectors = SECTOR_NAMES.filter(s => s !== 'Bankowość');
     const sector = [getRandomElement(sectors)];
-    const base = generateNewStartup();
-    // Generator startupów nie zna wszystkich sektorów — wtedy nazwa „marka + sektor”.
-    const name = base.name.startsWith('DejwCorp') || !base.sector?.includes(sector[0])
-        ? `${getRandomElement(MEMBER_NAME_PREFIXES)} ${sector[0]}` : base.name;
+    const name = generateCompanyName(sector[0]); // 0.14.2 P4: człony nazw dla każdego sektora
     const symbol = uniqueSymbol((name.normalize('NFD').replace(/[^A-Za-z ]/g, '').split(' ').map(w => w.slice(0, 2)).join('').toUpperCase() || 'NEW').slice(0, 4));
     const stock = createListedCompany({
         name, symbol, sector,
@@ -1760,7 +1992,7 @@ function spawnOperatorStartup(operator) {
     stocks.push(startup);
     operator.status = 'startup';
     operator.startupSymbol = startup.symbol;
-    logEvent(`🚀 W inkubatorze pojawia się ${def.name} — przyszły operator rynku (cel finansowania ${startup.fundingGoal.toLocaleString('pl-PL')} zł).`, 'market');
+    logEvent(`🚀 W inkubatorze pojawia się ${def.name} — przyszły operator rynku (cel finansowania ${startup.fundingGoal.toLocaleString('pl-PL')} PLN).`, 'market');
     return startup;
 }
 
@@ -1852,6 +2084,7 @@ function getOperatorStock(operatorId) {
 
 /** Prowizja od transakcji na rynku spółki; payer: 'player' albo bot. Zwraca pobraną kwotę. */
 function chargeMarketCommission(stock, value, payer) {
+    if (stock && value > 0) stock.turnoverQ = (Number(stock.turnoverQ) || 0) + value; // 0.14.2 P5: obrót kwartału (popularność)
     if (!marketOperators || !(value > 0)) return 0;
     const operatorId = getStockMarket(stock);
     const operatorStock = getOperatorStock(operatorId);
@@ -1875,6 +2108,7 @@ function chargeMarketCommission(stock, value, payer) {
 // =================================================================================
 
 function processMarketsQuarterly() {
+    for (const stock of stocks) { stock.lastTurnover = Number(stock.turnoverQ) || 0; stock.turnoverQ = 0; } // 0.14.2 P5
     ensureMarketOperators();
     const quarter = typeof macro === 'object' ? macro.quarter : 0;
     // D1: kolejne rynki internetowe w trakcie gry.
@@ -1882,7 +2116,8 @@ function processMarketsQuarterly() {
     if (quarter >= 8 && liveInternet < MAX_INTERNET_MARKETS && hasFreeTotalListingSlot() && Math.random() < NEW_INTERNET_MARKET_CHANCE) spawnInternetMarket(); // P1: łączny sufit
     for (const operator of Object.values(marketOperators)) {
         const def = getMarketDef(operator.id);
-        operator.members = stocks.filter(s => getStockMarket(s) === operator.id && s.marketOperator !== operator.id && !s.assetType).length;
+        operator.members = stocks.filter(s => getStockMarket(s) === operator.id && !s.isBankrupt && s.assetType !== 'Startup').length;
+        if (def.entry) continue; // 0.15.6: rynki wejścia nie mają operatora (cykl życia, opłaty, wyłączność)
 
         if (operator.status === 'dormant' && quarter >= 4 && Math.random() < OPERATOR_SPAWN_CHANCE) {
             spawnOperatorStartup(operator);
@@ -1919,6 +2154,7 @@ function collectListingFees(operator, operatorStock) {
 
 /** Operator inwestuje część gotówki w spółki swojego rynku (pakiety liczone w obrocie). */
 function investInMembers(operator, operatorStock) {
+    if (operator.id === 'GPW') return; // GPW jako rynek publiczny nie kupuje losowych akcji spółek
     const members = stocks.filter(s => getStockMarket(s) === operator.id && s !== operatorStock && !s.assetType && !s.isBankrupt);
     if (!members.length || operatorStock.cash <= 0) return;
     const target = getRandomElement(members);
@@ -1990,23 +2226,51 @@ function moveListing(symbol, marketId) {
 // WIDOK: zakładka „Rynki” w oknie Państwa
 // =================================================================================
 
+let selectedMarketPreview = null;
+
 function renderMarketsPanel() {
     ensureMarketOperators();
-    const statusLabel = { active: '🟢 aktywny', startup: '🧪 startup w inkubatorze', dormant: '⏳ jeszcze nie istnieje', closed: '🔒 zamknięty', inactive: '⏸️ nieaktywny — wkrótce' };
+    const statusLabel = { active: '🟢 aktywny', startup: '🧪 startup w inkubatorze', dormant: '⏳ uśpiony / powstający', closed: '🔒 zamknięty', inactive: '⏸️ rynek zagraniczny' };
+    
+    for (const op of Object.values(marketOperators)) {
+        op.members = stocks.filter(s => getStockMarket(s) === op.id && !s.isBankrupt && s.assetType !== 'Startup').length;
+    }
+
+    const activeOperators = Object.values(marketOperators).filter(operator => operator.status === 'active');
+    const cards = activeOperators.map(operator => {
+        const def = getMarketDef(operator.id) || { name: operator.id, commission: 0, color: '#888' };
+        const stock = operator.symbol ? stocks.find(s => s.symbol === operator.symbol) : null;
+        const startup = operator.startupSymbol ? stocks.find(s => s.symbol === operator.startupSymbol && s.assetType === 'Startup') : null;
+        const memberList = stocks.filter(s => getStockMarket(s) === operator.id && !s.isBankrupt && s.assetType !== 'Startup');
+        const isSelected = selectedMarketPreview === operator.id;
+
+        return `<article class="bank-card market-card" style="border-top: 3px solid ${def.color}">
+            <header class="bank-card-head"><span class="bank-card-icon">🏛️</span><div><h4>${escapeHtml(def.name)} (${escapeHtml(def.short || operator.id)})</h4><span class="bank-card-type">${statusLabel[operator.status] || operator.status}</span></div></header>
+            <dl class="bank-card-rates">
+                <div><dt>Prowizja</dt><dd>${(def.commission * 100).toFixed(2)}%</dd></div>
+                <div><dt>Spółki</dt><dd>${operator.members}</dd></div>
+                <div><dt>Kurs operatora</dt><dd>${stock ? formatZl(stock.price) : (def.entry ? 'bez operatora' : operator.status === 'active' ? 'GPW (rynek gł.)' : '—')}</dd></div>
+            </dl>
+            ${startup ? `<p class="text-sm">Finansowanie startupu: ${formatZl(startup.currentFunding, 0)} / ${formatZl(startup.fundingGoal, 0)} · sponsorzy: ${operator.sponsors.length}</p>` : ''}
+            ${operator.commissionsTotal > 0 ? `<p class="text-xs text-muted">Prowizje łącznie: ${formatZl(operator.commissionsTotal, 0)}</p>` : ''}
+            <div class="mt-2">
+                <button class="btn-secondary btn-sm" onclick="toggleMarketStocksList('${operator.id}')">
+                    ${isSelected ? 'Ukryj listę spółek' : `Pokaż spółki (${memberList.length})`}
+                </button>
+            </div>
+            ${isSelected ? `
+                <div class="market-members-preview mt-2" style="max-height: 180px; overflow-y: auto; background: rgba(0,0,0,0.1); padding: 8px; border-radius: 4px; font-size: 11px;">
+                    ${memberList.length ? memberList.map(s => `<span class="badge" style="display:inline-block; margin:2px;" title="${escapeHtml(s.name)}">${escapeHtml(s.symbol)} (${formatZl(s.price)})</span>`).join(' ') : '<span class="text-muted">Brak notowanych spółek na tym rynku.</span>'}
+                </div>
+            ` : ''}
+        </article>`;
+    }).join('');
+
     return `<p class="bank-lead">Operatorzy rynków pobierają prowizję od każdej transakcji na swoim rynku (płaci też fundusz) i opłatę za notowanie, inwestują w spółki członkowskie i podpisują umowy na wyłączność. Zamknięcie operatora zdejmuje jego spółki z notowań — posiadacze są rozliczani po ostatniej cenie.</p>
-        <div class="bank-grid">${Object.values(marketOperators).filter(operator => operator.status === 'active').map(operator => { // tylko rynki notowane na giełdzie
-            const def = getMarketDef(operator.id) || { name: operator.id, commission: 0, color: '#888' };
-            const stock = operator.symbol ? stocks.find(s => s.symbol === operator.symbol) : null;
-            const startup = operator.startupSymbol ? stocks.find(s => s.symbol === operator.startupSymbol && s.assetType === 'Startup') : null;
-            return `<article class="bank-card market-card" style="border-top: 3px solid ${def.color}">
-                <header class="bank-card-head"><span class="bank-card-icon">🏛️</span><div><h4>${escapeHtml(def.name)}</h4><span class="bank-card-type">${statusLabel[operator.status] || operator.status}</span></div></header>
-                <dl class="bank-card-rates">
-                    <div><dt>Prowizja</dt><dd>${(def.commission * 100).toFixed(2)}%</dd></div>
-                    <div><dt>Spółki</dt><dd>${operator.members}</dd></div>
-                    <div><dt>Kurs operatora</dt><dd>${stock ? formatZl(stock.price) : '—'}</dd></div>
-                </dl>
-                ${startup ? `<p class="text-sm">Finansowanie startupu: ${formatZl(startup.currentFunding, 0)} / ${formatZl(startup.fundingGoal, 0)} · sponsorzy: ${operator.sponsors.length}</p>` : ''}
-                ${operator.commissionsTotal > 0 ? `<p class="text-xs text-muted">Prowizje łącznie: ${formatZl(operator.commissionsTotal, 0)}</p>` : ''}
-            </article>`;
-        }).join('')}</div>`;
+        <div class="bank-grid">${cards}</div>${typeof renderListingPathPanel === 'function' ? renderListingPathPanel() : ''}`;
+}
+
+function toggleMarketStocksList(marketId) {
+    selectedMarketPreview = selectedMarketPreview === marketId ? null : marketId;
+    if (typeof updateStateModalContent === 'function') updateStateModalContent();
 }
