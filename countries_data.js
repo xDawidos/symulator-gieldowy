@@ -29,3 +29,31 @@ COUNTRY_DEFS.DE = {
         { id: 'WAB', name: 'Wiederaufbaubank', sector: 'Bankowość', subsector: 'Bank komercyjny', kind: 'state', price: 25, desc: 'Państwowy bank rozwoju.' }
     ]
 };
+
+COUNTRY_DEFS.US = {
+    id: 'US', name: 'USA', currency: 'USD', region: 'AM', rho: 0.6, rateMean: 0.04,
+    operator: { id: 'WSE', name: 'Wall Street Exchange', commission: 0.006 },
+    labour: { wages: 1.7, rights: 'liberalne', unionMult: 0.5, shadow: 2, note: 'niska szansa związku' },
+    companies: [
+        { id: 'PLT', name: 'Palant-YR', sector: 'Technologia', subsector: 'Sztuczna inteligencja', kind: 'normal', price: 24, special: 'defense', desc: 'Szpiegostwo dla obronności; kontrakty wywiadowcze rosną z wydatkami na obronność.' },
+        { id: 'GLS', name: 'Glasses', sector: 'Technologia', kind: 'giant', price: 180, desc: 'Wyszukiwarka i reklama.' },
+        { id: 'AMZ', name: 'Amazonka Corp.', sector: ['Usługi', 'Technologia'], kind: 'giant', price: 140, desc: 'E-commerce.' },
+        { id: 'PER', name: 'Pear', sector: ['Technologia', 'Dobra konsumpcyjne'], kind: 'giant', price: 210, special: 'premiere', desc: 'Smartfony; co rok premiera modelu — hit albo flop; lojalni klienci łagodzą spadki.' },
+        { id: 'MCH', name: 'Macrohard', sector: 'Technologia', kind: 'normal', price: 400, desc: 'Oprogramowanie.' },
+        { id: 'FNG', name: 'FingerPrint', sector: ['Media', 'Technologia'], kind: 'normal', price: 320, desc: 'Social media; specjalizacja Rozrywka.' },
+        { id: 'ENV', name: 'Envidia', sector: 'Technologia', subsector: 'Półprzewodniki', kind: 'normal', price: 120, desc: 'Projektant chipów do AI.' },
+        { id: 'TSL', name: 'Teslar Motors', sector: 'Motoryzacja', kind: 'normal', price: 250, special: 'volatile', desc: 'Auta elektryczne; wysoka zmienność.' },
+        { id: 'LAE', name: 'Lotos Aerospace', sector: ['Przemysł', 'Obronność'], kind: 'normal', price: 130, special: 'defense', desc: 'Lotnictwo.' },
+        { id: 'WSC', name: 'Wall Street Corp.', sector: 'Bankowość', subsector: 'Bank inwestycyjny', kind: 'normal', price: 90 },
+        { id: 'TOB', name: 'Texas Oil & Barbecue', sector: 'Energia', kind: 'normal', price: 75 },
+        { id: 'HDP', name: 'Hollywood Dreams Pictures', sector: 'Media', niche: 'Rozrywka', kind: 'normal', price: 60, special: 'season' },
+        { id: 'BPU', name: 'Big Pharma Unlimited', sector: 'Medycyna', niche: 'Farmaceutyki', kind: 'normal', price: 110 },
+        { id: 'CHQ', name: 'ChickQueen', sector: 'Żywność', kind: 'normal', price: 45 },
+        { id: 'CKF', name: 'Coke&Fent', sector: 'Alkohole', subsector: 'Piwowarstwo i napoje', kind: 'normal', price: 65 },
+        { id: 'AMR', name: 'AmeriRail', sector: 'Usługi', kind: 'state', price: 30, desc: 'Państwowa kolej.' },
+        { id: 'USM', name: 'US Mail & Parcel', sector: 'Usługi', kind: 'state', price: 12, desc: 'Państwowa poczta.' },
+        { id: 'TVP', name: 'Tennessee Valley Power', sector: 'Energia', kind: 'state', price: 28, desc: 'Państwowa energetyka.' },
+        { id: 'FFM', name: 'Fannie & Freddie Mortgage', sector: 'Bankowość', subsector: 'Bank komercyjny', kind: 'state', price: 15, desc: 'Państwowe hipoteki.' }
+    ]
+};
+
