@@ -12291,6 +12291,76 @@ group('0.16.2', () => {
         for (const name of ['Motoryzacja', 'Alkohole']) { assert(SECTOR_NAME_PARTS[name] && SECTOR_NAME_WORDS[name], `${name}: nazwy`); assert(!/undefined/.test(generateCompanyName(name)), `${name}: nazwa spółki`); }
         assertEq(SECTOR_NAMES.length, 20, 'dwadzieścia sektorów');
     });
+
+    // --- G6: Niemcy, USA, Czechy ---
+    const REAL_COUNTRIES = () => ['DE', 'US', 'CZ'].filter(id => COUNTRY_DEFS[id]);
+    const COUNTRY_COUNTS = { DE: [13, 3], US: [15, 4], CZ: [8, 1] }; // zwykłe + państwowe (załącznik B)
+
+    test('G6: dane krajów są spójne — liczby spółek z załącznika B, sektory i podsektory z rejestru, waluty, banki w Bankowości, giganci zgodni z gdr.js', () => {
+        assert(REAL_COUNTRIES().length >= 1, 'jakiś kraj zdefiniowany');
+        const ids = new Set();
+        for (const id of REAL_COUNTRIES()) {
+            const def = COUNTRY_DEFS[id], normal = def.companies.filter(c => c.kind !== 'state').length, state = def.companies.filter(c => c.kind === 'state').length;
+            assertEq(`${normal}+${state}`, COUNTRY_COUNTS[id].join('+'), `${id}: liczba spółek`);
+            assert(CURRENCIES[def.currency] && START_COUNTRIES.some(c => c.id === id), `${id}: waluta i kraj startowy`);
+            assert(def.rho >= 0.5 && def.rho <= 0.8 && def.operator.name && def.labour.rights, `${id}: ρ, operator, profil kraju`);
+            for (const c of def.companies) {
+                assert(!ids.has(c.id), `symbol ${c.id} powtórzony`); ids.add(c.id);
+                const sectors = Array.isArray(c.sector) ? c.sector : [c.sector];
+                assert(sectors.every(isCanonicalSector), `${c.name}: sektor ${sectors}`);
+                if (c.subsector) assert(SECTORS[sectors[0]].subsectors?.[c.subsector], `${c.name}: podsektor ${c.subsector}`);
+                if (c.niche) assert(SECTORS[sectors[0]].niches?.[c.niche] || c.niche === 'Rozrywka' || c.niche === 'TV' || c.niche === 'Farmaceutyki', `${c.name}: nisza ${c.niche}`);
+                assert(c.price > 0 && ['giant', 'normal', 'state'].includes(c.kind), `${c.name}: cena i rodzaj`);
+                const giant = FOREIGN_GIANTS.find(g => g.id === c.id);
+                if (giant) { assertEq(giant.country, id, `${c.name}: kraj giganta`); assertEq(giant.price, c.price, `${c.name}: cena giganta`); assertEq(giant.currency, def.currency, `${c.name}: waluta giganta`); assertEq(giant.name, c.name, `${c.name}: nazwa giganta`); assertEq(c.kind, 'giant', `${c.name}: rodzaj giganta`); }
+                if (/Bank|Mortgage|Goldhaus/.test(c.name) && !/Wall Street Corp/.test(c.name)) assertEq(sectors[0], 'Bankowość', `${c.name}: banki w sektorze Bankowość`);
+            }
+            assert(def.companies.filter(c => c.kind === 'giant').every(c => FOREIGN_GIANTS.some(g => g.id === c.id)), `${id}: giganci są w FOREIGN_GIANTS`);
+        }
+    });
+
+    test('G6: dołączenie każdego kraju — spółki, limit 1,5 ×, waluta, niezmienniki; kraj nie dotyka rynku krajowego i NAV gracza bez walut jest bez zmian', () => {
+        for (const id of REAL_COUNTRIES()) {
+            initFxState(); resetGdrState(); startFund();
+            const def = COUNTRY_DEFS[id], domestic = stocks.length, navBefore = getFundAssets();
+            joinCountry(id);
+            assertEq(getCountryIssuers(id).length, def.companies.length, `${id}: spółki po dołączeniu`);
+            assertEq(getCountryLimit(id), Math.ceil(def.companies.length * 1.5), `${id}: limit`);
+            assertEq(stocks.length, domestic, `${id}: rynek krajowy bez zmian`);
+            assertEq(getCountryIssuers(id).filter(i => i.state).length, COUNTRY_COUNTS[id][1], `${id}: spółki państwowe`);
+            assert(getCountryIssuers(id).every(i => i.currency === def.currency && i.price > 0), `${id}: waluta i ceny`);
+            fxRates[def.currency] = (CURRENCIES[def.currency].min + CURRENCIES[def.currency].max) / 2;
+            assertNear(getFundAssets(), navBefore, `${id}: NAV bez walut niezmieniony`, 1e-6);
+            assertEq(checkWorldInvariants().length, 0, `${id}: niezmienniki`);
+        }
+        resetGdrState(); initFxState();
+    });
+
+    test('G6: zapis uproszczony po 6,5 roku z krajami — poniżej 6 KB na spółkę zagraniczną, a wszystkie kraje razem poniżej 3 MB zapisu', () => {
+        initFxState(); resetGdrState(); startFund();
+        const q0 = macro.quarter;
+        for (const id of REAL_COUNTRIES()) joinCountry(id);
+        withSeededRandom(77, () => { for (let w = 0; w < 338; w++) { stepFxRates(); stepCountries(); if (w % 13 === 12) { macro.quarter++; processCountriesQuarterly(); } } });
+        macro.quarter = q0;
+        const n = getForeignIssuerList().filter(i => i.kind === 'share').length, bytes = JSON.stringify(getCountriesSnapshot()).length;
+        addTable('G6: rozmiar zapisu krajów po 6,5 roku', ['Kraje', 'Spółki', 'Bajty', 'B na spółkę'], [[REAL_COUNTRIES().join(', '), n, bytes, Math.round(bytes / n)]]);
+        assert(bytes / n < 6000, `${Math.round(bytes / n)} B na spółkę (cel < 6 KB)`); assert(bytes < 3_000_000, 'poniżej 3 MB');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki po 6,5 roku');
+        resetGdrState(); initFxState();
+    });
+
+    test('G6: spółki specjalne mają po jednym modyfikatorze: obronność podnosi dryf, Pear łagodzi spadki, Pivovar rośnie latem, Teslar jest zmienny', () => {
+        const mk = special => ({ special, sectors: [['Technologia', 1]] }), q0 = macro.quarter;
+        try {
+            assert(getSpecialEffect(mk('defense')).drift > 0, 'obronność');
+            assert(getSpecialEffect(mk('premiere')).bearDamp < 1 && getSpecialEffect(mk('volatile')).volMult > 1, 'lojalni klienci, zmienność');
+            macro.quarter = 2; const lato = getSpecialEffect(mk('summer')).drift; macro.quarter = 4; const zima = getSpecialEffect(mk('summer')).drift;
+            assert(lato > 0 && zima < lato, 'lato podbija sprzedaż');
+            assertEq(getSpecialEffect(mk(null)).drift, 0, 'bez modyfikatora zero');
+        } finally { macro.quarter = q0; }
+        const custom = REAL_COUNTRIES().flatMap(id => COUNTRY_DEFS[id].companies.filter(c => c.special));
+        assert(custom.every(c => ['defense', 'premiere', 'summer', 'volatile', 'season'].includes(c.special)), 'tylko znane modyfikatory');
+    });
     // --- koniec grupy 0.16.2 ---
 });
 

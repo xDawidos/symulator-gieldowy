@@ -139,7 +139,7 @@ function getSpecialEffect(issuer) {
     const quarterInYear = ((macro.quarter - 1) % 4) + 1;
     switch (issuer.special) {
         case 'defense': r.drift = 0.04; break;                       // kontrakty rosną z wydatkami na obronność
-        case 'loyal': r.bearDamp = 0.6; break;                       // lojalni klienci: mniejszy spadek w recesji
+        case 'premiere': r.bearDamp = 0.6; break;                    // Pear: lojalni klienci, mniejszy spadek w recesji (hit albo flop co rok: applySpecialEvents)
         case 'summer': r.drift = quarterInYear >= 2 && quarterInYear <= 3 ? 0.12 : -0.04; break; // upały podbijają sprzedaż
         case 'volatile': r.volMult = 1.6; break;
     }
