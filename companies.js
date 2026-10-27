@@ -4646,14 +4646,16 @@ function initializeCityCompanies() {
         { name: "Stadion Miejski", type: 'Turystyka', budget: 10000 },
         { name: "Szpital Miejski", type: 'Medycyna', budget: 80000 },
         { name: "Dom Kultury", type: 'Usługi', budget: 5000 },
-        { name: "Wodociągi Miejskie", type: 'Usługi', budget: 60000 }
+        { name: "Wodociągi Miejskie", type: 'Usługi', budget: 60000 },
+        { name: "Kantor Miejski", type: 'Usługi', budget: 20000, kantor: true } // 0.16.1: wymienia waluty po własnych kursach, nigdy nie wchodzi na giełdę
     ];
 
     // 0.15.4 P7: na giełdę może wejść tylko część spółek miejskich (3–5 z 8, czyli 38–63%); pozostałe zostają w rękach miasta na zawsze
-    const listing = new Set([...municipalNames.keys()].sort(() => Math.random() - 0.5).slice(0, getRandomIntInRange(3, 5)));
+    const listing = new Set([...municipalNames.keys()].filter(i => !municipalNames[i].kantor).sort(() => Math.random() - 0.5).slice(0, getRandomIntInRange(3, 5)));
     municipalNames.forEach((comp, index) => {
         municipalCompanies.push({
             willList: listing.has(index),
+            ...(comp.kantor ? { kantor: true } : {}),
             id: `mun_${comp.name.substring(0, 3).toUpperCase()}`,
             name: comp.name,
             type: comp.type,

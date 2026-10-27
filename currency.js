@@ -38,10 +38,11 @@ let fxMeans = {};
 let fxHistory = {};
 let fxWeek = 0;
 let playerCashByCurrency = {};
+let kantorOffers = {}; // id dostawcy → { w, s: {waluta: spread}, b: {waluta: przesunięcie kursu} }
 let kantorLog = [];   // ostatnie transakcje gracza w kantorze (do podglądu)
 
 function initFxState() {
-    fxRates = {}; fxMeans = {}; fxHistory = {}; fxWeek = 0; playerCashByCurrency = {}; kantorLog = [];
+    fxRates = {}; fxMeans = {}; fxHistory = {}; fxWeek = 0; playerCashByCurrency = {}; kantorLog = []; kantorOffers = {};
     for (const code of FOREIGN_CURRENCIES) {
         fxRates[code] = CURRENCIES[code].start;
         fxMeans[code] = CURRENCIES[code].start;
@@ -141,22 +142,98 @@ function getKantorQuote(code, amountPln, side = 'buy') {
     return { code, mid, rate, spread, side };
 }
 
+// ---------------------------------------------------------------------------------
+// Dostawcy kursów: kantor gry, banki (internetowy, uniwersalny, międzynarodowy) i Kantor Miejski (spółka miejska poza giełdą).
+// Każdy ustala własny spread i własne przesunięcie kursu (odświeżane co kwartał), więc kursy się różnią — warto porównywać.
+// ---------------------------------------------------------------------------------
+
+/** Zasady dostawców wg typu banku. spread: zakres całkowity (kupno+sprzedaż); minPln: poniżej tej kwoty spread ×2 (bank międzynarodowy
+ *  obsługuje dużych graczy); maxPln: limit jednej transakcji; currencies: oferowane waluty (null = wszystkie). */
+const KANTOR_PROVIDER_RULES = {
+    [BANK_TYPES.INTERNET]: { spread: [0.010, 0.016], maxPln: 300_000, currencies: ['EUR', 'USD', 'CHF', 'CZK', 'SEK'], tag: 'e-bank' },
+    [BANK_TYPES.UNIVERSAL]: { spread: [0.017, 0.026], maxPln: Infinity, currencies: ['EUR', 'USD', 'CHF', 'CZK', 'SEK'], tag: 'bank uniwersalny' },
+    [BANK_TYPES.INTERNATIONAL]: { spread: [0.006, 0.011], minPln: 100_000, maxPln: Infinity, currencies: null, tag: 'bank międzynarodowy', gdrSpreadFactor: 0.5 }
+};
+const MUNICIPAL_KANTOR_RULE = { spread: [0.012, 0.020], maxPln: 30_000, currencies: ['EUR', 'USD', 'CZK'], tag: 'spółka miejska' };
+const KANTOR_OFFER_WEEKS = 13; // oferty dostawców odświeżane co kwartał gry
+
+function getMunicipalKantor() { return typeof municipalCompanies !== 'undefined' ? municipalCompanies.find(c => c.kantor) || null : null; }
+
+/** Lista dostawców: kantor gry (standard, wszystkie waluty), aktywne banki z funkcją kantorową i Kantor Miejski. */
+function getKantorProviders() {
+    const list = [{ id: 'std', name: 'Kantor gry', kind: 'std', tag: 'standard', currencies: null, maxPln: Infinity }];
+    for (const bank of typeof commercialBanks !== 'undefined' ? commercialBanks : []) {
+        const rule = KANTOR_PROVIDER_RULES[bank.type];
+        if (rule && bank.isActive && !bank.isParabank && !bank.frozen) list.push({ id: bank.id, name: bank.name, kind: bank.type === BANK_TYPES.INTERNATIONAL ? 'international' : 'bank', rule, tag: rule.tag, currencies: rule.currencies, maxPln: rule.maxPln });
+    }
+    if (getMunicipalKantor()) list.push({ id: 'mun-kantor', name: getMunicipalKantor().name, kind: 'municipal', rule: MUNICIPAL_KANTOR_RULE, tag: MUNICIPAL_KANTOR_RULE.tag, currencies: MUNICIPAL_KANTOR_RULE.currencies, maxPln: MUNICIPAL_KANTOR_RULE.maxPln });
+    return list;
+}
+
+function getKantorProvider(id) { return getKantorProviders().find(p => p.id === id) || null; }
+
+/** Odświeża oferty dostawcy, gdy są starsze niż kwartał: spread z zakresu typu i przesunięcie kursu ≤ ±30% spreadu. */
+function ensureKantorOffer(provider) {
+    if (provider.kind === 'std') return null;
+    const cur = kantorOffers[provider.id];
+    if (cur && fxWeek - cur.w < KANTOR_OFFER_WEEKS) return cur;
+    const [lo, hi] = provider.rule.spread, offer = { w: fxWeek, s: {}, b: {} };
+    const bankFactor = Math.random(); // cały bank jest raz tańszy, raz droższy
+    for (const code of FOREIGN_CURRENCIES) {
+        const spread = lo + (hi - lo) * Math.min(1, Math.max(0, bankFactor * 0.7 + Math.random() * 0.3));
+        offer.s[code] = Math.round(spread * 1e4) / 1e4;
+        offer.b[code] = Math.round(spread * (Math.random() * 0.6 - 0.3) * 1e4) / 1e4;
+    }
+    kantorOffers[provider.id] = offer;
+    return offer;
+}
+
+/** Notowanie dostawcy: { ok, rate, mid, spread } albo { ok: false, reason }. `mid` to prawdziwy kurs środkowy (do liczenia kosztu spreadu). */
+function getProviderQuote(providerId, code, amountPln, side = 'buy') {
+    const provider = getKantorProvider(providerId || 'std');
+    if (!provider) return { ok: false, reason: 'Ten kantor nie działa.' };
+    if (provider.kind === 'std') return { ok: true, ...getKantorQuote(code, amountPln, side), provider };
+    if (provider.currencies && !provider.currencies.includes(code)) return { ok: false, reason: `${provider.name} nie wymienia ${code}.` };
+    if (Math.abs(amountPln) > provider.maxPln) return { ok: false, reason: `${provider.name}: limit jednej transakcji ${Math.round(provider.maxPln).toLocaleString('pl-PL')} zł.` };
+    const offer = ensureKantorOffer(provider);
+    const mid = getFxRate(code);
+    let spread = offer.s[code];
+    if (provider.rule.minPln && Math.abs(amountPln) < provider.rule.minPln) spread *= 2; // mała kwota w banku międzynarodowym
+    const own = mid * (1 + offer.b[code]);
+    const rate = side === 'buy' ? own * (1 + spread / 2) : own * (1 - spread / 2);
+    return { ok: true, code, mid, rate, spread, side, provider };
+}
+
+/** Wpływ ze spreadu trafia do dostawcy (bank: gotówka banku; Kantor Miejski: budżet spółki), kantor gry — poza obieg. */
+function settleKantorIncome(provider, spreadCost, purpose) {
+    if (!(spreadCost > 0)) return;
+    if (provider.kind === 'bank' || provider.kind === 'international') {
+        const bank = commercialBanks.find(b => b.id === provider.id);
+        if (bank) { bank.cash += spreadCost; if (typeof recordPayment === 'function') recordPayment('player-fund', bank.id, spreadCost, purpose); return; }
+    } else if (provider.kind === 'municipal') {
+        const comp = getMunicipalKantor();
+        if (comp) { comp.budget += spreadCost; if (typeof recordPayment === 'function') recordPayment('player-fund', comp.id, spreadCost, purpose); return; }
+    }
+    if (typeof recordPayment === 'function') recordPayment('player-fund', 'external:kantor', spreadCost, purpose);
+}
+
 function canUseKantor() { return Boolean(typeof playerFund === 'object' && playerFund); }
 
 /** Kupno waluty za złote z gotówki funduszu. Zwraca { ok, foreign, spreadCost } albo { ok: false, reason }. */
-function kantorBuyCurrency(code, amountPln) {
+function kantorBuyCurrency(code, amountPln, providerId = 'std') {
     amountPln = Number(amountPln);
     if (!canUseKantor()) return { ok: false, reason: 'Kantor działa dla funduszu.' };
     if (!FOREIGN_CURRENCIES.includes(code)) return { ok: false, reason: 'Nieznana waluta.' };
     if (!(amountPln >= 1)) return { ok: false, reason: 'Podaj kwotę w złotych.' };
     if (typeof isMarketHalted === 'function' && isMarketHalted()) return { ok: false, reason: 'Handel wstrzymany — zadziałał bezpiecznik giełdowy.' };
     if (amountPln > playerCash + 1e-9) return { ok: false, reason: 'Za mało złotych w gotówce funduszu.' };
-    const quote = getKantorQuote(code, amountPln, 'buy');
+    const quote = getProviderQuote(providerId, code, amountPln, 'buy');
+    if (!quote.ok) return { ok: false, reason: quote.reason };
     const foreign = amountPln / quote.rate;
     const spreadCost = amountPln - foreign * quote.mid;
     playerCash -= amountPln;
     addCurrencyCash('player', code, foreign);
-    if (spreadCost > 0 && typeof recordPayment === 'function') recordPayment('player-fund', 'external:kantor', spreadCost, 'Kantor: spread');
+    settleKantorIncome(quote.provider, spreadCost, 'Kantor: spread');
     if (typeof unlockAcademyEntry === 'function') { unlockAcademyEntry('ryzykoWalutowe'); unlockAcademyEntry('spread'); }
     kantorLog.push({ w: fxWeek, side: 'buy', code, pln: Math.round(amountPln), foreign: Math.round(foreign * 100) / 100, rate: Math.round(quote.rate * 1e5) / 1e5 });
     if (kantorLog.length > 20) kantorLog.shift();
@@ -164,7 +241,7 @@ function kantorBuyCurrency(code, amountPln) {
 }
 
 /** Sprzedaż waluty za złote (kwota w walucie obcej). */
-function kantorSellCurrency(code, amountForeign) {
+function kantorSellCurrency(code, amountForeign, providerId = 'std') {
     amountForeign = Number(amountForeign);
     if (!canUseKantor()) return { ok: false, reason: 'Kantor działa dla funduszu.' };
     if (!FOREIGN_CURRENCIES.includes(code)) return { ok: false, reason: 'Nieznana waluta.' };
@@ -173,13 +250,14 @@ function kantorSellCurrency(code, amountForeign) {
     const have = getCurrencyCash('player', code);
     if (amountForeign > have + 1e-9) return { ok: false, reason: 'Za mało tej waluty.' };
     amountForeign = Math.min(amountForeign, have);
-    const quote = getKantorQuote(code, amountForeign * getFxRate(code), 'sell');
+    const quote = getProviderQuote(providerId, code, amountForeign * getFxRate(code), 'sell');
+    if (!quote.ok) return { ok: false, reason: quote.reason };
     const pln = amountForeign * quote.rate;
     const spreadCost = amountForeign * quote.mid - pln;
     playerCashByCurrency[code] = have - amountForeign;
     if (playerCashByCurrency[code] < 1e-9) delete playerCashByCurrency[code];
     playerCash += pln;
-    if (spreadCost > 0 && typeof recordPayment === 'function') recordPayment('player-fund', 'external:kantor', spreadCost, 'Kantor: spread');
+    settleKantorIncome(quote.provider, spreadCost, 'Kantor: spread');
     kantorLog.push({ w: fxWeek, side: 'sell', code, pln: Math.round(pln), foreign: Math.round(amountForeign * 100) / 100, rate: Math.round(quote.rate * 1e5) / 1e5 });
     if (kantorLog.length > 20) kantorLog.shift();
     return { ok: true, pln, spreadCost, rate: quote.rate };
@@ -218,7 +296,7 @@ function checkCurrencyInvariants() {
 }
 
 function getCurrencySnapshot() {
-    return { rates: fxRates, means: fxMeans, history: fxHistory, week: fxWeek, playerCash: playerCashByCurrency, log: kantorLog };
+    return { rates: fxRates, means: fxMeans, history: fxHistory, week: fxWeek, playerCash: playerCashByCurrency, log: kantorLog, offers: kantorOffers };
 }
 
 function applyCurrencySnapshot(snapshot) {
@@ -237,4 +315,5 @@ function applyCurrencySnapshot(snapshot) {
     }
     fxWeek = Math.max(0, Number(snapshot.week) || 0);
     kantorLog = Array.isArray(snapshot.log) ? snapshot.log.slice(-20) : [];
+    for (const [id, o] of Object.entries(snapshot.offers || {})) if (o && o.s && o.b && Number.isFinite(Number(o.w))) kantorOffers[id] = { w: Number(o.w), s: o.s, b: o.b };
 }

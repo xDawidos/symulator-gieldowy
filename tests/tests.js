@@ -10256,14 +10256,14 @@ group('0.15.4: Poprawki z gry 3 (licznik, okna, wykres, dywidenda, split, limit 
             for (let round = 0; round < 12; round++) {
                 initializeCityCompanies();
                 const willList = municipalCompanies.filter(c => c.willList).length;
-                assert(municipalCompanies.length === 8 && willList >= 3 && willList <= 5, `chętnych do debiutu ${willList} z ${municipalCompanies.length}`);
+                assert(municipalCompanies.length === 9 && municipalCompanies.filter(c => c.kantor).length === 1 && willList >= 3 && willList <= 5, `chętnych do debiutu ${willList} z ${municipalCompanies.length}`);
                 stocks = stocks.filter(s => !s.isMunicipal);
                 Math.random = () => 0.01; // zawsze „szczęśliwy” rok: debiutują wszystkie chętne, niechętne nigdy
                 for (let year = 0; year < 12; year++) runMunicipalCompanyLogic();
                 Math.random = random;
                 assertEq(stocks.filter(s => s.isMunicipal).length, willList, 'na giełdzie tylko chętne spółki miejskie');
-                assertEq(municipalCompanies.length, 8 - willList, 'reszta zostaje miejska');
-                assert(municipalCompanies.every(c => !c.willList), 'w puli miejskiej zostały tylko niechętne');
+                assertEq(municipalCompanies.length, 9 - willList, 'reszta zostaje miejska (z Kantorem Miejskim)');
+                assert(municipalCompanies.every(c => !c.willList) && municipalCompanies.some(c => c.kantor), 'w puli miejskiej zostały tylko niechętne i Kantor Miejski');
             }
         } finally { Math.random = random; }
         for (const file of ['../ui.js', '../index.html', '../events.js']) assert(!(await (await fetch(file, { cache: 'no-store' })).text()).includes('Miasto Gdańsk'), `${file}: właściciel miejski nazywa się „Miasto”`);
@@ -12174,6 +12174,97 @@ group('0.16.1', () => {
         assert(getClientExcess(CLIENT_TYPES.senior, loss) < 0, 'emeryt ze stratą jest niezadowolony mimo lepszego wyniku niż GIG');
         assertNear(getClientExcess(CLIENT_TYPES.institution, { excess: 0.02 }), 0.02, 'bez SIG20 spada do GIG', 1e-12);
         assert(Object.keys(CLIENT_BENCHMARK).every(k => CLIENT_TYPES[k]), 'wszystkie typy w mapie istnieją');
+    });
+
+    // --- G7: banki i Kantor Miejski jako kantory, bank międzynarodowy ---
+    let savedBanks = null;
+    const providersWorld = () => {
+        savedBanks = commercialBanks;
+        commercialBanks = [...commercialBanks, ...[['tNet', BANK_TYPES.INTERNET], ['tUni', BANK_TYPES.UNIVERSAL], ['tUni2', BANK_TYPES.UNIVERSAL], ['tInt', BANK_TYPES.INTERNATIONAL], ['tInt2', BANK_TYPES.INTERNATIONAL], ['tInv', BANK_TYPES.INVESTMENT]]
+            .map(([id, type]) => ({ id, name: 'Bank ' + id, type, cash: 1e7, isActive: true, deposits: {}, loanPortfolio: {}, stockPortfolio: {} }))]; // testowe banki: w grze aktywują się z czasem
+        initFxState(); resetGdrState();
+        fundWithCash(50_000_000);
+        initializeCityCompanies();
+        for (let i = 0; i < 13; i++) stepFxRates();
+    };
+
+    const endProviders = () => { commercialBanks = savedBanks; initFxState(); resetGdrState(); };
+
+    test('G7: dostawcami kursów są kantor gry, banki internetowe, uniwersalne i międzynarodowe oraz Kantor Miejski (spółka miejska, nigdy niewchodząca na giełdę)', () => {
+        providersWorld();
+        const list = getKantorProviders(), kinds = new Set(list.map(p => p.kind));
+        assert(kinds.has('std') && kinds.has('bank') && kinds.has('international') && kinds.has('municipal'), `rodzaje: ${[...kinds]}`);
+        const types = new Set(list.filter(p => p.kind === 'bank' || p.kind === 'international').map(p => commercialBanks.find(b => b.id === p.id).type));
+        assert(types.has(BANK_TYPES.INTERNET) && types.has(BANK_TYPES.UNIVERSAL) && types.has(BANK_TYPES.INTERNATIONAL), 'typy banków');
+        assert(!list.some(p => commercialBanks.find(b => b.id === p.id && (b.type === BANK_TYPES.INVESTMENT || b.type === BANK_TYPES.CORPORATE))), 'banki inwestycyjne i korporacyjne bez kantoru');
+        const kant = getMunicipalKantor();
+        assert(kant && kant.willList === false, 'Kantor Miejski nie wchodzi na giełdę');
+        for (let i = 0; i < 200; i++) runMunicipalCompanyLogic();
+        assert(getMunicipalKantor(), 'Kantor Miejski po 200 próbach debiutów dalej jest spółką miejską');
+        endProviders();
+    });
+
+    test('G7: spready dostawców w zakresach typu, limity i oferowane waluty; kurs własny nie pozwala zarobić na przerzucaniu między kantorami', () => {
+        providersWorld();
+        const intl = getKantorProviders().find(p => p.kind === 'international'), mun = getKantorProviders().find(p => p.kind === 'municipal'), net = getKantorProviders().find(p => p.kind === 'bank' && commercialBanks.find(b => b.id === p.id).type === BANK_TYPES.INTERNET);
+        assert(getProviderQuote(intl.id, 'JPY', 500_000).ok, 'bank międzynarodowy wymienia wszystkie waluty');
+        assert(!getProviderQuote(net.id, 'JPY', 10_000).ok, 'e-bank nie wymienia jena'); assert(!getProviderQuote(net.id, 'EUR', 400_000).ok, 'e-bank: limit transakcji');
+        assert(!getProviderQuote(mun.id, 'EUR', 50_000).ok && !getProviderQuote(mun.id, 'CHF', 5_000).ok && getProviderQuote(mun.id, 'EUR', 5_000).ok, 'Kantor Miejski: limit 30 tys. i tylko EUR/USD/CZK');
+        for (const p of getKantorProviders().filter(x => x.kind !== 'std')) {
+            for (const code of FOREIGN_CURRENCIES) {
+                const q = getProviderQuote(p.id, code, 500_000, 'buy');
+                if (!q.ok) continue;
+                const [lo, hi] = p.rule.spread;
+                assert(q.spread >= lo - 1e-9 && q.spread <= hi + 1e-9, `${p.name} ${code}: spread ${q.spread} poza ${lo}–${hi}`);
+            }
+        }
+        const quotes = [];
+        for (const p of getKantorProviders()) { const b = getProviderQuote(p.id, 'EUR', 20_000, 'buy'), s = getProviderQuote(p.id, 'EUR', 20_000 / 4, 'sell'); if (b.ok && s.ok) quotes.push({ b: b.rate, s: s.rate }); }
+        const bestBuy = Math.min(...quotes.map(q => q.b)), bestSell = Math.max(...quotes.map(q => q.s));
+        assert(bestSell < bestBuy, `bez arbitrażu: najlepsza sprzedaż ${bestSell} < najlepsze kupno ${bestBuy}`);
+        endProviders();
+    });
+
+    test('G7: przy dużej kwocie bank międzynarodowy jest tańszy niż uniwersalny i e-bank; spread z transakcji zasila bank (gotówka banku i księga), nie znika', () => {
+        providersWorld();
+        const avg = fn => { const l = getKantorProviders().filter(fn).map(p => getProviderQuote(p.id, 'EUR', 2_000_000, 'buy')).filter(q => q.ok).map(q => q.spread); return l.reduce((a, b) => a + b, 0) / l.length; };
+        const spreadIntl = avg(p => p.kind === 'international');
+        assert(spreadIntl < avg(p => p.kind === 'bank'), `międzynarodowy ${spreadIntl} < bankowe`);
+        const intl = getKantorProviders().find(p => p.kind === 'international'), bank = commercialBanks.find(b => b.id === intl.id);
+        const cash0 = bank.cash, journal0 = paymentJournal.length, pc0 = playerCash;
+        const r = kantorBuyCurrency('EUR', 1_000_000, intl.id);
+        assert(r.ok, r.reason);
+        assertNear(bank.cash - cash0, r.spreadCost, 'bank dostał spread', 1e-6);
+        assertNear(pc0 - playerCash, 1_000_000, 'złote zeszły', 1e-6);
+        assert(paymentJournal.slice(journal0).some(e => e.to === bank.id && e.purpose === 'Kantor: spread'), 'płatność w księdze');
+        const sell = kantorSellCurrency('EUR', playerCashByCurrency.EUR, intl.id);
+        assert(sell.ok && sell.spreadCost >= 0 && r.spreadCost >= 0, 'koszty nieujemne');
+        assert(!kantorBuyCurrency('JPY', 1000, 'nie-ma').ok, 'nieznany dostawca odrzucony');
+        const mun = getKantorProviders().find(p => p.kind === 'municipal'), kant = getMunicipalKantor(), b0 = kant.budget;
+        assert(kantorBuyCurrency('USD', 10_000, mun.id).ok && kant.budget > b0, 'zysk Kantora Miejskiego zasila spółkę miejską');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+        endProviders();
+    });
+
+    test('G7: kwity GDR przez bank międzynarodowy mają połowę spreadu depozytowego; oferty dostawców zapisują się i wczytują', () => {
+        providersWorld();
+        const issuer = createForeignIssuer('GLS');
+        const intl = getKantorProviders().find(p => p.kind === 'international'), mid = getGdrMid(issuer);
+        assertNear(getGdrQuote(issuer, 'buy', 0.5) / mid - 1, GDR_RULES.depositSpread * 0.5, 'połowa spreadu', 1e-12);
+        const cash0 = playerCash;
+        assert(buyGdr('GLS', 100, intl.id).ok, 'kupno przez bank');
+        assertNear(cash0 - playerCash, 100 * mid * (1 + GDR_RULES.depositSpread * 0.5), 'koszt z połową spreadu', 1e-6);
+        assert(buyGdr('GLS', 100).ok, 'kupno przez depozytariusza'); assert(getGdrHeld(issuer) === 200, 'kwity');
+        getProviderQuote(intl.id, 'EUR', 100_000, 'buy');
+        const offer = JSON.parse(JSON.stringify(kantorOffers[intl.id]));
+        const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+        initFxState(); resetGdrState();
+        assert(applySaveSnapshot(raw).ok, 'wczytanie');
+        assertEq(kantorOffers[intl.id].w, offer.w, 'oferta po wczytaniu'); assertNear(kantorOffers[intl.id].s.EUR, offer.s.EUR, 'spread oferty', 1e-12);
+        const w0 = fxWeek; for (let i = 0; i < KANTOR_OFFER_WEEKS; i++) stepFxRates();
+        getProviderQuote(intl.id, 'EUR', 100_000, 'buy');
+        assert(kantorOffers[intl.id].w > w0, 'oferta odświeżona po kwartale');
+        endProviders();
     });
 });
 

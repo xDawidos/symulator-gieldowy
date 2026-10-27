@@ -47,3 +47,27 @@
 7. **Pułap napływu (G0b):** zaufanie 45–55 w 4/12 gier; odziedziczony wysoki GIG 20 lat (13–14%) nadal nie naprawiony.
 8. **Niezmierzone:** czas kroku (obciążenie maszyny), czas zapisu/wczytania, liczba gigantów w 20 latach (seria 20-letnia bez sondy), zapis gracza przy ×1, G0a: upadki w liniach wg dźwigni, sektory w linii, stopy, misje IR/VIP (zob. `baza_0.16.md`).
 9. **G2 i G0b w jednym commicie** zamiast osobnych G2a–G2d (zmiana weszła razem, testy po całości).
+
+## Zmiany po uwagach użytkownika (2026-10-27)
+
+1. **Flagi i ikony walut:** `flags.js` — flagi 10 krajów i UE oraz ikony 10 walut jako SVG z podpisem (kantor, zakładka Obce, okno wydarzenia); test.
+2. **Indeksy:** TIG5 zastąpiony SIG40, dodany BSIG80. Na starcie tylko GIG i SIG20; **Bank Centralny decyduje** o uruchomieniu SIG40 (od 45 spółek) i BSIG80 (od 90 spółek, po SIG40), 25% szansy na kwartał, decyzja zapisana w `centralBank.indexes`. W 8 grach × 20 lat SIG40 powstał w 8, BSIG80 w 1. Interpretacja polecenia „bank centralny decyduje” — do potwierdzenia.
+3. **Emisja tylko przez kampanię:** emisja ciągła (organiczny napływ, dopłaty, lokaty spółek, zainteresowanie wielkich inwestorów) wycofana z gry (flaga `openSubscriptions` zostaje wewnętrznie dla testów); przycisk „Kampania emisyjna…” prowadzi do panelu Klienci i udziały. **Emisja wymuszona zamieniona w ofertę dużego klienta**: nie dodaje udziałów, gracz może ją przyjąć (kampania na proponowaną liczbę udziałów, ważna 4 kwartały). Starsze zapisy: flaga czyszczona przy wczytaniu.
+4. **Zaufanie:** premia do zaufania za wyprzedzanie innych funduszy w ostatnim okresie (0 w dolnej połowie rankingu, do +8 za 1. miejsce). Punkt odniesienia klienta zależy od typu: emeryt, ostrożny, strachliwy, sknera, funkcjonariusz — zysk w ostatnim czasie (ponad ok. 1,5%), instytucja, inwestor, bogaty — SIG20, reszta — GIG.
+5. **Test SIG20 vs GIG** (20 gier × 6,5 roku i 8 × 20 lat, `fundusz-gig`): SIG20 przewyższa GIG we wszystkich grach (średnio 11,2% vs 8,7% w 6,5 roku, 16,0% vs 13,7% w 20 lat). **Wniosek: SIG20 jako wspólny punkt odniesienia utrudniłby wynik** (o ok. 2,5 pp rocznie), więc zostaje GIG dla większości, a SIG20 tylko dla typów „wymagających”.
+
+**Skutek pomiarowy:** w presecie `fundusz-gig` (bez kampanii) udziały teraz tylko maleją przez umorzenia: −8,2%/rok w 6,5 roku (12 gier), **−2,7%/rok w 20 lat (8 gier, zakres −4,3…−0,3%)** przy zaufaniu medianie 54. Liczby bazy z `baza_0.16.md` dotyczące udziałów i zaufania z `fundusz-gig` są przez to nieaktualne (GIG i marża bez zmian: 13,4%, 21,6% w 20 latach). Czy presety mają robić kampanie, żeby fundusz rósł — do decyzji.
+
+**Niesprawdzone:** wpływ premii za ranking i nowych punktów odniesienia na zaufanie przy graczu aktywnie wybierającym akcje (preset `gracz-akcje` bez nowej serii); wygląd oferty dużego klienta w panelu (bez zrzutu); testy: 733/733.
+
+## Banki jako kantory, Kantor Miejski, bank międzynarodowy (2026-10-27)
+
+- **Dostawcy kursów** (`currency.js`): kantor gry (standard) + aktywne banki trzech typów + **Kantor Miejski** (nowa spółka miejska, `willList: false`, nigdy nie wchodzi na giełdę; zysk ze spreadów zasila jej budżet). Każdy ustala własny spread (zakres wg typu) i własne przesunięcie kursu (≤ ±30% spreadu), odświeżane co kwartał (13 tygodni gry); oferty zapisywane w v16 (pole opcjonalne `currencies.offers`).
+  - **E-bank** (Internetowy): spread 1,0–1,6%, EUR/USD/CHF/CZK/SEK, limit 300 tys. zł na transakcję.
+  - **Bank uniwersalny:** 1,7–2,6%, te same pięć walut, bez limitu.
+  - **Bank międzynarodowy:** 0,6–1,1% od 100 tys. zł (poniżej spread ×2), wszystkie 9 walut; **obsługa spółek zagranicznych:** kwity GDR kupione przez niego mają połowę spreadu depozytowego (0,25%); jego spread zasila gotówkę banku.
+  - **Kantor Miejski:** 1,2–2,0%, EUR/USD/CZK, limit 30 tys. zł.
+  - Banki inwestycyjne, korporacyjne, spółdzielcze i hipoteczne nie mają funkcji kantorowej.
+- **Interfejs:** w oknie Kantor wybór kantoru i tabela porównawcza kursów kupna i sprzedaży z oznaczeniem najlepszego słowem; w zakładce Obce wybór pośrednika dla GDR.
+- **Testy:** 737/737 (4 nowe): skład i typy dostawców, Kantor Miejski poza giełdą, zakresy spreadów i limity, brak arbitrażu między kantorami, tańszy bank międzynarodowy przy dużej kwocie, księgowanie spreadu do banku i spółki miejskiej, GDR przez bank, zapis i odświeżanie ofert.
+- **Pominięte:** typ „międzynarodowy” już istniał (Gildia Handlowa, Bank Klasy Światowej) — dostał funkcje zamiast powstawać jako nowy typ; boty i banki nie handlują same walutą (kursy dostawców to tylko oferta dla gracza); kapitał banków nie jest obciążany kwotą wymiany (tylko dochód ze spreadu); „obsługa spółek z innych państw” ograniczona do GDR (spółki zagraniczne dopiero w 0.16.2); Kantor Miejski dopisany do 8 spółek miejskich (starszy zapis nie zapisuje listy spółek miejskich, więc powstaje przy każdym starcie); brak testów DOM i zrzutu okna w trzech rozdzielczościach.
