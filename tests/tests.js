@@ -12177,6 +12177,112 @@ group('0.16.1', () => {
     });
 });
 
+group('0.16.2', () => {
+    // --- G5: platforma rynku zagranicznego (kraj testowy ZZ, żeby testy nie zależały od danych DE/US/CZ) ---
+    const ZZ = () => ({
+        id: 'ZZ', name: 'Zetland', currency: 'EUR', region: 'EU', rho: 0.7, rateMean: 0.03, operator: { id: 'ZZX', name: 'Zetland Exchange' },
+        labour: { rights: 'ochronne', unionMult: 1.2, shadow: 0, wages: 1.6 },
+        companies: [
+            { id: 'ZA1', name: 'Zeta Auto', sector: 'Przemysł', kind: 'giant', price: 100 }, { id: 'ZB1', name: 'Zeta Bank', sector: 'Bankowość', subsector: 'Bank komercyjny', kind: 'normal', price: 40 },
+            { id: 'ZC1', name: 'Zeta Piwo', sector: 'Żywność', kind: 'normal', price: 30, special: 'summer' }, { id: 'ZD1', name: 'Zeta Koleje', sector: 'Usługi', kind: 'state', price: 20 }
+        ]
+    });
+    const withZZ = fn => {
+        COUNTRY_DEFS.ZZ = ZZ(); initFxState(); resetGdrState();
+        try { return fn(); } finally { delete COUNTRY_DEFS.ZZ; resetGdrState(); initFxState(); }
+    };
+    const startFund = (cash = 5_000_000) => { resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' }); playerCash = cash; };
+
+    test('G5: dołączenie kraju tworzy spółki z definicji, nastrój, stopę i limit 1,5 × liczba startowa; niezmienniki w porządku', () => withZZ(() => {
+        startFund();
+        assert(!isCountryJoined('ZZ') && getCountryIssuers('ZZ').length === 0, 'przed dołączeniem pusto');
+        joinCountry('ZZ');
+        assert(isCountryJoined('ZZ'), 'dołączył'); assertEq(getCountryIssuers('ZZ').length, 4, '4 spółki'); assertEq(getCountryLimit('ZZ'), 6, 'limit ceil(1,5 × 4)');
+        assert(marketRegimes.ZZ && marketRegimes.ZZ.premiumTarget !== undefined, 'nastrój kraju');
+        const zd = foreignIssuers.ZD1; assert(zd.state && zd.statePack === zd.shares / 2 && zd.float === zd.shares - zd.statePack, 'pakiet państwa poza floatem');
+        assertEq(getGdrSymbol(foreignIssuers.ZA1), 'ZA1.ZZ', 'symbol w kraju'); assert(joinCountry('ZZ') === null, 'drugie dołączenie nic nie robi');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+
+    test('G5: ceny spółek zagranicznych w ryzach (> 0, historia ≤ 13), stopa kraju w 0–12%, spółka państwowa nalicza licznik skarbu kraju', () => withZZ(() => {
+        startFund(); joinCountry('ZZ');
+        const q0 = macro.quarter;
+        for (let w = 0; w < 160; w++) { stepFxRates(); stepCountries(); if (w % 13 === 12) { macro.quarter++; processCountriesQuarterly(); } }
+        macro.quarter = q0;
+        for (const i of getCountryIssuers('ZZ')) { assert(i.price > 0 && Number.isFinite(i.price), `cena ${i.id}`); assert(i.history.length <= COUNTRY_RULES.historyWeeks, 'krótka historia'); }
+        const st = countryState.ZZ; assert(st.rate >= 0 && st.rate <= 0.12, 'stopa'); assert(st.treasury > 0, 'skarb kraju rośnie z dywidend państwowych');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki po 160 tyg.');
+    }));
+
+    test('G5: korelacja rynku obcego z GIG mieści się w 0,5–0,8 (ρ = 0,7), a średnia premia kraju jest bliska zera', () => withZZ(() => {
+        startFund(); joinCountry('ZZ');
+        const realGig = getGigIndexValue; let gig = 1000;
+        getGigIndexValue = () => gig;
+        const own = [], home = [];
+        const ids = ['ZA1', 'ZB1', 'ZC1'], index = () => ids.reduce((s, id) => s + Math.log(foreignIssuers[id].price), 0); // stały skład (debiuty nie psują miary)
+        let prevIdx = index(), prevGig = gig, premSum = 0, qs = 0;
+        try {
+            withSeededRandom(4242, () => {
+                for (let w = 1; w <= 1040; w++) {
+                    gig *= Math.exp(0.002 + 0.02 * normalFx()); stepCountries();
+                    if (w % 13 === 0) { macro.quarter++; processCountriesQuarterly(); premSum += marketRegimes.ZZ.premium; qs++; }
+                    const idx = index(); own.push(idx - prevIdx); home.push(Math.log(gig / prevGig)); prevIdx = idx; prevGig = gig;
+                }
+            });
+        } finally { getGigIndexValue = realGig; }
+        const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
+        const mo = mean(own), mh = mean(home);
+        const cov = mean(own.map((v, i) => (v - mo) * (home[i] - mh))), corr = cov / Math.sqrt(mean(own.map(v => (v - mo) ** 2)) * mean(home.map(v => (v - mh) ** 2)));
+        addTable('G5: korelacja tygodniowa', ['Miara', 'Wartość'], [['korelacja (średnia logów cen spółek vs GIG)', corr.toFixed(3)], ['średnia premia kraju', (premSum / qs).toFixed(4)]]);
+        assert(corr >= 0.5 && corr <= 0.85, `korelacja ${corr.toFixed(3)}`);
+        assert(Math.abs(premSum / qs) <= 0.07, `średnia premia ${(premSum / qs).toFixed(3)}`);
+    }));
+
+    test('G5: zapis uproszczony — przyrost na spółkę < 6 KB; zapis i wczytanie zachowują kraj, ceny, posiadaczy i nastrój', () => withZZ(() => {
+        startFund(); joinCountry('ZZ');
+        for (let w = 0; w < 80; w++) stepCountries();
+        foreignIssuers.ZA1.holders.player = 500;
+        const snap = getCountriesSnapshot(), perCompany = JSON.stringify(snap).length / 4;
+        assert(perCompany < 6000, `zapis ${Math.round(perCompany)} B na spółkę (cel < 6 KB)`);
+        const price = foreignIssuers.ZA1.price, prem = marketRegimes.ZZ.premium, rate = countryState.ZZ.rate;
+        const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+        assert(raw.countries && raw.countries.state.ZZ, 'pole countries w zapisie');
+        resetGdrState();
+        const report = applySaveSnapshot(raw);
+        assert(report.ok, `wczytanie: ${(report.errors || []).join('; ')}`);
+        assert(isCountryJoined('ZZ') && getCountryIssuers('ZZ').length === 4, 'kraj i spółki wróciły');
+        assertNear(foreignIssuers.ZA1.price, price, 'cena', 1e-6); assertEq(foreignIssuers.ZA1.holders.player, 500, 'posiadacz'); assertNear(marketRegimes.ZZ.premium, prem, 'premia', 1e-9); assertNear(countryState.ZZ.rate, rate, 'stopa', 1e-9);
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki po wczytaniu');
+    }));
+
+    test('G5: zapis bez pola countries (v16 z 0.16.1) wczytuje się bez krajów; zapis kraju spoza kodu jest pomijany', () => withZZ(() => {
+        startFund(); joinCountry('ZZ');
+        const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+        const old = JSON.parse(JSON.stringify(raw)); delete old.countries;
+        assert(applySaveSnapshot(old).ok, 'zapis bez countries'); assertEq(getJoinedCountries().length, 0, 'brak krajów');
+        raw.countries.state.XX = { joinedQ: 1, rate: 0.03 };
+        assert(applySaveSnapshot(raw).ok, 'zapis z nieznanym krajem'); assert(!isCountryJoined('XX'), 'nieznany kraj pominięty');
+    }));
+
+    test('G5: debiuty krajowe tylko do limitu kraju; po dojściu do limitu nie przybywa spółek', () => withZZ(() => {
+        startFund(); joinCountry('ZZ'); const q0 = macro.quarter;
+        const realRandom = Math.random; Math.random = () => 0.0001;
+        try { for (let k = 0; k < 20; k++) { macro.quarter += 5; maybeCountryDebut('ZZ'); } } finally { Math.random = realRandom; macro.quarter = q0; }
+        assertEq(getCountryIssuers('ZZ').length, getCountryLimit('ZZ'), 'dokładnie limit');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki z debiutami');
+    }));
+
+    test('G5: GDR giganta zamienia się 1:1 w akcje po dołączeniu jego kraju (posiadacz zachowuje liczbę)', () => withZZ(() => {
+        startFund();
+        COUNTRY_DEFS.ZZ.companies[0].id = 'GLS'; // gigant, który ma już kwit
+        const issuer = createForeignIssuer('GLS'); issuer.holders.player = 321;
+        joinCountry('ZZ');
+        assertEq(foreignIssuers.GLS.kind, 'share', 'zamiana w akcję'); assertEq(foreignIssuers.GLS.holders.player, 321, '1:1');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki po zamianie');
+    }));
+    // --- koniec grupy 0.16.2 ---
+});
+
 async function runAllTests() {
     const results = document.getElementById('results');
     let passed = 0;

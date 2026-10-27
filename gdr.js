@@ -39,9 +39,9 @@ let giantEventState = { lastQ: -99, count: 0, gdr: 0, takeover: 0 };
 let giantEventLog = [];       // { q, kind, giant | symbol, ... } — ostatnie zdarzenia
 let pendingGiantEvent = null; // wynik do pokazania w oknie (UI w ui.js; bez UI zostaje w dzienniku)
 
-function resetGdrState() { foreignIssuers = {}; giantEventState = { lastQ: -99, count: 0, gdr: 0, takeover: 0 }; giantEventLog = []; pendingGiantEvent = null; }
+function resetGdrState() { foreignIssuers = {}; giantEventState = { lastQ: -99, count: 0, gdr: 0, takeover: 0 }; giantEventLog = []; pendingGiantEvent = null; if (typeof resetCountriesState === 'function') resetCountriesState(); }
 
-function getGdrSymbol(issuer) { return `${issuer.id}.GDR`; }
+function getGdrSymbol(issuer) { return issuer.kind === 'share' ? `${issuer.id}.${issuer.country}` : `${issuer.id}.GDR`; }
 function getForeignIssuerList() { return Object.values(foreignIssuers); }
 
 function createForeignIssuer(giantId) {
@@ -70,6 +70,7 @@ function stepForeignIssuers() {
     const phase = typeof getMarketRegime === 'function' ? getMarketRegime('home')?.phase : 'bull';
     const bear = ['bear', 'capitulation'].includes(phase) || (typeof isCrisisActive === 'function' && isCrisisActive());
     for (const issuer of Object.values(foreignIssuers)) {
+        if (issuer.kind === 'share') continue; // spółki krajów dołączonych: countries.js
         const beta = (typeof SECTORS === 'object' && SECTORS[issuer.sector]?.profile?.beta) || 1;
         const sigma = GDR_RULES.volScale * beta / Math.sqrt(52);
         const drift = (bear ? GDR_RULES.bearDriftYear : GDR_RULES.driftYear) / 52;
@@ -211,7 +212,7 @@ function checkGdrInvariants() {
     return problems;
 }
 
-function getGdrSnapshot() { return { issuers: foreignIssuers, events: giantEventState, log: giantEventLog }; }
+function getGdrSnapshot() { return { issuers: Object.fromEntries(Object.entries(foreignIssuers).filter(([, i]) => i.kind !== 'share')), events: giantEventState, log: giantEventLog }; } // akcje krajów: countries.js
 
 function applyGdrSnapshot(snapshot) {
     resetGdrState();
