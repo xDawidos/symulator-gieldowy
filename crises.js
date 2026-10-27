@@ -576,7 +576,7 @@ function finishCrisisLine() {
     const gigDrop = line.gigStart > 0 ? line.gigMin / line.gigStart - 1 : 0;
     const gigChange = line.gigStart > 0 ? gigNow / line.gigStart - 1 : 0;
     const fundChange = line.fundStart > 0 ? fundNow / line.fundStart - 1 : 0;
-    const result = { id: line.id, startQ: line.startQuarter, endQ: crisisQuarter(), burstQ: line.burstQ, gigDrop, gigChange, fundChange, bankrupted: [...line.bankrupted], rescued: [...line.rescued], techShare: line.techShare, trust: playerFund?.trust ?? 0, forced: line.forced, quartersToRecover: line.recoverQ ?? null };
+    const result = { id: line.id, origin: line.origin || 'PL', delayQ: line.delayQ ?? 0, startQ: line.startQuarter, endQ: crisisQuarter(), burstQ: line.burstQ, gigDrop, gigChange, fundChange, bankrupted: [...line.bankrupted], rescued: [...line.rescued], techShare: line.techShare, trust: playerFund?.trust ?? 0, forced: line.forced, quartersToRecover: line.recoverQ ?? null };
     crisisState.history.push(result);
     crisisState.lastEventQ = crisisQuarter();
     if (typeof addMail === 'function') {
