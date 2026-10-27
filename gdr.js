@@ -54,7 +54,15 @@ function createForeignIssuer(giantId) {
 
 /** Cena obca × kurs: środek kwitu w złotych. */
 function getGdrMid(issuer) { return toPln(issuer.price, issuer.currency); }
-function getGdrQuote(issuer, side = 'buy') { const mid = getGdrMid(issuer); return side === 'buy' ? mid * (1 + GDR_RULES.depositSpread) : mid * (1 - GDR_RULES.depositSpread); }
+/** Cena kwitu; `spreadFactor` < 1 przy obsłudze przez bank międzynarodowy (tańszy depozyt). */
+function getGdrQuote(issuer, side = 'buy', spreadFactor = 1) { const mid = getGdrMid(issuer), s = GDR_RULES.depositSpread * spreadFactor; return side === 'buy' ? mid * (1 + s) : mid * (1 - s); }
+
+/** Pośrednik GDR: 'std' (depozytariusz) albo bank międzynarodowy (obsługa spółek z innych państw: połowa spreadu depozytowego). */
+function resolveGdrBroker(providerId) {
+    const provider = providerId && providerId !== 'std' && typeof getKantorProvider === 'function' ? getKantorProvider(providerId) : null;
+    if (provider && provider.kind === 'international') return { provider, factor: provider.rule.gdrSpreadFactor || 0.5 };
+    return { provider: null, factor: 1 };
+}
 function getGdrHeld(issuer, holder = 'player') { return Number(issuer.holders?.[holder]) || 0; }
 function getGdrFree(issuer) { return issuer.float - Object.values(issuer.holders || {}).reduce((s, v) => s + (Number(v) || 0), 0); }
 
@@ -79,7 +87,7 @@ function stepForeignIssuers() {
     }
 }
 
-function buyGdr(giantId, quantity) {
+function buyGdr(giantId, quantity, providerId = 'std') {
     const issuer = foreignIssuers[giantId];
     quantity = Math.floor(Number(quantity));
     if (!issuer) return { ok: false, reason: 'Ten kwit nie jest notowany.' };
@@ -87,28 +95,32 @@ function buyGdr(giantId, quantity) {
     if (typeof playerFund !== 'object' || !playerFund) return { ok: false, reason: 'Kwity kupuje fundusz.' };
     if (typeof isMarketHalted === 'function' && isMarketHalted()) return { ok: false, reason: 'Handel wstrzymany — zadziałał bezpiecznik giełdowy.' };
     if (quantity > getGdrFree(issuer)) return { ok: false, reason: 'Nie ma tylu kwitów w obrocie.' };
-    const cost = quantity * getGdrQuote(issuer, 'buy');
+    const broker = resolveGdrBroker(providerId);
+    const cost = quantity * getGdrQuote(issuer, 'buy', broker.factor);
     if (cost > playerCash + 1e-9) return { ok: false, reason: 'Za mało gotówki funduszu.' };
     const spreadCost = cost - quantity * getGdrMid(issuer);
     playerCash -= cost;
     issuer.holders.player = getGdrHeld(issuer) + quantity;
-    if (spreadCost > 0) recordPayment('player-fund', 'external:depozytariusz', spreadCost, 'GDR: spread depozytowy');
+    if (broker.provider) settleKantorIncome(broker.provider, spreadCost, 'GDR: obsługa banku międzynarodowego');
+    else if (spreadCost > 0) recordPayment('player-fund', 'external:depozytariusz', spreadCost, 'GDR: spread depozytowy');
     return { ok: true, cost };
 }
 
-function sellGdr(giantId, quantity) {
+function sellGdr(giantId, quantity, providerId = 'std') {
     const issuer = foreignIssuers[giantId];
     quantity = Math.floor(Number(quantity));
     if (!issuer || !(quantity > 0)) return { ok: false, reason: 'Podaj liczbę kwitów.' };
     if (typeof isMarketHalted === 'function' && isMarketHalted()) return { ok: false, reason: 'Handel wstrzymany — zadziałał bezpiecznik giełdowy.' };
     const held = getGdrHeld(issuer);
     if (quantity > held) return { ok: false, reason: 'Za mało kwitów.' };
-    const proceeds = quantity * getGdrQuote(issuer, 'sell');
+    const broker = resolveGdrBroker(providerId);
+    const proceeds = quantity * getGdrQuote(issuer, 'sell', broker.factor);
     const spreadCost = quantity * getGdrMid(issuer) - proceeds;
     issuer.holders.player = held - quantity;
     if (issuer.holders.player <= 0) delete issuer.holders.player;
     playerCash += proceeds;
-    if (spreadCost > 0) recordPayment('player-fund', 'external:depozytariusz', spreadCost, 'GDR: spread depozytowy');
+    if (broker.provider) settleKantorIncome(broker.provider, spreadCost, 'GDR: obsługa banku międzynarodowego');
+    else if (spreadCost > 0) recordPayment('player-fund', 'external:depozytariusz', spreadCost, 'GDR: spread depozytowy');
     return { ok: true, proceeds };
 }
 

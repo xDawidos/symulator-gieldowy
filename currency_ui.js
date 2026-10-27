@@ -7,6 +7,8 @@
 let kantorSelected = 'EUR';
 let kantorTab = 'rates';
 let obceFilter = { country: '', currency: '' };
+let kantorProviderId = 'std';
+let gdrBrokerId = 'std';
 
 const COUNTRY_NAMES = { PL: 'Polska', DE: 'Niemcy', US: 'USA', CZ: 'Czechy', SE: 'Szwecja', CH: 'Szwajcaria', JP: 'Japonia', CN: 'Chiny', IN: 'Indie', TW: 'Tajwan', FR: 'Francja' };
 
@@ -88,25 +90,48 @@ function renderRatesTab() {
         ${renderFxChart(code)}
         <p class="text-sm text-muted">Kurs porusza się w widełkach ${fmtRate(def.min, code)}–${fmtRate(def.max, code)} zł i wraca do wolno zmieniającej się średniej. ${def.safe ? 'Waluta „bezpiecznej przystani”: w kryzysie zwykle drożeje.' : 'W kryzysie zwykle słabnie wobec bezpiecznych przystani (USD, CHF, JPY).'}</p>
         <div class="bank-card mt-3"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('moneta', 20)}</span><div><h4>Wymiana ${code}</h4><span class="bank-card-type">kupno i sprzedaż po kursie kantoru</span></div></header>
-            <div class="kantor-form"><label for="kantor-amount" class="text-sm">Kwota (złote przy kupnie, jednostki ${code} przy sprzedaży)</label>
+            <div class="kantor-form"><label for="kantor-provider" class="text-sm">Kantor <select id="kantor-provider" onchange="setKantorProvider(this.value)">${renderProviderOptions(kantorProviderId, code)}</select></label>
+            <label for="kantor-amount" class="text-sm">Kwota (złote przy kupnie, jednostki ${code} przy sprzedaży)</label>
             <input id="kantor-amount" type="number" min="1" step="any" value="${Math.max(1000, Math.round(Math.min(playerCash, 50000) / 1000) * 1000)}" oninput="updateKantorQuote()" aria-describedby="kantor-quote">
             <div class="btn-row"><button class="btn-primary" onclick="kantorUiBuy()">Kup ${code} za PLN</button><button class="btn-ghost" onclick="kantorUiSell()">Sprzedaj ${code}</button></div></div>
-            <p id="kantor-quote" class="text-sm" aria-live="polite"></p></div>`;
+            <p id="kantor-quote" class="text-sm" aria-live="polite"></p></div>
+        <h4 class="mt-3">Porównanie kursów ${code}</h4><div id="kantor-compare"></div>
+        <p class="text-sm text-muted">Banki (e-bank, uniwersalny, międzynarodowy) i Kantor Miejski ustalają własne kursy i spready, odświeżane co kwartał. Bank międzynarodowy jest najtańszy przy dużych kwotach (od 100 tys. zł) i wymienia wszystkie waluty; e-bank ma limit transakcji, Kantor Miejski wymienia tylko EUR, USD i CZK do 30 tys. zł, a jego zysk zasila miasto.</p>`;
+}
+
+function providerLabel(p) { return `${p.name} (${p.tag})`; }
+function renderProviderOptions(selected, code) {
+    return getKantorProviders().map(p => `<option value="${escapeHtml(p.id)}" ${p.id === selected ? 'selected' : ''}>${escapeHtml(providerLabel(p))}${p.currencies && !p.currencies.includes(code) ? ' — bez ' + code : ''}</option>`).join('');
+}
+function setKantorProvider(id) { kantorProviderId = id; updateKantorQuote(); }
+
+/** Tabela porównawcza dostawców dla wybranej waluty i kwoty (najlepszy kurs kupna i sprzedaży oznaczony słowem). */
+function renderKantorCompare(code, amount) {
+    const rows = getKantorProviders().map(p => ({ p, buy: getProviderQuote(p.id, code, amount, 'buy'), sell: getProviderQuote(p.id, code, amount, 'sell') })); // kwota porównania w złotych dla obu stron
+    const okBuy = rows.filter(r => r.buy.ok).map(r => r.buy.rate), okSell = rows.filter(r => r.sell.ok).map(r => r.sell.rate);
+    const bestBuy = Math.min(...okBuy), bestSell = Math.max(...okSell);
+    const body = rows.map(r => r.buy.ok && r.sell.ok
+        ? `<tr><td>${escapeHtml(r.p.name)} <span class="text-muted text-xs">${escapeHtml(r.p.tag)}</span></td><td class="text-right">${fmtRate(r.buy.rate, code)} zł${r.buy.rate === bestBuy ? ' · najtaniej' : ''}</td><td class="text-right">${fmtRate(r.sell.rate, code)} zł${r.sell.rate === bestSell ? ' · najdrożej' : ''}</td><td class="text-right">${formatNumberPl(r.buy.spread * 100, 2)}%</td></tr>`
+        : `<tr class="text-muted"><td>${escapeHtml(r.p.name)} <span class="text-xs">${escapeHtml(r.p.tag)}</span></td><td colspan="3">${escapeHtml((r.buy.ok ? r.sell.reason : r.buy.reason) || 'niedostępny')}</td></tr>`).join('');
+    return `<table class="asset-mini-table w-full"><thead><tr><th>Kantor</th><th class="text-right">Kupno ${code} (płacisz)</th><th class="text-right">Sprzedaż (dostajesz)</th><th class="text-right">Spread</th></tr></thead><tbody>${body}</tbody></table>`;
 }
 
 function updateKantorQuote() {
     const el = document.getElementById('kantor-quote'), input = document.getElementById('kantor-amount');
     if (!el || !input) return;
     const code = kantorSelected, amount = Number(input.value) || 0;
-    const buy = getKantorQuote(code, amount, 'buy'), sell = getKantorQuote(code, amount * getFxRate(code), 'sell');
-    const spread = getKantorSpread(amount);
+    const cmp = document.getElementById('kantor-compare');
+    if (cmp) cmp.innerHTML = renderKantorCompare(code, amount);
+    const buy = getProviderQuote(kantorProviderId, code, amount, 'buy'), sell = getProviderQuote(kantorProviderId, code, amount * getFxRate(code), 'sell');
+    if (!buy.ok || !sell.ok) { el.textContent = (buy.ok ? sell.reason : buy.reason) || 'Ten kantor jest niedostępny.'; return; }
+    const spread = buy.spread;
     el.innerHTML = `Kupno: ${fmtRate(buy.rate, code)} zł za 1 ${code} (${formatNumberPl(amount / buy.rate, 2)} ${code} za ${formatZl(amount, 0)}). Sprzedaż: ${fmtRate(sell.rate, code)} zł. `
         + `Spread kantoru ${formatNumberPl(spread * 100, 1)}% — tyle tracisz na kupnie i sprzedaży razem, więc kurs musi się ruszyć o więcej, żeby to się opłaciło.`;
 }
 
 function kantorUiBuy() {
     const amount = Number(document.getElementById('kantor-amount')?.value) || 0;
-    const r = kantorBuyCurrency(kantorSelected, amount);
+    const r = kantorBuyCurrency(kantorSelected, amount, kantorProviderId);
     showToast(r.ok ? `Kupiono ${formatNumberPl(r.foreign, 2)} ${kantorSelected} za ${formatZl(amount, 0)} (spread ${formatZl(r.spreadCost, 0)}).` : r.reason, r.ok ? 'success' : 'warning');
     renderKantor();
     if (typeof updateUI === 'function') updateUI();
@@ -115,7 +140,7 @@ function kantorUiBuy() {
 /** Sprzedaż: kwota w oknie to liczba jednostek waluty (nie złotych). */
 function kantorUiSell() {
     const amount = Number(document.getElementById('kantor-amount')?.value) || 0;
-    const r = kantorSellCurrency(kantorSelected, amount);
+    const r = kantorSellCurrency(kantorSelected, amount, kantorProviderId);
     showToast(r.ok ? `Sprzedano ${formatNumberPl(amount, 2)} ${kantorSelected} za ${formatZl(r.pln, 0)} (spread ${formatZl(r.spreadCost, 0)}).` : r.reason, r.ok ? 'success' : 'warning');
     renderKantor();
     if (typeof updateUI === 'function') updateUI();
@@ -140,7 +165,9 @@ function renderForeignTab() {
             <td class="text-right"><input type="number" min="1" step="1" value="100" id="gdr-qty-${i.id}" aria-label="Liczba kwitów ${escapeHtml(i.name)}" style="width:5.5em">
                 <button class="btn-primary btn-sm" onclick="gdrUiTrade('${i.id}','buy')">Kup</button> <button class="btn-ghost btn-sm" onclick="gdrUiTrade('${i.id}','sell')" ${held > 0 ? '' : 'disabled'}>Sprzedaj</button></td></tr>`;
     }).join('');
-    return `<div class="btn-row"><label class="text-sm">Kraj <select onchange="setObceFilter('country', this.value)">${opts(countries, obceFilter.country, 'wszystkie')}</select></label>
+    const brokers = getKantorProviders().filter(p => p.kind === 'international');
+    const brokerSel = `<label class="text-sm">Pośrednik <select onchange="gdrBrokerId = this.value">${`<option value="std">Depozytariusz (spread ${formatNumberPl(GDR_RULES.depositSpread * 100, 2)}%)</option>` + brokers.map(b => `<option value="${escapeHtml(b.id)}" ${b.id === gdrBrokerId ? 'selected' : ''}>${escapeHtml(b.name)} (połowa spreadu)</option>`).join('')}</select></label>`;
+    return `<div class="btn-row">${brokerSel}<label class="text-sm">Kraj <select onchange="setObceFilter('country', this.value)">${opts(countries, obceFilter.country, 'wszystkie')}</select></label>
         <label class="text-sm">Waluta <select onchange="setObceFilter('currency', this.value)">${`<option value="">wszystkie</option>` + currencies.map(c => `<option value="${c}" ${c === obceFilter.currency ? 'selected' : ''}>${c}</option>`).join('')}</select></label></div>
         ${issuers.length ? `<table class="asset-mini-table w-full mt-3"><thead><tr><th>Kwit</th><th>Kraj · waluta</th><th class="text-right">Cena obca</th><th class="text-right">Cena kwitu w PLN</th><th class="text-right">Twoje kwity</th><th class="text-right">Zlecenie</th></tr></thead><tbody>${rows || '<tr><td colspan="6" class="text-muted">Brak kwitów dla tego filtra.</td></tr>'}</tbody></table>`
             : '<p class="text-muted mt-3">Żaden zagraniczny gigant nie jest jeszcze notowany. Pojawi się w wydarzeniu „Gigant wkracza na scenę” (średnio raz na 2 lata).</p>'}
@@ -149,7 +176,7 @@ function renderForeignTab() {
 
 function gdrUiTrade(id, side) {
     const qty = Number(document.getElementById(`gdr-qty-${id}`)?.value) || 0;
-    const r = side === 'buy' ? buyGdr(id, qty) : sellGdr(id, qty);
+    const r = side === 'buy' ? buyGdr(id, qty, gdrBrokerId) : sellGdr(id, qty, gdrBrokerId);
     showToast(r.ok ? `${side === 'buy' ? 'Kupiono' : 'Sprzedano'} ${qty} kwitów ${id}.GDR za ${formatZl(r.cost ?? r.proceeds, 0)}.` : r.reason, r.ok ? 'success' : 'warning');
     renderKantor();
     if (typeof updateUI === 'function') updateUI();
