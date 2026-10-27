@@ -11,7 +11,7 @@ const FOREIGN_GIANTS = [
     { id: 'GLS', name: 'Glasses', country: 'US', currency: 'USD', sector: 'Technologia', price: 180 },
     { id: 'AMZ', name: 'Amazonka Corp.', country: 'US', currency: 'USD', sector: 'Usługi', price: 140 },
     { id: 'PER', name: 'Pear', country: 'US', currency: 'USD', sector: 'Technologia', price: 210 },
-    { id: 'VWA', name: 'VolksDeutsch Auto', country: 'DE', currency: 'EUR', sector: 'Przemysł', price: 95 },
+    { id: 'VWA', name: 'VolksDeutsch Auto', country: 'DE', currency: 'EUR', sector: 'Motoryzacja', price: 95 },
     { id: 'CRH', name: 'Chemiefabrik Rhein AG', country: 'DE', currency: 'EUR', sector: 'Chemia', price: 70 },
     { id: 'TYM', name: 'Toyotomi Motors', country: 'JP', currency: 'JPY', sector: 'Przemysł', price: 2800 },
     { id: 'ALB', name: 'Alibaka Group', country: 'CN', currency: 'CNY', sector: 'Technologia', price: 90 },

@@ -5313,10 +5313,10 @@ group('0.14 T1a: rejestr sektorów i porządek nazw', () => {
     const isClean = stock => (stock.sector || []).every(isCanonicalSector) && !(stock.sector || []).some(name => LEGACY_SECTOR_NAMES.includes(name)) && isValidSegmentList(stock.segments);
 
     test('rejestr: 18 sektorów w 8 grupach, bez starych nazw i bez „common”', () => {
-        assert(SECTOR_NAMES.length === 18 && new Set(SECTOR_NAMES).size === 18 && SECTOR_GROUPS.length === 8, `sektory ${SECTOR_NAMES.length}`);
+        assert(SECTOR_NAMES.length === 20 && new Set(SECTOR_NAMES).size === 20 && SECTOR_GROUPS.length === 8, `sektory ${SECTOR_NAMES.length}`);
         assert(SECTOR_NAMES.every(name => SECTORS[name].group && SECTORS[name].icon && SECTORS[name].profile), 'grupa, ikona, profil');
         assert(!LEGACY_SECTOR_NAMES.some(isCanonicalSector), 'brak starych nazw w rejestrze');
-        assert(Object.keys(SECTOR_PROFILES).length === 18, 'profile tylko dla sektorów z rejestru');
+        assert(Object.keys(SECTOR_PROFILES).length === 20, 'profile tylko dla sektorów z rejestru');
     });
 
     test('mapowanie starych nazw na sektor i podsektor', () => {
@@ -7801,7 +7801,8 @@ group('0.15 Poprawki i Program Policyjny: Windykator, raporty, rynki i Policja',
         world();
         oversight.police.level = 5;
 
-        // 1. Sprawdź spawnowanie Komendanta Jakuba
+        // 1. Sprawdź spawnowanie Komendanta Jakuba (po poprzednich testach mógł już istnieć z innym kapitałem)
+        const stale = aiCompetitors.findIndex(a => a.id === 'komendant_jakub'); if (stale >= 0) aiCompetitors.splice(stale, 1);
         const jakub = checkPoliceChiefSpawn();
         assert(jakub !== null, 'Komendant Jakub został utworzony');
         assert(jakub.name === 'Komendant Jakub', 'poprawne imię bota');
@@ -12280,6 +12281,16 @@ group('0.16.2', () => {
         assertEq(foreignIssuers.GLS.kind, 'share', 'zamiana w akcję'); assertEq(foreignIssuers.GLS.holders.player, 321, '1:1');
         assertEq(checkWorldInvariants().length, 0, 'niezmienniki po zamianie');
     }));
+
+    // --- G6a: nowe sektory ---
+    test('G6a: Motoryzacja (grupa Przemysł i surowce) i Alkohole (Konsumpcja, podsektor Piwowarstwo i napoje) są w rejestrze z profilem, nazwami i elastycznością popytu', () => {
+        assertEq(SECTORS['Motoryzacja'].group, 'industry', 'Motoryzacja w Przemyśle i surowcach'); assertEq(SECTORS['Alkohole'].group, 'consumer', 'Alkohole w Konsumpcji');
+        assert(SECTORS['Alkohole'].subsectors['Piwowarstwo i napoje'], 'podsektor Piwowarstwo i napoje');
+        assert(SECTORS['Alkohole'].profile.beta < 1 && SECTORS['Motoryzacja'].profile.beta > 1, 'Alkohole defensywne, Motoryzacja cykliczna');
+        assertEq(DEMAND_ELASTICITY['Alkohole'], 0.4, 'elastyczność Alkoholi z załącznika C'); assertEq(DEMAND_ELASTICITY['Motoryzacja'], 1.3, 'elastyczność Motoryzacji');
+        for (const name of ['Motoryzacja', 'Alkohole']) { assert(SECTOR_NAME_PARTS[name] && SECTOR_NAME_WORDS[name], `${name}: nazwy`); assert(!/undefined/.test(generateCompanyName(name)), `${name}: nazwa spółki`); }
+        assertEq(SECTOR_NAMES.length, 20, 'dwadzieścia sektorów');
+    });
     // --- koniec grupy 0.16.2 ---
 });
 

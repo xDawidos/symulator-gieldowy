@@ -954,6 +954,8 @@ const SECTOR_NAME_PARTS = {
     'Badania': { prefixes: ['Inno', 'Lab', 'Scien', 'Proto', 'Expe', 'Nova', 'Delta'], suffixes: ['Lab', 'Research', 'Tech', 'Instytut', 'Probe', 'Insight', 'Metric'] },
     'Technologia': { prefixes: [...techPrefixes, 'Byte', 'Cloud'], suffixes: [...techSuffixes, 'Soft', 'Logic'] },
     'Nieruchomości': { prefixes: realtyPrefixes, suffixes: realtySuffixes },
+    'Motoryzacja': { prefixes: ['Auto', 'Moto', 'Silnik', 'Koła', 'Turbo', 'Felga', 'Pojazd'], suffixes: ['Motors', 'Auto', 'Drive', 'Moto', 'Cars', 'Wheels', 'Silnik'] },
+    'Alkohole': { prefixes: ['Piwo', 'Słód', 'Chmiel', 'Gorzel', 'Browar', 'Wino', 'Destyl'], suffixes: ['Browar', 'Piwo', 'Spirits', 'Destylarnia', 'Brew', 'Winnica', 'Likier'] },
     'Obronność': { prefixes: ['Arma', 'Tarcza', 'Grom', 'Husar', 'Bastion', 'Stal', 'Orzeł'], suffixes: ['Def', 'Guard', 'Shield', 'Arms', 'Tech', 'Systemy', 'Ochrona'] },
     'Usługi': { prefixes: servicesPrefixes, suffixes: servicesSuffixes }
 };
