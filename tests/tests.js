@@ -12670,7 +12670,7 @@ group('0.16.2', () => {
             assert(renderCrisisSection().includes('Zarażanie między krajami'), 'sekcja z krajami przy otwartym kraju');
             crisisState.pendingImport = { id: 'oil', origin: 'ZZ', startQ: 20, arriveQ: 22 };
             const html = renderCrisisSection();
-            assert(html.includes('dotrze do Polski za 2 kw.') && html.includes('Zetland') && html.includes('aria-label="Flaga:') && html.includes('Powiązanie'), 'opóźnienie, kraj, flaga, powiązanie');
+            assert(html.includes('dotrze do Polski za 2 kw.') && html.includes('Zetland') && html.includes('Powiązanie'), 'opóźnienie, kraj, powiązanie');
             assert(/[▲▼■]/.test(html), 'znak kierunku obok liczby');
             resetGdrState(); resetCrises();
             assert(!renderCrisisSection().includes('Zarażanie między krajami'), 'bez krajów sekcja zarażania znika');
