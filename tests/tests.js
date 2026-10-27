@@ -12479,6 +12479,71 @@ group('0.16.2', () => {
             assertEq(flights, reduced ? 0 : 1, 'zdarzenie animacji lotu tylko bez ruchu zredukowanego');
         } finally { host.remove(); }
     }));
+
+    // --- G8: boty zagraniczne ---
+    const withBots = fn => {
+        initFxState(); resetGdrState(); resetForeignBots(); startFund(10_000_000);
+        try { return fn(); } finally { resetForeignBots(); resetGdrState(); initFxState(); }
+    };
+    const botsReal = () => ['DE', 'US', 'CZ'].filter(id => COUNTRY_DEFS[id]);
+
+    test('G8: boty zagraniczne pojawiają się dopiero po dołączeniu swojego kraju i mają gotówkę w walutach, nie w złotych', () => withBots(() => {
+        assertEq(getForeignBots().length, 0, 'przed dołączeniem żadnego');
+        joinCountry('US');
+        const santos = aiCompetitors.find(a => a.id === 'fb_santos');
+        assert(santos && santos.isForeignBot && !aiCompetitors.some(a => a.id === 'fb_kozel' || a.id === 'fb_vogel'), 'tylko Santos po dołączeniu USA');
+        assertEq(santos.cash, 0, 'złotówek brak'); assert(santos.cashByCurrency.USD > 0, 'gotówka w USD'); assertNear(getForeignCashPln(santos), 12000 * fxRates.USD, 'wartość w złotych po kursie', 1e-6);
+        assertNear(calculateNetWorth(santos), getForeignCashPln(santos), 'majątek bota liczy gotówkę walutową', 1e-6);
+        joinCountry('CZ'); joinCountry('DE');
+        const kozel = aiCompetitors.find(a => a.id === 'fb_kozel');
+        assert(kozel.cashByCurrency.EUR > 0 && kozel.cashByCurrency.CZK > 0, 'Kozel ma EUR i CZK'); assert(aiCompetitors.some(a => a.id === 'fb_vogel'), 'niemiecki wieloryb');
+        joinCountry('US'); assertEq(getForeignBots().length, 3, 'drugie dołączenie nie dubluje botów');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+
+    test('G8: żaden bot nie ma ponad 50% spółki w pierwszym roku po dołączeniu, a transakcji jest najwyżej 4 na kwartał', () => withBots(() => {
+        for (const id of botsReal()) joinCountry(id);
+        for (const bot of getForeignBots()) bot.cashByCurrency = { USD: 1e9, EUR: 1e9, CZK: 1e9 }; // nieograniczone środki: sprawdzamy tylko zabezpieczenia
+        const q0 = macro.quarter;
+        withSeededRandom(31, () => {
+            for (let k = 0; k < 4; k++) {
+                for (const bot of getForeignBots()) { runForeignBot(bot); assert(bot.fx.trades <= BOT_RULES.tradesPerQuarter, `transakcje ${bot.name}: ${bot.fx.trades}`); }
+                for (const bot of getForeignBots()) runForeignBot(bot); // drugi bieg w tym samym kwartale nie zwiększa limitu
+                for (const bot of getForeignBots()) assert(bot.fx.trades <= BOT_RULES.tradesPerQuarter, 'limit na kwartał');
+                for (const issuer of getForeignIssuerList().filter(i => i.kind === 'share')) for (const bot of getForeignBots()) assert(getBotStake(issuer, bot) <= 0.5 + 1e-9, `${bot.name} ma ${(getBotStake(issuer, bot) * 100).toFixed(1)}% ${issuer.id}`);
+                macro.quarter++;
+            }
+        });
+        macro.quarter = q0;
+        assert(getForeignIssuerList().some(i => Object.keys(i.holders).some(h => h.startsWith('fb_'))), 'boty kupiły jakieś akcje');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki po handlu botów');
+    }));
+
+    test('G8: Santos wchodzi na rynek kraju startowego i kupuje polskie spółki za walutę z kantoru; Kozel trzyma 20% kapitału na wydatki prywatne', () => withBots(() => {
+        resetWorld(Array.from({ length: 12 }, (_, i) => mk156(`P${i}`, { price: 50 + i, totalShares: 1_000_000 })));
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        for (const id of botsReal()) joinCountry(id);
+        const santos = aiCompetitors.find(a => a.id === 'fb_santos'), kozel = aiCompetitors.find(a => a.id === 'fb_kozel');
+        const startPln = getForeignCashPln(kozel);
+        assert(santos.fx.entryQ >= macro.quarter + 1 && santos.fx.entryQ <= macro.quarter + 3, 'wejście na rynek PL za 1–3 kwartały');
+        const q0 = macro.quarter;
+        withSeededRandom(8, () => { for (let k = 0; k < 24; k++) { macro.quarter = q0 + k; processForeignBotsQuarterly('US'); processForeignBotsQuarterly('CZ'); for (const s of getForeignIssuerList()) s.price = Math.round(s.price * 100) / 100; } });
+        macro.quarter = q0;
+        assert(santos.fx.enteredHome && Object.keys(santos.portfolio).length > 0, 'Santos ma polskie spółki'); assert(Object.keys(santos.portfolio).every(sym => stocks.some(s => s.symbol === sym)), 'to spółki z rynku krajowego');
+        assert(getForeignCashPln(kozel) + getForeignSharesValue('fb_kozel') > 0 && getForeignCashPln(kozel) >= startPln * 0.2 - 1, `Kozel zostawił rezerwę 20%: ${getForeignCashPln(kozel).toFixed(0)} z ${startPln.toFixed(0)}`);
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki (akcje w obrocie = suma posiadaczy)');
+    }));
+
+    test('G8: boty zagraniczne zapisują się razem z botami i wracają po wczytaniu z gotówką w walutach i pozycjami', () => withBots(() => {
+        joinCountry('US'); const santos = aiCompetitors.find(a => a.id === 'fb_santos');
+        const issuer = getCountryIssuers('US')[0]; issuer.holders.fb_santos = 1000; santos.cashByCurrency.USD = 777;
+        const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+        resetForeignBots(); resetGdrState();
+        assert(applySaveSnapshot(raw).ok, 'wczytanie');
+        const back = aiCompetitors.find(a => a.id === 'fb_santos');
+        assert(back && back.isForeignBot && back.cashByCurrency.USD === 777, 'bot i gotówka wróciły'); assertEq(foreignIssuers[issuer.id].holders.fb_santos, 1000, 'pozycja wróciła');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki po wczytaniu');
+    }));
     // --- koniec grupy 0.16.2 ---
 });
 

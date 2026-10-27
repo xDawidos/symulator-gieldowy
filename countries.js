@@ -34,8 +34,7 @@ function resetCountriesState() {
     countryState = {};
     homeFeed = { last: null, sd: 0.02 };
     for (const id of Object.keys(marketRegimes || {})) if (id !== 'home') delete marketRegimes[id];
-    if (typeof resetTicketsState === 'function') resetTicketsState();
-    if (typeof resetForeignBots === 'function') resetForeignBots();
+    if (typeof resetTicketsState === 'function') resetTicketsState(); // boty zostają w aiCompetitors (zapis tablicy); nowa gra: resetForeignBots() w startNewCareer
 }
 
 function getCountryDef(id) { return COUNTRY_DEFS[id] || null; }
@@ -276,6 +275,7 @@ function checkCountryInvariants() {
         if (!countryState[issuer.country]) problems.push(`spółka ${issuer.id} w kraju niedołączonym ${issuer.country}`);
         if (issuer.state && getGdrFree(issuer) < -1e-6) problems.push(`pakiet państwa ${issuer.id} naruszony`);
     }
+    if (typeof checkForeignBotInvariants === 'function') problems.push(...checkForeignBotInvariants());
     return problems;
 }
 
@@ -465,4 +465,186 @@ function sellForeignShares(issuerId, quantity) {
     addCurrencyCash('player', issuer.currency, gross - fee);
     recordPayment('player-fund', `external:${def.operator.id}`, toPln(fee, issuer.currency), `Prowizja: ${def.operator.name}`);
     return { ok: true, proceeds: gross - fee, currency: issuer.currency };
+}
+
+
+// =================================================================================
+// 0.16.2 G8: BOTY ZAGRANICZNE (Niemcy, USA, Czechy)
+// Pojawiają się dopiero po dołączeniu kraju. To wpisy w `aiCompetitors` z flagą `isForeignBot` (zapis, ranking i posiadacze jak u innych botów),
+// ale bez `makeAiDecision`: handlują własną, krótką logiką raz na kwartał, gotówka jest w walutach (`cashByCurrency`, G2c).
+// Zabezpieczenia: najwyżej BOT_RULES.tradesPerQuarter transakcji na kwartał; w 1. roku po dołączeniu kraju żaden bot nie ma ponad 50% spółki.
+// Michael „Dad” Santos dodatkowo „wchodzi na rynek” kraju startowego (G7b): kupuje losowo polskie spółki po kursie kantoru.
+// =================================================================================
+
+const FOREIGN_BOTS = [
+    { id: 'fb_santos', name: 'Michael „Dad” Santos', country: 'US', style: 'ideal', cash: { USD: 12000 }, enterHome: true },
+    { id: 'fb_kozel', name: 'Peter „Lech” Kozel', country: 'CZ', style: 'czech', cash: { EUR: 4000, CZK: 80000 }, reserve: 0.2, favorite: 'PIV', also: ['DE'] },
+    { id: 'fb_vogel', name: 'Heinrich „Wieloryb” Vogel', country: 'DE', style: 'stable', cash: { EUR: 15000 }, avoidHome: true }
+];
+
+const BOT_RULES = {
+    tradesPerQuarter: 4,        // limit transakcji na kwartał
+    maxStakeFirstYear: 0.5,     // najwyżej 50% spółki w 1. roku po dołączeniu kraju
+    maxStake: 0.6,
+    firstYearQuarters: 4,
+    spendShare: 0.3,            // część gotówki na jedną transakcję
+    takeProfit: 1.25,           // sprzedaż połowy pozycji przy zysku 25%
+    homeEntryDelay: [1, 3],     // kwartały od dołączenia kraju do wejścia bota na rynek PL
+    conversionSpread: 0.015
+};
+
+function getForeignBots() { return aiCompetitors.filter(ai => ai.isForeignBot); }
+
+function resetForeignBots() {
+    for (let i = aiCompetitors.length - 1; i >= 0; i--) if (aiCompetitors[i].isForeignBot) aiCompetitors.splice(i, 1);
+}
+
+function spawnForeignBotsFor(country) {
+    for (const def of FOREIGN_BOTS.filter(b => b.country === country)) {
+        if (aiCompetitors.some(ai => ai.id === def.id)) continue;
+        const bot = {
+            id: def.id, name: def.name, cash: 0, portfolio: {}, loans: [], personality: `foreign_${def.style}`, isForeignBot: true, homeCountry: country,
+            accessLevel: 1, hasTBillAccess: false, tBills: [], skillPoints: 0, unlockedSkills: {}, creditScore: 100,
+            cashByCurrency: { ...def.cash }, fx: { joinQ: macro.quarter, trades: 0, tradesQ: -1, cost: {}, enteredHome: false, entryQ: def.enterHome ? macro.quarter + getRandomIntInRange(...BOT_RULES.homeEntryDelay) : null }
+        };
+        bot.fx.reservePln = getForeignCashPln(bot) * (def.reserve || 0);
+        aiCompetitors.push(bot);
+        (foreignTickets[bot.id] = foreignTickets[bot.id] || []).push(country); // własny rynek bez biletu
+        logEvent(`🌍 Na giełdzie ${COUNTRY_DEFS[country].name} pojawia się inwestor ${bot.name}.`, 'market');
+    }
+}
+
+/** Wartość akcji zagranicznych podmiotu (id bota) w złotych — do majątku i rankingu. */
+function getForeignSharesValue(holderId) {
+    let total = 0;
+    for (const issuer of getForeignIssuerList()) { const q = Number(issuer.holders?.[holderId]) || 0; if (q) total += q * toPln(issuer.price, issuer.currency); }
+    return total;
+}
+
+/** Płatność bota w walucie: najpierw ta sama waluta, potem inne (po kursie z narzutem). Zwraca false, gdy brak środków. */
+function botPay(bot, currency, amountLocal) {
+    const bag = bot.cashByCurrency || (bot.cashByCurrency = {});
+    let need = amountLocal;
+    const own = Math.min(Number(bag[currency]) || 0, need);
+    const needPlnLeft = toPln(need - own, currency) * (1 + BOT_RULES.conversionSpread);
+    let others = 0;
+    for (const code of Object.keys(bag)) if (code !== currency) others += toPln(bag[code], code);
+    if (needPlnLeft > others + 1e-9) return false;
+    bag[currency] = (Number(bag[currency]) || 0) - own; need -= own;
+    let pln = need > 1e-9 ? toPln(need, currency) * (1 + BOT_RULES.conversionSpread) : 0;
+    for (const code of Object.keys(bag)) {
+        if (pln <= 1e-9) break;
+        if (code === currency) continue;
+        const take = Math.min(toPln(bag[code], code), pln);
+        bag[code] -= fromPln(take, code); pln -= take;
+    }
+    for (const code of Object.keys(bag)) if (!(bag[code] > 1e-9)) delete bag[code];
+    return true;
+}
+
+function botSpendable(bot) { return Math.max(0, getForeignCashPln(bot) - (bot.fx.reservePln || 0)); } // rezerwa na wydatki prywatne (Kozel: 20% początkowego kapitału)
+
+function getBotStake(issuer, bot) { return (Number(issuer.holders?.[bot.id]) || 0) / issuer.shares; }
+function botStakeCap(issuer, bot) {
+    const joined = countryState[issuer.country]?.joinedQ ?? -99;
+    return macro.quarter - joined < BOT_RULES.firstYearQuarters ? BOT_RULES.maxStakeFirstYear : BOT_RULES.maxStake;
+}
+
+function botPickTarget(bot, def) {
+    const pool = id => getCountryIssuers(id).filter(i => !(i.state && getGdrFree(i) <= 0));
+    let candidates = pool(def.country);
+    if (def.style === 'czech') {
+        const fav = foreignIssuers[def.favorite];
+        if (fav && fav.kind === 'share' && Math.random() < 0.5) return fav;
+        for (const extra of def.also || []) if (canTradeCountry(bot.id, extra)) candidates = candidates.concat(pool(extra));
+    }
+    if (def.style === 'stable') candidates = candidates.filter(i => i.sectors.reduce((s, [n, w]) => s + w * getSectorBeta(n), 0) <= 1.0);
+    if (!candidates.length) return null;
+    if (def.style === 'ideal') return candidates.slice().sort((a, b) => a.price / a.ema - b.price / b.ema)[0]; // „idealnie”: najtańsza względem swojej średniej
+    return getRandomElement(candidates);
+}
+
+function foreignBotBuy(bot, def) {
+    const issuer = botPickTarget(bot, def);
+    if (!issuer) return false;
+    const budgetPln = botSpendable(bot) * BOT_RULES.spendShare, mid = toPln(issuer.price, issuer.currency);
+    const cap = Math.floor(issuer.shares * botStakeCap(issuer, bot)) - (Number(issuer.holders[bot.id]) || 0);
+    let qty = Math.min(Math.floor(budgetPln / mid), cap, Math.floor(getGdrFree(issuer)));
+    if (!(qty >= 1)) return false;
+    const cost = qty * issuer.price * (1 + getCountryCommission(issuer.country));
+    if (!botPay(bot, issuer.currency, cost)) return false;
+    const held = Number(issuer.holders[bot.id]) || 0, prev = (bot.fx.cost[issuer.id] || issuer.price) * held;
+    issuer.holders[bot.id] = held + qty;
+    bot.fx.cost[issuer.id] = (prev + qty * issuer.price) / (held + qty);
+    return true;
+}
+
+function foreignBotSell(bot) {
+    const positions = getForeignIssuerList().filter(i => (Number(i.holders[bot.id]) || 0) > 0);
+    const winners = positions.filter(i => i.price >= (bot.fx.cost[i.id] || i.price) * BOT_RULES.takeProfit);
+    const issuer = winners.length ? getRandomElement(winners) : (positions.length && Math.random() < 0.3 ? getRandomElement(positions) : null);
+    if (!issuer) return false;
+    const held = issuer.holders[bot.id], qty = Math.max(1, Math.floor(held / 2));
+    const gross = qty * issuer.price;
+    issuer.holders[bot.id] = held - qty;
+    if (issuer.holders[bot.id] <= 0) { delete issuer.holders[bot.id]; delete bot.fx.cost[issuer.id]; }
+    addCurrencyCash(bot, issuer.currency, gross * (1 - getCountryCommission(issuer.country)));
+    return true;
+}
+
+/** Wejście bota na rynek kraju startowego (G7b): kupuje losowe polskie spółki za złote z wymiany walut. */
+function botTradeHome(bot, def) {
+    const budgetPln = botSpendable(bot) * BOT_RULES.spendShare;
+    const pool = stocks.filter(s => !s.assetType && !s.isBankrupt && !s.isTradeLocked && s.price > 0 && s.price < budgetPln && getAvailableShares(s) > 0);
+    if (!pool.length) return false;
+    const stock = getRandomElement(pool), qty = Math.min(Math.floor(budgetPln / stock.price), Math.floor(stock.totalShares * 0.02), Math.floor(getAvailableShares(stock)));
+    if (!(qty >= 1) || (bot.portfolio[stock.symbol]?.shares || 0) + qty > stock.totalShares * (macro.quarter - bot.fx.joinQ < BOT_RULES.firstYearQuarters ? BOT_RULES.maxStakeFirstYear : BOT_RULES.maxStake)) return false;
+    const needPln = qty * stock.price * 1.01;
+    for (const code of Object.keys(bot.cashByCurrency)) {
+        const take = Math.min(toPln(bot.cashByCurrency[code], code), Math.max(0, needPln - bot.cash));
+        if (take <= 0) continue;
+        bot.cashByCurrency[code] -= fromPln(take, code);
+        bot.cash += take * (1 - BOT_RULES.conversionSpread);
+    }
+    const before = bot.portfolio[stock.symbol]?.shares || 0;
+    aiBuyStock(bot, stock.symbol, qty);
+    return (bot.portfolio[stock.symbol]?.shares || 0) > before;
+}
+
+function runForeignBot(bot) {
+    const def = FOREIGN_BOTS.find(b => b.id === bot.id);
+    if (!def || !isCountryJoined(bot.homeCountry)) return;
+    if (bot.fx.tradesQ !== macro.quarter) { bot.fx.tradesQ = macro.quarter; bot.fx.trades = 0; }
+    if (def.enterHome && !bot.fx.enteredHome && bot.fx.entryQ !== null && macro.quarter >= bot.fx.entryQ) {
+        bot.fx.enteredHome = true;
+        const text = `${bot.name} wchodzi na naszą giełdę z gotówką w ${Object.keys(bot.cashByCurrency).join(' i ')} — kupuje polskie spółki po kursie kantoru.`;
+        logEvent(`🌍 ${text}`, 'market');
+        if (typeof pushNews === 'function') pushNews(`🌍 ${text}`, null);
+    }
+    for (let k = 0; k < BOT_RULES.tradesPerQuarter && bot.fx.trades < BOT_RULES.tradesPerQuarter; k++) {
+        if (Math.random() < 0.35) continue; // nie każdy kwartał jest aktywny
+        const roll = Math.random();
+        let done = false;
+        if (def.enterHome && bot.fx.enteredHome && roll < 0.35) done = botTradeHome(bot, def);
+        else if (roll < 0.8) done = foreignBotBuy(bot, def);
+        else done = foreignBotSell(bot);
+        if (done) bot.fx.trades++;
+    }
+}
+
+function processForeignBotsQuarterly(country) {
+    for (const bot of getForeignBots().filter(b => b.homeCountry === country)) runForeignBot(bot);
+}
+
+function getForeignBotsSnapshot() { return undefined; } // boty są w aiCompetitors (zapis tablicy), stan w `bot.fx`
+
+function checkForeignBotInvariants() {
+    const problems = [];
+    for (const bot of getForeignBots()) {
+        if (!isCountryJoined(bot.homeCountry)) problems.push(`bot ${bot.name} bez kraju ${bot.homeCountry}`);
+        for (const issuer of getForeignIssuerList()) {
+            if (issuer.kind === 'share' && getBotStake(issuer, bot) > BOT_RULES.maxStake + 1e-9) problems.push(`bot ${bot.name} ma ${(getBotStake(issuer, bot) * 100).toFixed(0)}% ${issuer.id}`);
+        }
+    }
+    return problems;
 }

@@ -2031,7 +2031,7 @@ if (typeof window !== 'undefined' && !window.__GAME_TEST_MODE__) window.addEvent
 // Funkcja uruchamiająca AI (z bazy main.js - zawiera AI banków inwestycyjnych)
 function runAllAi() {
     aiCompetitors.forEach(ai => {
-        if (ai.isMafia || ai.isGuard) return; // Bruno Gato (mafia.js) i Gwardia (defense.js) mają własną logikę
+        if (ai.isMafia || ai.isGuard || ai.isForeignBot) return; // Bruno Gato (mafia.js), Gwardia (defense.js) i boty zagraniczne (countries.js) mają własną logikę
         if (Math.random() < 0.15) {
             makeAiDecision(ai);
             checkAiTierUpgrade(ai);
