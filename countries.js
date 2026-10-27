@@ -648,3 +648,78 @@ function checkForeignBotInvariants() {
     }
     return problems;
 }
+
+
+// =================================================================================
+// 0.16.2 G9: KORELACJA I ZARAŻANIE KRYZYSÓW MIĘDZY KRAJAMI
+// Korelacja nastrojów: cel premii kraju = ρ × premia PL + (1 − ρ) × składnik niezależny (advanceCountryRegime), a ceny dostają wspólny czynnik z GIG.
+// Budżet częstości linii jest jeden (crises.js: 1%/kw. po ≥ 12 kw. spokoju, 40% krachów zastępuje linia): z tych samych losowań ok. 25% linii
+// zaczyna się za granicą (tylko w kraju otwartym), a do Polski dociera po 0–2 kw. (`crisisState.pendingImport`, potem zwykła linia z polem `origin`).
+// Linia z PL dociera do krajów otwartych: szok sektorowy × ρ (powiązanie) i obniżony cel premii rynku. Szok sektorowy ma pole `country`.
+// =================================================================================
+
+const CONTAGION_RULES = {
+    foreignOriginChance: 0.25,   // część linii zaczynająca się w kraju obcym (gdy jakiś kraj jest otwarty)
+    delayQ: [0, 2],              // opóźnienie dotarcia do Polski
+    originPremium: -0.30,        // cel premii rynku kraju, w którym wybuchł kryzys
+    homeCap: -0.25,              // cel premii kraju obcego przy linii z PL: homeCap × ρ × waga etapu
+    stageWeights: { spark: 0, burst: 1, spread: 1, intervention: 0.7, bottom: 0.5, recovery: 0.2 }
+};
+
+/** Linia, która zaczyna się w kraju obcym: szoki w tym kraju od razu, do Polski dociera po `delay` kwartałach. Zwraca { pending } albo null. */
+function startForeignOriginCrisis(lineId, options = {}) {
+    const open = getJoinedCountries();
+    if (!open.length || Math.random() >= CONTAGION_RULES.foreignOriginChance) return null;
+    const def = CRISIS_LINES[lineId], origin = getRandomElement(open), q = crisisQuarter();
+    const delay = getRandomIntInRange(...CONTAGION_RULES.delayQ);
+    crisisState.pendingImport = { id: lineId, origin, startQ: q, arriveQ: q + delay };
+    crisisState.lastEventQ = q;
+    if (!crisisState.used.includes(lineId)) crisisState.used.push(lineId);
+    for (const item of [...def.lose, ...def.gain]) {
+        if (!item.premium) continue;
+        addSectorShock(item.sector, item.premium, { subsector: item.subsector, rampQ: 1, holdQ: 3, fadeQ: rangeInt(def.recoveryQ), lineId, country: origin, startQ: crisisTime() });
+    }
+    const regime = marketRegimes[origin];
+    if (regime) { regime.phase = 'capitulation'; regime.quartersInPhase = 1; regime.phaseLength = 2; regime.indep = CONTAGION_RULES.originPremium; }
+    const place = COUNTRY_DEFS[origin].name;
+    const text = `${def.name} wybucha w kraju ${place}${delay ? ` — do Polski dotrze za ok. ${delay} kw.` : ' — Polska odczuwa ją od razu.'}`;
+    logEvent(`${def.icon} ${text}`, 'macro');
+    if (typeof pushNews === 'function') pushNews(`${def.icon} ${text}`);
+    return { pending: true, origin, arriveQ: q + delay };
+}
+
+/** Co kwartał: zaczyna linię w Polsce, gdy minęło opóźnienie. Zwraca true, gdy właśnie wystartowała. */
+function processImportedCrisis() {
+    const p = crisisState.pendingImport;
+    if (!p || crisisQuarter() < p.arriveQ) return false;
+    crisisState.pendingImport = null;
+    const line = startCrisisLine(p.id, { skipSpark: true, arrived: true, origin: p.origin });
+    if (line) {
+        line.delayQ = p.arriveQ - p.startQ;
+        const text = `${CRISIS_LINES[p.id].name} z kraju ${COUNTRY_DEFS[p.origin]?.name || p.origin} dociera do Polski.`;
+        logEvent(`${CRISIS_LINES[p.id].icon} ${text}`, 'macro');
+    }
+    return true;
+}
+
+/** Górny cel premii rynku kraju w trakcie kryzysu (null = brak ograniczenia). */
+function getCountryCrisisCap(id) {
+    const p = crisisState.pendingImport;
+    if (p && p.origin === id) return CONTAGION_RULES.originPremium;
+    if (!crisisLine) return null;
+    const w = CONTAGION_RULES.stageWeights[crisisLine.stage] || 0;
+    if (!w) return null;
+    if (crisisLine.origin === id) return CONTAGION_RULES.originPremium * w;
+    return CONTAGION_RULES.homeCap * (COUNTRY_DEFS[id]?.rho || 0) * w;
+}
+
+/** Podsumowanie do interfejsu: kraje otwarte z powiązaniem, opóźnieniem i stanem zarażenia. */
+function getContagionSummary() {
+    const p = crisisState.pendingImport;
+    return {
+        pending: p ? { ...p, line: CRISIS_LINES[p.id].name, countryName: COUNTRY_DEFS[p.origin]?.name, delayLeft: Math.max(0, p.arriveQ - crisisQuarter()) } : null,
+        origin: crisisLine ? crisisLine.origin || 'PL' : null,
+        delayQ: crisisLine?.delayQ ?? null,
+        countries: getJoinedCountries().map(id => ({ id, name: COUNTRY_DEFS[id].name, link: COUNTRY_DEFS[id].rho, cap: getCountryCrisisCap(id), premium: marketRegimes[id]?.premium ?? 0 }))
+    };
+}

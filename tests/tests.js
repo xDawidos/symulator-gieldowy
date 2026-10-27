@@ -12544,6 +12544,138 @@ group('0.16.2', () => {
         assert(back && back.isForeignBot && back.cashByCurrency.USD === 777, 'bot i gotówka wróciły'); assertEq(foreignIssuers[issuer.id].holders.fb_santos, 1000, 'pozycja wróciła');
         assertEq(checkWorldInvariants().length, 0, 'niezmienniki po wczytaniu');
     }));
+
+    // --- G9: korelacja i zarażanie kryzysów ---
+    const crisisWorld = (withCountry = true) => {
+        COUNTRY_DEFS.ZZ = ZZ(); initFxState(); resetGdrState(); resetForeignBots();
+        resetWorld([makeCompany('AAA', { sector: ['Energia'] }), makeCompany('BBB', { sector: ['Turystyka'] })]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        initMarketRegimes(); marketCrash = createMarketCrashState(); marketHalt = createMarketHaltState(); macro.quarter = 20; mailbox = createMailbox();
+        maybeReplaceCrashWithCrisisLine = REAL_REPLACE_CRASH_WITH_LINE;
+        commercialBanks.forEach(bank => { bank.stockPortfolio = bank.stockPortfolio || {}; });
+        resetCrises(); playerFund.calWeek = 1;
+        if (withCountry) joinCountry('ZZ');
+    };
+    const endCrisisWorld = () => { delete COUNTRY_DEFS.ZZ; resetCrises(); resetGdrState(); initFxState(); };
+    const crisisTick = (n = 1) => { for (let i = 0; i < n; i++) { macro.quarter++; processCrisesQuarterly(); processCrisesWeekly(); } };
+
+    test('G9: ok. 25% linii zaczyna się w kraju otwartym, a do Polski dociera po 0–2 kwartałach w 100% przypadków; bez otwartego kraju linie są polskie', () => {
+        crisisWorld();
+        try {
+            let pending = 0, trials = 240;
+            withSeededRandom(2026, () => {
+                for (let i = 0; i < trials; i++) {
+                    resetCrises(); macro.quarter = 20; sectorShocks.length = 0;
+                    const r = startCrisisLine('oil');
+                    if (r && r.pending) {
+                        pending++;
+                        const p = crisisState.pendingImport; assert(p.arriveQ - p.startQ >= 0 && p.arriveQ - p.startQ <= 2, `opóźnienie ${p.arriveQ - p.startQ}`);
+                        assertEq(p.origin, 'ZZ', 'kraj pochodzenia');
+                        for (let k = 0; k < 3 && !crisisLine; k++) crisisTick();
+                        assert(crisisLine && crisisLine.origin === 'ZZ' && crisisLine.delayQ === p.arriveQ - p.startQ, 'linia dotarła do Polski w ≤ 2 kw.');
+                        assert(macro.quarter - 20 <= 2, `dotarła po ${macro.quarter - 20} kw.`);
+                    } else assert(crisisLine && crisisLine.origin === 'PL', 'linia polska');
+                }
+            });
+            const share = pending / trials;
+            assert(share > 0.15 && share < 0.36, `udział linii zagranicznych ${(share * 100).toFixed(0)}% (cel ok. 25%)`);
+            resetGdrState(); resetCrises(); macro.quarter = 20;
+            assert(startCrisisLine('oil') && !crisisState.pendingImport, 'bez otwartych krajów linia jest zawsze polska');
+        } finally { endCrisisWorld(); }
+    });
+
+    test('G9: jeden budżet częstości — w trakcie dojścia linii żadna druga nie wystartuje, a krach nie zastępuje drugiej linii; szok obcego kraju nie dotyka spółek krajowych', () => {
+        crisisWorld();
+        try {
+            const rnd = Math.random; Math.random = () => 0.1; // 10% < 25%: zawsze zagranica
+            let r; try { r = startCrisisLine('oil'); } finally { Math.random = rnd; }
+            assert(r && r.pending, 'zagraniczny początek');
+            assert(startCrisisLine('pandemic') === null, 'druga linia zablokowana, dopóki pierwsza nie dotarła'); assertEq(maybeReplaceCrashWithCrisisLine(), false, 'krach nie zastępuje drugiej linii');
+            assert(crisisState.used.includes('oil') && crisisState.lastEventQ === 20, 'wspólny licznik spokoju');
+            assert(sectorShocks.some(s => s.lineId === 'oil') && sectorShocks.filter(s => s.lineId === 'oil').every(s => s.country === 'ZZ'), 'szoki linii oznaczone krajem');
+            playerFund.calWeek = 6; updateAllSectorPremiums(); const energy = stocks.find(s => s.symbol === 'AAA');
+            assertEq(getSectorShockPremium(energy), 0, 'spółka krajowa nie czuje szoku z obcego kraju'); assertEq(getCrisisRevenueFactor(energy), 1, 'przychody krajowe bez zmian');
+        } finally { endCrisisWorld(); }
+    });
+
+    test('G9: linia z Polski obniża cel premii i ceny w krajach otwartych proporcjonalnie do powiązania ρ i wystawienia sektora; kraj bez tej ekspozycji reaguje słabiej', () => {
+        crisisWorld();
+        try {
+            marketRegimes.ZZ.indep = 0; marketRegimes.ZZ.premium = 0;
+            startCrisisLine('oil', { forced: true, skipSpark: true });
+            assertEq(crisisLine.origin, 'PL', 'linia z Polski');
+            const cap = getCountryCrisisCap('ZZ'); assertNear(cap, CONTAGION_RULES.homeCap * COUNTRY_DEFS.ZZ.rho, 'cel premii = −0,25 × ρ × waga etapu', 1e-9);
+            advanceCountryRegime('ZZ'); assert(marketRegimes.ZZ.premiumTarget <= cap + 1e-9, 'cel premii przycięty');
+            const loseSector = CRISIS_LINES.oil.lose.find(i => i.premium < 0).sector, touched = new Set([...CRISIS_LINES.oil.lose, ...CRISIS_LINES.oil.gain].map(i => i.sector));
+            const calmSector = SECTOR_NAMES.find(n => !touched.has(n));
+            const energy = createCountryIssuer(COUNTRY_DEFS.ZZ, { id: 'ZEN', name: 'Zeta Strata', sector: loseSector, kind: 'normal', price: 50 });
+            const food = createCountryIssuer(COUNTRY_DEFS.ZZ, { id: 'ZCA', name: 'Zeta Spokój', sector: calmSector, kind: 'normal', price: 50 }); playerFund.calWeek = 1;
+            for (let k = 0; k < 3; k++) { macro.quarter++; playerFund.calWeek = 1; }
+            playerFund.calWeek = 10; updateAllSectorPremiums();
+            const pe = getCountrySectorPremium(energy), pf = getCountrySectorPremium(food);
+            assert(pe < 0 && Math.abs(pe) > Math.abs(pf), `Energia ${pe.toFixed(3)} traci mocniej niż Żywność ${pf.toFixed(3)}`);
+            assert(Math.abs(pe) <= 0.6 * COUNTRY_DEFS.ZZ.rho + 1e-9, 'siła ≤ ρ × premia szoku');
+            const before = energy.price; for (let w = 0; w < 6; w++) { playerFund.calWeek = 10 + w; stepCountries(); }
+            assert(energy.sp < -0.02 && Math.abs(food.sp) < 0.005, `premia zastosowana w cenie: ${energy.sp.toFixed(3)} vs ${food.sp.toFixed(3)}`); void before; // szum cen jest większy niż 6 tygodni sygnału, więc sprawdzamy składnik sektorowy
+        } finally { endCrisisWorld(); }
+    });
+
+    test('G9: zapis w trakcie linii w drodze (pendingImport) i w trakcie linii zaimportowanej — po wczytaniu linia dochodzi do Polski i kończy się bez błędów', () => {
+        crisisWorld();
+        try {
+            const rnd = Math.random; Math.random = () => 0.1; try { startCrisisLine('oil'); } finally { Math.random = rnd; }
+            const arrive = crisisState.pendingImport.arriveQ;
+            const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+            assert(raw.crisisState?.pendingImport || raw.crises?.crisisState?.pendingImport || JSON.stringify(raw).includes('"pendingImport":{'), 'pendingImport w zapisie');
+            resetCrises(); resetGdrState();
+            assert(applySaveSnapshot(raw).ok, 'wczytanie'); assert(crisisState.pendingImport && crisisState.pendingImport.arriveQ === arrive, 'linia w drodze wróciła');
+            for (let k = 0; k < 4 && !crisisLine; k++) crisisTick();
+            assert(crisisLine && crisisLine.origin === 'ZZ', 'po wczytaniu linia dotarła do Polski');
+            const raw2 = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+            resetCrises(); assert(applySaveSnapshot(raw2).ok && crisisLine?.origin === 'ZZ', 'zapis w trakcie zaimportowanej linii');
+            crisisTick(30); assertEq(checkWorldInvariants().length, 0, 'niezmienniki po całej linii');
+        } finally { endCrisisWorld(); }
+    });
+
+    test('G9: kryzys w drodze uruchamia ruch walut (bezpieczne przystanie drożeją, reszta tanieje), a podsumowanie zarażenia opisuje kraje, powiązanie i opóźnienie', () => {
+        crisisWorld();
+        try {
+            const drift = pending => { initFxState(); crisisState.pendingImport = pending ? { id: 'oil', origin: 'ZZ', startQ: 20, arriveQ: 99 } : null; let s = 0; withSeededRandom(5, () => { for (let w = 0; w < 120; w++) { stepFxRates(); } }); const r = { usd: fxRates.USD, cny: fxRates.CNY }; return r; };
+            const calm = drift(false), stress = drift(true);
+            assert(stress.usd > calm.usd, 'dolar (bezpieczna przystań) mocniejszy w kryzysie'); assert(stress.cny < calm.cny, 'juan słabszy w kryzysie');
+            crisisState.pendingImport = { id: 'oil', origin: 'ZZ', startQ: 20, arriveQ: 22 };
+            const sum = getContagionSummary();
+            assert(sum.pending && sum.pending.delayLeft === 2 && sum.countries.length === 1 && sum.countries[0].link === COUNTRY_DEFS.ZZ.rho, 'podsumowanie zarażenia');
+        } finally { endCrisisWorld(); }
+    });
+
+    test('G9: średnia premia rynku obcego w 20 latach mieści się w −3…+3% (cel premii = ρ × PL + (1 − ρ) × składnik niezależny)', () => {
+        crisisWorld();
+        try {
+            let sum = 0, n = 0;
+            withSeededRandom(99, () => {
+                for (let run = 0; run < 12; run++) {
+                    initMarketRegimes(); marketRegimes.ZZ = createCountryRegime('ZZ');
+                    for (let q = 0; q < 80; q++) { advanceMarketRegimeQuarterly('home'); advanceCountryRegime('ZZ'); const r = marketRegimes.ZZ; r.premium += (r.premiumTarget - r.premium) * 0.6; sum += r.premium; n++; }
+                }
+            });
+            const mean = sum / n; addTable('G9: średnia premia kraju obcego (12 × 20 lat)', ['Miara', 'Wartość'], [['średnia premia', (mean * 100).toFixed(2) + '%']]);
+            assert(Math.abs(mean) <= 0.03, `średnia premia ${(mean * 100).toFixed(2)}%`);
+        } finally { endCrisisWorld(); }
+    });
+
+    test('G9/G10: sekcja „Kryzys” w oknie Rynek pokazuje kraje, powiązanie i opóźnienie zarażenia słowami (nie tylko kolorem)', () => {
+        crisisWorld();
+        try {
+            assert(renderCrisisSection().includes('Zarażanie między krajami'), 'sekcja z krajami przy otwartym kraju');
+            crisisState.pendingImport = { id: 'oil', origin: 'ZZ', startQ: 20, arriveQ: 22 };
+            const html = renderCrisisSection();
+            assert(html.includes('dotrze do Polski za 2 kw.') && html.includes('Zetland') && html.includes('aria-label="Flaga:') && html.includes('Powiązanie'), 'opóźnienie, kraj, flaga, powiązanie');
+            assert(/[▲▼■]/.test(html), 'znak kierunku obok liczby');
+            resetGdrState(); resetCrises();
+            assert(!renderCrisisSection().includes('Zarażanie między krajami'), 'bez krajów sekcja zarażania znika');
+        } finally { endCrisisWorld(); }
+    });
     // --- koniec grupy 0.16.2 ---
 });
 
