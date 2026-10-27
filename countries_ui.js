@@ -47,3 +47,65 @@ function airportUiBuy(country) {
     renderAirportWindow();
     if (typeof updateUI === 'function') updateUI();
 }
+
+// =================================================================================
+// Rynki zagraniczne: zakładki krajów z flagami i walutą, karta kraju (nastrój, stopa, waluta, spółki państwowe), handel z biletem.
+// Zakładka „Rynki” w oknie Kantor. Stan słowami (faza, kierunek ▲▼■), kolor nigdy jedynym nośnikiem.
+// =================================================================================
+
+let marketsSelected = null;
+
+function selectMarketCountry(id) { marketsSelected = id; renderKantor(); }
+
+function renderCountryCard(id) {
+    const def = COUNTRY_DEFS[id], st = countryState[id], regime = marketRegimes[id];
+    const phase = MARKET_PHASES[regime.phase] || MARKET_PHASES.bull, premium = regime.premium;
+    const stateIssuers = getCountryIssuers(id).filter(i => i.state);
+    const rate = fxRates[def.currency], change = typeof getFxChange === 'function' ? getFxChange(def.currency) : 0;
+    const crisis = typeof crisisState === 'object' && crisisState.pendingImport?.origin === id ? 'kryzys wybuchł tutaj i zmierza do Polski'
+        : (typeof crisisLine === 'object' && crisisLine?.origin === id ? 'kryzys zaczął się tutaj' : (crisisLine ? 'odczuwa kryzys z Polski' : 'bez kryzysu'));
+    return `<div class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${flagIcon(id, 22)}</span><div><h4>${escapeHtml(def.name)}</h4><span class="bank-card-type">${escapeHtml(def.operator.name)} · ${currencyIcon(def.currency, 14)} ${def.currency}</span></div></header>
+        <dl class="bank-card-rates">
+            <div><dt>Nastrój rynku</dt><dd>${uiIcon(phase.icon, 14)} ${phase.name}, premia ${premium > 0 ? '▲ +' : premium < 0 ? '▼ ' : '■ '}${formatNumberPl(premium * 100, 0)}%</dd></div>
+            <div><dt>Stopa w kraju</dt><dd>${formatNumberPl(st.rate * 100, 2)}%</dd></div>
+            <div><dt>Kurs ${def.currency}</dt><dd>${fmtRate(rate, def.currency)} zł (${fxArrow(change)} ${fxPct(change)} w roku)</dd></div>
+            <div><dt>Powiązanie z Polską</dt><dd>${formatNumberPl(def.rho * 100, 0)}%</dd></div>
+            <div><dt>Kryzys</dt><dd>${crisis}</dd></div>
+            <div><dt>Spółki państwowe</dt><dd>${stateIssuers.length ? stateIssuers.map(i => escapeHtml(i.name)).join(', ') : 'brak'}${stateIssuers.length ? ` · skarb kraju (licznik): ${formatNumberPl(st.treasury, 0)} ${def.currency}` : ''}</dd></div>
+            <div><dt>Pracownicy (profil kraju)</dt><dd>prawa ${escapeHtml(def.labour.rights)}, szansa związku ×${formatNumberPl(def.labour.unionMult, 1)}${def.labour.shadow ? `, szara strefa +${def.labour.shadow} pp` : ''}</dd></div>
+            <div><dt>Prowizja operatora</dt><dd>${formatNumberPl(getCountryCommission(id) * 100, 1)}% (z biletem)</dd></div>
+        </dl></div>`;
+}
+
+function renderMarketsTab() {
+    const joined = getJoinedCountries();
+    if (!joined.length) return `<p class="text-muted">Żaden rynek zagraniczny nie jest jeszcze otwarty. Pierwszy bilet na lotnisku (okno Miasto → Lotnisko) otwiera giełdę kraju; boty mogą być szybsze.</p>
+        <div class="btn-row"><button class="btn-ghost" onclick="closeModalFrom(document.querySelector('#kantor-modal .close-btn')); openCityInvestmentModal(); switchCityTab('airport')">Idź do lotniska</button></div>`;
+    if (!marketsSelected || !joined.includes(marketsSelected)) marketsSelected = joined[0];
+    const id = marketsSelected, def = COUNTRY_DEFS[id], access = hasTicket('player', id);
+    const tabs = joined.map(c => `<button class="tab-btn ${c === id ? 'active' : ''}" onclick="selectMarketCountry('${c}')" aria-pressed="${c === id}">${flagIcon(c, 12)} ${escapeHtml(COUNTRY_DEFS[c].name)} · ${COUNTRY_DEFS[c].currency}</button>`).join('');
+    const rows = getCountryIssuers(id).map(i => {
+        const h = i.history, change = h.length > 1 ? i.price / h[0] - 1 : 0, held = getGdrHeld(i), free = getGdrFree(i);
+        return `<tr><td><strong>${getGdrSymbol(i)}</strong> <span class="text-muted">${escapeHtml(i.name)}</span>${i.state ? ' <span class="text-xs">(państwowa)</span>' : ''}${i.giant ? ' <span class="text-xs">(gigant)</span>' : ''}</td>
+            <td>${escapeHtml(i.sectors.map(s => s[0]).join(' + '))}</td>
+            <td class="text-right">${formatNumberPl(i.price, 2)} ${i.currency}<br><span class="text-muted text-xs">${fxArrow(change)} ${fxPct(change)} w ${h.length - 1} tyg.</span></td>
+            <td class="text-right">${formatZl(toPln(i.price, i.currency), 2)}</td>
+            <td class="text-right">${held > 0 ? `${formatNumberPl(held, 0)} (${formatZl(held * toPln(i.price, i.currency), 0)})` : '—'}</td>
+            <td class="text-right"><input type="number" min="1" step="1" value="100" id="mkt-qty-${i.id}" aria-label="Liczba akcji ${escapeHtml(i.name)}" style="width:5.5em" ${free <= 0 ? 'disabled' : ''}>
+                <button class="btn-primary btn-sm" onclick="marketsUiTrade('${i.id}','buy')" ${access && free > 0 ? '' : 'disabled'}>Kup</button> <button class="btn-ghost btn-sm" onclick="marketsUiTrade('${i.id}','sell')" ${held > 0 ? '' : 'disabled'}>Sprzedaj</button></td></tr>`;
+    }).join('');
+    return `<div class="tab-buttons" role="group" aria-label="Rynki zagraniczne">${tabs}</div>
+        ${renderCountryCard(id)}
+        ${access ? '' : `<p class="text-sm" role="status">Brak biletu na ten rynek — kupowanie jest zablokowane (sprzedaż posiadanych akcji działa). Bilet kupisz w oknie Miasto → Lotnisko (${formatZl(getTicketPrice(id), 0)}).</p>`}
+        <table class="asset-mini-table w-full mt-3"><thead><tr><th>Spółka</th><th>Sektor</th><th class="text-right">Cena (waluta)</th><th class="text-right">Cena w PLN</th><th class="text-right">Twoje akcje</th><th class="text-right">Zlecenie</th></tr></thead><tbody>${rows}</tbody></table>
+        <p class="text-sm text-muted">Kupno płacisz najpierw gotówką w ${def.currency}, resztę wymienia kantor (spread). Prowizja ${formatNumberPl(getCountryCommission(id) * 100, 1)}%. Wpływy ze sprzedaży trafiają na konto walutowe — złotówki dostaniesz w kantorze. Zysk to zmiana ceny <em>i</em> kursu ${def.currency}; ceny zawierają dywidendy.</p>`;
+}
+
+function marketsUiTrade(id, side) {
+    const qty = Number(document.getElementById(`mkt-qty-${id}`)?.value) || 0;
+    const r = side === 'buy' ? buyForeignShares(id, qty) : sellForeignShares(id, qty);
+    const label = foreignIssuers[id] ? getGdrSymbol(foreignIssuers[id]) : id;
+    showToast(r.ok ? `${side === 'buy' ? 'Kupiono' : 'Sprzedano'} ${qty} akcji ${label}${side === 'buy' ? ` za ${formatZl(r.cost, 0)} (prowizja ${formatZl(r.commissionPln, 0)})` : ` — wpływ ${formatNumberPl(r.proceeds, 2)} ${r.currency}`}.` : r.reason, r.ok ? 'success' : 'warning');
+    renderKantor();
+    if (typeof updateUI === 'function') updateUI();
+}

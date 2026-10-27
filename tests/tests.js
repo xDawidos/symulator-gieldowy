@@ -12676,6 +12676,37 @@ group('0.16.2', () => {
             assert(!renderCrisisSection().includes('Zarażanie między krajami'), 'bez krajów sekcja zarażania znika');
         } finally { endCrisisWorld(); }
     });
+
+    // --- G10: interfejs ---
+    test('G10: zakładka Rynki — zakładki krajów z walutą, karta kraju (nastrój, stopa, kurs, powiązanie, spółki państwowe), kupno zablokowane słowami bez biletu', () => withTickets(() => {
+        marketsSelected = null;
+        assert(renderMarketsTab().includes('Żaden rynek zagraniczny nie jest jeszcze otwarty'), 'stan pusty');
+        joinCountry('ZZ');
+        let html = renderMarketsTab();
+        for (const piece of ['Zetland', 'EUR', 'Nastrój rynku', 'Stopa w kraju', 'Powiązanie z Polską', 'Spółki państwowe', 'Zeta Koleje', 'Pracownicy (profil kraju)', 'Brak biletu na ten rynek']) assert(html.includes(piece), `brak: ${piece}`);
+        assert(!/<button class="btn-primary btn-sm" onclick="marketsUiTrade\('ZA1','buy'\)" >/.test(html) && html.includes("marketsUiTrade('ZA1','buy')\" disabled"), 'kupno wyłączone bez biletu');
+        airportState.forced = true; buyTicket('ZZ'); html = renderMarketsTab();
+        assert(!html.includes('Brak biletu na ten rynek') && html.includes("marketsUiTrade('ZA1','buy')\" >"), 'po bilecie kupno aktywne');
+        assert(!/[\u{1F300}-\u{1FAFF}]/u.test(html) && /[▲▼■]/.test(html), 'bez emoji, ze znakiem kierunku');
+        const host = document.createElement('div'); host.innerHTML = '<input id="mkt-qty-ZA1" value="10">'; document.body.appendChild(host);
+        try { const realRender = renderKantor; renderKantor = () => {}; try { marketsUiTrade('ZA1', 'buy'); } finally { renderKantor = realRender; } assertEq(foreignIssuers.ZA1.holders.player, 10, 'zlecenie z interfejsu'); } finally { host.remove(); }
+    }));
+
+    test('G10: zakładka „Obce” pokazuje tylko kwity GDR (akcje krajów dołączonych są w zakładce Rynki), a przyrost zapisu 3 krajów po 6,5 roku mieści się w celu', () => {
+        initFxState(); resetGdrState(); startFund();
+        createForeignIssuer('GLS'); createForeignIssuer('KWS');
+        const countriesReal = ['DE', 'US', 'CZ'].filter(id => COUNTRY_DEFS[id]);
+        for (const id of countriesReal) joinCountry(id);
+        // GLS jest gigantem USA: po dołączeniu USA kwit stał się akcją i znika z zakładki Obce
+        const gdrOnly = getForeignIssuerList().filter(i => i.kind !== 'share');
+        assert(gdrOnly.every(i => i.kind !== 'share') && gdrOnly.some(i => i.id === 'KWS') && !gdrOnly.some(i => i.id === 'GLS'), 'kwity: KWS zostaje, GLS zamienił się w akcję');
+        const q0 = macro.quarter;
+        withSeededRandom(5, () => { for (let w = 0; w < 338; w++) { stepFxRates(); stepCountries(); if (w % 13 === 12) { macro.quarter++; processCountriesQuarterly(); } } });
+        macro.quarter = q0;
+        const bytes = JSON.stringify(getCountriesSnapshot()).length;
+        assert(bytes <= 0.15 * 2_300_000, `zapis krajów ${bytes} B (cel: ≤ 15% typowego zapisu 20 lat)`);
+        resetGdrState(); initFxState();
+    });
     // --- koniec grupy 0.16.2 ---
 });
 

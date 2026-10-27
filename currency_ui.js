@@ -69,7 +69,7 @@ function renderKantor() {
     if (!body || !playerFund) { if (body) body.innerHTML = '<p class="text-muted">Kantor działa po założeniu funduszu.</p>'; return; }
     const ticker = document.getElementById('kantor-ticker');
     if (ticker) ticker.textContent = `Gotówka funduszu: ${formatZl(playerCash, 0)} · waluty: ${formatZl(getForeignCashPln('player'), 0)} · kwity GDR: ${formatZl(getFundGdrValue(), 0)}`;
-    body.innerHTML = kantorTab === 'foreign' ? renderForeignTab() : renderRatesTab();
+    body.innerHTML = kantorTab === 'foreign' ? renderForeignTab() : (kantorTab === 'markets' && typeof renderMarketsTab === 'function') ? renderMarketsTab() : renderRatesTab();
     if (kantorTab === 'rates') updateKantorQuote();
 }
 
@@ -126,7 +126,7 @@ function kantorUiSell() {
 function setObceFilter(key, value) { obceFilter[key] = value; renderKantor(); }
 
 function renderForeignTab() {
-    const issuers = getForeignIssuerList();
+    const issuers = getForeignIssuerList().filter(i => i.kind !== 'share'); // akcje krajów dołączonych są w zakładce Rynki
     const countries = [...new Set(FOREIGN_GIANTS.map(g => g.country))], currencies = [...new Set(FOREIGN_GIANTS.map(g => g.currency))];
     const opts = (list, current, label) => `<option value="">${label}</option>` + list.map(v => `<option value="${v}" ${v === current ? 'selected' : ''}>${escapeHtml(COUNTRY_NAMES[v] || v)}</option>`).join('');
     const filtered = issuers.filter(i => (!obceFilter.country || i.country === obceFilter.country) && (!obceFilter.currency || i.currency === obceFilter.currency));
