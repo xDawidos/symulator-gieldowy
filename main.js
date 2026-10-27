@@ -593,6 +593,7 @@ function applySaveSnapshot(snapshot) {
     ensureSubcontractorRegistry(); // 0.15.5 B2: rejestr 12 specjalności budowany z istniejących danych (zapisy starsze mają 7 podwykonawców)
     ensureAllReitModels(); // 0.15.5 B5: REIT-y ze starszego zapisu dostają portfel z bilansu
     if (snapshot.version < 16) report.warnings.push('Dodano waluty i kantor (migracja v16): kursy startowe, brak walut i kwitów depozytowych.');
+    if (typeof ensureLaunchedIndexes === 'function') ensureLaunchedIndexes(); // 0.16.1: SIG40/BSIG80 z decyzji Banku Centralnego
     if (typeof applyGdrSnapshot === 'function') applyGdrSnapshot(snapshot.gdr);
     if (typeof applyCurrencySnapshot === 'function') applyCurrencySnapshot(snapshot.currencies); // 0.16.1 G2: v15 → kursy startowe, bez walut
     if (snapshot.antitrustOffice && typeof snapshot.antitrustOffice === 'object') Object.assign(antitrustOffice, snapshot.antitrustOffice); // 0.15.6 E5: poziom urzędu (dawniej nie zapisywany)
@@ -1199,7 +1200,7 @@ function setGameSpeed(speedMultiplier) {
         const gameTimeDelta = BASE_DELAYS.stockUpdate; // Każdy tick to zawsze 1 sekunda CZASU GRY
         cleanupBankruptStocks(currentSpeedMultiplier);
         updateStockPrices();
-        updateMarketIndexes(); // GIG/TIG5/SIG20 — benchmark funduszu (wcześniej nigdy nie był liczony)
+        updateMarketIndexes(); // GIG/SIG20/SIG40/BSIG80 — benchmark funduszu (wcześniej nigdy nie był liczony)
         updateHoldingCompanies();
         if (FEATURE_FLAGS.startups) {
             updateStartups(gameTimeDelta);
@@ -1485,6 +1486,7 @@ gameTimers.weekly = setGameInterval(() => {
         advanceMacroQuarter(); // inflacja, bezrobocie, cykle sektorów, wybory (macro.js)
         processCityQuarterly(); // festyn raz w roku (city.js)
         applyCrowdingPressureToWeak(); // D2: nasycony rynek — słabe spółki tanieją szybciej
+        if (typeof processIndexLaunchQuarterly === 'function') processIndexLaunchQuarterly(); // 0.16.1: Bank Centralny uruchamia SIG40 i BSIG80
         if (typeof processGiantEventQuarterly === 'function') processGiantEventQuarterly(); // 0.16.1 G3: „Gigant wkracza na scenę” (gdr.js)
         if (typeof processListingsQuarterly === 'function') processListingsQuarterly(); // 0.15.6: wymogi utrzymania, rynki NH i prywatny (listings.js)
         if (typeof enforceListingLimitQuarterly === 'function') enforceListingLimitQuarterly(); // 0.15.4 P5: powyżej 115 spółek krajowych wymuszone wycofanie najsłabszych

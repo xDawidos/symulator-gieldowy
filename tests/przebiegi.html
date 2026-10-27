@@ -714,7 +714,7 @@ const PROBE = `(function () {
             sectorUnions: soc ? Object.keys(soc.sectorUnions || {}).length : null,
             striking: wfCompanies.filter(c => c.workforce.strike).length,
             strikes: soc?.stats?.strikes || 0, mails: s.mails, mails013: s.mails013, companies: companies.length,
-            tig5: marketIndexes.find(i => i.id === 'TIG5')?.value,
+            sig40: marketIndexes.find(i => i.id === 'SIG40')?.value, bsig80: marketIndexes.find(i => i.id === 'BSIG80')?.value,
             // 0.14.2 P1: instytuty — cena względem wartości z modelu zysku (granty 30 tys. + 25 tys. zł × √technologii na kwartał, C/Z sektora Badania)
             inst: (() => { const techs = stocks.reduce((n, x) => n + (x.research?.unlockedTechs?.length || 0), 0); return stocks.filter(x => x.assetType === 'ResearchInstitute').map(x => +(x.price / ((30000 + Math.sqrt(techs) * 25000) * 4 * 25 / x.totalShares)).toFixed(3)); })(),
             maxFairRatio: (() => { let m = 0; for (const x of stocks) { const f = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(x) : null; if (f > 0 && !x.isBankrupt) m = Math.max(m, x.price / f); } return +m.toFixed(2); })(),

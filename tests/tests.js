@@ -3125,9 +3125,9 @@ group('Testy ogólne 0.11: benchmark GIG i wykup posiadaczy', () => {
         const gigReturn = (gig.value - baseGig) / baseGig;
         assert(Math.abs(gigReturn - 0.01) < 1e-4, `GIG powinien wzrosnąć o 1.0% (waga 10% * +10%), wzrósł o ${(gigReturn * 100).toFixed(3)}%`);
 
-        // 3. TIG5 ważony kapitalizacją
-        const tig5 = marketIndexes.find(i => i.id === 'TIG5');
-        assert(tig5 && tig5.value > 0, 'TIG5 ma dodatnią wartość');
+        // 3. SIG20 ważony kapitalizacją
+        const sig20 = marketIndexes.find(i => i.id === 'SIG20');
+        assert(sig20 && sig20.value > 0, 'SIG20 ma dodatnią wartość');
 
         // 4. Hasło w Akademii
         assert(typeof ACADEMY_ENTRIES.indeks_wazony === 'object', 'Hasło indeks_wazony istnieje');
@@ -10023,22 +10023,24 @@ group('0.15.4: Poprawki z gry 3 (licznik, okna, wykres, dywidenda, split, limit 
         try { assertEq(processSplitsQuarterly().length, 1, 'pętla kwartalna dzieli akcje bez wyjątku'); } finally { Math.random = random; }
     });
 
-    test('P4a: indeksy łańcuchowe (GIG, TIG5, SIG20) nie robią skoku przy splicie i konsolidacji, a nadal reagują na zwykły ruch kursu', () => {
+    test('P4a: indeksy łańcuchowe (GIG, SIG20, SIG40) nie robią skoku przy splicie i konsolidacji, a nadal reagują na zwykły ruch kursu', () => {
         const list = Array.from({ length: 30 }, (_, i) => Object.assign(mk(`I${i}`, { price: 100 + i, totalShares: 1000 * (30 - i) }), { sector: ['Usługi'] }));
         resetWorld(list);
+        launchMarketIndex('SIG40');
         const idx = id => marketIndexes.find(i => i.id === id);
-        for (const id of ['GIG', 'TIG5', 'SIG20']) { idx(id).value = 0; idx(id).lastPrices = null; }
+        for (const id of ['GIG', 'SIG40', 'SIG20']) { idx(id).value = 0; idx(id).lastPrices = null; }
         updateMarketIndexes(); updateMarketIndexes();
-        const base = { gig: idx('GIG').value, tig: idx('TIG5').value, sig: idx('SIG20').value };
+        const base = { gig: idx('GIG').value, tig: idx('SIG40').value, sig: idx('SIG20').value };
         assert(base.gig > 0 && base.tig > 0 && base.sig > 0, 'indeksy mają wartość');
         applyShareCountChange(list[0], 5);                      // największa spółka: split 5:1 (kurs ÷5)
         updateMarketIndexes();
-        assertNear(idx('GIG').value, base.gig, 'GIG bez skoku po splicie', 1e-9); assertNear(idx('TIG5').value, base.tig, 'TIG5 bez skoku', 1e-9); assertNear(idx('SIG20').value, base.sig, 'SIG20 bez skoku', 1e-9);
+        assertNear(idx('GIG').value, base.gig, 'GIG bez skoku po splicie', 1e-9); assertNear(idx('SIG40').value, base.tig, 'SIG40 bez skoku', 1e-9); assertNear(idx('SIG20').value, base.sig, 'SIG20 bez skoku', 1e-9);
         applyShareCountChange(list[1], 1 / 4);                  // konsolidacja 1:4 (kurs ×4)
         updateMarketIndexes();
         assertNear(idx('GIG').value, base.gig, 'GIG bez skoku po konsolidacji', 1e-9);
         list[2].price *= 1.1; updateMarketIndexes();
-        assert(idx('GIG').value > base.gig * 1.0001 && idx('TIG5').value > base.tig, 'zwykły wzrost kursu podnosi indeksy');
+        assert(idx('GIG').value > base.gig * 1.0001 && idx('SIG40').value > base.tig, 'zwykły wzrost kursu podnosi indeksy');
+        centralBank.indexes = {}; ensureLaunchedIndexes();
     });
 
     test('P4b: konsolidacja 1:10 — akcje ÷10, kurs ×10, ułamki akcji wypłacone gotówką z kasy spółki, wartość pozycji i NAV bez zmian', () => {
@@ -12109,6 +12111,34 @@ group('0.16.1', () => {
         for (const code of Object.keys(CURRENCIES)) { assert(currencyIcon(code).includes('<text'), `ikona ${code}`); assert(CURRENCY_FLAG[code], `flaga waluty ${code}`); }
         assertEq(flagIcon('XX'), '', 'nieznany kraj bez flagi');
     });
+
+    test('G5: TIG5 zniknął; SIG40 i BSIG80 uruchamia Bank Centralny dopiero przy dość dużym rynku (BSIG80 po SIG40), decyzja zapisuje się i wraca po wczytaniu', () => {
+        const reset = () => { centralBank.indexes = {}; ensureLaunchedIndexes(); };
+        reset();
+        try {
+            assert(!marketIndexes.some(i => i.id === 'TIG5'), 'brak TIG5'); assertEq(marketIndexes.map(i => i.id).join(), 'GIG,SIG20', 'start: GIG i SIG20');
+            const small = Array.from({ length: 30 }, (_, i) => mk156(`S${i}`, { price: 100 }));
+            resetWorld(small); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'F' });
+            for (let i = 0; i < 60; i++) processIndexLaunchQuarterly();
+            assertEq(marketIndexes.length, 2, 'przy 30 spółkach Bank Centralny nie uruchamia nic');
+            const mid = Array.from({ length: 50 }, (_, i) => mk156(`M${i}`, { price: 100 + i }));
+            resetWorld(mid);
+            for (let i = 0; i < 60; i++) processIndexLaunchQuarterly();
+            assert(marketIndexes.some(i => i.id === 'SIG40') && !marketIndexes.some(i => i.id === 'BSIG80'), 'przy 50 spółkach powstaje SIG40, nie BSIG80');
+            const big = Array.from({ length: 95 }, (_, i) => mk156(`B${i}`, { price: 100 + i }));
+            resetWorld(big);
+            for (let i = 0; i < 60; i++) processIndexLaunchQuarterly();
+            assert(marketIndexes.some(i => i.id === 'BSIG80'), 'przy 95 spółkach powstaje BSIG80');
+            updateMarketIndexes(); updateMarketIndexes();
+            for (const id of ['SIG20', 'SIG40', 'BSIG80']) assert(marketIndexes.find(i => i.id === id).value > 0, `${id} ma wartość`);
+            const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
+            marketIndexes.splice(marketIndexes.findIndex(i => i.id === 'BSIG80'), 1); marketIndexes.splice(marketIndexes.findIndex(i => i.id === 'SIG40'), 1);
+            assert(applySaveSnapshot(raw).ok, 'wczytanie');
+            assert(marketIndexes.some(i => i.id === 'SIG40') && marketIndexes.some(i => i.id === 'BSIG80'), 'indeksy wróciły po wczytaniu');
+            startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'F' });
+            assertEq(marketIndexes.map(i => i.id).join(), 'GIG,SIG20', 'nowa gra: znów tylko GIG i SIG20');
+        } finally { reset(); }
+    }, 99);
 });
 
 async function runAllTests() {

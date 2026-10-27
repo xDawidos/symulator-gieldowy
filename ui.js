@@ -2805,7 +2805,7 @@ function displayMarketIndexes() {
 
     const canTradeIndexes = getSkillLevel('indexAnalystLvl1') >= 2;
 
-    // Wyświetlanie głównych indeksów (GIG, TIG5, SIG20)
+    // Wyświetlanie głównych indeksów (GIG, SIG20, SIG40, BSIG80)
     marketIndexes.forEach(index => {
         const indexDiv = document.createElement('div');
         indexDiv.className = 'index-item';

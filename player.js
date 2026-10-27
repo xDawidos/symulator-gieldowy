@@ -185,7 +185,7 @@ const skills = {
         name: 'Analityk Indeksowy 📈',
         unlockedLevel: 0,
         levels: [
-            { level: 1, cost: 150, description: 'Odblokowuje podgląd podstawowych indeksów giełdowych (GIG, TIG5, SIG20) na pulpicie.' },
+            { level: 1, cost: 150, description: 'Odblokowuje podgląd podstawowych indeksów giełdowych (GIG, SIG20, a po decyzji Banku Centralnego SIG40 i BSIG80) na pulpicie.' },
             { level: 2, cost: 350, description: 'Odblokowuje możliwość handlu jednostkami głównych indeksów giełdowych.', requires: { skillId: 'indexAnalystLvl1', level: 1 } },
             { level: 3, cost: 550, description: 'Odblokowuje "Wskaźnik Niestabilności Rynku" (WNR).', requires: { skillId: 'indexAnalystLvl1', level: 2 } },
             { level: 4, cost: 900, description: 'L4 „Nastroje rynku” — faza rynku i wskaźnik strachu i chciwości na pasku. Fazę potwierdzamy z opóźnieniem.', requires: { skillId: 'indexAnalystLvl1', level: 3 } },
@@ -1753,6 +1753,7 @@ function startNewCareer(profile = {}) {
     };
 
     playerCash = FUND_START_CASH;
+    if (typeof centralBank === 'object') { centralBank.indexes = {}; if (typeof ensureLaunchedIndexes === 'function') ensureLaunchedIndexes(); } // 0.16.1: nowa gra — tylko GIG i SIG20
     if (typeof initFxState === 'function') initFxState(); // 0.16.1: nowe kursy i pusta gotówka walutowa
     if (typeof resetGdrState === 'function') resetGdrState();
     for (const symbol of Object.keys(playerPortfolio)) delete playerPortfolio[symbol];

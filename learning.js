@@ -714,7 +714,7 @@ Object.assign(ACADEMY_ENTRIES, {
     },
     indeks_wazony: {
         title: 'Indeks ważony kapitalizacją', icon: '📊',
-        text: 'W indeksie ważonym kapitalizacją (jak GIG, TIG5 czy WIG20) wpływ spółki na indeks zależy od jej wartości rynkowej (kurs × liczba akcji), a nie samej ceny akcji. Aby zapobiec zdominowaniu indeksu przez jednego giganta, stosuje się limity wag (tzw. cap, w GIG max 10% na spółkę). Dzięki temu indeks odzwierciedla realną wartość całej giełdy, a debiut drogiej pojedynczej akcji nie wykrzywia sztucznie wskaźnika.',
+        text: 'W indeksie ważonym kapitalizacją (jak GIG, SIG20, SIG40 czy BSIG80) wpływ spółki na indeks zależy od jej wartości rynkowej (kurs × liczba akcji), a nie samej ceny akcji. Aby zapobiec zdominowaniu indeksu przez jednego giganta, stosuje się limity wag (tzw. cap, w GIG max 10% na spółkę). Dzięki temu indeks odzwierciedla realną wartość całej giełdy, a debiut drogiej pojedynczej akcji nie wykrzywia sztucznie wskaźnika.',
         example: () => {
             const gig = typeof marketIndexes !== 'undefined' ? marketIndexes.find(i => i.id === 'GIG') : null;
             if (!gig || !gig.weights) return 'GIG stosuje limit 10% wagi na pojedynczą spółkę.';
@@ -724,7 +724,7 @@ Object.assign(ACADEMY_ENTRIES, {
         quiz: [
             { q: 'Od czego zależy waga spółki w indeksie ważonym kapitalizacją?', a: ['Od wartości rynkowej (kurs × liczba akcji)', 'Tylko od samej ceny pojedynczej akcji', 'Od liczby pracowników spółki'], c: 0 },
             { q: 'Po co wprowadza się limit wagi (tzw. cap, np. 10%) w indeksie giełdowym?', a: ['Aby jedna ogromna spółka nie zdominowała całego indeksu', 'Żeby zablokować wypłatę dywidend', 'Aby ograniczyć zysk inwestorów do 10%'], c: 0 },
-            { q: 'Które indeksy w grze są ważone kapitalizacją?', a: ['GIG (cap 10%), TIG5 oraz SIG20', 'Tylko lokaty i obligacje', 'Żadne — wszystkie są równe'], c: 0 }
+            { q: 'Które indeksy w grze są ważone kapitalizacją?', a: ['GIG (cap 10%), SIG20, SIG40 i BSIG80', 'Tylko lokaty i obligacje', 'Żadne — wszystkie są równe'], c: 0 }
         ]
     },
     jednorozce: {

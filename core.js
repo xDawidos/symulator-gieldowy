@@ -3638,14 +3638,6 @@ let marketIndexes = [
         priceHistory: []
     },
     {
-        id: 'TIG5',
-        name: 'Topowy Indeks Giełdowy 5',
-        description: 'Śledzi kondycję 5 spółek o największej kapitalizacji rynkowej (ważony kapitalizacją).',
-        value: 0,
-        change: 0,
-        priceHistory: []
-    },
-    {
         id: 'SIG20',
         name: 'Szeroki Indeks Giełdowy 20',
         description: 'Śledzi kondycję 20 największych spółek na giełdzie (ważony kapitalizacją).',
@@ -3654,6 +3646,46 @@ let marketIndexes = [
         priceHistory: []
     }
 ];
+
+// 0.16.1: SIG40 (dawniej TIG5 zastąpiony szerszym indeksem) i BSIG80 powstają dopiero z decyzji Banku Centralnego, gdy rynek jest dość duży.
+const INDEX_LAUNCHES = {
+    SIG40: { size: 40, minListed: 45, requires: null, name: 'Szeroki Indeks Giełdowy 40', description: 'Śledzi 40 największych spółek na giełdzie (ważony kapitalizacją). Uruchomiony decyzją Banku Centralnego.' },
+    BSIG80: { size: 80, minListed: 90, requires: 'SIG40', name: 'Bardzo Szeroki Indeks Giełdowy 80', description: 'Śledzi 80 największych spółek — prawie cały rynek (ważony kapitalizacją). Uruchomiony decyzją Banku Centralnego.' }
+};
+const INDEX_LAUNCH_CHANCE = 0.25; // szansa na decyzję Banku Centralnego w kwartale, gdy rynek spełnia warunek
+
+function launchMarketIndex(id) {
+    const def = INDEX_LAUNCHES[id];
+    if (!def || marketIndexes.some(i => i.id === id)) return false;
+    marketIndexes.push({ id, name: def.name, description: def.description, value: 0, change: 0, priceHistory: [] });
+    if (!centralBank.indexes) centralBank.indexes = {};
+    if (!(id in centralBank.indexes)) centralBank.indexes[id] = typeof macro === 'object' ? macro.quarter : 0;
+    return true;
+}
+
+/** Po wczytaniu zapisu / nowej grze: indeksy uruchomione przez Bank Centralny wracają na listę (indeksy startują od nowa jak GIG). */
+function ensureLaunchedIndexes() {
+    for (const id of Object.keys(INDEX_LAUNCHES)) {
+        const launched = Boolean(centralBank?.indexes?.[id]) || (centralBank?.indexes && id in centralBank.indexes);
+        if (launched) launchMarketIndex(id);
+        else { const i = marketIndexes.findIndex(x => x.id === id); if (i >= 0) marketIndexes.splice(i, 1); }
+    }
+}
+
+/** Co kwartał: Bank Centralny decyduje o uruchomieniu SIG40 (od 45 spółek) i BSIG80 (od 90 spółek, po SIG40). */
+function processIndexLaunchQuarterly() {
+    const listed = typeof getListedCompanyCount === 'function' ? getListedCompanyCount() : 0;
+    for (const [id, def] of Object.entries(INDEX_LAUNCHES)) {
+        if (marketIndexes.some(i => i.id === id) || listed < def.minListed || (def.requires && !marketIndexes.some(i => i.id === def.requires))) continue;
+        if (Math.random() >= INDEX_LAUNCH_CHANCE) continue;
+        launchMarketIndex(id);
+        const text = `🏦 Bank Centralny uruchamia indeks ${def.name} (${id}): rynek liczy już ${listed} spółek.`;
+        if (typeof logEvent === 'function') logEvent(text, 'market');
+        if (typeof pushNews === 'function') pushNews(text, null);
+        return id;
+    }
+    return null;
+}
 
 const bondIssuers = {
     municipal: [ // Emitenci komunalni
@@ -4126,7 +4158,7 @@ function updateMarketIndexes() {
         }
     }
 
-    // --- Obliczanie TIG5 i SIG20 (na podstawie kapitalizacji rynkowej) ---
+    // --- Obliczanie SIG20, SIG40 i BSIG80 (na podstawie kapitalizacji rynkowej) ---
 
     // 1. Spółki giełdowe aktywne
     const activeStocks = stocks.filter(stock => !stock.assetType && !stock.isBankrupt && !stock.tradeHalted && stock.price > 0);
@@ -4138,9 +4170,9 @@ function updateMarketIndexes() {
     // 2. Posortuj spółki od największej do najmniejszej pod względem kapitalizacji
     stocksWithMarketCap.sort((a, b) => b.marketCap - a.marketCap);
 
-    // 3–4. TIG5 (5 największych) i SIG20 (20 największych), ważone kapitalizacją. 0.15.4 P4: indeksy łańcuchowe jak GIG — zmiana liczby
+    // 3–4. SIG20 (20 największych), SIG40 i BSIG80 (jeśli uruchomione), ważone kapitalizacją. 0.15.4 P4: indeksy łańcuchowe jak GIG — zmiana liczby
     // akcji (split, konsolidacja) ani zmiana składu czołówki nie robi skoku; start jak dawniej: średnia cen ważona kapitalizacją.
-    for (const [id, size] of [['TIG5', 5], ['SIG20', 20]]) {
+    for (const [id, size] of [['SIG20', 20], ['SIG40', 40], ['BSIG80', 80]]) {
         const index = marketIndexes.find(idx => idx.id === id);
         const top = stocksWithMarketCap.slice(0, size);
         if (!index || top.length === 0) continue;
