@@ -5117,3 +5117,5 @@ button.mood-kpi:hover { background: var(--color-bg-hover) !important; border-col
 .text-right { text-align: right; }
 #kantor-modal tr.row-selected { background: var(--bg-elevated-2); outline: 1px solid var(--accent-info); }
 #kantor-modal tbody tr[onclick] { cursor: pointer; }
+.flag-ic, .cur-ic { vertical-align: -2px; flex: none; }
+.cur-ic { color: var(--accent-info); }

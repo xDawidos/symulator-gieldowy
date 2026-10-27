@@ -12068,7 +12068,7 @@ group('0.16.1', () => {
         fundWithCash(1_000_000);
         for (let i = 0; i < 10; i++) stepFxRates();
         const rates = renderRatesTab();
-        for (const code of FOREIGN_CURRENCIES) assert(rates.includes(`<strong>${code}</strong>`), `wiersz ${code}`);
+        for (const code of FOREIGN_CURRENCIES) assert(rates.includes(`<strong>${code}</strong>`) && rates.includes(`aria-label="Waluta ${code}"`), `wiersz ${code} z ikoną`);
         assert(rates.includes('<polyline') && rates.includes('dół widełek'), 'wykres z widełkami'); assert(!/[\u{1F300}-\u{1FAFF}]/u.test(rates), 'bez emoji');
         const holder = document.createElement('div'); holder.innerHTML = `<input id="kantor-amount" value="100000"><p id="kantor-quote"></p>`; document.body.appendChild(holder);
         try { updateKantorQuote(); assert(/Spread kantoru 1,5%/.test(document.getElementById('kantor-quote').textContent), 'spread słowem i liczbą'); } finally { holder.remove(); }
@@ -12100,6 +12100,14 @@ group('0.16.1', () => {
         const extra = JSON.stringify(getCurrencySnapshot()).length + JSON.stringify(getGdrSnapshot()).length;
         assert(extra <= 0.03 * 2_300_000, `przyrost zapisu ${extra} znaków (${(extra / 2_300_000 * 100).toFixed(2)}% typowego zapisu)`);
         initFxState(); resetGdrState();
+    });
+
+    test('G4: flagi 10 krajów i UE oraz ikony 10 walut istnieją jako SVG z podpisem, bez emoji', () => {
+        for (const c of ['PL', 'DE', 'FR', 'CZ', 'SE', 'CH', 'JP', 'CN', 'IN', 'TW', 'US', 'EU']) {
+            const svg = flagIcon(c); assert(svg.startsWith('<svg') && svg.includes('aria-label="Flaga:') && svg.includes('<title>'), `flaga ${c}`); assert(!/[\u{1F1E6}-\u{1F1FF}]/u.test(svg), 'bez emoji');
+        }
+        for (const code of Object.keys(CURRENCIES)) { assert(currencyIcon(code).includes('<text'), `ikona ${code}`); assert(CURRENCY_FLAG[code], `flaga waluty ${code}`); }
+        assertEq(flagIcon('XX'), '', 'nieznany kraj bez flagi');
     });
 });
 

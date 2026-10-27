@@ -77,14 +77,14 @@ function renderRatesTab() {
     const rows = FOREIGN_CURRENCIES.map(code => {
         const def = CURRENCIES[code], change = getFxChange(code), held = getCurrencyCash('player', code);
         return `<tr class="${code === kantorSelected ? 'row-selected' : ''}" onclick="selectKantorCurrency('${code}')" tabindex="0" onkeydown="if(event.key==='Enter')selectKantorCurrency('${code}')">
-            <td><strong>${code}</strong> <span class="text-muted">${escapeHtml(def.name)}</span></td>
+            <td>${currencyLabel(code)} <span class="text-muted">${escapeHtml(def.name)}</span></td>
             <td class="text-right">${fmtRate(fxRates[code], code)} zł</td>
             <td class="text-right">${fxArrow(change)} ${fxPct(change)}<span class="text-muted"> w ${getFxChangeWeeks(code)} tyg.</span></td>
             <td class="text-right">${held > 0 ? `${formatNumberPl(held, 2)} ${code} (${formatZl(toPln(held, code), 0)})` : '—'}</td></tr>`;
     }).join('');
     const code = kantorSelected, def = CURRENCIES[code];
     return `<table class="asset-mini-table w-full"><thead><tr><th>Waluta</th><th class="text-right">Kurs środkowy</th><th class="text-right">Zmiana</th><th class="text-right">Twoja pozycja</th></tr></thead><tbody>${rows}</tbody></table>
-        <h4 class="mt-3">${code} — ${escapeHtml(def.name)}</h4>
+        <h4 class="mt-3">${flagIcon(CURRENCY_FLAG[code], 14)} ${currencyIcon(code, 18)} ${code} — ${escapeHtml(def.name)}</h4>
         ${renderFxChart(code)}
         <p class="text-sm text-muted">Kurs porusza się w widełkach ${fmtRate(def.min, code)}–${fmtRate(def.max, code)} zł i wraca do wolno zmieniającej się średniej. ${def.safe ? 'Waluta „bezpiecznej przystani”: w kryzysie zwykle drożeje.' : 'W kryzysie zwykle słabnie wobec bezpiecznych przystani (USD, CHF, JPY).'}</p>
         <div class="bank-card mt-3"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('moneta', 20)}</span><div><h4>Wymiana ${code}</h4><span class="bank-card-type">kupno i sprzedaż po kursie kantoru</span></div></header>
@@ -133,7 +133,7 @@ function renderForeignTab() {
     const rows = filtered.map(i => {
         const held = getGdrHeld(i), h = i.history, change = h.length > 1 ? i.price / h[0] - 1 : 0;
         return `<tr><td><strong>${getGdrSymbol(i)}</strong> <span class="text-muted">${escapeHtml(i.name)}</span></td>
-            <td>${escapeHtml(COUNTRY_NAMES[i.country] || i.country)} · ${i.currency}</td>
+            <td>${flagIcon(i.country, 12)} ${escapeHtml(COUNTRY_NAMES[i.country] || i.country)} · ${currencyIcon(i.currency, 14)} ${i.currency}</td>
             <td class="text-right">${formatNumberPl(i.price, 2)} ${i.currency}<br><span class="text-muted text-xs">${fxArrow(change)} ${fxPct(change)} w ${h.length - 1} tyg.</span></td>
             <td class="text-right">${formatZl(getGdrMid(i), 2)}<br><span class="text-muted text-xs">kupno ${formatZl(getGdrQuote(i, 'buy'), 2)} · sprzedaż ${formatZl(getGdrQuote(i, 'sell'), 2)}</span></td>
             <td class="text-right">${held > 0 ? `${formatNumberPl(held, 0)} (${formatZl(held * getGdrMid(i), 0)})` : '—'}</td>
@@ -163,7 +163,7 @@ function showGiantEventWindow(result) {
     if (!isGamePaused && typeof togglePauseGame === 'function') togglePauseGame();
     const body = document.getElementById('giant-event-body');
     if (result.kind === 'gdr') {
-        body.innerHTML = `<p><strong>${escapeHtml(result.giantName)}</strong> (${escapeHtml(COUNTRY_NAMES[result.country] || result.country)}) wchodzi na naszą giełdę jako kwity depozytowe <strong>${escapeHtml(result.symbol)}</strong>.</p>
+        body.innerHTML = `<p><strong>${escapeHtml(result.giantName)}</strong> (${flagIcon(result.country, 12)} ${escapeHtml(COUNTRY_NAMES[result.country] || result.country)}) wchodzi na naszą giełdę jako kwity depozytowe <strong>${escapeHtml(result.symbol)}</strong>.</p>
             <dl class="bank-card-rates"><div><dt>Cena w ${result.currency}</dt><dd>${formatNumberPl(result.priceForeign, 2)}</dd></div><div><dt>Cena kwitu w PLN</dt><dd>${formatZl(result.pricePln, 2)}</dd></div><div><dt>Spread depozytowy</dt><dd>${formatNumberPl(GDR_RULES.depositSpread * 100, 1)}%</dd></div></dl>
             <p class="text-sm">Kupisz je w oknie Kantor → Obce. Pamiętaj: wynik kwitu to zmiana ceny akcji <em>i</em> kursu ${result.currency}.</p>`;
     } else {
