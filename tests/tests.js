@@ -950,6 +950,7 @@ group('Fundusz gracza (etap B)', () => {
 
     test('P12: lokaty spółek od zaufania 40; napływ organiczny 0 przy 20, połowa przy 37,5', () => {
         fundWorld();
+        playerFund.openSubscriptions = true; // emisja ciągła wycofana z gry — testujemy mechanizm wewnętrzny
         const full = getOrganicInflowRate(50);
         assert(getOrganicInflowRate(20) === 0, 'zaufanie 20');
         const half = getOrganicInflowRate(37.5), raw = Math.max(0, Math.min(0.5, ORGANIC_INFLOW_BASE + (37.5 - 50) / 50 * 0.04 + getRecentExcessAnnual() * 1.2 + getPlayerReputationFactor() * 0.03));
@@ -1634,6 +1635,7 @@ group('Klienci z charakterami i rynek JU (etap F1) + nowe spółki (F4)', () => 
 
     test('macierz decyzji: zadowolony+zaufanie → dokupuje; zadowolony bez zaufania → rynek wtórny; niezadowolony → umarza', () => {
         worldF1();
+        playerFund.openSubscriptions = true;
         const random = Math.random;
         Math.random = () => 0.01;
         const client = playerFund.clients.find(c => c.type === 'careful');
@@ -5163,6 +5165,7 @@ group('0.13.1 B5: stabilność funduszu', () => {
             allBonds.length = 0;
             marketIndexes.find(index => index.id === 'GIG').value = 100;
             startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+            playerFund.openSubscriptions = true; // emisja ciągła wycofana z gry — testujemy dawny mechanizm wewnętrzny
             const units0 = playerFund.units;
             let unitsYear1 = units0;
             for (let week = 0; week < weeks; week++) {
@@ -5182,11 +5185,20 @@ group('0.13.1 B5: stabilność funduszu', () => {
         });
     }
 
-    test('emisja ciągła domyślnie otwarta, przełącznik ją zamyka', () => {
+    test('0.16.1: emisja ciągła wycofana — domyślnie zamknięta, nowe udziały tylko przez kampanię emisyjną; oferta dużego klienta nie dodaje udziałów sama', () => {
         simulateFund(0, 1, 1);
-        assert(isFundOpenForSubscriptions(), 'domyślnie otwarta');
-        setFundOpenSubscriptions(false);
-        assert(!isFundOpenForSubscriptions() && getOrganicInflowRate() >= 0, 'zamknięta');
+        delete playerFund.openSubscriptions;
+        assert(!isFundOpenForSubscriptions(), 'domyślnie zamknięta');
+        const units0 = playerFund.units;
+        const r = Math.random; Math.random = () => 0;
+        try { playerFund.trust = 80; playerFund.current.emissions = 0; maybeTriggerForcedEmission(); } finally { Math.random = r; }
+        assertEq(playerFund.units, units0, 'oferta nie dodaje udziałów');
+        assert(getEmissionOffer() && getEmissionOffer().units > 0, 'jest oferta dużego klienta');
+        playerCash = 1_000_000;
+        const res = acceptEmissionOffer();
+        assert(res.ok && playerFund.subscription, `przyjęcie oferty uruchamia kampanię: ${res.reason || ''}`);
+        assert(!getEmissionOffer(), 'oferta zużyta');
+        for (let i = 0; i < 40; i++) processCampaignsWeekly();
     });
 
     test('wynik = GIG, zaufanie 50: zmiana JU w roku w granicach ±5% (8 kwartałów)', () => {
@@ -5266,6 +5278,7 @@ group('Etap A: decyzje balansu (zaufanie vs GIG, lokaty spółek, polityki kadro
 
     test('lokaty spółek w JU: każda ≤ 5% aktywów funduszu, łącznie ≤ 10% na kwartał', () => {
         const companies = world(12);
+        playerFund.openSubscriptions = true;
         companies.forEach(company => { company.reputation.player = REPUTATION_LEVELS.CORRECT + 10; });
         const assets0 = getFundAssets();
         const random = Math.random;
@@ -8263,6 +8276,7 @@ group('0.15.0.1: Poprawki 0.15 (bezpiecznik, margin call, pieniądze, emisje, kr
 
     test('C3 (B7): Funkcjonariusz dokupuje udziały z dopłatą ze skarbu; pętla obsługuje wszystkich klientów', () => {
         const { food } = defensiveWorld();
+        playerFund.openSubscriptions = true;
         playerPortfolio.JEDZ = { shares: 9000, avgPrice: 100, assetType: 'stock' };
         food.sharesHeld = 9000;
         playerCash = 500000; playerFund.trust = 80; // fundusz defensywny (≥ 50%) i budżet napływu dla 3 klientów

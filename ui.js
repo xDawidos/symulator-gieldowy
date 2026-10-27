@@ -6786,7 +6786,7 @@ function renderFundFlowReasons() {
     const queued = typeof getQueuedRedemptionUnits === 'function' ? getQueuedRedemptionUnits() : 0;
     box.innerHTML = quarterTable(stats.last, 'Ostatni kwartał') + quarterTable(stats.current, 'Bieżący kwartał')
         + `<p class="text-sm">Bramka umorzeń: wykorzystano ${formatNumberPl(gateUsed, 1)}% z ${formatNumberPl(REDEMPTION_GATE_SHARE * 100, 0)}%, w kolejce ${formatNumberPl(queued, 1)} udziałów.</p>`
-        + `<p class="text-xs text-muted">Napływ nowych klientów (emisja ${isFundOpenForSubscriptions() ? 'otwarta' : 'zamknięta'}): ok. ${formatNumberPl((isFundOpenForSubscriptions() ? getOrganicInflowRate() * 100 : 0), 1)}% aktywów rocznie — zależy od zaufania, reputacji i wyniku vs GIG.</p>`;
+        + `<p class="text-xs text-muted">Nowe udziały powstają tylko w kampanii emisyjnej (Klienci i udziały); duży klient składa ofertę, a Ty decydujesz, czy ją przyjąć.</p>`;
 }
 
 /** Skrót z powiadomienia: otwiera panel przepływów funduszu. */
@@ -6997,14 +6997,9 @@ function renderPrivatePanel() {
            Kupowanie akcji, które fundusz kupił w tym tygodniu, grozi kontrolą compliance.</p>`;
 }
 
+/** 0.16.1: emisja tylko przez kampanię — przycisk prowadzi do panelu „Klienci i udziały” z kartą kampanii. */
 function handleFundEmission() {
-    const input = document.getElementById('fund-emission-units');
-    const units = Math.floor(Number(input?.value) || 0);
-    if (!(units > 0)) return;
-    const result = issueFundUnits(units);
-    const blockedText = result.blocked === 'size' ? 'Emisja: przy obecnym zaufaniu limit wielkości to 0 udziałów.' : result.blocked;
-    showToast(result.issued > 0 ? `Emisja: sprzedano ${formatNumberPl(result.issued, 1)} udziałów (${formatZl(result.raised)})${units > getMaxEmissionUnits() ? ` — limit wielkości ${getMaxEmissionUnits()} udziałów` : ''}` : blockedText || 'Emisja: brak chętnych', result.issued > 0 ? 'success' : 'warning');
-    refreshFundViews();
+    if (typeof openJuMarket === 'function') openJuMarket();
 }
 
 // =================================================================================

@@ -2122,7 +2122,7 @@ function notePlayerPositionLoss(symbol, quantity, reason, value = null) {
  * domyślnie OTWARTA; gracz może ją zamknąć przełącznikiem — wtedy JU przybywa tylko przez jego emisję.
  */
 function isFundOpenForSubscriptions() {
-    return Boolean(playerFund) && playerFund.openSubscriptions !== false;
+    return Boolean(playerFund) && playerFund.openSubscriptions === true; // 0.16.1: emisja ciągła wycofana z gry (domyślnie zamknięta, bez przełącznika w UI) — nowe udziały tylko w kampanii emisyjnej; flaga zostaje dla testów
 }
 
 function setFundOpenSubscriptions(open) {
@@ -2283,9 +2283,13 @@ function maybeTriggerForcedEmission() {
     if (Math.random() > 0.03 * getFundCapacityFactor() || playerFund.trust < 40 || playerFund.current.emissions >= MAX_EMISSIONS_PER_PERIOD) return; // P12: limit 2 emisji na okres
     const nav = getFundNav();
     const value = getFundAssets() * getRandomInRange(0.1, 0.3);
-    const client = addFundClient('institution', 0, nav);
-    logEvent(`🏛️ ${client.name} chce zainwestować ${value.toFixed(0)} PLN — zarząd nakazuje przeprowadzić emisję.`, 'review');
-    issueFundUnits(Math.ceil(value / nav), { forcedValue: value, forcedClient: client });
+    // 0.16.1: duży klient nie dodaje udziałów sam — składa ofertę; gracz decyduje, czy zrobić kampanię emisyjną (acceptEmissionOffer)
+    const names = ['Fundusz Emerytalny Północ', 'Skarbiec Rodziny Kowalskich', 'Holding Zachodni', 'Kasa Oszczędnościowa Delta'];
+    const name = names[Math.floor(Math.random() * names.length)];
+    playerFund.emissionOffer = { name, units: Math.max(1, Math.ceil(value / nav)), expiresQ: (typeof macro === 'object' ? macro.quarter : 0) + 4 };
+    const text = `🏛️ ${name} chce zainwestować ok. ${value.toFixed(0)} PLN. Rozpocznij kampanię emisyjną (Klienci i udziały), by przyjąć ofertę.`;
+    logEvent(text, 'review');
+    if (typeof pushNotification === 'function') pushNotification(text, () => { if (typeof openJuMarket === 'function') openJuMarket(); });
 }
 
 // =================================================================================
