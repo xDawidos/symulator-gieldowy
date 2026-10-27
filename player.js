@@ -185,7 +185,7 @@ const skills = {
         name: 'Analityk Indeksowy 📈',
         unlockedLevel: 0,
         levels: [
-            { level: 1, cost: 150, description: 'Odblokowuje podgląd podstawowych indeksów giełdowych (GIG, TIG5, SIG20) na pulpicie.' },
+            { level: 1, cost: 150, description: 'Odblokowuje podgląd podstawowych indeksów giełdowych (GIG, SIG20, a po decyzji Banku Centralnego SIG40 i BSIG80) na pulpicie.' },
             { level: 2, cost: 350, description: 'Odblokowuje możliwość handlu jednostkami głównych indeksów giełdowych.', requires: { skillId: 'indexAnalystLvl1', level: 1 } },
             { level: 3, cost: 550, description: 'Odblokowuje "Wskaźnik Niestabilności Rynku" (WNR).', requires: { skillId: 'indexAnalystLvl1', level: 2 } },
             { level: 4, cost: 900, description: 'L4 „Nastroje rynku” — faza rynku i wskaźnik strachu i chciwości na pasku. Fazę potwierdzamy z opóźnieniem.', requires: { skillId: 'indexAnalystLvl1', level: 3 } },
@@ -1661,7 +1661,7 @@ function getFundAssets() {
     const ppp = typeof getFundPppValue === 'function' ? getFundPppValue() : 0;                 // projekty miejskie (city.js)
     const bridge = typeof getFundBridgeLoansValue === 'function' ? getFundBridgeLoansValue() : 0; // pożyczki pomostowe (finance.js)
     const projectBonds = typeof getFundProjectBondsValue === 'function' ? getFundProjectBondsValue() : 0; // obligacje projektowe (projects.js)
-    return Math.max(0, Number(playerCash) || 0) + getFundPortfolioValue() + getFundBondsValue() + deposits + ppp + bridge + projectBonds + getFundPoolValue();
+    return Math.max(0, Number(playerCash) || 0) + getFundPortfolioValue() + getFundBondsValue() + deposits + ppp + bridge + projectBonds + getFundPoolValue() + (typeof getForeignCashPln === 'function' ? getForeignCashPln('player') : 0) + (typeof getFundGdrValue === 'function' ? getFundGdrValue() : 0); // 0.16.1 G2b/G3: gotówka w walutach po kursie i kwity GDR
 }
 
 /** 0.14.1 R2 (błąd B): pula w NAV — niezainwestowana część gracza (nominalnie) + jego wkłady przez pulę w żyjące startupy (po koszcie). */
@@ -1672,6 +1672,26 @@ function getFundPoolValue() {
 function getFundNav() {
     if (!playerFund || !(playerFund.units > 0)) return 0;
     return Math.max(0, getFundAssets() - (Number(playerFund.liquidityLoan?.principal) || 0)) / playerFund.units; // 0.15.2: kredyt płynnościowy jest zobowiązaniem
+}
+
+/** 0.16.1: SIG20 — punkt odniesienia klientów instytucjonalnych (czołówka rynku zamiast całego rynku). */
+function getSig20Value() {
+    return Number(marketIndexes.find(index => index.id === 'SIG20')?.value) || 0;
+}
+
+/**
+ * 0.16.1: punkt odniesienia klienta zależy od typu. 'abs' — patrzy tylko, czy ma zysk w ostatnim czasie (emeryt, ostrożni, oszczędni),
+ * 'sig20' — porównuje z czołówką rynku (instytucje, inwestorzy, bogaci), 'gig' — z całym rynkiem (reszta).
+ */
+const CLIENT_BENCHMARK = { senior: 'abs', careful: 'abs', fearful: 'abs', miser: 'abs', officer: 'abs', institution: 'sig20', investor: 'sig20', rich: 'sig20' };
+const CLIENT_ABS_HURDLE = 0.015; // „ma zysk”: wynik okresu ponad ok. 1,5% (inflacja i lokata w skali okresu)
+
+/** Nadwyżka wyniku funduszu nad punktem odniesienia danego typu klienta (do `performance` w zadowoleniu). */
+function getClientExcess(def, ctx) {
+    const bench = CLIENT_BENCHMARK[def.key] || 'gig';
+    if (bench === 'abs' && Number.isFinite(ctx.recentReturn)) return ctx.recentReturn - CLIENT_ABS_HURDLE;
+    if (bench === 'sig20' && Number.isFinite(ctx.excessSig)) return ctx.excessSig;
+    return ctx.excess;
 }
 
 function getBenchmarkValue() {
@@ -1753,6 +1773,9 @@ function startNewCareer(profile = {}) {
     };
 
     playerCash = FUND_START_CASH;
+    if (typeof centralBank === 'object') { centralBank.indexes = {}; if (typeof ensureLaunchedIndexes === 'function') ensureLaunchedIndexes(); } // 0.16.1: nowa gra — tylko GIG i SIG20
+    if (typeof initFxState === 'function') initFxState(); // 0.16.1: nowe kursy i pusta gotówka walutowa
+    if (typeof resetGdrState === 'function') resetGdrState();
     for (const symbol of Object.keys(playerPortfolio)) delete playerPortfolio[symbol];
     playerWallet = createPlayerWallet(GRANDMA_POCKET_MONEY);
     activeTradingAccount = 'fund';
@@ -1803,6 +1826,7 @@ function beginFundPeriod() {
         elapsedMs: 0,
         startNav: nav,
         startBenchmark: getBenchmarkValue(),
+        startSig20: getSig20Value(),
         startRivals: Object.fromEntries(getExternalFunds().map(fund => [fund.symbol, getExternalFundValue(fund)])),
         peakNav: nav,
         maxDrawdown: 0,
@@ -1951,6 +1975,15 @@ const TRUST_TARGET_FLOOR = 15;      // 0.13.1 (B12): dolny próg celu zaufania
 const TRUST_GAIN_BONUS_MAX = 10;    // dodatni wynik okresu (+150 pkt × zwrot, do +10)
 const TRUST_CALM_BONUS = 5;         // okres bez wymuszonej sprzedaży i z obsunięciem < 5%
 
+/** 0.16.1: premia do zaufania za wyprzedzanie innych funduszy w ostatnim okresie: 0 przy miejscu w dolnej połowie, do +TRUST_RANK_BONUS_MAX za pierwsze miejsce. */
+const TRUST_RANK_BONUS_MAX = 8;
+function getRankTrustBonus() {
+    const last = playerFund?.periods?.[playerFund.periods.length - 1];
+    if (!last || !(last.rankOf > 1) || !(last.rank >= 1)) return 0;
+    const share = (last.rankOf - last.rank) / (last.rankOf - 1); // 1 = pierwsze miejsce, 0 = ostatnie
+    return Math.max(0, share - 0.5) * 2 * TRUST_RANK_BONUS_MAX;
+}
+
 function computeTrustTarget() {
     const periods = playerFund.periods.slice(-FUND_PERIODS_SHOWN);
     const current = playerFund.current;
@@ -1985,6 +2018,7 @@ function computeTrustTarget() {
     // 0.13.1 (B12): droga powrotu — zysk w bieżącym okresie (nawet poniżej GIG) i spokojny czas odbudowują zaufanie,
     // a cel nigdy nie spada poniżej progu, z którego da się wyjść dobrymi wynikami.
     score += Math.min(TRUST_GAIN_BONUS_MAX, Math.max(0, partial.fundReturn) * 150);
+    score += getRankTrustBonus();
     if (current.forcedSales === 0 && current.maxDrawdown < 0.05) score += TRUST_CALM_BONUS * partial.weight;
 
     return Math.max(TRUST_TARGET_FLOOR, Math.min(100, score));
@@ -1995,6 +2029,8 @@ function processFundWeekly() {
     if (!playerFund) return;
 
     chargeManagementFee();
+    if (typeof stepFxRates === 'function') stepFxRates(); // 0.16.1 G2a: kursy walut co tydzień gry
+    if (typeof stepForeignIssuers === 'function') stepForeignIssuers(); // 0.16.1 G3: ceny obcych gigantów (GDR)
 
     // Zaufanie zmienia się stopniowo (25% drogi do celu na tydzień).
     const target = computeTrustTarget();
@@ -2117,7 +2153,7 @@ function notePlayerPositionLoss(symbol, quantity, reason, value = null) {
  * domyślnie OTWARTA; gracz może ją zamknąć przełącznikiem — wtedy JU przybywa tylko przez jego emisję.
  */
 function isFundOpenForSubscriptions() {
-    return Boolean(playerFund) && playerFund.openSubscriptions !== false;
+    return Boolean(playerFund) && playerFund.openSubscriptions === true; // 0.16.1: emisja ciągła wycofana z gry (domyślnie zamknięta, bez przełącznika w UI) — nowe udziały tylko w kampanii emisyjnej; flaga zostaje dla testów
 }
 
 function setFundOpenSubscriptions(open) {
@@ -2137,6 +2173,7 @@ const FORCED_SALE_REASONS = {
 /** Przymusowa sprzedaż wolnych akcji funduszu; zwraca listę sprzedanych pozycji. */
 function forceLiquidation(amountNeeded, reason = 'redemption') {
     let needed = amountNeeded;
+    if (needed > 0 && typeof liquidateForeignCash === 'function') { needed -= liquidateForeignCash(needed); if (needed > 0 && typeof liquidateGdr === 'function') needed -= liquidateGdr(needed); } // 0.16.1: najpierw obca gotówka, potem kwity GDR
     const sold = [];
     const positions = Object.entries(playerPortfolio)
         .filter(([, holding]) => holding.assetType === 'stock' || !holding.assetType)
@@ -2271,14 +2308,19 @@ function issueFundUnits(requestedUnits, options = {}) {
     return { issued: raised / nav, raised, newClients: newClients.length };
 }
 
-/** Zdarzenie: duży klient chce wejść — emisja wymuszona (liczy się do limitu emisji). */
+/** Zdarzenie: duży klient chce wejść — emisja wymuszona (liczy się do limitu emisji).
+ * 0.16.1 G0b: szansa maleje z pojemnością strategii (getFundCapacityFactor) — pomiar g0b: to ≈ 70% napływu w 20 latach przy fundusz-gig. */
 function maybeTriggerForcedEmission() {
-    if (Math.random() > 0.03 || playerFund.trust < 40 || playerFund.current.emissions >= MAX_EMISSIONS_PER_PERIOD) return; // P12: limit 2 emisji na okres
+    if (Math.random() > 0.03 * getFundCapacityFactor() || playerFund.trust < 40 || playerFund.current.emissions >= MAX_EMISSIONS_PER_PERIOD) return; // P12: limit 2 emisji na okres
     const nav = getFundNav();
     const value = getFundAssets() * getRandomInRange(0.1, 0.3);
-    const client = addFundClient('institution', 0, nav);
-    logEvent(`🏛️ ${client.name} chce zainwestować ${value.toFixed(0)} PLN — zarząd nakazuje przeprowadzić emisję.`, 'review');
-    issueFundUnits(Math.ceil(value / nav), { forcedValue: value, forcedClient: client });
+    // 0.16.1: duży klient nie dodaje udziałów sam — składa ofertę; gracz decyduje, czy zrobić kampanię emisyjną (acceptEmissionOffer)
+    const names = ['Fundusz Emerytalny Północ', 'Skarbiec Rodziny Kowalskich', 'Holding Zachodni', 'Kasa Oszczędnościowa Delta'];
+    const name = names[Math.floor(Math.random() * names.length)];
+    playerFund.emissionOffer = { name, units: Math.max(1, Math.ceil(value / nav)), expiresQ: (typeof macro === 'object' ? macro.quarter : 0) + 4 };
+    const text = `🏛️ ${name} chce zainwestować ok. ${value.toFixed(0)} PLN. Rozpocznij kampanię emisyjną (Klienci i udziały), by przyjąć ofertę.`;
+    logEvent(text, 'review');
+    if (typeof pushNotification === 'function') pushNotification(text, () => { if (typeof openJuMarket === 'function') openJuMarket(); });
 }
 
 // =================================================================================
@@ -3774,7 +3816,7 @@ function getClientSatisfactionDrift(client, def, ctx) {
     const fee = getPlayerFeeRate();
     const parts = {
         reversion: (SATISFACTION_MEAN - client.satisfaction) * SATISFACTION_REVERSION,
-        performance: ctx.excess * def.chase * 0.3 - (def.comparesRivals && ctx.lastRankBad ? 0.02 : 0),
+        performance: getClientExcess(def, ctx) * def.chase * 0.3 - (def.comparesRivals && ctx.lastRankBad ? 0.02 : 0),
         trust: (ctx.trust - 50) / 50 * 0.012,                                   // słabszy składnik zaufania
         // 0.15.0.1 C6a: obsunięcie oceniane względem GIG (ponad 3 pp gorsze niż rynek) plus mała część absolutna w głębokiej bessie
         drawdown: -Math.max(0, ctx.maxDrawdown - (ctx.benchmarkDrawdown || 0) - 0.03) * def.volAversion * 0.3,
@@ -3807,16 +3849,29 @@ function getRecentExcessAnnual() {
     return playerFund?.periods?.length ? (last + partial) / 2 : partial;
 }
 
+/**
+ * 0.16.1 G0b: pojemność strategii. Napływ organiczny i dopłaty maleją z wielkością funduszu (duży fundusz trudniej powiększać o te same
+ * ułamki aktywów): mnożnik 1 do FUND_CAPACITY_REF, potem (ref/aktywa)^wykładnik, nie mniej niż FUND_CAPACITY_FLOOR.
+ * Pomiar (g0_diag20, fundusz-gig, 20 lat): bez pułapu udziały rosły średnio +3%/rok, ale 6,2% i −2% w skrajnych grach.
+ */
+const FUND_CAPACITY_REF = 60_000;
+const FUND_CAPACITY_EXPONENT = 0.6;
+const FUND_CAPACITY_FLOOR = 0.2;
+function getFundCapacityFactor(assets = getFundAssets()) {
+    if (!(assets > FUND_CAPACITY_REF)) return 1;
+    return Math.max(FUND_CAPACITY_FLOOR, Math.pow(FUND_CAPACITY_REF / assets, FUND_CAPACITY_EXPONENT));
+}
+
 /** Roczna stopa napływu nowych klientów (przy otwartej emisji): zaufanie, reputacja, wynik vs GIG. */
 function getOrganicInflowRate(trust = playerFund?.trust ?? 50) {
     const reputation = getPlayerReputationFactor();
     const trustGate = Math.max(0, Math.min(1, (trust - 25) / 25)); // 0.14.2 P12: 0 poniżej 25, liniowo do 50, potem bez zmian
-    return trustGate * Math.max(0, Math.min(0.5, ORGANIC_INFLOW_BASE + (trust - 50) / 50 * 0.04 + getRecentExcessAnnual() * 1.2 + reputation * 0.03));
+    return getFundCapacityFactor() * trustGate * Math.max(0, Math.min(0.5, ORGANIC_INFLOW_BASE + (trust - 50) / 50 * 0.04 + getRecentExcessAnnual() * 1.2 + reputation * 0.03));
 }
 
 /** Roczna stopa dopłat obecnych klientów (zadowoleni z zaufaniem): rośnie z wynikiem vs GIG. */
 function getTopupInflowRate(trust = playerFund?.trust ?? 50) {
-    return Math.max(0, Math.min(0.3, TOPUP_INFLOW_BASE + (trust - 50) / 50 * 0.03 + getRecentExcessAnnual() * 1.0));
+    return getFundCapacityFactor() * Math.max(0, Math.min(0.3, TOPUP_INFLOW_BASE + (trust - 50) / 50 * 0.03 + getRecentExcessAnnual() * 1.0));
 }
 
 /** Średnia reputacja gracza w spółkach (−1…1). */
@@ -3846,7 +3901,10 @@ function processClientsWeekly() {
     let newMoneyBudget = Math.min(getFundAssets() * MAX_WEEKLY_NEW_MONEY_SHARE, getFundAssets() * getTopupInflowRate(trust) / 52 * getRandomInRange(0.5, 1.5));
 
     const ethicsIssue = typeof getFundEthicsIssue === 'function' ? getFundEthicsIssue() : null;
-    const ctx = { excess, trust, maxDrawdown: current.maxDrawdown, benchmarkDrawdown: current.benchmarkDrawdown, lastRankBad, ethicsIssue };
+    const sigNow = getSig20Value();
+    const excessSig = current.startSig20 > 0 && sigNow > 0 ? getPeriodReturn(current.startNav, nav) - getPeriodReturn(current.startSig20, sigNow) : null;
+    const recentReturn = lastPeriod ? (lastPeriod.fundReturn + getPeriodReturn(current.startNav, nav)) / 2 : getPeriodReturn(current.startNav, nav); // zysk w ostatnim czasie: ostatni okres i bieżący
+    const ctx = { excess, excessSig, recentReturn, trust, maxDrawdown: current.maxDrawdown, benchmarkDrawdown: current.benchmarkDrawdown, lastRankBad, ethicsIssue };
     for (const client of [...playerFund.clients]) {
         const def = getClientCharacter(client);
         if (def.ethical && ethicsIssue && (!client.ethicsNoted || client.ethicsNoted !== ethicsIssue)) {

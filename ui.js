@@ -1907,7 +1907,7 @@ function displayStocks(previousInputValues = {}) {
     const parentNote = stock.isSubsidiaryOf ? ` · spółka zależna od ${stock.isSubsidiaryOf}${Number.isFinite(stock.parentStakePct) ? ` (${Math.round(stock.parentStakePct * 100)}%)` : ''} · ${exchanges[stock.exchange]?.name || stock.exchange}` : ''; // 0.14.2 P3
     const spinNote = (stock.spinoff ? ` · zapowiedziane wydzielenie: ${stock.spinoff.sector}` : '') + (stock.spunOffFrom && !stock.isSubsidiaryOf ? ` · wydzielona z ${stock.spunOffFrom}` : '') // 0.14 T4
       + (typeof getStockCooperations === 'function' && getStockCooperations(stock).length ? ` · kooperacje: ${getStockCooperations(stock).length}` : ''); // 0.14 T5
-    metaLine.textContent = `${primarySector} · ${stock.symbol}${parentNote}${spinNote}${marketId !== 'GPW' ? ` · ${getMarketBadgeText(stock)}` : ''}${stock.isDividendAristocrat ? ' · dywidendowy arystokrata' : ''}`;
+    metaLine.textContent = `${primarySector} · ${stock.symbol}${parentNote}${spinNote}${marketId !== 'GPW' ? ` · ${getMarketBadgeText(stock)}` : ''}${typeof getCompanyCountryNote === 'function' ? ` · ${getCompanyCountryNote(stock)}` : ''}${stock.isDividendAristocrat ? ' · dywidendowy arystokrata' : ''}`;
 
 
     identityWrap.appendChild(topLine);
@@ -2805,7 +2805,7 @@ function displayMarketIndexes() {
 
     const canTradeIndexes = getSkillLevel('indexAnalystLvl1') >= 2;
 
-    // Wyświetlanie głównych indeksów (GIG, TIG5, SIG20)
+    // Wyświetlanie głównych indeksów (GIG, SIG20, SIG40, BSIG80)
     marketIndexes.forEach(index => {
         const indexDiv = document.createElement('div');
         indexDiv.className = 'index-item';
@@ -6786,7 +6786,7 @@ function renderFundFlowReasons() {
     const queued = typeof getQueuedRedemptionUnits === 'function' ? getQueuedRedemptionUnits() : 0;
     box.innerHTML = quarterTable(stats.last, 'Ostatni kwartał') + quarterTable(stats.current, 'Bieżący kwartał')
         + `<p class="text-sm">Bramka umorzeń: wykorzystano ${formatNumberPl(gateUsed, 1)}% z ${formatNumberPl(REDEMPTION_GATE_SHARE * 100, 0)}%, w kolejce ${formatNumberPl(queued, 1)} udziałów.</p>`
-        + `<p class="text-xs text-muted">Napływ nowych klientów (emisja ${isFundOpenForSubscriptions() ? 'otwarta' : 'zamknięta'}): ok. ${formatNumberPl((isFundOpenForSubscriptions() ? getOrganicInflowRate() * 100 : 0), 1)}% aktywów rocznie — zależy od zaufania, reputacji i wyniku vs GIG.</p>`;
+        + `<p class="text-xs text-muted">Nowe udziały powstają tylko w kampanii emisyjnej (Klienci i udziały); duży klient składa ofertę, a Ty decydujesz, czy ją przyjąć.</p>`;
 }
 
 /** Skrót z powiadomienia: otwiera panel przepływów funduszu. */
@@ -6997,14 +6997,9 @@ function renderPrivatePanel() {
            Kupowanie akcji, które fundusz kupił w tym tygodniu, grozi kontrolą compliance.</p>`;
 }
 
+/** 0.16.1: emisja tylko przez kampanię — przycisk prowadzi do panelu „Klienci i udziały” z kartą kampanii. */
 function handleFundEmission() {
-    const input = document.getElementById('fund-emission-units');
-    const units = Math.floor(Number(input?.value) || 0);
-    if (!(units > 0)) return;
-    const result = issueFundUnits(units);
-    const blockedText = result.blocked === 'size' ? 'Emisja: przy obecnym zaufaniu limit wielkości to 0 udziałów.' : result.blocked;
-    showToast(result.issued > 0 ? `Emisja: sprzedano ${formatNumberPl(result.issued, 1)} udziałów (${formatZl(result.raised)})${units > getMaxEmissionUnits() ? ` — limit wielkości ${getMaxEmissionUnits()} udziałów` : ''}` : blockedText || 'Emisja: brak chętnych', result.issued > 0 ? 'success' : 'warning');
-    refreshFundViews();
+    if (typeof openJuMarket === 'function') openJuMarket();
 }
 
 // =================================================================================
@@ -7399,6 +7394,8 @@ function checkWorldInvariants() {
         finite(getBotFundNav(manager.fund), `NAV ${manager.name}`);
         checkPortfolio(manager.fund.portfolio, manager.name);
     }
+    if (typeof checkCurrencyInvariants === 'function') problems.push(...checkCurrencyInvariants()); // 0.16.1 G2
+    if (typeof checkGdrInvariants === 'function') problems.push(...checkGdrInvariants()); // 0.16.1 G3
     for (const bond of allBonds) finite(bond.faceValue, `obligacja ${bond.id}`);
     if (corporation) finite(corporation.budget, 'budżet korporacji');
     // A3: przycięcia „duchów posiadaczy” to ostrzeżenia, nie naruszenia — mogą maskować prawdziwy rozjazd.

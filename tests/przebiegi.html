@@ -211,6 +211,59 @@ PRESETS['gracz-aktywny'] = PRESETS['fundusz-gig'] + `(function () {
         return r;
     };
 })();`;
+// 0.16.1 G0a/G0c: gracz naprawdę kupujący akcje jednego typu (kolejna gra = kolejny mandat: defensywny, wzrostowy, dywidendowy, sektorowy tech)
+// i co rok robiący kampanię emisyjną z tym mandatem (w Hossie i w Bessie — fazy zapisywane przy każdej kampanii). Ok. 70% aktywów w akcjach
+// danego typu (fundusz sprzedaje wirtualną pozycję indeksową fundusz-gig), reszta w indeksie; pomiar mandatu co 4 tygodnie.
+PRESETS['gracz-akcje'] = PRESETS['fundusz-gig'] + `(function () {
+    const mandates = ['defensive', 'growth', 'dividend', 'sector:tech'];
+    const idx = (parent.__akcjeRun = (parent.__akcjeRun || 0) + 1) % mandates.length, mandate = mandates[idx];
+    const kind = [s => isStockDefensive(s), s => isStockModern(s), s => (Number(s.lastDividend?.yield) || 0) > 0.008, s => getStockSectorGroup(s) === 'tech'][idx];
+    // Przebieg bez gracza: okna wezwań i komplikacji nie zatrzymują gry (jak w presecie wiekszosciowiec).
+    if (typeof togglePauseGame === 'function') { const tp = togglePauseGame; togglePauseGame = function () { return isGamePaused ? tp.apply(this, arguments) : undefined; }; }
+    if (typeof openComplicationModal === 'function') openComplicationModal = (stock) => applyComplicationOption(stock.symbol, 'expensive');
+    if (typeof openTakeoverModal === 'function') openTakeoverModal = () => {};
+    const st = window.__akcje = { mandate, buys: 0, failed: 0, starts: [], measures: [], week: 0 };
+    const gigNow = () => Number(marketIndexes.find(i => i.id === 'GIG')?.value) || 0;
+    const stockValueNow = () => { let v = 0; for (const sym in playerPortfolio) { const h = playerPortfolio[sym]; if (h && h.assetType !== 'Startup') v += getHoldingMarketValue(sym, h); } return v; };
+    const pick = () => stocks.filter(s => !s.assetType && !s.isBankrupt && !s.isStateOwned && s.price > 0 && kind(s) && getAvailableShares(s) > 100 && (playerPortfolio[s.symbol]?.shares || 0) < s.totalShares * 0.15)
+        .sort((a, b) => b.price * b.sharesHeld - a.price * a.sharesHeld).slice(0, 12);
+    const origWeekly = processClientsWeekly;
+    processClientsWeekly = function () {
+        try {
+            const assets = getFundAssets(), g = gigNow();
+            const need = assets * 0.7 - stockValueNow();
+            if (need > assets * 0.01 && g > 0 && window.__idx) {
+                const s = pick()[Math.floor(Math.random() * pick().length)];
+                if (s) {
+                    const spend = Math.min(need, assets * 0.08, window.__idx.units * g);
+                    const free = Math.max(0, spend - Math.max(0, playerCash - assets * 0.02));
+                    if (free > 0) { window.__idx.units -= free / g; playerCash += free; }
+                    const qty = Math.floor(Math.min(spend, playerCash - assets * 0.02) / s.price);
+                    const before = playerCash;
+                    if (qty > 0) { buyStock(s.symbol, qty); if (playerCash < before) st.buys++; else st.failed++; }
+                }
+            }
+            st.week++;
+            if (st.week % 4 === 0) {
+                const def = getMandateDef(mandate), a2 = getFundAssets();
+                st.measures.push({ q: macro.quarter, v: Math.round(measureMandate(def) * 1000) / 1000, th: def.threshold, stockShare: Math.round(stockValueNow() / Math.max(1, a2) * 100) / 100, phase: getMarketRegime('home')?.phase });
+            }
+        } catch (e) { (window.__presetErrors = window.__presetErrors || []).push('akcje: ' + e); }
+        return origWeekly.apply(this, arguments);
+    };
+    const origQ = advanceMacroQuarter;
+    advanceMacroQuarter = function () {
+        try {
+            if (macro.quarter >= 4 && macro.quarter % 4 === 1) {
+                const r = startSubscriptionCampaign({ duration: 'quarter', targetPct: 0.1, lockYears: 1, mandate });
+                st.starts.push({ q: macro.quarter, ok: !!r.ok, reason: r.reason || null, phase: getMarketRegime('home')?.phase || '?' });
+            }
+        } catch (e) { (window.__presetErrors = window.__presetErrors || []).push('mandat: ' + e); }
+        return origQ.apply(this, arguments);
+    };
+    window.__campResult = () => ({ started: st.starts, totals: playerFund.campaignTotals || null, mandate: playerFund.mandateStats || null, mandateState: playerFund.mandateState || null, akcje: st,
+        ir: playerFund.ir || null, vip: playerFund.vip ? { won: playerFund.vip.won, lost: playerFund.vip.lost } : null, units: Math.round(playerFund.units), trust: Math.round(playerFund.trust) });
+})();`;
 PRESETS['ceo'] = PRESETS['gracz-aktywny'] + 'playerProfile.positionId = "ceo";';
 // 0.14 T4 (diagnoza decyzji 13): wymuszone dodatkowe zapowiedzi wydzieleń i stan matki/córki na każdym etapie.
 PRESETS['wydzielenia'] = `(function () {
@@ -661,7 +714,8 @@ const PROBE = `(function () {
             sectorUnions: soc ? Object.keys(soc.sectorUnions || {}).length : null,
             striking: wfCompanies.filter(c => c.workforce.strike).length,
             strikes: soc?.stats?.strikes || 0, mails: s.mails, mails013: s.mails013, companies: companies.length,
-            tig5: marketIndexes.find(i => i.id === 'TIG5')?.value,
+            sig20: marketIndexes.find(i => i.id === 'SIG20')?.value,
+            sig40: marketIndexes.find(i => i.id === 'SIG40')?.value, bsig80: marketIndexes.find(i => i.id === 'BSIG80')?.value,
             // 0.14.2 P1: instytuty — cena względem wartości z modelu zysku (granty 30 tys. + 25 tys. zł × √technologii na kwartał, C/Z sektora Badania)
             inst: (() => { const techs = stocks.reduce((n, x) => n + (x.research?.unlockedTechs?.length || 0), 0); return stocks.filter(x => x.assetType === 'ResearchInstitute').map(x => +(x.price / ((30000 + Math.sqrt(techs) * 25000) * 4 * 25 / x.totalShares)).toFixed(3)); })(),
             maxFairRatio: (() => { let m = 0; for (const x of stocks) { const f = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(x) : null; if (f > 0 && !x.isBankrupt) m = Math.max(m, x.price / f); } return +m.toFixed(2); })(),
@@ -744,6 +798,12 @@ const PROBE = `(function () {
             const noT3 = JSON.parse(JSON.stringify(snap));
             noT3.stocks.forEach(x => { delete x.strategy; if (typeof x.seg === 'string') x.seg = x.seg.split(';').map(part => part.split('|').slice(0, 3).join('|')).join(';'); });
             saveSizes = { now, legacy, noT2: JSON.stringify(noT2).length, noT3: JSON.stringify(noT3).length, stocks: stocks.length };
+            // 0.16.1 G0a: bajty zapisu wg sekcji i pól spółki, czas budowy/serializacji zapisu (ms).
+            const bySection = {}; for (const k of Object.keys(snap)) bySection[k] = JSON.stringify(snap[k] ?? null).length;
+            const stockFields = {}; for (const x of snap.stocks) for (const k of Object.keys(x)) stockFields[k] = (stockFields[k] || 0) + JSON.stringify(x[k] ?? null).length;
+            const topFields = Object.entries(stockFields).sort((a, b) => b[1] - a[1]).slice(0, 12);
+            const tSave0 = performance.now(); const raw2 = JSON.stringify(buildSaveSnapshot({ compact: 0 })); const saveMs = performance.now() - tSave0;
+            saveSizes.bySection = Object.entries(bySection).sort((a, b) => b[1] - a[1]).slice(0, 14); saveSizes.topStockFields = topFields; saveSizes.perStock = Math.round((bySection.stocks || 0) / Math.max(1, stocks.length)); saveSizes.saveMs = Math.round(saveMs); saveSizes.json = raw2.length;
         }
 
         // 0.15 H0 summary stats
@@ -787,6 +847,7 @@ const PROBE = `(function () {
         const h0 = {
             years: yearsTotal,
             gigCagr: cagr(qFirst?.gig, qLast?.gig),
+            sig20Cagr: cagr(qFirst?.sig20, qLast?.sig20),
             cap10Cagr: cagr(qFirst?.gigCap10, qLast?.gigCap10),
             buyHoldCagr: cagr(qFirst?.buyHold, qLast?.buyHold),
             survivorsCagr: cagr(qFirst?.gigSurvivors, qLast?.gigSurvivors),
@@ -808,7 +869,7 @@ const PROBE = `(function () {
         };
 
         const p0151 = P.finish(yearsTotal);
-        return { ...p0151, ma: s.ma ? s.ma.finish() : null, h0, tsr, moneyWarn: s.moneyWarn || [], moneyWarnQuarters: s.moneyWarnQuarters || 0, poolStake: s.poolStake, wallet: window.__wallet || null, presetErrors: window.__presetErrors || [], camp: window.__campResult ? window.__campResult() : null, crises: typeof crisisSummary === 'function' ? crisisSummary() : null, sectorIssues, saveSizes, subStart: s.subStart, subEnd: s.subEnd, multiSegEnd: s.multiSeg, mechanics: s.mechanics || null, badPrice: s.badPrice, negCash: s.negCash, mailBy: s.mailBy, bailouts: s.bailouts, flowWarnings: s.flowWarnings, fund: s.fund, panelText: panel ? panel.textContent.split(/\\s+/).join(' ').slice(0, 600) : null, panelError: s.panelError || null, elections: (macro.election?.history || []).filter(e => e.quarter >= s.quarters[0].q),
+        return { ...p0151, giant: typeof giantEventState !== 'undefined' ? { ...giantEventState, log: giantEventLog, gdrListed: Object.keys(foreignIssuers), fx: Object.fromEntries(Object.entries(fxRates).map(([k, v]) => [k, Math.round(v * 1e4) / 1e4])), fxProblems: checkCurrencyInvariants() } : null, ma: s.ma ? s.ma.finish() : null, h0, tsr, moneyWarn: s.moneyWarn || [], moneyWarnQuarters: s.moneyWarnQuarters || 0, poolStake: s.poolStake, wallet: window.__wallet || null, presetErrors: window.__presetErrors || [], camp: window.__campResult ? window.__campResult() : null, crises: typeof crisisSummary === 'function' ? crisisSummary() : null, sectorIssues, saveSizes, subStart: s.subStart, subEnd: s.subEnd, multiSegEnd: s.multiSeg, mechanics: s.mechanics || null, badPrice: s.badPrice, negCash: s.negCash, mailBy: s.mailBy, bailouts: s.bailouts, flowWarnings: s.flowWarnings, fund: s.fund, panelText: panel ? panel.textContent.split(/\\s+/).join(' ').slice(0, 600) : null, panelError: s.panelError || null, elections: (macro.election?.history || []).filter(e => e.quarter >= s.quarters[0].q),
             lawChanges: soc ? { ...soc.lawChanges } : null, laws: soc ? { ...soc.laws } : null,
             invariants: typeof checkWorldInvariants === 'function' ? checkWorldInvariants().slice(0, 5) : null, invLog: s.invLog, trimWarnings: s.trimWarnings,
             trims: typeof ghostTrimLog !== "undefined" ? ghostTrimLog.length : null, spinDiag: window.__spinDiag || null, diag: window.__haltDiag || null, offers: window.__offerLog || null,
@@ -1136,7 +1197,7 @@ async function oneRun(index) {
     localStorage.setItem('gra_inwestycyjna_debug_mode', '1');
     localStorage.setItem('gra_inwestycyjna_skip_intro', '1');
     const w = await loadFrame();
-    w.eval(`isGamePaused = false; setGameSpeed(${SPEED}); if (gameTimers.autoSave) clearInterval(gameTimers.autoSave);`);
+    w.eval(`if (typeof showGiantEventWindow === 'function') showGiantEventWindow = () => {}; /* 0.16.1: okno wydarzenia z pauzą zatrzymałoby przebieg bez gracza */ isGamePaused = false; setGameSpeed(${SPEED}); if (gameTimers.autoSave) clearInterval(gameTimers.autoSave);`);
     if (PATCH) w.eval(PATCH);
     w.eval(PROBE);
     w.eval(PROBE_0154);

@@ -341,6 +341,20 @@ function getCampaignTargetUnits(targetPct) {
     return Math.floor(playerFund.units * pct);
 }
 
+/** 0.16.1: oferta dużego klienta (zamiast emisji wymuszonej) — przyjęcie uruchamia kampanię na proponowaną liczbę udziałów. */
+function getEmissionOffer() {
+    const o = playerFund?.emissionOffer;
+    return o && o.expiresQ >= currentQuarter() ? o : null;
+}
+
+function acceptEmissionOffer() {
+    const o = getEmissionOffer();
+    if (!o) return { ok: false, reason: 'Brak aktualnej oferty.' };
+    const result = startSubscriptionCampaign({ duration: 'quarter', targetPct: o.units / Math.max(1, playerFund.units) });
+    if (result.ok) delete playerFund.emissionOffer;
+    return result;
+}
+
 function startSubscriptionCampaign(terms) {
     terms = { duration: 'quarter', targetPct: 0.1, lockYears: 0, guarantee: false, mandate: null, ...terms };
     terms.lockYears = Math.max(0, Math.min(LOCK_MAX_YEARS, Math.floor(Number(terms.lockYears) || 0)));
@@ -879,7 +893,9 @@ function renderCampaignCards() {
     const durationOptions = Object.entries(SUBSCRIPTION_DURATIONS).map(([id, d]) => `<option value="${id}">${d.label}</option>`).join('');
     const maxPct = Math.round(getCampaignMaxTargetPct() * 100);
 
-    const campaignBody = sub
+    const offer = getEmissionOffer();
+    const offerHtml = offer ? `<p class="text-sm"><strong>${escapeHtml(offer.name)}</strong> chce wejść do funduszu (ok. ${formatNumberPl(offer.units, 0)} udziałów, oferta do ${formatQuarterDate(offer.expiresQ)}). <button class="btn-primary btn-sm" onclick="const r = acceptEmissionOffer(); showToast(r.ok ? 'Kampania na ofertę klienta rozpoczęta.' : r.reason, r.ok ? 'success' : 'warning'); renderJuMarket();">Przyjmij: kampania na tę liczbę udziałów</button></p>` : '';
+    const campaignBody = offerHtml + (sub
         ? `<p class="text-sm">Trwa: cel ${formatNumberPl(sub.targetUnits, 0)} udziałów, zebrano ${formatNumberPl(sub.raisedUnits, 1)} (${(sub.raisedUnits / Math.max(1, sub.targetUnits) * 100).toFixed(0)}%), zostało ${sub.weeksLeft} tyg. Start: ${escapeHtml(sub.startDate)}.</p>`
         : `<p class="text-sm">Koszt: 0,2% celu na start i 0,5% zebranej kwoty. Udziały z lock-upem nie wrócą do Ciebie przed terminem (bramka umorzeń nadal działa). Kampania liczy się jako emisja (${playerFund.current.emissions}/${MAX_EMISSIONS_PER_PERIOD} w okresie).</p>
            <div class="bank-card-form" style="flex-wrap:wrap; gap:6px">
@@ -889,7 +905,7 @@ function renderCampaignCards() {
              <label><input type="checkbox" id="camp-guarantee"> Gwarancja kapitału</label>
              <label>Mandat <select id="camp-mandate">${mandateOptions}</select></label>
              <button onclick="handleStartCampaign()">Rozpocznij kampanię</button>
-           </div><p class="text-xs text-muted" id="camp-info">${escapeHtml(getCampaignBlockReason({ duration: 'quarter', targetPct: 0.1, lockYears: 0 }) || 'Gwarancja wymaga lock-upu ≥ 1 rok; transze z gwarancją ≤ 30% udziałów.')}</p>`;
+           </div><p class="text-xs text-muted" id="camp-info">${escapeHtml(getCampaignBlockReason({ duration: 'quarter', targetPct: 0.1, lockYears: 0 }) || 'Gwarancja wymaga lock-upu ≥ 1 rok; transze z gwarancją ≤ 30% udziałów.')}</p>`);
 
     const lockedUnits = getLockedFundUnits(), liability = getGuaranteeLiability(), loan = getLiquidityLoanPrincipal();
     const history = (playerFund.campaignHistory || []).slice(0, 3).map(h => `<li class="text-xs">${formatQuarterDate(h.startQ)}: ${(h.fill * 100).toFixed(0)}% celu, ${formatZl(h.raisedValue, 0)}, koszt ${formatZl(h.cost, 0)}, lock-up ${h.lockYears} lat</li>`).join('');
