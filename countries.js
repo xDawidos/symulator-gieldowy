@@ -139,7 +139,8 @@ function joinCountry(id, by = 'test') {
 /** Cechy prezesów krajowych (companies.js, pole `fx`); spółki zagraniczne dostają jedną z dwóch cech kraju, stałą dla symbolu. */
 const COUNTRY_CEO_TRAITS = {
     DE: ['ordnung_muss_sein', 'ingenieur'], SE: ['lagom', 'fika'], CH: ['tajemnica_bankowa', 'neutralnosc'],
-    FR: ['savoir_vivre', 'greve_generale'], CZ: ['svejk', 'piwny_dyplomata'], US: ['move_fast', 'shareholder_value']
+    FR: ['savoir_vivre', 'greve_generale'], CZ: ['svejk', 'piwny_dyplomata'], US: ['move_fast', 'shareholder_value'],
+    JP: ['kaizen', 'keiretsu'], CN: ['plan_piecioletni', 'kopiuj_wklej'], IN: ['jugaad', 'outsourcing'], TW: ['krzemowa_tarcza', 'pracoholik']
 };
 function getIssuerCeoTrait(issuer) {
     const list = COUNTRY_CEO_TRAITS[issuer.country];
@@ -256,6 +257,38 @@ function applySpecialEvents(issuer) {
         logEvent(`🌍 ${issuer.name}: protesty ekologów przeciw żabim udkom, kurs spada.`, 'market');
     } else if (issuer.special === 'cocoa' && q === 1) { // Matterhornen: cena kakao
         issuer.price = Math.max(0.05, issuer.price * (1 + getRandomInRange(-0.05, 0.04)));
+    } else if (issuer.special === 'anime' && q === 2) { // Bakugan TV: sezon anime, eksport kultury — im więcej krajów na giełdzie, tym częstszy hit
+        const hit = Math.random() < Math.min(0.8, 0.45 + 0.05 * getJoinedCountries().length);
+        issuer.price = Math.max(0.05, issuer.price * (hit ? 1 + getRandomInRange(0.05, 0.12) : 1 - getRandomInRange(0.05, 0.10)));
+        logEvent(`🌍 ${issuer.name}: sezon anime — ${hit ? 'hit, kurs rośnie' : 'klapa, kurs spada'}.`, 'market');
+    } else if (issuer.special === 'bollywood') { // Bollywood Studios: co kwartał premiera
+        const hit = Math.random() < 0.5;
+        issuer.price = Math.max(0.05, issuer.price * (hit ? 1 + getRandomInRange(0.02, 0.07) : 1 - getRandomInRange(0.02, 0.06)));
+    } else if (issuer.special === 'monsoon' && q === 3) { // Curry Masala: monsun decyduje o zbiorze przypraw
+        issuer.price = Math.max(0.05, issuer.price * (Math.random() < 0.6 ? 1 + getRandomInRange(0.02, 0.07) : 1 - getRandomInRange(0.04, 0.09)));
+    } else if (issuer.special === 'rareearths' && q === 1 && Math.random() < 0.2) { // Smok Rare Earths: ograniczenia eksportu podbijają ceny metali
+        issuer.price = Math.max(0.05, issuer.price * (1 + getRandomInRange(0.08, 0.15)));
+        logEvent(`🌍 ${issuer.name}: ograniczenia eksportu metali ziem rzadkich, kurs rośnie.`, 'market');
+    } else if (issuer.special === 'sanctions') { // Huiei Telecom: ryzyko sankcji (przerwa 6 kwartałów)
+        if (macro.quarter - (issuer.leakQ ?? -99) > 6 && Math.random() < 0.05) {
+            issuer.leakQ = macro.quarter;
+            issuer.price = Math.max(0.05, issuer.price * (1 - getRandomInRange(0.15, 0.25)));
+            const text = `🌍 Sankcje na ${issuer.name}: zakaz sprzedaży sprzętu na rynkach zachodnich, kurs spada o 15–25%.`;
+            logEvent(text, 'market');
+            if (typeof pushNews === 'function') pushNews(text, null);
+        }
+    } else if (issuer.special === 'parabank') { // PanDa Bank: wysokie lokaty przyciągają klientów, co kwartał rośnie ryzyko upadku (jak Amber Gold)
+        if (issuer.leakQ !== undefined) return; // po upadku zostaje wycena likwidacyjna
+        issuer.price = Math.max(0.05, issuer.price * (1 + getRandomInRange(0.01, 0.03)));
+        const risk = Math.min(0.25, 0.01 + 0.01 * Math.max(0, macro.quarter - (issuer.listedQ || 0)));
+        if (Math.random() < risk) {
+            issuer.leakQ = macro.quarter;
+            issuer.price = Math.max(0.05, issuer.price * getRandomInRange(0.05, 0.15));
+            const text = `🌍 Afera ${issuer.name}: parabank nie wypłaca lokat, prezes znika. Akcje tracą ok. 90% wartości.`;
+            logEvent(text, 'market');
+            if (typeof pushNews === 'function') pushNews(text, null);
+            if (getGdrHeld(issuer) > 0 && typeof addMail === 'function') addMail({ sender: 'PULS', subject: `🌍 ${issuer.name}: upadek parabanku`, body: `${text}\n\nMasz ${formatNumberPl(getGdrHeld(issuer), 0)} akcji tego banku.`, importance: 3 });
+        }
     } else if (issuer.special === 'tension') { // KWS: napięcie Chiny–Tajwan — kurs −30%, półprzewodniki w dół na świecie (linia lokalna, nie piąta linia kryzysu)
         if (macro.quarter - (issuer.leakQ ?? -99) > 8 && Math.random() < 0.03) {
             issuer.leakQ = macro.quarter;

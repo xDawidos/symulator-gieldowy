@@ -13261,6 +13261,43 @@ group('0.16.3', () => {
         assertEq(kws.price, p1, 'przerwa po zdarzeniu');
     }));
 
+
+    // --- G19: spółki specjalne Azji, PanDa Bank, prezesi ---
+    test('G19: PanDa Bank — rośnie, potem upada (kurs −85–95%), po upadku bez nowych zdarzeń i wycena zapisana w leakQ', () => withLinks(() => {
+        joinCountry('CN');
+        const panda = foreignIssuers.PND; assertEq(panda.special, 'parabank', 'mechanika parabanku');
+        const p0 = panda.price; withRandom(0.99, () => applySpecialEvents(panda));
+        assert(panda.price > p0 && panda.leakQ === undefined, 'przy braku upadku kurs rośnie dzięki lokatom');
+        const peak = panda.price; withRandom(0, () => applySpecialEvents(panda));
+        assert(panda.price <= peak * 0.16 && panda.leakQ === macro.quarter, `upadek (${panda.price / peak})`);
+        const after = panda.price; withRandom(0, () => applySpecialEvents(panda));
+        assertEq(panda.price, after, 'po upadku bez kolejnych zdarzeń');
+        const snap = getCountriesSnapshot(); applyCountriesSnapshot(JSON.parse(JSON.stringify(snap)));
+        assertEq(foreignIssuers.PND.leakQ, macro.quarter, 'upadek przeżywa zapis');
+    }));
+
+    test('G19: sankcje na Huiei (−15–25%, przerwa 6 kwartałów), hit/klapa Bakugan i Bollywood, ziemie rzadkie', () => withLinks(() => {
+        joinCountry('CN'); joinCountry('JP'); joinCountry('IN');
+        const hui = foreignIssuers.HUI, p0 = hui.price;
+        withRandom(0, () => applySpecialEvents(hui));
+        assert(hui.price <= p0 * 0.85 + 1e-9 && hui.price >= p0 * 0.75 - 1e-9, `sankcje (${hui.price / p0})`);
+        const p1 = hui.price; withRandom(0, () => applySpecialEvents(hui)); assertEq(hui.price, p1, 'przerwa');
+        macro.quarter = 2; const bkg = foreignIssuers.BKG, b0 = bkg.price;
+        withRandom(0.01, () => applySpecialEvents(bkg)); assert(bkg.price > b0, 'hit anime');
+        const bw = foreignIssuers.BWS, w0 = bw.price; withRandom(0.01, () => applySpecialEvents(bw)); assert(bw.price > w0, 'premiera hit');
+        macro.quarter = 1; const sre = foreignIssuers.SRE, s0 = sre.price; withRandom(0.01, () => applySpecialEvents(sre)); assert(sre.price > s0, 'ziemie rzadkie');
+    }));
+
+    test('G19: prezesi azjatyccy — każdy kraj ma dwie cechy z danymi fx, spółki dostają cechę kraju', () => withLinks(() => {
+        for (const id of ['JP', 'CN', 'IN', 'TW']) {
+            assertEq(COUNTRY_CEO_TRAITS[id].length, 2, `${id}: dwie cechy`);
+            for (const t of COUNTRY_CEO_TRAITS[id]) assert(ceoTraits[t]?.fx && ceoTraits[t].country === id, `${t}: fx i kraj`);
+            joinCountry(id);
+            const issuer = getCountryIssuers(id).find(i => !i.state);
+            assert(COUNTRY_CEO_TRAITS[id].includes(getIssuerCeoTrait(issuer)), `${id}: cecha spółki`);
+        }
+    }));
+
     // --- koniec grupy 0.16.3 ---
 });
 
