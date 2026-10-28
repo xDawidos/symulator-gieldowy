@@ -7652,6 +7652,40 @@ function updateMailBadge() {
     const unread = getUnreadMailCount('inbox');
     badge.textContent = unread > 99 ? '99+' : String(unread);
     badge.hidden = unread === 0;
+    const tuBadge = document.querySelector('#open-teamedup-btn .nav-badge');
+    if (tuBadge) { const n = getTeamedUnread(); tuBadge.textContent = n > 99 ? '99+' : String(n); tuBadge.hidden = n === 0; }
+}
+
+// --- TeamedUP! (0.16.5): osobna aplikacja — zadania i oceny, wiadomości od szefostwa i współpracowników, zatrudnianie ---
+let teamedView = { pane: 'tasks', selectedId: null };
+const getTeamedMessages = () => mailbox.messages.filter(m => getMailChannel(m) === 'teamedup');
+const getTeamedUnread = () => (mailbox ? getTeamedMessages().filter(m => !m.read).length : 0);
+
+function openTeamedUp(pane = 'tasks') {
+    teamedView = { pane, selectedId: null };
+    document.getElementById('teamedup-overlay').hidden = false;
+    renderTeamedUp();
+}
+function closeTeamedUp() { document.getElementById('teamedup-overlay').hidden = true; }
+function setTeamedPane(pane) { teamedView = { pane, selectedId: null }; renderTeamedUp(); }
+function selectTeamedMail(id) { teamedView.selectedId = id; markMailRead(id); renderTeamedUp(); }
+
+function renderTeamedUp() {
+    updateMailBadge();
+    const overlay = document.getElementById('teamedup-overlay');
+    if (!overlay || overlay.hidden || !mailbox) return;
+    const unread = getTeamedUnread();
+    const item = (pane, icon, label, extra = '') => `<button class="mail-folder ${teamedView.pane === pane ? 'active' : ''}" onclick="setTeamedPane('${pane}')"><span>${uiIcon(icon, 14)} ${label}</span>${extra}</button>`;
+    document.getElementById('teamedup-nav').innerHTML = item('tasks', 'cel', 'Zadania i oceny') + item('messages', 'poczta', 'Wiadomości', unread ? `<b>${unread}</b>` : '') + item('hiring', 'pracownik', 'Zatrudnianie')
+        + `<hr><button class="mail-folder" onclick="openPawnShopPanel()">${uiIcon('lombard', 14)} Lombard</button>`;
+    const body = document.getElementById('teamedup-content');
+    if (teamedView.pane === 'tasks') { body.innerHTML = renderTeamedTasks(); return; }
+    if (teamedView.pane === 'hiring') { body.innerHTML = renderTeamedHiring(); return; }
+    const msgs = getTeamedMessages();
+    const selected = msgs.find(m => m.id === teamedView.selectedId);
+    body.innerHTML = `<div class="mail-list">${msgs.length ? msgs.slice(0, 60).map(m => `<div class="mail-row ${m.read ? '' : 'unread'} ${m.id === teamedView.selectedId ? 'selected' : ''}" role="button" tabindex="0" onclick="selectTeamedMail(${m.id})">
+            <span class="mail-from">${escapeHtml(getMailSenderName(m.sender))}</span><span class="mail-subject">${escapeHtml(m.subject)}<span class="mail-snippet"> — ${escapeHtml(m.body.slice(0, 80))}</span></span><span class="mail-time">${formatMailTime(m.at)}</span></div>`).join('') : '<p class="fund-muted mail-empty">Brak wiadomości od szefostwa i współpracowników.</p>'}</div>
+        ${selected ? renderMailPreview(selected) : ''}`;
 }
 
 function formatMailTime(clockMs) {
@@ -7679,6 +7713,7 @@ function selectMail(id) {
 function mailAction(fn, ...args) {
     fn(...args);
     renderMailbox();
+    if (typeof renderTeamedUp === 'function') renderTeamedUp();
 }
 
 function renderMailbox() {
@@ -7694,9 +7729,6 @@ function renderMailbox() {
             <span>${MAIL_FOLDER_LABELS[folder]}</span>${unread ? `<b>${unread}</b>` : ''}</button>`;
     }).join('') + `
         <hr>
-        <button class="mail-folder ${mailView.pane === 'tasks' ? 'active' : ''}" onclick="setMailPane('tasks')">${uiIcon('cel', 14)} Zadania od szefostwa</button>
-        <button class="mail-folder ${mailView.pane === 'hiring' ? 'active' : ''}" onclick="setMailPane('hiring')">${uiIcon('pracownik', 14)} Zatrudnianie</button>
-        <button class="mail-folder" onclick="openPawnShopPanel()">${uiIcon('lombard', 14)} Lombard</button>
         <button class="mail-folder ${mailView.pane === 'subscriptions' ? 'active' : ''}" onclick="setMailPane('subscriptions')">${uiIcon('ustawienia', 14)} Subskrypcje</button>`;
 
     const list = document.getElementById('mail-list');
@@ -7704,7 +7736,7 @@ function renderMailbox() {
 
     if (mailView.pane !== 'mail') {
         list.hidden = true;
-        preview.innerHTML = mailView.pane === 'tasks' ? renderTeamedTasks() : mailView.pane === 'hiring' ? renderTeamedHiring() : renderMailSubscriptions();
+        preview.innerHTML = renderMailSubscriptions();
         return;
     }
 
@@ -7732,7 +7764,7 @@ function renderMailbox() {
 
 /** TeamedUP!: zadania od szefostwa — cele awansowe i okresu (targety), cele zarządu odsłaniane stopniowo, oceny zarządu. */
 function renderTeamedTasks() {
-    const row = t => `<li class="mail-task ${t.done ? 'done' : ''}"><span>${uiIcon(t.done ? 'ok' : 'cel', 14)} <strong>${t.done ? '[wykonane]' : '[do zrobienia]'}</strong>${t.promotion ? ' <span class="mail-tag">awans</span>' : ''} ${escapeHtml(t.label)}</span>
+    const row = t => `<li class="firm-target ${t.done ? 'done' : ''}"><span>${uiIcon(t.done ? 'ok' : 'cel', 14)} <strong>${t.done ? '[wykonane]' : '[do zrobienia]'}</strong>${t.promotion ? ' <span class="mail-tag">awans</span>' : ''} ${escapeHtml(t.label)}</span>
         <strong>${escapeHtml(String(t.value))}</strong><span class="firm-target-bar"><span style="width:${(t.progress * 100).toFixed(0)}%"></span></span></li>`;
     const targets = typeof getPlayerTargets === 'function' ? getPlayerTargets() : [];
     const goals = typeof getCorporateGoalsView === 'function' ? getCorporateGoalsView() : [];

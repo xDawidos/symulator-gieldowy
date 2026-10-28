@@ -80,11 +80,13 @@ function noteTiedEvent(message, category) {
     return addTiedPost({ symbol: stock.symbol, author: stock.ceo.name, text, kind });
 }
 
-/** Wiadomości od inwestorów (boty) i spółek idą do Tied, systemowe zostają w TeamedUP!. Bez odblokowanego Tied nic nie znika z TeamedUP!. */
+/** Kanał wiadomości: Poczta (newsy, ciekawostki, reklamy), TeamedUP! (szefostwo i współpracownicy), Tied (inwestorzy i spółki, po odblokowaniu). Nic nie ginie — kanał liczy się przy wyświetlaniu. */
 function getMailChannel(message) {
     const s = String(message.sender);
-    if (s === CORPORATION_SENDER || MAGAZINES[s] || message.isSpam) return 'teamedup'; // reklamy zostają w TeamedUP! (folder Spam), Tied jest bez reklam
-    return isTiedUnlocked() ? 'tied' : 'teamedup';
+    if (s === CORPORATION_SENDER) return 'teamedup';
+    if (MAGAZINES[s] || message.isSpam) return 'poczta'; // reklamy zostają w Poczcie (Spam), Tied jest bez reklam
+    if (s.startsWith('bot:') && typeof findRelationPerson === 'function' && findRelationPerson(s.slice(4))?.kind === 'colleague') return 'teamedup';
+    return isTiedUnlocked() ? 'tied' : 'poczta';
 }
 
 // =================================================================================

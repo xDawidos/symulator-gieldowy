@@ -309,6 +309,11 @@
       </button>
       <div class="nav-group" role="presentation">Ja</div>
       <button class="sidebar-nav-btn has-badge" id="open-mail-btn" onclick="openMailbox()">
+        <svg class="ic nav-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v12H3zM3 7l9 6 9-6"/></svg>
+        <span class="nav-label">Poczta</span>
+        <span class="nav-badge" hidden>0</span>
+      </button>
+      <button class="sidebar-nav-btn has-badge" id="open-teamedup-btn" onclick="openTeamedUp('tasks')">
         <svg class="ic nav-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg>
         <span class="nav-label">TeamedUP!</span>
         <span class="nav-badge" hidden>0</span>
@@ -1334,8 +1339,8 @@
         <header class="bank-hero">
           <div class="bank-emblem" aria-hidden="true"><svg class="ic" width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v12H3zM3 7l9 6 9-6"/></svg></div>
           <div>
-            <div class="bank-hero-kicker">Wiadomości · powiadomienia · rynek</div>
-            <h2 class="bank-hero-title" id="mail-title">TeamedUP!</h2>
+            <div class="bank-hero-kicker">Newsy · ciekawostki · rynek</div>
+            <h2 class="bank-hero-title" id="mail-title">Poczta</h2>
           </div>
           <button class="close-btn" onclick="closeMailbox()" aria-label="Zamknij" style="margin-left: auto;">&times;</button>
         </header>
@@ -1345,6 +1350,24 @@
           <div class="mail-preview-wrap">
             <div id="mail-preview" class="mail-preview"></div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 0.16.5: TeamedUP! — cele od szefów i współpracowników, wiadomości służbowe, zatrudnianie -->
+    <div id="teamedup-overlay" class="intro-overlay" hidden onclick="if (event.target === this) closeTeamedUp()">
+      <div class="mail-window" role="dialog" aria-labelledby="teamedup-title">
+        <header class="bank-hero">
+          <div class="bank-emblem" aria-hidden="true"><svg class="ic" width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg></div>
+          <div>
+            <div class="bank-hero-kicker">Szefowie · współpracownicy · zadania</div>
+            <h2 class="bank-hero-title" id="teamedup-title">TeamedUP!</h2>
+          </div>
+          <button class="close-btn" onclick="closeTeamedUp()" aria-label="Zamknij">&times;</button>
+        </header>
+        <div class="mail-layout teamedup-layout">
+          <nav id="teamedup-nav" class="mail-folders"></nav>
+          <div id="teamedup-content" class="mail-preview-wrap"></div>
         </div>
       </div>
     </div>

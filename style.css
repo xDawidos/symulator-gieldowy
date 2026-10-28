@@ -5140,3 +5140,9 @@ body #internet-modal[data-country] .tab-btn.active { border-color: var(--net-acc
 #net-page-startupy #startup-incubator-panel.collapsed .startup-panel-content { display: revert !important; }
 #net-page-startupy #startup-incubator-panel.collapsed table.startup-panel-content { display: table !important; }
 .mail-task { padding: 6px 0; border-bottom: 1px solid var(--ink-700); }
+
+/* Okna Poczta i TeamedUP!: przycisk zamknięcia w nagłówku, nie przy krawędzi ekranu */
+.mail-window { position: relative; }
+.mail-window .close-btn { position: static !important; margin-left: auto; flex: none; }
+.teamedup-layout { grid-template-columns: 190px minmax(0, 1fr) !important; }
+#teamedup-content { overflow-y: auto; }

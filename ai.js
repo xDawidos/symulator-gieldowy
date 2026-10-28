@@ -2719,7 +2719,7 @@ function renderCorporationFirm() {
                     <span class="${bossMood.cls}">${bossMood.icon} ${boss.opinion >= RELATION_FRIENDLY ? 'lubi Cię' : boss.opinion <= RELATION_HOSTILE ? 'nie lubi Cię' : boss.opinion > 10 ? 'ma o Tobie dobre zdanie' : boss.opinion < -10 ? 'ma zastrzeżenia' : 'jest neutralny'} (${boss.opinion.toFixed(0)})</span></div>
                 <h4>Zadania i oceny zarządu</h4>
                 <p class="fund-muted">Targety okresu, cele zarządu i wyniki ocen są teraz w aplikacji TeamedUP!.</p>
-                <button class="btn-primary btn-sm" onclick="closeVisibleModals(); openMailbox('inbox'); setMailPane('tasks')">Otwórz TeamedUP! — Zadania</button>
+                <button class="btn-primary btn-sm" onclick="closeVisibleModals(); openTeamedUp('tasks')">Otwórz TeamedUP!</button>
             </section>
         </div>
         <h4>Relacje (−100…100)</h4>

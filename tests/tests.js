@@ -13511,12 +13511,12 @@ group('0.16.5 Internet i TeamedUP!', () => {
         } finally { airportState.forced = false; resetTicketsState(); }
     });
 
-    test('I5: wiadomości od inwestorów i spółek idą do Tied dopiero po jego odblokowaniu; systemowe zostają w TeamedUP!; nic nie ginie', () => {
+    test('I5: wiadomości od inwestorów i spółek idą do Tied dopiero po jego odblokowaniu; sprawy korporacji do TeamedUP!, newsy zostają w Poczcie; nic nie ginie', () => {
         startFund(); playerProfile.positionId = 'junior'; botRelations.values = {};
         addMail({ sender: 'bot:x', subject: 'Cześć', body: 'Kawa?' }); addMail({ sender: CORPORATION_SENDER, subject: 'Cel', body: 'Do zrobienia' });
-        const total = mailbox.messages.length; assertEq(getMailInFolder('inbox').length, 2, 'bez Tied wszystko w TeamedUP!');
+        const total = mailbox.messages.length; assertEq(getMailInFolder('inbox').length, 1, 'bez Tied inwestor czyta się w Poczcie, korporacja w TeamedUP!'); assertEq(mailbox.messages.filter(m => getMailChannel(m) === 'teamedup').length, 1, 'korporacja w TeamedUP!');
         playerProfile.positionId = 'manager';
-        assertEq(getMailInFolder('inbox').length, 1, 'inwestor poza TeamedUP!'); assertEq(mailbox.messages.filter(m => getMailChannel(m) === 'tied').length, 1, 'wiadomość w Tied'); assertEq(mailbox.messages.length, total, 'żadna nie zginęła');
+        assertEq(getMailInFolder('inbox').length, 0, 'inwestor poza Pocztą'); assertEq(mailbox.messages.filter(m => getMailChannel(m) === 'tied').length, 1, 'wiadomość w Tied'); assertEq(mailbox.messages.length, total, 'żadna nie zginęła');
     });
 
     test('I5: dobre wieści spółki dają post jej prezesa w Tied (bez duplikatu), złe nie', () => {
