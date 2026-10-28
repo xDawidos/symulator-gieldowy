@@ -204,6 +204,16 @@ PRESETS['kraje-10'] = PRESETS['kraje-eu'] + `(function () {
         return r;
     };
 })();`;
+// 0.16.4: izolacja spadku GIG z krajami: (1) bez przejęcia naszej giełdy przez obcą i bez wejścia Santosa, (2) kraje otwierane stopniowo (co 2 kw. od 2.) zamiast 10 od startu
+PRESETS['kraje-10-izol'] = `FOREIGN_BOTS.find(b => b.id === 'fb_santos').enterHome = false; LINK_RULES.weights = { merged: 0.5, intl: 0.5, taken: 0 };` + PRESETS['kraje-10'];
+PRESETS['kraje-10-bez-taken'] = `LINK_RULES.weights = { merged: 0.5, intl: 0.5, taken: 0 };` + PRESETS['kraje-10'];
+PRESETS['kraje-stopniowo'] = `(function () {
+    airportState.forced = true;
+    const order = ['DE', 'US', 'CZ', 'SE', 'CH', 'FR', 'JP', 'CN', 'IN', 'TW'];
+    const joinNext = () => { const id = order.find(c => !isCountryJoined(c)); if (id) { try { joinCountry(id, 'preset'); } catch (e) { (window.__presetErrors = window.__presetErrors || []).push('kraj ' + id + ': ' + e); } } };
+    const origJ = advanceMacroQuarter;
+    advanceMacroQuarter = function () { const r = origJ.apply(this, arguments); if (macro.quarter >= 2 && macro.quarter % 2 === 0) joinNext(); return r; };
+` + PRESETS['kraje-10'].slice(PRESETS['kraje-10'].indexOf('    window.__forex ='));
 // izolacja źródła różnicy GIG: kraje bez wejścia Santosa na rynek PL (jego zakupy podbijają kursy o ≤ 2% na transakcję)
 PRESETS['kraje-gig-bez-santosa'] = `FOREIGN_BOTS.find(b => b.id === 'fb_santos').enterHome = false;` + PRESETS['kraje-gig'];
 PRESETS['gracz-aktywny'] = PRESETS['fundusz-gig'] + `(function () {
