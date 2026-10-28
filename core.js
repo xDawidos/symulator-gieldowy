@@ -1839,7 +1839,7 @@ const SECTORS = {
             'Fintech': { profile: { beta: 1.5, pe: 25 }, delta: { growth: 0.05 }, specialist: true, mechanic: 'knf', weight: 4 } // T2: licencja KNF (waga ×4 w losowaniu — decyzja użytkownika)
         } },
     'Żywność':               { icon: '🍞', profile: { beta: 0.5, rateSens: 0.4, pe: 15, margin: 0.12, growth: 0.03, ps: 1.0, da: 0.03 },
-        subsectors: { 'Rolnictwo': { peopleSubsidy: true }, 'Słodycze': {} } },                              // dotacje Ludowców (0.13); Słodycze: 0.16.3 G11
+        subsectors: { 'Rolnictwo': { peopleSubsidy: true }, 'Słodycze': {}, 'Herbata': { profile: { beta: 0.5 } } } },                              // dotacje Ludowców (0.13); Słodycze: 0.16.3 G11
     'Rybołówstwo':           { icon: '🐟', profile: { beta: 0.6, rateSens: 0.4, pe: 14, margin: 0.12, growth: 0.02, ps: 1.0, da: 0.05 } }, // 0.16.3 G11: stabilne, popyt mało elastyczny (0,3), koszt pracy 25%
     'Alkohole':              { icon: '🍺', profile: { beta: 0.5, rateSens: 0.4, pe: 17, margin: 0.20, growth: 0.02, ps: 2.0, da: 0.04 }, // 0.16.2 G6a: defensywne, popyt mało elastyczny (0,4)
         subsectors: { 'Piwowarstwo i napoje': {} } },
@@ -1849,7 +1849,7 @@ const SECTORS = {
         niches: { 'TV': { event: 'season' }, 'Rozrywka': { event: 'season' } } },                               // T3: hit albo klapa sezonu
     'Gaming':                { icon: '🎮', profile: { beta: 1.4, rateSens: 1.0, pe: 20, margin: 0.25, growth: 0.07, ps: 3.0, da: 0.06 } },
     'Przemysł':              { icon: '⚙️', profile: { beta: 1.3, rateSens: 0.8, pe: 13, margin: 0.14, growth: 0.03, ps: 1.0, da: 0.05 },
-        subsectors: { 'Robotyka': { delta: { growth: 0.02, margin: 0.02 } } } },
+        subsectors: { 'Robotyka': { delta: { growth: 0.02, margin: 0.02 } }, 'Przemysł ciężki': { profile: { beta: 1.4, da: 0.08 } } } }, // Przemysł ciężki: 0.16.4 G18
     'Motoryzacja':           { icon: '🚗', profile: { beta: 1.4, rateSens: 1.0, pe: 12, margin: 0.12, growth: 0.03, ps: 0.8, da: 0.05 } }, // 0.16.2 G6a: cykliczna, koszt pracy 22% przychodów
     'Chemia':                { icon: '⚗️', profile: { beta: 1.2, rateSens: 0.7, pe: 13, margin: 0.16, growth: 0.03, ps: 1.1, da: 0.05 } },
     'Energia':               { icon: '⚡', profile: { beta: 0.8, rateSens: 0.9, pe: 12, margin: 0.25, growth: 0.02, ps: 1.5, da: 0.08 },

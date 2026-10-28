@@ -228,7 +228,7 @@ function processNhPathQuarterly() {
         if (stock.marketSinceQ === undefined) stock.marketSinceQ = quarter;
         if (quarter - stock.marketSinceQ < NH_PROMOTE_MIN_AGE) continue;
         if (meetsListingRequirements(stock, 'GPW').ok) {
-            if (hasFreeListingSlot() && Math.random() < NH_PROMOTE_CHANCE && moveStockToMarket(stock, 'GPW', 'awans na główny parkiet: spełnia wymogi GPW', 0.03)) result.promoted++;
+            if (wantsGpwListing(stock) && hasFreeListingSlot() && Math.random() < NH_PROMOTE_CHANCE && moveStockToMarket(stock, 'GPW', 'awans na główny parkiet: spełnia wymogi GPW', 0.03)) result.promoted++;
             continue;
         }
         const weak = getMarketCapValue(stock) < getListingRequirements('NH').cap * LISTING_RETAIN_FACTOR || (Number(stock.financialHealth) || 0) <= 0;
@@ -251,6 +251,57 @@ function processMunicipalPromotionQuarterly() {
         if (Math.random() < NH_PROMOTE_CHANCE && moveStockToMarket(stock, 'GPW', 'spółka miejska awansuje na główny parkiet', 0.03)) promoted++;
     }
     return promoted;
+}
+
+// --- E6 (0.16.4): minimalna opłata za notowanie, profile giełd prywatnych, zostawanie na NewHorizons ---
+// Każda spółka płaci giełdzie co kwartał: procent kapitalizacji (finance.js), ale nie mniej niż minimum rynku. NH = 0 (państwowy operator, bez opłat).
+const MARKET_MIN_FEE = { GPW: 1000, NH: 0, PRV: 0, other: 100 }; // PRV (Włoska Giełda): bez opłaty — nie ma operatora, a ryzyko oszustw ×5 już ją obciąża
+const MARKET_PROFILE_CHANCE = 0.6;      // giełda internetowa dostaje profil z tą szansą (reszta przyjmuje każdą spółkę)
+const NH_STAY_CHANCE = 0.4;             // część spółek NH nie chce na GPW (stała cecha spółki, losowana raz)
+const NH_PROMOTE_FEE_MULT = 4;          // awans na GPW: zysk kwartalny i gotówka ≥ 4 × minimalna opłata GPW
+const MARKET_PROFILES = [
+    { id: 'defensive', label: 'tylko spółki defensywne', sectors: ['Żywność', 'Medycyna', 'Obronność', 'Energia', 'Usługi'] },
+    { id: 'tech', label: 'tylko technologia', sectors: ['Technologia'] },
+    { id: 'modern', label: 'tylko technologia i gaming', sectors: ['Technologia', 'Gaming'] },
+    { id: 'consumer', label: 'tylko konsumpcja', sectors: ['Żywność', 'Alkohole', 'Dobra konsumpcyjne', 'Turystyka'] },
+    { id: 'cap1m', label: 'kapitalizacja od 1 mln zł', minCap: 1_000_000 },
+    { id: 'cap300k', label: 'kapitalizacja od 300 tys. zł', minCap: 300_000 },
+    { id: 'poland', label: 'tylko spółki z Polski', countries: ['PL'] }
+];
+
+function getStockCountry(stock) { return stock?.country || 'PL'; }
+
+function getMarketMinFee(marketId) { return MARKET_MIN_FEE[marketId] ?? MARKET_MIN_FEE.other; }
+
+function getMarketProfile(marketId) {
+    const id = marketOperators?.[marketId]?.profile;
+    return id ? MARKET_PROFILES.find(p => p.id === id) || null : null;
+}
+
+/** Losowy profil dla nowej giełdy internetowej albo null (nie każda giełda ma profil). */
+function pickMarketProfileId() {
+    return Math.random() < MARKET_PROFILE_CHANCE ? getRandomElement(MARKET_PROFILES).id : null;
+}
+
+/** Czy giełda przyjmie spółkę (bez profilu, rynki bez operatora i sam operator: tak). */
+function marketAccepts(marketId, stock) {
+    const profile = getMarketProfile(marketId);
+    if (!profile || stock?.marketOperator) return true;
+    if (profile.sectors && !(stock.sector || []).some(sec => profile.sectors.includes(sec))) return false;
+    if (profile.minCap && getMarketCapValue(stock) < profile.minCap) return false;
+    if (profile.countries && !profile.countries.includes(getStockCountry(stock))) return false;
+    return true;
+}
+
+function describeMarketProfile(marketId) { return getMarketProfile(marketId)?.label || 'bez ograniczeń'; }
+
+/** Spółka NH sama decyduje o awansie: nie chce GPW (cecha `nhStay`), jej gracz-większościowiec decyduje sam albo nie stać jej na opłatę GPW. */
+function wantsGpwListing(stock) {
+    if (stock.nhStay === undefined) stock.nhStay = Math.random() < NH_STAY_CHANCE;
+    if (stock.nhStay) return false;
+    if (typeof getFundStakePct === 'function' && getFundStakePct(stock) > 0.5) return false;
+    const need = MARKET_MIN_FEE.GPW * NH_PROMOTE_FEE_MULT;
+    return (Number(stock.quarterlyEarnings) || 0) >= need && (Number(stock.cash) || 0) >= need;
 }
 
 // --- E5: urząd antymonopolowy zależny od poziomu (antitrustOffice.level 0–5, rozwijany wydatkami państwa) ---

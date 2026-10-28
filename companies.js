@@ -771,6 +771,62 @@ const ceoTraits = {
         fx: { growth: 0.015 }, country: 'US',
         description: "Wszystko dla akcjonariuszy (skup akcji własnych): kurs rośnie o 1,5% szybciej."
     },
+    kaizen: { // 0.16.4 G19
+        name: "Kaizen",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { growth: 0.01 }, country: 'JP',
+        description: "Ciągłe, drobne usprawnienia: marża rośnie stopniowo, kurs +1% szybciej."
+    },
+    keiretsu: { // 0.16.4 G19
+        name: "Keiretsu",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { growth: 0.005, vol: 0.95 }, country: 'JP',
+        description: "Sieć kooperacji z innymi spółkami: zmienność niższa o 5%, kurs +0,5%."
+    },
+    plan_piecioletni: { // 0.16.4 G19
+        name: "Plan pięcioletni",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { growth: 0.02, vol: 0.9 }, country: 'CN',
+        description: "Dotacje państwa: kurs rośnie o 2% szybciej, zmienność niższa o 10%."
+    },
+    kopiuj_wklej: { // 0.16.4 G19
+        name: "Kopiuj-wklej",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { growth: 0.025, vol: 1.15 }, country: 'CN',
+        description: "Tańsze badania kosztem sankcji: kurs +2,5%, zmienność +15%."
+    },
+    jugaad: { // 0.16.4 G19
+        name: "Jugaad",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { growth: 0.015 }, country: 'IN',
+        description: "Pomysłowe oszczędzanie: niższe koszty, kurs +1,5% szybciej."
+    },
+    outsourcing: { // 0.16.4 G19
+        name: "Outsourcing",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { growth: 0.01, vol: 1.05 }, country: 'IN',
+        description: "Usługi dla całego świata: kurs +1%, zmienność +5%."
+    },
+    krzemowa_tarcza: { // 0.16.4 G19
+        name: "Krzemowa tarcza",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { vol: 0.85 }, country: 'TW',
+        description: "Odporność geopolityczna: zmienność niższa o 15%."
+    },
+    pracoholik: { // 0.16.4 G19
+        name: "Pracoholik",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { growth: 0.015, vol: 1.05 }, country: 'TW',
+        description: "Prezes nie wychodzi z biura: kurs +1,5%, zmienność +5%."
+    },
 
     // === CECHY RZADKIE (RARE) ===
     pewniak: {

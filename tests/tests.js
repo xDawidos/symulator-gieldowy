@@ -11353,7 +11353,7 @@ group('0.15.6 E3: ścieżka startupu, awans z NewHorizons, Włoska Giełda', () 
     test('E3: awans z NH na GPW po 8 kw. i spełnieniu wymogów; wcześniej i bez wymogów — nie', () => {
         const list = world156(6, 1_000_000);
         const young = list[0], old = list[1], poor = list[2];
-        for (const s of [young, old, poor]) { s.market = 'NH'; s.quarterlyEarnings = 20_000; s.financialHealth = 2; }
+        for (const s of [young, old, poor]) { s.market = 'NH'; s.quarterlyEarnings = 20_000; s.financialHealth = 2; s.nhStay = false; s.cash = 50_000; }
         young.marketSinceQ = macro.quarter - 3; old.marketSinceQ = macro.quarter - 9; poor.marketSinceQ = macro.quarter - 9; poor.price = 3; // 30 tys. < 80 tys.
         let promoted = 0;
         for (let i = 0; i < 40; i++) promoted += processNhPathQuarterly().promoted;
@@ -13197,6 +13197,288 @@ group('0.16.3', () => {
         airportState.forced = true; macro.quarter = 7;
         try { assertEq(withRandom(0, () => processLinksQuarterly()), null, 'przed 8. kwartałem nic'); } finally { airportState.forced = false; }
     }));
+
+    // --- 0.16.4: zawieszanie przebiegów — okno połączenia giełd pauzuje grę, symulacja musi ją wznawiać ---
+    test('połączenie giełd z interfejsem pauzuje grę i wznowienie (jak w przebiegu) odblokowuje zegar', () => withLinks(() => {
+        const toast = document.getElementById('toast-notification') || Object.assign(document.body.appendChild(document.createElement('div')), { id: 'toast-notification' });
+        const wasPaused = isGamePaused;
+        try {
+            if (isGamePaused) togglePauseGame();
+            onLinkEvent({ kind: 'merged', members: ['DE'], text: 'test', drop: 0 });
+            assert(isGamePaused, 'okno wydarzenia zatrzymuje grę (przyczyna zawieszenia przebiegów)');
+            togglePauseGame();
+            assert(!isGamePaused, 'wznowienie działa');
+        } finally {
+            if (isGamePaused !== wasPaused) togglePauseGame();
+            if (!document.querySelector('#toast-notification')?.textContent && toast.parentNode === document.body && !toast.className) toast.remove();
+            const m = document.getElementById('link-event-modal'); if (m) m.style.display = 'none';
+        }
+    }));
+
+
+    // --- G18a: Japonia i Tajwan ---
+    test('G18a: JP 13+3, TW 5+1 spółek; sektory istnieją; kraje da się dołączyć, niezmienniki bez błędów', () => withLinks(() => {
+        const expected = { JP: [13, 3], TW: [5, 1] };
+        for (const [id, [normal, state]] of Object.entries(expected)) {
+            const def = COUNTRY_DEFS[id];
+            assertEq(def.companies.filter(c => c.kind !== 'state').length, normal, `${id}: zwykłe`);
+            assertEq(def.companies.filter(c => c.kind === 'state').length, state, `${id}: państwowe`);
+            assert(CURRENCIES[def.currency] && def.oversight && def.operator && def.labour, `${id}: pełna definicja`);
+            for (const c of def.companies) for (const sec of [].concat(c.sector)) assert(SECTORS[sec], `${c.id}: sektor ${sec}`);
+            joinCountry(id);
+            assert(isCountryJoined(id), `${id}: dołączony`);
+        }
+        assert(SECTORS['Przemysł'].subsectors['Przemysł ciężki'] && SECTORS['Żywność'].subsectors['Herbata'], 'podsektory');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+
+
+    // --- G18b: Chiny i Indie, napięcie Chiny–Tajwan ---
+    test('G18b: CN 13+4, IN 10+4; symbole unikalne, giganci zgodni z kwitami, sektory istnieją', () => withLinks(() => {
+        const expected = { CN: [13, 4], IN: [10, 4] };
+        for (const [id, [normal, state]] of Object.entries(expected)) {
+            const def = COUNTRY_DEFS[id];
+            assertEq(def.companies.filter(c => c.kind !== 'state').length, normal, `${id}: zwykłe`);
+            assertEq(def.companies.filter(c => c.kind === 'state').length, state, `${id}: państwowe`);
+            for (const c of def.companies) for (const sec of [].concat(c.sector)) assert(SECTORS[sec], `${c.id}: sektor ${sec}`);
+            joinCountry(id); assert(isCountryJoined(id), `${id}: dołączony`);
+        }
+        const seen = new Map();
+        for (const def of Object.values(COUNTRY_DEFS)) for (const c of def.companies) {
+            assert(!seen.has(c.id), `symbol ${c.id} powtórzony (${seen.get(c.id)} i ${def.id})`); seen.set(c.id, def.id);
+            if (c.kind === 'giant') assertEq(FOREIGN_GIANTS.find(g => g.id === c.id)?.price, c.price, `${c.id}: kwit z tą samą ceną`);
+        }
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+
+    test('G18b: napięcie Chiny–Tajwan obniża KWS o 30% i półprzewodniki na świecie, potem 8 kwartałów przerwy', () => withLinks(() => {
+        joinCountry('TW');
+        const kws = foreignIssuers.KWS, p0 = kws.price;
+        withRandom(0, () => applySpecialEvents(kws));
+        assert(Math.abs(kws.price / p0 - 0.7) < 1e-9, `KWS −30% (${kws.price / p0})`);
+        assert(sectorShocks.some(s => s.subsector === 'Półprzewodniki' && s.target < 0), 'szok półprzewodników');
+        const p1 = kws.price; withRandom(0, () => applySpecialEvents(kws));
+        assertEq(kws.price, p1, 'przerwa po zdarzeniu');
+    }));
+
+
+    // --- G19: spółki specjalne Azji, PanDa Bank, prezesi ---
+    test('G19: PanDa Bank na mechanice parabanku z 0.11 — bank z lokatami powstaje z Chinami, upadek w fazach: śledztwo (notowania zawieszone), policja, ucieczka (spółka znika, posiadacze rozliczeni)', () => withLinks(() => {
+        startFund(5_000_000); ensureScandals(); scandals.parabanks = []; scandals.usedScenarios = [];
+        joinCountry('CN');
+        const pb = scandals.parabanks.find(p => p.foreignId === 'PND'); assert(pb && pb.phase === 'open', 'parabank PanDa po dołączeniu Chin');
+        const bank = commercialBanks.find(b => b.id === pb.bankId); assert(bank && bank.isParabank, 'bank z lokatami w oknie banków');
+        assertEq(spawnPandaParabank(), null, 'tylko raz');
+        assert(!PARABANK_SCENARIOS.filter(s => !s.foreignId).some(s => s.id === 'panda'), 'losowy parabank krajowy nie wybiera PanDa');
+        const issuer = foreignIssuers.PND; foreignTickets.player = [...new Set([...(foreignTickets.player || []), 'CN'])];
+        const cash0 = playerCash; assert(buyParabankShares(pb.id, 100), 'kupno z rabatem'); assertEq(getGdrHeld(issuer), 100, 'akcje w portfelu');
+        const peak = issuer.price; pb.peakPrice = peak;
+        collapseParabank(pb, 'investigation');
+        assert(issuer.tradeHalted && issuer.price === 0.01 && bank.frozen, 'śledztwo: notowania zawieszone, wypłaty wstrzymane');
+        assert(!buyForeignShares('PND', 1).ok && !sellForeignShares('PND', 1).ok, 'handel zawieszony');
+        const p0 = issuer.price; withRandom(0.5, () => stepCountryIssuer(issuer, COUNTRY_DEFS.CN, countryState.CN, marketRegimes.CN, 0, 0)); assertEq(issuer.price, p0, 'kurs stoi');
+        const snap = JSON.parse(JSON.stringify(getCountriesSnapshot())); applyCountriesSnapshot(snap); assert(foreignIssuers.PND.tradeHalted, 'zawieszenie przeżywa zapis');
+        collapseParabank(pb, 'police'); assert(!foreignIssuers.PND.tradeHalted && foreignIssuers.PND.price >= peak * 0.05 - 1e-9 && foreignIssuers.PND.price <= peak * 0.15 + 1e-9, 'wycena likwidacyjna 5–15% szczytu');
+        const cashBefore = playerCash, price = foreignIssuers.PND.price;
+        collapseParabank(pb, 'fled');
+        assert(!foreignIssuers.PND && pb.phase === 'gone' && !bank.isActive, 'spółka i bank znikają');
+        assert(Math.abs(playerCash - cashBefore - toPln(100 * price, 'CNY')) < 1, 'posiadacz dostaje wycenę likwidacyjną');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+
+    test('G19: sankcje na Huiei (−15–25%, przerwa 6 kwartałów), hit/klapa Bakugan i Bollywood, ziemie rzadkie', () => withLinks(() => {
+        joinCountry('CN'); joinCountry('JP'); joinCountry('IN');
+        const hui = foreignIssuers.HUI, p0 = hui.price;
+        withRandom(0, () => applySpecialEvents(hui));
+        assert(hui.price <= p0 * 0.85 + 1e-9 && hui.price >= p0 * 0.75 - 1e-9, `sankcje (${hui.price / p0})`);
+        const p1 = hui.price; withRandom(0, () => applySpecialEvents(hui)); assertEq(hui.price, p1, 'przerwa');
+        macro.quarter = 2; const bkg = foreignIssuers.BKG, b0 = bkg.price;
+        withRandom(0.01, () => applySpecialEvents(bkg)); assert(bkg.price > b0, 'hit anime');
+        const bw = foreignIssuers.BWS, w0 = bw.price; withRandom(0.01, () => applySpecialEvents(bw)); assert(bw.price > w0, 'premiera hit');
+        macro.quarter = 1; const sre = foreignIssuers.SRE, s0 = sre.price; withRandom(0.01, () => applySpecialEvents(sre)); assert(sre.price > s0, 'ziemie rzadkie');
+    }));
+
+    test('G19: prezesi azjatyccy — każdy kraj ma dwie cechy z danymi fx, spółki dostają cechę kraju', () => withLinks(() => {
+        for (const id of ['JP', 'CN', 'IN', 'TW']) {
+            assertEq(COUNTRY_CEO_TRAITS[id].length, 2, `${id}: dwie cechy`);
+            for (const t of COUNTRY_CEO_TRAITS[id]) assert(ceoTraits[t]?.fx && ceoTraits[t].country === id, `${t}: fx i kraj`);
+            joinCountry(id);
+            const issuer = getCountryIssuers(id).find(i => !i.state);
+            assert(COUNTRY_CEO_TRAITS[id].includes(getIssuerCeoTrait(issuer)), `${id}: cecha spółki`);
+        }
+    }));
+
+
+    // --- G20: boty Azji ---
+    test('G20: Tygrys pojawia się z Chinami i celuje w technologię (co czwarty wybór — Japonia); Konfucjusz z Japonią', () => withLinks(() => {
+        joinCountry('CN'); joinCountry('JP'); joinCountry('US');
+        const tiger = aiCompetitors.find(b => b.id === 'fb_tygrys'), kon = aiCompetitors.find(b => b.id === 'fb_konfucjusz');
+        assert(tiger && tiger.homeCountry === 'CN' && kon && kon.homeCountry === 'JP', 'boty w grze');
+        const def = FOREIGN_BOTS.find(b => b.id === 'fb_tygrys'); let tech = 0, jp = 0, n = 0;
+        withSeededRandom(8, () => { for (let i = 0; i < 200; i++) { const t = botPickTarget(tiger, def); n++; if (t.sectors.some(([s]) => s === 'Technologia')) tech++; else if (t.country === 'JP') jp++; } });
+        assert(tech > n * 0.6 && jp > 0 && tech + jp === n, `technologia ${tech}, Japonia ${jp} z ${n}`);
+    }));
+
+    test('G20: Konfucjusz handluje akcjami japońskimi wyłącznie z Tygrysem (kupno i sprzedaż, gotówka i akcje się zgadzają)', () => withLinks(() => {
+        joinCountry('CN'); joinCountry('JP');
+        const tiger = aiCompetitors.find(b => b.id === 'fb_tygrys'), kon = aiCompetitors.find(b => b.id === 'fb_konfucjusz');
+        assertEq(withRandom(0.1, () => confuciusTrade(kon)), false, 'Tygrys nie ma jeszcze akcji japońskich');
+        const sne = foreignIssuers.SNE; sne.holders[tiger.id] = 200; tiger.fx.cost.SNE = sne.price;
+        const cashBefore = getForeignCashPln(kon) + getForeignCashPln(tiger), freeBefore = getGdrFree(sne);
+        assert(withRandom(0.1, () => confuciusTrade(kon)), 'kupno od Tygrysa');
+        const bought = sne.holders[kon.id]; assert(bought > 0 && sne.holders[tiger.id] === 200 - bought, 'akcje przeszły od Tygrysa');
+        assertEq(getGdrFree(sne), freeBefore, 'wolny obrót bez zmian — transakcja bot–bot');
+        assert(Math.abs(getForeignCashPln(kon) + getForeignCashPln(tiger) - cashBefore) < 1, 'gotówka botów zachowana');
+        kon.fx.cost.SNE = sne.price / 2; // zysk ≥ 25%
+        assert(withRandom(0.9, () => confuciusTrade(kon)), 'sprzedaż Tygrysowi z zyskiem');
+        assert(sne.holders[kon.id] < bought, 'Konfucjusz sprzedał część');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+        tiger.cashByCurrency = {}; const left = sne.holders[kon.id]; kon.fx.cost.SNE = sne.price / 2;
+        assertEq(withRandom(0.9, () => confuciusTrade(kon)), false, 'Tygrys bez gotówki — brak transakcji'); assertEq(sne.holders[kon.id], left, 'akcje bez zmian');
+    }));
+
+
+    // --- G21: Forex i marginEngine ---
+    test('G21: forex dostępny po otwarciu obcego rynku; otwarcie pobiera depozyt i spread, zamknięcie zwraca kapitał z wynikiem', () => withLinks(() => {
+        startFund(5_000_000);
+        assert(!openForexPosition('EUR/USD', 1, 100_000, 10).ok, 'bez drugiego rynku zablokowany');
+        joinCountry('DE');
+        const cash0 = playerCash, total0 = getFundAssets(), fxBefore = fxRates.EUR;
+        const r = openForexPosition('EUR/USD', 1, 100_000, 10); assert(r.ok, r.reason);
+        assertEq(Math.round(r.deposit), 10_000, 'depozyt = wartość / dźwignia'); assertEq(Math.round(cash0 - playerCash), 10_000 + 200, 'depozyt + spread 0,2%');
+        assert(Math.abs(getFundAssets() - (total0 - 200)) < 1, 'aktywa spadły tylko o spread (depozyt wchodzi jako kapitał pozycji)');
+        fxRates.EUR = fxBefore * 1.02; // EUR/USD +2% → +20% depozytu przy 1:10
+        assertEq(Math.round(getMarginPnl(r.position)), 2000, 'zysk liczony od całej wartości');
+        const cashMid = playerCash, closed = closeMarginPosition(r.position.id); assert(closed.ok, 'zamknięcie');
+        assertEq(Math.round(playerCash - cashMid), 12_000, 'zwrot depozytu z zyskiem'); assertEq(getMarginPositions().length, 0, 'brak pozycji');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+
+    test('G21: pozycja krótka zyskuje na spadku pary; swap rośnie co tydzień; limit dźwigni pozycji (10) i funduszu (3× aktywów)', () => withLinks(() => {
+        startFund(1_000_000); joinCountry('DE');
+        assert(!openForexPosition('EUR/USD', 1, 50_000, 11).ok && !openForexPosition('EUR/USD', 1, 50_000, 0).ok, 'dźwignia 1–10');
+        assert(!openForexPosition('EUR/EUR', 1, 50_000, 5).ok && !openForexPosition('XXX/USD', 1, 50_000, 5).ok, 'tylko prawdziwe pary');
+        const r = openForexPosition('USD/PLN', -1, 100_000, 5); assert(r.ok, r.reason);
+        fxRates.USD *= 0.98; assert(getMarginPnl(r.position) > 1900, 'krótka zyskuje na spadku');
+        fxRates.USD /= 0.98;
+        const a0 = r.position.accrued; stepMarginPositions(); assert(r.position.accrued > a0, 'koszt utrzymania');
+        assertEq(Math.round(r.position.accrued * 52 / MARGIN_RULES.holdingCostYear), 80_000, 'swap od pożyczonej części (80 000 zł)');
+        const cap = MARGIN_RULES.fundLeverageCap * getFundAssets() - getMarginNotional();
+        const tooBig = openForexPosition('EUR/USD', 1, cap + 1000, 10); assert(!tooBig.ok && tooBig.reason.includes('Limit funduszu'), tooBig.reason);
+        assert(!openForexPosition('EUR/USD', 1, 100, 10).ok, 'za mała pozycja');
+        assert(!openForexPosition('EUR/USD', 1, 1_000_000, 1).ok, 'za mało gotówki na depozyt');
+    }));
+
+    test('G21: margin call — ostrzeżenie poniżej 70%, zamknięcie automatyczne poniżej 50% depozytu, strata ograniczona do depozytu', () => withLinks(() => {
+        startFund(2_000_000); joinCountry('DE');
+        const r = openForexPosition('EUR/USD', 1, 200_000, 10).position, cash0 = playerCash, e0 = fxRates.EUR;
+        fxRates.EUR = e0 * 0.97; // −3% → −6 000 zł (30% depozytu 20 000)
+        stepMarginPositions(); assert(r.warned && getMarginPositions().length === 1, 'ostrzeżenie (kapitał ~70%), pozycja żyje');
+        fxRates.EUR = e0 * 0.94; // −6% → ponad 50% straty
+        stepMarginPositions(); assertEq(getMarginPositions().length, 0, 'zamknięta automatycznie');
+        assert(playerCash > cash0 && playerCash < cash0 + r.deposit * 0.5, 'zwrócono mniej niż połowę depozytu');
+        assertEq(marginClosedLog.at(-1).reason, 'margin', 'powód w dzienniku');
+        const r2 = openForexPosition('EUR/USD', 1, 200_000, 10).position, c1 = playerCash;
+        fxRates.EUR = e0 * 0.6; stepMarginPositions(); // luka kursowa ponad 100% depozytu
+        assert(playerCash >= c1 - 1e-6 && getMarginPositions().length === 0, 'strata nie większa niż depozyt, gotówka nie spada');
+        fxRates.EUR = e0; // kurs z powrotem w widełkach
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+
+    test('G21: pozycje przeżywają zapis, nie dotykają akcji, a silnik obsłuży dowolny zarejestrowany rynek (np. towary w 0.17)', () => withLinks(() => {
+        startFund(2_000_000); joinCountry('DE');
+        const stocksBefore = JSON.stringify(stocks.map(s => [s.symbol, s.sharesHeld]));
+        const r = openForexPosition('EUR/CHF', -1, 80_000, 4).position; r.accrued = 12.5;
+        assertEq(JSON.stringify(stocks.map(s => [s.symbol, s.sharesHeld])), stocksBefore, 'akcje bez zmian');
+        const snap = JSON.parse(JSON.stringify(getForexSnapshot())); resetMarginState(); applyForexSnapshot(snap);
+        const back = getMarginPositions()[0]; assert(back && back.instrument === 'EUR/CHF' && back.side === -1 && back.accrued === 12.5 && back.leverage === 4, 'pozycja po wczytaniu');
+        assertEq(getMarginPositions()[0].id, r.id, 'to samo id'); assert(marginNextId > r.id, 'kolejne id nie koliduje');
+        const savedMarkets = { ...marginMarkets }; let oil = 80;
+        registerMarginMarket('oil', { name: 'Ropa', priceOf: sym => sym === 'BRENT' ? oil : null });
+        try {
+            const o = openMarginPosition({ market: 'oil', instrument: 'BRENT', side: 1, notional: 40_000, leverage: 5 }); assert(o.ok, o.reason);
+            oil = 88; assertEq(Math.round(getMarginPnl(o.position)), 4000, 'zysk na innym rynku');
+            assert(!openMarginPosition({ market: 'oil', instrument: 'XXX', side: 1, notional: 40_000, leverage: 5 }).ok, 'nieznany instrument');
+        } finally { delete marginMarkets.oil; Object.assign(marginMarkets, savedMarkets); resetMarginState(); }
+    }));
+
+
+    // --- G22: interfejs forexu ---
+    test('G22: zakładka Forex — przed drugim rynkiem komunikat, potem formularz, tabela pozycji ze słowem stanu (nie tylko kolor) i zamknięcie', () => withLinks(() => {
+        startFund(2_000_000);
+        assert(renderForexTab().includes('odblokuje drugi rynek'), 'komunikat bez rynku');
+        joinCountry('DE');
+        const html = renderForexTab(); assert(html.includes('id="fx-base"') && html.includes('Brak otwartych pozycji') && html.includes('margin call'), 'formularz i opis');
+        const r = openForexPosition('EUR/USD', 1, 100_000, 10).position;
+        const withPos = renderForexTab(); assert(withPos.includes('EUR/USD') && withPos.includes('bezpieczna') && withPos.includes('1:10'), 'wiersz pozycji');
+        const e0 = fxRates.EUR; fxRates.EUR = e0 * 0.975;
+        assert(renderForexTab().includes('margin call') && /▼/.test(renderForexTab()), 'stan słowem i strzałką przy stracie');
+        fxRates.EUR = e0;
+        assert(typeof closeMarginPosition(r.id).ok === 'boolean' && !renderForexTab().includes('EUR/USD</td>'), 'po zamknięciu brak wiersza');
+    }));
+
+
+    // --- E6: minimalne opłaty giełd, profile giełd prywatnych, zostawanie na NH ---
+    test('E6: opłata minimalna — GPW 1000 zł/kw., giełda prywatna 100 zł/kw., NewHorizons 0; do wysokości gotówki spółki', () => {
+        const list = [mk156('GAA', { price: 10, totalShares: 1000 }), mk156('GAB', { price: 10, totalShares: 1000 }), mk156('GAC', { price: 10, totalShares: 1000 }), mk156('GAD', { price: 10, totalShares: 1000 })];
+        resetWorld(list); ensureMarketOperators();
+        const op = mk156('OPX', { price: 100, totalShares: 10000 }); stocks.push(op);
+        for (const [stock, market] of [[list[0], 'GPW'], [list[1], 'XTD'], [list[2], 'NH']]) { stock.cash = 50_000; if (market !== 'GPW') stock.market = market; }
+        list[3].market = 'XTD'; list[3].cash = 40; // prawie bez gotówki
+        marketOperators.GPW.symbol = op.symbol; marketOperators.XTD.status = 'active'; marketOperators.XTD.symbol = op.symbol;
+        const cash = s => s.cash;
+        const before = list.map(cash);
+        collectListingFees(marketOperators.GPW, op); collectListingFees(marketOperators.XTD, op);
+        assertEq(Math.round(before[0] - list[0].cash), 1000, 'GPW: minimum 1000 zł');
+        assertEq(Math.round(before[1] - list[1].cash), 100, 'giełda prywatna: minimum 100 zł');
+        assertEq(list[2].cash, before[2], 'NewHorizons: bez opłaty');
+        assertEq(Math.round(list[3].cash), 0, 'spółka płaci najwyżej tyle, ile ma gotówki'); assert(list[3].cash >= 0, 'gotówka nieujemna');
+    });
+
+    test('E6: profile giełd — kilka rodzajów, nie każda giełda ma profil; filtr sektorów, kapitalizacji i kraju (nowe spółki polskie mają kraj PL)', () => {
+        assert(MARKET_PROFILES.length >= 6, 'kilka wariantów');
+        const tech = mk156('TEC', { price: 100, totalShares: 20_000 }), food = mk156('FOO', { price: 100, totalShares: 20_000 });
+        tech.sector = ['Technologia']; food.sector = ['Żywność']; resetWorld([tech, food]); ensureMarketOperators();
+        const setProfile = id => { marketOperators.XTD.profile = id; };
+        setProfile('tech'); assert(marketAccepts('XTD', tech) && !marketAccepts('XTD', food), 'tylko technologia');
+        setProfile('defensive'); assert(!marketAccepts('XTD', tech) && marketAccepts('XTD', food), 'tylko defensywne');
+        setProfile('cap1m'); assert(getMarketCapValue(tech) >= 1_000_000 ? marketAccepts('XTD', tech) : !marketAccepts('XTD', tech), 'kapitalizacja od 1 mln'); tech.price = 1000; assert(marketAccepts('XTD', tech), 'duża spółka przechodzi'); food.price = 1; assert(!marketAccepts('XTD', food), 'mała nie');
+        setProfile('poland'); assert(marketAccepts('XTD', tech), 'kraj PL'); tech.country = 'DE'; assert(!marketAccepts('XTD', tech), 'obca spółka odrzucona');
+        setProfile(null); assert(marketAccepts('XTD', tech), 'bez profilu przyjmuje wszystkich');
+        assertEq(getStockCountry(createListedCompany({ name: 'Nowa', symbol: 'NWA', sector: ['Energia'], price: 10, totalShares: 1000 })), 'PL', 'kraj PL nowej spółki');
+        let withProfile = 0; withSeededRandom(3, () => { for (let i = 0; i < 200; i++) if (pickMarketProfileId()) withProfile++; });
+        assert(withProfile > 80 && withProfile < 180, `część giełd bez profilu (${withProfile}/200 z profilem)`);
+    });
+
+    test('E6: giełda z profilem podpisuje i tworzy tylko pasujące spółki; przeniesienie notowań też respektuje profil', () => {
+        const a = mk156('AAA', { price: 100, totalShares: 20_000 }), b = mk156('BBB', { price: 100, totalShares: 20_000 }), c = mk156('CCC', { price: 100, totalShares: 20_000 });
+        for (const s of [a, b, c]) { s.exchange = 'SILVER'; }
+        a.sector = ['Technologia']; b.sector = ['Żywność']; c.sector = ['Energia']; resetWorld([a, b, c]); ensureMarketOperators();
+        const op = mk156('XTO', { price: 100, totalShares: 10_000 }); stocks.push(op); op.marketOperator = 'XTD';
+        marketOperators.XTD.status = 'active'; marketOperators.XTD.symbol = op.symbol; marketOperators.XTD.profile = 'tech';
+        for (let i = 0; i < 6; i++) signExclusivity(marketOperators.XTD, op);
+        assertEq(getStockMarket(a), 'XTD', 'technologia podpisana'); assertEq(getStockMarket(b), 'GPW', 'żywność odrzucona'); assertEq(getStockMarket(c), 'GPW', 'energia odrzucona');
+        marketOperators.XTD.profile = 'cap1m';
+        const fresh = spawnMarketMember('XTD', 'test'); assert(fresh && getMarketCapValue(fresh) >= 1_000_000, `nowa spółka spełnia profil kapitalizacji (${fresh && Math.round(getMarketCapValue(fresh))})`);
+        marketOperators.XTD.profile = 'tech'; const t = spawnMarketMember('XTD', 'test'); assert(t && t.sector.includes('Technologia'), 'nowa spółka technologiczna');
+        const small = mk156('SML', { price: 1, totalShares: 1000 }); small.sector = ['Energia']; stocks.push(small); marketOperators.XTD.profile = 'cap1m';
+        small.sharesHeld = 0; playerPortfolio[small.symbol] = { shares: 600, avgPrice: 1, assetType: 'stock' }; small.sharesHeld = 600;
+        assert(!getListingMoveTargets(small).includes('XTD'), 'mała spółka nie przejdzie na giełdę z profilem kapitalizacji');
+    });
+
+    test('E6: spółka NH zostaje na NH, gdy nie chce GPW (cecha), nie stać jej na opłatę albo kontroluje ją gracz; chętna i zamożna awansuje', () => {
+        const list = world156(5, 1_000_000);
+        for (const s of list) { s.market = 'NH'; s.quarterlyEarnings = 20_000; s.financialHealth = 2; s.cash = 50_000; s.marketSinceQ = macro.quarter - 9; s.nhStay = false; }
+        const [stay, poor, mine, ok] = list;
+        stay.nhStay = true; poor.quarterlyEarnings = 3_000; poor.cash = 50_000;
+        playerPortfolio[mine.symbol] = { shares: Math.ceil(mine.totalShares * 0.6), avgPrice: 1, assetType: 'stock' }; mine.sharesHeld = Math.ceil(mine.totalShares * 0.6);
+        for (let i = 0; i < 60; i++) processNhPathQuarterly();
+        assertEq(getStockMarket(stay), 'NH', 'nie chce GPW'); assertEq(getStockMarket(poor), 'NH', 'zysk za mały na opłatę GPW');
+        assertEq(getStockMarket(mine), 'NH', 'gracz większościowy decyduje sam'); assertEq(getStockMarket(ok), 'GPW', 'chętna i zamożna awansuje');
+        const share = (() => { let stays = 0; withSeededRandom(9, () => { for (let i = 0; i < 300; i++) { const s = { }; wantsGpwListing(s); if (s.nhStay) stays++; } }); return stays / 300; })();
+        assert(share > 0.3 && share < 0.5, `ok. 40% spółek zostaje (${share})`);
+    });
+
     // --- koniec grupy 0.16.3 ---
 });
 

@@ -1933,6 +1933,7 @@ function createListedCompany({ name, symbol, sector, price, totalShares, exchang
         sector: sector || base.sector,
         exchange,
         market,
+        country: 'PL', // 0.16.4 E6: kraj pochodzenia (filtry giełd)
         price,
         totalShares,
         maxShares: totalShares,
@@ -1962,14 +1963,18 @@ function createListedCompany({ name, symbol, sector, price, totalShares, exchang
 
 function spawnMarketMember(operatorId, reason) {
     if (isInternetMarket(operatorId) ? !(hasInternetMemberSlot(operatorId) && hasFreeTotalListingSlot()) : !hasFreeListingSlot()) return null; // D1: limit spółek na rynek; P1: sufit krajowy i łączny
-    const sectors = SECTOR_NAMES.filter(s => s !== 'Bankowość');
-    const sector = [getRandomElement(sectors)];
+    const profile = typeof getMarketProfile === 'function' ? getMarketProfile(operatorId) : null; // 0.16.4 E6: giełda z profilem tworzy tylko pasujące spółki
+    const sectors = SECTOR_NAMES.filter(s => s !== 'Bankowość' && (!profile?.sectors || profile.sectors.includes(s)));
+    const sector = [getRandomElement(sectors.length ? sectors : SECTOR_NAMES.filter(s => s !== 'Bankowość'))];
     const name = generateCompanyName(sector[0]); // 0.14.2 P4: człony nazw dla każdego sektora
     const symbol = uniqueSymbol((name.normalize('NFD').replace(/[^A-Za-z ]/g, '').split(' ').map(w => w.slice(0, 2)).join('').toUpperCase() || 'NEW').slice(0, 4));
     const stock = createListedCompany({
         name, symbol, sector,
         price: getRandomInRange(25, 70), totalShares: getRandomIntInRange(20, 80) * 1000, exchange: 'BRONZE', market: operatorId
     });
+    if (profile?.minCap && getMarketCapValue(stock) < profile.minCap * 1.2) { // kapitalizacja z zapasem ponad próg profilu
+        stock.totalShares = stock.maxShares = Math.ceil(profile.minCap * 1.2 / stock.price / 1000) * 1000;
+    }
     stocks.push(stock);
     logEvent(`🏛️ ${stock.name} (${stock.symbol}) wchodzi na giełdę jako członek rynku ${getMarketLabel(operatorId)}${reason ? ` — ${reason}` : ''}.`, 'market');
     return stock;
@@ -2002,6 +2007,7 @@ function activateMarketOperator(startup) {
     if (!operator) return;
     operator.status = 'active';
     operator.symbol = startup.symbol;
+    if (operator.profile === undefined && typeof pickMarketProfileId === 'function') operator.profile = pickMarketProfileId(); // 0.16.4 E6: losowy profil (albo brak)
     startup.marketOperator = operator.id;
     startup.market = operator.id;
     // D1: rynek internetowy ma własny limit (INTERNET_MEMBER_LIMIT) — wliczają się sponsorzy z fazy startupu.
@@ -2143,7 +2149,9 @@ function processMarketsQuarterly() {
 
 function collectListingFees(operator, operatorStock) {
     for (const stock of stocks.filter(s => getStockMarket(s) === operator.id && s !== operatorStock && !s.assetType && !s.isBankrupt)) {
-        const fee = Math.min(Math.max(0, stock.cash) * 0.05, getMarketCapValue(stock) * OPERATOR_LISTING_FEE * (LISTING_FEE_FACTOR[operator.id] ?? 1) * (operator.id === 'GPW' && typeof getListingFeeBoost === 'function' ? getListingFeeBoost() : 1));
+        const boost = operator.id === 'GPW' && typeof getListingFeeBoost === 'function' ? getListingFeeBoost() : 1;
+        const pct = Math.min(Math.max(0, stock.cash) * 0.05, getMarketCapValue(stock) * OPERATOR_LISTING_FEE * (LISTING_FEE_FACTOR[operator.id] ?? 1) * boost);
+        const fee = Math.max(pct, Math.min(typeof getMarketMinFee === 'function' ? getMarketMinFee(operator.id) * boost : 0, Math.max(0, stock.cash))); // 0.16.4 E6: minimum rynku, płacone najwyżej do wysokości gotówki spółki
         if (!(fee > 0)) continue;
         adjustCompanyCash(stock, -fee);
         adjustBalanceSheet(stock, { assets: -fee, retainedEarnings: -fee });
@@ -2172,7 +2180,7 @@ function investInMembers(operator, operatorStock) {
 function signExclusivity(operator, operatorStock) {
     if (isInternetMarket(operator.id) && !hasInternetMemberSlot(operator.id)) return null; // D1: limit spółek rynku
     const candidates = stocks.filter(s => getStockMarket(s) === 'GPW' && !s.marketOperator && !s.assetType && !s.isBankrupt && !s.isStateOwned
-        && ['BRONZE', 'SILVER'].includes(s.exchange));
+        && ['BRONZE', 'SILVER'].includes(s.exchange) && (typeof marketAccepts !== 'function' || marketAccepts(operator.id, s)));
     if (!candidates.length) return null;
     const stock = getRandomElement(candidates);
     const bonus = Math.min(operatorStock.cash * 0.1, getMarketCapValue(stock) * 0.005);
@@ -2195,7 +2203,7 @@ function getListingMoveTargets(stock) {
     if (!stock || stock.assetType || stock.marketOperator || stock.isStateOwned || getFundStakePct(stock) <= 0.5) return [];
     ensureMarketOperators();
     const fromInternet = isInternetMarketStock(stock);
-    return Object.keys(marketOperators).filter(id => id !== getStockMarket(stock) && marketOperators[id]?.status === 'active' && (id in LISTING_MOVE_PRICE_EFFECT || isInternetMarket(id))
+    return Object.keys(marketOperators).filter(id => id !== getStockMarket(stock) && marketOperators[id]?.status === 'active' && (id in LISTING_MOVE_PRICE_EFFECT || isInternetMarket(id)) && (typeof marketAccepts !== 'function' || marketAccepts(id, stock))
         && (isInternetMarket(id) ? hasInternetMemberSlot(id) : (!fromInternet || hasFreeListingSlot()))); // P2: także nowe rynki internetowe; P1: limity rynków
 }
 
@@ -2249,6 +2257,8 @@ function renderMarketsPanel() {
             <dl class="bank-card-rates">
                 <div><dt>Prowizja</dt><dd>${(def.commission * 100).toFixed(2)}%</dd></div>
                 <div><dt>Spółki</dt><dd>${operator.members}</dd></div>
+                ${typeof getMarketMinFee === 'function' ? `<div><dt>Opłata minimalna</dt><dd>${getMarketMinFee(operator.id) > 0 ? `${formatZl(getMarketMinFee(operator.id), 0)} / kw.` : operator.id === 'PRV' ? 'brak (nie ma operatora; ryzyko oszustw ×5 już ją obciąża)' : 'brak'}</dd></div>` : ''}
+                ${typeof describeMarketProfile === 'function' && isInternetMarket(operator.id) ? `<div><dt>Profil giełdy</dt><dd>${escapeHtml(describeMarketProfile(operator.id))}</dd></div>` : ''}
                 <div><dt>Kurs operatora</dt><dd>${stock ? formatZl(stock.price) : (def.entry ? 'bez operatora' : operator.status === 'active' ? 'GPW (rynek gł.)' : '—')}</dd></div>
             </dl>
             ${startup ? `<p class="text-sm">Finansowanie startupu: ${formatZl(startup.currentFunding, 0)} / ${formatZl(startup.fundingGoal, 0)} · sponsorzy: ${operator.sponsors.length}</p>` : ''}

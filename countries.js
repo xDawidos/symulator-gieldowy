@@ -45,6 +45,16 @@ function getOversight(id) { return COUNTRY_DEFS[id]?.oversight || { name: 'nadz�
 function getJoinedCountries() { return Object.keys(countryState); }
 function isCountryJoined(id) { return Boolean(countryState[id]); }
 function getCountryLimit(id) { const def = COUNTRY_DEFS[id]; return def ? Math.ceil(def.companies.length * COUNTRY_RULES.limitMult) : 0; }
+/** Spółka obca znika z giełdy (np. ucieczka prezesa parabanku): posiadacze dostają gotówkę po podanej cenie (gracz w PLN, boty w walucie spółki). */
+function delistForeignIssuer(issuer, price) {
+    for (const [holder, qty] of Object.entries(issuer.holders || {})) {
+        const gross = Number(qty) * price;
+        if (!(gross > 0)) continue;
+        if (holder === 'player') playerCash += toPln(gross, issuer.currency);
+        else { const bot = aiCompetitors.find(b => b.id === holder); if (bot) addCurrencyCash(bot, issuer.currency, gross); }
+    }
+    delete foreignIssuers[issuer.id];
+}
 function getCountryIssuers(id) { return getForeignIssuerList().filter(i => i.kind === 'share' && i.country === id); }
 
 /** Symbol spółki zagranicznej w jej kraju, np. PLT.US (kwit na giganta jeszcze niedołączonego kraju: ID.GDR). */
@@ -124,6 +134,7 @@ function joinCountry(id, by = 'test') {
     marketRegimes[id] = createCountryRegime(id);
     for (const c of def.companies) createCountryIssuer(def, c);
     if (typeof spawnForeignBotsFor === 'function') spawnForeignBotsFor(id);
+    if (id === 'CN' && typeof spawnPandaParabank === 'function') spawnPandaParabank(); // 0.16.4 G19: PanDa Bank na mechanice parabanku z 0.11
     if (typeof applySectorShock === 'function') applySectorShock('Turystyka', 0.06, 3, { fadeQ: 4 }); // nowe państwo = nowi turyści (malejąco)
     const text = `Giełda w kraju: ${def.name} dołącza do świata gry (${def.operator.name}, waluta ${def.currency}, ${def.companies.length} spółek).`;
     logEvent(`🌍 ${text}`, 'market');
@@ -139,7 +150,8 @@ function joinCountry(id, by = 'test') {
 /** Cechy prezesów krajowych (companies.js, pole `fx`); spółki zagraniczne dostają jedną z dwóch cech kraju, stałą dla symbolu. */
 const COUNTRY_CEO_TRAITS = {
     DE: ['ordnung_muss_sein', 'ingenieur'], SE: ['lagom', 'fika'], CH: ['tajemnica_bankowa', 'neutralnosc'],
-    FR: ['savoir_vivre', 'greve_generale'], CZ: ['svejk', 'piwny_dyplomata'], US: ['move_fast', 'shareholder_value']
+    FR: ['savoir_vivre', 'greve_generale'], CZ: ['svejk', 'piwny_dyplomata'], US: ['move_fast', 'shareholder_value'],
+    JP: ['kaizen', 'keiretsu'], CN: ['plan_piecioletni', 'kopiuj_wklej'], IN: ['jugaad', 'outsourcing'], TW: ['krzemowa_tarcza', 'pracoholik']
 };
 function getIssuerCeoTrait(issuer) {
     const list = COUNTRY_CEO_TRAITS[issuer.country];
@@ -187,6 +199,7 @@ function getCountrySectorPremium(issuer) {
 }
 
 function stepCountryIssuer(issuer, def, st, regime, homeZ, countryZ) {
+    if (issuer.tradeHalted) return; // zawieszone notowania (parabank w śledztwie): kurs stoi
     const beta = issuer.sectors.reduce((s, [name, share]) => s + share * getSectorBeta(name), 0);
     const rateSens = issuer.sectors.reduce((s, [name, share]) => s + share * getSectorRateSens(name), 0);
     const fx = getSpecialEffect(issuer);
@@ -256,6 +269,35 @@ function applySpecialEvents(issuer) {
         logEvent(`🌍 ${issuer.name}: protesty ekologów przeciw żabim udkom, kurs spada.`, 'market');
     } else if (issuer.special === 'cocoa' && q === 1) { // Matterhornen: cena kakao
         issuer.price = Math.max(0.05, issuer.price * (1 + getRandomInRange(-0.05, 0.04)));
+    } else if (issuer.special === 'anime' && q === 2) { // Bakugan TV: sezon anime, eksport kultury — im więcej krajów na giełdzie, tym częstszy hit
+        const hit = Math.random() < Math.min(0.8, 0.45 + 0.05 * getJoinedCountries().length);
+        issuer.price = Math.max(0.05, issuer.price * (hit ? 1 + getRandomInRange(0.05, 0.12) : 1 - getRandomInRange(0.05, 0.10)));
+        logEvent(`🌍 ${issuer.name}: sezon anime — ${hit ? 'hit, kurs rośnie' : 'klapa, kurs spada'}.`, 'market');
+    } else if (issuer.special === 'bollywood') { // Bollywood Studios: co kwartał premiera
+        const hit = Math.random() < 0.5;
+        issuer.price = Math.max(0.05, issuer.price * (hit ? 1 + getRandomInRange(0.02, 0.07) : 1 - getRandomInRange(0.02, 0.06)));
+    } else if (issuer.special === 'monsoon' && q === 3) { // Curry Masala: monsun decyduje o zbiorze przypraw
+        issuer.price = Math.max(0.05, issuer.price * (Math.random() < 0.6 ? 1 + getRandomInRange(0.02, 0.07) : 1 - getRandomInRange(0.04, 0.09)));
+    } else if (issuer.special === 'rareearths' && q === 1 && Math.random() < 0.2) { // Smok Rare Earths: ograniczenia eksportu podbijają ceny metali
+        issuer.price = Math.max(0.05, issuer.price * (1 + getRandomInRange(0.08, 0.15)));
+        logEvent(`🌍 ${issuer.name}: ograniczenia eksportu metali ziem rzadkich, kurs rośnie.`, 'market');
+    } else if (issuer.special === 'sanctions') { // Huiei Telecom: ryzyko sankcji (przerwa 6 kwartałów)
+        if (macro.quarter - (issuer.leakQ ?? -99) > 6 && Math.random() < 0.05) {
+            issuer.leakQ = macro.quarter;
+            issuer.price = Math.max(0.05, issuer.price * (1 - getRandomInRange(0.15, 0.25)));
+            const text = `🌍 Sankcje na ${issuer.name}: zakaz sprzedaży sprzętu na rynkach zachodnich, kurs spada o 15–25%.`;
+            logEvent(text, 'market');
+            if (typeof pushNews === 'function') pushNews(text, null);
+        }
+    } else if (issuer.special === 'tension') { // KWS: napięcie Chiny–Tajwan — kurs −30%, półprzewodniki w dół na świecie (linia lokalna, nie piąta linia kryzysu)
+        if (macro.quarter - (issuer.leakQ ?? -99) > 8 && Math.random() < 0.03) {
+            issuer.leakQ = macro.quarter;
+            issuer.price = Math.max(0.05, issuer.price * 0.7);
+            const text = '🌍 Napięcie Chiny–Tajwan: blokada cieśniny uderza w dostawy chipów. Kurs KWS spada o 30%, półprzewodniki tanieją na całym świecie.';
+            logEvent(text, 'market');
+            if (typeof pushNews === 'function') pushNews(text, null);
+            if (typeof addSectorShock === 'function') for (const country of [null, ...getJoinedCountries()]) addSectorShock('Technologia', -0.08, { subsector: 'Półprzewodniki', holdQ: 2, fadeQ: 3, country });
+        }
     } else if (issuer.special === 'launder') { // Waschmabank: prowizja od brudnej gotówki i ryzyko wycieku „Swiss Leaks”
         issuer.price = Math.max(0.05, issuer.price * (1 + getRandomInRange(0.005, 0.015)));
         if (macro.quarter - (issuer.leakQ ?? -99) > 8 && Math.random() < 0.04) {
@@ -340,6 +382,7 @@ function getCountriesSnapshot() {
         if (Object.keys(i.holders).length) row.o = i.holders;
         if (i.leakQ !== undefined) row.lk = i.leakQ;
         if (i.vintage) row.v = i.vintage;
+        if (i.tradeHalted) row.th = 1;
         if (i.generated) row.g = { name: i.name, sector: i.sectors.map(s => s[0]), subsector: i.subsector, country: i.country, currency: i.currency };
         issuers[i.id] = row;
     }
@@ -373,6 +416,7 @@ function applyCountriesSnapshot(snapshot) {
         issuer.listedQ = Number(row.q) || 0; issuer.sp = Number(row.sp) || 0; issuer.ema = Number(row.e) > 0 ? Number(row.e) : issuer.price;
         if (Number.isFinite(Number(row.lk))) issuer.leakQ = Number(row.lk);
         if (row.v) issuer.vintage = String(row.v);
+        if (row.th) issuer.tradeHalted = true;
         issuer.holders = {};
         for (const [holder, qty] of Object.entries(row.o || {})) if (Number(qty) > 0) issuer.holders[holder] = Number(qty);
     }
@@ -494,6 +538,7 @@ function buyForeignShares(issuerId, quantity) {
     const def = COUNTRY_DEFS[issuer.country];
     if (!canTradeCountry('player', issuer.country)) return { ok: false, reason: `Brak biletu na rynek: ${def?.name || issuer.country}. Bilet kupisz na lotnisku.` };
     if (typeof isMarketHalted === 'function' && isMarketHalted()) return { ok: false, reason: 'Handel wstrzymany — zadziałał bezpiecznik giełdowy.' };
+    if (issuer.tradeHalted) return { ok: false, reason: 'Notowania spółki są zawieszone.' };
     if (quantity > getGdrFree(issuer)) return { ok: false, reason: 'Nie ma tylu akcji w wolnym obrocie.' };
     const room = Math.floor(getCallThreshold(issuer.country) * issuer.shares) - getGdrHeld(issuer); // drabina nadzoru (G15): bez wezwania nie przekroczysz progu
     if (quantity > room) {
@@ -521,10 +566,12 @@ function sellForeignShares(issuerId, quantity) {
     quantity = Math.floor(Number(quantity));
     if (!issuer || issuer.kind !== 'share' || !(quantity > 0)) return { ok: false, reason: 'Podaj liczbę akcji.' };
     if (typeof isMarketHalted === 'function' && isMarketHalted()) return { ok: false, reason: 'Handel wstrzymany — zadziałał bezpiecznik giełdowy.' };
+    if (issuer.tradeHalted) return { ok: false, reason: 'Notowania spółki są zawieszone.' };
     const held = getGdrHeld(issuer);
     if (quantity > held) return { ok: false, reason: 'Za mało akcji.' };
     const def = COUNTRY_DEFS[issuer.country], gross = quantity * issuer.price, fee = gross * getCountryCommission(issuer.country);
     issuer.holders.player = held - quantity;
+    if (typeof onParabankSharesSold === 'function') onParabankSharesSold({ symbol: issuer.id, name: issuer.name, totalShares: issuer.shares }, quantity); // panika w parabanku (0.11 B1)
     if (issuer.holders.player <= 0) delete issuer.holders.player;
     addCurrencyCash('player', issuer.currency, gross - fee);
     recordPayment('player-fund', `external:${def.operator.id}`, toPln(fee, issuer.currency), `Prowizja: ${def.operator.name}`);
@@ -548,6 +595,9 @@ const FOREIGN_BOTS = [
     { id: 'fb_gutz', name: 'Gregor „Bankier” Gutzwiller', country: 'CH', style: 'banker', cash: { CHF: 15000 }, reserve: 0.3, favorite: 'WSM' },
     // Szwecja — agresywny, kupuje cokolwiek (także w innych krajach, do których ma dostęp)
     { id: 'fb_wiking', name: 'Olaf „Wiking” Bergstrom', country: 'SE', style: 'viking', cash: { SEK: 40000, EUR: 2000 }, spend: 0.45 },
+    // 0.16.4 G20: Azja — Tygrys (agresywny, technologia) i Konfucjusz (rynek japoński, akcjami handluje tylko z Tygrysem)
+    { id: 'fb_tygrys', name: 'Li „Tygrys” Wei', country: 'CN', style: 'tiger', cash: { CNY: 70000, USD: 3000 }, spend: 0.5 },
+    { id: 'fb_konfucjusz', name: 'Hiroshi „Konfucjusz” Tanaka', country: 'JP', style: 'confucius', cash: { JPY: 1000000 }, spend: 0.3 },
     // Dynamiczne (bez kraju startowego): wspólnota europejska i pierwsze przejęcie giełdy przez naszą
     { id: 'fb_euro', name: 'Jean-Pierre „Ruletka” Bonvivant', country: null, style: 'gambler', cash: { EUR: 20000 }, spend: 0.5, dynamic: true },
     { id: 'fb_bayer', name: 'Kacper „Intercontinental” Bayer', country: null, style: 'abroad', cash: { EUR: 8000, USD: 6000, CHF: 4000 }, dynamic: true }
@@ -646,7 +696,7 @@ function botAccess(bot, country) {
 }
 
 function botPickTarget(bot, def) {
-    const pool = id => getCountryIssuers(id).filter(i => !(i.state && getGdrFree(i) <= 0));
+    const pool = id => getCountryIssuers(id).filter(i => !i.tradeHalted && !(i.state && getGdrFree(i) <= 0));
     let candidates = pool(bot.homeCountry);
     if (def.style === 'banker') { // Gutzwiller: tylko banki; Waschmabank z preferencją
         const fav = foreignIssuers[def.favorite];
@@ -654,6 +704,11 @@ function botPickTarget(bot, def) {
         candidates = getJoinedCountries().filter(c => canTradeCountry(bot.id, c)).flatMap(pool).filter(i => i.sectors.some(([n]) => n === 'Bankowość'));
     } else if (def.style === 'viking') { // Wiking: kupuje cokolwiek, w każdym kraju, do którego ma dostęp
         for (const c of getJoinedCountries()) if (c !== bot.homeCountry && (countryState[c]?.link || Math.random() < 0.5) && botAccess(bot, c)) candidates = candidates.concat(pool(c));
+    } else if (def.style === 'tiger') { // Tygrys: technologia w każdym dostępnym kraju, co czwarty wybór — dowolna spółka japońska (dostawa dla Konfucjusza)
+        const all = getJoinedCountries().flatMap(c => botAccess(bot, c) || c === bot.homeCountry ? pool(c) : []);
+        const tech = all.filter(i => i.sectors.some(([n]) => n === 'Technologia'));
+        const jp = all.filter(i => i.country === 'JP');
+        candidates = jp.length && Math.random() < 0.25 ? jp : (tech.length ? tech : candidates);
     } else if (def.style === 'gambler') { // bot europejski: hazard na spółkach krajów europejskich
         candidates = LINK_RULES.europe.filter(isCountryJoined).flatMap(c => botAccess(bot, c) ? pool(c) : []);
     } else if (def.style === 'abroad') { // Bayer: tylko spółki zagraniczne, każdy kraj otwarty
@@ -683,6 +738,35 @@ function foreignBotBuy(bot, def) {
     issuer.holders[bot.id] = held + qty;
     bot.fx.cost[issuer.id] = (prev + qty * issuer.price) / (held + qty);
     return true;
+}
+
+/** Konfucjusz (G20): kupuje i sprzedaje akcje japońskie wyłącznie Tygrysowi — transakcja bot–bot po kursie, bez prowizji, z limitem udziału. */
+function confuciusTrade(bot) {
+    const tiger = aiCompetitors.find(b => b.id === 'fb_tygrys');
+    if (!tiger) return false;
+    const jpIssuers = getCountryIssuers('JP').filter(i => !i.state);
+    const move = (issuer, from, to, qty) => { // przelew akcji i gotówki między botami; false = brak środków
+        const gross = qty * issuer.price;
+        if (!botPay(to, issuer.currency, gross)) return false;
+        addCurrencyCash(from, issuer.currency, gross);
+        const held = Number(issuer.holders[to.id]) || 0, prev = (to.fx.cost[issuer.id] || issuer.price) * held;
+        issuer.holders[from.id] -= qty; if (issuer.holders[from.id] <= 0) { delete issuer.holders[from.id]; delete from.fx.cost[issuer.id]; }
+        issuer.holders[to.id] = held + qty; to.fx.cost[issuer.id] = (prev + qty * issuer.price) / (held + qty);
+        return true;
+    };
+    if (Math.random() < 0.5) { // kupno od Tygrysa
+        const sellers = jpIssuers.filter(i => (Number(i.holders[tiger.id]) || 0) > 0);
+        if (!sellers.length) return false;
+        const issuer = getRandomElement(sellers), mid = toPln(issuer.price, issuer.currency);
+        const cap = Math.floor(issuer.shares * botStakeCap(issuer, bot)) - (Number(issuer.holders[bot.id]) || 0);
+        const qty = Math.min(Math.floor(botSpendable(bot) * 0.3 / mid), cap, Math.floor(issuer.holders[tiger.id] / 2) || 1);
+        return qty >= 1 && qty <= issuer.holders[tiger.id] && move(issuer, tiger, bot, qty);
+    }
+    const mine = jpIssuers.filter(i => (Number(i.holders[bot.id]) || 0) > 0 && i.price >= (bot.fx.cost[i.id] || i.price) * BOT_RULES.takeProfit);
+    if (!mine.length) return false;
+    const issuer = getRandomElement(mine), qty = Math.max(1, Math.floor(issuer.holders[bot.id] / 2));
+    if ((Number(issuer.holders[tiger.id]) || 0) + qty > issuer.shares * botStakeCap(issuer, tiger)) return false;
+    return move(issuer, bot, tiger, qty);
 }
 
 function foreignBotSell(bot) {
@@ -733,7 +817,8 @@ function runForeignBot(bot) {
         let done = false;
         const premium = marketRegimes[bot.homeCountry]?.premium || 0;
         const buyBelow = def.style === 'gambler' ? 0.55 : def.style === 'banker' && premium < 0 ? 0.95 : 0.8; // hazardzista sprzedaje częściej, Gutzwiller w bessie dokupuje
-        if (def.enterHome && bot.fx.enteredHome && roll < 0.35) done = botTradeHome(bot, def);
+        if (def.style === 'confucius') done = confuciusTrade(bot);
+        else if (def.enterHome && bot.fx.enteredHome && roll < 0.35) done = botTradeHome(bot, def);
         else if (roll < buyBelow) done = foreignBotBuy(bot, def);
         else if (def.style === 'banker' && premium < 0) done = false; // neutralność: nie sprzedaje w panice
         else done = foreignBotSell(bot);

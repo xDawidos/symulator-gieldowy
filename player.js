@@ -1664,7 +1664,7 @@ function getFundAssets() {
     const ppp = typeof getFundPppValue === 'function' ? getFundPppValue() : 0;                 // projekty miejskie (city.js)
     const bridge = typeof getFundBridgeLoansValue === 'function' ? getFundBridgeLoansValue() : 0; // pożyczki pomostowe (finance.js)
     const projectBonds = typeof getFundProjectBondsValue === 'function' ? getFundProjectBondsValue() : 0; // obligacje projektowe (projects.js)
-    return Math.max(0, Number(playerCash) || 0) + getFundPortfolioValue() + getFundBondsValue() + deposits + ppp + bridge + projectBonds + getFundPoolValue() + (typeof getForeignCashPln === 'function' ? getForeignCashPln('player') : 0) + (typeof getFundGdrValue === 'function' ? getFundGdrValue() : 0); // 0.16.1 G2b/G3: gotówka w walutach po kursie i kwity GDR
+    return Math.max(0, Number(playerCash) || 0) + getFundPortfolioValue() + getFundBondsValue() + deposits + ppp + bridge + projectBonds + getFundPoolValue() + (typeof getForeignCashPln === 'function' ? getForeignCashPln('player') : 0) + (typeof getFundGdrValue === 'function' ? getFundGdrValue() : 0) + (typeof getFundMarginValue === 'function' ? getFundMarginValue() : 0); // 0.16.1 G2b/G3: gotówka w walutach po kursie i kwity GDR; 0.16.4 G21: kapitał pozycji forex
 }
 
 /** 0.14.1 R2 (błąd B): pula w NAV — niezainwestowana część gracza (nominalnie) + jego wkłady przez pulę w żyjące startupy (po koszcie). */
@@ -1778,6 +1778,7 @@ function startNewCareer(profile = {}) {
     playerCash = FUND_START_CASH;
     if (typeof centralBank === 'object') { centralBank.indexes = {}; if (typeof ensureLaunchedIndexes === 'function') ensureLaunchedIndexes(); } // 0.16.1: nowa gra — tylko GIG i SIG20
     if (typeof initFxState === 'function') initFxState(); // 0.16.1: nowe kursy i pusta gotówka walutowa
+    if (typeof resetMarginState === 'function') resetMarginState(); // 0.16.4 G21: bez pozycji forex
     if (typeof resetGdrState === 'function') resetGdrState();
     if (typeof resetForeignBots === 'function') resetForeignBots(); // 0.16.2 G8: nowa gra bez botów zagranicznych
     for (const symbol of Object.keys(playerPortfolio)) delete playerPortfolio[symbol];
@@ -2034,6 +2035,7 @@ function processFundWeekly() {
 
     chargeManagementFee();
     if (typeof stepFxRates === 'function') stepFxRates(); // 0.16.1 G2a: kursy walut co tydzień gry
+    if (typeof stepMarginPositions === 'function') stepMarginPositions(); // 0.16.4 G21: koszt utrzymania i margin call
     if (typeof stepForeignIssuers === 'function') stepForeignIssuers(); // 0.16.1 G3: ceny obcych gigantów (GDR)
     if (typeof stepCountries === 'function') stepCountries(); // 0.16.2 G5: rynki zagraniczne (countries.js)
 

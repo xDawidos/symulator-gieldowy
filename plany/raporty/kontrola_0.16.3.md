@@ -20,3 +20,8 @@ Stan: G11–G15 zrobione, G16 (UI, zapis, Akademia) wpięte w G12/G15, testy 798
 - Symulacja `przebiegi` (3 gry): zawiesiła się na kw. 13/27 w przebiegu 1 (wcześniej 20 gier też), przerwana — brak liczb o częstości zdarzeń, wpływie GIG, rozmiarze zapisu i czasie kroku.
 - Brak sprawdzenia wizualnego UI i weryfikacji w przeglądarce (tylko testy).
 - Zawieszenie symulacji do zbadania (czy to pętla w nowym kodzie, czy narzędzie).
+
+## Uzupełnienie liczbami (0.16.4, 12 gier × 27 kw.)
+- Przebiegi nie zawieszają się (przyczyna: okno połączenia pauzowało grę; naprawione w 0.16.4). Przy 10 krajach: połączenia giełd 2–4 na grę (intl 14, merged 16, taken 6 w 12 grach), wspólnota europejska 12/12.
+- Zapis krajów ≈ 30 tys. znaków (max 32 tys.); czas kroku 1362 ms/kw. z krajami vs 1231 bez; niezmienniki 0 naruszeń.
+- Wpływ na GIG: −2,9 pp (kraje-10 vs bez krajów, 8,8% vs 11,7%), powtórzone; ponad cel ±1 pp, przyczyna nieustalona — szczegóły w kontrola_0.16.4.md.

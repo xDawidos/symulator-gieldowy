@@ -2540,7 +2540,9 @@ function updateGreyZoneBadge() {
 const PARABANK_SCENARIOS = [
     { id: 'gold',   name: 'Bursztynowy Kruszec Finanse', bankName: 'Bursztynowy Kruszec',   margin: 0.14, loanCut: 0.02, target: 6, desc: 'lokaty „zabezpieczone złotem”' },
     { id: 'piggy',  name: 'Złota Skarbonka S.A.',        bankName: 'Złota Skarbonka',        margin: 0.12, loanCut: 0.03, target: 5, desc: 'najwyższe lokaty w kraju' },
-    { id: 'quick',  name: 'Szybka Kasa Plus S.A.',       bankName: 'Szybka Kasa Plus',       margin: 0.10, loanCut: 0.05, target: 5, desc: 'kredyty bez BIK w 15 minut' }
+    { id: 'quick',  name: 'Szybka Kasa Plus S.A.',       bankName: 'Szybka Kasa Plus',       margin: 0.10, loanCut: 0.05, target: 5, desc: 'kredyty bez BIK w 15 minut' },
+    // 0.16.4 G19: PanDa Bank (Chiny) — ta sama mechanika; akcje to spółka zagraniczna (foreignId), a scenariusz startuje z dołączeniem Chin, nie losowo
+    { id: 'panda',  name: 'PanDa Bank',                  bankName: 'PanDa Bank',             margin: 0.15, loanCut: 0.02, target: 6, desc: 'lokaty o najwyższym oprocentowaniu w Azji', foreignId: 'PND' }
 ];
 const PARABANK_SPAWN_CHANCE = 0.08;
 const PARABANK_LOAN_LIMIT = 0.3;
@@ -2584,9 +2586,18 @@ function getParabankFor(bankId) {
     return scandals.parabanks.find(p => p.bankId === bankId) || null;
 }
 
-function spawnParabank() {
-    const scenario = PARABANK_SCENARIOS.find(s => !scandals.usedScenarios.includes(s.id));
-    if (!scenario) return null;
+/** Akcje parabanku: spółka z `stocks` albo (PanDa Bank) obca spółka z `foreignIssuers`. */
+function getParabankStock(parabank) {
+    return parabank.foreignId ? (foreignIssuers[parabank.foreignId] || null) : (stocks.find(s => s.symbol === parabank.symbol) || null);
+}
+
+/** PanDa Bank: start razem z dołączeniem Chin (raz). */
+function spawnPandaParabank() { return spawnParabank(PARABANK_SCENARIOS.find(s => s.id === 'panda')); }
+
+function spawnParabank(forced) {
+    const scenario = forced || PARABANK_SCENARIOS.find(s => !s.foreignId && !scandals.usedScenarios.includes(s.id));
+    if (!scenario || scandals.usedScenarios.includes(scenario.id)) return null;
+    if (scenario.foreignId && !foreignIssuers[scenario.foreignId]) return null;
     scandals.usedScenarios.push(scenario.id);
     const bank = {
         id: `para_${scenario.id}`, name: scenario.bankName, type: BANK_TYPES.INTERNET, isActive: true, isParabank: true,
@@ -2595,23 +2606,36 @@ function spawnParabank() {
     };
     commercialBanks.push(bank);
     if (typeof updateInterestRates === 'function') updateInterestRates();
-    const stock = createListedCompany({ name: scenario.name, symbol: uniqueSymbol(scenario.bankName.replace(/[^A-Za-z]/g, '').slice(0, 4).toUpperCase()), sector: ['Finanse'], price: getRandomInRange(20, 40), totalShares: 50000, exchange: 'BRONZE' });
-    stock.isParabankStock = true;
-    stocks.push(stock);
+    let stock;
+    if (scenario.foreignId) stock = foreignIssuers[scenario.foreignId];
+    else {
+        stock = createListedCompany({ name: scenario.name, symbol: uniqueSymbol(scenario.bankName.replace(/[^A-Za-z]/g, '').slice(0, 4).toUpperCase()), sector: ['Finanse'], price: getRandomInRange(20, 40), totalShares: 50000, exchange: 'BRONZE' });
+        stock.isParabankStock = true;
+        stocks.push(stock);
+    }
+    const symbol = scenario.foreignId || stock.symbol;
     // B1: termin upadku losowy i ukryty (3–8 kw.) — bez „pewnego” zarobku na akcjach.
-    const parabank = { id: `pb${scandals.nextId++}`, scenario: scenario.id, bankId: bank.id, symbol: stock.symbol, phase: 'open', quarters: 0, raised: 0, peakPrice: stock.price, knfWarned: false, collapseAt: getRandomIntInRange(3, 8) };
+    const parabank = { id: `pb${scandals.nextId++}`, scenario: scenario.id, bankId: bank.id, symbol, foreignId: scenario.foreignId || undefined, phase: 'open', quarters: 0, raised: 0, peakPrice: stock.price, knfWarned: false, collapseAt: getRandomIntInRange(3, 8) };
     scandals.parabanks.push(parabank);
-    logEvent(`🏦 Nowy gracz na rynku: ${scenario.bankName} — ${scenario.desc}. Akcje ${stock.name} debiutują na Rynku Brązowym.`, 'market');
-    addMail({ sender: 'PULS', subject: `🎁 ${scenario.bankName}: oferta, jakiej nie było`, body: `${scenario.bankName} kusi: ${scenario.desc}. Lokata dla funduszy nawet ${(getFundDepositRate(bank, 16) * 100).toFixed(1)}% rocznie. Akcje banku dla inwestorów instytucjonalnych z rabatem 10%.`, importance: 2, symbol: stock.symbol });
+    logEvent(`🏦 Nowy gracz na rynku: ${scenario.bankName} — ${scenario.desc}. ${scenario.foreignId ? `Akcje ${stock.name} notowane są na giełdzie w Szanghaju.` : `Akcje ${stock.name} debiutują na Rynku Brązowym.`}`, 'market');
+    addMail({ sender: 'PULS', subject: `🎁 ${scenario.bankName}: oferta, jakiej nie było`, body: `${scenario.bankName} kusi: ${scenario.desc}. Lokata dla funduszy nawet ${(getFundDepositRate(bank, 16) * 100).toFixed(1)}% rocznie. Akcje banku dla inwestorów instytucjonalnych z rabatem 10%.`, importance: 2, symbol });
     return parabank;
 }
 
 /** Akcje parabanku dla funduszu z rabatem 10% (faza otwarcia). */
 function buyParabankShares(parabankId, quantity) {
     const parabank = scandals.parabanks.find(p => p.id === parabankId);
-    const stock = parabank && stocks.find(s => s.symbol === parabank.symbol);
+    const stock = parabank && getParabankStock(parabank);
     quantity = Math.floor(Number(quantity));
     if (!stock || parabank.phase !== 'open') { showToast('Oferta nieaktualna.', 'warning'); return false; }
+    if (parabank.foreignId) { // akcje zagraniczne: zwykły zakup (bilet, prowizja, próg wezwania), potem rabat 10% zwrotem
+        const r = buyForeignShares(parabank.foreignId, quantity);
+        if (!r.ok) { showToast(r.reason, 'warning'); return false; }
+        const rebate = quantity * toPln(stock.price, stock.currency) * 0.1;
+        playerCash += rebate; parabank.raised += quantity * toPln(stock.price, stock.currency) - rebate;
+        showToast(`Kupiono ${quantity} akcji ${stock.name}; rabat instytucjonalny ${formatZl(rebate, 0)}.`, 'success');
+        return true;
+    }
     quantity = Math.min(quantity, getAvailableShares(stock));
     const cost = quantity * stock.price * 0.9;
     if (!(quantity > 0) || playerCash < cost) { showToast('Za mało gotówki albo akcji w ofercie.', 'error'); return false; }
@@ -2654,7 +2678,7 @@ function processParabanksQuarterly() {
     for (const parabank of scandals.parabanks) {
         const scenario = PARABANK_SCENARIOS.find(s => s.id === parabank.scenario);
         const bank = commercialBanks.find(b => b.id === parabank.bankId);
-        const stock = stocks.find(s => s.symbol === parabank.symbol);
+        const stock = getParabankStock(parabank);
         parabank.quarters++;
         if (parabank.loan) parabank.loan.owed *= 1 + PARABANK_LOAN_QUARTERLY_RATE;
 
@@ -2690,12 +2714,12 @@ function processParabanksQuarterly() {
 function collapseParabank(parabank, phase) {
     const scenario = PARABANK_SCENARIOS.find(s => s.id === parabank.scenario);
     const bank = commercialBanks.find(b => b.id === parabank.bankId);
-    const stock = stocks.find(s => s.symbol === parabank.symbol);
+    const stock = getParabankStock(parabank);
     parabank.phase = phase;
 
     if (phase === 'investigation') {
         if (bank) bank.frozen = true;
-        if (stock) { stock.price = 0.01; stock.isTradeLocked = true; stock.tradeHalted = true; }
+        if (stock) { stock.price = 0.01; stock.isTradeLocked = true; stock.tradeHalted = true; if (parabank.foreignId) stock.history.push(stock.price); }
         showBreakingNews(`Dziennikarskie śledztwo w sprawie ${scenario.bankName}! Notowania zawieszone, wypłaty wstrzymane.`);
         settleParabankDeposits(parabank, 0.2);
         // Kredyt z parabanku: syndyk żąda natychmiastowej spłaty.
@@ -2715,7 +2739,7 @@ function collapseParabank(parabank, phase) {
         }
     } else if (phase === 'fled') {
         showBreakingNews(`Prezes ${scenario.bankName} uciekł za granicę z pieniędzmi klientów.`);
-        if (stock) delistStockAtPrice(stock, stock.price);
+        if (stock) { if (parabank.foreignId) delistForeignIssuer(stock, stock.price); else delistStockAtPrice(stock, stock.price); }
         if (bank) { bank.isActive = false; bank.cash = 0; }
         parabank.phase = 'gone';
     }
@@ -2852,7 +2876,7 @@ function processScandalsQuarterly() {
 function renderParabankExtras(bank) {
     const parabank = getParabankFor(bank.id);
     if (!parabank) return '';
-    const stock = stocks.find(s => s.symbol === parabank.symbol);
+    const stock = getParabankStock(parabank);
     if (parabank.phase !== 'open') return '<p class="text-down text-sm"><strong>⛔ Wypłaty wstrzymane — trwa śledztwo.</strong></p>';
     return `${parabank.knfWarned ? '<p class="text-down text-sm"><strong>⚠️ KNF: lista ostrzeżeń publicznych — lokaty bez gwarancji.</strong></p>' : '<p class="text-warn text-sm">🎁 Oferta specjalna — najwyższe oprocentowanie na rynku!</p>'}
         <div class="bank-card-form">${stock ? `<input type="text" inputmode="numeric" id="pb-shares-${parabank.id}" value="100" aria-label="Akcje"><button class="btn-secondary" onclick="buyParabankShares('${parabank.id}', parseInt(document.getElementById('pb-shares-${parabank.id}').value, 10)); renderCommercialBanksList();">Akcje −10%</button>` : ''}</div>
@@ -2875,7 +2899,7 @@ function renderPrWars() {
 /** B1: sprzedaż dużego pakietu akcji parabanku w fazie otwarcia może wywołać panikę i wcześniejsze śledztwo. */
 function onParabankSharesSold(stock, quantity) {
     const parabank = scandals?.parabanks?.find(p => p.symbol === stock.symbol && p.phase === 'open');
-    if (!parabank || quantity / Math.max(1, stock.totalShares) < 0.02 || Math.random() > 0.5) return false;
+    if (!parabank || quantity / Math.max(1, stock.totalShares || stock.shares) < 0.02 || Math.random() > 0.5) return false;
     parabank.panic = true;
     logEvent(`📉 Duży pakiet ${stock.name} trafia na rynek — klienci banku zaczynają się niepokoić.`, 'market');
     return true;
