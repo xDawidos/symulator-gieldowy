@@ -5115,7 +5115,28 @@ button.mood-kpi:hover { background: var(--color-bg-hover) !important; border-col
 .kantor-form input { width: 10em; }
 .btn-row { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; margin-top: var(--space-3); }
 .text-right { text-align: right; }
-#kantor-modal tr.row-selected { background: var(--bg-elevated-2); outline: 1px solid var(--accent-info); }
-#kantor-modal tbody tr[onclick] { cursor: pointer; }
+#internet-modal tr.row-selected { background: var(--bg-elevated-2); outline: 1px solid var(--accent-info); }
+#internet-modal tbody tr[onclick] { cursor: pointer; }
 .flag-ic, .cur-ic { vertical-align: -2px; flex: none; }
 .cur-ic { color: var(--accent-info); }
+
+/* 0.16.5 Internet: pasek przeglądarki, ulubione, tło w barwach kraju (tylko ciemny motyw; kraj podaje też nazwa i flaga w pasku) */
+.net-bar { display: flex; align-items: center; gap: var(--space-2, 8px); padding: 8px 16px; border-bottom: 1px solid var(--ink-600); }
+.net-address { flex: 1; min-width: 0; padding: 6px 10px; border-radius: 999px; background: var(--ink-850); color: var(--ink-200); border: 1px solid var(--ink-600); cursor: default; }
+.net-country-badge { white-space: nowrap; color: var(--net-accent, var(--ink-100)); }
+.net-favs { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-top: 12px; }
+.net-fav { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 14px; text-align: left; background: var(--ink-750); color: var(--ink-100); border: 1px solid var(--ink-600); border-radius: 10px; cursor: pointer; }
+.net-fav:hover, .net-fav:focus-visible { border-color: var(--amber-400); outline: 2px solid var(--amber-a35); }
+.net-fav.locked { opacity: .65; border-style: dashed; }
+.net-fav .nav-badge { position: absolute; top: 8px; right: 8px; }
+.net-avatar { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; background: var(--ink-600); font-weight: 700; }
+.net-msg { padding: 6px 0; border-bottom: 1px solid var(--ink-700); }
+.net-msg.unread { border-left: 3px solid var(--amber-400); padding-left: 8px; }
+body #internet-modal[data-country] { background: var(--net-bg) !important; border-top: 5px solid var(--net-accent) !important; }
+body #internet-modal[data-country] .bank-card { border-left: 4px solid var(--net-accent) !important; }
+body #internet-modal[data-country] .tab-btn.active { border-color: var(--net-accent) !important; }
+/* Startupy w Internecie: panel zawsze rozwinięty, bez własnego nagłówka zwijania */
+#net-page-startupy #startup-incubator-panel h2 { display: none !important; }
+#net-page-startupy #startup-incubator-panel.collapsed .startup-panel-content { display: revert !important; }
+#net-page-startupy #startup-incubator-panel.collapsed table.startup-panel-content { display: table !important; }
+.mail-task { padding: 6px 0; border-bottom: 1px solid var(--ink-700); }

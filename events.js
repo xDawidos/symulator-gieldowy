@@ -46,7 +46,8 @@ function createMailbox() {
         messages: [],
         subscriptions: { PULS: 'free', FLESZ: 'free', OBSER: 'free' },
         nextId: 1,
-        rumors: []   // plotki FLESZ czekające na sprostowanie lub potwierdzenie
+        rumors: [],  // plotki FLESZ czekające na sprostowanie lub potwierdzenie
+        tied: []     // 0.16.5: posty prezesów w Tied (internet.js)
     };
 }
 
@@ -420,7 +421,7 @@ function markAllMailRead(folder) {
 
 function getMailInFolder(folder) {
     if (folder === 'starred') return mailbox.messages.filter(m => m.starred);
-    if (folder === 'inbox') return mailbox.messages.filter(m => getMailFolder(m) !== 'spam');
+    if (folder === 'inbox') return mailbox.messages.filter(m => getMailFolder(m) !== 'spam' && (typeof getMailChannel !== 'function' || getMailChannel(m) !== 'tied')); // 0.16.5: wiadomości od inwestorów i spółek czyta się w Tied
     return mailbox.messages.filter(m => getMailFolder(m) === folder);
 }
 
@@ -447,6 +448,7 @@ function logEvent(message, category = 'market') { // Domyślna kategoria to 'mar
         eventLog.pop();
     }
     if (typeof routeEventToMail === 'function') routeEventToMail(message, category); // skrzynka mailowa (mail.js)
+    if (typeof noteTiedEvent === 'function') noteTiedEvent(message, category); // 0.16.5: post prezesa w Tied
     if (typeof pushNews === 'function' && NEWS_CATEGORIES.includes(category) && !/^\[/.test(String(message))) pushNews(message); // 0.14.2 P7: pasek newsów
 }
 const NEWS_CATEGORIES = ['market', 'company', 'state', 'city', 'construction', 'success', 'warning'];

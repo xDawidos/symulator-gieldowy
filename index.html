@@ -6,7 +6,7 @@
     <title>Capital Quest</title>
     <link rel="icon" type="image/svg+xml" href="img/logo/favicon.svg">
     <link rel="stylesheet" href="tokens.css">
-        <link rel="stylesheet" href="style.css?v=15.2">
+        <link rel="stylesheet" href="style.css?v=16.5">
     <style id="market-selector-css">
       #stock-table tr.market-header td {
         padding: 0 !important;
@@ -290,9 +290,9 @@
         <svg class="ic nav-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18M6 21V9h12v12M4 9l8-6 8 6M10 13h4v8h-4z"/></svg>
         <span class="nav-label">Budownictwo</span>
       </button>
-      <button class="sidebar-nav-btn" id="open-kantor-btn" onclick="openKantorModal()">
-        <svg class="ic nav-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h14l-3-3M20 16H6l3 3M12 11v2"/></svg>
-        <span class="nav-label">Kantor</span>
+      <button class="sidebar-nav-btn" id="open-internet-btn" onclick="openInternetPage(null)">
+        <svg class="ic nav-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>
+        <span class="nav-label">Internet</span>
       </button>
       <div class="nav-group" role="presentation">Moja firma</div>
       <button class="sidebar-nav-btn" id="open-firm-btn" onclick="openCorporationModal('firm')">
@@ -303,18 +303,14 @@
         <svg class="ic nav-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21a7 7 0 0 1 14 0M17 11a3 3 0 1 0 0-6M22 21a6 6 0 0 0-4-5.6"/></svg>
         <span class="nav-label">Klienci i udziały</span>
       </button>
-      <button class="sidebar-nav-btn" id="open-pawnshop-btn" onclick="openPawnShopPanel()">
-        <svg class="ic nav-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M7 7h7.5a3 3 0 0 1 0 6H9a3 3 0 0 0 0 6h8"/></svg>
-        <span class="nav-label">Lombard</span>
-      </button>
       <button class="sidebar-nav-btn" id="open-grey-btn" onclick="openGreyZone()">
         <svg class="ic nav-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/></svg>
         <span class="nav-label">Szara strefa</span>
       </button>
       <div class="nav-group" role="presentation">Ja</div>
       <button class="sidebar-nav-btn has-badge" id="open-mail-btn" onclick="openMailbox()">
-        <svg class="ic nav-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v12H3zM3 7l9 6 9-6"/></svg>
-        <span class="nav-label">Poczta</span>
+        <svg class="ic nav-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg>
+        <span class="nav-label">TeamedUP!</span>
         <span class="nav-badge" hidden>0</span>
       </button>
       <button class="sidebar-nav-btn" id="open-skills-btn" onclick="openSkillsModal()">
@@ -398,57 +394,6 @@
         <div id="indexes-panel" class="panel" style="display: none;">
           <div id="indexes-container"></div>
         </div>
-
-            <div id="startup-incubator-panel" class="panel">
-                <h2 class="panel-head">
-                    <button class="panel-toggle" type="button" onclick="toggleStartupPanelVisibility()">Startupy <span id="toggle-icon-startup" aria-hidden="true">▼</span></button>
-                    <span class="market-kpi-row">inkubator · pula · rundy finansowania</span>
-                </h2>
-
-                <p id="startup-fund-limit" class="bank-lead startup-panel-content"></p>
-                <div id="investment-pool-panel" class="bank-card startup-panel-content">
-                    <header class="bank-card-head">
-                        <div>
-                            <h4>Pula start-upów</h4>
-                            <span class="bank-card-type">Wspólne inwestycje w obiecujące projekty · proporcjonalny podział zysków</span>
-                        </div>
-                    </header>
-                    <div class="d-flex justify-between items-center my-3 gap-3 flex-wrap">
-                        <div>
-                            <span class="text-sm text-muted">Całkowite środki w puli:</span>
-                            <h3 id="pool-total-funds" class="m-0">0.00 PLN</h3>
-                            <p class="text-xs text-muted m-0">Następna inwestycja za: <span id="pool-timer">60</span>s</p>
-                            <p class="text-xs text-muted m-0" id="pool-status"></p>
-                        </div>
-                        <div class="bank-card-form" id="pool-controls-container">
-                            <input class="w-md" type="number" id="pool-contribution-amount" placeholder="Wpłać do puli">
-                            <button onclick="contributeToInvestmentPool('player', document.getElementById('pool-contribution-amount').valueAsNumber)">Wpłać</button>
-                            <button class="btn-secondary" id="pool-withdraw-btn" onclick="withdrawFromPool(document.getElementById('pool-contribution-amount').valueAsNumber || investmentPool.contributors.player || 0)" title="Wycofuje niezainwestowane środki (kwota z pola albo całość); opłata 2% dla pozostałych uczestników">Wycofaj</button>
-                            <button class="btn-secondary" id="open-autoinvest-modal-btn">Automat</button>
-                            <div class="text-xs text-muted" id="autoinvest-status"></div>
-                        </div>
-                    </div>
-                    <div class="mt-3" id="pool-contributors-chart">
-                        <h4 class="text-sm">Niezainwestowane środki uczestników:</h4>
-                        <div id="pool-contributors-list">Brak wpłat.</div>
-                    </div>
-                    <div class="mt-3" id="pool-details"></div>
-                </div>
-
-                <table id="startup-table" class="startup-panel-content"> <thead>
-                        <tr>
-                            <th>Nazwa Start-upu</th>
-                            <th>Cel Finansowania</th>
-                            <th>Postęp Finansowania</th>
-                            <th>Postęp Rozwoju</th>
-                            <th>Akcje</th>
-                        </tr>
-                    </thead>
-                    <tbody id="startup-table-body">
-                    </tbody>
-                </table>
-            </div>
-            
 
 <div id="market" class="panel">
     <h2 class="panel-head">
@@ -1390,7 +1335,7 @@
           <div class="bank-emblem" aria-hidden="true"><svg class="ic" width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v12H3zM3 7l9 6 9-6"/></svg></div>
           <div>
             <div class="bank-hero-kicker">Wiadomości · powiadomienia · rynek</div>
-            <h2 class="bank-hero-title" id="mail-title">Poczta</h2>
+            <h2 class="bank-hero-title" id="mail-title">TeamedUP!</h2>
           </div>
           <button class="close-btn" onclick="closeMailbox()" aria-label="Zamknij" style="margin-left: auto;">&times;</button>
         </header>
@@ -1514,25 +1459,90 @@
       </div>
     </div>
 
-<!-- Modal Sektora Budowlanego -->
-<div id="kantor-modal" class="modal modal-xl bank-window" style="display: none;" role="dialog" aria-labelledby="kantor-title">
+<!-- 0.16.5: Internet (dawny Kantor). Strony tylko z ulubionych; adres tylko do odczytu -->
+<div id="internet-modal" class="modal modal-xl bank-window internet-window" style="display: none;" role="dialog" aria-labelledby="internet-title">
     <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
     <header class="bank-hero">
-        <div class="bank-emblem" aria-hidden="true"><svg class="ic" width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h14l-3-3M20 16H6l3 3M12 11v2"/></svg></div>
+        <div class="bank-emblem" aria-hidden="true"><svg class="ic" width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg></div>
         <div>
-            <div class="bank-hero-kicker">Waluty · kwity depozytowe · ryzyko kursowe</div>
-            <h2 class="bank-hero-title" id="kantor-title">Kantor</h2>
+            <div class="bank-hero-kicker">Przeglądarka · tylko ulubione · bez reklam</div>
+            <h2 class="bank-hero-title" id="internet-title">Internet</h2>
         </div>
     </header>
-    <div class="bank-ticker" id="kantor-ticker"></div>
+    <div class="net-bar">
+        <button type="button" id="net-home-btn" class="btn-ghost btn-sm" onclick="openInternetPage(null)" hidden>&larr; Ulubione</button>
+        <input id="net-address" class="net-address" type="text" value="ulubione" readonly aria-label="Adres strony (tylko do odczytu)">
+        <span id="net-country-badge" class="net-country-badge" aria-live="polite"></span>
+    </div>
     <div class="modal-body">
-        <div class="tab-buttons">
-            <button class="tab-btn active" data-tab="rates" onclick="showKantorTab('rates')">Kursy i wymiana</button>
-            <button class="tab-btn" data-tab="foreign" onclick="showKantorTab('foreign')">Obce (kwity GDR)</button>
-            <button class="tab-btn" data-tab="markets" onclick="showKantorTab('markets')">Rynki zagraniczne</button>
-            <button class="tab-btn" data-tab="forex" onclick="showKantorTab('forex')">Forex</button>
-        </div>
-        <div id="kantor-body"></div>
+        <div id="net-home"></div>
+        <section id="net-page-kantory24" hidden aria-label="Kantory24">
+            <div class="bank-ticker" id="kantor-ticker"></div>
+            <div class="tab-buttons">
+                <button class="tab-btn active" data-tab="rates" onclick="showKantorTab('rates')">Kursy i wymiana</button>
+                <button class="tab-btn" data-tab="foreign" onclick="showKantorTab('foreign')">Obce (kwity GDR)</button>
+                <button class="tab-btn" data-tab="markets" onclick="showKantorTab('markets')">Rynki zagraniczne</button>
+                <button class="tab-btn" data-tab="forex" onclick="showKantorTab('forex')">Forex</button>
+            </div>
+            <div id="kantor-body"></div>
+        </section>
+        <section id="net-page-tied" hidden aria-label="Tied"><div id="net-tied-body"></div></section>
+        <section id="net-page-startupy" hidden aria-label="Startupy">
+            <div id="startup-incubator-panel" class="panel">
+                    <h2 class="panel-head">
+                        <button class="panel-toggle" type="button" onclick="toggleStartupPanelVisibility()">Startupy <span id="toggle-icon-startup" aria-hidden="true">▼</span></button>
+                        <span class="market-kpi-row">inkubator · pula · rundy finansowania</span>
+                    </h2>
+    
+                    <p id="startup-fund-limit" class="bank-lead startup-panel-content"></p>
+                    <div id="investment-pool-panel" class="bank-card startup-panel-content">
+                        <header class="bank-card-head">
+                            <div>
+                                <h4>Pula start-upów</h4>
+                                <span class="bank-card-type">Wspólne inwestycje w obiecujące projekty · proporcjonalny podział zysków</span>
+                            </div>
+                        </header>
+                        <div class="d-flex justify-between items-center my-3 gap-3 flex-wrap">
+                            <div>
+                                <span class="text-sm text-muted">Całkowite środki w puli:</span>
+                                <h3 id="pool-total-funds" class="m-0">0.00 PLN</h3>
+                                <p class="text-xs text-muted m-0">Następna inwestycja za: <span id="pool-timer">60</span>s</p>
+                                <p class="text-xs text-muted m-0" id="pool-status"></p>
+                            </div>
+                            <div class="bank-card-form" id="pool-controls-container">
+                                <input class="w-md" type="number" id="pool-contribution-amount" placeholder="Wpłać do puli">
+                                <button onclick="contributeToInvestmentPool('player', document.getElementById('pool-contribution-amount').valueAsNumber)">Wpłać</button>
+                                <button class="btn-secondary" id="pool-withdraw-btn" onclick="withdrawFromPool(document.getElementById('pool-contribution-amount').valueAsNumber || investmentPool.contributors.player || 0)" title="Wycofuje niezainwestowane środki (kwota z pola albo całość); opłata 2% dla pozostałych uczestników">Wycofaj</button>
+                                <button class="btn-secondary" id="open-autoinvest-modal-btn">Automat</button>
+                                <div class="text-xs text-muted" id="autoinvest-status"></div>
+                            </div>
+                        </div>
+                        <div class="mt-3" id="pool-contributors-chart">
+                            <h4 class="text-sm">Niezainwestowane środki uczestników:</h4>
+                            <div id="pool-contributors-list">Brak wpłat.</div>
+                        </div>
+                        <div class="mt-3" id="pool-details"></div>
+                    </div>
+    
+                    <table id="startup-table" class="startup-panel-content"> <thead>
+                            <tr>
+                                <th>Nazwa Start-upu</th>
+                                <th>Cel Finansowania</th>
+                                <th>Postęp Finansowania</th>
+                                <th>Postęp Rozwoju</th>
+                                <th>Akcje</th>
+                            </tr>
+                        </thead>
+                        <tbody id="startup-table-body">
+                        </tbody>
+                    </table>
+                </div>
+                
+    
+    
+        </section>
+        <section id="net-page-ferie" hidden aria-label="Ferie i wakacje"><div id="net-ferie-body"></div></section>
+        <section id="net-page-lombard" hidden aria-label="Lombard"><div id="net-lombard-body"></div></section>
     </div>
 </div>
 <div id="giant-event-modal" class="modal" style="display: none;" role="alertdialog" aria-labelledby="giant-event-title">
@@ -1545,7 +1555,7 @@
     </header>
     <div class="modal-body">
         <div id="giant-event-body"></div>
-        <div class="btn-row"><button class="btn-primary" onclick="closeGiantEventWindow()">Rozumiem, wznów grę</button><button class="btn-ghost" onclick="closeGiantEventWindow(); openKantorModal(); showKantorTab('foreign')">Otwórz Kantor</button></div>
+        <div class="btn-row"><button class="btn-primary" onclick="closeGiantEventWindow()">Rozumiem, wznów grę</button><button class="btn-ghost" onclick="closeGiantEventWindow(); openKantorModal(); showKantorTab('foreign')">Otwórz Kantory24</button></div>
     </div>
 </div>
 <div id="construction-sector-modal" class="modal modal-xl bank-window construction-window" style="display: none;">
@@ -1638,6 +1648,7 @@
 <script src="flags.js"></script>
 <script src="currency_ui.js"></script>
 <script src="countries_ui.js"></script>
+<script src="internet.js"></script>
 <script src="lib/lz-string.min.js"></script>
 <script src="save_store.js"></script>
 <script src="main.js"></script>

@@ -50,17 +50,9 @@ function renderFxChart(code) {
         <polyline points="${points}" fill="none" stroke="var(--accent-info)" stroke-width="2"/></svg>`;
 }
 
-function openKantorModal() {
-    const modal = document.getElementById('kantor-modal');
-    if (!modal) return;
-    modal.hidden = false;
-    modal.style.display = 'block';
-    showKantorTab(kantorTab);
-}
-
 function showKantorTab(tab) {
     kantorTab = tab;
-    document.querySelectorAll('#kantor-modal .tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tab));
+    document.querySelectorAll('#net-page-kantory24 .tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tab));
     renderKantor();
 }
 
