@@ -13298,6 +13298,35 @@ group('0.16.3', () => {
         }
     }));
 
+
+    // --- G20: boty Azji ---
+    test('G20: Tygrys pojawia się z Chinami i celuje w technologię (co czwarty wybór — Japonia); Konfucjusz z Japonią', () => withLinks(() => {
+        joinCountry('CN'); joinCountry('JP'); joinCountry('US');
+        const tiger = aiCompetitors.find(b => b.id === 'fb_tygrys'), kon = aiCompetitors.find(b => b.id === 'fb_konfucjusz');
+        assert(tiger && tiger.homeCountry === 'CN' && kon && kon.homeCountry === 'JP', 'boty w grze');
+        const def = FOREIGN_BOTS.find(b => b.id === 'fb_tygrys'); let tech = 0, jp = 0, n = 0;
+        withSeededRandom(8, () => { for (let i = 0; i < 200; i++) { const t = botPickTarget(tiger, def); n++; if (t.sectors.some(([s]) => s === 'Technologia')) tech++; else if (t.country === 'JP') jp++; } });
+        assert(tech > n * 0.6 && jp > 0 && tech + jp === n, `technologia ${tech}, Japonia ${jp} z ${n}`);
+    }));
+
+    test('G20: Konfucjusz handluje akcjami japońskimi wyłącznie z Tygrysem (kupno i sprzedaż, gotówka i akcje się zgadzają)', () => withLinks(() => {
+        joinCountry('CN'); joinCountry('JP');
+        const tiger = aiCompetitors.find(b => b.id === 'fb_tygrys'), kon = aiCompetitors.find(b => b.id === 'fb_konfucjusz');
+        assertEq(withRandom(0.1, () => confuciusTrade(kon)), false, 'Tygrys nie ma jeszcze akcji japońskich');
+        const sne = foreignIssuers.SNE; sne.holders[tiger.id] = 200; tiger.fx.cost.SNE = sne.price;
+        const cashBefore = getForeignCashPln(kon) + getForeignCashPln(tiger), freeBefore = getGdrFree(sne);
+        assert(withRandom(0.1, () => confuciusTrade(kon)), 'kupno od Tygrysa');
+        const bought = sne.holders[kon.id]; assert(bought > 0 && sne.holders[tiger.id] === 200 - bought, 'akcje przeszły od Tygrysa');
+        assertEq(getGdrFree(sne), freeBefore, 'wolny obrót bez zmian — transakcja bot–bot');
+        assert(Math.abs(getForeignCashPln(kon) + getForeignCashPln(tiger) - cashBefore) < 1, 'gotówka botów zachowana');
+        kon.fx.cost.SNE = sne.price / 2; // zysk ≥ 25%
+        assert(withRandom(0.9, () => confuciusTrade(kon)), 'sprzedaż Tygrysowi z zyskiem');
+        assert(sne.holders[kon.id] < bought, 'Konfucjusz sprzedał część');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+        tiger.cashByCurrency = {}; const left = sne.holders[kon.id]; kon.fx.cost.SNE = sne.price / 2;
+        assertEq(withRandom(0.9, () => confuciusTrade(kon)), false, 'Tygrys bez gotówki — brak transakcji'); assertEq(sne.holders[kon.id], left, 'akcje bez zmian');
+    }));
+
     // --- koniec grupy 0.16.3 ---
 });
 

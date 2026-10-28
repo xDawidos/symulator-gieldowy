@@ -590,6 +590,9 @@ const FOREIGN_BOTS = [
     { id: 'fb_gutz', name: 'Gregor „Bankier” Gutzwiller', country: 'CH', style: 'banker', cash: { CHF: 15000 }, reserve: 0.3, favorite: 'WSM' },
     // Szwecja — agresywny, kupuje cokolwiek (także w innych krajach, do których ma dostęp)
     { id: 'fb_wiking', name: 'Olaf „Wiking” Bergstrom', country: 'SE', style: 'viking', cash: { SEK: 40000, EUR: 2000 }, spend: 0.45 },
+    // 0.16.4 G20: Azja — Tygrys (agresywny, technologia) i Konfucjusz (rynek japoński, akcjami handluje tylko z Tygrysem)
+    { id: 'fb_tygrys', name: 'Li „Tygrys” Wei', country: 'CN', style: 'tiger', cash: { CNY: 70000, USD: 3000 }, spend: 0.5 },
+    { id: 'fb_konfucjusz', name: 'Hiroshi „Konfucjusz” Tanaka', country: 'JP', style: 'confucius', cash: { JPY: 1000000 }, spend: 0.3 },
     // Dynamiczne (bez kraju startowego): wspólnota europejska i pierwsze przejęcie giełdy przez naszą
     { id: 'fb_euro', name: 'Jean-Pierre „Ruletka” Bonvivant', country: null, style: 'gambler', cash: { EUR: 20000 }, spend: 0.5, dynamic: true },
     { id: 'fb_bayer', name: 'Kacper „Intercontinental” Bayer', country: null, style: 'abroad', cash: { EUR: 8000, USD: 6000, CHF: 4000 }, dynamic: true }
@@ -696,6 +699,11 @@ function botPickTarget(bot, def) {
         candidates = getJoinedCountries().filter(c => canTradeCountry(bot.id, c)).flatMap(pool).filter(i => i.sectors.some(([n]) => n === 'Bankowość'));
     } else if (def.style === 'viking') { // Wiking: kupuje cokolwiek, w każdym kraju, do którego ma dostęp
         for (const c of getJoinedCountries()) if (c !== bot.homeCountry && (countryState[c]?.link || Math.random() < 0.5) && botAccess(bot, c)) candidates = candidates.concat(pool(c));
+    } else if (def.style === 'tiger') { // Tygrys: technologia w każdym dostępnym kraju, co czwarty wybór — dowolna spółka japońska (dostawa dla Konfucjusza)
+        const all = getJoinedCountries().flatMap(c => botAccess(bot, c) || c === bot.homeCountry ? pool(c) : []);
+        const tech = all.filter(i => i.sectors.some(([n]) => n === 'Technologia'));
+        const jp = all.filter(i => i.country === 'JP');
+        candidates = jp.length && Math.random() < 0.25 ? jp : (tech.length ? tech : candidates);
     } else if (def.style === 'gambler') { // bot europejski: hazard na spółkach krajów europejskich
         candidates = LINK_RULES.europe.filter(isCountryJoined).flatMap(c => botAccess(bot, c) ? pool(c) : []);
     } else if (def.style === 'abroad') { // Bayer: tylko spółki zagraniczne, każdy kraj otwarty
@@ -725,6 +733,35 @@ function foreignBotBuy(bot, def) {
     issuer.holders[bot.id] = held + qty;
     bot.fx.cost[issuer.id] = (prev + qty * issuer.price) / (held + qty);
     return true;
+}
+
+/** Konfucjusz (G20): kupuje i sprzedaje akcje japońskie wyłącznie Tygrysowi — transakcja bot–bot po kursie, bez prowizji, z limitem udziału. */
+function confuciusTrade(bot) {
+    const tiger = aiCompetitors.find(b => b.id === 'fb_tygrys');
+    if (!tiger) return false;
+    const jpIssuers = getCountryIssuers('JP').filter(i => !i.state);
+    const move = (issuer, from, to, qty) => { // przelew akcji i gotówki między botami; false = brak środków
+        const gross = qty * issuer.price;
+        if (!botPay(to, issuer.currency, gross)) return false;
+        addCurrencyCash(from, issuer.currency, gross);
+        const held = Number(issuer.holders[to.id]) || 0, prev = (to.fx.cost[issuer.id] || issuer.price) * held;
+        issuer.holders[from.id] -= qty; if (issuer.holders[from.id] <= 0) { delete issuer.holders[from.id]; delete from.fx.cost[issuer.id]; }
+        issuer.holders[to.id] = held + qty; to.fx.cost[issuer.id] = (prev + qty * issuer.price) / (held + qty);
+        return true;
+    };
+    if (Math.random() < 0.5) { // kupno od Tygrysa
+        const sellers = jpIssuers.filter(i => (Number(i.holders[tiger.id]) || 0) > 0);
+        if (!sellers.length) return false;
+        const issuer = getRandomElement(sellers), mid = toPln(issuer.price, issuer.currency);
+        const cap = Math.floor(issuer.shares * botStakeCap(issuer, bot)) - (Number(issuer.holders[bot.id]) || 0);
+        const qty = Math.min(Math.floor(botSpendable(bot) * 0.3 / mid), cap, Math.floor(issuer.holders[tiger.id] / 2) || 1);
+        return qty >= 1 && qty <= issuer.holders[tiger.id] && move(issuer, tiger, bot, qty);
+    }
+    const mine = jpIssuers.filter(i => (Number(i.holders[bot.id]) || 0) > 0 && i.price >= (bot.fx.cost[i.id] || i.price) * BOT_RULES.takeProfit);
+    if (!mine.length) return false;
+    const issuer = getRandomElement(mine), qty = Math.max(1, Math.floor(issuer.holders[bot.id] / 2));
+    if ((Number(issuer.holders[tiger.id]) || 0) + qty > issuer.shares * botStakeCap(issuer, tiger)) return false;
+    return move(issuer, bot, tiger, qty);
 }
 
 function foreignBotSell(bot) {
@@ -775,7 +812,8 @@ function runForeignBot(bot) {
         let done = false;
         const premium = marketRegimes[bot.homeCountry]?.premium || 0;
         const buyBelow = def.style === 'gambler' ? 0.55 : def.style === 'banker' && premium < 0 ? 0.95 : 0.8; // hazardzista sprzedaje częściej, Gutzwiller w bessie dokupuje
-        if (def.enterHome && bot.fx.enteredHome && roll < 0.35) done = botTradeHome(bot, def);
+        if (def.style === 'confucius') done = confuciusTrade(bot);
+        else if (def.enterHome && bot.fx.enteredHome && roll < 0.35) done = botTradeHome(bot, def);
         else if (roll < buyBelow) done = foreignBotBuy(bot, def);
         else if (def.style === 'banker' && premium < 0) done = false; // neutralność: nie sprzedaje w panice
         else done = foreignBotSell(bot);
