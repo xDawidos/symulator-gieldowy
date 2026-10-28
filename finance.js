@@ -2143,7 +2143,7 @@ function processMarketsQuarterly() {
 
 function collectListingFees(operator, operatorStock) {
     for (const stock of stocks.filter(s => getStockMarket(s) === operator.id && s !== operatorStock && !s.assetType && !s.isBankrupt)) {
-        const fee = Math.min(Math.max(0, stock.cash) * 0.05, getMarketCapValue(stock) * OPERATOR_LISTING_FEE * (LISTING_FEE_FACTOR[operator.id] ?? 1));
+        const fee = Math.min(Math.max(0, stock.cash) * 0.05, getMarketCapValue(stock) * OPERATOR_LISTING_FEE * (LISTING_FEE_FACTOR[operator.id] ?? 1) * (operator.id === 'GPW' && typeof getListingFeeBoost === 'function' ? getListingFeeBoost() : 1));
         if (!(fee > 0)) continue;
         adjustCompanyCash(stock, -fee);
         adjustBalanceSheet(stock, { assets: -fee, retainedEarnings: -fee });

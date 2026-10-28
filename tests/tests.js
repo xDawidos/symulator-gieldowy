@@ -12804,6 +12804,85 @@ group('0.16.3', () => {
             resetGdrState(); initFxState();
         });
     }
+    // --- G12: połączone giełdy ---
+    const withLinks = fn => { startFund(); initFxState(); resetGdrState(); macro.quarter = 10; try { return fn(); } finally { resetGdrState(); initFxState(); } };
+    const withRandom = (value, fn) => { const r = Math.random; Math.random = () => value; try { return fn(); } finally { Math.random = r; } };
+
+    test('G12: szansa 1% podwaja się co kwartał do 32%; po wydarzeniu wraca do 1% i są 2 kwartały przerwy', () => withLinks(() => {
+        assertEq(exchangeLinks.chance, 0.01, 'start 1%');
+        const seen = [];
+        withRandom(0.999, () => { for (let i = 0; i < 7; i++) { macro.quarter++; processLinksQuarterly(); seen.push(exchangeLinks.chance); } });
+        assertEq(seen[0], 0.02, 'po 1 kw.'); assertEq(seen[4], 0.32, 'sufit 32% po 5 kw.'); assertEq(seen[6], 0.32, 'sufit się trzyma');
+        const q = macro.quarter + 1;
+        macro.quarter = q;
+        const first = withRandom(0, () => processLinksQuarterly());
+        assert(first && exchangeLinks.chance === 0.01 && exchangeLinks.lastQ === q, 'wydarzenie: szansa wraca do 1%, kwartał zapisany');
+        for (const k of [1, 2]) { macro.quarter = q + k; assertEq(withRandom(0, () => processLinksQuarterly()), null, `przerwa ${k}. kwartał`); }
+        macro.quarter = q + 3;
+        assert(withRandom(0, () => processLinksQuarterly()) !== null, 'po 2 kwartałach przerwy kolejne wydarzenie możliwe');
+    }));
+
+    test('G12: brak wydarzeń przed 8. kwartałem', () => withLinks(() => {
+        macro.quarter = 7;
+        assertEq(withRandom(0, () => processLinksQuarterly()), null, 'za wcześnie');
+        assertEq(getLinkedCountries().length, 0, 'nic nie dołączyło');
+    }));
+
+    test('G12: ścieżka pozytywna — kraj dołącza bez biletu, z prowizją krajową; Turystyka dostaje bonus', () => withLinks(() => {
+        const shocks0 = sectorShocks.length;
+        const entry = runLinkEvent('merged', 'DE');
+        assert(entry && entry.kind === 'merged' && isCountryJoined('DE') && countryState.DE.link === 'merged', 'DE połączone');
+        assert(!hasTicket('player', 'DE') && canTradeCountry('player', 'DE'), 'handel bez biletu');
+        assertEq(getCountryCommission('DE'), LINK_RULES.domesticCommission, 'prowizja krajowa');
+        assert(sectorShocks.length > shocks0 && sectorShocks.some(s => s.sector === 'Turystyka'), 'bonus Turystyki');
+        assert(getForeignBots().length > 0, 'boty kraju');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+
+    test('G12: ścieżka neutralna — giełda międzynarodowa z nami, krajem X i najwyżej 2 innymi; kolejne dołączają powoli', () => withLinks(() => {
+        const entry = runLinkEvent('intl', 'CZ');
+        assert(entry && exchangeLinks.intl, 'giełda międzynarodowa');
+        assert(exchangeLinks.intl.members[0] === 'PL' && exchangeLinks.intl.members.includes('CZ'), 'Polska i X');
+        assert(entry.members.length >= 1 && entry.members.length <= 3, `X + najwyżej 2 inne: ${entry.members.length}`);
+        const before = exchangeLinks.intl.members.length;
+        for (let i = 0; i < 40 && getLinkCandidates().length; i++) { macro.quarter++; withRandom(0, () => processLinksQuarterly()); }
+        assert(exchangeLinks.intl.members.length > before || getLinkCandidates().length === 0, 'kolejny kraj dołączył powoli');
+        for (const m of exchangeLinks.intl.members) if (m !== 'PL') assertEq(countryState[m].link, getLinkedCountries().includes(m) ? countryState[m].link : null, 'członkowie połączeni');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+
+    test('G12: ścieżka negatywna (wariant B) — X przejmuje naszą giełdę: wyższe opłaty za notowanie, kurs GPW w dół 5–15%', () => withLinks(() => {
+        const fee0 = getListingFeeBoost();
+        const shocks0 = sectorShocks.length;
+        const entry = runLinkEvent('taken', 'SE');
+        assert(entry && exchangeLinks.takenBy === 'SE' && countryState.SE.link === 'taken', 'SE przejęła GPW');
+        assert(entry.drop >= 0.05 && entry.drop <= 0.15, `spadek ${entry.drop}`);
+        assertEq(getListingFeeBoost() / fee0, LINK_RULES.listingFeeMult, 'opłaty ×1,5');
+        assert(sectorShocks.length - shocks0 >= SECTOR_NAMES.length, 'szok na każdy sektor');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+
+    test('G12: kolejność rodzajów: 50% / 30% / 20% (waga w losowaniu)', () => {
+        const counts = { merged: 0, intl: 0, taken: 0 };
+        withSeededRandom(11, () => { for (let i = 0; i < 4000; i++) counts[pickLinkKind()]++; });
+        assert(Math.abs(counts.merged / 4000 - 0.5) < 0.03 && Math.abs(counts.intl / 4000 - 0.3) < 0.03 && Math.abs(counts.taken / 4000 - 0.2) < 0.03, JSON.stringify(counts));
+    });
+
+    test('G12: wspólnota europejska od 3 krajów europejskich; zapis i wczytanie zachowują połączenia', () => withLinks(() => {
+        joinCountry('DE'); joinCountry('CZ');
+        assert(!checkEuropeanCommunity() && !isEuropeanCommunity(), 'dwa kraje to jeszcze nie wspólnota');
+        runLinkEvent('merged', 'SE');
+        assert(isEuropeanCommunity(), 'trzeci kraj europejski tworzy wspólnotę');
+        runLinkEvent('intl', 'FR');
+        const snap = JSON.parse(JSON.stringify(getCountriesSnapshot()));
+        const links = JSON.stringify(exchangeLinks), linked = getLinkedCountries().sort().join();
+        resetCountriesState(); initFxState();
+        assertEq(getLinkedCountries().length, 0, 'po resecie pusto');
+        applyCountriesSnapshot(snap);
+        assertEq(getLinkedCountries().sort().join(), linked, 'połączone kraje wróciły');
+        assertEq(JSON.stringify(exchangeLinks), links, 'stan wydarzeń wrócił');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki po wczytaniu');
+    }));
     // --- koniec grupy 0.16.3 ---
 });
 

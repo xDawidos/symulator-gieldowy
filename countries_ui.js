@@ -82,7 +82,7 @@ function renderMarketsTab() {
     if (!joined.length) return `<p class="text-muted">Żaden rynek zagraniczny nie jest jeszcze otwarty. Pierwszy bilet na lotnisku (okno Miasto → Lotnisko) otwiera giełdę kraju; boty mogą być szybsze.</p>
         <div class="btn-row"><button class="btn-ghost" onclick="closeModalFrom(document.querySelector('#kantor-modal .close-btn')); openCityInvestmentModal(); switchCityTab('airport')">Idź do lotniska</button></div>`;
     if (!marketsSelected || !joined.includes(marketsSelected)) marketsSelected = joined[0];
-    const id = marketsSelected, def = COUNTRY_DEFS[id], access = hasTicket('player', id);
+    const id = marketsSelected, def = COUNTRY_DEFS[id], access = canTradeCountry('player', id);
     const tabs = joined.map(c => `<button class="tab-btn ${c === id ? 'active' : ''}" onclick="selectMarketCountry('${c}')" aria-pressed="${c === id}">${flagIcon(c, 12)} ${escapeHtml(COUNTRY_DEFS[c].name)} · ${COUNTRY_DEFS[c].currency}</button>`).join('');
     const rows = getCountryIssuers(id).map(i => {
         const h = i.history, change = h.length > 1 ? i.price / h[0] - 1 : 0, held = getGdrHeld(i), free = getGdrFree(i);
@@ -94,7 +94,7 @@ function renderMarketsTab() {
             <td class="text-right"><input type="number" min="1" step="1" value="100" id="mkt-qty-${i.id}" aria-label="Liczba akcji ${escapeHtml(i.name)}" style="width:5.5em" ${free <= 0 ? 'disabled' : ''}>
                 <button class="btn-primary btn-sm" onclick="marketsUiTrade('${i.id}','buy')" ${access && free > 0 ? '' : 'disabled'}>Kup</button> <button class="btn-ghost btn-sm" onclick="marketsUiTrade('${i.id}','sell')" ${held > 0 ? '' : 'disabled'}>Sprzedaj</button></td></tr>`;
     }).join('');
-    return `<div class="tab-buttons" role="group" aria-label="Rynki zagraniczne">${tabs}</div>
+    return `${renderLinksCard()}<div class="tab-buttons" role="group" aria-label="Rynki zagraniczne">${tabs}</div>
         ${renderCountryCard(id)}
         ${access ? '' : `<p class="text-sm" role="status">Brak biletu na ten rynek — kupowanie jest zablokowane (sprzedaż posiadanych akcji działa). Bilet kupisz w oknie Miasto → Lotnisko (${formatZl(getTicketPrice(id), 0)}).</p>`}
         <table class="asset-mini-table w-full mt-3"><thead><tr><th>Spółka</th><th>Sektor</th><th class="text-right">Cena (waluta)</th><th class="text-right">Cena w PLN</th><th class="text-right">Twoje akcje</th><th class="text-right">Zlecenie</th></tr></thead><tbody>${rows}</tbody></table>
@@ -108,4 +108,48 @@ function marketsUiTrade(id, side) {
     showToast(r.ok ? `${side === 'buy' ? 'Kupiono' : 'Sprzedano'} ${qty} akcji ${label}${side === 'buy' ? ` za ${formatZl(r.cost, 0)} (prowizja ${formatZl(r.commissionPln, 0)})` : ` — wpływ ${formatNumberPl(r.proceeds, 2)} ${r.currency}`}.` : r.reason, r.ok ? 'success' : 'warning');
     renderKantor();
     if (typeof updateUI === 'function') updateUI();
+}
+
+
+// =================================================================================
+// 0.16.3 G12/G16: połączone giełdy — okno wydarzenia (z pauzą) i karta stanu połączeń (dane: exchange_links.js)
+// =================================================================================
+
+const LINK_KIND_LABELS = { merged: 'przejęta przez naszą giełdę', intl: 'giełda międzynarodowa', taken: 'przejęła naszą giełdę (wariant B)' };
+
+/** Karta stanu: połączone kraje, giełda międzynarodowa, wspólnota europejska, szansa kolejnego wydarzenia słowami. */
+function renderLinksCard() {
+    const linked = getLinkedCountries();
+    const chance = exchangeLinks.chance;
+    const hint = chance >= 0.16 ? 'wysoka' : chance >= 0.04 ? 'rośnie' : 'niska';
+    const rows = linked.map(id => `<li>${flagIcon(id, 12)} <strong>${escapeHtml(COUNTRY_DEFS[id].name)}</strong> — ${LINK_KIND_LABELS[countryState[id].link]}; bez biletu, prowizja ${formatNumberPl(LINK_RULES.domesticCommission * 100, 2)}%</li>`).join('');
+    const intl = exchangeLinks.intl ? `<p class="text-sm">Giełda międzynarodowa: ${['PL', ...exchangeLinks.intl.members.filter(m => m !== 'PL')].map(m => escapeHtml(m === 'PL' ? 'Polska' : COUNTRY_DEFS[m]?.name || m)).join(', ')}.</p>` : '';
+    const taken = exchangeLinks.takenBy ? `<p class="text-sm text-warn">Wariant B: nasza giełda należy do ${escapeHtml(COUNTRY_DEFS[exchangeLinks.takenBy].name)} — opłaty za notowanie na GPW ×${LINK_RULES.listingFeeMult}.</p>` : '';
+    const community = isEuropeanCommunity() ? '<p class="text-sm">Wspólnota europejska giełd działa — na rynku gra europejski hazardzista.</p>' : `<p class="text-sm text-muted">Wspólnota europejska powstanie, gdy na giełdzie będą ${LINK_RULES.communityMin} kraje europejskie (teraz ${countEuropeanJoined()}).</p>`;
+    return `<div class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('rynek', 20)}</span><div><h4>Połączone giełdy</h4><span class="bank-card-type">szansa na kolejne połączenie: ${hint}</span></div></header>
+        ${linked.length ? `<ul class="text-sm">${rows}</ul>` : '<p class="text-sm text-muted">Żadna giełda nie jest jeszcze połączona z naszą. Połączenie (przejęcie, giełda międzynarodowa albo przejęcie nas) zdarza się samo, od drugiego roku gry.</p>'}
+        ${intl}${taken}${community}</div>`;
+}
+
+/** Wydarzenie połączenia: pauza gry i okno z opisem skutków (reszta: dziennik, pasek, hasło Akademii). */
+function onLinkEvent(entry) {
+    const names = entry.members.map(m => COUNTRY_DEFS[m].name).join(', ');
+    const titles = { merged: 'Nasza giełda przejmuje giełdę zagraniczną', intl: 'Powstaje giełda międzynarodowa', taken: 'Obca giełda przejmuje naszą' };
+    if (typeof addMail === 'function') addMail({ sender: 'PULS', subject: `🌍 ${titles[entry.kind]}: ${names}`, body: entry.text, importance: 3 });
+    if (typeof document === 'undefined') return;
+    let modal = document.getElementById('link-event-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'link-event-modal'; modal.className = 'modal'; modal.setAttribute('role', 'dialog'); modal.setAttribute('aria-labelledby', 'link-event-title');
+        modal.innerHTML = '<button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button><h2 class="mt-0" id="link-event-title"></h2><div id="link-event-body"></div>';
+        document.body.appendChild(modal);
+    }
+    if (!document.getElementById('toast-notification')) return; // środowisko testowe bez interfejsu
+    if (typeof isGamePaused !== 'undefined' && !isGamePaused && typeof togglePauseGame === 'function') togglePauseGame();
+    document.getElementById('link-event-title').textContent = titles[entry.kind];
+    const effects = entry.kind === 'taken'
+        ? `<li>Opłaty za notowanie na GPW rosną ×${LINK_RULES.listingFeeMult}.</li><li>Kurs GPW spada o ok. ${Math.round(entry.drop * 100)}% w ${LINK_RULES.dropQuarters} kwartały.</li>`
+        : '<li>Spółki kraju kupisz bez biletu, z prowizją krajową.</li>';
+    document.getElementById('link-event-body').innerHTML = `<p>${escapeHtml(entry.text)}</p><ul class="text-sm">${effects}<li>Turystyka dostaje duży, malejący bonus.</li><li>Do gry wchodzą boty kraju, a jego waluta pojawia się w kantorze.</li></ul><div class="btn-row"><button class="btn-primary" onclick="closeModalFrom(this)">Rozumiem — wznów grę</button></div>`;
+    modal.style.display = 'block';
 }

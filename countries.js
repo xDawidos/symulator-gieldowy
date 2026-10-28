@@ -33,6 +33,7 @@ let homeFeed = { last: null, sd: 0.02 }; // GIG jako wspólny czynnik rynków (o
 function resetCountriesState() {
     countryState = {};
     homeFeed = { last: null, sd: 0.02 };
+    if (typeof resetLinksState === 'function') resetLinksState();
     for (const id of Object.keys(marketRegimes || {})) if (id !== 'home') delete marketRegimes[id];
     if (typeof resetTicketsState === 'function') resetTicketsState(); // boty zostają w aiCompetitors (zapis tablicy); nowa gra: resetForeignBots() w startNewCareer
 }
@@ -116,7 +117,7 @@ function stepCountryRate(id) {
 function joinCountry(id, by = 'test') {
     const def = COUNTRY_DEFS[id];
     if (!def || countryState[id]) return null;
-    countryState[id] = { id, joinedQ: macro.quarter, rate: def.rateMean, treasury: 0, lastDebutQ: macro.quarter, by };
+    countryState[id] = { id, joinedQ: macro.quarter, rate: def.rateMean, treasury: 0, lastDebutQ: macro.quarter, by, link: null };
     marketRegimes[id] = createCountryRegime(id);
     for (const c of def.companies) createCountryIssuer(def, c);
     if (typeof spawnForeignBotsFor === 'function') spawnForeignBotsFor(id);
@@ -242,6 +243,7 @@ function maybeCountryDebut(id) {
 
 function processCountriesQuarterly() {
     if (typeof processAirportQuarterly === 'function') processAirportQuarterly();
+    if (typeof processLinksQuarterly === 'function') processLinksQuarterly();
     for (const id of getJoinedCountries()) {
         const def = COUNTRY_DEFS[id], st = countryState[id];
         advanceCountryRegime(id);
@@ -276,6 +278,7 @@ function checkCountryInvariants() {
         if (issuer.state && getGdrFree(issuer) < -1e-6) problems.push(`pakiet państwa ${issuer.id} naruszony`);
     }
     if (typeof checkForeignBotInvariants === 'function') problems.push(...checkForeignBotInvariants());
+    if (typeof checkLinkInvariants === 'function') problems.push(...checkLinkInvariants());
     return problems;
 }
 
@@ -292,7 +295,7 @@ function getCountriesSnapshot() {
     }
     return {
         state: countryState, issuers, regimes: Object.fromEntries(getJoinedCountries().map(id => [id, marketRegimes[id]])),
-        feed: homeFeed, tickets: typeof getTicketsSnapshot === 'function' ? getTicketsSnapshot() : undefined, bots: typeof getForeignBotsSnapshot === 'function' ? getForeignBotsSnapshot() : undefined
+        feed: homeFeed, links: typeof getLinksSnapshot === 'function' ? getLinksSnapshot() : undefined, tickets: typeof getTicketsSnapshot === 'function' ? getTicketsSnapshot() : undefined, bots: typeof getForeignBotsSnapshot === 'function' ? getForeignBotsSnapshot() : undefined
     };
 }
 
@@ -302,7 +305,7 @@ function applyCountriesSnapshot(snapshot) {
     for (const [id, st] of Object.entries(snapshot.state || {})) {
         const def = COUNTRY_DEFS[id];
         if (!def) continue; // kraj usunięty z kodu: pomijamy
-        countryState[id] = { id, joinedQ: Number(st.joinedQ) || 0, rate: Number(st.rate) || def.rateMean, treasury: Number(st.treasury) || 0, lastDebutQ: Number(st.lastDebutQ) || 0, by: st.by || 'test' };
+        countryState[id] = { id, joinedQ: Number(st.joinedQ) || 0, rate: Number(st.rate) || def.rateMean, treasury: Number(st.treasury) || 0, lastDebutQ: Number(st.lastDebutQ) || 0, by: st.by || 'test', link: ['merged', 'intl', 'taken'].includes(st.link) ? st.link : null };
         const raw = snapshot.regimes?.[id];
         marketRegimes[id] = raw && typeof raw === 'object' ? { ...createCountryRegime(id), ...raw } : createCountryRegime(id);
         for (const c of def.companies) createCountryIssuer(def, c);
@@ -323,6 +326,7 @@ function applyCountriesSnapshot(snapshot) {
     }
     if (snapshot.feed && typeof snapshot.feed === 'object') homeFeed = { last: Number(snapshot.feed.last) || null, sd: Number(snapshot.feed.sd) || 0.02 };
     if (typeof applyTicketsSnapshot === 'function') applyTicketsSnapshot(snapshot.tickets);
+    if (typeof applyLinksSnapshot === 'function') applyLinksSnapshot(snapshot.links);
 }
 
 
@@ -382,9 +386,12 @@ function getTicketPrice(country) {
     return Math.max(TICKET_RULES.min, Math.round(pass * TICKET_RULES.rate / 100) * 100);
 }
 function hasTicket(holder, country) { return Boolean(foreignTickets[holder]?.includes(country)); }
-function getCountryCommission(country) { return COUNTRY_DEFS[country]?.operator?.commission ?? COUNTRY_RULES.commission; }
+function getCountryCommission(country) {
+    if (countryState[country]?.link && typeof LINK_RULES === 'object') return LINK_RULES.domesticCommission; // połączone giełdy: prowizja jak krajowa
+    return COUNTRY_DEFS[country]?.operator?.commission ?? COUNTRY_RULES.commission;
+}
 /** Dostęp do zakupu spółek kraju: kraj dołączył i inwestor ma bilet. */
-function canTradeCountry(holder, country) { return isCountryJoined(country) && hasTicket(holder, country); }
+function canTradeCountry(holder, country) { return isCountryJoined(country) && (hasTicket(holder, country) || Boolean(countryState[country]?.link)); } // 0.16.3: kraj połączony z naszą giełdą — bez biletu
 
 /** Bilet dla gracza (holder 'player', gotówka funduszu) albo bota (obiekt z `cash`). Pierwszy bilet do nowego kraju otwiera jego giełdę. */
 function buyTicket(country, holder = 'player') {

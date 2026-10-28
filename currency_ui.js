@@ -204,6 +204,16 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Czy kupowanie waluty po niskim kursie zawsze daje zysk?', a: ['nie — spread i dryf średniej mogą go zjeść', 'tak', 'tylko w piątek'], c: 0 }
         ]
     },
+    konsolidacjaGield: {
+        title: 'Konsolidacja giełd', get icon() { return academyIcon('samolot'); },
+        text: 'Giełdy łączą się, żeby obniżyć koszty i przyciągnąć więcej inwestorów. Gdy giełda przejmuje inną, jej spółki trafiają do wspólnego obrotu. Gdy przejmuje ją obca giełda, spółki płacą wyższe opłaty za notowanie, a kursy chwilowo spadają. Wspólny rynek zwykle zmniejsza spread i prowizje, ale zwiększa zarażanie kryzysami między krajami.',
+        example: () => (typeof getLinkedCountries === 'function' && getLinkedCountries().length) ? `Połączone kraje: ${getLinkedCountries().map(id => COUNTRY_DEFS[id].name).join(', ')}.` : 'Żadna giełda nie jest jeszcze połączona z naszą.',
+        quiz: [
+            { q: 'Co się dzieje z kursami, gdy obca giełda przejmuje naszą?', a: ['chwilowo spadają', 'rosną na stałe', 'nic'], c: 0 },
+            { q: 'Czy spółki połączonego kraju kupisz bez biletu?', a: ['tak, z prowizją krajową', 'nie, zawsze trzeba biletu', 'tylko za dolary'], c: 0 },
+            { q: 'Co zwykle daje wspólny rynek?', a: ['niższe koszty i szybsze zarażanie kryzysami', 'brak ryzyka', 'zamknięcie giełdy'], c: 0 }
+        ]
+    },
     adrGdr: {
         title: 'ADR i GDR (kwity depozytowe)', get icon() { return academyIcon('samolot'); },
         text: 'Kwit depozytowy (ADR w USA, GDR na innych giełdach) to papier notowany u nas, którego zabezpieczeniem są akcje zagranicznej spółki trzymane w depozycie. Kupujesz go w złotych, bez rachunku za granicą, ale płacisz spread depozytowy, a jego cena zależy od ceny akcji i kursu waluty. Kwit nie daje praw głosu w spółce.',
