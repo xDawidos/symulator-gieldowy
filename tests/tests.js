@@ -13479,6 +13479,23 @@ group('0.16.3', () => {
         assert(share > 0.3 && share < 0.5, `ok. 40% spółek zostaje (${share})`);
     });
 
+
+    test('G19: PanDa Bank przeżywa ocenę upadku z szansą 30% i potem działa bez ryzyka; pozostałe parabanki upadają zawsze', () => withLinks(() => {
+        startFund(5_000_000); ensureScandals(); scandals.parabanks = []; scandals.usedScenarios = [];
+        joinCountry('CN');
+        const pb = scandals.parabanks.find(p => p.foreignId === 'PND'); pb.collapseAt = 1;
+        withRandom(0.1, () => processParabanksQuarterly());
+        assert(pb.survived && pb.phase === 'open' && foreignIssuers.PND, 'przeżył (losowanie < 30%)');
+        for (let i = 0; i < 20; i++) withRandom(0.9, () => processParabanksQuarterly());
+        assertEq(pb.phase, 'open', 'przetrwały PanDa nie upada później');
+        scandals.parabanks = []; scandals.usedScenarios = []; delete foreignIssuers.PND; countryState.CN.joinedQ = -99; // drugi przebieg: upadek
+        foreignIssuers.PND = createCountryIssuer(COUNTRY_DEFS.CN, COUNTRY_DEFS.CN.companies.find(c => c.id === 'PND'));
+        const pb2 = spawnPandaParabank(); pb2.collapseAt = 1;
+        withRandom(0.9, () => processParabanksQuarterly()); assertEq(pb2.phase, 'investigation', 'nie przeżył (losowanie ≥ 30%) → śledztwo');
+        const dom = { id: 'pbx', scenario: 'gold', bankId: 'x', symbol: 'NOPE', phase: 'open', quarters: 5, collapseAt: 1 };
+        scandals.parabanks.push(dom); withRandom(0.1, () => processParabanksQuarterly()); assert(dom.phase !== 'open', 'krajowy parabank bez szansy przetrwania');
+    }));
+
     // --- koniec grupy 0.16.3 ---
 });
 

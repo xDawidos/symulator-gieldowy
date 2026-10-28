@@ -2545,6 +2545,7 @@ const PARABANK_SCENARIOS = [
     { id: 'panda',  name: 'PanDa Bank',                  bankName: 'PanDa Bank',             margin: 0.15, loanCut: 0.02, target: 6, desc: 'lokaty o najwyższym oprocentowaniu w Azji', foreignId: 'PND' }
 ];
 const PARABANK_SPAWN_CHANCE = 0.08;
+const PANDA_SURVIVE_CHANCE = 0.3;   // 0.16.4: PanDa Bank (parabank zagraniczny) przeżywa ocenę upadku z tą szansą i działa dalej bez ryzyka upadku
 const PARABANK_LOAN_LIMIT = 0.3;
 const PARABANK_LOAN_QUARTERLY_RATE = 0.3;      // ≈ 2,3% tygodniowo
 const PR_WAR_CHANCE = 0.12;
@@ -2700,7 +2701,16 @@ function processParabanksQuarterly() {
                 parabank.collapseAt = Math.max(parabank.quarters + 1, (parabank.collapseAt || scenario.target) - getRandomIntInRange(1, 2)); // ostrzeżenie przyspiesza śledztwo
                 addMail({ sender: 'OBSER', subject: `⚠️ KNF: ${scenario.bankName} na liście ostrzeżeń publicznych`, body: `Komisja Nadzoru Finansowego ostrzega: ${scenario.bankName} nie ma licencji bankowej, a lokaty nie są objęte gwarancją. Uważaj.`, importance: 3, symbol: parabank.symbol });
             }
-            if (parabank.panic || parabank.quarters >= (parabank.collapseAt || scenario.target)) collapseParabank(parabank, 'investigation');
+            if (!parabank.survived && (parabank.panic || parabank.quarters >= (parabank.collapseAt || scenario.target))) {
+                if (parabank.foreignId && !parabank.survivalRolled) { // jedna ocena: przetrwanie = brak dalszego ryzyka upadku (prostsza wersja)
+                    parabank.survivalRolled = true;
+                    if (Math.random() < PANDA_SURVIVE_CHANCE) {
+                        parabank.survived = true; parabank.panic = false;
+                        logEvent(`🏦 ${scenario.bankName} przetrwał kontrole i dalej przyjmuje lokaty.`, 'market');
+                    }
+                }
+                if (!parabank.survived) collapseParabank(parabank, 'investigation');
+            }
         } else if (parabank.phase === 'investigation') {
             collapseParabank(parabank, 'police');
         } else if (parabank.phase === 'police') {
