@@ -862,11 +862,11 @@ group('Fundusz gracza (etap B)', () => {
         return { a, b, gig };
     }
 
-    test('start kariery: 10 000 zł, 1000 JU, NAV 10, 100 zł od babci, kilkunastu klientów', () => {
+    test('start kariery: 10 000 zł, 1000 JU, NAV 10, 50 zł od babci, kilkunastu klientów', () => {
         fundWorld();
         assert(playerCash === 10000 && playerFund.units === 1000, 'kapitał i JU');
         assertNear(getFundNav(), 10, 'NAV');
-        assert(playerWallet.cash === 100, 'kieszonkowe');
+        assert(playerWallet.cash === 50, 'kieszonkowe');
         assert(playerFund.clients.length >= 12 && playerFund.clients.length <= 15, 'liczba klientów');
         assertNear(playerFund.clients.reduce((sum, c) => sum + c.units, 0), 1000, 'JU rozdzielone');
         assert(playerAccessLevel === 2, 'dostęp: Śmieciowa, Brązowa, Srebrna');
@@ -902,7 +902,7 @@ group('Fundusz gracza (etap B)', () => {
         const fee = chargeManagementFee();
         assertNear(fee, 10000 * MANAGEMENT_FEE_ANNUAL / FUND_WEEKS_PER_YEAR, 'wysokość opłaty');
         assertNear(nav0 - getFundNav(), fee / playerFund.units, 'NAV po opłacie', 1e-9);
-        assertNear(playerWallet.cash - wallet0, fee * getPlayerPosition().feeShare, 'udział gracza');
+        assertNear(playerWallet.cash - wallet0, fee * getPlayerPosition().feeShare * PRIVATE_INCOME_FACTOR, 'udział gracza');
     });
 
     test('zaufanie spada stopniowo, odpływ tygodniowy ograniczony, lojalny klient zostaje', () => {
@@ -978,15 +978,16 @@ group('Fundusz gracza (etap B)', () => {
         assert(CAREER_POSITIONS[2].feeShare > CAREER_POSITIONS[0].feeShare, 'większy udział w opłacie');
     });
 
-    test('prywatny zakup akcji kupionej przez fundusz zwiększa ryzyko compliance', () => {
+    test('0.16.3: konto prywatne nie handluje — ani akcjami, ani udziałami funduszu', () => {
         fundWorld();
         buyStock('AAA', 10);
         playerWallet.cash = 5000;
         setTradingAccount('private');
         buyStock('AAA', 5);
         setTradingAccount('fund');
-        assert(playerWallet.portfolio.AAA?.shares === 5, 'akcje na koncie prywatnym');
-        assert(playerWallet.complianceRisk >= 1 || playerWallet.fines > 0, 'ryzyko lub kara');
+        assert(!playerWallet.portfolio.AAA, 'brak akcji na koncie prywatnym');
+        assertEq(playerWallet.cash, 5000, 'gotówka nietknięta');
+        assertEq(buyOwnFundUnits(1000), 0, 'bez zakupu JU');
         assert(playerPortfolio.AAA.shares === 10, 'portfel funduszu bez zmian');
     });
 
@@ -994,9 +995,7 @@ group('Fundusz gracza (etap B)', () => {
         const { a } = fundWorld();
         buyStock('AAA', 20);
         playerWallet.cash = 5000;
-        setTradingAccount('private');
-        buyStock('AAA', 10);
-        setTradingAccount('fund');
+        playerWallet.portfolio.AAA = { shares: 10, avgPrice: 10, assetType: 'stock' }; // pozycja sprzed zakazu handlu kontem prywatnym
         const fundCash = playerCash;
         const wallet = playerWallet.cash;
         payDividendToShareholders(a, 1);
@@ -1136,7 +1135,7 @@ group('Kariera w korporacji (etap C)', () => {
         careerWorld();
         const budget0 = corporation.budget;
         const fee = chargeManagementFee();
-        assertNear(corporation.budget - budget0, fee * (1 - getPlayerPosition().feeShare), 'opłata gracza', 1e-9);
+        assertNear(corporation.budget - budget0, fee * (1 - getPlayerPosition().feeShare * PRIVATE_INCOME_FACTOR), 'opłata gracza', 1e-9);
     });
 
     test('przejęcie: odrzucenie przez zarząd bez kosztów; zgoda — płatność z budżetu i proces M&A do końca', () => {
@@ -6251,7 +6250,7 @@ group('0.14.1 R5: portfel prywatny — cele korporacji i nagroda z festynu', () 
         corporation.goals.ids = ['compliance'];
         const wallet0 = playerWallet.cash;
         const result = settleCorporateGoals();
-        assert(result.bonus === (result.view[0].done ? 100 : 0) && playerWallet.cash - wallet0 === result.bonus, `premia ${result.bonus}`);
+        assert(result.bonus === (result.view[0].done ? 100 * PRIVATE_INCOME_FACTOR : 0) && playerWallet.cash - wallet0 === result.bonus, `premia ${result.bonus}`);
     });
 
     test('inwestor VC na festynie: 2% aktywów funduszu, 200–5000 zł', () => {
@@ -12737,6 +12736,17 @@ group('0.16.2', () => {
         playerPortfolio.SPQ = { shares: 40, avgPrice: 2000, assetType: 'stock' };
         const entry = applyShareCountChange(a, 5);
         assertEq(entry.playerBefore, 40, 'było'); assertEq(entry.playerAfter, 200, 'jest');
+    });
+    test('0.16.3: cykle sektorów w Makro dopiero z umiejętnością Analityk Finansowy', () => {
+        resetWorld([makeCompany('AAA')]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        skills.financialAnalyst.unlockedLevel = 0;
+        const locked = renderMacroPanel();
+        assert(!locked.includes('class="macro-sector is-') && locked.includes('Analityk Finansowy'), 'bez umiejętności: podpowiedź zamiast cykli');
+        skills.financialAnalyst.unlockedLevel = 1;
+        const open = renderMacroPanel();
+        assert(open.includes('class="macro-sector is-'), 'z umiejętnością: cykle widoczne');
+        skills.financialAnalyst.unlockedLevel = 0;
     });
     // --- koniec grupy 0.16.2 ---
 });

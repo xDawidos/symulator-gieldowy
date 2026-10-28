@@ -137,7 +137,7 @@ const skills = {
         name: 'Analityk Finansowy 🧐',
         unlockedLevel: 0,
         levels: [
-            { level: 1, cost: 500, description: 'Skaner spółek (filtry: C/Z względem sektora, C/WK, dywidenda, zadłużenie, kondycja), wycena porównawcza z C/Z sektora i fazy cyklu spółek w tabeli rynku.' },
+            { level: 1, cost: 500, description: 'Skaner spółek (filtry: C/Z względem sektora, C/WK, dywidenda, zadłużenie, kondycja), wycena porównawcza z C/Z sektora fazy cyklu spółek w tabeli rynku i cykle sektorów w zakładce Makro.' },
             { level: 2, cost: 1500, description: 'Skaner: ROE, marża i wzrost zysku rok do roku. Wycena trzema metodami: C/Z sektora, wartość księgowa (C/WK sektora) i model dywidend Gordona.' },
             { level: 3, cost: 3000, description: 'Konsensus analityków: prognoza zysku przed raportem i wynik vs konsensus po raporcie. Skaner pokazuje potencjał do wartości godziwej.' }
         ]
@@ -1476,7 +1476,8 @@ const FUND_PERIOD_MS = BASE_DELAYS.quarterly * 3;      // okres oceny = 3 kwarta
 const FUND_PERIODS_SHOWN = 4;                          // wykres: 4 okresy = 1 godzina gry
 const FUND_START_CASH = 10000;
 const FUND_START_UNITS = 1000;
-const GRANDMA_POCKET_MONEY = 100;
+const GRANDMA_POCKET_MONEY = 50;
+const PRIVATE_INCOME_FACTOR = 0.5;   // 0.16.3: konto prywatne dostaje połowę dotychczasowych wpływów (premie, udział w opłacie); handel nim jest zablokowany
 // Rok gry trwa 20 minut, więc „roczna” opłata 2% zabierałaby 1,5% na każdy 15-minutowy okres.
 // 0,8% rocznie ≈ 0,6% na okres.
 const MANAGEMENT_FEE_ANNUAL = 0.008;
@@ -1963,7 +1964,7 @@ function computePerformanceBonus(period, position = getPlayerPosition()) {
 function payPerformanceBonus(period) {
     // Po drugiej słabej ocenie zarządu na najniższym stanowisku premia jest wstrzymana.
     if (playerFund.bonusSuspendedUntilPeriod > period.number) return 0;
-    const bonus = computePerformanceBonus(period);
+    const bonus = computePerformanceBonus(period) * PRIVATE_INCOME_FACTOR;
     if (bonus > 0) {
         playerWallet.cash += bonus;
         recordPayment('external:korporacja', 'player-wallet', bonus, 'Premia za wyniki');
@@ -2092,7 +2093,7 @@ function chargeManagementFee() {
     playerFund.feesPaidTotal += fee;
     recordPayment('player-fund', 'external:korporacja', fee, 'Opłata za zarządzanie');
 
-    const share = fee * getPlayerPosition().feeShare;
+    const share = fee * getPlayerPosition().feeShare * PRIVATE_INCOME_FACTOR;
     playerWallet.cash += share;
     recordPayment('external:korporacja', 'player-wallet', share, 'Udział w opłacie za zarządzanie');
     if (typeof corporation !== 'undefined' && corporation) corporation.budget += fee - share;
@@ -2419,27 +2420,8 @@ function getMaxBuyQuantity(stock, account = activeTradingAccount) {
 }
 
 function buyStockPrivate(symbol, quantity) {
-    if (typeof isMarketHalted === 'function' && isMarketHalted()) { showToast('Handel wstrzymany — zadziałał bezpiecznik giełdowy!', 'error'); return false; }
-    const stock = stocks.find(s => s.symbol === symbol);
-    if (!stock || stock.isTradeLocked) { showToast('Handel tą akcją jest niedostępny.', 'warning'); return false; }
-    if (!canAccessExchange(stock.exchange, stock)) { showToast('Twoje stanowisko nie daje dostępu do tej giełdy.', 'warning'); return false; }
-    if (quantity > getAvailableShares(stock)) { showToast(`Za mało akcji na rynku (dostępne: ${getAvailableShares(stock)}).`, 'warning'); return false; }
-
-    const cost = stock.price * quantity;
-    if (playerWallet.cash < cost) { showToast('Za mało prywatnych pieniędzy.', 'error'); return false; }
-
-    playerWallet.cash -= cost;
-    stock.sharesHeld += quantity;
-    const holding = playerWallet.portfolio[symbol] || { shares: 0, avgPrice: 0, assetType: 'stock' };
-    holding.avgPrice = (holding.avgPrice * holding.shares + cost) / (holding.shares + quantity);
-    holding.shares += quantity;
-    playerWallet.portfolio[symbol] = holding;
-    applyTradeImpact(stock, quantity, 1);
-
-    checkCompliance(symbol);
-    logEvent(`🧍 Prywatnie kupiono ${quantity} szt. ${symbol} za ${cost.toFixed(2)} PLN.`, 'review');
-    refreshFundViews();
-    return true;
+    showToast('Konta prywatnego nie wolno używać do handlu akcjami — służy tylko do wydatków osobistych. Kupuj z funduszu.', 'warning');
+    return false;
 }
 
 function sellStockPrivate(symbol, quantity) {
@@ -2467,19 +2449,8 @@ function sellStockPrivate(symbol, quantity) {
 
 /** Gracz prywatnie kupuje JU własnego funduszu po NAV (bez wpływu na limit emisji). */
 function buyOwnFundUnits(amount) {
-    const value = Math.min(Number(amount) || 0, playerWallet.cash);
-    const nav = getFundNav();
-    if (!playerFund || !(value > 0) || !(nav > 0)) return 0;
-
-    const units = value / nav;
-    playerWallet.cash -= value;
-    playerWallet.fundUnits += units;
-    playerWallet.fundUnitsCost += value;
-    playerCash += value;
-    playerFund.units += units;
-    recordPayment('player-wallet', 'player-fund', value, 'Zakup udziałów własnego funduszu');
-    refreshFundViews();
-    return units;
+    showToast('Konto prywatne nie służy do inwestowania — nie kupisz za nie udziałów funduszu.', 'warning');
+    return 0;
 }
 
 function sellOwnFundUnits(units) {
@@ -2821,7 +2792,7 @@ function processCorporationWeekly() {
             corporation.budget += fee - share;
             if (corporation.supervisedManagerId === manager.id) {
                 // Nadzór kierownika projektu: gracz dostaje udział także z nadzorowanego funduszu.
-                const playerShare = fee * getPlayerPosition().feeShare * 0.5;
+                const playerShare = fee * getPlayerPosition().feeShare * 0.5 * PRIVATE_INCOME_FACTOR;
                 corporation.budget -= playerShare;
                 playerWallet.cash += playerShare;
                 recordPayment('external:korporacja', 'player-wallet', playerShare, 'Udział w opłacie nadzorowanego funduszu');
@@ -3054,7 +3025,7 @@ function settleCorporateGoals() {
     for (const goal of view) {
         delta += goal.done ? GOAL_MET_BONUS : -GOAL_MISSED_PENALTY;
         if (goal.done) {
-            const pay = getCorporateGoalPay();
+            const pay = getCorporateGoalPay() * PRIVATE_INCOME_FACTOR;
             if (pay > 0) {
                 corporation.budget -= pay;
                 playerWallet.cash += pay;

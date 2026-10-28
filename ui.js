@@ -8924,7 +8924,8 @@ function renderMacroPanel() {
                 <button class="btn-secondary" onclick="supportElectionCampaign(document.getElementById('donation-party').value, parseFloat(document.getElementById('donation-amount').value)); updateStateModalContent();">Wesprzyj kampanię</button></div>` : ''}</article>
         </div>
         <h4>Cykle sektorów</h4>
-        <div class="macro-sectors">${sectors.map(([sector, cycle]) => {
+        ${getSkillLevel('financialAnalyst') < 1 ? '<p class="text-sm text-muted">Cykle sektorów (faza i czas do zmiany) odblokowuje umiejętność Analityk Finansowy (poziom 1).</p>' : ''}
+        <div class="macro-sectors">${getSkillLevel('financialAnalyst') < 1 ? '' : sectors.map(([sector, cycle]) => {
             const phase = SECTOR_CYCLE_PHASES[cycle.phase];
             return `<div class="macro-sector is-${cycle.phase}"><span>${dataIcon(phase.icon)} ${escapeHtml(sector)}</span><strong>${phase.name}</strong><span class="text-xs text-muted">${cycle.quartersLeft} kw.</span></div>`;
         }).join('')}</div>`;
