@@ -2700,12 +2700,6 @@ function renderCorporationFirm() {
         ];
         return `<div class="firm-level ${playerProfile.positionId === position.id ? 'mine' : ''}"><span class="firm-level-name">${escapeHtml(position.name)}</span><span>${people.join(' · ') || '<span class="text-muted">—</span>'}</span></div>`;
     }).join('');
-    const targets = getPlayerTargets().map(t => `
-        <li class="firm-target ${t.done ? 'done' : ''}"><span>${typeof uiIcon === 'function' ? uiIcon(t.done ? 'ok' : 'cel', 14) : ''} ${escapeHtml(t.label)}</span><strong>${escapeHtml(t.value)}</strong>
-        <span class="firm-target-bar"><span style="width:${(t.progress * 100).toFixed(0)}%"></span></span></li>`).join('');
-    const goals = getCorporateGoalsView().map(t => `
-        <li class="firm-target ${t.done ? 'done' : ''}"><span>${typeof uiIcon === 'function' ? uiIcon(t.done ? 'ok' : 'cel', 14) : ''} ${escapeHtml(t.label)}</span><strong>${escapeHtml(t.value)}</strong>
-        <span class="firm-target-bar"><span style="width:${(t.progress * 100).toFixed(0)}%"></span></span></li>`).join('');
     const relations = getRelationPeople().map(person => {
         const value = getRelation(person.id);
         const mood = getRelationMood(value);
@@ -2723,10 +2717,9 @@ function renderCorporationFirm() {
                 <h4>Szef</h4>
                 <div class="firm-boss"><strong>${escapeHtml(boss.name)}</strong>${boss.positionId ? `<span class="text-xs text-muted">${escapeHtml(CAREER_POSITIONS[getPositionIndex(boss.positionId)].name)}</span>` : ''}
                     <span class="${bossMood.cls}">${bossMood.icon} ${boss.opinion >= RELATION_FRIENDLY ? 'lubi Cię' : boss.opinion <= RELATION_HOSTILE ? 'nie lubi Cię' : boss.opinion > 10 ? 'ma o Tobie dobre zdanie' : boss.opinion < -10 ? 'ma zastrzeżenia' : 'jest neutralny'} (${boss.opinion.toFixed(0)})</span></div>
-                <h4>Targety</h4><ul class="list-plain firm-targets">${targets}</ul>
-                <h4>Cele zarządu na ten cykl oceny</h4>
-                <p class="fund-muted">Spełniony cel: +${GOAL_MET_BONUS} pkt oceny i premia z budżetu korporacji; niespełniony: −${GOAL_MISSED_PENALTY} pkt.</p>
-                <ul class="list-plain firm-targets">${goals}</ul>
+                <h4>Zadania i oceny zarządu</h4>
+                <p class="fund-muted">Targety okresu, cele zarządu i wyniki ocen są teraz w aplikacji TeamedUP!.</p>
+                <button class="btn-primary btn-sm" onclick="closeVisibleModals(); openMailbox('inbox'); setMailPane('tasks')">Otwórz TeamedUP! — Zadania</button>
             </section>
         </div>
         <h4>Relacje (−100…100)</h4>

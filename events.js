@@ -197,6 +197,7 @@ function routeEventToMail(text, category) {
 
 function processMailWeekly() {
     if (!mailbox) return;
+    if (typeof releaseCorporateGoals === 'function') releaseCorporateGoals(); // 0.16.5: kolejne zadania od zarządu
     publishDigest();
     chargeMagazineSubscriptions();
     sendCompanyAdSpam();

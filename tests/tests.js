@@ -13527,6 +13527,19 @@ group('0.16.5 Internet i TeamedUP!', () => {
         assertEq(getTiedPosts()[0].author, 'Jan Testowy', 'autor to prezes');
     });
 
+    test('I4: zadania zarządu — 2 od razu (jedno awansowe), reszta odsłania się co rok cyklu; cel NAV +10% i podwójne punkty za awansowy', () => {
+        startFund(); playerProfile.positionId = 'junior';
+        const g = assignCorporateGoals();
+        assertEq(g.ids.length, 2, '2 zadania od razu'); assert(g.queue.length <= 3 && g.queue.length >= 1, 'kolejka zadań');
+        assert(g.ids.some(id => CORPORATE_GOAL_POOL[id].promotion), 'jedno cel awansowy');
+        assert(!g.ids.includes('nav25'), 'nav25 dopiero od stanowiska wyżej');
+        const before = g.ids.length, at = g.queue[0].at; macro.quarter = at - 1; assertEq(releaseCorporateGoals(), 0, 'przed terminem nic');
+        macro.quarter = at; assert(releaseCorporateGoals() >= 0 && corporation.goals.ids.length >= before, 'po terminie odsłonięte');
+        corporation.goals.ids = ['nav10']; corporation.goals.startNav = getFundNav() / 1.11;
+        const view = getCorporateGoalsView()[0]; assert(view.done && view.promotion, 'NAV +11% spełnia cel awansowy');
+        const res = settleCorporateGoals(); assertEq(res.delta, GOAL_MET_BONUS * GOAL_PROMOTION_MULT, 'podwójne punkty');
+    });
+
     test('I5: migracja zapisu v16 → v17: skrzynka zachowuje wszystkie wiadomości i dostaje pole Tied', () => {
         startFund(); addMail({ sender: 'PULS', subject: 'A', body: 'a' }); addMail({ sender: 'bot:x', subject: 'B', body: 'b' }); noteTiedEvent(`${stocks[0].name} ogłasza rekord`, 'company');
         const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 }))); assertEq(raw.version, 17, 'zapis v17');

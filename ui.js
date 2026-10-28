@@ -7730,11 +7730,28 @@ function renderMailbox() {
     preview.innerHTML = selected ? renderMailPreview(selected) : '<p class="fund-muted mail-empty">Wybierz wiadomość z listy, aby zobaczyć treść.</p>';
 }
 
-/** TeamedUP!: cele od szefostwa jako zadania z terminem (ocena zarządu) — dane z player.js, bez zmiany mechaniki. */
+/** TeamedUP!: zadania od szefostwa — cele awansowe i okresu (targety), cele zarządu odsłaniane stopniowo, oceny zarządu. */
 function renderTeamedTasks() {
+    const row = t => `<li class="mail-task ${t.done ? 'done' : ''}"><span>${uiIcon(t.done ? 'ok' : 'cel', 14)} <strong>${t.done ? '[wykonane]' : '[do zrobienia]'}</strong>${t.promotion ? ' <span class="mail-tag">awans</span>' : ''} ${escapeHtml(t.label)}</span>
+        <strong>${escapeHtml(String(t.value))}</strong><span class="firm-target-bar"><span style="width:${(t.progress * 100).toFixed(0)}%"></span></span></li>`;
+    const targets = typeof getPlayerTargets === 'function' ? getPlayerTargets() : [];
     const goals = typeof getCorporateGoalsView === 'function' ? getCorporateGoalsView() : [];
-    const rows = goals.map(g => `<li class="mail-task"><strong>${g.done ? '[wykonane]' : '[do zrobienia]'}</strong> ${escapeHtml(g.label)} — ${escapeHtml(String(g.progress))} / ${escapeHtml(String(g.value))}<div class="text-sm text-muted">Termin: najbliższa ocena zarządu</div></li>`).join('');
-    return `<article class="mail-article"><h3>Zadania od szefostwa</h3>${rows ? `<ul class="list-plain">${rows}</ul>` : '<p class="fund-muted">Zarząd nie wyznaczył jeszcze zadań.</p>'}</article>`;
+    const queue = (corporation?.goals?.queue || []).filter(i => isGoalEligible(i.id));
+    const q = macro?.quarter || 0;
+    const num = playerFund?.current?.number || 1;
+    const left = BOARD_REVIEW_EVERY_PERIODS - ((num - 1) % BOARD_REVIEW_EVERY_PERIODS);
+    const reviews = (corporation?.reviews || []).slice(-3).reverse().map(r => {
+        const me = r.results.find(x => x.isPlayer);
+        return `<li>Okres ${r.periodNumber}: ocena ${me?.score ?? '—'}/100 · ${escapeHtml(CAREER_POSITIONS[getPositionIndex(me?.from)].name)} → ${escapeHtml(CAREER_POSITIONS[getPositionIndex(me?.to)].name)}</li>`;
+    }).join('');
+    const last = (corporation?.lastGoals || []).map(g => `<li>${g.done ? '[wykonane]' : '[niewykonane]'} ${escapeHtml(g.label)}</li>`).join('');
+    return `<article class="mail-article"><h3>Zadania od szefostwa</h3>
+        <p class="fund-muted">Termin oceny zarządu: za ${left} ${left === 1 ? 'okres' : 'okresy'} funduszu. Spełnione zadanie: +${GOAL_MET_BONUS} pkt oceny (cel awansowy +${GOAL_MET_BONUS * GOAL_PROMOTION_MULT}) i premia z budżetu korporacji; niespełnione: −${GOAL_MISSED_PENALTY} pkt. Awans wymaga oceny ≥ ${PROMOTION_SCORE}.</p>
+        <h4>Targety okresu</h4><ul class="list-plain firm-targets">${targets.map(row).join('') || '<li class="fund-muted">Brak.</li>'}</ul>
+        <h4>Cele zarządu na ten cykl</h4><ul class="list-plain firm-targets">${goals.map(row).join('') || '<li class="fund-muted">Zarząd nie wyznaczył jeszcze zadań.</li>'}</ul>
+        ${queue.length ? `<p class="fund-muted">Zarząd zapowiada ${queue.length} ${queue.length === 1 ? 'kolejne zadanie' : 'kolejne zadania'}: pierwsze za ${Math.max(0, Math.min(...queue.map(i => i.at)) - q)} kw.</p>` : ''}
+        ${last ? `<h4>Poprzedni cykl</h4><ul class="list-plain text-sm">${last}</ul>` : ''}
+        <h4>Ostatnie oceny zarządu</h4>${reviews ? `<ul class="list-plain text-sm">${reviews}</ul>` : '<p class="fund-muted">Brak ocen.</p>'}</article>`;
 }
 
 /** TeamedUP!: zatrudnianie analityków z poziomu aplikacji (hireAnalyst — jak w oknie Firma). */
