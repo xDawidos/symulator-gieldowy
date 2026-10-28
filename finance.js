@@ -2257,7 +2257,7 @@ function renderMarketsPanel() {
             <dl class="bank-card-rates">
                 <div><dt>Prowizja</dt><dd>${(def.commission * 100).toFixed(2)}%</dd></div>
                 <div><dt>Spółki</dt><dd>${operator.members}</dd></div>
-                ${typeof getMarketMinFee === 'function' ? `<div><dt>Opłata minimalna</dt><dd>${getMarketMinFee(operator.id) > 0 ? `${formatZl(getMarketMinFee(operator.id), 0)} / kw.` : 'brak'}</dd></div>` : ''}
+                ${typeof getMarketMinFee === 'function' ? `<div><dt>Opłata minimalna</dt><dd>${getMarketMinFee(operator.id) > 0 ? `${formatZl(getMarketMinFee(operator.id), 0)} / kw.` : operator.id === 'PRV' ? 'brak (nie ma operatora; ryzyko oszustw ×5 już ją obciąża)' : 'brak'}</dd></div>` : ''}
                 ${typeof describeMarketProfile === 'function' && isInternetMarket(operator.id) ? `<div><dt>Profil giełdy</dt><dd>${escapeHtml(describeMarketProfile(operator.id))}</dd></div>` : ''}
                 <div><dt>Kurs operatora</dt><dd>${stock ? formatZl(stock.price) : (def.entry ? 'bez operatora' : operator.status === 'active' ? 'GPW (rynek gł.)' : '—')}</dd></div>
             </dl>

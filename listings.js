@@ -255,7 +255,7 @@ function processMunicipalPromotionQuarterly() {
 
 // --- E6 (0.16.4): minimalna opłata za notowanie, profile giełd prywatnych, zostawanie na NewHorizons ---
 // Każda spółka płaci giełdzie co kwartał: procent kapitalizacji (finance.js), ale nie mniej niż minimum rynku. NH = 0 (państwowy operator, bez opłat).
-const MARKET_MIN_FEE = { GPW: 1000, NH: 0, other: 100 };
+const MARKET_MIN_FEE = { GPW: 1000, NH: 0, PRV: 0, other: 100 }; // PRV (Włoska Giełda): bez opłaty — nie ma operatora, a ryzyko oszustw ×5 już ją obciąża
 const MARKET_PROFILE_CHANCE = 0.6;      // giełda internetowa dostaje profil z tą szansą (reszta przyjmuje każdą spółkę)
 const NH_STAY_CHANCE = 0.4;             // część spółek NH nie chce na GPW (stała cecha spółki, losowana raz)
 const NH_PROMOTE_FEE_MULT = 4;          // awans na GPW: zysk kwartalny i gotówka ≥ 4 × minimalna opłata GPW
