@@ -15,7 +15,7 @@ function onTicketPurchased(country, opened) {
 }
 
 /** Okno lotniska: stan budowy, ceny biletów, zakup. `targetId`: kontener (domyślnie zakładka Miasto → Lotnisko). */
-function renderAirportWindow(targetId = 'city-content-airport') {
+function renderAirportWindow(targetId = 'city-content-airport', { tickets = false } = {}) {
     const root = document.getElementById(targetId);
     if (!root) return;
     const built = isAirportBuilt(), building = isAirportInProgress();
@@ -23,28 +23,34 @@ function renderAirportWindow(targetId = 'city-content-airport') {
         : building ? 'Lotnisko jest w budowie (megaprojekt miasta, wykonawca: spółka budowlana).'
             : 'Lotnisko jeszcze nie powstało. Miasto może je zlecić przez przetarg budowlany; bez niego nie kupisz biletów.';
     const orderBtn = !built && !building ? `<button class="btn-primary" onclick="airportUiOrder()">Zleć budowę lotniska</button>` : '';
-    const rows = Object.values(COUNTRY_DEFS).map(def => {
+    const rows = !tickets ? '' : Object.values(COUNTRY_DEFS).map(def => {
         const has = hasTicket('player', def.id), price = getTicketPrice(def.id), joined = isCountryJoined(def.id);
-        const action = has ? '<span class="text-muted">masz bilet</span>' : `<button class="btn-ghost" ${built ? '' : 'disabled'} onclick="airportUiBuy('${def.id}')">Kup bilet za ${formatZl(price, 0)}</button>`;
+        const action = has ? `<span class="text-muted">masz bilet</span> <button class="btn-ghost" onclick="feriePickCountry('${def.id}')">Zobacz rynek</button>` : `<button class="btn-ghost" ${built ? '' : 'disabled'} onclick="airportUiBuy('${def.id}')">Kup bilet za ${formatZl(price, 0)}</button>`;
         return `<tr><td>${flagIcon(def.id, 14)} <strong>${escapeHtml(def.name)}</strong></td><td>${currencyIcon(def.currency, 14)} ${def.currency}</td>
             <td>${escapeHtml(def.operator.name)}</td><td>${joined ? 'giełda otwarta' : 'jeszcze zamknięta (pierwszy bilet ją otworzy)'}</td><td class="text-right">${action}</td></tr>`;
     }).join('');
     root.innerHTML = `<div class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('rynek', 20)}</span><div><h4>Lotnisko i bilety</h4><span class="bank-card-type">licencje na rynki zagraniczne</span></div></header>
         <p class="text-sm" aria-live="polite">${status}</p>${orderBtn}
-        <table class="asset-mini-table w-full"><thead><tr><th>Rynek</th><th>Waluta</th><th>Operator</th><th>Stan</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+        ${tickets ? `<table class="asset-mini-table w-full"><thead><tr><th>Rynek</th><th>Waluta</th><th>Operator</th><th>Stan</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : `<div class="btn-row"><button class="btn-ghost" onclick="openInternetPage('ferie')">Bilety: Internet → Ferie i wakacje</button></div>`}
         <p class="text-sm text-muted">Bilet kupujesz z gotówki funduszu (od ${formatZl(TICKET_RULES.min, 0)}). Z biletem kupujesz spółki kraju przez kantor z prowizją ${formatNumberPl(COUNTRY_RULES.commission * 100, 1)}% (na rynku krajowym 0,25%). Każdy inwestor ma bilet osobno, a każdy sprzedany bilet daje Turystyce małą premię.</p></div>`;
 }
 
 function airportUiOrder() {
     const r = orderAirport();
     showToast(r.ok ? 'Miasto ogłasza budowę lotniska.' : r.reason, r.ok ? 'success' : 'warning');
-    renderAirportWindow();
+    refreshAirportViews();
+}
+
+function refreshAirportViews() {
+    if (document.getElementById('city-content-airport')) renderAirportWindow();
+    if (document.getElementById('net-ferie-body') && internetState.page === 'ferie') renderFeriePage();
 }
 
 function airportUiBuy(country) {
     const r = buyTicket(country);
     if (!r.ok) showToast(r.reason, 'warning');
-    renderAirportWindow();
+    else if (typeof selectInternetCountry === 'function') selectInternetCountry(country); // tło okna w barwach kraju
+    refreshAirportViews();
     if (typeof updateUI === 'function') updateUI();
 }
 
@@ -55,7 +61,7 @@ function airportUiBuy(country) {
 
 let marketsSelected = null;
 
-function selectMarketCountry(id) { marketsSelected = id; renderKantor(); }
+function selectMarketCountry(id) { marketsSelected = id; if (typeof selectInternetCountry === 'function') selectInternetCountry(id); renderKantor(); }
 
 function renderCountryCard(id) {
     const def = COUNTRY_DEFS[id], st = countryState[id], regime = marketRegimes[id];
@@ -80,8 +86,8 @@ function renderCountryCard(id) {
 
 function renderMarketsTab() {
     const joined = getJoinedCountries();
-    if (!joined.length) return `<p class="text-muted">Żaden rynek zagraniczny nie jest jeszcze otwarty. Pierwszy bilet na lotnisku (okno Miasto → Lotnisko) otwiera giełdę kraju; boty mogą być szybsze.</p>
-        <div class="btn-row"><button class="btn-ghost" onclick="closeModalFrom(document.querySelector('#kantor-modal .close-btn')); openCityInvestmentModal(); switchCityTab('airport')">Idź do lotniska</button></div>`;
+    if (!joined.length) return `<p class="text-muted">Żaden rynek zagraniczny nie jest jeszcze otwarty. Pierwszy bilet w Internecie (Ferie i wakacje) otwiera giełdę kraju; boty mogą być szybsze.</p>
+        <div class="btn-row"><button class="btn-ghost" onclick="openInternetPage('ferie')">Idź do Ferie i wakacje</button></div>`;
     if (!marketsSelected || !joined.includes(marketsSelected)) marketsSelected = joined[0];
     const id = marketsSelected, def = COUNTRY_DEFS[id], access = canTradeCountry('player', id);
     const tabs = joined.map(c => `<button class="tab-btn ${c === id ? 'active' : ''}" onclick="selectMarketCountry('${c}')" aria-pressed="${c === id}">${flagIcon(c, 12)} ${escapeHtml(COUNTRY_DEFS[c].name)} · ${COUNTRY_DEFS[c].currency}</button>`).join('');
@@ -97,7 +103,7 @@ function renderMarketsTab() {
     }).join('');
     return `${renderLinksCard()}<div class="tab-buttons" role="group" aria-label="Rynki zagraniczne">${tabs}</div>
         ${renderCountryCard(id)}
-        ${access ? '' : `<p class="text-sm" role="status">Brak biletu na ten rynek — kupowanie jest zablokowane (sprzedaż posiadanych akcji działa). Bilet kupisz w oknie Miasto → Lotnisko (${formatZl(getTicketPrice(id), 0)}).</p>`}
+        ${access ? '' : `<p class="text-sm" role="status">Brak biletu na ten rynek — kupowanie jest zablokowane (sprzedaż posiadanych akcji działa). Bilet kupisz w Internecie, na stronie Ferie i wakacje (${formatZl(getTicketPrice(id), 0)}).</p>`}
         <table class="asset-mini-table w-full mt-3"><thead><tr><th>Spółka</th><th>Sektor</th><th class="text-right">Cena (waluta)</th><th class="text-right">Cena w PLN</th><th class="text-right">Twoje akcje</th><th class="text-right">Zlecenie</th></tr></thead><tbody>${rows}</tbody></table>
         <p class="text-sm text-muted">Kupno płacisz najpierw gotówką w ${def.currency}, resztę wymienia kantor (spread). Prowizja ${formatNumberPl(getCountryCommission(id) * 100, 1)}%. Wpływy ze sprzedaży trafiają na konto walutowe — złotówki dostaniesz w kantorze. Zysk to zmiana ceny <em>i</em> kursu ${def.currency}; ceny zawierają dywidendy.</p>`;
 }

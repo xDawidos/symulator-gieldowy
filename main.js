@@ -29,8 +29,8 @@ const LEGACY_SAVE_KEYS = ['gra_inwestycyjna_dawid_save_v2', 'gra_inwestycyjna_da
 // v13: społeczeństwo i rynek pracy (society, stock.workforce, trzecia partia). Starsze zapisy: kraj od zera,
 // zatrudnienie według giełdy, polityka według cech prezesa, związki tylko w spółkach państwowych (30%).
 // v16: waluty i kantor (kursy, gotówka w walutach), kwity depozytowe GDR. Zapis v15 migruje: kursy startowe, bez walut i GDR.
-const SAVE_FORMAT_VERSION = 16; // 0.16.1: waluty, kantor, GDR
-const SUPPORTED_SAVE_VERSIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+const SAVE_FORMAT_VERSION = 17; // 0.16.5: Internet (Tied w skrzynce); wcześniej 16 = waluty, kantor, GDR
+const SUPPORTED_SAVE_VERSIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17];
 
 let lastSaveReport = null;
 let saveDisabledUntilReload = false;
@@ -595,6 +595,7 @@ function applySaveSnapshot(snapshot) {
     ensureSubcontractorRegistry(); // 0.15.5 B2: rejestr 12 specjalności budowany z istniejących danych (zapisy starsze mają 7 podwykonawców)
     ensureAllReitModels(); // 0.15.5 B5: REIT-y ze starszego zapisu dostają portfel z bilansu
     if (snapshot.version < 16) report.warnings.push('Dodano waluty i kantor (migracja v16): kursy startowe, brak walut i kwitów depozytowych.');
+    if (snapshot.version < 17) report.warnings.push('Poczta to teraz TeamedUP!, a wiadomości od inwestorów i spółek czytasz w Tied (migracja v17): żadna wiadomość nie zginęła.');
     if (playerFund) delete playerFund.openSubscriptions; // 0.16.1: emisja ciągła wycofana także w starszych zapisach
     if (typeof ensureLaunchedIndexes === 'function') ensureLaunchedIndexes(); // 0.16.1: SIG40/BSIG80 z decyzji Banku Centralnego
     if (typeof applyGdrSnapshot === 'function') applyGdrSnapshot(snapshot.gdr);
@@ -626,6 +627,7 @@ function applySaveSnapshot(snapshot) {
     // Skrzynka, miasto i państwo (v6); starsze zapisy dostają pustą skrzynkę i burmistrza.
     if (snapshot.mailbox && Array.isArray(snapshot.mailbox.messages)) {
         mailbox = { ...createMailbox(), ...snapshot.mailbox };
+        if (!Array.isArray(mailbox.tied)) mailbox.tied = [];
     } else {
         mailbox = createMailbox();
         report.warnings.push('Zapis bez skrzynki mailowej — utworzono nową (migracja do v6).');

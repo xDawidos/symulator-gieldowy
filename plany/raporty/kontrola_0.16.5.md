@@ -1,0 +1,27 @@
+# Kontrola 0.16.5 „Internet”
+
+Stan: I0–I5 zrobione w zakresie poniżej. Testy 825/825 (`node plany/design/narzedzia/run_tests.mjs`, 5 nowych w grupie „0.16.5 Internet i TeamedUP!”). Gałąź `claude/impl-0165-0ecd20`, niescalona. Zapis: **v17** (było 16).
+
+## Zrobione
+- **I0:** ETF-y to osobny panel pod rynkiem akcji (własny nagłówek i zwijanie, te same id). Decyzja własna, bez pytania użytkownika: osobny panel, bez dzielenia na „ETF-y i fundusze”.
+- **I1:** panel „Giełda NewHorizons” w `index.html` przemianowany na **Startupy** (inkubator, pula, rundy). NewHorizons zostaje rynkiem wejścia z `listings.js` (jego opis jest na karcie giełd wejścia) i nie ma już nic wspólnego z panelem start-upów. Panel start-upów przeniesiony do strony Internetu (ten sam element, więc cała logika inkubatora bez zmian).
+- **I2:** nowy `internet.js`: okno `#internet-modal` zastępuje Kantor (przycisk menu „Internet”). Pasek adresu tylko do odczytu, strony tylko przez ulubione (`canOpenInternetPage`, `openInternetPage`; adres spoza listy = odmowa). Strony: Kantory24 (dawny kantor bez zmian mechaniki: kursy, GDR, rynki, forex), Tied, Startupy, Ferie i wakacje, Lombard. Zablokowane kafelki są widoczne z opisem (decyzja do pyt. 2 z planu). Tied odblokowuje się po awansie na Zarządcę funduszu albo po pierwszych relacjach z inwestorami. `openKantorModal()` zostało jako wejście zgodności (okno Gigant, itp.).
+- **Tied:** posty prezesów z faktycznych zdarzeń spółki (`noteTiedEvent` z `logEvent`, tylko dobre wieści, bez duplikatów, limit 60, pole `mailbox.tied`) i wiadomości od inwestorów/spółek (`getMailChannel`). Reklamy zostają w TeamedUP! (Spam), Tied jest bez reklam.
+- **I3:** strona „Ferie i wakacje” rysuje to samo okno lotniska (`renderAirportWindow(id, { tickets: true })`) z zakupem, „Zobacz rynek” i listą spółek kraju. Po zakupie okno dostaje barwy kraju (`COUNTRY_THEMES`, tło, górna krawędź, akcent kart); kraj stoi też słowami i flagą w pasku (kolor nie jest jedynym nośnikiem). Zakładka Miasto → Lotnisko zostaje do zlecania budowy, bilety kupuje się w Internecie. Logika biletów (`countries.js`) nie ruszona; cena od 1000 zł była już w kodzie (min 1000, 5% przepustki).
+- **I4:** Poczta → **TeamedUP!** (menu, tytuł okna). Nowe panele: Zadania od szefostwa (cele z `getCorporateGoalsView`), Zatrudnianie (`hireAnalyst`), wejście do Lombardu. Przycisk Lombard w menu bocznym usunięty (jedyne wejście: Internet i TeamedUP!; okno Lombardex i przyciski w panelu funduszu zostają).
+- **Migracja v16 → v17:** `SAVE_FORMAT_VERSION = 17`, skrzynka dostaje `tied: []`, żadna wiadomość nie jest przenoszona ani kasowana (kanał Tied/TeamedUP! liczony przy wyświetlaniu). Test migracji sprawdza liczbę wiadomości.
+- `style.css?v=16.5` (stary numer trzymał CSS w pamięci przeglądarki).
+
+## Sprawdzone w przeglądarce (wbudowanej, zapis w trakcie gry)
+Ulubione (kafelki, odznaka nowych wiadomości w Tied, zablokowany Tied przy niskim stanowisku), Ferie i wakacje z biletami (od 1000 zł, CZ 1000, SE 2000, JP 5000), motyw DE (wartości obliczone: tło `rgb(29,26,15)`, górna krawędź `rgb(255,206,0)`), karta kraju i tabela spółek, Startupy (tabela i pula widoczne), Tied (wiadomości i post prezesa), Kantory24 (pasek), TeamedUP! (Zadania, Zatrudnianie). Konsola bez błędów.
+
+## Pominięte i problemy
+- **Nie zweryfikowano wizualnie:** kolory pozostałych 9 krajów (tylko DE sprawdzone liczbowo), kontrast akcentów, układ na wąskim ekranie, nawigacja klawiaturą po kafelkach (kafelki są `button`, ale `Tab`/`Enter` nie były klikane), zrzuty ekranu w trakcie animacji otwarcia okna były półprzezroczyste (przejście), nie uznane za błąd. Brak makiet w Figmie (czat designu nie istnieje); wygląd z komponentów 0.14.5.
+- **Z planu nie zrobione:** bilet ważny przez ograniczony czas gry, cena rosnąca wg odległości (jest 5% przepustki, DE/CZ najtaniej, Azja najdrożej i tak wychodzi z danych), pakiety, utrudnienia lotu, karta lojalnościowa, godziny sesji (0.16.7). Zgodnie z poleceniem logika biletów bez zmian.
+- **Tied:** brak rozmów z botami i prezesami (0.17.3); w grze dziś wiadomości od botów (`bot:`) i spółek (reklamy sponsorowane) są jedynymi „towarzyskimi”, więc Tied jest uboga w treść. Posty generuje tylko `logEvent` kategorii `company` z kilku słów kluczowych (wynik, kontrakt, współpraca, dywidenda, rekord…), nie z raportów kwartalnych wprost. Nie ma postów „przemyśleń”.
+- **TeamedUP!:** zadania bez własnego terminu (pokazują „najbliższą ocenę zarządu”; cele nie mają daty w kodzie), tylko analitycy do zatrudnienia (inni pracownicy w grze nie istnieją), „prośby szefostwa” poza celami nie istnieją. Foldery prasy (PULS, FLESZ, OBSER) zostały w TeamedUP!.
+- **Lombard:** strona w Internecie to wejście (przycisk „Otwórz Lombardex”), nie osadzone okno; zostaje jedno źródło prawdy.
+- **Kantory24:** zakładka „Rynki zagraniczne” i „Ferie i wakacje” pokazują ten sam kraj (jedno wspólne `internetState.country`), zakupy akcji dalej w Kantory24.
+- **Test brakujący:** „NewHorizons bez startupów” nie jest sprawdzany w testach (testy nie ładują `index.html`), tylko ręcznie. Test kolorów w CSS (`!important` na tle okna kraju) również ręcznie.
+- **Błąd 0.16.4:** w trakcie pracy nie zauważono błędu w kodzie 0.16.4 do poprawki (raportu sesji `Wdrożenie 0.16.2` w notatkach jeszcze nie było, tylko dane serii); GIG −2,9 pp nie ruszany.
+- Nie zrobiono: cache-bust dla `tests/tests.html` (brak linku do CSS), zrzutów do dokumentacji.

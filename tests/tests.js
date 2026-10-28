@@ -11938,7 +11938,7 @@ group('0.16.1', () => {
         kantorBuyCurrency('CHF', 500_000);
         const rateChf = fxRates.CHF, held = playerCashByCurrency.CHF, assets = getFundAssets();
         const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
-        assertEq(raw.version, 16, 'zapis v16');
+        assertEq(raw.version, 17, 'zapis v17');
         initFxState();
         const report = applySaveSnapshot(raw);
         assert(report.ok, `wczytanie: ${(report.errors || []).join('; ')}`);
@@ -12558,10 +12558,10 @@ group('0.16.2', () => {
     test('G7: okno lotniska jest osobną warstwą wyświetlania — rysuje do dowolnego kontenera z flagami SVG, cenami i przyciskami; haczyk animacji respektuje ruch zredukowany', () => withTickets(() => {
         const host = document.createElement('div'); host.id = 'airport-test-host'; document.body.appendChild(host);
         try {
-            renderAirportWindow('airport-test-host');
+            renderAirportWindow('airport-test-host', { tickets: true });
             assert(host.innerHTML.includes('Zleć budowę lotniska') && host.innerHTML.includes('Zetland') && host.innerHTML.includes('aria-label="Flaga:'), 'stan, wiersz kraju, flaga');
             assert(host.querySelectorAll('button[disabled]').length >= 1, 'bilety zablokowane bez lotniska');
-            airportState.forced = true; renderAirportWindow('airport-test-host');
+            airportState.forced = true; renderAirportWindow('airport-test-host', { tickets: true });
             assert(host.innerHTML.includes('Kup bilet za') && !/[\u{1F300}-\u{1FAFF}]/u.test(host.innerHTML), 'przyciski zakupu, bez emoji');
             let flights = 0; const listener = () => flights++; document.addEventListener('ticket-flight', listener);
             buyTicket('ZZ'); document.removeEventListener('ticket-flight', listener);
@@ -13480,6 +13480,60 @@ group('0.16.3', () => {
     });
 
     // --- koniec grupy 0.16.3 ---
+});
+
+group('0.16.5 Internet i TeamedUP!', () => {
+    const startFund = (cash = 5_000_000) => { resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' }); playerCash = cash; mailbox = createMailbox(); internetState = { page: null, country: null }; };
+    const realCountry = () => ['CZ', 'DE', 'US'].find(id => COUNTRY_DEFS[id]);
+
+    test('I5: strony otwierają się tylko z ulubionych i tylko odblokowane (Tied po awansie albo relacjach)', () => {
+        startFund();
+        assert(canOpenInternetPage('kantory24').ok && canOpenInternetPage('ferie').ok && canOpenInternetPage('lombard').ok && canOpenInternetPage('startupy').ok, 'ulubione otwarte');
+        assert(!canOpenInternetPage('google.com').ok && !canOpenInternetPage('').ok && !canOpenInternetPage(undefined).ok, 'spoza ulubionych odmowa');
+        assert(!openInternetPage('google.com') && internetState.page === null, 'adres spoza ulubionych nie zmienia strony');
+        playerProfile.positionId = 'junior'; botRelations.values = {};
+        assert(!canOpenInternetPage('tied').ok && canOpenInternetPage('tied').reason.length > 10, 'Tied zablokowany z opisem');
+        playerProfile.positionId = 'manager';
+        assert(canOpenInternetPage('tied').ok, 'Tied po awansie');
+    });
+
+    test('I5: bilet z gotówki funduszu od 1000 zł, odmowa przy braku gotówki; tło okna zmienia się na kraj i wraca', () => {
+        startFund(500); const c = realCountry(); airportState.forced = true;
+        try {
+            const price = getTicketPrice(c); assert(price >= 1000, `cena od 1000 zł: ${price}`);
+            const refused = buyTicket(c); assert(!refused.ok && !hasTicket('player', c) && playerCash === 500, 'odmowa bez gotówki, gotówka nietknięta');
+            playerCash = price + 700; const ok = buyTicket(c); assert(ok.ok && hasTicket('player', c) && Math.abs(playerCash - 700) < 1e-6, 'bilet kupiony z gotówki funduszu');
+            internetState.page = 'ferie'; selectInternetCountry(c); assertEq(getInternetThemeCountry(), c, 'motyw kraju po zakupie');
+            internetState.page = null; assertEq(getInternetThemeCountry(), null, 'ekran ulubionych jest neutralny');
+            internetState.page = 'ferie'; selectInternetCountry(null); assertEq(getInternetThemeCountry(), null, 'powrót do neutralnego');
+            internetState.page = 'ferie'; foreignTickets.player = []; internetState.country = c; if (!countryState[c]?.link) assertEq(getInternetThemeCountry(), null, 'bez biletu brak motywu');
+            assert(Object.keys(COUNTRY_THEMES).every(id => COUNTRY_THEMES[id].bg && COUNTRY_THEMES[id].accent), 'każdy kraj ma barwy');
+        } finally { airportState.forced = false; resetTicketsState(); }
+    });
+
+    test('I5: wiadomości od inwestorów i spółek idą do Tied dopiero po jego odblokowaniu; systemowe zostają w TeamedUP!; nic nie ginie', () => {
+        startFund(); playerProfile.positionId = 'junior'; botRelations.values = {};
+        addMail({ sender: 'bot:x', subject: 'Cześć', body: 'Kawa?' }); addMail({ sender: CORPORATION_SENDER, subject: 'Cel', body: 'Do zrobienia' });
+        const total = mailbox.messages.length; assertEq(getMailInFolder('inbox').length, 2, 'bez Tied wszystko w TeamedUP!');
+        playerProfile.positionId = 'manager';
+        assertEq(getMailInFolder('inbox').length, 1, 'inwestor poza TeamedUP!'); assertEq(mailbox.messages.filter(m => getMailChannel(m) === 'tied').length, 1, 'wiadomość w Tied'); assertEq(mailbox.messages.length, total, 'żadna nie zginęła');
+    });
+
+    test('I5: dobre wieści spółki dają post jej prezesa w Tied (bez duplikatu), złe nie', () => {
+        startFund(); const s = stocks[0]; s.ceo = { name: 'Jan Testowy', traits: [] };
+        assert(noteTiedEvent(`${s.name} podpisuje kontrakt na dostawę`, 'company'), 'post z dobrej wieści');
+        assertEq(noteTiedEvent(`${s.name} podpisuje kontrakt na dostawę`, 'company'), null, 'bez duplikatu');
+        assertEq(noteTiedEvent(`${s.name} traci płynność, upadłość`, 'company'), null, 'zła wieść bez posta');
+        assertEq(getTiedPosts()[0].author, 'Jan Testowy', 'autor to prezes');
+    });
+
+    test('I5: migracja zapisu v16 → v17: skrzynka zachowuje wszystkie wiadomości i dostaje pole Tied', () => {
+        startFund(); addMail({ sender: 'PULS', subject: 'A', body: 'a' }); addMail({ sender: 'bot:x', subject: 'B', body: 'b' }); noteTiedEvent(`${stocks[0].name} ogłasza rekord`, 'company');
+        const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 }))); assertEq(raw.version, 17, 'zapis v17');
+        raw.version = 16; delete raw.mailbox.tied; const n = raw.mailbox.messages.length;
+        const res = applySaveSnapshot(raw); assert(res.ok, 'wczytanie v16');
+        assertEq(mailbox.messages.length, n, 'wiadomości zachowane'); assert(Array.isArray(mailbox.tied), 'pole Tied dodane');
+    });
 });
 
 async function runAllTests() {
