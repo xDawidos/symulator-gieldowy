@@ -3820,6 +3820,8 @@ function updateStockPrices() {
                     case 'ksiegowy': volatilityModifier *= 0.95; break;
                     case 'lowca_glow': volatilityModifier += 0.15; break;
                 }
+                const fx = typeof ceoTraits === 'object' ? ceoTraits[trait.id]?.fx : null; // 0.16.3 G13b: cechy krajowe opisane danymi
+                if (fx) { priceGrowthModifier += fx.growth || 0; volatilityModifier *= fx.vol || 1; }
             });
         }
         

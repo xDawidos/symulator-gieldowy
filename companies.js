@@ -659,6 +659,119 @@ const ceoTraits = {
         description: "Jego gadulstwo sprawia, że firma mocniej reaguje na plotki. Wzmacnia efekty wszystkich zdarzeń firmowych o 10% (pozytywnych i negatywnych)."
     },
 
+    janusz_biznesu: { // 0.16.3 G13b
+        name: "Janusz biznesu",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { growth: 0.01 }, country: 'PL',
+        description: "Tnie koszty, gdzie się da: kurs rośnie o 1% szybciej, ale załoga jest mniej zadowolona (niższe zadowolenie pracowników)."
+    },
+    szwagier_w_ministerstwie: { // 0.16.3 G13b
+        name: "Szwagier w ministerstwie",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { growth: 0.015 }, country: 'PL',
+        description: "Kontrakty państwowe same wpadają do firmy: kurs rośnie o 1,5% szybciej."
+    },
+    polak_potrafi: { // 0.16.3 G13b
+        name: "Polak potrafi",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { growth: 0.005, vol: 0.9 }, country: 'PL',
+        description: "W kryzysie kombinuje i szybko się podnosi: zmienność niższa o 10%, wzrost +0,5%."
+    },
+    cwaniak: { // 0.16.3 G13b
+        name: "Cwaniak",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { growth: 0.03, vol: 1.1 }, country: 'PL',
+        description: "Zysk rośnie szybciej (+3%), ale firma częściej wpada w aferę."
+    },
+    ordnung_muss_sein: { // 0.16.3 G13b
+        name: "Ordnung muss sein",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { vol: 0.85 }, country: 'DE',
+        description: "Niemiecki porządek: zmienność akcji niższa o 15%."
+    },
+    ingenieur: { // 0.16.3 G13b
+        name: "Ingenieur",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { growth: 0.01 }, country: 'DE',
+        description: "Inżynierska dokładność i badania: kurs rośnie o 1% szybciej."
+    },
+    lagom: { // 0.16.3 G13b
+        name: "Lagom",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { vol: 0.9 }, country: 'SE',
+        description: "Szwedzki umiar w ryzyku: zmienność niższa o 10%."
+    },
+    fika: { // 0.16.3 G13b
+        name: "Fika",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { growth: 0.003 }, country: 'SE',
+        description: "Kawa i ciasto z załogą: zadowolenie pracowników rośnie, kurs +0,3%."
+    },
+    tajemnica_bankowa: { // 0.16.3 G13b
+        name: "Tajemnica bankowa",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { vol: 0.9 }, country: 'CH',
+        description: "Dyskrecja uspokaja inwestorów: zmienność niższa o 10%."
+    },
+    neutralnosc: { // 0.16.3 G13b
+        name: "Neutralność",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { vol: 0.85 }, country: 'CH',
+        description: "Szwajcarska neutralność: odporność na kryzysy, zmienność niższa o 15%."
+    },
+    savoir_vivre: { // 0.16.3 G13b
+        name: "Savoir-vivre",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { growth: 0.015 }, country: 'FR',
+        description: "Elegancja sprzedaje się dobrze: kurs rośnie o 1,5% szybciej."
+    },
+    greve_generale: { // 0.16.3 G13b
+        name: "Grève générale",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { vol: 1.05 }, country: 'FR',
+        description: "Związkowcy mają mocny głos: znacznie częstsze związki zawodowe, zmienność +5%."
+    },
+    svejk: { // 0.16.3 G13b
+        name: "Švejk",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { growth: -0.01, vol: 0.8 }, country: 'CZ',
+        description: "Przetrwa każdy kryzys, ale rośnie wolno: zmienność niższa o 20%, wzrost −1%."
+    },
+    piwny_dyplomata: { // 0.16.3 G13b
+        name: "Piwny dyplomata",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { growth: 0.005 }, country: 'CZ',
+        description: "Załatwia sprawy przy piwie: kurs rośnie o 0,5% szybciej."
+    },
+    move_fast: { // 0.16.3 G13b
+        name: "Move fast",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { growth: 0.03, vol: 1.1 }, country: 'US',
+        description: "Szybki wzrost kosztem stabilności: wzrost +3%, zmienność +10%."
+    },
+    shareholder_value: { // 0.16.3 G13b
+        name: "Shareholder value",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { growth: 0.015 }, country: 'US',
+        description: "Wszystko dla akcjonariuszy (skup akcji własnych): kurs rośnie o 1,5% szybciej."
+    },
+
     // === CECHY RZADKIE (RARE) ===
     pewniak: {
         name: "Pewniak",
@@ -10060,8 +10173,8 @@ const CEO_POACH_COOLDOWN = 4;          // limit gracza: 1 na rok
 const UNION_BUST_DETECTION = 0.3;
 
 const EXPLOIT_CEO_TRAITS = ['chciwy', 'skorumpowany', 'czlonek_mafii'];
-const SAVING_CEO_TRAITS = ['tyran', 'skapiec'];
-const SOCIAL_CEO_TRAITS = ['lojalny_pracownikom', 'czlowiek_z_ludu', 'szczodry'];
+const SAVING_CEO_TRAITS = ['tyran', 'skapiec', 'janusz_biznesu']; // Janusz biznesu: niższe zadowolenie załogi (polityka oszczędna)
+const SOCIAL_CEO_TRAITS = ['lojalny_pracownikom', 'czlowiek_z_ludu', 'szczodry', 'fika']; // Fika: zadowolenie pracowników +
 
 function getWorkforceQuarter() {
     return typeof society === 'object' && society ? society.quarter : (typeof macro === 'object' ? macro.quarter : 0);
@@ -10466,7 +10579,8 @@ function processBotCeoPoaching(companies) {
 function getUnionChance(stock) {
     const wf = stock.workforce;
     const policy = LABOR_POLICIES[wf.policy] || LABOR_POLICIES.standard;
-    return UNION_BASE_CHANCE * Math.max(0.2, (50 - wf.satisfaction) / 10) * policy.union * RIGHTS_UNION_MULT[getRightsLevel()] * (wf.employees >= 200 ? 1 : 0.3);
+    const strike = stock.ceo?.traits?.some(t => t.id === 'greve_generale') ? 2 : 1; // 0.16.3: Grève générale — silniejsze związki
+    return UNION_BASE_CHANCE * Math.max(0.2, (50 - wf.satisfaction) / 10) * policy.union * RIGHTS_UNION_MULT[getRightsLevel()] * (wf.employees >= 200 ? 1 : 0.3) * strike;
 }
 
 function processUnionFormation(companies) {

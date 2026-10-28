@@ -434,7 +434,7 @@ function getUnreadMailCount(folder = 'inbox') {
 
 // --- Zmienne i dane dla systemu zdarzeń ---
 const positiveTraits = ['wyjadacz', 'pewniak', 'prowiec', 'doswiadczony', 'filar_w_branzy', 'oddany', 'stoik', 'wizjoner', 'rekin', 'kapitalista', 'bogacz', 'legenda'];
-const negativeTraits = ['tyran', 'rozrzutny', 'glowa_w_chmurach', 'nieudacznik', 'skompromitowany'];
+const negativeTraits = ['tyran', 'rozrzutny', 'glowa_w_chmurach', 'nieudacznik', 'skompromitowany', 'cwaniak'];
 
 let eventLog = [];
 const MAX_LOG_ENTRIES = 15;
@@ -1091,7 +1091,7 @@ function triggerCeoEvent() {
     let eventTriggered = false;
 
     // Zdarzenia zależne od cech (przykłady)
-    if (ceo.traits.some(t => t.id === 'skompromitowany') && Math.random() < 0.2) {
+    if (ceo.traits.some(t => t.id === 'skompromitowany' || t.id === 'cwaniak') && Math.random() < 0.2) {
         // Skompromitowany prezes wywołuje skandal
         const magnitude = getRandomInRange(-0.05, -0.15);
         displayEventMessage(`🚨 Skandal wokół prezesa ${targetStock.name}! Jego przeszłość wraca jak bumerang.`, 45, magnitude, 'company');

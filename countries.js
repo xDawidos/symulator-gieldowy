@@ -133,11 +133,32 @@ function joinCountry(id, by = 'test') {
 // Ceny spółek zagranicznych (co tydzień)
 // ---------------------------------------------------------------------------------
 
+/** Cechy prezesów krajowych (companies.js, pole `fx`); spółki zagraniczne dostają jedną z dwóch cech kraju, stałą dla symbolu. */
+const COUNTRY_CEO_TRAITS = {
+    DE: ['ordnung_muss_sein', 'ingenieur'], SE: ['lagom', 'fika'], CH: ['tajemnica_bankowa', 'neutralnosc'],
+    FR: ['savoir_vivre', 'greve_generale'], CZ: ['svejk', 'piwny_dyplomata'], US: ['move_fast', 'shareholder_value']
+};
+function getIssuerCeoTrait(issuer) {
+    const list = COUNTRY_CEO_TRAITS[issuer.country];
+    if (!list || issuer.state) return null; // spółki państwowe prowadzi urzędnik
+    let hash = 0;
+    for (const ch of String(issuer.id)) hash = (hash * 31 + ch.charCodeAt(0)) % 9973;
+    return list[hash % list.length];
+}
+
 /** Wpływ modyfikatora spółki specjalnej (jeden na spółkę): dryf roczny, mnożnik zmienności, tłumienie spadków. */
 function getSpecialEffect(issuer) {
     const r = { drift: 0, volMult: 1, bearDamp: 1 };
     const quarterInYear = ((macro.quarter - 1) % 4) + 1;
+    const fx = typeof ceoTraits === 'object' ? ceoTraits[getIssuerCeoTrait(issuer)]?.fx : null; // 0.16.3 G13b: prezes krajowy
+    if (fx) { r.drift += fx.growth || 0; r.volMult *= fx.vol || 1; }
     switch (issuer.special) {
+        case 'canopening': r.volMult *= 1.2; break;                  // śledź w puszce: skandal albo viral (applySpecialEvents)
+        case 'vintage': r.drift += (marketRegimes[issuer.country]?.premium || 0) > 0 ? 0.04 : 0; break; // luksus rośnie w hossie
+        case 'frogs': r.drift += quarterInYear >= 2 && quarterInYear <= 3 ? 0.05 : -0.02; break;      // sezon na żabie udka
+        case 'cocoa': r.bearDamp = 0.7; r.volMult *= 0.8; break;     // stabilna czekolada
+        case 'launder': r.drift += 0.08; r.volMult *= 1.2; break;    // wysoka marża prania (prowizja 10–20%), ryzyko wycieku
+        case 'loyal': r.drift += 0.02; r.volMult *= 0.7; r.bearDamp = 0.8; break; // państwowy monopol: stabilna dywidenda
         case 'defense': r.drift = 0.04; break;                       // kontrakty rosną z wydatkami na obronność
         case 'premiere': r.bearDamp = 0.6; break;                    // Pear: lojalni klienci, mniejszy spadek w recesji (hit albo flop co rok: applySpecialEvents)
         case 'summer': r.drift = quarterInYear >= 2 && quarterInYear <= 3 ? 0.12 : -0.04; break; // upały podbijają sprzedaż
@@ -218,6 +239,30 @@ function applySpecialEvents(issuer) {
     } else if (issuer.special === 'season' && q === 4) { // sezon filmowy / telewizyjny
         const hit = Math.random() < 0.5;
         issuer.price = Math.max(0.05, issuer.price * (hit ? 1 + getRandomInRange(0.04, 0.10) : 1 - getRandomInRange(0.04, 0.10)));
+    } else if (issuer.special === 'canopening' && q === 2) { // Surströmming: otwarcie puszki — skandal albo viral
+        const viral = Math.random() < 0.5;
+        issuer.price = Math.max(0.05, issuer.price * (viral ? 1 + getRandomInRange(0.08, 0.15) : 1 - getRandomInRange(0.10, 0.18)));
+        logEvent(`🌍 ${issuer.name}: otwarcie puszki kiszonego śledzia — ${viral ? 'viral w sieci, kurs rośnie' : 'skandal zapachowy, kurs spada'}.`, 'market');
+    } else if (issuer.special === 'vintage' && q === 3) { // Maison Champagnerie: winobranie
+        const roll = Math.random();
+        issuer.vintage = roll < 0.25 ? 'wyśmienite' : roll < 0.8 ? 'przeciętne' : 'słabe';
+        issuer.price = Math.max(0.05, issuer.price * (issuer.vintage === 'wyśmienite' ? 1 + getRandomInRange(0.06, 0.12) : issuer.vintage === 'słabe' ? 1 - getRandomInRange(0.05, 0.10) : 1));
+        logEvent(`🌍 ${issuer.name}: winobranie ${issuer.vintage}.`, 'market');
+    } else if (issuer.special === 'frogs' && q === 1 && Math.random() < 0.3) { // Grenouille: protesty ekologów
+        issuer.price = Math.max(0.05, issuer.price * (1 - getRandomInRange(0.03, 0.06)));
+        logEvent(`🌍 ${issuer.name}: protesty ekologów przeciw żabim udkom, kurs spada.`, 'market');
+    } else if (issuer.special === 'cocoa' && q === 1) { // Matterhornen: cena kakao
+        issuer.price = Math.max(0.05, issuer.price * (1 + getRandomInRange(-0.05, 0.04)));
+    } else if (issuer.special === 'launder') { // Waschmabank: prowizja od brudnej gotówki i ryzyko wycieku „Swiss Leaks”
+        issuer.price = Math.max(0.05, issuer.price * (1 + getRandomInRange(0.005, 0.015)));
+        if (macro.quarter - (issuer.leakQ ?? -99) > 8 && Math.random() < 0.04) {
+            issuer.leakQ = macro.quarter;
+            issuer.price = Math.max(0.05, issuer.price * (1 - getRandomInRange(0.30, 0.60)));
+            const text = `🌍 Swiss Leaks: kontrola ujawnia pranie pieniędzy w ${issuer.name}. Kurs spada o 30–60%, bank płaci karę.`;
+            logEvent(text, 'market');
+            if (typeof pushNews === 'function') pushNews(text, null);
+            if (getGdrHeld(issuer) > 0 && typeof addMail === 'function') addMail({ sender: 'PULS', subject: `🌍 ${issuer.name}: Swiss Leaks`, body: `${text}\n\nMasz ${formatNumberPl(getGdrHeld(issuer), 0)} akcji tego banku.`, importance: 3 });
+        }
     }
 }
 
@@ -290,6 +335,8 @@ function getCountriesSnapshot() {
         if (i.kind !== 'share') continue;
         const row = { p: i.price, h: i.history.slice(-COUNTRY_RULES.historyWeeks), q: i.listedQ, sp: Math.round(i.sp * 1e4) / 1e4, e: Math.round(i.ema * 1e3) / 1e3 };
         if (Object.keys(i.holders).length) row.o = i.holders;
+        if (i.leakQ !== undefined) row.lk = i.leakQ;
+        if (i.vintage) row.v = i.vintage;
         if (i.generated) row.g = { name: i.name, sector: i.sectors.map(s => s[0]), subsector: i.subsector, country: i.country, currency: i.currency };
         issuers[i.id] = row;
     }
@@ -321,6 +368,8 @@ function applyCountriesSnapshot(snapshot) {
         if (Number(row.p) > 0) issuer.price = Number(row.p);
         issuer.history = Array.isArray(row.h) ? row.h.map(Number).filter(Number.isFinite) : [issuer.price];
         issuer.listedQ = Number(row.q) || 0; issuer.sp = Number(row.sp) || 0; issuer.ema = Number(row.e) > 0 ? Number(row.e) : issuer.price;
+        if (Number.isFinite(Number(row.lk))) issuer.leakQ = Number(row.lk);
+        if (row.v) issuer.vintage = String(row.v);
         issuer.holders = {};
         for (const [holder, qty] of Object.entries(row.o || {})) if (Number(qty) > 0) issuer.holders[holder] = Number(qty);
     }

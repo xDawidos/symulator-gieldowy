@@ -94,7 +94,7 @@ COUNTRY_DEFS.SE = {
         { id: 'SAB', name: 'Saabre Defence', sector: 'Obronność', kind: 'normal', price: 190, special: 'defense' },
         { id: 'OFA', name: 'Östersjö Fiske AB', sector: 'Rybołówstwo', kind: 'normal', price: 70 },
         { id: 'VKF', name: 'Vattenkraft', sector: 'Energia', kind: 'state', price: 90, desc: 'Państwowa energetyka wodna.' },
-        { id: 'SYK', name: 'Systemkrogen', sector: 'Alkohole', kind: 'state', price: 110, desc: 'Państwowy monopol na sprzedaż alkoholu; stabilna, wysoka dywidenda.' }
+        { id: 'SYK', name: 'Systemkrogen', sector: 'Alkohole', kind: 'state', price: 110, special: 'loyal', desc: 'Państwowy monopol na sprzedaż alkoholu; stabilna, wysoka dywidenda.' }
     ]
 };
 

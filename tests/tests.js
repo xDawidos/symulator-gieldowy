@@ -12883,6 +12883,83 @@ group('0.16.3', () => {
         assertEq(JSON.stringify(exchangeLinks), links, 'stan wydarzeń wrócił');
         assertEq(checkWorldInvariants().length, 0, 'niezmienniki po wczytaniu');
     }));
+    // --- G13: spółki specjalne i prezesi krajowi ---
+    const specialWorld = ids => withLinks(() => { for (const id of ids) joinCountry(id); return null; });
+    const withQ = (q, fn) => { const saved = macro.quarter; macro.quarter = q; try { return fn(); } finally { macro.quarter = saved; } };
+
+    test('G13: Surströmming — otwarcie puszki w 2. kwartale roku: viral (+8–15%) albo skandal (−10–18%)', () => withLinks(() => {
+        joinCountry('SE'); const i = foreignIssuers.SSA, p0 = i.price;
+        withQ(6, () => withRandom(0.1, () => applySpecialEvents(i)));
+        assert(i.price / p0 >= 1.08 && i.price / p0 <= 1.15, `viral ${i.price / p0}`);
+        const p1 = i.price;
+        withQ(6, () => withRandom(0.9, () => applySpecialEvents(i)));
+        assert(i.price / p1 >= 0.82 && i.price / p1 <= 0.90, `skandal ${i.price / p1}`);
+        const p2 = i.price; withQ(5, () => withRandom(0.1, () => applySpecialEvents(i)));
+        assertEq(i.price, p2, 'poza 2. kwartałem nic się nie dzieje');
+    }));
+
+    test('G13: Maison Champagnerie — winobranie w 3. kwartale (rocznik), luksus rośnie w hossie', () => withLinks(() => {
+        joinCountry('FR'); const i = foreignIssuers.MCG, p0 = i.price;
+        withQ(3, () => withRandom(0.1, () => applySpecialEvents(i)));
+        assertEq(i.vintage, 'wyśmienite', 'rocznik'); assert(i.price > p0 * 1.05, 'dobre winobranie podbija kurs');
+        const p1 = i.price; withQ(7, () => withRandom(0.95, () => applySpecialEvents(i)));
+        assertEq(i.vintage, 'słabe', 'słabe winobranie'); assert(i.price < p1 * 0.95, 'słabe winobranie obniża kurs');
+        marketRegimes.FR.premium = 0.1; assertEq(withQ(2, () => getSpecialEffect(i)).drift - (getSpecialEffect(i).drift - 0.04), 0.04, 'hossa: dryf +4%');
+        marketRegimes.FR.premium = -0.1; assert(withQ(2, () => getSpecialEffect(i)).drift < 0.04, 'bessa: bez premii');
+    }));
+
+    test('G13: Grenouille & Fils — sezonowość i protesty ekologów (30% w 1. kwartale)', () => withLinks(() => {
+        joinCountry('FR'); const i = foreignIssuers.GRF;
+        const season = withQ(2, () => getSpecialEffect(i).drift), winter = withQ(4, () => getSpecialEffect(i).drift);
+        assert(season - winter > 0.06, `lato ${season} zima ${winter}`);
+        const p0 = i.price; withQ(5, () => withRandom(0.1, () => applySpecialEvents(i)));
+        assert(i.price < p0 * 0.97 && i.price > p0 * 0.93, 'protesty obniżają kurs o 3–6%');
+        const p1 = i.price; withQ(5, () => withRandom(0.5, () => applySpecialEvents(i)));
+        assertEq(i.price, p1, 'bez protestów (los powyżej 30%)');
+    }));
+
+    test('G13: Matterhornen — czekolada stabilna (tłumi spadki, niższa zmienność); Systemkrogen — monopol ze stabilną dywidendą', () => withLinks(() => {
+        joinCountry('CH'); joinCountry('SE');
+        const cocoa = getSpecialEffect(foreignIssuers.MTH), monopoly = getSpecialEffect(foreignIssuers.SYK);
+        assert(cocoa.bearDamp < 1 && cocoa.volMult < 1, 'kakao: spokojnie'); assert(monopoly.volMult < 1 && monopoly.drift > 0, 'monopol: stabilnie i z dywidendą');
+        const p0 = foreignIssuers.MTH.price; withQ(5, () => withRandom(0.99, () => applySpecialEvents(foreignIssuers.MTH)));
+        assert(Math.abs(foreignIssuers.MTH.price / p0 - 1) <= 0.05, 'zmiana ceny kakao do ±5%');
+    }));
+
+    test('G13: Waschmabank — rośnie na praniu, „Swiss Leaks” zbija kurs o 30–60% i ma przerwę 8 kwartałów', () => withLinks(() => {
+        joinCountry('CH'); const i = foreignIssuers.WSM;
+        assert(getSpecialEffect(i).drift >= 0.08, 'wysoka marża prania');
+        const p0 = i.price;
+        withQ(10, () => withRandom(0.001, () => applySpecialEvents(i)));
+        assert(i.leakQ === 10 && i.price < p0 * 0.75 && i.price > p0 * 0.35, `wyciek: ${i.price / p0}`);
+        const p1 = i.price; withQ(12, () => withRandom(0.001, () => applySpecialEvents(i)));
+        assert(i.price > p1, 'w czasie przerwy (kw. 12) bez kolejnego wycieku — tylko prowizja');
+        withQ(19, () => withRandom(0.001, () => applySpecialEvents(i)));
+        assertEq(i.leakQ, 19, 'po przerwie możliwy kolejny wyciek');
+        const snap = JSON.parse(JSON.stringify(getCountriesSnapshot()));
+        resetCountriesState(); initFxState(); applyCountriesSnapshot(snap);
+        assertEq(foreignIssuers.WSM.leakQ, 19, 'przerwa po wycieku wraca z zapisu');
+    }));
+
+    test('G13: prezesi krajowi — po 2 cechy na kraj, polskie 4, efekty danymi; spółka dostaje stałą cechę kraju, państwowa żadnej', () => {
+        for (const [country, list] of Object.entries(COUNTRY_CEO_TRAITS)) {
+            assertEq(list.length, 2, `${country}: dwie cechy`);
+            for (const id of list) { assert(ceoTraits[id]?.fx && ceoTraits[id].country === country, `${id}: cecha kraju ${country}`); }
+        }
+        for (const id of ['janusz_biznesu', 'szwagier_w_ministerstwie', 'polak_potrafi', 'cwaniak']) assert(ceoTraits[id]?.country === 'PL' && ceoTraits[id].fx, `${id}: polska cecha`);
+        for (const t of Object.values(ceoTraits)) if (t.fx) assert(Math.abs(t.fx.growth || 0) <= 0.05 && (t.fx.vol || 1) >= 0.7 && (t.fx.vol || 1) <= 1.3, `${t.name}: efekt w ryzach`);
+        withLinks(() => {
+            joinCountry('DE');
+            const a = foreignIssuers.STW, b = foreignIssuers.DBF;
+            assertEq(getIssuerCeoTrait(a), getIssuerCeoTrait(a), 'stała cecha'); assert(COUNTRY_CEO_TRAITS.DE.includes(getIssuerCeoTrait(a)), 'cecha niemiecka');
+            assertEq(getIssuerCeoTrait(b), null, 'spółka państwowa bez cechy prezesa');
+            let withOrdnung = Object.values(foreignIssuers).filter(i => i.country === 'DE' && getIssuerCeoTrait(i) === 'ordnung_muss_sein')[0];
+            if (withOrdnung) assert(getSpecialEffect(withOrdnung).volMult <= 0.85 * 1.2 + 1e-9, 'Ordnung obniża zmienność');
+        });
+        const a = { id: 'X', country: 'DE', special: null }, saved = COUNTRY_CEO_TRAITS.DE.slice();
+        COUNTRY_CEO_TRAITS.DE.splice(0, 2, 'ordnung_muss_sein', 'ordnung_muss_sein');
+        try { assertEq(withQ(2, () => getSpecialEffect(a).volMult), 0.85, 'Ordnung: zmienność ×0,85'); } finally { COUNTRY_CEO_TRAITS.DE.splice(0, 2, ...saved); }
+    });
     // --- koniec grupy 0.16.3 ---
 });
 
