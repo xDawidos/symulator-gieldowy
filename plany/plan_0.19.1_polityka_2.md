@@ -29,6 +29,7 @@ Cel: polityka dotyczy wszystkich otwartych krajów, partie się zmieniają, a gr
 1. **Partie w krajach obcych: stały profil z eventami** i zmianami programu (bez pełnej symulacji wyborów).
 2. **Programy socjalne wchodzą wcześniej, w 0.15.4 P7;** tu zostają nowe urzędy (O5).
 3. **Nepotyzm: najpierw poziom 2** (zasugerowanie spółce państwowej sprzedaży akcji funduszowi gracza); poziomy 3 i 4 w kolejnych krokach O4.
+4. **Uproszczone symulacje państw (zgłoszenie 2026-10-28):** inne państwa mają własne, uproszczone symulacje (gospodarka, budżet, partia rządząca, polityka zagraniczna) zamiast samego stałego profilu z decyzji 1; reagują na handel, kryzysy i działania gracza. Zakres i koszt czasu kroku ustalić po 0.16.7 (wspólny model spółek) i 0.19 (handel światowy).
 
 ## Zlecenie dla czatu designu
 

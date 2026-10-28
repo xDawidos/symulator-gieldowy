@@ -1,4 +1,4 @@
-# Plan 0.16.7 „Pełne spółki zagraniczne” (szkic zakresu; po 0.16.6)
+# Plan 0.16.7 „Pełne spółki zagraniczne” (szkic zakresu; PRZED wyborem kraju startowego z 0.16.6 S0)
 
 Źródło: decyzja użytkownika z 2026-10-28: spółki zagraniczne nie mogą być uproszczone, mają działać jak spółki z giełdy bazowej. Dziś (0.16.2–0.16.4) leżą poza `stocks`, bez bilansu i dywidend, zapis ≈ 210 B na spółkę. Szkic: przed startem przeczytać `countries*.js`, `companies.js`, `stocks`-pętlę kroku i `state.js`.
 
@@ -22,7 +22,12 @@ Spółka zagraniczna ma tę samą mechanikę co krajowa: bilans i wyniki, raport
 - Spółki państwowe nadal tylko na GPW (decyzja 5 z 0.16.6).
 
 ### F3. Limity spółek
-- Limit spółek na giełdę zagraniczną podnieść względem dzisiejszego (docelowo zbliżony do krajowego, z ewentualnym łagodnym podniesieniem bazy kosztem pomiaru), parametry w jednym miejscu; limit różnorodności sektorów (0.15.4) liczony na giełdę.
+- **Limit spółek zależy od wielkości kraju** (decyzja 2026-10-28): wskaźnik wielkości (PKB/kapitalizacja giełdy z `countries_data.js`) → limit na giełdę; duże rynki (US) najwyższy, małe (CZ) niski. Limit bazy ewentualnie lekko w górę po pomiarach. Parametry w jednym miejscu; limit różnorodności sektorów (0.15.4) liczony na giełdę.
+
+### F3b. Zegar giełd i godziny sesji (decyzja 2026-10-28)
+- Widok „czas na giełdach” jak w platformach forex: zegary analogowe z godziną w każdym mieście (Londyn, Nowy Jork, Sydney, Tokio, dalej Frankfurt, Praga, Warszawa) i pas godzin sesji na osi 24 h z linią „teraz” oraz podświetleniem otwartych giełd. Status czytelny tekstem („otwarta / zamknięta, otwiera się za X h”), kolor nigdy jedynym nośnikiem.
+- Dane: godziny sesji i strefa czasowa każdej giełdy w `countries_data.js`; reguła czas gry → godzina lokalna (zmiana czasu); handel poza sesją zablokowany lub z dopłatą (reguły 0.16.2). Stan sesji osobno od renderowania (`isMarketOpen(market, gameTime)`).
+- Miejsce w UI: okno rynków zagranicznych; po 0.16.5 także w Internecie. Wygląd: zlecenie dla czatu designu.
 
 ### F4. Wydajność i zapis
 - Budżet: czas kroku ≤ +X% względem 0.16.4, zapis ≤ +Y% (liczby ustalić w F0). Jeśli budżet przekroczony: aktualizacja spółek zagranicznych co kwartał z leniwym przeliczaniem nieobserwowanych.
@@ -35,4 +40,4 @@ Spółka zagraniczna ma tę samą mechanikę co krajowa: bilans i wyniki, raport
 
 1. To największa zmiana po 0.16.2 — prawdopodobny podział na F0–F2 (0.16.7) i F3–F5 (0.16.8).
 2. Przy N×M spółek rośnie czas kroku; zawieszanie przebiegów z 0.16.3 musi być wyjaśnione wcześniej (zadanie sesji 0.16.4).
-3. Zależność od 0.16.6 S0 (kraj startowy): ujednolicenie spółek krajowych i zagranicznych ułatwia S0 — rozważyć wykonanie F0–F1 przed S0.
+3. Kolejność (decyzja użytkownika): 0.16.7 przed 0.16.6 S0 (kraj startowy); reszta 0.16.6 (S1–S3) może iść przed lub po.

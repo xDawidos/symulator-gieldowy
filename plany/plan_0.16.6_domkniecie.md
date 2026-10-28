@@ -10,6 +10,8 @@
 4. **Połączenia giełd:** szansa zaczyna się od 8. kwartału (`fromQ` w `LINK_RULES`), ale **rośnie wyraźnie po powstaniu lotniska albo portu** (budowa infrastruktury z `city.js`); bez nich szansa niska i rosnąca powoli.
 5. **Państwo:** żadne spółki państwowe nie mogą przejść na giełdy inne niż GPW (patrz S2).
 
+> Kolejność (2026-10-28): S0 (kraj startowy) wykonać dopiero po 0.16.7 (pełne spółki zagraniczne, zegar giełd); S1–S3 mogą iść wcześniej.
+
 ## Zakres
 
 ### S0. Wybór kraju startowego
