@@ -1224,7 +1224,13 @@ async function oneRun(index) {
     let q = startQ;
     while (q < startQ + QUARTERS) {
         const t0 = performance.now();
-        while (w.eval('macro.quarter') === q) { w.__vt.advance(quarterMs / 10); await yieldNow(); }
+        let stuck = 0;
+        while (w.eval('macro.quarter') === q) {
+            // 0.16.4: okno wydarzenia (np. połączenie giełd) pauzuje grę — w przebiegu nikt go nie zamknie, więc wznawiamy; brak postępu = błąd, nie wieczne czekanie
+            if (w.eval('isGamePaused')) w.eval('togglePauseGame()');
+            w.__vt.advance(quarterMs / 10); await yieldNow();
+            if (++stuck > 5000) throw new Error('przebieg stoi w kwartale ' + (q - startQ) + ' (pauza: ' + w.eval('isGamePaused') + ')');
+        }
         msPerQuarter.push(performance.now() - t0);
         q = w.eval('macro.quarter');
         w.eval('__sim.sample()');

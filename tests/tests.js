@@ -13197,6 +13197,24 @@ group('0.16.3', () => {
         airportState.forced = true; macro.quarter = 7;
         try { assertEq(withRandom(0, () => processLinksQuarterly()), null, 'przed 8. kwartałem nic'); } finally { airportState.forced = false; }
     }));
+
+    // --- 0.16.4: zawieszanie przebiegów — okno połączenia giełd pauzuje grę, symulacja musi ją wznawiać ---
+    test('połączenie giełd z interfejsem pauzuje grę i wznowienie (jak w przebiegu) odblokowuje zegar', () => withLinks(() => {
+        const toast = document.getElementById('toast-notification') || Object.assign(document.body.appendChild(document.createElement('div')), { id: 'toast-notification' });
+        const wasPaused = isGamePaused;
+        try {
+            if (isGamePaused) togglePauseGame();
+            onLinkEvent({ kind: 'merged', members: ['DE'], text: 'test', drop: 0 });
+            assert(isGamePaused, 'okno wydarzenia zatrzymuje grę (przyczyna zawieszenia przebiegów)');
+            togglePauseGame();
+            assert(!isGamePaused, 'wznowienie działa');
+        } finally {
+            if (isGamePaused !== wasPaused) togglePauseGame();
+            if (!document.querySelector('#toast-notification')?.textContent && toast.parentNode === document.body && !toast.className) toast.remove();
+            const m = document.getElementById('link-event-modal'); if (m) m.style.display = 'none';
+        }
+    }));
+
     // --- koniec grupy 0.16.3 ---
 });
 
