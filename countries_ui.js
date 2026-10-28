@@ -121,7 +121,7 @@ const LINK_KIND_LABELS = { merged: 'przejęta przez naszą giełdę', intl: 'gie
 /** Karta stanu: połączone kraje, giełda międzynarodowa, wspólnota europejska, szansa kolejnego wydarzenia słowami. */
 function renderLinksCard() {
     const linked = getLinkedCountries();
-    const chance = exchangeLinks.chance;
+    const chance = getEffectiveLinkChance();
     const hint = chance >= 0.16 ? 'wysoka' : chance >= 0.04 ? 'rośnie' : 'niska';
     const rows = linked.map(id => `<li>${flagIcon(id, 12)} <strong>${escapeHtml(COUNTRY_DEFS[id].name)}</strong> — ${LINK_KIND_LABELS[countryState[id].link]}; bez biletu, prowizja ${formatNumberPl(LINK_RULES.domesticCommission * 100, 2)}%</li>`).join('');
     const intl = exchangeLinks.intl ? `<p class="text-sm">Giełda międzynarodowa: ${['PL', ...exchangeLinks.intl.members.filter(m => m !== 'PL')].map(m => escapeHtml(m === 'PL' ? 'Polska' : COUNTRY_DEFS[m]?.name || m)).join(', ')}.</p>` : '';

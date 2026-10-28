@@ -13095,6 +13095,17 @@ group('0.16.3', () => {
         try { assert(botStakeCap(foreignIssuers.PIV, bot) <= 0.54 + 1e-9, 'bot poniżej progu kraju'); } finally { COUNTRY_DEFS.CZ.oversight.callThreshold = saved; }
         assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
     }));
+    test('G12: lotnisko albo port morski zwiększa szansę połączenia giełd (×3), przed 8. kwartałem dalej nic', () => withLinks(() => {
+        const base = getEffectiveLinkChance();
+        assertEq(base, 0.01, 'bez infrastruktury');
+        airportState.forced = true;
+        assertEq(getEffectiveLinkChance(), 0.03, 'z lotniskiem ×3');
+        airportState.forced = false; assertEq(getEffectiveLinkChance(), 0.01, 'bez lotniska');
+        ensureSpecialProjects(); specialProjects.completed.unshift({ templateId: 'seaport', timed: false });
+        try { assertEq(getEffectiveLinkChance(), 0.03, 'z portem morskim ×3'); } finally { specialProjects.completed.shift(); }
+        airportState.forced = true; macro.quarter = 7;
+        try { assertEq(withRandom(0, () => processLinksQuarterly()), null, 'przed 8. kwartałem nic'); } finally { airportState.forced = false; }
+    }));
     // --- koniec grupy 0.16.3 ---
 });
 

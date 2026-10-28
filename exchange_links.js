@@ -12,6 +12,7 @@
 
 const LINK_RULES = {
     startChance: 0.01, maxChance: 0.32, gapQ: 2, fromQ: 8,
+    infraMult: 3,                   // lotnisko albo port morski: szansa połączenia rośnie wyraźnie (×3 przy losowaniu)
     weights: { merged: 0.5, intl: 0.3, taken: 0.2 },
     slowJoinChance: 0.12,           // na kwartał: giełda międzynarodowa przyjmuje kolejny kraj
     maxIntlAtStart: 2,              // z nami i krajem X najwyżej 2 inne
@@ -38,6 +39,11 @@ function getLinkCandidates() { return Object.keys(COUNTRY_DEFS).filter(id => !is
 function countEuropeanJoined() { return LINK_RULES.europe.filter(id => isCountryJoined(id)).length; }
 function isEuropeanCommunity() { return Boolean(exchangeLinks.community); }
 /** Wariant B: GPW pobiera od notowanych spółek podwyższone opłaty (mnożnik do opłaty z finance.js). */
+/** Lotnisko albo port morski (megaprojekty miasta) już stoją. */
+function hasLinkInfrastructure() {
+    return (typeof isAirportBuilt === 'function' && isAirportBuilt()) || (typeof specialProjects === 'object' && Boolean(specialProjects?.completed?.some(p => !p.timed && p.templateId === 'seaport')));
+}
+function getEffectiveLinkChance() { return Math.min(1, exchangeLinks.chance * (hasLinkInfrastructure() ? LINK_RULES.infraMult : 1)); }
 function getListingFeeBoost() { return exchangeLinks.takenBy ? LINK_RULES.listingFeeMult : 1; }
 
 /** Podpina kraj do naszej giełdy (kraj niedołączony najpierw dołącza). Zwraca true, gdy kraj jest teraz połączony. */
@@ -128,7 +134,7 @@ function processLinksQuarterly() {
         }
     }
     if (q < LINK_RULES.fromQ || q - exchangeLinks.lastQ <= LINK_RULES.gapQ) return null;
-    if (Math.random() < exchangeLinks.chance) {
+    if (Math.random() < getEffectiveLinkChance()) {
         const entry = runLinkEvent();
         if (entry) { exchangeLinks.chance = LINK_RULES.startChance; exchangeLinks.lastQ = q; return entry; }
     }
