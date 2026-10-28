@@ -13392,6 +13392,21 @@ group('0.16.3', () => {
         } finally { delete marginMarkets.oil; Object.assign(marginMarkets, savedMarkets); resetMarginState(); }
     }));
 
+
+    // --- G22: interfejs forexu ---
+    test('G22: zakładka Forex — przed drugim rynkiem komunikat, potem formularz, tabela pozycji ze słowem stanu (nie tylko kolor) i zamknięcie', () => withLinks(() => {
+        startFund(2_000_000);
+        assert(renderForexTab().includes('odblokuje drugi rynek'), 'komunikat bez rynku');
+        joinCountry('DE');
+        const html = renderForexTab(); assert(html.includes('id="fx-base"') && html.includes('Brak otwartych pozycji') && html.includes('margin call'), 'formularz i opis');
+        const r = openForexPosition('EUR/USD', 1, 100_000, 10).position;
+        const withPos = renderForexTab(); assert(withPos.includes('EUR/USD') && withPos.includes('bezpieczna') && withPos.includes('1:10'), 'wiersz pozycji');
+        const e0 = fxRates.EUR; fxRates.EUR = e0 * 0.975;
+        assert(renderForexTab().includes('margin call') && /▼/.test(renderForexTab()), 'stan słowem i strzałką przy stracie');
+        fxRates.EUR = e0;
+        assert(typeof closeMarginPosition(r.id).ok === 'boolean' && !renderForexTab().includes('EUR/USD</td>'), 'po zamknięciu brak wiersza');
+    }));
+
     // --- koniec grupy 0.16.3 ---
 });
 

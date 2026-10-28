@@ -119,3 +119,47 @@ function checkMarginInvariants() {
     }
     return problems;
 }
+
+// --- Interfejs: zakładka Forex w kantorze (G22) ---
+let forexForm = { base: 'EUR', quote: 'USD', side: 1, notional: 50000, leverage: 5 };
+function renderForexTab() {
+    if (!isForexAvailable()) return '<p class="text-muted">Forex odblokuje drugi rynek: gdy otworzysz giełdę obcego kraju, pojawią się pary walutowe z dźwignią do 1:10.</p>';
+    const codes = FOREX_CODES(), f = forexForm;
+    const opts = sel => codes.map(c => `<option value="${c}" ${c === sel ? 'selected' : ''}>${c}</option>`).join('');
+    const notional = getMarginNotional(), cap = MARGIN_RULES.fundLeverageCap * getFundAssets();
+    const rows = getMarginPositions('forex').map(p => {
+        const equity = getMarginEquity(p), cover = getMarginCoverage(p), pnl = equity - p.deposit;
+        const state = cover < MARGIN_RULES.closeBelow + 0.1 ? 'ryzyko zamknięcia' : cover < MARGIN_RULES.warnBelow ? 'margin call' : 'bezpieczna';
+        return `<tr><td>${escapeHtml(p.instrument)}</td><td>${p.side > 0 ? 'długa' : 'krótka'}</td><td class="text-right">${formatZl(p.notional, 0)}</td><td class="text-right">1:${p.leverage}</td>
+            <td class="text-right">${formatZl(p.deposit, 0)}</td><td class="text-right">${formatNumberPl(p.entry, 4)} → ${formatNumberPl(getMarginPrice(p), 4)}</td>
+            <td class="text-right">${pnl >= 0 ? '▲ +' : '▼ '}${formatZl(pnl, 0)}</td><td class="text-right">${Math.round(cover * 100)}% (${state})</td>
+            <td><button class="btn-ghost" onclick="forexUiClose(${p.id})">Zamknij</button></td></tr>`;
+    }).join('');
+    return `<p class="text-sm text-muted">Para A/B pokazuje, ile B kosztuje 1 A. Pozycja długa zyskuje, gdy A drożeje wobec B, krótka — gdy tanieje. Depozyt = wartość / dźwignia, pobierany z gotówki funduszu. Poniżej ${Math.round(MARGIN_RULES.warnBelow * 100)}% depozytu dostajesz ostrzeżenie (margin call), poniżej ${Math.round(MARGIN_RULES.closeBelow * 100)}% pozycja zamyka się sama. Strata nie przekroczy depozytu.</p>
+        <div class="kantor-form"><label for="fx-base" class="text-sm">Para</label>
+            <select id="fx-base" onchange="forexUiSet()">${opts(f.base)}</select> / <select id="fx-quote" onchange="forexUiSet()">${opts(f.quote)}</select>
+            <label for="fx-side" class="text-sm">Kierunek</label><select id="fx-side" onchange="forexUiSet()"><option value="1" ${f.side > 0 ? 'selected' : ''}>długa</option><option value="-1" ${f.side < 0 ? 'selected' : ''}>krótka</option></select>
+            <label for="fx-notional" class="text-sm">Wartość pozycji (zł)</label><input id="fx-notional" type="number" min="${MARGIN_RULES.minNotional}" step="1000" value="${f.notional}" onchange="forexUiSet()">
+            <label for="fx-leverage" class="text-sm">Dźwignia</label><select id="fx-leverage" onchange="forexUiSet()">${Array.from({ length: MARGIN_RULES.maxLeverage }, (_, i) => `<option value="${i + 1}" ${i + 1 === f.leverage ? 'selected' : ''}>1:${i + 1}</option>`).join('')}</select>
+            <p class="text-sm" id="fx-preview" aria-live="polite">Depozyt ${formatZl(f.notional / f.leverage, 0)}, spread ${formatZl(f.notional * MARGIN_RULES.entrySpread, 0)}, koszt utrzymania ok. ${formatZl(f.notional * (1 - 1 / f.leverage) * MARGIN_RULES.holdingCostYear, 0)} rocznie.</p>
+            <div class="btn-row"><button class="btn-primary" onclick="forexUiOpen()">Otwórz pozycję</button></div></div>
+        <p class="text-sm text-muted">Pozycje: ${formatZl(notional, 0)} z limitu ${formatZl(cap, 0)} (${MARGIN_RULES.fundLeverageCap}× aktywa funduszu).</p>
+        ${rows ? `<table class="asset-mini-table w-full"><thead><tr><th>Para</th><th>Kierunek</th><th class="text-right">Wartość</th><th class="text-right">Dźwignia</th><th class="text-right">Depozyt</th><th class="text-right">Kurs</th><th class="text-right">Wynik</th><th class="text-right">Kapitał / depozyt</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="text-muted">Brak otwartych pozycji.</p>'}`;
+}
+function forexUiSet() {
+    const v = id => document.getElementById(id)?.value;
+    forexForm = { base: v('fx-base') || forexForm.base, quote: v('fx-quote') || forexForm.quote, side: Number(v('fx-side')) < 0 ? -1 : 1, notional: Math.max(0, Number(v('fx-notional')) || 0), leverage: Math.min(MARGIN_RULES.maxLeverage, Math.max(1, Number(v('fx-leverage')) || 1)) };
+    if (typeof renderKantor === 'function') renderKantor();
+}
+function forexUiOpen() {
+    const f = forexForm, r = openForexPosition(`${f.base}/${f.quote}`, f.side, f.notional, f.leverage);
+    showToast(r.ok ? `Otwarto pozycję ${f.side > 0 ? 'długą' : 'krótką'} ${f.base}/${f.quote}: depozyt ${formatZl(r.deposit, 0)}.` : r.reason, r.ok ? 'success' : 'warning');
+    if (typeof renderKantor === 'function') renderKantor();
+    if (typeof updateUI === 'function') updateUI();
+}
+function forexUiClose(id) {
+    const r = closeMarginPosition(id);
+    showToast(r.ok ? `Pozycja zamknięta: wynik ${r.pnl >= 0 ? '+' : ''}${formatZl(r.pnl, 0)}.` : r.reason, r.ok ? (r.pnl >= 0 ? 'success' : 'info') : 'warning');
+    if (typeof renderKantor === 'function') renderKantor();
+    if (typeof updateUI === 'function') updateUI();
+}
