@@ -172,11 +172,60 @@ COUNTRY_DEFS.TW = {
     oversight: { name: 'FSC', callThreshold: 0.75, level: 2 },
     labour: { wages: 0.9, rights: 'standard', unionMult: 0.4, shadow: 0, note: 'standard' },
     companies: [
-        { id: 'KWS', name: 'Krzemowa Wyspa Semiconductor', sector: 'Technologia', subsector: 'Półprzewodniki', kind: 'giant', price: 700, desc: 'Gigant półprzewodników, dostawca dla AI.' },
+        { id: 'KWS', name: 'Krzemowa Wyspa Semiconductor', sector: 'Technologia', subsector: 'Półprzewodniki', kind: 'giant', price: 700, special: 'tension', desc: 'Gigant półprzewodników, dostawca dla AI; napięcie Chiny–Tajwan.' },
         { id: 'FXK', name: 'Foxkon', sector: 'Technologia', kind: 'normal', price: 110, desc: 'Montaż elektroniki.' },
         { id: 'ASU', name: 'Asuss', sector: 'Technologia', kind: 'normal', price: 340 },
         { id: 'FMC', name: 'Formoza Chemia', sector: 'Chemia', kind: 'normal', price: 90 },
         { id: 'BBT', name: 'Bubble Tea Taipei', sector: 'Żywność', kind: 'normal', price: 55 },
         { id: 'TPF', name: 'Taipower Formosa', sector: 'Energia', kind: 'state', price: 45, desc: 'Państwowa energetyka.' }
+    ]
+};
+
+COUNTRY_DEFS.CN = {
+    id: 'CN', name: 'Chiny', currency: 'CNY', region: 'AS', rho: 0.45, rateMean: 0.03,
+    operator: { id: 'SHG', name: 'Giełda w Szanghaju (SHG)', commission: 0.005 },
+    oversight: { name: 'CSRC', callThreshold: 0.66, level: 1 },
+    labour: { wages: 0.6, rights: 'liberalne', unionMult: 0.2, shadow: 5, note: 'związki państwowe' },
+    companies: [
+        { id: 'ALB', name: 'Alibaka Group', sector: ['Technologia', 'Usługi'], kind: 'giant', price: 90, desc: 'Gigant e-commerce.' },
+        { id: 'TNC', name: 'Tencentyl', sector: ['Technologia', 'Media'], kind: 'giant', price: 380, desc: 'Gigant komunikatorów i gier.' },
+        { id: 'HUI', name: 'Huiei Telecom', sector: 'Technologia', kind: 'normal', price: 60, desc: 'Ryzyko sankcji.' },
+        { id: 'BYD', name: 'BuildYourDream Motors', sector: 'Motoryzacja', kind: 'normal', price: 110, desc: 'Auta elektryczne.' },
+        { id: 'WMC', name: 'Wielcy Murarze Chińscy', sector: 'Budowlany', kind: 'normal', price: 24 },
+        { id: 'FSI', name: 'Fabryka Świata Industries', sector: 'Przemysł', kind: 'normal', price: 40 },
+        { id: 'SRE', name: 'Smok Rare Earths', sector: 'Przemysł', subsector: 'Przemysł ciężki', kind: 'normal', price: 75, desc: 'Metale ziem rzadkich.' },
+        { id: 'RPL', name: 'RicePlantators', sector: 'Żywność', kind: 'normal', price: 12, desc: 'Start na giełdzie brązowej.' },
+        { id: 'PND', name: 'PanDa Bank', sector: 'Bankowość', subsector: 'Bank komercyjny', kind: 'normal', price: 8, desc: 'Parabank: wysokie oprocentowanie lokat, ryzyko upadku jak Amber Gold.' },
+        { id: 'TTM', name: 'TikTak Media', sector: 'Media', kind: 'giant', price: 120, desc: 'Gigant krótkich filmów.' },
+        { id: 'JDL', name: 'Jedwabn Logistyka', sector: 'Usługi', kind: 'normal', price: 30 },
+        { id: 'HYN', name: 'Herbata Yunnan', sector: 'Żywność', subsector: 'Herbata', kind: 'normal', price: 55 },
+        { id: 'DAJ', name: 'Daj', sector: 'Żywność', kind: 'normal', price: 18, desc: 'Sprzedaż jaj.' },
+        { id: 'PSE', name: 'Państwowa Sieć Energetyczna', sector: 'Energia', kind: 'state', price: 14, desc: 'Państwowa energetyka.' },
+        { id: 'CKN', name: 'Chińska Kolej Narodowa', sector: 'Budowlany', kind: 'state', price: 9, desc: 'Państwowa kolej.' },
+        { id: 'LBR', name: 'Ludowy Bank Rolny', sector: 'Bankowość', subsector: 'Bank komercyjny', kind: 'state', price: 5, desc: 'Państwowy bank rolny.' },
+        { id: 'SNN', name: 'Sinochem Narodowy', sector: 'Chemia', kind: 'state', price: 22, desc: 'Państwowy koncern chemiczny.' }
+    ]
+};
+
+COUNTRY_DEFS.IN = {
+    id: 'IN', name: 'Indie', currency: 'INR', region: 'AS', rho: 0.5, rateMean: 0.065,
+    operator: { id: 'BSE', name: 'Giełda w Bombaju (BSE)', commission: 0.005 },
+    oversight: { name: 'SEBI', callThreshold: 0.66, level: 2 },
+    labour: { wages: 0.3, rights: 'liberalne', unionMult: 0.8, shadow: 10, note: 'duża szara strefa' },
+    companies: [
+        { id: 'CMS', name: 'Curry Masala Ltd', sector: 'Żywność', kind: 'normal', price: 900, desc: 'Ceny przypraw, sezon monsunowy.' },
+        { id: 'BWS', name: 'Bollywood Studios', sector: 'Media', niche: 'Rozrywka', kind: 'normal', price: 650, desc: 'Co kwartał premiera: hit albo klapa.' },
+        { id: 'HSR', name: 'HelloSir!', sector: 'Technologia', kind: 'giant', price: 1500, desc: 'Gigant IT (outsourcing).' },
+        { id: 'GNG', name: 'GangesGroup', sector: 'Medycyna', niche: 'Farmaceutyki', kind: 'normal', price: 1100, desc: 'Leki generyczne.' },
+        { id: 'MTA', name: 'Mata Group', sector: ['Przemysł', 'Motoryzacja'], kind: 'normal', price: 2400 },
+        { id: 'RLJ', name: 'Relajans Industries', sector: ['Energia', 'Przemysł'], kind: 'normal', price: 2800 },
+        { id: 'BOB', name: 'Bank of Bharat', sector: 'Bankowość', subsector: 'Bank komercyjny', kind: 'normal', price: 700 },
+        { id: 'IEX', name: 'Indian Express', sector: 'Usługi', kind: 'normal', price: 600 },
+        { id: 'TMH', name: 'Taj Mahal Hotels', sector: 'Turystyka', kind: 'normal', price: 1900 },
+        { id: 'KRK', name: 'Karakorum', sector: 'Obronność', kind: 'normal', price: 1500 },
+        { id: 'IKP', name: 'Indyjskie Koleje Państwowe', sector: 'Usługi', kind: 'state', price: 450, desc: 'Państwowa kolej.' },
+        { id: 'WGI', name: 'Węgiel Indii', sector: 'Przemysł', kind: 'state', price: 380, desc: 'Państwowe kopalnie węgla.' },
+        { id: 'NRG', name: 'Narodowa Ropa i Gaz Indii', sector: 'Energia', kind: 'state', price: 260, desc: 'Państwowy koncern paliwowy.' },
+        { id: 'NUB', name: 'Narodowe Ubezpieczenia Bharat', sector: 'Bankowość', subsector: 'Bank komercyjny', kind: 'state', price: 520, desc: 'Państwowy ubezpieczyciel.' }
     ]
 };

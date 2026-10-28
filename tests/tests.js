@@ -13232,6 +13232,35 @@ group('0.16.3', () => {
         assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
     }));
 
+
+    // --- G18b: Chiny i Indie, napięcie Chiny–Tajwan ---
+    test('G18b: CN 13+4, IN 10+4; symbole unikalne, giganci zgodni z kwitami, sektory istnieją', () => withLinks(() => {
+        const expected = { CN: [13, 4], IN: [10, 4] };
+        for (const [id, [normal, state]] of Object.entries(expected)) {
+            const def = COUNTRY_DEFS[id];
+            assertEq(def.companies.filter(c => c.kind !== 'state').length, normal, `${id}: zwykłe`);
+            assertEq(def.companies.filter(c => c.kind === 'state').length, state, `${id}: państwowe`);
+            for (const c of def.companies) for (const sec of [].concat(c.sector)) assert(SECTORS[sec], `${c.id}: sektor ${sec}`);
+            joinCountry(id); assert(isCountryJoined(id), `${id}: dołączony`);
+        }
+        const seen = new Map();
+        for (const def of Object.values(COUNTRY_DEFS)) for (const c of def.companies) {
+            assert(!seen.has(c.id), `symbol ${c.id} powtórzony (${seen.get(c.id)} i ${def.id})`); seen.set(c.id, def.id);
+            if (c.kind === 'giant') assertEq(FOREIGN_GIANTS.find(g => g.id === c.id)?.price, c.price, `${c.id}: kwit z tą samą ceną`);
+        }
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+
+    test('G18b: napięcie Chiny–Tajwan obniża KWS o 30% i półprzewodniki na świecie, potem 8 kwartałów przerwy', () => withLinks(() => {
+        joinCountry('TW');
+        const kws = foreignIssuers.KWS, p0 = kws.price;
+        withRandom(0, () => applySpecialEvents(kws));
+        assert(Math.abs(kws.price / p0 - 0.7) < 1e-9, `KWS −30% (${kws.price / p0})`);
+        assert(sectorShocks.some(s => s.subsector === 'Półprzewodniki' && s.target < 0), 'szok półprzewodników');
+        const p1 = kws.price; withRandom(0, () => applySpecialEvents(kws));
+        assertEq(kws.price, p1, 'przerwa po zdarzeniu');
+    }));
+
     // --- koniec grupy 0.16.3 ---
 });
 

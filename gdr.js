@@ -17,6 +17,7 @@ const FOREIGN_GIANTS = [
     { id: 'ARS', name: 'Araska Corp.', country: 'JP', currency: 'JPY', sector: 'Przemysł', price: 5200 },
     { id: 'ALB', name: 'Alibaka Group', country: 'CN', currency: 'CNY', sector: 'Technologia', price: 90 },
     { id: 'TNC', name: 'Tencentyl', country: 'CN', currency: 'CNY', sector: 'Technologia', price: 380 },
+    { id: 'TTM', name: 'TikTak Media', country: 'CN', currency: 'CNY', sector: 'Media', price: 120 },
     { id: 'LVT', name: 'Luxe Vuitonnet', country: 'FR', currency: 'EUR', sector: 'Dobra konsumpcyjne', price: 640 },
     { id: 'IKJ', name: 'IKEJA', country: 'SE', currency: 'SEK', sector: 'Dobra konsumpcyjne', price: 420 },
     { id: 'ROV', name: 'Rochevartis Pharma', country: 'CH', currency: 'CHF', sector: 'Medycyna', price: 105 },

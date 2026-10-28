@@ -256,6 +256,15 @@ function applySpecialEvents(issuer) {
         logEvent(`🌍 ${issuer.name}: protesty ekologów przeciw żabim udkom, kurs spada.`, 'market');
     } else if (issuer.special === 'cocoa' && q === 1) { // Matterhornen: cena kakao
         issuer.price = Math.max(0.05, issuer.price * (1 + getRandomInRange(-0.05, 0.04)));
+    } else if (issuer.special === 'tension') { // KWS: napięcie Chiny–Tajwan — kurs −30%, półprzewodniki w dół na świecie (linia lokalna, nie piąta linia kryzysu)
+        if (macro.quarter - (issuer.leakQ ?? -99) > 8 && Math.random() < 0.03) {
+            issuer.leakQ = macro.quarter;
+            issuer.price = Math.max(0.05, issuer.price * 0.7);
+            const text = '🌍 Napięcie Chiny–Tajwan: blokada cieśniny uderza w dostawy chipów. Kurs KWS spada o 30%, półprzewodniki tanieją na całym świecie.';
+            logEvent(text, 'market');
+            if (typeof pushNews === 'function') pushNews(text, null);
+            if (typeof addSectorShock === 'function') for (const country of [null, ...getJoinedCountries()]) addSectorShock('Technologia', -0.08, { subsector: 'Półprzewodniki', holdQ: 2, fadeQ: 3, country });
+        }
     } else if (issuer.special === 'launder') { // Waschmabank: prowizja od brudnej gotówki i ryzyko wycieku „Swiss Leaks”
         issuer.price = Math.max(0.05, issuer.price * (1 + getRandomInRange(0.005, 0.015)));
         if (macro.quarter - (issuer.leakQ ?? -99) > 8 && Math.random() < 0.04) {
