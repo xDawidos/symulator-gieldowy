@@ -44,3 +44,7 @@ Wcześniejsze serie (k64_none 12,6 ± 5,1; k64_10 9,3 ± 3,4) były liczone na k
 - Reguły nie zmieniono: łagodzenie wariantu B to zmiana projektu z planu — czeka na decyzję (łagodniejszy spadek 3–8% / zostawić jako zamierzony koszt / seria 24 gier).
 - **PanDa 12/12:** zgodne z mechaniką parabanku z 0.11 (upadek zawsze, termin ukryty 3–8 kw.); przy Chinach scenariusz jest przewidywalny. Opcja: szansa przetrwania (np. 30%) — czeka na decyzję.
 - **Odmowy forexu:** powód ustalony — „najmniejsza pozycja to 1000 zł”: fundusz w symulacji ma 2–2,5 tys. zł aktywów, więc 40% to < 1000 zł. Artefakt presetu, nie błąd.
+
+## Decyzje po dochodzeniu (z sesji „Reszta wersji 0.16.x”, nie od użytkownika)
+- **Wariant B bez zmian:** spadek 5–15% zostaje jako zamierzony koszt zdarzenia, bez dłuższej serii. **Pomiar GIG z krajami w 0.17.1 ma porównywać gry z przejęciem naszej giełdy i bez niego osobno** (CAGR od końca do końca jest wrażliwy na moment spadku).
+- **PanDa Bank: 30% szansy przetrwania** (`PANDA_SURVIVE_CHANCE`, state.js). Jedna ocena przy pierwszym wyzwoleniu upadku (termin 3–8 kw. albo panika po dużej sprzedaży): z p = 0,3 bank przetrwa i dalej działa **bez ryzyka upadku** (prostsza wersja: bez kolejnych ocen); w przeciwnym razie upada jak dotąd (śledztwo → policja → ucieczka). Parabanki krajowe upadają zawsze. Reszta mechaniki 0.11 bez zmian. Test: „PanDa Bank przeżywa ocenę upadku z szansą 30%”.
