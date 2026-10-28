@@ -32,3 +32,15 @@ Wcześniejsze serie (k64_none 12,6 ± 5,1; k64_10 9,3 ± 3,4) były liczone na k
 - Do 0.16.6 (bez zmian): Waschmabank poza nadzorem, wezwanie/kary przy progu, Bayer kupujący waluty, dźwignia Wilka, złota akcja Gutzwillera.
 - E6: filtr „kraje” jest dziś pusty (wszystkie spółki mają PL); opłata minimalna płacona najwyżej do wysokości gotówki spółki (bez zaległości i wycofania za długi); wpływ E6 na GIG osobno nie mierzony.
 - Zawieszenie notowań PanDa przeżywa zapis, ale parabank w fazie otwarcia po wczytaniu zależy od istnienia spółki PND (po ucieczce — pole `phase: 'gone'`).
+
+## Dochodzenie: spadek GIG z krajami (12 gier × 27 kw. na serię)
+| Seria | GIG średnia ± odch. |
+|---|---|
+| `none` (bez krajów) | 11,7% ± 3,9 (powtórka 12,6 ± 5,1) |
+| `kraje-10` (10 od startu) | 8,8% ± 3,0 (powtórka 9,3 ± 3,4) |
+| `kraje-10-izol` (bez „taken” i bez wejścia Santosa) | 10,2% ± 4,8 |
+| `kraje-stopniowo` (co 2 kw. od 2., jak w grze; „taken” w 11/12 gier) | 8,2% ± 4,8 |
+- Spadek **nie jest artefaktem presetu** (stopniowe otwieranie daje 8,2%). Przejęcie naszej giełdy przez obcą (wariant B: −5…−15% na wszystkie sektory, zamierzone w planie) tłumaczy ok. 1,5–2 pp; reszta (Santos, zarażanie) mieści się w szumie serii (błąd średniej ≈ 1,4 pp) — nie rozdzielona. CAGR liczony od końca do końca jest wrażliwy na moment spadku.
+- Reguły nie zmieniono: łagodzenie wariantu B to zmiana projektu z planu — czeka na decyzję (łagodniejszy spadek 3–8% / zostawić jako zamierzony koszt / seria 24 gier).
+- **PanDa 12/12:** zgodne z mechaniką parabanku z 0.11 (upadek zawsze, termin ukryty 3–8 kw.); przy Chinach scenariusz jest przewidywalny. Opcja: szansa przetrwania (np. 30%) — czeka na decyzję.
+- **Odmowy forexu:** powód ustalony — „najmniejsza pozycja to 1000 zł”: fundusz w symulacji ma 2–2,5 tys. zł aktywów, więc 40% to < 1000 zł. Artefakt presetu, nie błąd.
