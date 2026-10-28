@@ -76,6 +76,7 @@ function runLinkEvent(kind = pickLinkKind(), country = null) {
     const name = COUNTRY_DEFS[x].name, ex = COUNTRY_DEFS[x].operator.name;
     let text;
     if (kind === 'merged') {
+        if (typeof spawnBayerBot === 'function' && !aiCompetitors.some(b => b.id === 'fb_bayer')) spawnBayerBot(x); // pierwsze przejęcie giełdy przez naszą
         text = `Nasza giełda przejmuje giełdę ${ex}: spółki kraju ${name} są u nas notowane bez biletu, z prowizją krajową.`;
     } else if (kind === 'intl') {
         for (let i = getRandomIntInRange(0, LINK_RULES.maxIntlAtStart); i > 0; i--) {

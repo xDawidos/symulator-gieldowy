@@ -535,7 +535,14 @@ function sellForeignShares(issuerId, quantity) {
 const FOREIGN_BOTS = [
     { id: 'fb_santos', name: 'Michael „Dad” Santos', country: 'US', style: 'ideal', cash: { USD: 12000 }, enterHome: true },
     { id: 'fb_kozel', name: 'Peter „Lech” Kozel', country: 'CZ', style: 'czech', cash: { EUR: 4000, CZK: 80000 }, reserve: 0.2, favorite: 'PIV', also: ['DE'] },
-    { id: 'fb_vogel', name: 'Heinrich „Wieloryb” Vogel', country: 'DE', style: 'stable', cash: { EUR: 15000 }, avoidHome: true }
+    { id: 'fb_vogel', name: 'Heinrich „Wieloryb” Vogel', country: 'DE', style: 'stable', cash: { EUR: 15000 }, avoidHome: true },
+    // 0.16.3 G14a: Szwajcaria — tylko banki, „neutralność” (nie sprzedaje w panice, w bessie dokupuje), rezerwa w CHF, lubi Waschmabank
+    { id: 'fb_gutz', name: 'Gregor „Bankier” Gutzwiller', country: 'CH', style: 'banker', cash: { CHF: 15000 }, reserve: 0.3, favorite: 'WSM' },
+    // Szwecja — agresywny, kupuje cokolwiek (także w innych krajach, do których ma dostęp)
+    { id: 'fb_wiking', name: 'Olaf „Wiking” Bergstrom', country: 'SE', style: 'viking', cash: { SEK: 40000, EUR: 2000 }, spend: 0.45 },
+    // Dynamiczne (bez kraju startowego): wspólnota europejska i pierwsze przejęcie giełdy przez naszą
+    { id: 'fb_euro', name: 'Jean-Pierre „Ruletka” Bonvivant', country: null, style: 'gambler', cash: { EUR: 20000 }, spend: 0.5, dynamic: true },
+    { id: 'fb_bayer', name: 'Kacper „Intercontinental” Bayer', country: null, style: 'abroad', cash: { EUR: 8000, USD: 6000, CHF: 4000 }, dynamic: true }
 ];
 
 const BOT_RULES = {
@@ -556,8 +563,25 @@ function resetForeignBots() {
 }
 
 function spawnForeignBotsFor(country) {
-    for (const def of FOREIGN_BOTS.filter(b => b.country === country)) {
-        if (aiCompetitors.some(ai => ai.id === def.id)) continue;
+    for (const def of FOREIGN_BOTS.filter(b => b.country === country)) spawnForeignBot(def, country);
+}
+
+/** Bot dynamiczny (bez kraju startowego) o danym id; homeCountry = kraj, w którym „mieszka” (musi być dołączony). */
+function spawnDynamicBot(id, homeCountry) {
+    const def = FOREIGN_BOTS.find(b => b.id === id);
+    return def && homeCountry && isCountryJoined(homeCountry) ? spawnForeignBot(def, homeCountry) : null;
+}
+/** Wspólnota europejska (G12): bot-hazardzista w pierwszym dołączonym kraju Europy. */
+function spawnEuropeanBot() {
+    const home = (typeof LINK_RULES === 'object' ? LINK_RULES.europe : ['DE', 'CZ', 'SE', 'CH', 'FR']).find(isCountryJoined);
+    return spawnDynamicBot('fb_euro', home);
+}
+/** Pierwsze przejęcie giełdy przez naszą: Bayer gra tylko spółkami zagranicznymi, w kraju przejętej giełdy. */
+function spawnBayerBot(country) { return spawnDynamicBot('fb_bayer', country); }
+
+function spawnForeignBot(def, country) {
+    {
+        if (aiCompetitors.some(ai => ai.id === def.id)) return null;
         const bot = {
             id: def.id, name: def.name, cash: 0, portfolio: {}, loans: [], personality: `foreign_${def.style}`, isForeignBot: true, homeCountry: country,
             accessLevel: 1, hasTBillAccess: false, tBills: [], skillPoints: 0, unlockedSkills: {}, creditScore: 100,
@@ -567,6 +591,7 @@ function spawnForeignBotsFor(country) {
         aiCompetitors.push(bot);
         (foreignTickets[bot.id] = foreignTickets[bot.id] || []).push(country); // własny rynek bez biletu
         logEvent(`🌍 Na giełdzie ${COUNTRY_DEFS[country].name} pojawia się inwestor ${bot.name}.`, 'market');
+        return bot;
     }
 }
 
@@ -606,9 +631,27 @@ function botStakeCap(issuer, bot) {
     return macro.quarter - joined < BOT_RULES.firstYearQuarters ? BOT_RULES.maxStakeFirstYear : BOT_RULES.maxStake;
 }
 
+/** Boty bez ograniczeń kraju dostają dostęp do rynków, które grają (bot nie kupuje biletów). */
+function botAccess(bot, country) {
+    const list = foreignTickets[bot.id] || (foreignTickets[bot.id] = []);
+    if (!list.includes(country)) list.push(country);
+    return true;
+}
+
 function botPickTarget(bot, def) {
     const pool = id => getCountryIssuers(id).filter(i => !(i.state && getGdrFree(i) <= 0));
-    let candidates = pool(def.country);
+    let candidates = pool(bot.homeCountry);
+    if (def.style === 'banker') { // Gutzwiller: tylko banki; Waschmabank z preferencją
+        const fav = foreignIssuers[def.favorite];
+        if (fav && fav.kind === 'share' && Math.random() < 0.4) return fav;
+        candidates = getJoinedCountries().filter(c => canTradeCountry(bot.id, c)).flatMap(pool).filter(i => i.sectors.some(([n]) => n === 'Bankowość'));
+    } else if (def.style === 'viking') { // Wiking: kupuje cokolwiek, w każdym kraju, do którego ma dostęp
+        for (const c of getJoinedCountries()) if (c !== bot.homeCountry && (countryState[c]?.link || Math.random() < 0.5) && botAccess(bot, c)) candidates = candidates.concat(pool(c));
+    } else if (def.style === 'gambler') { // bot europejski: hazard na spółkach krajów europejskich
+        candidates = LINK_RULES.europe.filter(isCountryJoined).flatMap(c => botAccess(bot, c) ? pool(c) : []);
+    } else if (def.style === 'abroad') { // Bayer: tylko spółki zagraniczne, każdy kraj otwarty
+        candidates = getJoinedCountries().flatMap(c => botAccess(bot, c) ? pool(c) : []);
+    }
     if (def.style === 'czech') {
         const fav = foreignIssuers[def.favorite];
         if (fav && fav.kind === 'share' && Math.random() < 0.5) return fav;
@@ -623,7 +666,7 @@ function botPickTarget(bot, def) {
 function foreignBotBuy(bot, def) {
     const issuer = botPickTarget(bot, def);
     if (!issuer) return false;
-    const budgetPln = botSpendable(bot) * BOT_RULES.spendShare, mid = toPln(issuer.price, issuer.currency);
+    const budgetPln = botSpendable(bot) * (def.spend || BOT_RULES.spendShare), mid = toPln(issuer.price, issuer.currency);
     const cap = Math.floor(issuer.shares * botStakeCap(issuer, bot)) - (Number(issuer.holders[bot.id]) || 0);
     let qty = Math.min(Math.floor(budgetPln / mid), cap, Math.floor(getGdrFree(issuer)));
     if (!(qty >= 1)) return false;
@@ -681,8 +724,11 @@ function runForeignBot(bot) {
         if (Math.random() < 0.35) continue; // nie każdy kwartał jest aktywny
         const roll = Math.random();
         let done = false;
+        const premium = marketRegimes[bot.homeCountry]?.premium || 0;
+        const buyBelow = def.style === 'gambler' ? 0.55 : def.style === 'banker' && premium < 0 ? 0.95 : 0.8; // hazardzista sprzedaje częściej, Gutzwiller w bessie dokupuje
         if (def.enterHome && bot.fx.enteredHome && roll < 0.35) done = botTradeHome(bot, def);
-        else if (roll < 0.8) done = foreignBotBuy(bot, def);
+        else if (roll < buyBelow) done = foreignBotBuy(bot, def);
+        else if (def.style === 'banker' && premium < 0) done = false; // neutralność: nie sprzedaje w panice
         else done = foreignBotSell(bot);
         if (done) bot.fx.trades++;
     }

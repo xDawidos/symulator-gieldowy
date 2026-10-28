@@ -2035,6 +2035,7 @@ if (typeof window !== 'undefined' && !window.__GAME_TEST_MODE__) window.addEvent
 function runAllAi() {
     aiCompetitors.forEach(ai => {
         if (ai.isMafia || ai.isGuard || ai.isForeignBot) return; // Bruno Gato (mafia.js), Gwardia (defense.js) i boty zagraniczne (countries.js) mają własną logikę
+        if (ai.customLogic) { if (Math.random() < 0.15) { runCustomBot(ai); checkAiTierUpgrade(ai); } return; } // 0.16.3 G14b: Graham i Wilk (bots_domestic.js)
         if (Math.random() < 0.15) {
             makeAiDecision(ai);
             checkAiTierUpgrade(ai);

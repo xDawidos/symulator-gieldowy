@@ -53,6 +53,7 @@ const aiCompetitors = [
         name: 'Jordan "Wilk" Belfort',
         cash: 10500,
         portfolio: {},
+        customLogic: 'wolf', // 0.16.3 G14b: pump and dump (bots_domestic.js); osobowość zostaje do M&A i relacji
         personality: 'pro_investor', 
         accessLevel: 1,
         hasTBillAccess: false, 
@@ -120,6 +121,20 @@ const aiCompetitors = [
         unlockedSkills: {},
         // Można dodać preferencje np. do ryzyka
         riskAversionFactor: 0.2 // (0=bardzo ryzykowny, 1=bardzo ostrożny)
+    },
+    { // 0.16.3 G14b: Graham — cierpliwy inwestor wartości (bots_domestic.js)
+        id: 'ai9',
+        name: 'Beniamin „Margines” Grahamski',
+        cash: 12000,
+        portfolio: {},
+        personality: 'graham',
+        customLogic: 'graham',
+        accessLevel: 1,
+        hasTBillAccess: false,
+        tBills: [],
+        skillPoints: 0,
+        unlockedSkills: {},
+        creditScore: 100
     }
 
 

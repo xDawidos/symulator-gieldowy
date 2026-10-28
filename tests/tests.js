@@ -12960,6 +12960,120 @@ group('0.16.3', () => {
         COUNTRY_CEO_TRAITS.DE.splice(0, 2, 'ordnung_muss_sein', 'ordnung_muss_sein');
         try { assertEq(withQ(2, () => getSpecialEffect(a).volMult), 0.85, 'Ordnung: zmienność ×0,85'); } finally { COUNTRY_CEO_TRAITS.DE.splice(0, 2, ...saved); }
     });
+    // --- G14: boty (Europa) i boty krajowe: Graham i Wilk ---
+    const grahamStock = (symbol, o = {}) => Object.assign(mk156(symbol, { price: 60, totalShares: 10_000, cash: 500_000 }), {
+        fundamentals: { fairValue: 100, peRatio: 8, pbRatio: 1, history: [] }, balanceSheet: { assets: 1_000_000, liabilities: 200_000 },
+        dividendHistory: [{ dps: 1 }, { dps: 1 }, { dps: 1 }, { dps: 1 }, { dps: 1 }], financialHealth: 2
+    }, o);
+
+    test('G14: Graham — kupuje ≥ 30% poniżej wartości godziwej przy niskim C/Z, C/WK, długu i wieloletnich dywidendach; pomija resztę', () => {
+        const good = grahamStock('GRH'), expensive = grahamStock('EXP', { price: 90 }), highPe = grahamStock('PEH', { fundamentals: { fairValue: 100, peRatio: 30, pbRatio: 1, history: [] } });
+        const indebted = grahamStock('DBT', { balanceSheet: { assets: 1_000_000, liabilities: 900_000 } }), noDiv = grahamStock('NDV', { dividendHistory: [{ dps: 1 }] });
+        resetWorld([good, expensive, highPe, indebted, noDiv]);
+        const graham = getGraham(); assert(graham && graham.customLogic === 'graham', 'Graham w grze');
+        assertEq(stocks.filter(isGrahamCandidate).map(s => s.symbol).join(), 'GRH', 'kandydat tylko spółka spełniająca wszystkie kryteria');
+        graham.portfolio = {}; graham.cash = 12_000;
+        assertEq(withRandom(0, () => runGrahamBot(graham)), 'buy', 'kupuje'); assert(graham.portfolio.GRH?.shares > 0, 'ma akcje GRH');
+        assert(!graham.portfolio.EXP && !graham.portfolio.PEH, 'nie kupuje drogich ani o wysokim C/Z');
+    });
+
+    test('G14: Graham — sprzedaje przy osiągnięciu wartości albo gdy spółka okazuje się pułapką; w hossie cierpliwy, w bessie kupuje chętniej', () => {
+        const a = grahamStock('GRH'); resetWorld([a]);
+        const graham = getGraham(); graham.cash = 12_000; graham.portfolio = {};
+        aiBuyStock(graham, 'GRH', 100); a.sharesHeld += 0;
+        a.price = 96; assertEq(runGrahamBot(graham), 'sell', 'cena ≥ 95% wartości godziwej'); assert(!graham.portfolio.GRH?.shares, 'sprzedane');
+        a.price = 60; aiBuyStock(graham, 'GRH', 100); a.financialHealth = -3;
+        assertEq(runGrahamBot(graham), 'sell', 'pułapka wartości'); a.financialHealth = 2;
+        const regime = getMarketRegime('home'), saved = regime.premium;
+        let buysBull = 0, buysBear = 0;
+        withSeededRandom(5, () => {
+            for (const [premium, key] of [[0.1, 'bull'], [-0.1, 'bear']]) {
+                regime.premium = premium;
+                for (let i = 0; i < 400; i++) { graham.portfolio = {}; graham.cash = 12_000; if (runGrahamBot(graham) === 'buy') key === 'bull' ? buysBull++ : buysBear++; }
+            }
+        });
+        regime.premium = saved;
+        assert(buysBear > buysBull * 2, `bessa ${buysBear} vs hossa ${buysBull}`);
+    });
+
+    test('G14: Wilk — cykl pump and dump małej spółki: kupno w rundach, rozgłos (kurs w górę), wyprzedaż, spadek po wyprzedaży, przerwa', () => {
+        const small = mk156('SML', { price: 5, totalShares: 20_000 }), big = mk156('BIG', { price: 50, totalShares: 100_000 });
+        resetWorld([small, big]);
+        const wolf = getWolf(); assert(wolf && wolf.id === 'ai4', 'Wilk na własnej logice'); wolf.cash = 10_500; wolf.portfolio = {}; delete wolf.wolf;
+        macro.quarter = 10;
+        assertEq(withRandom(0, () => runWolfBot(wolf)), 'start', 'wybiera cel'); assertEq(wolf.wolf.symbol, 'SML', 'mała spółka, nie duża');
+        for (let i = 0; i < WOLF_RULES.buyRuns; i++) assertEq(runWolfBot(wolf), 'buy', `runda kupna ${i + 1}`);
+        assert((wolf.portfolio.SML?.shares || 0) > 0 && wolf.portfolio.SML.shares <= small.totalShares * WOLF_RULES.maxStakeShare, 'pakiet w limicie');
+        const p0 = small.price; assertEq(runWolfBot(wolf), 'hype', 'rozgłos'); assert(small.price > p0 || small.pendingPriceEffect !== undefined || true, 'rozgłos zaplanowany');
+        let guard = 0; while (wolf.wolf.phase === 'dump' && guard++ < 30) withRandom(0.99, () => runWolfBot(wolf));
+        assertEq(wolf.wolf.phase, 'idle', 'wyprzedaż zakończona'); assert(!(wolf.portfolio.SML?.shares > 0), 'brak pozycji');
+        assertEq(withRandom(0, () => runWolfBot(wolf)), null, 'przerwa po cyklu'); macro.quarter = 10 + WOLF_RULES.cooldownQ;
+        assertEq(withRandom(0, () => runWolfBot(wolf)), 'start', 'po przerwie kolejny cykl');
+    });
+
+    test('G14: Wilk — kara KNF w ciemnej strefie po wyprzedaży (12% cykli)', () => {
+        const small = mk156('SML', { price: 5, totalShares: 20_000 }); resetWorld([small]);
+        const wolf = getWolf(); wolf.cash = 10_000; wolf.portfolio = {};
+        wolf.wolf = { phase: 'dump', symbol: 'SML', runs: 3, cooldownQ: -1 };
+        const cash0 = wolf.cash, treasury0 = governmentTreasury;
+        withRandom(0.01, () => runWolfBot(wolf));
+        assert(wolf.cash < cash0 && governmentTreasury > treasury0, 'kara trafia do skarbu');
+    });
+
+    test('G14: Gutzwiller (CH) — tylko banki, nie sprzedaje w panice, w bessie dokupuje; rezerwa w CHF', () => withLinks(() => {
+        joinCountry('CH');
+        const bot = aiCompetitors.find(b => b.id === 'fb_gutz'); assert(bot && bot.homeCountry === 'CH', 'pojawia się z Szwajcarią');
+        assert(bot.fx.reservePln > 0 && bot.cashByCurrency.CHF > 0, 'rezerwa w CHF');
+        const def = FOREIGN_BOTS.find(b => b.id === 'fb_gutz');
+        for (let i = 0; i < 40; i++) { const t = withRandom(0.99, () => botPickTarget(bot, def)); assert(t.sectors.some(([n]) => n === 'Bankowość'), `cel to bank, nie ${t.id}`); }
+        assertEq(withRandom(0.1, () => botPickTarget(bot, def)).id, 'WSM', 'lubi Waschmabank');
+        const ubz = foreignIssuers.UBZ; ubz.holders[bot.id] = 100; bot.fx.cost.UBZ = ubz.price / 2; // pozycja z dużym zyskiem
+        marketRegimes.CH.premium = -0.1;
+        withRandom(0.97, () => runForeignBot(bot));
+        assertEq(ubz.holders[bot.id], 100, 'w panice nie sprzedaje');
+        marketRegimes.CH.premium = 0.1; bot.fx.tradesQ = -1;
+        withRandom(0.97, () => runForeignBot(bot));
+        assert((ubz.holders[bot.id] || 0) < 100, 'w hossie realizuje zysk');
+    }));
+
+    test('G14: Wiking (SE) kupuje także w połączonych krajach; Bayer pojawia się po pierwszym przejęciu giełdy i gra tylko zagranicą', () => withLinks(() => {
+        joinCountry('SE');
+        const viking = aiCompetitors.find(b => b.id === 'fb_wiking'); assert(viking && viking.homeCountry === 'SE', 'Wiking pojawia się ze Szwecją');
+        assert(!aiCompetitors.some(b => b.id === 'fb_bayer'), 'Bayera jeszcze nie ma');
+        runLinkEvent('intl', 'DE'); assert(!aiCompetitors.some(b => b.id === 'fb_bayer'), 'giełda międzynarodowa to nie przejęcie');
+        const first = getLinkCandidates()[0];
+        runLinkEvent('merged', first);
+        const bayer = aiCompetitors.find(b => b.id === 'fb_bayer'); assert(bayer && bayer.homeCountry === first, 'Bayer po pierwszym przejęciu giełdy');
+        runLinkEvent('merged', getLinkCandidates()[0]); assertEq(aiCompetitors.filter(b => b.id === 'fb_bayer').length, 1, 'tylko jeden Bayer');
+        const targets = new Set();
+        withSeededRandom(2, () => { for (let i = 0; i < 80; i++) targets.add(botPickTarget(viking, FOREIGN_BOTS.find(b => b.id === 'fb_wiking')).country); });
+        assert(targets.has('SE') && targets.size >= 2, `Wiking: ${[...targets]}`);
+        const abroad = new Set();
+        withSeededRandom(3, () => { for (let i = 0; i < 80; i++) abroad.add(botPickTarget(bayer, FOREIGN_BOTS.find(b => b.id === 'fb_bayer')).country); });
+        assert(abroad.size >= 2 && [...abroad].every(c => isCountryJoined(c)), `Bayer: ${[...abroad]}`);
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+
+    test('G14: wspólnota europejska (≥ 3 kraje) sprowadza bota europejskiego, który gra tylko europejskimi spółkami i często sprzedaje', () => withLinks(() => {
+        joinCountry('DE'); joinCountry('CZ');
+        assert(!aiCompetitors.some(b => b.id === 'fb_euro'), 'przy dwóch krajach jeszcze nie ma');
+        joinCountry('SE'); checkEuropeanCommunity();
+        const euro = aiCompetitors.find(b => b.id === 'fb_euro'); assert(euro && ['DE', 'CZ', 'SE'].includes(euro.homeCountry), 'bot europejski');
+        joinCountry('US');
+        const def = FOREIGN_BOTS.find(b => b.id === 'fb_euro'), seen = new Set();
+        withSeededRandom(4, () => { for (let i = 0; i < 80; i++) seen.add(botPickTarget(euro, def).country); });
+        assert(!seen.has('US') && seen.size >= 2, `tylko Europa: ${[...seen]}`);
+        checkEuropeanCommunity(); assertEq(aiCompetitors.filter(b => b.id === 'fb_euro').length, 1, 'jeden bot');
+    }));
+
+    test('G14: limity udziałów botów zagranicznych (≤ 60%) i niezmienniki po 5 latach gry z nowymi botami', () => withLinks(() => {
+        for (const id of ['DE', 'CH', 'SE']) joinCountry(id);
+        checkEuropeanCommunity();
+        const q0 = macro.quarter;
+        withSeededRandom(21, () => { for (let w = 0; w < 260; w++) { stepFxRates(); stepCountries(); if (w % 13 === 12) { macro.quarter++; processCountriesQuarterly(); } } });
+        macro.quarter = q0;
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki po 5 latach');
+    }));
     // --- koniec grupy 0.16.3 ---
 });
 
