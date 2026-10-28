@@ -5312,10 +5312,10 @@ group('0.14 T1a: rejestr sektorów i porządek nazw', () => {
     const isClean = stock => (stock.sector || []).every(isCanonicalSector) && !(stock.sector || []).some(name => LEGACY_SECTOR_NAMES.includes(name)) && isValidSegmentList(stock.segments);
 
     test('rejestr: 18 sektorów w 8 grupach, bez starych nazw i bez „common”', () => {
-        assert(SECTOR_NAMES.length === 20 && new Set(SECTOR_NAMES).size === 20 && SECTOR_GROUPS.length === 8, `sektory ${SECTOR_NAMES.length}`);
+        assert(SECTOR_NAMES.length === 21 && new Set(SECTOR_NAMES).size === 21 && SECTOR_GROUPS.length === 8, `sektory ${SECTOR_NAMES.length}`);
         assert(SECTOR_NAMES.every(name => SECTORS[name].group && SECTORS[name].icon && SECTORS[name].profile), 'grupa, ikona, profil');
         assert(!LEGACY_SECTOR_NAMES.some(isCanonicalSector), 'brak starych nazw w rejestrze');
-        assert(Object.keys(SECTOR_PROFILES).length === 20, 'profile tylko dla sektorów z rejestru');
+        assert(Object.keys(SECTOR_PROFILES).length === 21, 'profile tylko dla sektorów z rejestru');
     });
 
     test('mapowanie starych nazw na sektor i podsektor', () => {
@@ -12288,7 +12288,7 @@ group('0.16.2', () => {
         assert(SECTORS['Alkohole'].profile.beta < 1 && SECTORS['Motoryzacja'].profile.beta > 1, 'Alkohole defensywne, Motoryzacja cykliczna');
         assertEq(DEMAND_ELASTICITY['Alkohole'], 0.4, 'elastyczność Alkoholi z załącznika C'); assertEq(DEMAND_ELASTICITY['Motoryzacja'], 1.3, 'elastyczność Motoryzacji');
         for (const name of ['Motoryzacja', 'Alkohole']) { assert(SECTOR_NAME_PARTS[name] && SECTOR_NAME_WORDS[name], `${name}: nazwy`); assert(!/undefined/.test(generateCompanyName(name)), `${name}: nazwa spółki`); }
-        assertEq(SECTOR_NAMES.length, 20, 'dwadzieścia sektorów');
+        assertEq(SECTOR_NAMES.length, 21, 'dwadzieścia jeden sektorów (0.16.3: Rybołówstwo)');
     });
 
     // --- G6: Niemcy, USA, Czechy ---
@@ -12749,6 +12749,62 @@ group('0.16.2', () => {
         skills.financialAnalyst.unlockedLevel = 0;
     });
     // --- koniec grupy 0.16.2 ---
+});
+
+group('0.16.3', () => {
+    const startFund = (cash = 5_000_000) => { resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' }); playerCash = cash; };
+
+    // --- G11: Szwecja, Szwajcaria, Francja ---
+    test('G11: SE 7+2, CH 7+1, FR 11+2 spółek; symbole unikalne w całej grze; giganci zgodni z kwitami (to samo id i cena)', () => {
+        const expected = { SE: [7, 2], CH: [7, 1], FR: [11, 2] };
+        for (const [id, [normal, state]] of Object.entries(expected)) {
+            const def = COUNTRY_DEFS[id];
+            assert(def, `kraj ${id} zdefiniowany`);
+            assertEq(def.companies.filter(c => c.kind !== 'state').length, normal, `${id}: spółki zwykłe`);
+            assertEq(def.companies.filter(c => c.kind === 'state').length, state, `${id}: państwowe`);
+            assert(CURRENCIES[def.currency], `${id}: waluta w kantorze`);
+            assert(START_COUNTRIES.find(c => c.id === id)?.passCost > 0, `${id}: przepustka w START_COUNTRIES`);
+        }
+        assert(START_COUNTRIES.some(c => c.id === 'TW') && START_COUNTRIES.some(c => c.id === 'FR'), 'Tajwan i Francja dopisane');
+        const seen = new Map();
+        for (const def of Object.values(COUNTRY_DEFS)) for (const c of def.companies) {
+            assert(!seen.has(c.id), `symbol ${c.id} powtórzony (${seen.get(c.id)} i ${def.id})`);
+            seen.set(c.id, def.id);
+            const giant = FOREIGN_GIANTS.find(g => g.id === c.id);
+            if (c.kind === 'giant') { assert(giant, `gigant ${c.id} ma kwit`); assertEq(giant.price, c.price, `${c.id}: ta sama cena`); assertEq(giant.country, def.id, `${c.id}: ten sam kraj`); }
+        }
+    });
+
+    test('G11: sektor Rybołówstwo i podsektor Słodycze w rejestrze; wszystkie sektory spółek nowych krajów istnieją', () => {
+        assert(SECTORS['Rybołówstwo'] && SECTORS['Żywność'].subsectors['Słodycze'], 'rejestr');
+        assert(SECTOR_NAMES.includes('Rybołówstwo'), 'lista nazw');
+        assertEq(DEMAND_ELASTICITY['Rybołówstwo'], 0.3, 'elastyczność popytu');
+        for (const id of ['SE', 'CH', 'FR']) for (const c of COUNTRY_DEFS[id].companies) {
+            for (const s of Array.isArray(c.sector) ? c.sector : [c.sector]) assert(SECTORS[s], `${c.id}: sektor ${s}`);
+            if (c.subsector) assert(SECTORS[Array.isArray(c.sector) ? c.sector[0] : c.sector].subsectors?.[c.subsector], `${c.id}: podsektor ${c.subsector}`);
+        }
+        assert(typeof generateCompanyName('Rybołówstwo') === 'string', 'nazwa spółki rybnej');
+    });
+
+    for (const id of ['SE', 'CH', 'FR']) {
+        test(`G11: dołączenie ${id} tworzy spółki, giełdę i profil pracowników; kurs waluty w widełkach; niezmienniki 0`, () => {
+            startFund(); initFxState(); resetGdrState();
+            const def = COUNTRY_DEFS[id];
+            joinCountry(id);
+            assert(isCountryJoined(id), 'dołączył');
+            assertEq(getCountryIssuers(id).length, def.companies.length, 'wszystkie spółki');
+            assertEq(getCountryLimit(id), Math.ceil(def.companies.length * COUNTRY_RULES.limitMult), 'limit 1,5 ×');
+            const q0 = macro.quarter;
+            for (let w = 0; w < 120; w++) { stepFxRates(); stepCountries(); if (w % 13 === 12) { macro.quarter++; processCountriesQuarterly(); } }
+            macro.quarter = q0;
+            for (const i of getCountryIssuers(id)) assert(i.price > 0 && Number.isFinite(i.price), `cena ${i.id}`);
+            const cur = CURRENCIES[def.currency];
+            assert(getFxRate(def.currency) >= cur.min && getFxRate(def.currency) <= cur.max, 'kurs w widełkach');
+            assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+            resetGdrState(); initFxState();
+        });
+    }
+    // --- koniec grupy 0.16.3 ---
 });
 
 async function runAllTests() {

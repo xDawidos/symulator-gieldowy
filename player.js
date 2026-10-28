@@ -1509,7 +1509,9 @@ const START_COUNTRIES = [
     { id: 'US', name: 'USA', flag: '🇺🇸', available: false, passCost: 150000 },
     { id: 'JP', name: 'Japonia', flag: '🇯🇵', available: false, passCost: 100000 },
     { id: 'CN', name: 'Chiny', flag: '🇨🇳', available: false, passCost: 100000 },
-    { id: 'IN', name: 'Indie', flag: '🇮🇳', available: false, passCost: 80000 }
+    { id: 'IN', name: 'Indie', flag: '🇮🇳', available: false, passCost: 80000 },
+    { id: 'FR', name: 'Francja', flag: '🇫🇷', available: false, passCost: 50000 },    // 0.16.3 G11
+    { id: 'TW', name: 'Tajwan', flag: '🇹🇼', available: false, passCost: 80000 }     // 0.16.3 G11 (dane krajowe w 0.16.4)
 ];
 
 // Charaktery klientów (etap F1, logika w clients.js): cierpliwość, awersja do zmienności, pogoń za wynikiem,

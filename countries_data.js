@@ -74,3 +74,63 @@ COUNTRY_DEFS.CZ = {
         { id: 'CKO', name: 'České Koleje', sector: 'Usługi', kind: 'state', price: 120, desc: 'Państwowa kolej.' }
     ]
 };
+
+
+// =================================================================================
+// 0.16.3 G11: Szwecja (7 + 2 państwowe), Szwajcaria (7 + 1), Francja (11 + 2); załącznik B planu 0.16.
+// Tagi `special` canopening, vintage, frogs, cocoa i launder dostają mechanikę w G13.
+// =================================================================================
+
+COUNTRY_DEFS.SE = {
+    id: 'SE', name: 'Szwecja', currency: 'SEK', region: 'EU', rho: 0.7, rateMean: 0.03,
+    operator: { id: 'SSE', name: 'Stockholmska Börsen (SSE)', commission: 0.006 },
+    labour: { wages: 1.5, rights: 'ochronne', unionMult: 1.5, shadow: 0, note: 'zadowolenie +5' },
+    companies: [
+        { id: 'SSA', name: 'Surströmming Stålverk AB', sector: ['Przemysł', 'Rybołówstwo'], kind: 'normal', price: 160, special: 'canopening', desc: 'Stal (cykliczna) i kiszony śledź (stabilny); „otwarcie puszki” to skandal albo viral.' },
+        { id: 'IKJ', name: 'IKEJA', sector: 'Dobra konsumpcyjne', kind: 'giant', price: 420, desc: 'Gigant meblowy.' },
+        { id: 'VLK', name: 'Volvik', sector: 'Motoryzacja', kind: 'normal', price: 240 },
+        { id: 'SPT', name: 'Spotifaj', sector: ['Media', 'Technologia'], kind: 'normal', price: 360 },
+        { id: 'ERS', name: 'Ericssen', sector: 'Technologia', kind: 'normal', price: 85, desc: 'Telekomunikacja.' },
+        { id: 'SAB', name: 'Saabre Defence', sector: 'Obronność', kind: 'normal', price: 190, special: 'defense' },
+        { id: 'OFA', name: 'Östersjö Fiske AB', sector: 'Rybołówstwo', kind: 'normal', price: 70 },
+        { id: 'VKF', name: 'Vattenkraft', sector: 'Energia', kind: 'state', price: 90, desc: 'Państwowa energetyka wodna.' },
+        { id: 'SYK', name: 'Systemkrogen', sector: 'Alkohole', kind: 'state', price: 110, desc: 'Państwowy monopol na sprzedaż alkoholu; stabilna, wysoka dywidenda.' }
+    ]
+};
+
+COUNTRY_DEFS.CH = {
+    id: 'CH', name: 'Szwajcaria', currency: 'CHF', region: 'EU', rho: 0.65, rateMean: 0.01,
+    operator: { id: 'SWX', name: 'Giełda Zurychska (SWX)', commission: 0.006 },
+    labour: { wages: 1.9, rights: 'standard', unionMult: 0.6, shadow: 0, note: 'standard' },
+    companies: [
+        { id: 'WSM', name: 'Waschmabank', sector: 'Bankowość', subsector: 'Bank międzynarodowy', kind: 'normal', price: 62, special: 'launder', desc: 'Bank „bez pytań”: pranie pieniędzy mafii; w skarbcu złoto (tylko informacja).' },
+        { id: 'MTH', name: 'Matterhornen', sector: 'Żywność', subsector: 'Słodycze', kind: 'normal', price: 74, special: 'cocoa', desc: 'Czekolada; ceny kakao, stabilna dywidenda.' },
+        { id: 'UBZ', name: 'UBZ Bankgesellschaft', sector: 'Bankowość', subsector: 'Bank komercyjny', kind: 'normal', price: 24 },
+        { id: 'ROV', name: 'Rochevartis Pharma', sector: 'Medycyna', niche: 'Farmaceutyki', kind: 'giant', price: 105 },
+        { id: 'NSK', name: 'Nestlik', sector: 'Żywność', kind: 'giant', price: 98 },
+        { id: 'PUH', name: 'Präzision Uhren AG', sector: 'Dobra konsumpcyjne', kind: 'normal', price: 150, desc: 'Zegarki.' },
+        { id: 'ASR', name: 'Alpen Ski Resorts', sector: 'Turystyka', kind: 'normal', price: 45, special: 'season' },
+        { id: 'ALP', name: 'Alpenpost', sector: 'Usługi', kind: 'state', price: 32, desc: 'Państwowa poczta.' }
+    ]
+};
+
+COUNTRY_DEFS.FR = {
+    id: 'FR', name: 'Francja', currency: 'EUR', region: 'EU', rho: 0.75, rateMean: 0.025,
+    operator: { id: 'CAC', name: 'Bourse de Paris (CAC)', commission: 0.006 },
+    labour: { wages: 1.5, rights: 'ochronne', unionMult: 2.0, shadow: 0, note: 'częste strajki' },
+    companies: [
+        { id: 'MCG', name: 'Maison Champagnerie', sector: 'Alkohole', kind: 'normal', price: 210, special: 'vintage', desc: 'Co rok losowa jakość winobrania; luksus rośnie w hossie.' },
+        { id: 'GRF', name: 'Grenouille & Fils', sector: 'Żywność', kind: 'normal', price: 48, special: 'frogs', desc: 'Żabie udka; sezonowość i protesty ekologów.' },
+        { id: 'LVT', name: 'Luxe Vuitonnet', sector: 'Dobra konsumpcyjne', kind: 'giant', price: 640, desc: 'Gigant luksusu.' },
+        { id: 'JTM', name: 'Jetaime', sector: 'Dobra konsumpcyjne', kind: 'normal', price: 330, desc: 'Dom mody.' },
+        { id: 'BPA', name: 'Beauté Paris', sector: ['Chemia', 'Dobra konsumpcyjne'], kind: 'normal', price: 180, desc: 'Kosmetyki.' },
+        { id: 'ABS', name: 'Airbuss', sector: 'Przemysł', kind: 'normal', price: 140, desc: 'Lotnictwo.' },
+        { id: 'GPR', name: 'Gaz de Provence', sector: 'Energia', kind: 'normal', price: 38 },
+        { id: 'CLK', name: 'Crédit le Krecik', sector: 'Bankowość', subsector: 'Bank komercyjny', kind: 'normal', price: 12 },
+        { id: 'BAG', name: 'Bagieta SA', sector: ['Żywność', 'Budowlany'], kind: 'normal', price: 22 },
+        { id: 'CRD', name: 'Croissanterie Dupont', sector: 'Żywność', kind: 'normal', price: 34 },
+        { id: 'CAR', name: "Côte d'Azur Resorts", sector: 'Turystyka', kind: 'normal', price: 56 },
+        { id: 'ENA', name: 'Électricité Nationale', sector: 'Energia', kind: 'state', price: 28, desc: 'Państwowa energetyka (atom).' },
+        { id: 'RDF', name: 'Rail de France', sector: 'Usługi', kind: 'state', price: 20, desc: 'Państwowa kolej.' }
+    ]
+};

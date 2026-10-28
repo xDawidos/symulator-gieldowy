@@ -955,6 +955,7 @@ const SECTOR_NAME_PARTS = {
     'Technologia': { prefixes: [...techPrefixes, 'Byte', 'Cloud'], suffixes: [...techSuffixes, 'Soft', 'Logic'] },
     'Nieruchomości': { prefixes: realtyPrefixes, suffixes: realtySuffixes },
     'Motoryzacja': { prefixes: ['Auto', 'Moto', 'Silnik', 'Koła', 'Turbo', 'Felga', 'Pojazd'], suffixes: ['Motors', 'Auto', 'Drive', 'Moto', 'Cars', 'Wheels', 'Silnik'] },
+    'Rybołówstwo': { prefixes: ['Ryb', 'Kuter', 'Połów', 'Morze', 'Sieć', 'Łosoś', 'Śledź'], suffixes: ['Fish', 'Połowy', 'Kutry', 'Marine', 'Trawl', 'Przetwórnia', 'Ryby'] },
     'Alkohole': { prefixes: ['Piwo', 'Słód', 'Chmiel', 'Gorzel', 'Browar', 'Wino', 'Destyl'], suffixes: ['Browar', 'Piwo', 'Spirits', 'Destylarnia', 'Brew', 'Winnica', 'Likier'] },
     'Obronność': { prefixes: ['Arma', 'Tarcza', 'Grom', 'Husar', 'Bastion', 'Stal', 'Orzeł'], suffixes: ['Def', 'Guard', 'Shield', 'Arms', 'Tech', 'Systemy', 'Ochrona'] },
     'Usługi': { prefixes: servicesPrefixes, suffixes: servicesSuffixes }

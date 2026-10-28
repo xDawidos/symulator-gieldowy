@@ -1820,7 +1820,7 @@ function getGdpDriver() {
 // (profile, cykle, mediany, filtry, skaner, Akademia). Podsektor może nadpisać pola profilu sektora.
 const SECTOR_GROUPS = [
     { id: 'finance',  name: 'Finanse',            icon: '💰', sectors: ['Bankowość', 'Finanse'] },
-    { id: 'consumer', name: 'Konsumpcja',         icon: '🛒', sectors: ['Żywność', 'Alkohole', 'Dobra konsumpcyjne', 'Turystyka', 'Media', 'Gaming'] },
+    { id: 'consumer', name: 'Konsumpcja',         icon: '🛒', sectors: ['Żywność', 'Rybołówstwo', 'Alkohole', 'Dobra konsumpcyjne', 'Turystyka', 'Media', 'Gaming'] },
     { id: 'industry', name: 'Przemysł i surowce', icon: '🏭', sectors: ['Przemysł', 'Motoryzacja', 'Chemia', 'Energia', 'Budowlany', 'Transport i logistyka'] },
     { id: 'health',   name: 'Zdrowie i nauka',    icon: '🏥', sectors: ['Medycyna', 'Badania'] },
     { id: 'tech',     name: 'Technologia',        icon: '💻', sectors: ['Technologia'] },
@@ -1839,7 +1839,8 @@ const SECTORS = {
             'Fintech': { profile: { beta: 1.5, pe: 25 }, delta: { growth: 0.05 }, specialist: true, mechanic: 'knf', weight: 4 } // T2: licencja KNF (waga ×4 w losowaniu — decyzja użytkownika)
         } },
     'Żywność':               { icon: '🍞', profile: { beta: 0.5, rateSens: 0.4, pe: 15, margin: 0.12, growth: 0.03, ps: 1.0, da: 0.03 },
-        subsectors: { 'Rolnictwo': { peopleSubsidy: true } } },                                             // dotacje Ludowców (0.13)
+        subsectors: { 'Rolnictwo': { peopleSubsidy: true }, 'Słodycze': {} } },                              // dotacje Ludowców (0.13); Słodycze: 0.16.3 G11
+    'Rybołówstwo':           { icon: '🐟', profile: { beta: 0.6, rateSens: 0.4, pe: 14, margin: 0.12, growth: 0.02, ps: 1.0, da: 0.05 } }, // 0.16.3 G11: stabilne, popyt mało elastyczny (0,3), koszt pracy 25%
     'Alkohole':              { icon: '🍺', profile: { beta: 0.5, rateSens: 0.4, pe: 17, margin: 0.20, growth: 0.02, ps: 2.0, da: 0.04 }, // 0.16.2 G6a: defensywne, popyt mało elastyczny (0,4)
         subsectors: { 'Piwowarstwo i napoje': {} } },
     'Dobra konsumpcyjne':    { icon: '🛍️', profile: { beta: 1.0, rateSens: 0.6, pe: 16, margin: 0.14, growth: 0.04, ps: 1.3, da: 0.03 } },
@@ -1904,6 +1905,7 @@ const SECTOR_NAME_WORDS = {
     'Obronność': ['Defense', 'Guard', 'Shield', 'Arms'],
     'Motoryzacja': ['Motors', 'Auto', 'Drive', 'Wheels'],
     'Alkohole': ['Brew', 'Spirits', 'Cellar', 'Hops'],
+    'Rybołówstwo': ['Fish', 'Catch', 'Trawl', 'Marine'],
     'Usługi': ['Service', 'Serwis', 'Partner', 'Pro']
 };
 
@@ -5220,7 +5222,7 @@ const SOCIETY_CLASSES = [
 ];
 
 // Elastyczność przychodów sektora względem indeksu popytu (dobra luksusowe > 1, podstawowe < 1).
-const DEMAND_ELASTICITY = { 'Motoryzacja': 1.3, 'Alkohole': 0.4, 'Turystyka': 1.5, 'Gaming': 1.3, 'Nieruchomości': 1.2, 'Dobra konsumpcyjne': 1.0, 'Usługi': 0.8, 'Media': 0.6, 'Żywność': 0.3 };
+const DEMAND_ELASTICITY = { 'Motoryzacja': 1.3, 'Alkohole': 0.4, 'Rybołówstwo': 0.3, 'Turystyka': 1.5, 'Gaming': 1.3, 'Nieruchomości': 1.2, 'Dobra konsumpcyjne': 1.0, 'Usługi': 0.8, 'Media': 0.6, 'Żywność': 0.3 };
 const DEMAND_GROWTH_SCALE = 0.02;           // +(popyt − 1) × elastyczność × 2 pp na kwartał
 const POPULATION_NATURAL_GROWTH = 0.0005;   // +0,05% na kwartał
 const CLASS_MOBILITY_LIMIT = 0.008;         // ±0,8% udziału klasy na kwartał
