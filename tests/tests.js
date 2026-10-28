@@ -11353,7 +11353,7 @@ group('0.15.6 E3: ścieżka startupu, awans z NewHorizons, Włoska Giełda', () 
     test('E3: awans z NH na GPW po 8 kw. i spełnieniu wymogów; wcześniej i bez wymogów — nie', () => {
         const list = world156(6, 1_000_000);
         const young = list[0], old = list[1], poor = list[2];
-        for (const s of [young, old, poor]) { s.market = 'NH'; s.quarterlyEarnings = 20_000; s.financialHealth = 2; }
+        for (const s of [young, old, poor]) { s.market = 'NH'; s.quarterlyEarnings = 20_000; s.financialHealth = 2; s.nhStay = false; s.cash = 50_000; }
         young.marketSinceQ = macro.quarter - 3; old.marketSinceQ = macro.quarter - 9; poor.marketSinceQ = macro.quarter - 9; poor.price = 3; // 30 tys. < 80 tys.
         let promoted = 0;
         for (let i = 0; i < 40; i++) promoted += processNhPathQuarterly().promoted;
@@ -13416,6 +13416,68 @@ group('0.16.3', () => {
         fxRates.EUR = e0;
         assert(typeof closeMarginPosition(r.id).ok === 'boolean' && !renderForexTab().includes('EUR/USD</td>'), 'po zamknięciu brak wiersza');
     }));
+
+
+    // --- E6: minimalne opłaty giełd, profile giełd prywatnych, zostawanie na NH ---
+    test('E6: opłata minimalna — GPW 1000 zł/kw., giełda prywatna 100 zł/kw., NewHorizons 0; do wysokości gotówki spółki', () => {
+        const list = [mk156('GAA', { price: 10, totalShares: 1000 }), mk156('GAB', { price: 10, totalShares: 1000 }), mk156('GAC', { price: 10, totalShares: 1000 }), mk156('GAD', { price: 10, totalShares: 1000 })];
+        resetWorld(list); ensureMarketOperators();
+        const op = mk156('OPX', { price: 100, totalShares: 10000 }); stocks.push(op);
+        for (const [stock, market] of [[list[0], 'GPW'], [list[1], 'XTD'], [list[2], 'NH']]) { stock.cash = 50_000; if (market !== 'GPW') stock.market = market; }
+        list[3].market = 'XTD'; list[3].cash = 40; // prawie bez gotówki
+        marketOperators.GPW.symbol = op.symbol; marketOperators.XTD.status = 'active'; marketOperators.XTD.symbol = op.symbol;
+        const cash = s => s.cash;
+        const before = list.map(cash);
+        collectListingFees(marketOperators.GPW, op); collectListingFees(marketOperators.XTD, op);
+        assertEq(Math.round(before[0] - list[0].cash), 1000, 'GPW: minimum 1000 zł');
+        assertEq(Math.round(before[1] - list[1].cash), 100, 'giełda prywatna: minimum 100 zł');
+        assertEq(list[2].cash, before[2], 'NewHorizons: bez opłaty');
+        assertEq(Math.round(list[3].cash), 0, 'spółka płaci najwyżej tyle, ile ma gotówki'); assert(list[3].cash >= 0, 'gotówka nieujemna');
+    });
+
+    test('E6: profile giełd — kilka rodzajów, nie każda giełda ma profil; filtr sektorów, kapitalizacji i kraju (nowe spółki polskie mają kraj PL)', () => {
+        assert(MARKET_PROFILES.length >= 6, 'kilka wariantów');
+        const tech = mk156('TEC', { price: 100, totalShares: 20_000 }), food = mk156('FOO', { price: 100, totalShares: 20_000 });
+        tech.sector = ['Technologia']; food.sector = ['Żywność']; resetWorld([tech, food]); ensureMarketOperators();
+        const setProfile = id => { marketOperators.XTD.profile = id; };
+        setProfile('tech'); assert(marketAccepts('XTD', tech) && !marketAccepts('XTD', food), 'tylko technologia');
+        setProfile('defensive'); assert(!marketAccepts('XTD', tech) && marketAccepts('XTD', food), 'tylko defensywne');
+        setProfile('cap1m'); assert(getMarketCapValue(tech) >= 1_000_000 ? marketAccepts('XTD', tech) : !marketAccepts('XTD', tech), 'kapitalizacja od 1 mln'); tech.price = 1000; assert(marketAccepts('XTD', tech), 'duża spółka przechodzi'); food.price = 1; assert(!marketAccepts('XTD', food), 'mała nie');
+        setProfile('poland'); assert(marketAccepts('XTD', tech), 'kraj PL'); tech.country = 'DE'; assert(!marketAccepts('XTD', tech), 'obca spółka odrzucona');
+        setProfile(null); assert(marketAccepts('XTD', tech), 'bez profilu przyjmuje wszystkich');
+        assertEq(getStockCountry(createListedCompany({ name: 'Nowa', symbol: 'NWA', sector: ['Energia'], price: 10, totalShares: 1000 })), 'PL', 'kraj PL nowej spółki');
+        let withProfile = 0; withSeededRandom(3, () => { for (let i = 0; i < 200; i++) if (pickMarketProfileId()) withProfile++; });
+        assert(withProfile > 80 && withProfile < 180, `część giełd bez profilu (${withProfile}/200 z profilem)`);
+    });
+
+    test('E6: giełda z profilem podpisuje i tworzy tylko pasujące spółki; przeniesienie notowań też respektuje profil', () => {
+        const a = mk156('AAA', { price: 100, totalShares: 20_000 }), b = mk156('BBB', { price: 100, totalShares: 20_000 }), c = mk156('CCC', { price: 100, totalShares: 20_000 });
+        for (const s of [a, b, c]) { s.exchange = 'SILVER'; }
+        a.sector = ['Technologia']; b.sector = ['Żywność']; c.sector = ['Energia']; resetWorld([a, b, c]); ensureMarketOperators();
+        const op = mk156('XTO', { price: 100, totalShares: 10_000 }); stocks.push(op); op.marketOperator = 'XTD';
+        marketOperators.XTD.status = 'active'; marketOperators.XTD.symbol = op.symbol; marketOperators.XTD.profile = 'tech';
+        for (let i = 0; i < 6; i++) signExclusivity(marketOperators.XTD, op);
+        assertEq(getStockMarket(a), 'XTD', 'technologia podpisana'); assertEq(getStockMarket(b), 'GPW', 'żywność odrzucona'); assertEq(getStockMarket(c), 'GPW', 'energia odrzucona');
+        marketOperators.XTD.profile = 'cap1m';
+        const fresh = spawnMarketMember('XTD', 'test'); assert(fresh && getMarketCapValue(fresh) >= 1_000_000, `nowa spółka spełnia profil kapitalizacji (${fresh && Math.round(getMarketCapValue(fresh))})`);
+        marketOperators.XTD.profile = 'tech'; const t = spawnMarketMember('XTD', 'test'); assert(t && t.sector.includes('Technologia'), 'nowa spółka technologiczna');
+        const small = mk156('SML', { price: 1, totalShares: 1000 }); small.sector = ['Energia']; stocks.push(small); marketOperators.XTD.profile = 'cap1m';
+        small.sharesHeld = 0; playerPortfolio[small.symbol] = { shares: 600, avgPrice: 1, assetType: 'stock' }; small.sharesHeld = 600;
+        assert(!getListingMoveTargets(small).includes('XTD'), 'mała spółka nie przejdzie na giełdę z profilem kapitalizacji');
+    });
+
+    test('E6: spółka NH zostaje na NH, gdy nie chce GPW (cecha), nie stać jej na opłatę albo kontroluje ją gracz; chętna i zamożna awansuje', () => {
+        const list = world156(5, 1_000_000);
+        for (const s of list) { s.market = 'NH'; s.quarterlyEarnings = 20_000; s.financialHealth = 2; s.cash = 50_000; s.marketSinceQ = macro.quarter - 9; s.nhStay = false; }
+        const [stay, poor, mine, ok] = list;
+        stay.nhStay = true; poor.quarterlyEarnings = 3_000; poor.cash = 50_000;
+        playerPortfolio[mine.symbol] = { shares: Math.ceil(mine.totalShares * 0.6), avgPrice: 1, assetType: 'stock' }; mine.sharesHeld = Math.ceil(mine.totalShares * 0.6);
+        for (let i = 0; i < 60; i++) processNhPathQuarterly();
+        assertEq(getStockMarket(stay), 'NH', 'nie chce GPW'); assertEq(getStockMarket(poor), 'NH', 'zysk za mały na opłatę GPW');
+        assertEq(getStockMarket(mine), 'NH', 'gracz większościowy decyduje sam'); assertEq(getStockMarket(ok), 'GPW', 'chętna i zamożna awansuje');
+        const share = (() => { let stays = 0; withSeededRandom(9, () => { for (let i = 0; i < 300; i++) { const s = { }; wantsGpwListing(s); if (s.nhStay) stays++; } }); return stays / 300; })();
+        assert(share > 0.3 && share < 0.5, `ok. 40% spółek zostaje (${share})`);
+    });
 
     // --- koniec grupy 0.16.3 ---
 });
