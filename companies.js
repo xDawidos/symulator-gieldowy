@@ -3461,7 +3461,7 @@ function processFinancialReports() {
         // Logika bankructwa (bez zmian)
         const equity = stock.balanceSheet.assets - stock.balanceSheet.liabilities;
         if ((equity <= 0 || stock.financialHealth <= -5 || isCullCandidate(stock)) && !stock.isBankrupt) {
-             let bankruptcyChance = 0.30 * (typeof getMarketFailureFactor === 'function' ? getMarketFailureFactor(stock) : 1); // 0.15.6: NH i giełda prywatna — większa szansa upadku
+             let bankruptcyChance = 0.30 * (typeof getMarketFailureFactor === 'function' ? getMarketFailureFactor(stock) : 1); // 0.15.6: NH i Włoska Giełda — większa szansa upadku
              if (typeof isProtectedMarketOperator === 'function' && isProtectedMarketOperator(stock)) {
                  // D1 (decyzja 2): ratunek operatora rynku internetowego finansują spółki członkowskie z własnej gotówki,
                  // proporcjonalnie do kapitalizacji. Pełny ratunek = brak upadku; niepełny — mniejsza ochrona i słabsza kondycja.
@@ -9242,7 +9242,7 @@ function handleSuccessfulIPO(startup, successMultiplier) {
 
     const totalShares = Math.max(1000, Math.floor(base * successMultiplier * cycleValuationMultiplier / ipoPrice));
     const debutMarket = routing && !startup.operatorStartup ? chooseDebutMarket(ipoPrice * totalShares, startup) : 'GPW';
-    if (!debutMarket) { parkStartupForListing(startup, successMultiplier); return; } // kwalifikuje się na GPW, ale brak miejsca (albo NH i giełda prywatna pełne)
+    if (!debutMarket) { parkStartupForListing(startup, successMultiplier); return; } // kwalifikuje się na GPW, ale brak miejsca (albo NH i Włoska Giełda pełne)
     const investorShares = Math.floor(totalShares * STARTUP_INVESTORS_SHARE * (startup.operatorStartup ? 1 : getStartupTermsFactor())); // D2: gorsze warunki na nasyconym rynku
     let sharesHeld = 0;
 
@@ -9784,7 +9784,7 @@ function processAccountingQuarterly() {
         if (!stock.hiddenChecked) rollHiddenLiabilities(stock);
         else if (stock.hiddenLiabilities > 0 && Math.random() < HIDDEN_LIABILITY_SPONTANEOUS) revealHiddenLiabilities(stock, 'sprawa sądowa');
     }
-    const isRisky = s => typeof getMarketFraudFactor === 'function' && getMarketFraudFactor(s) > 1; // 0.15.6 E3: giełda prywatna ma własny limit oszustw (wspólny 5% blokowałby jej ×5)
+    const isRisky = s => typeof getMarketFraudFactor === 'function' && getMarketFraudFactor(s) > 1; // 0.15.6 E3: Włoska Giełda ma własny limit oszustw (wspólny 5% blokowałby jej ×5)
     let active = listed.filter(s => s.fraud && !isRisky(s)).length, activeRisky = listed.filter(s => s.fraud && isRisky(s)).length;
     const riskyCount = listed.filter(isRisky).length;
     const knf = typeof getInstitutionEffectiveness === 'function' && typeof oversight === 'object' ? getInstitutionEffectiveness(oversight.knf) : 0.3;
@@ -9800,7 +9800,7 @@ function processAccountingQuarterly() {
         }
         const risky = isRisky(stock);
         if (!isFraudEligible(stock) || (risky ? activeRisky >= Math.max(1, Math.floor(riskyCount * 0.8)) : active >= Math.max(1, Math.floor(listed.length * FRAUD_MAX_SHARE)))) continue;
-        let chance = FRAUD_START_CHANCE * (typeof getMarketFraudFactor === 'function' ? getMarketFraudFactor(stock) : 1); // 0.15.6 E3: giełda prywatna ×5
+        let chance = FRAUD_START_CHANCE * (typeof getMarketFraudFactor === 'function' ? getMarketFraudFactor(stock) : 1); // 0.15.6 E3: Włoska Giełda ×5
         if ((Number(stock.financialHealth) || 0) < 0) chance *= 2;
         if (stock.ceo?.traits?.some(t => ['skorumpowany', 'sklonny_do_korupcji', 'chciwy'].includes(t.id))) chance *= 3;
         if (Math.random() < chance) { stock.fraud = { start: quarter, correctAt: quarter + getRandomIntInRange(...(typeof getFraudDetectionRange === 'function' ? getFraudDetectionRange(stock) : [3, 7])), total: 0 }; if (risky) activeRisky++; else active++; }

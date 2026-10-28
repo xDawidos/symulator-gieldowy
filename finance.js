@@ -1730,16 +1730,16 @@ const MARKET_OPERATOR_DEFS = {
     XTD:      { name: 'XTD Markets', short: 'XTD', commission: 0.002, color: '#8957e5' },
     PLU5:     { name: 'PLU5 Exchange', short: 'PLU5', commission: 0.0015, color: '#d29922' },
     EURONEXT: { name: 'Euronext', short: 'Euronext', commission: 0.0025, color: '#3fb950', dormantForever: true },
-    // 0.15.6: rynki wejścia bez spółki-operatora (listings.js): NewHorizons (państwowy operator, młode i ryzykowne spółki) i giełda prywatna
+    // 0.15.6: rynki wejścia bez spółki-operatora (listings.js): NewHorizons (państwowy operator, młode i ryzykowne spółki) i Włoska Giełda
     NH:       { name: 'NewHorizons', short: 'NH', commission: 0, color: '#2dd4bf', entry: true },
-    PRV:      { name: 'Giełda prywatna', short: 'PRV', commission: 0, color: '#94a3b8', entry: true }
+    PRV:      { name: 'Włoska Giełda', short: 'PRV', commission: 0, color: '#94a3b8', entry: true }
 };
 const OPERATOR_STARTUP_GOAL = [300000, 600000];  // bardzo drogie startupy
 const OPERATOR_STARTUP_SLOWDOWN = 0.25;         // rozwój 4× wolniej niż zwykły startup
 const OPERATOR_SPONSOR_CHANCE = 0.12;           // co kwartał w fazie startupu
 const OPERATOR_SPAWN_CHANCE = 0.1;              // co kwartał, od 4. kwartału gry
 const OPERATOR_LISTING_FEE = 0.0002;            // opłata za notowanie: % kapitalizacji członka na kwartał
-const OPERATOR_EXCLUSIVITY_CHANCE = 0.3;        // 0.16.2: było 0,1 — rynki internetowe podpisywały za mało spółek
+const OPERATOR_EXCLUSIVITY_CHANCE = 0.15;       // 0.16.2: było 0,1 — rynki internetowe podpisywały za mało spółek
 const LISTING_FEE_FACTOR = { GPW: 1, XTD: 0.7, PLU5: 0.5, EURONEXT: 1 }; // B4: tańsze rynki alternatywne
 const LISTING_MOVE_PRICE_EFFECT = { GPW: 0.02, XTD: -0.03, PLU5: -0.03 };  // mniej inwestorów = niższa wycena
 
@@ -1790,7 +1790,7 @@ function isInternetMarket(id) {
     return Boolean(def && !def.main && !def.dormantForever && !def.entry);
 }
 
-/** 0.15.6: rynek wejścia (NH, giełda prywatna) — bez operatora, poza limitem spółek krajowych. */
+/** 0.15.6: rynek wejścia (NH, Włoska Giełda) — bez operatora, poza limitem spółek krajowych. */
 function isEntryMarket(id) {
     return Boolean(getMarketDef(id)?.entry);
 }

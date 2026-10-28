@@ -2139,12 +2139,12 @@ Object.assign(ACADEMY_ENTRIES, {
         ]
     },
     gieldaPrywatna: {
-        title: 'Giełda prywatna i ryzyko oszustwa', get icon() { return academyIcon('alert'); },
-        text: 'Giełda prywatna ma najłagodniejsze wymogi i najsłabszy nadzór. Dlatego przyciąga spółki, które nie dostałyby się gdzie indziej — także takie, które ukrywają problemy. W grze oszustwa księgowe zdarzają się tam ok. 5 razy częściej niż na GPW i są wykrywane później, a ujawnienie boli mocniej: odpis, spadek kursu i zmiana zarządu. Zasada ostrożności: mała pozycja, dywersyfikacja, audyt przed większym zakupem. Fundusz może mieć na giełdzie prywatnej najwyżej 20% swojej wartości.',
-        example: () => { const p = stocks.filter(s => getStockMarket(s) === 'PRV' && !s.isBankrupt); return p.length ? `Na giełdzie prywatnej notowanych jest ${p.length} spółek; trwających oszustw: ${p.filter(s => s.fraud).length} (widoczne dopiero po audycie lub ujawnieniu).` : 'Na giełdzie prywatnej nie ma jeszcze żadnej spółki — trafiają tu słabe spółki z NewHorizons.'; },
+        title: 'Włoska Giełda i ryzyko oszustwa', get icon() { return academyIcon('alert'); },
+        text: 'Włoska Giełda ma najłagodniejsze wymogi i najsłabszy nadzór. Dlatego przyciąga spółki, które nie dostałyby się gdzie indziej — także takie, które ukrywają problemy. W grze oszustwa księgowe zdarzają się tam ok. 5 razy częściej niż na GPW i są wykrywane później, a ujawnienie boli mocniej: odpis, spadek kursu i zmiana zarządu. Zasada ostrożności: mała pozycja, dywersyfikacja, audyt przed większym zakupem. Fundusz może mieć na Włoskiej Giełdzie najwyżej 20% swojej wartości.',
+        example: () => { const p = stocks.filter(s => getStockMarket(s) === 'PRV' && !s.isBankrupt); return p.length ? `Na Włoskiej Giełdzie notowanych jest ${p.length} spółek; trwających oszustw: ${p.filter(s => s.fraud).length} (widoczne dopiero po audycie lub ujawnieniu).` : 'Na Włoskiej Giełdzie nie ma jeszcze żadnej spółki — trafiają tu słabe spółki z NewHorizons.'; },
         quiz: [
-            { q: 'Jak często oszustwa zdarzają się na giełdzie prywatnej względem GPW?', a: ['ok. 5 razy częściej', 'tak samo często', 'rzadziej'], c: 0 },
-            { q: 'Jak ograniczyć ryzyko na giełdzie prywatnej?', a: ['mała pozycja, dywersyfikacja i audyt', 'jedna duża pozycja', 'kupować na kredyt'], c: 0 },
+            { q: 'Jak często oszustwa zdarzają się na Włoskiej Giełdzie względem GPW?', a: ['ok. 5 razy częściej', 'tak samo często', 'rzadziej'], c: 0 },
+            { q: 'Jak ograniczyć ryzyko na Włoskiej Giełdzie?', a: ['mała pozycja, dywersyfikacja i audyt', 'jedna duża pozycja', 'kupować na kredyt'], c: 0 },
             { q: 'Co grozi spółce po ujawnieniu oszustwa?', a: ['odpis, spadek kursu i zmiana zarządu', 'premia od nadzoru', 'nic'], c: 0 }
         ]
     },

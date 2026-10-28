@@ -11316,7 +11316,7 @@ group('0.15.6 E2: NewHorizons (ryzyko, ograniczenia inwestorów, płynność)', 
     });
 });
 
-group('0.15.6 E3: ścieżka startupu, awans z NewHorizons, giełda prywatna', () => {
+group('0.15.6 E3: ścieżka startupu, awans z NewHorizons, Włoska Giełda', () => {
     const debut = (worldCount, fundingGoal, mult = 1) => {
         world156(worldCount, 1_000_000);
         const startup = generateNewStartup();
@@ -11327,16 +11327,16 @@ group('0.15.6 E3: ścieżka startupu, awans z NewHorizons, giełda prywatna', ()
         return startup;
     };
 
-    test('E3: debiut startupu wg kapitalizacji — duży na GPW, średni na NH, mały na giełdę prywatną', () => {
+    test('E3: debiut startupu wg kapitalizacji — duży na GPW, średni na NH, mały na Włoską Giełdę', () => {
         const big = debut(5, 3_000_000);
         assert(!big.assetType && getStockMarket(big) === 'GPW', 'duży debiutuje na GPW');
         const mid = debut(5, 40_000);
         assert(!mid.assetType && getStockMarket(mid) === 'NH' && mid.marketSinceQ !== undefined, `średni na NH (${getStockMarket(mid)}, kap. ${getMarketCapValue(mid)})`);
         assertEq(getListedCompanyCount(), 5, 'NH nie zajmuje miejsc na GPW');
-        world156(5); // minimalny debiut to 1000 akcji po 25–50 zł, więc giełda prywatna to głównie ścieżka z NH; wybór rynku dla bardzo małej kapitalizacji:
-        assertEq(chooseDebutMarket(10_000), 'PRV', 'poniżej wymogu NH → giełda prywatna');
+        world156(5); // minimalny debiut to 1000 akcji po 25–50 zł, więc Włoska Giełda to głównie ścieżka z NH; wybór rynku dla bardzo małej kapitalizacji:
+        assertEq(chooseDebutMarket(10_000), 'PRV', 'poniżej wymogu NH → Włoska Giełda');
         const saved = hasEntryMarketSlot; hasEntryMarketSlot = () => false;
-        try { assertEq(chooseDebutMarket(10_000), null, 'giełda prywatna pełna → czeka'); } finally { hasEntryMarketSlot = saved; }
+        try { assertEq(chooseDebutMarket(10_000), null, 'Włoska Giełda pełna → czeka'); } finally { hasEntryMarketSlot = saved; }
     });
 
     test('E3: kwalifikujący się na GPW czeka w inkubatorze, gdy GPW pełny; NH pełny blokuje debiut na NH', () => {
@@ -11365,19 +11365,19 @@ group('0.15.6 E3: ścieżka startupu, awans z NewHorizons, giełda prywatna', ()
         assertEq(getListedCompanyCount(), 4, 'awansowana wraca do spółek krajowych (3 pozostałe GPW + 1)');
     });
 
-    test('E3: słaba spółka NH po 8 kw. — giełda prywatna albo firma prywatna (wykup), bez ujemnej gotówki i duchów', () => {
+    test('E3: słaba spółka NH po 8 kw. — Włoska Giełda albo firma prywatna (wykup), bez ujemnej gotówki i duchów', () => {
         const list = world156(24, 1_000_000);
         const weak = list.slice(0, 20);
         weak.forEach((s, i) => { s.market = 'NH'; s.marketSinceQ = macro.quarter - 10; s.financialHealth = -1; s.price = 1; s.sharesHeld = 100; aiCompetitors[0].portfolio[s.symbol] = { shares: 100, avgPrice: 1 }; });
         let toPrv = 0, wentPrivate = 0;
         for (let q = 0; q < 60; q++) { const r = processNhPathQuarterly(); toPrv += r.toPrivateMarket; wentPrivate += r.wentPrivate; }
         assert(toPrv >= 1 && wentPrivate >= 1, `oba kierunki zdarzają się (PRV ${toPrv}, prywatne ${wentPrivate})`);
-        assert(getEntryMarketCount('PRV') <= Math.max(3, Math.floor(PRV_SHARE_CAP * 24)), 'pojemność giełdy prywatnej ≤ 10% spółek (min. 3)');
+        assert(getEntryMarketCount('PRV') <= Math.max(3, Math.floor(PRV_SHARE_CAP * 24)), 'pojemność Włoskiej Giełdy ≤ 10% spółek (min. 3)');
         for (const s of weak) if (!stocks.includes(s)) assert(!aiCompetitors[0].portfolio[s.symbol], `bez ducha posiadacza ${s.symbol}`);
         assert(stocks.every(s => !(s.cash < 0)) && governmentTreasury >= 0 && checkWorldInvariants().length === 0, 'gotówka, skarb i niezmienniki');
     });
 
-    test('E3: oszustwa na giełdzie prywatnej ok. 5× częstsze niż na GPW, wykrycie później', () => {
+    test('E3: oszustwa na Włoskiej Giełdzie ok. 5× częstsze niż na GPW, wykrycie później', () => {
         const list = world156(60, 1_000_000);
         list.forEach(s => { s.fundamentals = s.fundamentals || {}; });
         list.slice(30).forEach(s => { s.market = 'PRV'; });
@@ -11402,7 +11402,7 @@ group('0.15.6 E3: ścieżka startupu, awans z NewHorizons, giełda prywatna', ()
         assertEq(a.fraud, null, 'ujawnione'); assertEq(b.fraud, null, 'ujawnione');
     });
 
-    test('E3: gracz może mieć na giełdzie prywatnej najwyżej 20% wartości funduszu', () => {
+    test('E3: gracz może mieć na Włoskiej Giełdzie najwyżej 20% wartości funduszu', () => {
         const [a, b] = world156(2, 1_000_000); b.market = 'PRV'; playerCash = 100_000;
         const nav = getFundAssets();
         assert(nav > 0, 'fundusz ma wartość');
@@ -11675,11 +11675,11 @@ group('0.15.6 E6: media-córka jako gazeta matki', () => {
 });
 
 group('0.15.6 E7: interfejs i Akademia', () => {
-    test('E7: panel Rynki — ścieżka spółki, wymogi i ryzyko słowem (NH, giełda prywatna), bez przycisku koncesji dla rynków wejścia', () => {
+    test('E7: panel Rynki — ścieżka spółki, wymogi i ryzyko słowem (NH, Włoska Giełda), bez przycisku koncesji dla rynków wejścia', () => {
         const list = world156(3); list[0].market = 'NH'; list[1].market = 'PRV';
         ensureMarketOperators();
         const html = renderMarketsPanel();
-        for (const word of ['Ścieżka spółki i wymogi wejścia', 'NewHorizons', 'Giełda prywatna', 'ryzyko oszustwa', 'Ryzyko podwyższone', 'najwyżej 20%']) assert(html.includes(word), `panel zawiera „${word}”`);
+        for (const word of ['Ścieżka spółki i wymogi wejścia', 'NewHorizons', 'Włoska Giełda', 'ryzyko oszustwa', 'Ryzyko podwyższone', 'najwyżej 20%']) assert(html.includes(word), `panel zawiera „${word}”`);
         assert(!/Kup koncesję/.test(html), 'rynki wejścia bez koncesji');
         assert(html.includes('bez operatora'), 'rynki wejścia nie udają operatora z kursem');
     });
@@ -11687,7 +11687,7 @@ group('0.15.6 E7: interfejs i Akademia', () => {
     test('E7: znacznik rynku spółki — ryzyko słowem, nie samym kolorem; spółki miejskie bez ostrzeżenia', () => {
         const [a, b, c] = world156(3); a.market = 'NH'; b.market = 'PRV'; c.market = 'NH'; c.assetType = 'Municipal';
         assertEq(getMarketBadgeText(a), 'rynek NH · ryzyko podwyższone', 'NH'); assertEq(getMarketBadgeText(c), 'rynek NH', 'miejska na NH');
-        assert(/ryzyko oszustwa/.test(getMarketBadgeText(b)), 'giełda prywatna: ryzyko oszustwa słowem');
+        assert(/ryzyko oszustwa/.test(getMarketBadgeText(b)), 'Włoska Giełda: ryzyko oszustwa słowem');
         assert(renderDividendBadges(a).includes('ryzyko podwyższone') && renderDividendBadges(b).includes('ryzyko oszustwa'), 'plakietka przy spółce niesie ryzyko słowem');
     });
 
@@ -11730,7 +11730,7 @@ group('0.15.6 E7: interfejs i Akademia', () => {
         moveStockToMarket(a, 'NH', 'test');
         assert('rynekGlownyAlternatywny' in academy.unlocked, 'zmiana rynku posiadanej spółki odblokowuje hasło');
         moveStockToMarket(a, 'PRV', 'test');
-        assert('gieldaPrywatna' in academy.unlocked, 'giełda prywatna odblokowuje hasło');
+        assert('gieldaPrywatna' in academy.unlocked, 'Włoska Giełda odblokowuje hasło');
     });
 });
 
