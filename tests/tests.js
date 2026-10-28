@@ -13327,6 +13327,71 @@ group('0.16.3', () => {
         assertEq(withRandom(0.9, () => confuciusTrade(kon)), false, 'Tygrys bez gotówki — brak transakcji'); assertEq(sne.holders[kon.id], left, 'akcje bez zmian');
     }));
 
+
+    // --- G21: Forex i marginEngine ---
+    test('G21: forex dostępny po otwarciu obcego rynku; otwarcie pobiera depozyt i spread, zamknięcie zwraca kapitał z wynikiem', () => withLinks(() => {
+        startFund(5_000_000);
+        assert(!openForexPosition('EUR/USD', 1, 100_000, 10).ok, 'bez drugiego rynku zablokowany');
+        joinCountry('DE');
+        const cash0 = playerCash, total0 = getFundAssets(), fxBefore = fxRates.EUR;
+        const r = openForexPosition('EUR/USD', 1, 100_000, 10); assert(r.ok, r.reason);
+        assertEq(Math.round(r.deposit), 10_000, 'depozyt = wartość / dźwignia'); assertEq(Math.round(cash0 - playerCash), 10_000 + 200, 'depozyt + spread 0,2%');
+        assert(Math.abs(getFundAssets() - (total0 - 200)) < 1, 'aktywa spadły tylko o spread (depozyt wchodzi jako kapitał pozycji)');
+        fxRates.EUR = fxBefore * 1.02; // EUR/USD +2% → +20% depozytu przy 1:10
+        assertEq(Math.round(getMarginPnl(r.position)), 2000, 'zysk liczony od całej wartości');
+        const cashMid = playerCash, closed = closeMarginPosition(r.position.id); assert(closed.ok, 'zamknięcie');
+        assertEq(Math.round(playerCash - cashMid), 12_000, 'zwrot depozytu z zyskiem'); assertEq(getMarginPositions().length, 0, 'brak pozycji');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+
+    test('G21: pozycja krótka zyskuje na spadku pary; swap rośnie co tydzień; limit dźwigni pozycji (10) i funduszu (3× aktywów)', () => withLinks(() => {
+        startFund(1_000_000); joinCountry('DE');
+        assert(!openForexPosition('EUR/USD', 1, 50_000, 11).ok && !openForexPosition('EUR/USD', 1, 50_000, 0).ok, 'dźwignia 1–10');
+        assert(!openForexPosition('EUR/EUR', 1, 50_000, 5).ok && !openForexPosition('XXX/USD', 1, 50_000, 5).ok, 'tylko prawdziwe pary');
+        const r = openForexPosition('USD/PLN', -1, 100_000, 5); assert(r.ok, r.reason);
+        fxRates.USD *= 0.98; assert(getMarginPnl(r.position) > 1900, 'krótka zyskuje na spadku');
+        fxRates.USD /= 0.98;
+        const a0 = r.position.accrued; stepMarginPositions(); assert(r.position.accrued > a0, 'koszt utrzymania');
+        assertEq(Math.round(r.position.accrued * 52 / MARGIN_RULES.holdingCostYear), 80_000, 'swap od pożyczonej części (80 000 zł)');
+        const cap = MARGIN_RULES.fundLeverageCap * getFundAssets() - getMarginNotional();
+        const tooBig = openForexPosition('EUR/USD', 1, cap + 1000, 10); assert(!tooBig.ok && tooBig.reason.includes('Limit funduszu'), tooBig.reason);
+        assert(!openForexPosition('EUR/USD', 1, 100, 10).ok, 'za mała pozycja');
+        assert(!openForexPosition('EUR/USD', 1, 1_000_000, 1).ok, 'za mało gotówki na depozyt');
+    }));
+
+    test('G21: margin call — ostrzeżenie poniżej 70%, zamknięcie automatyczne poniżej 50% depozytu, strata ograniczona do depozytu', () => withLinks(() => {
+        startFund(2_000_000); joinCountry('DE');
+        const r = openForexPosition('EUR/USD', 1, 200_000, 10).position, cash0 = playerCash, e0 = fxRates.EUR;
+        fxRates.EUR = e0 * 0.97; // −3% → −6 000 zł (30% depozytu 20 000)
+        stepMarginPositions(); assert(r.warned && getMarginPositions().length === 1, 'ostrzeżenie (kapitał ~70%), pozycja żyje');
+        fxRates.EUR = e0 * 0.94; // −6% → ponad 50% straty
+        stepMarginPositions(); assertEq(getMarginPositions().length, 0, 'zamknięta automatycznie');
+        assert(playerCash > cash0 && playerCash < cash0 + r.deposit * 0.5, 'zwrócono mniej niż połowę depozytu');
+        assertEq(marginClosedLog.at(-1).reason, 'margin', 'powód w dzienniku');
+        const r2 = openForexPosition('EUR/USD', 1, 200_000, 10).position, c1 = playerCash;
+        fxRates.EUR = e0 * 0.6; stepMarginPositions(); // luka kursowa ponad 100% depozytu
+        assert(playerCash >= c1 - 1e-6 && getMarginPositions().length === 0, 'strata nie większa niż depozyt, gotówka nie spada');
+        fxRates.EUR = e0; // kurs z powrotem w widełkach
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+
+    test('G21: pozycje przeżywają zapis, nie dotykają akcji, a silnik obsłuży dowolny zarejestrowany rynek (np. towary w 0.17)', () => withLinks(() => {
+        startFund(2_000_000); joinCountry('DE');
+        const stocksBefore = JSON.stringify(stocks.map(s => [s.symbol, s.sharesHeld]));
+        const r = openForexPosition('EUR/CHF', -1, 80_000, 4).position; r.accrued = 12.5;
+        assertEq(JSON.stringify(stocks.map(s => [s.symbol, s.sharesHeld])), stocksBefore, 'akcje bez zmian');
+        const snap = JSON.parse(JSON.stringify(getForexSnapshot())); resetMarginState(); applyForexSnapshot(snap);
+        const back = getMarginPositions()[0]; assert(back && back.instrument === 'EUR/CHF' && back.side === -1 && back.accrued === 12.5 && back.leverage === 4, 'pozycja po wczytaniu');
+        assertEq(getMarginPositions()[0].id, r.id, 'to samo id'); assert(marginNextId > r.id, 'kolejne id nie koliduje');
+        const savedMarkets = { ...marginMarkets }; let oil = 80;
+        registerMarginMarket('oil', { name: 'Ropa', priceOf: sym => sym === 'BRENT' ? oil : null });
+        try {
+            const o = openMarginPosition({ market: 'oil', instrument: 'BRENT', side: 1, notional: 40_000, leverage: 5 }); assert(o.ok, o.reason);
+            oil = 88; assertEq(Math.round(getMarginPnl(o.position)), 4000, 'zysk na innym rynku');
+            assert(!openMarginPosition({ market: 'oil', instrument: 'XXX', side: 1, notional: 40_000, leverage: 5 }).ok, 'nieznany instrument');
+        } finally { delete marginMarkets.oil; Object.assign(marginMarkets, savedMarkets); resetMarginState(); }
+    }));
+
     // --- koniec grupy 0.16.3 ---
 });
 

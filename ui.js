@@ -7398,6 +7398,7 @@ function checkWorldInvariants() {
         checkPortfolio(manager.fund.portfolio, manager.name);
     }
     if (typeof checkCurrencyInvariants === 'function') problems.push(...checkCurrencyInvariants()); // 0.16.1 G2
+    if (typeof checkMarginInvariants === 'function') problems.push(...checkMarginInvariants()); // 0.16.4 G21
     if (typeof checkGdrInvariants === 'function') problems.push(...checkGdrInvariants()); // 0.16.1 G3
     if (typeof checkCountryInvariants === 'function') problems.push(...checkCountryInvariants()); // 0.16.2 G5
     for (const bond of allBonds) finite(bond.faceValue, `obligacja ${bond.id}`);

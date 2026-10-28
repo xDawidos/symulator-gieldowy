@@ -231,6 +231,16 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Czy kupowanie waluty po niskim kursie zawsze daje zysk?', a: ['nie — spread i dryf średniej mogą go zjeść', 'tak', 'tylko w piątek'], c: 0 }
         ]
     },
+    dzwigniaMarginCall: {
+        title: 'Dźwignia i margin call', get icon() { return academyIcon('samolot'); },
+        text: 'Dźwignia 1:10 oznacza, że wkładasz 10% wartości pozycji (depozyt), a resztę „pożycza” rynek. Zysk i strata liczą się od całej wartości, więc ruch kursu o 5% daje ±50% depozytu. Gdy kapitał pozycji spadnie poniżej 70% depozytu, dostajesz ostrzeżenie (margin call), a poniżej 50% pozycja zamyka się automatycznie. Za utrzymanie pozycji płacisz koszt finansowania (swap), a przy otwarciu spread. Strata nie przekroczy depozytu.',
+        example: () => `Pozycja 100 000 zł z dźwignią 1:10 ma depozyt 10 000 zł. Kurs spada o 5% → strata 5 000 zł, kapitał 50% depozytu — pozycja zostaje zamknięta.`,
+        quiz: [
+            { q: 'Ile wynosi depozyt pozycji 50 000 zł przy dźwigni 1:10?', a: ['5 000 zł', '50 000 zł', '500 zł'], c: 0 },
+            { q: 'Co się dzieje, gdy kapitał pozycji spada poniżej 50% depozytu?', a: ['pozycja zamyka się automatycznie', 'dopłacasz bez końca', 'nic'], c: 0 },
+            { q: 'Czym jest swap w tej grze?', a: ['kosztem finansowania pozycji z dźwignią', 'zyskiem z kursu', 'prowizją od akcji'], c: 0 }
+        ]
+    },
     konsolidacjaGield: {
         title: 'Konsolidacja giełd', get icon() { return academyIcon('samolot'); },
         text: 'Giełdy łączą się, żeby obniżyć koszty i przyciągnąć więcej inwestorów. Gdy giełda przejmuje inną, jej spółki trafiają do wspólnego obrotu. Gdy przejmuje ją obca giełda, spółki płacą wyższe opłaty za notowanie, a kursy chwilowo spadają. Wspólny rynek zwykle zmniejsza spread i prowizje, ale zwiększa zarażanie kryzysami między krajami.',
