@@ -3744,7 +3744,7 @@ function processMarketStarsQuarterly() {
                 correctionCooldown: 30,
                 totalCycles: 0
             };
-            logEvent(`📉 [Gasnąca Gwiazda] ${candidate.name} (${candidate.symbol}) traci pozycję rynkową. Spółka wkracza w fazę schyłkową.`, 'market');
+            console.log(`[Gasnąca Gwiazda] ${candidate.name} (${candidate.symbol}) wkracza w fazę schyłkową.`); // bez komunikatu w grze — gracz ma to zobaczyć w danych
         }
     }
 }
@@ -5341,7 +5341,7 @@ function startCollateralAuction(originalOwnerId, symbol, quantity) {
     if (!stock) return;
 
     const auctionDurationMinutes = 3;
-    const auctionEndTime = Date.now() + (auctionDurationMinutes * 60 * 1000 / currentSpeedMultiplier);
+    const auctionEndTime = getAuctionNow() + auctionDurationMinutes * 60 * 1000;
     const minPrice = stock.price * 0.7; // Cena minimalna 70% wartości rynkowej
 
     currentCollateralAuction = {
@@ -5397,7 +5397,7 @@ function startCollateralAuction(originalOwnerId, symbol, quantity) {
 }
 
 function placeCollateralBid(bidder, quantity, price) {
-    if (!currentCollateralAuction || Date.now() > currentCollateralAuction.endTime) {
+    if (!currentCollateralAuction || getAuctionNow() > currentCollateralAuction.endTime) {
         if (bidder === 'player') showToast("Aukcja akcji nie jest aktywna.");
         return false;
     }

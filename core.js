@@ -3631,6 +3631,11 @@ let activeBonds = []; // Oferty na rynku
 let allTBills = []; // Lista bonów skarbowych
 let currentTBillAuction = null;
 
+/** Zegar aukcji: czas gry (stoi na pauzie, biegnie z prędkością gry), a nie zegar ścienny. */
+function getAuctionNow() {
+    return typeof gameScheduler === 'object' && gameScheduler ? gameScheduler.clockMs : Date.now();
+}
+
 // --- Indeksy ---
 let marketIndexes = [
     {
@@ -4396,7 +4401,7 @@ function checkTBillAccess() {
 }
 
 function placeTBillBid(bidder, quantity, price) {
-    if (!currentTBillAuction || Date.now() > currentTBillAuction.endTime) {
+    if (!currentTBillAuction || getAuctionNow() > currentTBillAuction.endTime) {
         if (bidder === 'player') alert("Aukcja nie jest aktywna.");
         return false;
     }

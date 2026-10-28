@@ -732,9 +732,7 @@ Object.assign(ACADEMY_ENTRIES, {
         text: 'Na dojrzałym rynku pewne spółki przechodzą 6–8 kwartalne cykle skrajnych emocji inwestorów. Jednorożec (Unicorn) notuje dynamiczny wzrost przychodów (+5–7%), wyższe marże i premię wyceny (+25%), lecz po falach silnych wzrostów inwestorzy okresowo realizują zyski (korekta -15–20%). Z kolei Gasnąca Gwiazda zmaga się ze spadkiem przychodów i marż, a jej wycena cierpi z powodu dyskonta, przeplatanego jedynie krótkimi, technicznymi odbiciami ulgi (dead-cat bounce). Role te rotują na rynku w formie sztafety.',
         example: () => {
             const unicorn = typeof stocks !== 'undefined' ? stocks.find(s => s.marketStar?.type === 'unicorn') : null;
-            const fading = typeof stocks !== 'undefined' ? stocks.find(s => s.marketStar?.type === 'fading_star') : null;
             if (unicorn) return `Obecny jednorożec na rynku: ${unicorn.name} (${unicorn.symbol}) — pozostało ${unicorn.marketStar.quartersLeft} kw. cyklu.`;
-            if (fading) return `Obecna gasnąca gwiazda: ${fading.name} (${fading.symbol}) — pozostało ${fading.marketStar.quartersLeft} kw. cyklu.`;
             return 'Jednorożce i gasnące gwiazdy wyłaniają się na rynku od 3. kwartału gry.';
         },
         quiz: [
@@ -1044,8 +1042,7 @@ Object.assign(ACADEMY_ENTRIES, {
         title: 'Pułapka wartości (Value Trap)', icon: '🕳️',
         text: 'Pułapka wartości to sytuacja, w której spółka wydaje się niezwykle tania według tradycyjnych wskaźników (bardzo niskie C/Z lub C/WK poniżej 1), lecz w rzeczywistości jej model biznesowy chyli się ku upadkowi, przychody kurczą się, a rynkowa pozycja gaśnie (np. Gasnąca Gwiazda). Kupowanie takich spółek wyłącznie z powodu „niskiej ceny” często prowadzi do wieloletnich strat.',
         example: () => {
-            const fading = typeof stocks !== 'undefined' ? stocks.find(s => s.marketStar?.type === 'fading_star') : null;
-            return fading ? `Obecna gasnąca gwiazda na parkiecie: ${fading.name} (${fading.symbol}) — C/Z: ${fading.fundamentals?.peRatio?.toFixed(1) || 'N/A'}.` : 'Uważaj na spółki ze spadającymi przychodami, nawet jeśli ich C/Z wydaje się atrakcyjne.';
+            return 'Uważaj na spółki ze spadającymi przychodami, nawet jeśli ich C/Z wydaje się atrakcyjne.';
         },
         quiz: [
             { q: 'Czym jest pułapka wartości?', a: ['Pozornie tanią spółką, której biznes trwale słabnie i przynosi straty', 'Zablokowaniem konta maklerskiego przez giełdę', 'Opłatą za wycenę portfela'], c: 0 },
@@ -1159,7 +1156,7 @@ function checkAcademyTriggers() {
         unlockAcademyEntry('krach_bezpieczniki');
         unlockAcademyEntry('pozyczkodawca');
     }
-    if (stocks.some(s => s.marketStar?.type === 'fading_star')) {
+    if (stocks.some(s => s.marketStar?.type === 'fading_star' && (playerPortfolio?.[s.symbol]?.shares || 0) > 0)) { // hasło dopiero, gdy gracz ją trzyma — inaczej wskazuje ukrytą spółkę
         unlockAcademyEntry('pulapka_wartosci');
     }
     if (getSkillLevel('accountant') >= 3) unlockAcademyEntry('przeplywy');

@@ -4912,7 +4912,7 @@ group('0.13.1 D1/D2: rynki internetowe i limit spółek krajowych', () => {
         assert(Math.max(...goals) > 40_000, `cele zbiórek: max ${Math.max(...goals)}`);
     });
 
-    test('D1: startup operatora ma gwarancję debiutu, rynek ma limit 8 spółek', () => {
+    test('D1: startup operatora ma gwarancję debiutu, rynek ma limit 12 spółek', () => {
         worldD(20);
         const startup = spawnOperatorStartup(marketOperators.XTD);
         startup.isScam = true; startup.successChance = 0;
@@ -6876,16 +6876,16 @@ group('0.14.2 P7: pasek newsów i dymki tylko w sprawach gracza', () => {
         assert(toastStats.shown === 1, 'spółka z portfela gracza');
     });
 
-    test('≤ 3 dymki na minutę gry; nadmiar na pasek; odpowiedź na akcję gracza zawsze', () => {
+    test('≤ 2 dymki na minutę gry; nadmiar na pasek; odpowiedź na akcję gracza zawsze', () => {
         world();
         for (let i = 0; i < 6; i++) showToast(`Alfa Testowa: zdarzenie ${i}`, 'default');
-        assert(toastStats.shown === 3 && toastStats.limited === 3 && newsLog.length === 3, JSON.stringify(toastStats));
+        assert(toastStats.shown === 2 && toastStats.limited === 4 && newsLog.length === 4, JSON.stringify(toastStats));
         playerFund.clockMs += 61_000;
         showToast('Alfa Testowa: kolejna minuta', 'default');
-        assert(toastStats.shown === 4, 'nowa minuta gry');
+        assert(toastStats.shown === 3, 'nowa minuta gry');
         userActionUntil = Date.now() + 1000;
         showToast('Za mało gotówki!', 'error');
-        assert(toastStats.feedback === 1 && toastStats.shown === 5, 'odpowiedź na kliknięcie');
+        assert(toastStats.feedback === 1 && toastStats.shown === 4, 'odpowiedź na kliknięcie');
     });
 
     test('historia paska: najwyżej 50; logEvent z rynku trafia na pasek', () => {
@@ -12706,6 +12706,37 @@ group('0.16.2', () => {
         const bytes = JSON.stringify(getCountriesSnapshot()).length;
         assert(bytes <= 0.15 * 2_300_000, `zapis krajów ${bytes} B (cel: ≤ 15% typowego zapisu 20 lat)`);
         resetGdrState(); initFxState();
+    });
+    test('0.16.2 poprawki: aukcje liczą czas gry (pauza je zatrzymuje), aukcja zastawu się rozstrzyga, SMSR wskakuje przy resztce', () => {
+        resetWorld([makeCompany('AAA')]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        const t0 = gameScheduler.clockMs;
+        try {
+            currentCollateralAuction = { stockSymbol: 'AAA', quantityAvailable: 10, minPrice: 1, endTime: t0 + 1000, bids: [] };
+            gameScheduler.clockMs = t0 + 500;
+            assert(placeCollateralBid('player', 1, 5) === true, 'przed końcem czasu gry oferta przyjęta');
+            currentCollateralAuction.bids = [];
+            gameScheduler.clockMs = t0 + 1500;
+            assert(getAuctionNow() > currentCollateralAuction.endTime && placeCollateralBid('player', 1, 5) === false, 'po końcu czasu gry oferty nie przyjmuje');
+            resolveCollateralAuction();
+            assert(currentCollateralAuction === null, 'rozstrzygnięta aukcja znika');
+        } finally { gameScheduler.clockMs = t0; currentCollateralAuction = null; }
+        // SMSR: wpłata odległa o < 1 zł od celu awansuje poziom (wcześniej pasek 100% bez awansu)
+        const p = getMarketStabilityProject();
+        const level0 = p.level;
+        p.contributions = { state: 25e6, otherFunds: 25e6 - 0.4, player: 0 };
+        processMarketStabilityProjectQuarterly();
+        assert(p.level === level0 + 1, `poziom SMSR ${p.level}`);
+        marketStabilityProject = createMarketStabilityProject();
+    });
+
+    test('0.16.2 poprawki: split pokazuje graczowi liczbę akcji przed i po', () => {
+        const a = Object.assign(makeCompany('SPQ', { price: 2400, totalShares: 10_000, cash: 5_000_000 }), {});
+        resetWorld([a]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' });
+        playerPortfolio.SPQ = { shares: 40, avgPrice: 2000, assetType: 'stock' };
+        const entry = applyShareCountChange(a, 5);
+        assertEq(entry.playerBefore, 40, 'było'); assertEq(entry.playerAfter, 200, 'jest');
     });
     // --- koniec grupy 0.16.2 ---
 });

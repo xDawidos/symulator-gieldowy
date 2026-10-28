@@ -1739,7 +1739,7 @@ const OPERATOR_STARTUP_SLOWDOWN = 0.25;         // rozwój 4× wolniej niż zwyk
 const OPERATOR_SPONSOR_CHANCE = 0.12;           // co kwartał w fazie startupu
 const OPERATOR_SPAWN_CHANCE = 0.1;              // co kwartał, od 4. kwartału gry
 const OPERATOR_LISTING_FEE = 0.0002;            // opłata za notowanie: % kapitalizacji członka na kwartał
-const OPERATOR_EXCLUSIVITY_CHANCE = 0.1;
+const OPERATOR_EXCLUSIVITY_CHANCE = 0.3;        // 0.16.2: było 0,1 — rynki internetowe podpisywały za mało spółek
 const LISTING_FEE_FACTOR = { GPW: 1, XTD: 0.7, PLU5: 0.5, EURONEXT: 1 }; // B4: tańsze rynki alternatywne
 const LISTING_MOVE_PRICE_EFFECT = { GPW: 0.02, XTD: -0.03, PLU5: -0.03 };  // mniej inwestorów = niższa wycena
 
@@ -1766,11 +1766,11 @@ function getMarketLabel(id) {
 // =================================================================================
 // 0.13.1 (D1): RYNKI INTERNETOWE — XTD, PLU5 i nowe rynki powstające w trakcie gry
 // Startup operatora ma gwarancję debiutu; po debiucie operator nie upada, dopóki ma ≥ 3 spółki.
-// Każdy rynek ma limit 8 spółek członkowskich (nie liczą się do limitu spółek krajowych).
+// Każdy rynek ma limit 12 spółek członkowskich (nie liczą się do limitu spółek krajowych).
 // Gracz może kupić jednorazową koncesję na rynek: handel jego spółkami bez prowizji.
 // =================================================================================
 
-const INTERNET_MEMBER_LIMIT = 8;
+const INTERNET_MEMBER_LIMIT = 12;
 const INTERNET_PROTECTION_MEMBERS = 3;
 const MAX_INTERNET_MARKETS = 4;
 const NEW_INTERNET_MARKET_CHANCE = 0.04;   // co kwartał, od 8. kwartału, gdy rynków < MAX_INTERNET_MARKETS

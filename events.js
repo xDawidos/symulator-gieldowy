@@ -1231,7 +1231,7 @@ function triggerTBillAuctionEvent() {
     }
     const quantity = getRandomIntInRange(50, 250);
     const auctionDurationMinutes = 2;
-    const auctionEndTime = Date.now() + (auctionDurationMinutes * 60 * 1000 / currentSpeedMultiplier);
+    const auctionEndTime = getAuctionNow() + auctionDurationMinutes * 60 * 1000;
     currentTBillAuction = {
         quantityAvailable: quantity,
         endTime: auctionEndTime,

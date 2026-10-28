@@ -1233,7 +1233,7 @@ function contributeToMarketStabilityProject(amount) {
     }
 
     const newTotal = p.contributions.state + p.contributions.otherFunds + p.contributions.player;
-    if (newTotal >= currentTarget) {
+    if (newTotal >= currentTarget - 1) {
         advanceMarketStabilityLevel();
     }
 
@@ -1263,12 +1263,13 @@ function processMarketStabilityProjectQuarterly() {
         const totalNow = p.contributions.state + p.contributions.otherFunds + p.contributions.player;
         const remainingToTarget = currentTarget - totalNow;
         if (remainingToTarget > 0) {
-            const otherTranche = Math.min(remainingToTarget * 0.35, 400000 + Math.random() * 800000);
-            p.contributions.otherFunds += Math.round(otherTranche);
+            // 35% reszty w kwartale zbiegało do celu asymptotycznie (pasek 100%, a poziom nie wskakiwał): resztę poniżej 1000 zł dopłacają od razu
+            const otherTranche = remainingToTarget < 1000 ? remainingToTarget : Math.min(remainingToTarget * 0.35, 400000 + Math.random() * 800000);
+            p.contributions.otherFunds += Math.ceil(otherTranche);
         }
 
         const updatedTotal = p.contributions.state + p.contributions.otherFunds + p.contributions.player;
-        if (updatedTotal >= currentTarget) {
+        if (updatedTotal >= currentTarget - 1) {
             advanceMarketStabilityLevel();
         }
     }

@@ -1868,9 +1868,8 @@ function displayStocks(previousInputValues = {}) {
       const flags = getRedFlags(stock);
       if (flags.length >= 2) markers.push(['flaga', `Czerwone flagi: ${flags.map(f => f.label).join(', ')}`, 'down']);
     }
-    if (stock.marketStar && typeof getMarketStarTooltip === 'function') {
-      const isUnicorn = stock.marketStar.type === 'unicorn';
-      markers.push([isUnicorn ? 'jednorozec' : 'trend_down', getMarketStarTooltip(stock), isUnicorn ? 'accent' : 'down']);
+    if (stock.marketStar?.type === 'unicorn' && typeof getMarketStarTooltip === 'function') { // gasnąca gwiazda jest ukryta — gracz ma ją rozpoznać po danych
+      markers.push(['jednorozec', getMarketStarTooltip(stock), 'accent']);
     }
     if (markers.length) {
       const markerWrap = document.createElement('span');
@@ -3244,8 +3243,11 @@ function openBankModal() {
     }
 
     renderBankTicker();
-    switchBankTab('central'); // Ustaw domyślną zakładkę
-    document.getElementById('bank-modal').style.display = 'block';
+    const bankModal = document.getElementById('bank-modal');
+    if (!bankModal) return;
+    const openTab = bankModal.style.display === 'block' ? [...bankModal.querySelectorAll('.bank-tab-btn.active')].map(b => b.id.replace('tab-btn-', ''))[0] : null;
+    switchBankTab(openTab || 'central'); // odświeżenie otwartego banku zostaje na bieżącej zakładce (np. obligacje po zakupie)
+    bankModal.style.display = 'block';
 }
 
 
@@ -3760,7 +3762,7 @@ let toastTimer = null;
 // =================================================================================
 const NEWS_HISTORY_LIMIT = 50;
 const NEWS_TICKER_ITEMS = 12;
-const TOAST_LIMIT_PER_GAME_MINUTE = 3;
+const TOAST_LIMIT_PER_GAME_MINUTE = 2;
 const PLAYER_MATTER_PATTERN = /fundusz|twoj|twój|twoje|twoich|awans|degradac|ocena zarządu|\bkar[aęy]\b|grzywn|przelew|wypłat|konto prywatne|portfel|decyzj|oferta dla|mail/i;
 let newsLog = [];
 let toastGameTimes = [];
@@ -4144,7 +4146,7 @@ function renderCompanyCard() {
             <div>
                 <div class="cc-kicker">${sectorIcon(getMainSector(stock), 14)}${escapeHtml(sector)} · ${escapeHtml(stripEmoji(exchange))}</div>
                 <h2 class="m-0">${escapeHtml(stock.name)} <span class="cc-symbol">${escapeHtml(stock.symbol)}</span></h2>
-                <div class="text-sm text-muted">${stock.isStateOwned ? '<span class="badge badge--neutral">Skarb Państwa</span> ' : ''}${typeof isConcern === 'function' && isConcern(stock) ? '<span class="badge badge--info">koncern</span> ' : ''}${stock.marketStar ? `<span class="badge ${stock.marketStar.type === 'unicorn' ? 'badge--accent' : 'badge--down'}" title="${escapeHtml(typeof getMarketStarTooltip === 'function' ? getMarketStarTooltip(stock) : '')}">${stock.marketStar.type === 'unicorn' ? '🦄 Jednorożec' : '📉 Gasnąca gwiazda'} (${stock.marketStar.quartersLeft} kw.)</span> ` : ''}${stock.ceo?.name ? `prezes ${escapeHtml(stock.ceo.name)}` : ''}</div>
+                <div class="text-sm text-muted">${stock.isStateOwned ? '<span class="badge badge--neutral">Skarb Państwa</span> ' : ''}${typeof isConcern === 'function' && isConcern(stock) ? '<span class="badge badge--info">koncern</span> ' : ''}${stock.marketStar?.type === 'unicorn' ? `<span class="badge badge--accent" title="${escapeHtml(typeof getMarketStarTooltip === 'function' ? getMarketStarTooltip(stock) : '')}">🦄 Jednorożec (${stock.marketStar.quartersLeft} kw.)</span> ` : ''}${stock.ceo?.name ? `prezes ${escapeHtml(stock.ceo.name)}` : ''}</div>
             </div>
             <div class="cc-price">
                 <strong>${formatZl(stock.price)}</strong>
@@ -5189,7 +5191,7 @@ function updateTBillAuctionSection() {
     if (!section) return;
 
     if (currentTBillAuction && playerHasTBillAccess) {
-        const timeLeft = Math.max(0, Math.ceil((currentTBillAuction.endTime - Date.now()) / 1000));
+        const timeLeft = Math.max(0, Math.ceil((currentTBillAuction.endTime - getAuctionNow()) / 1000));
         document.getElementById('t-bill-auction-available').textContent = currentTBillAuction.quantityAvailable;
         document.getElementById('t-bill-auction-timer').textContent = timeLeft;
 
@@ -5303,7 +5305,7 @@ function updateCollateralAuctionSection() {
     if (!section) return;
 
     if (currentCollateralAuction) {
-        const timeLeft = Math.max(0, Math.ceil((currentCollateralAuction.endTime - Date.now()) / 1000));
+        const timeLeft = Math.max(0, Math.ceil((currentCollateralAuction.endTime - getAuctionNow()) / 1000));
         document.getElementById('collateral-auction-symbol').textContent = currentCollateralAuction.stockSymbol;
         document.getElementById('collateral-auction-available').textContent = currentCollateralAuction.quantityAvailable;
         document.getElementById('collateral-auction-min-price').textContent = formatNumberPl(currentCollateralAuction.minPrice, 2);
@@ -8579,6 +8581,8 @@ function openTakeoverModal(symbol) {
     }
     const { initiator, process } = pair;
     const offer = process.offerDetails;
+    const title = document.getElementById('takeover-title');
+    if (title) title.textContent = `${process.hostile === false ? 'Oferta przejęcia' : 'Wrogie przejęcie'}: ${target.name} (${symbol})`;
     const holding = playerPortfolio[symbol];
     const pct = getFundStakePct(target);
     const value = (holding?.shares || 0) * offer.buyoutPricePerShare;
@@ -8588,6 +8592,7 @@ function openTakeoverModal(symbol) {
 
     body.innerHTML = `
         <div class="bank-ticker">
+            <div class="bank-ticker-item"><span>Przejmowana spółka</span><strong>${escapeHtml(target.name)} (${escapeHtml(symbol)})</strong></div>
             <div class="bank-ticker-item"><span>${process.hostile === false ? 'Przyjazny oferent' : 'Agresor'}</span><strong>${escapeHtml(initiator.name)}</strong></div>
             <div class="bank-ticker-item"><span>Cena oferty (premia ${((offer.premium || 0) * 100).toFixed(0)}%)</span><strong>${formatZl(offer.buyoutPricePerShare)}</strong></div>
             <div class="bank-ticker-item"><span>Udział funduszu</span><strong>${formatNumberPl((pct * 100), 1)}% · ${formatZl(value, 0)}</strong></div>
@@ -8929,6 +8934,7 @@ function renderMacroPanel() {
 // POWIADOMIENIA (B2): zamiast okien otwieranych samoczynnie w trakcie gry
 // =================================================================================
 
+const NOTIF_LIFETIME_MS = 30000;
 const notificationActions = new Map();
 let notificationSeq = 0;
 
@@ -8936,8 +8942,11 @@ let notificationSeq = 0;
 function pushNotification(text, onOpen, isValid = null) {
     const bar = document.getElementById('notif-bar');
     if (!bar) { if (typeof onOpen === 'function') onOpen(); return; }
+    const shown = stripEmoji(text);
+    if ([...bar.querySelectorAll('.notif-item > span')].some(span => span.textContent === shown)) return; // to samo powiadomienie już wisi
     const id = `n${++notificationSeq}`;
     notificationActions.set(id, { onOpen, isValid });
+    setTimeout(() => { if (notificationActions.has(id) && !document.querySelector(`#notif-bar [data-id="${id}"]:hover`)) dismissNotification(id); }, NOTIF_LIFETIME_MS); // nie zalega w rogu bez końca
     const item = document.createElement('div');
     item.className = 'notif-item';
     item.dataset.id = id;

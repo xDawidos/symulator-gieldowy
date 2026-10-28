@@ -1621,7 +1621,7 @@ function aiManageBondsAndCity(ai) {
         return;
     }
 
-    if (currentCollateralAuction && Date.now() < currentCollateralAuction.endTime && ai.hasTBillAccess) { // Używamy TBillAccess jako ogólnego dostępu do aukcji BC
+    if (currentCollateralAuction && getAuctionNow() < currentCollateralAuction.endTime && ai.hasTBillAccess) { // Używamy TBillAccess jako ogólnego dostępu do aukcji BC
         const alreadyBid = currentCollateralAuction.bids.some(b => b.bidderId === ai.id);
         if (!alreadyBid) {
             const stock = stocks.find(s=>s.symbol === currentCollateralAuction.stockSymbol);
@@ -1649,7 +1649,7 @@ function aiManageBondsAndCity(ai) {
 
     // --- 👇 NOWA LOGIKA LICYTACJI BONÓW 👇 ---
     // 2. Sprawdź, czy trwa aukcja i czy AI ma dostęp
-    if (currentTBillAuction && Date.now() < currentTBillAuction.endTime && ai.hasTBillAccess) {
+    if (currentTBillAuction && getAuctionNow() < currentTBillAuction.endTime && ai.hasTBillAccess) {
         // Sprawdź, czy AI już złożyło ofertę w tej aukcji (proste zabezpieczenie przed wielokrotnym licytowaniem)
         const alreadyBid = currentTBillAuction.bids.some(b => b.bidderId === ai.id);
         

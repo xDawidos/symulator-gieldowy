@@ -1218,8 +1218,11 @@ function setGameSpeed(speedMultiplier) {
         updateFestival(gameTimeDelta); // Aktualizacja festynu (czas gry)
         updateFestivalCountdown(gameTimeDelta); // Odliczanie do festynu
         applyActiveModifiers(); // Aplikowanie rocznych bonusów
-        if (currentTBillAuction && Date.now() > currentTBillAuction.endTime) {
+        if (currentTBillAuction && getAuctionNow() > currentTBillAuction.endTime) {
             resolveTBillAuction(); // Rozstrzygnij aukcję
+        }
+        if (currentCollateralAuction && getAuctionNow() > currentCollateralAuction.endTime) {
+            resolveCollateralAuction(); // wcześniej nikt jej nie rozstrzygał — aukcja wisiała w nieskończoność
         }
         processCeoActions(gameTimeDelta);
         runAllAi(); // Zawiera AI banków z bazy main.js

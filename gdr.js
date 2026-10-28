@@ -180,8 +180,18 @@ function processGiantEventQuarterly(force = null) {
     let result = null;
     if (kind === 'takeover') {
         const target = pickForeignTakeoverTarget();
-        const giant = FOREIGN_GIANTS[Math.floor(Math.random() * FOREIGN_GIANTS.length)];
-        if (target) result = { kind: 'takeover', giant: giant.id, giantName: giant.name, country: giant.country, ...executeForeignTakeover(target, giant) };
+        const pool = free.length ? free : FOREIGN_GIANTS; // przejmuje koncern, którego jeszcze nie ma na giełdzie — wchodzi do obrotu jako kwity (GDR)
+        const giant = pool[Math.floor(Math.random() * pool.length)];
+        if (target) {
+            result = { kind: 'takeover', giant: giant.id, giantName: giant.name, country: giant.country, ...executeForeignTakeover(target, giant) };
+            if (!foreignIssuers[giant.id]) {
+                const issuer = createForeignIssuer(giant.id);
+                const text = `🌍 ${issuer.name} (${issuer.country}) po przejęciu ${result.name} wchodzi na naszą giełdę jako kwity depozytowe ${getGdrSymbol(issuer)}.`;
+                logEvent(text, 'market');
+                if (typeof pushNews === 'function') pushNews(text, null);
+                result.listedSymbol = getGdrSymbol(issuer);
+            }
+        }
         else if (free.length) kind = 'gdr';
     }
     if (!result && kind === 'gdr' && free.length) {
