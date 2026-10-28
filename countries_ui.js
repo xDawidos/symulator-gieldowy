@@ -73,6 +73,7 @@ function renderCountryCard(id) {
             <div><dt>Kryzys</dt><dd>${crisis}</dd></div>
             <div><dt>Spółki państwowe</dt><dd>${stateIssuers.length ? stateIssuers.map(i => escapeHtml(i.name)).join(', ') : 'brak'}${stateIssuers.length ? ` · skarb kraju (licznik): ${formatNumberPl(st.treasury, 0)} ${def.currency}` : ''}</dd></div>
             <div><dt>Pracownicy (profil kraju)</dt><dd>prawa ${escapeHtml(def.labour.rights)}, szansa związku ×${formatNumberPl(def.labour.unionMult, 1)}${def.labour.shadow ? `, szara strefa +${def.labour.shadow} pp` : ''}</dd></div>
+            <div><dt>Nadzór</dt><dd>${escapeHtml(getOversight(id).name)} (poziom ${getOversight(id).level}/3), próg wezwania ${Math.round(getCallThreshold(id) * 100)}% głosów</dd></div>
             <div><dt>Prowizja operatora</dt><dd>${formatNumberPl(getCountryCommission(id) * 100, 1)}% (z biletem)</dd></div>
         </dl></div>`;
 }

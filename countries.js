@@ -39,6 +39,9 @@ function resetCountriesState() {
 }
 
 function getCountryDef(id) { return COUNTRY_DEFS[id] || null; }
+/** 0.16.3 G15: próg wezwania kraju (66/75/90% głosów) i nadzór (odpowiednik KNF). Przekroczenie progu wymagałoby wezwania na resztę akcji. */
+function getCallThreshold(id) { return COUNTRY_DEFS[id]?.oversight?.callThreshold ?? 0.66; }
+function getOversight(id) { return COUNTRY_DEFS[id]?.oversight || { name: 'nadzór', callThreshold: 0.66, level: 1 }; }
 function getJoinedCountries() { return Object.keys(countryState); }
 function isCountryJoined(id) { return Boolean(countryState[id]); }
 function getCountryLimit(id) { const def = COUNTRY_DEFS[id]; return def ? Math.ceil(def.companies.length * COUNTRY_RULES.limitMult) : 0; }
@@ -492,6 +495,11 @@ function buyForeignShares(issuerId, quantity) {
     if (!canTradeCountry('player', issuer.country)) return { ok: false, reason: `Brak biletu na rynek: ${def?.name || issuer.country}. Bilet kupisz na lotnisku.` };
     if (typeof isMarketHalted === 'function' && isMarketHalted()) return { ok: false, reason: 'Handel wstrzymany — zadziałał bezpiecznik giełdowy.' };
     if (quantity > getGdrFree(issuer)) return { ok: false, reason: 'Nie ma tylu akcji w wolnym obrocie.' };
+    const room = Math.floor(getCallThreshold(issuer.country) * issuer.shares) - getGdrHeld(issuer); // drabina nadzoru (G15): bez wezwania nie przekroczysz progu
+    if (quantity > room) {
+        const o = getOversight(issuer.country);
+        return { ok: false, reason: `Próg wezwania w kraju ${def.name} to ${Math.round(o.callThreshold * 100)}% (nadzór: ${o.name}). Możesz dokupić najwyżej ${Math.max(0, room).toLocaleString('pl-PL')} akcji.` };
+    }
     const cur = issuer.currency, valueLocal = quantity * issuer.price, midPln = toPln(valueLocal, cur);
     const commissionPln = midPln * getCountryCommission(issuer.country);
     const have = getCurrencyCash('player', cur), useLocal = Math.min(have, valueLocal), restLocal = valueLocal - useLocal;
@@ -628,7 +636,8 @@ function botSpendable(bot) { return Math.max(0, getForeignCashPln(bot) - (bot.fx
 function getBotStake(issuer, bot) { return (Number(issuer.holders?.[bot.id]) || 0) / issuer.shares; }
 function botStakeCap(issuer, bot) {
     const joined = countryState[issuer.country]?.joinedQ ?? -99;
-    return macro.quarter - joined < BOT_RULES.firstYearQuarters ? BOT_RULES.maxStakeFirstYear : BOT_RULES.maxStake;
+    const base = macro.quarter - joined < BOT_RULES.firstYearQuarters ? BOT_RULES.maxStakeFirstYear : BOT_RULES.maxStake;
+    return Math.min(base, getCallThreshold(issuer.country) - 0.01); // bot nie przekracza progu wezwania (G15)
 }
 
 /** Boty bez ograniczeń kraju dostają dostęp do rynków, które grają (bot nie kupuje biletów). */

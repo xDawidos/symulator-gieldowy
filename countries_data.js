@@ -9,6 +9,7 @@
 COUNTRY_DEFS.DE = {
     id: 'DE', name: 'Niemcy', currency: 'EUR', region: 'EU', rho: 0.75, rateMean: 0.025,
     operator: { id: 'DAX', name: 'Frankfurter Börsenhaus (DAX)', commission: 0.006 },
+    oversight: { name: 'BaFin', callThreshold: 0.75, level: 3 },
     labour: { wages: 1.6, rights: 'ochronne', unionMult: 1.2, shadow: 0, note: 'współdecydowanie' },
     companies: [
         { id: 'PZW', name: 'Panzerwafel GmbH', sector: ['Żywność', 'Obronność'], kind: 'normal', price: 38, special: 'defense', desc: 'Wafle w racjach wojskowych; rosną z wydatkami na obronność.' },
@@ -33,6 +34,7 @@ COUNTRY_DEFS.DE = {
 COUNTRY_DEFS.US = {
     id: 'US', name: 'USA', currency: 'USD', region: 'AM', rho: 0.6, rateMean: 0.04,
     operator: { id: 'WSE', name: 'Wall Street Exchange', commission: 0.006 },
+    oversight: { name: 'SEC', callThreshold: 0.66, level: 3 },
     labour: { wages: 1.7, rights: 'liberalne', unionMult: 0.5, shadow: 2, note: 'niska szansa związku' },
     companies: [
         { id: 'PLT', name: 'Palant-YR', sector: 'Technologia', subsector: 'Sztuczna inteligencja', kind: 'normal', price: 24, special: 'defense', desc: 'Szpiegostwo dla obronności; kontrakty wywiadowcze rosną z wydatkami na obronność.' },
@@ -61,6 +63,7 @@ COUNTRY_DEFS.US = {
 COUNTRY_DEFS.CZ = {
     id: 'CZ', name: 'Czechy', currency: 'CZK', region: 'EU', rho: 0.7, rateMean: 0.04,
     operator: { id: 'PX', name: 'Burza Praha (PX)', commission: 0.006 },
+    oversight: { name: 'ČNB', callThreshold: 0.66, level: 2 },
     labour: { wages: 0.9, rights: 'standard', unionMult: 0.8, shadow: 2, note: 'standard' },
     companies: [
         { id: 'PIV', name: 'Pivovar Bohemia', sector: 'Alkohole', subsector: 'Piwowarstwo i napoje', kind: 'normal', price: 520, special: 'summer', desc: 'Ulubiona spółka Kozela; upały w lecie podbijają sprzedaż.' },
@@ -84,6 +87,7 @@ COUNTRY_DEFS.CZ = {
 COUNTRY_DEFS.SE = {
     id: 'SE', name: 'Szwecja', currency: 'SEK', region: 'EU', rho: 0.7, rateMean: 0.03,
     operator: { id: 'SSE', name: 'Stockholmska Börsen (SSE)', commission: 0.006 },
+    oversight: { name: 'Finansinspektionen', callThreshold: 0.9, level: 2 },
     labour: { wages: 1.5, rights: 'ochronne', unionMult: 1.5, shadow: 0, note: 'zadowolenie +5' },
     companies: [
         { id: 'SSA', name: 'Surströmming Stålverk AB', sector: ['Przemysł', 'Rybołówstwo'], kind: 'normal', price: 160, special: 'canopening', desc: 'Stal (cykliczna) i kiszony śledź (stabilny); „otwarcie puszki” to skandal albo viral.' },
@@ -101,6 +105,7 @@ COUNTRY_DEFS.SE = {
 COUNTRY_DEFS.CH = {
     id: 'CH', name: 'Szwajcaria', currency: 'CHF', region: 'EU', rho: 0.65, rateMean: 0.01,
     operator: { id: 'SWX', name: 'Giełda Zurychska (SWX)', commission: 0.006 },
+    oversight: { name: 'FINMA', callThreshold: 0.9, level: 3 },
     labour: { wages: 1.9, rights: 'standard', unionMult: 0.6, shadow: 0, note: 'standard' },
     companies: [
         { id: 'WSM', name: 'Waschmabank', sector: 'Bankowość', subsector: 'Bank międzynarodowy', kind: 'normal', price: 62, special: 'launder', desc: 'Bank „bez pytań”: pranie pieniędzy mafii; w skarbcu złoto (tylko informacja).' },
@@ -117,6 +122,7 @@ COUNTRY_DEFS.CH = {
 COUNTRY_DEFS.FR = {
     id: 'FR', name: 'Francja', currency: 'EUR', region: 'EU', rho: 0.75, rateMean: 0.025,
     operator: { id: 'CAC', name: 'Bourse de Paris (CAC)', commission: 0.006 },
+    oversight: { name: 'AMF', callThreshold: 0.75, level: 3 },
     labour: { wages: 1.5, rights: 'ochronne', unionMult: 2.0, shadow: 0, note: 'częste strajki' },
     companies: [
         { id: 'MCG', name: 'Maison Champagnerie', sector: 'Alkohole', kind: 'normal', price: 210, special: 'vintage', desc: 'Co rok losowa jakość winobrania; luksus rośnie w hossie.' },

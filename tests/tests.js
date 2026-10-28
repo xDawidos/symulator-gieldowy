@@ -13074,6 +13074,27 @@ group('0.16.3', () => {
         macro.quarter = q0;
         assertEq(checkWorldInvariants().length, 0, 'niezmienniki po 5 latach');
     }));
+    // --- G15: nadzór i progi wezwania za granicą ---
+    test('G15: każdy kraj ma nadzór i stały próg wezwania 66/75/90%', () => {
+        const expected = { US: 0.66, CZ: 0.66, DE: 0.75, FR: 0.75, SE: 0.9, CH: 0.9 };
+        for (const [id, th] of Object.entries(expected)) { assertEq(getCallThreshold(id), th, `${id}: próg`); assert(getOversight(id).level >= 1 && getOversight(id).name, `${id}: nadzór`); }
+        for (const def of Object.values(COUNTRY_DEFS)) assert([0.66, 0.75, 0.9].includes(def.oversight?.callThreshold), `${def.id}: próg 66/75/90`);
+    });
+
+    test('G15: gracz nie przekroczy progu wezwania w obcej spółce (komunikat z nadzorem), bot też nie', () => withLinks(() => {
+        joinCountry('DE'); runLinkEvent('merged', 'CZ'); // DE: bilet gracza, CZ: połączony kraj (bez biletu)
+        playerCash = 1e12; (foreignTickets.player = [...new Set([...(foreignTickets.player || []), 'DE'])]);
+        const issuer = foreignIssuers.SIE, room = Math.floor(0.75 * issuer.shares);
+        const tooMany = buyForeignShares('SIE', room + 1);
+        assert(!tooMany.ok && tooMany.reason.includes('75%') && tooMany.reason.includes('BaFin'), tooMany.reason);
+        assert(buyForeignShares('SIE', room).ok, 'do progu wolno'); assertEq(getGdrHeld(issuer), room, 'dokładnie próg');
+        assert(!buyForeignShares('SIE', 1).ok, 'ponad próg nie');
+        // bot: limit udziału poniżej progu wezwania kraju
+        const bot = getForeignBots()[0]; const saved = COUNTRY_DEFS.CZ.oversight.callThreshold;
+        COUNTRY_DEFS.CZ.oversight.callThreshold = 0.55;
+        try { assert(botStakeCap(foreignIssuers.PIV, bot) <= 0.54 + 1e-9, 'bot poniżej progu kraju'); } finally { COUNTRY_DEFS.CZ.oversight.callThreshold = saved; }
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
     // --- koniec grupy 0.16.3 ---
 });
 
