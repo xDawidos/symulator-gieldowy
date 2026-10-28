@@ -83,7 +83,7 @@ function noteTiedEvent(message, category) {
 /** Wiadomości od inwestorów (boty) i spółek idą do Tied, systemowe zostają w TeamedUP!. Bez odblokowanego Tied nic nie znika z TeamedUP!. */
 function getMailChannel(message) {
     const s = String(message.sender);
-    if (s === CORPORATION_SENDER || MAGAZINES[s]) return 'teamedup';
+    if (s === CORPORATION_SENDER || MAGAZINES[s] || message.isSpam) return 'teamedup'; // reklamy zostają w TeamedUP! (folder Spam), Tied jest bez reklam
     return isTiedUnlocked() ? 'tied' : 'teamedup';
 }
 
