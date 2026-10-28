@@ -659,6 +659,119 @@ const ceoTraits = {
         description: "Jego gadulstwo sprawia, że firma mocniej reaguje na plotki. Wzmacnia efekty wszystkich zdarzeń firmowych o 10% (pozytywnych i negatywnych)."
     },
 
+    janusz_biznesu: { // 0.16.3 G13b
+        name: "Janusz biznesu",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { growth: 0.01 }, country: 'PL',
+        description: "Tnie koszty, gdzie się da: kurs rośnie o 1% szybciej, ale załoga jest mniej zadowolona (niższe zadowolenie pracowników)."
+    },
+    szwagier_w_ministerstwie: { // 0.16.3 G13b
+        name: "Szwagier w ministerstwie",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { growth: 0.015 }, country: 'PL',
+        description: "Kontrakty państwowe same wpadają do firmy: kurs rośnie o 1,5% szybciej."
+    },
+    polak_potrafi: { // 0.16.3 G13b
+        name: "Polak potrafi",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { growth: 0.005, vol: 0.9 }, country: 'PL',
+        description: "W kryzysie kombinuje i szybko się podnosi: zmienność niższa o 10%, wzrost +0,5%."
+    },
+    cwaniak: { // 0.16.3 G13b
+        name: "Cwaniak",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { growth: 0.03, vol: 1.1 }, country: 'PL',
+        description: "Zysk rośnie szybciej (+3%), ale firma częściej wpada w aferę."
+    },
+    ordnung_muss_sein: { // 0.16.3 G13b
+        name: "Ordnung muss sein",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { vol: 0.85 }, country: 'DE',
+        description: "Niemiecki porządek: zmienność akcji niższa o 15%."
+    },
+    ingenieur: { // 0.16.3 G13b
+        name: "Ingenieur",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { growth: 0.01 }, country: 'DE',
+        description: "Inżynierska dokładność i badania: kurs rośnie o 1% szybciej."
+    },
+    lagom: { // 0.16.3 G13b
+        name: "Lagom",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { vol: 0.9 }, country: 'SE',
+        description: "Szwedzki umiar w ryzyku: zmienność niższa o 10%."
+    },
+    fika: { // 0.16.3 G13b
+        name: "Fika",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { growth: 0.003 }, country: 'SE',
+        description: "Kawa i ciasto z załogą: zadowolenie pracowników rośnie, kurs +0,3%."
+    },
+    tajemnica_bankowa: { // 0.16.3 G13b
+        name: "Tajemnica bankowa",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { vol: 0.9 }, country: 'CH',
+        description: "Dyskrecja uspokaja inwestorów: zmienność niższa o 10%."
+    },
+    neutralnosc: { // 0.16.3 G13b
+        name: "Neutralność",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { vol: 0.85 }, country: 'CH',
+        description: "Szwajcarska neutralność: odporność na kryzysy, zmienność niższa o 15%."
+    },
+    savoir_vivre: { // 0.16.3 G13b
+        name: "Savoir-vivre",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { growth: 0.015 }, country: 'FR',
+        description: "Elegancja sprzedaje się dobrze: kurs rośnie o 1,5% szybciej."
+    },
+    greve_generale: { // 0.16.3 G13b
+        name: "Grève générale",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { vol: 1.05 }, country: 'FR',
+        description: "Związkowcy mają mocny głos: znacznie częstsze związki zawodowe, zmienność +5%."
+    },
+    svejk: { // 0.16.3 G13b
+        name: "Švejk",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { growth: -0.01, vol: 0.8 }, country: 'CZ',
+        description: "Przetrwa każdy kryzys, ale rośnie wolno: zmienność niższa o 20%, wzrost −1%."
+    },
+    piwny_dyplomata: { // 0.16.3 G13b
+        name: "Piwny dyplomata",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { growth: 0.005 }, country: 'CZ',
+        description: "Załatwia sprawy przy piwie: kurs rośnie o 0,5% szybciej."
+    },
+    move_fast: { // 0.16.3 G13b
+        name: "Move fast",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { growth: 0.03, vol: 1.1 }, country: 'US',
+        description: "Szybki wzrost kosztem stabilności: wzrost +3%, zmienność +10%."
+    },
+    shareholder_value: { // 0.16.3 G13b
+        name: "Shareholder value",
+        rarity: "rare",
+        color: "#4caf50",
+        fx: { growth: 0.015 }, country: 'US',
+        description: "Wszystko dla akcjonariuszy (skup akcji własnych): kurs rośnie o 1,5% szybciej."
+    },
+
     // === CECHY RZADKIE (RARE) ===
     pewniak: {
         name: "Pewniak",
@@ -954,6 +1067,9 @@ const SECTOR_NAME_PARTS = {
     'Badania': { prefixes: ['Inno', 'Lab', 'Scien', 'Proto', 'Expe', 'Nova', 'Delta'], suffixes: ['Lab', 'Research', 'Tech', 'Instytut', 'Probe', 'Insight', 'Metric'] },
     'Technologia': { prefixes: [...techPrefixes, 'Byte', 'Cloud'], suffixes: [...techSuffixes, 'Soft', 'Logic'] },
     'Nieruchomości': { prefixes: realtyPrefixes, suffixes: realtySuffixes },
+    'Motoryzacja': { prefixes: ['Auto', 'Moto', 'Silnik', 'Koła', 'Turbo', 'Felga', 'Pojazd'], suffixes: ['Motors', 'Auto', 'Drive', 'Moto', 'Cars', 'Wheels', 'Silnik'] },
+    'Rybołówstwo': { prefixes: ['Ryb', 'Kuter', 'Połów', 'Morze', 'Sieć', 'Łosoś', 'Śledź'], suffixes: ['Fish', 'Połowy', 'Kutry', 'Marine', 'Trawl', 'Przetwórnia', 'Ryby'] },
+    'Alkohole': { prefixes: ['Piwo', 'Słód', 'Chmiel', 'Gorzel', 'Browar', 'Wino', 'Destyl'], suffixes: ['Browar', 'Piwo', 'Spirits', 'Destylarnia', 'Brew', 'Winnica', 'Likier'] },
     'Obronność': { prefixes: ['Arma', 'Tarcza', 'Grom', 'Husar', 'Bastion', 'Stal', 'Orzeł'], suffixes: ['Def', 'Guard', 'Shield', 'Arms', 'Tech', 'Systemy', 'Ochrona'] },
     'Usługi': { prefixes: servicesPrefixes, suffixes: servicesSuffixes }
 };
@@ -3459,7 +3575,7 @@ function processFinancialReports() {
         // Logika bankructwa (bez zmian)
         const equity = stock.balanceSheet.assets - stock.balanceSheet.liabilities;
         if ((equity <= 0 || stock.financialHealth <= -5 || isCullCandidate(stock)) && !stock.isBankrupt) {
-             let bankruptcyChance = 0.30 * (typeof getMarketFailureFactor === 'function' ? getMarketFailureFactor(stock) : 1); // 0.15.6: NH i giełda prywatna — większa szansa upadku
+             let bankruptcyChance = 0.30 * (typeof getMarketFailureFactor === 'function' ? getMarketFailureFactor(stock) : 1); // 0.15.6: NH i Włoska Giełda — większa szansa upadku
              if (typeof isProtectedMarketOperator === 'function' && isProtectedMarketOperator(stock)) {
                  // D1 (decyzja 2): ratunek operatora rynku internetowego finansują spółki członkowskie z własnej gotówki,
                  // proporcjonalnie do kapitalizacji. Pełny ratunek = brak upadku; niepełny — mniejsza ochrona i słabsza kondycja.
@@ -3742,7 +3858,7 @@ function processMarketStarsQuarterly() {
                 correctionCooldown: 30,
                 totalCycles: 0
             };
-            logEvent(`📉 [Gasnąca Gwiazda] ${candidate.name} (${candidate.symbol}) traci pozycję rynkową. Spółka wkracza w fazę schyłkową.`, 'market');
+            console.log(`[Gasnąca Gwiazda] ${candidate.name} (${candidate.symbol}) wkracza w fazę schyłkową.`); // bez komunikatu w grze — gracz ma to zobaczyć w danych
         }
     }
 }
@@ -5341,7 +5457,7 @@ function startCollateralAuction(originalOwnerId, symbol, quantity) {
     if (!stock) return;
 
     const auctionDurationMinutes = 3;
-    const auctionEndTime = Date.now() + (auctionDurationMinutes * 60 * 1000 / currentSpeedMultiplier);
+    const auctionEndTime = getAuctionNow() + auctionDurationMinutes * 60 * 1000;
     const minPrice = stock.price * 0.7; // Cena minimalna 70% wartości rynkowej
 
     currentCollateralAuction = {
@@ -5397,7 +5513,7 @@ function startCollateralAuction(originalOwnerId, symbol, quantity) {
 }
 
 function placeCollateralBid(bidder, quantity, price) {
-    if (!currentCollateralAuction || Date.now() > currentCollateralAuction.endTime) {
+    if (!currentCollateralAuction || getAuctionNow() > currentCollateralAuction.endTime) {
         if (bidder === 'player') showToast("Aukcja akcji nie jest aktywna.");
         return false;
     }
@@ -9242,7 +9358,7 @@ function handleSuccessfulIPO(startup, successMultiplier) {
 
     const totalShares = Math.max(1000, Math.floor(base * successMultiplier * cycleValuationMultiplier / ipoPrice));
     const debutMarket = routing && !startup.operatorStartup ? chooseDebutMarket(ipoPrice * totalShares, startup) : 'GPW';
-    if (!debutMarket) { parkStartupForListing(startup, successMultiplier); return; } // kwalifikuje się na GPW, ale brak miejsca (albo NH i giełda prywatna pełne)
+    if (!debutMarket) { parkStartupForListing(startup, successMultiplier); return; } // kwalifikuje się na GPW, ale brak miejsca (albo NH i Włoska Giełda pełne)
     const investorShares = Math.floor(totalShares * STARTUP_INVESTORS_SHARE * (startup.operatorStartup ? 1 : getStartupTermsFactor())); // D2: gorsze warunki na nasyconym rynku
     let sharesHeld = 0;
 
@@ -9784,7 +9900,7 @@ function processAccountingQuarterly() {
         if (!stock.hiddenChecked) rollHiddenLiabilities(stock);
         else if (stock.hiddenLiabilities > 0 && Math.random() < HIDDEN_LIABILITY_SPONTANEOUS) revealHiddenLiabilities(stock, 'sprawa sądowa');
     }
-    const isRisky = s => typeof getMarketFraudFactor === 'function' && getMarketFraudFactor(s) > 1; // 0.15.6 E3: giełda prywatna ma własny limit oszustw (wspólny 5% blokowałby jej ×5)
+    const isRisky = s => typeof getMarketFraudFactor === 'function' && getMarketFraudFactor(s) > 1; // 0.15.6 E3: Włoska Giełda ma własny limit oszustw (wspólny 5% blokowałby jej ×5)
     let active = listed.filter(s => s.fraud && !isRisky(s)).length, activeRisky = listed.filter(s => s.fraud && isRisky(s)).length;
     const riskyCount = listed.filter(isRisky).length;
     const knf = typeof getInstitutionEffectiveness === 'function' && typeof oversight === 'object' ? getInstitutionEffectiveness(oversight.knf) : 0.3;
@@ -9800,7 +9916,7 @@ function processAccountingQuarterly() {
         }
         const risky = isRisky(stock);
         if (!isFraudEligible(stock) || (risky ? activeRisky >= Math.max(1, Math.floor(riskyCount * 0.8)) : active >= Math.max(1, Math.floor(listed.length * FRAUD_MAX_SHARE)))) continue;
-        let chance = FRAUD_START_CHANCE * (typeof getMarketFraudFactor === 'function' ? getMarketFraudFactor(stock) : 1); // 0.15.6 E3: giełda prywatna ×5
+        let chance = FRAUD_START_CHANCE * (typeof getMarketFraudFactor === 'function' ? getMarketFraudFactor(stock) : 1); // 0.15.6 E3: Włoska Giełda ×5
         if ((Number(stock.financialHealth) || 0) < 0) chance *= 2;
         if (stock.ceo?.traits?.some(t => ['skorumpowany', 'sklonny_do_korupcji', 'chciwy'].includes(t.id))) chance *= 3;
         if (Math.random() < chance) { stock.fraud = { start: quarter, correctAt: quarter + getRandomIntInRange(...(typeof getFraudDetectionRange === 'function' ? getFraudDetectionRange(stock) : [3, 7])), total: 0 }; if (risky) activeRisky++; else active++; }
@@ -10059,8 +10175,8 @@ const CEO_POACH_COOLDOWN = 4;          // limit gracza: 1 na rok
 const UNION_BUST_DETECTION = 0.3;
 
 const EXPLOIT_CEO_TRAITS = ['chciwy', 'skorumpowany', 'czlonek_mafii'];
-const SAVING_CEO_TRAITS = ['tyran', 'skapiec'];
-const SOCIAL_CEO_TRAITS = ['lojalny_pracownikom', 'czlowiek_z_ludu', 'szczodry'];
+const SAVING_CEO_TRAITS = ['tyran', 'skapiec', 'janusz_biznesu']; // Janusz biznesu: niższe zadowolenie załogi (polityka oszczędna)
+const SOCIAL_CEO_TRAITS = ['lojalny_pracownikom', 'czlowiek_z_ludu', 'szczodry', 'fika']; // Fika: zadowolenie pracowników +
 
 function getWorkforceQuarter() {
     return typeof society === 'object' && society ? society.quarter : (typeof macro === 'object' ? macro.quarter : 0);
@@ -10465,7 +10581,8 @@ function processBotCeoPoaching(companies) {
 function getUnionChance(stock) {
     const wf = stock.workforce;
     const policy = LABOR_POLICIES[wf.policy] || LABOR_POLICIES.standard;
-    return UNION_BASE_CHANCE * Math.max(0.2, (50 - wf.satisfaction) / 10) * policy.union * RIGHTS_UNION_MULT[getRightsLevel()] * (wf.employees >= 200 ? 1 : 0.3);
+    const strike = stock.ceo?.traits?.some(t => t.id === 'greve_generale') ? 2 : 1; // 0.16.3: Grève générale — silniejsze związki
+    return UNION_BASE_CHANCE * Math.max(0.2, (50 - wf.satisfaction) / 10) * policy.union * RIGHTS_UNION_MULT[getRightsLevel()] * (wf.employees >= 200 ? 1 : 0.3) * strike;
 }
 
 function processUnionFormation(companies) {

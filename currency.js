@@ -77,7 +77,7 @@ function normalFx() {
 /** Jeden krok tygodniowy kursów (wołany z `processFundWeekly`). Kurs zawsze w widełkach. */
 function stepFxRates() {
     fxWeek++;
-    const crisis = typeof isCrisisActive === 'function' && isCrisisActive();
+    const crisis = (typeof isCrisisActive === 'function' && isCrisisActive()) || Boolean(typeof crisisState === 'object' && crisisState?.pendingImport); // 0.16.2 G9: także kryzys zagraniczny w drodze
     const bear = !crisis && typeof getMarketRegime === 'function' && ['bear', 'capitulation'].includes(getMarketRegime('home')?.phase);
     const stress = crisis ? 1 : bear ? 0.5 : 0;
     for (const code of FOREIGN_CURRENCIES) {

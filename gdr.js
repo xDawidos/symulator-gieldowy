@@ -11,7 +11,7 @@ const FOREIGN_GIANTS = [
     { id: 'GLS', name: 'Glasses', country: 'US', currency: 'USD', sector: 'Technologia', price: 180 },
     { id: 'AMZ', name: 'Amazonka Corp.', country: 'US', currency: 'USD', sector: 'Usługi', price: 140 },
     { id: 'PER', name: 'Pear', country: 'US', currency: 'USD', sector: 'Technologia', price: 210 },
-    { id: 'VWA', name: 'VolksDeutsch Auto', country: 'DE', currency: 'EUR', sector: 'Przemysł', price: 95 },
+    { id: 'VWA', name: 'VolksDeutsch Auto', country: 'DE', currency: 'EUR', sector: 'Motoryzacja', price: 95 },
     { id: 'CRH', name: 'Chemiefabrik Rhein AG', country: 'DE', currency: 'EUR', sector: 'Chemia', price: 70 },
     { id: 'TYM', name: 'Toyotomi Motors', country: 'JP', currency: 'JPY', sector: 'Przemysł', price: 2800 },
     { id: 'ALB', name: 'Alibaka Group', country: 'CN', currency: 'CNY', sector: 'Technologia', price: 90 },
@@ -39,9 +39,9 @@ let giantEventState = { lastQ: -99, count: 0, gdr: 0, takeover: 0 };
 let giantEventLog = [];       // { q, kind, giant | symbol, ... } — ostatnie zdarzenia
 let pendingGiantEvent = null; // wynik do pokazania w oknie (UI w ui.js; bez UI zostaje w dzienniku)
 
-function resetGdrState() { foreignIssuers = {}; giantEventState = { lastQ: -99, count: 0, gdr: 0, takeover: 0 }; giantEventLog = []; pendingGiantEvent = null; }
+function resetGdrState() { foreignIssuers = {}; giantEventState = { lastQ: -99, count: 0, gdr: 0, takeover: 0 }; giantEventLog = []; pendingGiantEvent = null; if (typeof resetCountriesState === 'function') resetCountriesState(); }
 
-function getGdrSymbol(issuer) { return `${issuer.id}.GDR`; }
+function getGdrSymbol(issuer) { return issuer.kind === 'share' ? `${issuer.id}.${issuer.country}` : `${issuer.id}.GDR`; }
 function getForeignIssuerList() { return Object.values(foreignIssuers); }
 
 function createForeignIssuer(giantId) {
@@ -78,6 +78,7 @@ function stepForeignIssuers() {
     const phase = typeof getMarketRegime === 'function' ? getMarketRegime('home')?.phase : 'bull';
     const bear = ['bear', 'capitulation'].includes(phase) || (typeof isCrisisActive === 'function' && isCrisisActive());
     for (const issuer of Object.values(foreignIssuers)) {
+        if (issuer.kind === 'share') continue; // spółki krajów dołączonych: countries.js
         const beta = (typeof SECTORS === 'object' && SECTORS[issuer.sector]?.profile?.beta) || 1;
         const sigma = GDR_RULES.volScale * beta / Math.sqrt(52);
         const drift = (bear ? GDR_RULES.bearDriftYear : GDR_RULES.driftYear) / 52;
@@ -91,6 +92,7 @@ function buyGdr(giantId, quantity, providerId = 'std') {
     const issuer = foreignIssuers[giantId];
     quantity = Math.floor(Number(quantity));
     if (!issuer) return { ok: false, reason: 'Ten kwit nie jest notowany.' };
+    if (issuer.kind === 'share') return { ok: false, reason: 'Kraj tej spółki dołączył do giełdy: akcje kupuje się przez rynek kraju (bilet).' };
     if (!(quantity > 0)) return { ok: false, reason: 'Podaj liczbę kwitów.' };
     if (typeof playerFund !== 'object' || !playerFund) return { ok: false, reason: 'Kwity kupuje fundusz.' };
     if (typeof isMarketHalted === 'function' && isMarketHalted()) return { ok: false, reason: 'Handel wstrzymany — zadziałał bezpiecznik giełdowy.' };
@@ -125,13 +127,21 @@ function sellGdr(giantId, quantity, providerId = 'std') {
 }
 
 /** Przymusowa płynność: po obcej gotówce sprzedajemy kwity (od największej pozycji). Zwraca zdobyte złote. */
+/** Przymusowa sprzedaż akcji zagranicznych: sprzedaż w walucie kraju i od razu wymiana w kantorze. */
+function sellShareForPln(issuer, qty) {
+    const r = sellForeignShares(issuer.id, qty);
+    if (!r.ok) return r;
+    const k = kantorSellCurrency(issuer.currency, r.proceeds);
+    return k.ok ? { ok: true, proceeds: k.pln } : k;
+}
+
 function liquidateGdr(amountPln) {
     let raised = 0;
     const positions = Object.values(foreignIssuers).filter(i => getGdrHeld(i) > 0).sort((a, b) => getGdrHeld(b) * getGdrMid(b) - getGdrHeld(a) * getGdrMid(a));
     for (const issuer of positions) {
         if (raised >= amountPln) break;
         const qty = Math.min(getGdrHeld(issuer), Math.ceil((amountPln - raised) / getGdrQuote(issuer, 'sell')));
-        const result = sellGdr(issuer.id, qty);
+        const result = issuer.kind === 'share' ? sellShareForPln(issuer, qty) : sellGdr(issuer.id, qty);
         if (result.ok) raised += result.proceeds;
     }
     return raised;
@@ -182,8 +192,18 @@ function processGiantEventQuarterly(force = null) {
     let result = null;
     if (kind === 'takeover') {
         const target = pickForeignTakeoverTarget();
-        const giant = FOREIGN_GIANTS[Math.floor(Math.random() * FOREIGN_GIANTS.length)];
-        if (target) result = { kind: 'takeover', giant: giant.id, giantName: giant.name, country: giant.country, ...executeForeignTakeover(target, giant) };
+        const pool = free.length ? free : FOREIGN_GIANTS; // przejmuje koncern, którego jeszcze nie ma na giełdzie — wchodzi do obrotu jako kwity (GDR)
+        const giant = pool[Math.floor(Math.random() * pool.length)];
+        if (target) {
+            result = { kind: 'takeover', giant: giant.id, giantName: giant.name, country: giant.country, ...executeForeignTakeover(target, giant) };
+            if (!foreignIssuers[giant.id]) {
+                const issuer = createForeignIssuer(giant.id);
+                const text = `🌍 ${issuer.name} (${issuer.country}) po przejęciu ${result.name} wchodzi na naszą giełdę jako kwity depozytowe ${getGdrSymbol(issuer)}.`;
+                logEvent(text, 'market');
+                if (typeof pushNews === 'function') pushNews(text, null);
+                result.listedSymbol = getGdrSymbol(issuer);
+            }
+        }
         else if (free.length) kind = 'gdr';
     }
     if (!result && kind === 'gdr' && free.length) {
@@ -223,7 +243,7 @@ function checkGdrInvariants() {
     return problems;
 }
 
-function getGdrSnapshot() { return { issuers: foreignIssuers, events: giantEventState, log: giantEventLog }; }
+function getGdrSnapshot() { return { issuers: Object.fromEntries(Object.entries(foreignIssuers).filter(([, i]) => i.kind !== 'share')), events: giantEventState, log: giantEventLog }; } // akcje krajów: countries.js
 
 function applyGdrSnapshot(snapshot) {
     resetGdrState();

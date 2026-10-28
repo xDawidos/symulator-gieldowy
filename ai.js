@@ -53,6 +53,7 @@ const aiCompetitors = [
         name: 'Jordan "Wilk" Belfort',
         cash: 10500,
         portfolio: {},
+        customLogic: 'wolf', // 0.16.3 G14b: pump and dump (bots_domestic.js); osobowość zostaje do M&A i relacji
         personality: 'pro_investor', 
         accessLevel: 1,
         hasTBillAccess: false, 
@@ -120,6 +121,20 @@ const aiCompetitors = [
         unlockedSkills: {},
         // Można dodać preferencje np. do ryzyka
         riskAversionFactor: 0.2 // (0=bardzo ryzykowny, 1=bardzo ostrożny)
+    },
+    { // 0.16.3 G14b: Graham — cierpliwy inwestor wartości (bots_domestic.js)
+        id: 'ai9',
+        name: 'Beniamin „Margines” Grahamski',
+        cash: 12000,
+        portfolio: {},
+        personality: 'graham',
+        customLogic: 'graham',
+        accessLevel: 1,
+        hasTBillAccess: false,
+        tBills: [],
+        skillPoints: 0,
+        unlockedSkills: {},
+        creditScore: 100
     }
 
 
@@ -1621,7 +1636,7 @@ function aiManageBondsAndCity(ai) {
         return;
     }
 
-    if (currentCollateralAuction && Date.now() < currentCollateralAuction.endTime && ai.hasTBillAccess) { // Używamy TBillAccess jako ogólnego dostępu do aukcji BC
+    if (currentCollateralAuction && getAuctionNow() < currentCollateralAuction.endTime && ai.hasTBillAccess) { // Używamy TBillAccess jako ogólnego dostępu do aukcji BC
         const alreadyBid = currentCollateralAuction.bids.some(b => b.bidderId === ai.id);
         if (!alreadyBid) {
             const stock = stocks.find(s=>s.symbol === currentCollateralAuction.stockSymbol);
@@ -1649,7 +1664,7 @@ function aiManageBondsAndCity(ai) {
 
     // --- 👇 NOWA LOGIKA LICYTACJI BONÓW 👇 ---
     // 2. Sprawdź, czy trwa aukcja i czy AI ma dostęp
-    if (currentTBillAuction && Date.now() < currentTBillAuction.endTime && ai.hasTBillAccess) {
+    if (currentTBillAuction && getAuctionNow() < currentTBillAuction.endTime && ai.hasTBillAccess) {
         // Sprawdź, czy AI już złożyło ofertę w tej aukcji (proste zabezpieczenie przed wielokrotnym licytowaniem)
         const alreadyBid = currentTBillAuction.bids.some(b => b.bidderId === ai.id);
         

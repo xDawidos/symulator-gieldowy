@@ -70,6 +70,7 @@ function applyShareCountChange(stock, factor, { quarter = getSplitQuarter(), kin
     const symbol = stock.symbol, divisor = factor;
     const priceBefore = stock.price, priceAfter = priceBefore / divisor;
     const credits = [];                 // { cash, pay(amount) } — wypłaty za ułamki akcji
+    const playerBefore = (Number(playerPortfolio?.[symbol]?.shares) || 0) + (Number(playerWallet?.portfolio?.[symbol]?.shares) || 0); // do komunikatu: ile akcji było
     const floorShares = x => Math.floor(x + 1e-9);
 
     /** Przelicza jeden pakiet; zwraca nową liczbę akcji (0 → pakiet do usunięcia). */
@@ -176,7 +177,7 @@ function applyShareCountChange(stock, factor, { quarter = getSplitQuarter(), kin
     stock.splitHistory.push({ q: quarter, f: Math.round(factor * 1e6) / 1e6 }); // czynnik skali liczby akcji (opcjonalne pole zapisu v15)
     if (stock.splitHistory.length > 6) stock.splitHistory.shift();
 
-    const entry = { symbol, name: stock.name, quarter, kind, ratio: factor > 1 ? factor : 1 / factor, priceBefore, priceAfter, fractionCash: paid };
+    const entry = { symbol, name: stock.name, quarter, kind, ratio: factor > 1 ? factor : 1 / factor, priceBefore, priceAfter, fractionCash: paid, playerBefore, playerAfter: (Number(playerPortfolio?.[symbol]?.shares) || 0) + (Number(playerWallet?.portfolio?.[symbol]?.shares) || 0) };
     splitLog.push(entry);
     if (splitLog.length > SPLIT_LOG_LIMIT) splitLog.shift();
     return entry;
@@ -212,10 +213,11 @@ function announceShareCountChange(stock, entry) {
     logEvent(text, 'company');
     if (typeof pushNews === 'function') pushNews(text, stock.symbol);
     if (typeof addChartEvent === 'function') addChartEvent(stock, '🔀', split ? `Split ${ratio}: kurs ÷${entry.ratio}` : `Konsolidacja ${ratio}: kurs ×${Math.round(entry.ratio)}`);
-    const held = (playerPortfolio?.[stock.symbol]?.shares || 0) > 0 || (playerWallet?.portfolio?.[stock.symbol]?.shares || 0) > 0;
-    if (!held) return;
-    if (typeof addMail === 'function') addMail({ sender: 'PULS', subject: `🔀 ${stock.name}: ${split ? 'split' : 'konsolidacja akcji'} ${ratio}`, body: `${text}\n\nTwoje pakiety i zlecenia (alerty cenowe, zastaw) przeliczono automatycznie.`, importance: 2, symbol: stock.symbol });
-    if (typeof showToast === 'function') showToast(`${stock.name}: ${split ? 'split' : 'konsolidacja akcji'} ${ratio}. Wartość Twoich akcji bez zmian.`, 'default');
+    if (!(entry.playerBefore > 0)) return;
+    const mine = `Masz teraz ${Math.round(entry.playerAfter).toLocaleString('pl-PL')} akcji (było ${Math.round(entry.playerBefore).toLocaleString('pl-PL')})`;
+    if (typeof addMail === 'function') addMail({ sender: 'PULS', subject: `🔀 ${stock.name}: ${split ? 'split' : 'konsolidacja akcji'} ${ratio}`, body: `${text}\n\n${mine}. Twoje pakiety i zlecenia (alerty cenowe, zastaw) przeliczono automatycznie.`, importance: 2, symbol: stock.symbol });
+    if (typeof showToast === 'function') showToast(`${stock.name}: ${split ? 'split' : 'konsolidacja akcji'} ${ratio}. ${mine}; wartość bez zmian.`, 'default');
+    if (typeof displayPortfolio === 'function') displayPortfolio();
     if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('splitReverseSplit', `${stock.name}: ${split ? 'split' : 'konsolidacja'} ${ratio}`);
 }
 

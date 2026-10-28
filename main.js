@@ -217,6 +217,7 @@ function buildSaveSnapshot({ compact = 0 } = {}) {
         specialists: typeof serializeSubcontractors === 'function' ? serializeSubcontractors() : serializeWithStockRefs(specialists), // 0.15.5 B6: wersja skrócona
         constructionAwardLog, // 0.15.5 B1: okno wygranych przetargów (pole opcjonalne)
         gdr: typeof getGdrSnapshot === 'function' ? getGdrSnapshot() : undefined, // 0.16.1 G3: kwity depozytowe i zdarzenia
+        countries: typeof getCountriesSnapshot === 'function' ? getCountriesSnapshot() : undefined, // 0.16.2 G5: dołączone kraje (pole opcjonalne v16)
         currencies: typeof getCurrencySnapshot === 'function' ? getCurrencySnapshot() : undefined, // 0.16.1 G2: kursy, gotówka w walutach (v16)
         antitrustOffice, antitrustLog, // 0.15.6 E5: poziom urzędu antymonopolowego i interwencje (pola opcjonalne)
         subcontractLog, subcontractorDeals, subcontractorAcquisitionCount, // 0.15.5 B2–B3: okno zleceń podwykonawców, przejęcia pionowe (pola opcjonalne)
@@ -596,6 +597,7 @@ function applySaveSnapshot(snapshot) {
     if (playerFund) delete playerFund.openSubscriptions; // 0.16.1: emisja ciągła wycofana także w starszych zapisach
     if (typeof ensureLaunchedIndexes === 'function') ensureLaunchedIndexes(); // 0.16.1: SIG40/BSIG80 z decyzji Banku Centralnego
     if (typeof applyGdrSnapshot === 'function') applyGdrSnapshot(snapshot.gdr);
+    if (typeof applyCountriesSnapshot === 'function') applyCountriesSnapshot(snapshot.countries); // 0.16.2 G5
     if (typeof applyCurrencySnapshot === 'function') applyCurrencySnapshot(snapshot.currencies); // 0.16.1 G2: v15 → kursy startowe, bez walut
     if (snapshot.antitrustOffice && typeof snapshot.antitrustOffice === 'object') Object.assign(antitrustOffice, snapshot.antitrustOffice); // 0.15.6 E5: poziom urzędu (dawniej nie zapisywany)
     antitrustLog = Array.isArray(snapshot.antitrustLog) ? snapshot.antitrustLog.filter(e => e && typeof e.symbol === 'string') : [];
@@ -1216,8 +1218,11 @@ function setGameSpeed(speedMultiplier) {
         updateFestival(gameTimeDelta); // Aktualizacja festynu (czas gry)
         updateFestivalCountdown(gameTimeDelta); // Odliczanie do festynu
         applyActiveModifiers(); // Aplikowanie rocznych bonusów
-        if (currentTBillAuction && Date.now() > currentTBillAuction.endTime) {
+        if (currentTBillAuction && getAuctionNow() > currentTBillAuction.endTime) {
             resolveTBillAuction(); // Rozstrzygnij aukcję
+        }
+        if (currentCollateralAuction && getAuctionNow() > currentCollateralAuction.endTime) {
+            resolveCollateralAuction(); // wcześniej nikt jej nie rozstrzygał — aukcja wisiała w nieskończoność
         }
         processCeoActions(gameTimeDelta);
         runAllAi(); // Zawiera AI banków z bazy main.js
@@ -1489,6 +1494,7 @@ gameTimers.weekly = setGameInterval(() => {
         applyCrowdingPressureToWeak(); // D2: nasycony rynek — słabe spółki tanieją szybciej
         if (typeof processIndexLaunchQuarterly === 'function') processIndexLaunchQuarterly(); // 0.16.1: Bank Centralny uruchamia SIG40 i BSIG80
         if (typeof processGiantEventQuarterly === 'function') processGiantEventQuarterly(); // 0.16.1 G3: „Gigant wkracza na scenę” (gdr.js)
+        if (typeof processCountriesQuarterly === 'function') processCountriesQuarterly(); // 0.16.2 G5: rynki zagraniczne, bilety, boty (countries.js)
         if (typeof processListingsQuarterly === 'function') processListingsQuarterly(); // 0.15.6: wymogi utrzymania, rynki NH i prywatny (listings.js)
         if (typeof enforceListingLimitQuarterly === 'function') enforceListingLimitQuarterly(); // 0.15.4 P5: powyżej 115 spółek krajowych wymuszone wycofanie najsłabszych
         processAwaitingListings(); // P1: startupy czekające na wolne miejsce na giełdzie
@@ -2028,7 +2034,8 @@ if (typeof window !== 'undefined' && !window.__GAME_TEST_MODE__) window.addEvent
 // Funkcja uruchamiająca AI (z bazy main.js - zawiera AI banków inwestycyjnych)
 function runAllAi() {
     aiCompetitors.forEach(ai => {
-        if (ai.isMafia || ai.isGuard) return; // Bruno Gato (mafia.js) i Gwardia (defense.js) mają własną logikę
+        if (ai.isMafia || ai.isGuard || ai.isForeignBot) return; // Bruno Gato (mafia.js), Gwardia (defense.js) i boty zagraniczne (countries.js) mają własną logikę
+        if (ai.customLogic) { if (Math.random() < 0.15) { runCustomBot(ai); checkAiTierUpgrade(ai); } return; } // 0.16.3 G14b: Graham i Wilk (bots_domestic.js)
         if (Math.random() < 0.15) {
             makeAiDecision(ai);
             checkAiTierUpgrade(ai);

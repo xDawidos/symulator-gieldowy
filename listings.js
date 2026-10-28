@@ -1,5 +1,5 @@
 // listings.js — 0.15.6 „Giełdy wejścia”: wymogi wejścia i utrzymania na GPW, rynek NewHorizons (NH, państwowy operator)
-// i giełda prywatna (PRV). Rynki NH i PRV są wpisane w MARKET_OPERATOR_DEFS (finance.js, flaga `entry`), nie mają spółki-operatora,
+// i Włoska Giełda (PRV). Rynki NH i PRV są wpisane w MARKET_OPERATOR_DEFS (finance.js, flaga `entry`), nie mają spółki-operatora,
 // nie liczą się do limitu spółek krajowych (GPW), ale liczą się do łącznego sufitu (LISTING_TOTAL_CAP).
 // Stan spółki (pola opcjonalne, zapis v15): market, marketSinceQ, belowReqQ. Progi z diagnozy plany/raporty/diagnoza_0.15.6.md.
 
@@ -63,7 +63,7 @@ function moveStockToMarket(stock, marketId, reason, priceEffect = 0) {
     stock.marketSinceQ = typeof macro === 'object' ? macro.quarter : 0;
     delete stock.belowReqQ;
     if (marketId === 'NH' && typeof unlockAcademyEntry === 'function' && isStockOwnedByPlayer(stock)) unlockAcademyEntry('rynekGlownyAlternatywny', `${stock.name}: zmiana rynku`);
-    if (marketId === 'PRV' && typeof unlockAcademyEntry === 'function' && isStockOwnedByPlayer(stock)) unlockAcademyEntry('gieldaPrywatna', `${stock.name}: giełda prywatna`);
+    if (marketId === 'PRV' && typeof unlockAcademyEntry === 'function' && isStockOwnedByPlayer(stock)) unlockAcademyEntry('gieldaPrywatna', `${stock.name}: Włoska Giełda`);
     if (priceEffect) applyPriceEffect(stock.symbol, priceEffect, priceEffect > 0 ? 'positive' : 'negative', 'company');
     const text = `🔀 ${stock.name} (${stock.symbol}) przechodzi z ${getMarketLabel(from)} na ${getMarketLabel(marketId)}${reason ? ` — ${reason}` : ''}.`;
     logEvent(text, 'market');
@@ -145,7 +145,7 @@ function canManagerInvestIn(manager, stock) {
     return !rules || isPersonalityAllowed(rules, 'Managers', manager?.personality);
 }
 
-/** Czy gracz ma stanowisko dające dostęp do rynku spółki (NH od poziomu 2, giełda prywatna od 3). */
+/** Czy gracz ma stanowisko dające dostęp do rynku spółki (NH od poziomu 2, Włoska Giełda od 3). */
 function canPlayerTradeMarket(stock) {
     const rules = getEntryRules(stock);
     return !rules || playerAccessLevel >= rules.playerAccess;
@@ -167,10 +167,10 @@ function processNewHorizonsQuarterly() {
     return supported;
 }
 
-// --- E3: ścieżka startupu i giełda prywatna ---
-// Debiut: kapitalizacja ≥ wymóg GPW → GPW (gdy brak miejsca: czeka w inkubatorze); ≥ wymóg NH → NH; poniżej → giełda prywatna.
-// NH → po NH_PROMOTE_MIN_AGE kw.: awans na GPW (spełnia wymogi), a słabe spółki: giełda prywatna albo firma prywatna (wykup).
-// Giełda prywatna: szansa startu oszustwa ×5 względem GPW (kwartalnie), wykrycie później (4–10 kw.), mocniejszy spadek po ujawnieniu,
+// --- E3: ścieżka startupu i Włoska Giełda ---
+// Debiut: kapitalizacja ≥ wymóg GPW → GPW (gdy brak miejsca: czeka w inkubatorze); ≥ wymóg NH → NH; poniżej → Włoska Giełda.
+// NH → po NH_PROMOTE_MIN_AGE kw.: awans na GPW (spełnia wymogi), a słabe spółki: Włoska Giełda albo firma prywatna (wykup).
+// Włoska Giełda: szansa startu oszustwa ×5 względem GPW (kwartalnie), wykrycie później (4–10 kw.), mocniejszy spadek po ujawnieniu,
 // upadek ×1,5 (ENTRY_MARKET_RULES), pojemność ≤ 10% spółek, gracz najwyżej 20% wartości funduszu.
 const LISTING_RULES = { debutRouting: true };   // testy starsze od 0.15.6 wyłączają w resetWorld (debiut zawsze na GPW)
 const PRV_SHARE_CAP = 0.10;
@@ -181,7 +181,7 @@ const PRV_PLAYER_LIMIT = 0.20;
 const NH_PROMOTE_MIN_AGE = 8;           // kwartały na NH przed awansem / rozwidleniem
 const NH_PROMOTE_CHANCE = 0.35;         // co kwartał dla spółki spełniającej wymogi GPW
 const NH_FORK_CHANCE = 0.15;            // co kwartał dla słabej spółki NH
-const NH_FORK_PRIVATE_SHARE = 0.4;      // z rozwidlenia: firma prywatna (wykup); reszta — giełda prywatna
+const NH_FORK_PRIVATE_SHARE = 0.4;      // z rozwidlenia: firma prywatna (wykup); reszta — Włoska Giełda
 
 function isDebutRoutingActive() {
     return LISTING_RULES.debutRouting;
@@ -206,7 +206,7 @@ function getMarketRevealPenalty(stock) {
     return getStockMarket(stock) === 'PRV' ? PRV_REVEAL_PENALTY : 0;
 }
 
-/** Limit gracza na giełdzie prywatnej: tekst odmowy albo null. */
+/** Limit gracza na Włoskiej Giełdzie: tekst odmowy albo null. */
 function checkPrivateMarketLimit(stock, value) {
     if (getStockMarket(stock) !== 'PRV') return null;
     if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry('gieldaPrywatna');
@@ -216,10 +216,10 @@ function checkPrivateMarketLimit(stock, value) {
     }, 0);
     const nav = typeof getFundAssets === 'function' ? getFundAssets() : 0; // aktywa funduszu (nie NAV na jednostkę)
     if (!(nav > 0) || held + value <= nav * PRV_PLAYER_LIMIT) return null;
-    return `Giełda prywatna: wysokie ryzyko oszustwa i słaby nadzór — fundusz może tam trzymać najwyżej ${PRV_PLAYER_LIMIT * 100}% wartości (${formatZl(nav * PRV_PLAYER_LIMIT, 0)}).`;
+    return `Włoska Giełda: wysokie ryzyko oszustwa i słaby nadzór — fundusz może tam trzymać najwyżej ${PRV_PLAYER_LIMIT * 100}% wartości (${formatZl(nav * PRV_PLAYER_LIMIT, 0)}).`;
 }
 
-/** E3: co kwartał — spółki NH po 8 kw.: awans na GPW albo (słabe) giełda prywatna / firma prywatna. */
+/** E3: co kwartał — spółki NH po 8 kw.: awans na GPW albo (słabe) Włoska Giełda / firma prywatna. */
 function processNhPathQuarterly() {
     const quarter = typeof macro === 'object' ? macro.quarter : 0;
     const result = { promoted: 0, toPrivateMarket: 0, wentPrivate: 0 };
@@ -471,7 +471,7 @@ function getEntryMarketNote(id) {
 function getMarketBadgeText(stock) {
     const id = getStockMarket(stock);
     if (id === 'NH') return stock.assetType === 'Municipal' ? 'rynek NH' : 'rynek NH · ryzyko podwyższone';
-    if (id === 'PRV') return 'giełda prywatna · ryzyko oszustwa';
+    if (id === 'PRV') return 'Włoska Giełda · ryzyko oszustwa';
     return `członek rynku ${getMarketLabel(id)}`;
 }
 
@@ -498,11 +498,11 @@ function renderListingPathPanel() {
     const profit = (req, exempt) => req.profit ? (exempt ? 'zysk (bez wymogu dla spółek innowacyjnych)' : 'dodatni zysk') : 'brak wymogu';
     return `<h4 class="mt-3">Ścieżka spółki i wymogi wejścia</h4>
         <ol class="list-plain text-sm"><li>Start-up w inkubatorze (pula) → debiut: kapitalizacja co najmniej ${money(gpw.cap)} → <strong>główny parkiet GPW</strong>; mniej, ale co najmniej ${money(nh.cap)} → <strong>NewHorizons</strong>.</li>
-        <li>Z NewHorizons po ${NH_PROMOTE_MIN_AGE} kw.: awans na GPW (spełnia wymogi), a słaba spółka — <strong>giełda prywatna</strong> albo wyjście z giełdy jako firma prywatna.</li>
+        <li>Z NewHorizons po ${NH_PROMOTE_MIN_AGE} kw.: awans na GPW (spełnia wymogi), a słaba spółka — <strong>Włoska Giełda</strong> albo wyjście z giełdy jako firma prywatna.</li>
         <li>GPW: spółka poniżej ${pct(LISTING_RETAIN_FACTOR)} wymogu kapitalizacji przez ${LISTING_BELOW_QUARTERS} kw. schodzi na NewHorizons zamiast upadać.</li></ol>
         <div class="bank-grid">${card("rynek", "GPW", "główny parkiet", [["Kapitalizacja", "≥ " + money(gpw.cap)], ["Wolny obrót", "≥ " + pct(gpw.freeFloat)], ["Zysk", profit(gpw)], ["Mnożnik wymogów", "×" + gpw.mult.toFixed(2)]], "Wymogi rosną, gdy rynek jest zatłoczony: ×1,0 do 100 spółek krajowych, ×1,5 przy 125. Ryzyko: standardowe.")}
         ${card("rakieta", "NewHorizons", "rynek wejścia, państwowy operator", [["Kapitalizacja", "≥ " + money(nh.cap)], ["Wolny obrót", "≥ " + pct(nh.freeFloat)], ["Zysk", profit(nh, true)], ["Spółek", String(getEntryMarketCount("NH")) + "/" + NH_CAPACITY]], "Ryzyko podwyższone: zmienność ×" + ENTRY_MARKET_RULES.NH.volatility + ", upadki ×" + ENTRY_MARKET_RULES.NH.failure + ", ale zdarzają się przełomy. Nie inwestują tu ostrożne boty i fundusze; płynność podtrzymuje państwo.")}
-        ${card("alert", "Giełda prywatna", "rynek wejścia, ryzyko oszustwa bardzo wysokie", [["Kapitalizacja", "≥ " + money(prv.cap)], ["Wolny obrót", "≥ " + pct(prv.freeFloat)], ["Zysk", profit(prv)], ["Spółek", String(getEntryMarketCount("PRV"))]], "Oszustwa ok. " + PRV_FRAUD_FACTOR + "× częstsze niż na GPW, wykrywane później (" + PRV_DETECTION_RANGE.join("–") + " kw.). Fundusz może tu trzymać najwyżej " + Math.round(PRV_PLAYER_LIMIT * 100) + "% wartości.")}</div>`;
+        ${card("alert", "Włoska Giełda", "rynek wejścia, ryzyko oszustwa bardzo wysokie", [["Kapitalizacja", "≥ " + money(prv.cap)], ["Wolny obrót", "≥ " + pct(prv.freeFloat)], ["Zysk", profit(prv)], ["Spółek", String(getEntryMarketCount("PRV"))]], "Oszustwa ok. " + PRV_FRAUD_FACTOR + "× częstsze niż na GPW, wykrywane później (" + PRV_DETECTION_RANGE.join("–") + " kw.). Fundusz może tu trzymać najwyżej " + Math.round(PRV_PLAYER_LIMIT * 100) + "% wartości.")}</div>`;
 }
 
 /** Jeden kwartalny punkt wejścia modułu (main.js). */

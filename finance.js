@@ -1730,16 +1730,16 @@ const MARKET_OPERATOR_DEFS = {
     XTD:      { name: 'XTD Markets', short: 'XTD', commission: 0.002, color: '#8957e5' },
     PLU5:     { name: 'PLU5 Exchange', short: 'PLU5', commission: 0.0015, color: '#d29922' },
     EURONEXT: { name: 'Euronext', short: 'Euronext', commission: 0.0025, color: '#3fb950', dormantForever: true },
-    // 0.15.6: rynki wejścia bez spółki-operatora (listings.js): NewHorizons (państwowy operator, młode i ryzykowne spółki) i giełda prywatna
+    // 0.15.6: rynki wejścia bez spółki-operatora (listings.js): NewHorizons (państwowy operator, młode i ryzykowne spółki) i Włoska Giełda
     NH:       { name: 'NewHorizons', short: 'NH', commission: 0, color: '#2dd4bf', entry: true },
-    PRV:      { name: 'Giełda prywatna', short: 'PRV', commission: 0, color: '#94a3b8', entry: true }
+    PRV:      { name: 'Włoska Giełda', short: 'PRV', commission: 0, color: '#94a3b8', entry: true }
 };
 const OPERATOR_STARTUP_GOAL = [300000, 600000];  // bardzo drogie startupy
 const OPERATOR_STARTUP_SLOWDOWN = 0.25;         // rozwój 4× wolniej niż zwykły startup
 const OPERATOR_SPONSOR_CHANCE = 0.12;           // co kwartał w fazie startupu
 const OPERATOR_SPAWN_CHANCE = 0.1;              // co kwartał, od 4. kwartału gry
 const OPERATOR_LISTING_FEE = 0.0002;            // opłata za notowanie: % kapitalizacji członka na kwartał
-const OPERATOR_EXCLUSIVITY_CHANCE = 0.1;
+const OPERATOR_EXCLUSIVITY_CHANCE = 0.15;       // 0.16.2: było 0,1 — rynki internetowe podpisywały za mało spółek
 const LISTING_FEE_FACTOR = { GPW: 1, XTD: 0.7, PLU5: 0.5, EURONEXT: 1 }; // B4: tańsze rynki alternatywne
 const LISTING_MOVE_PRICE_EFFECT = { GPW: 0.02, XTD: -0.03, PLU5: -0.03 };  // mniej inwestorów = niższa wycena
 
@@ -1766,11 +1766,11 @@ function getMarketLabel(id) {
 // =================================================================================
 // 0.13.1 (D1): RYNKI INTERNETOWE — XTD, PLU5 i nowe rynki powstające w trakcie gry
 // Startup operatora ma gwarancję debiutu; po debiucie operator nie upada, dopóki ma ≥ 3 spółki.
-// Każdy rynek ma limit 8 spółek członkowskich (nie liczą się do limitu spółek krajowych).
+// Każdy rynek ma limit 12 spółek członkowskich (nie liczą się do limitu spółek krajowych).
 // Gracz może kupić jednorazową koncesję na rynek: handel jego spółkami bez prowizji.
 // =================================================================================
 
-const INTERNET_MEMBER_LIMIT = 8;
+const INTERNET_MEMBER_LIMIT = 12;
 const INTERNET_PROTECTION_MEMBERS = 3;
 const MAX_INTERNET_MARKETS = 4;
 const NEW_INTERNET_MARKET_CHANCE = 0.04;   // co kwartał, od 8. kwartału, gdy rynków < MAX_INTERNET_MARKETS
@@ -1790,7 +1790,7 @@ function isInternetMarket(id) {
     return Boolean(def && !def.main && !def.dormantForever && !def.entry);
 }
 
-/** 0.15.6: rynek wejścia (NH, giełda prywatna) — bez operatora, poza limitem spółek krajowych. */
+/** 0.15.6: rynek wejścia (NH, Włoska Giełda) — bez operatora, poza limitem spółek krajowych. */
 function isEntryMarket(id) {
     return Boolean(getMarketDef(id)?.entry);
 }
@@ -2143,7 +2143,7 @@ function processMarketsQuarterly() {
 
 function collectListingFees(operator, operatorStock) {
     for (const stock of stocks.filter(s => getStockMarket(s) === operator.id && s !== operatorStock && !s.assetType && !s.isBankrupt)) {
-        const fee = Math.min(Math.max(0, stock.cash) * 0.05, getMarketCapValue(stock) * OPERATOR_LISTING_FEE * (LISTING_FEE_FACTOR[operator.id] ?? 1));
+        const fee = Math.min(Math.max(0, stock.cash) * 0.05, getMarketCapValue(stock) * OPERATOR_LISTING_FEE * (LISTING_FEE_FACTOR[operator.id] ?? 1) * (operator.id === 'GPW' && typeof getListingFeeBoost === 'function' ? getListingFeeBoost() : 1));
         if (!(fee > 0)) continue;
         adjustCompanyCash(stock, -fee);
         adjustBalanceSheet(stock, { assets: -fee, retainedEarnings: -fee });

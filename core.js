@@ -1820,8 +1820,8 @@ function getGdpDriver() {
 // (profile, cykle, mediany, filtry, skaner, Akademia). Podsektor może nadpisać pola profilu sektora.
 const SECTOR_GROUPS = [
     { id: 'finance',  name: 'Finanse',            icon: '💰', sectors: ['Bankowość', 'Finanse'] },
-    { id: 'consumer', name: 'Konsumpcja',         icon: '🛒', sectors: ['Żywność', 'Dobra konsumpcyjne', 'Turystyka', 'Media', 'Gaming'] },
-    { id: 'industry', name: 'Przemysł i surowce', icon: '🏭', sectors: ['Przemysł', 'Chemia', 'Energia', 'Budowlany', 'Transport i logistyka'] },
+    { id: 'consumer', name: 'Konsumpcja',         icon: '🛒', sectors: ['Żywność', 'Rybołówstwo', 'Alkohole', 'Dobra konsumpcyjne', 'Turystyka', 'Media', 'Gaming'] },
+    { id: 'industry', name: 'Przemysł i surowce', icon: '🏭', sectors: ['Przemysł', 'Motoryzacja', 'Chemia', 'Energia', 'Budowlany', 'Transport i logistyka'] },
     { id: 'health',   name: 'Zdrowie i nauka',    icon: '🏥', sectors: ['Medycyna', 'Badania'] },
     { id: 'tech',     name: 'Technologia',        icon: '💻', sectors: ['Technologia'] },
     { id: 'realty',   name: 'Nieruchomości',      icon: '🏢', sectors: ['Nieruchomości'] },
@@ -1839,7 +1839,10 @@ const SECTORS = {
             'Fintech': { profile: { beta: 1.5, pe: 25 }, delta: { growth: 0.05 }, specialist: true, mechanic: 'knf', weight: 4 } // T2: licencja KNF (waga ×4 w losowaniu — decyzja użytkownika)
         } },
     'Żywność':               { icon: '🍞', profile: { beta: 0.5, rateSens: 0.4, pe: 15, margin: 0.12, growth: 0.03, ps: 1.0, da: 0.03 },
-        subsectors: { 'Rolnictwo': { peopleSubsidy: true } } },                                             // dotacje Ludowców (0.13)
+        subsectors: { 'Rolnictwo': { peopleSubsidy: true }, 'Słodycze': {} } },                              // dotacje Ludowców (0.13); Słodycze: 0.16.3 G11
+    'Rybołówstwo':           { icon: '🐟', profile: { beta: 0.6, rateSens: 0.4, pe: 14, margin: 0.12, growth: 0.02, ps: 1.0, da: 0.05 } }, // 0.16.3 G11: stabilne, popyt mało elastyczny (0,3), koszt pracy 25%
+    'Alkohole':              { icon: '🍺', profile: { beta: 0.5, rateSens: 0.4, pe: 17, margin: 0.20, growth: 0.02, ps: 2.0, da: 0.04 }, // 0.16.2 G6a: defensywne, popyt mało elastyczny (0,4)
+        subsectors: { 'Piwowarstwo i napoje': {} } },
     'Dobra konsumpcyjne':    { icon: '🛍️', profile: { beta: 1.0, rateSens: 0.6, pe: 16, margin: 0.14, growth: 0.04, ps: 1.3, da: 0.03 } },
     'Turystyka':             { icon: '✈️', profile: { beta: 1.5, rateSens: 0.8, pe: 15, margin: 0.15, growth: 0.04, ps: 1.5, da: 0.06 } },
     'Media':                 { icon: '📺', profile: { beta: 1.1, rateSens: 0.6, pe: 14, margin: 0.18, growth: 0.02, ps: 1.8, da: 0.04 },
@@ -1847,6 +1850,7 @@ const SECTORS = {
     'Gaming':                { icon: '🎮', profile: { beta: 1.4, rateSens: 1.0, pe: 20, margin: 0.25, growth: 0.07, ps: 3.0, da: 0.06 } },
     'Przemysł':              { icon: '⚙️', profile: { beta: 1.3, rateSens: 0.8, pe: 13, margin: 0.14, growth: 0.03, ps: 1.0, da: 0.05 },
         subsectors: { 'Robotyka': { delta: { growth: 0.02, margin: 0.02 } } } },
+    'Motoryzacja':           { icon: '🚗', profile: { beta: 1.4, rateSens: 1.0, pe: 12, margin: 0.12, growth: 0.03, ps: 0.8, da: 0.05 } }, // 0.16.2 G6a: cykliczna, koszt pracy 22% przychodów
     'Chemia':                { icon: '⚗️', profile: { beta: 1.2, rateSens: 0.7, pe: 13, margin: 0.16, growth: 0.03, ps: 1.1, da: 0.05 } },
     'Energia':               { icon: '⚡', profile: { beta: 0.8, rateSens: 0.9, pe: 12, margin: 0.25, growth: 0.02, ps: 1.5, da: 0.08 },
         subsectors: {
@@ -1899,6 +1903,9 @@ const SECTOR_NAME_WORDS = {
     'Technologia': ['Tech', 'Soft', 'Digital', 'Data'],
     'Nieruchomości': ['Estate', 'Properties', 'Development', 'Dom'],
     'Obronność': ['Defense', 'Guard', 'Shield', 'Arms'],
+    'Motoryzacja': ['Motors', 'Auto', 'Drive', 'Wheels'],
+    'Alkohole': ['Brew', 'Spirits', 'Cellar', 'Hops'],
+    'Rybołówstwo': ['Fish', 'Catch', 'Trawl', 'Marine'],
     'Usługi': ['Service', 'Serwis', 'Partner', 'Pro']
 };
 
@@ -3626,6 +3633,11 @@ let activeBonds = []; // Oferty na rynku
 let allTBills = []; // Lista bonów skarbowych
 let currentTBillAuction = null;
 
+/** Zegar aukcji: czas gry (stoi na pauzie, biegnie z prędkością gry), a nie zegar ścienny. */
+function getAuctionNow() {
+    return typeof gameScheduler === 'object' && gameScheduler ? gameScheduler.clockMs : Date.now();
+}
+
 // --- Indeksy ---
 let marketIndexes = [
     {
@@ -3808,6 +3820,8 @@ function updateStockPrices() {
                     case 'ksiegowy': volatilityModifier *= 0.95; break;
                     case 'lowca_glow': volatilityModifier += 0.15; break;
                 }
+                const fx = typeof ceoTraits === 'object' ? ceoTraits[trait.id]?.fx : null; // 0.16.3 G13b: cechy krajowe opisane danymi
+                if (fx) { priceGrowthModifier += fx.growth || 0; volatilityModifier *= fx.vol || 1; }
             });
         }
         
@@ -4215,6 +4229,7 @@ function calculateNetWorth(entity) {
     value += allBonds.filter(bond => bond.ownerId === entity.id).reduce((sum, bond) => sum + (typeof getBondValue === 'function' ? getBondValue(bond) : (bond.faceValue || 1000)), 0);
     value += (entity.tBills || []).length * 1000;
     if (typeof getForeignCashPln === 'function') value += getForeignCashPln(entity); // 0.16.1 G2b
+    if (typeof getForeignSharesValue === 'function') value += getForeignSharesValue(entity.id); // 0.16.2 G8: akcje zagraniczne
     return value;
 }
 
@@ -4390,7 +4405,7 @@ function checkTBillAccess() {
 }
 
 function placeTBillBid(bidder, quantity, price) {
-    if (!currentTBillAuction || Date.now() > currentTBillAuction.endTime) {
+    if (!currentTBillAuction || getAuctionNow() > currentTBillAuction.endTime) {
         if (bidder === 'player') alert("Aukcja nie jest aktywna.");
         return false;
     }
@@ -5209,7 +5224,7 @@ const SOCIETY_CLASSES = [
 ];
 
 // Elastyczność przychodów sektora względem indeksu popytu (dobra luksusowe > 1, podstawowe < 1).
-const DEMAND_ELASTICITY = { 'Turystyka': 1.5, 'Gaming': 1.3, 'Nieruchomości': 1.2, 'Dobra konsumpcyjne': 1.0, 'Usługi': 0.8, 'Media': 0.6, 'Żywność': 0.3 };
+const DEMAND_ELASTICITY = { 'Motoryzacja': 1.3, 'Alkohole': 0.4, 'Rybołówstwo': 0.3, 'Turystyka': 1.5, 'Gaming': 1.3, 'Nieruchomości': 1.2, 'Dobra konsumpcyjne': 1.0, 'Usługi': 0.8, 'Media': 0.6, 'Żywność': 0.3 };
 const DEMAND_GROWTH_SCALE = 0.02;           // +(popyt − 1) × elastyczność × 2 pp na kwartał
 const POPULATION_NATURAL_GROWTH = 0.0005;   // +0,05% na kwartał
 const CLASS_MOBILITY_LIMIT = 0.008;         // ±0,8% udziału klasy na kwartał

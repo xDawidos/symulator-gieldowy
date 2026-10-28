@@ -64,7 +64,7 @@ function addSectorShock(sector, target, options = {}) {
     const shock = {
         id: nextSectorShockId++, sector, subsector: options.subsector || null, target,
         rampQ: Math.max(0, options.rampQ ?? 0), holdQ: Math.max(0, options.holdQ ?? 2), fadeQ: Math.max(0.01, options.fadeQ ?? 1),
-        startQ: options.startQ ?? crisisTime(), lineId: options.lineId || null, revenue: options.revenue || 0
+        startQ: options.startQ ?? crisisTime(), lineId: options.lineId || null, revenue: options.revenue || 0, country: options.country || null // 0.16.2 G9: premia sektora per kraj (null = Polska)
     };
     sectorShocks.push(shock);
     updateAllSectorPremiums();
@@ -82,6 +82,7 @@ function getSectorShockPremium(stock) {
     const time = crisisTime();
     let total = 0;
     for (const shock of sectorShocks) {
+        if (shock.country) continue; // szok obcego kraju nie dotyka spółek krajowych
         const share = getCompanyBubbleShare(stock, { sector: shock.sector, subsector: shock.subsector });
         if (share > 0) total += share * getSectorShockValue(shock, time);
     }
@@ -94,7 +95,7 @@ function getCrisisRevenueFactor(stock) {
     const time = crisisTime();
     let effect = 0;
     for (const shock of sectorShocks) {
-        if (!shock.revenue || !shock.target) continue;
+        if (!shock.revenue || !shock.target || shock.country) continue;
         const share = getCompanyBubbleShare(stock, { sector: shock.sector, subsector: shock.subsector });
         if (share > 0) effect += share * shock.revenue * Math.max(0, getSectorShockValue(shock, time) / shock.target);
     }
@@ -116,7 +117,7 @@ function pruneSectorShocks() {
 const CRISIS_STAGES = ['spark', 'burst', 'spread', 'intervention', 'bottom', 'recovery'];
 const CRISIS_STAGE_NAMES = { spark: 'Zapowiedź', burst: 'Wybuch', spread: 'Zarażanie', intervention: 'Interwencja', bottom: 'Dno', recovery: 'Odbicie' };
 const CRISIS_STAGE_LENGTHS = { spark: [1, 2], burst: [1, 1], spread: [1, 3], intervention: [1, 2], bottom: [1, 2] };
-const CRISIS_BASE_CHANCE = 0.01;      // pokrętło 0,5–2% na kwartał
+const CRISIS_BASE_CHANCE = 0.015;     // pokrętło 0,5–2% na kwartał (0.16.2: 1% → 1,5%: 0,7–1,0 linii na 20 lat było dolną granicą celu 1–2)
 const CRISIS_QUIET_QUARTERS = 12;     // linia najwcześniej po tylu kwartałach bez krachu i linii
 const CRISIS_REPLACES_CRASH = 0.40;   // szansa, że wylosowany krach jest linią
 const CRISIS_MAX_VICTIMS = 3;
@@ -230,13 +231,17 @@ function getEligibleCrisisLines(regime = getMarketRegime('home')) {
 /** Rozpoczyna linię: Zapowiedź (z sygnałem) albo od razu Wybuch (zamiast krachu). */
 function startCrisisLine(id, options = {}) {
     const def = CRISIS_LINES[id];
-    if (!def || crisisLine) return null;
+    if (!def || crisisLine || crisisState.pendingImport) return null;
+    if (!options.arrived && !options.forced && typeof startForeignOriginCrisis === 'function') { // 0.16.2 G9: ok. 25% linii zaczyna się za granicą
+        const pending = startForeignOriginCrisis(id, options);
+        if (pending) return pending;
+    }
     const lens = {
         spark: options.skipSpark ? 0 : rangeInt(CRISIS_STAGE_LENGTHS.spark), burst: 1, spread: rangeInt(CRISIS_STAGE_LENGTHS.spread),
         intervention: rangeInt(CRISIS_STAGE_LENGTHS.intervention), bottom: rangeInt(CRISIS_STAGE_LENGTHS.bottom), recovery: rangeInt(def.recoveryQ)
     };
     crisisLine = {
-        id, stage: 'spark', qInStage: 0, startQuarter: crisisQuarter(), lens, victims: [], bankrupted: [], rescued: [], forced: Boolean(options.forced),
+        id, stage: 'spark', qInStage: 0, startQuarter: crisisQuarter(), origin: options.origin || 'PL', lens, victims: [], bankrupted: [], rescued: [], forced: Boolean(options.forced),
         gigStart: getGigIndexValue(), gigMin: getGigIndexValue(), fundStart: playerFund ? getFundNav() : 0, trustStart: playerFund?.trust ?? 0,
         positionStart: playerProfile?.positionId || null, techShare: 0, rateStart: Number(centralBank?.baseInterestRate) || 0, fundMin: playerFund ? getFundNav() : 0, positiveStages: 0, stagesSeen: 0
     };
@@ -532,6 +537,7 @@ function processCrisesWeekly() {
 /** Co kwartał: przejścia etapów, nowa linia (po spokoju), scenariusz startowy. */
 function processCrisesQuarterly() {
     const q = crisisQuarter();
+    if (typeof processImportedCrisis === 'function' && processImportedCrisis()) return; // 0.16.2 G9: linia z zagranicy dociera do Polski
     if (crisisLine) {
         const line = crisisLine;
         line.qInStage++;
@@ -557,7 +563,7 @@ function processCrisesQuarterly() {
 
 /** Z checkMarketCrashQuarterly: 40% wylosowanych krachów jest linią (bez Zapowiedzi). Zwraca true, gdy linia zastąpiła krach. */
 function maybeReplaceCrashWithCrisisLine() {
-    if (crisisLine || Math.random() >= CRISIS_REPLACES_CRASH) return false;
+    if (crisisLine || crisisState.pendingImport || Math.random() >= CRISIS_REPLACES_CRASH) return false;
     const eligible = getEligibleCrisisLines();
     if (!eligible.length) return false;
     return Boolean(startCrisisLine(getRandomElement(eligible), { skipSpark: true }));
@@ -570,7 +576,7 @@ function finishCrisisLine() {
     const gigDrop = line.gigStart > 0 ? line.gigMin / line.gigStart - 1 : 0;
     const gigChange = line.gigStart > 0 ? gigNow / line.gigStart - 1 : 0;
     const fundChange = line.fundStart > 0 ? fundNow / line.fundStart - 1 : 0;
-    const result = { id: line.id, startQ: line.startQuarter, endQ: crisisQuarter(), burstQ: line.burstQ, gigDrop, gigChange, fundChange, bankrupted: [...line.bankrupted], rescued: [...line.rescued], techShare: line.techShare, trust: playerFund?.trust ?? 0, forced: line.forced, quartersToRecover: line.recoverQ ?? null };
+    const result = { id: line.id, origin: line.origin || 'PL', delayQ: line.delayQ ?? 0, startQ: line.startQuarter, endQ: crisisQuarter(), burstQ: line.burstQ, gigDrop, gigChange, fundChange, bankrupted: [...line.bankrupted], rescued: [...line.rescued], techShare: line.techShare, trust: playerFund?.trust ?? 0, forced: line.forced, quartersToRecover: line.recoverQ ?? null };
     crisisState.history.push(result);
     crisisState.lastEventQ = crisisQuarter();
     if (typeof addMail === 'function') {
@@ -648,7 +654,17 @@ if (typeof ACHIEVEMENTS === 'object') {
 // W5. Interfejs: sekcja „Kryzys” w oknie „Rynek”
 // ---------------------------------------------------------------------------------
 
-function renderCrisisSection() {
+function renderCrisisCountries() {
+    if (typeof getContagionSummary !== 'function') return '';
+    const sum = getContagionSummary();
+    if (!sum.countries.length && !sum.pending) return '';
+    const pending = sum.pending ? `<p class="text-sm" role="status"><strong>${escapeHtml(sum.pending.line)}</strong> wybuchła w kraju ${escapeHtml(sum.pending.countryName || sum.pending.origin)} i dotrze do Polski ${sum.pending.delayLeft ? `za ${sum.pending.delayLeft} kw.` : 'w tym kwartale'}.</p>` : '';
+    const origin = sum.origin && sum.origin !== 'PL' ? `<p class="text-sm">Linia przyszła z kraju ${escapeHtml(COUNTRY_DEFS[sum.origin]?.name || sum.origin)}${sum.delayQ ? ` z opóźnieniem ${sum.delayQ} kw.` : ' bez opóźnienia'}.</p>` : '';
+    const rows = sum.countries.map(c => `<tr><td>${flagIcon(c.id, 12)} ${escapeHtml(c.name)}</td><td class="text-right">${formatNumberPl(c.link * 100, 0)}%</td><td class="text-right">${c.premium > 0 ? '▲ +' : c.premium < 0 ? '▼ ' : '■ '}${formatNumberPl(c.premium * 100, 0)}%</td><td>${c.cap === null ? 'brak ograniczenia' : `cel premii ≤ ${formatNumberPl(c.cap * 100, 0)}%`}</td></tr>`).join('');
+    return `<div><h4 class="bank-section-title">Zarażanie między krajami</h4>${pending}${origin}${rows ? `<table class="asset-mini-table w-full"><thead><tr><th>Kraj</th><th class="text-right">Powiązanie</th><th class="text-right">Premia rynku</th><th>Stan</th></tr></thead><tbody>${rows}</tbody></table>` : ''}<p class="text-sm text-muted">Kryzys z jednego kraju dochodzi do innych z opóźnieniem 0–2 kw. Siła zależy od powiązania krajów i od tego, czy dany sektor jest w linii.</p></div>`;
+}
+
+function renderCrisisSectionBase() {
     const stateRows = (items, sign) => items.filter(i => i.premium).map(i => `<li>${escapeHtml(i.subsector ? `${i.sector} / ${i.subsector}` : i.sector)} <strong class="${sign < 0 ? 'text-down' : 'text-up'}">${i.premium > 0 ? '+' : ''}${Math.round(i.premium * 100)}%</strong> <span class="text-muted">${sign < 0 ? 'traci' : 'zyskuje'}</span></li>`).join('');
     if (!crisisLine) {
         const last = crisisState.history[crisisState.history.length - 1];
@@ -662,3 +678,5 @@ function renderCrisisSection() {
         <div class="market-grid"><ul class="list-plain">${stateRows(def.lose, -1)}</ul><ul class="list-plain">${stateRows(def.gain, 1)}</ul></div>
         <p class="text-sm">${escapeHtml(reaction)} Upadłości: ${crisisLine.bankrupted.length}, ratunki państwa: ${crisisLine.rescued.length}.</p></div>`;
 }
+
+function renderCrisisSection() { return renderCrisisSectionBase() + renderCrisisCountries(); } // 0.16.2 G9: sekcja „Kryzys” z krajami i opóźnieniem zarażenia

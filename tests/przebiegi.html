@@ -177,6 +177,16 @@ PRESETS['kampanie'] = PRESETS['fundusz-gig'] + `(function () {
 })();`;
 // 0.15.3 W0/W7: wymuszona linia kryzysu (scenariusz startowy, start w kw. 5–16) — pomiar każdej linii osobno.
 for (const id of ['banking', 'dotcom', 'oil', 'black', 'pandemic']) PRESETS['kryzys-' + id] = PRESETS['fundusz-gig'] + `setCrisisScenario('${id}');`;
+// 0.16.2: kraje DE, US, CZ otwarte od startu (lotnisko wymuszone, bez biletów gracza); kontrola rozmiaru zapisu, czasu kroku i korelacji.
+PRESETS['kraje'] = `(function () {
+        airportState.forced = true;
+        for (const id of ['DE', 'US', 'CZ']) { try { if (!isCountryJoined(id)) joinCountry(id, 'preset'); } catch (e) { (window.__presetErrors = window.__presetErrors || []).push('kraj ' + id + ': ' + e); } }
+    })();`;
+PRESETS['kraje-gig'] = PRESETS['fundusz-gig'] + PRESETS['kraje'];
+// 0.16.3: sześć krajów (DE, US, CZ, SE, CH, FR) od startu — kontrola obciążenia i zapisu
+PRESETS['kraje-eu'] = PRESETS['kraje'] + `(function () { for (const id of ['SE', 'CH', 'FR']) { try { if (!isCountryJoined(id)) joinCountry(id, 'preset'); } catch (e) { (window.__presetErrors = window.__presetErrors || []).push('kraj ' + id + ': ' + e); } } })();`;
+// izolacja źródła różnicy GIG: kraje bez wejścia Santosa na rynek PL (jego zakupy podbijają kursy o ≤ 2% na transakcję)
+PRESETS['kraje-gig-bez-santosa'] = `FOREIGN_BOTS.find(b => b.id === 'fb_santos').enterHome = false;` + PRESETS['kraje-gig'];
 PRESETS['gracz-aktywny'] = PRESETS['fundusz-gig'] + `(function () {
     const w = window.__wallet = { byPos: {}, quartersAt: {}, excess: [] };
     const origPay = recordPayment;
@@ -705,7 +715,8 @@ const PROBE = `(function () {
 
         const soc = typeof society === 'object' && society ? society : null;
         const wfCompanies = companies.filter(c => c.workforce);
-        s.quarters.push({ q: macro.quarter, gig, margin: rev ? ebitda / rev : null, marginNoSub: revNoSub ? ebitdaNoSub / revNoSub : null, marginStd: revStd ? ebitdaStd / revStd : null,
+        const cx = typeof getJoinedCountries === 'function' ? Object.fromEntries(getJoinedCountries().map(id => { const defs = COUNTRY_DEFS[id].companies; const list = getCountryIssuers(id).filter(i => !i.state && !i.generated); const m = list.reduce((a, i) => a + Math.log(i.price / (defs.find(c => c.id === i.id)?.price || i.price)), 0) / Math.max(1, list.length); return [id, Math.round(Math.exp(m) * 1000) / 1000]; })) : null;
+        s.quarters.push({ q: macro.quarter, cx, gig, margin: rev ? ebitda / rev : null, marginNoSub: revNoSub ? ebitdaNoSub / revNoSub : null, marginStd: revStd ? ebitdaStd / revStd : null,
             gigCap10: s.gigCap10Val, buyHold: buyHoldVal, gigSurvivors: s.gigSurvivorsVal,
             epsMedian: h0Med(epsList), epsP10: h0Pct(epsList, 0.1), epsP90: h0Pct(epsList, 0.9),
             peMedian: h0Med(peList), marginMedian: h0Med(marginList),
@@ -869,7 +880,9 @@ const PROBE = `(function () {
         };
 
         const p0151 = P.finish(yearsTotal);
-        return { ...p0151, giant: typeof giantEventState !== 'undefined' ? { ...giantEventState, log: giantEventLog, gdrListed: Object.keys(foreignIssuers), fx: Object.fromEntries(Object.entries(fxRates).map(([k, v]) => [k, Math.round(v * 1e4) / 1e4])), fxProblems: checkCurrencyInvariants() } : null, ma: s.ma ? s.ma.finish() : null, h0, tsr, moneyWarn: s.moneyWarn || [], moneyWarnQuarters: s.moneyWarnQuarters || 0, poolStake: s.poolStake, wallet: window.__wallet || null, presetErrors: window.__presetErrors || [], camp: window.__campResult ? window.__campResult() : null, crises: typeof crisisSummary === 'function' ? crisisSummary() : null, sectorIssues, saveSizes, subStart: s.subStart, subEnd: s.subEnd, multiSegEnd: s.multiSeg, mechanics: s.mechanics || null, badPrice: s.badPrice, negCash: s.negCash, mailBy: s.mailBy, bailouts: s.bailouts, flowWarnings: s.flowWarnings, fund: s.fund, panelText: panel ? panel.textContent.split(/\\s+/).join(' ').slice(0, 600) : null, panelError: s.panelError || null, elections: (macro.election?.history || []).filter(e => e.quarter >= s.quarters[0].q),
+        const corrOf = id => { const rows = s.quarters.filter(x => x.cx && x.cx[id] > 0 && x.gig > 0); const a = [], b = []; for (let i = 1; i < rows.length; i++) { a.push(Math.log(rows[i].cx[id] / rows[i - 1].cx[id])); b.push(Math.log(rows[i].gig / rows[i - 1].gig)); } if (a.length < 6) return null; const m = v => v.reduce((x, y) => x + y, 0) / v.length, ma = m(a), mb = m(b); const c = m(a.map((v, i) => (v - ma) * (b[i] - mb))); return c / Math.sqrt(m(a.map(v => (v - ma) ** 2)) * m(b.map(v => (v - mb) ** 2))); };
+        const countriesOut = typeof getJoinedCountries === 'function' ? { joined: getJoinedCountries().map(id => ({ id, q: countryState[id].joinedQ, issuers: getCountryIssuers(id).length, index: s.quarters.at(-1)?.cx?.[id] ?? null, corrGig: corrOf(id), premium: marketRegimes[id]?.premium ?? null })), airport: isAirportBuilt(), tickets: foreignTickets, bytes: JSON.stringify(getCountriesSnapshot() || {}).length, botsPln: getForeignBots().map(b => ({ id: b.id, pln: Math.round(calculateNetWorth(b)), stakes: getForeignIssuerList().filter(i => i.holders[b.id]).length })), crisisOrigins: (crisisState.history || []).map(h => ({ id: h.id, origin: h.origin || 'PL', delayQ: h.delayQ ?? 0 })), links: typeof exchangeLinks === 'object' ? { history: exchangeLinks.history, community: exchangeLinks.community, takenBy: exchangeLinks.takenBy, linked: getLinkedCountries() } : null, graham: typeof getGraham === 'function' && getGraham() ? Math.round(calculateNetWorth(getGraham())) : null, wolf: typeof getWolf === 'function' && getWolf() ? Math.round(calculateNetWorth(getWolf())) : null, problems: checkCountryInvariants() } : null;
+        return { ...p0151, countries: countriesOut, giant: typeof giantEventState !== 'undefined' ? { ...giantEventState, log: giantEventLog, gdrListed: Object.keys(foreignIssuers), fx: Object.fromEntries(Object.entries(fxRates).map(([k, v]) => [k, Math.round(v * 1e4) / 1e4])), fxProblems: checkCurrencyInvariants() } : null, ma: s.ma ? s.ma.finish() : null, h0, tsr, moneyWarn: s.moneyWarn || [], moneyWarnQuarters: s.moneyWarnQuarters || 0, poolStake: s.poolStake, wallet: window.__wallet || null, presetErrors: window.__presetErrors || [], camp: window.__campResult ? window.__campResult() : null, crises: typeof crisisSummary === 'function' ? crisisSummary() : null, sectorIssues, saveSizes, subStart: s.subStart, subEnd: s.subEnd, multiSegEnd: s.multiSeg, mechanics: s.mechanics || null, badPrice: s.badPrice, negCash: s.negCash, mailBy: s.mailBy, bailouts: s.bailouts, flowWarnings: s.flowWarnings, fund: s.fund, panelText: panel ? panel.textContent.split(/\\s+/).join(' ').slice(0, 600) : null, panelError: s.panelError || null, elections: (macro.election?.history || []).filter(e => e.quarter >= s.quarters[0].q),
             lawChanges: soc ? { ...soc.lawChanges } : null, laws: soc ? { ...soc.laws } : null,
             invariants: typeof checkWorldInvariants === 'function' ? checkWorldInvariants().slice(0, 5) : null, invLog: s.invLog, trimWarnings: s.trimWarnings,
             trims: typeof ghostTrimLog !== "undefined" ? ghostTrimLog.length : null, spinDiag: window.__spinDiag || null, diag: window.__haltDiag || null, offers: window.__offerLog || null,

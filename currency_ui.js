@@ -71,7 +71,7 @@ function renderKantor() {
     if (!body || !playerFund) { if (body) body.innerHTML = '<p class="text-muted">Kantor działa po założeniu funduszu.</p>'; return; }
     const ticker = document.getElementById('kantor-ticker');
     if (ticker) ticker.textContent = `Gotówka funduszu: ${formatZl(playerCash, 0)} · waluty: ${formatZl(getForeignCashPln('player'), 0)} · kwity GDR: ${formatZl(getFundGdrValue(), 0)}`;
-    body.innerHTML = kantorTab === 'foreign' ? renderForeignTab() : renderRatesTab();
+    body.innerHTML = kantorTab === 'foreign' ? renderForeignTab() : (kantorTab === 'markets' && typeof renderMarketsTab === 'function') ? renderMarketsTab() : renderRatesTab();
     if (kantorTab === 'rates') updateKantorQuote();
 }
 
@@ -151,7 +151,7 @@ function kantorUiSell() {
 function setObceFilter(key, value) { obceFilter[key] = value; renderKantor(); }
 
 function renderForeignTab() {
-    const issuers = getForeignIssuerList();
+    const issuers = getForeignIssuerList().filter(i => i.kind !== 'share'); // akcje krajów dołączonych są w zakładce Rynki
     const countries = [...new Set(FOREIGN_GIANTS.map(g => g.country))], currencies = [...new Set(FOREIGN_GIANTS.map(g => g.currency))];
     const opts = (list, current, label) => `<option value="">${label}</option>` + list.map(v => `<option value="${v}" ${v === current ? 'selected' : ''}>${escapeHtml(COUNTRY_NAMES[v] || v)}</option>`).join('');
     const filtered = issuers.filter(i => (!obceFilter.country || i.country === obceFilter.country) && (!obceFilter.currency || i.currency === obceFilter.currency));
@@ -229,6 +229,16 @@ Object.assign(ACADEMY_ENTRIES, {
             { q: 'Kupujesz walutę i od razu ją sprzedajesz. Co się dzieje z Twoimi pieniędzmi?', a: ['tracisz spread', 'zyskujesz spread', 'nic'], c: 0 },
             { q: 'Kiedy spread kantoru jest niższy?', a: ['przy większych kwotach', 'przy mniejszych kwotach', 'zawsze taki sam'], c: 0 },
             { q: 'Czy kupowanie waluty po niskim kursie zawsze daje zysk?', a: ['nie — spread i dryf średniej mogą go zjeść', 'tak', 'tylko w piątek'], c: 0 }
+        ]
+    },
+    konsolidacjaGield: {
+        title: 'Konsolidacja giełd', get icon() { return academyIcon('samolot'); },
+        text: 'Giełdy łączą się, żeby obniżyć koszty i przyciągnąć więcej inwestorów. Gdy giełda przejmuje inną, jej spółki trafiają do wspólnego obrotu. Gdy przejmuje ją obca giełda, spółki płacą wyższe opłaty za notowanie, a kursy chwilowo spadają. Wspólny rynek zwykle zmniejsza spread i prowizje, ale zwiększa zarażanie kryzysami między krajami.',
+        example: () => (typeof getLinkedCountries === 'function' && getLinkedCountries().length) ? `Połączone kraje: ${getLinkedCountries().map(id => COUNTRY_DEFS[id].name).join(', ')}.` : 'Żadna giełda nie jest jeszcze połączona z naszą.',
+        quiz: [
+            { q: 'Co się dzieje z kursami, gdy obca giełda przejmuje naszą?', a: ['chwilowo spadają', 'rosną na stałe', 'nic'], c: 0 },
+            { q: 'Czy spółki połączonego kraju kupisz bez biletu?', a: ['tak, z prowizją krajową', 'nie, zawsze trzeba biletu', 'tylko za dolary'], c: 0 },
+            { q: 'Co zwykle daje wspólny rynek?', a: ['niższe koszty i szybsze zarażanie kryzysami', 'brak ryzyka', 'zamknięcie giełdy'], c: 0 }
         ]
     },
     adrGdr: {

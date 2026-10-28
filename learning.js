@@ -732,9 +732,7 @@ Object.assign(ACADEMY_ENTRIES, {
         text: 'Na dojrzałym rynku pewne spółki przechodzą 6–8 kwartalne cykle skrajnych emocji inwestorów. Jednorożec (Unicorn) notuje dynamiczny wzrost przychodów (+5–7%), wyższe marże i premię wyceny (+25%), lecz po falach silnych wzrostów inwestorzy okresowo realizują zyski (korekta -15–20%). Z kolei Gasnąca Gwiazda zmaga się ze spadkiem przychodów i marż, a jej wycena cierpi z powodu dyskonta, przeplatanego jedynie krótkimi, technicznymi odbiciami ulgi (dead-cat bounce). Role te rotują na rynku w formie sztafety.',
         example: () => {
             const unicorn = typeof stocks !== 'undefined' ? stocks.find(s => s.marketStar?.type === 'unicorn') : null;
-            const fading = typeof stocks !== 'undefined' ? stocks.find(s => s.marketStar?.type === 'fading_star') : null;
             if (unicorn) return `Obecny jednorożec na rynku: ${unicorn.name} (${unicorn.symbol}) — pozostało ${unicorn.marketStar.quartersLeft} kw. cyklu.`;
-            if (fading) return `Obecna gasnąca gwiazda: ${fading.name} (${fading.symbol}) — pozostało ${fading.marketStar.quartersLeft} kw. cyklu.`;
             return 'Jednorożce i gasnące gwiazdy wyłaniają się na rynku od 3. kwartału gry.';
         },
         quiz: [
@@ -1044,8 +1042,7 @@ Object.assign(ACADEMY_ENTRIES, {
         title: 'Pułapka wartości (Value Trap)', icon: '🕳️',
         text: 'Pułapka wartości to sytuacja, w której spółka wydaje się niezwykle tania według tradycyjnych wskaźników (bardzo niskie C/Z lub C/WK poniżej 1), lecz w rzeczywistości jej model biznesowy chyli się ku upadkowi, przychody kurczą się, a rynkowa pozycja gaśnie (np. Gasnąca Gwiazda). Kupowanie takich spółek wyłącznie z powodu „niskiej ceny” często prowadzi do wieloletnich strat.',
         example: () => {
-            const fading = typeof stocks !== 'undefined' ? stocks.find(s => s.marketStar?.type === 'fading_star') : null;
-            return fading ? `Obecna gasnąca gwiazda na parkiecie: ${fading.name} (${fading.symbol}) — C/Z: ${fading.fundamentals?.peRatio?.toFixed(1) || 'N/A'}.` : 'Uważaj na spółki ze spadającymi przychodami, nawet jeśli ich C/Z wydaje się atrakcyjne.';
+            return 'Uważaj na spółki ze spadającymi przychodami, nawet jeśli ich C/Z wydaje się atrakcyjne.';
         },
         quiz: [
             { q: 'Czym jest pułapka wartości?', a: ['Pozornie tanią spółką, której biznes trwale słabnie i przynosi straty', 'Zablokowaniem konta maklerskiego przez giełdę', 'Opłatą za wycenę portfela'], c: 0 },
@@ -1159,7 +1156,7 @@ function checkAcademyTriggers() {
         unlockAcademyEntry('krach_bezpieczniki');
         unlockAcademyEntry('pozyczkodawca');
     }
-    if (stocks.some(s => s.marketStar?.type === 'fading_star')) {
+    if (stocks.some(s => s.marketStar?.type === 'fading_star' && (playerPortfolio?.[s.symbol]?.shares || 0) > 0)) { // hasło dopiero, gdy gracz ją trzyma — inaczej wskazuje ukrytą spółkę
         unlockAcademyEntry('pulapka_wartosci');
     }
     if (getSkillLevel('accountant') >= 3) unlockAcademyEntry('przeplywy');
@@ -2142,12 +2139,12 @@ Object.assign(ACADEMY_ENTRIES, {
         ]
     },
     gieldaPrywatna: {
-        title: 'Giełda prywatna i ryzyko oszustwa', get icon() { return academyIcon('alert'); },
-        text: 'Giełda prywatna ma najłagodniejsze wymogi i najsłabszy nadzór. Dlatego przyciąga spółki, które nie dostałyby się gdzie indziej — także takie, które ukrywają problemy. W grze oszustwa księgowe zdarzają się tam ok. 5 razy częściej niż na GPW i są wykrywane później, a ujawnienie boli mocniej: odpis, spadek kursu i zmiana zarządu. Zasada ostrożności: mała pozycja, dywersyfikacja, audyt przed większym zakupem. Fundusz może mieć na giełdzie prywatnej najwyżej 20% swojej wartości.',
-        example: () => { const p = stocks.filter(s => getStockMarket(s) === 'PRV' && !s.isBankrupt); return p.length ? `Na giełdzie prywatnej notowanych jest ${p.length} spółek; trwających oszustw: ${p.filter(s => s.fraud).length} (widoczne dopiero po audycie lub ujawnieniu).` : 'Na giełdzie prywatnej nie ma jeszcze żadnej spółki — trafiają tu słabe spółki z NewHorizons.'; },
+        title: 'Włoska Giełda i ryzyko oszustwa', get icon() { return academyIcon('alert'); },
+        text: 'Włoska Giełda ma najłagodniejsze wymogi i najsłabszy nadzór. Dlatego przyciąga spółki, które nie dostałyby się gdzie indziej — także takie, które ukrywają problemy. W grze oszustwa księgowe zdarzają się tam ok. 5 razy częściej niż na GPW i są wykrywane później, a ujawnienie boli mocniej: odpis, spadek kursu i zmiana zarządu. Zasada ostrożności: mała pozycja, dywersyfikacja, audyt przed większym zakupem. Fundusz może mieć na Włoskiej Giełdzie najwyżej 20% swojej wartości.',
+        example: () => { const p = stocks.filter(s => getStockMarket(s) === 'PRV' && !s.isBankrupt); return p.length ? `Na Włoskiej Giełdzie notowanych jest ${p.length} spółek; trwających oszustw: ${p.filter(s => s.fraud).length} (widoczne dopiero po audycie lub ujawnieniu).` : 'Na Włoskiej Giełdzie nie ma jeszcze żadnej spółki — trafiają tu słabe spółki z NewHorizons.'; },
         quiz: [
-            { q: 'Jak często oszustwa zdarzają się na giełdzie prywatnej względem GPW?', a: ['ok. 5 razy częściej', 'tak samo często', 'rzadziej'], c: 0 },
-            { q: 'Jak ograniczyć ryzyko na giełdzie prywatnej?', a: ['mała pozycja, dywersyfikacja i audyt', 'jedna duża pozycja', 'kupować na kredyt'], c: 0 },
+            { q: 'Jak często oszustwa zdarzają się na Włoskiej Giełdzie względem GPW?', a: ['ok. 5 razy częściej', 'tak samo często', 'rzadziej'], c: 0 },
+            { q: 'Jak ograniczyć ryzyko na Włoskiej Giełdzie?', a: ['mała pozycja, dywersyfikacja i audyt', 'jedna duża pozycja', 'kupować na kredyt'], c: 0 },
             { q: 'Co grozi spółce po ujawnieniu oszustwa?', a: ['odpis, spadek kursu i zmiana zarządu', 'premia od nadzoru', 'nic'], c: 0 }
         ]
     },
