@@ -50,6 +50,7 @@ Stan na 2026-10-13: etap A (domknięcie 0.13 i 0.13.1) zrobiony na gałęzi work
 | 0.16.3 | Europa i połączone giełdy G11–G17: SE/CH/FR, wariant B, wspólnota europejska, spółki specjalne, prezesi, boty (Graham, Wilk), nadzór | ⬜ plan zatwierdzony |
 | 0.16.4 | Azja i forex G18–G22: JP/CN/IN/TW, PanDa Bank, boty azjatyckie, forex i `marginEngine`, kontrola końcowa | ⬜ plan zatwierdzony |
 | 0.16.5 | Internet (`plan_0.16.5_internet.md`): zakładka Internet zamiast Kantora (ulubione: Kantory24, Tied, startupy, Ferie i wakacje, Lombard), TeamedUP! zamiast poczty, rozdzielenie NewHorizons i startupów, reorganizacja okna ETF-ów | ⬜ szkic zakresu (zgłoszenie 2026-10-27); po 0.16.4, potem porządki plików i graf |
+| 0.16.6 | Domknięcie 0.16 (`plan_0.16.6_domkniecie.md`): wybór kraju startowego, mechaniki pominięte w 0.16.3 (gotówka w Waschmabanku, wezwanie przy przekroczeniu progu, złota akcja Gutzwillera, Bayer, Wilk), połączenia giełd rosnące z lotniskiem/portem, superprojekty jako spółki państwowe tylko na GPW | ⬜ szkic zakresu (decyzje 2026-10-28); po 0.16.5 |
 | 0.17 | Surowce i transport S0–S7 (`plan_0.17_surowce_transport.md`) | ⬜ szkic zakresu |
 | 0.17.1 | Wielkie testy rozgrywki i balans T0–T7 (`plan_0.17.1_wielkie_testy_balans.md`): serie ×200, presety graczy, gra ręczna | ⬜ plan zatwierdzony |
 | 0.17.2 | Energia i środowisko (`plan_0.17.2_energia_srodowisko.md`) | ⬜ szkic zakresu |
