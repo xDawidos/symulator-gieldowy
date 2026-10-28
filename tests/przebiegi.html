@@ -183,6 +183,8 @@ PRESETS['kraje'] = `(function () {
         for (const id of ['DE', 'US', 'CZ']) { try { if (!isCountryJoined(id)) joinCountry(id, 'preset'); } catch (e) { (window.__presetErrors = window.__presetErrors || []).push('kraj ' + id + ': ' + e); } }
     })();`;
 PRESETS['kraje-gig'] = PRESETS['fundusz-gig'] + PRESETS['kraje'];
+// izolacja źródła różnicy GIG: kraje bez wejścia Santosa na rynek PL (jego zakupy podbijają kursy o ≤ 2% na transakcję)
+PRESETS['kraje-gig-bez-santosa'] = `FOREIGN_BOTS.find(b => b.id === 'fb_santos').enterHome = false;` + PRESETS['kraje-gig'];
 PRESETS['gracz-aktywny'] = PRESETS['fundusz-gig'] + `(function () {
     const w = window.__wallet = { byPos: {}, quartersAt: {}, excess: [] };
     const origPay = recordPayment;

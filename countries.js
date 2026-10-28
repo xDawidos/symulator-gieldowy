@@ -339,9 +339,9 @@ const TICKET_RULES = {
     rate: 0.05,              // cena biletu = 5% przepustki kraju (START_COUNTRIES.passCost), nie mniej niż 1000 zł
     min: 1000,
     tourismBonus: 0.015,     // premia Turystyki za sprzedany bilet (malejąca w 2 kw.)
-    botChance: 0.10,         // na kwartał i kraj: bot kupuje bilet (po ukończeniu lotniska)
-    autoOrderChance: 0.12,   // na kwartał: miasto samo zleca lotnisko (od kwartału autoOrderFromQ)
-    autoOrderFromQ: 8,
+    botChance: 0.25,         // na kwartał i kraj: bot kupuje bilet (po ukończeniu lotniska)
+    autoOrderChance: 0.30,   // na kwartał: miasto samo zleca lotnisko (od kwartału autoOrderFromQ)
+    autoOrderFromQ: 4,
     joinCooldownQ: 2         // odstęp między otwarciami krajów
 };
 
@@ -420,7 +420,7 @@ function processAirportQuarterly() {
     const closed = Object.keys(COUNTRY_DEFS).filter(id => !isCountryJoined(id));
     if (!closed.length || Math.random() >= TICKET_RULES.botChance * closed.length) return;
     const country = getRandomElement(closed), price = getTicketPrice(country);
-    const buyers = aiCompetitors.filter(ai => !ai.isMafia && !ai.isGuard && !ai.isForeignBot && ai.personality !== 'market_maker' && ai.cash >= price * 8);
+    const buyers = aiCompetitors.filter(ai => !ai.isMafia && !ai.isGuard && !ai.isForeignBot && ai.personality !== 'market_maker' && ai.cash >= price * 3);
     if (buyers.length) buyTicket(country, getRandomElement(buyers));
 }
 
