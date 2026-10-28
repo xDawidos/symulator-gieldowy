@@ -13263,17 +13263,27 @@ group('0.16.3', () => {
 
 
     // --- G19: spółki specjalne Azji, PanDa Bank, prezesi ---
-    test('G19: PanDa Bank — rośnie, potem upada (kurs −85–95%), po upadku bez nowych zdarzeń i wycena zapisana w leakQ', () => withLinks(() => {
+    test('G19: PanDa Bank na mechanice parabanku z 0.11 — bank z lokatami powstaje z Chinami, upadek w fazach: śledztwo (notowania zawieszone), policja, ucieczka (spółka znika, posiadacze rozliczeni)', () => withLinks(() => {
+        startFund(5_000_000); ensureScandals(); scandals.parabanks = []; scandals.usedScenarios = [];
         joinCountry('CN');
-        const panda = foreignIssuers.PND; assertEq(panda.special, 'parabank', 'mechanika parabanku');
-        const p0 = panda.price; withRandom(0.99, () => applySpecialEvents(panda));
-        assert(panda.price > p0 && panda.leakQ === undefined, 'przy braku upadku kurs rośnie dzięki lokatom');
-        const peak = panda.price; withRandom(0, () => applySpecialEvents(panda));
-        assert(panda.price <= peak * 0.16 && panda.leakQ === macro.quarter, `upadek (${panda.price / peak})`);
-        const after = panda.price; withRandom(0, () => applySpecialEvents(panda));
-        assertEq(panda.price, after, 'po upadku bez kolejnych zdarzeń');
-        const snap = getCountriesSnapshot(); applyCountriesSnapshot(JSON.parse(JSON.stringify(snap)));
-        assertEq(foreignIssuers.PND.leakQ, macro.quarter, 'upadek przeżywa zapis');
+        const pb = scandals.parabanks.find(p => p.foreignId === 'PND'); assert(pb && pb.phase === 'open', 'parabank PanDa po dołączeniu Chin');
+        const bank = commercialBanks.find(b => b.id === pb.bankId); assert(bank && bank.isParabank, 'bank z lokatami w oknie banków');
+        assertEq(spawnPandaParabank(), null, 'tylko raz');
+        assert(!PARABANK_SCENARIOS.filter(s => !s.foreignId).some(s => s.id === 'panda'), 'losowy parabank krajowy nie wybiera PanDa');
+        const issuer = foreignIssuers.PND; foreignTickets.player = [...new Set([...(foreignTickets.player || []), 'CN'])];
+        const cash0 = playerCash; assert(buyParabankShares(pb.id, 100), 'kupno z rabatem'); assertEq(getGdrHeld(issuer), 100, 'akcje w portfelu');
+        const peak = issuer.price; pb.peakPrice = peak;
+        collapseParabank(pb, 'investigation');
+        assert(issuer.tradeHalted && issuer.price === 0.01 && bank.frozen, 'śledztwo: notowania zawieszone, wypłaty wstrzymane');
+        assert(!buyForeignShares('PND', 1).ok && !sellForeignShares('PND', 1).ok, 'handel zawieszony');
+        const p0 = issuer.price; withRandom(0.5, () => stepCountryIssuer(issuer, COUNTRY_DEFS.CN, countryState.CN, marketRegimes.CN, 0, 0)); assertEq(issuer.price, p0, 'kurs stoi');
+        const snap = JSON.parse(JSON.stringify(getCountriesSnapshot())); applyCountriesSnapshot(snap); assert(foreignIssuers.PND.tradeHalted, 'zawieszenie przeżywa zapis');
+        collapseParabank(pb, 'police'); assert(!foreignIssuers.PND.tradeHalted && foreignIssuers.PND.price >= peak * 0.05 - 1e-9 && foreignIssuers.PND.price <= peak * 0.15 + 1e-9, 'wycena likwidacyjna 5–15% szczytu');
+        const cashBefore = playerCash, price = foreignIssuers.PND.price;
+        collapseParabank(pb, 'fled');
+        assert(!foreignIssuers.PND && pb.phase === 'gone' && !bank.isActive, 'spółka i bank znikają');
+        assert(Math.abs(playerCash - cashBefore - toPln(100 * price, 'CNY')) < 1, 'posiadacz dostaje wycenę likwidacyjną');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
     }));
 
     test('G19: sankcje na Huiei (−15–25%, przerwa 6 kwartałów), hit/klapa Bakugan i Bollywood, ziemie rzadkie', () => withLinks(() => {

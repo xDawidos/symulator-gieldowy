@@ -45,6 +45,16 @@ function getOversight(id) { return COUNTRY_DEFS[id]?.oversight || { name: 'nadz�
 function getJoinedCountries() { return Object.keys(countryState); }
 function isCountryJoined(id) { return Boolean(countryState[id]); }
 function getCountryLimit(id) { const def = COUNTRY_DEFS[id]; return def ? Math.ceil(def.companies.length * COUNTRY_RULES.limitMult) : 0; }
+/** Spółka obca znika z giełdy (np. ucieczka prezesa parabanku): posiadacze dostają gotówkę po podanej cenie (gracz w PLN, boty w walucie spółki). */
+function delistForeignIssuer(issuer, price) {
+    for (const [holder, qty] of Object.entries(issuer.holders || {})) {
+        const gross = Number(qty) * price;
+        if (!(gross > 0)) continue;
+        if (holder === 'player') playerCash += toPln(gross, issuer.currency);
+        else { const bot = aiCompetitors.find(b => b.id === holder); if (bot) addCurrencyCash(bot, issuer.currency, gross); }
+    }
+    delete foreignIssuers[issuer.id];
+}
 function getCountryIssuers(id) { return getForeignIssuerList().filter(i => i.kind === 'share' && i.country === id); }
 
 /** Symbol spółki zagranicznej w jej kraju, np. PLT.US (kwit na giganta jeszcze niedołączonego kraju: ID.GDR). */
@@ -124,6 +134,7 @@ function joinCountry(id, by = 'test') {
     marketRegimes[id] = createCountryRegime(id);
     for (const c of def.companies) createCountryIssuer(def, c);
     if (typeof spawnForeignBotsFor === 'function') spawnForeignBotsFor(id);
+    if (id === 'CN' && typeof spawnPandaParabank === 'function') spawnPandaParabank(); // 0.16.4 G19: PanDa Bank na mechanice parabanku z 0.11
     if (typeof applySectorShock === 'function') applySectorShock('Turystyka', 0.06, 3, { fadeQ: 4 }); // nowe państwo = nowi turyści (malejąco)
     const text = `Giełda w kraju: ${def.name} dołącza do świata gry (${def.operator.name}, waluta ${def.currency}, ${def.companies.length} spółek).`;
     logEvent(`🌍 ${text}`, 'market');
@@ -188,6 +199,7 @@ function getCountrySectorPremium(issuer) {
 }
 
 function stepCountryIssuer(issuer, def, st, regime, homeZ, countryZ) {
+    if (issuer.tradeHalted) return; // zawieszone notowania (parabank w śledztwie): kurs stoi
     const beta = issuer.sectors.reduce((s, [name, share]) => s + share * getSectorBeta(name), 0);
     const rateSens = issuer.sectors.reduce((s, [name, share]) => s + share * getSectorRateSens(name), 0);
     const fx = getSpecialEffect(issuer);
@@ -276,18 +288,6 @@ function applySpecialEvents(issuer) {
             const text = `🌍 Sankcje na ${issuer.name}: zakaz sprzedaży sprzętu na rynkach zachodnich, kurs spada o 15–25%.`;
             logEvent(text, 'market');
             if (typeof pushNews === 'function') pushNews(text, null);
-        }
-    } else if (issuer.special === 'parabank') { // PanDa Bank: wysokie lokaty przyciągają klientów, co kwartał rośnie ryzyko upadku (jak Amber Gold)
-        if (issuer.leakQ !== undefined) return; // po upadku zostaje wycena likwidacyjna
-        issuer.price = Math.max(0.05, issuer.price * (1 + getRandomInRange(0.01, 0.03)));
-        const risk = Math.min(0.25, 0.01 + 0.01 * Math.max(0, macro.quarter - (issuer.listedQ || 0)));
-        if (Math.random() < risk) {
-            issuer.leakQ = macro.quarter;
-            issuer.price = Math.max(0.05, issuer.price * getRandomInRange(0.05, 0.15));
-            const text = `🌍 Afera ${issuer.name}: parabank nie wypłaca lokat, prezes znika. Akcje tracą ok. 90% wartości.`;
-            logEvent(text, 'market');
-            if (typeof pushNews === 'function') pushNews(text, null);
-            if (getGdrHeld(issuer) > 0 && typeof addMail === 'function') addMail({ sender: 'PULS', subject: `🌍 ${issuer.name}: upadek parabanku`, body: `${text}\n\nMasz ${formatNumberPl(getGdrHeld(issuer), 0)} akcji tego banku.`, importance: 3 });
         }
     } else if (issuer.special === 'tension') { // KWS: napięcie Chiny–Tajwan — kurs −30%, półprzewodniki w dół na świecie (linia lokalna, nie piąta linia kryzysu)
         if (macro.quarter - (issuer.leakQ ?? -99) > 8 && Math.random() < 0.03) {
@@ -382,6 +382,7 @@ function getCountriesSnapshot() {
         if (Object.keys(i.holders).length) row.o = i.holders;
         if (i.leakQ !== undefined) row.lk = i.leakQ;
         if (i.vintage) row.v = i.vintage;
+        if (i.tradeHalted) row.th = 1;
         if (i.generated) row.g = { name: i.name, sector: i.sectors.map(s => s[0]), subsector: i.subsector, country: i.country, currency: i.currency };
         issuers[i.id] = row;
     }
@@ -415,6 +416,7 @@ function applyCountriesSnapshot(snapshot) {
         issuer.listedQ = Number(row.q) || 0; issuer.sp = Number(row.sp) || 0; issuer.ema = Number(row.e) > 0 ? Number(row.e) : issuer.price;
         if (Number.isFinite(Number(row.lk))) issuer.leakQ = Number(row.lk);
         if (row.v) issuer.vintage = String(row.v);
+        if (row.th) issuer.tradeHalted = true;
         issuer.holders = {};
         for (const [holder, qty] of Object.entries(row.o || {})) if (Number(qty) > 0) issuer.holders[holder] = Number(qty);
     }
@@ -536,6 +538,7 @@ function buyForeignShares(issuerId, quantity) {
     const def = COUNTRY_DEFS[issuer.country];
     if (!canTradeCountry('player', issuer.country)) return { ok: false, reason: `Brak biletu na rynek: ${def?.name || issuer.country}. Bilet kupisz na lotnisku.` };
     if (typeof isMarketHalted === 'function' && isMarketHalted()) return { ok: false, reason: 'Handel wstrzymany — zadziałał bezpiecznik giełdowy.' };
+    if (issuer.tradeHalted) return { ok: false, reason: 'Notowania spółki są zawieszone.' };
     if (quantity > getGdrFree(issuer)) return { ok: false, reason: 'Nie ma tylu akcji w wolnym obrocie.' };
     const room = Math.floor(getCallThreshold(issuer.country) * issuer.shares) - getGdrHeld(issuer); // drabina nadzoru (G15): bez wezwania nie przekroczysz progu
     if (quantity > room) {
@@ -563,10 +566,12 @@ function sellForeignShares(issuerId, quantity) {
     quantity = Math.floor(Number(quantity));
     if (!issuer || issuer.kind !== 'share' || !(quantity > 0)) return { ok: false, reason: 'Podaj liczbę akcji.' };
     if (typeof isMarketHalted === 'function' && isMarketHalted()) return { ok: false, reason: 'Handel wstrzymany — zadziałał bezpiecznik giełdowy.' };
+    if (issuer.tradeHalted) return { ok: false, reason: 'Notowania spółki są zawieszone.' };
     const held = getGdrHeld(issuer);
     if (quantity > held) return { ok: false, reason: 'Za mało akcji.' };
     const def = COUNTRY_DEFS[issuer.country], gross = quantity * issuer.price, fee = gross * getCountryCommission(issuer.country);
     issuer.holders.player = held - quantity;
+    if (typeof onParabankSharesSold === 'function') onParabankSharesSold({ symbol: issuer.id, name: issuer.name, totalShares: issuer.shares }, quantity); // panika w parabanku (0.11 B1)
     if (issuer.holders.player <= 0) delete issuer.holders.player;
     addCurrencyCash('player', issuer.currency, gross - fee);
     recordPayment('player-fund', `external:${def.operator.id}`, toPln(fee, issuer.currency), `Prowizja: ${def.operator.name}`);
@@ -691,7 +696,7 @@ function botAccess(bot, country) {
 }
 
 function botPickTarget(bot, def) {
-    const pool = id => getCountryIssuers(id).filter(i => !(i.state && getGdrFree(i) <= 0));
+    const pool = id => getCountryIssuers(id).filter(i => !i.tradeHalted && !(i.state && getGdrFree(i) <= 0));
     let candidates = pool(bot.homeCountry);
     if (def.style === 'banker') { // Gutzwiller: tylko banki; Waschmabank z preferencją
         const fav = foreignIssuers[def.favorite];

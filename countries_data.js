@@ -195,7 +195,7 @@ COUNTRY_DEFS.CN = {
         { id: 'FSI', name: 'Fabryka Świata Industries', sector: 'Przemysł', kind: 'normal', price: 40 },
         { id: 'SRE', name: 'Smok Rare Earths', sector: 'Przemysł', subsector: 'Przemysł ciężki', kind: 'normal', price: 75, special: 'rareearths', desc: 'Metale ziem rzadkich.' },
         { id: 'RPL', name: 'RicePlantators', sector: 'Żywność', kind: 'normal', price: 12, desc: 'Start na giełdzie brązowej.' },
-        { id: 'PND', name: 'PanDa Bank', sector: 'Bankowość', subsector: 'Bank komercyjny', kind: 'normal', price: 8, special: 'parabank', desc: 'Parabank: wysokie oprocentowanie lokat, ryzyko upadku jak Amber Gold.' },
+        { id: 'PND', name: 'PanDa Bank', sector: 'Bankowość', subsector: 'Bank komercyjny', kind: 'normal', price: 8, desc: 'Parabank: wysokie oprocentowanie lokat, ryzyko upadku jak Amber Gold (mechanika parabanku z 0.11).' },
         { id: 'TTM', name: 'TikTak Media', sector: 'Media', kind: 'giant', price: 120, desc: 'Gigant krótkich filmów.' },
         { id: 'JDL', name: 'Jedwabn Logistyka', sector: 'Usługi', kind: 'normal', price: 30 },
         { id: 'HYN', name: 'Herbata Yunnan', sector: 'Żywność', subsector: 'Herbata', kind: 'normal', price: 55 },
