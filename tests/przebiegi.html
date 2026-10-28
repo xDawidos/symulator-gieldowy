@@ -198,7 +198,7 @@ PRESETS['kraje-10'] = PRESETS['kraje-eu'] + `(function () {
                 for (const p of getMarginPositions()) closeMarginPosition(p.id);
                 const pairs = ['EUR/USD', 'USD/JPY', 'CHF/PLN', 'EUR/PLN'], k = (macro.quarter / 4) | 0;
                 const res = openForexPosition(pairs[k % 4], k % 2 ? 1 : -1, getFundAssets() * 0.4, 5);
-                res.ok ? window.__forex.opened++ : window.__forex.refused++;
+                if (res.ok) window.__forex.opened++; else { window.__forex.refused++; (window.__forex.reasons = window.__forex.reasons || []).push(res.reason + ' [gotówka ' + Math.round(playerCash) + ', aktywa ' + Math.round(getFundAssets()) + ']'); }
             }
         } catch (e) { err('forex: ' + e); }
         return r;
