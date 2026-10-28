@@ -140,3 +140,43 @@ COUNTRY_DEFS.FR = {
         { id: 'RDF', name: 'Rail de France', sector: 'Usługi', kind: 'state', price: 20, desc: 'Państwowa kolej.' }
     ]
 };
+
+COUNTRY_DEFS.JP = {
+    id: 'JP', name: 'Japonia', currency: 'JPY', region: 'AS', rho: 0.6, rateMean: 0.005,
+    operator: { id: 'TSE', name: 'Giełda w Tokio (TSE)', commission: 0.005 },
+    oversight: { name: 'FSA', callThreshold: 0.75, level: 3 },
+    labour: { wages: 1.3, rights: 'standard', unionMult: 0.4, shadow: 0, note: 'lojalność wobec firmy' },
+    companies: [
+        { id: 'BKG', name: 'Bakugan TV', sector: 'Media', niche: 'TV', kind: 'normal', price: 4200, desc: 'Hit albo klapa sezonu anime; rośnie z liczbą krajów na giełdzie (eksport kultury).' },
+        { id: 'SSM', name: 'SushShama', sector: 'Żywność', kind: 'normal', price: 1800 },
+        { id: 'TYM', name: 'Toyotomi Motors', sector: 'Motoryzacja', kind: 'giant', price: 2800, desc: 'Gigant motoryzacyjny.' },
+        { id: 'HND', name: 'Hondaru Motors', sector: 'Motoryzacja', kind: 'normal', price: 1500 },
+        { id: 'SNE', name: 'Sonic Electronics', sector: ['Technologia', 'Media'], kind: 'normal', price: 3600 },
+        { id: 'PKM', name: 'Pokeman', sector: 'Gaming', kind: 'normal', price: 7000 },
+        { id: 'MHI', name: 'Mitsubosh Heavy Industries', sector: 'Przemysł', subsector: 'Przemysł ciężki', kind: 'normal', price: 3300 },
+        { id: 'ARS', name: 'Araska Corp.', sector: 'Przemysł', subsector: 'Robotyka', kind: 'giant', price: 5200, desc: 'Gigant robotyki.' },
+        { id: 'SHK', name: 'Shinkansen Railways', sector: 'Usługi', kind: 'normal', price: 3500 },
+        { id: 'SKY', name: 'SaKyoto', sector: 'Alkohole', kind: 'normal', price: 2400 },
+        { id: 'YPH', name: 'YellowPharm', sector: 'Medycyna', niche: 'Farmaceutyki', kind: 'normal', price: 4200 },
+        { id: 'HTB', name: 'Howam To Bank', sector: 'Bankowość', subsector: 'Bank komercyjny', kind: 'normal', price: 900 },
+        { id: 'SMR', name: 'Samurai', sector: 'Obronność', kind: 'normal', price: 3800 },
+        { id: 'NPH', name: 'Nippon Poczta Holding', sector: 'Usługi', kind: 'state', price: 1300, desc: 'Państwowa poczta i bank pocztowy.' },
+        { id: 'TPK', name: 'TEPKO Tokio Energia', sector: 'Energia', kind: 'state', price: 1100, desc: 'Państwowa energetyka.' },
+        { id: 'JBR', name: 'Japoński Bank Rozwoju', sector: 'Bankowość', subsector: 'Bank komercyjny', kind: 'state', price: 1600, desc: 'Państwowy bank rozwoju.' }
+    ]
+};
+
+COUNTRY_DEFS.TW = {
+    id: 'TW', name: 'Tajwan', currency: 'TWD', region: 'AS', rho: 0.55, rateMean: 0.02,
+    operator: { id: 'TWS', name: 'Giełda Tajpejska (TWSE)', commission: 0.005 },
+    oversight: { name: 'FSC', callThreshold: 0.75, level: 2 },
+    labour: { wages: 0.9, rights: 'standard', unionMult: 0.4, shadow: 0, note: 'standard' },
+    companies: [
+        { id: 'KWS', name: 'Krzemowa Wyspa Semiconductor', sector: 'Technologia', subsector: 'Półprzewodniki', kind: 'giant', price: 700, desc: 'Gigant półprzewodników, dostawca dla AI.' },
+        { id: 'FXK', name: 'Foxkon', sector: 'Technologia', kind: 'normal', price: 110, desc: 'Montaż elektroniki.' },
+        { id: 'ASU', name: 'Asuss', sector: 'Technologia', kind: 'normal', price: 340 },
+        { id: 'FMC', name: 'Formoza Chemia', sector: 'Chemia', kind: 'normal', price: 90 },
+        { id: 'BBT', name: 'Bubble Tea Taipei', sector: 'Żywność', kind: 'normal', price: 55 },
+        { id: 'TPF', name: 'Taipower Formosa', sector: 'Energia', kind: 'state', price: 45, desc: 'Państwowa energetyka.' }
+    ]
+};

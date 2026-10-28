@@ -14,6 +14,7 @@ const FOREIGN_GIANTS = [
     { id: 'VWA', name: 'VolksDeutsch Auto', country: 'DE', currency: 'EUR', sector: 'Motoryzacja', price: 95 },
     { id: 'CRH', name: 'Chemiefabrik Rhein AG', country: 'DE', currency: 'EUR', sector: 'Chemia', price: 70 },
     { id: 'TYM', name: 'Toyotomi Motors', country: 'JP', currency: 'JPY', sector: 'Przemysł', price: 2800 },
+    { id: 'ARS', name: 'Araska Corp.', country: 'JP', currency: 'JPY', sector: 'Przemysł', price: 5200 },
     { id: 'ALB', name: 'Alibaka Group', country: 'CN', currency: 'CNY', sector: 'Technologia', price: 90 },
     { id: 'TNC', name: 'Tencentyl', country: 'CN', currency: 'CNY', sector: 'Technologia', price: 380 },
     { id: 'LVT', name: 'Luxe Vuitonnet', country: 'FR', currency: 'EUR', sector: 'Dobra konsumpcyjne', price: 640 },

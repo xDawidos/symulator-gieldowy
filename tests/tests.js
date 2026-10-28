@@ -13215,6 +13215,23 @@ group('0.16.3', () => {
         }
     }));
 
+
+    // --- G18a: Japonia i Tajwan ---
+    test('G18a: JP 13+3, TW 5+1 spółek; sektory istnieją; kraje da się dołączyć, niezmienniki bez błędów', () => withLinks(() => {
+        const expected = { JP: [13, 3], TW: [5, 1] };
+        for (const [id, [normal, state]] of Object.entries(expected)) {
+            const def = COUNTRY_DEFS[id];
+            assertEq(def.companies.filter(c => c.kind !== 'state').length, normal, `${id}: zwykłe`);
+            assertEq(def.companies.filter(c => c.kind === 'state').length, state, `${id}: państwowe`);
+            assert(CURRENCIES[def.currency] && def.oversight && def.operator && def.labour, `${id}: pełna definicja`);
+            for (const c of def.companies) for (const sec of [].concat(c.sector)) assert(SECTORS[sec], `${c.id}: sektor ${sec}`);
+            joinCountry(id);
+            assert(isCountryJoined(id), `${id}: dołączony`);
+        }
+        assert(SECTORS['Przemysł'].subsectors['Przemysł ciężki'] && SECTORS['Żywność'].subsectors['Herbata'], 'podsektory');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+
     // --- koniec grupy 0.16.3 ---
 });
 
