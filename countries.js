@@ -588,19 +588,17 @@ function spawnEuropeanBot() {
 function spawnBayerBot(country) { return spawnDynamicBot('fb_bayer', country); }
 
 function spawnForeignBot(def, country) {
-    {
-        if (aiCompetitors.some(ai => ai.id === def.id)) return null;
-        const bot = {
-            id: def.id, name: def.name, cash: 0, portfolio: {}, loans: [], personality: `foreign_${def.style}`, isForeignBot: true, homeCountry: country,
-            accessLevel: 1, hasTBillAccess: false, tBills: [], skillPoints: 0, unlockedSkills: {}, creditScore: 100,
-            cashByCurrency: { ...def.cash }, fx: { joinQ: macro.quarter, trades: 0, tradesQ: -1, cost: {}, enteredHome: false, entryQ: def.enterHome ? macro.quarter + getRandomIntInRange(...BOT_RULES.homeEntryDelay) : null }
-        };
-        bot.fx.reservePln = getForeignCashPln(bot) * (def.reserve || 0);
-        aiCompetitors.push(bot);
-        (foreignTickets[bot.id] = foreignTickets[bot.id] || []).push(country); // własny rynek bez biletu
-        logEvent(`🌍 Na giełdzie ${COUNTRY_DEFS[country].name} pojawia się inwestor ${bot.name}.`, 'market');
-        return bot;
-    }
+    if (aiCompetitors.some(ai => ai.id === def.id)) return null;
+    const bot = {
+        id: def.id, name: def.name, cash: 0, portfolio: {}, loans: [], personality: `foreign_${def.style}`, isForeignBot: true, homeCountry: country,
+        accessLevel: 1, hasTBillAccess: false, tBills: [], skillPoints: 0, unlockedSkills: {}, creditScore: 100,
+        cashByCurrency: { ...def.cash }, fx: { joinQ: macro.quarter, trades: 0, tradesQ: -1, cost: {}, enteredHome: false, entryQ: def.enterHome ? macro.quarter + getRandomIntInRange(...BOT_RULES.homeEntryDelay) : null }
+    };
+    bot.fx.reservePln = getForeignCashPln(bot) * (def.reserve || 0);
+    aiCompetitors.push(bot);
+    (foreignTickets[bot.id] = foreignTickets[bot.id] || []).push(country); // własny rynek bez biletu
+    logEvent(`🌍 Na giełdzie ${COUNTRY_DEFS[country].name} pojawia się inwestor ${bot.name}.`, 'market');
+    return bot;
 }
 
 /** Wartość akcji zagranicznych podmiotu (id bota) w złotych — do majątku i rankingu. */
