@@ -7694,14 +7694,17 @@ function renderMailbox() {
             <span>${MAIL_FOLDER_LABELS[folder]}</span>${unread ? `<b>${unread}</b>` : ''}</button>`;
     }).join('') + `
         <hr>
+        <button class="mail-folder ${mailView.pane === 'tasks' ? 'active' : ''}" onclick="setMailPane('tasks')">${uiIcon('cel', 14)} Zadania od szefostwa</button>
+        <button class="mail-folder ${mailView.pane === 'hiring' ? 'active' : ''}" onclick="setMailPane('hiring')">${uiIcon('pracownik', 14)} Zatrudnianie</button>
+        <button class="mail-folder" onclick="openPawnShopPanel()">${uiIcon('lombard', 14)} Lombard</button>
         <button class="mail-folder ${mailView.pane === 'subscriptions' ? 'active' : ''}" onclick="setMailPane('subscriptions')">${uiIcon('ustawienia', 14)} Subskrypcje</button>`;
 
     const list = document.getElementById('mail-list');
     const preview = document.getElementById('mail-preview');
 
-    if (mailView.pane === 'subscriptions') {
+    if (mailView.pane !== 'mail') {
         list.hidden = true;
-        preview.innerHTML = renderMailSubscriptions();
+        preview.innerHTML = mailView.pane === 'tasks' ? renderTeamedTasks() : mailView.pane === 'hiring' ? renderTeamedHiring() : renderMailSubscriptions();
         return;
     }
 
@@ -7725,6 +7728,24 @@ function renderMailbox() {
     const layout = document.querySelector('.mail-layout');
     if (layout) layout.classList.toggle('has-selection', Boolean(selected));
     preview.innerHTML = selected ? renderMailPreview(selected) : '<p class="fund-muted mail-empty">Wybierz wiadomość z listy, aby zobaczyć treść.</p>';
+}
+
+/** TeamedUP!: cele od szefostwa jako zadania z terminem (ocena zarządu) — dane z player.js, bez zmiany mechaniki. */
+function renderTeamedTasks() {
+    const goals = typeof getCorporateGoalsView === 'function' ? getCorporateGoalsView() : [];
+    const rows = goals.map(g => `<li class="mail-task"><strong>${g.done ? '[wykonane]' : '[do zrobienia]'}</strong> ${escapeHtml(g.label)} — ${escapeHtml(String(g.progress))} / ${escapeHtml(String(g.value))}<div class="text-sm text-muted">Termin: najbliższa ocena zarządu</div></li>`).join('');
+    return `<article class="mail-article"><h3>Zadania od szefostwa</h3>${rows ? `<ul class="list-plain">${rows}</ul>` : '<p class="fund-muted">Zarząd nie wyznaczył jeszcze zadań.</p>'}</article>`;
+}
+
+/** TeamedUP!: zatrudnianie analityków z poziomu aplikacji (hireAnalyst — jak w oknie Firma). */
+function renderTeamedHiring() {
+    const can = typeof canHireAnalysts === 'function' && canHireAnalysts();
+    const rows = Object.entries(ANALYST_TYPES).map(([type, def]) => {
+        const hired = corporation?.analysts.some(a => a.type === type);
+        return `<li><strong>${escapeHtml(def.label)}</strong> — ${escapeHtml(def.description)} <span class="text-muted">(koszt ${def.hireCost} PLN, pensja ${def.salary} PLN)</span>
+            ${hired ? '<span class="text-muted">zatrudniony</span>' : `<button class="btn-ghost btn-sm" ${can ? '' : 'disabled'} onclick="mailAction(hireAnalyst, '${type}')">Zatrudnij</button>`}</li>`;
+    }).join('');
+    return `<article class="mail-article"><h3>Zatrudnianie</h3>${can ? '' : '<p class="fund-muted">Analityków zatrudnia się od stanowiska Starszy zarządca.</p>'}<ul class="list-plain">${rows}</ul></article>`;
 }
 
 function renderMailBody(body) {
