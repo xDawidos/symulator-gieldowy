@@ -725,11 +725,11 @@ function updateMarketKPIs() {
 function updateTopbarKPIs() {
     const fmt = new Intl.NumberFormat('pl-PL', {minimumFractionDigits:2, maximumFractionDigits:2});
     if (typeof playerCash !== 'undefined') {
-        const v = fmt.format(playerCash);
+        const v = fmt.format(playerCash / getBaseScale());
         const isPrivate = typeof activeTradingAccount !== 'undefined' && activeTradingAccount === 'private';
         ['cash','cash-portfolio'].forEach(id => {
             const el = document.getElementById(id);
-            if (el) el.textContent = (id === 'cash-portfolio' && isPrivate ? fmt.format(playerWallet?.cash || 0) : v) + ' PLN';
+            if (el) el.textContent = (id === 'cash-portfolio' && isPrivate ? fmt.format((playerWallet?.cash || 0) / getBaseScale()) : v) + ' ' + getBaseCurrency();
         });
     }
     if (typeof playerFund !== 'undefined' && playerFund) {
@@ -5591,7 +5591,7 @@ function openFinancialDetailsModal(symbol) {
 
 /** Podgląd pozycji okresu: koszty R&D, kontrakty, nieruchomości i ostatni raport. */
 function renderFinancialPeriodPreview(stock) {
-    const fmt = value => (Number(value) || 0).toLocaleString('pl-PL', { maximumFractionDigits: 0 }) + ' PLN';
+    const fmt = value => ((Number(value) || 0) / getBaseScale()).toLocaleString('pl-PL', { maximumFractionDigits: 0 }) + ' ' + getBaseCurrency();
     const rd = getResearchCostSummary(stock);
     const period = getPendingPeriodResult(stock);
     const last = stock.lastReportBreakdown;
