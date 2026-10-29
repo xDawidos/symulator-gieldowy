@@ -62,7 +62,7 @@ Stan na 2026-10-13: etap A (domknięcie 0.13 i 0.13.1) zrobiony na gałęzi work
 | 0.17.3 | Rozmowy (`plan_0.17.3_rozmowy.md`): minigra wyboru z prezesami i inwestorami wg charakteru i relacji, boty kupują jednostki po cenie różnej od NAV (zmiana relacji) | ⬜ szkic zakresu (zgłoszenie 2026-10-27) |
 | 0.18 | Łańcuchy produkcyjne: 0.18.1 pilotaż (3 łańcuchy, bramka), 0.18.2 pełny graf (`plan_0.18_lancuchy_produkcyjne.md`) | ⬜ szkic zakresu |
 | 0.19–0.21 | Handel światowy; Globalne korporacje; Rynek pracy 2 (szkice w sekcji „Po 0.16”); **0.19.1 Polityka 2** (`plan_0.19.1_polityka_2.md`) | ⬜ kierunek |
-| 0.19.2 | Multikulturalizm (`plan_0.19.2_multikulturalizm.md`): przychylność polityczna (favour) w państwach innych niż Polska, wybory, lobbing, wpływ na spółki państwowe i nadzór | ⬜ szkic zakresu (zgłoszenie 2026-10-29); po 0.19.1 |
+| 0.19.2 | Multikulturalizm (`plan_0.19.2_multikulturalizm.md`): własny „flavour” państw — Landy zamiast zakładki Państwo, własne spółki landów/miejskie, badania i projekty, obywatele i partie kraju, nazwy i boty, inny motyw, zasady (np. ład korporacyjny w Niemczech), nowe instytucje, greenfield/brownfield i poziomy obecności zamiast przejmowania giełdy, przychylność per kraj | ⬜ szkic zakresu (zgłoszenie 2026-10-29); po 0.16.11 i 0.19.1 |
 
 **Etap A zrobiony (A1–A4) razem z 3 decyzjami balansu; 0.14 T1–T3 zrobione.** Zostało: poprawki 0.14.1 i 0.14.2 + 3 części 0.14 (T4–T6) + 7 etapów 0.15 + 9 etapów 0.16.
 
