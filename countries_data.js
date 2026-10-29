@@ -1,5 +1,5 @@
 // =================================================================================
-// 0.16.2 G6: DANE KRAJÓW — Niemcy (13 + 3 państwowe), USA (15 + 4), Czechy (8 + 1); załącznik B planu 0.16.
+// 0.16.2 G6: DANE KRAJÓW — Niemcy (14 + 3 państwowe), USA (16 + 4), Czechy (8 + 1); załącznik B planu 0.16.
 // Definicje są w kodzie, nie w zapisie. Pola spółki: id (symbol), name, sector (lub [główny, drugi]), subsector, kind ('giant' | 'normal' | 'state'),
 // price (w walucie kraju), special (jeden modyfikator: defense | loyal | summer | volatile | premiere | season), vol (mnożnik zmienności), desc.
 // Kraj: rho (korelacja nastroju z PL: Europa 0,8 → 0,75/0,7, Ameryka–Europa 0,6), rateMean (średnia stopa), labour (stały profil dla pracowników, 0.13).
@@ -27,6 +27,7 @@ COUNTRY_DEFS.DE = {
         { id: 'MRA', name: 'MetallRai', sector: ['Przemysł', 'Obronność'], kind: 'normal', price: 45, special: 'defense' },
         { id: 'DBF', name: 'Deutsche Bahnhof', sector: 'Usługi', kind: 'state', price: 22, desc: 'Państwowa kolej.' },
         { id: 'BPS', name: 'Bundespost', sector: 'Usługi', kind: 'state', price: 18, desc: 'Państwowa poczta.' },
+        { id: 'WiS', name: 'Wolf & Stein Tech.', sector: 'Technologia', subsector: 'Półprzewodniki', kind: 'normal', price: 19, vol: 2.2, desc: 'Mała spółka półprzewodnikowa o gwałtownych notowaniach.' },
         { id: 'WAB', name: 'Wiederaufbaubank', sector: 'Bankowość', subsector: 'Bank komercyjny', kind: 'state', price: 25, desc: 'Państwowy bank rozwoju.' }
     ]
 };
@@ -52,6 +53,7 @@ COUNTRY_DEFS.US = {
         { id: 'BPU', name: 'Big Pharma Unlimited', sector: 'Medycyna', niche: 'Farmaceutyki', kind: 'normal', price: 110 },
         { id: 'CHQ', name: 'ChickQueen', sector: 'Żywność', kind: 'normal', price: 45 },
         { id: 'CKF', name: 'Coke&Fent', sector: 'Alkohole', subsector: 'Piwowarstwo i napoje', kind: 'normal', price: 65 },
+        { id: 'DMPC', name: 'Dunder Mifflin Paper Company, Inc.', sector: 'Przemysł', kind: 'normal', price: 22, vol: 1.1, desc: 'Papier biurowy ze Scranton.' },
         { id: 'AMR', name: 'AmeriRail', sector: 'Usługi', kind: 'state', price: 30, desc: 'Państwowa kolej.' },
         { id: 'USM', name: 'US Mail & Parcel', sector: 'Usługi', kind: 'state', price: 12, desc: 'Państwowa poczta.' },
         { id: 'TVP', name: 'Tennessee Valley Power', sector: 'Energia', kind: 'state', price: 28, desc: 'Państwowa energetyka.' },

@@ -11820,6 +11820,23 @@ group('0.16.1', () => {
         assertEq(getCompanyOrigin(initialStocks.find(s => s.symbol === 'CTX')), 'UNI', 'Cortex Neural jest uniwersalny');
         assertEq(new Set(initialStocks.map(s => s.symbol)).size, initialStocks.length, 'symbole bez duplikatów');
     });
+    test('0.16.11 K0: klasyfikacja firm startowych (32 PL, reszta UNI), WiS=DE i DMPC=US poza rynkiem polskim', () => {
+        const origin = sym => getCompanyOrigin(initialStocks.find(s => s.symbol === sym) || { symbol: sym }); // banki startowe powstają przy starcie gry
+        for (const sym of ['WZM', 'BPIG', 'MAJB', 'GIEB', 'UnG', 'KRA', 'DRH']) assertEq(origin(sym), 'PL', `${sym}: PL`);
+        for (const sym of ['KFX', 'KWM', 'MLD', 'LIN', 'GROM', 'KUP', 'CZB', 'BLP', 'SPR', 'RPK', 'GPW']) assertEq(origin(sym), 'UNI', `${sym}: UNI`);
+        assertEq(PL_ORIGIN_SYMBOLS.length, 32, '32 firmy PL');
+        assert(!initialStocks.some(s => ['WiS', 'DMPC'].includes(s.symbol)), 'WiS i DMPC nie są firmami polskimi');
+        assertEq(getCompanyOrigin({ symbol: 'WiS' }), 'DE', 'WiS = DE'); assertEq(getCompanyOrigin({ symbol: 'DMPC' }), 'US', 'DMPC = US');
+        assert(COUNTRY_DEFS.DE.companies.some(c => c.id === 'WiS') && COUNTRY_DEFS.US.companies.some(c => c.id === 'DMPC'), 'są w danych krajów');
+    });
+    test('0.16.11 K0: symbole banków SPR/RPK/BPIG i migracja starych zapisów', () => {
+        assertEq(getBankSymbol({ id: 'inv1' }), 'SPR', 'inv1'); assertEq(getBankSymbol({ id: 'inv3' }), 'RPK', 'inv3'); assertEq(getBankSymbol({ id: 'corp3' }), 'BPIG', 'corp3');
+        assertEq(getBankSymbol({ id: 'coop1' }), 'BKCOOP1', 'pozostałe bez zmian');
+        const snap = { stocks: [{ symbol: 'BKINV1' }, { symbol: 'BKCORP3' }], playerPortfolio: { BKINV3: { shares: 2 } }, name: 'X' };
+        const out = migrateLegacyBankSymbols(snap);
+        assertEq(out.stocks.map(s => s.symbol).join(), 'SPR,BPIG', 'wartości'); assert(out.playerPortfolio.RPK && !out.playerPortfolio.BKINV3, 'klucze');
+        assert(migrateLegacyBankSymbols({ a: 1 }).a === 1, 'bez starych symboli bez zmian');
+    });
 
     // --- G2: waluty i kantor ---
     const fundWithCash = (cash = 5_000_000) => {
@@ -12384,7 +12401,7 @@ group('0.16.2', () => {
 
     // --- G6: Niemcy, USA, Czechy ---
     const REAL_COUNTRIES = () => ['DE', 'US', 'CZ'].filter(id => COUNTRY_DEFS[id]);
-    const COUNTRY_COUNTS = { DE: [13, 3], US: [15, 4], CZ: [8, 1] }; // zwykłe + państwowe (załącznik B)
+    const COUNTRY_COUNTS = { DE: [14, 3], US: [16, 4], CZ: [8, 1] }; // zwykłe + państwowe (załącznik B)
 
     test('G6: dane krajów są spójne — liczby spółek z załącznika B, sektory i podsektory z rejestru, waluty, banki w Bankowości, giganci zgodni z gdr.js', () => {
         assert(REAL_COUNTRIES().length >= 1, 'jakiś kraj zdefiniowany');

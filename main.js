@@ -435,6 +435,7 @@ function applySaveSnapshot(snapshot) {
         return report;
     }
 
+    snapshot = migrateLegacyBankSymbols(snapshot); // 0.16.11 K0: BKINV1/BKINV3/BKCORP3 → SPR/RPK/BPIG
     if (!Array.isArray(snapshot.stocks) || snapshot.stocks.length === 0) {
         report.errors.push('Zapis nie zawiera spółek.');
         return report;
