@@ -1,5 +1,5 @@
 // =================================================================================
-// 0.16.2 G6: DANE KRAJÓW — Niemcy (14 + 3 państwowe), USA (16 + 4), Czechy (8 + 1); załącznik B planu 0.16.
+// 0.16.2 G6: DANE KRAJÓW — Niemcy (14 + 3 państwowe + 40 zestawu startowego 0.16.11), USA (16 + 4), Czechy (8 + 1); załącznik B planu 0.16.
 // Definicje są w kodzie, nie w zapisie. Pola spółki: id (symbol), name, sector (lub [główny, drugi]), subsector, kind ('giant' | 'normal' | 'state'),
 // price (w walucie kraju), special (jeden modyfikator: defense | loyal | summer | volatile | premiere | season), vol (mnożnik zmienności), desc.
 // Kraj: rho (korelacja nastroju z PL: Europa 0,8 → 0,75/0,7, Ameryka–Europa 0,6), rateMean (średnia stopa), labour (stały profil dla pracowników, 0.13).
@@ -21,13 +21,39 @@ COUNTRY_DEFS.DE = {
         { id: 'MTS', name: 'Medizintechnik Schwarzwald', sector: 'Medycyna', subsector: 'Sprzęt medyczny', kind: 'normal', price: 60 },
         { id: 'SIE', name: 'Siemenz Industrie', sector: ['Przemysł', 'Technologia'], kind: 'normal', price: 110 },
         { id: 'SPF', name: 'SPASF Software', sector: 'Technologia', kind: 'normal', price: 130 },
-        { id: 'DGH', name: 'Deutsche Goldhaus', sector: 'Bankowość', subsector: 'Bank komercyjny', kind: 'normal', price: 40 },
         { id: 'OKT', name: 'Oktoberbräu Feust', sector: 'Alkohole', subsector: 'Piwowarstwo i napoje', kind: 'normal', price: 55 },
         { id: 'ABL', name: 'Autobahn Logistik', sector: 'Budowlany', kind: 'normal', price: 35 },
         { id: 'MRA', name: 'MetallRai', sector: ['Przemysł', 'Obronność'], kind: 'normal', price: 45, special: 'defense' },
         { id: 'DBF', name: 'Deutsche Bahnhof', sector: 'Usługi', kind: 'state', price: 22, desc: 'Państwowa kolej.' },
         { id: 'BPS', name: 'Bundespost', sector: 'Usługi', kind: 'state', price: 18, desc: 'Państwowa poczta.' },
         { id: 'WiS', name: 'Wolf & Stein Tech.', sector: 'Technologia', subsector: 'Półprzewodniki', kind: 'normal', price: 19, vol: 2.2, desc: 'Mała spółka półprzewodnikowa o gwałtownych notowaniach.' },
+        { id: 'SPI', name: 'Spielkonsole Nord', sector: 'Gaming', kind: 'normal', price: 32, desc: 'Konsole i gry; cykl premier.' },
+        { id: 'WND', name: 'Windkraft Nordsee', sector: 'Energia', kind: 'normal', price: 44, desc: 'OZE, dotacje.' },
+        { id: 'GLB', name: 'Glasbau Thüringen', sector: 'Przemysł', kind: 'normal', price: 62, desc: 'Szkło techniczne i fasady.' },
+        { id: 'ROB', name: 'Roboterwerk Stuttgart', sector: ['Technologia', 'Przemysł'], kind: 'normal', price: 150, desc: 'Roboty przemysłowe.' },
+        { id: 'QNT', name: 'Quantenfabrik Ulm', sector: 'Technologia', kind: 'normal', price: 260, desc: 'Komputery kwantowe „do pokazania”.' },
+        { id: 'FHI', name: 'Fraunhofer-Fälschung Institut', sector: 'Badania', kind: 'normal', price: 45, desc: 'Instytut stosowany, kontrakty z przemysłem.' },
+        { id: 'TUM', name: 'Technische Universität Minsterberg', sector: 'Badania', kind: 'normal', price: 38, desc: 'Uczelnia techniczna, spin-offy.' },
+        { id: 'RHM', name: 'Rheinmetall-Rhetorik', sector: 'Obronność', kind: 'normal', price: 180, special: 'defense', desc: 'Pojazdy opancerzone.' },
+        { id: 'LPD', name: 'Leopard Dynamik', sector: 'Obronność', kind: 'normal', price: 160, special: 'defense', desc: 'Czołgi i serwis.' },
+        { id: 'HKS', name: 'Heckler & Kochanek', sector: 'Obronność', kind: 'normal', price: 85, special: 'defense', desc: 'Broń strzelecka.' },
+        { id: 'BAU', name: 'Bauhaus-Baumeister', sector: 'Budowlany', kind: 'normal', price: 70, desc: 'Generalny wykonawca.' },
+        { id: 'HOC', name: 'Hochtief-Höhenflug', sector: 'Budowlany', kind: 'normal', price: 120, desc: 'Wieżowce i mosty.' },
+        { id: 'ALZ', name: 'Allianz-Alles-Versichert', sector: 'Finanse', kind: 'normal', price: 95, desc: 'Ubezpieczenia.' },
+        { id: 'BLD', name: 'Bildzeitung Boulevard', sector: 'Media', kind: 'normal', price: 22, desc: 'Tabloid, wpływa na nastroje.' },
+        { id: 'VON', name: 'Vonovia-Wohnheim REIT', sector: 'Nieruchomości', kind: 'normal', price: 30, desc: 'Mieszkania na wynajem.' },
+        { id: 'BRO', name: 'Bürohochhaus REIT', sector: 'Nieruchomości', kind: 'normal', price: 34, desc: 'Biurowce Frankfurt/Berlin.' },
+        { id: 'EWB', name: 'Energiewerke Bund', sector: 'Energia', kind: 'state', price: 24, desc: 'Państwowy koncern energetyczny.' },
+        { id: 'NTZ', name: 'Netzbetreiber Deutschland', sector: ['Energia', 'Technologia'], kind: 'state', price: 30, desc: 'Sieci przesyłowe.' },
+        { id: 'TKB', name: 'Telekom Bundeswerk', sector: 'Technologia', kind: 'state', price: 20, desc: 'Państwowy operator telekomunikacyjny.' },
+        { id: 'KUR', name: 'Kernkraft Rückbau', sector: ['Przemysł', 'Energia'], kind: 'state', price: 26, desc: 'Wygaszanie elektrowni jądrowych.' },
+        { id: 'TKS', name: 'Thyssen-Krupps Stahl', sector: 'Przemysł', kind: 'normal', price: 48, desc: 'Stal i konstrukcje; cykl przemysłowy.' },
+        { id: 'LND', name: 'Lindwurm Gase', sector: 'Chemia', kind: 'normal', price: 130, desc: 'Gazy techniczne dla przemysłu.' },
+        { id: 'MAN', name: 'Mannschaft Nutzfahrzeuge', sector: ['Motoryzacja', 'Przemysł'], kind: 'normal', price: 75, desc: 'Ciężarówki i autobusy.' },
+        { id: 'DIH', name: 'Diehl-Defensiv Lenkwaffen', sector: 'Obronność', kind: 'normal', price: 110, special: 'defense', desc: 'Rakiety i systemy obrony powietrznej.' },
+        { id: 'HNS', name: 'Hensolt Radar', sector: 'Obronność', kind: 'normal', price: 95, special: 'defense', desc: 'Radary i optoelektronika dla wojska.' },
+        { id: 'MRH', name: 'Münchner Rückhalt', sector: 'Finanse', kind: 'normal', price: 210, desc: 'Reasekuracja; kwartalne straty po katastrofach.' },
+        { id: 'RWK', name: 'Rheinwestfalen Kraftwerke', sector: 'Energia', kind: 'normal', price: 33, desc: 'Elektrownie węglowe i gazowe w transformacji.' },
         { id: 'WAB', name: 'Wiederaufbaubank', sector: 'Bankowość', subsector: 'Bank komercyjny', kind: 'state', price: 25, desc: 'Państwowy bank rozwoju.' }
     ]
 };

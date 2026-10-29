@@ -21,7 +21,7 @@ Gałąź `claude/impl-01611-3c96f1` (nie scalona, bez zmian w `zmiany-AI`/`main`
 - Zrzuty przeglądarki: start z DE w aplikacji (okno wyboru kraju → DE): pasek gotówki 2500,00 EUR, NAV 2,5000 EUR, ceny akcji w EUR, okno gotówki (mobile 375 px) z saldem EUR i wymianą na PLN; 59 firm UNI, 0 polskich, niezmienniki 0.
 
 ## Pominięte i problemy
-1. **Nie wdrożono firm niemieckich** (czekają na zatwierdzenie nazw). Dziś przy starcie z DE rynek macierzysty to tylko 59 firm UNI + 17 firm DE jako rynek zagraniczny „domowy”; DE/US/CZ nie mają jeszcze dopracowanego zestawu (USA/CZ: ten sam mechanizm, bez własnych list).
+1. **Firmy niemieckie wdrożone po zatwierdzeniu użytkownika** (40 firm, `countries_data.js`; GLS → GLB z powodu kolizji symbolu z kwitem Glasses): DE = 49 zwykłych + 8 państwowych, test 884/884; seria start DE ×6 (57 firm DE): GIG 12,8% ± 2,5, marża 20,6%, niezmienniki 0, bez błędów JS. USA/CZ: ten sam mechanizm, bez własnych dodatkowych list. Ceny nowych firm nie były kalibrowane do poziomów giełd.
 2. **Literały „PLN/zł” w tekstach** (ok. 300 miejsc: opisy, maile, Akademia, `index.html`: np. „PLN całkowity”, „Konto prywatne: … PLN”, bony skarbowe, ceny w `market-kpi-row`) — poprawione tylko formatery, pasek, kantor, okno gotówki, karty krajów i podgląd okresu. Reszta nadal mówi o złotych; kwoty w nich są skalowane tylko tam, gdzie idą przez `formatZl`.
 3. Progi giełd, opłaty i stałe są w jednostkach gry (skala), nie „okrągłe” w EUR/USD (np. 50 000 → 12 500 EUR).
 4. Kursy i zmiany walut w UI (`getFxChange`, widełki kursu w kantorze, wykres) nadal opisane w złotych/surowo; przy bazie ≠ PLN zmiana PLN względem bazy nie jest pokazywana.
@@ -29,3 +29,8 @@ Gałąź `claude/impl-01611-3c96f1` (nie scalona, bez zmian w `zmiany-AI`/`main`
 6. **K3 (społeczeństwo, polityka, kryzysy kraju startowego) nie ruszone** — zakres XL (jak 0.13), zostaje na osobną wersję. Rynek macierzysty, partie, NBP/KNF pozostają polskie.
 7. Stare zapisy z startem z DE/US/CZ (v19–v20) wczytują się jako PLN z polskimi firmami (zgodnie z decyzją „stare zapisy = PL/PLN”).
 8. Do potwierdzenia: seria PL ×12 + baza ×12 nie rozstrzyga ±1 pp (wymagane ≥ 24 + 24 jak w 0.16.9); US/CZ tylko 6 gier.
+
+## Aktualizacja 2026-10-30: zestaw DE po decyzjach użytkownika
+- Zestaw odchudzony i przeprofilowany (przemysł, chemia, motoryzacja, energia, obronność, ubezpieczenia; 1 gaming): **48 firm krajowych** = 43 spółki giełdowe (36 zwykłych + 7 państwowych) + **5 banków komercyjnych** (CBK, SPK, VBK, IBK, DGH) z pełną mechaniką banków (`COUNTRY_BANK_DEFS`, `addCountryBanks`: aktywne i notowane od startu; kredyty w jednostkach gry, w UI EUR). Lista finalna i skreślenia: `plany/propozycja_firm_niemieckich.md`.
+- Testy 885/885. Seria start DE ×12 × 27 kw. ×200: GIG CAGR 10,4% ± 4,8 (mediana 9,3), marża 19,7%, zapis 1,92 mln znaków, 974 ms/kw.; niezmienniki 0, ujemna gotówka 0, błędy JS 0. W aplikacji (nowa gra, start DE): 63 akcje w rynku macierzystym, 5 niemieckich banków aktywnych, 43 spółki DE, 0 polskich, niezmienniki 0.
+- Pominięte: polskie banki UNI (6) zostają na rynku (decyzja 29.10); banki DE powstają tylko przy starcie z DE (przy dołączeniu Niemiec w trakcie gry jest tylko WAB); kredyty niemieckich banków sprawdzone jedynie pośrednio (niezmienniki serii), bez osobnego testu scenariusza kredytu.

@@ -2434,8 +2434,8 @@ let specialists = [
 
 // --- Funkcje Zarządzania Spółkami ---
 
-function initializeCommercialBanks() {
-    commercialBanks = ALL_COMMERCIAL_BANKS_DEFINITIONS.map(def => ({
+function createBankFromDef(def, isActive = def.isActiveFromStart || false) {
+    return {
         ...def,
         cash: def.initialCapital,
         reservesBC: 0,
@@ -2445,11 +2445,34 @@ function initializeCommercialBanks() {
         corporateClients: [],
         interestRateDeposit: 0,
         interestRateLoan: 0,
-
-        isActive: def.isActiveFromStart || false, // <--- Dodaj lub zmodyfikuj tę linię
+        isActive,
         startupInvestments: {} // Dodajmy pole na inwestycje startupowe
-    }));
+    };
+}
 
+function initializeCommercialBanks() {
+    commercialBanks = ALL_COMMERCIAL_BANKS_DEFINITIONS.map(def => createBankFromDef(def));
+}
+
+// 0.16.11 K1: banki startowe kraju (mechanika banków komercyjnych: kredyty, depozyty, wypłacalność, ratunek, upadek). Kwoty w jednostkach gry (waluta konta × skala).
+// Dodawane przy starcie z danego kraju (addCountryBanks), aktywne i notowane od pierwszego dnia; symbol giełdowy w polu `symbol`.
+const COUNTRY_BANK_DEFS = {
+    DE: [
+        { id: 'de_cbk', symbol: 'CBK', name: 'Commerzbank-Kommerz', type: BANK_TYPES.CORPORATE, initialCapital: 6500000, reserveRatio: 0.15, baseInterestRateMargin: 0.015 },
+        { id: 'de_spk', symbol: 'SPK', name: 'Sparkasse Sparsam', type: BANK_TYPES.UNIVERSAL, initialCapital: 9000000, reserveRatio: 0.12, baseInterestRateMargin: 0.019 },
+        { id: 'de_vbk', symbol: 'VBK', name: 'Volksbank Vereinigt', type: BANK_TYPES.UNIVERSAL, initialCapital: 7000000, reserveRatio: 0.12, baseInterestRateMargin: 0.02 },
+        { id: 'de_ibk', symbol: 'IBK', name: 'Investmentbank Isar', type: BANK_TYPES.INVESTMENT, initialCapital: 5500000, reserveRatio: 0.1, baseInterestRateMargin: 0.01 },
+        { id: 'de_dgh', symbol: 'DGH', name: 'Deutsche Goldhaus', type: BANK_TYPES.INTERNATIONAL, initialCapital: 12000000, reserveRatio: 0.09, baseInterestRateMargin: 0.017 }
+    ]
+};
+function addCountryBanks(country) {
+    for (const def of COUNTRY_BANK_DEFS[country] || []) {
+        if (commercialBanks.some(b => b.id === def.id)) continue;
+        const bank = createBankFromDef(def, true);
+        commercialBanks.push(bank);
+        const stock = createBankStockObject(bank, 'SILVER');
+        if (stock && !stocks.some(s => s.symbol === stock.symbol)) stocks.push(stock);
+    }
 }
 
 function createBankStockObject(bank, exchangeLevel = 'SILVER') {
@@ -13098,7 +13121,7 @@ function creepSubsidiaryStake(child, parent) {
 // 0.16.11 K0: pochodzenie spółki startowej (decyzje użytkownika, plany/lista_firm_startowych.md). PL = tylko przy starcie z Polski,
 // UNI = w każdym kraju startowym, DE/US = firma tego kraju (przy innym starcie istnieje tylko jako zagraniczna z countries_data.js). Nie zapisujemy.
 const PL_ORIGIN_SYMBOLS = ['WZM', 'PIX', 'SUM', 'WIP', 'FIX', 'DRH', 'BAL', 'LEK', 'DPB', 'WPY', 'KRO', 'PLX', 'BTX', 'ANN', 'SIK', 'KRA', 'STM', 'SKP', 'BOR', 'BEW', 'ORT', 'ENG', 'TRN', 'PUR', 'NOC', 'GIEB', 'UnG', 'PZB', 'ORZD', 'HUSA', 'BPIG', 'MAJB'];
-const COMPANY_ORIGIN_OVERRIDES = { WiS: 'DE', DMPC: 'US' }; // firmy z countries_data.js: krajowe tylko przy starcie ze swojego kraju
+const COMPANY_ORIGIN_OVERRIDES = { WiS: 'DE', DMPC: 'US', CBK: 'DE', SPK: 'DE', VBK: 'DE', IBK: 'DE', DGH: 'DE' }; // + banki startowe kraju (COUNTRY_BANK_DEFS) // firmy z countries_data.js: krajowe tylko przy starcie ze swojego kraju
 function getCompanyOrigin(stock) {
     if (!stock) return 'UNI';
     return stock.origin || COMPANY_ORIGIN_OVERRIDES[stock.symbol] || (PL_ORIGIN_SYMBOLS.includes(stock.symbol) ? 'PL' : 'UNI');
@@ -13106,7 +13129,7 @@ function getCompanyOrigin(stock) {
 // 0.16.11 K0: symbole giełdowe banków startowych (stare BKINV1/BKINV3/BKCORP3 → SPR/RPK/BPIG); pozostałe BK + id.
 const BANK_SYMBOL_OVERRIDES = { inv1: 'SPR', inv3: 'RPK', corp3: 'BPIG' };
 const LEGACY_BANK_SYMBOLS = { BKINV1: 'SPR', BKINV3: 'RPK', BKCORP3: 'BPIG' };
-function getBankSymbol(bank) { return BANK_SYMBOL_OVERRIDES[bank.id] || `BK${bank.id.toUpperCase()}`; }
+function getBankSymbol(bank) { return bank.symbol || BANK_SYMBOL_OVERRIDES[bank.id] || `BK${bank.id.toUpperCase()}`; }
 /** Migracja zapisu: stare symbole banków w całym snapshocie (klucze portfeli i wartości symbol). */
 function migrateLegacyBankSymbols(snapshot) {
     const json = JSON.stringify(snapshot);

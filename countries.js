@@ -90,6 +90,7 @@ function applyStartCountrySet(id) {
     if (id === 'PL' || COUNTRY_DEFS.PL) return;
     const companies = removeStartSetFromMarket(id);
     if (companies.length) registerPolandDef(companies);
+    if (typeof addCountryBanks === 'function') addCountryBanks(id); // 0.16.11 K1: banki komercyjne kraju startu
     if (typeof displayStocks === 'function') displayStocks();
 }
 /** 0.16.3 G15: próg wezwania kraju (66/75/90% głosów) i nadzór (odpowiednik KNF). Przekroczenie progu wymagałoby wezwania na resztę akcji. */
