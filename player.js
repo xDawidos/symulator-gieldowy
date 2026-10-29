@@ -622,6 +622,10 @@ function contributeToInvestmentPool(contributorId, amount) {
     notePoolLedger(contributorId, 'deposited', amount); // 0.14.1 R0: księga puli
     recomputePoolStakes(); // 0.14.1 R1: wkład w pulę = fakty
     console.log(`[PULA] ${contributorId} wpłacił(a) ${amount.toFixed(2)} PLN do puli inwestycyjnej.`, 'market');
+    if (contributorId === 'player') { // odświeżenie jak po wycofaniu: panel puli i widoki funduszu
+        if (typeof displayInvestmentPool === 'function') displayInvestmentPool();
+        if (typeof refreshFundViews === 'function') refreshFundViews();
+    }
 }
 
 // 0.14.1 R0: księga puli per uczestnik — wpłaty, wypłaty, zamiana na akcje, zwroty do puli, straty, opłaty.
