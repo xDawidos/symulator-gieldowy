@@ -4504,12 +4504,12 @@ function triggerPrivatizedStartupComplication(startup) {
     }
 }
 
-function generateNewStartup() {
+function generateNewStartup(preferredSector = null) {
     let name;
-    let sector;
-    do {
+    let sector = preferredSector && preferredSector !== 'Bankowość' ? startupSectors.find(x => x[0] === preferredSector) : null; // 0.16.9: debiut w miejsce przejętej spółki — ten sam sektor
+    while (!sector || sector[0] === 'Bankowość') {
         sector = getRandomElement(startupSectors);
-    } while (sector[0] === 'Bankowość'); // Losuj ponownie, jeśli wylosowano Bankowość
+    } // Losuj ponownie, jeśli wylosowano Bankowość
     // 0.14.2 P4: nazwa i symbol dopiero po sektorze z rejestru i podsektorze (niżej).
     let symbol = null;
 

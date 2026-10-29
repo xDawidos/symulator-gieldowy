@@ -37,11 +37,11 @@ const GDR_RULES = {
 };
 
 let foreignIssuers = {};      // id giganta → instancja (tworzona przy pierwszej potrzebie)
-let giantEventState = { lastQ: -99, count: 0, gdr: 0, takeover: 0 };
+let giantEventState = { lastQ: -99, count: 0, gdr: 0, takeover: 0, replacements: [] };
 let giantEventLog = [];       // { q, kind, giant | symbol, ... } — ostatnie zdarzenia
 let pendingGiantEvent = null; // wynik do pokazania w oknie (UI w ui.js; bez UI zostaje w dzienniku)
 
-function resetGdrState() { foreignIssuers = {}; giantEventState = { lastQ: -99, count: 0, gdr: 0, takeover: 0 }; giantEventLog = []; pendingGiantEvent = null; if (typeof resetCountriesState === 'function') resetCountriesState(); }
+function resetGdrState() { foreignIssuers = {}; giantEventState = { lastQ: -99, count: 0, gdr: 0, takeover: 0, replacements: [] }; giantEventLog = []; pendingGiantEvent = null; if (typeof resetCountriesState === 'function') resetCountriesState(); }
 
 function getGdrSymbol(issuer) { return issuer.kind === 'share' ? `${issuer.id}.${issuer.country}` : `${issuer.id}.GDR`; }
 function getForeignIssuerList() { return Object.values(foreignIssuers); }
@@ -177,16 +177,40 @@ function executeForeignTakeover(stock, giant) {
     for (const ai of aiCompetitors) for (const loan of ai.loans || []) if (loan.collateral?.symbol === symbol) loan.collateral = null;
     for (const bank of commercialBanks) for (const loans of Object.values(bank.loanPortfolio || {})) if (Array.isArray(loans)) for (const loan of loans) if (loan.collateral?.symbol === symbol) loan.collateral = null;
     if (paid > 0) recordPayment('external:inwestor-zagraniczny', 'external:akcjonariusze', paid, 'Przejęcie przez zagranicznego inwestora');
-    const text = `🌍 ${giant.name} (${CURRENCIES[giant.currency]?.name || giant.currency}) przejmuje ${name} (${symbol}): wykup wszystkich akcjonariuszy po cenie ${formatNumberPl(offer, 2)} zł (premia ${(premium * 100).toFixed(0)}%). Spółka znika z giełdy.`;
+    const q = typeof macro === 'object' ? macro.quarter : 0, sector = getMainSector(stock);
+    (giantEventState.replacements ||= []).push({ due: q + 1 + Math.floor(Math.random() * 4), sector: sector || '', replaces: name, since: q }); // 0.16.9: w miejsce zdjętej spółki debiutuje nowa krajowa
+    const text = `🌍 ${giant.name} (${CURRENCIES[giant.currency]?.name || giant.currency}) przejmuje ${name} (${symbol}): wykup wszystkich akcjonariuszy po cenie ${formatNumberPl(offer, 2)} zł (premia ${(premium * 100).toFixed(0)}%). Spółka znika z giełdy; w ciągu 1–4 kwartałów w jej miejsce zadebiutuje nowa spółka krajowa.`;
     logEvent(text, 'market');
     if (typeof pushNews === 'function') pushNews(text, null);
     if (heldByPlayer && typeof addMail === 'function') addMail({ sender: 'PULS', subject: `🌍 ${name}: przejęcie przez zagraniczny koncern`, body: `${text}\n\nTwoje akcje rozliczono gotówką po cenie wykupu.` });
-    return { symbol, name, offer, premium, paid, heldByPlayer };
+    return { symbol, name, offer, premium, paid, heldByPlayer, replacementSector: sector || null };
 }
+
+/** 0.16.9: debiuty spółek w miejsce przejętych (1–4 kw. po przejęciu): nowy startup z tego samego sektora od razu przez zwykłe IPO (limity spółek i wymogi wejścia jak zawsze); brak miejsca = próba w kolejnym kwartale, najdłużej 8 kw. */
+function processTakeoverReplacements() {
+    const q = typeof macro === 'object' ? macro.quarter : 0, list = giantEventState.replacements || [], debuts = [];
+    giantEventState.replacements = list.filter(r => {
+        if (q < r.due) return true;
+        if (q - r.since > 8) return false;
+        if (!hasFreeListingSlot()) return true;
+        const startup = generateNewStartup(r.sector);
+        stocks.push(startup);
+        handleSuccessfulIPO(startup, getRandomInRange(2, 4));
+        if (startup.assetType === 'Startup') { stocks.splice(stocks.indexOf(startup), 1); return true; } // IPO zaparkowane (brak miejsca na rynku wejścia) — bez duchów w inkubatorze
+        const text = `🆕 W miejsce ${r.replaces} wchodzi na giełdę ${startup.name} (${startup.symbol}), sektor: ${getMainSector(startup)}.`;
+        logEvent(text, 'market');
+        if (typeof pushNews === 'function') pushNews(text, null);
+        debuts.push({ symbol: startup.symbol, name: startup.name, replaces: r.replaces });
+        return false;
+    });
+    return debuts;
+}
+
 
 /** Raz na kwartał: szansa na zdarzenie (≈ raz na 2 lata, nie częściej niż raz na rok). force: 'gdr' | 'takeover' wymusza rodzaj. */
 function processGiantEventQuarterly(force = null) {
     const q = typeof macro === 'object' ? macro.quarter : 0;
+    if (!force) processTakeoverReplacements();
     if (!force && (q - giantEventState.lastQ < GDR_RULES.eventCooldownQuarters || q < 4 || Math.random() >= GDR_RULES.eventChancePerQuarter)) return null;
     const free = FOREIGN_GIANTS.filter(g => !foreignIssuers[g.id]);
     let kind = force || (Math.random() < GDR_RULES.gdrShare ? 'gdr' : 'takeover');
@@ -261,6 +285,6 @@ function applyGdrSnapshot(snapshot) {
         for (const [holder, qty] of Object.entries(raw.holders || {})) if (Number(qty) > 0) issuer.holders[holder] = Number(qty);
     }
     const ev = snapshot.events || {};
-    giantEventState = { lastQ: Number.isFinite(Number(ev.lastQ)) ? Number(ev.lastQ) : -99, count: Number(ev.count) || 0, gdr: Number(ev.gdr) || 0, takeover: Number(ev.takeover) || 0 };
+    giantEventState = { lastQ: Number.isFinite(Number(ev.lastQ)) ? Number(ev.lastQ) : -99, count: Number(ev.count) || 0, gdr: Number(ev.gdr) || 0, takeover: Number(ev.takeover) || 0, replacements: Array.isArray(ev.replacements) ? ev.replacements.map(r => ({ due: Number(r.due) || 0, sector: String(r.sector || ''), replaces: String(r.replaces || ''), since: Number(r.since) || 0 })) : [] };
     giantEventLog = Array.isArray(snapshot.log) ? snapshot.log.slice(-20) : [];
 }
