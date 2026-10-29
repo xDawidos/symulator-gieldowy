@@ -1338,7 +1338,7 @@ function setGameSpeed(speedMultiplier) {
 
         // Odświeżanie wykresu, jeśli jest otwarty
         if (currentlyDisplayedChartSymbol) {
-            const stockToUpdate = stocks.find(s => s.symbol === currentlyDisplayedChartSymbol);
+            const stockToUpdate = typeof getCompanyCardSource === 'function' ? getCompanyCardSource(currentlyDisplayedChartSymbol) : stocks.find(s => s.symbol === currentlyDisplayedChartSymbol);
             const modal = document.getElementById('price-chart-modal');
             if (stockToUpdate && modal && modal.style.display === 'block') {
                 const svgArea = document.getElementById('chart-svg-area');

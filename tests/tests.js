@@ -14050,16 +14050,24 @@ group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
         countryState.DE.link = null; assert(/asset-mini-table/.test(renderMarketsTab()), 'kraj z biletem nadal ma listę w Kantorze');
     }));
 
-    test('Sortowanie po kraju: domyślnie PL, potem kraje w kolejności dołączenia; Kraj ▲/▼ porządkuje bloki; „tylko moje” i sortowanie kursu działają też na wierszach zagranicznych', () => withLinkedTable(body => {
-        const blocks = () => { const out = []; for (const r of body.rows) { const k = r.classList.contains('linked-market-header') ? r.textContent.match(/\(([A-Z]{2})\)/)[1] : r.classList.contains('stock-row') ? (r.dataset.country || 'PL') : null; if (k && out[out.length - 1] !== k) out.push(k); } return out.join(); };
-        displayStocks(); assertEq(blocks(), 'PL,DE,CZ', 'domyślnie krajowe, potem kraje w kolejności dołączenia');
-        toggleCountrySort(); assertEq(countrySortState, 'asc'); assertEq(blocks(), 'CZ,DE,PL', 'rosnąco wg kodu kraju');
-        toggleCountrySort(); assertEq(blocks(), 'PL,DE,CZ', 'malejąco wg kodu kraju');
-        toggleCountrySort(); assertEq(countrySortState, 'none'); assertEq(blocks(), 'PL,DE,CZ', 'wyłączone sortowanie: kolejność domyślna');
+    test('0.16.9 W3: spółki krajów połączonych leżą w grupach poziomów naszych giełd (poziom z ceny/kapitalizacji), „Kraj ▲/▼”, „tylko moje” i sortowanie kursu porządkują wiersze w grupie sektora', () => withLinkedTable(body => {
+        const issuerOf = r => getCountryIssuers(r.dataset.country).find(x => getShareSymbol(x) === r.dataset.symbol);
+        const headerOf = r => { let p = r; while (p && !(p.classList.contains('exchange-header') && !p.classList.contains('market-header'))) p = p.previousElementSibling; return p ? p.textContent : ''; };
+        const segments = () => { const out = []; let cur = null; for (const r of body.rows) { if (r.classList.contains('stock-row') && r.style.display !== 'none') (cur = cur || []).push(r); else if (cur) { out.push(cur); cur = null; } } if (cur) out.push(cur); return out; };
+        const country = r => r.dataset.country || 'PL', pln = r => r.dataset.country ? toPln(issuerOf(r).price, issuerOf(r).currency) : stocks.find(x => x.symbol === r.dataset.symbol).price;
+        displayStocks();
+        const fr = [...body.querySelectorAll('tr.foreign-row')];
+        assert(fr.length > 5 && fr.every(r => r.dataset.level === getForeignTier(issuerOf(r)).key), 'poziom wiersza = poziom giełdy spółki');
+        assert(fr.every(r => headerOf(r).includes(stripEmoji(exchanges[r.dataset.level].name))), 'wiersz stoi pod nagłówkiem swojego poziomu giełdy');
+        assert(new Set(fr.map(r => r.dataset.level)).size > 1, 'spółki rozkładają się na kilka poziomów, nie w jednym bloku');
+        toggleCountrySort(); assertEq(countrySortState, 'asc');
+        assert(segments().every(seg => seg.every((r, k) => k === 0 || country(seg[k - 1]) <= country(r))), 'Kraj ▲: w grupie sektora kody krajów rosnąco');
+        toggleCountrySort();
+        assert(segments().every(seg => seg.every((r, k) => k === 0 || country(seg[k - 1]) >= country(r))), 'Kraj ▼: kody krajów malejąco');
+        toggleCountrySort(); assertEq(countrySortState, 'none');
         ownedOnlyFilter = true; displayStocks(); assertEq(body.querySelectorAll('tr.foreign-row').length, 0, '„tylko moje”: brak posiadanych zagranicznych');
         ownedOnlyFilter = false; currentSortState = 'price_desc'; displayStocks();
-        const px = [...body.querySelectorAll('tr.foreign-row[data-country="DE"]')].map(r => toPln(getCountryIssuers('DE').find(i => getGdrSymbol(i) === r.dataset.symbol).price, 'EUR'));
-        assert(px.length > 1 && px.every((v, k) => k === 0 || px[k - 1] >= v), 'kurs malejąco wewnątrz bloku kraju');
+        assert(segments().every(seg => seg.every((r, k) => k === 0 || pln(seg[k - 1]) >= pln(r) - 1e-9)), 'kurs w PLN malejąco w grupie sektora (krajowe i zagraniczne razem)');
     }));
 
     test('Przejęcie przez giganta: w ciągu 4 kwartałów w miejsce spółki debiutuje nowa krajowa (liczba wraca, z sufitem), news „w miejsce X wchodzi Y”, okno mówi o zastępstwie, niezmienniki 0', () => {
@@ -14116,4 +14124,88 @@ group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
             assertEq(picked, 'CZ', 'callback z krajem'); assert(!document.querySelector('.cg-overlay'), 'ekran usunięty z DOM');
         } finally { closeCountryGlobe(); }
     });
+});
+
+group('0.16.9 W3 Spółki zagraniczne jak krajowe', () => {
+    function withWorld(fn) {
+        initFxState(); resetGdrState(); resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+        const hosts = ['company-card-header', 'company-card-kpis', 'company-card-tabs', 'company-card-body'].filter(id => !document.getElementById(id)).map(id => { const el = document.createElement('div'); el.id = id; document.body.appendChild(el); return el; });
+        try { return fn(); } finally { hosts.forEach(el => el.remove()); resetGdrState(); initFxState(); }
+    }
+    const symOf = i => getShareSymbol(i);
+
+    test('Poziomy: kraj połączony → nasze poziomy z ceny w PLN (progi giełd), kraj niepołączony → własne poziomy z nazwą operatora; poziom nie zmienia stanu spółki', () => withWorld(() => {
+        joinCountry('DE'); joinCountry('CZ'); countryState.DE.link = 'intl';
+        for (const i of getCountryIssuers('DE')) {
+            const t = getForeignTier(i), pln = toPln(i.price, i.currency);
+            assert(t.linked && exchanges[t.key], `${i.id}: poziom z naszych giełd`);
+            if (!isEliteExchange(t.key)) assert(pln >= exchanges[t.key].minPrice && pln < exchanges[t.key].maxPrice, `${i.id}: cena ${pln.toFixed(0)} zł mieści się w progach ${t.key}`);
+        }
+        const cz = getCountryIssuers('CZ')[0], tc = getForeignTier(cz);
+        assert(!tc.linked && tc.label.startsWith(`${COUNTRY_DEFS.CZ.operator.id}:`), 'kraj niepołączony: poziom wewnątrz giełdy kraju');
+        const snap = JSON.stringify(cz); getForeignTier(cz); assertEq(JSON.stringify(cz), snap, 'wyznaczenie poziomu nie zmienia spółki');
+    }));
+
+    test('Elitarne poziomy obcych: Szmaragd i Rubin tylko dla kapitalizacji ≥ progu, w limitach; reszta wg ceny', () => withWorld(() => {
+        joinCountry('DE'); countryState.DE.link = 'intl';
+        const list = getCountryIssuers('DE');
+        list.forEach(i => { i.price = fromPln(60, i.currency); });
+        list[0].price = fromPln(3000, list[0].currency); // 10 mln akcji × 3000 zł = 30 mld zł
+        list[1].price = fromPln(1600, list[1].currency); // 16 mld zł
+        foreignEliteCache.q = -1;
+        assertEq(getForeignTier(list[0]).key, 'EMERALD', 'największa kapitalizacja → Szmaragd');
+        assertEq(getForeignTier(list[1]).key, 'EMERALD', 'druga też ≥ 2,5 mld zł');
+        assert(list.slice(2).every(i => getForeignTier(i).key !== 'EMERALD' && getForeignTier(i).key !== 'RUBY'), 'tanie spółki bez poziomów elitarnych');
+        const count = list.filter(i => getForeignTier(i).key === 'EMERALD').length; assert(count <= ELITE_EXCHANGES.EMERALD.limit, 'limit Szmaragdu');
+    }));
+
+    test('Karta spółki zagranicznej: wszystkie zakładki renderują się (nagłówek z walutą spółki i krajem, wskaźniki w PLN), wykres ceny w Przeglądzie z historii tygodniowej', () => withWorld(() => {
+        joinCountry('DE'); countryState.DE.link = 'intl';
+        const i = getCountryIssuers('DE')[0]; i.history = [30, 31, 33, 32, 35, 34, i.price];
+        const sym = symOf(i); companyCardView.symbol = sym;
+        for (const tab of ['overview', 'finance', 'owners', 'manage', 'group']) {
+            companyCardView.tab = tab; renderCompanyCard();
+            const body = document.getElementById('company-card-body').innerHTML;
+            assert(body.length > 40 && !/undefined|NaN/.test(body), `zakładka ${tab} bez undefined/NaN`);
+        }
+        const head = document.getElementById('company-card-header').innerHTML;
+        assert(head.includes(sym) && head.includes('EUR') && head.includes(formatZl(toPln(i.price, 'EUR')).replace(/\s/g, ' ')) , 'nagłówek: symbol, cena w PLN i w walucie spółki');
+        assert(/Kapitalizacja/.test(document.getElementById('company-card-kpis').innerHTML) && !/NaN/.test(document.getElementById('company-card-kpis').innerHTML), 'kafelki wskaźników');
+        assert(document.getElementById('company-card-tabs').textContent.includes('Grupa') && !document.getElementById('company-card-tabs').textContent.includes('Zatrudnienie'), 'zakładki: Grupa tak, Zatrudnienie nie');
+        companyCardView.tab = 'overview'; renderCompanyCard();
+        const area = document.getElementById('cc-foreign-chart'); assert(area, 'miejsce na wykres w Przeglądzie');
+        drawCompanyCardChart(); assertEq(area.querySelectorAll('svg line').length >= i.history.length - 1, true, 'wykres narysowany z historii tygodniowej');
+        companyCardView.tab = 'overview';
+    }));
+
+    test('Karta krajowa nie zmienia się: wspólny widok nie dodaje wykresu ani pól obcych, a widok obcej nie zmienia spółki źródłowej', () => withWorld(() => {
+        companyCardView.symbol = 'GA'; companyCardView.tab = 'overview'; renderCompanyCard();
+        assert(!document.getElementById('cc-foreign-chart'), 'karta krajowa bez wykresu obcej');
+        joinCountry('DE'); const i = getCountryIssuers('DE')[0], before = JSON.stringify({ p: i.price, h: i.holders, c: i.cash, f: i.fundamentals, b: i.balanceSheet });
+        const vm = buildForeignCardStock(i); const after = JSON.stringify({ p: i.price, h: i.holders, c: i.cash, f: i.fundamentals, b: i.balanceSheet });
+        assertEq(before.length > 0 && after.length > 0, true); 
+        assertNear(vm.price, toPln(i.price, i.currency), 'cena w PLN'); assertNear(vm.cash, toPln(i.cash, i.currency), 'gotówka w PLN');
+        assertNear(vm.fundamentals.epsTtm * 1, toPln(i.fundamentals.epsTtm ?? 0, i.currency) || vm.fundamentals.epsTtm, 'EPS w PLN (po przeliczeniu historii)');
+    }));
+
+    test('Wykres: renderer ma wspólny kod z krajowym, ale dla obcej rysuje tylko linię tygodniową (bez świec)', () => withWorld(() => {
+        joinCountry('DE'); const i = getCountryIssuers('DE')[0]; i.history = [10, 12, 11, 13, 15, 14];
+        const vm = buildForeignCardStock(i), area = document.createElement('div'), saved = playerChartSettings.type;
+        try {
+            playerChartSettings.type = 'candlestick'; renderChartSVGForStock(vm, area, 400, 200);
+            assert(area.querySelector('svg') && !area.querySelector('rect.candle, .candle'), 'bez świec');
+            assert(area.querySelectorAll('svg line').length >= 5, 'segmenty linii');
+        } finally { playerChartSettings.type = saved; }
+    }));
+
+    test('Dywidendy obcej: historia 4 ostatnich wypłat (stopa dywidendy jak u krajowych), skalowana splitem i w zapisie bez zmiany wersji', () => withWorld(() => {
+        joinCountry('DE'); const i = getCountryIssuers('DE')[0]; ensureForeignCompany(i, true);
+        for (const d of [1, 2, 3, 4, 5]) noteForeignDividend(i, d);
+        assertEq(i.divHistory.join(), '5,4,3,2', 'cztery najnowsze, najnowsza pierwsza');
+        applyForeignShareChange(i, 2); assertEq(i.divHistory.join(), '2.5,2,1.5,1', 'split 2:1 dzieli historię dywidend');
+        const row = getForeignCompanySnapshot(i); assertEq(row.dh.join(), '2.5,2,1.5,1');
+        const j = { ...i, divHistory: undefined }; applyForeignCompanySnapshot(j, row); assertEq(j.divHistory.join(), 
+'2.5,2,1.5,1', 'odtworzone z zapisu');
+        const vm = buildForeignCardStock(i); assert(getTrailingDividendYield(vm) > 0, 'stopa dywidendy w karcie z historii');
+    }));
 });

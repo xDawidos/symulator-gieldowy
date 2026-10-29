@@ -1397,8 +1397,9 @@ function renderChartSVGForStock(stock, svgAreaElement, width, height) {
     const chartHeight = height - padding.top - padding.bottom;
 
     let dataToDraw, minPrice, maxPrice, historyForMapping;
+    const candles = playerChartSettings.type === 'candlestick' && !stock.foreignHistory; // 0.16.9: spółki zagraniczne mają tylko historię tygodniową (linia)
 
-    if (playerChartSettings.type === 'candlestick') {
+    if (candles) {
         const fullHistory = (stock.candlestickHistory || []).concat(stock.currentCandle || []);
         dataToDraw = aggregateCandles(fullHistory, playerChartSettings.candleInterval);
         historyForMapping = dataToDraw; // Do mapowania transakcji użyjemy zagregowanych danych
@@ -1409,8 +1410,8 @@ function renderChartSVGForStock(stock, svgAreaElement, width, height) {
         minPrice = Math.min(...dataToDraw.map(c => c.low));
         maxPrice = Math.max(...dataToDraw.map(c => c.high));
     } else { // 'line'
-        historyForMapping = stock.lineHistory || []; // Do mapowania transakcji użyjemy pełnej, surowej historii
-        dataToDraw = filterLineData(historyForMapping, playerChartSettings.lineInterval);
+        historyForMapping = stock.foreignHistory ? stock.foreignHistory.map((price, n) => ({ price, time: n })) : (stock.lineHistory || []); // Do mapowania transakcji użyjemy pełnej, surowej historii
+        dataToDraw = stock.foreignHistory ? [...stock.foreignHistory] : filterLineData(historyForMapping, playerChartSettings.lineInterval);
         if (dataToDraw.length === 0) {
             svgAreaElement.innerHTML = `<p style="text-align: center; padding-top: 60px;">Brak danych do narysowania wykresu.</p>`;
             return;
@@ -1452,7 +1453,7 @@ function renderChartSVGForStock(stock, svgAreaElement, width, height) {
     }
     
     // Wywołaj odpowiednią funkcję rysującą
-    if (playerChartSettings.type === 'candlestick') {
+    if (candles) {
         drawCandlestickChart(dataToDraw, svg, chartWidth, getX, getY);
     } else {
         drawLineChart(dataToDraw, svg, getX, getY);
@@ -2175,25 +2176,31 @@ function displayStocks(previousInputValues = {}) {
     `;
   }
 
-  const domesticStart = stockTableBody.rows.length;
   // --- Pętla renderująca giełdy ---
   if (!internetTab) sortedExchanges.forEach(exchangeKey => {
     const exchange = exchanges[exchangeKey];
     let stocksOnThisExchange = baseStocksToDisplay.filter(
       stock => stock.exchange === exchangeKey
     );
+    // 0.16.9 W3: spółki krajów połączonych stoją na odpowiednim poziomie naszych giełd razem z krajowymi (ta sama grupa sektora, sortowanie, zwijanie)
+    const isForeignRow = x => x.kind === 'share' && Boolean(x.country);
+    const rowPrice = x => isForeignRow(x) ? toPln(x.price, x.currency) : x.price;
+    const rowCountry = x => isForeignRow(x) ? x.country : 'PL';
+    if (selectedMarketOperator === 'GPW' && typeof getLinkedIssuersForExchange === 'function') stocksOnThisExchange = stocksOnThisExchange.concat(getLinkedIssuersForExchange(exchangeKey));
 
     // 0.14.1 R6: grupy sektora głównego w kolejności rejestru; sortowanie po cenie wewnątrz grupy.
     // 0.14.5: możliwość wyłączenia grupowania według kategorii — płaska lista i sortowanie po cenie w całej giełdzie.
     const isGroupedBySector = sectorFilterState.grouped !== false;
-    const sectorOf = new Map(stocksOnThisExchange.map(stock => [stock, getMainSector(stock)]));
+    const sectorOf = new Map(stocksOnThisExchange.map(stock => [stock, isForeignRow(stock) ? stock.sectors[0][0] : getMainSector(stock)]));
+    const countryDir = countrySortState === 'asc' ? 1 : countrySortState === 'desc' ? -1 : 0;
+    const byCountry = (a, b) => countryDir ? rowCountry(a).localeCompare(rowCountry(b)) * countryDir : 0;
     const priceDir = currentSortState === 'price_asc' ? 1 : currentSortState === 'price_desc' ? -1 : 0;
 
     if (isGroupedBySector) {
       stocksOnThisExchange.sort((a, b) =>
-        (getSectorDisplayOrder(sectorOf.get(a)) - getSectorDisplayOrder(sectorOf.get(b))) || (priceDir ? (a.price - b.price) * priceDir : 0));
-    } else if (priceDir) {
-      stocksOnThisExchange.sort((a, b) => (a.price - b.price) * priceDir);
+        (getSectorDisplayOrder(sectorOf.get(a)) - getSectorDisplayOrder(sectorOf.get(b))) || byCountry(a, b) || (priceDir ? (rowPrice(a) - rowPrice(b)) * priceDir : 0));
+    } else if (priceDir || countryDir) {
+      stocksOnThisExchange.sort((a, b) => byCountry(a, b) || (priceDir ? (rowPrice(a) - rowPrice(b)) * priceDir : 0));
     }
 
     if (stocksOnThisExchange.length > 0) {
@@ -2228,6 +2235,7 @@ function displayStocks(previousInputValues = {}) {
         const countEl = document.createElement('span'); countEl.className = 'sector-count'; countEl.textContent = sectorCount;
         subCell.append(nameEl, ' ', countEl);
       }
+      if (isForeignRow(stock)) { const linkedRow = renderLinkedStockRow(stockTableBody, stock, previousInputValues); if (exchangeCollapseState[exchangeKey]) linkedRow.style.display = 'none'; return; }
       const mainRow = renderStockRow(stock, false);
       if (exchangeCollapseState[exchangeKey]) mainRow.style.display = 'none';
 
@@ -2238,15 +2246,6 @@ function displayStocks(previousInputValues = {}) {
     });
   });
 
-  // 0.16.9: kraje połączone na głównej liście; sortowanie „Kraj” porządkuje bloki (PL = spółki krajowe), nagłówek wyboru rynku zostaje na górze
-  if (selectedMarketOperator === 'GPW' && typeof buildLinkedStockBlocks === 'function') {
-    const linked = buildLinkedStockBlocks(previousInputValues);
-    if (linked.length) {
-      const blocks = [{ code: 'PL', rows: Array.from(stockTableBody.rows).slice(domesticStart) }, ...linked];
-      if (countrySortState !== 'none') blocks.sort((a, b) => a.code.localeCompare(b.code) * (countrySortState === 'asc' ? 1 : -1));
-      stockTableBody.append(...blocks.flatMap(b => b.rows));
-    }
-  }
   const countryBtn = document.getElementById('table-country-sort');
   if (countryBtn) { countryBtn.textContent = countrySortState === 'asc' ? 'Kraj ▲' : countrySortState === 'desc' ? 'Kraj ▼' : 'Kraj'; countryBtn.setAttribute('aria-pressed', String(countrySortState !== 'none')); }
   liveStockTableBody.replaceChildren(...stockTableBody.childNodes);
@@ -2272,7 +2271,7 @@ function displayStocks(previousInputValues = {}) {
 }
 
 function showPriceHistoryModal(symbol) {
-    const stock = stocks.find(s => s.symbol === symbol);
+    const stock = getCompanyCardSource(symbol);
     if (!stock) { showToast(`Nie znaleziono akcji o symbolu ${symbol}.`); return; }
 
     currentlyDisplayedChartSymbol = symbol;
@@ -2288,7 +2287,9 @@ function showPriceHistoryModal(symbol) {
     const candleIntervalSelect = document.getElementById('candle-chart-interval-select');
     const openAlertBtn = document.getElementById('open-alert-modal-btn');
 
-    chartTitle.textContent = `Wykres: ${stock.name} (${stock.symbol})`;
+    const foreign = Boolean(stock.foreignHistory); // 0.16.9: spółka zagraniczna — linia tygodniowa w jej walucie, bez świec i alertów
+    chartTitle.textContent = `Wykres: ${stock.name} (${stock.symbol})${foreign ? ` · ${stock.nativeCurrency}, notowania tygodniowe` : ''}`;
+    for (const el of [candlestickBtn, lineBtn, openAlertBtn]) el.style.display = foreign ? 'none' : '';
 
     const redrawChart = () => {
         const svgWidth = svgArea.clientWidth; // bez ramki — offsetWidth dawał 2 px poziomego przewijania okna
@@ -2297,6 +2298,7 @@ function showPriceHistoryModal(symbol) {
     };
 
     const updateControlsVisibility = () => {
+        if (foreign) { lineIntervalSelect.style.display = 'none'; candleIntervalSelect.style.display = 'none'; return; }
         if (playerChartSettings.type === 'candlestick') {
             lineIntervalSelect.style.display = 'none';
             candleIntervalSelect.style.display = 'inline-block';
@@ -4149,7 +4151,7 @@ const COMPANY_CARD_TABS = [
 ];
 
 function openDescriptionModal(symbol, tab = null) {
-    const stock = stocks.find(s => s.symbol === symbol);
+    const stock = getCompanyCardSource(symbol); // 0.16.9: spółka krajowa albo obca (wspólny widok)
     const modal = document.getElementById('description-modal');
     if (!stock || !modal) return;
     if (companyCardView.symbol !== symbol) companyCardView.tab = 'overview';
@@ -4157,11 +4159,21 @@ function openDescriptionModal(symbol, tab = null) {
     if (tab) companyCardView.tab = tab;
     renderCompanyCard();
     modal.style.display = 'block';
+    drawCompanyCardChart();
+}
+
+/** Wykres ceny w Przeglądzie karty spółki zagranicznej (wspólny renderer renderChartSVGForStock; rysowany po pokazaniu okna, bo potrzebuje szerokości). */
+function drawCompanyCardChart() {
+    const area = document.getElementById('cc-foreign-chart');
+    if (!area) return;
+    const stock = getCompanyCardSource(companyCardView.symbol);
+    if (stock?.foreignHistory) renderChartSVGForStock(stock, area, area.clientWidth || 360, 200);
 }
 
 function setCompanyCardTab(tab) {
     companyCardView.tab = tab;
     renderCompanyCard();
+    drawCompanyCardChart();
 }
 
 function formatRatio(value, eps) {
@@ -4170,17 +4182,18 @@ function formatRatio(value, eps) {
 }
 
 function renderCompanyCard() {
-    const stock = stocks.find(s => s.symbol === companyCardView.symbol);
+    const stock = getCompanyCardSource(companyCardView.symbol);
     if (!stock) return;
+    const foreign = Boolean(stock.foreignSource); // 0.16.9: widok spółki zagranicznej (kwoty przeliczone na PLN, w nagłówku także waluta spółki)
     // U3: każda notowana spółka (także państwowa i miejska) ma bilans i wyniki do wskaźników.
-    if (!stock.assetType || stock.assetType === 'Holding') {
+    if (!foreign && (!stock.assetType || stock.assetType === 'Holding')) {
         if (!stock.balanceSheet && typeof initializeBalanceSheetForStock === 'function') initializeBalanceSheetForStock(stock);
         if (!stock.fundamentals && stock.balanceSheet && typeof initializeFundamentals === 'function') initializeFundamentals(stock, true);
     }
     const f = stock.fundamentals ? updateFundamentalRatios(stock) : null;
     const week = getStockChangePct(stock, 1);
     const sector = formatMainSectorLabel(stock); // T1b: sektor główny z ikoną i podsektorem
-    const exchange = exchanges[stock.exchange]?.name || stock.exchange || '—';
+    const exchange = stock.exchangeLabel || exchanges[stock.exchange]?.name || stock.exchange || '—';
     const health = Number(stock.financialHealth) || 0;
     const healthLabel = health >= 3 ? 'bardzo dobra' : health >= 1 ? 'dobra' : health > -1 ? 'przeciętna' : health > -3 ? 'słaba' : 'krytyczna';
     const dividendYield = typeof getTrailingDividendYield === 'function' ? getTrailingDividendYield(stock) : 0;
@@ -4191,10 +4204,10 @@ function renderCompanyCard() {
             <div>
                 <div class="cc-kicker">${sectorIcon(getMainSector(stock), 14)}${escapeHtml(sector)} · ${escapeHtml(stripEmoji(exchange))}</div>
                 <h2 class="m-0">${escapeHtml(stock.name)} <span class="cc-symbol">${escapeHtml(stock.symbol)}</span></h2>
-                <div class="text-sm text-muted">${stock.isStateOwned ? '<span class="badge badge--neutral">Skarb Państwa</span> ' : ''}${typeof isConcern === 'function' && isConcern(stock) ? '<span class="badge badge--info">koncern</span> ' : ''}${stock.marketStar?.type === 'unicorn' ? `<span class="badge badge--accent" title="${escapeHtml(typeof getMarketStarTooltip === 'function' ? getMarketStarTooltip(stock) : '')}">🦄 Jednorożec (${stock.marketStar.quartersLeft} kw.)</span> ` : ''}${stock.ceo?.name ? `prezes ${escapeHtml(stock.ceo.name)}` : ''}</div>
+                <div class="text-sm text-muted">${stock.isStateOwned ? '<span class="badge badge--neutral">Skarb Państwa</span> ' : ''}${typeof isConcern === 'function' && isConcern(stock) ? '<span class="badge badge--info">koncern</span> ' : ''}${stock.marketStar?.type === 'unicorn' ? `<span class="badge badge--accent" title="${escapeHtml(typeof getMarketStarTooltip === 'function' ? getMarketStarTooltip(stock) : '')}">🦄 Jednorożec (${stock.marketStar.quartersLeft} kw.)</span> ` : ''}${foreign ? `${flagIcon(stock.country, 12)} ${escapeHtml(COUNTRY_DEFS[stock.country]?.name || stock.country)} · ` : ''}${stock.ceo?.name ? `prezes ${escapeHtml(stock.ceo.name)}` : ''}</div>
             </div>
             <div class="cc-price">
-                <strong>${formatZl(stock.price)}</strong>
+                <strong>${formatZl(stock.price)}</strong>${foreign ? `<span class="text-xs text-muted d-block">${formatNumberPl(stock.nativePrice, 2)} ${stock.nativeCurrency}</span>` : ''}
                 <span class="${week > 0 ? 'text-up' : week < 0 ? 'text-down' : 'text-muted'}">${week > 0 ? '▲' : week < 0 ? '▼' : '■'} ${formatPct(week)} w tygodniu</span>
             </div>
         </div>
@@ -4240,8 +4253,8 @@ function renderCompanyCard() {
     ].filter(Boolean).join('') + renderSubsectorMedianLine(stock, med);
 
     document.getElementById('company-card-tabs').innerHTML = COMPANY_CARD_TABS
-        .filter(([id]) => id !== 'workforce' || (typeof hasWorkforce === 'function' && hasWorkforce(stock)))
-        .filter(([id]) => id !== 'group' || hasGroupCard(stock))
+        .filter(([id]) => id !== 'workforce' || (!foreign && typeof hasWorkforce === 'function' && hasWorkforce(stock)))
+        .filter(([id]) => id !== 'group' || foreign || hasGroupCard(stock))
         .map(([id, label]) => `<button role="tab" aria-selected="${companyCardView.tab === id}" class="${companyCardView.tab === id ? 'active' : ''}" onclick="setCompanyCardTab('${id}')">${label}</button>`).join('');
 
     if (typeof unlockAcademyEntry === 'function') ['cwk', 'dywidenda', 'zadluzenie'].forEach(id => unlockAcademyEntry(id));
@@ -4251,9 +4264,10 @@ function renderCompanyCard() {
         if (typeof noteMentorEvent === 'function') noteMentorEvent('financeView', stock);
         body.innerHTML = renderCompanyCardFinance(stock, f);
     }
-    else if (companyCardView.tab === 'owners') body.innerHTML = renderCompanyCardOwners(stock);
-    else if (companyCardView.tab === 'manage') body.innerHTML = renderCompanyCardManage(stock);
-    else if (companyCardView.tab === 'workforce') body.innerHTML = renderCompanyCardWorkforce(stock);
+    else if (companyCardView.tab === 'owners') body.innerHTML = foreign ? renderForeignCardOwners(stock) : renderCompanyCardOwners(stock);
+    else if (companyCardView.tab === 'manage') body.innerHTML = foreign ? renderForeignCardManage(stock) : renderCompanyCardManage(stock);
+    else if (companyCardView.tab === 'workforce' && !foreign) body.innerHTML = renderCompanyCardWorkforce(stock);
+    else if (companyCardView.tab === 'group' && foreign) body.innerHTML = renderForeignCardGroup(stock);
     else if (companyCardView.tab === 'group' && hasGroupCard(stock)) body.innerHTML = renderCompanyCardGroup(stock);
     else body.innerHTML = renderCompanyCardOverview(stock);
 }
@@ -4263,20 +4277,54 @@ function renderCompanyCardOverview(stock) {
         const data = ceoTraits[trait.id];
         return data ? `<span class="ceo-trait" style="--trait-color: ${data.color};" title="${escapeHtml(data.description)}">${escapeHtml(data.name)}</span>` : '';
     }).join('');
-    const phase = stock.corporatePhase && getSkillLevel('financialAnalyst') >= 1 ? `<p class="text-sm"><strong>Faza cyklu życia:</strong> ${escapeHtml(stock.corporatePhase)}</p>` : '';
+    const foreign = Boolean(stock.foreignSource);
+    const phase = stock.corporatePhase && getSkillLevel('financialAnalyst') >= 1 ?`<p class="text-sm"><strong>Faza cyklu życia:</strong> ${escapeHtml(stock.corporatePhase)}</p>` : '';
     const splitInfo = typeof describeShareCountHistory === 'function' ? describeShareCountHistory(stock) : '';
     const research = stock.research?.isResearching && stock.research.currentTech ?`<p class="text-sm">${uiIcon('mikroskop', 14)} W fazie R&D: <strong>${escapeHtml(technologies[stock.research.currentTech]?.name || stock.research.currentTech)}</strong></p>` : '';
     const insights = typeof getAnalystInsights === 'function' ? getAnalystInsights(stock) : [];
     return `
         <div class="cc-grid">
-            <section><h4>O spółce</h4><div class="text-sm text-justify">${assembleDescription(stock)}</div>${phase}${splitInfo}${research}</section>
+            <section><h4>O spółce</h4><div class="text-sm text-justify">${foreign ? escapeHtml(describeForeignCompany(stock)) : assembleDescription(stock)}</div>${phase}${splitInfo}${research}</section>
             <section>
                 ${stock.ceo?.name ? `<h4>Prezes</h4><p class="m-0"><strong>${uiIcon('zarzad', 14)} ${escapeHtml(stock.ceo.name)}</strong></p>
                     <p class="text-xs text-muted mt-0">wiek ${stock.ceo.age ?? '—'}, staż ${Math.floor((stock.ceo.tenure || 0) / 4)} lat</p>
                     <div class="ceo-traits-container">${traits}</div>` : ''}
                 ${insights.length ? `<h4>Analityk</h4>${insights.map(line => `<p class="text-sm">${uiIcon('szukaj', 14)} ${escapeHtml(line)}</p>`).join('')}` : ''}
             </section>
-        </div>`;
+        </div>
+        ${foreign ? `<section class="cc-section"><h4>${uiIcon('wykres', 16)} Cena (${stock.foreignHistory.length} ostatnich tygodni, w ${stock.nativeCurrency})</h4><div id="cc-foreign-chart" class="cc-chart" style="height:200px" role="img" aria-label="Wykres ceny ${escapeHtml(stock.name)}"></div>
+            <p class="text-xs text-muted">Linia tygodniowa; kolor odcinka oznacza wzrost albo spadek względem poprzedniego tygodnia. Pełny wykres: przycisk „Wykres” przy spółce.</p></section>` : ''}`;
+}
+
+// --- 0.16.9 W3: karta spółki zagranicznej — te same zakładki co krajowa; Przegląd i Finanse reużywają kodu krajowego (widok w PLN) ---
+
+function describeForeignCompany(stock) {
+    const def = COUNTRY_DEFS[stock.country];
+    const parts = [stock.desc, `${stock.name} jest notowana na giełdzie kraju: ${def?.name || stock.country} (${stock.exchangeLabel}), kwoty w ${stock.nativeCurrency}; w tej karcie przeliczone na złote po bieżącym kursie.`];
+    if (stock.giant) parts.push('Gigant swojego rynku.');
+    if (stock.isStateOwned) parts.push(`Państwo trzyma ${Math.round(COUNTRY_RULES.statePct * 100)}% akcji (poza wolnym obrotem).`);
+    return parts.filter(Boolean).join(' ');
+}
+
+function renderForeignCardOwners(stock) {
+    const i = stock.foreignSource, total = Math.max(1, i.shares), pct = n => `${formatNumberPl(n / total * 100, 2)}%`;
+    const names = id => id === 'player' ? 'Twój fundusz' : (aiCompetitors.find(b => b.id === id)?.name || id);
+    const holders = Object.entries(i.holders || {}).filter(([, q]) => q > 0).sort((a, b) => b[1] - a[1]);
+    const rows = [...(i.statePack > 0 ? [['Skarb Państwa', i.statePack]] : []), ...holders.map(([id, q]) => [names(id), q]), ['Wolne akcje na rynku', Math.max(0, getGdrFree(i))]];
+    return `<p class="text-sm">Fundusz: <strong>${pct(getGdrHeld(i))}</strong> · wolny obrót: <strong>${formatNumberPl(Math.max(0, getGdrFree(i)), 0)}</strong> z ${formatNumberPl(i.shares, 0)} akcji.</p>
+        <table class="asset-mini-table w-full"><thead><tr><th>Akcjonariusz</th><th class="cell-number">Akcje</th><th class="cell-number">Udział</th></tr></thead><tbody>${rows.map(([n, q]) => `<tr><td>${escapeHtml(n)}</td><td class="cell-number">${formatNumberPl(q, 0)}</td><td class="cell-number">${pct(q)}</td></tr>`).join('')}</tbody></table>`;
+}
+
+function renderForeignCardManage(stock) {
+    const i = stock.foreignSource, o = getOversight(i.country), held = getGdrHeld(i) / Math.max(1, i.shares);
+    return `<p class="text-sm">Udział funduszu: <strong>${formatNumberPl(held * 100, 2)}%</strong>. Nadzór kraju: <strong>${escapeHtml(o.name)}</strong> — próg wezwania ${Math.round(o.callThreshold * 100)}% (kupno ponad próg grozi ostrzeżeniem, karą i nakazem odsprzedaży).</p>
+        <p class="text-sm text-muted">Walne zgromadzenia, spółki zależne i zlecenia strategii dla obcych spółek nie działają w tej wersji — kurs, raporty, dywidendy, splity i prezes są takie same jak u krajowych.</p>`;
+}
+
+function renderForeignCardGroup(stock) {
+    const i = stock.foreignSource;
+    return `<p class="text-sm">${escapeHtml(i.name)} to spółka niezależna: nie ma spółek zależnych ani kooperantów w grze. ${i.giant ? 'Gigant rynku kraju (większe wahania wpływają na cały indeks kraju).' : ''}${i.state ? ' Pakiet państwa należy do skarbu kraju spółki.' : ''}</p>
+        <p class="text-xs text-muted">Rynek: ${escapeHtml(stock.exchangeLabel)}.</p>`;
 }
 
 function renderCompanyCardFinance(stock, f) {

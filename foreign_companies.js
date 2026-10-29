@@ -111,6 +111,7 @@ function payForeignDividend(i, st, net) {
             }
             if (i.statePack > 0) st.treasury += i.statePack * dps; // dywidenda państwowa do skarbu kraju
             i.lastDividend = { dps, total, q: macro.quarter, yield: dps / Math.max(0.01, i.price) };
+            noteForeignDividend(i, dps);
             if ((i.holders?.player || 0) > 0) logEvent(`💰 ${i.name} (${getShareSymbol(i)}): dywidenda ${formatNumberPl(dps, 2)} ${i.currency} na akcję (po podatku u źródła ${Math.round((1 - keep) * 100)}%).`, 'review');
         }
     }
@@ -145,6 +146,7 @@ function applyForeignShareChange(i, factor) {
     const f = i.fundamentals;
     if (f) { scalePerShareList(f.history, factor, ['eps']); f.expectedEps /= factor; if (Number.isFinite(f.lastEps)) f.lastEps /= factor; f.fairValue /= factor; updateFundamentalRatios(i); }
     if (i.lastDividend) { i.lastDividend.dps /= factor; }
+    if (i.divHistory) i.divHistory = i.divHistory.map(d => d / factor);
     i.lastSplitQuarter = macro.quarter;
     const text = `✂️ ${i.name} (${getShareSymbol(i)}): ${factor > 1 ? `podział akcji ${formatSplitRatio(factor)}` : `konsolidacja akcji ${formatSplitRatio(factor)}`}, kurs ${formatNumberPl(priceBefore, 2)} → ${formatNumberPl(priceAfter, 2)} ${i.currency}.`;
     logEvent(text, 'market');
@@ -210,6 +212,7 @@ function getForeignCompanySnapshot(i) {
     };
     if (i.ceo) row.ceo = [i.ceo.name, Math.round(i.ceo.age * 4) / 4, i.ceo.tenure, i.ceo.traits?.[0]?.id || null];
     if (i.lastDividend) row.ld = [rs(i.lastDividend.dps), i.lastDividend.q];
+    if (i.divHistory?.length) row.dh = i.divHistory.map(rs);
     if (i.lastSplitQuarter !== undefined) row.ls = i.lastSplitQuarter;
     if (i.lastSurprise !== undefined) row.su = roundSig(i.lastSurprise, 3);
     return row;
@@ -230,6 +233,7 @@ function applyForeignCompanySnapshot(i, row) {
     i.divYield = Number(row.dy) || 0;
     if (row.ceo) i.ceo = { name: row.ceo[0], age: Number(row.ceo[1]) || 50, tenure: Number(row.ceo[2]) || 0, traits: row.ceo[3] ? [{ id: row.ceo[3] }] : [] };
     if (row.ld) i.lastDividend = { dps: row.ld[0], q: row.ld[1], total: 0, yield: row.ld[0] / Math.max(0.01, i.price) };
+    if (Array.isArray(row.dh)) i.divHistory = row.dh.map(Number).filter(Number.isFinite);
     if (row.ls !== undefined) i.lastSplitQuarter = row.ls;
     if (row.su !== undefined) i.lastSurprise = row.su;
     return i;
@@ -257,4 +261,91 @@ function renderForeignCompanyLine(i) {
     const div = i.lastDividend ? `dywidenda ${formatNumberPl(i.lastDividend.dps, 2)} ${i.currency} (${formatNumberPl(i.lastDividend.yield * 100, 1)}%)` : 'bez dywidendy';
     const ceo = i.ceo ? ` · prezes ${escapeHtml(i.ceo.name)}` : '';
     return `<br><span class="text-muted text-xs">${pe} · ${eps} · ${div}${ceo}</span>`;
+}
+
+// =================================================================================
+// 0.16.9 W3: spółki zagraniczne jak krajowe — poziomy giełd i wspólny widok „źródło danych” (diagnoza: plany/raporty/diagnoza_0.16.9.md)
+// Nic z tego nie jest zapisywane: poziom wynika z ceny (i kapitalizacji) w złotych, widok karty to kopia spółki przeliczona na PLN.
+// =================================================================================
+
+const FOREIGN_ELITE_ORDER = ['EMERALD', 'RUBY']; // Diament jest jeden i krajowy; elitarne poziomy obcych mają własne limity (liczone tylko wśród spółek krajów połączonych)
+
+let foreignEliteCache = { q: -1, size: -1, map: {} };
+
+/** Ranking kapitalizacji (w PLN) spółek krajów połączonych → Szmaragd i Rubin wg progów i limitów giełd elitarnych; odświeżany raz na kwartał. */
+function getForeignEliteMap() {
+    const linked = typeof getLinkedCountries === 'function' ? getLinkedCountries() : [];
+    const key = macro.quarter * 1000 + linked.length;
+    if (foreignEliteCache.q === key && foreignEliteCache.size === foreignIssuerCount()) return foreignEliteCache.map;
+    const pool = linked.flatMap(c => getCountryIssuers(c)).filter(i => i.kind === 'share' && !i.tradeHalted && toPln(i.price, i.currency) >= exchanges.PLATINUM.minPrice)
+        .map(i => ({ i, cap: toPln(i.price * i.shares, i.currency) })).sort((a, b) => b.cap - a.cap);
+    const map = {};
+    let idx = 0;
+    for (const tier of FOREIGN_ELITE_ORDER) {
+        const def = ELITE_EXCHANGES[tier];
+        for (let n = 0; idx < pool.length && n < def.limit && pool[idx].cap >= def.minCap; n++) map[pool[idx++].i.id] = tier;
+    }
+    foreignEliteCache = { q: key, size: foreignIssuerCount(), map };
+    return map;
+}
+function foreignIssuerCount() { return Object.keys(foreignIssuers).length; }
+
+/** Poziom giełdy spółki: kraj połączony → nasze poziomy (Śmieciowa…Platynowa po cenie w PLN, Szmaragd/Rubin po kapitalizacji); inny kraj → własne poziomy giełdy kraju. */
+function getForeignTier(i) {
+    const pln = toPln(i.price, i.currency), linked = typeof isCountryLinked === 'function' && isCountryLinked(i.country);
+    let key = Object.keys(exchanges).find(k => !isEliteExchange(k) && pln >= exchanges[k].minPrice && pln < exchanges[k].maxPrice) || 'PLATINUM';
+    if (linked) {
+        key = getForeignEliteMap()[i.id] || key;
+        return { key, level: exchanges[key].level, linked: true, label: exchanges[key].name, exchange: key };
+    }
+    const op = COUNTRY_DEFS[i.country]?.operator;
+    return { key, level: exchanges[key].level, linked: false, label: `${op?.id || i.country}: ${exchanges[key].name}`, exchange: `${i.country}:${key}` };
+}
+
+/** Spółki krajów połączonych na danym poziomie naszych giełd (filtry listy jak dla krajowych: sektor, „tylko moje”). */
+function getLinkedIssuersForExchange(key) {
+    if (typeof getLinkedCountries !== 'function' || (typeof sectorFilterState === 'object' && ((sectorFilterState.type && sectorFilterState.type !== 'all') || sectorFilterState.subsector))) return [];
+    let list = getLinkedCountries().flatMap(c => getCountryIssuers(c)).filter(i => getForeignTier(i).key === key);
+    if (typeof sectorFilterState === 'object' && sectorFilterState.sector !== 'all') list = list.filter(i => i.sectors.some(x => x[0] === sectorFilterState.sector));
+    if (typeof ownedOnlyFilter !== 'undefined' && ownedOnlyFilter) list = list.filter(i => getGdrHeld(i) > 0);
+    return list;
+}
+
+/** Wiersz historii dywidend w walucie spółki (najnowsza pierwsza, 4 ostatnie): stopa dywidendy jak u krajowych liczy się z roku, nie z jednej wypłaty. */
+function noteForeignDividend(i, dps) {
+    i.divHistory = [dps, ...(i.divHistory || [])].slice(0, 4);
+}
+
+/**
+ * Widok „źródło danych” dla karty spółki: kopia spółki obcej przeliczona na złote (kurs z chwili otwarcia), w kształcie spółki krajowej,
+ * żeby karta (nagłówek, wskaźniki, finanse, wycena) renderowała się tym samym kodem. Pola walutowe: cena, flow bilansu i wyników, wartości na akcję.
+ */
+function buildForeignCardStock(i) {
+    ensureForeignCompany(i, true); // karta przed pierwszym raportem: fundamenty leniwie
+    const r = toPln(1, i.currency), t = getForeignTier(i), f = i.fundamentals;
+    const segments = i.sectors.map(([sector, share], n) => ({ sector, share, subsector: n === 0 ? i.subsector : null, niche: n === 0 ? i.niche : null }));
+    const vm = {
+        ...i, foreignSource: i, nativeCurrency: i.currency, nativePrice: i.price, rateToPln: r,
+        name: i.name, symbol: getShareSymbol(i), price: i.price * r, totalShares: i.shares, exchange: t.exchange, exchangeLabel: t.label,
+        sector: segments.map(s => s.sector), segments, assetType: undefined, isStateOwned: Boolean(i.state), foreignHolders: i.holders,
+        cash: (i.cash || 0) * r, weeklyCloses: (i.history || []).map(p => p * r), foreignHistory: [...(i.history || [])],
+        balanceSheet: i.balanceSheet ? { assets: i.balanceSheet.assets * r, liabilities: i.balanceSheet.liabilities * r, shareCapital: i.balanceSheet.shareCapital * r, retainedEarnings: i.balanceSheet.retainedEarnings * r } : undefined,
+        dividendHistory: (i.divHistory || (i.lastDividend ? [i.lastDividend.dps] : [])).map(dps => ({ dps: dps * r })),
+        lastDividend: i.lastDividend ? { ...i.lastDividend, dps: i.lastDividend.dps * r, total: (i.lastDividend.total || 0) * r } : null,
+        playerTransactions: [], chartEvents: []
+    };
+    if (f) {
+        vm.fundamentals = { ...f, revenue: f.revenue * r, expectedEps: f.expectedEps * r, lastEps: (f.lastEps || 0) * r, fairValue: f.fairValue * r,
+            history: f.history.map(q => ({ ...q, revenue: q.revenue * r, ebitda: q.ebitda * r, netIncome: q.netIncome * r, eps: q.eps * r })) };
+        updateFundamentalRatios(vm);
+    }
+    return vm;
+}
+
+/** Źródło danych karty po symbolu: spółka krajowa z `stocks` albo widok spółki zagranicznej (symbol „ID.KRAJ”). */
+function getCompanyCardSource(symbol) {
+    const domestic = stocks.find(s => s.symbol === symbol);
+    if (domestic || typeof symbol !== 'string' || !symbol.includes('.')) return domestic || null;
+    const issuer = foreignIssuers[symbol.split('.')[0]];
+    return issuer && issuer.kind === 'share' && getShareSymbol(issuer) === symbol ? buildForeignCardStock(issuer) : null;
 }
