@@ -22,6 +22,13 @@ Z 0.16.7 pominięto (na wspólnym kodzie z krajowymi spółkami):
 
 Powód pominięcia w 0.16.7: koszt czasu kroku i zapisu (wariant A′ zamiast włączenia do `stocks`), ryzyko dla kalibracji GIG i konieczność pomiarów. W 0.16.9 wdrażać etapami z pomiarem budżetu po każdym.
 
+## W3. Spółki zagraniczne jak krajowe w interfejsie i na giełdach (zgłoszenie 2026-10-29)
+
+Zgłoszenie: spółki zagraniczne nie wchodzą na nasze giełdy od śmieciowej do diamentowej (poziomy giełd krajowych), mają inny wygląd niż zwykłe spółki, nie mają wykresów ani zwykłych kart.
+- **Giełdy:** spółki zagraniczne notowane są dziś tylko na giełdzie swojego kraju (`foreignIssuers`, dane w `countries_data.js`), poza systemem poziomów (`exchanges`, `ELITE_EXCHANGES`). Docelowo: spółka kraju połączonego (0.16.3) trafia na odpowiedni poziom naszej giełdy wg ceny/kapitalizacji i wymogów (jak krajowe), a spółki kraju niepołączonego są na giełdzie krajowej z własnymi poziomami (np. NASDAQ/NYSE jako wyższe poziomy).
+- **Interfejs:** ta sama karta spółki jak dla krajowych (okno z zakładkami Przegląd, Finanse, Akcjonariat, Zarządzanie, Grupa), **wykres ceny** (historia cen istnieje w `i.history`, trzeba podpiąć wspólny komponent wykresu), wskaźniki, prezes, dywidendy, splity.
+- **Podejście:** wspólna funkcja widoku spółki przyjmująca „źródło danych” (krajowa z `stocks` lub zagraniczna z `foreignIssuers`) zamiast kopiowania renderowania; najpierw inwentaryzacja różnic w kartach, potem podpinanie po jednej zakładce z testem.
+
 ## Kontrola
 
 Testy grupy „0.16.9”, przebiegi ×200 (GIG ±1 pp względem 0.16.7/0.16.8, czas kroku i zapis w budżecie), niezmienniki 0; raport `kontrola_0.16.9.md` z sekcją „Pominięte i problemy”.
