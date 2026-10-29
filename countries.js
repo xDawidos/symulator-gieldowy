@@ -11,7 +11,10 @@ const COUNTRY_RULES = {
     shares: 10_000_000,        // liczba akcji zwykłej spółki (giganci: giantShares)
     giantShares: 30_000_000,
     statePct: 0.5,             // pakiet obcego państwa (poza wolnym obrotem)
-    limitMult: 1.5,            // limit spółek kraju = 1,5 × liczba startowa
+    limitMult: 1.5,            // limit spółek kraju bez wskaźnika wielkości (kraj testowy) — patrz getCountryLimit
+    limitMultRange: [1.2, 2.0], // 0.16.8 F3: mnożnik liczby startowej rośnie z wielkością rynku (logarytmicznie od najmniejszego do największego)
+    sizeIndex: { US: 10, CN: 8, JP: 4, DE: 3.5, IN: 3, FR: 2.5, TW: 1.5, CH: 1.2, SE: 1, CZ: 0.6 }, // względna wielkość (PKB / kapitalizacja giełdy), jedno miejsce parametrów
+    sectorShareCap: 0.4,       // 0.16.8 F3: debiut nie może zwiększyć udziału jednego sektora głównego powyżej 40% spółek giełdy
     historyWeeks: 13,          // zapis uproszczony: 25% długości historii GDR (52 tyg.)
     volScale: 0.24,            // zmienność roczna × beta sektora
     driftYear: 0.08,           // dryf roczny przy zerowej premii (zwrot całkowity)
@@ -44,7 +47,12 @@ function getCallThreshold(id) { return COUNTRY_DEFS[id]?.oversight?.callThreshol
 function getOversight(id) { return COUNTRY_DEFS[id]?.oversight || { name: 'nadzór', callThreshold: 0.66, level: 1 }; }
 function getJoinedCountries() { return Object.keys(countryState); }
 function isCountryJoined(id) { return Boolean(countryState[id]); }
-function getCountryLimit(id) { const def = COUNTRY_DEFS[id]; return def ? Math.ceil(def.companies.length * COUNTRY_RULES.limitMult) : 0; }
+/** Limit spółek giełdy kraju: liczba startowa × mnożnik zależny od wielkości kraju (US najwyższy, CZ najniższy); kraj bez wskaźnika (testowy) dostaje stały 1,5. */
+function getCountryLimitMult(id) {
+    const size = COUNTRY_RULES.sizeIndex[id], [lo, hi] = COUNTRY_RULES.limitMultRange, sizes = Object.values(COUNTRY_RULES.sizeIndex), min = Math.min(...sizes), max = Math.max(...sizes);
+    return size ? lo + (hi - lo) * Math.log(size / min) / Math.log(max / min) : COUNTRY_RULES.limitMult;
+}
+function getCountryLimit(id) { const def = COUNTRY_DEFS[id]; return def ? Math.ceil(def.companies.length * getCountryLimitMult(id)) : 0; }
 /** Spółka obca znika z giełdy (np. ucieczka prezesa parabanku): posiadacze dostają gotówkę po podanej cenie (gracz w PLN, boty w walucie spółki). */
 function delistForeignIssuer(issuer, price) {
     for (const [holder, qty] of Object.entries(issuer.holders || {})) {
@@ -90,6 +98,7 @@ function createCountryIssuer(countryDef, c) {
     if (!existing) foreignIssuers[c.id] = issuer;
     issuer.ema = issuer.ema || issuer.price;
     issuer.sp = issuer.sp || 0;
+    if (typeof ensureForeignCompany === 'function') ensureForeignCompany(issuer); // 0.16.7: pełny model spółki (foreign_companies.js)
     return issuer;
 }
 
@@ -206,7 +215,7 @@ function stepCountryIssuer(issuer, def, st, regime, homeZ, countryZ) {
     const sigma = COUNTRY_RULES.volScale * beta * issuer.vol * fx.volMult / Math.sqrt(52);
     const premiumDrift = COUNTRY_RULES.premiumDrift * regime.premium * (regime.premium < 0 ? fx.bearDamp : 1);
     const rateDrift = -COUNTRY_RULES.rateDrift * rateSens * (st.rate - def.rateMean);
-    const drift = (COUNTRY_RULES.driftYear + premiumDrift + rateDrift + fx.drift) / 52;
+    const drift = (COUNTRY_RULES.driftYear + premiumDrift + rateDrift + fx.drift - (issuer.divYield || 0)) / 52; // 0.16.7: dywidenda wypłacana osobno, więc dryf ceny o tyle niższy (zwrot całkowity bez zmian)
     const a = Math.sqrt(0.5) * def.rho, b = Math.sqrt(0.5) * Math.sqrt(1 - def.rho * def.rho), c = Math.sqrt(0.5);
     const shock = sigma * (a * homeZ + b * countryZ + c * normalFx());
     // premia szoków sektorowych: cena dąży do wartości z udziałem szoku (zmiana premii przechodzi w cenę)
@@ -317,7 +326,9 @@ function maybeCountryDebut(id) {
     const def = COUNTRY_DEFS[id], st = countryState[id], regime = marketRegimes[id];
     if (getCountryIssuers(id).length >= getCountryLimit(id)) return null;
     if (macro.quarter - st.lastDebutQ < 4 || Math.random() >= COUNTRY_RULES.debutChance * Math.max(0.2, 1 + regime.premium * 3)) return null;
-    const base = getRandomElement(def.companies.filter(c => c.kind === 'normal'));
+    const listed = getCountryIssuers(id), mainOf = c => (Array.isArray(c.sector) ? c.sector[0] : c.sector);
+    const roomy = def.companies.filter(c => c.kind === 'normal' && listed.filter(i => i.sector === mainOf(c)).length + 1 <= Math.max(2, Math.ceil((listed.length + 1) * COUNTRY_RULES.sectorShareCap))); // limit koncentracji sektora liczony na giełdę kraju
+    const base = getRandomElement(roomy);
     if (!base) return null;
     const sector = Array.isArray(base.sector) ? base.sector[0] : base.sector;
     let name = null;
@@ -343,8 +354,9 @@ function processCountriesQuarterly() {
         stepCountryRate(id);
         for (const issuer of getCountryIssuers(id)) {
             applySpecialEvents(issuer);
-            if (issuer.state) st.treasury += issuer.statePack * issuer.price * 0.005; // dywidenda państwowa ≈ 2%/rok do licznika „skarbu kraju” (tylko wgląd)
+            if (issuer.state && !issuer.fundamentals) st.treasury += issuer.statePack * issuer.price * 0.005; // dywidenda państwowa ≈ 2%/rok do licznika „skarbu kraju” (tylko wgląd); od 0.16.7 realna dywidenda w foreign_companies.js
         }
+        if (typeof processForeignCompaniesQuarterly === 'function') processForeignCompaniesQuarterly(id); // 0.16.7 F2: raporty, dywidendy, splity, prezesi, upadłości
         maybeCountryDebut(id);
         if (typeof processForeignBotsQuarterly === 'function') processForeignBotsQuarterly(id);
     }
@@ -370,6 +382,7 @@ function checkCountryInvariants() {
         if (!countryState[issuer.country]) problems.push(`spółka ${issuer.id} w kraju niedołączonym ${issuer.country}`);
         if (issuer.state && getGdrFree(issuer) < -1e-6) problems.push(`pakiet państwa ${issuer.id} naruszony`);
     }
+    if (typeof checkForeignCompanyInvariants === 'function') problems.push(...checkForeignCompanyInvariants());
     if (typeof checkForeignBotInvariants === 'function') problems.push(...checkForeignBotInvariants());
     if (typeof checkLinkInvariants === 'function') problems.push(...checkLinkInvariants());
     return problems;
@@ -387,6 +400,8 @@ function getCountriesSnapshot() {
         if (i.vintage) row.v = i.vintage;
         if (i.tradeHalted) row.th = 1;
         if (i.oversightResale) row.or = i.oversightResale.until;
+        const company = typeof getForeignCompanySnapshot === 'function' ? getForeignCompanySnapshot(i) : undefined;
+        if (company) row.c = company; // 0.16.7: bilans, wyniki, dywidenda, prezes
         if (i.generated) row.g = { name: i.name, sector: i.sectors.map(s => s[0]), subsector: i.subsector, country: i.country, currency: i.currency };
         issuers[i.id] = row;
     }
@@ -422,6 +437,7 @@ function applyCountriesSnapshot(snapshot) {
         if (row.v) issuer.vintage = String(row.v);
         if (row.th) issuer.tradeHalted = true;
         if (Number.isFinite(Number(row.or))) issuer.oversightResale = { until: Number(row.or) };
+        if (typeof applyForeignCompanySnapshot === 'function') applyForeignCompanySnapshot(issuer, row.c); // zapis v17 (bez `c`): model z ceny
         issuer.holders = {};
         for (const [holder, qty] of Object.entries(row.o || {})) if (Number(qty) > 0) issuer.holders[holder] = Number(qty);
     }
@@ -488,6 +504,10 @@ function getTicketPrice(country) {
 }
 function hasTicket(holder, country) { return Boolean(foreignTickets[holder]?.includes(country)); }
 function getCountryCommission(country) {
+    const off = typeof getOffHoursSurcharge === 'function' && !countryState[country]?.link ? getOffHoursSurcharge(country) : 0; // 0.16.8 F3b: dopłata poza sesją
+    return getCountryBaseCommission(country) + off;
+}
+function getCountryBaseCommission(country) {
     if (countryState[country]?.link && typeof LINK_RULES === 'object') return LINK_RULES.domesticCommission; // połączone giełdy: prowizja jak krajowa
     return COUNTRY_DEFS[country]?.operator?.commission ?? COUNTRY_RULES.commission;
 }

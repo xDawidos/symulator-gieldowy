@@ -11938,7 +11938,7 @@ group('0.16.1', () => {
         kantorBuyCurrency('CHF', 500_000);
         const rateChf = fxRates.CHF, held = playerCashByCurrency.CHF, assets = getFundAssets();
         const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
-        assertEq(raw.version, 17, 'zapis v17');
+        assertEq(raw.version, 18, 'zapis v18');
         initFxState();
         const report = applySaveSnapshot(raw);
         assert(report.ok, `wczytanie: ${(report.errors || []).join('; ')}`);
@@ -12415,7 +12415,7 @@ group('0.16.2', () => {
             const def = COUNTRY_DEFS[id], domestic = stocks.length, navBefore = getFundAssets();
             joinCountry(id);
             assertEq(getCountryIssuers(id).length, def.companies.length, `${id}: spółki po dołączeniu`);
-            assertEq(getCountryLimit(id), Math.ceil(def.companies.length * 1.5), `${id}: limit`);
+            assertEq(getCountryLimit(id), Math.ceil(def.companies.length * getCountryLimitMult(id)), `${id}: limit (0.16.8: zależny od wielkości kraju)`);
             assertEq(stocks.length, domestic, `${id}: rynek krajowy bez zmian`);
             assertEq(getCountryIssuers(id).filter(i => i.state).length, COUNTRY_COUNTS[id][1], `${id}: spółki państwowe`);
             assert(getCountryIssuers(id).every(i => i.currency === def.currency && i.price > 0), `${id}: waluta i ceny`);
@@ -12884,7 +12884,7 @@ group('0.16.3', () => {
             joinCountry(id);
             assert(isCountryJoined(id), 'dołączył');
             assertEq(getCountryIssuers(id).length, def.companies.length, 'wszystkie spółki');
-            assertEq(getCountryLimit(id), Math.ceil(def.companies.length * COUNTRY_RULES.limitMult), 'limit 1,5 ×');
+            assertEq(getCountryLimit(id), Math.ceil(def.companies.length * getCountryLimitMult(id)), 'limit wg wielkości kraju (0.16.8)');
             const q0 = macro.quarter;
             for (let w = 0; w < 120; w++) { stepFxRates(); stepCountries(); if (w % 13 === 12) { macro.quarter++; processCountriesQuarterly(); } }
             macro.quarter = q0;
@@ -13559,7 +13559,7 @@ group('0.16.5 Internet i TeamedUP!', () => {
 
     test('I5: migracja zapisu v16 → v17: skrzynka zachowuje wszystkie wiadomości i dostaje pole Tied', () => {
         startFund(); addMail({ sender: 'PULS', subject: 'A', body: 'a' }); addMail({ sender: 'bot:x', subject: 'B', body: 'b' }); noteTiedEvent(`${stocks[0].name} ogłasza rekord`, 'company');
-        const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 }))); assertEq(raw.version, 17, 'zapis v17');
+        const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 }))); assertEq(raw.version, 18, 'zapis v18');
         raw.version = 16; delete raw.mailbox.tied; const n = raw.mailbox.messages.length;
         const res = applySaveSnapshot(raw); assert(res.ok, 'wczytanie v16');
         assertEq(mailbox.messages.length, n, 'wiadomości zachowane'); assert(Array.isArray(mailbox.tied), 'pole Tied dodane');
@@ -13806,6 +13806,195 @@ group('0.16.6 Domknięcie', () => {
             assert(card && card.querySelector('.te-role') && card.querySelector('.te-dot[aria-label]') && card.getAttribute('tabindex') === '0', 'karta kontaktu: rola, kropka z opisem, fokus');
             assert(host.querySelector('.mail-folder.active[aria-current="page"]'), 'aktywny panel oznaczony');
         } finally { host.remove(); teamedView = { pane: 'tasks', selectedId: null }; }
+    });
+});
+
+group('0.16.7 Pełne spółki zagraniczne', () => {
+    const YY = () => ({
+        id: 'YY', name: 'Ypsilonia', currency: 'EUR', region: 'EU', rho: 0.7, rateMean: 0.03, operator: { id: 'YYX', name: 'Ypsilon Exchange' },
+        labour: { rights: 'ochronne', unionMult: 1.2, shadow: 0, wages: 1.6 },
+        companies: [
+            { id: 'YA1', name: 'Ypsilon Auto', sector: 'Przemysł', kind: 'normal', price: 100 }, { id: 'YB1', name: 'Ypsilon Bank', sector: 'Bankowość', subsector: 'Bank komercyjny', kind: 'normal', price: 40 },
+            { id: 'YC1', name: 'Ypsilon Piwo', sector: 'Żywność', kind: 'normal', price: 30 }, { id: 'YD1', name: 'Ypsilon Koleje', sector: 'Usługi', kind: 'state', price: 20 }
+        ]
+    });
+    const withYY = fn => {
+        COUNTRY_DEFS.YY = YY(); initFxState(); resetGdrState(); resetWorld([mk156('GA', { price: 100 })]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' }); playerCash = 5_000_000;
+        try { joinCountry('YY'); return fn(); } finally { delete COUNTRY_DEFS.YY; resetGdrState(); initFxState(); }
+    };
+    const quarter = () => { macro.quarter++; processCountriesQuarterly(); };
+    const withRand = (value, fn) => { const real = Math.random; Math.random = () => value; try { return fn(); } finally { Math.random = real; } };
+
+    test('F1: nowa spółka zagraniczna ma pola spółki krajowej (symbol, rynek, akcje, bilans, polityka dywidendy, prezes poza państwowymi)', () => withYY(() => {
+        const a = foreignIssuers.YA1, d = foreignIssuers.YD1;
+        assertEq(a.symbol, 'YA1.YY', 'symbol'); assertEq(a.market, 'YY', 'rynek'); assertEq(a.totalShares, a.shares, 'totalShares = akcje');
+        assert(a.balanceSheet.assets > 0 && a.cash > 0 && a.balanceSheet.liabilities < a.balanceSheet.assets, 'bilans');
+        assert(['Growth', 'Balanced', 'Aggressive', 'Total'].includes(a.dividendPolicy), 'polityka dywidendy'); assert(a.ceo && a.ceo.name, 'prezes');
+        assert(d.state && d.isStateOwned && !d.ceo && d.dividendPolicy === 'Aggressive', 'państwowa: bez prezesa, wysoka wypłata');
+        assert(!a.fundamentals, 'fundamenty leniwie — po pierwszym raporcie');
+    }));
+
+    test('F2: kwartał daje raport (fundamenty, EPS, wskaźniki), kapitał własny się zmienia, niezmienniki bez naruszeń', () => withYY(() => {
+        const a = foreignIssuers.YA1, eq0 = a.balanceSheet.assets - a.balanceSheet.liabilities;
+        withSeededRandom(7, () => { for (let k = 0; k < 6; k++) quarter(); });
+        const f = a.fundamentals; assert(f && f.history.length >= 4 && f.revenueTtm > 0, 'fundamenty');
+        assert(Number.isFinite(a.quarterlyEarnings) && Number.isFinite(a.lastSurprise), 'wynik i niespodzianka');
+        assert(a.balanceSheet.assets - a.balanceSheet.liabilities !== eq0, 'kapitał własny się zmienił');
+        assertEq(checkForeignCompanyInvariants().length, 0, 'niezmienniki modelu'); assertEq(checkWorldInvariants().length, 0, 'niezmienniki świata');
+    }));
+
+    test('F2 parytet: ta sama spółka w dwóch walutach (kurs ×50) ma te same wyniki z dokładnością do skali', () => {
+        const mkIssuer = k => {
+            const i = { id: 'PX', kind: 'share', country: 'DE', currency: 'EUR', sector: 'Przemysł', sectors: [['Przemysł', 1]], vol: 1, special: null, state: false, giant: false, shares: 1_000_000, statePack: 0, float: 1_000_000, price: 100 * k, history: [100 * k], ema: 100 * k, holders: {}, sp: 0 };
+            ensureForeignCompany(i); i.ceo = null; i.marginAdj = 0.05; i.valuationGap = 1; i.growthBase = 0; return i;
+        };
+        const A = mkIssuer(1), B = mkIssuer(50), stA = { treasury: 0 }, stB = { treasury: 0 }, q0 = macro.quarter;
+        withSeededRandom(5, () => initializeFundamentals(A, true)); withSeededRandom(5, () => initializeFundamentals(B, true));
+        const run = (i, s) => withSeededRandom(11, () => { for (let k = 0; k < 4; k++) { macro.quarter++; runForeignReport(i, s); } });
+        run(A, stA); macro.quarter = q0; run(B, stB); macro.quarter = q0;
+        assertNear(B.fundamentals.revenueTtm / A.fundamentals.revenueTtm, 50, 'przychód ×50', 1e-6);
+        assertNear(B.fundamentals.epsTtm / A.fundamentals.epsTtm, 50, 'EPS ×50', 1e-6);
+        assertNear(stB.treasury / stA.treasury, 50, 'podatek do skarbu kraju ×50', 1e-6);
+    });
+
+    test('F2: CIT i dotacje idą do skarbu kraju, skarb PL bez zmian', () => withYY(() => {
+        const g0 = governmentTreasury;
+        withSeededRandom(3, () => { for (let k = 0; k < 4; k++) quarter(); });
+        assertEq(governmentTreasury, g0, 'skarb PL'); assert(countryState.YY.treasury !== 0, 'skarb kraju zmienia się');
+    }));
+
+    test('F2: dywidenda — gracz dostaje walutę spółki po podatku u źródła, spółka traci gotówkę i zyski zatrzymane, pakiet państwa idzie do skarbu kraju', () => withYY(() => {
+        const a = foreignIssuers.YA1, st = countryState.YY;
+        a.holders.player = 100_000; setCompanyDividendPolicy(a, 'Total'); a.dividendPayoutRatio = 1; a.cash = 1e9;
+        const cash0 = a.cash, eq0 = a.balanceSheet.retainedEarnings, ccy0 = getCurrencyCash('player', 'EUR');
+        const paid = payForeignDividend(a, st, 5_000_000);
+        assert(paid > 0 && a.cash === cash0 - paid && a.balanceSheet.retainedEarnings === eq0 - paid, 'wypłata z gotówki i zysków zatrzymanych');
+        assertNear(getCurrencyCash('player', 'EUR') - ccy0, 100_000 * (paid / a.shares) * (1 - getForeignWithholding('YY')), 'dywidenda gracza netto', 1e-6);
+        const d = foreignIssuers.YD1; d.cash = 1e9; d.dividendPayoutRatio = 1; const t0 = st.treasury;
+        payForeignDividend(d, st, 2_000_000); assert(st.treasury > t0, 'pakiet państwa → skarb kraju');
+        assertEq(payForeignDividend(a, st, -1000), 0, 'strata: brak dywidendy');
+        assert(a.divYield > 0, 'stopa wypłat obniża dryf ceny (zwrot całkowity bez podwójnego liczenia)');
+    }));
+
+    test('F2: split — progi w złotych po kursie, posiadacze × współczynnik, wartość pozycji bez zmian, float = akcje − pakiet; konsolidacja wypłaca ułamek', () => withYY(() => {
+        const a = foreignIssuers.YA1;
+        a.price = fromPln(2500, 'EUR'); a.holders.player = 1000; const value = a.holders.player * a.price, sharesBefore = a.shares;
+        applyForeignShareChange(a, 5);
+        assertEq(a.holders.player, 5000, 'posiadacz ×5'); assertEq(a.shares, sharesBefore * 5, 'akcje ×5'); assertNear(a.holders.player * a.price, value, 'wartość pozycji', 1e-6);
+        assertEq(a.statePack + a.float, a.shares, 'float'); assertEq(checkForeignCompanyInvariants().length, 0, 'niezmienniki');
+        const b = foreignIssuers.YC1; b.price = fromPln(500, 'EUR'); assert(getSplitProposal(toPln(b.price, 'EUR')) === null, 'kurs 500 zł: bez splitu');
+        b.price = fromPln(1500, 'EUR'); assertEq(getSplitProposal(toPln(b.price, 'EUR')).kind, 'split', '1500 zł → split');
+        b.price = fromPln(0.4, 'EUR'); b.holders.player = 7; const ccy0 = getCurrencyCash('player', 'EUR');
+        applyForeignShareChange(b, 0.1); assert(!b.holders.player, '7 akcji → 0 po konsolidacji 1:10'); assert(getCurrencyCash('player', 'EUR') > ccy0, 'ułamek wypłacony gotówką');
+    }));
+
+    test('F2: upadłość — państwowa dokapitalizowana, zwykła znika z wypłatą 2% wartości; gigant i Waschmabank chronieni', () => withYY(() => {
+        const st = countryState.YY, b = foreignIssuers.YB1, d = foreignIssuers.YD1;
+        d.balanceSheet.liabilities = d.balanceSheet.assets * 2; d.financialHealth = -5;
+        assertEq(maybeForeignBankruptcy(d, st), false, 'państwowa nie upada'); assert(d.balanceSheet.assets >= d.balanceSheet.liabilities, 'dokapitalizowana');
+        b.balanceSheet.liabilities = b.balanceSheet.assets * 2; b.financialHealth = -5; b.holders.player = 1000; const pln0 = playerCash, price = b.price;
+        const gone = withRand(0, () => maybeForeignBankruptcy(b, st));
+        assert(gone && !foreignIssuers.YB1, 'zwykła znika'); assertNear(playerCash - pln0, toPln(1000 * price * 0.02, 'EUR'), 'wypłata 2% wartości w PLN', 1e-6);
+        const g = foreignIssuers.YC1; g.giant = true; g.balanceSheet.liabilities = g.balanceSheet.assets * 2;
+        assertEq(withRand(0, () => maybeForeignBankruptcy(g, st)), false, 'gigant chroniony');
+    }));
+
+    test('F1: zapis — bilans, fundamenty, prezes i polityka przeżywają zapis; zapis v17 (bez pola c) buduje model z ceny; wiersz spółki < 3 KB', () => withYY(() => {
+        withSeededRandom(9, () => { for (let k = 0; k < 8; k++) quarter(); });
+        const a = foreignIssuers.YA1, snap = JSON.parse(JSON.stringify(getCountriesSnapshot()));
+        const eq = a.balanceSheet.assets - a.balanceSheet.liabilities, name = a.ceo.name, eps = a.fundamentals.epsTtm, pol = a.dividendPolicy;
+        const bytes = JSON.stringify(snap.issuers.YA1.c).length; assert(bytes < 3000, `wiersz spółki ${bytes} B`);
+        applyCountriesSnapshot(snap); const b = foreignIssuers.YA1;
+        assertNear(b.balanceSheet.assets - b.balanceSheet.liabilities, eq, 'kapitał własny', 1e-3); assertEq(b.ceo.name, name, 'prezes'); assertNear(b.fundamentals.epsTtm, eps, 'EPS TTM', 1e-3); assertEq(b.dividendPolicy, pol, 'polityka');
+        for (const row of Object.values(snap.issuers)) delete row.c; // zapis v17
+        resetGdrState(); applyCountriesSnapshot(snap); const c = foreignIssuers.YA1; assert(c.balanceSheet && c.cash > 0 && !c.fundamentals, 'v17: model z ceny, fundamenty przy pierwszym raporcie');
+        quarter(); assert(foreignIssuers.YA1.fundamentals, 'po kwartale są fundamenty'); assertEq(checkWorldInvariants().length, 0, 'niezmienniki po migracji');
+        assertEq(SAVE_FORMAT_VERSION, 18, 'wersja zapisu'); assert(SUPPORTED_SAVE_VERSIONS.includes(17), 'v17 nadal wczytywany');
+    }));
+
+    test('F2: prezes po 65. roku odchodzi (nowa osoba, cecha kraju z definicji)', () => withYY(() => {
+        const a = foreignIssuers.YA1; a.ceo.age = 70; const old = a.ceo.name;
+        withRand(0, () => stepForeignCeo(a)); assert(a.ceo.age < 70 && a.ceo.name !== old, 'nowy prezes');
+    }));
+});
+
+group('0.16.8 Limity i zegar giełd', () => {
+    test('F3: limit spółek rośnie z wielkością kraju (US najwyższy, CZ najniższy), mnożnik w zakresie, kraj bez wskaźnika dostaje 1,5×', () => {
+        const [lo, hi] = COUNTRY_RULES.limitMultRange;
+        assertNear(getCountryLimitMult('CZ'), lo, 'najmniejszy kraj = dolna granica', 1e-9); assertNear(getCountryLimitMult('US'), hi, 'największy = górna granica', 1e-9);
+        const order = ['CZ', 'SE', 'CH', 'TW', 'FR', 'IN', 'DE', 'JP', 'CN', 'US'];
+        for (let k = 1; k < order.length; k++) assert(getCountryLimitMult(order[k]) > getCountryLimitMult(order[k - 1]), `${order[k]} > ${order[k - 1]}`);
+        assertEq(getCountryLimit('US'), Math.ceil(COUNTRY_DEFS.US.companies.length * hi), 'limit US'); assert(getCountryLimit('US') > getCountryLimit('CZ'), 'US > CZ');
+        for (const id of Object.keys(COUNTRY_RULES.sizeIndex)) assert(getCountryLimit(id) >= COUNTRY_DEFS[id].companies.length, `${id}: limit nie poniżej liczby startowej`);
+        assertNear(getCountryLimitMult('ZZ'), COUNTRY_RULES.limitMult, 'kraj bez wskaźnika', 1e-9);
+    });
+
+    test('F3: debiut nie zwiększa udziału jednego sektora ponad 40% spółek giełdy kraju', () => {
+        COUNTRY_DEFS.WW = { id: 'WW', name: 'Wuland', currency: 'EUR', region: 'EU', rho: 0.7, rateMean: 0.03, operator: { id: 'WWX', name: 'W' }, labour: { rights: 'standard', unionMult: 1, shadow: 0, wages: 1 },
+            companies: [{ id: 'WA1', name: 'A', sector: 'Przemysł', kind: 'normal', price: 10 }, { id: 'WB1', name: 'B', sector: 'Przemysł', kind: 'normal', price: 10 }, { id: 'WC1', name: 'C', sector: 'Przemysł', kind: 'normal', price: 10 }, { id: 'WD1', name: 'D', sector: 'Żywność', kind: 'normal', price: 10 }] };
+        try {
+            initFxState(); resetGdrState(); resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+            joinCountry('WW'); countryState.WW.lastDebutQ = -99; COUNTRY_RULES.sizeIndex.WW = 10;
+            const real = Math.random; Math.random = () => 0; let debut;
+            try { debut = maybeCountryDebut('WW'); } finally { Math.random = real; }
+            assert(debut, 'debiut wystąpił'); assertEq(debut.sector, 'Żywność', 'przemysł ma już ≥ 40% — debiut z innego sektora');
+        } finally { delete COUNTRY_RULES.sizeIndex.WW; delete COUNTRY_DEFS.WW; resetGdrState(); initFxState(); }
+    });
+
+    test('F3b: godzina lokalna z czasu gry — doba = tydzień gry, strefy i czas letni (kw. 2–3; Sydney odwrotnie, Tokio bez zmiany)', () => {
+        const day = getMarketClockDayMs(), q0 = macro.quarter;
+        try {
+            macro.quarter = 0; // zima na północy
+            assertNear(getGameUtcHour(0), 0, 'UTC 0:00', 1e-9); assertNear(getGameUtcHour(day / 2), 12, 'pół doby = 12:00 UTC', 1e-9);
+            assertNear(getMarketLocalHour('PL', day / 2), 13, 'Warszawa zimą UTC+1', 1e-9); assertNear(getMarketLocalHour('US', day / 2), 7, 'Nowy Jork zimą UTC−5', 1e-9);
+            assertNear(getMarketLocalHour('AU', day / 2), 23, 'Sydney zimą północy = lato południa: UTC+11', 1e-9); assertNear(getMarketLocalHour('JP', day / 2), 21, 'Tokio UTC+9', 1e-9);
+            macro.quarter = 1; // lato na północy
+            assertNear(getMarketLocalHour('PL', day / 2), 14, 'Warszawa latem UTC+2', 1e-9); assertNear(getMarketLocalHour('US', day / 2), 8, 'Nowy Jork latem UTC−4', 1e-9);
+            assertNear(getMarketLocalHour('AU', day / 2), 22, 'Sydney latem północy UTC+10', 1e-9); assertNear(getMarketLocalHour('JP', day / 2), 21, 'Tokio bez zmiany', 1e-9);
+            assertNear(getMarketLocalHour('PL', day * 3 + day / 2), getMarketLocalHour('PL', day / 2), 'doba się powtarza', 1e-9);
+        } finally { macro.quarter = q0; }
+    });
+
+    test('F3b: sesja — otwarta/zamknięta i czas do zmiany; PL zawsze otwarta; dopłata poza sesją tylko dla rynków zagranicznych z sesją', () => {
+        const day = getMarketClockDayMs(), q0 = macro.quarter;
+        try {
+            macro.quarter = 0;
+            const at = (market, localHour) => { const def = MARKET_SESSIONS[market]; const utc = localHour - def.utc - (isMarketDst(def) ? 1 : 0); return (((utc % 24) + 24) % 24) / 24 * day; };
+            const open = getMarketStatus('DE', at('DE', 10)), closed = getMarketStatus('DE', at('DE', 20));
+            assert(open.open && Math.abs(open.hoursToChange - 7.5) < 1e-6 && /zamyka się za/.test(open.text), 'Frankfurt 10:00 otwarta, zamknięcie za 7,5 h');
+            assert(!closed.open && Math.abs(closed.hoursToChange - 13) < 1e-6 && /otwiera się za/.test(closed.text), 'Frankfurt 20:00 zamknięta, otwarcie za 13 h');
+            assert(!getMarketStatus('DE', at('DE', 9 - 1e-6)).open && getMarketStatus('DE', at('DE', 9)).open, 'granica otwarcia');
+            assert(getMarketStatus('home', 0).open && isMarketOpen('ZZ', 0), 'rynek macierzysty (home) i nieznane rynki zawsze otwarte'); assertEq(getOffHoursSurcharge('PL'), SESSION_RULES.offHoursSurcharge * (isMarketOpen('PL') ? 0 : 1), 'PL ma sesję na zegarze, ale handel krajowy nie podlega dopłacie z getCountryCommission');
+            const real = getGameClockMs; getGameClockMs = () => at('DE', 20);
+            try { assertNear(getOffHoursSurcharge('DE'), SESSION_RULES.offHoursSurcharge, 'dopłata poza sesją'); assertEq(getOffHoursSurcharge('ZZ'), 0, 'rynek bez sesji'); assertEq(getOffHoursSurcharge('GB'), 0, 'miasto tylko na zegarze'); getGameClockMs = () => at('DE', 10); assertEq(getOffHoursSurcharge('DE'), 0, 'w sesji bez dopłaty'); } finally { getGameClockMs = real; }
+        } finally { macro.quarter = q0; }
+    });
+
+    test('F3b: karta zegarów — 4 zegary analogowe z godziną i statusem tekstem, pas sesji z linią „teraz”; nie tworzy okna ani nie pauzuje gry', () => {
+        const paused = isGamePaused, host = document.createElement('div');
+        host.innerHTML = renderMarketClockCard(); document.body.appendChild(host);
+        try {
+            assertEq(host.querySelectorAll('.mclock').length, 4, 'zegary: Londyn, Nowy Jork, Sydney, Tokio');
+            assert([...host.querySelectorAll('.mclock svg')].every(svg => /\d\d:\d\d, (otwarta|zamknięta)/.test(svg.getAttribute('aria-label'))), 'aria-label z godziną i statusem');
+            assert([...host.querySelectorAll('.mclock figcaption')].every(f => /otwarta|zamknięta/.test(f.textContent)), 'status tekstem, nie samym kolorem');
+            assert(/teraz \d\d:\d\d/.test(host.querySelector('svg[aria-label^="Sesje"]').textContent), 'linia „teraz” opisana');
+            assertEq(isGamePaused, paused, 'karta nie zmienia pauzy gry'); assertEq(document.querySelectorAll('.modal, [role="dialog"]').length >= 0, true);
+        } finally { host.remove(); }
+    });
+
+    test('F4: budżet — 10 krajów po 6,5 roku: zapis krajów ≤ 1,5 KB na spółkę i ≤ 250 tys. znaków (≈ +12% zapisu), kwartał krajów poniżej 100 ms, niezmienniki 0', () => {
+        const ids = ['DE', 'US', 'CZ', 'SE', 'CH', 'FR', 'JP', 'CN', 'IN', 'TW'].filter(id => COUNTRY_DEFS[id]);
+        initFxState(); resetGdrState(); resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+        const q0 = macro.quarter; let quarterMs = 0, quarters = 0;
+        try {
+            for (const id of ids) joinCountry(id);
+            withSeededRandom(31, () => { for (let q = 0; q < 26; q++) { for (let w = 0; w < 13; w++) { stepFxRates(); stepCountries(); } const t = performance.now(); macro.quarter++; processCountriesQuarterly(); quarterMs += performance.now() - t; quarters++; } });
+            const n = getForeignIssuerList().filter(i => i.kind === 'share').length, bytes = JSON.stringify(getCountriesSnapshot()).length;
+            addTable('F4: koszt pełnych spółek zagranicznych (10 krajów, 26 kw.)', ['Spółki', 'Zapis (B)', 'B na spółkę', 'ms na kwartał (kraje)'], [[n, bytes, Math.round(bytes / n), Math.round(quarterMs / quarters * 10) / 10]]);
+            assert(bytes / n <= 1500, `${Math.round(bytes / n)} B na spółkę`); assert(bytes <= 250_000, `${bytes} znaków`); assert(quarterMs / quarters < 100, `${Math.round(quarterMs / quarters)} ms na kwartał`);
+            assertEq(checkWorldInvariants().length, 0, 'niezmienniki po 6,5 roku'); assertEq(checkForeignCompanyInvariants().length, 0, 'niezmienniki spółek');
+        } finally { macro.quarter = q0; resetGdrState(); initFxState(); }
     });
 });
 

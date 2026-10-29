@@ -1,5 +1,7 @@
 # Plan 0.16.7 „Pełne spółki zagraniczne” (szkic zakresu; PRZED wyborem kraju startowego z 0.16.6 S0)
 
+**Stan realizacji (2026-10-29):** ✅ F0–F2 jako 0.16.7, ✅ F3–F5 jako 0.16.8 (podział zgodnie z ryzykiem 1); wybrany wariant A′ (wspólny model i kod, magazyn `foreignIssuers`) — `raporty/diagnoza_0.16.7.md`, wyniki i „Pominięte i problemy”: `raporty/kontrola_0.16.7.md`.
+
 Źródło: decyzja użytkownika z 2026-10-28: spółki zagraniczne nie mogą być uproszczone, mają działać jak spółki z giełdy bazowej. Dziś (0.16.2–0.16.4) leżą poza `stocks`, bez bilansu i dywidend, zapis ≈ 210 B na spółkę. Szkic: przed startem przeczytać `countries*.js`, `companies.js`, `stocks`-pętlę kroku i `state.js`.
 
 ## Cel
