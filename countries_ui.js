@@ -74,7 +74,7 @@ function renderCountryCard(id) {
         <dl class="bank-card-rates">
             <div><dt>Nastrój rynku</dt><dd>${uiIcon(phase.icon, 14)} ${phase.name}, premia ${premium > 0 ? '▲ +' : premium < 0 ? '▼ ' : '■ '}${formatNumberPl(premium * 100, 0)}%</dd></div>
             <div><dt>Stopa w kraju</dt><dd>${formatNumberPl(st.rate * 100, 2)}%</dd></div>
-            <div><dt>Kurs ${def.currency}</dt><dd>${fmtRate(rate, def.currency)} zł (${fxArrow(change)} ${fxPct(change)} w roku)</dd></div>
+            <div><dt>Kurs ${def.currency}</dt><dd>${fmtRate(getFxRate(def.currency) / getBaseScale(), def.currency)} ${getBaseCurrency()} (${fxArrow(change)} ${fxPct(change)} w roku)</dd></div>
             <div><dt>Powiązanie z Polską</dt><dd>${formatNumberPl(def.rho * 100, 0)}%</dd></div>
             <div><dt>Kryzys</dt><dd>${crisis}</dd></div>
             <div><dt>Spółki państwowe</dt><dd>${stateIssuers.length ? stateIssuers.map(i => escapeHtml(i.name)).join(', ') : 'brak'}${stateIssuers.length ? ` · skarb kraju (licznik): ${formatNumberPl(st.treasury, 0)} ${def.currency}` : ''}</dd></div>
