@@ -103,9 +103,28 @@ function renderMarketsTab() {
     }).join('');
     return `${renderLinksCard()}<div class="tab-buttons" role="group" aria-label="Rynki zagraniczne">${tabs}</div>
         ${renderCountryCard(id)}
+        ${id === 'CH' ? renderHiddenCashCard() : ''}
         ${access ? '' : `<p class="text-sm" role="status">Brak biletu na ten rynek — kupowanie jest zablokowane (sprzedaż posiadanych akcji działa). Bilet kupisz w Internecie, na stronie Ferie i wakacje (${formatZl(getTicketPrice(id), 0)}).</p>`}
         <table class="asset-mini-table w-full mt-3"><thead><tr><th>Spółka</th><th>Sektor</th><th class="text-right">Cena (waluta)</th><th class="text-right">Cena w PLN</th><th class="text-right">Twoje akcje</th><th class="text-right">Zlecenie</th></tr></thead><tbody>${rows}</tbody></table>
         <p class="text-sm text-muted">Kupno płacisz najpierw gotówką w ${def.currency}, resztę wymienia kantor (spread). Prowizja ${formatNumberPl(getCountryCommission(id) * 100, 1)}%. Wpływy ze sprzedaży trafiają na konto walutowe — złotówki dostaniesz w kantorze. Zysk to zmiana ceny <em>i</em> kursu ${def.currency}; ceny zawierają dywidendy.</p>`;
+}
+
+/** 0.16.6 S1: rachunek w Waschmabanku (ukryty przed nadzorem, ale w majątku funduszu). */
+function renderHiddenCashCard() {
+    if (!canUseWaschmabank()) return '';
+    const r = HIDDEN_CASH_RULES;
+    return `<div class="bank-card mt-3"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('blokada', 20)}</span><div><h4>Rachunek w Waschmabanku</h4><span class="bank-card-type">poza kontrolą nadzoru · liczy się do majątku funduszu</span></div></header>
+        <p class="text-sm">Saldo: <strong id="hidden-cash-balance">${formatZl(getHiddenBalance(), 0)}</strong>. Wpłata kosztuje ${formatNumberPl(r.depositFee * 100, 0)}%, wypłata ${formatNumberPl(r.withdrawFee * 100, 0)}%. Kary i rekwizycja nielegalnych zysków sięgają tylko gotówki na koncie funduszu, ale każdy kwartał grozi wykryciem rachunku, a wyciek „Swiss Leaks” w Waschmabanku ujawnia go od razu: konfiskata całości, przewinienie i spadek zaufania klientów.</p>
+        <div class="bank-card-form"><input type="number" min="${r.min}" step="100" id="hidden-cash-amount" placeholder="Kwota (PLN)" aria-label="Kwota wpłaty lub wypłaty (PLN)">
+            <button class="btn-primary" onclick="hiddenCashUi('hide')">Wpłać</button> <button class="btn-ghost" onclick="hiddenCashUi('unhide')" ${getHiddenBalance() > 0 ? '' : 'disabled'}>Wypłać</button></div></div>`;
+}
+
+function hiddenCashUi(action) {
+    const amount = Number(document.getElementById('hidden-cash-amount')?.value) || 0;
+    const r = action === 'hide' ? hideCash(amount) : unhideCash(amount);
+    showToast(r.ok ? (action === 'hide' ? `Wpłacono na rachunek w Waschmabanku (prowizja ${formatZl(r.fee, 0)}).` : `Wypłacono ${formatZl(r.received, 0)}.`) : r.reason, r.ok ? 'success' : 'warning');
+    renderKantor();
+    if (typeof updateUI === 'function') updateUI();
 }
 
 function marketsUiTrade(id, side) {

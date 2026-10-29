@@ -1566,6 +1566,7 @@ function createOversight() {
         knf: { level: 0, budget: 0 },
         records: {},          // id → { strikes, suspicion, immuneUntil, blockedUntil, illegalGains }
         history: [],          // ostatnie wykrycia (do panelu)
+        hidden: { balance: 0 }, // 0.16.6 S1: rachunek w Waschmabanku (countries.js)
         convicted: false
     };
 }
@@ -1576,6 +1577,7 @@ function ensureOversight() {
     oversight.police = { ...fresh.police, ...(oversight.police || {}) };
     oversight.knf = { ...fresh.knf, ...(oversight.knf || {}) };
     if (!Array.isArray(oversight.history)) oversight.history = [];
+    oversight.hidden = { ...fresh.hidden, ...(oversight.hidden || {}) };
     return oversight;
 }
 
@@ -1742,7 +1744,7 @@ function greyTender(symbol) {
 // =================================================================================
 
 function getKnfAttention() {
-    const assets = typeof getFundAssets === 'function' ? getFundAssets() : 0;
+    const assets = typeof getFundAssets === 'function' ? getFundAssets() - (typeof getHiddenBalance === 'function' ? getHiddenBalance() : 0) : 0;
     return clampValue(Math.log10(Math.max(1, assets)) / 7, 0.1, 1); // 10 mln PLN → pełna uwaga
 }
 
@@ -1758,7 +1760,7 @@ function punishEntity(id, institutionName) {
     const quarter = getOversightQuarter();
     const ai = id === 'player' ? null : aiCompetitors.find(a => a.id === id);
     const name = ai ? ai.name : 'Twój fundusz';
-    const assets = ai ? ai.cash : getFundAssets();
+    const assets = ai ? ai.cash : getFundAssets() - (typeof getHiddenBalance === 'function' ? getHiddenBalance() : 0); // KNF nie widzi rachunku w Waschmabanku
     const fine = Math.round(Math.max(500, assets * STRIKE_FINES[Math.min(record.strikes, STRIKE_FINES.length) - 1]) * (!ai && isDecentFund() ? 0.75 : 1));
     let seized = 0;
 

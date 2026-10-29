@@ -13734,6 +13734,65 @@ group('0.16.6 Domknięcie', () => {
         assert(getGdrHeld(issuer) <= room && !issuer.oversightResale, `po terminie nadzór sprzedał nadwyżkę (${getGdrHeld(issuer)} ≤ ${room})`);
         assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
     }));
+    // --- S1.1: gotówka w Waschmabanku — osobne testy niezmienników NAV ---
+    const withWsm = fn => withWorld(() => { joinCountry('CH'); assert(canUseWaschmabank(), 'Waschmabank dostępny po otwarciu CH'); playerCash = 1_000_000; ensureOversight(); oversight.hidden.balance = 0; return fn(); });
+
+    test('S1.1 NAV: wpłata i wypłata zmieniają majątek i NAV wyłącznie o widoczne prowizje (5% i 1%), liczba jednostek bez zmian', () => withWsm(() => {
+        const assets0 = getFundAssets(), units0 = playerFund.units, nav0 = getFundNav();
+        const r = hideCash(200_000); assert(r.ok, r.reason);
+        assertNear(getFundAssets(), assets0 - 200_000 * HIDDEN_CASH_RULES.depositFee, 'majątek spada tylko o prowizję od wpłaty', 1e-6);
+        assertEq(playerFund.units, units0, 'jednostki bez zmian'); assert(getFundNav() < nav0 && getFundNav() > nav0 * 0.98, 'NAV spada o prowizję, nie o całą kwotę');
+        assertNear(getHiddenBalance(), 190_000, 'saldo po prowizji', 1e-6);
+        const u = unhideCash(100_000); assert(u.ok);
+        assertNear(getFundAssets(), assets0 - 10_000 - 1_000, 'po wypłacie: prowizje 5% + 1%', 1e-6);
+        assertNear(getHiddenBalance(), 90_000, 'saldo po wypłacie', 1e-6);
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+
+    test('S1.1 NAV: odmowy — bez Waschmabanku, poniżej minimum, ponad gotówkę; NAV bez zmian po odmowie', () => withWsm(() => {
+        const assets0 = getFundAssets();
+        assert(!hideCash(10).ok && !hideCash(1e12).ok && !unhideCash(1).ok, 'odmowy');
+        assertEq(getFundAssets(), assets0, 'NAV bez zmian po odmowie');
+        delete foreignIssuers.WSM; assert(!canUseWaschmabank() && !hideCash(5000).ok, 'bez Waschmabanku brak rachunku');
+    }));
+
+    test('S1.1 nadzór: kara i rekwizycja sięgają tylko gotówki konta funduszu; podstawa kary nie widzi rachunku; rachunek nietknięty', () => withWsm(() => {
+        hideCash(900_000); const hidden = getHiddenBalance(); playerCash = 50_000;
+        const rec = getRecord('player'); rec.illegalGains = 500_000; rec.strikes = 2; // trzecie wykrycie = rekwizycja
+        const fineBaseAssets = getFundAssets() - hidden;
+        punishEntity('player', 'KNF');
+        assertEq(getHiddenBalance(), hidden, 'rachunek nietknięty przez karę i rekwizycję');
+        assertEq(playerCash, 0, 'z gotówki zabrano wszystko, co było (kara + rekwizycja ≤ gotówka)');
+        assert(STRIKE_FINES && fineBaseAssets < getFundAssets(), 'podstawa kary bez rachunku');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+
+    test('S1.1 afera: ujawnienie (Swiss Leaks / kontrola) konfiskuje całość, przewinienie +1, zaufanie −10; majątek spada o saldo i jest to zgłoszone (log, poczta, wiadomość)', () => withWsm(() => {
+        hideCash(400_000); const balance = getHiddenBalance(), assets0 = getFundAssets(), treasury0 = governmentTreasury, strikes0 = getRecord('player').strikes, trust0 = playerFund.trust;
+        const mails = mailbox.messages.length;
+        assert(exposeHiddenCash('test'), 'ujawniono');
+        assertEq(getHiddenBalance(), 0, 'saldo wyzerowane'); assert(governmentTreasury >= treasury0 + balance, 'konfiskata do skarbu');
+        assert(getRecord('player').strikes > strikes0, 'przewinienie'); assert(playerFund.trust <= trust0 - HIDDEN_CASH_RULES.exposeTrustLoss, 'spadek zaufania');
+        assert(getFundAssets() <= assets0 - balance + 1, 'majątek spadł co najmniej o saldo (plus kara)'); assert(mailbox.messages.length > mails, 'poczta o aferze');
+        assert(!exposeHiddenCash('znowu'), 'puste konto nie jest ujawniane drugi raz');
+        withRandom(0, () => processHiddenCashQuarterly()); assertEq(getHiddenBalance(), 0, 'kwartał bez salda bez skutków');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+
+    test('S1.1 kwartał: ryzyko wykrycia działa tylko przy saldzie; wypłata awaryjna pod umorzenia pobiera z rachunku (net po 1%)', () => withWsm(() => {
+        hideCash(300_000);
+        withRandom(0.999, () => processHiddenCashQuarterly()); assert(getHiddenBalance() > 0, 'brak wykrycia przy wysokim losowaniu');
+        playerCash = 0; const raised = liquidateHiddenCash(100_000);
+        assertNear(raised, 100_000, 'wpływ netto równy żądanej kwocie', 1e-6); assertNear(playerCash, 100_000, 'gotówka na koncie', 1e-6);
+        withRandom(0, () => processHiddenCashQuarterly()); assertEq(getHiddenBalance(), 0, 'niskie losowanie = wykrycie');
+    }));
+
+    test('S1.1 zapis: saldo rachunku przeżywa zapis i wczytanie; stary zapis bez pola działa', () => withWsm(() => {
+        hideCash(120_000); const saved = JSON.parse(JSON.stringify(oversight));
+        assertEq(saved.hidden.balance, getHiddenBalance(), 'saldo w zapisie');
+        oversight = { ...createOversight() }; delete oversight.hidden; ensureOversight(); assertEq(getHiddenBalance(), 0, 'stary zapis: saldo 0');
+        oversight = saved; assertEq(getHiddenBalance(), saved.hidden.balance, 'wczytane saldo');
+    }));
 });
 
 runAllTests();

@@ -303,6 +303,7 @@ function applySpecialEvents(issuer) {
         if (macro.quarter - (issuer.leakQ ?? -99) > 8 && Math.random() < 0.04) {
             issuer.leakQ = macro.quarter;
             issuer.price = Math.max(0.05, issuer.price * (1 - getRandomInRange(0.30, 0.60)));
+            if (issuer.id === 'WSM') exposeHiddenCash('Swiss Leaks');
             const text = `🌍 Swiss Leaks: kontrola ujawnia pranie pieniędzy w ${issuer.name}. Kurs spada o 30–60%, bank płaci karę.`;
             logEvent(text, 'market');
             if (typeof pushNews === 'function') pushNews(text, null);
@@ -335,6 +336,7 @@ function processCountriesQuarterly() {
     if (typeof processAirportQuarterly === 'function') processAirportQuarterly();
     if (typeof processLinksQuarterly === 'function') processLinksQuarterly();
     processForeignOversightQuarterly();
+    processHiddenCashQuarterly();
     for (const id of getJoinedCountries()) {
         const def = COUNTRY_DEFS[id], st = countryState[id];
         advanceCountryRegime(id);
@@ -384,6 +386,7 @@ function getCountriesSnapshot() {
         if (i.leakQ !== undefined) row.lk = i.leakQ;
         if (i.vintage) row.v = i.vintage;
         if (i.tradeHalted) row.th = 1;
+        if (i.oversightResale) row.or = i.oversightResale.until;
         if (i.generated) row.g = { name: i.name, sector: i.sectors.map(s => s[0]), subsector: i.subsector, country: i.country, currency: i.currency };
         issuers[i.id] = row;
     }
@@ -418,6 +421,7 @@ function applyCountriesSnapshot(snapshot) {
         if (Number.isFinite(Number(row.lk))) issuer.leakQ = Number(row.lk);
         if (row.v) issuer.vintage = String(row.v);
         if (row.th) issuer.tradeHalted = true;
+        if (Number.isFinite(Number(row.or))) issuer.oversightResale = { until: Number(row.or) };
         issuer.holders = {};
         for (const [holder, qty] of Object.entries(row.o || {})) if (Number(qty) > 0) issuer.holders[holder] = Number(qty);
     }
@@ -580,6 +584,74 @@ function processForeignOversightQuarterly() {
         logEvent(text, 'review');
         if (typeof addMail === 'function') addMail({ sender: getOversight(issuer.country).name, subject: `⚖️ Nakaz odsprzedaży: ${issuer.name}`, body: text, importance: 3 });
     }
+}
+
+// --- 0.16.6 S1: gotówka w Waschmabanku poza kontrolą nadzoru ---
+// Decyzja: ukryta gotówka JEST w majątku (NAV, jednostki, ocena klientów i raporty widzą ją w całości — nie ma „cichej” zmiany NAV);
+// wpłata kosztuje 5% (widoczna w historii płatności), wypłata 1%. Poza zasięgiem jest tylko egzekucja: kary, rekwizycja nielegalnych zysków i
+// podstawa kary KNF liczą wyłącznie gotówkę na koncie funduszu. Cena: co kwartał ryzyko wykrycia (rośnie z uwagą KNF), a „Swiss Leaks” w Waschmabanku
+// ujawnia rachunek: konfiskata całości, przewinienie nr +1 i utrata zaufania klientów.
+const HIDDEN_CASH_RULES = { depositFee: 0.05, withdrawFee: 0.01, min: 1000, detectChance: 0.03, exposeTrustLoss: 10 };
+
+function getHiddenBalance() { return Math.max(0, Number(oversight?.hidden?.balance) || 0); }
+function canUseWaschmabank() { return Boolean(playerFund && foreignIssuers.WSM && foreignIssuers.WSM.kind === 'share'); }
+
+/** Wpłata z gotówki funduszu na rachunek w Waschmabanku. Zwraca { ok, hidden, fee } albo { ok: false, reason }. */
+function hideCash(amount) {
+    amount = Number(amount);
+    if (!canUseWaschmabank()) return { ok: false, reason: 'Waschmabank działa dopiero po otwarciu giełdy szwajcarskiej.' };
+    if (!(amount >= HIDDEN_CASH_RULES.min)) return { ok: false, reason: `Minimalna wpłata: ${formatZl(HIDDEN_CASH_RULES.min, 0)}.` };
+    if (amount > playerCash + 1e-9) return { ok: false, reason: 'Za mało gotówki funduszu.' };
+    ensureOversight();
+    const fee = amount * HIDDEN_CASH_RULES.depositFee;
+    playerCash -= amount;
+    oversight.hidden.balance = getHiddenBalance() + amount - fee;
+    recordPayment('player-fund', 'external:waschmabank', fee, 'Waschmabank: prowizja od wpłaty');
+    logEvent(`🏦 Wpłata ${formatZl(amount, 0)} na rachunek w Waschmabanku (prowizja ${formatZl(fee, 0)}). Środki liczą się do majątku funduszu, ale nadzór ich nie widzi.`, 'state');
+    return { ok: true, hidden: oversight.hidden.balance, fee };
+}
+
+/** Wypłata na konto funduszu (prowizja 1%). */
+function unhideCash(amount) {
+    amount = Math.min(Number(amount), getHiddenBalance());
+    if (!(amount > 0)) return { ok: false, reason: 'Brak środków na rachunku w Waschmabanku.' };
+    const fee = amount * HIDDEN_CASH_RULES.withdrawFee;
+    oversight.hidden.balance = getHiddenBalance() - amount;
+    playerCash += amount - fee;
+    recordPayment('player-fund', 'external:waschmabank', fee, 'Waschmabank: prowizja od wypłaty');
+    return { ok: true, received: amount - fee, fee };
+}
+
+/** Wypłata awaryjna pod umorzenia / margin call (w forceLiquidation, po obcej gotówce i GDR). Zwraca wpływ netto. */
+function liquidateHiddenCash(amountPln) {
+    const gross = Math.min(getHiddenBalance(), amountPln / (1 - HIDDEN_CASH_RULES.withdrawFee));
+    return gross > 0 ? (unhideCash(gross).received || 0) : 0;
+}
+
+/** Wykrycie rachunku: konfiskata całości, przewinienie, utrata zaufania. */
+function exposeHiddenCash(reason) {
+    const balance = getHiddenBalance();
+    if (!(balance > 0)) return false;
+    oversight.hidden.balance = 0;
+    governmentTreasury += balance;
+    recordPayment('player-fund', 'external:skarb-panstwa', balance, 'Konfiskata rachunku w Waschmabanku');
+    playerFund.trust = Math.max(0, playerFund.trust - HIDDEN_CASH_RULES.exposeTrustLoss);
+    const text = `Ujawniono ukryty rachunek funduszu w Waschmabanku (${reason}): konfiskata ${formatZl(balance, 0)}, utrata zaufania klientów.`;
+    logEvent(`🕵️ ${text}`, 'error');
+    if (typeof pushNews === 'function') pushNews(`🕵️ Afera: ${text}`, null);
+    if (typeof addMail === 'function') addMail({ sender: 'PULS', subject: '🕵️ Afera: ukryty rachunek funduszu', body: text, importance: 3 });
+    if (typeof punishEntity === 'function') punishEntity('player', 'KNF');
+    return true;
+}
+
+function processHiddenCashQuarterly() {
+    if (getHiddenBalance() <= 0) return;
+    if (Math.random() < HIDDEN_CASH_RULES.detectChance * getKnfAttention()) exposeHiddenCash('kontrola przepływów');
+}
+
+function checkHiddenCashInvariants() {
+    const b = oversight?.hidden?.balance;
+    return b === undefined || (Number.isFinite(b) && b >= 0) ? [] : [`rachunek w Waschmabanku: ${b}`];
 }
 
 // --- Handel akcjami zagranicznymi (gracz) ---
