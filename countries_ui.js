@@ -93,7 +93,7 @@ function renderMarketsTab() {
     const tabs = joined.map(c => `<button class="tab-btn ${c === id ? 'active' : ''}" onclick="selectMarketCountry('${c}')" aria-pressed="${c === id}">${flagIcon(c, 12)} ${escapeHtml(COUNTRY_DEFS[c].name)} · ${COUNTRY_DEFS[c].currency}</button>`).join('');
     const rows = getCountryIssuers(id).map(i => {
         const h = i.history, change = h.length > 1 ? i.price / h[0] - 1 : 0, held = getGdrHeld(i), free = getGdrFree(i);
-        return `<tr><td><strong>${getGdrSymbol(i)}</strong> <span class="text-muted">${escapeHtml(i.name)}</span>${i.state ? ' <span class="text-xs">(państwowa)</span>' : ''}${i.giant ? ' <span class="text-xs">(gigant)</span>' : ''}</td>
+        return `<tr><td><strong>${getGdrSymbol(i)}</strong> <span class="text-muted">${escapeHtml(i.name)}</span>${i.state ? ' <span class="text-xs">(państwowa)</span>' : ''}${i.giant ? ' <span class="text-xs">(gigant)</span>' : ''}${typeof renderForeignCompanyLine === 'function' ? renderForeignCompanyLine(i) : ''}</td>
             <td>${escapeHtml(i.sectors.map(s => s[0]).join(' + '))}</td>
             <td class="text-right">${formatNumberPl(i.price, 2)} ${i.currency}<br><span class="text-muted text-xs">${fxArrow(change)} ${fxPct(change)} w ${h.length - 1} tyg.</span></td>
             <td class="text-right">${formatZl(toPln(i.price, i.currency), 2)}</td>

@@ -31,7 +31,7 @@ server.listen(PORT, async () => {
       const call = (method, params) => new Promise(res => { const i = ++id; pend[i] = res; ws.send(JSON.stringify({ id: i, method, params })); });
       ws.onmessage = e => { const d = JSON.parse(e.data); if (pend[d.id]) { pend[d.id](d.result); delete pend[d.id]; } };
       await new Promise(r => ws.onopen = r);
-      for (let k = 0; k < 120; k++) { const r = await call('Runtime.evaluate', { expression: '!!window.__testSummary', returnByValue: true }); if (r?.result?.value) break; await new Promise(r => setTimeout(r, 500)); }
+      for (let k = 0; k < (Number(process.env.PROBE_WAIT) || 120); k++) { const r = await call('Runtime.evaluate', { expression: '!!window.__testSummary', returnByValue: true }); if (r?.result?.value) break; await new Promise(r => setTimeout(r, 500)); }
       const r = await call('Runtime.evaluate', { expression: `(async()=>{try{return JSON.stringify(await (async()=>{${expr}\n})())}catch(e){return 'ERR '+e.stack}})()`, awaitPromise: true, returnByValue: true });
       console.log(r?.result?.value ?? JSON.stringify(r)); ws.close(); done(0); return;
     } catch (e) {}

@@ -11938,7 +11938,7 @@ group('0.16.1', () => {
         kantorBuyCurrency('CHF', 500_000);
         const rateChf = fxRates.CHF, held = playerCashByCurrency.CHF, assets = getFundAssets();
         const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
-        assertEq(raw.version, 17, 'zapis v17');
+        assertEq(raw.version, 18, 'zapis v18');
         initFxState();
         const report = applySaveSnapshot(raw);
         assert(report.ok, `wczytanie: ${(report.errors || []).join('; ')}`);
@@ -13559,7 +13559,7 @@ group('0.16.5 Internet i TeamedUP!', () => {
 
     test('I5: migracja zapisu v16 → v17: skrzynka zachowuje wszystkie wiadomości i dostaje pole Tied', () => {
         startFund(); addMail({ sender: 'PULS', subject: 'A', body: 'a' }); addMail({ sender: 'bot:x', subject: 'B', body: 'b' }); noteTiedEvent(`${stocks[0].name} ogłasza rekord`, 'company');
-        const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 }))); assertEq(raw.version, 17, 'zapis v17');
+        const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 }))); assertEq(raw.version, 18, 'zapis v18');
         raw.version = 16; delete raw.mailbox.tied; const n = raw.mailbox.messages.length;
         const res = applySaveSnapshot(raw); assert(res.ok, 'wczytanie v16');
         assertEq(mailbox.messages.length, n, 'wiadomości zachowane'); assert(Array.isArray(mailbox.tied), 'pole Tied dodane');
@@ -13807,6 +13807,116 @@ group('0.16.6 Domknięcie', () => {
             assert(host.querySelector('.mail-folder.active[aria-current="page"]'), 'aktywny panel oznaczony');
         } finally { host.remove(); teamedView = { pane: 'tasks', selectedId: null }; }
     });
+});
+
+group('0.16.7 Pełne spółki zagraniczne', () => {
+    const YY = () => ({
+        id: 'YY', name: 'Ypsilonia', currency: 'EUR', region: 'EU', rho: 0.7, rateMean: 0.03, operator: { id: 'YYX', name: 'Ypsilon Exchange' },
+        labour: { rights: 'ochronne', unionMult: 1.2, shadow: 0, wages: 1.6 },
+        companies: [
+            { id: 'YA1', name: 'Ypsilon Auto', sector: 'Przemysł', kind: 'normal', price: 100 }, { id: 'YB1', name: 'Ypsilon Bank', sector: 'Bankowość', subsector: 'Bank komercyjny', kind: 'normal', price: 40 },
+            { id: 'YC1', name: 'Ypsilon Piwo', sector: 'Żywność', kind: 'normal', price: 30 }, { id: 'YD1', name: 'Ypsilon Koleje', sector: 'Usługi', kind: 'state', price: 20 }
+        ]
+    });
+    const withYY = fn => {
+        COUNTRY_DEFS.YY = YY(); initFxState(); resetGdrState(); resetWorld([mk156('GA', { price: 100 })]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' }); playerCash = 5_000_000;
+        try { joinCountry('YY'); return fn(); } finally { delete COUNTRY_DEFS.YY; resetGdrState(); initFxState(); }
+    };
+    const quarter = () => { macro.quarter++; processCountriesQuarterly(); };
+    const withRand = (value, fn) => { const real = Math.random; Math.random = () => value; try { return fn(); } finally { Math.random = real; } };
+
+    test('F1: nowa spółka zagraniczna ma pola spółki krajowej (symbol, rynek, akcje, bilans, polityka dywidendy, prezes poza państwowymi)', () => withYY(() => {
+        const a = foreignIssuers.YA1, d = foreignIssuers.YD1;
+        assertEq(a.symbol, 'YA1.YY', 'symbol'); assertEq(a.market, 'YY', 'rynek'); assertEq(a.totalShares, a.shares, 'totalShares = akcje');
+        assert(a.balanceSheet.assets > 0 && a.cash > 0 && a.balanceSheet.liabilities < a.balanceSheet.assets, 'bilans');
+        assert(['Growth', 'Balanced', 'Aggressive', 'Total'].includes(a.dividendPolicy), 'polityka dywidendy'); assert(a.ceo && a.ceo.name, 'prezes');
+        assert(d.state && d.isStateOwned && !d.ceo && d.dividendPolicy === 'Aggressive', 'państwowa: bez prezesa, wysoka wypłata');
+        assert(!a.fundamentals, 'fundamenty leniwie — po pierwszym raporcie');
+    }));
+
+    test('F2: kwartał daje raport (fundamenty, EPS, wskaźniki), kapitał własny się zmienia, niezmienniki bez naruszeń', () => withYY(() => {
+        const a = foreignIssuers.YA1, eq0 = a.balanceSheet.assets - a.balanceSheet.liabilities;
+        withSeededRandom(7, () => { for (let k = 0; k < 6; k++) quarter(); });
+        const f = a.fundamentals; assert(f && f.history.length >= 4 && f.revenueTtm > 0, 'fundamenty');
+        assert(Number.isFinite(a.quarterlyEarnings) && Number.isFinite(a.lastSurprise), 'wynik i niespodzianka');
+        assert(a.balanceSheet.assets - a.balanceSheet.liabilities !== eq0, 'kapitał własny się zmienił');
+        assertEq(checkForeignCompanyInvariants().length, 0, 'niezmienniki modelu'); assertEq(checkWorldInvariants().length, 0, 'niezmienniki świata');
+    }));
+
+    test('F2 parytet: ta sama spółka w dwóch walutach (kurs ×50) ma te same wyniki z dokładnością do skali', () => {
+        const mkIssuer = k => {
+            const i = { id: 'PX', kind: 'share', country: 'DE', currency: 'EUR', sector: 'Przemysł', sectors: [['Przemysł', 1]], vol: 1, special: null, state: false, giant: false, shares: 1_000_000, statePack: 0, float: 1_000_000, price: 100 * k, history: [100 * k], ema: 100 * k, holders: {}, sp: 0 };
+            ensureForeignCompany(i); i.ceo = null; i.marginAdj = 0.05; i.valuationGap = 1; i.growthBase = 0; return i;
+        };
+        const A = mkIssuer(1), B = mkIssuer(50), stA = { treasury: 0 }, stB = { treasury: 0 }, q0 = macro.quarter;
+        withSeededRandom(5, () => initializeFundamentals(A, true)); withSeededRandom(5, () => initializeFundamentals(B, true));
+        const run = (i, s) => withSeededRandom(11, () => { for (let k = 0; k < 4; k++) { macro.quarter++; runForeignReport(i, s); } });
+        run(A, stA); macro.quarter = q0; run(B, stB); macro.quarter = q0;
+        assertNear(B.fundamentals.revenueTtm / A.fundamentals.revenueTtm, 50, 'przychód ×50', 1e-6);
+        assertNear(B.fundamentals.epsTtm / A.fundamentals.epsTtm, 50, 'EPS ×50', 1e-6);
+        assertNear(stB.treasury / stA.treasury, 50, 'podatek do skarbu kraju ×50', 1e-6);
+    });
+
+    test('F2: CIT i dotacje idą do skarbu kraju, skarb PL bez zmian', () => withYY(() => {
+        const g0 = governmentTreasury;
+        withSeededRandom(3, () => { for (let k = 0; k < 4; k++) quarter(); });
+        assertEq(governmentTreasury, g0, 'skarb PL'); assert(countryState.YY.treasury !== 0, 'skarb kraju zmienia się');
+    }));
+
+    test('F2: dywidenda — gracz dostaje walutę spółki po podatku u źródła, spółka traci gotówkę i zyski zatrzymane, pakiet państwa idzie do skarbu kraju', () => withYY(() => {
+        const a = foreignIssuers.YA1, st = countryState.YY;
+        a.holders.player = 100_000; setCompanyDividendPolicy(a, 'Total'); a.dividendPayoutRatio = 1; a.cash = 1e9;
+        const cash0 = a.cash, eq0 = a.balanceSheet.retainedEarnings, ccy0 = getCurrencyCash('player', 'EUR');
+        const paid = payForeignDividend(a, st, 5_000_000);
+        assert(paid > 0 && a.cash === cash0 - paid && a.balanceSheet.retainedEarnings === eq0 - paid, 'wypłata z gotówki i zysków zatrzymanych');
+        assertNear(getCurrencyCash('player', 'EUR') - ccy0, 100_000 * (paid / a.shares) * (1 - getForeignWithholding('YY')), 'dywidenda gracza netto', 1e-6);
+        const d = foreignIssuers.YD1; d.cash = 1e9; d.dividendPayoutRatio = 1; const t0 = st.treasury;
+        payForeignDividend(d, st, 2_000_000); assert(st.treasury > t0, 'pakiet państwa → skarb kraju');
+        assertEq(payForeignDividend(a, st, -1000), 0, 'strata: brak dywidendy');
+        assert(a.divYield > 0, 'stopa wypłat obniża dryf ceny (zwrot całkowity bez podwójnego liczenia)');
+    }));
+
+    test('F2: split — progi w złotych po kursie, posiadacze × współczynnik, wartość pozycji bez zmian, float = akcje − pakiet; konsolidacja wypłaca ułamek', () => withYY(() => {
+        const a = foreignIssuers.YA1;
+        a.price = fromPln(2500, 'EUR'); a.holders.player = 1000; const value = a.holders.player * a.price, sharesBefore = a.shares;
+        applyForeignShareChange(a, 5);
+        assertEq(a.holders.player, 5000, 'posiadacz ×5'); assertEq(a.shares, sharesBefore * 5, 'akcje ×5'); assertNear(a.holders.player * a.price, value, 'wartość pozycji', 1e-6);
+        assertEq(a.statePack + a.float, a.shares, 'float'); assertEq(checkForeignCompanyInvariants().length, 0, 'niezmienniki');
+        const b = foreignIssuers.YC1; b.price = fromPln(500, 'EUR'); assert(getSplitProposal(toPln(b.price, 'EUR')) === null, 'kurs 500 zł: bez splitu');
+        b.price = fromPln(1500, 'EUR'); assertEq(getSplitProposal(toPln(b.price, 'EUR')).kind, 'split', '1500 zł → split');
+        b.price = fromPln(0.4, 'EUR'); b.holders.player = 7; const ccy0 = getCurrencyCash('player', 'EUR');
+        applyForeignShareChange(b, 0.1); assert(!b.holders.player, '7 akcji → 0 po konsolidacji 1:10'); assert(getCurrencyCash('player', 'EUR') > ccy0, 'ułamek wypłacony gotówką');
+    }));
+
+    test('F2: upadłość — państwowa dokapitalizowana, zwykła znika z wypłatą 2% wartości; gigant i Waschmabank chronieni', () => withYY(() => {
+        const st = countryState.YY, b = foreignIssuers.YB1, d = foreignIssuers.YD1;
+        d.balanceSheet.liabilities = d.balanceSheet.assets * 2; d.financialHealth = -5;
+        assertEq(maybeForeignBankruptcy(d, st), false, 'państwowa nie upada'); assert(d.balanceSheet.assets >= d.balanceSheet.liabilities, 'dokapitalizowana');
+        b.balanceSheet.liabilities = b.balanceSheet.assets * 2; b.financialHealth = -5; b.holders.player = 1000; const pln0 = playerCash, price = b.price;
+        const gone = withRand(0, () => maybeForeignBankruptcy(b, st));
+        assert(gone && !foreignIssuers.YB1, 'zwykła znika'); assertNear(playerCash - pln0, toPln(1000 * price * 0.02, 'EUR'), 'wypłata 2% wartości w PLN', 1e-6);
+        const g = foreignIssuers.YC1; g.giant = true; g.balanceSheet.liabilities = g.balanceSheet.assets * 2;
+        assertEq(withRand(0, () => maybeForeignBankruptcy(g, st)), false, 'gigant chroniony');
+    }));
+
+    test('F1: zapis — bilans, fundamenty, prezes i polityka przeżywają zapis; zapis v17 (bez pola c) buduje model z ceny; wiersz spółki < 3 KB', () => withYY(() => {
+        withSeededRandom(9, () => { for (let k = 0; k < 8; k++) quarter(); });
+        const a = foreignIssuers.YA1, snap = JSON.parse(JSON.stringify(getCountriesSnapshot()));
+        const eq = a.balanceSheet.assets - a.balanceSheet.liabilities, name = a.ceo.name, eps = a.fundamentals.epsTtm, pol = a.dividendPolicy;
+        const bytes = JSON.stringify(snap.issuers.YA1.c).length; assert(bytes < 3000, `wiersz spółki ${bytes} B`);
+        applyCountriesSnapshot(snap); const b = foreignIssuers.YA1;
+        assertNear(b.balanceSheet.assets - b.balanceSheet.liabilities, eq, 'kapitał własny', 1e-3); assertEq(b.ceo.name, name, 'prezes'); assertNear(b.fundamentals.epsTtm, eps, 'EPS TTM', 1e-3); assertEq(b.dividendPolicy, pol, 'polityka');
+        for (const row of Object.values(snap.issuers)) delete row.c; // zapis v17
+        resetGdrState(); applyCountriesSnapshot(snap); const c = foreignIssuers.YA1; assert(c.balanceSheet && c.cash > 0 && !c.fundamentals, 'v17: model z ceny, fundamenty przy pierwszym raporcie');
+        quarter(); assert(foreignIssuers.YA1.fundamentals, 'po kwartale są fundamenty'); assertEq(checkWorldInvariants().length, 0, 'niezmienniki po migracji');
+        assertEq(SAVE_FORMAT_VERSION, 18, 'wersja zapisu'); assert(SUPPORTED_SAVE_VERSIONS.includes(17), 'v17 nadal wczytywany');
+    }));
+
+    test('F2: prezes po 65. roku odchodzi (nowa osoba, cecha kraju z definicji)', () => withYY(() => {
+        const a = foreignIssuers.YA1; a.ceo.age = 70; const old = a.ceo.name;
+        withRand(0, () => stepForeignCeo(a)); assert(a.ceo.age < 70 && a.ceo.name !== old, 'nowy prezes');
+    }));
 });
 
 runAllTests();

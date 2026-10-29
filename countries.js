@@ -90,6 +90,7 @@ function createCountryIssuer(countryDef, c) {
     if (!existing) foreignIssuers[c.id] = issuer;
     issuer.ema = issuer.ema || issuer.price;
     issuer.sp = issuer.sp || 0;
+    if (typeof ensureForeignCompany === 'function') ensureForeignCompany(issuer); // 0.16.7: pełny model spółki (foreign_companies.js)
     return issuer;
 }
 
@@ -206,7 +207,7 @@ function stepCountryIssuer(issuer, def, st, regime, homeZ, countryZ) {
     const sigma = COUNTRY_RULES.volScale * beta * issuer.vol * fx.volMult / Math.sqrt(52);
     const premiumDrift = COUNTRY_RULES.premiumDrift * regime.premium * (regime.premium < 0 ? fx.bearDamp : 1);
     const rateDrift = -COUNTRY_RULES.rateDrift * rateSens * (st.rate - def.rateMean);
-    const drift = (COUNTRY_RULES.driftYear + premiumDrift + rateDrift + fx.drift) / 52;
+    const drift = (COUNTRY_RULES.driftYear + premiumDrift + rateDrift + fx.drift - (issuer.divYield || 0)) / 52; // 0.16.7: dywidenda wypłacana osobno, więc dryf ceny o tyle niższy (zwrot całkowity bez zmian)
     const a = Math.sqrt(0.5) * def.rho, b = Math.sqrt(0.5) * Math.sqrt(1 - def.rho * def.rho), c = Math.sqrt(0.5);
     const shock = sigma * (a * homeZ + b * countryZ + c * normalFx());
     // premia szoków sektorowych: cena dąży do wartości z udziałem szoku (zmiana premii przechodzi w cenę)
@@ -343,8 +344,9 @@ function processCountriesQuarterly() {
         stepCountryRate(id);
         for (const issuer of getCountryIssuers(id)) {
             applySpecialEvents(issuer);
-            if (issuer.state) st.treasury += issuer.statePack * issuer.price * 0.005; // dywidenda państwowa ≈ 2%/rok do licznika „skarbu kraju” (tylko wgląd)
+            if (issuer.state && !issuer.fundamentals) st.treasury += issuer.statePack * issuer.price * 0.005; // dywidenda państwowa ≈ 2%/rok do licznika „skarbu kraju” (tylko wgląd); od 0.16.7 realna dywidenda w foreign_companies.js
         }
+        if (typeof processForeignCompaniesQuarterly === 'function') processForeignCompaniesQuarterly(id); // 0.16.7 F2: raporty, dywidendy, splity, prezesi, upadłości
         maybeCountryDebut(id);
         if (typeof processForeignBotsQuarterly === 'function') processForeignBotsQuarterly(id);
     }
@@ -370,6 +372,7 @@ function checkCountryInvariants() {
         if (!countryState[issuer.country]) problems.push(`spółka ${issuer.id} w kraju niedołączonym ${issuer.country}`);
         if (issuer.state && getGdrFree(issuer) < -1e-6) problems.push(`pakiet państwa ${issuer.id} naruszony`);
     }
+    if (typeof checkForeignCompanyInvariants === 'function') problems.push(...checkForeignCompanyInvariants());
     if (typeof checkForeignBotInvariants === 'function') problems.push(...checkForeignBotInvariants());
     if (typeof checkLinkInvariants === 'function') problems.push(...checkLinkInvariants());
     return problems;
@@ -387,6 +390,8 @@ function getCountriesSnapshot() {
         if (i.vintage) row.v = i.vintage;
         if (i.tradeHalted) row.th = 1;
         if (i.oversightResale) row.or = i.oversightResale.until;
+        const company = typeof getForeignCompanySnapshot === 'function' ? getForeignCompanySnapshot(i) : undefined;
+        if (company) row.c = company; // 0.16.7: bilans, wyniki, dywidenda, prezes
         if (i.generated) row.g = { name: i.name, sector: i.sectors.map(s => s[0]), subsector: i.subsector, country: i.country, currency: i.currency };
         issuers[i.id] = row;
     }
@@ -422,6 +427,7 @@ function applyCountriesSnapshot(snapshot) {
         if (row.v) issuer.vintage = String(row.v);
         if (row.th) issuer.tradeHalted = true;
         if (Number.isFinite(Number(row.or))) issuer.oversightResale = { until: Number(row.or) };
+        if (typeof applyForeignCompanySnapshot === 'function') applyForeignCompanySnapshot(issuer, row.c); // zapis v17 (bez `c`): model z ceny
         issuer.holders = {};
         for (const [holder, qty] of Object.entries(row.o || {})) if (Number(qty) > 0) issuer.holders[holder] = Number(qty);
     }
