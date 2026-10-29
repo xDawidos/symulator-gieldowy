@@ -29,6 +29,7 @@ let isGamePaused = true;
 let currentlyDisplayedChartSymbol = null;
 let playerAccessLevel = 0; // Poziom dostępu do giełd
 let currentSortState = 'none'; // 'none', 'price_asc', 'price_desc'
+let countrySortState = 'none'; // 0.16.9: kolejność bloków krajów na liście akcji: 'none', 'asc', 'desc'
 let lastWeekStockPrices = {};
 
 
@@ -117,6 +118,11 @@ function togglePriceSort() {
     }
     console.log(`Nowy stan sortowania: ${currentSortState}`); // Log diagnostyczny
     displayStocks(getCurrentInputValues()); // Odśwież tabelę z nowym sortowaniem
+}
+
+function toggleCountrySort() {
+    countrySortState = countrySortState === 'none' ? 'asc' : countrySortState === 'asc' ? 'desc' : 'none';
+    displayStocks(getCurrentInputValues());
 }
 
 function initializeGameTimeRelatedVariables() {

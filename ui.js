@@ -1670,6 +1670,7 @@ function getCurrentInputValues() {
             values[stock.symbol] = inputElement.value;
         }
     });
+    document.querySelectorAll('input[data-linked-qty]').forEach(el => { values['f:' + el.id.replace('mkt-qty-', '')] = el.value; });
     return values;
 }
 
@@ -2174,6 +2175,7 @@ function displayStocks(previousInputValues = {}) {
     `;
   }
 
+  const domesticStart = stockTableBody.rows.length;
   // --- Pętla renderująca giełdy ---
   if (!internetTab) sortedExchanges.forEach(exchangeKey => {
     const exchange = exchanges[exchangeKey];
@@ -2236,6 +2238,17 @@ function displayStocks(previousInputValues = {}) {
     });
   });
 
+  // 0.16.9: kraje połączone na głównej liście; sortowanie „Kraj” porządkuje bloki (PL = spółki krajowe), nagłówek wyboru rynku zostaje na górze
+  if (selectedMarketOperator === 'GPW' && typeof buildLinkedStockBlocks === 'function') {
+    const linked = buildLinkedStockBlocks(previousInputValues);
+    if (linked.length) {
+      const blocks = [{ code: 'PL', rows: Array.from(stockTableBody.rows).slice(domesticStart) }, ...linked];
+      if (countrySortState !== 'none') blocks.sort((a, b) => a.code.localeCompare(b.code) * (countrySortState === 'asc' ? 1 : -1));
+      stockTableBody.append(...blocks.flatMap(b => b.rows));
+    }
+  }
+  const countryBtn = document.getElementById('table-country-sort');
+  if (countryBtn) { countryBtn.textContent = countrySortState === 'asc' ? 'Kraj ▲' : countrySortState === 'desc' ? 'Kraj ▼' : 'Kraj'; countryBtn.setAttribute('aria-pressed', String(countrySortState !== 'none')); }
   liveStockTableBody.replaceChildren(...stockTableBody.childNodes);
   const shownCount = document.getElementById('mkpi-active');
   if (shownCount) shownCount.textContent = liveStockTableBody.querySelectorAll('tr.stock-row').length; // 0.15.4 P1: licznik = wiersze listy

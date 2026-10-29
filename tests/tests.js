@@ -14013,3 +14013,52 @@ group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
         } finally { host.remove(); }
     });
 });
+
+group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
+    test('Lombard: strona w Internecie ma pełną obsługę (informacje + zastawy funduszu), TeamedUP nie ma wejścia, okno Lombardex zastąpione stroną', () => {
+        initFxState(); resetGdrState(); resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+        const host = document.createElement('div'); host.innerHTML = '<div id="net-lombard-body"></div>'; document.body.appendChild(host);
+        try {
+            renderLombardPage(); const html = host.innerHTML;
+            assert(/Lombardex/.test(html) && /Zastawy Twojego funduszu/.test(html) && document.getElementById('net-lombard-pawn'), 'strona Lombard z zastawami funduszu');
+            assert(!/TeamedUP/.test(html), 'opis bez TeamedUP');
+            assert(!/openPawnShopPanel/.test(renderTeamedUp.toString()), 'TeamedUP bez wejścia do Lombardu');
+            assert(!document.getElementById('pawnshop-modal'), 'osobne okno Lombardex usunięte');
+        } finally { host.remove(); }
+    });
+
+    function withLinkedTable(fn) {
+        const old = document.getElementById('stock-table-body'); if (old) old.id = 'stock-table-body-hidden'; // strona testów ma własną tabelę listy
+        const table = document.createElement('table'), body = document.createElement('tbody'); body.id = 'stock-table-body'; table.appendChild(body); document.body.appendChild(table);
+        const saved = { sort: currentSortState, filter: sectorFilterState, level: currentMarketLevel, owned: ownedOnlyFilter, country: countrySortState, op: selectedMarketOperator };
+        initFxState(); resetGdrState(); resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); playerCash = 5_000_000;
+        try {
+            sectorFilterState = { sector: 'all', subsector: null, secondary: false, type: 'all' }; currentMarketLevel = 'ALL'; ownedOnlyFilter = false; currentSortState = 'none'; countrySortState = 'none'; selectedMarketOperator = 'GPW';
+            joinCountry('DE'); joinCountry('CZ'); countryState.DE.link = 'intl'; countryState.CZ.link = 'intl';
+            return fn(body);
+        } finally { sectorFilterState = saved.filter; currentMarketLevel = saved.level; ownedOnlyFilter = saved.owned; currentSortState = saved.sort; countrySortState = saved.country; selectedMarketOperator = saved.op; table.remove(); if (old) old.id = 'stock-table-body'; resetGdrState(); initFxState(); }
+    }
+
+    test('Rynek połączony: spółki kraju połączonego są na głównej liście akcji (cena w PLN, kraj tekstem, Kup/Sprzedaj), a w Kantory24 nie ma listy akcji tego kraju', () => withLinkedTable(body => {
+        displayStocks();
+        const de = getCountryIssuers('DE')[0], row = body.querySelector(`tr.foreign-row[data-symbol="${getGdrSymbol(de)}"]`);
+        assert(row && row.dataset.country === 'DE', 'wiersz spółki DE na liście');
+        assert(row.textContent.includes(formatZl(toPln(de.price, de.currency), 2)) && /DE · EUR/.test(row.querySelector('.stock-meta').textContent), 'cena w PLN i kraj/waluta tekstem');
+        const before = getGdrHeld(de); document.getElementById(`mkt-qty-${de.id}`).value = '10'; marketsUiTrade(de.id, 'buy');
+        assertEq(getGdrHeld(de), before + 10, 'kupno z listy głównej tą samą funkcją co w Kantorze');
+        assert(!/asset-mini-table/.test(renderMarketsTab()) && /głównej liście akcji/.test(renderMarketsTab()), 'Kantory24: bez listy akcji kraju połączonego');
+        countryState.DE.link = null; assert(/asset-mini-table/.test(renderMarketsTab()), 'kraj z biletem nadal ma listę w Kantorze');
+    }));
+
+    test('Sortowanie po kraju: domyślnie PL, potem kraje w kolejności dołączenia; Kraj ▲/▼ porządkuje bloki; „tylko moje” i sortowanie kursu działają też na wierszach zagranicznych', () => withLinkedTable(body => {
+        const blocks = () => { const out = []; for (const r of body.rows) { const k = r.classList.contains('linked-market-header') ? r.textContent.match(/\(([A-Z]{2})\)/)[1] : r.classList.contains('stock-row') ? (r.dataset.country || 'PL') : null; if (k && out[out.length - 1] !== k) out.push(k); } return out.join(); };
+        displayStocks(); assertEq(blocks(), 'PL,DE,CZ', 'domyślnie krajowe, potem kraje w kolejności dołączenia');
+        toggleCountrySort(); assertEq(countrySortState, 'asc'); assertEq(blocks(), 'CZ,DE,PL', 'rosnąco wg kodu kraju');
+        toggleCountrySort(); assertEq(blocks(), 'PL,DE,CZ', 'malejąco wg kodu kraju');
+        toggleCountrySort(); assertEq(countrySortState, 'none'); assertEq(blocks(), 'PL,DE,CZ', 'wyłączone sortowanie: kolejność domyślna');
+        ownedOnlyFilter = true; displayStocks(); assertEq(body.querySelectorAll('tr.foreign-row').length, 0, '„tylko moje”: brak posiadanych zagranicznych');
+        ownedOnlyFilter = false; currentSortState = 'price_desc'; displayStocks();
+        const px = [...body.querySelectorAll('tr.foreign-row[data-country="DE"]')].map(r => toPln(getCountryIssuers('DE').find(i => getGdrSymbol(i) === r.dataset.symbol).price, 'EUR'));
+        assert(px.length > 1 && px.every((v, k) => k === 0 || px[k - 1] >= v), 'kurs malejąco wewnątrz bloku kraju');
+    }));
+});
