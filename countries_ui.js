@@ -125,8 +125,8 @@ function renderLinkedStockRow(tbody, i, previous = {}) {
     row.insertCell().innerHTML = `<div class="availability-cell"><span class="availability-value">${formatNumberPl(free, 0)}</span></div>`;
     const own = row.insertCell(); own.className = 'cell-number'; own.innerHTML = held > 0 ? `<span class="owned-badge">${formatNumberPl(held, 0)}</span>` : '<span class="owned-zero">0</span>';
     const act = row.insertCell(); act.className = 'trade-actions-cell text-center';
-    act.innerHTML = `<input type="number" min="1" step="1" value="${escapeHtml(String(previous['f:' + i.id] ?? 100))}" id="mkt-qty-${i.id}" data-linked-qty aria-label="Liczba akcji ${escapeHtml(i.name)}" style="width:5em" ${free <= 0 ? 'disabled' : ''}>
-        <button class="btn-primary btn-sm" onclick="marketsUiTrade('${i.id}','buy')" ${free > 0 ? '' : 'disabled'}>Kup</button> <button class="btn-ghost btn-sm" onclick="marketsUiTrade('${i.id}','sell')" ${held > 0 ? '' : 'disabled'}>Sprzedaj</button>`;
+    act.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center;max-width:7.5em"><input type="number" min="1" step="1" value="${escapeHtml(String(previous['f:' + i.id] ?? 100))}" id="mkt-qty-${i.id}" data-linked-qty aria-label="Liczba akcji ${escapeHtml(i.name)}" style="width:100%" ${free <= 0 ? 'disabled' : ''}>
+        <button class="btn-primary btn-sm" onclick="marketsUiTrade('${i.id}','buy')" ${free > 0 ? '' : 'disabled'}>Kup</button> <button class="btn-ghost btn-sm" onclick="marketsUiTrade('${i.id}','sell')" ${held > 0 ? '' : 'disabled'}>Sprzedaj</button></div>`;
     return row;
 }
 
