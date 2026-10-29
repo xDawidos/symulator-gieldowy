@@ -12401,7 +12401,7 @@ group('0.16.2', () => {
 
     // --- G6: Niemcy, USA, Czechy ---
     const REAL_COUNTRIES = () => ['DE', 'US', 'CZ'].filter(id => COUNTRY_DEFS[id]);
-    const COUNTRY_COUNTS = { DE: [49, 8], US: [16, 4], CZ: [8, 1] }; // zwykłe + państwowe (załącznik B)
+    const COUNTRY_COUNTS = { DE: [36, 7], US: [16, 4], CZ: [8, 1] }; // zwykłe + państwowe (załącznik B)
 
     test('G6: dane krajów są spójne — liczby spółek z załącznika B, sektory i podsektory z rejestru, waluty, banki w Bankowości, giganci zgodni z gdr.js', () => {
         assert(REAL_COUNTRIES().length >= 1, 'jakiś kraj zdefiniowany');
@@ -14172,6 +14172,24 @@ group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
             const rep = applySaveSnapshot(old); assert(rep.ok, 'v20 się wczytuje: ' + rep.errors.join('; ')); assertEq(getBaseCurrency(), 'PLN', 'stary zapis = PLN');
             assert(FOREIGN_CURRENCIES.includes('EUR') && !FOREIGN_CURRENCIES.includes('PLN'), 'lista walut po migracji');
         } finally { initFxState(); resetGdrState(); startNewCareer({}); syncBaseCurrency(); }
+    });
+
+    test('0.16.11 K1: banki komercyjne kraju startu — start z DE dodaje 5 niemieckich banków (aktywne, notowane, kredyty działają), PL bez zmian', () => {
+        initFxState(); resetGdrState();
+        try {
+            resetWorld([mk156('CTX', { price: 90 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+            const before = commercialBanks.length; setStartCountry('PL'); assertEq(commercialBanks.length, before, 'PL: bez nowych banków');
+            resetGdrState(); resetWorld([mk156('CTX', { price: 90 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+            initializeCommercialBanks(); const n0 = commercialBanks.length;
+            setStartCountry('DE');
+            assertEq(commercialBanks.length, n0 + 5, '5 banków DE'); setStartCountry('DE'); assertEq(commercialBanks.length, n0 + 5, 'idempotentne');
+            for (const sym of ['CBK', 'SPK', 'VBK', 'IBK', 'DGH']) {
+                const st = stocks.find(x => x.symbol === sym); assert(st && st.isBankStock && getCompanyOrigin(st) === 'DE', `${sym}: notowany bank niemiecki`);
+                const b = commercialBanks.find(x => x.id === st.bankData.id); assert(b && b.isActive && b.cash > 0, `${sym}: aktywny bank komercyjny`);
+            }
+            assert(!COUNTRY_DEFS.DE.companies.some(c => ['CBK', 'SPK', 'VBK', 'IBK', 'DGH'].includes(c.id)), 'brak duplikatu w spółkach zagranicznych DE');
+            assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+        } finally { resetGdrState(); }
     });
 
     test('0.16.10 S0c: wybór kraju — karta kraju, lista zgodna z START_PLAYABLE, globus nie otwiera się w testach (bez WebGL), ekran wyboru: JP („wkrótce”) nie do potwierdzenia, callback z krajem', () => {
