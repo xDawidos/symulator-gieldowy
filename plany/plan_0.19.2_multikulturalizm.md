@@ -17,10 +17,15 @@ Start w innym kraju ma być inną grą, a nie polską grą z inną walutą. Każ
 7. **Nowe instytucje dla wszystkich państw:** wspólne instytucje (np. banki rozwoju, fundusze emerytalne, agencje nadzoru i antymonopolowe, izby handlowe) dostępne w każdym kraju w wersji z lokalną nazwą i parametrami; ich lista do ustalenia z użytkownikiem.
 8. **Greenfield i brownfield oraz poziomy obecności w miejsce przejmowania giełdy:** zamiast obecnej mechaniki „przejęcie giełdy zagranicznej” (0.16.3 wariant B) inwestycje typu **greenfield** (budowa od zera: biuro, fabryka, oddział funduszu) i **brownfield** (przejęcie lub rozbudowa istniejącego), a obecność w kraju ma **poziomy** (brak, biuro, oddział, spółka zależna, pełna obecność) odblokowujące kolejne możliwości (handel, instytucje, politykę, spółki krajowe). Wymaga decyzji, co z istniejącym połączeniem giełd (zachować jako najwyższy poziom?).
 
-## Zależności i kolejność
+## Podział na wersje (decyzja użytkownika 2026-10-29)
+
+- **0.19.2 = wspólny silnik „flavour”:** konfiguracja kraju (`COUNTRY_DEFS`) rozszerzona o administrację (Landy/stany/kraje), motyw, zasady kraju, instytucje, poziomy obecności greenfield/brownfield (pkt 8) i przychylność per kraj (pkt 6), z Polską jako pierwszą implementacją na wspólnym silniku. Bez pełnej treści innych krajów.
+- **Każdy kraj ma własną wersję po 0.19.2:** 0.19.3 Niemcy (wzór: Landy, ład korporacyjny, firmy, badania, partie, wydarzenia, nazwy, boty, motyw), 0.19.4 USA, 0.19.5 Czechy, dalej Szwecja, Szwajcaria, Francja, Japonia, Chiny, Indie, Tajwan (kolejność do ustalenia). Każda wersja z pomiarem GIG ±1 pp i czasu kroku.
+- **Do czasu tych wersji gra zostaje przy uproszczonej mechanice krajów:** kraj startowy z 0.16.6/0.16.11 (firmy krajowe i uniwersalne, waluta konta, giełda macierzysta), połączone giełdy i bilety z 0.16.2–0.16.3, stały profil społeczeństwa z 0.19.1 decyzja 1/4. Bez Landów, własnych partii i instytucji kraju.
+
+## Zależności
 
 - Po 0.16.11 (zestawy firm i waluta kraju startowego) i 0.19.1 (Polityka 2, uproszczone symulacje państw). Pkt 8 dotyka 0.16.3 (połączone giełdy), bilety/lotniska z 0.16.2 i `foreign_companies.js`.
-- Realizacja po jednym kraju (Niemcy najpierw); każdy kraj jako osobna wersja 0.19.2a, b, c… z pomiarem GIG ±1 pp i czasu kroku.
 
 ## Otwarte pytania
 
