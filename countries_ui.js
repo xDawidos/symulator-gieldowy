@@ -182,6 +182,6 @@ function onLinkEvent(entry) {
     const effects = entry.kind === 'taken'
         ? `<li>Opłaty za notowanie na GPW rosną ×${LINK_RULES.listingFeeMult}.</li><li>Kurs GPW spada o ok. ${Math.round(entry.drop * 100)}% w ${LINK_RULES.dropQuarters} kwartały.</li>`
         : '<li>Spółki kraju kupisz bez biletu, z prowizją krajową.</li>';
-    document.getElementById('link-event-body').innerHTML = `<p>${escapeHtml(entry.text)}</p><ul class="text-sm">${effects}<li>Turystyka dostaje duży, malejący bonus.</li><li>Do gry wchodzą boty kraju, a jego waluta pojawia się w kantorze.</li></ul><div class="btn-row"><button class="btn-primary" onclick="closeModalFrom(this)">Rozumiem — wznów grę</button></div>`;
+    document.getElementById('link-event-body').innerHTML = `<p>${escapeHtml(entry.text)}</p><ul class="text-sm">${effects}</ul><div class="btn-row"><button class="btn-primary" onclick="closeModalFrom(this)">Rozumiem — wznów grę</button></div>`;
     modal.style.display = 'block';
 }
