@@ -5209,3 +5209,35 @@ body #internet-modal[data-country] .tab-btn.active { border-color: var(--net-acc
 @media (max-width: 900px) { .net-tied { grid-template-columns: 1fr; } .net-route { grid-template-columns: 1fr; } .net-rail { display: none; } }
 @media (prefers-reduced-motion: reduce) { .net-fav, .net-dest { transition: none; } }
 .net-post footer .btn-ghost, .net-dest footer .btn-primary { white-space: nowrap; }
+
+/* 0.16.6 S4: strona „Startupy” w Internecie — karty zamiast tabeli (ikona + tekst etapu, drabinka etapów, wąski ekran) */
+#startup-table, #startup-table tbody { display: block; width: 100%; }
+#startup-table thead { display: none; } /* etykiety kolumn są w data-label komórek */
+#startup-table tbody { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 290px), 1fr)); gap: 14px; }
+#startup-table tr.sc { display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1px solid var(--border-color); border-radius: 14px; background: var(--bg-elevated); }
+#startup-table tr.sc td { display: block; padding: 0; border: 0; }
+#startup-table tr.sc td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 4px; color: var(--text-muted); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+#startup-table tr.sc:hover { border-color: var(--accent-info); }
+#startup-table tr.sc-financial_complications { border-color: var(--color-warn); }
+#startup-table tr.sc-empty td { display: flex; align-items: center; gap: 8px; padding: 18px; color: var(--text-muted); grid-column: 1 / -1; }
+.sc-name-cell { display: flex !important; flex-direction: column; align-items: flex-start; gap: 8px; }
+.sc-name { font-size: 16px; }
+.sc-sym { margin-left: 6px; color: var(--text-muted); font-family: ui-monospace, Consolas, monospace; font-size: 12px; font-weight: 600; }
+.sc-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border-color); color: var(--accent-info); font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.sc-badge.sc-warn, .sc-financial_complications .sc-badge { color: var(--color-warn); border-color: var(--color-warn); }
+.sc-steps { display: flex; gap: 6px; margin: 0; padding: 0; list-style: none; flex-wrap: wrap; }
+.sc-steps li { display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 6px; border: 1px dashed var(--border-color); color: var(--text-muted); font-size: 12px; }
+.sc-steps li.done { border-style: solid; color: var(--color-up); }
+.sc-steps li.cur { border-style: solid; border-color: var(--accent-info); color: var(--accent-info); font-weight: 700; }
+.sc-pct { display: block; margin-top: 2px; color: var(--text-muted); font-size: 12px; }
+td.sc-actions { display: flex !important; flex-wrap: wrap; align-items: center; gap: 6px; }
+td.sc-actions[data-label]::before { flex-basis: 100%; }
+td.sc-actions input { width: 100px; min-width: 0; }
+td.sc-actions button { white-space: normal; margin: 0; }
+#startup-table button:focus-visible, #startup-table input:focus-visible { outline: 2px solid var(--accent-info); outline-offset: 2px; }
+#pool-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 14px; }
+.pool-sec { padding: 12px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-elevated); min-width: 0; overflow-x: auto; }
+.pool-sec h4 { margin: 0 0 6px; color: var(--text-muted); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+#pool-controls-container { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+#pool-contribution-amount { width: 180px; }
+@media (max-width: 520px) { #startup-table tbody { grid-template-columns: 1fr; } #pool-controls-container { width: 100%; } #pool-contribution-amount { flex: 1 1 100%; width: 100%; } }

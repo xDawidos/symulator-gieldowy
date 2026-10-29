@@ -1539,7 +1539,7 @@
                                 <p class="text-xs text-muted m-0" id="pool-status"></p>
                             </div>
                             <div class="bank-card-form" id="pool-controls-container">
-                                <input class="w-md" type="number" id="pool-contribution-amount" placeholder="Wpłać do puli">
+                                <input class="w-md" type="number" id="pool-contribution-amount" placeholder="Wpłać do puli" aria-label="Kwota wpłaty do puli (PLN)">
                                 <button onclick="contributeToInvestmentPool('player', document.getElementById('pool-contribution-amount').valueAsNumber)">Wpłać</button>
                                 <button class="btn-secondary" id="pool-withdraw-btn" onclick="withdrawFromPool(document.getElementById('pool-contribution-amount').valueAsNumber || investmentPool.contributors.player || 0)" title="Wycofuje niezainwestowane środki (kwota z pola albo całość); opłata 2% dla pozostałych uczestników">Wycofaj</button>
                                 <button class="btn-secondary" id="open-autoinvest-modal-btn">Automat</button>

@@ -13660,6 +13660,23 @@ group('0.16.6 Domknięcie', () => {
         const plain = mk156('PLN', { price: 100 }); stocks.push(plain);
         assert(moveStockToMarket(plain, 'NH', 'test'), 'zwykła spółka może zmienić rynek');
     });
+    test('S4: strona Startupy — karta z plakietką etapu (ikona + tekst), drabinką i etykietami; mechanika bez zmian', () => {
+        fresh();
+        const host = document.createElement('div');
+        host.innerHTML = '<div id="startup-incubator-panel"><table id="startup-table"><tbody id="startup-table-body"></tbody></table></div>';
+        document.body.appendChild(host);
+        try {
+            const st = mk156('STX', { price: 5, assetType: 'Startup', stage: 'development', developmentProgress: 40, fundingGoal: 10000, currentFunding: 10000, investors: {} });
+            stocks.push(st);
+            displayStartups();
+            const row = document.querySelector('#startup-table-body tr.sc-development');
+            assert(row && /Rozwój/.test(row.textContent) && row.querySelector('.sc-badge svg'), 'plakietka etapu z ikoną i tekstem');
+            assertEq(row.querySelector('.sc-steps li.cur').textContent.trim(), 'Rozwój', 'bieżący etap w drabince');
+            assert(row.querySelector('.sc-steps li.cur[aria-current="step"]'), 'aria-current');
+            assert([...row.querySelectorAll('td')].slice(1).every(td => td.dataset.label), 'etykiety komórek');
+            assertEq(stocks.find(s => s.symbol === 'STX').stage, 'development', 'etap nietknięty');
+        } finally { host.remove(); }
+    });
 });
 
 runAllTests();

@@ -3366,6 +3366,16 @@ function openDividendTrackerModal() {
     modal.style.display = 'flex'; // ważne! nie 'block', bo w CSS masz flex
 }
 
+/** S4: etapy startupu na stronie Startupy — drabinka Zbiórka → Rozwój → Rynek (tylko prezentacja). */
+const STARTUP_STEPS = ['Zbiórka', 'Rozwój', 'Rynek'];
+const STARTUP_STAGE_INFO = {
+    funding: { label: 'Zbiórka', icon: 'moneta', step: 0 },
+    overfunding: { label: 'Nadsubskrypcja', icon: 'wzrost', step: 0 },
+    development: { label: 'Rozwój', icon: 'atom', step: 1 },
+    financial_complications: { label: 'Komplikacje', icon: 'alert', step: 1 },
+    awaitingListing: { label: 'Czeka na giełdę', icon: 'zegar', step: 2 }
+};
+
 function displayStartups(previousInputValues = {}) {
     const startupPanel = document.getElementById('startup-incubator-panel');
     const startupTableBody = document.getElementById('startup-table-body');
@@ -3380,6 +3390,8 @@ function displayStartups(previousInputValues = {}) {
     const startups = stocks.filter(s => s.assetType === 'Startup');
     startupTableBody.innerHTML = '';
 
+    startupTableBody.setAttribute('role', 'list');
+    if (!startups.length) startupTableBody.innerHTML = `<tr class="sc-empty"><td>${uiIcon('rakieta', 18)} Brak startupów w inkubatorze — nowe pojawiają się co jakiś czas.</td></tr>`;
     startups.forEach(startup => {
         const row = startupTableBody.insertRow();
 
@@ -3404,26 +3416,38 @@ function displayStartups(previousInputValues = {}) {
             row.title = 'UWAGA! Ten start-up to prawdopodobnie oszustwo!';
         }
 
-        // Komórka 1: Nazwa
+        // Komórka 1: Nazwa, plakietka etapu i drabinka etapów (S4: ikona + tekst, kolor nie jest jedynym nośnikiem)
+        row.className = `sc sc-${startup.stage}`;
+        row.setAttribute('role', 'listitem');
         const nameCell = row.insertCell();
-        let nameHTML = `${startup.name} (${startup.symbol})`;
-        if (startup.isPrivatized) {
-            nameHTML += ` <span title="Projekt sprywatyzowany. Sukces gwarantowany, ale możliwe komplikacje.">${uiIcon('firma', 14)}</span>`;
-        }
-        nameHTML += ` <button onclick="openInvestorsModal('${startup.symbol}')" class="ml-2 btn-xs text-sm">${uiIcon('ranking', 14)} Ranking</button>`;
+        nameCell.className = 'sc-name-cell';
+        const stageInfo = STARTUP_STAGE_INFO[startup.stage] || { label: startup.stage || '—', icon: 'info', step: 0 };
+        let nameHTML = `<span class="sc-badge">${uiIcon(stageInfo.icon, 14)} ${stageInfo.label}</span>`;
+        if (startup.isScamDetected) nameHTML += ` <span class="sc-badge sc-warn">${uiIcon('alert', 14)} Podejrzenie oszustwa</span>`;
+        if (startup.isPrivatized) nameHTML += ` <span class="sc-badge" title="Projekt sprywatyzowany. Sukces gwarantowany, ale możliwe komplikacje.">${uiIcon('firma', 14)} Prywatyzacja</span>`;
+        nameHTML += `<strong class="sc-name">${escapeHtml(startup.name)} <span class="sc-sym">${escapeHtml(startup.symbol)}</span></strong>`;
+        nameHTML += `<ol class="sc-steps" aria-label="Etap: ${stageInfo.label} (${stageInfo.step + 1} z ${STARTUP_STEPS.length})">${STARTUP_STEPS.map((label, i) => `<li class="${i < stageInfo.step ? 'done' : i === stageInfo.step ? 'cur' : ''}"${i === stageInfo.step ? ' aria-current="step"' : ''}>${i < stageInfo.step ? uiIcon('ok', 12) : ''}${label}</li>`).join('')}</ol>`;
+        nameHTML += `<button type="button" onclick="openInvestorsModal('${startup.symbol}')" class="btn-xs text-sm sc-rank" aria-label="Ranking inwestorów: ${escapeHtml(startup.name)}">${uiIcon('ranking', 14)} Ranking</button>`;
         nameCell.innerHTML = nameHTML;
 
         // Komórka 2: Cel Finansowania
-        row.insertCell().textContent = `${startup.fundingGoal.toLocaleString('pl-PL')} PLN`;
+        const goalCell = row.insertCell();
+        goalCell.dataset.label = 'Cel finansowania';
+        goalCell.textContent = `${startup.fundingGoal.toLocaleString('pl-PL')} PLN`;
 
         // Komórki 3, 4 i 5
         const fundingCell = row.insertCell();
         const progressCell = row.insertCell();
         const actionsCell = row.insertCell();
+        fundingCell.dataset.label = 'Postęp finansowania';
+        progressCell.dataset.label = 'Postęp rozwoju';
+        actionsCell.dataset.label = 'Akcje';
+        actionsCell.classList.add('sc-actions');
 
         const amountInput = document.createElement('input');
         amountInput.type = 'number';
         amountInput.placeholder = 'Kwota';
+        amountInput.setAttribute('aria-label', `Kwota inwestycji w ${startup.name}`);
         amountInput.classList.add('w-sm');
         amountInput.id = `invest-amount-${startup.symbol}`;
         amountInput.value = previousInputValues[startup.symbol] || '';
@@ -3458,6 +3482,7 @@ function displayStartups(previousInputValues = {}) {
                 const autoInvestButton = document.createElement('button');
                 autoInvestButton.innerHTML = uiIcon('odswiez', 14);
                 autoInvestButton.title = 'Ustaw automatyczne inwestowanie';
+                autoInvestButton.setAttribute('aria-label', `Automat inwestycji: ${startup.name}`);
                 autoInvestButton.classList.add('ml-1');
                 if (autoInvestSettings && autoInvestSettings.isEnabled) {
                     autoInvestButton.style.borderColor = 'var(--color-up)';
@@ -3536,6 +3561,7 @@ function displayStartups(previousInputValues = {}) {
                 const autoInvestButton = document.createElement('button');
                 autoInvestButton.innerHTML = uiIcon('odswiez', 14);
                 autoInvestButton.title = 'Ustaw automatyczne inwestowanie';
+                autoInvestButton.setAttribute('aria-label', `Automat inwestycji: ${startup.name}`);
                 autoInvestButton.classList.add('ml-1');
                 if (autoInvestSettings && autoInvestSettings.isEnabled) {
                     autoInvestButton.style.borderColor = 'var(--color-up)'; // Zielona ramka dla aktywnych
@@ -3557,6 +3583,12 @@ function displayStartups(previousInputValues = {}) {
 
                 break;
             }
+        }
+
+        for (const bar of row.querySelectorAll('progress')) {
+            const pct = bar.max > 0 ? Math.round(bar.value / bar.max * 100) : 0;
+            bar.setAttribute('aria-label', `${bar.parentElement.dataset.label}: ${pct}%`);
+            if (bar.parentElement === fundingCell || bar.parentElement === progressCell) bar.insertAdjacentHTML('afterend', `<span class="sc-pct">${pct}%</span>`);
         }
 
         // Ubezpieczenie (Logika Poziomu 4)
@@ -3681,12 +3713,12 @@ function renderPoolDetails() {
     });
     const history = (investmentPool.history || []).map(h => `<li><span class="text-muted">kw. ${h.quarter ?? '—'}</span> ${POOL_KIND_LABELS[h.kind] || ''} ${escapeHtml(h.text || '')}</li>`);
     el.innerHTML = `
-        <h4>Niezainwestowane</h4>
-        <p>Razem: <strong>${fmtZl(investmentPool.totalFunds)}</strong> · Twoje: <strong>${fmtZl(free)}</strong></p>
-        <h4>W startupach</h4>
+        <section class="pool-sec"><h4>Niezainwestowane</h4>
+        <p>Razem: <strong>${fmtZl(investmentPool.totalFunds)}</strong> · Twoje: <strong>${fmtZl(free)}</strong></p></section>
+        <section class="pool-sec"><h4>W startupach</h4>
         ${rows.length ? `<table class="w-full text-sm"><thead><tr><th>Startup</th><th>Etap</th><th>Kwota puli</th><th>Twój udział</th></tr></thead><tbody>${rows.join('')}</tbody></table>` : '<p class="text-muted">Pula nie ma teraz wkładów w startupach.</p>'}
-        <h4>Ostatnie rozliczenia (Twój udział)</h4>
-        ${history.length ? `<ul class="text-sm">${history.join('')}</ul>` : '<p class="text-muted">Brak rozliczeń.</p>'}`;
+        </section><section class="pool-sec"><h4>Ostatnie rozliczenia (Twój udział)</h4>
+        ${history.length ? `<ul class="text-sm">${history.join('')}</ul>` : '<p class="text-muted">Brak rozliczeń.</p>'}</section>`;
 }
 
 // --- NOWY FRAGMENT - FUNKCJE DLA MODALA AUTO-INWESTOWANIA ---
