@@ -16,7 +16,8 @@ const GLOBE_COUNTRIES = {
     CN: { a3: 'CHN', capital: 'Pekin', lat: 35.0, lng: 103.0 }, IN: { a3: 'IND', capital: 'Nowe Delhi', lat: 22.5, lng: 79.0 },
     TW: { a3: 'TWN', capital: 'Tajpej', lat: 23.7, lng: 121.0 }
 };
-const GLOBE_ASSETS = { lib: 'lib/globe.gl.min.js', night: 'img/globus/earth-night.jpg', bump: 'img/globus/earth-topology.png', sky: 'img/globus/night-sky.png', geo: 'data/kraje.geojson' };
+// Wszystko jako skrypty (bez fetch i zapytań cross-origin), więc działa też przy otwarciu gry z dysku (file://). Tekstury: data-URI, tło nieba: kolor.
+const GLOBE_ASSETS = [['lib/globe.gl.min.js', () => typeof Globe === 'function'], ['data/kraje.js', () => window.GLOBE_GEO], ['img/globus/tekstury.js', () => window.GLOBE_TEXTURES]];
 const GLOBE_HOME_VIEW = { lat: 30, lng: 15, altitude: 2.4 };
 
 let globeInstance = null;
@@ -30,11 +31,12 @@ function canUseGlobe() {
     try { const c = document.createElement('canvas'); return Boolean(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { return false; }
 }
 
-function loadScriptOnce(src) {
+/** Wczytuje skrypt, jeśli jego dane nie są jeszcze w oknie (`loaded()`); błąd mówi, którego pliku brakuje. */
+function loadScriptOnce(src, loaded) {
     return new Promise((resolve, reject) => {
-        if (typeof Globe === 'function') return resolve();
+        if (loaded()) return resolve();
         const s = document.createElement('script');
-        s.src = src; s.onload = () => resolve(); s.onerror = () => reject(new Error(`Nie wczytano ${src}`));
+        s.src = src; s.onload = () => (loaded() ? resolve() : reject(new Error(`Skrypt ${src} nie ustawił danych`))); s.onerror = () => reject(new Error(`Nie wczytano ${src}`));
         document.head.appendChild(s);
     });
 }
@@ -123,14 +125,14 @@ async function showCountryGlobe(onPick) {
     globeOverlay.querySelector('.cg-item.selected')?.focus();
     if (!webgl) { const st = globeOverlay.querySelector('#cg-status'); if (st) st.textContent = 'Globus 3D niedostępny (brak WebGL) — wybierz kraj z listy obok.'; return true; }
     try {
-        await loadScriptOnce(GLOBE_ASSETS.lib);
-        const geo = await (await fetch(GLOBE_ASSETS.geo)).json();
+        for (const [src, loaded] of GLOBE_ASSETS) await loadScriptOnce(src, loaded);
+        const geo = window.GLOBE_GEO, tex = window.GLOBE_TEXTURES;
         if (!globeOverlay) return true; // zamknięto w trakcie ładowania
         const stage = globeOverlay.querySelector('#cg-stage'), accent = themeColor('--accent-primary', '#4da3ff'), byA3 = Object.fromEntries(ids.map(id => [GLOBE_COUNTRIES[id].a3, id]));
         stage.innerHTML = '';
         const selectedId = () => globeCurrent, idOf = f => byA3[f.properties.ADM0_A3];
         globeInstance = Globe()(stage).width(stage.clientWidth).height(stage.clientHeight)
-            .globeImageUrl(GLOBE_ASSETS.night).bumpImageUrl(GLOBE_ASSETS.bump).backgroundImageUrl(GLOBE_ASSETS.sky)
+            .globeImageUrl(tex.night).bumpImageUrl(tex.bump).backgroundColor('#02040a')
             .polygonsData(geo.features)
             .polygonCapColor(f => { const id = idOf(f); return !id ? 'rgba(255,255,255,0.03)' : id === selectedId() ? toRgba(accent, 0.75) : toRgba(accent, START_PLAYABLE.includes(id) ? 0.4 : 0.18); })
             .polygonSideColor(() => 'rgba(0,0,0,0.15)')
@@ -144,8 +146,9 @@ async function showCountryGlobe(onPick) {
         window.addEventListener('resize', resizeGlobe);
         syncCountryPicker(globeCurrent);
     } catch (e) {
+        console.warn('Globus wyboru kraju:', e);
         const st = globeOverlay?.querySelector('#cg-status');
-        if (st) st.textContent = 'Globus niedostępny (brak WebGL, sieci lub plików) — wybierz kraj z listy obok.';
+        if (st) st.textContent = `Globus nie wczytał się (${e && e.message || e}) — wybierz kraj z listy obok.`;
     }
     return true;
 }

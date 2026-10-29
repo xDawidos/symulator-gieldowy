@@ -14101,6 +14101,13 @@ group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
 
     test('0.16.10 S0c: wybór kraju — karta kraju, lista zgodna z START_PLAYABLE, globus nie otwiera się w testach (bez WebGL), ekran wyboru: JP („wkrótce”) nie do potwierdzenia, callback z krajem', () => {
         assert(!canUseGlobe(), 'testy nie ładują WebGL');
+        const runData = path => { const x = new XMLHttpRequest(); x.open('GET', path, false); x.send(); new Function(x.responseText)(); }; // jak <script>: skrypt ustawia zmienną globalną
+        try {
+            for (const [src] of GLOBE_ASSETS) if (!/globe\.gl/.test(src)) runData('../' + src);
+            const byA3 = new Set(window.GLOBE_GEO.features.map(f => f.properties.ADM0_A3));
+            for (const id of Object.keys(GLOBE_COUNTRIES)) assert(byA3.has(GLOBE_COUNTRIES[id].a3), `${id}: granice w data/kraje.js (ADM0_A3 ${GLOBE_COUNTRIES[id].a3})`);
+            assert(/^data:image\/jpeg;base64,/.test(window.GLOBE_TEXTURES.night) && /^data:image\/jpeg;base64,/.test(window.GLOBE_TEXTURES.bump), 'tekstury jako data-URI');
+        } finally { delete window.GLOBE_GEO; delete window.GLOBE_TEXTURES; }
         for (const id of START_PLAYABLE) assert(GLOBE_COUNTRIES[id], `${id}: dane globusu`);
         for (const id of Object.keys(GLOBE_COUNTRIES)) assert(START_COUNTRIES.some(c => c.id === id) && FLAG_NAMES[id], `${id}: kraj gry z flagą`);
         const de = renderGlobeCard('DE'), jp = renderGlobeCard('JP'), pl = renderGlobeCard('PL');
