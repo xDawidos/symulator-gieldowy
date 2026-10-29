@@ -13982,6 +13982,20 @@ group('0.16.8 Limity i zegar giełd', () => {
             assertEq(isGamePaused, paused, 'karta nie zmienia pauzy gry'); assertEq(document.querySelectorAll('.modal, [role="dialog"]').length >= 0, true);
         } finally { host.remove(); }
     });
+
+    test('F4: budżet — 10 krajów po 6,5 roku: zapis krajów ≤ 1,5 KB na spółkę i ≤ 250 tys. znaków (≈ +12% zapisu), kwartał krajów poniżej 100 ms, niezmienniki 0', () => {
+        const ids = ['DE', 'US', 'CZ', 'SE', 'CH', 'FR', 'JP', 'CN', 'IN', 'TW'].filter(id => COUNTRY_DEFS[id]);
+        initFxState(); resetGdrState(); resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+        const q0 = macro.quarter; let quarterMs = 0, quarters = 0;
+        try {
+            for (const id of ids) joinCountry(id);
+            withSeededRandom(31, () => { for (let q = 0; q < 26; q++) { for (let w = 0; w < 13; w++) { stepFxRates(); stepCountries(); } const t = performance.now(); macro.quarter++; processCountriesQuarterly(); quarterMs += performance.now() - t; quarters++; } });
+            const n = getForeignIssuerList().filter(i => i.kind === 'share').length, bytes = JSON.stringify(getCountriesSnapshot()).length;
+            addTable('F4: koszt pełnych spółek zagranicznych (10 krajów, 26 kw.)', ['Spółki', 'Zapis (B)', 'B na spółkę', 'ms na kwartał (kraje)'], [[n, bytes, Math.round(bytes / n), Math.round(quarterMs / quarters * 10) / 10]]);
+            assert(bytes / n <= 1500, `${Math.round(bytes / n)} B na spółkę`); assert(bytes <= 250_000, `${bytes} znaków`); assert(quarterMs / quarters < 100, `${Math.round(quarterMs / quarters)} ms na kwartał`);
+            assertEq(checkWorldInvariants().length, 0, 'niezmienniki po 6,5 roku'); assertEq(checkForeignCompanyInvariants().length, 0, 'niezmienniki spółek');
+        } finally { macro.quarter = q0; resetGdrState(); initFxState(); }
+    });
 });
 
 runAllTests();
