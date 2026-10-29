@@ -29,3 +29,8 @@ Gałąź `claude/impl-01611-3c96f1` (nie scalona, bez zmian w `zmiany-AI`/`main`
 6. **K3 (społeczeństwo, polityka, kryzysy kraju startowego) nie ruszone** — zakres XL (jak 0.13), zostaje na osobną wersję. Rynek macierzysty, partie, NBP/KNF pozostają polskie.
 7. Stare zapisy z startem z DE/US/CZ (v19–v20) wczytują się jako PLN z polskimi firmami (zgodnie z decyzją „stare zapisy = PL/PLN”).
 8. Do potwierdzenia: seria PL ×12 + baza ×12 nie rozstrzyga ±1 pp (wymagane ≥ 24 + 24 jak w 0.16.9); US/CZ tylko 6 gier.
+
+## Aktualizacja 2026-10-30: zestaw DE po decyzjach użytkownika
+- Zestaw odchudzony i przeprofilowany (przemysł, chemia, motoryzacja, energia, obronność, ubezpieczenia; 1 gaming): **48 firm krajowych** = 43 spółki giełdowe (36 zwykłych + 7 państwowych) + **5 banków komercyjnych** (CBK, SPK, VBK, IBK, DGH) z pełną mechaniką banków (`COUNTRY_BANK_DEFS`, `addCountryBanks`: aktywne i notowane od startu; kredyty w jednostkach gry, w UI EUR). Lista finalna i skreślenia: `plany/propozycja_firm_niemieckich.md`.
+- Testy 885/885. Seria start DE ×12 × 27 kw. ×200: GIG CAGR 10,4% ± 4,8 (mediana 9,3), marża 19,7%, zapis 1,92 mln znaków, 974 ms/kw.; niezmienniki 0, ujemna gotówka 0, błędy JS 0. W aplikacji (nowa gra, start DE): 63 akcje w rynku macierzystym, 5 niemieckich banków aktywnych, 43 spółki DE, 0 polskich, niezmienniki 0.
+- Pominięte: polskie banki UNI (6) zostają na rynku (decyzja 29.10); banki DE powstają tylko przy starcie z DE (przy dołączeniu Niemiec w trakcie gry jest tylko WAB); kredyty niemieckich banków sprawdzone jedynie pośrednio (niezmienniki serii), bez osobnego testu scenariusza kredytu.
