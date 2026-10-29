@@ -80,6 +80,8 @@ function renderCountryCard(id) {
             <div><dt>Spółki państwowe</dt><dd>${stateIssuers.length ? stateIssuers.map(i => escapeHtml(i.name)).join(', ') : 'brak'}${stateIssuers.length ? ` · skarb kraju (licznik): ${formatNumberPl(st.treasury, 0)} ${def.currency}` : ''}</dd></div>
             <div><dt>Pracownicy (profil kraju)</dt><dd>prawa ${escapeHtml(def.labour.rights)}, szansa związku ×${formatNumberPl(def.labour.unionMult, 1)}${def.labour.shadow ? `, szara strefa +${def.labour.shadow} pp` : ''}</dd></div>
             <div><dt>Nadzór</dt><dd>${escapeHtml(getOversight(id).name)} (poziom ${getOversight(id).level}/3), próg wezwania ${Math.round(getCallThreshold(id) * 100)}% głosów</dd></div>
+            <div><dt>Spółek na giełdzie</dt><dd>${getCountryIssuers(id).length} z limitu ${getCountryLimit(id)} (wielkość rynku ×${formatNumberPl(getCountryLimitMult(id), 2)} liczby startowej)</dd></div>
+            <div><dt>Sesja</dt><dd>${typeof getMarketStatus === 'function' ? getMarketStatus(id).text : '—'}</dd></div>
             <div><dt>Prowizja operatora</dt><dd>${formatNumberPl(getCountryCommission(id) * 100, 1)}% (z biletem)</dd></div>
         </dl></div>`;
 }
@@ -101,7 +103,7 @@ function renderMarketsTab() {
             <td class="text-right"><input type="number" min="1" step="1" value="100" id="mkt-qty-${i.id}" aria-label="Liczba akcji ${escapeHtml(i.name)}" style="width:5.5em" ${free <= 0 ? 'disabled' : ''}>
                 <button class="btn-primary btn-sm" onclick="marketsUiTrade('${i.id}','buy')" ${access && free > 0 ? '' : 'disabled'}>Kup</button> <button class="btn-ghost btn-sm" onclick="marketsUiTrade('${i.id}','sell')" ${held > 0 ? '' : 'disabled'}>Sprzedaj</button></td></tr>`;
     }).join('');
-    return `${renderLinksCard()}<div class="tab-buttons" role="group" aria-label="Rynki zagraniczne">${tabs}</div>
+    return `${typeof renderMarketClockCard === 'function' ? renderMarketClockCard() : ''}${renderLinksCard()}<div class="tab-buttons" role="group" aria-label="Rynki zagraniczne">${tabs}</div>
         ${renderCountryCard(id)}
         ${id === 'CH' ? renderHiddenCashCard() : ''}
         ${access ? '' : `<p class="text-sm" role="status">Brak biletu na ten rynek — kupowanie jest zablokowane (sprzedaż posiadanych akcji działa). Bilet kupisz w Internecie, na stronie Ferie i wakacje (${formatZl(getTicketPrice(id), 0)}).</p>`}

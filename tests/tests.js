@@ -12415,7 +12415,7 @@ group('0.16.2', () => {
             const def = COUNTRY_DEFS[id], domestic = stocks.length, navBefore = getFundAssets();
             joinCountry(id);
             assertEq(getCountryIssuers(id).length, def.companies.length, `${id}: spółki po dołączeniu`);
-            assertEq(getCountryLimit(id), Math.ceil(def.companies.length * 1.5), `${id}: limit`);
+            assertEq(getCountryLimit(id), Math.ceil(def.companies.length * getCountryLimitMult(id)), `${id}: limit (0.16.8: zależny od wielkości kraju)`);
             assertEq(stocks.length, domestic, `${id}: rynek krajowy bez zmian`);
             assertEq(getCountryIssuers(id).filter(i => i.state).length, COUNTRY_COUNTS[id][1], `${id}: spółki państwowe`);
             assert(getCountryIssuers(id).every(i => i.currency === def.currency && i.price > 0), `${id}: waluta i ceny`);
@@ -12884,7 +12884,7 @@ group('0.16.3', () => {
             joinCountry(id);
             assert(isCountryJoined(id), 'dołączył');
             assertEq(getCountryIssuers(id).length, def.companies.length, 'wszystkie spółki');
-            assertEq(getCountryLimit(id), Math.ceil(def.companies.length * COUNTRY_RULES.limitMult), 'limit 1,5 ×');
+            assertEq(getCountryLimit(id), Math.ceil(def.companies.length * getCountryLimitMult(id)), 'limit wg wielkości kraju (0.16.8)');
             const q0 = macro.quarter;
             for (let w = 0; w < 120; w++) { stepFxRates(); stepCountries(); if (w % 13 === 12) { macro.quarter++; processCountriesQuarterly(); } }
             macro.quarter = q0;
@@ -13917,6 +13917,71 @@ group('0.16.7 Pełne spółki zagraniczne', () => {
         const a = foreignIssuers.YA1; a.ceo.age = 70; const old = a.ceo.name;
         withRand(0, () => stepForeignCeo(a)); assert(a.ceo.age < 70 && a.ceo.name !== old, 'nowy prezes');
     }));
+});
+
+group('0.16.8 Limity i zegar giełd', () => {
+    test('F3: limit spółek rośnie z wielkością kraju (US najwyższy, CZ najniższy), mnożnik w zakresie, kraj bez wskaźnika dostaje 1,5×', () => {
+        const [lo, hi] = COUNTRY_RULES.limitMultRange;
+        assertNear(getCountryLimitMult('CZ'), lo, 'najmniejszy kraj = dolna granica', 1e-9); assertNear(getCountryLimitMult('US'), hi, 'największy = górna granica', 1e-9);
+        const order = ['CZ', 'SE', 'CH', 'TW', 'FR', 'IN', 'DE', 'JP', 'CN', 'US'];
+        for (let k = 1; k < order.length; k++) assert(getCountryLimitMult(order[k]) > getCountryLimitMult(order[k - 1]), `${order[k]} > ${order[k - 1]}`);
+        assertEq(getCountryLimit('US'), Math.ceil(COUNTRY_DEFS.US.companies.length * hi), 'limit US'); assert(getCountryLimit('US') > getCountryLimit('CZ'), 'US > CZ');
+        for (const id of Object.keys(COUNTRY_RULES.sizeIndex)) assert(getCountryLimit(id) >= COUNTRY_DEFS[id].companies.length, `${id}: limit nie poniżej liczby startowej`);
+        assertNear(getCountryLimitMult('ZZ'), COUNTRY_RULES.limitMult, 'kraj bez wskaźnika', 1e-9);
+    });
+
+    test('F3: debiut nie zwiększa udziału jednego sektora ponad 40% spółek giełdy kraju', () => {
+        COUNTRY_DEFS.WW = { id: 'WW', name: 'Wuland', currency: 'EUR', region: 'EU', rho: 0.7, rateMean: 0.03, operator: { id: 'WWX', name: 'W' }, labour: { rights: 'standard', unionMult: 1, shadow: 0, wages: 1 },
+            companies: [{ id: 'WA1', name: 'A', sector: 'Przemysł', kind: 'normal', price: 10 }, { id: 'WB1', name: 'B', sector: 'Przemysł', kind: 'normal', price: 10 }, { id: 'WC1', name: 'C', sector: 'Przemysł', kind: 'normal', price: 10 }, { id: 'WD1', name: 'D', sector: 'Żywność', kind: 'normal', price: 10 }] };
+        try {
+            initFxState(); resetGdrState(); resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+            joinCountry('WW'); countryState.WW.lastDebutQ = -99; COUNTRY_RULES.sizeIndex.WW = 10;
+            const real = Math.random; Math.random = () => 0; let debut;
+            try { debut = maybeCountryDebut('WW'); } finally { Math.random = real; }
+            assert(debut, 'debiut wystąpił'); assertEq(debut.sector, 'Żywność', 'przemysł ma już ≥ 40% — debiut z innego sektora');
+        } finally { delete COUNTRY_RULES.sizeIndex.WW; delete COUNTRY_DEFS.WW; resetGdrState(); initFxState(); }
+    });
+
+    test('F3b: godzina lokalna z czasu gry — doba = tydzień gry, strefy i czas letni (kw. 2–3; Sydney odwrotnie, Tokio bez zmiany)', () => {
+        const day = getMarketClockDayMs(), q0 = macro.quarter;
+        try {
+            macro.quarter = 0; // zima na północy
+            assertNear(getGameUtcHour(0), 0, 'UTC 0:00', 1e-9); assertNear(getGameUtcHour(day / 2), 12, 'pół doby = 12:00 UTC', 1e-9);
+            assertNear(getMarketLocalHour('PL', day / 2), 13, 'Warszawa zimą UTC+1', 1e-9); assertNear(getMarketLocalHour('US', day / 2), 7, 'Nowy Jork zimą UTC−5', 1e-9);
+            assertNear(getMarketLocalHour('AU', day / 2), 23, 'Sydney zimą północy = lato południa: UTC+11', 1e-9); assertNear(getMarketLocalHour('JP', day / 2), 21, 'Tokio UTC+9', 1e-9);
+            macro.quarter = 1; // lato na północy
+            assertNear(getMarketLocalHour('PL', day / 2), 14, 'Warszawa latem UTC+2', 1e-9); assertNear(getMarketLocalHour('US', day / 2), 8, 'Nowy Jork latem UTC−4', 1e-9);
+            assertNear(getMarketLocalHour('AU', day / 2), 22, 'Sydney latem północy UTC+10', 1e-9); assertNear(getMarketLocalHour('JP', day / 2), 21, 'Tokio bez zmiany', 1e-9);
+            assertNear(getMarketLocalHour('PL', day * 3 + day / 2), getMarketLocalHour('PL', day / 2), 'doba się powtarza', 1e-9);
+        } finally { macro.quarter = q0; }
+    });
+
+    test('F3b: sesja — otwarta/zamknięta i czas do zmiany; PL zawsze otwarta; dopłata poza sesją tylko dla rynków zagranicznych z sesją', () => {
+        const day = getMarketClockDayMs(), q0 = macro.quarter;
+        try {
+            macro.quarter = 0;
+            const at = (market, localHour) => { const def = MARKET_SESSIONS[market]; const utc = localHour - def.utc - (isMarketDst(def) ? 1 : 0); return (((utc % 24) + 24) % 24) / 24 * day; };
+            const open = getMarketStatus('DE', at('DE', 10)), closed = getMarketStatus('DE', at('DE', 20));
+            assert(open.open && Math.abs(open.hoursToChange - 7.5) < 1e-6 && /zamyka się za/.test(open.text), 'Frankfurt 10:00 otwarta, zamknięcie za 7,5 h');
+            assert(!closed.open && Math.abs(closed.hoursToChange - 13) < 1e-6 && /otwiera się za/.test(closed.text), 'Frankfurt 20:00 zamknięta, otwarcie za 13 h');
+            assert(!getMarketStatus('DE', at('DE', 9 - 1e-6)).open && getMarketStatus('DE', at('DE', 9)).open, 'granica otwarcia');
+            assert(getMarketStatus('home', 0).open && isMarketOpen('ZZ', 0), 'rynek macierzysty (home) i nieznane rynki zawsze otwarte'); assertEq(getOffHoursSurcharge('PL'), SESSION_RULES.offHoursSurcharge * (isMarketOpen('PL') ? 0 : 1), 'PL ma sesję na zegarze, ale handel krajowy nie podlega dopłacie z getCountryCommission');
+            const real = getGameClockMs; getGameClockMs = () => at('DE', 20);
+            try { assertNear(getOffHoursSurcharge('DE'), SESSION_RULES.offHoursSurcharge, 'dopłata poza sesją'); assertEq(getOffHoursSurcharge('ZZ'), 0, 'rynek bez sesji'); assertEq(getOffHoursSurcharge('GB'), 0, 'miasto tylko na zegarze'); getGameClockMs = () => at('DE', 10); assertEq(getOffHoursSurcharge('DE'), 0, 'w sesji bez dopłaty'); } finally { getGameClockMs = real; }
+        } finally { macro.quarter = q0; }
+    });
+
+    test('F3b: karta zegarów — 4 zegary analogowe z godziną i statusem tekstem, pas sesji z linią „teraz”; nie tworzy okna ani nie pauzuje gry', () => {
+        const paused = isGamePaused, host = document.createElement('div');
+        host.innerHTML = renderMarketClockCard(); document.body.appendChild(host);
+        try {
+            assertEq(host.querySelectorAll('.mclock').length, 4, 'zegary: Londyn, Nowy Jork, Sydney, Tokio');
+            assert([...host.querySelectorAll('.mclock svg')].every(svg => /\d\d:\d\d, (otwarta|zamknięta)/.test(svg.getAttribute('aria-label'))), 'aria-label z godziną i statusem');
+            assert([...host.querySelectorAll('.mclock figcaption')].every(f => /otwarta|zamknięta/.test(f.textContent)), 'status tekstem, nie samym kolorem');
+            assert(/teraz \d\d:\d\d/.test(host.querySelector('svg[aria-label^="Sesje"]').textContent), 'linia „teraz” opisana');
+            assertEq(isGamePaused, paused, 'karta nie zmienia pauzy gry'); assertEq(document.querySelectorAll('.modal, [role="dialog"]').length >= 0, true);
+        } finally { host.remove(); }
+    });
 });
 
 runAllTests();

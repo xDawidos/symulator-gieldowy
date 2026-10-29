@@ -11,7 +11,10 @@ const COUNTRY_RULES = {
     shares: 10_000_000,        // liczba akcji zwykłej spółki (giganci: giantShares)
     giantShares: 30_000_000,
     statePct: 0.5,             // pakiet obcego państwa (poza wolnym obrotem)
-    limitMult: 1.5,            // limit spółek kraju = 1,5 × liczba startowa
+    limitMult: 1.5,            // limit spółek kraju bez wskaźnika wielkości (kraj testowy) — patrz getCountryLimit
+    limitMultRange: [1.2, 2.0], // 0.16.8 F3: mnożnik liczby startowej rośnie z wielkością rynku (logarytmicznie od najmniejszego do największego)
+    sizeIndex: { US: 10, CN: 8, JP: 4, DE: 3.5, IN: 3, FR: 2.5, TW: 1.5, CH: 1.2, SE: 1, CZ: 0.6 }, // względna wielkość (PKB / kapitalizacja giełdy), jedno miejsce parametrów
+    sectorShareCap: 0.4,       // 0.16.8 F3: debiut nie może zwiększyć udziału jednego sektora głównego powyżej 40% spółek giełdy
     historyWeeks: 13,          // zapis uproszczony: 25% długości historii GDR (52 tyg.)
     volScale: 0.24,            // zmienność roczna × beta sektora
     driftYear: 0.08,           // dryf roczny przy zerowej premii (zwrot całkowity)
@@ -44,7 +47,12 @@ function getCallThreshold(id) { return COUNTRY_DEFS[id]?.oversight?.callThreshol
 function getOversight(id) { return COUNTRY_DEFS[id]?.oversight || { name: 'nadzór', callThreshold: 0.66, level: 1 }; }
 function getJoinedCountries() { return Object.keys(countryState); }
 function isCountryJoined(id) { return Boolean(countryState[id]); }
-function getCountryLimit(id) { const def = COUNTRY_DEFS[id]; return def ? Math.ceil(def.companies.length * COUNTRY_RULES.limitMult) : 0; }
+/** Limit spółek giełdy kraju: liczba startowa × mnożnik zależny od wielkości kraju (US najwyższy, CZ najniższy); kraj bez wskaźnika (testowy) dostaje stały 1,5. */
+function getCountryLimitMult(id) {
+    const size = COUNTRY_RULES.sizeIndex[id], [lo, hi] = COUNTRY_RULES.limitMultRange, sizes = Object.values(COUNTRY_RULES.sizeIndex), min = Math.min(...sizes), max = Math.max(...sizes);
+    return size ? lo + (hi - lo) * Math.log(size / min) / Math.log(max / min) : COUNTRY_RULES.limitMult;
+}
+function getCountryLimit(id) { const def = COUNTRY_DEFS[id]; return def ? Math.ceil(def.companies.length * getCountryLimitMult(id)) : 0; }
 /** Spółka obca znika z giełdy (np. ucieczka prezesa parabanku): posiadacze dostają gotówkę po podanej cenie (gracz w PLN, boty w walucie spółki). */
 function delistForeignIssuer(issuer, price) {
     for (const [holder, qty] of Object.entries(issuer.holders || {})) {
@@ -318,7 +326,9 @@ function maybeCountryDebut(id) {
     const def = COUNTRY_DEFS[id], st = countryState[id], regime = marketRegimes[id];
     if (getCountryIssuers(id).length >= getCountryLimit(id)) return null;
     if (macro.quarter - st.lastDebutQ < 4 || Math.random() >= COUNTRY_RULES.debutChance * Math.max(0.2, 1 + regime.premium * 3)) return null;
-    const base = getRandomElement(def.companies.filter(c => c.kind === 'normal'));
+    const listed = getCountryIssuers(id), mainOf = c => (Array.isArray(c.sector) ? c.sector[0] : c.sector);
+    const roomy = def.companies.filter(c => c.kind === 'normal' && listed.filter(i => i.sector === mainOf(c)).length + 1 <= Math.max(2, Math.ceil((listed.length + 1) * COUNTRY_RULES.sectorShareCap))); // limit koncentracji sektora liczony na giełdę kraju
+    const base = getRandomElement(roomy);
     if (!base) return null;
     const sector = Array.isArray(base.sector) ? base.sector[0] : base.sector;
     let name = null;
@@ -494,6 +504,10 @@ function getTicketPrice(country) {
 }
 function hasTicket(holder, country) { return Boolean(foreignTickets[holder]?.includes(country)); }
 function getCountryCommission(country) {
+    const off = typeof getOffHoursSurcharge === 'function' && !countryState[country]?.link ? getOffHoursSurcharge(country) : 0; // 0.16.8 F3b: dopłata poza sesją
+    return getCountryBaseCommission(country) + off;
+}
+function getCountryBaseCommission(country) {
     if (countryState[country]?.link && typeof LINK_RULES === 'object') return LINK_RULES.domesticCommission; // połączone giełdy: prowizja jak krajowa
     return COUNTRY_DEFS[country]?.operator?.commission ?? COUNTRY_RULES.commission;
 }
