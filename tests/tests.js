@@ -13528,12 +13528,12 @@ group('0.16.5 Internet i TeamedUP!', () => {
         } finally { airportState.forced = false; resetTicketsState(); }
     });
 
-    test('I5: wiadomości od inwestorów i spółek idą do Tied dopiero po jego odblokowaniu; systemowe zostają w TeamedUP!; nic nie ginie', () => {
+    test('I5: wiadomości od inwestorów i spółek idą do Tied dopiero po jego odblokowaniu; sprawy korporacji do TeamedUP!, newsy zostają w Poczcie; nic nie ginie', () => {
         startFund(); playerProfile.positionId = 'junior'; botRelations.values = {};
         addMail({ sender: 'bot:x', subject: 'Cześć', body: 'Kawa?' }); addMail({ sender: CORPORATION_SENDER, subject: 'Cel', body: 'Do zrobienia' });
-        const total = mailbox.messages.length; assertEq(getMailInFolder('inbox').length, 2, 'bez Tied wszystko w TeamedUP!');
+        const total = mailbox.messages.length; assertEq(getMailInFolder('inbox').length, 1, 'bez Tied inwestor czyta się w Poczcie, korporacja w TeamedUP!'); assertEq(mailbox.messages.filter(m => getMailChannel(m) === 'teamedup').length, 1, 'korporacja w TeamedUP!');
         playerProfile.positionId = 'manager';
-        assertEq(getMailInFolder('inbox').length, 1, 'inwestor poza TeamedUP!'); assertEq(mailbox.messages.filter(m => getMailChannel(m) === 'tied').length, 1, 'wiadomość w Tied'); assertEq(mailbox.messages.length, total, 'żadna nie zginęła');
+        assertEq(getMailInFolder('inbox').length, 0, 'inwestor poza Pocztą'); assertEq(mailbox.messages.filter(m => getMailChannel(m) === 'tied').length, 1, 'wiadomość w Tied'); assertEq(mailbox.messages.length, total, 'żadna nie zginęła');
     });
 
     test('I5: dobre wieści spółki dają post jej prezesa w Tied (bez duplikatu), złe nie', () => {
@@ -13542,6 +13542,19 @@ group('0.16.5 Internet i TeamedUP!', () => {
         assertEq(noteTiedEvent(`${s.name} podpisuje kontrakt na dostawę`, 'company'), null, 'bez duplikatu');
         assertEq(noteTiedEvent(`${s.name} traci płynność, upadłość`, 'company'), null, 'zła wieść bez posta');
         assertEq(getTiedPosts()[0].author, 'Jan Testowy', 'autor to prezes');
+    });
+
+    test('I4: zadania zarządu — 2 od razu (jedno awansowe), reszta odsłania się co rok cyklu; cel NAV +10% i podwójne punkty za awansowy', () => {
+        startFund(); playerProfile.positionId = 'junior';
+        const g = assignCorporateGoals();
+        assertEq(g.ids.length, 2, '2 zadania od razu'); assert(g.queue.length <= 3 && g.queue.length >= 1, 'kolejka zadań');
+        assert(g.ids.some(id => CORPORATE_GOAL_POOL[id].promotion), 'jedno cel awansowy');
+        assert(!g.ids.includes('nav25'), 'nav25 dopiero od stanowiska wyżej');
+        const before = g.ids.length, at = g.queue[0].at; macro.quarter = at - 1; assertEq(releaseCorporateGoals(), 0, 'przed terminem nic');
+        macro.quarter = at; assert(releaseCorporateGoals() >= 0 && corporation.goals.ids.length >= before, 'po terminie odsłonięte');
+        corporation.goals.ids = ['nav10']; corporation.goals.startNav = getFundNav() / 1.11;
+        const view = getCorporateGoalsView()[0]; assert(view.done && view.promotion, 'NAV +11% spełnia cel awansowy');
+        const res = settleCorporateGoals(); assertEq(res.delta, GOAL_MET_BONUS * GOAL_PROMOTION_MULT, 'podwójne punkty');
     });
 
     test('I5: migracja zapisu v16 → v17: skrzynka zachowuje wszystkie wiadomości i dostaje pole Tied', () => {

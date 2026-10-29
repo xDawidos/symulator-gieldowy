@@ -2984,17 +2984,105 @@ const CORPORATE_GOAL_POOL = {
     }
 };
 
-/** Zarząd przydziela 2 losowe cele na cykl oceny. */
+/** 0.16.5: dodatkowe cele z TeamedUP!. `promotion` = cel awansowy (podwójna premia punktowa), `minPos` = od jakiego stanowiska. */
+Object.assign(CORPORATE_GOAL_POOL, {
+    nav10: {
+        label: 'Wzrost NAV o 10% w cyklu (cel awansowy)', promotion: true,
+        value: goals => `${(getGoalCycleReturn(goals) * 100).toFixed(1)}% / 10%`,
+        progress: goals => Math.max(0, Math.min(1, getGoalCycleReturn(goals) / 0.10)),
+        check: goals => getGoalCycleReturn(goals) >= 0.10
+    },
+    nav25: {
+        label: 'Wzrost NAV o 25% w cyklu (cel awansowy)', promotion: true, minPos: 1,
+        value: goals => `${(getGoalCycleReturn(goals) * 100).toFixed(1)}% / 25%`,
+        progress: goals => Math.max(0, Math.min(1, getGoalCycleReturn(goals) / 0.25)),
+        check: goals => getGoalCycleReturn(goals) >= 0.25
+    },
+    beatGig: {
+        label: 'Pobij GIG w cyklu (cel awansowy)', promotion: true,
+        value: goals => `${(getGoalCycleReturn(goals) * 100).toFixed(1)}% vs GIG ${(getGoalBenchReturn(goals) * 100).toFixed(1)}%`,
+        progress: goals => Math.max(0, Math.min(1, 0.5 + (getGoalCycleReturn(goals) - getGoalBenchReturn(goals)) * 5)),
+        check: goals => getGoalCycleReturn(goals) > getGoalBenchReturn(goals)
+    },
+    trust70: {
+        label: 'Zaufanie klientów ≥ 70',
+        value: () => `${(playerFund?.trust ?? 0).toFixed(0)}/100`,
+        progress: () => Math.min(1, (playerFund?.trust ?? 0) / 70),
+        check: () => (playerFund?.trust ?? 0) >= 70
+    },
+    abroad: {
+        label: 'Wejdź na rynek zagraniczny (kup bilet w Ferie i wakacje)',
+        available: () => typeof isAirportBuilt === 'function' && isAirportBuilt(),
+        value: () => (foreignTickets?.player?.length || 0) ? 'tak' : 'nie',
+        progress: () => (foreignTickets?.player?.length || 0) ? 1 : 0,
+        check: () => (foreignTickets?.player?.length || 0) > 0
+    },
+    analyst: {
+        label: 'Zatrudnij analityka (TeamedUP!)',
+        available: () => canHireAnalysts(),
+        value: () => `${corporation?.analysts?.length || 0}/1`,
+        progress: () => (corporation?.analysts?.length || 0) ? 1 : 0,
+        check: () => (corporation?.analysts?.length || 0) >= 1
+    },
+    cashBuffer: {
+        label: 'Bufor gotówki ≥ 10% aktywów',
+        value: () => `${(playerCash / Math.max(1, getFundAssets()) * 100).toFixed(0)}%`,
+        progress: () => Math.min(1, playerCash / Math.max(1, getFundAssets()) / 0.1),
+        check: () => playerCash / Math.max(1, getFundAssets()) >= 0.1
+    }
+});
+
+function getGoalBenchReturn(goals) {
+    return goals.startBench > 0 && typeof getBenchmarkValue === 'function' ? getBenchmarkValue() / goals.startBench - 1 : 0;
+}
+
+const GOAL_ACTIVE_AT_START = 2;     // tyle zadań zarząd daje od razu
+const GOAL_QUEUE_MAX = 3;           // kolejne odsłaniają się w trakcie cyklu
+const GOAL_RELEASE_EVERY_Q = 4;     // co 4 kwartały (rok) jedno nowe zadanie
+const GOAL_PROMOTION_MULT = 2;      // cel awansowy: podwójne punkty oceny za spełnienie
+
+function isGoalEligible(id) {
+    const def = CORPORATE_GOAL_POOL[id];
+    return def && (!def.available || def.available()) && getPositionIndex(playerProfile?.positionId) >= (def.minPos || 0);
+}
+
+/** Zarząd przydziela 2 cele od razu (jeden zawsze awansowy, gdy jest dostępny); do 3 kolejnych odsłania się co rok cyklu. */
 function assignCorporateGoals() {
-    const ids = Object.keys(CORPORATE_GOAL_POOL).filter(id => !CORPORATE_GOAL_POOL[id].available || CORPORATE_GOAL_POOL[id].available()).sort(() => Math.random() - 0.5).slice(0, 2);
-    corporation.goals = { ids, quarter: macro?.quarter || 0, startNav: playerFund ? getFundNav() : 0, progress: { project: false, dividends: 0 } };
+    const eligible = Object.keys(CORPORATE_GOAL_POOL).filter(isGoalEligible).sort(() => Math.random() - 0.5);
+    const promo = eligible.filter(id => CORPORATE_GOAL_POOL[id].promotion), rest = eligible.filter(id => !CORPORATE_GOAL_POOL[id].promotion);
+    const ordered = [...promo.slice(0, 1), ...rest, ...promo.slice(1)];
+    const q = macro?.quarter || 0;
+    corporation.goals = {
+        ids: ordered.slice(0, GOAL_ACTIVE_AT_START), quarter: q, startNav: playerFund ? getFundNav() : 0,
+        startBench: typeof getBenchmarkValue === 'function' ? getBenchmarkValue() : 0,
+        queue: ordered.slice(GOAL_ACTIVE_AT_START, GOAL_ACTIVE_AT_START + GOAL_QUEUE_MAX).map((id, i) => ({ id, at: q + GOAL_RELEASE_EVERY_Q * (i + 1) })),
+        progress: { project: false, dividends: 0 }
+    };
     return corporation.goals;
+}
+
+/** Odsłania zadania z kolejki, których termin nadszedł (wołane co tydzień i przy odczycie). Zwraca liczbę nowych. */
+function releaseCorporateGoals() {
+    const goals = corporation?.goals;
+    if (!goals || !Array.isArray(goals.queue)) return 0;
+    const q = macro?.quarter || 0;
+    let released = 0;
+    for (const item of [...goals.queue]) {
+        if (item.at > q) continue;
+        goals.queue = goals.queue.filter(x => x !== item);
+        if (!isGoalEligible(item.id) || goals.ids.includes(item.id)) continue;
+        goals.ids.push(item.id); released++;
+        if (typeof addMail === 'function') addMail({ sender: CORPORATION_SENDER, subject: 'Nowe zadanie od zarządu', body: CORPORATE_GOAL_POOL[item.id].label, importance: 2 });
+    }
+    return released;
 }
 
 function ensureCorporateGoals() {
     if (!corporation) return null;
     if (!corporation.goals || !Array.isArray(corporation.goals.ids)) assignCorporateGoals();
     if (!(corporation.goals.startNav > 0) && playerFund) corporation.goals.startNav = getFundNav();
+    if (!(corporation.goals.startBench > 0) && typeof getBenchmarkValue === 'function') corporation.goals.startBench = getBenchmarkValue();
+    releaseCorporateGoals();
     return corporation.goals;
 }
 
@@ -3011,7 +3099,7 @@ function getCorporateGoalsView() {
     if (!goals) return [];
     return goals.ids.filter(id => CORPORATE_GOAL_POOL[id]).map(id => {
         const goal = CORPORATE_GOAL_POOL[id];
-        return { id, label: goal.label, value: goal.value(goals), progress: goal.progress(goals), done: goal.check(goals) };
+        return { id, label: goal.label, value: goal.value(goals), progress: goal.progress(goals), done: goal.check(goals), promotion: Boolean(goal.promotion) };
     });
 }
 
@@ -3027,7 +3115,7 @@ function settleCorporateGoals() {
     const view = getCorporateGoalsView();
     let delta = 0, bonus = 0;
     for (const goal of view) {
-        delta += goal.done ? GOAL_MET_BONUS : -GOAL_MISSED_PENALTY;
+        delta += goal.done ? GOAL_MET_BONUS * (goal.promotion ? GOAL_PROMOTION_MULT : 1) : -GOAL_MISSED_PENALTY;
         if (goal.done) {
             const pay = getCorporateGoalPay() * PRIVATE_INCOME_FACTOR;
             if (pay > 0) {

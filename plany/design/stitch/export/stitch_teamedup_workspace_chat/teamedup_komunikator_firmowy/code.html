@@ -1,0 +1,627 @@
+<!DOCTYPE html><html class="dark" lang="pl" style=""><head><meta charset="utf-8"><meta content="width=device-width, initial-scale=1.0" name="viewport"><meta content="web_dashboard" name="shell-type"><link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;family=Space+Grotesk:wght@500;600;700&amp;family=Geist:wght@400;500;600&amp;display=swap" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script><script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+          "surface-container-lowest": "#0c0814",
+          "surface-container-low": "#140e20",
+          "surface": "#120c1d",
+          "surface-dim": "#0e0917",
+          "background": "#0f0a18",
+          "surface-container": "#1a1329",
+          "surface-container-high": "#241c38",
+          "surface-container-highest": "#31264a",
+          "surface-bright": "#3c305a",
+          "outline": "#8c7e9e",
+          "outline-variant": "#352a4f",
+          "on-surface": "#f1eaf8",
+          "on-surface-variant": "#c9bedb",
+          "on-background": "#f1eaf8",
+          "inverse-surface": "#ebe1f5",
+          "inverse-on-surface": "#282035",
+          "primary": "#ffdf9f",
+          "primary-container": "#fbbf24",
+          "primary-fixed-dim": "#f59e0b",
+          "primary-fixed": "#ffe1a7",
+          "on-primary": "#3d2a00",
+          "on-primary-container": "#4a3300",
+          "secondary": "#34d399",
+          "secondary-container": "#059669",
+          "on-secondary": "#003824",
+          "on-secondary-container": "#ecfdf5",
+          "tertiary": "#10b981",
+          "tertiary-container": "#047857",
+          "on-tertiary": "#ffffff",
+          "on-tertiary-container": "#d1fae5",
+          "error": "#f87171",
+          "error-container": "#7f1d1d",
+          "on-error": "#ffffff",
+          "on-error-container": "#fee2e2"
+        },
+        "borderRadius": {
+          "DEFAULT": "0.125rem",
+          "lg": "0.25rem",
+          "xl": "0.5rem",
+          "full": "0.75rem"
+        },
+        "spacing": {
+          "margin": "1.25rem",
+          "space-lg": "1rem",
+          "space-md": "0.75rem",
+          "space-xl": "1.5rem",
+          "gutter": "1rem",
+          "space-xs": "0.25rem",
+          "space-sm": "0.5rem"
+        },
+        "fontFamily": {
+          "label-md": ["JetBrains Mono", "monospace"],
+          "headline-lg": ["Space Grotesk", "sans-serif"],
+          "body-sm": ["Geist", "sans-serif"],
+          "label-sm": ["JetBrains Mono", "monospace"],
+          "headline-sm": ["Space Grotesk", "sans-serif"],
+          "label-lg": ["JetBrains Mono", "monospace"],
+          "headline-xl": ["Space Grotesk", "sans-serif"],
+          "headline-md": ["Space Grotesk", "sans-serif"],
+          "body-md": ["Geist", "sans-serif"],
+          "body-lg": ["Geist", "sans-serif"]
+        },
+        "fontSize": {
+          "label-md": ["11px", {"lineHeight": "14px", "letterSpacing": "0.04em", "fontWeight": "500"}],
+          "headline-lg": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+          "body-sm": ["12px", {"lineHeight": "16px", "fontWeight": "400"}],
+          "label-sm": ["10px", {"lineHeight": "12px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+          "headline-sm": ["15px", {"lineHeight": "20px", "fontWeight": "600"}],
+          "label-lg": ["13px", {"lineHeight": "18px", "letterSpacing": "0.02em", "fontWeight": "500"}],
+          "headline-xl": ["32px", {"lineHeight": "40px", "fontWeight": "700"}],
+          "headline-md": ["18px", {"lineHeight": "24px", "fontWeight": "600"}],
+          "body-md": ["13px", {"lineHeight": "18px", "fontWeight": "400"}],
+          "body-lg": ["15px", {"lineHeight": "22px", "fontWeight": "400"}]
+        }
+      }
+    }
+  };
+</script></head><body class="bg-background font-body-md text-on-surface antialiased"><header class="fixed top-0 left-0 right-0 h-16 z-50 bg-[#0c0814]/95 backdrop-blur-md flex items-center justify-between px-space-lg border-b border-outline-variant/60 shadow-[0_4px_20px_rgba(0,0,0,0.6)]"><div class="flex items-center gap-space-lg"><div class="flex items-center gap-space-sm"><div class="w-8 h-8 rounded-lg bg-surface-container-high border border-outline-variant flex items-center justify-center shadow-inner"><span class="material-symbols-outlined text-primary-container text-[20px]">query_stats</span></div><div><div class="font-headline-sm text-headline-sm uppercase text-primary-container tracking-wider drop-shadow-sm">Capital Quest</div><div class="font-label-sm text-label-sm text-on-surface-variant/80">Fundusz Pierwszy Krok</div></div></div><div class="hidden xl:flex items-center gap-space-sm pl-space-md"><div class="flex items-center gap-space-xs px-space-sm py-1 bg-surface-container-low border border-outline-variant/50 rounded-lg"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Gotówka:</span><span class="font-label-sm text-label-sm text-tertiary font-bold">81,72 PLN</span></div><div class="flex items-center gap-space-xs px-space-sm py-1 bg-surface-container-low border border-outline-variant/50 rounded-lg"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">NAV/Udział:</span><span class="font-label-sm text-label-sm text-on-surface font-bold">9,0006 PLN</span></div><div class="flex items-center gap-space-xs px-space-sm py-1 bg-surface-container-low border border-outline-variant/50 rounded-lg"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Prywatne:</span><span class="font-label-sm text-label-sm text-primary-container font-bold">1551,15 PLN</span></div><div class="flex items-center gap-space-xs px-space-sm py-1 bg-surface-container-low border border-outline-variant/50 rounded-lg"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Zaufanie:</span><span class="font-label-sm text-label-sm text-secondary font-bold">14/100</span></div></div></div><div class="flex items-center gap-space-md"><div class="flex items-center gap-space-xs bg-surface-container-high border border-outline-variant/50 px-space-sm py-1 rounded-lg"><span class="material-symbols-outlined text-[16px] text-primary-container">calendar_today</span><span class="font-label-sm text-label-sm text-on-surface">Rok 14 · kw. 1 · tydz. 1</span></div><div class="flex items-center bg-surface-container-low p-space-xs rounded-lg gap-space-xs border border-outline-variant/50"><button class="px-space-xs py-0.5 rounded text-label-sm font-label-sm bg-primary-container text-on-primary-container font-bold shadow-sm" type="button">x1</button><button class="px-space-xs py-0.5 rounded text-label-sm font-label-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors" type="button">x2</button><button class="px-space-xs py-0.5 rounded text-label-sm font-label-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors" type="button">x5</button></div><button class="flex items-center gap-space-xs px-space-md py-1.5 bg-gradient-to-r from-amber-400 to-amber-500 text-stone-950 font-bold rounded-lg font-headline-sm text-headline-sm uppercase hover:from-amber-300 hover:to-amber-400 transition-all shadow-[0_0_15px_rgba(251,191,36,0.35)] active:scale-95" type="button"><span class="material-symbols-outlined text-[18px]">play_arrow</span>Wznów</button><div class="w-8 h-8 rounded-full bg-primary-container border border-amber-300 flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-stone-950 font-bold text-[18px]">person</span></div></div></header><aside class="fixed left-0 top-16 bottom-0 w-64 bg-surface-container-lowest border-r border-outline-variant/60 z-40 flex flex-col justify-between overflow-y-auto"><div class="p-space-md"><div class="mb-space-lg"><div class="font-label-sm text-label-sm uppercase tracking-wider text-outline px-space-sm mb-space-xs font-semibold">Świat</div><nav class="flex flex-col gap-space-xs" data-active-classes="bg-primary-container text-on-primary-container font-bold rounded-lg"><a class="flex items-center justify-between px-space-sm py-1.5 rounded-lg font-body-md text-body-md text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="bank" href="#"><span class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px] text-outline">account_balance</span>Bank</span></a><a class="flex items-center justify-between px-space-sm py-1.5 rounded-lg font-body-md text-body-md text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="panstwo" href="#"><span class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px] text-outline">account_balance_wallet</span>Państwo</span></a><a class="flex items-center justify-between px-space-sm py-1.5 rounded-lg font-body-md text-body-md text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="miasto" href="#"><span class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px] text-outline">location_city</span>Miasto</span></a><a class="flex items-center justify-between px-space-sm py-1.5 rounded-lg font-body-md text-body-md text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="budownictwo" href="#"><span class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px] text-outline">apartment</span>Budownictwo</span></a><a class="flex items-center justify-between px-space-sm py-1.5 rounded-lg font-body-md text-body-md text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="internet" href="#"><span class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px] text-outline">language</span>Internet</span></a></nav></div><div class="mb-space-lg"><div class="font-label-sm text-label-sm uppercase tracking-wider text-outline px-space-sm mb-space-xs font-semibold">Moja Firma</div><nav class="flex flex-col gap-space-xs" data-active-classes="bg-primary-container text-on-primary-container font-bold rounded-lg"><a class="flex items-center justify-between px-space-sm py-1.5 rounded-lg font-body-md text-body-md text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="firma" href="#"><span class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px] text-outline">domain</span>Firma</span></a><a class="flex items-center justify-between px-space-sm py-1.5 rounded-lg font-body-md text-body-md text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="klienci-i-udzialy" href="#"><span class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px] text-outline">pie_chart</span>Klienci i udziały</span></a><a class="flex items-center justify-between px-space-sm py-1.5 rounded-lg font-body-md text-body-md text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="szara-strefa" href="#"><span class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px] text-outline">visibility_off</span>Szara strefa</span></a></nav></div><div><div class="font-label-sm text-label-sm uppercase tracking-wider text-outline px-space-sm mb-space-xs font-semibold">Ja</div><nav class="flex flex-col gap-space-xs" data-active-classes="bg-primary-container text-on-primary-container font-bold rounded-lg"><a class="flex items-center justify-between px-space-sm py-1.5 rounded-lg font-body-md text-body-md bg-surface-container-high text-primary-container font-semibold border-l-2 border-primary-container transition-colors" data-path="teamedup" href="#"><span class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px] text-primary-container">forum</span>TeamedUp!</span><span class="px-1.5 py-0.5 rounded-full font-label-sm text-label-sm bg-primary-container text-stone-950 font-bold">3</span></a><a class="flex items-center justify-between px-space-sm py-1.5 rounded-lg font-body-md text-body-md text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="cv-i-akademia" href="#"><span class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px] text-outline">school</span>CV i Akademia</span></a><a class="flex items-center justify-between px-space-sm py-1.5 rounded-lg font-body-md text-body-md text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="ranking" href="#"><span class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px] text-outline">leaderboard</span>Ranking</span></a><a class="flex items-center justify-between px-space-sm py-1.5 rounded-lg font-body-md text-body-md text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" data-path="ustawienia" href="#"><span class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px] text-outline">settings</span>Ustawienia</span></a></nav></div></div><div class="p-space-md bg-surface-container-low/70 border-t border-outline-variant/40"><div class="flex items-center justify-between font-label-sm text-label-sm text-on-surface-variant"><span class="">Status Symulacji</span><span class="flex items-center gap-1.5 text-tertiary font-semibold"><span class="w-2 h-2 rounded-full bg-tertiary animate-pulse"></span>Aktywny</span></div></div></aside><div class="pl-64"><main class="w-full pt-16 bg-background min-h-screen"><div class="flex flex-col w-full h-[calc(100vh-4rem)] overflow-hidden">
+<!-- Sub-header bar / Simulation breadcrumbs & global messenger status -->
+<div class="h-10 bg-surface-container-lowest border-b border-outline-variant/60 px-space-md flex items-center justify-between shrink-0">
+<div class="flex items-center gap-space-sm font-label-sm text-label-sm">
+<span class="flex items-center gap-1.5 text-primary-container font-bold tracking-wider uppercase">
+<span class="material-symbols-outlined text-[15px]">forum</span>
+        TeamedUp! Messenger
+      </span>
+<span class="text-outline/70">/</span>
+<span class="text-on-surface-variant font-medium">Centrala Zarządcza Capital Quest</span>
+<span class="text-outline/70">/</span>
+<span class="text-secondary font-medium">Połączenie szyfrowane E2EE (KNF Compliant)</span>
+</div>
+<div class="flex items-center gap-space-md">
+<div class="flex items-center gap-space-xs font-label-sm text-label-sm text-on-surface-variant">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary animate-pulse"></span>
+<span class="">Sieć wewnętrzna: Aktywna (12 wątków, 3 zadania priorytetowe)</span>
+</div>
+<div class="h-3 w-px bg-outline-variant"></div>
+<button class="flex items-center gap-1 font-label-sm text-label-sm text-primary-container hover:text-amber-300 transition-colors" type="button">
+<span class="material-symbols-outlined text-[14px]">tune</span>
+        Preferencje alertów
+      </button>
+</div>
+</div>
+<!-- Main 3-Pane Messenger Workspace -->
+<div class="flex flex-1 min-h-0 w-full overflow-hidden">
+<!-- PANE 1: CONVERSATIONS / CHANNELS SIDEBAR (320px) -->
+<section class="w-80 shrink-0 bg-surface-container-low border-r border-outline-variant/60 flex flex-col justify-between overflow-hidden">
+<!-- Top Action & Search -->
+<div class="p-space-sm bg-surface-container-lowest border-b border-outline-variant/50 flex flex-col gap-space-xs">
+<div class="flex items-center justify-between gap-space-xs">
+<div class="relative flex-1">
+<span class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-outline text-[16px]">search</span>
+<input class="w-full h-8 pl-8 pr-3 bg-surface-container font-body-sm text-body-sm text-on-surface placeholder:text-outline border border-outline-variant/60 rounded-lg focus:outline-none focus:border-primary-container focus:bg-surface-container-high transition-colors" placeholder="Szukaj kontaktów, wiadomości..." type="text">
+</div>
+<button class="h-8 w-8 rounded-lg bg-primary-container text-stone-950 font-bold flex items-center justify-center hover:bg-amber-300 transition-all shrink-0 shadow-sm" title="Nowa wiadomość" type="button">
+<span class="material-symbols-outlined text-[18px]">edit_square</span>
+</button>
+</div>
+<!-- Filter Pill Chips -->
+<div class="flex items-center gap-1 overflow-x-auto py-1 scrollbar-none">
+<button class="px-2 py-0.5 rounded font-label-sm text-label-sm bg-primary-container/20 text-primary-container border border-primary-container/40 font-semibold whitespace-nowrap">Wszystkie</button>
+<button class="px-2 py-0.5 rounded font-label-sm text-label-sm bg-surface-container border border-outline-variant/40 text-secondary font-semibold flex items-center gap-1 whitespace-nowrap">
+            Nieprzeczytane <span class="px-1 py-0 rounded-full bg-secondary text-stone-950 font-label-sm text-[9px] font-bold">3</span>
+</button>
+<button class="px-2 py-0.5 rounded font-label-sm text-label-sm bg-surface-container border border-outline-variant/40 text-on-surface-variant hover:text-on-surface whitespace-nowrap">Szefowie</button>
+<button class="px-2 py-0.5 rounded font-label-sm text-label-sm bg-surface-container border border-outline-variant/40 text-on-surface-variant hover:text-on-surface whitespace-nowrap">Zarząd</button>
+<button class="px-2 py-0.5 rounded font-label-sm text-label-sm bg-surface-container border border-outline-variant/40 text-on-surface-variant hover:text-on-surface whitespace-nowrap">Kanały</button>
+</div>
+</div>
+<!-- Feed List (Scrollable) -->
+<div class="flex-1 overflow-y-auto p-space-xs space-y-space-md">
+<!-- SECTION 1: PRZEŁOŻENI & ZARZĄD -->
+<div>
+<div class="flex items-center justify-between px-space-xs py-1">
+<span class="font-label-sm text-label-sm tracking-wider uppercase text-outline font-semibold">Przełożeni &amp; Zarząd</span>
+<span class="font-label-sm text-[9px] text-primary-container font-bold px-1.5 py-0.2 rounded bg-primary-container/15 border border-primary-container/30">VIP (3)</span>
+</div>
+<div class="space-y-1 mt-1">
+<!-- Dariusz Wolski (ACTIVE SELECTED) -->
+<div class="relative p-space-xs rounded-xl bg-surface-container-high border border-primary-container/50 cursor-pointer shadow-[0_2px_12px_rgba(0,0,0,0.35)]">
+<div class="absolute left-0 top-2 bottom-2 w-1 bg-primary-container rounded-r"></div>
+<div class="flex items-start gap-space-sm pl-1.5">
+<div class="relative shrink-0">
+<div class="w-9 h-9 rounded-lg bg-surface-container-highest border border-outline-variant flex items-center justify-center font-headline-sm text-headline-sm text-primary-container font-bold">
+                    DW
+                  </div>
+<span class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-tertiary border-2 border-surface-container-high shadow-sm"></span>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex items-center justify-between">
+<span class="font-headline-sm text-headline-sm text-on-surface truncate font-bold">Dariusz Wolski</span>
+<span class="font-label-sm text-label-sm text-primary-container font-semibold">10:42</span>
+</div>
+<div class="flex items-center gap-1.5 my-0.5">
+<span class="px-1 py-0.5 rounded text-[9px] font-label-sm font-bold bg-error-container text-error border border-error/30 uppercase tracking-wider">PILNE</span>
+<span class="font-label-sm text-[10px] text-outline truncate font-medium">Prezes Zarządu</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant truncate">Co z pozycją LOMBARDEX? Musimy zamknąć zysk...</p>
+</div>
+<span class="w-2 h-2 rounded-full bg-primary-container mt-1 shrink-0 animate-pulse"></span>
+</div>
+</div>
+<!-- Beata Nowak -->
+<div class="p-space-xs rounded-xl hover:bg-surface-container border border-transparent hover:border-outline-variant/40 cursor-pointer transition-colors">
+<div class="flex items-start gap-space-sm">
+<div class="relative shrink-0">
+<div class="w-9 h-9 rounded-lg bg-surface-container border border-outline-variant/60 flex items-center justify-center font-headline-sm text-headline-sm text-secondary font-bold">
+                    BN
+                  </div>
+<span class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-primary-container border-2 border-surface-container shadow-sm" title="Na spotkaniu"></span>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex items-center justify-between">
+<span class="font-headline-sm text-headline-sm text-on-surface-variant truncate">Beata Nowak</span>
+<span class="font-label-sm text-label-sm text-outline">Wczoraj</span>
+</div>
+<div class="font-label-sm text-[10px] text-outline truncate">Dyrektor Operacyjna (COO)</div>
+<p class="font-body-sm text-body-sm text-outline truncate">Raport audytowy funduszu gotowy do wglądu.</p>
+</div>
+</div>
+</div>
+<!-- Marek Czarnecki -->
+<div class="p-space-xs rounded-xl hover:bg-surface-container border border-transparent hover:border-outline-variant/40 cursor-pointer transition-colors">
+<div class="flex items-start gap-space-sm">
+<div class="relative shrink-0">
+<div class="w-9 h-9 rounded-lg bg-surface-container border border-outline-variant/60 flex items-center justify-center font-headline-sm text-headline-sm text-on-surface-variant font-bold">
+                    MC
+                  </div>
+<span class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-tertiary border-2 border-surface-container shadow-sm" title="Dostępny"></span>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex items-center justify-between">
+<span class="font-headline-sm text-headline-sm text-on-surface-variant truncate">Marek Czarnecki</span>
+<span class="font-label-sm text-label-sm text-outline">Pn</span>
+</div>
+<div class="font-label-sm text-[10px] text-outline truncate">Główny Analityk</div>
+<p class="font-body-sm text-body-sm text-outline truncate">Giełda Śmieciowa ma dzisiaj podwyższoną...</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- SECTION 2: KANAŁY I PROJEKTY -->
+<div>
+<div class="flex items-center justify-between px-space-xs py-1">
+<span class="font-label-sm text-label-sm tracking-wider uppercase text-outline font-semibold">Kanały i Projekty</span>
+<span class="material-symbols-outlined text-[14px] text-outline cursor-pointer hover:text-primary-container">add</span>
+</div>
+<div class="space-y-1 mt-1">
+<!-- #trading-floor -->
+<div class="p-space-xs rounded-xl hover:bg-surface-container border border-transparent hover:border-outline-variant/40 cursor-pointer transition-colors flex items-center justify-between">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-8 h-8 rounded-lg bg-surface-container border border-outline-variant/60 flex items-center justify-center text-primary-container shrink-0">
+<span class="material-symbols-outlined text-[16px]">candlestick_chart</span>
+</div>
+<div class="min-w-0">
+<div class="flex items-center gap-1">
+<span class="font-label-md text-label-md font-bold text-on-surface truncate">#trading-floor</span>
+</div>
+<p class="font-body-sm text-body-sm text-outline truncate">GPW: WRONA +1,16%, WINPOST...</p>
+</div>
+</div>
+<span class="px-1.5 py-0.5 rounded-full bg-secondary text-stone-950 font-label-sm text-[10px] font-bold shrink-0">4</span>
+</div>
+<!-- #ryzyko-i-zgodnosc -->
+<div class="p-space-xs rounded-xl hover:bg-surface-container border border-transparent hover:border-outline-variant/40 cursor-pointer transition-colors flex items-center justify-between">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-8 h-8 rounded-lg bg-surface-container border border-outline-variant/60 flex items-center justify-center text-error shrink-0">
+<span class="material-symbols-outlined text-[16px]">gavel</span>
+</div>
+<div class="min-w-0">
+<span class="font-label-md text-label-md font-medium text-on-surface-variant truncate block">#ryzyko-i-zgodność</span>
+<p class="font-body-sm text-body-sm text-outline truncate">KNF: Nowe wytyczne dot. emisji...</p>
+</div>
+</div>
+<span class="w-2 h-2 rounded-full bg-error shrink-0"></span>
+</div>
+<!-- #kawa-i-plotki -->
+<div class="p-space-xs rounded-xl hover:bg-surface-container border border-transparent hover:border-outline-variant/40 cursor-pointer transition-colors flex items-center justify-between">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-8 h-8 rounded-lg bg-surface-container border border-outline-variant/60 flex items-center justify-center text-on-surface-variant shrink-0">
+<span class="material-symbols-outlined text-[16px]">coffee</span>
+</div>
+<div class="min-w-0">
+<span class="font-label-md text-label-md font-medium text-on-surface-variant truncate block">#kawa-i-plotki</span>
+<p class="font-body-sm text-body-sm text-outline truncate">Kto zostawił kubek w kuchni?</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- SECTION 3: PRACOWNICY & ZESPÓŁ -->
+<div>
+<div class="flex items-center justify-between px-space-xs py-1">
+<span class="font-label-sm text-label-sm tracking-wider uppercase text-outline font-semibold">Pracownicy &amp; Zespół</span>
+<span class="font-label-sm text-[9px] text-tertiary font-bold">4 ONLINE</span>
+</div>
+<div class="space-y-1 mt-1">
+<!-- Tomasz Wiśniewski -->
+<div class="p-space-xs rounded-xl hover:bg-surface-container border border-transparent hover:border-outline-variant/40 cursor-pointer transition-colors">
+<div class="flex items-center gap-space-sm">
+<div class="relative shrink-0">
+<div class="w-8 h-8 rounded-lg bg-surface-container border border-outline-variant/60 flex items-center justify-center font-label-md text-label-md text-secondary font-semibold">
+                    TW
+                  </div>
+<span class="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-tertiary"></span>
+</div>
+<div class="min-w-0 flex-1">
+<div class="flex items-center justify-between">
+<span class="font-headline-sm text-headline-sm text-on-surface-variant truncate">Tomasz Wiśniewski</span>
+<span class="font-label-sm text-label-sm text-outline">08:11</span>
+</div>
+<p class="font-body-sm text-body-sm text-outline truncate">Młodszy Trader: Cześć szefie, czy mam...</p>
+</div>
+</div>
+</div>
+<!-- Karolina Lewandowska -->
+<div class="p-space-xs rounded-xl hover:bg-surface-container border border-transparent hover:border-outline-variant/40 cursor-pointer transition-colors">
+<div class="flex items-center gap-space-sm">
+<div class="relative shrink-0">
+<div class="w-8 h-8 rounded-lg bg-surface-container border border-outline-variant/60 flex items-center justify-center font-label-md text-label-md text-primary font-semibold">
+                    KL
+                  </div>
+<span class="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-outline"></span>
+</div>
+<div class="min-w-0 flex-1">
+<div class="flex items-center justify-between">
+<span class="font-headline-sm text-headline-sm text-on-surface-variant truncate">Karolina Lewandowska</span>
+<span class="font-label-sm text-label-sm text-outline">Wczoraj</span>
+</div>
+<p class="font-body-sm text-body-sm text-outline truncate">HR: Przypomnienie o szkoleniu...</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- User status footer bar -->
+<div class="p-space-sm bg-surface-container-lowest border-t border-outline-variant/60 flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="relative">
+<div class="w-7 h-7 rounded-lg bg-primary-container text-stone-950 flex items-center justify-center font-bold text-[11px] shadow-sm">
+              TY
+            </div>
+<span class="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-tertiary"></span>
+</div>
+<div>
+<div class="font-label-md text-label-md text-on-surface font-semibold">Zarządzający Portfelem</div>
+<div class="font-label-sm text-[10px] text-tertiary font-medium">Status: Aktywny w grze</div>
+</div>
+</div>
+<button class="text-outline hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</section>
+<!-- PANE 2: ACTIVE CONVERSATION STREAM (FLEX-1) -->
+<main class="flex-1 min-w-0 bg-background flex flex-col justify-between overflow-hidden">
+<!-- Thread Header -->
+<header class="h-16 px-space-md bg-surface-container-low border-b border-outline-variant/60 flex items-center justify-between shrink-0 shadow-sm">
+<div class="flex items-center gap-space-md min-w-0">
+<div class="relative shrink-0">
+<div class="w-10 h-10 rounded-xl bg-surface-container-high border border-outline-variant flex items-center justify-center font-headline-md text-headline-md text-primary-container font-bold shadow-inner">
+              DW
+            </div>
+<span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-tertiary border-2 border-surface-container-low shadow-sm"></span>
+</div>
+<div class="min-w-0">
+<div class="flex items-center gap-space-sm">
+<h1 class="font-headline-md text-headline-md text-on-surface font-bold truncate">Dariusz Wolski</h1>
+<span class="px-2 py-0.5 rounded font-label-sm text-label-sm bg-primary-container/15 text-primary-container border border-primary-container/30 uppercase font-bold tracking-wide">Prezes Zarządu</span>
+<span class="font-label-sm text-label-sm text-outline hidden sm:inline">• Fundusz Pierwszy Krok</span>
+</div>
+<div class="flex items-center gap-2 font-label-sm text-label-sm text-on-surface-variant truncate">
+<span class="flex items-center gap-1.5 text-tertiary font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
+                Dostępny w gabinecie
+              </span>
+<span class="text-outline-variant">|</span>
+<span class="text-error font-medium flex items-center gap-1">
+<span class="material-symbols-outlined text-[13px]">notification_important</span>
+                Wymaga szybkiej decyzji inwestycyjnej (Kwartał 1)
+              </span>
+</div>
+</div>
+</div>
+<!-- Call & Action Buttons -->
+<div class="flex items-center gap-1">
+<button class="w-8 h-8 rounded-lg bg-surface-container hover:bg-surface-container-high border border-outline-variant/50 text-on-surface-variant hover:text-primary-container flex items-center justify-center transition-colors" title="Połączenie głosowe" type="button">
+<span class="material-symbols-outlined text-[18px]">call</span>
+</button>
+<button class="w-8 h-8 rounded-lg bg-surface-container hover:bg-surface-container-high border border-outline-variant/50 text-on-surface-variant hover:text-primary-container flex items-center justify-center transition-colors" title="Wideokonferencja Zarządu" type="button">
+<span class="material-symbols-outlined text-[18px]">videocam</span>
+</button>
+<button class="w-8 h-8 rounded-lg bg-surface-container hover:bg-surface-container-high border border-outline-variant/50 text-on-surface-variant hover:text-primary-container flex items-center justify-center transition-colors" title="Przypięte transakcje" type="button">
+<span class="material-symbols-outlined text-[18px]">push_pin</span>
+</button>
+<div class="h-4 w-px bg-outline-variant mx-1"></div>
+<button class="w-8 h-8 rounded-lg bg-surface-container hover:bg-surface-container-high border border-outline-variant/50 text-on-surface-variant hover:text-on-surface flex items-center justify-center transition-colors" title="Więcej opcji" type="button">
+<span class="material-symbols-outlined text-[18px]">more_horiz</span>
+</button>
+</div>
+</header>
+<!-- Message History Flow -->
+<div class="flex-1 overflow-y-auto p-space-lg space-y-space-md bg-gradient-to-b from-background via-surface to-background">
+<!-- Day Divider: WCZORAJ -->
+<div class="flex items-center justify-center my-space-sm">
+<div class="h-px bg-outline-variant/60 flex-1"></div>
+<span class="px-space-md font-label-sm text-label-sm text-outline uppercase tracking-wider bg-surface border border-outline-variant/40 rounded-full py-0.5">Wczoraj • Sesja Zamknięcia GPW</span>
+<div class="h-px bg-outline-variant/60 flex-1"></div>
+</div>
+<!-- Boss Message 1 -->
+<div class="flex items-start gap-space-md max-w-3xl">
+<div class="w-9 h-9 rounded-xl bg-surface-container-high border border-outline-variant text-primary-container flex items-center justify-center font-headline-sm text-headline-sm font-bold shrink-0 mt-0.5 shadow-sm">
+            DW
+          </div>
+<div class="space-y-1">
+<div class="flex items-baseline gap-space-sm">
+<span class="font-headline-sm text-headline-sm text-on-surface font-semibold">Dariusz Wolski</span>
+<span class="font-label-sm text-label-sm text-outline">17:30</span>
+<span class="font-label-sm text-[10px] text-outline uppercase">Prezes Funduszu</span>
+</div>
+<div class="p-space-md rounded-xl rounded-tl-sm bg-surface-container border border-outline-variant/60 text-on-surface space-y-2 shadow-md">
+<p class="font-body-md text-body-md leading-relaxed">
+                Widziałem wyniki wyceny jednostki NAV (<strong class="text-primary-container font-label-md">9,0006 PLN</strong>). Wynik funduszu jest na granicy zaufania inwestorów — mamy zaledwie <strong class="text-error font-label-md">14/100 punktów</strong>! Klienci zaczynają wycofywać depozyty do konkurencji.
+              </p>
+<p class="font-body-md text-body-md leading-relaxed">
+                Co zamierzasz zrobić z aktywami w spółce <strong class="text-on-surface font-semibold">LOMBARDEX S.A.</strong>? Rynek pożyczek konsumenckich jest przegrzany.
+              </p>
+</div>
+</div>
+</div>
+<!-- Player Message (Self) -->
+<div class="flex items-start justify-end gap-space-md max-w-3xl ml-auto">
+<div class="space-y-1 text-right">
+<div class="flex items-baseline justify-end gap-space-sm">
+<span class="font-label-sm text-label-sm text-outline">17:45</span>
+<span class="font-headline-sm text-headline-sm text-primary-container font-semibold">Ty (Zarządzający)</span>
+</div>
+<div class="p-space-md rounded-xl rounded-tr-sm bg-surface-container-high border border-primary-container/30 text-on-surface text-left space-y-space-sm shadow-md">
+<p class="font-body-md text-body-md leading-relaxed">
+                LOMBARDEX odbił w trakcie fixingu o <span class="text-tertiary font-bold font-label-md">▲ +7,22%</span>, aktualny kurs to <span class="font-label-md font-bold text-on-surface">11,12 PLN</span>. W portfelu funduszu mamy zablokowane 41 912 dostępnych akcji.
+              </p>
+<!-- Embedded Ticker Card -->
+<div class="p-space-sm rounded-lg bg-surface-container-low border border-outline-variant/60 flex items-center justify-between gap-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-8 h-8 rounded bg-surface-container-lowest border border-outline-variant/50 flex items-center justify-center text-primary-container">
+<span class="material-symbols-outlined text-[18px]">show_chart</span>
+</div>
+<div>
+<div class="font-headline-sm text-headline-sm text-on-surface font-bold">LOM • LOMBARDEX S.A.</div>
+<div class="font-label-sm text-label-sm text-outline">Finanse (Pożyczki konsumenckie) • GPW Śmieciowa</div>
+</div>
+</div>
+<div class="text-right">
+<div class="font-label-md text-label-md font-bold text-tertiary">11,12 PLN (+7,22%)</div>
+<div class="font-label-sm text-label-sm text-outline">Wolumen: 41 912 szt.</div>
+</div>
+</div>
+<p class="font-body-md text-body-md leading-relaxed">
+                Proponuję zrealizować część zysku na otwarciu jutrzejszej sesji. W ten sposób zasilimy płynność i podniesiemy NAV przed raportem kwartalnym.
+              </p>
+</div>
+<div class="flex items-center justify-end gap-1 font-label-sm text-label-sm text-outline">
+<span class="">Dostarczono i odczytano</span>
+<span class="material-symbols-outlined text-[13px] text-tertiary">done_all</span>
+</div>
+</div>
+<div class="w-9 h-9 rounded-xl bg-primary-container text-stone-950 flex items-center justify-center font-headline-sm text-headline-sm font-bold shrink-0 mt-0.5 shadow-md">
+            TY
+          </div>
+</div>
+<!-- Day Divider: DZIŚ -->
+<div class="flex items-center justify-center my-space-sm">
+<div class="h-px bg-outline-variant/60 flex-1"></div>
+<span class="px-space-md font-label-sm text-label-sm text-primary-container uppercase tracking-wider bg-surface border border-primary-container/30 rounded-full py-0.5 font-semibold">Dziś • Rok 14 · Kw. 1 · Tydzień 1</span>
+<div class="h-px bg-outline-variant/60 flex-1"></div>
+</div>
+<!-- Telemetry / System Event Bubble -->
+<div class="mx-auto max-w-xl p-space-sm rounded-lg bg-surface-container-low border border-outline-variant/50 flex items-center gap-space-md shadow-sm">
+<div class="w-7 h-7 rounded-md bg-primary-container/15 text-primary-container border border-primary-container/30 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[16px]">sensors</span>
+</div>
+<div class="flex-1 min-w-0 font-label-sm text-label-sm">
+<div class="text-outline uppercase flex items-center justify-between font-semibold">
+<span class="text-primary-container/90">[SYSTEM GIEŁDOWY GPW • OTWARCIE SESJI]</span>
+<span class="text-outline">09:15</span>
+</div>
+<div class="text-on-surface truncate mt-0.5 font-medium">
+              WRONA <span class="text-tertiary font-semibold">▲ +1,16%</span> (16,83 PLN) | LOMBARDEX <span class="text-tertiary font-semibold">▲ +7,22%</span> (11,12 PLN) | VirtuoLend <span class="text-tertiary font-semibold">▲ +5,92%</span> (77,34 PLN)
+            </div>
+</div>
+</div>
+<!-- Boss Message 2 (Latest) -->
+<div class="flex items-start gap-space-md max-w-3xl">
+<div class="w-9 h-9 rounded-xl bg-surface-container-high border border-outline-variant text-primary-container flex items-center justify-center font-headline-sm text-headline-sm font-bold shrink-0 mt-0.5 shadow-sm">
+            DW
+          </div>
+<div class="space-y-1">
+<div class="flex items-baseline gap-space-sm">
+<span class="font-headline-sm text-headline-sm text-on-surface font-semibold">Dariusz Wolski</span>
+<span class="font-label-sm text-label-sm text-primary-container font-bold">10:42</span>
+<span class="px-1.5 py-0.2 rounded font-label-sm text-[9px] bg-primary-container text-stone-950 font-bold uppercase tracking-wide">NOWA</span>
+</div>
+<div class="p-space-md rounded-xl rounded-tl-sm bg-surface-container border border-outline-variant/60 text-on-surface space-y-space-md shadow-md">
+<p class="font-body-md text-body-md leading-relaxed">
+                Zgoda, ale nie ryzykuj całej gotówki. Mamy tylko <span class="font-label-md font-bold text-tertiary bg-surface-container-low border border-outline-variant/50 px-1.5 py-0.5 rounded">81,72 PLN</span> w wolnych środkach operacyjnych funduszu. Pamiętaj też o odsetkach na Twoim koncie prywatnym (<span class="font-label-md font-bold text-primary-container bg-surface-container-low border border-outline-variant/50 px-1.5 py-0.5 rounded">1551,15 PLN</span>).
+              </p>
+<p class="font-body-md text-body-md leading-relaxed">
+                Wyślij mi gotowe zlecenie pakietowe do kontrasygnaty. Jeśli wyjdziemy z tego zyskiem, podniosę Twoją premię kwartalną.
+              </p>
+<!-- Interactive Decision Block directly in stream -->
+<div class="p-space-md rounded-xl bg-surface-container-high border border-outline-variant/80 space-y-space-sm">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm font-bold text-primary-container uppercase tracking-wider flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px]">flash_on</span>
+                    Akcja Decyzyjna: Likwidacja Pozycji
+                  </span>
+<span class="font-label-sm text-label-sm text-secondary font-semibold">Szacowany wpływ: +466 061 PLN</span>
+</div>
+<div class="grid grid-cols-2 gap-space-sm pt-1">
+<button class="py-2.5 px-space-md rounded-lg bg-gradient-to-r from-amber-400 to-amber-500 text-stone-950 font-headline-sm text-headline-sm font-bold hover:from-amber-300 hover:to-amber-400 transition-all flex items-center justify-center gap-space-xs shadow-[0_4px_14px_rgba(251,191,36,0.3)] active:scale-[0.99]" type="button">
+<span class="material-symbols-outlined text-[18px]">verified</span>
+                    Zatwierdź sprzedaż pakietu LOMBARDEX
+                  </button>
+<button class="py-2.5 px-space-md rounded-lg bg-surface-container-highest border border-outline-variant/80 text-on-surface hover:bg-surface-bright transition-colors font-headline-sm text-headline-sm flex items-center justify-center gap-space-xs" type="button">
+<span class="material-symbols-outlined text-[18px] text-primary-container">description</span>
+                    Przygotuj aneks inwestycyjny
+                  </button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Thread Input Footer -->
+<footer class="p-space-md bg-surface-container-low border-t border-outline-variant/60 shrink-0 space-y-space-xs shadow-lg">
+<div class="p-space-xs bg-surface-container border border-outline-variant/60 rounded-xl focus-within:border-primary-container/80 transition-colors">
+<!-- Action icons bar -->
+<div class="flex items-center justify-between px-space-xs pb-1 mb-1 border-b border-outline-variant/40">
+<div class="flex items-center gap-1">
+<button class="w-7 h-7 rounded text-outline hover:text-primary-container hover:bg-surface-container-high flex items-center justify-center transition-colors" title="Dołącz pozycję z portfela funduszu" type="button">
+<span class="material-symbols-outlined text-[18px]">domain</span>
+</button>
+<button class="w-7 h-7 rounded text-outline hover:text-primary-container hover:bg-surface-container-high flex items-center justify-center transition-colors" title="Załącz raport analityczny" type="button">
+<span class="material-symbols-outlined text-[18px]">attach_file</span>
+</button>
+<button class="w-7 h-7 rounded text-outline hover:text-primary-container hover:bg-surface-container-high flex items-center justify-center transition-colors" title="Wstaw wykres kursowy GPW" type="button">
+<span class="material-symbols-outlined text-[18px]">monitoring</span>
+</button>
+<button class="w-7 h-7 rounded text-outline hover:text-error hover:bg-surface-container-high flex items-center justify-center transition-colors" title="Priorytet C-Level" type="button">
+<span class="material-symbols-outlined text-[18px]">priority_high</span>
+</button>
+</div>
+<div class="flex items-center gap-space-xs font-label-sm text-label-sm text-outline">
+<kbd class="px-1.5 py-0.5 rounded bg-surface-container-lowest border border-outline-variant/50 text-outline font-label-sm text-[9px]">Shift + Enter</kbd>
+<span class="">nowa linia</span>
+</div>
+</div>
+<!-- Input Area: 3 choices -->
+<div class="space-y-space-xs pt-1"><div class="flex items-center justify-between px-space-xs text-outline font-label-sm text-[10px] uppercase tracking-wider font-semibold"><span class="">Wybierz odpowiedź dla Dariusza Wolskiego (Wpływ na tury i relacje):</span><span class="text-primary-container font-mono">Skróty klawiszowe [1] [2] [3]</span></div><div class="grid grid-cols-1 md:grid-cols-3 gap-space-xs"><button class="p-space-sm rounded-lg bg-surface-container-high hover:bg-surface-bright border border-tertiary/40 hover:border-tertiary text-left transition-all group flex flex-col justify-between gap-1 shadow-sm active:scale-[0.99]" type="button"><div class="flex items-center justify-between w-full"><span class="px-1.5 py-0.5 rounded text-[9px] font-label-sm font-bold bg-tertiary/15 text-tertiary border border-tertiary/30 uppercase flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>Ostrożnie</span><span class="font-label-sm text-[10px] text-outline group-hover:text-primary-container font-bold font-mono">[1] ↵</span></div><p class="font-body-sm text-body-sm text-on-surface group-hover:text-on-surface leading-tight mt-1">„Wyjdźmy z 50% pozycji LOMBARDEX z zyskiem na otwarciu, a resztę zabezpieczmy stop-lossem. Gotówka wzrośnie o ok. 230 tys. PLN.”</p><div class="flex items-center gap-1 text-[10px] font-label-sm text-tertiary font-semibold mt-1"><span class="material-symbols-outlined text-[12px]">shield</span><span class="">+Zaufanie szefa | Ryzyko: Niskie</span></div></button><button class="p-space-sm rounded-lg bg-surface-container-high hover:bg-surface-bright border border-primary-container/40 hover:border-primary-container text-left transition-all group flex flex-col justify-between gap-1 shadow-sm active:scale-[0.99]" type="button"><div class="flex items-center justify-between w-full"><span class="px-1.5 py-0.5 rounded text-[9px] font-label-sm font-bold bg-primary-container/15 text-primary-container border border-primary-container/30 uppercase flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-primary-container"></span>Ryzykownie</span><span class="font-label-sm text-[10px] text-outline group-hover:text-primary-container font-bold font-mono">[2] ↵</span></div><p class="font-body-sm text-body-sm text-on-surface group-hover:text-on-surface leading-tight mt-1">„Trzymajmy całą pozycję do fixingu popołudniowego. Spekulacje na Giełdzie Śmieciowej pchną kurs powyżej 12,50 PLN i wyciągniemy NAV.”</p><div class="flex items-center gap-1 text-[10px] font-label-sm text-primary-container font-semibold mt-1"><span class="material-symbols-outlined text-[12px]">trending_up</span><span class="">++NAV / +500 PLN premii | Ryzyko: Wysokie</span></div></button><button class="p-space-sm rounded-lg bg-surface-container-high hover:bg-surface-bright border border-secondary/40 hover:border-secondary text-left transition-all group flex flex-col justify-between gap-1 shadow-sm active:scale-[0.99]" type="button"><div class="flex items-center justify-between w-full"><span class="px-1.5 py-0.5 rounded text-[9px] font-label-sm font-bold bg-secondary/15 text-secondary border border-secondary/30 uppercase flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>Prywatna kalkulacja</span><span class="font-label-sm text-[10px] text-outline group-hover:text-primary-container font-bold font-mono">[3] ↵</span></div><p class="font-body-sm text-body-sm text-on-surface group-hover:text-on-surface leading-tight mt-1">„Zgadzam się z Panem, Panie Prezesie. Dokapitalizuję pozycję z mojego konta prywatnego (1551 PLN), żeby pokazać inwestorom wiarę w fundusz.”</p><div class="flex items-center gap-1 text-[10px] font-label-sm text-secondary font-semibold mt-1"><span class="material-symbols-outlined text-[12px]">handshake</span><span class="">+++Relacja z Wolskim | -Własne środki</span></div></button></div></div>
+</div>
+</footer>
+</main>
+<!-- PANE 3: EXECUTIVE INSPECTOR & CONTEXT DOCK (280px) -->
+<aside class="w-72 shrink-0 bg-surface-container-lowest border-l border-outline-variant/60 flex flex-col justify-between overflow-y-auto">
+<div class="p-space-md space-y-space-lg">
+<!-- Contact Identity Card -->
+<div class="text-center space-y-space-sm pb-space-md border-b border-outline-variant/50">
+<div class="relative w-20 h-20 mx-auto">
+<div class="w-full h-full rounded-2xl bg-surface-container-high border-2 border-outline-variant flex items-center justify-center font-headline-xl text-headline-xl text-primary-container font-bold shadow-lg">
+              DW
+            </div>
+<div class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-tertiary border-2 border-surface-container-lowest flex items-center justify-center shadow-md">
+<span class="material-symbols-outlined text-[12px] text-stone-950 font-bold">check</span>
+</div>
+</div>
+<div>
+<h2 class="font-headline-md text-headline-md text-on-surface font-bold">Dariusz Wolski</h2>
+<div class="font-label-sm text-label-sm text-primary-container uppercase tracking-wide font-semibold">Prezes &amp; Założyciel</div>
+<div class="font-body-sm text-body-sm text-outline">Fundusz Pierwszy Krok S.A.</div>
+</div>
+<!-- Telemetry badges -->
+<div class="grid grid-cols-2 gap-space-xs pt-1">
+<div class="p-space-xs rounded-lg bg-surface-container border border-outline-variant/50 text-left">
+<div class="font-label-sm text-[10px] text-outline uppercase font-semibold">Zaufanie do Ciebie</div>
+<div class="font-label-md text-label-md font-bold text-tertiary flex items-center gap-1">
+<span class="">45%</span>
+<span class="text-[10px] text-tertiary">▲ +2%</span>
+</div>
+</div>
+<div class="p-space-xs rounded-lg bg-surface-container border border-outline-variant/50 text-left">
+<div class="font-label-sm text-[10px] text-outline uppercase font-semibold">Wpływ na Premię</div>
+<div class="font-label-md text-label-md font-bold text-primary-container">B. Wysoki</div>
+</div>
+</div>
+</div>
+<!-- Active Board Tasks -->
+<div class="space-y-space-xs">
+<div class="flex items-center justify-between font-label-sm text-label-sm uppercase tracking-wider text-outline px-1 font-semibold">
+<span class="">Zadania od Szefa</span>
+<span class="text-primary-container font-bold">2 aktywne</span>
+</div>
+<div class="space-y-1.5">
+<!-- Task 1 -->
+<div class="p-space-sm rounded-xl bg-surface-container border border-outline-variant/50 space-y-1 hover:border-outline-variant transition-colors">
+<div class="flex items-center justify-between">
+<span class="px-1.5 py-0.5 rounded text-[9px] font-label-sm font-bold bg-primary-container text-stone-950 uppercase">W trakcie</span>
+<span class="font-label-sm text-label-sm text-primary-container font-bold">+500 PLN pryw.</span>
+</div>
+<div class="font-headline-sm text-headline-sm text-on-surface font-semibold">Zwiększ zaufanie klientów</div>
+<div class="font-body-sm text-body-sm text-outline">Podnieś ogólny wskaźnik powyżej 20 pkt (obecnie 14/100).</div>
+<div class="w-full bg-surface-container-lowest border border-outline-variant/40 h-1.5 rounded-full overflow-hidden mt-1">
+<div class="bg-gradient-to-r from-amber-400 to-amber-500 h-full rounded-full" style="width: 70%"></div>
+</div>
+</div>
+<!-- Task 2 -->
+<div class="p-space-sm rounded-xl bg-surface-container border border-outline-variant/50 space-y-1 hover:border-outline-variant transition-colors">
+<div class="flex items-center justify-between">
+<span class="px-1.5 py-0.5 rounded text-[9px] font-label-sm font-bold bg-surface-container-highest text-outline uppercase">Oczekuje</span>
+<span class="font-label-sm text-label-sm text-tertiary font-bold">+1000 NAV</span>
+</div>
+<div class="font-headline-sm text-headline-sm text-on-surface font-semibold">Wyjście z Lombardex</div>
+<div class="font-body-sm text-body-sm text-outline">Zrealizuj profit przed załamaniem płynności na Giełdzie Śmieciowej.</div>
+</div>
+</div>
+</div>
+<!-- Shared Documents Section -->
+<div class="space-y-space-xs">
+<div class="flex items-center justify-between font-label-sm text-label-sm uppercase tracking-wider text-outline px-1 font-semibold">
+
+
+</div>
+<div class="space-y-1">
+
+
+</div>
+</div>
+<!-- Psychological / Strategic Insights -->
+<div class="p-space-sm rounded-xl bg-surface-container border border-outline-variant/50 space-y-1">
+<div class="font-label-sm text-[10px] uppercase font-bold text-primary-container flex items-center gap-1">
+<span class="material-symbols-outlined text-[13px]">psychology</span>
+            Notatki dotyczące relacji
+          </div>
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
+            „Prezes Wolski nie toleruje zbędnego ryzyka przy niskiej gotówce funduszu. Preferuje szybkie zamykanie zysków z małych spółek.”
+          </p>
+</div>
+</div>
+<!-- Quick Action Drawer Footer -->
+<div class="p-space-sm bg-surface-container border-t border-outline-variant/60 flex items-center justify-between shrink-0">
+<button class="w-full py-1.5 rounded-lg bg-surface-container-high hover:bg-surface-bright border border-outline-variant text-on-surface hover:text-primary-container font-label-sm text-label-sm uppercase font-bold tracking-wider transition-colors flex items-center justify-center gap-1 shadow-sm" type="button">
+<span class="material-symbols-outlined text-[16px]">history_edu</span>
+          Historia dyspozycji
+        </button>
+</div>
+</aside>
+</div>
+</div></main></div>
+
+
+</body></html>

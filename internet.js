@@ -10,11 +10,11 @@ const TIED_POSITIVE_NEWS = /wynik|kontrakt|raport|współprac|kooperac|dywidend|
 
 /** Ulubione: jedyna droga do stron. `unlocked` — mechanika gry (nie zakup); `hint` — opis zablokowanego kafelka. */
 const INTERNET_FAVORITES = [
-    { id: 'kantory24', title: 'Kantory24', host: 'kantory24.pl', icon: 'moneta', desc: 'Waluty, kwity GDR, rynki zagraniczne i forex.', unlocked: () => true },
-    { id: 'tied', title: 'Tied', host: 'tied.net', icon: 'grupa', desc: 'Posty prezesów i wiadomości od inwestorów.', unlocked: () => isTiedUnlocked(), hint: 'Odblokuje się po awansie na Zarządcę funduszu albo po pierwszych relacjach z inwestorami.' },
-    { id: 'startupy', title: 'Startupy', host: 'startupy.gielda.pl', icon: 'rakieta', desc: 'Inkubator, pula start-upów i rundy finansowania.', unlocked: () => true },
-    { id: 'ferie', title: 'Ferie i wakacje', host: 'ferie-i-wakacje.pl', icon: 'samolot', desc: 'Bilety do rynków zagranicznych, lotnisko miasta.', unlocked: () => true },
-    { id: 'lombard', title: 'Lombard', host: 'lombardex.pl', icon: 'lombard', desc: 'Pożyczki pod zastaw akcji.', unlocked: () => true }
+    { id: 'kantory24', tag: 'Waluty i forex', tone: 'amber', title: 'Kantory24', host: 'kantory24.pl', icon: 'moneta', desc: 'Waluty, kwity GDR, rynki zagraniczne i forex.', unlocked: () => true },
+    { id: 'tied', tag: 'Sieć zawodowa', tone: 'blue', title: 'Tied', host: 'tied.net', icon: 'grupa', desc: 'Posty prezesów i wiadomości od inwestorów.', unlocked: () => isTiedUnlocked(), hint: 'Odblokuje się po awansie na Zarządcę funduszu albo po pierwszych relacjach z inwestorami.' },
+    { id: 'startupy', tag: 'Venture capital', tone: 'violet', title: 'Startupy', host: 'startupy.gielda.pl', icon: 'rakieta', desc: 'Inkubator, pula start-upów i rundy finansowania.', unlocked: () => true },
+    { id: 'ferie', tag: 'Mobilność', tone: 'teal', title: 'Ferie i wakacje', host: 'ferie-i-wakacje.pl', icon: 'samolot', desc: 'Bilety do rynków zagranicznych, lotnisko miasta.', unlocked: () => true },
+    { id: 'lombard', tag: 'Płynność', tone: 'orange', title: 'Lombard', host: 'lombardex.pl', icon: 'lombard', desc: 'Pożyczki pod zastaw akcji.', unlocked: () => true }
 ];
 
 /** Barwy kraju (ciemne tło okna i akcent) — kolor nigdy jedynym nośnikiem: nazwa i flaga stoją w pasku okna. */
@@ -80,11 +80,13 @@ function noteTiedEvent(message, category) {
     return addTiedPost({ symbol: stock.symbol, author: stock.ceo.name, text, kind });
 }
 
-/** Wiadomości od inwestorów (boty) i spółek idą do Tied, systemowe zostają w TeamedUP!. Bez odblokowanego Tied nic nie znika z TeamedUP!. */
+/** Kanał wiadomości: Poczta (newsy, ciekawostki, reklamy), TeamedUP! (szefostwo i współpracownicy), Tied (inwestorzy i spółki, po odblokowaniu). Nic nie ginie — kanał liczy się przy wyświetlaniu. */
 function getMailChannel(message) {
     const s = String(message.sender);
-    if (s === CORPORATION_SENDER || MAGAZINES[s] || message.isSpam) return 'teamedup'; // reklamy zostają w TeamedUP! (folder Spam), Tied jest bez reklam
-    return isTiedUnlocked() ? 'tied' : 'teamedup';
+    if (s === CORPORATION_SENDER) return 'teamedup';
+    if (MAGAZINES[s] || message.isSpam) return 'poczta'; // reklamy zostają w Poczcie (Spam), Tied jest bez reklam
+    if (s.startsWith('bot:') && typeof findRelationPerson === 'function' && findRelationPerson(s.slice(4))?.kind === 'colleague') return 'teamedup';
+    return isTiedUnlocked() ? 'tied' : 'poczta';
 }
 
 // =================================================================================
@@ -123,9 +125,11 @@ function renderInternet() {
     home.hidden = Boolean(fav);
     for (const f of INTERNET_FAVORITES) { const el = document.getElementById(`net-page-${f.id}`); if (el) el.hidden = !fav || fav.id !== f.id; }
     const address = document.getElementById('net-address');
-    if (address) address.value = fav ? `https://${fav.host}` : 'ulubione';
-    const back = document.getElementById('net-home-btn');
-    if (back) back.hidden = !fav;
+    if (address) address.value = fav ? `https://${fav.host}` : 'ulubione://start';
+    const tab = document.getElementById('net-tab-title');
+    if (tab) tab.textContent = fav ? fav.title : 'Ulubione';
+    const back = document.getElementById('net-back-btn');
+    if (back) back.disabled = !fav;
     if (!fav) { home.innerHTML = renderInternetFavorites(); applyInternetTheme(); return; }
     if (fav.id === 'kantory24') showKantorTab(typeof kantorTab === 'string' ? kantorTab : 'rates');
     else if (fav.id === 'ferie') renderFeriePage();
@@ -138,13 +142,13 @@ function renderInternetFavorites() {
     const tiles = INTERNET_FAVORITES.map(f => {
         const ok = f.unlocked();
         const extra = f.id === 'tied' && ok ? unreadTiedCount() : 0;
-        return `<button type="button" role="listitem" class="net-fav ${ok ? '' : 'locked'}" ${ok ? '' : 'aria-disabled="true"'} onclick="openInternetPage('${f.id}')">
-            <span class="net-fav-icon">${uiIcon(ok ? f.icon : 'klodka', 24)}</span>
+        return `<button type="button" role="listitem" class="net-fav tone-${f.tone} ${ok ? '' : 'locked'}" ${ok ? '' : 'aria-disabled="true"'} onclick="openInternetPage('${f.id}')">
+            <span class="net-fav-top"><span class="net-fav-icon">${uiIcon(ok ? f.icon : 'klodka', 22)}</span>
+                ${ok ? `<span class="net-chip">${escapeHtml(f.tag)}</span>` : `<span class="net-chip">${uiIcon('klodka', 11)} Zablokowane</span>`}${extra ? `<span class="net-new">${extra} ${extra === 1 ? 'nowa' : 'nowe'}</span>` : ''}</span>
             <strong>${escapeHtml(f.title)}</strong>
-            <span class="text-sm text-muted">${escapeHtml(ok ? f.desc : (f.hint || 'Zablokowane'))}</span>
-            ${ok ? '' : '<span class="text-xs">Zablokowane</span>'}${extra ? `<span class="nav-badge">${extra}</span>` : ''}</button>`;
+            <span class="net-fav-desc">${escapeHtml(ok ? f.desc : (f.hint || 'Zablokowane'))}</span>${ok ? `<span class="net-fav-arrow" aria-hidden="true">&rarr;</span>` : ''}</button>`;
     }).join('');
-    return `<p class="text-sm text-muted">Ulubione to jedyny sposób wejścia na strony. Nowe odblokowuje gra, nie zakup.</p><div class="net-favs" role="list" aria-label="Ulubione strony">${tiles}</div>`;
+    return `<p class="net-notice">${uiIcon('info', 16)} Ulubione to jedyny sposób wejścia na strony. Nowe odblokowuje gra, nie zakup.</p><div class="net-favs" role="list" aria-label="Ulubione strony">${tiles}</div>`;
 }
 
 function unreadTiedCount() { return mailbox ? mailbox.messages.filter(m => !m.read && getMailChannel(m) === 'tied').length : 0; }
@@ -153,30 +157,60 @@ function unreadTiedCount() { return mailbox ? mailbox.messages.filter(m => !m.re
 function renderFeriePage() {
     const root = document.getElementById('net-ferie-body');
     if (!root) return;
-    root.innerHTML = '<div id="net-ferie-tickets"></div><div id="net-ferie-country"></div>';
-    renderAirportWindow('net-ferie-tickets', { tickets: true });
+    const built = isAirportBuilt(), building = isAirportInProgress();
+    const status = built ? ['Stoi', 'Lotnisko miasta działa — bilety są w sprzedaży.'] : building ? ['W budowie', 'Lotnisko to megaprojekt miasta; wykonawcą jest spółka budowlana. Do ukończenia bilety są niedostępne.'] : ['Brak lotniska', 'Lotnisko jeszcze nie powstało. Miasto może je zlecić przez przetarg budowlany; bez niego nie kupisz biletów.'];
+    const order = !built && !building ? '<button class="btn-primary btn-sm" onclick="airportUiOrder()">Zleć budowę lotniska</button>' : '';
     const c = internetState.country, owns = c && canTradeCountry('player', c);
+    const defs = Object.values(COUNTRY_DEFS);
+    const cards = defs.map(def => {
+        const has = hasTicket('player', def.id), price = getTicketPrice(def.id), joined = isCountryJoined(def.id), theme = COUNTRY_THEMES[def.id] || {};
+        const missing = price - playerCash;
+        const money = has ? '<span class="net-ok">' + uiIcon('ok', 14) + ' Bilet aktywny</span>' : `<strong>${formatZl(price, 0)}</strong>`;
+        const wallet = has ? 'Opłacono bezterminowo' : !built ? 'Lotnisko nie stoi' : missing > 0 ? `<span class="net-short">Brakuje ${formatZl(missing, 0)}</span>` : `Dostępne (gotówka ${formatZl(playerCash, 0)})`;
+        const action = has ? `<button class="btn-primary" onclick="feriePickCountry('${def.id}')">Zobacz rynek</button>` : `<button class="btn-primary" ${built && missing <= 0 ? '' : 'disabled'} onclick="airportUiBuy('${def.id}')">Kup bilet za ${formatZl(price, 0)}</button>`;
+        return `<article class="net-dest ${def.id === c ? 'selected' : ''}" style="--dest:${theme.accent || 'var(--amber-400)'}">
+            <header><span class="net-dest-flag">${flagIcon(def.id, 28)}</span><div><h4>${escapeHtml(def.name)} <span class="net-chip">${currencyIcon(def.currency, 12)} ${def.currency}</span></h4><span class="text-sm text-muted">${escapeHtml(def.operator.name)}</span></div>
+                <span class="net-status ${joined ? 'open' : ''}">${joined ? 'Giełda otwarta' : 'Jeszcze zamknięta'}</span></header>
+            <div class="net-dest-row"><span><small>${has ? 'Status licencji' : 'Koszt biletu'}</small>${money}</span><span class="text-right"><small>Prowizja z biletem</small><strong>${formatNumberPl(getCountryCommission(def.id) * 100, 1)}%</strong></span></div>
+            <footer><span class="text-sm">${wallet}</span>${action}</footer>${joined ? '' : '<p class="text-xs text-muted">Pierwszy bilet otwiera giełdę kraju.</p>'}</article>`;
+    }).join('');
+    root.innerHTML = `<section class="net-airport"><span class="net-airport-icon">${uiIcon('samolot', 22)}</span><div><h3>Port lotniczy miasta <span class="net-status ${built ? 'open' : ''}">${status[0]}</span></h3><p class="text-sm" aria-live="polite">${status[1]}</p></div>${order}</section>
+        <section class="net-hero"><span class="net-kicker">Międzynarodowe połączenia kapitałowe</span><h3>Bilet na rynek zagraniczny</h3><p class="text-sm text-muted">Odblokuj bezpośredni obrót spółkami kraju. Bilet kupujesz z gotówki funduszu, od ${formatZl(TICKET_RULES.min, 0)}.</p>
+            <div class="net-route"><div><small>Wylot (z)</small><strong>Warszawa (GPW)</strong><span class="text-sm text-muted">Rynek bazowy · PLN</span></div><span class="net-route-line" aria-hidden="true">${uiIcon('samolot', 18)}</span>
+                <div><small>Przylot (do)</small>${owns ? `<strong>${flagIcon(c, 14)} ${escapeHtml(COUNTRY_DEFS[c].name)}</strong><span class="text-sm text-muted">${escapeHtml(COUNTRY_DEFS[c].operator.name)} · ${COUNTRY_DEFS[c].currency}</span>` : `<strong>Wybierz giełdę</strong><span class="text-sm text-muted">${defs.length} rynków globalnych</span>`}</div>
+                <div><small>Klasa lotu</small><strong>Fundusz (inwestor)</strong><small>Ważność</small><strong>Bezterminowo</strong></div></div></section>
+        <div class="net-section-head"><h3>Katalog lotów i licencji</h3><span class="text-sm text-muted">Dostępnych: ${defs.length} krajów</span></div>
+        <div class="net-dests">${cards}</div><div id="net-ferie-country"></div>`;
     const box = document.getElementById('net-ferie-country');
-    if (!owns) { box.innerHTML = '<p class="text-sm text-muted">Kup bilet i wybierz „Zobacz rynek”, a okno zmieni barwy na barwy kraju i pokaże jego spółki.</p>'; return; }
+    if (!owns) return;
     const rows = getCountryIssuers(c).map(i => `<tr><td><strong>${getGdrSymbol(i)}</strong> <span class="text-muted">${escapeHtml(i.name)}</span></td><td>${escapeHtml(i.sectors.map(s => s[0]).join(' + '))}</td><td class="text-right">${formatNumberPl(i.price, 2)} ${i.currency}</td><td class="text-right">${formatZl(toPln(i.price, i.currency), 2)}</td></tr>`).join('');
-    box.innerHTML = `${renderCountryCard(c)}<table class="asset-mini-table w-full mt-3"><thead><tr><th>Spółka</th><th>Sektor</th><th class="text-right">Cena</th><th class="text-right">Cena w PLN</th></tr></thead><tbody>${rows}</tbody></table>
+    box.innerHTML = `<div class="net-section-head"><h3>Rynek: ${escapeHtml(COUNTRY_DEFS[c].name)}</h3></div>${renderCountryCard(c)}<table class="asset-mini-table w-full mt-3"><thead><tr><th>Spółka</th><th>Sektor</th><th class="text-right">Cena</th><th class="text-right">Cena w PLN</th></tr></thead><tbody>${rows}</tbody></table>
         <div class="btn-row"><button class="btn-primary" onclick="marketsSelected='${c}'; kantorTab='markets'; openInternetPage('kantory24')">Handluj w Kantory24</button><button class="btn-ghost" onclick="selectInternetCountry(null); renderFeriePage()">Wróć do neutralnego okna</button></div>`;
 }
 
 function feriePickCountry(id) { selectInternetCountry(id); renderFeriePage(); }
 
 // --- Tied ---
+const initials = name => String(name || '?').split(/\s+/).map(w => w.charAt(0)).join('').slice(0, 2).toUpperCase();
+
 function renderTiedPage() {
     const root = document.getElementById('net-tied-body');
     if (!root) return;
-    const posts = getTiedPosts().map(p => `<article class="bank-card net-post"><header class="bank-card-head"><span class="bank-card-icon net-avatar" aria-hidden="true">${escapeHtml(String(p.author || '?').charAt(0))}</span>
-        <div><h4>${escapeHtml(p.author || 'Prezes')}</h4><span class="bank-card-type">prezes · ${escapeHtml(p.symbol)} · ${formatMailTime(p.at)}</span></div></header><p class="text-sm">${escapeHtml(p.text)}</p>
-        <div class="btn-row"><button class="btn-ghost btn-sm" onclick="openStockDetailsModal('${escapeHtml(p.symbol)}')">Pokaż spółkę</button></div></article>`).join('');
-    const msgs = mailbox.messages.filter(m => getMailChannel(m) === 'tied').slice(0, 30).map(m => `<li class="net-msg ${m.read ? '' : 'unread'}"><button type="button" class="btn-ghost btn-sm" onclick="markMailRead(${m.id}); renderTiedPage()" aria-label="Oznacz jako przeczytane">${m.read ? 'przeczytane' : 'nowa'}</button>
-        <strong>${escapeHtml(getMailSenderName(m.sender))}</strong> — ${escapeHtml(m.subject)}<div class="text-sm text-muted">${escapeHtml(m.body.slice(0, 240))}</div></li>`).join('');
-    root.innerHTML = `<div class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('grupa', 20)}</span><div><h4>Wiadomości</h4><span class="bank-card-type">od inwestorów i spółek</span></div></header>
-        ${msgs ? `<ul class="list-plain">${msgs}</ul>` : '<p class="text-sm text-muted">Brak wiadomości.</p>'}</div>
-        <h4 class="mt-3">Aktualności prezesów</h4>${posts || '<p class="text-sm text-muted">Prezesi jeszcze nic nie opublikowali — posty pojawiają się przy dobrych wiadomościach ze spółek.</p>'}`;
+    const me = playerProfile || {}, position = CAREER_POSITIONS[getPositionIndex(me.positionId)]?.name || '';
+    const posts = getTiedPosts().map(p => {
+        const st = stocks.find(x => x.symbol === p.symbol);
+        return `<article class="net-post"><header><span class="net-avatar" aria-hidden="true">${escapeHtml(initials(p.author))}</span><div><strong>${escapeHtml(p.author || 'Prezes')}</strong>
+            <span class="text-sm text-muted">Prezes · ${escapeHtml(st?.name || p.symbol)} (${escapeHtml(p.symbol)}) · ${formatMailTime(p.at)}</span></div><span class="net-chip">${p.kind === 'coop' ? 'Współpraca' : 'Wyniki'}</span></header>
+            <p>${escapeHtml(p.text)}</p><footer>${st ? `<span class="text-sm">Kurs ${escapeHtml(p.symbol)}: <strong>${formatZl(st.price, 2)}</strong></span>` : '<span></span>'}<button class="btn-ghost btn-sm" onclick="openStockDetailsModal('${escapeHtml(p.symbol)}')">${uiIcon('rynek', 14)} Pokaż spółkę</button></footer></article>`;
+    }).join('');
+    const msgsAll = mailbox.messages.filter(m => getMailChannel(m) === 'tied'), unread = msgsAll.filter(m => !m.read).length;
+    const msgs = msgsAll.slice(0, 20).map(m => `<li class="net-msg ${m.read ? '' : 'unread'}"><span class="net-avatar sm" aria-hidden="true">${escapeHtml(initials(getMailSenderName(m.sender).replace(/^\P{L}+/u, '')))}</span><div><strong>${escapeHtml(getMailSenderName(m.sender).replace(/^\P{L}+/u, ''))}</strong>${m.read ? '' : ' <span class="net-chip">Nowa</span>'}
+        <div class="text-sm">${escapeHtml(m.subject)}</div><div class="text-sm text-muted">${escapeHtml(m.body.slice(0, 140))}</div>${m.read ? '' : `<button type="button" class="btn-ghost btn-sm" onclick="markMailRead(${m.id}); renderTiedPage()">Oznacz jako przeczytane</button>`}</div></li>`).join('');
+    root.innerHTML = `<div class="net-tied">
+        <aside class="net-tied-profile"><div class="net-card"><span class="net-avatar lg" aria-hidden="true">${escapeHtml(initials(me.name))}</span><h4>${escapeHtml(me.name || 'Ty')}</h4><span class="text-sm text-muted">${escapeHtml(position)}${playerFund?.name ? ' · ' + escapeHtml(playerFund.name) : ''}</span>
+            <dl class="net-kv"><div><dt>Konto prywatne</dt><dd>${formatZl(playerWallet?.cash || 0, 2)}</dd></div><div><dt>Zaufanie klientów</dt><dd>${(playerFund?.trust ?? 0).toFixed(0)} / 100</dd></div></dl></div></aside>
+        <section class="net-tied-feed"><div class="net-feed-tab">Najnowsze z rynku</div>${posts || '<p class="net-empty">Prezesi jeszcze nic nie opublikowali — posty pojawiają się przy dobrych wiadomościach ze spółek.</p>'}</section>
+        <aside class="net-tied-msgs"><div class="net-card"><h4>${uiIcon('poczta', 16)} Wiadomości <span class="net-count">${unread}</span></h4>${msgs ? `<ul class="list-plain">${msgs}</ul>` : '<p class="text-sm text-muted">Brak wiadomości od inwestorów i spółek.</p>'}</div></aside></div>`;
 }
 
 // --- Lombard (jedno źródło prawdy: okno Lombardex, tu tylko wejście) ---
