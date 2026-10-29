@@ -13624,4 +13624,42 @@ async function runAllTests() {
     window.__testSummary = { passed, failed, errors: testErrors };
 }
 
+group('0.16.6 Domknięcie', () => {
+    const fresh = () => { resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' }); };
+
+    test('S2: ukończony szpital/kampus/centrum = spółka państwowa na GPW z dywidendą do skarbu; inne megaprojekty nie tworzą spółek', () => {
+        fresh();
+        for (const id of ['hospital', 'techcampus', 'expo']) {
+            const def = MEGA_PROJECTS.find(p => p.id === id);
+            const before = getListedCompanyCount();
+            completeProject({ id: 'spx' + id, templateId: id, name: def.name, icon: def.icon, timed: false, cost: def.cost, bonus: def.bonus, participants: [], builder: null, quarters: def.quarters });
+            const stock = stocks.find(s => s.symbol === SUPERPROJECT_COMPANIES[id].symbol);
+            assert(stock && stock.isStateOwned && stock.stateOwnershipPct > 0.5 && getStockMarket(stock) === 'GPW', `${id}: spółka państwowa na GPW`);
+            assertEq(getListedCompanyCount(), before + 1, `${id}: liczona do spółek krajowych`);
+            const mc = getMarketCapValue(stock);
+            assert(mc > def.cost * 0.5 && mc < def.cost * 2, `${id}: kapitalizacja ≈ koszt budowy (${mc})`);
+            const treasury = governmentTreasury; payDividendToInstitutions(stock, 1);
+            assert(governmentTreasury > treasury, `${id}: dywidenda do skarbu`);
+        }
+        const n = stocks.length; const bridge = MEGA_PROJECTS.find(p => p.id === 'bridge');
+        completeProject({ id: 'spb', templateId: 'bridge', name: bridge.name, icon: bridge.icon, timed: false, cost: bridge.cost, bonus: bridge.bonus, participants: [], builder: null, quarters: 5 });
+        assertEq(stocks.length, n, 'most nie tworzy spółki');
+        completeProject({ id: 'spx2', templateId: 'hospital', name: 'Szpital kliniczny', icon: '🏥', timed: false, cost: 1, bonus: MEGA_PROJECTS[7].bonus, participants: [], builder: null, quarters: 6 });
+        assertEq(stocks.filter(s => s.symbol === 'SZK').length, 1, 'bez duplikatu');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    });
+
+    test('S2: spółka państwowa nie opuszcza GPW (przeniesienie, wyłączność, zejście na NH, zagraniczne przejęcie); miejska może awansować na GPW', () => {
+        fresh();
+        const gov = stocks.find(s => s.isStateOwned && !s.assetType) || (() => { const s = mk156('GOV', { price: 100, isStateOwned: true, stateOwnershipPct: 0.6 }); stocks.push(s); return s; })();
+        for (const m of ['NH', 'PRV', 'XTD']) assert(!moveStockToMarket(gov, m, 'test') && getStockMarket(gov) === 'GPW', `odmowa ${m}`);
+        assert(!getListingMoveTargets(gov).length, 'brak celów przenosin');
+        assert(!pickForeignTakeoverTarget() || pickForeignTakeoverTarget() !== gov, 'nie cel przejęcia');
+        const city = mk156('MUN', { price: 100, isStateOwned: true, stateOwnershipPct: 0.6, market: 'NH' }); stocks.push(city);
+        assert(moveStockToMarket(city, 'GPW', 'awans') && getStockMarket(city) === 'GPW', 'awans na GPW wolno');
+        const plain = mk156('PLN', { price: 100 }); stocks.push(plain);
+        assert(moveStockToMarket(plain, 'NH', 'test'), 'zwykła spółka może zmienić rynek');
+    });
+});
+
 runAllTests();
