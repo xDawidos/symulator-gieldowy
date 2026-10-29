@@ -38,11 +38,12 @@ let fxMeans = {};
 let fxHistory = {};
 let fxWeek = 0;
 let playerCashByCurrency = {};
+let playerFxBasis = {}; // 0.16.9 W1: średni kurs nabycia sald walutowych funduszu (zł za jednostkę; zapis v20)
 let kantorOffers = {}; // id dostawcy → { w, s: {waluta: spread}, b: {waluta: przesunięcie kursu} }
 let kantorLog = [];   // ostatnie transakcje gracza w kantorze (do podglądu)
 
 function initFxState() {
-    fxRates = {}; fxMeans = {}; fxHistory = {}; fxWeek = 0; playerCashByCurrency = {}; kantorLog = []; kantorOffers = {};
+    fxRates = {}; fxMeans = {}; fxHistory = {}; fxWeek = 0; playerCashByCurrency = {}; playerFxBasis = {}; kantorLog = []; kantorOffers = {};
     for (const code of FOREIGN_CURRENCIES) {
         fxRates[code] = CURRENCIES[code].start;
         fxMeans[code] = CURRENCIES[code].start;
@@ -132,9 +133,15 @@ function getForeignCashPln(entity = 'player') {
     return total;
 }
 
-function addCurrencyCash(entity, code, amount) {
+/** `rate`: kurs nabycia partii (zł za jednostkę; domyślnie środkowy) — wchodzi do średniego kursu salda funduszu. */
+function addCurrencyCash(entity, code, amount, rate = getFxRate(code)) {
     if (code === 'PLN') return;
-    if (entity === 'player') { playerCashByCurrency[code] = (Number(playerCashByCurrency[code]) || 0) + amount; return; }
+    if (entity === 'player') {
+        const old = Number(playerCashByCurrency[code]) || 0;
+        if (amount > 0) playerFxBasis[code] = old > 1e-9 && playerFxBasis[code] > 0 ? (old * playerFxBasis[code] + amount * rate) / (old + amount) : rate;
+        playerCashByCurrency[code] = old + amount;
+        return;
+    }
     if (!entity.cashByCurrency) entity.cashByCurrency = {};
     entity.cashByCurrency[code] = (Number(entity.cashByCurrency[code]) || 0) + amount;
 }
@@ -246,7 +253,7 @@ function kantorBuyCurrency(code, amountPln, providerId = 'std') {
     const foreign = amountPln / quote.rate;
     const spreadCost = amountPln - foreign * quote.mid;
     playerCash -= amountPln;
-    addCurrencyCash('player', code, foreign);
+    addCurrencyCash('player', code, foreign, quote.rate);
     settleKantorIncome(quote.provider, spreadCost, 'Kantor: spread');
     if (typeof unlockAcademyEntry === 'function') { unlockAcademyEntry('ryzykoWalutowe'); unlockAcademyEntry('spread'); }
     kantorLog.push({ w: fxWeek, side: 'buy', code, pln: Math.round(amountPln), foreign: Math.round(foreign * 100) / 100, rate: Math.round(quote.rate * 1e5) / 1e5 });
@@ -278,18 +285,83 @@ function kantorSellCurrency(code, amountForeign, providerId = 'std') {
 }
 
 /** Przymusowa płynność: najpierw sprzedajemy obcą gotówkę (przed akcjami). Zwraca zdobyte złote. */
-function liquidateForeignCash(amountPln) {
-    let raised = 0;
-    for (const code of Object.keys(playerCashByCurrency)) {
+function liquidateForeignCash(amountPln, reason = 'brak złotych na obowiązkową płatność') {
+    let raised = 0, spread = 0;
+    const done = [];
+    for (const code of Object.keys(playerCashByCurrency).sort((a, b) => toPln(getCurrencyCash('player', b), b) - toPln(getCurrencyCash('player', a), a))) { // od największego salda: najmniej wymian
         if (raised >= amountPln) break;
         const have = getCurrencyCash('player', code);
         if (!(have > 0)) continue;
         const quote = getKantorQuote(code, amountPln - raised, 'sell');
         const need = Math.min(have, (amountPln - raised) / quote.rate);
         const result = kantorSellCurrency(code, need);
-        if (result.ok) raised += result.pln;
+        if (result.ok) { raised += result.pln; spread += result.spreadCost; done.push(`${formatNumberPl(need, 2)} ${code}`); }
     }
+    // 0.16.9 W1: automatyczne przewalutowanie nie dzieje się po cichu — dziennik mówi, co i za ile (z kosztem spreadu)
+    if (raised > 0 && typeof logEvent === 'function') logEvent(`💱 ${reason[0].toUpperCase() + reason.slice(1)}: fundusz przewalutował ${done.join(', ')} na ${formatZl(raised, 0)} (spread ${formatZl(spread, 0)}).`, 'warning');
     return raised;
+}
+
+/**
+ * 0.16.9 W1: obowiązkowe płatności w złotych (opłata za zarządzanie, umorzenia, gwarancje) płaci gotówka PLN; gdy jej brakuje,
+ * fundusz przewalutowuje sald walutowe z ostrzeżeniem w dzienniku (spread jest kosztem funduszu). Dobrowolne zakupy złotówkowe nie przewalutowują
+ * się same: kupno odmawia z podpowiedzią (zob. getForeignCashHint). Zwraca true, gdy po operacji PLN ≥ kwota.
+ */
+function ensurePlnCash(amountPln, reason, buffer = 1) { // buffer: przy cyklicznych opłatach przewalutowuje od razu kilka okresów (jeden wpis w dzienniku, jeden spread)
+    if (playerCash + 1e-9 >= amountPln) return true;
+    liquidateForeignCash(amountPln * buffer - playerCash, reason);
+    return playerCash + 1e-9 >= amountPln;
+}
+
+/** Podpowiedź do odmowy kupna za złote, gdy fundusz ma gotówkę w walutach (kupno nie przewalutowuje samo). */
+function getForeignCashHint() {
+    const held = getForeignCashPln('player');
+    return held >= 1 ? ` Masz ${formatZl(held, 0)} w walutach — przewalutuj je po kliknięciu w gotówkę funduszu.` : '';
+}
+
+/** Salda gotówki funduszu: PLN + waluty z wartością w złotych, udziałem i wynikiem kursowym względem średniego kursu nabycia. */
+function getCashBalances() {
+    const rows = [{ code: 'PLN', amount: playerCash, rate: 1, pln: playerCash, basis: 1, gainPln: 0 }];
+    for (const code of FOREIGN_CURRENCIES) {
+        const amount = getCurrencyCash('player', code);
+        if (!(amount > 1e-9)) continue;
+        const rate = getFxRate(code), basis = playerFxBasis[code] > 0 ? playerFxBasis[code] : rate;
+        rows.push({ code, amount, rate, pln: amount * rate, basis, gainPln: amount * (rate - basis) });
+    }
+    const total = rows.reduce((s, r) => s + Math.max(0, r.pln), 0) || 1;
+    rows.forEach(r => { r.share = Math.max(0, r.pln) / total; });
+    return rows;
+}
+
+/** Całkowita gotówka funduszu w złotych (PLN + salda walutowe po kursie środkowym) — ta sama liczba wchodzi do NAV. */
+function getFundCashTotalPln() { return Math.max(0, Number(playerCash) || 0) + getForeignCashPln('player'); }
+
+/**
+ * Zmiana waluty: z `from` na `to` (PLN lub obca) przez kantor; waluta obca na obcą idzie przez złote (dwa spready — wynik w `spreadCost`).
+ * `amount` w jednostkach waluty `from`. Wszystko albo nic: kwoty i limity dostawcy sprawdzane przed ruchem sald.
+ */
+function convertCurrency(from, to, amount, providerId = 'std') {
+    amount = Number(amount);
+    if (!canUseKantor()) return { ok: false, reason: 'Kantor działa dla funduszu.' };
+    if (from === to || ![from, to].every(c => c === 'PLN' || FOREIGN_CURRENCIES.includes(c))) return { ok: false, reason: 'Wybierz dwie różne waluty.' };
+    if (!(amount > 0)) return { ok: false, reason: 'Podaj kwotę.' };
+    if (typeof isMarketHalted === 'function' && isMarketHalted()) return { ok: false, reason: 'Handel wstrzymany — zadziałał bezpiecznik giełdowy.' };
+    const have = from === 'PLN' ? playerCash : getCurrencyCash('player', from);
+    if (amount > have + 1e-9) return { ok: false, reason: `Za mało ${from} na koncie funduszu.` };
+    amount = Math.min(amount, have);
+    if (from === 'PLN') { const r = kantorBuyCurrency(to, amount, providerId); return r.ok ? { ...r, received: r.foreign, receivedCode: to, spreadCost: r.spreadCost } : r; }
+    if (to === 'PLN') { const r = kantorSellCurrency(from, amount, providerId); return r.ok ? { ...r, received: r.pln, receivedCode: 'PLN', spreadCost: r.spreadCost } : r; }
+    const sellQuote = getProviderQuote(providerId, from, amount * getFxRate(from), 'sell');
+    if (!sellQuote.ok) return { ok: false, reason: sellQuote.reason };
+    const pln = amount * sellQuote.rate, buyQuote = getProviderQuote(providerId, to, pln, 'buy');
+    if (!buyQuote.ok) return { ok: false, reason: buyQuote.reason };
+    const sold = kantorSellCurrency(from, amount, providerId);
+    if (!sold.ok) return sold;
+    const bought = kantorBuyCurrency(to, Math.min(sold.pln, playerCash), providerId);
+    if (!bought.ok) { // nie powinno się zdarzyć po sprawdzeniu wyżej; wycofanie tylko złotych byłoby gorsze niż zostawić je na koncie PLN
+        return { ok: false, reason: `Sprzedano ${from}, ale kupno ${to} się nie udało: ${bought.reason} Złote zostały na koncie PLN.` };
+    }
+    return { ok: true, received: bought.foreign, receivedCode: to, spreadCost: sold.spreadCost + bought.spreadCost, rate: bought.rate };
 }
 
 // ---------------------------------------------------------------------------------
@@ -302,7 +374,11 @@ function checkCurrencyInvariants() {
         const rate = fxRates[code], def = CURRENCIES[code];
         if (!Number.isFinite(rate) || rate < def.min - 1e-9 || rate > def.max + 1e-9) problems.push(`kurs ${code} poza widełkami: ${rate}`);
     }
-    for (const [code, value] of Object.entries(playerCashByCurrency)) if (!Number.isFinite(value) || value < -1e-9) problems.push(`gotówka funduszu w ${code}: ${value}`);
+    for (const [code, value] of Object.entries(playerCashByCurrency)) {
+        if (!Number.isFinite(value) || value < -1e-9) problems.push(`gotówka funduszu w ${code}: ${value}`);
+        else if (code in playerFxBasis && !(playerFxBasis[code] > 0)) problems.push(`średni kurs nabycia ${code} nieprawidłowy: ${playerFxBasis[code]}`); // 0.16.9 W1 (v20); brak wpisu = kurs bieżący (getCashBalances)
+    }
+    if (typeof playerCash === 'number' && playerCash < -1e-6) problems.push(`ujemna gotówka PLN funduszu: ${playerCash}`);
     for (const ai of typeof aiCompetitors !== 'undefined' ? aiCompetitors : []) {
         for (const [code, value] of Object.entries(ai.cashByCurrency || {})) if (!Number.isFinite(value) || value < -1e-9) problems.push(`gotówka ${ai.name} w ${code}: ${value}`);
     }
@@ -310,7 +386,7 @@ function checkCurrencyInvariants() {
 }
 
 function getCurrencySnapshot() {
-    return { rates: fxRates, means: fxMeans, history: fxHistory, week: fxWeek, playerCash: playerCashByCurrency, log: kantorLog, offers: kantorOffers };
+    return { rates: fxRates, means: fxMeans, history: fxHistory, week: fxWeek, playerCash: playerCashByCurrency, basis: playerFxBasis, log: kantorLog, offers: kantorOffers };
 }
 
 function applyCurrencySnapshot(snapshot) {
@@ -325,9 +401,26 @@ function applyCurrencySnapshot(snapshot) {
         if (Array.isArray(snapshot.history?.[code])) fxHistory[code] = snapshot.history[code].map(Number).filter(Number.isFinite).slice(-FX_RULES.historyWeeks);
         if (!fxHistory[code]?.length) fxHistory[code] = [fxRates[code]];
         const cash = Number(snapshot.playerCash?.[code]);
-        if (cash > 0) playerCashByCurrency[code] = cash;
+        if (cash > 0) {
+            playerCashByCurrency[code] = cash;
+            const basis = Number(snapshot.basis?.[code]);
+            playerFxBasis[code] = basis >= def.min * 0.5 && basis <= def.max * 2 ? basis : fxRates[code]; // v20: zapis v16–v19 nie ma kursu nabycia → bieżący kurs (wynik kursowy liczony od migracji)
+        }
     }
     fxWeek = Math.max(0, Number(snapshot.week) || 0);
     kantorLog = Array.isArray(snapshot.log) ? snapshot.log.slice(-20) : [];
     for (const [id, o] of Object.entries(snapshot.offers || {})) if (o && o.s && o.b && Number.isFinite(Number(o.w))) kantorOffers[id] = { w: Number(o.w), s: o.s, b: o.b };
+}
+
+/** Szacunek wymiany bez ruchu sald (okno sald walutowych): { ok, received, spreadCost } albo { ok: false, reason }. Te same notowania co convertCurrency. */
+function previewConversion(from, to, amount, providerId = 'std') {
+    amount = Number(amount);
+    if (!(amount > 0) || from === to) return { ok: false, reason: 'Wybierz dwie różne waluty i kwotę.' };
+    if (from === 'PLN') { const q = getProviderQuote(providerId, to, amount, 'buy'); return q.ok ? { ok: true, received: amount / q.rate, spreadCost: amount - amount / q.rate * q.mid } : { ok: false, reason: q.reason }; }
+    const sell = getProviderQuote(providerId, from, amount * getFxRate(from), 'sell');
+    if (!sell.ok) return { ok: false, reason: sell.reason };
+    const pln = amount * sell.rate, sellCost = amount * sell.mid - pln;
+    if (to === 'PLN') return { ok: true, received: pln, spreadCost: sellCost };
+    const buy = getProviderQuote(providerId, to, pln, 'buy');
+    return buy.ok ? { ok: true, received: pln / buy.rate, spreadCost: sellCost + (pln - pln / buy.rate * buy.mid) } : { ok: false, reason: buy.reason };
 }

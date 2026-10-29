@@ -319,7 +319,7 @@ function buyStock(symbol, quantity) {
     const privateLimit = typeof checkPrivateMarketLimit === 'function' ? checkPrivateMarketLimit(stockToBuy, stockToBuy.price * quantity) : null; // 0.15.6 E3
     if (privateLimit) { showToast(privateLimit, 'warning'); return; }
     if (playerCash < quote.total) {
-        showToast(`Nie masz wystarczająco gotówki: ${formatZl(quote.total)} z prowizją, maksymalnie ${getMaxBuyQuantity(stockToBuy, 'fund')} akcji.`);
+        showToast(`Nie masz wystarczająco gotówki: ${formatZl(quote.total)} z prowizją, maksymalnie ${getMaxBuyQuantity(stockToBuy, 'fund')} akcji.${typeof getForeignCashHint === 'function' ? getForeignCashHint() : ''}`);
         return;
     }
     const tradeValue = stockToBuy.price * quantity; // podstawa prowizji: cena przed wpływem zlecenia
@@ -2094,7 +2094,9 @@ function setPlayerFeeRate(percent) {
 
 function chargeManagementFee() {
     const assets = getFundAssets();
-    const fee = Math.min(Math.max(0, playerCash), assets * getPlayerFeeRate() / FUND_WEEKS_PER_YEAR);
+    const due = assets * getPlayerFeeRate() / FUND_WEEKS_PER_YEAR;
+    if (typeof ensurePlnCash === 'function' && due > 0) ensurePlnCash(due, 'brak złotych na opłatę za zarządzanie', 8); // 0.16.9 W1: opłata nie jest „pomijana” tylko dlatego, że gotówka jest w walucie
+    const fee = Math.min(Math.max(0, playerCash), due);
     if (!(fee > 0)) return 0;
 
     playerCash -= fee;
@@ -2184,7 +2186,7 @@ const FORCED_SALE_REASONS = {
 /** Przymusowa sprzedaż wolnych akcji funduszu; zwraca listę sprzedanych pozycji. */
 function forceLiquidation(amountNeeded, reason = 'redemption') {
     let needed = amountNeeded;
-    if (needed > 0 && typeof liquidateForeignCash === 'function') { needed -= liquidateForeignCash(needed); if (needed > 0 && typeof liquidateGdr === 'function') needed -= liquidateGdr(needed); if (needed > 0 && typeof liquidateHiddenCash === 'function') needed -= liquidateHiddenCash(needed); } // 0.16.1: najpierw obca gotówka, potem kwity GDR
+    if (needed > 0 && typeof liquidateForeignCash === 'function') { needed -= liquidateForeignCash(needed, reason === 'margin' ? 'brak złotych na spłatę pożyczki lombardowej' : 'brak złotych na wypłaty dla klientów'); if (needed > 0 && typeof liquidateGdr === 'function') needed -= liquidateGdr(needed); if (needed > 0 && typeof liquidateHiddenCash === 'function') needed -= liquidateHiddenCash(needed); } // 0.16.1: najpierw obca gotówka, potem kwity GDR
     const sold = [];
     const positions = Object.entries(playerPortfolio)
         .filter(([, holding]) => holding.assetType === 'stock' || !holding.assetType)
