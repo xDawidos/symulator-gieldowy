@@ -7258,6 +7258,8 @@ let introStartCountry = 'PL';
 function renderIntroCountries() {
     const container = document.getElementById('intro-countries');
     if (!container) return;
+    const globeBtn = document.getElementById('intro-globe-btn');
+    if (globeBtn) globeBtn.hidden = typeof canUseGlobe !== 'function' || !canUseGlobe();
     container.innerHTML = START_COUNTRIES.map(country => {
         const playable = START_PLAYABLE.includes(country.id), selected = playable && country.id === introStartCountry;
         return `<button type="button" class="intro-country ${selected ? 'selected' : ''} ${playable ? '' : 'locked'}" data-country="${country.id}" ${playable ? '' : 'disabled'} aria-pressed="${selected}"

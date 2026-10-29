@@ -1315,6 +1315,7 @@
           <label>Kryzys w grze<select id="intro-crisis"><option value="">Losowo (domyślnie)</option><option value="banking">Kryzys bankowy</option><option value="dotcom">Bańka internetowa</option><option value="oil">Szok naftowy</option><option value="black">Czarny czwartek</option><option value="pandemic">Pandemia</option></select></label>
           <div class="intro-country-label">Kraj startowy</div>
           <div id="intro-countries" class="intro-countries"></div>
+          <button type="button" id="intro-globe-btn" class="btn-ghost" onclick="openCountryGlobe()" hidden>Wybierz na globusie</button>
           <button type="submit" class="btn-pause">Zaczynam pracę</button>
         </form>
       </div>
@@ -1667,6 +1668,7 @@
 <script src="flags.js"></script>
 <script src="currency_ui.js"></script>
 <script src="countries_ui.js"></script>
+<script src="country_picker.js"></script>
 <script src="internet.js"></script>
 <script src="lib/lz-string.min.js"></script>
 <script src="save_store.js"></script>

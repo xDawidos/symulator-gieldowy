@@ -14098,4 +14098,18 @@ group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
             resetGdrState(); startNewCareer({}); assertEq(setStartCountry('JP'), 'PL', 'kraj spoza START_PLAYABLE = Polska'); assertEq(getJoinedCountries().length, 0);
         } finally { resetGdrState(); }
     });
+
+    test('0.16.10 S0c: wybór kraju — karta kraju, lista zgodna z START_PLAYABLE, globus nie otwiera się w testach (bez WebGL), chooseIntroCountry odrzuca kraj „wkrótce”', () => {
+        assert(!canUseGlobe(), 'testy nie ładują WebGL');
+        for (const id of START_PLAYABLE) assert(GLOBE_COUNTRIES[id], `${id}: dane globusu`);
+        for (const id of Object.keys(GLOBE_COUNTRIES)) assert(START_COUNTRIES.some(c => c.id === id) && FLAG_NAMES[id], `${id}: kraj gry z flagą`);
+        const de = renderGlobeCard('DE'), jp = renderGlobeCard('JP'), pl = renderGlobeCard('PL');
+        assert(/Berlin/.test(de) && /EUR/.test(de) && /DAX/.test(de) && /09:00–17:30/.test(de), 'karta DE: stolica, waluta, giełda, sesja');
+        assert(/wkrótce|nie jest dostępny/.test(jp) && /GPW/.test(pl), 'JP niegrywalny, PL = GPW');
+        const box = document.createElement('div'); box.id = 'intro-countries'; document.body.appendChild(box);
+        try {
+            introStartCountry = 'PL'; chooseIntroCountry('JP'); assertEq(introStartCountry, 'PL', 'JP odrzucone');
+            chooseIntroCountry('CZ'); assertEq(introStartCountry, 'CZ'); assert(box.querySelector('[data-country="CZ"][aria-pressed="true"]') && box.querySelector('[data-country="JP"][disabled]'), 'lista: CZ wybrany, JP wyłączony etykietą');
+        } finally { box.remove(); introStartCountry = 'PL'; }
+    });
 });
