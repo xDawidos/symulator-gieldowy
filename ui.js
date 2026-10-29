@@ -6316,14 +6316,14 @@ function formatConstructionTime(milliseconds) {
 }
 
 function formatConstructionMoney(value) {
-    const amount = Number(value);
+    const amount = Number(value) / getBaseScale();
 
     if (!Number.isFinite(amount)) return 'Brak danych';
 
     return amount.toLocaleString('pl-PL', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
-    }) + ' PLN';
+    }) + ` ${getBaseCurrency()}`;
 }
 
 function createConstructionInfoRow(label, value) {
@@ -6847,19 +6847,19 @@ function formatNumberPl(value, digits = 2) {
 }
 
 /** Kwota w PLN (nazwa formatZl zostaje — używana w całej grze). */
-function formatZl(value, digits = 2) {
-    const text = formatNumberPl(value, digits);
-    return text === '—' ? text : `${text} PLN`;
+function formatZl(value, digits = 2) { // 0.16.11 K2: wartość w jednostkach gry → waluta bazowa konta (PL: PLN, bez zmian)
+    const text = formatNumberPl(Number(value) / getBaseScale(), digits);
+    return text === '—' ? text : `${text} ${getBaseCurrency()}`;
 }
 
 /** Krótka kwota: 3,5 mln PLN / 1,2 mld PLN; poniżej miliona pełna kwota bez groszy. */
 function formatPLNShort(value) {
-    const number = Number(value);
+    const number = Number(value) / getBaseScale(), code = getBaseCurrency();
     if (!Number.isFinite(number)) return '—';
     const abs = Math.abs(number);
-    if (abs >= 1e9) return `${formatNumberPl(number / 1e9, 1)} mld PLN`;
-    if (abs >= 1e6) return `${formatNumberPl(number / 1e6, 1)} mln PLN`;
-    return formatZl(number, 0);
+    if (abs >= 1e9) return `${formatNumberPl(number / 1e9, 1)} mld ${code}`;
+    if (abs >= 1e6) return `${formatNumberPl(number / 1e6, 1)} mln ${code}`;
+    return formatZl(number * getBaseScale(), 0);
 }
 
 /** Zmiana procentowa ze znakiem: +2,10% / −7,20% / 0,00% (value jako ułamek). */

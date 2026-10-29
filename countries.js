@@ -51,7 +51,8 @@ function getStartCountry() { return (typeof playerProfile === 'object' && player
 /** Ustawia kraj startowy: poza PL jego giełda działa od pierwszego dnia (bez biletu dla gracza, bez wiadomości o dołączeniu). */
 function setStartCountry(id) {
     if (!START_PLAYABLE.includes(id) || !COUNTRY_DEFS[id] && id !== 'PL') id = 'PL';
-    if (typeof playerProfile === 'object' && playerProfile) playerProfile.country = id;
+    if (typeof playerProfile === 'object' && playerProfile) { playerProfile.country = id; playerProfile.baseCurrency = BASE_CURRENCY_BY_COUNTRY[id] || 'PLN'; } // 0.16.11 K2: konto w walucie kraju startowego
+    syncBaseCurrency();
     if (id !== 'PL' && !isCountryJoined(id)) joinCountry(id, 'start');
     applyStartCountrySet(id);
     return id;

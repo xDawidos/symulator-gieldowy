@@ -13927,7 +13927,7 @@ group('0.16.7 Pełne spółki zagraniczne', () => {
         for (const row of Object.values(snap.issuers)) delete row.c; // zapis v17
         resetGdrState(); applyCountriesSnapshot(snap); const c = foreignIssuers.YA1; assert(c.balanceSheet && c.cash > 0 && !c.fundamentals, 'v17: model z ceny, fundamenty przy pierwszym raporcie');
         quarter(); assert(foreignIssuers.YA1.fundamentals, 'po kwartale są fundamenty'); assertEq(checkWorldInvariants().length, 0, 'niezmienniki po migracji');
-        assertEq(SAVE_FORMAT_VERSION, 20, 'wersja zapisu'); assert(SUPPORTED_SAVE_VERSIONS.includes(17), 'v17 nadal wczytywany');
+        assertEq(SAVE_FORMAT_VERSION, 21, 'wersja zapisu'); assert(SUPPORTED_SAVE_VERSIONS.includes(17), 'v17 nadal wczytywany');
     }));
 
     test('F2: prezes po 65. roku odchodzi (nowa osoba, cecha kraju z definicji)', () => withYY(() => {
@@ -14144,6 +14144,34 @@ group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
             assertEq(setStartCountry('DE'), 'DE', 'idempotentne'); assertEq(stocks.length, 2, 'bez ponownego usuwania');
             assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
         } finally { resetGdrState(); }
+    });
+
+    test('0.16.11 K2: waluta bazowa — PL bez zmian (PLN, skala 1); start z DE: konto w EUR, EUR nie pływa, PLN zwykłą walutą w kantorze, formatery, zapis v21', () => {
+        initFxState(); resetGdrState();
+        try {
+            resetWorld([mk156('CTX', { price: 90 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+            assertEq(getBaseCurrency(), 'PLN'); assertEq(getBaseScale(), 1); assertEq(formatZl(1234.5), '1234,50 PLN', 'format PL'); assertEq(toPln(100, 'EUR'), 100 * fxRates.EUR, 'PL: kurs EUR w zł');
+            assert(FOREIGN_CURRENCIES.includes('EUR') && !FOREIGN_CURRENCIES.includes('PLN'), 'PL: EUR obca, PLN nie');
+            resetGdrState(); resetWorld([mk156('CTX', { price: 90 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+            setStartCountry('DE');
+            assertEq(getBaseCurrency(), 'EUR'); assertEq(playerProfile.baseCurrency, 'EUR');
+            assert(FOREIGN_CURRENCIES.includes('PLN') && !FOREIGN_CURRENCIES.includes('EUR'), 'DE: PLN obca, EUR bazowa');
+            assertEq(formatZl(400), '100,00 EUR', 'format w EUR'); assertEq(formatPLNShort(4_000_000), '1,0 mln EUR', 'skrót w EUR');
+            assertEq(toPln(100, 'EUR'), 400, 'EUR = skala 4 jednostek gry'); fxRates.EUR *= 1.1; assertEq(toPln(100, 'EUR'), 400, 'saldo bazowej nie pływa');
+            assertNear(toPln(100, 'PLN'), 400 / fxRates.EUR, 'PLN wyceniany przez kurs EUR/PLN', 1e-9);
+            assertNear(fromPln(toPln(50, 'USD'), 'USD'), 50, 'kurs w obie strony', 1e-9);
+            playerCash = 40_000; const buy = kantorBuyCurrency('PLN', 4_000); assert(buy.ok, 'kupno PLN w kantorze: ' + buy.reason);
+            assert(getCurrencyCash('player', 'PLN') > 0 && playerCash < 40_000, 'saldo PLN powstało z gotówki bazowej');
+            const rows = getCashBalances(); assertEq(rows[0].code, 'EUR'); assertNear(rows[0].amount, playerCash / 4, 'wiersz bazowy w EUR', 1e-9);
+            assertNear(getFundCashTotalPln(), playerCash + getForeignCashPln('player'), 'suma gotówki', 1e-9);
+            const back = convertCurrency('PLN', 'EUR', getCurrencyCash('player', 'PLN')); assert(back.ok && back.receivedCode === 'EUR', 'wymiana PLN→EUR');
+            addCurrencyCash('player', 'EUR', 10); assertNear(playerCash, playerCash, 'brak NaN'); assert(!('EUR' in playerCashByCurrency), 'wpływ w EUR trafia do gotówki bazowej');
+            assertEq(checkCurrencyInvariants().length, 0, 'niezmienniki walut'); assertEq(checkWorldInvariants().length, 0, 'niezmienniki świata');
+            const snap = JSON.parse(JSON.stringify(buildSaveSnapshot())); assertEq(snap.version, 21); assertEq(snap.playerProfile.baseCurrency, 'EUR');
+            const old = JSON.parse(JSON.stringify(snap)); old.version = 20; delete old.playerProfile.baseCurrency;
+            const rep = applySaveSnapshot(old); assert(rep.ok, 'v20 się wczytuje: ' + rep.errors.join('; ')); assertEq(getBaseCurrency(), 'PLN', 'stary zapis = PLN');
+            assert(FOREIGN_CURRENCIES.includes('EUR') && !FOREIGN_CURRENCIES.includes('PLN'), 'lista walut po migracji');
+        } finally { initFxState(); resetGdrState(); startNewCareer({}); syncBaseCurrency(); }
     });
 
     test('0.16.10 S0c: wybór kraju — karta kraju, lista zgodna z START_PLAYABLE, globus nie otwiera się w testach (bez WebGL), ekran wyboru: JP („wkrótce”) nie do potwierdzenia, callback z krajem', () => {
@@ -14363,7 +14391,7 @@ group('0.16.9 W1 Gotówka w wielu walutach', () => {
         assert(basis > 0 && snap.basis.CHF === basis, 'basis w zapisie');
         applyCurrencySnapshot(snap); assertNear(playerFxBasis.CHF, basis, 'odtworzony kurs nabycia', 1e-12);
         delete snap.basis; fxRates.CHF = fxRates.CHF; applyCurrencySnapshot(snap); assertNear(playerFxBasis.CHF, fxRates.CHF, 'v19: kurs nabycia = bieżący', 1e-12);
-        assertEq(SAVE_FORMAT_VERSION, 20); assert(SUPPORTED_SAVE_VERSIONS.includes(19) && SUPPORTED_SAVE_VERSIONS.includes(20), 'v19 i v20 obsługiwane');
+        assertEq(SAVE_FORMAT_VERSION, 21); assert(SUPPORTED_SAVE_VERSIONS.includes(19) && SUPPORTED_SAVE_VERSIONS.includes(20) && SUPPORTED_SAVE_VERSIONS.includes(21), 'v19, v20 i v21 obsługiwane');
         assertEq(checkCurrencyInvariants().length, 0);
         initFxState();
     });
