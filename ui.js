@@ -577,12 +577,31 @@ function renderStockDrawer(symbol) {
     const cols = row.querySelectorAll('td').length || 7;
     const stockData = typeof stocks !== 'undefined' ? stocks.find(s => s.symbol === symbol) : null;
     const isCompanyStock = Boolean(stockData && !stockData.assetType);
+    const foreignIssuer = !stockData && typeof foreignIssuers === 'object' ? foreignIssuers[symbol.split('.')[0]] : null; // 0.16.9: spółka zagraniczna — szuflada z tym samym układem, handel przez marketsUiTrade
     const dr = document.createElement('tr');
     dr.id = drawerId;
     dr.className = 'stock-row-drawer open';
     const td = document.createElement('td');
     td.colSpan = cols;
     td.style.padding = '0';
+    if (foreignIssuer) {
+      const fid = foreignIssuer.id;
+      td.innerHTML = `<div class="stock-drawer-inner"><div class="stock-drawer-actions">
+        <div class="stock-drawer-actions-row"><div class="qty-input-wrapper"><input type="number" min="1" step="1" id="mkt-qty-${fid}" value="100" aria-label="Liczba akcji ${escapeHtml(foreignIssuer.name)}" data-linked-qty></div></div>
+        <div class="stock-drawer-actions-row">
+          <button class="btn-buy" onclick="marketsUiTrade('${fid}','buy')">Kup</button>
+          <button class="btn-sell" onclick="marketsUiTrade('${fid}','sell')">Sprzedaj</button>
+          <span class="drawer-tools">
+            <button class="drawer-tool" title="Wykres ceny" onclick="showPriceHistoryModal('${symbol}')">${uiIcon('wykres', 16)}<span>Wykres</span></button>
+            <button class="drawer-tool" title="Karta spółki" onclick="openDescriptionModal('${symbol}')">${uiIcon('karta', 16)}<span>Karta</span></button>
+            <button class="drawer-tool" title="Akcjonariat" onclick="openDescriptionModal('${symbol}', 'owners')">${uiIcon('akcjonariat', 16)}<span>Akcjonariat</span></button>
+          </span>
+        </div>
+        <div class="stock-drawer-impact text-xs">Kupno: najpierw gotówka w ${foreignIssuer.currency}, reszta przez kantor; prowizja ${formatNumberPl(getCountryCommission(foreignIssuer.country) * 100, 2)}%. Kurs ${formatNumberPl(foreignIssuer.price, 2)} ${foreignIssuer.currency}.</div>
+      </div></div>`;
+      dr.appendChild(td); row.after(dr);
+      return;
+    }
     td.innerHTML = `<div class="stock-drawer-inner">
       <div class="stock-drawer-actions">
         <div class="stock-drawer-actions-row">
@@ -4292,7 +4311,7 @@ function renderCompanyCardOverview(stock) {
                 ${insights.length ? `<h4>Analityk</h4>${insights.map(line => `<p class="text-sm">${uiIcon('szukaj', 14)} ${escapeHtml(line)}</p>`).join('')}` : ''}
             </section>
         </div>
-        ${foreign ? `<section class="cc-section"><h4>${uiIcon('wykres', 16)} Cena (${stock.foreignHistory.length} ostatnich tygodni, w ${stock.nativeCurrency})</h4><div id="cc-foreign-chart" class="cc-chart" style="height:200px" role="img" aria-label="Wykres ceny ${escapeHtml(stock.name)}"></div>
+        ${foreign ? `<section class="cc-section"><h4>${uiIcon('wykres', 16)} Cena (historia: ${stock.foreignHistory.length} tyg., w ${stock.nativeCurrency})</h4><div id="cc-foreign-chart" class="cc-chart" style="height:200px" role="img" aria-label="Wykres ceny ${escapeHtml(stock.name)}"></div>
             <p class="text-xs text-muted">Linia tygodniowa; kolor odcinka oznacza wzrost albo spadek względem poprzedniego tygodnia. Pełny wykres: przycisk „Wykres” przy spółce.</p></section>` : ''}`;
 }
 

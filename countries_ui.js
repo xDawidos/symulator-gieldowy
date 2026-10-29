@@ -120,17 +120,17 @@ function renderLinkedStockRow(tbody, i, previous = {}) {
     if (i.tradeHalted) { row.classList.add('locked-row'); row.title = 'HANDEL WSTRZYMANY'; }
     const name = row.insertCell(); name.className = 'stock-company-cell';
     name.innerHTML = `<div class="stock-identity"><div class="stock-name-line"><span class="stock-name" title="${escapeHtml(i.name)}">${escapeHtml(i.name)}</span>${held > 0 ? '<span class="owned-dot" title="Masz akcje tej spółki"></span>' : ''}<button type="button" class="info-btn" aria-label="Karta spółki ${escapeHtml(i.name)}" title="Karta spółki" onclick="openDescriptionModal('${sym}')">${uiIcon('karta', 14)}</button></div>
-        <div class="stock-meta">${escapeHtml(i.sectors.map(x => x[0]).join(' + '))} · ${sym} · ${flagIcon(c, 12)} ${c} · ${i.currency}${i.state ? ' · państwowa' : ''}${i.giant ? ' · gigant' : ''}${allowed ? '' : ` · wymaga poziomu giełdy: ${escapeHtml(tier.label)}`}${typeof renderForeignCompanyLine === 'function' ? renderForeignCompanyLine(i) : ''}</div></div>`;
+        <div class="stock-meta">${escapeHtml(i.sectors.map(x => x[0]).join(' + '))} · ${sym} · ${flagIcon(c, 12)} ${c} · ${i.currency}${i.state ? ' · państwowa' : ''}${i.giant ? ' · gigant' : ''}${allowed ? '' : ` · wymaga poziomu giełdy: ${escapeHtml(tier.label)}`}</div></div>`;
     const price = row.insertCell(); price.className = 'cell-number cell-price';
     price.innerHTML = `<div class="price-main">${formatZl(toPln(i.price, i.currency), 2)}</div><div class="text-xs text-muted">${formatNumberPl(i.price, 2)} ${i.currency}</div>`;
     const ch = row.insertCell(); ch.className = 'cell-number'; ch.innerHTML = `<span class="change-pill ${cls}"><span aria-hidden="true">${fxArrow(change)}</span> ${fxPct(change)}</span>`;
-    row.insertCell().innerHTML = `<div class="availability-cell"><span class="availability-value">${formatNumberPl(free, 0)}</span></div>`;
+    row.insertCell().innerHTML = `<div class="availability-cell"><span class="availability-value">${formatNumberPl(free, 0)}</span><span class="mini-progress" aria-hidden="true"><span class="mini-progress-bar" style="width:${Math.max(0, Math.min(100, free / Math.max(1, i.shares) * 100))}%"></span></span></div>`;
     const own = row.insertCell(); own.className = 'cell-number'; own.innerHTML = held > 0 ? `<span class="owned-badge">${formatNumberPl(held, 0)}</span>` : '<span class="owned-zero">0</span>';
     const act = row.insertCell(); act.className = 'trade-actions-cell text-center';
-    act.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center;max-width:7.5em"><input type="number" min="1" step="1" value="${escapeHtml(String(previous['f:' + i.id] ?? 100))}" id="mkt-qty-${i.id}" data-linked-qty aria-label="Liczba akcji ${escapeHtml(i.name)}" style="width:100%" ${free <= 0 || !allowed ? 'disabled' : ''}>
-        <button class="btn-primary btn-sm" onclick="marketsUiTrade('${i.id}','buy')" ${free > 0 && allowed ? '' : 'disabled'}>Kup</button> <button class="btn-ghost btn-sm" onclick="marketsUiTrade('${i.id}','sell')" ${held > 0 ? '' : 'disabled'}>Sprzedaj</button>
-        <button class="drawer-tool" title="Wykres ceny" onclick="showPriceHistoryModal('${sym}')">${uiIcon('wykres', 16)}<span>Wykres</span></button></div>`;
-    row.addEventListener('click', e => { if (!e.target.closest('button') && !e.target.closest('input')) openDescriptionModal(sym); });
+    if (!allowed) act.innerHTML = `<span class="row-state" role="img" aria-label="Brak dostępu do tej giełdy — awans otworzy kolejne" title="Brak dostępu do tej giełdy — awans otworzy kolejne">${uiIcon('klodka', 16)}</span>`;
+    else if (i.tradeHalted) act.innerHTML = `<span class="row-state tone-down" role="img" aria-label="Handel wstrzymany" title="Handel wstrzymany">${uiIcon('blokada', 16)}</span>`;
+    else act.innerHTML = `<button type="button" class="btn-ghost-icon drawer-toggle-btn" data-symbol="${sym}" title="Kup, sprzedaj, wykres" aria-label="Handel: ${escapeHtml(i.name)}" aria-expanded="${openStockDrawerSymbol === sym}" onclick="event.stopPropagation(); toggleStockDrawer('${sym}')">${uiIcon('chevron-down', 16)}</button>`;
+    row.addEventListener('click', e => { if (!e.target.closest('button') && !e.target.closest('input') && allowed && !i.tradeHalted) toggleStockDrawer(sym); });
     return row;
 }
 
