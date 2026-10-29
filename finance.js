@@ -1033,6 +1033,7 @@ function pickSubsidiaryName(parent, sector) {
     const candidates = [];
     for (const word of words) {
         candidates.push(`${parent.name} ${word}`, `${first} ${word}`);
+        if (first.length > 6 && /^[A-Za-z]{3}/.test(first)) candidates.push(`${first.slice(0, 3)}${word.toLowerCase()}`); // długi człon skraca się do 3 liter („Polskie” → „Polenergy”), o ile bez polskich znaków („Pań” odpada)
         if (first.length <= 6) candidates.push(`${first.slice(0, Math.min(5, Math.max(3, first.length - 2)))}${word.toLowerCase()}`, `${first.slice(0, 4)}${word.toLowerCase()}`); // zlepek tylko z krótkiego członu; z długiego wychodzi „Pańsenergy” z „Państwowy”
     }
     if (sector === getMainSector(parent)) for (const extra of SUBSIDIARY_EXTRA_WORDS) candidates.push(`${parent.name} ${extra}`, `${first} ${extra}`);
