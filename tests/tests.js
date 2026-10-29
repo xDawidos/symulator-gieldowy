@@ -12401,7 +12401,7 @@ group('0.16.2', () => {
 
     // --- G6: Niemcy, USA, Czechy ---
     const REAL_COUNTRIES = () => ['DE', 'US', 'CZ'].filter(id => COUNTRY_DEFS[id]);
-    const COUNTRY_COUNTS = { DE: [14, 3], US: [16, 4], CZ: [8, 1] }; // zwykłe + państwowe (załącznik B)
+    const COUNTRY_COUNTS = { DE: [49, 8], US: [16, 4], CZ: [8, 1] }; // zwykłe + państwowe (załącznik B)
 
     test('G6: dane krajów są spójne — liczby spółek z załącznika B, sektory i podsektory z rejestru, waluty, banki w Bankowości, giganci zgodni z gdr.js', () => {
         assert(REAL_COUNTRIES().length >= 1, 'jakiś kraj zdefiniowany');

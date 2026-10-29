@@ -21,7 +21,7 @@ Gałąź `claude/impl-01611-3c96f1` (nie scalona, bez zmian w `zmiany-AI`/`main`
 - Zrzuty przeglądarki: start z DE w aplikacji (okno wyboru kraju → DE): pasek gotówki 2500,00 EUR, NAV 2,5000 EUR, ceny akcji w EUR, okno gotówki (mobile 375 px) z saldem EUR i wymianą na PLN; 59 firm UNI, 0 polskich, niezmienniki 0.
 
 ## Pominięte i problemy
-1. **Nie wdrożono firm niemieckich** (czekają na zatwierdzenie nazw). Dziś przy starcie z DE rynek macierzysty to tylko 59 firm UNI + 17 firm DE jako rynek zagraniczny „domowy”; DE/US/CZ nie mają jeszcze dopracowanego zestawu (USA/CZ: ten sam mechanizm, bez własnych list).
+1. **Firmy niemieckie wdrożone po zatwierdzeniu użytkownika** (40 firm, `countries_data.js`; GLS → GLB z powodu kolizji symbolu z kwitem Glasses): DE = 49 zwykłych + 8 państwowych, test 884/884; seria start DE ×6 (57 firm DE): GIG 12,8% ± 2,5, marża 20,6%, niezmienniki 0, bez błędów JS. USA/CZ: ten sam mechanizm, bez własnych dodatkowych list. Ceny nowych firm nie były kalibrowane do poziomów giełd.
 2. **Literały „PLN/zł” w tekstach** (ok. 300 miejsc: opisy, maile, Akademia, `index.html`: np. „PLN całkowity”, „Konto prywatne: … PLN”, bony skarbowe, ceny w `market-kpi-row`) — poprawione tylko formatery, pasek, kantor, okno gotówki, karty krajów i podgląd okresu. Reszta nadal mówi o złotych; kwoty w nich są skalowane tylko tam, gdzie idą przez `formatZl`.
 3. Progi giełd, opłaty i stałe są w jednostkach gry (skala), nie „okrągłe” w EUR/USD (np. 50 000 → 12 500 EUR).
 4. Kursy i zmiany walut w UI (`getFxChange`, widełki kursu w kantorze, wykres) nadal opisane w złotych/surowo; przy bazie ≠ PLN zmiana PLN względem bazy nie jest pokazywana.

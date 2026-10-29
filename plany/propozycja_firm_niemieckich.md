@@ -1,6 +1,6 @@
 # Propozycja brakujących firm niemieckich (0.16.11 K1) — DO ZATWIERDZENIA
 
-Status: **propozycja, niewdrożona w kodzie.** Ustalamy nazwy wspólnie z użytkownikiem; po zatwierdzeniu (lub poprawkach) firmy trafią do `countries_data.js` (DE) jako krajowe przy starcie z Niemiec.
+Status: **zatwierdzone przez użytkownika i wdrożone (wszystkie 40 firm, `countries_data.js`); GLS zmieniono na GLB (kolizja z kwitem Glasses).**
 
 Punkt wyjścia: w danych DE jest 14 firm + 3 państwowe (PZW, VWA, STW, BMV, CRH, BYM, MTS, SIE, SPF, DGH, OKT, ABL, MRA, WiS; państwowe DBF, BPS, WAB). Przy starcie z Niemiec rynek macierzysty = 38 firm uniwersalnych (UNI) + zestaw niemiecki. Polski rynek ma 70 firm (38 UNI + 32 PL), więc do parytetu brakuje ok. **35 firm niemieckich** (17 istniejących + 35 = 52; razem z UNI ok. 90 pozycji, jak 92 w Polsce).
 
@@ -25,7 +25,7 @@ Polskie odpowiedniki (dla orientacji, którego typu spółki brakuje): spółki 
 | LKO | Lufthansa-Kopie Luftfahrt | Transport i logistyka | SILVER | 28 | Linia lotnicza, wrażliwa na paliwo |
 | WND | Windkraft Nordsee | Energia | SILVER | 44 | OZE, dotacje |
 | SCH | Schwarzwald Kosmetik | Dobra konsumpcyjne | SILVER | 36 | Marka luksusowa „natury” |
-| GLS | Glasbau Thüringen | Przemysł | GOLD | 62 | Szkło techniczne i fasady |
+| GLB | Glasbau Thüringen | Przemysł | GOLD | 62 | Szkło techniczne i fasady |
 | ELK | Elektronik Köln | Technologia | GOLD | 90 | Sprzęt sieciowy |
 | ROB | Roboterwerk Stuttgart | Technologia / Przemysł | PLATINUM | 150 | Roboty przemysłowe |
 | QNT | Quantenfabrik Ulm | Technologia | EMERALD | 260 | Komputery kwantowe „do pokazania” |
