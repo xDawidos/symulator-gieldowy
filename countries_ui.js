@@ -29,7 +29,7 @@ function renderAirportWindow(targetId = 'city-content-airport', { tickets = fals
         return `<tr><td>${flagIcon(def.id, 14)} <strong>${escapeHtml(def.name)}</strong></td><td>${currencyIcon(def.currency, 14)} ${def.currency}</td>
             <td>${escapeHtml(def.operator.name)}</td><td>${joined ? 'giełda otwarta' : 'jeszcze zamknięta (pierwszy bilet ją otworzy)'}</td><td class="text-right">${action}</td></tr>`;
     }).join('');
-    root.innerHTML = `<div class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('rynek', 20)}</span><div><h4>Lotnisko i bilety</h4><span class="bank-card-type">licencje na rynki zagraniczne</span></div></header>
+    root.innerHTML = `${tickets && typeof renderMarketClockCard === 'function' ? renderMarketClockCard() : ''}<div class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('rynek', 20)}</span><div><h4>Lotnisko i bilety</h4><span class="bank-card-type">licencje na rynki zagraniczne</span></div></header>
         <p class="text-sm" aria-live="polite">${status}</p>${orderBtn}
         ${tickets ? `<table class="asset-mini-table w-full"><thead><tr><th>Rynek</th><th>Waluta</th><th>Operator</th><th>Stan</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : `<div class="btn-row"><button class="btn-ghost" onclick="openInternetPage('ferie')">Bilety: Internet → Ferie i wakacje</button></div>`}
         <p class="text-sm text-muted">Bilet kupujesz z gotówki funduszu (od ${formatZl(TICKET_RULES.min, 0)}). Z biletem kupujesz spółki kraju przez kantor z prowizją ${formatNumberPl(COUNTRY_RULES.commission * 100, 1)}% (na rynku krajowym 0,25%). Każdy inwestor ma bilet osobno, a każdy sprzedany bilet daje Turystyce małą premię.</p></div>`;
