@@ -1664,7 +1664,7 @@ function getFundAssets() {
     const ppp = typeof getFundPppValue === 'function' ? getFundPppValue() : 0;                 // projekty miejskie (city.js)
     const bridge = typeof getFundBridgeLoansValue === 'function' ? getFundBridgeLoansValue() : 0; // pożyczki pomostowe (finance.js)
     const projectBonds = typeof getFundProjectBondsValue === 'function' ? getFundProjectBondsValue() : 0; // obligacje projektowe (projects.js)
-    return Math.max(0, Number(playerCash) || 0) + getFundPortfolioValue() + getFundBondsValue() + deposits + ppp + bridge + projectBonds + getFundPoolValue() + (typeof getForeignCashPln === 'function' ? getForeignCashPln('player') : 0) + (typeof getFundGdrValue === 'function' ? getFundGdrValue() : 0) + (typeof getFundMarginValue === 'function' ? getFundMarginValue() : 0); // 0.16.1 G2b/G3: gotówka w walutach po kursie i kwity GDR; 0.16.4 G21: kapitał pozycji forex
+    return Math.max(0, Number(playerCash) || 0) + getFundPortfolioValue() + getFundBondsValue() + deposits + ppp + bridge + projectBonds + getFundPoolValue() + (typeof getForeignCashPln === 'function' ? getForeignCashPln('player') : 0) + (typeof getFundGdrValue === 'function' ? getFundGdrValue() : 0) + (typeof getFundMarginValue === 'function' ? getFundMarginValue() : 0) + (typeof getHiddenBalance === 'function' ? getHiddenBalance() : 0); // 0.16.6 S1: rachunek w Waschmabanku liczy się do majątku; 0.16.1 G2b/G3: gotówka w walutach po kursie i kwity GDR; 0.16.4 G21: kapitał pozycji forex
 }
 
 /** 0.14.1 R2 (błąd B): pula w NAV — niezainwestowana część gracza (nominalnie) + jego wkłady przez pulę w żyjące startupy (po koszcie). */
@@ -2180,7 +2180,7 @@ const FORCED_SALE_REASONS = {
 /** Przymusowa sprzedaż wolnych akcji funduszu; zwraca listę sprzedanych pozycji. */
 function forceLiquidation(amountNeeded, reason = 'redemption') {
     let needed = amountNeeded;
-    if (needed > 0 && typeof liquidateForeignCash === 'function') { needed -= liquidateForeignCash(needed); if (needed > 0 && typeof liquidateGdr === 'function') needed -= liquidateGdr(needed); } // 0.16.1: najpierw obca gotówka, potem kwity GDR
+    if (needed > 0 && typeof liquidateForeignCash === 'function') { needed -= liquidateForeignCash(needed); if (needed > 0 && typeof liquidateGdr === 'function') needed -= liquidateGdr(needed); if (needed > 0 && typeof liquidateHiddenCash === 'function') needed -= liquidateHiddenCash(needed); } // 0.16.1: najpierw obca gotówka, potem kwity GDR
     const sold = [];
     const positions = Object.entries(playerPortfolio)
         .filter(([, holding]) => holding.assetType === 'stock' || !holding.assetType)

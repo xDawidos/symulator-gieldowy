@@ -2214,7 +2214,7 @@ function getListingMovePriceEffect(marketId) {
 
 function moveListing(symbol, marketId) {
     const stock = stocks.find(s => s.symbol === symbol);
-    if (!getListingMoveTargets(stock).includes(marketId)) { showToast('Przeniesienie notowań niemożliwe (wymaga większości i aktywnego rynku).', 'warning'); return false; }
+    if (!getListingMoveTargets(stock).includes(marketId) || (typeof isStateGpwOnly === 'function' && isStateGpwOnly(stock))) { showToast('Przeniesienie notowań niemożliwe (wymaga większości i aktywnego rynku).', 'warning'); return false; }
     const quarter = typeof macro === 'object' ? macro.quarter : 0;
     if (stock.listingMovedQuarter !== undefined && quarter - stock.listingMovedQuarter < 4) { showToast('Notowania można przenieść raz na rok gry.', 'warning'); return false; }
     const cost = Math.round(getMarketCapValue(stock) * 0.003);

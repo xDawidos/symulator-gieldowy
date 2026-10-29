@@ -155,7 +155,7 @@ function liquidateGdr(amountPln) {
 
 /** Cel zagranicznego przejęcia: zdrowa spółka krajowa z górnej połowy kapitalizacji (te same zabezpieczenia co przy wycofaniu z giełdy). */
 function pickForeignTakeoverTarget() {
-    const pool = stocks.filter(s => hasListingMoveGuards(s) && (Number(s.financialHealth) || 0) >= 0 && !s.assetType && (playerPortfolio?.[s.symbol]?.shares || 0) <= s.totalShares * 0.3);
+    const pool = stocks.filter(s => hasListingMoveGuards(s) && !isStateGpwOnly(s) && (Number(s.financialHealth) || 0) >= 0 && !s.assetType && (playerPortfolio?.[s.symbol]?.shares || 0) <= s.totalShares * 0.3);
     if (pool.length < 4) return null;
     pool.sort((a, b) => getMarketCapValue(b) - getMarketCapValue(a));
     const top = pool.slice(0, Math.max(3, Math.ceil(pool.length / 2)));

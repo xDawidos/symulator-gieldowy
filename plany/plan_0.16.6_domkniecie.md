@@ -41,6 +41,9 @@
 - Poprawa wyglądu strony „Startupy” w Internecie (0.16.5): karty startupów, rundy finansowania, wskaźniki i etapy rozwoju mają być czytelne i atrakcyjne wizualnie (ikony SVG, ilustracje etapów, wykresy rund, stany: pomysł, prototyp, rynek, upadek/wyjście), na komponentach i tokenach z 0.14.5, tylko ciemny motyw, kolor nigdy jedynym nośnikiem.
 - Najpierw krótki przegląd obecnej strony (zrzuty ekranu), lista problemów, potem poprawki; bez zmiany mechaniki startupów. Weryfikacja w przeglądarce w aplikacji, także wąski ekran i klawiatura.
 
+### S5. Wygląd TeamedUP! (zgłoszenie 2026-10-29; po S4)
+- Okno TeamedUP! (0.16.5) według makiety `plany/design/stitch/teamedup_komunikator_firmowy/` (`screen.png`, `code.html`; kolory i typografia: `obsidian_syndicate/DESIGN.md`; wersja eksportu w `stitch/export/` — nowsza tam, gdzie się różni): bursztynowy akcent, karty kontaktów z awatarem i rolą, rozmowa w dymku, zadania jako karty ze stanem i paskiem. Komponenty i tokeny z 0.14.5, bez Tailwinda i zewnętrznych czcionek, tylko ciemny motyw, kolor nigdy jedynym nośnikiem; mechanika bez zmian (kanały, czat, dokumenty z makiety nie istnieją w grze i nie są dodawane). Ta sama konwencja dla S4 i dalszych poprawek Internetu.
+
 ### S3. Kontrola i raport
 - Testy (grupa „0.16.6”), przebiegi ×200 (20 gier × 6,5 roku): GIG ±1 pp względem bazy po 0.16.5, niezmienniki 0, ukryta gotówka nie zmienia NAV w sposób niezgłaszany. Raport `kontrola_0.16.6.md` z sekcją „Pominięte i problemy”, wiersz w mapie.
 

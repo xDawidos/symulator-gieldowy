@@ -13624,4 +13624,189 @@ async function runAllTests() {
     window.__testSummary = { passed, failed, errors: testErrors };
 }
 
+group('0.16.6 Domknięcie', () => {
+    const fresh = () => { resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' }); };
+
+    test('S2: ukończony szpital/kampus/centrum = spółka państwowa na GPW z dywidendą do skarbu; inne megaprojekty nie tworzą spółek', () => {
+        fresh();
+        for (const id of ['hospital', 'techcampus', 'expo']) {
+            const def = MEGA_PROJECTS.find(p => p.id === id);
+            const before = getListedCompanyCount();
+            completeProject({ id: 'spx' + id, templateId: id, name: def.name, icon: def.icon, timed: false, cost: def.cost, bonus: def.bonus, participants: [], builder: null, quarters: def.quarters });
+            const stock = stocks.find(s => s.symbol === SUPERPROJECT_COMPANIES[id].symbol);
+            assert(stock && stock.isStateOwned && stock.stateOwnershipPct > 0.5 && getStockMarket(stock) === 'GPW', `${id}: spółka państwowa na GPW`);
+            assertEq(getListedCompanyCount(), before + 1, `${id}: liczona do spółek krajowych`);
+            const mc = getMarketCapValue(stock);
+            assert(mc > def.cost * 0.5 && mc < def.cost * 2, `${id}: kapitalizacja ≈ koszt budowy (${mc})`);
+            const treasury = governmentTreasury; payDividendToInstitutions(stock, 1);
+            assert(governmentTreasury > treasury, `${id}: dywidenda do skarbu`);
+        }
+        const n = stocks.length; const bridge = MEGA_PROJECTS.find(p => p.id === 'bridge');
+        completeProject({ id: 'spb', templateId: 'bridge', name: bridge.name, icon: bridge.icon, timed: false, cost: bridge.cost, bonus: bridge.bonus, participants: [], builder: null, quarters: 5 });
+        assertEq(stocks.length, n, 'most nie tworzy spółki');
+        completeProject({ id: 'spx2', templateId: 'hospital', name: 'Szpital kliniczny', icon: '🏥', timed: false, cost: 1, bonus: MEGA_PROJECTS[7].bonus, participants: [], builder: null, quarters: 6 });
+        assertEq(stocks.filter(s => s.symbol === 'SZK').length, 1, 'bez duplikatu');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    });
+
+    test('S2: spółka państwowa nie opuszcza GPW (przeniesienie, wyłączność, zejście na NH, zagraniczne przejęcie); miejska może awansować na GPW', () => {
+        fresh();
+        const gov = stocks.find(s => s.isStateOwned && !s.assetType) || (() => { const s = mk156('GOV', { price: 100, isStateOwned: true, stateOwnershipPct: 0.6 }); stocks.push(s); return s; })();
+        for (const m of ['NH', 'PRV', 'XTD']) assert(!moveStockToMarket(gov, m, 'test') && getStockMarket(gov) === 'GPW', `odmowa ${m}`);
+        assert(!getListingMoveTargets(gov).length, 'brak celów przenosin');
+        assert(!pickForeignTakeoverTarget() || pickForeignTakeoverTarget() !== gov, 'nie cel przejęcia');
+        const city = mk156('MUN', { price: 100, isStateOwned: true, stateOwnershipPct: 0.6, market: 'NH' }); stocks.push(city);
+        assert(moveStockToMarket(city, 'GPW', 'awans') && getStockMarket(city) === 'GPW', 'awans na GPW wolno');
+        const plain = mk156('PLN', { price: 100 }); stocks.push(plain);
+        assert(moveStockToMarket(plain, 'NH', 'test'), 'zwykła spółka może zmienić rynek');
+    });
+    test('S4: strona Startupy — karta z plakietką etapu (ikona + tekst), drabinką i etykietami; mechanika bez zmian', () => {
+        fresh();
+        const host = document.createElement('div');
+        host.innerHTML = '<div id="startup-incubator-panel"><table id="startup-table"><tbody id="startup-table-body"></tbody></table></div>';
+        document.body.appendChild(host);
+        try {
+            const st = mk156('STX', { price: 5, assetType: 'Startup', stage: 'development', developmentProgress: 40, fundingGoal: 10000, currentFunding: 10000, investors: {} });
+            stocks.push(st);
+            displayStartups();
+            const row = document.querySelector('#startup-table-body tr.sc-development');
+            assert(row && /Rozwój/.test(row.textContent) && row.querySelector('.sc-badge svg'), 'plakietka etapu z ikoną i tekstem');
+            assertEq(row.querySelector('.sc-steps li.cur').textContent.trim(), 'Rozwój', 'bieżący etap w drabince');
+            assert(row.querySelector('.sc-steps li.cur[aria-current="step"]'), 'aria-current');
+            assert([...row.querySelectorAll('td')].slice(1).every(td => td.dataset.label), 'etykiety komórek');
+            assertEq(stocks.find(s => s.symbol === 'STX').stage, 'development', 'etap nietknięty');
+        } finally { host.remove(); }
+    });
+    const withWorld = fn => { fresh(); initFxState(); resetGdrState(); macro.quarter = 10; try { return fn(); } finally { resetGdrState(); initFxState(); } };
+    const withRandom = (value, fn) => { const r = Math.random; Math.random = () => value; try { return fn(); } finally { Math.random = r; } };
+
+    test('S1: złota akcja Gutzwillera — weto wobec przejęcia szwajcarskiej giełdy raz na 12 kw.; inne kraje i inne rodzaje połączeń bez weta', () => withWorld(() => {
+        joinCountry('CH'); assert(getForeignBots().some(b => b.id === 'fb_gutz'), 'Gutzwiller w grze');
+        assert(runLinkEvent('merged', 'CH') === null && !isCountryLinked('CH'), 'weto: CH nie jest połączone');
+        assertEq(exchangeLinks.goldenQ, 10, 'cooldown zapisany');
+        assert(runLinkEvent('intl', 'CH') && isCountryLinked('CH'), 'weto dotyczy tylko przejęcia (merged); tu giełda międzynarodowa');
+        exchangeLinks.goldenQ = -99; countryState.CH.link = null;
+        macro.quarter = 10; exchangeLinks.goldenQ = 5;
+        assert(runLinkEvent('merged', 'CH') && isCountryLinked('CH'), 'w cooldownie (5 kw. temu) brak weta');
+        assert(JSON.parse(JSON.stringify(getLinksSnapshot())).goldenQ === 5, 'cooldown w zapisie');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+
+    test('S1: Bayer zamienia walutę — kurs przesuwa się o ≤ 1%, historia ma nowy punkt, wartość portfela spada tylko o spread', () => withWorld(() => {
+        joinCountry('DE'); spawnBayerBot('DE'); const bayer = aiCompetitors.find(b => b.id === 'fb_bayer'); assert(bayer, 'Bayer w grze');
+        const before = Object.fromEntries(FOREIGN_CURRENCIES.map(c => [c, getFxRate(c)])), wealth0 = getForeignCashPln(bayer);
+        assert(withRandom(0, () => bayerFxTrade(bayer)), 'zamiana wykonana');
+        for (const c of FOREIGN_CURRENCIES) assert(Math.abs(getFxRate(c) / before[c] - 1) <= 0.01 + 1e-9, `${c}: zmiana kursu ≤ 1%`);
+        assert(FOREIGN_CURRENCIES.some(c => getFxRate(c) !== before[c]), 'kurs się przesunął');
+        const wealth1 = getForeignCashPln(bayer);
+        assert(wealth1 < wealth0 * 1.01 && wealth1 > wealth0 * (1 - 0.15 * BOT_RULES.conversionSpread - 0.03), `wartość ${wealth0.toFixed(0)} → ${wealth1.toFixed(0)}`);
+        assertEq(checkCurrencyInvariants().length, 0, 'niezmienniki walut');
+        const huge = applyFxFlow('EUR', 'USD', 1e12); assertEq(huge, FX_FLOW_MAX, 'przepływ ograniczony do ±1%');
+    }));
+
+    test('S1: Wilk bierze kredyt (dźwignia) przed pierwszym zakupem; odmowa banku nie blokuje cyklu', () => withWorld(() => {
+        const small = mk156('SML', { price: 5, totalShares: 20_000 }); resetWorld([small]);
+        const wolf = getWolf(); wolf.cash = 10_500; wolf.portfolio = {}; wolf.loans = []; wolf.creditScore = 100; delete wolf.wolf;
+        wolf.wolf = { phase: 'accumulate', symbol: 'SML', runs: 0, cooldownQ: -1 };
+        const bankCash = commercialBanks.reduce((s, b) => s + b.cash, 0), nwBefore = wolf.cash;
+        runWolfBot(wolf);
+        if (wolf.loans.length) assert(wolf.loans[0].amount > 0 && wolf.loans[0].amount <= nwBefore * WOLF_RULES.leverage + 1, 'kredyt do 50% gotówki');
+        assertEq(wolf.wolf.runs, 1, 'runda kupna wykonana');
+        wolf.creditScore = 0; wolf.wolf = { phase: 'accumulate', symbol: 'SML', runs: 0, cooldownQ: -1 }; const n = wolf.loans.length;
+        runWolfBot(wolf); assertEq(wolf.loans.length, n, 'bez zdolności kredytowej brak kredytu, cykl trwa');
+        assert(bankCash >= 0, 'banki');
+    }));
+    test('S1: wspólny widok posiadaczy akcji zagranicznych; kupno ponad próg wezwania → drabina nadzoru (ostrzeżenie, kara, nakaz odsprzedaży, sprzedaż nadwyżki)', () => withWorld(() => {
+        joinCountry('DE'); playerCash = 1e12; foreignTickets.player = [...new Set([...(foreignTickets.player || []), 'DE'])];
+        const issuer = foreignIssuers.SIE, room = Math.floor(0.75 * issuer.shares);
+        assertEq(getIssuerHolders(issuer).length, 0, 'brak posiadaczy');
+        const refused = buyForeignShares('SIE', room + 10); assert(!refused.ok && refused.needsConfirm && refused.room === room, 'bez potwierdzenia odmowa');
+        playerFund.trust = 50; getTenderRecord().tenderStrikes = 0;
+        assert(buyForeignShares('SIE', room + 10, { overThreshold: true }).ok, 'kupno ponad próg po potwierdzeniu');
+        assertEq(getIssuerHolders(issuer)[0].id, 'player', 'gracz na liście posiadaczy'); assertEq(getIssuerHolders(issuer)[0].shares, room + 10, 'liczba akcji');
+        assertEq(getTenderRecord().tenderStrikes, 1, 'ostrzeżenie'); assertEq(playerFund.trust, 50, 'ostrzeżenie bez kary');
+        const cash = playerCash; assert(buyForeignShares('SIE', 10, { overThreshold: true }).ok, 'drugie przekroczenie');
+        assertEq(getTenderRecord().tenderStrikes, 2, 'kara'); assertEq(playerFund.trust, 47, 'zaufanie −3'); assert(playerCash < cash - 10 * toPln(issuer.price, issuer.currency), 'kara pobrana');
+        assert(buyForeignShares('SIE', 10, { overThreshold: true }).ok, 'trzecie przekroczenie');
+        assert(issuer.oversightResale && issuer.oversightResale.until === macro.quarter + FOREIGN_OVERSIGHT.resaleQuarters, 'nakaz odsprzedaży');
+        processForeignOversightQuarterly(); assert(getGdrHeld(issuer) > room, 'przed terminem nadwyżka zostaje');
+        macro.quarter += FOREIGN_OVERSIGHT.resaleQuarters; processForeignOversightQuarterly();
+        assert(getGdrHeld(issuer) <= room && !issuer.oversightResale, `po terminie nadzór sprzedał nadwyżkę (${getGdrHeld(issuer)} ≤ ${room})`);
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+    // --- S1.1: gotówka w Waschmabanku — osobne testy niezmienników NAV ---
+    const withWsm = fn => withWorld(() => { joinCountry('CH'); assert(canUseWaschmabank(), 'Waschmabank dostępny po otwarciu CH'); playerCash = 1_000_000; ensureOversight(); oversight.hidden.balance = 0; return fn(); });
+
+    test('S1.1 NAV: wpłata i wypłata zmieniają majątek i NAV wyłącznie o widoczne prowizje (5% i 1%), liczba jednostek bez zmian', () => withWsm(() => {
+        const assets0 = getFundAssets(), units0 = playerFund.units, nav0 = getFundNav();
+        const r = hideCash(200_000); assert(r.ok, r.reason);
+        assertNear(getFundAssets(), assets0 - 200_000 * HIDDEN_CASH_RULES.depositFee, 'majątek spada tylko o prowizję od wpłaty', 1e-6);
+        assertEq(playerFund.units, units0, 'jednostki bez zmian'); assert(getFundNav() < nav0 && getFundNav() > nav0 * 0.98, 'NAV spada o prowizję, nie o całą kwotę');
+        assertNear(getHiddenBalance(), 190_000, 'saldo po prowizji', 1e-6);
+        const u = unhideCash(100_000); assert(u.ok);
+        assertNear(getFundAssets(), assets0 - 10_000 - 1_000, 'po wypłacie: prowizje 5% + 1%', 1e-6);
+        assertNear(getHiddenBalance(), 90_000, 'saldo po wypłacie', 1e-6);
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+
+    test('S1.1 NAV: odmowy — bez Waschmabanku, poniżej minimum, ponad gotówkę; NAV bez zmian po odmowie', () => withWsm(() => {
+        const assets0 = getFundAssets();
+        assert(!hideCash(10).ok && !hideCash(1e12).ok && !unhideCash(1).ok, 'odmowy');
+        assertEq(getFundAssets(), assets0, 'NAV bez zmian po odmowie');
+        delete foreignIssuers.WSM; assert(!canUseWaschmabank() && !hideCash(5000).ok, 'bez Waschmabanku brak rachunku');
+    }));
+
+    test('S1.1 nadzór: kara i rekwizycja sięgają tylko gotówki konta funduszu; podstawa kary nie widzi rachunku; rachunek nietknięty', () => withWsm(() => {
+        hideCash(900_000); const hidden = getHiddenBalance(); playerCash = 50_000;
+        const rec = getRecord('player'); rec.illegalGains = 500_000; rec.strikes = 2; // trzecie wykrycie = rekwizycja
+        const fineBaseAssets = getFundAssets() - hidden;
+        punishEntity('player', 'KNF');
+        assertEq(getHiddenBalance(), hidden, 'rachunek nietknięty przez karę i rekwizycję');
+        assertEq(playerCash, 0, 'z gotówki zabrano wszystko, co było (kara + rekwizycja ≤ gotówka)');
+        assert(STRIKE_FINES && fineBaseAssets < getFundAssets(), 'podstawa kary bez rachunku');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+
+    test('S1.1 afera: ujawnienie (Swiss Leaks / kontrola) konfiskuje całość, przewinienie +1, zaufanie −10; majątek spada o saldo i jest to zgłoszone (log, poczta, wiadomość)', () => withWsm(() => {
+        hideCash(400_000); const balance = getHiddenBalance(), assets0 = getFundAssets(), treasury0 = governmentTreasury, strikes0 = getRecord('player').strikes, trust0 = playerFund.trust;
+        const mails = mailbox.messages.length;
+        assert(exposeHiddenCash('test'), 'ujawniono');
+        assertEq(getHiddenBalance(), 0, 'saldo wyzerowane'); assert(governmentTreasury >= treasury0 + balance, 'konfiskata do skarbu');
+        assert(getRecord('player').strikes > strikes0, 'przewinienie'); assert(playerFund.trust <= trust0 - HIDDEN_CASH_RULES.exposeTrustLoss, 'spadek zaufania');
+        assert(getFundAssets() <= assets0 - balance + 1, 'majątek spadł co najmniej o saldo (plus kara)'); assert(mailbox.messages.length > mails, 'poczta o aferze');
+        assert(!exposeHiddenCash('znowu'), 'puste konto nie jest ujawniane drugi raz');
+        withRandom(0, () => processHiddenCashQuarterly()); assertEq(getHiddenBalance(), 0, 'kwartał bez salda bez skutków');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+
+    test('S1.1 kwartał: ryzyko wykrycia działa tylko przy saldzie; wypłata awaryjna pod umorzenia pobiera z rachunku (net po 1%)', () => withWsm(() => {
+        hideCash(300_000);
+        withRandom(0.999, () => processHiddenCashQuarterly()); assert(getHiddenBalance() > 0, 'brak wykrycia przy wysokim losowaniu');
+        playerCash = 0; const raised = liquidateHiddenCash(100_000);
+        assertNear(raised, 100_000, 'wpływ netto równy żądanej kwocie', 1e-6); assertNear(playerCash, 100_000, 'gotówka na koncie', 1e-6);
+        withRandom(0, () => processHiddenCashQuarterly()); assertEq(getHiddenBalance(), 0, 'niskie losowanie = wykrycie');
+    }));
+
+    test('S1.1 zapis: saldo rachunku przeżywa zapis i wczytanie; stary zapis bez pola działa', () => withWsm(() => {
+        hideCash(120_000); const saved = JSON.parse(JSON.stringify(oversight));
+        assertEq(saved.hidden.balance, getHiddenBalance(), 'saldo w zapisie');
+        oversight = { ...createOversight() }; delete oversight.hidden; ensureOversight(); assertEq(getHiddenBalance(), 0, 'stary zapis: saldo 0');
+        oversight = saved; assertEq(getHiddenBalance(), saved.hidden.balance, 'wczytane saldo');
+    }));
+    test('S5: TeamedUP! — zadania jako karty z plakietką stanu i paskiem; wiadomości jako karty kontaktów z rolą i kropką nieprzeczytanej', () => {
+        fresh(); mailbox = createMailbox();
+        assert(/class="te-task/.test(renderTeamedTasks()) && /te-chip/.test(renderTeamedTasks()) && /role="progressbar"/.test(renderTeamedTasks()), 'karty zadań');
+        addMail({ sender: 'corporation', subject: 'Test', body: 'Treść wiadomości testowej', importance: 1 });
+        const host = document.createElement('div');
+        host.innerHTML = '<div id="teamedup-overlay"><nav id="teamedup-nav"></nav><div id="teamedup-content"></div></div>';
+        document.body.appendChild(host);
+        try {
+            teamedView = { pane: 'messages', selectedId: null }; renderTeamedUp();
+            const card = host.querySelector('.te-contact.unread');
+            assert(card && card.querySelector('.te-role') && card.querySelector('.te-dot[aria-label]') && card.getAttribute('tabindex') === '0', 'karta kontaktu: rola, kropka z opisem, fokus');
+            assert(host.querySelector('.mail-folder.active[aria-current="page"]'), 'aktywny panel oznaczony');
+        } finally { host.remove(); teamedView = { pane: 'tasks', selectedId: null }; }
+    });
+});
+
 runAllTests();

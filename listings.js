@@ -55,10 +55,14 @@ function hasEntryMarketSlot(marketId) {
     return getEntryMarketCount(marketId) < capacity && hasFreeTotalListingSlot();
 }
 
+/** 0.16.6 S2: spółka państwowa nie opuszcza GPW (ani nie dostaje GDR, ani zagranicznego przejęcia); spółki miejskie startują na NH i mogą tylko awansować na GPW. */
+function isStateGpwOnly(stock) { return Boolean(stock?.isStateOwned); }
+
 /** Przeniesienie spółki na inny rynek (NH / PRV / GPW) z komunikatem; zwraca true, gdy przeniesiona. */
 function moveStockToMarket(stock, marketId, reason, priceEffect = 0) {
     const from = getStockMarket(stock);
     if (from === marketId) return false;
+    if (isStateGpwOnly(stock) && marketId !== 'GPW') return false; // 0.16.6 S2
     if (marketId === 'GPW') delete stock.market; else stock.market = marketId;
     stock.marketSinceQ = typeof macro === 'object' ? macro.quarter : 0;
     delete stock.belowReqQ;

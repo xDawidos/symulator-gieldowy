@@ -3366,6 +3366,16 @@ function openDividendTrackerModal() {
     modal.style.display = 'flex'; // ważne! nie 'block', bo w CSS masz flex
 }
 
+/** S4: etapy startupu na stronie Startupy — drabinka Zbiórka → Rozwój → Rynek (tylko prezentacja). */
+const STARTUP_STEPS = ['Zbiórka', 'Rozwój', 'Rynek'];
+const STARTUP_STAGE_INFO = {
+    funding: { label: 'Zbiórka', icon: 'moneta', step: 0 },
+    overfunding: { label: 'Nadsubskrypcja', icon: 'wzrost', step: 0 },
+    development: { label: 'Rozwój', icon: 'atom', step: 1 },
+    financial_complications: { label: 'Komplikacje', icon: 'alert', step: 1 },
+    awaitingListing: { label: 'Czeka na giełdę', icon: 'zegar', step: 2 }
+};
+
 function displayStartups(previousInputValues = {}) {
     const startupPanel = document.getElementById('startup-incubator-panel');
     const startupTableBody = document.getElementById('startup-table-body');
@@ -3380,6 +3390,8 @@ function displayStartups(previousInputValues = {}) {
     const startups = stocks.filter(s => s.assetType === 'Startup');
     startupTableBody.innerHTML = '';
 
+    startupTableBody.setAttribute('role', 'list');
+    if (!startups.length) startupTableBody.innerHTML = `<tr class="sc-empty"><td>${uiIcon('rakieta', 18)} Brak startupów w inkubatorze — nowe pojawiają się co jakiś czas.</td></tr>`;
     startups.forEach(startup => {
         const row = startupTableBody.insertRow();
 
@@ -3404,26 +3416,38 @@ function displayStartups(previousInputValues = {}) {
             row.title = 'UWAGA! Ten start-up to prawdopodobnie oszustwo!';
         }
 
-        // Komórka 1: Nazwa
+        // Komórka 1: Nazwa, plakietka etapu i drabinka etapów (S4: ikona + tekst, kolor nie jest jedynym nośnikiem)
+        row.className = `sc sc-${startup.stage}`;
+        row.setAttribute('role', 'listitem');
         const nameCell = row.insertCell();
-        let nameHTML = `${startup.name} (${startup.symbol})`;
-        if (startup.isPrivatized) {
-            nameHTML += ` <span title="Projekt sprywatyzowany. Sukces gwarantowany, ale możliwe komplikacje.">${uiIcon('firma', 14)}</span>`;
-        }
-        nameHTML += ` <button onclick="openInvestorsModal('${startup.symbol}')" class="ml-2 btn-xs text-sm">${uiIcon('ranking', 14)} Ranking</button>`;
+        nameCell.className = 'sc-name-cell';
+        const stageInfo = STARTUP_STAGE_INFO[startup.stage] || { label: startup.stage || '—', icon: 'info', step: 0 };
+        let nameHTML = `<span class="sc-badge">${uiIcon(stageInfo.icon, 14)} ${stageInfo.label}</span>`;
+        if (startup.isScamDetected) nameHTML += ` <span class="sc-badge sc-warn">${uiIcon('alert', 14)} Podejrzenie oszustwa</span>`;
+        if (startup.isPrivatized) nameHTML += ` <span class="sc-badge" title="Projekt sprywatyzowany. Sukces gwarantowany, ale możliwe komplikacje.">${uiIcon('firma', 14)} Prywatyzacja</span>`;
+        nameHTML += `<strong class="sc-name">${escapeHtml(startup.name)} <span class="sc-sym">${escapeHtml(startup.symbol)}</span></strong>`;
+        nameHTML += `<ol class="sc-steps" aria-label="Etap: ${stageInfo.label} (${stageInfo.step + 1} z ${STARTUP_STEPS.length})">${STARTUP_STEPS.map((label, i) => `<li class="${i < stageInfo.step ? 'done' : i === stageInfo.step ? 'cur' : ''}"${i === stageInfo.step ? ' aria-current="step"' : ''}>${i < stageInfo.step ? uiIcon('ok', 12) : ''}${label}</li>`).join('')}</ol>`;
+        nameHTML += `<button type="button" onclick="openInvestorsModal('${startup.symbol}')" class="btn-xs text-sm sc-rank" aria-label="Ranking inwestorów: ${escapeHtml(startup.name)}">${uiIcon('ranking', 14)} Ranking</button>`;
         nameCell.innerHTML = nameHTML;
 
         // Komórka 2: Cel Finansowania
-        row.insertCell().textContent = `${startup.fundingGoal.toLocaleString('pl-PL')} PLN`;
+        const goalCell = row.insertCell();
+        goalCell.dataset.label = 'Cel finansowania';
+        goalCell.textContent = `${startup.fundingGoal.toLocaleString('pl-PL')} PLN`;
 
         // Komórki 3, 4 i 5
         const fundingCell = row.insertCell();
         const progressCell = row.insertCell();
         const actionsCell = row.insertCell();
+        fundingCell.dataset.label = 'Postęp finansowania';
+        progressCell.dataset.label = 'Postęp rozwoju';
+        actionsCell.dataset.label = 'Akcje';
+        actionsCell.classList.add('sc-actions');
 
         const amountInput = document.createElement('input');
         amountInput.type = 'number';
         amountInput.placeholder = 'Kwota';
+        amountInput.setAttribute('aria-label', `Kwota inwestycji w ${startup.name}`);
         amountInput.classList.add('w-sm');
         amountInput.id = `invest-amount-${startup.symbol}`;
         amountInput.value = previousInputValues[startup.symbol] || '';
@@ -3458,6 +3482,7 @@ function displayStartups(previousInputValues = {}) {
                 const autoInvestButton = document.createElement('button');
                 autoInvestButton.innerHTML = uiIcon('odswiez', 14);
                 autoInvestButton.title = 'Ustaw automatyczne inwestowanie';
+                autoInvestButton.setAttribute('aria-label', `Automat inwestycji: ${startup.name}`);
                 autoInvestButton.classList.add('ml-1');
                 if (autoInvestSettings && autoInvestSettings.isEnabled) {
                     autoInvestButton.style.borderColor = 'var(--color-up)';
@@ -3536,6 +3561,7 @@ function displayStartups(previousInputValues = {}) {
                 const autoInvestButton = document.createElement('button');
                 autoInvestButton.innerHTML = uiIcon('odswiez', 14);
                 autoInvestButton.title = 'Ustaw automatyczne inwestowanie';
+                autoInvestButton.setAttribute('aria-label', `Automat inwestycji: ${startup.name}`);
                 autoInvestButton.classList.add('ml-1');
                 if (autoInvestSettings && autoInvestSettings.isEnabled) {
                     autoInvestButton.style.borderColor = 'var(--color-up)'; // Zielona ramka dla aktywnych
@@ -3557,6 +3583,12 @@ function displayStartups(previousInputValues = {}) {
 
                 break;
             }
+        }
+
+        for (const bar of row.querySelectorAll('progress')) {
+            const pct = bar.max > 0 ? Math.round(bar.value / bar.max * 100) : 0;
+            bar.setAttribute('aria-label', `${bar.parentElement.dataset.label}: ${pct}%`);
+            if (bar.parentElement === fundingCell || bar.parentElement === progressCell) bar.insertAdjacentHTML('afterend', `<span class="sc-pct">${pct}%</span>`);
         }
 
         // Ubezpieczenie (Logika Poziomu 4)
@@ -3681,12 +3713,12 @@ function renderPoolDetails() {
     });
     const history = (investmentPool.history || []).map(h => `<li><span class="text-muted">kw. ${h.quarter ?? '—'}</span> ${POOL_KIND_LABELS[h.kind] || ''} ${escapeHtml(h.text || '')}</li>`);
     el.innerHTML = `
-        <h4>Niezainwestowane</h4>
-        <p>Razem: <strong>${fmtZl(investmentPool.totalFunds)}</strong> · Twoje: <strong>${fmtZl(free)}</strong></p>
-        <h4>W startupach</h4>
+        <section class="pool-sec"><h4>Niezainwestowane</h4>
+        <p>Razem: <strong>${fmtZl(investmentPool.totalFunds)}</strong> · Twoje: <strong>${fmtZl(free)}</strong></p></section>
+        <section class="pool-sec"><h4>W startupach</h4>
         ${rows.length ? `<table class="w-full text-sm"><thead><tr><th>Startup</th><th>Etap</th><th>Kwota puli</th><th>Twój udział</th></tr></thead><tbody>${rows.join('')}</tbody></table>` : '<p class="text-muted">Pula nie ma teraz wkładów w startupach.</p>'}
-        <h4>Ostatnie rozliczenia (Twój udział)</h4>
-        ${history.length ? `<ul class="text-sm">${history.join('')}</ul>` : '<p class="text-muted">Brak rozliczeń.</p>'}`;
+        </section><section class="pool-sec"><h4>Ostatnie rozliczenia (Twój udział)</h4>
+        ${history.length ? `<ul class="text-sm">${history.join('')}</ul>` : '<p class="text-muted">Brak rozliczeń.</p>'}</section>`;
 }
 
 // --- NOWY FRAGMENT - FUNKCJE DLA MODALA AUTO-INWESTOWANIA ---
@@ -7400,6 +7432,7 @@ function checkWorldInvariants() {
     if (typeof checkCurrencyInvariants === 'function') problems.push(...checkCurrencyInvariants()); // 0.16.1 G2
     if (typeof checkMarginInvariants === 'function') problems.push(...checkMarginInvariants()); // 0.16.4 G21
     if (typeof checkGdrInvariants === 'function') problems.push(...checkGdrInvariants()); // 0.16.1 G3
+    if (typeof checkHiddenCashInvariants === 'function') problems.push(...checkHiddenCashInvariants()); // 0.16.6 S1
     if (typeof checkCountryInvariants === 'function') problems.push(...checkCountryInvariants()); // 0.16.2 G5
     for (const bond of allBonds) finite(bond.faceValue, `obligacja ${bond.id}`);
     if (corporation) finite(corporation.budget, 'budżet korporacji');
@@ -7675,7 +7708,7 @@ function renderTeamedUp() {
     const overlay = document.getElementById('teamedup-overlay');
     if (!overlay || overlay.hidden || !mailbox) return;
     const unread = getTeamedUnread();
-    const item = (pane, icon, label, extra = '') => `<button class="mail-folder ${teamedView.pane === pane ? 'active' : ''}" onclick="setTeamedPane('${pane}')"><span>${uiIcon(icon, 14)} ${label}</span>${extra}</button>`;
+    const item = (pane, icon, label, extra = '') => `<button class="mail-folder ${teamedView.pane === pane ? 'active' : ''}" ${teamedView.pane === pane ? 'aria-current="page"' : ''} onclick="setTeamedPane('${pane}')"><span>${uiIcon(icon, 16)} ${label}</span>${extra}</button>`;
     document.getElementById('teamedup-nav').innerHTML = item('tasks', 'cel', 'Zadania i oceny') + item('messages', 'poczta', 'Wiadomości', unread ? `<b>${unread}</b>` : '') + item('hiring', 'pracownik', 'Zatrudnianie')
         + `<hr><button class="mail-folder" onclick="openPawnShopPanel()">${uiIcon('lombard', 14)} Lombard</button>`;
     const body = document.getElementById('teamedup-content');
@@ -7683,9 +7716,14 @@ function renderTeamedUp() {
     if (teamedView.pane === 'hiring') { body.innerHTML = renderTeamedHiring(); return; }
     const msgs = getTeamedMessages();
     const selected = msgs.find(m => m.id === teamedView.selectedId);
-    body.innerHTML = `<div class="mail-list">${msgs.length ? msgs.slice(0, 60).map(m => `<div class="mail-row ${m.read ? '' : 'unread'} ${m.id === teamedView.selectedId ? 'selected' : ''}" role="button" tabindex="0" onclick="selectTeamedMail(${m.id})">
-            <span class="mail-from">${escapeHtml(getMailSenderName(m.sender))}</span><span class="mail-subject">${escapeHtml(m.subject)}<span class="mail-snippet"> — ${escapeHtml(m.body.slice(0, 80))}</span></span><span class="mail-time">${formatMailTime(m.at)}</span></div>`).join('') : '<p class="fund-muted mail-empty">Brak wiadomości od szefostwa i współpracowników.</p>'}</div>
-        ${selected ? renderMailPreview(selected) : ''}`;
+    body.innerHTML = `<div class="mail-list te-contacts" aria-label="Wiadomości">${msgs.length ? msgs.slice(0, 60).map(m => { // 0.16.6 S5: karty kontaktów jak we wzorze Stitcha (awatar, rola, godzina, zajawka, kropka nieprzeczytanej)
+            const name = getMailSenderName(m.sender), coworker = String(m.sender).startsWith('bot:');
+            return `<div class="te-contact ${m.read ? '' : 'unread'} ${m.id === teamedView.selectedId ? 'selected' : ''}" role="button" tabindex="0" ${m.id === teamedView.selectedId ? 'aria-current="true"' : ''} onclick="selectTeamedMail(${m.id})" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectTeamedMail(${m.id}); }">
+            <span class="net-avatar" aria-hidden="true">${escapeHtml(initials(name.replace(/^\P{L}+/u, '')))}</span>
+            <span class="te-contact-main"><span class="te-contact-top"><strong>${escapeHtml(name)}</strong><span class="te-time">${formatMailTime(m.at)}</span></span>
+            <span class="te-role">${coworker ? 'Współpracownik' : 'Zarząd'}</span>
+            <span class="te-snippet">${escapeHtml(m.subject)} — ${escapeHtml(m.body.slice(0, 70))}</span></span>${m.read ? '' : '<span class="te-dot" role="img" aria-label="Nieprzeczytana"></span>'}</div>`; }).join('') : '<p class="fund-muted mail-empty">Brak wiadomości od szefostwa i współpracowników.</p>'}</div>
+        ${selected ? `<div class="te-chat">${renderMailPreview(selected)}</div>` : '<div class="te-chat te-chat-empty"><p class="fund-muted">Wybierz rozmowę z listy.</p></div>'}`;
 }
 
 function formatMailTime(clockMs) {
@@ -7764,8 +7802,8 @@ function renderMailbox() {
 
 /** TeamedUP!: zadania od szefostwa — cele awansowe i okresu (targety), cele zarządu odsłaniane stopniowo, oceny zarządu. */
 function renderTeamedTasks() {
-    const row = t => `<li class="firm-target ${t.done ? 'done' : ''}"><span>${uiIcon(t.done ? 'ok' : 'cel', 14)} <strong>${t.done ? '[wykonane]' : '[do zrobienia]'}</strong>${t.promotion ? ' <span class="mail-tag">awans</span>' : ''} ${escapeHtml(t.label)}</span>
-        <strong>${escapeHtml(String(t.value))}</strong><span class="firm-target-bar"><span style="width:${(t.progress * 100).toFixed(0)}%"></span></span></li>`;
+    const row = t => `<li class="te-task ${t.done ? 'done' : ''}"><div class="te-task-top"><span class="te-chip ${t.done ? 'ok' : 'live'}">${uiIcon(t.done ? 'ok' : 'zegar', 12)} ${t.done ? 'Wykonane' : 'W trakcie'}</span>${t.promotion ? ` <span class="te-chip promo">${uiIcon('szczyt', 12)} Awansowe</span>` : ''}<strong class="te-task-value">${escapeHtml(String(t.value))}</strong></div>
+        <span class="te-task-label">${escapeHtml(t.label)}</span><span class="firm-target-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${(t.progress * 100).toFixed(0)}" aria-label="Postęp: ${escapeHtml(t.label)}"><span style="width:${(t.progress * 100).toFixed(0)}%"></span></span><span class="te-pct">${(t.progress * 100).toFixed(0)}%</span></li>`;
     const targets = typeof getPlayerTargets === 'function' ? getPlayerTargets() : [];
     const goals = typeof getCorporateGoalsView === 'function' ? getCorporateGoalsView() : [];
     const queue = (corporation?.goals?.queue || []).filter(i => isGoalEligible(i.id));
@@ -7779,8 +7817,8 @@ function renderTeamedTasks() {
     const last = (corporation?.lastGoals || []).map(g => `<li>${g.done ? '[wykonane]' : '[niewykonane]'} ${escapeHtml(g.label)}</li>`).join('');
     return `<article class="mail-article"><h3>Zadania od szefostwa</h3>
         <p class="fund-muted">Termin oceny zarządu: za ${left} ${left === 1 ? 'okres' : 'okresy'} funduszu. Spełnione zadanie: +${GOAL_MET_BONUS} pkt oceny (cel awansowy +${GOAL_MET_BONUS * GOAL_PROMOTION_MULT}) i premia z budżetu korporacji; niespełnione: −${GOAL_MISSED_PENALTY} pkt. Awans wymaga oceny ≥ ${PROMOTION_SCORE}.</p>
-        <h4>Targety okresu</h4><ul class="list-plain firm-targets">${targets.map(row).join('') || '<li class="fund-muted">Brak.</li>'}</ul>
-        <h4>Cele zarządu na ten cykl</h4><ul class="list-plain firm-targets">${goals.map(row).join('') || '<li class="fund-muted">Zarząd nie wyznaczył jeszcze zadań.</li>'}</ul>
+        <h4>Targety okresu</h4><ul class="list-plain firm-targets te-tasks">${targets.map(row).join('') || '<li class="fund-muted">Brak.</li>'}</ul>
+        <h4>Cele zarządu na ten cykl</h4><ul class="list-plain firm-targets te-tasks">${goals.map(row).join('') || '<li class="fund-muted">Zarząd nie wyznaczył jeszcze zadań.</li>'}</ul>
         ${queue.length ? `<p class="fund-muted">Zarząd zapowiada ${queue.length} ${queue.length === 1 ? 'kolejne zadanie' : 'kolejne zadania'}: pierwsze za ${Math.max(0, Math.min(...queue.map(i => i.at)) - q)} kw.</p>` : ''}
         ${last ? `<h4>Poprzedni cykl</h4><ul class="list-plain text-sm">${last}</ul>` : ''}
         <h4>Ostatnie oceny zarządu</h4>${reviews ? `<ul class="list-plain text-sm">${reviews}</ul>` : '<p class="fund-muted">Brak ocen.</p>'}</article>`;

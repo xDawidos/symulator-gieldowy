@@ -909,6 +909,43 @@ function completeProject(project) {
     specialProjects.active = specialProjects.active.filter(p => p !== project);
     specialProjects.completed.unshift(project);
     logEvent(`🎉 Ukończono ${project.icon} ${project.name}! Bonusy dla: ${members.map(m => m.name).join(', ')}${project.timed ? ` (do ${MAX_TIMED_BONUS_QUARTERS / 4} lat)` : ''}.`, 'city');
+    createSuperprojectCompany(project);
+}
+
+// 0.16.6 S2: szpital, kampus i centrum wystawiennicze po ukończeniu stają się spółkami państwowymi na GPW (bez IPO).
+// Są liczone do spółek krajowych, ale powstają także przy pełnym limicie (3 spółki w całej grze).
+const SUPERPROJECT_COMPANIES = {
+    hospital:   { symbol: 'SZK', name: 'Szpital Kliniczny SA' },
+    techcampus: { symbol: 'KTE', name: 'Kampus Technologiczny SA' },
+    expo:       { symbol: 'CWE', name: 'Centrum Wystawiennicze SA' }
+};
+const SUPERPROJECT_SHARES = 100000;
+const SUPERPROJECT_STATE_SHARE = 0.8;
+
+function createSuperprojectCompany(project) {
+    const def = project.timed ? null : SUPERPROJECT_COMPANIES[project.templateId];
+    if (!def || stocks.some(s => s.symbol === def.symbol)) return null;
+    const mega = MEGA_PROJECTS.find(p => p.id === project.templateId);
+    const stock = {
+        name: def.name, symbol: def.symbol, exchange: 'SILVER',
+        price: Math.max(1, mega.cost / SUPERPROJECT_SHARES), volatilityFactor: 0.5,
+        totalShares: SUPERPROJECT_SHARES, maxShares: SUPERPROJECT_SHARES, sharesHeld: 0, insiderShares: 0,
+        sector: mega.sectors.slice(), financialHealth: 2, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0,
+        isStateOwned: true, stateOwnershipPct: SUPERPROJECT_STATE_SHARE, eventResistance: 0.7, stateOfferCooldownUntil: 0,
+        dividendPolicy: 'Balanced', dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000), lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null,
+        balanceSheet: { assets: 0, liabilities: 0, shareCapital: 0, retainedEarnings: 0 }, quarterlyEarnings: 0, cash: 0,
+        priceHistory: [], candlestickHistory: [], lineHistory: [], playerTransactions: [], priceAlerts: { buy: null, sell: null },
+        superproject: mega.id
+    };
+    initializeBalanceSheetForStock(stock);
+    initializeDescriptionParts(stock);
+    generateCEO(stock);
+    initializeDepartments(stock);
+    assignBankToCompany(stock);
+    stocks.push(stock);
+    initializeFundamentals(stock, true);
+    logEvent(`🏛️ ${mega.icon} ${def.name} (${def.symbol}) — spółka państwowa z ukończonego projektu — debiutuje na GPW (Skarb Państwa ${Math.round(SUPERPROJECT_STATE_SHARE * 100)}%).`, 'city');
+    return stock;
 }
 
 // =================================================================================
@@ -1529,6 +1566,7 @@ function createOversight() {
         knf: { level: 0, budget: 0 },
         records: {},          // id → { strikes, suspicion, immuneUntil, blockedUntil, illegalGains }
         history: [],          // ostatnie wykrycia (do panelu)
+        hidden: { balance: 0 }, // 0.16.6 S1: rachunek w Waschmabanku (countries.js)
         convicted: false
     };
 }
@@ -1539,6 +1577,7 @@ function ensureOversight() {
     oversight.police = { ...fresh.police, ...(oversight.police || {}) };
     oversight.knf = { ...fresh.knf, ...(oversight.knf || {}) };
     if (!Array.isArray(oversight.history)) oversight.history = [];
+    oversight.hidden = { ...fresh.hidden, ...(oversight.hidden || {}) };
     return oversight;
 }
 
@@ -1705,7 +1744,7 @@ function greyTender(symbol) {
 // =================================================================================
 
 function getKnfAttention() {
-    const assets = typeof getFundAssets === 'function' ? getFundAssets() : 0;
+    const assets = typeof getFundAssets === 'function' ? getFundAssets() - (typeof getHiddenBalance === 'function' ? getHiddenBalance() : 0) : 0;
     return clampValue(Math.log10(Math.max(1, assets)) / 7, 0.1, 1); // 10 mln PLN → pełna uwaga
 }
 
@@ -1721,7 +1760,7 @@ function punishEntity(id, institutionName) {
     const quarter = getOversightQuarter();
     const ai = id === 'player' ? null : aiCompetitors.find(a => a.id === id);
     const name = ai ? ai.name : 'Twój fundusz';
-    const assets = ai ? ai.cash : getFundAssets();
+    const assets = ai ? ai.cash : getFundAssets() - (typeof getHiddenBalance === 'function' ? getHiddenBalance() : 0); // KNF nie widzi rachunku w Waschmabanku
     const fine = Math.round(Math.max(500, assets * STRIKE_FINES[Math.min(record.strikes, STRIKE_FINES.length) - 1]) * (!ai && isDecentFund() ? 0.75 : 1));
     let seized = 0;
 

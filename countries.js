@@ -303,6 +303,7 @@ function applySpecialEvents(issuer) {
         if (macro.quarter - (issuer.leakQ ?? -99) > 8 && Math.random() < 0.04) {
             issuer.leakQ = macro.quarter;
             issuer.price = Math.max(0.05, issuer.price * (1 - getRandomInRange(0.30, 0.60)));
+            if (issuer.id === 'WSM') exposeHiddenCash('Swiss Leaks');
             const text = `🌍 Swiss Leaks: kontrola ujawnia pranie pieniędzy w ${issuer.name}. Kurs spada o 30–60%, bank płaci karę.`;
             logEvent(text, 'market');
             if (typeof pushNews === 'function') pushNews(text, null);
@@ -334,6 +335,8 @@ function maybeCountryDebut(id) {
 function processCountriesQuarterly() {
     if (typeof processAirportQuarterly === 'function') processAirportQuarterly();
     if (typeof processLinksQuarterly === 'function') processLinksQuarterly();
+    processForeignOversightQuarterly();
+    processHiddenCashQuarterly();
     for (const id of getJoinedCountries()) {
         const def = COUNTRY_DEFS[id], st = countryState[id];
         advanceCountryRegime(id);
@@ -383,6 +386,7 @@ function getCountriesSnapshot() {
         if (i.leakQ !== undefined) row.lk = i.leakQ;
         if (i.vintage) row.v = i.vintage;
         if (i.tradeHalted) row.th = 1;
+        if (i.oversightResale) row.or = i.oversightResale.until;
         if (i.generated) row.g = { name: i.name, sector: i.sectors.map(s => s[0]), subsector: i.subsector, country: i.country, currency: i.currency };
         issuers[i.id] = row;
     }
@@ -417,6 +421,7 @@ function applyCountriesSnapshot(snapshot) {
         if (Number.isFinite(Number(row.lk))) issuer.leakQ = Number(row.lk);
         if (row.v) issuer.vintage = String(row.v);
         if (row.th) issuer.tradeHalted = true;
+        if (Number.isFinite(Number(row.or))) issuer.oversightResale = { until: Number(row.or) };
         issuer.holders = {};
         for (const [holder, qty] of Object.entries(row.o || {})) if (Number(qty) > 0) issuer.holders[holder] = Number(qty);
     }
@@ -527,9 +532,132 @@ function processAirportQuarterly() {
     if (buyers.length) buyTicket(country, getRandomElement(buyers));
 }
 
+// --- 0.16.6 S1: wspólny widok posiadaczy akcji zagranicznych (odpowiednik getShareholders dla spółek krajowych) i drabina nadzoru ---
+
+/** Posiadacze spółki zagranicznej: { id, name, kind: 'player' | 'ai', shares, pct }, od największego. */
+function getIssuerHolders(issuer) {
+    return Object.entries(issuer.holders || {}).filter(([, q]) => Number(q) >= 1).map(([id, q]) => ({
+        id, kind: id === 'player' ? 'player' : 'ai', shares: Number(q), pct: Number(q) / issuer.shares,
+        name: id === 'player' ? (playerProfile?.fundName || 'Twój fundusz') : (aiCompetitors.find(b => b.id === id)?.name || id)
+    })).sort((a, b) => b.shares - a.shares);
+}
+function getIssuerStake(issuer, holderId) { return (Number(issuer.holders?.[holderId]) || 0) / issuer.shares; }
+
+const FOREIGN_OVERSIGHT = { fine: 0.02, trustLoss: 3, resaleQuarters: 2, resaleLevel: 3 }; // jak KNF_TENDER_FINE / KNF_RESALE_QUARTERS (ma.js)
+
+/** Krok drabiny po kupnie ponad próg wezwania: 1 — ostrzeżenie, 2 — kara (2% wartości nadwyżki), ≥ 3 — nakaz odsprzedaży do progu w 2 kw. Licznik wspólny z KNF (getTenderRecord). */
+function applyForeignOversightStep(issuer, overValuePln) {
+    const rec = getTenderRecord(), strike = (rec.tenderStrikes = (Number(rec.tenderStrikes) || 0) + 1);
+    const o = getOversight(issuer.country), thr = Math.round(o.callThreshold * 100), sym = getGdrSymbol(issuer);
+    let step, body;
+    if (strike === 1) {
+        step = 'warning';
+        body = `Fundusz przekroczył próg wezwania ${thr}% w ${issuer.name} (${sym}) bez ogłoszenia wezwania. Następne takie przekroczenie skończy się karą, a kolejne nakazem odsprzedaży do progu.`;
+    } else if (strike === 2) {
+        step = 'fine';
+        const fine = Math.min(Math.max(0, playerCash), Math.round(overValuePln * FOREIGN_OVERSIGHT.fine));
+        playerCash -= fine; governmentTreasury += fine;
+        if (fine > 0) recordPayment('player-fund', 'external:skarb-panstwa', fine, `Kara ${o.name}: przekroczenie progu wezwania ${sym}`);
+        playerFund.trust = Math.max(0, playerFund.trust - FOREIGN_OVERSIGHT.trustLoss);
+        body = `Kolejne przekroczenie progu ${thr}% w ${issuer.name}: kara ${formatZl(fine, 0)} (2% wartości nadwyżki). Klienci funduszu tracą zaufanie (−${FOREIGN_OVERSIGHT.trustLoss}).`;
+    } else {
+        step = 'resale';
+        issuer.oversightResale = { until: macro.quarter + FOREIGN_OVERSIGHT.resaleQuarters };
+        body = `Fundusz ma zejść poniżej progu ${thr}% w ${issuer.name} w ciągu ${FOREIGN_OVERSIGHT.resaleQuarters} kw. — inaczej ${o.name} sprzeda nadwyżkę na rynku.`;
+    }
+    if (typeof addMail === 'function') addMail({ sender: o.name, subject: `⚠️ ${o.name}: próg wezwania ${issuer.name}`, body, importance: 3 });
+    logEvent(`⚖️ ${o.name}: ${body}`, 'review');
+    return step;
+}
+
+/** Co kwartał: nakaz odsprzedaży wygasł — nadwyżka ponad próg sprzedana przez nadzór (przez zwykłą sprzedaż, z prowizją). */
+function processForeignOversightQuarterly() {
+    for (const issuer of getForeignIssuerList()) {
+        const order = issuer.oversightResale;
+        if (!order) continue;
+        const excess = getGdrHeld(issuer) - Math.floor(getCallThreshold(issuer.country) * issuer.shares);
+        if (excess <= 0) { delete issuer.oversightResale; continue; }
+        if (macro.quarter < order.until) continue;
+        const r = sellForeignShares(issuer.id, excess);
+        delete issuer.oversightResale;
+        const text = `⚖️ ${getOversight(issuer.country).name} sprzedaje nadwyżkę ${formatNumberPl(excess, 0)} akcji ${issuer.name} ponad próg wezwania${r.ok ? '' : ' (sprzedaż nieudana)'}.`;
+        logEvent(text, 'review');
+        if (typeof addMail === 'function') addMail({ sender: getOversight(issuer.country).name, subject: `⚖️ Nakaz odsprzedaży: ${issuer.name}`, body: text, importance: 3 });
+    }
+}
+
+// --- 0.16.6 S1: gotówka w Waschmabanku poza kontrolą nadzoru ---
+// Decyzja: ukryta gotówka JEST w majątku (NAV, jednostki, ocena klientów i raporty widzą ją w całości — nie ma „cichej” zmiany NAV);
+// wpłata kosztuje 5% (widoczna w historii płatności), wypłata 1%. Poza zasięgiem jest tylko egzekucja: kary, rekwizycja nielegalnych zysków i
+// podstawa kary KNF liczą wyłącznie gotówkę na koncie funduszu. Cena: co kwartał ryzyko wykrycia (rośnie z uwagą KNF), a „Swiss Leaks” w Waschmabanku
+// ujawnia rachunek: konfiskata całości, przewinienie nr +1 i utrata zaufania klientów.
+const HIDDEN_CASH_RULES = { depositFee: 0.05, withdrawFee: 0.01, min: 1000, detectChance: 0.03, exposeTrustLoss: 10 };
+
+function getHiddenBalance() { return Math.max(0, Number(oversight?.hidden?.balance) || 0); }
+function canUseWaschmabank() { return Boolean(playerFund && foreignIssuers.WSM && foreignIssuers.WSM.kind === 'share'); }
+
+/** Wpłata z gotówki funduszu na rachunek w Waschmabanku. Zwraca { ok, hidden, fee } albo { ok: false, reason }. */
+function hideCash(amount) {
+    amount = Number(amount);
+    if (!canUseWaschmabank()) return { ok: false, reason: 'Waschmabank działa dopiero po otwarciu giełdy szwajcarskiej.' };
+    if (!(amount >= HIDDEN_CASH_RULES.min)) return { ok: false, reason: `Minimalna wpłata: ${formatZl(HIDDEN_CASH_RULES.min, 0)}.` };
+    if (amount > playerCash + 1e-9) return { ok: false, reason: 'Za mało gotówki funduszu.' };
+    ensureOversight();
+    const fee = amount * HIDDEN_CASH_RULES.depositFee;
+    playerCash -= amount;
+    oversight.hidden.balance = getHiddenBalance() + amount - fee;
+    recordPayment('player-fund', 'external:waschmabank', fee, 'Waschmabank: prowizja od wpłaty');
+    logEvent(`🏦 Wpłata ${formatZl(amount, 0)} na rachunek w Waschmabanku (prowizja ${formatZl(fee, 0)}). Środki liczą się do majątku funduszu, ale nadzór ich nie widzi.`, 'state');
+    return { ok: true, hidden: oversight.hidden.balance, fee };
+}
+
+/** Wypłata na konto funduszu (prowizja 1%). */
+function unhideCash(amount) {
+    amount = Math.min(Number(amount), getHiddenBalance());
+    if (!(amount > 0)) return { ok: false, reason: 'Brak środków na rachunku w Waschmabanku.' };
+    const fee = amount * HIDDEN_CASH_RULES.withdrawFee;
+    oversight.hidden.balance = getHiddenBalance() - amount;
+    playerCash += amount - fee;
+    recordPayment('player-fund', 'external:waschmabank', fee, 'Waschmabank: prowizja od wypłaty');
+    return { ok: true, received: amount - fee, fee };
+}
+
+/** Wypłata awaryjna pod umorzenia / margin call (w forceLiquidation, po obcej gotówce i GDR). Zwraca wpływ netto. */
+function liquidateHiddenCash(amountPln) {
+    const gross = Math.min(getHiddenBalance(), amountPln / (1 - HIDDEN_CASH_RULES.withdrawFee));
+    return gross > 0 ? (unhideCash(gross).received || 0) : 0;
+}
+
+/** Wykrycie rachunku: konfiskata całości, przewinienie, utrata zaufania. */
+function exposeHiddenCash(reason) {
+    const balance = getHiddenBalance();
+    if (!(balance > 0)) return false;
+    oversight.hidden.balance = 0;
+    governmentTreasury += balance;
+    recordPayment('player-fund', 'external:skarb-panstwa', balance, 'Konfiskata rachunku w Waschmabanku');
+    playerFund.trust = Math.max(0, playerFund.trust - HIDDEN_CASH_RULES.exposeTrustLoss);
+    const text = `Ujawniono ukryty rachunek funduszu w Waschmabanku (${reason}): konfiskata ${formatZl(balance, 0)}, utrata zaufania klientów.`;
+    logEvent(`🕵️ ${text}`, 'error');
+    if (typeof pushNews === 'function') pushNews(`🕵️ Afera: ${text}`, null);
+    if (typeof addMail === 'function') addMail({ sender: 'PULS', subject: '🕵️ Afera: ukryty rachunek funduszu', body: text, importance: 3 });
+    if (typeof punishEntity === 'function') punishEntity('player', 'KNF');
+    return true;
+}
+
+function processHiddenCashQuarterly() {
+    if (getHiddenBalance() <= 0) return;
+    if (Math.random() < HIDDEN_CASH_RULES.detectChance * getKnfAttention()) exposeHiddenCash('kontrola przepływów');
+}
+
+function checkHiddenCashInvariants() {
+    const b = oversight?.hidden?.balance;
+    return b === undefined || (Number.isFinite(b) && b >= 0) ? [] : [`rachunek w Waschmabanku: ${b}`];
+}
+
 // --- Handel akcjami zagranicznymi (gracz) ---
 
-function buyForeignShares(issuerId, quantity) {
+/** opts.overThreshold: gracz świadomie przekracza próg wezwania (drabina nadzoru: ostrzeżenie → kara → nakaz odsprzedaży). */
+function buyForeignShares(issuerId, quantity, opts = {}) {
     const issuer = foreignIssuers[issuerId];
     quantity = Math.floor(Number(quantity));
     if (!issuer || issuer.kind !== 'share') return { ok: false, reason: 'Ta spółka nie jest notowana na rynku zagranicznym.' };
@@ -541,9 +669,10 @@ function buyForeignShares(issuerId, quantity) {
     if (issuer.tradeHalted) return { ok: false, reason: 'Notowania spółki są zawieszone.' };
     if (quantity > getGdrFree(issuer)) return { ok: false, reason: 'Nie ma tylu akcji w wolnym obrocie.' };
     const room = Math.floor(getCallThreshold(issuer.country) * issuer.shares) - getGdrHeld(issuer); // drabina nadzoru (G15): bez wezwania nie przekroczysz progu
-    if (quantity > room) {
+    const over = quantity > room;
+    if (over && !opts.overThreshold) {
         const o = getOversight(issuer.country);
-        return { ok: false, reason: `Próg wezwania w kraju ${def.name} to ${Math.round(o.callThreshold * 100)}% (nadzór: ${o.name}). Możesz dokupić najwyżej ${Math.max(0, room).toLocaleString('pl-PL')} akcji.` };
+        return { ok: false, needsConfirm: true, room: Math.max(0, room), reason: `Próg wezwania w kraju ${def.name} to ${Math.round(o.callThreshold * 100)}% (nadzór: ${o.name}). Możesz dokupić najwyżej ${Math.max(0, room).toLocaleString('pl-PL')} akcji.` };
     }
     const cur = issuer.currency, valueLocal = quantity * issuer.price, midPln = toPln(valueLocal, cur);
     const commissionPln = midPln * getCountryCommission(issuer.country);
@@ -555,6 +684,7 @@ function buyForeignShares(issuerId, quantity) {
     playerCash -= total;
     if (useLocal > 0) { playerCashByCurrency[cur] = have - useLocal; if (playerCashByCurrency[cur] < 1e-9) delete playerCashByCurrency[cur]; }
     issuer.holders.player = getGdrHeld(issuer) + quantity;
+    if (over) applyForeignOversightStep(issuer, toPln((quantity - Math.max(0, room)) * issuer.price, cur));
     if (spreadCost > 0) recordPayment('player-fund', 'external:kantor', spreadCost, 'Kantor: spread przy zakupie akcji zagranicznych');
     if (commissionPln > 0) recordPayment('player-fund', `external:${def.operator.id}`, commissionPln, `Prowizja: ${def.operator.name}`);
     return { ok: true, cost: total, commissionPln, spreadCost };
@@ -681,7 +811,7 @@ function botPay(bot, currency, amountLocal) {
 
 function botSpendable(bot) { return Math.max(0, getForeignCashPln(bot) - (bot.fx.reservePln || 0)); } // rezerwa na wydatki prywatne (Kozel: 20% początkowego kapitału)
 
-function getBotStake(issuer, bot) { return (Number(issuer.holders?.[bot.id]) || 0) / issuer.shares; }
+function getBotStake(issuer, bot) { return getIssuerStake(issuer, bot.id); }
 function botStakeCap(issuer, bot) {
     const joined = countryState[issuer.country]?.joinedQ ?? -99;
     const base = macro.quarter - joined < BOT_RULES.firstYearQuarters ? BOT_RULES.maxStakeFirstYear : BOT_RULES.maxStake;
@@ -801,9 +931,26 @@ function botTradeHome(bot, def) {
     return (bot.portfolio[stock.symbol]?.shares || 0) > before;
 }
 
+/** Bayer (0.16.6 S1): raz na kilka kwartałów zamienia do 15% najcenniejszej waluty na najtańszą względem jej średniej; zamiana lekko przesuwa kursy (≤ ±1%). */
+function bayerFxTrade(bot) {
+    if (Math.random() >= 0.5) return false;
+    const bag = bot.cashByCurrency || {};
+    const codes = Object.keys(bag).filter(c => FOREIGN_CURRENCIES.includes(c) && bag[c] > 0).sort((a, b) => toPln(bag[b], b) - toPln(bag[a], a));
+    const sell = codes[0], buy = FOREIGN_CURRENCIES.filter(c => c !== sell && fxMeans[c]).sort((a, b) => fxRates[a] / fxMeans[a] - fxRates[b] / fxMeans[b])[0];
+    if (!sell || !buy) return false;
+    const amountPln = toPln(bag[sell], sell) * 0.15;
+    const sold = fromPln(amountPln, sell);
+    bag[sell] -= sold;
+    bag[buy] = (Number(bag[buy]) || 0) + fromPln(amountPln * (1 - BOT_RULES.conversionSpread), buy);
+    applyFxFlow(buy, sell, amountPln);
+    bot.fx.fxFlowQ = macro.quarter;
+    return true;
+}
+
 function runForeignBot(bot) {
     const def = FOREIGN_BOTS.find(b => b.id === bot.id);
     if (!def || !isCountryJoined(bot.homeCountry)) return;
+    if (def.style === 'abroad') bayerFxTrade(bot); // przed zakupami akcji; stan konta w walutach liczą testy niezmienników
     if (bot.fx.tradesQ !== macro.quarter) { bot.fx.tradesQ = macro.quarter; bot.fx.trades = 0; }
     if (def.enterHome && !bot.fx.enteredHome && bot.fx.entryQ !== null && macro.quarter >= bot.fx.entryQ) {
         bot.fx.enteredHome = true;
