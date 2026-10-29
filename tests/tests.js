@@ -13943,7 +13943,7 @@ group('0.16.8 Limity i zegar giełd', () => {
         const order = ['CZ', 'SE', 'CH', 'TW', 'FR', 'IN', 'DE', 'JP', 'CN', 'US'];
         for (let k = 1; k < order.length; k++) assert(getCountryLimitMult(order[k]) > getCountryLimitMult(order[k - 1]), `${order[k]} > ${order[k - 1]}`);
         assertEq(getCountryLimit('US'), Math.ceil(COUNTRY_DEFS.US.companies.length * hi), 'limit US'); assert(getCountryLimit('US') > getCountryLimit('CZ'), 'US > CZ');
-        for (const id of Object.keys(COUNTRY_RULES.sizeIndex)) assert(getCountryLimit(id) >= COUNTRY_DEFS[id].companies.length, `${id}: limit nie poniżej liczby startowej`);
+        for (const id of Object.keys(COUNTRY_RULES.sizeIndex).filter(id => COUNTRY_DEFS[id])) assert(getCountryLimit(id) >= COUNTRY_DEFS[id].companies.length, `${id}: limit nie poniżej liczby startowej`);
         assertNear(getCountryLimitMult('ZZ'), COUNTRY_RULES.limitMult, 'kraj bez wskaźnika', 1e-9);
     });
 
@@ -14123,6 +14123,26 @@ group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
                 assertEq(setStartCountry(id), id, 'idempotentne');
             }
             resetGdrState(); startNewCareer({}); assertEq(setStartCountry('JP'), 'PL', 'kraj spoza START_PLAYABLE = Polska'); assertEq(getJoinedCountries().length, 0);
+        } finally { resetGdrState(); }
+    });
+
+    test('0.16.11 K1: zestaw krajowy — start z DE usuwa polskie firmy z rynku macierzystego, zostają UNI; Polska jako rynek zagraniczny z biletem; zapis i wczytanie; PL bez zmian', () => {
+        initFxState(); resetGdrState();
+        try {
+            resetWorld([mk156('PIX', { price: 20 }), mk156('WZM', { price: 30 }), mk156('CTX', { price: 90 }), mk156('ECL', { price: 40 })]);
+            startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+            assertEq(setStartCountry('PL'), 'PL'); assertEq(stocks.length, 4, 'PL: wszystkie firmy'); assert(!COUNTRY_DEFS.PL, 'PL: brak definicji Polski jako rynku obcego');
+            resetGdrState(); resetWorld([mk156('PIX', { price: 20 }), mk156('WZM', { price: 30 }), mk156('CTX', { price: 90 }), mk156('ECL', { price: 40 })]);
+            startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+            setStartCountry('DE');
+            assertEq(stocks.map(s => s.symbol).sort().join(), 'CTX,ECL', 'DE: zostają tylko UNI');
+            assert(COUNTRY_DEFS.PL && COUNTRY_DEFS.PL.companies.map(c => c.id).sort().join() === 'PIX,WZM', 'polskie firmy w definicji kraju PL');
+            assert(!isCountryJoined('PL') && !hasTicket('player', 'PL') && !canTradeCountry('player', 'PL'), 'Polska wymaga biletu');
+            assert(getTicketPrice('PL') >= TICKET_RULES.min, 'jest cena biletu');
+            const snap = JSON.parse(JSON.stringify(getCountriesSnapshot())); delete COUNTRY_DEFS.PL; applyCountriesSnapshot(snap);
+            assertEq(COUNTRY_DEFS.PL?.companies.length, 2, 'definicja Polski wraca z zapisu');
+            assertEq(setStartCountry('DE'), 'DE', 'idempotentne'); assertEq(stocks.length, 2, 'bez ponownego usuwania');
+            assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
         } finally { resetGdrState(); }
     });
 
