@@ -1785,7 +1785,7 @@ function aiChooseCommercialBank(serviceType, ai) {
     // Znajdź ID banku spółdzielczego (zakładamy, że jest tylko jeden)
     const coopBankDef = ALL_COMMERCIAL_BANKS_DEFINITIONS.find(def => def.type === BANK_TYPES.COOPERATIVE);
     if (coopBankDef) {
-        const coopBankStockSymbol = `BK${coopBankDef.id.toUpperCase()}`; // Symbol giełdowy banku
+        const coopBankStockSymbol = getBankSymbol(coopBankDef); // Symbol giełdowy banku
         // Sprawdź, czy AI ma udziały w tym banku
         if (ai.portfolio[coopBankStockSymbol] && ai.portfolio[coopBankStockSymbol].shares > 0) {
             eligibleBankTypes.push(BANK_TYPES.COOPERATIVE); // Dodaj typ spółdzielczy do możliwych wyborów

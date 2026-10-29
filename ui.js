@@ -725,11 +725,11 @@ function updateMarketKPIs() {
 function updateTopbarKPIs() {
     const fmt = new Intl.NumberFormat('pl-PL', {minimumFractionDigits:2, maximumFractionDigits:2});
     if (typeof playerCash !== 'undefined') {
-        const v = fmt.format(playerCash);
+        const v = fmt.format(playerCash / getBaseScale());
         const isPrivate = typeof activeTradingAccount !== 'undefined' && activeTradingAccount === 'private';
         ['cash','cash-portfolio'].forEach(id => {
             const el = document.getElementById(id);
-            if (el) el.textContent = (id === 'cash-portfolio' && isPrivate ? fmt.format(playerWallet?.cash || 0) : v) + ' PLN';
+            if (el) el.textContent = (id === 'cash-portfolio' && isPrivate ? fmt.format((playerWallet?.cash || 0) / getBaseScale()) : v) + ' ' + getBaseCurrency();
         });
     }
     if (typeof playerFund !== 'undefined' && playerFund) {
@@ -5591,7 +5591,7 @@ function openFinancialDetailsModal(symbol) {
 
 /** Podgląd pozycji okresu: koszty R&D, kontrakty, nieruchomości i ostatni raport. */
 function renderFinancialPeriodPreview(stock) {
-    const fmt = value => (Number(value) || 0).toLocaleString('pl-PL', { maximumFractionDigits: 0 }) + ' PLN';
+    const fmt = value => ((Number(value) || 0) / getBaseScale()).toLocaleString('pl-PL', { maximumFractionDigits: 0 }) + ' ' + getBaseCurrency();
     const rd = getResearchCostSummary(stock);
     const period = getPendingPeriodResult(stock);
     const last = stock.lastReportBreakdown;
@@ -6316,14 +6316,14 @@ function formatConstructionTime(milliseconds) {
 }
 
 function formatConstructionMoney(value) {
-    const amount = Number(value);
+    const amount = Number(value) / getBaseScale();
 
     if (!Number.isFinite(amount)) return 'Brak danych';
 
     return amount.toLocaleString('pl-PL', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
-    }) + ' PLN';
+    }) + ` ${getBaseCurrency()}`;
 }
 
 function createConstructionInfoRow(label, value) {
@@ -6847,19 +6847,19 @@ function formatNumberPl(value, digits = 2) {
 }
 
 /** Kwota w PLN (nazwa formatZl zostaje — używana w całej grze). */
-function formatZl(value, digits = 2) {
-    const text = formatNumberPl(value, digits);
-    return text === '—' ? text : `${text} PLN`;
+function formatZl(value, digits = 2) { // 0.16.11 K2: wartość w jednostkach gry → waluta bazowa konta (PL: PLN, bez zmian)
+    const text = formatNumberPl(Number(value) / getBaseScale(), digits);
+    return text === '—' ? text : `${text} ${getBaseCurrency()}`;
 }
 
 /** Krótka kwota: 3,5 mln PLN / 1,2 mld PLN; poniżej miliona pełna kwota bez groszy. */
 function formatPLNShort(value) {
-    const number = Number(value);
+    const number = Number(value) / getBaseScale(), code = getBaseCurrency();
     if (!Number.isFinite(number)) return '—';
     const abs = Math.abs(number);
-    if (abs >= 1e9) return `${formatNumberPl(number / 1e9, 1)} mld PLN`;
-    if (abs >= 1e6) return `${formatNumberPl(number / 1e6, 1)} mln PLN`;
-    return formatZl(number, 0);
+    if (abs >= 1e9) return `${formatNumberPl(number / 1e9, 1)} mld ${code}`;
+    if (abs >= 1e6) return `${formatNumberPl(number / 1e6, 1)} mln ${code}`;
+    return formatZl(number * getBaseScale(), 0);
 }
 
 /** Zmiana procentowa ze znakiem: +2,10% / −7,20% / 0,00% (value jako ułamek). */

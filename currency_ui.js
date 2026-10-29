@@ -72,7 +72,7 @@ function renderRatesTab() {
         const def = CURRENCIES[code], change = getFxChange(code), held = getCurrencyCash('player', code);
         return `<tr class="${code === kantorSelected ? 'row-selected' : ''}" onclick="selectKantorCurrency('${code}')" tabindex="0" onkeydown="if(event.key==='Enter')selectKantorCurrency('${code}')">
             <td>${currencyLabel(code)} <span class="text-muted">${escapeHtml(def.name)}</span></td>
-            <td class="text-right">${fmtRate(fxRates[code], code)} zł</td>
+            <td class="text-right">${fmtRate(getFxRate(code) / getBaseScale(), code)} ${getBaseCurrency()}</td>
             <td class="text-right">${fxArrow(change)} ${fxPct(change)}<span class="text-muted"> w ${getFxChangeWeeks(code)} tyg.</span></td>
             <td class="text-right">${held > 0 ? `${formatNumberPl(held, 2)} ${code} (${formatZl(toPln(held, code), 0)})` : '—'}</td></tr>`;
     }).join('');
@@ -83,9 +83,9 @@ function renderRatesTab() {
         <p class="text-sm text-muted">Kurs porusza się w widełkach ${fmtRate(def.min, code)}–${fmtRate(def.max, code)} zł i wraca do wolno zmieniającej się średniej. ${def.safe ? 'Waluta „bezpiecznej przystani”: w kryzysie zwykle drożeje.' : 'W kryzysie zwykle słabnie wobec bezpiecznych przystani (USD, CHF, JPY).'}</p>
         <div class="bank-card mt-3"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('moneta', 20)}</span><div><h4>Wymiana ${code}</h4><span class="bank-card-type">kupno i sprzedaż po kursie kantoru</span></div></header>
             <div class="kantor-form"><label for="kantor-provider" class="text-sm">Kantor <select id="kantor-provider" onchange="setKantorProvider(this.value)">${renderProviderOptions(kantorProviderId, code)}</select></label>
-            <label for="kantor-amount" class="text-sm">Kwota (złote przy kupnie, jednostki ${code} przy sprzedaży)</label>
+            <label for="kantor-amount" class="text-sm">Kwota (${getBaseCurrency()} przy kupnie, jednostki ${code} przy sprzedaży)</label>
             <input id="kantor-amount" type="number" min="1" step="any" value="${Math.max(1000, Math.round(Math.min(playerCash, 50000) / 1000) * 1000)}" oninput="updateKantorQuote()" aria-describedby="kantor-quote">
-            <div class="btn-row"><button class="btn-primary" onclick="kantorUiBuy()">Kup ${code} za PLN</button><button class="btn-ghost" onclick="kantorUiSell()">Sprzedaj ${code}</button></div></div>
+            <div class="btn-row"><button class="btn-primary" onclick="kantorUiBuy()">Kup ${code} za ${getBaseCurrency()}</button><button class="btn-ghost" onclick="kantorUiSell()">Sprzedaj ${code}</button></div></div>
             <p id="kantor-quote" class="text-sm" aria-live="polite"></p></div>
         <h4 class="mt-3">Porównanie kursów ${code}</h4><div id="kantor-compare"></div>
         <p class="text-sm text-muted">Banki (e-bank, uniwersalny, międzynarodowy) i Kantor Miejski ustalają własne kursy i spready, odświeżane co kwartał. Bank międzynarodowy jest najtańszy przy dużych kwotach (od 100 tys. zł) i wymienia wszystkie waluty; e-bank ma limit transakcji, Kantor Miejski wymienia tylko EUR, USD i CZK do 30 tys. zł, a jego zysk zasila miasto.</p>`;
@@ -111,18 +111,18 @@ function renderKantorCompare(code, amount) {
 function updateKantorQuote() {
     const el = document.getElementById('kantor-quote'), input = document.getElementById('kantor-amount');
     if (!el || !input) return;
-    const code = kantorSelected, amount = Number(input.value) || 0;
+    const code = kantorSelected, scale = getBaseScale(), baseCode = getBaseCurrency(), amount = (Number(input.value) || 0) * scale; // amount: jednostki gry
     const cmp = document.getElementById('kantor-compare');
     if (cmp) cmp.innerHTML = renderKantorCompare(code, amount);
     const buy = getProviderQuote(kantorProviderId, code, amount, 'buy'), sell = getProviderQuote(kantorProviderId, code, amount * getFxRate(code), 'sell');
     if (!buy.ok || !sell.ok) { el.textContent = (buy.ok ? sell.reason : buy.reason) || 'Ten kantor jest niedostępny.'; return; }
     const spread = buy.spread;
-    el.innerHTML = `Kupno: ${fmtRate(buy.rate, code)} zł za 1 ${code} (${formatNumberPl(amount / buy.rate, 2)} ${code} za ${formatZl(amount, 0)}). Sprzedaż: ${fmtRate(sell.rate, code)} zł. `
+    el.innerHTML = `Kupno: ${fmtRate(buy.rate / scale, code)} ${baseCode} za 1 ${code} (${formatNumberPl(amount / buy.rate, 2)} ${code} za ${formatZl(amount, 0)}). Sprzedaż: ${fmtRate(sell.rate / scale, code)} ${baseCode}. `
         + `Spread kantoru ${formatNumberPl(spread * 100, 1)}% — tyle tracisz na kupnie i sprzedaży razem, więc kurs musi się ruszyć o więcej, żeby to się opłaciło.`;
 }
 
 function kantorUiBuy() {
-    const amount = Number(document.getElementById('kantor-amount')?.value) || 0;
+    const amount = (Number(document.getElementById('kantor-amount')?.value) || 0) * getBaseScale(); // jednostki gry
     const r = kantorBuyCurrency(kantorSelected, amount, kantorProviderId);
     showToast(r.ok ? `Kupiono ${formatNumberPl(r.foreign, 2)} ${kantorSelected} za ${formatZl(amount, 0)} (spread ${formatZl(r.spreadCost, 0)}).` : r.reason, r.ok ? 'success' : 'warning');
     renderKantor();
@@ -206,7 +206,7 @@ function closeGiantEventWindow() {
 // 0.16.9 W1: okno „Gotówka funduszu” — salda walutowe i zmiana waluty (klik w gotówkę na pasku, Enter/Spacja z klawiatury)
 // =================================================================================
 
-let cashWindowState = { from: 'PLN', to: 'EUR', providerId: 'std' };
+let cashWindowState = { from: 'PLN', to: 'EUR', providerId: 'std' }; // „PLN” = waluta bazowa tylko do czasu pierwszego renderu (renderCashWindow poprawia)
 
 function ensureCashModal() {
     let modal = document.getElementById('cash-modal');
@@ -228,28 +228,29 @@ function openCashWindow() {
 function renderCashWindow() {
     const body = document.getElementById('cash-modal-body');
     if (!body || !playerFund) return;
-    const rows = getCashBalances(), total = getFundCashTotalPln(), held = rows.filter(r => r.amount > 1e-9 || r.code === 'PLN'), s = cashWindowState;
+    const base = getBaseCurrency(), rows = getCashBalances(), total = getFundCashTotalPln(), held = rows.filter(r => r.amount > 1e-9 || r.code === base), s = cashWindowState;
+    if (s.from === 'PLN' && base !== 'PLN' && !FOREIGN_CURRENCIES.includes('PLN')) s.from = base;
     const trs = held.map(r => {
-        const gain = r.code === 'PLN' ? null : r.rate / r.basis - 1;
+        const gain = r.code === base ? null : r.rate / r.basis - 1;
         return `<tr class="${r.code === s.from ? 'row-selected' : ''}" tabindex="0" onclick="cashPickFrom('${r.code}')" onkeydown="if(event.key==='Enter')cashPickFrom('${r.code}')" aria-label="Wybierz ${r.code} jako walutę do wymiany">
             <td>${flagIcon(CURRENCY_FLAG[r.code], 12)} <strong>${r.code}</strong> <span class="text-muted text-xs">${escapeHtml(CURRENCIES[r.code].name)}</span></td>
-            <td class="text-right">${formatNumberPl(r.amount, 2)}${r.code === 'PLN' ? '' : `<br><span class="text-muted text-xs">kurs ${fmtRate(r.rate, r.code)} zł</span>`}</td>
+            <td class="text-right">${formatNumberPl(r.amount, 2)}${r.code === base ? '' : `<br><span class="text-muted text-xs">kurs ${fmtRate(r.rate, r.code)} ${base}</span>`}</td>
             <td class="text-right">${formatZl(r.pln, 0)}<br><span class="text-muted text-xs">${formatNumberPl(r.share * 100, 0)}% gotówki</span></td>
-            <td class="text-right">${gain === null ? '—' : `${fxArrow(gain)} ${fxPct(gain)}<br><span class="text-muted text-xs">${r.gainPln >= 0 ? '+' : ''}${formatZl(r.gainPln, 0)} od zakupu (śr. ${fmtRate(r.basis, r.code)} zł)</span>`}</td></tr>`;
+            <td class="text-right">${gain === null ? '—' : `${fxArrow(gain)} ${fxPct(gain)}<br><span class="text-muted text-xs">${r.gainPln >= 0 ? '+' : ''}${formatZl(r.gainPln, 0)} od zakupu (śr. ${fmtRate(r.basis, r.code)} ${base})</span>`}</td></tr>`;
     }).join('');
     const fromCodes = held.map(r => r.code);
-    if (!fromCodes.includes(s.from)) s.from = 'PLN';
-    if (s.to === s.from) s.to = s.from === 'PLN' ? 'EUR' : 'PLN';
+    if (!fromCodes.includes(s.from)) s.from = base;
+    if (s.to === base && s.from === base || s.to === s.from || ![base, ...FOREIGN_CURRENCIES].includes(s.to)) s.to = s.from === base ? FOREIGN_CURRENCIES[0] : base;
     const opt = (list, sel) => list.map(c => `<option value="${c}" ${c === sel ? 'selected' : ''}>${c} — ${escapeHtml(CURRENCIES[c].name)}</option>`).join('');
     const maxAmount = rows.find(r => r.code === s.from)?.amount || 0, whole = Math.floor(maxAmount * 100) / 100;
-    body.innerHTML = `<p class="text-sm" aria-live="polite">Razem gotówka: <strong>${formatZl(total, 0)}</strong> — złote ${formatZl(playerCash, 0)}, waluty ${formatZl(getForeignCashPln('player'), 0)} po kursie środkowym (wchodzą do NAV; kurs waluty zmienia wartość funduszu).</p>
-        <table class="asset-mini-table w-full"><thead><tr><th>Waluta</th><th class="text-right">Saldo</th><th class="text-right">Wartość w PLN</th><th class="text-right">Wynik kursowy</th></tr></thead><tbody>${trs}</tbody></table>
+    body.innerHTML = `<p class="text-sm" aria-live="polite">Razem gotówka: <strong>${formatZl(total, 0)}</strong> — gotówka bazowa ${formatZl(playerCash, 0)}, waluty ${formatZl(getForeignCashPln('player'), 0)} po kursie środkowym (wchodzą do NAV; kurs waluty zmienia wartość funduszu).</p>
+        <table class="asset-mini-table w-full"><thead><tr><th>Waluta</th><th class="text-right">Saldo</th><th class="text-right">Wartość w ${base}</th><th class="text-right">Wynik kursowy</th></tr></thead><tbody>${trs}</tbody></table>
         <div class="bank-card mt-3"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('moneta', 20)}</span><div><h4>Zmień walutę</h4><span class="bank-card-type">po kursie wybranego kantoru, ze spreadem</span></div></header>
-            <div class="kantor-form"><label class="text-sm" for="cash-from">Z waluty <select id="cash-from" onchange="cashWindowState.from=this.value;renderCashWindow()">${opt(['PLN', ...FOREIGN_CURRENCIES].filter(c => fromCodes.includes(c)), s.from)}</select></label>
-            <label class="text-sm" for="cash-to">Na walutę <select id="cash-to" onchange="cashWindowState.to=this.value;renderCashWindow()">${opt(['PLN', ...FOREIGN_CURRENCIES].filter(c => c !== s.from), s.to)}</select></label>
-            <label class="text-sm" for="cash-provider">Kantor <select id="cash-provider" onchange="cashWindowState.providerId=this.value;updateCashQuote()">${renderProviderOptions(s.providerId, s.to === 'PLN' ? s.from : s.to)}</select></label>
+            <div class="kantor-form"><label class="text-sm" for="cash-from">Z waluty <select id="cash-from" onchange="cashWindowState.from=this.value;renderCashWindow()">${opt([base, ...FOREIGN_CURRENCIES].filter(c => fromCodes.includes(c)), s.from)}</select></label>
+            <label class="text-sm" for="cash-to">Na walutę <select id="cash-to" onchange="cashWindowState.to=this.value;renderCashWindow()">${opt([base, ...FOREIGN_CURRENCIES].filter(c => c !== s.from), s.to)}</select></label>
+            <label class="text-sm" for="cash-provider">Kantor <select id="cash-provider" onchange="cashWindowState.providerId=this.value;updateCashQuote()">${renderProviderOptions(s.providerId, s.to === base ? s.from : s.to)}</select></label>
             <label class="text-sm" for="cash-amount">Kwota w ${s.from} (masz ${formatNumberPl(maxAmount, 2)})</label>
-            <div class="btn-row"><input id="cash-amount" type="number" min="0" step="any" value="${whole > 0 ? (s.from === 'PLN' ? Math.min(whole, 10000) : whole) : ''}" oninput="updateCashQuote()" aria-describedby="cash-quote"><button type="button" class="btn-ghost btn-sm" onclick="document.getElementById('cash-amount').value=${whole};updateCashQuote()">Całe saldo</button></div>
+            <div class="btn-row"><input id="cash-amount" type="number" min="0" step="any" value="${whole > 0 ? (s.from === base ? Math.min(whole, 10000 / getBaseScale()) : whole) : ''}" oninput="updateCashQuote()" aria-describedby="cash-quote"><button type="button" class="btn-ghost btn-sm" onclick="document.getElementById('cash-amount').value=${whole};updateCashQuote()">Całe saldo</button></div>
             <p id="cash-quote" class="text-sm" aria-live="polite"></p>
             <div class="btn-row"><button type="button" class="btn-primary" onclick="cashUiConvert()">Przewalutuj</button></div></div></div>
         <p class="text-sm text-muted mt-3">Zasady: akcje spółek zagranicznych kupujesz najpierw z salda w ich walucie, resztę wymienia kantor. Zakupy w złotych (akcje krajowe, inwestycje) odmawiają, gdy brakuje PLN — przewalutuj tu. Obowiązkowe płatności w złotych (umorzenia dla klientów, opłata za zarządzanie, spłata lombardu) przewalutowują same, z wpisem w dzienniku i kosztem spreadu. Waluta obca na obcą idzie przez złote, więc kosztuje dwa spready.</p>`;
@@ -261,14 +262,16 @@ function cashPickFrom(code) { cashWindowState.from = code; renderCashWindow(); }
 function updateCashQuote() {
     const el = document.getElementById('cash-quote'), amount = Number(document.getElementById('cash-amount')?.value) || 0, s = cashWindowState;
     if (!el) return;
-    const p = previewConversion(s.from, s.to, amount, s.providerId);
-    el.textContent = p.ok ? `Dostaniesz ok. ${formatNumberPl(p.received, 2)} ${s.to}; koszt spreadu ok. ${formatZl(p.spreadCost, 0)}.` : (amount > 0 ? p.reason : 'Podaj kwotę do wymiany.');
+    const base = getBaseCurrency(), scale = getBaseScale();
+    const p = previewConversion(s.from, s.to, amount * (s.from === base ? scale : 1), s.providerId); // waluta bazowa: wpisane jednostki → jednostki gry
+    el.textContent = p.ok ? `Dostaniesz ok. ${formatNumberPl(p.received / (s.to === base ? scale : 1), 2)} ${s.to}; koszt spreadu ok. ${formatZl(p.spreadCost, 0)}.` : (amount > 0 ? p.reason : 'Podaj kwotę do wymiany.');
 }
 
 function cashUiConvert() {
     const s = cashWindowState, amount = Number(document.getElementById('cash-amount')?.value) || 0;
-    const r = convertCurrency(s.from, s.to, amount, s.providerId);
-    showToast(r.ok ? `Przewalutowano ${formatNumberPl(amount, 2)} ${s.from} na ${formatNumberPl(r.received, 2)} ${r.receivedCode} (spread ${formatZl(r.spreadCost, 0)}).` : r.reason, r.ok ? 'success' : 'warning');
+    const base = getBaseCurrency(), scale = getBaseScale();
+    const r = convertCurrency(s.from, s.to, amount * (s.from === base ? scale : 1), s.providerId);
+    showToast(r.ok ? `Przewalutowano ${formatNumberPl(amount, 2)} ${s.from} na ${formatNumberPl(r.received / (s.to === base ? scale : 1), 2)} ${r.receivedCode} (spread ${formatZl(r.spreadCost, 0)}).` : r.reason, r.ok ? 'success' : 'warning');
     renderCashWindow();
     if (typeof updateUI === 'function') updateUI();
     if (typeof renderKantor === 'function') renderKantor();

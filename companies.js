@@ -1351,14 +1351,6 @@ const initialStocks = [
         bankData: { id: 'bpn', type: BANK_TYPES.UNIVERSAL } // --> Dodane dane banku <--
     },
     {
-    name: 'Wolf & Stein Tech.', price: 19.00, volatilityFactor: 2.2, symbol: 'WiS', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
-    quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
-  lineHistory: [], playerTransactions: [], sector: ['Technologia'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
-        dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
-        lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null, // <-- DODAJ TO
-    cash: 0 
-    },
-    {
     name: 'WinPost', price: 20.00, volatilityFactor: 2.8, symbol: 'WIP', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Technologia', 'Usługi'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
@@ -1378,14 +1370,6 @@ const initialStocks = [
     name: 'Czysty Błysk', price: 30.00, volatilityFactor: 0.7, symbol: 'CZB', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
     quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
   lineHistory: [], playerTransactions: [], sector: ['Usługi'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
-        dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
-        lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null, // <-- DODAJ TO
-    cash: 0 
-    },
-    {
-    name: 'Dunder Mifflin Paper Company, Inc.', price: 22.00, volatilityFactor: 1.1, symbol: 'DMPC', exchange: 'BRONZE', totalShares: 10000, maxShares: 10000, sharesHeld: 0, activePositiveBoostUntil: null, priceHistory: [], 
-    quarterlyEarnings: 0, // Zysk za ostatni kwartał (dla wskaźnika C/Z) 
-  lineHistory: [], playerTransactions: [], sector: ['Przemysł'], financialHealth: 0, lastReport: 'brak', isTradeLocked: false, dividendCooldownUntil: 0, stateOwnershipPct: 0, dividendPolicy: 'None',
         dividendTimer: getRandomIntInRange(8 * 60 * 1000, 15 * 60 * 1000),
         lastQuarterValue: 0, estimatedDividend: 0, bankAccountId: null, // <-- DODAJ TO
     cash: 0 
@@ -2481,7 +2465,7 @@ function createBankStockObject(bank, exchangeLevel = 'SILVER') {
         return null;
     }
 
-    const symbol = `BK${bank.id.toUpperCase()}`; // Generowanie symbolu, np. BKINV1
+    const symbol = getBankSymbol(bank);
 
     const newBankStock = {
         name: bank.name,
@@ -13111,11 +13095,21 @@ function creepSubsidiaryStake(child, parent) {
     return n;
 }
 
-// 0.16.1 G1: pochodzenie spółki. PL = tylko przy starcie w Polsce (załącznik A planu 0.16), UNI = zawsze. Dziś jedyny kraj to PL, więc znacznik
-// niczego nie wyłącza; kraje startowe z 0.16.2 pominą spółki PL. Nie zapisujemy go (wynika z symbolu i nazwy).
-const PL_ORIGIN_SYMBOLS = ['KFX', 'SUM', 'KWM', 'STM', 'MLD', 'SIK', 'KUP', 'BTX', 'ANN', 'ENG', 'TRN', 'PUR', 'BEW', 'WZM', 'ORT', 'NOC', 'LIN', 'PZB', 'ORZD', 'GROM', 'HUSA', 'BAL', 'KRO', 'LEK', 'UnG', 'CZB', 'PIX', 'BLP', 'DPB', 'WPY'];
-const PL_ORIGIN_NAMES = ['Giereklud', 'Budipol', 'Majsterbud', 'Linapol'];
+// 0.16.11 K0: pochodzenie spółki startowej (decyzje użytkownika, plany/lista_firm_startowych.md). PL = tylko przy starcie z Polski,
+// UNI = w każdym kraju startowym, DE/US = firma tego kraju (przy innym starcie istnieje tylko jako zagraniczna z countries_data.js). Nie zapisujemy.
+const PL_ORIGIN_SYMBOLS = ['WZM', 'PIX', 'SUM', 'WIP', 'FIX', 'DRH', 'BAL', 'LEK', 'DPB', 'WPY', 'KRO', 'PLX', 'BTX', 'ANN', 'SIK', 'KRA', 'STM', 'SKP', 'BOR', 'BEW', 'ORT', 'ENG', 'TRN', 'PUR', 'NOC', 'GIEB', 'UnG', 'PZB', 'ORZD', 'HUSA', 'BPIG', 'MAJB'];
+const COMPANY_ORIGIN_OVERRIDES = { WiS: 'DE', DMPC: 'US' }; // firmy z countries_data.js: krajowe tylko przy starcie ze swojego kraju
 function getCompanyOrigin(stock) {
     if (!stock) return 'UNI';
-    return stock.origin || (PL_ORIGIN_SYMBOLS.includes(stock.symbol) || PL_ORIGIN_NAMES.includes(stock.name) ? 'PL' : 'UNI');
+    return stock.origin || COMPANY_ORIGIN_OVERRIDES[stock.symbol] || (PL_ORIGIN_SYMBOLS.includes(stock.symbol) ? 'PL' : 'UNI');
+}
+// 0.16.11 K0: symbole giełdowe banków startowych (stare BKINV1/BKINV3/BKCORP3 → SPR/RPK/BPIG); pozostałe BK + id.
+const BANK_SYMBOL_OVERRIDES = { inv1: 'SPR', inv3: 'RPK', corp3: 'BPIG' };
+const LEGACY_BANK_SYMBOLS = { BKINV1: 'SPR', BKINV3: 'RPK', BKCORP3: 'BPIG' };
+function getBankSymbol(bank) { return BANK_SYMBOL_OVERRIDES[bank.id] || `BK${bank.id.toUpperCase()}`; }
+/** Migracja zapisu: stare symbole banków w całym snapshocie (klucze portfeli i wartości symbol). */
+function migrateLegacyBankSymbols(snapshot) {
+    const json = JSON.stringify(snapshot);
+    if (!/"BK(INV1|INV3|CORP3)"/.test(json)) return snapshot;
+    return JSON.parse(json.replace(/"(BKINV1|BKINV3|BKCORP3)"/g, (m, k) => `"${LEGACY_BANK_SYMBOLS[k]}"`));
 }

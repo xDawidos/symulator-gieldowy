@@ -1774,11 +1774,13 @@ function startNewCareer(profile = {}) {
         corporation: profile.corporation || 'Korporacja Inwestycyjna',
         fundName: profile.fundName || 'Fundusz Start',
         country: profile.country || 'PL',
+        baseCurrency: 'PLN', // 0.16.11 K2: zmienia się przy wyborze kraju startowego (setStartCountry)
         positionId: 'junior',
         startedAt: Date.now(),
         cv: [{ type: 'start', text: `Zatrudnienie w ${profile.corporation || 'korporacji'} jako Młodszy zarządca.` }]
     };
 
+    if (typeof syncBaseCurrency === 'function') syncBaseCurrency();
     playerCash = FUND_START_CASH;
     if (typeof centralBank === 'object') { centralBank.indexes = {}; if (typeof ensureLaunchedIndexes === 'function') ensureLaunchedIndexes(); } // 0.16.1: nowa gra — tylko GIG i SIG20
     if (typeof initFxState === 'function') initFxState(); // 0.16.1: nowe kursy i pusta gotówka walutowa
@@ -4108,7 +4110,7 @@ function processClientsWeekly() {
 }
 
 function formatPlnShort(value) {
-    return `${Math.round(value).toLocaleString('pl-PL')} PLN`;
+    return `${Math.round(value / getBaseScale()).toLocaleString('pl-PL')} ${getBaseCurrency()}`;
 }
 
 // =================================================================================

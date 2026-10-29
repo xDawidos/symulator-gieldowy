@@ -13,7 +13,7 @@ const COUNTRY_RULES = {
     statePct: 0.5,             // pakiet obcego państwa (poza wolnym obrotem)
     limitMult: 1.5,            // limit spółek kraju bez wskaźnika wielkości (kraj testowy) — patrz getCountryLimit
     limitMultRange: [1.2, 2.0], // 0.16.8 F3: mnożnik liczby startowej rośnie z wielkością rynku (logarytmicznie od najmniejszego do największego)
-    sizeIndex: { US: 10, CN: 8, JP: 4, DE: 3.5, IN: 3, FR: 2.5, TW: 1.5, CH: 1.2, SE: 1, CZ: 0.6 }, // względna wielkość (PKB / kapitalizacja giełdy), jedno miejsce parametrów
+    sizeIndex: { US: 10, CN: 8, JP: 4, DE: 3.5, IN: 3, FR: 2.5, TW: 1.5, CH: 1.2, SE: 1, PL: 1, CZ: 0.6 }, // względna wielkość (PKB / kapitalizacja giełdy), jedno miejsce parametrów
     sectorShareCap: 0.4,       // 0.16.8 F3: debiut nie może zwiększyć udziału jednego sektora głównego powyżej 40% spółek giełdy
     historyWeeks: 13,          // zapis uproszczony: 25% długości historii GDR (52 tyg.)
     volScale: 0.24,            // zmienność roczna × beta sektora
@@ -35,6 +35,7 @@ let homeFeed = { last: null, sd: 0.02 }; // GIG jako wspólny czynnik rynków (o
 
 function resetCountriesState() {
     countryState = {};
+    delete COUNTRY_DEFS.PL; // 0.16.11 K1: definicja Polski istnieje tylko przy starcie spoza PL
     homeFeed = { last: null, sd: 0.02 };
     if (typeof resetForeignStats === 'function') resetForeignStats();
     if (typeof resetLinksState === 'function') resetLinksState();
@@ -50,9 +51,46 @@ function getStartCountry() { return (typeof playerProfile === 'object' && player
 /** Ustawia kraj startowy: poza PL jego giełda działa od pierwszego dnia (bez biletu dla gracza, bez wiadomości o dołączeniu). */
 function setStartCountry(id) {
     if (!START_PLAYABLE.includes(id) || !COUNTRY_DEFS[id] && id !== 'PL') id = 'PL';
-    if (typeof playerProfile === 'object' && playerProfile) playerProfile.country = id;
+    if (typeof playerProfile === 'object' && playerProfile) { playerProfile.country = id; playerProfile.baseCurrency = BASE_CURRENCY_BY_COUNTRY[id] || 'PLN'; } // 0.16.11 K2: konto w walucie kraju startowego
+    syncBaseCurrency();
     if (id !== 'PL' && !isCountryJoined(id)) joinCountry(id, 'start');
+    applyStartCountrySet(id);
     return id;
+}
+
+// 0.16.11 K1: ZESTAW KRAJOWY STARTU. Rynek macierzysty = firmy UNI + firmy kraju startu (getCompanyOrigin). Firmy innego pochodzenia (przy starcie spoza PL:
+// 32 polskie) znikają z rynku macierzystego i stają się spółkami zagranicznymi kraju PL (bilet, waluta PLN). Definicja PL jest budowana z usuniętych firm i zapisywana.
+const START_SET_RULES = { plPass: 25000 }; // „przepustka” Polski dla gracza z innego kraju (bilet 5%)
+function isInStartSet(stock, country) { const o = getCompanyOrigin(stock); return o === 'UNI' || o === country; }
+function buildPolandDef(companies) {
+    return {
+        id: 'PL', name: 'Polska', currency: 'PLN', region: 'EU', rho: 0.75, rateMean: 0.045,
+        operator: { id: 'GPW', name: 'Giełda Papierów Wartościowych (GPW)', commission: 0.006 },
+        oversight: { name: 'KNF', callThreshold: 0.66, level: 2 },
+        labour: { wages: 1, rights: 'standardowe', unionMult: 1, shadow: 1, note: 'rynek macierzysty wersji polskiej' },
+        companies
+    };
+}
+function registerPolandDef(companies) {
+    COUNTRY_DEFS.PL = buildPolandDef(companies);
+    const entry = START_COUNTRIES.find(c => c.id === 'PL');
+    if (entry && !entry.passCost) entry.passCost = START_SET_RULES.plPass;
+}
+function removeStartSetFromMarket(id) {
+    const removed = stocks.filter(s => !isInStartSet(s, id));
+    const companies = removed.map(s => ({
+        id: s.symbol, name: s.name, sector: s.sector.length > 1 ? s.sector.slice(0, 2) : s.sector[0], kind: s.stateOwnershipPct > 0 ? 'state' : 'normal',
+        price: Math.round(s.price * 100) / 100, vol: Math.min(2.2, Math.max(0.6, Number(s.volatilityFactor) || 1))
+    }));
+    for (const s of removed) removeStockFromGame(s.symbol);
+    return companies;
+}
+/** Nowa gra: po wyborze kraju. Dla PL nic się nie zmienia; dla innego kraju rynek macierzysty traci firmy spoza zestawu (idempotentne). */
+function applyStartCountrySet(id) {
+    if (id === 'PL' || COUNTRY_DEFS.PL) return;
+    const companies = removeStartSetFromMarket(id);
+    if (companies.length) registerPolandDef(companies);
+    if (typeof displayStocks === 'function') displayStocks();
 }
 /** 0.16.3 G15: próg wezwania kraju (66/75/90% głosów) i nadzór (odpowiednik KNF). Przekroczenie progu wymagałoby wezwania na resztę akcji. */
 function getCallThreshold(id) { return COUNTRY_DEFS[id]?.oversight?.callThreshold ?? 0.66; }
@@ -419,6 +457,7 @@ function getCountriesSnapshot() {
         issuers[i.id] = row;
     }
     return {
+        pl: COUNTRY_DEFS.PL ? COUNTRY_DEFS.PL.companies : undefined, // 0.16.11 K1: firmy polskie usunięte z rynku macierzystego
         state: countryState, issuers, regimes: Object.fromEntries(getJoinedCountries().map(id => [id, marketRegimes[id]])),
         feed: homeFeed, links: typeof getLinksSnapshot === 'function' ? getLinksSnapshot() : undefined, tickets: typeof getTicketsSnapshot === 'function' ? getTicketsSnapshot() : undefined, bots: typeof getForeignBotsSnapshot === 'function' ? getForeignBotsSnapshot() : undefined
     };
@@ -427,6 +466,7 @@ function getCountriesSnapshot() {
 function applyCountriesSnapshot(snapshot) {
     resetCountriesState();
     if (!snapshot || typeof snapshot !== 'object') return; // zapis bez krajów
+    if (Array.isArray(snapshot.pl)) registerPolandDef(snapshot.pl);
     for (const [id, st] of Object.entries(snapshot.state || {})) {
         const def = COUNTRY_DEFS[id];
         if (!def) continue; // kraj usunięty z kodu: pomijamy

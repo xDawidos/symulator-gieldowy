@@ -837,7 +837,7 @@ function createProject(def, { timed = false, deadline = null } = {}) {
 }
 
 function formatProjectMoney(value) {
-    return `${(value / 1e6).toFixed(1).replace('.', ',')} mln PLN`;
+    return `${(value / getBaseScale() / 1e6).toFixed(1).replace('.', ',')} mln ${getBaseCurrency()}`;
 }
 
 function getProjectFunding(project) {

@@ -28,7 +28,7 @@ resetForeignStats();
 function noteForeignStat(key, n = 1) { foreignStats[key] = (foreignStats[key] || 0) + n; }
 
 /** Podatek u źródła od dywidendy (stawki zbliżone do realnych, po umowach o unikaniu podwójnego opodatkowania). */
-const FOREIGN_WITHHOLDING = { DE: 0.15, US: 0.15, CZ: 0.15, SE: 0.15, CH: 0.15, FR: 0.15, JP: 0.10, CN: 0.10, IN: 0.10, TW: 0.21 };
+const FOREIGN_WITHHOLDING = { PL: 0.15, DE: 0.15, US: 0.15, CZ: 0.15, SE: 0.15, CH: 0.15, FR: 0.15, JP: 0.10, CN: 0.10, IN: 0.10, TW: 0.21 };
 
 function getForeignWithholding(country) { return FOREIGN_WITHHOLDING[country] ?? 0.15; }
 function roundSig(x, digits = 6) { return Number.isFinite(x) ? Number(x.toPrecision(digits)) : 0; }

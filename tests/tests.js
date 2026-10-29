@@ -11820,6 +11820,23 @@ group('0.16.1', () => {
         assertEq(getCompanyOrigin(initialStocks.find(s => s.symbol === 'CTX')), 'UNI', 'Cortex Neural jest uniwersalny');
         assertEq(new Set(initialStocks.map(s => s.symbol)).size, initialStocks.length, 'symbole bez duplikatów');
     });
+    test('0.16.11 K0: klasyfikacja firm startowych (32 PL, reszta UNI), WiS=DE i DMPC=US poza rynkiem polskim', () => {
+        const origin = sym => getCompanyOrigin(initialStocks.find(s => s.symbol === sym) || { symbol: sym }); // banki startowe powstają przy starcie gry
+        for (const sym of ['WZM', 'BPIG', 'MAJB', 'GIEB', 'UnG', 'KRA', 'DRH']) assertEq(origin(sym), 'PL', `${sym}: PL`);
+        for (const sym of ['KFX', 'KWM', 'MLD', 'LIN', 'GROM', 'KUP', 'CZB', 'BLP', 'SPR', 'RPK', 'GPW']) assertEq(origin(sym), 'UNI', `${sym}: UNI`);
+        assertEq(PL_ORIGIN_SYMBOLS.length, 32, '32 firmy PL');
+        assert(!initialStocks.some(s => ['WiS', 'DMPC'].includes(s.symbol)), 'WiS i DMPC nie są firmami polskimi');
+        assertEq(getCompanyOrigin({ symbol: 'WiS' }), 'DE', 'WiS = DE'); assertEq(getCompanyOrigin({ symbol: 'DMPC' }), 'US', 'DMPC = US');
+        assert(COUNTRY_DEFS.DE.companies.some(c => c.id === 'WiS') && COUNTRY_DEFS.US.companies.some(c => c.id === 'DMPC'), 'są w danych krajów');
+    });
+    test('0.16.11 K0: symbole banków SPR/RPK/BPIG i migracja starych zapisów', () => {
+        assertEq(getBankSymbol({ id: 'inv1' }), 'SPR', 'inv1'); assertEq(getBankSymbol({ id: 'inv3' }), 'RPK', 'inv3'); assertEq(getBankSymbol({ id: 'corp3' }), 'BPIG', 'corp3');
+        assertEq(getBankSymbol({ id: 'coop1' }), 'BKCOOP1', 'pozostałe bez zmian');
+        const snap = { stocks: [{ symbol: 'BKINV1' }, { symbol: 'BKCORP3' }], playerPortfolio: { BKINV3: { shares: 2 } }, name: 'X' };
+        const out = migrateLegacyBankSymbols(snap);
+        assertEq(out.stocks.map(s => s.symbol).join(), 'SPR,BPIG', 'wartości'); assert(out.playerPortfolio.RPK && !out.playerPortfolio.BKINV3, 'klucze');
+        assert(migrateLegacyBankSymbols({ a: 1 }).a === 1, 'bez starych symboli bez zmian');
+    });
 
     // --- G2: waluty i kantor ---
     const fundWithCash = (cash = 5_000_000) => {
@@ -12384,7 +12401,7 @@ group('0.16.2', () => {
 
     // --- G6: Niemcy, USA, Czechy ---
     const REAL_COUNTRIES = () => ['DE', 'US', 'CZ'].filter(id => COUNTRY_DEFS[id]);
-    const COUNTRY_COUNTS = { DE: [13, 3], US: [15, 4], CZ: [8, 1] }; // zwykłe + państwowe (załącznik B)
+    const COUNTRY_COUNTS = { DE: [14, 3], US: [16, 4], CZ: [8, 1] }; // zwykłe + państwowe (załącznik B)
 
     test('G6: dane krajów są spójne — liczby spółek z załącznika B, sektory i podsektory z rejestru, waluty, banki w Bankowości, giganci zgodni z gdr.js', () => {
         assert(REAL_COUNTRIES().length >= 1, 'jakiś kraj zdefiniowany');
@@ -13910,7 +13927,7 @@ group('0.16.7 Pełne spółki zagraniczne', () => {
         for (const row of Object.values(snap.issuers)) delete row.c; // zapis v17
         resetGdrState(); applyCountriesSnapshot(snap); const c = foreignIssuers.YA1; assert(c.balanceSheet && c.cash > 0 && !c.fundamentals, 'v17: model z ceny, fundamenty przy pierwszym raporcie');
         quarter(); assert(foreignIssuers.YA1.fundamentals, 'po kwartale są fundamenty'); assertEq(checkWorldInvariants().length, 0, 'niezmienniki po migracji');
-        assertEq(SAVE_FORMAT_VERSION, 20, 'wersja zapisu'); assert(SUPPORTED_SAVE_VERSIONS.includes(17), 'v17 nadal wczytywany');
+        assertEq(SAVE_FORMAT_VERSION, 21, 'wersja zapisu'); assert(SUPPORTED_SAVE_VERSIONS.includes(17), 'v17 nadal wczytywany');
     }));
 
     test('F2: prezes po 65. roku odchodzi (nowa osoba, cecha kraju z definicji)', () => withYY(() => {
@@ -13926,7 +13943,7 @@ group('0.16.8 Limity i zegar giełd', () => {
         const order = ['CZ', 'SE', 'CH', 'TW', 'FR', 'IN', 'DE', 'JP', 'CN', 'US'];
         for (let k = 1; k < order.length; k++) assert(getCountryLimitMult(order[k]) > getCountryLimitMult(order[k - 1]), `${order[k]} > ${order[k - 1]}`);
         assertEq(getCountryLimit('US'), Math.ceil(COUNTRY_DEFS.US.companies.length * hi), 'limit US'); assert(getCountryLimit('US') > getCountryLimit('CZ'), 'US > CZ');
-        for (const id of Object.keys(COUNTRY_RULES.sizeIndex)) assert(getCountryLimit(id) >= COUNTRY_DEFS[id].companies.length, `${id}: limit nie poniżej liczby startowej`);
+        for (const id of Object.keys(COUNTRY_RULES.sizeIndex).filter(id => COUNTRY_DEFS[id])) assert(getCountryLimit(id) >= COUNTRY_DEFS[id].companies.length, `${id}: limit nie poniżej liczby startowej`);
         assertNear(getCountryLimitMult('ZZ'), COUNTRY_RULES.limitMult, 'kraj bez wskaźnika', 1e-9);
     });
 
@@ -14107,6 +14124,54 @@ group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
             }
             resetGdrState(); startNewCareer({}); assertEq(setStartCountry('JP'), 'PL', 'kraj spoza START_PLAYABLE = Polska'); assertEq(getJoinedCountries().length, 0);
         } finally { resetGdrState(); }
+    });
+
+    test('0.16.11 K1: zestaw krajowy — start z DE usuwa polskie firmy z rynku macierzystego, zostają UNI; Polska jako rynek zagraniczny z biletem; zapis i wczytanie; PL bez zmian', () => {
+        initFxState(); resetGdrState();
+        try {
+            resetWorld([mk156('PIX', { price: 20 }), mk156('WZM', { price: 30 }), mk156('CTX', { price: 90 }), mk156('ECL', { price: 40 })]);
+            startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+            assertEq(setStartCountry('PL'), 'PL'); assertEq(stocks.length, 4, 'PL: wszystkie firmy'); assert(!COUNTRY_DEFS.PL, 'PL: brak definicji Polski jako rynku obcego');
+            resetGdrState(); resetWorld([mk156('PIX', { price: 20 }), mk156('WZM', { price: 30 }), mk156('CTX', { price: 90 }), mk156('ECL', { price: 40 })]);
+            startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+            setStartCountry('DE');
+            assertEq(stocks.map(s => s.symbol).sort().join(), 'CTX,ECL', 'DE: zostają tylko UNI');
+            assert(COUNTRY_DEFS.PL && COUNTRY_DEFS.PL.companies.map(c => c.id).sort().join() === 'PIX,WZM', 'polskie firmy w definicji kraju PL');
+            assert(!isCountryJoined('PL') && !hasTicket('player', 'PL') && !canTradeCountry('player', 'PL'), 'Polska wymaga biletu');
+            assert(getTicketPrice('PL') >= TICKET_RULES.min, 'jest cena biletu');
+            const snap = JSON.parse(JSON.stringify(getCountriesSnapshot())); delete COUNTRY_DEFS.PL; applyCountriesSnapshot(snap);
+            assertEq(COUNTRY_DEFS.PL?.companies.length, 2, 'definicja Polski wraca z zapisu');
+            assertEq(setStartCountry('DE'), 'DE', 'idempotentne'); assertEq(stocks.length, 2, 'bez ponownego usuwania');
+            assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+        } finally { resetGdrState(); }
+    });
+
+    test('0.16.11 K2: waluta bazowa — PL bez zmian (PLN, skala 1); start z DE: konto w EUR, EUR nie pływa, PLN zwykłą walutą w kantorze, formatery, zapis v21', () => {
+        initFxState(); resetGdrState();
+        try {
+            resetWorld([mk156('CTX', { price: 90 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+            assertEq(getBaseCurrency(), 'PLN'); assertEq(getBaseScale(), 1); assertEq(formatZl(1234.5), '1234,50 PLN', 'format PL'); assertEq(toPln(100, 'EUR'), 100 * fxRates.EUR, 'PL: kurs EUR w zł');
+            assert(FOREIGN_CURRENCIES.includes('EUR') && !FOREIGN_CURRENCIES.includes('PLN'), 'PL: EUR obca, PLN nie');
+            resetGdrState(); resetWorld([mk156('CTX', { price: 90 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+            setStartCountry('DE');
+            assertEq(getBaseCurrency(), 'EUR'); assertEq(playerProfile.baseCurrency, 'EUR');
+            assert(FOREIGN_CURRENCIES.includes('PLN') && !FOREIGN_CURRENCIES.includes('EUR'), 'DE: PLN obca, EUR bazowa');
+            assertEq(formatZl(400), '100,00 EUR', 'format w EUR'); assertEq(formatPLNShort(4_000_000), '1,0 mln EUR', 'skrót w EUR');
+            assertEq(toPln(100, 'EUR'), 400, 'EUR = skala 4 jednostek gry'); fxRates.EUR *= 1.1; assertEq(toPln(100, 'EUR'), 400, 'saldo bazowej nie pływa');
+            assertNear(toPln(100, 'PLN'), 400 / fxRates.EUR, 'PLN wyceniany przez kurs EUR/PLN', 1e-9);
+            assertNear(fromPln(toPln(50, 'USD'), 'USD'), 50, 'kurs w obie strony', 1e-9);
+            playerCash = 40_000; const buy = kantorBuyCurrency('PLN', 4_000); assert(buy.ok, 'kupno PLN w kantorze: ' + buy.reason);
+            assert(getCurrencyCash('player', 'PLN') > 0 && playerCash < 40_000, 'saldo PLN powstało z gotówki bazowej');
+            const rows = getCashBalances(); assertEq(rows[0].code, 'EUR'); assertNear(rows[0].amount, playerCash / 4, 'wiersz bazowy w EUR', 1e-9);
+            assertNear(getFundCashTotalPln(), playerCash + getForeignCashPln('player'), 'suma gotówki', 1e-9);
+            const back = convertCurrency('PLN', 'EUR', getCurrencyCash('player', 'PLN')); assert(back.ok && back.receivedCode === 'EUR', 'wymiana PLN→EUR');
+            addCurrencyCash('player', 'EUR', 10); assertNear(playerCash, playerCash, 'brak NaN'); assert(!('EUR' in playerCashByCurrency), 'wpływ w EUR trafia do gotówki bazowej');
+            assertEq(checkCurrencyInvariants().length, 0, 'niezmienniki walut'); assertEq(checkWorldInvariants().length, 0, 'niezmienniki świata');
+            const snap = JSON.parse(JSON.stringify(buildSaveSnapshot())); assertEq(snap.version, 21); assertEq(snap.playerProfile.baseCurrency, 'EUR');
+            const old = JSON.parse(JSON.stringify(snap)); old.version = 20; delete old.playerProfile.baseCurrency;
+            const rep = applySaveSnapshot(old); assert(rep.ok, 'v20 się wczytuje: ' + rep.errors.join('; ')); assertEq(getBaseCurrency(), 'PLN', 'stary zapis = PLN');
+            assert(FOREIGN_CURRENCIES.includes('EUR') && !FOREIGN_CURRENCIES.includes('PLN'), 'lista walut po migracji');
+        } finally { initFxState(); resetGdrState(); startNewCareer({}); syncBaseCurrency(); }
     });
 
     test('0.16.10 S0c: wybór kraju — karta kraju, lista zgodna z START_PLAYABLE, globus nie otwiera się w testach (bez WebGL), ekran wyboru: JP („wkrótce”) nie do potwierdzenia, callback z krajem', () => {
@@ -14326,7 +14391,7 @@ group('0.16.9 W1 Gotówka w wielu walutach', () => {
         assert(basis > 0 && snap.basis.CHF === basis, 'basis w zapisie');
         applyCurrencySnapshot(snap); assertNear(playerFxBasis.CHF, basis, 'odtworzony kurs nabycia', 1e-12);
         delete snap.basis; fxRates.CHF = fxRates.CHF; applyCurrencySnapshot(snap); assertNear(playerFxBasis.CHF, fxRates.CHF, 'v19: kurs nabycia = bieżący', 1e-12);
-        assertEq(SAVE_FORMAT_VERSION, 20); assert(SUPPORTED_SAVE_VERSIONS.includes(19) && SUPPORTED_SAVE_VERSIONS.includes(20), 'v19 i v20 obsługiwane');
+        assertEq(SAVE_FORMAT_VERSION, 21); assert(SUPPORTED_SAVE_VERSIONS.includes(19) && SUPPORTED_SAVE_VERSIONS.includes(20) && SUPPORTED_SAVE_VERSIONS.includes(21), 'v19, v20 i v21 obsługiwane');
         assertEq(checkCurrencyInvariants().length, 0);
         initFxState();
     });

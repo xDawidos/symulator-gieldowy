@@ -83,7 +83,7 @@ function stepMarginPositions() {
 }
 
 // --- Forex: pary walutowe (kurs krzyżowy z kursów w złotych) ---
-const FOREX_CODES = () => ['PLN', ...(typeof FOREIGN_CURRENCIES !== 'undefined' ? FOREIGN_CURRENCIES : [])];
+const FOREX_CODES = () => (typeof CURRENCIES !== 'undefined' ? Object.keys(CURRENCIES) : ['PLN']); // wszystkie waluty gry, niezależnie od bazowej
 function isForexInstrument(pair) { const [a, b] = String(pair).split('/'); return a !== b && FOREX_CODES().includes(a) && FOREX_CODES().includes(b); }
 registerMarginMarket('forex', { name: 'Forex', priceOf: pair => isForexInstrument(pair) ? getFxRate(pair.split('/')[0]) / getFxRate(pair.split('/')[1]) : null });
 /** Forex dostępny po otwarciu drugiego rynku (przynajmniej jeden kraj obcy). */

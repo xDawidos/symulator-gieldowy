@@ -1272,7 +1272,7 @@ function triggerBankIPOEvent() {
 
     currentBankIPOOffer = {
         bank: bankToIPO,
-        symbol: `BK${bankToIPO.id.toUpperCase()}`,
+        symbol: getBankSymbol(bankToIPO),
         ipoSharePrice: ipoSharePrice,
         ipoTotalShares: ipoTotalShares,
         sharesOffered: sharesOfferedToPlayer,
