@@ -453,7 +453,7 @@
     <table id="stock-table">
       <thead>
         <tr>
-          <th class="col-name" id="company-header-cell">Spółka <button type="button" class="th-group-toggle" id="table-group-toggle" onclick="toggleSectorGrouping()" title="Przełącz grupowanie spółek według sektorów (kategorii)">wg kategorii</button></th>
+          <th class="col-name" id="company-header-cell">Spółka <button type="button" class="th-group-toggle" id="table-group-toggle" onclick="toggleSectorGrouping()" title="Przełącz grupowanie spółek według sektorów (kategorii)">wg kategorii</button> <button type="button" class="th-group-toggle" id="table-country-sort" aria-pressed="false" onclick="toggleCountrySort()" title="Sortuj bloki według kraju pochodzenia spółek (PL = krajowe, potem kraje połączone)">Kraj</button></th>
           <th class="col-price" id="price-header-cell" aria-sort="none"><button type="button" class="th-sort" onclick="togglePriceSort()">Kurs</button></th>
           <th class="col-change" title="Zmiana kursu od zamknięcia poprzedniego tygodnia gry">Zmiana tydz.</th>
           <th class="col-avail">Dostępne akcje</th>
@@ -1290,19 +1290,6 @@
 </div>
 
 
-
-<!-- Modal Lombardu -->
-<div id="pawnshop-modal" class="modal bank-window" style="display: none;">
-    <button class="close-btn" onclick="closeModalFrom(this)" aria-label="Zamknij">&times;</button>
-    <header class="bank-hero">
-        <div class="bank-emblem" aria-hidden="true"><svg class="ic" width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M7 7h7.5a3 3 0 0 1 0 6H9a3 3 0 0 0 0 6h8"/></svg></div>
-        <div>
-            <div class="bank-hero-kicker">Pożyczki pod zastaw akcji</div>
-            <h2 class="bank-hero-title">Lombard — Lombardex S.A.</h2>
-        </div>
-    </header>
-    <div class="modal-body" id="pawnshop-body"></div>
-</div>
 
 <!-- Modal Windykatora -->
 <div id="debtcollector-modal" class="modal" style="display: none;">

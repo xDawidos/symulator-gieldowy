@@ -107,8 +107,44 @@ function renderMarketsTab() {
         ${renderCountryCard(id)}
         ${id === 'CH' ? renderHiddenCashCard() : ''}
         ${access ? '' : `<p class="text-sm" role="status">Brak biletu na ten rynek — kupowanie jest zablokowane (sprzedaż posiadanych akcji działa). Bilet kupisz w Internecie, na stronie Ferie i wakacje (${formatZl(getTicketPrice(id), 0)}).</p>`}
-        <table class="asset-mini-table w-full mt-3"><thead><tr><th>Spółka</th><th>Sektor</th><th class="text-right">Cena (waluta)</th><th class="text-right">Cena w PLN</th><th class="text-right">Twoje akcje</th><th class="text-right">Zlecenie</th></tr></thead><tbody>${rows}</tbody></table>
+        ${countryState[id]?.link ? `<p class="text-sm" role="status">Giełda połączona z naszą: spółki ${escapeHtml(def.name)} (${id}) są na głównej liście akcji, z kupnem i sprzedażą jak krajowe (prowizja krajowa, bez biletu). Tu zostają kursy walut, forex i kwity GDR.</p>` : `<table class="asset-mini-table w-full mt-3"><thead><tr><th>Spółka</th><th>Sektor</th><th class="text-right">Cena (waluta)</th><th class="text-right">Cena w PLN</th><th class="text-right">Twoje akcje</th><th class="text-right">Zlecenie</th></tr></thead><tbody>${rows}</tbody></table>`}
         <p class="text-sm text-muted">Kupno płacisz najpierw gotówką w ${def.currency}, resztę wymienia kantor (spread). Prowizja ${formatNumberPl(getCountryCommission(id) * 100, 1)}%. Wpływy ze sprzedaży trafiają na konto walutowe — złotówki dostaniesz w kantorze. Zysk to zmiana ceny <em>i</em> kursu ${def.currency}; ceny zawierają dywidendy.</p>`;
+}
+
+/** 0.16.9: spółki krajów połączonych (bez biletu, prowizja krajowa) stoją na głównej liście akcji, w blokach wg kraju. Handel przez marketsUiTrade (jedno źródło cen i transakcji). */
+function renderLinkedStockRow(tbody, i, previous = {}) {
+    const row = tbody.insertRow(), c = i.country, h = i.history, change = h.length > 1 ? i.price / h[0] - 1 : 0, held = getGdrHeld(i), free = getGdrFree(i);
+    const cls = change > 0 ? 'up' : change < 0 ? 'down' : 'flat';
+    row.className = 'stock-row foreign-row'; row.dataset.symbol = getGdrSymbol(i); row.dataset.country = c;
+    const name = row.insertCell(); name.className = 'stock-company-cell';
+    name.innerHTML = `<div class="stock-identity"><div class="stock-name-line"><span class="stock-name" title="${escapeHtml(i.name)}">${escapeHtml(i.name)}</span>${held > 0 ? '<span class="owned-dot" title="Masz akcje tej spółki"></span>' : ''}</div>
+        <div class="stock-meta">${escapeHtml(i.sectors.map(x => x[0]).join(' + '))} · ${getGdrSymbol(i)} · ${flagIcon(c, 12)} ${c} · ${i.currency}${i.state ? ' · państwowa' : ''}${i.giant ? ' · gigant' : ''}${typeof renderForeignCompanyLine === 'function' ? renderForeignCompanyLine(i) : ''}</div></div>`;
+    const price = row.insertCell(); price.className = 'cell-number cell-price';
+    price.innerHTML = `<div class="price-main">${formatZl(toPln(i.price, i.currency), 2)}</div><div class="text-xs text-muted">${formatNumberPl(i.price, 2)} ${i.currency}</div>`;
+    const ch = row.insertCell(); ch.className = 'cell-number'; ch.innerHTML = `<span class="change-pill ${cls}"><span aria-hidden="true">${fxArrow(change)}</span> ${fxPct(change)}</span>`;
+    row.insertCell().innerHTML = `<div class="availability-cell"><span class="availability-value">${formatNumberPl(free, 0)}</span></div>`;
+    const own = row.insertCell(); own.className = 'cell-number'; own.innerHTML = held > 0 ? `<span class="owned-badge">${formatNumberPl(held, 0)}</span>` : '<span class="owned-zero">0</span>';
+    const act = row.insertCell(); act.className = 'trade-actions-cell text-center';
+    act.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center;max-width:7.5em"><input type="number" min="1" step="1" value="${escapeHtml(String(previous['f:' + i.id] ?? 100))}" id="mkt-qty-${i.id}" data-linked-qty aria-label="Liczba akcji ${escapeHtml(i.name)}" style="width:100%" ${free <= 0 ? 'disabled' : ''}>
+        <button class="btn-primary btn-sm" onclick="marketsUiTrade('${i.id}','buy')" ${free > 0 ? '' : 'disabled'}>Kup</button> <button class="btn-ghost btn-sm" onclick="marketsUiTrade('${i.id}','sell')" ${held > 0 ? '' : 'disabled'}>Sprzedaj</button></div>`;
+    return row;
+}
+
+/** Bloki [{code, rows}] dla krajów połączonych, z filtrami listy (sektor, „tylko moje”, poziom giełdy, typ) i sortowaniem po kursie. */
+function buildLinkedStockBlocks(previous = {}) {
+    if (typeof getLinkedCountries !== 'function' || currentMarketLevel !== 'ALL' || (sectorFilterState.type && sectorFilterState.type !== 'all') || sectorFilterState.subsector) return [];
+    const dir = currentSortState === 'price_asc' ? 1 : currentSortState === 'price_desc' ? -1 : 0, tbody = document.createElement('tbody');
+    return getLinkedCountries().map(c => {
+        let list = getCountryIssuers(c);
+        if (sectorFilterState.sector !== 'all') list = list.filter(i => i.sectors.some(x => x[0] === sectorFilterState.sector));
+        if (ownedOnlyFilter) list = list.filter(i => getGdrHeld(i) > 0);
+        if (dir) list = [...list].sort((a, b) => (toPln(a.price, a.currency) - toPln(b.price, b.currency)) * dir);
+        if (!list.length) return null;
+        const head = tbody.insertRow(); head.className = 'exchange-header linked-market-header';
+        const cell = head.insertCell(); cell.colSpan = 6;
+        cell.innerHTML = `<h4 class="my-1 exchange-title">${flagIcon(c, 14)} ${escapeHtml(COUNTRY_DEFS[c].name)} (${c}) <span class="exchange-meta">· giełda połączona z naszą · ${COUNTRY_DEFS[c].currency} · prowizja ${formatNumberPl(getCountryCommission(c) * 100, 2)}% · ${list.length} spółek</span></h4>`;
+        return { code: c, rows: [head, ...list.map(i => renderLinkedStockRow(tbody, i, previous))] };
+    }).filter(Boolean);
 }
 
 /** 0.16.6 S1: rachunek w Waschmabanku (ukryty przed nadzorem, ale w majątku funduszu). */

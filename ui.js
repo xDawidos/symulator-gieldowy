@@ -1670,6 +1670,7 @@ function getCurrentInputValues() {
             values[stock.symbol] = inputElement.value;
         }
     });
+    document.querySelectorAll('input[data-linked-qty]').forEach(el => { values['f:' + el.id.replace('mkt-qty-', '')] = el.value; });
     return values;
 }
 
@@ -2174,6 +2175,7 @@ function displayStocks(previousInputValues = {}) {
     `;
   }
 
+  const domesticStart = stockTableBody.rows.length;
   // --- Pętla renderująca giełdy ---
   if (!internetTab) sortedExchanges.forEach(exchangeKey => {
     const exchange = exchanges[exchangeKey];
@@ -2236,6 +2238,17 @@ function displayStocks(previousInputValues = {}) {
     });
   });
 
+  // 0.16.9: kraje połączone na głównej liście; sortowanie „Kraj” porządkuje bloki (PL = spółki krajowe), nagłówek wyboru rynku zostaje na górze
+  if (selectedMarketOperator === 'GPW' && typeof buildLinkedStockBlocks === 'function') {
+    const linked = buildLinkedStockBlocks(previousInputValues);
+    if (linked.length) {
+      const blocks = [{ code: 'PL', rows: Array.from(stockTableBody.rows).slice(domesticStart) }, ...linked];
+      if (countrySortState !== 'none') blocks.sort((a, b) => a.code.localeCompare(b.code) * (countrySortState === 'asc' ? 1 : -1));
+      stockTableBody.append(...blocks.flatMap(b => b.rows));
+    }
+  }
+  const countryBtn = document.getElementById('table-country-sort');
+  if (countryBtn) { countryBtn.textContent = countrySortState === 'asc' ? 'Kraj ▲' : countrySortState === 'desc' ? 'Kraj ▼' : 'Kraj'; countryBtn.setAttribute('aria-pressed', String(countrySortState !== 'none')); }
   liveStockTableBody.replaceChildren(...stockTableBody.childNodes);
   const shownCount = document.getElementById('mkpi-active');
   if (shownCount) shownCount.textContent = liveStockTableBody.querySelectorAll('tr.stock-row').length; // 0.15.4 P1: licznik = wiersze listy
@@ -7709,8 +7722,7 @@ function renderTeamedUp() {
     if (!overlay || overlay.hidden || !mailbox) return;
     const unread = getTeamedUnread();
     const item = (pane, icon, label, extra = '') => `<button class="mail-folder ${teamedView.pane === pane ? 'active' : ''}" ${teamedView.pane === pane ? 'aria-current="page"' : ''} onclick="setTeamedPane('${pane}')"><span>${uiIcon(icon, 16)} ${label}</span>${extra}</button>`;
-    document.getElementById('teamedup-nav').innerHTML = item('tasks', 'cel', 'Zadania i oceny') + item('messages', 'poczta', 'Wiadomości', unread ? `<b>${unread}</b>` : '') + item('hiring', 'pracownik', 'Zatrudnianie')
-        + `<hr><button class="mail-folder" onclick="openPawnShopPanel()">${uiIcon('lombard', 14)} Lombard</button>`;
+    document.getElementById('teamedup-nav').innerHTML = item('tasks', 'cel', 'Zadania i oceny') + item('messages', 'poczta', 'Wiadomości', unread ? `<b>${unread}</b>` : '') + item('hiring', 'pracownik', 'Zatrudnianie');
     const body = document.getElementById('teamedup-content');
     if (teamedView.pane === 'tasks') { body.innerHTML = renderTeamedTasks(); return; }
     if (teamedView.pane === 'hiring') { body.innerHTML = renderTeamedHiring(); return; }
@@ -7991,8 +8003,8 @@ function renderCityElection() {
 // LOMBARD FUNDUSZU (etap E2)
 // =================================================================================
 
-function renderPawnPanel() {
-    const container = document.getElementById('fund-pawn-panel');
+function renderPawnPanel(containerId = 'fund-pawn-panel') {
+    const container = document.getElementById(containerId);
     if (!container || !playerFund || container.contains(document.activeElement)) return; // nie przerywaj wpisywania
     const account = getFundAccount();
     const pawnShop = getPawnShop();
@@ -8027,26 +8039,22 @@ function renderPawnClientsSummary(shop) {
         <p class="fund-muted">Klientów przybywa z udziałem biedniejszych klas i w recesji; lombard zarabia na odsetkach (${(PAWN_ANNUAL_RATE * 100).toFixed(0)}% rocznie), a przy niewykupionym zastawie odzyskuje ${(PAWN_CLIENT_RECOVERY * 100).toFixed(0)}% kapitału.</p>`;
 }
 
-function openPawnShopPanel() {
-    const modal = document.getElementById('pawnshop-modal');
-    const body = document.getElementById('pawnshop-body');
-    if (!modal || !body) return;
+/** Informacje lombardu (warunki, zastawy gracza, klienci, przejęte akcje) — dla strony Lombard w Internecie. */
+function renderPawnShopInfo() {
     const pawnShop = getPawnShop();
     const holdings = shop => Object.entries(shop?.holdingPortfolio || {})
         .map(([symbol, item]) => `<li>${item.quantity} × ${escapeHtml(symbol)} (przejęte po ${formatZl(item.purchasePrice)})</li>`).join('');
-
-    body.innerHTML = pawnShop ? `
+    return pawnShop ? `
         <p><strong>${escapeHtml(pawnShop.name)}</strong> (${escapeHtml(pawnShop.symbol)}) · gotówka ${formatZl(pawnShop.cash, 0)}</p>
-        <p class="fund-muted">Pożyczki pod zastaw akcji dla funduszy: ${(PAWN_LOAN_TO_VALUE * 100).toFixed(0)}% wartości, ${(PAWN_ANNUAL_RATE * 100).toFixed(0)}% rocznie, ${PAWN_WEEKS} tygodni, do ${(PAWN_MAX_SHARE_OF_ASSETS * 100).toFixed(0)}% aktywów funduszu. Zastaw ustawisz w panelu funduszu (sekcja „Lombard”).</p>
-        <h4>Zastawy Twojego funduszu</h4>
-        <ul>${(playerFund?.pawnLoans || []).map(loan => `<li>${loan.shares} × ${escapeHtml(loan.symbol)}: ${formatZl(loan.principal)} · ${loan.weeksLeft} tyg.${loan.missed ? ` · zaległość ${loan.missed}` : ''}</li>`).join('') || '<li class="fund-muted">Brak.</li>'}</ul>
         <h4>Klienci lombardu (rynek)</h4>
         ${renderPawnClientsSummary(pawnShop)}
         <h4>Akcje przejęte przez lombard</h4>
         <ul>${holdings(pawnShop) || '<li class="fund-muted">Brak.</li>'}</ul>`
         : '<p class="loss">Lombard nie jest dostępny.</p>';
-    modal.style.display = 'block';
 }
+
+/** Dawne okno Lombardex: obsługa jest na stronie Lombard w Internecie (jedno miejsce). */
+function openPawnShopPanel() { return openInternetPage('lombard'); }
 
 /** Okno windykatora: zasady i akcje zajęte dłużnikom (fundusze, boty). */
 /** 0.15.4 P7: portfel pożyczek konsumenckich Wrony (liczby i słowami, bez koloru). */

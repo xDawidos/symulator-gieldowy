@@ -188,7 +188,8 @@ function showGiantEventWindow(result) {
     } else {
         body.innerHTML = `<p><strong>${escapeHtml(result.giantName)}</strong> przejmuje <strong>${escapeHtml(result.name)}</strong> (${escapeHtml(result.symbol)}).</p>
             <dl class="bank-card-rates"><div><dt>Cena wykupu</dt><dd>${formatZl(result.offer, 2)}</dd></div><div><dt>Premia do kursu</dt><dd>${formatNumberPl(result.premium * 100, 0)}%</dd></div><div><dt>Wypłacono akcjonariuszom</dt><dd>${formatZl(result.paid, 0)}</dd></div></dl>
-            <p class="text-sm">${result.heldByPlayer ? 'Twoje akcje rozliczono gotówką po cenie wykupu.' : 'Nie miałeś akcji tej spółki.'} Spółka znika z giełdy.</p>`;
+            <p class="text-sm">${result.heldByPlayer ? 'Twoje akcje rozliczono gotówką po cenie wykupu.' : 'Nie miałeś akcji tej spółki.'} Spółka znika z giełdy.</p>
+            <p class="text-sm">W jej miejsce w ciągu 1–4 kwartałów zadebiutuje nowa spółka krajowa${result.replacementSector ? ` z sektora ${escapeHtml(result.replacementSector)}` : ''} (informacja w wiadomościach).${result.listedSymbol ? ` Przejmujący koncern wchodzi do obrotu jako kwity <strong>${escapeHtml(result.listedSymbol)}</strong> (Kantor → Obce).` : ''}</p>`;
     }
     modal.hidden = false;
     modal.style.display = 'block';

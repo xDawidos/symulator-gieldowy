@@ -213,11 +213,14 @@ function renderTiedPage() {
         <aside class="net-tied-msgs"><div class="net-card"><h4>${uiIcon('poczta', 16)} Wiadomości <span class="net-count">${unread}</span></h4>${msgs ? `<ul class="list-plain">${msgs}</ul>` : '<p class="text-sm text-muted">Brak wiadomości od inwestorów i spółek.</p>'}</div></aside></div>`;
 }
 
-// --- Lombard (jedno źródło prawdy: okno Lombardex, tu tylko wejście) ---
+// --- Lombard (jedno źródło prawdy: renderPawnPanel z panelu funduszu + renderPawnShopInfo z ui.js) ---
 function renderLombardPage() {
     const root = document.getElementById('net-lombard-body');
-    if (root) root.innerHTML = `<div class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('lombard', 20)}</span><div><h4>Lombardex S.A.</h4><span class="bank-card-type">pożyczki pod zastaw akcji</span></div></header>
-        <p class="text-sm">Zastaw akcji w zamian za gotówkę. Szczegóły i spłaty są w oknie Lombardex (dostęp także z TeamedUP!).</p><div class="btn-row"><button class="btn-primary" onclick="openPawnShopPanel()">Otwórz Lombardex</button></div></div>`;
+    if (!root) return;
+    root.innerHTML = `<div class="bank-card"><header class="bank-card-head"><span class="bank-card-icon">${uiIcon('lombard', 20)}</span><div><h4>Lombardex S.A.</h4><span class="bank-card-type">pożyczki pod zastaw akcji</span></div></header>
+        ${renderPawnShopInfo()}<h4>Zastawy Twojego funduszu</h4><div id="net-lombard-pawn"></div></div>`;
+    if (playerFund) { const box = document.getElementById('net-lombard-pawn'); renderPawnPanel('net-lombard-pawn'); if (!box.innerHTML) box.innerHTML = '<p class="fund-muted">Brak aktywnego funduszu.</p>'; }
+    else document.getElementById('net-lombard-pawn').innerHTML = '<p class="fund-muted">Zastaw jest dostępny dla funduszu.</p>';
 }
 
 // --- Dojście z dawnych wejść ---
