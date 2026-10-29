@@ -13999,3 +13999,17 @@ group('0.16.8 Limity i zegar giełd', () => {
 });
 
 runAllTests();
+
+group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
+    test('Lombard: strona w Internecie ma pełną obsługę (informacje + zastawy funduszu), TeamedUP nie ma wejścia, okno Lombardex zastąpione stroną', () => {
+        initFxState(); resetGdrState(); resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+        const host = document.createElement('div'); host.innerHTML = '<div id="net-lombard-body"></div>'; document.body.appendChild(host);
+        try {
+            renderLombardPage(); const html = host.innerHTML;
+            assert(/Lombardex/.test(html) && /Zastawy Twojego funduszu/.test(html) && document.getElementById('net-lombard-pawn'), 'strona Lombard z zastawami funduszu');
+            assert(!/TeamedUP/.test(html), 'opis bez TeamedUP');
+            assert(!/openPawnShopPanel/.test(renderTeamedUp.toString()), 'TeamedUP bez wejścia do Lombardu');
+            assert(!document.getElementById('pawnshop-modal'), 'osobne okno Lombardex usunięte');
+        } finally { host.remove(); }
+    });
+});

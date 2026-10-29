@@ -696,12 +696,14 @@ function maybeBotPawn(manager) {
 function pawnFundShares(symbol, quantity) {
     const loan = pawnShares(getFundAccount(), symbol, quantity);
     if (typeof refreshFundViews === 'function') refreshFundViews();
+    if (typeof renderLombardPage === 'function') renderLombardPage();
     return loan;
 }
 
 function repayFundPawn(loanId) {
     const ok = repayPawnLoan(getFundAccount(), loanId);
     if (typeof refreshFundViews === 'function') refreshFundViews();
+    if (typeof renderLombardPage === 'function') renderLombardPage();
     return ok;
 }
 
