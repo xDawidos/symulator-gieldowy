@@ -13910,7 +13910,7 @@ group('0.16.7 Pełne spółki zagraniczne', () => {
         for (const row of Object.values(snap.issuers)) delete row.c; // zapis v17
         resetGdrState(); applyCountriesSnapshot(snap); const c = foreignIssuers.YA1; assert(c.balanceSheet && c.cash > 0 && !c.fundamentals, 'v17: model z ceny, fundamenty przy pierwszym raporcie');
         quarter(); assert(foreignIssuers.YA1.fundamentals, 'po kwartale są fundamenty'); assertEq(checkWorldInvariants().length, 0, 'niezmienniki po migracji');
-        assertEq(SAVE_FORMAT_VERSION, 19, 'wersja zapisu'); assert(SUPPORTED_SAVE_VERSIONS.includes(17), 'v17 nadal wczytywany');
+        assertEq(SAVE_FORMAT_VERSION, 20, 'wersja zapisu'); assert(SUPPORTED_SAVE_VERSIONS.includes(17), 'v17 nadal wczytywany');
     }));
 
     test('F2: prezes po 65. roku odchodzi (nowa osoba, cecha kraju z definicji)', () => withYY(() => {
@@ -14210,4 +14210,105 @@ group('0.16.9 W3 Spółki zagraniczne jak krajowe', () => {
 '2.5,2,1.5,1', 'odtworzone z zapisu');
         const vm = buildForeignCardStock(i); assert(getTrailingDividendYield(vm) > 0, 'stopa dywidendy w karcie z historii');
     }));
+});
+
+group('0.16.9 W1 Gotówka w wielu walutach', () => {
+    const navNow = () => getFundNav();
+    const fundWithCash = (cash = 5_000_000) => { resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' }); playerCash = cash; return cash; };
+    test('Niezmienniki rdzenia: NAV liczy salda walutowe po kursie (zmiana kursu zmienia NAV o saldo × Δkurs / udziały), gotówka całkowita = PLN + waluty, ujemne salda zakazane', () => {
+        initFxState(); fundWithCash(1_000_000);
+        assert(kantorBuyCurrency('EUR', 400_000).ok, 'kupno EUR');
+        const eur = getCurrencyCash('player', 'EUR'), nav0 = navNow(), units = playerFund.units, rate0 = fxRates.EUR;
+        assertNear(getFundCashTotalPln(), playerCash + eur * rate0, 'gotówka całkowita = PLN + EUR × kurs', 1e-6);
+        fxRates.EUR = rate0 * 1.05;
+        assertNear(navNow() - nav0, eur * rate0 * 0.05 / units, 'NAV rośnie o saldo × Δkurs / udziały', 1e-6);
+        fxRates.EUR = rate0;
+        const rows = getCashBalances(); assertNear(rows.reduce((s, r) => s + r.share, 0), 1, 'udziały sald sumują się do 1', 1e-9);
+        assertEq(rows.map(r => r.code).join(), 'PLN,EUR', 'PLN i waluta z saldem');
+        assert(!convertCurrency('EUR', 'USD', eur * 2).ok && !convertCurrency('EUR', 'EUR', 1).ok && !convertCurrency('USD', 'PLN', 1).ok, 'za dużo / ta sama / brak salda → odmowa');
+        assertEq(checkCurrencyInvariants().length, 0, 'niezmienniki walutowe'); assertEq(checkWorldInvariants().length, 0, 'niezmienniki świata');
+        initFxState();
+    });
+
+    test('Średni kurs nabycia: partie z kantora (z kursem ze spreadem) i z dywidend (kurs środkowy) uśredniają się; wynik kursowy = saldo × (kurs − średni kurs)', () => {
+        initFxState(); fundWithCash(2_000_000);
+        kantorBuyCurrency('USD', 100_000); const q1 = playerFxBasis.USD, n1 = getCurrencyCash('player', 'USD');
+        assert(q1 > fxRates.USD, 'kurs nabycia z kantora ≥ środkowy (spread)');
+        fxRates.USD = Math.min(CURRENCIES.USD.max, fxRates.USD * 1.1); const mid = fxRates.USD;
+        addCurrencyCash('player', 'USD', 1000); // np. dywidenda po kursie środkowym
+        assertNear(playerFxBasis.USD, (n1 * q1 + 1000 * mid) / (n1 + 1000), 'średnia ważona ilością', 1e-9);
+        const row = getCashBalances().find(r => r.code === 'USD'); assertNear(row.gainPln, row.amount * (mid - playerFxBasis.USD), 'wynik kursowy', 1e-6);
+        initFxState();
+    });
+
+    test('Zmiana waluty: EUR→USD idzie przez złote (dwa spready), PLN bez zmiany, NAV spada o koszt spreadu; wynik w oknie = ten sam kod co kantor', () => {
+        initFxState(); fundWithCash(2_000_000); kantorBuyCurrency('EUR', 500_000);
+        const pln0 = playerCash, nav0 = navNow() * playerFund.units, eur0 = getCurrencyCash('player', 'EUR');
+        const r = convertCurrency('EUR', 'USD', eur0 / 2);
+        assert(r.ok && r.receivedCode === 'USD' && r.received > 0 && r.spreadCost > 0, 'wymiana z kosztem spreadu');
+        assertNear(playerCash, pln0, 'złote po wymianie bez zmiany (przechodnie)', 1e-6);
+        assertNear(getCurrencyCash('player', 'EUR'), eur0 / 2, 'EUR zmalało o połowę', 1e-6);
+        assertNear(nav0 - navNow() * playerFund.units, r.spreadCost, 'NAV spadł o koszt spreadu (2 nogi)', 1.5);
+        assert(r.spreadCost > (eur0 / 2) * fxRates.EUR * 0.01, 'dwa spready ≥ 1% wymienianej kwoty');
+        const back = convertCurrency('USD', 'PLN', getCurrencyCash('player', 'USD')); assert(back.ok && back.receivedCode === 'PLN' && playerCash > pln0, 'USD → PLN');
+        const buy = convertCurrency('PLN', 'CZK', 10_000); assert(buy.ok && buy.receivedCode === 'CZK', 'PLN → CZK');
+        assertEq(checkCurrencyInvariants().length, 0, 'niezmienniki po wymianach');
+        initFxState();
+    });
+
+    test('Wymiana jest „wszystko albo nic”: limit dostawcy na nodze kupna nie zmienia sald', () => {
+        initFxState(); fundWithCash(2_000_000); kantorBuyCurrency('EUR', 900_000);
+        const mun = { id: 'mun-test' }; const before = JSON.stringify({ p: playerCash, c: playerCashByCurrency });
+        const r = convertCurrency('EUR', 'USD', getCurrencyCash('player', 'EUR'), 'nie-ma-takiego');
+        assert(!r.ok, 'nieznany dostawca → odmowa'); assertEq(JSON.stringify({ p: playerCash, c: playerCashByCurrency }), before, 'salda bez zmian po odmowie');
+        initFxState();
+    });
+
+    test('Obowiązkowa płatność w złotych: brak PLN → przewalutowanie sald z ostrzeżeniem w dzienniku (spread = koszt funduszu); dobrowolny zakup tylko z podpowiedzią', () => {
+        initFxState(); fundWithCash(1_000_000); kantorBuyCurrency('EUR', 600_000); kantorBuyCurrency('USD', 300_000);
+        playerCash = 1_000; const log0 = (typeof eventLog !== 'undefined' ? eventLog.length : 0);
+        assert(ensurePlnCash(50_000, 'brak złotych na test'), 'przewalutowano tyle, ile trzeba');
+        assert(playerCash >= 50_000 && playerCash < 60_000, `PLN po przewalutowaniu: ${playerCash}`);
+        const hint = getForeignCashHint(); assert(/w walutach/.test(hint) && /kliknięcie|kliknięciu/.test(hint), 'podpowiedź przy odmowie kupna');
+        assertEq(ensurePlnCash(1e12, 'test'), false, 'za duża kwota: false, nic nie wisi na minusie');
+        assertEq(checkCurrencyInvariants().length, 0, 'bez ujemnych sald po wyczerpaniu');
+        initFxState();
+    });
+
+    test('Opłata za zarządzanie z gotówki walutowej: bez PLN opłata nie przepada, fundusz przewalutowuje z zapasem (jeden wpis w dzienniku)', () => {
+        initFxState(); fundWithCash(1_000_000); kantorBuyCurrency('EUR', 990_000); playerCash = 0;
+        const fees0 = playerFund.feesPaidTotal || 0, eur0 = getCurrencyCash('player', 'EUR');
+        const fee = chargeManagementFee();
+        assert(fee > 0 && playerFund.feesPaidTotal > fees0, 'opłata pobrana mimo braku PLN'); assert(getCurrencyCash('player', 'EUR') < eur0, 'EUR zmalało');
+        assert(playerCash >= 0, 'PLN nieujemne'); assertEq(checkWorldInvariants().length, 0);
+        initFxState();
+    });
+
+    test('Zapis v20: kurs nabycia w zapisie i odtwarzany; zapis v19 (bez „basis”) → kurs bieżący (migracja), wersja formatu 20, v19 nadal się wczytuje', () => {
+        initFxState(); fundWithCash(1_000_000); kantorBuyCurrency('CHF', 200_000);
+        const snap = JSON.parse(JSON.stringify(getCurrencySnapshot())), basis = playerFxBasis.CHF;
+        assert(basis > 0 && snap.basis.CHF === basis, 'basis w zapisie');
+        applyCurrencySnapshot(snap); assertNear(playerFxBasis.CHF, basis, 'odtworzony kurs nabycia', 1e-12);
+        delete snap.basis; fxRates.CHF = fxRates.CHF; applyCurrencySnapshot(snap); assertNear(playerFxBasis.CHF, fxRates.CHF, 'v19: kurs nabycia = bieżący', 1e-12);
+        assertEq(SAVE_FORMAT_VERSION, 20); assert(SUPPORTED_SAVE_VERSIONS.includes(19) && SUPPORTED_SAVE_VERSIONS.includes(20), 'v19 i v20 obsługiwane');
+        assertEq(checkCurrencyInvariants().length, 0);
+        initFxState();
+    });
+
+    test('Okno „Gotówka funduszu”: salda z wartością w PLN, udziałem i wynikiem kursowym (tekstem), wymiana z okna, pasek gotówki dostępny z klawiatury', () => {
+        initFxState(); fundWithCash(1_000_000); kantorBuyCurrency('EUR', 300_000);
+        const kpi = document.createElement('div'); kpi.className = 'topbar-kpi'; kpi.innerHTML = '<span id="cash">x</span>'; document.body.appendChild(kpi);
+        try {
+            initCashKpi(); assertEq(kpi.getAttribute('role'), 'button'); assertEq(kpi.tabIndex, 0, 'fokus z klawiatury');
+            kpi.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+            const modal = document.getElementById('cash-modal'); assert(modal && modal.style.display === 'block', 'Enter otwiera okno');
+            const text = modal.textContent; assert(/EUR/.test(text) && /PLN/.test(text) && /Wynik kursowy/.test(text) && /% gotówki/.test(text), 'salda, udział i wynik kursowy słowami');
+            cashWindowState = { from: 'EUR', to: 'USD', providerId: 'std' }; renderCashWindow();
+            document.getElementById('cash-amount').value = String(Math.floor(getCurrencyCash('player', 'EUR') / 2)); updateCashQuote();
+            assert(/Dostaniesz ok\./.test(document.getElementById('cash-quote').textContent), 'szacunek wymiany');
+            const eur0 = getCurrencyCash('player', 'EUR'); cashUiConvert();
+            assert(getCurrencyCash('player', 'EUR') < eur0 && getCurrencyCash('player', 'USD') > 0, 'wymiana z okna zmieniła salda');
+            assertEq(checkWorldInvariants().length, 0, 'niezmienniki po wymianie z okna');
+        } finally { kpi.remove(); document.getElementById('cash-modal')?.remove(); cashWindowState = { from: 'PLN', to: 'EUR', providerId: 'std' }; initFxState(); }
+    });
 });
