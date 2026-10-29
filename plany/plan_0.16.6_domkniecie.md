@@ -10,7 +10,7 @@
 4. **Połączenia giełd:** szansa zaczyna się od 8. kwartału (`fromQ` w `LINK_RULES`), ale **rośnie wyraźnie po powstaniu lotniska albo portu** (budowa infrastruktury z `city.js`); bez nich szansa niska i rosnąca powoli.
 5. **Państwo:** żadne spółki państwowe nie mogą przejść na giełdy inne niż GPW (patrz S2).
 
-> Kolejność (2026-10-28): S0 (kraj startowy) wykonać dopiero po 0.16.7 (pełne spółki zagraniczne, zegar giełd); S1–S3 mogą iść wcześniej.
+> Kolejność (2026-10-28): S0 (kraj startowy) wykonać dopiero po 0.16.7 (pełne spółki zagraniczne, zegar giełd); S1–S4 mogą iść wcześniej.
 
 ## Zakres
 
@@ -36,6 +36,10 @@
 - **Szpital kliniczny, Kampus technologiczny, Centrum wystawiennicze** (`state.js`, projekty miejskie) po ukończeniu stają się **spółkami państwowymi notowanymi na GPW** (sektory z definicji projektu: Medycyna/Usługi, Technologia/Gaming/Badania, Usługi/Media/Dobra konsumpcyjne), z kapitałem początkowym zbliżonym do kosztu budowy, własnością skarbu państwa i dywidendą do skarbu.
 - **Spółki państwowe nie mogą przejść na inne giełdy niż GPW:** blokada przeniesienia notowania (awans/zejście NewHorizons, rynki zagraniczne, giełda prywatna), brak GDR dla nich, zagraniczne przejęcia i wchodzenie na nowe giełdy zablokowane; sprawdzić istniejące spółki państwowe (sektor państwowy z 0.10.2) i objąć je tą samą regułą.
 - Testy: ukończenie projektu → nowa spółka GPW; próba przeniesienia → odmowa; niezmiennik liczby spółek krajowych (limit 0.15.4 P5 nie jest łamany; spółki państwowe z superprojektów spoza limitu albo w nim — decyzja przy wdrożeniu).
+
+### S4. Grafika startupów (zgłoszenie 2026-10-29; po 0.16.5)
+- Poprawa wyglądu strony „Startupy” w Internecie (0.16.5): karty startupów, rundy finansowania, wskaźniki i etapy rozwoju mają być czytelne i atrakcyjne wizualnie (ikony SVG, ilustracje etapów, wykresy rund, stany: pomysł, prototyp, rynek, upadek/wyjście), na komponentach i tokenach z 0.14.5, tylko ciemny motyw, kolor nigdy jedynym nośnikiem.
+- Najpierw krótki przegląd obecnej strony (zrzuty ekranu), lista problemów, potem poprawki; bez zmiany mechaniki startupów. Weryfikacja w przeglądarce w aplikacji, także wąski ekran i klawiatura.
 
 ### S3. Kontrola i raport
 - Testy (grupa „0.16.6”), przebiegi ×200 (20 gier × 6,5 roku): GIG ±1 pp względem bazy po 0.16.5, niezmienniki 0, ukryta gotówka nie zmienia NAV w sposób niezgłaszany. Raport `kontrola_0.16.6.md` z sekcją „Pominięte i problemy”, wiersz w mapie.

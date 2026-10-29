@@ -1,0 +1,349 @@
+<!DOCTYPE html><html class="h-full bg-[#0a0710]" lang="pl" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Capital Quest - Internet</title>
+<!-- Tailwind CSS CDN with plugins -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            cq: {
+              bg: '#0e0a16',
+              sidebar: '#130d1e',
+              card: '#1a1329',
+              cardBorder: '#2d2244',
+              accentRed: '#FF4B5C',
+              gold: '#F59E0B',
+              textMuted: '#8b80a1',
+              activeNav: '#241838'
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+<!-- BEGIN: Custom Styles -->
+<style data-purpose="custom-scrollbar">
+    /* Custom subtle scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #110c1a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #2a203c;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3e3058;
+    }
+  </style>
+<style data-purpose="interactive-tiles">
+    /* Speed Dial Tile Interactive States */
+    .speed-dial-card {
+      transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .speed-dial-card:hover:not(.locked) {
+      transform: translateY(-4px);
+      box-shadow: 0 14px 28px -10px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 75, 92, 0.45);
+      border-color: rgba(255, 75, 92, 0.6);
+    }
+    .speed-dial-card:focus-visible:not(.locked) {
+      outline: 2px solid #FF4B5C;
+      outline-offset: 2px;
+      transform: translateY(-2px);
+    }
+    .locked {
+      background-image: repeating-linear-gradient(
+        -45deg,
+        rgba(255, 255, 255, 0.015),
+        rgba(255, 255, 255, 0.015) 10px,
+        transparent 10px,
+        transparent 20px
+      );
+    }
+  </style>
+<!-- END: Custom Styles -->
+<meta content="web_dashboard" name="shell-type">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"></head>
+<body class="h-full overflow-hidden text-slate-200 select-none bg-[#0e0a16] flex flex-col font-sans text-xs">
+<!-- BEGIN: Global Topbar -->
+<header class="h-14 border-b border-[#251b36] bg-[#110c1b] px-4 flex items-center justify-between shrink-0 z-20" data-purpose="game-topbar">
+<!-- Brand / Fund Title -->
+<div class="flex items-center space-x-3 pr-6 border-r border-[#251b36]">
+<div class="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center font-black text-slate-950 shadow-md shadow-amber-900/30 text-sm">
+        CQ
+      </div>
+<div>
+<div class="text-[13px] font-bold text-white tracking-wider flex items-center gap-1.5">
+          CAPITAL QUEST
+          <span class="text-[9px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20 font-medium">BETA</span>
+</div>
+<div class="text-[10px] text-cq-textMuted tracking-tight">Fundusz Pierwszy Krok</div>
+</div>
+</div>
+<!-- Core Metrics Dashboard -->
+<div class="flex items-center space-x-7 px-4">
+<!-- Gotówka Funduszu -->
+<div>
+<div class="text-[9px] uppercase tracking-wider text-cq-textMuted font-semibold">Gotówka funduszu</div>
+<div class="text-sm font-black text-white tracking-tight">81,72 <span class="text-[10px] font-medium text-slate-400">PLN</span></div>
+</div>
+<!-- NAV / Udział -->
+<div>
+<div class="text-[9px] uppercase tracking-wider text-cq-textMuted font-semibold">NAV / udział</div>
+<div class="text-sm font-black text-white tracking-tight">9,0006 <span class="text-[10px] font-medium text-slate-400">PLN</span></div>
+</div>
+<!-- Konto Prywatne -->
+<div>
+<div class="text-[9px] uppercase tracking-wider text-cq-textMuted font-semibold">Konto prywatne</div>
+<div class="text-sm font-black text-emerald-400 tracking-tight">1 551,15 <span class="text-[10px] font-medium text-emerald-300">PLN</span></div>
+</div>
+<!-- Zaufanie Klientów -->
+<div>
+<div class="text-[9px] uppercase tracking-wider text-cq-textMuted font-semibold">Zaufanie klientów</div>
+<div class="text-sm font-black text-[#FF4B5C] flex items-center gap-1 tracking-tight">
+          14<span class="text-slate-500 text-[10px] font-normal">/100</span>
+<span class="inline-block w-1.5 h-1.5 rounded-full bg-[#FF4B5C] animate-pulse"></span>
+</div>
+</div>
+</div>
+<!-- Game Time and Speed Controls -->
+<div class="flex items-center space-x-4 pl-4 border-l border-[#251b36]">
+<div class="text-right">
+<span class="text-slate-300 font-semibold tracking-wide">Rok 14</span>
+<span class="text-slate-500 mx-1">•</span>
+<span class="text-slate-400">kw. 1</span>
+<span class="text-slate-500 mx-1">•</span>
+<span class="text-slate-400">tydz. 1</span>
+</div>
+<!-- Speed selector buttons -->
+<div class="flex items-center bg-[#171025] rounded-md p-0.5 border border-[#2c2042]">
+<button class="px-2 py-0.5 rounded text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">x1</button>
+<button class="px-2 py-0.5 rounded text-[11px] font-semibold text-slate-400 hover:text-white">x2</button>
+<button class="px-2 py-0.5 rounded text-[11px] font-semibold text-slate-400 hover:text-white">x5</button>
+<button class="px-2 py-0.5 rounded text-[11px] font-semibold text-slate-400 hover:text-white">x10</button>
+<button class="px-2 py-0.5 rounded text-[11px] font-semibold text-slate-400 hover:text-white">x50</button>
+</div>
+<!-- Pause / Step button -->
+<button class="bg-[#F59E0B] hover:bg-amber-400 text-slate-950 font-bold px-3 py-1.5 rounded text-xs tracking-wider transition-colors shadow-sm">
+        Wznów
+      </button>
+<!-- Global menu icon -->
+<button class="text-slate-400 hover:text-white p-1 rounded hover:bg-white/5">
+<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+<circle cx="5" cy="10" r="1.5"></circle>
+<circle cx="10" cy="10" r="1.5"></circle>
+<circle cx="15" cy="10" r="1.5"></circle>
+</svg>
+</button>
+</div>
+</header>
+<!-- END: Global Topbar -->
+<!-- BEGIN: Game Body Layout -->
+<div class="flex flex-1 overflow-hidden">
+<!-- BEGIN: Left Global Sidebar Navigation -->
+<aside class="w-56 shrink-0 bg-[#130d20] border-r border-[#251b36] flex flex-col justify-between py-3 overflow-y-auto" data-purpose="game-main-navigation">
+<div class="space-y-4 px-2">
+<!-- Navigation Section: ŚWIAT -->
+<div>
+<div class="px-3 pb-1.5 text-[9px] font-extrabold uppercase tracking-widest text-cq-textMuted/70">Świat</div>
+<nav class="space-y-0.5">
+<a class="flex items-center space-x-2.5 px-3 py-1.5 rounded text-slate-400 hover:text-white hover:bg-white/[0.03] transition-colors" href="#">
+<svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M3 21h18M3 10h18M5 10v11m4-11v11m6-11v11m4-11v11M12 3l9 7H3l9-7z" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<span class="">Bank</span>
+</a>
+<a class="flex items-center space-x-2.5 px-3 py-1.5 rounded text-slate-400 hover:text-white hover:bg-white/[0.03] transition-colors" href="#">
+<svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M12 3l9 7H3l9-7z" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<span class="">Państwo</span>
+</a>
+<a class="flex items-center space-x-2.5 px-3 py-1.5 rounded text-slate-400 hover:text-white hover:bg-white/[0.03] transition-colors" href="#">
+<svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<span class="">Miasto</span>
+</a>
+<a class="flex items-center space-x-2.5 px-3 py-1.5 rounded text-slate-400 hover:text-white hover:bg-white/[0.03] transition-colors" href="#">
+<svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5m4-9v9m-4-9v9" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<span class="">Budownictwo</span>
+</a>
+<!-- ACTIVE ITEM: Internet -->
+<a class="flex items-center justify-between px-3 py-1.5 rounded bg-[#241838] text-white border-l-2 border-[#FF4B5C] font-semibold shadow-inner" href="#">
+<div class="flex items-center space-x-2.5">
+<svg class="w-4 h-4 text-[#FF4B5C]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M3.6 9h16.8M3.6 15h16.8M12 3a14.8 14.8 0 010 18M12 3a14.8 14.8 0 000 18"></path></svg>
+<span class="">Internet</span>
+</div>
+<span class="w-1.5 h-1.5 rounded-full bg-[#FF4B5C] ring-2 ring-[#FF4B5C]/20"></span>
+</a>
+</nav>
+</div>
+<!-- Navigation Section: MOJA FIRMA -->
+<div>
+<div class="px-3 pb-1.5 text-[9px] font-extrabold uppercase tracking-widest text-cq-textMuted/70">Moja Firma</div>
+<nav class="space-y-0.5">
+<a class="flex items-center space-x-2.5 px-3 py-1.5 rounded text-slate-400 hover:text-white hover:bg-white/[0.03] transition-colors" href="#">
+<svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<span class="">Firma</span>
+</a>
+<a class="flex items-center space-x-2.5 px-3 py-1.5 rounded text-slate-400 hover:text-white hover:bg-white/[0.03] transition-colors" href="#">
+<svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<span class="">Klienci i udziały</span>
+</a>
+<a class="flex items-center space-x-2.5 px-3 py-1.5 rounded text-slate-400 hover:text-white hover:bg-white/[0.03] transition-colors" href="#">
+<svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<span class="">Szara strefa</span>
+</a>
+</nav>
+</div>
+<!-- Navigation Section: JA -->
+<div>
+<div class="px-3 pb-1.5 text-[9px] font-extrabold uppercase tracking-widest text-cq-textMuted/70">Ja</div>
+<nav class="space-y-0.5">
+<a class="flex items-center space-x-2.5 px-3 py-1.5 rounded text-slate-400 hover:text-white hover:bg-white/[0.03] transition-colors" href="#">
+<svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<span class="">TeamedUp!</span>
+</a>
+<a class="flex items-center space-x-2.5 px-3 py-1.5 rounded text-slate-400 hover:text-white hover:bg-white/[0.03] transition-colors" href="#">
+<svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 14l9-5-9-5-9 5 9 5zm0 7l-9-5 9-5 9 5-9 5z" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<span class="">CV i Akademia</span>
+</a>
+<a class="flex items-center space-x-2.5 px-3 py-1.5 rounded text-slate-400 hover:text-white hover:bg-white/[0.03] transition-colors" href="#">
+<svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<span class="">Ranking</span>
+</a>
+<a class="flex items-center space-x-2.5 px-3 py-1.5 rounded text-slate-400 hover:text-white hover:bg-white/[0.03] transition-colors" href="#">
+<svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" stroke-linecap="round" stroke-linejoin="round"></path><circle cx="12" cy="12" r="3"></circle></svg>
+<span class="">Ustawienia</span>
+</a>
+</nav>
+</div>
+</div>
+<!-- Quick status footer inside menu -->
+<div class="px-4 py-3 border-t border-[#251b36] mx-2 text-[10px] text-cq-textMuted flex items-center justify-between">
+<span class="">Połączenie sieciowe</span>
+<span class="flex items-center gap-1.5 text-emerald-400 font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+          Aktywne
+        </span>
+</div>
+</aside>
+<!-- END: Left Global Sidebar Navigation -->
+<!-- BEGIN: Opera Browser Container Area -->
+<main class="flex-1 flex flex-col bg-[#110c1a] overflow-hidden p-3 gap-2" data-purpose="opera-browser-view"><div class="flex flex-col w-full">
+<!-- Top Slim Browser Strip (Opera / Financial Workstation Tab Bar) -->
+<div class="flex items-center justify-between bg-surface-container-lowest px-space-sm pt-space-xs shrink-0 select-none">
+<div class="flex items-center space-x-space-xs overflow-hidden">
+<!-- Active Tab: Ferie i wakacje -->
+<div class="flex items-center space-x-space-sm bg-surface-container-low px-space-md py-1.5 rounded-t-lg shadow-sm">
+<span class="material-symbols-outlined text-secondary-fixed text-[15px]" style="font-variation-settings: &quot;FILL&quot; 1;">flight_takeoff</span>
+<span class="font-headline-sm text-[12px] text-on-surface truncate">Ferie i wakacje — Tanie Loty Finansowe</span>
+<button class="text-on-surface-variant hover:text-on-surface transition-colors p-0.5 rounded-full ml-1" type="button">
+<span class="material-symbols-outlined text-[13px]">close</span>
+</button>
+</div>
+<!-- Inactive Tab: Ulubione / Giełda GPW -->
+<div class="flex items-center space-x-space-xs bg-surface-container-lowest hover:bg-surface-container px-space-md py-1.5 rounded-t-lg text-on-surface-variant transition-colors cursor-pointer">
+<span class="material-symbols-outlined text-[14px]">star</span>
+<span class="font-body-sm text-[12px]">Ulubione rynki</span>
+</div>
+<button class="p-1 text-on-surface-variant hover:text-on-surface transition-colors" title="Nowa karta" type="button">
+<span class="material-symbols-outlined text-[16px]">add</span>
+</button>
+</div>
+<!-- Window Controls Fake UI -->
+<div class="flex items-center space-x-2 px-space-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-[14px] cursor-pointer hover:text-on-surface">minimize</span>
+<span class="material-symbols-outlined text-[14px] cursor-pointer hover:text-on-surface">check_box_outline_blank</span>
+<span class="material-symbols-outlined text-[14px] cursor-pointer hover:text-error">close</span>
+</div>
+</div>
+<!-- Browser Navigation Bar & Read-only Omnibox -->
+<div class="flex items-center space-x-space-md bg-surface-container-low px-space-md py-2 shadow-sm shrink-0">
+<div class="flex items-center space-x-space-xs text-on-surface-variant">
+<button class="p-1 hover:bg-surface-container rounded-lg text-on-surface transition-colors" title="Wstecz" type="button">
+<span class="material-symbols-outlined text-[17px]">arrow_back</span>
+</button>
+<button class="p-1 opacity-40 rounded-lg cursor-not-allowed text-on-surface" title="Dalej" type="button">
+<span class="material-symbols-outlined text-[17px]">arrow_forward</span>
+</button>
+<button class="p-1 hover:bg-surface-container rounded-lg text-on-surface transition-colors" title="Odśwież" type="button">
+<span class="material-symbols-outlined text-[17px]">refresh</span>
+</button>
+</div>
+<!-- Address URL Pill -->
+<div class="flex-1 flex items-center bg-surface-container-lowest px-space-md py-1.5 rounded-lg shadow-inner">
+<span class="material-symbols-outlined text-secondary-fixed text-[15px] mr-2">lock</span>
+<span class="font-label-caps text-secondary-fixed mr-1">https://</span>
+<span class="font-body-md text-on-surface font-semibold text-[13px]">ferie-i-wakacje.pl</span>
+<span class="font-body-sm text-on-surface-variant ml-1">/bilety-lotnicze-licencje</span>
+</div>
+<!-- Active Visa / Connection Status Chip -->
+<div class="flex items-center space-x-2 bg-surface-container px-space-md py-1.5 rounded-lg shadow-sm">
+<span class="text-[13px]">🇩🇪</span>
+<span class="font-label-caps text-[11px] text-on-surface">Wiza: Niemcy (EUR)</span>
+<span class="inline-block w-2 h-2 rounded-full bg-secondary-fixed shadow-[0_0_8px_rgba(78,222,163,0.7)] animate-pulse"></span>
+</div>
+</div>
+<!-- Browser Viewport / Web Page Body -->
+<div class="flex-1 overflow-y-auto bg-surface px-space-lg py-space-md space-y-space-md">
+<!-- Game Condition Notice Banner -->
+<div class="bg-[#1c142b] border border-amber-500/30 rounded-2xl p-4 flex items-start gap-4 shadow-xl relative overflow-hidden backdrop-blur-sm"><div class="absolute -right-8 -top-8 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl pointer-events-none"></div><div class="p-3 bg-amber-500/15 border border-amber-500/40 text-amber-300 rounded-xl shrink-0 flex items-center justify-center"><span class="material-symbols-outlined text-[24px]">construction</span></div><div class="flex-1"><div class="flex flex-wrap items-center justify-between gap-2"><div class="flex items-center gap-2.5"><h2 class="text-[15px] font-bold text-white tracking-wide">Port Lotniczy Warszawa-Okęcie (Terminal Inwestycyjny)</h2><span class="text-[10px] font-mono uppercase px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/40 font-semibold tracking-wider flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>STATUS: W BUDOWIE</span></div><span class="text-[11px] text-purple-300/80 font-mono bg-purple-950/60 px-2.5 py-1 rounded-lg border border-purple-800/40">Terminal Pasażerski · Brama 01</span></div><p class="text-[13px] text-slate-300 mt-2 leading-relaxed">Lotnisko nie posiada jeszcze pełnej przepustowości miejskiej. Rozbudowa możliwa przez przetarg publiczny w sekcji <a class="text-amber-300 font-semibold underline decoration-amber-400/60 hover:text-amber-200 transition-colors" href="#">Budownictwo</a>. Obecnie obsługiwane są komercyjne loty czarterowe oraz bezterminowe paszporty inwestycyjne funduszy kapitałowych.</p></div></div>
+<!-- Flight Booking Portal Hero Box -->
+<div class="bg-gradient-to-br from-[#1b152d] via-[#161025] to-[#120d1e] border border-purple-500/20 rounded-2xl p-5 shadow-2xl relative overflow-hidden"><div class="absolute -left-12 -top-12 w-48 h-48 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div><div class="relative z-10 flex flex-col gap-4"><div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10"><div><div class="flex items-center gap-2"><span class="px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 font-semibold">Międzynarodowe Połączenia Kapitałowe</span></div><h1 class="text-[24px] font-extrabold text-white mt-1 tracking-tight">Bilet na rynek zagraniczny</h1><p class="text-[13px] text-slate-300 mt-0.5">Odblokuj bezpośredni obrót spółkami, lokalny arkusz zleceń oraz bezprowizyjny arbitraż walutowy.</p></div><div class="flex items-center gap-2 bg-[#231b3b] border border-emerald-500/30 px-3.5 py-2 rounded-xl shadow-inner"><span class="material-symbols-outlined text-emerald-400 text-[20px]">verified_user</span><div class="text-left"><div class="text-[12px] font-bold text-emerald-300">Licencje bezterminowe</div><div class="text-[10px] text-slate-400 font-mono">Dostęp natychmiastowy 24/7</div></div></div></div><div class="bg-[#110c1c]/90 border border-white/10 rounded-xl p-3.5 grid grid-cols-1 md:grid-cols-12 gap-3 items-center shadow-inner"><div class="md:col-span-4 bg-[#1f1733] border border-white/10 rounded-xl p-3"><div class="text-[10px] font-mono uppercase text-slate-400 font-medium">WYLOT (Z)</div><div class="flex items-center gap-2.5 mt-1"><div class="w-8 h-8 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 flex items-center justify-center"><span class="material-symbols-outlined text-[18px]">flight_takeoff</span></div><div><div class="text-[14px] font-bold text-white">Warszawa (GPW)</div><div class="text-[11px] text-cyan-300 font-mono">Rynek bazowy · PLN</div></div></div></div><div class="md:col-span-2 flex flex-col items-center justify-center py-1"><div class="flex items-center gap-1.5 text-cyan-400"><span class="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#38bdf8]"></span><div class="w-9 border-b-2 border-dashed border-cyan-400/60"></div><span class="material-symbols-outlined text-cyan-300 text-[20px] animate-pulse">flight</span><div class="w-9 border-b-2 border-dashed border-cyan-400/60"></div><span class="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#38bdf8]"></span></div><span class="text-[10px] font-mono text-cyan-300 uppercase tracking-widest font-semibold mt-1">LOT BEZPOŚREDNI</span></div><div class="md:col-span-3 bg-[#1f1733] border border-white/10 rounded-xl p-3"><div class="text-[10px] font-mono uppercase text-slate-400 font-medium">PRZYLOT (DO)</div><div class="flex items-center gap-2.5 mt-1"><div class="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-300 border border-purple-500/40 flex items-center justify-center"><span class="material-symbols-outlined text-[18px]">travel_explore</span></div><div><div class="text-[14px] font-bold text-white">Wybierz państwo</div><div class="text-[11px] text-purple-300 font-mono">6 dostępnych lotów globalnych</div></div></div></div><div class="md:col-span-3 flex flex-col gap-2"><div class="bg-[#1f1733] border border-white/10 rounded-lg px-3 py-1.5 flex items-center justify-between"><span class="text-[10px] font-mono uppercase text-slate-400">KLASA LOTU:</span><span class="text-[11px] font-bold text-amber-300 font-mono">Fundusz (Inwestor)</span></div><div class="bg-[#1f1733] border border-white/10 rounded-lg px-3 py-1.5 flex items-center justify-between"><span class="text-[10px] font-mono uppercase text-slate-400">WAŻNOŚĆ:</span><span class="text-[11px] font-bold text-emerald-400 font-mono">Dożywotnia wiza</span></div></div></div></div></div>
+<!-- Active Boarding Pass Card (Perforated Edge Ticket) -->
+<div class="bg-[#1c142b] border border-amber-500/30 rounded-2xl p-4 flex items-start gap-4 shadow-xl relative overflow-hidden backdrop-blur-sm"><div class="absolute -right-8 -top-8 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl pointer-events-none"></div><div class="p-3 bg-amber-500/15 border border-amber-500/40 text-amber-300 rounded-xl shrink-0 flex items-center justify-center"><span class="material-symbols-outlined text-[24px]">construction</span></div><div class="flex-1"><div class="flex flex-wrap items-center justify-between gap-2"><div class="flex items-center gap-2.5"><h2 class="text-[15px] font-bold text-white tracking-wide">Port Lotniczy Warszawa-Okęcie (Terminal Inwestycyjny)</h2><span class="text-[10px] font-mono uppercase px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/40 font-semibold tracking-wider flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>STATUS: W BUDOWIE</span></div><span class="text-[11px] text-purple-300/80 font-mono bg-purple-950/60 px-2.5 py-1 rounded-lg border border-purple-800/40">Terminal Pasażerski · Brama 01</span></div><p class="text-[13px] text-slate-300 mt-2 leading-relaxed">Lotnisko nie posiada jeszcze pełnej przepustowości miejskiej. Rozbudowa możliwa przez przetarg publiczny w sekcji <a class="text-amber-300 font-semibold underline decoration-amber-400/60 hover:text-amber-200 transition-colors" href="#">Budownictwo</a>. Obecnie obsługiwane są komercyjne loty czarterowe oraz bezterminowe paszporty inwestycyjne funduszy kapitałowych.</p></div></div>
+<!-- Section Heading: Dostępne destynacje rynkowe -->
+<div class="flex items-center justify-between pt-space-xs">
+<div>
+<h2 class="font-headline-md text-on-surface text-[18px]">Katalog Lotów i Licencji Handlowych</h2>
+<p class="font-body-sm text-on-surface-variant text-[12px]">Wybierz giełdę zagraniczną. Zakupiony bilet natychmiast rejestruje Twój fundusz w lokalnej izbie rozliczeniowej.</p>
+</div>
+<span class="font-label-caps text-on-surface-variant text-[11px] bg-surface-container px-3 py-1 rounded">DOSTĘPNYCH: 6 KRAJÓW</span>
+</div>
+<!-- Destination Market Cards Grid (2 Columns) -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-5"><div class="bg-gradient-to-br from-[#241c2c] via-[#1a1424] to-[#161020] border-2 border-amber-500/40 rounded-2xl p-4 flex flex-col justify-between shadow-xl relative overflow-hidden group hover:border-amber-400/60 transition-all"><div class="absolute top-0 right-0 w-36 h-36 bg-amber-500/10 rounded-full blur-2xl pointer-events-none"></div><div class="flex items-start justify-between"><div class="flex items-center gap-3.5"><div class="text-3xl p-2 bg-[#2d223a] rounded-xl border border-amber-500/30 shadow-md">🇩🇪</div><div><div class="flex items-center gap-2"><h3 class="text-[17px] font-bold text-white">Niemcy</h3><span class="font-mono font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded text-[11px]">EUR €</span></div><p class="text-[12px] text-slate-300 font-medium mt-0.5">Frankfurter Börsenhaus · DAX &amp; TecDAX</p></div></div><span class="bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 font-mono text-[11px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-sm"><span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span><span class="">Giełda otwarta</span></span></div><div class="my-3.5 bg-[#120d1c]/90 border border-white/10 p-3 rounded-xl flex items-center justify-between"><div class="text-left"><span class="text-[10px] font-mono uppercase text-slate-400 block">STATUS LICENCJI</span><span class="text-[14px] font-bold text-emerald-400 flex items-center gap-1 mt-0.5"><span class="material-symbols-outlined text-[16px]">check_circle</span>Bilet aktywny</span></div><div class="text-right"><span class="text-[10px] font-mono uppercase text-slate-400 block">KOSZT TRANSAKCJI</span><span class="text-[14px] font-bold text-amber-300 font-mono mt-0.5">0,15% prowizji</span></div></div><div class="flex items-center justify-between pt-3 border-t border-white/10"><div class="flex items-center gap-1.5 text-emerald-400 font-mono text-[12px] font-medium"><span class="material-symbols-outlined text-[16px]">verified</span><span class="">Opłacono bezterminowo</span></div><button class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-[13px] py-2 px-4 rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer" type="button"><span class="">Otwórz arkusz</span><span class="material-symbols-outlined text-[15px]">open_in_new</span></button></div></div><div class="bg-gradient-to-br from-[#191d33] via-[#141829] to-[#101221] border-2 border-blue-500/40 rounded-2xl p-4 flex flex-col justify-between shadow-xl relative overflow-hidden group hover:border-blue-400/60 transition-all"><div class="absolute top-0 right-0 w-36 h-36 bg-blue-500/10 rounded-full blur-2xl pointer-events-none"></div><div class="flex items-start justify-between"><div class="flex items-center gap-3.5"><div class="text-3xl p-2 bg-[#1c223d] rounded-xl border border-blue-500/30 shadow-md">🇺🇸</div><div><div class="flex items-center gap-2"><h3 class="text-[17px] font-bold text-white">Stany Zjednoczone</h3><span class="font-mono font-bold text-blue-300 bg-blue-500/15 border border-blue-500/30 px-2 py-0.5 rounded text-[11px]">USD $</span></div><p class="text-[12px] text-slate-300 font-medium mt-0.5">Wall Street Exchange · NYSE &amp; NASDAQ</p></div></div><span class="bg-amber-950/80 text-amber-300 border border-amber-500/40 font-mono text-[11px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-sm"><span class="w-2 h-2 rounded-full bg-amber-400"></span><span class="">Zamknięta (od 15:30)</span></span></div><div class="my-3.5 bg-[#101220]/90 border border-white/10 p-3 rounded-xl flex items-center justify-between"><div class="text-left"><span class="text-[10px] font-mono uppercase text-slate-400 block">KOSZT BILETU &amp; WIZY</span><span class="text-[17px] font-black text-amber-300 font-mono mt-0.5">7 500 PLN</span></div><div class="text-right"><span class="text-[10px] font-mono uppercase text-slate-400 block">STAN PORTFELA</span><span class="text-[13px] font-bold text-red-400 font-mono mt-0.5 bg-red-950/60 px-2 py-0.5 rounded border border-red-800/40">Brakuje ~5 948 PLN</span></div></div><div class="flex items-center justify-between pt-3 border-t border-white/10"><span class="text-[12px] font-mono text-cyan-300">Czas lotu: Natychmiastowy</span><button class="bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-[13px] py-2 px-4 rounded-xl shadow-lg shadow-sky-950/50 transition-all flex items-center gap-1.5 cursor-pointer" type="button"><span class="material-symbols-outlined text-[16px]">shopping_cart</span><span class="">Kup bilet za 7 500 PLN</span></button></div></div><div class="bg-gradient-to-br from-[#182626] via-[#121c1c] to-[#0e1617] border-2 border-emerald-500/40 rounded-2xl p-4 flex flex-col justify-between shadow-xl relative overflow-hidden group hover:border-emerald-400/60 transition-all"><div class="absolute top-0 right-0 w-36 h-36 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none"></div><div class="flex items-start justify-between"><div class="flex items-center gap-3.5"><div class="text-3xl p-2 bg-[#1b2b2b] rounded-xl border border-emerald-500/30 shadow-md">🇨🇿</div><div><div class="flex items-center gap-2"><h3 class="text-[17px] font-bold text-white">Czechy</h3><span class="font-mono font-bold text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded text-[11px]">CZK Kč</span></div><p class="text-[12px] text-slate-300 font-medium mt-0.5">Burza cenných papírů Praha · PX</p></div></div><span class="bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 font-mono text-[11px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-sm"><span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span><span class="">Giełda otwarta</span></span></div><div class="my-3.5 bg-[#0e1616]/90 border border-white/10 p-3 rounded-xl flex items-center justify-between"><div class="text-left"><span class="text-[10px] font-mono uppercase text-slate-400 block">KOSZT BILETU &amp; WIZY</span><span class="text-[17px] font-black text-amber-300 font-mono mt-0.5">1 000 PLN</span></div><div class="text-right"><span class="text-[10px] font-mono uppercase text-slate-400 block">KONTO PRYWATNE</span><span class="text-[13px] font-bold text-emerald-400 font-mono mt-0.5 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/40">Dostępne (1 551,15 PLN)</span></div></div><div class="flex items-center justify-between pt-3 border-t border-white/10"><span class="text-[12px] font-mono text-emerald-300 font-semibold">Stała baza dywidendowa</span><button class="bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold text-[13px] py-2 px-4 rounded-xl shadow-lg shadow-emerald-950/50 transition-all flex items-center gap-1.5 cursor-pointer" type="button"><span class="material-symbols-outlined text-[16px]">shopping_cart</span><span class="">Kup bilet za 1 000 PLN</span></button></div></div><div class="bg-gradient-to-br from-[#16233b] via-[#121c2e] to-[#0e1524] border-2 border-cyan-500/40 rounded-2xl p-4 flex flex-col justify-between shadow-xl relative overflow-hidden group hover:border-cyan-400/60 transition-all"><div class="absolute top-0 right-0 w-36 h-36 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none"></div><div class="flex items-start justify-between"><div class="flex items-center gap-3.5"><div class="text-3xl p-2 bg-[#1b2b46] rounded-xl border border-cyan-500/30 shadow-md">🇸🇪</div><div><div class="flex items-center gap-2"><h3 class="text-[17px] font-bold text-white">Szwecja</h3><span class="font-mono font-bold text-cyan-300 bg-cyan-500/15 border border-cyan-500/30 px-2 py-0.5 rounded text-[11px]">SEK kr</span></div><p class="text-[12px] text-slate-300 font-medium mt-0.5">Nasdaq Stockholm · OMXS30</p></div></div><span class="bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 font-mono text-[11px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-sm"><span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span><span class="">Giełda otwarta</span></span></div><div class="my-3.5 bg-[#0e1422]/90 border border-white/10 p-3 rounded-xl flex items-center justify-between"><div class="text-left"><span class="text-[10px] font-mono uppercase text-slate-400 block">KOSZT BILETU &amp; WIZY</span><span class="text-[17px] font-black text-amber-300 font-mono mt-0.5">2 000 PLN</span></div><div class="text-right"><span class="text-[10px] font-mono uppercase text-slate-400 block">STAN PORTFELA</span><span class="text-[13px] font-bold text-red-400 font-mono mt-0.5 bg-red-950/60 px-2 py-0.5 rounded border border-red-800/40">Brakuje ~448,85 PLN</span></div></div><div class="flex items-center justify-between pt-3 border-t border-white/10"><span class="text-[12px] font-mono text-cyan-300">Sektor: GreenTech &amp; SaaS</span><button class="bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-bold text-[13px] py-2 px-4 rounded-xl shadow-lg shadow-cyan-950/50 transition-all flex items-center gap-1.5 cursor-pointer" type="button"><span class="material-symbols-outlined text-[16px]">shopping_cart</span><span class="">Kup bilet za 2 000 PLN</span></button></div></div><div class="bg-gradient-to-br from-[#2a171d] via-[#201217] to-[#180e12] border-2 border-red-500/40 rounded-2xl p-4 flex flex-col justify-between shadow-xl relative overflow-hidden group hover:border-red-400/60 transition-all"><div class="absolute top-0 right-0 w-36 h-36 bg-red-500/10 rounded-full blur-2xl pointer-events-none"></div><div class="flex items-start justify-between"><div class="flex items-center gap-3.5"><div class="text-3xl p-2 bg-[#331c23] rounded-xl border border-red-500/30 shadow-md">🇨🇭</div><div><div class="flex items-center gap-2"><h3 class="text-[17px] font-bold text-white">Szwajcaria</h3><span class="font-mono font-bold text-red-300 bg-red-500/15 border border-red-500/30 px-2 py-0.5 rounded text-[11px]">CHF Fr</span></div><p class="text-[12px] text-slate-300 font-medium mt-0.5">SIX Swiss Exchange · SMI Index</p></div></div><span class="bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 font-mono text-[11px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-sm"><span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span><span class="">Giełda otwarta</span></span></div><div class="my-3.5 bg-[#170e12]/90 border border-white/10 p-3 rounded-xl flex items-center justify-between"><div class="text-left"><span class="text-[10px] font-mono uppercase text-slate-400 block">KOSZT BILETU &amp; WIZY</span><span class="text-[17px] font-black text-amber-300 font-mono mt-0.5">3 000 PLN</span></div><div class="text-right"><span class="text-[10px] font-mono uppercase text-slate-400 block">OCHRONA KAPITAŁU</span><span class="text-[13px] font-bold text-red-300 font-mono mt-0.5 bg-red-950/60 px-2 py-0.5 rounded border border-red-800/40">Safe Haven / Banki</span></div></div><div class="flex items-center justify-between pt-3 border-t border-white/10"><span class="text-[12px] font-mono text-slate-300">Reżim: Preferencyjny</span><button class="bg-rose-500 hover:bg-rose-400 text-white font-bold text-[13px] py-2 px-4 rounded-xl shadow-lg shadow-rose-950/50 transition-all flex items-center gap-1.5 cursor-pointer" type="button"><span class="material-symbols-outlined text-[16px]">shopping_cart</span><span class="">Kup bilet za 3 000 PLN</span></button></div></div><div class="bg-gradient-to-br from-[#29172b] via-[#201222] to-[#170e19] border-2 border-fuchsia-500/40 rounded-2xl p-4 flex flex-col justify-between shadow-xl relative overflow-hidden group hover:border-fuchsia-400/60 transition-all"><div class="absolute top-0 right-0 w-36 h-36 bg-fuchsia-500/10 rounded-full blur-2xl pointer-events-none"></div><div class="flex items-start justify-between"><div class="flex items-center gap-3.5"><div class="text-3xl p-2 bg-[#331c36] rounded-xl border border-fuchsia-500/30 shadow-md">🇯🇵</div><div><div class="flex items-center gap-2"><h3 class="text-[17px] font-bold text-white">Japonia</h3><span class="font-mono font-bold text-fuchsia-300 bg-fuchsia-500/15 border border-fuchsia-500/30 px-2 py-0.5 rounded text-[11px]">JPY ¥</span></div><p class="text-[12px] text-slate-300 font-medium mt-0.5">Tokyo Stock Exchange · Nikkei 225</p></div></div><span class="bg-amber-950/80 text-amber-300 border border-amber-500/40 font-mono text-[11px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-sm"><span class="w-2 h-2 rounded-full bg-amber-400"></span><span class="">Zamknięta (Strefa nocna)</span></span></div><div class="my-3.5 bg-[#170e19]/90 border border-white/10 p-3 rounded-xl flex items-center justify-between"><div class="text-left"><span class="text-[10px] font-mono uppercase text-slate-400 block">KOSZT BILETU &amp; WIZY</span><span class="text-[17px] font-black text-amber-300 font-mono mt-0.5">5 000 PLN</span></div><div class="text-right"><span class="text-[10px] font-mono uppercase text-slate-400 block">DŹWIGNIA FINANSOWA</span><span class="text-[13px] font-bold text-fuchsia-300 font-mono mt-0.5 bg-fuchsia-950/60 px-2 py-0.5 rounded border border-fuchsia-800/40">Maks. x5</span></div></div><div class="flex items-center justify-between pt-3 border-t border-white/10"><span class="text-[12px] font-mono text-fuchsia-300">Rynki azjatyckie · Giganci AI</span><button class="bg-fuchsia-500 hover:bg-fuchsia-400 text-white font-bold text-[13px] py-2 px-4 rounded-xl shadow-lg shadow-fuchsia-950/50 transition-all flex items-center gap-1.5 cursor-pointer" type="button"><span class="material-symbols-outlined text-[16px]">shopping_cart</span><span class="">Kup bilet za 5 000 PLN</span></button></div></div></div>
+<!-- Bottom Portal Footer Note -->
+<div class="bg-surface-container-low rounded-xl px-space-md py-space-sm flex flex-wrap items-center justify-between text-on-surface-variant font-label-caps text-[10px]">
+<div class="flex items-center space-x-2">
+<span class="material-symbols-outlined text-[14px]">shield</span>
+<span class="">Biuro Podróży Kapitałowych „Ferie i Wakacje” Sp. z o.o. · Partner Giełd Międzynarodowych</span>
+</div>
+<div class="">Serwer: FRA-DC-04 · Ping: 12ms · Szyfrowanie SSL/TLS 1.3</div>
+</div>
+</div>
+</div>
+<script>
+  // Simple in-game interactive feedback for booking CTAs
+  document.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const text = btn.innerText.trim();
+      if (text.includes('Kup bilet')) {
+        console.log(`[Capital Quest / Ferie i Wakacje] Próba zakupu licencji: ${text}`);
+      } else if (text.includes('Zobacz rynek')) {
+        console.log(`[Capital Quest / Ferie i Wakacje] Przejście do rynku XETRA Niemcy`);
+      }
+    });
+  });
+</script></main>
+<!-- END: Opera Browser Container Area -->
+</div>
+<!-- END: Game Body Layout -->
+<!-- BEGIN: Interactive Feedback Script -->
+<script data-purpose="speed-dial-interactions">
+    // Optional click handler to provide rich simulation feedback inside the game console/toast
+    document.querySelectorAll('.speed-dial-card:not(.locked)').forEach(tile => {
+      tile.addEventListener('click', (e) => {
+        const title = tile.querySelector('h2')?.innerText?.replace('→', '').trim();
+        console.log(`[Capital Quest Browser] Przekierowanie do serwisu: ${title}`);
+      });
+    });
+  </script>
+<!-- END: Interactive Feedback Script -->
+
+
+</body></html>
