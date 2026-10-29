@@ -13,7 +13,8 @@ const GRAHAM_RULES = {
 };
 const WOLF_RULES = {
     smallCapShare: 0.35, buyRuns: 3, spend: 0.3, startChance: 0.10, hype: [0.06, 0.12], dump: [0.05, 0.10],
-    cooldownQ: 4, knfChance: 0.12, knfFine: 0.10, maxStakeShare: 0.4
+    cooldownQ: 4, knfChance: 0.12, knfFine: 0.10, maxStakeShare: 0.4,
+    leverage: 0.5            // 0.16.6 S1: dźwignia — kredyt (przez aiTakeLoan, spłacany jak każdy kredyt bota) na 50% gotówki przed pierwszym zakupem
 };
 
 function getGraham() { return aiCompetitors.find(ai => ai.id === GRAHAM_RULES.id) || null; }
@@ -68,6 +69,7 @@ function runWolfBot(ai) {
         return 'start';
     }
     if (w.phase === 'accumulate') {
+        if (w.runs === 0 && typeof aiTakeLoan === 'function') aiTakeLoan(ai, Math.floor(ai.cash * WOLF_RULES.leverage)); // odmowa banku = gra własną gotówką
         const maxQty = Math.floor(stock.totalShares * WOLF_RULES.maxStakeShare) - (ai.portfolio[w.symbol]?.shares || 0);
         const qty = Math.min(Math.floor(ai.cash * WOLF_RULES.spend / stock.price), maxQty);
         if (qty >= 1) aiBuyStock(ai, w.symbol, qty);

@@ -21,6 +21,7 @@ const LINK_RULES = {
     dropRange: [0.05, 0.15], dropQuarters: 2,
     tourismBonus: 0.10,
     communityMin: 3,
+    goldenShareGapQ: 12,            // 0.16.6 S1: złota akcja Gutzwillera — weto wobec przejęcia szwajcarskiej giełdy najwyżej raz na 12 kwartałów
     europe: ['DE', 'CZ', 'SE', 'CH', 'FR']
 };
 
@@ -28,7 +29,7 @@ let exchangeLinks = createLinksState();
 let linkEventLog = [];                  // do wglądu w oknie giełd (nie zapisujemy; historia wydarzeń jest w exchangeLinks.history)
 
 function createLinksState() {
-    return { chance: LINK_RULES.startChance, lastQ: -99, history: [], intl: null, takenBy: null, community: false };
+    return { chance: LINK_RULES.startChance, lastQ: -99, history: [], intl: null, takenBy: null, community: false, goldenQ: -99 };
 }
 
 function resetLinksState() { exchangeLinks = createLinksState(); linkEventLog = []; }
@@ -78,6 +79,13 @@ function runLinkEvent(kind = pickLinkKind(), country = null) {
     if (!candidates.length) return null;
     const x = country && candidates.includes(country) ? country : getRandomElement(candidates);
     const entry = { q: macro.quarter, kind, country: x, members: [x], drop: 0 };
+    if (kind === 'merged' && x === 'CH' && macro.quarter - exchangeLinks.goldenQ >= LINK_RULES.goldenShareGapQ && getForeignBots().some(b => b.id === 'fb_gutz')) { // złota akcja Gutzwillera (decyzja 2)
+        exchangeLinks.goldenQ = macro.quarter;
+        const veto = 'Złota akcja: Gutzwiller wetuje przejęcie szwajcarskiej giełdy przez naszą. Szwajcaria zostaje poza połączeniem.';
+        logEvent(`🌍 ${veto}`, 'market');
+        if (typeof pushNews === 'function') pushNews(`🌍 ${veto}`, null);
+        return null;
+    }
     if (!linkCountry(x, kind)) return null;
     const name = COUNTRY_DEFS[x].name, ex = COUNTRY_DEFS[x].operator.name;
     let text;
@@ -161,4 +169,5 @@ function applyLinksSnapshot(snapshot) {
     exchangeLinks.intl = snapshot.intl && Array.isArray(snapshot.intl.members) ? { members: snapshot.intl.members.filter(m => m === 'PL' || COUNTRY_DEFS[m]), startedQ: Number(snapshot.intl.startedQ) || 0 } : null;
     exchangeLinks.takenBy = snapshot.takenBy && COUNTRY_DEFS[snapshot.takenBy] ? snapshot.takenBy : null;
     exchangeLinks.community = Boolean(snapshot.community);
+    exchangeLinks.goldenQ = Number.isFinite(Number(snapshot.goldenQ)) ? Number(snapshot.goldenQ) : -99;
 }

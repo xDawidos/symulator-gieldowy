@@ -13677,6 +13677,45 @@ group('0.16.6 Domknięcie', () => {
             assertEq(stocks.find(s => s.symbol === 'STX').stage, 'development', 'etap nietknięty');
         } finally { host.remove(); }
     });
+    const withWorld = fn => { fresh(); initFxState(); resetGdrState(); macro.quarter = 10; try { return fn(); } finally { resetGdrState(); initFxState(); } };
+    const withRandom = (value, fn) => { const r = Math.random; Math.random = () => value; try { return fn(); } finally { Math.random = r; } };
+
+    test('S1: złota akcja Gutzwillera — weto wobec przejęcia szwajcarskiej giełdy raz na 12 kw.; inne kraje i inne rodzaje połączeń bez weta', () => withWorld(() => {
+        joinCountry('CH'); assert(getForeignBots().some(b => b.id === 'fb_gutz'), 'Gutzwiller w grze');
+        assert(runLinkEvent('merged', 'CH') === null && !isCountryLinked('CH'), 'weto: CH nie jest połączone');
+        assertEq(exchangeLinks.goldenQ, 10, 'cooldown zapisany');
+        assert(runLinkEvent('intl', 'CH') && isCountryLinked('CH'), 'weto dotyczy tylko przejęcia (merged); tu giełda międzynarodowa');
+        exchangeLinks.goldenQ = -99; countryState.CH.link = null;
+        macro.quarter = 10; exchangeLinks.goldenQ = 5;
+        assert(runLinkEvent('merged', 'CH') && isCountryLinked('CH'), 'w cooldownie (5 kw. temu) brak weta');
+        assert(JSON.parse(JSON.stringify(getLinksSnapshot())).goldenQ === 5, 'cooldown w zapisie');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+
+    test('S1: Bayer zamienia walutę — kurs przesuwa się o ≤ 1%, historia ma nowy punkt, wartość portfela spada tylko o spread', () => withWorld(() => {
+        joinCountry('DE'); spawnBayerBot('DE'); const bayer = aiCompetitors.find(b => b.id === 'fb_bayer'); assert(bayer, 'Bayer w grze');
+        const before = Object.fromEntries(FOREIGN_CURRENCIES.map(c => [c, getFxRate(c)])), wealth0 = getForeignCashPln(bayer);
+        assert(withRandom(0, () => bayerFxTrade(bayer)), 'zamiana wykonana');
+        for (const c of FOREIGN_CURRENCIES) assert(Math.abs(getFxRate(c) / before[c] - 1) <= 0.01 + 1e-9, `${c}: zmiana kursu ≤ 1%`);
+        assert(FOREIGN_CURRENCIES.some(c => getFxRate(c) !== before[c]), 'kurs się przesunął');
+        const wealth1 = getForeignCashPln(bayer);
+        assert(wealth1 < wealth0 * 1.01 && wealth1 > wealth0 * (1 - 0.15 * BOT_RULES.conversionSpread - 0.03), `wartość ${wealth0.toFixed(0)} → ${wealth1.toFixed(0)}`);
+        assertEq(checkCurrencyInvariants().length, 0, 'niezmienniki walut');
+        const huge = applyFxFlow('EUR', 'USD', 1e12); assertEq(huge, FX_FLOW_MAX, 'przepływ ograniczony do ±1%');
+    }));
+
+    test('S1: Wilk bierze kredyt (dźwignia) przed pierwszym zakupem; odmowa banku nie blokuje cyklu', () => withWorld(() => {
+        const small = mk156('SML', { price: 5, totalShares: 20_000 }); resetWorld([small]);
+        const wolf = getWolf(); wolf.cash = 10_500; wolf.portfolio = {}; wolf.loans = []; wolf.creditScore = 100; delete wolf.wolf;
+        wolf.wolf = { phase: 'accumulate', symbol: 'SML', runs: 0, cooldownQ: -1 };
+        const bankCash = commercialBanks.reduce((s, b) => s + b.cash, 0), nwBefore = wolf.cash;
+        runWolfBot(wolf);
+        if (wolf.loans.length) assert(wolf.loans[0].amount > 0 && wolf.loans[0].amount <= nwBefore * WOLF_RULES.leverage + 1, 'kredyt do 50% gotówki');
+        assertEq(wolf.wolf.runs, 1, 'runda kupna wykonana');
+        wolf.creditScore = 0; wolf.wolf = { phase: 'accumulate', symbol: 'SML', runs: 0, cooldownQ: -1 }; const n = wolf.loans.length;
+        runWolfBot(wolf); assertEq(wolf.loans.length, n, 'bez zdolności kredytowej brak kredytu, cykl trwa');
+        assert(bankCash >= 0, 'banki');
+    }));
 });
 
 runAllTests();

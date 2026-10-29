@@ -801,9 +801,26 @@ function botTradeHome(bot, def) {
     return (bot.portfolio[stock.symbol]?.shares || 0) > before;
 }
 
+/** Bayer (0.16.6 S1): raz na kilka kwartałów zamienia do 15% najcenniejszej waluty na najtańszą względem jej średniej; zamiana lekko przesuwa kursy (≤ ±1%). */
+function bayerFxTrade(bot) {
+    if (Math.random() >= 0.5) return false;
+    const bag = bot.cashByCurrency || {};
+    const codes = Object.keys(bag).filter(c => FOREIGN_CURRENCIES.includes(c) && bag[c] > 0).sort((a, b) => toPln(bag[b], b) - toPln(bag[a], a));
+    const sell = codes[0], buy = FOREIGN_CURRENCIES.filter(c => c !== sell && fxMeans[c]).sort((a, b) => fxRates[a] / fxMeans[a] - fxRates[b] / fxMeans[b])[0];
+    if (!sell || !buy) return false;
+    const amountPln = toPln(bag[sell], sell) * 0.15;
+    const sold = fromPln(amountPln, sell);
+    bag[sell] -= sold;
+    bag[buy] = (Number(bag[buy]) || 0) + fromPln(amountPln * (1 - BOT_RULES.conversionSpread), buy);
+    applyFxFlow(buy, sell, amountPln);
+    bot.fx.fxFlowQ = macro.quarter;
+    return true;
+}
+
 function runForeignBot(bot) {
     const def = FOREIGN_BOTS.find(b => b.id === bot.id);
     if (!def || !isCountryJoined(bot.homeCountry)) return;
+    if (def.style === 'abroad') bayerFxTrade(bot); // przed zakupami akcji; stan konta w walutach liczą testy niezmienników
     if (bot.fx.tradesQ !== macro.quarter) { bot.fx.tradesQ = macro.quarter; bot.fx.trades = 0; }
     if (def.enterHome && !bot.fx.enteredHome && bot.fx.entryQ !== null && macro.quarter >= bot.fx.entryQ) {
         bot.fx.enteredHome = true;

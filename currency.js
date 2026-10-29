@@ -101,6 +101,20 @@ function stepFxRates() {
     }
 }
 
+/** 0.16.6 S1: przepływ bota (Bayer) przesuwa kursy o kwota/głębokość rynku, najwyżej ±1% (widoczne w ostatnim punkcie historii). Zwraca skalę przesunięcia. */
+const FX_FLOW_DEPTH_PLN = 5_000_000, FX_FLOW_MAX = 0.01;
+function applyFxFlow(buyCode, sellCode, amountPln) {
+    const impact = Math.min(FX_FLOW_MAX, Math.max(0, amountPln) / FX_FLOW_DEPTH_PLN);
+    for (const [code, sign] of [[buyCode, 1], [sellCode, -1]]) {
+        const def = CURRENCIES[code];
+        if (!def || !fxRates[code]) continue;
+        fxRates[code] = Math.max(def.min, Math.min(def.max, fxRates[code] * (1 + sign * impact)));
+        const history = fxHistory[code];
+        if (history?.length) history[history.length - 1] = Math.round(fxRates[code] * 1e5) / 1e5;
+    }
+    return impact;
+}
+
 // ---------------------------------------------------------------------------------
 // Gotówka w walutach
 // ---------------------------------------------------------------------------------
