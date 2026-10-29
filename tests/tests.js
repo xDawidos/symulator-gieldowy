@@ -13793,6 +13793,20 @@ group('0.16.6 Domknięcie', () => {
         oversight = { ...createOversight() }; delete oversight.hidden; ensureOversight(); assertEq(getHiddenBalance(), 0, 'stary zapis: saldo 0');
         oversight = saved; assertEq(getHiddenBalance(), saved.hidden.balance, 'wczytane saldo');
     }));
+    test('S5: TeamedUP! — zadania jako karty z plakietką stanu i paskiem; wiadomości jako karty kontaktów z rolą i kropką nieprzeczytanej', () => {
+        fresh(); mailbox = createMailbox();
+        assert(/class="te-task/.test(renderTeamedTasks()) && /te-chip/.test(renderTeamedTasks()) && /role="progressbar"/.test(renderTeamedTasks()), 'karty zadań');
+        addMail({ sender: 'corporation', subject: 'Test', body: 'Treść wiadomości testowej', importance: 1 });
+        const host = document.createElement('div');
+        host.innerHTML = '<div id="teamedup-overlay"><nav id="teamedup-nav"></nav><div id="teamedup-content"></div></div>';
+        document.body.appendChild(host);
+        try {
+            teamedView = { pane: 'messages', selectedId: null }; renderTeamedUp();
+            const card = host.querySelector('.te-contact.unread');
+            assert(card && card.querySelector('.te-role') && card.querySelector('.te-dot[aria-label]') && card.getAttribute('tabindex') === '0', 'karta kontaktu: rola, kropka z opisem, fokus');
+            assert(host.querySelector('.mail-folder.active[aria-current="page"]'), 'aktywny panel oznaczony');
+        } finally { host.remove(); teamedView = { pane: 'tasks', selectedId: null }; }
+    });
 });
 
 runAllTests();

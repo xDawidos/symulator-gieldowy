@@ -5241,3 +5241,39 @@ td.sc-actions button { white-space: normal; margin: 0; }
 #pool-controls-container { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 #pool-contribution-amount { width: 180px; }
 @media (max-width: 520px) { #startup-table tbody { grid-template-columns: 1fr; } #pool-controls-container { width: 100%; } #pool-contribution-amount { flex: 1 1 100%; width: 100%; } }
+
+/* 0.16.6 S5: TeamedUP! wg makiety Stitcha (plany/design/stitch/teamedup_komunikator_firmowy): ciemne okno z bursztynowym akcentem, karty kontaktów, rozmowa w dymku, zadania jako karty. Tokeny z 0.14.5, bez Tailwinda. */
+#teamedup-overlay .mail-window { border-top-color: var(--color-warn); background: #130f1e; }
+#teamedup-overlay .bank-hero-kicker { color: var(--color-warn); letter-spacing: .08em; }
+#teamedup-nav { gap: 6px; padding-right: 10px; border-right: 1px solid var(--border-color); }
+#teamedup-nav .mail-folder { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid transparent; font-weight: 600; }
+#teamedup-nav .mail-folder.active { color: var(--color-warn); border-color: var(--color-warn); background: color-mix(in srgb, var(--color-warn) 12%, transparent); }
+#teamedup-nav .mail-folder b { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: var(--color-warn); color: #130f1e; font-size: 12px; }
+#teamedup-nav .mail-folder:focus-visible, .te-contact:focus-visible { outline: 2px solid var(--color-warn); outline-offset: 2px; }
+#teamedup-content:has(.te-contacts) { display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); gap: 14px; align-items: stretch; }
+.te-contacts { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 0; background: transparent; }
+.te-contact { display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-elevated); cursor: pointer; }
+.te-contact:hover { border-color: var(--accent-info); }
+.te-contact.selected { border-color: var(--color-warn); background: color-mix(in srgb, var(--color-warn) 10%, var(--bg-elevated)); }
+.te-contact-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.te-contact-top { display: flex; justify-content: space-between; gap: 8px; }
+.te-contact.unread .te-contact-top strong { color: var(--color-text-primary); }
+.te-time { color: var(--text-muted); font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+.te-role { align-self: flex-start; padding: 0 6px; border-radius: 4px; border: 1px solid var(--border-color); color: var(--color-warn); font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.te-snippet { color: var(--text-muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.te-dot { width: 10px; height: 10px; flex: none; border-radius: 50%; background: var(--color-warn); }
+.te-chat { padding: 16px; border: 1px solid var(--border-color); border-radius: 14px; background: color-mix(in srgb, var(--bg-elevated) 70%, transparent); overflow-y: auto; }
+.te-chat .mail-article, .te-chat .mail-preview { border: 1px solid var(--border-color); border-radius: 4px 14px 14px 14px; background: var(--bg-elevated); padding: 14px; }
+.te-chat-empty { display: grid; place-items: center; }
+.te-tasks { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 10px; }
+.te-task { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-elevated); }
+.te-task.done { border-color: var(--color-up); }
+.te-task-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.te-task-value { margin-left: auto; color: var(--color-warn); font-family: ui-monospace, Consolas, monospace; }
+.te-task-label { font-weight: 600; }
+.te-pct { color: var(--text-muted); font-size: 12px; }
+.te-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 4px; border: 1px solid var(--border-color); font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.te-chip.live { color: var(--color-warn); border-color: var(--color-warn); }
+.te-chip.ok { color: var(--color-up); border-color: var(--color-up); }
+.te-chip.promo { color: var(--accent-info); border-color: var(--accent-info); }
+@media (max-width: 760px) { .teamedup-layout { grid-template-columns: 1fr !important; } #teamedup-nav { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--border-color); padding: 0 0 8px; } #teamedup-content:has(.te-contacts) { grid-template-columns: 1fr; } }

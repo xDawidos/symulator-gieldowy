@@ -7708,7 +7708,7 @@ function renderTeamedUp() {
     const overlay = document.getElementById('teamedup-overlay');
     if (!overlay || overlay.hidden || !mailbox) return;
     const unread = getTeamedUnread();
-    const item = (pane, icon, label, extra = '') => `<button class="mail-folder ${teamedView.pane === pane ? 'active' : ''}" onclick="setTeamedPane('${pane}')"><span>${uiIcon(icon, 14)} ${label}</span>${extra}</button>`;
+    const item = (pane, icon, label, extra = '') => `<button class="mail-folder ${teamedView.pane === pane ? 'active' : ''}" ${teamedView.pane === pane ? 'aria-current="page"' : ''} onclick="setTeamedPane('${pane}')"><span>${uiIcon(icon, 16)} ${label}</span>${extra}</button>`;
     document.getElementById('teamedup-nav').innerHTML = item('tasks', 'cel', 'Zadania i oceny') + item('messages', 'poczta', 'Wiadomości', unread ? `<b>${unread}</b>` : '') + item('hiring', 'pracownik', 'Zatrudnianie')
         + `<hr><button class="mail-folder" onclick="openPawnShopPanel()">${uiIcon('lombard', 14)} Lombard</button>`;
     const body = document.getElementById('teamedup-content');
@@ -7716,9 +7716,14 @@ function renderTeamedUp() {
     if (teamedView.pane === 'hiring') { body.innerHTML = renderTeamedHiring(); return; }
     const msgs = getTeamedMessages();
     const selected = msgs.find(m => m.id === teamedView.selectedId);
-    body.innerHTML = `<div class="mail-list">${msgs.length ? msgs.slice(0, 60).map(m => `<div class="mail-row ${m.read ? '' : 'unread'} ${m.id === teamedView.selectedId ? 'selected' : ''}" role="button" tabindex="0" onclick="selectTeamedMail(${m.id})">
-            <span class="mail-from">${escapeHtml(getMailSenderName(m.sender))}</span><span class="mail-subject">${escapeHtml(m.subject)}<span class="mail-snippet"> — ${escapeHtml(m.body.slice(0, 80))}</span></span><span class="mail-time">${formatMailTime(m.at)}</span></div>`).join('') : '<p class="fund-muted mail-empty">Brak wiadomości od szefostwa i współpracowników.</p>'}</div>
-        ${selected ? renderMailPreview(selected) : ''}`;
+    body.innerHTML = `<div class="mail-list te-contacts" aria-label="Wiadomości">${msgs.length ? msgs.slice(0, 60).map(m => { // 0.16.6 S5: karty kontaktów jak we wzorze Stitcha (awatar, rola, godzina, zajawka, kropka nieprzeczytanej)
+            const name = getMailSenderName(m.sender), coworker = String(m.sender).startsWith('bot:');
+            return `<div class="te-contact ${m.read ? '' : 'unread'} ${m.id === teamedView.selectedId ? 'selected' : ''}" role="button" tabindex="0" ${m.id === teamedView.selectedId ? 'aria-current="true"' : ''} onclick="selectTeamedMail(${m.id})" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectTeamedMail(${m.id}); }">
+            <span class="net-avatar" aria-hidden="true">${escapeHtml(initials(name.replace(/^\P{L}+/u, '')))}</span>
+            <span class="te-contact-main"><span class="te-contact-top"><strong>${escapeHtml(name)}</strong><span class="te-time">${formatMailTime(m.at)}</span></span>
+            <span class="te-role">${coworker ? 'Współpracownik' : 'Zarząd'}</span>
+            <span class="te-snippet">${escapeHtml(m.subject)} — ${escapeHtml(m.body.slice(0, 70))}</span></span>${m.read ? '' : '<span class="te-dot" role="img" aria-label="Nieprzeczytana"></span>'}</div>`; }).join('') : '<p class="fund-muted mail-empty">Brak wiadomości od szefostwa i współpracowników.</p>'}</div>
+        ${selected ? `<div class="te-chat">${renderMailPreview(selected)}</div>` : '<div class="te-chat te-chat-empty"><p class="fund-muted">Wybierz rozmowę z listy.</p></div>'}`;
 }
 
 function formatMailTime(clockMs) {
@@ -7797,8 +7802,8 @@ function renderMailbox() {
 
 /** TeamedUP!: zadania od szefostwa — cele awansowe i okresu (targety), cele zarządu odsłaniane stopniowo, oceny zarządu. */
 function renderTeamedTasks() {
-    const row = t => `<li class="firm-target ${t.done ? 'done' : ''}"><span>${uiIcon(t.done ? 'ok' : 'cel', 14)} <strong>${t.done ? '[wykonane]' : '[do zrobienia]'}</strong>${t.promotion ? ' <span class="mail-tag">awans</span>' : ''} ${escapeHtml(t.label)}</span>
-        <strong>${escapeHtml(String(t.value))}</strong><span class="firm-target-bar"><span style="width:${(t.progress * 100).toFixed(0)}%"></span></span></li>`;
+    const row = t => `<li class="te-task ${t.done ? 'done' : ''}"><div class="te-task-top"><span class="te-chip ${t.done ? 'ok' : 'live'}">${uiIcon(t.done ? 'ok' : 'zegar', 12)} ${t.done ? 'Wykonane' : 'W trakcie'}</span>${t.promotion ? ` <span class="te-chip promo">${uiIcon('szczyt', 12)} Awansowe</span>` : ''}<strong class="te-task-value">${escapeHtml(String(t.value))}</strong></div>
+        <span class="te-task-label">${escapeHtml(t.label)}</span><span class="firm-target-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${(t.progress * 100).toFixed(0)}" aria-label="Postęp: ${escapeHtml(t.label)}"><span style="width:${(t.progress * 100).toFixed(0)}%"></span></span><span class="te-pct">${(t.progress * 100).toFixed(0)}%</span></li>`;
     const targets = typeof getPlayerTargets === 'function' ? getPlayerTargets() : [];
     const goals = typeof getCorporateGoalsView === 'function' ? getCorporateGoalsView() : [];
     const queue = (corporation?.goals?.queue || []).filter(i => isGoalEligible(i.id));
@@ -7812,8 +7817,8 @@ function renderTeamedTasks() {
     const last = (corporation?.lastGoals || []).map(g => `<li>${g.done ? '[wykonane]' : '[niewykonane]'} ${escapeHtml(g.label)}</li>`).join('');
     return `<article class="mail-article"><h3>Zadania od szefostwa</h3>
         <p class="fund-muted">Termin oceny zarządu: za ${left} ${left === 1 ? 'okres' : 'okresy'} funduszu. Spełnione zadanie: +${GOAL_MET_BONUS} pkt oceny (cel awansowy +${GOAL_MET_BONUS * GOAL_PROMOTION_MULT}) i premia z budżetu korporacji; niespełnione: −${GOAL_MISSED_PENALTY} pkt. Awans wymaga oceny ≥ ${PROMOTION_SCORE}.</p>
-        <h4>Targety okresu</h4><ul class="list-plain firm-targets">${targets.map(row).join('') || '<li class="fund-muted">Brak.</li>'}</ul>
-        <h4>Cele zarządu na ten cykl</h4><ul class="list-plain firm-targets">${goals.map(row).join('') || '<li class="fund-muted">Zarząd nie wyznaczył jeszcze zadań.</li>'}</ul>
+        <h4>Targety okresu</h4><ul class="list-plain firm-targets te-tasks">${targets.map(row).join('') || '<li class="fund-muted">Brak.</li>'}</ul>
+        <h4>Cele zarządu na ten cykl</h4><ul class="list-plain firm-targets te-tasks">${goals.map(row).join('') || '<li class="fund-muted">Zarząd nie wyznaczył jeszcze zadań.</li>'}</ul>
         ${queue.length ? `<p class="fund-muted">Zarząd zapowiada ${queue.length} ${queue.length === 1 ? 'kolejne zadanie' : 'kolejne zadania'}: pierwsze za ${Math.max(0, Math.min(...queue.map(i => i.at)) - q)} kw.</p>` : ''}
         ${last ? `<h4>Poprzedni cykl</h4><ul class="list-plain text-sm">${last}</ul>` : ''}
         <h4>Ostatnie oceny zarządu</h4>${reviews ? `<ul class="list-plain text-sm">${reviews}</ul>` : '<p class="fund-muted">Brak ocen.</p>'}</article>`;
