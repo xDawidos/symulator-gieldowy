@@ -7236,7 +7236,6 @@ function showIntroScene() {
             transfer.className = 'intro-transfer';
             transfer.textContent = `💸 Przelew przychodzący: +${GRANDMA_POCKET_MONEY},00 zł od: Babcia`;
             thread.appendChild(transfer);
-            renderIntroCountries();
             form.hidden = false;
             return;
         }
@@ -7253,27 +7252,6 @@ function showIntroScene() {
     typeNext();
 }
 
-let introStartCountry = 'PL';
-/** Lista krajów na ekranie startu (0.16.10): grywalne są kraje z START_PLAYABLE; reszta pokazana z etykietą „wkrótce”. Pełnoprawny wybór (klawiatura, czytnik), także bez globusa. */
-function renderIntroCountries() {
-    const container = document.getElementById('intro-countries');
-    if (!container) return;
-    const globeBtn = document.getElementById('intro-globe-btn');
-    if (globeBtn) globeBtn.hidden = typeof canUseGlobe !== 'function' || !canUseGlobe();
-    container.innerHTML = START_COUNTRIES.map(country => {
-        const playable = START_PLAYABLE.includes(country.id), selected = playable && country.id === introStartCountry;
-        return `<button type="button" class="intro-country ${selected ? 'selected' : ''} ${playable ? '' : 'locked'}" data-country="${country.id}" ${playable ? '' : 'disabled'} aria-pressed="${selected}"
-            onclick="chooseIntroCountry('${country.id}')">${flagIcon(country.id, 12)} ${country.name}${selected ? ' (wybrany)' : playable ? '' : ' (wkrótce)'}</button>`;
-    }).join('');
-}
-
-function chooseIntroCountry(id) {
-    if (!START_PLAYABLE.includes(id)) return;
-    introStartCountry = id;
-    renderIntroCountries();
-    if (typeof syncCountryPicker === 'function') syncCountryPicker(id);
-}
-
 function completeIntroScene(event) {
     if (event) event.preventDefault();
     const value = id => (document.getElementById(id)?.value || '').trim();
@@ -7281,7 +7259,6 @@ function completeIntroScene(event) {
     playerProfile.name = value('intro-name') || playerProfile.name;
     playerProfile.corporation = value('intro-corporation') || playerProfile.corporation;
     playerProfile.fundName = value('intro-fund') || playerProfile.fundName;
-    setStartCountry(introStartCountry); // 0.16.10 S0: kraj startowy (giełda kraju od pierwszego dnia)
     playerProfile.cv = [{ type: 'start', text: `Zatrudnienie w ${playerProfile.corporation} jako Młodszy zarządca funduszu „${playerProfile.fundName}”.` }];
 
     if (typeof setCrisisScenario === 'function') setCrisisScenario(value('intro-crisis')); // 0.15.3 W4: scenariusz startowy (po zapisie CV)

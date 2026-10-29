@@ -14099,17 +14099,21 @@ group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
         } finally { resetGdrState(); }
     });
 
-    test('0.16.10 S0c: wybór kraju — karta kraju, lista zgodna z START_PLAYABLE, globus nie otwiera się w testach (bez WebGL), chooseIntroCountry odrzuca kraj „wkrótce”', () => {
+    test('0.16.10 S0c: wybór kraju — karta kraju, lista zgodna z START_PLAYABLE, globus nie otwiera się w testach (bez WebGL), ekran wyboru: JP („wkrótce”) nie do potwierdzenia, callback z krajem', () => {
         assert(!canUseGlobe(), 'testy nie ładują WebGL');
         for (const id of START_PLAYABLE) assert(GLOBE_COUNTRIES[id], `${id}: dane globusu`);
         for (const id of Object.keys(GLOBE_COUNTRIES)) assert(START_COUNTRIES.some(c => c.id === id) && FLAG_NAMES[id], `${id}: kraj gry z flagą`);
         const de = renderGlobeCard('DE'), jp = renderGlobeCard('JP'), pl = renderGlobeCard('PL');
         assert(/Berlin/.test(de) && /EUR/.test(de) && /DAX/.test(de) && /09:00–17:30/.test(de), 'karta DE: stolica, waluta, giełda, sesja');
         assert(/wkrótce|nie jest dostępny/.test(jp) && /GPW/.test(pl), 'JP niegrywalny, PL = GPW');
-        const box = document.createElement('div'); box.id = 'intro-countries'; document.body.appendChild(box);
+        let picked = null; showCountryGlobe(id => { picked = id; });
         try {
-            introStartCountry = 'PL'; chooseIntroCountry('JP'); assertEq(introStartCountry, 'PL', 'JP odrzucone');
-            chooseIntroCountry('CZ'); assertEq(introStartCountry, 'CZ'); assert(box.querySelector('[data-country="CZ"][aria-pressed="true"]') && box.querySelector('[data-country="JP"][disabled]'), 'lista: CZ wybrany, JP wyłączony etykietą');
-        } finally { box.remove(); introStartCountry = 'PL'; }
+            const ov = document.querySelector('.cg-overlay'); assert(ov && !ov.querySelector('canvas'), 'ekran jest, bez WebGL (tylko lista)');
+            const item = id => ov.querySelector(`.cg-item[data-country="${id}"]`), ok = ov.querySelector('#cg-confirm');
+            assert(item('PL').getAttribute('aria-pressed') === 'true' && !ok.disabled, 'domyślnie PL');
+            item('JP').click(); assert(ok.disabled && /nie jest dostępny/.test(ov.querySelector('#cg-card').textContent), 'JP: karta, bez potwierdzenia'); ok.click(); assertEq(picked, null, 'JP nie do wyboru');
+            item('CZ').click(); assert(item('CZ').getAttribute('aria-pressed') === 'true' && !ok.disabled, 'CZ wybrany'); ok.click();
+            assertEq(picked, 'CZ', 'callback z krajem'); assert(!document.querySelector('.cg-overlay'), 'ekran usunięty z DOM');
+        } finally { closeCountryGlobe(); }
     });
 });

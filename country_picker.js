@@ -1,8 +1,9 @@
 // =================================================================================
 // 0.16.10 S0c: WYBÓR KRAJU STARTOWEGO NA GLOBUSIE
 // Globe.gl (lib/globe.gl.min.js, zawiera Three.js), tekstury z img/globus, granice z data/kraje.geojson ładują się dopiero po kliknięciu „Wybierz na globusie”
-// (≈3,2 MB); globus jest niszczony i usuwany z DOM po zamknięciu. Lista krajów (intro-countries w ui.js) jest pełnoprawnym wyborem: bez WebGL, bez
-// sieci lub w testach (`__GAME_TEST_MODE__`) globus się nie otwiera. Dwukierunkowa synchronizacja: `chooseIntroCountry` ↔ `syncCountryPicker`.
+// (≈3,2 MB); globus jest niszczony i usuwany z DOM po wyborze. To osobny ekran: `showCountryGlobe(onPick)` woła `onPick(kraj)` po potwierdzeniu.
+// Lista krajów obok globusa jest pełnoprawnym wyborem: bez WebGL, bez sieci lub w testach (`__GAME_TEST_MODE__`) ekran działa tylko jako lista.
+// Dwukierunkowa synchronizacja: lista, pinezki i obrysy krajów → `selectGlobeCountry` → `syncCountryPicker`.
 // Kolor nigdy jedynym nośnikiem: kraje gry mają pinezkę z flagą i nazwą, wybrany ma obrys i podpis w karcie.
 // =================================================================================
 
@@ -21,6 +22,8 @@ const GLOBE_HOME_VIEW = { lat: 30, lng: 15, altitude: 2.4 };
 let globeInstance = null;
 let globeOverlay = null;
 let globeAutoRotate = true;
+let globeCurrent = 'PL';   // kraj pokazany na karcie (może być „wkrótce”)
+let globeOnPick = null;
 
 function canUseGlobe() {
     if (typeof window === 'undefined' || window.__GAME_TEST_MODE__) return false;
@@ -63,6 +66,7 @@ function renderGlobeCard(id) {
 /** Zaznaczenie kraju (z listy intro albo z globusa): karta, lot kamery, odświeżenie obrysu. Bez otwartego globusa nic nie robi. */
 function syncCountryPicker(id) {
     if (!globeOverlay || !GLOBE_COUNTRIES[id]) return;
+    globeCurrent = id;
     const card = globeOverlay.querySelector('#cg-card'), ok = globeOverlay.querySelector('#cg-confirm');
     if (card) card.innerHTML = renderGlobeCard(id);
     if (ok) ok.disabled = !START_PLAYABLE.includes(id);
@@ -74,11 +78,8 @@ function syncCountryPicker(id) {
     }
 }
 
-/** Kraj grywalny staje się wyborem (lista w intro się odświeża); kraj „wkrótce” tylko pokazuje kartę. */
-function selectGlobeCountry(id) {
-    if (START_PLAYABLE.includes(id)) chooseIntroCountry(id);
-    else syncCountryPicker(id);
-}
+/** Kliknięcie kraju (lista, pinezka, obrys): karta i lot kamery; kraj „wkrótce” można obejrzeć, ale nie potwierdzić. */
+function selectGlobeCountry(id) { syncCountryPicker(id); }
 
 function setGlobeAutoRotate(on) {
     globeAutoRotate = on;
@@ -90,44 +91,44 @@ function setGlobeAutoRotate(on) {
 function closeCountryGlobe() {
     if (globeInstance) { try { globeInstance._destructor?.(); } catch (e) { /* biblioteka już zwolniona */ } globeInstance = null; }
     window.removeEventListener('resize', resizeGlobe);
-    document.removeEventListener('keydown', globeKeydown);
     if (globeOverlay) { globeOverlay.remove(); globeOverlay = null; }
 }
-function globeKeydown(e) { if (e.key === 'Escape') closeCountryGlobe(); }
 function resizeGlobe() {
     const stage = globeOverlay?.querySelector('#cg-stage');
     if (globeInstance && stage) globeInstance.width(stage.clientWidth).height(stage.clientHeight);
 }
 
-async function openCountryGlobe() {
-    if (globeOverlay || !canUseGlobe()) return false;
+/** Ekran wyboru kraju startowego; zawsze się otwiera (lista), globus 3D tylko gdy jest WebGL. `onPick(id)` po potwierdzeniu. */
+async function showCountryGlobe(onPick) {
+    if (globeOverlay) return false;
+    globeOnPick = onPick;
+    const webgl = canUseGlobe();
     const ids = Object.keys(GLOBE_COUNTRIES);
     globeOverlay = document.createElement('div');
     globeOverlay.className = 'intro-overlay cg-overlay';
     globeOverlay.innerHTML = `<div class="cg-dialog" role="dialog" aria-modal="true" aria-labelledby="cg-title">
-        <div class="cg-head"><h2 id="cg-title">Kraj startowy</h2><button type="button" class="btn-ghost" id="cg-close">Zamknij</button></div>
+        <div class="cg-head"><h2 id="cg-title">Wybierz kraj startowy</h2></div>
         <div class="cg-body"><div id="cg-stage" class="cg-stage"><p class="cg-loading" id="cg-status" role="status">Wczytywanie globusa (ok. 3 MB)…</p></div>
         <div class="cg-side"><div id="cg-card" class="cg-card" aria-live="polite"></div>
         <div class="cg-list" role="group" aria-label="Kraje">${ids.map(id => `<button type="button" class="cg-item" data-country="${id}" aria-pressed="false">${flagIcon(id, 12)} ${escapeHtml(FLAG_NAMES[id])}${START_PLAYABLE.includes(id) ? '' : ' (wkrótce)'}</button>`).join('')}</div>
         <div class="cg-actions"><button type="button" class="btn-ghost" id="cg-rotate" aria-pressed="true"></button><button type="button" class="btn-ghost" id="cg-reset">Reset widoku</button><button type="button" class="btn-primary" id="cg-confirm">Wybieram ten kraj</button></div></div></div></div>`;
     document.body.appendChild(globeOverlay);
-    document.addEventListener('keydown', globeKeydown);
-    globeOverlay.querySelector('#cg-close').onclick = closeCountryGlobe;
-    globeOverlay.querySelector('#cg-confirm').onclick = closeCountryGlobe;
+    globeOverlay.querySelector('#cg-confirm').onclick = () => { const id = globeCurrent, cb = globeOnPick; if (!START_PLAYABLE.includes(id)) return; closeCountryGlobe(); if (cb) cb(id); };
     globeOverlay.querySelector('#cg-rotate').onclick = () => setGlobeAutoRotate(!globeAutoRotate);
     globeOverlay.querySelector('#cg-reset').onclick = () => { globeInstance?.pointOfView(GLOBE_HOME_VIEW, prefersReducedMotion() ? 0 : 800); };
     globeOverlay.querySelectorAll('.cg-item').forEach(b => { b.onclick = () => selectGlobeCountry(b.dataset.country); });
     globeAutoRotate = !prefersReducedMotion();
     setGlobeAutoRotate(globeAutoRotate);
-    syncCountryPicker(introStartCountry);
+    syncCountryPicker('PL');
     globeOverlay.querySelector('.cg-item.selected')?.focus();
+    if (!webgl) { const st = globeOverlay.querySelector('#cg-status'); if (st) st.textContent = 'Globus 3D niedostępny (brak WebGL) — wybierz kraj z listy obok.'; return true; }
     try {
         await loadScriptOnce(GLOBE_ASSETS.lib);
         const geo = await (await fetch(GLOBE_ASSETS.geo)).json();
         if (!globeOverlay) return true; // zamknięto w trakcie ładowania
         const stage = globeOverlay.querySelector('#cg-stage'), accent = themeColor('--accent-primary', '#4da3ff'), byA3 = Object.fromEntries(ids.map(id => [GLOBE_COUNTRIES[id].a3, id]));
         stage.innerHTML = '';
-        const selectedId = () => introStartCountry, idOf = f => byA3[f.properties.ADM0_A3];
+        const selectedId = () => globeCurrent, idOf = f => byA3[f.properties.ADM0_A3];
         globeInstance = Globe()(stage).width(stage.clientWidth).height(stage.clientHeight)
             .globeImageUrl(GLOBE_ASSETS.night).bumpImageUrl(GLOBE_ASSETS.bump).backgroundImageUrl(GLOBE_ASSETS.sky)
             .polygonsData(geo.features)
@@ -141,7 +142,7 @@ async function openCountryGlobe() {
             .pointOfView(GLOBE_HOME_VIEW);
         const c = globeInstance.controls(); c.autoRotateSpeed = 0.6; c.autoRotate = globeAutoRotate;
         window.addEventListener('resize', resizeGlobe);
-        syncCountryPicker(introStartCountry);
+        syncCountryPicker(globeCurrent);
     } catch (e) {
         const st = globeOverlay?.querySelector('#cg-status');
         if (st) st.textContent = 'Globus niedostępny (brak WebGL, sieci lub plików) — wybierz kraj z listy obok.';

@@ -183,6 +183,8 @@ PRESETS['kraje'] = `(function () {
         for (const id of ['DE', 'US', 'CZ']) { try { if (!isCountryJoined(id)) joinCountry(id, 'preset'); } catch (e) { (window.__presetErrors = window.__presetErrors || []).push('kraj ' + id + ': ' + e); } }
     })();`;
 PRESETS['kraje-gig'] = PRESETS['fundusz-gig'] + PRESETS['kraje'];
+// 0.16.10 S0: kraj startowy innego niż PL (giełda kraju od pierwszego dnia, gracz bez biletu); fundusz-gig jak w serii bazowej.
+for (const id of ['DE', 'US', 'CZ']) PRESETS['start-' + id] = PRESETS['fundusz-gig'] + `setStartCountry('${id}');`;
 // 0.16.3: sześć krajów (DE, US, CZ, SE, CH, FR) od startu — kontrola obciążenia i zapisu
 PRESETS['kraje-eu'] = PRESETS['kraje'] + `(function () { for (const id of ['SE', 'CH', 'FR']) { try { if (!isCountryJoined(id)) joinCountry(id, 'preset'); } catch (e) { (window.__presetErrors = window.__presetErrors || []).push('kraj ' + id + ': ' + e); } } })();`;
 // 0.16.4: dziesięć krajów (+ JP, CN, IN, TW) i forex: co rok jedna pozycja 1:5 na 40% aktywów (na zmianę długa/krótka), poprzednia zamykana

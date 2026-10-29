@@ -1724,7 +1724,9 @@ function initializeGame() {
     }
 
     if (!restoredFromSave && typeof showIntroScene === 'function') {
-        showIntroScene(); // SMS od babci + profil gracza (gra stoi na pauzie)
+        // 0.16.10 S0: osobny ekran wyboru kraju (globus albo lista), potem scenka: SMS od babci + profil gracza (gra stoi na pauzie)
+        if (typeof showCountryGlobe === 'function' && !(isDebugMode() && isIntroSkipEnabled())) showCountryGlobe(id => { setStartCountry(id); showIntroScene(); });
+        else showIntroScene();
     }
 
     // Uruchomienie pętli gry — jedyne miejsce tworzenia timerów (setGameSpeed czyści poprzednie

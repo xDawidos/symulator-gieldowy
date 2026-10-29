@@ -22,9 +22,9 @@ Zbyt wiele założeń (powyżej: 4 obszary XL), więc zgodnie z poleceniem:
 - **S0 (ta wersja, 0.16.10)** = wybór kraju startowego + globus + **kraj startowy jako parametr dla krajów z pełnymi danymi giełdowymi: PL, DE, US, CZ** (lista w jednym miejscu: `START_PLAYABLE`). Efekty wybranego kraju (poza PL), wszystkie zbudowane na gotowych mechanizmach:
   1. giełda kraju jest dołączona od pierwszego dnia (`joinCountry(id, 'start')`), spółki, operator, nadzór i boty zagraniczne kraju działają;
   2. gracz (i tylko gracz) handluje na giełdzie kraju startowego **bez biletu** (rynek „domowy”, prowizja operatora kraju);
-  3. profil kraju (`labour`, nadzór, stopa) jest widoczny na karcie kraju; w poczcie powitalnej kraj startowy jest wymieniony;
+  3. profil kraju (`labour`, nadzór) jest widoczny na karcie kraju na ekranie wyboru; w poczcie powitalnej kraj startowy jest wymieniony;
   4. zapis v19: `playerProfile.country`; stare zapisy = Polska.
-- **Waluta konta (decyzja):** jednostką rozliczeniową gry pozostaje **PLN** dla każdego kraju startowego (NAV, ranking, czynsze, limity). Waluta kraju startowego jest dla gracza walutą „własną”: kantor bez opłaty za dostęp, a karta kraju i okno rynku pokazują ceny w tej walucie z przelicznikiem. Powód: bezpieczeństwo niezmienników (wszystko wycenia `toPln`) i zero literałów do przepisania; GIG dla PL bez zmian z założenia (ścieżka PL nie dotyka nowego kodu).
+- **Waluta konta (decyzja):** jednostką rozliczeniową gry pozostaje **PLN** dla każdego kraju startowego (NAV, ranking, limity, napisy). Waluta kraju startowego jest widoczna na karcie kraju i w oknie rynku (ceny w walucie kraju, jak dla każdego rynku zagranicznego); gracz kupuje ją na kantorze jak dotąd. Powód: wszystko wycenia `toPln`, brak ~300 literałów do przepisania; ścieżka PL nie dotyka nowego kodu.
 - **S0d (osobna wersja, nie zrobiona tu):** prawdziwy rynek macierzysty i społeczeństwo kraju startowego innego niż PL (GPW → DAX/WSE jako rynek „home”, klasy, partie, ustawy, urzędy, migracja, kryzysy z kraju startowego, waluta bazowa). To oddzielny, duży projekt (≈ koszt 0.13 + 0.15.4); do planu jako 0.17.x.
 
 ## Koszt (szacunek po decyzji)
