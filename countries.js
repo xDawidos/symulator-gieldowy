@@ -334,6 +334,7 @@ function maybeCountryDebut(id) {
 function processCountriesQuarterly() {
     if (typeof processAirportQuarterly === 'function') processAirportQuarterly();
     if (typeof processLinksQuarterly === 'function') processLinksQuarterly();
+    processForeignOversightQuarterly();
     for (const id of getJoinedCountries()) {
         const def = COUNTRY_DEFS[id], st = countryState[id];
         advanceCountryRegime(id);
@@ -527,9 +528,64 @@ function processAirportQuarterly() {
     if (buyers.length) buyTicket(country, getRandomElement(buyers));
 }
 
+// --- 0.16.6 S1: wspólny widok posiadaczy akcji zagranicznych (odpowiednik getShareholders dla spółek krajowych) i drabina nadzoru ---
+
+/** Posiadacze spółki zagranicznej: { id, name, kind: 'player' | 'ai', shares, pct }, od największego. */
+function getIssuerHolders(issuer) {
+    return Object.entries(issuer.holders || {}).filter(([, q]) => Number(q) >= 1).map(([id, q]) => ({
+        id, kind: id === 'player' ? 'player' : 'ai', shares: Number(q), pct: Number(q) / issuer.shares,
+        name: id === 'player' ? (playerProfile?.fundName || 'Twój fundusz') : (aiCompetitors.find(b => b.id === id)?.name || id)
+    })).sort((a, b) => b.shares - a.shares);
+}
+function getIssuerStake(issuer, holderId) { return (Number(issuer.holders?.[holderId]) || 0) / issuer.shares; }
+
+const FOREIGN_OVERSIGHT = { fine: 0.02, trustLoss: 3, resaleQuarters: 2, resaleLevel: 3 }; // jak KNF_TENDER_FINE / KNF_RESALE_QUARTERS (ma.js)
+
+/** Krok drabiny po kupnie ponad próg wezwania: 1 — ostrzeżenie, 2 — kara (2% wartości nadwyżki), ≥ 3 — nakaz odsprzedaży do progu w 2 kw. Licznik wspólny z KNF (getTenderRecord). */
+function applyForeignOversightStep(issuer, overValuePln) {
+    const rec = getTenderRecord(), strike = (rec.tenderStrikes = (Number(rec.tenderStrikes) || 0) + 1);
+    const o = getOversight(issuer.country), thr = Math.round(o.callThreshold * 100), sym = getGdrSymbol(issuer);
+    let step, body;
+    if (strike === 1) {
+        step = 'warning';
+        body = `Fundusz przekroczył próg wezwania ${thr}% w ${issuer.name} (${sym}) bez ogłoszenia wezwania. Następne takie przekroczenie skończy się karą, a kolejne nakazem odsprzedaży do progu.`;
+    } else if (strike === 2) {
+        step = 'fine';
+        const fine = Math.min(Math.max(0, playerCash), Math.round(overValuePln * FOREIGN_OVERSIGHT.fine));
+        playerCash -= fine; governmentTreasury += fine;
+        if (fine > 0) recordPayment('player-fund', 'external:skarb-panstwa', fine, `Kara ${o.name}: przekroczenie progu wezwania ${sym}`);
+        playerFund.trust = Math.max(0, playerFund.trust - FOREIGN_OVERSIGHT.trustLoss);
+        body = `Kolejne przekroczenie progu ${thr}% w ${issuer.name}: kara ${formatZl(fine, 0)} (2% wartości nadwyżki). Klienci funduszu tracą zaufanie (−${FOREIGN_OVERSIGHT.trustLoss}).`;
+    } else {
+        step = 'resale';
+        issuer.oversightResale = { until: macro.quarter + FOREIGN_OVERSIGHT.resaleQuarters };
+        body = `Fundusz ma zejść poniżej progu ${thr}% w ${issuer.name} w ciągu ${FOREIGN_OVERSIGHT.resaleQuarters} kw. — inaczej ${o.name} sprzeda nadwyżkę na rynku.`;
+    }
+    if (typeof addMail === 'function') addMail({ sender: o.name, subject: `⚠️ ${o.name}: próg wezwania ${issuer.name}`, body, importance: 3 });
+    logEvent(`⚖️ ${o.name}: ${body}`, 'review');
+    return step;
+}
+
+/** Co kwartał: nakaz odsprzedaży wygasł — nadwyżka ponad próg sprzedana przez nadzór (przez zwykłą sprzedaż, z prowizją). */
+function processForeignOversightQuarterly() {
+    for (const issuer of getForeignIssuerList()) {
+        const order = issuer.oversightResale;
+        if (!order) continue;
+        const excess = getGdrHeld(issuer) - Math.floor(getCallThreshold(issuer.country) * issuer.shares);
+        if (excess <= 0) { delete issuer.oversightResale; continue; }
+        if (macro.quarter < order.until) continue;
+        const r = sellForeignShares(issuer.id, excess);
+        delete issuer.oversightResale;
+        const text = `⚖️ ${getOversight(issuer.country).name} sprzedaje nadwyżkę ${formatNumberPl(excess, 0)} akcji ${issuer.name} ponad próg wezwania${r.ok ? '' : ' (sprzedaż nieudana)'}.`;
+        logEvent(text, 'review');
+        if (typeof addMail === 'function') addMail({ sender: getOversight(issuer.country).name, subject: `⚖️ Nakaz odsprzedaży: ${issuer.name}`, body: text, importance: 3 });
+    }
+}
+
 // --- Handel akcjami zagranicznymi (gracz) ---
 
-function buyForeignShares(issuerId, quantity) {
+/** opts.overThreshold: gracz świadomie przekracza próg wezwania (drabina nadzoru: ostrzeżenie → kara → nakaz odsprzedaży). */
+function buyForeignShares(issuerId, quantity, opts = {}) {
     const issuer = foreignIssuers[issuerId];
     quantity = Math.floor(Number(quantity));
     if (!issuer || issuer.kind !== 'share') return { ok: false, reason: 'Ta spółka nie jest notowana na rynku zagranicznym.' };
@@ -541,9 +597,10 @@ function buyForeignShares(issuerId, quantity) {
     if (issuer.tradeHalted) return { ok: false, reason: 'Notowania spółki są zawieszone.' };
     if (quantity > getGdrFree(issuer)) return { ok: false, reason: 'Nie ma tylu akcji w wolnym obrocie.' };
     const room = Math.floor(getCallThreshold(issuer.country) * issuer.shares) - getGdrHeld(issuer); // drabina nadzoru (G15): bez wezwania nie przekroczysz progu
-    if (quantity > room) {
+    const over = quantity > room;
+    if (over && !opts.overThreshold) {
         const o = getOversight(issuer.country);
-        return { ok: false, reason: `Próg wezwania w kraju ${def.name} to ${Math.round(o.callThreshold * 100)}% (nadzór: ${o.name}). Możesz dokupić najwyżej ${Math.max(0, room).toLocaleString('pl-PL')} akcji.` };
+        return { ok: false, needsConfirm: true, room: Math.max(0, room), reason: `Próg wezwania w kraju ${def.name} to ${Math.round(o.callThreshold * 100)}% (nadzór: ${o.name}). Możesz dokupić najwyżej ${Math.max(0, room).toLocaleString('pl-PL')} akcji.` };
     }
     const cur = issuer.currency, valueLocal = quantity * issuer.price, midPln = toPln(valueLocal, cur);
     const commissionPln = midPln * getCountryCommission(issuer.country);
@@ -555,6 +612,7 @@ function buyForeignShares(issuerId, quantity) {
     playerCash -= total;
     if (useLocal > 0) { playerCashByCurrency[cur] = have - useLocal; if (playerCashByCurrency[cur] < 1e-9) delete playerCashByCurrency[cur]; }
     issuer.holders.player = getGdrHeld(issuer) + quantity;
+    if (over) applyForeignOversightStep(issuer, toPln((quantity - Math.max(0, room)) * issuer.price, cur));
     if (spreadCost > 0) recordPayment('player-fund', 'external:kantor', spreadCost, 'Kantor: spread przy zakupie akcji zagranicznych');
     if (commissionPln > 0) recordPayment('player-fund', `external:${def.operator.id}`, commissionPln, `Prowizja: ${def.operator.name}`);
     return { ok: true, cost: total, commissionPln, spreadCost };
@@ -681,7 +739,7 @@ function botPay(bot, currency, amountLocal) {
 
 function botSpendable(bot) { return Math.max(0, getForeignCashPln(bot) - (bot.fx.reservePln || 0)); } // rezerwa na wydatki prywatne (Kozel: 20% początkowego kapitału)
 
-function getBotStake(issuer, bot) { return (Number(issuer.holders?.[bot.id]) || 0) / issuer.shares; }
+function getBotStake(issuer, bot) { return getIssuerStake(issuer, bot.id); }
 function botStakeCap(issuer, bot) {
     const joined = countryState[issuer.country]?.joinedQ ?? -99;
     const base = macro.quarter - joined < BOT_RULES.firstYearQuarters ? BOT_RULES.maxStakeFirstYear : BOT_RULES.maxStake;

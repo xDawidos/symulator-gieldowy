@@ -111,6 +111,10 @@ function renderMarketsTab() {
 function marketsUiTrade(id, side) {
     const qty = Number(document.getElementById(`mkt-qty-${id}`)?.value) || 0;
     const r = side === 'buy' ? buyForeignShares(id, qty) : sellForeignShares(id, qty);
+    if (r.needsConfirm && typeof gameConfirm === 'function') { // 0.16.6 S1: kupno ponad próg wezwania — drabina nadzoru
+        gameConfirm(`${r.reason} Kupno ponad próg grozi ostrzeżeniem, karą i nakazem odsprzedaży nadzoru. Kupić mimo to?`, () => { const t = buyForeignShares(id, qty, { overThreshold: true }); showToast(t.ok ? `Kupiono ${qty} akcji (ponad próg wezwania).` : t.reason, t.ok ? 'warning' : 'error'); renderKantor(); if (typeof updateUI === 'function') updateUI(); }, { title: 'Przekroczenie progu wezwania', confirmLabel: 'Kupuję mimo to', danger: true });
+        return;
+    }
     const label = foreignIssuers[id] ? getGdrSymbol(foreignIssuers[id]) : id;
     showToast(r.ok ? `${side === 'buy' ? 'Kupiono' : 'Sprzedano'} ${qty} akcji ${label}${side === 'buy' ? ` za ${formatZl(r.cost, 0)} (prowizja ${formatZl(r.commissionPln, 0)})` : ` — wpływ ${formatNumberPl(r.proceeds, 2)} ${r.currency}`}.` : r.reason, r.ok ? 'success' : 'warning');
     renderKantor();

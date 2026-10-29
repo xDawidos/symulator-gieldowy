@@ -13716,6 +13716,24 @@ group('0.16.6 Domknięcie', () => {
         runWolfBot(wolf); assertEq(wolf.loans.length, n, 'bez zdolności kredytowej brak kredytu, cykl trwa');
         assert(bankCash >= 0, 'banki');
     }));
+    test('S1: wspólny widok posiadaczy akcji zagranicznych; kupno ponad próg wezwania → drabina nadzoru (ostrzeżenie, kara, nakaz odsprzedaży, sprzedaż nadwyżki)', () => withWorld(() => {
+        joinCountry('DE'); playerCash = 1e12; foreignTickets.player = [...new Set([...(foreignTickets.player || []), 'DE'])];
+        const issuer = foreignIssuers.SIE, room = Math.floor(0.75 * issuer.shares);
+        assertEq(getIssuerHolders(issuer).length, 0, 'brak posiadaczy');
+        const refused = buyForeignShares('SIE', room + 10); assert(!refused.ok && refused.needsConfirm && refused.room === room, 'bez potwierdzenia odmowa');
+        playerFund.trust = 50; getTenderRecord().tenderStrikes = 0;
+        assert(buyForeignShares('SIE', room + 10, { overThreshold: true }).ok, 'kupno ponad próg po potwierdzeniu');
+        assertEq(getIssuerHolders(issuer)[0].id, 'player', 'gracz na liście posiadaczy'); assertEq(getIssuerHolders(issuer)[0].shares, room + 10, 'liczba akcji');
+        assertEq(getTenderRecord().tenderStrikes, 1, 'ostrzeżenie'); assertEq(playerFund.trust, 50, 'ostrzeżenie bez kary');
+        const cash = playerCash; assert(buyForeignShares('SIE', 10, { overThreshold: true }).ok, 'drugie przekroczenie');
+        assertEq(getTenderRecord().tenderStrikes, 2, 'kara'); assertEq(playerFund.trust, 47, 'zaufanie −3'); assert(playerCash < cash - 10 * toPln(issuer.price, issuer.currency), 'kara pobrana');
+        assert(buyForeignShares('SIE', 10, { overThreshold: true }).ok, 'trzecie przekroczenie');
+        assert(issuer.oversightResale && issuer.oversightResale.until === macro.quarter + FOREIGN_OVERSIGHT.resaleQuarters, 'nakaz odsprzedaży');
+        processForeignOversightQuarterly(); assert(getGdrHeld(issuer) > room, 'przed terminem nadwyżka zostaje');
+        macro.quarter += FOREIGN_OVERSIGHT.resaleQuarters; processForeignOversightQuarterly();
+        assert(getGdrHeld(issuer) <= room && !issuer.oversightResale, `po terminie nadzór sprzedał nadwyżkę (${getGdrHeld(issuer)} ≤ ${room})`);
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
 });
 
 runAllTests();
