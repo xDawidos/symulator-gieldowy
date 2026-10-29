@@ -7236,7 +7236,6 @@ function showIntroScene() {
             transfer.className = 'intro-transfer';
             transfer.textContent = `💸 Przelew przychodzący: +${GRANDMA_POCKET_MONEY},00 zł od: Babcia`;
             thread.appendChild(transfer);
-            renderIntroCountries();
             form.hidden = false;
             return;
         }
@@ -7253,16 +7252,6 @@ function showIntroScene() {
     typeNext();
 }
 
-function renderIntroCountries() {
-    const container = document.getElementById('intro-countries');
-    if (!container) return;
-    container.innerHTML = START_COUNTRIES.map(country => `
-        <button type="button" class="intro-country ${country.available ? 'selected' : 'locked'}" ${country.available ? '' : 'disabled'}
-            title="${country.available ? 'Dostępny' : `Przepustka: ${country.passCost.toLocaleString('pl-PL')} PLN (wkrótce)`}">
-            ${country.flag} ${country.name}${country.available ? '' : ` ${uiIcon('klodka', 14)}`}
-        </button>`).join('');
-}
-
 function completeIntroScene(event) {
     if (event) event.preventDefault();
     const value = id => (document.getElementById(id)?.value || '').trim();
@@ -7270,7 +7259,6 @@ function completeIntroScene(event) {
     playerProfile.name = value('intro-name') || playerProfile.name;
     playerProfile.corporation = value('intro-corporation') || playerProfile.corporation;
     playerProfile.fundName = value('intro-fund') || playerProfile.fundName;
-    playerProfile.country = 'PL';
     playerProfile.cv = [{ type: 'start', text: `Zatrudnienie w ${playerProfile.corporation} jako Młodszy zarządca funduszu „${playerProfile.fundName}”.` }];
 
     if (typeof setCrisisScenario === 'function') setCrisisScenario(value('intro-crisis')); // 0.15.3 W4: scenariusz startowy (po zapisie CV)
@@ -7283,7 +7271,7 @@ function completeIntroScene(event) {
     addMail({
         sender: 'corporation',
         subject: `Witamy w ${playerProfile.corporation}, ${playerProfile.name}!`,
-        body: `Od dziś zarządzasz funduszem „${playerProfile.fundName}”. Wyniki oceniamy co 4 okresy. Wiadomości z rynku przysyłają czasopisma — prenumeraty ustawisz w zakładce Subskrypcje.`,
+        body: `Od dziś zarządzasz funduszem „${playerProfile.fundName}”. Wyniki oceniamy co 4 okresy. Wiadomości z rynku przysyłają czasopisma — prenumeraty ustawisz w zakładce Subskrypcje.${playerProfile.country !== 'PL' ? ` Kraj startowy: ${getCountryDef(playerProfile.country).name} — jego giełda (${getCountryDef(playerProfile.country).operator.name}) jest dla Ciebie rynkiem domowym, bez biletu.` : ''}`,
         importance: 2
     });
     refreshFundViews();

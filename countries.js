@@ -42,6 +42,17 @@ function resetCountriesState() {
 }
 
 function getCountryDef(id) { return COUNTRY_DEFS[id] || null; }
+
+/** 0.16.10 S0: kraje, z których można zacząć grę (pełne dane giełdowe; PL = rynek macierzysty). Rynek macierzysty i społeczeństwo zostają polskie (S0d). */
+const START_PLAYABLE = ['PL', 'DE', 'US', 'CZ'];
+function getStartCountry() { return (typeof playerProfile === 'object' && playerProfile?.country) || 'PL'; }
+/** Ustawia kraj startowy: poza PL jego giełda działa od pierwszego dnia (bez biletu dla gracza, bez wiadomości o dołączeniu). */
+function setStartCountry(id) {
+    if (!START_PLAYABLE.includes(id) || !COUNTRY_DEFS[id] && id !== 'PL') id = 'PL';
+    if (typeof playerProfile === 'object' && playerProfile) playerProfile.country = id;
+    if (id !== 'PL' && !isCountryJoined(id)) joinCountry(id, 'start');
+    return id;
+}
 /** 0.16.3 G15: próg wezwania kraju (66/75/90% głosów) i nadzór (odpowiednik KNF). Przekroczenie progu wymagałoby wezwania na resztę akcji. */
 function getCallThreshold(id) { return COUNTRY_DEFS[id]?.oversight?.callThreshold ?? 0.66; }
 function getOversight(id) { return COUNTRY_DEFS[id]?.oversight || { name: 'nadzór', callThreshold: 0.66, level: 1 }; }
@@ -143,6 +154,7 @@ function joinCountry(id, by = 'test') {
     marketRegimes[id] = createCountryRegime(id);
     for (const c of def.companies) createCountryIssuer(def, c);
     if (typeof spawnForeignBotsFor === 'function') spawnForeignBotsFor(id);
+    if (by === 'start') return countryState[id];
     if (id === 'CN' && typeof spawnPandaParabank === 'function') spawnPandaParabank(); // 0.16.4 G19: PanDa Bank na mechanice parabanku z 0.11
     if (typeof applySectorShock === 'function') applySectorShock('Turystyka', 0.06, 3, { fadeQ: 4 }); // nowe państwo = nowi turyści (malejąco)
     const text = `Giełda w kraju: ${def.name} dołącza do świata gry (${def.operator.name}, waluta ${def.currency}, ${def.companies.length} spółek).`;
@@ -502,9 +514,9 @@ function getTicketPrice(country) {
     const pass = START_COUNTRIES.find(c => c.id === country)?.passCost || 0;
     return Math.max(TICKET_RULES.min, Math.round(pass * TICKET_RULES.rate / 100) * 100);
 }
-function hasTicket(holder, country) { return Boolean(foreignTickets[holder]?.includes(country)); }
+function hasTicket(holder, country) { return (holder === 'player' && country === getStartCountry() && country !== 'PL') || Boolean(foreignTickets[holder]?.includes(country)); } // 0.16.10: rynek kraju startowego gracza jest domowy
 function getCountryCommission(country) {
-    const off = typeof getOffHoursSurcharge === 'function' && !countryState[country]?.link ? getOffHoursSurcharge(country) : 0; // 0.16.8 F3b: dopłata poza sesją
+    const off = typeof getOffHoursSurcharge === 'function' && !countryState[country]?.link && country !== getStartCountry() ? getOffHoursSurcharge(country) : 0; // 0.16.8 F3b: dopłata poza sesją
     return getCountryBaseCommission(country) + off;
 }
 function getCountryBaseCommission(country) {

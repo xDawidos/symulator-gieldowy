@@ -11938,7 +11938,7 @@ group('0.16.1', () => {
         kantorBuyCurrency('CHF', 500_000);
         const rateChf = fxRates.CHF, held = playerCashByCurrency.CHF, assets = getFundAssets();
         const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 })));
-        assertEq(raw.version, 18, 'zapis v18');
+        assertEq(raw.version, SAVE_FORMAT_VERSION, 'zapis bieżący');
         initFxState();
         const report = applySaveSnapshot(raw);
         assert(report.ok, `wczytanie: ${(report.errors || []).join('; ')}`);
@@ -13559,7 +13559,7 @@ group('0.16.5 Internet i TeamedUP!', () => {
 
     test('I5: migracja zapisu v16 → v17: skrzynka zachowuje wszystkie wiadomości i dostaje pole Tied', () => {
         startFund(); addMail({ sender: 'PULS', subject: 'A', body: 'a' }); addMail({ sender: 'bot:x', subject: 'B', body: 'b' }); noteTiedEvent(`${stocks[0].name} ogłasza rekord`, 'company');
-        const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 }))); assertEq(raw.version, 18, 'zapis v18');
+        const raw = JSON.parse(JSON.stringify(buildSaveSnapshot({ compact: 0 }))); assertEq(raw.version, SAVE_FORMAT_VERSION, 'zapis bieżący');
         raw.version = 16; delete raw.mailbox.tied; const n = raw.mailbox.messages.length;
         const res = applySaveSnapshot(raw); assert(res.ok, 'wczytanie v16');
         assertEq(mailbox.messages.length, n, 'wiadomości zachowane'); assert(Array.isArray(mailbox.tied), 'pole Tied dodane');
@@ -13910,7 +13910,7 @@ group('0.16.7 Pełne spółki zagraniczne', () => {
         for (const row of Object.values(snap.issuers)) delete row.c; // zapis v17
         resetGdrState(); applyCountriesSnapshot(snap); const c = foreignIssuers.YA1; assert(c.balanceSheet && c.cash > 0 && !c.fundamentals, 'v17: model z ceny, fundamenty przy pierwszym raporcie');
         quarter(); assert(foreignIssuers.YA1.fundamentals, 'po kwartale są fundamenty'); assertEq(checkWorldInvariants().length, 0, 'niezmienniki po migracji');
-        assertEq(SAVE_FORMAT_VERSION, 18, 'wersja zapisu'); assert(SUPPORTED_SAVE_VERSIONS.includes(17), 'v17 nadal wczytywany');
+        assertEq(SAVE_FORMAT_VERSION, 19, 'wersja zapisu'); assert(SUPPORTED_SAVE_VERSIONS.includes(17), 'v17 nadal wczytywany');
     }));
 
     test('F2: prezes po 65. roku odchodzi (nowa osoba, cecha kraju z definicji)', () => withYY(() => {
@@ -14077,5 +14077,43 @@ group('0.16.9 Lombard w Internecie, rynek połączony na giełdzie', () => {
                 assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
             } finally { pushNews = saved; }
         } finally { macro.quarter = q0; resetGdrState(); }
+    });
+
+    test('0.16.10 S0: kraj startowy — DE/US/CZ dołączone od 1. dnia, gracz bez biletu (boty z biletem), PL bez zmian, nieznany kraj = PL', () => {
+        initFxState(); resetGdrState();
+        try {
+            for (const id of ['DE', 'US', 'CZ']) {
+                resetGdrState(); resetWorld(Array.from({ length: 12 }, (_, i) => mk156(`T${i}`, { price: 50 + i, financialHealth: 2 })));
+                startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+                assertEq(getStartCountry(), 'PL', 'domyślnie Polska'); assertEq(getJoinedCountries().length, 0, 'PL: żadne kraje obce');
+                assertEq(setStartCountry(id), id); assertEq(playerProfile.country, id); assert(isCountryJoined(id), `${id}: giełda od pierwszego dnia`);
+                assert(canTradeCountry('player', id) && hasTicket('player', id), `${id}: gracz bez biletu`);
+                assert(!canTradeCountry('bot-x', id), 'inny inwestor nadal potrzebuje biletu');
+                assertEq(buyTicket(id).ok, false, 'bilet na rynek domowy: odmowa');
+                assertEq(getCountryCommission(id), getCountryBaseCommission(id), 'brak dopłaty poza sesją na rynku domowym');
+                assertEq(getCountryIssuers(id).length, COUNTRY_DEFS[id].companies.length, 'spółki kraju');
+                assertEq(checkWorldInvariants().length, 0, `${id}: niezmienniki`);
+                assertEq(setStartCountry(id), id, 'idempotentne');
+            }
+            resetGdrState(); startNewCareer({}); assertEq(setStartCountry('JP'), 'PL', 'kraj spoza START_PLAYABLE = Polska'); assertEq(getJoinedCountries().length, 0);
+        } finally { resetGdrState(); }
+    });
+
+    test('0.16.10 S0c: wybór kraju — karta kraju, lista zgodna z START_PLAYABLE, globus nie otwiera się w testach (bez WebGL), ekran wyboru: JP („wkrótce”) nie do potwierdzenia, callback z krajem', () => {
+        assert(!canUseGlobe(), 'testy nie ładują WebGL');
+        for (const id of START_PLAYABLE) assert(GLOBE_COUNTRIES[id], `${id}: dane globusu`);
+        for (const id of Object.keys(GLOBE_COUNTRIES)) assert(START_COUNTRIES.some(c => c.id === id) && FLAG_NAMES[id], `${id}: kraj gry z flagą`);
+        const de = renderGlobeCard('DE'), jp = renderGlobeCard('JP'), pl = renderGlobeCard('PL');
+        assert(/Berlin/.test(de) && /EUR/.test(de) && /DAX/.test(de) && /09:00–17:30/.test(de), 'karta DE: stolica, waluta, giełda, sesja');
+        assert(/wkrótce|nie jest dostępny/.test(jp) && /GPW/.test(pl), 'JP niegrywalny, PL = GPW');
+        let picked = null; showCountryGlobe(id => { picked = id; });
+        try {
+            const ov = document.querySelector('.cg-overlay'); assert(ov && !ov.querySelector('canvas'), 'ekran jest, bez WebGL (tylko lista)');
+            const item = id => ov.querySelector(`.cg-item[data-country="${id}"]`), ok = ov.querySelector('#cg-confirm');
+            assert(item('PL').getAttribute('aria-pressed') === 'true' && !ok.disabled, 'domyślnie PL');
+            item('JP').click(); assert(ok.disabled && /nie jest dostępny/.test(ov.querySelector('#cg-card').textContent), 'JP: karta, bez potwierdzenia'); ok.click(); assertEq(picked, null, 'JP nie do wyboru');
+            item('CZ').click(); assert(item('CZ').getAttribute('aria-pressed') === 'true' && !ok.disabled, 'CZ wybrany'); ok.click();
+            assertEq(picked, 'CZ', 'callback z krajem'); assert(!document.querySelector('.cg-overlay'), 'ekran usunięty z DOM');
+        } finally { closeCountryGlobe(); }
     });
 });

@@ -5277,3 +5277,26 @@ td.sc-actions button { white-space: normal; margin: 0; }
 .te-chip.ok { color: var(--color-up); border-color: var(--color-up); }
 .te-chip.promo { color: var(--accent-info); border-color: var(--accent-info); }
 @media (max-width: 760px) { .teamedup-layout { grid-template-columns: 1fr !important; } #teamedup-nav { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--border-color); padding: 0 0 8px; } #teamedup-content:has(.te-contacts) { grid-template-columns: 1fr; } }
+
+/* 0.16.10 S0c: globus wyboru kraju startowego */
+.cg-overlay { z-index: 3100; }
+.cg-dialog { width: min(980px, 100%); max-height: 94vh; overflow: auto; background: var(--bg-main); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 12px; display: grid; gap: 10px; }
+.cg-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.cg-head h2 { margin: 0; font-size: 18px; }
+.cg-body { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(240px, 1fr); gap: 12px; }
+.cg-stage { position: relative; min-height: 360px; height: 52vh; background: #02040a; border-radius: var(--radius-lg); overflow: hidden; }
+.cg-loading { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 16px; text-align: center; color: var(--text-muted); font-size: 13px; }
+.cg-side { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.cg-card { background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 10px 12px; font-size: 13px; }
+.cg-card h3 { margin: 0 0 6px; font-size: 15px; display: flex; align-items: center; gap: 6px; }
+.cg-dl { margin: 0; display: grid; gap: 3px; }
+.cg-dl div { display: flex; gap: 8px; justify-content: space-between; }
+.cg-dl dt { color: var(--text-muted); }
+.cg-dl dd { margin: 0; text-align: right; }
+.cg-note { margin: 8px 0 0; color: var(--text-muted); font-size: 12px; }
+.cg-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.cg-item { font-size: 12px; padding: 4px 8px; border-radius: 999px; }
+.cg-item.selected { border-color: var(--accent-primary); font-weight: 700; }
+.cg-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.cg-pin { display: inline-flex; align-items: center; gap: 4px; padding: 1px 5px; font-size: 11px; background: rgba(2, 4, 10, 0.78); color: #fff; border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 999px; cursor: pointer; white-space: nowrap; transform: translate(-50%, -50%); }
+@media (max-width: 720px) { .cg-body { grid-template-columns: 1fr; } .cg-stage { height: 38vh; min-height: 260px; } }
