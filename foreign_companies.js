@@ -17,9 +17,16 @@ const FOREIGN_CO = {
     divMinPct: 0.001,        // dywidenda poniżej 0,1% kursu albo 0,01 zł (w walucie) jest pomijana
     ceoRetireAge: 65,
     bankruptcyChance: 0.30,
+    fairPull: 0.018,         // 0.16.9 W2: tygodniowy powrót kursu do wartości godziwej: 0,0003 na tick krajowych × 60 ticków na tydzień (PRICE_MEAN_REVERSION_PER_TICK), luka obcięta do −50%…+100%
     growthTilt: 0.03,        // wzrost przychodów kwartalnie na 1,0 premii rynku kraju
     shockTilt: 0.15          // ... i na 1,0 premii sektorowej
 };
+/** 0.16.9 W2: liczniki zdarzeń spółek zagranicznych (sonda częstości w tests/przebiegi.html; nie zapisywane). */
+let foreignStats = {};
+function resetForeignStats() { foreignStats = { reports: 0, dividends: 0, dividendPln: 0, splits: 0, consolidations: 0, bankruptcies: 0, rescues: 0, ceoChanges: 0 }; }
+resetForeignStats();
+function noteForeignStat(key, n = 1) { foreignStats[key] = (foreignStats[key] || 0) + n; }
+
 /** Podatek u źródła od dywidendy (stawki zbliżone do realnych, po umowach o unikaniu podwójnego opodatkowania). */
 const FOREIGN_WITHHOLDING = { DE: 0.15, US: 0.15, CZ: 0.15, SE: 0.15, CH: 0.15, FR: 0.15, JP: 0.10, CN: 0.10, IN: 0.10, TW: 0.21 };
 
@@ -62,6 +69,14 @@ function withCountryTreasury(st, fn) {
     }
 }
 
+/** Tygodniowy składnik log-zwrotu: kurs dąży do wartości godziwej z fundamentów (jak PRICE_MEAN_REVERSION_PER_TICK × luka u krajowych); 0 przed pierwszym raportem. */
+function foreignFairPull(i) {
+    const fair = Number(i.fundamentals?.fairValue);
+    if (!(fair > 0) || !(i.price > 0)) return 0;
+    const gap = Math.max(-0.5, Math.min(1, fair / i.price - 1));
+    return FOREIGN_CO.fairPull * gap * (i.fundamentals.lossAnchor ? LOSS_REVERSION_FACTOR : 1);
+}
+
 function foreignGrowthTilt(i) {
     const regime = marketRegimes[i.country];
     return Math.max(-0.04, Math.min(0.04, (regime?.premium || 0) * FOREIGN_CO.growthTilt + (i.sp || 0) * FOREIGN_CO.shockTilt));
@@ -80,7 +95,7 @@ function runForeignReport(i, st) {
     if (net < 0) { const debt = -net * getRandomInRange(0.1, 0.4); sheet.liabilities += debt; adjustCompanyCash(i, debt); sheet.assets += debt; }
     else if (net > 0 && sheet.liabilities > 0 && i.cash > 0) { const repay = Math.min(i.cash * 0.5, net * getRandomInRange(0.1, 0.3), sheet.liabilities); sheet.liabilities -= repay; sheet.assets -= repay; adjustCompanyCash(i, -repay); }
     if (i.cash < 0) { const fix = -i.cash + Math.abs(net) * 0.05; adjustCompanyCash(i, fix); sheet.liabilities += fix; sheet.assets += fix; } // jak coverNegativeCash: bank dokredytowuje do zera
-    i.quarterlyEarnings = net;
+    i.quarterlyEarnings = net; noteForeignStat('reports');
     i.lastSurprise = Math.max(-1, Math.min(1, surprise));
     if (!i.tradeHalted) {
         i.price = Math.max(0.05, Math.round(i.price * (1 + i.lastSurprise * FOREIGN_CO.surpriseMove) * 1000) / 1000);
@@ -111,7 +126,7 @@ function payForeignDividend(i, st, net) {
             }
             if (i.statePack > 0) st.treasury += i.statePack * dps; // dywidenda państwowa do skarbu kraju
             i.lastDividend = { dps, total, q: macro.quarter, yield: dps / Math.max(0.01, i.price) };
-            noteForeignDividend(i, dps);
+            noteForeignDividend(i, dps); noteForeignStat('dividends'); noteForeignStat('dividendPln', toPln(total, i.currency));
             if ((i.holders?.player || 0) > 0) logEvent(`💰 ${i.name} (${getShareSymbol(i)}): dywidenda ${formatNumberPl(dps, 2)} ${i.currency} na akcję (po podatku u źródła ${Math.round((1 - keep) * 100)}%).`, 'review');
         }
     }
@@ -147,8 +162,8 @@ function applyForeignShareChange(i, factor) {
     if (f) { scalePerShareList(f.history, factor, ['eps']); f.expectedEps /= factor; if (Number.isFinite(f.lastEps)) f.lastEps /= factor; f.fairValue /= factor; updateFundamentalRatios(i); }
     if (i.lastDividend) { i.lastDividend.dps /= factor; }
     if (i.divHistory) i.divHistory = i.divHistory.map(d => d / factor);
-    i.lastSplitQuarter = macro.quarter;
-    const text = `✂️ ${i.name} (${getShareSymbol(i)}): ${factor > 1 ? `podział akcji ${formatSplitRatio(factor)}` : `konsolidacja akcji ${formatSplitRatio(factor)}`}, kurs ${formatNumberPl(priceBefore, 2)} → ${formatNumberPl(priceAfter, 2)} ${i.currency}.`;
+    i.lastSplitQuarter = macro.quarter; noteForeignStat(factor > 1 ? 'splits' : 'consolidations');
+    const text =`✂️ ${i.name} (${getShareSymbol(i)}): ${factor > 1 ? `podział akcji ${formatSplitRatio(factor)}` : `konsolidacja akcji ${formatSplitRatio(factor)}`}, kurs ${formatNumberPl(priceBefore, 2)} → ${formatNumberPl(priceAfter, 2)} ${i.currency}.`;
     logEvent(text, 'market');
     if ((i.holders?.player || 0) > 0 && typeof pushNews === 'function') pushNews(text, null);
     return { factor, priceBefore, priceAfter };
@@ -159,7 +174,7 @@ function stepForeignCeo(i) {
     if (!i.ceo) return;
     i.ceo.age += 0.25; i.ceo.tenure += 1;
     if (i.ceo.age >= FOREIGN_CO.ceoRetireAge && Math.random() < (i.ceo.age - 64) * 0.15 / 4) {
-        const old = i.ceo.name;
+        const old = i.ceo.name; noteForeignStat('ceoChanges');
         i.ceo = newForeignCeo(i);
         if ((i.holders?.player || 0) > 0) logEvent(`👴 Prezes ${old} (${i.name}) przechodzi na emeryturę; nowy prezes: ${i.ceo.name}.`, 'company');
     }
@@ -172,14 +187,14 @@ function maybeForeignBankruptcy(i, st) {
     if (i.state || i.giant || i.special === 'launder' || (typeof parabank === 'object' && parabank?.foreignId === i.id)) {
         const inject = -equity + i.price * i.shares * 0.05; // ratunek: dokapitalizowanie, kondycja do −1
         sheet.assets += Math.max(0, inject); sheet.retainedEarnings += Math.max(0, inject); adjustCompanyCash(i, Math.max(0, inject));
-        i.financialHealth = Math.max(i.financialHealth, -1);
+        i.financialHealth = Math.max(i.financialHealth, -1); noteForeignStat('rescues');
         return false;
     }
     if (Math.random() >= FOREIGN_CO.bankruptcyChance) return false;
     const text = `🔥 Upadłość: ${i.name} (${getShareSymbol(i)}) znika z giełdy ${COUNTRY_DEFS[i.country]?.name || i.country}; akcjonariusze odzyskują ułamek wartości.`;
     logEvent(text, 'market');
     if ((i.holders?.player || 0) > 0 && typeof pushNews === 'function') pushNews(text, null);
-    delistForeignIssuer(i, i.price * 0.02);
+    delistForeignIssuer(i, i.price * 0.02); noteForeignStat('bankruptcies');
     return true;
 }
 

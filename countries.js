@@ -36,6 +36,7 @@ let homeFeed = { last: null, sd: 0.02 }; // GIG jako wspólny czynnik rynków (o
 function resetCountriesState() {
     countryState = {};
     homeFeed = { last: null, sd: 0.02 };
+    if (typeof resetForeignStats === 'function') resetForeignStats();
     if (typeof resetLinksState === 'function') resetLinksState();
     for (const id of Object.keys(marketRegimes || {})) if (id !== 'home') delete marketRegimes[id];
     if (typeof resetTicketsState === 'function') resetTicketsState(); // boty zostają w aiCompetitors (zapis tablicy); nowa gra: resetForeignBots() w startNewCareer
@@ -234,7 +235,7 @@ function stepCountryIssuer(issuer, def, st, regime, homeZ, countryZ) {
     const target = getCountrySectorPremium(issuer);
     const dsp = (target - issuer.sp) * COUNTRY_RULES.sectorEase;
     issuer.sp += dsp;
-    const logRet = drift - sigma * sigma / 2 + shock + Math.log(Math.max(0.2, 1 + dsp));
+    const logRet = drift - sigma * sigma / 2 + shock + Math.log(Math.max(0.2, 1 + dsp)) + (typeof foreignFairPull === 'function' ? foreignFairPull(issuer) : 0); // 0.16.9 W2: powrót do wartości godziwej z fundamentów (jak u krajowych)
     issuer.price = Math.max(0.05, issuer.price * Math.exp(logRet));
     issuer.price = Math.round(issuer.price * 1000) / 1000;
     issuer.ema += (issuer.price - issuer.ema) / 26;

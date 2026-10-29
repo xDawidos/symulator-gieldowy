@@ -14210,6 +14210,35 @@ group('0.16.9 W3 Spółki zagraniczne jak krajowe', () => {
 '2.5,2,1.5,1', 'odtworzone z zapisu');
         const vm = buildForeignCardStock(i); assert(getTrailingDividendYield(vm) > 0, 'stopa dywidendy w karcie z historii');
     }));
+
+    test('W2: kurs obcej dąży do wartości godziwej z fundamentów (znak i granice składnika, parytet z krajowymi 0,0003 × 60 ticków), przed pierwszym raportem bez składnika', () => withWorld(() => {
+        joinCountry('DE'); const i = getCountryIssuers('DE')[0];
+        i.fundamentals = null; assertEq(foreignFairPull(i), 0, 'bez fundamentów brak składnika');
+        ensureForeignCompany(i, true); const f = i.fundamentals; f.lossAnchor = false;
+        f.fairValue = i.price * 1.2; assertNear(foreignFairPull(i), FOREIGN_CO.fairPull * 0.2, 'luka +20% → +0,36% tygodniowo', 1e-9);
+        f.fairValue = i.price * 0.8; assertNear(foreignFairPull(i), -FOREIGN_CO.fairPull * 0.2, 'luka −20%', 1e-9);
+        f.fairValue = i.price * 50; assertNear(foreignFairPull(i), FOREIGN_CO.fairPull * 1, 'luka obcięta do +100%', 1e-9);
+        f.fairValue = i.price * 0.001; assertNear(foreignFairPull(i), -FOREIGN_CO.fairPull * 0.5, 'luka obcięta do −50%', 1e-9);
+        assertNear(FOREIGN_CO.fairPull, PRICE_MEAN_REVERSION_PER_TICK * (BASE_DELAYS.weekly / BASE_DELAYS.stockUpdate), 'parytet z krajowymi', 1e-12);
+        f.fairValue = i.price * 1.5; f.lossAnchor = true; assertNear(foreignFairPull(i), FOREIGN_CO.fairPull * 0.5 * LOSS_REVERSION_FACTOR, 'przy stracie wolniej jak u krajowych', 1e-9);
+    }));
+
+    test('W2: kurs z luką +100% w sumie zyskuje wobec identycznej spółki bez fundamentów (średnia z wielu kroków)', () => withWorld(() => {
+        joinCountry('DE'); const def = COUNTRY_DEFS.DE, st = countryState.DE, regime = marketRegimes.DE;
+        const a = { ...getCountryIssuers('DE')[0] }, mk = fair => { const x = { ...a, history: [a.price], holders: {}, sp: 0, fundamentals: fair ? { fairValue: a.price * fair, lossAnchor: false } : null }; return x; };
+        let up = 0, base = 0; const N = 600;
+        for (let k = 0; k < N; k++) { const x = mk(2), y = mk(0); x.price = y.price = a.price; stepCountryIssuer(x, def, st, regime, 0, 0); stepCountryIssuer(y, def, st, regime, 0, 0); up += Math.log(x.price / a.price); base += Math.log(y.price / a.price); }
+        const diff = (up - base) / N; assert(diff > FOREIGN_CO.fairPull * 0.3 && diff < FOREIGN_CO.fairPull * 3, `średnia różnica log-zwrotu ${diff.toFixed(4)} ≈ ${FOREIGN_CO.fairPull}`);
+    }));
+
+    test('W2: sonda zdarzeń obcych — liczniki raportów, dywidend, splitów, konsolidacji, upadłości, ratunków i zmian prezesa rosną w kwartale i zerują się z nową grą', () => withWorld(() => {
+        joinCountry('DE'); resetForeignStats(); assertEq(JSON.stringify(Object.values(foreignStats).filter(Boolean)), '[]', 'zerowe na starcie');
+        for (let q = 0; q < 6; q++) { macro.quarter++; processForeignCompaniesQuarterly('DE'); }
+        assert(foreignStats.reports >= getCountryIssuers('DE').length * 4, `raporty policzone: ${foreignStats.reports}`);
+        const i = getCountryIssuers('DE')[0]; i.lastSplitQuarter = -99; applyForeignShareChange(i, 2); applyForeignShareChange(i, 0.5);
+        assertEq(foreignStats.splits >= 1 && foreignStats.consolidations >= 1, true, 'split i konsolidacja policzone');
+        resetGdrState(); assertEq(foreignStats.reports, 0, 'reset z nową grą');
+    }));
 });
 
 group('0.16.9 W1 Gotówka w wielu walutach', () => {
