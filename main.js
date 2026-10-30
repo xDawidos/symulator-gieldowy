@@ -1101,46 +1101,8 @@ function getMeasuredGameSpeed() {
     return { quartersPerMinute: 60000 / msPerQuarter, effectiveMultiplier: BASE_DELAYS.quarterly / msPerQuarter };
 }
 
-/**
- * Ustawia nową prędkość gry, czyszcząc stare pętle i tworząc nowe.
- * @param {number} speedMultiplier - Mnożnik prędkości (np. 1, 2, 5).
- */
-function setGameSpeed(speedMultiplier) {
-    clearIntervals(); // Zatrzymaj wszystkie istniejące pętle
-    currentSpeedMultiplier = speedMultiplier; // Ustaw nowy mnożnik
-
-    // Zaktualizuj wygląd przycisków prędkości
-    const speedButtons = document.querySelectorAll('.speed-btn');
-    speedButtons.forEach(btn => btn.classList.remove('active'));
-    const activeBtn = document.querySelector(`.speed-btn[data-speed="${speedMultiplier}"]`);
-    if (activeBtn) activeBtn.classList.add('active');
-
-    console.log(`Ustawiono prędkość gry na x${speedMultiplier}`);
-
-    // --- URUCHOMIENIE NOWYCH PĘTLI Z NOWĄ PRĘDKOŚCIĄ ---
-
-    // Pętla sprawdzania niespłaconych hipotek (z bazy main.js)
-    gameTimers.mortgageCheck = setGameInterval(() => {
-        if (isGamePaused) return;
-        checkMortgageDefaults();
-    }, BASE_DELAYS.weekly / speedMultiplier); // Sprawdzaj co tydzień
-
-    gameTimers.autoSave = setInterval(() => {
-        if (typeof saveGameState === 'function') {
-            saveGameState();
-        }
-    }, 60000 / Math.min(speedMultiplier, MAX_AUTOSAVE_SPEED)); // T0: przy ×100/×200 autozapis nie częściej niż przy ×50
-
-    // Pętla sprawdzania zapadalności bonów skarbowych
-    gameTimers.tBillMaturityCheck = setGameInterval(() => {
-        if (isGamePaused) return;
-        checkTBillMaturities();
-    }, 5000 / speedMultiplier);
-
-    // Główna pętla gry (aktualizacje co sekundę czasu gry). T0: przy prędkościach testowych (> ×50) kilka tików
-    // w jednym wywołaniu zamiast interwału krótszego niż ~10 ms (przeglądarka nie nadążyłaby z timerami).
-    const tickSteps = getTickStepsPerCall(speedMultiplier);
-    const stockTick = (skipUi = false) => {
+/** Jeden krok logiki giełdy (skipUi: bez odświeżania interfejsu). */
+function runStockTick(skipUi, speedMultiplier, tickSteps) {
 
         if (!skipUi) document.querySelectorAll('#stock-table-body tr').forEach(row => {
     const symbol = row.dataset.symbol;
@@ -1369,24 +1331,10 @@ function setGameSpeed(speedMultiplier) {
             }
         }
 
-    };
-    // T0: doganianie czasu — tyle kroków logiki, ile sekund gry upłynęło od ostatniego wywołania (najwyżej
-    // MAX_TICK_CATCHUP), żeby kwartał zawsze miał ~300 tików także przy ×50/×100/×200, gdy przeglądarka nie nadąża.
-    debugStockTick = stockTick; // testy symulacyjne: tiki logiki bez timerów przeglądarki
-    let lastTickAt = performance.now();
-    let tickBacklog = 0;
-    gameTimers.stockUpdate = setInterval(() => {
-        const now = performance.now();
-        tickBacklog += (now - lastTickAt) * speedMultiplier / BASE_DELAYS.stockUpdate;
-        lastTickAt = now;
-        const steps = Math.max(1, Math.min(MAX_TICK_CATCHUP, Math.floor(tickBacklog)));
-        tickBacklog = Math.max(0, Math.min(tickBacklog - steps, MAX_TICK_CATCHUP));
-        if (isGamePaused) { tickBacklog = 0; stockTick(); return; }
-        for (let step = 0; step < steps; step++) stockTick(step < steps - 1);
-    }, BASE_DELAYS.stockUpdate * tickSteps / speedMultiplier);
+}
 
-    // Pętla tygodniowa (z bazy main.js - bankowość komercyjna)
-gameTimers.weekly = setGameInterval(() => {
+/** Pętla tygodniowa gry. */
+function runWeeklyTick() {
         if (isGamePaused) return;
 
         // ===>>> NOWE WYWOŁANIE SKANERA WINDYKATORA <<<===
@@ -1456,10 +1404,10 @@ gameTimers.weekly = setGameInterval(() => {
 
         if (playerCash > 0) displayCash(); //
 
-    }, BASE_DELAYS.weekly / speedMultiplier);
+}
 
-    // Pętla kwartalna (z bazy main.js - zawiera AI Banku Centralnego)
-    gameTimers.quarterly = setGameInterval(() => {
+/** Pętla kwartalna gry. */
+function runQuarterlyTick() {
         if (isGamePaused) return;
         noteQuarterForSpeedStats();
         reviewCompanyPlacements();
@@ -1547,7 +1495,99 @@ gameTimers.weekly = setGameInterval(() => {
             runPrivateCompanyLogic(); // Logika rozwoju firm prywatnych
         }
 
-    }, BASE_DELAYS.quarterly / speedMultiplier);
+}
+
+/** Pętla roczna gry. */
+function runYearlyTick() {
+        if (isGamePaused) return;
+        updateCeoTenureAndAge();
+        triggerYearlyCeoEvents();
+        if (Date.now() >= nextWealthTaxTime) {
+         if (typeof processWealthTax === 'function') {
+             processWealthTax();
+         } else {
+             console.error("Funkcja processWealthTax nie została znaleziona!");
+         }
+    }
+
+    checkSanEscobarRisk();
+
+    if (typeof aiUpgradeAntitrustOffice === 'function') {
+            aiUpgradeAntitrustOffice(); // Państwo (AI) decyduje o ulepszeniu urzędu
+        }
+
+
+    if (Math.random() < 0.3) {
+        if (typeof triggerGovernmentSpendingEvent === 'function') {
+            triggerGovernmentSpendingEvent();
+        } else {
+            console.error("Funkcja triggerGovernmentSpendingEvent nie została znaleziona!");
+        }
+    }
+
+        processCityYearly(); // gospodarka miasta, polityka burmistrza, spółki miejskie, kampania i wybory (city.js)
+}
+
+/**
+ * Ustawia nową prędkość gry, czyszcząc stare pętle i tworząc nowe.
+ * @param {number} speedMultiplier - Mnożnik prędkości (np. 1, 2, 5).
+ */
+function setGameSpeed(speedMultiplier) {
+    clearIntervals(); // Zatrzymaj wszystkie istniejące pętle
+    currentSpeedMultiplier = speedMultiplier; // Ustaw nowy mnożnik
+
+    // Zaktualizuj wygląd przycisków prędkości
+    const speedButtons = document.querySelectorAll('.speed-btn');
+    speedButtons.forEach(btn => btn.classList.remove('active'));
+    const activeBtn = document.querySelector(`.speed-btn[data-speed="${speedMultiplier}"]`);
+    if (activeBtn) activeBtn.classList.add('active');
+
+    console.log(`Ustawiono prędkość gry na x${speedMultiplier}`);
+
+    // --- URUCHOMIENIE NOWYCH PĘTLI Z NOWĄ PRĘDKOŚCIĄ ---
+
+    // Pętla sprawdzania niespłaconych hipotek (z bazy main.js)
+    gameTimers.mortgageCheck = setGameInterval(() => {
+        if (isGamePaused) return;
+        checkMortgageDefaults();
+    }, BASE_DELAYS.weekly / speedMultiplier); // Sprawdzaj co tydzień
+
+    gameTimers.autoSave = setInterval(() => {
+        if (typeof saveGameState === 'function') {
+            saveGameState();
+        }
+    }, 60000 / Math.min(speedMultiplier, MAX_AUTOSAVE_SPEED)); // T0: przy ×100/×200 autozapis nie częściej niż przy ×50
+
+    // Pętla sprawdzania zapadalności bonów skarbowych
+    gameTimers.tBillMaturityCheck = setGameInterval(() => {
+        if (isGamePaused) return;
+        checkTBillMaturities();
+    }, 5000 / speedMultiplier);
+
+    // Główna pętla gry (aktualizacje co sekundę czasu gry). T0: przy prędkościach testowych (> ×50) kilka tików
+    // w jednym wywołaniu zamiast interwału krótszego niż ~10 ms (przeglądarka nie nadążyłaby z timerami).
+    const tickSteps = getTickStepsPerCall(speedMultiplier);
+    const stockTick = (skipUi = false) => runStockTick(skipUi, speedMultiplier, tickSteps);
+    // T0: doganianie czasu — tyle kroków logiki, ile sekund gry upłynęło od ostatniego wywołania (najwyżej
+    // MAX_TICK_CATCHUP), żeby kwartał zawsze miał ~300 tików także przy ×50/×100/×200, gdy przeglądarka nie nadąża.
+    debugStockTick = stockTick; // testy symulacyjne: tiki logiki bez timerów przeglądarki
+    let lastTickAt = performance.now();
+    let tickBacklog = 0;
+    gameTimers.stockUpdate = setInterval(() => {
+        const now = performance.now();
+        tickBacklog += (now - lastTickAt) * speedMultiplier / BASE_DELAYS.stockUpdate;
+        lastTickAt = now;
+        const steps = Math.max(1, Math.min(MAX_TICK_CATCHUP, Math.floor(tickBacklog)));
+        tickBacklog = Math.max(0, Math.min(tickBacklog - steps, MAX_TICK_CATCHUP));
+        if (isGamePaused) { tickBacklog = 0; stockTick(); return; }
+        for (let step = 0; step < steps; step++) stockTick(step < steps - 1);
+    }, BASE_DELAYS.stockUpdate * tickSteps / speedMultiplier);
+
+    // Pętla tygodniowa (z bazy main.js - bankowość komercyjna)
+    gameTimers.weekly = setGameInterval(runWeeklyTick, BASE_DELAYS.weekly / speedMultiplier);
+
+    // Pętla kwartalna (z bazy main.js - zawiera AI Banku Centralnego)
+    gameTimers.quarterly = setGameInterval(runQuarterlyTick, BASE_DELAYS.quarterly / speedMultiplier);
 
     // Pętla reputacji (powolny powrót do zera)
     gameTimers.reputationDecay = setGameInterval(() => {
@@ -1601,35 +1641,7 @@ gameTimers.weekly = setGameInterval(() => {
         triggerSemiAnnualEvents();
     }, BASE_DELAYS.quarterly * 2 / speedMultiplier); // Co pół roku
 
-    gameTimers.yearly = setGameInterval(() => {
-        if (isGamePaused) return;
-        updateCeoTenureAndAge();
-        triggerYearlyCeoEvents();
-        if (Date.now() >= nextWealthTaxTime) {
-         if (typeof processWealthTax === 'function') {
-             processWealthTax();
-         } else {
-             console.error("Funkcja processWealthTax nie została znaleziona!");
-         }
-    }
-
-    checkSanEscobarRisk();
-
-    if (typeof aiUpgradeAntitrustOffice === 'function') {
-            aiUpgradeAntitrustOffice(); // Państwo (AI) decyduje o ulepszeniu urzędu
-        }
-
-
-    if (Math.random() < 0.3) {
-        if (typeof triggerGovernmentSpendingEvent === 'function') {
-            triggerGovernmentSpendingEvent();
-        } else {
-            console.error("Funkcja triggerGovernmentSpendingEvent nie została znaleziona!");
-        }
-    }
-
-        processCityYearly(); // gospodarka miasta, polityka burmistrza, spółki miejskie, kampania i wybory (city.js)
-    }, BASE_DELAYS.quarterly * 4 / speedMultiplier); // Co rok
+    gameTimers.yearly = setGameInterval(runYearlyTick, BASE_DELAYS.quarterly * 4 / speedMultiplier); // Co rok
 }
 
 // Funkcja inicjalizująca grę
