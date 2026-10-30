@@ -6526,7 +6526,7 @@ group('0.14.2 P2: emisja ratunkowa — oferty per spółka; zapłata funduszu = 
         const { lines } = capture(() => handleSuccessfulIPO(s, 2));
         const shares = playerPortfolio.NEWS?.shares || 0;
         const msg = lines.find(l => l.startsWith('🔔 IPO'));
-        const value = Number((msg?.match(/→ (\d+) zł/)?.[1]) || 0);
+        const value = Number((msg?.match(/→ ([\d\s ]+) (?:zł|PLN)/)?.[1] || '').replace(/\D/g, '') || 0);
         assert(shares > 0 && Math.abs(Math.round(shares * s.price) - value) <= 1, `akcje ${shares} × ${s.price} vs ${value}`);
     });
 

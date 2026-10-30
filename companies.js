@@ -3393,7 +3393,7 @@ function payCompanyDividend(stock, dividendPerShare, purpose = 'Dywidenda') {
     recordPayment(stock, 'external:akcjonariusze', total, purpose);
 
     stock.lastDividend = { dps, total, paidAt: Date.now(), yield: dps / Math.max(0.01, stock.price) };
-    if (typeof addChartEvent === 'function') addChartEvent(stock, '✂️', `Odcięcie dywidendy: ${dps.toFixed(2)} PLN/akcję — kurs spada o mniej więcej tyle`);
+    if (typeof addChartEvent === 'function') addChartEvent(stock, '✂️', `Odcięcie dywidendy: ${formatZl(dps, 2)}/akcję — kurs spada o mniej więcej tyle`);
     recordDividendPayment(stock, dps);
     payDividendToShareholders(stock, dps);
     return total;
@@ -3646,7 +3646,7 @@ function computeQuarterOperatingResult(stock, marketCap, totalUnlockedTechs) {
                         targetStock.sharesHeld -= holding.quantity; 
                         delete stock.holdingPortfolio[symbol]; 
                         
-                        logEvent(`[LOMBARDEX] ${stock.name} sprzedał ${holding.quantity} akcji ${symbol} (zysk: ${profitFromSales.toFixed(0)} PLN).`, 'company');
+                        logEvent(`[LOMBARDEX] ${stock.name} sprzedał ${holding.quantity} akcji ${symbol} (zysk: ${formatZl(profitFromSales, 0)}).`, 'company');
                     }
                 }
             }
@@ -3972,7 +3972,7 @@ function settleTargetHolders(target, pricePerShare, initiator = null) {
         const holding = playerPortfolio[target.symbol];
         const grossGain = holding.shares * pricePerShare;
         playerCash += grossGain; // TODO: Obliczyć podatek
-        logEvent(`💰 Otrzymujesz ${grossGain.toFixed(2)} PLN za akcje ${target.name} w ramach przejęcia.`, 'success');
+        logEvent(`💰 Otrzymujesz ${formatZl(grossGain, 2)} za akcje ${target.name} w ramach przejęcia.`, 'success');
     }
     // AI
     aiCompetitors.forEach(ai => {
@@ -4009,7 +4009,7 @@ function resolveMerger(stock1, stock2, process) {
     let defenseCost = 0;
     if (process.defenseActive === 'poisonPill') {
         defenseCost = (target.price * target.totalShares) * 0.20;
-        logEvent(`💊 ${initiator.name} musi zapłacić ${defenseCost.toFixed(0)} PLN za "odtrucie pigułki" w ${target.name}!`, 'review');
+        logEvent(`💊 ${initiator.name} musi zapłacić ${formatZl(defenseCost, 0)} za "odtrucie pigułki" w ${target.name}!`, 'review');
         process.costs += defenseCost;
     }
     
@@ -4030,7 +4030,7 @@ function resolveMerger(stock1, stock2, process) {
                 }
                 initiator.cash -= totalCost;
                 if (initiator.balanceSheet) initiator.balanceSheet.assets -= totalCost; // 0.15.1 M6: zapłata to wydatek gotówki
-                logEvent(`💸 ${initiator.name} wydaje łącznie ${totalCost.toFixed(0)} PLN (z gotówki) na przejęcie ${target.name}.`, 'company');
+                logEvent(`💸 ${initiator.name} wydaje łącznie ${formatZl(totalCost, 0)} (z gotówki) na przejęcie ${target.name}.`, 'company');
             
             } else if (process.financing === 'lbo') {
                 // 2. Finansowanie Długiem (LBO)
@@ -4050,7 +4050,7 @@ function resolveMerger(stock1, stock2, process) {
                 if (!lenderBank.loanPortfolio[initiator.symbol]) lenderBank.loanPortfolio[initiator.symbol] = 0;
                 lenderBank.loanPortfolio[initiator.symbol] += totalCost;
                 
-                logEvent(`🏦 ${initiator.name} finansuje przejęcie ${target.name} poprzez LBO (dług) w ${lenderBank.name} na kwotę ${totalCost.toFixed(0)} PLN!`, 'company');
+                logEvent(`🏦 ${initiator.name} finansuje przejęcie ${target.name} poprzez LBO (dług) w ${lenderBank.name} na kwotę ${formatZl(totalCost, 0)}!`, 'company');
             
             } else {
                 console.error(`[M&A Resolve] Nieznany typ finansowania: ${process.financing}`);
@@ -4080,7 +4080,7 @@ function resolveMerger(stock1, stock2, process) {
                 const parachuteCost = (target.price * target.totalShares) * 0.02; 
                 if (initiator.cash >= parachuteCost) {
                     initiator.cash -= parachuteCost;
-                    logEvent(`[CEO] Prezes ${target.name} odpala złoty spadochron! Koszt dla ${initiator.name}: ${parachuteCost.toFixed(0)} PLN.`, 'company');
+                    logEvent(`[CEO] Prezes ${target.name} odpala złoty spadochron! Koszt dla ${initiator.name}: ${formatZl(parachuteCost, 0)}.`, 'company');
                 }
             }
 
@@ -4294,7 +4294,7 @@ function updateStartups(deltaTime) {
                             startup.rescueCurrent += amount;
                             const aiHolding = contributingAI.portfolio[startup.symbol];
                             aiHolding.investedAmount = (Number(aiHolding.investedAmount) || 0) + amount; // ratunek = inwestycja
-                            logEvent(`[START-UP] ${contributingAI.name} dofinansowuje ${startup.name} kwotą ${amount.toFixed(2)} PLN!`);
+                            logEvent(`[START-UP] ${contributingAI.name} dofinansowuje ${startup.name} kwotą ${formatZl(amount, 2)}!`);
                         }
                     }
                 }
@@ -4383,7 +4383,7 @@ function initializeResearchForStock(stock, options = {}) {
 
             logEvent(
                 `Bank ${stock.name} rozpoczyna inwestycję ` +
-                `„${investment.name}” za ${cost.toFixed(2)} PLN.`,
+                `„${investment.name}” za ${formatZl(cost, 2)}.`,
                 'company'
             );
         } else {
@@ -4509,16 +4509,16 @@ function buyStartupInsurance(symbol) {
     const insuranceCost = holding.investedAmount * 0.05;
 
     if (playerCash < insuranceCost) {
-        showToast(`Nie masz wystarczająco gotówki, aby wykupić ubezpieczenie! Potrzebujesz ${insuranceCost.toFixed(2)} PLN.`);
+        showToast(`Nie masz wystarczająco gotówki, aby wykupić ubezpieczenie! Potrzebujesz ${formatZl(insuranceCost, 2)}.`);
         return;
     }
 
-    gameConfirm(`Czy na pewno chcesz wykupić ubezpieczenie dla inwestycji w ${symbol} za ${insuranceCost.toFixed(2)} PLN?`, () => {
+    gameConfirm(`Czy na pewno chcesz wykupić ubezpieczenie dla inwestycji w ${symbol} za ${formatZl(insuranceCost, 2)}?`, () => {
         // Transakcja
         playerCash -= insuranceCost;
         holding.isInsured = true;
 
-        logEvent(`🛡️ Wykupiono ubezpieczenie dla inwestycji w ${symbol} za ${insuranceCost.toFixed(2)} PLN.`, 'review');
+        logEvent(`🛡️ Wykupiono ubezpieczenie dla inwestycji w ${symbol} za ${formatZl(insuranceCost, 2)}.`, 'review');
         displayCash();
     });
 }
@@ -4534,7 +4534,7 @@ function triggerPrivatizedStartupComplication(startup) {
         // Komplikacja: Dodatkowe koszty
         const extraCost = startup.fundingGoal * getRandomInRange(0.15, 0.30);
         startup.pendingExtraCost = extraCost;
-        logEvent(`Projekt ${startup.name} wymaga dodatkowych ${extraCost.toFixed(2)} PLN! Prace zostały wstrzymane do czasu uregulowania płatności.`, 'review');
+        logEvent(`Projekt ${startup.name} wymaga dodatkowych ${formatZl(extraCost, 2)}! Prace zostały wstrzymane do czasu uregulowania płatności.`, 'review');
     } else {
         // Komplikacja: Opóźnienie
         const delaySeconds = getRandomIntInRange(45, 90);
@@ -4643,14 +4643,14 @@ function acceptStartupOffer(symbol, amount, offerType, offerValue) {
 
     let finalAmount = amount;
     let successChanceBonus = (amount / startup.fundingGoal) * 0.05; // Standardowy bonus
-    let logMessage = `Przyjęto ofertę od ${startup.name} i zainwestowano ${amount.toFixed(2)} PLN.`;
+    let logMessage = `Przyjęto ofertę od ${startup.name} i zainwestowano ${formatZl(amount, 2)}.`;
 
     // Zastosuj bonusy z oferty
     switch (offerType) {
         case 'DISCOUNT':
             const discountedCost = amount * (1 - offerValue);
             if (playerCash < discountedCost) {
-                showToast(`Nie masz wystarczająco gotówki! Koszt po zniżce to ${discountedCost.toFixed(2)} PLN.`);
+                showToast(`Nie masz wystarczająco gotówki! Koszt po zniżce to ${formatZl(discountedCost, 2)}.`);
                 return;
             }
             playerCash -= discountedCost;
@@ -4711,7 +4711,7 @@ function updateStartupAutoInvestTimers(deltaTime) {
                 if (startup && (startup.stage === 'funding' || startup.stage === 'overfunding')) {
                     if (canFundInvestInStartups(settings.amount, true)) {
                         investInStartup(symbol, settings.amount);
-                        logEvent(`[AUTO-STARTUP] Automatycznie zainwestowano ${settings.amount.toFixed(2)} PLN w ${startup.name}.`);
+                        logEvent(`[AUTO-STARTUP] Automatycznie zainwestowano ${formatZl(settings.amount, 2)} w ${startup.name}.`);
                     } else {
                         settings.isEnabled = false; // Wyłącz, jeśli brak środków
                         logEvent(`[AUTO-STARTUP] Brak środków! Auto-inwestowanie w ${startup.name} zostało wyłączone.`, 'review');
@@ -4739,14 +4739,14 @@ function payExtraStartupCost(symbol) {
     const cost = startup.pendingExtraCost;
 
     if (playerCash < cost) {
-        showToast(`Nie masz wystarczająco gotówki, aby pokryć dodatkowe koszty (${cost.toFixed(2)} PLN).`);
+        showToast(`Nie masz wystarczająco gotówki, aby pokryć dodatkowe koszty (${formatZl(cost, 2)}).`);
         return;
     }
     playerCash -= cost;
     startup.pendingExtraCost = null; // Usuń blokadę kosztową
     startup.developmentProgress += 1; // Daj mały "kopniak", aby wznowić postęp
 
-    logEvent(`Zapłacono dodatkowe ${cost.toFixed(2)} PLN, aby wznowić prace nad ${startup.name}.`, 'review');
+    logEvent(`Zapłacono dodatkowe ${formatZl(cost, 2)}, aby wznowić prace nad ${startup.name}.`, 'review');
 
     displayCash();
     displayStartups(getCurrentStartupInputValues());
@@ -5270,7 +5270,7 @@ function initiateMergerProcess(initiatorStock, targetStock, type, financing = 'c
         buyoutPricePerShare = targetStock.price * (1 + offerPremium);
         totalCost = buyoutPricePerShare * targetStock.totalShares;
         if (financing === 'cash' && initiatorStock.cash < totalCost) {
-            showToast(`Anulowano: ${initiatorStock.name} nie ma wystarczająco gotówki (${totalCost.toFixed(0)} PLN) na przejęcie.`, 'error');
+            showToast(`Anulowano: ${initiatorStock.name} nie ma wystarczająco gotówki (${formatZl(totalCost, 0)}) na przejęcie.`, 'error');
             return false;
         }
         if (financing === 'lbo') {
@@ -5595,7 +5595,7 @@ function startCollateralAuction(originalOwnerId, symbol, quantity) {
     }
     // UWAGA: Te akcje formalnie "znikają" na czas aukcji. Zostaną dodane do zwycięzcy.
 
-    logEvent(` AUKCJA AKCJI! ${quantity} szt. ${symbol} trafia na licytację (cena min. ${minPrice.toFixed(2)} PLN). Aukcja trwa ${auctionDurationMinutes} min.`, 'warning');
+    logEvent(` AUKCJA AKCJI! ${quantity} szt. ${symbol} trafia na licytację (cena min. ${formatZl(minPrice, 2)}). Aukcja trwa ${auctionDurationMinutes} min.`, 'warning');
     showToast(` AUKCJA AKCJI ${symbol}! Sprawdź Bank Centralny.`, 'warning', 10000);
 
     // Zaplanuj rozstrzygnięcie
@@ -5614,7 +5614,7 @@ function placeCollateralBid(bidder, quantity, price) {
     }
     if (isNaN(quantity) || quantity <= 0 || quantity > currentCollateralAuction.quantityAvailable ||
         isNaN(price) || price < currentCollateralAuction.minPrice) {
-        if (bidder === 'player') showToast(`Wprowadź poprawną ilość (max ${currentCollateralAuction.quantityAvailable}) i cenę (min ${currentCollateralAuction.minPrice.toFixed(2)} PLN).`);
+        if (bidder === 'player') showToast(`Wprowadź poprawną ilość (max ${currentCollateralAuction.quantityAvailable}) i cenę (min ${formatZl(currentCollateralAuction.minPrice, 2)}).`);
         return false;
     }
 
@@ -5630,11 +5630,11 @@ function placeCollateralBid(bidder, quantity, price) {
     currentCollateralAuction.bids.push({ bidderId, quantity, price });
 
     if (bidder === 'player') {
-        logEvent(`Złożono ofertę zakupu ${quantity} akcji ${currentCollateralAuction.stockSymbol} po ${price.toFixed(2)} PLN.`, 'review');
+        logEvent(`Złożono ofertę zakupu ${quantity} akcji ${currentCollateralAuction.stockSymbol} po ${formatZl(price, 2)}.`, 'review');
         showToast("Oferta na akcje złożona!", 'success');
         openBankModal();
     } else {
-        console.log(`[AI] ${bidder.name} złożył ofertę na ${quantity} akcji ${currentCollateralAuction.stockSymbol} po ${price.toFixed(2)} PLN.`);
+        console.log(`[AI] ${bidder.name} złożył ofertę na ${quantity} akcji ${currentCollateralAuction.stockSymbol} po ${formatZl(price, 2)}.`);
     }
     return true;
 }
@@ -5677,10 +5677,10 @@ function resolveCollateralAuction() {
 
             // Informacje
             if (bid.bidderId === 'player') {
-                logEvent(`✅ Wygrałeś ${quantityToAllocate} akcji ${stockSymbol} na aukcji po cenie ${bid.price.toFixed(2)} PLN!`, 'success');
+                logEvent(`✅ Wygrałeś ${quantityToAllocate} akcji ${stockSymbol} na aukcji po cenie ${formatZl(bid.price, 2)}!`, 'success');
                 displayCash(); displayPortfolio();
             } else {
-                console.log(`[AI] ${bidderObject.name} wygrał ${quantityToAllocate} akcji ${stockSymbol} po ${bid.price.toFixed(2)} PLN.`);
+                console.log(`[AI] ${bidderObject.name} wygrał ${quantityToAllocate} akcji ${stockSymbol} po ${formatZl(bid.price, 2)}.`);
             }
 
             // Pieniądze z aukcji trafiają do banku hipotecznego (uproszczone - na razie do BC)
@@ -5791,7 +5791,7 @@ function sellSharesToInvestmentBank(bankId, symbol, quantity) {
         bank.stockPortfolio[symbol] = { shares: quantity, avgPrice: purchasePrice };
     }
 
-    logEvent(`Sprzedałeś ${quantity} akcji ${symbol} bankowi ${bank.name} po ${purchasePrice.toFixed(2)} PLN.`, 'review');
+    logEvent(`Sprzedałeś ${quantity} akcji ${symbol} bankowi ${bank.name} po ${formatZl(purchasePrice, 2)}.`, 'review');
     displayCash();
     displayPortfolio();
 }
@@ -5837,7 +5837,7 @@ function buySharesFromInvestmentBank(bankId, symbol) {
         playerPortfolio[symbol] = { shares: quantity, avgPrice: sellPrice };
     }
 
-    logEvent(`Kupiłeś ${quantity} akcji ${symbol} od banku ${bank.name} po ${sellPrice.toFixed(2)} PLN.`, 'review');
+    logEvent(`Kupiłeś ${quantity} akcji ${symbol} od banku ${bank.name} po ${formatZl(sellPrice, 2)}.`, 'review');
     displayCash();
     displayPortfolio();
     renderCommercialBanksList(); // Odśwież listę banków, bo zmieniła się dostępność akcji
@@ -5921,7 +5921,7 @@ function changeCompanyBank(symbol, newBankId) {
         // Symulacja przepływu środków między bankami (nowy bank "spłaca" stary)
         oldBank.cash += transferredLoanAmount; // Stary bank odzyskuje środki
         newBank.cash -= transferredLoanAmount; // Nowy bank wydaje środki na przejęcie kredytu
-        logEvent(` Kredyt spółki ${symbol} (${transferredLoanAmount.toFixed(0)} PLN) został przeniesiony do ${newBank.name}.`);
+        logEvent(` Kredyt spółki ${symbol} (${formatZl(transferredLoanAmount, 0)}) został przeniesiony do ${newBank.name}.`);
     }
     // --- 👆 KONIEC NOWEJ LOGIKI TRANSFERU 👆 ---
 
@@ -5935,7 +5935,7 @@ function changeCompanyBank(symbol, newBankId) {
         newBank.corporateClients.push(symbol);
     }
 
-    logEvent(`🏦 Spółka ${stock.name} przenosi swój rachunek (saldo: ${cashToTransfer.toFixed(0)} PLN${transferredLoanAmount > 0 ? `, kredyt: ${transferredLoanAmount.toFixed(0)} PLN` : ''}) do banku ${newBank.name}.`, 'review');
+    logEvent(`🏦 Spółka ${stock.name} przenosi swój rachunek (saldo: ${formatZl(cashToTransfer, 0)}${transferredLoanAmount > 0 ? `, kredyt: ${formatZl(transferredLoanAmount, 0)}` : ''}) do banku ${newBank.name}.`, 'review');
     showToast(`Rachunek ${stock.name} przeniesiony do ${newBank.name}.`, 'success');
 
     // Odśwież widok panelu zarządzania (bez zmian)
@@ -6421,7 +6421,7 @@ function fundResearch(symbol) {
     // Gracz płaci za zewnętrzne prace badawcze — środki opuszczają model (jawnie oznaczone).
     recordPayment('player', 'external:uslugi_badawcze', amount, `Finansowanie badań w ${stock.name}`);
     
-    showToast(`Sfinansowano badania w ${stock.name} kwotą ${amount.toFixed(2)} PLN!`, 'success');
+    showToast(`Sfinansowano badania w ${stock.name} kwotą ${formatZl(amount, 2)}!`, 'success');
     logEvent(`🔬 Przyspieszono badania w ${stock.name} o ${amount} punktów.`);
 
     displayCash();
@@ -6598,7 +6598,7 @@ function confirmCeoChange(symbol, candidateIndex) {
 
     playerCash -= operationCost;
     displayCash(); // Natychmiast zaktualizuj gotówkę
-    logEvent(`💸 Pobrano ${operationCost.toFixed(2)} PLN za próbę zwołania walnego zgromadzenia w ${stock.name}.`, 'review');
+    logEvent(`💸 Pobrano ${formatZl(operationCost, 2)} za próbę zwołania walnego zgromadzenia w ${stock.name}.`, 'review');
 
 
     const playerShares = playerPortfolio[symbol]?.shares || 0;
@@ -7336,7 +7336,7 @@ function finalizeStartup(startup) {
                 startup.developmentProgress = 50; // Cofamy postęp do 50%
                 startup.fundingGoal *= 1.15; // Koszty rosną o 15% na poprawki
                 startup.successChance -= 0.10; // Szansa na sukces przy następnej próbie jest niższa
-                logEvent(`Cel finansowy ${startup.name} wzrósł do ${startup.fundingGoal.toLocaleString('pl-PL')} PLN!`);
+                logEvent(`Cel finansowy ${startup.name} wzrósł do ${formatZl(startup.fundingGoal, 0)}!`);
             } else {
                 // --- WYNIK: KOMPLIKACJE FINANSOWE ---
                 showToast(`Komplikacje! ${startup.name} potrzebuje natychmiastowego dofinansowania!`, 'warning', 5000);
@@ -7488,7 +7488,7 @@ function executePawnLoan(targetEntity, pawnShop, targetStock, quantity, loanAmou
     if (!holding.lockedShares) holding.lockedShares = 0;
     holding.lockedShares += quantity;
 
-    logEvent(`💰 ${pawnShop.name} udzielił pożyczki ${loanAmount.toFixed(2)} PLN pod zastaw ${quantity} akcji ${targetStock.symbol}. Termin spłaty: ${durationWeeks} tyg.`, 'review');
+    logEvent(`💰 ${pawnShop.name} udzielił pożyczki ${formatZl(loanAmount, 2)} pod zastaw ${quantity} akcji ${targetStock.symbol}. Termin spłaty: ${durationWeeks} tyg.`, 'review');
     
     if (targetEntity === 'player') {
         showToast("Otrzymano gotówkę z lombardu! Akcje zostały zablokowane.", 'success');
@@ -7533,7 +7533,7 @@ function executeDebtTransfer(collectorStock, targetEntity, loan, newInterestRate
     }
 
     const entityName = (targetEntity === 'player') ? "Twój" : `Bota ${targetEntity.name}`;
-    logEvent(`🔔 ${collectorStock.name} przejął ${entityName} dług w wysokości ${loan.amount.toFixed(2)} PLN. Nowe oprocentowanie: ${(newInterestRate * 100).toFixed(1)}%.`, 'review');
+    logEvent(`🔔 ${collectorStock.name} przejął ${entityName} dług w wysokości ${formatZl(loan.amount, 2)}. Nowe oprocentowanie: ${(newInterestRate * 100).toFixed(1)}%.`, 'review');
 
 }
 
@@ -7907,7 +7907,7 @@ function startCompanyInvestment(stock, investmentId, source = 'ai') {
     }
 
     const cost = getInvestmentCostForCompany(stock, investment);
-    if (!financeInvestment(stock, cost)) return fail(`Brak środków i zdolności kredytowej (koszt: ${cost.toLocaleString('pl-PL')} PLN).`);
+    if (!financeInvestment(stock, cost)) return fail(`Brak środków i zdolności kredytowej (koszt: ${formatZl(cost, 0)}).`);
 
     startInternalInvestment(stock, investment, cost);
     return { ok: true, message: `Rozpoczęto projekt: ${investment.name}` };
@@ -7939,7 +7939,7 @@ function startInternalInvestment(stock, investment, cost, options = {}) {
     };
 
     stock.activeInvestments.push(project);
-    logEvent(`🏢 ${stock.name} rozpoczyna projekt: ${project.name} (koszt: ${cost.toFixed(0)} PLN, ${project.durationDays} dni).`, 'company');
+    logEvent(`🏢 ${stock.name} rozpoczyna projekt: ${project.name} (koszt: ${formatZl(cost, 0)}, ${project.durationDays} dni).`, 'company');
 
     return project;
 }
@@ -8049,7 +8049,7 @@ function finishInvestment(stock, project) {
         applyPriceEffect(stock.symbol, data.incomeBonus * 0.2, 'positive', 'company');
     }
 
-    logEvent(`✅ ${stock.name} zakończył projekt: „${project.name}” (aktywowano ${capitalized.toFixed(0)} PLN, koszt okresu ${expensed.toFixed(0)} PLN).`, 'success');
+    logEvent(`✅ ${stock.name} zakończył projekt: „${project.name}” (aktywowano ${formatZl(capitalized, 0)}, koszt okresu ${formatZl(expensed, 0)}).`, 'success');
 }
 
 function payDividendToShareholders(stock, dividendPerShare) {
@@ -8074,7 +8074,7 @@ function payDividendToShareholders(stock, dividendPerShare) {
             // Fundusz nie płaci podatku od dywidend — dywidenda podnosi NAV.
             playerCash += grossDividend;
             if (typeof noteCorporateGoal === 'function') noteCorporateGoal('dividends', grossDividend);
-            logEvent(`💰 Fundusz otrzymuje ${grossDividend.toFixed(2)} PLN dywidendy od ${stock.name}.`, 'review');
+            logEvent(`💰 Fundusz otrzymuje ${formatZl(grossDividend, 2)} dywidendy od ${stock.name}.`, 'review');
         } else {
             // Podatki (San Escobar)
             let playerTaxModifier = 1.0;
@@ -8085,7 +8085,7 @@ function payDividendToShareholders(stock, dividendPerShare) {
             const taxToPay = grossDividend * taxRateDividend * playerTaxModifier;
             governmentTreasury += taxToPay;
             playerCash += grossDividend - taxToPay;
-            logEvent(`💰 Otrzymujesz ${(grossDividend - taxToPay).toFixed(2)} PLN dywidendy netto od ${stock.name} (podatek: ${taxToPay.toFixed(2)} PLN).`, 'review');
+            logEvent(`💰 Otrzymujesz ${formatZl((grossDividend - taxToPay), 2)} dywidendy netto od ${stock.name} (podatek: ${formatZl(taxToPay, 2)}).`, 'review');
         }
         displayCash(); // Funkcja z ui.js
     }
@@ -8097,7 +8097,7 @@ function payDividendToShareholders(stock, dividendPerShare) {
         const tax = gross * taxRateDividend * getPrivateTaxModifier();
         governmentTreasury += tax;
         playerWallet.cash += gross - tax;
-        logEvent(`💰 Prywatnie otrzymujesz ${(gross - tax).toFixed(2)} PLN dywidendy od ${stock.name} (podatek ${tax.toFixed(2)} PLN).`, 'review');
+        logEvent(`💰 Prywatnie otrzymujesz ${formatZl((gross - tax), 2)} dywidendy od ${stock.name} (podatek ${formatZl(tax, 2)}).`, 'review');
     }
 
     // 2. Wypłata dla AI
@@ -8264,7 +8264,7 @@ function blockInvestment(symbol, orderRef) {
         postPeriodEntry(stock, `investment_block_${inv.uid || inv.id}`, { investmentExpense: lost });
 
         stock.activeInvestments.splice(internalIndex, 1);
-        logEvent(`⛔ [KORONA] Zablokowałeś inwestycję „${inv.name}” w ${stock.name}. Odzyskano ${recovered.toFixed(0)} PLN.`, 'review');
+        logEvent(`⛔ [KORONA] Zablokowałeś inwestycję „${inv.name}” w ${stock.name}. Odzyskano ${formatZl(recovered, 0)}.`, 'review');
     } else if (project) {
         cancelConstructionProject(project, 'Inwestycja zablokowana przez właściciela.', 'client');
     } else if (tender && ['open', 'closed'].includes(tender.status)) {
@@ -8678,7 +8678,7 @@ function startCompanyResearch(company, techId) {
 
     logEvent(
         `${company.name} rozpoczyna badanie „${tech.name}”. ` +
-        `Koszt rozpoczęcia: ${cost.toFixed(2)} PLN.`,
+        `Koszt rozpoczęcia: ${formatZl(cost, 2)}.`,
         'company'
     );
 
@@ -9120,12 +9120,12 @@ function processOperatingInvestments(stock) {
 
         if (operating.lifeQuarters && operating.quarters >= operating.lifeQuarters) {
             stock.operatingInvestments = stock.operatingInvestments.filter(item => item !== operating);
-            logEvent(`⏹️ ${stock.name}: „${operating.name}” zakończyła działanie (łączny wynik ${Math.round(operating.totalResult).toLocaleString('pl-PL')} PLN).`, 'company');
+            logEvent(`⏹️ ${stock.name}: „${operating.name}” zakończyła działanie (łączny wynik ${formatZl(Math.round(operating.totalResult), 0)}).`, 'company');
         } else if (operating.lossStreak >= INVESTMENT_LOSS_STREAK_LIMIT) {
             const writeOff = Math.round(operating.cost * 0.4);
             adjustBalanceSheet(stock, { assets: -writeOff, retainedEarnings: -writeOff });
             stock.operatingInvestments = stock.operatingInvestments.filter(item => item !== operating);
-            logEvent(`📉 ${stock.name} wygasza nierentowną inwestycję „${operating.name}” (odpis ${writeOff.toLocaleString('pl-PL')} PLN).`, 'company');
+            logEvent(`📉 ${stock.name} wygasza nierentowną inwestycję „${operating.name}” (odpis ${formatZl(writeOff, 0)}).`, 'company');
         }
     }
     return total;
@@ -9185,14 +9185,14 @@ function fundTopUpInvestment(symbol, uid, amount, mode) {
         holding.shares += newShares;
         adjustBalanceSheet(stock, { assets: amount, retainedEarnings: amount });
         recordPayment('player-fund', stock, amount, `Dopłata za akcje: ${project.name}`);
-        logEvent(`💼 Fundusz dopłaca ${amount.toLocaleString('pl-PL')} PLN do „${project.name}” (${stock.name}) i obejmuje ${newShares.toLocaleString('pl-PL')} nowych akcji.`, 'review');
+        logEvent(`💼 Fundusz dopłaca ${formatZl(amount, 0)} do „${project.name}” (${stock.name}) i obejmuje ${newShares.toLocaleString('pl-PL')} nowych akcji.`, 'review');
     } else {
         const pct = Math.min(FUND_INCOME_MAX_SHARE, FUND_INCOME_MAX_SHARE * project.fundTopUp / Math.max(1, project.cost));
         project.fundIncomePct = pct;
         project.fundInvested = (project.fundInvested || 0) + amount;
         adjustBalanceSheet(stock, { assets: amount, liabilities: amount }); // zobowiązanie wobec funduszu (udział w zysku)
         recordPayment('player-fund', stock, amount, `Dopłata za udział w zysku: ${project.name}`);
-        logEvent(`💼 Fundusz dopłaca ${amount.toLocaleString('pl-PL')} PLN do „${project.name}” (${stock.name}) za ${(pct * 100).toFixed(0)}% zysku tej inwestycji.`, 'review');
+        logEvent(`💼 Fundusz dopłaca ${formatZl(amount, 0)} do „${project.name}” (${stock.name}) za ${(pct * 100).toFixed(0)}% zysku tej inwestycji.`, 'review');
     }
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return true;
@@ -9233,12 +9233,12 @@ function processPublicInvestmentFunding() {
             centralBank.funds -= amount;
             const shares = issueSharesToPublicOwner(stock, amount, 'state');
             project.publicFunding = 'state';
-            logEvent(`🏛️ Bank Centralny dofinansowuje „${project.name}” w ${stock.name}: ${amount.toLocaleString('pl-PL')} PLN za ${shares.toLocaleString('pl-PL')} akcji.`, 'state');
+            logEvent(`🏛️ Bank Centralny dofinansowuje „${project.name}” w ${stock.name}: ${formatZl(amount, 0)} za ${shares.toLocaleString('pl-PL')} akcji.`, 'state');
         } else if (stock.isMunicipal && Math.random() < (city.mayor?.policy === 'municipal' ? 0.6 : 0.25) && city.budget > amount * 3) {
             city.budget -= amount;
             const shares = issueSharesToPublicOwner(stock, amount, 'city');
             project.publicFunding = 'city';
-            logEvent(`🏙️ Miasto dofinansowuje „${project.name}” w ${stock.name}: ${amount.toLocaleString('pl-PL')} PLN za ${shares.toLocaleString('pl-PL')} akcji.`, 'city');
+            logEvent(`🏙️ Miasto dofinansowuje „${project.name}” w ${stock.name}: ${formatZl(amount, 0)} za ${shares.toLocaleString('pl-PL')} akcji.`, 'city');
         }
     }
 }
@@ -9280,7 +9280,7 @@ function canFundInvestInStartups(amount, silent = false) {
     if (!(amount > 0)) return fail('Wpisz poprawną kwotę.');
     if (amount > playerCash) return fail('Za mało gotówki funduszu.');
     if (amount > getFundStartupCapacity() + 1e-6) {
-        return fail(`Limit startupów: ${(STARTUP_FUND_LIMIT * 100).toFixed(0)}% aktywów funduszu (wolne: ${getFundStartupCapacity().toFixed(0)} PLN).`);
+        return fail(`Limit startupów: ${(STARTUP_FUND_LIMIT * 100).toFixed(0)}% aktywów funduszu (wolne: ${formatZl(getFundStartupCapacity(), 0)}).`);
     }
     return true;
 }
@@ -9311,10 +9311,10 @@ function investInStartup(symbol, amount) {
     if (startup.stage === 'funding') {
         startup.currentFunding += amount;
         startup.successChance = Math.min(1, startup.successChance + amount / startup.fundingGoal * 0.05);
-        logEvent(`🚀 Fundusz inwestuje ${amount.toFixed(2)} PLN w ${startup.name} (faza finansowania).`, 'review');
+        logEvent(`🚀 Fundusz inwestuje ${formatZl(amount, 2)} w ${startup.name} (faza finansowania).`, 'review');
     } else {
         startup.ipoPriceBonus += amount;
-        logEvent(`🚀 Fundusz dopłaca ${amount.toFixed(2)} PLN do ${startup.name} przed debiutem (wyższa wycena IPO).`, 'review');
+        logEvent(`🚀 Fundusz dopłaca ${formatZl(amount, 2)} do ${startup.name} przed debiutem (wyższa wycena IPO).`, 'review');
     }
     addFundStartupStake(startup, amount);
     if (typeof refreshFundViews === 'function') refreshFundViews();
@@ -9332,7 +9332,7 @@ function playerRescuesStartup(symbol, amount) {
     playerCash -= amount;
     startup.rescueCurrent += amount;
     addFundStartupStake(startup, amount);
-    logEvent(`🚑 Fundusz dofinansowuje ${startup.name} kwotą ${amount.toFixed(2)} PLN.`, 'review');
+    logEvent(`🚑 Fundusz dofinansowuje ${startup.name} kwotą ${formatZl(amount, 2)}.`, 'review');
     checkStartupRescue(startup);
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return true;
@@ -9368,7 +9368,7 @@ function privatizeStartup(symbol) {
     startup.privatizationPremium = price - startup.fundingGoal; // 0.14.1 R0: premia 20% ponad cel (niezmiennik inkubatora)
     startup.investors = { 'Fundusz': price };
     playerPortfolio[symbol] = { investedAmount: price, assetType: 'Startup', isInsured: playerPortfolio[symbol]?.isInsured || false };
-    logEvent(`🏢 Fundusz prywatyzuje start-up ${startup.name} za ${cost.toFixed(2)} PLN — gwarantowany debiut.`, 'review');
+    logEvent(`🏢 Fundusz prywatyzuje start-up ${startup.name} za ${formatZl(cost, 2)} — gwarantowany debiut.`, 'review');
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return true;
 }
@@ -9395,7 +9395,7 @@ function refundOtherStartupClaims(startup) {
             investmentPool.contributors[id] = (Number(investmentPool.contributors[id]) || 0) + share;
             investmentPool.totalFunds = (Number(investmentPool.totalFunds) || 0) + share;
             notePoolLedger(id, 'refunded', share); notePoolLedger(id, 'lost', contribution - share);
-            if (id === 'player') notePoolSettlement({ symbol, name: startup.name, kind: 'privatized', contribution, refund: share, text: `🏊 Pula: ${startup.name} sprywatyzowany przez fundusz — zwrot ${share.toFixed(0)} PLN do puli.` });
+            if (id === 'player') notePoolSettlement({ symbol, name: startup.name, kind: 'privatized', contribution, refund: share, text: `🏊 Pula: ${startup.name} sprywatyzowany przez fundusz — zwrot ${formatZl(share, 0)} do puli.` });
         }
     }
     startup.poolInvestors = [];
@@ -9474,7 +9474,7 @@ function handleSuccessfulIPO(startup, successMultiplier) {
             const holding = playerPortfolio[symbol] || { shares: 0, avgPrice: ipoPrice, assetType: 'stock' };
             holding.shares += shares;
             playerPortfolio[symbol] = holding;
-            if (claim.pool) { notePoolLedger('player', 'toShares', claim.contribution); notePoolSettlement({ symbol, name: startup.name, kind: 'ipo', contribution: claim.contribution, shares, text: `🏊 Pula: ${startup.name} — debiut, Twój udział: ${shares.toLocaleString('pl-PL')} akcji (wkład ${claim.contribution.toFixed(0)} PLN).` }); }
+            if (claim.pool) { notePoolLedger('player', 'toShares', claim.contribution); notePoolSettlement({ symbol, name: startup.name, kind: 'ipo', contribution: claim.contribution, shares, text: `🏊 Pula: ${startup.name} — debiut, Twój udział: ${shares.toLocaleString('pl-PL')} akcji (wkład ${formatZl(claim.contribution, 0)}).` }); }
         } else if (claim.kind === 'ai') {
             const holding = claim.ai.portfolio[symbol] || { shares: 0, avgPrice: ipoPrice };
             holding.shares += shares;
@@ -9519,9 +9519,9 @@ function handleSuccessfulIPO(startup, successMultiplier) {
     if (!startup.reputation) startup.reputation = { player: 0 };
 
     const fundValue = (playerPortfolio[symbol]?.shares || 0) * ipoPrice;
-    logEvent(`🔔 IPO: ${startup.name} debiutuje${debutMarket !== 'GPW' ? ` na ${getMarketLabel(debutMarket)}` : ''} po ${ipoPrice.toFixed(2)} zł (${totalShares.toLocaleString('pl-PL')} akcji).${fundClaim > 0 ? ` Fundusz: ${fundClaim.toFixed(0)} zł → ${fundValue.toFixed(0)} zł.` : ''}`, 'review');
+    logEvent(`🔔 IPO: ${startup.name} debiutuje${debutMarket !== 'GPW' ? ` na ${getMarketLabel(debutMarket)}` : ''} po ${formatZl(ipoPrice, 2)} (${totalShares.toLocaleString('pl-PL')} akcji).${fundClaim > 0 ? ` Fundusz: ${formatZl(fundClaim, 0)} → ${formatZl(fundValue, 0)}.` : ''}`, 'review');
     if (startup.operatorStartup && typeof activateMarketOperator === 'function') activateMarketOperator(startup); // nowy rynek (markets.js)
-    if (fundClaim > 0) playerProfile?.cv.push({ type: 'milestone', text: `Startup ${startup.name}: debiut na giełdzie (${fundClaim.toFixed(0)} → ${fundValue.toFixed(0)} PLN).` });
+    if (fundClaim > 0) playerProfile?.cv.push({ type: 'milestone', text: `Startup ${startup.name}: debiut na giełdzie (${fundClaim.toFixed(0)} → ${formatZl(fundValue, 0)}).` });
 }
 
 // =================================================================================
@@ -9568,10 +9568,10 @@ function settlePoolClaims(startup, refundMin = 0, refundMax = 0) {
             if (id === 'player') {
                 const kind = refundMin >= 1 ? 'takeover' : refund > 0 ? 'refund' : 'loss';
                 const text = kind === 'takeover'
-                    ? `🏊 Pula: ${startup.name} przejęty — zwrot ${refund.toFixed(0)} PLN do puli (wkład ${contribution.toFixed(0)} PLN).`
+                    ? `🏊 Pula: ${startup.name} przejęty — zwrot ${formatZl(refund, 0)} do puli (wkład ${formatZl(contribution, 0)}).`
                     : kind === 'refund'
-                        ? `🏊 Pula: ${startup.name} upadł — zwrot ${refund.toFixed(0)} PLN do puli, Twoja strata ${(contribution - refund).toFixed(0)} PLN.`
-                        : `🏊 Pula: ${startup.name} upadł — Twoja strata ${contribution.toFixed(0)} PLN.`;
+                        ? `🏊 Pula: ${startup.name} upadł — zwrot ${formatZl(refund, 0)} do puli, Twoja strata ${formatZl((contribution - refund), 0)}.`
+                        : `🏊 Pula: ${startup.name} upadł — Twoja strata ${formatZl(contribution, 0)}.`;
                 notePoolSettlement({ symbol: startup.symbol, name: startup.name, kind, contribution, refund, text });
             }
         }
@@ -9597,7 +9597,7 @@ function migratePoolStakesToFacts() {
     investmentPool.stakesMigrated = true;
     const facts = Number(investmentPool.playerStakes?.player) || 0;
     const diff = stored - facts;
-    if (diff > 1) logEvent(`🏊 Korekta wkładu w pulę: ${stored.toFixed(0)} → ${facts.toFixed(0)} PLN (startupy, których już nie ma, rozliczono przed poprawką 0.14.1; limit 10% się odblokowuje).`, 'review');
+    if (diff > 1) logEvent(`🏊 Korekta wkładu w pulę: ${stored.toFixed(0)} → ${formatZl(facts, 0)} (startupy, których już nie ma, rozliczono przed poprawką 0.14.1; limit 10% się odblokowuje).`, 'review');
     return diff;
 }
 
@@ -9608,8 +9608,8 @@ function removeStartup(startup, refundMin = 0, refundMax = 0) {
     if (holding?.investedAmount > 0) {
         const refund = holding.isInsured ? holding.investedAmount * 0.75 : holding.investedAmount * (refundMax > 0 ? getRandomInRange(refundMin, refundMax) : 0);
         if (refund > 0) playerCash += refund;
-        logEvent(`📉 Startup ${startup.name} nie debiutuje — fundusz odzyskuje ${refund.toFixed(2)} z ${holding.investedAmount.toFixed(2)} PLN${holding.isInsured ? ' (ubezpieczenie)' : ''}.`, 'review');
-        playerProfile?.cv.push({ type: 'milestone', text: `Startup ${startup.name}: upadek (odzysk ${refund.toFixed(0)} PLN).` });
+        logEvent(`📉 Startup ${startup.name} nie debiutuje — fundusz odzyskuje ${refund.toFixed(2)} z ${formatZl(holding.investedAmount, 2)}${holding.isInsured ? ' (ubezpieczenie)' : ''}.`, 'review');
+        playerProfile?.cv.push({ type: 'milestone', text: `Startup ${startup.name}: upadek (odzysk ${formatZl(refund, 0)}).` });
     }
     for (const ai of aiCompetitors) {
         const aiHolding = ai.portfolio[symbol];
@@ -9646,7 +9646,7 @@ function triggerStartupFundingEvent() {
     const added = Math.max(0, Math.min(startup.fundingGoal, startup.currentFunding + amount) - startup.currentFunding);
     startup.currentFunding += added;
     startup.unclaimedFunding = (Number(startup.unclaimedFunding) || 0) + added; // 0.14.1 R0: wpłata bez roszczenia (niezmiennik inkubatora)
-    logEvent(`[INKUBATOR] 👼 Anioł biznesu wspiera ${startup.name} kwotą ${amount.toLocaleString('pl-PL')} PLN.`, 'market');
+    logEvent(`[INKUBATOR] 👼 Anioł biznesu wspiera ${startup.name} kwotą ${formatZl(amount, 0)}.`, 'market');
     return startup.symbol;
 }
 
@@ -12533,7 +12533,7 @@ function transferSubsidiaryProfit(stock, earnings) {
     transferCompanyCash(stock, parentStock, amount, 'Transfer zysku do spółki-matki');
     adjustBalanceSheet(stock, { assets: -amount, retainedEarnings: -amount });
     adjustBalanceSheet(parentStock, { assets: amount, retainedEarnings: amount });
-    logEvent(`💸 Spółka zależna ${stock.name} transferuje ${amount.toFixed(0)} PLN zysku do ${parentStock.name}.`, 'company');
+    logEvent(`💸 Spółka zależna ${stock.name} transferuje ${formatZl(amount, 0)} zysku do ${parentStock.name}.`, 'company');
     return amount;
 }
 

@@ -111,7 +111,7 @@ function processCompanyBanking() {
                 stock.balanceSheet.assets += loanAmount;
                 bank.loanPortfolio[symbol] = (bank.loanPortfolio[symbol] || 0) + loanAmount;
                 bank.cash -= loanAmount;
-                logEvent(`🏦 Kredyt korporacyjny: ${stock.name} zaciąga ${loanAmount.toFixed(0)} PLN w ${bank.name}.`, 'market');
+                logEvent(`🏦 Kredyt korporacyjny: ${stock.name} zaciąga ${formatZl(loanAmount, 0)} w ${bank.name}.`, 'market');
             }
         }
 
@@ -138,7 +138,7 @@ function processCompanyBanking() {
                     ledger.writeOffs += writeOff;
                     adjustBalanceSheet(stock, { liabilities: -writeOff, retainedEarnings: writeOff });
                     stock.loanMissedPayments = 0;
-                    logEvent(`🏦 ${bank.name} odpisuje ${writeOff.toFixed(0)} PLN kredytu ${stock.name} — restrukturyzacja długu.`, 'market');
+                    logEvent(`🏦 ${bank.name} odpisuje ${formatZl(writeOff, 0)} kredytu ${stock.name} — restrukturyzacja długu.`, 'market');
                 }
             }
         }
@@ -316,7 +316,7 @@ function openFundDeposit(bankId, amount, weeks) {
     bank.cash += amount;
     getFundDeposits().push(deposit);
     recordPayment('player-fund', bank, amount, `Lokata ${weeks} tyg.`);
-    logEvent(`🏦 Fundusz zakłada lokatę w ${bank.name}: ${amount.toFixed(2)} PLN na ${weeks} tyg. (${(deposit.rate * 100).toFixed(2)}% rocznie).`, 'review');
+    logEvent(`🏦 Fundusz zakłada lokatę w ${bank.name}: ${formatZl(amount, 2)} na ${weeks} tyg. (${(deposit.rate * 100).toFixed(2)}% rocznie).`, 'review');
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return deposit;
 }
@@ -343,7 +343,7 @@ function breakFundDeposit(depositId) {
     const deposit = getFundDeposits().find(item => item.id === depositId);
     if (!deposit) return false;
     const payout = settleFundDeposit(deposit, true);
-    logEvent(`🏦 Fundusz zrywa lokatę w ${deposit.bankName}: wypłata ${payout.toFixed(2)} PLN (utrata odsetek i kara ${(FUND_DEPOSIT_BREAK_PENALTY * 100).toFixed(0)}%).`, 'review');
+    logEvent(`🏦 Fundusz zrywa lokatę w ${deposit.bankName}: wypłata ${formatZl(payout, 2)} (utrata odsetek i kara ${(FUND_DEPOSIT_BREAK_PENALTY * 100).toFixed(0)}%).`, 'review');
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return true;
 }
@@ -365,7 +365,7 @@ function processFundDepositsWeekly() {
         deposit.weeksLeft--;
         if (deposit.weeksLeft <= 0) {
             const payout = settleFundDeposit(deposit);
-            logEvent(`🏦 Lokata w ${deposit.bankName} zapada: fundusz otrzymuje ${payout.toFixed(2)} PLN (odsetki ${deposit.accrued.toFixed(2)} PLN).`, 'review');
+            logEvent(`🏦 Lokata w ${deposit.bankName} zapada: fundusz otrzymuje ${formatZl(payout, 2)} (odsetki ${formatZl(deposit.accrued, 2)}).`, 'review');
         }
     }
 }
@@ -457,7 +457,7 @@ function pawnShares(account, symbol, quantity) {
     if (account.isPlayer) {
         playerFund.trust = Math.max(0, playerFund.trust - PAWN_TRUST_PENALTY);
         playerWallet.complianceRisk = (playerWallet.complianceRisk || 0) + 1;
-        logEvent(`🏦 Fundusz zastawia ${quantity} akcji ${stock.name} w lombardzie ${pawnShop.name}: ${principal.toFixed(2)} PLN na ${PAWN_WEEKS} tygodni. Klienci patrzą na to nieufnie.`, 'review');
+        logEvent(`🏦 Fundusz zastawia ${quantity} akcji ${stock.name} w lombardzie ${pawnShop.name}: ${formatZl(principal, 2)} na ${PAWN_WEEKS} tygodni. Klienci patrzą na to nieufnie.`, 'review');
     }
     return loan;
 }
@@ -480,7 +480,7 @@ function repayPawnLoan(account, loanId) {
     account.cash -= loan.principal;
     if (pawnShop) adjustCompanyCash(pawnShop, loan.principal);
     releasePawnCollateral(account, loan);
-    if (account.isPlayer) logEvent(`🏦 Fundusz spłaca pożyczkę lombardową (${loan.principal.toFixed(2)} PLN) i odzyskuje ${loan.shares} akcji ${loan.symbol}.`, 'review');
+    if (account.isPlayer) logEvent(`🏦 Fundusz spłaca pożyczkę lombardową (${formatZl(loan.principal, 2)}) i odzyskuje ${loan.shares} akcji ${loan.symbol}.`, 'review');
     return true;
 }
 
@@ -561,7 +561,7 @@ function collectPawnDebt(account, loan) {
     adjustCompanyCash(collector, -payout);
     if (pawnShop) adjustCompanyCash(pawnShop, payout);
 
-    notifyDebtAction(account, `⚖️ Windykator ${collector.name} zajmuje akcje ${account.name} o wartości ${seizedValue.toFixed(0)} PLN za niespłaconą pożyczkę lombardową.`);
+    notifyDebtAction(account, `⚖️ Windykator ${collector.name} zajmuje akcje ${account.name} o wartości ${formatZl(seizedValue, 0)} za niespłaconą pożyczkę lombardową.`);
     return seizedValue;
 }
 
@@ -938,8 +938,8 @@ function checkBondMaturities(deltaGameMs = 5000) {
         }
         if (bond.ownerId === 'player') {
             logEvent(bond.defaulted
-                ? `💥 Obligacja ${bond.issuerName} zapada po niewypłacalności — odzysk ${payout.toFixed(2)} PLN.`
-                : `💰 Obligacja ${bond.issuerName} zapada: fundusz otrzymuje nominał ${payout.toFixed(2)} PLN.`, 'review');
+                ? `💥 Obligacja ${bond.issuerName} zapada po niewypłacalności — odzysk ${formatZl(payout, 2)}.`
+                : `💰 Obligacja ${bond.issuerName} zapada: fundusz otrzymuje nominał ${formatZl(payout, 2)}.`, 'review');
         }
         allBonds.splice(i, 1);
     }
@@ -1143,7 +1143,7 @@ function runDiamondStrategy() {
         const fine = Math.round(Math.max(0, diamond.cash) * 0.01);
         adjustCompanyCash(diamond, -fine);
         governmentTreasury += fine;
-        logEvent(`⚖️ Urząd antymonopolowy blokuje skup akcji ${target.name} przez ${diamond.name} i nakłada karę ${fine.toLocaleString('pl-PL')} PLN.`, 'state');
+        logEvent(`⚖️ Urząd antymonopolowy blokuje skup akcji ${target.name} przez ${diamond.name} i nakłada karę ${formatZl(fine, 0)}.`, 'state');
         return null;
     }
 
@@ -1247,7 +1247,7 @@ function generateBridgeLoanOffers() {
         weeksLeft: 3
     };
     bridgeLoanOffers.push(offer);
-    logEvent(`🏗️ ${company.name} szuka finansowania pomostowego na „${offer.project}”: ${offer.amount.toLocaleString('pl-PL')} PLN, ${(offer.rate * 100).toFixed(1)}% rocznie.`, 'construction');
+    logEvent(`🏗️ ${company.name} szuka finansowania pomostowego na „${offer.project}”: ${formatZl(offer.amount, 0)}, ${(offer.rate * 100).toFixed(1)}% rocznie.`, 'construction');
     return offer;
 }
 
@@ -1265,7 +1265,7 @@ function fundBridgeLoan(offerId) {
     const loan = { id: offer.id, symbol: company.symbol, name: company.name, project: offer.project, principal: offer.amount, rate: offer.rate, accrued: 0, weeksLeft: offer.weeks, termWeeks: offer.weeks, extended: false };
     getFundBridgeLoans().push(loan);
     bridgeLoanOffers = bridgeLoanOffers.filter(item => item !== offer);
-    logEvent(`🏗️ Fundusz udziela ${company.name} pożyczki pomostowej ${offer.amount.toLocaleString('pl-PL')} PLN (${(offer.rate * 100).toFixed(1)}%, ${offer.weeks} tyg.).`, 'review');
+    logEvent(`🏗️ Fundusz udziela ${company.name} pożyczki pomostowej ${formatZl(offer.amount, 0)} (${(offer.rate * 100).toFixed(1)}%, ${offer.weeks} tyg.).`, 'review');
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return loan;
 }
@@ -1283,7 +1283,7 @@ function processBridgeLoansWeekly() {
         const company = stocks.find(s => s.symbol === loan.symbol);
         if (!company || company.isBankrupt) {
             const recovery = loan.principal * BRIDGE_RECOVERY;
-            closeBridgeLoan(loan, recovery, `💥 ${loan.name} upada — fundusz odzyskuje ${recovery.toFixed(0)} z ${loan.principal.toFixed(0)} PLN pożyczki pomostowej.`);
+            closeBridgeLoan(loan, recovery, `💥 ${loan.name} upada — fundusz odzyskuje ${recovery.toFixed(0)} z ${formatZl(loan.principal, 0)} pożyczki pomostowej.`);
             continue;
         }
         loan.accrued += loan.principal * loan.rate / FUND_WEEKS_PER_YEAR;
@@ -1294,7 +1294,7 @@ function processBridgeLoansWeekly() {
         if (company.cash >= due) {
             adjustCompanyCash(company, -due);
             adjustBalanceSheet(company, { assets: -due, liabilities: -loan.principal, retainedEarnings: -loan.accrued });
-            closeBridgeLoan(loan, due, `🏗️ ${company.name} spłaca pożyczkę pomostową: ${due.toFixed(0)} PLN (odsetki ${loan.accrued.toFixed(0)} PLN).`);
+            closeBridgeLoan(loan, due, `🏗️ ${company.name} spłaca pożyczkę pomostową: ${formatZl(due, 0)} (odsetki ${formatZl(loan.accrued, 0)}).`);
         } else if (!loan.extended) {
             loan.extended = true;
             loan.weeksLeft = 4;
@@ -1303,7 +1303,7 @@ function processBridgeLoansWeekly() {
             const paid = Math.max(0, company.cash * 0.5);
             adjustCompanyCash(company, -paid);
             adjustBalanceSheet(company, { assets: -paid, liabilities: -Math.min(paid, loan.principal) });
-            closeBridgeLoan(loan, paid, `💥 ${company.name} spłaca tylko ${paid.toFixed(0)} z ${due.toFixed(0)} PLN pożyczki pomostowej.`);
+            closeBridgeLoan(loan, paid, `💥 ${company.name} spłaca tylko ${paid.toFixed(0)} z ${formatZl(due, 0)} pożyczki pomostowej.`);
         }
     }
 }
@@ -1685,7 +1685,7 @@ function sellEtf(symbol, quantity) {
     playerCash += proceeds;
     holding.shares -= quantity;
     if (holding.shares <= 0) delete playerPortfolio[symbol];
-    logEvent(`Fundusz umarza ${quantity} jedn. ${etf.name} (wynik ${profit >= 0 ? '+' : ''}${profit.toFixed(2)} PLN).`, 'review');
+    logEvent(`Fundusz umarza ${quantity} jedn. ${etf.name} (wynik ${profit >= 0 ? '+' : ''}${formatZl(profit, 2)}).`, 'review');
     displayCash();
     displayPortfolio();
     if (typeof checkPlayerTierUpgrade === 'function') checkPlayerTierUpgrade();
@@ -2001,7 +2001,7 @@ function spawnOperatorStartup(operator) {
     stocks.push(startup);
     operator.status = 'startup';
     operator.startupSymbol = startup.symbol;
-    logEvent(`🚀 W inkubatorze pojawia się ${def.name} — przyszły operator rynku (cel finansowania ${startup.fundingGoal.toLocaleString('pl-PL')} PLN).`, 'market');
+    logEvent(`🚀 W inkubatorze pojawia się ${def.name} — przyszły operator rynku (cel finansowania ${formatZl(startup.fundingGoal, 0)}).`, 'market');
     return startup;
 }
 

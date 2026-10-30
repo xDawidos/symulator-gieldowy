@@ -809,12 +809,12 @@ function triggerNationalizationEvent() {
     const buyoutPrice = target.price * 0.8;
     const totalCost = buyoutPrice * target.totalShares;
     if (centralBank.funds < totalCost) {
-        console.log(`[EVENT] Bank Centralny chciał znacjonalizować ${target.name}, ale zabrakło środków (${centralBank.funds.toFixed(0)} / ${totalCost.toFixed(0)} PLN).`);
+        console.log(`[EVENT] Bank Centralny chciał znacjonalizować ${target.name}, ale zabrakło środków (${centralBank.funds.toFixed(0)} / ${formatZl(totalCost, 0)}).`);
         return;
     }
     centralBank.funds -= totalCost;
-    logEvent(`🏛️ NACJONALIZACJA! Bank Centralny przejmuje kontrolę nad ${target.name} za ${totalCost.toFixed(0)} PLN w celu ochrony gospodarki!`, 'review');
-    if (playerPortfolio[target.symbol]) showToast(`Państwo przymusowo wykupiło Twoje akcje w ${target.name} po cenie ${buyoutPrice.toFixed(2)} PLN.`, 'warning', 7000);
+    logEvent(`🏛️ NACJONALIZACJA! Bank Centralny przejmuje kontrolę nad ${target.name} za ${formatZl(totalCost, 0)} w celu ochrony gospodarki!`, 'review');
+    if (playerPortfolio[target.symbol]) showToast(`Państwo przymusowo wykupiło Twoje akcje w ${target.name} po cenie ${formatZl(buyoutPrice, 2)}.`, 'warning', 7000);
     buyOutAllHolders(target, buyoutPrice); // wszyscy posiadacze, nie tylko gracz i boty (testy ogólne 0.11)
     target.isStateOwned = true;
     target.stateOwnershipPct = getRandomInRange(0.75, 0.90);
@@ -1282,8 +1282,8 @@ function triggerBankIPOEvent() {
 
     const message = `Nowy bank "${bankToIPO.name}" (${bankToIPO.type}) wchodzi na giełdę!<br><br>
                      Oferujemy Ci możliwość zakupu <strong>${sharesOfferedToPlayer}</strong> akcji (5% udziałów)
-                     po preferencyjnej cenie <strong>${offerPrice.toFixed(2)} PLN</strong>
-                     (całkowity koszt: <strong>${offerCost.toFixed(2)} PLN</strong>) przed oficjalnym debiutem.<br><br>
+                     po preferencyjnej cenie <strong>${formatZl(offerPrice, 2)}</strong>
+                     (całkowity koszt: <strong>${formatZl(offerCost, 2)}</strong>) przed oficjalnym debiutem.<br><br>
                      Czy chcesz skorzystać z oferty?`;
     openBankIPOOfferModal(message);
 }

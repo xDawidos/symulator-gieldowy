@@ -972,7 +972,7 @@ function runMergerStage(stock, partner, process) {
             return true;
         case 3: {
             process.costs += 5000 + (getMarketCapValue(stock) + getMarketCapValue(partner)) * 0.005;
-            process.statusMessage = `Etap 3: strategia i finansowanie (koszty: ${process.costs.toFixed(0)} PLN).`;
+            process.statusMessage = `Etap 3: strategia i finansowanie (koszty: ${formatZl(process.costs, 0)}).`;
             return true;
         }
         case 4:
@@ -983,7 +983,7 @@ function runMergerStage(stock, partner, process) {
                     adjustCompanyCash(stock, -fine);
                     adjustBalanceSheet(stock, { assets: -fine, retainedEarnings: -fine });
                     governmentTreasury += fine;
-                    logEvent(`⚖️ Urząd antymonopolowy blokuje ${process.type} ${stock.name} → ${partner.name} i nakłada na inicjatora karę ${fine.toLocaleString('pl-PL')} PLN.`, 'state');
+                    logEvent(`⚖️ Urząd antymonopolowy blokuje ${process.type} ${stock.name} → ${partner.name} i nakłada na inicjatora karę ${formatZl(fine, 0)}.`, 'state');
                 }
                 cancelMerger(stock, 'Zablokowane przez urząd antymonopolowy.');
                 cancelMerger(partner, 'Zablokowane przez urząd antymonopolowy.');
@@ -1209,7 +1209,7 @@ function activateDefenseMechanism(symbol, defenseType, entityId = 'player') {
     switch (defenseType) {
         case 'poisonPill':
             target.financialHealth = Math.max(-5, (Number(target.financialHealth) || 0) - 0.5);
-            logEvent(`🧪 ${target.name} aktywuje „Zatrutą Pigułkę” przeciw ${initiator.name} (koszt ${check.cost.toLocaleString('pl-PL')} PLN, płaci: ${payer.name}).`, 'review');
+            logEvent(`🧪 ${target.name} aktywuje „Zatrutą Pigułkę” przeciw ${initiator.name} (koszt ${formatZl(check.cost, 0)}, płaci: ${payer.name}).`, 'review');
             break;
         case 'negotiate':
             runTakeoverNegotiation(initiator, target, process);
@@ -1235,7 +1235,7 @@ function runTakeoverNegotiation(initiator, target, process) {
     const affordable = process.financing !== 'cash' || initiator.cash >= newTotal;
     if (affordable && Math.random() < getAggressorPersistence(initiator) + 0.2) {
         raiseTakeoverOffer(initiator, target, process, demand);
-        logEvent(`🤝 ${initiator.name} przyjmuje żądania ${target.name}: premia rośnie o ${(demand * 100).toFixed(0)} pkt proc. (cena ${process.offerDetails.buyoutPricePerShare.toFixed(2)} PLN).`, 'review');
+        logEvent(`🤝 ${initiator.name} przyjmuje żądania ${target.name}: premia rośnie o ${(demand * 100).toFixed(0)} pkt proc. (cena ${formatZl(process.offerDetails.buyoutPricePerShare, 2)}).`, 'review');
     } else {
         logEvent(`🤝 ${initiator.name} odrzuca żądania ${target.name} i wycofuje ofertę.`, 'review');
         abortTakeover(initiator, target, 'Agresor odrzucił żądania wyższej premii.');
@@ -1334,7 +1334,7 @@ function notifyFundOfTakeover(initiator, target) {
     addMail({
         sender: CORPORATION_SENDER,
         subject: `🚨 Wezwanie: ${initiator.name} chce przejąć ${target.name}`,
-        body: `${initiator.name} oferuje ${process.offerDetails.buyoutPricePerShare.toFixed(2)} PLN za akcję ${target.name} (premia ${((process.offerDetails.premium || 0) * 100).toFixed(0)}%). Fundusz ma ${(pct * 100).toFixed(1)}% akcji — zdecyduj: sprzedaż po cenie oferty albo głos przeciw${pct > 0.5 ? ', a jako większościowy akcjonariusz także obrona' : ''}.`,
+        body: `${initiator.name} oferuje ${formatZl(process.offerDetails.buyoutPricePerShare, 2)} za akcję ${target.name} (premia ${((process.offerDetails.premium || 0) * 100).toFixed(0)}%). Fundusz ma ${(pct * 100).toFixed(1)}% akcji — zdecyduj: sprzedaż po cenie oferty albo głos przeciw${pct > 0.5 ? ', a jako większościowy akcjonariusz także obrona' : ''}.`,
         importance: 3, symbol: target.symbol, action: { type: 'takeover', symbol: target.symbol }
     });
     // U1: decyzja o przejęciu wyskakuje na ekranie i pauzuje grę (wyjątek od zasady „bez okien”).
@@ -1391,7 +1391,7 @@ function negotiationDemand(symbol, demand) {
         raiseTakeoverOffer(initiator, target, process, demand);
         neg.open = false;
         result = 'accepted';
-        logEvent(`🤝 ${initiator.name} przyjmuje żądanie: premia +${(demand * 100).toFixed(0)} pkt proc. (cena ${process.offerDetails.buyoutPricePerShare.toFixed(2)} PLN).`, 'review');
+        logEvent(`🤝 ${initiator.name} przyjmuje żądanie: premia +${(demand * 100).toFixed(0)} pkt proc. (cena ${formatZl(process.offerDetails.buyoutPricePerShare, 2)}).`, 'review');
     } else if (neg.round < NEGOTIATION_MAX_ROUNDS && affordable && Math.random() < 0.6) {
         neg.counter = Math.round(demand * getRandomInRange(0.3, 0.6) * 100) / 100;
         result = 'counter';
@@ -1450,7 +1450,7 @@ function sellFundSharesToAggressor(symbol) {
     process.offerDetails.totalCost = Math.max(0, process.offerDetails.totalCost - amount);
     process.fundDecision = 'sold';
     syncTakeover(initiator, target);
-    logEvent(`💰 Fundusz sprzedaje ${shares.toLocaleString('pl-PL')} akcji ${target.name} spółce ${initiator.name} po ${price.toFixed(2)} PLN (wynik ${profit >= 0 ? '+' : ''}${profit.toFixed(0)} PLN).`, 'review');
+    logEvent(`💰 Fundusz sprzedaje ${shares.toLocaleString('pl-PL')} akcji ${target.name} spółce ${initiator.name} po ${formatZl(price, 2)} (wynik ${profit >= 0 ? '+' : ''}${formatZl(profit, 0)}).`, 'review');
     showToast(`Sprzedano pakiet ${symbol} za ${formatZl(amount, 0)}.`, 'success');
     if (typeof refreshFundViews === 'function') refreshFundViews();
     refreshTakeoverViews(symbol);
@@ -1565,7 +1565,7 @@ function triggerRescueOfferingEvent(forcedTarget = null) {
 
     if (getRescueOffer(stock.symbol)) finalizeRescueOffering(stock); // poprzednia emisja tej spółki zamknięta przed nową
     const offer = { symbol: stock.symbol, price, total, remaining: total, fundReserved: 0, closed: false, quarter: typeof macro === 'object' ? macro.quarter : 0 };
-    logEvent(`📢 EMISJA RATUNKOWA: ${stock.name} oferuje ${total.toLocaleString('pl-PL')} nowych akcji po ${price.toFixed(2)} PLN, aby spłacić długi.`, 'market');
+    logEvent(`📢 EMISJA RATUNKOWA: ${stock.name} oferuje ${total.toLocaleString('pl-PL')} nowych akcji po ${formatZl(price, 2)}, aby spłacić długi.`, 'market');
 
     // Fundusz: pula zarezerwowana (do 40%) — gracz decyduje w oknie/poczcie.
     const fundEligible = playerFund && canAccessExchange(stock.exchange);
@@ -1583,7 +1583,7 @@ function triggerRescueOfferingEvent(forcedTarget = null) {
         addMail({
             sender: CORPORATION_SENDER,
             subject: `Emisja ratunkowa: ${stock.name}`,
-            body: `${stock.name} oferuje funduszowi do ${offer.fundReserved.toLocaleString('pl-PL')} nowych akcji po ${price.toFixed(2)} PLN (dyskonto do rynku). Pieniądze idą na spłatę długu.`,
+            body: `${stock.name} oferuje funduszowi do ${offer.fundReserved.toLocaleString('pl-PL')} nowych akcji po ${formatZl(price, 2)} (dyskonto do rynku). Pieniądze idą na spłatę długu.`,
             importance: 2, symbol: stock.symbol, action: { type: 'rescue', symbol: stock.symbol }
         });
         if ((playerPortfolio[stock.symbol]?.shares || 0) > 0) openRescueOfferingModal(stock.symbol);
@@ -1641,7 +1641,7 @@ function finalizeRescueOffering(stock) {
     const raised = stock.rescueRaised || 0;
     stock.rescueRaised = 0;
     if (raised > 0) stock.financialHealth = Math.min(5, (Number(stock.financialHealth) || 0) + 0.5);
-    logEvent(`📢 Emisja ratunkowa ${stock.name} zamknięta: zebrano ${raised.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN na spłatę długu.`, 'review');
+    logEvent(`📢 Emisja ratunkowa ${stock.name} zamknięta: zebrano ${formatZl(raised, 0)} na spłatę długu.`, 'review');
 }
 
 // #################################################################################

@@ -318,7 +318,7 @@ function acquireSubcontractor(builder, spec, price = null) {
     if (!Array.isArray(subcontractorDeals)) subcontractorDeals = [];
     subcontractorDeals.push({ q: getSubcontractorQuarter(), builder: spec.groupSymbol, spec: spec.id, name: spec.name, specialty: spec.specialty, price: cost });
     if (subcontractorDeals.length > 40) subcontractorDeals.splice(0, subcontractorDeals.length - 40);
-    logEvent(`🏗️ ${builder.name} przejmuje podwykonawcę ${spec.name} (${SUBCONTRACTOR_SPECIALTIES[spec.specialty]}) za ${cost.toLocaleString('pl-PL')} PLN — prywatna spółka zależna.`, 'company');
+    logEvent(`🏗️ ${builder.name} przejmuje podwykonawcę ${spec.name} (${SUBCONTRACTOR_SPECIALTIES[spec.specialty]}) za ${formatZl(cost, 0)} — prywatna spółka zależna.`, 'company');
     return true;
 }
 

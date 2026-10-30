@@ -230,7 +230,7 @@ const ACADEMY_ENTRIES = {
     nav: {
         title: 'NAV i jednostki funduszu', icon: '💼',
         text: 'NAV (wartość aktywów netto) na udział to wartość funduszu podzielona przez liczbę udziałów. Klienci kupują i umarzają udziały po NAV. Wynik funduszu mierzy się zmianą NAV, nie wielkością aktywów — napływ klientów nie jest zyskiem.',
-        example: () => playerFund ? `Twój fundusz: NAV ${getFundNav().toFixed(4)} PLN na jednostkę, aktywa ${formatZl(getFundAssets(), 0)}.` : '',
+        example: () => playerFund ? `Twój fundusz: NAV ${formatZl(getFundNav(), 4)} na jednostkę, aktywa ${formatZl(getFundAssets(), 0)}.` : '',
         quiz: [
             { q: 'Klienci wpłacają do funduszu 1 mln PLN. NAV na jednostkę…', a: ['się nie zmienia — przybywa jednostek', 'rośnie o 1 mln PLN', 'spada'], c: 0 },
             { q: 'Czym mierzy się wynik zarządzającego?', a: ['Zmianą NAV na jednostkę', 'Wielkością aktywów', 'Liczbą klientów'], c: 0 },
@@ -465,7 +465,7 @@ Object.assign(ACADEMY_ENTRIES, {
     splitReverseSplit: {
         title: 'Split i reverse split', icon: '🔀',
         text: 'Split to podział akcji: spółka wymienia każdą akcję na kilka (np. 5:1), a kurs spada tyle razy, ile akcji przybywa. Kapitalizacja i wartość Twojej pozycji zostają bez zmian — to jak rozmiana banknotu na drobne. Spółki dzielą akcje, gdy kurs jest bardzo wysoki, bo tanie akcje łatwiej kupować. Reverse split (konsolidacja, np. 1:10) robi odwrotnie: wiele akcji zamienia się w jedną, a kurs rośnie — stosują go spółki z kursem poniżej 1 zł, żeby nie wyglądać na „grosze” i uniknąć zawieszenia handlu. Ułamki akcji, których nie da się wymienić, spółka wypłaca gotówką. Sam podział nie czyni spółki ani lepszą, ani gorszą (reverse split bywa sygnałem kłopotów). W grze: split od 1000 zł, konsolidacja poniżej 1 zł; wykresy i dywidendy na akcję są przeliczane wstecz.',
-        example: () => { const e = splitLog[splitLog.length - 1]; return e ? `${e.name}: ${e.kind === 'split' ? 'split' : 'konsolidacja'} ${formatSplitRatio(e.kind === 'split' ? e.ratio : 1 / e.ratio)} w kw. ${e.quarter} — kurs ${e.priceBefore.toFixed(2)} → ${e.priceAfter.toFixed(2)} zł.` : 'Przykład: akcja za 1200 zł po splicie 3:1 kosztuje 400 zł, a Ty masz 3 razy więcej akcji.'; },
+        example: () => { const e = splitLog[splitLog.length - 1]; return e ? `${e.name}: ${e.kind === 'split' ? 'split' : 'konsolidacja'} ${formatSplitRatio(e.kind === 'split' ? e.ratio : 1 / e.ratio)} w kw. ${e.quarter} — kurs ${e.priceBefore.toFixed(2)} → ${formatZl(e.priceAfter, 2)}.` : 'Przykład: akcja za 1200 zł po splicie 3:1 kosztuje 400 zł, a Ty masz 3 razy więcej akcji.'; },
         quiz: [
             { q: 'Masz 10 akcji po 1200 zł. Spółka robi split 3:1. Ile masz akcji i po ile?', a: ['30 akcji po 400 zł', '10 akcji po 400 zł', '30 akcji po 1200 zł'], c: 0 },
             { q: 'Jak split zmienia wartość Twojej pozycji?', a: ['nie zmienia jej', 'zwiększa ją', 'zmniejsza ją'], c: 0 },

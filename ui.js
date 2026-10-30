@@ -1508,7 +1508,7 @@ function renderChartSVGForStock(stock, svgAreaElement, width, height) {
                 marker.setAttribute("stroke", "white");
                 marker.setAttribute("stroke-width", "1.5");
                 marker.style.cursor = "pointer";
-                const txTitle = `Kupiono: ${tx.quantity} szt. po ${formatNumberPl(tx.price, 2)} PLN`;
+                const txTitle = `Kupiono: ${tx.quantity} szt. po ${formatZl(tx.price, 2)}`;
                 marker.setAttribute("title", txTitle);
                 const titleEl = document.createElementNS(svgNs, "title");
                 titleEl.textContent = txTitle;
@@ -2610,7 +2610,7 @@ function updateSectorDonut(portfolio) {
     const legendHtml = sortedSectors.map(item => {
         const icon = typeof sectorIcon === 'function' ? sectorIcon(item.sector, 13) : '';
         const pctFormatted = typeof formatNumberPl === 'function' ? formatNumberPl(item.pct, 1) : item.pct.toFixed(1);
-        const valFormatted = typeof formatZl === 'function' ? formatZl(item.val, 0) : `${item.val.toFixed(0)} zł`;
+        const valFormatted = typeof formatZl === 'function' ? formatZl(item.val, 0) : `${formatZl(item.val, 0)}`;
         const nameEsc = typeof escapeHtml === 'function' ? escapeHtml(item.sector) : item.sector;
         return `
             <div class="sector-donut-item" title="${nameEsc}: ${valFormatted} (${pctFormatted}%)">
@@ -3341,7 +3341,7 @@ function renderDividendTrackerContent() {
             row.insertCell().textContent = s.isDividendAristocrat ? `${s.name} ★` : s.name;
             row.insertCell().textContent = getDividendPolicyLabel(s.dividendPolicy);
             row.insertCell().textContent = s.pendingDividend ? 'ogłoszona' : '—';
-            row.insertCell().textContent = `ostatnio ${formatNumberPl(s.lastDividend.dps, 4)} PLN`;
+            row.insertCell().textContent = `ostatnio ${formatZl(s.lastDividend.dps, 4)}`;
             row.insertCell().textContent = `${formatNumberPl((dy * 100), 2)}%`;
         });
         if (!payers.length) { const cell = body.insertRow().insertCell(); cell.colSpan = 5; cell.className = 'text-center'; cell.textContent = 'Jeszcze żadna spółka nie wypłaciła dywidendy.'; }
@@ -3383,7 +3383,7 @@ function renderDividendTrackerContent() {
         const estimateCell = row.insertCell();
         if (skillLvl >= 3) {
             if (typeof stock.estimatedDividend === "number") {
-                estimateCell.textContent = `${formatNumberPl(stock.estimatedDividend, 4)} PLN`;
+                estimateCell.textContent = `${formatZl(stock.estimatedDividend, 4)}`;
             } else {
                 estimateCell.textContent = "Brak danych";
             }
@@ -3423,7 +3423,7 @@ function displayStartups(previousInputValues = {}) {
     startupPanel.style.display = FEATURE_FLAGS.startups ? 'block' : 'none';
     if (!FEATURE_FLAGS.startups) return;
     const limitInfo = document.getElementById('startup-fund-limit');
-    if (limitInfo) limitInfo.textContent = `Fundusz w startupach: ${getFundStartupExposure().toFixed(0)} PLN z limitu ${(getFundAssets() * STARTUP_FUND_LIMIT).toFixed(0)} PLN (${(STARTUP_FUND_LIMIT * 100).toFixed(0)}% aktywów).` + (getCrowdingPressure() > 0 ? ` Rynek nasycony (${getListedCompanyCount()}/${LISTING_SOFT_CAP} spółek): finansowanie startupów mniejsze o ${((1 - getStartupFundingFactor()) * 100).toFixed(0)}%, cele zbiórek wyższe.` : '');
+    if (limitInfo) limitInfo.textContent = `Fundusz w startupach: ${formatZl(getFundStartupExposure(), 0)} z limitu ${formatZl((getFundAssets() * STARTUP_FUND_LIMIT), 0)} (${(STARTUP_FUND_LIMIT * 100).toFixed(0)}% aktywów).` + (getCrowdingPressure() > 0 ? ` Rynek nasycony (${getListedCompanyCount()}/${LISTING_SOFT_CAP} spółek): finansowanie startupów mniejsze o ${((1 - getStartupFundingFactor()) * 100).toFixed(0)}%, cele zbiórek wyższe.` : '');
 
     const startups = stocks.filter(s => s.assetType === 'Startup');
     startupTableBody.innerHTML = '';
@@ -3471,7 +3471,7 @@ function displayStartups(previousInputValues = {}) {
         // Komórka 2: Cel Finansowania
         const goalCell = row.insertCell();
         goalCell.dataset.label = 'Cel finansowania';
-        goalCell.textContent = `${startup.fundingGoal.toLocaleString('pl-PL')} PLN`;
+        goalCell.textContent = `${formatZl(startup.fundingGoal, 0)}`;
 
         // Komórki 3, 4 i 5
         const fundingCell = row.insertCell();
@@ -3493,7 +3493,7 @@ function displayStartups(previousInputValues = {}) {
 
         switch (startup.stage) {
             case 'funding': {
-                fundingCell.innerHTML = `${formatNumberPl(startup.currentFunding, 2)} PLN <progress value="${startup.currentFunding}" max="${startup.fundingGoal}" class="w-full"></progress>`;
+                fundingCell.innerHTML = `${formatZl(startup.currentFunding, 2)} <progress value="${startup.currentFunding}" max="${startup.fundingGoal}" class="w-full"></progress>`;
                 progressCell.innerHTML = `<progress value="0" max="100" class="w-full"></progress>`;
                 investButton.textContent = 'Zainwestuj';
                 investButton.onclick = () => {
@@ -3537,7 +3537,7 @@ function displayStartups(previousInputValues = {}) {
 
                 if (startup.pendingExtraCost) {
                     progressCell.innerHTML = `<span class="text-down fw-bold">WSTRZYMANO</span>`;
-                    actionsCell.innerHTML = `<span>Wymaga: ${formatNumberPl(startup.pendingExtraCost, 2)} PLN</span>
+                    actionsCell.innerHTML = `<span>Wymaga: ${formatZl(startup.pendingExtraCost, 2)}</span>
                                            <button onclick="payExtraStartupCost('${startup.symbol}')">Zapłać</button>`;
                 } else if (startup.developmentPausedUntil && Date.now() < startup.developmentPausedUntil) {
                     const timeLeft = Math.ceil((startup.developmentPausedUntil - Date.now()) / 1000);
@@ -3562,7 +3562,7 @@ function displayStartups(previousInputValues = {}) {
                 fundingCell.innerHTML = `
                     <strong class="text-down">Wymagane dofinansowanie!</strong>
                     <progress value="${startup.rescueCurrent}" max="${startup.rescueGoal}" class="w-full"></progress>
-                    <span>${startup.rescueCurrent.toLocaleString('pl-PL')} / ${startup.rescueGoal.toLocaleString('pl-PL')} PLN</span>
+                    <span>${startup.rescueCurrent.toLocaleString('pl-PL')} / ${formatZl(startup.rescueGoal, 0)}</span>
                 `;
                 progressCell.innerHTML = `<strong class="text-down">Pozostały czas: ${timeLeftFC}s</strong>`;
 
@@ -3664,8 +3664,8 @@ function openInvestorsModal(symbol) {
             const row = tableBody.insertRow();
             row.insertCell().textContent = `#${index + 1}`;
             const mine = name === 'Pula Inwestycyjna' ? getPoolStartupShare(startup, 'player') : 0; // 0.14.1 R4
-            row.insertCell().textContent = mine > 0 ? `${name} (w tym Ty: ${mine.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN)` : name;
-            row.insertCell().textContent = `${amount.toLocaleString('pl-PL')} PLN`;
+            row.insertCell().textContent = mine > 0 ? `${name} (w tym Ty: ${formatZl(mine, 0)})` : name;
+            row.insertCell().textContent = `${formatZl(amount, 0)}`;
 
             if (name === "Ty (Gracz)") {
                 row.style.fontWeight = 'bold';
@@ -3696,7 +3696,7 @@ function displayInvestmentPool() {
 
     if (!totalFundsEl) return; // Panel nie istnieje, nic nie rób
 
-    totalFundsEl.textContent = `${investmentPool.totalFunds.toLocaleString('pl-PL')} PLN`;
+    totalFundsEl.textContent = `${formatZl(investmentPool.totalFunds, 0)}`;
     timerEl.textContent = `${Math.floor(investmentPool.investmentTimer / 1000)}`;
     const statusEl = document.getElementById('pool-status'); // 0.14.1 R3: dlaczego pieniądze czekają
     if (statusEl) statusEl.textContent = getPoolStatus().text;
@@ -3742,7 +3742,7 @@ function getPoolStartupShare(startup, id) {
 function renderPoolDetails() {
     const el = document.getElementById('pool-details');
     if (!el) return;
-    const fmtZl = value => `${(Number(value) || 0).toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN`;
+    const fmtZl = value => `${formatZl((Number(value) || 0), 0)}`;
     const free = Number(investmentPool.contributors?.player) || 0;
     const rows = stocks.filter(s => s.assetType === 'Startup' && (s.poolInvestors || []).length).map(s => {
         const pool = (s.poolInvestors || []).reduce((sum, round) => sum + (Number(round.amount) || 0), 0);
@@ -4383,7 +4383,7 @@ function renderCompanyCardFinance(stock, f) {
                     ${row('Gotówka', money(stock.cash), 'Pieniądze na koncie spółki.')}
                     ${row('Wartość księgowa / akcję', perShare(f.bookValuePerShare), '(Aktywa − zobowiązania) / liczba akcji.')}
                     ${stock.assetType !== 'REIT' ? row('Polityka dywidendy', escapeHtml(getDividendPolicyLabel(stock.dividendPolicy)), 'Jak dużą część zysku spółka wypłaca.') : ''}
-                    ${row('Ostatnia dywidenda', last ? `${formatNumberPl(last.dps, 4)} PLN (${formatNumberPl((last.yield * 100), 2)}%)` : 'brak', 'Ostatnia wypłata na akcję i stopa w dniu wypłaty.')}
+                    ${row('Ostatnia dywidenda', last ? `${formatZl(last.dps, 4)} (${formatNumberPl((last.yield * 100), 2)}%)` : 'brak', 'Ostatnia wypłata na akcję i stopa w dniu wypłaty.')}
                 </tbody></table></section>
         </div>
         ${stock.assetType === 'REIT' && stock.reit ? renderReitCard(stock) : ''}
@@ -4522,7 +4522,7 @@ function updateStateOfferInfo() {
     else if (exchangeLevel >= 1) premium = 1.15; // Giełda Brązowa: 15%
 
     const offerPrice = stock.price * premium;
-    costLabel.textContent = `${formatNumberPl((offerPrice * quantity), 2)} PLN (cena za akcję: ~${formatNumberPl(offerPrice, 2)} PLN)`;
+    costLabel.textContent = `${formatZl((offerPrice * quantity), 2)} (cena za akcję: ~${formatZl(offerPrice, 2)})`;
 
     // Sprawdzanie cooldownu
     if (stock.stateOfferCooldownUntil && Date.now() < stock.stateOfferCooldownUntil) {
@@ -4994,7 +4994,7 @@ function updateCityModalContent() {
             statusEl.textContent = "Odblokowane!";
             statusEl.style.color = 'var(--color-up)';
         } else {
-            statusEl.textContent = `Zablokowane (cel: ${CITY_UNLOCK_DONATION.toLocaleString('pl-PL')} PLN)`;
+            statusEl.textContent = `Zablokowane (cel: ${formatZl(CITY_UNLOCK_DONATION, 0)})`;
             statusEl.style.color = 'var(--color-down)';
         }
 
@@ -5007,8 +5007,8 @@ function updateCityModalContent() {
                     <tr>
                         <td>${comp.name}</td>
                         <td>${comp.type}</td>
-                        <td>${comp.budget.toLocaleString('pl-PL')} PLN</td>
-                        <td>${comp.baseIncome.toLocaleString('pl-PL')} PLN</td>
+                        <td>${formatZl(comp.budget, 0)}</td>
+                        <td>${formatZl(comp.baseIncome, 0)}</td>
                     </tr>`;
             });
         } else {
@@ -5023,7 +5023,7 @@ function updateCityModalContent() {
                 privateList.innerHTML += `
                     <tr>
                         <td>${comp.name}</td>
-                        <td>${comp.value.toLocaleString('pl-PL')} PLN</td>
+                        <td>${formatZl(comp.value, 0)}</td>
                         <td><progress value="${comp.developmentProgress}" max="100"></progress></td>
                     </tr>`;
             });
@@ -5316,7 +5316,7 @@ function updateTBillAuctionSection() {
         playerBidsList.innerHTML = '';
         currentTBillAuction.bids.filter(b => b.bidderId === 'player').forEach(bid => {
             const li = document.createElement('li');
-            li.textContent = `${bid.quantity} szt. po ${formatNumberPl(bid.price, 2)} PLN`;
+            li.textContent = `${bid.quantity} szt. po ${formatZl(bid.price, 2)}`;
             playerBidsList.appendChild(li);
         });
 
@@ -5432,7 +5432,7 @@ function updateCollateralAuctionSection() {
         playerBidsList.innerHTML = '';
         currentCollateralAuction.bids.filter(b => b.bidderId === 'player').forEach(bid => {
             const li = document.createElement('li');
-            li.textContent = `${bid.quantity} szt. po ${formatNumberPl(bid.price, 2)} PLN`;
+            li.textContent = `${bid.quantity} szt. po ${formatZl(bid.price, 2)}`;
             playerBidsList.appendChild(li);
         });
 
@@ -5566,14 +5566,14 @@ function openFinancialDetailsModal(symbol) {
     if (stock.balanceSheet) {
         content.innerHTML = `
             <h4>Bilans Spółki:</h4>
-            <p><strong>Aktywa:</strong> ${stock.balanceSheet.assets.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN</p>
-            <p><strong>Zobowiązania (Pasywa):</strong> ${stock.balanceSheet.liabilities.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN</p>
-            <p><strong>Kapitał Własny:</strong> ${(stock.balanceSheet.assets - stock.balanceSheet.liabilities).toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN</p>
-            <p> &nbsp; - Kapitał Zakładowy: ${stock.balanceSheet.shareCapital.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN</p>
-            <p> &nbsp; - Zyski Zatrzymane: ${stock.balanceSheet.retainedEarnings.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN</p>
+            <p><strong>Aktywa:</strong> ${formatZl(stock.balanceSheet.assets, 0)}</p>
+            <p><strong>Zobowiązania (Pasywa):</strong> ${formatZl(stock.balanceSheet.liabilities, 0)}</p>
+            <p><strong>Kapitał Własny:</strong> ${formatZl((stock.balanceSheet.assets - stock.balanceSheet.liabilities), 0)}</p>
+            <p> &nbsp; - Kapitał Zakładowy: ${formatZl(stock.balanceSheet.shareCapital, 0)}</p>
+            <p> &nbsp; - Zyski Zatrzymane: ${formatZl(stock.balanceSheet.retainedEarnings, 0)}</p>
             <hr>
-            <p><strong>Zysk Kwartalny (Ostatni):</strong> ${stock.quarterlyEarnings.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN</p>
-            <p><strong>Dług Korporacyjny (jeśli dotyczy):</strong> ${(stock.corporateDebt || 0).toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN</p>
+            <p><strong>Zysk Kwartalny (Ostatni):</strong> ${formatZl(stock.quarterlyEarnings, 0)}</p>
+            <p><strong>Dług Korporacyjny (jeśli dotyczy):</strong> ${formatZl((stock.corporateDebt || 0), 0)}</p>
             ${renderFinancialPeriodPreview(stock)}
         `;
     } else {
@@ -5729,7 +5729,7 @@ function openMaTargetModal(initiatorSymbol) {
             
             row.insertCell().textContent = `${target.name} (${target.symbol})`;
             row.insertCell().textContent = target.sector.join(', ');
-            row.insertCell().textContent = `${marketCap.toLocaleString('pl-PL')} PLN`;
+            row.insertCell().textContent = `${formatZl(marketCap, 0)}`;
             
             const actionCell = row.insertCell();
             

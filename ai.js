@@ -214,7 +214,7 @@ if (weeklyRate === 0) {
         collateral: null // Zwykły kredyt, bez hipoteki
     });
 
-    console.log(`[AI Kredyt] ${ai.name} wziął ${amount.toFixed(0)} PLN kredytu w ${bestBank.name}. Rata: ${weeklyPayment.toFixed(2)} PLN/tydz.`);
+    console.log(`[AI Kredyt] ${ai.name} wziął ${formatZl(amount, 0)} kredytu w ${bestBank.name}. Rata: ${formatZl(weeklyPayment, 2)}/tydz.`);
     return true; // Sukces
 }
 
@@ -474,7 +474,7 @@ function processAiLoansWeekly(ai) {
                     // AI ma pieniądze - spłaca
                     ai.cash -= loan.amount;
                     if (pawnShop) pawnShop.cash += loan.amount;
-                    console.log(`[AI] ${ai.name} spłacił pożyczkę lombardową w ${loan.bankName} (${loan.amount.toFixed(2)} PLN).`);
+                    console.log(`[AI] ${ai.name} spłacił pożyczkę lombardową w ${loan.bankName} (${formatZl(loan.amount, 2)}).`);
                     
                     // Odblokuj akcje
                     const holding = ai.portfolio[loan.collateral.symbol];
@@ -651,7 +651,7 @@ function aiTurnReckless(ai, accessibleStocks, portfolioSize, aiNetWorth, cashRat
         const repaymentAmount = Math.min(loanToRepay.amount, ai.cash * 0.5); // Użyj 50% gotówki na spłatę
         if (repaymentAmount > 100) {
              if (aiRepayLoan(ai, loanToRepay.id, repaymentAmount)) {
-                console.log(`[AI ${ai.personality}] ${ai.name} spłacił ${repaymentAmount.toFixed(0)} PLN pożyczki (nadmiar gotówki).`);
+                console.log(`[AI ${ai.personality}] ${ai.name} spłacił ${formatZl(repaymentAmount, 0)} pożyczki (nadmiar gotówki).`);
                 return true; // Zrób tylko to w tej turze
              }
         }
@@ -857,7 +857,7 @@ function aiTurnCalm(ai, accessibleStocks, portfolioSize, aiNetWorth, cashRatio, 
         const depositBank = aiChooseCommercialBank('deposit', ai);
         if (depositBank && excessCash > 500) {
             if (aiMakeDeposit(ai, depositBank.id, excessCash)) {
-                console.log(`[AI ${ai.personality}] ${ai.name} wpłacił ${excessCash.toFixed(0)} PLN na lokatę w ${depositBank.name}.`);
+                console.log(`[AI ${ai.personality}] ${ai.name} wpłacił ${formatZl(excessCash, 0)} na lokatę w ${depositBank.name}.`);
                 return true; // Akcja podjęta
             }
         }
@@ -974,7 +974,7 @@ function aiTurnWhale(ai, accessibleStocks, portfolioSize, aiNetWorth, cashRatio,
         const depositBank = aiChooseCommercialBank('deposit', ai);
         if (depositBank && excessCash > 1000) {
             if (aiMakeDeposit(ai, depositBank.id, excessCash)) {
-                console.log(`[AI ${ai.personality}] ${ai.name} wpłacił ${excessCash.toFixed(0)} PLN na lokatę w ${depositBank.name}.`);
+                console.log(`[AI ${ai.personality}] ${ai.name} wpłacił ${formatZl(excessCash, 0)} na lokatę w ${depositBank.name}.`);
                 return true;
             }
         }
@@ -1129,7 +1129,7 @@ function makeAiDecision(ai) {
                 const depositBank = aiChooseCommercialBank('deposit', banker);
                 if (depositBank && excessCash > 100) {
                     if (aiMakeDeposit(banker, depositBank.id, excessCash)) {
-                        console.log(`[AI Bankier] ${banker.name} wpłacił ${excessCash.toFixed(0)} PLN na lokatę w ${depositBank.name}.`);
+                        console.log(`[AI Bankier] ${banker.name} wpłacił ${formatZl(excessCash, 0)} na lokatę w ${depositBank.name}.`);
                         break;
                     }
                 }
@@ -1237,7 +1237,7 @@ function makeAiDecision(ai) {
                 const repaymentAmount = Math.min(loanToRepay.amount, banker.cash * 0.3);
                 if (repaymentAmount > 100) {
                      if (aiRepayLoan(banker, loanToRepay.id, repaymentAmount)) {
-                        console.log(`[AI Bankier] ${banker.name} spłacił ${repaymentAmount.toFixed(0)} PLN pożyczki w ${loanToRepay.bankName}.`);
+                        console.log(`[AI Bankier] ${banker.name} spłacił ${formatZl(repaymentAmount, 0)} pożyczki w ${loanToRepay.bankName}.`);
                         break;
                      }
                 }
@@ -1322,7 +1322,7 @@ function makeAiDecision(ai) {
              const repaymentAmount = Math.min(loanToRepay.amount, ai.cash * 0.4);
              if (repaymentAmount > 100) {
                  if (aiRepayLoan(ai, loanToRepay.id, repaymentAmount)) {
-                     console.log(`[AI] ${ai.name} spłacił ${repaymentAmount.toFixed(0)} PLN pożyczki w ${loanToRepay.bankName}.`);
+                     console.log(`[AI] ${ai.name} spłacił ${formatZl(repaymentAmount, 0)} pożyczki w ${loanToRepay.bankName}.`);
                      return;
                  }
              }
@@ -1450,7 +1450,7 @@ function aiInvestInStartup(ai, symbol, amount) {
     startup.successChance += successChanceBonus;
     if (startup.successChance > 1) startup.successChance = 1;
 
-    console.log(`[AI] ${ai.name} zainwestował ${amount.toFixed(2)} PLN w start-up ${startup.name}!`);
+    console.log(`[AI] ${ai.name} zainwestował ${formatZl(amount, 2)} w start-up ${startup.name}!`);
 }
 
 function runStateActions() {
@@ -1523,7 +1523,7 @@ function aiUseCrownPowers(ai, stock) {
             ai.cash -= bailoutAmount;
             adjustBalanceSheet(stock, { liabilities: -bailoutAmount, retainedEarnings: bailoutAmount });
             stock.financialHealth = Math.min(5, stock.financialHealth + 1);
-            logEvent(`[AI] 👑 ${ai.name} ratuje ${stock.name}, spłacając ${bailoutAmount.toFixed(2)} PLN długu!`, 'review');
+            logEvent(`[AI] 👑 ${ai.name} ratuje ${stock.name}, spłacając ${formatZl(bailoutAmount, 2)} długu!`, 'review');
             return; // Akcja podjęta
         }
     }
@@ -1646,7 +1646,7 @@ function runHoldingCompanyAI(holding) {
                 };
                 
                 targetStock.sharesHeld += quantityToBuy;
-                logEvent(`💼 Fundusz ${holding.name} nabywa ${quantityToBuy} akcji w ${targetStock.name} za ${cost.toFixed(2)} PLN.`);
+                logEvent(`💼 Fundusz ${holding.name} nabywa ${quantityToBuy} akcji w ${targetStock.name} za ${formatZl(cost, 2)}.`);
                 return;
             }
         }
@@ -2279,7 +2279,7 @@ function aiTakeMortgageLoan(ai, bankId, collateralSymbol, collateralQuantity, re
     if (!holding.lockedShares) holding.lockedShares = 0;
     holding.lockedShares += collateralQuantity;
 
-    console.log(`[AI Hipoteka] ${ai.name} wziął ${finalLoanAmount.toFixed(0)} PLN hipoteki w ${bank.name} pod zastaw ${collateralQuantity} ${collateralSymbol}.`);
+    console.log(`[AI Hipoteka] ${ai.name} wziął ${formatZl(finalLoanAmount, 0)} hipoteki w ${bank.name} pod zastaw ${collateralQuantity} ${collateralSymbol}.`);
     return true; // Sukces
 }
 
@@ -2648,7 +2648,7 @@ function offerBotBlock(ai) {
     botRelations.blockOffer = { aiId: ai.id, symbol: pick.stock.symbol, shares, price };
     addMail({
         sender: `bot:${ai.id}`, subject: `🤝 ${ai.name}: pakiet ${pick.stock.symbol} dla Ciebie`,
-        body: `Mogę odstąpić Twojemu funduszowi ${shares.toLocaleString('pl-PL')} akcji ${pick.stock.name} po ${price.toFixed(2)} PLN (${(BOT_BLOCK_DISCOUNT * 100).toFixed(0)}% poniżej rynku). Oferta ważna do końca kwartału.`,
+        body: `Mogę odstąpić Twojemu funduszowi ${shares.toLocaleString('pl-PL')} akcji ${pick.stock.name} po ${formatZl(price, 2)} (${(BOT_BLOCK_DISCOUNT * 100).toFixed(0)}% poniżej rynku). Oferta ważna do końca kwartału.`,
         importance: 2, symbol: pick.stock.symbol, action: { type: 'botBlock', symbol: pick.stock.symbol }
     });
     return botRelations.blockOffer;

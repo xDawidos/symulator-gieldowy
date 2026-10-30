@@ -78,7 +78,7 @@ function donateToCity(amount) {
     cityInvestment.donatedAmount += amount;
     city.mayor.support = Math.min(100, city.mayor.support + amount / 1000);
     recordPayment('player-wallet', 'external:miasto', amount, 'Darowizna na miasto');
-    logEvent(`🏙️ Przekazujesz ${amount.toFixed(2)} PLN na rozwój miasta. Twój wkład: ${city.playerDonatedAmount.toFixed(2)} PLN.`, 'city');
+    logEvent(`🏙️ Przekazujesz ${formatZl(amount, 2)} na rozwój miasta. Twój wkład: ${formatZl(city.playerDonatedAmount, 2)}.`, 'city');
 
     if (!city.playerHasUnlocked && city.playerDonatedAmount >= CITY_UNLOCK_DONATION) {
         city.playerHasUnlocked = true;
@@ -113,7 +113,7 @@ function runCityEconomy() {
     if (governmentTreasury > 10000000) {
         stateGrant = governmentTreasury * 0.01;
         governmentTreasury -= stateGrant;
-        logEvent(`🏛️ Rząd przekazał ${stateGrant.toFixed(0)} PLN dotacji dla miasta ${city.name}.`, 'state');
+        logEvent(`🏛️ Rząd przekazał ${formatZl(stateGrant, 0)} dotacji dla miasta ${city.name}.`, 'state');
     }
     city.budget += citizenTax + stateGrant - expenses;
 
@@ -127,7 +127,7 @@ function runCityEconomy() {
     mayor.support += (city.budget > 0 ? 3 : -8) + (city.infrastructureLevel - 1) * 5 + (50 - mayor.support) * 0.1;
     mayor.support = Math.max(5, Math.min(95, mayor.support));
 
-    logEvent(`🏙️ Roczne rozliczenie miasta ${city.name}: budżet ${city.budget.toFixed(0)} PLN, mieszkańców ${city.population.toLocaleString('pl-PL')}, poparcie burmistrza ${mayor.support.toFixed(0)}%.`, 'city');
+    logEvent(`🏙️ Roczne rozliczenie miasta ${city.name}: budżet ${formatZl(city.budget, 0)}, mieszkańców ${city.population.toLocaleString('pl-PL')}, poparcie burmistrza ${mayor.support.toFixed(0)}%.`, 'city');
 }
 
 function runMayorPolicy() {
@@ -150,7 +150,7 @@ function runMayorPolicy() {
                 recordPayment('external:miasto', stock, grant, 'Program wsparcia biznesu');
             }
             applyPriceEffect(stock.symbol, 0.02, 'positive', 'company');
-            logEvent(`🏙️ Program wsparcia biznesu: ${stock.name} otrzymuje ${grant.toFixed(0)} PLN dotacji od miasta.`, 'city');
+            logEvent(`🏙️ Program wsparcia biznesu: ${stock.name} otrzymuje ${formatZl(grant, 0)} dotacji od miasta.`, 'city');
         }
     } else if (policy === 'municipal') {
         municipalCompanies.forEach(company => { company.budget += 10000; });
@@ -184,7 +184,7 @@ function commissionCityTender() {
         const result = startCompanyInvestment(stock, investment.id, 'owner');
         if (result.ok) {
             recordPayment('external:miasto', stock, grant, `Dotacja miejska: ${spec.name}`);
-            logEvent(`🏙️ Burmistrz ${city.mayor.name} zleca przez ${stock.name} inwestycję „${spec.name}” (dotacja ${grant.toLocaleString('pl-PL')} PLN) — przetarg dla firm budowlanych.`, 'city');
+            logEvent(`🏙️ Burmistrz ${city.mayor.name} zleca przez ${stock.name} inwestycję „${spec.name}” (dotacja ${formatZl(grant, 0)}) — przetarg dla firm budowlanych.`, 'city');
             return stock.symbol;
         }
         // Nie udało się ogłosić przetargu — dotacja wraca do miasta.
@@ -250,7 +250,7 @@ function donateToCampaign(candidateId, amount) {
         playerWallet.complianceRisk = (playerWallet.complianceRisk || 0) + 1;
         logEvent(`⚠️ Duża darowizna na kampanię polityczną zwraca uwagę działu compliance.`, 'warning');
     }
-    logEvent(`🗳️ Wspierasz kampanię: ${candidate.name} (${amount.toFixed(0)} PLN).`, 'city');
+    logEvent(`🗳️ Wspierasz kampanię: ${candidate.name} (${formatZl(amount, 0)}).`, 'city');
     return true;
 }
 
@@ -357,11 +357,11 @@ function triggerStatePrivatizationEvent() {
         fundShares: 0,
         remainingMs: BASE_DELAYS.weekly
     };
-    logEvent(`🏛️ PRYWATYZACJA: Skarb Państwa sprzedaje ${shares.toLocaleString('pl-PL')} akcji ${stock.name} po ${privatizationOffer.price.toFixed(2)} PLN (dyskonto do rynku). Zapisy przez tydzień.`, 'state');
+    logEvent(`🏛️ PRYWATYZACJA: Skarb Państwa sprzedaje ${shares.toLocaleString('pl-PL')} akcji ${stock.name} po ${formatZl(privatizationOffer.price, 2)} (dyskonto do rynku). Zapisy przez tydzień.`, 'state');
     addMail({
         sender: CORPORATION_SENDER,
         subject: `Oferta prywatyzacyjna: ${stock.name}`,
-        body: `Skarb Państwa sprzedaje akcje ${stock.name} po ${privatizationOffer.price.toFixed(2)} PLN. Fundusz może kupić do 30% oferty. Zapisy przez tydzień gry.`,
+        body: `Skarb Państwa sprzedaje akcje ${stock.name} po ${formatZl(privatizationOffer.price, 2)}. Fundusz może kupić do 30% oferty. Zapisy przez tydzień gry.`,
         importance: 3, symbol: stock.symbol, action: { type: 'privatization', symbol: stock.symbol }
     });
     return privatizationOffer;
@@ -390,7 +390,7 @@ function subscribePrivatization(quantity) {
 
     offer.remaining -= quantity;
     offer.fundShares += quantity;
-    logEvent(`🏛️ Fundusz kupuje ${quantity} akcji ${stock.name} w prywatyzacji za ${cost.toFixed(2)} PLN.`, 'review');
+    logEvent(`🏛️ Fundusz kupuje ${quantity} akcji ${stock.name} w prywatyzacji za ${formatZl(cost, 2)}.`, 'review');
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return true;
 }
@@ -450,7 +450,7 @@ function applyAntitrustPenalties() {
         governmentTreasury += fine;
         recordPayment(stock, 'external:skarb-panstwa', fine, 'Kara antymonopolowa');
         applyPriceEffect(stock.symbol, -0.03, 'negative', 'company');
-        logEvent(`⚖️ Urząd antymonopolowy nakłada na ${stock.name} karę ${fine.toLocaleString('pl-PL')} PLN za nadużywanie pozycji monopolisty.`, 'state');
+        logEvent(`⚖️ Urząd antymonopolowy nakłada na ${stock.name} karę ${formatZl(fine, 0)} za nadużywanie pozycji monopolisty.`, 'state');
         penalized.push(stock.symbol);
     }
     return penalized;
@@ -504,7 +504,7 @@ function generatePppOffer() {
         risk
     };
     ppp.offers.push(offer);
-    logEvent(`🏙️ Miasto ogłasza projekt PPP: ${offer.icon} ${offer.name} — ${offer.total.toLocaleString('pl-PL')} PLN, ${(offer.rate * 100).toFixed(1)}% rocznie, ${offer.termWeeks} tyg.`, 'city');
+    logEvent(`🏙️ Miasto ogłasza projekt PPP: ${offer.icon} ${offer.name} — ${formatZl(offer.total, 0)}, ${(offer.rate * 100).toFixed(1)}% rocznie, ${offer.termWeeks} tyg.`, 'city');
     return offer;
 }
 
@@ -533,7 +533,7 @@ function investInPpp(offerId, amount) {
     playerFund.ppp.push(stake);
     recordPayment('player-fund', 'external:miasto', amount, `PPP: ${offer.name}`);
     if (typeof noteCorporateGoal === 'function') noteCorporateGoal('project');
-    logEvent(`🤝 Fundusz współfinansuje projekt miejski ${offer.icon} ${offer.name}: ${amount.toLocaleString('pl-PL')} PLN na ${offer.termWeeks} tyg.`, 'review');
+    logEvent(`🤝 Fundusz współfinansuje projekt miejski ${offer.icon} ${offer.name}: ${formatZl(amount, 0)} na ${offer.termWeeks} tyg.`, 'review');
     if (offer.raised >= offer.total) ppp.offers = ppp.offers.filter(item => item !== offer);
     if (typeof refreshFundViews === 'function') refreshFundViews();
     return stake;
@@ -610,7 +610,7 @@ function processPppWeekly() {
             city.budget -= stake.principal;
             playerCash += stake.principal;
             playerFund.ppp = playerFund.ppp.filter(item => item !== stake);
-            logEvent(`🏙️ Miasto spłaca udział funduszu w PPP ${stake.icon} ${stake.name}: ${stake.principal.toLocaleString('pl-PL')} PLN.`, 'review');
+            logEvent(`🏙️ Miasto spłaca udział funduszu w PPP ${stake.icon} ${stake.name}: ${formatZl(stake.principal, 0)}.`, 'review');
         } else if (stake.extensions < 2) {
             stake.extensions++;
             stake.weeksLeft = 4;
@@ -619,7 +619,7 @@ function processPppWeekly() {
             const recovery = stake.principal * PPP_RECOVERY;
             playerCash += recovery;
             playerFund.ppp = playerFund.ppp.filter(item => item !== stake);
-            logEvent(`💥 Miasto nie spłaca PPP ${stake.name} — fundusz odzyskuje ${recovery.toFixed(0)} z ${stake.principal.toFixed(0)} PLN.`, 'review');
+            logEvent(`💥 Miasto nie spłaca PPP ${stake.name} — fundusz odzyskuje ${recovery.toFixed(0)} z ${formatZl(stake.principal, 0)}.`, 'review');
         }
     }
 }
@@ -652,7 +652,7 @@ function runStatePensionProgram() {
             governmentTreasury -= amount;
             addOutsideSubscription('institution', 'Państwowy Program Emerytalny', amount);
             grants.push({ name: fund.name, amount });
-            logEvent(`🏛️ Państwowy Program Emerytalny powierza Twojemu funduszowi ${amount.toFixed(0)} PLN (miejsce ${index + 1} w rankingu).`, 'review');
+            logEvent(`🏛️ Państwowy Program Emerytalny powierza Twojemu funduszowi ${formatZl(amount, 0)} (miejsce ${index + 1} w rankingu).`, 'review');
         } else if (fund.kind === 'bot') {
             const manager = corporation.managers.find(item => item.id === fund.id);
             if (!manager) continue;
