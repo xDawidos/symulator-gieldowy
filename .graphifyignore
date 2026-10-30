@@ -6,3 +6,4 @@ skills-lock.json
 plany/raporty/*.json
 plany/design/tokens.json
 graphify-out/
+lib/

@@ -1,422 +1,1394 @@
 {
-  ".claude/launch.json": {
-    "mtime": 1791831638.661912,
-    "seen": 1792333599.7722883,
-    "ast_hash": "5d2fa1a392eec02a025b3f7d5bfb70ae",
-    "semantic_hash": "5d2fa1a392eec02a025b3f7d5bfb70ae"
-  },
-  ".vs/Pliki zaktualizowane na 06.10.2025/v17/DocumentLayout.backup.json": {
-    "mtime": 1791717783.6915042,
-    "seen": 1792333599.772296,
-    "ast_hash": "7f9e97a636c8048e4a27568f743c6750",
-    "semantic_hash": "7f9e97a636c8048e4a27568f743c6750"
-  },
-  ".vs/Pliki zaktualizowane na 06.10.2025/v17/DocumentLayout.json": {
-    "mtime": 1791717783.6925042,
-    "seen": 1792333599.772299,
-    "ast_hash": "833ff3599d35834a13834b203b839f2e",
-    "semantic_hash": "833ff3599d35834a13834b203b839f2e"
-  },
-  ".vs/ProjectSettings.json": {
-    "mtime": 1791717783.6935043,
-    "seen": 1792333599.7723002,
-    "ast_hash": "e88a33ccaa92ae56561422612f557911",
-    "semantic_hash": "e88a33ccaa92ae56561422612f557911"
-  },
-  ".vs/VSWorkspaceState.json": {
-    "mtime": 1791717783.6935043,
-    "seen": 1792333599.772302,
-    "ast_hash": "c5d8964c7f5288c0be2b2463a8eccc7a",
-    "semantic_hash": "c5d8964c7f5288c0be2b2463a8eccc7a"
-  },
   "ai.js": {
-    "mtime": 1792095915.749644,
-    "seen": 1792333599.772303,
-    "ast_hash": "b042a6846bc6bc105b075fee1e7a9d2c",
-    "semantic_hash": "b042a6846bc6bc105b075fee1e7a9d2c"
+    "mtime": 1793319426.5977926,
+    "seen": 1793319953.4138832,
+    "ast_hash": "cbccf8f1ba1d0ac8edbd140e34bf1d49",
+    "semantic_hash": ""
   },
   "companies.js": {
-    "mtime": 1792253437.1844442,
-    "seen": 1792333599.7723043,
-    "ast_hash": "bc237d82f7c4a423b0f8f76920440923",
-    "semantic_hash": "bc237d82f7c4a423b0f8f76920440923"
+    "mtime": 1793319238.3206203,
+    "seen": 1793319953.4138982,
+    "ast_hash": "90a2f75f679516a5215d4ce0ce19563e",
+    "semantic_hash": ""
   },
   "core.js": {
-    "mtime": 1792095915.756129,
-    "seen": 1792333599.7723057,
-    "ast_hash": "e40ee717ed68cf2bf49a47c7715228a6",
-    "semantic_hash": "e40ee717ed68cf2bf49a47c7715228a6"
+    "mtime": 1793319297.9906702,
+    "seen": 1793319953.413901,
+    "ast_hash": "4b990faca8dbfe0d78bfecc147f0f688",
+    "semantic_hash": ""
   },
   "events.js": {
-    "mtime": 1792095915.7571278,
-    "seen": 1792333599.7723067,
-    "ast_hash": "05cbd78d6073b722efd29e7f0fae36ee",
-    "semantic_hash": "05cbd78d6073b722efd29e7f0fae36ee"
+    "mtime": 1793318478.5998862,
+    "seen": 1793318608.9310687,
+    "ast_hash": "c2a3585c73b18676eef49f5fb5e72a9a",
+    "semantic_hash": ""
   },
   "finance.js": {
-    "mtime": 1792160876.3524992,
-    "seen": 1792333599.7723076,
-    "ast_hash": "98a5a4477fb38b3440509b561f5b76b2",
-    "semantic_hash": "98a5a4477fb38b3440509b561f5b76b2"
+    "mtime": 1793318478.6028874,
+    "seen": 1793318608.9310725,
+    "ast_hash": "f2e2a011ba685cb32cb1e9b0336bc9e1",
+    "semantic_hash": ""
   },
   "learning.js": {
-    "mtime": 1792253437.186419,
-    "seen": 1792333599.772309,
-    "ast_hash": "9df7a5ace0dfed76e351edcb8f49bbff",
-    "semantic_hash": "9df7a5ace0dfed76e351edcb8f49bbff"
-  },
-  "lib/lz-string.min.js": {
-    "mtime": 1792253931.536181,
-    "seen": 1792333599.77231,
-    "ast_hash": "abb688fbad2fd4f1208d4e627c470dc6",
-    "semantic_hash": "abb688fbad2fd4f1208d4e627c470dc6"
+    "mtime": 1793318478.7603207,
+    "seen": 1793318608.931081,
+    "ast_hash": "9a0fbb55d38d08b9e7356d271eb17a60",
+    "semantic_hash": ""
   },
   "ma.js": {
-    "mtime": 1792095915.762128,
-    "seen": 1792333599.7723112,
-    "ast_hash": "5ba0a7e89f7dfd6c6ea7aaec2302fdc9",
-    "semantic_hash": "5ba0a7e89f7dfd6c6ea7aaec2302fdc9"
+    "mtime": 1793318478.770321,
+    "seen": 1793318608.9310868,
+    "ast_hash": "da5fe5e2a2856941164fa38c20465b06",
+    "semantic_hash": ""
   },
   "main.js": {
-    "mtime": 1792253931.537179,
-    "seen": 1792333599.7723126,
-    "ast_hash": "14e3852227fa5a89a8af45c576a70618",
-    "semantic_hash": "14e3852227fa5a89a8af45c576a70618"
+    "mtime": 1793319837.9352784,
+    "seen": 1793319953.413961,
+    "ast_hash": "f97e57587dbe22a7dd250ea2780b70fb",
+    "semantic_hash": ""
   },
   "player.js": {
-    "mtime": 1792109069.2398243,
-    "seen": 1792333599.7723136,
-    "ast_hash": "f2b9d5097127e3dfe9de3e4442cb28f2",
-    "semantic_hash": "f2b9d5097127e3dfe9de3e4442cb28f2"
+    "mtime": 1793318479.025065,
+    "seen": 1793318608.9311047,
+    "ast_hash": "52c570214edfc960224f8b40bbac8947",
+    "semantic_hash": ""
   },
   "save_store.js": {
-    "mtime": 1792253931.5401795,
-    "seen": 1792333599.7723145,
+    "mtime": 1793318479.0270648,
+    "seen": 1793318608.9311075,
     "ast_hash": "39ccb8d8eadcabe46288fef814778a62",
     "semantic_hash": "39ccb8d8eadcabe46288fef814778a62"
   },
   "state.js": {
-    "mtime": 1791873956.3334253,
-    "seen": 1792333599.7723157,
-    "ast_hash": "9451fd93bd35a7a602ed3a621b964e7c",
-    "semantic_hash": "9451fd93bd35a7a602ed3a621b964e7c"
+    "mtime": 1793318479.0295696,
+    "seen": 1793318608.9311104,
+    "ast_hash": "ea3136a6200f6b475450b4f3d550676f",
+    "semantic_hash": ""
   },
   "tests/tests.js": {
-    "mtime": 1792253931.5452218,
-    "seen": 1792333599.772317,
-    "ast_hash": "e35db9d66fd5debf8716a7bd1a3657df",
-    "semantic_hash": "e35db9d66fd5debf8716a7bd1a3657df"
+    "mtime": 1793318479.0400827,
+    "seen": 1793318608.931113,
+    "ast_hash": "23e12870358cdc4f9ee9d5b58ca1d886",
+    "semantic_hash": ""
   },
   "ui.js": {
-    "mtime": 1792253931.548223,
-    "seen": 1792333599.7723181,
-    "ast_hash": "10edd0d80b270aa2ae5dbcfa078c3ee8",
-    "semantic_hash": "10edd0d80b270aa2ae5dbcfa078c3ee8"
+    "mtime": 1793319708.801805,
+    "seen": 1793319953.4140055,
+    "ast_hash": "5a402a4ee74a2c1f7a5b1a2289e3b124",
+    "semantic_hash": ""
   },
   "index.html": {
-    "mtime": 1792253931.5341792,
-    "seen": 1792333599.7723193,
-    "ast_hash": "5510c08e5c57442ed3e7c4deb6714f5a",
-    "semantic_hash": "5510c08e5c57442ed3e7c4deb6714f5a"
-  },
-  "plany/IMPLEMENTATION_SUMMARY.md": {
-    "mtime": 1792013762.8836415,
-    "seen": 1792333599.7723203,
-    "ast_hash": "8f8929f557cc2e898170537be59918b6",
-    "semantic_hash": "8f8929f557cc2e898170537be59918b6"
-  },
-  "plany/audyt_0.10.2.md": {
-    "mtime": 1792013762.9307568,
-    "seen": 1792333599.7723212,
-    "ast_hash": "d09c143c46cf15f91f3afdbf492e16c3",
-    "semantic_hash": "d09c143c46cf15f91f3afdbf492e16c3"
-  },
-  "plany/audyt_mechanik.md": {
-    "mtime": 1792013762.9793327,
-    "seen": 1792333599.772323,
-    "ast_hash": "e3107b9d506d40e002c8d4933bd8d5cb",
-    "semantic_hash": "e3107b9d506d40e002c8d4933bd8d5cb"
-  },
-  "plany/etapy_1-6_realizacja.md": {
-    "mtime": 1792013763.0278428,
-    "seen": 1792333599.7723238,
-    "ast_hash": "7cdd4c5c73a9683404d5680c020931f6",
-    "semantic_hash": "7cdd4c5c73a9683404d5680c020931f6"
-  },
-  "plany/ewentualny roadmap.txt": {
-    "mtime": 1791717783.732215,
-    "seen": 1792333599.7723248,
-    "ast_hash": "235f8d2a080d803a0e7c0f3d387f3b82",
-    "semantic_hash": "235f8d2a080d803a0e7c0f3d387f3b82"
-  },
-  "plany/plan_0.10.2_makro.md": {
-    "mtime": 1792013763.0768511,
-    "seen": 1792333599.772326,
-    "ast_hash": "40020c45c374dc6de2c72228dd5b744f",
-    "semantic_hash": "40020c45c374dc6de2c72228dd5b744f"
-  },
-  "plany/plan_0.11.5_balans.md": {
-    "mtime": 1792013763.125604,
-    "seen": 1792333599.7723272,
-    "ast_hash": "7fb4222a0b3ca20775b55ed4be7b3043",
-    "semantic_hash": "7fb4222a0b3ca20775b55ed4be7b3043"
-  },
-  "plany/plan_0.11.6_uwagi.md": {
-    "mtime": 1792013763.1731482,
-    "seen": 1792333599.7723281,
-    "ast_hash": "3d62fcc13a0e8f3c122ab00bf4ae76b7",
-    "semantic_hash": "3d62fcc13a0e8f3c122ab00bf4ae76b7"
-  },
-  "plany/plan_0.11_ciemna_strefa.md": {
-    "mtime": 1792013763.220726,
-    "seen": 1792333599.7723293,
-    "ast_hash": "b675ca0dc69c05b382866f9dfbe9460f",
-    "semantic_hash": "b675ca0dc69c05b382866f9dfbe9460f"
-  },
-  "plany/plan_0.12_nauka.md": {
-    "mtime": 1792013763.268695,
-    "seen": 1792333599.7723303,
-    "ast_hash": "93dfa23f0b53c5b392bcab0f1626cbd6",
-    "semantic_hash": "93dfa23f0b53c5b392bcab0f1626cbd6"
+    "mtime": 1793318478.7583208,
+    "seen": 1793318608.9311159,
+    "ast_hash": "4b324e4edff6c8946d325b53820ccaa3",
+    "semantic_hash": ""
   },
   "plany/plan_0.13-0.16_mapa.md": {
-    "mtime": 1792332877.768168,
-    "seen": 1792333599.7723312,
-    "ast_hash": "f255d2e2c1d682b58400f4c782006d53",
-    "semantic_hash": "f255d2e2c1d682b58400f4c782006d53"
-  },
-  "plany/plan_0.13_spoleczenstwo.md": {
-    "mtime": 1792013763.3171954,
-    "seen": 1792333599.7723322,
-    "ast_hash": "70d1cbed26242191315ff95c96984e61",
-    "semantic_hash": "70d1cbed26242191315ff95c96984e61"
+    "mtime": 1793318478.931262,
+    "seen": 1793318608.9311447,
+    "ast_hash": "192717c2aec6289a4d0fab6edc9a5b7a",
+    "semantic_hash": ""
   },
   "plany/plan_0.14.1_startupy.md": {
-    "mtime": 1792013763.3652296,
-    "seen": 1792333599.7723334,
+    "mtime": 1793318478.9322617,
+    "seen": 1793318608.9311464,
     "ast_hash": "b5efc15014e636df7aa320872c1d4134",
     "semantic_hash": "b5efc15014e636df7aa320872c1d4134"
   },
   "plany/plan_0.14.2_poprawki_z_gry_2.md": {
-    "mtime": 1792097926.411156,
-    "seen": 1792333599.7723343,
-    "ast_hash": "d8a6cae31368b0a4c6fd24402f2d4c71",
-    "semantic_hash": "d8a6cae31368b0a4c6fd24402f2d4c71"
+    "mtime": 1793318478.9332652,
+    "seen": 1793318608.931148,
+    "ast_hash": "89c62f371ed087334de0f8a144872e08",
+    "semantic_hash": ""
   },
   "plany/plan_0.14.3_zapis.md": {
-    "mtime": 1792162796.1584651,
-    "seen": 1792333599.7723353,
-    "ast_hash": "6a88c8d60c14b28f521b4fdf0528f799",
-    "semantic_hash": "6a88c8d60c14b28f521b4fdf0528f799"
+    "mtime": 1793318478.9332652,
+    "seen": 1793318608.9311492,
+    "ast_hash": "5d4959daf37e0b684e9dbc08e7d97964",
+    "semantic_hash": ""
   },
   "plany/plan_0.14_struktura_spolek.md": {
-    "mtime": 1792253446.8525286,
-    "seen": 1792333599.7723365,
-    "ast_hash": "cb85add3072def6cbbb7bcda277e8e85",
-    "semantic_hash": "cb85add3072def6cbbb7bcda277e8e85"
-  },
-  "plany/plan_0.15.1_kryzysy.md": {
-    "mtime": 1792332877.7699728,
-    "seen": 1792333599.7723377,
-    "ast_hash": "0ff449312e8c544246b580a1ba18cce5",
-    "semantic_hash": "0ff449312e8c544246b580a1ba18cce5"
+    "mtime": 1793318478.9342651,
+    "seen": 1793318608.931151,
+    "ast_hash": "67ee835d72e63cff213673393c47fbc4",
+    "semantic_hash": ""
   },
   "plany/plan_0.15_hossa_bessa.md": {
-    "mtime": 1792332877.7709806,
-    "seen": 1792333599.7723386,
-    "ast_hash": "1a870fe954f4c3c65e888362d18a9d6f",
-    "semantic_hash": "1a870fe954f4c3c65e888362d18a9d6f"
+    "mtime": 1793318478.9404998,
+    "seen": 1793318608.931162,
+    "ast_hash": "6e89b34fe118cb1555e78d9c6be3f273",
+    "semantic_hash": ""
   },
   "plany/plan_0.16_gielda_miedzynarodowa.md": {
-    "mtime": 1792332877.7719789,
-    "seen": 1792333599.7723398,
-    "ast_hash": "1ea5ec7103738a7a6e4d5b012e6cc393",
-    "semantic_hash": "1ea5ec7103738a7a6e4d5b012e6cc393"
+    "mtime": 1793318478.945031,
+    "seen": 1793318608.9311705,
+    "ast_hash": "a790dcf38487639c18c8f671bb464d3e",
+    "semantic_hash": ""
   },
   "plany/plan_sektor_budowlany.md": {
-    "mtime": 1792013763.4147394,
-    "seen": 1792333599.7723408,
-    "ast_hash": "ff9240581a614fc37c78f48a8cb6218d",
-    "semantic_hash": "ff9240581a614fc37c78f48a8cb6218d"
+    "mtime": 1793318541.5866315,
+    "seen": 1793318608.9311798,
+    "ast_hash": "7b10fbd54577f37568c06b6e8058b501",
+    "semantic_hash": ""
   },
   "plany/plany poprawione przez ai.txt": {
-    "mtime": 1791717783.7342162,
-    "seen": 1792333599.7723446,
+    "mtime": 1793318478.9510274,
+    "seen": 1793318608.9311817,
     "ast_hash": "9afb50db7339d73e1810179f514ff53d",
     "semantic_hash": "9afb50db7339d73e1810179f514ff53d"
   },
   "plany/plany.txt": {
-    "mtime": 1791717783.73522,
-    "seen": 1792333599.7723463,
+    "mtime": 1793318478.9510274,
+    "seen": 1793318608.931183,
     "ast_hash": "2c6e4783f99c86c2667e9cc011fa46c6",
     "semantic_hash": "2c6e4783f99c86c2667e9cc011fa46c6"
   },
   "plany/pomysly_na_kolejne_wersje.md": {
-    "mtime": 1792332877.7729793,
-    "seen": 1792333599.7723477,
-    "ast_hash": "c8fe7473beb536fc9a60943538d8b8fe",
-    "semantic_hash": "c8fe7473beb536fc9a60943538d8b8fe"
+    "mtime": 1793318478.953027,
+    "seen": 1793318608.9311843,
+    "ast_hash": "abdaff2fff359a801bc11bc2e25654c7",
+    "semantic_hash": ""
   },
   "plany/raporty/audyt_planu_0.15.md": {
-    "mtime": 1792332877.7729793,
-    "seen": 1792333599.7723496,
+    "mtime": 1793318478.9568443,
+    "seen": 1793318608.9311895,
     "ast_hash": "60e6e6572d600905277cb2439dd0e9ec",
     "semantic_hash": "60e6e6572d600905277cb2439dd0e9ec"
   },
   "plany/raporty/audyt_startupow_0.14.1.md": {
-    "mtime": 1792018160.5139098,
-    "seen": 1792333599.772351,
+    "mtime": 1793318478.9568443,
+    "seen": 1793318608.9311907,
     "ast_hash": "95e179b1825280f18a7a4990711f2b9f",
     "semantic_hash": "95e179b1825280f18a7a4990711f2b9f"
   },
   "plany/raporty/kontrola_0.14.2.md": {
-    "mtime": 1792095915.7651284,
-    "seen": 1792333599.772352,
+    "mtime": 1793318479.0020597,
+    "seen": 1793318608.9312005,
     "ast_hash": "1af8bc46165a4948f7e56f92ef33b126",
     "semantic_hash": "1af8bc46165a4948f7e56f92ef33b126"
   },
   "plany/raporty/kontrola_0.14.md": {
-    "mtime": 1792253437.1874175,
-    "seen": 1792333599.772353,
+    "mtime": 1793318479.0030594,
+    "seen": 1793318608.931202,
     "ast_hash": "b01e931e1c97736e0ff8b660d2d49ace",
     "semantic_hash": "b01e931e1c97736e0ff8b660d2d49ace"
   },
   "plany/raporty/weryfikacja_0.13.1.md": {
-    "mtime": 1792013763.463742,
-    "seen": 1792333599.7723541,
+    "mtime": 1793318479.0210645,
+    "seen": 1793318608.9312282,
     "ast_hash": "6da30564f18a204952f561df39f52aa7",
     "semantic_hash": "6da30564f18a204952f561df39f52aa7"
   },
   "plany/raporty/wydzielenia_0.14_T4.md": {
-    "mtime": 1792160876.3584983,
-    "seen": 1792333599.772355,
+    "mtime": 1793318479.0220644,
+    "seen": 1793318608.9312308,
     "ast_hash": "c304dbc5806b95f4fd910f2f97fac623",
     "semantic_hash": "c304dbc5806b95f4fd910f2f97fac623"
   },
   "plany/raporty/zapis_0.14.3.md": {
-    "mtime": 1792253931.5391784,
-    "seen": 1792333599.772356,
+    "mtime": 1793318479.0220644,
+    "seen": 1793318608.9312322,
     "ast_hash": "ff7e94d4255d5b8cfddb08738ab5cd0d",
     "semantic_hash": "ff7e94d4255d5b8cfddb08738ab5cd0d"
   },
   "plany/roadmap.txt": {
-    "mtime": 1791717783.7362168,
-    "seen": 1792333599.7723572,
+    "mtime": 1793318479.0230646,
+    "seen": 1793318608.9312336,
     "ast_hash": "9ae963d901aa0c9f203a3791474828a5",
     "semantic_hash": "9ae963d901aa0c9f203a3791474828a5"
   },
   "plany/testy_ogolne_0.11.md": {
-    "mtime": 1792013763.5138488,
-    "seen": 1792333599.7723582,
+    "mtime": 1793318479.0240645,
+    "seen": 1793318608.9312353,
     "ast_hash": "2ace1de089f4fbd58fb40f056fbde90f",
     "semantic_hash": "2ace1de089f4fbd58fb40f056fbde90f"
   },
   "tests/przebiegi.html": {
-    "mtime": 1792253931.5412223,
-    "seen": 1792333599.7723591,
-    "ast_hash": "0739fd5629c03f6d934effb8cb398a0f",
-    "semantic_hash": "0739fd5629c03f6d934effb8cb398a0f"
+    "mtime": 1793318479.0335805,
+    "seen": 1793318608.9312365,
+    "ast_hash": "e55c3b1d94adc22207bbbdb49aa4f666",
+    "semantic_hash": ""
   },
   "tests/tests.html": {
-    "mtime": 1792253931.5422246,
-    "seen": 1792333599.77236,
-    "ast_hash": "9138f50c0ca6fcab46fb9127a4c2d5fb",
-    "semantic_hash": "9138f50c0ca6fcab46fb9127a4c2d5fb"
+    "mtime": 1793318479.0345788,
+    "seen": 1793318608.9312391,
+    "ast_hash": "60be153e0dad1a0268ab1d2cc15bdaba",
+    "semantic_hash": ""
   },
-  "img/billboardicon.png": {
-    "mtime": 1791717783.709693,
-    "seen": 1792333599.7723613,
-    "ast_hash": "33513c67ae3313f3198ff6754d47caba",
-    "semantic_hash": "33513c67ae3313f3198ff6754d47caba"
+  "bots_domestic.js": {
+    "mtime": 1793318478.5798838,
+    "seen": 1793318608.9310482,
+    "ast_hash": "5b23ea430ba938873811964be5b2b8f1",
+    "semantic_hash": ""
   },
-  "img/box.png": {
-    "mtime": 1791717783.7106934,
-    "seen": 1792333599.7723625,
-    "ast_hash": "b2f643e336a16861aff1c0aff8e24bc4",
-    "semantic_hash": "b2f643e336a16861aff1c0aff8e24bc4"
+  "campaigns.js": {
+    "mtime": 1793318478.580885,
+    "seen": 1793318608.931051,
+    "ast_hash": "1434796c5e995a8592f3e532c891ef62",
+    "semantic_hash": ""
   },
-  "img/branch.png": {
-    "mtime": 1791717783.7116919,
-    "seen": 1792333599.7723634,
-    "ast_hash": "8ef500783913db5d1fbc4dbb882ecd8e",
-    "semantic_hash": "8ef500783913db5d1fbc4dbb882ecd8e"
+  "countries.js": {
+    "mtime": 1793318478.5898871,
+    "seen": 1793318608.9310572,
+    "ast_hash": "f7a5ddea204a7f20cdae86b6ce4a937e",
+    "semantic_hash": ""
   },
-  "img/desk.png": {
-    "mtime": 1791717783.712692,
-    "seen": 1792333599.7723649,
-    "ast_hash": "64768cb13ed1c2619660c288c193df1b",
-    "semantic_hash": "64768cb13ed1c2619660c288c193df1b"
+  "countries_data.js": {
+    "mtime": 1793318478.5898871,
+    "seen": 1793318608.9310584,
+    "ast_hash": "820270afbfa2d3dd9c0bd9be1f8a1ea6",
+    "semantic_hash": ""
   },
-  "img/equipment.png": {
-    "mtime": 1791717783.713692,
-    "seen": 1792333599.7723658,
-    "ast_hash": "0db5d7411fc711da89ba545961a52ca1",
-    "semantic_hash": "0db5d7411fc711da89ba545961a52ca1"
+  "countries_ui.js": {
+    "mtime": 1793318478.5908864,
+    "seen": 1793318608.93106,
+    "ast_hash": "5e1957def378acc92f13c464905ad902",
+    "semantic_hash": ""
   },
-  "img/fabrykaicon.png": {
-    "mtime": 1791717783.713692,
-    "seen": 1792333599.772367,
-    "ast_hash": "1d67b4ef7d18b6058da4005eb8127869",
-    "semantic_hash": "1d67b4ef7d18b6058da4005eb8127869"
+  "country_picker.js": {
+    "mtime": 1793318478.5918875,
+    "seen": 1793318608.931061,
+    "ast_hash": "ea19c2acce747c3e143503dd386187b1",
+    "semantic_hash": ""
   },
-  "img/face.png": {
-    "mtime": 1791717783.7146933,
-    "seen": 1792333599.7723682,
-    "ast_hash": "0f9fbd0de2c794d5741fa606b7e026b8",
-    "semantic_hash": "0f9fbd0de2c794d5741fa606b7e026b8"
+  "crises.js": {
+    "mtime": 1793318478.5918875,
+    "seen": 1793318608.9310634,
+    "ast_hash": "bd58ef74b4a2dab802c252e64a1ee85b",
+    "semantic_hash": ""
   },
-  "img/face_sleeping.png": {
-    "mtime": 1791717783.7156951,
-    "seen": 1792333599.7723691,
-    "ast_hash": "5108d1cfb1f7d75dfe14971e2ae5e49f",
-    "semantic_hash": "5108d1cfb1f7d75dfe14971e2ae5e49f"
+  "currency.js": {
+    "mtime": 1793318478.5938864,
+    "seen": 1793318608.9310646,
+    "ast_hash": "85255a1c36fc7f1cc28043aa48765b23",
+    "semantic_hash": ""
   },
-  "img/globe.png": {
-    "mtime": 1791717783.717201,
-    "seen": 1792333599.77237,
-    "ast_hash": "2952f64177aaf1772a9b7d18cc459937",
-    "semantic_hash": "2952f64177aaf1772a9b7d18cc459937"
+  "currency_ui.js": {
+    "mtime": 1793318478.595886,
+    "seen": 1793318608.9310658,
+    "ast_hash": "ab69188b4989fdbe179cf8b067271b43",
+    "semantic_hash": ""
   },
-  "img/medlab.png": {
-    "mtime": 1791717783.71821,
-    "seen": 1792333599.7723715,
-    "ast_hash": "23a34280b0af074aea6553fc305506e4",
-    "semantic_hash": "23a34280b0af074aea6553fc305506e4"
+  "data/kraje.js": {
+    "mtime": 1793318478.598886,
+    "seen": 1793318608.9310672,
+    "ast_hash": "fa60918139beca270fcbb3cecb33c755",
+    "semantic_hash": ""
   },
-  "img/mine.png": {
-    "mtime": 1791717783.719209,
-    "seen": 1792333599.7723725,
-    "ast_hash": "962f6727ff0a71bac68bc2f9682c9064",
-    "semantic_hash": "962f6727ff0a71bac68bc2f9682c9064"
+  "exchange_clock.js": {
+    "mtime": 1793318478.6008854,
+    "seen": 1793318608.9310696,
+    "ast_hash": "a29ab3a0e79bd747b747dbc1966bfe8b",
+    "semantic_hash": ""
   },
-  "img/money.png": {
-    "mtime": 1791717783.721207,
-    "seen": 1792333599.7723734,
-    "ast_hash": "c57319799ff80b144ab9da0b7d85176c",
-    "semantic_hash": "c57319799ff80b144ab9da0b7d85176c"
+  "exchange_links.js": {
+    "mtime": 1793318478.6008854,
+    "seen": 1793318608.931071,
+    "ast_hash": "5682bb64a1e7e888dfd87656bcbd7ede",
+    "semantic_hash": ""
   },
-  "img/server.png": {
-    "mtime": 1791717783.7222095,
-    "seen": 1792333599.7723749,
-    "ast_hash": "4ce0281b0556953436da4d45139ae9e1",
-    "semantic_hash": "4ce0281b0556953436da4d45139ae9e1"
+  "flags.js": {
+    "mtime": 1793318478.6028874,
+    "seen": 1793318608.931074,
+    "ast_hash": "f9c38d37585bb2798779349ca72cf2f7",
+    "semantic_hash": ""
   },
-  "img/slupki.png": {
-    "mtime": 1791717783.7242067,
-    "seen": 1792333599.7723758,
-    "ast_hash": "0ad477e4887d4503ef955feb96d2cb0e",
-    "semantic_hash": "0ad477e4887d4503ef955feb96d2cb0e"
+  "foreign_companies.js": {
+    "mtime": 1793318478.6038873,
+    "seen": 1793318608.931075,
+    "ast_hash": "c09606bd94466e6cac30797e758b5b7a",
+    "semantic_hash": ""
   },
-  "img/update.png": {
-    "mtime": 1791717783.7242067,
-    "seen": 1792333599.7723768,
-    "ast_hash": "da9ea5eea7068c79b074f837e71405d1",
-    "semantic_hash": "da9ea5eea7068c79b074f837e71405d1"
+  "forex.js": {
+    "mtime": 1793318478.6048863,
+    "seen": 1793318608.9310763,
+    "ast_hash": "a4aa9fdd2c12595f311cdcffa73794c3",
+    "semantic_hash": ""
   },
-  "img/wykres.png": {
-    "mtime": 1791717783.7262063,
-    "seen": 1792333599.7723782,
-    "ast_hash": "dcb80006652eddb93c88363b940eb10d",
-    "semantic_hash": "dcb80006652eddb93c88363b940eb10d"
+  "gdr.js": {
+    "mtime": 1793318478.6048863,
+    "seen": 1793318608.9310775,
+    "ast_hash": "bc0a489d1b346c5866d9e2f4a474c3c3",
+    "semantic_hash": ""
+  },
+  "img/globus/tekstury.js": {
+    "mtime": 1793318478.6807923,
+    "seen": 1793318608.9310787,
+    "ast_hash": "d88ef263352198f9d2500d4abc191cab",
+    "semantic_hash": ""
+  },
+  "internet.js": {
+    "mtime": 1793318478.759318,
+    "seen": 1793318608.9310796,
+    "ast_hash": "9d12d26df15a6470636c302022b762f0",
+    "semantic_hash": ""
+  },
+  "listings.js": {
+    "mtime": 1793318478.7683225,
+    "seen": 1793318608.9310853,
+    "ast_hash": "b6a4058e910e21ad4ad915c7d4889878",
+    "semantic_hash": ""
+  },
+  "plany/design/narzedzia/analyze_h0.mjs": {
+    "mtime": 1793318478.8003192,
+    "seen": 1793318608.9310894,
+    "ast_hash": "c189f859257e02c71c4b5f40558ee160",
+    "semantic_hash": ""
+  },
+  "plany/design/narzedzia/gen_ikony.py": {
+    "mtime": 1793318478.8003192,
+    "seen": 1793318608.9310906,
+    "ast_hash": "2983674223219d8ccc0055a596cc6fbc",
+    "semantic_hash": ""
+  },
+  "plany/design/narzedzia/gen_makieta_015.py": {
+    "mtime": 1793318478.8013182,
+    "seen": 1793318608.931092,
+    "ast_hash": "b2f1d1c44b4aa0a227a32f4a180d2442",
+    "semantic_hash": ""
+  },
+  "plany/design/narzedzia/gen_makieta_0155.py": {
+    "mtime": 1793318478.80232,
+    "seen": 1793318608.931093,
+    "ast_hash": "4416084278ef42eaab2606982681abfa",
+    "semantic_hash": ""
+  },
+  "plany/design/narzedzia/gen_tokens.py": {
+    "mtime": 1793318478.803319,
+    "seen": 1793318608.931094,
+    "ast_hash": "b2c027c510bb94711280f7db2ce2bac5",
+    "semantic_hash": ""
+  },
+  "plany/design/narzedzia/graphify_polacz.py": {
+    "mtime": 1793318478.803319,
+    "seen": 1793318608.9310954,
+    "ast_hash": "7999ef53df81fe64febda4147b96b5aa",
+    "semantic_hash": ""
+  },
+  "plany/design/narzedzia/martwy_css.py": {
+    "mtime": 1793318478.8043194,
+    "seen": 1793318608.9310963,
+    "ast_hash": "28c562bc23526dfd3b30ee8107bc5c69",
+    "semantic_hash": ""
+  },
+  "plany/design/narzedzia/podsumuj_kraje.mjs": {
+    "mtime": 1793318478.8043194,
+    "seen": 1793318608.9310975,
+    "ast_hash": "2ce6a4c0d8cbf797e0dba33d0ed3d8ba",
+    "semantic_hash": ""
+  },
+  "plany/design/narzedzia/podsumuj_serie.mjs": {
+    "mtime": 1793318478.80532,
+    "seen": 1793318608.931099,
+    "ast_hash": "5428cd2f7c5a8236f5c18bb8496d070c",
+    "semantic_hash": ""
+  },
+  "plany/design/narzedzia/probe.mjs": {
+    "mtime": 1793318478.8063192,
+    "seen": 1793318608.9311,
+    "ast_hash": "67af483ad726a80d1ea184289ae7c0d5",
+    "semantic_hash": ""
+  },
+  "plany/design/narzedzia/run_h3_sims.mjs": {
+    "mtime": 1793318478.8063192,
+    "seen": 1793318608.931101,
+    "ast_hash": "cb5b51984e9a9f6cc9d940fb88f4efa4",
+    "semantic_hash": ""
+  },
+  "plany/design/narzedzia/run_przebiegi.mjs": {
+    "mtime": 1793318478.807319,
+    "seen": 1793318608.9311023,
+    "ast_hash": "c25521bda0a12950f2867ecc1b177f52",
+    "semantic_hash": ""
+  },
+  "plany/design/narzedzia/run_tests.mjs": {
+    "mtime": 1793318478.807319,
+    "seen": 1793318608.9311035,
+    "ast_hash": "129bf5f5c7e90fd241775a5ba73b6576",
+    "semantic_hash": ""
+  },
+  "reits.js": {
+    "mtime": 1793318479.0260644,
+    "seen": 1793318608.931106,
+    "ast_hash": "5f4962e52df43aea00330f8173df82b0",
+    "semantic_hash": ""
+  },
+  "splits.js": {
+    "mtime": 1793318479.0280645,
+    "seen": 1793318608.931109,
+    "ast_hash": "97318ad28feada19910679fdb39d8656",
+    "semantic_hash": ""
+  },
+  "subcontractors.js": {
+    "mtime": 1793318479.0315819,
+    "seen": 1793318608.9311116,
+    "ast_hash": "c344f81b802d74ab7ffdbbae1f25754f",
+    "semantic_hash": ""
+  },
+  "plany/design/01_ocena.md": {
+    "mtime": 1793318478.7723198,
+    "seen": 1793318608.931118,
+    "ast_hash": "1272f0b20df568e0384fb1eb9a7be951",
+    "semantic_hash": ""
+  },
+  "plany/design/02_dostepnosc.md": {
+    "mtime": 1793318478.7733183,
+    "seen": 1793318608.9311194,
+    "ast_hash": "f6ee5dfd3c5e0cf94753063e9cec71cf",
+    "semantic_hash": ""
+  },
+  "plany/design/03_system.md": {
+    "mtime": 1793318478.7733183,
+    "seen": 1793318608.9311204,
+    "ast_hash": "dbac0fc6fb60b8ab53143958a018e3a9",
+    "semantic_hash": ""
+  },
+  "plany/design/04_teksty.md": {
+    "mtime": 1793318478.7753198,
+    "seen": 1793318608.9311216,
+    "ast_hash": "285eaeb29460ad85ab6a31d31ef56bf3",
+    "semantic_hash": ""
+  },
+  "plany/design/05_wdrozenie.md": {
+    "mtime": 1793318478.7753198,
+    "seen": 1793318608.931123,
+    "ast_hash": "d830faaaafa9720e915b13f4b9a77c96",
+    "semantic_hash": ""
+  },
+  "plany/design/05b_ui_0.15.md": {
+    "mtime": 1793318478.776319,
+    "seen": 1793318608.9311242,
+    "ast_hash": "ca0b783cada8d2e8eba45cf6c375df81",
+    "semantic_hash": ""
+  },
+  "plany/design/05c_ui_0.15.5.md": {
+    "mtime": 1793318478.776319,
+    "seen": 1793318608.9311254,
+    "ast_hash": "6dfc6a75f01ba6ae61e96873a375e103",
+    "semantic_hash": ""
+  },
+  "plany/design/06_assety.md": {
+    "mtime": 1793318478.7773194,
+    "seen": 1793318608.9311268,
+    "ast_hash": "d52d1058318bd9bac4aa0c0bfa04b8fe",
+    "semantic_hash": ""
+  },
+  "plany/design/07_poprawki.md": {
+    "mtime": 1793318478.7783175,
+    "seen": 1793318608.931128,
+    "ast_hash": "d746227528945b0e24dfcf8c3de00c7f",
+    "semantic_hash": ""
+  },
+  "plany/design/07_porownanie.md": {
+    "mtime": 1793318478.7783175,
+    "seen": 1793318608.931129,
+    "ast_hash": "52e6e2f604c3ff11357b3dee28663e80",
+    "semantic_hash": ""
+  },
+  "plany/design/kontrast_tokenow.md": {
+    "mtime": 1793318478.7793188,
+    "seen": 1793318608.9311304,
+    "ast_hash": "8644a477b0c61c745f34666418afd8b4",
+    "semantic_hash": ""
+  },
+  "plany/design/makiety/03_kierunki.html": {
+    "mtime": 1793318478.790321,
+    "seen": 1793318608.9311314,
+    "ast_hash": "639b26271347d619dbe15ea339d8a786",
+    "semantic_hash": ""
+  },
+  "plany/design/makiety/05b_ui_015.html": {
+    "mtime": 1793318478.7973187,
+    "seen": 1793318608.931134,
+    "ast_hash": "aa14f28c2b3e191d5ffc4b926486c9fc",
+    "semantic_hash": ""
+  },
+  "plany/design/makiety/05c_ui_0155.html": {
+    "mtime": 1793318478.798319,
+    "seen": 1793318608.9311352,
+    "ast_hash": "08ca8b0d1ef5d39307d91b6bb42e5dfa",
+    "semantic_hash": ""
+  },
+  "plany/design/martwy_css.md": {
+    "mtime": 1793318478.798319,
+    "seen": 1793318608.9311364,
+    "ast_hash": "7903da2093f1bba314c14a25e817ec2d",
+    "semantic_hash": ""
+  },
+  "plany/design/stitch/capital_quest_ferie_i_wakacje_wi_ksza_przejrzysto_i_kolory/code.html": {
+    "mtime": 1793318478.8093195,
+    "seen": 1793318608.9311376,
+    "ast_hash": "6387c8b71dc078a1badd747b4bbeaf25",
+    "semantic_hash": ""
+  },
+  "plany/design/stitch/capital_quest_internet_przegl_darka_ulubione/code.html": {
+    "mtime": 1793318478.8163238,
+    "seen": 1793318608.9311388,
+    "ast_hash": "04134578f3afacbaef11f84f66ae5db7",
+    "semantic_hash": ""
+  },
+  "plany/design/stitch/capital_quest_internet_tied_wi_ksza_przejrzysto_i_kolory/code.html": {
+    "mtime": 1793318478.819324,
+    "seen": 1793318608.93114,
+    "ast_hash": "451330274608f71e4078db6abf13384d",
+    "semantic_hash": ""
+  },
+  "plany/design/stitch/obsidian_syndicate/DESIGN.md": {
+    "mtime": 1793318478.8509736,
+    "seen": 1793318608.9311411,
+    "ast_hash": "77398d557606c32c9d53cb1d8e573cd8",
+    "semantic_hash": ""
+  },
+  "plany/design/stitch/teamedup_komunikator_firmowy/code.html": {
+    "mtime": 1793318478.8519735,
+    "seen": 1793318608.931142,
+    "ast_hash": "f321fd771bbf29377753dc78e3413277",
+    "semantic_hash": ""
+  },
+  "plany/lista_firm_startowych.md": {
+    "mtime": 1793318478.9302642,
+    "seen": 1793318608.9311435,
+    "ast_hash": "7f33257d2ae4eb6f0fdc2bc33e2f20c4",
+    "semantic_hash": ""
+  },
+  "plany/plan_0.15.0.1_poprawki.md": {
+    "mtime": 1793318478.9352634,
+    "seen": 1793318608.931152,
+    "ast_hash": "2a117cd54bad58621f50307188beb353",
+    "semantic_hash": ""
+  },
+  "plany/plan_0.15.1_przejecia.md": {
+    "mtime": 1793318478.9362626,
+    "seen": 1793318608.9311538,
+    "ast_hash": "8ddaa9fab9bb69e9a571d11965196b0e",
+    "semantic_hash": ""
+  },
+  "plany/plan_0.15.2_pr_inwestorzy.md": {
+    "mtime": 1793318478.9362626,
+    "seen": 1793318608.9311547,
+    "ast_hash": "18aa4e2b71307e248ece93d7be14fd3d",
+    "semantic_hash": ""
+  },
+  "plany/plan_0.15.3_kryzysy.md": {
+    "mtime": 1793318478.9372642,
+    "seen": 1793318608.9311562,
+    "ast_hash": "22575f2e4ebf8868c599b539fffcd6c7",
+    "semantic_hash": ""
+  },
+  "plany/plan_0.15.4_poprawki_z_gry_3.md": {
+    "mtime": 1793318478.9372642,
+    "seen": 1793318608.9311574,
+    "ast_hash": "0c26ae18c985667bd4a40d6b0ffa11a8",
+    "semantic_hash": ""
+  },
+  "plany/plan_0.15.4b_giganci.md": {
+    "mtime": 1793318478.9387689,
+    "seen": 1793318608.9311583,
+    "ast_hash": "d29e4117c00e56fa19a9843eeeb1271d",
+    "semantic_hash": ""
+  },
+  "plany/plan_0.15.5_budownictwo_banki.md": {
+    "mtime": 1793318478.9387689,
+    "seen": 1793318608.9311593,
+    "ast_hash": "ff73848d25f71651905abb8533710616",
+    "semantic_hash": ""
+  },
+  "plany/plan_0.15.6_gieldy_wejscia.md": {
+    "mtime": 1793318478.9404998,
+    "seen": 1793318608.9311607,
+    "ast_hash": "174df56b1adcb7d7f9ba0cfc4b856535",
+    "semantic_hash": ""
+  },
+  "plany/plan_0.16.10_intro.md": {
+    "mtime": 1793318478.9420214,
+    "seen": 1793318608.9311633,
+    "ast_hash": "8086b19b24b03de81931c3c5e69a3c71",
+    "semantic_hash": ""
+  },
+  "plany/plan_0.16.11_swiat_startowy.md": {
+    "mtime": 1793318478.9420214,
+    "seen": 1793318608.9311645,
+    "ast_hash": "1f94f6d0ac4e515812c7862cf608d416",
+    "semantic_hash": ""
+  },
+  "plany/plan_0.16.5_internet.md": {
+    "mtime": 1793318478.9430277,
+    "seen": 1793318608.9311657,
+    "ast_hash": "1a708a2de23fbf57993f4770efcd8e9f",
+    "semantic_hash": ""
+  },
+  "plany/plan_0.16.6_domkniecie.md": {
+    "mtime": 1793318478.9440298,
+    "seen": 1793318608.9311666,
+    "ast_hash": "75f6bf2b69f36c92e6ab1a4a98e68778",
+    "semantic_hash": ""
+  },
+  "plany/plan_0.16.7_pelne_spolki_zagraniczne.md": {
+    "mtime": 1793318478.9440298,
+    "seen": 1793318608.931168,
+    "ast_hash": "42a70a6bf8e8c2fabf07584807966414",
+    "semantic_hash": ""
+  },
+  "plany/plan_0.16.9_waluty_w_funduszu.md": {
+    "mtime": 1793318478.945031,
+    "seen": 1793318608.931169,
+    "ast_hash": "004782f22c5478024a06e639237e1938",
+    "semantic_hash": ""
+  },
+  "plany/plan_0.17.1_wielkie_testy_balans.md": {
+    "mtime": 1793318478.9460287,
+    "seen": 1793318608.931172,
+    "ast_hash": "f52a15352879a4af647f84ee85f43dc2",
+    "semantic_hash": ""
+  },
+  "plany/plan_0.17.2_energia_srodowisko.md": {
+    "mtime": 1793318478.9470267,
+    "seen": 1793318608.9311728,
+    "ast_hash": "219752542c91c8864d5d3c57d83abe9b",
+    "semantic_hash": ""
+  },
+  "plany/plan_0.17.3_rozmowy.md": {
+    "mtime": 1793318478.9470267,
+    "seen": 1793318608.931174,
+    "ast_hash": "e74967a7ffc2dfe34950e148b7fc0f5b",
+    "semantic_hash": ""
+  },
+  "plany/plan_0.17_surowce_transport.md": {
+    "mtime": 1793318478.948031,
+    "seen": 1793318608.9311755,
+    "ast_hash": "2c58a7e824f0dcd3129396f038c5a964",
+    "semantic_hash": ""
+  },
+  "plany/plan_0.18_lancuchy_produkcyjne.md": {
+    "mtime": 1793318478.948031,
+    "seen": 1793318608.9311764,
+    "ast_hash": "7006a358e269a2c8ecfd70c34dec9940",
+    "semantic_hash": ""
+  },
+  "plany/plan_0.19.1_polityka_2.md": {
+    "mtime": 1793318478.94903,
+    "seen": 1793318608.9311774,
+    "ast_hash": "aac9e15d695683dacac2e6a8f545beef",
+    "semantic_hash": ""
+  },
+  "plany/plan_0.19.2_multikulturalizm.md": {
+    "mtime": 1793318478.94903,
+    "seen": 1793318608.9311786,
+    "ast_hash": "c4ca1f2a6850501c8e48c40c6eddac07",
+    "semantic_hash": ""
+  },
+  "plany/propozycja_firm_niemieckich.md": {
+    "mtime": 1793318478.9540272,
+    "seen": 1793318608.9311857,
+    "ast_hash": "6096c6fb5e9408115d95818951ec3dfe",
+    "semantic_hash": ""
+  },
+  "plany/raporty/audyt_planow_0.15.x.md": {
+    "mtime": 1793318478.9550285,
+    "seen": 1793318608.931187,
+    "ast_hash": "044ab4771ff8ba20ae47a906b14b80f4",
+    "semantic_hash": ""
+  },
+  "plany/raporty/audyt_planow_0.16.x.md": {
+    "mtime": 1793318478.9550285,
+    "seen": 1793318608.931188,
+    "ast_hash": "47beb96f8784350f9ca7ce5d253c6e93",
+    "semantic_hash": ""
+  },
+  "plany/raporty/baza_0.16.md": {
+    "mtime": 1793318478.9580534,
+    "seen": 1793318608.9311922,
+    "ast_hash": "0f0938f840c2259dd65713a66c14f40a",
+    "semantic_hash": ""
+  },
+  "plany/raporty/diagnoza_0.15.4.md": {
+    "mtime": 1793318478.9580534,
+    "seen": 1793318608.931193,
+    "ast_hash": "ec17d92a1ee5dc66579f7408b9b71ed4",
+    "semantic_hash": ""
+  },
+  "plany/raporty/diagnoza_0.15.5.md": {
+    "mtime": 1793318478.9590597,
+    "seen": 1793318608.9311943,
+    "ast_hash": "81de7f157a4e5eef082dcaf87843a74a",
+    "semantic_hash": ""
+  },
+  "plany/raporty/diagnoza_0.15.6.md": {
+    "mtime": 1793318478.9590597,
+    "seen": 1793318608.9311957,
+    "ast_hash": "bcae34d6612141b46e543cd6c2f84b4d",
+    "semantic_hash": ""
+  },
+  "plany/raporty/diagnoza_0.16.6_s0.md": {
+    "mtime": 1793318478.9600594,
+    "seen": 1793318608.9311967,
+    "ast_hash": "1638b8c5bd5fc57e972c814dbaa28ef5",
+    "semantic_hash": ""
+  },
+  "plany/raporty/diagnoza_0.16.7.md": {
+    "mtime": 1793318478.9600594,
+    "seen": 1793318608.931198,
+    "ast_hash": "9b1af9d7a21f0320a0b6af95191124f5",
+    "semantic_hash": ""
+  },
+  "plany/raporty/diagnoza_0.16.9.md": {
+    "mtime": 1793318478.9610596,
+    "seen": 1793318608.931199,
+    "ast_hash": "679a9c6ca9072e7eb66816b9be682a66",
+    "semantic_hash": ""
+  },
+  "plany/raporty/kontrola_0.15.0.1.md": {
+    "mtime": 1793318479.004059,
+    "seen": 1793318608.9312031,
+    "ast_hash": "81ebc2f65309cc4f8d994edb8eb341a3",
+    "semantic_hash": ""
+  },
+  "plany/raporty/kontrola_0.15.1.md": {
+    "mtime": 1793318479.004059,
+    "seen": 1793318608.9312043,
+    "ast_hash": "f6b469cd41a4b0d24830343305822203",
+    "semantic_hash": ""
+  },
+  "plany/raporty/kontrola_0.15.2.md": {
+    "mtime": 1793318479.0050597,
+    "seen": 1793318608.9312057,
+    "ast_hash": "cf2dda46f838772750f7963268f742f4",
+    "semantic_hash": ""
+  },
+  "plany/raporty/kontrola_0.15.3.md": {
+    "mtime": 1793318479.0050597,
+    "seen": 1793318608.9312067,
+    "ast_hash": "bf19ee9fadae25afe6f30da8000c5d14",
+    "semantic_hash": ""
+  },
+  "plany/raporty/kontrola_0.15.4.md": {
+    "mtime": 1793318479.0060594,
+    "seen": 1793318608.9312077,
+    "ast_hash": "b9580418fc52f4c30370939f6d1520c4",
+    "semantic_hash": ""
+  },
+  "plany/raporty/kontrola_0.15.5.md": {
+    "mtime": 1793318479.0060594,
+    "seen": 1793318608.9312088,
+    "ast_hash": "6f350cae04b99fc8f0139320bcbb308b",
+    "semantic_hash": ""
+  },
+  "plany/raporty/kontrola_0.15.6.md": {
+    "mtime": 1793318479.007059,
+    "seen": 1793318608.93121,
+    "ast_hash": "102dcdbe4189cae10467a3db25137697",
+    "semantic_hash": ""
+  },
+  "plany/raporty/kontrola_0.16.1.md": {
+    "mtime": 1793318479.0080595,
+    "seen": 1793318608.9312117,
+    "ast_hash": "d4537b717125ffae34aa70cd11b3a31b",
+    "semantic_hash": ""
+  },
+  "plany/raporty/kontrola_0.16.11.md": {
+    "mtime": 1793318479.0080595,
+    "seen": 1793318608.931213,
+    "ast_hash": "33292c077e715eba46698dbf859264c1",
+    "semantic_hash": ""
+  },
+  "plany/raporty/kontrola_0.16.2.md": {
+    "mtime": 1793318479.009059,
+    "seen": 1793318608.931214,
+    "ast_hash": "979934461c6af056756be5b9fd4323cf",
+    "semantic_hash": ""
+  },
+  "plany/raporty/kontrola_0.16.3.md": {
+    "mtime": 1793318479.0100594,
+    "seen": 1793318608.9312153,
+    "ast_hash": "3722618f983940f353feabcdfc37b023",
+    "semantic_hash": ""
+  },
+  "plany/raporty/kontrola_0.16.4.md": {
+    "mtime": 1793318479.0100594,
+    "seen": 1793318608.9312165,
+    "ast_hash": "5abf388883d85dbebcd5cb21377e53cc",
+    "semantic_hash": ""
+  },
+  "plany/raporty/kontrola_0.16.5.md": {
+    "mtime": 1793318479.0110598,
+    "seen": 1793318608.9312177,
+    "ast_hash": "153932e7e2e9b939b4c3e1299df13306",
+    "semantic_hash": ""
+  },
+  "plany/raporty/kontrola_0.16.6.md": {
+    "mtime": 1793318479.0110598,
+    "seen": 1793318608.9312186,
+    "ast_hash": "b4a732f1a27bac3a014ecc1c0f29836b",
+    "semantic_hash": ""
+  },
+  "plany/raporty/kontrola_0.16.6_s0.md": {
+    "mtime": 1793318479.0120592,
+    "seen": 1793318608.9312198,
+    "ast_hash": "c8ee05dc05b606a246b344d36ceb230a",
+    "semantic_hash": ""
+  },
+  "plany/raporty/kontrola_0.16.7.md": {
+    "mtime": 1793318479.0120592,
+    "seen": 1793318608.931221,
+    "ast_hash": "122e1d8e3fa0c60d6cc989c4fc2cd43b",
+    "semantic_hash": ""
+  },
+  "plany/raporty/kontrola_0.16.9.md": {
+    "mtime": 1793318479.0130591,
+    "seen": 1793318608.931222,
+    "ast_hash": "cb517f9f514e481ebd4cc085e39d01b5",
+    "semantic_hash": ""
+  },
+  "plany/raporty/pomiar_0.15.1.md": {
+    "mtime": 1793318479.0140595,
+    "seen": 1793318608.9312234,
+    "ast_hash": "627b1f7ce011c9bed27a1411ed8bcf19",
+    "semantic_hash": ""
+  },
+  "plany/raporty/pomiar_gig_0.15.md": {
+    "mtime": 1793318479.0140595,
+    "seen": 1793318608.9312246,
+    "ast_hash": "7e4b5b7e84d829e4d73e52e11e95de5d",
+    "semantic_hash": ""
+  },
+  "plany/raporty/pomiar_giganci_0.15.4b.md": {
+    "mtime": 1793318479.0150645,
+    "seen": 1793318608.9312255,
+    "ast_hash": "3517d1377567bed3bb681dc26e7a3fcc",
+    "semantic_hash": ""
+  },
+  "plany/raporty/porzadki.md": {
+    "mtime": 1793318579.5418575,
+    "seen": 1793318608.9312267,
+    "ast_hash": "2612df6fe4464a70d4aa9e2aff891bcd",
+    "semantic_hash": ""
+  },
+  "plany/raporty/weryfikacja_0.15.md": {
+    "mtime": 1793318479.0210645,
+    "seen": 1793318608.9312294,
+    "ast_hash": "a678375c655b3550e7adc143e336d742",
+    "semantic_hash": ""
+  },
+  "tests/test_h3_bubbles.html": {
+    "mtime": 1793318479.0335805,
+    "seen": 1793318608.931238,
+    "ast_hash": "75a8a4fa4fd2dacd49810a3f0287847f",
+    "semantic_hash": ""
+  },
+  "img/globus/earth-night.jpg": {
+    "mtime": 1793318478.6695354,
+    "seen": 1793318608.9312406,
+    "ast_hash": "5350543dfb8e809a3bcc0724df2dc443",
+    "semantic_hash": ""
+  },
+  "img/globus/earth-topology.png": {
+    "mtime": 1793318478.6725376,
+    "seen": 1793318608.9312418,
+    "ast_hash": "56e5c0687430c9eff705e6ffbd82ce31",
+    "semantic_hash": ""
+  },
+  "img/globus/night-sky.png": {
+    "mtime": 1793318478.6787894,
+    "seen": 1793318608.9312427,
+    "ast_hash": "1701d6355eb0713db98c2734e162c169",
+    "semantic_hash": ""
+  },
+  "img/logo/capital-quest-logo-jasne-tlo.svg": {
+    "mtime": 1793318478.7553186,
+    "seen": 1793318608.9312437,
+    "ast_hash": "36b0c5b7599fdbf7871b8783925a32c1",
+    "semantic_hash": ""
+  },
+  "img/logo/capital-quest-logo.svg": {
+    "mtime": 1793318478.7563179,
+    "seen": 1793318608.931245,
+    "ast_hash": "5e188334b12bb6a88b009082aff621cf",
+    "semantic_hash": ""
+  },
+  "img/logo/capital-quest-znak.svg": {
+    "mtime": 1793318478.7573185,
+    "seen": 1793318608.9312463,
+    "ast_hash": "336233f63f9f693b2351c8e020fa0e59",
+    "semantic_hash": ""
+  },
+  "img/logo/favicon.svg": {
+    "mtime": 1793318478.7573185,
+    "seen": 1793318608.9312477,
+    "ast_hash": "336233f63f9f693b2351c8e020fa0e59",
+    "semantic_hash": ""
+  },
+  "plany/design/makiety/03_kierunek_A_terminal.png": {
+    "mtime": 1793318478.7823238,
+    "seen": 1793318608.9312487,
+    "ast_hash": "c346cd1a5f7301c7089da4505fd4c6e4",
+    "semantic_hash": ""
+  },
+  "plany/design/makiety/03_kierunek_B_gabinet.png": {
+    "mtime": 1793318478.7853193,
+    "seen": 1793318608.9312499,
+    "ast_hash": "8d70cae3914d3d22e17b9dcbf8a29528",
+    "semantic_hash": ""
+  },
+  "plany/design/makiety/03_kierunek_C_fintech.png": {
+    "mtime": 1793318478.7893212,
+    "seen": 1793318608.931251,
+    "ast_hash": "0293170f6c8606b91db120696ad65905",
+    "semantic_hash": ""
+  },
+  "plany/design/makiety/03_system_fundamenty.png": {
+    "mtime": 1793318478.7913194,
+    "seen": 1793318608.9312522,
+    "ast_hash": "1e8693c64035a4467c92d183c96efb37",
+    "semantic_hash": ""
+  },
+  "plany/design/makiety/03_system_komponenty.png": {
+    "mtime": 1793318478.7963204,
+    "seen": 1793318608.9312532,
+    "ast_hash": "9da8665c0cbbcb162bb49a84d8932076",
+    "semantic_hash": ""
+  },
+  "plany/design/makiety/04_logo_capital_quest.png": {
+    "mtime": 1793318478.7963204,
+    "seen": 1793318608.9312546,
+    "ast_hash": "eb3a81e53c0c9cacbd5b2363a68b4f37",
+    "semantic_hash": ""
+  },
+  "plany/design/stitch/capital_quest_ferie_i_wakacje_wi_ksza_przejrzysto_i_kolory/screen.png": {
+    "mtime": 1793318478.815323,
+    "seen": 1793318608.9312558,
+    "ast_hash": "2fb14bc05dfae2c35b16ecf6aeb86d95",
+    "semantic_hash": ""
+  },
+  "plany/design/stitch/capital_quest_internet_przegl_darka_ulubione/screen.png": {
+    "mtime": 1793318478.8183234,
+    "seen": 1793318608.931257,
+    "ast_hash": "71ecdb8ae55c57488fbc81193287686b",
+    "semantic_hash": ""
+  },
+  "plany/design/stitch/capital_quest_internet_tied_wi_ksza_przejrzysto_i_kolory/screen.png": {
+    "mtime": 1793318478.8243234,
+    "seen": 1793318608.9312582,
+    "ast_hash": "7465ecd63d5c4fc4d393beed264a109c",
+    "semantic_hash": ""
+  },
+  "plany/design/stitch/teamedup_komunikator_firmowy/screen.png": {
+    "mtime": 1793318478.8569717,
+    "seen": 1793318608.9312594,
+    "ast_hash": "50d74ba673e3af40139203382df5e3ff",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po7/01_start_nowa_gra.jpg": {
+    "mtime": 1793318478.8734913,
+    "seen": 1793318608.9312606,
+    "ast_hash": "0fcd41511df17224208bc2cd033bd5c4",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po7/02_pulpit_gora.jpg": {
+    "mtime": 1793318478.8744917,
+    "seen": 1793318608.9312618,
+    "ast_hash": "182400808e9d87ba5bebc3651d9cff16",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po7/03_rynek_filtry_naglowek.jpg": {
+    "mtime": 1793318478.875494,
+    "seen": 1793318608.931263,
+    "ast_hash": "182400808e9d87ba5bebc3651d9cff16",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po7/04_tabela_akcji_sektory.jpg": {
+    "mtime": 1793318478.876492,
+    "seen": 1793318608.931264,
+    "ast_hash": "dd8a579ab533bfb0d019cab52b0d0ad3",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po7/05_wiersz_handel_rozwiniety.jpg": {
+    "mtime": 1793318478.876492,
+    "seen": 1793318608.9312654,
+    "ast_hash": "7327092c0fb49e3469853d67fd6de73f",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po7/06_karta_spolki.jpg": {
+    "mtime": 1793318478.8782508,
+    "seen": 1793318608.9312682,
+    "ast_hash": "c6df4f05b239e8120f811eb074a683db",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po7/07_poczta_lista.jpg": {
+    "mtime": 1793318478.879258,
+    "seen": 1793318608.9312694,
+    "ast_hash": "c6ad04c0111a499e44661b20532dbb9d",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po7/08_poczta_wiadomosc.jpg": {
+    "mtime": 1793318478.8802574,
+    "seen": 1793318608.9312706,
+    "ast_hash": "71e14d8695b072b5e1a02c95c5e09ac2",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po7/09_akademia.jpg": {
+    "mtime": 1793318478.88126,
+    "seen": 1793318608.9312718,
+    "ast_hash": "cafdf7bd6b71672a34752b0cecb3965b",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po7/11_inkubator_pula.jpg": {
+    "mtime": 1793318478.8822591,
+    "seen": 1793318608.931273,
+    "ast_hash": "86950cb834a4ef5914d7a41478208547",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po7/12_miasto.jpg": {
+    "mtime": 1793318478.883258,
+    "seen": 1793318608.931274,
+    "ast_hash": "1104d17033ae338be6e9fad4fc44d5e2",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po7/13_panstwo_kraj.jpg": {
+    "mtime": 1793318478.883258,
+    "seen": 1793318608.931275,
+    "ast_hash": "7133db9729a65ff0eb5cb8bff58e09aa",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po7/14_klienci_udzialy.jpg": {
+    "mtime": 1793318478.8842583,
+    "seen": 1793318608.9312763,
+    "ast_hash": "d0054d22657adba5d946077fc1936249",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po7/15_panel_funduszu_wyniki.jpg": {
+    "mtime": 1793318478.8852582,
+    "seen": 1793318608.9312775,
+    "ast_hash": "82a0e37e0c21beb2281d659983012415",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po7/16_okno_decyzji_potwierdzenie.jpg": {
+    "mtime": 1793318478.8862617,
+    "seen": 1793318608.9312787,
+    "ast_hash": "399ef6cff0511412f07af0183e4d9ce7",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po7/17_wykres_swiecowy.jpg": {
+    "mtime": 1793318478.8872564,
+    "seen": 1793318608.93128,
+    "ast_hash": "476594fd91ff396e6aeb33393ba1c103",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po7/18_pasek_newsow.png": {
+    "mtime": 1793318478.8892565,
+    "seen": 1793318608.9312809,
+    "ast_hash": "b71d0c286cb340496e2a3219aa554148",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po7/20_waski_panel_800px.jpg": {
+    "mtime": 1793318478.890257,
+    "seen": 1793318608.9312823,
+    "ast_hash": "3e74ef5bf1a9da6db0c15444badb1c20",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po7/21_mobile_390_gora.jpg": {
+    "mtime": 1793318478.8912623,
+    "seen": 1793318608.9312832,
+    "ast_hash": "530d07ec71b98210fe3b394049945898",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po7/22_mobile_390_pasek_przyklejony.jpg": {
+    "mtime": 1793318478.8922603,
+    "seen": 1793318608.9312844,
+    "ast_hash": "e68670d47ed9491c5ec70d1d29901fba",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po7/23_mobile_390_menu.jpg": {
+    "mtime": 1793318478.8932605,
+    "seen": 1793318608.9312856,
+    "ast_hash": "23dc287910066c75a4ad3c39dceb85c6",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po7/24_mobile_390_karta_spolki.jpg": {
+    "mtime": 1793318478.8962598,
+    "seen": 1793318608.9312866,
+    "ast_hash": "538aaa2daf5a136636c5af9cabf2a44d",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po7/25_mobile_390_tabela.jpg": {
+    "mtime": 1793318478.8962598,
+    "seen": 1793318608.9312878,
+    "ast_hash": "e68670d47ed9491c5ec70d1d29901fba",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po7/26_bank.jpg": {
+    "mtime": 1793318478.8972578,
+    "seen": 1793318608.9312887,
+    "ast_hash": "e2d1ed48af0f345040099e97875268b2",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po7/27_budownictwo.jpg": {
+    "mtime": 1793318478.89826,
+    "seen": 1793318608.9312901,
+    "ast_hash": "0d635738568e60a722419a31ae506df5",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po7/28_szara_strefa.jpg": {
+    "mtime": 1793318478.8992598,
+    "seen": 1793318608.931291,
+    "ast_hash": "6bfd3be280aebc92dcb0509f9e4f0929",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po7/29_korporacja.jpg": {
+    "mtime": 1793318478.9002602,
+    "seen": 1793318608.9312925,
+    "ast_hash": "24c68fe3bc63d9a0b4170d55be1257c3",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po7/30_lombard.jpg": {
+    "mtime": 1793318478.9012613,
+    "seen": 1793318608.9312935,
+    "ast_hash": "ad9d7638003a4beba8966f8a6fb6d373",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po7/31_badania_rnd.jpg": {
+    "mtime": 1793318478.9012613,
+    "seen": 1793318608.9312947,
+    "ast_hash": "b700d7581c40fda4ccfe15d4c4e82d42",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po/5-1_pulpit_fundament.jpg": {
+    "mtime": 1793318478.8599727,
+    "seen": 1793318608.931296,
+    "ast_hash": "66b2c8dded9f8fe48af053ec040bc46b",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po/5-2_nowa_gra.jpg": {
+    "mtime": 1793318478.8609738,
+    "seen": 1793318608.931297,
+    "ast_hash": "173f5070f520623dcad94eb004e7f50a",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po/5-2_pulpit_pasek.jpg": {
+    "mtime": 1793318478.8619733,
+    "seen": 1793318608.9312983,
+    "ast_hash": "bf4c5b26d853d0ea9d918550c38f3677",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po/5-3_rynek_filtry.jpg": {
+    "mtime": 1793318478.862973,
+    "seen": 1793318608.9312992,
+    "ast_hash": "e5ed8f38168b2403c17dee22b4d16617",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po/5-3_tabela_handel.jpg": {
+    "mtime": 1793318478.8639722,
+    "seen": 1793318608.9313006,
+    "ast_hash": "4f22819e2ca9ad4cb1ddd391e1c4daeb",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po/5-4_inkubator_sticky.jpg": {
+    "mtime": 1793318478.8644774,
+    "seen": 1793318608.9313016,
+    "ast_hash": "9ef30c37982ea4a7aa6affd45a8fbe99",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po/5-4_pulpit_menu_fundusz.jpg": {
+    "mtime": 1793318478.865484,
+    "seen": 1793318608.931303,
+    "ast_hash": "f8b6fa67c0d47fcff1683de1da062b28",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po/5-5_bank.jpg": {
+    "mtime": 1793318478.8664908,
+    "seen": 1793318608.931304,
+    "ast_hash": "f3dad887a6c1f1a8b3164b282ae708d3",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po/5-5_karta_spolki.jpg": {
+    "mtime": 1793318478.8674903,
+    "seen": 1793318608.9313052,
+    "ast_hash": "ee65580d2c32d68abfb2bbcc6ec58c22",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po/5-5_poczta.jpg": {
+    "mtime": 1793318478.8684905,
+    "seen": 1793318608.9313066,
+    "ast_hash": "6bc34bd4905c7899a426f56b989af4c9",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po/5-6_powiadomienia.jpg": {
+    "mtime": 1793318478.8684905,
+    "seen": 1793318608.9313076,
+    "ast_hash": "fe7a080752e04186db76085414373972",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po/5-7_desktop_jedno_przewijanie.jpg": {
+    "mtime": 1793318478.86949,
+    "seen": 1793318608.9313087,
+    "ast_hash": "c2a290bb60e209e59ad67a83ef5c536a",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po/5-7_mobile_390_menu.jpg": {
+    "mtime": 1793318478.8704894,
+    "seen": 1793318608.93131,
+    "ast_hash": "8cd7d41cd28a1fd702ebfa71403aa577",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/po/5-7_mobile_390_tabela.jpg": {
+    "mtime": 1793318478.8714898,
+    "seen": 1793318608.931311,
+    "ast_hash": "fa35c8f14c1acce425fd363fa468ddb5",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/przed/01_start_nowa_gra.jpg": {
+    "mtime": 1793318478.9032605,
+    "seen": 1793318608.931312,
+    "ast_hash": "c8a4f1aa2d616fc1d93f15b7ad7a3e2a",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/przed/02_pulpit_gora.jpg": {
+    "mtime": 1793318478.9042592,
+    "seen": 1793318608.9313135,
+    "ast_hash": "da1b776e486d6f2915482fb439dc1512",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/przed/03_rynek_filtry_naglowek.jpg": {
+    "mtime": 1793318478.9062576,
+    "seen": 1793318608.9313145,
+    "ast_hash": "8226d0bc1bea4296c5e84fd2cafa4737",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/przed/04_tabela_akcji_sektory.jpg": {
+    "mtime": 1793318478.9072578,
+    "seen": 1793318608.9313157,
+    "ast_hash": "a17ed4e7019ac437e3e24fec06c43bd3",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/przed/05_wiersz_handel_rozwiniety.jpg": {
+    "mtime": 1793318478.9082603,
+    "seen": 1793318608.9313169,
+    "ast_hash": "db4bf5afbb0b11c461c8b375d0362ed2",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/przed/06_karta_spolki.jpg": {
+    "mtime": 1793318478.9092607,
+    "seen": 1793318608.931318,
+    "ast_hash": "a08f0b93630d31bcd7797b0853f4f543",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/przed/07_poczta_lista.jpg": {
+    "mtime": 1793318478.9102602,
+    "seen": 1793318608.931319,
+    "ast_hash": "7232933d9e742e814438a92dab8bca5a",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/przed/08_poczta_wiadomosc.jpg": {
+    "mtime": 1793318478.9112592,
+    "seen": 1793318608.9313204,
+    "ast_hash": "9887c23ae1b0ffc80e243f05aae8e43e",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/przed/09_akademia.jpg": {
+    "mtime": 1793318478.912257,
+    "seen": 1793318608.9313216,
+    "ast_hash": "da8826645b7c93e3edcb96a1bc31f562",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/przed/10_skaner_spolek.jpg": {
+    "mtime": 1793318478.9132576,
+    "seen": 1793318608.9313226,
+    "ast_hash": "f9ea6ae8eb30b2853e50115a07418fc2",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/przed/11_inkubator_pula_topbar_zaslania.jpg": {
+    "mtime": 1793318478.914256,
+    "seen": 1793318608.931324,
+    "ast_hash": "ba1dfa5f58ca98cfe4c6e1073e19c38e",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/przed/12_miasto.jpg": {
+    "mtime": 1793318478.9152572,
+    "seen": 1793318608.9313252,
+    "ast_hash": "70fda67e15218a19e8c2e9536d8df49d",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/przed/13_panstwo_kraj.jpg": {
+    "mtime": 1793318478.916259,
+    "seen": 1793318608.9313262,
+    "ast_hash": "0c813be38c7753053b9522de850859f3",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/przed/14_klienci_rynek_JU_dymki_zaslaniaja.jpg": {
+    "mtime": 1793318478.9172566,
+    "seen": 1793318608.9313276,
+    "ast_hash": "a053d9bcf9e58d1b0aa94944a6cc84f7",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/przed/15_panel_funduszu_wyniki.jpg": {
+    "mtime": 1793318478.9192598,
+    "seen": 1793318608.9313288,
+    "ast_hash": "96f491f059e032ad7818f0c757d8451e",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/przed/16_okno_decyzji_potwierdzenie.jpg": {
+    "mtime": 1793318478.9202576,
+    "seen": 1793318608.93133,
+    "ast_hash": "2981dbc09304522e7785667d087a65b4",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/przed/17_wykres_swiecowy.jpg": {
+    "mtime": 1793318478.9222567,
+    "seen": 1793318608.9313312,
+    "ast_hash": "c73fe5ec1025a0d6de78cd71419ceca6",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/przed/18_pasek_newsow.png": {
+    "mtime": 1793318478.9232566,
+    "seen": 1793318608.9313323,
+    "ast_hash": "a97b276e6fef447c73a98ccb4fa9bb53",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/przed/19_motyw_jasny_pulpit.jpg": {
+    "mtime": 1793318478.9232566,
+    "seen": 1793318608.9313333,
+    "ast_hash": "6cd9b3100e20377278fb857b379ce62e",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/przed/19b_motyw_jasny_karta_spolki.jpg": {
+    "mtime": 1793318478.9242623,
+    "seen": 1793318608.9313347,
+    "ast_hash": "9f7f4715ffeb402f362007c5f127a72b",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/przed/20_waski_panel_800px.jpg": {
+    "mtime": 1793318478.9252625,
+    "seen": 1793318608.9313357,
+    "ast_hash": "1f65ac15749e710112e506acb7e42300",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/przed/21_mobile_390_gora.jpg": {
+    "mtime": 1793318478.9262629,
+    "seen": 1793318608.9313369,
+    "ast_hash": "219303c0322950a15408ad9ea8fed6d9",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/przed/22_mobile_390_topbar_zaslania_ekran.jpg": {
+    "mtime": 1793318478.9272633,
+    "seen": 1793318608.931338,
+    "ast_hash": "ea2b4ad49231905e525fc8e635670311",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/przed/23_mobile_390_menu.jpg": {
+    "mtime": 1793318478.928263,
+    "seen": 1793318608.9313393,
+    "ast_hash": "eb910605e65bc40852427951ff1de716",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/przed/24_mobile_390_karta_spolki.jpg": {
+    "mtime": 1793318478.929264,
+    "seen": 1793318608.9313402,
+    "ast_hash": "440ab7d23431e57c7d3c90ce867b6d0d",
+    "semantic_hash": ""
+  },
+  "plany/design/zrzuty/przed/25_mobile_390_tabela_niewidoczna.jpg": {
+    "mtime": 1793318478.9302642,
+    "seen": 1793318608.9313416,
+    "ast_hash": "dc0b3bafffcde3c25a2c37f5ff47ad1a",
+    "semantic_hash": ""
   }
 }
