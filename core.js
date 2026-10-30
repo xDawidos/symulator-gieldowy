@@ -3786,6 +3786,116 @@ function updateInterestRates() {
     }
 }
 
+/** Tik ceny: modyfikatory dryfu i zmienności (faza spółki, arystokrata, cechy CEO, efekt M&A). */
+function getStockTickModifiers(stock, regime, now) {
+    let priceGrowthModifier = 1.0;
+    let volatilityModifier = (regime?.volMult || 1.0);
+    let isVolatilityCapped = false; 
+
+    // Modyfikatory fazy korporacyjnej (bez zmian)
+    switch (stock.corporatePhase) {
+        case CORPORATE_PHASES.GROWTH: priceGrowthModifier += 0.015; volatilityModifier += 0.1; break;
+        case CORPORATE_PHASES.STABILITY: volatilityModifier -= 0.1; break;
+        case CORPORATE_PHASES.DECLINE: priceGrowthModifier -= 0.02; volatilityModifier += 0.15; break;
+        case CORPORATE_PHASES.REORGANIZATION: volatilityModifier += 0.2; break;
+        case CORPORATE_PHASES.GOLDEN_YEAR: priceGrowthModifier += 0.04; volatilityModifier -= 0.05; break;
+        case CORPORATE_PHASES.SHADOW_DESCENT: priceGrowthModifier -= 0.05; volatilityModifier += 0.25; break;
+        case CORPORATE_PHASES.INNOVATION_PUSH: priceGrowthModifier += 0.01; volatilityModifier += 0.1; break;
+    }
+
+    // Dywidendowy arystokrata: stabilność i przyrost (dividends.js)
+    if (stock.isDividendAristocrat) {
+        volatilityModifier -= ARISTOCRAT_BONUS.stability;
+        priceGrowthModifier += ARISTOCRAT_BONUS.growth;
+    }
+
+    // Modyfikatory cech CEO (bez zmian)
+    if (stock.ceo && stock.ceo.traits) {
+        stock.ceo.traits.forEach(trait => {
+            switch (trait.id) {
+                case 'wyjadacz': priceGrowthModifier += 0.01; break;
+                case 'rekin': priceGrowthModifier += 0.05; break;
+                case 'filar_w_branzy': priceGrowthModifier += 0.01; break;
+                case 'tyran': priceGrowthModifier -= 0.02; break;
+                case 'rozrzutny': priceGrowthModifier -= 0.02; break;
+                case 'nieudacznik': priceGrowthModifier -= 0.05; volatilityModifier += 0.05; break;
+                case 'biurowy_dron': priceGrowthModifier -= 0.01; break;
+                case 'hobbista': volatilityModifier += 0.02; break;
+                case 'wizjoner': volatilityModifier += 0.05; break;
+                case 'stoik': volatilityModifier *= 0.60; break;
+                case 'pewniak': isVolatilityCapped = true; break;
+                case 'ryzykant': volatilityModifier += 0.10; break;
+                case 'ksiegowy': volatilityModifier *= 0.95; break;
+                case 'lowca_glow': volatilityModifier += 0.15; break;
+            }
+            const fx = typeof ceoTraits === 'object' ? ceoTraits[trait.id]?.fx : null; // 0.16.3 G13b: cechy krajowe opisane danymi
+            if (fx) { priceGrowthModifier += fx.growth || 0; volatilityModifier *= fx.vol || 1; }
+        });
+    }
+    
+    // ===>>> NOWY BLOK: ZASTOSOWANIE EFEKTÓW M&A (SYNERGIA/DYSSYNERGIA) <<<===
+    if (stock.mergerEffect) {
+        if (now < stock.mergerEffect.expiryTime) {
+            // Jeśli modyfikator jest aktywny, dodaj jego wartość (dodatnią lub ujemną)
+            priceGrowthModifier += stock.mergerEffect.effectValue;
+        } else {
+            // Czas modyfikatora minął, usuń go
+            logEvent(`[M&A Efekt] Efekt ${stock.mergerEffect.type} dla ${stock.name} wygasł.`);
+            stock.mergerEffect = null;
+        }
+    }
+    // ===>>> KONIEC NOWEGO BLOKU <<<===
+    return { priceGrowthModifier, volatilityModifier, isVolatilityCapped };
+}
+
+/** Tik ceny: blokada handlu po dwóch tygodniach poniżej 1 zł i jej zdjęcie. */
+function updateTradeLockAfterTick(stock) {
+    stock.belowOneTicks = stock.price < 1.00 ? (stock.belowOneTicks || 0) + 1 : 0;
+    if (stock.price < 1.00 && !stock.isTradeLocked && !stock.tradeHalted && stock.belowOneTicks >= 120) {
+        stock.isTradeLocked = true;
+        logEvent(`⛔ Handel akcjami ${stock.name} (${stock.symbol}) wstrzymany — kurs od dwóch tygodni poniżej 1 PLN.`, 'review');
+    } else if (stock.price > 1.50 && stock.isTradeLocked && !stock.tradeHalted) {
+        stock.isTradeLocked = false;
+        logEvent(`✅ Wznowiono handel akcjami ${stock.name} (${stock.symbol}).`, 'review');
+    }
+}
+
+/** Tik ceny: historia liniowa i świece (limit zależny od Analitycznego Umysłu). */
+function recordStockPriceHistory(stock, chartNow) {
+    let historyLimitCandles = 15 * 4;
+    let historyLimitLine = 15 * 60;
+    const mindLevel = getSkillLevel('analyticalMind');
+    if (mindLevel === 1) {
+        historyLimitCandles = 20 * 4;
+        historyLimitLine = 20 * 60;
+    } else if (mindLevel >= 2) {
+        historyLimitCandles = 25 * 4;
+        historyLimitLine = 25 * 60;
+    }
+
+    stock.lineHistory.push({ time: chartNow, price: stock.price });
+    if (stock.lineHistory.length > historyLimitLine) {
+        stock.lineHistory.shift(); 
+    }
+
+    const candle = stock.currentCandle;
+    if (candle) {
+        candle.close = stock.price;
+        if (stock.price > candle.high) candle.high = stock.price;
+        if (stock.price < candle.low) candle.low = stock.price;
+
+        if (chartNow - candle.time >= CANDLE_INTERVAL) {
+            stock.candlestickHistory.push(candle);
+            if (stock.candlestickHistory.length > historyLimitCandles) {
+                stock.candlestickHistory.shift(); 
+            }
+            stock.currentCandle = { time: chartNow, open: stock.price, high: stock.price, low: stock.price, close: stock.price };
+        }
+    } else {
+         stock.currentCandle = { time: chartNow, open: stock.price, high: stock.price, low: stock.price, close: stock.price };
+    }
+}
+
 // Główna funkcja aktualizująca ceny (Symulacja Rynku)
 function updateStockPrices() {
     // 0.15 H4: Bezpiecznik giełdowy (Market Circuit Breaker) wstrzymuje aktualizację cen na giełdzie
@@ -3813,63 +3923,7 @@ function updateStockPrices() {
         }
         if (stock.tradeHalted) return; // notowania zawieszone (afera, scandals.js)
 
-        let priceGrowthModifier = 1.0;
-        let volatilityModifier = (regime?.volMult || 1.0);
-        let isVolatilityCapped = false; 
-
-        // Modyfikatory fazy korporacyjnej (bez zmian)
-        switch (stock.corporatePhase) {
-            case CORPORATE_PHASES.GROWTH: priceGrowthModifier += 0.015; volatilityModifier += 0.1; break;
-            case CORPORATE_PHASES.STABILITY: volatilityModifier -= 0.1; break;
-            case CORPORATE_PHASES.DECLINE: priceGrowthModifier -= 0.02; volatilityModifier += 0.15; break;
-            case CORPORATE_PHASES.REORGANIZATION: volatilityModifier += 0.2; break;
-            case CORPORATE_PHASES.GOLDEN_YEAR: priceGrowthModifier += 0.04; volatilityModifier -= 0.05; break;
-            case CORPORATE_PHASES.SHADOW_DESCENT: priceGrowthModifier -= 0.05; volatilityModifier += 0.25; break;
-            case CORPORATE_PHASES.INNOVATION_PUSH: priceGrowthModifier += 0.01; volatilityModifier += 0.1; break;
-        }
-
-        // Dywidendowy arystokrata: stabilność i przyrost (dividends.js)
-        if (stock.isDividendAristocrat) {
-            volatilityModifier -= ARISTOCRAT_BONUS.stability;
-            priceGrowthModifier += ARISTOCRAT_BONUS.growth;
-        }
-
-        // Modyfikatory cech CEO (bez zmian)
-        if (stock.ceo && stock.ceo.traits) {
-            stock.ceo.traits.forEach(trait => {
-                switch (trait.id) {
-                    case 'wyjadacz': priceGrowthModifier += 0.01; break;
-                    case 'rekin': priceGrowthModifier += 0.05; break;
-                    case 'filar_w_branzy': priceGrowthModifier += 0.01; break;
-                    case 'tyran': priceGrowthModifier -= 0.02; break;
-                    case 'rozrzutny': priceGrowthModifier -= 0.02; break;
-                    case 'nieudacznik': priceGrowthModifier -= 0.05; volatilityModifier += 0.05; break;
-                    case 'biurowy_dron': priceGrowthModifier -= 0.01; break;
-                    case 'hobbista': volatilityModifier += 0.02; break;
-                    case 'wizjoner': volatilityModifier += 0.05; break;
-                    case 'stoik': volatilityModifier *= 0.60; break;
-                    case 'pewniak': isVolatilityCapped = true; break;
-                    case 'ryzykant': volatilityModifier += 0.10; break;
-                    case 'ksiegowy': volatilityModifier *= 0.95; break;
-                    case 'lowca_glow': volatilityModifier += 0.15; break;
-                }
-                const fx = typeof ceoTraits === 'object' ? ceoTraits[trait.id]?.fx : null; // 0.16.3 G13b: cechy krajowe opisane danymi
-                if (fx) { priceGrowthModifier += fx.growth || 0; volatilityModifier *= fx.vol || 1; }
-            });
-        }
-        
-        // ===>>> NOWY BLOK: ZASTOSOWANIE EFEKTÓW M&A (SYNERGIA/DYSSYNERGIA) <<<===
-        if (stock.mergerEffect) {
-            if (now < stock.mergerEffect.expiryTime) {
-                // Jeśli modyfikator jest aktywny, dodaj jego wartość (dodatnią lub ujemną)
-                priceGrowthModifier += stock.mergerEffect.effectValue;
-            } else {
-                // Czas modyfikatora minął, usuń go
-                logEvent(`[M&A Efekt] Efekt ${stock.mergerEffect.type} dla ${stock.name} wygasł.`);
-                stock.mergerEffect = null;
-            }
-        }
-        // ===>>> KONIEC NOWEGO BLOKU <<<===
+        const { priceGrowthModifier, volatilityModifier, isVolatilityCapped } = getStockTickModifiers(stock, regime, now);
 
 
         // Inicjalizacja świec
@@ -4006,14 +4060,7 @@ function updateStockPrices() {
 
         // Reszta funkcji (blokada handlu, bankructwo, historia cen, świece, ETFy) bez zmian...
         // B2: blokada dopiero po ~2 tygodniach gry poniżej 1 zł (wcześniej 80% szans co tick).
-        stock.belowOneTicks = stock.price < 1.00 ? (stock.belowOneTicks || 0) + 1 : 0;
-        if (stock.price < 1.00 && !stock.isTradeLocked && !stock.tradeHalted && stock.belowOneTicks >= 120) {
-            stock.isTradeLocked = true;
-            logEvent(`⛔ Handel akcjami ${stock.name} (${stock.symbol}) wstrzymany — kurs od dwóch tygodni poniżej 1 PLN.`, 'review');
-        } else if (stock.price > 1.50 && stock.isTradeLocked && !stock.tradeHalted) {
-            stock.isTradeLocked = false;
-            logEvent(`✅ Wznowiono handel akcjami ${stock.name} (${stock.symbol}).`, 'review');
-        }
+        updateTradeLockAfterTick(stock);
 
         if (stock.financialHealth <= -5 && !stock.isBankrupt) {
             let canGoBankrupt = true;
@@ -4023,38 +4070,7 @@ function updateStockPrices() {
             }
         }
 
-        let historyLimitCandles = 15 * 4;
-        let historyLimitLine = 15 * 60;
-        const mindLevel = getSkillLevel('analyticalMind');
-        if (mindLevel === 1) {
-            historyLimitCandles = 20 * 4;
-            historyLimitLine = 20 * 60;
-        } else if (mindLevel >= 2) {
-            historyLimitCandles = 25 * 4;
-            historyLimitLine = 25 * 60;
-        }
-
-        stock.lineHistory.push({ time: chartNow, price: stock.price });
-        if (stock.lineHistory.length > historyLimitLine) {
-            stock.lineHistory.shift(); 
-        }
-
-        const candle = stock.currentCandle;
-        if (candle) {
-            candle.close = stock.price;
-            if (stock.price > candle.high) candle.high = stock.price;
-            if (stock.price < candle.low) candle.low = stock.price;
-
-            if (chartNow - candle.time >= CANDLE_INTERVAL) {
-                stock.candlestickHistory.push(candle);
-                if (stock.candlestickHistory.length > historyLimitCandles) {
-                    stock.candlestickHistory.shift(); 
-                }
-                stock.currentCandle = { time: chartNow, open: stock.price, high: stock.price, low: stock.price, close: stock.price };
-            }
-        } else {
-             stock.currentCandle = { time: chartNow, open: stock.price, high: stock.price, low: stock.price, close: stock.price };
-        }
+        recordStockPriceHistory(stock, chartNow);
     }); // Koniec stocks.forEach
 
     // ETF-y: cena = wartość portfela / jednostki (etf.js)
