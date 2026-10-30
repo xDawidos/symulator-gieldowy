@@ -27,6 +27,12 @@ Start w innym kraju ma być inną grą, a nie polską grą z inną walutą. Każ
 
 - Po 0.16.11 (zestawy firm i waluta kraju startowego) i 0.19.1 (Polityka 2, uproszczone symulacje państw). Pkt 8 dotyka 0.16.3 (połączone giełdy), bilety/lotniska z 0.16.2 i `foreign_companies.js`.
 
+## Przeniesione z 0.16.x (decyzja użytkownika 2026-10-30)
+
+- **Partie, wybory i społeczeństwo kraju startowego** (K3/S0d z 0.16.6 i 0.16.11): dziś rynek macierzysty, partie, NBP i KNF kraju startowego zostają polskie — ma to być w tej wersji i w wersjach krajów 0.19.3+.
+- **Strajki i rynek pracy spółek zagranicznych** (z 0.16.9 W2): razem z 0.21 „Rynek pracy 2”.
+- **Listy firm i kalibracja GIG dla USA i Czech** (z 0.16.11): wersje 0.19.4 USA i 0.19.5 Czechy; do tego czasu te kraje działają w uproszczonej mechanice.
+
 ## Otwarte pytania
 
 1. Czy motyw graficzny kraju zmienia tylko akcenty, czy także tło i ikonografię? (Domyślnie: akcenty, nagłówek i tło; ikony wspólne.)
