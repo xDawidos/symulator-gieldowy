@@ -13858,7 +13858,7 @@ group('0.16.7 Pełne spółki zagraniczne', () => {
         withSeededRandom(7, () => { for (let k = 0; k < 6; k++) quarter(); });
         const f = a.fundamentals; assert(f && f.history.length >= 4 && f.revenueTtm > 0, 'fundamenty');
         assert(Number.isFinite(a.quarterlyEarnings) && Number.isFinite(a.lastSurprise), 'wynik i niespodzianka');
-        assert(a.balanceSheet.assets - a.balanceSheet.liabilities !== eq0, 'kapitał własny się zmienił');
+        assert(a.balanceSheet.assets - a.balanceSheet.liabilities !== eq0 || a.dividendPolicy === 'Total', 'kapitał własny się zmienił (polityka 100% wypłaca cały zysk, więc kapitał może zostać bez zmian)');
         assertEq(checkForeignCompanyInvariants().length, 0, 'niezmienniki modelu'); assertEq(checkWorldInvariants().length, 0, 'niezmienniki świata');
     }));
 
@@ -13927,7 +13927,7 @@ group('0.16.7 Pełne spółki zagraniczne', () => {
         assertNear(b.balanceSheet.assets - b.balanceSheet.liabilities, eq, 'kapitał własny (zapis zaokrągla do 6 cyfr znaczących)', 0.05); assertEq(b.ceo.name, name, 'prezes'); assertNear(b.fundamentals.epsTtm, eps, 'EPS TTM', 1e-3); assertEq(b.dividendPolicy, pol, 'polityka');
         for (const row of Object.values(snap.issuers)) delete row.c; // zapis v17
         resetGdrState(); applyCountriesSnapshot(snap); const c = foreignIssuers.YA1; assert(c.balanceSheet && c.cash > 0 && !c.fundamentals, 'v17: model z ceny, fundamenty przy pierwszym raporcie');
-        quarter(); assert(foreignIssuers.YA1.fundamentals, 'po kwartale są fundamenty'); assertEq(checkWorldInvariants().length, 0, 'niezmienniki po migracji');
+        quarter(); assert(foreignIssuers.YA1.fundamentals, 'po kwartale są fundamenty'); assertEq(checkWorldInvariants().join(' ; '), '', 'niezmienniki po migracji');
         assertEq(SAVE_FORMAT_VERSION, 21, 'wersja zapisu'); assert(SUPPORTED_SAVE_VERSIONS.includes(17), 'v17 nadal wczytywany');
     }));
 
@@ -14528,5 +14528,57 @@ group('0.16.9 W1 Gotówka w wielu walutach', () => {
             assert(getGdrFree(i) >= -1e-6, 'wolny obrót nieujemny');
         }
         assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+
+    // --- 0.16.12 D3: przejęcia obcych ---
+    const withMaDe = fn => withSubLinks(() => {
+        resetWorld([mk156('CTX', { price: 10, cash: 5_000_000, sector: ['Usługi'] }), mk156('ECL', { price: 10, cash: 10_000, sector: ['Usługi'] })]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' }); playerCash = 5_000_000;
+        setStartCountry('DE'); macro.quarter = 10;
+        for (const x of getCountryIssuers('DE')) ensureForeignCompany(x, true);
+        const [a, b] = getCountryIssuers('DE').filter(isForeignMaEligible); for (const x of [a, b]) { ensureForeignCompany(x, true); x.sectors = [['Usługi', 1]]; x.sector = 'Usługi'; x.financialHealth = 2; }
+        return fn(a, b);
+    });
+    test('0.16.12 D3: przejęcie obca–obca — cel znika, posiadacze dostają premię, przejmujący księguje aktywa i wartość firmy, gotówka z marginesem; niezmienniki', () => withMaDe((a, b) => {
+        a.cash = 1e12; a.balanceSheet.assets += 1e12; b.holders = { player: 1000 }; const cashPlayer0 = playerCash, assets0 = a.balanceSheet.assets, bid = b.id;
+        const offer = getForeignOffer(b); assertNear(offer.price, b.price * 1.25, 'premia 25%', 1e-6);
+        const r = executeIssuerTakeover(a, b); assert(r.ok, r.reason);
+        assert(!foreignIssuers[bid], 'cel zniknął z giełdy'); assert(playerCash > cashPlayer0, 'gracz dostał gotówkę za akcje');
+        assert(a.balanceSheet.assets !== assets0 && a.absorbedCompanies?.length === 1, 'przejęcie zaksięgowane'); assert(a.balanceSheet.liabilities >= 0 && a.cash > 0);
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+    test('0.16.12 D3: wykluczenia — państwowe, giganci, specjalne, zależne, spółki spoza giełdy macierzystej, za mało gotówki, dwie spółki krajowe', () => withMaDe((a, b) => {
+        a.cash = 1e12;
+        b.state = true; assert(!executeIssuerTakeover(a, b).ok, 'państwowa wyłączona'); b.state = false;
+        b.giant = true; assert(!executeIssuerTakeover(a, b).ok, 'gigant wyłączony'); b.giant = false;
+        b.special = 'launder'; assert(!executeIssuerTakeover(a, b).ok, 'specjalna wyłączona'); b.special = null;
+        b.parentId = 'XXX'; assert(!executeIssuerTakeover(a, b).ok, 'zależna wyłączona'); delete b.parentId;
+        joinCountry('CZ'); const cz = getCountryIssuers('CZ').find(x => !x.state && !x.giant && !x.special); ensureForeignCompany(cz, true);
+        assert(!isCountryLinked('CZ') && !isForeignMaEligible(cz), 'kraj bez linku nie jest na liście macierzystej'); assert(!executeIssuerTakeover(a, cz).ok, 'cel spoza giełdy macierzystej');
+        a.cash = 1; assertEq(executeIssuerTakeover(a, b).reason, 'Za mało gotówki przejmującego.');
+        const d1 = stocks.find(s => s.symbol === 'CTX'), d2 = stocks.find(s => s.symbol === 'ECL'); assert(!executeIssuerTakeover(d1, d2).ok, 'dwie krajowe: proces M&A');
+        assertEq(checkWorldInvariants().join(' ; '), '');
+    }));
+    test('0.16.12 D3: obca przejmuje krajową (wypłata przez wspólne settleTargetHolders) i krajowa przejmuje obcą; fundusz z >50% krajowej uruchamia przejęcie obcej', () => withMaDe((a, b) => {
+        const dom = stocks.find(s => s.symbol === 'ECL'); dom.price = 10; dom.totalShares = 10000; dom.financialHealth = 0;
+        playerPortfolio.ECL = { shares: 100, avgPrice: 10, assetType: 'stock' }; dom.sharesHeld = (dom.sharesHeld || 0) + 100; const cash0 = playerCash;
+        a.cash = 1e12; const n0 = stocks.length;
+        const r1 = executeIssuerTakeover(a, dom); assert(r1.ok, r1.reason); assertEq(stocks.length, n0 - 1, 'krajowy cel usunięty'); assert(!stocks.some(s => s.symbol === 'ECL'));
+        assertNear(playerCash - cash0, 100 * 12.5, 'gracz dostał 100 × cena z premią', 1e-6);
+        const buyer = stocks.find(s => s.symbol === 'CTX'); buyer.cash = 1e12; buyer.balanceSheet = buyer.balanceSheet || { assets: 1e12, liabilities: 0, shareCapital: 1e12, retainedEarnings: 0 };
+        const bid = b.id, r2 = executeIssuerTakeover(buyer, b); assert(r2.ok, r2.reason); assert(!foreignIssuers[bid], 'obcy cel zniknął');
+        assertEq(checkWorldInvariants().join(' ; '), '');
+        // fundusz-kontrola krajowej: przejmuje obcą
+        const c = getCountryIssuers('DE').filter(isForeignMaEligible)[0]; c.financialHealth = 0;
+        assert(!startPlayerForeignTakeover('CTX', c.id).ok, 'bez kontroli funduszu nie wolno');
+        playerPortfolio.CTX = { shares: buyer.totalShares * 0.6, avgPrice: 10, assetType: 'stock' }; buyer.sharesHeld = buyer.totalShares * 0.6;
+        buyer.sectors = undefined; const rr = startPlayerForeignTakeover('CTX', c.id); assert(rr.ok || /za duży|gotówki/.test(rr.reason), 'ścieżka gracza działa albo odmawia z powodem: ' + rr.reason);
+        assertEq(checkWorldInvariants().join(' ; '), '');
+    }));
+    test('0.16.12 D3: sprzedaż spółki z walnego (gracz > 50%) i kwartalna pętla przejęć nie psują stanu', () => withMaDe((a, b) => {
+        a.cash = 1e12; b.price *= 0.05; b.holders = { player: Math.floor(b.shares * 0.6) };
+        const sold = applyAgmResolution(b, { type: 'sellCompany' }); assertEq(sold.startsWith('nabywca: '), true, 'kupiec z gotówką: ' + sold);
+        for (let k = 0; k < 40; k++) processForeignMaQuarterly();
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki po pętli kwartalnej');
     }));
 });

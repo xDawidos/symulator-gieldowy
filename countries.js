@@ -413,6 +413,7 @@ function processCountriesQuarterly() {
         maybeCountryDebut(id);
         if (typeof processForeignBotsQuarterly === 'function') processForeignBotsQuarterly(id);
     }
+    if (typeof processForeignMaQuarterly === "function") processForeignMaQuarterly(); // 0.16.12 D3: przejęcia obcych na liście giełdy macierzystej
 }
 
 // ---------------------------------------------------------------------------------
@@ -452,6 +453,7 @@ function getCountriesSnapshot() {
         if (i.leakQ !== undefined) row.lk = i.leakQ;
         if (i.vintage) row.v = i.vintage;
         if (i.tradeHalted) row.th = 1;
+        if (i.parentPack > 0) row.pp = i.parentPack; // 0.16.12 D1: pakiet matki
         if (i.oversightResale) row.or = i.oversightResale.until;
         const company = typeof getForeignCompanySnapshot === 'function' ? getForeignCompanySnapshot(i) : undefined;
         if (company) row.c = company; // 0.16.7: bilans, wyniki, dywidenda, prezes
@@ -492,7 +494,9 @@ function applyCountriesSnapshot(snapshot) {
         if (row.v) issuer.vintage = String(row.v);
         if (row.th) issuer.tradeHalted = true;
         if (Number.isFinite(Number(row.or))) issuer.oversightResale = { until: Number(row.or) };
+        issuer.parentPack = Number(row.pp) > 0 && issuer.parentId ? Number(row.pp) : 0;
         if (typeof applyForeignCompanySnapshot === 'function') applyForeignCompanySnapshot(issuer, row.c); // zapis v17 (bez `c`): model z ceny
+        if (issuer.parentPack > 0) issuer.float = issuer.shares - issuer.statePack - issuer.parentPack;
         issuer.holders = {};
         for (const [holder, qty] of Object.entries(row.o || {})) if (Number(qty) > 0) issuer.holders[holder] = Number(qty);
     }

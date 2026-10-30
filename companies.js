@@ -3965,6 +3965,39 @@ function processReitDividend(stock) {
     payDividendToShareholders(stock, stock.dividendPerShare);
 }
 
+/** Wypłata ceny za akcję wszystkim posiadaczom spółki-celu przejęcia (gracz, boty, holdingi, banki, ETF-y, fundusze, konto prywatne, pakiety spółek). 0.16.12 D3: wspólne dla przejęć krajowych i przejęć krajowego celu przez spółkę zagraniczną. */
+function settleTargetHolders(target, pricePerShare, initiator = null) {
+    // Gracz
+    if (playerPortfolio[target.symbol]) {
+        const holding = playerPortfolio[target.symbol];
+        const grossGain = holding.shares * pricePerShare;
+        playerCash += grossGain; // TODO: Obliczyć podatek
+        logEvent(`💰 Otrzymujesz ${grossGain.toFixed(2)} PLN za akcje ${target.name} w ramach przejęcia.`, 'success');
+    }
+    // AI
+    aiCompetitors.forEach(ai => {
+        if (ai.portfolio[target.symbol]) {
+            ai.cash += ai.portfolio[target.symbol].shares * pricePerShare;
+        }
+    });
+    // Holdingi i Banki
+    stocks.filter(s => s.assetType === 'Holding' && s.holdingPortfolio[target.symbol]).forEach(h => h.cash += (h.holdingPortfolio[target.symbol].quantity * pricePerShare));
+    commercialBanks.filter(b => b.stockPortfolio[target.symbol]).forEach(b => b.cash += (b.stockPortfolio[target.symbol].shares * pricePerShare));
+    settleEtfHoldings(target.symbol, pricePerShare); // pakiety ETF-ów (etf.js)
+    // Fundusze botów, konto prywatne gracza i inne spółki z pakietami
+    for (const manager of corporation?.managers || []) {
+        const held = manager.fund?.portfolio?.[target.symbol]?.shares || 0;
+        if (held > 0) { manager.fund.cash += held * pricePerShare; delete manager.fund.portfolio[target.symbol]; }
+    }
+    const walletHeld = playerWallet?.portfolio?.[target.symbol]?.shares || 0;
+    if (walletHeld > 0) { playerWallet.cash += walletHeld * pricePerShare; delete playerWallet.portfolio[target.symbol]; }
+    for (const owner of stocks) {
+        const stake = owner !== initiator ? owner.equityStakes?.[target.symbol] || 0 : 0;
+        if (stake > 0) adjustCompanyCash(owner, stake * pricePerShare);
+        if (owner.equityStakes?.[target.symbol]) delete owner.equityStakes[target.symbol];
+    }
+}
+
 function resolveMerger(stock1, stock2, process) {
     console.log(`[M&A Resolve] Finalizowanie procesu ${process.type} dla ${stock1.symbol} i ${stock2.symbol}...`);
 
@@ -4028,40 +4061,12 @@ function resolveMerger(stock1, stock2, process) {
             // ===>>> KONIEC NOWEJ LOGIKI FINANSOWANIA <<<===
 
 
-            // 3. Wypłata dla akcjonariuszy spółki-celu (bez zmian)
+            // 3. Wypłata dla akcjonariuszy spółki-celu (0.16.12 D3: wspólna funkcja settleTargetHolders)
             const pricePerShare = process.offerDetails.buyoutPricePerShare;
             if (typeof noteTakeoverAchievements === 'function') noteTakeoverAchievements(process, target, pricePerShare); // 0.15.1 M7
-            // Gracz
-            if (playerPortfolio[target.symbol]) {
-                const holding = playerPortfolio[target.symbol];
-                const grossGain = holding.shares * pricePerShare;
-                playerCash += grossGain; // TODO: Obliczyć podatek
-                logEvent(`💰 Otrzymujesz ${grossGain.toFixed(2)} PLN za akcje ${target.name} w ramach przejęcia.`, 'success');
-            }
-            // AI
-            aiCompetitors.forEach(ai => {
-                if (ai.portfolio[target.symbol]) {
-                    ai.cash += ai.portfolio[target.symbol].shares * pricePerShare;
-                }
-            });
-            // Holdingi i Banki
-            stocks.filter(s => s.assetType === 'Holding' && s.holdingPortfolio[target.symbol]).forEach(h => h.cash += (h.holdingPortfolio[target.symbol].quantity * pricePerShare));
-            commercialBanks.filter(b => b.stockPortfolio[target.symbol]).forEach(b => b.cash += (b.stockPortfolio[target.symbol].shares * pricePerShare));
-            settleEtfHoldings(target.symbol, pricePerShare); // pakiety ETF-ów (etf.js)
+            settleTargetHolders(target, pricePerShare, initiator);
             transferSpecialBonuses(target, initiator); // bonusy projektów specjalnych (projects.js)
             target.absorbedBy = initiator.symbol; // pakiety celu przechodzą na przejmującego
-            // Fundusze botów, konto prywatne gracza i inne spółki z pakietami
-            for (const manager of corporation?.managers || []) {
-                const held = manager.fund?.portfolio?.[target.symbol]?.shares || 0;
-                if (held > 0) { manager.fund.cash += held * pricePerShare; delete manager.fund.portfolio[target.symbol]; }
-            }
-            const walletHeld = playerWallet?.portfolio?.[target.symbol]?.shares || 0;
-            if (walletHeld > 0) { playerWallet.cash += walletHeld * pricePerShare; delete playerWallet.portfolio[target.symbol]; }
-            for (const owner of stocks) {
-                const stake = owner !== initiator ? owner.equityStakes?.[target.symbol] || 0 : 0;
-                if (stake > 0) adjustCompanyCash(owner, stake * pricePerShare);
-                if (owner.equityStakes?.[target.symbol]) delete owner.equityStakes[target.symbol];
-            }
 
             // 4. Przeniesienie aktywów i pasywów (0.15.1 M6): wartość firmy = cena − aktywa netto celu;
             // kapitał przejmującego maleje tylko o koszty procesu (zysk zatrzymany celu nie jest dopisywany).
