@@ -579,7 +579,8 @@ function runForeignTenderOrder(issuer) {
 // spółek zależnych (kontroluje je matka). Kwoty: cena w walucie celu, zapłata w walucie przejmującego po kursie środkowym; krajowe kwoty są w jednostkach PLN.
 // =================================================================================
 
-const FOREIGN_MA = { premium: 0.25, chance: 0.10, maxTargetCapShare: 0.25, cashMargin: 1.1, minHealth: 0 };
+const FOREIGN_MA = { premium: 0.25, chance: 0.05, domesticCooldownQ: 12, // przejęcia z udziałem spółki krajowej wpuszczają gotówkę z zewnątrz do GIG (pomiar 0.16.12: ok. +6 pp CAGR w grach z przejęciami) — najwyżej jedno na 12 kw.
+     maxTargetCapShare: 0.25, cashMargin: 1.1, minHealth: 0 };
 
 /** Spółka obca nadaje się na przejmującą/cel: nie państwowa, nie gigant, nie specjalna, nie zależna, nie zawieszona, z modelem spółki, z listy giełdy macierzystej. */
 function isForeignMaEligible(i) {
@@ -677,6 +678,8 @@ function startPlayerForeignTakeover(acquirerSymbol, issuerId, premium = FOREIGN_
 }
 
 /** Kwartalnie: z szansą `chance` na kraj połączony najbogatszy zdrowy kupiec wykupuje słabszego z tego samego sektora (obca↔obca, obca→krajowa, krajowa→obca). */
+let lastDomesticMaQuarter = -99; // nie zapisywane: po wczytaniu zapisu limit zaczyna się od nowa
+function resetForeignMa() { lastDomesticMaQuarter = -99; }
 function processForeignMaQuarterly() {
     if (typeof getLinkedCountries !== 'function') return;
     for (const country of getLinkedCountries()) {
@@ -686,6 +689,9 @@ function processForeignMaQuarterly() {
         const target = getRandomElement(targets);
         if (!target) continue;
         const buyer = findForeignTakeoverBuyer(target);
-        if (buyer && (Number(buyer.financialHealth) || 0) >= FOREIGN_MA.minHealth) executeIssuerTakeover(buyer, target);
+        if (!buyer || (Number(buyer.financialHealth) || 0) < FOREIGN_MA.minHealth) continue;
+        const domestic = !acqForeignOf(target) || !acqForeignOf(buyer);
+        if (domestic && macro.quarter - lastDomesticMaQuarter < FOREIGN_MA.domesticCooldownQ) continue;
+        if (executeIssuerTakeover(buyer, target).ok && domestic) lastDomesticMaQuarter = macro.quarter;
     }
 }

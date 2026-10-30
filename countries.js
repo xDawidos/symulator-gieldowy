@@ -38,6 +38,7 @@ function resetCountriesState() {
     delete COUNTRY_DEFS.PL; // 0.16.11 K1: definicja Polski istnieje tylko przy starcie spoza PL
     homeFeed = { last: null, sd: 0.02 };
     if (typeof resetForeignStats === 'function') resetForeignStats();
+    if (typeof resetForeignMa === 'function') resetForeignMa();
     if (typeof resetLinksState === 'function') resetLinksState();
     for (const id of Object.keys(marketRegimes || {})) if (id !== 'home') delete marketRegimes[id];
     if (typeof resetTicketsState === 'function') resetTicketsState(); // boty zostają w aiCompetitors (zapis tablicy); nowa gra: resetForeignBots() w startNewCareer
