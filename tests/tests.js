@@ -14430,4 +14430,16 @@ group('0.16.9 W1 Gotówka w wielu walutach', () => {
             assertEq(checkWorldInvariants().length, 0, 'niezmienniki po wymianie z okna');
         } finally { kpi.remove(); document.getElementById('cash-modal')?.remove(); cashWindowState = { from: 'PLN', to: 'EUR', providerId: 'std' }; initFxState(); }
     });
+    test('0.16.11: spółki kraju startowego są na głównej liście (link home), bez biletu dla botów i bez zmiany prowizji', () => {
+        initFxState(); resetGdrState();
+        try {
+            resetWorld(Array.from({ length: 12 }, (_, i) => mk156(`T${i}`, { price: 50 + i, financialHealth: 2 })));
+            startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+            setStartCountry('DE');
+            assert(getLinkedCountries().includes('DE') && countryState.DE.link === 'home', 'DE na głównej liście jako rynek macierzysty');
+            assert(!canTradeCountry('bot-x', 'DE'), 'bot nadal potrzebuje biletu');
+            assertEq(getCountryCommission('DE'), getCountryBaseCommission('DE'), 'prowizja bez zmian');
+            assert(!getLinkCandidates().includes('DE'), 'kraj startowy nie jest kandydatem na połączenie');
+        } finally { resetGdrState(); initFxState(); }
+    });
 });

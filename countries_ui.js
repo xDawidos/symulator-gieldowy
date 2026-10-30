@@ -172,7 +172,7 @@ function marketsUiTrade(id, side) {
 // 0.16.3 G12/G16: połączone giełdy — okno wydarzenia (z pauzą) i karta stanu połączeń (dane: exchange_links.js)
 // =================================================================================
 
-const LINK_KIND_LABELS = { merged: 'przejęta przez naszą giełdę', intl: 'giełda międzynarodowa', taken: 'przejęła naszą giełdę (wariant B)' };
+const LINK_KIND_LABELS = { home: 'giełda macierzysta (kraj startowy)', merged: 'przejęta przez naszą giełdę', intl: 'giełda międzynarodowa', taken: 'przejęła naszą giełdę (wariant B)' };
 
 /** Karta stanu: połączone kraje, giełda międzynarodowa, wspólnota europejska, szansa kolejnego wydarzenia słowami. */
 function renderLinksCard() {

@@ -194,7 +194,7 @@ function joinCountry(id, by = 'test') {
     marketRegimes[id] = createCountryRegime(id);
     for (const c of def.companies) createCountryIssuer(def, c);
     if (typeof spawnForeignBotsFor === 'function') spawnForeignBotsFor(id);
-    if (by === 'start') return countryState[id];
+    if (by === 'start') { countryState[id].link = 'home'; return countryState[id]; } // 0.16.11: giełda kraju startowego to rynek macierzysty — jej spółki są na głównej liście, bez biletu, z prowizją krajową
     if (id === 'CN' && typeof spawnPandaParabank === 'function') spawnPandaParabank(); // 0.16.4 G19: PanDa Bank na mechanice parabanku z 0.11
     if (typeof applySectorShock === 'function') applySectorShock('Turystyka', 0.06, 3, { fadeQ: 4 }); // nowe państwo = nowi turyści (malejąco)
     const text = `Giełda w kraju: ${def.name} dołącza do świata gry (${def.operator.name}, waluta ${def.currency}, ${def.companies.length} spółek).`;
@@ -562,11 +562,11 @@ function getCountryCommission(country) {
     return getCountryBaseCommission(country) + off;
 }
 function getCountryBaseCommission(country) {
-    if (countryState[country]?.link && typeof LINK_RULES === 'object') return LINK_RULES.domesticCommission; // połączone giełdy: prowizja jak krajowa
+    if (countryState[country]?.link && countryState[country].link !== 'home' && typeof LINK_RULES === 'object') return LINK_RULES.domesticCommission; // połączone giełdy: prowizja jak krajowa
     return COUNTRY_DEFS[country]?.operator?.commission ?? COUNTRY_RULES.commission;
 }
 /** Dostęp do zakupu spółek kraju: kraj dołączył i inwestor ma bilet. */
-function canTradeCountry(holder, country) { return isCountryJoined(country) && (hasTicket(holder, country) || Boolean(countryState[country]?.link)); } // 0.16.3: kraj połączony z naszą giełdą — bez biletu
+function canTradeCountry(holder, country) { return isCountryJoined(country) && (hasTicket(holder, country) || Boolean(countryState[country]?.link && countryState[country].link !== 'home')); } // 0.16.3: kraj połączony z naszą giełdą — bez biletu
 
 /** Bilet dla gracza (holder 'player', gotówka funduszu) albo bota (obiekt z `cash`). Pierwszy bilet do nowego kraju otwiera jego giełdę. */
 function buyTicket(country, holder = 'player') {
