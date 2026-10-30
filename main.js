@@ -419,29 +419,8 @@ function sanitizeCompanyNumbers(company, warnings) {
     }
 }
 
-/**
- * Waliduje i odtwarza stan z obiektu zapisu. Zwraca raport; przy błędach krytycznych nic nie zmienia.
- */
-function applySaveSnapshot(snapshot) {
-    const report = { ok: false, warnings: [], errors: [] };
-
-    if (!snapshot || typeof snapshot !== 'object') {
-        report.errors.push('Brak danych zapisu.');
-        return report;
-    }
-
-    if (!SUPPORTED_SAVE_VERSIONS.includes(snapshot.version)) {
-        report.errors.push(`Niezgodna wersja zapisu (${snapshot.version}). Obsługiwane: ${SUPPORTED_SAVE_VERSIONS.join(', ')}.`);
-        return report;
-    }
-
-    snapshot = migrateLegacyBankSymbols(snapshot); // 0.16.11 K0: BKINV1/BKINV3/BKCORP3 → SPR/RPK/BPIG
-    if (!Array.isArray(snapshot.stocks) || snapshot.stocks.length === 0) {
-        report.errors.push('Zapis nie zawiera spółek.');
-        return report;
-    }
-
-    // --- Spółki: duplikaty symboli ---
+/** Wczytanie zapisu: spółki bez duplikatów symboli, segmenty v14. */
+function restoreSavedStocks(snapshot, report) {
     const bySymbol = new Map();
     const restoredStocks = [];
 
@@ -462,12 +441,11 @@ function applySaveSnapshot(snapshot) {
         }
         restoredStocks.push(company);
     }
+    return { bySymbol, restoredStocks };
+}
 
-    const missing = new Set();
-    resolveStockRefs(restoredStocks, bySymbol, missing);
-    restoredStocks.forEach(company => sanitizeCompanyNumbers(company, report.warnings));
-
-    // --- Przetargi ---
+/** Wczytanie zapisu: przetargi z referencjami do spółek; błędne anulowane. */
+function restoreSavedTenders(snapshot, bySymbol, report) {
     const tenderIds = new Set();
     const restoredTenders = [];
 
@@ -513,10 +491,11 @@ function applySaveSnapshot(snapshot) {
         if (!Array.isArray(tender.evaluatedBy)) tender.evaluatedBy = [];
         restoredTenders.push(tender);
     }
+    return restoredTenders;
+}
 
-    const tenderById = new Map(restoredTenders.map(tender => [tender.id, tender]));
-
-    // --- Projekty budowlane ---
+/** Wczytanie zapisu: projekty budowlane (model 3) z przetargiem i wykonawcą. */
+function restoreSavedProjects(snapshot, bySymbol, tenderById, report) {
     const projectIds = new Set();
     const restoredProjects = [];
     const moneyFields = ['price', 'escrowBalance', 'paidToBuilder', 'costsPaid', 'estimatedCost', 'progress', 'elapsedGameMs', 'workRequiredMs', 'deadlineMs'];
@@ -564,6 +543,45 @@ function applySaveSnapshot(snapshot) {
         if (!Array.isArray(project.events)) project.events = [];
         restoredProjects.push(project);
     }
+    return restoredProjects;
+}
+
+/**
+ * Waliduje i odtwarza stan z obiektu zapisu. Zwraca raport; przy błędach krytycznych nic nie zmienia.
+ */
+function applySaveSnapshot(snapshot) {
+    const report = { ok: false, warnings: [], errors: [] };
+
+    if (!snapshot || typeof snapshot !== 'object') {
+        report.errors.push('Brak danych zapisu.');
+        return report;
+    }
+
+    if (!SUPPORTED_SAVE_VERSIONS.includes(snapshot.version)) {
+        report.errors.push(`Niezgodna wersja zapisu (${snapshot.version}). Obsługiwane: ${SUPPORTED_SAVE_VERSIONS.join(', ')}.`);
+        return report;
+    }
+
+    snapshot = migrateLegacyBankSymbols(snapshot); // 0.16.11 K0: BKINV1/BKINV3/BKCORP3 → SPR/RPK/BPIG
+    if (!Array.isArray(snapshot.stocks) || snapshot.stocks.length === 0) {
+        report.errors.push('Zapis nie zawiera spółek.');
+        return report;
+    }
+
+    // --- Spółki: duplikaty symboli ---
+    const { bySymbol, restoredStocks } = restoreSavedStocks(snapshot, report);
+
+    const missing = new Set();
+    resolveStockRefs(restoredStocks, bySymbol, missing);
+    restoredStocks.forEach(company => sanitizeCompanyNumbers(company, report.warnings));
+
+    // --- Przetargi ---
+    const restoredTenders = restoreSavedTenders(snapshot, bySymbol, report);
+
+    const tenderById = new Map(restoredTenders.map(tender => [tender.id, tender]));
+
+    // --- Projekty budowlane ---
+    const restoredProjects = restoreSavedProjects(snapshot, bySymbol, tenderById, report);
 
     // Przetarg "awarded" bez projektu nie ma kontynuacji.
     for (const tender of restoredTenders) {
