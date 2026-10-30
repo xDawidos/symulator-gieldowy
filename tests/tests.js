@@ -14444,6 +14444,9 @@ group('0.16.9 W1 Gotówka w wielu walutach', () => {
         } finally { resetGdrState(); initFxState(); }
     });
 
+});
+
+group('0.16.12 Dokończenie krajów (D1–D4)', () => {
     // --- 0.16.12 D1: spółki zależne spółek zagranicznych ---
     const withSubLinks = fn => { resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' }); playerCash = 5_000_000; initFxState(); resetGdrState(); macro.quarter = 10; try { return fn(); } finally { resetGdrState(); initFxState(); } };
     const subParent = () => {
