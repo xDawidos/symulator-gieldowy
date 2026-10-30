@@ -3425,6 +3425,249 @@ function updateDividendTimers(deltaTime) {
     });
 }
 
+/** Raport kwartalny: ujemny kapitał lub zła kondycja — ratunek albo bankructwo; true = spółka wypada z dalszego raportu. */
+function resolveQuarterlyBankruptcy(stock) {
+    const equity = stock.balanceSheet.assets - stock.balanceSheet.liabilities;
+    if ((equity <= 0 || stock.financialHealth <= -5 || isCullCandidate(stock)) && !stock.isBankrupt) {
+         let bankruptcyChance = 0.30 * (typeof getMarketFailureFactor === 'function' ? getMarketFailureFactor(stock) : 1); // 0.15.6: NH i Włoska Giełda — większa szansa upadku
+         if (typeof isProtectedMarketOperator === 'function' && isProtectedMarketOperator(stock)) {
+             // D1 (decyzja 2): ratunek operatora rynku internetowego finansują spółki członkowskie z własnej gotówki,
+             // proporcjonalnie do kapitalizacji. Pełny ratunek = brak upadku; niepełny — mniejsza ochrona i słabsza kondycja.
+             const needed = Math.max(0, -equity) + getMarketCapValue(stock) * 0.05;
+             const raised = fundMarketOperatorBailout(stock, needed);
+             const coverage = needed > 0 ? raised / needed : 1;
+             bankruptcyChance = coverage >= 1 ? 0 : 0.30 * (1 - coverage);
+             stock.financialHealth = coverage >= 1 ? Math.max(stock.financialHealth, -1) : stock.financialHealth - 1;
+         } else if (stock.ceo?.traits?.some(t => t.id === 'bogacz')) {
+             bankruptcyChance = 0;
+             logEvent(`[CEO] Prywatne środki i wpływy prezesa ratują ${stock.name} przed bankructwem!`);
+             const bailout = Math.abs(equity) + (stock.price * stock.totalShares * 0.1);
+             stock.balanceSheet.assets += bailout;
+             stock.balanceSheet.retainedEarnings += bailout;
+             stock.financialHealth = 1;
+         } else if (stock.assetType === 'REIT' || stock.isBankStock) {
+            bankruptcyChance = 0.05; // REITy i Banki rzadziej bankrutują
+         }
+
+         if (bankruptcyChance > 0 && Math.random() < bankruptcyChance) {
+             if (typeof mafiaRescueFromBankruptcy === 'function' && mafiaRescueFromBankruptcy(stock)) return true; // „inwestor” w ostatniej chwili (mafia.js)
+             noteGenealogy('bankrupt', null, stock);
+             logEvent(`🔥 BANKRUCTWO! Spółka ${stock.name} (${stock.symbol}) ogłasza upadłość!`, 'review');
+             if (typeof onAcademyEvent === 'function') onAcademyEvent('bankruptcy', stock); // przed usunięciem akcji gracza
+             if (typeof onCooperationPartnerShock === 'function') onCooperationPartnerShock(stock, COOP_BANKRUPTCY_SHOCK, 'bankructwo'); // T5: kooperanci tracą kontrahenta
+             removeStockFromGame(stock.symbol); 
+             stock.isBankrupt = true;
+             stock.timeOfDeath = Date.now();
+             return true; 
+         }
+    }
+    return false;
+}
+
+/** Raport kwartalny: reakcja kursu na niespodziankę EPS względem konsensusu. */
+function reactToEarningsSurprise(stock, earningsSurprise, publishedEarnings) {
+    let reportResult = 'neutral';
+    let magnitude = 0;
+    let eventMessage = '';
+    const surprise = Math.max(-1, Math.min(1, earningsSurprise));
+    stock.lastSurprise = surprise; // N2: wynik vs konsensus (karta spółki)
+    stock.surpriseHistory = [...(stock.surpriseHistory || []), surprise].slice(-4); // N3: czerwona flaga „zawsze tuż nad konsensusem”
+
+    if (publishedEarnings < 0) {
+        // Spółka poniosła stratę w kwartale — brak sztucznego pompowania kursu
+        if (surprise >= 0.15) {
+            reportResult = 'neutral';
+            magnitude = 0;
+            eventMessage = `📊 RAPORT: ${stock.name} (${stock.symbol}) notuje stratę netto (${formatZl(publishedEarnings, 0)}), nieco mniejszą niż pesymistyczny konsensus.`;
+        } else if (surprise <= -0.4) {
+            reportResult = 'tragic';
+            magnitude = -0.12;
+            eventMessage = `📉 TRAGICZNY RAPORT! ${stock.name} (${stock.symbol}) notuje głęboką stratę (${formatZl(publishedEarnings, 0)}).`;
+            if (typeof onAcademyEvent === 'function') onAcademyEvent('tragicReport', stock);
+        } else {
+            reportResult = 'bad';
+            magnitude = -0.06;
+            eventMessage = `📉 SŁABY RAPORT: ${stock.name} (${stock.symbol}) przynosi stratę netto (${formatZl(publishedEarnings, 0)}).`;
+        }
+    } else {
+        if (surprise >= 0.5) {
+            reportResult = 'excellent';
+            eventMessage = `📈 DOSKONAŁY RAPORT! ${stock.name} (${stock.symbol}): zysk znacznie powyżej oczekiwań.`;
+        } else if (surprise >= 0.15) {
+            reportResult = 'good';
+            eventMessage = `📈 DOBRY RAPORT: Wyniki ${stock.name} (${stock.symbol}) powyżej oczekiwań.`;
+        } else if (surprise <= -0.5) {
+            reportResult = 'tragic';
+            eventMessage = `📉 TRAGICZNY RAPORT! ${stock.name} (${stock.symbol}) mocno rozczarowuje wynikami.`;
+            if (typeof onAcademyEvent === 'function') onAcademyEvent('tragicReport', stock);
+        } else if (surprise <= -0.15) {
+            reportResult = 'bad';
+            eventMessage = `📉 SŁABY RAPORT: ${stock.name} (${stock.symbol}) notuje wyniki poniżej prognoz.`;
+        }
+
+        if (reportResult !== 'neutral') {
+            magnitude = Math.max(-0.12, Math.min(0.12, surprise * 0.12));
+        }
+    }
+
+    stock.lastReport = reportResult;
+    if (reportResult !== 'neutral') {
+        logEvent(eventMessage);
+        applyPriceEffect(stock.symbol, magnitude, magnitude < 0 ? 'negative' : 'positive', 'review');
+    }
+    if (typeof addChartEvent === 'function' && Math.abs(surprise) >= 0.15) addChartEvent(stock, surprise > 0 ? '📈' : '📉', `Raport kwartalny: zysk ${surprise >= 0 ? '+' : ''}${(surprise * 100).toFixed(0)}% vs konsensus`);
+}
+
+/** Raport kwartalny: zmienność kursu zależnie od kondycji finansowej. */
+function updateVolatilityAfterReport(stock) {
+    const baseVolatility = initialStocks.find(s => s.symbol === stock.symbol)?.volatilityFactor || stock.volatilityFactor;
+    if (stock.financialHealth > 0) {
+        stock.volatilityFactor = Math.max(baseVolatility * 0.8, stock.volatilityFactor * 0.95);
+    } else if (stock.financialHealth < 0) {
+        stock.volatilityFactor = Math.min(baseVolatility * 2.5, stock.volatilityFactor * 1.05);
+    }
+    if (stock.volatilityFactor < 0.1) stock.volatilityFactor = 0.1;
+}
+
+/** Raport kwartalny: podatek miejski od dodatniego zysku. */
+function payCityTaxFromEarnings(stock) {
+    if (stock.quarterlyEarnings > 0 && !stock.isBankrupt) {
+        let cityTaxRate = 0.005; // 0.5%
+        
+        // Sprawdź modyfikator podatkowy burmistrza
+        if (city.mayor.taxModifier) {
+            cityTaxRate += city.mayor.taxModifier; // np. +0.01 lub -0.01
+        }
+        
+        if (cityTaxRate > 0) {
+             const cityTax = stock.quarterlyEarnings * cityTaxRate;
+             if (stock.cash >= cityTax) {
+                 adjustCompanyCash(stock, -cityTax);
+                 adjustBalanceSheet(stock, { assets: -cityTax, retainedEarnings: -cityTax });
+                 city.budget += cityTax;
+             }
+             // Nie logujemy tego, żeby nie spamować
+        }
+    }
+}
+
+/** Raport kwartalny: wynik operacyjny spółki (typy specjalne, model przychodów, koszty stałe). */
+function computeQuarterOperatingResult(stock, marketCap, totalUnlockedTechs) {
+    let quarterlyEarnings = 0;
+    // Dochód bazowy typów specjalnych (lombard, biuro rachunkowe). Spółki standardowe mają model przychodów.
+    const baseQuarterlyIncome = 0;
+    let quarterModel = null;   // wynik z modelu przychodów (spółki standardowe)
+    let nonCashCosts = 0;      // amortyzacja: obniża wynik, ale nie gotówkę
+    if (!stock.fundamentals) initializeFundamentals(stock);
+
+
+    if (!stock.balanceSheet) {
+         console.warn(`[REPORTS] ${stock.symbol} nie miał bilansu. Inicjalizuję pusty.`);
+         stock.balanceSheet = { assets: 0, liabilities: 0, shareCapital: 0, retainedEarnings: 0 };
+    }
+    
+    // --- Logika obliczania Zysku/Straty (główna) ---
+    if (stock.assetType === 'REIT') {
+        // 🏡 REITy (0.15.5 B5: portfel nieruchomości, najem × obłożenie, odsetki od długu, wypłata ≥ 80% — reits.js)
+        if (typeof computeReitQuarter === 'function') {
+            quarterlyEarnings = computeReitQuarter(stock);
+        } else {
+            const assetBase = stock.balanceSheet.assets > 0 ? stock.balanceSheet.assets : marketCap * 0.8;
+            if (stock.balanceSheet.assets === 0) stock.balanceSheet.assets = assetBase;
+            const rentalIncome = assetBase * 0.02; // 2%
+            const maintenanceCosts = assetBase * 0.005; // 0.5%
+            quarterlyEarnings = (rentalIncome - maintenanceCosts) * (1 + (stock.financialHealth / 50));
+        }
+
+    } else if (stock.assetType === 'Holding') {
+        // 🏢 Holdingi
+        const portfolioValue = Object.values(stock.holdingPortfolio).reduce((sum, holding) => {
+            const ownedStock = stocks.find(s => s.symbol === Object.keys(stock.holdingPortfolio).find(key => stock.holdingPortfolio[key] === holding));
+            return sum + (ownedStock ? ownedStock.price * holding.quantity : 0);
+        }, 0);
+        const managementFee = (stock.cash + portfolioValue) * 0.0025;
+        const portfolioPerformance = portfolioValue * ((stock.financialHealth * 0.005) + getRandomInRange(-0.02, 0.02));
+        quarterlyEarnings = managementFee + portfolioPerformance;
+
+    } else if (stock.assetType === 'ResearchInstitute') {
+        // 🧪 Instytuty
+        quarterlyEarnings = getInstituteQuarterlyIncome(totalUnlockedTechs) * getRandomInRange(0.9, 1.1); // 0.14.2 P1: granty + licencje
+    
+    // ===>>> NOWA LOGIKA DLA FINANSÓW KONSUMENCKICH <<<===
+    } else if (stock.assetType === 'DebtCollector') {
+        // WRONA zarabia na odsetkach od przejętych długów
+        let totalInterestCollected = 0;
+        // Sprawdź długi AI
+        aiCompetitors.forEach(ai => {
+            if (ai.loans) {
+                ai.loans.forEach(loan => {
+                    if (loan.collectorSymbol === stock.symbol) {
+                        const weeklyInterest = loan.amount * (loan.interestRate / 52);
+                        totalInterestCollected += weeklyInterest * 12;
+                    }
+                });
+            }
+        });
+        quarterlyEarnings = totalInterestCollected * (1 + (stock.financialHealth / 10)); // Modyfikator kondycji
+    
+
+    } else if (stock.isBankStock) {
+        // 🏦 Banki Komercyjne
+        // Wynik = marża odsetkowa z księgi banku (finance.js); stary wzór tylko bez danych.
+        const ledgerResult = typeof getBankQuarterlyEarnings === 'function' ? getBankQuarterlyEarnings(stock) : null;
+        if (ledgerResult !== null) {
+            quarterlyEarnings = ledgerResult;
+        } else {
+            const loanIncome = stock.balanceSheet.assets * 0.01;
+            const depositCosts = stock.balanceSheet.liabilities * 0.005;
+            quarterlyEarnings = (loanIncome - depositCosts) * (1 + (stock.financialHealth / 10));
+        }
+
+    } else if (!stock.assetType) {
+        // 🏭 Spółki standardowe i państwowe: model przychodów, kosztów, amortyzacji, odsetek i CIT.
+        // Zysk nie zależy od ceny akcji.
+        quarterModel = computeQuarterResults(stock);
+        quarterlyEarnings = quarterModel.netIncome;
+        nonCashCosts = quarterModel.depreciation;
+    } else if (stock.assetType === 'PawnShop') {
+        // LOMBARDEX (Na razie mały bazowy zysk + zysk ze sprzedaży)
+        let profitFromSales = 0;
+        if (stock.holdingPortfolio) {
+            for (const symbol in stock.holdingPortfolio) {
+                if (Math.random() < 0.5) { // 50% szans na sprzedaż w tym kwartale
+                    const holding = stock.holdingPortfolio[symbol];
+                    const targetStock = stocks.find(s => s.symbol === symbol);
+                    if (targetStock) {
+                        const proceeds = targetStock.price * holding.quantity;
+                        const costBasis = holding.purchasePrice * holding.quantity;
+                        profitFromSales += (proceeds - costBasis);
+                        
+                        stock.cash += proceeds; 
+                        targetStock.sharesHeld -= holding.quantity; 
+                        delete stock.holdingPortfolio[symbol]; 
+                        
+                        logEvent(`[LOMBARDEX] ${stock.name} sprzedał ${holding.quantity} akcji ${symbol} (zysk: ${profitFromSales.toFixed(0)} PLN).`, 'company');
+                    }
+                }
+            }
+        }
+        quarterlyEarnings = profitFromSales + baseQuarterlyIncome + 5000; // Zysk ze sprzedaży + Baza + Stały bonus
+    }
+    else if (stock.assetType === 'Accounting') {
+        // Zysk z prowizji (stock.quarterlyEarnings) był już zbierany co tydzień w chargeAccountingFee()
+        // Dodajemy do niego tylko bazowy dochód
+        quarterlyEarnings = stock.quarterlyEarnings + baseQuarterlyIncome;
+        
+        // WAŻNE: Resetujemy licznik zysków na następny kwartał
+        stock.quarterlyEarnings = 0; 
+    }
+    // Koszty stałe z inwestycji: w modelu przychodów są już w EBITDA.
+    if (stock.fixedExpenses && !quarterModel) {
+        quarterlyEarnings -= stock.fixedExpenses;
+    }
+    return { quarterlyEarnings, quarterModel, nonCashCosts };
+}
+
 function processFinancialReports() {
     console.log("[RAPORTY KWARTALNE] Rozpoczęto przetwarzanie raportów finansowych...");
 
@@ -3441,120 +3684,9 @@ function processFinancialReports() {
 
         if (stock.assetType === 'Startup' || stock.isBankrupt) continue;
 
-        let quarterlyEarnings = 0;
         const marketCap = stock.price * stock.totalShares;
 
-        // Dochód bazowy typów specjalnych (lombard, biuro rachunkowe). Spółki standardowe mają model przychodów.
-        const baseQuarterlyIncome = 0;
-        let quarterModel = null;   // wynik z modelu przychodów (spółki standardowe)
-        let nonCashCosts = 0;      // amortyzacja: obniża wynik, ale nie gotówkę
-        if (!stock.fundamentals) initializeFundamentals(stock);
-
-
-        if (!stock.balanceSheet) {
-             console.warn(`[REPORTS] ${stock.symbol} nie miał bilansu. Inicjalizuję pusty.`);
-             stock.balanceSheet = { assets: 0, liabilities: 0, shareCapital: 0, retainedEarnings: 0 };
-        }
-        
-        // --- Logika obliczania Zysku/Straty (główna) ---
-        if (stock.assetType === 'REIT') {
-            // 🏡 REITy (0.15.5 B5: portfel nieruchomości, najem × obłożenie, odsetki od długu, wypłata ≥ 80% — reits.js)
-            if (typeof computeReitQuarter === 'function') {
-                quarterlyEarnings = computeReitQuarter(stock);
-            } else {
-                const assetBase = stock.balanceSheet.assets > 0 ? stock.balanceSheet.assets : marketCap * 0.8;
-                if (stock.balanceSheet.assets === 0) stock.balanceSheet.assets = assetBase;
-                const rentalIncome = assetBase * 0.02; // 2%
-                const maintenanceCosts = assetBase * 0.005; // 0.5%
-                quarterlyEarnings = (rentalIncome - maintenanceCosts) * (1 + (stock.financialHealth / 50));
-            }
-
-        } else if (stock.assetType === 'Holding') {
-            // 🏢 Holdingi
-            const portfolioValue = Object.values(stock.holdingPortfolio).reduce((sum, holding) => {
-                const ownedStock = stocks.find(s => s.symbol === Object.keys(stock.holdingPortfolio).find(key => stock.holdingPortfolio[key] === holding));
-                return sum + (ownedStock ? ownedStock.price * holding.quantity : 0);
-            }, 0);
-            const managementFee = (stock.cash + portfolioValue) * 0.0025;
-            const portfolioPerformance = portfolioValue * ((stock.financialHealth * 0.005) + getRandomInRange(-0.02, 0.02));
-            quarterlyEarnings = managementFee + portfolioPerformance;
-
-        } else if (stock.assetType === 'ResearchInstitute') {
-            // 🧪 Instytuty
-            quarterlyEarnings = getInstituteQuarterlyIncome(totalUnlockedTechs) * getRandomInRange(0.9, 1.1); // 0.14.2 P1: granty + licencje
-        
-        // ===>>> NOWA LOGIKA DLA FINANSÓW KONSUMENCKICH <<<===
-        } else if (stock.assetType === 'DebtCollector') {
-            // WRONA zarabia na odsetkach od przejętych długów
-            let totalInterestCollected = 0;
-            // Sprawdź długi AI
-            aiCompetitors.forEach(ai => {
-                if (ai.loans) {
-                    ai.loans.forEach(loan => {
-                        if (loan.collectorSymbol === stock.symbol) {
-                            const weeklyInterest = loan.amount * (loan.interestRate / 52);
-                            totalInterestCollected += weeklyInterest * 12;
-                        }
-                    });
-                }
-            });
-            quarterlyEarnings = totalInterestCollected * (1 + (stock.financialHealth / 10)); // Modyfikator kondycji
-        
-
-        } else if (stock.isBankStock) {
-            // 🏦 Banki Komercyjne
-            // Wynik = marża odsetkowa z księgi banku (finance.js); stary wzór tylko bez danych.
-            const ledgerResult = typeof getBankQuarterlyEarnings === 'function' ? getBankQuarterlyEarnings(stock) : null;
-            if (ledgerResult !== null) {
-                quarterlyEarnings = ledgerResult;
-            } else {
-                const loanIncome = stock.balanceSheet.assets * 0.01;
-                const depositCosts = stock.balanceSheet.liabilities * 0.005;
-                quarterlyEarnings = (loanIncome - depositCosts) * (1 + (stock.financialHealth / 10));
-            }
-
-        } else if (!stock.assetType) {
-            // 🏭 Spółki standardowe i państwowe: model przychodów, kosztów, amortyzacji, odsetek i CIT.
-            // Zysk nie zależy od ceny akcji.
-            quarterModel = computeQuarterResults(stock);
-            quarterlyEarnings = quarterModel.netIncome;
-            nonCashCosts = quarterModel.depreciation;
-        } else if (stock.assetType === 'PawnShop') {
-            // LOMBARDEX (Na razie mały bazowy zysk + zysk ze sprzedaży)
-            let profitFromSales = 0;
-            if (stock.holdingPortfolio) {
-                for (const symbol in stock.holdingPortfolio) {
-                    if (Math.random() < 0.5) { // 50% szans na sprzedaż w tym kwartale
-                        const holding = stock.holdingPortfolio[symbol];
-                        const targetStock = stocks.find(s => s.symbol === symbol);
-                        if (targetStock) {
-                            const proceeds = targetStock.price * holding.quantity;
-                            const costBasis = holding.purchasePrice * holding.quantity;
-                            profitFromSales += (proceeds - costBasis);
-                            
-                            stock.cash += proceeds; 
-                            targetStock.sharesHeld -= holding.quantity; 
-                            delete stock.holdingPortfolio[symbol]; 
-                            
-                            logEvent(`[LOMBARDEX] ${stock.name} sprzedał ${holding.quantity} akcji ${symbol} (zysk: ${profitFromSales.toFixed(0)} PLN).`, 'company');
-                        }
-                    }
-                }
-            }
-            quarterlyEarnings = profitFromSales + baseQuarterlyIncome + 5000; // Zysk ze sprzedaży + Baza + Stały bonus
-        }
-        else if (stock.assetType === 'Accounting') {
-            // Zysk z prowizji (stock.quarterlyEarnings) był już zbierany co tydzień w chargeAccountingFee()
-            // Dodajemy do niego tylko bazowy dochód
-            quarterlyEarnings = stock.quarterlyEarnings + baseQuarterlyIncome;
-            
-            // WAŻNE: Resetujemy licznik zysków na następny kwartał
-            stock.quarterlyEarnings = 0; 
-        }
-        // Koszty stałe z inwestycji: w modelu przychodów są już w EBITDA.
-        if (stock.fixedExpenses && !quarterModel) {
-            quarterlyEarnings -= stock.fixedExpenses;
-        }
+        const { quarterlyEarnings, quarterModel, nonCashCosts } = computeQuarterOperatingResult(stock, marketCap, totalUnlockedTechs);
 
         // --- Wynik raportowany a przepływy gotówki ---
         // quarterlyEarnings to wynik operacyjny symulowany przez raport: wpływa na gotówkę teraz.
@@ -3636,40 +3768,7 @@ function processFinancialReports() {
         coverNegativeCash(stock, reportedQuarterlyEarnings);
 
         // Logika bankructwa (bez zmian)
-        const equity = stock.balanceSheet.assets - stock.balanceSheet.liabilities;
-        if ((equity <= 0 || stock.financialHealth <= -5 || isCullCandidate(stock)) && !stock.isBankrupt) {
-             let bankruptcyChance = 0.30 * (typeof getMarketFailureFactor === 'function' ? getMarketFailureFactor(stock) : 1); // 0.15.6: NH i Włoska Giełda — większa szansa upadku
-             if (typeof isProtectedMarketOperator === 'function' && isProtectedMarketOperator(stock)) {
-                 // D1 (decyzja 2): ratunek operatora rynku internetowego finansują spółki członkowskie z własnej gotówki,
-                 // proporcjonalnie do kapitalizacji. Pełny ratunek = brak upadku; niepełny — mniejsza ochrona i słabsza kondycja.
-                 const needed = Math.max(0, -equity) + getMarketCapValue(stock) * 0.05;
-                 const raised = fundMarketOperatorBailout(stock, needed);
-                 const coverage = needed > 0 ? raised / needed : 1;
-                 bankruptcyChance = coverage >= 1 ? 0 : 0.30 * (1 - coverage);
-                 stock.financialHealth = coverage >= 1 ? Math.max(stock.financialHealth, -1) : stock.financialHealth - 1;
-             } else if (stock.ceo?.traits?.some(t => t.id === 'bogacz')) {
-                 bankruptcyChance = 0;
-                 logEvent(`[CEO] Prywatne środki i wpływy prezesa ratują ${stock.name} przed bankructwem!`);
-                 const bailout = Math.abs(equity) + (stock.price * stock.totalShares * 0.1);
-                 stock.balanceSheet.assets += bailout;
-                 stock.balanceSheet.retainedEarnings += bailout;
-                 stock.financialHealth = 1;
-             } else if (stock.assetType === 'REIT' || stock.isBankStock) {
-                bankruptcyChance = 0.05; // REITy i Banki rzadziej bankrutują
-             }
-
-             if (bankruptcyChance > 0 && Math.random() < bankruptcyChance) {
-                 if (typeof mafiaRescueFromBankruptcy === 'function' && mafiaRescueFromBankruptcy(stock)) continue; // „inwestor” w ostatniej chwili (mafia.js)
-                 noteGenealogy('bankrupt', null, stock);
-                 logEvent(`🔥 BANKRUCTWO! Spółka ${stock.name} (${stock.symbol}) ogłasza upadłość!`, 'review');
-                 if (typeof onAcademyEvent === 'function') onAcademyEvent('bankruptcy', stock); // przed usunięciem akcji gracza
-                 if (typeof onCooperationPartnerShock === 'function') onCooperationPartnerShock(stock, COOP_BANKRUPTCY_SHOCK, 'bankructwo'); // T5: kooperanci tracą kontrahenta
-                 removeStockFromGame(stock.symbol); 
-                 stock.isBankrupt = true;
-                 stock.timeOfDeath = Date.now();
-                 continue; 
-             }
-        }
+        if (resolveQuarterlyBankruptcy(stock)) continue;
 
         // Emisja obligacji ratunkowych (bez zmian)
         const canIssueRescue = stock.financialHealth <= -3 &&
@@ -3682,56 +3781,7 @@ function processFinancialReports() {
         }
 
         // Reakcja rynku na raport: niespodzianka EPS względem oczekiwań (nie progi kondycji).
-        let reportResult = 'neutral';
-        let magnitude = 0;
-        let eventMessage = '';
-        const surprise = Math.max(-1, Math.min(1, earningsSurprise));
-        stock.lastSurprise = surprise; // N2: wynik vs konsensus (karta spółki)
-        stock.surpriseHistory = [...(stock.surpriseHistory || []), surprise].slice(-4); // N3: czerwona flaga „zawsze tuż nad konsensusem”
-
-        if (publishedEarnings < 0) {
-            // Spółka poniosła stratę w kwartale — brak sztucznego pompowania kursu
-            if (surprise >= 0.15) {
-                reportResult = 'neutral';
-                magnitude = 0;
-                eventMessage = `📊 RAPORT: ${stock.name} (${stock.symbol}) notuje stratę netto (${formatZl(publishedEarnings, 0)}), nieco mniejszą niż pesymistyczny konsensus.`;
-            } else if (surprise <= -0.4) {
-                reportResult = 'tragic';
-                magnitude = -0.12;
-                eventMessage = `📉 TRAGICZNY RAPORT! ${stock.name} (${stock.symbol}) notuje głęboką stratę (${formatZl(publishedEarnings, 0)}).`;
-                if (typeof onAcademyEvent === 'function') onAcademyEvent('tragicReport', stock);
-            } else {
-                reportResult = 'bad';
-                magnitude = -0.06;
-                eventMessage = `📉 SŁABY RAPORT: ${stock.name} (${stock.symbol}) przynosi stratę netto (${formatZl(publishedEarnings, 0)}).`;
-            }
-        } else {
-            if (surprise >= 0.5) {
-                reportResult = 'excellent';
-                eventMessage = `📈 DOSKONAŁY RAPORT! ${stock.name} (${stock.symbol}): zysk znacznie powyżej oczekiwań.`;
-            } else if (surprise >= 0.15) {
-                reportResult = 'good';
-                eventMessage = `📈 DOBRY RAPORT: Wyniki ${stock.name} (${stock.symbol}) powyżej oczekiwań.`;
-            } else if (surprise <= -0.5) {
-                reportResult = 'tragic';
-                eventMessage = `📉 TRAGICZNY RAPORT! ${stock.name} (${stock.symbol}) mocno rozczarowuje wynikami.`;
-                if (typeof onAcademyEvent === 'function') onAcademyEvent('tragicReport', stock);
-            } else if (surprise <= -0.15) {
-                reportResult = 'bad';
-                eventMessage = `📉 SŁABY RAPORT: ${stock.name} (${stock.symbol}) notuje wyniki poniżej prognoz.`;
-            }
-
-            if (reportResult !== 'neutral') {
-                magnitude = Math.max(-0.12, Math.min(0.12, surprise * 0.12));
-            }
-        }
-
-        stock.lastReport = reportResult;
-        if (reportResult !== 'neutral') {
-            logEvent(eventMessage);
-            applyPriceEffect(stock.symbol, magnitude, magnitude < 0 ? 'negative' : 'positive', 'review');
-        }
-        if (typeof addChartEvent === 'function' && Math.abs(surprise) >= 0.15) addChartEvent(stock, surprise > 0 ? '📈' : '📉', `Raport kwartalny: zysk ${surprise >= 0 ? '+' : ''}${(surprise * 100).toFixed(0)}% vs konsensus`);
+        reactToEarningsSurprise(stock, earningsSurprise, publishedEarnings);
 
         // Dywidenda: zarząd może zmienić strategię, potem ogłasza wypłatę z zysku kwartału.
         reviewDividendPolicy(stock);
@@ -3739,32 +3789,9 @@ function processFinancialReports() {
         updateDividendStreak(stock); // seria wypłat i status arystokraty (dividends.js)
 
         // Aktualizacja zmienności (bez zmian)
-        const baseVolatility = initialStocks.find(s => s.symbol === stock.symbol)?.volatilityFactor || stock.volatilityFactor;
-        if (stock.financialHealth > 0) {
-            stock.volatilityFactor = Math.max(baseVolatility * 0.8, stock.volatilityFactor * 0.95);
-        } else if (stock.financialHealth < 0) {
-            stock.volatilityFactor = Math.min(baseVolatility * 2.5, stock.volatilityFactor * 1.05);
-        }
-        if (stock.volatilityFactor < 0.1) stock.volatilityFactor = 0.1;
+        updateVolatilityAfterReport(stock);
 
-        if (stock.quarterlyEarnings > 0 && !stock.isBankrupt) {
-            let cityTaxRate = 0.005; // 0.5%
-            
-            // Sprawdź modyfikator podatkowy burmistrza
-            if (city.mayor.taxModifier) {
-                cityTaxRate += city.mayor.taxModifier; // np. +0.01 lub -0.01
-            }
-            
-            if (cityTaxRate > 0) {
-                 const cityTax = stock.quarterlyEarnings * cityTaxRate;
-                 if (stock.cash >= cityTax) {
-                     adjustCompanyCash(stock, -cityTax);
-                     adjustBalanceSheet(stock, { assets: -cityTax, retainedEarnings: -cityTax });
-                     city.budget += cityTax;
-                 }
-                 // Nie logujemy tego, żeby nie spamować
-            }
-        }
+        payCityTaxFromEarnings(stock);
 
     } // Koniec pętli for
 
