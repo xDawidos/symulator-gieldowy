@@ -1135,7 +1135,7 @@ function endFestival() {
 function playerJoinFestival(promotionTarget) {
     // Stoisko i promocje opłaca gracz prywatnie (portfel), nie fundusz klientów.
     if (!cityInvestment.playerHasUnlocked) {
-        showToast(`Najpierw odblokuj inwestycje miejskie (darowizna ${CITY_UNLOCK_DONATION} PLN z portfela prywatnego).`, 'warning');
+        showToast(`Najpierw odblokuj inwestycje miejskie (darowizna ${formatZl(CITY_UNLOCK_DONATION, 0)} z portfela prywatnego).`, 'warning');
         return; // Zakończ funkcję, jeśli miasto nie jest odblokowane dla gracza
     }
     if (!festival || !festival.isActive || playerWallet.cash < FESTIVAL_STALL_LEVELS[0].cost) return;
@@ -1403,7 +1403,7 @@ function fundDepartmentUpgrade(symbol, deptType) {
     const cost = 50000 * Math.pow(2, currentLevel);
     
     if (playerCash < cost) {
-        showToast(`Brak środków! Koszt ulepszenia: ${cost} PLN.`);
+        showToast(`Brak środków! Koszt ulepszenia: ${formatZl(cost, 0)}.`);
         return;
     }
 
@@ -2519,7 +2519,7 @@ function buyTraining(skillId) {
 
     const cost = getTrainingCost(skillId);
     if (playerWallet.cash < cost) {
-        showToast(`Szkolenie kosztuje ${cost} PLN — masz ${formatZl(playerWallet.cash, 2)}.`, 'error');
+        showToast(`Szkolenie kosztuje ${formatZl(cost, 0)} — masz ${formatZl(playerWallet.cash, 2)}.`, 'error');
         return false;
     }
 
@@ -3315,7 +3315,7 @@ function hireAnalyst(type) {
     if (!corporation || !def) return false;
     if (!canHireAnalysts()) { showToast('Analityków zatrudnia się od stanowiska Starszy zarządca.', 'warning'); return false; }
     if (corporation.analysts.some(analyst => analyst.type === type)) { showToast('Masz już takiego analityka.', 'default'); return false; }
-    if (playerWallet.cash < def.hireCost) { showToast(`Zatrudnienie kosztuje ${def.hireCost} PLN.`, 'error'); return false; }
+    if (playerWallet.cash < def.hireCost) { showToast(`Zatrudnienie kosztuje ${formatZl(def.hireCost, 0)}.`, 'error'); return false; }
 
     playerWallet.cash -= def.hireCost;
     const stars = getRandomIntInRange(1, 5);
@@ -3456,7 +3456,7 @@ function meetInvestor(investorId, forceSuccess = null) {
     if (!investor || !playerFund || !corporation) return false;
     const period = playerFund.current.number;
     if (corporation.lastMeetings[investorId] === period) { showToast('W tym okresie już spotkałeś się z tym inwestorem.', 'default'); return false; }
-    if (playerWallet.cash < MEETING_COST) { showToast(`Spotkanie kosztuje ${MEETING_COST} PLN.`, 'error'); return false; }
+    if (playerWallet.cash < MEETING_COST) { showToast(`Spotkanie kosztuje ${formatZl(MEETING_COST, 0)}.`, 'error'); return false; }
 
     playerWallet.cash -= MEETING_COST;
     corporation.lastMeetings[investorId] = period;
@@ -3483,7 +3483,7 @@ function lunchWithCeo(symbol) {
     if (!stock || !corporation) return false;
     const period = playerFund.current.number;
     if (corporation.lastMeetings[symbol] === period) { showToast('Z tym prezesem spotkałeś się już w tym okresie.', 'default'); return false; }
-    if (playerWallet.cash < CEO_LUNCH_COST) { showToast(`Lunch kosztuje ${CEO_LUNCH_COST} PLN.`, 'error'); return false; }
+    if (playerWallet.cash < CEO_LUNCH_COST) { showToast(`Lunch kosztuje ${formatZl(CEO_LUNCH_COST, 0)}.`, 'error'); return false; }
 
     playerWallet.cash -= CEO_LUNCH_COST;
     corporation.lastMeetings[symbol] = period;
@@ -3555,7 +3555,7 @@ function proposeFundTakeover(symbol, forceApproval = null) {
 
     const price = getExternalFirmValuation(stock);
     if (corporation.budget < price) {
-        logEvent(`🗳️ Zarząd odrzuca przejęcie ${getExternalFirmName(stock)}: budżet ${formatZl(corporation.budget, 0)} < cena ${price} PLN.`, 'review');
+        logEvent(`🗳️ Zarząd odrzuca przejęcie ${getExternalFirmName(stock)}: budżet ${formatZl(corporation.budget, 0)} < cena ${formatZl(price, 0)}.`, 'review');
         showToast('Za mały budżet korporacji na to przejęcie.', 'error');
         return false;
     }
@@ -3579,7 +3579,7 @@ function proposeFundTakeover(symbol, forceApproval = null) {
         costs: 0,
         reservedBudget: price
     };
-    logEvent(`🗳️ Zarząd zatwierdza przejęcie ${getExternalFirmName(stock)} za ${price} PLN. Rozpoczyna się proces (7 etapów).`, 'review');
+    logEvent(`🗳️ Zarząd zatwierdza przejęcie ${getExternalFirmName(stock)} za ${formatZl(price, 0)}. Rozpoczyna się proces (7 etapów).`, 'review');
     return true;
 }
 
@@ -3595,7 +3595,7 @@ function advanceFundTakeover(stock) {
         const cost = Math.round(process.reservedBudget * 0.05);
         corporation.budget -= cost;
         process.costs += cost;
-        logEvent(`⚖️ Komplikacja przy przejęciu ${stock.name}: dodatkowe koszty prawne ${cost} PLN.`, 'review');
+        logEvent(`⚖️ Komplikacja przy przejęciu ${stock.name}: dodatkowe koszty prawne ${formatZl(cost, 0)}.`, 'review');
     } else if (roll < 0.11) {
         corporation.budget += process.reservedBudget;
         stock.mergerProcess = null;

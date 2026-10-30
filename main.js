@@ -1898,7 +1898,7 @@ function placeInitialAiDeposits() {
                             startDate: Date.now()
                          });
                      }
-                    console.log(`- Bankier ${ai.name} umieścił startowy depozyt ${depositAmount} PLN w ${chosenBank.name}.`);
+                    console.log(`- Bankier ${ai.name} umieścił startowy depozyt ${formatZl(depositAmount, 0)} w ${chosenBank.name}.`);
                 } else {
                     console.warn(`! Bankier ${ai.name} nie miał wystarczająco gotówki (${ai.cash}) na startowy depozyt (${depositAmount}).`);
                 }

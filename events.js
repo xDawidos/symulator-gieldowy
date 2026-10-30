@@ -219,7 +219,7 @@ function chargeMagazineSubscriptions() {
                 recordPayment('player-wallet', stock, def.premiumWeekly, `Prenumerata premium: ${def.label}`);
             } else {
                 mailbox.subscriptions[symbol] = 'free';
-                addMail({ sender: symbol, subject: 'Prenumerata premium wygasła — brak środków', body: `Nie udało się pobrać ${def.premiumWeekly} PLN z Twojego konta. Wracasz do wersji darmowej.`, importance: 2 });
+                addMail({ sender: symbol, subject: 'Prenumerata premium wygasła — brak środków', body: `Nie udało się pobrać ${formatZl(def.premiumWeekly, 0)} z Twojego konta. Wracasz do wersji darmowej.`, importance: 2 });
             }
         } else {
             // Darmowy czytelnik = przychód od reklamodawców (z zewnątrz modelu).
@@ -258,7 +258,7 @@ function sendMagazineSpam() {
         addMail({
             sender: symbol,
             subject: getRandomElement([`Przejdź na ${def.label} Premium — pierwszy tydzień taniej!`, `Nie przegap ważnych wiadomości — ${def.label} Premium`, `Ankieta czytelników ${def.label} (zajmie tylko 45 minut)`]),
-            body: `Wersja premium to tylko ważne wiadomości i zero spamu za ${def.premiumWeekly} PLN tygodniowo. Zarządzaj prenumeratą w zakładce „Subskrypcje”.`,
+            body: `Wersja premium to tylko ważne wiadomości i zero spamu za ${formatZl(def.premiumWeekly, 0)} tygodniowo. Zarządzaj prenumeratą w zakładce „Subskrypcje”.`,
             importance: 0, isSpam: true, spamKind: 'magazine'
         });
     }
@@ -392,7 +392,7 @@ function processBubbleNewsToMail() {
 function setMagazineSubscription(symbol, level) {
     if (!MAGAZINES[symbol] || ![null, 'free', 'premium'].includes(level)) return false;
     if (level === 'premium' && playerWallet.cash < MAGAZINES[symbol].premiumWeekly) {
-        showToast(`Premium kosztuje ${MAGAZINES[symbol].premiumWeekly} PLN tygodniowo — za mało środków.`, 'error');
+        showToast(`Premium kosztuje ${formatZl(MAGAZINES[symbol].premiumWeekly, 0)} tygodniowo — za mało środków.`, 'error');
         return false;
     }
     mailbox.subscriptions[symbol] = level;
@@ -1424,7 +1424,7 @@ const governmentInterventions = [
                     if(bank) bank.cash += spentAmount;
                 }
                 applyPriceEffect(target.symbol, 0.10, 'positive'); // Boost ceny
-                logEvent(`🆘 Rząd ratuje ${target.name} przed bankructwem kwotą ${spentAmount.toLocaleString()} PLN!`);
+                logEvent(`🆘 Rząd ratuje ${target.name} przed bankructwem kwotą ${formatZl(spentAmount, 0)}!`);
                 showToast(`Rządowa pomoc dla ${target.name}!`, 'success');
             } else {
                  logEvent(`ℹ️ Rząd planował koło ratunkowe, ale żadna spółka nie była na skraju upadku.`);

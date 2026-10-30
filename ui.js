@@ -3027,7 +3027,7 @@ function openManagementModal(symbol, defaultTab = 'main') {
         activeBanks.forEach(bank => {
             const option = document.createElement('option');
             option.value = bank.id;
-            option.textContent = `${bank.name} (Gotówka: ${bank.cash.toLocaleString()} PLN)`;
+            option.textContent = `${bank.name} (Gotówka: ${formatZl(bank.cash, 0)})`;
             if (stock.bankAccountId === bank.id) option.selected = true;
             bankSelect.appendChild(option);
         });
@@ -3766,7 +3766,7 @@ function updateAutoInvestStatus() {
     if (!statusEl) return;
 
     if (playerAutoInvest.isEnabled) {
-        statusEl.innerHTML = `${uiIcon('ok', 14)} Aktywne: <strong>${playerAutoInvest.amount} PLN</strong> co <strong>${playerAutoInvest.interval / 1000}s</strong>`;
+        statusEl.innerHTML = `${uiIcon('ok', 14)} Aktywne: <strong>${formatZl(playerAutoInvest.amount, 0)}</strong> co <strong>${playerAutoInvest.interval / 1000}s</strong>`;
         statusEl.style.color = 'var(--color-up)';
     } else {
         statusEl.textContent = 'Nieaktywne';
@@ -5059,14 +5059,14 @@ function renderFestivalView(festivalContainer) {
             <h4>Twoje stoisko (Poziom ${playerParticipant.level}: ${currentLevel.name})</h4>
             <p>Zdobyte zainteresowanie: <strong>${formatNumberPl(playerParticipant.interest, 1)}</strong></p>
             <div class="mb-2">
-                ${nextLevel ? `<button onclick="playerUpgradeStall()">Ulepsz do: "${nextLevel.name}" (${nextLevel.cost} PLN)</button>` : '<p>Osiągnięto maksymalny poziom stoiska.</p>'}
+                ${nextLevel ? `<button onclick="playerUpgradeStall()">Ulepsz do: "${nextLevel.name}" (${formatZl(nextLevel.cost, 0)})</button>` : '<p>Osiągnięto maksymalny poziom stoiska.</p>'}
             </div>
             <div>
                 <p>Promuj stoisko:</p>
-                <button onclick="playerPromoteStall('flyers')" title="+5 zainteresowania">${PROMOTION_ACTIONS.flyers.name} (${PROMOTION_ACTIONS.flyers.cost} PLN)</button>
-                <button onclick="playerPromoteStall('contest')" title="+10 zainteresowania">${PROMOTION_ACTIONS.contest.name} (${PROMOTION_ACTIONS.contest.cost} PLN)</button>
-                <button onclick="playerPromoteStall('kids')" title="+10 zainteresowania">${PROMOTION_ACTIONS.kids.name} (${PROMOTION_ACTIONS.kids.cost} PLN)</button>
-                <button onclick="playerPromoteStall('merch')" title="+12 zainteresowania">${PROMOTION_ACTIONS.merch.name} (${PROMOTION_ACTIONS.merch.cost} PLN)</button>
+                <button onclick="playerPromoteStall('flyers')" title="+5 zainteresowania">${PROMOTION_ACTIONS.flyers.name} (${formatZl(PROMOTION_ACTIONS.flyers.cost, 0)})</button>
+                <button onclick="playerPromoteStall('contest')" title="+10 zainteresowania">${PROMOTION_ACTIONS.contest.name} (${formatZl(PROMOTION_ACTIONS.contest.cost, 0)})</button>
+                <button onclick="playerPromoteStall('kids')" title="+10 zainteresowania">${PROMOTION_ACTIONS.kids.name} (${formatZl(PROMOTION_ACTIONS.kids.cost, 0)})</button>
+                <button onclick="playerPromoteStall('merch')" title="+12 zainteresowania">${PROMOTION_ACTIONS.merch.name} (${formatZl(PROMOTION_ACTIONS.merch.cost, 0)})</button>
             </div>
         `;
     } else {
@@ -5080,7 +5080,7 @@ function renderFestivalView(festivalContainer) {
             }
         }
         playerSectionHTML = `
-            <h4>Dołącz do festynu! (Koszt: ${FESTIVAL_STALL_LEVELS[0].cost} PLN)</h4>
+            <h4>Dołącz do festynu! (Koszt: ${formatZl(FESTIVAL_STALL_LEVELS[0].cost, 0)})</h4>
             <p>Co chcesz promować?</p>
             <div id="join-festival-options">
                 <button onclick="playerJoinFestival({type: 'self'})">Siebie</button>
@@ -5653,16 +5653,16 @@ function handleViewFinancesClick(symbol) {
     // Dostęp wymaga opłaty (Lvl 1)
     const accessCost = 2000;
     if (playerCash < accessCost) {
-        showToast(`Nie masz wystarczająco gotówki (${accessCost} PLN), aby zapłacić za dostęp.`, 'error');
+        showToast(`Nie masz wystarczająco gotówki (${formatZl(accessCost, 0)}), aby zapłacić za dostęp.`, 'error');
         return;
     }
 
     // Zapytaj gracza o potwierdzenie płatności
-    gameConfirm(`Czy chcesz zapłacić ${accessCost} PLN za jednorazowy wgląd w finanse ${stock.name}?`, () => {
+    gameConfirm(`Czy chcesz zapłacić ${formatZl(accessCost, 0)} za jednorazowy wgląd w finanse ${stock.name}?`, () => {
         playerCash -= accessCost; // Pobierz opłatę
         stock.playerHasFinancialAccess = true; // Ustaw flagę dostępu
         displayCash(); // Zaktualizuj UI gotówki
-        logEvent(`Zapłacono ${accessCost} PLN za wgląd w finanse ${stock.name}.`, 'review'); // Zaloguj zdarzenie
+        logEvent(`Zapłacono ${formatZl(accessCost, 0)} za wgląd w finanse ${stock.name}.`, 'review'); // Zaloguj zdarzenie
         showToast("Dostęp do finansów uzyskany!", 'success'); // Pokaż powiadomienie
         openFinancialDetailsModal(symbol); // Otwórz modal finansowy
         // Odśwież modal zarządzania, aby zaktualizować tekst przycisku/info
@@ -7196,7 +7196,7 @@ function renderCvPanel() {
             <div class="level-steps">${steps}</div>
             ${next ? `<p>${escapeHtml(next.description || '')}</p>` : '<p><strong>Ukończone w pełni.</strong></p>'}
             ${unlockPreview}
-            ${next ? `<button ${canBuy ? '' : 'disabled'} onclick="buyTraining('${id}')">${reqMet ? `Szkolenie: ${cost} PLN` : reqMsg}</button>` : ''}
+            ${next ? `<button ${canBuy ? '' : 'disabled'} onclick="buyTraining('${id}')">${reqMet ? `Szkolenie: ${formatZl(cost, 0)}` : reqMsg}</button>` : ''}
         </article>`;
     }).join('');
 
@@ -7399,14 +7399,14 @@ function toggleDebugMode() {
 
 function debugAddWallet(amount) {
     playerWallet.cash += amount;
-    logEvent(`🛠️ [DEBUG] +${amount} PLN do portfela prywatnego.`, 'review');
+    logEvent(`🛠️ [DEBUG] +${formatZl(amount, 0)} do portfela prywatnego.`, 'review');
     refreshFundViews();
 }
 
 /** Dodaje gotówkę funduszowi bez nowych JU (NAV rośnie). */
 function debugAddFund(amount) {
     playerCash += amount;
-    logEvent(`🛠️ [DEBUG] +${amount} PLN do gotówki funduszu.`, 'review');
+    logEvent(`🛠️ [DEBUG] +${formatZl(amount, 0)} do gotówki funduszu.`, 'review');
     refreshFundViews();
 }
 
@@ -7900,7 +7900,7 @@ function renderTeamedHiring() {
     const can = typeof canHireAnalysts === 'function' && canHireAnalysts();
     const rows = Object.entries(ANALYST_TYPES).map(([type, def]) => {
         const hired = corporation?.analysts.some(a => a.type === type);
-        return `<li><strong>${escapeHtml(def.label)}</strong> — ${escapeHtml(def.description)} <span class="text-muted">(koszt ${def.hireCost} PLN, pensja ${def.salary} PLN)</span>
+        return `<li><strong>${escapeHtml(def.label)}</strong> — ${escapeHtml(def.description)} <span class="text-muted">(koszt ${formatZl(def.hireCost, 0)}, pensja ${formatZl(def.salary, 0)})</span>
             ${hired ? '<span class="text-muted">zatrudniony</span>' : `<button class="btn-ghost btn-sm" ${can ? '' : 'disabled'} onclick="mailAction(hireAnalyst, '${type}')">Zatrudnij</button>`}</li>`;
     }).join('');
     return `<article class="mail-article"><h3>Zatrudnianie</h3>${can ? '' : '<p class="fund-muted">Analityków zatrudnia się od stanowiska Starszy zarządca.</p>'}<ul class="list-plain">${rows}</ul></article>`;
@@ -8044,7 +8044,7 @@ function renderCityElection() {
     }
     container.innerHTML = `
         <h4>Kampania wyborcza — wybory za ${city.mayor.electionYear} ${city.mayor.electionYear === 1 ? 'rok' : 'lata'}</h4>
-        <p class="fund-muted">Darowizny z portfela prywatnego (${formatZl(playerWallet.cash)}) zwiększają szanse kandydata. Darowizna od ${PLAYER_DONATION_COMPLIANCE_LIMIT} PLN zwraca uwagę compliance. Wygrany pamięta wsparcie.</p>
+        <p class="fund-muted">Darowizny z portfela prywatnego (${formatZl(playerWallet.cash)}) zwiększają szanse kandydata. Darowizna od ${formatZl(PLAYER_DONATION_COMPLIANCE_LIMIT, 0)} zwraca uwagę compliance. Wygrany pamięta wsparcie.</p>
         <table class="asset-mini-table">
             <thead><tr><th>Kandydat</th><th>Polityka</th><th>Siła kampanii</th><th>Twoje wsparcie</th><th></th></tr></thead>
             <tbody>${city.election.candidates.map(c => `<tr>

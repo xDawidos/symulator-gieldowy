@@ -1297,7 +1297,7 @@ function runWeeklyProjectEvents(project) {
             project.excusedDelayMs += extraWork;
 
             recordPayment(client, `escrow:${project.id}`, extra, 'Dopłata za zmianę zamówienia', project.id);
-            project.events.push({ type: 'change_order', cause: 'client', description: `Zmiana zamówienia (+${extra} PLN)`, gameTimeMs: project.elapsedGameMs });
+            project.events.push({ type: 'change_order', cause: 'client', description: `Zmiana zamówienia (+${formatZl(extra, 0)})`, gameTimeMs: project.elapsedGameMs });
             logEvent(`${client.name} zmienia zakres ${project.tender.buildingType.name}: +${formatZl(extra, 0)}, termin wydłużony.`, 'construction');
             return;
         }
@@ -4575,7 +4575,7 @@ function checkTBillMaturities() {
         // SCALONO: Sprawdzamy `isTBill` (z Twojej wersji) ORAZ `ownerId` (z obu wersji)
         if (tBill.isTBill && tBill.ownerId === 'player' && now >= tBill.maturityDate) {
             playerCash += faceValue;
-            logEvent(`🪙 Bon skarbowy (zakup: ${formatZl(tBill.purchasePrice, 2)}) dojrzał. Otrzymujesz ${faceValue} PLN.`, 'review');
+            logEvent(`🪙 Bon skarbowy (zakup: ${formatZl(tBill.purchasePrice, 2)}) dojrzał. Otrzymujesz ${formatZl(faceValue, 0)}.`, 'review');
             allBonds.splice(i, 1); // Usuwamy z globalnej listy
             displayCash();
             displayPortfolio();
@@ -4590,7 +4590,7 @@ function checkTBillMaturities() {
              // SCALONO: Sprawdzamy `isTBill` (z Twojej wersji)
             if (tBill.isTBill && now >= tBill.maturityDate) {
                 ai.cash += faceValue;
-                console.log(`[AI] Bon skarbowy ${ai.name} (zakup: ${tBill.purchasePrice.toFixed(2)}) dojrzał. Otrzymuje ${faceValue} PLN.`);
+                console.log(`[AI] Bon skarbowy ${ai.name} (zakup: ${tBill.purchasePrice.toFixed(2)}) dojrzał. Otrzymuje ${formatZl(faceValue, 0)}.`);
                 ai.tBills.splice(i, 1);
             }
         }

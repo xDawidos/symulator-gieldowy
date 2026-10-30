@@ -1255,7 +1255,7 @@ function academyQuizSubmit(id) {
     if (answers.some(a => a === undefined)) { showToast('Odpowiedz na wszystkie pytania.', 'warning'); return; }
     academyView.result = submitAcademyQuiz(id, answers);
     academyView.answers = answers;
-    if (academyView.result?.reward) showToast(`🎓 Quiz zaliczony! +${academyView.result.reward} PLN do portfela.`, 'success');
+    if (academyView.result?.reward) showToast(`🎓 Quiz zaliczony! +${formatZl(academyView.result.reward, 0)} do portfela.`, 'success');
     renderCvPanel();
 }
 
@@ -1290,7 +1290,7 @@ function renderAcademyPanel() {
             <h3 class="mt-0">${entry.icon} ${escapeHtml(entry.title)}</h3>
             <p>${escapeHtml(entry.text)}</p>
             ${example ? `<p class="academy-example">🎮 <strong>W Twojej grze:</strong> ${escapeHtml(example)}</p>` : ''}
-            <h4>Quiz ${academy.quizzes[selected] ? '— zaliczony ✔' : `— za zaliczenie ${ACADEMY_QUIZ_REWARD} PLN`}</h4>
+            <h4>Quiz ${academy.quizzes[selected] ? '— zaliczony ✔' : `— za zaliczenie ${formatZl(ACADEMY_QUIZ_REWARD, 0)}`}</h4>
             ${quiz}
             ${result ? `<p class="${result.passed ? 'text-up' : 'text-down'}">${result.passed ? '✅ Wszystko dobrze!' : `Poprawne: ${result.correct}/${result.total} — spróbuj jeszcze raz.`}</p>` : ''}
             <button onclick="academyQuizSubmit('${selected}')">Sprawdź odpowiedzi</button>`;
@@ -1821,7 +1821,7 @@ function checkMentorTasks() {
         playerWallet.cash += MENTOR_REWARD;
         recordPayment('external:korporacja', 'player-wallet', MENTOR_REWARD, `Zadanie mentora: ${def.title}`);
         if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry(def.lesson);
-        if (typeof pushNotification === 'function') pushNotification(`🎓 ${MENTOR_NAME}: zadanie „${def.title}” zaliczone (+${MENTOR_REWARD} PLN)`, () => openMentor());
+        if (typeof pushNotification === 'function') pushNotification(`🎓 ${MENTOR_NAME}: zadanie „${def.title}” zaliczone (+${formatZl(MENTOR_REWARD, 0)})`, () => openMentor());
     }
     // Certyfikaty: ścieżka z wymaganą liczbą zadań.
     for (const [id, track] of Object.entries(MENTOR_TRACKS)) {
@@ -1874,7 +1874,7 @@ function renderMentorPanel() {
         let progress = '';
         try { progress = def.progress(task); } catch (e) { progress = ''; }
         return `<li class="mentor-task"><div><strong>${MENTOR_TRACKS[def.track].icon} ${escapeHtml(def.title)}</strong>
-            <p class="text-sm m-0">${escapeHtml(def.text)}</p><span class="text-xs text-muted">${escapeHtml(progress)} · nagroda ${MENTOR_REWARD} PLN</span></div>
+            <p class="text-sm m-0">${escapeHtml(def.text)}</p><span class="text-xs text-muted">${escapeHtml(progress)} · nagroda ${formatZl(MENTOR_REWARD, 0)}</span></div>
             <button class="btn-xs btn-secondary" onclick="openAcademy('${def.lesson}')">📘 Hasło</button></li>`;
     }).join('');
     const done = Object.keys(mentor.done).map(id => MENTOR_TASKS[id]).filter(Boolean).map(def => `<li>✅ ${escapeHtml(def.title)}</li>`).join('');

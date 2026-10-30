@@ -299,7 +299,7 @@ function openFundDeposit(bankId, amount, weeks) {
     const bank = commercialBanks.find(item => item.id === bankId);
     amount = Math.floor(Number(amount) * 100) / 100;
     if (!canBankTakeFundDeposits(bank)) { showToast('Ten bank nie przyjmuje lokat funduszy.', 'error'); return null; }
-    if (!(amount >= FUND_DEPOSIT_MIN)) { showToast(`Minimalna lokata: ${FUND_DEPOSIT_MIN} PLN.`, 'error'); return null; }
+    if (!(amount >= FUND_DEPOSIT_MIN)) { showToast(`Minimalna lokata: ${formatZl(FUND_DEPOSIT_MIN, 0)}.`, 'error'); return null; }
     if (amount > playerCash) { showToast('Za mało wolnej gotówki funduszu.', 'error'); return null; }
 
     const deposit = {

@@ -193,7 +193,7 @@ const bankInvestments = {
             bankData.cash -= 10000; // Koszt zakupu bankomatów z kasy banku
             stock.financialHealth += 0.1; // Mały, stały bonus do kondycji
             // Można dodać mechanizm małego pasywnego dochodu dla banku
-            logEvent(`🏦 Bank ${stock.name} inwestuje ${bankInvestments.BANK_ATM_EXPANSION.initialCashCost.toLocaleString()} PLN w rozbudowę sieci bankomatów.`);
+            logEvent(`🏦 Bank ${stock.name} inwestuje ${formatZl(bankInvestments.BANK_ATM_EXPANSION.initialCashCost, 0)} w rozbudowę sieci bankomatów.`);
         }
     },
     'BANK_FINTECH_PLATFORM': {
@@ -209,7 +209,7 @@ const bankInvestments = {
             stock.financialHealth += 0.3;
             stock.volatilityFactor *= 0.98; // Bardziej stabilne operacje
             applyPriceEffect(stock.symbol, 0.02, 'positive'); // Mały boost ceny akcji
-            logEvent(`💻 Bank ${stock.name} wdraża nowoczesną platformę FinTech kosztem ${bankInvestments.BANK_FINTECH_PLATFORM.initialCashCost.toLocaleString()} PLN.`);
+            logEvent(`💻 Bank ${stock.name} wdraża nowoczesną platformę FinTech kosztem ${formatZl(bankInvestments.BANK_FINTECH_PLATFORM.initialCashCost, 0)}.`);
         }
     },
     'BANK_NEW_BRANCHES': {
@@ -224,7 +224,7 @@ const bankInvestments = {
             bankData.cash -= 80000;
             stock.financialHealth += 0.2; // Potencjał wzrostu
             // W przyszłości można dodać mechanizm zwiększający koszty operacyjne banku
-            logEvent(`🏢 Bank ${stock.name} otwiera nowe oddziały, inwestując ${bankInvestments.BANK_NEW_BRANCHES.initialCashCost.toLocaleString()} PLN.`);
+            logEvent(`🏢 Bank ${stock.name} otwiera nowe oddziały, inwestując ${formatZl(bankInvestments.BANK_NEW_BRANCHES.initialCashCost, 0)}.`);
         }
     },
     'BANK_MARKETING_CAMPAIGN': {
@@ -239,7 +239,7 @@ const bankInvestments = {
             bankData.cash -= 25000;
             applyPriceEffect(stock.symbol, 0.03, 'positive'); // Tymczasowy boost ceny akcji
             // W przyszłości można dodać tymczasowy bonus do przyciągania depozytów
-            logEvent(`📣 Bank ${stock.name} rozpoczyna kampanię marketingową za ${bankInvestments.BANK_MARKETING_CAMPAIGN.initialCashCost.toLocaleString()} PLN.`);
+            logEvent(`📣 Bank ${stock.name} rozpoczyna kampanię marketingową za ${formatZl(bankInvestments.BANK_MARKETING_CAMPAIGN.initialCashCost, 0)}.`);
         }
     },
      'BANK_AI_RISK_ASSESSMENT': {
@@ -255,7 +255,7 @@ const bankInvestments = {
             stock.financialHealth += 0.4; // Lepsze zarządzanie ryzykiem
             stock.volatilityFactor *= 0.96; // Bardziej stabilne wyniki
             // Można dodać mechanizm zmniejszający szansę na default kredytów udzielonych przez ten bank
-            logEvent(`🤖 Bank ${stock.name} inwestuje ${bankInvestments.BANK_AI_RISK_ASSESSMENT.initialCashCost.toLocaleString()} PLN w AI do oceny ryzyka kredytowego.`);
+            logEvent(`🤖 Bank ${stock.name} inwestuje ${formatZl(bankInvestments.BANK_AI_RISK_ASSESSMENT.initialCashCost, 0)} w AI do oceny ryzyka kredytowego.`);
         }
     },
     'BANK_INVESTMENT_FUND': {
@@ -271,7 +271,7 @@ const bankInvestments = {
             stock.financialHealth += 0.25;
             applyPriceEffect(stock.symbol, 0.015, 'positive');
             // Można dodać mechanizm generowania pasywnego dochodu dla banku
-            logEvent(`📈 Bank ${stock.name} uruchamia nowy fundusz inwestycyjny, inwestując ${bankInvestments.BANK_INVESTMENT_FUND.initialCashCost.toLocaleString()} PLN.`);
+            logEvent(`📈 Bank ${stock.name} uruchamia nowy fundusz inwestycyjny, inwestując ${formatZl(bankInvestments.BANK_INVESTMENT_FUND.initialCashCost, 0)}.`);
         }
     }
 };
@@ -6061,12 +6061,12 @@ function startNextBankInvestment(stock, nextInvestmentId, bankData) {
     if (bankData.cash >= initialCashCost) {
         bankData.cash -= initialCashCost;
         stock.research.isResearching = true;
-        if(initialCashCost > 0) logEvent(`💸 Bank ${stock.name} rozpoczyna kolejną inwestycję: "${nextInvestment.name}" (Poziom ${completedCount + 1}) kosztem ${initialCashCost.toLocaleString()} PLN. Czas: ${Math.round(requiredProgress / BANK_INVESTMENT_POINT_EQUIVALENT_MINUTE)} min.`);
+        if(initialCashCost > 0) logEvent(`💸 Bank ${stock.name} rozpoczyna kolejną inwestycję: "${nextInvestment.name}" (Poziom ${completedCount + 1}) kosztem ${formatZl(initialCashCost, 0)}. Czas: ${Math.round(requiredProgress / BANK_INVESTMENT_POINT_EQUIVALENT_MINUTE)} min.`);
         else logEvent(`▶️ Bank ${stock.name} rozpoczyna kolejną inwestycję: "${nextInvestment.name}" (Poziom ${completedCount + 1}). Czas: ${Math.round(requiredProgress / BANK_INVESTMENT_POINT_EQUIVALENT_MINUTE)} min.`);
     } else {
         stock.research.isResearching = false;
         stock.research.investmentPaused = true; // Zapauzuj
-        logEvent(`⏸️ Bank ${stock.name} chciał rozpocząć inwestycję "${nextInvestment.name}", ale brakuje środków (${initialCashCost.toLocaleString()} PLN). Inwestycje wstrzymane.`);
+        logEvent(`⏸️ Bank ${stock.name} chciał rozpocząć inwestycję "${nextInvestment.name}", ale brakuje środków (${formatZl(initialCashCost, 0)}). Inwestycje wstrzymane.`);
     }
 }
 
@@ -7435,7 +7435,7 @@ function processBankStartupSponsorship() {
                 if (!targetStartup.acquisitionTargetChance) targetStartup.acquisitionTargetChance = 0;
                 targetStartup.acquisitionTargetChance += 0.05; // +5% szansy
 
-                logEvent(`🏦 Bank ${bank.name} sponsoruje startup ${targetStartup.name} kwotą ${investmentAmount.toLocaleString()} PLN!`, 'market');
+                logEvent(`🏦 Bank ${bank.name} sponsoruje startup ${targetStartup.name} kwotą ${formatZl(investmentAmount, 0)}!`, 'market');
                 
                 // Odśwież widok startupów, jeśli otwarty
                 if (document.getElementById('startup-incubator-panel').style.display === 'block') {
@@ -8636,7 +8636,7 @@ function processBankInvestmentResume(stock) {
     research.isResearching = true;
     research.investmentPaused = false;
 
-    if (cost > 0) logEvent(`💸 Bank ${stock.name} wznawia inwestycję "${investment.name}" kosztem ${cost.toLocaleString()} PLN.`);
+    if (cost > 0) logEvent(`💸 Bank ${stock.name} wznawia inwestycję "${investment.name}" kosztem ${formatZl(cost, 0)}.`);
     else logEvent(`▶️ Bank ${stock.name} wznawia inwestycję "${investment.name}".`);
 
     return true;
