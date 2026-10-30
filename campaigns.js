@@ -394,7 +394,7 @@ function applySubscriptionUnits(client, units, nav, sub) {
     playerFund.current.inflow += value;
     recordPayment('external:klienci', 'player-fund', value, 'Kampania emisyjna');
     noteFundFlow('in', 'campaign', value, units);
-    noteClientHistory(client, `Obejmuje ${formatNumberPl(units, 1)} udziałów w kampanii emisyjnej po ${formatNumberPl(nav, 2)} PLN${sub.lockYears ? ` (lock-up ${sub.lockYears} lat)` : ''}.`);
+    noteClientHistory(client, `Obejmuje ${formatNumberPl(units, 1)} udziałów w kampanii emisyjnej po ${formatZl(nav, 2)}${sub.lockYears ? ` (lock-up ${sub.lockYears} lat)` : ''}.`);
     sub.raisedUnits += units;
     sub.raisedValue += value;
     sub.byType[client.type] = (sub.byType[client.type] || 0) + value;

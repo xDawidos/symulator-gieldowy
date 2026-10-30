@@ -219,7 +219,7 @@ function chargeMagazineSubscriptions() {
                 recordPayment('player-wallet', stock, def.premiumWeekly, `Prenumerata premium: ${def.label}`);
             } else {
                 mailbox.subscriptions[symbol] = 'free';
-                addMail({ sender: symbol, subject: 'Prenumerata premium wygasła — brak środków', body: `Nie udało się pobrać ${def.premiumWeekly} PLN z Twojego konta. Wracasz do wersji darmowej.`, importance: 2 });
+                addMail({ sender: symbol, subject: 'Prenumerata premium wygasła — brak środków', body: `Nie udało się pobrać ${formatZl(def.premiumWeekly, 0)} z Twojego konta. Wracasz do wersji darmowej.`, importance: 2 });
             }
         } else {
             // Darmowy czytelnik = przychód od reklamodawców (z zewnątrz modelu).
@@ -258,7 +258,7 @@ function sendMagazineSpam() {
         addMail({
             sender: symbol,
             subject: getRandomElement([`Przejdź na ${def.label} Premium — pierwszy tydzień taniej!`, `Nie przegap ważnych wiadomości — ${def.label} Premium`, `Ankieta czytelników ${def.label} (zajmie tylko 45 minut)`]),
-            body: `Wersja premium to tylko ważne wiadomości i zero spamu za ${def.premiumWeekly} PLN tygodniowo. Zarządzaj prenumeratą w zakładce „Subskrypcje”.`,
+            body: `Wersja premium to tylko ważne wiadomości i zero spamu za ${formatZl(def.premiumWeekly, 0)} tygodniowo. Zarządzaj prenumeratą w zakładce „Subskrypcje”.`,
             importance: 0, isSpam: true, spamKind: 'magazine'
         });
     }
@@ -392,7 +392,7 @@ function processBubbleNewsToMail() {
 function setMagazineSubscription(symbol, level) {
     if (!MAGAZINES[symbol] || ![null, 'free', 'premium'].includes(level)) return false;
     if (level === 'premium' && playerWallet.cash < MAGAZINES[symbol].premiumWeekly) {
-        showToast(`Premium kosztuje ${MAGAZINES[symbol].premiumWeekly} PLN tygodniowo — za mało środków.`, 'error');
+        showToast(`Premium kosztuje ${formatZl(MAGAZINES[symbol].premiumWeekly, 0)} tygodniowo — za mało środków.`, 'error');
         return false;
     }
     mailbox.subscriptions[symbol] = level;
@@ -809,12 +809,12 @@ function triggerNationalizationEvent() {
     const buyoutPrice = target.price * 0.8;
     const totalCost = buyoutPrice * target.totalShares;
     if (centralBank.funds < totalCost) {
-        console.log(`[EVENT] Bank Centralny chciał znacjonalizować ${target.name}, ale zabrakło środków (${centralBank.funds.toFixed(0)} / ${totalCost.toFixed(0)} PLN).`);
+        console.log(`[EVENT] Bank Centralny chciał znacjonalizować ${target.name}, ale zabrakło środków (${centralBank.funds.toFixed(0)} / ${formatZl(totalCost, 0)}).`);
         return;
     }
     centralBank.funds -= totalCost;
-    logEvent(`🏛️ NACJONALIZACJA! Bank Centralny przejmuje kontrolę nad ${target.name} za ${totalCost.toFixed(0)} PLN w celu ochrony gospodarki!`, 'review');
-    if (playerPortfolio[target.symbol]) showToast(`Państwo przymusowo wykupiło Twoje akcje w ${target.name} po cenie ${buyoutPrice.toFixed(2)} PLN.`, 'warning', 7000);
+    logEvent(`🏛️ NACJONALIZACJA! Bank Centralny przejmuje kontrolę nad ${target.name} za ${formatZl(totalCost, 0)} w celu ochrony gospodarki!`, 'review');
+    if (playerPortfolio[target.symbol]) showToast(`Państwo przymusowo wykupiło Twoje akcje w ${target.name} po cenie ${formatZl(buyoutPrice, 2)}.`, 'warning', 7000);
     buyOutAllHolders(target, buyoutPrice); // wszyscy posiadacze, nie tylko gracz i boty (testy ogólne 0.11)
     target.isStateOwned = true;
     target.stateOwnershipPct = getRandomInRange(0.75, 0.90);
@@ -1282,8 +1282,8 @@ function triggerBankIPOEvent() {
 
     const message = `Nowy bank "${bankToIPO.name}" (${bankToIPO.type}) wchodzi na giełdę!<br><br>
                      Oferujemy Ci możliwość zakupu <strong>${sharesOfferedToPlayer}</strong> akcji (5% udziałów)
-                     po preferencyjnej cenie <strong>${offerPrice.toFixed(2)} PLN</strong>
-                     (całkowity koszt: <strong>${offerCost.toFixed(2)} PLN</strong>) przed oficjalnym debiutem.<br><br>
+                     po preferencyjnej cenie <strong>${formatZl(offerPrice, 2)}</strong>
+                     (całkowity koszt: <strong>${formatZl(offerCost, 2)}</strong>) przed oficjalnym debiutem.<br><br>
                      Czy chcesz skorzystać z oferty?`;
     openBankIPOOfferModal(message);
 }
@@ -1424,7 +1424,7 @@ const governmentInterventions = [
                     if(bank) bank.cash += spentAmount;
                 }
                 applyPriceEffect(target.symbol, 0.10, 'positive'); // Boost ceny
-                logEvent(`🆘 Rząd ratuje ${target.name} przed bankructwem kwotą ${spentAmount.toLocaleString()} PLN!`);
+                logEvent(`🆘 Rząd ratuje ${target.name} przed bankructwem kwotą ${formatZl(spentAmount, 0)}!`);
                 showToast(`Rządowa pomoc dla ${target.name}!`, 'success');
             } else {
                  logEvent(`ℹ️ Rząd planował koło ratunkowe, ale żadna spółka nie była na skraju upadku.`);

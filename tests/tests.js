@@ -6526,7 +6526,7 @@ group('0.14.2 P2: emisja ratunkowa — oferty per spółka; zapłata funduszu = 
         const { lines } = capture(() => handleSuccessfulIPO(s, 2));
         const shares = playerPortfolio.NEWS?.shares || 0;
         const msg = lines.find(l => l.startsWith('🔔 IPO'));
-        const value = Number((msg?.match(/→ (\d+) zł/)?.[1]) || 0);
+        const value = Number((msg?.match(/→ ([\d\s ]+) (?:zł|PLN)/)?.[1] || '').replace(/\D/g, '') || 0);
         assert(shares > 0 && Math.abs(Math.round(shares * s.price) - value) <= 1, `akcje ${shares} × ${s.price} vs ${value}`);
     });
 
@@ -13744,6 +13744,7 @@ group('0.16.6 Domknięcie', () => {
         assertEq(getTenderRecord().tenderStrikes, 1, 'ostrzeżenie'); assertEq(playerFund.trust, 50, 'ostrzeżenie bez kary');
         const cash = playerCash; assert(buyForeignShares('SIE', 10, { overThreshold: true }).ok, 'drugie przekroczenie');
         assertEq(getTenderRecord().tenderStrikes, 2, 'kara'); assertEq(playerFund.trust, 47, 'zaufanie −3'); assert(playerCash < cash - 10 * toPln(issuer.price, issuer.currency), 'kara pobrana');
+        playerCash = toPln(issuer.price * 12, issuer.currency) * 1.2; delete playerCashByCurrency[issuer.currency]; // 0.16.12: bez gotówki na wezwanie → odsprzedaż (DE: nadzór poziomu 3)
         assert(buyForeignShares('SIE', 10, { overThreshold: true }).ok, 'trzecie przekroczenie');
         assert(issuer.oversightResale && issuer.oversightResale.until === macro.quarter + FOREIGN_OVERSIGHT.resaleQuarters, 'nakaz odsprzedaży');
         processForeignOversightQuarterly(); assert(getGdrHeld(issuer) > room, 'przed terminem nadwyżka zostaje');
@@ -13857,7 +13858,7 @@ group('0.16.7 Pełne spółki zagraniczne', () => {
         withSeededRandom(7, () => { for (let k = 0; k < 6; k++) quarter(); });
         const f = a.fundamentals; assert(f && f.history.length >= 4 && f.revenueTtm > 0, 'fundamenty');
         assert(Number.isFinite(a.quarterlyEarnings) && Number.isFinite(a.lastSurprise), 'wynik i niespodzianka');
-        assert(a.balanceSheet.assets - a.balanceSheet.liabilities !== eq0, 'kapitał własny się zmienił');
+        assert(a.balanceSheet.assets - a.balanceSheet.liabilities !== eq0 || a.dividendPolicy === 'Total', 'kapitał własny się zmienił (polityka 100% wypłaca cały zysk, więc kapitał może zostać bez zmian)');
         assertEq(checkForeignCompanyInvariants().length, 0, 'niezmienniki modelu'); assertEq(checkWorldInvariants().length, 0, 'niezmienniki świata');
     }));
 
@@ -13923,10 +13924,10 @@ group('0.16.7 Pełne spółki zagraniczne', () => {
         const eq = a.balanceSheet.assets - a.balanceSheet.liabilities, name = a.ceo.name, eps = a.fundamentals.epsTtm, pol = a.dividendPolicy;
         const bytes = JSON.stringify(snap.issuers.YA1.c).length; assert(bytes < 3000, `wiersz spółki ${bytes} B`);
         applyCountriesSnapshot(snap); const b = foreignIssuers.YA1;
-        assertNear(b.balanceSheet.assets - b.balanceSheet.liabilities, eq, 'kapitał własny', 1e-3); assertEq(b.ceo.name, name, 'prezes'); assertNear(b.fundamentals.epsTtm, eps, 'EPS TTM', 1e-3); assertEq(b.dividendPolicy, pol, 'polityka');
+        assertNear(b.balanceSheet.assets - b.balanceSheet.liabilities, eq, 'kapitał własny (zapis zaokrągla do 6 cyfr znaczących)', 0.05); assertEq(b.ceo.name, name, 'prezes'); assertNear(b.fundamentals.epsTtm, eps, 'EPS TTM', 1e-3); assertEq(b.dividendPolicy, pol, 'polityka');
         for (const row of Object.values(snap.issuers)) delete row.c; // zapis v17
         resetGdrState(); applyCountriesSnapshot(snap); const c = foreignIssuers.YA1; assert(c.balanceSheet && c.cash > 0 && !c.fundamentals, 'v17: model z ceny, fundamenty przy pierwszym raporcie');
-        quarter(); assert(foreignIssuers.YA1.fundamentals, 'po kwartale są fundamenty'); assertEq(checkWorldInvariants().length, 0, 'niezmienniki po migracji');
+        quarter(); assert(foreignIssuers.YA1.fundamentals, 'po kwartale są fundamenty'); assertEq(checkWorldInvariants().join(' ; '), '', 'niezmienniki po migracji');
         assertEq(SAVE_FORMAT_VERSION, 21, 'wersja zapisu'); assert(SUPPORTED_SAVE_VERSIONS.includes(17), 'v17 nadal wczytywany');
     }));
 
@@ -14442,4 +14443,165 @@ group('0.16.9 W1 Gotówka w wielu walutach', () => {
             assert(!getLinkCandidates().includes('DE'), 'kraj startowy nie jest kandydatem na połączenie');
         } finally { resetGdrState(); initFxState(); }
     });
+
+});
+
+group('0.16.12 Dokończenie krajów (D1–D4)', () => {
+    // --- 0.16.12 D1: spółki zależne spółek zagranicznych ---
+    const withSubLinks = fn => { resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' }); playerCash = 5_000_000; initFxState(); resetGdrState(); macro.quarter = 10; try { return fn(); } finally { resetGdrState(); initFxState(); } };
+    const subParent = () => {
+        const p = getCountryIssuers('DE').find(i => !i.state && !i.giant && !i.special);
+        ensureForeignCompany(p, true); p.financialHealth = 3; p.cash = 80_000_000; p.name = 'Polskie Zakłady Testowe';
+        return p;
+    };
+    test('0.16.12 D1: spółka zagraniczna zakłada córkę i dwie zależne (najwyżej 3), nazwa z reguły 3 liter bez polskich znaków, pakiet matki poza wolnym obrotem', () => withSubLinks(() => {
+        joinCountry('DE');
+        const parent = subParent(), cash0 = parent.cash;
+        const kids = [];
+        for (let n = 0; n < 5; n++) { parent.cash = 80_000_000; const c = foundForeignSubsidiary(parent); if (c) kids.push(c); }
+        assertEq(kids.length, FOREIGN_SUB.max, 'najwyżej 3 podmioty powiązane');
+        assertEq(getForeignChildren(parent).length, 3);
+        assertEq(getForeignSubsidiaryKind(kids[0]), 'córka'); assertEq(getForeignSubsidiaryKind(kids[1]), 'spółka zależna');
+        for (const c of kids) {
+            assert(c.parentPack > 0 && c.parentPack < c.shares && c.float === c.shares - c.parentPack, 'pakiet matki poza floatem');
+            assertEq(getGdrFree(c), c.float, 'wolny obrót = float');
+            assert(!/[ąćęłńóśźż]/i.test(c.name.replace(/^Polskie Zakłady Testowe/, '')), `nazwa bez polskich znaków w skrócie: ${c.name}`);
+            assert(/^(Polskie Zakłady Testowe |Polskie |Pol)/.test(c.name), `nazwa dziedziczy po matce: ${c.name}`);
+            assert(c.cash > 0 && c.balanceSheet.assets === c.cash, 'kapitał od matki');
+        }
+        assert(new Set([...Object.values(foreignIssuers).map(i => i.name)]).size === Object.keys(foreignIssuers).length, 'nazwy unikalne');
+        assert(parent.cash < cash0 + 1, 'matka oddała gotówkę');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+        assert(!canFoundForeignSubsidiary(kids[0]), 'córka nie zakłada własnych');
+        // dywidenda córki wpływa do kasy matki
+        const before = parent.cash; payForeignParentDividend(kids[0], 2); assertEq(Math.round(parent.cash - before), Math.round(kids[0].parentPack * 2), 'dywidenda do matki');
+        // zapis i wczytanie
+        const snap = JSON.parse(JSON.stringify(getCountriesSnapshot())), ids = kids.map(c => c.id);
+        applyCountriesSnapshot(snap);
+        for (const id of ids) { const c = foreignIssuers[id]; assert(c && c.parentId === parent.id && c.parentPack > 0, `po wczytaniu ${id} ma matkę i pakiet`); assertEq(c.float, c.shares - c.parentPack); }
+        assertEq(getForeignChildren(foreignIssuers[parent.id]).length, 3);
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki po wczytaniu');
+        // split córki nie psuje pakietu
+        applyForeignShareChange(foreignIssuers[ids[0]], 2); assertEq(foreignIssuers[ids[0]].float + foreignIssuers[ids[0]].parentPack, foreignIssuers[ids[0]].shares, 'split zachowuje sumę');
+        // upadek matki zwalnia pakiety
+        delistForeignIssuer(foreignIssuers[parent.id], 1);
+        for (const id of ids) { const c = foreignIssuers[id]; assert(!c.parentId && c.parentPack === 0 && c.float === c.shares, 'pakiet wraca do obrotu'); }
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki po upadku matki');
+    }));
+
+    // --- 0.16.12 D2: walne spółek zagranicznych na wspólnym kodzie + drabina z wezwaniem ---
+    test('0.16.12 D2: walne obcej spółki — porządek obrad, głosowanie wg akcjonariatu z holders, uchwały kapitałowe w walucie spółki, niezmienniki; zapis momentu walnego', () => withSubLinks(() => {
+        joinCountry('DE');
+        const i = subParent(); i.cash = 1; i.holders.player = Math.floor(i.shares * 0.4); i.holders[aiCompetitors[0].id] = Math.floor(i.shares * 0.1);
+        assert(isForeignShare(i) && !isForeignShare(stocks[0]), 'rozpoznanie spółki zagranicznej');
+        assertNear(getFundStakePct(i), 0.4, 'udział funduszu z holders', 1e-3); assert(!canFundControlAgm(i), 'poniżej 50% bez kontroli');
+        const sh = getShareholders(i); assertEq(sh[0].id, 'player'); assert(sh.some(h => h.kind === 'ai'), 'bot na liście');
+        i.holders.player = Math.floor(i.shares * 0.55); assert(canFundControlAgm(i), '>50% = kontrola');
+        assertEq(findGovernedStock(getShareSymbol(i)), i, 'wyszukanie po symbolu');
+        const shares0 = i.shares, cap0 = i.cash;
+        let agm = null;
+        for (let k = 0; k < 30 && !agm; k++) { i.governance = null; createPendingAgm(i); const items = i.governance.pendingAgm.items; if (items.some(x => x.type === 'issue')) { agm = items; break; } i.cash = 1; }
+        assert(agm, 'przy braku gotówki zarząd proponuje emisję');
+        const issue = agm.find(x => x.type === 'issue'); assert(setAgmVote(getShareSymbol(i), issue.id, 'for'), 'gracz głosuje'); issue.playerVote = 'for'; issue.reason = null; // wycena rynku jest losowa — bez powodu uchwała nie jest wycofywana
+        const rec = holdAgm(i); assert(rec && rec.results.length >= 3, 'walne się odbyło');
+        const res = rec.results.find(r => r.type === 'issue'); assert(res && res.passed, 'gracz z 55% przeforsował emisję');
+        assert(i.shares > shares0 && i.totalShares === i.shares && i.cash > cap0, 'emisja: akcje i gotówka w walucie spółki');
+        assertEq(i.statePack + (i.parentPack || 0) + i.float, i.shares, 'float spójny po emisji');
+        i.cash = 1e9; i.governance = null; createPendingAgm(i);
+        i.governance.pendingAgm.items = [{ id: 'buyback', kind: 'board', type: 'buyback', reason: 'cash', label: 'Skup', playerVote: 'for' }];
+        const free0 = getGdrFree(i), sh1 = i.shares; applyAgmResolution(i, i.governance.pendingAgm.items[0]);
+        assert(i.shares < sh1 && getGdrFree(i) < free0 && getGdrFree(i) >= 0, 'skup zmniejsza wolny obrót, nie schodzi poniżej zera');
+        const m0 = i.marginAdj || 0; assertEq(applyAgmResolution(i, { type: 'pay' }), 'wyższe koszty wynagrodzeń'); assert(i.marginAdj < m0, 'wynagrodzenia obciążają marżę');
+        const old = i.ceo.name; i.financialHealth = -3; i.ceo.tenure = 5; assert(getForeignAgmItems(i).some(x => x.type === 'replaceCeo'), 'zła kondycja → wniosek o odwołanie prezesa'); applyAgmResolution(i, { type: 'replaceCeo' }); assert(i.ceo.name !== old, 'nowy prezes');
+        assert(getGovernanceCompanies().some(s => s === i), 'okno Walne widzi spółkę zagraniczną');
+        processGovernanceQuarter(); // wszystkie obce przez wspólną pętlę kwartalną — bez wyjątków
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+    test('0.16.12 D2: drabina nadzoru — trzecie przekroczenie progu: nakaz wezwania na pozostałe akcje (z gotówką), bez gotówki odsprzedaż (nadzór poziomu ≥ 3) albo wezwanie częściowe (poziom < 3)', () => withSubLinks(() => {
+        joinCountry('DE'); joinCountry('CZ');
+        for (const [country, expect] of [['DE', 'tender'], ['DE', 'resale'], ['CZ', 'partial']]) {
+            const i = getCountryIssuers(country).find(x => !x.state && !x.giant && !x.special);
+            const bot = aiCompetitors[0]; i.holders = { player: Math.floor(i.shares * 0.5), [bot.id]: Math.floor(i.shares * 0.05) };
+            const botCash = bot ? getCurrencyCash(bot, i.currency) : 0;
+            const held0 = getGdrHeld(i); playerCash = expect === 'tender' ? 1e13 : 1000; delete playerCashByCurrency[i.currency];
+            const r = runForeignTenderOrder(i);
+            if (expect === 'tender') { assertEq(r, 'tender'); assert(getGdrHeld(i) > held0 * 1.3, 'wezwanie podnosi udział funduszu'); assert(playerCash < 1e13, 'zapłacono'); assert((i.holders[bot.id] || 0) < i.shares * 0.05, 'bot sprzedał'); assert(getCurrencyCash(bot, i.currency) > botCash, 'bot dostał gotówkę'); }
+            else if (expect === 'resale') { assertEq(r, 'resale'); assert(i.oversightResale, 'nakaz odsprzedaży'); assertEq(getGdrHeld(i), held0, 'bez zakupu'); }
+            else { assertEq(r, 'tender', 'poziom < 3: wezwanie częściowe'); assert(getGdrHeld(i) >= held0 && playerCash >= 0, 'częściowe wezwanie w granicach gotówki'); }
+            assert(getGdrFree(i) >= -1e-6, 'wolny obrót nieujemny');
+        }
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+
+    // --- 0.16.12 D3: przejęcia obcych ---
+    const withMaDe = fn => withSubLinks(() => {
+        resetWorld([mk156('CTX', { price: 10, cash: 5_000_000, sector: ['Usługi'] }), mk156('ECL', { price: 10, cash: 10_000, sector: ['Usługi'] })]);
+        startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' }); playerCash = 5_000_000;
+        setStartCountry('DE'); macro.quarter = 10;
+        for (const x of getCountryIssuers('DE')) ensureForeignCompany(x, true);
+        const [a, b] = getCountryIssuers('DE').filter(isForeignMaEligible); for (const x of [a, b]) { ensureForeignCompany(x, true); x.sectors = [['Usługi', 1]]; x.sector = 'Usługi'; x.financialHealth = 2; }
+        return fn(a, b);
+    });
+    test('0.16.12 D3: przejęcie obca–obca — cel znika, posiadacze dostają premię, przejmujący księguje aktywa i wartość firmy, gotówka z marginesem; niezmienniki', () => withMaDe((a, b) => {
+        a.cash = 1e12; a.balanceSheet.assets += 1e12; b.holders = { player: 1000 }; const cashPlayer0 = playerCash, assets0 = a.balanceSheet.assets, bid = b.id;
+        const offer = getForeignOffer(b); assertNear(offer.price, b.price * 1.25, 'premia 25%', 1e-6);
+        const r = executeIssuerTakeover(a, b); assert(r.ok, r.reason);
+        assert(!foreignIssuers[bid], 'cel zniknął z giełdy'); assert(playerCash > cashPlayer0, 'gracz dostał gotówkę za akcje');
+        assert(a.balanceSheet.assets !== assets0 && a.absorbedCompanies?.length === 1, 'przejęcie zaksięgowane'); assert(a.balanceSheet.liabilities >= 0 && a.cash > 0);
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+    test('0.16.12 D3: wykluczenia — państwowe, giganci, specjalne, zależne, spółki spoza giełdy macierzystej, za mało gotówki, dwie spółki krajowe', () => withMaDe((a, b) => {
+        a.cash = 1e12;
+        b.state = true; assert(!executeIssuerTakeover(a, b).ok, 'państwowa wyłączona'); b.state = false;
+        b.giant = true; assert(!executeIssuerTakeover(a, b).ok, 'gigant wyłączony'); b.giant = false;
+        b.special = 'launder'; assert(!executeIssuerTakeover(a, b).ok, 'specjalna wyłączona'); b.special = null;
+        b.parentId = 'XXX'; assert(!executeIssuerTakeover(a, b).ok, 'zależna wyłączona'); delete b.parentId;
+        joinCountry('CZ'); const cz = getCountryIssuers('CZ').find(x => !x.state && !x.giant && !x.special); ensureForeignCompany(cz, true);
+        assert(!isCountryLinked('CZ') && !isForeignMaEligible(cz), 'kraj bez linku nie jest na liście macierzystej'); assert(!executeIssuerTakeover(a, cz).ok, 'cel spoza giełdy macierzystej');
+        a.cash = 1; assertEq(executeIssuerTakeover(a, b).reason, 'Za mało gotówki przejmującego.');
+        const d1 = stocks.find(s => s.symbol === 'CTX'), d2 = stocks.find(s => s.symbol === 'ECL'); assert(!executeIssuerTakeover(d1, d2).ok, 'dwie krajowe: proces M&A');
+        assertEq(checkWorldInvariants().join(' ; '), '');
+    }));
+    test('0.16.12 D3: obca przejmuje krajową (wypłata przez wspólne settleTargetHolders) i krajowa przejmuje obcą; fundusz z >50% krajowej uruchamia przejęcie obcej', () => withMaDe((a, b) => {
+        const dom = stocks.find(s => s.symbol === 'ECL'); dom.price = 10; dom.totalShares = 10000; dom.financialHealth = 0;
+        playerPortfolio.ECL = { shares: 100, avgPrice: 10, assetType: 'stock' }; dom.sharesHeld = (dom.sharesHeld || 0) + 100; const cash0 = playerCash;
+        a.cash = 1e12; const n0 = stocks.length;
+        const r1 = executeIssuerTakeover(a, dom); assert(r1.ok, r1.reason); assertEq(stocks.length, n0 - 1, 'krajowy cel usunięty'); assert(!stocks.some(s => s.symbol === 'ECL'));
+        assertNear(playerCash - cash0, 100 * 12.5, 'gracz dostał 100 × cena z premią', 1e-6);
+        const buyer = stocks.find(s => s.symbol === 'CTX'); buyer.cash = 1e12; buyer.balanceSheet = buyer.balanceSheet || { assets: 1e12, liabilities: 0, shareCapital: 1e12, retainedEarnings: 0 };
+        const bid = b.id, r2 = executeIssuerTakeover(buyer, b); assert(r2.ok, r2.reason); assert(!foreignIssuers[bid], 'obcy cel zniknął');
+        assertEq(checkWorldInvariants().join(' ; '), '');
+        // fundusz-kontrola krajowej: przejmuje obcą
+        const c = getCountryIssuers('DE').filter(isForeignMaEligible)[0]; c.financialHealth = 0;
+        assert(!startPlayerForeignTakeover('CTX', c.id).ok, 'bez kontroli funduszu nie wolno');
+        playerPortfolio.CTX = { shares: buyer.totalShares * 0.6, avgPrice: 10, assetType: 'stock' }; buyer.sharesHeld = buyer.totalShares * 0.6;
+        buyer.sectors = undefined; const rr = startPlayerForeignTakeover('CTX', c.id); assert(rr.ok || /za duży|gotówki/.test(rr.reason), 'ścieżka gracza działa albo odmawia z powodem: ' + rr.reason);
+        assertEq(checkWorldInvariants().join(' ; '), '');
+    }));
+    test('0.16.12 D3: sprzedaż spółki z walnego (gracz > 50%) i kwartalna pętla przejęć nie psują stanu', () => withMaDe((a, b) => {
+        a.cash = 1e12; b.price *= 0.05; b.holders = { player: Math.floor(b.shares * 0.6) };
+        const sold = applyAgmResolution(b, { type: 'sellCompany' }); assertEq(sold.startsWith('nabywca: '), true, 'kupiec z gotówką: ' + sold);
+        for (let k = 0; k < 40; k++) processForeignMaQuarterly();
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki po pętli kwartalnej');
+    }));
+
+    // --- 0.16.12 D4: giełda macierzysta z danych kraju, etykiety, waluta w tekstach ---
+    test('0.16.12 D4: nagłówek giełdy macierzystej z danych kraju (DAX/WSE/PX), spółka UNI → kraj i waluta rynku macierzystego, PL bez zmian', () => withSubLinks(() => {
+        resetWorld([mk156('CTX', { price: 10 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+        assertEq(getMarketLabel('GPW'), 'GPW', 'PL: GPW'); assertEq(getMarketDef('GPW').name, 'Giełda Papierów Wartościowych');
+        assertEq(getCompanyCountryNote({ symbol: 'CTX', name: 'Cortex' }), 'Polska · PLN', 'PL: Polska · PLN'); assertEq(getHomeCityLabel(), 'Warszawa (GPW)');
+        for (const [country, op, name, note, currency] of [['DE', 'DAX', 'Frankfurter Börsenhaus', 'Niemcy · EUR', 'EUR'], ['US', 'WSE', 'Wall Street Exchange', 'USA · USD', 'USD'], ['CZ', 'PX', 'Burza Praha', 'Czechy · CZK', 'CZK']]) {
+            resetGdrState(); initFxState(); resetWorld([mk156('CTX', { price: 10 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); setStartCountry(country);
+            assertEq(getMarketLabel('GPW'), op, `${country}: skrót giełdy macierzystej`); assertEq(getMarketDef('GPW').name, name, `${country}: nazwa giełdy`);
+            assertEq(getCompanyCountryNote({ symbol: 'CTX', name: 'Cortex' }), note, `${country}: etykieta spółki uniwersalnej`); assert(getHomeCityLabel().includes(`(${op})`));
+            assertEq(getBaseCurrency(), currency); assertEq(localizeCurrencyText('Cena 20 PLN, kapitalizacja 2 mln zł na GPW'), `Cena 20 ${currency}, kapitalizacja 2 mln ${currency} na ${op}`, 'przykład z Akademii: tylko etykieta');
+            assertEq(localizeCurrencyText('Odblokuj · 1 000 PLN', true), `Odblokuj · ${formatZl(1000, 0)}`, 'statyczna kwota przeliczona na walutę bazową');
+        }
+        resetGdrState(); initFxState(); resetWorld([mk156('CTX', { price: 10 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' });
+        assertEq(localizeCurrencyText('10 PLN na GPW', true), '10 PLN na GPW', 'PL: tekst bez zmian');
+    }));
+    test('0.16.12 D4: maile i dziennik pokazują kwoty w walucie bazowej konta (formatZl), nie w literale PLN', () => withSubLinks(() => {
+        resetWorld([mk156('CTX', { price: 10 })]); startNewCareer({ name: 'T', corporation: 'K', fundName: 'F' }); setStartCountry('DE');
+        assert(getBaseCurrency() === 'EUR' && formatZl(100000, 0).endsWith('EUR') && formatZl(100000, 0).startsWith('25'), 'kwota przeliczona na EUR (÷4)');
+    }));
 });

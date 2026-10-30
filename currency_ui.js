@@ -12,10 +12,51 @@ let gdrBrokerId = 'std';
 
 const COUNTRY_NAMES = { PL: 'Polska', DE: 'Niemcy', US: 'USA', CZ: 'Czechy', SE: 'Szwecja', CH: 'Szwajcaria', JP: 'Japonia', CN: 'Chiny', IN: 'Indie', TW: 'Tajwan', FR: 'Francja' };
 
-/** Kraj i waluta spółki do karty (zaległość z planu: „kraj · waluta · cena”). Dziś wszystkie spółki są polskie, w złotych. */
+/** Kraj i waluta spółki do karty. Spółka uniwersalna (UNI) należy do rynku macierzystego: kraj startowy gracza i jego waluta bazowa (0.16.12 D4); obca — jej kraj i waluta. */
 function getCompanyCountryNote(stock) {
-    const country = getCompanyOrigin(stock) === 'PL' || !stock?.country ? 'PL' : stock.country;
-    return `${COUNTRY_NAMES[country] || country} · PLN`;
+    const origin = getCompanyOrigin(stock), start = getStartCountry(), country = stock?.country || (origin === 'UNI' ? start : origin);
+    const currency = country === start ? getBaseCurrency() : (COUNTRY_DEFS[country]?.currency || stock?.currency || 'PLN');
+    return `${COUNTRY_NAMES[country] || country} · ${currency}`;
+}
+
+const HOME_CITY = { PL: 'Warszawa', DE: 'Frankfurt', US: 'Nowy Jork', CZ: 'Praga' };
+/** Miasto i giełda macierzysta do karty lotu („Warszawa (GPW)”, „Frankfurt (DAX)”). */
+function getHomeCityLabel() { const c = getStartCountry(); return `${HOME_CITY[c] || COUNTRY_NAMES[c] || c} (${getMarketLabel('GPW')})`; }
+
+// 0.16.12 D4: jedno miejsce przepisywania tekstów z walutą PLN/zł na walutę bazową konta (playerProfile.baseCurrency). Przy PL tekst zostaje bez zmian.
+const CURRENCY_AMOUNT_RX = /(\d[\d\s ]*(?:[.,]\d+)?)\s?(?:PLN|zł)(?![A-Za-zĄ-ż])/g;
+const CURRENCY_WORD_RX = /(?<![A-Za-zĄ-ż])(?:PLN|zł)(?![A-Za-zĄ-ż])/g;
+/** Etykieta waluty bez przeliczania liczb (przykłady z Akademii: liczby są umowne); `scaleAmounts`: kwoty ze stałych tekstów (jednostki gry = PLN) przeliczane na walutę bazową. */
+function localizeCurrencyText(text, scaleAmounts = false) {
+    const code = getBaseCurrency(), home = getMarketLabel('GPW');
+    if ((code === 'PLN' && home === 'GPW') || typeof text !== 'string' || !/PLN|zł|GPW/.test(text)) return text;
+    let out = text.replace(/(?<![A-Za-zĄ-ż])GPW(?![A-Za-zĄ-ż])/g, home);
+    if (scaleAmounts) out = out.replace(CURRENCY_AMOUNT_RX, (m, num) => {
+        const clean = num.replace(/[\s ]/g, '').replace(',', '.'), decimals = (clean.split('.')[1] || '').length;
+        return Number.isFinite(Number(clean)) ? formatZl(Number(clean), Math.min(2, decimals)) : m;
+    });
+    return code === 'PLN' ? out : out.replace(CURRENCY_WORD_RX, code);
+}
+
+const staticCurrencyOriginals = new WeakMap(); // węzeł tekstowy / element → oryginalny tekst (powtórne przepisanie po zmianie kraju startowego)
+/** Statyczny HTML (index.html): etykiety i kwoty w złotych → waluta bazowa konta. Wołane po zmianie waluty bazowej (syncBaseCurrency). */
+function localizeStaticCurrency(root = typeof document === 'object' ? document.body : null) {
+    if (!root || typeof document !== 'object') return;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: n => /SCRIPT|STYLE/.test(n.parentNode?.nodeName || '') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        const orig = staticCurrencyOriginals.get(n) ?? n.nodeValue;
+        if (!/PLN|zł|GPW/.test(orig)) continue;
+        staticCurrencyOriginals.set(n, orig);
+        const next = localizeCurrencyText(orig, true);
+        if (n.nodeValue !== next) n.nodeValue = next;
+    }
+    for (const el of root.querySelectorAll('[placeholder],[aria-label],[title]')) for (const attr of ['placeholder', 'aria-label', 'title']) {
+        const v0 = el.getAttribute(attr); if (v0 === null) continue;
+        const store = staticCurrencyOriginals.get(el) || {}, orig = store[attr] ?? v0;
+        if (!/PLN|zł|GPW/.test(orig)) continue;
+        store[attr] = orig; staticCurrencyOriginals.set(el, store);
+        const next = localizeCurrencyText(orig, true); if (v0 !== next) el.setAttribute(attr, next);
+    }
 }
 
 function fmtRate(value, code) {

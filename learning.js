@@ -230,7 +230,7 @@ const ACADEMY_ENTRIES = {
     nav: {
         title: 'NAV i jednostki funduszu', icon: '💼',
         text: 'NAV (wartość aktywów netto) na udział to wartość funduszu podzielona przez liczbę udziałów. Klienci kupują i umarzają udziały po NAV. Wynik funduszu mierzy się zmianą NAV, nie wielkością aktywów — napływ klientów nie jest zyskiem.',
-        example: () => playerFund ? `Twój fundusz: NAV ${getFundNav().toFixed(4)} PLN na jednostkę, aktywa ${formatZl(getFundAssets(), 0)}.` : '',
+        example: () => playerFund ? `Twój fundusz: NAV ${formatZl(getFundNav(), 4)} na jednostkę, aktywa ${formatZl(getFundAssets(), 0)}.` : '',
         quiz: [
             { q: 'Klienci wpłacają do funduszu 1 mln PLN. NAV na jednostkę…', a: ['się nie zmienia — przybywa jednostek', 'rośnie o 1 mln PLN', 'spada'], c: 0 },
             { q: 'Czym mierzy się wynik zarządzającego?', a: ['Zmianą NAV na jednostkę', 'Wielkością aktywów', 'Liczbą klientów'], c: 0 },
@@ -465,7 +465,7 @@ Object.assign(ACADEMY_ENTRIES, {
     splitReverseSplit: {
         title: 'Split i reverse split', icon: '🔀',
         text: 'Split to podział akcji: spółka wymienia każdą akcję na kilka (np. 5:1), a kurs spada tyle razy, ile akcji przybywa. Kapitalizacja i wartość Twojej pozycji zostają bez zmian — to jak rozmiana banknotu na drobne. Spółki dzielą akcje, gdy kurs jest bardzo wysoki, bo tanie akcje łatwiej kupować. Reverse split (konsolidacja, np. 1:10) robi odwrotnie: wiele akcji zamienia się w jedną, a kurs rośnie — stosują go spółki z kursem poniżej 1 zł, żeby nie wyglądać na „grosze” i uniknąć zawieszenia handlu. Ułamki akcji, których nie da się wymienić, spółka wypłaca gotówką. Sam podział nie czyni spółki ani lepszą, ani gorszą (reverse split bywa sygnałem kłopotów). W grze: split od 1000 zł, konsolidacja poniżej 1 zł; wykresy i dywidendy na akcję są przeliczane wstecz.',
-        example: () => { const e = splitLog[splitLog.length - 1]; return e ? `${e.name}: ${e.kind === 'split' ? 'split' : 'konsolidacja'} ${formatSplitRatio(e.kind === 'split' ? e.ratio : 1 / e.ratio)} w kw. ${e.quarter} — kurs ${e.priceBefore.toFixed(2)} → ${e.priceAfter.toFixed(2)} zł.` : 'Przykład: akcja za 1200 zł po splicie 3:1 kosztuje 400 zł, a Ty masz 3 razy więcej akcji.'; },
+        example: () => { const e = splitLog[splitLog.length - 1]; return e ? `${e.name}: ${e.kind === 'split' ? 'split' : 'konsolidacja'} ${formatSplitRatio(e.kind === 'split' ? e.ratio : 1 / e.ratio)} w kw. ${e.quarter} — kurs ${e.priceBefore.toFixed(2)} → ${formatZl(e.priceAfter, 2)}.` : 'Przykład: akcja za 1200 zł po splicie 3:1 kosztuje 400 zł, a Ty masz 3 razy więcej akcji.'; },
         quiz: [
             { q: 'Masz 10 akcji po 1200 zł. Spółka robi split 3:1. Ile masz akcji i po ile?', a: ['30 akcji po 400 zł', '10 akcji po 400 zł', '30 akcji po 1200 zł'], c: 0 },
             { q: 'Jak split zmienia wartość Twojej pozycji?', a: ['nie zmienia jej', 'zwiększa ją', 'zmniejsza ją'], c: 0 },
@@ -1255,7 +1255,7 @@ function academyQuizSubmit(id) {
     if (answers.some(a => a === undefined)) { showToast('Odpowiedz na wszystkie pytania.', 'warning'); return; }
     academyView.result = submitAcademyQuiz(id, answers);
     academyView.answers = answers;
-    if (academyView.result?.reward) showToast(`🎓 Quiz zaliczony! +${academyView.result.reward} PLN do portfela.`, 'success');
+    if (academyView.result?.reward) showToast(`🎓 Quiz zaliczony! +${formatZl(academyView.result.reward, 0)} do portfela.`, 'success');
     renderCvPanel();
 }
 
@@ -1282,15 +1282,15 @@ function renderAcademyPanel() {
         const quiz = entry.quiz.map((q, qi) => {
             const order = getQuizOrder(selected, qi, q.a.length);
             const chosen = result ? Number(academyView.answers?.[qi]) : null;
-            return `<fieldset class="academy-q"><legend>${qi + 1}. ${escapeHtml(q.q)}</legend>
-                ${order.map(ai => `<label class="${result ? (ai === q.c ? 'text-up' : ai === chosen ? 'text-down' : '') : ''}"><input type="radio" name="aq-${qi}" value="${ai}" ${chosen === ai ? 'checked' : ''}> ${escapeHtml(q.a[ai])}</label>`).join('')}
+            return `<fieldset class="academy-q"><legend>${qi + 1}. ${escapeHtml(localizeCurrencyText(q.q))}</legend>
+                ${order.map(ai => `<label class="${result ? (ai === q.c ? 'text-up' : ai === chosen ? 'text-down' : '') : ''}"><input type="radio" name="aq-${qi}" value="${ai}" ${chosen === ai ? 'checked' : ''}> ${escapeHtml(localizeCurrencyText(q.a[ai]))}</label>`).join('')}
             </fieldset>`;
         }).join('');
         detail = `
             <h3 class="mt-0">${entry.icon} ${escapeHtml(entry.title)}</h3>
-            <p>${escapeHtml(entry.text)}</p>
-            ${example ? `<p class="academy-example">🎮 <strong>W Twojej grze:</strong> ${escapeHtml(example)}</p>` : ''}
-            <h4>Quiz ${academy.quizzes[selected] ? '— zaliczony ✔' : `— za zaliczenie ${ACADEMY_QUIZ_REWARD} PLN`}</h4>
+            <p>${escapeHtml(localizeCurrencyText(entry.text))}</p>
+            ${example ? `<p class="academy-example">🎮 <strong>W Twojej grze:</strong> ${escapeHtml(localizeCurrencyText(example))}</p>` : ''}
+            <h4>Quiz ${academy.quizzes[selected] ? '— zaliczony ✔' : `— za zaliczenie ${formatZl(ACADEMY_QUIZ_REWARD, 0)}`}</h4>
             ${quiz}
             ${result ? `<p class="${result.passed ? 'text-up' : 'text-down'}">${result.passed ? '✅ Wszystko dobrze!' : `Poprawne: ${result.correct}/${result.total} — spróbuj jeszcze raz.`}</p>` : ''}
             <button onclick="academyQuizSubmit('${selected}')">Sprawdź odpowiedzi</button>`;
@@ -1821,7 +1821,7 @@ function checkMentorTasks() {
         playerWallet.cash += MENTOR_REWARD;
         recordPayment('external:korporacja', 'player-wallet', MENTOR_REWARD, `Zadanie mentora: ${def.title}`);
         if (typeof unlockAcademyEntry === 'function') unlockAcademyEntry(def.lesson);
-        if (typeof pushNotification === 'function') pushNotification(`🎓 ${MENTOR_NAME}: zadanie „${def.title}” zaliczone (+${MENTOR_REWARD} PLN)`, () => openMentor());
+        if (typeof pushNotification === 'function') pushNotification(`🎓 ${MENTOR_NAME}: zadanie „${def.title}” zaliczone (+${formatZl(MENTOR_REWARD, 0)})`, () => openMentor());
     }
     // Certyfikaty: ścieżka z wymaganą liczbą zadań.
     for (const [id, track] of Object.entries(MENTOR_TRACKS)) {
@@ -1874,7 +1874,7 @@ function renderMentorPanel() {
         let progress = '';
         try { progress = def.progress(task); } catch (e) { progress = ''; }
         return `<li class="mentor-task"><div><strong>${MENTOR_TRACKS[def.track].icon} ${escapeHtml(def.title)}</strong>
-            <p class="text-sm m-0">${escapeHtml(def.text)}</p><span class="text-xs text-muted">${escapeHtml(progress)} · nagroda ${MENTOR_REWARD} PLN</span></div>
+            <p class="text-sm m-0">${escapeHtml(def.text)}</p><span class="text-xs text-muted">${escapeHtml(progress)} · nagroda ${formatZl(MENTOR_REWARD, 0)}</span></div>
             <button class="btn-xs btn-secondary" onclick="openAcademy('${def.lesson}')">📘 Hasło</button></li>`;
     }).join('');
     const done = Object.keys(mentor.done).map(id => MENTOR_TASKS[id]).filter(Boolean).map(def => `<li>✅ ${escapeHtml(def.title)}</li>`).join('');

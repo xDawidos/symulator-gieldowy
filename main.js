@@ -534,7 +534,7 @@ function restoreSavedProjects(snapshot, bySymbol, tenderById, report) {
         if (!builder) {
             // Brak wykonawcy: niewykorzystany depozyt wraca do zamawiającego.
             adjustCompanyCash(client, project.escrowBalance);
-            report.warnings.push(`Projekt ${raw.id}: brak wykonawcy — zwrócono depozyt ${project.escrowBalance.toFixed(0)} PLN.`);
+            report.warnings.push(`Projekt ${raw.id}: brak wykonawcy — zwrócono depozyt ${formatZl(project.escrowBalance, 0)}.`);
             tender.status = 'cancelled';
             tender.cancelReason = 'Brak wykonawcy po wczytaniu.';
             continue;
@@ -1898,7 +1898,7 @@ function placeInitialAiDeposits() {
                             startDate: Date.now()
                          });
                      }
-                    console.log(`- Bankier ${ai.name} umieścił startowy depozyt ${depositAmount} PLN w ${chosenBank.name}.`);
+                    console.log(`- Bankier ${ai.name} umieścił startowy depozyt ${formatZl(depositAmount, 0)} w ${chosenBank.name}.`);
                 } else {
                     console.warn(`! Bankier ${ai.name} nie miał wystarczająco gotówki (${ai.cash}) na startowy depozyt (${depositAmount}).`);
                 }

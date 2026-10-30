@@ -35,6 +35,7 @@ function getBaseScale() { return BASE_SCALES[getBaseCurrency()] || 1; }
 function syncBaseCurrency() {
     const base = getBaseCurrency();
     FOREIGN_CURRENCIES.splice(0, FOREIGN_CURRENCIES.length, ...Object.keys(CURRENCIES).filter(code => code !== base));
+    if (typeof localizeStaticCurrency === 'function') localizeStaticCurrency(); // 0.16.12 D4: statyczne teksty z PLN/zł → waluta bazowa
 }
 
 /** Parametry procesu tygodniowego: powrót do średniej, szum, dryf średniej (±10%/rok), wpływ kryzysu. */

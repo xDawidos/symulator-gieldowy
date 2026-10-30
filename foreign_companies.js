@@ -23,7 +23,7 @@ const FOREIGN_CO = {
 };
 /** 0.16.9 W2: liczniki zdarzeń spółek zagranicznych (sonda częstości w tests/przebiegi.html; nie zapisywane). */
 let foreignStats = {};
-function resetForeignStats() { foreignStats = { reports: 0, dividends: 0, dividendPln: 0, splits: 0, consolidations: 0, bankruptcies: 0, rescues: 0, ceoChanges: 0 }; }
+function resetForeignStats() { foreignStats = { reports: 0, dividends: 0, dividendPln: 0, splits: 0, consolidations: 0, bankruptcies: 0, rescues: 0, ceoChanges: 0, takeovers: 0 }; }
 resetForeignStats();
 function noteForeignStat(key, n = 1) { foreignStats[key] = (foreignStats[key] || 0) + n; }
 
@@ -126,6 +126,7 @@ function payForeignDividend(i, st, net) {
             }
             if (i.statePack > 0) st.treasury += i.statePack * dps; // dywidenda państwowa do skarbu kraju
             i.lastDividend = { dps, total, q: macro.quarter, yield: dps / Math.max(0.01, i.price) };
+            if (i.parentId) payForeignParentDividend(i, dps); // 0.16.12 D1
             noteForeignDividend(i, dps); noteForeignStat('dividends'); noteForeignStat('dividendPln', toPln(total, i.currency));
             if ((i.holders?.player || 0) > 0) logEvent(`💰 ${i.name} (${getShareSymbol(i)}): dywidenda ${formatNumberPl(dps, 2)} ${i.currency} na akcję (po podatku u źródła ${Math.round((1 - keep) * 100)}%).`, 'review');
         }
@@ -156,7 +157,7 @@ function applyForeignShareChange(i, factor) {
         }
     }
     i.shares = Math.max(1, floorShares(i.shares * factor)); i.totalShares = i.shares;
-    i.statePack = i.state ? Math.round(i.shares * COUNTRY_RULES.statePct) : 0; i.float = i.shares - i.statePack;
+    i.statePack = i.state ? Math.round(i.shares * COUNTRY_RULES.statePct) : 0; i.parentPack = Math.floor((i.parentPack || 0) * factor + 1e-9); i.float = i.shares - i.statePack - i.parentPack;
     i.price = priceAfter; i.ema = i.ema / factor; i.history = i.history.map(p => p / factor);
     const f = i.fundamentals;
     if (f) { scalePerShareList(f.history, factor, ['eps']); f.expectedEps /= factor; if (Number.isFinite(f.lastEps)) f.lastEps /= factor; f.fairValue /= factor; updateFundamentalRatios(i); }
@@ -211,6 +212,7 @@ function processForeignCompaniesQuarterly(countryId) {
         maybeForeignSplit(issuer);
         stepForeignCeo(issuer);
     }
+    processForeignSubsidiariesQuarterly(countryId); // 0.16.12 D1
 }
 
 // ---------------------------------------------------------------------------------
@@ -235,7 +237,7 @@ function getForeignCompanySnapshot(i) {
 
 function applyForeignCompanySnapshot(i, row) {
     if (!row || !Array.isArray(row.b)) return ensureForeignCompany(i); // zapis v17: model z bieżącej ceny
-    if (Number(row.n) > 0) { i.shares = Number(row.n); i.statePack = i.state ? Math.round(i.shares * COUNTRY_RULES.statePct) : 0; i.float = i.shares - i.statePack; }
+    if (Number(row.n) > 0) { i.shares = Number(row.n); i.statePack = i.state ? Math.round(i.shares * COUNTRY_RULES.statePct) : 0; i.float = i.shares - i.statePack - (i.parentPack || 0); }
     i.totalShares = i.shares; i.symbol = getShareSymbol(i); i.market = i.country; i.isStateOwned = Boolean(i.state);
     i.balanceSheet = { assets: row.b[0], liabilities: row.b[1], shareCapital: row.b[2], retainedEarnings: row.b[3] };
     i.cash = Number(row.c) || 0; i.financialHealth = Number(row.h) || 0;
@@ -262,7 +264,9 @@ function checkForeignCompanyInvariants() {
         const b = i.balanceSheet;
         if (![b.assets, b.liabilities, i.cash, i.financialHealth, i.fundamentals.revenue].every(Number.isFinite)) problems.push(`${i.id}: niefinitywna wartość w bilansie lub fundamentach`);
         if (i.totalShares !== i.shares) problems.push(`${i.id}: totalShares ≠ shares`);
-        if (i.statePack + i.float !== i.shares) problems.push(`${i.id}: pakiet państwa + float ≠ akcje`);
+        if (i.statePack + (i.parentPack || 0) + i.float !== i.shares) problems.push(`${i.id}: pakiet państwa + pakiet matki + float ≠ akcje`);
+        if (i.parentId && (!foreignIssuers[i.parentId] || !(i.parentPack > 0))) problems.push(`${i.id}: spółka zależna bez matki albo bez pakietu`);
+        if (getForeignChildren(i).length > FOREIGN_SUB.max) problems.push(`${i.id}: więcej niż ${FOREIGN_SUB.max} spółek powiązanych`);
         if (i.cash < -1e-6) problems.push(`${i.id}: ujemna gotówka spółki`);
     }
     return problems;
@@ -347,7 +351,8 @@ function buildForeignCardStock(i) {
         balanceSheet: i.balanceSheet ? { assets: i.balanceSheet.assets * r, liabilities: i.balanceSheet.liabilities * r, shareCapital: i.balanceSheet.shareCapital * r, retainedEarnings: i.balanceSheet.retainedEarnings * r } : undefined,
         dividendHistory: (i.divHistory || (i.lastDividend ? [i.lastDividend.dps] : [])).map(dps => ({ dps: dps * r })),
         lastDividend: i.lastDividend ? { ...i.lastDividend, dps: i.lastDividend.dps * r, total: (i.lastDividend.total || 0) * r } : null,
-        playerTransactions: [], chartEvents: []
+        playerTransactions: [], chartEvents: [],
+        isSubsidiaryOf: i.parentId && foreignIssuers[i.parentId] ? getShareSymbol(foreignIssuers[i.parentId]) : undefined, parentStakePct: i.parentPack > 0 ? i.parentPack / i.shares : undefined // 0.16.12 D1
     };
     if (f) {
         vm.fundamentals = { ...f, revenue: f.revenue * r, expectedEps: f.expectedEps * r, lastEps: (f.lastEps || 0) * r, fairValue: f.fairValue * r,
@@ -363,4 +368,330 @@ function getCompanyCardSource(symbol) {
     if (domestic || typeof symbol !== 'string' || !symbol.includes('.')) return domestic || null;
     const issuer = foreignIssuers[symbol.split('.')[0]];
     return issuer && issuer.kind === 'share' && getShareSymbol(issuer) === symbol ? buildForeignCardStock(issuer) : null;
+}
+
+// =================================================================================
+// 0.16.12 D1: SPÓŁKI ZALEŻNE SPÓŁEK ZAGRANICZNYCH (okrojone)
+// Spółka zagraniczna zakłada najwyżej jedną córkę i dwie spółki zależne (łącznie ≤ 3 powiązane). Nazwa i segment z `pickSubsidiaryName` /
+// `pickSubsidiarySegment` (finance.js — ta sama reguła: długi człon matki skraca się do 3 liter bez polskich znaków). Córka jest zwykłym emitentem kraju
+// (liczy się do limitu giełdy kraju, F3 z 0.16.8); pakiet matki (`parentPack`) jest poza wolnym obrotem, jak pakiet państwa, a dywidenda córki płynie do kasy matki.
+// Pierwsza założona to córka, kolejne to spółki zależne (etykieta wynika z kolejności listingu, nic poza `parentId` i `parentPack` nie jest zapisywane).
+// =================================================================================
+
+const FOREIGN_SUB = {
+    max: 3, maxDaughters: 1,
+    chance: 0.06,                 // na kwartał i spółkę spełniającą warunki (bardziej opłacalne duże, zdrowe spółki)
+    minHealth: 1,                 // kondycja finansowa matki
+    capitalPln: 500000,           // minimalny kapitał córki (w przeliczeniu na walutę kraju); matka musi mieć co najmniej 2× tyle gotówki
+    stake: [0.6, 0.8],            // pakiet matki po IPO córki
+    priceRangePln: [8, 25]        // cena akcji córki (PLN) → liczba akcji wynika z kapitału
+};
+
+function getForeignChildren(parent) {
+    return getCountryIssuers(parent.country).filter(c => c.parentId === parent.id).sort((a, b) => a.listedQ - b.listedQ || a.id.localeCompare(b.id));
+}
+function getForeignParent(child) { return child?.parentId ? foreignIssuers[child.parentId] || null : null; }
+/** „córka” (pierwsza założona) albo „spółka zależna” (kolejne). */
+function getForeignSubsidiaryKind(child) {
+    const parent = getForeignParent(child);
+    return parent && getForeignChildren(parent)[0] === child ? 'córka' : 'spółka zależna';
+}
+/** Matka bez spółki-widmo: pakiet wraca do wolnego obrotu (matka znika z giełdy, np. upadłość, przejęcie). */
+function releaseForeignChildren(parentId) {
+    for (const child of Object.values(foreignIssuers)) {
+        if (child.parentId !== parentId) continue;
+        delete child.parentId; child.float += child.parentPack || 0; child.parentPack = 0;
+    }
+}
+
+/** Cienki obiekt dla `pickSubsidiarySegment`/`pickSubsidiaryName` (finance.js): nazwa i segmenty matki zagranicznej. */
+function foreignParentProxy(parent) {
+    return { name: parent.name, segments: parent.sectors.map(([sector, share], n) => ({ sector, share, subsector: n === 0 ? parent.subsector : null })) };
+}
+
+function canFoundForeignSubsidiary(parent) {
+    if (parent.kind !== 'share' || parent.state || parent.giant || parent.special || parent.parentId || parent.tradeHalted || !parent.fundamentals) return false;
+    const def = COUNTRY_DEFS[parent.country], kids = getForeignChildren(parent);
+    if (!def || kids.length >= FOREIGN_SUB.max || getCountryIssuers(parent.country).length >= getCountryLimit(parent.country)) return false;
+    return parent.financialHealth >= FOREIGN_SUB.minHealth && parent.cash >= 2 * fromPln(FOREIGN_SUB.capitalPln, parent.currency);
+}
+
+/** IPO spółki zależnej: kapitał z gotówki matki (10% gotówki, nie więcej niż 5% kapitalizacji), pakiet matki 60–80%. Zwraca emitenta albo null. */
+function foundForeignSubsidiary(parent) {
+    if (!canFoundForeignSubsidiary(parent)) return null;
+    const def = COUNTRY_DEFS[parent.country], cur = parent.currency;
+    const capital = Math.max(fromPln(FOREIGN_SUB.capitalPln, cur), Math.min(parent.cash * 0.1, parent.price * parent.shares * 0.05));
+    if (parent.cash < capital) return null;
+    const proxy = foreignParentProxy(parent), seg = pickSubsidiarySegment(proxy);
+    const name = pickSubsidiaryName(proxy, seg.sector);
+    let n = 1, id;
+    do { id = `${parent.id.slice(0, 3)}Z${n++}`; } while (foreignIssuers[id]);
+    const price = Math.round(fromPln(getRandomInRange(...FOREIGN_SUB.priceRangePln), cur) * 100) / 100 || 10;
+    const child = createCountryIssuer(def, { id, name, sector: seg.sector, subsector: seg.subsector, kind: 'normal', price, generated: true });
+    child.generated = true; child.parentId = parent.id;
+    child.shares = child.totalShares = Math.max(100000, Math.round(capital * 1.5 / price));
+    child.parentPack = Math.floor(child.shares * getRandomInRange(...FOREIGN_SUB.stake));
+    child.statePack = 0; child.float = child.shares - child.parentPack;
+    child.balanceSheet = { assets: capital, liabilities: 0, shareCapital: capital, retainedEarnings: 0 }; child.cash = capital; child.financialHealth = 1;
+    child.dividendPolicy = parent.dividendPolicy; if (typeof setCompanyDividendPolicy === 'function') setCompanyDividendPolicy(child, parent.dividendPolicy);
+    adjustCompanyCash(parent, -capital); // gotówka → udziały w córce (aktywa matki bez zmian)
+    logEvent(`🆕 IPO: ${parent.name} zakłada ${getForeignChildren(parent).length === 1 ? 'spółkę-córkę' : 'spółkę zależną'} ${child.name} (${getShareSymbol(child)}) na giełdzie ${def.name} — ${Math.round((1 - child.parentPack / child.shares) * 100)}% akcji w ofercie publicznej.`, 'market');
+    return child;
+}
+
+/** Kwartalnie: spółki zagraniczne z zapasem gotówki zakładają zależne (wywoływane z processForeignCompaniesQuarterly po raportach). */
+function processForeignSubsidiariesQuarterly(countryId) {
+    for (const parent of [...getCountryIssuers(countryId)]) {
+        if (Math.random() < FOREIGN_SUB.chance) foundForeignSubsidiary(parent);
+    }
+}
+
+/** Dywidenda córki: pakiet matki wpływa do jej kasy (reszta idzie do posiadaczy jak zwykle). */
+function payForeignParentDividend(child, dps) {
+    const parent = getForeignParent(child);
+    if (parent && dps > 0 && child.parentPack > 0) adjustCompanyCash(parent, child.parentPack * dps); // spółki jednego kraju: bez podatku u źródła
+}
+
+function describeForeignSubsidiaryLine(child) {
+    const parent = getForeignParent(child);
+    return parent ? `${getForeignSubsidiaryKind(child)} ${parent.name} (${Math.round(child.parentPack / child.shares * 100)}%)` : '';
+}
+
+// =================================================================================
+// 0.16.12 D2: WALNE ZGROMADZENIA SPÓŁEK ZAGRANICZNYCH NA WSPÓLNYM KODZIE (ma.js)
+// `holdAgm`, `tallyAgmItem`, porządek obrad i okno „Walne” działają na emitencie zagranicznym przez cienkie haki: `isForeignShare`, lista akcjonariuszy z `holders`
+// (gracz, boty, pakiet państwa, pakiet matki), udział funduszu z `holders.player`, kwoty emisji/skupu w walucie spółki. Dodatkowe punkty porządku obrad:
+// wynagrodzenia zarządu i odwołanie prezesa przy złej kondycji. Gracz głosuje i zgłasza wnioski od >50% głosów (jak przy krajowych).
+// Drabina nadzoru po przekroczeniu progu wezwania kraju (`COUNTRY_DEFS[…].oversight.callThreshold`): ostrzeżenie → kara → nakaz wezwania na pozostałe akcje
+// (gdy fundusz ma na nie gotówkę; inaczej nakaz odsprzedaży).
+// =================================================================================
+
+const FOREIGN_AGM = { payMargin: 0.002, tenderPremium: 0.10, tenderBotShare: 0.7, tenderRetail: [0.6, 0.9] };
+
+function isForeignShare(stock) { return Boolean(stock && stock.kind === 'share' && stock.country && stock.holders && stock.currency); }
+function getForeignGovernedList() { return getForeignIssuerList().filter(i => i.kind === 'share' && i.fundamentals && !i.tradeHalted); }
+function getForeignIssuerBySymbol(symbol) {
+    if (typeof symbol !== 'string' || !symbol.includes('.')) return null;
+    const issuer = foreignIssuers[symbol.split('.')[0]];
+    return issuer && issuer.kind === 'share' && getShareSymbol(issuer) === symbol ? issuer : null;
+}
+
+function getForeignShareholders(i) {
+    const list = [], add = (id, name, kind, shares, entity = null) => { if (shares >= 1) list.push({ id, name, kind, shares, pct: shares / i.totalShares, entity }); };
+    for (const [id, qty] of Object.entries(i.holders || {})) {
+        if (id === 'player') add('player', playerProfile?.fundName || 'Twój fundusz', 'player', Number(qty));
+        else { const bot = aiCompetitors.find(b => b.id === id); if (bot) add(id, bot.isMafia ? 'Akcjonariusz nieujawniony' : bot.name, 'ai', Number(qty), bot); }
+    }
+    if (i.statePack > 0) add('state', 'Skarb Państwa', 'state', i.statePack);
+    if (i.parentPack > 0) { const parent = getForeignParent(i); add(`${i.parentId}:stake`, parent?.name || 'Spółka matka', 'company', i.parentPack, parent); }
+    return list.sort((a, b) => b.shares - a.shares);
+}
+
+/** Dodatkowe punkty porządku obrad spółki zagranicznej: wynagrodzenia (co drugie walne) i odwołanie prezesa przy kondycji ≤ −2. */
+function getForeignAgmItems(i) {
+    const items = [];
+    if (Math.random() < 0.5) items.push({ id: 'pay', kind: 'board', type: 'pay', label: 'Podwyżka wynagrodzeń zarządu o 10%' });
+    if (i.ceo && i.financialHealth <= -2 && (i.ceo.tenure || 0) >= 2) items.push({ id: 'replaceCeo', kind: 'board', type: 'replaceCeo', label: `Odwołanie prezesa ${i.ceo.name}` });
+    return items;
+}
+
+/** Skutki uchwał, które w spółkach krajowych dotykają `stocks`/akcji w obrocie; tu na modelu emitenta (kwoty w walucie spółki, akcje przez `shares` i `float`). */
+function applyForeignAgmResolution(i, item) {
+    const syncPrice = () => { if (i.history.length) i.history[i.history.length - 1] = i.price; };
+    switch (item.type) {
+        case 'buyback': {
+            if (typeof noteCapitalCycleResolution === 'function') noteCapitalCycleResolution(i, item);
+            const n = Math.floor(Math.min(getGdrFree(i), Math.max(0, i.cash) * 0.1 / Math.max(0.01, i.price)));
+            if (n <= 0) return 'brak akcji do skupu';
+            const cost = n * i.price;
+            adjustCompanyCash(i, -cost); adjustBalanceSheet(i, { assets: -cost, retainedEarnings: -cost });
+            i.shares -= n; i.totalShares = i.shares; i.float -= n; i.price *= 1.02; syncPrice();
+            return `skupiono ${n.toLocaleString('pl-PL')} akcji`;
+        }
+        case 'issue': {
+            if (typeof noteCapitalCycleResolution === 'function') noteCapitalCycleResolution(i, item);
+            const n = Math.floor(i.shares * 0.1), amount = n * i.price * 0.95;
+            if (n <= 0) return '';
+            i.shares += n; i.totalShares = i.shares; i.float += n;
+            adjustCompanyCash(i, amount); adjustBalanceSheet(i, { assets: amount });
+            i.balanceSheet.shareCapital = (Number(i.balanceSheet.shareCapital) || 0) + amount;
+            i.price *= 0.97; syncPrice();
+            return `wyemitowano ${n.toLocaleString('pl-PL')} akcji`;
+        }
+        case 'replaceCeo':
+            i.ceo = newForeignCeo(i); noteForeignStat('ceoChanges');
+            return `nowy prezes: ${i.ceo.name}`;
+        case 'pay':
+            i.marginAdj = Math.max(-0.6, (Number(i.marginAdj) || 0) - FOREIGN_AGM.payMargin / Math.max(0.05, getSectorProfile(i).margin)); // marginAdj jest względne (±30%): −0,2 pp marży
+            return 'wyższe koszty wynagrodzeń';
+        case 'sellCompany':
+            return typeof acceptForeignTakeoverProposal === 'function' ? acceptForeignTakeoverProposal(i) : 'brak nabywcy';
+    }
+    return '';
+}
+
+/**
+ * Nakaz wezwania na pozostałe akcje (trzecie przekroczenie progu): fundusz kupuje po kursie +10% pakiety botów (70%) i 60–90% wolnego obrotu.
+ * Brak gotówki na całość: przy nadzorze poziomu ≥ 3 nakaz odsprzedaży, inaczej wezwanie na tyle akcji, na ile starcza gotówki. Zwraca 'tender' albo 'resale'.
+ */
+function runForeignTenderOrder(issuer) {
+    const o = getOversight(issuer.country), cur = issuer.currency, price = Math.round(issuer.price * (1 + FOREIGN_AGM.tenderPremium) * 1000) / 1000, sym = getGdrSymbol(issuer);
+    const bots = Object.entries(issuer.holders).filter(([id, q]) => id !== 'player' && q >= 1).map(([id, q]) => [id, Math.floor(q * FOREIGN_AGM.tenderBotShare)]);
+    const botTotal = bots.reduce((s, [, n]) => s + n, 0), retail = Math.floor(Math.max(0, getGdrFree(issuer)) * getRandomInRange(...FOREIGN_AGM.tenderRetail));
+    const localCash = getCurrencyCash('player', cur), have = Math.max(0, playerCash) + toPln(localCash, cur), costPln = toPln((botTotal + retail) * price, cur);
+    let scale = 1;
+    if (costPln > have) {
+        if ((o.level || 0) >= 3) {
+            issuer.oversightResale = { until: macro.quarter + FOREIGN_OVERSIGHT.resaleQuarters };
+            const body = `Fundusz nie ma gotówki na wezwanie na pozostałe akcje ${issuer.name} (${formatZl(costPln, 0)}). ${o.name} nakazuje zejść poniżej progu ${Math.round(o.callThreshold * 100)}% w ${FOREIGN_OVERSIGHT.resaleQuarters} kw. — inaczej nadwyżka zostanie sprzedana na rynku.`;
+            if (typeof addMail === 'function') addMail({ sender: o.name, subject: `⛔ ${o.name}: nakaz odsprzedaży ${issuer.name}`, body, importance: 3 });
+            logEvent(`⚖️ ${o.name}: ${body}`, 'review');
+            return 'resale';
+        }
+        scale = have / costPln;
+    }
+    let bought = 0;
+    for (const [id, n0] of bots) {
+        const n = Math.floor(n0 * scale), bot = aiCompetitors.find(b => b.id === id);
+        if (!bot || n <= 0) continue;
+        issuer.holders[id] -= n; if (issuer.holders[id] < 1) delete issuer.holders[id];
+        addCurrencyCash(bot, cur, n * price); bought += n;
+    }
+    bought += Math.floor(retail * scale);
+    const cost = bought * price, useLocal = Math.min(localCash, cost);
+    if (useLocal > 0) { playerCashByCurrency[cur] = localCash - useLocal; if (playerCashByCurrency[cur] < 1e-9) delete playerCashByCurrency[cur]; }
+    const costPlnPaid = toPln(cost - useLocal, cur);
+    playerCash -= costPlnPaid;
+    if (costPlnPaid > 0) recordPayment('player-fund', 'external:akcjonariusze', costPlnPaid, `Wezwanie (nakaz ${o.name}) ${sym}`);
+    issuer.holders.player = getGdrHeld(issuer) + bought;
+    const body = `Na nakaz ${o.name} fundusz ogłosił wezwanie na pozostałe akcje ${issuer.name} po ${formatNumberPl(price, 2)} ${cur} (kurs +${Math.round(FOREIGN_AGM.tenderPremium * 100)}%). Sprzedano ${bought.toLocaleString('pl-PL')} akcji za ${formatZl(toPln(cost, cur), 0)}; fundusz ma teraz ${(getIssuerStake(issuer, 'player') * 100).toFixed(1)}% głosów.`;
+    if (typeof addMail === 'function') addMail({ sender: o.name, subject: `📣 ${o.name}: nakaz wezwania ${issuer.name}`, body, importance: 3 });
+    logEvent(`📣 ${o.name}: ${body}`, 'review');
+    return 'tender';
+}
+
+// =================================================================================
+// 0.16.12 D3: PRZEJĘCIA SPÓŁEK ZAGRANICZNYCH (bot–bot, gracz–obca, obca–krajowa) NA WSPÓLNYCH ZASADACH M&A
+// Wspólne z `ma.js`/`companies.js`: premia (domyślnie 25% jak „sprzedaż spółki” z walnego), wypłata akcjonariuszom celu (`settleTargetHolders`), księgowanie
+// (`bookAcquisition` albo jego odpowiednik dla bilansu w walucie spółki), genealogia, wykluczenia. Różnice (uproszczenie): jednoetapowa transakcja w kwartale
+// (bez negocjacji, pigułek i badania due diligence), tylko przejęcia za gotówkę, bez fuzji. Zasady: spółki państwowe wyłączone (decyzja 5 z 0.16.6),
+// tylko spółki z listy giełdy macierzystej (krajowe oraz obce z krajów o `link` — home/merged), bez giganta, spółek specjalnych (Waschmabank, parabank) i
+// spółek zależnych (kontroluje je matka). Kwoty: cena w walucie celu, zapłata w walucie przejmującego po kursie środkowym; krajowe kwoty są w jednostkach PLN.
+// =================================================================================
+
+const FOREIGN_MA = { premium: 0.25, chance: 0.05, domesticCooldownQ: 12, // przejęcia z udziałem spółki krajowej wpuszczają gotówkę z zewnątrz do GIG (pomiar 0.16.12: ok. +6 pp CAGR w grach z przejęciami) — najwyżej jedno na 12 kw.
+     maxTargetCapShare: 0.25, cashMargin: 1.1, minHealth: 0 };
+
+/** Spółka obca nadaje się na przejmującą/cel: nie państwowa, nie gigant, nie specjalna, nie zależna, nie zawieszona, z modelem spółki, z listy giełdy macierzystej. */
+function isForeignMaEligible(i) {
+    return Boolean(i && i.kind === 'share' && !i.state && !i.giant && !i.special && !i.parentId && !i.tradeHalted && i.fundamentals && i.balanceSheet
+        && typeof isCountryLinked === 'function' && isCountryLinked(i.country) && !(typeof parabank === 'object' && parabank?.foreignId === i.id)
+        && getForeignChildren(i).length === 0);
+}
+function isDomesticMaTarget(s) {
+    return Boolean(s && !s.assetType && !s.isBankStock && !s.isBankrupt && !s.isStateOwned && !(s.stateOwnershipPct > 0) && !s.isSubsidiaryOf && !s.mergerProcess
+        && !(s.subsidiaries && s.subsidiaries.length) && !isEliteExchange(s.exchange));
+}
+
+/** Cena oferty za akcję celu w jego walucie i koszt w PLN. */
+function getForeignOffer(target, premium = FOREIGN_MA.premium) {
+    const isForeign = target.kind === 'share' && target.country;
+    const shares = isForeign ? target.shares - (target.parentPack || 0) : target.totalShares, price = (isForeign ? target.price : target.price) * (1 + premium);
+    const costLocal = shares * price;
+    return { price, shares, costLocal, costPln: isForeign ? toPln(costLocal, target.currency) : costLocal };
+}
+
+function maTargetCapPln(t) { return t.kind === 'share' && t.country ? toPln(t.price * t.shares, t.currency) : t.price * t.totalShares; }
+function maSectors(x) { return x.kind === 'share' && x.country ? x.sectors.map(s => s[0]) : (x.sector || []); }
+
+/**
+ * Przejęcie: `acquirer` (spółka obca albo krajowa) wykupuje wszystkie akcje `target` (spółka obca albo krajowa) po cenie ×(1+premium), płacąc gotówką.
+ * Zwraca { ok, reason?, costPln }. Cel znika z giełdy, posiadacze (gracz, boty, fundusze) dostają gotówkę.
+ */
+function executeIssuerTakeover(acquirer, target, premium = FOREIGN_MA.premium) {
+    const acqForeign = acquirer.kind === 'share' && acquirer.country, tgtForeign = target.kind === 'share' && target.country;
+    if (acquirer === target) return { ok: false, reason: 'Ta sama spółka.' };
+    if (!acqForeignOf(acquirer) && !acqForeignOf(target)) return { ok: false, reason: 'Przejęcia dwóch spółek krajowych idą przez proces M&A (companies.js).' };
+    if (acqForeign ? !isForeignMaEligible(acquirer) : !(acquirer.cash >= 0) || acquirer.isBankrupt || acquirer.assetType || acquirer.isStateOwned) return { ok: false, reason: 'Przejmujący nie spełnia warunków.' };
+    if (tgtForeign ? !isForeignMaEligible(target) : !isDomesticMaTarget(target)) return { ok: false, reason: 'Cel nie spełnia warunków (państwowa, gigant, zależna albo spoza giełdy macierzystej).' };
+    const offer = getForeignOffer(target, premium), acqCur = acqForeign ? acquirer.currency : 'PLN';
+    const payAcq = acqForeign ? fromPln(offer.costPln, acqCur) : offer.costPln;
+    if (!(acquirer.cash >= payAcq * FOREIGN_MA.cashMargin)) return { ok: false, reason: 'Za mało gotówki przejmującego.' };
+
+    // 1) zapłata
+    adjustCompanyCash(acquirer, -payAcq);
+    // 2) wypłata posiadaczom celu
+    const tgtName = target.name, acqName = acquirer.name, priceTgt = offer.price;
+    const tgtSheet = target.balanceSheet || { assets: 0, liabilities: 0 }, tgtCashPln = tgtForeign ? toPln(target.cash || 0, target.currency) : (target.cash || 0);
+    const rate = tgtForeign ? (acqForeign ? toPln(1, target.currency) / toPln(1, acqCur) : toPln(1, target.currency)) : (acqForeign ? 1 / toPln(1, acqCur) : 1); // waluta celu → waluta przejmującego
+    const heldByPlayer = tgtForeign ? getGdrHeld(target) > 0 : (playerPortfolio[target.symbol]?.shares || 0) > 0;
+    if (tgtForeign) { releaseForeignChildren(target.id); delistForeignIssuer(target, priceTgt); }
+    else { settleTargetHolders(target, priceTgt, acquirer); removeStockFromGame(target.symbol); }
+    // 3) księgowanie u przejmującego (aktywa celu, wartość firmy, gotówka celu)
+    const ib = acquirer.balanceSheet;
+    if (ib) {
+        const tAssets = (Number(tgtSheet.assets) || 0) * rate, tLiab = (Number(tgtSheet.liabilities) || 0) * rate, netAssets = tAssets - tLiab;
+        const goodwill = Math.max(0, payAcq - netAssets), bargain = Math.max(0, netAssets - payAcq);
+        ib.assets += tAssets + goodwill - payAcq; ib.liabilities += tLiab; ib.retainedEarnings += bargain; ib.goodwill = (Number(ib.goodwill) || 0) + goodwill;
+        // wypłata ceny przeszła przez adjustCompanyCash (gotówka), więc aktywa maleją o zapłatę, a rosną o aktywa celu i goodwill
+    }
+    adjustCompanyCash(acquirer, tgtForeign ? (target.cash || 0) * rate : tgtCashPln * (acqForeign ? 1 / toPln(1, acqCur) : 1));
+    acquirer.financialHealth = Math.max(-5, Math.min(5, ((Number(acquirer.financialHealth) || 0) + (Number(target.financialHealth) || 0)) / 2 + 0.5));
+    (acquirer.absorbedCompanies = acquirer.absorbedCompanies || []).push({ symbol: tgtForeign ? getShareSymbol(target) : target.symbol, name: tgtName, date: Date.now() });
+    if (typeof noteGenealogy === 'function') noteGenealogy('takeover', acqForeign ? getShareSymbol(acquirer) : acquirer, tgtForeign ? getShareSymbol(target) : target, { note: `${formatNumberPl(priceTgt, 2)} ${tgtForeign ? target.currency : 'PLN'} za akcję` });
+    noteForeignStat('takeovers');
+    const text = `🤝 Przejęcie: ${acqName} wykupuje ${tgtName} po ${formatNumberPl(priceTgt, 2)} ${tgtForeign ? target.currency : 'PLN'} za akcję (premia ${Math.round(premium * 100)}%, razem ${formatZl(offer.costPln, 0)}).`;
+    logEvent(text, 'market');
+    if (heldByPlayer && typeof pushNews === 'function') pushNews(text, null);
+    return { ok: true, costPln: offer.costPln, price: priceTgt };
+}
+
+/** Kandydaci na kupca celu: spółki obce i krajowe z listy macierzystej z gotówką na całą ofertę (cel nie większy niż 25% kapitalizacji kupca), ten sam sektor główny. */
+function acqForeignOf(x) { return Boolean(x && x.kind === 'share' && x.country); }
+
+function findForeignTakeoverBuyer(target, premium = FOREIGN_MA.premium) {
+    const offer = getForeignOffer(target, premium), sector = maSectors(target)[0];
+    const pool = [...getForeignGovernedList().filter(i => i !== target && isForeignMaEligible(i)), ...stocks.filter(s => !s.assetType && !s.isBankStock && !s.isBankrupt && !s.isStateOwned && !s.mergerProcess && s.cash >= 0)]
+        .filter(b => (acqForeignOf(target) || acqForeignOf(b)) && maSectors(b).includes(sector) && maTargetCapPln(target) <= maTargetCapPln(b) * FOREIGN_MA.maxTargetCapShare)
+        .filter(b => (b.kind === 'share' && b.country ? toPln(b.cash, b.currency) : b.cash) >= offer.costPln * FOREIGN_MA.cashMargin);
+    return pool.sort((a, b) => (b.kind === 'share' && b.country ? toPln(b.cash, b.currency) : b.cash) - (a.kind === 'share' && a.country ? toPln(a.cash, a.currency) : a.cash))[0] || null;
+}
+
+/** Uchwała walnego „sprzedaż spółki” spółki obcej: kupiec z gotówką znajduje się jak dla bota (ta sama premia 25%). */
+function acceptForeignTakeoverProposal(target) {
+    if (!isForeignMaEligible(target)) return 'spółka wyłączona z przejęć';
+    const buyer = findForeignTakeoverBuyer(target);
+    if (!buyer) return 'brak nabywcy';
+    const r = executeIssuerTakeover(buyer, target);
+    return r.ok ? `nabywca: ${buyer.name}` : 'brak nabywcy';
+}
+
+/**
+ * Gracz–obca: spółka krajowa kontrolowana przez fundusz (>50% głosów) przejmuje spółkę obcą z listy macierzystej (wywołanie z interfejsu M&A).
+ * Fundusz decyduje; reszta warunków i księgowanie jak w `executeIssuerTakeover`.
+ */
+function startPlayerForeignTakeover(acquirerSymbol, issuerId, premium = FOREIGN_MA.premium) {
+    const acquirer = stocks.find(s => s.symbol === acquirerSymbol), target = foreignIssuers[issuerId];
+    if (!acquirer || !target || !canFundControlAgm(acquirer)) return { ok: false, reason: 'Przejęcie prowadzi spółka, w której fundusz ma > 50% głosów.' };
+    if (maTargetCapPln(target) > maTargetCapPln(acquirer) * FOREIGN_MA.maxTargetCapShare * 2) return { ok: false, reason: 'Cel jest za duży dla tego przejmującego.' };
+    return executeIssuerTakeover(acquirer, target, premium);
+}
+
+/** Kwartalnie: z szansą `chance` na kraj połączony najbogatszy zdrowy kupiec wykupuje słabszego z tego samego sektora (obca↔obca, obca→krajowa, krajowa→obca). */
+let lastDomesticMaQuarter = -99; // nie zapisywane: po wczytaniu zapisu limit zaczyna się od nowa
+function resetForeignMa() { lastDomesticMaQuarter = -99; }
+function processForeignMaQuarterly() {
+    if (typeof getLinkedCountries !== 'function') return;
+    for (const country of getLinkedCountries()) {
+        if (Math.random() >= FOREIGN_MA.chance) continue;
+        const targets = [...getCountryIssuers(country).filter(isForeignMaEligible), ...stocks.filter(isDomesticMaTarget)]
+            .filter(t => (Number(t.financialHealth) || 0) <= 1);
+        const target = getRandomElement(targets);
+        if (!target) continue;
+        const buyer = findForeignTakeoverBuyer(target);
+        if (!buyer || (Number(buyer.financialHealth) || 0) < FOREIGN_MA.minHealth) continue;
+        const domestic = !acqForeignOf(target) || !acqForeignOf(buyer);
+        if (domestic && macro.quarter - lastDomesticMaQuarter < FOREIGN_MA.domesticCooldownQ) continue;
+        if (executeIssuerTakeover(buyer, target).ok && domestic) lastDomesticMaQuarter = macro.quarter;
+    }
 }

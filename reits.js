@@ -199,7 +199,7 @@ function orderReitBuilding(stock) {
     const tenderId = createTender(spec, stock, budget, typeof randomTenderWeights === 'function' ? randomTenderWeights(stock) : {});
     if (tenderId) {
         reit.orderTenderId = tenderId;
-        logEvent(`🏢 ${stock.name} zamawia budowę: ${spec.name} (przetarg, budżet ${budget.toLocaleString('pl-PL')} PLN).`, 'company');
+        logEvent(`🏢 ${stock.name} zamawia budowę: ${spec.name} (przetarg, budżet ${formatZl(budget, 0)}).`, 'company');
     }
     return tenderId;
 }
@@ -214,7 +214,7 @@ function onReitBuildingCompleted(client, project, purchasePrice) {
     reit.portfolioValue = total;
     reit.buildings++;
     reit.orderTenderId = null;
-    logEvent(`🏢 ${client.name} odbiera nową nieruchomość: ${project.tender.buildingType.name} (portfel ${Math.round(total).toLocaleString('pl-PL')} PLN).`, 'company');
+    logEvent(`🏢 ${client.name} odbiera nową nieruchomość: ${project.tender.buildingType.name} (portfel ${formatZl(Math.round(total), 0)}).`, 'company');
 }
 
 /** Co kwartał: dźwignia, rezerwa gotówki (nadwyżka spłaca dług), nowe zamówienia budowy. */

@@ -38,6 +38,7 @@ function resetCountriesState() {
     delete COUNTRY_DEFS.PL; // 0.16.11 K1: definicja Polski istnieje tylko przy starcie spoza PL
     homeFeed = { last: null, sd: 0.02 };
     if (typeof resetForeignStats === 'function') resetForeignStats();
+    if (typeof resetForeignMa === 'function') resetForeignMa();
     if (typeof resetLinksState === 'function') resetLinksState();
     for (const id of Object.keys(marketRegimes || {})) if (id !== 'home') delete marketRegimes[id];
     if (typeof resetTicketsState === 'function') resetTicketsState(); // boty zostają w aiCompetitors (zapis tablicy); nowa gra: resetForeignBots() w startNewCareer
@@ -113,6 +114,7 @@ function delistForeignIssuer(issuer, price) {
         else { const bot = aiCompetitors.find(b => b.id === holder); if (bot) addCurrencyCash(bot, issuer.currency, gross); }
     }
     delete foreignIssuers[issuer.id];
+    if (typeof releaseForeignChildren === 'function') releaseForeignChildren(issuer.id); // 0.16.12 D1
 }
 function getCountryIssuers(id) { return getForeignIssuerList().filter(i => i.kind === 'share' && i.country === id); }
 
@@ -412,6 +414,7 @@ function processCountriesQuarterly() {
         maybeCountryDebut(id);
         if (typeof processForeignBotsQuarterly === 'function') processForeignBotsQuarterly(id);
     }
+    if (typeof processForeignMaQuarterly === "function") processForeignMaQuarterly(); // 0.16.12 D3: przejęcia obcych na liście giełdy macierzystej
 }
 
 // ---------------------------------------------------------------------------------
@@ -451,10 +454,11 @@ function getCountriesSnapshot() {
         if (i.leakQ !== undefined) row.lk = i.leakQ;
         if (i.vintage) row.v = i.vintage;
         if (i.tradeHalted) row.th = 1;
+        if (i.parentPack > 0) row.pp = i.parentPack; // 0.16.12 D1: pakiet matki
         if (i.oversightResale) row.or = i.oversightResale.until;
         const company = typeof getForeignCompanySnapshot === 'function' ? getForeignCompanySnapshot(i) : undefined;
         if (company) row.c = company; // 0.16.7: bilans, wyniki, dywidenda, prezes
-        if (i.generated) row.g = { name: i.name, sector: i.sectors.map(s => s[0]), subsector: i.subsector, country: i.country, currency: i.currency };
+        if (i.generated) row.g = { name: i.name, sector: i.sectors.map(s => s[0]), subsector: i.subsector, country: i.country, currency: i.currency, ...(i.parentId ? { par: i.parentId } : {}) };
         issuers[i.id] = row;
     }
     return {
@@ -481,7 +485,7 @@ function applyCountriesSnapshot(snapshot) {
         if (!issuer && row.g && countryState[row.g.country]) {
             const def = COUNTRY_DEFS[row.g.country];
             issuer = createCountryIssuer(def, { id, name: row.g.name, sector: row.g.sector, subsector: row.g.subsector, kind: 'normal', price: Number(row.p) || 10 });
-            issuer.generated = true;
+            issuer.generated = true; if (row.g.par) issuer.parentId = String(row.g.par);
         }
         if (!issuer) continue;
         if (Number(row.p) > 0) issuer.price = Number(row.p);
@@ -491,7 +495,9 @@ function applyCountriesSnapshot(snapshot) {
         if (row.v) issuer.vintage = String(row.v);
         if (row.th) issuer.tradeHalted = true;
         if (Number.isFinite(Number(row.or))) issuer.oversightResale = { until: Number(row.or) };
+        issuer.parentPack = Number(row.pp) > 0 && issuer.parentId ? Number(row.pp) : 0;
         if (typeof applyForeignCompanySnapshot === 'function') applyForeignCompanySnapshot(issuer, row.c); // zapis v17 (bez `c`): model z ceny
+        if (issuer.parentPack > 0) issuer.float = issuer.shares - issuer.statePack - issuer.parentPack;
         issuer.holders = {};
         for (const [holder, qty] of Object.entries(row.o || {})) if (Number(qty) > 0) issuer.holders[holder] = Number(qty);
     }
@@ -635,6 +641,7 @@ function applyForeignOversightStep(issuer, overValuePln) {
         playerFund.trust = Math.max(0, playerFund.trust - FOREIGN_OVERSIGHT.trustLoss);
         body = `Kolejne przekroczenie progu ${thr}% w ${issuer.name}: kara ${formatZl(fine, 0)} (2% wartości nadwyżki). Klienci funduszu tracą zaufanie (−${FOREIGN_OVERSIGHT.trustLoss}).`;
     } else {
+        if (typeof runForeignTenderOrder === 'function') return runForeignTenderOrder(issuer); // 0.16.12 D2: nakaz wezwania (komunikat i log w środku); brak gotówki → odsprzedaż
         step = 'resale';
         issuer.oversightResale = { until: macro.quarter + FOREIGN_OVERSIGHT.resaleQuarters };
         body = `Fundusz ma zejść poniżej progu ${thr}% w ${issuer.name} w ciągu ${FOREIGN_OVERSIGHT.resaleQuarters} kw. — inaczej ${o.name} sprzeda nadwyżkę na rynku.`;

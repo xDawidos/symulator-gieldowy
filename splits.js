@@ -206,7 +206,7 @@ function describeShareCountHistory(stock) {
 function announceShareCountChange(stock, entry) {
     if (!entry) return;
     const split = entry.kind === 'split', ratio = formatSplitRatio(split ? entry.ratio : 1 / entry.ratio);
-    const price = p => `${p < 10 ? p.toFixed(2) : Math.round(p).toLocaleString('pl-PL')} zł`;
+    const price = p => `${formatZl(p < 10 ? p.toFixed(2) : Math.round(p), 0)}`;
     const text = split
         ? `🔀 ${stock.name} (${stock.symbol}) dzieli akcje ${ratio}: kurs ${price(entry.priceBefore)} → ${price(entry.priceAfter)}, akcji ${entry.ratio} razy więcej. Wartość posiadanych akcji bez zmian.`
         : `🔀 ${stock.name} (${stock.symbol}) skupia akcje ${ratio} (konsolidacja): kurs ${price(entry.priceBefore)} → ${price(entry.priceAfter)}, akcji ${Math.round(entry.ratio)} razy mniej. Ułamki akcji spółka wypłaca gotówką; wartość posiadanych akcji bez zmian.`;

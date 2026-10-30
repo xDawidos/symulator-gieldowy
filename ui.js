@@ -1508,7 +1508,7 @@ function renderChartSVGForStock(stock, svgAreaElement, width, height) {
                 marker.setAttribute("stroke", "white");
                 marker.setAttribute("stroke-width", "1.5");
                 marker.style.cursor = "pointer";
-                const txTitle = `Kupiono: ${tx.quantity} szt. po ${formatNumberPl(tx.price, 2)} PLN`;
+                const txTitle = `Kupiono: ${tx.quantity} szt. po ${formatZl(tx.price, 2)}`;
                 marker.setAttribute("title", txTitle);
                 const titleEl = document.createElementNS(svgNs, "title");
                 titleEl.textContent = txTitle;
@@ -2142,9 +2142,7 @@ function displayStocks(previousInputValues = {}) {
     cell.colSpan = STOCK_TABLE_COLS;
     
     const currDef = (typeof getMarketDef === 'function' ? getMarketDef(selectedMarketOperator) : null) || { name: selectedMarketOperator, short: selectedMarketOperator };
-    const currTitle = selectedMarketOperator === 'GPW'
-        ? 'GPW — GIEŁDA PAPIERÓW WARTOŚCIOWYCH'
-        : `${escapeHtml(currDef.short || selectedMarketOperator)} — ${escapeHtml((currDef.name || selectedMarketOperator).toUpperCase())}`;
+    const currTitle = `${escapeHtml(currDef.short || selectedMarketOperator)} — ${escapeHtml((currDef.name || selectedMarketOperator).toUpperCase())}`; // 0.16.12 D4: giełda macierzysta z danych kraju startowego
 
     const marketCards = activeMarkets.map(m => {
         const def = (typeof getMarketDef === 'function' ? getMarketDef(m.id) : null) || { name: m.id, short: m.id };
@@ -2610,7 +2608,7 @@ function updateSectorDonut(portfolio) {
     const legendHtml = sortedSectors.map(item => {
         const icon = typeof sectorIcon === 'function' ? sectorIcon(item.sector, 13) : '';
         const pctFormatted = typeof formatNumberPl === 'function' ? formatNumberPl(item.pct, 1) : item.pct.toFixed(1);
-        const valFormatted = typeof formatZl === 'function' ? formatZl(item.val, 0) : `${item.val.toFixed(0)} zł`;
+        const valFormatted = typeof formatZl === 'function' ? formatZl(item.val, 0) : `${formatZl(item.val, 0)}`;
         const nameEsc = typeof escapeHtml === 'function' ? escapeHtml(item.sector) : item.sector;
         return `
             <div class="sector-donut-item" title="${nameEsc}: ${valFormatted} (${pctFormatted}%)">
@@ -3027,7 +3025,7 @@ function openManagementModal(symbol, defaultTab = 'main') {
         activeBanks.forEach(bank => {
             const option = document.createElement('option');
             option.value = bank.id;
-            option.textContent = `${bank.name} (Gotówka: ${bank.cash.toLocaleString()} PLN)`;
+            option.textContent = `${bank.name} (Gotówka: ${formatZl(bank.cash, 0)})`;
             if (stock.bankAccountId === bank.id) option.selected = true;
             bankSelect.appendChild(option);
         });
@@ -3103,7 +3101,7 @@ function openManagementModal(symbol, defaultTab = 'main') {
                 financesInfo.className = 'text-up';
             } else {
                 viewFinancesBtn.disabled = false;
-                financesInfo.textContent = 'Wymagana opłata: 2000 PLN.';
+                financesInfo.textContent = `Wymagana opłata: ${formatZl(2000, 0)}.`;
                 financesInfo.className = 'text-muted';
             }
         } else {
@@ -3341,7 +3339,7 @@ function renderDividendTrackerContent() {
             row.insertCell().textContent = s.isDividendAristocrat ? `${s.name} ★` : s.name;
             row.insertCell().textContent = getDividendPolicyLabel(s.dividendPolicy);
             row.insertCell().textContent = s.pendingDividend ? 'ogłoszona' : '—';
-            row.insertCell().textContent = `ostatnio ${formatNumberPl(s.lastDividend.dps, 4)} PLN`;
+            row.insertCell().textContent = `ostatnio ${formatZl(s.lastDividend.dps, 4)}`;
             row.insertCell().textContent = `${formatNumberPl((dy * 100), 2)}%`;
         });
         if (!payers.length) { const cell = body.insertRow().insertCell(); cell.colSpan = 5; cell.className = 'text-center'; cell.textContent = 'Jeszcze żadna spółka nie wypłaciła dywidendy.'; }
@@ -3383,7 +3381,7 @@ function renderDividendTrackerContent() {
         const estimateCell = row.insertCell();
         if (skillLvl >= 3) {
             if (typeof stock.estimatedDividend === "number") {
-                estimateCell.textContent = `${formatNumberPl(stock.estimatedDividend, 4)} PLN`;
+                estimateCell.textContent = `${formatZl(stock.estimatedDividend, 4)}`;
             } else {
                 estimateCell.textContent = "Brak danych";
             }
@@ -3423,7 +3421,7 @@ function displayStartups(previousInputValues = {}) {
     startupPanel.style.display = FEATURE_FLAGS.startups ? 'block' : 'none';
     if (!FEATURE_FLAGS.startups) return;
     const limitInfo = document.getElementById('startup-fund-limit');
-    if (limitInfo) limitInfo.textContent = `Fundusz w startupach: ${getFundStartupExposure().toFixed(0)} PLN z limitu ${(getFundAssets() * STARTUP_FUND_LIMIT).toFixed(0)} PLN (${(STARTUP_FUND_LIMIT * 100).toFixed(0)}% aktywów).` + (getCrowdingPressure() > 0 ? ` Rynek nasycony (${getListedCompanyCount()}/${LISTING_SOFT_CAP} spółek): finansowanie startupów mniejsze o ${((1 - getStartupFundingFactor()) * 100).toFixed(0)}%, cele zbiórek wyższe.` : '');
+    if (limitInfo) limitInfo.textContent = `Fundusz w startupach: ${formatZl(getFundStartupExposure(), 0)} z limitu ${formatZl((getFundAssets() * STARTUP_FUND_LIMIT), 0)} (${(STARTUP_FUND_LIMIT * 100).toFixed(0)}% aktywów).` + (getCrowdingPressure() > 0 ? ` Rynek nasycony (${getListedCompanyCount()}/${LISTING_SOFT_CAP} spółek): finansowanie startupów mniejsze o ${((1 - getStartupFundingFactor()) * 100).toFixed(0)}%, cele zbiórek wyższe.` : '');
 
     const startups = stocks.filter(s => s.assetType === 'Startup');
     startupTableBody.innerHTML = '';
@@ -3471,7 +3469,7 @@ function displayStartups(previousInputValues = {}) {
         // Komórka 2: Cel Finansowania
         const goalCell = row.insertCell();
         goalCell.dataset.label = 'Cel finansowania';
-        goalCell.textContent = `${startup.fundingGoal.toLocaleString('pl-PL')} PLN`;
+        goalCell.textContent = `${formatZl(startup.fundingGoal, 0)}`;
 
         // Komórki 3, 4 i 5
         const fundingCell = row.insertCell();
@@ -3493,7 +3491,7 @@ function displayStartups(previousInputValues = {}) {
 
         switch (startup.stage) {
             case 'funding': {
-                fundingCell.innerHTML = `${formatNumberPl(startup.currentFunding, 2)} PLN <progress value="${startup.currentFunding}" max="${startup.fundingGoal}" class="w-full"></progress>`;
+                fundingCell.innerHTML = `${formatZl(startup.currentFunding, 2)} <progress value="${startup.currentFunding}" max="${startup.fundingGoal}" class="w-full"></progress>`;
                 progressCell.innerHTML = `<progress value="0" max="100" class="w-full"></progress>`;
                 investButton.textContent = 'Zainwestuj';
                 investButton.onclick = () => {
@@ -3537,7 +3535,7 @@ function displayStartups(previousInputValues = {}) {
 
                 if (startup.pendingExtraCost) {
                     progressCell.innerHTML = `<span class="text-down fw-bold">WSTRZYMANO</span>`;
-                    actionsCell.innerHTML = `<span>Wymaga: ${formatNumberPl(startup.pendingExtraCost, 2)} PLN</span>
+                    actionsCell.innerHTML = `<span>Wymaga: ${formatZl(startup.pendingExtraCost, 2)}</span>
                                            <button onclick="payExtraStartupCost('${startup.symbol}')">Zapłać</button>`;
                 } else if (startup.developmentPausedUntil && Date.now() < startup.developmentPausedUntil) {
                     const timeLeft = Math.ceil((startup.developmentPausedUntil - Date.now()) / 1000);
@@ -3562,7 +3560,7 @@ function displayStartups(previousInputValues = {}) {
                 fundingCell.innerHTML = `
                     <strong class="text-down">Wymagane dofinansowanie!</strong>
                     <progress value="${startup.rescueCurrent}" max="${startup.rescueGoal}" class="w-full"></progress>
-                    <span>${startup.rescueCurrent.toLocaleString('pl-PL')} / ${startup.rescueGoal.toLocaleString('pl-PL')} PLN</span>
+                    <span>${startup.rescueCurrent.toLocaleString('pl-PL')} / ${formatZl(startup.rescueGoal, 0)}</span>
                 `;
                 progressCell.innerHTML = `<strong class="text-down">Pozostały czas: ${timeLeftFC}s</strong>`;
 
@@ -3664,8 +3662,8 @@ function openInvestorsModal(symbol) {
             const row = tableBody.insertRow();
             row.insertCell().textContent = `#${index + 1}`;
             const mine = name === 'Pula Inwestycyjna' ? getPoolStartupShare(startup, 'player') : 0; // 0.14.1 R4
-            row.insertCell().textContent = mine > 0 ? `${name} (w tym Ty: ${mine.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN)` : name;
-            row.insertCell().textContent = `${amount.toLocaleString('pl-PL')} PLN`;
+            row.insertCell().textContent = mine > 0 ? `${name} (w tym Ty: ${formatZl(mine, 0)})` : name;
+            row.insertCell().textContent = `${formatZl(amount, 0)}`;
 
             if (name === "Ty (Gracz)") {
                 row.style.fontWeight = 'bold';
@@ -3696,7 +3694,7 @@ function displayInvestmentPool() {
 
     if (!totalFundsEl) return; // Panel nie istnieje, nic nie rób
 
-    totalFundsEl.textContent = `${investmentPool.totalFunds.toLocaleString('pl-PL')} PLN`;
+    totalFundsEl.textContent = `${formatZl(investmentPool.totalFunds, 0)}`;
     timerEl.textContent = `${Math.floor(investmentPool.investmentTimer / 1000)}`;
     const statusEl = document.getElementById('pool-status'); // 0.14.1 R3: dlaczego pieniądze czekają
     if (statusEl) statusEl.textContent = getPoolStatus().text;
@@ -3742,7 +3740,7 @@ function getPoolStartupShare(startup, id) {
 function renderPoolDetails() {
     const el = document.getElementById('pool-details');
     if (!el) return;
-    const fmtZl = value => `${(Number(value) || 0).toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN`;
+    const fmtZl = value => `${formatZl((Number(value) || 0), 0)}`;
     const free = Number(investmentPool.contributors?.player) || 0;
     const rows = stocks.filter(s => s.assetType === 'Startup' && (s.poolInvestors || []).length).map(s => {
         const pool = (s.poolInvestors || []).reduce((sum, round) => sum + (Number(round.amount) || 0), 0);
@@ -3766,7 +3764,7 @@ function updateAutoInvestStatus() {
     if (!statusEl) return;
 
     if (playerAutoInvest.isEnabled) {
-        statusEl.innerHTML = `${uiIcon('ok', 14)} Aktywne: <strong>${playerAutoInvest.amount} PLN</strong> co <strong>${playerAutoInvest.interval / 1000}s</strong>`;
+        statusEl.innerHTML = `${uiIcon('ok', 14)} Aktywne: <strong>${formatZl(playerAutoInvest.amount, 0)}</strong> co <strong>${playerAutoInvest.interval / 1000}s</strong>`;
         statusEl.style.color = 'var(--color-up)';
     } else {
         statusEl.textContent = 'Nieaktywne';
@@ -4323,7 +4321,7 @@ function renderCompanyCardOverview(stock) {
 
 function describeForeignCompany(stock) {
     const def = COUNTRY_DEFS[stock.country];
-    const parts = [stock.desc, `${stock.name} jest notowana na giełdzie kraju: ${def?.name || stock.country} (${stock.exchangeLabel}), kwoty w ${stock.nativeCurrency}; w tej karcie przeliczone na złote po bieżącym kursie.`];
+    const parts = [stock.desc, `${stock.name} jest notowana na giełdzie kraju: ${def?.name || stock.country} (${stock.exchangeLabel}), kwoty w ${stock.nativeCurrency}; w tej karcie przeliczone na ${getBaseCurrency()} po bieżącym kursie.`];
     if (stock.giant) parts.push('Gigant swojego rynku.');
     if (stock.isStateOwned) parts.push(`Państwo trzyma ${Math.round(COUNTRY_RULES.statePct * 100)}% akcji (poza wolnym obrotem).`);
     return parts.filter(Boolean).join(' ');
@@ -4333,7 +4331,7 @@ function renderForeignCardOwners(stock) {
     const i = stock.foreignSource, total = Math.max(1, i.shares), pct = n => `${formatNumberPl(n / total * 100, 2)}%`;
     const names = id => id === 'player' ? 'Twój fundusz' : (aiCompetitors.find(b => b.id === id)?.name || id);
     const holders = Object.entries(i.holders || {}).filter(([, q]) => q > 0).sort((a, b) => b[1] - a[1]);
-    const rows = [...(i.statePack > 0 ? [['Skarb Państwa', i.statePack]] : []), ...holders.map(([id, q]) => [names(id), q]), ['Wolne akcje na rynku', Math.max(0, getGdrFree(i))]];
+    const rows = [...(i.statePack > 0 ? [['Skarb Państwa', i.statePack]] : []), ...(i.parentPack > 0 ? [[`Spółka matka: ${getForeignParent(i)?.name || '—'}`, i.parentPack]] : []), ...holders.map(([id, q]) => [names(id), q]), ['Wolne akcje na rynku', Math.max(0, getGdrFree(i))]];
     return `<p class="text-sm">Fundusz: <strong>${pct(getGdrHeld(i))}</strong> · wolny obrót: <strong>${formatNumberPl(Math.max(0, getGdrFree(i)), 0)}</strong> z ${formatNumberPl(i.shares, 0)} akcji.</p>
         <table class="asset-mini-table w-full"><thead><tr><th>Akcjonariusz</th><th class="cell-number">Akcje</th><th class="cell-number">Udział</th></tr></thead><tbody>${rows.map(([n, q]) => `<tr><td>${escapeHtml(n)}</td><td class="cell-number">${formatNumberPl(q, 0)}</td><td class="cell-number">${pct(q)}</td></tr>`).join('')}</tbody></table>`;
 }
@@ -4345,7 +4343,10 @@ function renderForeignCardManage(stock) {
 }
 
 function renderForeignCardGroup(stock) {
-    const i = stock.foreignSource;
+    const i = stock.foreignSource, parent = getForeignParent(i), kids = getForeignChildren(i);
+    const link = x => `<a href="#" onclick="openDescriptionModal('${getShareSymbol(x)}'); return false;">${escapeHtml(x.name)}</a> <span class="text-muted">${escapeHtml(getShareSymbol(x))}</span>`;
+    if (parent || kids.length) return `<p class="text-sm">${parent ? `↑ ${getForeignSubsidiaryKind(i)} — matka: ${link(parent)} (pakiet ${Math.round(i.parentPack / i.shares * 100)}%, poza wolnym obrotem).` : `${escapeHtml(i.name)} ma ${kids.length} z ${FOREIGN_SUB.max} możliwych spółek powiązanych (jedna córka, reszta zależne).`}</p>
+        <ul class="list-plain text-sm">${kids.map(c => `<li>↳ ${getForeignSubsidiaryKind(c)}: ${link(c)} — ${Math.round(c.parentPack / c.shares * 100)}% w rękach matki</li>`).join('')}</ul><p class="text-xs text-muted">Rynek: ${escapeHtml(stock.exchangeLabel)}.</p>`;
     return `<p class="text-sm">${escapeHtml(i.name)} to spółka niezależna: nie ma spółek zależnych ani kooperantów w grze. ${i.giant ? 'Gigant rynku kraju (większe wahania wpływają na cały indeks kraju).' : ''}${i.state ? ' Pakiet państwa należy do skarbu kraju spółki.' : ''}</p>
         <p class="text-xs text-muted">Rynek: ${escapeHtml(stock.exchangeLabel)}.</p>`;
 }
@@ -4383,7 +4384,7 @@ function renderCompanyCardFinance(stock, f) {
                     ${row('Gotówka', money(stock.cash), 'Pieniądze na koncie spółki.')}
                     ${row('Wartość księgowa / akcję', perShare(f.bookValuePerShare), '(Aktywa − zobowiązania) / liczba akcji.')}
                     ${stock.assetType !== 'REIT' ? row('Polityka dywidendy', escapeHtml(getDividendPolicyLabel(stock.dividendPolicy)), 'Jak dużą część zysku spółka wypłaca.') : ''}
-                    ${row('Ostatnia dywidenda', last ? `${formatNumberPl(last.dps, 4)} PLN (${formatNumberPl((last.yield * 100), 2)}%)` : 'brak', 'Ostatnia wypłata na akcję i stopa w dniu wypłaty.')}
+                    ${row('Ostatnia dywidenda', last ? `${formatZl(last.dps, 4)} (${formatNumberPl((last.yield * 100), 2)}%)` : 'brak', 'Ostatnia wypłata na akcję i stopa w dniu wypłaty.')}
                 </tbody></table></section>
         </div>
         ${stock.assetType === 'REIT' && stock.reit ? renderReitCard(stock) : ''}
@@ -4506,7 +4507,7 @@ function updateStateOfferInfo() {
     if (!select || !quantityInput || !costLabel || !cooldownLabel) return;
 
     if (!select.value) {
-        costLabel.textContent = "0.00 PLN";
+        costLabel.textContent = formatZl(0);
         cooldownLabel.textContent = "Wybierz spółkę.";
         return;
     }
@@ -4522,7 +4523,7 @@ function updateStateOfferInfo() {
     else if (exchangeLevel >= 1) premium = 1.15; // Giełda Brązowa: 15%
 
     const offerPrice = stock.price * premium;
-    costLabel.textContent = `${formatNumberPl((offerPrice * quantity), 2)} PLN (cena za akcję: ~${formatNumberPl(offerPrice, 2)} PLN)`;
+    costLabel.textContent = `${formatZl((offerPrice * quantity), 2)} (cena za akcję: ~${formatZl(offerPrice, 2)})`;
 
     // Sprawdzanie cooldownu
     if (stock.stateOfferCooldownUntil && Date.now() < stock.stateOfferCooldownUntil) {
@@ -4994,7 +4995,7 @@ function updateCityModalContent() {
             statusEl.textContent = "Odblokowane!";
             statusEl.style.color = 'var(--color-up)';
         } else {
-            statusEl.textContent = `Zablokowane (cel: ${CITY_UNLOCK_DONATION.toLocaleString('pl-PL')} PLN)`;
+            statusEl.textContent = `Zablokowane (cel: ${formatZl(CITY_UNLOCK_DONATION, 0)})`;
             statusEl.style.color = 'var(--color-down)';
         }
 
@@ -5007,8 +5008,8 @@ function updateCityModalContent() {
                     <tr>
                         <td>${comp.name}</td>
                         <td>${comp.type}</td>
-                        <td>${comp.budget.toLocaleString('pl-PL')} PLN</td>
-                        <td>${comp.baseIncome.toLocaleString('pl-PL')} PLN</td>
+                        <td>${formatZl(comp.budget, 0)}</td>
+                        <td>${formatZl(comp.baseIncome, 0)}</td>
                     </tr>`;
             });
         } else {
@@ -5023,7 +5024,7 @@ function updateCityModalContent() {
                 privateList.innerHTML += `
                     <tr>
                         <td>${comp.name}</td>
-                        <td>${comp.value.toLocaleString('pl-PL')} PLN</td>
+                        <td>${formatZl(comp.value, 0)}</td>
                         <td><progress value="${comp.developmentProgress}" max="100"></progress></td>
                     </tr>`;
             });
@@ -5059,14 +5060,14 @@ function renderFestivalView(festivalContainer) {
             <h4>Twoje stoisko (Poziom ${playerParticipant.level}: ${currentLevel.name})</h4>
             <p>Zdobyte zainteresowanie: <strong>${formatNumberPl(playerParticipant.interest, 1)}</strong></p>
             <div class="mb-2">
-                ${nextLevel ? `<button onclick="playerUpgradeStall()">Ulepsz do: "${nextLevel.name}" (${nextLevel.cost} PLN)</button>` : '<p>Osiągnięto maksymalny poziom stoiska.</p>'}
+                ${nextLevel ? `<button onclick="playerUpgradeStall()">Ulepsz do: "${nextLevel.name}" (${formatZl(nextLevel.cost, 0)})</button>` : '<p>Osiągnięto maksymalny poziom stoiska.</p>'}
             </div>
             <div>
                 <p>Promuj stoisko:</p>
-                <button onclick="playerPromoteStall('flyers')" title="+5 zainteresowania">${PROMOTION_ACTIONS.flyers.name} (${PROMOTION_ACTIONS.flyers.cost} PLN)</button>
-                <button onclick="playerPromoteStall('contest')" title="+10 zainteresowania">${PROMOTION_ACTIONS.contest.name} (${PROMOTION_ACTIONS.contest.cost} PLN)</button>
-                <button onclick="playerPromoteStall('kids')" title="+10 zainteresowania">${PROMOTION_ACTIONS.kids.name} (${PROMOTION_ACTIONS.kids.cost} PLN)</button>
-                <button onclick="playerPromoteStall('merch')" title="+12 zainteresowania">${PROMOTION_ACTIONS.merch.name} (${PROMOTION_ACTIONS.merch.cost} PLN)</button>
+                <button onclick="playerPromoteStall('flyers')" title="+5 zainteresowania">${PROMOTION_ACTIONS.flyers.name} (${formatZl(PROMOTION_ACTIONS.flyers.cost, 0)})</button>
+                <button onclick="playerPromoteStall('contest')" title="+10 zainteresowania">${PROMOTION_ACTIONS.contest.name} (${formatZl(PROMOTION_ACTIONS.contest.cost, 0)})</button>
+                <button onclick="playerPromoteStall('kids')" title="+10 zainteresowania">${PROMOTION_ACTIONS.kids.name} (${formatZl(PROMOTION_ACTIONS.kids.cost, 0)})</button>
+                <button onclick="playerPromoteStall('merch')" title="+12 zainteresowania">${PROMOTION_ACTIONS.merch.name} (${formatZl(PROMOTION_ACTIONS.merch.cost, 0)})</button>
             </div>
         `;
     } else {
@@ -5080,7 +5081,7 @@ function renderFestivalView(festivalContainer) {
             }
         }
         playerSectionHTML = `
-            <h4>Dołącz do festynu! (Koszt: ${FESTIVAL_STALL_LEVELS[0].cost} PLN)</h4>
+            <h4>Dołącz do festynu! (Koszt: ${formatZl(FESTIVAL_STALL_LEVELS[0].cost, 0)})</h4>
             <p>Co chcesz promować?</p>
             <div id="join-festival-options">
                 <button onclick="playerJoinFestival({type: 'self'})">Siebie</button>
@@ -5134,7 +5135,7 @@ function renderFestivalView(festivalContainer) {
         <div class="bank-section">
             <p>Koniec za: <strong>${timeLeft}s</strong> | Zainteresowanie wydarzeniem: <strong>${formatNumberPl(festival.globalInterest, 1)}</strong></p>
             <p class="text-sm">Atrakcje: ${festival.attractions.join(', ')}</p>
-            <button onclick="playerPromoteEvent()">Promuj wydarzenie (500 PLN)</button>
+            <button onclick="playerPromoteEvent()">Promuj wydarzenie (${formatZl(500, 0)})</button>
         </div>
         <div class="bank-section">
             ${playerSectionHTML}
@@ -5316,7 +5317,7 @@ function updateTBillAuctionSection() {
         playerBidsList.innerHTML = '';
         currentTBillAuction.bids.filter(b => b.bidderId === 'player').forEach(bid => {
             const li = document.createElement('li');
-            li.textContent = `${bid.quantity} szt. po ${formatNumberPl(bid.price, 2)} PLN`;
+            li.textContent = `${bid.quantity} szt. po ${formatZl(bid.price, 2)}`;
             playerBidsList.appendChild(li);
         });
 
@@ -5432,7 +5433,7 @@ function updateCollateralAuctionSection() {
         playerBidsList.innerHTML = '';
         currentCollateralAuction.bids.filter(b => b.bidderId === 'player').forEach(bid => {
             const li = document.createElement('li');
-            li.textContent = `${bid.quantity} szt. po ${formatNumberPl(bid.price, 2)} PLN`;
+            li.textContent = `${bid.quantity} szt. po ${formatZl(bid.price, 2)}`;
             playerBidsList.appendChild(li);
         });
 
@@ -5566,14 +5567,14 @@ function openFinancialDetailsModal(symbol) {
     if (stock.balanceSheet) {
         content.innerHTML = `
             <h4>Bilans Spółki:</h4>
-            <p><strong>Aktywa:</strong> ${stock.balanceSheet.assets.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN</p>
-            <p><strong>Zobowiązania (Pasywa):</strong> ${stock.balanceSheet.liabilities.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN</p>
-            <p><strong>Kapitał Własny:</strong> ${(stock.balanceSheet.assets - stock.balanceSheet.liabilities).toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN</p>
-            <p> &nbsp; - Kapitał Zakładowy: ${stock.balanceSheet.shareCapital.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN</p>
-            <p> &nbsp; - Zyski Zatrzymane: ${stock.balanceSheet.retainedEarnings.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN</p>
+            <p><strong>Aktywa:</strong> ${formatZl(stock.balanceSheet.assets, 0)}</p>
+            <p><strong>Zobowiązania (Pasywa):</strong> ${formatZl(stock.balanceSheet.liabilities, 0)}</p>
+            <p><strong>Kapitał Własny:</strong> ${formatZl((stock.balanceSheet.assets - stock.balanceSheet.liabilities), 0)}</p>
+            <p> &nbsp; - Kapitał Zakładowy: ${formatZl(stock.balanceSheet.shareCapital, 0)}</p>
+            <p> &nbsp; - Zyski Zatrzymane: ${formatZl(stock.balanceSheet.retainedEarnings, 0)}</p>
             <hr>
-            <p><strong>Zysk Kwartalny (Ostatni):</strong> ${stock.quarterlyEarnings.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN</p>
-            <p><strong>Dług Korporacyjny (jeśli dotyczy):</strong> ${(stock.corporateDebt || 0).toLocaleString('pl-PL', { maximumFractionDigits: 0 })} PLN</p>
+            <p><strong>Zysk Kwartalny (Ostatni):</strong> ${formatZl(stock.quarterlyEarnings, 0)}</p>
+            <p><strong>Dług Korporacyjny (jeśli dotyczy):</strong> ${formatZl((stock.corporateDebt || 0), 0)}</p>
             ${renderFinancialPeriodPreview(stock)}
         `;
     } else {
@@ -5653,16 +5654,16 @@ function handleViewFinancesClick(symbol) {
     // Dostęp wymaga opłaty (Lvl 1)
     const accessCost = 2000;
     if (playerCash < accessCost) {
-        showToast(`Nie masz wystarczająco gotówki (${accessCost} PLN), aby zapłacić za dostęp.`, 'error');
+        showToast(`Nie masz wystarczająco gotówki (${formatZl(accessCost, 0)}), aby zapłacić za dostęp.`, 'error');
         return;
     }
 
     // Zapytaj gracza o potwierdzenie płatności
-    gameConfirm(`Czy chcesz zapłacić ${accessCost} PLN za jednorazowy wgląd w finanse ${stock.name}?`, () => {
+    gameConfirm(`Czy chcesz zapłacić ${formatZl(accessCost, 0)} za jednorazowy wgląd w finanse ${stock.name}?`, () => {
         playerCash -= accessCost; // Pobierz opłatę
         stock.playerHasFinancialAccess = true; // Ustaw flagę dostępu
         displayCash(); // Zaktualizuj UI gotówki
-        logEvent(`Zapłacono ${accessCost} PLN za wgląd w finanse ${stock.name}.`, 'review'); // Zaloguj zdarzenie
+        logEvent(`Zapłacono ${formatZl(accessCost, 0)} za wgląd w finanse ${stock.name}.`, 'review'); // Zaloguj zdarzenie
         showToast("Dostęp do finansów uzyskany!", 'success'); // Pokaż powiadomienie
         openFinancialDetailsModal(symbol); // Otwórz modal finansowy
         // Odśwież modal zarządzania, aby zaktualizować tekst przycisku/info
@@ -5729,7 +5730,7 @@ function openMaTargetModal(initiatorSymbol) {
             
             row.insertCell().textContent = `${target.name} (${target.symbol})`;
             row.insertCell().textContent = target.sector.join(', ');
-            row.insertCell().textContent = `${marketCap.toLocaleString('pl-PL')} PLN`;
+            row.insertCell().textContent = `${formatZl(marketCap, 0)}`;
             
             const actionCell = row.insertCell();
             
@@ -7109,7 +7110,7 @@ function renderPrivatePanel() {
         <ul class="fund-private-list">${holdings}</ul>
         <div class="fund-emission">
             <input type="number" id="private-ju-amount" min="1" value="50" aria-label="Kwota lub liczba udziałów">
-            <button class="btn-secondary" onclick="buyOwnFundUnits(document.getElementById('private-ju-amount').value)">Kup udziały za PLN</button>
+            <button class="btn-secondary" onclick="buyOwnFundUnits(document.getElementById('private-ju-amount').value)">Kup udziały za ${getBaseCurrency()}</button>
             <button class="btn-secondary" onclick="sellOwnFundUnits(document.getElementById('private-ju-amount').value)">Umórz udziały</button>
         </div>
         <p class="fund-muted">Prywatny handel akcjami: przełącz konto na „Konto prywatne” i kupuj w tabeli rynku.
@@ -7196,7 +7197,7 @@ function renderCvPanel() {
             <div class="level-steps">${steps}</div>
             ${next ? `<p>${escapeHtml(next.description || '')}</p>` : '<p><strong>Ukończone w pełni.</strong></p>'}
             ${unlockPreview}
-            ${next ? `<button ${canBuy ? '' : 'disabled'} onclick="buyTraining('${id}')">${reqMet ? `Szkolenie: ${cost} PLN` : reqMsg}</button>` : ''}
+            ${next ? `<button ${canBuy ? '' : 'disabled'} onclick="buyTraining('${id}')">${reqMet ? `Szkolenie: ${formatZl(cost, 0)}` : reqMsg}</button>` : ''}
         </article>`;
     }).join('');
 
@@ -7278,7 +7279,7 @@ function displayXP() {
 const INTRO_SMS = [
     'Cześć Wnusiu! 😊',
     'Słyszałam, że dostałeś pracę w tej wielkiej firmie od pieniędzy. Jestem z Ciebie taka dumna! ❤️',
-    'Wysyłam Ci 100 zł kieszonkowego na dobry start. Kup sobie coś mądrego, może jakąś książkę albo kurs.',
+    'Wysyłam Ci {kasa} kieszonkowego na dobry start. Kup sobie coś mądrego, może jakąś książkę albo kurs.',
     'Tylko nie przepuść wszystkiego od razu! Całuję, Babcia 👵'
 ];
 
@@ -7305,7 +7306,7 @@ function showIntroScene() {
         if (index >= INTRO_SMS.length) {
             const transfer = document.createElement('div');
             transfer.className = 'intro-transfer';
-            transfer.textContent = `💸 Przelew przychodzący: +${GRANDMA_POCKET_MONEY},00 zł od: Babcia`;
+            transfer.textContent = `💸 Przelew przychodzący: +${formatZl(GRANDMA_POCKET_MONEY)} od: Babcia`;
             thread.appendChild(transfer);
             form.hidden = false;
             return;
@@ -7316,7 +7317,7 @@ function showIntroScene() {
         thread.appendChild(bubble);
         setTimeout(() => {
             bubble.classList.remove('typing');
-            bubble.textContent = INTRO_SMS[index++];
+            bubble.textContent = INTRO_SMS[index++].replace('{kasa}', formatZl(GRANDMA_POCKET_MONEY, 0));
             setTimeout(typeNext, 450);
         }, 700);
     };
@@ -7399,14 +7400,14 @@ function toggleDebugMode() {
 
 function debugAddWallet(amount) {
     playerWallet.cash += amount;
-    logEvent(`🛠️ [DEBUG] +${amount} PLN do portfela prywatnego.`, 'review');
+    logEvent(`🛠️ [DEBUG] +${formatZl(amount, 0)} do portfela prywatnego.`, 'review');
     refreshFundViews();
 }
 
 /** Dodaje gotówkę funduszowi bez nowych JU (NAV rośnie). */
 function debugAddFund(amount) {
     playerCash += amount;
-    logEvent(`🛠️ [DEBUG] +${amount} PLN do gotówki funduszu.`, 'review');
+    logEvent(`🛠️ [DEBUG] +${formatZl(amount, 0)} do gotówki funduszu.`, 'review');
     refreshFundViews();
 }
 
@@ -7900,7 +7901,7 @@ function renderTeamedHiring() {
     const can = typeof canHireAnalysts === 'function' && canHireAnalysts();
     const rows = Object.entries(ANALYST_TYPES).map(([type, def]) => {
         const hired = corporation?.analysts.some(a => a.type === type);
-        return `<li><strong>${escapeHtml(def.label)}</strong> — ${escapeHtml(def.description)} <span class="text-muted">(koszt ${def.hireCost} PLN, pensja ${def.salary} PLN)</span>
+        return `<li><strong>${escapeHtml(def.label)}</strong> — ${escapeHtml(def.description)} <span class="text-muted">(koszt ${formatZl(def.hireCost, 0)}, pensja ${formatZl(def.salary, 0)})</span>
             ${hired ? '<span class="text-muted">zatrudniony</span>' : `<button class="btn-ghost btn-sm" ${can ? '' : 'disabled'} onclick="mailAction(hireAnalyst, '${type}')">Zatrudnij</button>`}</li>`;
     }).join('');
     return `<article class="mail-article"><h3>Zatrudnianie</h3>${can ? '' : '<p class="fund-muted">Analityków zatrudnia się od stanowiska Starszy zarządca.</p>'}<ul class="list-plain">${rows}</ul></article>`;
@@ -8044,7 +8045,7 @@ function renderCityElection() {
     }
     container.innerHTML = `
         <h4>Kampania wyborcza — wybory za ${city.mayor.electionYear} ${city.mayor.electionYear === 1 ? 'rok' : 'lata'}</h4>
-        <p class="fund-muted">Darowizny z portfela prywatnego (${formatZl(playerWallet.cash)}) zwiększają szanse kandydata. Darowizna od ${PLAYER_DONATION_COMPLIANCE_LIMIT} PLN zwraca uwagę compliance. Wygrany pamięta wsparcie.</p>
+        <p class="fund-muted">Darowizny z portfela prywatnego (${formatZl(playerWallet.cash)}) zwiększają szanse kandydata. Darowizna od ${formatZl(PLAYER_DONATION_COMPLIANCE_LIMIT, 0)} zwraca uwagę compliance. Wygrany pamięta wsparcie.</p>
         <table class="asset-mini-table">
             <thead><tr><th>Kandydat</th><th>Polityka</th><th>Siła kampanii</th><th>Twoje wsparcie</th><th></th></tr></thead>
             <tbody>${city.election.candidates.map(c => `<tr>
@@ -8962,7 +8963,7 @@ function closeRescueOfferingModal() {
 let governanceView = { symbol: null };
 
 function getGovernanceCompanies() {
-    return stocks.filter(s => isGovernedCompany(s) && (playerPortfolio[s.symbol]?.shares || 0) > 0)
+    return [...stocks.filter(s => (playerPortfolio[s.symbol]?.shares || 0) > 0), ...getForeignGovernedList().filter(s => getGdrHeld(s) > 0)].filter(isGovernedCompany)
         .sort((a, b) => ensureGovernance(a).quartersToAgm - ensureGovernance(b).quartersToAgm || getFundStakePct(b) - getFundStakePct(a));
 }
 
@@ -8984,7 +8985,7 @@ function renderGovernance() {
     const detail = document.getElementById('governance-detail');
     if (!list || !detail) return;
     const companies = getGovernanceCompanies();
-    if (!governanceView.symbol || !stocks.some(s => s.symbol === governanceView.symbol)) governanceView.symbol = companies[0]?.symbol || null;
+    if (!governanceView.symbol || !findGovernedStock(governanceView.symbol)) governanceView.symbol = companies[0]?.symbol || null;
 
     list.innerHTML = companies.length ? companies.map(stock => {
         const gov = ensureGovernance(stock);
@@ -8995,7 +8996,7 @@ function renderGovernance() {
         </button>`;
     }).join('') : '<p class="text-muted text-sm">Fundusz nie ma akcji żadnej spółki.</p>';
 
-    const stock = stocks.find(s => s.symbol === governanceView.symbol);
+    const stock = findGovernedStock(governanceView.symbol);
     detail.innerHTML = stock ? renderGovernanceDetail(stock) : '<p class="text-muted">Kup akcje spółki, aby uczestniczyć w jej walnych zgromadzeniach.</p>';
 }
 
@@ -9007,7 +9008,7 @@ function renderShareholderBars(stock) {
         <span class="gov-bar-name">${escapeHtml(h.name)}</span>
         <span class="gov-bar-track"><span style="width:${Math.min(100, h.pct * 100).toFixed(1)}%"></span></span>
         <span class="gov-bar-pct">${h.entity?.isMafia ? `~${Math.max(5, Math.round(h.pct * 20) * 5)}%` : `${formatNumberPl((h.pct * 100), 1)}%`}</span>
-    </div>${typeof renderBlockBuyForm === 'function' && playerFund && getBlockHolder(stock, h.id) ? renderBlockBuyForm(stock, getBlockHolder(stock, h.id)) : ''}`).join('');
+    </div>${typeof renderBlockBuyForm === 'function' && playerFund && !isForeignShare(stock) && getBlockHolder(stock, h.id) ? renderBlockBuyForm(stock, getBlockHolder(stock, h.id)) : ''}`).join('');
 }
 
 function renderGovernanceDetail(stock) {
@@ -9051,7 +9052,7 @@ function renderGovernanceDetail(stock) {
             <select id="gov-proposal-type" aria-label="Rodzaj wniosku">${Object.entries(ACTIVIST_PROPOSALS).map(([id, p]) => `<option value="${id}" title="${escapeHtml(p.desc)}">${p.label}</option>`).join('')}</select>
             <button onclick="submitShareholderProposal('${stock.symbol}', document.getElementById('gov-proposal-type').value)">Zgłoś na walne</button>
         </div>` : '<p class="text-muted text-sm">Głosuje, zgłasza wnioski i prowadzi kampanie tylko akcjonariusz większościowy (> 50%). Poniżej fundusz głosuje „za” wnioskami zarządu.</p>'}
-        ${typeof getListingMoveTargets === 'function' && getListingMoveTargets(stock).length ? `<h4>Rynek notowań</h4>
+        ${typeof getListingMoveTargets === 'function' && !isForeignShare(stock) && getListingMoveTargets(stock).length ? `<h4>Rynek notowań</h4>
             <p class="text-sm">Teraz: <strong>${escapeHtml(getMarketLabel(getStockMarket(stock)))}</strong>. Rynki alternatywne mają niższą prowizję i opłatę za notowanie, ale mniej inwestorów (wycena −3%). Koszt: 0,3% kapitalizacji z gotówki spółki, raz na rok.</p>
             <div class="bank-card-form">${getListingMoveTargets(stock).map(id => `<button class="btn-secondary" onclick="moveListing('${stock.symbol}', '${id}'); openGovernanceModal('${stock.symbol}');">Przenieś na ${escapeHtml(getMarketLabel(id))}</button>`).join('')}</div>` : ''}
         ${insight ? `<h4>Wgląd rady nadzorczej</h4>

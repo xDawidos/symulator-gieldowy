@@ -574,7 +574,7 @@ function createTender(
 
     logEvent(
         `Ogłoszono przetarg: ${spec.name}, zamawiający: ${clientCompany.name}, ` +
-        `budżet: ${amount.toLocaleString('pl-PL')} PLN. ` +
+        `budżet: ${formatZl(amount, 0)}. ` +
         `Przyjmowanie ofert: ${Math.ceil(duration / 1000)} s symulacji.`,
         'construction'
     );
@@ -640,7 +640,7 @@ function bidOnTender(tenderId, bidderCompany, bidPrice, bidTime) {
     logEvent(
         `${existingIndex >= 0 ? 'Aktualizacja oferty' : 'Nowa oferta'}: ` +
         `${bidderCompany.name} — ${tender.buildingType.name}, ` +
-        `${price.toLocaleString('pl-PL')} PLN, ${bid.time} dni budowy.`,
+        `${formatZl(price, 0)}, ${bid.time} dni budowy.`,
         'construction'
     );
 
@@ -874,7 +874,7 @@ function awardTender(tenderId) {
 
         logEvent(
             `${bid.bidder.name} wygrywa przetarg na ${tender.buildingType.name} za ` +
-            `${price.toLocaleString('pl-PL')} PLN.`,
+            `${formatZl(price, 0)}.`,
             'construction'
         );
 
@@ -1192,8 +1192,8 @@ function startConstructionProject(tender, winningBid) {
 
     logEvent(
         `${builder.name} rozpoczyna budowę ${building.name} (termin: ${durationDays} dni budowy). ` +
-        `Zaliczka ${(price * CONSTRUCTION_RULES.advanceRate).toFixed(0)} PLN, ` +
-        `planowane koszty ${estimatedCost.toFixed(0)} PLN.`,
+        `Zaliczka ${formatZl((price * CONSTRUCTION_RULES.advanceRate), 0)}, ` +
+        `planowane koszty ${formatZl(estimatedCost, 0)}.`,
         'construction'
     );
 
@@ -1246,7 +1246,7 @@ function hireSubcontractorForProject(project, specId = null) {
     if (typeof noteSubcontractorHire === 'function') noteSubcontractorHire(project, spec);
 
     project.events.push({ type: 'subcontractor', description: `Zatrudniono podwykonawcę ${spec.name}`, gameTimeMs: project.elapsedGameMs });
-    logEvent(`${project.builder.name} zatrudnia podwykonawcę ${spec.name} przy ${project.tender.buildingType.name} (${fee.toFixed(0)} PLN).`, 'construction');
+    logEvent(`${project.builder.name} zatrudnia podwykonawcę ${spec.name} przy ${project.tender.buildingType.name} (${formatZl(fee, 0)}).`, 'construction');
 
     return true;
 }
@@ -1297,8 +1297,8 @@ function runWeeklyProjectEvents(project) {
             project.excusedDelayMs += extraWork;
 
             recordPayment(client, `escrow:${project.id}`, extra, 'Dopłata za zmianę zamówienia', project.id);
-            project.events.push({ type: 'change_order', cause: 'client', description: `Zmiana zamówienia (+${extra} PLN)`, gameTimeMs: project.elapsedGameMs });
-            logEvent(`${client.name} zmienia zakres ${project.tender.buildingType.name}: +${extra.toLocaleString('pl-PL')} PLN, termin wydłużony.`, 'construction');
+            project.events.push({ type: 'change_order', cause: 'client', description: `Zmiana zamówienia (+${formatZl(extra, 0)})`, gameTimeMs: project.elapsedGameMs });
+            logEvent(`${client.name} zmienia zakres ${project.tender.buildingType.name}: +${formatZl(extra, 0)}, termin wydłużony.`, 'construction');
             return;
         }
     }
@@ -1568,9 +1568,9 @@ function completeConstructionProject(project) {
 
     logEvent(
         `Odebrano ${project.tender.buildingType.name} dla ${client.name}. ${builder.name}: ` +
-        `przychód ${revenue.toFixed(0)} PLN, koszty ${project.costsPaid.toFixed(0)} PLN` +
-        (penalty > 0 ? `, kara ${penalty.toFixed(0)} PLN` : '') +
-        (bonus > 0 ? `, premia ${bonus.toFixed(0)} PLN` : '') + '.',
+        `przychód ${formatZl(revenue, 0)}, koszty ${formatZl(project.costsPaid, 0)}` +
+        (penalty > 0 ? `, kara ${formatZl(penalty, 0)}` : '') +
+        (bonus > 0 ? `, premia ${formatZl(bonus, 0)}` : '') + '.',
         'construction'
     );
 
@@ -1688,8 +1688,8 @@ function cancelConstructionProject(project, reason = 'Anulowanie', faultParty = 
 
     logEvent(
         `Anulowano budowę ${project.tender.buildingType.name}. ${project.cancelReason} ` +
-        `Zwrot dla ${client.name}: ${(escrowRefund + refundCollected).toFixed(0)} PLN. ` +
-        `Wykonawca zatrzymuje ${revenue.toFixed(0)} PLN przy kosztach ${project.costsPaid.toFixed(0)} PLN.`,
+        `Zwrot dla ${client.name}: ${formatZl((escrowRefund + refundCollected), 0)}. ` +
+        `Wykonawca zatrzymuje ${formatZl(revenue, 0)} przy kosztach ${formatZl(project.costsPaid, 0)}.`,
         'construction'
     );
 
@@ -3853,7 +3853,7 @@ function updateTradeLockAfterTick(stock) {
     stock.belowOneTicks = stock.price < 1.00 ? (stock.belowOneTicks || 0) + 1 : 0;
     if (stock.price < 1.00 && !stock.isTradeLocked && !stock.tradeHalted && stock.belowOneTicks >= 120) {
         stock.isTradeLocked = true;
-        logEvent(`⛔ Handel akcjami ${stock.name} (${stock.symbol}) wstrzymany — kurs od dwóch tygodni poniżej 1 PLN.`, 'review');
+        logEvent(`⛔ Handel akcjami ${stock.name} (${stock.symbol}) wstrzymany — kurs od dwóch tygodni poniżej ${formatZl(1, 0)}.`, 'review');
     } else if (stock.price > 1.50 && stock.isTradeLocked && !stock.tradeHalted) {
         stock.isTradeLocked = false;
         logEvent(`✅ Wznowiono handel akcjami ${stock.name} (${stock.symbol}).`, 'review');
@@ -4344,11 +4344,11 @@ function processWealthTax() {
 
                 if (entity.id === 'player') {
                     playerCash -= taxToPay;
-                    logEvent(`💸 Zapłacono roczny podatek od bogactwa: ${taxToPay.toFixed(2)} PLN (${(taxRate * 100).toFixed(0)}% od ${netWorth.toFixed(2)} PLN).`, 'review');
+                    logEvent(`💸 Zapłacono roczny podatek od bogactwa: ${formatZl(taxToPay, 2)} (${(taxRate * 100).toFixed(0)}% od ${formatZl(netWorth, 2)}).`, 'review');
                     displayCash();
                 } else {
                     entity.cash -= taxToPay;
-                    console.log(`[AI Podatki] ${entity.name} zapłacił ${taxToPay.toFixed(2)} PLN podatku od bogactwa.`);
+                    console.log(`[AI Podatki] ${entity.name} zapłacił ${formatZl(taxToPay, 2)} podatku od bogactwa.`);
                 }
             } else if (entity.id === 'player' && sanEscobarLvl >= 3) {
                  // Informacja dla gracza, że uniknął podatku dzięki umiejętności
@@ -4409,7 +4409,7 @@ function processCityAndCitizenTaxes() {
 
     // Loguj tylko dla gracza
     if (playerCityTax > 0 && playerSanEscobarLvl < 4) { // Nie loguj, jeśli gracz nie płaci
-        logEvent(`🏛️ Zapłacono tygodniowy podatek miejski: ${playerCityTax.toFixed(2)} PLN.`);
+        logEvent(`🏛️ Zapłacono tygodniowy podatek miejski: ${formatZl(playerCityTax, 2)}.`);
     }
 }
 
@@ -4437,7 +4437,7 @@ function issueStateBonds() {
 function checkTBillAccess() {
     if (!playerHasTBillAccess && calculateNetWorth('player') >= 100000) {
         playerHasTBillAccess = true;
-        logEvent("💰 Osiągnięto próg 100,000 PLN wartości netto! Odblokowano dostęp do aukcji bonów skarbowych w Banku Centralnym.", 'success');
+        logEvent(`💰 Osiągnięto próg ${formatZl(100000, 0)} wartości netto! Odblokowano dostęp do aukcji bonów skarbowych w Banku Centralnym.`, 'success');
         showToast("Odblokowano aukcje bonów skarbowych!", 'success');
         // Odśwież widok banku, jeśli jest otwarty
         if (document.getElementById('bank-modal').style.display === 'block') {
@@ -4459,7 +4459,7 @@ function placeTBillBid(bidder, quantity, price) {
         return false;
     }
     if (isNaN(quantity) || quantity <= 0 || isNaN(price) || price <= 0 || price >= 1000) {
-        if (bidder === 'player') alert("Wprowadź poprawną ilość i cenę (poniżej 1000 PLN).");
+        if (bidder === 'player') alert(`Wprowadź poprawną ilość i cenę (poniżej ${formatZl(1000, 0)}).`);
         return false;
     }
 
@@ -4476,11 +4476,11 @@ function placeTBillBid(bidder, quantity, price) {
     currentTBillAuction.bids.push({ bidderId, quantity, price });
 
     if (bidder === 'player') {
-        logEvent(`Złożono ofertę zakupu ${quantity} bonów skarbowych po ${price.toFixed(2)} PLN.`, 'review');
+        logEvent(`Złożono ofertę zakupu ${quantity} bonów skarbowych po ${formatZl(price, 2)}.`, 'review');
         showToast("Oferta złożona!", 'success');
         openBankModal(); // Odśwież widok banku
     } else {
-        console.log(`[AI] ${bidder.name} złożył ofertę na ${quantity} bonów po ${price.toFixed(2)} PLN.`);
+        console.log(`[AI] ${bidder.name} złożył ofertę na ${quantity} bonów po ${formatZl(price, 2)}.`);
     }
     return true;
 }
@@ -4544,15 +4544,15 @@ function resolveTBillAuction() {
 
             // Poinformuj gracza o wyniku
             if (bid.bidderId === 'player') {
-                logEvent(`✅ Przydzielono Ci ${quantityToAllocate} bonów skarbowych po cenie ${bid.price.toFixed(2)} PLN.`, 'success');
+                logEvent(`✅ Przydzielono Ci ${quantityToAllocate} bonów skarbowych po cenie ${formatZl(bid.price, 2)}.`, 'success');
                 displayCash();
                 displayPortfolio();
             } else {
-                console.log(`[AI] ${bidderObject.name} wygrał ${quantityToAllocate} bonów po ${bid.price.toFixed(2)} PLN.`);
+                console.log(`[AI] ${bidderObject.name} wygrał ${quantityToAllocate} bonów po ${formatZl(bid.price, 2)}.`);
             }
 
         } else if (bid.bidderId === 'player') {
-            logEvent(`⚠️ Twoja oferta na ${bid.quantity} bonów po ${bid.price.toFixed(2)} PLN została odrzucona z powodu braku środków!`, 'error');
+            logEvent(`⚠️ Twoja oferta na ${bid.quantity} bonów po ${formatZl(bid.price, 2)} została odrzucona z powodu braku środków!`, 'error');
         }
     }
 
@@ -4575,7 +4575,7 @@ function checkTBillMaturities() {
         // SCALONO: Sprawdzamy `isTBill` (z Twojej wersji) ORAZ `ownerId` (z obu wersji)
         if (tBill.isTBill && tBill.ownerId === 'player' && now >= tBill.maturityDate) {
             playerCash += faceValue;
-            logEvent(`🪙 Bon skarbowy (zakup: ${tBill.purchasePrice.toFixed(2)} PLN) dojrzał. Otrzymujesz ${faceValue} PLN.`, 'review');
+            logEvent(`🪙 Bon skarbowy (zakup: ${formatZl(tBill.purchasePrice, 2)}) dojrzał. Otrzymujesz ${formatZl(faceValue, 0)}.`, 'review');
             allBonds.splice(i, 1); // Usuwamy z globalnej listy
             displayCash();
             displayPortfolio();
@@ -4590,7 +4590,7 @@ function checkTBillMaturities() {
              // SCALONO: Sprawdzamy `isTBill` (z Twojej wersji)
             if (tBill.isTBill && now >= tBill.maturityDate) {
                 ai.cash += faceValue;
-                console.log(`[AI] Bon skarbowy ${ai.name} (zakup: ${tBill.purchasePrice.toFixed(2)}) dojrzał. Otrzymuje ${faceValue} PLN.`);
+                console.log(`[AI] Bon skarbowy ${ai.name} (zakup: ${tBill.purchasePrice.toFixed(2)}) dojrzał. Otrzymuje ${formatZl(faceValue, 0)}.`);
                 ai.tBills.splice(i, 1);
             }
         }
@@ -4655,7 +4655,7 @@ function fundStateOwnedCompanies() {
             targetCompany.financialHealth += 0.5; // Lekka poprawa kondycji
             if(targetCompany.financialHealth > 5) targetCompany.financialHealth = 5;
 
-            logEvent(`🏛️ Bank Centralny zasila ${targetCompany.name} kwotą ${fundingAmount.toFixed(0)} PLN na rozwój!`, 'state');
+            logEvent(`🏛️ Bank Centralny zasila ${targetCompany.name} kwotą ${formatZl(fundingAmount, 0)} na rozwój!`, 'state');
         } else {
             console.log(`[BC Finansowanie] BC chciał wesprzeć ${targetCompany.name}, ale zabrakło środków.`);
         }
@@ -4726,13 +4726,13 @@ function checkPriceAlerts() {
 
         // Sprawdź alert kupna (cena spada poniżej progu)
         if (stock.priceAlerts.buy !== null && stock.price <= stock.priceAlerts.buy) {
-            showToast(`🔔 ALERT CENOWY: ${stock.name} osiągnął cenę zakupu ${stock.priceAlerts.buy.toFixed(2)} PLN!`, 'success', 7000);
+            showToast(`🔔 ALERT CENOWY: ${stock.name} osiągnął cenę zakupu ${formatZl(stock.priceAlerts.buy, 2)}!`, 'success', 7000);
             stock.priceAlerts.buy = null; // Wyłącz alert po aktywacji
         }
 
         // Sprawdź alert sprzedaży (cena rośnie powyżej progu)
         if (stock.priceAlerts.sell !== null && stock.price >= stock.priceAlerts.sell) {
-            showToast(`🔔 ALERT CENOWY: ${stock.name} osiągnął cenę sprzedaży ${stock.priceAlerts.sell.toFixed(2)} PLN!`, 'error', 7000);
+            showToast(`🔔 ALERT CENOWY: ${stock.name} osiągnął cenę sprzedaży ${formatZl(stock.priceAlerts.sell, 2)}!`, 'error', 7000);
             stock.priceAlerts.sell = null; // Wyłącz alert po aktywacji
         }
     });
@@ -5081,7 +5081,7 @@ function supportElectionCampaign(partyId, amount) {
     election.donations = { market: 0, state: 0, people: 0, social: 0, ...(election.donations || {}) };
     const assets = getFundAssets();
     const given = Object.values(election.donations).reduce((sum, value) => sum + (Number(value) || 0), 0);
-    if (!(amount >= 100)) { showToast('Minimalna darowizna: 100 PLN.', 'warning'); return false; }
+    if (!(amount >= 100)) { showToast(`Minimalna darowizna: ${formatZl(100, 0)}.`, 'warning'); return false; }
     if (given + amount > assets * ELECTION_DONATION_LIMIT) { showToast(`Limit: 2% aktywów funduszu na kampanię (zostało ${formatZl(Math.max(0, assets * ELECTION_DONATION_LIMIT - given), 0)}).`, 'warning'); return false; }
     if (playerCash < amount) { showToast('Za mało gotówki funduszu.', 'error'); return false; }
     playerCash -= amount;
