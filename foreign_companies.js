@@ -126,6 +126,7 @@ function payForeignDividend(i, st, net) {
             }
             if (i.statePack > 0) st.treasury += i.statePack * dps; // dywidenda państwowa do skarbu kraju
             i.lastDividend = { dps, total, q: macro.quarter, yield: dps / Math.max(0.01, i.price) };
+            if (i.parentId) payForeignParentDividend(i, dps); // 0.16.12 D1
             noteForeignDividend(i, dps); noteForeignStat('dividends'); noteForeignStat('dividendPln', toPln(total, i.currency));
             if ((i.holders?.player || 0) > 0) logEvent(`💰 ${i.name} (${getShareSymbol(i)}): dywidenda ${formatNumberPl(dps, 2)} ${i.currency} na akcję (po podatku u źródła ${Math.round((1 - keep) * 100)}%).`, 'review');
         }
@@ -156,7 +157,7 @@ function applyForeignShareChange(i, factor) {
         }
     }
     i.shares = Math.max(1, floorShares(i.shares * factor)); i.totalShares = i.shares;
-    i.statePack = i.state ? Math.round(i.shares * COUNTRY_RULES.statePct) : 0; i.float = i.shares - i.statePack;
+    i.statePack = i.state ? Math.round(i.shares * COUNTRY_RULES.statePct) : 0; i.parentPack = Math.floor((i.parentPack || 0) * factor + 1e-9); i.float = i.shares - i.statePack - i.parentPack;
     i.price = priceAfter; i.ema = i.ema / factor; i.history = i.history.map(p => p / factor);
     const f = i.fundamentals;
     if (f) { scalePerShareList(f.history, factor, ['eps']); f.expectedEps /= factor; if (Number.isFinite(f.lastEps)) f.lastEps /= factor; f.fairValue /= factor; updateFundamentalRatios(i); }
@@ -211,6 +212,7 @@ function processForeignCompaniesQuarterly(countryId) {
         maybeForeignSplit(issuer);
         stepForeignCeo(issuer);
     }
+    processForeignSubsidiariesQuarterly(countryId); // 0.16.12 D1
 }
 
 // ---------------------------------------------------------------------------------
@@ -221,7 +223,7 @@ function getForeignCompanySnapshot(i) {
     if (!i.fundamentals || !i.balanceSheet) return undefined;
     const f = i.fundamentals, b = i.balanceSheet, rs = x => roundSig(x);
     const row = {
-        n: i.shares, b: [rs(b.assets), rs(b.liabilities), rs(b.shareCapital), rs(b.retainedEarnings)], c: rs(i.cash), h: roundSig(i.financialHealth, 4),
+        n: i.shares, ...(i.parentPack > 0 ? { pp: i.parentPack } : {}), b: [rs(b.assets), rs(b.liabilities), rs(b.shareCapital), rs(b.retainedEarnings)], c: rs(i.cash), h: roundSig(i.financialHealth, 4),
         f: { r: rs(f.revenue), e: rs(f.expectedEps), fv: rs(f.fairValue), le: rs(f.lastEps || 0), hs: f.history.map(x => [rs(x.revenue), rs(x.ebitda), rs(x.netIncome), rs(x.eps)]) },
         a: [roundSig(i.marginAdj, 4), roundSig(i.growthBase, 4), roundSig(i.valuationGap, 4)], dp: [i.dividendPolicy, roundSig(i.dividendPayoutRatio, 4)], dy: roundSig(i.divYield, 4)
     };
@@ -235,7 +237,8 @@ function getForeignCompanySnapshot(i) {
 
 function applyForeignCompanySnapshot(i, row) {
     if (!row || !Array.isArray(row.b)) return ensureForeignCompany(i); // zapis v17: model z bieżącej ceny
-    if (Number(row.n) > 0) { i.shares = Number(row.n); i.statePack = i.state ? Math.round(i.shares * COUNTRY_RULES.statePct) : 0; i.float = i.shares - i.statePack; }
+    i.parentPack = Number(row.pp) > 0 ? Number(row.pp) : 0; // 0.16.12 D1: pakiet matki (poza wolnym obrotem)
+    if (Number(row.n) > 0) { i.shares = Number(row.n); i.statePack = i.state ? Math.round(i.shares * COUNTRY_RULES.statePct) : 0; i.float = i.shares - i.statePack - i.parentPack; }
     i.totalShares = i.shares; i.symbol = getShareSymbol(i); i.market = i.country; i.isStateOwned = Boolean(i.state);
     i.balanceSheet = { assets: row.b[0], liabilities: row.b[1], shareCapital: row.b[2], retainedEarnings: row.b[3] };
     i.cash = Number(row.c) || 0; i.financialHealth = Number(row.h) || 0;
@@ -262,7 +265,9 @@ function checkForeignCompanyInvariants() {
         const b = i.balanceSheet;
         if (![b.assets, b.liabilities, i.cash, i.financialHealth, i.fundamentals.revenue].every(Number.isFinite)) problems.push(`${i.id}: niefinitywna wartość w bilansie lub fundamentach`);
         if (i.totalShares !== i.shares) problems.push(`${i.id}: totalShares ≠ shares`);
-        if (i.statePack + i.float !== i.shares) problems.push(`${i.id}: pakiet państwa + float ≠ akcje`);
+        if (i.statePack + (i.parentPack || 0) + i.float !== i.shares) problems.push(`${i.id}: pakiet państwa + pakiet matki + float ≠ akcje`);
+        if (i.parentId && (!foreignIssuers[i.parentId] || !(i.parentPack > 0))) problems.push(`${i.id}: spółka zależna bez matki albo bez pakietu`);
+        if (getForeignChildren(i).length > FOREIGN_SUB.max) problems.push(`${i.id}: więcej niż ${FOREIGN_SUB.max} spółek powiązanych`);
         if (i.cash < -1e-6) problems.push(`${i.id}: ujemna gotówka spółki`);
     }
     return problems;
@@ -347,7 +352,8 @@ function buildForeignCardStock(i) {
         balanceSheet: i.balanceSheet ? { assets: i.balanceSheet.assets * r, liabilities: i.balanceSheet.liabilities * r, shareCapital: i.balanceSheet.shareCapital * r, retainedEarnings: i.balanceSheet.retainedEarnings * r } : undefined,
         dividendHistory: (i.divHistory || (i.lastDividend ? [i.lastDividend.dps] : [])).map(dps => ({ dps: dps * r })),
         lastDividend: i.lastDividend ? { ...i.lastDividend, dps: i.lastDividend.dps * r, total: (i.lastDividend.total || 0) * r } : null,
-        playerTransactions: [], chartEvents: []
+        playerTransactions: [], chartEvents: [],
+        isSubsidiaryOf: i.parentId && foreignIssuers[i.parentId] ? getShareSymbol(foreignIssuers[i.parentId]) : undefined, parentStakePct: i.parentPack > 0 ? i.parentPack / i.shares : undefined // 0.16.12 D1
     };
     if (f) {
         vm.fundamentals = { ...f, revenue: f.revenue * r, expectedEps: f.expectedEps * r, lastEps: (f.lastEps || 0) * r, fairValue: f.fairValue * r,
@@ -363,4 +369,91 @@ function getCompanyCardSource(symbol) {
     if (domestic || typeof symbol !== 'string' || !symbol.includes('.')) return domestic || null;
     const issuer = foreignIssuers[symbol.split('.')[0]];
     return issuer && issuer.kind === 'share' && getShareSymbol(issuer) === symbol ? buildForeignCardStock(issuer) : null;
+}
+
+// =================================================================================
+// 0.16.12 D1: SPÓŁKI ZALEŻNE SPÓŁEK ZAGRANICZNYCH (okrojone)
+// Spółka zagraniczna zakłada najwyżej jedną córkę i dwie spółki zależne (łącznie ≤ 3 powiązane). Nazwa i segment z `pickSubsidiaryName` /
+// `pickSubsidiarySegment` (finance.js — ta sama reguła: długi człon matki skraca się do 3 liter bez polskich znaków). Córka jest zwykłym emitentem kraju
+// (liczy się do limitu giełdy kraju, F3 z 0.16.8); pakiet matki (`parentPack`) jest poza wolnym obrotem, jak pakiet państwa, a dywidenda córki płynie do kasy matki.
+// Pierwsza założona to córka, kolejne to spółki zależne (etykieta wynika z kolejności listingu, nic poza `parentId` i `parentPack` nie jest zapisywane).
+// =================================================================================
+
+const FOREIGN_SUB = {
+    max: 3, maxDaughters: 1,
+    chance: 0.06,                 // na kwartał i spółkę spełniającą warunki (bardziej opłacalne duże, zdrowe spółki)
+    minHealth: 1,                 // kondycja finansowa matki
+    capitalPln: 500000,           // minimalny kapitał córki (w przeliczeniu na walutę kraju); matka musi mieć co najmniej 2× tyle gotówki
+    stake: [0.6, 0.8],            // pakiet matki po IPO córki
+    priceRangePln: [8, 25]        // cena akcji córki (PLN) → liczba akcji wynika z kapitału
+};
+
+function getForeignChildren(parent) {
+    return getCountryIssuers(parent.country).filter(c => c.parentId === parent.id).sort((a, b) => a.listedQ - b.listedQ || a.id.localeCompare(b.id));
+}
+function getForeignParent(child) { return child?.parentId ? foreignIssuers[child.parentId] || null : null; }
+/** „córka” (pierwsza założona) albo „spółka zależna” (kolejne). */
+function getForeignSubsidiaryKind(child) {
+    const parent = getForeignParent(child);
+    return parent && getForeignChildren(parent)[0] === child ? 'córka' : 'spółka zależna';
+}
+/** Matka bez spółki-widmo: pakiet wraca do wolnego obrotu (matka znika z giełdy, np. upadłość, przejęcie). */
+function releaseForeignChildren(parentId) {
+    for (const child of Object.values(foreignIssuers)) {
+        if (child.parentId !== parentId) continue;
+        delete child.parentId; child.float += child.parentPack || 0; child.parentPack = 0;
+    }
+}
+
+/** Cienki obiekt dla `pickSubsidiarySegment`/`pickSubsidiaryName` (finance.js): nazwa i segmenty matki zagranicznej. */
+function foreignParentProxy(parent) {
+    return { name: parent.name, segments: parent.sectors.map(([sector, share], n) => ({ sector, share, subsector: n === 0 ? parent.subsector : null })) };
+}
+
+function canFoundForeignSubsidiary(parent) {
+    if (parent.kind !== 'share' || parent.state || parent.giant || parent.special || parent.parentId || parent.tradeHalted || !parent.fundamentals) return false;
+    const def = COUNTRY_DEFS[parent.country], kids = getForeignChildren(parent);
+    if (!def || kids.length >= FOREIGN_SUB.max || getCountryIssuers(parent.country).length >= getCountryLimit(parent.country)) return false;
+    return parent.financialHealth >= FOREIGN_SUB.minHealth && parent.cash >= 2 * fromPln(FOREIGN_SUB.capitalPln, parent.currency);
+}
+
+/** IPO spółki zależnej: kapitał z gotówki matki (10% gotówki, nie więcej niż 5% kapitalizacji), pakiet matki 60–80%. Zwraca emitenta albo null. */
+function foundForeignSubsidiary(parent) {
+    if (!canFoundForeignSubsidiary(parent)) return null;
+    const def = COUNTRY_DEFS[parent.country], cur = parent.currency;
+    const capital = Math.max(fromPln(FOREIGN_SUB.capitalPln, cur), Math.min(parent.cash * 0.1, parent.price * parent.shares * 0.05));
+    if (parent.cash < capital) return null;
+    const proxy = foreignParentProxy(parent), seg = pickSubsidiarySegment(proxy);
+    const name = pickSubsidiaryName(proxy, seg.sector);
+    let n = 1, id;
+    do { id = `${parent.id.slice(0, 3)}Z${n++}`; } while (foreignIssuers[id]);
+    const price = Math.round(fromPln(getRandomInRange(...FOREIGN_SUB.priceRangePln), cur) * 100) / 100 || 10;
+    const child = createCountryIssuer(def, { id, name, sector: seg.sector, subsector: seg.subsector, kind: 'normal', price, generated: true });
+    child.generated = true; child.parentId = parent.id;
+    child.shares = child.totalShares = Math.max(100000, Math.round(capital * 1.5 / price));
+    child.parentPack = Math.floor(child.shares * getRandomInRange(...FOREIGN_SUB.stake));
+    child.statePack = 0; child.float = child.shares - child.parentPack;
+    child.balanceSheet = { assets: capital, liabilities: 0, shareCapital: capital, retainedEarnings: 0 }; child.cash = capital; child.financialHealth = 1;
+    child.dividendPolicy = parent.dividendPolicy; if (typeof setCompanyDividendPolicy === 'function') setCompanyDividendPolicy(child, parent.dividendPolicy);
+    adjustCompanyCash(parent, -capital); // gotówka → udziały w córce (aktywa matki bez zmian)
+    logEvent(`🆕 IPO: ${parent.name} zakłada ${getForeignChildren(parent).length === 1 ? 'spółkę-córkę' : 'spółkę zależną'} ${child.name} (${getShareSymbol(child)}) na giełdzie ${def.name} — ${Math.round((1 - child.parentPack / child.shares) * 100)}% akcji w ofercie publicznej.`, 'market');
+    return child;
+}
+
+/** Kwartalnie: spółki zagraniczne z zapasem gotówki zakładają zależne (wywoływane z processForeignCompaniesQuarterly po raportach). */
+function processForeignSubsidiariesQuarterly(countryId) {
+    for (const parent of [...getCountryIssuers(countryId)]) {
+        if (Math.random() < FOREIGN_SUB.chance) foundForeignSubsidiary(parent);
+    }
+}
+
+/** Dywidenda córki: pakiet matki wpływa do jej kasy (reszta idzie do posiadaczy jak zwykle). */
+function payForeignParentDividend(child, dps) {
+    const parent = getForeignParent(child);
+    if (parent && dps > 0 && child.parentPack > 0) adjustCompanyCash(parent, child.parentPack * dps); // spółki jednego kraju: bez podatku u źródła
+}
+
+function describeForeignSubsidiaryLine(child) {
+    const parent = getForeignParent(child);
+    return parent ? `${getForeignSubsidiaryKind(child)} ${parent.name} (${Math.round(child.parentPack / child.shares * 100)}%)` : '';
 }

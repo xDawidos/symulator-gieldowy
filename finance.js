@@ -1037,7 +1037,7 @@ function pickSubsidiaryName(parent, sector) {
         if (first.length <= 6) candidates.push(`${first.slice(0, Math.min(5, Math.max(3, first.length - 2)))}${word.toLowerCase()}`, `${first.slice(0, 4)}${word.toLowerCase()}`); // zlepek tylko z krótkiego członu; z długiego wychodzi „Pańsenergy” z „Państwowy”
     }
     if (sector === getMainSector(parent)) for (const extra of SUBSIDIARY_EXTRA_WORDS) candidates.push(`${parent.name} ${extra}`, `${first} ${extra}`);
-    const taken = new Set(stocks.map(s => String(s.name).toLowerCase()));
+    const taken = new Set([...stocks, ...(typeof foreignIssuers === 'object' ? Object.values(foreignIssuers) : [])].map(s => String(s.name).toLowerCase()));
     const free = [...new Set(candidates)].filter(name => !taken.has(name.toLowerCase()));
     if (free.length) return getRandomElement(free);
     let n = 2;

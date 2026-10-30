@@ -13923,7 +13923,7 @@ group('0.16.7 Pełne spółki zagraniczne', () => {
         const eq = a.balanceSheet.assets - a.balanceSheet.liabilities, name = a.ceo.name, eps = a.fundamentals.epsTtm, pol = a.dividendPolicy;
         const bytes = JSON.stringify(snap.issuers.YA1.c).length; assert(bytes < 3000, `wiersz spółki ${bytes} B`);
         applyCountriesSnapshot(snap); const b = foreignIssuers.YA1;
-        assertNear(b.balanceSheet.assets - b.balanceSheet.liabilities, eq, 'kapitał własny', 1e-3); assertEq(b.ceo.name, name, 'prezes'); assertNear(b.fundamentals.epsTtm, eps, 'EPS TTM', 1e-3); assertEq(b.dividendPolicy, pol, 'polityka');
+        assertNear(b.balanceSheet.assets - b.balanceSheet.liabilities, eq, 'kapitał własny (zapis zaokrągla do 6 cyfr znaczących)', 0.05); assertEq(b.ceo.name, name, 'prezes'); assertNear(b.fundamentals.epsTtm, eps, 'EPS TTM', 1e-3); assertEq(b.dividendPolicy, pol, 'polityka');
         for (const row of Object.values(snap.issuers)) delete row.c; // zapis v17
         resetGdrState(); applyCountriesSnapshot(snap); const c = foreignIssuers.YA1; assert(c.balanceSheet && c.cash > 0 && !c.fundamentals, 'v17: model z ceny, fundamenty przy pierwszym raporcie');
         quarter(); assert(foreignIssuers.YA1.fundamentals, 'po kwartale są fundamenty'); assertEq(checkWorldInvariants().length, 0, 'niezmienniki po migracji');
@@ -14442,4 +14442,46 @@ group('0.16.9 W1 Gotówka w wielu walutach', () => {
             assert(!getLinkCandidates().includes('DE'), 'kraj startowy nie jest kandydatem na połączenie');
         } finally { resetGdrState(); initFxState(); }
     });
+
+    // --- 0.16.12 D1: spółki zależne spółek zagranicznych ---
+    const withSubLinks = fn => { resetWorld([mk156('GA', { price: 100 })]); startNewCareer({ name: 'Test', corporation: 'Korpo', fundName: 'Fundusz Testowy' }); playerCash = 5_000_000; initFxState(); resetGdrState(); macro.quarter = 10; try { return fn(); } finally { resetGdrState(); initFxState(); } };
+    const subParent = () => {
+        const p = getCountryIssuers('DE').find(i => !i.state && !i.giant && !i.special);
+        ensureForeignCompany(p, true); p.financialHealth = 3; p.cash = 80_000_000; p.name = 'Polskie Zakłady Testowe';
+        return p;
+    };
+    test('0.16.12 D1: spółka zagraniczna zakłada córkę i dwie zależne (najwyżej 3), nazwa z reguły 3 liter bez polskich znaków, pakiet matki poza wolnym obrotem', () => withSubLinks(() => {
+        joinCountry('DE');
+        const parent = subParent(), cash0 = parent.cash;
+        const kids = [];
+        for (let n = 0; n < 5; n++) { parent.cash = 80_000_000; const c = foundForeignSubsidiary(parent); if (c) kids.push(c); }
+        assertEq(kids.length, FOREIGN_SUB.max, 'najwyżej 3 podmioty powiązane');
+        assertEq(getForeignChildren(parent).length, 3);
+        assertEq(getForeignSubsidiaryKind(kids[0]), 'córka'); assertEq(getForeignSubsidiaryKind(kids[1]), 'spółka zależna');
+        for (const c of kids) {
+            assert(c.parentPack > 0 && c.parentPack < c.shares && c.float === c.shares - c.parentPack, 'pakiet matki poza floatem');
+            assertEq(getGdrFree(c), c.float, 'wolny obrót = float');
+            assert(!/[ąćęłńóśźż]/i.test(c.name.replace(/^Polskie Zakłady Testowe/, '')), `nazwa bez polskich znaków w skrócie: ${c.name}`);
+            assert(/^(Polskie Zakłady Testowe |Polskie |Pol)/.test(c.name), `nazwa dziedziczy po matce: ${c.name}`);
+            assert(c.cash > 0 && c.balanceSheet.assets === c.cash, 'kapitał od matki');
+        }
+        assert(new Set([...Object.values(foreignIssuers).map(i => i.name)]).size === Object.keys(foreignIssuers).length, 'nazwy unikalne');
+        assert(parent.cash < cash0 + 1, 'matka oddała gotówkę');
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+        assert(!canFoundForeignSubsidiary(kids[0]), 'córka nie zakłada własnych');
+        // dywidenda córki wpływa do kasy matki
+        const before = parent.cash; payForeignParentDividend(kids[0], 2); assertEq(Math.round(parent.cash - before), Math.round(kids[0].parentPack * 2), 'dywidenda do matki');
+        // zapis i wczytanie
+        const snap = JSON.parse(JSON.stringify(getCountriesSnapshot())), ids = kids.map(c => c.id);
+        applyCountriesSnapshot(snap);
+        for (const id of ids) { const c = foreignIssuers[id]; assert(c && c.parentId === parent.id && c.parentPack > 0, `po wczytaniu ${id} ma matkę i pakiet`); assertEq(c.float, c.shares - c.parentPack); }
+        assertEq(getForeignChildren(foreignIssuers[parent.id]).length, 3);
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki po wczytaniu');
+        // split córki nie psuje pakietu
+        applyForeignShareChange(foreignIssuers[ids[0]], 2); assertEq(foreignIssuers[ids[0]].float + foreignIssuers[ids[0]].parentPack, foreignIssuers[ids[0]].shares, 'split zachowuje sumę');
+        // upadek matki zwalnia pakiety
+        delistForeignIssuer(foreignIssuers[parent.id], 1);
+        for (const id of ids) { const c = foreignIssuers[id]; assert(!c.parentId && c.parentPack === 0 && c.float === c.shares, 'pakiet wraca do obrotu'); }
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki po upadku matki');
+    }));
 });

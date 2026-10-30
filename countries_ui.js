@@ -120,7 +120,7 @@ function renderLinkedStockRow(tbody, i, previous = {}) {
     if (i.tradeHalted) { row.classList.add('locked-row'); row.title = 'HANDEL WSTRZYMANY'; }
     const name = row.insertCell(); name.className = 'stock-company-cell';
     name.innerHTML = `<div class="stock-identity"><div class="stock-name-line"><span class="stock-name" title="${escapeHtml(i.name)}">${escapeHtml(i.name)}</span>${held > 0 ? '<span class="owned-dot" title="Masz akcje tej spółki"></span>' : ''}<button type="button" class="info-btn" aria-label="Karta spółki ${escapeHtml(i.name)}" title="Karta spółki" onclick="openDescriptionModal('${sym}')">${uiIcon('karta', 14)}</button></div>
-        <div class="stock-meta">${escapeHtml(i.sectors.map(x => x[0]).join(' + '))} · ${sym} · ${flagIcon(c, 12)} ${c} · ${i.currency}${i.state ? ' · państwowa' : ''}${i.giant ? ' · gigant' : ''}${allowed ? '' : ` · wymaga poziomu giełdy: ${escapeHtml(tier.label)}`}</div></div>`;
+        <div class="stock-meta">${escapeHtml(i.sectors.map(x => x[0]).join(' + '))} · ${sym} · ${flagIcon(c, 12)} ${c} · ${i.currency}${i.state ? ' · państwowa' : ''}${i.giant ? ' · gigant' : ''}${i.parentId ? ` · ${escapeHtml(describeForeignSubsidiaryLine(i))}` : ''}${allowed ? '' : ` · wymaga poziomu giełdy: ${escapeHtml(tier.label)}`}</div></div>`;
     const price = row.insertCell(); price.className = 'cell-number cell-price';
     price.innerHTML = `<div class="price-main">${formatZl(toPln(i.price, i.currency), 2)}</div><div class="text-xs text-muted">${formatNumberPl(i.price, 2)} ${i.currency}</div>`;
     const ch = row.insertCell(); ch.className = 'cell-number'; ch.innerHTML = `<span class="change-pill ${cls}"><span aria-hidden="true">${fxArrow(change)}</span> ${fxPct(change)}</span>`;

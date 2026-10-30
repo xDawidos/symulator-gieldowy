@@ -113,6 +113,7 @@ function delistForeignIssuer(issuer, price) {
         else { const bot = aiCompetitors.find(b => b.id === holder); if (bot) addCurrencyCash(bot, issuer.currency, gross); }
     }
     delete foreignIssuers[issuer.id];
+    if (typeof releaseForeignChildren === 'function') releaseForeignChildren(issuer.id); // 0.16.12 D1
 }
 function getCountryIssuers(id) { return getForeignIssuerList().filter(i => i.kind === 'share' && i.country === id); }
 
@@ -454,7 +455,7 @@ function getCountriesSnapshot() {
         if (i.oversightResale) row.or = i.oversightResale.until;
         const company = typeof getForeignCompanySnapshot === 'function' ? getForeignCompanySnapshot(i) : undefined;
         if (company) row.c = company; // 0.16.7: bilans, wyniki, dywidenda, prezes
-        if (i.generated) row.g = { name: i.name, sector: i.sectors.map(s => s[0]), subsector: i.subsector, country: i.country, currency: i.currency };
+        if (i.generated) row.g = { name: i.name, sector: i.sectors.map(s => s[0]), subsector: i.subsector, country: i.country, currency: i.currency, ...(i.parentId ? { par: i.parentId } : {}) };
         issuers[i.id] = row;
     }
     return {
@@ -481,7 +482,7 @@ function applyCountriesSnapshot(snapshot) {
         if (!issuer && row.g && countryState[row.g.country]) {
             const def = COUNTRY_DEFS[row.g.country];
             issuer = createCountryIssuer(def, { id, name: row.g.name, sector: row.g.sector, subsector: row.g.subsector, kind: 'normal', price: Number(row.p) || 10 });
-            issuer.generated = true;
+            issuer.generated = true; if (row.g.par) issuer.parentId = String(row.g.par);
         }
         if (!issuer) continue;
         if (Number(row.p) > 0) issuer.price = Number(row.p);
