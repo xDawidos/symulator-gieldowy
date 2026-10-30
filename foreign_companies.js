@@ -457,3 +457,116 @@ function describeForeignSubsidiaryLine(child) {
     const parent = getForeignParent(child);
     return parent ? `${getForeignSubsidiaryKind(child)} ${parent.name} (${Math.round(child.parentPack / child.shares * 100)}%)` : '';
 }
+
+// =================================================================================
+// 0.16.12 D2: WALNE ZGROMADZENIA SPÓŁEK ZAGRANICZNYCH NA WSPÓLNYM KODZIE (ma.js)
+// `holdAgm`, `tallyAgmItem`, porządek obrad i okno „Walne” działają na emitencie zagranicznym przez cienkie haki: `isForeignShare`, lista akcjonariuszy z `holders`
+// (gracz, boty, pakiet państwa, pakiet matki), udział funduszu z `holders.player`, kwoty emisji/skupu w walucie spółki. Dodatkowe punkty porządku obrad:
+// wynagrodzenia zarządu i odwołanie prezesa przy złej kondycji. Gracz głosuje i zgłasza wnioski od >50% głosów (jak przy krajowych).
+// Drabina nadzoru po przekroczeniu progu wezwania kraju (`COUNTRY_DEFS[…].oversight.callThreshold`): ostrzeżenie → kara → nakaz wezwania na pozostałe akcje
+// (gdy fundusz ma na nie gotówkę; inaczej nakaz odsprzedaży).
+// =================================================================================
+
+const FOREIGN_AGM = { payMargin: 0.002, tenderPremium: 0.10, tenderBotShare: 0.7, tenderRetail: [0.6, 0.9] };
+
+function isForeignShare(stock) { return Boolean(stock && stock.kind === 'share' && stock.country && stock.holders && stock.currency); }
+function getForeignGovernedList() { return getForeignIssuerList().filter(i => i.kind === 'share' && i.fundamentals && !i.tradeHalted); }
+function getForeignIssuerBySymbol(symbol) {
+    if (typeof symbol !== 'string' || !symbol.includes('.')) return null;
+    const issuer = foreignIssuers[symbol.split('.')[0]];
+    return issuer && issuer.kind === 'share' && getShareSymbol(issuer) === symbol ? issuer : null;
+}
+
+function getForeignShareholders(i) {
+    const list = [], add = (id, name, kind, shares, entity = null) => { if (shares >= 1) list.push({ id, name, kind, shares, pct: shares / i.totalShares, entity }); };
+    for (const [id, qty] of Object.entries(i.holders || {})) {
+        if (id === 'player') add('player', playerProfile?.fundName || 'Twój fundusz', 'player', Number(qty));
+        else { const bot = aiCompetitors.find(b => b.id === id); if (bot) add(id, bot.isMafia ? 'Akcjonariusz nieujawniony' : bot.name, 'ai', Number(qty), bot); }
+    }
+    if (i.statePack > 0) add('state', 'Skarb Państwa', 'state', i.statePack);
+    if (i.parentPack > 0) { const parent = getForeignParent(i); add(`${i.parentId}:stake`, parent?.name || 'Spółka matka', 'company', i.parentPack, parent); }
+    return list.sort((a, b) => b.shares - a.shares);
+}
+
+/** Dodatkowe punkty porządku obrad spółki zagranicznej: wynagrodzenia (co drugie walne) i odwołanie prezesa przy kondycji ≤ −2. */
+function getForeignAgmItems(i) {
+    const items = [];
+    if (Math.random() < 0.5) items.push({ id: 'pay', kind: 'board', type: 'pay', label: 'Podwyżka wynagrodzeń zarządu o 10%' });
+    if (i.ceo && i.financialHealth <= -2 && (i.ceo.tenure || 0) >= 2) items.push({ id: 'replaceCeo', kind: 'board', type: 'replaceCeo', label: `Odwołanie prezesa ${i.ceo.name}` });
+    return items;
+}
+
+/** Skutki uchwał, które w spółkach krajowych dotykają `stocks`/akcji w obrocie; tu na modelu emitenta (kwoty w walucie spółki, akcje przez `shares` i `float`). */
+function applyForeignAgmResolution(i, item) {
+    const syncPrice = () => { if (i.history.length) i.history[i.history.length - 1] = i.price; };
+    switch (item.type) {
+        case 'buyback': {
+            if (typeof noteCapitalCycleResolution === 'function') noteCapitalCycleResolution(i, item);
+            const n = Math.floor(Math.min(getGdrFree(i), Math.max(0, i.cash) * 0.1 / Math.max(0.01, i.price)));
+            if (n <= 0) return 'brak akcji do skupu';
+            const cost = n * i.price;
+            adjustCompanyCash(i, -cost); adjustBalanceSheet(i, { assets: -cost, retainedEarnings: -cost });
+            i.shares -= n; i.totalShares = i.shares; i.float -= n; i.price *= 1.02; syncPrice();
+            return `skupiono ${n.toLocaleString('pl-PL')} akcji`;
+        }
+        case 'issue': {
+            if (typeof noteCapitalCycleResolution === 'function') noteCapitalCycleResolution(i, item);
+            const n = Math.floor(i.shares * 0.1), amount = n * i.price * 0.95;
+            if (n <= 0) return '';
+            i.shares += n; i.totalShares = i.shares; i.float += n;
+            adjustCompanyCash(i, amount); adjustBalanceSheet(i, { assets: amount });
+            i.balanceSheet.shareCapital = (Number(i.balanceSheet.shareCapital) || 0) + amount;
+            i.price *= 0.97; syncPrice();
+            return `wyemitowano ${n.toLocaleString('pl-PL')} akcji`;
+        }
+        case 'replaceCeo':
+            i.ceo = newForeignCeo(i); noteForeignStat('ceoChanges');
+            return `nowy prezes: ${i.ceo.name}`;
+        case 'pay':
+            i.marginAdj = Math.max(-0.6, (Number(i.marginAdj) || 0) - FOREIGN_AGM.payMargin / Math.max(0.05, getSectorProfile(i).margin)); // marginAdj jest względne (±30%): −0,2 pp marży
+            return 'wyższe koszty wynagrodzeń';
+        case 'sellCompany':
+            return typeof acceptForeignTakeoverProposal === 'function' ? acceptForeignTakeoverProposal(i) : 'brak nabywcy';
+    }
+    return '';
+}
+
+/**
+ * Nakaz wezwania na pozostałe akcje (trzecie przekroczenie progu): fundusz kupuje po kursie +10% pakiety botów (70%) i 60–90% wolnego obrotu.
+ * Brak gotówki na całość: przy nadzorze poziomu ≥ 3 nakaz odsprzedaży, inaczej wezwanie na tyle akcji, na ile starcza gotówki. Zwraca 'tender' albo 'resale'.
+ */
+function runForeignTenderOrder(issuer) {
+    const o = getOversight(issuer.country), cur = issuer.currency, price = Math.round(issuer.price * (1 + FOREIGN_AGM.tenderPremium) * 1000) / 1000, sym = getGdrSymbol(issuer);
+    const bots = Object.entries(issuer.holders).filter(([id, q]) => id !== 'player' && q >= 1).map(([id, q]) => [id, Math.floor(q * FOREIGN_AGM.tenderBotShare)]);
+    const botTotal = bots.reduce((s, [, n]) => s + n, 0), retail = Math.floor(Math.max(0, getGdrFree(issuer)) * getRandomInRange(...FOREIGN_AGM.tenderRetail));
+    const localCash = getCurrencyCash('player', cur), have = Math.max(0, playerCash) + toPln(localCash, cur), costPln = toPln((botTotal + retail) * price, cur);
+    let scale = 1;
+    if (costPln > have) {
+        if ((o.level || 0) >= 3) {
+            issuer.oversightResale = { until: macro.quarter + FOREIGN_OVERSIGHT.resaleQuarters };
+            const body = `Fundusz nie ma gotówki na wezwanie na pozostałe akcje ${issuer.name} (${formatZl(costPln, 0)}). ${o.name} nakazuje zejść poniżej progu ${Math.round(o.callThreshold * 100)}% w ${FOREIGN_OVERSIGHT.resaleQuarters} kw. — inaczej nadwyżka zostanie sprzedana na rynku.`;
+            if (typeof addMail === 'function') addMail({ sender: o.name, subject: `⛔ ${o.name}: nakaz odsprzedaży ${issuer.name}`, body, importance: 3 });
+            logEvent(`⚖️ ${o.name}: ${body}`, 'review');
+            return 'resale';
+        }
+        scale = have / costPln;
+    }
+    let bought = 0;
+    for (const [id, n0] of bots) {
+        const n = Math.floor(n0 * scale), bot = aiCompetitors.find(b => b.id === id);
+        if (!bot || n <= 0) continue;
+        issuer.holders[id] -= n; if (issuer.holders[id] < 1) delete issuer.holders[id];
+        addCurrencyCash(bot, cur, n * price); bought += n;
+    }
+    bought += Math.floor(retail * scale);
+    const cost = bought * price, useLocal = Math.min(localCash, cost);
+    if (useLocal > 0) { playerCashByCurrency[cur] = localCash - useLocal; if (playerCashByCurrency[cur] < 1e-9) delete playerCashByCurrency[cur]; }
+    const costPlnPaid = toPln(cost - useLocal, cur);
+    playerCash -= costPlnPaid;
+    if (costPlnPaid > 0) recordPayment('player-fund', 'external:akcjonariusze', costPlnPaid, `Wezwanie (nakaz ${o.name}) ${sym}`);
+    issuer.holders.player = getGdrHeld(issuer) + bought;
+    const body = `Na nakaz ${o.name} fundusz ogłosił wezwanie na pozostałe akcje ${issuer.name} po ${formatNumberPl(price, 2)} ${cur} (kurs +${Math.round(FOREIGN_AGM.tenderPremium * 100)}%). Sprzedano ${bought.toLocaleString('pl-PL')} akcji za ${formatZl(toPln(cost, cur), 0)}; fundusz ma teraz ${(getIssuerStake(issuer, 'player') * 100).toFixed(1)}% głosów.`;
+    if (typeof addMail === 'function') addMail({ sender: o.name, subject: `📣 ${o.name}: nakaz wezwania ${issuer.name}`, body, importance: 3 });
+    logEvent(`📣 ${o.name}: ${body}`, 'review');
+    return 'tender';
+}

@@ -29,6 +29,7 @@ const LBO_MAX_DEBT_TO_ASSETS = 0.8;
 
 /** Lista posiadaczy akcji spółki (pakiety ≥ 1 akcji). */
 function getShareholders(stock) {
+    if (isForeignShare(stock)) return getForeignShareholders(stock); // 0.16.12 D2: spółki zagraniczne na tym samym kodzie walnych
     const list = [];
     const add = (id, name, kind, shares, entity = null) => { if (shares >= 1) list.push({ id, name, kind, shares, pct: shares / stock.totalShares, entity }); };
     const symbol = stock.symbol;
@@ -58,6 +59,7 @@ function findMajorityShareholder(stock) {
 }
 
 function getFundStakePct(stock) {
+    if (isForeignShare(stock)) return getGdrHeld(stock) / Math.max(1, stock.totalShares);
     return (playerPortfolio[stock.symbol]?.shares || 0) / Math.max(1, stock.totalShares);
 }
 
@@ -1671,6 +1673,9 @@ const ACTIVIST_PROPOSALS = {
 // STAN I RADA NADZORCZA
 // =================================================================================
 
+/** Spółka krajowa z `stocks` albo zagraniczna po symbolu „ID.KRAJ” (walne na wspólnym kodzie). */
+function findGovernedStock(symbol) { return stocks.find(s => s.symbol === symbol) || getForeignIssuerBySymbol(symbol); }
+
 function ensureGovernance(stock) {
     if (!stock.governance) {
         stock.governance = { quartersToAgm: 2 + Math.floor(Math.random() * 4), // pierwsze walne nie w 1. kwartale
@@ -1697,10 +1702,11 @@ function getBoardInsight(stock) {
     if (getBoardSeats(stock).seats < 1) return null;
     const last = Number(stock.quarterlyEarnings) || 0;
     const health = Number(stock.financialHealth) || 0;
-    const forecast = last * (1 + health * 0.04) + (stock.operatingInvestments || []).reduce((sum, op) => sum + op.cost * op.roi / 4 * op.efficiency, 0) * 0.5;
+    const toPlnMult = isForeignShare(stock) ? toPln(1, stock.currency) : 1; // walne obcej spółki: prognoza w złotych
+    const forecast = (last * (1 + health * 0.04) + (stock.operatingInvestments || []).reduce((sum, op) => sum + op.cost * op.roi / 4 * op.efficiency, 0) * 0.5) * toPlnMult;
     const plans = [
         ...(stock.activeInvestments || []).map(item => `w toku: ${item.name}`),
-        ...(typeof getInvestmentCatalogForCompany === 'function'
+        ...(typeof getInvestmentCatalogForCompany === 'function' && !isForeignShare(stock)
             ? getInvestmentCatalogForCompany(stock).filter(inv => inv.minDevLevel <= (stock.departments?.development?.level || 0) && !hasCompanyInvestmentInProgress(stock, inv.id)).slice(0, 2).map(inv => `rozważa: ${inv.name}`)
             : [])
     ];
@@ -1727,6 +1733,7 @@ function buildAgmAgenda(stock) {
     items.push({ id: 'discharge', kind: 'board', type: 'discharge', label: `Absolutorium dla prezesa ${stock.ceo?.name || ''}`.trim() });
     const capital = getCapitalAgmProposal(stock);
     if (capital) items.push(capital);
+    if (isForeignShare(stock)) items.push(...getForeignAgmItems(stock)); // wynagrodzenia, zmiana prezesa
 
     for (const proposal of gov.proposals) {
         items.push({ id: `p-${proposal.type}`, kind: 'activist', type: proposal.type, by: 'player', label: `Wniosek funduszu: ${ACTIVIST_PROPOSALS[proposal.type].label}` });
@@ -1738,7 +1745,7 @@ function buildAgmAgenda(stock) {
 
 /** 0.15.0.1 C4: wycena akcji spółki na tle rynku — drogie (premia rynku > +10% albo kurs ≥ 1,3 × wartości godziwej) lub tanie. */
 function getShareValuationMood(stock) {
-    const regime = typeof getMarketRegime === 'function' ? getMarketRegime('home') : null;
+    const regime = typeof getMarketRegime === 'function' ? getMarketRegime(isForeignShare(stock) && marketRegimes[stock.country] ? stock.country : 'home') : null;
     const premium = Number(regime?.premium) || 0;
     const bearish = regime?.phase === 'bear' || regime?.phase === 'capitulation'; // okno emisji zamknięte
     const fair = typeof getDisplayedFairValue === 'function' ? getDisplayedFairValue(stock) : null;
@@ -1808,6 +1815,7 @@ function getVoteForProbability(holder, item, stock) {
         if (relation <= RELATION_HOSTILE) return item.kind === 'board' ? 0.1 : 0.02;
         if (relation >= RELATION_FRIENDLY && item.kind === 'activist') return 0.85;
     }
+    if (holder.kind === 'company' && isForeignShare(stock)) return item.kind === 'board' ? 1 : 0; // 0.16.12 D1/D2: matka obcej spółki zależnej głosuje za zarządem
     if (holder.kind === 'company' && stock.isSubsidiaryOf === holder.entity?.symbol && isPuppetOf(stock, holder.entity.symbol)) {
         return item.kind === 'board' ? 1 : (item.by === holder.entity.symbol ? 1 : 0); // 0.15.1 M9: matka z marionetką forsuje walne
     }
@@ -1895,12 +1903,13 @@ function holdAgm(stock) {
             importance: 2, symbol: stock.symbol, action: { type: 'agm', symbol: stock.symbol }
         });
     }
-    logEvent(`🗳️ Walne zgromadzenie ${stock.name}: ${results.filter(r => r.passed).length}/${results.length} uchwał przyjętych (frekwencja ${(turnout * 100).toFixed(0)}%).`, 'company');
+    if (!isForeignShare(stock) || getGdrHeld(stock) > 0) logEvent(`🗳️ Walne zgromadzenie ${stock.name}: ${results.filter(r => r.passed).length}/${results.length} uchwał przyjętych (frekwencja ${(turnout * 100).toFixed(0)}%).`, 'company');
     return record;
 }
 
 /** Skutek przyjętej uchwały; zwraca krótki opis. */
 function applyAgmResolution(stock, item) {
+    if (isForeignShare(stock) && ['buyback', 'issue', 'replaceCeo', 'sellCompany', 'pay'].includes(item.type)) return applyForeignAgmResolution(stock, item);
     switch (item.type) {
         case 'dividend':
             if (item.policy !== stock.dividendPolicy) setCompanyDividendPolicy(stock, item.policy);
@@ -1964,7 +1973,7 @@ function runAgmIssue(stock) {
 
 /** Co kwartał (main.js): odliczanie, porządek obrad kwartał wcześniej, potem zgromadzenie. */
 function processGovernanceQuarter() {
-    for (const stock of stocks) {
+    for (const stock of [...stocks, ...getForeignGovernedList()]) {
         if (!isGovernedCompany(stock)) continue;
         const gov = ensureGovernance(stock);
         gov.quartersToAgm--;
@@ -1983,7 +1992,7 @@ function processGovernanceQuarter() {
 // =================================================================================
 
 function setAgmVote(symbol, itemId, vote) {
-    const stock = stocks.find(s => s.symbol === symbol);
+    const stock = findGovernedStock(symbol);
     const item = stock?.governance?.pendingAgm?.items.find(i => i.id === itemId);
     if (!item || !['for', 'against', 'abstain'].includes(vote) || !canFundControlAgm(stock)) return false;
     item.playerVote = vote;
@@ -1991,7 +2000,7 @@ function setAgmVote(symbol, itemId, vote) {
 }
 
 function submitShareholderProposal(symbol, type) {
-    const stock = stocks.find(s => s.symbol === symbol);
+    const stock = findGovernedStock(symbol);
     if (!stock || !ACTIVIST_PROPOSALS[type]) return false;
     if (!canFundControlAgm(stock)) { showToast('Wnioski na walne zgłasza akcjonariusz większościowy (> 50%).', 'warning'); return false; }
     const gov = ensureGovernance(stock);
@@ -2007,16 +2016,16 @@ function submitShareholderProposal(symbol, type) {
 }
 
 function getCampaignCost(stock) {
-    return Math.round(Math.max(2000, getMarketCapValue(stock) * 0.002));
+    return Math.round(Math.max(2000, getMarketCapValue(stock) * (isForeignShare(stock) ? toPln(1, stock.currency) : 1) * 0.002)); // zawsze w złotych
 }
 
 /** Kampania o głosy dla wniosku funduszu — koszt z funduszu, zwiększa poparcie botów i drobnych. */
 function runProxyCampaign(symbol, itemId) {
-    const stock = stocks.find(s => s.symbol === symbol);
+    const stock = findGovernedStock(symbol);
     const item = stock?.governance?.pendingAgm?.items.find(i => i.id === itemId);
     if (!item || item.by !== 'player' || !canFundControlAgm(stock)) { showToast('Kampanię prowadzi większościowiec dla wniosku funduszu na zaplanowanym walnym.', 'warning'); return false; }
     if (item.campaign) { showToast('Kampania już trwa.', 'default'); return false; }
-    const cost = getCampaignCost(stock);
+    const cost = getCampaignCost(stock) * (isForeignShare(stock) ? toPln(1, stock.currency) : 1);
     if (playerCash < cost) { showToast(`Kampania kosztuje ${formatZl(cost, 0)} — za mało gotówki funduszu.`, 'error'); return false; }
     playerCash -= cost;
     recordPayment('player-fund', 'external:doradcy_ma', cost, `Kampania o głosy ${symbol}`);

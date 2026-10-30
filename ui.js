@@ -8962,7 +8962,7 @@ function closeRescueOfferingModal() {
 let governanceView = { symbol: null };
 
 function getGovernanceCompanies() {
-    return stocks.filter(s => isGovernedCompany(s) && (playerPortfolio[s.symbol]?.shares || 0) > 0)
+    return [...stocks.filter(s => (playerPortfolio[s.symbol]?.shares || 0) > 0), ...getForeignGovernedList().filter(s => getGdrHeld(s) > 0)].filter(isGovernedCompany)
         .sort((a, b) => ensureGovernance(a).quartersToAgm - ensureGovernance(b).quartersToAgm || getFundStakePct(b) - getFundStakePct(a));
 }
 
@@ -8984,7 +8984,7 @@ function renderGovernance() {
     const detail = document.getElementById('governance-detail');
     if (!list || !detail) return;
     const companies = getGovernanceCompanies();
-    if (!governanceView.symbol || !stocks.some(s => s.symbol === governanceView.symbol)) governanceView.symbol = companies[0]?.symbol || null;
+    if (!governanceView.symbol || !findGovernedStock(governanceView.symbol)) governanceView.symbol = companies[0]?.symbol || null;
 
     list.innerHTML = companies.length ? companies.map(stock => {
         const gov = ensureGovernance(stock);
@@ -8995,7 +8995,7 @@ function renderGovernance() {
         </button>`;
     }).join('') : '<p class="text-muted text-sm">Fundusz nie ma akcji żadnej spółki.</p>';
 
-    const stock = stocks.find(s => s.symbol === governanceView.symbol);
+    const stock = findGovernedStock(governanceView.symbol);
     detail.innerHTML = stock ? renderGovernanceDetail(stock) : '<p class="text-muted">Kup akcje spółki, aby uczestniczyć w jej walnych zgromadzeniach.</p>';
 }
 
@@ -9007,7 +9007,7 @@ function renderShareholderBars(stock) {
         <span class="gov-bar-name">${escapeHtml(h.name)}</span>
         <span class="gov-bar-track"><span style="width:${Math.min(100, h.pct * 100).toFixed(1)}%"></span></span>
         <span class="gov-bar-pct">${h.entity?.isMafia ? `~${Math.max(5, Math.round(h.pct * 20) * 5)}%` : `${formatNumberPl((h.pct * 100), 1)}%`}</span>
-    </div>${typeof renderBlockBuyForm === 'function' && playerFund && getBlockHolder(stock, h.id) ? renderBlockBuyForm(stock, getBlockHolder(stock, h.id)) : ''}`).join('');
+    </div>${typeof renderBlockBuyForm === 'function' && playerFund && !isForeignShare(stock) && getBlockHolder(stock, h.id) ? renderBlockBuyForm(stock, getBlockHolder(stock, h.id)) : ''}`).join('');
 }
 
 function renderGovernanceDetail(stock) {
@@ -9051,7 +9051,7 @@ function renderGovernanceDetail(stock) {
             <select id="gov-proposal-type" aria-label="Rodzaj wniosku">${Object.entries(ACTIVIST_PROPOSALS).map(([id, p]) => `<option value="${id}" title="${escapeHtml(p.desc)}">${p.label}</option>`).join('')}</select>
             <button onclick="submitShareholderProposal('${stock.symbol}', document.getElementById('gov-proposal-type').value)">Zgłoś na walne</button>
         </div>` : '<p class="text-muted text-sm">Głosuje, zgłasza wnioski i prowadzi kampanie tylko akcjonariusz większościowy (> 50%). Poniżej fundusz głosuje „za” wnioskami zarządu.</p>'}
-        ${typeof getListingMoveTargets === 'function' && getListingMoveTargets(stock).length ? `<h4>Rynek notowań</h4>
+        ${typeof getListingMoveTargets === 'function' && !isForeignShare(stock) && getListingMoveTargets(stock).length ? `<h4>Rynek notowań</h4>
             <p class="text-sm">Teraz: <strong>${escapeHtml(getMarketLabel(getStockMarket(stock)))}</strong>. Rynki alternatywne mają niższą prowizję i opłatę za notowanie, ale mniej inwestorów (wycena −3%). Koszt: 0,3% kapitalizacji z gotówki spółki, raz na rok.</p>
             <div class="bank-card-form">${getListingMoveTargets(stock).map(id => `<button class="btn-secondary" onclick="moveListing('${stock.symbol}', '${id}'); openGovernanceModal('${stock.symbol}');">Przenieś na ${escapeHtml(getMarketLabel(id))}</button>`).join('')}</div>` : ''}
         ${insight ? `<h4>Wgląd rady nadzorczej</h4>

@@ -636,6 +636,7 @@ function applyForeignOversightStep(issuer, overValuePln) {
         playerFund.trust = Math.max(0, playerFund.trust - FOREIGN_OVERSIGHT.trustLoss);
         body = `Kolejne przekroczenie progu ${thr}% w ${issuer.name}: kara ${formatZl(fine, 0)} (2% wartości nadwyżki). Klienci funduszu tracą zaufanie (−${FOREIGN_OVERSIGHT.trustLoss}).`;
     } else {
+        if (typeof runForeignTenderOrder === 'function') return runForeignTenderOrder(issuer); // 0.16.12 D2: nakaz wezwania (komunikat i log w środku); brak gotówki → odsprzedaż
         step = 'resale';
         issuer.oversightResale = { until: macro.quarter + FOREIGN_OVERSIGHT.resaleQuarters };
         body = `Fundusz ma zejść poniżej progu ${thr}% w ${issuer.name} w ciągu ${FOREIGN_OVERSIGHT.resaleQuarters} kw. — inaczej ${o.name} sprzeda nadwyżkę na rynku.`;

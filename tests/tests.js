@@ -13744,6 +13744,7 @@ group('0.16.6 Domknięcie', () => {
         assertEq(getTenderRecord().tenderStrikes, 1, 'ostrzeżenie'); assertEq(playerFund.trust, 50, 'ostrzeżenie bez kary');
         const cash = playerCash; assert(buyForeignShares('SIE', 10, { overThreshold: true }).ok, 'drugie przekroczenie');
         assertEq(getTenderRecord().tenderStrikes, 2, 'kara'); assertEq(playerFund.trust, 47, 'zaufanie −3'); assert(playerCash < cash - 10 * toPln(issuer.price, issuer.currency), 'kara pobrana');
+        playerCash = toPln(issuer.price * 12, issuer.currency) * 1.2; delete playerCashByCurrency[issuer.currency]; // 0.16.12: bez gotówki na wezwanie → odsprzedaż (DE: nadzór poziomu 3)
         assert(buyForeignShares('SIE', 10, { overThreshold: true }).ok, 'trzecie przekroczenie');
         assert(issuer.oversightResale && issuer.oversightResale.until === macro.quarter + FOREIGN_OVERSIGHT.resaleQuarters, 'nakaz odsprzedaży');
         processForeignOversightQuarterly(); assert(getGdrHeld(issuer) > room, 'przed terminem nadwyżka zostaje');
@@ -14483,5 +14484,49 @@ group('0.16.9 W1 Gotówka w wielu walutach', () => {
         delistForeignIssuer(foreignIssuers[parent.id], 1);
         for (const id of ids) { const c = foreignIssuers[id]; assert(!c.parentId && c.parentPack === 0 && c.float === c.shares, 'pakiet wraca do obrotu'); }
         assertEq(checkWorldInvariants().length, 0, 'niezmienniki po upadku matki');
+    }));
+
+    // --- 0.16.12 D2: walne spółek zagranicznych na wspólnym kodzie + drabina z wezwaniem ---
+    test('0.16.12 D2: walne obcej spółki — porządek obrad, głosowanie wg akcjonariatu z holders, uchwały kapitałowe w walucie spółki, niezmienniki; zapis momentu walnego', () => withSubLinks(() => {
+        joinCountry('DE');
+        const i = subParent(); i.cash = 1; i.holders.player = Math.floor(i.shares * 0.4); i.holders[aiCompetitors[0].id] = Math.floor(i.shares * 0.1);
+        assert(isForeignShare(i) && !isForeignShare(stocks[0]), 'rozpoznanie spółki zagranicznej');
+        assertNear(getFundStakePct(i), 0.4, 'udział funduszu z holders', 1e-3); assert(!canFundControlAgm(i), 'poniżej 50% bez kontroli');
+        const sh = getShareholders(i); assertEq(sh[0].id, 'player'); assert(sh.some(h => h.kind === 'ai'), 'bot na liście');
+        i.holders.player = Math.floor(i.shares * 0.55); assert(canFundControlAgm(i), '>50% = kontrola');
+        assertEq(findGovernedStock(getShareSymbol(i)), i, 'wyszukanie po symbolu');
+        const shares0 = i.shares, cap0 = i.cash;
+        let agm = null;
+        for (let k = 0; k < 30 && !agm; k++) { i.governance = null; createPendingAgm(i); const items = i.governance.pendingAgm.items; if (items.some(x => x.type === 'issue')) { agm = items; break; } i.cash = 1; }
+        assert(agm, 'przy braku gotówki zarząd proponuje emisję');
+        const issue = agm.find(x => x.type === 'issue'); assert(setAgmVote(getShareSymbol(i), issue.id, 'for'), 'gracz głosuje'); issue.playerVote = 'for'; issue.reason = null; // wycena rynku jest losowa — bez powodu uchwała nie jest wycofywana
+        const rec = holdAgm(i); assert(rec && rec.results.length >= 3, 'walne się odbyło');
+        const res = rec.results.find(r => r.type === 'issue'); assert(res && res.passed, 'gracz z 55% przeforsował emisję');
+        assert(i.shares > shares0 && i.totalShares === i.shares && i.cash > cap0, 'emisja: akcje i gotówka w walucie spółki');
+        assertEq(i.statePack + (i.parentPack || 0) + i.float, i.shares, 'float spójny po emisji');
+        i.cash = 1e9; i.governance = null; createPendingAgm(i);
+        i.governance.pendingAgm.items = [{ id: 'buyback', kind: 'board', type: 'buyback', reason: 'cash', label: 'Skup', playerVote: 'for' }];
+        const free0 = getGdrFree(i), sh1 = i.shares; applyAgmResolution(i, i.governance.pendingAgm.items[0]);
+        assert(i.shares < sh1 && getGdrFree(i) < free0 && getGdrFree(i) >= 0, 'skup zmniejsza wolny obrót, nie schodzi poniżej zera');
+        const m0 = i.marginAdj || 0; assertEq(applyAgmResolution(i, { type: 'pay' }), 'wyższe koszty wynagrodzeń'); assert(i.marginAdj < m0, 'wynagrodzenia obciążają marżę');
+        const old = i.ceo.name; i.financialHealth = -3; i.ceo.tenure = 5; assert(getForeignAgmItems(i).some(x => x.type === 'replaceCeo'), 'zła kondycja → wniosek o odwołanie prezesa'); applyAgmResolution(i, { type: 'replaceCeo' }); assert(i.ceo.name !== old, 'nowy prezes');
+        assert(getGovernanceCompanies().some(s => s === i), 'okno Walne widzi spółkę zagraniczną');
+        processGovernanceQuarter(); // wszystkie obce przez wspólną pętlę kwartalną — bez wyjątków
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
+    }));
+    test('0.16.12 D2: drabina nadzoru — trzecie przekroczenie progu: nakaz wezwania na pozostałe akcje (z gotówką), bez gotówki odsprzedaż (nadzór poziomu ≥ 3) albo wezwanie częściowe (poziom < 3)', () => withSubLinks(() => {
+        joinCountry('DE'); joinCountry('CZ');
+        for (const [country, expect] of [['DE', 'tender'], ['DE', 'resale'], ['CZ', 'partial']]) {
+            const i = getCountryIssuers(country).find(x => !x.state && !x.giant && !x.special);
+            const bot = aiCompetitors[0]; i.holders = { player: Math.floor(i.shares * 0.5), [bot.id]: Math.floor(i.shares * 0.05) };
+            const botCash = bot ? getCurrencyCash(bot, i.currency) : 0;
+            const held0 = getGdrHeld(i); playerCash = expect === 'tender' ? 1e13 : 1000; delete playerCashByCurrency[i.currency];
+            const r = runForeignTenderOrder(i);
+            if (expect === 'tender') { assertEq(r, 'tender'); assert(getGdrHeld(i) > held0 * 1.3, 'wezwanie podnosi udział funduszu'); assert(playerCash < 1e13, 'zapłacono'); assert((i.holders[bot.id] || 0) < i.shares * 0.05, 'bot sprzedał'); assert(getCurrencyCash(bot, i.currency) > botCash, 'bot dostał gotówkę'); }
+            else if (expect === 'resale') { assertEq(r, 'resale'); assert(i.oversightResale, 'nakaz odsprzedaży'); assertEq(getGdrHeld(i), held0, 'bez zakupu'); }
+            else { assertEq(r, 'tender', 'poziom < 3: wezwanie częściowe'); assert(getGdrHeld(i) >= held0 && playerCash >= 0, 'częściowe wezwanie w granicach gotówki'); }
+            assert(getGdrFree(i) >= -1e-6, 'wolny obrót nieujemny');
+        }
+        assertEq(checkWorldInvariants().length, 0, 'niezmienniki');
     }));
 });
