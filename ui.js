@@ -1707,82 +1707,8 @@ function displayCash() {
 
 const STOCK_TABLE_COLS = 6; // 0.14.1 R6: bez kolumny „Sektor”
 
-function displayStocks(previousInputValues = {}) {
-  const liveStockTableBody = document.getElementById('stock-table-body');
-  if (!liveStockTableBody) return;
-
-  // Panel kupna (drawer) przenosimy między odświeżeniami tabeli zamiast budować go od nowa:
-  // wpisana ilość, kursor i kliknięcia w przyciski nie giną co sekundę.
-  const openDrawer = typeof openStockDrawerSymbol !== 'undefined' && openStockDrawerSymbol
-    ? document.getElementById(`drawer-${openStockDrawerSymbol}`)
-    : null;
-  const drawerInput = openDrawer ? openDrawer.querySelector('input') : null;
-  const drawerState = drawerInput ? {
-    focused: document.activeElement === drawerInput,
-    selectionStart: drawerInput.selectionStart,
-    selectionEnd: drawerInput.selectionEnd
-  } : null;
-  if (openDrawer) openDrawer.remove();
-
-  // Nagłówek ceny (strzałki sortowania)
-  const priceHeader = document.getElementById('price-header-cell');
-  if (priceHeader) {
-    // 0.14.5: sortowanie jako przycisk w nagłówku (klawiatura) + aria-sort
-    const sortLabel = currentSortState === 'price_asc' ? 'Kurs ▲' : currentSortState === 'price_desc' ? 'Kurs ▼' : 'Kurs';
-    const sortAria = currentSortState === 'price_asc' ? 'ascending' : currentSortState === 'price_desc' ? 'descending' : 'none';
-    const sortBtn = priceHeader.querySelector('.th-sort');
-    if (sortBtn) { if (sortBtn.textContent !== sortLabel) sortBtn.textContent = sortLabel; }
-    else priceHeader.textContent = sortLabel;
-    priceHeader.setAttribute('aria-sort', sortAria);
-  }
-
-  const groupToggleBtn = document.getElementById('table-group-toggle');
-  if (groupToggleBtn) {
-    const isGrouped = sectorFilterState.grouped !== false;
-    groupToggleBtn.classList.toggle('active', isGrouped);
-    groupToggleBtn.setAttribute('aria-pressed', String(isGrouped));
-    groupToggleBtn.title = isGrouped ? 'Kliknij, aby wyłączyć podział na kategorie (sektory) w tabeli' : 'Kliknij, aby włączyć podział na kategorie (sektory) w tabeli';
-    groupToggleBtn.textContent = isGrouped ? 'wg kategorii' : 'bez grup';
-  }
-
-  if (typeof renderSectorFilters === 'function') renderSectorFilters();
-
-  // Filtrowanie spółek do wyświetlenia
-  // 0.14 T1c: sektor główny (albo także poboczne), podsektor i typ instrumentu.
-  // 0.14.2 P3: córki z faktów (isSubsidiaryOf) — zawsze pod widoczną matką, niezależnie od filtra i poziomu giełdy.
-  const childrenByParent = new Map();
-  for (const stock of stocks) if (stock.isSubsidiaryOf && !stock.isBankrupt) {
-    if (!childrenByParent.has(stock.isSubsidiaryOf)) childrenByParent.set(stock.isSubsidiaryOf, []);
-    childrenByParent.get(stock.isSubsidiaryOf).push(stock);
-  }
-  let baseStocksToDisplay = stocks.filter(stock => stockMatchesSectorFilter(stock, sectorFilterState));
-
-  if (ownedOnlyFilter) baseStocksToDisplay = baseStocksToDisplay.filter(isStockOwnedByPlayer);
-  // Wybór aktywnego rynku (GPW / alternatywne rynki)
-  if (typeof selectedMarketOperator === 'undefined' || !selectedMarketOperator) selectedMarketOperator = 'GPW';
-  const activeMarkets = (typeof marketOperators === 'object' && marketOperators)
-      ? Object.values(marketOperators).filter(op => op.status === 'active')
-      : [{ id: 'GPW' }];
-  if (!activeMarkets.some(m => m.id === selectedMarketOperator)) {
-      selectedMarketOperator = 'GPW';
-  }
-  baseStocksToDisplay = baseStocksToDisplay.filter(stock => getStockMarket(stock) === selectedMarketOperator);
-  const internetTab = false;
-
-  // 0.14.5: wiersze budujemy w odpiętym tbody (szybciej niż wstawianie do żywej tabeli),
-  // na końcu przenosimy je jednym ruchem (replaceChildren) — bez odczytów układu, przewinięcie zostaje.
-  const stockTableBody = document.createElement('tbody');
-  // Zakładka poziomu rynku (ui-update.js: setMarketLevel) — pokazujemy tylko wybraną giełdę.
-  const sortedExchanges = Object.keys(exchanges)
-    .filter(key => typeof currentMarketLevel === 'undefined' || currentMarketLevel === 'ALL' || key === currentMarketLevel)
-    .sort((a, b) => exchanges[a].level - exchanges[b].level);
-  // Córka trafia pod matkę, gdy matka jest w tym widoku; inaczej (matka poza filtrem lub poziomem) stoi samodzielnie.
-  const shownParents = new Set(baseStocksToDisplay.filter(stock => !stock.isSubsidiaryOf && (internetTab || sortedExchanges.includes(stock.exchange))).map(stock => stock.symbol));
-  baseStocksToDisplay = baseStocksToDisplay.filter(stock => !stock.isSubsidiaryOf || !shownParents.has(stock.isSubsidiaryOf));
-  const hasAnalystSkill = getSkillLevel('financialAnalyst') > 0;
-
-  // --- Funkcja pomocnicza do renderowania wiersza ---
-  const renderStockRow = (stock, isSubsidiary = false, parentSymbol = null) => {
+/** Jeden wiersz tabeli spółek (nazwa, znaczniki, kurs, zmiana, dostępność, akcje gracza, przyciski handlu). */
+function renderStockTableRow(stock, isSubsidiary, parentSymbol, stockTableBody, childrenByParent, hasAnalystSkill, previousInputValues) {
     const exchangeData = exchanges[stock.exchange];
     const hasAccess = exchangeData ? exchangeData.level <= playerAccessLevel : false;
     const isLocked = stock.isTradeLocked;
@@ -2096,7 +2022,85 @@ function displayStocks(previousInputValues = {}) {
     }
 
     return row;
-  };
+}
+
+function displayStocks(previousInputValues = {}) {
+  const liveStockTableBody = document.getElementById('stock-table-body');
+  if (!liveStockTableBody) return;
+
+  // Panel kupna (drawer) przenosimy między odświeżeniami tabeli zamiast budować go od nowa:
+  // wpisana ilość, kursor i kliknięcia w przyciski nie giną co sekundę.
+  const openDrawer = typeof openStockDrawerSymbol !== 'undefined' && openStockDrawerSymbol
+    ? document.getElementById(`drawer-${openStockDrawerSymbol}`)
+    : null;
+  const drawerInput = openDrawer ? openDrawer.querySelector('input') : null;
+  const drawerState = drawerInput ? {
+    focused: document.activeElement === drawerInput,
+    selectionStart: drawerInput.selectionStart,
+    selectionEnd: drawerInput.selectionEnd
+  } : null;
+  if (openDrawer) openDrawer.remove();
+
+  // Nagłówek ceny (strzałki sortowania)
+  const priceHeader = document.getElementById('price-header-cell');
+  if (priceHeader) {
+    // 0.14.5: sortowanie jako przycisk w nagłówku (klawiatura) + aria-sort
+    const sortLabel = currentSortState === 'price_asc' ? 'Kurs ▲' : currentSortState === 'price_desc' ? 'Kurs ▼' : 'Kurs';
+    const sortAria = currentSortState === 'price_asc' ? 'ascending' : currentSortState === 'price_desc' ? 'descending' : 'none';
+    const sortBtn = priceHeader.querySelector('.th-sort');
+    if (sortBtn) { if (sortBtn.textContent !== sortLabel) sortBtn.textContent = sortLabel; }
+    else priceHeader.textContent = sortLabel;
+    priceHeader.setAttribute('aria-sort', sortAria);
+  }
+
+  const groupToggleBtn = document.getElementById('table-group-toggle');
+  if (groupToggleBtn) {
+    const isGrouped = sectorFilterState.grouped !== false;
+    groupToggleBtn.classList.toggle('active', isGrouped);
+    groupToggleBtn.setAttribute('aria-pressed', String(isGrouped));
+    groupToggleBtn.title = isGrouped ? 'Kliknij, aby wyłączyć podział na kategorie (sektory) w tabeli' : 'Kliknij, aby włączyć podział na kategorie (sektory) w tabeli';
+    groupToggleBtn.textContent = isGrouped ? 'wg kategorii' : 'bez grup';
+  }
+
+  if (typeof renderSectorFilters === 'function') renderSectorFilters();
+
+  // Filtrowanie spółek do wyświetlenia
+  // 0.14 T1c: sektor główny (albo także poboczne), podsektor i typ instrumentu.
+  // 0.14.2 P3: córki z faktów (isSubsidiaryOf) — zawsze pod widoczną matką, niezależnie od filtra i poziomu giełdy.
+  const childrenByParent = new Map();
+  for (const stock of stocks) if (stock.isSubsidiaryOf && !stock.isBankrupt) {
+    if (!childrenByParent.has(stock.isSubsidiaryOf)) childrenByParent.set(stock.isSubsidiaryOf, []);
+    childrenByParent.get(stock.isSubsidiaryOf).push(stock);
+  }
+  let baseStocksToDisplay = stocks.filter(stock => stockMatchesSectorFilter(stock, sectorFilterState));
+
+  if (ownedOnlyFilter) baseStocksToDisplay = baseStocksToDisplay.filter(isStockOwnedByPlayer);
+  // Wybór aktywnego rynku (GPW / alternatywne rynki)
+  if (typeof selectedMarketOperator === 'undefined' || !selectedMarketOperator) selectedMarketOperator = 'GPW';
+  const activeMarkets = (typeof marketOperators === 'object' && marketOperators)
+      ? Object.values(marketOperators).filter(op => op.status === 'active')
+      : [{ id: 'GPW' }];
+  if (!activeMarkets.some(m => m.id === selectedMarketOperator)) {
+      selectedMarketOperator = 'GPW';
+  }
+  baseStocksToDisplay = baseStocksToDisplay.filter(stock => getStockMarket(stock) === selectedMarketOperator);
+  const internetTab = false;
+
+  // 0.14.5: wiersze budujemy w odpiętym tbody (szybciej niż wstawianie do żywej tabeli),
+  // na końcu przenosimy je jednym ruchem (replaceChildren) — bez odczytów układu, przewinięcie zostaje.
+  const stockTableBody = document.createElement('tbody');
+  // Zakładka poziomu rynku (ui-update.js: setMarketLevel) — pokazujemy tylko wybraną giełdę.
+  const sortedExchanges = Object.keys(exchanges)
+    .filter(key => typeof currentMarketLevel === 'undefined' || currentMarketLevel === 'ALL' || key === currentMarketLevel)
+    .sort((a, b) => exchanges[a].level - exchanges[b].level);
+  // Córka trafia pod matkę, gdy matka jest w tym widoku; inaczej (matka poza filtrem lub poziomem) stoi samodzielnie.
+  const shownParents = new Set(baseStocksToDisplay.filter(stock => !stock.isSubsidiaryOf && (internetTab || sortedExchanges.includes(stock.exchange))).map(stock => stock.symbol));
+  baseStocksToDisplay = baseStocksToDisplay.filter(stock => !stock.isSubsidiaryOf || !shownParents.has(stock.isSubsidiaryOf));
+  const hasAnalystSkill = getSkillLevel('financialAnalyst') > 0;
+
+  // --- Funkcja pomocnicza do renderowania wiersza ---
+  const renderStockRow = (stock, isSubsidiary = false, parentSymbol = null) =>
+    renderStockTableRow(stock, isSubsidiary, parentSymbol, stockTableBody, childrenByParent, hasAnalystSkill, previousInputValues);
 
   // --- D1: zakładka „Internet” — rynki internetowe i ich spółki (rozwijane listy) ---
   if (internetTab) {
