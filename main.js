@@ -1773,15 +1773,8 @@ function initializeGame() {
     }
 }
 
-/** Tworzy nowy świat gry (banki, spółki budowlane, startupy, bilanse, R&D...). */
-function createNewWorld() {
-    // Inicjalizacja banków komercyjnych (ta funkcja teraz ustawia isActive dla banków startowych)
-    initializeCommercialBanks(); // Tworzy banki, może ustawić isActiveFromStart
-    generateCentralBankGovernor();
-    initializeConstructionCompanies();
-    initializeAllConstructionStats(); // Inicjalizuje maxProjects i currentProjects dla spółek budowlanych
-    ensureSubcontractorRegistry(); // 0.15.5 B2: rejestr podwykonawców (12 specjalności, min. 3 w każdej)
-    
+/** Nowy świat: cztery banki startowe (inwestycyjny, korporacyjny i dwa losowe). */
+function activateStartingBanks() {
     let activatedBankIds = []; // Tablica do śledzenia ID aktywowanych banków
     let activatedBanksCount = 0; // Licznik aktywowanych banków
 
@@ -1829,35 +1822,10 @@ function createNewWorld() {
     if (activatedBanksCount < 4) {
         console.warn(`! Nie udało się aktywować 4 banków, aktywnych jest tylko ${activatedBanksCount}. Sprawdź definicje banków.`);
     }
+}
 
-    // Tworzenie początkowych start-upów, jeśli ich brakuje
-    const existingStartups = Array.isArray(stocks) ? stocks.filter(s => s.assetType === 'Startup').length : 0;
-    if (existingStartups < 5) {
-        const genFn = (typeof generateNewStartup === 'function') ? generateNewStartup : (typeof window !== 'undefined' && typeof window.generateNewStartup === 'function') ? window.generateNewStartup : null;
-        if (genFn) {
-            const toCreate = 5 - existingStartups;
-            for (let i = 0; i < toCreate; i++) {
-                try {
-                    stocks.push(genFn());
-                } catch (err) {
-                    console.error('Błąd podczas generowania start-upu:', err); // Zachowany błąd
-                }
-            }
-        } else {
-            console.warn('generateNewStartup nie jest dostępna — pomijam tworzenie dodatkowych start-upów.'); // Zachowane ostrzeżenie
-        }
-    }
-
-    // Inicjalizacja opisów R&D Instytutów
-    let availableResearchDescriptions = [];
-    if (typeof researchInstituteDescriptions !== 'undefined' && Array.isArray(researchInstituteDescriptions)) {
-        availableResearchDescriptions = [...researchInstituteDescriptions];
-    } else {
-        console.warn("Zmienna researchInstituteDescriptions nie jest zdefiniowana lub nie jest tablicą."); // Zachowane ostrzeżenie
-    }
-    // (Pętla inicjalizująca opisy Instytutów - zakładam, że jest w innej części kodu lub była w usuniętym fragmencie)
-
-    // --- Dodawanie aktywnych banków do giełdy ---
+/** Nowy świat: aktywne banki jako spółki na giełdzie. */
+function listActiveBanksOnExchange() {
     console.log("[START GRY] Dodawanie aktywnych banków na giełdę...");
     let banksAddedToStocks = 0;
     commercialBanks.forEach(bank => {
@@ -1889,6 +1857,10 @@ function createNewWorld() {
         }
     });
     console.log(`[initializeGame] Zakończono dodawanie banków. ${banksAddedToStocks} banków jest teraz w 'stocks'. Całkowita liczba banków w 'stocks': ${stocks.filter(s=>s.isBankStock).length}`);
+}
+
+/** Nowy świat: startowe depozyty botów w aktywnych bankach. */
+function placeInitialAiDeposits() {
     console.log("[initializeGame] Inicjalizacja startowych depozytów AI...");
     aiCompetitors.forEach(ai => {
         if (ai.initialDeposit && ai.initialDeposit > 0) {
@@ -1935,6 +1907,49 @@ function createNewWorld() {
             }
         }
     });
+}
+
+/** Tworzy nowy świat gry (banki, spółki budowlane, startupy, bilanse, R&D...). */
+function createNewWorld() {
+    // Inicjalizacja banków komercyjnych (ta funkcja teraz ustawia isActive dla banków startowych)
+    initializeCommercialBanks(); // Tworzy banki, może ustawić isActiveFromStart
+    generateCentralBankGovernor();
+    initializeConstructionCompanies();
+    initializeAllConstructionStats(); // Inicjalizuje maxProjects i currentProjects dla spółek budowlanych
+    ensureSubcontractorRegistry(); // 0.15.5 B2: rejestr podwykonawców (12 specjalności, min. 3 w każdej)
+    
+    activateStartingBanks();
+
+    // Tworzenie początkowych start-upów, jeśli ich brakuje
+    const existingStartups = Array.isArray(stocks) ? stocks.filter(s => s.assetType === 'Startup').length : 0;
+    if (existingStartups < 5) {
+        const genFn = (typeof generateNewStartup === 'function') ? generateNewStartup : (typeof window !== 'undefined' && typeof window.generateNewStartup === 'function') ? window.generateNewStartup : null;
+        if (genFn) {
+            const toCreate = 5 - existingStartups;
+            for (let i = 0; i < toCreate; i++) {
+                try {
+                    stocks.push(genFn());
+                } catch (err) {
+                    console.error('Błąd podczas generowania start-upu:', err); // Zachowany błąd
+                }
+            }
+        } else {
+            console.warn('generateNewStartup nie jest dostępna — pomijam tworzenie dodatkowych start-upów.'); // Zachowane ostrzeżenie
+        }
+    }
+
+    // Inicjalizacja opisów R&D Instytutów
+    let availableResearchDescriptions = [];
+    if (typeof researchInstituteDescriptions !== 'undefined' && Array.isArray(researchInstituteDescriptions)) {
+        availableResearchDescriptions = [...researchInstituteDescriptions];
+    } else {
+        console.warn("Zmienna researchInstituteDescriptions nie jest zdefiniowana lub nie jest tablicą."); // Zachowane ostrzeżenie
+    }
+    // (Pętla inicjalizująca opisy Instytutów - zakładam, że jest w innej części kodu lub była w usuniętym fragmencie)
+
+    // --- Dodawanie aktywnych banków do giełdy ---
+    listActiveBanksOnExchange();
+    placeInitialAiDeposits();
 
     // Przypisywanie kont bankowych spółkom
     console.log("[START GRY] Przypisywanie kont bankowych spółkom..."); // Log informacyjny
